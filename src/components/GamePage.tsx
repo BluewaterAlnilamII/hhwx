@@ -427,10 +427,10 @@ export default function GamePage() {
                 </div>
             </div>
 
-            {/* 主游戏区域 */}
+            {/* 桌面端：主游戏区域 */}
             <div className="relative flex items-center justify-center w-full max-w-3xl">
                 {/* AI 角色（左上角） */}
-                <div className="absolute -left-2 -top-2 sm:left-0 sm:top-0 flex flex-col items-start gap-2 z-20">
+                <div className="hidden sm:flex absolute left-0 top-0 flex-col items-start gap-2 z-20">
                     <CharacterAvatar
                         characterId={aiChar.id}
                         avatarSrc={aiChar.avatar}
@@ -457,7 +457,7 @@ export default function GamePage() {
                 />
 
                 {/* 玩家角色（右下角） */}
-                <div className="absolute -right-2 -bottom-2 sm:right-0 sm:bottom-0 flex flex-col items-end gap-2 z-20">
+                <div className="hidden sm:flex absolute right-0 bottom-0 flex-col items-end gap-2 z-20">
                     <SpeechBubble
                         text={playerBubble.text}
                         visible={playerBubble.visible}
@@ -474,43 +474,120 @@ export default function GamePage() {
                 </div>
             </div>
 
-            {/* 回合指示器 */}
-            <div className="mt-4 px-4 py-2 rounded-full bg-white/70 backdrop-blur-sm text-sm font-medium text-gray-600 shadow-sm">
-                {state.gamePhase === "playing" && state.currentPlayer === playerColor
-                    ? "🎮 你的回合"
-                    : state.gamePhase === "aiThinking" || state.currentPlayer === aiColor
-                        ? "🤔 AI 思考中..."
-                        : state.gamePhase === "ended"
-                            ? "🏁 游戏结束"
-                            : "🎮 你的回合"}
+            {/* 移动端：底部角色及控制区 */}
+            <div className="flex sm:hidden w-full max-w-md mt-6 justify-between items-end px-2 z-20">
+                {/* AI 角色（左侧） */}
+                <div className="flex flex-col items-start gap-1">
+                    <SpeechBubble
+                        text={aiBubble.text}
+                        visible={aiBubble.visible}
+                        position="left"
+                    />
+                    <CharacterAvatar
+                        characterId={aiChar.id}
+                        avatarSrc={aiChar.avatar}
+                        color={aiChar.color}
+                        playerColor={aiColor}
+                        size="sm"
+                    />
+                    <div className="text-xs font-bold text-gray-700">{aiChar.nameJp}</div>
+                </div>
+
+                {/* 中间按钮/状态核心区 */}
+                <div className="flex flex-col items-center gap-3 mb-2 flex-1 px-2">
+                    {/* 回合指示器 */}
+                    <div className="px-4 py-2 rounded-full bg-white/70 backdrop-blur-sm text-xs font-medium text-gray-600 shadow-sm text-center whitespace-nowrap">
+                        {state.gamePhase === "playing" && state.currentPlayer === playerColor
+                            ? "🎮 你的回合"
+                            : state.gamePhase === "aiThinking" || state.currentPlayer === aiColor
+                                ? "🤔 AI 思考中..."
+                                : state.gamePhase === "ended"
+                                    ? "🏁 游戏结束"
+                                    : "🎮 你的回合"}
+                    </div>
+
+                    {/* 按钮区域 */}
+                    {state.gamePhase !== "ended" ? (
+                        <button
+                            onClick={handleGiveUp}
+                            className="w-full max-w-[120px] px-3 py-2 bg-white/50 backdrop-blur-sm border border-gray-300 text-xs font-medium text-gray-600 rounded-full hover:bg-red-50 hover:border-red-300 hover:text-red-600 shadow-sm"
+                        >
+                            🚪 放弃这局
+                        </button>
+                    ) : reviewingBoard ? (
+                        <div className="flex flex-col gap-2 w-full max-w-[120px]">
+                            <button
+                                onClick={handleRestart}
+                                className="w-full px-3 py-2 bg-gradient-to-r from-blue-500 to-purple-600 text-white font-semibold rounded-full hover:opacity-90 shadow-sm text-xs"
+                            >
+                                🔄 重新开始
+                            </button>
+                            <button
+                                onClick={handleReturnToSelect}
+                                className="w-full px-3 py-2 bg-white/50 backdrop-blur-sm border border-gray-300 text-xs font-medium text-gray-600 rounded-full hover:bg-white/80 shadow-sm"
+                            >
+                                🎭 重选角色
+                            </button>
+                        </div>
+                    ) : null}
+                </div>
+
+                {/* 玩家角色（右侧） */}
+                <div className="flex flex-col items-end gap-1">
+                    <SpeechBubble
+                        text={playerBubble.text}
+                        visible={playerBubble.visible}
+                        position="right"
+                    />
+                    <CharacterAvatar
+                        characterId={playerChar.id}
+                        avatarSrc={playerChar.avatar}
+                        color={playerChar.color}
+                        playerColor={playerColor}
+                        size="sm"
+                    />
+                    <div className="text-xs font-bold text-gray-700">{playerChar.nameJp}</div>
+                </div>
             </div>
 
-            {/* 底部按钮区域 */}
-            {state.gamePhase !== "ended" ? (
-                /* 游戏进行中：显示“放弃这局” */
-                <button
-                    onClick={handleGiveUp}
-                    className="mt-3 px-5 py-2 bg-white/50 backdrop-blur-sm border border-gray-300 text-sm font-medium text-gray-600 rounded-full hover:bg-red-50 hover:border-red-300 hover:text-red-600 transition-all duration-200 shadow-sm"
-                >
-                    🚪 放弃这局
-                </button>
-            ) : reviewingBoard ? (
-                /* 终局回看模式：显示重开/返回按钮 */
-                <div className="mt-3 flex gap-3">
-                    <button
-                        onClick={handleRestart}
-                        className="px-5 py-2 bg-gradient-to-r from-blue-500 to-purple-600 text-white font-semibold rounded-full hover:opacity-90 transition text-sm shadow-sm"
-                    >
-                        🔄 重新开始
-                    </button>
-                    <button
-                        onClick={handleReturnToSelect}
-                        className="px-5 py-2 bg-white/50 backdrop-blur-sm border border-gray-300 text-sm font-medium text-gray-600 rounded-full hover:bg-white/80 transition-all duration-200 shadow-sm"
-                    >
-                        🎭 返回选角
-                    </button>
+            {/* 桌面端：中控及按钮区 */}
+            <div className="hidden sm:flex flex-col items-center">
+                {/* 回合指示器 */}
+                <div className="mt-4 px-4 py-2 rounded-full bg-white/70 backdrop-blur-sm text-sm font-medium text-gray-600 shadow-sm">
+                    {state.gamePhase === "playing" && state.currentPlayer === playerColor
+                        ? "🎮 你的回合"
+                        : state.gamePhase === "aiThinking" || state.currentPlayer === aiColor
+                            ? "🤔 AI 思考中..."
+                            : state.gamePhase === "ended"
+                                ? "🏁 游戏结束"
+                                : "🎮 你的回合"}
                 </div>
-            ) : null}
+
+                {/* 底部按钮区域 */}
+                {state.gamePhase !== "ended" ? (
+                    <button
+                        onClick={handleGiveUp}
+                        className="mt-3 px-5 py-2 bg-white/50 backdrop-blur-sm border border-gray-300 text-sm font-medium text-gray-600 rounded-full hover:bg-red-50 hover:border-red-300 hover:text-red-600 transition-all duration-200 shadow-sm"
+                    >
+                        🚪 放弃这局
+                    </button>
+                ) : reviewingBoard ? (
+                    <div className="mt-3 flex flex-col gap-3">
+                        <button
+                            onClick={handleRestart}
+                            className="px-5 py-2 bg-gradient-to-r from-blue-500 to-purple-600 text-white font-semibold rounded-full hover:opacity-90 transition text-sm shadow-sm"
+                        >
+                            🔄 重新开始
+                        </button>
+                        <button
+                            onClick={handleReturnToSelect}
+                            className="px-5 py-2 bg-white/50 backdrop-blur-sm border border-gray-300 text-sm font-medium text-gray-600 rounded-full hover:bg-white/80 transition-all duration-200 shadow-sm"
+                        >
+                            🎭 重选角色
+                        </button>
+                    </div>
+                ) : null}
+            </div>
 
             {/* 跳过回合通知 */}
             {state.passMessage && (

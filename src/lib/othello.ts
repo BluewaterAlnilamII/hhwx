@@ -335,19 +335,10 @@ export function getStablePositions(board: CellState[][], player: PlayerColor): S
 
 /**
  * 增强版棋盘评估函数，综合多个维度评分。
- *
- * 评估维度与权重设计理念：
- * 1. 位置权重（权重 1.0）：基础的位置价值评估
- * 2. 行动力（权重 8.0）：可落子数多 = 选择多 = 灵活性强，黑白棋中行动力极其重要
- * 3. 角位占有（权重 30.0 / 个）：角位不可翻转，是最强战略位
- * 4. 稳定子（权重 10.0 / 个）：稳定子越多局面越安全
- *
- * 行动力权重设为 8 是因为：研究表明在黑白棋中期，行动力差每多 1 步≈ 8 分位置价值。
  */
 export function advancedEvaluateBoard(board: CellState[][], player: PlayerColor): number {
     const opp = opponent(player);
 
-    // 1. 位置权重得分
     let positionScore = 0;
     for (let r = 0; r < BOARD_SIZE; r++) {
         for (let c = 0; c < BOARD_SIZE; c++) {
@@ -356,12 +347,10 @@ export function advancedEvaluateBoard(board: CellState[][], player: PlayerColor)
         }
     }
 
-    // 2. 行动力得分：己方可落子数 - 对手可落子数
     const myMoves = getValidMoves(board, player).length;
     const oppMoves = getValidMoves(board, opp).length;
     const mobilityScore = (myMoves - oppMoves) * 8;
 
-    // 3. 角位占有得分
     let cornerScore = 0;
     const corners: [number, number][] = [[0, 0], [0, 7], [7, 0], [7, 7]];
     for (const [cr, cc] of corners) {
@@ -369,7 +358,6 @@ export function advancedEvaluateBoard(board: CellState[][], player: PlayerColor)
         else if (board[cr][cc] === opp) cornerScore -= 30;
     }
 
-    // 4. 稳定子得分
     const myStable = countStableDiscs(board, player);
     const oppStable = countStableDiscs(board, opp);
     const stabilityScore = (myStable - oppStable) * 10;
@@ -378,110 +366,137 @@ export function advancedEvaluateBoard(board: CellState[][], player: PlayerColor)
 }
 
 /**
- * 检查在 (row, col) 落子后，对手是否会获得直接占角的机会。
- *
- * 为什么这个检测如此重要：黑白棋中角位一旦被占就不可翻转，且可延伸出大量稳定子。
- * "送角"是最严重的战略失误。AI 落子前先模拟，若发现对手因此能占角，应大幅降低该步的优先级。
+ * 评估落子后的势力差（Potential Difference）。
+ * 
+ * @param board 当前棋盘
+ * @param myColor 当前落子玩家颜色
+ * @param move 即将落子的位置
+ * @param simulateFlipForThreat 是否在生成敌方用来计算反击威胁的棋盘时考虑己方翻转带来的改变。
+ *        如果设为 false（盲区机制），AI 会幻想自己仅仅多下了一颗子没有吃子。
+ *        但此时会进行双重校验，排除掉“因为己方（在幻想中）没有吃子而产生的不仅不应该存在、甚至连原版规则都不允许的空气威胁”。
+ * 
+ * @returns 包含:
+ *   - gainedWeight: 我方新占据的所有点位的基础权重之和（仅计入这单颗子，不计翻转）。
+ *   - maxOpponentWeight: 敌方在下一步所有合法落子中，能踩中的最高权重（潜在最大反击威胁）。
  */
-export function givesOpponentCorner(
+export function evaluatePotentialDiff(
     board: CellState[][],
-    row: number,
-    col: number,
-    player: PlayerColor
-): boolean {
-    // 检查落子是否合法
-    const flips = getFlips(board, row, col, player);
-    if (flips.length === 0) return false;
+    myColor: PlayerColor,
+    move: { row: number; col: number },
+    simulateFlipForThreat: boolean = true
+): { gainedWeight: number; maxOpponentWeight: number } {
+    const oppColor = opponent(myColor);
+    const flips = getFlips(board, move.row, move.col, myColor);
 
-    const newBoard = applyMove(board, row, col, player);
-    const opp = opponent(player);
-    const oppMoves = getValidMoves(newBoard, opp);
+    // 计算我方新获得的基础权重之和（仅计入当前这一颗子）
+    const gainedWeight = POSITION_WEIGHTS[move.row][move.col];
 
-    // 检查对手是否因此获得角位落子机会
-    return oppMoves.some((m) => isCorner(m.row, m.col));
-}
+    // --- 真实棋盘（包含了合法的翻转结果，代表客观即将发生的未来） ---
+    let trueBoard = cloneBoard(board);
+    trueBoard[move.row][move.col] = myColor;
+    for (const [fr, fc] of flips) {
+        trueBoard[fr][fc] = myColor;
+    }
+    const trueOppMoves = getValidMoves(trueBoard, oppColor);
 
-/**
- * 判断某位置是否为高价值战略位（权重 >= 15 的位置）。
- * 这些位置包括边线位（权重 20）和次边线位（权重 15），
- * 是黑白棋中仅次于角位的重要位置，占据后能形成稳定的边线控制。
- */
-export function isStrategicPosition(row: number, col: number): boolean {
-    return POSITION_WEIGHTS[row][col] >= 15;
-}
+    let maxOpponentWeight = -Infinity;
 
-/**
- * 检查落子后，该位置的棋子是否容易在对手的下一步中被翻转。
- *
- * 为什么要检测"安全性"：即使位置权重很高，如果落子后立即被对手翻转，
- * 不仅白费一步，还替对手占据了好位置。这在边线争夺中尤其常见。
- * 只检查己方新落的子是否在对手的翻转列表中（不需要检查所有被翻转的棋子，
- * 因为影响最大的是新落位置本身的稳定性）。
- */
-export function isMoveSafe(
-    board: CellState[][],
-    row: number,
-    col: number,
-    player: PlayerColor
-): boolean {
-    const flips = getFlips(board, row, col, player);
-    if (flips.length === 0) return false;
+    if (simulateFlipForThreat) {
+        // 正常推演模式：直接使用真实棋盘去探测敌方威胁
+        if (trueOppMoves.length === 0) {
+            maxOpponentWeight = -100; // 敌方无路可走，形成压制，给予负向极低威胁
+        } else {
+            for (const oppMove of trueOppMoves) {
+                const weight = POSITION_WEIGHTS[oppMove.row][oppMove.col];
+                if (weight > maxOpponentWeight) {
+                    maxOpponentWeight = weight;
+                }
+            }
+        }
+    } else {
+        // 盲区机制（破绽）：AI “瞎了眼”以为自己没有吃子，只放下了这一颗棋子。
+        // --- 盲棋盘（仅放下子，没有翻转） ---
+        let blindBoard = cloneBoard(board);
+        blindBoard[move.row][move.col] = myColor;
+        const blindOppMoves = getValidMoves(blindBoard, oppColor);
 
-    const newBoard = applyMove(board, row, col, player);
-    const opp = opponent(player);
-    const oppMoves = getValidMoves(newBoard, opp);
+        // 过滤掉那些在真实棋盘中根本不合法的“幻觉落子点”，消除“自己吓自己”的现象。
+        // 例如：本来敌方可以通过某颗垫脚石下在角落，但在真实棋盘里那颗垫脚石已经被我方翻转了。
+        const validBlindOppMoves = blindOppMoves.filter(blindMove =>
+            trueOppMoves.some(trueMove => trueMove.row === blindMove.row && trueMove.col === blindMove.col)
+        );
 
-    // 检查对手的每一步是否能翻转我们刚落子的位置
-    for (const m of oppMoves) {
-        const oppFlips = getFlips(newBoard, m.row, m.col, opp);
-        if (oppFlips.some(([fr, fc]) => fr === row && fc === col)) {
-            return false; // 对手能翻转我们刚落的子
+        if (validBlindOppMoves.length === 0) {
+            maxOpponentWeight = -100;
+        } else {
+            for (const oppMove of validBlindOppMoves) {
+                const weight = POSITION_WEIGHTS[oppMove.row][oppMove.col];
+                if (weight > maxOpponentWeight) {
+                    maxOpponentWeight = weight;
+                }
+            }
         }
     }
-    return true;
+
+    return { gainedWeight, maxOpponentWeight };
 }
 
 /**
- * 检测某个边线位置是否与己方棋子之间恰好隔了一个空位（形成"间隔落子"），
- * 这在黑白棋中通常是劣步，因为中间的空位会成为对手的突破口。
+ * 检查边缘插入漏洞 (Edge Insertion Vulnerability)
+ * 当我们在边缘落子时，如果留下了一个单格空位隔开我们现有的棋子（例如: 己-空-己 新下），
+ * 这个单格空位就成为了极度危险的"楔子"打入点，对手一旦下入将获得绝对稳定子。
  * 
- * 例如在边线上 `bbxxbybb` 中（b=空，x=己方棋子），y 位置就是"间隔一空"的危险落点。
- * 只检查沿落子所在边线方向的情况（水平边检测左右，垂直边检测上下）。
- * 
- * @returns true 表示该位置是边线上的间隔落子（应被惩罚），但角位除外
+ * @param board 模拟落子后的棋盘（必须是包含新落子和翻转结果的棋盘）
+ * @param aiColor 判断的玩家颜色（落子方）
+ * @param move 本次落子的坐标
+ * @returns 如果发现构成了危险的插入漏洞，返回 true
  */
-export function isEdgeGapMove(
+export function checkEdgeInsertionVulnerability(
     board: CellState[][],
-    row: number,
-    col: number,
-    player: PlayerColor
+    aiColor: PlayerColor,
+    move: { row: number; col: number }
 ): boolean {
-    if (!isEdge(row, col) || isCorner(row, col)) return false;
+    // 1. 如果本手就下在角落，不视为危险漏洞（占角收益极大）
+    if (isCorner(move.row, move.col)) return false;
 
-    const last = BOARD_SIZE - 1;
+    // 2. 检查是否在边线上
+    if (!isEdge(move.row, move.col)) return false;
 
-    // 确定沿边线方向的增量：水平边→左右(dc)，垂直边→上下(dr)
-    const directions: [number, number][] = [];
-    if (row === 0 || row === last) {
-        directions.push([0, -1], [0, 1]); // 水平边
+    // 3. 构建当前所在边的 1D 数组表示
+    // 分四个方向边：上边(r=0), 下边(r=7), 左边(c=0), 右边(c=7)
+    // 为了统一步骤扫描，我们将整条边提取出来放进一个长度为8的数组里。
+    let edgeValues: CellState[] = [];
+    let moveIdx = -1; // 记录当前落子在一条边(1D数组)上的索引
+
+    if (move.row === 0) { // 上边缘
+        edgeValues = board[0].slice();
+        moveIdx = move.col;
+    } else if (move.row === BOARD_SIZE - 1) { // 下边缘
+        edgeValues = board[BOARD_SIZE - 1].slice();
+        moveIdx = move.col;
+    } else if (move.col === 0) { // 左边缘
+        edgeValues = board.map(r => r[0]);
+        moveIdx = move.row;
+    } else if (move.col === BOARD_SIZE - 1) { // 右边缘
+        edgeValues = board.map(r => r[BOARD_SIZE - 1]);
+        moveIdx = move.row;
     }
-    if (col === 0 || col === last) {
-        directions.push([-1, 0], [1, 0]); // 垂直边
+
+    // 4. 重中之重：分别向沿着边的两个方向扫描，看是否存在 [新下的子] - [唯一的空格] - [我方棋子]
+    // 这种结构极为致命，因为如果这是唯一的空格，对方下入将没有翻转风险。
+
+    // 向前看 (i = moveIdx - 1)
+    if (moveIdx >= 2) {
+        // 如果前一格是空，前前格是我方的棋子 (注意这里是在新棋盘上检查，所以新落子的位置必定是我方的)
+        if (edgeValues[moveIdx - 1] === null && edgeValues[moveIdx - 2] === aiColor) {
+            return true;
+        }
     }
 
-    for (const [dr, dc] of directions) {
-        // 检查相邻一格是否是空位
-        const adjR = row + dr;
-        const adjC = col + dc;
-        if (!inBounds(adjR, adjC)) continue;
-        if (board[adjR][adjC] !== null) continue; // 相邻格有棋子，不算间隔
-
-        // 检查间隔后一格是否是己方棋子
-        const beyondR = adjR + dr;
-        const beyondC = adjC + dc;
-        if (!inBounds(beyondR, beyondC)) continue;
-        if (board[beyondR][beyondC] === player) {
-            return true; // 找到了 [己方棋子]...[空位]...[落子位] 的间隔模式
+    // 向后看 (i = moveIdx + 1)
+    if (moveIdx <= BOARD_SIZE - 3) {
+        if (edgeValues[moveIdx + 1] === null && edgeValues[moveIdx + 2] === aiColor) {
+            return true;
         }
     }
 

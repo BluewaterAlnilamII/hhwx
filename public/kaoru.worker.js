@@ -194,6 +194,30 @@ self.onmessage = (e) => {
         return;
     }
 
+    // 适配白棋第一步固定概率的需求（Web Worker需要独立实现因为不能import）
+    if (aiColor === "white") {
+        let pieceCount = 0;
+        for (let r = 0; r < BOARD_SIZE; r++) {
+            for (let c = 0; c < BOARD_SIZE; c++) {
+                if (board[r][c] !== null) pieceCount++;
+            }
+        }
+        if (pieceCount === 5) {
+            const diagMove = moves.find(m => m.row === m.col || m.row + m.col === 7);
+            const otherMoves = moves.filter(m => m !== diagMove);
+            const rand = Math.random();
+            let selectedMove;
+            if (rand < 0.50 && diagMove) {
+                selectedMove = diagMove;
+            } else {
+                if (!diagMove) selectedMove = moves[0];
+                else selectedMove = rand < 0.75 ? otherMoves[0] : otherMoves[1];
+            }
+            self.postMessage({ move: selectedMove });
+            return;
+        }
+    }
+
     // 动态搜索深度：终局阶段加深
     const totalPieces = countTotalPieces(board);
     const depth = totalPieces >= ENDGAME_THRESHOLD ? ENDGAME_DEPTH : BASE_DEPTH;

@@ -49,24 +49,24 @@ export default function ResultPanel({
                     </div>
                 </div>
 
-                <div className="flex gap-3 justify-center flex-wrap">
+                <div className="flex flex-col gap-3 justify-center items-center w-full max-w-xs mx-auto mb-4">
                     <button
                         onClick={onRestart}
-                        className="px-6 py-2.5 bg-gradient-to-r from-blue-500 to-purple-600 text-white font-semibold rounded-xl hover:opacity-90 transition text-sm"
+                        className="w-full px-6 py-2.5 bg-gradient-to-r from-blue-500 to-purple-600 text-white font-semibold rounded-xl hover:opacity-90 transition text-sm"
                     >
                         重新开始
                     </button>
                     <button
                         onClick={onReviewBoard}
-                        className="px-6 py-2.5 bg-white/10 border border-white/20 text-white font-medium rounded-xl hover:bg-white/20 transition text-sm"
+                        className="w-full px-6 py-2.5 bg-white/10 border border-white/20 text-white font-medium rounded-xl hover:bg-white/20 transition text-sm"
                     >
                         📋 回看棋盘
                     </button>
                     <button
                         onClick={onReturnToSelect}
-                        className="px-6 py-2.5 bg-white/10 border border-white/20 text-white font-medium rounded-xl hover:bg-white/20 transition text-sm"
+                        className="w-full px-6 py-2.5 bg-white/10 border border-white/20 text-white font-medium rounded-xl hover:bg-white/20 transition text-sm"
                     >
-                        返回选角
+                        重选角色
                     </button>
                 </div>
             </div>

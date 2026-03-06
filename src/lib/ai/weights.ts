@@ -2,26 +2,18 @@ import {
     CellState,
     PlayerColor,
     getValidMoves,
-    getFlips,
-    applyMove,
-    isCorner,
-    isEdge,
-    isDangerousFor,
-    givesOpponentCorner,
-    isStrategicPosition,
-    isMoveSafe,
     countPieces,
-    opponent,
-    getThreatenedEdgePieces,
     POSITION_WEIGHTS,
     BOARD_SIZE,
-    isEdgeGapMove,
-    countStableDiscs,
-    getStablePositions,
+    getThreatenedEdgePieces,
+    isCorner,
 } from "../othello";
-import { getHagumiFlipScore } from "./hagumi";
+import { evaluateHagumiMove } from "./hagumi";
+import { evaluateKokoroMove } from "./kokoro";
+import { evaluateKanonMove, evaluateKanonEndgameMove } from "./kanon";
+import { evaluateMichelleMove } from "./michelle";
 import { WeightData } from "@/store/useGameStore";
-import { assignProbabilities, getTopRangeMoves, getBottomRangeMoves, getMidRangeMoves, AIRandomContext } from "./utils";
+import { assignProbabilities, getTopRangeMoves, getBottomRangeMoves, getMidRangeMoves, AIRandomContext, isFirstWhiteMove } from "./utils";
 
 /**
  * 计算指定 AI 角色在当前棋盘上所有合法落子点的评分。
@@ -39,6 +31,17 @@ export function computeAIWeights(
 
     const moves = getValidMoves(board, aiColor);
     if (moves.length === 0) return weights;
+
+    if (isFirstWhiteMove(board, aiColor)) {
+        for (const m of moves) {
+            if (m.row === m.col || m.row + m.col === 7) {
+                weights[m.row][m.col] = { total: 0, details: "初始随机：0", probability: 0.5 };
+            } else {
+                weights[m.row][m.col] = { total: 0, details: "初始随机：0", probability: 0.25 };
+            }
+        }
+        return weights;
+    }
 
     switch (characterId) {
         case "kokoro":
@@ -79,108 +82,13 @@ function computeKokoroWeights(
     const currentThreatenedSet = new Set(currentThreatened.map(p => `${p.row},${p.col}`));
 
     for (const m of moves) {
-        const flips = getFlips(board, m.row, m.col, aiColor);
-        let score = 0;
-        let details = "";
-
-        if (isCorner(m.row, m.col)) {
-            score = 200;
-            details = "占角: +200";
-        } else {
-            const posW = POSITION_WEIGHTS[m.row][m.col];
-            score = posW;
-            details = `位置权重: ${posW}`;
-
-            // 模拟落子并检测稳定子
-            const newBoard = applyMove(board, m.row, m.col, aiColor);
-            const stableSet = getStablePositions(newBoard, aiColor);
-            const isStable = stableSet.has(`${m.row},${m.col}`);
-
-            if (isStrategicPosition(m.row, m.col)) {
-                if (posW >= 20) {
-                    score += 15;
-                    details += "\n边线位: +15";
-                } else {
-                    score += 10;
-                    details += "\n次边线位: +10";
-                }
-                if (isMoveSafe(board, m.row, m.col, aiColor)) {
-                    score += 10;
-                    details += "\n安全位: +10";
-                }
-            }
-            score += flips.length;
-            details += `\n翻转: +${flips.length}`;
-
-            // 稳定子抵消负面位置权重
-            if (isStable && posW < 0) {
-                score -= posW;
-                details += `\n稳定子抵消: +${-posW}`;
-            }
-
-            // 负面修正：仅在非稳定子时生效
-            if (!isStable) {
-                if (givesOpponentCorner(board, m.row, m.col, aiColor)) {
-                    score -= 50;
-                    details += "\n送角: -50";
-                }
-                if (isDangerousFor(board, m.row, m.col, aiColor)) {
-                    score -= 50;
-                    details += "\n危险位: -50";
-                }
-                if (isEdgeGapMove(board, m.row, m.col, aiColor)) {
-                    score -= 40;
-                    details += "\n边线间隔: -40";
-                }
-            }
-
-            // --- 护边策略 ---
-            const newThreatened = getThreatenedEdgePieces(newBoard, aiColor);
-            const newThreatenedSet = new Set(newThreatened.map(p => `${p.row},${p.col}`));
-
-            let savedScore = 0;
-            for (const p of currentThreatened) {
-                if (!newThreatenedSet.has(`${p.row},${p.col}`)) {
-                    const w = POSITION_WEIGHTS[p.row][p.col];
-                    savedScore += (30 + Math.max(0, w) * 2);
-                }
-            }
-            if (savedScore > 0) {
-                score += savedScore;
-                details += `\n边线保护: +${savedScore}`;
-            }
-
-            if (!isStable) {
-                let hasNewThreat = false;
-                let newThreatPenalty = 0;
-                for (const p of newThreatened) {
-                    if (!currentThreatenedSet.has(`${p.row},${p.col}`)) {
-                        hasNewThreat = true;
-                        newThreatPenalty += POSITION_WEIGHTS[p.row][p.col];
-                    }
-                }
-                if (hasNewThreat) {
-                    const totalPenalty = 50 + newThreatPenalty * 2;
-                    score -= totalPenalty;
-                    details += `\n边线威胁: -${totalPenalty}`;
-                }
-            }
-
-            // 稳定子偏好
-            const stableBefore = countStableDiscs(board, aiColor);
-            const stableGain = stableSet.size - stableBefore;
-            if (stableGain > 0) {
-                score += stableGain * 15;
-                details += `\n稳定子: +${stableGain * 15}`;
-            }
-        }
-
+        const { score, details } = evaluateKokoroMove(board, aiColor, m, currentThreatened, currentThreatenedSet);
         weights[m.row][m.col] = { total: score, details };
     }
 
     const scored = moves.map(m => ({ ...m, score: weights[m.row][m.col]!.total, probability: undefined as number | undefined }));
     const pool = getTopRangeMoves(scored, 0.40);
-    assignProbabilities(scored, pool);
+    assignProbabilities(scored, pool, 1.5); // Kokoro: 1.5
     for (const m of pool) weights[m.row][m.col]!.probability = m.probability;
 }
 
@@ -206,28 +114,13 @@ function computeHagumiWeights(
     randomContext?: AIRandomContext
 ) {
     for (const m of moves) {
-        const flips = getFlips(board, m.row, m.col, aiColor);
-        const posW = POSITION_WEIGHTS[m.row][m.col];
-        const flipScore = getHagumiFlipScore(flips.length);
-        let score = flipScore + posW;
-        let details = `翻转(${flips.length}): +${flipScore}\n位置权重: +${posW}`;
-
-        if (isDangerousFor(board, m.row, m.col, aiColor)) {
-            score -= 30;
-            details += "\n危险位: -30";
-        }
-        if (givesOpponentCorner(board, m.row, m.col, aiColor)) {
-            score -= 50;
-            details += "\n送角: -50";
-        }
+        const { score, details } = evaluateHagumiMove(board, aiColor, m);
         weights[m.row][m.col] = { total: score, details };
     }
 
-    const safeMoves = moves.filter((m) => !givesOpponentCorner(board, m.row, m.col, aiColor));
-    const candidates = safeMoves.length > 0 ? safeMoves : moves;
-    const scored = candidates.map(m => ({ ...m, score: weights[m.row][m.col]!.total, probability: undefined as number | undefined }));
+    const scored = moves.map(m => ({ ...m, score: weights[m.row][m.col]!.total, probability: undefined as number | undefined }));
     const pool = getTopRangeMoves(scored, 0.60);
-    assignProbabilities(scored, pool);
+    assignProbabilities(scored, pool, 0.5); // Hagumi: 0.5
     for (const m of pool) weights[m.row][m.col]!.probability = m.probability;
 }
 
@@ -238,85 +131,39 @@ function computeKanonWeights(
     weights: (WeightData | null)[][],
     randomContext?: AIRandomContext
 ) {
-    const opp = opponent(aiColor);
+    const pieces = countPieces(board);
+    const emptyCount = BOARD_SIZE * BOARD_SIZE - (pieces.black + pieces.white);
 
-    // 计算当前边线威胁情况
-    const currentThreatened = getThreatenedEdgePieces(board, aiColor);
-    const currentThreatenedSet = new Set(currentThreatened.map(p => `${p.row},${p.col}`));
-
-    for (const m of moves) {
-        const flips = getFlips(board, m.row, m.col, aiColor).length;
-        const posW = POSITION_WEIGHTS[m.row][m.col];
-        let score = posW + flips * 2;
-        let details = `位置权重: ${posW}\n翻转(${flips}): +${flips * 2}`;
-
-        if (isCorner(m.row, m.col)) {
-            score += 100;
-            details += "\n占角: +100";
+    if (emptyCount <= 12) {
+        for (const m of moves) {
+            const { score, details } = evaluateKanonEndgameMove(board, aiColor, m);
+            weights[m.row][m.col] = { total: score, details };
         }
-
-        const newBoard = applyMove(board, m.row, m.col, aiColor);
-        const myNextMoves = getValidMoves(newBoard, aiColor).length;
-        const oppNextMoves = getValidMoves(newBoard, opp).length;
-        const mobilityScore = (myNextMoves - oppNextMoves) * 10;
-        score += mobilityScore;
-        details += `\n行动力差(${myNextMoves}-${oppNextMoves}): ${mobilityScore > 0 ? '+' : ''}${mobilityScore}`;
-
-        if (givesOpponentCorner(board, m.row, m.col, aiColor)) {
-            score -= 50;
-            details += "\n送角: -50";
+    } else {
+        for (const m of moves) {
+            const { score, details } = evaluateKanonMove(board, aiColor, m);
+            weights[m.row][m.col] = { total: score, details };
         }
-        if (isDangerousFor(board, m.row, m.col, aiColor)) {
-            score -= 40;
-            details += "\n危险位: -40";
-        }
-
-        // --- 边线保护 ---
-        const newThreatened = getThreatenedEdgePieces(newBoard, aiColor);
-        const newThreatenedSet = new Set(newThreatened.map(p => `${p.row},${p.col}`));
-
-        let savedScore = 0;
-        for (const p of currentThreatened) {
-            if (!newThreatenedSet.has(`${p.row},${p.col}`)) {
-                const w = POSITION_WEIGHTS[p.row][p.col];
-                savedScore += (20 + Math.max(0, w));
-            }
-        }
-        if (savedScore > 0) {
-            score += savedScore;
-            details += `\n边线保护: +${savedScore}`;
-        }
-
-        let hasNewThreat = false;
-        let newThreatPenalty = 0;
-        for (const p of newThreatened) {
-            if (!currentThreatenedSet.has(`${p.row},${p.col}`)) {
-                hasNewThreat = true;
-                newThreatPenalty += POSITION_WEIGHTS[p.row][p.col];
-            }
-        }
-        if (hasNewThreat) {
-            const totalPenalty = 30 + newThreatPenalty;
-            score -= totalPenalty;
-            details += `\n边线威胁: -${totalPenalty}`;
-        }
-
-        weights[m.row][m.col] = { total: score, details };
     }
 
     const scored = moves.map(m => ({ ...m, score: weights[m.row][m.col]!.total, probability: undefined as number | undefined }));
 
-    const isConfused = randomContext?.kanonConfused ?? false;
+    let isConfused = randomContext?.kanonConfused ?? false;
+    const hasCornerMove = moves.some(m => isCorner(m.row, m.col));
+    if (hasCornerMove) {
+        isConfused = false;
+    }
+
     if (isConfused && scored.length > 1) {
-        const pool = getMidRangeMoves(scored, 0.10, 0.75);
-        assignProbabilities(scored, pool);
+        const pool = getMidRangeMoves(scored, 0.25, 0.80);
+        assignProbabilities(scored, pool, 1.5); // Kanon Confused: 1.5
         for (const m of pool) {
             weights[m.row][m.col]!.probability = m.probability;
             weights[m.row][m.col]!.isConfused = true;
         }
     } else {
         const pool = getTopRangeMoves(scored, 0.25);
-        assignProbabilities(scored, pool);
+        assignProbabilities(scored, pool, 2.5); // Kanon Normal: 2.5
         for (const m of pool) weights[m.row][m.col]!.probability = m.probability;
     }
 }
@@ -328,31 +175,11 @@ function computeMichelleWeights(
     weights: (WeightData | null)[][],
     randomContext?: AIRandomContext
 ) {
+    const currentThreatened = getThreatenedEdgePieces(board, aiColor);
+    const currentThreatenedSet = new Set(currentThreatened.map(p => `${p.row},${p.col}`));
+
     for (const m of moves) {
-        const flips = getFlips(board, m.row, m.col, aiColor);
-        const posW = POSITION_WEIGHTS[m.row][m.col];
-        let score = posW;
-        let details = `位置权重: ${posW}`;
-
-        score += flips.length * 2;
-        details += `\n翻转(${flips.length}): +${flips.length * 2}`;
-
-        if (isCorner(m.row, m.col)) {
-            score += 50;
-            details += "\n占角: +50";
-        }
-        if (isEdge(m.row, m.col)) {
-            score += 8;
-            details += "\n边线位: +8";
-        }
-        if (givesOpponentCorner(board, m.row, m.col, aiColor)) {
-            score -= 50;
-            details += "\n送角: -50";
-        }
-        if (isDangerousFor(board, m.row, m.col, aiColor)) {
-            score -= 60;
-            details += "\n危险位: -60";
-        }
+        const { score, details } = evaluateMichelleMove(board, aiColor, m, currentThreatened, currentThreatenedSet);
         weights[m.row][m.col] = { total: score, details };
     }
 
@@ -362,15 +189,29 @@ function computeMichelleWeights(
     const oppCount = aiColor === "black" ? pieces.white : pieces.black;
     const gap = myCount - oppCount;
 
-    if (gap >= 5 && scored.length > 1) {
-        const safeMoves = scored.filter(m => !givesOpponentCorner(board, m.row, m.col, aiColor));
-        const poolSource = safeMoves.length > 0 ? safeMoves : scored;
-        const pool = getBottomRangeMoves(poolSource, 0.60);
-        assignProbabilities(poolSource, pool);
-        for (const m of pool) weights[m.row][m.col]!.probability = m.probability;
+    if (gap >= 5 && scored.length > 2) {
+        // 在新体系中，不再硬编码过滤给对手送角的步，因为势能差评估出的最差得分自然包含那些大失误
+        const bottomPool = getBottomRangeMoves(scored, 0.25);
+
+        // 翻转得分以实现“分数越低被选中的概率越大”并在盘面上正确显示概率
+        const invertedPool = bottomPool.map(m => {
+            const maxScoreInPool = Math.max(...bottomPool.map(p => p.score));
+            const invertedScore = maxScoreInPool - m.score + 1;
+            return { ...m, score: invertedScore };
+        });
+
+        assignProbabilities(invertedPool, invertedPool);
+
+        // 将计算出的概率写回原始 pool，让低分步显示高概率
+        for (const invertedM of invertedPool) {
+            const originalM = bottomPool.find(p => p.row === invertedM.row && p.col === invertedM.col);
+            if (originalM) {
+                weights[originalM.row][originalM.col]!.probability = invertedM.probability;
+            }
+        }
     } else {
         const pool = getTopRangeMoves(scored, 0.10);
-        assignProbabilities(scored, pool);
+        assignProbabilities(scored, pool, 3.0); // Michelle Normal: 3.0
         for (const m of pool) weights[m.row][m.col]!.probability = m.probability;
     }
 }

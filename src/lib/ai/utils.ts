@@ -1,3 +1,33 @@
+import { countPieces, getValidMoves, CellState, PlayerColor } from "../othello";
+/**
+ * 判断是否为白方的第一步（棋盘上恰好只有初始的4个子+黑方下的1个子=5个子，且轮到白方）。
+ */
+export function isFirstWhiteMove(board: CellState[][], aiColor: PlayerColor): boolean {
+    if (aiColor !== "white") return false;
+    const pieces = countPieces(board);
+    return pieces.black + pieces.white === 5;
+}
+
+/**
+ * 处理白方第一步的强制逻辑：
+ * 必定有3个合法落子点，其中1个为沿对角线落子（概率50%），其余2个为垂直/水平落子（各25%）。
+ */
+export function handleFirstWhiteMove(board: CellState[][], aiColor: PlayerColor): { row: number; col: number } {
+    const moves = getValidMoves(board, aiColor);
+    // 寻找对角线落子点（必定有一个）
+    const diagMove = moves.find(m => m.row === m.col || m.row + m.col === 7);
+    const otherMoves = moves.filter(m => m !== diagMove);
+
+    const rand = Math.random();
+    if (rand < 0.50 && diagMove) {
+        return diagMove;
+    } else {
+        // 剩下 50% 均分给另外两个点
+        if (!diagMove) return moves[0];
+        return rand < 0.75 ? otherMoves[0] : otherMoves[1];
+    }
+}
+
 /**
  * 按分数权重进行比例随机选择（支持负数）。
  * 
@@ -12,7 +42,8 @@
  */
 export function getProportionalRandomMove<T extends { score: number }>(
     allScoredMoves: T[],
-    poolMoves: T[]
+    poolMoves: T[],
+    exponent: number = 1.0
 ): T {
     if (poolMoves.length === 0) return allScoredMoves[0]; // 兜底
     if (poolMoves.length === 1) return poolMoves[0];
@@ -20,8 +51,8 @@ export function getProportionalRandomMove<T extends { score: number }>(
     // 使用池内最低分进行偏移，而非全局最低分
     const minScore = Math.min(...poolMoves.map((m) => m.score));
 
-    // 计算映射权重（偏移至非负数 + 1）
-    const weights = poolMoves.map((m) => Math.max(0, m.score - minScore) + 1);
+    // 计算映射权重（偏移至非负数 + 1，再应用指数/对数衰减）
+    const weights = poolMoves.map((m) => Math.pow(Math.max(0, m.score - minScore) + 1, exponent));
     const totalWeight = weights.reduce((sum, w) => sum + w, 0);
 
     let randomVal = Math.random() * totalWeight;
@@ -104,7 +135,8 @@ export interface AIRandomContext {
  */
 export function assignProbabilities<T extends { score: number, probability?: number }>(
     allScoredMoves: { score: number }[],
-    poolMoves: T[]
+    poolMoves: T[],
+    exponent: number = 1.0
 ): void {
     if (poolMoves.length === 0) return;
     if (poolMoves.length === 1) {
@@ -113,7 +145,7 @@ export function assignProbabilities<T extends { score: number, probability?: num
     }
     // 使用池内最低分而非全局最低分，避免极端异常值压缩概率差异
     const minScore = Math.min(...poolMoves.map((m) => m.score));
-    const weights = poolMoves.map((m) => Math.max(0, m.score - minScore) + 1);
+    const weights = poolMoves.map((m) => Math.pow(Math.max(0, m.score - minScore) + 1, exponent));
     const totalWeight = weights.reduce((sum, w) => sum + w, 0);
 
     for (let i = 0; i < poolMoves.length; i++) {

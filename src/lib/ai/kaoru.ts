@@ -10,6 +10,7 @@ import {
     POSITION_WEIGHTS,
     BOARD_SIZE,
 } from "../othello";
+import { isFirstWhiteMove, handleFirstWhiteMove } from "./utils";
 
 /**
  * 基础搜索深度限制为 5 层。
@@ -42,6 +43,8 @@ export function kaoruAI(
     board: CellState[][],
     aiColor: PlayerColor
 ): { row: number; col: number } {
+    if (isFirstWhiteMove(board, aiColor)) return handleFirstWhiteMove(board, aiColor);
+
     const moves = getValidMoves(board, aiColor);
     if (moves.length === 0) throw new Error("Kaoru AI 无合法落子点");
 
