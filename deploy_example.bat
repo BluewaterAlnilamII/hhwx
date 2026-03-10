@@ -28,10 +28,11 @@ echo [4/4] 代码已推送！正在连接服务器执行部署...
 set SSH_KEY="C:\path\to\your\key.pem"
 set SERVER_IP="你的服务器公网IP"
 set SERVER_USER="ubuntu"
+set SERVER_PORT=22
 :: ==============================================
 
 :: 通过 SSH 连接服务器并执行部署脚本
-ssh -i %SSH_KEY% %SERVER_USER%@%SERVER_IP% "bash ~/hhwx/deploy.sh"
+ssh -p %SERVER_PORT% -i %SSH_KEY% %SERVER_USER%@%SERVER_IP% "bash ~/hhwx/deploy.sh"
 
 echo.
 echo ===================================
