@@ -22,7 +22,11 @@
 
 # misc
 .DS_Store
+Thumbs.db
+.idea/
+.vscode/
 *.pem
+*.key
 
 # debug
 npm-debug.log*
@@ -39,3 +43,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Local deployment scripts
+deploy.bat
