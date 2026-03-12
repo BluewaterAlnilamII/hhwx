@@ -48,7 +48,10 @@ export async function GET(request: Request) {
       ep: Number(item.ep)
     }));
 
-    return NextResponse.json(formattedData);
+    return NextResponse.json({
+      result: true,
+      cutoffs: formattedData
+    });
   } catch (error) {
     console.error("Tracker API error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });

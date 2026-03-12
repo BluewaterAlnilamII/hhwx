@@ -294,14 +294,25 @@ body::before {
 }
 
 ::-webkit-scrollbar {
-  width: 6px;
+  width: 8px;
+  height: 8px;
+  background-color: var(--bg-yellow); /* Ensure no transparency bleeding */
 }
 
 ::-webkit-scrollbar-track {
-  background: transparent;
+  background: rgba(255, 255, 255, 0.4);
+  border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(0, 0, 0, 0.2);
-  border-radius: 3px;
+  background: #44DDFF;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #22BBDD;
+}
+
+::-webkit-scrollbar-corner {
+  background: var(--bg-yellow);
 }
