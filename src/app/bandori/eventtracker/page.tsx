@@ -27,6 +27,12 @@ type EventMetadata = {
   endAt: (string | null)[];
 };
 
+type MinimalEvent = {
+  id: number;
+  name: string;
+  startAt: number;
+};
+
 const EVENT_TIERS = [1, 10, 20, 30, 40, 50, 100, 200, 300, 400, 500, 1000, 2000, 3000, 4000, 5000, 10000, 20000, 30000, 40000, 50000, 70000, 100000];
 const SONG_TIERS = [1, 10, 20, 30, 40, 50, 100, 200, 300, 400, 500, 1000, 2000, 5000, 10000, 20000];
 const MONTHLY_TIERS = [1, 10, 20, 30, 40, 50, 100, 200, 300, 500, 1000, 2000, 3000, 4000];
@@ -43,6 +49,8 @@ export default function EventTrackerPage() {
   
   const [zoomLevel, setZoomLevel] = useState(1);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  
+  const [allEvents, setAllEvents] = useState<MinimalEvent[]>([]);
 
   // Auto-scroll to the rightmost (latest data) whenever the container resizes (e.g., from zooming)
   useEffect(() => {
@@ -92,6 +100,31 @@ export default function EventTrackerPage() {
       .catch((err) => console.error("Error fetching event metadata:", err));
     return () => { active = false; };
   }, [currentEventId]);
+
+  // Fetch All Events list for selector
+  useEffect(() => {
+    fetch('/api/bestdori/events')
+      .then(res => res.json())
+      .then(data => {
+        if (data && !data.error) {
+          const eventsList: MinimalEvent[] = [];
+          Object.entries(data).forEach(([idStr, ev]: [string, any]) => {
+            const cnName = ev.eventName?.[3];
+            if (cnName) {
+              eventsList.push({
+                id: parseInt(idStr),
+                name: cnName,
+                startAt: ev.startAt?.[3] ? parseInt(ev.startAt[3]) : 0
+              });
+            }
+          });
+          // Sort descending by ID (newest first)
+          eventsList.sort((a, b) => b.id - a.id);
+          setAllEvents(eventsList);
+        }
+      })
+      .catch(err => console.error("Error fetching all events list:", err));
+  }, []);
 
   // Reset zoom when tracking mode changes
   useEffect(() => {
@@ -199,9 +232,25 @@ export default function EventTrackerPage() {
         <div className="flex flex-col md:flex-row justify-between items-center bg-white dark:bg-[#131A2B] rounded-3xl shadow-xl shadow-blue-500/5 dark:shadow-blue-500/10 border border-gray-100 dark:border-gray-800 p-8 relative z-20">
           
           <div className="flex-1 space-y-4">
-            <h1 className="text-3xl font-extrabold text-[#f43f5e]">
-              {cnEventName}
-            </h1>
+            <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+              <h1 className="text-3xl font-extrabold text-[#f43f5e]">
+                {cnEventName}
+              </h1>
+              {allEvents.length > 0 && (
+                <select 
+                  className="bg-gray-100 dark:bg-[#0C111C] border border-gray-200 dark:border-gray-700/50 rounded-xl px-3 py-2 text-sm font-semibold text-gray-700 dark:text-gray-300 focus:ring-2 focus:ring-[#f43f5e] focus:outline-none cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-800 transition-colors shadow-sm max-w-[280px] text-ellipsis"
+                  value={currentEventId}
+                  onChange={(e) => setCurrentEventId(parseInt(e.target.value))}
+                >
+                  <option disabled value="">切换往期活动...</option>
+                  {allEvents.map(ev => (
+                    <option key={ev.id} value={ev.id}>
+                      第 {ev.id} 期: {ev.name}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
             <div className="text-sm font-medium text-gray-500 dark:text-gray-400">
               {startDate && endDate ? (
                 <>
