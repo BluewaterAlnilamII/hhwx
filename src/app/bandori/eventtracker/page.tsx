@@ -10,6 +10,7 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
+  ReferenceLine,
 } from "recharts";
 import * as Tabs from "@radix-ui/react-tabs";
 import { ZoomIn, ZoomOut } from "lucide-react";
@@ -51,6 +52,13 @@ export default function EventTrackerPage() {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   
   const [allEvents, setAllEvents] = useState<MinimalEvent[]>([]);
+  const [ticker, setTicker] = useState(0);
+
+  // Real-time refresh for minutes ago
+  useEffect(() => {
+    const interval = setInterval(() => setTicker(t => t + 1), 60000);
+    return () => clearInterval(interval);
+  }, []);
 
   // Auto-scroll to the rightmost (latest data) whenever the container resizes (e.g., from zooming)
   useEffect(() => {
@@ -175,14 +183,130 @@ export default function EventTrackerPage() {
   // Chart X-Axis Boundaries
   let domainStart: number | "auto" = "auto";
   let domainEnd: number | "auto" = "auto";
+  let cutoffEnd: number | null = null;
   
   if (trackingMode === "monthly") {
     const now = new Date();
     domainStart = new Date(now.getFullYear(), now.getMonth(), 1, 13, 0, 0).getTime();
-    domainEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999).getTime(); // Last day of that month 24:00
+    cutoffEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1, 0, 0, 0).getTime(); // 24:00:00 of last day is 00:00:00 of next month
+    domainEnd = cutoffEnd;
   } else if (startDate && endDate) {
     domainStart = startDate;
-    domainEnd = endDate;
+    cutoffEnd = endDate + 1000; // 1秒后
+    domainEnd = cutoffEnd;
+  }
+
+  // 计算所有的午夜 0:00 时间戳
+  const midnights: number[] = [];
+  if (typeof domainStart === "number" && typeof domainEnd === "number") {
+    let m = new Date(domainStart);
+    m.setHours(24, 0, 0, 0); // 跳到下一个 0 点
+    while (m.getTime() <= domainEnd) {
+      midnights.push(m.getTime());
+      m.setDate(m.getDate() + 1);
+    }
+  }
+
+  // 最右侧强锁定事件结束
+  const displayedData = chartData.filter(d => cutoffEnd === null || d.time <= cutoffEnd);
+
+  // XAxis 2% padding
+  let paddedDomainStart = domainStart;
+  let paddedDomainEnd = domainEnd;
+  
+  if (typeof domainStart === "number" && typeof domainEnd === "number") {
+    const duration = domainEnd - domainStart;
+    const paddingMs = duration * 0.02; // 2% 留白
+    paddedDomainStart = domainStart - paddingMs;
+    paddedDomainEnd = domainEnd + paddingMs;
+  }
+
+  // 自定义 Y 轴 Ticks 生成器
+  const generateYTicks = () => {
+    if (displayedData.length === 0) return undefined;
+    
+    let minEp = trackingMode === "monthly" ? 2500 : 0;
+    let maxEp = minEp;
+    for (const d of displayedData) {
+      if (d.ep > maxEp) maxEp = d.ep;
+    }
+    
+    // 自动计算理想步进 (Nice steps: 1, 2, 5 * 10^n)
+    const range = Math.max(maxEp - minEp, 100); // 至少 100
+    const roughStep = range / 8; // 最多 8-10 格
+    
+    const magnitude = Math.pow(10, Math.floor(Math.log10(roughStep)));
+    const normalizedStep = roughStep / magnitude;
+    
+    let stepMultiplier;
+    if (normalizedStep <= 1.5) stepMultiplier = 1;
+    else if (normalizedStep <= 3) stepMultiplier = 2;
+    else if (normalizedStep <= 7) stepMultiplier = 5;
+    else stepMultiplier = 10;
+    
+    let selectedStep = stepMultiplier * magnitude;
+    
+    const ticks: number[] = [minEp]; // 强插首个底座点
+    
+    // 从首个点后寻找下一个整数倍点作为对齐分割点
+    let currentTick = Math.floor(minEp / selectedStep) * selectedStep + selectedStep;
+    
+    while (currentTick <= maxEp + selectedStep) {
+      ticks.push(currentTick);
+      currentTick += selectedStep;
+    }
+    
+    return ticks;
+  };
+  const yTicks = generateYTicks();
+  const yDomainInfo: any[] = yTicks && yTicks.length > 0 ? [yTicks[0], yTicks[yTicks.length - 1]] : [0, 'dataMax'];
+
+  const nowTime = Date.now();
+  let status = "未开始";
+  if (domainStart !== "auto" && domainEnd !== "auto") {
+    if (nowTime < (domainStart as number)) status = "未开始";
+    else if (nowTime > (domainEnd as number)) status = "已结束";
+    else status = "进行中";
+  }
+
+  // Helper to extract data near a target timestamp
+  const getScoreAtTime = (targetTime: number, toleranceMs = 5 * 60 * 1000) => {
+    let best = null;
+    let minDiff = Infinity;
+    for (const pt of chartData) {
+      const diff = Math.abs(pt.time - targetTime);
+      if (diff < minDiff && diff <= toleranceMs) {
+        minDiff = diff;
+        best = pt.ep;
+      }
+    }
+    return best;
+  };
+
+  let latestScore: number | null = null;
+  let updateMinutesAgo = -1;
+  let endScore: number | null = null;
+  let finalScore: number | null = null;
+
+  if (chartData.length > 0) {
+    const latestPt = chartData[chartData.length - 1];
+    latestScore = latestPt.ep;
+    updateMinutesAgo = Math.floor((nowTime - latestPt.time) / 60000);
+
+    if (status === "已结束") {
+      if (trackingMode === "monthly" && typeof domainEnd === "number") {
+        const nextMonth1st0000 = domainEnd + 1;
+        const nextMonth1st0015 = nextMonth1st0000 + 15 * 60 * 1000;
+        endScore = getScoreAtTime(nextMonth1st0000);
+        finalScore = getScoreAtTime(nextMonth1st0015);
+      } else if (endDate) {
+        const ed = new Date(endDate);
+        const endDay2300 = new Date(ed.getFullYear(), ed.getMonth(), ed.getDate(), 23, 0, 0).getTime();
+        const endDay2315 = new Date(ed.getFullYear(), ed.getMonth(), ed.getDate(), 23, 15, 0).getTime();
+        endScore = getScoreAtTime(endDay2300);
+        finalScore = getScoreAtTime(endDay2315);
+      }
+    }
   }
 
   // Custom Tooltip for Speed calculation
@@ -225,11 +349,11 @@ export default function EventTrackerPage() {
   };
 
   return (
-    <div className="min-h-screen text-gray-800 dark:text-gray-100 p-6 sm:p-10 font-sans relative z-10">
+    <div className="min-h-screen text-gray-800 dark:text-gray-100 p-2 sm:p-6 lg:p-10 font-sans relative z-10">
       
       {/* Header Container */}
-      <div className="max-w-5xl mx-auto space-y-8 relative z-10">
-        <div className="flex flex-col md:flex-row justify-between items-center bg-white dark:bg-[#131A2B] rounded-3xl shadow-xl shadow-blue-500/5 dark:shadow-blue-500/10 border border-gray-100 dark:border-gray-800 p-8 relative z-20">
+      <div className="max-w-5xl mx-auto space-y-4 lg:space-y-8 relative z-10">
+        <div className="flex flex-col md:flex-row justify-between items-center bg-white dark:bg-[#131A2B] rounded-3xl shadow-xl shadow-blue-500/5 dark:shadow-blue-500/10 border border-gray-100 dark:border-gray-800 p-4 sm:p-8 relative z-20">
           
           <div className="flex-1 space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center gap-4">
@@ -293,49 +417,91 @@ export default function EventTrackerPage() {
         )}
 
         {/* Navigation & Controls */}
-        <div className="bg-white/80 dark:bg-[#131A2B]/80 backdrop-blur-xl rounded-3xl p-6 md:p-8 shadow-xl border border-white/20 dark:border-gray-800">
+        <div className="bg-white/80 dark:bg-[#131A2B]/80 backdrop-blur-xl rounded-3xl p-3 sm:p-6 shadow-xl border border-white/20 dark:border-gray-800">
           <Tabs.Root 
             value={trackingMode} 
             onValueChange={(val: string) => setTrackingMode(val as any)}
-            className="w-full flex flex-col space-y-8"
+            className="w-full flex flex-col gap-4 sm:gap-6"
           >
-            <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
-              <Tabs.List className="flex items-center p-1.5 bg-gray-100/80 dark:bg-gray-900/50 rounded-2xl shadow-inner">
-                {["event", "song", "monthly"].map((mode) => (
+            <div className="flex flex-col xl:flex-row gap-4 items-stretch">
+              
+              {/* Tab Toggles */}
+              <Tabs.List className="flex flex-row xl:flex-col justify-center gap-1 sm:gap-2 p-1.5 sm:p-2 bg-gray-100/80 dark:bg-gray-900/50 rounded-2xl shadow-inner flex-shrink-0 overflow-x-auto">
+                {[
+                  { id: "event", label: "活动排行" },
+                  { id: "song", label: "歌曲排行" },
+                  { id: "monthly", label: "月度排行" }
+                ].map((mode) => (
                   <Tabs.Trigger
-                    key={mode}
-                    value={mode}
-                    className="px-6 py-2.5 rounded-xl text-sm font-semibold capitalize transition-all duration-300
+                    key={mode.id}
+                    value={mode.id}
+                    className="px-4 py-2 sm:px-6 sm:py-3 rounded-xl text-xs sm:text-sm font-semibold transition-all duration-300 whitespace-nowrap
                       data-[state=active]:bg-white data-[state=active]:dark:bg-gray-800 
                       data-[state=active]:text-blue-600 data-[state=active]:dark:text-blue-400
-                      data-[state=active]:shadow-md data-[state=inactive]:text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+                      data-[state=active]:shadow-md data-[state=inactive]:text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 w-full text-center tracking-wide"
                   >
-                    {mode} Score
+                    {mode.label}
                   </Tabs.Trigger>
                 ))}
               </Tabs.List>
 
               {/* Tier Selection */}
-              <div className="flex flex-wrap gap-2 items-center">
-                <span className="text-xs font-bold uppercase tracking-wider text-gray-400 mr-2">Select Tier</span>
-                {(trackingMode === "event" ? EVENT_TIERS : trackingMode === "song" ? SONG_TIERS : MONTHLY_TIERS).map(tier => (
-                  <button
-                    key={tier}
-                    onClick={() => setSelectedTier(tier)}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-300 ${
-                      selectedTier === tier 
-                        ? "bg-blue-600 text-white shadow-lg shadow-blue-500/30 ring-2 ring-blue-600 ring-offset-2 dark:ring-offset-[#131A2B] scale-105" 
-                        : "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 hover:scale-105"
-                    }`}
-                  >
-                    T{tier}
-                  </button>
-                ))}
+              <div className="flex-1 bg-gray-50/50 dark:bg-[#0C111C]/50 rounded-2xl p-3 sm:p-5 border border-gray-100 dark:border-gray-800/60 shadow-inner overflow-hidden flex flex-col justify-center">
+                <div className="text-xs sm:text-sm font-bold tracking-wider text-gray-400 mb-2 ml-1 block hidden xl:block">选择排名</div>
+                <div className="flex flex-wrap gap-1.5 sm:gap-2">
+                  {(trackingMode === "event" ? EVENT_TIERS : trackingMode === "song" ? SONG_TIERS : MONTHLY_TIERS).map(tier => (
+                    <button
+                      key={tier}
+                      onClick={() => setSelectedTier(tier)}
+                      className={`px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-lg text-[11px] sm:text-xs font-semibold transition-all duration-300 ${
+                        selectedTier === tier 
+                          ? "bg-blue-600 text-white shadow-lg shadow-blue-500/30 ring-2 ring-blue-600 ring-offset-2 dark:ring-offset-[#131A2B] scale-105" 
+                          : "bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 hover:scale-105 border border-gray-200 dark:border-gray-700 shadow-sm"
+                      }`}
+                    >
+                      T{tier}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Status Indicator */}
+              <div className="flex flex-col justify-center bg-gray-50 dark:bg-[#0C111C] rounded-2xl border border-gray-100 dark:border-gray-800/60 shadow-inner min-w-[280px] divide-y divide-gray-200 dark:divide-gray-800 flex-shrink-0">
+                <div className="flex justify-between items-center p-4">
+                  <span className="text-base font-bold text-gray-500 dark:text-gray-400">活动状态</span>
+                  <span className={`text-base font-bold tracking-wider ${status === '进行中' ? 'text-green-500' : status === '已结束' ? 'text-gray-500' : 'text-blue-500'}`}>
+                    {status}
+                  </span>
+                </div>
+                {status === "进行中" && (
+                  <>
+                     <div className="flex justify-between items-center p-4">
+                       <span className="text-base text-gray-500 dark:text-gray-400">最新分数</span>
+                       <span className="text-base font-bold text-blue-500">{latestScore !== null ? new Intl.NumberFormat().format(latestScore) : "-"}</span>
+                     </div>
+                     <div className="flex justify-between items-center p-4">
+                       <span className="text-base text-gray-500 dark:text-gray-400">更新时间</span>
+                       <span className="text-base font-medium text-gray-600 dark:text-gray-300">{updateMinutesAgo >= 0 ? `${updateMinutesAgo}分钟前` : "-"}</span>
+                     </div>
+                  </>
+                )}
+                {status === "已结束" && (
+                  <>
+                     <div className="flex justify-between items-center p-4">
+                       <span className="text-base text-gray-500 dark:text-gray-400">结束分数</span>
+                       <span className="text-base font-bold text-gray-700 dark:text-gray-300">{endScore !== null ? new Intl.NumberFormat().format(endScore) : "结算中"}</span>
+                     </div>
+                     <div className="flex justify-between items-center p-4">
+                       <span className="text-base text-gray-500 dark:text-gray-400">最终分数</span>
+                       <span className="text-base font-bold text-gray-700 dark:text-gray-300">{finalScore !== null ? new Intl.NumberFormat().format(finalScore) : "结算中"}</span>
+                     </div>
+                  </>
+                )}
               </div>
             </div>
 
             <Tabs.Content value={trackingMode} className="outline-none focus:outline-none w-full animate-in fade-in zoom-in-95 duration-500">
-              <div className="mt-4 relative bg-[#F9FBFC] dark:bg-[#0C111C] p-6 rounded-2xl border border-gray-100 dark:border-gray-800/60 shadow-inner">
+              <div className="mt-2 relative bg-[#F9FBFC] dark:bg-[#0C111C] p-1 sm:p-4 rounded-2xl border border-gray-100 dark:border-gray-800/60 shadow-inner">
                 
                 {loading && (
                    <div className="absolute inset-0 bg-white/50 dark:bg-[#0C111C]/50 backdrop-blur-sm z-30 flex items-center justify-center rounded-2xl">
@@ -352,9 +518,9 @@ export default function EventTrackerPage() {
                     className="w-full h-full overflow-x-auto overflow-y-hidden rounded-xl styling-scrollbar relative"
                   >
                     <div style={{ minWidth: `${zoomLevel * 100}%`, height: '100%', transition: 'min-width 0.3s ease-out' }}>
-                      {chartData.length > 0 ? (
+                      {displayedData.length > 0 ? (
                         <ResponsiveContainer width="100%" height="100%">
-                          <LineChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
+                          <LineChart data={displayedData} margin={{ top: 20, right: 0, left: 0, bottom: 20 }}>
                             <defs>
                               <linearGradient id="colorEp" x1="0" y1="0" x2="0" y2="1">
                                 <stop offset="5%" stopColor="#3B82F6" stopOpacity={0.3}/>
@@ -362,11 +528,23 @@ export default function EventTrackerPage() {
                               </linearGradient>
                             </defs>
                             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#374151" opacity={0.15} />
+                            
+                            {midnights.map(m => (
+                              <ReferenceLine 
+                                key={m} 
+                                x={m} 
+                                stroke="#D1D5DB" 
+                                strokeDasharray="3 3" 
+                                opacity={0.6}
+                              />
+                            ))}
+
                             <XAxis 
                               dataKey="time" 
-                              domain={[domainStart, domainEnd]}
+                              domain={[paddedDomainStart, paddedDomainEnd]}
                               type="number"
-                              tickFormatter={(unixTime) => format(unixTime, "MM/dd HH:mm")}
+                              ticks={midnights}
+                              tickFormatter={(unixTime) => format(unixTime, "MM/dd")}
                               stroke="#6B7280"
                               fontSize={12}
                               tickLine={false}
@@ -375,12 +553,22 @@ export default function EventTrackerPage() {
                             />
                             <YAxis 
                               stroke="#6B7280"
-                              fontSize={12}
+                              fontSize={11}
                               tickLine={false}
                               axisLine={false}
-                              tickFormatter={(value) => new Intl.NumberFormat('en-US', { notation: "compact", compactDisplay: "short" }).format(value)}
+                              width={45}
+                              ticks={yTicks}
+                              type="number"
+                              domain={yDomainInfo}
+                              tickFormatter={(value) => {
+                                if (value === 0) return "0";
+                                if (value % 1000000 === 0 && value >= 1000000) return (value / 1000000) + "M";
+                                if (value % 100000 === 0 && value >= 1000000) return (value / 1000000).toFixed(1) + "M"; 
+                                if (value >= 1000) return (value / 1000) + "K";
+                                return value.toString();
+                              }}
                             />
-                            <Tooltip content={<CustomTooltip />} />
+                            <Tooltip content={<CustomTooltip />} cursor={{ stroke: '#9CA3AF', strokeWidth: 1, strokeDasharray: '4 4' }} />
                             <Line 
                               type="monotone" 
                               dataKey="ep" 
@@ -427,7 +615,6 @@ export default function EventTrackerPage() {
                     </button>
                   </div>
                 </div>
-
               </div>
             </Tabs.Content>
           </Tabs.Root>
