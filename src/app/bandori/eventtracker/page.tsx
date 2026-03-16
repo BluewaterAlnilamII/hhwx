@@ -13,7 +13,8 @@ import {
   ReferenceLine,
 } from "recharts";
 import * as Tabs from "@radix-ui/react-tabs";
-import { ZoomIn, ZoomOut } from "lucide-react";
+import { ZoomIn, ZoomOut, Search, History, X, ChevronDown, Check, Info } from "lucide-react";
+import * as Dialog from "@radix-ui/react-dialog";
 
 type TrackerData = {
   time: number;
@@ -31,7 +32,10 @@ type EventMetadata = {
 type MinimalEvent = {
   id: number;
   name: string;
-  startAt: number;
+  startAt: number | null;
+  endAt: number | null;
+  hasCn: boolean;
+  hasJp: boolean;
 };
 
 const EVENT_TIERS = [1, 10, 20, 30, 40, 50, 100, 200, 300, 400, 500, 1000, 2000, 3000, 4000, 5000, 10000, 20000, 30000, 40000, 50000, 70000, 100000];
@@ -39,7 +43,7 @@ const SONG_TIERS = [1, 10, 20, 30, 40, 50, 100, 200, 300, 400, 500, 1000, 2000, 
 const MONTHLY_TIERS = [1, 10, 20, 30, 40, 50, 100, 200, 300, 500, 1000, 2000, 3000, 4000];
 
 export default function EventTrackerPage() {
-  const [currentEventId, setCurrentEventId] = useState<number>(302);
+  const [currentEventId, setCurrentEventId] = useState<number | null>(null);
   const [eventMeta, setEventMeta] = useState<EventMetadata | null>(null);
   
   const [trackingMode, setTrackingMode] = useState<"event" | "song" | "monthly">("event");
@@ -53,6 +57,9 @@ export default function EventTrackerPage() {
   
   const [allEvents, setAllEvents] = useState<MinimalEvent[]>([]);
   const [ticker, setTicker] = useState(0);
+  
+  const [isPickerOpen, setIsPickerOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
 
   // Real-time refresh for minutes ago
   useEffect(() => {
@@ -99,6 +106,7 @@ export default function EventTrackerPage() {
 
   // Fetch Event Metadata
   useEffect(() => {
+    if (currentEventId === null) return;
     let active = true;
     fetch(`/api/bestdori/event/${currentEventId}`)
       .then((res) => res.json())
@@ -117,23 +125,89 @@ export default function EventTrackerPage() {
         if (data && !data.error) {
           const eventsList: MinimalEvent[] = [];
           Object.entries(data).forEach(([idStr, ev]: [string, any]) => {
+            // Keep everything that has at least one valid name
             const cnName = ev.eventName?.[3];
-            if (cnName) {
+            const jpName = ev.eventName?.[0];
+            
+            if (cnName || jpName) {
               eventsList.push({
                 id: parseInt(idStr),
-                name: cnName,
-                startAt: ev.startAt?.[3] ? parseInt(ev.startAt[3]) : 0
+                name: cnName || jpName || "Unknown",
+                startAt: ev.startAt?.[3] ? parseInt(ev.startAt[3]) : null,
+                endAt: ev.endAt?.[3] ? parseInt(ev.endAt[3]) : null,
+                hasCn: !!cnName,
+                hasJp: !!jpName
               });
             }
           });
-          // Sort descending by ID (newest first)
+          // Sort descending by ID (newest first) for the dropdown list
           eventsList.sort((a, b) => b.id - a.id);
           setAllEvents(eventsList);
+
+          // Auto-select logic with strict priority:
+          // 1. Ongoing
+          // 2. Earliest Upcoming (Min ID)
+          // 3. Latest Finished (Max ID)
+          const now = Date.now();
+          
+          let bestMatch: MinimalEvent | null = null;
+          
+          // Priority 1: Ongoing
+          bestMatch = eventsList.find(ev => ev.startAt !== null && ev.endAt !== null && now >= ev.startAt && now <= ev.endAt) || null;
+          
+          // Priority 2: Upcoming (startAt is null or in the future)
+          if (!bestMatch) {
+            const upcoming = eventsList
+              .filter(ev => ev.startAt === null || ev.startAt > now)
+              .sort((a, b) => a.id - b.id); // ASCENDING ID (Smallest ID first, e.g. 303)
+            if (upcoming.length > 0) bestMatch = upcoming[0];
+          }
+          
+          // Priority 3: Finished
+          if (!bestMatch) {
+            const finished = eventsList
+              .filter(ev => ev.endAt !== null && ev.endAt < now)
+              .sort((a, b) => b.id - a.id); // DESCENDING ID (Newest ID first, e.g. 313)
+            if (finished.length > 0) bestMatch = finished[0];
+          }
+
+          if (bestMatch && currentEventId === null) {
+            setCurrentEventId(bestMatch.id);
+          }
         }
       })
-      .catch(err => console.error("Error fetching all events list:", err));
-  }, []);
+      .catch(err => console.error("Error fetching events list:", err));
+  }, []); // Run once on mount
 
+  // Helper for "Jump to Latest" logic (same as auto-select)
+  const jumpToLatest = () => {
+    if (allEvents.length === 0) return;
+    const now = Date.now();
+    let bestMatch: MinimalEvent | null = null;
+    
+    // 1. Ongoing
+    bestMatch = allEvents.find(ev => ev.startAt !== null && ev.endAt !== null && now >= ev.startAt && now <= ev.endAt) || null;
+    
+    // 2. Upcoming (Min ID)
+    if (!bestMatch) {
+      const upcoming = [...allEvents]
+        .filter(ev => ev.startAt === null || ev.startAt > now)
+        .sort((a, b) => a.id - b.id);
+      if (upcoming.length > 0) bestMatch = upcoming[0];
+    }
+    
+    // 3. Finished (Max ID)
+    if (!bestMatch) {
+      const finished = [...allEvents]
+        .filter(ev => ev.endAt !== null && ev.endAt < now)
+        .sort((a, b) => b.id - a.id);
+      if (finished.length > 0) bestMatch = finished[0];
+    }
+
+    if (bestMatch) {
+      setCurrentEventId(bestMatch.id);
+    }
+  };
   // Reset zoom when tracking mode changes
   useEffect(() => {
     setZoomLevel(1);
@@ -141,6 +215,7 @@ export default function EventTrackerPage() {
 
   // Fetch Tracker Data
   useEffect(() => {
+    if (currentEventId === null) return;
     let active = true;
     setLoading(true);
     
@@ -168,13 +243,17 @@ export default function EventTrackerPage() {
     return () => { active = false; };
   }, [currentEventId, trackingMode, selectedTier]);
 
-  const cnEventName = eventMeta?.eventName[3] || "Loading Event...";
+  const cnEventName = eventMeta?.eventName[3] || eventMeta?.eventName[0] || "Loading Event...";
+  
+  // Decide which banner to show: CN if meta has it, else JP
+  const bannerPath = eventMeta?.eventName[3] ? "cn" : "jp";
   const bannerUrl = eventMeta?.assetBundleName 
-    ? `https://bestdori.com/assets/cn/event/${eventMeta.assetBundleName}/images_rip/banner.png`
+    ? `https://bestdori.com/assets/${bannerPath}/event/${eventMeta.assetBundleName}/images_rip/banner.png`
     : "";
     
-  const startDate = eventMeta?.startAt[3] ? parseInt(eventMeta.startAt[3]) : null;
-  const endDate = eventMeta?.endAt[3] ? parseInt(eventMeta.endAt[3]) : null;
+  // Only read CN time information (server index 3)
+  const startDate = eventMeta?.startAt[3] ? parseInt(eventMeta.startAt[3]!) : null;
+  const endDate = eventMeta?.endAt[3] ? parseInt(eventMeta.endAt[3]!) : null;
 
   const progress = (startDate && endDate) 
     ? Math.min(100, Math.max(0, ((Date.now() - startDate) / (endDate - startDate)) * 100))
@@ -356,34 +435,122 @@ export default function EventTrackerPage() {
         <div className="flex flex-col md:flex-row justify-between items-center bg-white dark:bg-[#131A2B] rounded-3xl shadow-xl shadow-blue-500/5 dark:shadow-blue-500/10 border border-gray-100 dark:border-gray-800 p-4 sm:p-8 relative z-20">
           
           <div className="flex-1 space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center gap-4">
-              <h1 className="text-3xl font-extrabold text-[#f43f5e]">
-                {cnEventName}
-              </h1>
-              {allEvents.length > 0 && (
+            <h1 className="text-3xl font-extrabold text-[#f43f5e] block w-full">
+              {cnEventName}
+            </h1>
+            
+            {allEvents.length > 0 && (
+              <div className="flex items-center gap-2">
                 <select 
-                  className="bg-gray-100 dark:bg-[#0C111C] border border-gray-200 dark:border-gray-700/50 rounded-xl px-3 py-2 text-sm font-semibold text-gray-700 dark:text-gray-300 focus:ring-2 focus:ring-[#f43f5e] focus:outline-none cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-800 transition-colors shadow-sm max-w-[280px] text-ellipsis"
-                  value={currentEventId}
+                  className="bg-gray-100 dark:bg-[#0C111C] border border-gray-200 dark:border-gray-700/50 rounded-xl px-4 py-2.5 text-sm font-bold text-gray-700 dark:text-gray-300 focus:ring-2 focus:ring-[#f43f5e] focus:outline-none cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-800 transition-colors shadow-sm w-full max-w-[400px] text-ellipsis sm:min-w-[320px]"
+                  value={currentEventId || ""}
                   onChange={(e) => setCurrentEventId(parseInt(e.target.value))}
                 >
                   <option disabled value="">切换往期活动...</option>
                   {allEvents.map(ev => (
                     <option key={ev.id} value={ev.id}>
-                      第 {ev.id} 期: {ev.name}
+                      {ev.id}期 : {ev.name}
                     </option>
                   ))}
                 </select>
-              )}
-            </div>
+
+                <button 
+                  onClick={jumpToLatest}
+                  className="p-2.5 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-xl hover:bg-blue-100 dark:hover:bg-blue-900/40 transition-all border border-blue-200/50 dark:border-blue-800/50 shadow-sm group flex-shrink-0"
+                  title="最新活动"
+                >
+                  <History size={22} className="group-hover:rotate-[-45deg] transition-transform duration-500" />
+                </button>
+
+                <Dialog.Root open={isPickerOpen} onOpenChange={setIsPickerOpen}>
+                  <Dialog.Trigger asChild>
+                    <button 
+                      className="p-2.5 bg-gray-50 dark:bg-gray-900/50 text-gray-500 border border-gray-200 dark:border-gray-800 rounded-xl hover:text-blue-500 hover:border-blue-300 transition-all shadow-sm flex-shrink-0"
+                      title="搜索活动"
+                    >
+                      <Search size={22} />
+                    </button>
+                  </Dialog.Trigger>
+                  
+                  <Dialog.Portal>
+                    <Dialog.Overlay className="fixed inset-0 bg-black/40 backdrop-blur-[2px] z-[100] animate-in fade-in duration-200" />
+                    <Dialog.Content className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-lg bg-white dark:bg-[#131A2B] rounded-2xl shadow-2xl z-[101] flex flex-col overflow-hidden animate-in zoom-in-95 fade-in duration-200">
+                      
+                      {/* Header */}
+                      <div className="flex items-center justify-between p-5 border-b border-gray-100 dark:border-gray-800">
+                        <Dialog.Title className="text-xl font-bold text-gray-800 dark:text-white">Select Event</Dialog.Title>
+                        <Dialog.Close asChild>
+                          <button className="p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full text-gray-400">
+                            <X size={22} />
+                          </button>
+                        </Dialog.Close>
+                      </div>
+
+                      {/* Search Area */}
+                      <div className="p-4 border-b border-gray-50 dark:border-gray-800/50 flex gap-2">
+                        <div className="relative flex-1">
+                          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-blue-500" size={18} />
+                          <input 
+                            autoFocus
+                            type="text" 
+                            placeholder="Search" 
+                            className="w-full bg-white dark:bg-[#0C111C] border border-blue-400 dark:border-blue-500 rounded px-10 py-1.5 shadow-[0_0_8px_rgba(59,130,246,0.3)] text-sm font-medium text-gray-700 dark:text-gray-200 outline-none"
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                          />
+                          {searchQuery && (
+                            <button 
+                              onClick={() => setSearchQuery("")}
+                              className="absolute right-3 top-1/2 -translate-y-1/2 p-0.5 bg-gray-200 dark:bg-gray-800 rounded-md text-gray-500"
+                            >
+                              <X size={14} />
+                            </button>
+                          )}
+                        </div>
+                        <Dialog.Close asChild>
+                          <button className="px-4 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-600 dark:text-gray-400 font-bold hover:bg-gray-50 dark:hover:bg-gray-800">
+                            <X size={18} />
+                          </button>
+                        </Dialog.Close>
+                      </div>
+
+                      {/* Event List */}
+                      <div className="flex-1 overflow-y-auto max-h-[60vh] py-2">
+                        {allEvents
+                          .filter(ev => !searchQuery || ev.name.toLowerCase().includes(searchQuery.toLowerCase()) || ev.id.toString().includes(searchQuery))
+                          .map(ev => (
+                            <button
+                              key={ev.id}
+                              onClick={() => {
+                                setCurrentEventId(ev.id);
+                                setIsPickerOpen(false);
+                                setSearchQuery("");
+                              }}
+                              className="w-full px-6 py-3.5 flex items-center justify-between hover:bg-blue-50/50 dark:hover:bg-blue-500/5 transition-colors group"
+                            >
+                              <span className={`text-sm font-bold ${ev.id === currentEventId ? 'text-blue-500' : 'text-gray-600 dark:text-gray-300'}`}>
+                                {ev.id}期 : {ev.name}
+                              </span>
+                              <div className="flex gap-2">
+                                {ev.hasCn && <span className="px-1.5 py-0.5 border border-gray-200 dark:border-gray-700 rounded text-[10px] font-bold text-gray-400 group-hover:text-blue-500 group-hover:border-blue-200 transition-colors">CN</span>}
+                                {ev.hasJp && <span className="px-1.5 py-0.5 border border-gray-200 dark:border-gray-700 rounded text-[10px] font-bold text-gray-400 group-hover:text-blue-500 group-hover:border-blue-200 transition-colors">JP</span>}
+                              </div>
+                            </button>
+                          ))}
+                      </div>
+                    </Dialog.Content>
+                  </Dialog.Portal>
+                </Dialog.Root>
+              </div>
+            )}
+            
             <div className="text-sm font-medium text-gray-500 dark:text-gray-400">
               {startDate && endDate ? (
                 <>
                   <p>Start: {format(startDate, "MMM do yyyy, HH:mm")} (CN)</p>
                   <p>End: {format(endDate, "MMM do yyyy, HH:mm")} (CN)</p>
                 </>
-              ) : (
-                <p>Loading dates...</p>
-              )}
+              ) : null}
             </div>
           </div>
           
