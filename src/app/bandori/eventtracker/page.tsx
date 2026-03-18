@@ -5,6 +5,7 @@ import { format } from "date-fns";
 import {
   LineChart,
   Line,
+  Scatter,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -21,6 +22,11 @@ type TrackerData = {
   ep: number;
   speed?: number;
   speed24?: number;
+  instantEp?: number;
+  dayEp?: number;
+  isProjection?: boolean;
+  projectionType?: "instant" | "24h" | "both";
+  projectionEndTime?: number;
 };
 
 type EventMetadata = {
@@ -43,6 +49,27 @@ type MinimalEvent = {
 const EVENT_TIERS = [1, 10, 20, 30, 40, 50, 100, 200, 300, 400, 500, 1000, 2000, 3000, 4000, 5000, 10000, 20000, 30000, 40000, 50000, 70000, 100000];
 const SONG_TIERS = [1, 10, 20, 30, 40, 50, 100, 200, 300, 400, 500, 1000, 2000, 5000, 10000, 20000];
 const MONTHLY_TIERS = [1, 10, 20, 30, 40, 50, 100, 200, 300, 500, 1000, 2000, 3000, 4000];
+const INSTANT_PROJECTION_COOKIE = "eventtracker_projection_instant";
+const DAY_PROJECTION_COOKIE = "eventtracker_projection_24h";
+
+function readProjectionCookie(cookieName: string): boolean | null {
+  if (typeof document === "undefined") return null;
+  const found = document.cookie
+    .split(";")
+    .map((part) => part.trim())
+    .find((part) => part.startsWith(`${cookieName}=`));
+
+  if (!found) return null;
+  const rawValue = found.slice(cookieName.length + 1).toLowerCase();
+  if (rawValue === "1" || rawValue === "true") return true;
+  if (rawValue === "0" || rawValue === "false") return false;
+  return null;
+}
+
+function writeProjectionCookie(cookieName: string, value: boolean) {
+  if (typeof document === "undefined") return;
+  document.cookie = `${cookieName}=${value ? "1" : "0"}; path=/; max-age=31536000; samesite=lax`;
+}
 
 /**
  * EventProgressBar —— 活动进度条与倒计时展示组件。
@@ -135,6 +162,28 @@ export default function EventTrackerPage() {
   const [isPickerOpen, setIsPickerOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [apiHasResult, setApiHasResult] = useState(false);
+  const [showInstantProjection, setShowInstantProjection] = useState(true);
+  const [showDayProjection, setShowDayProjection] = useState(true);
+  const [projectionPrefLoaded, setProjectionPrefLoaded] = useState(false);
+
+  useEffect(() => {
+    const instantPref = readProjectionCookie(INSTANT_PROJECTION_COOKIE);
+    const dayPref = readProjectionCookie(DAY_PROJECTION_COOKIE);
+
+    if (instantPref !== null) setShowInstantProjection(instantPref);
+    if (dayPref !== null) setShowDayProjection(dayPref);
+    setProjectionPrefLoaded(true);
+  }, []);
+
+  useEffect(() => {
+    if (!projectionPrefLoaded) return;
+    writeProjectionCookie(INSTANT_PROJECTION_COOKIE, showInstantProjection);
+  }, [projectionPrefLoaded, showInstantProjection]);
+
+  useEffect(() => {
+    if (!projectionPrefLoaded) return;
+    writeProjectionCookie(DAY_PROJECTION_COOKIE, showDayProjection);
+  }, [projectionPrefLoaded, showDayProjection]);
 
   // Auto-scroll to the rightmost (latest data) whenever the container resizes (e.g., from zooming)
   useEffect(() => {
@@ -400,52 +449,6 @@ export default function EventTrackerPage() {
     return processed;
   }, [chartData, apiHasResult, domainStart, trackingMode]);
 
-  // finalDisplayedData is what actually goes into the chart (strictly bounded)
-  const finalDisplayedData = useMemo(() => {
-    return fullProcessedData.filter(d => cutoffEnd === null || d.time <= cutoffEnd);
-  }, [fullProcessedData, cutoffEnd]);
-
-
-
-  // 自定义 Y 轴 Ticks 生成器
-  const generateYTicks = () => {
-    if (finalDisplayedData.length === 0) return undefined;
-    
-    let minEp = 0;
-    let maxEp = minEp;
-    for (const d of finalDisplayedData) {
-      if (d.ep > maxEp) maxEp = d.ep;
-    }
-    
-    // 自动计算理想步进 (Nice steps: 1, 2, 5 * 10^n)
-    const range = Math.max(maxEp - minEp, 100); // 至少 100
-    const roughStep = range / 6; // 分母改为 6，以确保除 0 位外刻度总数不超过 10 个
-    
-    const magnitude = Math.pow(10, Math.floor(Math.log10(roughStep)));
-    const normalizedStep = roughStep / magnitude;
-    
-    let stepMultiplier;
-    if (normalizedStep <= 1.5) stepMultiplier = 1;
-    else if (normalizedStep <= 3) stepMultiplier = 2;
-    else if (normalizedStep <= 7) stepMultiplier = 5;
-    else stepMultiplier = 10;
-    
-    let selectedStep = stepMultiplier * magnitude;
-    
-    const ticks: number[] = [minEp]; // 强插首个底座点
-    
-    // 从首个点后寻找下一个整数倍点作为对齐分割点
-    let currentTick = Math.floor(minEp / selectedStep) * selectedStep + selectedStep;
-    
-    while (currentTick <= maxEp + selectedStep) {
-      ticks.push(currentTick);
-      currentTick += selectedStep;
-    }
-    
-    return ticks;
-  };
-  const yTicks = generateYTicks();
-  const yDomainInfo: any[] = yTicks && yTicks.length > 0 ? [yTicks[0], yTicks[yTicks.length - 1]] : [0, 'dataMax'];
 
   // 活动状态仅在图表时间范围变化时重新计算。
   // 原先它依赖于每秒 ticker 更新的 nowTime，导致整页每秒全量重渲染；
@@ -457,6 +460,96 @@ export default function EventTrackerPage() {
     if (now > (domainEnd as number)) return "已结束";
     return "进行中";
   }, [domainStart, domainEnd]);
+
+  // finalDisplayedData is what actually goes into the chart (strictly bounded and includes projections)
+  const finalDisplayedData = useMemo(() => {
+    const base = fullProcessedData.filter(d => cutoffEnd === null || d.time <= cutoffEnd);
+    if (status !== "进行中" || base.length === 0 || typeof cutoffEnd !== "number") return base;
+
+    const result = base.map(d => ({ ...d }));
+    const latestPoint = result[result.length - 1];
+    if (latestPoint.time >= cutoffEnd) return result;
+
+    const remainingMs = cutoffEnd - latestPoint.time;
+    const renderEndTime = cutoffEnd - 1;
+
+    let instantEp: number | undefined;
+    let dayEp: number | undefined;
+
+    if (showInstantProjection && latestPoint.speed !== undefined) {
+      instantEp = Math.max(0, Math.round(latestPoint.ep + latestPoint.speed * (remainingMs / 3600000)));
+    }
+    if (showDayProjection && latestPoint.speed24 !== undefined) {
+      dayEp = Math.max(0, Math.round(latestPoint.ep + latestPoint.speed24 * (remainingMs / 86400000)));
+    }
+
+    if (instantEp !== undefined || dayEp !== undefined) {
+      // Latest real point needs the keys to connect the projection lines
+      latestPoint.instantEp = latestPoint.ep;
+      latestPoint.dayEp = latestPoint.ep;
+
+      result.push({
+        time: renderEndTime,
+        instantEp,
+        dayEp,
+        projectionType: instantEp !== undefined && dayEp !== undefined ? "both" : (instantEp !== undefined ? "instant" : "24h"),
+        projectionEndTime: cutoffEnd,
+        isProjection: true,
+      } as any);
+    }
+
+    return result;
+  }, [fullProcessedData, cutoffEnd, status, showInstantProjection, showDayProjection]);
+
+  // projectionData no longer needed as we integrate it into data array
+
+
+  // visibleProjectionEndPoints replaced by isProjection flag in data array
+
+
+  // 自定义 Y 轴 Ticks 生成器
+  const generateYTicks = () => {
+    const ySourceData = finalDisplayedData;
+
+    if (ySourceData.length === 0) return undefined;
+
+    let minEp = 0;
+    let maxEp = minEp;
+    for (const d of ySourceData) {
+      if (d.ep !== undefined && d.ep > maxEp) maxEp = d.ep;
+      if (d.instantEp !== undefined && d.instantEp > maxEp) maxEp = d.instantEp;
+      if (d.dayEp !== undefined && d.dayEp > maxEp) maxEp = d.dayEp;
+    }
+
+    // 自动计算理想步进 (Nice steps: 1, 2, 5 * 10^n)
+    const range = Math.max(maxEp - minEp, 100); // 至少 100
+    const roughStep = range / 6; // 分母改为 6，以确保除 0 位外刻度总数不超过 10 个
+
+    const magnitude = Math.pow(10, Math.floor(Math.log10(roughStep)));
+    const normalizedStep = roughStep / magnitude;
+
+    let stepMultiplier;
+    if (normalizedStep <= 1.5) stepMultiplier = 1;
+    else if (normalizedStep <= 3) stepMultiplier = 2;
+    else if (normalizedStep <= 7) stepMultiplier = 5;
+    else stepMultiplier = 10;
+
+    let selectedStep = stepMultiplier * magnitude;
+
+    const ticks: number[] = [minEp]; // 强插首个底座点
+
+    // 从首个点后寻找下一个整数倍点作为对齐分割点
+    let currentTick = Math.floor(minEp / selectedStep) * selectedStep + selectedStep;
+
+    while (currentTick <= maxEp + selectedStep) {
+      ticks.push(currentTick);
+      currentTick += selectedStep;
+    }
+
+    return ticks;
+  };
+  const yTicks = generateYTicks();
+  const yDomainInfo: any[] = yTicks && yTicks.length > 0 ? [yTicks[0], yTicks[yTicks.length - 1]] : [0, 'dataMax'];
 
   const getScoreAtTime = (targetTime: number, toleranceMs = 5 * 60 * 1000) => {
     let best = null;
@@ -500,7 +593,44 @@ export default function EventTrackerPage() {
   // Custom Tooltip for Speed calculation
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
-      const currentPoint = payload[0].payload;
+      if (payload[0]?.payload?.isProjection) {
+        const p = payload[0].payload;
+        const projectionLabelTime = p.projectionEndTime || label;
+
+        return (
+          <div className="bg-white/90 backdrop-blur-xl p-4 rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] border border-white/40 dark:bg-[#131A2B]/90 dark:border-gray-800 min-w-[210px]">
+            <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-2">{format(projectionLabelTime, "yyyy/MM/dd HH:mm:ss")}</p>
+
+            {p.instantEp !== undefined && (
+              <div className="mt-1 flex justify-between items-center gap-6">
+                <span className="text-xs font-bold text-[#ef4444]">线性投影（瞬时）</span>
+                <span className="text-sm font-bold text-[#ef4444]">
+                  {new Intl.NumberFormat().format(p.instantEp)} {trackingMode === "song" ? "Pt" : "P"}
+                </span>
+              </div>
+            )}
+
+            {p.dayEp !== undefined && (
+              <div className="mt-1 flex justify-between items-center gap-6">
+                <span className="text-xs font-bold text-[#3b82f6]">线性投影（24h）</span>
+                <span className="text-sm font-bold text-[#3b82f6]">
+                  {new Intl.NumberFormat().format(p.dayEp)} {trackingMode === "song" ? "Pt" : "P"}
+                </span>
+              </div>
+            )}
+          </div>
+        );
+      }
+
+
+      const mainEntry = payload.find(
+        (entry: any) => entry?.dataKey === "ep" && !entry?.payload?.isProjection
+      );
+
+
+      if (!mainEntry?.payload) return null;
+
+      const currentPoint = mainEntry.payload;
       
       const currentIndex = finalDisplayedData.findIndex((d: TrackerData) => d.time === currentPoint.time);
       const pointWithSpeeds = currentIndex !== -1 ? finalDisplayedData[currentIndex] : currentPoint;
@@ -805,13 +935,8 @@ export default function EventTrackerPage() {
                       {finalDisplayedData.length > 0 ? (
                         <ResponsiveContainer width="100%" height="100%">
                           <LineChart data={finalDisplayedData} margin={{ top: 20, right: 5, left: 0, bottom: 20 }}>
-                            <defs>
-                              <linearGradient id="colorEp" x1="0" y1="0" x2="0" y2="1">
-                                <stop offset="5%" stopColor="#3B82F6" stopOpacity={0.3}/>
-                                <stop offset="95%" stopColor="#3B82F6" stopOpacity={0}/>
-                              </linearGradient>
-                            </defs>
                             <CartesianGrid vertical={false} stroke="#374151" opacity={0.15} />
+
                             
                             {midnights.map(m => (
                               <ReferenceLine 
@@ -859,9 +984,59 @@ export default function EventTrackerPage() {
                               strokeWidth={2}
                               strokeOpacity={0.6}
                               dot={{ r: 2.5, fill: '#3B82F6', strokeWidth: 0 }}
-                              activeDot={{ r: 6, strokeWidth: 0, fill: '#3B82F6' }}
+                              activeDot={(props: any) => {
+                                const { cx, cy, payload } = props;
+                                if (payload.isProjection || isNaN(cx) || isNaN(cy)) return <circle cx={0} cy={0} r={0} stroke="none" />;
+                                return <circle cx={cx} cy={cy} r={6} fill="#3B82F6" stroke="none" />;
+                              }}
                               isAnimationActive={false}
                             />
+
+                            {showInstantProjection && (
+                              <Line 
+                                type="linear" 
+                                dataKey="instantEp" 
+                                stroke="#ef4444" 
+                                strokeWidth={2}
+                                strokeDasharray="6 4"
+                                dot={(props: any) => {
+                                  const { cx, cy, payload, index } = props;
+                                  if (payload.isProjection) {
+                                    return <circle key={`dot-instant-${index}`} cx={cx} cy={cy} r={2.5} fill="#ef4444" stroke="none" />;
+                                  }
+                                  return <circle key={`dot-hidden-instant-${index}`} cx={cx} cy={cy} r={0} stroke="none" />;
+                                }}
+                                activeDot={(props: any) => {
+                                  const { cx, cy, payload } = props;
+                                  if (!payload.isProjection || isNaN(cx) || isNaN(cy)) return <circle cx={0} cy={0} r={0} stroke="none" />;
+                                  return <circle cx={cx} cy={cy} r={6} fill="#ef4444" stroke="none" />;
+                                }}
+                                isAnimationActive={false}
+                              />
+                            )}
+
+                            {showDayProjection && (
+                              <Line 
+                                type="linear" 
+                                dataKey="dayEp" 
+                                stroke="#3b82f6" 
+                                strokeWidth={2}
+                                strokeDasharray="6 4"
+                                dot={(props: any) => {
+                                  const { cx, cy, payload, index } = props;
+                                  if (payload.isProjection) {
+                                    return <circle key={`dot-day-${index}`} cx={cx} cy={cy} r={2.5} fill="#3b82f6" stroke="none" />;
+                                  }
+                                  return <circle key={`dot-hidden-day-${index}`} cx={cx} cy={cy} r={0} stroke="none" />;
+                                }}
+                                activeDot={(props: any) => {
+                                  const { cx, cy, payload } = props;
+                                  if (!payload.isProjection || isNaN(cx) || isNaN(cy)) return <circle cx={0} cy={0} r={0} stroke="none" />;
+                                  return <circle cx={cx} cy={cy} r={6} fill="#3b82f6" stroke="none" />;
+                                }}
+                                isAnimationActive={false}
+                              />
+                            )}
                           </LineChart>
                         </ResponsiveContainer>
                       ) : (
@@ -899,6 +1074,48 @@ export default function EventTrackerPage() {
                     </button>
                   </div>
                 </div>
+
+                {status === "进行中" && (
+                  <div className="px-1 pt-4 sm:px-2">
+                    <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-3">
+                      <button
+                        type="button"
+                        aria-pressed={showInstantProjection}
+                        onClick={() => setShowInstantProjection((prev) => !prev)}
+                        className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs sm:text-sm font-semibold transition-all ${
+                          showInstantProjection
+                            ? "border-red-300 bg-red-50 text-red-600 dark:border-red-500/40 dark:bg-red-500/15 dark:text-red-300"
+                            : "border-gray-200 bg-white text-gray-500 dark:border-gray-700 dark:bg-[#131A2B] dark:text-gray-400"
+                        }`}
+                      >
+                        <span
+                          className={`h-2.5 w-2.5 rounded-full ${
+                            showInstantProjection ? "bg-red-500" : "bg-gray-300 dark:bg-gray-600"
+                          }`}
+                        />
+                        线性投影（瞬时）
+                      </button>
+
+                      <button
+                        type="button"
+                        aria-pressed={showDayProjection}
+                        onClick={() => setShowDayProjection((prev) => !prev)}
+                        className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs sm:text-sm font-semibold transition-all ${
+                          showDayProjection
+                            ? "border-blue-300 bg-blue-50 text-blue-600 dark:border-blue-500/40 dark:bg-blue-500/15 dark:text-blue-300"
+                            : "border-gray-200 bg-white text-gray-500 dark:border-gray-700 dark:bg-[#131A2B] dark:text-gray-400"
+                        }`}
+                      >
+                        <span
+                          className={`h-2.5 w-2.5 rounded-full ${
+                            showDayProjection ? "bg-blue-500" : "bg-gray-300 dark:bg-gray-600"
+                          }`}
+                        />
+                        线性投影（24h）
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             </Tabs.Content>
           </Tabs.Root>
