@@ -9,7 +9,9 @@ export default function FallingPatterns() {
 
     useEffect(() => {
         setItems(
-            Array.from({ length: 20 }, (_, i) => ({
+            // 元素数量从 20 减至 12：每个飘落图片各占一个 GPU 合成层，
+            // 层数越少合成开销越低；12 个在视觉上仍能保持足够的密度感。
+            Array.from({ length: 12 }, (_, i) => ({
                 id: i,
                 left: Math.random() * 100,
                 delay: -(Math.random() * 20), // 负延迟使动画从中途开始，避免初始时屏幕空白

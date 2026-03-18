@@ -27,12 +27,14 @@ body {
 }
 
 /* 白色雾化遮罩层 */
+/* 注意：此处故意不使用 backdrop-filter，因为任何全屏 fixed 伪元素若带有 backdrop-filter，
+   会强制将页面上的每一个元素都提升为独立的 GPU 合成层，造成显著的 GPU 开销。
+   PRD 允许"可通过 backdrop-filter 或半透明遮罩实现"，故直接使用半透明背景色替代。 */
 body::before {
   content: '';
   position: fixed;
   inset: 0;
   background: var(--fog-white);
-  backdrop-filter: blur(1px);
   z-index: 0;
   pointer-events: none;
 }
@@ -54,6 +56,8 @@ body::before {
   z-index: 0;
   pointer-events: none;
   overflow: hidden;
+  /* contain 限制布局和样式的重排范围，防止飘落动画影响页面其他元素的渲染 */
+  contain: layout style;
 }
 
 .falling-disc {
@@ -63,6 +67,9 @@ body::before {
   animation: fall linear infinite;
   opacity: 0.5;
   object-fit: contain;
+  /* will-change 主动声明合成层，让浏览器提前为每个飘落元素分配 GPU 层，
+     避免动画期间的隐式提升抖动；配合数量缩减（12个）控制总层数 */
+  will-change: transform;
 }
 
 /* 对话气泡动画 */
