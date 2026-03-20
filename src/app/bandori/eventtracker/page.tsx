@@ -16,12 +16,14 @@ import {
 import * as Tabs from "@radix-ui/react-tabs";
 import { ZoomIn, ZoomOut, Search, History, X, ChevronDown, Check, Info } from "lucide-react";
 import * as Dialog from "@radix-ui/react-dialog";
+import { supabase } from "@/lib/supabase";
 
 type TrackerData = {
   time: number;
   ep: number;
   speed?: number;
   speed24?: number;
+  refSpeed24?: number;
   instantEp?: number;
   dayEp?: number;
   isProjection?: boolean;
@@ -158,6 +160,57 @@ export default function EventTrackerPage() {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   
   const [allEvents, setAllEvents] = useState<MinimalEvent[]>([]);
+
+  // 用于在实时回调中获取最新的视图参数，而不需每次参数改变都重新建立 WebSocket 订阅。
+  const currentViewRef = useRef({ eventId: currentEventId, mode: trackingMode, tier: selectedTier });
+  useEffect(() => {
+    currentViewRef.current = { eventId: currentEventId, mode: trackingMode, tier: selectedTier };
+  }, [currentEventId, trackingMode, selectedTier]);
+
+  useEffect(() => {
+    // 建立全局唯一 WebSocket 监听以实现前端实时刷新
+    // 监听 `bandori_tracker_data` 表的新数据插入
+    const channel = supabase
+      .channel("bandori_tracker_realtime")
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "bandori_tracker_data" },
+        (payload) => {
+          const newRow = payload.new;
+          if (!newRow) return;
+
+          const view = currentViewRef.current;
+          // 根据当前的追踪模式，确认应该返回的关联 eventId 取值
+          const targetEventParam = view.mode === "monthly" ? 14 : view.eventId;
+
+          // 仅当新数据符合当前图表视图时才更新当前数据
+          if (
+            newRow.event_id === targetEventParam &&
+            newRow.type === view.mode &&
+            newRow.tier === view.tier
+          ) {
+            setChartData((prev) => {
+              const time = Number(newRow.time);
+              const ep = Number(newRow.ep);
+
+              // 避免乱序或重复数据插入导致图表绘制扭曲
+              if (prev.length > 0 && time <= prev[prev.length - 1].time) {
+                return prev;
+              }
+
+              // 此处追加最新点并返回全新引用以触发图表平滑重渲染
+              return [...prev, { time, ep }];
+            });
+            setApiHasResult(true);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
 
   const [isPickerOpen, setIsPickerOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -443,7 +496,11 @@ export default function EventTrackerPage() {
         const dtDays = (processed[r].time - processed[l24].time) / (86400000);
         if (dtDays > 0) {
           processed[r].speed24 = Math.round((processed[r].ep - processed[l24].ep) / dtDays);
+          processed[r].refSpeed24 = processed[l24].speed24;
         }
+      } else if (r > 0) {
+        processed[r].speed24 = processed[r].ep;
+        processed[r].refSpeed24 = processed[0].speed24;
       }
     }
     return processed;
@@ -648,10 +705,26 @@ export default function EventTrackerPage() {
       }
 
       if (pointWithSpeeds.speed24 !== undefined) {
+          let diffRender = null;
+          if (pointWithSpeeds.refSpeed24 !== undefined && pointWithSpeeds.refSpeed24 !== 0) {
+              let diffPercent = ((pointWithSpeeds.speed24 - pointWithSpeeds.refSpeed24) / pointWithSpeeds.refSpeed24) * 100;
+              if (Math.abs(diffPercent) < 0.005) diffPercent = 0; // Prevent "-0.00%"
+              const sign = diffPercent >= 0 ? "+" : "";
+              const colorClass = diffPercent < 0 ? "text-red-500" : "text-blue-500";
+              diffRender = (
+                  <div className="mt-0.5 flex justify-end">
+                      <span className={`${colorClass} font-bold text-xs`}>({sign}{diffPercent.toFixed(2)}%)</span>
+                  </div>
+              );
+          }
+
           speed24Render = (
-            <div className="mt-1 flex justify-between items-center">
-               <span className="text-xs font-bold text-gray-400">24h速度</span>
-               <span className="text-blue-500 font-bold text-sm">+{new Intl.NumberFormat().format(pointWithSpeeds.speed24)} {trackingMode === "song" ? "Pt" : "P"}/d</span>
+            <div>
+              <div className="mt-1 flex justify-between items-center">
+                 <span className="text-xs font-bold text-gray-400">24h速度</span>
+                 <span className="text-blue-500 font-bold text-sm">+{new Intl.NumberFormat().format(pointWithSpeeds.speed24)} {trackingMode === "song" ? "Pt" : "P"}/d</span>
+              </div>
+              {diffRender}
             </div>
           );
       }
