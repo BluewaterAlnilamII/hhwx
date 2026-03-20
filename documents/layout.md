@@ -22,7 +22,16 @@ hhwx/
 │   │   ├── page.tsx            # 首页（角色选择/游戏页面路由、续局对话框）
 │   │   ├── globals.css         # 全局样式（动画、棋盘、气泡等）
 │   │   ├── page.module.css     # 页面模块样式（未使用，Next.js 生成）
-│   │   └── favicon.ico         # 站点图标
+│   │   ├── favicon.ico         # 站点图标
+│   │   └── bandori/
+│   │       └── eventtracker/   # Bestdori 活动追踪页面
+│   │           ├── layout.tsx          # 页面布局（元数据）
+│   │           ├── page.tsx            # 主页面组件（UI 渲染层）
+│   │           ├── types.ts            # 共享 TypeScript 类型定义
+│   │           ├── constants.ts        # 档位常量、Cookie 读写工具
+│   │           ├── useTrackerData.ts   # 数据获取层（HTTP + Supabase 实时订阅）
+│   │           ├── useChartData.ts     # 数据派生层（速度计算、投影、Y 轴刻度）
+│   │           └── TrackerTooltip.tsx  # 图表 Tooltip 组件
 │   ├── components/             # React 组件
 │   │   ├── AuthModal.tsx       # 登录/注册弹窗
 │   │   ├── Board.tsx           # 8x8 黑白棋盘组件
@@ -35,6 +44,7 @@ hhwx/
 │   │   ├── SpeechBubble.tsx    # 对话气泡组件
 │   │   └── Toolbar.tsx         # 顶部工具栏（登录/账号管理）
 │   ├── hooks/                  # 自定义 Hooks
+│   │   ├── useCachedFetch.ts   # 通用 HTTP 缓存 Hook（支持 merge 策略防止 WS 数据回退）
 │   │   └── useOthelloGame.ts   # 黑白棋游戏状态管理（useReducer + localStorage）
 │   ├── lib/                    # 工具库和核心逻辑
 │   │   ├── ai/                 # AI 策略模块（每个角色独立文件）
