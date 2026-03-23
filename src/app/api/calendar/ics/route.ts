@@ -57,16 +57,17 @@ export async function GET(request: Request) {
       let endDate: string | null = null;
 
       if (ev.cn_start_at && ev.cn_end_at) {
-        // 使用官方时间戳（转为日期）
-        startDate = timestampToDateStr(ev.cn_start_at);
-        endDate = timestampToDateStr(ev.cn_end_at, true); // ICS 全天事件结束日为排他日（+1天）
+        // 为什么这么做：服务端运行在 UTC+0，但国服活动时间语义属于 UTC+8。
+        // 这里必须先把毫秒时间戳按 UTC+8 解释，再映射到全天事件日期，
+        // 否则结束日会因为服务器时区不同而提前一天。
+        startDate = timestampToUtc8DateStr(ev.cn_start_at);
+        endDate = timestampToUtc8DateStr(ev.cn_end_at, true); // ICS 全天事件结束日为排他日（+1天）
       } else if (ev.predicted_start && ev.predicted_end) {
-        // 使用预测日期
-        startDate = ev.predicted_start.replace(/-/g, "");
-        // ICS 全天事件的 DTEND 为排他日期，需要 +1 天
-        const endObj = new Date(ev.predicted_end + "T00:00:00+08:00");
-        endObj.setDate(endObj.getDate() + 1);
-        endDate = formatDateOnly(endObj);
+        // 为什么这么做：预测活动没有真实时间戳，按约定将开始时刻视为 UTC+8 15:00，
+        // 结束时刻视为 UTC+8 23:00，再按 UTC+8 将这些时刻归入全天事件日期。
+        // 当前 ICS 仍输出 VALUE=DATE，因此这里固定按 UTC+8 推送日期。
+        startDate = predictedDateTimeToUtc8DateStr(ev.predicted_start, "15:00:00");
+        endDate = predictedDateTimeToUtc8DateStr(ev.predicted_end, "23:00:00", true);
       }
 
       if (!startDate || !endDate) continue;
@@ -104,20 +105,33 @@ export async function GET(request: Request) {
   }
 }
 
-/** 将毫秒时间戳转换为 ICS DATE 格式（YYYYMMDD），可选 +1 天（排他结束日） */
-function timestampToDateStr(ms: number, addOneDay = false): string {
-  const shanghaiDateText = formatShanghaiDateText(ms);
+/** 将毫秒时间戳按 UTC+8 转换为 ICS DATE 格式（YYYYMMDD），可选 +1 天（排他结束日） */
+function timestampToUtc8DateStr(ms: number, addOneDay = false): string {
+  const utc8DateText = formatUtc8DateText(new Date(ms));
 
   if (!addOneDay) {
-    return shanghaiDateText.replace(/-/g, "");
+    return utc8DateText.replace(/-/g, "");
   }
 
-  const d = new Date(`${shanghaiDateText}T00:00:00+08:00`);
+  const d = new Date(`${utc8DateText}T00:00:00+08:00`);
   d.setDate(d.getDate() + 1);
   return formatDateOnly(d);
 }
 
-function formatShanghaiDateText(ms: number): string {
+function predictedDateTimeToUtc8DateStr(dateText: string, timeText: string, addOneDay = false): string {
+  const date = new Date(`${dateText}T${timeText}+08:00`);
+  const utc8DateText = formatUtc8DateText(date);
+
+  if (!addOneDay) {
+    return utc8DateText.replace(/-/g, "");
+  }
+
+  const exclusiveEndDate = new Date(`${utc8DateText}T00:00:00+08:00`);
+  exclusiveEndDate.setDate(exclusiveEndDate.getDate() + 1);
+  return formatDateOnly(exclusiveEndDate);
+}
+
+function formatUtc8DateText(date: Date): string {
   const formatter = new Intl.DateTimeFormat("zh-CN", {
     timeZone: "Asia/Shanghai",
     year: "numeric",
@@ -125,13 +139,13 @@ function formatShanghaiDateText(ms: number): string {
     day: "2-digit",
   });
 
-  const parts = formatter.formatToParts(new Date(ms));
+  const parts = formatter.formatToParts(date);
   const year = parts.find((part) => part.type === "year")?.value;
   const month = parts.find((part) => part.type === "month")?.value;
   const day = parts.find((part) => part.type === "day")?.value;
 
   if (!year || !month || !day) {
-    throw new Error(`无法将时间戳 ${ms} 转换为上海时区日期`);
+    throw new Error("无法将日期转换为 UTC+8 日期");
   }
 
   return `${year}-${month}-${day}`;
