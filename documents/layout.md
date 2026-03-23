@@ -24,14 +24,21 @@ hhwx/
 │   │   ├── page.module.css     # 页面模块样式（未使用，Next.js 生成）
 │   │   ├── favicon.ico         # 站点图标
 │   │   └── bandori/
-│   │       └── eventtracker/   # Bestdori 活动追踪页面
+│   │       ├── eventtracker/   # Bestdori 活动追踪页面
+│   │       │   ├── layout.tsx          # 页面布局（元数据）
+│   │       │   ├── page.tsx            # 主页面组件（UI 渲染层）
+│   │       │   ├── types.ts            # 共享 TypeScript 类型定义
+│   │       │   ├── constants.ts        # 档位常量、Cookie 读写工具
+│   │       │   ├── useTrackerData.ts   # 数据获取层（HTTP + Supabase 实时订阅）
+│   │       │   ├── useChartData.ts     # 数据派生层（速度计算、投影、Y 轴刻度）
+│   │       │   └── TrackerTooltip.tsx  # 图表 Tooltip 组件
+│   │       └── calendar/       # 国服活动日历页面
 │   │           ├── layout.tsx          # 页面布局（元数据）
-│   │           ├── page.tsx            # 主页面组件（UI 渲染层）
-│   │           ├── types.ts            # 共享 TypeScript 类型定义
-│   │           ├── constants.ts        # 档位常量、Cookie 读写工具
-│   │           ├── useTrackerData.ts   # 数据获取层（HTTP + Supabase 实时订阅）
-│   │           ├── useChartData.ts     # 数据派生层（速度计算、投影、Y 轴刻度）
-│   │           └── TrackerTooltip.tsx  # 图表 Tooltip 组件
+│   │           ├── page.tsx            # 主页面（日历视图 + 订阅 + 编辑入口）
+│   │           ├── CalendarGrid.tsx    # 月视图日历网格组件（乐团颜色横条）
+│   │           ├── EventEditor.tsx     # 活动日程编辑面板（拖拽排序 + 级联更新）
+│   │           ├── options.ts          # stamp 角色与订阅乐队筛选选项
+│   │           └── useCalendarData.ts  # 数据获取/权限/编辑提交 Hooks
 │   ├── components/             # React 组件
 │   │   ├── AuthModal.tsx       # 登录/注册弹窗
 │   │   ├── Board.tsx           # 8x8 黑白棋盘组件
@@ -56,7 +63,8 @@ hhwx/
 │   │   │   └── michelle.ts     # Michelle AI：动态强度，放水机制
 │   │   ├── characters.ts       # 角色数据定义（台词、思考时间等）
 │   │   ├── othello.ts          # 黑白棋核心规则（纯函数、位置权重矩阵）
-│   │   ├── supabase.ts         # Supabase 客户端初始化
+│   │   ├── supabase.ts         # Supabase 浏览器端客户端初始化
+│   │   ├── supabase-server.ts  # Supabase 服务端客户端初始化（API 路由使用 service role）
 │   │   └── utils.ts            # 通用工具函数（cn 类名合并）
 │   └── store/                  # Zustand 全局状态
 │       └── useGameStore.ts     # 游戏全局状态（角色选择、用户认证）

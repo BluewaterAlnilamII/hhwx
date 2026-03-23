@@ -5,7 +5,11 @@ import { supabase } from "@/lib/supabase";
 import { useGameStore } from "@/store/useGameStore";
 import AuthModal from "./AuthModal";
 
-export default function Toolbar() {
+interface ToolbarProps {
+    showDebugButton?: boolean;
+}
+
+export default function Toolbar({ showDebugButton = true }: ToolbarProps) {
     const { userId, username, setAuth, logout, debugMode, toggleDebugMode } = useGameStore();
     const [showAuth, setShowAuth] = useState(false);
     const [showMenu, setShowMenu] = useState(false);
@@ -45,18 +49,19 @@ export default function Toolbar() {
     return (
         <>
             <div className="fixed top-4 right-4 z-[250] flex items-center gap-3">
-                {/* 调试模式开关 */}
-                <button
-                    onClick={toggleDebugMode}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium shadow-lg transition-all duration-200 ${debugMode
-                            ? "bg-cyan-500 text-white shadow-cyan-500/30"
-                            : "bg-white/70 backdrop-blur-sm text-gray-500 hover:bg-white/90"
-                        }`}
-                    title="开启后在 AI 回合显示落子权重"
-                >
-                    🔍
-                    <span>{debugMode ? "调试 ON" : "调试"}</span>
-                </button>
+                {showDebugButton && (
+                    <button
+                        onClick={toggleDebugMode}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium shadow-lg transition-all duration-200 ${debugMode
+                                ? "bg-cyan-500 text-white shadow-cyan-500/30"
+                                : "bg-white/70 backdrop-blur-sm text-gray-500 hover:bg-white/90"
+                            }`}
+                        title="开启后在 AI 回合显示落子权重"
+                    >
+                        🔍
+                        <span>{debugMode ? "调试 ON" : "调试"}</span>
+                    </button>
+                )}
 
                 {userId ? (
                     <div className="relative">
