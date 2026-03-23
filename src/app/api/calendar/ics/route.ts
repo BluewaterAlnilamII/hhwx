@@ -57,20 +57,21 @@ export async function GET(request: Request) {
       let endDate: string | null = null;
 
       if (ev.cn_start_at && ev.cn_end_at) {
-        // 为什么这么做：服务端运行在 UTC+0，但国服活动时间语义属于 UTC+8。
-        // 这里必须先把毫秒时间戳按 UTC+8 解释，再映射到全天事件日期，
-        // 否则结束日会因为服务器时区不同而提前一天。
+        // 为什么这么做：官方时间戳要按“当前运行时区”与 UTC+8 的差值映射到国服自然日，
+        // 不能直接硬编码 +8 小时，否则部署时区变化后会继续出现日期偏移。
         startDate = timestampToUtc8DateStr(ev.cn_start_at);
-        endDate = timestampToUtc8DateStr(ev.cn_end_at, true); // ICS 全天事件结束日为排他日（+1天）
+        endDate = timestampToUtc8DateStr(ev.cn_end_at);
       } else if (ev.predicted_start && ev.predicted_end) {
-        // 为什么这么做：预测活动没有真实时间戳，按约定将开始时刻视为 UTC+8 15:00，
-        // 结束时刻视为 UTC+8 23:00，再按 UTC+8 将这些时刻归入全天事件日期。
-        // 当前 ICS 仍输出 VALUE=DATE，因此这里固定按 UTC+8 推送日期。
-        startDate = predictedDateTimeToUtc8DateStr(ev.predicted_start, "15:00:00");
-        endDate = predictedDateTimeToUtc8DateStr(ev.predicted_end, "23:00:00", true);
+        // 为什么这么做：预测活动本身就是按“国服日期”维护的，
+        // 订阅日历直接映射 predicted_start / predicted_end 对应的真实日期即可。
+        startDate = predictedDateToDateStr(ev.predicted_start);
+        endDate = predictedDateToDateStr(ev.predicted_end);
       }
 
       if (!startDate || !endDate) continue;
+
+      const durationDays = calculateInclusiveDurationDays(startDate, endDate);
+      if (durationDays < 1) continue;
 
       const summary = formatCalendarSubscriptionTitle(
         ev.band_type,
@@ -83,7 +84,7 @@ export async function GET(request: Request) {
         `UID:gbp-event-${ev.event_id}@hhwx`,
         `DTSTAMP:${dtstamp}`,
         `DTSTART;VALUE=DATE:${startDate}`,
-        `DTEND;VALUE=DATE:${endDate}`,
+        `DURATION:P${durationDays}D`,
         `SUMMARY:${escapeICSText(summary)}`,
         "END:VEVENT"
       );
@@ -105,54 +106,34 @@ export async function GET(request: Request) {
   }
 }
 
-/** 将毫秒时间戳按 UTC+8 转换为 ICS DATE 格式（YYYYMMDD），可选 +1 天（排他结束日） */
-function timestampToUtc8DateStr(ms: number, addOneDay = false): string {
-  const utc8DateText = formatUtc8DateText(new Date(ms));
-
-  if (!addOneDay) {
-    return utc8DateText.replace(/-/g, "");
-  }
-
-  const d = new Date(`${utc8DateText}T00:00:00+08:00`);
-  d.setDate(d.getDate() + 1);
-  return formatDateOnly(d);
+/** 将毫秒时间戳按“当前运行时区”与 UTC+8 的差值映射为 ICS DATE 格式（YYYYMMDD） */
+function timestampToUtc8DateStr(ms: number): string {
+  const sourceDate = new Date(ms);
+  const runtimeOffsetMinutes = sourceDate.getTimezoneOffset();
+  const utc8OffsetMinutes = -8 * 60;
+  const offsetDeltaMinutes = runtimeOffsetMinutes - utc8OffsetMinutes;
+  const mappedDate = new Date(ms + offsetDeltaMinutes * 60 * 1000);
+  return formatDateOnlyLocal(mappedDate);
 }
 
-function predictedDateTimeToUtc8DateStr(dateText: string, timeText: string, addOneDay = false): string {
-  const date = new Date(`${dateText}T${timeText}+08:00`);
-  const utc8DateText = formatUtc8DateText(date);
-
-  if (!addOneDay) {
-    return utc8DateText.replace(/-/g, "");
-  }
-
-  const exclusiveEndDate = new Date(`${utc8DateText}T00:00:00+08:00`);
-  exclusiveEndDate.setDate(exclusiveEndDate.getDate() + 1);
-  return formatDateOnly(exclusiveEndDate);
+function predictedDateToDateStr(dateText: string): string {
+  return dateText.replace(/-/g, "");
 }
 
-function formatUtc8DateText(date: Date): string {
-  const formatter = new Intl.DateTimeFormat("zh-CN", {
-    timeZone: "Asia/Shanghai",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  });
-
-  const parts = formatter.formatToParts(date);
-  const year = parts.find((part) => part.type === "year")?.value;
-  const month = parts.find((part) => part.type === "month")?.value;
-  const day = parts.find((part) => part.type === "day")?.value;
-
-  if (!year || !month || !day) {
-    throw new Error("无法将日期转换为 UTC+8 日期");
-  }
-
-  return `${year}-${month}-${day}`;
+function calculateInclusiveDurationDays(startDateText: string, endDateText: string): number {
+  const start = parseDateTextAsUtc(startDateText);
+  const end = parseDateTextAsUtc(endDateText);
+  return Math.floor((end.getTime() - start.getTime()) / 86400000) + 1;
 }
 
-/** 格式化日期为 YYYYMMDD */
-function formatDateOnly(d: Date): string {
+function parseDateTextAsUtc(dateText: string): Date {
+  const year = Number(dateText.slice(0, 4));
+  const month = Number(dateText.slice(4, 6));
+  const day = Number(dateText.slice(6, 8));
+  return new Date(Date.UTC(year, month - 1, day));
+}
+
+function formatDateOnlyLocal(d: Date): string {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");

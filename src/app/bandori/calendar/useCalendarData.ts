@@ -38,14 +38,14 @@ export interface CalendarEvent {
 // ─── 乐团颜色映射 ───
 
 export const BAND_COLORS: Record<string, string> = {
-  ppp: "#FF6B9D",
-  ag: "#FF2D54",
-  pp: "#43B5A0",
-  roselia: "#7044C4",
-  hhw: "#FFBB00",
-  morfonica: "#99CCFF",
-  ras: "#C41E3A",
-  mygo: "#4499EE",
+  ppp: "#FF3377",
+  ag: "#EE3344",
+  pp: "#33DDAA",
+  roselia: "#3344AA",
+  hhw: "#FFDD00",
+  morfonica: "#33AAFF",
+  ras: "#33CCCC",
+  mygo: "#3388BB",
   avemujica: "#8B5CF6",
   mix: "#888888",
 };
