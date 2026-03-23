@@ -106,9 +106,35 @@ export async function GET(request: Request) {
 
 /** 将毫秒时间戳转换为 ICS DATE 格式（YYYYMMDD），可选 +1 天（排他结束日） */
 function timestampToDateStr(ms: number, addOneDay = false): string {
-  const d = new Date(ms);
-  if (addOneDay) d.setDate(d.getDate() + 1);
+  const shanghaiDateText = formatShanghaiDateText(ms);
+
+  if (!addOneDay) {
+    return shanghaiDateText.replace(/-/g, "");
+  }
+
+  const d = new Date(`${shanghaiDateText}T00:00:00+08:00`);
+  d.setDate(d.getDate() + 1);
   return formatDateOnly(d);
+}
+
+function formatShanghaiDateText(ms: number): string {
+  const formatter = new Intl.DateTimeFormat("zh-CN", {
+    timeZone: "Asia/Shanghai",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+
+  const parts = formatter.formatToParts(new Date(ms));
+  const year = parts.find((part) => part.type === "year")?.value;
+  const month = parts.find((part) => part.type === "month")?.value;
+  const day = parts.find((part) => part.type === "day")?.value;
+
+  if (!year || !month || !day) {
+    throw new Error(`无法将时间戳 ${ms} 转换为上海时区日期`);
+  }
+
+  return `${year}-${month}-${day}`;
 }
 
 /** 格式化日期为 YYYYMMDD */

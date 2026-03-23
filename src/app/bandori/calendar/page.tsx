@@ -8,6 +8,10 @@ import { CALENDAR_BAND_OPTIONS } from "./options";
 import Toolbar from "@/components/Toolbar";
 
 function getReadableTextColor(hexColor: string): string {
+  if (hexColor.toLowerCase() === BAND_COLORS.hhw.toLowerCase()) {
+    return "#FFFFFF";
+  }
+
   const normalized = hexColor.replace("#", "");
   const red = parseInt(normalized.slice(0, 2), 16);
   const green = parseInt(normalized.slice(2, 4), 16);

@@ -19,7 +19,7 @@ export const CALENDAR_BAND_SHORT_LABELS: Record<string, string> = {
   ras: "RAS",
   mygo: "MyGO",
   avemujica: "AveMujica",
-  mix: "MIX",
+  mix: "混活",
 };
 
 export function getCalendarBandShortLabel(bandType: string): string {
@@ -43,7 +43,7 @@ export const CALENDAR_BAND_OPTIONS: CalendarBandOption[] = [
   { value: "morfonica", label: "Morfonica" },
   { value: "ras", label: "RAISE A SUILEN" },
   { value: "mygo", label: "MyGO!!!!!" },
-  { value: "mix", label: "混活 / 其他" },
+  { value: "mix", label: "混活" },
 ];
 
 export const STAMP_CHARACTER_OPTIONS: StampCharacterOption[] = [
