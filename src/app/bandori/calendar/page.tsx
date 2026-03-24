@@ -139,7 +139,10 @@ export default function CalendarPage() {
   }, [refresh]);
 
   const stampCharacterOptions = useMemo(() => buildStampCharacterOptions(allCharacters), [allCharacters]);
-  const bandUniverse = useMemo(() => CALENDAR_BAND_OPTIONS.map((option) => option.value), []);
+  const subscriptionBandOptions = useMemo(
+    () => CALENDAR_BAND_OPTIONS.filter((option) => option.value !== "mix"),
+    [],
+  );
   const characterUniverse = useMemo(() => stampCharacterOptions.map((option) => option.id), [stampCharacterOptions]);
   const characterNameById = useMemo(() => {
     const mapped = new Map<number, string>();
@@ -196,10 +199,8 @@ export default function CalendarPage() {
   const icsUrl = useMemo(() => {
     const params = new URLSearchParams();
 
-    if (selectedBands.length > 0 || selectedCharacterIds.length > 0) {
-      const bandToken = encodeMask(selectedBands, bandUniverse);
-      const characterToken = encodeMask(selectedCharacterIds, characterUniverse);
-      params.set("s", `${bandToken}.${characterToken}`);
+    if (selectedCharacterIds.length > 0) {
+      params.set("s", encodeMask(selectedCharacterIds, characterUniverse));
     }
     const reminderFlagToken = encodeReminderFlagToken([
       enableStartPreviousDayReminder,
@@ -227,10 +228,9 @@ export default function CalendarPage() {
     }
 
     const query = params.toString();
-    const path = `/api/bandori/calendar/cn/ics.ics${query ? `?${query}` : ""}`;
+    const path = `/api/bandori/calendar/cn/bandori-calendar-cn.ics${query ? `?${query}` : ""}`;
     return typeof window !== "undefined" ? `${window.location.origin}${path}` : path;
   }, [
-    bandUniverse,
     characterUniverse,
     enableEndPreviousDayReminder,
     enableEndSameDayReminder,
@@ -265,24 +265,35 @@ export default function CalendarPage() {
   }, [characterIdsByBand]);
 
   const toggleCharacter = useCallback((characterId: number, bandType: string) => {
+    const relatedCharacterIds = characterIdsByBand.get(bandType) ?? [];
+
     setSelectedCharacterIds((prevCharacterIds) => {
       const isSelected = prevCharacterIds.includes(characterId);
       const nextCharacterIds = isSelected
         ? prevCharacterIds.filter((id) => id !== characterId)
         : [...prevCharacterIds, characterId];
 
-      if (isSelected) {
-        setSelectedBands((prevBands) => prevBands.filter((item) => item !== bandType));
-      }
+      const hasSelectedAllBandMembers = relatedCharacterIds.length > 0
+        && relatedCharacterIds.every((id) => nextCharacterIds.includes(id));
+
+      setSelectedBands((prevBands) => {
+        if (isSelected || !hasSelectedAllBandMembers) {
+          return prevBands.filter((item) => item !== bandType);
+        }
+
+        return prevBands.includes(bandType)
+          ? prevBands
+          : [...prevBands, bandType];
+      });
 
       return nextCharacterIds;
     });
-  }, []);
+  }, [characterIdsByBand]);
 
   const handleSelectAllBands = useCallback(() => {
-    setSelectedBands(CALENDAR_BAND_OPTIONS.map((option) => option.value));
+    setSelectedBands(subscriptionBandOptions.map((option) => option.value));
     setSelectedCharacterIds(stampCharacterOptions.map((option) => option.id));
-  }, [stampCharacterOptions]);
+  }, [stampCharacterOptions, subscriptionBandOptions]);
 
   const handleClearBands = useCallback(() => {
     setSelectedBands([]);
@@ -359,7 +370,7 @@ export default function CalendarPage() {
                 </div>
               </div>
               <div className="flex flex-wrap gap-2">
-                {CALENDAR_BAND_OPTIONS.map((option) => {
+                {subscriptionBandOptions.map((option) => {
                   const checked = selectedBandSet.has(option.value);
                   const bandColor = BAND_COLORS[option.value as keyof typeof BAND_COLORS] ?? BAND_COLORS.mix;
                   return (
@@ -528,7 +539,7 @@ export default function CalendarPage() {
               将此链接添加到您的日历应用（Google Calendar、Apple Calendar 等）以自动同步活动日程
             </p>
             <p className="text-xs md:text-sm text-gray-600 leading-6">
-              活动将以全天事件形式显示，并附带在上方订阅的闹钟提醒，时间为UTC+8时区
+              活动将以全天事件形式显示，并附带在上方订阅的闹钟提醒，时间均采用 UTC+8 时区
             </p>
           </div>
         )}

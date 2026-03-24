@@ -2,7 +2,6 @@ import { createServerSupabaseClient } from "@/lib/supabase-server";
 import {
   CalendarCharacter,
   buildStampCharacterOptions,
-  CALENDAR_BAND_ORDER,
   formatCalendarSubscriptionTitle,
   getCharacterBandType,
   getSubscriptionEventColor,
@@ -88,7 +87,17 @@ export async function GET(request: Request) {
       characterRows.map((character) => [character.character_id, character]),
     );
     const characterUniverse = buildStampCharacterOptions(characterRows).map((option) => option.id);
-    const { selectedBands, selectedCharacterIds } = parseSelectionState(searchParams.get("s"), characterUniverse);
+    const selectedCharacterIds = parseSelectionState(searchParams.get("s"), characterUniverse);
+    const selectedBandTypes = new Set<string>();
+
+    selectedCharacterIds.forEach((characterId) => {
+      const character = characterMap.get(characterId);
+      if (!character) {
+        return;
+      }
+
+      selectedBandTypes.add(getCharacterBandType(character));
+    });
     const [
       enableStartPreviousDayReminder,
       enableStartSameDayReminder,
@@ -114,7 +123,7 @@ export async function GET(request: Request) {
 
     for (const ev of events ?? []) {
       const stampCharacter = ev.stamp ? characterMap.get(ev.stamp) ?? null : null;
-      if (!shouldIncludeEventByFilters(ev.band_type, ev.stamp ?? null, stampCharacter, selectedBands, selectedCharacterIds)) continue;
+      if (!shouldIncludeEventByFilters(ev.band_type, ev.stamp ?? null, selectedBandTypes, selectedCharacterIds)) continue;
 
       // 跳过已提前举办且无官方时间的活动
       if (ev.is_skipped && !ev.cn_start_at) continue;
@@ -184,7 +193,7 @@ export async function GET(request: Request) {
     return new Response(icsContent.join("\r\n"), {
       headers: {
         "Content-Type": "text/calendar; charset=utf-8",
-        "Content-Disposition": 'attachment; filename="bandori-cn-calendar.ics"',
+        "Content-Disposition": 'attachment; filename="bandori-calendar-cn.ics"',
         // 为什么这么做：允许日历应用程序定期拉取最新内容，不做长时间缓存
         "Cache-Control": "no-cache, max-age=0",
       },
@@ -198,27 +207,18 @@ export async function GET(request: Request) {
 function shouldIncludeEventByFilters(
   bandType: string,
   stampCharacterId: number | null,
-  stampCharacter: CalendarCharacter | null,
-  selectedBands: Set<string>,
+  selectedBandTypes: Set<string>,
   selectedCharacterIds: Set<number>,
 ): boolean {
-  if (selectedBands.size === 0 && selectedCharacterIds.size === 0) {
+  if (selectedCharacterIds.size === 0) {
     return true;
   }
 
-  if (stampCharacterId !== null && selectedCharacterIds.has(stampCharacterId)) {
-    return true;
+  if (bandType === "mix") {
+    return stampCharacterId !== null && selectedCharacterIds.has(stampCharacterId);
   }
 
-  if (selectedBands.has(bandType)) {
-    return true;
-  }
-
-  if (bandType === "mix" && stampCharacter) {
-    return selectedBands.has(getCharacterBandType(stampCharacter));
-  }
-
-  return false;
+  return selectedBandTypes.has(bandType);
 }
 
 function normalizeTimeInput(input: string | null, fallback: string): string {
@@ -240,16 +240,12 @@ function decodeMask<T extends string | number>(token: string, universe: T[]): Se
   return results;
 }
 
-function parseSelectionState(input: string | null, characterUniverse: number[]): { selectedBands: Set<string>; selectedCharacterIds: Set<number> } {
+function parseSelectionState(input: string | null, characterUniverse: number[]): Set<number> {
   if (!input) {
-    return { selectedBands: new Set<string>(), selectedCharacterIds: new Set<number>() };
+    return new Set<number>();
   }
 
-  const [bandToken = "0", characterToken = "0"] = input.split(".");
-  return {
-    selectedBands: decodeMask(bandToken, CALENDAR_BAND_ORDER),
-    selectedCharacterIds: decodeMask(characterToken, characterUniverse),
-  };
+  return decodeMask(input, characterUniverse);
 }
 
 function parseReminderState(input: string | null): [boolean, boolean, boolean, boolean] {
