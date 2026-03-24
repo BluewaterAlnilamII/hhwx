@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { supabase } from "@/lib/supabase";
+import { getSafeSession, supabase } from "@/lib/supabase";
 import { useGameStore } from "@/store/useGameStore";
 import AuthModal from "./AuthModal";
 
@@ -16,18 +16,23 @@ export default function Toolbar({ showDebugButton = true }: ToolbarProps) {
 
     // Restore session on mount
     useEffect(() => {
-        supabase.auth.getSession().then(({ data: { session } }) => {
-            if (session?.user) {
-                supabase
-                    .from("profiles")
-                    .select("username")
-                    .eq("id", session.user.id)
-                    .single()
-                    .then(({ data }) => {
-                        setAuth(session.user.id, data?.username ?? "User");
-                    });
+        const restoreSession = async () => {
+            const session = await getSafeSession();
+            if (!session?.user) {
+                logout();
+                return;
             }
-        });
+
+            const { data } = await supabase
+                .from("profiles")
+                .select("username")
+                .eq("id", session.user.id)
+                .single();
+
+            setAuth(session.user.id, data?.username ?? "User");
+        };
+
+        void restoreSession();
 
         const {
             data: { subscription },

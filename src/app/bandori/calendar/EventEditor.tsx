@@ -1,8 +1,12 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
-import { GbpEvent, BAND_COLORS, useCalendarEditor } from "./useCalendarData";
-import { STAMP_CHARACTER_OPTIONS } from "./options";
+import { useState, useCallback, useMemo } from "react";
+import { BAND_COLORS, GbpEvent, useCalendarEditor } from "./useCalendarData";
+import {
+  buildStampCharacterOptions,
+  CalendarCharacter,
+  StampCharacterOption,
+} from "@/lib/calendar-character-service";
 import {
   DndContext,
   closestCenter,
@@ -21,13 +25,16 @@ import { CSS } from "@dnd-kit/utilities";
 
 interface EventEditorProps {
   allEvents: GbpEvent[];
+  allCharacters: CalendarCharacter[];
   onSaved: () => void;
 }
+
+type EditorMode = "future" | "past";
 
 /** 编辑中的活动数据 */
 interface EditableEvent {
   event_id: number;
-  name: string;
+  title: string;
   band_type: string;
   stamp: number | null;
   predicted_start: string; // "YYYY-MM-DD"
@@ -39,21 +46,23 @@ interface EditableEvent {
 }
 
 /** 从数据库记录中提取可编辑的活动（仅国服尚未开始的） */
-function toEditableEvents(events: GbpEvent[]): EditableEvent[] {
+function toEditableEvents(events: GbpEvent[], mode: EditorMode): EditableEvent[] {
   const now = Date.now();
+
   return events
     .filter(ev => {
-      // 已经有国服开始时间且已经开始了 → 不可编辑
+      if (mode === "past") {
+        return !!ev.cn_end_at && ev.cn_end_at < now;
+      }
+
       if (ev.cn_start_at && ev.cn_start_at <= now) return false;
-      // 没有预测开始日期且无国服开始时间 → 可编辑
       if (!ev.cn_start_at) return true;
-      // 有国服开始时间但还没开始 → 可编辑
       return ev.cn_start_at > now;
     })
     .sort((a, b) => a.sort_order - b.sort_order)
     .map(ev => ({
       event_id: ev.event_id,
-      name: ev.event_name_cn || ev.event_name_jp || `活动 #${ev.event_id}`,
+      title: ev.event_name_cn || ev.event_name_jp || `活动 #${ev.event_id}`,
       band_type: ev.band_type,
       stamp: ev.stamp ?? null,
       predicted_start: ev.predicted_start ?? "",
@@ -135,10 +144,27 @@ function formatDate(d: Date): string {
   return `${y}-${m}-${day}`;
 }
 
+function hasEditableEventChanged(current: EditableEvent, original: EditableEvent | undefined): boolean {
+  if (!original) {
+    return true;
+  }
+
+  return current.stamp !== original.stamp
+    || current.predicted_start !== original.predicted_start
+    || current.predicted_end !== original.predicted_end
+    || current.duration_days !== original.duration_days
+    || current.has_rest_day !== original.has_rest_day
+    || current.sort_order !== original.sort_order
+    || current.is_skipped !== original.is_skipped;
+}
+
 // ─── 可排序行组件 ───
 
 function SortableRow({
   item,
+  draggable,
+  stampOnly,
+  stampOptions,
   minDate,
   onChangeStart,
   onChangeEnd,
@@ -147,6 +173,9 @@ function SortableRow({
   onToggleRestDay,
 }: {
   item: EditableEvent;
+  draggable: boolean;
+  stampOnly: boolean;
+  stampOptions: StampCharacterOption[];
   minDate?: string;
   onChangeStart: (id: number, val: string) => void;
   onChangeEnd: (id: number, val: string) => void;
@@ -174,114 +203,134 @@ function SortableRow({
     onMouseDown: (event: React.MouseEvent<HTMLElement>) => event.stopPropagation(),
     onTouchStart: (event: React.TouchEvent<HTMLElement>) => event.stopPropagation(),
   };
-
-  const color = BAND_COLORS[item.band_type] ?? BAND_COLORS.mix;
+  const isStampUnset = item.stamp == null;
+  const bandColor = BAND_COLORS[item.band_type as keyof typeof BAND_COLORS] ?? BAND_COLORS.mix;
 
   return (
     <div
       ref={setNodeRef}
       style={style}
-      {...attributes}
-      {...listeners}
-      className={`flex items-center gap-2 py-2 px-3 rounded-lg bg-white/50 backdrop-blur-sm mb-1.5 cursor-grab active:cursor-grabbing touch-none ${
+      className={`flex items-center gap-1.5 py-2 px-2 rounded-lg bg-white/50 backdrop-blur-sm mb-1.5 ${
         item.is_skipped ? "opacity-40" : ""
       }`}
     >
-      <span className="text-gray-400 text-sm flex-shrink-0" aria-hidden="true">
-        ☰
-      </span>
+      {draggable ? (
+        <button
+          {...attributes}
+          {...listeners}
+          className="cursor-grab active:cursor-grabbing text-gray-400 hover:text-gray-600 text-sm flex-shrink-0 touch-none"
+          type="button"
+        >
+          ☰
+        </button>
+      ) : (
+        <span className="text-gray-300 text-sm flex-shrink-0" aria-hidden="true">
+          ☰
+        </span>
+      )}
 
-      {/* 乐团颜色指示 */}
-      <div
-        className="w-2 h-8 rounded-full flex-shrink-0"
-        style={{ backgroundColor: color }}
+      <span
+        className="w-1.5 h-8 rounded-full flex-shrink-0"
+        style={{ backgroundColor: bandColor }}
+        aria-hidden="true"
       />
 
-      <span className="w-[64px] flex-shrink-0 text-xs font-semibold text-gray-600 text-center">
+      <span className="w-[52px] flex-shrink-0 text-xs font-semibold text-gray-600 text-center">
         {item.event_id}
       </span>
 
       {/* 活动名称 */}
-      <span className="text-sm font-medium truncate min-w-[220px] w-[220px] md:min-w-[280px] md:w-[280px] flex-shrink-0" title={item.name}>
-        {item.name}
+      <span
+        className={`text-sm truncate min-w-[240px] w-[240px] md:min-w-[280px] md:w-[280px] flex-shrink-0 ${
+          isStampUnset ? "font-bold text-red-600" : "font-medium text-gray-900"
+        }`}
+        title={item.title}
+      >
+        {item.title}
       </span>
 
-      <select
-        {...stopDragPropagation}
-        value={item.stamp ?? ""}
-        onChange={(e) => onChangeStamp(item.event_id, e.target.value)}
-        className="text-xs border border-gray-200 rounded px-1.5 py-1 bg-white/70 w-[140px] flex-shrink-0"
-      >
-        <option value="">未设置</option>
-        {STAMP_CHARACTER_OPTIONS.map((option) => (
-          <option key={option.id} value={option.id}>
-            {option.name}
-          </option>
-        ))}
-      </select>
+      <div className="ml-auto flex items-center justify-end gap-1.5">
+        <select
+          {...stopDragPropagation}
+          value={item.stamp ?? ""}
+          onChange={(e) => onChangeStamp(item.event_id, e.target.value)}
+          className={`text-xs rounded px-1.5 py-1 bg-white/70 w-[132px] flex-shrink-0 border ${
+            isStampUnset ? "border-red-500 text-red-600 font-bold" : "border-gray-200 text-gray-900"
+          }`}
+        >
+          <option value="">未设置</option>
+          {stampOptions.map((option) => (
+            <option key={option.id} value={option.id}>
+              {option.name}
+            </option>
+          ))}
+        </select>
 
-      {/* 开始日期 */}
-      <input
-        {...stopDragPropagation}
-        type="date"
-        value={item.predicted_start}
-        onChange={(e) => onChangeStart(item.event_id, e.target.value)}
-        min={minDate}
-        className="text-xs border border-gray-200 rounded px-1.5 py-1 bg-white/70 w-[120px] flex-shrink-0"
-        disabled={item.is_skipped}
-      />
-
-      {/* 结束日期 */}
-      <input
-        {...stopDragPropagation}
-        type="date"
-        value={item.predicted_end}
-        onChange={(e) => onChangeEnd(item.event_id, e.target.value)}
-        min={item.predicted_start || minDate}
-        className="text-xs border border-gray-200 rounded px-1.5 py-1 bg-white/70 w-[120px] flex-shrink-0"
-        disabled={item.is_skipped}
-      />
-
-      {/* 持续天数 */}
-      <div className="flex items-center gap-1 w-[72px] flex-shrink-0">
         <input
           {...stopDragPropagation}
-          type="number"
-          min={1}
-          step={1}
-          value={item.duration_days}
-          onChange={(e) => onChangeDuration(item.event_id, e.target.value)}
-          className="text-xs border border-gray-200 rounded px-1.5 py-1 bg-white/70 w-[48px] text-center"
-          disabled={item.is_skipped}
+          type="date"
+          value={item.predicted_start}
+          onChange={(e) => onChangeStart(item.event_id, e.target.value)}
+          min={minDate}
+          className="text-xs border border-gray-200 rounded px-1.5 py-1 bg-white/70 w-[110px] flex-shrink-0"
+          disabled={item.is_skipped || stampOnly}
         />
-        <span className="text-xs text-gray-500">天</span>
+
+        <input
+          {...stopDragPropagation}
+          type="date"
+          value={item.predicted_end}
+          onChange={(e) => onChangeEnd(item.event_id, e.target.value)}
+          min={item.predicted_start || minDate}
+          className="text-xs border border-gray-200 rounded px-1.5 py-1 bg-white/70 w-[110px] flex-shrink-0"
+          disabled={item.is_skipped || stampOnly}
+        />
+
+        <div className="flex items-center gap-1 w-[64px] flex-shrink-0 justify-end">
+          <input
+            {...stopDragPropagation}
+            type="number"
+            min={1}
+            step={1}
+            value={item.duration_days}
+            onChange={(e) => onChangeDuration(item.event_id, e.target.value)}
+            className="text-xs border border-gray-200 rounded px-1.5 py-1 bg-white/70 w-[42px] text-center"
+            disabled={item.is_skipped || stampOnly}
+          />
+          <span className="text-xs text-gray-500">天</span>
+        </div>
+
+        <label className="flex items-center gap-1 flex-shrink-0 cursor-pointer w-[72px] justify-end">
+          <input
+            {...stopDragPropagation}
+            type="checkbox"
+            checked={item.has_rest_day}
+            onChange={() => onToggleRestDay(item.event_id)}
+            className="accent-blue-500"
+            disabled={item.is_skipped || stampOnly}
+          />
+          <span className="text-xs text-gray-500">无邦日</span>
+        </label>
       </div>
-
-      {/* 无邦日 */}
-      <label className="flex items-center gap-1 flex-shrink-0 cursor-pointer">
-        <input
-          {...stopDragPropagation}
-          type="checkbox"
-          checked={item.has_rest_day}
-          onChange={() => onToggleRestDay(item.event_id)}
-          className="accent-blue-500"
-          disabled={item.is_skipped}
-        />
-        <span className="text-xs text-gray-500">无邦日</span>
-      </label>
     </div>
   );
 }
 
 // ─── 主编辑器组件 ───
 
-export default function EventEditor({ allEvents, onSaved }: EventEditorProps) {
+export default function EventEditor({ allEvents, allCharacters, onSaved }: EventEditorProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const [editorMode, setEditorMode] = useState<EditorMode>("future");
   const [editableEvents, setEditableEvents] = useState<EditableEvent[]>([]);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const { saveEvents, saving, error } = useCalendarEditor(onSaved);
   const lockedUntilDate = getLockedUntilDate(allEvents);
   const earliestSelectableDate = lockedUntilDate ? addDays(lockedUntilDate, 1) : undefined;
+  const stampOptions = useMemo(() => buildStampCharacterOptions(allCharacters), [allCharacters]);
+  const originalEditableEventsByMode = useMemo(() => ({
+    future: toEditableEvents(allEvents, "future"),
+    past: toEditableEvents(allEvents, "past"),
+  }), [allEvents]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -289,15 +338,25 @@ export default function EventEditor({ allEvents, onSaved }: EventEditorProps) {
     })
   );
 
-  // 打开编辑器时初始化数据
-  useEffect(() => {
-    if (isOpen) {
-      setEditableEvents(toEditableEvents(allEvents));
+  const openEditor = useCallback((mode: EditorMode) => {
+    setEditorMode(mode);
+    setEditableEvents(toEditableEvents(allEvents, mode));
+    setSuccessMessage(null);
+    setIsOpen(true);
+  }, [allEvents]);
+
+  const switchEditorMode = useCallback(() => {
+    setEditorMode((prev) => {
+      const nextMode = prev === "future" ? "past" : "future";
+      setEditableEvents(toEditableEvents(allEvents, nextMode));
       setSuccessMessage(null);
-    }
-  }, [isOpen, allEvents]);
+      return nextMode;
+    });
+  }, [allEvents]);
 
   const handleDragEnd = useCallback((event: DragEndEvent) => {
+    if (editorMode !== "future") return;
+
     const { active, over } = event;
     if (!over || active.id === over.id) return;
 
@@ -311,7 +370,7 @@ export default function EventEditor({ allEvents, onSaved }: EventEditorProps) {
       // 从移动目标位置开始级联更新
       return recalculateFrom(reordered, Math.min(oldIdx, newIdx), lockedUntilDate);
     });
-  }, [lockedUntilDate]);
+  }, [editorMode, lockedUntilDate]);
 
   const handleChangeStart = useCallback((id: number, val: string) => {
     setEditableEvents(prev => {
@@ -433,8 +492,20 @@ export default function EventEditor({ allEvents, onSaved }: EventEditorProps) {
 
   const handleSave = useCallback(() => {
     setSuccessMessage(null);
+    const originalEventMap = new Map(
+      originalEditableEventsByMode[editorMode].map((event) => [event.event_id, event]),
+    );
+    const eventsToSubmit = editorMode === "past"
+      ? editableEvents.filter((event) => hasEditableEventChanged(event, originalEventMap.get(event.event_id)))
+      : editableEvents;
+
+    if (eventsToSubmit.length === 0) {
+      setSuccessMessage("没有需要提交的变更");
+      return;
+    }
+
     void saveEvents(
-      editableEvents.map(e => ({
+      eventsToSubmit.map(e => ({
         event_id: e.event_id,
         stamp: e.stamp,
         predicted_start: e.predicted_start || null,
@@ -447,13 +518,13 @@ export default function EventEditor({ allEvents, onSaved }: EventEditorProps) {
     ).then((success) => {
       setSuccessMessage(success ? "提交成功！" : null);
     });
-  }, [editableEvents, saveEvents]);
+  }, [editableEvents, editorMode, originalEditableEventsByMode, saveEvents]);
 
   if (!isOpen) {
     return (
       <div className="mt-4 text-center">
         <button
-          onClick={() => setIsOpen(true)}
+          onClick={() => openEditor("future")}
           className="px-4 py-2 rounded-lg bg-blue-500 text-white font-medium hover:bg-blue-600 transition-colors text-sm"
         >
           编辑活动日程
@@ -465,7 +536,20 @@ export default function EventEditor({ allEvents, onSaved }: EventEditorProps) {
   return (
     <div className="mt-4">
       <div className="flex items-center justify-between mb-3">
-        <h3 className="text-lg font-bold">编辑活动日程</h3>
+        <div className="flex items-center gap-2">
+          <h3 className="text-lg font-bold">编辑活动日程</h3>
+          <button
+            type="button"
+            onClick={switchEditorMode}
+            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+              editorMode === "past"
+                ? "bg-amber-500 text-white hover:bg-amber-600"
+                : "bg-white/80 text-gray-700 hover:bg-white"
+            }`}
+          >
+            {editorMode === "past" ? "返回未来活动" : "编辑往期活动"}
+          </button>
+        </div>
         <div className="flex items-center gap-2">
           {successMessage && (
             <span className="text-green-600 text-sm font-medium">{successMessage}</span>
@@ -491,41 +575,65 @@ export default function EventEditor({ allEvents, onSaved }: EventEditorProps) {
 
       {/* 列头 */}
       <div className="overflow-x-auto pb-2">
-        <div className="min-w-[980px]">
-          <div className="flex items-center gap-2 py-1.5 px-3 text-xs text-gray-500 font-medium">
+        <div className="min-w-[900px]">
+          <div className="flex items-center gap-1.5 py-1.5 px-2 text-xs text-gray-500 font-medium">
             <span className="w-[16px]" />
-            <span className="w-2" />
-            <span className="w-[64px] text-center">ID</span>
-            <span className="w-[220px] md:w-[280px]">活动名称</span>
-            <span className="w-[140px] text-center">表情角色</span>
-            <span className="w-[120px] text-center">开始日期</span>
-            <span className="w-[120px] text-center">结束日期</span>
-            <span className="w-[72px] text-center">天数</span>
-            <span className="w-[72px] text-center">无邦日</span>
+            <span className="w-1.5" />
+            <span className="w-[52px] text-center">ID</span>
+            <span className="w-[240px] md:w-[280px]">活动名</span>
+            <div className="ml-auto flex items-center justify-end gap-1.5 text-right">
+              <span className="w-[132px] text-center">表情角色</span>
+              <span className="w-[110px] text-center">开始日期</span>
+              <span className="w-[110px] text-center">结束日期</span>
+              <span className="w-[64px] text-center">天数</span>
+              <span className="w-[72px] text-center">无邦日</span>
+            </div>
           </div>
 
-          {/* 可排序列表 */}
-          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-            <SortableContext
-              items={editableEvents.map(e => e.event_id)}
-              strategy={verticalListSortingStrategy}
-            >
-              <div className="max-h-[400px] overflow-y-auto pr-1">
-                {editableEvents.map(item => (
-                  <SortableRow
-                    key={item.event_id}
-                    item={item}
-                    minDate={earliestSelectableDate}
-                    onChangeStart={handleChangeStart}
-                    onChangeEnd={handleChangeEnd}
-                    onChangeDuration={handleChangeDuration}
-                    onChangeStamp={handleChangeStamp}
-                    onToggleRestDay={handleToggleRestDay}
-                  />
-                ))}
-              </div>
-            </SortableContext>
-          </DndContext>
+          {editorMode === "future" ? (
+            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+              <SortableContext
+                items={editableEvents.map(e => e.event_id)}
+                strategy={verticalListSortingStrategy}
+              >
+                <div className="max-h-[400px] overflow-y-auto pr-1">
+                  {editableEvents.map(item => (
+                    <SortableRow
+                      key={item.event_id}
+                      item={item}
+                      draggable
+                      stampOnly={false}
+                      stampOptions={stampOptions}
+                      minDate={earliestSelectableDate}
+                      onChangeStart={handleChangeStart}
+                      onChangeEnd={handleChangeEnd}
+                      onChangeDuration={handleChangeDuration}
+                      onChangeStamp={handleChangeStamp}
+                      onToggleRestDay={handleToggleRestDay}
+                    />
+                  ))}
+                </div>
+              </SortableContext>
+            </DndContext>
+          ) : (
+            <div className="max-h-[400px] overflow-y-auto pr-1">
+              {editableEvents.map(item => (
+                <SortableRow
+                  key={item.event_id}
+                  item={item}
+                  draggable={false}
+                  stampOnly
+                  stampOptions={stampOptions}
+                  minDate={undefined}
+                  onChangeStart={handleChangeStart}
+                  onChangeEnd={handleChangeEnd}
+                  onChangeDuration={handleChangeDuration}
+                  onChangeStamp={handleChangeStamp}
+                  onToggleRestDay={handleToggleRestDay}
+                />
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </div>

@@ -1,8 +1,57 @@
-import { NextResponse } from "next/server";
-import { formatCalendarSubscriptionTitle } from "@/app/bandori/calendar/options";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
+import {
+  CalendarCharacter,
+  buildStampCharacterOptions,
+  CALENDAR_BAND_ORDER,
+  formatCalendarSubscriptionTitle,
+  getCharacterBandType,
+  getSubscriptionEventColor,
+} from "@/lib/calendar-character-service";
+
+const CHARACTER_SELECT_FIELDS = [
+  "character_id",
+  "band_id",
+  "color_code",
+  "character_name_jp",
+  "character_name_en",
+  "character_name_tw",
+  "character_name_cn",
+  "nickname_jp",
+  "nickname_en",
+  "nickname_tw",
+  "nickname_cn",
+].join(",");
 
 export const dynamic = "force-dynamic";
+
+const MAX_PAST_SUBSCRIPTION_DAYS = 180;
+
+const DEFAULT_START_PREVIOUS_DAY_REMINDER_TIME = "21:00";
+const DEFAULT_START_SAME_DAY_REMINDER_TIME = "14:30";
+const DEFAULT_END_PREVIOUS_DAY_REMINDER_TIME = "21:00";
+const DEFAULT_END_SAME_DAY_REMINDER_TIME = "17:00";
+const DEFAULT_REMINDER_FLAG_TOKEN = "f";
+const DEFAULT_REMINDER_TIMES = [
+  DEFAULT_START_PREVIOUS_DAY_REMINDER_TIME,
+  DEFAULT_START_SAME_DAY_REMINDER_TIME,
+  DEFAULT_END_PREVIOUS_DAY_REMINDER_TIME,
+  DEFAULT_END_SAME_DAY_REMINDER_TIME,
+];
+
+function parseBase36BigInt(input: string): bigint {
+  let result = BigInt(0);
+
+  for (const character of input.toLowerCase()) {
+    const digit = parseInt(character, 36);
+    if (Number.isNaN(digit) || digit < 0 || digit >= 36) {
+      return BigInt(0);
+    }
+
+    result = result * BigInt(36) + BigInt(digit);
+  }
+
+  return result;
+}
 
 /**
  * GET /api/calendar/ics
@@ -13,17 +62,9 @@ export async function GET(request: Request) {
   try {
     const serviceClient = createServerSupabaseClient();
     const { searchParams } = new URL(request.url);
-    const bandQuery = searchParams.get("bands")?.trim() ?? "";
-    const selectedBands = new Set(
-      bandQuery
-        .split(",")
-        .map((band) => band.trim())
-        .filter(Boolean),
-    );
-
     const { data: events, error } = await serviceClient
       .from("gbp_event")
-      .select("event_id, event_name_jp, event_name_cn, band_type, cn_start_at, cn_end_at, predicted_start, predicted_end, is_skipped")
+      .select("event_id, event_name_jp, event_name_cn, band_type, stamp, cn_start_at, cn_end_at, predicted_start, predicted_end, is_skipped")
       .order("sort_order", { ascending: true });
 
     if (error) {
@@ -33,21 +74,47 @@ export async function GET(request: Request) {
 
     const now = new Date();
     const dtstamp = formatICSDate(now);
+    const { data: characters, error: characterError } = await serviceClient
+      .from("gbp_characters")
+      .select(CHARACTER_SELECT_FIELDS)
+      .order("character_id", { ascending: true });
 
-    let icsContent = [
+    if (characterError) {
+      console.error("gbp_characters 查询失败:", characterError);
+    }
+
+    const characterRows = (characters ?? []) as unknown as CalendarCharacter[];
+    const characterMap = new Map<number, CalendarCharacter>(
+      characterRows.map((character) => [character.character_id, character]),
+    );
+    const characterUniverse = buildStampCharacterOptions(characterRows).map((option) => option.id);
+    const { selectedBands, selectedCharacterIds } = parseSelectionState(searchParams.get("s"), characterUniverse);
+    const [
+      enableStartPreviousDayReminder,
+      enableStartSameDayReminder,
+      enableEndPreviousDayReminder,
+      enableEndSameDayReminder,
+    ] = parseReminderState(searchParams.get("r"));
+    const [
+      startPreviousDayReminderTime,
+      startSameDayReminderTime,
+      endPreviousDayReminderTime,
+      endSameDayReminderTime,
+    ] = parseReminderStateTimes(searchParams.get("r"));
+
+    const icsContent = [
       "BEGIN:VCALENDAR",
       "VERSION:2.0",
       "PRODID:-//HHWX//Bandori CN Calendar//CN",
       "CALSCALE:GREGORIAN",
       "METHOD:PUBLISH",
-      "X-WR-CALNAME:Bandori 国服活动日历",
+      "X-WR-CALNAME:BanGDream 国服活动",
       "X-WR-TIMEZONE:Asia/Shanghai",
     ];
 
     for (const ev of events ?? []) {
-      if (selectedBands.size > 0 && !selectedBands.has(ev.band_type)) {
-        continue;
-      }
+      const stampCharacter = ev.stamp ? characterMap.get(ev.stamp) ?? null : null;
+      if (!shouldIncludeEventByFilters(ev.band_type, ev.stamp ?? null, stampCharacter, selectedBands, selectedCharacterIds)) continue;
 
       // 跳过已提前举办且无官方时间的活动
       if (ev.is_skipped && !ev.cn_start_at) continue;
@@ -70,6 +137,8 @@ export async function GET(request: Request) {
 
       if (!startDate || !endDate) continue;
 
+      if (!shouldIncludeEventByAge(endDate)) continue;
+
       const durationDays = calculateInclusiveDurationDays(startDate, endDate);
       if (durationDays < 1) continue;
 
@@ -77,7 +146,23 @@ export async function GET(request: Request) {
         ev.band_type,
         ev.event_id,
         ev.event_name_cn || ev.event_name_jp || `活动 #${ev.event_id}`,
+        stampCharacter,
       );
+      const eventColor = getSubscriptionEventColor(ev.band_type, stampCharacter);
+      const alarmBlocks = [
+        ...(enableStartPreviousDayReminder
+          ? buildDisplayAlarmBlock(`活动明天开始：${summary}`, buildUtcDateTime(addDaysToCompactDate(startDate, -1), startPreviousDayReminderTime))
+          : []),
+        ...(enableStartSameDayReminder
+          ? buildDisplayAlarmBlock(`活动今天开始：${summary}`, buildUtcDateTime(startDate, startSameDayReminderTime))
+          : []),
+        ...(enableEndPreviousDayReminder
+          ? buildDisplayAlarmBlock(`活动明天结束：${summary}`, buildUtcDateTime(addDaysToCompactDate(endDate, -1), endPreviousDayReminderTime))
+          : []),
+        ...(enableEndSameDayReminder
+          ? buildDisplayAlarmBlock(`活动今天结束：${summary}`, buildUtcDateTime(endDate, endSameDayReminderTime))
+          : []),
+      ];
 
       icsContent.push(
         "BEGIN:VEVENT",
@@ -85,7 +170,11 @@ export async function GET(request: Request) {
         `DTSTAMP:${dtstamp}`,
         `DTSTART;VALUE=DATE:${startDate}`,
         `DURATION:P${durationDays}D`,
+        "TRANSP:TRANSPARENT",
+        `COLOR:${eventColor}`,
+        `X-APPLE-CALENDAR-COLOR:${eventColor}`,
         `SUMMARY:${escapeICSText(summary)}`,
+        ...alarmBlocks,
         "END:VEVENT"
       );
     }
@@ -104,6 +193,138 @@ export async function GET(request: Request) {
     console.error("ICS API 错误:", error);
     return new Response("服务器内部错误", { status: 500 });
   }
+}
+
+function shouldIncludeEventByFilters(
+  bandType: string,
+  stampCharacterId: number | null,
+  stampCharacter: CalendarCharacter | null,
+  selectedBands: Set<string>,
+  selectedCharacterIds: Set<number>,
+): boolean {
+  if (selectedBands.size === 0 && selectedCharacterIds.size === 0) {
+    return true;
+  }
+
+  if (stampCharacterId !== null && selectedCharacterIds.has(stampCharacterId)) {
+    return true;
+  }
+
+  if (selectedBands.has(bandType)) {
+    return true;
+  }
+
+  if (bandType === "mix" && stampCharacter) {
+    return selectedBands.has(getCharacterBandType(stampCharacter));
+  }
+
+  return false;
+}
+
+function normalizeTimeInput(input: string | null, fallback: string): string {
+  if (!input) return fallback;
+  return /^\d{2}:\d{2}$/.test(input) ? input : fallback;
+}
+
+function decodeMask<T extends string | number>(token: string, universe: T[]): Set<T> {
+  const normalized = /^[0-9a-z]+$/i.test(token) ? token : "0";
+  const mask = parseBase36BigInt(normalized);
+  const results = new Set<T>();
+
+  universe.forEach((value, index) => {
+    if ((mask & (BigInt(1) << BigInt(index))) !== BigInt(0)) {
+      results.add(value);
+    }
+  });
+
+  return results;
+}
+
+function parseSelectionState(input: string | null, characterUniverse: number[]): { selectedBands: Set<string>; selectedCharacterIds: Set<number> } {
+  if (!input) {
+    return { selectedBands: new Set<string>(), selectedCharacterIds: new Set<number>() };
+  }
+
+  const [bandToken = "0", characterToken = "0"] = input.split(".");
+  return {
+    selectedBands: decodeMask(bandToken, CALENDAR_BAND_ORDER),
+    selectedCharacterIds: decodeMask(characterToken, characterUniverse),
+  };
+}
+
+function parseReminderState(input: string | null): [boolean, boolean, boolean, boolean] {
+  const [flagToken = DEFAULT_REMINDER_FLAG_TOKEN] = (input ?? "").split(".");
+  const flagMask = /^[0-9a-z]$/i.test(flagToken) ? parseInt(flagToken, 36) : parseInt(DEFAULT_REMINDER_FLAG_TOKEN, 36);
+  const normalized = Number.isNaN(flagMask) ? 15 : flagMask;
+  return [
+    (normalized & 1) !== 0,
+    (normalized & 2) !== 0,
+    (normalized & 4) !== 0,
+    (normalized & 8) !== 0,
+  ];
+}
+
+function parseReminderStateTimes(input: string | null): [string, string, string, string] {
+  const [, timeToken = ""] = (input ?? "").split(".");
+  if (!timeToken) {
+    return [...DEFAULT_REMINDER_TIMES] as [string, string, string, string];
+  }
+
+  if (!/^[0-9a-z]+$/i.test(timeToken)) {
+    return [...DEFAULT_REMINDER_TIMES] as [string, string, string, string];
+  }
+
+  let packed = parseBase36BigInt(timeToken);
+  const decoded = new Array<string>(4);
+
+  for (let index = 3; index >= 0; index -= 1) {
+    const totalMinutes = Number(packed % BigInt(1440));
+    const hours = String(Math.floor(totalMinutes / 60)).padStart(2, "0");
+    const minutes = String(totalMinutes % 60).padStart(2, "0");
+    decoded[index] = normalizeTimeInput(`${hours}:${minutes}`, DEFAULT_REMINDER_TIMES[index]);
+    packed /= BigInt(1440);
+  }
+
+  return decoded as [string, string, string, string];
+}
+
+function buildDisplayAlarmBlock(description: string, triggerUtc: string): string[] {
+  return [
+    "BEGIN:VALARM",
+    "ACTION:DISPLAY",
+    `TRIGGER;VALUE=DATE-TIME:${triggerUtc}`,
+    `DESCRIPTION:${escapeICSText(description)}`,
+    "END:VALARM",
+  ];
+}
+
+function shouldIncludeEventByAge(endDateText: string): boolean {
+  const today = new Date();
+  const todayDateText = formatDateOnlyUtc(new Date(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate())));
+
+  if (endDateText >= todayDateText) {
+    return true;
+  }
+
+  const endDate = parseDateTextAsUtc(endDateText);
+  const thresholdDate = new Date(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()));
+  thresholdDate.setUTCDate(thresholdDate.getUTCDate() - MAX_PAST_SUBSCRIPTION_DAYS);
+  return endDate.getTime() >= thresholdDate.getTime();
+}
+
+function addDaysToCompactDate(dateText: string, days: number): string {
+  const baseDate = parseDateTextAsUtc(dateText);
+  baseDate.setUTCDate(baseDate.getUTCDate() + days);
+  return formatDateOnlyUtc(baseDate);
+}
+
+function buildUtcDateTime(dateText: string, timeText: string): string {
+  const year = Number(dateText.slice(0, 4));
+  const month = Number(dateText.slice(4, 6));
+  const day = Number(dateText.slice(6, 8));
+  const [hour, minute] = timeText.split(":").map(Number);
+  const utcDate = new Date(Date.UTC(year, month - 1, day, hour - 8, minute, 0));
+  return formatICSDate(utcDate);
 }
 
 /** 将毫秒时间戳按“当前运行时区”与 UTC+8 的差值映射为 ICS DATE 格式（YYYYMMDD） */
@@ -131,6 +352,13 @@ function parseDateTextAsUtc(dateText: string): Date {
   const month = Number(dateText.slice(4, 6));
   const day = Number(dateText.slice(6, 8));
   return new Date(Date.UTC(year, month - 1, day));
+}
+
+function formatDateOnlyUtc(d: Date): string {
+  const y = d.getUTCFullYear();
+  const m = String(d.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(d.getUTCDate()).padStart(2, "0");
+  return `${y}${m}${day}`;
 }
 
 function formatDateOnlyLocal(d: Date): string {

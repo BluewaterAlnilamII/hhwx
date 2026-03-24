@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { CalendarEvent, BAND_COLORS, filterEventsForMonth } from "./useCalendarData";
+import { CalendarEvent, filterEventsForMonth } from "./useCalendarData";
+import { isChinaMainlandRestDay } from "./chinaMainlandHolidayCalendar";
 
 const WEEKDAY_LABELS = ["一", "二", "三", "四", "五", "六", "日"];
 
@@ -134,6 +135,20 @@ export default function CalendarGrid({ events }: CalendarGridProps) {
     [monthEvents, year, month, totalWeeks, firstDayOffset, daysInMonth]
   );
 
+  const eventRowsByWeek = useMemo(() => {
+    const grouped: Record<number, EventRow[]> = {};
+
+    for (const row of eventRows) {
+      if (!grouped[row.weekRow]) {
+        grouped[row.weekRow] = [];
+      }
+
+      grouped[row.weekRow].push(row);
+    }
+
+    return grouped;
+  }, [eventRows]);
+
   // 每周最大 lane 数（用于计算格子高度）
   const maxLanesPerWeek = useMemo(() => {
     const map: Record<number, number> = {};
@@ -162,34 +177,34 @@ export default function CalendarGrid({ events }: CalendarGridProps) {
   return (
     <div className="w-full max-w-5xl mx-auto">
       {/* 导航栏 */}
-      <div className="flex items-center justify-center gap-4 mb-6">
+      <div className="mb-6 flex items-center justify-center gap-3 rounded-[22px] border border-white/70 bg-white/65 px-3 py-3 shadow-[0_12px_30px_rgba(15,23,42,0.08)] ring-1 ring-white/50 md:gap-4">
         <button
           onClick={goToPrevMonth}
-          className="px-4 py-2 rounded-xl bg-white/75 hover:bg-white shadow-sm backdrop-blur text-sm font-semibold transition-colors text-gray-700"
+          className="rounded-xl border border-gray-200/80 bg-white px-4 py-2 text-sm font-semibold text-gray-700 shadow-sm transition-colors hover:bg-gray-50"
         >
           ◀
         </button>
-        <h2 className="text-2xl font-black tracking-wide min-w-[200px] text-center text-gray-800">
+        <h2 className="min-w-[200px] text-center text-2xl font-black tracking-[0.08em] text-gray-800 md:min-w-[240px]">
           {year}年 {month + 1}月
         </h2>
         <button
           onClick={goToNextMonth}
-          className="px-4 py-2 rounded-xl bg-white/75 hover:bg-white shadow-sm backdrop-blur text-sm font-semibold transition-colors text-gray-700"
+          className="rounded-xl border border-gray-200/80 bg-white px-4 py-2 text-sm font-semibold text-gray-700 shadow-sm transition-colors hover:bg-gray-50"
         >
           ▶
         </button>
         <button
           onClick={goToToday}
-          className="px-4 py-2 rounded-xl bg-gray-900 text-white hover:bg-black shadow-sm text-sm font-semibold transition-colors ring-1 ring-black/10"
+          className="rounded-xl bg-gradient-to-r from-gray-900 to-gray-700 px-4 py-2 text-sm font-semibold text-white shadow-sm ring-1 ring-black/10 transition-opacity hover:opacity-95"
         >
           今天
         </button>
       </div>
 
       {/* 日历网格 */}
-      <div className="rounded-[24px] overflow-hidden bg-white/70 backdrop-blur-md shadow-[0_18px_60px_rgba(0,0,0,0.12)] ring-1 ring-white/70">
+      <div className="overflow-hidden rounded-[24px] border border-white/70 bg-white/72 backdrop-blur-md shadow-[0_22px_60px_rgba(15,23,42,0.12)] ring-1 ring-white/60">
         {/* 星期头 */}
-        <div className="grid grid-cols-7 border-b border-gray-200/70 bg-white/80">
+        <div className="grid grid-cols-7 border-b border-gray-200/70 bg-gradient-to-r from-white/90 via-white/75 to-white/90">
           {WEEKDAY_LABELS.map((label, i) => (
             <div
               key={label}
@@ -206,12 +221,12 @@ export default function CalendarGrid({ events }: CalendarGridProps) {
         {Array.from({ length: totalWeeks }, (_, weekIdx) => {
           const lanes = maxLanesPerWeek[weekIdx] ?? 0;
           const minH = 42 + lanes * 28 + 18;
-          const weekEvents = eventRows.filter(r => r.weekRow === weekIdx);
+          const weekEvents = eventRowsByWeek[weekIdx] ?? [];
 
           return (
             <div
               key={weekIdx}
-              className="relative border-b border-gray-200/50 last:border-b-0 bg-gradient-to-b from-white/60 to-white/35"
+              className="relative border-b border-gray-200/50 last:border-b-0 bg-gradient-to-b from-white/65 via-white/42 to-white/30"
               style={{ minHeight: `${Math.max(minH, 120)}px` }}
             >
               <div className="grid grid-cols-7">
@@ -219,20 +234,25 @@ export default function CalendarGrid({ events }: CalendarGridProps) {
                   const dayNum = weekIdx * 7 + colIdx - firstDayOffset + 1;
                   const isValidDay = dayNum >= 1 && dayNum <= daysInMonth;
                   const today = isValidDay && isToday(year, month, dayNum);
+                  const cellDate = isValidDay ? new Date(year, month, dayNum) : null;
+                  const isRestDay = cellDate ? isChinaMainlandRestDay(cellDate) : false;
 
                   return (
                     <div
                       key={colIdx}
                       className={`relative min-h-[120px] border-r border-gray-200/40 last:border-r-0 p-2 ${
-                        !isValidDay ? "bg-gray-50/30" : ""
+                        !isValidDay ? "bg-gray-50/35" : isRestDay ? "bg-[#fff7f7]/50" : ""
                       }`}
                     >
+                      {today && (
+                        <div className="pointer-events-none absolute inset-x-2 inset-y-2 rounded-2xl border border-blue-200/80 bg-blue-50/45" />
+                      )}
                       {isValidDay && (
                         <span
-                          className={`inline-flex text-sm leading-none ${
+                          className={`relative z-[1] inline-flex text-sm leading-none ${
                             today
-                              ? "bg-blue-600 text-white rounded-full w-7 h-7 items-center justify-center font-bold shadow-sm"
-                              : colIdx >= 5
+                              ? "h-7 w-7 items-center justify-center rounded-full bg-blue-600 font-bold text-white shadow-sm"
+                              : isRestDay
                                 ? "text-red-500 font-semibold"
                                 : "text-gray-700 font-semibold"
                           }`}
@@ -248,7 +268,6 @@ export default function CalendarGrid({ events }: CalendarGridProps) {
               {/* 活动横条层 —— 相对当前周行定位 */}
               <div className="absolute inset-0 pointer-events-none z-10">
                 {weekEvents.map((row, i) => {
-                  const color = BAND_COLORS[row.event.band_type] ?? BAND_COLORS.mix;
                   const leftPercent = (row.startCol / 7) * 100;
                   const widthPercent = (row.colSpan / 7) * 100;
                   const topPx = 34 + row.lane * 28;
@@ -256,14 +275,17 @@ export default function CalendarGrid({ events }: CalendarGridProps) {
                   return (
                     <div
                       key={`${row.event.event_id}-${row.weekRow}-${i}`}
-                      className="absolute overflow-hidden text-white text-xs leading-tight font-semibold px-2 py-1 rounded-lg whitespace-nowrap shadow-[0_6px_14px_rgba(0,0,0,0.18)] ring-1 ring-white/20"
+                      className="absolute overflow-hidden whitespace-nowrap rounded-xl px-2 py-1 text-xs font-semibold leading-tight text-white shadow-[0_8px_18px_rgba(0,0,0,0.16)] ring-1 ring-white/25"
                       style={{
-                        backgroundColor: color,
+                        backgroundColor: row.event.primaryColor,
+                        backgroundImage: row.event.secondaryColor
+                          ? `repeating-linear-gradient(135deg, ${row.event.primaryColor} 0 36px, ${row.event.primaryColor} 36px 72px, ${row.event.secondaryColor} 72px 108px, ${row.event.secondaryColor} 108px 144px)`
+                          : undefined,
                         left: `${leftPercent}%`,
                         width: `${widthPercent}%`,
                         top: `${topPx}px`,
                         height: "22px",
-                        opacity: 0.96,
+                        opacity: 0.97,
                       }}
                       title={row.event.name}
                     >

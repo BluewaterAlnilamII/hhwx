@@ -1,10 +1,64 @@
 import { NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
 
+const CHARACTER_SELECT_FIELDS = [
+  "character_id",
+  "character_type",
+  "band_id",
+  "color_code",
+  "character_name_jp",
+  "character_name_en",
+  "character_name_tw",
+  "character_name_cn",
+  "first_name_jp",
+  "first_name_en",
+  "first_name_tw",
+  "first_name_cn",
+  "last_name_jp",
+  "last_name_en",
+  "last_name_tw",
+  "last_name_cn",
+  "nickname_jp",
+  "nickname_en",
+  "nickname_tw",
+  "nickname_cn",
+].join(",");
+
 export const dynamic = "force-dynamic";
 
-const UPDATE_BATCH_SIZE = 10;
+const UPDATE_BATCH_SIZE = 5;
 const UPDATE_MAX_RETRIES = 3;
+
+function normalizeExternalErrorText(value: string | null | undefined): string | null {
+  if (!value) return null;
+
+  const trimmed = value.trim();
+  const normalized = trimmed.toLowerCase();
+
+  if (trimmed.startsWith("<!DOCTYPE html") || trimmed.startsWith("<html")) {
+    if (normalized.includes("502") || normalized.includes("bad gateway")) {
+      return "Supabase 网关暂时不可用（502 Bad Gateway）";
+    }
+
+    return "上游服务返回了异常 HTML 错误页";
+  }
+
+  if (normalized.includes("bad gateway") || normalized.includes("502")) {
+    return "Supabase 网关暂时不可用（502 Bad Gateway）";
+  }
+
+  return trimmed;
+}
+
+function normalizeUpdateError(error: { message?: string | null; details?: string | null; hint?: string | null } | null | undefined) {
+  if (!error) return null;
+
+  return {
+    message: normalizeExternalErrorText(error.message) ?? error.message ?? null,
+    details: normalizeExternalErrorText(error.details) ?? error.details ?? null,
+    hint: normalizeExternalErrorText(error.hint) ?? error.hint ?? null,
+  };
+}
 
 async function createServiceClient() {
   return createServerSupabaseClient();
@@ -35,7 +89,7 @@ function isRetriableUpdateError(error: { message?: string | null; details?: stri
     .join(" ")
     .toLowerCase();
 
-  return text.includes("fetch failed") || text.includes("connect timeout") || text.includes("timeout");
+  return text.includes("fetch failed") || text.includes("connect timeout") || text.includes("timeout") || text.includes("bad gateway") || text.includes("502");
 }
 
 function sleep(ms: number) {
@@ -65,7 +119,7 @@ async function updateCalendarEvent(
     updated_at: new Date().toISOString(),
   };
 
-  if (ev.stamp !== undefined && ev.stamp !== null) {
+  if (ev.stamp !== undefined) {
     updatePayload.stamp = ev.stamp;
   }
 
@@ -80,18 +134,20 @@ async function updateCalendarEvent(
         return { eventId: ev.event_id, error: null };
       }
 
-      if (attempt < UPDATE_MAX_RETRIES && isRetriableUpdateError(result.error)) {
+      const normalizedResultError = normalizeUpdateError(result.error);
+
+      if (attempt < UPDATE_MAX_RETRIES && isRetriableUpdateError(normalizedResultError)) {
         await sleep(attempt * 400);
         continue;
       }
 
-      return { eventId: ev.event_id, error: result.error };
+      return { eventId: ev.event_id, error: normalizedResultError };
     } catch (error) {
-      const normalizedError = {
+      const normalizedError = normalizeUpdateError({
         message: error instanceof Error ? error.message : String(error),
         details: error instanceof Error ? error.cause ? String(error.cause) : null : null,
         hint: null,
-      };
+      });
 
       if (attempt < UPDATE_MAX_RETRIES && isRetriableUpdateError(normalizedError)) {
         await sleep(attempt * 400);
@@ -125,7 +181,19 @@ export async function GET() {
       return NextResponse.json({ error: "数据库查询失败" }, { status: 500 });
     }
 
-    return NextResponse.json({ events: data ?? [] });
+    const { data: characters, error: characterError } = await serviceClient
+      .from("gbp_characters")
+      .select(CHARACTER_SELECT_FIELDS)
+      .order("character_id", { ascending: true });
+
+    if (characterError) {
+      console.error("gbp_characters 查询失败:", characterError);
+    }
+
+    return NextResponse.json({
+      events: data ?? [],
+      characters: characterError ? [] : (characters ?? []),
+    });
   } catch (error) {
     console.error("Calendar API 错误:", error);
     return NextResponse.json({ error: "服务器内部错误" }, { status: 500 });
@@ -177,6 +245,30 @@ export async function POST(request: Request) {
 
     if (!Array.isArray(events)) {
       return NextResponse.json({ error: "无效的请求数据" }, { status: 400 });
+    }
+
+    const stampIds = [...new Set(events.map((event) => event.stamp).filter((stamp): stamp is number => typeof stamp === "number"))];
+    if (stampIds.length > 0) {
+      const { data: stampCharacters, error: stampError } = await serviceClient
+        .from("gbp_characters")
+        .select("character_id")
+        .in("character_id", stampIds);
+
+      if (stampError) {
+        return NextResponse.json(
+          { error: "校验表情角色失败", details: stampError.message },
+          { status: 500 },
+        );
+      }
+
+      const existingStampIds = new Set((stampCharacters ?? []).map((character) => character.character_id));
+      const missingStampId = stampIds.find((stampId) => !existingStampIds.has(stampId));
+      if (missingStampId !== undefined) {
+        return NextResponse.json(
+          { error: "表情角色不存在", details: `角色 ${missingStampId} 不存在于 gbp_characters` },
+          { status: 400 },
+        );
+      }
     }
 
     const nowMs = Date.now();

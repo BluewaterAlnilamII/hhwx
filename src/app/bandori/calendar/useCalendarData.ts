@@ -2,8 +2,14 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useCachedFetch } from "@/hooks/useCachedFetch";
-import { supabase } from "@/lib/supabase";
-import { formatCalendarEventTitle } from "./options";
+import { getSafeSession, supabase } from "@/lib/supabase";
+import {
+  CalendarCharacter,
+  formatCalendarEventTitle,
+  getCalendarEventColors,
+} from "@/lib/calendar-character-service";
+
+export { BAND_COLORS } from "@/lib/calendar-character-service";
 
 // ─── 类型定义 ───
 
@@ -33,27 +39,14 @@ export interface CalendarEvent {
   band_type: string;
   startDate: Date;
   endDate: Date;
+  primaryColor: string;
+  secondaryColor: string | null;
 }
-
-// ─── 乐团颜色映射 ───
-
-export const BAND_COLORS: Record<string, string> = {
-  ppp: "#FF3377",
-  ag: "#EE3344",
-  pp: "#33DDAA",
-  roselia: "#3344AA",
-  hhw: "#FFDD00",
-  morfonica: "#33AAFF",
-  ras: "#33CCCC",
-  mygo: "#3388BB",
-  avemujica: "#8B5CF6",
-  mix: "#888888",
-};
 
 // ─── 工具函数 ───
 
 /** 将 gbp_event 记录转换为日历显示用的事件 */
-function toCalendarEvent(ev: GbpEvent): CalendarEvent | null {
+function toCalendarEvent(ev: GbpEvent, characterMap: Map<number, CalendarCharacter>): CalendarEvent | null {
   let startDate: Date | null = null;
   let endDate: Date | null = null;
 
@@ -68,16 +61,22 @@ function toCalendarEvent(ev: GbpEvent): CalendarEvent | null {
   if (!startDate || !endDate) return null;
   if (ev.is_skipped && !ev.cn_start_at) return null;
 
+  const stampCharacter = ev.stamp ? characterMap.get(ev.stamp) ?? null : null;
+  const colors = getCalendarEventColors(ev.band_type, stampCharacter);
+
   return {
     event_id: ev.event_id,
     name: formatCalendarEventTitle(
       ev.band_type,
       ev.event_id,
       ev.event_name_cn || ev.event_name_jp || `活动 #${ev.event_id}`,
+      stampCharacter,
     ),
     band_type: ev.band_type,
     startDate,
     endDate,
+    primaryColor: colors.primaryColor,
+    secondaryColor: colors.secondaryColor,
   };
 }
 
@@ -91,20 +90,22 @@ export function filterEventsForMonth(events: CalendarEvent[], year: number, mont
 // ─── 主 Hook ───
 
 export function useCalendarData() {
-  const { data: rawData, loading, refresh } = useCachedFetch<{ events: GbpEvent[] }>(
+  const { data: rawData, loading, refresh } = useCachedFetch<{ events: GbpEvent[]; characters: CalendarCharacter[] }>(
     "calendar-events",
     "/api/calendar/events",
-    (raw) => raw as { events: GbpEvent[] }
+    (raw) => raw as { events: GbpEvent[]; characters: CalendarCharacter[] }
   );
 
   const allEvents = rawData?.events ?? [];
+  const allCharacters = rawData?.characters ?? [];
+  const characterMap = new Map(allCharacters.map((character) => [character.character_id, character]));
 
   // 转换为日历显示格式
   const calendarEvents: CalendarEvent[] = allEvents
-    .map(toCalendarEvent)
+    .map((event) => toCalendarEvent(event, characterMap))
     .filter((ev): ev is CalendarEvent => ev !== null);
 
-  return { allEvents, calendarEvents, loading, refresh };
+  return { allEvents, allCharacters, calendarEvents, loading, refresh };
 }
 
 // ─── 权限检查 Hook ───
@@ -114,7 +115,7 @@ export function useCalendarPermission() {
 
   useEffect(() => {
     const checkPermission = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
+      const session = await getSafeSession();
       if (!session?.user) {
         setHasPermission(false);
         return;
@@ -171,7 +172,7 @@ export function useCalendarEditor(onSuccess: () => void) {
     setError(null);
 
     try {
-      const { data: { session } } = await supabase.auth.getSession();
+      const session = await getSafeSession();
       if (!session?.access_token) {
         setError("请先登录");
         return false;
