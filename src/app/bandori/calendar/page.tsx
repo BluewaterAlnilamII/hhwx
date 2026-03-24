@@ -227,7 +227,7 @@ export default function CalendarPage() {
     }
 
     const query = params.toString();
-    const path = `/api/bandori/calendar/cn/ics${query ? `?${query}` : ""}`;
+    const path = `/api/bandori/calendar/cn/ics.ics${query ? `?${query}` : ""}`;
     return typeof window !== "undefined" ? `${window.location.origin}${path}` : path;
   }, [
     bandUniverse,
@@ -528,7 +528,7 @@ export default function CalendarPage() {
               将此链接添加到您的日历应用（Google Calendar、Apple Calendar 等）以自动同步活动日程
             </p>
             <p className="text-xs md:text-sm text-gray-600 leading-6">
-              活动将以全天事件形式显示，并附带在上方订阅的闹钟提醒
+              活动将以全天事件形式显示，并附带在上方订阅的闹钟提醒，时间为UTC+8时区
             </p>
           </div>
         )}
