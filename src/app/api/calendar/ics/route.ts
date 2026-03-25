@@ -161,30 +161,16 @@ export async function GET(request: Request) {
       const eventColor = getSubscriptionEventColor(ev.band_type, stampCharacter);
       const alarmBlocks = [
         ...(enableStartPreviousDayReminder
-            ? buildRelativeDisplayAlarmBlock(
-                `活动明天开始：${summary}`,
-                buildStartRelativeTrigger(startPreviousDayReminderTime),
-              )
+          ? buildDisplayAlarmBlock(`活动明天开始：${summary}`, buildUtcDateTime(addDaysToCompactDate(startDate, -1), startPreviousDayReminderTime))
           : []),
         ...(enableStartSameDayReminder
-            ? buildRelativeDisplayAlarmBlock(
-                `活动今天开始：${summary}`,
-                buildStartRelativeTrigger(startSameDayReminderTime),
-              )
+          ? buildDisplayAlarmBlock(`活动今天开始：${summary}`, buildUtcDateTime(startDate, startSameDayReminderTime))
           : []),
         ...(enableEndPreviousDayReminder
-            ? buildRelativeDisplayAlarmBlock(
-                `活动明天结束：${summary}`,
-                buildEndRelativeTrigger(endPreviousDayReminderTime),
-                "END",
-              )
+          ? buildDisplayAlarmBlock(`活动明天结束：${summary}`, buildUtcDateTime(addDaysToCompactDate(endDate, -1), endPreviousDayReminderTime))
           : []),
         ...(enableEndSameDayReminder
-            ? buildRelativeDisplayAlarmBlock(
-                `活动今天结束：${summary}`,
-                buildEndRelativeTrigger(endSameDayReminderTime),
-                "END",
-              )
+          ? buildDisplayAlarmBlock(`活动今天结束：${summary}`, buildUtcDateTime(endDate, endSameDayReminderTime))
           : []),
       ];
 
@@ -299,58 +285,14 @@ function parseReminderStateTimes(input: string | null): [string, string, string,
   return decoded as [string, string, string, string];
 }
 
-function buildRelativeDisplayAlarmBlock(
-  description: string,
-  trigger: string,
-  related: "START" | "END" = "START",
-): string[] {
+function buildDisplayAlarmBlock(description: string, triggerUtc: string): string[] {
   return [
     "BEGIN:VALARM",
     "ACTION:DISPLAY",
-    related === "END" ? `TRIGGER;RELATED=END:${trigger}` : `TRIGGER:${trigger}`,
+    `TRIGGER;VALUE=DATE-TIME:${triggerUtc}`,
     `DESCRIPTION:${escapeICSText(description)}`,
     "END:VALARM",
   ];
-}
-
-function buildStartRelativeTrigger(timeText: string): string {
-  const minutesFromStart = timeTextToMinutes(timeText);
-  return formatRelativeTrigger(minutesFromStart);
-}
-
-function buildEndRelativeTrigger(timeText: string): string {
-  const minutesUntilExclusiveEnd = 24 * 60 - timeTextToMinutes(timeText);
-  return formatRelativeTrigger(-minutesUntilExclusiveEnd);
-}
-
-function timeTextToMinutes(timeText: string): number {
-  const [hour, minute] = timeText.split(":").map(Number);
-  return hour * 60 + minute;
-}
-
-function formatRelativeTrigger(totalMinutes: number): string {
-  if (totalMinutes === 0) {
-    return "PT0M";
-  }
-
-  const sign = totalMinutes < 0 ? "-" : "";
-  let remainingMinutes = Math.abs(totalMinutes);
-  const days = Math.floor(remainingMinutes / 1440);
-  remainingMinutes -= days * 1440;
-  const hours = Math.floor(remainingMinutes / 60);
-  const minutes = remainingMinutes % 60;
-  const datePart = days > 0 ? `${days}D` : "";
-  const timePart = `${hours > 0 ? `${hours}H` : ""}${minutes > 0 ? `${minutes}M` : ""}`;
-
-  if (!datePart && !timePart) {
-    return "PT0M";
-  }
-
-  if (!timePart) {
-    return `${sign}P${datePart}`;
-  }
-
-  return `${sign}P${datePart}T${timePart}`;
 }
 
 function serializeICalendar(lines: string[]): string {
@@ -407,6 +349,15 @@ function addDaysToCompactDate(dateText: string, days: number): string {
   const baseDate = parseDateTextAsUtc(dateText);
   baseDate.setUTCDate(baseDate.getUTCDate() + days);
   return formatDateOnlyUtc(baseDate);
+}
+
+function buildUtcDateTime(dateText: string, timeText: string): string {
+  const year = Number(dateText.slice(0, 4));
+  const month = Number(dateText.slice(4, 6));
+  const day = Number(dateText.slice(6, 8));
+  const [hour, minute] = timeText.split(":").map(Number);
+  const utcDate = new Date(Date.UTC(year, month - 1, day, hour - 8, minute, 0));
+  return formatICSDate(utcDate);
 }
 
 /** 将毫秒时间戳按“当前运行时区”与 UTC+8 的差值映射为 ICS DATE 格式（YYYYMMDD） */
