@@ -26,8 +26,29 @@ const DEFAULT_REMINDER_TIMES = [
   DEFAULT_END_PREVIOUS_DAY_REMINDER_TIME,
   DEFAULT_END_SAME_DAY_REMINDER_TIME,
 ];
+const DEFAULT_SUBSCRIPTION_SCHEME = "webcal" as const;
 const REMINDER_HOURS = Array.from({ length: 24 }, (_, index) => String(index).padStart(2, "0"));
 const REMINDER_MINUTES = Array.from({ length: 60 }, (_, index) => String(index).padStart(2, "0"));
+
+function buildSubscriptionUrl(origin: string, path: string, scheme: "https" | "webcal"): string {
+  const httpsOrigin = origin.replace(/^http:/, "https:");
+
+  if (scheme === "webcal") {
+    return `${httpsOrigin.replace(/^https:/, "webcal:")}${path}`;
+  }
+
+  return `${httpsOrigin}${path}`;
+}
+
+function attemptOpenSubscriptionUrl(url: string): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  window.setTimeout(() => {
+    window.location.assign(url);
+  }, 0);
+}
 
 function encodeMask(selectedValues: Array<string | number>, universe: Array<string | number>): string {
   const selectedSet = new Set(selectedValues.map((value) => String(value)));
@@ -133,6 +154,7 @@ export default function CalendarPage() {
   const [startSameDayReminderTime, setStartSameDayReminderTime] = useState(DEFAULT_START_SAME_DAY_REMINDER_TIME);
   const [endPreviousDayReminderTime, setEndPreviousDayReminderTime] = useState(DEFAULT_END_PREVIOUS_DAY_REMINDER_TIME);
   const [endSameDayReminderTime, setEndSameDayReminderTime] = useState(DEFAULT_END_SAME_DAY_REMINDER_TIME);
+  const [subscriptionScheme, setSubscriptionScheme] = useState<"https" | "webcal">(DEFAULT_SUBSCRIPTION_SCHEME);
 
   const handleSaved = useCallback(() => {
     refresh();
@@ -196,7 +218,7 @@ export default function CalendarPage() {
   const selectedBandSet = useMemo(() => new Set(selectedBands), [selectedBands]);
   const selectedCharacterSet = useMemo(() => new Set(selectedCharacterIds), [selectedCharacterIds]);
 
-  const icsUrl = useMemo(() => {
+  const subscriptionUrls = useMemo(() => {
     const params = new URLSearchParams();
 
     if (selectedCharacterIds.length > 0) {
@@ -229,7 +251,17 @@ export default function CalendarPage() {
 
     const query = params.toString();
     const path = `/api/bandori/calendar/cn/bandori-calendar-cn.ics${query ? `?${query}` : ""}`;
-    return typeof window !== "undefined" ? `${window.location.origin}${path}` : path;
+    if (typeof window === "undefined") {
+      return {
+        https: path,
+        webcal: path,
+      };
+    }
+
+    return {
+      https: buildSubscriptionUrl(window.location.origin, path, "https"),
+      webcal: buildSubscriptionUrl(window.location.origin, path, "webcal"),
+    };
   }, [
     characterUniverse,
     enableEndPreviousDayReminder,
@@ -243,6 +275,7 @@ export default function CalendarPage() {
     startPreviousDayReminderTime,
     startSameDayReminderTime,
   ]);
+  const icsUrl = subscriptionUrls[subscriptionScheme];
 
   const toggleBand = useCallback((band: string) => {
     const relatedCharacterIds = characterIdsByBand.get(band) ?? [];
@@ -316,7 +349,11 @@ export default function CalendarPage() {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     }
-  }, [icsUrl]);
+
+    if (subscriptionScheme === "webcal") {
+      attemptOpenSubscriptionUrl(icsUrl);
+    }
+  }, [icsUrl, subscriptionScheme]);
 
   return (
     <div className="relative z-10 min-h-screen px-4 py-8 md:px-6 lg:px-8">
@@ -518,6 +555,30 @@ export default function CalendarPage() {
             </div>
 
             <div className="flex items-center gap-2 mb-2">
+              <div className="flex shrink-0 items-center overflow-hidden rounded-xl border border-gray-200 bg-white/90 p-1">
+                <button
+                  type="button"
+                  onClick={() => setSubscriptionScheme("webcal")}
+                  className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors md:text-sm ${
+                    subscriptionScheme === "webcal"
+                      ? "bg-[#ffedd5] text-[#9a3412]"
+                      : "text-gray-500 hover:text-gray-700"
+                  }`}
+                >
+                  webcal
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSubscriptionScheme("https")}
+                  className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors md:text-sm ${
+                    subscriptionScheme === "https"
+                      ? "bg-[#dbeafe] text-[#1d4ed8]"
+                      : "text-gray-500 hover:text-gray-700"
+                  }`}
+                >
+                  https
+                </button>
+              </div>
               <input
                 type="text"
                 value={icsUrl}
@@ -536,10 +597,11 @@ export default function CalendarPage() {
               </button>
             </div>
             <p className="text-xs md:text-sm text-gray-600 leading-6">
-              将此链接添加到您的日历应用（Google Calendar、Apple Calendar 等）以自动同步活动日程
+              将此链接添加到您的日历应用以自动同步活动日程，
+              <span className="font-semibold text-[#dc2626]">注意并非所有日历应用都支持自动配置提醒</span>
             </p>
             <p className="text-xs md:text-sm text-gray-600 leading-6">
-              活动将以全天事件形式显示；若启用提醒，系统会额外生成活动开始与结束的时间点事件作为提醒锚点，时间均采用 UTC+8 时区
+              活动将以全天事件形式显示；若启用提醒，系统会额外生成活动开始或结束的时间点事件；所有时间均采用 UTC+8 时区
             </p>
           </div>
         )}

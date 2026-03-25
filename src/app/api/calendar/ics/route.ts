@@ -3,9 +3,7 @@ import {
   CalendarCharacter,
   buildStampCharacterOptions,
   formatCalendarSubscriptionTitle,
-  getBandDisplayName,
   getCharacterBandType,
-  getCharacterDisplayName,
   getSubscriptionEventColor,
 } from "@/lib/calendar-character-service";
 
@@ -161,7 +159,6 @@ export async function GET(request: Request) {
         stampCharacter,
       );
       const eventColor = getSubscriptionEventColor(ev.band_type, stampCharacter);
-      const anchorLabel = formatReminderAnchorLabel(ev.band_type, ev.event_id, stampCharacter);
 
       icsContent.push(
         "BEGIN:VEVENT",
@@ -171,13 +168,12 @@ export async function GET(request: Request) {
         `DTEND;VALUE=DATE:${exclusiveEndDate}`,
         "TRANSP:TRANSPARENT",
         `COLOR:${eventColor}`,
-        `X-APPLE-CALENDAR-COLOR:${eventColor}`,
         `SUMMARY:${escapeICSText(summary)}`,
         "END:VEVENT"
       );
 
       if (enableStartPreviousDayReminder || enableStartSameDayReminder) {
-        const startAnchorSummary = `🎸 ${anchorLabel} 活动开始`;
+        const startAnchorSummary = `🎸 活动开始 ${ev.event_id}期`;
         const startAnchorDateTime = buildUtcDateTime(startDate, "15:00");
         const startAnchorAlarmBlocks = [
           ...(enableStartPreviousDayReminder
@@ -202,7 +198,6 @@ export async function GET(request: Request) {
           `DTEND:${addMinutesToICSDateTime(startAnchorDateTime, 1)}`,
           "TRANSP:TRANSPARENT",
           `COLOR:${eventColor}`,
-          `X-APPLE-CALENDAR-COLOR:${eventColor}`,
           `SUMMARY:${escapeICSText(startAnchorSummary)}`,
           ...startAnchorAlarmBlocks,
           "END:VEVENT",
@@ -210,7 +205,7 @@ export async function GET(request: Request) {
       }
 
       if (enableEndPreviousDayReminder || enableEndSameDayReminder) {
-        const endAnchorSummary = `🎸 ${anchorLabel} 活动结束`;
+        const endAnchorSummary = `🎸 活动结束 ${ev.event_id}期`;
         const endAnchorDateTime = buildUtcDateTime(endDate, "23:00");
         const endAnchorAlarmBlocks = [
           ...(enableEndPreviousDayReminder
@@ -235,7 +230,6 @@ export async function GET(request: Request) {
           `DTEND:${addMinutesToICSDateTime(endAnchorDateTime, 1)}`,
           "TRANSP:TRANSPARENT",
           `COLOR:${eventColor}`,
-          `X-APPLE-CALENDAR-COLOR:${eventColor}`,
           `SUMMARY:${escapeICSText(endAnchorSummary)}`,
           ...endAnchorAlarmBlocks,
           "END:VEVENT",
@@ -347,21 +341,6 @@ function buildRelativeDisplayAlarmBlock(description: string, trigger: string): s
     `DESCRIPTION:${escapeICSText(description)}`,
     "END:VALARM",
   ];
-}
-
-function formatReminderAnchorLabel(
-  bandType: string,
-  eventId: number,
-  stampCharacter?: CalendarCharacter | null,
-): string {
-  const segments = [getBandDisplayName(bandType), `${eventId}期`];
-  const characterName = getCharacterDisplayName(stampCharacter);
-
-  if (characterName) {
-    segments.push(characterName);
-  }
-
-  return segments.join(" ");
 }
 
 function buildRelativeTriggerFromLocalTimes(reminderTimeText: string, anchorTimeText: string, dayOffset: number): string {
