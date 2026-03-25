@@ -556,7 +556,7 @@ export default function CalendarPage() {
 
         {/* 编辑按钮（仅有权限用户可见） */}
         {hasPermission && !loading && (
-          <EventEditor allEvents={allEvents} allCharacters={allCharacters} onSaved={handleSaved} />
+          <EventEditor allEvents={allEvents} onSaved={handleSaved} />
         )}
       </div>
     </div>

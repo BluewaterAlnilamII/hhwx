@@ -100,7 +100,6 @@ async function updateCalendarEvent(
   serviceClient: Awaited<ReturnType<typeof createServiceClient>>,
   ev: {
     event_id: number;
-    stamp?: number | null;
     predicted_start: string | null;
     predicted_end: string | null;
     duration_days: number;
@@ -118,10 +117,6 @@ async function updateCalendarEvent(
     is_skipped: ev.is_skipped,
     updated_at: new Date().toISOString(),
   };
-
-  if (ev.stamp !== undefined) {
-    updatePayload.stamp = ev.stamp;
-  }
 
   for (let attempt = 1; attempt <= UPDATE_MAX_RETRIES; attempt++) {
     try {
@@ -202,7 +197,7 @@ export async function GET() {
 
 /**
  * POST /api/calendar/events
- * 接收编辑后的活动数组，鉴权后做冲突检测并批量更新。
+ * 接收编辑后的活动数组，鉴权后做冲突检测并批量更新排期字段。
  */
 export async function POST(request: Request) {
   try {
@@ -234,7 +229,6 @@ export async function POST(request: Request) {
     const body = await request.json();
     const events: Array<{
       event_id: number;
-      stamp?: number | null;
       predicted_start: string | null;
       predicted_end: string | null;
       duration_days: number;
@@ -245,30 +239,6 @@ export async function POST(request: Request) {
 
     if (!Array.isArray(events)) {
       return NextResponse.json({ error: "无效的请求数据" }, { status: 400 });
-    }
-
-    const stampIds = [...new Set(events.map((event) => event.stamp).filter((stamp): stamp is number => typeof stamp === "number"))];
-    if (stampIds.length > 0) {
-      const { data: stampCharacters, error: stampError } = await serviceClient
-        .from("gbp_characters")
-        .select("character_id")
-        .in("character_id", stampIds);
-
-      if (stampError) {
-        return NextResponse.json(
-          { error: "校验表情角色失败", details: stampError.message },
-          { status: 500 },
-        );
-      }
-
-      const existingStampIds = new Set((stampCharacters ?? []).map((character) => character.character_id));
-      const missingStampId = stampIds.find((stampId) => !existingStampIds.has(stampId));
-      if (missingStampId !== undefined) {
-        return NextResponse.json(
-          { error: "表情角色不存在", details: `角色 ${missingStampId} 不存在于 gbp_characters` },
-          { status: 400 },
-        );
-      }
     }
 
     const nowMs = Date.now();

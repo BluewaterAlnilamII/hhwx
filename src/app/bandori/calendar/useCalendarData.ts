@@ -18,7 +18,7 @@ export interface GbpEvent {
   event_name_jp: string;
   event_name_cn: string | null;
   band_type: string;
-  stamp?: number | null;
+  stamp_character_id: number | null;
   jp_start_at: number;
   jp_end_at: number;
   cn_start_at: number | null;
@@ -61,7 +61,7 @@ function toCalendarEvent(ev: GbpEvent, characterMap: Map<number, CalendarCharact
   if (!startDate || !endDate) return null;
   if (ev.is_skipped && !ev.cn_start_at) return null;
 
-  const stampCharacter = ev.stamp ? characterMap.get(ev.stamp) ?? null : null;
+  const stampCharacter = ev.stamp_character_id ? characterMap.get(ev.stamp_character_id) ?? null : null;
   const colors = getCalendarEventColors(ev.band_type, stampCharacter);
 
   return {
@@ -160,7 +160,6 @@ export function useCalendarEditor(onSuccess: () => void) {
 
   const saveEvents = useCallback(async (events: Array<{
     event_id: number;
-    stamp?: number | null;
     predicted_start: string | null;
     predicted_end: string | null;
     duration_days: number;

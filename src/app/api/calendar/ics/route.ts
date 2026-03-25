@@ -63,7 +63,7 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const { data: events, error } = await serviceClient
       .from("gbp_event")
-      .select("event_id, event_name_jp, event_name_cn, band_type, stamp, cn_start_at, cn_end_at, predicted_start, predicted_end, is_skipped")
+      .select("event_id, event_name_jp, event_name_cn, band_type, stamp_character_id, cn_start_at, cn_end_at, predicted_start, predicted_end, is_skipped")
       .order("sort_order", { ascending: true });
 
     if (error) {
@@ -122,8 +122,8 @@ export async function GET(request: Request) {
     ];
 
     for (const ev of events ?? []) {
-      const stampCharacter = ev.stamp ? characterMap.get(ev.stamp) ?? null : null;
-      if (!shouldIncludeEventByFilters(ev.band_type, ev.stamp ?? null, selectedBandTypes, selectedCharacterIds)) continue;
+      const stampCharacter = ev.stamp_character_id ? characterMap.get(ev.stamp_character_id) ?? null : null;
+      if (!shouldIncludeEventByFilters(ev.band_type, ev.stamp_character_id ?? null, selectedBandTypes, selectedCharacterIds)) continue;
 
       // 跳过已提前举办且无官方时间的活动
       if (ev.is_skipped && !ev.cn_start_at) continue;

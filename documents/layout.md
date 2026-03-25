@@ -36,7 +36,7 @@ hhwx/
 │   │           ├── layout.tsx          # 页面布局（元数据）
 │   │           ├── page.tsx            # 主页面（日历视图 + 订阅 + 编辑入口）
 │   │           ├── CalendarGrid.tsx    # 月视图日历网格组件（支持纯色/条纹活动横条）
-│   │           ├── EventEditor.tsx     # 活动日程编辑面板（未来/往期双模式、stamp 编辑）
+│   │           ├── EventEditor.tsx     # 活动日程编辑面板（仅未来活动排期编辑）
 │   │           ├── options.ts          # 订阅乐队筛选选项
 │   │           └── useCalendarData.ts  # 数据获取/权限/角色解析/编辑提交 Hooks
 │   │       └── api/
@@ -44,7 +44,7 @@ hhwx/
 │   │               ├── check-role/
 │   │               │   └── route.ts    # 检查当前登录用户是否具备日历编辑权限
 │   │               ├── events/
-│   │               │   └── route.ts    # 读取/保存活动、角色表情角色校验
+│   │               │   └── route.ts    # 读取/保存活动排期字段
 │   │               └── ics/
 │   │                   └── route.ts    # 生成可订阅的 ICS 日历数据
 │   ├── components/             # React 组件
@@ -70,7 +70,7 @@ hhwx/
 │   │   │   ├── kanon.ts        # Kanon AI：中等强度，犯迷糊+角位必抢
 │   │   │   └── michelle.ts     # Michelle AI：动态强度，放水机制
 │   │   ├── characters.ts       # 角色数据定义（台词、思考时间等）
-│   │   ├── calendar-character-service.ts # 日历角色解析/标题/颜色/stamp 选项统一服务
+│   │   ├── calendar-character-service.ts # 日历角色解析/标题/颜色/角色筛选统一服务
 │   │   ├── othello.ts          # 黑白棋核心规则（纯函数、位置权重矩阵）
 │   │   ├── supabase.ts         # Supabase 浏览器端客户端初始化
 │   │   ├── supabase-server.ts  # Supabase 服务端客户端初始化（API 路由使用 service role）

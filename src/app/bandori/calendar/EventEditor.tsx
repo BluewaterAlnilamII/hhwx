@@ -1,12 +1,7 @@
 "use client";
 
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback } from "react";
 import { BAND_COLORS, GbpEvent, useCalendarEditor } from "./useCalendarData";
-import {
-  buildStampCharacterOptions,
-  CalendarCharacter,
-  StampCharacterOption,
-} from "@/lib/calendar-character-service";
 import {
   DndContext,
   closestCenter,
@@ -25,18 +20,14 @@ import { CSS } from "@dnd-kit/utilities";
 
 interface EventEditorProps {
   allEvents: GbpEvent[];
-  allCharacters: CalendarCharacter[];
   onSaved: () => void;
 }
-
-type EditorMode = "future" | "past";
 
 /** 编辑中的活动数据 */
 interface EditableEvent {
   event_id: number;
   title: string;
   band_type: string;
-  stamp: number | null;
   predicted_start: string; // "YYYY-MM-DD"
   predicted_end: string;
   duration_days: number;
@@ -46,15 +37,11 @@ interface EditableEvent {
 }
 
 /** 从数据库记录中提取可编辑的活动（仅国服尚未开始的） */
-function toEditableEvents(events: GbpEvent[], mode: EditorMode): EditableEvent[] {
+function toEditableEvents(events: GbpEvent[]): EditableEvent[] {
   const now = Date.now();
 
   return events
     .filter(ev => {
-      if (mode === "past") {
-        return !!ev.cn_end_at && ev.cn_end_at < now;
-      }
-
       if (ev.cn_start_at && ev.cn_start_at <= now) return false;
       if (!ev.cn_start_at) return true;
       return ev.cn_start_at > now;
@@ -64,7 +51,6 @@ function toEditableEvents(events: GbpEvent[], mode: EditorMode): EditableEvent[]
       event_id: ev.event_id,
       title: ev.event_name_cn || ev.event_name_jp || `活动 #${ev.event_id}`,
       band_type: ev.band_type,
-      stamp: ev.stamp ?? null,
       predicted_start: ev.predicted_start ?? "",
       predicted_end: ev.predicted_end ?? "",
       duration_days: ev.duration_days,
@@ -144,43 +130,23 @@ function formatDate(d: Date): string {
   return `${y}-${m}-${day}`;
 }
 
-function hasEditableEventChanged(current: EditableEvent, original: EditableEvent | undefined): boolean {
-  if (!original) {
-    return true;
-  }
-
-  return current.stamp !== original.stamp
-    || current.predicted_start !== original.predicted_start
-    || current.predicted_end !== original.predicted_end
-    || current.duration_days !== original.duration_days
-    || current.has_rest_day !== original.has_rest_day
-    || current.sort_order !== original.sort_order
-    || current.is_skipped !== original.is_skipped;
-}
-
 // ─── 可排序行组件 ───
 
 function SortableRow({
   item,
   draggable,
-  stampOnly,
-  stampOptions,
   minDate,
   onChangeStart,
   onChangeEnd,
   onChangeDuration,
-  onChangeStamp,
   onToggleRestDay,
 }: {
   item: EditableEvent;
   draggable: boolean;
-  stampOnly: boolean;
-  stampOptions: StampCharacterOption[];
   minDate?: string;
   onChangeStart: (id: number, val: string) => void;
   onChangeEnd: (id: number, val: string) => void;
   onChangeDuration: (id: number, val: string) => void;
-  onChangeStamp: (id: number, val: string) => void;
   onToggleRestDay: (id: number) => void;
 }) {
   const {
@@ -203,7 +169,6 @@ function SortableRow({
     onMouseDown: (event: React.MouseEvent<HTMLElement>) => event.stopPropagation(),
     onTouchStart: (event: React.TouchEvent<HTMLElement>) => event.stopPropagation(),
   };
-  const isStampUnset = item.stamp == null;
   const bandColor = BAND_COLORS[item.band_type as keyof typeof BAND_COLORS] ?? BAND_COLORS.mix;
 
   return (
@@ -241,31 +206,13 @@ function SortableRow({
 
       {/* 活动名称 */}
       <span
-        className={`text-sm truncate min-w-[240px] w-[240px] md:min-w-[280px] md:w-[280px] flex-shrink-0 ${
-          isStampUnset ? "font-bold text-red-600" : "font-medium text-gray-900"
-        }`}
+        className="text-sm truncate min-w-[240px] w-[240px] md:min-w-[280px] md:w-[280px] flex-shrink-0 font-medium text-gray-900"
         title={item.title}
       >
         {item.title}
       </span>
 
       <div className="ml-auto flex items-center justify-end gap-1.5">
-        <select
-          {...stopDragPropagation}
-          value={item.stamp ?? ""}
-          onChange={(e) => onChangeStamp(item.event_id, e.target.value)}
-          className={`text-xs rounded px-1.5 py-1 bg-white/70 w-[132px] flex-shrink-0 border ${
-            isStampUnset ? "border-red-500 text-red-600 font-bold" : "border-gray-200 text-gray-900"
-          }`}
-        >
-          <option value="">未设置</option>
-          {stampOptions.map((option) => (
-            <option key={option.id} value={option.id}>
-              {option.name}
-            </option>
-          ))}
-        </select>
-
         <input
           {...stopDragPropagation}
           type="date"
@@ -273,7 +220,7 @@ function SortableRow({
           onChange={(e) => onChangeStart(item.event_id, e.target.value)}
           min={minDate}
           className="text-xs border border-gray-200 rounded px-1.5 py-1 bg-white/70 w-[110px] flex-shrink-0"
-          disabled={item.is_skipped || stampOnly}
+          disabled={item.is_skipped}
         />
 
         <input
@@ -283,7 +230,7 @@ function SortableRow({
           onChange={(e) => onChangeEnd(item.event_id, e.target.value)}
           min={item.predicted_start || minDate}
           className="text-xs border border-gray-200 rounded px-1.5 py-1 bg-white/70 w-[110px] flex-shrink-0"
-          disabled={item.is_skipped || stampOnly}
+          disabled={item.is_skipped}
         />
 
         <div className="flex items-center gap-1 w-[64px] flex-shrink-0 justify-end">
@@ -295,7 +242,7 @@ function SortableRow({
             value={item.duration_days}
             onChange={(e) => onChangeDuration(item.event_id, e.target.value)}
             className="text-xs border border-gray-200 rounded px-1.5 py-1 bg-white/70 w-[42px] text-center"
-            disabled={item.is_skipped || stampOnly}
+            disabled={item.is_skipped}
           />
           <span className="text-xs text-gray-500">天</span>
         </div>
@@ -307,7 +254,7 @@ function SortableRow({
             checked={item.has_rest_day}
             onChange={() => onToggleRestDay(item.event_id)}
             className="accent-blue-500"
-            disabled={item.is_skipped || stampOnly}
+            disabled={item.is_skipped}
           />
           <span className="text-xs text-gray-500">无邦日</span>
         </label>
@@ -318,19 +265,13 @@ function SortableRow({
 
 // ─── 主编辑器组件 ───
 
-export default function EventEditor({ allEvents, allCharacters, onSaved }: EventEditorProps) {
+export default function EventEditor({ allEvents, onSaved }: EventEditorProps) {
   const [isOpen, setIsOpen] = useState(false);
-  const [editorMode, setEditorMode] = useState<EditorMode>("future");
   const [editableEvents, setEditableEvents] = useState<EditableEvent[]>([]);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const { saveEvents, saving, error } = useCalendarEditor(onSaved);
   const lockedUntilDate = getLockedUntilDate(allEvents);
   const earliestSelectableDate = lockedUntilDate ? addDays(lockedUntilDate, 1) : undefined;
-  const stampOptions = useMemo(() => buildStampCharacterOptions(allCharacters), [allCharacters]);
-  const originalEditableEventsByMode = useMemo(() => ({
-    future: toEditableEvents(allEvents, "future"),
-    past: toEditableEvents(allEvents, "past"),
-  }), [allEvents]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -338,25 +279,13 @@ export default function EventEditor({ allEvents, allCharacters, onSaved }: Event
     })
   );
 
-  const openEditor = useCallback((mode: EditorMode) => {
-    setEditorMode(mode);
-    setEditableEvents(toEditableEvents(allEvents, mode));
+  const openEditor = useCallback(() => {
+    setEditableEvents(toEditableEvents(allEvents));
     setSuccessMessage(null);
     setIsOpen(true);
   }, [allEvents]);
 
-  const switchEditorMode = useCallback(() => {
-    setEditorMode((prev) => {
-      const nextMode = prev === "future" ? "past" : "future";
-      setEditableEvents(toEditableEvents(allEvents, nextMode));
-      setSuccessMessage(null);
-      return nextMode;
-    });
-  }, [allEvents]);
-
   const handleDragEnd = useCallback((event: DragEndEvent) => {
-    if (editorMode !== "future") return;
-
     const { active, over } = event;
     if (!over || active.id === over.id) return;
 
@@ -370,7 +299,7 @@ export default function EventEditor({ allEvents, allCharacters, onSaved }: Event
       // 从移动目标位置开始级联更新
       return recalculateFrom(reordered, Math.min(oldIdx, newIdx), lockedUntilDate);
     });
-  }, [editorMode, lockedUntilDate]);
+  }, [lockedUntilDate]);
 
   const handleChangeStart = useCallback((id: number, val: string) => {
     setEditableEvents(prev => {
@@ -465,20 +394,6 @@ export default function EventEditor({ allEvents, allCharacters, onSaved }: Event
     });
   }, [lockedUntilDate]);
 
-  const handleChangeStamp = useCallback((id: number, val: string) => {
-    setEditableEvents((prev) => {
-      const idx = prev.findIndex((event) => event.event_id === id);
-      if (idx === -1) return prev;
-
-      const updated = [...prev];
-      updated[idx] = {
-        ...updated[idx],
-        stamp: val ? parseInt(val, 10) : null,
-      };
-      return updated;
-    });
-  }, []);
-
   const handleToggleRestDay = useCallback((id: number) => {
     setEditableEvents(prev => {
       const idx = prev.findIndex(e => e.event_id === id);
@@ -492,22 +407,14 @@ export default function EventEditor({ allEvents, allCharacters, onSaved }: Event
 
   const handleSave = useCallback(() => {
     setSuccessMessage(null);
-    const originalEventMap = new Map(
-      originalEditableEventsByMode[editorMode].map((event) => [event.event_id, event]),
-    );
-    const eventsToSubmit = editorMode === "past"
-      ? editableEvents.filter((event) => hasEditableEventChanged(event, originalEventMap.get(event.event_id)))
-      : editableEvents;
-
-    if (eventsToSubmit.length === 0) {
+    if (editableEvents.length === 0) {
       setSuccessMessage("没有需要提交的变更");
       return;
     }
 
     void saveEvents(
-      eventsToSubmit.map(e => ({
+      editableEvents.map(e => ({
         event_id: e.event_id,
-        stamp: e.stamp,
         predicted_start: e.predicted_start || null,
         predicted_end: e.predicted_end || null,
         duration_days: e.duration_days,
@@ -518,13 +425,13 @@ export default function EventEditor({ allEvents, allCharacters, onSaved }: Event
     ).then((success) => {
       setSuccessMessage(success ? "提交成功！" : null);
     });
-  }, [editableEvents, editorMode, originalEditableEventsByMode, saveEvents]);
+  }, [editableEvents, saveEvents]);
 
   if (!isOpen) {
     return (
       <div className="mt-4 text-center">
         <button
-          onClick={() => openEditor("future")}
+          onClick={openEditor}
           className="px-4 py-2 rounded-lg bg-blue-500 text-white font-medium hover:bg-blue-600 transition-colors text-sm"
         >
           编辑活动日程
@@ -538,17 +445,6 @@ export default function EventEditor({ allEvents, allCharacters, onSaved }: Event
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
           <h3 className="text-lg font-bold">编辑活动日程</h3>
-          <button
-            type="button"
-            onClick={switchEditorMode}
-            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-              editorMode === "past"
-                ? "bg-amber-500 text-white hover:bg-amber-600"
-                : "bg-white/80 text-gray-700 hover:bg-white"
-            }`}
-          >
-            {editorMode === "past" ? "返回未来活动" : "编辑往期活动"}
-          </button>
         </div>
         <div className="flex items-center gap-2">
           {successMessage && (
@@ -582,7 +478,6 @@ export default function EventEditor({ allEvents, allCharacters, onSaved }: Event
             <span className="w-[52px] text-center">ID</span>
             <span className="w-[240px] md:w-[280px]">活动名</span>
             <div className="ml-auto flex items-center justify-end gap-1.5 text-right">
-              <span className="w-[132px] text-center">表情角色</span>
               <span className="w-[110px] text-center">开始日期</span>
               <span className="w-[110px] text-center">结束日期</span>
               <span className="w-[64px] text-center">天数</span>
@@ -590,50 +485,27 @@ export default function EventEditor({ allEvents, allCharacters, onSaved }: Event
             </div>
           </div>
 
-          {editorMode === "future" ? (
-            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-              <SortableContext
-                items={editableEvents.map(e => e.event_id)}
-                strategy={verticalListSortingStrategy}
-              >
-                <div className="max-h-[400px] overflow-y-auto pr-1">
-                  {editableEvents.map(item => (
-                    <SortableRow
-                      key={item.event_id}
-                      item={item}
-                      draggable
-                      stampOnly={false}
-                      stampOptions={stampOptions}
-                      minDate={earliestSelectableDate}
-                      onChangeStart={handleChangeStart}
-                      onChangeEnd={handleChangeEnd}
-                      onChangeDuration={handleChangeDuration}
-                      onChangeStamp={handleChangeStamp}
-                      onToggleRestDay={handleToggleRestDay}
-                    />
-                  ))}
-                </div>
-              </SortableContext>
-            </DndContext>
-          ) : (
+          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+            <SortableContext
+              items={editableEvents.map(e => e.event_id)}
+              strategy={verticalListSortingStrategy}
+            >
             <div className="max-h-[400px] overflow-y-auto pr-1">
               {editableEvents.map(item => (
                 <SortableRow
                   key={item.event_id}
                   item={item}
-                  draggable={false}
-                  stampOnly
-                  stampOptions={stampOptions}
-                  minDate={undefined}
+                  draggable
+                  minDate={earliestSelectableDate}
                   onChangeStart={handleChangeStart}
                   onChangeEnd={handleChangeEnd}
                   onChangeDuration={handleChangeDuration}
-                  onChangeStamp={handleChangeStamp}
                   onToggleRestDay={handleToggleRestDay}
                 />
               ))}
             </div>
-          )}
+            </SortableContext>
+          </DndContext>
         </div>
       </div>
     </div>
