@@ -539,7 +539,7 @@ export default function CalendarPage() {
               将此链接添加到您的日历应用（Google Calendar、Apple Calendar 等）以自动同步活动日程
             </p>
             <p className="text-xs md:text-sm text-gray-600 leading-6">
-              活动将以全天事件形式显示，并附带在上方订阅的闹钟提醒，时间均采用 UTC+8 时区
+              活动将以全天事件形式显示；若启用提醒，系统会额外生成活动开始与结束的时间点事件作为提醒锚点，时间均采用 UTC+8 时区
             </p>
           </div>
         )}
