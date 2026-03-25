@@ -117,6 +117,7 @@ export async function GET(request: Request) {
       "PRODID:-//HHWX//Bandori CN Calendar//CN",
       "CALSCALE:GREGORIAN",
       "METHOD:PUBLISH",
+      "COLOR:#FFDD00",
       "X-WR-CALNAME:BanGDream 国服活动",
       "X-WR-TIMEZONE:Asia/Shanghai",
     ];
@@ -206,18 +207,21 @@ export async function GET(request: Request) {
 
       if (enableEndPreviousDayReminder || enableEndSameDayReminder) {
         const endAnchorSummary = `🎸 活动结束 ${ev.event_id}期`;
-        const endAnchorDateTime = buildUtcDateTime(endDate, "23:00");
+        const endAnchorStartDateTime = buildUtcDateTime(endDate, "22:59");
+        const endAnchorEndDateTime = buildUtcDateTime(endDate, "23:00");
         const endAnchorAlarmBlocks = [
           ...(enableEndPreviousDayReminder
             ? buildRelativeDisplayAlarmBlock(
               `活动明天结束：${summary}`,
               buildRelativeTriggerFromLocalTimes(endPreviousDayReminderTime, "23:00", 1),
+              "END",
             )
             : []),
           ...(enableEndSameDayReminder
             ? buildRelativeDisplayAlarmBlock(
               `活动今天结束：${summary}`,
               buildRelativeTriggerFromLocalTimes(endSameDayReminderTime, "23:00", 0),
+              "END",
             )
             : []),
         ];
@@ -226,8 +230,8 @@ export async function GET(request: Request) {
           "BEGIN:VEVENT",
           `UID:gbp-event-${ev.event_id}-end-anchor@hhwx`,
           `DTSTAMP:${dtstamp}`,
-          `DTSTART:${endAnchorDateTime}`,
-          `DTEND:${addMinutesToICSDateTime(endAnchorDateTime, 1)}`,
+          `DTSTART:${endAnchorStartDateTime}`,
+          `DTEND:${endAnchorEndDateTime}`,
           "TRANSP:TRANSPARENT",
           `COLOR:${eventColor}`,
           `SUMMARY:${escapeICSText(endAnchorSummary)}`,
@@ -333,11 +337,11 @@ function parseReminderStateTimes(input: string | null): [string, string, string,
   return decoded as [string, string, string, string];
 }
 
-function buildRelativeDisplayAlarmBlock(description: string, trigger: string): string[] {
+function buildRelativeDisplayAlarmBlock(description: string, trigger: string, related?: "START" | "END"): string[] {
   return [
     "BEGIN:VALARM",
     "ACTION:DISPLAY",
-    `TRIGGER:${trigger}`,
+    related && related !== "START" ? `TRIGGER;RELATED=${related}:${trigger}` : `TRIGGER:${trigger}`,
     `DESCRIPTION:${escapeICSText(description)}`,
     "END:VALARM",
   ];

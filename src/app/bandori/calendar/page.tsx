@@ -50,6 +50,20 @@ function attemptOpenSubscriptionUrl(url: string): void {
   }, 0);
 }
 
+function attemptOpenSubscriptionUrlWithFallback(primaryUrl: string, fallbackUrl: string): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  attemptOpenSubscriptionUrl(primaryUrl);
+
+  window.setTimeout(() => {
+    if (document.visibilityState === "visible") {
+      window.open(fallbackUrl, "_blank", "noopener,noreferrer");
+    }
+  }, 1200);
+}
+
 function encodeMask(selectedValues: Array<string | number>, universe: Array<string | number>): string {
   const selectedSet = new Set(selectedValues.map((value) => String(value)));
   let mask = BigInt(0);
@@ -351,9 +365,9 @@ export default function CalendarPage() {
     }
 
     if (subscriptionScheme === "webcal") {
-      attemptOpenSubscriptionUrl(icsUrl);
+      attemptOpenSubscriptionUrlWithFallback(subscriptionUrls.webcal, subscriptionUrls.https);
     }
-  }, [icsUrl, subscriptionScheme]);
+  }, [icsUrl, subscriptionScheme, subscriptionUrls]);
 
   return (
     <div className="relative z-10 min-h-screen px-4 py-8 md:px-6 lg:px-8">
@@ -554,7 +568,7 @@ export default function CalendarPage() {
               </label>
             </div>
 
-            <div className="flex items-center gap-2 mb-2">
+            <div className="mb-2 flex items-center gap-2">
               <div className="flex shrink-0 items-center overflow-hidden rounded-xl border border-gray-200 bg-white/90 p-1">
                 <button
                   type="button"
@@ -583,11 +597,11 @@ export default function CalendarPage() {
                 type="text"
                 value={icsUrl}
                 readOnly
-                className="flex-1 text-xs md:text-sm border border-gray-200 rounded-xl px-3 py-2 bg-white/90 text-gray-700"
+                className="min-w-0 flex-1 text-xs md:text-sm border border-gray-200 rounded-xl px-3 py-2 bg-white/90 text-gray-700"
               />
               <button
                 onClick={handleCopyIcs}
-                className={`px-4 py-2 rounded-xl text-sm font-semibold transition-colors ${
+                className={`shrink-0 px-4 py-2 rounded-xl text-sm font-semibold transition-colors ${
                   copied
                     ? "bg-green-500 text-white"
                     : "bg-gradient-to-r from-[#ff7b57] to-[#ffb11f] text-white hover:opacity-95"
