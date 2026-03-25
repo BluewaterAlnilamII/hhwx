@@ -169,6 +169,7 @@ export async function GET(request: Request) {
         `DTEND;VALUE=DATE:${exclusiveEndDate}`,
         "TRANSP:TRANSPARENT",
         `COLOR:${eventColor}`,
+        `X-APPLE-CALENDAR-COLOR:${eventColor}`,
         `SUMMARY:${escapeICSText(summary)}`,
         "END:VEVENT"
       );
@@ -199,6 +200,7 @@ export async function GET(request: Request) {
           `DTEND:${addMinutesToICSDateTime(startAnchorDateTime, 1)}`,
           "TRANSP:TRANSPARENT",
           `COLOR:${eventColor}`,
+          `X-APPLE-CALENDAR-COLOR:${eventColor}`,
           `SUMMARY:${escapeICSText(startAnchorSummary)}`,
           ...startAnchorAlarmBlocks,
           "END:VEVENT",
@@ -234,6 +236,7 @@ export async function GET(request: Request) {
           `DTEND:${endAnchorEndDateTime}`,
           "TRANSP:TRANSPARENT",
           `COLOR:${eventColor}`,
+          `X-APPLE-CALENDAR-COLOR:${eventColor}`,
           `SUMMARY:${escapeICSText(endAnchorSummary)}`,
           ...endAnchorAlarmBlocks,
           "END:VEVENT",
