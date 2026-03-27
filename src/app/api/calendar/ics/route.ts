@@ -55,7 +55,7 @@ function parseBase36BigInt(input: string): bigint {
 /**
  * GET /api/calendar/ics
  * 生成 iCalendar (.ics) 格式的活动日历。
- * 活动主体以全天事件展示，提醒通过单独的定时锚点事件提供。
+ * 所有活动以"全天事件"形式记录，不包含小时/分钟信息。
  */
 export async function GET(request: Request) {
   try {
@@ -150,7 +150,6 @@ export async function GET(request: Request) {
 
       const durationDays = calculateInclusiveDurationDays(startDate, endDate);
       if (durationDays < 1) continue;
-      const exclusiveEndDate = addDaysToCompactDate(endDate, 1);
 
       const summary = formatCalendarSubscriptionTitle(
         ev.band_type,
@@ -159,89 +158,39 @@ export async function GET(request: Request) {
         stampCharacter,
       );
       const eventColor = getSubscriptionEventColor(ev.band_type, stampCharacter);
+      const alarmBlocks = [
+        ...(enableStartPreviousDayReminder
+          ? buildDisplayAlarmBlock(`活动明天开始：${summary}`, buildUtcDateTime(addDaysToCompactDate(startDate, -1), startPreviousDayReminderTime))
+          : []),
+        ...(enableStartSameDayReminder
+          ? buildDisplayAlarmBlock(`活动今天开始：${summary}`, buildUtcDateTime(startDate, startSameDayReminderTime))
+          : []),
+        ...(enableEndPreviousDayReminder
+          ? buildDisplayAlarmBlock(`活动明天结束：${summary}`, buildUtcDateTime(addDaysToCompactDate(endDate, -1), endPreviousDayReminderTime))
+          : []),
+        ...(enableEndSameDayReminder
+          ? buildDisplayAlarmBlock(`活动今天结束：${summary}`, buildUtcDateTime(endDate, endSameDayReminderTime))
+          : []),
+      ];
+
       icsContent.push(
         "BEGIN:VEVENT",
         `UID:gbp-event-${ev.event_id}@hhwx`,
         `DTSTAMP:${dtstamp}`,
         `DTSTART;VALUE=DATE:${startDate}`,
-        `DTEND;VALUE=DATE:${exclusiveEndDate}`,
+        `DURATION:P${durationDays}D`,
         "TRANSP:TRANSPARENT",
         `COLOR:${eventColor}`,
         `X-APPLE-CALENDAR-COLOR:${eventColor}`,
         `SUMMARY:${escapeICSText(summary)}`,
+        ...alarmBlocks,
         "END:VEVENT"
       );
-
-      if (enableStartPreviousDayReminder || enableStartSameDayReminder) {
-        const startAnchorSummary = `🎸 活动开始 ${ev.event_id}期`;
-        const startAnchorDateTime = buildUtcDateTime(startDate, "15:00");
-        const startAnchorAlarmBlocks = [
-          ...(enableStartPreviousDayReminder
-            ? buildRelativeDisplayAlarmBlock(
-              `活动明天开始：${summary}`,
-              buildRelativeTriggerFromLocalTimes(startPreviousDayReminderTime, "15:00", 1),
-            )
-            : []),
-          ...(enableStartSameDayReminder
-            ? buildRelativeDisplayAlarmBlock(
-              `活动今天开始：${summary}`,
-              buildRelativeTriggerFromLocalTimes(startSameDayReminderTime, "15:00", 0),
-            )
-            : []),
-        ];
-
-        icsContent.push(
-          "BEGIN:VEVENT",
-          `UID:gbp-event-${ev.event_id}-start-anchor@hhwx`,
-          `DTSTAMP:${dtstamp}`,
-          `DTSTART:${startAnchorDateTime}`,
-          `DTEND:${addMinutesToICSDateTime(startAnchorDateTime, 1)}`,
-          "TRANSP:TRANSPARENT",
-          `COLOR:${eventColor}`,
-          `X-APPLE-CALENDAR-COLOR:${eventColor}`,
-          `SUMMARY:${escapeICSText(startAnchorSummary)}`,
-          ...startAnchorAlarmBlocks,
-          "END:VEVENT",
-        );
-      }
-
-      if (enableEndPreviousDayReminder || enableEndSameDayReminder) {
-        const endAnchorSummary = `🎸 活动结束 ${ev.event_id}期`;
-        const endAnchorDateTime = buildUtcDateTime(endDate, "22:59");
-        const endAnchorAlarmBlocks = [
-          ...(enableEndPreviousDayReminder
-            ? buildRelativeDisplayAlarmBlock(
-              `活动明天结束：${summary}`,
-              buildRelativeTriggerFromLocalTimes(endPreviousDayReminderTime, "23:00", 1),
-            )
-            : []),
-          ...(enableEndSameDayReminder
-            ? buildRelativeDisplayAlarmBlock(
-              `活动今天结束：${summary}`,
-              buildRelativeTriggerFromLocalTimes(endSameDayReminderTime, "23:00", 0),
-            )
-            : []),
-        ];
-
-        icsContent.push(
-          "BEGIN:VEVENT",
-          `UID:gbp-event-${ev.event_id}-end-anchor@hhwx`,
-          `DTSTAMP:${dtstamp}`,
-          `DTSTART:${endAnchorDateTime}`,
-          `DTEND:${addMinutesToICSDateTime(endAnchorDateTime, 1)}`,
-          "TRANSP:TRANSPARENT",
-          `COLOR:${eventColor}`,
-          `X-APPLE-CALENDAR-COLOR:${eventColor}`,
-          `SUMMARY:${escapeICSText(endAnchorSummary)}`,
-          ...endAnchorAlarmBlocks,
-          "END:VEVENT",
-        );
-      }
     }
 
     icsContent.push("END:VCALENDAR");
 
-    return new Response(serializeICalendar(icsContent), {
+    return new Response(icsContent.join("\r\n"), {
       headers: {
         "Content-Type": "text/calendar; charset=utf-8",
         "Content-Disposition": 'attachment; filename="bandori-calendar-cn.ics"',
@@ -335,92 +284,14 @@ function parseReminderStateTimes(input: string | null): [string, string, string,
   return decoded as [string, string, string, string];
 }
 
-function buildRelativeDisplayAlarmBlock(description: string, trigger: string): string[] {
+function buildDisplayAlarmBlock(description: string, triggerUtc: string): string[] {
   return [
     "BEGIN:VALARM",
     "ACTION:DISPLAY",
-    `TRIGGER:${trigger}`,
+    `TRIGGER;VALUE=DATE-TIME:${triggerUtc}`,
     `DESCRIPTION:${escapeICSText(description)}`,
     "END:VALARM",
   ];
-}
-
-function buildRelativeTriggerFromLocalTimes(reminderTimeText: string, anchorTimeText: string, dayOffset: number): string {
-  const reminderMinutes = parseLocalTimeToMinutes(reminderTimeText);
-  const anchorMinutes = parseLocalTimeToMinutes(anchorTimeText) + dayOffset * 1440;
-  const deltaMinutes = anchorMinutes - reminderMinutes;
-
-  if (deltaMinutes <= 0) {
-    return "-PT0M";
-  }
-
-  return `-${formatDurationFromMinutes(deltaMinutes)}`;
-}
-
-function parseLocalTimeToMinutes(timeText: string): number {
-  const [hour, minute] = timeText.split(":").map(Number);
-  return hour * 60 + minute;
-}
-
-function formatDurationFromMinutes(totalMinutes: number): string {
-  const days = Math.floor(totalMinutes / 1440);
-  const hours = Math.floor((totalMinutes % 1440) / 60);
-  const minutes = totalMinutes % 60;
-  let result = "P";
-
-  if (days > 0) {
-    result += `${days}D`;
-  }
-
-  if (hours > 0 || minutes > 0 || days === 0) {
-    result += "T";
-
-    if (hours > 0) {
-      result += `${hours}H`;
-    }
-
-    if (minutes > 0 || (days === 0 && hours === 0)) {
-      result += `${minutes}M`;
-    }
-  }
-
-  return result;
-}
-
-function serializeICalendar(lines: string[]): string {
-  return lines
-    .flatMap((line) => foldICalendarLine(line))
-    .join("\r\n");
-}
-
-function foldICalendarLine(line: string): string[] {
-  const encoder = new TextEncoder();
-  const chunks: string[] = [];
-  let currentChunk = "";
-  let currentLimit = 75;
-
-  for (const character of line) {
-    if (encoder.encode(currentChunk + character).length > currentLimit) {
-      if (currentChunk.length === 0) {
-        chunks.push(character);
-        currentLimit = 74;
-        continue;
-      }
-
-      chunks.push(currentChunk);
-      currentChunk = character;
-      currentLimit = 74;
-      continue;
-    }
-
-    currentChunk += character;
-  }
-
-  if (currentChunk.length > 0) {
-    chunks.push(currentChunk);
-  }
-
-  return chunks.map((chunk, index) => (index === 0 ? chunk : ` ${chunk}`));
 }
 
 function shouldIncludeEventByAge(endDateText: string): boolean {
@@ -450,17 +321,6 @@ function buildUtcDateTime(dateText: string, timeText: string): string {
   const [hour, minute] = timeText.split(":").map(Number);
   const utcDate = new Date(Date.UTC(year, month - 1, day, hour - 8, minute, 0));
   return formatICSDate(utcDate);
-}
-
-function addMinutesToICSDateTime(dateTimeText: string, minutes: number): string {
-  const year = Number(dateTimeText.slice(0, 4));
-  const month = Number(dateTimeText.slice(4, 6));
-  const day = Number(dateTimeText.slice(6, 8));
-  const hour = Number(dateTimeText.slice(9, 11));
-  const minute = Number(dateTimeText.slice(11, 13));
-  const date = new Date(Date.UTC(year, month - 1, day, hour, minute, 0));
-  date.setUTCMinutes(date.getUTCMinutes() + minutes);
-  return formatICSDate(date);
 }
 
 /** 将毫秒时间戳按“当前运行时区”与 UTC+8 的差值映射为 ICS DATE 格式（YYYYMMDD） */

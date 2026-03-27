@@ -536,11 +536,10 @@ export default function CalendarPage() {
               </button>
             </div>
             <p className="text-xs md:text-sm text-gray-600 leading-6">
-              将此链接添加到您的日历应用以自动同步活动日程，
-              <span className="font-semibold text-red-600">注意并非所有日历应用都支持自动配置提醒</span>
+              将此链接添加到您的日历应用（Google Calendar、Apple Calendar 等）以自动同步活动日程
             </p>
             <p className="text-xs md:text-sm text-gray-600 leading-6">
-              活动将以全天事件形式显示；若启用提醒，系统会额外生成活动开始或结束的时间点事件；所有时间均采用 UTC+8 时区
+              活动将以全天事件形式显示，并附带在上方订阅的闹钟提醒，时间均采用 UTC+8 时区
             </p>
           </div>
         )}

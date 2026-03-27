@@ -1,9 +1,64 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { supabase } from "@/lib/supabase";
 import { useCachedFetch, updateFetchCache } from "@/hooks/useCachedFetch";
 import type { TrackerData, TrackerResult, EventMetadata, MinimalEvent, TrackingMode } from "./types";
+
+type RawMinimalEvent = {
+  id: number;
+  name: string;
+  startAtRaw: string | null;
+  endAtRaw: string | null;
+  hasCn: boolean;
+  hasJp: boolean;
+};
+
+type TrackerCalendarEvent = {
+  event_id: number;
+  predicted_start: string | null;
+  predicted_end: string | null;
+};
+
+function parseBestdoriTimestamp(timestampText: string | null | undefined): number | null {
+  if (!timestampText) return null;
+  const parsed = parseInt(timestampText, 10);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function parsePredictedStartTimestamp(dateText: string | null | undefined): number | null {
+  if (!dateText) return null;
+  const parsed = Date.parse(`${dateText}T15:00:00+08:00`);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function parsePredictedEndTimestamp(dateText: string | null | undefined): number | null {
+  if (!dateText) return null;
+  const parsed = Date.parse(`${dateText}T22:59:59+08:00`);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function resolveTrackerEventWindow(
+  cnStartAtRaw: string | null | undefined,
+  cnEndAtRaw: string | null | undefined,
+  predictedStart: string | null | undefined,
+  predictedEnd: string | null | undefined,
+): { startAt: number | null; endAt: number | null } {
+  const bestdoriStartAt = parseBestdoriTimestamp(cnStartAtRaw);
+  const bestdoriEndAt = parseBestdoriTimestamp(cnEndAtRaw);
+
+  if (bestdoriStartAt !== null) {
+    return {
+      startAt: bestdoriStartAt,
+      endAt: bestdoriEndAt,
+    };
+  }
+
+  return {
+    startAt: parsePredictedStartTimestamp(predictedStart),
+    endAt: parsePredictedEndTimestamp(predictedEnd),
+  };
+}
 
 /**
  * useTrackerData —— 活动追踪页面的数据获取层 Hook。
@@ -28,12 +83,12 @@ export function useTrackerData(
   const [apiHasResult, setApiHasResult] = useState(false);
 
   // ===== 缓存 + 前台自动刷新：活动列表 =====
-  const { data: allEventsData } = useCachedFetch<MinimalEvent[]>(
+  const { data: rawAllEventsData } = useCachedFetch<RawMinimalEvent[]>(
     "bestdori-events",
     "/api/bestdori/events",
     (data: any) => {
       if (!data || data.error) return [];
-      const eventsList: MinimalEvent[] = [];
+      const eventsList: RawMinimalEvent[] = [];
       Object.entries(data).forEach(([idStr, ev]: [string, any]) => {
         const cnName = ev.eventName?.[3];
         const jpName = ev.eventName?.[0];
@@ -41,8 +96,8 @@ export function useTrackerData(
           eventsList.push({
             id: parseInt(idStr),
             name: cnName || jpName || "Unknown",
-            startAt: ev.startAt?.[3] ? parseInt(ev.startAt[3]) : null,
-            endAt: ev.endAt?.[3] ? parseInt(ev.endAt[3]) : null,
+            startAtRaw: ev.startAt?.[3] ?? null,
+            endAtRaw: ev.endAt?.[3] ?? null,
             hasCn: !!cnName,
             hasJp: !!jpName,
           });
@@ -52,7 +107,43 @@ export function useTrackerData(
       return eventsList;
     }
   );
-  const allEvents = allEventsData ?? [];
+
+  const { data: trackerCalendarEvents } = useCachedFetch<TrackerCalendarEvent[]>(
+    "tracker-calendar-events",
+    "/api/calendar/events",
+    (data: any) => Array.isArray(data?.events)
+      ? data.events.map((event: any) => ({
+        event_id: Number(event.event_id),
+        predicted_start: event.predicted_start ?? null,
+        predicted_end: event.predicted_end ?? null,
+      }))
+      : []
+  );
+
+  const trackerCalendarEventMap = useMemo(() => {
+    return new Map<number, TrackerCalendarEvent>((trackerCalendarEvents ?? []).map((event) => [event.event_id, event]));
+  }, [trackerCalendarEvents]);
+
+  const allEvents = useMemo<MinimalEvent[]>(() => {
+    return (rawAllEventsData ?? []).map((event) => {
+      const trackerCalendarEvent = trackerCalendarEventMap.get(event.id);
+      const { startAt, endAt } = resolveTrackerEventWindow(
+        event.startAtRaw,
+        event.endAtRaw,
+        trackerCalendarEvent?.predicted_start,
+        trackerCalendarEvent?.predicted_end,
+      );
+
+      return {
+        id: event.id,
+        name: event.name,
+        startAt,
+        endAt,
+        hasCn: event.hasCn,
+        hasJp: event.hasJp,
+      };
+    });
+  }, [rawAllEventsData, trackerCalendarEventMap]);
 
   // ===== 缓存 + 前台自动刷新：活动元数据 =====
   const { data: eventMeta } = useCachedFetch<EventMetadata | null>(
@@ -180,9 +271,27 @@ export function useTrackerData(
     setApiHasResult(trackerResult?.result ?? false);
   }, [trackerResult]);
 
+  const resolvedCurrentEventWindow = useMemo(() => {
+    if (currentEventId === null) {
+      return { startDate: null, endDate: null };
+    }
+
+    const trackerCalendarEvent = trackerCalendarEventMap.get(currentEventId);
+    const { startAt, endAt } = resolveTrackerEventWindow(
+      eventMeta?.startAt?.[3] ?? null,
+      eventMeta?.endAt?.[3] ?? null,
+      trackerCalendarEvent?.predicted_start,
+      trackerCalendarEvent?.predicted_end,
+    );
+
+    return { startDate: startAt, endDate: endAt };
+  }, [currentEventId, eventMeta, trackerCalendarEventMap]);
+
   return {
     allEvents,
     eventMeta,
+    startDate: resolvedCurrentEventWindow.startDate,
+    endDate: resolvedCurrentEventWindow.endDate,
     chartData,
     loading,
     apiHasResult,

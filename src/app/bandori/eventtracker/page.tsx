@@ -121,7 +121,7 @@ export default function EventTrackerPage() {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   // ===== 数据获取层 =====
-  const { allEvents, eventMeta, chartData, loading, apiHasResult } = useTrackerData(
+  const { allEvents, eventMeta, startDate, endDate, chartData, loading, apiHasResult } = useTrackerData(
     currentEventId,
     trackingMode,
     selectedTier,
@@ -237,10 +237,6 @@ export default function EventTrackerPage() {
   const bannerUrl = eventMeta?.assetBundleName
     ? `https://bestdori.com/assets/${bannerPath}/event/${eventMeta.assetBundleName}/images_rip/banner.png`
     : "";
-
-  // 仅读取国服（server index 3）的活动时间
-  const startDate = eventMeta?.startAt[3] ? parseInt(eventMeta.startAt[3]!) : null;
-  const endDate = eventMeta?.endAt[3] ? parseInt(eventMeta.endAt[3]!) : null;
 
   const { domainStart, domainEnd, cutoffEnd, midnights } = useChartDomain(trackingMode, startDate, endDate);
   const fullProcessedData = useProcessedData(chartData, apiHasResult, domainStart, trackingMode);
