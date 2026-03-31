@@ -4,7 +4,7 @@ import { format } from "date-fns";
 import type { TrackerData, TrackingMode } from "./types";
 
 /**
- * TrackerTooltip —— 图表悬停气泡组件。
+ * TrackerTooltip —— 图表悬浮提示组件。
  *
  * 根据悬停点是真实数据还是投影虚拟点，展示不同内容：
  * - 投影点：显示投影终点时间和预测分数
@@ -27,7 +27,7 @@ export function TrackerTooltip({
 
   const unit = trackingMode === "song" ? "Pt" : "P";
 
-  // ===== 投影点的 Tooltip =====
+  // ===== 投影点的悬浮提示 =====
   if (payload[0]?.payload?.isProjection) {
     const p = payload[0].payload;
     const projectionLabelTime = p.projectionEndTime || label;
@@ -59,7 +59,7 @@ export function TrackerTooltip({
     );
   }
 
-  // ===== 真实数据点的 Tooltip =====
+  // ===== 真实数据点的悬浮提示 =====
   const mainEntry = payload.find(
     (entry: any) => entry?.dataKey === "ep" && !entry?.payload?.isProjection
   );

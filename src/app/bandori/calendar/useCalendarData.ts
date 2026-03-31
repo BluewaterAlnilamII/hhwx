@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useCachedFetch } from "@/hooks/useCachedFetch";
 import { getSafeSession, supabase } from "@/lib/supabase";
+import { ChinaMainlandHolidayCalendarData } from "./chinaMainlandHolidayCalendar";
 import {
   CalendarCharacter,
   formatCalendarEventTitle,
@@ -42,6 +43,8 @@ export interface CalendarEvent {
   primaryColor: string;
   secondaryColor: string | null;
 }
+
+export interface CalendarHolidayData extends ChinaMainlandHolidayCalendarData {}
 
 // ─── 工具函数 ───
 
@@ -90,10 +93,15 @@ export function filterEventsForMonth(events: CalendarEvent[], year: number, mont
 // ─── 主 Hook ───
 
 export function useCalendarData() {
-  const { data: rawData, loading, refresh } = useCachedFetch<{ events: GbpEvent[]; characters: CalendarCharacter[] }>(
+  const { data: rawData, loading: eventLoading, refresh: refreshEvents } = useCachedFetch<{ events: GbpEvent[]; characters: CalendarCharacter[] }>(
     "calendar-events",
     "/api/calendar/events",
     (raw) => raw as { events: GbpEvent[]; characters: CalendarCharacter[] }
+  );
+  const { data: holidayData, loading: holidayLoading, refresh: refreshHolidayData } = useCachedFetch<CalendarHolidayData>(
+    "calendar-holiday-days",
+    "/api/calendar/holiday-days",
+    (raw) => raw as CalendarHolidayData,
   );
 
   const allEvents = rawData?.events ?? [];
@@ -105,7 +113,19 @@ export function useCalendarData() {
     .map((event) => toCalendarEvent(event, characterMap))
     .filter((ev): ev is CalendarEvent => ev !== null);
 
-  return { allEvents, allCharacters, calendarEvents, loading, refresh };
+  const refresh = useCallback(() => {
+    refreshEvents();
+    refreshHolidayData();
+  }, [refreshEvents, refreshHolidayData]);
+
+  return {
+    allEvents,
+    allCharacters,
+    calendarEvents,
+    holidayData,
+    loading: eventLoading || holidayLoading,
+    refresh,
+  };
 }
 
 // ─── 权限检查 Hook ───
@@ -121,8 +141,8 @@ export function useCalendarPermission() {
         return;
       }
 
-      // 为什么这么做：客户端 supabase 已自动携带当前用户会话，
-      // 直接读取权限表即可触发 RLS；这样既能首屏恢复，也能在登录状态变化后立即刷新按钮显示。
+      // 客户端 supabase 会自动携带当前用户会话，
+      // 直接读取权限表即可触发 RLS，并在登录态变化后同步刷新按钮显示。
       const { data, error } = await supabase
         .from("user_roles")
         .select("role")

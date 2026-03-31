@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback, useLayoutEffect } from "react";
 import { format } from "date-fns";
 import {
   LineChart,
@@ -10,6 +10,7 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
+  ReferenceArea,
   ReferenceLine,
 } from "recharts";
 import * as Tabs from "@radix-ui/react-tabs";
@@ -34,6 +35,69 @@ import {
   getScoreAtTime,
 } from "./useChartData";
 import { TrackerTooltip } from "./TrackerTooltip";
+import FixedYAxis from "./FixedYAxis";
+import {
+  buildChinaMainlandHolidayLookup,
+  isChinaMainlandRestDay,
+} from "../calendar/chinaMainlandHolidayCalendar";
+
+type NonWorkingDayBand = {
+  key: string;
+  start: number;
+  end: number;
+};
+
+const ZOOM_WIDTH_MULTIPLIERS = [1, 2, 4, 8, 16, 32] as const;
+const TOOLTIP_OFFSET = 12;
+const TOOLTIP_EDGE_PADDING = 8;
+const FIXED_Y_AXIS_WIDTH = 38;
+const CHART_MARGIN = { top: 20, right: 5, left: 0, bottom: 20 } as const;
+
+type HoverTooltipState = {
+  active: boolean;
+  coordinate: { x: number; y: number };
+  label?: number;
+  payload?: any[];
+};
+
+function buildNonWorkingDayBands(
+  domainStart: number | "auto",
+  domainEnd: number | "auto",
+  holidayLookup: ReturnType<typeof buildChinaMainlandHolidayLookup>,
+): NonWorkingDayBand[] {
+  if (typeof domainStart !== "number" || typeof domainEnd !== "number") {
+    return [];
+  }
+
+  const bands: NonWorkingDayBand[] = [];
+  const cursor = new Date(domainStart);
+  cursor.setHours(0, 0, 0, 0);
+
+  while (cursor.getTime() < domainEnd) {
+    const nextDay = new Date(cursor);
+    nextDay.setDate(nextDay.getDate() + 1);
+
+    if (isChinaMainlandRestDay(cursor, holidayLookup)) {
+      const bandStart = Math.max(cursor.getTime(), domainStart);
+      const bandEnd = Math.min(nextDay.getTime(), domainEnd);
+
+      if (bandStart < bandEnd) {
+        const year = cursor.getFullYear();
+        const month = String(cursor.getMonth() + 1).padStart(2, "0");
+        const day = String(cursor.getDate()).padStart(2, "0");
+        bands.push({
+          key: `${year}-${month}-${day}`,
+          start: bandStart,
+          end: bandEnd,
+        });
+      }
+    }
+
+    cursor.setDate(cursor.getDate() + 1);
+  }
+
+  return bands;
+}
 
 // ─────────────────────────── 展示子组件 ───────────────────────────
 
@@ -117,11 +181,19 @@ export default function EventTrackerPage() {
   const [trackingMode, setTrackingMode] = useState<TrackingMode>("event");
   const [selectedTier, setSelectedTier] = useState<number>(1000);
 
-  const [zoomLevel, setZoomLevel] = useState(1);
+  const [zoomIndex, setZoomIndex] = useState(0);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const chartViewportRef = useRef<HTMLDivElement>(null);
+  const tooltipRef = useRef<HTMLDivElement>(null);
+  const isUserScrollingRef = useRef(false);
+  const isProgrammaticScrollRef = useRef(false);
+  const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const [hoverTooltip, setHoverTooltip] = useState<HoverTooltipState | null>(null);
+  const [horizontalScrollbarHeight, setHorizontalScrollbarHeight] = useState(0);
+  const [chartViewportHeight, setChartViewportHeight] = useState(400);
 
   // ===== 数据获取层 =====
-  const { allEvents, eventMeta, startDate, endDate, chartData, loading, apiHasResult } = useTrackerData(
+  const { allEvents, eventMeta, startDate, endDate, chartData, holidayData, loading, apiHasResult } = useTrackerData(
     currentEventId,
     trackingMode,
     selectedTier,
@@ -149,39 +221,6 @@ export default function EventTrackerPage() {
     if (!projectionPrefLoaded) return;
     writeProjectionCookie(DAY_PROJECTION_COOKIE, showDayProjection);
   }, [projectionPrefLoaded, showDayProjection]);
-
-  // ===== 图表容器尺寸变化时自动滚动到最右侧（最新数据） =====
-  useEffect(() => {
-    const el = scrollContainerRef.current;
-    if (!el) return;
-
-    let isUserScrolling = false;
-    let scrollTimeout: NodeJS.Timeout;
-
-    const handleScroll = () => {
-      isUserScrolling = true;
-      clearTimeout(scrollTimeout);
-      scrollTimeout = setTimeout(() => { isUserScrolling = false; }, 200);
-    };
-
-    el.addEventListener("scroll", handleScroll);
-
-    // 监听内层缩放容器的宽度变化（由 zoomLevel 驱动）
-    const resizeObserver = new ResizeObserver(() => {
-      if (!isUserScrolling) {
-        el.scrollLeft = el.scrollWidth;
-      }
-    });
-    if (el.firstElementChild) {
-      resizeObserver.observe(el.firstElementChild);
-    }
-
-    return () => {
-      el.removeEventListener("scroll", handleScroll);
-      resizeObserver.disconnect();
-      clearTimeout(scrollTimeout);
-    };
-  }, []);
 
   // ===== 活动列表首次加载后自动选择当前活动（仅执行一次） =====
   const autoSelectDoneRef = useRef(false);
@@ -223,7 +262,7 @@ export default function EventTrackerPage() {
 
   // 切换追踪模式时重置缩放，并将 tier 修正到目标模式的合法值
   useEffect(() => {
-    setZoomLevel(1);
+    setZoomIndex(0);
     const targetTiers = getTiersForMode(trackingMode);
     if (!targetTiers.includes(selectedTier)) {
       const validTiers = targetTiers.filter(t => t <= selectedTier);
@@ -242,6 +281,156 @@ export default function EventTrackerPage() {
   const fullProcessedData = useProcessedData(chartData, apiHasResult, domainStart, trackingMode);
   const status = useEventStatus(domainStart, domainEnd);
   const finalDisplayedData = useFinalDisplayedData(fullProcessedData, cutoffEnd, status, showInstantProjection, showDayProjection);
+  const holidayLookup = useMemo(() => buildChinaMainlandHolidayLookup(holidayData), [holidayData]);
+  const nonWorkingDayBands = useMemo(
+    () => buildNonWorkingDayBands(domainStart, domainEnd, holidayLookup),
+    [domainEnd, domainStart, holidayLookup],
+  );
+  const zoomWidthMultiplier = ZOOM_WIDTH_MULTIPLIERS[zoomIndex];
+  const latestActualDataTime = useMemo(() => {
+    for (let index = finalDisplayedData.length - 1; index >= 0; index -= 1) {
+      const point = finalDisplayedData[index];
+      if (!point.isProjection) {
+        return point.time;
+      }
+    }
+
+    return null;
+  }, [finalDisplayedData]);
+
+  const focusViewportNearLatestDataPoint = useCallback(() => {
+    const viewport = scrollContainerRef.current;
+    if (!viewport) {
+      return;
+    }
+
+    const maxScrollLeft = Math.max(0, viewport.scrollWidth - viewport.clientWidth);
+    if (
+      maxScrollLeft <= 0 ||
+      typeof domainStart !== "number" ||
+      typeof domainEnd !== "number" ||
+      latestActualDataTime === null ||
+      domainEnd <= domainStart
+    ) {
+      viewport.scrollLeft = maxScrollLeft;
+      return;
+    }
+
+    const latestProgress = (latestActualDataTime - domainStart) / (domainEnd - domainStart);
+    const clampedProgress = Math.max(0, Math.min(1, latestProgress));
+    const latestPointX = clampedProgress * viewport.scrollWidth;
+    const desiredViewportAnchor = viewport.clientWidth * 0.76;
+    const desiredScrollLeft = latestPointX - desiredViewportAnchor;
+
+    isProgrammaticScrollRef.current = true;
+    viewport.scrollLeft = Math.max(0, Math.min(desiredScrollLeft, maxScrollLeft));
+    requestAnimationFrame(() => {
+      isProgrammaticScrollRef.current = false;
+    });
+  }, [domainEnd, domainStart, latestActualDataTime]);
+
+  const syncScrollbarMetrics = useCallback(() => {
+    const viewport = scrollContainerRef.current;
+    if (!viewport) {
+      return;
+    }
+
+    const nextScrollbarHeight = Math.max(0, viewport.offsetHeight - viewport.clientHeight);
+    const nextChartViewportHeight = viewport.offsetHeight;
+    setHorizontalScrollbarHeight((prev) => (prev === nextScrollbarHeight ? prev : nextScrollbarHeight));
+    setChartViewportHeight((prev) => (prev === nextChartViewportHeight ? prev : nextChartViewportHeight));
+  }, []);
+
+  const updateTooltipPosition = useCallback(() => {
+    if (!hoverTooltip?.active || !chartViewportRef.current || !tooltipRef.current || !scrollContainerRef.current) {
+      return;
+    }
+
+    const container = chartViewportRef.current;
+    const viewport = scrollContainerRef.current;
+    const tooltip = tooltipRef.current;
+    const containerHeight = container.clientHeight;
+    const tooltipWidth = tooltip.offsetWidth;
+    const tooltipHeight = tooltip.offsetHeight;
+    const visibleLeft = viewport.scrollLeft;
+    const visibleRight = viewport.scrollLeft + viewport.clientWidth;
+
+    let left = hoverTooltip.coordinate.x + TOOLTIP_OFFSET;
+    if (left + tooltipWidth > visibleRight - TOOLTIP_EDGE_PADDING) {
+      left = hoverTooltip.coordinate.x - tooltipWidth - TOOLTIP_OFFSET;
+    }
+    left = Math.max(
+      visibleLeft + TOOLTIP_EDGE_PADDING,
+      Math.min(left, visibleRight - tooltipWidth - TOOLTIP_EDGE_PADDING),
+    );
+
+    let top = hoverTooltip.coordinate.y - tooltipHeight / 2;
+    top = Math.max(TOOLTIP_EDGE_PADDING, Math.min(top, containerHeight - tooltipHeight - TOOLTIP_EDGE_PADDING));
+
+    tooltip.style.left = `${left}px`;
+    tooltip.style.top = `${top}px`;
+  }, [hoverTooltip]);
+
+  // ===== 图表容器尺寸变化时默认将视角聚焦到最新真实数据点附近 =====
+  useEffect(() => {
+    const el = scrollContainerRef.current;
+    if (!el) return;
+
+    const handleScroll = () => {
+      if (isProgrammaticScrollRef.current) {
+        updateTooltipPosition();
+        return;
+      }
+
+      isUserScrollingRef.current = true;
+      if (scrollTimeoutRef.current) {
+        clearTimeout(scrollTimeoutRef.current);
+      }
+      scrollTimeoutRef.current = setTimeout(() => {
+        isUserScrollingRef.current = false;
+      }, 200);
+      updateTooltipPosition();
+    };
+
+    el.addEventListener("scroll", handleScroll);
+
+    const resizeObserver = new ResizeObserver(() => {
+      syncScrollbarMetrics();
+      updateTooltipPosition();
+      if (!isUserScrollingRef.current) {
+        focusViewportNearLatestDataPoint();
+      }
+    });
+    if (el.firstElementChild) {
+      resizeObserver.observe(el.firstElementChild);
+    }
+
+    return () => {
+      el.removeEventListener("scroll", handleScroll);
+      resizeObserver.disconnect();
+      if (scrollTimeoutRef.current) {
+        clearTimeout(scrollTimeoutRef.current);
+        scrollTimeoutRef.current = null;
+      }
+    };
+  }, [focusViewportNearLatestDataPoint, syncScrollbarMetrics, updateTooltipPosition]);
+
+  useEffect(() => {
+    if (!isUserScrollingRef.current) {
+      focusViewportNearLatestDataPoint();
+    }
+    syncScrollbarMetrics();
+    requestAnimationFrame(() => {
+      updateTooltipPosition();
+    });
+  }, [focusViewportNearLatestDataPoint, zoomWidthMultiplier, currentEventId, trackingMode, selectedTier, syncScrollbarMetrics, updateTooltipPosition]);
+
+  useLayoutEffect(() => {
+    if (!hoverTooltip?.active) {
+      return;
+    }
+    updateTooltipPosition();
+  }, [hoverTooltip, zoomWidthMultiplier, updateTooltipPosition]);
 
   const { ticks: yTicks, domain: yDomainInfo } = useMemo(
     () => generateYTicks(finalDisplayedData),
@@ -288,7 +477,7 @@ export default function EventTrackerPage() {
     <div className="min-h-screen text-gray-800 dark:text-gray-100 p-2 sm:p-6 lg:p-10 font-sans relative z-10">
       <div className="max-w-5xl mx-auto space-y-4 lg:space-y-8 relative z-10">
 
-        {/* ========== 页头：活动名称、切换器、Banner ========== */}
+        {/* ========== 页头：活动名称、切换器、活动横幅 ========== */}
         <div className="flex flex-col md:flex-row justify-between items-center bg-white dark:bg-[#131A2B] rounded-3xl shadow-xl shadow-blue-500/5 dark:shadow-blue-500/10 border border-gray-100 dark:border-gray-800 p-4 sm:p-8 relative z-20">
           <div className="flex-1 space-y-4">
             <h1 className="text-3xl font-extrabold text-[#f43f5e] block w-full">{cnEventName}</h1>
@@ -525,112 +714,168 @@ export default function EventTrackerPage() {
                 )}
 
                 <div className="h-[400px] w-full relative group">
-                  <div
-                    ref={scrollContainerRef}
-                    className="w-full h-full overflow-x-auto overflow-y-hidden rounded-xl styling-scrollbar relative"
-                  >
-                    <div style={{ minWidth: `${zoomLevel * 100}%`, height: "100%", transition: "min-width 0.3s ease-out" }}>
-                      {finalDisplayedData.length > 0 ? (
-                        <ResponsiveContainer width="100%" height="100%">
-                          <LineChart data={finalDisplayedData} margin={{ top: 20, right: 5, left: 0, bottom: 20 }}>
-                            <CartesianGrid vertical={false} stroke="#374151" opacity={0.15} />
+                  {finalDisplayedData.length > 0 ? (
+                    <div className="flex h-full w-full overflow-hidden rounded-xl">
+                      <FixedYAxis
+                        ticks={yTicks}
+                        domain={yDomainInfo}
+                        chartHeight={chartViewportHeight}
+                        scrollbarHeight={horizontalScrollbarHeight}
+                        axisWidth={FIXED_Y_AXIS_WIDTH}
+                        topMargin={CHART_MARGIN.top}
+                        bottomMargin={CHART_MARGIN.bottom}
+                      />
 
-                            {midnights.map(m => (
-                              <ReferenceLine key={m} x={m} stroke="#D1D5DB" opacity={0.6} />
-                            ))}
+                      <div
+                        ref={scrollContainerRef}
+                        className="min-w-0 flex-1 h-full overflow-x-auto overflow-y-hidden styling-scrollbar relative"
+                      >
+                        <div style={{ minWidth: `${zoomWidthMultiplier * 100}%`, height: "100%", transition: "min-width 0.3s ease-out" }}>
+                          <div ref={chartViewportRef} className="relative h-full overflow-hidden">
+                            <ResponsiveContainer width="100%" height="100%">
+                              <LineChart
+                                data={finalDisplayedData}
+                                margin={CHART_MARGIN}
+                                onMouseMove={(state: any) => {
+                                  if (!state?.isTooltipActive || !state?.activeCoordinate || !state?.activePayload?.length) {
+                                    setHoverTooltip(null);
+                                    return;
+                                  }
 
-                            <XAxis
-                              dataKey="time"
-                              domain={[domainStart, domainEnd]}
-                              type="number"
-                              ticks={midnights}
-                              tickFormatter={(unixTime) => format(unixTime, "MM/dd")}
-                              stroke="#6B7280"
-                              fontSize={12}
-                              tickLine={false}
-                              axisLine={false}
-                              dy={10}
-                            />
-                            <YAxis
-                              stroke="#6B7280"
-                              fontSize={11}
-                              tickLine={false}
-                              axisLine={false}
-                              width={45}
-                              ticks={yTicks}
-                              type="number"
-                              domain={yDomainInfo}
-                              tickFormatter={(value) => {
-                                if (value === 0) return "0";
-                                if (value % 1000000 === 0 && value >= 1000000) return (value / 1000000) + "M";
-                                if (value % 100000 === 0 && value >= 1000000) return (value / 1000000).toFixed(1) + "M";
-                                if (value >= 1000) return (value / 1000) + "K";
-                                return value.toString();
-                              }}
-                            />
-                            <Tooltip
-                              content={<TrackerTooltip trackingMode={trackingMode} displayedData={finalDisplayedData} />}
-                              cursor={{ stroke: "#9CA3AF", strokeWidth: 1, strokeDasharray: "4 4" }}
-                            />
-                            <Line
-                              type="linear"
-                              dataKey="ep"
-                              stroke="#3B82F6"
-                              strokeWidth={2}
-                              strokeOpacity={0.6}
-                              dot={{ r: 2.5, fill: "#3B82F6", strokeWidth: 0 }}
-                              activeDot={(props: any) => {
-                                const { cx, cy, payload } = props;
-                                if (payload.isProjection || isNaN(cx) || isNaN(cy)) return <circle cx={0} cy={0} r={0} stroke="none" />;
-                                return <circle cx={cx} cy={cy} r={6} fill="#3B82F6" stroke="none" />;
-                              }}
-                              isAnimationActive={false}
-                            />
+                                  setHoverTooltip({
+                                    active: true,
+                                    coordinate: {
+                                      x: state.activeCoordinate.x,
+                                      y: state.activeCoordinate.y,
+                                    },
+                                    label: state.activeLabel,
+                                    payload: state.activePayload,
+                                  });
+                                }}
+                                onMouseLeave={() => setHoverTooltip(null)}
+                              >
+                              {nonWorkingDayBands.map((band) => (
+                                <ReferenceArea
+                                  key={band.key}
+                                  x1={band.start}
+                                  x2={band.end}
+                                  fill="#FFD966"
+                                  fillOpacity={0.7}
+                                  strokeOpacity={0}
+                                  ifOverflow="extendDomain"
+                                />
+                              ))}
 
-                            {showInstantProjection && (
+                              <YAxis
+                                hide
+                                width={0}
+                                ticks={yTicks}
+                                type="number"
+                                domain={yDomainInfo}
+                              />
+
+                              <CartesianGrid vertical={false} stroke="#374151" opacity={0.15} />
+
+                              {midnights.map(m => (
+                                <ReferenceLine key={m} x={m} stroke="#D1D5DB" opacity={0.6} />
+                              ))}
+
+                              <XAxis
+                                dataKey="time"
+                                domain={[domainStart, domainEnd]}
+                                type="number"
+                                ticks={midnights}
+                                tickFormatter={(unixTime) => format(unixTime, "MM/dd")}
+                                stroke="#6B7280"
+                                fontSize={12}
+                                tickLine={false}
+                                axisLine={false}
+                                dy={10}
+                              />
+                              <Tooltip
+                                content={() => null}
+                                wrapperStyle={{ display: "none" }}
+                                cursor={{ stroke: "#9CA3AF", strokeWidth: 1, strokeDasharray: "4 4" }}
+                                isAnimationActive={false}
+                              />
                               <Line
                                 type="linear"
-                                dataKey="instantEp"
-                                stroke="#ef4444"
+                                dataKey="ep"
+                                stroke="#3B82F6"
                                 strokeWidth={2}
-                                strokeDasharray="6 4"
-                                dot={(props: any) => {
-                                  const { cx, cy, payload, index } = props;
-                                  if (payload.isProjection) return <circle key={`dot-instant-${index}`} cx={cx} cy={cy} r={2.5} fill="#ef4444" stroke="none" />;
-                                  return <circle key={`dot-hidden-instant-${index}`} cx={cx} cy={cy} r={0} stroke="none" />;
-                                }}
+                                strokeOpacity={0.6}
+                                dot={{ r: 2.5, fill: "#3B82F6", strokeWidth: 0 }}
                                 activeDot={(props: any) => {
                                   const { cx, cy, payload } = props;
-                                  if (!payload.isProjection || isNaN(cx) || isNaN(cy)) return <circle cx={0} cy={0} r={0} stroke="none" />;
-                                  return <circle cx={cx} cy={cy} r={6} fill="#ef4444" stroke="none" />;
+                                  if (payload.isProjection || isNaN(cx) || isNaN(cy)) return <circle cx={0} cy={0} r={0} stroke="none" />;
+                                  return <circle cx={cx} cy={cy} r={6} fill="#3B82F6" stroke="none" />;
                                 }}
                                 isAnimationActive={false}
                               />
-                            )}
 
-                            {showDayProjection && (
-                              <Line
-                                type="linear"
-                                dataKey="dayEp"
-                                stroke="#3b82f6"
-                                strokeWidth={2}
-                                strokeDasharray="6 4"
-                                dot={(props: any) => {
-                                  const { cx, cy, payload, index } = props;
-                                  if (payload.isProjection) return <circle key={`dot-day-${index}`} cx={cx} cy={cy} r={2.5} fill="#3b82f6" stroke="none" />;
-                                  return <circle key={`dot-hidden-day-${index}`} cx={cx} cy={cy} r={0} stroke="none" />;
-                                }}
-                                activeDot={(props: any) => {
-                                  const { cx, cy, payload } = props;
-                                  if (!payload.isProjection || isNaN(cx) || isNaN(cy)) return <circle cx={0} cy={0} r={0} stroke="none" />;
-                                  return <circle cx={cx} cy={cy} r={6} fill="#3b82f6" stroke="none" />;
-                                }}
-                                isAnimationActive={false}
-                              />
-                            )}
-                          </LineChart>
-                        </ResponsiveContainer>
-                      ) : (
+                              {showInstantProjection && (
+                                <Line
+                                  type="linear"
+                                  dataKey="instantEp"
+                                  stroke="#ef4444"
+                                  strokeWidth={2}
+                                  strokeDasharray="6 4"
+                                  dot={(props: any) => {
+                                    const { cx, cy, payload, index } = props;
+                                    if (payload.isProjection) return <circle key={`dot-instant-${index}`} cx={cx} cy={cy} r={2.5} fill="#ef4444" stroke="none" />;
+                                    return <circle key={`dot-hidden-instant-${index}`} cx={cx} cy={cy} r={0} stroke="none" />;
+                                  }}
+                                  activeDot={(props: any) => {
+                                    const { cx, cy, payload } = props;
+                                    if (!payload.isProjection || isNaN(cx) || isNaN(cy)) return <circle cx={0} cy={0} r={0} stroke="none" />;
+                                    return <circle cx={cx} cy={cy} r={6} fill="#ef4444" stroke="none" />;
+                                  }}
+                                  isAnimationActive={false}
+                                />
+                              )}
+
+                              {showDayProjection && (
+                                <Line
+                                  type="linear"
+                                  dataKey="dayEp"
+                                  stroke="#3b82f6"
+                                  strokeWidth={2}
+                                  strokeDasharray="6 4"
+                                  dot={(props: any) => {
+                                    const { cx, cy, payload, index } = props;
+                                    if (payload.isProjection) return <circle key={`dot-day-${index}`} cx={cx} cy={cy} r={2.5} fill="#3b82f6" stroke="none" />;
+                                    return <circle key={`dot-hidden-day-${index}`} cx={cx} cy={cy} r={0} stroke="none" />;
+                                  }}
+                                  activeDot={(props: any) => {
+                                    const { cx, cy, payload } = props;
+                                    if (!payload.isProjection || isNaN(cx) || isNaN(cy)) return <circle cx={0} cy={0} r={0} stroke="none" />;
+                                    return <circle cx={cx} cy={cy} r={6} fill="#3b82f6" stroke="none" />;
+                                  }}
+                                  isAnimationActive={false}
+                                />
+                              )}
+                              </LineChart>
+                            </ResponsiveContainer>
+                            {hoverTooltip?.active && hoverTooltip.payload?.length ? (
+                              <div
+                                ref={tooltipRef}
+                                className="pointer-events-none absolute z-20"
+                                style={{ left: "-9999px", top: 0 }}
+                              >
+                                <TrackerTooltip
+                                  active={hoverTooltip.active}
+                                  payload={hoverTooltip.payload}
+                                  label={hoverTooltip.label}
+                                  trackingMode={trackingMode}
+                                  displayedData={finalDisplayedData}
+                                />
+                              </div>
+                            ) : null}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
                         <div className="h-full flex flex-col items-center justify-center text-gray-400">
                           {loading ? null : (
                             <>
@@ -642,22 +887,21 @@ export default function EventTrackerPage() {
                           )}
                         </div>
                       )}
-                    </div>
-                  </div>
 
                   {/* 缩放控制浮层 */}
                   <div className="absolute top-[70%] right-4 -translate-y-1/2 flex flex-col gap-2 z-20 transition-opacity opacity-70 hover:opacity-100 mix-blend-difference dark:mix-blend-normal">
                     <button
-                      onClick={() => setZoomLevel(prev => Math.min(10, prev + 1))}
-                      className="p-1.5 text-gray-500 dark:text-gray-400 hover:text-blue-500 dark:hover:text-blue-400 rounded-full transition-transform hover:scale-110 active:scale-95 bg-white/20 dark:bg-black/20 backdrop-blur-sm"
+                      onClick={() => setZoomIndex(prev => Math.min(ZOOM_WIDTH_MULTIPLIERS.length - 1, prev + 1))}
+                      className={`p-1.5 text-gray-500 dark:text-gray-400 hover:text-blue-500 dark:hover:text-blue-400 rounded-full transition-transform hover:scale-110 active:scale-95 bg-white/20 dark:bg-black/20 backdrop-blur-sm ${zoomIndex >= ZOOM_WIDTH_MULTIPLIERS.length - 1 ? "invisible pointer-events-none" : ""}`}
+                      disabled={zoomIndex >= ZOOM_WIDTH_MULTIPLIERS.length - 1}
                       title="放大"
                     >
                       <ZoomIn size={22} strokeWidth={2.5} />
                     </button>
                     <button
-                      onClick={() => setZoomLevel(prev => Math.max(1, prev - 1))}
-                      className={`p-1.5 rounded-full transition-all hover:scale-110 active:scale-95 bg-white/20 dark:bg-black/20 backdrop-blur-sm ${zoomLevel <= 1 ? "text-gray-300/50 dark:text-gray-700/50 cursor-not-allowed hidden" : "text-gray-500 dark:text-gray-400 hover:text-blue-500 dark:hover:text-blue-400"}`}
-                      disabled={zoomLevel <= 1}
+                      onClick={() => setZoomIndex(prev => Math.max(0, prev - 1))}
+                      className={`p-1.5 rounded-full transition-all hover:scale-110 active:scale-95 bg-white/20 dark:bg-black/20 backdrop-blur-sm ${zoomIndex <= 0 ? "invisible pointer-events-none" : "text-gray-500 dark:text-gray-400 hover:text-blue-500 dark:hover:text-blue-400"}`}
+                      disabled={zoomIndex <= 0}
                       title="缩小"
                     >
                       <ZoomOut size={22} strokeWidth={2.5} />

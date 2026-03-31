@@ -15,10 +15,15 @@ import {
   getCharacterIconUrl,
 } from "@/lib/calendar-character-service";
 
+/** 默认的“活动开始前一天”提醒时间。 */
 const DEFAULT_START_PREVIOUS_DAY_REMINDER_TIME = "21:00";
+/** 默认的“活动开始当天”提醒时间。 */
 const DEFAULT_START_SAME_DAY_REMINDER_TIME = "14:30";
+/** 默认的“活动结束前一天”提醒时间。 */
 const DEFAULT_END_PREVIOUS_DAY_REMINDER_TIME = "21:00";
+/** 默认的“活动结束当天”提醒时间。 */
 const DEFAULT_END_SAME_DAY_REMINDER_TIME = "17:00";
+/** 默认提醒开关位掩码。 */
 const DEFAULT_REMINDER_FLAG_TOKEN = "f";
 const DEFAULT_REMINDER_TIMES = [
   DEFAULT_START_PREVIOUS_DAY_REMINDER_TIME,
@@ -26,9 +31,12 @@ const DEFAULT_REMINDER_TIMES = [
   DEFAULT_END_PREVIOUS_DAY_REMINDER_TIME,
   DEFAULT_END_SAME_DAY_REMINDER_TIME,
 ];
+/** 小时选择器的候选值。 */
 const REMINDER_HOURS = Array.from({ length: 24 }, (_, index) => String(index).padStart(2, "0"));
+/** 分钟选择器的候选值。 */
 const REMINDER_MINUTES = Array.from({ length: 60 }, (_, index) => String(index).padStart(2, "0"));
 
+/** 将选中的条目压缩为位掩码，缩短订阅链接中的筛选参数。 */
 function encodeMask(selectedValues: Array<string | number>, universe: Array<string | number>): string {
   const selectedSet = new Set(selectedValues.map((value) => String(value)));
   let mask = BigInt(0);
@@ -42,6 +50,7 @@ function encodeMask(selectedValues: Array<string | number>, universe: Array<stri
   return mask.toString(36);
 }
 
+/** 将四个提醒开关压缩为单个短令牌。 */
 function encodeReminderFlagToken(flags: boolean[]): string {
   let mask = 0;
   flags.forEach((flag, index) => {
@@ -52,6 +61,10 @@ function encodeReminderFlagToken(flags: boolean[]): string {
   return mask.toString(36);
 }
 
+/**
+ * 将提醒开关与提醒时间编码进订阅链接。
+ * 这样可以在保持链接较短的前提下，完整恢复用户的提醒偏好。
+ */
 function encodeReminderState(flags: boolean[], times: string[]): string {
   const packedTimes = times.reduce((accumulator, time) => {
     const [hour, minute] = time.split(":").map(Number);
@@ -63,6 +76,7 @@ function encodeReminderState(flags: boolean[], times: string[]): string {
   return `${flagToken}${timeToken !== "0" ? `.${timeToken}` : ""}`;
 }
 
+/** 小时与分钟联动的时间选择器。 */
 function TimeSelector({
   value,
   onChange,
@@ -105,6 +119,7 @@ function TimeSelector({
   );
 }
 
+/** 根据背景色亮度推导可读性更高的前景文字颜色。 */
 function getReadableTextColor(hexColor: string): string {
   if (hexColor.toLowerCase() === BAND_COLORS.hhw.toLowerCase()) {
     return "#FFFFFF";
@@ -118,8 +133,12 @@ function getReadableTextColor(hexColor: string): string {
   return brightness > 170 ? "#1F2937" : "#FFFFFF";
 }
 
+/**
+ * 国服活动日历页面。
+ * 负责组合月历视图、订阅参数配置、权限控制和活动编辑入口。
+ */
 export default function CalendarPage() {
-  const { allEvents, allCharacters, calendarEvents, loading, refresh } = useCalendarData();
+  const { allEvents, allCharacters, calendarEvents, holidayData, loading, refresh } = useCalendarData();
   const hasPermission = useCalendarPermission();
   const [showIcsModal, setShowIcsModal] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -536,10 +555,13 @@ export default function CalendarPage() {
               </button>
             </div>
             <p className="text-xs md:text-sm text-gray-600 leading-6">
-              将此链接添加到您的日历应用（Google Calendar、Apple Calendar 等）以自动同步活动日程
+              将此链接添加到您的日历应用以自动同步活动日程，活动将以全天事件形式显示，所有时间均采用 UTC+8 时区
             </p>
             <p className="text-xs md:text-sm text-gray-600 leading-6">
-              活动将以全天事件形式显示，并附带在上方订阅的闹钟提醒，时间均采用 UTC+8 时区
+              若启用提醒，系统会额外按需分别生成位于活动开始或结束时间点的独立事件，并通过该事件配置定时提醒
+            </p>
+            <p className="text-xs font-semibold md:text-sm text-red-600 leading-6">
+              注意：部分日历应用（如Apple Calendar）可能会默认选择移除由服务器端配置的提醒，请确保订阅时已关闭应用的相关功能，以保证提醒正常生效
             </p>
           </div>
         )}
@@ -552,7 +574,7 @@ export default function CalendarPage() {
         )}
 
         {/* 日历 */}
-        {!loading && <CalendarGrid events={calendarEvents} />}
+        {!loading && <CalendarGrid events={calendarEvents} holidayData={holidayData} />}
 
         {/* 编辑按钮（仅有权限用户可见） */}
         {hasPermission && !loading && (

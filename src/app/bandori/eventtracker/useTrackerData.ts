@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { supabase } from "@/lib/supabase";
 import { useCachedFetch, updateFetchCache } from "@/hooks/useCachedFetch";
+import type { ChinaMainlandHolidayCalendarData } from "@/app/bandori/calendar/chinaMainlandHolidayCalendar";
 import type { TrackerData, TrackerResult, EventMetadata, MinimalEvent, TrackingMode } from "./types";
 
 type RawMinimalEvent = {
@@ -61,18 +62,17 @@ function resolveTrackerEventWindow(
 }
 
 /**
- * useTrackerData —— 活动追踪页面的数据获取层 Hook。
+ * useTrackerData —— 活动追踪页面的数据获取层钩子。
  *
  * 职责：
  * 1. 通过 useCachedFetch 获取活动列表、活动元数据、追踪数据
  * 2. 建立 Supabase 实时订阅，将新数据追加到 chartData 并同步回缓存
- * 3. 提供防竞态的 merge 策略，确保前台恢复后 HTTP 静默刷新不会覆盖
- *    WebSocket 已追加的更新数据点
+ * 3. 提供防竞态的数据合并策略，确保前台恢复后的接口刷新不会覆盖
+ *    实时推送已经追加的数据点
  *
- * 为什么将数据获取逻辑从 page.tsx 中抽离：
- * - page.tsx 同时承担数据获取、派生计算和 UI 渲染，职责过密
- * - 数据获取逻辑（HTTP + WebSocket + 缓存同步）本身已足够复杂，
- *   独立为 Hook 后便于单独审查和测试竞态修复的正确性
+ * 设计取舍：
+ * - 页面组件同时承担数据获取、派生计算和界面渲染时，职责边界会过于模糊
+ * - 将接口请求、实时推送与缓存同步抽离后，更便于独立审查竞态修复是否正确
  */
 export function useTrackerData(
   currentEventId: number | null,
@@ -120,6 +120,12 @@ export function useTrackerData(
       : []
   );
 
+  const { data: holidayData } = useCachedFetch<ChinaMainlandHolidayCalendarData | null>(
+    "calendar-holiday-days",
+    "/api/calendar/holiday-days",
+    (data: any) => data as ChinaMainlandHolidayCalendarData,
+  );
+
   const trackerCalendarEventMap = useMemo(() => {
     return new Map<number, TrackerCalendarEvent>((trackerCalendarEvents ?? []).map((event) => [event.event_id, event]));
   }, [trackerCalendarEvents]);
@@ -153,21 +159,21 @@ export function useTrackerData(
   );
 
   // ===== 缓存 + 前台自动刷新：追踪数据 =====
-  // monthly 模式固定使用 event_id=14 查询，其他模式使用当前选中的活动 ID
+  // 月度排行固定使用 14 号活动槽位，其余模式沿用当前选中的活动编号。
   const targetEventParam = trackingMode === "monthly" ? 14 : currentEventId;
   const trackerCacheKey = currentEventId !== null
     ? `tracker-3-${targetEventParam}-${trackingMode}-${selectedTier}`
     : null;
 
   /**
-   * 追踪数据的合并策略 —— 防止 HTTP 静默刷新覆盖 WebSocket 已追加的新数据。
+    * 追踪数据的合并策略 —— 防止接口静默刷新覆盖实时推送已追加的新数据。
    *
-   * 竞态场景：用户切回前台 → useCachedFetch 触发 HTTP 静默刷新 →
-   * 请求飞行期间 WebSocket 推送了新数据点并写入缓存 → HTTP 响应到达。
-   * 若直接覆盖缓存，WebSocket 追加的新点会丢失，图表出现回退。
+    * 竞态场景：用户切回前台后，`useCachedFetch` 触发接口静默刷新；
+    * 请求尚未返回时，实时推送已经写入了更新的数据点。若直接用接口结果覆盖缓存，
+    * 图表会丢失这段增量并出现回退。
    *
-   * 合并逻辑：以 HTTP 响应（服务端完整数据）为基准，
-   * 补入缓存中时间戳晚于 HTTP 最新点的数据（即 WebSocket 追加的增量），
+    * 合并逻辑：以接口返回的完整结果为基准，
+    * 再补入缓存中时间戳晚于接口最新点的数据，也就是实时推送期间追加的增量，
    * 确保两个数据源的结果都不会丢失。
    */
   const trackerMerge = useCallback(
@@ -176,7 +182,7 @@ export function useTrackerData(
       const latestHttpTime = httpCutoffs.length > 0
         ? httpCutoffs[httpCutoffs.length - 1].time
         : -Infinity;
-      // 保留缓存中比 HTTP 响应更新的数据点（通常是 WebSocket 在请求期间追加的）
+      // 仅保留缓存里比接口结果更新的数据点，避免覆盖实时推送的增量。
       const wsOnlyPoints = existing.cutoffs.filter(pt => pt.time > latestHttpTime);
       return {
         cutoffs: [...httpCutoffs, ...wsOnlyPoints],
@@ -198,9 +204,8 @@ export function useTrackerData(
     { merge: trackerMerge }
   );
 
-  // 用于在实时回调中获取最新的视图参数，而不需每次参数改变都重新建立 WebSocket 订阅。
-  // 为什么使用 ref：WebSocket 订阅在组件整个生命周期内只建立一次（依赖数组为空），
-  // 但回调需要判断推送数据是否匹配当前视图，ref 让回调总能读到最新参数。
+  // 订阅在组件生命周期内只建立一次，因此通过 ref 维持最新视图参数，
+  // 以便实时回调能够准确判断推送数据是否属于当前页面视图。
   const currentViewRef = useRef({ eventId: currentEventId, mode: trackingMode, tier: selectedTier });
   useEffect(() => {
     currentViewRef.current = { eventId: currentEventId, mode: trackingMode, tier: selectedTier };
@@ -238,10 +243,8 @@ export function useTrackerData(
             });
             setApiHasResult(true);
 
-            // 同步写入模块级缓存，确保切换视图再切回时看到实时追加的数据。
-            // 为什么实时推送后必须同步写缓存：若只更新了 React 状态而不更新缓存，
-            // 用户切到其他 tier 再切回来时，useCachedFetch 会从缓存读取旧数据，
-            // 丢失 WebSocket 推送的增量。
+            // 实时推送不仅要更新组件状态，也要同步写回缓存，
+            // 否则用户切换视图再返回时仍会读到旧缓存，导致增量数据丢失。
             if (view.eventId !== null) {
               const cacheKey = `tracker-3-${targetEvent}-${view.mode}-${view.tier}`;
               updateFetchCache<TrackerResult>(cacheKey, (cached) => {
@@ -262,10 +265,7 @@ export function useTrackerData(
     };
   }, []);
 
-  // HTTP 获取的追踪数据同步到本地状态
-  // 为什么需要 chartData 与 trackerResult 分离：WebSocket 实时追加直接操作 chartData，
-  // 而 trackerResult 是 useCachedFetch 的输出。将两者通过 useEffect 桥接，
-  // 使得 HTTP 刷新和实时推送都能统一反映到图表数据源上。
+  // 接口数据与本地状态分离存放，目的是让接口刷新和实时推送都能汇聚到同一份图表数据源。
   useEffect(() => {
     setChartData(trackerResult?.cutoffs ?? []);
     setApiHasResult(trackerResult?.result ?? false);
@@ -293,6 +293,7 @@ export function useTrackerData(
     startDate: resolvedCurrentEventWindow.startDate,
     endDate: resolvedCurrentEventWindow.endDate,
     chartData,
+    holidayData,
     loading,
     apiHasResult,
   };

@@ -27,6 +27,7 @@ hhwx/
 │   │       ├── eventtracker/   # Bestdori 活动追踪页面
 │   │       │   ├── layout.tsx          # 页面布局（元数据）
 │   │       │   ├── page.tsx            # 主页面组件（UI 渲染层）
+│   │       │   ├── FixedYAxis.tsx      # 图表固定纵坐标组件（与主图共享同一套刻度数据）
 │   │       │   ├── types.ts            # 共享 TypeScript 类型定义
 │   │       │   ├── constants.ts        # 档位常量、Cookie 读写工具
 │   │       │   ├── useTrackerData.ts   # 数据获取层（HTTP + Supabase 实时订阅）
@@ -36,6 +37,7 @@ hhwx/
 │   │           ├── layout.tsx          # 页面布局（元数据）
 │   │           ├── page.tsx            # 主页面（日历视图 + 订阅 + 编辑入口）
 │   │           ├── CalendarGrid.tsx    # 月视图日历网格组件（支持纯色/条纹活动横条）
+│   │           ├── chinaMainlandHolidayCalendar.ts # 中国大陆休假日/调休判断与本地回退数据
 │   │           ├── EventEditor.tsx     # 活动日程编辑面板（仅未来活动排期编辑）
 │   │           ├── options.ts          # 订阅乐队筛选选项
 │   │           └── useCalendarData.ts  # 数据获取/权限/角色解析/编辑提交 Hooks
@@ -45,6 +47,8 @@ hhwx/
 │   │               │   └── route.ts    # 检查当前登录用户是否具备日历编辑权限
 │   │               ├── events/
 │   │               │   └── route.ts    # 读取/保存活动排期字段
+│   │               ├── holiday-days/
+│   │               │   └── route.ts    # 读取中国大陆休假日/调休数据（优先 iCloud，失败时回退本地表）
 │   │               └── ics/
 │   │                   └── route.ts    # 生成可订阅的 ICS 日历数据
 │   ├── components/             # React 组件

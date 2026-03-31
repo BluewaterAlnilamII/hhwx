@@ -17,9 +17,11 @@ export type ChartDomain = {
 /**
  * useChartDomain —— 根据追踪模式和活动起止时间计算图表 X 轴域范围。
  *
- * - monthly 模式：从当月 1 日 13:00 到次月 1 日 00:00
- * - event/song 模式：从活动开始到结束后 1 秒
- * - midnights: 域内每个午夜 0:00 的时间戳列表，用于绘制日期分割竖线
+ * - 月度排行模式：默认显示“当前有效月度榜”
+ *   - 若当前时间已到本月 1 日 13:00，则显示本月 1 日 13:00 到次月 1 日 00:00
+ *   - 若当前时间尚未到本月 1 日 13:00，则继续显示上月 1 日 13:00 到本月 1 日 00:00
+ * - 活动排行与歌曲排行模式：从活动开始到结束后 1 秒
+ * - `midnights`：域内每个午夜 0:00 的时间戳列表，用于绘制日期分割竖线
  */
 export function useChartDomain(
   trackingMode: TrackingMode,
@@ -33,8 +35,20 @@ export function useChartDomain(
 
     if (trackingMode === "monthly") {
       const now = new Date();
-      domainStart = new Date(now.getFullYear(), now.getMonth(), 1, 13, 0, 0).getTime();
-      cutoffEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1, 0, 0, 0).getTime();
+      const monthAnchor = new Date(now.getFullYear(), now.getMonth(), 1, 13, 0, 0);
+      const effectiveMonthStart = now.getTime() < monthAnchor.getTime()
+        ? new Date(now.getFullYear(), now.getMonth() - 1, 1, 13, 0, 0)
+        : monthAnchor;
+
+      domainStart = effectiveMonthStart.getTime();
+      cutoffEnd = new Date(
+        effectiveMonthStart.getFullYear(),
+        effectiveMonthStart.getMonth() + 1,
+        1,
+        0,
+        0,
+        0,
+      ).getTime();
       domainEnd = cutoffEnd;
     } else if (startDate && endDate) {
       domainStart = startDate;
@@ -63,9 +77,9 @@ export function useChartDomain(
  * - speed（瞬时速度）：相邻两点的 EP 差 / 时间差（单位 P/h）
  * - speed24（24h 速度）：当前点与约 24 小时前那个点的 EP 差 / 天数差（单位 P/d）
  *
- * 关于 24h 速度为什么使用 23 小时 55 分阈值（而非整 24 小时）：
- * 服务端采集间隔约为 5 分钟，严格按 24h 可能刚好卡在两个采集点之间导致
- * 找不到足够远的参考点。放宽 5 分钟的容差确保几乎总能命中一个有效的参考点。
+ * 设计原因：24 小时速度使用 23 小时 55 分阈值，而不是严格的 24 小时。
+ * 服务端采集间隔约为 5 分钟，若完全按 24 小时截取，容易恰好落在两个采集点之间，
+ * 导致找不到足够远的参考点。放宽 5 分钟容差可以稳定命中有效样本。
  */
 export function useProcessedData(
   chartData: TrackerData[],
@@ -76,9 +90,9 @@ export function useProcessedData(
   return useMemo(() => {
     let raw = [...chartData];
 
-    // 当有有效数据且域起点确定时，在序列头部插入原点 (domainStart, 0)，
-    // 使折线图从活动开始时刻画起，而非从第一个采集点开始。
-    // song 模式不插入原点，因为歌曲排行无明确统一起始时间。
+    // 当域起点明确且存在有效数据时，在序列头部补一个原点，
+    // 让折线从活动起点开始绘制，而不是从第一个采集点突然出现。
+    // 歌曲排行没有统一的起始时刻，因此不补原点。
     if (apiHasResult && typeof domainStart === "number" && trackingMode !== "song") {
       if (raw.length === 0 || raw[0].time > domainStart) {
         raw = [{ time: domainStart, ep: 0 }, ...raw];
@@ -87,9 +101,9 @@ export function useProcessedData(
 
     const processed: TrackerData[] = raw.map(d => ({ ...d }));
 
-    // l24 是 24h 速度滑动窗口的左指针（双指针法）
+    // `l24` 表示 24 小时速度滑动窗口的左指针，采用双指针方式推进。
     let l24 = 0;
-    // 23 小时 55 分阈值，原因见函数注释
+    // 23 小时 55 分阈值的选取原因见上方函数说明。
     const threshold24 = (23 * 60 + 55) * 60 * 1000;
 
     for (let r = 0; r < processed.length; r++) {
@@ -126,9 +140,8 @@ export function useProcessedData(
 /**
  * useEventStatus —— 根据活动时间域判断当前活动状态。
  *
- * 为什么不使用每秒更新的 Date.now()：
- * 活动状态在切换活动时才需重算，而每秒更新会导致包含 Recharts 图表的父组件
- * 全量重渲染，造成不必要的性能开销。改为 useMemo 仅在域边界变化时才触发。
+ * 设计取舍：活动状态只在域边界变化时才需要重算。
+ * 若按秒级更新时间反复读取当前时间，会让包含图表的父组件发生无意义的整树重渲染。
  */
 export function useEventStatus(
   domainStart: number | "auto",
@@ -197,7 +210,7 @@ export function useFinalDisplayedData(
   }, [fullProcessedData, cutoffEnd, status, showInstantProjection, showDayProjection]);
 }
 
-/** 自定义 Y 轴刻度生成器，使用 "Nice Numbers" 算法自动计算人类友好的刻度间距。 */
+/** 自定义 Y 轴刻度生成器，使用“友好刻度”算法自动计算更易读的刻度间距。 */
 export function generateYTicks(data: TrackerData[]): { ticks: number[] | undefined; domain: [number | string, number | string] } {
   if (data.length === 0) return { ticks: undefined, domain: [0, "dataMax"] };
 

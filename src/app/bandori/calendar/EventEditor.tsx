@@ -85,8 +85,7 @@ function addDays(dateText: string, days: number): string {
 
 /**
  * 级联更新：从指定索引开始，根据 has_rest_day 和 duration_days 重新计算后续活动的日期。
- * 为什么这么做：编辑器需要确保后续活动的日期随前面的修改自动调整，
- * 包括拖拽排序、修改开始日期、切换无邦日等操作。
+ * 这样可以在拖拽排序、修改开始日期或切换无邦日后，保持后续活动时间链条连续。
  */
 function recalculateFrom(events: EditableEvent[], fromIndex: number, lockedUntilDate: string | null): EditableEvent[] {
   const result = [...events];
@@ -339,8 +338,7 @@ export default function EventEditor({ allEvents, onSaved }: EventEditorProps) {
         };
       }
 
-      // 如果新开始日期超过了下一个活动的开始日期，需要重新排序
-      // 为什么这么做：用户修改开始日期后如果时间跑到了其它活动之后，自动重排
+      // 若新的开始日期越过了后续活动，则重新排序以维持时间顺序。
       const sorted = [...updated].sort((a, b) => {
         if (a.is_skipped !== b.is_skipped) return a.is_skipped ? 1 : -1;
         return (a.predicted_start || "9").localeCompare(b.predicted_start || "9");
