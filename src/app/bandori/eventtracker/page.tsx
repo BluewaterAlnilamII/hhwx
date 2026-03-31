@@ -52,6 +52,7 @@ const TOOLTIP_OFFSET = 12;
 const TOOLTIP_EDGE_PADDING = 8;
 const FIXED_Y_AXIS_WIDTH = 38;
 const CHART_MARGIN = { top: 20, right: 5, left: 0, bottom: 20 } as const;
+const X_AXIS_HEIGHT = 30;
 
 type HoverTooltipState = {
   active: boolean;
@@ -191,7 +192,6 @@ export default function EventTrackerPage() {
   const isProgrammaticScrollRef = useRef(false);
   const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [hoverTooltip, setHoverTooltip] = useState<HoverTooltipState | null>(null);
-  const [horizontalScrollbarHeight, setHorizontalScrollbarHeight] = useState(0);
   const [chartViewportHeight, setChartViewportHeight] = useState(400);
 
   // ===== 数据获取层 =====
@@ -337,9 +337,7 @@ export default function EventTrackerPage() {
       return;
     }
 
-    const nextScrollbarHeight = Math.max(0, viewport.offsetHeight - viewport.clientHeight);
     const nextChartViewportHeight = viewport.offsetHeight;
-    setHorizontalScrollbarHeight((prev) => (prev === nextScrollbarHeight ? prev : nextScrollbarHeight));
     setChartViewportHeight((prev) => (prev === nextChartViewportHeight ? prev : nextChartViewportHeight));
   }, []);
 
@@ -370,7 +368,8 @@ export default function EventTrackerPage() {
     let top = currentHoverTooltip.coordinate.y - tooltipHeight / 2;
     top = Math.max(TOOLTIP_EDGE_PADDING, Math.min(top, containerHeight - tooltipHeight - TOOLTIP_EDGE_PADDING));
 
-    tooltip.style.transform = `translate3d(${left}px, ${top}px, 0)`;
+    tooltip.style.left = `${Math.round(left)}px`;
+    tooltip.style.top = `${Math.round(top)}px`;
   }, []);
 
   const scheduleTooltipPositionUpdate = useCallback(() => {
@@ -735,10 +734,10 @@ export default function EventTrackerPage() {
                         ticks={yTicks}
                         domain={yDomainInfo}
                         chartHeight={chartViewportHeight}
-                        scrollbarHeight={horizontalScrollbarHeight}
                         axisWidth={FIXED_Y_AXIS_WIDTH}
                         topMargin={CHART_MARGIN.top}
                         bottomMargin={CHART_MARGIN.bottom}
+                        xAxisHeight={X_AXIS_HEIGHT}
                       />
 
                       <div
@@ -820,6 +819,7 @@ export default function EventTrackerPage() {
                                 domain={[domainStart, domainEnd]}
                                 type="number"
                                 ticks={midnights}
+                                height={X_AXIS_HEIGHT}
                                 tickFormatter={(unixTime) => format(unixTime, "MM/dd")}
                                 stroke="#6B7280"
                                 fontSize={12}
@@ -894,8 +894,8 @@ export default function EventTrackerPage() {
                             {hoverTooltip?.active && hoverTooltip.payload?.length ? (
                               <div
                                 ref={tooltipRef}
-                                className="pointer-events-none absolute left-0 top-0 z-20 will-change-transform"
-                                style={{ transform: "translate3d(-9999px, 0, 0)", transition: "transform 50ms linear" }}
+                                className="pointer-events-none absolute z-20"
+                                style={{ left: "-9999px", top: 0 }}
                               >
                                 <TrackerTooltip
                                   active={hoverTooltip.active}

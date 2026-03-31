@@ -4,10 +4,10 @@ interface FixedYAxisProps {
   ticks: number[] | undefined;
   domain: [number | string, number | string];
   chartHeight: number;
-  scrollbarHeight: number;
   axisWidth: number;
   topMargin: number;
   bottomMargin: number;
+  xAxisHeight: number;
 }
 
 function formatTrackerYAxisTick(value: number): string {
@@ -44,15 +44,15 @@ export default function FixedYAxis({
   ticks,
   domain,
   chartHeight,
-  scrollbarHeight,
   axisWidth,
   topMargin,
   bottomMargin,
+  xAxisHeight,
 }: FixedYAxisProps) {
   const axisTicks = ticks ?? [];
   const domainMin = normalizeNumericBoundary(domain[0], axisTicks[0] ?? 0);
   const domainMax = normalizeNumericBoundary(domain[1], axisTicks[axisTicks.length - 1] ?? domainMin);
-  const usableHeight = Math.max(0, chartHeight - scrollbarHeight - topMargin - bottomMargin);
+  const usableHeight = Math.max(0, chartHeight - topMargin - bottomMargin - xAxisHeight);
   const domainSpan = domainMax - domainMin;
 
   return (
@@ -71,7 +71,7 @@ export default function FixedYAxis({
 
       {axisTicks.map((tickValue) => {
         const progress = domainSpan <= 0 ? 1 : (tickValue - domainMin) / domainSpan;
-        const top = topMargin + usableHeight * (1 - progress);
+        const top = Math.round(topMargin + usableHeight * (1 - progress));
 
         return (
           <span
