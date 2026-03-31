@@ -185,6 +185,8 @@ export default function EventTrackerPage() {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const chartViewportRef = useRef<HTMLDivElement>(null);
   const tooltipRef = useRef<HTMLDivElement>(null);
+  const hoverTooltipRef = useRef<HoverTooltipState | null>(null);
+  const tooltipAnimationFrameRef = useRef<number | null>(null);
   const isUserScrollingRef = useRef(false);
   const isProgrammaticScrollRef = useRef(false);
   const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -342,7 +344,8 @@ export default function EventTrackerPage() {
   }, []);
 
   const updateTooltipPosition = useCallback(() => {
-    if (!hoverTooltip?.active || !chartViewportRef.current || !tooltipRef.current || !scrollContainerRef.current) {
+    const currentHoverTooltip = hoverTooltipRef.current;
+    if (!currentHoverTooltip?.active || !chartViewportRef.current || !tooltipRef.current || !scrollContainerRef.current) {
       return;
     }
 
@@ -355,21 +358,31 @@ export default function EventTrackerPage() {
     const visibleLeft = viewport.scrollLeft;
     const visibleRight = viewport.scrollLeft + viewport.clientWidth;
 
-    let left = hoverTooltip.coordinate.x + TOOLTIP_OFFSET;
+    let left = currentHoverTooltip.coordinate.x + TOOLTIP_OFFSET;
     if (left + tooltipWidth > visibleRight - TOOLTIP_EDGE_PADDING) {
-      left = hoverTooltip.coordinate.x - tooltipWidth - TOOLTIP_OFFSET;
+      left = currentHoverTooltip.coordinate.x - tooltipWidth - TOOLTIP_OFFSET;
     }
     left = Math.max(
       visibleLeft + TOOLTIP_EDGE_PADDING,
       Math.min(left, visibleRight - tooltipWidth - TOOLTIP_EDGE_PADDING),
     );
 
-    let top = hoverTooltip.coordinate.y - tooltipHeight / 2;
+    let top = currentHoverTooltip.coordinate.y - tooltipHeight / 2;
     top = Math.max(TOOLTIP_EDGE_PADDING, Math.min(top, containerHeight - tooltipHeight - TOOLTIP_EDGE_PADDING));
 
-    tooltip.style.left = `${left}px`;
-    tooltip.style.top = `${top}px`;
-  }, [hoverTooltip]);
+    tooltip.style.transform = `translate3d(${left}px, ${top}px, 0)`;
+  }, []);
+
+  const scheduleTooltipPositionUpdate = useCallback(() => {
+    if (tooltipAnimationFrameRef.current !== null) {
+      return;
+    }
+
+    tooltipAnimationFrameRef.current = requestAnimationFrame(() => {
+      tooltipAnimationFrameRef.current = null;
+      updateTooltipPosition();
+    });
+  }, [updateTooltipPosition]);
 
   // ===== 图表容器尺寸变化时默认将视角聚焦到最新真实数据点附近 =====
   useEffect(() => {
@@ -378,7 +391,7 @@ export default function EventTrackerPage() {
 
     const handleScroll = () => {
       if (isProgrammaticScrollRef.current) {
-        updateTooltipPosition();
+        scheduleTooltipPositionUpdate();
         return;
       }
 
@@ -389,14 +402,14 @@ export default function EventTrackerPage() {
       scrollTimeoutRef.current = setTimeout(() => {
         isUserScrollingRef.current = false;
       }, 200);
-      updateTooltipPosition();
+      scheduleTooltipPositionUpdate();
     };
 
     el.addEventListener("scroll", handleScroll);
 
     const resizeObserver = new ResizeObserver(() => {
       syncScrollbarMetrics();
-      updateTooltipPosition();
+      scheduleTooltipPositionUpdate();
       if (!isUserScrollingRef.current) {
         focusViewportNearLatestDataPoint();
       }
@@ -412,25 +425,27 @@ export default function EventTrackerPage() {
         clearTimeout(scrollTimeoutRef.current);
         scrollTimeoutRef.current = null;
       }
+      if (tooltipAnimationFrameRef.current !== null) {
+        cancelAnimationFrame(tooltipAnimationFrameRef.current);
+        tooltipAnimationFrameRef.current = null;
+      }
     };
-  }, [focusViewportNearLatestDataPoint, syncScrollbarMetrics, updateTooltipPosition]);
+  }, [focusViewportNearLatestDataPoint, scheduleTooltipPositionUpdate, syncScrollbarMetrics]);
 
   useEffect(() => {
     if (!isUserScrollingRef.current) {
       focusViewportNearLatestDataPoint();
     }
     syncScrollbarMetrics();
-    requestAnimationFrame(() => {
-      updateTooltipPosition();
-    });
-  }, [focusViewportNearLatestDataPoint, zoomWidthMultiplier, currentEventId, trackingMode, selectedTier, syncScrollbarMetrics, updateTooltipPosition]);
+    scheduleTooltipPositionUpdate();
+  }, [focusViewportNearLatestDataPoint, zoomWidthMultiplier, currentEventId, trackingMode, selectedTier, scheduleTooltipPositionUpdate, syncScrollbarMetrics]);
 
   useLayoutEffect(() => {
     if (!hoverTooltip?.active) {
       return;
     }
-    updateTooltipPosition();
-  }, [hoverTooltip, zoomWidthMultiplier, updateTooltipPosition]);
+    scheduleTooltipPositionUpdate();
+  }, [hoverTooltip, zoomWidthMultiplier, scheduleTooltipPositionUpdate]);
 
   const { ticks: yTicks, domain: yDomainInfo } = useMemo(
     () => generateYTicks(finalDisplayedData),
@@ -738,11 +753,12 @@ export default function EventTrackerPage() {
                                 margin={CHART_MARGIN}
                                 onMouseMove={(state: any) => {
                                   if (!state?.isTooltipActive || !state?.activeCoordinate || !state?.activePayload?.length) {
+                                    hoverTooltipRef.current = null;
                                     setHoverTooltip(null);
                                     return;
                                   }
 
-                                  setHoverTooltip({
+                                  const nextHoverTooltip = {
                                     active: true,
                                     coordinate: {
                                       x: state.activeCoordinate.x,
@@ -750,9 +766,28 @@ export default function EventTrackerPage() {
                                     },
                                     label: state.activeLabel,
                                     payload: state.activePayload,
+                                  };
+
+                                  hoverTooltipRef.current = nextHoverTooltip;
+                                  scheduleTooltipPositionUpdate();
+
+                                  setHoverTooltip((previous) => {
+                                    if (
+                                      previous?.active &&
+                                      previous.label === nextHoverTooltip.label &&
+                                      previous.payload?.[0]?.payload?.time === nextHoverTooltip.payload?.[0]?.payload?.time &&
+                                      previous.payload?.[0]?.payload?.projectionType === nextHoverTooltip.payload?.[0]?.payload?.projectionType
+                                    ) {
+                                      return previous;
+                                    }
+
+                                    return nextHoverTooltip;
                                   });
                                 }}
-                                onMouseLeave={() => setHoverTooltip(null)}
+                                onMouseLeave={() => {
+                                  hoverTooltipRef.current = null;
+                                  setHoverTooltip(null);
+                                }}
                               >
                               {nonWorkingDayBands.map((band) => (
                                 <ReferenceArea
@@ -859,8 +894,8 @@ export default function EventTrackerPage() {
                             {hoverTooltip?.active && hoverTooltip.payload?.length ? (
                               <div
                                 ref={tooltipRef}
-                                className="pointer-events-none absolute z-20"
-                                style={{ left: "-9999px", top: 0 }}
+                                className="pointer-events-none absolute left-0 top-0 z-20 will-change-transform"
+                                style={{ transform: "translate3d(-9999px, 0, 0)", transition: "transform 50ms linear" }}
                               >
                                 <TrackerTooltip
                                   active={hoverTooltip.active}

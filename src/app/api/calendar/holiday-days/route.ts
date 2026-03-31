@@ -7,6 +7,8 @@ import {
 const ICLOUD_HOLIDAY_URL = "https://p10-calendars.icloud.com/holiday/CN_zh.ics";
 const WORK_HOLIDAY_TYPE = "WORK-HOLIDAY";
 const ALTERNATE_WORKDAY_TYPE = "ALTERNATE-WORKDAY";
+const UTC8_OFFSET_MINUTES = 8 * 60;
+const MILLISECONDS_PER_DAY = 86400000;
 
 export const dynamic = "force-dynamic";
 
@@ -41,25 +43,30 @@ function parseIcsDate(value: string | null | undefined): Date | null {
   return new Date(`${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}T00:00:00+08:00`);
 }
 
-function formatDateKey(date: Date): string {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
+function formatDateKeyInUtc8(timestamp: number): string {
+  const utc8Date = new Date(timestamp + UTC8_OFFSET_MINUTES * 60 * 1000);
+  const year = utc8Date.getUTCFullYear();
+  const month = String(utc8Date.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(utc8Date.getUTCDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
+}
+
+function formatDateKey(date: Date): string {
+  return formatDateKeyInUtc8(date.getTime());
 }
 
 function enumerateDateRange(startDate: Date, endDateExclusive: Date | null): string[] {
   const values: string[] = [];
-  const cursor = new Date(startDate);
-  const endInclusive = endDateExclusive ? new Date(endDateExclusive) : new Date(startDate);
+  let cursor = startDate.getTime();
+  let endInclusive = endDateExclusive ? endDateExclusive.getTime() : startDate.getTime();
 
   if (endDateExclusive) {
-    endInclusive.setDate(endInclusive.getDate() - 1);
+    endInclusive -= MILLISECONDS_PER_DAY;
   }
 
-  while (cursor.getTime() <= endInclusive.getTime()) {
-    values.push(formatDateKey(cursor));
-    cursor.setDate(cursor.getDate() + 1);
+  while (cursor <= endInclusive) {
+    values.push(formatDateKeyInUtc8(cursor));
+    cursor += MILLISECONDS_PER_DAY;
   }
 
   return values;

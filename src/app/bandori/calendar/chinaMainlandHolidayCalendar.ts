@@ -1,3 +1,21 @@
+const UTC8_OFFSET_MINUTES = 8 * 60;
+const MILLISECONDS_PER_DAY = 86400000;
+
+/** 将毫秒时间戳映射到 UTC+8 日期键。 */
+function formatDateKeyInUtc8(timestamp: number): string {
+  const utc8Date = new Date(timestamp + UTC8_OFFSET_MINUTES * 60 * 1000);
+  const year = utc8Date.getUTCFullYear();
+  const month = String(utc8Date.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(utc8Date.getUTCDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+/** 基于 UTC+8 日期键计算星期编号，0 表示周日，6 表示周六。 */
+function getUtc8Weekday(dateKey: string): number {
+  const [yearText, monthText, dayText] = dateKey.split("-");
+  return new Date(Date.UTC(Number(yearText), Number(monthText) - 1, Number(dayText))).getUTCDay();
+}
+
 /** 按年份维护的法定休息日区间，格式为“开始日期:结束日期”。 */
 const REST_DAY_RANGES: Record<number, string[]> = {
   2024: [
@@ -53,23 +71,20 @@ export interface ChinaMainlandHolidayLookup {
   makeupWorkDays: Set<string>;
 }
 
-/** 将日期对象格式化为 YYYY-MM-DD 键值。 */
+/** 将日期对象格式化为 UTC+8 下的 YYYY-MM-DD 键值。 */
 function formatDateKey(date: Date): string {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
+  return formatDateKeyInUtc8(date.getTime());
 }
 
 /** 枚举闭区间内的所有日期键，用于将区间配置展开成逐日集合。 */
 function enumerateDateRange(startDateText: string, endDateText: string): string[] {
   const values: string[] = [];
-  const cursor = new Date(`${startDateText}T00:00:00+08:00`);
-  const end = new Date(`${endDateText}T00:00:00+08:00`);
+  let cursor = new Date(`${startDateText}T00:00:00+08:00`).getTime();
+  const end = new Date(`${endDateText}T00:00:00+08:00`).getTime();
 
-  while (cursor.getTime() <= end.getTime()) {
-    values.push(formatDateKey(cursor));
-    cursor.setDate(cursor.getDate() + 1);
+  while (cursor <= end) {
+    values.push(formatDateKeyInUtc8(cursor));
+    cursor += MILLISECONDS_PER_DAY;
   }
 
   return values;
@@ -135,6 +150,7 @@ export function getFallbackChinaMainlandHolidayCalendarData(): ChinaMainlandHoli
  */
 export function isChinaMainlandRestDay(date: Date, holidayLookup?: ChinaMainlandHolidayLookup | null): boolean {
   const dateKey = formatDateKey(date);
+  const weekday = getUtc8Weekday(dateKey);
 
   if (holidayLookup) {
     if (holidayLookup.makeupWorkDays.has(dateKey)) {
@@ -145,11 +161,10 @@ export function isChinaMainlandRestDay(date: Date, holidayLookup?: ChinaMainland
       return true;
     }
 
-    const weekday = date.getDay();
     return weekday === 0 || weekday === 6;
   }
 
-  const year = date.getFullYear();
+  const year = Number(dateKey.slice(0, 4));
   const makeupWorkdays = MAKEUP_WORKDAY_MAP[year];
 
   if (makeupWorkdays?.has(dateKey)) {
@@ -161,6 +176,5 @@ export function isChinaMainlandRestDay(date: Date, holidayLookup?: ChinaMainland
     return true;
   }
 
-  const weekday = date.getDay();
   return weekday === 0 || weekday === 6;
 }
