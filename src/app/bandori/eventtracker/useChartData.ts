@@ -14,6 +14,34 @@ export type ChartDomain = {
   midnights: number[];
 };
 
+type MonthlyRankingWindow = {
+  effectiveMonthStart: Date;
+  domainStart: number;
+  cutoffEnd: number;
+  monthId: number;
+};
+
+export function getMonthlyRankingWindow(referenceTime: Date = new Date()): MonthlyRankingWindow {
+  const monthAnchor = new Date(referenceTime.getFullYear(), referenceTime.getMonth(), 1, 13, 0, 0);
+  const effectiveMonthStart = referenceTime.getTime() < monthAnchor.getTime()
+    ? new Date(referenceTime.getFullYear(), referenceTime.getMonth() - 1, 1, 13, 0, 0)
+    : monthAnchor;
+
+  return {
+    effectiveMonthStart,
+    domainStart: effectiveMonthStart.getTime(),
+    cutoffEnd: new Date(
+      effectiveMonthStart.getFullYear(),
+      effectiveMonthStart.getMonth() + 1,
+      1,
+      0,
+      0,
+      0,
+    ).getTime(),
+    monthId: (effectiveMonthStart.getFullYear() - 2025) * 12 + effectiveMonthStart.getMonth(),
+  };
+}
+
 /**
  * useChartDomain —— 根据追踪模式和活动起止时间计算图表 X 轴域范围。
  *
@@ -34,21 +62,9 @@ export function useChartDomain(
     let cutoffEnd: number | null = null;
 
     if (trackingMode === "monthly") {
-      const now = new Date();
-      const monthAnchor = new Date(now.getFullYear(), now.getMonth(), 1, 13, 0, 0);
-      const effectiveMonthStart = now.getTime() < monthAnchor.getTime()
-        ? new Date(now.getFullYear(), now.getMonth() - 1, 1, 13, 0, 0)
-        : monthAnchor;
-
-      domainStart = effectiveMonthStart.getTime();
-      cutoffEnd = new Date(
-        effectiveMonthStart.getFullYear(),
-        effectiveMonthStart.getMonth() + 1,
-        1,
-        0,
-        0,
-        0,
-      ).getTime();
+      const monthlyWindow = getMonthlyRankingWindow();
+      domainStart = monthlyWindow.domainStart;
+      cutoffEnd = monthlyWindow.cutoffEnd;
       domainEnd = cutoffEnd;
     } else if (startDate && endDate) {
       domainStart = startDate;

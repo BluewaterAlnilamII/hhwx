@@ -5,6 +5,7 @@ import { supabase } from "@/lib/supabase";
 import { useCachedFetch, updateFetchCache } from "@/hooks/useCachedFetch";
 import type { ChinaMainlandHolidayCalendarData } from "@/app/bandori/calendar/chinaMainlandHolidayCalendar";
 import type { TrackerData, TrackerResult, EventMetadata, MinimalEvent, TrackingMode } from "./types";
+import { getMonthlyRankingWindow } from "./useChartData";
 
 type RawMinimalEvent = {
   id: number;
@@ -159,9 +160,10 @@ export function useTrackerData(
   );
 
   // ===== 缓存 + 前台自动刷新：追踪数据 =====
-  // 月度排行固定使用 14 号活动槽位，其余模式沿用当前选中的活动编号。
-  const targetEventParam = trackingMode === "monthly" ? 14 : currentEventId;
-  const trackerCacheKey = currentEventId !== null
+  // 月度排行按当前有效月份自动切换 month id，其余模式沿用当前选中的活动编号。
+  const monthlyWindow = getMonthlyRankingWindow();
+  const targetEventParam = trackingMode === "monthly" ? monthlyWindow.monthId : currentEventId;
+  const trackerCacheKey = targetEventParam !== null
     ? `tracker-3-${targetEventParam}-${trackingMode}-${selectedTier}`
     : null;
 
@@ -194,7 +196,7 @@ export function useTrackerData(
 
   const { data: trackerResult, loading } = useCachedFetch<TrackerResult>(
     trackerCacheKey,
-    currentEventId !== null
+    targetEventParam !== null
       ? `/api/tracker/data?server=3&event=${targetEventParam}&type=${trackingMode}&tier=${selectedTier}`
       : null,
     (data: any) => ({
@@ -206,10 +208,10 @@ export function useTrackerData(
 
   // 订阅在组件生命周期内只建立一次，因此通过 ref 维持最新视图参数，
   // 以便实时回调能够准确判断推送数据是否属于当前页面视图。
-  const currentViewRef = useRef({ eventId: currentEventId, mode: trackingMode, tier: selectedTier });
+  const currentViewRef = useRef({ targetEventId: targetEventParam, mode: trackingMode, tier: selectedTier });
   useEffect(() => {
-    currentViewRef.current = { eventId: currentEventId, mode: trackingMode, tier: selectedTier };
-  }, [currentEventId, trackingMode, selectedTier]);
+    currentViewRef.current = { targetEventId: targetEventParam, mode: trackingMode, tier: selectedTier };
+  }, [targetEventParam, trackingMode, selectedTier]);
 
   // ===== Supabase 实时订阅：监听新追踪数据插入 =====
   useEffect(() => {
@@ -223,11 +225,10 @@ export function useTrackerData(
           if (!newRow) return;
 
           const view = currentViewRef.current;
-          const targetEvent = view.mode === "monthly" ? 14 : view.eventId;
 
           // 仅当新数据匹配当前图表视图（活动+模式+排名）时才追加
           if (
-            newRow.event_id === targetEvent &&
+            newRow.event_id === view.targetEventId &&
             newRow.type === view.mode &&
             newRow.tier === view.tier
           ) {
@@ -245,8 +246,8 @@ export function useTrackerData(
 
             // 实时推送不仅要更新组件状态，也要同步写回缓存，
             // 否则用户切换视图再返回时仍会读到旧缓存，导致增量数据丢失。
-            if (view.eventId !== null) {
-              const cacheKey = `tracker-3-${targetEvent}-${view.mode}-${view.tier}`;
+            if (view.targetEventId !== null) {
+              const cacheKey = `tracker-3-${view.targetEventId}-${view.mode}-${view.tier}`;
               updateFetchCache<TrackerResult>(cacheKey, (cached) => {
                 const prevCutoffs = cached?.cutoffs ?? [];
                 if (prevCutoffs.length > 0 && time <= prevCutoffs[prevCutoffs.length - 1].time) {
