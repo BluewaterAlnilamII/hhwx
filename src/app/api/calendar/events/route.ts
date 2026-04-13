@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { fetchBandoriEventRecords } from "@/lib/bandori-events-server";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
 
 const CHARACTER_SELECT_FIELDS = [
@@ -96,6 +97,31 @@ function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function toChinaDateText(timestampMs: number) {
+  return new Date(timestampMs + 8 * 60 * 60 * 1000).toISOString().slice(0, 10);
+}
+
+function shouldPersistScheduleEvent(
+  event: {
+    predicted_end: string | null;
+  },
+  source: {
+    cn_end_at: number | null;
+  },
+  nowMs: number,
+  todayChinaDate: string,
+) {
+  if (source.cn_end_at !== null && Number(source.cn_end_at) < nowMs) {
+    return false;
+  }
+
+  if (source.cn_end_at === null && event.predicted_end && event.predicted_end < todayChinaDate) {
+    return false;
+  }
+
+  return true;
+}
+
 async function updateCalendarEvent(
   serviceClient: Awaited<ReturnType<typeof createServiceClient>>,
   ev: {
@@ -109,21 +135,20 @@ async function updateCalendarEvent(
   },
 ) {
   const updatePayload: Record<string, unknown> = {
+    event_id: ev.event_id,
     predicted_start: ev.predicted_start,
     predicted_end: ev.predicted_end,
     duration_days: ev.duration_days,
     has_rest_day: ev.has_rest_day,
     sort_order: ev.sort_order,
     is_skipped: ev.is_skipped,
-    updated_at: new Date().toISOString(),
   };
 
   for (let attempt = 1; attempt <= UPDATE_MAX_RETRIES; attempt++) {
     try {
       const result = await serviceClient
-        .from("gbp_event")
-        .update(updatePayload)
-        .eq("event_id", ev.event_id);
+        .from("gbp_event_schedule_cn")
+        .upsert(updatePayload, { onConflict: "event_id" });
 
       if (!result.error) {
         return { eventId: ev.event_id, error: null };
@@ -161,20 +186,12 @@ async function updateCalendarEvent(
 
 /**
  * GET /api/calendar/events
- * 读取 gbp_event 表全部数据，返回供日历渲染的活动列表。
+ * 读取本地活动目录三表合并结果，返回供日历渲染的活动列表。
  */
 export async function GET() {
   try {
     const serviceClient = await createServiceClient();
-    const { data, error } = await serviceClient
-      .from("gbp_event")
-      .select("*")
-      .order("sort_order", { ascending: true });
-
-    if (error) {
-      console.error("gbp_event 查询失败:", error);
-      return NextResponse.json({ error: "数据库查询失败" }, { status: 500 });
-    }
+    const events = await fetchBandoriEventRecords();
 
     const { data: characters, error: characterError } = await serviceClient
       .from("gbp_characters")
@@ -186,7 +203,7 @@ export async function GET() {
     }
 
     return NextResponse.json({
-      events: data ?? [],
+      events,
       characters: characterError ? [] : (characters ?? []),
     });
   } catch (error) {
@@ -242,8 +259,87 @@ export async function POST(request: Request) {
     }
 
     const nowMs = Date.now();
+    const todayChinaDate = toChinaDateText(nowMs);
+    const eventIds = Array.from(
+      new Set(
+        events
+          .map((event) => Number(event.event_id))
+          .filter((eventId) => Number.isFinite(eventId) && eventId > 0),
+      ),
+    );
+
+    if (eventIds.length === 0) {
+      return NextResponse.json({ success: true, updated: 0, skippedPast: 0 });
+    }
+
+    const requestEventMap = new Map(events.map((event) => [Number(event.event_id), event]));
+
+    const { data: lifecycleRows, error: lifecycleError } = await serviceClient
+      .from("gbp_events")
+      .select("event_id, cn_end_at")
+      .in("event_id", eventIds);
+
+    if (lifecycleError) {
+      return NextResponse.json(
+        { error: "读取活动生命周期失败", details: lifecycleError.message },
+        { status: 500 },
+      );
+    }
+
+    const lifecycleMap = new Map<number, { event_id: number; cn_end_at: number | null }>(
+      (lifecycleRows ?? []).map((row) => [Number(row.event_id), { event_id: Number(row.event_id), cn_end_at: row.cn_end_at ? Number(row.cn_end_at) : null }]),
+    );
+
+    const unknownEventIds = eventIds.filter((eventId) => !lifecycleMap.has(eventId));
+    if (unknownEventIds.length > 0) {
+      return NextResponse.json(
+        {
+          error: "请求中包含未知活动",
+          details: `未知 event_id: ${unknownEventIds.slice(0, 10).join(", ")}`,
+        },
+        { status: 400 },
+      );
+    }
+
+    const ignoredPastEventIds = eventIds.filter((eventId) => {
+      const source = lifecycleMap.get(eventId);
+      if (!source) return false;
+
+      const requestEvent = requestEventMap.get(eventId);
+      if (!requestEvent) return false;
+
+      return !shouldPersistScheduleEvent(requestEvent, source, nowMs, todayChinaDate);
+    });
+
+    if (ignoredPastEventIds.length > 0) {
+      const deleteResult = await serviceClient
+        .from("gbp_event_schedule_cn")
+        .delete()
+        .in("event_id", ignoredPastEventIds);
+
+      if (deleteResult.error) {
+        return NextResponse.json(
+          {
+            error: "清理历史排期失败",
+            details: deleteResult.error.message,
+          },
+          { status: 500 },
+        );
+      }
+    }
+
+    const editableEvents = events.filter((event) => {
+      const source = lifecycleMap.get(Number(event.event_id));
+      if (!source) return false;
+      return shouldPersistScheduleEvent(event, source, nowMs, todayChinaDate);
+    });
+
+    if (editableEvents.length === 0) {
+      return NextResponse.json({ success: true, updated: 0, skippedPast: ignoredPastEventIds.length });
+    }
+
     const { data: ongoingEvent, error: ongoingError } = await serviceClient
-      .from("gbp_event")
+      .from("gbp_events")
       .select("event_id, cn_end_at")
       .not("cn_start_at", "is", null)
       .not("cn_end_at", "is", null)
@@ -265,7 +361,7 @@ export async function POST(request: Request) {
       lockedUntil.setDate(lockedUntil.getDate() + 1);
       const earliestSelectableDate = lockedUntil.toISOString().slice(0, 10);
 
-      const invalidEvent = events.find(
+      const invalidEvent = editableEvents.find(
         (event) => !event.is_skipped && event.predicted_start && event.predicted_start < earliestSelectableDate,
       );
 
@@ -281,7 +377,7 @@ export async function POST(request: Request) {
     }
 
     // 4. 冲突检测：按 predicted_start 排序，检查相邻活动无时间重叠
-    const activeEvents = events
+    const activeEvents = editableEvents
       .filter(e => !e.is_skipped && e.predicted_start && e.predicted_end)
       .sort((a, b) => (a.predicted_start! > b.predicted_start! ? 1 : -1));
 
@@ -303,8 +399,8 @@ export async function POST(request: Request) {
       error: { message?: string | null; details?: string | null; hint?: string | null };
     }> = [];
 
-    for (let index = 0; index < events.length; index += UPDATE_BATCH_SIZE) {
-      const batch = events.slice(index, index + UPDATE_BATCH_SIZE);
+    for (let index = 0; index < editableEvents.length; index += UPDATE_BATCH_SIZE) {
+      const batch = editableEvents.slice(index, index + UPDATE_BATCH_SIZE);
       const batchResults = await Promise.all(batch.map((event) => updateCalendarEvent(serviceClient, event)));
 
       for (const result of batchResults) {
@@ -330,7 +426,11 @@ export async function POST(request: Request) {
       );
     }
 
-    return NextResponse.json({ success: true, updated: events.length });
+    return NextResponse.json({
+      success: true,
+      updated: editableEvents.length,
+      skippedPast: ignoredPastEventIds.length,
+    });
   } catch (error) {
     console.error("Calendar POST API 错误:", error);
     return NextResponse.json(

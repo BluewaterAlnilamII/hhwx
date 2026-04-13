@@ -1,21 +1,25 @@
 import { NextResponse } from "next/server";
+import { fetchBandoriEventRecord, toBestdoriEventDetail } from "@/lib/bandori-events-server";
+
+
+export const dynamic = "force-dynamic";
 
 export async function GET(request: Request, context: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await context.params;
-    const res = await fetch(`https://bestdori.com/api/events/${id}.json`, { 
-        headers: { "User-Agent": "hhwx-tracker/1.0" },
-        // Add cache control if necessary, but default fetch is fine
-    });
-    
-    if (!res.ok) {
-      return NextResponse.json({ error: "Bestdori API error" }, { status: res.status });
+    const eventId = Number(id);
+    if (!Number.isFinite(eventId) || eventId <= 0) {
+      return NextResponse.json({ error: "Invalid event id" }, { status: 400 });
     }
-    
-    const data = await res.json();
-    return NextResponse.json(data);
+
+    const record = await fetchBandoriEventRecord(eventId);
+    if (!record) {
+      return NextResponse.json({ error: "Event not found" }, { status: 404 });
+    }
+
+    return NextResponse.json(toBestdoriEventDetail(record));
   } catch (error) {
-    console.error("Failed to proxy Bestdori API", error);
-    return NextResponse.json({ error: "Failed to fetch event meta" }, { status: 500 });
+    console.error("Failed to read local event meta", error);
+    return NextResponse.json({ error: "Failed to fetch local event meta" }, { status: 500 });
   }
 }

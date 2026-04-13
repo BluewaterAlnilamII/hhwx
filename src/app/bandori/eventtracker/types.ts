@@ -39,7 +39,7 @@ export type EventMetadata = {
   /** 活动类型编码。 */
   eventType: string;
   /** 多语言活动名称列表。 */
-  eventName: string[];
+  eventName: (string | null)[];
   /** 活动资源包名称，用于拼接横幅地址。 */
   assetBundleName: string;
   /** 各服务器的活动开始时间原始值。 */

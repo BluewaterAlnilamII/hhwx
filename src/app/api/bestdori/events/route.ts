@@ -1,15 +1,19 @@
 import { NextResponse } from "next/server";
+import { fetchBandoriEventRecords, toBestdoriAll5Event } from "@/lib/bandori-events-server";
+
+
+export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
-    const res = await fetch(`https://bestdori.com/api/events/all.5.json`);
-    if (!res.ok) {
-      throw new Error(`Bestdori API responded with status: ${res.status}`);
-    }
-    const data = await res.json();
-    return NextResponse.json(data);
+    const records = await fetchBandoriEventRecords();
+    const payload = Object.fromEntries(
+      records.map((record) => [String(record.event_id), toBestdoriAll5Event(record)]),
+    );
+
+    return NextResponse.json(payload);
   } catch (error) {
-    console.error("Error proxying Bestdori all events metadata:", error);
-    return NextResponse.json({ error: "Failed to fetch event data" }, { status: 500 });
+    console.error("Error reading local event catalog:", error);
+    return NextResponse.json({ error: "Failed to fetch local event data" }, { status: 500 });
   }
 }

@@ -282,11 +282,18 @@ export default function EventTrackerPage() {
     }
 
     const jpMusics = eventMeta.musics?.[0];
-    if (!Array.isArray(jpMusics)) {
+    const cnMusics = eventMeta.musics?.[3];
+    const challengeMusics = Array.isArray(jpMusics) && jpMusics.length > 0
+      ? jpMusics
+      : Array.isArray(cnMusics)
+        ? cnMusics
+        : null;
+
+    if (!Array.isArray(challengeMusics)) {
       return [];
     }
 
-    const songIds = jpMusics
+    const songIds = challengeMusics
       .map((music) => Number(music?.musicId))
       .filter((musicId) => Number.isFinite(musicId) && musicId > 0);
 

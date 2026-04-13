@@ -1,4 +1,5 @@
 import { createServerSupabaseClient } from "@/lib/supabase-server";
+import { fetchBandoriEventRecords } from "@/lib/bandori-events-server";
 import {
   CalendarCharacter,
   buildStampCharacterOptions,
@@ -61,15 +62,7 @@ export async function GET(request: Request) {
   try {
     const serviceClient = createServerSupabaseClient();
     const { searchParams } = new URL(request.url);
-    const { data: events, error } = await serviceClient
-      .from("gbp_event")
-      .select("event_id, event_name_jp, event_name_cn, band_type, stamp_character_id, cn_start_at, cn_end_at, predicted_start, predicted_end, is_skipped")
-      .order("sort_order", { ascending: true });
-
-    if (error) {
-      console.error("gbp_event 查询失败:", error);
-      return new Response("数据库查询失败", { status: 500 });
-    }
+    const events = await fetchBandoriEventRecords();
 
     const now = new Date();
     const dtstamp = formatICSDate(now);
@@ -121,9 +114,9 @@ export async function GET(request: Request) {
       "X-WR-TIMEZONE:Asia/Shanghai",
     ];
 
-    for (const ev of events ?? []) {
+    for (const ev of events) {
       const stampCharacter = ev.stamp_character_id ? characterMap.get(ev.stamp_character_id) ?? null : null;
-      if (!shouldIncludeEventByFilters(ev.band_type, ev.stamp_character_id ?? null, selectedBandTypes, selectedCharacterIds)) continue;
+      if (!shouldIncludeEventByFilters(ev.band, ev.stamp_character_id ?? null, selectedBandTypes, selectedCharacterIds)) continue;
 
       // 跳过已提前举办且无官方时间的活动
       if (ev.is_skipped && !ev.cn_start_at) continue;
@@ -153,12 +146,12 @@ export async function GET(request: Request) {
       const exclusiveEndDate = addDaysToCompactDate(endDate, 1);
 
       const summary = formatCalendarSubscriptionTitle(
-        ev.band_type,
+        ev.band,
         ev.event_id,
         ev.event_name_cn || ev.event_name_jp || `活动 #${ev.event_id}`,
         stampCharacter,
       );
-      const eventColor = getSubscriptionEventColor(ev.band_type, stampCharacter);
+      const eventColor = getSubscriptionEventColor(ev.band, stampCharacter);
 
       icsContent.push(
         "BEGIN:VEVENT",

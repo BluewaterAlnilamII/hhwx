@@ -27,7 +27,7 @@ interface EventEditorProps {
 interface EditableEvent {
   event_id: number;
   title: string;
-  band_type: string;
+  band: string;
   predicted_start: string; // "YYYY-MM-DD"
   predicted_end: string;
   duration_days: number;
@@ -50,7 +50,7 @@ function toEditableEvents(events: GbpEvent[]): EditableEvent[] {
     .map(ev => ({
       event_id: ev.event_id,
       title: ev.event_name_cn || ev.event_name_jp || `活动 #${ev.event_id}`,
-      band_type: ev.band_type,
+      band: ev.band,
       predicted_start: ev.predicted_start ?? "",
       predicted_end: ev.predicted_end ?? "",
       duration_days: ev.duration_days,
@@ -168,7 +168,7 @@ function SortableRow({
     onMouseDown: (event: React.MouseEvent<HTMLElement>) => event.stopPropagation(),
     onTouchStart: (event: React.TouchEvent<HTMLElement>) => event.stopPropagation(),
   };
-  const bandColor = BAND_COLORS[item.band_type as keyof typeof BAND_COLORS] ?? BAND_COLORS.mix;
+  const bandColor = BAND_COLORS[item.band as keyof typeof BAND_COLORS] ?? BAND_COLORS.mix;
 
   return (
     <div

@@ -16,9 +16,14 @@ export { BAND_COLORS } from "@/lib/calendar-character-service";
 
 export interface GbpEvent {
   event_id: number;
+  event_type: string;
   event_name_jp: string;
   event_name_cn: string | null;
-  band_type: string;
+  asset_bundle_name: string;
+  banner_asset_bundle_name: string | null;
+  music_ids_jp: number[];
+  music_ids_cn: number[];
+  band: string;
   stamp_character_id: number | null;
   jp_start_at: number;
   jp_end_at: number;
@@ -30,25 +35,33 @@ export interface GbpEvent {
   has_rest_day: boolean;
   sort_order: number;
   is_skipped: boolean;
-  updated_at: string;
+  attributes_jsonb: unknown[];
+  characters_jsonb: unknown[];
+  point_percent: number | null;
+  parameter_percent: number | null;
+  performance_percent: number | null;
+  technique_percent: number | null;
+  visual_percent: number | null;
+  members_jsonb: unknown[];
+  limit_breaks_jsonb: unknown[];
 }
 
 /** 日历上用于渲染的活动显示信息 */
 export interface CalendarEvent {
   event_id: number;
   name: string;
-  band_type: string;
+  band: string;
   startDate: Date;
   endDate: Date;
   primaryColor: string;
   secondaryColor: string | null;
 }
 
-export interface CalendarHolidayData extends ChinaMainlandHolidayCalendarData {}
+export type CalendarHolidayData = ChinaMainlandHolidayCalendarData;
 
 // ─── 工具函数 ───
 
-/** 将 gbp_event 记录转换为日历显示用的事件 */
+/** 将本地活动目录记录转换为日历显示用的事件 */
 function toCalendarEvent(ev: GbpEvent, characterMap: Map<number, CalendarCharacter>): CalendarEvent | null {
   let startDate: Date | null = null;
   let endDate: Date | null = null;
@@ -65,17 +78,17 @@ function toCalendarEvent(ev: GbpEvent, characterMap: Map<number, CalendarCharact
   if (ev.is_skipped && !ev.cn_start_at) return null;
 
   const stampCharacter = ev.stamp_character_id ? characterMap.get(ev.stamp_character_id) ?? null : null;
-  const colors = getCalendarEventColors(ev.band_type, stampCharacter);
+  const colors = getCalendarEventColors(ev.band, stampCharacter);
 
   return {
     event_id: ev.event_id,
     name: formatCalendarEventTitle(
-      ev.band_type,
+      ev.band,
       ev.event_id,
       ev.event_name_cn || ev.event_name_jp || `活动 #${ev.event_id}`,
       stampCharacter,
     ),
-    band_type: ev.band_type,
+    band: ev.band,
     startDate,
     endDate,
     primaryColor: colors.primaryColor,
