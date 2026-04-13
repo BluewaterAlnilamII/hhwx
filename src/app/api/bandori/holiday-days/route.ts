@@ -51,10 +51,6 @@ function formatDateKeyInUtc8(timestamp: number): string {
   return `${year}-${month}-${day}`;
 }
 
-function formatDateKey(date: Date): string {
-  return formatDateKeyInUtc8(date.getTime());
-}
-
 function enumerateDateRange(startDate: Date, endDateExclusive: Date | null): string[] {
   const values: string[] = [];
   let cursor = startDate.getTime();
@@ -175,7 +171,7 @@ export async function GET() {
       },
     });
   } catch (error) {
-    console.error("holiday-days API 错误:", error);
+    console.error("Bandori holiday-days API 错误:", error);
     return NextResponse.json(getFallbackChinaMainlandHolidayCalendarData(), {
       headers: {
         "Cache-Control": "no-cache, max-age=0",

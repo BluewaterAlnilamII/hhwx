@@ -55,16 +55,16 @@ export async function GET(request: Request) {
   }
 
   try {
-    const res = await fetch(BESTDORI_SONGS_URL, {
+    const response = await fetch(BESTDORI_SONGS_URL, {
       headers: { "User-Agent": "hhwx-tracker/1.0" },
       next: { revalidate: 86400 },
     });
 
-    if (!res.ok) {
-      return NextResponse.json({ error: "Bestdori API error" }, { status: res.status });
+    if (!response.ok) {
+      return NextResponse.json({ error: "Bestdori API error" }, { status: response.status });
     }
 
-    const payload = await res.json() as Record<string, BestdoriSongMetadata>;
+    const payload = await response.json() as Record<string, BestdoriSongMetadata>;
     const songs: Record<string, string> = {};
 
     for (const songId of songIds) {
@@ -76,7 +76,7 @@ export async function GET(request: Request) {
 
     return NextResponse.json({ songs });
   } catch (error) {
-    console.error("Failed to proxy Bestdori songs API", error);
+    console.error("Bandori songs API 错误:", error);
     return NextResponse.json({ error: "Failed to fetch song metadata" }, { status: 500 });
   }
 }

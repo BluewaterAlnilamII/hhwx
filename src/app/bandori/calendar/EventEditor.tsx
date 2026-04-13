@@ -33,7 +33,6 @@ interface EditableEvent {
   duration_days: number;
   has_rest_day: boolean;
   sort_order: number;
-  is_skipped: boolean;
 }
 
 /** 从数据库记录中提取可编辑的活动（仅国服尚未开始的） */
@@ -56,7 +55,6 @@ function toEditableEvents(events: GbpEvent[]): EditableEvent[] {
       duration_days: ev.duration_days,
       has_rest_day: ev.has_rest_day,
       sort_order: ev.sort_order,
-      is_skipped: ev.is_skipped,
     }));
 }
 
@@ -90,16 +88,12 @@ function addDays(dateText: string, days: number): string {
 function recalculateFrom(events: EditableEvent[], fromIndex: number, lockedUntilDate: string | null): EditableEvent[] {
   const result = [...events];
   for (let i = fromIndex; i < result.length; i++) {
-    if (result[i].is_skipped) continue;
-
     let anchorEndText: string | null = null;
     if (i === 0) {
       anchorEndText = lockedUntilDate;
     } else {
-      let prevIdx = i - 1;
-      while (prevIdx >= 0 && result[prevIdx].is_skipped) prevIdx--;
-      if (prevIdx >= 0 && result[prevIdx].predicted_end) {
-        anchorEndText = result[prevIdx].predicted_end;
+      if (result[i - 1].predicted_end) {
+        anchorEndText = result[i - 1].predicted_end;
       }
     }
 
@@ -174,9 +168,7 @@ function SortableRow({
     <div
       ref={setNodeRef}
       style={style}
-      className={`flex items-center gap-1.5 py-2 px-2 rounded-lg bg-white/50 backdrop-blur-sm mb-1.5 ${
-        item.is_skipped ? "opacity-40" : ""
-      }`}
+      className="flex items-center gap-1.5 py-2 px-2 rounded-lg bg-white/50 backdrop-blur-sm mb-1.5"
     >
       {draggable ? (
         <button
@@ -219,7 +211,6 @@ function SortableRow({
           onChange={(e) => onChangeStart(item.event_id, e.target.value)}
           min={minDate}
           className="text-xs border border-gray-200 rounded px-1.5 py-1 bg-white/70 w-[110px] flex-shrink-0"
-          disabled={item.is_skipped}
         />
 
         <input
@@ -229,7 +220,6 @@ function SortableRow({
           onChange={(e) => onChangeEnd(item.event_id, e.target.value)}
           min={item.predicted_start || minDate}
           className="text-xs border border-gray-200 rounded px-1.5 py-1 bg-white/70 w-[110px] flex-shrink-0"
-          disabled={item.is_skipped}
         />
 
         <div className="flex items-center gap-1 w-[64px] flex-shrink-0 justify-end">
@@ -241,7 +231,6 @@ function SortableRow({
             value={item.duration_days}
             onChange={(e) => onChangeDuration(item.event_id, e.target.value)}
             className="text-xs border border-gray-200 rounded px-1.5 py-1 bg-white/70 w-[42px] text-center"
-            disabled={item.is_skipped}
           />
           <span className="text-xs text-gray-500">天</span>
         </div>
@@ -253,7 +242,6 @@ function SortableRow({
             checked={item.has_rest_day}
             onChange={() => onToggleRestDay(item.event_id)}
             className="accent-blue-500"
-            disabled={item.is_skipped}
           />
           <span className="text-xs text-gray-500">无邦日</span>
         </label>
@@ -319,10 +307,8 @@ export default function EventEditor({ allEvents, onSaved }: EventEditorProps) {
 
       // 同步重算当前活动前是否存在无邦日。
       if (idx > 0) {
-        let prevIdx = idx - 1;
-        while (prevIdx >= 0 && updated[prevIdx].is_skipped) prevIdx--;
-        if (prevIdx >= 0 && updated[prevIdx].predicted_end) {
-          const prevEnd = new Date(updated[prevIdx].predicted_end + "T00:00:00+08:00");
+        if (updated[idx - 1].predicted_end) {
+          const prevEnd = new Date(updated[idx - 1].predicted_end + "T00:00:00+08:00");
           const diffDays = Math.round((startDate.getTime() - prevEnd.getTime()) / 86400000);
           updated[idx] = {
             ...updated[idx],
@@ -339,10 +325,9 @@ export default function EventEditor({ allEvents, onSaved }: EventEditorProps) {
       }
 
       // 若新的开始日期越过了后续活动，则重新排序以维持时间顺序。
-      const sorted = [...updated].sort((a, b) => {
-        if (a.is_skipped !== b.is_skipped) return a.is_skipped ? 1 : -1;
-        return (a.predicted_start || "9").localeCompare(b.predicted_start || "9");
-      }).map((e, i) => ({ ...e, sort_order: i }));
+      const sorted = [...updated]
+        .sort((a, b) => (a.predicted_start || "9").localeCompare(b.predicted_start || "9"))
+        .map((e, i) => ({ ...e, sort_order: i }));
 
       const newIdx = sorted.findIndex(e => e.event_id === id);
       return recalculateFrom(sorted, newIdx + 1, lockedUntilDate);
@@ -418,7 +403,6 @@ export default function EventEditor({ allEvents, onSaved }: EventEditorProps) {
         duration_days: e.duration_days,
         has_rest_day: e.has_rest_day,
         sort_order: e.sort_order,
-        is_skipped: e.is_skipped,
       }))
     ).then((success) => {
       setSuccessMessage(success ? "提交成功！" : null);

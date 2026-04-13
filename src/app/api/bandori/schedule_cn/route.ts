@@ -1,34 +1,24 @@
 import { NextResponse } from "next/server";
-import { fetchBandoriEventRecords } from "@/lib/bandori-events-server";
+import {
+  fetchBandoriEventRecords,
+  toBandoriScheduleEvent,
+  type BandoriEventRecord,
+} from "@/lib/bandori-events-server";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
-
-const CHARACTER_SELECT_FIELDS = [
-  "character_id",
-  "character_type",
-  "band_id",
-  "color_code",
-  "character_name_jp",
-  "character_name_en",
-  "character_name_tw",
-  "character_name_cn",
-  "first_name_jp",
-  "first_name_en",
-  "first_name_tw",
-  "first_name_cn",
-  "last_name_jp",
-  "last_name_en",
-  "last_name_tw",
-  "last_name_cn",
-  "nickname_jp",
-  "nickname_en",
-  "nickname_tw",
-  "nickname_cn",
-].join(",");
 
 export const dynamic = "force-dynamic";
 
 const UPDATE_BATCH_SIZE = 5;
 const UPDATE_MAX_RETRIES = 3;
+
+type ScheduleWritePayload = {
+  event_id: number;
+  predicted_start: string | null;
+  predicted_end: string | null;
+  duration_days: number;
+  has_rest_day: boolean;
+  sort_order: number;
+};
 
 function normalizeExternalErrorText(value: string | null | undefined): string | null {
   if (!value) return null;
@@ -61,27 +51,6 @@ function normalizeUpdateError(error: { message?: string | null; details?: string
   };
 }
 
-async function createServiceClient() {
-  return createServerSupabaseClient();
-}
-
-async function hasCalendarEditorRole(userId: string): Promise<boolean> {
-  const serviceClient = await createServiceClient();
-  const { data, error } = await serviceClient
-    .from("user_roles")
-    .select("role")
-    .eq("user_id", userId)
-    .eq("role", "calendar_editor")
-    .maybeSingle();
-
-  if (error) {
-    console.error("Calendar POST API 查询 user_roles 失败:", error);
-    return false;
-  }
-
-  return !!data;
-}
-
 function isRetriableUpdateError(error: { message?: string | null; details?: string | null; hint?: string | null } | null | undefined): boolean {
   if (!error) return false;
 
@@ -102,12 +71,8 @@ function toChinaDateText(timestampMs: number) {
 }
 
 function shouldPersistScheduleEvent(
-  event: {
-    predicted_end: string | null;
-  },
-  source: {
-    cn_end_at: number | null;
-  },
+  event: { predicted_end: string | null },
+  source: { cn_end_at: number | null },
   nowMs: number,
   todayChinaDate: string,
 ) {
@@ -122,36 +87,56 @@ function shouldPersistScheduleEvent(
   return true;
 }
 
-async function updateCalendarEvent(
-  serviceClient: Awaited<ReturnType<typeof createServiceClient>>,
-  ev: {
-    event_id: number;
-    predicted_start: string | null;
-    predicted_end: string | null;
-    duration_days: number;
-    has_rest_day: boolean;
-    sort_order: number;
-    is_skipped: boolean;
-  },
+function shouldExposeScheduleRecord(record: BandoriEventRecord, nowMs: number) {
+  if (record.cn_end_at !== null && record.cn_end_at < nowMs) {
+    return true;
+  }
+
+  if (record.cn_start_at !== null && record.cn_end_at !== null) {
+    return record.has_schedule_row;
+  }
+
+  return true;
+}
+
+async function hasCalendarEditorRole(userId: string): Promise<boolean> {
+  const serviceClient = createServerSupabaseClient();
+  const { data, error } = await serviceClient
+    .from("user_roles")
+    .select("role")
+    .eq("user_id", userId)
+    .eq("role", "calendar_editor")
+    .maybeSingle();
+
+  if (error) {
+    console.error("Bandori schedule POST API 查询 user_roles 失败:", error);
+    return false;
+  }
+
+  return !!data;
+}
+
+async function updateScheduleEvent(
+  serviceClient: ReturnType<typeof createServerSupabaseClient>,
+  event: ScheduleWritePayload,
 ) {
   const updatePayload: Record<string, unknown> = {
-    event_id: ev.event_id,
-    predicted_start: ev.predicted_start,
-    predicted_end: ev.predicted_end,
-    duration_days: ev.duration_days,
-    has_rest_day: ev.has_rest_day,
-    sort_order: ev.sort_order,
-    is_skipped: ev.is_skipped,
+    event_id: event.event_id,
+    predicted_start: event.predicted_start,
+    predicted_end: event.predicted_end,
+    duration_days: event.duration_days,
+    has_rest_day: event.has_rest_day,
+    sort_order: event.sort_order,
   };
 
-  for (let attempt = 1; attempt <= UPDATE_MAX_RETRIES; attempt++) {
+  for (let attempt = 1; attempt <= UPDATE_MAX_RETRIES; attempt += 1) {
     try {
       const result = await serviceClient
         .from("gbp_event_schedule_cn")
         .upsert(updatePayload, { onConflict: "event_id" });
 
       if (!result.error) {
-        return { eventId: ev.event_id, error: null };
+        return { eventId: event.event_id, error: null };
       }
 
       const normalizedResultError = normalizeUpdateError(result.error);
@@ -161,11 +146,11 @@ async function updateCalendarEvent(
         continue;
       }
 
-      return { eventId: ev.event_id, error: normalizedResultError };
+      return { eventId: event.event_id, error: normalizedResultError };
     } catch (error) {
       const normalizedError = normalizeUpdateError({
         message: error instanceof Error ? error.message : String(error),
-        details: error instanceof Error ? error.cause ? String(error.cause) : null : null,
+        details: error instanceof Error && error.cause ? String(error.cause) : null,
         hint: null,
       });
 
@@ -174,53 +159,35 @@ async function updateCalendarEvent(
         continue;
       }
 
-      return { eventId: ev.event_id, error: normalizedError };
+      return { eventId: event.event_id, error: normalizedError };
     }
   }
 
   return {
-    eventId: ev.event_id,
+    eventId: event.event_id,
     error: { message: "更新失败", details: "超过最大重试次数", hint: null },
   };
 }
 
-/**
- * GET /api/calendar/events
- * 读取本地活动目录三表合并结果，返回供日历渲染的活动列表。
- */
 export async function GET() {
   try {
-    const serviceClient = await createServiceClient();
+    const nowMs = Date.now();
     const events = await fetchBandoriEventRecords();
 
-    const { data: characters, error: characterError } = await serviceClient
-      .from("gbp_characters")
-      .select(CHARACTER_SELECT_FIELDS)
-      .order("character_id", { ascending: true });
-
-    if (characterError) {
-      console.error("gbp_characters 查询失败:", characterError);
-    }
-
     return NextResponse.json({
-      events,
-      characters: characterError ? [] : (characters ?? []),
+      events: events
+        .filter((record) => shouldExposeScheduleRecord(record, nowMs))
+        .map((record) => toBandoriScheduleEvent(record)),
     });
   } catch (error) {
-    console.error("Calendar API 错误:", error);
+    console.error("Bandori schedule API 错误:", error);
     return NextResponse.json({ error: "服务器内部错误" }, { status: 500 });
   }
 }
 
-/**
- * POST /api/calendar/events
- * 接收编辑后的活动数组，鉴权后做冲突检测并批量更新排期字段。
- */
 export async function POST(request: Request) {
   try {
-    const serviceClient = await createServiceClient();
-
-    // 1. 鉴权：从请求头获取用户 token
+    const serviceClient = createServerSupabaseClient();
     const authHeader = request.headers.get("authorization");
     if (!authHeader) {
       return NextResponse.json({ error: "未登录" }, { status: 401 });
@@ -233,26 +200,16 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "认证失败" }, { status: 401 });
     }
 
-    // 2. 检查权限：查询 user_roles 表
-    // 为什么这么做：使用 service role key 绕过 RLS 来检查权限，
-    // 因为 anon key 下 user_roles 的 RLS 要求 auth.uid() 匹配，
-    // 而服务端 API 路由中的 supabase client 没有用户上下文。
+    // 为什么这里仍然使用 service role 查询权限：
+    // 这个写接口需要在服务端统一鉴权并绕过 RLS 读 user_roles，
+    // 否则 API 路由内没有稳定的用户上下文去复用客户端那套权限判断。
     const hasPermission = await hasCalendarEditorRole(user.id);
     if (!hasPermission) {
       return NextResponse.json({ error: "没有编辑权限" }, { status: 403 });
     }
 
-    // 3. 解析请求体
     const body = await request.json();
-    const events: Array<{
-      event_id: number;
-      predicted_start: string | null;
-      predicted_end: string | null;
-      duration_days: number;
-      has_rest_day: boolean;
-      sort_order: number;
-      is_skipped: boolean;
-    }> = body.events;
+    const events = body.events as ScheduleWritePayload[];
 
     if (!Array.isArray(events)) {
       return NextResponse.json({ error: "无效的请求数据" }, { status: 400 });
@@ -319,10 +276,7 @@ export async function POST(request: Request) {
 
       if (deleteResult.error) {
         return NextResponse.json(
-          {
-            error: "清理历史排期失败",
-            details: deleteResult.error.message,
-          },
+          { error: "清理历史排期失败", details: deleteResult.error.message },
           { status: 500 },
         );
       }
@@ -362,7 +316,7 @@ export async function POST(request: Request) {
       const earliestSelectableDate = lockedUntil.toISOString().slice(0, 10);
 
       const invalidEvent = editableEvents.find(
-        (event) => !event.is_skipped && event.predicted_start && event.predicted_start < earliestSelectableDate,
+        (event) => event.predicted_start && event.predicted_start < earliestSelectableDate,
       );
 
       if (invalidEvent) {
@@ -376,24 +330,23 @@ export async function POST(request: Request) {
       }
     }
 
-    // 4. 冲突检测：按 predicted_start 排序，检查相邻活动无时间重叠
     const activeEvents = editableEvents
-      .filter(e => !e.is_skipped && e.predicted_start && e.predicted_end)
-      .sort((a, b) => (a.predicted_start! > b.predicted_start! ? 1 : -1));
+      .filter((event) => event.predicted_start && event.predicted_end)
+      .sort((left, right) => (left.predicted_start! > right.predicted_start! ? 1 : -1));
 
-    for (let i = 0; i < activeEvents.length - 1; i++) {
-      const curr = activeEvents[i];
-      const next = activeEvents[i + 1];
-      if (curr.predicted_end! >= next.predicted_start!) {
-        return NextResponse.json({
-          error: `时间冲突：活动 ${curr.event_id} 的结束日期 (${curr.predicted_end}) 与活动 ${next.event_id} 的开始日期 (${next.predicted_start}) 重叠`
-        }, { status: 409 });
+    for (let index = 0; index < activeEvents.length - 1; index += 1) {
+      const currentEvent = activeEvents[index];
+      const nextEvent = activeEvents[index + 1];
+      if (currentEvent.predicted_end! >= nextEvent.predicted_start!) {
+        return NextResponse.json(
+          {
+            error: `时间冲突：活动 ${currentEvent.event_id} 的结束日期 (${currentEvent.predicted_end}) 与活动 ${nextEvent.event_id} 的开始日期 (${nextEvent.predicted_start}) 重叠`,
+          },
+          { status: 409 },
+        );
       }
     }
 
-    // 5. 分批更新
-    // 为什么这么做：之前一次性并发更新全部活动，容易在窄网络环境下触发 Supabase REST 连接超时。
-    // 改为小批量并发并对网络超时重试，能明显降低保存失败概率。
     const failures: Array<{
       eventId: number;
       error: { message?: string | null; details?: string | null; hint?: string | null };
@@ -401,7 +354,7 @@ export async function POST(request: Request) {
 
     for (let index = 0; index < editableEvents.length; index += UPDATE_BATCH_SIZE) {
       const batch = editableEvents.slice(index, index + UPDATE_BATCH_SIZE);
-      const batchResults = await Promise.all(batch.map((event) => updateCalendarEvent(serviceClient, event)));
+      const batchResults = await Promise.all(batch.map((event) => updateScheduleEvent(serviceClient, event)));
 
       for (const result of batchResults) {
         if (result.error) {
@@ -432,7 +385,7 @@ export async function POST(request: Request) {
       skippedPast: ignoredPastEventIds.length,
     });
   } catch (error) {
-    console.error("Calendar POST API 错误:", error);
+    console.error("Bandori schedule POST API 错误:", error);
     return NextResponse.json(
       {
         error: "服务器内部错误",

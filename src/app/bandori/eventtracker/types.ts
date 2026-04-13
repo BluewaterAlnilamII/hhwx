@@ -34,20 +34,59 @@ export type TrackerSongGroup = {
   cutoffs: TrackerData[];
 };
 
-/** Bestdori 活动详情接口中会被页面消费的元数据字段。 */
-export type EventMetadata = {
-  /** 活动类型编码。 */
+export type BandoriEventSummary = {
+  eventId: number;
   eventType: string;
-  /** 多语言活动名称列表。 */
-  eventName: (string | null)[];
-  /** 活动资源包名称，用于拼接横幅地址。 */
-  assetBundleName: string;
-  /** 各服务器的活动开始时间原始值。 */
-  startAt: (string | null)[];
-  /** 各服务器的活动结束时间原始值。 */
-  endAt: (string | null)[];
-  /** challenge 等活动使用的歌曲列表。 */
-  musics?: ({ musicId: number }[] | null)[];
+  name: {
+    jp: string;
+    cn: string | null;
+    display: string;
+  };
+  availability: {
+    hasCn: boolean;
+    hasJp: boolean;
+  };
+  asset: {
+    bundleName: string;
+    bannerBundleName: string | null;
+    bannerRegion: "jp" | "cn";
+  };
+  timeline: {
+    jp: {
+      startAt: number;
+      endAt: number;
+    };
+    cn: {
+      startAt: number | null;
+      endAt: number | null;
+    };
+    scheduleCn: {
+      predictedStart: string | null;
+      predictedEnd: string | null;
+      durationDays: number;
+      hasRestDay: boolean;
+      sortOrder: number;
+    };
+    trackerWindow: {
+      startAt: number | null;
+      endAt: number | null;
+      source: "official" | "predicted" | "unknown";
+    };
+  };
+  music: {
+    jpIds: number[];
+    cnIds: number[];
+  };
+};
+
+/** 活动详情接口中会被页面消费的结构化字段。 */
+export type EventMetadata = BandoriEventSummary & {
+  music: BandoriEventSummary["music"] & {
+    entries: {
+      jp: { musicId: number }[];
+      cn: { musicId: number }[];
+    };
+  };
 };
 
 /** 活动选择器和视图判断所需的最小活动信息。 */

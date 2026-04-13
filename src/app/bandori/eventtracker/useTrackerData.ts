@@ -4,63 +4,8 @@ import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { supabase } from "@/lib/supabase";
 import { useCachedFetch, updateFetchCache } from "@/hooks/useCachedFetch";
 import type { ChinaMainlandHolidayCalendarData } from "@/app/bandori/calendar/chinaMainlandHolidayCalendar";
-import type { TrackerData, TrackerResult, TrackerSongGroup, EventMetadata, MinimalEvent, TrackingMode } from "./types";
+import type { TrackerData, TrackerResult, TrackerSongGroup, EventMetadata, MinimalEvent, TrackingMode, BandoriEventSummary } from "./types";
 import { getMonthlyRankingWindow } from "./useChartData";
-
-type RawMinimalEvent = {
-  id: number;
-  name: string;
-  startAtRaw: string | null;
-  endAtRaw: string | null;
-  hasCn: boolean;
-  hasJp: boolean;
-};
-
-type TrackerCalendarEvent = {
-  event_id: number;
-  predicted_start: string | null;
-  predicted_end: string | null;
-};
-
-function parseBestdoriTimestamp(timestampText: string | null | undefined): number | null {
-  if (!timestampText) return null;
-  const parsed = parseInt(timestampText, 10);
-  return Number.isFinite(parsed) ? parsed : null;
-}
-
-function parsePredictedStartTimestamp(dateText: string | null | undefined): number | null {
-  if (!dateText) return null;
-  const parsed = Date.parse(`${dateText}T15:00:00+08:00`);
-  return Number.isFinite(parsed) ? parsed : null;
-}
-
-function parsePredictedEndTimestamp(dateText: string | null | undefined): number | null {
-  if (!dateText) return null;
-  const parsed = Date.parse(`${dateText}T22:59:59+08:00`);
-  return Number.isFinite(parsed) ? parsed : null;
-}
-
-function resolveTrackerEventWindow(
-  cnStartAtRaw: string | null | undefined,
-  cnEndAtRaw: string | null | undefined,
-  predictedStart: string | null | undefined,
-  predictedEnd: string | null | undefined,
-): { startAt: number | null; endAt: number | null } {
-  const bestdoriStartAt = parseBestdoriTimestamp(cnStartAtRaw);
-  const bestdoriEndAt = parseBestdoriTimestamp(cnEndAtRaw);
-
-  if (bestdoriStartAt !== null) {
-    return {
-      startAt: bestdoriStartAt,
-      endAt: bestdoriEndAt,
-    };
-  }
-
-  return {
-    startAt: parsePredictedStartTimestamp(predictedStart),
-    endAt: parsePredictedEndTimestamp(predictedEnd),
-  };
-}
 
 function appendTrackerPoint(series: TrackerData[], time: number, ep: number, isFinal = false): TrackerData[] {
   if (series.length > 0 && time <= series[series.length - 1].time) {
@@ -192,78 +137,37 @@ export function useTrackerData(
   const [apiHasResult, setApiHasResult] = useState(false);
 
   // ===== 缓存 + 前台自动刷新：活动列表 =====
-  const { data: rawAllEventsData } = useCachedFetch<RawMinimalEvent[]>(
-    "bestdori-events",
-    "/api/bestdori/events",
-    (data: any) => {
-      if (!data || data.error) return [];
-      const eventsList: RawMinimalEvent[] = [];
-      Object.entries(data).forEach(([idStr, ev]: [string, any]) => {
-        const cnName = ev.eventName?.[3];
-        const jpName = ev.eventName?.[0];
-        if (cnName || jpName) {
-          eventsList.push({
-            id: parseInt(idStr),
-            name: cnName || jpName || "Unknown",
-            startAtRaw: ev.startAt?.[3] ?? null,
-            endAtRaw: ev.endAt?.[3] ?? null,
-            hasCn: !!cnName,
-            hasJp: !!jpName,
-          });
-        }
-      });
-      eventsList.sort((a, b) => b.id - a.id);
-      return eventsList;
-    }
-  );
-
-  const { data: trackerCalendarEvents } = useCachedFetch<TrackerCalendarEvent[]>(
-    "tracker-calendar-events",
-    "/api/calendar/events",
-    (data: any) => Array.isArray(data?.events)
-      ? data.events.map((event: any) => ({
-        event_id: Number(event.event_id),
-        predicted_start: event.predicted_start ?? null,
-        predicted_end: event.predicted_end ?? null,
-      }))
-      : []
+  const { data: eventCatalog } = useCachedFetch<{ events: BandoriEventSummary[] }>(
+    "bandori-events",
+    "/api/bandori/events",
+    (data: any) => ({
+      events: Array.isArray(data?.events) ? data.events as BandoriEventSummary[] : [],
+    }),
   );
 
   const { data: holidayData } = useCachedFetch<ChinaMainlandHolidayCalendarData | null>(
-    "calendar-holiday-days",
-    "/api/calendar/holiday-days",
+    "bandori-holiday-days",
+    "/api/bandori/holiday-days",
     (data: any) => data as ChinaMainlandHolidayCalendarData,
   );
 
-  const trackerCalendarEventMap = useMemo(() => {
-    return new Map<number, TrackerCalendarEvent>((trackerCalendarEvents ?? []).map((event) => [event.event_id, event]));
-  }, [trackerCalendarEvents]);
-
   const allEvents = useMemo<MinimalEvent[]>(() => {
-    return (rawAllEventsData ?? []).map((event) => {
-      const trackerCalendarEvent = trackerCalendarEventMap.get(event.id);
-      const { startAt, endAt } = resolveTrackerEventWindow(
-        event.startAtRaw,
-        event.endAtRaw,
-        trackerCalendarEvent?.predicted_start,
-        trackerCalendarEvent?.predicted_end,
-      );
-
-      return {
-        id: event.id,
-        name: event.name,
-        startAt,
-        endAt,
-        hasCn: event.hasCn,
-        hasJp: event.hasJp,
-      };
-    });
-  }, [rawAllEventsData, trackerCalendarEventMap]);
+    return (eventCatalog?.events ?? [])
+      .map((event) => ({
+        id: event.eventId,
+        name: event.name.display,
+        startAt: event.timeline.trackerWindow.startAt,
+        endAt: event.timeline.trackerWindow.endAt,
+        hasCn: event.availability.hasCn,
+        hasJp: event.availability.hasJp,
+      }))
+      .sort((left, right) => right.id - left.id);
+  }, [eventCatalog]);
 
   // ===== 缓存 + 前台自动刷新：活动元数据 =====
   const { data: eventMeta } = useCachedFetch<EventMetadata | null>(
-    currentEventId !== null ? `event-meta-${currentEventId}` : null,
-    currentEventId !== null ? `/api/bestdori/event/${currentEventId}` : null,
+    currentEventId !== null ? `bandori-event-meta-${currentEventId}` : null,
+    currentEventId !== null ? `/api/bandori/events/${currentEventId}` : null,
     (data: any) => (data && !data.error ? data : null)
   );
 
@@ -306,7 +210,7 @@ export function useTrackerData(
   const { data: trackerResult, loading } = useCachedFetch<TrackerResult>(
     trackerCacheKey,
     targetEventParam !== null
-      ? `/api/tracker/data?server=3&event=${targetEventParam}&type=${trackingMode}&tier=${selectedTier}`
+      ? `/api/bandori/tracker/data?server=3&event=${targetEventParam}&type=${trackingMode}&tier=${selectedTier}`
       : null,
     (data: any) => {
       const parsedSongResult = trackingMode === "song"
@@ -436,16 +340,11 @@ export function useTrackerData(
       return { startDate: null, endDate: null };
     }
 
-    const trackerCalendarEvent = trackerCalendarEventMap.get(currentEventId);
-    const { startAt, endAt } = resolveTrackerEventWindow(
-      eventMeta?.startAt?.[3] ?? null,
-      eventMeta?.endAt?.[3] ?? null,
-      trackerCalendarEvent?.predicted_start,
-      trackerCalendarEvent?.predicted_end,
-    );
-
-    return { startDate: startAt, endDate: endAt };
-  }, [currentEventId, eventMeta, trackerCalendarEventMap]);
+    return {
+      startDate: eventMeta?.timeline.trackerWindow.startAt ?? null,
+      endDate: eventMeta?.timeline.trackerWindow.endAt ?? null,
+    };
+  }, [currentEventId, eventMeta]);
 
   return {
     allEvents,

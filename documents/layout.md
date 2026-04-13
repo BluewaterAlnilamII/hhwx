@@ -23,6 +23,30 @@ hhwx/
 │   │   ├── globals.css         # 全局样式（动画、棋盘、气泡等）
 │   │   ├── page.module.css     # 页面模块样式（未使用，Next.js 生成）
 │   │   ├── favicon.ico         # 站点图标
+│   │   ├── api/
+│   │   │   ├── bandori/        # Bandori 游戏相关 API 主命名空间
+│   │   │   │   ├── characters/
+│   │   │   │   │   └── route.ts    # 读取角色目录
+│   │   │   │   ├── events/
+│   │   │   │   │   ├── route.ts    # 读取结构化活动目录
+│   │   │   │   │   └── [id]/
+│   │   │   │   │       └── route.ts # 读取结构化活动详情
+│   │   │   │   ├── holiday-days/
+│   │   │   │   │   └── route.ts    # 读取中国大陆休假日/调休数据
+│   │   │   │   ├── schedule_cn/
+│   │   │   │   │   └── route.ts    # 读取/保存国服活动排期
+│   │   │   │   ├── songs/
+│   │   │   │   │   └── route.ts    # 读取 challenge 歌曲标题
+│   │   │   │   ├── tracker/
+│   │   │   │   │   └── data/
+│   │   │   │   │       └── route.ts # 读取 tracker 追踪数据主入口
+│   │   │   │   └── calendar/
+│   │   │   │       └── cn/
+│   │   │   │           └── bandori-calendar-cn.ics/
+│   │   │   │               └── route.ts # 生成可订阅的国服活动 ICS
+│   │   │   └── tracker/
+│   │   │       └── data/
+│   │   │           └── route.ts    # tracker 旧兼容入口，内部复用 Bandori 主处理器
 │   │   └── bandori/
 │   │       ├── eventtracker/   # Bestdori 活动追踪页面
 │   │       │   ├── layout.tsx          # 页面布局（元数据）
@@ -41,16 +65,6 @@ hhwx/
 │   │           ├── EventEditor.tsx     # 活动日程编辑面板（仅未来活动排期编辑）
 │   │           ├── options.ts          # 订阅乐队筛选选项
 │   │           └── useCalendarData.ts  # 数据获取/权限/角色解析/编辑提交 Hooks
-│   │       └── api/
-│   │           └── calendar/           # 国服活动日历 API
-│   │               ├── check-role/
-│   │               │   └── route.ts    # 检查当前登录用户是否具备日历编辑权限
-│   │               ├── events/
-│   │               │   └── route.ts    # 读取/保存活动排期字段
-│   │               ├── holiday-days/
-│   │               │   └── route.ts    # 读取中国大陆休假日/调休数据（优先 iCloud，失败时回退本地表）
-│   │               └── ics/
-│   │                   └── route.ts    # 生成可订阅的 ICS 日历数据
 │   ├── components/             # React 组件
 │   │   ├── AuthModal.tsx       # 登录/注册弹窗
 │   │   ├── Board.tsx           # 8x8 黑白棋盘组件
@@ -74,6 +88,8 @@ hhwx/
 │   │   │   ├── kanon.ts        # Kanon AI：中等强度，犯迷糊+角位必抢
 │   │   │   └── michelle.ts     # Michelle AI：动态强度，放水机制
 │   │   ├── characters.ts       # 角色数据定义（台词、思考时间等）
+│   │   ├── bandori-events-server.ts # Bandori 活动/角色聚合与 DTO 转换服务
+│   │   ├── bandori-tracker-server.ts # tracker data 共享服务端处理器（新旧路由共用）
 │   │   ├── calendar-character-service.ts # 日历角色解析/标题/颜色/角色筛选统一服务
 │   │   ├── othello.ts          # 黑白棋核心规则（纯函数、位置权重矩阵）
 │   │   ├── supabase.ts         # Supabase 浏览器端客户端初始化
@@ -85,7 +101,7 @@ hhwx/
 ├── tailwind.config.ts          # Tailwind CSS 配置
 ├── tsconfig.json               # TypeScript 配置
 ├── next.config.mjs             # Next.js 配置
-├── postcss.config.js           # PostCSS 配置
+├── postcss.config.mjs          # PostCSS 配置
 ├── eslint.config.mjs           # ESLint 配置
 └── package.json                # 项目依赖和脚本
 ```

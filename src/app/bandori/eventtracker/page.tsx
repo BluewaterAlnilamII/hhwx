@@ -281,15 +281,11 @@ export default function EventTrackerPage() {
       return [];
     }
 
-    const jpMusics = eventMeta.musics?.[0];
-    const cnMusics = eventMeta.musics?.[3];
-    const challengeMusics = Array.isArray(jpMusics) && jpMusics.length > 0
-      ? jpMusics
-      : Array.isArray(cnMusics)
-        ? cnMusics
-        : null;
+    const jpMusics = eventMeta.music.entries.jp;
+    const cnMusics = eventMeta.music.entries.cn;
+    const challengeMusics = jpMusics.length > 0 ? jpMusics : cnMusics;
 
-    if (!Array.isArray(challengeMusics)) {
+    if (!Array.isArray(challengeMusics) || challengeMusics.length === 0) {
       return [];
     }
 
@@ -306,8 +302,8 @@ export default function EventTrackerPage() {
   );
 
   const { data: challengeSongTitleMap } = useCachedFetch<Record<string, string>>(
-    availableChallengeSongIds.length > 0 ? `bestdori-song-titles-${challengeSongIdsQuery}` : null,
-    availableChallengeSongIds.length > 0 ? `/api/bestdori/songs?ids=${challengeSongIdsQuery}` : null,
+    availableChallengeSongIds.length > 0 ? `bandori-song-titles-${challengeSongIdsQuery}` : null,
+    availableChallengeSongIds.length > 0 ? `/api/bandori/songs?ids=${challengeSongIdsQuery}` : null,
     (data: any) => (data?.songs ?? {}) as Record<string, string>,
     { refreshOnVisible: false },
   );
@@ -333,10 +329,10 @@ export default function EventTrackerPage() {
   }, [availableChallengeSongIds, eventMeta?.eventType, selectedSongId, trackingMode]);
 
   // ===== 数据派生层 =====
-  const cnEventName = eventMeta?.eventName[3] || eventMeta?.eventName[0] || "Loading Event...";
-  const bannerPath = eventMeta?.eventName[3] ? "cn" : "jp";
-  const bannerUrl = eventMeta?.assetBundleName
-    ? `https://bestdori.com/assets/${bannerPath}/event/${eventMeta.assetBundleName}/images_rip/banner.png`
+  const cnEventName = eventMeta?.name.cn || eventMeta?.name.jp || "Loading Event...";
+  const bannerPath = eventMeta?.asset.bannerRegion ?? "jp";
+  const bannerUrl = eventMeta?.asset.bundleName
+    ? `https://bestdori.com/assets/${bannerPath}/event/${eventMeta.asset.bundleName}/images_rip/banner.png`
     : "";
 
   const { domainStart, domainEnd, cutoffEnd, midnights } = useChartDomain(trackingMode, startDate, endDate);

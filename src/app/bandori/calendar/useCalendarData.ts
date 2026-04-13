@@ -16,17 +16,10 @@ export { BAND_COLORS } from "@/lib/calendar-character-service";
 
 export interface GbpEvent {
   event_id: number;
-  event_type: string;
   event_name_jp: string;
   event_name_cn: string | null;
-  asset_bundle_name: string;
-  banner_asset_bundle_name: string | null;
-  music_ids_jp: number[];
-  music_ids_cn: number[];
   band: string;
   stamp_character_id: number | null;
-  jp_start_at: number;
-  jp_end_at: number;
   cn_start_at: number | null;
   cn_end_at: number | null;
   predicted_start: string | null; // "YYYY-MM-DD"
@@ -34,16 +27,6 @@ export interface GbpEvent {
   duration_days: number;
   has_rest_day: boolean;
   sort_order: number;
-  is_skipped: boolean;
-  attributes_jsonb: unknown[];
-  characters_jsonb: unknown[];
-  point_percent: number | null;
-  parameter_percent: number | null;
-  performance_percent: number | null;
-  technique_percent: number | null;
-  visual_percent: number | null;
-  members_jsonb: unknown[];
-  limit_breaks_jsonb: unknown[];
 }
 
 /** 日历上用于渲染的活动显示信息 */
@@ -75,7 +58,6 @@ function toCalendarEvent(ev: GbpEvent, characterMap: Map<number, CalendarCharact
   }
 
   if (!startDate || !endDate) return null;
-  if (ev.is_skipped && !ev.cn_start_at) return null;
 
   const stampCharacter = ev.stamp_character_id ? characterMap.get(ev.stamp_character_id) ?? null : null;
   const colors = getCalendarEventColors(ev.band, stampCharacter);
@@ -106,19 +88,24 @@ export function filterEventsForMonth(events: CalendarEvent[], year: number, mont
 // ─── 主 Hook ───
 
 export function useCalendarData() {
-  const { data: rawData, loading: eventLoading, refresh: refreshEvents } = useCachedFetch<{ events: GbpEvent[]; characters: CalendarCharacter[] }>(
-    "calendar-events",
-    "/api/calendar/events",
-    (raw) => raw as { events: GbpEvent[]; characters: CalendarCharacter[] }
+  const { data: scheduleData, loading: eventLoading, refresh: refreshEvents } = useCachedFetch<{ events: GbpEvent[] }>(
+    "bandori-schedule-cn",
+    "/api/bandori/schedule_cn",
+    (raw) => raw as { events: GbpEvent[] },
+  );
+  const { data: characterData, loading: characterLoading, refresh: refreshCharacters } = useCachedFetch<{ characters: CalendarCharacter[] }>(
+    "bandori-characters",
+    "/api/bandori/characters",
+    (raw) => raw as { characters: CalendarCharacter[] },
   );
   const { data: holidayData, loading: holidayLoading, refresh: refreshHolidayData } = useCachedFetch<CalendarHolidayData>(
-    "calendar-holiday-days",
-    "/api/calendar/holiday-days",
+    "bandori-holiday-days",
+    "/api/bandori/holiday-days",
     (raw) => raw as CalendarHolidayData,
   );
 
-  const allEvents = rawData?.events ?? [];
-  const allCharacters = rawData?.characters ?? [];
+  const allEvents = scheduleData?.events ?? [];
+  const allCharacters = characterData?.characters ?? [];
   const characterMap = new Map(allCharacters.map((character) => [character.character_id, character]));
 
   // 转换为日历显示格式
@@ -128,15 +115,16 @@ export function useCalendarData() {
 
   const refresh = useCallback(() => {
     refreshEvents();
+    refreshCharacters();
     refreshHolidayData();
-  }, [refreshEvents, refreshHolidayData]);
+  }, [refreshCharacters, refreshEvents, refreshHolidayData]);
 
   return {
     allEvents,
     allCharacters,
     calendarEvents,
     holidayData,
-    loading: eventLoading || holidayLoading,
+    loading: eventLoading || characterLoading || holidayLoading,
     refresh,
   };
 }
@@ -198,7 +186,6 @@ export function useCalendarEditor(onSuccess: () => void) {
     duration_days: number;
     has_rest_day: boolean;
     sort_order: number;
-    is_skipped: boolean;
   }>) => {
     setSaving(true);
     setError(null);
@@ -210,7 +197,7 @@ export function useCalendarEditor(onSuccess: () => void) {
         return false;
       }
 
-      const res = await fetch("/api/calendar/events", {
+      const res = await fetch("/api/bandori/schedule_cn", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
