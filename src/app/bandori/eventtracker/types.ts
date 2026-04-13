@@ -7,6 +7,8 @@ export type TrackerData = {
   time: number;
   /** 当前时刻的累计分数。 */
   ep: number;
+  /** 标记该点是否为清挂后的最终结果。 */
+  isFinal?: boolean;
   /** 相邻两点推导出的瞬时速度，单位为分数每小时。 */
   speed?: number;
   /** 以约 24 小时窗口估算的速度，单位为分数每天。 */
@@ -25,6 +27,13 @@ export type TrackerData = {
   projectionEndTime?: number;
 };
 
+export type TrackerSongGroup = {
+  /** challenge 歌曲榜对应的 musicId；0 表示历史单歌曲榜或未分组数据。 */
+  songId: number;
+  /** 该歌曲榜的时间序列。 */
+  cutoffs: TrackerData[];
+};
+
 /** Bestdori 活动详情接口中会被页面消费的元数据字段。 */
 export type EventMetadata = {
   /** 活动类型编码。 */
@@ -37,6 +46,8 @@ export type EventMetadata = {
   startAt: (string | null)[];
   /** 各服务器的活动结束时间原始值。 */
   endAt: (string | null)[];
+  /** challenge 等活动使用的歌曲列表。 */
+  musics?: ({ musicId: number }[] | null)[];
 };
 
 /** 活动选择器和视图判断所需的最小活动信息。 */
@@ -61,6 +72,8 @@ export type TrackerResult = {
   cutoffs: TrackerData[];
   /** 服务端是否确认存在有效追踪结果。 */
   result: boolean;
+  /** song 模式下按 song_id 返回的所有分组。 */
+  songGroups?: TrackerSongGroup[];
 };
 
 /** 活动追踪页面支持的三种排行模式。 */

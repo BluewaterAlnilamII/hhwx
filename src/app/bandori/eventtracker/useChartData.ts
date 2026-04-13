@@ -283,3 +283,12 @@ export function getScoreAtTime(
   }
   return best;
 }
+
+export function getFinalScore(data: TrackerData[]): number | null {
+  for (let index = data.length - 1; index >= 0; index -= 1) {
+    if (data[index].isFinal) {
+      return data[index].ep;
+    }
+  }
+  return null;
+}

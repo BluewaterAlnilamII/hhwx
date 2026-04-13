@@ -17,6 +17,7 @@ import * as Tabs from "@radix-ui/react-tabs";
 import { ZoomIn, ZoomOut, Search, History, X } from "lucide-react";
 import * as Dialog from "@radix-ui/react-dialog";
 
+import { useCachedFetch } from "@/hooks/useCachedFetch";
 import type { MinimalEvent, TrackingMode } from "./types";
 import {
   INSTANT_PROJECTION_COOKIE,
@@ -33,6 +34,7 @@ import {
   useFinalDisplayedData,
   generateYTicks,
   getScoreAtTime,
+  getFinalScore,
 } from "./useChartData";
 import { TrackerTooltip } from "./TrackerTooltip";
 import FixedYAxis from "./FixedYAxis";
@@ -181,6 +183,7 @@ export default function EventTrackerPage() {
   const [currentEventId, setCurrentEventId] = useState<number | null>(null);
   const [trackingMode, setTrackingMode] = useState<TrackingMode>("event");
   const [selectedTier, setSelectedTier] = useState<number>(1000);
+  const [selectedSongId, setSelectedSongId] = useState<number>(0);
 
   const [zoomIndex, setZoomIndex] = useState(0);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -199,6 +202,7 @@ export default function EventTrackerPage() {
     currentEventId,
     trackingMode,
     selectedTier,
+    selectedSongId,
   );
 
   // ===== 投影偏好持久化 =====
@@ -271,6 +275,55 @@ export default function EventTrackerPage() {
       setSelectedTier(validTiers.length > 0 ? validTiers[validTiers.length - 1] : targetTiers[0]);
     }
   }, [trackingMode]);
+
+  const availableChallengeSongIds = useMemo(() => {
+    if (eventMeta?.eventType !== "challenge") {
+      return [];
+    }
+
+    const jpMusics = eventMeta.musics?.[0];
+    if (!Array.isArray(jpMusics)) {
+      return [];
+    }
+
+    const songIds = jpMusics
+      .map((music) => Number(music?.musicId))
+      .filter((musicId) => Number.isFinite(musicId) && musicId > 0);
+
+    return Array.from(new Set(songIds)).sort((left, right) => left - right);
+  }, [eventMeta]);
+
+  const challengeSongIdsQuery = useMemo(
+    () => availableChallengeSongIds.join(","),
+    [availableChallengeSongIds],
+  );
+
+  const { data: challengeSongTitleMap } = useCachedFetch<Record<string, string>>(
+    availableChallengeSongIds.length > 0 ? `bestdori-song-titles-${challengeSongIdsQuery}` : null,
+    availableChallengeSongIds.length > 0 ? `/api/bestdori/songs?ids=${challengeSongIdsQuery}` : null,
+    (data: any) => (data?.songs ?? {}) as Record<string, string>,
+    { refreshOnVisible: false },
+  );
+
+  useEffect(() => {
+    if (trackingMode !== "song") {
+      if (selectedSongId !== 0) {
+        setSelectedSongId(0);
+      }
+      return;
+    }
+
+    if (eventMeta?.eventType !== "challenge" || availableChallengeSongIds.length === 0) {
+      if (selectedSongId !== 0) {
+        setSelectedSongId(0);
+      }
+      return;
+    }
+
+    if (!availableChallengeSongIds.includes(selectedSongId)) {
+      setSelectedSongId(availableChallengeSongIds[0]);
+    }
+  }, [availableChallengeSongIds, eventMeta?.eventType, selectedSongId, trackingMode]);
 
   // ===== 数据派生层 =====
   const cnEventName = eventMeta?.eventName[3] || eventMeta?.eventName[0] || "Loading Event...";
@@ -468,13 +521,13 @@ export default function EventTrackerPage() {
           const nextMonth1st0000 = domainEnd + 1;
           const nextMonth1st0015 = nextMonth1st0000 + 15 * 60 * 1000;
           endScore = getScoreAtTime(fullProcessedData, nextMonth1st0000);
-          finalScore = getScoreAtTime(fullProcessedData, nextMonth1st0015);
+          finalScore = getFinalScore(fullProcessedData) ?? getScoreAtTime(fullProcessedData, nextMonth1st0015);
         } else if (endDate) {
           const ed = new Date(endDate);
           const endDay2300 = new Date(ed.getFullYear(), ed.getMonth(), ed.getDate(), 23, 0, 0).getTime();
           const endDay2315 = new Date(ed.getFullYear(), ed.getMonth(), ed.getDate(), 23, 15, 0).getTime();
           endScore = getScoreAtTime(fullProcessedData, endDay2300);
-          finalScore = getScoreAtTime(fullProcessedData, endDay2315);
+          finalScore = getFinalScore(fullProcessedData) ?? getScoreAtTime(fullProcessedData, endDay2315);
         }
       }
     }
@@ -643,23 +696,51 @@ export default function EventTrackerPage() {
                 ))}
               </Tabs.List>
 
-              {/* 排名档位选择 */}
-              <div className="flex-1 bg-gray-50/50 dark:bg-[#0C111C]/50 rounded-2xl p-3 sm:p-5 border border-gray-100 dark:border-gray-800/60 shadow-inner overflow-hidden flex flex-col justify-center">
-                <div className="text-xs sm:text-sm font-bold tracking-wider text-gray-400 mb-2 ml-1 block hidden xl:block">选择排名</div>
-                <div className="flex flex-wrap gap-1.5 sm:gap-2">
-                  {getTiersForMode(trackingMode).map(tier => (
-                    <button
-                      key={tier}
-                      onClick={() => setSelectedTier(tier)}
-                      className={`px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-lg text-[11px] sm:text-xs font-semibold transition-all duration-300 ${
-                        selectedTier === tier
-                          ? "bg-blue-600 text-white shadow-lg shadow-blue-500/30 ring-2 ring-blue-600 ring-offset-2 dark:ring-offset-[#131A2B] scale-105"
-                          : "bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 hover:scale-105 border border-gray-200 dark:border-gray-700 shadow-sm"
-                      }`}
+              <div className="flex-1 min-w-0 flex flex-col gap-4 xl:max-w-[42rem] xl:mx-auto">
+                {trackingMode === "song" && availableChallengeSongIds.length > 0 && (
+                  <div className="bg-gray-50/50 dark:bg-[#0C111C]/50 rounded-2xl p-3 sm:p-4 border border-gray-100 dark:border-gray-800/60 shadow-inner overflow-hidden flex flex-col justify-center">
+                    <div
+                      className="grid gap-2.5 sm:gap-3 w-full"
+                      style={{
+                        gridTemplateColumns: `repeat(${Math.min(Math.max(availableChallengeSongIds.length, 1), 3)}, minmax(0, 1fr))`,
+                      }}
                     >
-                      T{tier}
-                    </button>
-                  ))}
+                      {availableChallengeSongIds.map(songId => (
+                        <button
+                          key={songId}
+                          onClick={() => setSelectedSongId(songId)}
+                          title={`song_id : ${songId}`}
+                          className={`w-full min-w-0 px-3 py-2 sm:px-4 sm:py-2.5 rounded-xl text-xs sm:text-[13px] font-semibold text-center leading-snug transition-all duration-300 ${
+                            selectedSongId === songId
+                              ? "bg-blue-600 text-white shadow-lg shadow-blue-500/30 ring-2 ring-blue-600 ring-offset-2 dark:ring-offset-[#131A2B] scale-105"
+                              : "bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 hover:scale-105 border border-gray-200 dark:border-gray-700 shadow-sm"
+                          }`}
+                        >
+                          {challengeSongTitleMap?.[String(songId)] ?? `曲目 ${songId}`}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* 排名档位选择 */}
+                <div className="bg-gray-50/50 dark:bg-[#0C111C]/50 rounded-2xl p-3 sm:p-4 border border-gray-100 dark:border-gray-800/60 shadow-inner overflow-hidden flex flex-col justify-center">
+                  <div className="hidden xl:block text-xs sm:text-sm font-bold tracking-wider text-gray-400 mb-2 ml-1">选择排名</div>
+                  <div className="flex flex-wrap gap-1.5 sm:gap-2">
+                    {getTiersForMode(trackingMode).map(tier => (
+                      <button
+                        key={tier}
+                        onClick={() => setSelectedTier(tier)}
+                        className={`px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-lg text-[11px] sm:text-xs font-semibold transition-all duration-300 ${
+                          selectedTier === tier
+                            ? "bg-blue-600 text-white shadow-lg shadow-blue-500/30 ring-2 ring-blue-600 ring-offset-2 dark:ring-offset-[#131A2B] scale-105"
+                            : "bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 hover:scale-105 border border-gray-200 dark:border-gray-700 shadow-sm"
+                        }`}
+                      >
+                        T{tier}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
 
