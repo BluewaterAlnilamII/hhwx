@@ -41,7 +41,9 @@ type BonusRow = {
   limit_breaks_jsonb: unknown;
 };
 
-export type BandoriEventRecord = EventRow & {
+export type BandoriEventRecord = Omit<EventRow, "music_ids_jp" | "music_ids_cn"> & {
+  music_ids_jp: number[];
+  music_ids_cn: number[];
   predicted_start: string | null;
   predicted_end: string | null;
   duration_days: number;
