@@ -168,7 +168,7 @@ export function useTrackerData(
 
   // ===== 缓存 + 前台自动刷新：活动列表 =====
   const { data: eventCatalog } = useCachedFetch<{ events: BandoriEventSummary[] }>(
-    "bandori-events",
+    "bandori-events-v3",
     "/api/bandori/events",
     (data: any) => ({
       events: Array.isArray(data?.events) ? data.events as BandoriEventSummary[] : [],
@@ -266,7 +266,10 @@ export function useTrackerData(
         songGroups: parsedSongResult?.songGroups,
       };
     },
-    { merge: trackerMerge }
+    {
+      merge: trackerMerge,
+      staleTimeMs: 60 * 1000,
+    }
   );
 
   // 订阅在组件生命周期内只建立一次，因此通过 ref 维持最新视图参数，

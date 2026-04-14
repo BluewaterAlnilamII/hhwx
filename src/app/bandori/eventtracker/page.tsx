@@ -335,9 +335,9 @@ export default function EventTrackerPage() {
   // ===== 数据派生层 =====
   const cnEventName = eventMeta?.name.cn?.trim() || eventMeta?.name.jp.trim() || "Loading Event...";
   const bannerPath = eventMeta?.name.cn?.trim() ? "cn" : "jp";
-  const bannerBundleName = eventMeta ? resolveBandoriEventBannerBundleName(eventMeta.asset) : null;
-  const bannerUrl = bannerBundleName
-    ? buildBandoriEventBannerProxyPath(bannerPath, bannerBundleName)
+  const bannerAssetSegment = eventMeta ? resolveBandoriEventBannerBundleName(eventMeta.asset) : null;
+  const bannerUrl = bannerAssetSegment
+    ? buildBandoriEventBannerProxyPath(bannerPath, bannerAssetSegment)
     : "";
 
   const { domainStart, domainEnd, cutoffEnd, midnights } = useChartDomain(trackingMode, startDate, endDate);

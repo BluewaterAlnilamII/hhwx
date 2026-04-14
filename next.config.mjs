@@ -21,6 +21,12 @@ const nextConfig = {
                 ],
             },
             {
+                source: "/apple-icon.png",
+                headers: [
+                    { key: "Cache-Control", value: STATIC_ICON_CACHE_CONTROL },
+                ],
+            },
+            {
                 source: "/res/bandori/icon/:path*",
                 headers: [
                     { key: "Cache-Control", value: STATIC_ICON_CACHE_CONTROL },

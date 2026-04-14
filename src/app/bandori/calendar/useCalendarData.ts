@@ -163,7 +163,7 @@ export function filterEventsForMonth(events: CalendarEvent[], year: number, mont
 
 export function useCalendarData() {
   const { data: eventCatalogData, loading: eventCatalogLoading, refresh: refreshEventCatalog } = useCachedFetch<{ events: BandoriEventSummary[] }>(
-    "bandori-events-v2",
+    "bandori-events-v3",
     "/api/bandori/events",
     (raw) => raw as { events: BandoriEventSummary[] },
     { staleTimeMs: 5 * 60 * 1000 },

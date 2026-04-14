@@ -14,8 +14,13 @@ export const metadata: Metadata = {
   description: "与 Hello, Happy World! 的成员们来一场黑白棋对决吧！",
   manifest: "/manifest.webmanifest",
   icons: {
-    icon: [{ url: "/favicon.ico", type: "image/x-icon" }],
-    shortcut: ["/favicon.ico"],
+    icon: [
+      { url: "/favicon/icon-192.png", sizes: "192x192", type: "image/png" },
+      { url: "/favicon/icon-512.png", sizes: "512x512", type: "image/png" },
+      { url: "/favicon.ico", sizes: "any", type: "image/x-icon" },
+    ],
+    shortcut: [{ url: "/favicon.ico", type: "image/x-icon" }],
+    apple: [{ url: "/apple-icon.png", sizes: "180x180", type: "image/png" }],
   },
 };
 

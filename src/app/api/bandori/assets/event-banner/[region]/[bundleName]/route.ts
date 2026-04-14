@@ -7,11 +7,110 @@ import {
 } from "@/lib/api-cache";
 import {
   buildBestdoriEventBannerOriginUrl,
+  buildBestdoriLegacyHomeBannerOriginUrl,
+  extractBandoriEventIdFromLegacyBannerBundleName,
   isBandoriAssetRegion,
   isSafeBandoriAssetSegment,
 } from "@/lib/bandori-asset-proxy";
+import { fetchBandoriEventRecords } from "@/lib/bandori-events-server";
 
 export const dynamic = "force-dynamic";
+
+type UpstreamBannerFailure = {
+  upstreamUrl: string;
+  status: number;
+  contentType: string | null;
+  reason: "http_error" | "non_image" | "empty";
+  snippet?: string;
+};
+
+async function resolveEventBannerCandidateUrls(region: "jp" | "cn", bundleName: string): Promise<string[]> {
+  const candidateUrls = new Set<string>();
+  const legacyEventId = extractBandoriEventIdFromLegacyBannerBundleName(bundleName);
+
+  if (legacyEventId !== null) {
+    try {
+      const [record] = await fetchBandoriEventRecords({ eventId: legacyEventId });
+      const resolvedBundleName = record?.asset_bundle_name?.trim();
+      if (resolvedBundleName) {
+        candidateUrls.add(buildBestdoriEventBannerOriginUrl(region, resolvedBundleName));
+      }
+    } catch (error) {
+      console.warn("Bandori event banner proxy 解析 legacy banner bundle 失败:", {
+        bundleName,
+        legacyEventId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  candidateUrls.add(buildBestdoriEventBannerOriginUrl(region, bundleName));
+
+  if (legacyEventId !== null) {
+    candidateUrls.add(buildBestdoriLegacyHomeBannerOriginUrl(region, bundleName));
+  }
+
+  return Array.from(candidateUrls);
+}
+
+async function fetchUpstreamBannerImage(upstreamUrl: string): Promise<
+  | { ok: true; contentType: string; buffer: ArrayBuffer }
+  | { ok: false; failure: UpstreamBannerFailure }
+> {
+  const upstreamResponse = await fetch(upstreamUrl, {
+    headers: {
+      Accept: "image/png,image/*;q=0.9,*/*;q=0.8",
+    },
+    next: { revalidate: BESTDORI_ASSET_PROXY_REVALIDATE_SECONDS },
+  });
+
+  const upstreamContentType = upstreamResponse.headers.get("Content-Type");
+
+  if (!upstreamResponse.ok) {
+    return {
+      ok: false,
+      failure: {
+        upstreamUrl,
+        status: upstreamResponse.status,
+        contentType: upstreamContentType,
+        reason: "http_error",
+      },
+    };
+  }
+
+  if (!upstreamContentType?.toLowerCase().startsWith("image/")) {
+    const upstreamText = await upstreamResponse.text();
+    return {
+      ok: false,
+      failure: {
+        upstreamUrl,
+        status: upstreamResponse.status,
+        contentType: upstreamContentType,
+        reason: "non_image",
+        snippet: upstreamText.slice(0, 200),
+      },
+    };
+  }
+
+  const upstreamBuffer = await upstreamResponse.arrayBuffer();
+  if (upstreamBuffer.byteLength === 0) {
+    return {
+      ok: false,
+      failure: {
+        upstreamUrl,
+        status: upstreamResponse.status,
+        contentType: upstreamContentType,
+        reason: "empty",
+      },
+    };
+  }
+
+  return {
+    ok: true,
+    contentType: upstreamContentType,
+    buffer: upstreamBuffer,
+  };
+}
 
 /**
  * GET /api/bandori/assets/event-banner/[region]/[bundleName]
@@ -37,28 +136,32 @@ export async function GET(
       });
     }
 
-    const upstreamUrl = buildBestdoriEventBannerOriginUrl(region, bundleName);
-    const upstreamResponse = await fetch(upstreamUrl, {
-      headers: {
-        Accept: "image/png,image/*;q=0.9,*/*;q=0.8",
-      },
-      next: { revalidate: BESTDORI_ASSET_PROXY_REVALIDATE_SECONDS },
-    });
+    const candidateUrls = await resolveEventBannerCandidateUrls(region, bundleName);
+    const failures: UpstreamBannerFailure[] = [];
 
-    if (!upstreamResponse.ok) {
-      return new Response(upstreamResponse.body, {
-        status: upstreamResponse.status,
-        headers: withCacheControl(LIVE_API_CACHE_CONTROL, {
-          "Content-Type": upstreamResponse.headers.get("Content-Type") ?? "text/plain; charset=utf-8",
-        }),
-      });
+    for (const upstreamUrl of candidateUrls) {
+      const upstreamResult = await fetchUpstreamBannerImage(upstreamUrl);
+      if (upstreamResult.ok) {
+        return new Response(upstreamResult.buffer, {
+          status: 200,
+          headers: withCacheControl(BESTDORI_ASSET_PROXY_CACHE_CONTROL, {
+            "Content-Type": upstreamResult.contentType,
+          }),
+        });
+      }
+
+      failures.push(upstreamResult.failure);
     }
 
-    return new Response(upstreamResponse.body, {
-      status: 200,
-      headers: withCacheControl(BESTDORI_ASSET_PROXY_CACHE_CONTROL, {
-        "Content-Type": upstreamResponse.headers.get("Content-Type") ?? "image/png",
-      }),
+    console.error("Bandori event banner proxy 未找到可用横幅资源:", {
+      region,
+      bundleName,
+      candidateUrls,
+      failures,
+    });
+    return NextResponse.json({ error: "上游横幅资源不存在或返回了非图片内容" }, {
+      status: 502,
+      headers: withCacheControl(LIVE_API_CACHE_CONTROL),
     });
   } catch (error) {
     console.error("Bandori event banner proxy API 错误:", error);
