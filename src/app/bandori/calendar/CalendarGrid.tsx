@@ -484,7 +484,7 @@ export default function CalendarGrid({ events, holidayData }: CalendarGridProps)
 
                   return (
                     <div
-                      key={`${row.event.event_id}-${row.weekRow}-${i}`}
+                      key={`${row.event.eventId}-${row.weekRow}-${i}`}
                       className="absolute overflow-hidden whitespace-nowrap rounded-xl px-2 py-0.5 text-[11px] font-semibold leading-tight text-white shadow-[0_8px_18px_rgba(0,0,0,0.16)] ring-1 ring-white/25 md:py-1 md:text-xs"
                       style={{
                         backgroundColor: row.event.primaryColor,
@@ -509,7 +509,7 @@ export default function CalendarGrid({ events, holidayData }: CalendarGridProps)
 
                         return (
                           <div
-                            key={`${row.event.event_id}-${row.weekRow}-${i}-mask-${segmentIndex}`}
+                            key={`${row.event.eventId}-${row.weekRow}-${i}-mask-${segmentIndex}`}
                             className="absolute inset-y-0 z-[1]"
                             style={{
                               left: `${segmentLeftPercent}%`,

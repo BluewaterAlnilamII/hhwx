@@ -40,17 +40,13 @@ export type BandoriEventSummary = {
   name: {
     jp: string;
     cn: string | null;
-    display: string;
-  };
-  availability: {
-    hasCn: boolean;
-    hasJp: boolean;
   };
   asset: {
     bundleName: string;
     bannerBundleName: string | null;
-    bannerRegion: "jp" | "cn";
   };
+  band: string;
+  stampCharacterId: number | null;
   timeline: {
     jp: {
       startAt: number;
@@ -60,34 +56,19 @@ export type BandoriEventSummary = {
       startAt: number | null;
       endAt: number | null;
     };
-    scheduleCn: {
-      predictedStart: string | null;
-      predictedEnd: string | null;
-      durationDays: number;
-      hasRestDay: boolean;
-      sortOrder: number;
-    };
-    trackerWindow: {
-      startAt: number | null;
-      endAt: number | null;
-      source: "official" | "predicted" | "unknown";
+    cnSchedule?: {
+      startAt: number;
+      endAt: number;
     };
   };
-  music: {
-    jpIds: number[];
-    cnIds: number[];
+  musicIds: {
+    jp: number[];
+    cn: number[];
   };
 };
 
-/** 活动详情接口中会被页面消费的结构化字段。 */
-export type EventMetadata = BandoriEventSummary & {
-  music: BandoriEventSummary["music"] & {
-    entries: {
-      jp: { musicId: number }[];
-      cn: { musicId: number }[];
-    };
-  };
-};
+/** eventtracker 当前只依赖活动目录摘要，不再需要单独拉详情。 */
+export type EventMetadata = BandoriEventSummary;
 
 /** 活动选择器和视图判断所需的最小活动信息。 */
 export type MinimalEvent = {

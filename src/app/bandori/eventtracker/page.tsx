@@ -18,13 +18,17 @@ import { ZoomIn, ZoomOut, Search, History, X } from "lucide-react";
 import * as Dialog from "@radix-ui/react-dialog";
 
 import { useCachedFetch } from "@/hooks/useCachedFetch";
+import {
+  buildBandoriEventBannerProxyPath,
+  resolveBandoriEventBannerBundleName,
+} from "@/lib/bandori-asset-proxy";
 import type { MinimalEvent, TrackingMode } from "./types";
 import {
-  INSTANT_PROJECTION_COOKIE,
-  DAY_PROJECTION_COOKIE,
+  INSTANT_PROJECTION_STORAGE_KEY,
+  DAY_PROJECTION_STORAGE_KEY,
   getTiersForMode,
-  readProjectionCookie,
-  writeProjectionCookie,
+  readProjectionPreference,
+  writeProjectionPreference,
 } from "./constants";
 import { useTrackerData } from "./useTrackerData";
 import {
@@ -211,8 +215,8 @@ export default function EventTrackerPage() {
   const [projectionPrefLoaded, setProjectionPrefLoaded] = useState(false);
 
   useEffect(() => {
-    const instantPref = readProjectionCookie(INSTANT_PROJECTION_COOKIE);
-    const dayPref = readProjectionCookie(DAY_PROJECTION_COOKIE);
+    const instantPref = readProjectionPreference(INSTANT_PROJECTION_STORAGE_KEY);
+    const dayPref = readProjectionPreference(DAY_PROJECTION_STORAGE_KEY);
     if (instantPref !== null) setShowInstantProjection(instantPref);
     if (dayPref !== null) setShowDayProjection(dayPref);
     setProjectionPrefLoaded(true);
@@ -220,12 +224,12 @@ export default function EventTrackerPage() {
 
   useEffect(() => {
     if (!projectionPrefLoaded) return;
-    writeProjectionCookie(INSTANT_PROJECTION_COOKIE, showInstantProjection);
+    writeProjectionPreference(INSTANT_PROJECTION_STORAGE_KEY, showInstantProjection);
   }, [projectionPrefLoaded, showInstantProjection]);
 
   useEffect(() => {
     if (!projectionPrefLoaded) return;
-    writeProjectionCookie(DAY_PROJECTION_COOKIE, showDayProjection);
+    writeProjectionPreference(DAY_PROJECTION_STORAGE_KEY, showDayProjection);
   }, [projectionPrefLoaded, showDayProjection]);
 
   // ===== 活动列表首次加载后自动选择当前活动（仅执行一次） =====
@@ -281,16 +285,16 @@ export default function EventTrackerPage() {
       return [];
     }
 
-    const jpMusics = eventMeta.music.entries.jp;
-    const cnMusics = eventMeta.music.entries.cn;
-    const challengeMusics = jpMusics.length > 0 ? jpMusics : cnMusics;
+    const challengeSongIds = eventMeta.musicIds.jp.length > 0
+      ? eventMeta.musicIds.jp
+      : eventMeta.musicIds.cn;
 
-    if (!Array.isArray(challengeMusics) || challengeMusics.length === 0) {
+    if (challengeSongIds.length === 0) {
       return [];
     }
 
-    const songIds = challengeMusics
-      .map((music) => Number(music?.musicId))
+    const songIds = challengeSongIds
+      .map((musicId) => Number(musicId))
       .filter((musicId) => Number.isFinite(musicId) && musicId > 0);
 
     return Array.from(new Set(songIds)).sort((left, right) => left - right);
@@ -305,7 +309,7 @@ export default function EventTrackerPage() {
     availableChallengeSongIds.length > 0 ? `bandori-song-titles-${challengeSongIdsQuery}` : null,
     availableChallengeSongIds.length > 0 ? `/api/bandori/songs?ids=${challengeSongIdsQuery}` : null,
     (data: any) => (data?.songs ?? {}) as Record<string, string>,
-    { refreshOnVisible: false },
+    { refreshOnVisible: false, staleTimeMs: 24 * 60 * 60 * 1000 },
   );
 
   useEffect(() => {
@@ -329,10 +333,11 @@ export default function EventTrackerPage() {
   }, [availableChallengeSongIds, eventMeta?.eventType, selectedSongId, trackingMode]);
 
   // ===== 数据派生层 =====
-  const cnEventName = eventMeta?.name.cn || eventMeta?.name.jp || "Loading Event...";
-  const bannerPath = eventMeta?.asset.bannerRegion ?? "jp";
-  const bannerUrl = eventMeta?.asset.bundleName
-    ? `https://bestdori.com/assets/${bannerPath}/event/${eventMeta.asset.bundleName}/images_rip/banner.png`
+  const cnEventName = eventMeta?.name.cn?.trim() || eventMeta?.name.jp.trim() || "Loading Event...";
+  const bannerPath = eventMeta?.name.cn?.trim() ? "cn" : "jp";
+  const bannerBundleName = eventMeta ? resolveBandoriEventBannerBundleName(eventMeta.asset) : null;
+  const bannerUrl = bannerBundleName
+    ? buildBandoriEventBannerProxyPath(bannerPath, bannerBundleName)
     : "";
 
   const { domainStart, domainEnd, cutoffEnd, midnights } = useChartDomain(trackingMode, startDate, endDate);

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { LIVE_API_CACHE_CONTROL, withCacheControl } from "@/lib/api-cache";
 import { supabase } from "@/lib/supabase";
 
 const VALID_TRACKER_TYPES = new Set(["event", "song", "monthly"]);
@@ -37,7 +38,10 @@ function errorResponse(
         details: options?.details,
       },
     },
-    { status },
+    {
+      status,
+      headers: withCacheControl(LIVE_API_CACHE_CONTROL),
+    },
   );
 }
 
@@ -137,6 +141,9 @@ export async function handleBandoriTrackerDataRequest(request: Request) {
     }
 
     if (typeParam === "song") {
+      // 为什么 song 模式要一次返回全部 song_id 分组：
+      // challenge 活动切歌只是在前端本地切换视图，如果服务端按单曲逐次查询，
+      // 会让相同档位的数据被重复请求多次，既增加带宽也更容易打乱缓存一致性。
       const { data, error } = await supabase
         .from("bandori_tracker_data")
         .select("time, ep, song_id, is_final")
@@ -173,6 +180,8 @@ export async function handleBandoriTrackerDataRequest(request: Request) {
       return NextResponse.json({
         result: true,
         cutoffs: buildSongCutoffs((data ?? []) as TrackerRow[]),
+      }, {
+        headers: withCacheControl(LIVE_API_CACHE_CONTROL),
       });
     }
 
@@ -200,6 +209,9 @@ export async function handleBandoriTrackerDataRequest(request: Request) {
     const formattedData = formatCutoffs((data ?? []) as TrackerRow[]);
 
     if (formattedData.length === 0) {
+      // 这里保持 HTTP 200 + result=false，
+      // 是为了兼容现有 tracker 页面和外部调用者的空结果分支，
+      // 避免把“无数据”误判成“接口失败”。
       return errorResponse(200, "No tracker data found for the requested query.", {
         code: "TRACKER_DATA_NOT_FOUND",
         cutoffs: [],
@@ -214,6 +226,8 @@ export async function handleBandoriTrackerDataRequest(request: Request) {
     return NextResponse.json({
       result: true,
       cutoffs: formattedData,
+    }, {
+      headers: withCacheControl(LIVE_API_CACHE_CONTROL),
     });
   } catch (error) {
     console.error("Tracker API error:", error);

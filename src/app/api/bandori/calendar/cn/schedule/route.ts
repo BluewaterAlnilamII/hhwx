@@ -1,4 +1,12 @@
 import { NextResponse } from "next/server";
+import { revalidateTag, unstable_cache } from "next/cache";
+import {
+  BANDORI_EVENTS_CACHE_TAG,
+  BANDORI_SCHEDULE_CACHE_TAG,
+  LIVE_API_CACHE_CONTROL,
+  PUBLIC_SHORT_API_CACHE_CONTROL,
+  withCacheControl,
+} from "@/lib/api-cache";
 import {
   fetchBandoriEventRecords,
   toBandoriScheduleEvent,
@@ -11,14 +19,67 @@ export const dynamic = "force-dynamic";
 const UPDATE_BATCH_SIZE = 5;
 const UPDATE_MAX_RETRIES = 3;
 
+const readBandoriScheduleResponse = unstable_cache(
+  async () => {
+    const nowMs = Date.now();
+    const todayChinaDate = toChinaDateText(nowMs);
+    const events = await fetchBandoriEventRecords();
+
+    return {
+      events: events
+        .filter((record) => shouldExposeScheduleRecord(record, nowMs, todayChinaDate))
+        .map((record) => toBandoriScheduleEvent(record)),
+    };
+  },
+  ["bandori-schedule-cn-route:v2"],
+  { revalidate: 300, tags: [BANDORI_EVENTS_CACHE_TAG, BANDORI_SCHEDULE_CACHE_TAG] },
+);
+
 type ScheduleWritePayload = {
-  event_id: number;
-  predicted_start: string | null;
-  predicted_end: string | null;
-  duration_days: number;
-  has_rest_day: boolean;
-  sort_order: number;
+  eventId: number;
+  predictedStart: string | null;
+  predictedEnd: string | null;
+  durationDays: number;
+  hasRestDay: boolean;
+  sortOrder: number;
 };
+
+function normalizeNullableDateText(value: unknown): string | null {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+function normalizeScheduleWritePayload(value: unknown): ScheduleWritePayload | null {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+
+  const raw = value as Record<string, unknown>;
+  const eventId = Number(raw.eventId);
+  if (!Number.isFinite(eventId) || eventId <= 0) {
+    return null;
+  }
+
+  const durationDays = Number(raw.durationDays);
+  const sortOrder = Number(raw.sortOrder);
+
+  return {
+    eventId,
+    predictedStart: normalizeNullableDateText(raw.predictedStart),
+    predictedEnd: normalizeNullableDateText(raw.predictedEnd),
+    durationDays: Number.isFinite(durationDays) && durationDays > 0 ? durationDays : 7,
+    hasRestDay: Boolean(raw.hasRestDay),
+    sortOrder: Number.isFinite(sortOrder) ? sortOrder : eventId,
+  };
+}
+
+function isScheduleDeletionPayload(event: ScheduleWritePayload) {
+  return !event.predictedStart && !event.predictedEnd;
+}
 
 function normalizeExternalErrorText(value: string | null | undefined): string | null {
   if (!value) return null;
@@ -70,33 +131,46 @@ function toChinaDateText(timestampMs: number) {
   return new Date(timestampMs + 8 * 60 * 60 * 1000).toISOString().slice(0, 10);
 }
 
+// 业务规则：calendar/cn/schedule 只保留“当前与未来”排期。
+// 因此不管请求来自同步任务还是手工编辑，只要活动已结束，
+// 都应该视为不可持久化对象，并在必要时主动删除已有 schedule 行。
 function shouldPersistScheduleEvent(
-  event: { predicted_end: string | null },
+  event: { predictedEnd?: string | null; predicted_end?: string | null },
   source: { cn_end_at: number | null },
   nowMs: number,
   todayChinaDate: string,
 ) {
+  const predictedEnd = event.predictedEnd ?? event.predicted_end ?? null;
+
   if (source.cn_end_at !== null && Number(source.cn_end_at) < nowMs) {
     return false;
   }
 
-  if (source.cn_end_at === null && event.predicted_end && event.predicted_end < todayChinaDate) {
+  if (source.cn_end_at === null && predictedEnd && predictedEnd < todayChinaDate) {
     return false;
   }
 
   return true;
 }
 
-function shouldExposeScheduleRecord(record: BandoriEventRecord, nowMs: number) {
-  if (record.cn_end_at !== null && record.cn_end_at < nowMs) {
-    return true;
+// 业务规则：未来时间线里的“跳过活动”不再用布尔字段表达，
+// 而是通过 schedule 行不存在来表达。这里在 GET 阶段统一做一次过滤，
+// 避免前端重新理解 has_schedule_row 的底层语义。
+function shouldExposeScheduleRecord(record: BandoriEventRecord, nowMs: number, todayChinaDate: string) {
+  if (!record.has_schedule_row) {
+    return false;
   }
 
-  if (record.cn_start_at !== null && record.cn_end_at !== null) {
-    return record.has_schedule_row;
+  if (record.cn_start_at !== null && record.cn_start_at <= nowMs) {
+    return false;
   }
 
-  return true;
+  return shouldPersistScheduleEvent(
+    { predicted_end: record.predicted_end },
+    { cn_end_at: record.cn_end_at },
+    nowMs,
+    todayChinaDate,
+  );
 }
 
 async function hasCalendarEditorRole(userId: string): Promise<boolean> {
@@ -121,12 +195,12 @@ async function updateScheduleEvent(
   event: ScheduleWritePayload,
 ) {
   const updatePayload: Record<string, unknown> = {
-    event_id: event.event_id,
-    predicted_start: event.predicted_start,
-    predicted_end: event.predicted_end,
-    duration_days: event.duration_days,
-    has_rest_day: event.has_rest_day,
-    sort_order: event.sort_order,
+    event_id: event.eventId,
+    predicted_start: event.predictedStart,
+    predicted_end: event.predictedEnd,
+    duration_days: event.durationDays,
+    has_rest_day: event.hasRestDay,
+    sort_order: event.sortOrder,
   };
 
   for (let attempt = 1; attempt <= UPDATE_MAX_RETRIES; attempt += 1) {
@@ -136,7 +210,7 @@ async function updateScheduleEvent(
         .upsert(updatePayload, { onConflict: "event_id" });
 
       if (!result.error) {
-        return { eventId: event.event_id, error: null };
+        return { eventId: event.eventId, error: null };
       }
 
       const normalizedResultError = normalizeUpdateError(result.error);
@@ -146,7 +220,7 @@ async function updateScheduleEvent(
         continue;
       }
 
-      return { eventId: event.event_id, error: normalizedResultError };
+      return { eventId: event.eventId, error: normalizedResultError };
     } catch (error) {
       const normalizedError = normalizeUpdateError({
         message: error instanceof Error ? error.message : String(error),
@@ -159,30 +233,33 @@ async function updateScheduleEvent(
         continue;
       }
 
-      return { eventId: event.event_id, error: normalizedError };
+      return { eventId: event.eventId, error: normalizedError };
     }
   }
 
   return {
-    eventId: event.event_id,
+    eventId: event.eventId,
     error: { message: "更新失败", details: "超过最大重试次数", hint: null },
   };
 }
 
 export async function GET() {
   try {
-    const nowMs = Date.now();
-    const events = await fetchBandoriEventRecords();
-
-    return NextResponse.json({
-      events: events
-        .filter((record) => shouldExposeScheduleRecord(record, nowMs))
-        .map((record) => toBandoriScheduleEvent(record)),
+    return NextResponse.json(await readBandoriScheduleResponse(), {
+      headers: withCacheControl(PUBLIC_SHORT_API_CACHE_CONTROL),
     });
   } catch (error) {
     console.error("Bandori schedule API 错误:", error);
-    return NextResponse.json({ error: "服务器内部错误" }, { status: 500 });
+    return NextResponse.json({ error: "服务器内部错误" }, {
+      status: 500,
+      headers: withCacheControl(LIVE_API_CACHE_CONTROL),
+    });
   }
+}
+
+function revalidateBandoriTimelineCaches() {
+  revalidateTag(BANDORI_EVENTS_CACHE_TAG, "max");
+  revalidateTag(BANDORI_SCHEDULE_CACHE_TAG, "max");
 }
 
 export async function POST(request: Request) {
@@ -209,27 +286,43 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const events = body.events as ScheduleWritePayload[];
+    const events: ScheduleWritePayload[] | null = Array.isArray(body.events)
+      ? body.events.map(normalizeScheduleWritePayload).filter((event: ScheduleWritePayload | null): event is ScheduleWritePayload => event !== null)
+      : null;
 
-    if (!Array.isArray(events)) {
+    if (!events) {
       return NextResponse.json({ error: "无效的请求数据" }, { status: 400 });
+    }
+
+    const invalidDateRangeEvent = events.find((event) => {
+      const hasStart = Boolean(event.predictedStart);
+      const hasEnd = Boolean(event.predictedEnd);
+      return hasStart !== hasEnd;
+    });
+
+    if (invalidDateRangeEvent) {
+      return NextResponse.json(
+        {
+          error: "开始日期和结束日期必须同时填写，或同时清空",
+          details: `活动 ${invalidDateRangeEvent.eventId} 的预测日期不完整`,
+        },
+        { status: 400 },
+      );
     }
 
     const nowMs = Date.now();
     const todayChinaDate = toChinaDateText(nowMs);
-    const eventIds = Array.from(
-      new Set(
-        events
-          .map((event) => Number(event.event_id))
-          .filter((eventId) => Number.isFinite(eventId) && eventId > 0),
-      ),
-    );
+    const eventIds = Array.from(new Set(
+      events
+        .map((event) => Number(event.eventId))
+        .filter((eventId) => Number.isFinite(eventId) && eventId > 0),
+    ));
 
     if (eventIds.length === 0) {
       return NextResponse.json({ success: true, updated: 0, skippedPast: 0 });
     }
 
-    const requestEventMap = new Map(events.map((event) => [Number(event.event_id), event]));
+    const requestEventMap = new Map(events.map((event) => [Number(event.eventId), event]));
 
     const { data: lifecycleRows, error: lifecycleError } = await serviceClient
       .from("gbp_events")
@@ -252,7 +345,7 @@ export async function POST(request: Request) {
       return NextResponse.json(
         {
           error: "请求中包含未知活动",
-          details: `未知 event_id: ${unknownEventIds.slice(0, 10).join(", ")}`,
+          details: `未知 eventId: ${unknownEventIds.slice(0, 10).join(", ")}`,
         },
         { status: 400 },
       );
@@ -268,11 +361,17 @@ export async function POST(request: Request) {
       return !shouldPersistScheduleEvent(requestEvent, source, nowMs, todayChinaDate);
     });
 
-    if (ignoredPastEventIds.length > 0) {
+    const deletionEventIds = events
+      .filter((event) => isScheduleDeletionPayload(event))
+      .map((event) => Number(event.eventId));
+
+    const scheduleRowIdsToDelete = Array.from(new Set([...ignoredPastEventIds, ...deletionEventIds]));
+
+    if (scheduleRowIdsToDelete.length > 0) {
       const deleteResult = await serviceClient
         .from("gbp_event_schedule_cn")
         .delete()
-        .in("event_id", ignoredPastEventIds);
+        .in("event_id", scheduleRowIdsToDelete);
 
       if (deleteResult.error) {
         return NextResponse.json(
@@ -283,13 +382,23 @@ export async function POST(request: Request) {
     }
 
     const editableEvents = events.filter((event) => {
-      const source = lifecycleMap.get(Number(event.event_id));
+      const source = lifecycleMap.get(Number(event.eventId));
       if (!source) return false;
       return shouldPersistScheduleEvent(event, source, nowMs, todayChinaDate);
     });
 
-    if (editableEvents.length === 0) {
-      return NextResponse.json({ success: true, updated: 0, skippedPast: ignoredPastEventIds.length });
+    const upsertEvents = editableEvents.filter((event) => !isScheduleDeletionPayload(event));
+
+    if (upsertEvents.length === 0) {
+      if (scheduleRowIdsToDelete.length > 0) {
+        revalidateBandoriTimelineCaches();
+      }
+      return NextResponse.json({
+        success: true,
+        updated: 0,
+        deleted: deletionEventIds.length,
+        skippedPast: ignoredPastEventIds.length,
+      });
     }
 
     const { data: ongoingEvent, error: ongoingError } = await serviceClient
@@ -315,32 +424,36 @@ export async function POST(request: Request) {
       lockedUntil.setDate(lockedUntil.getDate() + 1);
       const earliestSelectableDate = lockedUntil.toISOString().slice(0, 10);
 
-      const invalidEvent = editableEvents.find(
-        (event) => event.predicted_start && event.predicted_start < earliestSelectableDate,
+      const invalidEvent = upsertEvents.find(
+        (event) => event.predictedStart && event.predictedStart < earliestSelectableDate,
       );
 
       if (invalidEvent) {
         return NextResponse.json(
           {
             error: "开始日期不能落在已确定国服活动占用的日期范围内",
-            details: `活动 ${invalidEvent.event_id} 的开始日期 ${invalidEvent.predicted_start} 早于允许编辑的最早日期 ${earliestSelectableDate}`,
+            details: `活动 ${invalidEvent.eventId} 的开始日期 ${invalidEvent.predictedStart} 早于允许编辑的最早日期 ${earliestSelectableDate}`,
           },
           { status: 400 },
         );
       }
     }
 
-    const activeEvents = editableEvents
-      .filter((event) => event.predicted_start && event.predicted_end)
-      .sort((left, right) => (left.predicted_start! > right.predicted_start! ? 1 : -1));
+    const activeEvents = upsertEvents
+      .filter((event) => event.predictedStart && event.predictedEnd)
+      .sort((left, right) => (left.predictedStart! > right.predictedStart! ? 1 : -1));
 
+    // 为什么冲突检测只看 activeEvents：
+    // calendar/cn/schedule 现在不再支持“跳过但保留占位行”的状态，
+    // 因此凡是被提交的可编辑对象都应该形成一条连续时间线，
+    // 这里只需要确保相邻区间没有重叠即可。
     for (let index = 0; index < activeEvents.length - 1; index += 1) {
       const currentEvent = activeEvents[index];
       const nextEvent = activeEvents[index + 1];
-      if (currentEvent.predicted_end! >= nextEvent.predicted_start!) {
+      if (currentEvent.predictedEnd! >= nextEvent.predictedStart!) {
         return NextResponse.json(
           {
-            error: `时间冲突：活动 ${currentEvent.event_id} 的结束日期 (${currentEvent.predicted_end}) 与活动 ${nextEvent.event_id} 的开始日期 (${nextEvent.predicted_start}) 重叠`,
+            error: `时间冲突：活动 ${currentEvent.eventId} 的结束日期 (${currentEvent.predictedEnd}) 与活动 ${nextEvent.eventId} 的开始日期 (${nextEvent.predictedStart}) 重叠`,
           },
           { status: 409 },
         );
@@ -352,8 +465,8 @@ export async function POST(request: Request) {
       error: { message?: string | null; details?: string | null; hint?: string | null };
     }> = [];
 
-    for (let index = 0; index < editableEvents.length; index += UPDATE_BATCH_SIZE) {
-      const batch = editableEvents.slice(index, index + UPDATE_BATCH_SIZE);
+    for (let index = 0; index < upsertEvents.length; index += UPDATE_BATCH_SIZE) {
+      const batch = upsertEvents.slice(index, index + UPDATE_BATCH_SIZE);
       const batchResults = await Promise.all(batch.map((event) => updateScheduleEvent(serviceClient, event)));
 
       for (const result of batchResults) {
@@ -364,6 +477,7 @@ export async function POST(request: Request) {
     }
 
     if (failures.length > 0) {
+      revalidateBandoriTimelineCaches();
       console.error("部分更新失败:", failures);
       const firstFailure = failures[0];
       const firstError = firstFailure?.error;
@@ -379,9 +493,11 @@ export async function POST(request: Request) {
       );
     }
 
+    revalidateBandoriTimelineCaches();
     return NextResponse.json({
       success: true,
-      updated: editableEvents.length,
+      updated: upsertEvents.length,
+      deleted: deletionEventIds.length,
       skippedPast: ignoredPastEventIds.length,
     });
   } catch (error) {

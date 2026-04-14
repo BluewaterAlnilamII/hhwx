@@ -167,7 +167,7 @@ export default function CalendarPage() {
     const mapped = new Map<number, string>();
 
     allCharacters.forEach((character) => {
-      mapped.set(character.character_id, getCharacterDisplayName(character) ?? `角色 ${character.character_id}`);
+      mapped.set(character.characterId, getCharacterDisplayName(character) ?? `角色 ${character.characterId}`);
     });
 
     return mapped;

@@ -9,32 +9,47 @@ hhwx/
 │   ├── PRD.md                  # 产品需求文档
 │   └── layout.md               # 文件结构说明（本文件）
 ├── public/                     # 静态资源
-│   └── res/                    # 角色头像和图标资源
+│   ├── favicon/                # 安装态/PWA 图标固定尺寸资源
+│   │   ├── icon-192.png
+│   │   └── icon-512.png
+│   └── res/                    # 前端直接访问的角色头像和图标资源
 │       ├── kokoro.png
 │       ├── kaoru.png
 │       ├── hagumi.png
 │       ├── kanon.png
 │       ├── michelle.png
 │       └── band_3.svg          # 飘落动画图案
+├── res/                        # 设计源资源；站点图标运行时入口已迁到 src/app 与 public/favicon
+│   ├── band_3.png              # 飘落图案源 PNG
+│   ├── band_3.svg              # 飘落图案源 SVG
+│   ├── kokoro.png              # 角色头像源图
+│   ├── kaoru.png
+│   ├── hagumi.png
+│   ├── kanon.png
+│   └── michelle.png
 ├── src/
 │   ├── app/                    # Next.js App Router 页面
 │   │   ├── layout.tsx          # 根布局（字体、元数据）
+│   │   ├── manifest.ts         # Web App Manifest（应用名、主题色、安装图标）
 │   │   ├── page.tsx            # 首页（角色选择/游戏页面路由、续局对话框）
 │   │   ├── globals.css         # 全局样式（动画、棋盘、气泡等）
 │   │   ├── page.module.css     # 页面模块样式（未使用，Next.js 生成）
-│   │   ├── favicon.ico         # 站点图标
+│   │   ├── favicon.ico         # 浏览器标签页 favicon
+│   │   ├── icon.png            # App Router 通用站点图标
+│   │   ├── apple-icon.png      # iOS 主屏图标
 │   │   ├── api/
 │   │   │   ├── bandori/        # Bandori 游戏相关 API 主命名空间
 │   │   │   │   ├── characters/
 │   │   │   │   │   └── route.ts    # 读取角色目录
+│   │   │   │   ├── assets/
+│   │   │   │   │   └── event-banner/
+│   │   │   │   │       └── [region]/
+│   │   │   │   │           └── [bundleName]/
+│   │   │   │   │               └── route.ts # 同域代理 Bestdori 活动横幅并提供长时间 CDN 缓存
 │   │   │   │   ├── events/
 │   │   │   │   │   ├── route.ts    # 读取结构化活动目录
-│   │   │   │   │   └── [id]/
-│   │   │   │   │       └── route.ts # 读取结构化活动详情
-│   │   │   │   ├── holiday-days/
-│   │   │   │   │   └── route.ts    # 读取中国大陆休假日/调休数据
-│   │   │   │   ├── schedule_cn/
-│   │   │   │   │   └── route.ts    # 读取/保存国服活动排期
+│   │   │   │   │   └── bonus/
+│   │   │   │   │       └── route.ts # 读取活动加成，可按 event 查询
 │   │   │   │   ├── songs/
 │   │   │   │   │   └── route.ts    # 读取 challenge 歌曲标题
 │   │   │   │   ├── tracker/
@@ -42,6 +57,10 @@ hhwx/
 │   │   │   │   │       └── route.ts # 读取 tracker 追踪数据主入口
 │   │   │   │   └── calendar/
 │   │   │   │       └── cn/
+│   │   │   │           ├── holidays/
+│   │   │   │           │   └── route.ts # 读取中国大陆休假日/调休数据
+│   │   │   │           ├── schedule/
+│   │   │   │           │   └── route.ts # 读取/保存国服活动排期主路径
 │   │   │   │           └── bandori-calendar-cn.ics/
 │   │   │   │               └── route.ts # 生成可订阅的国服活动 ICS
 │   │   │   └── tracker/

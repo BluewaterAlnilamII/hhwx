@@ -1,26 +1,26 @@
 export type CalendarBandType = "ppp" | "ag" | "hhw" | "pp" | "roselia" | "morfonica" | "ras" | "mygo" | "mix";
 
 export interface CalendarCharacter {
-  character_id: number;
-  character_type: string;
-  band_id: number;
-  color_code: string | null;
-  character_name_jp: string;
-  character_name_en: string;
-  character_name_tw: string | null;
-  character_name_cn: string | null;
-  first_name_jp: string;
-  first_name_en: string;
-  first_name_tw: string | null;
-  first_name_cn: string | null;
-  last_name_jp: string;
-  last_name_en: string;
-  last_name_tw: string | null;
-  last_name_cn: string | null;
-  nickname_jp: string | null;
-  nickname_en: string | null;
-  nickname_tw: string | null;
-  nickname_cn: string | null;
+  characterId: number;
+  characterType: string;
+  bandId: number;
+  colorCode: string | null;
+  characterNameJp: string;
+  characterNameEn: string;
+  characterNameTw: string | null;
+  characterNameCn: string | null;
+  firstNameJp: string;
+  firstNameEn: string;
+  firstNameTw: string | null;
+  firstNameCn: string | null;
+  lastNameJp: string;
+  lastNameEn: string;
+  lastNameTw: string | null;
+  lastNameCn: string | null;
+  nicknameJp: string | null;
+  nicknameEn: string | null;
+  nicknameTw: string | null;
+  nicknameCn: string | null;
 }
 
 export interface StampCharacterOption {
@@ -88,20 +88,20 @@ export function getCharacterDisplayName(character: CalendarCharacter | null | un
   if (!character) return null;
 
   return firstNonEmpty([
-    character.nickname_cn,
-    character.character_name_cn,
-    character.nickname_tw,
-    character.character_name_tw,
-    character.nickname_jp,
-    character.character_name_jp,
-    character.nickname_en,
-    character.character_name_en,
+    character.nicknameCn,
+    character.characterNameCn,
+    character.nicknameTw,
+    character.characterNameTw,
+    character.nicknameJp,
+    character.characterNameJp,
+    character.nicknameEn,
+    character.characterNameEn,
   ]);
 }
 
 export function getCharacterBandType(character: CalendarCharacter | null | undefined): CalendarBandType {
   if (!character) return "mix";
-  return getBandTypeByBandId(character.band_id);
+  return getBandTypeByBandId(character.bandId);
 }
 
 export function formatCalendarEventTitle(
@@ -129,11 +129,11 @@ export function formatCalendarSubscriptionTitle(
 
 export function buildStampCharacterOptions(characters: CalendarCharacter[]): StampCharacterOption[] {
   return [...characters]
-    .sort((left, right) => left.character_id - right.character_id)
+    .sort((left, right) => left.characterId - right.characterId)
     .map((character) => ({
-      id: character.character_id,
-      name: getCharacterDisplayName(character) ?? `角色 ${character.character_id}`,
-      bandId: character.band_id,
+      id: character.characterId,
+      name: getCharacterDisplayName(character) ?? `角色 ${character.characterId}`,
+      bandId: character.bandId,
     }));
 }
 

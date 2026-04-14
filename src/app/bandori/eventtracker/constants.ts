@@ -4,8 +4,8 @@ export const EVENT_TIERS = [1, 10, 20, 30, 40, 50, 100, 200, 300, 400, 500, 1000
 export const SONG_TIERS = [1, 10, 20, 30, 40, 50, 100, 200, 300, 400, 500, 1000, 2000, 5000, 10000, 20000];
 export const MONTHLY_TIERS = [1, 10, 20, 30, 40, 50, 100, 200, 300, 500, 1000, 2000, 3000, 4000];
 
-const INSTANT_PROJECTION_COOKIE = "eventtracker_projection_instant";
-const DAY_PROJECTION_COOKIE = "eventtracker_projection_24h";
+const INSTANT_PROJECTION_STORAGE_KEY = "eventtracker_projection_instant";
+const DAY_PROJECTION_STORAGE_KEY = "eventtracker_projection_24h";
 
 /** 根据追踪模式返回对应的可选排名档位列表。 */
 export function getTiersForMode(mode: TrackingMode): number[] {
@@ -14,9 +14,9 @@ export function getTiersForMode(mode: TrackingMode): number[] {
   return MONTHLY_TIERS;
 }
 
-/** 从 cookie 读取投影开关状态（true/false/null 表示未设置过）。 */
-export function readProjectionCookie(cookieName: string): boolean | null {
+function readLegacyProjectionCookie(cookieName: string): boolean | null {
   if (typeof document === "undefined") return null;
+
   const found = document.cookie
     .split(";")
     .map((part) => part.trim())
@@ -29,10 +29,48 @@ export function readProjectionCookie(cookieName: string): boolean | null {
   return null;
 }
 
-/** 将投影开关状态写入 cookie，有效期 1 年。 */
-export function writeProjectionCookie(cookieName: string, value: boolean) {
+function clearLegacyProjectionCookie(cookieName: string) {
   if (typeof document === "undefined") return;
-  document.cookie = `${cookieName}=${value ? "1" : "0"}; path=/; max-age=31536000; samesite=lax`;
+
+  document.cookie = `${cookieName}=; path=/; max-age=0; samesite=lax`;
 }
 
-export { INSTANT_PROJECTION_COOKIE, DAY_PROJECTION_COOKIE };
+/** 从 localStorage 读取投影开关状态（true/false/null 表示未设置过），并兼容迁移旧 cookie。 */
+export function readProjectionPreference(storageKey: string): boolean | null {
+  if (typeof window === "undefined") return null;
+
+  try {
+    const rawValue = window.localStorage.getItem(storageKey)?.toLowerCase() ?? null;
+    if (rawValue === "1" || rawValue === "true") {
+      return true;
+    }
+    if (rawValue === "0" || rawValue === "false") {
+      return false;
+    }
+  } catch {
+    return null;
+  }
+
+  const legacyValue = readLegacyProjectionCookie(storageKey);
+  if (legacyValue !== null) {
+    writeProjectionPreference(storageKey, legacyValue);
+    clearLegacyProjectionCookie(storageKey);
+  }
+
+  return legacyValue;
+}
+
+/** 将投影开关状态写入 localStorage；这类纯前端偏好不再占用 cookie。 */
+export function writeProjectionPreference(storageKey: string, value: boolean) {
+  if (typeof window === "undefined") return;
+
+  try {
+    window.localStorage.setItem(storageKey, value ? "1" : "0");
+  } catch {
+    return;
+  }
+
+  clearLegacyProjectionCookie(storageKey);
+}
+
+export { INSTANT_PROJECTION_STORAGE_KEY, DAY_PROJECTION_STORAGE_KEY };

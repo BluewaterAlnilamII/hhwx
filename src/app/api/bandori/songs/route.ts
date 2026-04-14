@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { LIVE_API_CACHE_CONTROL, PUBLIC_METADATA_API_CACHE_CONTROL, withCacheControl } from "@/lib/api-cache";
 
 const BESTDORI_SONGS_URL = "https://bestdori.com/api/songs/all.5.json";
 const TITLE_PREFERENCE_ORDER = [3, 2, 1, 0, 4] as const;
@@ -6,6 +7,10 @@ const TITLE_PREFERENCE_ORDER = [3, 2, 1, 0, 4] as const;
 type BestdoriSongMetadata = {
   musicTitle?: Array<string | null>;
 };
+
+// 当前 songs 仍直接请求 Bestdori，是因为我们本地只同步了活动目录三表，
+// 还没有把歌曲名称目录纳入数据库。这里先把外部依赖收敛到单一路由，
+// 未来若补 songs 同步任务，只需要替换这一层实现即可。
 
 function parseRequestedSongIds(request: Request): number[] {
   const { searchParams } = new URL(request.url);
@@ -51,7 +56,10 @@ export async function GET(request: Request) {
   const songIds = parseRequestedSongIds(request);
 
   if (songIds.length === 0) {
-    return NextResponse.json({ error: "Query parameter ids is required" }, { status: 400 });
+    return NextResponse.json({ error: "Query parameter ids is required" }, {
+      status: 400,
+      headers: withCacheControl(LIVE_API_CACHE_CONTROL),
+    });
   }
 
   try {
@@ -61,7 +69,10 @@ export async function GET(request: Request) {
     });
 
     if (!response.ok) {
-      return NextResponse.json({ error: "Bestdori API error" }, { status: response.status });
+      return NextResponse.json({ error: "Bestdori API error" }, {
+        status: response.status,
+        headers: withCacheControl(LIVE_API_CACHE_CONTROL),
+      });
     }
 
     const payload = await response.json() as Record<string, BestdoriSongMetadata>;
@@ -74,9 +85,14 @@ export async function GET(request: Request) {
       }
     }
 
-    return NextResponse.json({ songs });
+    return NextResponse.json({ songs }, {
+      headers: withCacheControl(PUBLIC_METADATA_API_CACHE_CONTROL),
+    });
   } catch (error) {
     console.error("Bandori songs API 错误:", error);
-    return NextResponse.json({ error: "Failed to fetch song metadata" }, { status: 500 });
+    return NextResponse.json({ error: "Failed to fetch song metadata" }, {
+      status: 500,
+      headers: withCacheControl(LIVE_API_CACHE_CONTROL),
+    });
   }
 }

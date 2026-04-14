@@ -10,9 +10,12 @@ const outfit = Outfit({
 
 export const metadata: Metadata = {
   title: "🎭 Happy！Lucky！黑白棋！",
+  applicationName: "Happy！Lucky！黑白棋！",
   description: "与 Hello, Happy World! 的成员们来一场黑白棋对决吧！",
+  manifest: "/manifest.webmanifest",
   icons: {
-    icon: "/res/band_3.svg",
+    icon: [{ url: "/favicon.ico", type: "image/x-icon" }],
+    shortcut: ["/favicon.ico"],
   },
 };
 

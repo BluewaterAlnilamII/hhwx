@@ -3,6 +3,11 @@ import {
   ChinaMainlandHolidayCalendarData,
   getFallbackChinaMainlandHolidayCalendarData,
 } from "@/app/bandori/calendar/chinaMainlandHolidayCalendar";
+import {
+  HOLIDAY_API_CACHE_CONTROL,
+  HOLIDAY_FALLBACK_API_CACHE_CONTROL,
+  withCacheControl,
+} from "@/lib/api-cache";
 
 const ICLOUD_HOLIDAY_URL = "https://p10-calendars.icloud.com/holiday/CN_zh.ics";
 const WORK_HOLIDAY_TYPE = "WORK-HOLIDAY";
@@ -68,6 +73,8 @@ function enumerateDateRange(startDate: Date, endDateExclusive: Date | null): str
   return values;
 }
 
+// 这里继续保留 iCloud ICS 解析，而不是把节假日静态写死在数据库里，
+// 是因为调休规则每年都可能变更；线上优先拉权威日历，失败时再回退本地兜底数据。
 function parseHolidayCalendar(content: string): ChinaMainlandHolidayCalendarData {
   const restDays = new Set<string>();
   const makeupWorkDays = new Set<string>();
@@ -166,16 +173,12 @@ export async function GET() {
     const content = await response.text();
     const holidayCalendar = parseHolidayCalendar(content);
     return NextResponse.json(holidayCalendar, {
-      headers: {
-        "Cache-Control": "public, s-maxage=43200, stale-while-revalidate=86400",
-      },
+      headers: withCacheControl(HOLIDAY_API_CACHE_CONTROL),
     });
   } catch (error) {
-    console.error("Bandori holiday-days API 错误:", error);
+    console.error("Bandori calendar/cn/holidays API 错误:", error);
     return NextResponse.json(getFallbackChinaMainlandHolidayCalendarData(), {
-      headers: {
-        "Cache-Control": "no-cache, max-age=0",
-      },
+      headers: withCacheControl(HOLIDAY_FALLBACK_API_CACHE_CONTROL),
     });
   }
 }

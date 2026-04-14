@@ -41,6 +41,29 @@ type BonusRow = {
   limit_breaks_jsonb: unknown;
 };
 
+type CharacterRow = {
+  character_id: number;
+  character_type: string;
+  band_id: number;
+  color_code: string | null;
+  character_name_jp: string;
+  character_name_en: string;
+  character_name_tw: string | null;
+  character_name_cn: string | null;
+  first_name_jp: string;
+  first_name_en: string;
+  first_name_tw: string | null;
+  first_name_cn: string | null;
+  last_name_jp: string;
+  last_name_en: string;
+  last_name_tw: string | null;
+  last_name_cn: string | null;
+  nickname_jp: string | null;
+  nickname_en: string | null;
+  nickname_tw: string | null;
+  nickname_cn: string | null;
+};
+
 export type BandoriEventRecord = Omit<EventRow, "music_ids_jp" | "music_ids_cn"> & {
   music_ids_jp: number[];
   music_ids_cn: number[];
@@ -50,52 +73,43 @@ export type BandoriEventRecord = Omit<EventRow, "music_ids_jp" | "music_ids_cn">
   duration_days: number;
   has_rest_day: boolean;
   sort_order: number;
-  attributes_jsonb: unknown[];
-  characters_jsonb: unknown[];
-  point_percent: number | null;
-  parameter_percent: number | null;
-  performance_percent: number | null;
-  technique_percent: number | null;
-  visual_percent: number | null;
-  members_jsonb: unknown[];
-  limit_breaks_jsonb: unknown[];
 };
 
-export type BandoriScheduleEvent = Pick<
-  BandoriEventRecord,
-  | "event_id"
-  | "event_name_jp"
-  | "event_name_cn"
-  | "band"
-  | "stamp_character_id"
-  | "cn_start_at"
-  | "cn_end_at"
-  | "predicted_start"
-  | "predicted_end"
-  | "duration_days"
-  | "has_rest_day"
-  | "sort_order"
->;
+export type BandoriEventBonusRecord = {
+  eventId: number;
+  attributes: unknown[];
+  characters: unknown[];
+  pointPercent: number | null;
+  parameterPercent: number | null;
+  performancePercent: number | null;
+  techniquePercent: number | null;
+  visualPercent: number | null;
+  members: unknown[];
+  limitBreaks: unknown[];
+};
+
+export type BandoriScheduleEvent = {
+  eventId: number;
+  predictedStart: string | null;
+  predictedEnd: string | null;
+  durationDays: number;
+  hasRestDay: boolean;
+  sortOrder: number;
+};
 
 export type BandoriPublicEventSummary = {
   eventId: number;
   eventType: string;
-  band: string;
-  stampCharacterId: number | null;
   name: {
     jp: string;
     cn: string | null;
-    display: string;
-  };
-  availability: {
-    hasJp: boolean;
-    hasCn: boolean;
   };
   asset: {
     bundleName: string;
     bannerBundleName: string | null;
-    bannerRegion: "jp" | "cn";
   };
+  band: string;
+  stampCharacterId: number | null;
   timeline: {
     jp: {
       startAt: number;
@@ -105,42 +119,14 @@ export type BandoriPublicEventSummary = {
       startAt: number | null;
       endAt: number | null;
     };
-    scheduleCn: {
-      predictedStart: string | null;
-      predictedEnd: string | null;
-      durationDays: number;
-      hasRestDay: boolean;
-      sortOrder: number;
-    };
-    trackerWindow: {
-      startAt: number | null;
-      endAt: number | null;
-      source: "official" | "predicted" | "unknown";
+    cnSchedule?: {
+      startAt: number;
+      endAt: number;
     };
   };
-  bonus: {
-    attributes: unknown[];
-    characters: unknown[];
-    pointPercent: number | null;
-    parameterPercent: number | null;
-    performancePercent: number | null;
-    techniquePercent: number | null;
-    visualPercent: number | null;
-    members: unknown[];
-    limitBreaks: unknown[];
-  };
-  music: {
-    jpIds: number[];
-    cnIds: number[];
-  };
-};
-
-export type BandoriPublicEventDetail = BandoriPublicEventSummary & {
-  music: BandoriPublicEventSummary["music"] & {
-    entries: {
-      jp: { musicId: number }[];
-      cn: { musicId: number }[];
-    };
+  musicIds: {
+    jp: number[];
+    cn: number[];
   };
 };
 
@@ -225,58 +211,62 @@ function normalizeNullableNumber(value: unknown): number | null {
   return Number.isFinite(numeric) ? numeric : null;
 }
 
-function resolveEventDisplayName(record: BandoriEventRecord): string {
-  const preferredName = record.event_name_cn?.trim();
-  if (preferredName) {
-    return preferredName;
-  }
-
-  const fallbackName = record.event_name_jp.trim();
-  if (fallbackName) {
-    return fallbackName;
-  }
-
-  return `活动 #${record.event_id}`;
-}
-
-function resolveBannerRegion(record: BandoriEventRecord): "jp" | "cn" {
-  return record.event_name_cn ? "cn" : "jp";
-}
-
-function toTrackerWindow(record: BandoriEventRecord): BandoriPublicEventSummary["timeline"]["trackerWindow"] {
+// cnSchedule 只在“官方国服时间还不存在，但本地已经维护了预测排期”时输出。
+// 这样 events DTO 可以同时满足 tracker 的时间窗需求，又不会在官方时间已知时
+// 额外重复一份和 timeline.cn 完全相同的数据。
+function toCnSchedule(record: BandoriEventRecord): BandoriPublicEventSummary["timeline"]["cnSchedule"] {
   if (record.cn_start_at !== null && record.cn_end_at !== null) {
-    return {
-      startAt: record.cn_start_at,
-      endAt: record.cn_end_at,
-      source: "official",
-    };
+    return undefined;
   }
 
   if (record.predicted_start && record.predicted_end) {
     return {
       startAt: Date.parse(`${record.predicted_start}T15:00:00+08:00`),
       endAt: Date.parse(`${record.predicted_end}T22:59:59+08:00`),
-      source: "predicted",
     };
   }
 
+  return undefined;
+}
+
+function toBandoriEventBonusRecord(row: BonusRow): BandoriEventBonusRecord {
   return {
-    startAt: null,
-    endAt: null,
-    source: "unknown",
+    eventId: row.event_id,
+    attributes: normalizeJsonArray(row.attributes_jsonb),
+    characters: normalizeJsonArray(row.characters_jsonb),
+    pointPercent: normalizeNullableNumber(row.point_percent),
+    parameterPercent: normalizeNullableNumber(row.parameter_percent),
+    performancePercent: normalizeNullableNumber(row.performance_percent),
+    techniquePercent: normalizeNullableNumber(row.technique_percent),
+    visualPercent: normalizeNullableNumber(row.visual_percent),
+    members: normalizeJsonArray(row.members_jsonb),
+    limitBreaks: normalizeJsonArray(row.limit_breaks_jsonb),
   };
 }
 
-function buildRegionArray<T>(jpValue: T | null, cnValue: T | null): [T | null, null, null, T | null] {
-  return [jpValue, null, null, cnValue];
-}
-
-function toTimestampText(value: number | null): string | null {
-  return value !== null && Number.isFinite(value) ? String(value) : null;
-}
-
-function toMusicEntries(musicIds: number[]): { musicId: number }[] | null {
-  return musicIds.length > 0 ? musicIds.map((musicId) => ({ musicId })) : null;
+function toCalendarCharacter(row: CharacterRow): CalendarCharacter {
+  return {
+    characterId: row.character_id,
+    characterType: row.character_type,
+    bandId: row.band_id,
+    colorCode: row.color_code,
+    characterNameJp: row.character_name_jp,
+    characterNameEn: row.character_name_en,
+    characterNameTw: row.character_name_tw,
+    characterNameCn: row.character_name_cn,
+    firstNameJp: row.first_name_jp,
+    firstNameEn: row.first_name_en,
+    firstNameTw: row.first_name_tw,
+    firstNameCn: row.first_name_cn,
+    lastNameJp: row.last_name_jp,
+    lastNameEn: row.last_name_en,
+    lastNameTw: row.last_name_tw,
+    lastNameCn: row.last_name_cn,
+    nicknameJp: row.nickname_jp,
+    nicknameEn: row.nickname_en,
+    nicknameTw: row.nickname_tw,
+    nicknameCn: row.nickname_cn,
+  };
 }
 
 export async function fetchBandoriCharacters(): Promise<CalendarCharacter[]> {
@@ -290,9 +280,44 @@ export async function fetchBandoriCharacters(): Promise<CalendarCharacter[]> {
     throw new Error(error.message);
   }
 
-  return (data ?? []) as unknown as CalendarCharacter[];
+  return ((data ?? []) as unknown as CharacterRow[]).map((row) => toCalendarCharacter(row));
 }
 
+/**
+ * 单独读取活动 bonus 资源。
+ *
+ * 为什么拆成独立查询：
+ * 当前 eventtracker、calendar、ICS 和 schedule 编辑都不依赖 bonus，
+ * 如果继续在活动目录查询里顺带拉取 gbp_event_bonus，会让每次活动目录读取都多出一份无用 payload。
+ * 将其拆成独立 API 后，只有真正需要活动加成的页面才会触发这张表的读取。
+ */
+export async function fetchBandoriEventBonuses(options?: { eventId?: number }): Promise<BandoriEventBonusRecord[]> {
+  const serviceClient = createServerSupabaseClient();
+  let bonusQuery = serviceClient
+    .from("gbp_event_bonus")
+    .select(BONUS_SELECT_FIELDS)
+    .order("event_id", { ascending: true });
+
+  if (options?.eventId !== undefined) {
+    bonusQuery = bonusQuery.eq("event_id", options.eventId);
+  }
+
+  const { data, error } = await bonusQuery;
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return ((data ?? []) as unknown as BonusRow[]).map((row) => toBandoriEventBonusRecord(row));
+}
+
+/**
+ * 读取 Bandori 活动目录三表并合成为统一记录。
+ *
+ * 为什么这里要保留 has_schedule_row：
+ * 删除 is_skipped 之后，未来时间线是否保留该活动改成由 schedule 行是否存在来表达。
+ * 但前端仍然需要区分“官方时间已知但被移出未来时间线”和“官方时间已知且仍在时间线中”，
+ * 所以这里把 schedule 行存在性显式带出来，避免每个调用方重复推断。
+ */
 export async function fetchBandoriEventRecords(options?: { eventId?: number }): Promise<BandoriEventRecord[]> {
   const serviceClient = createServerSupabaseClient();
 
@@ -306,21 +331,14 @@ export async function fetchBandoriEventRecords(options?: { eventId?: number }): 
     .select(SCHEDULE_SELECT_FIELDS)
     .order("sort_order", { ascending: true });
 
-  let bonusQuery = serviceClient
-    .from("gbp_event_bonus")
-    .select(BONUS_SELECT_FIELDS)
-    .order("event_id", { ascending: true });
-
   if (options?.eventId !== undefined) {
     eventsQuery = eventsQuery.eq("event_id", options.eventId);
     scheduleQuery = scheduleQuery.eq("event_id", options.eventId);
-    bonusQuery = bonusQuery.eq("event_id", options.eventId);
   }
 
-  const [eventsResult, scheduleResult, bonusResult] = await Promise.all([
+  const [eventsResult, scheduleResult] = await Promise.all([
     eventsQuery,
     scheduleQuery,
-    bonusQuery,
   ]);
 
   if (eventsResult.error) {
@@ -329,22 +347,14 @@ export async function fetchBandoriEventRecords(options?: { eventId?: number }): 
   if (scheduleResult.error) {
     throw new Error(scheduleResult.error.message);
   }
-  if (bonusResult.error) {
-    throw new Error(bonusResult.error.message);
-  }
 
   const scheduleMap = new Map<number, ScheduleRow>(
     ((scheduleResult.data ?? []) as unknown as ScheduleRow[]).map((row) => [row.event_id, row]),
   );
 
-  const bonusMap = new Map<number, BonusRow>(
-    ((bonusResult.data ?? []) as unknown as BonusRow[]).map((row) => [row.event_id, row]),
-  );
-
   return ((eventsResult.data ?? []) as unknown as EventRow[])
     .map((eventRow) => {
       const scheduleRow = scheduleMap.get(eventRow.event_id);
-      const bonusRow = bonusMap.get(eventRow.event_id);
 
       return {
         ...eventRow,
@@ -356,15 +366,6 @@ export async function fetchBandoriEventRecords(options?: { eventId?: number }): 
         duration_days: scheduleRow?.duration_days ?? 7,
         has_rest_day: scheduleRow?.has_rest_day ?? true,
         sort_order: scheduleRow?.sort_order ?? eventRow.event_id,
-        attributes_jsonb: normalizeJsonArray(bonusRow?.attributes_jsonb),
-        characters_jsonb: normalizeJsonArray(bonusRow?.characters_jsonb),
-        point_percent: normalizeNullableNumber(bonusRow?.point_percent),
-        parameter_percent: normalizeNullableNumber(bonusRow?.parameter_percent),
-        performance_percent: normalizeNullableNumber(bonusRow?.performance_percent),
-        technique_percent: normalizeNullableNumber(bonusRow?.technique_percent),
-        visual_percent: normalizeNullableNumber(bonusRow?.visual_percent),
-        members_jsonb: normalizeJsonArray(bonusRow?.members_jsonb),
-        limit_breaks_jsonb: normalizeJsonArray(bonusRow?.limit_breaks_jsonb),
       } satisfies BandoriEventRecord;
     })
     .sort((left, right) => {
@@ -375,48 +376,35 @@ export async function fetchBandoriEventRecords(options?: { eventId?: number }): 
     });
 }
 
-export async function fetchBandoriEventRecord(eventId: number): Promise<BandoriEventRecord | null> {
-  const records = await fetchBandoriEventRecords({ eventId });
-  return records[0] ?? null;
-}
-
+// calendar/cn/schedule 现在只承担“未来排期补充层”，
+// 因此这里只暴露 schedule 表本身的字段，并统一转换成前端可直接消费的小驼峰命名。
 export function toBandoriScheduleEvent(record: BandoriEventRecord): BandoriScheduleEvent {
   return {
-    event_id: record.event_id,
-    event_name_jp: record.event_name_jp,
-    event_name_cn: record.event_name_cn,
-    band: record.band,
-    stamp_character_id: record.stamp_character_id,
-    cn_start_at: record.cn_start_at,
-    cn_end_at: record.cn_end_at,
-    predicted_start: record.predicted_start,
-    predicted_end: record.predicted_end,
-    duration_days: record.duration_days,
-    has_rest_day: record.has_rest_day,
-    sort_order: record.sort_order,
+    eventId: record.event_id,
+    predictedStart: record.predicted_start,
+    predictedEnd: record.predicted_end,
+    durationDays: record.duration_days,
+    hasRestDay: record.has_rest_day,
+    sortOrder: record.sort_order,
   };
 }
 
 export function toBandoriEventSummary(record: BandoriEventRecord): BandoriPublicEventSummary {
+  const cnSchedule = toCnSchedule(record);
+
   return {
     eventId: record.event_id,
     eventType: record.event_type,
-    band: record.band,
-    stampCharacterId: record.stamp_character_id,
     name: {
       jp: record.event_name_jp,
       cn: record.event_name_cn,
-      display: resolveEventDisplayName(record),
-    },
-    availability: {
-      hasJp: Boolean(record.event_name_jp.trim()),
-      hasCn: Boolean(record.event_name_cn?.trim()),
     },
     asset: {
       bundleName: record.asset_bundle_name,
       bannerBundleName: record.banner_asset_bundle_name,
-      bannerRegion: resolveBannerRegion(record),
     },
+    band: record.band,
+    stampCharacterId: record.stamp_character_id,
     timeline: {
       jp: {
         startAt: record.jp_start_at,
@@ -426,84 +414,17 @@ export function toBandoriEventSummary(record: BandoriEventRecord): BandoriPublic
         startAt: record.cn_start_at,
         endAt: record.cn_end_at,
       },
-      scheduleCn: {
-        predictedStart: record.predicted_start,
-        predictedEnd: record.predicted_end,
-        durationDays: record.duration_days,
-        hasRestDay: record.has_rest_day,
-        sortOrder: record.sort_order,
-      },
-      trackerWindow: toTrackerWindow(record),
+      ...(cnSchedule ? { cnSchedule } : {}),
     },
-    bonus: {
-      attributes: record.attributes_jsonb,
-      characters: record.characters_jsonb,
-      pointPercent: record.point_percent,
-      parameterPercent: record.parameter_percent,
-      performancePercent: record.performance_percent,
-      techniquePercent: record.technique_percent,
-      visualPercent: record.visual_percent,
-      members: record.members_jsonb,
-      limitBreaks: record.limit_breaks_jsonb,
-    },
-    music: {
-      jpIds: record.music_ids_jp,
-      cnIds: record.music_ids_cn,
-    },
-  };
-}
-
-export function toBandoriEventDetail(record: BandoriEventRecord): BandoriPublicEventDetail {
-  return {
-    ...toBandoriEventSummary(record),
-    music: {
-      jpIds: record.music_ids_jp,
-      cnIds: record.music_ids_cn,
-      entries: {
-        jp: toMusicEntries(record.music_ids_jp) ?? [],
-        cn: toMusicEntries(record.music_ids_cn) ?? [],
-      },
+    musicIds: {
+      jp: record.music_ids_jp,
+      cn: record.music_ids_cn,
     },
   };
 }
 
 export function toBandoriEventsListResponse(records: BandoriEventRecord[]) {
   return {
-    meta: {
-      total: records.length,
-      generatedAt: new Date().toISOString(),
-    },
     events: records.map((record) => toBandoriEventSummary(record)),
-  };
-}
-
-export function toLegacyBestdoriAll5Event(record: BandoriEventRecord) {
-  return {
-    eventType: record.event_type,
-    eventName: buildRegionArray(record.event_name_jp || null, record.event_name_cn),
-    assetBundleName: record.asset_bundle_name,
-    bannerAssetBundleName: record.banner_asset_bundle_name,
-    startAt: buildRegionArray(toTimestampText(record.jp_start_at), toTimestampText(record.cn_start_at)),
-    endAt: buildRegionArray(toTimestampText(record.jp_end_at), toTimestampText(record.cn_end_at)),
-    attributes: record.attributes_jsonb,
-    characters: record.characters_jsonb,
-    eventAttributeAndCharacterBonus: {
-      pointPercent: record.point_percent ?? 0,
-      parameterPercent: record.parameter_percent ?? 0,
-    },
-    eventCharacterParameterBonus: {
-      performance: record.performance_percent ?? 0,
-      technique: record.technique_percent ?? 0,
-      visual: record.visual_percent ?? 0,
-    },
-    members: record.members_jsonb,
-    limitBreaks: record.limit_breaks_jsonb,
-  };
-}
-
-export function toLegacyBestdoriEventDetail(record: BandoriEventRecord) {
-  return {
-    ...toLegacyBestdoriAll5Event(record),
-    musics: buildRegionArray(toMusicEntries(record.music_ids_jp), toMusicEntries(record.music_ids_cn)),
   };
 }

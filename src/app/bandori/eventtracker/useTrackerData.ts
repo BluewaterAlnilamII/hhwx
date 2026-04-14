@@ -113,6 +113,36 @@ function parseSongCutoffsPayload(
   };
 }
 
+function resolvePreferredEventName(event: Pick<BandoriEventSummary, "eventId" | "name">): string {
+  const preferredName = event.name.cn?.trim();
+  if (preferredName) {
+    return preferredName;
+  }
+
+  const fallbackName = event.name.jp.trim();
+  if (fallbackName) {
+    return fallbackName;
+  }
+
+  return `活动 #${event.eventId}`;
+}
+
+function resolveCnScheduleWindow(event: Pick<BandoriEventSummary, "timeline">): { startAt: number | null; endAt: number | null } {
+  if (event.timeline.cn.startAt !== null || event.timeline.cn.endAt !== null) {
+    return {
+      startAt: event.timeline.cn.startAt,
+      endAt: event.timeline.cn.endAt,
+    };
+  }
+
+  const predictedWindow = event.timeline.cnSchedule;
+  if (predictedWindow) {
+    return predictedWindow;
+  }
+
+  return { startAt: null, endAt: null };
+}
+
 /**
  * useTrackerData —— 活动追踪页面的数据获取层钩子。
  *
@@ -143,33 +173,42 @@ export function useTrackerData(
     (data: any) => ({
       events: Array.isArray(data?.events) ? data.events as BandoriEventSummary[] : [],
     }),
+    { staleTimeMs: 5 * 60 * 1000 },
   );
 
   const { data: holidayData } = useCachedFetch<ChinaMainlandHolidayCalendarData | null>(
-    "bandori-holiday-days",
-    "/api/bandori/holiday-days",
+    "bandori-calendar-cn-holidays",
+    "/api/bandori/calendar/cn/holidays",
     (data: any) => data as ChinaMainlandHolidayCalendarData,
+    { refreshOnVisible: false, staleTimeMs: 12 * 60 * 60 * 1000 },
   );
+
+  const eventMetaMap = useMemo(() => {
+    return new Map<number, BandoriEventSummary>((eventCatalog?.events ?? []).map((event) => [event.eventId, event]));
+  }, [eventCatalog]);
 
   const allEvents = useMemo<MinimalEvent[]>(() => {
     return (eventCatalog?.events ?? [])
       .map((event) => ({
         id: event.eventId,
-        name: event.name.display,
-        startAt: event.timeline.trackerWindow.startAt,
-        endAt: event.timeline.trackerWindow.endAt,
-        hasCn: event.availability.hasCn,
-        hasJp: event.availability.hasJp,
+        name: resolvePreferredEventName(event),
+        startAt: resolveCnScheduleWindow(event).startAt,
+        endAt: resolveCnScheduleWindow(event).endAt,
+        hasCn: Boolean(event.name.cn?.trim()),
+        hasJp: Boolean(event.name.jp.trim()),
       }))
       .sort((left, right) => right.id - left.id);
   }, [eventCatalog]);
 
-  // ===== 缓存 + 前台自动刷新：活动元数据 =====
-  const { data: eventMeta } = useCachedFetch<EventMetadata | null>(
-    currentEventId !== null ? `bandori-event-meta-${currentEventId}` : null,
-    currentEventId !== null ? `/api/bandori/events/${currentEventId}` : null,
-    (data: any) => (data && !data.error ? data : null)
-  );
+  // eventtracker 当前只消费目录摘要里已经存在的字段，
+  // 因此直接从 events 列表中选出当前活动，避免再发一次 detail 请求。
+  const eventMeta = useMemo<EventMetadata | null>(() => {
+    if (currentEventId === null) {
+      return null;
+    }
+
+    return eventMetaMap.get(currentEventId) ?? null;
+  }, [currentEventId, eventMetaMap]);
 
   // ===== 缓存 + 前台自动刷新：追踪数据 =====
   // 月度排行按当前有效月份自动切换 month id，其余模式沿用当前选中的活动编号。
@@ -340,9 +379,11 @@ export function useTrackerData(
       return { startDate: null, endDate: null };
     }
 
+    const currentWindow = eventMeta ? resolveCnScheduleWindow(eventMeta) : null;
+
     return {
-      startDate: eventMeta?.timeline.trackerWindow.startAt ?? null,
-      endDate: eventMeta?.timeline.trackerWindow.endAt ?? null,
+      startDate: currentWindow?.startAt ?? null,
+      endDate: currentWindow?.endAt ?? null,
     };
   }, [currentEventId, eventMeta]);
 

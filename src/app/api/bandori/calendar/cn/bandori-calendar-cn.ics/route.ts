@@ -10,6 +10,7 @@ import {
   getSubscriptionEventColor,
   type CalendarCharacter,
 } from "@/lib/calendar-character-service";
+import { LIVE_API_CACHE_CONTROL, SUBSCRIPTION_API_CACHE_CONTROL, withCacheControl } from "@/lib/api-cache";
 
 export const dynamic = "force-dynamic";
 
@@ -68,7 +69,7 @@ export async function GET(request: Request) {
     const dtstamp = formatICSDate(now);
     const characterRows = await fetchBandoriCharacters();
     const characterMap = new Map<number, CalendarCharacter>(
-      characterRows.map((character) => [character.character_id, character]),
+      characterRows.map((character) => [character.characterId, character]),
     );
     const characterUniverse = buildStampCharacterOptions(characterRows).map((option) => option.id);
     const selectedCharacterIds = parseSelectionState(searchParams.get("s"), characterUniverse);
@@ -227,12 +228,15 @@ export async function GET(request: Request) {
       headers: {
         "Content-Type": "text/calendar; charset=utf-8",
         "Content-Disposition": 'attachment; filename="bandori-calendar-cn.ics"',
-        "Cache-Control": "no-cache, max-age=0",
+        "Cache-Control": SUBSCRIPTION_API_CACHE_CONTROL,
       },
     });
   } catch (error) {
     console.error("Bandori ICS API 错误:", error);
-    return new Response("服务器内部错误", { status: 500 });
+    return new Response("服务器内部错误", {
+      status: 500,
+      headers: withCacheControl(LIVE_API_CACHE_CONTROL),
+    });
   }
 }
 

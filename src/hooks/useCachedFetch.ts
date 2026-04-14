@@ -2,16 +2,41 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 
+type CacheEntry<T> = {
+  value: T;
+  updatedAt: number;
+};
+
 /**
  * 模块级缓存 —— 在组件卸载/重新挂载后依然保留已获取的数据。
- * 键为请求标识字符串，值为经 transform 处理后的响应。
+ * 键为请求标识字符串，值为经 transform 处理后的响应及其写入时间。
  *
  * 之所以选择模块级 Map 而非 sessionStorage / localStorage：
  * - 无序列化开销，对大型数组（如上千条追踪数据）更高效
  * - 生命周期与 SPA 会话一致，在浏览器标签存活期间自动保持
  * - Next.js client component 的模块在页面间软导航时不会被重新加载
  */
-const globalCache = new Map<string, unknown>();
+const globalCache = new Map<string, CacheEntry<unknown>>();
+
+function readCacheEntry<T>(key: string): CacheEntry<T> | undefined {
+  return globalCache.get(key) as CacheEntry<T> | undefined;
+}
+
+function writeCacheEntry<T>(key: string, value: T): void {
+  globalCache.set(key, { value, updatedAt: Date.now() });
+}
+
+function isCacheStale(entry: CacheEntry<unknown> | undefined, staleTimeMs: number | undefined): boolean {
+  if (!entry) {
+    return true;
+  }
+
+  if (staleTimeMs === undefined || staleTimeMs <= 0) {
+    return true;
+  }
+
+  return Date.now() - entry.updatedAt >= staleTimeMs;
+}
 
 /**
  * useCachedFetch —— 带内存缓存 + 前台回归自动刷新的通用 HTTP 请求 Hook。
@@ -25,6 +50,7 @@ const globalCache = new Map<string, unknown>();
  * @param url        请求地址（传 null 则跳过请求）
  * @param transform  将原始 JSON 响应转换为目标类型 T 的纯函数
  * @param options.refreshOnVisible  是否在切回前台时自动刷新（默认 true）
+ * @param options.staleTimeMs       缓存保鲜时长。命中且未过期时，跳过挂载刷新与可见性刷新。
  * @param options.merge  合并策略函数，用于防止静默刷新覆盖实时推送的新数据。
  *                       当提供此函数时，HTTP 响应不会直接替换缓存，而是与当前缓存进行合并。
  *                       典型场景：WebSocket 在 HTTP 请求期间追加了新数据点，
@@ -35,13 +61,19 @@ export function useCachedFetch<T>(
   key: string | null,
   url: string | null,
   transform?: (raw: any) => T,
-  options?: { refreshOnVisible?: boolean; merge?: (incoming: T, existing: T) => T }
+  options?: { refreshOnVisible?: boolean; staleTimeMs?: number; merge?: (incoming: T, existing: T) => T }
 ): { data: T | null; loading: boolean; refresh: () => void } {
   const refreshOnVisible = options?.refreshOnVisible ?? true;
 
   // 懒初始化：组件首次渲染即可从缓存读取上一次的数据
   const [data, setData] = useState<T | null>(() => {
-    if (key && globalCache.has(key)) return globalCache.get(key) as T;
+    if (key) {
+      const cachedEntry = readCacheEntry<T>(key);
+      if (cachedEntry) {
+        return cachedEntry.value;
+      }
+    }
+
     return null;
   });
   const [loading, setLoading] = useState(false);
@@ -51,10 +83,16 @@ export function useCachedFetch<T>(
   const urlRef = useRef(url);
   const transformRef = useRef(transform);
   const mergeRef = useRef(options?.merge);
+  const staleTimeRef = useRef(options?.staleTimeMs);
   keyRef.current = key;
   urlRef.current = url;
   transformRef.current = transform;
   mergeRef.current = options?.merge;
+  staleTimeRef.current = options?.staleTimeMs;
+
+  const shouldRefresh = useCallback((currentKey: string) => {
+    return isCacheStale(readCacheEntry(currentKey), staleTimeRef.current);
+  }, []);
 
   /**
    * 发起一次 HTTP 请求并更新缓存。
@@ -85,13 +123,13 @@ export function useCachedFetch<T>(
         // 当存在 merge 策略且缓存中已有数据时，合并而非覆盖。
         // 这是防止前台恢复后 HTTP 静默刷新覆盖 WebSocket 已追加数据的关键逻辑。
         const mergeFn = mergeRef.current;
-        const existing = globalCache.get(currentKey) as T | undefined;
+        const existing = readCacheEntry<T>(currentKey)?.value;
         if (mergeFn && existing !== undefined) {
           const merged = mergeFn(result, existing);
-          globalCache.set(currentKey, merged);
+          writeCacheEntry(currentKey, merged);
           setData(merged);
         } else {
-          globalCache.set(currentKey, result);
+          writeCacheEntry(currentKey, result);
           setData(result);
         }
       })
@@ -112,30 +150,33 @@ export function useCachedFetch<T>(
       return;
     }
 
-    const cached = globalCache.get(key);
-    if (cached !== undefined) {
-      setData(cached as T);
+    const cachedEntry = readCacheEntry<T>(key);
+    if (cachedEntry !== undefined) {
+      setData(cachedEntry.value);
       setLoading(false);
-      doFetch(true); // 有缓存，静默刷新
+      if (shouldRefresh(key)) {
+        doFetch(true); // 有缓存但已过保鲜期，静默刷新
+      }
     } else {
       setData(null);
       setLoading(true);
       doFetch(false); // 无缓存，显示 loading
     }
-  }, [key, url, doFetch]);
+  }, [key, url, doFetch, shouldRefresh]);
 
   // 页面从后台切回前台时自动静默刷新
   useEffect(() => {
     if (!refreshOnVisible) return;
 
     const onVisibilityChange = () => {
-      if (document.visibilityState === "visible") {
+      const currentKey = keyRef.current;
+      if (document.visibilityState === "visible" && currentKey && shouldRefresh(currentKey)) {
         doFetch(true);
       }
     };
     document.addEventListener("visibilitychange", onVisibilityChange);
     return () => document.removeEventListener("visibilitychange", onVisibilityChange);
-  }, [refreshOnVisible, doFetch]);
+  }, [refreshOnVisible, doFetch, shouldRefresh]);
 
   const refresh = useCallback(() => doFetch(true), [doFetch]);
 
@@ -149,6 +190,6 @@ export function useCachedFetch<T>(
  * 确保用户切换视图再切回时看到的缓存快照已包含实时追加的数据点。
  */
 export function updateFetchCache<T>(key: string, updater: (prev: T | undefined) => T): void {
-  const prev = globalCache.get(key) as T | undefined;
-  globalCache.set(key, updater(prev));
+  const prev = readCacheEntry<T>(key)?.value;
+  writeCacheEntry(key, updater(prev));
 }
