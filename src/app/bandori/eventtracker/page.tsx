@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useEffect, useRef, useMemo, useCallback, useLayoutEffect } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback, useLayoutEffect, useSyncExternalStore } from "react";
 import { format } from "date-fns";
+import Image from "next/image";
 import {
   LineChart,
   Line,
@@ -22,7 +23,7 @@ import {
   buildBandoriEventBannerProxyPath,
   resolveBandoriEventBannerBundleName,
 } from "@/lib/bandori-asset-proxy";
-import type { MinimalEvent, TrackingMode } from "./types";
+import type { TrackerDotProps, TrackerMouseState, TrackerTooltipPayloadEntry, TrackingMode } from "./types";
 import {
   INSTANT_PROJECTION_STORAGE_KEY,
   DAY_PROJECTION_STORAGE_KEY,
@@ -59,13 +60,73 @@ const TOOLTIP_EDGE_PADDING = 8;
 const FIXED_Y_AXIS_WIDTH = 38;
 const CHART_MARGIN = { top: 20, right: 5, left: 0, bottom: 20 } as const;
 const X_AXIS_HEIGHT = 30;
+const PROJECTION_PREFERENCE_CHANGE_EVENT = "eventtracker:projection-preference-change";
 
 type HoverTooltipState = {
   active: boolean;
   coordinate: { x: number; y: number };
   label?: number;
-  payload?: any[];
+  payload?: TrackerTooltipPayloadEntry[];
 };
+
+type ModeIndicatorStyle = {
+  width: number;
+  height: number;
+  x: number;
+  y: number;
+  ready: boolean;
+};
+
+type ProjectionPreferenceUpdater = boolean | ((previous: boolean) => boolean);
+
+function isInvalidMarkerPosition(cx?: number, cy?: number): boolean {
+  return typeof cx !== "number" || Number.isNaN(cx) || typeof cy !== "number" || Number.isNaN(cy);
+}
+
+function renderHiddenMarker(key?: string) {
+  return <circle key={key} cx={0} cy={0} r={0} stroke="none" />;
+}
+
+function formatBandoriCnDateTime(timestamp: number) {
+  return format(timestamp, "yyyy年M月d日 HH:mm");
+}
+
+function subscribeProjectionPreference(onStoreChange: () => void): () => void {
+  if (typeof window === "undefined") {
+    return () => undefined;
+  }
+
+  window.addEventListener("storage", onStoreChange);
+  window.addEventListener(PROJECTION_PREFERENCE_CHANGE_EVENT, onStoreChange);
+
+  return () => {
+    window.removeEventListener("storage", onStoreChange);
+    window.removeEventListener(PROJECTION_PREFERENCE_CHANGE_EVENT, onStoreChange);
+  };
+}
+
+function useProjectionPreference(storageKey: string, fallbackValue: boolean) {
+  const value = useSyncExternalStore(
+    subscribeProjectionPreference,
+    () => readProjectionPreference(storageKey) ?? fallbackValue,
+    () => fallbackValue,
+  );
+
+  const setValue = useCallback((nextValue: ProjectionPreferenceUpdater) => {
+    const previousValue = readProjectionPreference(storageKey) ?? fallbackValue;
+    const resolvedValue = typeof nextValue === "function"
+      ? nextValue(previousValue)
+      : nextValue;
+
+    writeProjectionPreference(storageKey, resolvedValue);
+
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new Event(PROJECTION_PREFERENCE_CHANGE_EVENT));
+    }
+  }, [fallbackValue, storageKey]);
+
+  return [value, setValue] as const;
+}
 
 function buildNonWorkingDayBands(
   domainStart: number | "auto",
@@ -129,24 +190,35 @@ function EventProgressBar({ startDate, endDate }: { startDate: number; endDate: 
     const days = Math.floor(remainingMs / (1000 * 60 * 60 * 24));
     const hours = Math.floor((remainingMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
     const minutes = Math.floor((remainingMs % (1000 * 60 * 60)) / (1000 * 60));
-    const seconds = Math.floor((remainingMs % (1000 * 60)) / 1000);
+    const seconds = Math.floor((remainingMs % (1000 * 60)) / 1000).toString().padStart(2, "0");
     return (
-      <>
-        距结束
-        <span className="text-blue-500">{days}</span>天
-        <span className="text-blue-500">{hours}</span>小时
-        <span className="text-blue-500">{minutes}</span>分
-        <span className="text-blue-500">{seconds}</span>秒
-      </>
+      <span className="inline-flex items-baseline gap-0.5">
+        <span>距结束</span>
+        <span className="inline-flex items-baseline gap-0.5">
+          <span className="text-blue-500">{days}</span>
+          <span>天</span>
+          <span className="text-blue-500">{hours}</span>
+          <span>小时</span>
+          <span className="text-blue-500">{minutes}</span>
+          <span>分</span>
+          {/* 只有秒数每秒变化最频繁，这里单独保留固定宽度，避免文本抖动。 */}
+          <span className="inline-flex min-w-[2ch] justify-end text-blue-500 tabular-nums">{seconds}</span>
+          <span>秒</span>
+        </span>
+      </span>
     );
   };
 
   return (
     <div className="bg-white dark:bg-[#131A2B] rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-gray-800">
-      <div className="flex justify-between text-sm font-semibold mb-2">
-        <span className="text-blue-500 font-bold">活动进度</span>
-        <span>
-          <span className="text-blue-500">{progress.toFixed(1)}%</span>已完成 {timeRemaining()}
+      <div className="mb-2 flex items-start justify-between gap-3 text-sm font-semibold">
+        <span className="shrink-0 whitespace-nowrap text-blue-500 font-bold">活动进度</span>
+        <span className="min-w-0 flex flex-col items-end gap-0.5 text-right leading-tight">
+          <span className="inline-flex items-baseline gap-1 whitespace-nowrap">
+            <span className="text-blue-500 tabular-nums">{progress.toFixed(1)}%</span>
+            <span>已完成</span>
+          </span>
+          <span className="inline-flex justify-end">{timeRemaining()}</span>
         </span>
       </div>
       <div className="h-3 w-full bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
@@ -188,8 +260,22 @@ export default function EventTrackerPage() {
   const [trackingMode, setTrackingMode] = useState<TrackingMode>("event");
   const [selectedTier, setSelectedTier] = useState<number>(1000);
   const [selectedSongId, setSelectedSongId] = useState<number>(0);
+  const [chartRenderRevision, setChartRenderRevision] = useState(0);
+  const [modeIndicatorStyle, setModeIndicatorStyle] = useState<ModeIndicatorStyle>({
+    width: 0,
+    height: 0,
+    x: 0,
+    y: 0,
+    ready: false,
+  });
 
   const [zoomIndex, setZoomIndex] = useState(0);
+  const modeTabsListRef = useRef<HTMLDivElement>(null);
+  const modeTriggerRefs = useRef<Record<TrackingMode, HTMLButtonElement | null>>({
+    event: null,
+    song: null,
+    monthly: null,
+  });
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const chartViewportRef = useRef<HTMLDivElement>(null);
   const tooltipRef = useRef<HTMLDivElement>(null);
@@ -202,7 +288,19 @@ export default function EventTrackerPage() {
   const [chartViewportHeight, setChartViewportHeight] = useState(400);
 
   // ===== 数据获取层 =====
-  const { allEvents, eventMeta, startDate, endDate, chartData, holidayData, loading, apiHasResult } = useTrackerData(
+  const {
+    allEvents,
+    currentEventId: resolvedCurrentEventId,
+    recommendedEventId,
+    eventMeta,
+    selectedSongId: resolvedSelectedSongId,
+    startDate,
+    endDate,
+    chartData,
+    holidayData,
+    loading,
+    apiHasResult,
+  } = useTrackerData(
     currentEventId,
     trackingMode,
     selectedTier,
@@ -210,74 +308,65 @@ export default function EventTrackerPage() {
   );
 
   // ===== 投影偏好持久化 =====
-  const [showInstantProjection, setShowInstantProjection] = useState(true);
-  const [showDayProjection, setShowDayProjection] = useState(true);
-  const [projectionPrefLoaded, setProjectionPrefLoaded] = useState(false);
-
-  useEffect(() => {
-    const instantPref = readProjectionPreference(INSTANT_PROJECTION_STORAGE_KEY);
-    const dayPref = readProjectionPreference(DAY_PROJECTION_STORAGE_KEY);
-    if (instantPref !== null) setShowInstantProjection(instantPref);
-    if (dayPref !== null) setShowDayProjection(dayPref);
-    setProjectionPrefLoaded(true);
-  }, []);
-
-  useEffect(() => {
-    if (!projectionPrefLoaded) return;
-    writeProjectionPreference(INSTANT_PROJECTION_STORAGE_KEY, showInstantProjection);
-  }, [projectionPrefLoaded, showInstantProjection]);
-
-  useEffect(() => {
-    if (!projectionPrefLoaded) return;
-    writeProjectionPreference(DAY_PROJECTION_STORAGE_KEY, showDayProjection);
-  }, [projectionPrefLoaded, showDayProjection]);
-
-  // ===== 活动列表首次加载后自动选择当前活动（仅执行一次） =====
-  const autoSelectDoneRef = useRef(false);
-  useEffect(() => {
-    if (allEvents.length === 0 || autoSelectDoneRef.current) return;
-    const best = findBestEvent(allEvents);
-    if (best) {
-      setCurrentEventId(best.id);
-      autoSelectDoneRef.current = true;
-    }
-  }, [allEvents]);
-
-  /**
-   * 自动选择活动的优先级策略：
-   * 1. 进行中的活动 —— 用户最可能关注正在进行的活动
-   * 2. 最近即将开始（ID 最小的未来活动） —— 活动尚未开始时提前展示
-   * 3. 最近结束（ID 最大的已结束活动） —— 所有活动都结束时展示最近的
-   */
-  const findBestEvent = useCallback((events: MinimalEvent[]): MinimalEvent | null => {
-    const now = Date.now();
-    const ongoing = events.find(ev => ev.startAt !== null && ev.endAt !== null && now >= ev.startAt && now <= ev.endAt);
-    if (ongoing) return ongoing;
-    const upcoming = events
-      .filter(ev => ev.startAt === null || ev.startAt > now)
-      .sort((a, b) => a.id - b.id);
-    if (upcoming.length > 0) return upcoming[0];
-    const finished = events
-      .filter(ev => ev.endAt !== null && ev.endAt < now)
-      .sort((a, b) => b.id - a.id);
-    if (finished.length > 0) return finished[0];
-    return null;
-  }, []);
+  const [showInstantProjection, setShowInstantProjection] = useProjectionPreference(INSTANT_PROJECTION_STORAGE_KEY, true);
+  const [showDayProjection, setShowDayProjection] = useProjectionPreference(DAY_PROJECTION_STORAGE_KEY, true);
 
   const jumpToLatest = () => {
-    if (allEvents.length === 0) return;
-    const best = findBestEvent(allEvents);
-    if (best) setCurrentEventId(best.id);
+    if (recommendedEventId !== null) {
+      setCurrentEventId(recommendedEventId);
+    }
   };
 
-  // 切换追踪模式时重置缩放，并将 tier 修正到目标模式的合法值
-  useEffect(() => {
+  const handleTrackingModeChange = useCallback((value: string) => {
+    const nextMode = value as TrackingMode;
+
+    setTrackingMode(nextMode);
     setZoomIndex(0);
-    const targetTiers = getTiersForMode(trackingMode);
-    if (!targetTiers.includes(selectedTier)) {
-      const validTiers = targetTiers.filter(t => t <= selectedTier);
-      setSelectedTier(validTiers.length > 0 ? validTiers[validTiers.length - 1] : targetTiers[0]);
+    const targetTiers = getTiersForMode(nextMode);
+
+    setSelectedTier((previousTier) => {
+      if (targetTiers.includes(previousTier)) {
+        return previousTier;
+      }
+
+      const validTiers = targetTiers.filter((tier) => tier <= previousTier);
+      return validTiers.length > 0 ? validTiers[validTiers.length - 1] : targetTiers[0];
+    });
+  }, []);
+
+  const updateModeIndicator = useCallback(() => {
+    const listElement = modeTabsListRef.current;
+    const activeTrigger = modeTriggerRefs.current[trackingMode];
+    if (!listElement || !activeTrigger) {
+      return;
     }
+
+    const listRect = listElement.getBoundingClientRect();
+    const activeRect = activeTrigger.getBoundingClientRect();
+
+    // 指示器直接跟随真实按钮几何信息，可以同时兼容横排与竖排布局，
+    // 避免为不同断点手写两套动画逻辑。
+    const nextStyle = {
+      width: activeRect.width,
+      height: activeRect.height,
+      x: activeRect.left - listRect.left,
+      y: activeRect.top - listRect.top,
+      ready: true,
+    };
+
+    setModeIndicatorStyle((previous) => {
+      if (
+        previous.width === nextStyle.width &&
+        previous.height === nextStyle.height &&
+        previous.x === nextStyle.x &&
+        previous.y === nextStyle.y &&
+        previous.ready === nextStyle.ready
+      ) {
+        return previous;
+      }
+
+      return nextStyle;
+    });
   }, [trackingMode]);
 
   const availableChallengeSongIds = useMemo(() => {
@@ -308,29 +397,22 @@ export default function EventTrackerPage() {
   const { data: challengeSongTitleMap } = useCachedFetch<Record<string, string>>(
     availableChallengeSongIds.length > 0 ? `bandori-song-titles-${challengeSongIdsQuery}` : null,
     availableChallengeSongIds.length > 0 ? `/api/bandori/songs?ids=${challengeSongIdsQuery}` : null,
-    (data: any) => (data?.songs ?? {}) as Record<string, string>,
+    (data: unknown) => {
+      if (typeof data !== "object" || data === null || !("songs" in data)) {
+        return {};
+      }
+
+      const songs = (data as { songs?: Record<string, string> }).songs;
+      return songs ?? {};
+    },
     { refreshOnVisible: false, staleTimeMs: 24 * 60 * 60 * 1000 },
   );
-
-  useEffect(() => {
-    if (trackingMode !== "song") {
-      if (selectedSongId !== 0) {
-        setSelectedSongId(0);
-      }
-      return;
-    }
-
-    if (eventMeta?.eventType !== "challenge" || availableChallengeSongIds.length === 0) {
-      if (selectedSongId !== 0) {
-        setSelectedSongId(0);
-      }
-      return;
-    }
-
-    if (!availableChallengeSongIds.includes(selectedSongId)) {
-      setSelectedSongId(availableChallengeSongIds[0]);
-    }
-  }, [availableChallengeSongIds, eventMeta?.eventType, selectedSongId, trackingMode]);
+  // 1/2/3 首歌的布局密度差异很大，按数量限制容器宽度可以减少横向留白。
+  const challengeSongGridClassName = availableChallengeSongIds.length <= 1
+    ? "max-w-[12rem] grid-cols-1"
+    : availableChallengeSongIds.length === 2
+      ? "max-w-[23.5rem] grid-cols-1 sm:grid-cols-2"
+      : "max-w-[31.5rem] grid-cols-1 sm:grid-cols-2 xl:grid-cols-3";
 
   // ===== 数据派生层 =====
   const cnEventName = eventMeta?.name.cn?.trim() || eventMeta?.name.jp.trim() || "Loading Event...";
@@ -444,6 +526,15 @@ export default function EventTrackerPage() {
     });
   }, [updateTooltipPosition]);
 
+  const flushTooltipPositionUpdate = useCallback(() => {
+    if (tooltipAnimationFrameRef.current !== null) {
+      cancelAnimationFrame(tooltipAnimationFrameRef.current);
+      tooltipAnimationFrameRef.current = null;
+    }
+
+    updateTooltipPosition();
+  }, [updateTooltipPosition]);
+
   // ===== 图表容器尺寸变化时默认将视角聚焦到最新真实数据点附近 =====
   useEffect(() => {
     const el = scrollContainerRef.current;
@@ -498,19 +589,81 @@ export default function EventTrackerPage() {
     }
     syncScrollbarMetrics();
     scheduleTooltipPositionUpdate();
-  }, [focusViewportNearLatestDataPoint, zoomWidthMultiplier, currentEventId, trackingMode, selectedTier, scheduleTooltipPositionUpdate, syncScrollbarMetrics]);
+  }, [focusViewportNearLatestDataPoint, zoomWidthMultiplier, resolvedCurrentEventId, trackingMode, selectedTier, scheduleTooltipPositionUpdate, syncScrollbarMetrics]);
+
+  useEffect(() => {
+    const rebuildChart = () => {
+      if (document.visibilityState === "hidden") {
+        return;
+      }
+
+      setChartRenderRevision((previous) => previous + 1);
+
+      requestAnimationFrame(() => {
+        syncScrollbarMetrics();
+        if (!isUserScrollingRef.current) {
+          focusViewportNearLatestDataPoint();
+        }
+        scheduleTooltipPositionUpdate();
+      });
+    };
+
+    document.addEventListener("visibilitychange", rebuildChart);
+    window.addEventListener("pageshow", rebuildChart);
+
+    return () => {
+      document.removeEventListener("visibilitychange", rebuildChart);
+      window.removeEventListener("pageshow", rebuildChart);
+    };
+  }, [focusViewportNearLatestDataPoint, scheduleTooltipPositionUpdate, syncScrollbarMetrics]);
 
   useLayoutEffect(() => {
     if (!hoverTooltip?.active) {
       return;
     }
+
+    // 悬浮内容切换为更宽的投影提示时，需要在首帧绘制前同步重算尺寸与位置，
+    // 否则绝对定位元素会先按旧宽度发生 shrink-to-fit 换行。
+    flushTooltipPositionUpdate();
     scheduleTooltipPositionUpdate();
-  }, [hoverTooltip, zoomWidthMultiplier, scheduleTooltipPositionUpdate]);
+  }, [flushTooltipPositionUpdate, hoverTooltip, zoomWidthMultiplier, scheduleTooltipPositionUpdate]);
+
+  useLayoutEffect(() => {
+    const listElement = modeTabsListRef.current;
+    if (!listElement) {
+      return;
+    }
+
+    updateModeIndicator();
+
+    const resizeObserver = new ResizeObserver(() => {
+      updateModeIndicator();
+    });
+    resizeObserver.observe(listElement);
+
+    const activeTrigger = modeTriggerRefs.current[trackingMode];
+    if (activeTrigger) {
+      resizeObserver.observe(activeTrigger);
+    }
+
+    const animationFrame = requestAnimationFrame(() => {
+      updateModeIndicator();
+    });
+
+    window.addEventListener("resize", updateModeIndicator);
+
+    return () => {
+      resizeObserver.disconnect();
+      cancelAnimationFrame(animationFrame);
+      window.removeEventListener("resize", updateModeIndicator);
+    };
+  }, [trackingMode, updateModeIndicator]);
 
   const { ticks: yTicks, domain: yDomainInfo } = useMemo(
     () => generateYTicks(finalDisplayedData),
     [finalDisplayedData],
   );
+  const chartContainerKey = `${resolvedCurrentEventId ?? "none"}-${trackingMode}-${selectedTier}-${resolvedSelectedSongId}-${chartRenderRevision}`;
 
   // ===== 分数摘要 =====
   const scoreSummary = useMemo(() => {
@@ -561,7 +714,7 @@ export default function EventTrackerPage() {
               <div className="flex items-center gap-2">
                 <select
                   className="bg-gray-100 dark:bg-[#0C111C] border border-gray-200 dark:border-gray-700/50 rounded-xl px-4 py-2.5 text-sm font-bold text-gray-700 dark:text-gray-300 focus:ring-2 focus:ring-[#f43f5e] focus:outline-none cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-800 transition-colors shadow-sm w-full max-w-[400px] text-ellipsis sm:min-w-[320px]"
-                  value={currentEventId || ""}
+                  value={resolvedCurrentEventId || ""}
                   onChange={(e) => setCurrentEventId(parseInt(e.target.value))}
                 >
                   <option disabled value="">切换往期活动...</option>
@@ -634,7 +787,7 @@ export default function EventTrackerPage() {
                               onClick={() => { setCurrentEventId(ev.id); setIsPickerOpen(false); setSearchQuery(""); }}
                               className="w-full px-6 py-3.5 flex items-center justify-between hover:bg-blue-50/50 dark:hover:bg-blue-500/5 transition-colors group"
                             >
-                              <span className={`text-sm font-bold ${ev.id === currentEventId ? "text-blue-500" : "text-gray-600 dark:text-gray-300"}`}>
+                              <span className={`text-sm font-bold ${ev.id === resolvedCurrentEventId ? "text-blue-500" : "text-gray-600 dark:text-gray-300"}`}>
                                 {ev.id}期 : {ev.name}
                               </span>
                               <div className="flex gap-2">
@@ -653,8 +806,8 @@ export default function EventTrackerPage() {
             <div className="text-sm font-medium text-gray-500 dark:text-gray-400">
               {startDate && endDate ? (
                 <>
-                  <p>开始: {format(startDate, "MMM do yyyy, HH:mm")} (CN)</p>
-                  <p>结束: {format(endDate, "MMM do yyyy, HH:mm")} (CN)</p>
+                  <p>开始: {formatBandoriCnDateTime(startDate)} (CN)</p>
+                  <p>结束: {formatBandoriCnDateTime(endDate)} (CN)</p>
                 </>
               ) : null}
             </div>
@@ -662,10 +815,14 @@ export default function EventTrackerPage() {
 
           <div className="flex-1 pt-6 md:pt-0 flex justify-end">
             {bannerUrl ? (
-              <img
+              <Image
                 src={bannerUrl}
                 alt="活动横幅"
-                className="rounded-2xl shadow-lg ring-1 ring-black/5 hover:scale-105 transition-transform duration-500 max-h-[140px] object-cover"
+                width={420}
+                height={140}
+                unoptimized
+                sizes="(max-width: 768px) 100vw, 420px"
+                className="h-auto w-auto max-h-[140px] max-w-full rounded-2xl object-cover shadow-lg ring-1 ring-black/5 transition-transform duration-500 hover:scale-105"
               />
             ) : (
               <div className="w-[300px] h-[100px] bg-gray-200 dark:bg-gray-800 rounded-2xl animate-pulse" />
@@ -680,12 +837,25 @@ export default function EventTrackerPage() {
         <div className="bg-white/80 dark:bg-[#131A2B]/80 backdrop-blur-xl rounded-3xl p-3 sm:p-6 shadow-xl border border-white/20 dark:border-gray-800">
           <Tabs.Root
             value={trackingMode}
-            onValueChange={(val: string) => setTrackingMode(val as TrackingMode)}
-            className="w-full flex flex-col gap-4 sm:gap-6"
+            onValueChange={handleTrackingModeChange}
+            className="w-full flex flex-col gap-3.5 sm:gap-4"
           >
-            <div className="flex flex-col xl:flex-row gap-4 items-stretch">
+            <div className="flex flex-col gap-3.5 items-stretch xl:flex-row xl:items-start xl:gap-4">
               {/* 追踪模式切换 */}
-              <Tabs.List className="flex flex-row xl:flex-col justify-center gap-1 sm:gap-2 p-1.5 sm:p-2 bg-gray-100/80 dark:bg-gray-900/50 rounded-2xl shadow-inner flex-shrink-0 overflow-x-auto">
+              <Tabs.List
+                ref={modeTabsListRef}
+                className="relative flex w-full flex-row justify-center gap-1 overflow-x-auto rounded-[20px] border border-white/70 bg-white/65 p-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.72)] dark:border-gray-800/70 dark:bg-[#0F1728]/84 xl:w-[7.1rem] xl:flex-none xl:flex-col xl:self-start xl:overflow-visible"
+              >
+                <span
+                  aria-hidden="true"
+                  className="pointer-events-none absolute left-0 top-0 z-0 rounded-[16px] bg-white shadow-[0_8px_18px_rgba(59,130,246,0.14)] ring-1 ring-blue-100 transition-[transform,width,height,opacity] duration-300 ease-out dark:bg-[#182133] dark:ring-blue-500/20"
+                  style={{
+                    width: `${modeIndicatorStyle.width}px`,
+                    height: `${modeIndicatorStyle.height}px`,
+                    transform: `translate(${modeIndicatorStyle.x}px, ${modeIndicatorStyle.y}px)`,
+                    opacity: modeIndicatorStyle.ready ? 1 : 0,
+                  }}
+                />
                 {([
                   { id: "event", label: "活动排行" },
                   { id: "song", label: "歌曲排行" },
@@ -693,56 +863,66 @@ export default function EventTrackerPage() {
                 ] as const).map((mode) => (
                   <Tabs.Trigger
                     key={mode.id}
+                    ref={(node) => {
+                      modeTriggerRefs.current[mode.id] = node;
+                    }}
                     value={mode.id}
-                    className="px-4 py-2 sm:px-6 sm:py-3 rounded-xl text-xs sm:text-sm font-semibold transition-all duration-300 whitespace-nowrap
-                      data-[state=active]:bg-white data-[state=active]:dark:bg-gray-800
-                      data-[state=active]:text-blue-600 data-[state=active]:dark:text-blue-400
-                      data-[state=active]:shadow-md data-[state=inactive]:text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 w-full text-center tracking-wide"
+                    className="relative z-10 min-h-[2.85rem] flex-1 rounded-[16px] px-3 py-1.5 text-[14px] font-semibold tracking-[0.01em] text-center whitespace-nowrap transition-colors duration-300
+                      data-[state=active]:text-blue-600 dark:data-[state=active]:text-blue-300
+                      data-[state=inactive]:text-gray-500 hover:text-gray-700 dark:data-[state=inactive]:text-gray-400 dark:hover:text-gray-200 xl:flex-none"
                   >
                     {mode.label}
                   </Tabs.Trigger>
                 ))}
               </Tabs.List>
 
-              <div className="flex-1 min-w-0 flex flex-col gap-4 xl:max-w-[42rem] xl:mx-auto">
+              <div className="flex-1 min-w-0 flex flex-col gap-3 xl:max-w-[41rem] xl:mx-auto">
                 {trackingMode === "song" && availableChallengeSongIds.length > 0 && (
-                  <div className="bg-gray-50/50 dark:bg-[#0C111C]/50 rounded-2xl p-3 sm:p-4 border border-gray-100 dark:border-gray-800/60 shadow-inner overflow-hidden flex flex-col justify-center">
-                    <div
-                      className="grid gap-2.5 sm:gap-3 w-full"
-                      style={{
-                        gridTemplateColumns: `repeat(${Math.min(Math.max(availableChallengeSongIds.length, 1), 3)}, minmax(0, 1fr))`,
-                      }}
-                    >
-                      {availableChallengeSongIds.map(songId => (
-                        <button
-                          key={songId}
-                          onClick={() => setSelectedSongId(songId)}
-                          title={`song_id : ${songId}`}
-                          className={`w-full min-w-0 px-3 py-2 sm:px-4 sm:py-2.5 rounded-xl text-xs sm:text-[13px] font-semibold text-center leading-snug transition-all duration-300 ${
-                            selectedSongId === songId
-                              ? "bg-blue-600 text-white shadow-lg shadow-blue-500/30 ring-2 ring-blue-600 ring-offset-2 dark:ring-offset-[#131A2B] scale-105"
-                              : "bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 hover:scale-105 border border-gray-200 dark:border-gray-700 shadow-sm"
-                          }`}
-                        >
-                          {challengeSongTitleMap?.[String(songId)] ?? `曲目 ${songId}`}
-                        </button>
-                      ))}
+                  <div className="overflow-visible rounded-none border border-transparent bg-transparent p-2 sm:p-2.5 shadow-none">
+                    <div className="mb-2 px-1 text-xs font-semibold tracking-[0.1em] text-blue-500/85 dark:text-blue-300/85 sm:text-[13px]">
+                      挑战曲目
+                    </div>
+                    <div className={`grid w-full gap-2 sm:gap-2.5 ${challengeSongGridClassName}`}>
+                      {availableChallengeSongIds.map(songId => {
+                        const songLabel = challengeSongTitleMap?.[String(songId)] ?? `曲目 ${songId}`;
+
+                        return (
+                          <button
+                            key={songId}
+                            type="button"
+                            onClick={() => setSelectedSongId(songId)}
+                            title={songLabel}
+                            className={`group relative flex min-h-[2.75rem] w-full items-center justify-center overflow-hidden rounded-[17px] border px-3 py-1.5 text-center transition-all duration-300 sm:min-h-[3.35rem] sm:px-3.5 sm:py-2 ${
+                              resolvedSelectedSongId === songId
+                                ? "border-blue-500 bg-blue-600 text-white shadow-[0_10px_20px_rgba(37,99,235,0.2)] ring-2 ring-blue-500/85 ring-offset-2 ring-offset-white dark:ring-offset-[#131A2B]"
+                                : "border-gray-200/90 bg-white/94 text-gray-700 shadow-[0_4px_10px_rgba(15,23,42,0.05)] hover:border-blue-200 hover:text-blue-600 hover:shadow-[0_8px_18px_rgba(59,130,246,0.12)] dark:border-gray-700/80 dark:bg-[#162033] dark:text-gray-200 dark:hover:border-blue-500/30 dark:hover:text-blue-200"
+                            }`}
+                          >
+                            <span className="eventtracker-song-button-label text-[13px] font-semibold tracking-[0.005em] sm:text-sm">
+                              {songLabel}
+                            </span>
+                          </button>
+                        );
+                      })}
                     </div>
                   </div>
                 )}
 
                 {/* 排名档位选择 */}
-                <div className="bg-gray-50/50 dark:bg-[#0C111C]/50 rounded-2xl p-3 sm:p-4 border border-gray-100 dark:border-gray-800/60 shadow-inner overflow-hidden flex flex-col justify-center">
-                  <div className="hidden xl:block text-xs sm:text-sm font-bold tracking-wider text-gray-400 mb-2 ml-1">选择排名</div>
+                <div className="overflow-visible rounded-none border border-transparent bg-transparent p-2 sm:p-2.5 shadow-none">
+                  <div className="mb-2 px-1 text-xs font-semibold tracking-[0.1em] text-blue-500/85 dark:text-blue-300/85 sm:text-[13px]">
+                    选择排名
+                  </div>
                   <div className="flex flex-wrap gap-1.5 sm:gap-2">
                     {getTiersForMode(trackingMode).map(tier => (
                       <button
                         key={tier}
+                        type="button"
                         onClick={() => setSelectedTier(tier)}
-                        className={`px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-lg text-[11px] sm:text-xs font-semibold transition-all duration-300 ${
+                        className={`h-8 min-w-[2.9rem] rounded-[12px] border px-2 text-[11px] font-semibold tracking-[0.01em] transition-all duration-300 sm:h-9 sm:min-w-[3.15rem] sm:rounded-[14px] sm:px-2.5 sm:text-[12px] ${
                           selectedTier === tier
-                            ? "bg-blue-600 text-white shadow-lg shadow-blue-500/30 ring-2 ring-blue-600 ring-offset-2 dark:ring-offset-[#131A2B] scale-105"
-                            : "bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 hover:scale-105 border border-gray-200 dark:border-gray-700 shadow-sm"
+                            ? "border-blue-500 bg-blue-600 text-white shadow-[0_8px_18px_rgba(37,99,235,0.2)] ring-2 ring-blue-500/85 ring-offset-2 ring-offset-white dark:ring-offset-[#131A2B]"
+                            : "border-gray-200/90 bg-white/94 text-gray-600 shadow-[0_4px_10px_rgba(15,23,42,0.05)] hover:border-blue-200 hover:text-blue-600 hover:shadow-[0_8px_18px_rgba(59,130,246,0.12)] dark:border-gray-700/80 dark:bg-[#162033] dark:text-gray-300 dark:hover:border-blue-500/30 dark:hover:text-blue-200"
                         }`}
                       >
                         T{tier}
@@ -753,7 +933,7 @@ export default function EventTrackerPage() {
               </div>
 
               {/* 状态信息面板 */}
-              <div className="flex flex-col justify-center bg-gray-50 dark:bg-[#0C111C] rounded-2xl border border-gray-100 dark:border-gray-800/60 shadow-inner min-w-[280px] divide-y divide-gray-200 dark:divide-gray-800 flex-shrink-0">
+              <div className="flex min-w-[280px] flex-col justify-center divide-y divide-gray-200 rounded-none border border-transparent bg-transparent px-2 py-2 shadow-none dark:divide-gray-800 sm:px-2.5 sm:py-2.5 xl:w-[17.25rem] xl:flex-shrink-0">
                 <div className="flex justify-between items-center p-4">
                   <span className="text-base font-bold text-gray-500 dark:text-gray-400">活动状态</span>
                   <span className={`text-base font-bold tracking-wider ${status === "进行中" ? "text-green-500" : status === "已结束" ? "text-gray-500" : "text-blue-500"}`}>
@@ -835,24 +1015,28 @@ export default function EventTrackerPage() {
                       >
                         <div style={{ minWidth: `${zoomWidthMultiplier * 100}%`, height: "100%", transition: "min-width 0.3s ease-out" }}>
                           <div ref={chartViewportRef} className="relative h-full overflow-hidden">
-                            <ResponsiveContainer width="100%" height="100%">
+                            <ResponsiveContainer key={chartContainerKey} width="100%" height="100%">
                               <LineChart
                                 data={finalDisplayedData}
                                 margin={CHART_MARGIN}
-                                onMouseMove={(state: any) => {
+                                onMouseMove={(state: TrackerMouseState) => {
                                   if (!state?.isTooltipActive || !state?.activeCoordinate || !state?.activePayload?.length) {
                                     hoverTooltipRef.current = null;
                                     setHoverTooltip(null);
                                     return;
                                   }
 
-                                  const nextHoverTooltip = {
+                                  const nextLabel = typeof state.activeLabel === "number"
+                                    ? state.activeLabel
+                                    : Number(state.activeLabel);
+
+                                  const nextHoverTooltip: HoverTooltipState = {
                                     active: true,
                                     coordinate: {
                                       x: state.activeCoordinate.x,
                                       y: state.activeCoordinate.y,
                                     },
-                                    label: state.activeLabel,
+                                    label: Number.isFinite(nextLabel) ? nextLabel : undefined,
                                     payload: state.activePayload,
                                   };
 
@@ -922,21 +1106,6 @@ export default function EventTrackerPage() {
                                 cursor={{ stroke: "#9CA3AF", strokeWidth: 1, strokeDasharray: "4 4" }}
                                 isAnimationActive={false}
                               />
-                              <Line
-                                type="linear"
-                                dataKey="ep"
-                                stroke="#3B82F6"
-                                strokeWidth={2}
-                                strokeOpacity={0.6}
-                                dot={{ r: 2.5, fill: "#3B82F6", strokeWidth: 0 }}
-                                activeDot={(props: any) => {
-                                  const { cx, cy, payload } = props;
-                                  if (payload.isProjection || isNaN(cx) || isNaN(cy)) return <circle cx={0} cy={0} r={0} stroke="none" />;
-                                  return <circle cx={cx} cy={cy} r={6} fill="#3B82F6" stroke="none" />;
-                                }}
-                                isAnimationActive={false}
-                              />
-
                               {showInstantProjection && (
                                 <Line
                                   type="linear"
@@ -944,19 +1113,35 @@ export default function EventTrackerPage() {
                                   stroke="#ef4444"
                                   strokeWidth={2}
                                   strokeDasharray="6 4"
-                                  dot={(props: any) => {
+                                  dot={(props: TrackerDotProps) => {
                                     const { cx, cy, payload, index } = props;
-                                    if (payload.isProjection) return <circle key={`dot-instant-${index}`} cx={cx} cy={cy} r={2.5} fill="#ef4444" stroke="none" />;
-                                    return <circle key={`dot-hidden-instant-${index}`} cx={cx} cy={cy} r={0} stroke="none" />;
+                                    if (!payload?.isProjection || isInvalidMarkerPosition(cx, cy)) {
+                                      return renderHiddenMarker(`dot-hidden-instant-${index}`);
+                                    }
+                                    return <circle key={`dot-instant-${index}`} cx={cx} cy={cy} r={2.5} fill="#ef4444" stroke="none" />;
                                   }}
-                                  activeDot={(props: any) => {
+                                  activeDot={(props: TrackerDotProps) => {
                                     const { cx, cy, payload } = props;
-                                    if (!payload.isProjection || isNaN(cx) || isNaN(cy)) return <circle cx={0} cy={0} r={0} stroke="none" />;
+                                    if (!payload?.isProjection || isInvalidMarkerPosition(cx, cy)) return renderHiddenMarker();
                                     return <circle cx={cx} cy={cy} r={6} fill="#ef4444" stroke="none" />;
                                   }}
                                   isAnimationActive={false}
                                 />
                               )}
+                              <Line
+                                type="linear"
+                                dataKey="ep"
+                                stroke="#3B82F6"
+                                strokeWidth={2}
+                                strokeOpacity={0.6}
+                                dot={{ r: 2.5, fill: "#3B82F6", strokeWidth: 0 }}
+                                activeDot={(props: TrackerDotProps) => {
+                                  const { cx, cy, payload } = props;
+                                  if (payload?.isProjection || isInvalidMarkerPosition(cx, cy)) return renderHiddenMarker();
+                                  return <circle cx={cx} cy={cy} r={6} fill="#3B82F6" stroke="none" />;
+                                }}
+                                isAnimationActive={false}
+                              />
 
                               {showDayProjection && (
                                 <Line
@@ -965,14 +1150,16 @@ export default function EventTrackerPage() {
                                   stroke="#3b82f6"
                                   strokeWidth={2}
                                   strokeDasharray="6 4"
-                                  dot={(props: any) => {
+                                  dot={(props: TrackerDotProps) => {
                                     const { cx, cy, payload, index } = props;
-                                    if (payload.isProjection) return <circle key={`dot-day-${index}`} cx={cx} cy={cy} r={2.5} fill="#3b82f6" stroke="none" />;
-                                    return <circle key={`dot-hidden-day-${index}`} cx={cx} cy={cy} r={0} stroke="none" />;
+                                    if (!payload?.isProjection || isInvalidMarkerPosition(cx, cy)) {
+                                      return renderHiddenMarker(`dot-hidden-day-${index}`);
+                                    }
+                                    return <circle key={`dot-day-${index}`} cx={cx} cy={cy} r={2.5} fill="#3b82f6" stroke="none" />;
                                   }}
-                                  activeDot={(props: any) => {
+                                  activeDot={(props: TrackerDotProps) => {
                                     const { cx, cy, payload } = props;
-                                    if (!payload.isProjection || isNaN(cx) || isNaN(cy)) return <circle cx={0} cy={0} r={0} stroke="none" />;
+                                    if (!payload?.isProjection || isInvalidMarkerPosition(cx, cy)) return renderHiddenMarker();
                                     return <circle cx={cx} cy={cy} r={6} fill="#3b82f6" stroke="none" />;
                                   }}
                                   isAnimationActive={false}

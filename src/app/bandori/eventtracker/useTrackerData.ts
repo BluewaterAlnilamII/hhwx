@@ -20,12 +20,42 @@ function appendTrackerPoint(series: TrackerData[], time: number, ep: number, isF
   return [...series, { time, ep, isFinal }];
 }
 
-function mergeTrackerCutoffs(incoming: TrackerData[], existing: TrackerData[]): TrackerData[] {
-  const latestIncomingTime = incoming.length > 0
-    ? incoming[incoming.length - 1].time
-    : -Infinity;
+function normalizeTrackerCutoffs(series: TrackerData[]): TrackerData[] {
+  const pointByTime = new Map<number, TrackerData>();
 
-  return [...incoming, ...existing.filter((point) => point.time > latestIncomingTime)];
+  for (const point of series) {
+    const time = Number(point?.time);
+    const ep = Number(point?.ep);
+
+    if (!Number.isFinite(time) || !Number.isFinite(ep)) {
+      continue;
+    }
+
+    const previousPoint = pointByTime.get(time);
+    pointByTime.set(time, {
+      ...previousPoint,
+      ...point,
+      time,
+      ep,
+      isFinal: previousPoint?.isFinal || point?.isFinal ? true : undefined,
+    });
+  }
+
+  return Array.from(pointByTime.values()).sort((left, right) => left.time - right.time);
+}
+
+function mergeTrackerCutoffs(incoming: TrackerData[], existing: TrackerData[]): TrackerData[] {
+  const merged = new Map<number, TrackerData>();
+
+  for (const point of normalizeTrackerCutoffs(existing)) {
+    merged.set(point.time, point);
+  }
+
+  for (const point of normalizeTrackerCutoffs(incoming)) {
+    merged.set(point.time, point);
+  }
+
+  return Array.from(merged.values()).sort((left, right) => left.time - right.time);
 }
 
 function mergeTrackerSongGroups(incoming: TrackerSongGroup[], existing: TrackerSongGroup[]): TrackerSongGroup[] {
@@ -75,13 +105,14 @@ function selectSongCutoffs(songGroups: TrackerSongGroup[], selectedSongId: numbe
     ?? [];
 }
 
-function parseTrackerPoint(point: any): TrackerData {
+function parseTrackerPoint(point: unknown): TrackerData {
+  const parsedPoint = point as { time?: number | string; ep?: number | string; isFinal?: boolean | null } | null;
   const nextPoint: TrackerData = {
-    time: Number(point?.time),
-    ep: Number(point?.ep),
+    time: Number(parsedPoint?.time),
+    ep: Number(parsedPoint?.ep),
   };
 
-  if (point?.isFinal === true) {
+  if (parsedPoint?.isFinal === true) {
     nextPoint.isFinal = true;
   }
 
@@ -148,6 +179,67 @@ function resolveCnScheduleWindow(event: Pick<BandoriEventSummary, "timeline">): 
   return { startAt: null, endAt: null };
 }
 
+function findBestEvent(events: MinimalEvent[]): MinimalEvent | null {
+  const now = Date.now();
+  const ongoing = events.find(ev => ev.startAt !== null && ev.endAt !== null && now >= ev.startAt && now <= ev.endAt);
+  if (ongoing) {
+    return ongoing;
+  }
+
+  const upcoming = events
+    .filter(ev => ev.startAt === null || ev.startAt > now)
+    .sort((a, b) => a.id - b.id);
+  if (upcoming.length > 0) {
+    return upcoming[0];
+  }
+
+  const finished = events
+    .filter(ev => ev.endAt !== null && ev.endAt < now)
+    .sort((a, b) => b.id - a.id);
+  if (finished.length > 0) {
+    return finished[0];
+  }
+
+  return null;
+}
+
+function getAvailableChallengeSongIds(eventMeta: EventMetadata | null): number[] {
+  if (eventMeta?.eventType !== "challenge") {
+    return [];
+  }
+
+  const challengeSongIds = eventMeta.musicIds.jp.length > 0
+    ? eventMeta.musicIds.jp
+    : eventMeta.musicIds.cn;
+
+  return Array.from(
+    new Set(
+      challengeSongIds
+        .map((musicId) => Number(musicId))
+        .filter((musicId) => Number.isFinite(musicId) && musicId > 0),
+    ),
+  ).sort((left, right) => left - right);
+}
+
+function resolveSelectedSongId(
+  trackingMode: TrackingMode,
+  eventMeta: EventMetadata | null,
+  selectedSongId: number,
+): number {
+  if (trackingMode !== "song") {
+    return 0;
+  }
+
+  const availableChallengeSongIds = getAvailableChallengeSongIds(eventMeta);
+  if (availableChallengeSongIds.length === 0) {
+    return 0;
+  }
+
+  return availableChallengeSongIds.includes(selectedSongId)
+    ? selectedSongId
+    : availableChallengeSongIds[0];
+}
+
 /**
  * useTrackerData —— 活动追踪页面的数据获取层钩子。
  *
@@ -167,24 +259,27 @@ export function useTrackerData(
   selectedTier: number,
   selectedSongId: number,
 ) {
-  const [chartData, setChartData] = useState<TrackerData[]>([]);
-  const [songGroups, setSongGroups] = useState<TrackerSongGroup[]>([]);
-  const [apiHasResult, setApiHasResult] = useState(false);
+  const [liveCutoffsByKey, setLiveCutoffsByKey] = useState<Record<string, TrackerData[]>>({});
+  const [liveSongGroupsByKey, setLiveSongGroupsByKey] = useState<Record<string, TrackerSongGroup[]>>({});
+  const [liveHasResultByKey, setLiveHasResultByKey] = useState<Record<string, boolean>>({});
 
   // ===== 缓存 + 前台自动刷新：活动列表 =====
   const { data: eventCatalog } = useCachedFetch<{ events: BandoriEventSummary[] }>(
     "bandori-events-v3",
     "/api/bandori/events",
-    (data: any) => ({
-      events: Array.isArray(data?.events) ? data.events as BandoriEventSummary[] : [],
-    }),
+    (data: unknown) => {
+      const payload = data as { events?: BandoriEventSummary[] } | null;
+      return {
+        events: Array.isArray(payload?.events) ? payload.events : [],
+      };
+    },
     { ...(MUTABLE_DIRECTORY_CACHE_PROFILE.client ?? {}) },
   );
 
   const { data: holidayData } = useCachedFetch<ChinaMainlandHolidayCalendarData | null>(
     "bandori-calendar-cn-holidays",
     "/api/bandori/calendar/cn/holidays",
-    (data: any) => data as ChinaMainlandHolidayCalendarData,
+    (data: unknown) => data as ChinaMainlandHolidayCalendarData,
     { ...(EXTERNAL_REFERENCE_CACHE_PROFILE.client ?? {}) },
   );
 
@@ -205,15 +300,25 @@ export function useTrackerData(
       .sort((left, right) => right.id - left.id);
   }, [eventCatalog]);
 
+  const recommendedEventId = useMemo(() => findBestEvent(allEvents)?.id ?? null, [allEvents]);
+  const resolvedCurrentEventId = currentEventId !== null && eventMetaMap.has(currentEventId)
+    ? currentEventId
+    : recommendedEventId;
+
   // eventtracker 当前只消费目录摘要里已经存在的字段，
   // 因此直接从 events 列表中选出当前活动，避免再发一次 detail 请求。
   const eventMeta = useMemo<EventMetadata | null>(() => {
-    if (currentEventId === null) {
+    if (resolvedCurrentEventId === null) {
       return null;
     }
 
-    return eventMetaMap.get(currentEventId) ?? null;
-  }, [currentEventId, eventMetaMap]);
+    return eventMetaMap.get(resolvedCurrentEventId) ?? null;
+  }, [eventMetaMap, resolvedCurrentEventId]);
+
+  const resolvedSelectedSongId = useMemo(
+    () => resolveSelectedSongId(trackingMode, eventMeta, selectedSongId),
+    [eventMeta, selectedSongId, trackingMode],
+  );
 
   // ===== 缓存 + 前台自动刷新：追踪数据 =====
   // 月度排行按当前有效月份自动切换 month id，其余模式沿用当前选中的活动编号。
@@ -221,7 +326,7 @@ export function useTrackerData(
   // 普通活动则仍返回单条时间序列。前端缓存键不区分 selectedSongId，
   // 避免同一批 challenge 数据重复缓存多份。
   const monthlyWindow = getMonthlyRankingWindow();
-  const targetEventParam = trackingMode === "monthly" ? monthlyWindow.monthId : currentEventId;
+  const targetEventParam = trackingMode === "monthly" ? monthlyWindow.monthId : resolvedCurrentEventId;
   const trackerCacheKey = targetEventParam !== null
     ? `tracker-3-${targetEventParam}-${trackingMode}-${selectedTier}`
     : null;
@@ -256,18 +361,19 @@ export function useTrackerData(
     targetEventParam !== null
       ? `/api/bandori/tracker/data?server=3&event=${targetEventParam}&type=${trackingMode}&tier=${selectedTier}`
       : null,
-    (data: any) => {
+    (data: unknown) => {
+      const payload = data as { cutoffs?: unknown; result?: boolean } | null;
       const parsedSongResult = trackingMode === "song"
-        ? parseSongCutoffsPayload(data?.cutoffs, selectedSongId)
+        ? parseSongCutoffsPayload(payload?.cutoffs, resolvedSelectedSongId)
         : undefined;
 
       return {
         cutoffs: trackingMode === "song"
           ? parsedSongResult?.cutoffs ?? []
-          : Array.isArray(data?.cutoffs)
-            ? data.cutoffs.map((point: any) => parseTrackerPoint(point))
+          : Array.isArray(payload?.cutoffs)
+            ? payload.cutoffs.map((point) => parseTrackerPoint(point))
             : [],
-        result: data?.result || false,
+        result: payload?.result || false,
         songGroups: parsedSongResult?.songGroups,
       };
     },
@@ -279,10 +385,38 @@ export function useTrackerData(
 
   // 订阅在组件生命周期内只建立一次，因此通过 ref 维持最新视图参数，
   // 以便实时回调能够准确判断推送数据是否属于当前页面视图。
-  const currentViewRef = useRef({ targetEventId: targetEventParam, mode: trackingMode, tier: selectedTier, songId: selectedSongId });
+  const currentViewRef = useRef({ targetEventId: targetEventParam, mode: trackingMode, tier: selectedTier, songId: resolvedSelectedSongId });
   useEffect(() => {
-    currentViewRef.current = { targetEventId: targetEventParam, mode: trackingMode, tier: selectedTier, songId: selectedSongId };
-  }, [targetEventParam, trackingMode, selectedTier, selectedSongId]);
+    currentViewRef.current = { targetEventId: targetEventParam, mode: trackingMode, tier: selectedTier, songId: resolvedSelectedSongId };
+  }, [resolvedSelectedSongId, selectedTier, targetEventParam, trackingMode]);
+
+  const liveCutoffsForView = trackerCacheKey ? liveCutoffsByKey[trackerCacheKey] : undefined;
+  const liveSongGroupsForView = trackerCacheKey ? liveSongGroupsByKey[trackerCacheKey] : undefined;
+  const mergedSongGroupsForView = useMemo(
+    () => mergeTrackerSongGroups(liveSongGroupsForView ?? [], trackerResult?.songGroups ?? []),
+    [liveSongGroupsForView, trackerResult?.songGroups],
+  );
+  const mergedCutoffsForView = useMemo(
+    () => mergeTrackerCutoffs(liveCutoffsForView ?? [], trackerResult?.cutoffs ?? []),
+    [liveCutoffsForView, trackerResult?.cutoffs],
+  );
+  const mergedTrackerStateRef = useRef<{
+    cacheKey: string | null;
+    cutoffs: TrackerData[];
+    songGroups: TrackerSongGroup[];
+  }>({
+    cacheKey: null,
+    cutoffs: [],
+    songGroups: [],
+  });
+
+  useEffect(() => {
+    mergedTrackerStateRef.current = {
+      cacheKey: trackerCacheKey,
+      cutoffs: mergedCutoffsForView,
+      songGroups: mergedSongGroupsForView,
+    };
+  }, [mergedCutoffsForView, mergedSongGroupsForView, trackerCacheKey]);
 
   // ===== Supabase 实时订阅：监听新追踪数据插入 =====
   useEffect(() => {
@@ -311,11 +445,24 @@ export function useTrackerData(
             if (view.mode === "song") {
               // song 模式维护完整 songGroups，图表当前曲目只是在本地做投影与切换，
               // 不需要为每个 song_id 单独建一条实时订阅链路。
-              setSongGroups((prev) => upsertSongGroupPoint(prev, incomingSongId, time, ep, incomingIsFinal));
-              setApiHasResult(true);
+              const cacheKey = `tracker-3-${view.targetEventId}-${view.mode}-${view.tier}`;
+
+              setLiveSongGroupsByKey((prev) => {
+                const baseSongGroups = mergeTrackerSongGroups(
+                  prev[cacheKey] ?? [],
+                  mergedTrackerStateRef.current.cacheKey === cacheKey
+                    ? mergedTrackerStateRef.current.songGroups
+                    : [],
+                );
+
+                return {
+                  ...prev,
+                  [cacheKey]: upsertSongGroupPoint(baseSongGroups, incomingSongId, time, ep, incomingIsFinal),
+                };
+              });
+              setLiveHasResultByKey((prev) => ({ ...prev, [cacheKey]: true }));
 
               if (view.targetEventId !== null) {
-                const cacheKey = `tracker-3-${view.targetEventId}-${view.mode}-${view.tier}`;
                 updateFetchCache<TrackerResult>(cacheKey, (cached) => {
                   const nextSongGroups = upsertSongGroupPoint(cached?.songGroups ?? [], incomingSongId, time, ep, incomingIsFinal);
                   return {
@@ -329,16 +476,26 @@ export function useTrackerData(
               return;
             }
 
-            setChartData((prev) => {
-              // 丢弃时间戳不递增的数据，避免乱序插入导致折线图绘制扭曲
-              return appendTrackerPoint(prev, time, ep, incomingIsFinal);
+            const cacheKey = `tracker-3-${view.targetEventId}-${view.mode}-${view.tier}`;
+            setLiveCutoffsByKey((prev) => {
+              const baseCutoffs = mergeTrackerCutoffs(
+                prev[cacheKey] ?? [],
+                mergedTrackerStateRef.current.cacheKey === cacheKey
+                  ? mergedTrackerStateRef.current.cutoffs
+                  : [],
+              );
+
+              return {
+                ...prev,
+                // 丢弃时间戳不递增的数据，避免乱序插入导致折线图绘制扭曲
+                [cacheKey]: appendTrackerPoint(baseCutoffs, time, ep, incomingIsFinal),
+              };
             });
-            setApiHasResult(true);
+            setLiveHasResultByKey((prev) => ({ ...prev, [cacheKey]: true }));
 
             // 实时推送不仅要更新组件状态，也要同步写回缓存，
             // 否则用户切换视图再返回时仍会读到旧缓存，导致增量数据丢失。
             if (view.targetEventId !== null) {
-              const cacheKey = `tracker-3-${view.targetEventId}-${view.mode}-${view.tier}`;
               updateFetchCache<TrackerResult>(cacheKey, (cached) => {
                 const prevCutoffs = cached?.cutoffs ?? [];
                 return {
@@ -357,33 +514,26 @@ export function useTrackerData(
     };
   }, []);
 
-  // 接口数据与本地状态分离存放，目的是让接口刷新和实时推送都能汇聚到同一份图表数据源。
-  useEffect(() => {
-    setSongGroups(trackerResult?.songGroups ?? []);
-
-    if (trackingMode === "song" && (trackerResult?.songGroups?.length ?? 0) > 0) {
-      // song 接口返回的是全量分组；真正要画哪一条线，
-      // 取决于当前页面选中的 selectedSongId。
-      setChartData(selectSongCutoffs(trackerResult?.songGroups ?? [], selectedSongId));
-      setApiHasResult((trackerResult?.songGroups?.length ?? 0) > 0);
-      return;
+  const chartData = useMemo(() => {
+    if (trackingMode === "song" && mergedSongGroupsForView.length > 0) {
+      return selectSongCutoffs(mergedSongGroupsForView, resolvedSelectedSongId);
     }
 
-    setChartData(trackerResult?.cutoffs ?? []);
-    setApiHasResult(trackerResult?.result ?? false);
-  }, [selectedSongId, trackerResult, trackingMode]);
+    return mergedCutoffsForView;
+  }, [mergedCutoffsForView, mergedSongGroupsForView, resolvedSelectedSongId, trackingMode]);
 
-  useEffect(() => {
-    if (trackingMode !== "song" || songGroups.length === 0) {
-      return;
+  const apiHasResult = useMemo(() => {
+    const liveHasResult = trackerCacheKey !== null ? liveHasResultByKey[trackerCacheKey] : undefined;
+
+    if (trackingMode === "song" && mergedSongGroupsForView.length > 0) {
+      return mergedSongGroupsForView.some((group) => group.cutoffs.length > 0);
     }
 
-    setChartData(selectSongCutoffs(songGroups, selectedSongId));
-    setApiHasResult(songGroups.some((group) => group.cutoffs.length > 0));
-  }, [selectedSongId, songGroups, trackingMode]);
+    return Boolean(liveHasResult || trackerResult?.result);
+  }, [liveHasResultByKey, mergedSongGroupsForView, trackerCacheKey, trackerResult?.result, trackingMode]);
 
   const resolvedCurrentEventWindow = useMemo(() => {
-    if (currentEventId === null) {
+    if (resolvedCurrentEventId === null) {
       return { startDate: null, endDate: null };
     }
 
@@ -393,11 +543,14 @@ export function useTrackerData(
       startDate: currentWindow?.startAt ?? null,
       endDate: currentWindow?.endAt ?? null,
     };
-  }, [currentEventId, eventMeta]);
+  }, [eventMeta, resolvedCurrentEventId]);
 
   return {
     allEvents,
+    currentEventId: resolvedCurrentEventId,
+    recommendedEventId,
     eventMeta,
+    selectedSongId: resolvedSelectedSongId,
     startDate: resolvedCurrentEventWindow.startDate,
     endDate: resolvedCurrentEventWindow.endDate,
     chartData,

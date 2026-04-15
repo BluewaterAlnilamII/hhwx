@@ -105,6 +105,28 @@ body::before {
   animation: bubbleOut 0.3s ease-in forwards;
 }
 
+/* Eventtracker: 移动端优先单行省略，桌面端允许两行但超长时仍以省略号收口。 */
+.eventtracker-song-button-label {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+@media (min-width: 640px) {
+  .eventtracker-song-button-label {
+    display: -webkit-box;
+    white-space: normal;
+    text-wrap: balance;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+    line-height: 1.28;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
+}
+
 /* 棋盘样式 */
 .othello-board {
   display: grid;

@@ -1,7 +1,7 @@
 "use client";
 
 import { format } from "date-fns";
-import type { TrackerData, TrackingMode } from "./types";
+import type { TrackerData, TrackerTooltipPayloadEntry, TrackingMode } from "./types";
 
 /**
  * TrackerTooltip —— 图表悬浮提示组件。
@@ -18,7 +18,7 @@ export function TrackerTooltip({
   displayedData,
 }: {
   active?: boolean;
-  payload?: any[];
+  payload?: TrackerTooltipPayloadEntry[];
   label?: number;
   trackingMode: TrackingMode;
   displayedData: TrackerData[];
@@ -30,6 +30,7 @@ export function TrackerTooltip({
   // ===== 投影点的悬浮提示 =====
   if (payload[0]?.payload?.isProjection) {
     const p = payload[0].payload;
+    if (!p) return null;
     const projectionLabelTime = p.projectionEndTime || label;
 
     return (
@@ -61,7 +62,7 @@ export function TrackerTooltip({
 
   // ===== 真实数据点的悬浮提示 =====
   const mainEntry = payload.find(
-    (entry: any) => entry?.dataKey === "ep" && !entry?.payload?.isProjection
+    (entry: TrackerTooltipPayloadEntry) => entry?.dataKey === "ep" && !entry?.payload?.isProjection
   );
   if (!mainEntry?.payload) return null;
 
