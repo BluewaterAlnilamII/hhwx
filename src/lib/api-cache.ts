@@ -68,6 +68,10 @@ export const STATIC_ASSET_PROXY_CACHE_PROFILE: CacheProfile = {
 
 export const STATIC_SITE_ASSET_CACHE_CONTROL = "public, max-age=2592000, s-maxage=2592000, stale-while-revalidate=604800";
 export const FAVICON_SITE_ASSET_CACHE_CONTROL = "public, max-age=604800, s-maxage=604800, stale-while-revalidate=86400";
+// HTML 页面本身只是应用壳，真正高频变化的数据走各自 API。
+// 因此这里把共享缓存收敛到 15 分钟，既避免版本更新后页面壳长期滞留，
+// 也避免每次请求都回源重复生成几乎不变的静态 HTML。
+export const HTML_SHELL_REVALIDATE_SECONDS = 15 * 60;
 
 // 兼容现有 route 导入，避免一次性重写整片 API 文件。
 export const LIVE_API_CACHE_CONTROL = REALTIME_HOT_CACHE_PROFILE.cacheControl;

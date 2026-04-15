@@ -1,12 +1,15 @@
 import type { Metadata } from "next";
 import { Outfit } from "next/font/google";
 import "./globals.css";
+import { HTML_SHELL_REVALIDATE_SECONDS } from "@/lib/api-cache";
 
 const outfit = Outfit({
   variable: "--font-outfit",
   subsets: ["latin"],
   weight: ["300", "400", "500", "600", "700", "800"],
 });
+
+export const revalidate = HTML_SHELL_REVALIDATE_SECONDS;
 
 export const metadata: Metadata = {
   title: "🎭 Happy！Lucky！黑白棋！",
