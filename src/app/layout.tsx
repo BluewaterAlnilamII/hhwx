@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import { Outfit } from "next/font/google";
 import "./globals.css";
-import { HTML_SHELL_REVALIDATE_SECONDS } from "@/lib/api-cache";
 
 const outfit = Outfit({
   variable: "--font-outfit",
@@ -9,7 +8,9 @@ const outfit = Outfit({
   weight: ["300", "400", "500", "600", "700", "800"],
 });
 
-export const revalidate = HTML_SHELL_REVALIDATE_SECONDS;
+// Next 的 segment config 必须写成可静态分析的字面量，
+// 这里不能复用外部常量，否则生产构建会直接报 Invalid segment configuration export。
+export const revalidate = 900;
 
 export const metadata: Metadata = {
   title: "🎭 Happy！Lucky！黑白棋！",
