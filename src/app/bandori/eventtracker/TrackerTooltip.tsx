@@ -31,7 +31,8 @@ export function TrackerTooltip({
   if (payload[0]?.payload?.isProjection) {
     const p = payload[0].payload;
     if (!p) return null;
-    const projectionLabelTime = p.projectionEndTime || label;
+    const projectionLabelTime = p.projectionEndTime ?? label;
+    if (projectionLabelTime === undefined) return null;
 
     return (
       <div className="bg-white/90 backdrop-blur-xl p-4 rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] border border-white/40 dark:bg-[#131A2B]/90 dark:border-gray-800 min-w-[210px]">
@@ -65,6 +66,7 @@ export function TrackerTooltip({
     (entry: TrackerTooltipPayloadEntry) => entry?.dataKey === "ep" && !entry?.payload?.isProjection
   );
   if (!mainEntry?.payload) return null;
+  if (label === undefined) return null;
 
   const currentPoint = mainEntry.payload;
   const currentIndex = displayedData.findIndex((d: TrackerData) => d.time === currentPoint.time);
@@ -114,7 +116,7 @@ export function TrackerTooltip({
   return (
     <div className="bg-white/90 backdrop-blur-xl p-4 rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] border border-white/40 dark:bg-[#131A2B]/90 dark:border-gray-800 min-w-[180px]">
       <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-2">
-        {format(label!, "yyyy/MM/dd HH:mm:ss")}
+        {format(label, "yyyy/MM/dd HH:mm:ss")}
       </p>
       <div className="flex items-end gap-2">
         <span className="text-blue-500 font-extrabold text-2xl leading-none">
