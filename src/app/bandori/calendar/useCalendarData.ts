@@ -2,6 +2,11 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useCachedFetch } from "@/hooks/useCachedFetch";
+import {
+  EXTERNAL_REFERENCE_CACHE_PROFILE,
+  MUTABLE_DIRECTORY_CACHE_PROFILE,
+  REFERENCE_METADATA_CACHE_PROFILE,
+} from "@/lib/api-cache";
 import { getSafeSession, supabase } from "@/lib/supabase";
 import { ChinaMainlandHolidayCalendarData } from "./chinaMainlandHolidayCalendar";
 import {
@@ -166,25 +171,25 @@ export function useCalendarData() {
     "bandori-events-v3",
     "/api/bandori/events",
     (raw) => raw as { events: BandoriEventSummary[] },
-    { staleTimeMs: 5 * 60 * 1000 },
+    { ...(MUTABLE_DIRECTORY_CACHE_PROFILE.client ?? {}) },
   );
   const { data: scheduleData, loading: scheduleLoading, refresh: refreshSchedule } = useCachedFetch<{ events: BandoriScheduleSupplement[] }>(
     "bandori-calendar-cn-schedule-v2",
     "/api/bandori/calendar/cn/schedule",
     (raw) => raw as { events: BandoriScheduleSupplement[] },
-    { staleTimeMs: 5 * 60 * 1000 },
+    { ...(MUTABLE_DIRECTORY_CACHE_PROFILE.client ?? {}) },
   );
   const { data: characterData, loading: characterLoading, refresh: refreshCharacters } = useCachedFetch<{ characters: CalendarCharacter[] }>(
     "bandori-characters-v2",
     "/api/bandori/characters",
     (raw) => raw as { characters: CalendarCharacter[] },
-    { refreshOnVisible: false, staleTimeMs: 12 * 60 * 60 * 1000 },
+    { ...(REFERENCE_METADATA_CACHE_PROFILE.client ?? {}) },
   );
   const { data: holidayData, loading: holidayLoading, refresh: refreshHolidayData } = useCachedFetch<CalendarHolidayData>(
     "bandori-calendar-cn-holidays",
     "/api/bandori/calendar/cn/holidays",
     (raw) => raw as CalendarHolidayData,
-    { refreshOnVisible: false, staleTimeMs: 12 * 60 * 60 * 1000 },
+    { ...(EXTERNAL_REFERENCE_CACHE_PROFILE.client ?? {}) },
   );
 
   const scheduleMap = new Map((scheduleData?.events ?? []).map((event) => [event.eventId, event]));

@@ -39,7 +39,10 @@ export function resolveBandoriEventBannerBundleName(asset: {
 }
 
 export function buildBandoriEventBannerProxyPath(region: BandoriAssetRegion, bundleName: string): string {
-  return `/api/bandori/assets/event-banner/${region}/${encodeURIComponent(bundleName)}`;
+  const normalizedBundleName = encodeURIComponent(normalizeBandoriAssetSegment(bundleName));
+  // 代理路径显式保留 banner.png 后缀，
+  // 这样 URL 语义会更接近 Bestdori 原始资源结构，也更方便排查缓存与资源来源问题。
+  return `/api/bandori/assets/${region}/event/${normalizedBundleName}/images_rip/banner.png`;
 }
 
 export function buildBestdoriEventBannerOriginUrl(region: BandoriAssetRegion, bundleName: string): string {

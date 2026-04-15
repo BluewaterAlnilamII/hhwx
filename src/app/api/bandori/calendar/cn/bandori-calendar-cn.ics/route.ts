@@ -10,7 +10,12 @@ import {
   getSubscriptionEventColor,
   type CalendarCharacter,
 } from "@/lib/calendar-character-service";
-import { LIVE_API_CACHE_CONTROL, SUBSCRIPTION_API_CACHE_CONTROL, withCacheControl } from "@/lib/api-cache";
+import {
+  LIVE_API_CACHE_CONTROL,
+  SUBSCRIPTION_API_CACHE_CONTROL,
+  SUBSCRIPTION_FEED_CACHE_PROFILE,
+  withCacheControl,
+} from "@/lib/api-cache";
 
 export const dynamic = "force-dynamic";
 
@@ -228,7 +233,7 @@ export async function GET(request: Request) {
       headers: {
         "Content-Type": "text/calendar; charset=utf-8",
         "Content-Disposition": 'attachment; filename="bandori-calendar-cn.ics"',
-        "Cache-Control": SUBSCRIPTION_API_CACHE_CONTROL,
+        "Cache-Control": SUBSCRIPTION_FEED_CACHE_PROFILE.cacheControl ?? SUBSCRIPTION_API_CACHE_CONTROL,
       },
     });
   } catch (error) {

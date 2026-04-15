@@ -11,10 +11,9 @@ import {
   extractBandoriEventIdFromLegacyBannerBundleName,
   isBandoriAssetRegion,
   isSafeBandoriAssetSegment,
+  type BandoriAssetRegion,
 } from "@/lib/bandori-asset-proxy";
 import { fetchBandoriEventRecords } from "@/lib/bandori-events-server";
-
-export const dynamic = "force-dynamic";
 
 type UpstreamBannerFailure = {
   upstreamUrl: string;
@@ -24,7 +23,11 @@ type UpstreamBannerFailure = {
   snippet?: string;
 };
 
-async function resolveEventBannerCandidateUrls(region: "jp" | "cn", bundleName: string): Promise<string[]> {
+// 这里按“真实 event bundle -> 当前请求 bundle -> legacy homebanner”排序尝试，
+// 是为了优先命中更稳定的原始活动资源路径，同时保留 banner_eventXXX 旧值的回退能力。
+// 老活动往往只有 event/{bundle}/images_rip/banner.png；
+// 如果一开始就把 banner_eventXXX 当主资源名，更容易命中 Bestdori 返回的 HTML 占位页。
+async function resolveEventBannerCandidateUrls(region: BandoriAssetRegion, bundleName: string): Promise<string[]> {
   const candidateUrls = new Set<string>();
   const legacyEventId = extractBandoriEventIdFromLegacyBannerBundleName(bundleName);
 
@@ -53,6 +56,9 @@ async function resolveEventBannerCandidateUrls(region: "jp" | "cn", bundleName: 
   return Array.from(candidateUrls);
 }
 
+// 这里必须把“200 但不是 image/*”和“空 body”都当成失败，
+// 因为 Bestdori 对不存在的资源经常返回 HTML 页面而不是 404。
+// 如果把这类响应当成功图片透传，再叠加长缓存头，就会把错误页面缓存成稳定静态资源。
 async function fetchUpstreamBannerImage(upstreamUrl: string): Promise<
   | { ok: true; contentType: string; buffer: ArrayBuffer }
   | { ok: false; failure: UpstreamBannerFailure }
@@ -112,23 +118,10 @@ async function fetchUpstreamBannerImage(upstreamUrl: string): Promise<
   };
 }
 
-/**
- * GET /api/bandori/assets/event-banner/[region]/[bundleName]
- * 同域代理 Bestdori 活动横幅。
- *
- * 为什么先做成“专用横幅代理”而不是开放任意 assets 透传：
- * 1. 当前仓库里真正稳定高频的外链资源只有活动横幅，先收窄范围更安全。
- * 2. 横幅 URL 完全由 region + bundleName 推导，适合单独配置长时间 CDN 缓存。
- * 3. 未来如果要代理更多 Bestdori 静态资源，可以在同一命名空间下继续扩展，
- *    但前端不需要再改回第三方域名。
- */
-export async function GET(
-  request: Request,
-  context: { params: Promise<{ region: string; bundleName: string }> },
-) {
+// 共享代理逻辑单独抽到 lib，是为了让原始语义主路径只维护一份上游判定逻辑。
+// 这样未来如果调整 candidate 顺序、错误降级或缓存策略，不会再出现多个路由各改一半的分叉。
+export async function proxyBandoriEventBanner({ region, bundleName }: { region: string; bundleName: string }) {
   try {
-    const { region, bundleName } = await context.params;
-
     if (!isBandoriAssetRegion(region) || !isSafeBandoriAssetSegment(bundleName)) {
       return NextResponse.json({ error: "无效的横幅资源参数" }, {
         status: 400,

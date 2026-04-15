@@ -4,6 +4,8 @@ import {
   getFallbackChinaMainlandHolidayCalendarData,
 } from "@/app/bandori/calendar/chinaMainlandHolidayCalendar";
 import {
+  EXTERNAL_REFERENCE_CACHE_PROFILE,
+  EXTERNAL_REFERENCE_FALLBACK_CACHE_PROFILE,
   HOLIDAY_API_CACHE_CONTROL,
   HOLIDAY_FALLBACK_API_CACHE_CONTROL,
   withCacheControl,
@@ -163,7 +165,7 @@ export async function GET() {
       headers: {
         Accept: "text/calendar, text/plain;q=0.9, */*;q=0.8",
       },
-      next: { revalidate: 43200 },
+      next: { revalidate: EXTERNAL_REFERENCE_CACHE_PROFILE.nextRevalidateSeconds ?? 43200 },
     });
 
     if (!response.ok) {
@@ -173,12 +175,12 @@ export async function GET() {
     const content = await response.text();
     const holidayCalendar = parseHolidayCalendar(content);
     return NextResponse.json(holidayCalendar, {
-      headers: withCacheControl(HOLIDAY_API_CACHE_CONTROL),
+      headers: withCacheControl(EXTERNAL_REFERENCE_CACHE_PROFILE.cacheControl ?? HOLIDAY_API_CACHE_CONTROL),
     });
   } catch (error) {
     console.error("Bandori calendar/cn/holidays API 错误:", error);
     return NextResponse.json(getFallbackChinaMainlandHolidayCalendarData(), {
-      headers: withCacheControl(HOLIDAY_FALLBACK_API_CACHE_CONTROL),
+      headers: withCacheControl(EXTERNAL_REFERENCE_FALLBACK_CACHE_PROFILE.cacheControl ?? HOLIDAY_FALLBACK_API_CACHE_CONTROL),
     });
   }
 }

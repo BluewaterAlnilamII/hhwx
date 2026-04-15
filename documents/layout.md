@@ -6,9 +6,10 @@ hhwx/
 │   └── rules/
 │       └── hhwx.md             # 项目开发规范
 ├── documents/                  # 项目文档
-│   ├── PRD.md                  # 产品需求文档
+│   ├── prd.md                  # 产品需求文档
 │   └── layout.md               # 文件结构说明（本文件）
 ├── public/                     # 静态资源
+│   ├── favicon.ico             # 浏览器标签页 favicon 主入口
 │   ├── favicon/                # 安装态/PWA 图标固定尺寸资源
 │   │   ├── icon-192.png
 │   │   └── icon-512.png
@@ -34,7 +35,6 @@ hhwx/
 │   │   ├── page.tsx            # 首页（角色选择/游戏页面路由、续局对话框）
 │   │   ├── globals.css         # 全局样式（动画、棋盘、气泡等）
 │   │   ├── page.module.css     # 页面模块样式（未使用，Next.js 生成）
-│   │   ├── favicon.ico         # 浏览器标签页 favicon
 │   │   ├── icon.png            # App Router 通用站点图标
 │   │   ├── apple-icon.png      # iOS 主屏图标
 │   │   ├── api/
@@ -42,10 +42,12 @@ hhwx/
 │   │   │   │   ├── characters/
 │   │   │   │   │   └── route.ts    # 读取角色目录
 │   │   │   │   ├── assets/
-│   │   │   │   │   └── event-banner/
-│   │   │   │   │       └── [region]/
+│   │   │   │   │   └── [region]/
+│   │   │   │   │       └── event/
 │   │   │   │   │           └── [bundleName]/
-│   │   │   │   │               └── route.ts # 同域代理 Bestdori 活动横幅并提供长时间 CDN 缓存
+│   │   │   │   │               └── images_rip/
+│   │   │   │   │                   └── banner.png/
+│   │   │   │   │                       └── route.ts # 以接近 Bestdori 原始路径的方式同域代理活动横幅
 │   │   │   │   ├── events/
 │   │   │   │   │   ├── route.ts    # 读取结构化活动目录
 │   │   │   │   │   └── bonus/
@@ -99,6 +101,7 @@ hhwx/
 │   │   ├── useCachedFetch.ts   # 通用 HTTP 缓存 Hook（支持 merge 策略防止 WS 数据回退）
 │   │   └── useOthelloGame.ts   # 黑白棋游戏状态管理（useReducer + localStorage）
 │   ├── lib/                    # 工具库和核心逻辑
+│   │   ├── api-cache.ts        # 统一定义 API、订阅源与静态资源代理的缓存 profile
 │   │   ├── ai/                 # AI 策略模块（每个角色独立文件）
 │   │   │   ├── types.ts        # AI 策略通用类型定义
 │   │   │   ├── kokoro.ts       # Kokoro AI：高强度，随机+角位锁定
@@ -106,6 +109,8 @@ hhwx/
 │   │   │   ├── hagumi.ts       # Hagumi AI：最低强度，贪心策略
 │   │   │   ├── kanon.ts        # Kanon AI：中等强度，犯迷糊+角位必抢
 │   │   │   └── michelle.ts     # Michelle AI：动态强度，放水机制
+│   │   ├── bandori-asset-proxy.ts # Bestdori 资源路径拼装与安全校验
+│   │   ├── bandori-event-banner-proxy.ts # 活动横幅共享代理逻辑（供原始语义路径复用）
 │   │   ├── characters.ts       # 角色数据定义（台词、思考时间等）
 │   │   ├── bandori-events-server.ts # Bandori 活动/角色聚合与 DTO 转换服务
 │   │   ├── bandori-tracker-server.ts # tracker data 共享服务端处理器（新旧路由共用）

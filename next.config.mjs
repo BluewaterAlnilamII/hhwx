@@ -1,5 +1,5 @@
-const FAVICON_CACHE_CONTROL = "public, max-age=604800, s-maxage=604800, stale-while-revalidate=86400";
-const STATIC_ICON_CACHE_CONTROL = "public, max-age=2592000, s-maxage=2592000, stale-while-revalidate=604800";
+const FAVICON_SITE_ASSET_CACHE_CONTROL = "public, max-age=604800, s-maxage=604800, stale-while-revalidate=86400";
+const STATIC_SITE_ASSET_CACHE_CONTROL = "public, max-age=2592000, s-maxage=2592000, stale-while-revalidate=604800";
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
@@ -11,25 +11,25 @@ const nextConfig = {
             {
                 source: "/favicon.ico",
                 headers: [
-                    { key: "Cache-Control", value: FAVICON_CACHE_CONTROL },
+                    { key: "Cache-Control", value: FAVICON_SITE_ASSET_CACHE_CONTROL },
                 ],
             },
             {
                 source: "/favicon/:path*",
                 headers: [
-                    { key: "Cache-Control", value: STATIC_ICON_CACHE_CONTROL },
+                    { key: "Cache-Control", value: STATIC_SITE_ASSET_CACHE_CONTROL },
                 ],
             },
             {
                 source: "/apple-icon.png",
                 headers: [
-                    { key: "Cache-Control", value: STATIC_ICON_CACHE_CONTROL },
+                    { key: "Cache-Control", value: STATIC_SITE_ASSET_CACHE_CONTROL },
                 ],
             },
             {
                 source: "/res/bandori/icon/:path*",
                 headers: [
-                    { key: "Cache-Control", value: STATIC_ICON_CACHE_CONTROL },
+                    { key: "Cache-Control", value: STATIC_SITE_ASSET_CACHE_CONTROL },
                 ],
             },
         ];

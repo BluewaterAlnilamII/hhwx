@@ -3,6 +3,11 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { supabase } from "@/lib/supabase";
 import { useCachedFetch, updateFetchCache } from "@/hooks/useCachedFetch";
+import {
+  EXTERNAL_REFERENCE_CACHE_PROFILE,
+  MUTABLE_DIRECTORY_CACHE_PROFILE,
+  REALTIME_HOT_CACHE_PROFILE,
+} from "@/lib/api-cache";
 import type { ChinaMainlandHolidayCalendarData } from "@/app/bandori/calendar/chinaMainlandHolidayCalendar";
 import type { TrackerData, TrackerResult, TrackerSongGroup, EventMetadata, MinimalEvent, TrackingMode, BandoriEventSummary } from "./types";
 import { getMonthlyRankingWindow } from "./useChartData";
@@ -173,14 +178,14 @@ export function useTrackerData(
     (data: any) => ({
       events: Array.isArray(data?.events) ? data.events as BandoriEventSummary[] : [],
     }),
-    { staleTimeMs: 5 * 60 * 1000 },
+    { ...(MUTABLE_DIRECTORY_CACHE_PROFILE.client ?? {}) },
   );
 
   const { data: holidayData } = useCachedFetch<ChinaMainlandHolidayCalendarData | null>(
     "bandori-calendar-cn-holidays",
     "/api/bandori/calendar/cn/holidays",
     (data: any) => data as ChinaMainlandHolidayCalendarData,
-    { refreshOnVisible: false, staleTimeMs: 12 * 60 * 60 * 1000 },
+    { ...(EXTERNAL_REFERENCE_CACHE_PROFILE.client ?? {}) },
   );
 
   const eventMetaMap = useMemo(() => {
@@ -268,7 +273,7 @@ export function useTrackerData(
     },
     {
       merge: trackerMerge,
-      staleTimeMs: 60 * 1000,
+      ...(REALTIME_HOT_CACHE_PROFILE.client ?? {}),
     }
   );
 
