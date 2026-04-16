@@ -1,4 +1,3 @@
-import { NextResponse } from "next/server";
 import {
   ChinaMainlandHolidayCalendarData,
   getFallbackChinaMainlandHolidayCalendarData,
@@ -10,6 +9,7 @@ import {
   HOLIDAY_FALLBACK_API_CACHE_CONTROL,
   withCacheControl,
 } from "@/lib/api-cache";
+import { jsonSuccess } from "@/lib/api-response";
 
 const ICLOUD_HOLIDAY_URL = "https://p10-calendars.icloud.com/holiday/CN_zh.ics";
 const WORK_HOLIDAY_TYPE = "WORK-HOLIDAY";
@@ -174,13 +174,14 @@ export async function GET() {
 
     const content = await response.text();
     const holidayCalendar = parseHolidayCalendar(content);
-    return NextResponse.json(holidayCalendar, {
+    return jsonSuccess(holidayCalendar, {
       headers: withCacheControl(EXTERNAL_REFERENCE_CACHE_PROFILE.cacheControl ?? HOLIDAY_API_CACHE_CONTROL),
     });
   } catch (error) {
     console.error("Bandori calendar/cn/holidays API 错误:", error);
-    return NextResponse.json(getFallbackChinaMainlandHolidayCalendarData(), {
+    return jsonSuccess(getFallbackChinaMainlandHolidayCalendarData(), {
       headers: withCacheControl(EXTERNAL_REFERENCE_FALLBACK_CACHE_PROFILE.cacheControl ?? HOLIDAY_FALLBACK_API_CACHE_CONTROL),
+      meta: { fallback: true },
     });
   }
 }

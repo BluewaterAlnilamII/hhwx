@@ -1,5 +1,5 @@
-import { NextResponse } from "next/server";
 import { LIVE_API_CACHE_CONTROL, PUBLIC_METADATA_API_CACHE_CONTROL, withCacheControl } from "@/lib/api-cache";
+import { jsonError, jsonRouteError, jsonSuccess } from "@/lib/api-response";
 
 const BESTDORI_SONGS_URL = "https://bestdori.com/api/songs/all.5.json";
 const TITLE_PREFERENCE_ORDER = [3, 2, 1, 0, 4] as const;
@@ -56,8 +56,7 @@ export async function GET(request: Request) {
   const songIds = parseRequestedSongIds(request);
 
   if (songIds.length === 0) {
-    return NextResponse.json({ error: "Query parameter ids is required" }, {
-      status: 400,
+    return jsonError(400, "SONG_IDS_REQUIRED", "Query parameter ids is required", {
       headers: withCacheControl(LIVE_API_CACHE_CONTROL),
     });
   }
@@ -69,9 +68,9 @@ export async function GET(request: Request) {
     });
 
     if (!response.ok) {
-      return NextResponse.json({ error: "Bestdori API error" }, {
-        status: response.status,
+      return jsonError(response.status, "BESTDORI_SONGS_UPSTREAM_FAILED", "Bestdori API error", {
         headers: withCacheControl(LIVE_API_CACHE_CONTROL),
+        details: `HTTP ${response.status}`,
       });
     }
 
@@ -85,13 +84,16 @@ export async function GET(request: Request) {
       }
     }
 
-    return NextResponse.json({ songs }, {
+    return jsonSuccess({ songs }, {
       headers: withCacheControl(PUBLIC_METADATA_API_CACHE_CONTROL),
     });
   } catch (error) {
     console.error("Bandori songs API 错误:", error);
-    return NextResponse.json({ error: "Failed to fetch song metadata" }, {
+    return jsonRouteError(error, {
       status: 500,
+      code: "BANDORI_SONGS_READ_FAILED",
+      message: "Failed to fetch song metadata",
+    }, {
       headers: withCacheControl(LIVE_API_CACHE_CONTROL),
     });
   }

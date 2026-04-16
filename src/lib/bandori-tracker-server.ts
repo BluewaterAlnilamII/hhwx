@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { LIVE_API_CACHE_CONTROL, withCacheControl } from "@/lib/api-cache";
+import { jsonError } from "@/lib/api-response";
 import { supabase } from "@/lib/supabase";
 import { BANDORI_TRACKER_DATA_TABLE } from "@/lib/supabase-table-names";
 
@@ -22,28 +23,16 @@ type TrackerSongCutoffMap = Record<string, TrackerPoint[]>;
 
 function errorResponse(
   status: number,
+  code: string,
   message: string,
   options?: {
-    code?: string;
-    cutoffs?: TrackerPoint[] | TrackerSongCutoffMap;
     details?: Record<string, string | number | boolean | null>;
   },
 ) {
-  return NextResponse.json(
-    {
-      result: false,
-      cutoffs: options?.cutoffs ?? [],
-      error: {
-        code: options?.code ?? "INTERNAL_SERVER_ERROR",
-        message,
-        details: options?.details,
-      },
-    },
-    {
-      status,
-      headers: withCacheControl(LIVE_API_CACHE_CONTROL),
-    },
-  );
+  return jsonError(status, code, message, {
+    headers: withCacheControl(LIVE_API_CACHE_CONTROL),
+    details: options?.details,
+  });
 }
 
 function toTrackerPoint(row: TrackerRow): TrackerPoint {
@@ -94,8 +83,8 @@ function buildSongCutoffs(rows: TrackerRow[]): TrackerPoint[] | TrackerSongCutof
  * 为什么要抽到共享模块：
  * 1. 新旧路径需要在兼容期内返回完全一致的结构，避免行为漂移。
  * 2. 未来下线旧路径时，只需要删除别名路由，不需要再次搬运查询逻辑。
- * 3. 当前 result/cutoffs/error 结构已经被现有 tracker 页面和外部调用方依赖，
- *    它属于项目明确保留的历史兼容协议；在未引入新版本接口前，不要直接改成 success/data 信封。
+ * 3. 当前成功响应的 result/cutoffs 结构已经被现有 tracker 页面和外部调用方依赖，
+ *    因此成功体保持不变；失败体则回到项目统一错误信封，避免继续扩散旧协议。
  */
 export async function handleBandoriTrackerDataRequest(request: Request) {
   try {
@@ -107,15 +96,13 @@ export async function handleBandoriTrackerDataRequest(request: Request) {
     const typeParam = searchParams.get("type") || "event";
 
     if (server !== "3") {
-      return errorResponse(400, "Only server 3 (CN) is currently supported.", {
-        code: "INVALID_REQUEST",
+      return errorResponse(400, "INVALID_REQUEST", "Only server 3 (CN) is currently supported.", {
         details: { server },
       });
     }
 
     if (!eventIdParam || !tierParam) {
-      return errorResponse(400, "Missing required parameters: event, tier.", {
-        code: "INVALID_REQUEST",
+      return errorResponse(400, "INVALID_REQUEST", "Missing required parameters: event, tier.", {
         details: {
           event: eventIdParam,
           tier: tierParam,
@@ -124,8 +111,7 @@ export async function handleBandoriTrackerDataRequest(request: Request) {
     }
 
     if (!VALID_TRACKER_TYPES.has(typeParam)) {
-      return errorResponse(400, "Unsupported tracker type.", {
-        code: "INVALID_REQUEST",
+      return errorResponse(400, "INVALID_REQUEST", "Unsupported tracker type.", {
         details: { type: typeParam },
       });
     }
@@ -134,8 +120,7 @@ export async function handleBandoriTrackerDataRequest(request: Request) {
     const tier = Number.parseInt(tierParam, 10);
 
     if (!Number.isFinite(eventId) || !Number.isFinite(tier) || eventId <= 0 || tier <= 0) {
-      return errorResponse(400, "Numeric parameters must be positive integers.", {
-        code: "INVALID_REQUEST",
+      return errorResponse(400, "INVALID_REQUEST", "Numeric parameters must be positive integers.", {
         details: {
           event: eventIdParam,
           tier: tierParam,
@@ -158,8 +143,7 @@ export async function handleBandoriTrackerDataRequest(request: Request) {
 
       if (error) {
         console.error("Supabase query error:", error);
-        return errorResponse(500, "Failed to query tracker data.", {
-          code: "DATABASE_QUERY_FAILED",
+        return errorResponse(500, "DATABASE_QUERY_FAILED", "Failed to query tracker data.", {
           details: {
             event: eventId,
             tier,
@@ -169,9 +153,7 @@ export async function handleBandoriTrackerDataRequest(request: Request) {
       }
 
       if ((data ?? []).length === 0) {
-        return errorResponse(200, "No song ranking data found for the requested query.", {
-          code: "TRACKER_DATA_NOT_FOUND",
-          cutoffs: [],
+        return errorResponse(404, "TRACKER_DATA_NOT_FOUND", "No song ranking data found for the requested query.", {
           details: {
             event: eventId,
             tier,
@@ -199,8 +181,7 @@ export async function handleBandoriTrackerDataRequest(request: Request) {
 
     if (error) {
       console.error("Supabase query error:", error);
-      return errorResponse(500, "Failed to query tracker data.", {
-        code: "DATABASE_QUERY_FAILED",
+      return errorResponse(500, "DATABASE_QUERY_FAILED", "Failed to query tracker data.", {
         details: {
           event: eventId,
           tier,
@@ -212,12 +193,7 @@ export async function handleBandoriTrackerDataRequest(request: Request) {
     const formattedData = formatCutoffs((data ?? []) as TrackerRow[]);
 
     if (formattedData.length === 0) {
-      // 这里保持 HTTP 200 + result=false，
-      // 是为了兼容现有 tracker 页面和外部调用者的空结果分支，
-      // 避免把“无数据”误判成“接口失败”。
-      return errorResponse(200, "No tracker data found for the requested query.", {
-        code: "TRACKER_DATA_NOT_FOUND",
-        cutoffs: [],
+      return errorResponse(404, "TRACKER_DATA_NOT_FOUND", "No tracker data found for the requested query.", {
         details: {
           event: eventId,
           tier,
@@ -234,8 +210,6 @@ export async function handleBandoriTrackerDataRequest(request: Request) {
     });
   } catch (error) {
     console.error("Tracker API error:", error);
-    return errorResponse(500, "Internal server error.", {
-      code: "INTERNAL_SERVER_ERROR",
-    });
+    return errorResponse(500, "INTERNAL_SERVER_ERROR", "Internal server error.");
   }
 }

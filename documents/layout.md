@@ -60,8 +60,8 @@ hhwx/
 │   │   │   │   │                       └── route.ts # 以接近 Bestdori 原始路径的方式同域代理活动横幅
 │   │   │   │   ├── events/
 │   │   │   │   │   ├── route.ts    # 读取结构化活动目录
-│   │   │   │   │   └── bonus/
-│   │   │   │   │       └── route.ts # 读取活动加成，可按 event 查询
+│   │   │   │   │   ├── bonuses/
+│   │   │   │   │   │   └── route.ts # 读取活动加成，可按 event 查询（主路径）
 │   │   │   │   ├── songs/
 │   │   │   │   │   └── route.ts    # 读取 challenge 歌曲标题
 │   │   │   │   ├── tracker/
@@ -71,8 +71,8 @@ hhwx/
 │   │   │   │       └── cn/
 │   │   │   │           ├── holidays/
 │   │   │   │           │   └── route.ts # 读取中国大陆休假日/调休数据
-│   │   │   │           ├── schedule/
-│   │   │   │           │   └── route.ts # 读取/保存国服活动排期主路径
+│   │   │   │           ├── schedules/
+│   │   │   │           │   └── route.ts # 薄路由：读取/保存国服活动排期，实际逻辑下沉到服务层
 │   │   │   │           └── bandori-calendar-cn.ics/
 │   │   │   │               └── route.ts # 生成可订阅的国服活动 ICS
 │   │   │   └── tracker/
@@ -85,6 +85,7 @@ hhwx/
 │   │       │   ├── FixedYAxis.tsx      # 图表固定纵坐标组件（与主图共享同一套刻度数据）
 │   │       │   ├── types.ts            # 共享 TypeScript 类型定义
 │   │       │   ├── constants.ts        # 档位常量、Cookie 读写工具
+│   │       │   ├── useProjectionPreference.ts # 投影显示偏好持久化 Hook
 │   │       │   ├── useTrackerData.ts   # 数据获取层（HTTP + Supabase 实时订阅）
 │   │       │   ├── useChartData.ts     # 数据派生层（速度计算、投影、Y 轴刻度）
 │   │       │   └── TrackerTooltip.tsx  # 图表 Tooltip 组件
@@ -112,6 +113,8 @@ hhwx/
 │   │   └── useOthelloGame.ts   # 黑白棋游戏状态管理（useReducer + localStorage）
 │   ├── lib/                    # 工具库和核心逻辑
 │   │   ├── api-cache.ts        # 统一定义 API、订阅源与静态资源代理的缓存 profile
+│   │   ├── api-contracts.ts    # success/data JSON envelope 类型与错误解析辅助
+│   │   ├── api-response.ts     # API 路由统一 success/error 响应构造器
 │   │   ├── ai/                 # AI 策略模块（每个角色独立文件）
 │   │   │   ├── types.ts        # AI 策略通用类型定义
 │   │   │   ├── kokoro.ts       # Kokoro AI：高强度，随机+角位锁定
@@ -123,6 +126,7 @@ hhwx/
 │   │   ├── bandori-event-banner-proxy.ts # 活动横幅共享代理逻辑（供原始语义路径复用）
 │   │   ├── characters.ts       # 角色数据定义（台词、思考时间等）
 │   │   ├── bandori-events-server.ts # Bandori 活动/角色聚合与 DTO 转换服务
+│   │   ├── bandori-schedule-server.ts # 国服排期服务：鉴权后编辑校验、冲突检测与写入
 │   │   ├── bandori-tracker-server.ts # tracker data 共享服务端处理器（新旧路由共用）
 │   │   ├── calendar-character-service.ts # 日历角色解析/标题/颜色/角色筛选统一服务
 │   │   ├── othello.ts          # 黑白棋核心规则（纯函数、位置权重矩阵）

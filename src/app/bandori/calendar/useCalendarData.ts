@@ -7,6 +7,7 @@ import {
   MUTABLE_DIRECTORY_CACHE_PROFILE,
   REFERENCE_METADATA_CACHE_PROFILE,
 } from "@/lib/api-cache";
+import { getApiErrorMessage, parseApiSuccessData } from "@/lib/api-contracts";
 import { getSafeSession, supabase } from "@/lib/supabase";
 import { ChinaMainlandHolidayCalendarData } from "./chinaMainlandHolidayCalendar";
 import {
@@ -171,25 +172,40 @@ export function useCalendarData() {
   const { data: eventCatalogData, loading: eventCatalogLoading, refresh: refreshEventCatalog } = useCachedFetch<{ events: BandoriEventSummary[] }>(
     "bandori-events-v3",
     "/api/bandori/events",
-    (raw) => raw as { events: BandoriEventSummary[] },
+    (raw) => {
+      const payload = parseApiSuccessData<{ events?: BandoriEventSummary[] }>(raw) ?? raw as { events?: BandoriEventSummary[] } | null;
+      return {
+        events: Array.isArray(payload?.events) ? payload.events : [],
+      };
+    },
     { ...(MUTABLE_DIRECTORY_CACHE_PROFILE.client ?? {}) },
   );
   const { data: scheduleData, loading: scheduleLoading, refresh: refreshSchedule } = useCachedFetch<{ events: BandoriScheduleSupplement[] }>(
-    "bandori-calendar-cn-schedule-v2",
-    "/api/bandori/calendar/cn/schedule",
-    (raw) => raw as { events: BandoriScheduleSupplement[] },
+    "bandori-calendar-cn-schedules-v3",
+    "/api/bandori/calendar/cn/schedules",
+    (raw) => {
+      const payload = parseApiSuccessData<{ events?: BandoriScheduleSupplement[] }>(raw) ?? raw as { events?: BandoriScheduleSupplement[] } | null;
+      return {
+        events: Array.isArray(payload?.events) ? payload.events : [],
+      };
+    },
     { ...(MUTABLE_DIRECTORY_CACHE_PROFILE.client ?? {}) },
   );
   const { data: characterData, loading: characterLoading, refresh: refreshCharacters } = useCachedFetch<{ characters: CalendarCharacter[] }>(
     "bandori-characters-v2",
     "/api/bandori/characters",
-    (raw) => raw as { characters: CalendarCharacter[] },
+    (raw) => {
+      const payload = parseApiSuccessData<{ characters?: CalendarCharacter[] }>(raw) ?? raw as { characters?: CalendarCharacter[] } | null;
+      return {
+        characters: Array.isArray(payload?.characters) ? payload.characters : [],
+      };
+    },
     { ...(REFERENCE_METADATA_CACHE_PROFILE.client ?? {}) },
   );
   const { data: holidayData, loading: holidayLoading, refresh: refreshHolidayData } = useCachedFetch<CalendarHolidayData>(
     "bandori-calendar-cn-holidays",
     "/api/bandori/calendar/cn/holidays",
-    (raw) => raw as CalendarHolidayData,
+    (raw) => parseApiSuccessData<CalendarHolidayData>(raw) ?? raw as CalendarHolidayData,
     { ...(EXTERNAL_REFERENCE_CACHE_PROFILE.client ?? {}) },
   );
 
@@ -281,7 +297,7 @@ export function useCalendarEditor(onSuccess: () => void) {
         return false;
       }
 
-      const response = await fetch("/api/bandori/calendar/cn/schedule", {
+      const response = await fetch("/api/bandori/calendar/cn/schedules", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -292,7 +308,7 @@ export function useCalendarEditor(onSuccess: () => void) {
 
       const json = await response.json().catch(() => ({}));
       if (!response.ok) {
-        const message = [json.error, json.details].filter(Boolean).join("：");
+        const message = getApiErrorMessage(json);
         setError(message || `保存失败（HTTP ${response.status}）`);
         return false;
       }

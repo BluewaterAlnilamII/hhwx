@@ -1,4 +1,3 @@
-import { NextResponse } from "next/server";
 import { unstable_cache } from "next/cache";
 import {
   BANDORI_EVENTS_CACHE_TAG,
@@ -7,6 +6,7 @@ import {
   PUBLIC_SHORT_API_CACHE_CONTROL,
   withCacheControl,
 } from "@/lib/api-cache";
+import { jsonRouteError, jsonSuccess } from "@/lib/api-response";
 import { fetchBandoriEventRecords, toBandoriEventsListResponse } from "@/lib/bandori-events-server";
 
 export const dynamic = "force-dynamic";
@@ -24,15 +24,16 @@ const readBandoriEventsListResponse = unstable_cache(
 
 export async function GET() {
   try {
-    // 列表接口返回结构化目录 DTO，而不是数据库原表或 Bestdori 原始形状，
-    // 这样页面消费方只依赖业务语义，不会被底层存储结构牵着走。
-    return NextResponse.json(await readBandoriEventsListResponse(), {
+    return jsonSuccess(await readBandoriEventsListResponse(), {
       headers: withCacheControl(PUBLIC_SHORT_API_CACHE_CONTROL),
     });
   } catch (error) {
     console.error("Bandori events API 错误:", error);
-    return NextResponse.json({ error: "读取活动目录失败" }, {
+    return jsonRouteError(error, {
       status: 500,
+      code: "BANDORI_EVENTS_READ_FAILED",
+      message: "读取活动目录失败",
+    }, {
       headers: withCacheControl(LIVE_API_CACHE_CONTROL),
     });
   }

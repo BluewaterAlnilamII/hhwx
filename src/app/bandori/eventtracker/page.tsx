@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useMemo, useCallback, useLayoutEffect, useSyncExternalStore } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback, useLayoutEffect } from "react";
 import { format } from "date-fns";
 import Image from "next/image";
 import {
@@ -19,6 +19,7 @@ import { ZoomIn, ZoomOut, Search, History, X } from "lucide-react";
 import * as Dialog from "@radix-ui/react-dialog";
 
 import { useCachedFetch } from "@/hooks/useCachedFetch";
+import { parseApiSuccessData } from "@/lib/api-contracts";
 import {
   buildBandoriEventBannerProxyPath,
   resolveBandoriEventBannerBundleName,
@@ -28,8 +29,6 @@ import {
   INSTANT_PROJECTION_STORAGE_KEY,
   DAY_PROJECTION_STORAGE_KEY,
   getTiersForMode,
-  readProjectionPreference,
-  writeProjectionPreference,
 } from "./constants";
 import { useTrackerData } from "./useTrackerData";
 import {
@@ -43,6 +42,7 @@ import {
 } from "./useChartData";
 import { TrackerTooltip } from "./TrackerTooltip";
 import FixedYAxis from "./FixedYAxis";
+import { useProjectionPreference } from "./useProjectionPreference";
 import {
   buildChinaMainlandHolidayLookup,
   isChinaMainlandRestDay,
@@ -60,7 +60,6 @@ const TOOLTIP_EDGE_PADDING = 8;
 const FIXED_Y_AXIS_WIDTH = 38;
 const CHART_MARGIN = { top: 20, right: 5, left: 0, bottom: 20 } as const;
 const X_AXIS_HEIGHT = 30;
-const PROJECTION_PREFERENCE_CHANGE_EVENT = "eventtracker:projection-preference-change";
 
 type HoverTooltipState = {
   active: boolean;
@@ -77,8 +76,6 @@ type ModeIndicatorStyle = {
   ready: boolean;
 };
 
-type ProjectionPreferenceUpdater = boolean | ((previous: boolean) => boolean);
-
 function isInvalidMarkerPosition(cx?: number, cy?: number): boolean {
   return typeof cx !== "number" || Number.isNaN(cx) || typeof cy !== "number" || Number.isNaN(cy);
 }
@@ -89,43 +86,6 @@ function renderHiddenMarker(key?: string) {
 
 function formatBandoriCnDateTime(timestamp: number) {
   return format(timestamp, "yyyy年M月d日 HH:mm");
-}
-
-function subscribeProjectionPreference(onStoreChange: () => void): () => void {
-  if (typeof window === "undefined") {
-    return () => undefined;
-  }
-
-  window.addEventListener("storage", onStoreChange);
-  window.addEventListener(PROJECTION_PREFERENCE_CHANGE_EVENT, onStoreChange);
-
-  return () => {
-    window.removeEventListener("storage", onStoreChange);
-    window.removeEventListener(PROJECTION_PREFERENCE_CHANGE_EVENT, onStoreChange);
-  };
-}
-
-function useProjectionPreference(storageKey: string, fallbackValue: boolean) {
-  const value = useSyncExternalStore(
-    subscribeProjectionPreference,
-    () => readProjectionPreference(storageKey) ?? fallbackValue,
-    () => fallbackValue,
-  );
-
-  const setValue = useCallback((nextValue: ProjectionPreferenceUpdater) => {
-    const previousValue = readProjectionPreference(storageKey) ?? fallbackValue;
-    const resolvedValue = typeof nextValue === "function"
-      ? nextValue(previousValue)
-      : nextValue;
-
-    writeProjectionPreference(storageKey, resolvedValue);
-
-    if (typeof window !== "undefined") {
-      window.dispatchEvent(new Event(PROJECTION_PREFERENCE_CHANGE_EVENT));
-    }
-  }, [fallbackValue, storageKey]);
-
-  return [value, setValue] as const;
 }
 
 function buildNonWorkingDayBands(
@@ -398,11 +358,12 @@ export default function EventTrackerPage() {
     availableChallengeSongIds.length > 0 ? `bandori-song-titles-${challengeSongIdsQuery}` : null,
     availableChallengeSongIds.length > 0 ? `/api/bandori/songs?ids=${challengeSongIdsQuery}` : null,
     (data: unknown) => {
-      if (typeof data !== "object" || data === null || !("songs" in data)) {
+      const payload = parseApiSuccessData<{ songs?: Record<string, string> }>(data) ?? data as { songs?: Record<string, string> } | null;
+      if (!payload || typeof payload !== "object") {
         return {};
       }
 
-      const songs = (data as { songs?: Record<string, string> }).songs;
+      const songs = payload.songs;
       return songs ?? {};
     },
     { refreshOnVisible: false, staleTimeMs: 24 * 60 * 60 * 1000 },

@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { supabase } from "@/lib/supabase";
 import { useCachedFetch, updateFetchCache } from "@/hooks/useCachedFetch";
+import { parseApiSuccessData } from "@/lib/api-contracts";
 import { BANDORI_TRACKER_DATA_TABLE } from "@/lib/supabase-table-names";
 import {
   EXTERNAL_REFERENCE_CACHE_PROFILE,
@@ -269,7 +270,7 @@ export function useTrackerData(
     "bandori-events-v3",
     "/api/bandori/events",
     (data: unknown) => {
-      const payload = data as { events?: BandoriEventSummary[] } | null;
+      const payload = parseApiSuccessData<{ events?: BandoriEventSummary[] }>(data) ?? data as { events?: BandoriEventSummary[] } | null;
       return {
         events: Array.isArray(payload?.events) ? payload.events : [],
       };
@@ -280,7 +281,7 @@ export function useTrackerData(
   const { data: holidayData } = useCachedFetch<ChinaMainlandHolidayCalendarData | null>(
     "bandori-calendar-cn-holidays",
     "/api/bandori/calendar/cn/holidays",
-    (data: unknown) => data as ChinaMainlandHolidayCalendarData,
+    (data: unknown) => parseApiSuccessData<ChinaMainlandHolidayCalendarData>(data) ?? data as ChinaMainlandHolidayCalendarData,
     { ...(EXTERNAL_REFERENCE_CACHE_PROFILE.client ?? {}) },
   );
 

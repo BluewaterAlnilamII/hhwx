@@ -382,7 +382,7 @@ export async function fetchBandoriEventRecords(options?: { eventId?: number }): 
     });
 }
 
-// calendar/cn/schedule 现在只承担“未来排期补充层”，
+// calendar/cn/schedules 现在只承担“未来排期补充层”，
 // 因此这里只暴露 schedule 表本身的字段，并统一转换成前端可直接消费的小驼峰命名。
 export function toBandoriScheduleEvent(record: BandoriEventRecord): BandoriScheduleEvent {
   return {
