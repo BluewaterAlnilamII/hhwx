@@ -15,32 +15,29 @@ export default function Home() {
   const isGameReady = selectionStep === "ready";
 
   const [savedGame, setSavedGame] = useState<SavedGameData | null>(null);
-  const [showResume, setShowResume] = useState(false);
-  const [checked, setChecked] = useState(false);
+  const showResume = savedGame !== null;
 
   // 页面挂载时检查是否有已保存的对局数据
   useEffect(() => {
-    if (checked) return;
-    setChecked(true);
+    const frameId = window.requestAnimationFrame(() => {
+      const saved = getSavedGame();
+      if (saved && saved.playerCharacterId && saved.aiCharacterId) {
+        setSavedGame(saved);
+      }
+    });
 
-    const saved = getSavedGame();
-    if (saved && saved.playerCharacterId && saved.aiCharacterId) {
-      setSavedGame(saved);
-      setShowResume(true);
-    }
-  }, [checked]);
+    return () => window.cancelAnimationFrame(frameId);
+  }, []);
 
   const handleResume = () => {
     if (savedGame && savedGame.playerCharacterId && savedGame.aiCharacterId) {
       setCharactersById(savedGame.playerCharacterId, savedGame.aiCharacterId);
     }
-    setShowResume(false);
     setSavedGame(null);
   };
 
   const handleDecline = () => {
     localStorage.removeItem("hhwx-othello-game");
-    setShowResume(false);
     setSavedGame(null);
   };
 

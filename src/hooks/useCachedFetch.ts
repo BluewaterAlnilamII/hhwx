@@ -60,7 +60,7 @@ function isCacheStale(entry: CacheEntry<unknown> | undefined, staleTimeMs: numbe
 export function useCachedFetch<T>(
   key: string | null,
   url: string | null,
-  transform?: (raw: any) => T,
+  transform?: (raw: unknown) => T,
   options?: { refreshOnVisible?: boolean; staleTimeMs?: number; merge?: (incoming: T, existing: T) => T }
 ): { data: T | null; loading: boolean; refresh: () => void } {
   const refreshOnVisible = options?.refreshOnVisible ?? true;
@@ -84,11 +84,14 @@ export function useCachedFetch<T>(
   const transformRef = useRef(transform);
   const mergeRef = useRef(options?.merge);
   const staleTimeRef = useRef(options?.staleTimeMs);
-  keyRef.current = key;
-  urlRef.current = url;
-  transformRef.current = transform;
-  mergeRef.current = options?.merge;
-  staleTimeRef.current = options?.staleTimeMs;
+
+  useEffect(() => {
+    keyRef.current = key;
+    urlRef.current = url;
+    transformRef.current = transform;
+    mergeRef.current = options?.merge;
+    staleTimeRef.current = options?.staleTimeMs;
+  }, [key, options?.merge, options?.staleTimeMs, transform, url]);
 
   const shouldRefresh = useCallback((currentKey: string) => {
     return isCacheStale(readCacheEntry(currentKey), staleTimeRef.current);
@@ -144,24 +147,28 @@ export function useCachedFetch<T>(
 
   // key / url 变化时：缓存命中 → 立即显示 + 后台静默刷新；未命中 → 常规 loading
   useEffect(() => {
-    if (!key || !url) {
-      setData(null);
-      setLoading(false);
-      return;
-    }
-
-    const cachedEntry = readCacheEntry<T>(key);
-    if (cachedEntry !== undefined) {
-      setData(cachedEntry.value);
-      setLoading(false);
-      if (shouldRefresh(key)) {
-        doFetch(true); // 有缓存但已过保鲜期，静默刷新
+    const timeoutId = window.setTimeout(() => {
+      if (!key || !url) {
+        setData(null);
+        setLoading(false);
+        return;
       }
-    } else {
-      setData(null);
-      setLoading(true);
-      doFetch(false); // 无缓存，显示 loading
-    }
+
+      const cachedEntry = readCacheEntry<T>(key);
+      if (cachedEntry !== undefined) {
+        setData(cachedEntry.value);
+        setLoading(false);
+        if (shouldRefresh(key)) {
+          doFetch(true); // 有缓存但已过保鲜期，静默刷新
+        }
+      } else {
+        setData(null);
+        setLoading(true);
+        doFetch(false); // 无缓存，显示 loading
+      }
+    }, 0);
+
+    return () => window.clearTimeout(timeoutId);
   }, [key, url, doFetch, shouldRefresh]);
 
   // 页面从后台切回前台时自动静默刷新

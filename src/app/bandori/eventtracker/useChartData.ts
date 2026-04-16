@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { TrackerData, TrackingMode } from "./types";
 
 /**
@@ -163,13 +163,33 @@ export function useEventStatus(
   domainStart: number | "auto",
   domainEnd: number | "auto",
 ): string {
-  return useMemo(() => {
-    if (domainStart === "auto" || domainEnd === "auto") return "未开始";
-    const now = Date.now();
-    if (now < domainStart) return "未开始";
-    if (now > domainEnd) return "已结束";
-    return "进行中";
-  }, [domainStart, domainEnd]);
+  const [status, setStatus] = useState("未开始");
+
+  useEffect(() => {
+    const timerId = window.setTimeout(() => {
+      if (domainStart === "auto" || domainEnd === "auto") {
+        setStatus("未开始");
+        return;
+      }
+
+      const currentTimeMs = Date.now();
+      if (currentTimeMs < domainStart) {
+        setStatus("未开始");
+        return;
+      }
+
+      if (currentTimeMs > domainEnd) {
+        setStatus("已结束");
+        return;
+      }
+
+      setStatus("进行中");
+    }, 0);
+
+    return () => window.clearTimeout(timerId);
+  }, [domainEnd, domainStart]);
+
+  return status;
 }
 
 /**
@@ -230,7 +250,7 @@ export function useFinalDisplayedData(
 export function generateYTicks(data: TrackerData[]): { ticks: number[] | undefined; domain: [number | string, number | string] } {
   if (data.length === 0) return { ticks: undefined, domain: [0, "dataMax"] };
 
-  let minEp = 0;
+  const minEp = 0;
   let maxEp = minEp;
   for (const d of data) {
     if (d.ep !== undefined && d.ep > maxEp) maxEp = d.ep;

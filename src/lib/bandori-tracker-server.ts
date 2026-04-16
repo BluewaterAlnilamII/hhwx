@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { LIVE_API_CACHE_CONTROL, withCacheControl } from "@/lib/api-cache";
 import { supabase } from "@/lib/supabase";
+import { BANDORI_TRACKER_DATA_TABLE } from "@/lib/supabase-table-names";
 
 const VALID_TRACKER_TYPES = new Set(["event", "song", "monthly"]);
 
@@ -93,6 +94,8 @@ function buildSongCutoffs(rows: TrackerRow[]): TrackerPoint[] | TrackerSongCutof
  * 为什么要抽到共享模块：
  * 1. 新旧路径需要在兼容期内返回完全一致的结构，避免行为漂移。
  * 2. 未来下线旧路径时，只需要删除别名路由，不需要再次搬运查询逻辑。
+ * 3. 当前 result/cutoffs/error 结构已经被现有 tracker 页面和外部调用方依赖，
+ *    它属于项目明确保留的历史兼容协议；在未引入新版本接口前，不要直接改成 success/data 信封。
  */
 export async function handleBandoriTrackerDataRequest(request: Request) {
   try {
@@ -145,7 +148,7 @@ export async function handleBandoriTrackerDataRequest(request: Request) {
       // challenge 活动切歌只是在前端本地切换视图，如果服务端按单曲逐次查询，
       // 会让相同档位的数据被重复请求多次，既增加带宽也更容易打乱缓存一致性。
       const { data, error } = await supabase
-        .from("bandori_tracker_data")
+        .from(BANDORI_TRACKER_DATA_TABLE)
         .select("time, ep, song_id, is_final")
         .eq("event_id", eventId)
         .eq("type", "song")
@@ -186,7 +189,7 @@ export async function handleBandoriTrackerDataRequest(request: Request) {
     }
 
     const { data, error } = await supabase
-      .from("bandori_tracker_data")
+      .from(BANDORI_TRACKER_DATA_TABLE)
       .select("time, ep, is_final")
       .eq("event_id", eventId)
       .eq("type", typeParam)

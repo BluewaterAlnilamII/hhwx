@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import { BAND_COLORS, GbpEvent, useCalendarEditor } from "./useCalendarData";
+import { BAND_COLORS, BandoriCalendarRecord, useCalendarEditor } from "./useCalendarData";
 import {
   DndContext,
   closestCenter,
@@ -19,7 +19,7 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 
 interface EventEditorProps {
-  allEvents: GbpEvent[];
+  allEvents: BandoriCalendarRecord[];
   onSaved: () => void;
 }
 
@@ -35,7 +35,7 @@ interface EditableEvent {
   hasScheduleSupplement: boolean;
 }
 
-function toEditableEvents(events: GbpEvent[]): EditableEvent[] {
+function toEditableEvents(events: BandoriCalendarRecord[]): EditableEvent[] {
   const now = Date.now();
 
   return events
@@ -64,7 +64,7 @@ function toEditableEvents(events: GbpEvent[]): EditableEvent[] {
     }));
 }
 
-function getLockedUntilDate(events: GbpEvent[]): string | null {
+function getLockedUntilDate(events: BandoriCalendarRecord[]): string | null {
   const now = Date.now();
   const ongoingEvents = events
     .filter((event) => event.cnStartAt && event.cnEndAt && event.cnStartAt <= now && event.cnEndAt >= now)

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useMemo, useState } from "react";
 import { CalendarEvent, CalendarHolidayData, filterEventsForMonth } from "./useCalendarData";
 import { buildChinaMainlandHolidayLookup, isChinaMainlandRestDay } from "./chinaMainlandHolidayCalendar";
 
@@ -257,12 +257,12 @@ export default function CalendarGrid({ events, holidayData }: CalendarGridProps)
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth()); // 月份沿用原生日期对象的 0 到 11 编码。
 
-  useEffect(() => {
+  const [displayYear, displayMonth] = useMemo<[number, number]>(() => {
     if (!monthBounds) {
-      return;
+      return [year, month];
     }
 
-    const [nextYear, nextMonth] = clampYearMonth(
+    return clampYearMonth(
       year,
       month,
       monthBounds.minYear,
@@ -270,30 +270,24 @@ export default function CalendarGrid({ events, holidayData }: CalendarGridProps)
       monthBounds.maxYear,
       monthBounds.maxMonth,
     );
-
-    if (nextYear !== year) {
-      setYear(nextYear);
-    }
-
-    if (nextMonth !== month) {
-      setMonth(nextMonth);
-    }
   }, [month, monthBounds, year]);
 
-  const daysInMonth = getDaysInMonth(year, month);
-  const firstDayOffset = getFirstDayOfWeek(year, month);
+  const daysInMonth = getDaysInMonth(displayYear, displayMonth);
+  const firstDayOffset = getFirstDayOfWeek(displayYear, displayMonth);
   const totalWeeks = Math.ceil((firstDayOffset + daysInMonth) / 7);
   const calendarCells = useMemo(
-    () => buildCalendarCells(year, month, firstDayOffset, totalWeeks),
-    [year, month, firstDayOffset, totalWeeks],
+    () => buildCalendarCells(displayYear, displayMonth, firstDayOffset, totalWeeks),
+    [displayYear, displayMonth, firstDayOffset, totalWeeks],
   );
-  const gridStartDate = calendarCells[0]?.date ?? new Date(year, month, 1);
-  const gridEndDate = calendarCells[calendarCells.length - 1]?.date ?? new Date(year, month, daysInMonth);
+  const { gridStartDate, gridEndDate } = useMemo(() => ({
+    gridStartDate: calendarCells[0]?.date ?? new Date(displayYear, displayMonth, 1),
+    gridEndDate: calendarCells[calendarCells.length - 1]?.date ?? new Date(displayYear, displayMonth, daysInMonth),
+  }), [calendarCells, displayYear, displayMonth, daysInMonth]);
   const holidayLookup = useMemo(() => buildChinaMainlandHolidayLookup(holidayData), [holidayData]);
 
   const monthEvents = useMemo(
-    () => filterEventsForMonth(events, year, month),
-    [events, year, month]
+    () => filterEventsForMonth(events, displayYear, displayMonth),
+    [events, displayYear, displayMonth]
   );
 
   const eventRows = useMemo(
@@ -325,10 +319,10 @@ export default function CalendarGrid({ events, holidayData }: CalendarGridProps)
   }, [eventRows]);
 
   const isPrevDisabled = monthBounds
-    ? compareYearMonth(year, month, monthBounds.minYear, monthBounds.minMonth) <= 0
+    ? compareYearMonth(displayYear, displayMonth, monthBounds.minYear, monthBounds.minMonth) <= 0
     : false;
   const isNextDisabled = monthBounds
-    ? compareYearMonth(year, month, monthBounds.maxYear, monthBounds.maxMonth) >= 0
+    ? compareYearMonth(displayYear, displayMonth, monthBounds.maxYear, monthBounds.maxMonth) >= 0
     : false;
 
   const goToPrevMonth = () => {
@@ -336,7 +330,7 @@ export default function CalendarGrid({ events, holidayData }: CalendarGridProps)
       return;
     }
 
-    if (month === 0) { setYear(y => y - 1); setMonth(11); }
+    if (displayMonth === 0) { setYear(displayYear - 1); setMonth(11); }
     else setMonth(m => m - 1);
   };
 
@@ -345,7 +339,7 @@ export default function CalendarGrid({ events, holidayData }: CalendarGridProps)
       return;
     }
 
-    if (month === 11) { setYear(y => y + 1); setMonth(0); }
+    if (displayMonth === 11) { setYear(displayYear + 1); setMonth(0); }
     else setMonth(m => m + 1);
   };
 
@@ -382,7 +376,7 @@ export default function CalendarGrid({ events, holidayData }: CalendarGridProps)
             ◀
           </button>
           <h2 className="min-w-0 text-center text-base font-black tracking-[0.02em] text-gray-800 sm:text-lg md:text-2xl md:tracking-[0.08em]">
-            {year}年 {month + 1}月
+            {displayYear}年 {displayMonth + 1}月
           </h2>
           <button
             onClick={goToNextMonth}
@@ -419,7 +413,6 @@ export default function CalendarGrid({ events, holidayData }: CalendarGridProps)
         {/* 周行 */}
         {Array.from({ length: totalWeeks }, (_, weekIdx) => {
           const lanes = maxLanesPerWeek[weekIdx] ?? 0;
-          const minH = 42 + lanes * 28 + 18;
           const weekEvents = eventRowsByWeek[weekIdx] ?? [];
 
           return (

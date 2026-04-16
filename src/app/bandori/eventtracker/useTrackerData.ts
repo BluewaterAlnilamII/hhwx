@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { supabase } from "@/lib/supabase";
 import { useCachedFetch, updateFetchCache } from "@/hooks/useCachedFetch";
+import { BANDORI_TRACKER_DATA_TABLE } from "@/lib/supabase-table-names";
 import {
   EXTERNAL_REFERENCE_CACHE_PROFILE,
   MUTABLE_DIRECTORY_CACHE_PROFILE,
@@ -424,7 +425,7 @@ export function useTrackerData(
       .channel("bandori_tracker_realtime")
       .on(
         "postgres_changes",
-        { event: "INSERT", schema: "public", table: "bandori_tracker_data" },
+        { event: "INSERT", schema: "public", table: BANDORI_TRACKER_DATA_TABLE },
         (payload) => {
           const newRow = payload.new;
           if (!newRow) return;

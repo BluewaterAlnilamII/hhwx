@@ -11,6 +11,14 @@ interface Comment {
     profiles: { username: string } | null;
 }
 
+function getErrorMessage(error: unknown, fallbackMessage: string): string {
+    if (error instanceof Error && error.message) {
+        return error.message;
+    }
+
+    return fallbackMessage;
+}
+
 export default function CommentSection() {
     const [comments, setComments] = useState<Comment[]>([]);
     const [newComment, setNewComment] = useState("");
@@ -48,9 +56,9 @@ export default function CommentSection() {
 
             setNewComment("");
             fetchComments();
-        } catch (err: any) {
+        } catch (err: unknown) {
             console.error("Failed to post comment:", err);
-            alert("评论发送失败：" + (err.message || "未知错误"));
+            alert("评论发送失败：" + getErrorMessage(err, "未知错误"));
         } finally {
             setLoading(false);
         }

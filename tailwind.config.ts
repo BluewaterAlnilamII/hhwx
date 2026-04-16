@@ -32,7 +32,7 @@ const config: Config = {
     },
   },
   plugins: [
-    function ({ addUtilities }: any) {
+    function ({ addUtilities }: { addUtilities: (utilities: Record<string, Record<string, string>>) => void }) {
       addUtilities({
         '.animation-delay-2000': {
           'animation-delay': '2s',

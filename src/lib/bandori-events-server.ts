@@ -1,5 +1,11 @@
 import type { CalendarCharacter } from "@/lib/calendar-character-service";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
+import {
+  BANDORI_CHARACTERS_TABLE,
+  BANDORI_EVENT_BONUSES_TABLE,
+  BANDORI_EVENTS_TABLE,
+  BANDORI_EVENT_SCHEDULES_CN_TABLE,
+} from "@/lib/supabase-table-names";
 
 
 type EventRow = {
@@ -272,7 +278,7 @@ function toCalendarCharacter(row: CharacterRow): CalendarCharacter {
 export async function fetchBandoriCharacters(): Promise<CalendarCharacter[]> {
   const serviceClient = createServerSupabaseClient();
   const { data, error } = await serviceClient
-    .from("gbp_characters")
+    .from(BANDORI_CHARACTERS_TABLE)
     .select(CHARACTER_SELECT_FIELDS)
     .order("character_id", { ascending: true });
 
@@ -288,13 +294,13 @@ export async function fetchBandoriCharacters(): Promise<CalendarCharacter[]> {
  *
  * 为什么拆成独立查询：
  * 当前 eventtracker、calendar、ICS 和 schedule 编辑都不依赖 bonus，
- * 如果继续在活动目录查询里顺带拉取 gbp_event_bonus，会让每次活动目录读取都多出一份无用 payload。
+ * 如果继续在活动目录查询里顺带拉取 bandori_event_bonuses，会让每次活动目录读取都多出一份无用 payload。
  * 将其拆成独立 API 后，只有真正需要活动加成的页面才会触发这张表的读取。
  */
 export async function fetchBandoriEventBonuses(options?: { eventId?: number }): Promise<BandoriEventBonusRecord[]> {
   const serviceClient = createServerSupabaseClient();
   let bonusQuery = serviceClient
-    .from("gbp_event_bonus")
+    .from(BANDORI_EVENT_BONUSES_TABLE)
     .select(BONUS_SELECT_FIELDS)
     .order("event_id", { ascending: true });
 
@@ -322,12 +328,12 @@ export async function fetchBandoriEventRecords(options?: { eventId?: number }): 
   const serviceClient = createServerSupabaseClient();
 
   let eventsQuery = serviceClient
-    .from("gbp_events")
+    .from(BANDORI_EVENTS_TABLE)
     .select(EVENT_SELECT_FIELDS)
     .order("event_id", { ascending: true });
 
   let scheduleQuery = serviceClient
-    .from("gbp_event_schedule_cn")
+    .from(BANDORI_EVENT_SCHEDULES_CN_TABLE)
     .select(SCHEDULE_SELECT_FIELDS)
     .order("sort_order", { ascending: true });
 

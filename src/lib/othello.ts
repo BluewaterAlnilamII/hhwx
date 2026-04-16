@@ -392,7 +392,7 @@ export function evaluatePotentialDiff(
     const gainedWeight = POSITION_WEIGHTS[move.row][move.col];
 
     // --- 真实棋盘（包含了合法的翻转结果，代表客观即将发生的未来） ---
-    let trueBoard = cloneBoard(board);
+    const trueBoard = cloneBoard(board);
     trueBoard[move.row][move.col] = myColor;
     for (const [fr, fc] of flips) {
         trueBoard[fr][fc] = myColor;
@@ -416,7 +416,7 @@ export function evaluatePotentialDiff(
     } else {
         // 盲区机制（破绽）：AI “瞎了眼”以为自己没有吃子，只放下了这一颗棋子。
         // --- 盲棋盘（仅放下子，没有翻转） ---
-        let blindBoard = cloneBoard(board);
+        const blindBoard = cloneBoard(board);
         blindBoard[move.row][move.col] = myColor;
         const blindOppMoves = getValidMoves(blindBoard, oppColor);
 

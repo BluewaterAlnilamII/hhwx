@@ -14,6 +14,7 @@ import {
   formatCalendarEventTitle,
   getCalendarEventColors,
 } from "@/lib/calendar-character-service";
+import { USER_ROLES_TABLE } from "@/lib/supabase-table-names";
 
 export { BAND_COLORS } from "@/lib/calendar-character-service";
 
@@ -59,7 +60,7 @@ export interface BandoriScheduleSupplement {
   sortOrder: number;
 }
 
-export interface GbpEvent {
+export interface BandoriCalendarRecord {
   eventId: number;
   eventNameJp: string;
   eventNameCn: string | null;
@@ -98,7 +99,7 @@ function calculateInclusiveDurationDays(startText: string, endText: string) {
   return Math.max(1, Math.round((end - start) / 86400000) + 1);
 }
 
-function mergeCalendarEvent(event: BandoriEventSummary, schedule: BandoriScheduleSupplement | undefined): GbpEvent {
+function mergeCalendarEvent(event: BandoriEventSummary, schedule: BandoriScheduleSupplement | undefined): BandoriCalendarRecord {
   const fallbackPredictedStart = event.timeline.cnSchedule ? timestampToChinaDateText(event.timeline.cnSchedule.startAt) : null;
   const fallbackPredictedEnd = event.timeline.cnSchedule ? timestampToChinaDateText(event.timeline.cnSchedule.endAt) : null;
   const predictedStart = schedule?.predictedStart ?? fallbackPredictedStart;
@@ -124,7 +125,7 @@ function mergeCalendarEvent(event: BandoriEventSummary, schedule: BandoriSchedul
 }
 
 /** 将活动目录与未来排期补充层合并为日历显示用事件。 */
-function toCalendarEvent(event: GbpEvent, characterMap: Map<number, CalendarCharacter>): CalendarEvent | null {
+function toCalendarEvent(event: BandoriCalendarRecord, characterMap: Map<number, CalendarCharacter>): CalendarEvent | null {
   let startDate: Date | null = null;
   let endDate: Date | null = null;
 
@@ -230,7 +231,7 @@ export function useCalendarPermission() {
       }
 
       const { data, error } = await supabase
-        .from("user_roles")
+        .from(USER_ROLES_TABLE)
         .select("role")
         .eq("user_id", session.user.id)
         .eq("role", "calendar_editor")

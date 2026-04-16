@@ -2,6 +2,16 @@
 
 ```
 hhwx/
+├── .claude/                    # Claude Code 规则目录
+│   ├── CLAUDE.md               # Claude Code 项目级入口规则
+│   └── rules/
+│       ├── core.md             # 全局基础规则（技术栈、架构模式、禁忌）
+│       ├── naming-and-contracts.md # 命名、JSON 键名与数据库命名规范
+│       ├── documentation.md    # 文档与注释规则
+│       ├── frontend-components.md # React 组件路径规则
+│       ├── react-hooks.md      # Hooks 与状态管理路径规则
+│       ├── api-routes.md       # Next.js API 路由路径规则
+│       └── server-services.md  # 服务端模块与数据库边界路径规则
 ├── .agents/                    # Agent 配置
 │   └── rules/
 │       └── hhwx.md             # 项目开发规范

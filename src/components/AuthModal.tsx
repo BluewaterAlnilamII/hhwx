@@ -9,6 +9,14 @@ interface AuthModalProps {
     onClose: () => void;
 }
 
+function getErrorMessage(error: unknown, fallbackMessage: string): string {
+    if (error instanceof Error && error.message) {
+        return error.message;
+    }
+
+    return fallbackMessage;
+}
+
 export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
     const [mode, setMode] = useState<"login" | "register">("login");
     const [email, setEmail] = useState("");
@@ -47,8 +55,8 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
                 .single();
             setAuth(data.user.id, profile?.username ?? "User");
             onClose();
-        } catch (err: any) {
-            setError(err.message || "登录失败");
+        } catch (err: unknown) {
+            setError(getErrorMessage(err, "登录失败"));
         } finally {
             setLoading(false);
         }
@@ -82,8 +90,8 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
                 setAuth(data.user.id, username.trim());
             }
             onClose();
-        } catch (err: any) {
-            setError(err.message || "注册失败");
+        } catch (err: unknown) {
+            setError(getErrorMessage(err, "注册失败"));
         } finally {
             setLoading(false);
         }

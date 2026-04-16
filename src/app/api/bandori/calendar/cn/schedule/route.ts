@@ -13,6 +13,11 @@ import {
   type BandoriEventRecord,
 } from "@/lib/bandori-events-server";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
+import {
+  BANDORI_EVENTS_TABLE,
+  BANDORI_EVENT_SCHEDULES_CN_TABLE,
+  USER_ROLES_TABLE,
+} from "@/lib/supabase-table-names";
 
 export const dynamic = "force-dynamic";
 
@@ -176,7 +181,7 @@ function shouldExposeScheduleRecord(record: BandoriEventRecord, nowMs: number, t
 async function hasCalendarEditorRole(userId: string): Promise<boolean> {
   const serviceClient = createServerSupabaseClient();
   const { data, error } = await serviceClient
-    .from("user_roles")
+    .from(USER_ROLES_TABLE)
     .select("role")
     .eq("user_id", userId)
     .eq("role", "calendar_editor")
@@ -206,7 +211,7 @@ async function updateScheduleEvent(
   for (let attempt = 1; attempt <= UPDATE_MAX_RETRIES; attempt += 1) {
     try {
       const result = await serviceClient
-        .from("gbp_event_schedule_cn")
+        .from(BANDORI_EVENT_SCHEDULES_CN_TABLE)
         .upsert(updatePayload, { onConflict: "event_id" });
 
       if (!result.error) {
@@ -325,7 +330,7 @@ export async function POST(request: Request) {
     const requestEventMap = new Map(events.map((event) => [Number(event.eventId), event]));
 
     const { data: lifecycleRows, error: lifecycleError } = await serviceClient
-      .from("gbp_events")
+      .from(BANDORI_EVENTS_TABLE)
       .select("event_id, cn_end_at")
       .in("event_id", eventIds);
 
@@ -369,7 +374,7 @@ export async function POST(request: Request) {
 
     if (scheduleRowIdsToDelete.length > 0) {
       const deleteResult = await serviceClient
-        .from("gbp_event_schedule_cn")
+        .from(BANDORI_EVENT_SCHEDULES_CN_TABLE)
         .delete()
         .in("event_id", scheduleRowIdsToDelete);
 
@@ -402,7 +407,7 @@ export async function POST(request: Request) {
     }
 
     const { data: ongoingEvent, error: ongoingError } = await serviceClient
-      .from("gbp_events")
+      .from(BANDORI_EVENTS_TABLE)
       .select("event_id, cn_end_at")
       .not("cn_start_at", "is", null)
       .not("cn_end_at", "is", null)
