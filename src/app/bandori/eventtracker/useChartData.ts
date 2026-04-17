@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import type { TrackerData, TrackingMode } from "./types";
+import { useBoundaryClock } from "./useBoundaryClock";
 
 /**
  * 图表时间域（X 轴范围）信息。
@@ -13,6 +14,8 @@ export type ChartDomain = {
   cutoffEnd: number | null;
   midnights: number[];
 };
+
+type EventStatus = "未开始" | "进行中" | "已结束";
 
 type MonthlyRankingWindow = {
   effectiveMonthStart: Date;
@@ -159,37 +162,36 @@ export function useProcessedData(
  * 设计取舍：活动状态只在域边界变化时才需要重算。
  * 若按秒级更新时间反复读取当前时间，会让包含图表的父组件发生无意义的整树重渲染。
  */
+function getEventStatusAt(
+  currentTimeMs: number,
+  domainStart: number | "auto",
+  domainEnd: number | "auto",
+): EventStatus {
+  if (domainStart === "auto" || domainEnd === "auto") {
+    return "未开始";
+  }
+
+  if (currentTimeMs < domainStart) {
+    return "未开始";
+  }
+
+  if (currentTimeMs > domainEnd) {
+    return "已结束";
+  }
+
+  return "进行中";
+}
+
 export function useEventStatus(
   domainStart: number | "auto",
   domainEnd: number | "auto",
-): string {
-  const [status, setStatus] = useState("未开始");
+): EventStatus {
+  const boundaryNow = useBoundaryClock([
+    typeof domainStart === "number" ? domainStart : null,
+    typeof domainEnd === "number" ? domainEnd + 1 : null,
+  ]);
 
-  useEffect(() => {
-    const timerId = window.setTimeout(() => {
-      if (domainStart === "auto" || domainEnd === "auto") {
-        setStatus("未开始");
-        return;
-      }
-
-      const currentTimeMs = Date.now();
-      if (currentTimeMs < domainStart) {
-        setStatus("未开始");
-        return;
-      }
-
-      if (currentTimeMs > domainEnd) {
-        setStatus("已结束");
-        return;
-      }
-
-      setStatus("进行中");
-    }, 0);
-
-    return () => window.clearTimeout(timerId);
-  }, [domainEnd, domainStart]);
-
-  return status;
+  return getEventStatusAt(boundaryNow, domainStart, domainEnd);
 }
 
 /**

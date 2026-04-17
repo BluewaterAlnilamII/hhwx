@@ -88,6 +88,37 @@ function formatBandoriCnDateTime(timestamp: number) {
   return format(timestamp, "yyyy年M月d日 HH:mm");
 }
 
+function renderRelativeCountdown(
+  prefix: "距开始" | "距结束",
+  remainingMs: number,
+  completedLabel: string,
+) {
+  if (remainingMs <= 0) {
+    return <span>{completedLabel}</span>;
+  }
+
+  const days = Math.floor(remainingMs / (1000 * 60 * 60 * 24));
+  const hours = Math.floor((remainingMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+  const minutes = Math.floor((remainingMs % (1000 * 60 * 60)) / (1000 * 60));
+  const seconds = Math.floor((remainingMs % (1000 * 60)) / 1000).toString().padStart(2, "0");
+
+  return (
+    <span className="inline-flex items-baseline gap-0.5 whitespace-nowrap">
+      <span>{prefix}</span>
+      <span className="inline-flex items-baseline gap-0.5">
+        <span className="text-blue-500">{days}</span>
+        <span>天</span>
+        <span className="text-blue-500">{hours}</span>
+        <span>小时</span>
+        <span className="text-blue-500">{minutes}</span>
+        <span>分</span>
+        <span className="inline-flex min-w-[2ch] justify-end text-blue-500 tabular-nums">{seconds}</span>
+        <span>秒</span>
+      </span>
+    </span>
+  );
+}
+
 function buildNonWorkingDayBands(
   domainStart: number | "auto",
   domainEnd: number | "auto",
@@ -142,43 +173,29 @@ function EventProgressBar({ startDate, endDate }: { startDate: number; endDate: 
     return () => clearInterval(interval);
   }, []);
 
-  const progress = Math.min(100, Math.max(0, ((now - startDate) / (endDate - startDate)) * 100));
-  const remainingMs = endDate - now;
+  const hasStarted = now >= startDate;
+  const hasEnded = now >= endDate;
+  const durationMs = Math.max(1, endDate - startDate);
+  const progress = hasStarted ? Math.min(100, Math.max(0, ((now - startDate) / durationMs) * 100)) : 0;
 
-  const timeRemaining = () => {
-    if (remainingMs <= 0) return <span>活动已结束</span>;
-    const days = Math.floor(remainingMs / (1000 * 60 * 60 * 24));
-    const hours = Math.floor((remainingMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-    const minutes = Math.floor((remainingMs % (1000 * 60 * 60)) / (1000 * 60));
-    const seconds = Math.floor((remainingMs % (1000 * 60)) / 1000).toString().padStart(2, "0");
-    return (
-      <span className="inline-flex items-baseline gap-0.5">
-        <span>距结束</span>
-        <span className="inline-flex items-baseline gap-0.5">
-          <span className="text-blue-500">{days}</span>
-          <span>天</span>
-          <span className="text-blue-500">{hours}</span>
-          <span>小时</span>
-          <span className="text-blue-500">{minutes}</span>
-          <span>分</span>
-          {/* 只有秒数每秒变化最频繁，这里单独保留固定宽度，避免文本抖动。 */}
-          <span className="inline-flex min-w-[2ch] justify-end text-blue-500 tabular-nums">{seconds}</span>
-          <span>秒</span>
+  const summaryContent = hasStarted
+    ? (
+        <span className="inline-flex items-baseline gap-1 whitespace-nowrap">
+          <span className="text-blue-500 tabular-nums">{progress.toFixed(1)}%</span>
+          <span>已完成</span>
         </span>
-      </span>
-    );
-  };
+      )
+    : renderRelativeCountdown("距开始", startDate - now, "活动已开始");
+
+  const subSummaryContent = renderRelativeCountdown("距结束", endDate - now, hasEnded ? "活动已结束" : "活动已结束");
 
   return (
     <div className="bg-white dark:bg-[#131A2B] rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-gray-800">
       <div className="mb-2 flex items-start justify-between gap-3 text-sm font-semibold">
         <span className="shrink-0 whitespace-nowrap text-blue-500 font-bold">活动进度</span>
         <span className="min-w-0 flex flex-col items-end gap-0.5 text-right leading-tight">
-          <span className="inline-flex items-baseline gap-1 whitespace-nowrap">
-            <span className="text-blue-500 tabular-nums">{progress.toFixed(1)}%</span>
-            <span>已完成</span>
-          </span>
-          <span className="inline-flex justify-end">{timeRemaining()}</span>
+          <span className="inline-flex justify-end">{summaryContent}</span>
+          <span className="inline-flex justify-end">{subSummaryContent}</span>
         </span>
       </div>
       <div className="h-3 w-full bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
@@ -840,7 +857,7 @@ export default function EventTrackerPage() {
               <div className="flex-1 min-w-0 flex flex-col gap-3 xl:max-w-[41rem] xl:mx-auto">
                 {trackingMode === "song" && availableChallengeSongIds.length > 0 && (
                   <div className="overflow-visible rounded-none border border-transparent bg-transparent p-2 sm:p-2.5 shadow-none">
-                    <div className="mb-2 px-1 text-xs font-semibold tracking-[0.1em] text-blue-500/85 dark:text-blue-300/85 sm:text-[13px]">
+                    <div className="mb-2 px-1 text-xs font-bold tracking-[0.1em] text-blue-500/85 dark:text-blue-300/85 sm:text-[13px]">
                       挑战曲目
                     </div>
                     <div className={`grid w-full gap-2 sm:gap-2.5 ${challengeSongGridClassName}`}>
@@ -852,11 +869,11 @@ export default function EventTrackerPage() {
                             key={songId}
                             type="button"
                             onClick={() => setSelectedSongId(songId)}
-                            title={songLabel}
+                            title={`曲目 ${songId}`}
                             className={`group relative flex min-h-[2.75rem] w-full items-center justify-center overflow-hidden rounded-[17px] border px-3 py-1.5 text-center transition-all duration-300 sm:min-h-[3.35rem] sm:px-3.5 sm:py-2 ${
                               resolvedSelectedSongId === songId
                                 ? "border-blue-500 bg-blue-600 text-white shadow-[0_10px_20px_rgba(37,99,235,0.2)] ring-2 ring-blue-500/85 ring-offset-2 ring-offset-white dark:ring-offset-[#131A2B]"
-                                : "border-gray-200/90 bg-white/94 text-gray-700 shadow-[0_4px_10px_rgba(15,23,42,0.05)] hover:border-blue-200 hover:text-blue-600 hover:shadow-[0_8px_18px_rgba(59,130,246,0.12)] dark:border-gray-700/80 dark:bg-[#162033] dark:text-gray-200 dark:hover:border-blue-500/30 dark:hover:text-blue-200"
+                                : "border-slate-300/90 bg-slate-50 text-slate-800 shadow-[0_6px_16px_rgba(15,23,42,0.06)] hover:border-blue-300 hover:bg-white hover:text-blue-700 hover:shadow-[0_10px_24px_rgba(59,130,246,0.14)] dark:border-slate-600/80 dark:bg-[#1B2436] dark:text-slate-100 dark:hover:border-blue-400/45 dark:hover:text-blue-200"
                             }`}
                           >
                             <span className="eventtracker-song-button-label text-[13px] font-semibold tracking-[0.005em] sm:text-sm">
@@ -871,7 +888,7 @@ export default function EventTrackerPage() {
 
                 {/* 排名档位选择 */}
                 <div className="overflow-visible rounded-none border border-transparent bg-transparent p-2 sm:p-2.5 shadow-none">
-                  <div className="mb-2 px-1 text-xs font-semibold tracking-[0.1em] text-blue-500/85 dark:text-blue-300/85 sm:text-[13px]">
+                  <div className="mb-2 px-1 text-xs font-bold tracking-[0.1em] text-blue-500/85 dark:text-blue-300/85 sm:text-[13px]">
                     选择排名
                   </div>
                   <div className="flex flex-wrap gap-1.5 sm:gap-2">
@@ -883,7 +900,7 @@ export default function EventTrackerPage() {
                         className={`h-8 min-w-[2.9rem] rounded-[12px] border px-2 text-[11px] font-semibold tracking-[0.01em] transition-all duration-300 sm:h-9 sm:min-w-[3.15rem] sm:rounded-[14px] sm:px-2.5 sm:text-[12px] ${
                           selectedTier === tier
                             ? "border-blue-500 bg-blue-600 text-white shadow-[0_8px_18px_rgba(37,99,235,0.2)] ring-2 ring-blue-500/85 ring-offset-2 ring-offset-white dark:ring-offset-[#131A2B]"
-                            : "border-gray-200/90 bg-white/94 text-gray-600 shadow-[0_4px_10px_rgba(15,23,42,0.05)] hover:border-blue-200 hover:text-blue-600 hover:shadow-[0_8px_18px_rgba(59,130,246,0.12)] dark:border-gray-700/80 dark:bg-[#162033] dark:text-gray-300 dark:hover:border-blue-500/30 dark:hover:text-blue-200"
+                            : "border-slate-300/90 bg-slate-50 text-slate-700 shadow-[0_4px_12px_rgba(15,23,42,0.06)] hover:border-blue-300 hover:bg-white hover:text-blue-700 hover:shadow-[0_8px_18px_rgba(59,130,246,0.14)] dark:border-slate-600/80 dark:bg-[#1B2436] dark:text-slate-100 dark:hover:border-blue-400/45 dark:hover:text-blue-200"
                         }`}
                       >
                         T{tier}

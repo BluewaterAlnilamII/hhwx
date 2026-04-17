@@ -46,4 +46,4 @@ yarn-error.log*
 next-env.d.ts
 
 # Local deployment scripts
-deploy.bat
+deploy*.bat

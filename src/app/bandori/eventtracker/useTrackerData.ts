@@ -13,6 +13,7 @@ import {
 import type { ChinaMainlandHolidayCalendarData } from "@/app/bandori/calendar/chinaMainlandHolidayCalendar";
 import type { TrackerData, TrackerResult, TrackerSongGroup, EventMetadata, MinimalEvent, TrackingMode, BandoriEventSummary } from "./types";
 import { getMonthlyRankingWindow } from "./useChartData";
+import { useBoundaryClock } from "./useBoundaryClock";
 
 function appendTrackerPoint(series: TrackerData[], time: number, ep: number, isFinal = false): TrackerData[] {
   if (series.length > 0 && time <= series[series.length - 1].time) {
@@ -181,8 +182,7 @@ function resolveCnScheduleWindow(event: Pick<BandoriEventSummary, "timeline">): 
   return { startAt: null, endAt: null };
 }
 
-function findBestEvent(events: MinimalEvent[]): MinimalEvent | null {
-  const now = Date.now();
+function findBestEvent(events: MinimalEvent[], now: number): MinimalEvent | null {
   const ongoing = events.find(ev => ev.startAt !== null && ev.endAt !== null && now >= ev.startAt && now <= ev.endAt);
   if (ongoing) {
     return ongoing;
@@ -302,7 +302,29 @@ export function useTrackerData(
       .sort((left, right) => right.id - left.id);
   }, [eventCatalog]);
 
-  const recommendedEventId = useMemo(() => findBestEvent(allEvents)?.id ?? null, [allEvents]);
+  const eventScheduleBoundaries = useMemo(
+    () => allEvents.flatMap((event) => {
+      const boundaries: number[] = [];
+
+      if (event.startAt !== null) {
+        boundaries.push(event.startAt);
+      }
+
+      if (event.endAt !== null) {
+        boundaries.push(event.endAt + 1);
+      }
+
+      return boundaries;
+    }),
+    [allEvents],
+  );
+
+  const eventScheduleNow = useBoundaryClock(eventScheduleBoundaries);
+
+  const recommendedEventId = useMemo(
+    () => findBestEvent(allEvents, eventScheduleNow)?.id ?? null,
+    [allEvents, eventScheduleNow],
+  );
   const resolvedCurrentEventId = currentEventId !== null && eventMetaMap.has(currentEventId)
     ? currentEventId
     : recommendedEventId;
