@@ -102,10 +102,18 @@ function upsertSongGroupPoint(songGroups: TrackerSongGroup[], songId: number, ti
 }
 
 function selectSongCutoffs(songGroups: TrackerSongGroup[], selectedSongId: number): TrackerData[] {
-  return songGroups.find((group) => group.songId === selectedSongId)?.cutoffs
-    ?? songGroups.find((group) => group.songId === 0)?.cutoffs
-    ?? songGroups[0]?.cutoffs
-    ?? [];
+  const selectedGroup = songGroups.find((group) => group.songId === selectedSongId);
+  if (selectedGroup) {
+    return selectedGroup.cutoffs;
+  }
+
+  if (selectedSongId === 0) {
+    return songGroups.find((group) => group.songId === 0)?.cutoffs
+      ?? songGroups[0]?.cutoffs
+      ?? [];
+  }
+
+  return [];
 }
 
 function parseTrackerPoint(point: unknown): TrackerData {
