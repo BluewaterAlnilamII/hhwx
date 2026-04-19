@@ -3,12 +3,60 @@ const STATIC_SITE_ASSET_CACHE_CONTROL = "public, max-age=2592000, s-maxage=25920
 // manifest 会影响安装态名称、主题色与图标入口，
 // 因此这里单独缩短浏览器 TTL，避免发布后长时间拿到旧元数据。
 const MANIFEST_SITE_ASSET_CACHE_CONTROL = "public, max-age=3600, s-maxage=86400, stale-while-revalidate=604800";
+const CSP_REPORT_ENDPOINT = "/api/security/csp-report";
+
+function normalizeOrigin(value) {
+    if (typeof value !== "string" || !value.trim()) {
+        return null;
+    }
+
+    try {
+        return new URL(value).origin;
+    } catch {
+        return null;
+    }
+}
+
+function buildSupabaseConnectSources() {
+    const supabaseOrigin = normalizeOrigin(process.env.NEXT_PUBLIC_SUPABASE_URL);
+    if (!supabaseOrigin) {
+        return [];
+    }
+
+    const websocketOrigin = supabaseOrigin.replace(/^http/, "ws");
+    return [...new Set([supabaseOrigin, websocketOrigin])];
+}
+
+function buildContentSecurityPolicyReportOnly() {
+    const directives = [
+        ["default-src", ["'self'"]],
+        ["base-uri", ["'self'"]],
+        ["form-action", ["'self'"]],
+        ["frame-ancestors", ["'self'"]],
+        ["frame-src", ["'none'"]],
+        ["object-src", ["'none'"]],
+        ["manifest-src", ["'self'"]],
+        ["worker-src", ["'self'", "blob:"]],
+        ["img-src", ["'self'", "data:", "blob:"]],
+        ["font-src", ["'self'", "data:"]],
+        ["style-src", ["'self'", "'unsafe-inline'"]],
+        ["script-src", ["'self'", "'unsafe-inline'"]],
+        ["connect-src", ["'self'", ...buildSupabaseConnectSources()]],
+        ["report-uri", [CSP_REPORT_ENDPOINT]],
+    ];
+
+    return directives
+        .map(([directive, values]) => `${directive} ${values.join(" ")}`)
+        .join("; ");
+}
+
 const SITE_SECURITY_HEADERS = [
-    { key: "Strict-Transport-Security", value: "max-age=31536000; includeSubDomains" },
+    { key: "Strict-Transport-Security", value: "max-age=31536000; includeSubDomains; preload" },
     { key: "X-Content-Type-Options", value: "nosniff" },
     { key: "X-Frame-Options", value: "SAMEORIGIN" },
     { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
     { key: "Permissions-Policy", value: "camera=(), display-capture=(), geolocation=(), microphone=(), payment=(), usb=()" },
+    { key: "Content-Security-Policy-Report-Only", value: buildContentSecurityPolicyReportOnly() },
 ];
 
 /** @type {import('next').NextConfig} */
