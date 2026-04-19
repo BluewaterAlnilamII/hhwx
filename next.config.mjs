@@ -50,9 +50,16 @@ function buildContentSecurityPolicyReportOnly() {
         .join("; ");
 }
 
-const SITE_SECURITY_HEADERS = [
+const HTML_ACCEPT_MATCHERS = [
+    { type: "header", key: "accept", value: ".*text/html.*" },
+];
+
+const BASE_SECURITY_HEADERS = [
     { key: "Strict-Transport-Security", value: "max-age=31536000; includeSubDomains; preload" },
     { key: "X-Content-Type-Options", value: "nosniff" },
+];
+
+const PAGE_SECURITY_HEADERS = [
     { key: "X-Frame-Options", value: "SAMEORIGIN" },
     { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
     { key: "Permissions-Policy", value: "camera=(), display-capture=(), geolocation=(), microphone=(), payment=(), usb=()" },
@@ -69,7 +76,17 @@ const nextConfig = {
         return [
             {
                 source: "/:path*",
-                headers: SITE_SECURITY_HEADERS,
+                headers: BASE_SECURITY_HEADERS,
+            },
+            {
+                source: "/",
+                has: HTML_ACCEPT_MATCHERS,
+                headers: PAGE_SECURITY_HEADERS,
+            },
+            {
+                source: "/:path((?!api(?:/|$)).*)",
+                has: HTML_ACCEPT_MATCHERS,
+                headers: PAGE_SECURITY_HEADERS,
             },
             {
                 source: "/favicon.ico",
