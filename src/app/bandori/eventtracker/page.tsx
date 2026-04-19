@@ -684,127 +684,143 @@ export default function EventTrackerPage() {
       <div className="max-w-5xl mx-auto space-y-4 lg:space-y-8 relative z-10">
 
         {/* ========== 页头：活动名称、切换器、活动横幅 ========== */}
-        <div className="flex flex-col md:flex-row justify-between items-center bg-white dark:bg-[#131A2B] rounded-3xl shadow-xl shadow-blue-500/5 dark:shadow-blue-500/10 border border-gray-100 dark:border-gray-800 p-4 sm:p-8 relative z-20">
-          <div className="flex-1 space-y-4">
-            <h1 className="text-3xl font-extrabold text-[#f43f5e] block w-full">{cnEventName}</h1>
+        <div className="relative z-20 flex flex-col gap-6 rounded-3xl border border-gray-100 bg-white p-4 shadow-xl shadow-blue-500/5 dark:border-gray-800 dark:bg-[#131A2B] dark:shadow-blue-500/10 sm:p-8 md:flex-row md:items-center md:justify-between md:gap-8">
+          <div className="min-w-0 flex-1 space-y-4">
+            <h1 className="block min-h-[4rem] w-full text-3xl font-extrabold leading-tight text-[#f43f5e] md:min-h-[3rem]">
+              {cnEventName}
+            </h1>
 
-            {allEvents.length > 0 && (
-              <div className="flex items-center gap-2">
-                <select
-                  className="bg-gray-100 dark:bg-[#0C111C] border border-gray-200 dark:border-gray-700/50 rounded-xl px-4 py-2.5 text-sm font-bold text-gray-700 dark:text-gray-300 focus:ring-2 focus:ring-[#f43f5e] focus:outline-none cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-800 transition-colors shadow-sm w-full max-w-[400px] text-ellipsis sm:min-w-[320px]"
-                  value={resolvedCurrentEventId || ""}
-                  onChange={(e) => setCurrentEventId(parseInt(e.target.value))}
-                >
-                  <option disabled value="">切换往期活动...</option>
-                  {allEvents.map(ev => (
-                    <option key={ev.id} value={ev.id}>{ev.id}期 : {ev.name}</option>
-                  ))}
-                </select>
+            <div className="min-h-[3.25rem]">
+              {allEvents.length > 0 ? (
+                <div className="flex items-center gap-2">
+                  <select
+                    className="bg-gray-100 dark:bg-[#0C111C] border border-gray-200 dark:border-gray-700/50 rounded-xl px-4 py-2.5 text-sm font-bold text-gray-700 dark:text-gray-300 focus:ring-2 focus:ring-[#f43f5e] focus:outline-none cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-800 transition-colors shadow-sm w-full max-w-[400px] text-ellipsis sm:min-w-[320px]"
+                    value={resolvedCurrentEventId || ""}
+                    onChange={(e) => setCurrentEventId(parseInt(e.target.value))}
+                  >
+                    <option disabled value="">切换往期活动...</option>
+                    {allEvents.map(ev => (
+                      <option key={ev.id} value={ev.id}>{ev.id}期 : {ev.name}</option>
+                    ))}
+                  </select>
 
-                <button
-                  onClick={jumpToLatest}
-                  className="p-2.5 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-xl hover:bg-blue-100 dark:hover:bg-blue-900/40 transition-all border border-blue-200/50 dark:border-blue-800/50 shadow-sm group flex-shrink-0"
-                  title="最新活动"
-                >
-                  <History size={22} className="group-hover:rotate-[-45deg] transition-transform duration-500" />
-                </button>
+                  <button
+                    onClick={jumpToLatest}
+                    className="p-2.5 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-xl hover:bg-blue-100 dark:hover:bg-blue-900/40 transition-all border border-blue-200/50 dark:border-blue-800/50 shadow-sm group flex-shrink-0"
+                    title="最新活动"
+                  >
+                    <History size={22} className="group-hover:rotate-[-45deg] transition-transform duration-500" />
+                  </button>
 
-                <Dialog.Root open={isPickerOpen} onOpenChange={setIsPickerOpen}>
-                  <Dialog.Trigger asChild>
-                    <button
-                      className="p-2.5 bg-gray-50 dark:bg-gray-900/50 text-gray-500 border border-gray-200 dark:border-gray-800 rounded-xl hover:text-blue-500 hover:border-blue-300 transition-all shadow-sm flex-shrink-0"
-                      title="搜索活动"
-                    >
-                      <Search size={22} />
-                    </button>
-                  </Dialog.Trigger>
+                  <Dialog.Root open={isPickerOpen} onOpenChange={setIsPickerOpen}>
+                    <Dialog.Trigger asChild>
+                      <button
+                        className="p-2.5 bg-gray-50 dark:bg-gray-900/50 text-gray-500 border border-gray-200 dark:border-gray-800 rounded-xl hover:text-blue-500 hover:border-blue-300 transition-all shadow-sm flex-shrink-0"
+                        title="搜索活动"
+                      >
+                        <Search size={22} />
+                      </button>
+                    </Dialog.Trigger>
 
-                  <Dialog.Portal>
-                    <Dialog.Overlay className="fixed inset-0 bg-black/40 backdrop-blur-[2px] z-[100] animate-in fade-in duration-200" />
-                    <Dialog.Content className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-lg bg-white dark:bg-[#131A2B] rounded-2xl shadow-2xl z-[101] flex flex-col overflow-hidden animate-in zoom-in-95 fade-in duration-200">
-                      <div className="flex items-center justify-between p-5 border-b border-gray-100 dark:border-gray-800">
-                        <Dialog.Title className="text-xl font-bold text-gray-800 dark:text-white">选择活动</Dialog.Title>
-                        <Dialog.Close asChild>
-                          <button className="p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full text-gray-400"><X size={22} /></button>
-                        </Dialog.Close>
-                      </div>
-
-                      <div className="p-4 border-b border-gray-50 dark:border-gray-800/50 flex gap-2">
-                        <div className="relative flex-1">
-                          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-blue-500" size={18} />
-                          <input
-                            autoFocus
-                            type="text"
-                            placeholder="搜索"
-                            className="w-full bg-white dark:bg-[#0C111C] border border-blue-400 dark:border-blue-500 rounded px-10 py-1.5 shadow-[0_0_8px_rgba(59,130,246,0.3)] text-sm font-medium text-gray-700 dark:text-gray-200 outline-none"
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                          />
-                          {searchQuery && (
-                            <button
-                              onClick={() => setSearchQuery("")}
-                              className="absolute right-3 top-1/2 -translate-y-1/2 p-0.5 bg-gray-200 dark:bg-gray-800 rounded-md text-gray-500"
-                            >
-                              <X size={14} />
-                            </button>
-                          )}
+                    <Dialog.Portal>
+                      <Dialog.Overlay className="fixed inset-0 bg-black/40 backdrop-blur-[2px] z-[100] animate-in fade-in duration-200" />
+                      <Dialog.Content className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-lg bg-white dark:bg-[#131A2B] rounded-2xl shadow-2xl z-[101] flex flex-col overflow-hidden animate-in zoom-in-95 fade-in duration-200">
+                        <div className="flex items-center justify-between p-5 border-b border-gray-100 dark:border-gray-800">
+                          <Dialog.Title className="text-xl font-bold text-gray-800 dark:text-white">选择活动</Dialog.Title>
+                          <Dialog.Close asChild>
+                            <button className="p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full text-gray-400"><X size={22} /></button>
+                          </Dialog.Close>
                         </div>
-                        <Dialog.Close asChild>
-                          <button className="px-4 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-600 dark:text-gray-400 font-bold hover:bg-gray-50 dark:hover:bg-gray-800">
-                            <X size={18} />
-                          </button>
-                        </Dialog.Close>
-                      </div>
 
-                      <div className="flex-1 overflow-y-auto max-h-[60vh] py-2">
-                        {allEvents
-                          .filter(ev => !searchQuery || ev.name.toLowerCase().includes(searchQuery.toLowerCase()) || ev.id.toString().includes(searchQuery))
-                          .map(ev => (
-                            <button
-                              key={ev.id}
-                              onClick={() => { setCurrentEventId(ev.id); setIsPickerOpen(false); setSearchQuery(""); }}
-                              className="w-full px-6 py-3.5 flex items-center justify-between hover:bg-blue-50/50 dark:hover:bg-blue-500/5 transition-colors group"
-                            >
-                              <span className={`text-sm font-bold ${ev.id === resolvedCurrentEventId ? "text-blue-500" : "text-gray-600 dark:text-gray-300"}`}>
-                                {ev.id}期 : {ev.name}
-                              </span>
-                              <div className="flex gap-2">
-                                {ev.hasCn && <span className="px-1.5 py-0.5 border border-gray-200 dark:border-gray-700 rounded text-[10px] font-bold text-gray-400 group-hover:text-blue-500 group-hover:border-blue-200 transition-colors">CN</span>}
-                                {ev.hasJp && <span className="px-1.5 py-0.5 border border-gray-200 dark:border-gray-700 rounded text-[10px] font-bold text-gray-400 group-hover:text-blue-500 group-hover:border-blue-200 transition-colors">JP</span>}
-                              </div>
+                        <div className="p-4 border-b border-gray-50 dark:border-gray-800/50 flex gap-2">
+                          <div className="relative flex-1">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-blue-500" size={18} />
+                            <input
+                              autoFocus
+                              type="text"
+                              placeholder="搜索"
+                              className="w-full bg-white dark:bg-[#0C111C] border border-blue-400 dark:border-blue-500 rounded px-10 py-1.5 shadow-[0_0_8px_rgba(59,130,246,0.3)] text-sm font-medium text-gray-700 dark:text-gray-200 outline-none"
+                              value={searchQuery}
+                              onChange={(e) => setSearchQuery(e.target.value)}
+                            />
+                            {searchQuery && (
+                              <button
+                                onClick={() => setSearchQuery("")}
+                                className="absolute right-3 top-1/2 -translate-y-1/2 p-0.5 bg-gray-200 dark:bg-gray-800 rounded-md text-gray-500"
+                              >
+                                <X size={14} />
+                              </button>
+                            )}
+                          </div>
+                          <Dialog.Close asChild>
+                            <button className="px-4 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-600 dark:text-gray-400 font-bold hover:bg-gray-50 dark:hover:bg-gray-800">
+                              <X size={18} />
                             </button>
-                          ))}
-                      </div>
-                    </Dialog.Content>
-                  </Dialog.Portal>
-                </Dialog.Root>
-              </div>
-            )}
+                          </Dialog.Close>
+                        </div>
 
-            <div className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                        <div className="flex-1 overflow-y-auto max-h-[60vh] py-2">
+                          {allEvents
+                            .filter(ev => !searchQuery || ev.name.toLowerCase().includes(searchQuery.toLowerCase()) || ev.id.toString().includes(searchQuery))
+                            .map(ev => (
+                              <button
+                                key={ev.id}
+                                onClick={() => { setCurrentEventId(ev.id); setIsPickerOpen(false); setSearchQuery(""); }}
+                                className="w-full px-6 py-3.5 flex items-center justify-between hover:bg-blue-50/50 dark:hover:bg-blue-500/5 transition-colors group"
+                              >
+                                <span className={`text-sm font-bold ${ev.id === resolvedCurrentEventId ? "text-blue-500" : "text-gray-600 dark:text-gray-300"}`}>
+                                  {ev.id}期 : {ev.name}
+                                </span>
+                                <div className="flex gap-2">
+                                  {ev.hasCn && <span className="px-1.5 py-0.5 border border-gray-200 dark:border-gray-700 rounded text-[10px] font-bold text-gray-400 group-hover:text-blue-500 group-hover:border-blue-200 transition-colors">CN</span>}
+                                  {ev.hasJp && <span className="px-1.5 py-0.5 border border-gray-200 dark:border-gray-700 rounded text-[10px] font-bold text-gray-400 group-hover:text-blue-500 group-hover:border-blue-200 transition-colors">JP</span>}
+                                </div>
+                              </button>
+                            ))}
+                        </div>
+                      </Dialog.Content>
+                    </Dialog.Portal>
+                  </Dialog.Root>
+                </div>
+              ) : (
+                <div className="flex w-full max-w-[492px] items-center gap-2" aria-hidden="true">
+                  <div className="h-[46px] flex-1 rounded-xl bg-gray-100 dark:bg-gray-800 animate-pulse" />
+                  <div className="h-[46px] w-[46px] rounded-xl bg-blue-50 dark:bg-blue-900/20 animate-pulse" />
+                  <div className="h-[46px] w-[46px] rounded-xl bg-gray-100 dark:bg-gray-800 animate-pulse" />
+                </div>
+              )}
+            </div>
+
+            <div className="min-h-[3rem] text-sm font-medium text-gray-500 dark:text-gray-400">
               {startDate && endDate ? (
                 <>
                   <p>开始: {formatBandoriCnDateTime(startDate)} (CN)</p>
                   <p>结束: {formatBandoriCnDateTime(endDate)} (CN)</p>
                 </>
-              ) : null}
+              ) : (
+                <div className="space-y-2 py-0.5" aria-hidden="true">
+                  <div className="h-4 w-48 rounded-full bg-gray-100 dark:bg-gray-800 animate-pulse" />
+                  <div className="h-4 w-56 rounded-full bg-gray-100 dark:bg-gray-800 animate-pulse" />
+                </div>
+              )}
             </div>
           </div>
 
-          <div className="flex-1 pt-6 md:pt-0 flex justify-end">
-            {bannerUrl ? (
-              <Image
-                src={bannerUrl}
-                alt="活动横幅"
-                width={420}
-                height={140}
-                unoptimized
-                sizes="(max-width: 768px) 100vw, 420px"
-                className="h-auto w-auto max-h-[140px] max-w-full rounded-2xl object-cover shadow-lg ring-1 ring-black/5 transition-transform duration-500 hover:scale-105"
-              />
-            ) : (
-              <div className="w-[300px] h-[100px] bg-gray-200 dark:bg-gray-800 rounded-2xl animate-pulse" />
-            )}
+          <div className="flex w-full flex-none justify-end md:w-[420px]">
+            <div className="relative aspect-[3/1] w-full max-w-[420px] overflow-hidden rounded-2xl shadow-lg ring-1 ring-black/5">
+              {bannerUrl ? (
+                <Image
+                  src={bannerUrl}
+                  alt="活动横幅"
+                  fill
+                  priority
+                  sizes="(max-width: 768px) calc(100vw - 2rem), 420px"
+                  className="object-cover transition-transform duration-500 hover:scale-105"
+                />
+              ) : (
+                <div className="absolute inset-0 animate-pulse bg-gradient-to-br from-gray-100 via-gray-50 to-gray-200 dark:from-gray-800 dark:via-gray-900 dark:to-gray-800" />
+              )}
+            </div>
           </div>
         </div>
 

@@ -133,6 +133,55 @@ function getReadableTextColor(hexColor: string): string {
   return brightness > 170 ? "#1F2937" : "#FFFFFF";
 }
 
+function CalendarPageSkeleton({ showEditorPlaceholder }: { showEditorPlaceholder: boolean }) {
+  return (
+    <div className="w-full max-w-5xl mx-auto animate-pulse" aria-hidden="true">
+      <div className="mb-5 flex items-center justify-center rounded-[22px] border border-white/70 bg-white/65 px-3 py-3 shadow-[0_12px_30px_rgba(15,23,42,0.08)] ring-1 ring-white/50 md:mb-6">
+        <div className="h-8 w-[15rem] rounded-full bg-white/90 md:h-10 md:w-[18rem]" />
+      </div>
+
+      <div className="overflow-hidden rounded-[24px] border border-white/70 bg-white/72 backdrop-blur-md shadow-[0_22px_60px_rgba(15,23,42,0.12)] ring-1 ring-white/60">
+        <div className="grid grid-cols-7 border-b border-gray-200/70 bg-gradient-to-r from-white/90 via-white/75 to-white/90">
+          {Array.from({ length: 7 }, (_, index) => (
+            <div key={`skeleton-weekday-${index}`} className="py-3 text-center">
+              <div className="mx-auto h-4 w-7 rounded-full bg-white/95" />
+            </div>
+          ))}
+        </div>
+
+        {Array.from({ length: 5 }, (_, rowIndex) => (
+          <div
+            key={`skeleton-week-${rowIndex}`}
+            className="grid grid-cols-7 border-b border-gray-200/50 bg-gradient-to-b from-white/65 via-white/42 to-white/30 last:border-b-0"
+          >
+            {Array.from({ length: 7 }, (_, columnIndex) => (
+              <div
+                key={`skeleton-week-${rowIndex}-day-${columnIndex}`}
+                className="min-h-[102px] border-r border-gray-200/40 p-1.5 last:border-r-0 md:min-h-[120px] md:p-2"
+              >
+                <div className="h-6 w-6 rounded-full bg-white/90" />
+                <div className="mt-6 h-3 w-full rounded-full bg-white/80" />
+                <div className="mt-2 h-3 w-4/5 rounded-full bg-white/65" />
+              </div>
+            ))}
+          </div>
+        ))}
+      </div>
+
+      {showEditorPlaceholder && (
+        <div className="mt-6 rounded-[24px] border border-white/70 bg-white/65 p-4 shadow-[0_12px_30px_rgba(15,23,42,0.08)] ring-1 ring-white/50">
+          <div className="h-6 w-40 rounded-full bg-white/90" />
+          <div className="mt-4 space-y-3">
+            {Array.from({ length: 3 }, (_, index) => (
+              <div key={`skeleton-editor-row-${index}`} className="h-12 rounded-xl bg-white/85" />
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /**
  * 国服活动日历页面。
  * 负责组合月历视图、订阅参数配置、权限控制和活动编辑入口。
@@ -567,11 +616,7 @@ export default function CalendarPage() {
         )}
 
         {/* 加载状态 */}
-        {loading && (
-          <div className="text-center py-12 text-gray-500">
-            加载中...
-          </div>
-        )}
+        {loading && <CalendarPageSkeleton showEditorPlaceholder={hasPermission} />}
 
         {/* 日历 */}
         {!loading && <CalendarGrid events={calendarEvents} holidayData={holidayData} />}
