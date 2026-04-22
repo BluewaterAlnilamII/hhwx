@@ -14,7 +14,6 @@ import {
 } from "@/lib/supabase";
 import { isTurnstileEnabled } from "@/lib/turnstile";
 import { useGameStore } from "@/store/useGameStore";
-import Toolbar from "./Toolbar";
 import TurnstileChallenge, { type TurnstileChallengeHandle } from "./TurnstileChallenge";
 
 function getErrorMessage(error: unknown, fallbackMessage: string): string {
@@ -30,20 +29,20 @@ function getModeTitle(mode: AuthViewMode): string {
     case "register":
       return "创建账号";
     case "forgot-password":
-      return "找回密码";
+      return "重置密码";
     default:
-      return "登录账号";
+      return "登录";
   }
 }
 
 function getModeDescription(mode: AuthViewMode): string {
   switch (mode) {
     case "register":
-      return "注册完成后，请先前往邮箱确认，再登录并使用完整的账号功能。";
+      return "注册后需完成邮箱确认，才能使用完整功能。";
     case "forgot-password":
-      return "输入登录邮箱后，我们会在可用时向它发送后续操作邮件。";
+      return "我们会把重置链接发送到你的邮箱。";
     default:
-      return "使用已绑定的邮箱登录，并在登录后前往账号中心管理资料和安全设置。";
+      return "使用邮箱登录。";
   }
 }
 
@@ -64,9 +63,10 @@ export default function AuthPageContent() {
   const [notice, setNotice] = useState("");
   const [loading, setLoading] = useState(false);
   const captchaRef = useRef<TurnstileChallengeHandle | null>(null);
+  const shouldShowCaptcha = isTurnstileEnabled() && mode !== "login";
 
   const requireCaptchaToken = (): string | undefined => {
-    if (!isTurnstileEnabled()) {
+    if (!shouldShowCaptcha) {
       return undefined;
     }
 
@@ -125,17 +125,11 @@ export default function AuthPageContent() {
     setError("");
     setNotice("");
     setLoading(true);
-    const captchaToken = requireCaptchaToken();
-    if (isTurnstileEnabled() && !captchaToken) {
-      setLoading(false);
-      return;
-    }
 
     try {
       const { data, error: signInError } = await supabase.auth.signInWithPassword({
         email: email.trim(),
         password,
-        options: { captchaToken },
       });
 
       if (signInError) {
@@ -188,7 +182,7 @@ export default function AuthPageContent() {
 
     setLoading(true);
     const captchaToken = requireCaptchaToken();
-    if (isTurnstileEnabled() && !captchaToken) {
+    if (shouldShowCaptcha && !captchaToken) {
       setLoading(false);
       return;
     }
@@ -269,7 +263,7 @@ export default function AuthPageContent() {
 
     setLoading(true);
     const captchaToken = requireCaptchaToken();
-    if (isTurnstileEnabled() && !captchaToken) {
+    if (shouldShowCaptcha && !captchaToken) {
       setLoading(false);
       return;
     }
@@ -284,7 +278,7 @@ export default function AuthPageContent() {
         throw resetError;
       }
 
-      setNotice("如果该邮箱已绑定账号，我们会向它发送修改密码邮件。");
+      setNotice("如果该邮箱已绑定账号，我们会向它发送重置链接。");
     } catch (authError) {
       setError(getErrorMessage(authError, "发送邮件失败"));
     } finally {
@@ -294,100 +288,66 @@ export default function AuthPageContent() {
   };
 
   return (
-    <main className="relative min-h-screen px-4 pb-16 pt-24 sm:px-6 lg:px-8">
-      <Toolbar showDebugButton={false} />
-
-      <div className="mx-auto max-w-6xl">
-        <div className="grid gap-6 lg:grid-cols-[0.92fr_1.08fr]">
-          <section className="rounded-[32px] border border-white/50 bg-[radial-gradient(circle_at_top_left,_rgba(56,189,248,0.28),_transparent_32%),linear-gradient(145deg,rgba(15,23,42,0.96),rgba(30,41,59,0.92))] p-8 text-white shadow-[0_24px_80px_rgba(15,23,42,0.24)]">
-            <p className="text-sm font-semibold uppercase tracking-[0.35em] text-sky-200">Account Access</p>
-            <h1 className="mt-4 text-4xl font-bold leading-tight">把登录、注册和安全操作收口到同一入口。</h1>
-            <p className="mt-4 max-w-xl text-sm leading-7 text-slate-200/90">
-              登录后，你可以在账号中心查看验证状态、更新公开资料、处理邮箱变更，并通过安全邮件完成密码重置。
-            </p>
-
-            <div className="mt-8 space-y-4">
-              <div className="rounded-2xl border border-white/10 bg-white/10 p-4 backdrop-blur-sm">
-                <div className="text-sm font-semibold text-white">注册后先验证邮箱</div>
-                <div className="mt-2 text-sm leading-6 text-slate-200/85">
-                  未验证的账号仍可登录，但评论和活动编辑等受保护功能会继续受限。
-                </div>
-              </div>
-              <div className="rounded-2xl border border-white/10 bg-white/10 p-4 backdrop-blur-sm">
-                <div className="text-sm font-semibold text-white">密码修改统一走安全邮件</div>
-                <div className="mt-2 text-sm leading-6 text-slate-200/85">
-                  无论是忘记密码，还是主动更换密码，最终都会通过邮件中的页面完成设置，避免在站内直接暴露敏感操作。
-                </div>
-              </div>
+    <main className="relative min-h-screen px-4 py-10 sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-xl">
+        <section className="rounded-[32px] border border-white/60 bg-white/85 p-8 shadow-[0_24px_80px_rgba(15,23,42,0.12)] backdrop-blur-xl">
+          <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-200 pb-5">
+            <div>
+              <p className="text-sm font-semibold uppercase tracking-[0.28em] text-sky-500">Account</p>
+              <h1 className="mt-2 text-3xl font-bold text-slate-900">{getModeTitle(mode)}</h1>
+              <p className="mt-2 max-w-xl text-sm leading-6 text-slate-600">{getModeDescription(mode)}</p>
             </div>
+            <Link
+              href="/"
+              className="inline-flex items-center justify-center rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-sky-200 hover:text-sky-600"
+            >
+              返回首页
+            </Link>
+          </div>
 
-            <div className="mt-8 flex flex-wrap gap-3 text-sm">
-              <Link
-                href="/"
-                className="rounded-full border border-white/20 px-5 py-2 font-semibold text-white transition hover:bg-white/10"
-              >
-                返回首页
-              </Link>
-              <Link
-                href="/account"
-                className="rounded-full bg-white px-5 py-2 font-semibold text-slate-900 transition hover:bg-slate-100"
-              >
-                前往账号中心
-              </Link>
+          {authReady && userId && (
+            <div className="mt-6 rounded-2xl bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+              当前已登录为 {username || "当前账号"}。如需管理资料，请直接前往账号中心。
             </div>
-          </section>
+          )}
 
-          <section className="rounded-[32px] border border-white/60 bg-white/85 p-8 shadow-[0_24px_80px_rgba(15,23,42,0.12)] backdrop-blur-xl">
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-4">
-              <div>
-                <p className="text-sm font-semibold uppercase tracking-[0.28em] text-sky-500">Account</p>
-                <h2 className="mt-2 text-3xl font-bold text-slate-900">{getModeTitle(mode)}</h2>
-                <p className="mt-2 max-w-xl text-sm leading-6 text-slate-600">{getModeDescription(mode)}</p>
-              </div>
-              {authReady && userId && (
-                <div className="rounded-2xl bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
-                  当前已登录为 {username || "当前账号"}。
-                </div>
-              )}
+          <div className="mt-6 flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => switchMode("login")}
+              className={`rounded-full px-4 py-2 text-sm font-semibold transition ${mode === "login" ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}
+            >
+              登录
+            </button>
+            <button
+              type="button"
+              onClick={() => switchMode("register")}
+              className={`rounded-full px-4 py-2 text-sm font-semibold transition ${mode === "register" ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}
+            >
+              注册
+            </button>
+            <button
+              type="button"
+              onClick={() => switchMode("forgot-password")}
+              className={`rounded-full px-4 py-2 text-sm font-semibold transition ${mode === "forgot-password" ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}
+            >
+              忘记密码
+            </button>
+          </div>
+
+          {error && (
+            <div className="mt-6 rounded-2xl bg-red-50 p-4 text-sm leading-6 text-red-600">
+              {error}
             </div>
+          )}
 
-            <div className="mt-6 flex flex-wrap gap-2 border-b border-slate-200 pb-4">
-              <button
-                type="button"
-                onClick={() => switchMode("login")}
-                className={`rounded-full px-4 py-2 text-sm font-semibold transition ${mode === "login" ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}
-              >
-                登录
-              </button>
-              <button
-                type="button"
-                onClick={() => switchMode("register")}
-                className={`rounded-full px-4 py-2 text-sm font-semibold transition ${mode === "register" ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}
-              >
-                注册
-              </button>
-              <button
-                type="button"
-                onClick={() => switchMode("forgot-password")}
-                className={`rounded-full px-4 py-2 text-sm font-semibold transition ${mode === "forgot-password" ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}
-              >
-                忘记密码
-              </button>
+          {notice && (
+            <div className="mt-6 rounded-2xl bg-sky-50 p-4 text-sm leading-6 text-sky-700">
+              {notice}
             </div>
+          )}
 
-            {error && (
-              <div className="mt-6 rounded-2xl bg-red-50 p-4 text-sm leading-6 text-red-600">
-                {error}
-              </div>
-            )}
-
-            {notice && (
-              <div className="mt-6 rounded-2xl bg-sky-50 p-4 text-sm leading-6 text-sky-700">
-                {notice}
-              </div>
-            )}
-
-            <form onSubmit={mode === "login" ? handleLogin : mode === "register" ? handleRegister : handleForgotPassword} className="mt-6 space-y-5">
+          <form onSubmit={mode === "login" ? handleLogin : mode === "register" ? handleRegister : handleForgotPassword} className="mt-6 space-y-5">
               {mode === "register" && (
                 <label className="block text-sm font-medium text-slate-700">
                   用户名
@@ -444,19 +404,22 @@ export default function AuthPageContent() {
                 </label>
               )}
 
-              <TurnstileChallenge
-                ref={captchaRef}
-                action={`auth-${mode}`}
-                title="人机验证"
-                description="为防止恶意注册和批量请求，登录、注册和找回密码前都需要先完成一次验证。"
-              />
+              {shouldShowCaptcha && (
+                <TurnstileChallenge
+                  ref={captchaRef}
+                  action={`auth-${mode}`}
+                  title="安全验证"
+                  description={mode === "register" ? "创建账号前，请先完成安全验证。" : "发送重置链接前，请先完成安全验证。"}
+                  variant="inline"
+                />
+              )}
 
               <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
                 <div className="text-sm text-slate-500">
                   {mode === "register"
-                    ? "注册后请先完成邮箱验证。"
+                    ? "注册后需完成邮箱确认。"
                     : mode === "forgot-password"
-                      ? "邮件发送后，请在收件箱和垃圾邮件箱中查看。"
+                      ? "发送完成后，请到邮箱中继续。"
                       : "还没有账号？切换到“注册”即可创建。"}
                 </div>
                 <button
@@ -470,12 +433,19 @@ export default function AuthPageContent() {
                       ? "登录"
                       : mode === "register"
                         ? "注册"
-                        : "发送修改密码邮件"}
+                        : "发送重置链接"}
                 </button>
               </div>
+
+              {authReady && userId && (
+                <div className="pt-3 text-right">
+                  <Link href="/account" className="text-sm font-semibold text-sky-600 transition hover:text-sky-500">
+                    前往账号中心
+                  </Link>
+                </div>
+              )}
             </form>
-          </section>
-        </div>
+        </section>
       </div>
     </main>
   );

@@ -5,7 +5,6 @@ import { useCalendarData, useCalendarPermission, BAND_COLORS } from "./useCalend
 import CalendarGrid from "./CalendarGrid";
 import EventEditor from "./EventEditor";
 import { CALENDAR_BAND_OPTIONS } from "./options";
-import Toolbar from "@/components/Toolbar";
 import {
   buildStampCharacterOptions,
   CALENDAR_BAND_ORDER,
@@ -388,8 +387,6 @@ export default function CalendarPage() {
 
   return (
     <div className="relative z-10 min-h-screen px-4 py-8 md:px-6 lg:px-8">
-      <Toolbar showDebugButton={false} />
-
       <div className="max-w-5xl mx-auto">
         {/* 页面标题 */}
         <div className="mb-8 pt-4 md:pt-8">

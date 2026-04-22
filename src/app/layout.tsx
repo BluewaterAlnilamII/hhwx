@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Outfit } from "next/font/google";
 import "./globals.css";
+import Toolbar from "@/components/Toolbar";
 
 const outfit = Outfit({
   variable: "--font-outfit",
@@ -37,9 +38,12 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="zh-CN">
-      <body className={`${outfit.variable} font-sans`}>
+      <body className={`${outfit.variable} min-h-screen bg-[#f8f5ea] font-sans text-slate-900`}>
         <BackgroundEffects />
-        {children}
+        <div className="relative flex min-h-screen flex-col">
+          <Toolbar />
+          <div className="relative flex-1">{children}</div>
+        </div>
       </body>
     </html>
   );

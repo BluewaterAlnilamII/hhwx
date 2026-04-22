@@ -35,26 +35,26 @@ function getErrorMessage(error: unknown, fallbackMessage: string): string {
 function getSuccessMessage(type: string | null): string {
   switch (type) {
     case "email_change":
-      return "新邮箱已验证，正在返回账号中心。";
+      return "新邮箱已确认，正在返回设置页。";
     case "magiclink":
       return "登录已确认，正在继续。";
     case "invite":
       return "邀请已确认，正在继续。";
     default:
-      return "邮箱验证成功，正在继续。";
+      return "邮箱已确认，正在继续。";
   }
 }
 
 function getStatusHeading(status: CallbackStatus): string {
   switch (status) {
     case "success":
-      return "认证成功";
+      return "已完成";
     case "error":
-      return "认证未完成";
+      return "未完成";
     case "recovery":
       return "设置新密码";
     default:
-      return "认证处理中";
+      return "处理中";
   }
 }
 
@@ -63,12 +63,12 @@ function AuthConfirmPageFallback() {
     <main className="relative min-h-screen px-4 py-16 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-xl rounded-[32px] border border-white/50 bg-white/80 p-8 shadow-[0_20px_80px_rgba(15,23,42,0.14)] backdrop-blur-xl">
         <div className="mb-6 text-center">
-          <p className="text-sm font-semibold uppercase tracking-[0.3em] text-sky-500">Auth Callback</p>
-          <h1 className="mt-3 text-3xl font-bold text-slate-900">认证处理中</h1>
+          <p className="text-sm font-semibold uppercase tracking-[0.3em] text-sky-500">Account</p>
+          <h1 className="mt-3 text-3xl font-bold text-slate-900">正在处理请求</h1>
         </div>
         <div className="space-y-4 text-center">
           <div className="mx-auto h-12 w-12 animate-spin rounded-full border-4 border-sky-100 border-t-sky-500" />
-          <p className="text-sm leading-6 text-slate-600">正在处理认证结果，请稍候...</p>
+          <p className="text-sm leading-6 text-slate-600">请稍候，页面马上就好。</p>
         </div>
       </div>
     </main>
@@ -81,7 +81,7 @@ function AuthConfirmPageContent() {
   const { setAuth, logout } = useGameStore();
 
   const [status, setStatus] = useState<CallbackStatus>("verifying");
-  const [message, setMessage] = useState("正在处理认证结果，请稍候...");
+  const [message, setMessage] = useState("正在处理请求，请稍候...");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [passwordMessage, setPasswordMessage] = useState("");
@@ -110,15 +110,15 @@ function AuthConfirmPageContent() {
     } = supabase.auth.onAuthStateChange((event) => {
       if (event === "PASSWORD_RECOVERY") {
         setStatus("recovery");
-        setMessage("认证已完成，请设置一个新密码。");
+        setMessage("你可以现在设置新密码。 ");
         return;
       }
 
       if (event === "SIGNED_IN" || event === "USER_UPDATED") {
         setStatus((currentStatus) => (currentStatus === "verifying" ? "success" : currentStatus));
         setMessage((currentMessage) => (
-          currentMessage === "正在处理认证结果，请稍候..."
-            ? "邮箱验证成功，正在同步账号信息..."
+          currentMessage === "正在处理请求，请稍候..."
+            ? "正在同步账号信息..."
             : currentMessage
         ));
       }
@@ -162,7 +162,7 @@ function AuthConfirmPageContent() {
       if (type === "recovery") {
         if (active) {
           setStatus("recovery");
-          setMessage("认证已完成，请设置一个新密码。");
+          setMessage("你可以现在设置新密码。");
         }
         return;
       }
@@ -273,7 +273,7 @@ function AuthConfirmPageContent() {
 
       await readAuthProfileSummary().catch(() => null);
       setStatus("success");
-      setMessage("新密码已设置成功，正在返回账号中心。");
+      setMessage("新密码已设置，正在返回上一页。");
       setPasswordMessage("");
     } catch (error) {
       setPasswordMessage(getErrorMessage(error, "设置新密码失败"));

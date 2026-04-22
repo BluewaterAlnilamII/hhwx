@@ -11,21 +11,24 @@ export interface TurnstileChallengeHandle {
 
 interface TurnstileChallengeProps {
   title?: string;
-  description: string;
+  description?: string;
   action: string;
   theme?: TurnstileTheme;
   className?: string;
+  variant?: "card" | "inline";
 }
 
 const baseClassName = "rounded-3xl border border-slate-200 bg-slate-50 p-4";
+const inlineClassName = "space-y-3";
 
 const TurnstileChallenge = forwardRef<TurnstileChallengeHandle, TurnstileChallengeProps>(function TurnstileChallenge(
   {
     title = "安全验证",
-    description,
+    description = "",
     action,
     theme = "light",
     className = "",
+    variant = "card",
   },
   ref,
 ) {
@@ -40,22 +43,24 @@ const TurnstileChallenge = forwardRef<TurnstileChallengeHandle, TurnstileChallen
     },
   }), []);
 
+  const containerClassName = `${variant === "inline" ? inlineClassName : baseClassName} ${className}`.trim();
+
   if (!TURNSTILE_SITE_KEY) {
     return (
-      <div className={`${baseClassName} ${className}`.trim()}>
+      <div className={containerClassName}>
         <div className="text-sm font-semibold text-amber-700">未配置安全验证</div>
         <p className="mt-2 text-sm leading-6 text-amber-700/90">
-          当前环境缺少 NEXT_PUBLIC_TURNSTILE_SITE_KEY，无法渲染人机验证组件。部署前请补齐该公开站点 key。
+          当前环境暂时无法渲染安全验证组件，请补齐对应配置后再试。
         </p>
       </div>
     );
   }
 
   return (
-    <div className={`${baseClassName} ${className}`.trim()}>
-      <div className="text-sm font-semibold text-slate-900">{title}</div>
-      <p className="mt-2 text-sm leading-6 text-slate-600">{description}</p>
-      <div className="mt-4 overflow-hidden rounded-2xl border border-slate-200 bg-white p-3">
+    <div className={containerClassName}>
+      {title && <div className="text-sm font-semibold text-slate-900">{title}</div>}
+      {description && <p className="text-sm leading-6 text-slate-600">{description}</p>}
+      <div className={`overflow-hidden rounded-2xl border border-slate-200 bg-white p-3 ${variant === "card" && (title || description) ? "mt-4" : ""}`.trim()}>
         <Turnstile
           ref={widgetRef}
           siteKey={TURNSTILE_SITE_KEY}

@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect } from "react";
 import FallingPatterns from "@/components/FallingPatterns";
-import Toolbar from "@/components/Toolbar";
 import CharacterSelect from "@/components/CharacterSelect";
 import GamePage from "@/components/GamePage";
 import { useGameStore } from "@/store/useGameStore";
@@ -53,7 +52,6 @@ export default function Home() {
   return (
     <main className="relative min-h-screen">
       <FallingPatterns />
-      <Toolbar />
 
       {/* 续局对话框 */}
       {showResume && savedGame && (
