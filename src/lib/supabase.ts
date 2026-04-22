@@ -17,6 +17,14 @@ export function isEmailVerified(user: Pick<User, "email_confirmed_at"> | null | 
 	return Boolean(user?.email_confirmed_at);
 }
 
+function readUserMetadataUsername(user: Pick<User, "user_metadata"> | null | undefined): string | null {
+	const username = typeof user?.user_metadata?.username === "string"
+		? user.user_metadata.username.trim()
+		: "";
+
+	return username || null;
+}
+
 function trimTrailingSlash(value: string): string {
 	return value.replace(/\/+$/, "");
 }
@@ -50,7 +58,7 @@ export function buildAuthCallbackUrl(nextPath = "/account"): string {
 	return url.toString();
 }
 
-async function readUsername(userId: string): Promise<string> {
+async function readUsername(userId: string, fallbackUsername: string | null = null): Promise<string> {
 	const { data, error } = await supabase
 		.from("profiles")
 		.select("username")
@@ -61,7 +69,7 @@ async function readUsername(userId: string): Promise<string> {
 		throw error;
 	}
 
-	return data?.username ?? "User";
+	return data?.username ?? fallbackUsername ?? "User";
 }
 
 export async function readAuthProfileSummary(session?: Session | null): Promise<AuthProfileSummary | null> {
@@ -72,9 +80,11 @@ export async function readAuthProfileSummary(session?: Session | null): Promise<
 		return null;
 	}
 
+	const fallbackUsername = readUserMetadataUsername(user);
+
 	return {
 		userId: user.id,
-		username: await readUsername(user.id),
+		username: await readUsername(user.id, fallbackUsername),
 		email: user.email ?? null,
 		emailVerified: isEmailVerified(user),
 	};

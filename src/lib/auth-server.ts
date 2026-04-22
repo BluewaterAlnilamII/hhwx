@@ -6,6 +6,7 @@ export interface AuthenticatedRequestUser {
   id: string;
   email: string | null;
   emailVerified: boolean;
+  metadataUsername: string | null;
 }
 
 function parseBearerToken(request: Request): string {
@@ -27,6 +28,9 @@ function toAuthenticatedRequestUser(user: User): AuthenticatedRequestUser {
     id: user.id,
     email: user.email ?? null,
     emailVerified: Boolean(user.email_confirmed_at),
+    metadataUsername: typeof user.user_metadata?.username === "string"
+      ? user.user_metadata.username.trim() || null
+      : null,
   };
 }
 

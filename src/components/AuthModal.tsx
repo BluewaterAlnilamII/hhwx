@@ -79,29 +79,38 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
         e.preventDefault();
         setError("");
         setNotice("");
-        if (!username.trim()) {
+        const normalizedUsername = username.trim();
+        if (!normalizedUsername) {
             setError("请输入用户名");
             return;
         }
         setLoading(true);
         try {
+            const { data: existingProfile, error: existingProfileError } = await supabase
+                .from("profiles")
+                .select("id")
+                .eq("username", normalizedUsername)
+                .maybeSingle();
+
+            if (existingProfileError) {
+                throw new Error("检查用户名是否可用失败：" + existingProfileError.message);
+            }
+
+            if (existingProfile) {
+                setError("该用户名已被占用");
+                return;
+            }
+
             const { data, error: err } = await supabase.auth.signUp({
                 email,
                 password,
                 options: {
                     emailRedirectTo: buildAuthCallbackUrl("/account"),
-                    data: { username: username.trim() },
+                    data: { username: normalizedUsername },
                 },
             });
             if (err) throw err;
             if (data.user) {
-                // 主动在 profiles 表创建记录（作为数据库触发器的补充/双保险）
-                const { error: profileErr } = await supabase.from("profiles").upsert({
-                    id: data.user.id,
-                    username: username.trim(),
-                });
-                if (profileErr) throw new Error("创建用户资料失败：" + profileErr.message);
-
                 if (data.session && isEmailVerified(data.user)) {
                     const summary = await readAuthProfileSummary(data.session);
                     if (summary) {
@@ -121,7 +130,13 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
             setPassword("");
             setNotice("注册成功，请前往邮箱完成验证后再登录。");
         } catch (err: unknown) {
-            setError(getErrorMessage(err, "注册失败"));
+            const message = getErrorMessage(err, "注册失败");
+            if (message.includes("Database error saving new user")) {
+                setError("注册失败，可能是用户名已被占用或用户资料写入失败，请更换用户名后重试");
+                return;
+            }
+
+            setError(message);
         } finally {
             setLoading(false);
         }

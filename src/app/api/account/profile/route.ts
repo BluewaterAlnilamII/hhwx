@@ -9,13 +9,11 @@ const USERNAME_PATTERN = /^[\p{L}\p{N}_-]{2,24}$/u;
 type ProfileRow = {
   username: string;
   created_at: string | null;
-  updated_at: string | null;
 };
 
-function buildFallbackUsername(email: string | null, userId: string): string {
-  const base = email?.split("@")[0]?.trim();
-  if (base && USERNAME_PATTERN.test(base)) {
-    return base;
+function buildFallbackUsername(preferredUsername: string | null, userId: string): string {
+  if (preferredUsername && USERNAME_PATTERN.test(preferredUsername)) {
+    return preferredUsername;
   }
 
   return `user_${userId.slice(0, 8)}`;
@@ -34,11 +32,11 @@ function normalizeUsername(value: unknown): string {
   return username;
 }
 
-async function ensureProfileRow(userId: string, email: string | null): Promise<ProfileRow> {
+async function ensureProfileRow(userId: string, preferredUsername: string | null): Promise<ProfileRow> {
   const serviceClient = createServerSupabaseClient();
   const { data, error } = await serviceClient
     .from(PROFILES_TABLE)
-    .select("username, created_at, updated_at")
+    .select("username, created_at")
     .eq("id", userId)
     .maybeSingle();
 
@@ -50,17 +48,16 @@ async function ensureProfileRow(userId: string, email: string | null): Promise<P
     return data;
   }
 
-  const fallbackUsername = buildFallbackUsername(email, userId);
+  const fallbackUsername = buildFallbackUsername(preferredUsername, userId);
   const { data: created, error: createError } = await serviceClient
     .from(PROFILES_TABLE)
     .upsert({
       id: userId,
       username: fallbackUsername,
-      updated_at: new Date().toISOString(),
     }, {
       onConflict: "id",
     })
-    .select("username, created_at, updated_at")
+    .select("username, created_at")
     .single();
 
   if (createError) {
@@ -70,10 +67,15 @@ async function ensureProfileRow(userId: string, email: string | null): Promise<P
   return created;
 }
 
-async function readAccountProfile(userId: string, email: string | null, emailVerified: boolean) {
+async function readAccountProfile(
+  userId: string,
+  email: string | null,
+  emailVerified: boolean,
+  metadataUsername: string | null,
+) {
   const serviceClient = createServerSupabaseClient();
   const [profile, rolesResult] = await Promise.all([
-    ensureProfileRow(userId, email),
+    ensureProfileRow(userId, metadataUsername),
     serviceClient
       .from(USER_ROLES_TABLE)
       .select("role")
@@ -90,7 +92,7 @@ async function readAccountProfile(userId: string, email: string | null, emailVer
     emailVerified,
     username: profile.username,
     createdAt: profile.created_at,
-    updatedAt: profile.updated_at,
+    updatedAt: profile.created_at,
     roles: (rolesResult.data ?? []).map((row) => row.role),
   };
 }
@@ -98,7 +100,12 @@ async function readAccountProfile(userId: string, email: string | null, emailVer
 export async function GET(request: Request) {
   try {
     const user = await requireAuthenticatedUser(request);
-    return jsonSuccess(await readAccountProfile(user.id, user.email, user.emailVerified));
+    return jsonSuccess(await readAccountProfile(
+      user.id,
+      user.email,
+      user.emailVerified,
+      user.metadataUsername,
+    ));
   } catch (error) {
     console.error("Account profile GET API 错误:", error);
     return jsonRouteError(error, {
@@ -127,7 +134,6 @@ export async function PUT(request: Request) {
       .upsert({
         id: user.id,
         username,
-        updated_at: new Date().toISOString(),
       }, {
         onConflict: "id",
       });
@@ -140,7 +146,12 @@ export async function PUT(request: Request) {
       throw new ApiRouteError(500, "ACCOUNT_PROFILE_UPDATE_FAILED", "更新账号资料失败", error.message);
     }
 
-    return jsonSuccess(await readAccountProfile(user.id, user.email, user.emailVerified));
+    return jsonSuccess(await readAccountProfile(
+      user.id,
+      user.email,
+      user.emailVerified,
+      username,
+    ));
   } catch (error) {
     console.error("Account profile PUT API 错误:", error);
     return jsonRouteError(error, {
