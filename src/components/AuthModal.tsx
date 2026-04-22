@@ -27,6 +27,16 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
     const [loading, setLoading] = useState(false);
     const setAuth = useGameStore((s) => s.setAuth);
 
+    const requireEmailInput = (): string | null => {
+        const normalizedEmail = email.trim();
+        if (!normalizedEmail) {
+            setError("请先输入邮箱地址");
+            return null;
+        }
+
+        return normalizedEmail;
+    };
+
     useEffect(() => {
         if (isOpen) {
             setEmail("");
@@ -142,6 +152,64 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
         }
     };
 
+    const handleForgotPassword = async () => {
+        setError("");
+        setNotice("");
+
+        const normalizedEmail = requireEmailInput();
+        if (!normalizedEmail) {
+            return;
+        }
+
+        setLoading(true);
+        try {
+            const { error: resetError } = await supabase.auth.resetPasswordForEmail(normalizedEmail, {
+                redirectTo: buildAuthCallbackUrl("/account"),
+            });
+
+            if (resetError) {
+                throw resetError;
+            }
+
+            setNotice("重置密码邮件已发送，请前往邮箱继续操作。");
+        } catch (err: unknown) {
+            setError(getErrorMessage(err, "发送重置密码邮件失败"));
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleResendVerification = async () => {
+        setError("");
+        setNotice("");
+
+        const normalizedEmail = requireEmailInput();
+        if (!normalizedEmail) {
+            return;
+        }
+
+        setLoading(true);
+        try {
+            const { error: resendError } = await supabase.auth.resend({
+                type: "signup",
+                email: normalizedEmail,
+                options: {
+                    emailRedirectTo: buildAuthCallbackUrl("/account"),
+                },
+            });
+
+            if (resendError) {
+                throw resendError;
+            }
+
+            setNotice("验证邮件已重新发送，请检查收件箱和垃圾邮件箱。");
+        } catch (err: unknown) {
+            setError(getErrorMessage(err, "重发验证邮件失败"));
+        } finally {
+            setLoading(false);
+        }
+    };
+
     return (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[300]">
             <div className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md mx-4">
@@ -212,6 +280,27 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
                             minLength={6}
                         />
                     </div>
+
+                    {mode === "login" && (
+                        <div className="mb-6 flex items-center justify-between gap-3 text-sm">
+                            <button
+                                type="button"
+                                onClick={handleForgotPassword}
+                                disabled={loading}
+                                className="text-blue-600 transition hover:text-blue-700 disabled:opacity-50"
+                            >
+                                忘记密码
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleResendVerification}
+                                disabled={loading}
+                                className="text-amber-600 transition hover:text-amber-700 disabled:opacity-50"
+                            >
+                                重发验证邮件
+                            </button>
+                        </div>
+                    )}
 
                     {error && (
                         <div className="mb-4 p-3 bg-red-50 text-red-600 text-sm rounded-xl">

@@ -61,6 +61,8 @@ export default function AccountPage() {
   const [newEmail, setNewEmail] = useState("");
   const [emailSaving, setEmailSaving] = useState(false);
   const [emailMessage, setEmailMessage] = useState("");
+  const [resendingVerification, setResendingVerification] = useState(false);
+  const [verificationMessage, setVerificationMessage] = useState("");
 
   const [deletePassword, setDeletePassword] = useState("");
   const [deleteConfirmation, setDeleteConfirmation] = useState("");
@@ -230,6 +232,38 @@ export default function AccountPage() {
     }
   };
 
+  const handleResendVerificationEmail = async () => {
+    setVerificationMessage("");
+    setResendingVerification(true);
+
+    try {
+      const currentEmail = (profile?.email ?? userEmail ?? "").trim();
+      if (!currentEmail) {
+        setVerificationMessage("当前账号缺少邮箱信息，无法重发验证邮件。");
+        return;
+      }
+
+      const { error } = await supabase.auth.resend({
+        type: "signup",
+        email: currentEmail,
+        options: {
+          emailRedirectTo: buildAuthCallbackUrl("/account"),
+        },
+      });
+
+      if (error) {
+        setVerificationMessage(error.message);
+        return;
+      }
+
+      setVerificationMessage("验证邮件已重新发送，请检查收件箱和垃圾邮件箱。");
+    } catch (error) {
+      setVerificationMessage(error instanceof Error ? error.message : "重发验证邮件失败");
+    } finally {
+      setResendingVerification(false);
+    }
+  };
+
   const handleDeleteAccount = async (event: React.FormEvent) => {
     event.preventDefault();
     setDeleteLoading(true);
@@ -356,7 +390,20 @@ export default function AccountPage() {
                   </div>
                   {!profile.emailVerified && (
                     <div className="mt-4 rounded-2xl bg-amber-400/15 p-4 text-sm text-amber-100">
-                      你当前仍可访问账号中心，但评论和活动排期编辑等受保护功能需要先完成邮箱验证。
+                      <p>你当前仍可访问账号中心，但评论和活动排期编辑等受保护功能需要先完成邮箱验证。</p>
+                      <div className="mt-3 flex flex-wrap items-center gap-3">
+                        <button
+                          type="button"
+                          onClick={handleResendVerificationEmail}
+                          disabled={resendingVerification}
+                          className="rounded-full bg-white/15 px-4 py-2 text-xs font-semibold text-white transition hover:bg-white/20 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          {resendingVerification ? "发送中..." : "重发验证邮件"}
+                        </button>
+                        {verificationMessage && (
+                          <span className="text-xs text-amber-50">{verificationMessage}</span>
+                        )}
+                      </div>
                     </div>
                   )}
                 </div>

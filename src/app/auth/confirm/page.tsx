@@ -44,6 +44,19 @@ function getSuccessMessage(type: string | null): string {
   }
 }
 
+function getStatusHeading(status: CallbackStatus): string {
+  switch (status) {
+    case "success":
+      return "认证成功";
+    case "error":
+      return "认证未完成";
+    case "recovery":
+      return "设置新密码";
+    default:
+      return "认证处理中";
+  }
+}
+
 function AuthConfirmPageFallback() {
   return (
     <main className="relative min-h-screen px-4 py-16 sm:px-6 lg:px-8">
@@ -91,6 +104,29 @@ function AuthConfirmPageContent() {
   }, [nextPath, router, status]);
 
   useEffect(() => {
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event) => {
+      if (event === "PASSWORD_RECOVERY") {
+        setStatus("recovery");
+        setMessage("认证已完成，请设置一个新密码。");
+        return;
+      }
+
+      if (event === "SIGNED_IN" || event === "USER_UPDATED") {
+        setStatus((currentStatus) => (currentStatus === "verifying" ? "success" : currentStatus));
+        setMessage((currentMessage) => (
+          currentMessage === "正在处理认证结果，请稍候..."
+            ? "邮箱验证成功，正在同步账号信息..."
+            : currentMessage
+        ));
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  useEffect(() => {
     if (hasHandledRef.current) {
       return;
     }
@@ -100,20 +136,25 @@ function AuthConfirmPageContent() {
     let active = true;
 
     const syncStore = async () => {
-      const summary = await readAuthProfileSummary();
-      if (!summary) {
-        logout();
+      try {
+        const summary = await readAuthProfileSummary();
+        if (!summary) {
+          logout();
+          return null;
+        }
+
+        setAuth({
+          userId: summary.userId,
+          username: summary.username,
+          userEmail: summary.email,
+          emailVerified: summary.emailVerified,
+        });
+
+        return summary;
+      } catch (error) {
+        console.error("Auth confirm sync error:", error);
         return null;
       }
-
-      setAuth({
-        userId: summary.userId,
-        username: summary.username,
-        userEmail: summary.email,
-        emailVerified: summary.emailVerified,
-      });
-
-      return summary;
     };
 
     const handleSuccess = async (type: string | null) => {
@@ -125,12 +166,12 @@ function AuthConfirmPageContent() {
         return;
       }
 
-      await syncStore();
-
       if (active) {
         setStatus("success");
         setMessage(getSuccessMessage(type));
       }
+
+      await syncStore();
     };
 
     const run = async () => {
@@ -245,7 +286,7 @@ function AuthConfirmPageContent() {
       <div className="mx-auto max-w-xl rounded-[32px] border border-white/50 bg-white/80 p-8 shadow-[0_20px_80px_rgba(15,23,42,0.14)] backdrop-blur-xl">
         <div className="mb-6 text-center">
           <p className="text-sm font-semibold uppercase tracking-[0.3em] text-sky-500">Auth Callback</p>
-          <h1 className="mt-3 text-3xl font-bold text-slate-900">认证处理中</h1>
+          <h1 className="mt-3 text-3xl font-bold text-slate-900">{getStatusHeading(status)}</h1>
         </div>
 
         {status === "verifying" && (
