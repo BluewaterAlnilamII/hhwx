@@ -16,7 +16,7 @@ import {
   type AuthViewMode,
 } from "@/lib/supabase";
 import { PASSWORD_POLICY_MESSAGE, isPasswordStrongEnough } from "@/lib/password-policy";
-import { isTurnstileEnabled } from "@/lib/turnstile";
+import { useTurnstileAvailability } from "@/lib/turnstile";
 import { useGameStore } from "@/store/useGameStore";
 import TurnstileChallenge, { type TurnstileChallengeHandle } from "./TurnstileChallenge";
 
@@ -73,13 +73,19 @@ export default function AuthPageContent() {
   const [notice, setNotice] = useState("");
   const [loading, setLoading] = useState(false);
   const captchaRef = useRef<TurnstileChallengeHandle | null>(null);
-  const shouldShowCaptcha = isTurnstileEnabled() && mode !== "login";
+  const { isTurnstileEnabled, isTurnstileLoading } = useTurnstileAvailability();
+  const shouldShowCaptcha = isTurnstileEnabled && mode !== "login";
   const usernameValidationProps = createNativeValidationProps({ label: "用户名" });
   const emailValidationProps = createNativeValidationProps({ label: "邮箱", invalidTypeMessage: "请输入有效的邮箱地址。" });
   const passwordValidationProps = createNativeValidationProps({ label: "密码", minLengthMessage: PASSWORD_POLICY_MESSAGE });
   const confirmPasswordValidationProps = createNativeValidationProps({ label: "确认密码", minLengthMessage: PASSWORD_POLICY_MESSAGE });
 
   const requireCaptchaToken = (): string | undefined => {
+    if (mode !== "login" && isTurnstileLoading) {
+      setError("安全验证配置加载中，请稍后再试。");
+      return undefined;
+    }
+
     if (!shouldShowCaptcha) {
       return undefined;
     }
@@ -456,7 +462,7 @@ export default function AuthPageContent() {
                 </div>
                 <button
                   type="submit"
-                  disabled={loading}
+                  disabled={loading || (mode !== "login" && isTurnstileLoading)}
                   className="hhwx-accent-button"
                 >
                   {loading

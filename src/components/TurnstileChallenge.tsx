@@ -19,7 +19,7 @@ interface TurnstileChallengeProps {
 }
 
 const baseClassName = "rounded-3xl border border-slate-200 bg-slate-50 p-4";
-const inlineClassName = "inline-flex flex-col items-start gap-2";
+const inlineClassName = "flex w-full max-w-full flex-col items-start gap-2";
 
 const TurnstileChallenge = forwardRef<TurnstileChallengeHandle, TurnstileChallengeProps>(function TurnstileChallenge(
   {
@@ -45,7 +45,7 @@ const TurnstileChallenge = forwardRef<TurnstileChallengeHandle, TurnstileChallen
 
   const containerClassName = `${variant === "inline" ? inlineClassName : baseClassName} ${className}`.trim();
   const widgetClassName = variant === "inline"
-    ? "inline-block overflow-visible rounded-none border-0 bg-transparent p-0"
+    ? "w-full max-w-full overflow-x-auto overflow-y-hidden rounded-none border-0 bg-transparent p-0"
     : `overflow-hidden rounded-2xl border border-slate-200 bg-white p-3 ${title || description ? "mt-4" : ""}`.trim();
 
   if (!TURNSTILE_SITE_KEY) {
@@ -64,18 +64,20 @@ const TurnstileChallenge = forwardRef<TurnstileChallengeHandle, TurnstileChallen
       {title && <div className="text-sm font-semibold text-slate-900">{title}</div>}
       {description && <p className="text-sm leading-6 text-slate-600">{description}</p>}
       <div className={widgetClassName}>
-        <Turnstile
-          ref={widgetRef}
-          siteKey={TURNSTILE_SITE_KEY}
-          options={{
-            action,
-            theme,
-            size: "flexible",
-          }}
-          onSuccess={() => setStatusMessage("")}
-          onExpire={() => setStatusMessage("验证已过期，请重新完成。")}
-          onError={() => setStatusMessage("验证加载失败，请刷新后重试。")}
-        />
+        <div className="min-w-[300px] sm:min-w-0">
+          <Turnstile
+            ref={widgetRef}
+            siteKey={TURNSTILE_SITE_KEY}
+            options={{
+              action,
+              theme,
+              size: "flexible",
+            }}
+            onSuccess={() => setStatusMessage("")}
+            onExpire={() => setStatusMessage("验证已过期，请重新完成。")}
+            onError={() => setStatusMessage("验证加载失败，请刷新后重试。")}
+          />
+        </div>
       </div>
       {statusMessage && (
         <div className="mt-3 text-sm text-red-500">{statusMessage}</div>

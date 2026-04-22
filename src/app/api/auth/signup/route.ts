@@ -1,5 +1,6 @@
 import { ApiRouteError } from "@/lib/api-contracts";
 import { jsonRouteError, jsonSuccess } from "@/lib/api-response";
+import { findAuthUserByEmail, normalizeEmailAddress } from "@/lib/auth-user-server";
 import { createServerAuthSupabaseClient } from "@/lib/supabase-auth-server";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
 import { PROFILES_TABLE } from "@/lib/supabase-table-names";
@@ -47,7 +48,7 @@ export async function POST(request: Request) {
     }
 
     const username = normalizeUsername(body.username);
-    const email = readRequiredString(body.email, "请输入邮箱");
+    const email = normalizeEmailAddress(readRequiredString(body.email, "请输入邮箱"));
     const password = readRequiredString(body.password, "请输入密码");
     const redirectTo = typeof body.redirectTo === "string" ? body.redirectTo.trim() : "";
     const captchaToken = typeof body.captchaToken === "string" ? body.captchaToken.trim() : "";
@@ -67,6 +68,11 @@ export async function POST(request: Request) {
 
     if (existingProfile) {
       throw new ApiRouteError(409, "USERNAME_TAKEN", "该用户名已被占用");
+    }
+
+    const existingUser = await findAuthUserByEmail(email);
+    if (existingUser) {
+      throw new ApiRouteError(409, "EMAIL_TAKEN", "该邮箱已被注册");
     }
 
     const authClient = createServerAuthSupabaseClient();

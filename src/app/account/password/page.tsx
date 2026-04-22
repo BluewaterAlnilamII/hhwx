@@ -6,7 +6,7 @@ import AccountShell, { AccountErrorState, AccountLoadingState, AccountSignInStat
 import { getApiErrorMessage } from "@/lib/api-contracts";
 import { formatAuthErrorMessage } from "@/lib/auth-error";
 import { buildAuthCallbackUrl, getSafeSession } from "@/lib/supabase";
-import { isTurnstileEnabled } from "@/lib/turnstile";
+import { useTurnstileAvailability } from "@/lib/turnstile";
 import { useAccountProfile } from "../useAccountProfile";
 
 export default function AccountPasswordPage() {
@@ -14,9 +14,15 @@ export default function AccountPasswordPage() {
   const [sending, setSending] = useState(false);
   const [message, setMessage] = useState("");
   const captchaRef = useRef<TurnstileChallengeHandle | null>(null);
+  const { isTurnstileEnabled, isTurnstileLoading } = useTurnstileAvailability();
 
   const requireCaptchaToken = () => {
-    if (!isTurnstileEnabled()) {
+    if (isTurnstileLoading) {
+      setMessage("安全验证配置加载中，请稍后再试。");
+      return undefined;
+    }
+
+    if (!isTurnstileEnabled) {
       return undefined;
     }
 
@@ -39,7 +45,7 @@ export default function AccountPasswordPage() {
     setMessage("");
 
     const captchaToken = requireCaptchaToken();
-    if (isTurnstileEnabled() && !captchaToken) {
+    if (isTurnstileEnabled && !captchaToken) {
       setSending(false);
       return;
     }
@@ -102,7 +108,7 @@ export default function AccountPasswordPage() {
             当前接收邮箱：{profile.email || userEmail || "-"}
           </div>
 
-          {isTurnstileEnabled() && (
+          {isTurnstileEnabled && (
             <TurnstileChallenge
               ref={captchaRef}
               action="account-password-reset"
@@ -121,7 +127,7 @@ export default function AccountPasswordPage() {
           <div className="flex justify-end">
             <button
               type="submit"
-              disabled={sending}
+              disabled={sending || isTurnstileLoading}
               className="hhwx-accent-button"
             >
               {sending ? "发送中..." : "发送修改邮件"}

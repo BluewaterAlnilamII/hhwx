@@ -30,6 +30,14 @@ export function formatAuthErrorMessage(error: unknown, fallbackMessage: string, 
       return "该邮箱已被注册。";
     }
 
+    if ((normalizedMessage.includes("email") && normalizedMessage.includes("already")) || normalizedMessage.includes("email address has already been taken")) {
+      return "该邮箱已被注册。";
+    }
+
+    if (normalizedMessage.includes("new email") && normalizedMessage.includes("different")) {
+      return "新邮箱需要与当前邮箱不同。";
+    }
+
     if (normalizedMessage.includes("unable to validate email address") || (normalizedMessage.includes("email") && normalizedMessage.includes("invalid"))) {
       return "请输入有效的邮箱地址。";
     }

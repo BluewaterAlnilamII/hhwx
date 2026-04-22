@@ -1,6 +1,7 @@
 import { ApiRouteError } from "@/lib/api-contracts";
 import { requireAuthenticatedUser } from "@/lib/auth-server";
 import { jsonRouteError, jsonSuccess } from "@/lib/api-response";
+import { findAuthUserByEmail, normalizeEmailAddress } from "@/lib/auth-user-server";
 import { createServerAuthSupabaseClient } from "@/lib/supabase-auth-server";
 import { verifyTurnstileToken } from "@/lib/turnstile-server";
 
@@ -72,9 +73,19 @@ export async function POST(request: Request) {
     }
 
     if (action === "update") {
-      const newEmail = readRequiredString(body.newEmail, "请输入新的邮箱地址");
+      const newEmail = normalizeEmailAddress(readRequiredString(body.newEmail, "请输入新的邮箱地址"));
+      const currentEmail = normalizeEmailAddress(user.email ?? "");
       const refreshToken = readRequiredString(body.refreshToken, "缺少刷新凭证");
       const accessToken = parseAccessToken(request);
+
+      if (currentEmail && newEmail === currentEmail) {
+        throw new ApiRouteError(400, "EMAIL_UNCHANGED", "新邮箱需要与当前邮箱不同");
+      }
+
+      const existingUser = await findAuthUserByEmail(newEmail);
+      if (existingUser && existingUser.id !== user.id) {
+        throw new ApiRouteError(409, "EMAIL_TAKEN", "该邮箱已被注册");
+      }
 
       const { error: setSessionError } = await authClient.auth.setSession({
         access_token: accessToken,

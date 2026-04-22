@@ -20,7 +20,7 @@ function readRemoteIp(request: Request): string | null {
 }
 
 export function isServerTurnstileEnabled(): boolean {
-  return Boolean(readSiteKey());
+  return Boolean(readSiteKey() && readSecretKey());
 }
 
 export async function verifyTurnstileToken(token: string | null | undefined, request: Request): Promise<void> {
