@@ -10,7 +10,7 @@ import {
   withCacheControl,
 } from "@/lib/api-cache";
 import { jsonError, jsonRouteError, jsonSuccess } from "@/lib/api-response";
-import { createServerSupabaseClient } from "@/lib/supabase-server";
+import { ensureVerifiedEmail, requireAuthenticatedUser } from "@/lib/auth-server";
 
 export const dynamic = "force-dynamic";
 
@@ -33,19 +33,8 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    const authHeader = request.headers.get("authorization");
-    if (!authHeader) {
-      return jsonError(401, "UNAUTHENTICATED", "未登录");
-    }
-
-    const serviceClient = createServerSupabaseClient();
-    const token = authHeader.replace("Bearer ", "");
-    const { data: { user }, error: authError } = await serviceClient.auth.getUser(token);
-
-    if (authError || !user) {
-      return jsonError(401, "AUTHENTICATION_FAILED", "认证失败");
-    }
-
+    const user = await requireAuthenticatedUser(request);
+    ensureVerifiedEmail(user);
     await ensureBandoriCalendarEditor(user.id);
 
     let body: unknown;

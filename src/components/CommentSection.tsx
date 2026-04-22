@@ -1,7 +1,8 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
-import { supabase } from "@/lib/supabase";
+import { getApiErrorMessage } from "@/lib/api-contracts";
+import { getSafeSession, supabase } from "@/lib/supabase";
 import { useGameStore } from "@/store/useGameStore";
 
 interface Comment {
@@ -23,7 +24,8 @@ export default function CommentSection() {
     const [comments, setComments] = useState<Comment[]>([]);
     const [newComment, setNewComment] = useState("");
     const [loading, setLoading] = useState(false);
-    const { userId, username } = useGameStore();
+    const [submitError, setSubmitError] = useState("");
+    const { userId, username, emailVerified, authReady } = useGameStore();
 
     const fetchComments = useCallback(async () => {
         const { data } = await supabase
@@ -40,25 +42,39 @@ export default function CommentSection() {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!newComment.trim() || !userId) return;
+        if (!newComment.trim() || !userId || !emailVerified) return;
         setLoading(true);
+        setSubmitError("");
         try {
-            const { error: insertErr } = await supabase.from("comments").insert({
-                user_id: userId,
-                content: newComment.trim(),
+            const session = await getSafeSession();
+            if (!session?.access_token) {
+                setSubmitError("请先登录");
+                return;
+            }
+
+            const response = await fetch("/api/comments", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${session.access_token}`,
+                },
+                body: JSON.stringify({
+                    content: newComment.trim(),
+                }),
             });
 
-            if (insertErr) {
-                console.error("Failed to post comment:", insertErr);
-                alert("评论发送失败：" + insertErr.message);
+            const payload = await response.json().catch(() => ({}));
+            if (!response.ok) {
+                setSubmitError(getApiErrorMessage(payload) || `评论发送失败（HTTP ${response.status}）`);
                 return;
             }
 
             setNewComment("");
+            setSubmitError("");
             fetchComments();
         } catch (err: unknown) {
             console.error("Failed to post comment:", err);
-            alert("评论发送失败：" + getErrorMessage(err, "未知错误"));
+            setSubmitError(getErrorMessage(err, "评论发送失败"));
         } finally {
             setLoading(false);
         }
@@ -79,7 +95,12 @@ export default function CommentSection() {
             <h3 className="text-lg font-bold text-gray-800 mb-4">💬 游戏评论区</h3>
 
             {/* Comment input */}
-            {userId ? (
+            {!authReady ? (
+                <div className="mb-6 p-4 bg-white/60 backdrop-blur-sm rounded-xl text-center text-gray-500 text-sm">
+                    正在读取登录状态...
+                </div>
+            ) : userId ? (
+                emailVerified ? (
                 <form onSubmit={handleSubmit} className="mb-6">
                     <div className="flex gap-3">
                         <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-400 to-purple-500 flex items-center justify-center text-white text-xs font-bold flex-shrink-0 mt-1">
@@ -102,9 +123,17 @@ export default function CommentSection() {
                                     {loading ? "发送中..." : "发送"}
                                 </button>
                             </div>
+                            {submitError && (
+                                <div className="mt-2 text-sm text-red-500">{submitError}</div>
+                            )}
                         </div>
                     </div>
                 </form>
+                ) : (
+                    <div className="mb-6 p-4 bg-amber-50 rounded-xl text-center text-amber-700 text-sm">
+                        请先完成邮箱验证后再发表评论
+                    </div>
+                )
             ) : (
                 <div className="mb-6 p-4 bg-white/60 backdrop-blur-sm rounded-xl text-center text-gray-500 text-sm">
                     请先登录后发表评论

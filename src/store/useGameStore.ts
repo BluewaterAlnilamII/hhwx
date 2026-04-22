@@ -25,6 +25,9 @@ interface GameStore {
     // 用户认证状态
     userId: string | null;
     username: string | null;
+    userEmail: string | null;
+    emailVerified: boolean;
+    authReady: boolean;
 
     // 调试模式：显示 AI 落子权重
     debugMode: boolean;
@@ -37,7 +40,12 @@ interface GameStore {
     setPlayerColor: (color: "black" | "white") => void;
     resetSelection: () => void;
     setCharactersById: (playerId: string, aiId: string) => void;
-    setAuth: (userId: string | null, username: string | null) => void;
+    setAuth: (auth: {
+        userId: string;
+        username: string;
+        userEmail: string | null;
+        emailVerified: boolean;
+    } | null) => void;
     logout: () => void;
     toggleDebugMode: () => void;
     setAIWeights: (weights: (WeightData | null)[][]) => void;
@@ -60,6 +68,9 @@ export const useGameStore = create<GameStore>((set) => ({
 
     userId: null,
     username: null,
+    userEmail: null,
+    emailVerified: false,
+    authReady: false,
 
     debugMode: false,
     aiWeights: emptyWeights(),
@@ -90,9 +101,21 @@ export const useGameStore = create<GameStore>((set) => ({
         }
     },
 
-    setAuth: (userId, username) => set({ userId, username }),
+    setAuth: (auth) => set({
+        userId: auth?.userId ?? null,
+        username: auth?.username ?? null,
+        userEmail: auth?.userEmail ?? null,
+        emailVerified: auth?.emailVerified ?? false,
+        authReady: true,
+    }),
 
-    logout: () => set({ userId: null, username: null }),
+    logout: () => set({
+        userId: null,
+        username: null,
+        userEmail: null,
+        emailVerified: false,
+        authReady: true,
+    }),
 
     toggleDebugMode: () => set((s) => ({ debugMode: !s.debugMode })),
 

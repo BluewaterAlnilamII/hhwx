@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { supabase } from "@/lib/supabase";
+import { buildAuthCallbackUrl, isEmailVerified, readAuthProfileSummary, supabase } from "@/lib/supabase";
 import { useGameStore } from "@/store/useGameStore";
 
 interface AuthModalProps {
@@ -23,6 +23,7 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
     const [password, setPassword] = useState("");
     const [username, setUsername] = useState("");
     const [error, setError] = useState("");
+    const [notice, setNotice] = useState("");
     const [loading, setLoading] = useState(false);
     const setAuth = useGameStore((s) => s.setAuth);
 
@@ -32,6 +33,7 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
             setPassword("");
             setUsername("");
             setError("");
+            setNotice("");
         }
     }, [isOpen]);
 
@@ -40,6 +42,7 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
     const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();
         setError("");
+        setNotice("");
         setLoading(true);
         try {
             const { data, error: err } = await supabase.auth.signInWithPassword({
@@ -47,13 +50,23 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
                 password,
             });
             if (err) throw err;
-            // Fetch username from profiles
-            const { data: profile } = await supabase
-                .from("profiles")
-                .select("username")
-                .eq("id", data.user.id)
-                .single();
-            setAuth(data.user.id, profile?.username ?? "User");
+
+            const summary = await readAuthProfileSummary(data.session);
+            if (!summary) {
+                throw new Error("登录后未能读取账号信息");
+            }
+
+            setAuth({
+                userId: summary.userId,
+                username: summary.username,
+                userEmail: summary.email,
+                emailVerified: summary.emailVerified,
+            });
+
+            if (!summary.emailVerified) {
+                setNotice("当前邮箱尚未验证，部分功能仍会受限。");
+            }
+
             onClose();
         } catch (err: unknown) {
             setError(getErrorMessage(err, "登录失败"));
@@ -65,6 +78,7 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
     const handleRegister = async (e: React.FormEvent) => {
         e.preventDefault();
         setError("");
+        setNotice("");
         if (!username.trim()) {
             setError("请输入用户名");
             return;
@@ -75,6 +89,7 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
                 email,
                 password,
                 options: {
+                    emailRedirectTo: buildAuthCallbackUrl("/account"),
                     data: { username: username.trim() },
                 },
             });
@@ -87,9 +102,24 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
                 });
                 if (profileErr) throw new Error("创建用户资料失败：" + profileErr.message);
 
-                setAuth(data.user.id, username.trim());
+                if (data.session && isEmailVerified(data.user)) {
+                    const summary = await readAuthProfileSummary(data.session);
+                    if (summary) {
+                        setAuth({
+                            userId: summary.userId,
+                            username: summary.username,
+                            userEmail: summary.email,
+                            emailVerified: summary.emailVerified,
+                        });
+                        onClose();
+                        return;
+                    }
+                }
             }
-            onClose();
+
+            setMode("login");
+            setPassword("");
+            setNotice("注册成功，请前往邮箱完成验证后再登录。");
         } catch (err: unknown) {
             setError(getErrorMessage(err, "注册失败"));
         } finally {
@@ -171,6 +201,12 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
                     {error && (
                         <div className="mb-4 p-3 bg-red-50 text-red-600 text-sm rounded-xl">
                             {error}
+                        </div>
+                    )}
+
+                    {notice && (
+                        <div className="mb-4 p-3 bg-blue-50 text-blue-700 text-sm rounded-xl">
+                            {notice}
                         </div>
                     )}
 

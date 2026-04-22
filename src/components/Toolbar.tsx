@@ -1,7 +1,8 @@
 "use client";
 
+import Link from "next/link";
 import React, { useState, useEffect } from "react";
-import { getSafeSession, supabase } from "@/lib/supabase";
+import { readAuthProfileSummary, supabase } from "@/lib/supabase";
 import { useGameStore } from "@/store/useGameStore";
 import AuthModal from "./AuthModal";
 
@@ -10,36 +11,50 @@ interface ToolbarProps {
 }
 
 export default function Toolbar({ showDebugButton = true }: ToolbarProps) {
-    const { userId, username, setAuth, logout, debugMode, toggleDebugMode } = useGameStore();
+    const { userId, username, emailVerified, setAuth, logout, debugMode, toggleDebugMode } = useGameStore();
     const [showAuth, setShowAuth] = useState(false);
     const [showMenu, setShowMenu] = useState(false);
 
     // Restore session on mount
     useEffect(() => {
-        const restoreSession = async () => {
-            const session = await getSafeSession();
-            if (!session?.user) {
+        const syncAuthState = async () => {
+            const summary = await readAuthProfileSummary();
+            if (!summary) {
                 logout();
                 return;
             }
 
-            const { data } = await supabase
-                .from("profiles")
-                .select("username")
-                .eq("id", session.user.id)
-                .single();
-
-            setAuth(session.user.id, data?.username ?? "User");
+            setAuth({
+                userId: summary.userId,
+                username: summary.username,
+                userEmail: summary.email,
+                emailVerified: summary.emailVerified,
+            });
         };
 
-        void restoreSession();
+        void syncAuthState();
 
         const {
             data: { subscription },
         } = supabase.auth.onAuthStateChange((_event, session) => {
             if (!session) {
                 logout();
+                return;
             }
+
+            void readAuthProfileSummary(session).then((summary) => {
+                if (!summary) {
+                    logout();
+                    return;
+                }
+
+                setAuth({
+                    userId: summary.userId,
+                    username: summary.username,
+                    userEmail: summary.email,
+                    emailVerified: summary.emailVerified,
+                });
+            });
         });
 
         return () => subscription.unsubscribe();
@@ -78,9 +93,26 @@ export default function Toolbar({ showDebugButton = true }: ToolbarProps) {
                                 {(username || "U")[0].toUpperCase()}
                             </div>
                             <span className="text-sm">{username}</span>
+                            {!emailVerified && (
+                                <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-700">
+                                    未验证
+                                </span>
+                            )}
                         </button>
                         {showMenu && (
                             <div className="absolute top-full right-0 mt-2 bg-white rounded-xl shadow-xl py-2 min-w-[140px]">
+                                {!emailVerified && (
+                                    <div className="px-4 py-2 text-xs text-amber-700 bg-amber-50">
+                                        验证邮箱后可使用评论和编辑功能
+                                    </div>
+                                )}
+                                <Link
+                                    href="/account"
+                                    onClick={() => setShowMenu(false)}
+                                    className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition"
+                                >
+                                    账号中心
+                                </Link>
                                 <button
                                     onClick={handleLogout}
                                     className="w-full text-left px-4 py-2 text-sm text-red-500 hover:bg-red-50 transition"
