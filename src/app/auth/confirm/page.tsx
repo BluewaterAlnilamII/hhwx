@@ -5,6 +5,7 @@ import { type EmailOtpType } from "@supabase/supabase-js";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import {
+  buildAuthPath,
   getSafeSession,
   normalizeInternalPath,
   readAuthProfileSummary,
@@ -309,10 +310,10 @@ function AuthConfirmPageContent() {
                 返回首页
               </Link>
               <Link
-                href="/account"
+                href={buildAuthPath("login", nextPath)}
                 className="rounded-full border border-slate-200 bg-white px-5 py-2 text-sm font-semibold text-slate-700 transition hover:border-sky-200 hover:text-sky-600"
               >
-                前往账号中心
+                前往登录页
               </Link>
             </div>
           </div>

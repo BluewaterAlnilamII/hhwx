@@ -1,10 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import TurnstileChallenge, { type TurnstileChallengeHandle } from "@/components/TurnstileChallenge";
 import Toolbar from "@/components/Toolbar";
 import { getApiErrorMessage, parseApiSuccessData } from "@/lib/api-contracts";
-import { buildAuthCallbackUrl, getSafeSession, readAuthProfileSummary, supabase } from "@/lib/supabase";
+import { buildAuthCallbackUrl, buildAuthPath, getSafeSession, readAuthProfileSummary, supabase } from "@/lib/supabase";
+import { isTurnstileEnabled } from "@/lib/turnstile";
 import { useGameStore } from "@/store/useGameStore";
 
 type AccountProfile = {
@@ -54,8 +56,7 @@ export default function AccountPage() {
   const [usernameSaving, setUsernameSaving] = useState(false);
   const [usernameMessage, setUsernameMessage] = useState("");
 
-  const [newPassword, setNewPassword] = useState("");
-  const [passwordSaving, setPasswordSaving] = useState(false);
+  const [passwordResetSending, setPasswordResetSending] = useState(false);
   const [passwordMessage, setPasswordMessage] = useState("");
 
   const [newEmail, setNewEmail] = useState("");
@@ -68,6 +69,25 @@ export default function AccountPage() {
   const [deleteConfirmation, setDeleteConfirmation] = useState("");
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [deleteMessage, setDeleteMessage] = useState("");
+  const captchaRef = useRef<TurnstileChallengeHandle | null>(null);
+
+  const requireCaptchaToken = (setMessage: (message: string) => void): string | undefined => {
+    if (!isTurnstileEnabled()) {
+      return undefined;
+    }
+
+    const token = captchaRef.current?.getToken() ?? undefined;
+    if (!token) {
+      setMessage("请先完成人机验证。");
+      return undefined;
+    }
+
+    return token;
+  };
+
+  const resetCaptcha = () => {
+    captchaRef.current?.reset();
+  };
 
   const syncStoreSummary = useCallback(async () => {
     const summary = await readAuthProfileSummary();
@@ -187,24 +207,39 @@ export default function AccountPage() {
     }
   };
 
-  const handlePasswordUpdate = async (event: React.FormEvent) => {
+  const handlePasswordResetRequest = async (event: React.FormEvent) => {
     event.preventDefault();
-    setPasswordSaving(true);
+    setPasswordResetSending(true);
     setPasswordMessage("");
+    const captchaToken = requireCaptchaToken(setPasswordMessage);
+    if (isTurnstileEnabled() && !captchaToken) {
+      setPasswordResetSending(false);
+      return;
+    }
 
     try {
-      const { error } = await supabase.auth.updateUser({ password: newPassword });
+      const currentEmail = (profile?.email ?? userEmail ?? "").trim();
+      if (!currentEmail) {
+        setPasswordMessage("当前账号缺少可用邮箱，暂时无法发送重置邮件。");
+        return;
+      }
+
+      const { error } = await supabase.auth.resetPasswordForEmail(currentEmail, {
+        captchaToken,
+        redirectTo: buildAuthCallbackUrl("/account"),
+      });
+
       if (error) {
         setPasswordMessage(error.message);
         return;
       }
 
-      setNewPassword("");
-      setPasswordMessage("密码已更新");
+      setPasswordMessage("修改密码邮件已发送，请前往当前邮箱继续操作。");
     } catch (error) {
-      setPasswordMessage(error instanceof Error ? error.message : "更新密码失败");
+      setPasswordMessage(error instanceof Error ? error.message : "发送修改密码邮件失败");
     } finally {
-      setPasswordSaving(false);
+      setPasswordResetSending(false);
+      resetCaptcha();
     }
   };
 
@@ -224,7 +259,7 @@ export default function AccountPage() {
 
       await syncStoreSummary();
       await loadProfile();
-      setEmailMessage("更换邮箱请求已提交，请查收新邮箱并完成验证");
+      setEmailMessage("确认邮件已发送到新邮箱，请按邮件提示完成更换。");
     } catch (error) {
       setEmailMessage(error instanceof Error ? error.message : "提交更换邮箱失败");
     } finally {
@@ -235,6 +270,11 @@ export default function AccountPage() {
   const handleResendVerificationEmail = async () => {
     setVerificationMessage("");
     setResendingVerification(true);
+    const captchaToken = requireCaptchaToken(setVerificationMessage);
+    if (isTurnstileEnabled() && !captchaToken) {
+      setResendingVerification(false);
+      return;
+    }
 
     try {
       const currentEmail = (profile?.email ?? userEmail ?? "").trim();
@@ -247,6 +287,7 @@ export default function AccountPage() {
         type: "signup",
         email: currentEmail,
         options: {
+          captchaToken,
           emailRedirectTo: buildAuthCallbackUrl("/account"),
         },
       });
@@ -256,11 +297,12 @@ export default function AccountPage() {
         return;
       }
 
-      setVerificationMessage("验证邮件已重新发送，请检查收件箱和垃圾邮件箱。");
+      setVerificationMessage("验证邮件已发送到当前邮箱，请检查收件箱和垃圾邮件箱。");
     } catch (error) {
       setVerificationMessage(error instanceof Error ? error.message : "重发验证邮件失败");
     } finally {
       setResendingVerification(false);
+      resetCaptcha();
     }
   };
 
@@ -268,6 +310,11 @@ export default function AccountPage() {
     event.preventDefault();
     setDeleteLoading(true);
     setDeleteMessage("");
+    const captchaToken = requireCaptchaToken(setDeleteMessage);
+    if (isTurnstileEnabled() && !captchaToken) {
+      setDeleteLoading(false);
+      return;
+    }
 
     try {
       if (deleteConfirmation !== "DELETE") {
@@ -283,6 +330,7 @@ export default function AccountPage() {
       const reAuthResult = await supabase.auth.signInWithPassword({
         email: userEmail,
         password: deletePassword,
+        options: { captchaToken },
       });
 
       if (reAuthResult.error) {
@@ -318,6 +366,7 @@ export default function AccountPage() {
       setDeleteMessage(error instanceof Error ? error.message : "删除账号失败");
     } finally {
       setDeleteLoading(false);
+      resetCaptcha();
     }
   };
 
@@ -349,11 +398,27 @@ export default function AccountPage() {
             <div className="py-16 text-center">
               <h2 className="text-xl font-semibold text-slate-900">请先登录</h2>
               <p className="mt-2 text-sm text-slate-600">登录后即可查看和管理个人账号设置。</p>
+              <div className="mt-5">
+                <Link
+                  href={buildAuthPath("login", "/account")}
+                  className="inline-flex items-center justify-center rounded-full bg-slate-900 px-5 py-2 text-sm font-semibold text-white transition hover:bg-slate-800"
+                >
+                  前往登录页
+                </Link>
+              </div>
             </div>
           ) : profileError ? (
             <div className="mt-8 rounded-2xl bg-red-50 p-4 text-sm text-red-600">{profileError}</div>
           ) : profile ? (
-            <div className="mt-8 grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
+            <div className="mt-8 space-y-6">
+              <TurnstileChallenge
+                ref={captchaRef}
+                action="account-security"
+                title="账户安全验证"
+                description="为防止恶意请求，重发验证邮件、发送修改密码邮件和删除账号前，请先完成一次人机验证。"
+              />
+
+              <div className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
               <section className="space-y-6">
                 <div className="rounded-3xl bg-slate-950 p-6 text-white shadow-lg">
                   <div className="flex flex-wrap items-center gap-3">
@@ -439,20 +504,14 @@ export default function AccountPage() {
               </section>
 
               <section className="space-y-6">
-                <form onSubmit={handlePasswordUpdate} className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+                <form id="security" onSubmit={handlePasswordResetRequest} className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
                   <h2 className="text-xl font-semibold text-slate-900">修改密码</h2>
-                  <p className="mt-2 text-sm text-slate-600">请输入新的登录密码，长度至少为 6 位。</p>
-                  <label className="mt-5 block text-sm font-medium text-slate-700">
-                    新密码
-                    <input
-                      type="password"
-                      value={newPassword}
-                      onChange={(event) => setNewPassword(event.target.value)}
-                      minLength={6}
-                      className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 text-slate-900 outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100"
-                      placeholder="输入新的密码"
-                    />
-                  </label>
+                  <p className="mt-2 text-sm leading-6 text-slate-600">
+                    如果你想更换登录密码，我们会向当前邮箱发送一封安全邮件。打开邮件里的页面后，再设置新的登录密码。
+                  </p>
+                  <div className="mt-5 rounded-2xl bg-slate-50 p-4 text-sm text-slate-600">
+                    当前接收邮箱：{profile.email || userEmail || "-"}
+                  </div>
                   {passwordMessage && (
                     <div className={`mt-3 text-sm ${passwordMessage.includes("已") ? "text-emerald-600" : "text-red-500"}`}>
                       {passwordMessage}
@@ -461,17 +520,17 @@ export default function AccountPage() {
                   <div className="mt-5 flex justify-end">
                     <button
                       type="submit"
-                      disabled={passwordSaving || newPassword.length < 6}
+                      disabled={passwordResetSending}
                       className="rounded-full bg-sky-600 px-5 py-2 text-sm font-semibold text-white transition hover:bg-sky-500 disabled:cursor-not-allowed disabled:opacity-50"
                     >
-                      {passwordSaving ? "更新中..." : "更新密码"}
+                      {passwordResetSending ? "发送中..." : "发送修改密码邮件"}
                     </button>
                   </div>
                 </form>
 
                 <form onSubmit={handleEmailUpdate} className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
                   <h2 className="text-xl font-semibold text-slate-900">更换登录邮箱</h2>
-                  <p className="mt-2 text-sm text-slate-600">提交后会由 Supabase 发起邮箱确认流程，请到新邮箱完成验证。</p>
+                  <p className="mt-2 text-sm leading-6 text-slate-600">提交后，我们会向新邮箱发送一封确认邮件。按邮件里的提示完成操作后，新的登录邮箱才会正式生效。</p>
                   <label className="mt-5 block text-sm font-medium text-slate-700">
                     新邮箱
                     <input
@@ -535,6 +594,7 @@ export default function AccountPage() {
                   </div>
                 </form>
               </section>
+              </div>
             </div>
           ) : null}
         </div>

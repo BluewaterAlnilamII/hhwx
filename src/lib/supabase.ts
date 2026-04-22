@@ -13,6 +13,8 @@ export interface AuthProfileSummary {
 	emailVerified: boolean;
 }
 
+export type AuthViewMode = "login" | "register" | "forgot-password";
+
 export function isEmailVerified(user: Pick<User, "email_confirmed_at"> | null | undefined): boolean {
 	return Boolean(user?.email_confirmed_at);
 }
@@ -37,6 +39,14 @@ export function normalizeInternalPath(path: string | null | undefined, fallback 
 	return path;
 }
 
+export function normalizeAuthMode(mode: string | null | undefined, fallback: AuthViewMode = "login"): AuthViewMode {
+	if (mode === "register" || mode === "forgot-password" || mode === "login") {
+		return mode;
+	}
+
+	return fallback;
+}
+
 export function getSiteUrl(): string {
 	const configured = process.env.NEXT_PUBLIC_SITE_URL?.trim() || process.env.NEXT_PUBLIC_VERCEL_URL?.trim();
 	if (configured) {
@@ -56,6 +66,16 @@ export function buildAuthCallbackUrl(nextPath = "/account"): string {
 	const safeNextPath = normalizeInternalPath(nextPath, "/account");
 	url.searchParams.set("next", safeNextPath);
 	return url.toString();
+}
+
+export function buildAuthPath(mode: AuthViewMode = "login", nextPath = "/account"): string {
+	const safeNextPath = normalizeInternalPath(nextPath, "/account");
+	const params = new URLSearchParams({
+		mode,
+		next: safeNextPath,
+	});
+
+	return `/auth?${params.toString()}`;
 }
 
 async function readUsername(userId: string, fallbackUsername: string | null = null): Promise<string> {
