@@ -3,7 +3,10 @@
 import { useEffect, useRef, useState } from "react";
 import TurnstileChallenge, { type TurnstileChallengeHandle } from "@/components/TurnstileChallenge";
 import AccountShell, { AccountErrorState, AccountLoadingState, AccountSignInState } from "../AccountShell";
-import { buildAuthCallbackUrl, supabase } from "@/lib/supabase";
+import { getApiErrorMessage } from "@/lib/api-contracts";
+import { formatAuthErrorMessage } from "@/lib/auth-error";
+import { createNativeValidationProps } from "@/lib/native-validation";
+import { buildAuthCallbackUrl, getSafeSession } from "@/lib/supabase";
 import { isTurnstileEnabled } from "@/lib/turnstile";
 import { useAccountProfile } from "../useAccountProfile";
 
@@ -23,13 +26,18 @@ export default function AccountEmailPage() {
   const [emailMessage, setEmailMessage] = useState("");
   const [resendingVerification, setResendingVerification] = useState(false);
   const [verificationMessage, setVerificationMessage] = useState("");
-  const captchaRef = useRef<TurnstileChallengeHandle | null>(null);
+  const emailCaptchaRef = useRef<TurnstileChallengeHandle | null>(null);
+  const resendCaptchaRef = useRef<TurnstileChallengeHandle | null>(null);
+  const emailValidationProps = createNativeValidationProps({ label: "邮箱", invalidTypeMessage: "请输入有效的邮箱地址。" });
 
   useEffect(() => {
     setNewEmail(profile?.email ?? "");
   }, [profile?.email]);
 
-  const requireCaptchaToken = (setMessage: (message: string) => void) => {
+  const requireCaptchaToken = (
+    captchaRef: React.MutableRefObject<TurnstileChallengeHandle | null>,
+    setMessage: (message: string) => void,
+  ) => {
     if (!isTurnstileEnabled()) {
       return undefined;
     }
@@ -44,7 +52,8 @@ export default function AccountEmailPage() {
   };
 
   const resetCaptcha = () => {
-    captchaRef.current?.reset();
+    emailCaptchaRef.current?.reset();
+    resendCaptchaRef.current?.reset();
   };
 
   const handleEmailUpdate = async (event: React.FormEvent) => {
@@ -52,18 +61,37 @@ export default function AccountEmailPage() {
     setEmailSaving(true);
     setEmailMessage("");
 
-    const captchaToken = requireCaptchaToken(setEmailMessage);
+    const captchaToken = requireCaptchaToken(emailCaptchaRef, setEmailMessage);
     if (isTurnstileEnabled() && !captchaToken) {
       setEmailSaving(false);
       return;
     }
 
     try {
-      const { error } = await supabase.auth.updateUser({ email: newEmail.trim() }, {
-        emailRedirectTo: buildAuthCallbackUrl("/account/email"),
+      const session = await getSafeSession();
+      if (!session?.access_token || !session.refresh_token) {
+        setEmailMessage("登录状态已失效，请重新登录后再试。");
+        return;
+      }
+
+      const response = await fetch("/api/auth/email", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({
+          action: "update",
+          newEmail: newEmail.trim(),
+          captchaToken,
+          redirectTo: buildAuthCallbackUrl("/account/email"),
+          refreshToken: session.refresh_token,
+        }),
       });
-      if (error) {
-        setEmailMessage(error.message);
+      const payload = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        setEmailMessage(getApiErrorMessage(payload) || `提交更换邮箱失败（HTTP ${response.status}）`);
         return;
       }
 
@@ -71,7 +99,7 @@ export default function AccountEmailPage() {
       await loadProfile();
       setEmailMessage("确认邮件已发送到新邮箱。请按邮件提示完成更换。");
     } catch (error) {
-      setEmailMessage(error instanceof Error ? error.message : "提交更换邮箱失败");
+      setEmailMessage(formatAuthErrorMessage(error, "提交更换邮箱失败", "email-update"));
     } finally {
       setEmailSaving(false);
       resetCaptcha();
@@ -82,36 +110,41 @@ export default function AccountEmailPage() {
     setVerificationMessage("");
     setResendingVerification(true);
 
-    const captchaToken = requireCaptchaToken(setVerificationMessage);
+    const captchaToken = requireCaptchaToken(resendCaptchaRef, setVerificationMessage);
     if (isTurnstileEnabled() && !captchaToken) {
       setResendingVerification(false);
       return;
     }
 
     try {
-      const currentEmail = (profile?.email ?? userEmail ?? "").trim();
-      if (!currentEmail) {
-        setVerificationMessage("当前账号缺少邮箱信息，无法发送验证邮件。");
+      const session = await getSafeSession();
+      if (!session?.access_token) {
+        setVerificationMessage("登录状态已失效，请重新登录后再试。");
         return;
       }
 
-      const { error } = await supabase.auth.resend({
-        type: "signup",
-        email: currentEmail,
-        options: {
-          captchaToken,
-          emailRedirectTo: buildAuthCallbackUrl("/account/email"),
+      const response = await fetch("/api/auth/email", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
         },
+        body: JSON.stringify({
+          action: "resend-verification",
+          captchaToken,
+          redirectTo: buildAuthCallbackUrl("/account/email"),
+        }),
       });
+      const payload = await response.json().catch(() => ({}));
 
-      if (error) {
-        setVerificationMessage(error.message);
+      if (!response.ok) {
+        setVerificationMessage(getApiErrorMessage(payload) || `发送验证邮件失败（HTTP ${response.status}）`);
         return;
       }
 
       setVerificationMessage("验证邮件已发送。请检查收件箱和垃圾邮件箱。");
     } catch (error) {
-      setVerificationMessage(error instanceof Error ? error.message : "发送验证邮件失败");
+      setVerificationMessage(formatAuthErrorMessage(error, "发送验证邮件失败", "email-verify"));
     } finally {
       setResendingVerification(false);
       resetCaptcha();
@@ -121,7 +154,7 @@ export default function AccountEmailPage() {
   return (
     <AccountShell
       title="更换邮箱"
-      description="新邮箱确认后才会生效。若当前邮箱尚未验证，也可以在这里重新发送验证邮件。"
+      description="新邮箱确认后才会生效。"
     >
       {!authReady || loadingProfile ? (
         <AccountLoadingState message="正在读取账号信息..." />
@@ -143,22 +176,23 @@ export default function AccountEmailPage() {
             </div>
           </section>
 
-          {isTurnstileEnabled() && (
-            <TurnstileChallenge
-              ref={captchaRef}
-              action="account-email"
-              title=""
-              description=""
-              variant="inline"
-            />
-          )}
-
           {!profile.emailVerified && (
             <section className="rounded-3xl border border-amber-200 bg-amber-50 p-6 shadow-sm">
               <h2 className="text-xl font-semibold text-amber-900">重新发送验证邮件</h2>
               <p className="mt-2 text-sm leading-6 text-amber-700">
-                若当前邮箱还没有完成验证，可以先重新发送一封验证邮件。
+                当前邮箱还未验证时，可以先重发验证邮件。
               </p>
+              {isTurnstileEnabled() && (
+                <div className="mt-5">
+                  <TurnstileChallenge
+                    ref={resendCaptchaRef}
+                    action="account-email-resend"
+                    title=""
+                    description=""
+                    variant="inline"
+                  />
+                </div>
+              )}
               {verificationMessage && (
                 <div className={`mt-4 text-sm ${verificationMessage.includes("已") ? "text-emerald-600" : "text-red-500"}`}>
                   {verificationMessage}
@@ -169,7 +203,7 @@ export default function AccountEmailPage() {
                   type="button"
                   onClick={handleResendVerificationEmail}
                   disabled={resendingVerification}
-                  className="rounded-full bg-amber-500 px-5 py-2 text-sm font-semibold text-white transition hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="hhwx-accent-button"
                 >
                   {resendingVerification ? "发送中..." : "重新发送验证邮件"}
                 </button>
@@ -180,7 +214,7 @@ export default function AccountEmailPage() {
           <form onSubmit={handleEmailUpdate} className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
             <h2 className="text-xl font-semibold text-slate-900">提交新邮箱</h2>
             <p className="mt-2 text-sm leading-6 text-slate-600">
-              新邮箱确认完成后，才会成为新的登录邮箱。
+              确认完成后，新邮箱会成为新的登录邮箱。
             </p>
 
             <label className="mt-5 block text-sm font-medium text-slate-700">
@@ -189,10 +223,23 @@ export default function AccountEmailPage() {
                 type="email"
                 value={newEmail}
                 onChange={(event) => setNewEmail(event.target.value)}
+                {...emailValidationProps}
                 className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 text-slate-900 outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100"
                 placeholder="输入新的邮箱地址"
               />
             </label>
+
+            {isTurnstileEnabled() && (
+              <div className="mt-5">
+                <TurnstileChallenge
+                  ref={emailCaptchaRef}
+                  action="account-email-update"
+                  title=""
+                  description=""
+                  variant="inline"
+                />
+              </div>
+            )}
 
             {emailMessage && (
               <div className={`mt-4 text-sm ${emailMessage.includes("已") ? "text-emerald-600" : "text-red-500"}`}>
@@ -204,7 +251,7 @@ export default function AccountEmailPage() {
               <button
                 type="submit"
                 disabled={emailSaving || !newEmail.trim()}
-                className="rounded-full bg-slate-900 px-5 py-2 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+                className="hhwx-accent-button"
               >
                 {emailSaving ? "提交中..." : "发送确认邮件"}
               </button>

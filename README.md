@@ -1,36 +1,43 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# HHWX
 
-## Getting Started
+HHWX 是一个基于 Next.js App Router 的前端站点，当前包含以下主要能力：
 
-First, run the development server:
+- 首页黑白棋与角色交互
+- Bandori 国服活动日历
+- Bandori 活动分数追踪器展示
+- 账号中心、邮箱与密码管理
+- 基于 Supabase 的鉴权与服务端 API
+
+## 常用命令
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm run build
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+默认开发地址为 http://localhost:3000 。
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## 目录概览
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```text
+hhwx/
+├── documents/      # 项目文档
+├── public/         # 直接公开的静态资源
+├── res/            # 设计源资源
+├── src/
+│   ├── app/        # App Router 页面、布局和 API 路由
+│   ├── components/ # 通用 React 组件
+│   ├── hooks/      # 自定义 Hooks
+│   ├── lib/        # 服务端与共享业务逻辑
+│   └── store/      # Zustand 状态
+└── package.json    # 脚本与依赖
+```
 
-## Learn More
+更细的结构说明见 documents/layout.md。
 
-To learn more about Next.js, take a look at the following resources:
+## 关键约定
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- 账号与敏感操作的安全校验放在服务端 API 中完成。
+- 全站壳层、页眉和侧边栏由共享组件统一管理。
+- 文档只保留长期有效的信息，不记录 .next、node_modules、tsconfig.tsbuildinfo 这类本地产物。

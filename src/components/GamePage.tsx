@@ -413,7 +413,7 @@ export default function GamePage() {
             : [];
 
     return (
-        <div className="relative z-10 min-h-screen flex flex-col items-center py-6 px-4">
+        <div className="relative z-10 min-h-full flex flex-col items-center px-4 py-4 lg:py-5">
             {/* 分数栏 */}
             <div className="flex items-center gap-6 mb-4">
                 <div className="flex items-center gap-2">

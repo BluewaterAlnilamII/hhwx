@@ -1,13 +1,6 @@
 import type { Metadata } from "next";
-import { Outfit } from "next/font/google";
 import "./globals.css";
-import Toolbar from "@/components/Toolbar";
-
-const outfit = Outfit({
-  variable: "--font-outfit",
-  subsets: ["latin"],
-  weight: ["300", "400", "500", "600", "700", "800"],
-});
+import AppChrome from "@/components/AppChrome";
 
 // Next 的 segment config 必须写成可静态分析的字面量，
 // 这里不能复用外部常量，否则生产构建会直接报 Invalid segment configuration export。
@@ -38,12 +31,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="zh-CN">
-      <body className={`${outfit.variable} min-h-screen bg-[#f8f5ea] font-sans text-slate-900`}>
+      <body className="h-screen overflow-hidden text-slate-900">
         <BackgroundEffects />
-        <div className="relative flex min-h-screen flex-col">
-          <Toolbar />
-          <div className="relative flex-1">{children}</div>
-        </div>
+        <AppChrome>{children}</AppChrome>
       </body>
     </html>
   );

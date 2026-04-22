@@ -2,6 +2,30 @@
 @tailwind components;
 @tailwind utilities;
 
+.hhwx-accent-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  background: linear-gradient(90deg, #ff7a59 0%, #ff9b45 100%);
+  padding: 0.6rem 1.35rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #ffffff;
+  box-shadow: 0 10px 24px rgba(255, 153, 34, 0.28);
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.hhwx-accent-button:hover {
+  opacity: 0.95;
+}
+
+.hhwx-accent-button:disabled,
+.hhwx-accent-button[aria-disabled='true'] {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
 
 :root {
   --bg-yellow: #FFEE22;
@@ -17,7 +41,7 @@
 html,
 body {
   min-height: 100vh;
-  font-family: 'Outfit', sans-serif;
+  font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", "Source Han Sans SC", "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
 body {

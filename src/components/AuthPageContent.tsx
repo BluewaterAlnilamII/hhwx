@@ -3,6 +3,9 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { formatAuthErrorMessage } from "@/lib/auth-error";
+import { getApiErrorMessage, parseApiSuccessData } from "@/lib/api-contracts";
+import { createNativeValidationProps } from "@/lib/native-validation";
 import {
   buildAuthCallbackUrl,
   buildAuthPath,
@@ -12,17 +15,10 @@ import {
   supabase,
   type AuthViewMode,
 } from "@/lib/supabase";
+import { PASSWORD_POLICY_MESSAGE, isPasswordStrongEnough } from "@/lib/password-policy";
 import { isTurnstileEnabled } from "@/lib/turnstile";
 import { useGameStore } from "@/store/useGameStore";
 import TurnstileChallenge, { type TurnstileChallengeHandle } from "./TurnstileChallenge";
-
-function getErrorMessage(error: unknown, fallbackMessage: string): string {
-  if (error instanceof Error && error.message) {
-    return error.message;
-  }
-
-  return fallbackMessage;
-}
 
 function getModeTitle(mode: AuthViewMode): string {
   switch (mode) {
@@ -46,6 +42,20 @@ function getModeDescription(mode: AuthViewMode): string {
   }
 }
 
+interface SignUpResponseData {
+  requiresEmailVerification: boolean;
+  session: {
+    accessToken: string;
+    refreshToken: string;
+  } | null;
+  authSummary: {
+    userId: string;
+    username: string;
+    email: string | null;
+    emailVerified: boolean;
+  } | null;
+}
+
 export default function AuthPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -64,6 +74,10 @@ export default function AuthPageContent() {
   const [loading, setLoading] = useState(false);
   const captchaRef = useRef<TurnstileChallengeHandle | null>(null);
   const shouldShowCaptcha = isTurnstileEnabled() && mode !== "login";
+  const usernameValidationProps = createNativeValidationProps({ label: "用户名" });
+  const emailValidationProps = createNativeValidationProps({ label: "邮箱", invalidTypeMessage: "请输入有效的邮箱地址。" });
+  const passwordValidationProps = createNativeValidationProps({ label: "密码", minLengthMessage: PASSWORD_POLICY_MESSAGE });
+  const confirmPasswordValidationProps = createNativeValidationProps({ label: "确认密码", minLengthMessage: PASSWORD_POLICY_MESSAGE });
 
   const requireCaptchaToken = (): string | undefined => {
     if (!shouldShowCaptcha) {
@@ -150,7 +164,7 @@ export default function AuthPageContent() {
 
       router.replace(nextPath);
     } catch (authError) {
-      setError(getErrorMessage(authError, "登录失败"));
+      setError(formatAuthErrorMessage(authError, "登录失败", "login"));
     } finally {
       setLoading(false);
       resetCaptcha();
@@ -170,8 +184,8 @@ export default function AuthPageContent() {
       return;
     }
 
-    if (password.length < 6) {
-      setError("密码至少需要 6 位");
+    if (!isPasswordStrongEnough(password)) {
+      setError(PASSWORD_POLICY_MESSAGE);
       return;
     }
 
@@ -188,43 +202,48 @@ export default function AuthPageContent() {
     }
 
     try {
-      const { data: existingProfile, error: existingProfileError } = await supabase
-        .from("profiles")
-        .select("id")
-        .eq("username", normalizedUsername)
-        .maybeSingle();
+      const response = await fetch("/api/auth/signup", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          username: normalizedUsername,
+          email: normalizedEmail,
+          password,
+          captchaToken,
+          redirectTo: buildAuthCallbackUrl("/account"),
+        }),
+      });
+      const payload = await response.json().catch(() => ({}));
 
-      if (existingProfileError) {
-        throw new Error(`检查用户名是否可用失败：${existingProfileError.message}`);
-      }
-
-      if (existingProfile) {
-        setError("该用户名已被占用");
+      if (!response.ok) {
+        setError(getApiErrorMessage(payload) || `注册失败（HTTP ${response.status}）`);
         return;
       }
 
-      const { data, error: signUpError } = await supabase.auth.signUp({
-        email: normalizedEmail,
-        password,
-        options: {
-          captchaToken,
-          emailRedirectTo: buildAuthCallbackUrl("/account"),
-          data: { username: normalizedUsername },
-        },
-      });
-
-      if (signUpError) {
-        throw signUpError;
+      const result = parseApiSuccessData<SignUpResponseData>(payload);
+      if (!result) {
+        setError("注册返回格式无效");
+        return;
       }
 
-      if (data.session && data.user?.email_confirmed_at) {
-        const summary = await readAuthProfileSummary(data.session);
-        if (summary) {
+      if (result.session && result.authSummary) {
+        const { error: setSessionError } = await supabase.auth.setSession({
+          access_token: result.session.accessToken,
+          refresh_token: result.session.refreshToken,
+        });
+
+        if (setSessionError) {
+          throw setSessionError;
+        }
+
+        if (result.authSummary.emailVerified) {
           setAuth({
-            userId: summary.userId,
-            username: summary.username,
-            userEmail: summary.email,
-            emailVerified: summary.emailVerified,
+            userId: result.authSummary.userId,
+            username: result.authSummary.username,
+            userEmail: result.authSummary.email,
+            emailVerified: result.authSummary.emailVerified,
           });
 
           router.replace(nextPath);
@@ -238,12 +257,7 @@ export default function AuthPageContent() {
       router.replace(buildAuthPath("login", nextPath));
       setNotice("注册成功，请先前往邮箱完成验证，然后再登录。");
     } catch (authError) {
-      const message = getErrorMessage(authError, "注册失败");
-      if (message.includes("Database error saving new user")) {
-        setError("注册失败，请更换用户名后重试。");
-      } else {
-        setError(message);
-      }
+      setError(formatAuthErrorMessage(authError, "注册失败", "register"));
     } finally {
       setLoading(false);
       resetCaptcha();
@@ -269,18 +283,27 @@ export default function AuthPageContent() {
     }
 
     try {
-      const { error: resetError } = await supabase.auth.resetPasswordForEmail(normalizedEmail, {
-        captchaToken,
-        redirectTo: buildAuthCallbackUrl("/account"),
+      const response = await fetch("/api/auth/password-reset", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          email: normalizedEmail,
+          captchaToken,
+          redirectTo: buildAuthCallbackUrl("/account"),
+        }),
       });
+      const payload = await response.json().catch(() => ({}));
 
-      if (resetError) {
-        throw resetError;
+      if (!response.ok) {
+        setError(getApiErrorMessage(payload) || `发送邮件失败（HTTP ${response.status}）`);
+        return;
       }
 
       setNotice("如果该邮箱已绑定账号，我们会向它发送重置链接。");
     } catch (authError) {
-      setError(getErrorMessage(authError, "发送邮件失败"));
+      setError(formatAuthErrorMessage(authError, "发送邮件失败", "forgot-password"));
     } finally {
       setLoading(false);
       resetCaptcha();
@@ -288,7 +311,7 @@ export default function AuthPageContent() {
   };
 
   return (
-    <main className="relative min-h-screen px-4 py-10 sm:px-6 lg:px-8">
+    <main className="relative min-h-full px-4 py-10 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-xl">
         <section className="rounded-[32px] border border-white/60 bg-white/85 p-8 shadow-[0_24px_80px_rgba(15,23,42,0.12)] backdrop-blur-xl">
           <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-200 pb-5">
@@ -355,6 +378,7 @@ export default function AuthPageContent() {
                     type="text"
                     value={usernameInput}
                     onChange={(event) => setUsernameInput(event.target.value)}
+                    {...usernameValidationProps}
                     className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 text-slate-900 outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100"
                     placeholder="输入你的公开用户名"
                     required
@@ -368,6 +392,7 @@ export default function AuthPageContent() {
                   type="email"
                   value={email}
                   onChange={(event) => setEmail(event.target.value)}
+                  {...emailValidationProps}
                   className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 text-slate-900 outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100"
                   placeholder="输入登录邮箱"
                   required
@@ -381,11 +406,17 @@ export default function AuthPageContent() {
                     type="password"
                     value={password}
                     onChange={(event) => setPassword(event.target.value)}
+                    {...passwordValidationProps}
                     className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 text-slate-900 outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100"
                     placeholder={mode === "register" ? "设置登录密码" : "输入登录密码"}
-                    minLength={6}
+                    minLength={8}
                     required
                   />
+                  {mode === "register" && (
+                    <span className="mt-2 block text-xs leading-5 text-slate-500">
+                      {PASSWORD_POLICY_MESSAGE}
+                    </span>
+                  )}
                 </label>
               )}
 
@@ -396,9 +427,10 @@ export default function AuthPageContent() {
                     type="password"
                     value={confirmPassword}
                     onChange={(event) => setConfirmPassword(event.target.value)}
+                    {...confirmPasswordValidationProps}
                     className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 text-slate-900 outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100"
                     placeholder="再次输入密码"
-                    minLength={6}
+                    minLength={8}
                     required
                   />
                 </label>
@@ -425,7 +457,7 @@ export default function AuthPageContent() {
                 <button
                   type="submit"
                   disabled={loading}
-                  className="rounded-full bg-gradient-to-r from-sky-500 via-blue-500 to-indigo-500 px-6 py-2.5 text-sm font-semibold text-white transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="hhwx-accent-button"
                 >
                   {loading
                     ? "处理中..."

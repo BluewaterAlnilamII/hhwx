@@ -19,7 +19,7 @@ interface TurnstileChallengeProps {
 }
 
 const baseClassName = "rounded-3xl border border-slate-200 bg-slate-50 p-4";
-const inlineClassName = "space-y-3";
+const inlineClassName = "inline-flex flex-col items-start gap-2";
 
 const TurnstileChallenge = forwardRef<TurnstileChallengeHandle, TurnstileChallengeProps>(function TurnstileChallenge(
   {
@@ -44,6 +44,9 @@ const TurnstileChallenge = forwardRef<TurnstileChallengeHandle, TurnstileChallen
   }), []);
 
   const containerClassName = `${variant === "inline" ? inlineClassName : baseClassName} ${className}`.trim();
+  const widgetClassName = variant === "inline"
+    ? "inline-block overflow-visible rounded-none border-0 bg-transparent p-0"
+    : `overflow-hidden rounded-2xl border border-slate-200 bg-white p-3 ${title || description ? "mt-4" : ""}`.trim();
 
   if (!TURNSTILE_SITE_KEY) {
     return (
@@ -60,7 +63,7 @@ const TurnstileChallenge = forwardRef<TurnstileChallengeHandle, TurnstileChallen
     <div className={containerClassName}>
       {title && <div className="text-sm font-semibold text-slate-900">{title}</div>}
       {description && <p className="text-sm leading-6 text-slate-600">{description}</p>}
-      <div className={`overflow-hidden rounded-2xl border border-slate-200 bg-white p-3 ${variant === "card" && (title || description) ? "mt-4" : ""}`.trim()}>
+      <div className={widgetClassName}>
         <Turnstile
           ref={widgetRef}
           siteKey={TURNSTILE_SITE_KEY}

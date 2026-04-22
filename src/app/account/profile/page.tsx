@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import AccountShell, { AccountErrorState, AccountLoadingState, AccountSignInState } from "../AccountShell";
 import { type AccountProfile, getAccessToken, useAccountProfile } from "../useAccountProfile";
 import { getApiErrorMessage, parseApiSuccessData } from "@/lib/api-contracts";
+import { createNativeValidationProps } from "@/lib/native-validation";
 
 export default function AccountProfilePage() {
   const {
@@ -19,6 +20,7 @@ export default function AccountProfilePage() {
   const [usernameInput, setUsernameInput] = useState("");
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
+  const usernameValidationProps = createNativeValidationProps({ label: "用户名" });
 
   useEffect(() => {
     setUsernameInput(profile?.username ?? "");
@@ -75,7 +77,7 @@ export default function AccountProfilePage() {
   return (
     <AccountShell
       title="编辑资料"
-      description="更新公开显示的用户名。修改后会同步应用到账号相关展示区域。"
+      description="修改公开显示的用户名。"
     >
       {!authReady || loadingProfile ? (
         <AccountLoadingState message="正在读取资料..." />
@@ -85,7 +87,7 @@ export default function AccountProfilePage() {
         <AccountErrorState message={profileError} />
       ) : profile ? (
         <div className="space-y-6">
-          <div className="rounded-3xl border border-slate-200 bg-slate-950 p-6 text-white shadow-lg">
+          <div className="rounded-3xl border border-slate-200 bg-[#006699] p-6 text-white shadow-lg">
             <div className="flex flex-wrap items-center gap-4">
               <div className="flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-sky-400 to-indigo-500 text-xl font-bold">
                 {(profile.username || "U")[0].toUpperCase()}
@@ -100,7 +102,7 @@ export default function AccountProfilePage() {
           <form onSubmit={handleSubmit} className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
             <h2 className="text-xl font-semibold text-slate-900">公开用户名</h2>
             <p className="mt-2 text-sm leading-6 text-slate-600">
-              这个名称会显示在账号相关页面，以及未来需要展示用户名的区域。
+              这个名称会显示在账号相关页面和其他展示用户名的地方。
             </p>
 
             <label className="mt-5 block text-sm font-medium text-slate-700">
@@ -109,6 +111,7 @@ export default function AccountProfilePage() {
                 type="text"
                 value={usernameInput}
                 onChange={(event) => setUsernameInput(event.target.value)}
+                {...usernameValidationProps}
                 className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 text-slate-900 outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100"
                 placeholder="输入新的用户名"
               />
@@ -124,7 +127,7 @@ export default function AccountProfilePage() {
               <button
                 type="submit"
                 disabled={saving || !usernameInput.trim()}
-                className="rounded-full bg-slate-900 px-5 py-2 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+                className="hhwx-accent-button"
               >
                 {saving ? "保存中..." : "保存资料"}
               </button>

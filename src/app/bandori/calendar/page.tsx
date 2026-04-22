@@ -386,8 +386,8 @@ export default function CalendarPage() {
   }, [icsUrl]);
 
   return (
-    <div className="relative z-10 min-h-screen px-4 py-8 md:px-6 lg:px-8">
-      <div className="max-w-5xl mx-auto">
+    <div className="relative z-10 min-h-full">
+      <div className="mx-auto max-w-5xl">
         {/* 页面标题 */}
         <div className="mb-8 pt-4 md:pt-8">
           <div className="px-2 py-4 text-center md:px-4">

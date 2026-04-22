@@ -10,7 +10,7 @@ export default function AccountPage() {
   return (
     <AccountShell
       title="账号中心"
-      description="查看账号状态，并进入资料、密码和邮箱设置。"
+      description="查看账号状态，处理资料、密码和邮箱。"
       backHref="/"
       backLabel="返回首页"
     >
@@ -22,7 +22,7 @@ export default function AccountPage() {
         <AccountErrorState message={profileError} />
       ) : profile ? (
         <div className="space-y-6">
-          <section className="rounded-3xl bg-slate-950 p-6 text-white shadow-lg">
+          <section className="rounded-3xl bg-[#006699] p-6 text-white shadow-lg">
             <div className="flex flex-wrap items-center gap-4">
               <div className="flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-sky-400 to-indigo-500 text-xl font-bold">
                 {(profile.username || "U")[0].toUpperCase()}
@@ -38,7 +38,7 @@ export default function AccountPage() {
 
             {!profile.emailVerified && (
               <div className="mt-5 rounded-2xl bg-amber-400/15 px-4 py-3 text-sm leading-6 text-amber-100">
-                邮箱尚未验证。完成验证后，账号功能才会全部开放。
+                邮箱尚未验证。完成验证后可使用全部账号功能。
               </div>
             )}
           </section>
@@ -50,7 +50,7 @@ export default function AccountPage() {
             >
               <div>
                 <h2 className="text-xl font-semibold text-slate-900">编辑资料</h2>
-                <p className="mt-2 text-sm leading-6 text-slate-600">更新公开显示的用户名，保持账号信息简洁一致。</p>
+                <p className="mt-2 text-sm leading-6 text-slate-600">修改用户名等公开信息。</p>
               </div>
               <span className="shrink-0 rounded-full border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 transition group-hover:border-sky-200 group-hover:text-sky-600">
                 进入
@@ -63,7 +63,7 @@ export default function AccountPage() {
             >
               <div>
                 <h2 className="text-xl font-semibold text-slate-900">修改密码</h2>
-                <p className="mt-2 text-sm leading-6 text-slate-600">通过当前邮箱接收修改链接，再完成新密码设置。</p>
+                <p className="mt-2 text-sm leading-6 text-slate-600">向当前邮箱发送改密链接。</p>
               </div>
               <span className="shrink-0 rounded-full border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 transition group-hover:border-sky-200 group-hover:text-sky-600">
                 进入
@@ -76,7 +76,7 @@ export default function AccountPage() {
             >
               <div>
                 <h2 className="text-xl font-semibold text-slate-900">更换邮箱</h2>
-                <p className="mt-2 text-sm leading-6 text-slate-600">查看邮箱验证状态，并把登录邮箱更换为新的地址。</p>
+                <p className="mt-2 text-sm leading-6 text-slate-600">检查验证状态并更换登录邮箱。</p>
               </div>
               <span className="shrink-0 rounded-full border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 transition group-hover:border-sky-200 group-hover:text-sky-600">
                 进入

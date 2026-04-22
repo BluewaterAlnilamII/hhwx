@@ -21,7 +21,7 @@ export default function AccountShell({
   children,
 }: AccountShellProps) {
   return (
-    <main className="relative min-h-screen px-4 py-10 sm:px-6 lg:px-8">
+    <main className="relative min-h-full px-4 py-10 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-4xl">
         <div className="rounded-[32px] border border-white/50 bg-white/80 p-8 shadow-[0_20px_80px_rgba(15,23,42,0.12)] backdrop-blur-xl">
           <div className="flex flex-col gap-3 border-b border-slate-200 pb-6 sm:flex-row sm:items-end sm:justify-between">
@@ -61,7 +61,7 @@ export function AccountSignInState({ nextPath }: { nextPath: string }) {
       <div className="mt-5">
         <Link
           href={buildAuthPath("login", nextPath)}
-          className="inline-flex items-center justify-center rounded-full bg-slate-900 px-5 py-2 text-sm font-semibold text-white transition hover:bg-slate-800"
+          className="hhwx-accent-button"
         >
           前往登录页
         </Link>

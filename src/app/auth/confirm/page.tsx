@@ -4,6 +4,8 @@ import Link from "next/link";
 import { type EmailOtpType } from "@supabase/supabase-js";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { formatAuthErrorMessage } from "@/lib/auth-error";
+import { createNativeValidationProps } from "@/lib/native-validation";
 import {
   buildAuthPath,
   getSafeSession,
@@ -11,6 +13,7 @@ import {
   readAuthProfileSummary,
   supabase,
 } from "@/lib/supabase";
+import { PASSWORD_POLICY_MESSAGE, isPasswordStrongEnough } from "@/lib/password-policy";
 import { useGameStore } from "@/store/useGameStore";
 
 type CallbackStatus = "verifying" | "success" | "error" | "recovery";
@@ -60,7 +63,7 @@ function getStatusHeading(status: CallbackStatus): string {
 
 function AuthConfirmPageFallback() {
   return (
-    <main className="relative min-h-screen px-4 py-16 sm:px-6 lg:px-8">
+    <main className="relative min-h-full px-4 py-16 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-xl rounded-[32px] border border-white/50 bg-white/80 p-8 shadow-[0_20px_80px_rgba(15,23,42,0.14)] backdrop-blur-xl">
         <div className="mb-6 text-center">
           <p className="text-sm font-semibold uppercase tracking-[0.3em] text-sky-500">Account</p>
@@ -87,6 +90,8 @@ function AuthConfirmPageContent() {
   const [passwordMessage, setPasswordMessage] = useState("");
   const [savingPassword, setSavingPassword] = useState(false);
   const hasHandledRef = useRef(false);
+  const passwordValidationProps = createNativeValidationProps({ label: "新密码", minLengthMessage: PASSWORD_POLICY_MESSAGE });
+  const confirmPasswordValidationProps = createNativeValidationProps({ label: "确认新密码", minLengthMessage: PASSWORD_POLICY_MESSAGE });
 
   const nextPath = useMemo(() => {
     return normalizeInternalPath(searchParams.get("next"), "/account");
@@ -237,7 +242,7 @@ function AuthConfirmPageContent() {
 
         if (active) {
           setStatus("error");
-          setMessage(getErrorMessage(error, "认证失败，请重新请求邮件。"));
+          setMessage(formatAuthErrorMessage(error, "认证失败，请重新请求邮件。"));
         }
       }
     };
@@ -253,8 +258,8 @@ function AuthConfirmPageContent() {
     event.preventDefault();
     setPasswordMessage("");
 
-    if (newPassword.length < 6) {
-      setPasswordMessage("新密码至少需要 6 位。");
+    if (!isPasswordStrongEnough(newPassword)) {
+      setPasswordMessage(PASSWORD_POLICY_MESSAGE);
       return;
     }
 
@@ -267,7 +272,7 @@ function AuthConfirmPageContent() {
     try {
       const { error } = await supabase.auth.updateUser({ password: newPassword });
       if (error) {
-        setPasswordMessage(error.message);
+        setPasswordMessage(formatAuthErrorMessage(error, "设置新密码失败", "password-reset"));
         return;
       }
 
@@ -283,7 +288,7 @@ function AuthConfirmPageContent() {
   };
 
   return (
-    <main className="relative min-h-screen px-4 py-16 sm:px-6 lg:px-8">
+    <main className="relative min-h-full px-4 py-16 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-xl rounded-[32px] border border-white/50 bg-white/80 p-8 shadow-[0_20px_80px_rgba(15,23,42,0.14)] backdrop-blur-xl">
         <div className="mb-6 text-center">
           <p className="text-sm font-semibold uppercase tracking-[0.3em] text-sky-500">Auth Callback</p>
@@ -328,7 +333,7 @@ function AuthConfirmPageContent() {
             <button
               type="button"
               onClick={() => router.replace(nextPath)}
-              className="rounded-full bg-slate-900 px-5 py-2 text-sm font-semibold text-white transition hover:bg-slate-800"
+              className="hhwx-accent-button"
             >
               立即继续
             </button>
@@ -346,10 +351,14 @@ function AuthConfirmPageContent() {
                 type="password"
                 value={newPassword}
                 onChange={(event) => setNewPassword(event.target.value)}
-                minLength={6}
+                {...passwordValidationProps}
+                minLength={8}
                 className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 text-slate-900 outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100"
                 placeholder="输入新密码"
               />
+              <span className="mt-2 block text-xs leading-5 text-slate-500">
+                {PASSWORD_POLICY_MESSAGE}
+              </span>
             </label>
             <label className="block text-sm font-medium text-slate-700">
               确认新密码
@@ -357,7 +366,8 @@ function AuthConfirmPageContent() {
                 type="password"
                 value={confirmPassword}
                 onChange={(event) => setConfirmPassword(event.target.value)}
-                minLength={6}
+                {...confirmPasswordValidationProps}
+                minLength={8}
                 className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 text-slate-900 outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100"
                 placeholder="再次输入新密码"
               />
@@ -375,7 +385,7 @@ function AuthConfirmPageContent() {
               <button
                 type="submit"
                 disabled={savingPassword}
-                className="rounded-full bg-sky-600 px-5 py-2 text-sm font-semibold text-white transition hover:bg-sky-500 disabled:cursor-not-allowed disabled:opacity-50"
+                className="hhwx-accent-button"
               >
                 {savingPassword ? "保存中..." : "设置新密码"}
               </button>

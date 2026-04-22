@@ -680,8 +680,8 @@ export default function EventTrackerPage() {
 
   // ===== 渲染 =====
   return (
-    <div className="min-h-screen text-gray-800 dark:text-gray-100 p-2 sm:p-6 lg:p-10 font-sans relative z-10">
-      <div className="max-w-5xl mx-auto space-y-4 lg:space-y-8 relative z-10">
+    <div className="relative z-10 min-h-full font-sans text-gray-800 dark:text-gray-100">
+      <div className="relative z-10 mx-auto max-w-5xl space-y-4 lg:space-y-8">
 
         {/* ========== 页头：活动名称、切换器、活动横幅 ========== */}
         <div className="relative z-20 flex flex-col gap-6 rounded-3xl border border-gray-100 bg-white p-4 shadow-xl shadow-blue-500/5 dark:border-gray-800 dark:bg-[#131A2B] dark:shadow-blue-500/10 sm:p-8 md:flex-row md:items-center md:justify-between md:gap-8">
