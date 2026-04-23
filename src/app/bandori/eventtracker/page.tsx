@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useRef, useMemo, useCallback, useLayoutEffect } from "react";
 import { format } from "date-fns";
-import Image from "next/image";
 import {
   LineChart,
   Line,
@@ -21,7 +20,7 @@ import * as Dialog from "@radix-ui/react-dialog";
 import { useCachedFetch } from "@/hooks/useCachedFetch";
 import { parseApiSuccessData } from "@/lib/api-contracts";
 import {
-  buildBandoriEventBannerProxyPath,
+  buildBandoriEventBannerPublicUrl,
   resolveBandoriEventBannerBundleName,
 } from "@/lib/bandori-asset-proxy";
 import type { TrackerDotProps, TrackerMouseState, TrackerTooltipPayloadEntry, TrackingMode } from "./types";
@@ -397,7 +396,7 @@ export default function EventTrackerPage() {
   const bannerPath = eventMeta?.name.cn?.trim() ? "cn" : "jp";
   const bannerAssetSegment = eventMeta ? resolveBandoriEventBannerBundleName(eventMeta.asset) : null;
   const bannerUrl = bannerAssetSegment
-    ? buildBandoriEventBannerProxyPath(bannerPath, bannerAssetSegment)
+    ? buildBandoriEventBannerPublicUrl(bannerPath, bannerAssetSegment)
     : "";
 
   const { domainStart, domainEnd, cutoffEnd, midnights } = useChartDomain(trackingMode, startDate, endDate);
@@ -809,13 +808,15 @@ export default function EventTrackerPage() {
           <div className="flex w-full flex-none justify-end md:w-[420px]">
             <div className="relative aspect-[3/1] w-full max-w-[420px] overflow-hidden rounded-2xl shadow-lg ring-1 ring-black/5">
               {bannerUrl ? (
-                <Image
+                // Event banner 已迁移到外部 CDN，这里刻意直连资源 URL，避免重新进入 Next Image 优化层。
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
                   src={bannerUrl}
                   alt="活动横幅"
-                  fill
-                  priority
-                  sizes="(max-width: 768px) calc(100vw - 2rem), 420px"
-                  className="object-cover transition-transform duration-500 hover:scale-105"
+                  loading="eager"
+                  fetchPriority="high"
+                  decoding="async"
+                  className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 hover:scale-105"
                 />
               ) : (
                 <div className="absolute inset-0 animate-pulse bg-gradient-to-br from-gray-100 via-gray-50 to-gray-200 dark:from-gray-800 dark:via-gray-900 dark:to-gray-800" />

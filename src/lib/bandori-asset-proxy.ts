@@ -1,10 +1,28 @@
 export type BandoriAssetRegion = "jp" | "cn";
 
 const BESTDORI_ASSET_ORIGIN = "https://bestdori.com/assets";
+const BANDORI_ASSET_PUBLIC_PATH_PREFIX = "/bandori/assets";
 const SAFE_ASSET_SEGMENT_PATTERN = /^[A-Za-z0-9_-]+$/;
 
 function normalizeBandoriAssetSegment(value: string): string {
   return value.replace(/\.png$/i, "").trim();
+}
+
+function normalizeBandoriAssetBaseUrl(value: string | null | undefined): string | null {
+  const trimmedValue = value?.trim();
+  if (!trimmedValue) {
+    return null;
+  }
+
+  return trimmedValue.replace(/\/+$/, "");
+}
+
+function encodeBandoriAssetKeyPath(assetKey: string): string {
+  return assetKey
+    .split("/")
+    .filter(Boolean)
+    .map((segment) => encodeURIComponent(segment))
+    .join("/");
 }
 
 // 为什么这里要严格限制 path segment：
@@ -38,11 +56,36 @@ export function resolveBandoriEventBannerBundleName(asset: {
   return fallbackBundleName || null;
 }
 
+export function buildBandoriEventBannerAssetKey(region: BandoriAssetRegion, bundleName: string): string {
+  const normalizedBundleName = normalizeBandoriAssetSegment(bundleName);
+  return `${region}/event/${normalizedBundleName}/images_rip/banner.png`;
+}
+
+export function buildBandoriAssetCdnUrl(assetKey: string, baseUrl?: string | null): string | null {
+  const normalizedBaseUrl = normalizeBandoriAssetBaseUrl(
+    baseUrl ?? process.env.NEXT_PUBLIC_BANDORI_ASSET_CDN_BASE_URL,
+  );
+  if (!normalizedBaseUrl) {
+    return null;
+  }
+
+  return `${normalizedBaseUrl}${BANDORI_ASSET_PUBLIC_PATH_PREFIX}/${encodeBandoriAssetKeyPath(assetKey)}`;
+}
+
 export function buildBandoriEventBannerProxyPath(region: BandoriAssetRegion, bundleName: string): string {
   const normalizedBundleName = encodeURIComponent(normalizeBandoriAssetSegment(bundleName));
   // 代理路径显式保留 banner.png 后缀，
   // 这样 URL 语义会更接近 Bestdori 原始资源结构，也更方便排查缓存与资源来源问题。
   return `/api/bandori/assets/${region}/event/${normalizedBundleName}/images_rip/banner.png`;
+}
+
+export function buildBandoriEventBannerPublicUrl(region: BandoriAssetRegion, bundleName: string): string {
+  if (extractBandoriEventIdFromLegacyBannerBundleName(bundleName) !== null) {
+    return buildBandoriEventBannerProxyPath(region, bundleName);
+  }
+
+  const assetKey = buildBandoriEventBannerAssetKey(region, bundleName);
+  return buildBandoriAssetCdnUrl(assetKey) ?? buildBandoriEventBannerProxyPath(region, bundleName);
 }
 
 export function buildBestdoriEventBannerOriginUrl(region: BandoriAssetRegion, bundleName: string): string {
