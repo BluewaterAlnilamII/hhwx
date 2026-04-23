@@ -5,14 +5,15 @@
 当前这套配置的目标是让 Bandori 活动横幅按下面这条链路工作：
 
 - 浏览器公开 URL：`https://cdn.hhwx.org/bandori/assets/{region}/event/{assetBundleName}/images_rip/banner.png`
-- R2 对象 key：`{region}/event/{assetBundleName}/images_rip/banner.png`
+- R2 对象 key：`bandori/assets/{region}/event/{assetBundleName}/images_rip/banner.png`
 - 资源预抓取命令：`python tracker_job.py --test-sync-event-banners`
 
 注意：
 
 - 存储桶名称现在是 `cdn`
 - 公开 URL 前缀仍然保持 `/bandori/assets/`
-- 所以这次改动只影响存储桶配置与环境变量，不影响前端 URL 契约
+- 现在桶内对象 key 与公开 URL path 保持一致，不再额外依赖 URL Rewrite
+- tracker 会同时归档 canonical event banner 与 legacy `banner_eventXXX` alias
 
 ## 1. HHWX Web 应用
 
@@ -107,9 +108,16 @@ AWS_SECRET_ACCESS_KEY=your_r2_secret_access_key_here
 ### 存储桶
 
 - 存储桶名称：`cdn`
-- 桶内对象 key 继续只保存 canonical 形式，例如：
-  - `cn/event/ranmoca_note/images_rip/banner.png`
-  - `jp/event/ranmoca_note/images_rip/banner.png`
+- 桶内对象 key 现在直接保存公开前缀，例如：
+  - `bandori/assets/cn/event/ranmoca_note/images_rip/banner.png`
+  - `bandori/assets/jp/event/ranmoca_note/images_rip/banner.png`
+  - `bandori/assets/cn/event/banner_event13/images_rip/banner.png`
+
+说明：
+
+- canonical 路径和 legacy alias 都存进同一个存储桶
+- 这样线上访问和桶内对象路径保持一致，排查时不需要再做路径换算
+- 如果你之前已经把对象同步到桶根目录下的 `cn/...`、`jp/...`，现在重新跑一次同步任务即可把新前缀路径补齐
 
 ### S3 API 凭据
 
@@ -137,68 +145,40 @@ AWS_SECRET_ACCESS_KEY=your_r2_secret_access_key_here
 
 ### URL Rewrite 规则
 
-在 `hhwx.org` 这个 Cloudflare Zone 里创建一条 Transform Rules > URL Rewrite 规则：
+现在不再需要 Cloudflare Transform Rules > URL Rewrite。
 
-- 规则名：`bandori-assets-prefix-to-r2-key`
-- 匹配表达式：
+原因：
 
-```text
-http.host eq "cdn.hhwx.org" and starts_with(http.request.uri.path, "/bandori/assets/")
-```
+- R2 对象 key 已经直接带上 `/bandori/assets/` 前缀
+- 浏览器访问路径与桶内对象 key 已经一一对应
+- 再保留旧的 rewrite，会把 `/bandori/assets/...` 错误改写回桶根目录下的 `/{region}/...`
 
-- Path rewrite expression：
+结论：
 
-```text
-wildcard_replace(http.request.uri.path, "/bandori/assets/*", "/${1}")
-```
+- 如果你之前加过 `bandori-assets-prefix-to-r2-key` 这条 URL Rewrite，请删除或禁用它
+- 当前生产方案只需要 `cdn.hhwx.org` 绑定到 `cdn` 存储桶，不需要再做 path rewrite
 
-这条规则的作用是：
+### 关于是否需要禁止“原始 key”访问
 
-- 浏览器继续访问 `/bandori/assets/...`
-- Cloudflare 在回源到 R2 前把它改写成 `/{key}`
-- 因此即使桶名从 `bandori` 改成了 `cdn`，公开 URL 也不需要变化
-
-### 按你截图里的表单怎么填
-
-如果你现在打开的就是截图这个界面，那就按下面逐栏填写：
-
-1. 规则名称
+这里的“原始 key”如果指的是直接访问：
 
 ```text
-bandori-assets-prefix-to-r2-key
+https://cdn.hhwx.org/cn/event/...
 ```
 
-2. 如果传入请求匹配...
+它本身不属于安全问题，只要你放在桶里的本来就是打算公开的静态图片。
 
-- 选择：`自定义筛选表达式`
+真正的影响主要有两个：
 
-3. 当传入请求匹配时...
+- 会出现两套 URL，导致缓存和排查口径不一致
+- 会让外部访问契约变得不够稳定
 
-```text
-http.host eq "cdn.hhwx.org" and starts_with(http.request.uri.path, "/bandori/assets/")
-```
+所以当前更推荐的做法是：
 
-4. 则 > 路径
+- 以后只写入 `bandori/assets/...` 这套对象 key
+- 不额外为“桶根目录下的原始 key”补新对象
 
-- 选择：`重写到...`
-- 把左侧下拉框从 `Static` 改成 `Dynamic`
-- 右侧输入框填写：
-
-```text
-wildcard_replace(http.request.uri.path, "/bandori/assets/*", "/${1}")
-```
-
-5. 则 > 查询
-
-- 选择：`保留`
-
-6. 最后点击
-
-- `部署`
-
-你截图里当前这一步还差的关键点只有一个：
-
-- 路径那一行左侧下拉框现在还是 `Static`，这里必须切换成 `Dynamic`，否则 `wildcard_replace(...)` 会被当成普通字符串，而不是表达式
+这样即使你不专门加拦截规则，新的资源也会自然只通过 `/bandori/assets/...` 这套路径暴露。
 
 ### CORS
 
@@ -223,10 +203,10 @@ wildcard_replace(http.request.uri.path, "/bandori/assets/*", "/${1}")
 
 ### 结合你当前截图，再检查一次
 
-截图里目前需要补的，只有两件事：
+按现在这版方案，截图里真正需要确认的是这两件事：
 
 1. 给 `cdn` 这个存储桶绑定自定义域 `cdn.hhwx.org`
-2. 在 Cloudflare Zone 里加上 `/bandori/assets/*` -> `/*` 的 URL Rewrite
+2. 确认之前加过的 `/bandori/assets/*` -> `/*` URL Rewrite 已经删除或禁用
 
 截图里的下面这些项目目前保持现状即可：
 
@@ -254,10 +234,27 @@ cd D:\Workspace\hhwx-tracker
 d:/Workspace/.venv/Scripts/python.exe tracker_job.py --test-sync-event-banners
 ```
 
+如果你之前已经跑过旧版同步器，这一步仍然建议再跑一次。
+
+原因：
+
+- 旧版对象 key 在桶根目录下，例如 `cn/event/...`
+- 新版会把对象补到 `bandori/assets/...`
+- legacy `banner_eventXXX` alias 也会在这一轮一起归档
+
 3. 在浏览器里验证对象是否已经可访问，例如：
 
 ```text
 https://cdn.hhwx.org/bandori/assets/cn/event/ranmoca_note/images_rip/banner.png
 ```
+
+也可以顺手验证一个 legacy alias，例如：
+
+```text
+https://cdn.hhwx.org/bandori/assets/cn/event/banner_event13/images_rip/banner.png
+```
+
+如果这个 legacy URL 仍然失败，通常不是 CDN 配置问题，而是上游可归档源本身已经缺失。
+这类样本会在 tracker 同步输出里以 `回源失败` 或 `同步失败` 记录出来，需要再补额外的数据源。
 
 4. 打开 eventtracker 页面，确认 banner 请求不再经过 `/_next/image`。

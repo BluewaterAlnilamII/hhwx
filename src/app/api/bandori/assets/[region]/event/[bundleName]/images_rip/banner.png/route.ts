@@ -3,7 +3,6 @@ import { NextResponse } from "next/server";
 import {
   buildBandoriAssetCdnUrl,
   buildBandoriEventBannerAssetKey,
-  extractBandoriEventIdFromLegacyBannerBundleName,
   isBandoriAssetRegion,
 } from "@/lib/bandori-asset-proxy";
 import { proxyBandoriEventBanner } from "@/lib/bandori-event-banner-proxy";
@@ -17,7 +16,7 @@ export async function GET(
 ) {
   const { region, bundleName } = await context.params;
 
-  if (isBandoriAssetRegion(region) && extractBandoriEventIdFromLegacyBannerBundleName(bundleName) === null) {
+  if (isBandoriAssetRegion(region)) {
     const redirectUrl = buildBandoriAssetCdnUrl(
       buildBandoriEventBannerAssetKey(region, bundleName),
       process.env.BANDORI_ASSET_CDN_BASE_URL ?? process.env.NEXT_PUBLIC_BANDORI_ASSET_CDN_BASE_URL,

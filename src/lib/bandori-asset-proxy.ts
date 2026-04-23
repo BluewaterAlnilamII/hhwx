@@ -1,7 +1,7 @@
 export type BandoriAssetRegion = "jp" | "cn";
 
 const BESTDORI_ASSET_ORIGIN = "https://bestdori.com/assets";
-const BANDORI_ASSET_PUBLIC_PATH_PREFIX = "/bandori/assets";
+const BANDORI_ASSET_OBJECT_KEY_PREFIX = "bandori/assets";
 const SAFE_ASSET_SEGMENT_PATTERN = /^[A-Za-z0-9_-]+$/;
 
 function normalizeBandoriAssetSegment(value: string): string {
@@ -58,7 +58,7 @@ export function resolveBandoriEventBannerBundleName(asset: {
 
 export function buildBandoriEventBannerAssetKey(region: BandoriAssetRegion, bundleName: string): string {
   const normalizedBundleName = normalizeBandoriAssetSegment(bundleName);
-  return `${region}/event/${normalizedBundleName}/images_rip/banner.png`;
+  return `${BANDORI_ASSET_OBJECT_KEY_PREFIX}/${region}/event/${normalizedBundleName}/images_rip/banner.png`;
 }
 
 export function buildBandoriAssetCdnUrl(assetKey: string, baseUrl?: string | null): string | null {
@@ -69,7 +69,7 @@ export function buildBandoriAssetCdnUrl(assetKey: string, baseUrl?: string | nul
     return null;
   }
 
-  return `${normalizedBaseUrl}${BANDORI_ASSET_PUBLIC_PATH_PREFIX}/${encodeBandoriAssetKeyPath(assetKey)}`;
+  return `${normalizedBaseUrl}/${encodeBandoriAssetKeyPath(assetKey)}`;
 }
 
 export function buildBandoriEventBannerProxyPath(region: BandoriAssetRegion, bundleName: string): string {
@@ -80,10 +80,6 @@ export function buildBandoriEventBannerProxyPath(region: BandoriAssetRegion, bun
 }
 
 export function buildBandoriEventBannerPublicUrl(region: BandoriAssetRegion, bundleName: string): string {
-  if (extractBandoriEventIdFromLegacyBannerBundleName(bundleName) !== null) {
-    return buildBandoriEventBannerProxyPath(region, bundleName);
-  }
-
   const assetKey = buildBandoriEventBannerAssetKey(region, bundleName);
   return buildBandoriAssetCdnUrl(assetKey) ?? buildBandoriEventBannerProxyPath(region, bundleName);
 }
