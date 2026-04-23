@@ -13,7 +13,13 @@ import {
   readAuthProfileSummary,
   supabase,
 } from "@/lib/supabase";
-import { PASSWORD_POLICY_MESSAGE, isPasswordStrongEnough } from "@/lib/password-policy";
+import {
+  PASSWORD_INPUT_PATTERN,
+  PASSWORD_MAX_LENGTH,
+  PASSWORD_MIN_LENGTH,
+  PASSWORD_POLICY_MESSAGE,
+  validatePasswordValue,
+} from "@/lib/password-policy";
 import { useGameStore } from "@/store/useGameStore";
 
 type CallbackStatus = "verifying" | "success" | "error" | "recovery";
@@ -38,13 +44,13 @@ function getErrorMessage(error: unknown, fallbackMessage: string): string {
 function getSuccessMessage(type: string | null): string {
   switch (type) {
     case "email_change":
-      return "新邮箱已确认，正在返回设置页。";
+      return "新邮箱验证已完成，正在返回设置页。";
     case "magiclink":
       return "登录已确认，正在继续。";
     case "invite":
       return "邀请已确认，正在继续。";
     default:
-      return "邮箱已确认，正在继续。";
+      return "邮箱验证已完成，正在继续。";
   }
 }
 
@@ -66,7 +72,7 @@ function AuthConfirmPageFallback() {
     <main className="relative min-h-full px-4 py-16 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-xl rounded-[32px] border border-white/50 bg-white/80 p-8 shadow-[0_20px_80px_rgba(15,23,42,0.14)] backdrop-blur-xl">
         <div className="mb-6 text-center">
-          <p className="text-sm font-semibold uppercase tracking-[0.3em] text-sky-500">Account</p>
+          <p className="text-sm font-semibold uppercase tracking-[0.3em] text-sky-500">账号</p>
           <h1 className="mt-3 text-3xl font-bold text-slate-900">正在处理请求</h1>
         </div>
         <div className="space-y-4 text-center">
@@ -90,8 +96,20 @@ function AuthConfirmPageContent() {
   const [passwordMessage, setPasswordMessage] = useState("");
   const [savingPassword, setSavingPassword] = useState(false);
   const hasHandledRef = useRef(false);
-  const passwordValidationProps = createNativeValidationProps({ label: "新密码", minLengthMessage: PASSWORD_POLICY_MESSAGE });
-  const confirmPasswordValidationProps = createNativeValidationProps({ label: "确认新密码", minLengthMessage: PASSWORD_POLICY_MESSAGE });
+  const passwordValidationProps = createNativeValidationProps({
+    label: "新密码",
+    customValidationMessage: validatePasswordValue,
+    minLengthMessage: PASSWORD_POLICY_MESSAGE,
+    maxLengthMessage: PASSWORD_POLICY_MESSAGE,
+    patternMessage: PASSWORD_POLICY_MESSAGE,
+  });
+  const confirmPasswordValidationProps = createNativeValidationProps({
+    label: "确认新密码",
+    customValidationMessage: validatePasswordValue,
+    minLengthMessage: PASSWORD_POLICY_MESSAGE,
+    maxLengthMessage: PASSWORD_POLICY_MESSAGE,
+    patternMessage: PASSWORD_POLICY_MESSAGE,
+  });
 
   const nextPath = useMemo(() => {
     return normalizeInternalPath(searchParams.get("next"), "/account");
@@ -258,8 +276,9 @@ function AuthConfirmPageContent() {
     event.preventDefault();
     setPasswordMessage("");
 
-    if (!isPasswordStrongEnough(newPassword)) {
-      setPasswordMessage(PASSWORD_POLICY_MESSAGE);
+    const passwordValidationError = validatePasswordValue(newPassword);
+    if (passwordValidationError) {
+      setPasswordMessage(passwordValidationError);
       return;
     }
 
@@ -291,7 +310,7 @@ function AuthConfirmPageContent() {
     <main className="relative min-h-full px-4 py-16 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-xl rounded-[32px] border border-white/50 bg-white/80 p-8 shadow-[0_20px_80px_rgba(15,23,42,0.14)] backdrop-blur-xl">
         <div className="mb-6 text-center">
-          <p className="text-sm font-semibold uppercase tracking-[0.3em] text-sky-500">Auth Callback</p>
+          <p className="text-sm font-semibold uppercase tracking-[0.3em] text-sky-500">账号</p>
           <h1 className="mt-3 text-3xl font-bold text-slate-900">{getStatusHeading(status)}</h1>
         </div>
 
@@ -352,7 +371,9 @@ function AuthConfirmPageContent() {
                 value={newPassword}
                 onChange={(event) => setNewPassword(event.target.value)}
                 {...passwordValidationProps}
-                minLength={8}
+                minLength={PASSWORD_MIN_LENGTH}
+                maxLength={PASSWORD_MAX_LENGTH}
+                pattern={PASSWORD_INPUT_PATTERN}
                 className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 text-slate-900 outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100"
                 placeholder="输入新密码"
               />
@@ -367,7 +388,9 @@ function AuthConfirmPageContent() {
                 value={confirmPassword}
                 onChange={(event) => setConfirmPassword(event.target.value)}
                 {...confirmPasswordValidationProps}
-                minLength={8}
+                minLength={PASSWORD_MIN_LENGTH}
+                maxLength={PASSWORD_MAX_LENGTH}
+                pattern={PASSWORD_INPUT_PATTERN}
                 className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 text-slate-900 outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100"
                 placeholder="再次输入新密码"
               />

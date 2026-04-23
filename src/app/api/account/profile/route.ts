@@ -3,8 +3,12 @@ import { jsonRouteError, jsonSuccess } from "@/lib/api-response";
 import { requireAuthenticatedUser } from "@/lib/auth-server";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
 import { PROFILES_TABLE, USER_ROLES_TABLE } from "@/lib/supabase-table-names";
-
-const USERNAME_PATTERN = /^[\p{L}\p{N}_-]{2,24}$/u;
+import {
+  USERNAME_REQUIRED_MESSAGE,
+  USERNAME_TAKEN_MESSAGE,
+  normalizeUsernameValue,
+  validateUsernameValue,
+} from "@/lib/username-policy";
 
 type ProfileRow = {
   username: string;
@@ -12,8 +16,11 @@ type ProfileRow = {
 };
 
 function buildFallbackUsername(preferredUsername: string | null, userId: string): string {
-  if (preferredUsername && USERNAME_PATTERN.test(preferredUsername)) {
-    return preferredUsername;
+  if (preferredUsername) {
+    const normalizedPreferredUsername = normalizeUsernameValue(preferredUsername);
+    if (!validateUsernameValue(normalizedPreferredUsername)) {
+      return normalizedPreferredUsername;
+    }
   }
 
   return `user_${userId.slice(0, 8)}`;
@@ -21,12 +28,13 @@ function buildFallbackUsername(preferredUsername: string | null, userId: string)
 
 function normalizeUsername(value: unknown): string {
   if (typeof value !== "string") {
-    throw new ApiRouteError(400, "INVALID_USERNAME", "用户名无效");
+    throw new ApiRouteError(400, "INVALID_USERNAME", USERNAME_REQUIRED_MESSAGE);
   }
 
-  const username = value.trim();
-  if (!USERNAME_PATTERN.test(username)) {
-    throw new ApiRouteError(400, "INVALID_USERNAME", "用户名需为 2-24 位，可包含字母、数字、下划线或连字符");
+  const username = normalizeUsernameValue(value);
+  const validationError = validateUsernameValue(username);
+  if (validationError) {
+    throw new ApiRouteError(400, "INVALID_USERNAME", validationError);
   }
 
   return username;
@@ -140,7 +148,7 @@ export async function PUT(request: Request) {
 
     if (error) {
       if (error.code === "23505") {
-        throw new ApiRouteError(409, "USERNAME_TAKEN", "该用户名已被占用", error.message);
+        throw new ApiRouteError(409, "USERNAME_TAKEN", USERNAME_TAKEN_MESSAGE, error.message);
       }
 
       throw new ApiRouteError(500, "ACCOUNT_PROFILE_UPDATE_FAILED", "更新账号资料失败", error.message);

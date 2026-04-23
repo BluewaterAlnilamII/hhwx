@@ -13,9 +13,24 @@ import {
   normalizeInternalPath,
   readAuthProfileSummary,
   supabase,
+  type AuthFlashNotice,
   type AuthViewMode,
 } from "@/lib/supabase";
-import { PASSWORD_POLICY_MESSAGE, isPasswordStrongEnough } from "@/lib/password-policy";
+import {
+  PUBLIC_USERNAME_HINT,
+  PUBLIC_USERNAME_LABEL,
+  PUBLIC_USERNAME_PLACEHOLDER,
+  USERNAME_REQUIRED_MESSAGE,
+  normalizeUsernameValue,
+  validateUsernameValue,
+} from "@/lib/username-policy";
+import {
+  PASSWORD_INPUT_PATTERN,
+  PASSWORD_MAX_LENGTH,
+  PASSWORD_MIN_LENGTH,
+  PASSWORD_POLICY_MESSAGE,
+  validatePasswordValue,
+} from "@/lib/password-policy";
 import { useTurnstileAvailability } from "@/lib/turnstile";
 import { useGameStore } from "@/store/useGameStore";
 import TurnstileChallenge, { type TurnstileChallengeHandle } from "./TurnstileChallenge";
@@ -34,11 +49,20 @@ function getModeTitle(mode: AuthViewMode): string {
 function getModeDescription(mode: AuthViewMode): string {
   switch (mode) {
     case "register":
-      return "注册后需完成邮箱确认，才能使用完整功能。";
+      return "注册后需完成邮箱验证，才能使用完整功能。";
     case "forgot-password":
-      return "我们会把重置链接发送到你的邮箱。";
+      return "我们会把重置密码邮件发送到你的邮箱。";
     default:
       return "使用邮箱登录。";
+  }
+}
+
+function getFlashNoticeMessage(notice: AuthFlashNotice | null): string {
+  switch (notice) {
+    case "signup-email-sent":
+      return "注册成功，验证邮件已发送，请先前往邮箱完成验证，然后再登录。";
+    default:
+      return "";
   }
 }
 
@@ -63,8 +87,11 @@ export default function AuthPageContent() {
 
   const searchMode = useMemo(() => normalizeAuthMode(searchParams.get("mode")), [searchParams]);
   const nextPath = useMemo(() => normalizeInternalPath(searchParams.get("next"), "/account"), [searchParams]);
+  const flashNotice = useMemo<AuthFlashNotice | null>(() => {
+    const notice = searchParams.get("notice");
+    return notice === "signup-email-sent" ? notice : null;
+  }, [searchParams]);
 
-  const [mode, setMode] = useState<AuthViewMode>(searchMode);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -74,11 +101,24 @@ export default function AuthPageContent() {
   const [loading, setLoading] = useState(false);
   const captchaRef = useRef<TurnstileChallengeHandle | null>(null);
   const { isTurnstileEnabled, isTurnstileLoading } = useTurnstileAvailability();
+  const mode = searchMode;
   const shouldShowCaptcha = isTurnstileEnabled && mode !== "login";
-  const usernameValidationProps = createNativeValidationProps({ label: "用户名" });
+  const usernameValidationProps = createNativeValidationProps({ label: PUBLIC_USERNAME_LABEL });
   const emailValidationProps = createNativeValidationProps({ label: "邮箱", invalidTypeMessage: "请输入有效的邮箱地址。" });
-  const passwordValidationProps = createNativeValidationProps({ label: "密码", minLengthMessage: PASSWORD_POLICY_MESSAGE });
-  const confirmPasswordValidationProps = createNativeValidationProps({ label: "确认密码", minLengthMessage: PASSWORD_POLICY_MESSAGE });
+  const passwordValidationProps = createNativeValidationProps({
+    label: "密码",
+    customValidationMessage: validatePasswordValue,
+    minLengthMessage: PASSWORD_POLICY_MESSAGE,
+    maxLengthMessage: PASSWORD_POLICY_MESSAGE,
+    patternMessage: PASSWORD_POLICY_MESSAGE,
+  });
+  const confirmPasswordValidationProps = createNativeValidationProps({
+    label: "确认密码",
+    customValidationMessage: validatePasswordValue,
+    minLengthMessage: PASSWORD_POLICY_MESSAGE,
+    maxLengthMessage: PASSWORD_POLICY_MESSAGE,
+    patternMessage: PASSWORD_POLICY_MESSAGE,
+  });
 
   const requireCaptchaToken = (): string | undefined => {
     if (mode !== "login" && isTurnstileLoading) {
@@ -104,29 +144,14 @@ export default function AuthPageContent() {
   };
 
   useEffect(() => {
-    if (searchMode === mode) {
-      return;
-    }
-
-    setMode(searchMode);
-    setError("");
-    setNotice("");
-    setPassword("");
-    setConfirmPassword("");
-
-    if (searchMode !== "register") {
-      setUsernameInput("");
-    }
-
-    resetCaptcha();
-  }, [mode, searchMode]);
+    setNotice(getFlashNoticeMessage(flashNotice));
+  }, [flashNotice]);
 
   const switchMode = (nextMode: AuthViewMode) => {
     if (nextMode === mode) {
       return;
     }
 
-    setMode(nextMode);
     setError("");
     setNotice("");
     setPassword("");
@@ -182,16 +207,27 @@ export default function AuthPageContent() {
     setError("");
     setNotice("");
 
-    const normalizedUsername = usernameInput.trim();
+    const normalizedUsername = normalizeUsernameValue(usernameInput);
     const normalizedEmail = email.trim();
 
     if (!normalizedUsername) {
-      setError("请输入用户名");
+      setError(USERNAME_REQUIRED_MESSAGE);
       return;
     }
 
-    if (!isPasswordStrongEnough(password)) {
-      setError(PASSWORD_POLICY_MESSAGE);
+    const usernameValidationError = validateUsernameValue(normalizedUsername);
+    if (usernameValidationError) {
+      setError(usernameValidationError);
+      return;
+    }
+
+    if (normalizedUsername !== usernameInput) {
+      setUsernameInput(normalizedUsername);
+    }
+
+    const passwordValidationError = validatePasswordValue(password);
+    if (passwordValidationError) {
+      setError(passwordValidationError);
       return;
     }
 
@@ -257,11 +293,12 @@ export default function AuthPageContent() {
         }
       }
 
-      setMode("login");
       setPassword("");
       setConfirmPassword("");
-      router.replace(buildAuthPath("login", nextPath));
-      setNotice("注册成功，请先前往邮箱完成验证，然后再登录。");
+      setError("");
+      resetCaptcha();
+      router.replace(buildAuthPath("login", nextPath, "signup-email-sent"));
+      return;
     } catch (authError) {
       setError(formatAuthErrorMessage(authError, "注册失败", "register"));
     } finally {
@@ -307,7 +344,7 @@ export default function AuthPageContent() {
         return;
       }
 
-      setNotice("如果该邮箱已绑定账号，我们会向它发送重置链接。");
+      setNotice("如果该邮箱已绑定账号，我们会向该邮箱发送重置密码邮件。");
     } catch (authError) {
       setError(formatAuthErrorMessage(authError, "发送邮件失败", "forgot-password"));
     } finally {
@@ -322,7 +359,7 @@ export default function AuthPageContent() {
         <section className="rounded-[32px] border border-white/60 bg-white/85 p-8 shadow-[0_24px_80px_rgba(15,23,42,0.12)] backdrop-blur-xl">
           <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-200 pb-5">
             <div>
-              <p className="text-sm font-semibold uppercase tracking-[0.28em] text-sky-500">Account</p>
+              <p className="text-sm font-semibold uppercase tracking-[0.28em] text-sky-500">账号</p>
               <h1 className="mt-2 text-3xl font-bold text-slate-900">{getModeTitle(mode)}</h1>
               <p className="mt-2 max-w-xl text-sm leading-6 text-slate-600">{getModeDescription(mode)}</p>
             </div>
@@ -379,16 +416,19 @@ export default function AuthPageContent() {
           <form onSubmit={mode === "login" ? handleLogin : mode === "register" ? handleRegister : handleForgotPassword} className="mt-6 space-y-5">
               {mode === "register" && (
                 <label className="block text-sm font-medium text-slate-700">
-                  用户名
+                  {PUBLIC_USERNAME_LABEL}
                   <input
                     type="text"
                     value={usernameInput}
                     onChange={(event) => setUsernameInput(event.target.value)}
                     {...usernameValidationProps}
                     className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 text-slate-900 outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100"
-                    placeholder="输入你的公开用户名"
+                    placeholder={PUBLIC_USERNAME_PLACEHOLDER}
                     required
                   />
+                  <span className="mt-2 block text-xs leading-5 text-slate-500">
+                    {PUBLIC_USERNAME_HINT}
+                  </span>
                 </label>
               )}
 
@@ -415,7 +455,9 @@ export default function AuthPageContent() {
                     {...passwordValidationProps}
                     className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 text-slate-900 outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100"
                     placeholder={mode === "register" ? "设置登录密码" : "输入登录密码"}
-                    minLength={8}
+                    minLength={PASSWORD_MIN_LENGTH}
+                    maxLength={PASSWORD_MAX_LENGTH}
+                    pattern={PASSWORD_INPUT_PATTERN}
                     required
                   />
                   {mode === "register" && (
@@ -436,7 +478,9 @@ export default function AuthPageContent() {
                     {...confirmPasswordValidationProps}
                     className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 text-slate-900 outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100"
                     placeholder="再次输入密码"
-                    minLength={8}
+                    minLength={PASSWORD_MIN_LENGTH}
+                    maxLength={PASSWORD_MAX_LENGTH}
+                    pattern={PASSWORD_INPUT_PATTERN}
                     required
                   />
                 </label>

@@ -1,12 +1,18 @@
 import { ApiRouteError } from "@/lib/api-contracts";
 import { jsonRouteError, jsonSuccess } from "@/lib/api-response";
 import { findAuthUserByEmail, normalizeEmailAddress } from "@/lib/auth-user-server";
+import { validatePasswordValue } from "@/lib/password-policy";
 import { createServerAuthSupabaseClient } from "@/lib/supabase-auth-server";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
 import { PROFILES_TABLE } from "@/lib/supabase-table-names";
 import { verifyTurnstileToken } from "@/lib/turnstile-server";
-
-const USERNAME_PATTERN = /^[\p{L}\p{N}_-]{2,24}$/u;
+import {
+  USERNAME_CHECK_FAILED_MESSAGE,
+  USERNAME_REQUIRED_MESSAGE,
+  USERNAME_TAKEN_MESSAGE,
+  normalizeUsernameValue,
+  validateUsernameValue,
+} from "@/lib/username-policy";
 
 interface SignUpRequestBody {
   username?: unknown;
@@ -29,10 +35,28 @@ function readRequiredString(value: unknown, message: string): string {
   return normalizedValue;
 }
 
+function readPassword(value: unknown): string {
+  if (typeof value !== "string") {
+    throw new ApiRouteError(400, "INVALID_REQUEST", "请输入密码");
+  }
+
+  if (!value) {
+    throw new ApiRouteError(400, "INVALID_REQUEST", "请输入密码");
+  }
+
+  const validationError = validatePasswordValue(value);
+  if (validationError) {
+    throw new ApiRouteError(400, "INVALID_PASSWORD", validationError);
+  }
+
+  return value;
+}
+
 function normalizeUsername(value: unknown): string {
-  const username = readRequiredString(value, "请输入用户名");
-  if (!USERNAME_PATTERN.test(username)) {
-    throw new ApiRouteError(400, "INVALID_USERNAME", "用户名需为 2-24 位，可包含字母、数字、下划线或连字符");
+  const username = normalizeUsernameValue(readRequiredString(value, USERNAME_REQUIRED_MESSAGE));
+  const validationError = validateUsernameValue(username);
+  if (validationError) {
+    throw new ApiRouteError(400, "INVALID_USERNAME", validationError);
   }
 
   return username;
@@ -49,7 +73,7 @@ export async function POST(request: Request) {
 
     const username = normalizeUsername(body.username);
     const email = normalizeEmailAddress(readRequiredString(body.email, "请输入邮箱"));
-    const password = readRequiredString(body.password, "请输入密码");
+    const password = readPassword(body.password);
     const redirectTo = typeof body.redirectTo === "string" ? body.redirectTo.trim() : "";
     const captchaToken = typeof body.captchaToken === "string" ? body.captchaToken.trim() : "";
 
@@ -63,11 +87,11 @@ export async function POST(request: Request) {
       .maybeSingle();
 
     if (existingProfileError) {
-      throw new ApiRouteError(500, "USERNAME_CHECK_FAILED", "检查用户名是否可用失败", existingProfileError.message);
+      throw new ApiRouteError(500, "USERNAME_CHECK_FAILED", USERNAME_CHECK_FAILED_MESSAGE, existingProfileError.message);
     }
 
     if (existingProfile) {
-      throw new ApiRouteError(409, "USERNAME_TAKEN", "该用户名已被占用");
+      throw new ApiRouteError(409, "USERNAME_TAKEN", USERNAME_TAKEN_MESSAGE);
     }
 
     const existingUser = await findAuthUserByEmail(email);

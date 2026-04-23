@@ -27,6 +27,7 @@ export default function AccountShell({
           <div className="flex flex-col gap-3 border-b border-slate-200 pb-6 sm:flex-row sm:items-end sm:justify-between">
             <div>
               <p className="text-sm font-semibold uppercase tracking-[0.3em] text-sky-500">Account</p>
+                            <p className="text-sm font-semibold uppercase tracking-[0.3em] text-sky-500">账号</p>
               <h1 className="mt-2 text-3xl font-bold text-slate-900">{title}</h1>
               <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">{description}</p>
             </div>

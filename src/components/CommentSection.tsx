@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from "react";
 import { getApiErrorMessage } from "@/lib/api-contracts";
+import { getUsernameAvatarLabel } from "@/lib/username-policy";
 import { getSafeSession, supabase } from "@/lib/supabase";
 import { useGameStore } from "@/store/useGameStore";
 
@@ -104,7 +105,7 @@ export default function CommentSection() {
                 <form onSubmit={handleSubmit} className="mb-6">
                     <div className="flex gap-3">
                         <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-400 to-purple-500 flex items-center justify-center text-white text-xs font-bold flex-shrink-0 mt-1">
-                            {(username || "U")[0].toUpperCase()}
+                            {getUsernameAvatarLabel(username)}
                         </div>
                         <div className="flex-1">
                             <textarea
@@ -154,7 +155,7 @@ export default function CommentSection() {
                     >
                         <div className="flex items-center gap-2 mb-2">
                             <div className="w-6 h-6 rounded-full bg-gradient-to-br from-gray-300 to-gray-400 flex items-center justify-center text-white text-[10px] font-bold">
-                                {(c.profiles?.username || "?")[0].toUpperCase()}
+                                {getUsernameAvatarLabel(c.profiles?.username, "?")}
                             </div>
                             <span className="text-sm font-semibold text-gray-700">
                                 {c.profiles?.username || "匿名"}

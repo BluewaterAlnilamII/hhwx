@@ -194,7 +194,7 @@ export default function AccountEmailPage() {
             <section className="rounded-3xl border border-amber-200 bg-amber-50 p-6 shadow-sm">
               <h2 className="text-xl font-semibold text-amber-900">重新发送验证邮件</h2>
               <p className="mt-2 text-sm leading-6 text-amber-700">
-                当前邮箱还未验证时，可以先重发验证邮件。
+                当前邮箱尚未验证时，可以重新发送验证邮件。
               </p>
               {isTurnstileEnabled && (
                 <div className="mt-5">

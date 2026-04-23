@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { getUsernameAvatarLabel } from "@/lib/username-policy";
 import AccountShell, { AccountErrorState, AccountLoadingState, AccountSignInState } from "./AccountShell";
 import { useAccountProfile } from "./useAccountProfile";
 
@@ -25,7 +26,7 @@ export default function AccountPage() {
           <section className="rounded-3xl bg-[#006699] p-6 text-white shadow-lg">
             <div className="flex flex-wrap items-center gap-4">
               <div className="flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-sky-400 to-indigo-500 text-xl font-bold">
-                {(profile.username || "U")[0].toUpperCase()}
+                {getUsernameAvatarLabel(profile.username)}
               </div>
               <div>
                 <div className="text-2xl font-bold">{profile.username}</div>
@@ -50,7 +51,7 @@ export default function AccountPage() {
             >
               <div>
                 <h2 className="text-xl font-semibold text-slate-900">编辑资料</h2>
-                <p className="mt-2 text-sm leading-6 text-slate-600">修改用户名等公开信息。</p>
+                <p className="mt-2 text-sm leading-6 text-slate-600">修改公开用户名。</p>
               </div>
               <span className="shrink-0 rounded-full border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 transition group-hover:border-sky-200 group-hover:text-sky-600">
                 进入
@@ -63,7 +64,7 @@ export default function AccountPage() {
             >
               <div>
                 <h2 className="text-xl font-semibold text-slate-900">修改密码</h2>
-                <p className="mt-2 text-sm leading-6 text-slate-600">向当前邮箱发送改密链接。</p>
+                <p className="mt-2 text-sm leading-6 text-slate-600">向当前邮箱发送重置密码邮件。</p>
               </div>
               <span className="shrink-0 rounded-full border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 transition group-hover:border-sky-200 group-hover:text-sky-600">
                 进入

@@ -14,6 +14,7 @@ export interface AuthProfileSummary {
 }
 
 export type AuthViewMode = "login" | "register" | "forgot-password";
+export type AuthFlashNotice = "signup-email-sent";
 
 export function isEmailVerified(user: Pick<User, "email_confirmed_at"> | null | undefined): boolean {
 	return Boolean(user?.email_confirmed_at);
@@ -68,12 +69,16 @@ export function buildAuthCallbackUrl(nextPath = "/account"): string {
 	return url.toString();
 }
 
-export function buildAuthPath(mode: AuthViewMode = "login", nextPath = "/account"): string {
+export function buildAuthPath(mode: AuthViewMode = "login", nextPath = "/account", notice?: AuthFlashNotice): string {
 	const safeNextPath = normalizeInternalPath(nextPath, "/account");
 	const params = new URLSearchParams({
 		mode,
 		next: safeNextPath,
 	});
+
+	if (notice) {
+		params.set("notice", notice);
+	}
 
 	return `/auth?${params.toString()}`;
 }

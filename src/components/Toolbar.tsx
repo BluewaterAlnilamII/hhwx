@@ -4,6 +4,7 @@ import Link from "next/link";
 import React, { useEffect, useRef, useState } from "react";
 import { Menu, X } from "lucide-react";
 import { usePathname } from "next/navigation";
+import { getUsernameAvatarLabel } from "@/lib/username-policy";
 import { buildAuthPath, readAuthProfileSummary, supabase } from "@/lib/supabase";
 import { useGameStore } from "@/store/useGameStore";
 
@@ -129,7 +130,7 @@ export default function Toolbar({ showDebugButton = true, isSidebarOpen = false,
                             <span className="relative flex h-6 w-6 items-center justify-center rounded-[12px] bg-[#fff4db] text-[#c76400] transition duration-200 group-hover:scale-105 group-hover:bg-[#fff7e7]">
                                 {userId ? (
                                     <span className="flex h-6 w-6 items-center justify-center rounded-[12px] bg-[#fff4db] text-[11px] font-bold text-[#c76400]">
-                                        {(username || "U")[0].toUpperCase()}
+                                        {getUsernameAvatarLabel(username)}
                                     </span>
                                 ) : (
                                     <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">

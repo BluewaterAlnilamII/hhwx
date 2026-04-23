@@ -5,6 +5,16 @@ import AccountShell, { AccountErrorState, AccountLoadingState, AccountSignInStat
 import { type AccountProfile, getAccessToken, useAccountProfile } from "../useAccountProfile";
 import { getApiErrorMessage, parseApiSuccessData } from "@/lib/api-contracts";
 import { createNativeValidationProps } from "@/lib/native-validation";
+import {
+  PUBLIC_USERNAME_DESCRIPTION,
+  PUBLIC_USERNAME_HINT,
+  PUBLIC_USERNAME_LABEL,
+  PUBLIC_USERNAME_PLACEHOLDER,
+  USERNAME_REQUIRED_MESSAGE,
+  getUsernameAvatarLabel,
+  normalizeUsernameValue,
+  validateUsernameValue,
+} from "@/lib/username-policy";
 
 export default function AccountProfilePage() {
   const {
@@ -20,7 +30,7 @@ export default function AccountProfilePage() {
   const [usernameInput, setUsernameInput] = useState("");
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
-  const usernameValidationProps = createNativeValidationProps({ label: "用户名" });
+  const usernameValidationProps = createNativeValidationProps({ label: PUBLIC_USERNAME_LABEL });
 
   useEffect(() => {
     setUsernameInput(profile?.username ?? "");
@@ -28,8 +38,25 @@ export default function AccountProfilePage() {
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
-    setSaving(true);
     setMessage("");
+
+    const normalizedUsername = normalizeUsernameValue(usernameInput);
+    if (!normalizedUsername) {
+      setMessage(USERNAME_REQUIRED_MESSAGE);
+      return;
+    }
+
+    const usernameValidationError = validateUsernameValue(normalizedUsername);
+    if (usernameValidationError) {
+      setMessage(usernameValidationError);
+      return;
+    }
+
+    if (normalizedUsername !== usernameInput) {
+      setUsernameInput(normalizedUsername);
+    }
+
+    setSaving(true);
 
     try {
       const accessToken = await getAccessToken();
@@ -44,7 +71,7 @@ export default function AccountProfilePage() {
           "Content-Type": "application/json",
           Authorization: `Bearer ${accessToken}`,
         },
-        body: JSON.stringify({ username: usernameInput }),
+        body: JSON.stringify({ username: normalizedUsername }),
       });
       const payload = await response.json().catch(() => ({}));
 
@@ -77,7 +104,7 @@ export default function AccountProfilePage() {
   return (
     <AccountShell
       title="编辑资料"
-      description="修改公开显示的用户名。"
+      description="修改公开用户名。"
     >
       {!authReady || loadingProfile ? (
         <AccountLoadingState message="正在读取资料..." />
@@ -90,7 +117,7 @@ export default function AccountProfilePage() {
           <div className="rounded-3xl border border-slate-200 bg-[#006699] p-6 text-white shadow-lg">
             <div className="flex flex-wrap items-center gap-4">
               <div className="flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-sky-400 to-indigo-500 text-xl font-bold">
-                {(profile.username || "U")[0].toUpperCase()}
+                {getUsernameAvatarLabel(profile.username)}
               </div>
               <div>
                 <div className="text-2xl font-bold">{profile.username}</div>
@@ -100,21 +127,24 @@ export default function AccountProfilePage() {
           </div>
 
           <form onSubmit={handleSubmit} className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-            <h2 className="text-xl font-semibold text-slate-900">公开用户名</h2>
+            <h2 className="text-xl font-semibold text-slate-900">{PUBLIC_USERNAME_LABEL}</h2>
             <p className="mt-2 text-sm leading-6 text-slate-600">
-              这个名称会显示在账号相关页面和其他展示用户名的地方。
+              {PUBLIC_USERNAME_DESCRIPTION}
             </p>
 
             <label className="mt-5 block text-sm font-medium text-slate-700">
-              用户名
+              {PUBLIC_USERNAME_LABEL}
               <input
                 type="text"
                 value={usernameInput}
                 onChange={(event) => setUsernameInput(event.target.value)}
                 {...usernameValidationProps}
                 className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 text-slate-900 outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100"
-                placeholder="输入新的用户名"
+                placeholder={PUBLIC_USERNAME_PLACEHOLDER}
               />
+              <span className="mt-2 block text-xs leading-5 text-slate-500">
+                {PUBLIC_USERNAME_HINT}
+              </span>
             </label>
 
             {message && (

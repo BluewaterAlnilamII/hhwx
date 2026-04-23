@@ -75,7 +75,7 @@ export default function AccountPasswordPage() {
         return;
       }
 
-      setMessage("修改链接已发送到当前邮箱。请打开邮件继续设置新密码。");
+      setMessage("重置密码邮件已发送到当前邮箱。请打开邮件继续设置新密码。");
     } catch (error) {
       setMessage(formatAuthErrorMessage(error, "发送修改邮件失败", "forgot-password"));
     } finally {
@@ -87,7 +87,7 @@ export default function AccountPasswordPage() {
   return (
     <AccountShell
       title="修改密码"
-      description="把改密链接发到当前邮箱。"
+      description="把重置密码邮件发到当前邮箱。"
     >
       {!authReady || loadingProfile ? (
         <AccountLoadingState message="正在读取账号信息..." />
