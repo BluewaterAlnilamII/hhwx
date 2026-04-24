@@ -1,0 +1,239 @@
+-- Game account binding schema for hhwx.
+-- Run this in Supabase SQL editor with service-role/admin privileges.
+
+create extension if not exists pgcrypto;
+
+create table if not exists public.user_game_bind_challenges (
+  id uuid primary key default gen_random_uuid(),
+  web_user_id uuid not null references auth.users(id) on delete cascade,
+  game_uid text not null,
+  challenge text not null,
+  status text not null default 'pending',
+  attempt_count integer not null default 0,
+  expires_at timestamptz not null,
+  verified_at timestamptz,
+  created_at timestamptz not null default now()
+);
+
+alter table public.user_game_bind_challenges
+  add column if not exists status text not null default 'pending';
+
+alter table public.user_game_bind_challenges
+  add column if not exists attempt_count integer not null default 0;
+
+create table if not exists public.user_game_bindings (
+  game_uid text primary key,
+  web_user_id uuid not null references auth.users(id) on delete cascade,
+  challenge_id uuid references public.user_game_bind_challenges(id) on delete set null,
+  bound_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+-- Normalize existing challenge data before tightening generated-code/status constraints.
+delete from public.user_game_bind_challenges
+where challenge !~ '^hhwx[a-z2-9]{8}$';
+
+update public.user_game_bind_challenges
+set status = 'pending'
+where status is null or status not in ('pending', 'verified', 'expired', 'failed');
+
+update public.user_game_bind_challenges
+set attempt_count = 0
+where attempt_count is null or attempt_count < 0;
+
+alter table public.user_game_bind_challenges
+  drop constraint if exists user_game_bind_challenges_challenge_check;
+
+alter table public.user_game_bind_challenges
+  add constraint user_game_bind_challenges_challenge_check
+  check (challenge ~ '^hhwx[a-z2-9]{8}$');
+
+alter table public.user_game_bind_challenges
+  drop constraint if exists user_game_bind_challenges_status_check;
+
+alter table public.user_game_bind_challenges
+  add constraint user_game_bind_challenges_status_check
+  check (status in ('pending', 'verified', 'expired', 'failed'));
+
+alter table public.user_game_bind_challenges
+  drop constraint if exists user_game_bind_challenges_attempt_count_check;
+
+alter table public.user_game_bind_challenges
+  add constraint user_game_bind_challenges_attempt_count_check
+  check (attempt_count >= 0);
+
+create index if not exists user_game_bind_challenges_user_created_idx
+  on public.user_game_bind_challenges(web_user_id, created_at desc);
+
+create index if not exists user_game_bind_challenges_game_uid_idx
+  on public.user_game_bind_challenges(game_uid);
+
+create index if not exists user_game_bind_challenges_status_idx
+  on public.user_game_bind_challenges(status);
+
+create index if not exists user_game_bind_challenges_expires_idx
+  on public.user_game_bind_challenges(expires_at);
+
+create index if not exists user_game_bindings_user_idx
+  on public.user_game_bindings(web_user_id, bound_at desc);
+
+alter table public.user_game_bind_challenges enable row level security;
+alter table public.user_game_bindings enable row level security;
+
+drop policy if exists "Users can read own game bind challenges" on public.user_game_bind_challenges;
+drop policy if exists "Users can insert own game bind challenges" on public.user_game_bind_challenges;
+drop policy if exists "Users can update own game bind challenges" on public.user_game_bind_challenges;
+drop policy if exists "Users can delete own game bind challenges" on public.user_game_bind_challenges;
+
+drop policy if exists "Users can read own game uid bindings" on public.user_game_bindings;
+drop policy if exists "Users can delete own game uid bindings" on public.user_game_bindings;
+
+create policy "Users can read own game bind challenges"
+  on public.user_game_bind_challenges
+  for select
+  to authenticated
+  using (auth.uid() = web_user_id);
+
+create policy "Users can insert own game bind challenges"
+  on public.user_game_bind_challenges
+  for insert
+  to authenticated
+  with check (auth.uid() = web_user_id);
+
+create policy "Users can update own game bind challenges"
+  on public.user_game_bind_challenges
+  for update
+  to authenticated
+  using (auth.uid() = web_user_id)
+  with check (auth.uid() = web_user_id);
+
+create policy "Users can delete own game bind challenges"
+  on public.user_game_bind_challenges
+  for delete
+  to authenticated
+  using (auth.uid() = web_user_id);
+
+create policy "Users can read own game uid bindings"
+  on public.user_game_bindings
+  for select
+  to authenticated
+  using (auth.uid() = web_user_id);
+
+create policy "Users can delete own game uid bindings"
+  on public.user_game_bindings
+  for delete
+  to authenticated
+  using (auth.uid() = web_user_id);
+
+drop function if exists public.cleanup_old_game_bind_challenges(timestamptz);
+drop function if exists public.complete_game_uid_binding(uuid, text, uuid);
+drop function if exists public.unbind_game_uid(text, uuid);
+
+create or replace function public.cleanup_old_game_bind_challenges(
+  p_before timestamptz default now() - interval '7 days'
+)
+returns integer
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  deleted_count integer;
+begin
+  delete from public.user_game_bind_challenges
+  where created_at < p_before;
+
+  get diagnostics deleted_count = row_count;
+  return deleted_count;
+end;
+$$;
+
+create or replace function public.complete_game_uid_binding(
+  p_challenge_id uuid,
+  p_game_uid text,
+  p_web_user_id uuid
+)
+returns public.user_game_bindings
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  result public.user_game_bindings;
+begin
+  if p_web_user_id is null then
+    raise exception 'web_user_id is required';
+  end if;
+
+  if p_game_uid is null or btrim(p_game_uid) = '' then
+    raise exception 'game_uid is required';
+  end if;
+
+  update public.user_game_bind_challenges
+  set verified_at = now(),
+      status = 'verified'
+  where id = p_challenge_id
+    and web_user_id = p_web_user_id
+    and game_uid = p_game_uid
+    and status = 'pending'
+    and expires_at > now();
+
+  if not found then
+    raise exception 'challenge is invalid, expired, or already verified';
+  end if;
+
+  insert into public.user_game_bindings as bindings (
+    game_uid,
+    web_user_id,
+    challenge_id,
+    bound_at,
+    updated_at
+  )
+  values (
+    p_game_uid,
+    p_web_user_id,
+    p_challenge_id,
+    now(),
+    now()
+  )
+  on conflict (game_uid) do update
+  set web_user_id = excluded.web_user_id,
+      challenge_id = excluded.challenge_id,
+      updated_at = now()
+  returning * into result;
+
+  return result;
+end;
+$$;
+
+create or replace function public.unbind_game_uid(
+  p_game_uid text,
+  p_web_user_id uuid
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if p_web_user_id is null then
+    raise exception 'web_user_id is required';
+  end if;
+
+  delete from public.user_game_bindings
+  where game_uid = p_game_uid
+    and web_user_id = p_web_user_id;
+
+  delete from public.user_game_bind_challenges
+  where game_uid = p_game_uid
+    and web_user_id = p_web_user_id;
+end;
+$$;
+
+revoke all on function public.cleanup_old_game_bind_challenges(timestamptz) from public, anon, authenticated;
+revoke all on function public.complete_game_uid_binding(uuid, text, uuid) from public, anon, authenticated;
+revoke all on function public.unbind_game_uid(text, uuid) from public, anon, authenticated;
+
+grant execute on function public.cleanup_old_game_bind_challenges(timestamptz) to service_role;
+grant execute on function public.complete_game_uid_binding(uuid, text, uuid) to service_role;
+grant execute on function public.unbind_game_uid(text, uuid) to service_role;

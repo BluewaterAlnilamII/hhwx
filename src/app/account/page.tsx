@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { getUsernameAvatarLabel } from "@/lib/username-policy";
 import AccountShell, { AccountErrorState, AccountLoadingState, AccountSignInState } from "./AccountShell";
+import GameAccountBindingPanel from "./GameAccountBindingPanel";
 import { useAccountProfile } from "./useAccountProfile";
 
 export default function AccountPage() {
@@ -11,7 +12,7 @@ export default function AccountPage() {
   return (
     <AccountShell
       title="账号中心"
-      description="查看账号状态，处理资料、密码和邮箱。"
+      description="查看账号状态，处理资料、密码、邮箱和游戏账号绑定。"
       backHref="/"
       backLabel="返回首页"
     >
@@ -43,6 +44,8 @@ export default function AccountPage() {
               </div>
             )}
           </section>
+
+          <GameAccountBindingPanel />
 
           <div className="space-y-4">
             <Link
