@@ -3,7 +3,7 @@ import { jsonRouteError, jsonSuccess } from "@/lib/api-response";
 import { requireAuthenticatedUser } from "@/lib/auth-server";
 import { GAME_BIND_CHALLENGE_MAX_ATTEMPTS, fetchGameProfileSignature, isSignatureMatch } from "@/lib/game-account-binding";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
-import { USER_GAME_BIND_CHALLENGES_TABLE, USER_GAME_BINDINGS_TABLE } from "@/lib/supabase-table-names";
+import { USER_GAME_BIND_CHALLENGES_TABLE } from "@/lib/supabase-table-names";
 
 type ChallengeRow = {
   id: string;
@@ -62,21 +62,14 @@ export async function POST(request: Request) {
 
     const profile = await fetchGameProfileSignature(challenge.game_uid);
     if (!isSignatureMatch(profile.signature, challenge.challenge)) {
-      await serviceClient
-        .from(USER_GAME_BIND_CHALLENGES_TABLE)
-        .update({ attempt_count: challenge.attempt_count + 1 })
-        .eq("id", challenge.id);
+      await serviceClient.rpc("increment_game_bind_challenge_attempt", {
+        p_challenge_id: challenge.id,
+        p_web_user_id: user.id,
+      });
       throw new ApiRouteError(400, "GAME_BIND_SIGNATURE_MISMATCH", "\u9a8c\u8bc1\u5931\u8d25\uff0c\u8bf7\u786e\u8ba4\u6e38\u620f\u5185\u4e2a\u6027\u7b7e\u540d\u4e0e\u9a8c\u8bc1\u7801\u5b8c\u5168\u4e00\u81f4");
     }
 
-    const { data: existingBinding } = await serviceClient
-      .from(USER_GAME_BINDINGS_TABLE)
-      .select("web_user_id")
-      .eq("game_uid", challenge.game_uid)
-      .maybeSingle();
-    const transferred = Boolean(existingBinding && existingBinding.web_user_id !== user.id);
-
-    const { error: rpcError } = await serviceClient.rpc("complete_game_uid_binding", {
+    const { data: result, error: rpcError } = await serviceClient.rpc("complete_game_uid_binding", {
       p_challenge_id: challenge.id,
       p_game_uid: challenge.game_uid,
       p_web_user_id: user.id,
@@ -88,7 +81,7 @@ export async function POST(request: Request) {
 
     return jsonSuccess({
       gameUid: challenge.game_uid,
-      transferred,
+      transferred: Boolean((result as { transferred?: unknown } | null)?.transferred),
     });
   } catch (error) {
     console.error("Game bind verify API error:", error);

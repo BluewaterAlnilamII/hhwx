@@ -34,22 +34,12 @@ export async function POST(request: Request) {
       .eq("web_user_id", user.id)
       .lt("created_at", getChallengeRetentionCutoff());
 
-    await serviceClient
-      .from(USER_GAME_BIND_CHALLENGES_TABLE)
-      .delete()
-      .eq("web_user_id", user.id)
-      .eq("game_uid", gameUid);
-
-    const { data, error } = await serviceClient
-      .from(USER_GAME_BIND_CHALLENGES_TABLE)
-      .insert({
-        web_user_id: user.id,
-        game_uid: gameUid,
-        challenge: createGameBindChallenge(),
-        expires_at: createChallengeExpiresAt(),
-      })
-      .select("id, game_uid, challenge, expires_at")
-      .single();
+    const { data, error } = await serviceClient.rpc("create_game_uid_bind_challenge", {
+      p_web_user_id: user.id,
+      p_game_uid: gameUid,
+      p_challenge: createGameBindChallenge(),
+      p_expires_at: createChallengeExpiresAt(),
+    });
 
     if (error) {
       throw new ApiRouteError(500, "GAME_BIND_CHALLENGE_CREATE_FAILED", "\u521b\u5efa\u7ed1\u5b9a\u9a8c\u8bc1\u7801\u5931\u8d25", error.message);

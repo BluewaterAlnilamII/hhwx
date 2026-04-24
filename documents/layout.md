@@ -31,6 +31,7 @@ hhwx/
 - auth/: 登录、注册、找回密码等认证页面
 - bandori/: 日历与活动追踪器页面
 - api/: 前端同域 API 路由
+- api/account/game-bind/: 游戏账号绑定的验证码生成、验证、绑定列表和解绑 API
 - layout.tsx: 根布局与全站壳层入口
 - globals.css: 全局样式、动画和共享视觉规则
 

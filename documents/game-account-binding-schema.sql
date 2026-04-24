@@ -21,7 +21,9 @@ create table if not exists public.user_game_bindings (
 
 -- Existing installations may have functions depending on the old table row type.
 drop function if exists public.cleanup_old_game_bind_challenges(timestamptz);
+drop function if exists public.create_game_uid_bind_challenge(uuid, text, text, timestamptz);
 drop function if exists public.complete_game_uid_binding(uuid, text, uuid);
+drop function if exists public.increment_game_bind_challenge_attempt(uuid, uuid);
 drop function if exists public.unbind_game_uid(text, uuid);
 
 -- Bring older installations to the lean schema.
@@ -152,18 +154,19 @@ begin
 end;
 $$;
 
-create or replace function public.complete_game_uid_binding(
-  p_challenge_id uuid,
+create or replace function public.create_game_uid_bind_challenge(
+  p_web_user_id uuid,
   p_game_uid text,
-  p_web_user_id uuid
+  p_challenge text,
+  p_expires_at timestamptz
 )
-returns public.user_game_bindings
+returns public.user_game_bind_challenges
 language plpgsql
 security definer
 set search_path = public
 as $$
 declare
-  result public.user_game_bindings;
+  result public.user_game_bind_challenges;
 begin
   if p_web_user_id is null then
     raise exception 'web_user_id is required';
@@ -173,16 +176,80 @@ begin
     raise exception 'game_uid is required';
   end if;
 
-  perform 1
-  from public.user_game_bind_challenges
+  if p_challenge !~ '^hhwx[a-z2-9]{8}$' then
+    raise exception 'challenge format is invalid';
+  end if;
+
+  if p_expires_at <= now() then
+    raise exception 'expires_at must be in the future';
+  end if;
+
+  perform pg_advisory_xact_lock(hashtext(p_web_user_id::text || ':' || p_game_uid)::bigint);
+
+  delete from public.user_game_bind_challenges
+  where web_user_id = p_web_user_id
+    and game_uid = p_game_uid;
+
+  insert into public.user_game_bind_challenges (
+    web_user_id,
+    game_uid,
+    challenge,
+    expires_at
+  )
+  values (
+    p_web_user_id,
+    p_game_uid,
+    p_challenge,
+    p_expires_at
+  )
+  returning * into result;
+
+  return result;
+end;
+$$;
+
+create or replace function public.complete_game_uid_binding(
+  p_challenge_id uuid,
+  p_game_uid text,
+  p_web_user_id uuid
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  result public.user_game_bindings;
+  consumed_challenge public.user_game_bind_challenges;
+  previous_web_user_id uuid;
+  transferred boolean;
+begin
+  if p_web_user_id is null then
+    raise exception 'web_user_id is required';
+  end if;
+
+  if p_game_uid is null or btrim(p_game_uid) = '' then
+    raise exception 'game_uid is required';
+  end if;
+
+  perform pg_advisory_xact_lock(hashtext(p_game_uid)::bigint);
+
+  delete from public.user_game_bind_challenges
   where id = p_challenge_id
     and web_user_id = p_web_user_id
     and game_uid = p_game_uid
-    and expires_at > now();
+    and expires_at > now()
+  returning * into consumed_challenge;
 
   if not found then
     raise exception 'challenge is invalid or expired';
   end if;
+
+  select web_user_id into previous_web_user_id
+  from public.user_game_bindings
+  where game_uid = p_game_uid;
+
+  transferred := previous_web_user_id is not null and previous_web_user_id <> p_web_user_id;
 
   insert into public.user_game_bindings as bindings (
     game_uid,
@@ -199,10 +266,42 @@ begin
       bound_at = now()
   returning * into result;
 
-  delete from public.user_game_bind_challenges
-  where id = p_challenge_id;
+  return jsonb_build_object(
+    'gameUid', result.game_uid,
+    'webUserId', result.web_user_id,
+    'boundAt', result.bound_at,
+    'transferred', transferred
+  );
+end;
+$$;
 
-  return result;
+create or replace function public.increment_game_bind_challenge_attempt(
+  p_challenge_id uuid,
+  p_web_user_id uuid
+)
+returns integer
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  next_attempt_count integer;
+begin
+  if p_web_user_id is null then
+    raise exception 'web_user_id is required';
+  end if;
+
+  update public.user_game_bind_challenges
+  set attempt_count = attempt_count + 1
+  where id = p_challenge_id
+    and web_user_id = p_web_user_id
+  returning attempt_count into next_attempt_count;
+
+  if not found then
+    raise exception 'challenge is invalid';
+  end if;
+
+  return next_attempt_count;
 end;
 $$;
 
@@ -231,9 +330,13 @@ end;
 $$;
 
 revoke all on function public.cleanup_old_game_bind_challenges(timestamptz) from public, anon, authenticated;
+revoke all on function public.create_game_uid_bind_challenge(uuid, text, text, timestamptz) from public, anon, authenticated;
 revoke all on function public.complete_game_uid_binding(uuid, text, uuid) from public, anon, authenticated;
+revoke all on function public.increment_game_bind_challenge_attempt(uuid, uuid) from public, anon, authenticated;
 revoke all on function public.unbind_game_uid(text, uuid) from public, anon, authenticated;
 
 grant execute on function public.cleanup_old_game_bind_challenges(timestamptz) to service_role;
+grant execute on function public.create_game_uid_bind_challenge(uuid, text, text, timestamptz) to service_role;
 grant execute on function public.complete_game_uid_binding(uuid, text, uuid) to service_role;
+grant execute on function public.increment_game_bind_challenge_attempt(uuid, uuid) to service_role;
 grant execute on function public.unbind_game_uid(text, uuid) to service_role;
