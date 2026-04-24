@@ -5,7 +5,8 @@ import { supabase } from "@/lib/supabase";
 import { BANDORI_TRACKER_DATA_TABLE } from "@/lib/supabase-table-names";
 
 const VALID_TRACKER_TYPES = new Set(["event", "song", "monthly"]);
-const SONG_TRACKER_QUERY_LIMIT = 5000;
+const SONG_TRACKER_PAGE_SIZE = 1000;
+const SONG_TRACKER_MAX_ROWS = 5000;
 
 type TrackerRow = {
   time: number | string;
@@ -133,28 +134,40 @@ export async function handleBandoriTrackerDataRequest(request: Request) {
       // 为什么 song 模式要一次返回全部 song_id 分组：
       // challenge 活动切歌只是在前端本地切换视图，如果服务端按单曲逐次查询，
       // 会让相同档位的数据被重复请求多次，既增加带宽也更容易打乱缓存一致性。
-      const { data, error } = await supabase
-        .from(BANDORI_TRACKER_DATA_TABLE)
-        .select("time, ep, song_id, is_final")
-        .eq("event_id", eventId)
-        .eq("type", "song")
-        .eq("tier", tier)
-        .order("song_id", { ascending: true })
-        .order("time", { ascending: true })
-        .range(0, SONG_TRACKER_QUERY_LIMIT - 1);
+      const rows: TrackerRow[] = [];
 
-      if (error) {
-        console.error("Supabase query error:", error);
-        return errorResponse(500, "DATABASE_QUERY_FAILED", "Failed to query tracker data.", {
-          details: {
-            event: eventId,
-            tier,
-            type: typeParam,
-          },
-        });
+      for (let offset = 0; offset < SONG_TRACKER_MAX_ROWS; offset += SONG_TRACKER_PAGE_SIZE) {
+        const pageEnd = Math.min(offset + SONG_TRACKER_PAGE_SIZE, SONG_TRACKER_MAX_ROWS) - 1;
+        const { data, error } = await supabase
+          .from(BANDORI_TRACKER_DATA_TABLE)
+          .select("time, ep, song_id, is_final")
+          .eq("event_id", eventId)
+          .eq("type", "song")
+          .eq("tier", tier)
+          .order("song_id", { ascending: true })
+          .order("time", { ascending: true })
+          .range(offset, pageEnd);
+
+        if (error) {
+          console.error("Supabase query error:", error);
+          return errorResponse(500, "DATABASE_QUERY_FAILED", "Failed to query tracker data.", {
+            details: {
+              event: eventId,
+              tier,
+              type: typeParam,
+            },
+          });
+        }
+
+        const pageRows = (data ?? []) as TrackerRow[];
+        rows.push(...pageRows);
+
+        if (pageRows.length < SONG_TRACKER_PAGE_SIZE) {
+          break;
+        }
       }
 
-      if ((data ?? []).length === 0) {
+      if (rows.length === 0) {
         return errorResponse(404, "TRACKER_DATA_NOT_FOUND", "No song ranking data found for the requested query.", {
           details: {
             event: eventId,
@@ -166,7 +179,7 @@ export async function handleBandoriTrackerDataRequest(request: Request) {
 
       return NextResponse.json({
         result: true,
-        cutoffs: buildSongCutoffs((data ?? []) as TrackerRow[]),
+        cutoffs: buildSongCutoffs(rows),
       }, {
         headers: withCacheControl(LIVE_API_CACHE_CONTROL),
       });
