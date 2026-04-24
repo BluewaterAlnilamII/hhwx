@@ -5,8 +5,8 @@ import { supabase } from "@/lib/supabase";
 import { BANDORI_TRACKER_DATA_TABLE } from "@/lib/supabase-table-names";
 
 const VALID_TRACKER_TYPES = new Set(["event", "song", "monthly"]);
-const SONG_TRACKER_PAGE_SIZE = 1000;
-const SONG_TRACKER_MAX_ROWS = 5000;
+const TRACKER_PAGE_SIZE = 1000;
+const TRACKER_MAX_ROWS = 5000;
 
 type TrackerRow = {
   time: number | string;
@@ -136,8 +136,8 @@ export async function handleBandoriTrackerDataRequest(request: Request) {
       // 会让相同档位的数据被重复请求多次，既增加带宽也更容易打乱缓存一致性。
       const rows: TrackerRow[] = [];
 
-      for (let offset = 0; offset < SONG_TRACKER_MAX_ROWS; offset += SONG_TRACKER_PAGE_SIZE) {
-        const pageEnd = Math.min(offset + SONG_TRACKER_PAGE_SIZE, SONG_TRACKER_MAX_ROWS) - 1;
+      for (let offset = 0; offset < TRACKER_MAX_ROWS; offset += TRACKER_PAGE_SIZE) {
+        const pageEnd = Math.min(offset + TRACKER_PAGE_SIZE, TRACKER_MAX_ROWS) - 1;
         const { data, error } = await supabase
           .from(BANDORI_TRACKER_DATA_TABLE)
           .select("time, ep, song_id, is_final")
@@ -162,7 +162,7 @@ export async function handleBandoriTrackerDataRequest(request: Request) {
         const pageRows = (data ?? []) as TrackerRow[];
         rows.push(...pageRows);
 
-        if (pageRows.length < SONG_TRACKER_PAGE_SIZE) {
+        if (pageRows.length < TRACKER_PAGE_SIZE) {
           break;
         }
       }
@@ -185,27 +185,40 @@ export async function handleBandoriTrackerDataRequest(request: Request) {
       });
     }
 
-    const { data, error } = await supabase
-      .from(BANDORI_TRACKER_DATA_TABLE)
-      .select("time, ep, is_final")
-      .eq("event_id", eventId)
-      .eq("type", typeParam)
-      .eq("tier", tier)
-      .eq("song_id", 0)
-      .order("time", { ascending: true });
+    const rows: TrackerRow[] = [];
 
-    if (error) {
-      console.error("Supabase query error:", error);
-      return errorResponse(500, "DATABASE_QUERY_FAILED", "Failed to query tracker data.", {
-        details: {
-          event: eventId,
-          tier,
-          type: typeParam,
-        },
-      });
+    for (let offset = 0; offset < TRACKER_MAX_ROWS; offset += TRACKER_PAGE_SIZE) {
+      const pageEnd = Math.min(offset + TRACKER_PAGE_SIZE, TRACKER_MAX_ROWS) - 1;
+      const { data, error } = await supabase
+        .from(BANDORI_TRACKER_DATA_TABLE)
+        .select("time, ep, is_final")
+        .eq("event_id", eventId)
+        .eq("type", typeParam)
+        .eq("tier", tier)
+        .eq("song_id", 0)
+        .order("time", { ascending: true })
+        .range(offset, pageEnd);
+
+      if (error) {
+        console.error("Supabase query error:", error);
+        return errorResponse(500, "DATABASE_QUERY_FAILED", "Failed to query tracker data.", {
+          details: {
+            event: eventId,
+            tier,
+            type: typeParam,
+          },
+        });
+      }
+
+      const pageRows = (data ?? []) as TrackerRow[];
+      rows.push(...pageRows);
+
+      if (pageRows.length < TRACKER_PAGE_SIZE) {
+        break;
+      }
     }
 
-    const formattedData = formatCutoffs((data ?? []) as TrackerRow[]);
+    const formattedData = formatCutoffs(rows);
 
     if (formattedData.length === 0) {
       return errorResponse(404, "TRACKER_DATA_NOT_FOUND", "No tracker data found for the requested query.", {
