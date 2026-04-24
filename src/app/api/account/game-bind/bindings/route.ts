@@ -10,25 +10,24 @@ export async function GET(request: Request) {
     const serviceClient = createServerSupabaseClient();
     const { data, error } = await serviceClient
       .from(USER_GAME_BINDINGS_TABLE)
-      .select("game_uid, bound_at, last_verified_at")
+      .select("game_uid, bound_at")
       .eq("web_user_id", user.id)
       .order("bound_at", { ascending: false });
 
     if (error) {
-      throw new ApiRouteError(500, "GAME_BINDINGS_READ_FAILED", "读取已绑定游戏账号失败", error.message);
+      throw new ApiRouteError(500, "GAME_BINDINGS_READ_FAILED", "\u8bfb\u53d6\u5df2\u7ed1\u5b9a\u6e38\u620f\u8d26\u53f7\u5931\u8d25", error.message);
     }
 
     return jsonSuccess((data ?? []).map((row) => ({
       gameUid: row.game_uid,
       boundAt: row.bound_at,
-      lastVerifiedAt: row.last_verified_at,
     })));
   } catch (error) {
     console.error("Game bindings GET API error:", error);
     return jsonRouteError(error, {
       status: 500,
       code: "GAME_BINDINGS_READ_FAILED",
-      message: "读取已绑定游戏账号失败",
+      message: "\u8bfb\u53d6\u5df2\u7ed1\u5b9a\u6e38\u620f\u8d26\u53f7\u5931\u8d25",
     });
   }
 }

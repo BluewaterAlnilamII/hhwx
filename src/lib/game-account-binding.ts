@@ -13,7 +13,6 @@ const CHALLENGE_SUFFIX_LENGTH = 8;
 export type GameAccountBinding = {
   gameUid: string;
   boundAt: string;
-  lastVerifiedAt: string;
 };
 
 export type GameBindChallenge = {
@@ -94,4 +93,3 @@ export async function fetchGameProfileSignature(gameUid: string): Promise<{ sign
     fetchedAt: typeof payload.fetchedAt === "string" ? payload.fetchedAt : null,
   };
 }
-

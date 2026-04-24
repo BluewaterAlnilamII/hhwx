@@ -8,34 +8,53 @@ create table if not exists public.user_game_bind_challenges (
   web_user_id uuid not null references auth.users(id) on delete cascade,
   game_uid text not null,
   challenge text not null,
-  status text not null default 'pending',
-  attempt_count integer not null default 0,
   expires_at timestamptz not null,
-  verified_at timestamptz,
+  attempt_count integer not null default 0,
   created_at timestamptz not null default now()
 );
-
-alter table public.user_game_bind_challenges
-  add column if not exists status text not null default 'pending';
-
-alter table public.user_game_bind_challenges
-  add column if not exists attempt_count integer not null default 0;
 
 create table if not exists public.user_game_bindings (
   game_uid text primary key,
   web_user_id uuid not null references auth.users(id) on delete cascade,
-  challenge_id uuid references public.user_game_bind_challenges(id) on delete set null,
-  bound_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
+  bound_at timestamptz not null default now()
 );
 
--- Normalize existing challenge data before tightening generated-code/status constraints.
+-- Existing installations may have functions depending on the old table row type.
+drop function if exists public.cleanup_old_game_bind_challenges(timestamptz);
+drop function if exists public.complete_game_uid_binding(uuid, text, uuid);
+drop function if exists public.unbind_game_uid(text, uuid);
+
+-- Bring older installations to the lean schema.
+alter table public.user_game_bind_challenges
+  add column if not exists attempt_count integer not null default 0;
+
+alter table public.user_game_bind_challenges
+  add column if not exists created_at timestamptz not null default now();
+
+alter table public.user_game_bind_challenges
+  drop constraint if exists user_game_bind_challenges_status_check;
+
+alter table public.user_game_bind_challenges
+  drop constraint if exists user_game_bind_challenges_attempt_count_check;
+
+alter table public.user_game_bind_challenges
+  drop column if exists status;
+
+alter table public.user_game_bind_challenges
+  drop column if exists verified_at;
+
+alter table public.user_game_bindings
+  add column if not exists bound_at timestamptz not null default now();
+
+alter table public.user_game_bindings
+  drop column if exists challenge_id;
+
+alter table public.user_game_bindings
+  drop column if exists updated_at;
+
+-- Normalize existing challenge data before tightening generated-code constraints.
 delete from public.user_game_bind_challenges
 where challenge !~ '^hhwx[a-z2-9]{8}$';
-
-update public.user_game_bind_challenges
-set status = 'pending'
-where status is null or status not in ('pending', 'verified', 'expired', 'failed');
 
 update public.user_game_bind_challenges
 set attempt_count = 0
@@ -49,16 +68,6 @@ alter table public.user_game_bind_challenges
   check (challenge ~ '^hhwx[a-z2-9]{8}$');
 
 alter table public.user_game_bind_challenges
-  drop constraint if exists user_game_bind_challenges_status_check;
-
-alter table public.user_game_bind_challenges
-  add constraint user_game_bind_challenges_status_check
-  check (status in ('pending', 'verified', 'expired', 'failed'));
-
-alter table public.user_game_bind_challenges
-  drop constraint if exists user_game_bind_challenges_attempt_count_check;
-
-alter table public.user_game_bind_challenges
   add constraint user_game_bind_challenges_attempt_count_check
   check (attempt_count >= 0);
 
@@ -68,14 +77,13 @@ create index if not exists user_game_bind_challenges_user_created_idx
 create index if not exists user_game_bind_challenges_game_uid_idx
   on public.user_game_bind_challenges(game_uid);
 
-create index if not exists user_game_bind_challenges_status_idx
-  on public.user_game_bind_challenges(status);
-
 create index if not exists user_game_bind_challenges_expires_idx
   on public.user_game_bind_challenges(expires_at);
 
 create index if not exists user_game_bindings_user_idx
   on public.user_game_bindings(web_user_id, bound_at desc);
+
+drop index if exists public.user_game_bind_challenges_status_idx;
 
 alter table public.user_game_bind_challenges enable row level security;
 alter table public.user_game_bindings enable row level security;
@@ -125,10 +133,6 @@ create policy "Users can delete own game uid bindings"
   to authenticated
   using (auth.uid() = web_user_id);
 
-drop function if exists public.cleanup_old_game_bind_challenges(timestamptz);
-drop function if exists public.complete_game_uid_binding(uuid, text, uuid);
-drop function if exists public.unbind_game_uid(text, uuid);
-
 create or replace function public.cleanup_old_game_bind_challenges(
   p_before timestamptz default now() - interval '7 days'
 )
@@ -169,38 +173,34 @@ begin
     raise exception 'game_uid is required';
   end if;
 
-  update public.user_game_bind_challenges
-  set verified_at = now(),
-      status = 'verified'
+  perform 1
+  from public.user_game_bind_challenges
   where id = p_challenge_id
     and web_user_id = p_web_user_id
     and game_uid = p_game_uid
-    and status = 'pending'
     and expires_at > now();
 
   if not found then
-    raise exception 'challenge is invalid, expired, or already verified';
+    raise exception 'challenge is invalid or expired';
   end if;
 
   insert into public.user_game_bindings as bindings (
     game_uid,
     web_user_id,
-    challenge_id,
-    bound_at,
-    updated_at
+    bound_at
   )
   values (
     p_game_uid,
     p_web_user_id,
-    p_challenge_id,
-    now(),
     now()
   )
   on conflict (game_uid) do update
   set web_user_id = excluded.web_user_id,
-      challenge_id = excluded.challenge_id,
-      updated_at = now()
+      bound_at = now()
   returning * into result;
+
+  delete from public.user_game_bind_challenges
+  where id = p_challenge_id;
 
   return result;
 end;

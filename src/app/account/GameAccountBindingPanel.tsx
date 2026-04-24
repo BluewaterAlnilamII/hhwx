@@ -61,6 +61,7 @@ export default function GameAccountBindingPanel() {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [copiedChallenge, setCopiedChallenge] = useState(false);
 
   const normalizedUid = useMemo(() => gameUid.trim(), [gameUid]);
 
@@ -90,6 +91,7 @@ export default function GameAccountBindingPanel() {
         body: JSON.stringify({ gameUid: normalizedUid }),
       });
       setChallenge(nextChallenge);
+      setCopiedChallenge(false);
       setMessage("验证码已生成，请填入游戏内个性签名。");
     } catch (createError) {
       setError(createError instanceof Error ? createError.message : "创建验证码失败");
@@ -113,6 +115,7 @@ export default function GameAccountBindingPanel() {
       });
       setMessage(result.transferred ? "绑定成功，该 UID 已从旧账号转移到当前账号。" : "绑定成功。");
       setChallenge(null);
+      setCopiedChallenge(false);
       setGameUid("");
       await loadBindings();
     } catch (verifyError) {
@@ -142,6 +145,17 @@ export default function GameAccountBindingPanel() {
       setBusy(false);
     }
   }, [loadBindings]);
+
+  const copyChallenge = useCallback(() => {
+    if (!challenge) {
+      return;
+    }
+
+    void navigator.clipboard?.writeText(challenge.challenge).then(() => {
+      setCopiedChallenge(true);
+      window.setTimeout(() => setCopiedChallenge(false), 1600);
+    }).catch(() => undefined);
+  }, [challenge]);
 
   return (
     <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
@@ -177,10 +191,10 @@ export default function GameAccountBindingPanel() {
             <code className="rounded-xl bg-white px-3 py-2 text-lg font-bold text-slate-900 shadow-sm">{challenge.challenge}</code>
             <button
               type="button"
-              onClick={() => navigator.clipboard?.writeText(challenge.challenge).catch(() => undefined)}
+              onClick={copyChallenge}
               className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-sky-200 hover:text-sky-600"
             >
-              复制
+              {copiedChallenge ? "已复制" : "复制"}
             </button>
           </div>
           <div className="mt-3 text-sm text-slate-600">有效期至 {formatDate(challenge.expiresAt)}</div>

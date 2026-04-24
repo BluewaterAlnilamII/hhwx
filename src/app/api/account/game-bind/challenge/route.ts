@@ -36,10 +36,9 @@ export async function POST(request: Request) {
 
     await serviceClient
       .from(USER_GAME_BIND_CHALLENGES_TABLE)
-      .update({ status: "expired" })
+      .delete()
       .eq("web_user_id", user.id)
-      .eq("game_uid", gameUid)
-      .eq("status", "pending");
+      .eq("game_uid", gameUid);
 
     const { data, error } = await serviceClient
       .from(USER_GAME_BIND_CHALLENGES_TABLE)
