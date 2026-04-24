@@ -5,6 +5,7 @@ import { supabase } from "@/lib/supabase";
 import { BANDORI_TRACKER_DATA_TABLE } from "@/lib/supabase-table-names";
 
 const VALID_TRACKER_TYPES = new Set(["event", "song", "monthly"]);
+const SONG_TRACKER_QUERY_LIMIT = 5000;
 
 type TrackerRow = {
   time: number | string;
@@ -139,7 +140,8 @@ export async function handleBandoriTrackerDataRequest(request: Request) {
         .eq("type", "song")
         .eq("tier", tier)
         .order("song_id", { ascending: true })
-        .order("time", { ascending: true });
+        .order("time", { ascending: true })
+        .range(0, SONG_TRACKER_QUERY_LIMIT - 1);
 
       if (error) {
         console.error("Supabase query error:", error);
