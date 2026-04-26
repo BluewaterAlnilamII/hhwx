@@ -186,6 +186,19 @@ begin
 
   perform pg_advisory_xact_lock(hashtext(p_web_user_id::text || ':' || p_game_uid)::bigint);
 
+  if not exists (
+    select 1
+    from public.user_game_bindings
+    where web_user_id = p_web_user_id
+      and game_uid = p_game_uid
+  ) and (
+    select count(*)
+    from public.user_game_bindings
+    where web_user_id = p_web_user_id
+  ) >= 5 then
+    raise exception 'game uid binding limit reached';
+  end if;
+
   delete from public.user_game_bind_challenges
   where web_user_id = p_web_user_id
     and game_uid = p_game_uid;
@@ -250,6 +263,20 @@ begin
   where game_uid = p_game_uid;
 
   transferred := previous_web_user_id is not null and previous_web_user_id <> p_web_user_id;
+
+  if previous_web_user_id is null and (
+    select count(*)
+    from public.user_game_bindings
+    where web_user_id = p_web_user_id
+  ) >= 5 then
+    raise exception 'game uid binding limit reached';
+  end if;
+
+  if transferred and to_regclass('public.user_game_profiles') is not null then
+    execute
+      'delete from public.user_game_profiles where web_user_id = $1 and source_game_uid = $2'
+      using previous_web_user_id, p_game_uid;
+  end if;
 
   insert into public.user_game_bindings as bindings (
     game_uid,
@@ -322,6 +349,12 @@ begin
   delete from public.user_game_bindings
   where game_uid = p_game_uid
     and web_user_id = p_web_user_id;
+
+  if to_regclass('public.user_game_profiles') is not null then
+    execute
+      'delete from public.user_game_profiles where web_user_id = $1 and source_game_uid = $2'
+      using p_web_user_id, p_game_uid;
+  end if;
 
   delete from public.user_game_bind_challenges
   where game_uid = p_game_uid

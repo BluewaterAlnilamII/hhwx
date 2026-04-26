@@ -47,7 +47,8 @@ export function getApiErrorMessage(payload: unknown): string | null {
   if (isRecord(payload) && payload.success === false && isRecord(payload.error)) {
     const message = typeof payload.error.message === "string" ? payload.error.message : null;
     const details = typeof payload.error.details === "string" ? payload.error.details : null;
-    const parts = [message, details].filter((value): value is string => Boolean(value));
+    const objectDetails = details ? null : payload.error.details !== undefined ? JSON.stringify(payload.error.details) : null;
+    const parts = [message, details, objectDetails].filter((value): value is string => Boolean(value));
     return parts.length > 0 ? parts.join("：") : null;
   }
 

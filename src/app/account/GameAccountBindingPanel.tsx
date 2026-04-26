@@ -10,6 +10,8 @@ type VerifyResult = {
   transferred: boolean;
 };
 
+const USER_GAME_BINDING_LIMIT = 5;
+
 async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
   const accessToken = await getAccessToken();
   if (!accessToken) {
@@ -177,7 +179,7 @@ export default function GameAccountBindingPanel() {
         <button
           type="button"
           onClick={createChallenge}
-          disabled={busy || !normalizedUid}
+          disabled={busy || !normalizedUid || bindings.length >= USER_GAME_BINDING_LIMIT}
           className="h-11 rounded-2xl bg-sky-600 px-5 text-sm font-semibold text-white transition hover:bg-sky-500 disabled:cursor-not-allowed disabled:bg-slate-300"
         >
           {challenge ? "刷新验证码" : "生成验证码"}
@@ -216,7 +218,7 @@ export default function GameAccountBindingPanel() {
       )}
 
       <div className="mt-6 border-t border-slate-100 pt-5">
-        <h3 className="text-base font-semibold text-slate-900">已绑定账号</h3>
+        <h3 className="text-base font-semibold text-slate-900">已绑定账号 {bindings.length}/{USER_GAME_BINDING_LIMIT}</h3>
         {loadingBindings ? (
           <p className="mt-3 text-sm text-slate-500">正在读取...</p>
         ) : bindings.length === 0 ? (

@@ -8,3 +8,4 @@ export const USER_ROLES_TABLE = "user_roles";
 export const BANDORI_TRACKER_DATA_TABLE = "bandori_tracker_data";
 export const USER_GAME_BIND_CHALLENGES_TABLE = "user_game_bind_challenges";
 export const USER_GAME_BINDINGS_TABLE = "user_game_bindings";
+export const USER_GAME_PROFILES_TABLE = "user_game_profiles";

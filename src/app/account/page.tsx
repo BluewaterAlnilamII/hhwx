@@ -4,6 +4,7 @@ import Link from "next/link";
 import { getUsernameAvatarLabel } from "@/lib/username-policy";
 import AccountShell, { AccountErrorState, AccountLoadingState, AccountSignInState } from "./AccountShell";
 import GameAccountBindingPanel from "./GameAccountBindingPanel";
+import GameProfilesPanel from "./GameProfilesPanel";
 import { useAccountProfile } from "./useAccountProfile";
 
 export default function AccountPage() {
@@ -46,6 +47,7 @@ export default function AccountPage() {
           </section>
 
           <GameAccountBindingPanel />
+          <GameProfilesPanel />
 
           <div className="space-y-4">
             <Link
