@@ -16,6 +16,7 @@ import {
 } from "@/lib/user-game-profile-payload";
 import { decodeBestdoriProfile, encodeBestdoriProfile } from "@/lib/bestdori-profile-codec";
 import { BANDORI_AREA_ITEM_GROUPS, BANDORI_AREA_ITEM_IDS } from "@/lib/bandori-area-item-groups";
+import { BANDORI_CHARACTER_GROUPS, compareBandoriCharacterIds } from "@/lib/bandori-character-groups";
 import {
   isLocalGameProfileId,
   readLocalGameProfilePayload,
@@ -94,14 +95,7 @@ type CharacterBonusRow = {
 const AREA_ITEM_GROUPS = BANDORI_AREA_ITEM_GROUPS;
 
 const CHARACTER_GROUPS: CharacterGroup[] = [
-  { bandId: 1, label: "Poppin'Party" },
-  { bandId: 2, label: "Afterglow" },
-  { bandId: 3, label: "Pastel＊Palettes" },
-  { bandId: 4, label: "Roselia" },
-  { bandId: 5, label: "Hello, Happy World!" },
-  { bandId: 18, label: "Morfonica" },
-  { bandId: 21, label: "RAISE A SUILEN" },
-  { bandId: 45, label: "MyGO!!!!!" },
+  ...BANDORI_CHARACTER_GROUPS.map((group) => ({ bandId: group.bandId, label: group.label })),
 ];
 
 const AREA_ITEM_IDS = BANDORI_AREA_ITEM_IDS;
@@ -559,7 +553,7 @@ export default function GameProfileItemsPage({ params }: { params: Promise<{ pro
     return CHARACTER_GROUPS.map((group) => {
       const rows = metadata.characters
         .filter((character) => character.bandId === group.bandId && character.characterId > 0 && character.characterId <= MAX_CHARACTER_ID)
-        .sort((left, right) => left.characterId - right.characterId)
+        .sort((left, right) => compareBandoriCharacterIds(left.characterId, right.characterId))
         .map((character): CharacterBonusRow => ({
           characterId: character.characterId,
           characterName: pickCharacterName(character, character.characterId),
@@ -615,7 +609,7 @@ export default function GameProfileItemsPage({ params }: { params: Promise<{ pro
         characterPotentials: (hasRecord
           ? current.characterPotentials.map((record) => (record.characterId === characterId ? nextRecord : record))
           : [...current.characterPotentials, nextRecord]
-        ).sort((left, right) => left.characterId - right.characterId),
+        ).sort((left, right) => compareBandoriCharacterIds(left.characterId, right.characterId)),
       };
     });
   }
@@ -632,7 +626,7 @@ export default function GameProfileItemsPage({ params }: { params: Promise<{ pro
         characterMissionBonuses: (hasRecord
           ? current.characterMissionBonuses.map((record) => (`${record.characterId}:${normalizeMissionBonusType(record.bonusType)}` === key ? nextRecord : record))
           : [...current.characterMissionBonuses, nextRecord]
-        ).sort((left, right) => left.characterId - right.characterId || (normalizeMissionBonusType(left.bonusType) === "TRAINING" ? -1 : 1)),
+        ).sort((left, right) => compareBandoriCharacterIds(left.characterId, right.characterId) || (normalizeMissionBonusType(left.bonusType) === "TRAINING" ? -1 : 1)),
       };
     });
   }

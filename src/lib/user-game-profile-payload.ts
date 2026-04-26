@@ -11,6 +11,7 @@ import {
   BANDORI_AREA_ITEM_IDS_BY_GROUP,
   orderBandoriAreaItems,
 } from "@/lib/bandori-area-item-groups";
+import { compareBandoriCharacterIds } from "@/lib/bandori-character-groups";
 
 export const USER_GAME_PROFILE_STORAGE_CODEC = "hhwx-profile+gzip+base64-v1";
 
@@ -201,7 +202,7 @@ export function compactPotentialRecords(records?: UserGameProfilePotentialRecord
 
   const sortedRecords = [...records]
     .filter((record) => record.characterId > 0 && record.characterId <= MAX_BANDORI_CHARACTER_ID)
-    .sort((left, right) => left.characterId - right.characterId);
+    .sort((left, right) => compareBandoriCharacterIds(left.characterId, right.characterId));
   return {
     ids: encodeBestdoriCardIds(sortedRecords.map((record) => record.characterId)),
     performance: encodeRunLengthPairs(sortedRecords.map((record) => record.performanceLevel)),
@@ -221,7 +222,9 @@ function decodeCompactPotentialRecords(records: CompactGameProfilePotentialRecor
     performanceLevel: performance[index] === null ? null : Math.max(0, toFiniteNumber(performance[index])),
     techniqueLevel: technique[index] === null ? null : Math.max(0, toFiniteNumber(technique[index])),
     visualLevel: visual[index] === null ? null : Math.max(0, toFiniteNumber(visual[index])),
-  })).filter((record) => record.characterId > 0 && record.characterId <= MAX_BANDORI_CHARACTER_ID);
+  }))
+    .filter((record) => record.characterId > 0 && record.characterId <= MAX_BANDORI_CHARACTER_ID)
+    .sort((left, right) => compareBandoriCharacterIds(left.characterId, right.characterId));
 }
 
 export function compactMissionBonusRecords(records?: UserGameProfileMissionBonusRecord[] | CompactGameProfileMissionBonusRecords): CompactGameProfileMissionBonusRecords | undefined {
@@ -248,7 +251,7 @@ export function compactMissionBonusRecords(records?: UserGameProfileMissionBonus
       };
       valuesByCharacter.set(record.characterId, current);
     });
-  const sortedRecords = [...valuesByCharacter.entries()].sort(([left], [right]) => left - right);
+  const sortedRecords = [...valuesByCharacter.entries()].sort(([left], [right]) => compareBandoriCharacterIds(left, right));
 
   return {
     ids: encodeBestdoriCardIds(sortedRecords.map(([characterId]) => characterId)),
@@ -295,7 +298,7 @@ function decodeCompactMissionBonusRecords(records: CompactGameProfileMissionBonu
         visual: Math.max(0, toFiniteNumber(trainingVisual[index])),
       },
     ];
-  });
+  }).sort((left, right) => compareBandoriCharacterIds(left.characterId, right.characterId) || (left.bonusType === "TRAINING" ? -1 : 1));
 }
 
 export function compactGameProfilePayload(payload: UserGameProfilePayload): UserGameProfilePayload {

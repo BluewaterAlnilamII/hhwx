@@ -7,9 +7,9 @@ export type BandoriAreaItemGroup = {
 export const BANDORI_AREA_ITEM_GROUPS: BandoriAreaItemGroup[] = [
   { key: "PoppinParty", label: "Poppin'Party 道具", itemIds: [1, 6, 11, 16, 21, 26, 31] },
   { key: "Afterglow", label: "Afterglow 道具", itemIds: [2, 7, 12, 17, 22, 27, 32] },
-  { key: "HelloHappyWorld", label: "Hello, Happy World! 道具", itemIds: [3, 8, 13, 18, 23, 28, 33] },
-  { key: "PastelPalettes", label: "Pastel＊Palettes 道具", itemIds: [4, 9, 14, 19, 24, 29, 34] },
-  { key: "Roselia", label: "Roselia 道具", itemIds: [5, 10, 15, 20, 25, 30, 35] },
+  { key: "HelloHappyWorld", label: "Hello, Happy World! 道具", itemIds: [5, 10, 15, 20, 25, 30, 35] },
+  { key: "PastelPalettes", label: "Pastel＊Palettes 道具", itemIds: [3, 8, 13, 18, 23, 28, 33] },
+  { key: "Roselia", label: "Roselia 道具", itemIds: [4, 9, 14, 19, 24, 29, 34] },
   { key: "Morfonica", label: "Morfonica 道具", itemIds: [83, 84, 85, 86, 87, 88, 89] },
   { key: "RaiseASuilen", label: "RAISE A SUILEN 道具", itemIds: [90, 91, 92, 93, 94, 95, 96] },
   { key: "MyGO", label: "MyGO!!!!! 道具", itemIds: [97, 98, 99, 100, 101, 102, 103] },
