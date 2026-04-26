@@ -239,6 +239,10 @@ function importMissionBonusRecordsFromBestdoriTotals(potentials: number[]): User
 
 export function importBestdoriGameProfilePayload(bestdoriProfile: BestdoriProfile): UserGameProfilePayload {
   const normalizedProfile = decodeBestdoriProfile(bestdoriProfile);
+  if (bestdoriProfile.data.cards.ids.trim() && normalizedProfile.cards.length === 0) {
+    throw new Error("Bestdori Profile 卡牌数据解析为空，已取消导入以避免创建空档案");
+  }
+
   const bestdoriPotentials = normalizedProfile.potentials;
   // Public profile JSON always uses Bestdori's area-item level encoding.
   // The HHWX extension only restores fields that Bestdori does not model.

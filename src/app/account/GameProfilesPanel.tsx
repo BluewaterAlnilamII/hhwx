@@ -61,7 +61,6 @@ type ExportedProfilePayload = {
   json: string;
 };
 
-const USER_GAME_BINDING_LIMIT = 5;
 const USER_GAME_AUTO_PROFILE_LIMIT = 5;
 const USER_GAME_MANUAL_PROFILE_LIMIT = 10;
 
@@ -403,7 +402,7 @@ export default function GameProfilesPanel({ refreshSignal = 0 }: GameProfilesPan
           </p>
         </div>
         <div className="text-sm text-slate-500">
-          自动 {autoProfileCount}/{USER_GAME_AUTO_PROFILE_LIMIT} · 本地手动 {manualProfileCount}/{USER_GAME_MANUAL_PROFILE_LIMIT} · 绑定 {bindings.length}/{USER_GAME_BINDING_LIMIT}
+          自动 {autoProfileCount}/{USER_GAME_AUTO_PROFILE_LIMIT} · 手动 {manualProfileCount}/{USER_GAME_MANUAL_PROFILE_LIMIT}
         </div>
       </div>
 
@@ -536,7 +535,7 @@ export default function GameProfilesPanel({ refreshSignal = 0 }: GameProfilesPan
                       className={`inline-flex h-9 items-center justify-center gap-2 rounded-xl border px-3 text-sm font-semibold transition disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400 ${profileExported ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-slate-200 bg-white text-slate-700 hover:border-sky-200 hover:text-sky-600"}`}
                     >
                       {isExportingProfile ? <RefreshCw className="h-4 w-4 animate-spin" /> : profileExported ? <CheckCircle2 className="h-4 w-4" /> : <Download className="h-4 w-4" />}
-                      {isExportingProfile ? "导出中" : profileExported ? "导出成功" : "导出 Profile"}
+                      {isExportingProfile ? "导出中" : profileExported ? "导出成功" : "导出"}
                     </button>
                     {profile.location === "local" ? (
                       <button
