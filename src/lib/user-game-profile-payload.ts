@@ -14,6 +14,7 @@ import {
 import { compareBandoriCharacterIds } from "@/lib/bandori-character-groups";
 
 export const USER_GAME_PROFILE_STORAGE_CODEC = "hhwx-profile+gzip+base64-v1";
+export const HHWX_BESTDORI_PROFILE_FORMAT = "hhwx-profile-v1";
 
 export type UserGameProfileCardRecord = {
   cardId: number;
@@ -79,7 +80,11 @@ export type UserGameProfilePayload = {
   };
 };
 
-export type CompleteGameProfileExport = Omit<UserGameProfilePayload, "source">;
+export type HhwxBestdoriProfileExtension = {
+  format: typeof HHWX_BESTDORI_PROFILE_FORMAT;
+  characterPotentials?: CompactGameProfilePotentialRecords;
+  characterMissionBonuses?: CompactGameProfileMissionBonusRecords;
+};
 
 export type CompressedGameProfilePayload = {
   storageCodec: typeof USER_GAME_PROFILE_STORAGE_CODEC;
@@ -93,6 +98,34 @@ const MAX_BANDORI_CHARACTER_ID = 50;
 function toFiniteNumber(value: unknown, fallback = 0): number {
   const numberValue = typeof value === "number" ? value : Number(value);
   return Number.isFinite(numberValue) ? numberValue : fallback;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function normalizeBestdoriImportAreaItemLevel(level: number | null): number | null {
+  if (level === null) {
+    return 0;
+  }
+
+  return Math.max(0, Math.trunc(toFiniteNumber(level)) + 1);
+}
+
+function getHhwxBestdoriProfileExtension(profile: BestdoriProfile): HhwxBestdoriProfileExtension | null {
+  if (!isRecord(profile.hhwx) || profile.hhwx.format !== HHWX_BESTDORI_PROFILE_FORMAT) {
+    return null;
+  }
+
+  return {
+    format: HHWX_BESTDORI_PROFILE_FORMAT,
+    characterPotentials: isRecord(profile.hhwx.characterPotentials)
+      ? profile.hhwx.characterPotentials as CompactGameProfilePotentialRecords
+      : undefined,
+    characterMissionBonuses: isRecord(profile.hhwx.characterMissionBonuses)
+      ? profile.hhwx.characterMissionBonuses as CompactGameProfileMissionBonusRecords
+      : undefined,
+  };
 }
 
 export function getGameProfileCards(payload: UserGameProfilePayload): UserGameProfileCardRecord[] {
@@ -146,6 +179,89 @@ function normalizeAreaItemExportLevel(level: number | null): number | null {
   return normalizedLevel > 0 ? normalizedLevel - 1 : null;
 }
 
+function distributeBestdoriPotentialTotal(total: number): {
+  potential: number;
+  training: number;
+  collection: number;
+} {
+  const normalizedTotal = Math.max(0, Math.trunc(toFiniteNumber(total)));
+  const effectiveTotal = normalizedTotal <= 1 ? 0 : normalizedTotal;
+  const potential = Math.min(effectiveTotal, 50);
+  const training = Math.min(Math.max(effectiveTotal - 50, 0), 20);
+  const collection = Math.min(Math.max(effectiveTotal - 70, 0), 40);
+
+  return { potential, training, collection };
+}
+
+function importPotentialRecordsFromBestdoriTotals(potentials: number[]): UserGameProfilePotentialRecord[] {
+  return potentials.flatMap((total, index) => {
+    const characterId = index + 1;
+    if (characterId > MAX_BANDORI_CHARACTER_ID) {
+      return [];
+    }
+
+    const distributed = distributeBestdoriPotentialTotal(total);
+    return {
+      characterId,
+      performanceLevel: distributed.potential,
+      techniqueLevel: distributed.potential,
+      visualLevel: distributed.potential,
+    };
+  });
+}
+
+function importMissionBonusRecordsFromBestdoriTotals(potentials: number[]): UserGameProfileMissionBonusRecord[] {
+  return potentials.flatMap((total, index) => {
+    const characterId = index + 1;
+    if (characterId > MAX_BANDORI_CHARACTER_ID) {
+      return [];
+    }
+
+    const distributed = distributeBestdoriPotentialTotal(total);
+    return [
+      {
+        characterId,
+        bonusType: "TRAINING",
+        performance: distributed.training,
+        technique: distributed.training,
+        visual: distributed.training,
+      },
+      {
+        characterId,
+        bonusType: "COLLECTION",
+        performance: distributed.collection,
+        technique: distributed.collection,
+        visual: distributed.collection,
+      },
+    ];
+  });
+}
+
+export function importBestdoriGameProfilePayload(bestdoriProfile: BestdoriProfile): UserGameProfilePayload {
+  const normalizedProfile = decodeBestdoriProfile(bestdoriProfile);
+  const bestdoriPotentials = normalizedProfile.potentials;
+  // Public profile JSON always uses Bestdori's area-item level encoding.
+  // The HHWX extension only restores fields that Bestdori does not model.
+  normalizedProfile.items = Object.fromEntries(
+    Object.entries(normalizedProfile.items).map(([itemKey, levels]) => [
+      itemKey,
+      levels.map(normalizeBestdoriImportAreaItemLevel),
+    ]),
+  );
+  normalizedProfile.potentials = [];
+
+  const extension = getHhwxBestdoriProfileExtension(bestdoriProfile);
+  return {
+    bestdoriProfile: encodeBestdoriProfile(normalizedProfile),
+    characterPotentials: compactPotentialRecords(
+      extension?.characterPotentials ?? importPotentialRecordsFromBestdoriTotals(bestdoriPotentials),
+    ),
+    characterMissionBonuses: compactMissionBonusRecords(
+      extension?.characterMissionBonuses ?? importMissionBonusRecordsFromBestdoriTotals(bestdoriPotentials),
+    ),
+  };
+}
+
 export function exportBestdoriGameProfilePayload(payload: UserGameProfilePayload): BestdoriProfile {
   const compactPayload = compactGameProfilePayload(payload);
   const normalizedProfile = decodeBestdoriProfile(compactPayload.bestdoriProfile);
@@ -189,7 +305,13 @@ export function exportBestdoriGameProfilePayload(payload: UserGameProfilePayload
     return total > 0 ? total : 1;
   });
 
-  return encodeBestdoriProfile(normalizedProfile);
+  const exportedProfile = encodeBestdoriProfile(normalizedProfile);
+  exportedProfile.hhwx = {
+    format: HHWX_BESTDORI_PROFILE_FORMAT,
+    characterPotentials: compactPayload.characterPotentials,
+    characterMissionBonuses: compactPayload.characterMissionBonuses,
+  } satisfies HhwxBestdoriProfileExtension;
+  return exportedProfile;
 }
 
 export function compactPotentialRecords(records?: UserGameProfilePotentialRecord[] | CompactGameProfilePotentialRecords): CompactGameProfilePotentialRecords | undefined {
@@ -311,15 +433,6 @@ export function compactGameProfilePayload(payload: UserGameProfilePayload): User
     characterPotentials: compactPotentialRecords(payload.characterPotentials),
     characterMissionBonuses: compactMissionBonusRecords(payload.characterMissionBonuses),
     source: payload.source,
-  };
-}
-
-export function exportCompactGameProfilePayload(payload: UserGameProfilePayload): CompleteGameProfileExport {
-  const compactPayload = compactGameProfilePayload(payload);
-  return {
-    bestdoriProfile: compactPayload.bestdoriProfile,
-    characterPotentials: compactPayload.characterPotentials,
-    characterMissionBonuses: compactPayload.characterMissionBonuses,
   };
 }
 

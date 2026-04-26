@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { jsonRouteError } from "@/lib/api-response";
 import { requireAuthenticatedUser } from "@/lib/auth-server";
-import { exportBestdoriGameProfile, exportCompleteGameProfile, normalizeProfileId } from "@/lib/user-game-profiles-server";
+import { exportBestdoriGameProfile, normalizeProfileId } from "@/lib/user-game-profiles-server";
 
 export async function GET(
   request: Request,
@@ -11,14 +11,10 @@ export async function GET(
     const user = await requireAuthenticatedUser(request);
     const { profileId: rawProfileId } = await context.params;
     const profileId = normalizeProfileId(rawProfileId);
-    const url = new URL(request.url);
-    const format = url.searchParams.get("format") === "full" ? "full" : "bestdori";
-    const profile = format === "full"
-      ? await exportCompleteGameProfile(user.id, profileId)
-      : await exportBestdoriGameProfile(user.id, profileId);
+    const profile = await exportBestdoriGameProfile(user.id, profileId);
 
-    // This route is an explicit profile export boundary. Bestdori format returns
-    // the third-party-compatible JSON, and full format returns HHWX-owned details.
+    // The export is Bestdori-compatible and carries HHWX-only fields in a top-level
+    // extension object so third-party readers can ignore it.
     return NextResponse.json(profile);
   } catch (error) {
     console.error("Game profile export API error:", error);

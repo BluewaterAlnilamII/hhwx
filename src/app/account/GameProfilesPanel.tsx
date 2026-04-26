@@ -15,7 +15,7 @@ import {
 import {
   decodeCompressedGameProfilePayload,
   exportBestdoriGameProfilePayload,
-  exportCompactGameProfilePayload,
+  importBestdoriGameProfilePayload,
   type CompressedGameProfilePayload,
   type UserGameProfilePayload,
 } from "@/lib/user-game-profile-payload";
@@ -53,12 +53,10 @@ type BusyAction =
   | { type: "copy"; profileId: string }
   | { type: "upload"; profileId: string }
   | { type: "download"; profileId: string }
-  | { type: "export"; profileId: string; format: ExportFormat }
+  | { type: "export"; profileId: string }
   | { type: "delete"; profileId: string };
-type ExportFormat = "bestdori" | "full";
 type ExportedProfilePayload = {
   profileId: string;
-  format: ExportFormat;
   label: string;
   json: string;
 };
@@ -227,8 +225,9 @@ export default function GameProfilesPanel({ refreshSignal = 0 }: GameProfilesPan
     setExportedPayload(null);
     try {
       const bestdoriProfile = parseBestdoriProfile(JSON.parse(importText));
-      const normalizedProfile = decodeBestdoriProfile(bestdoriProfile);
-      await saveLocalGameProfilePayload(payloadFromNormalizedProfile(normalizedProfile, bestdoriProfile), normalizedProfile.name);
+      const payload = importBestdoriGameProfilePayload(bestdoriProfile);
+      const normalizedProfile = decodeBestdoriProfile(payload.bestdoriProfile);
+      await saveLocalGameProfilePayload(payload, normalizedProfile.name);
       setImportText("");
       setMessage("Bestdori Profile 已导入到本地。");
       await loadData();
@@ -327,8 +326,8 @@ export default function GameProfilesPanel({ refreshSignal = 0 }: GameProfilesPan
     }
   }, [loadData]);
 
-  const exportProfile = useCallback(async (profile: ProfileSummary, format: ExportFormat) => {
-    setBusyAction({ type: "export", profileId: profile.id, format });
+  const exportProfile = useCallback(async (profile: ProfileSummary) => {
+    setBusyAction({ type: "export", profileId: profile.id });
     setError("");
     setMessage("");
     setExportedPayload(null);
@@ -336,16 +335,14 @@ export default function GameProfilesPanel({ refreshSignal = 0 }: GameProfilesPan
       let exportPayload: unknown;
       if (profile.location === "local") {
         const payload = await readLocalGameProfilePayload(profile.id);
-        exportPayload = format === "full"
-          ? exportCompactGameProfilePayload(payload)
-          : exportBestdoriGameProfilePayload(payload);
+        exportPayload = exportBestdoriGameProfilePayload(payload);
       } else {
         const accessToken = await getAccessToken();
         if (!accessToken) {
           throw new Error("请先登录");
         }
 
-        const response = await fetch(`/api/account/game-profiles/${profile.id}/export?format=${format}`, {
+        const response = await fetch(`/api/account/game-profiles/${profile.id}/export`, {
           headers: {
             Authorization: `Bearer ${accessToken}`,
           },
@@ -360,8 +357,7 @@ export default function GameProfilesPanel({ refreshSignal = 0 }: GameProfilesPan
       await navigator.clipboard.writeText(json);
       setExportedPayload({
         profileId: profile.id,
-        format,
-        label: format === "full" ? "完整导出" : "Bestdori 格式导出",
+        label: "Profile 导出",
         json,
       });
     } catch (exportError) {
@@ -498,10 +494,8 @@ export default function GameProfilesPanel({ refreshSignal = 0 }: GameProfilesPan
         ) : (
           <div className="mt-3 grid gap-3">
             {profiles.map((profile) => {
-              const bestdoriExported = exportedPayload?.profileId === profile.id && exportedPayload.format === "bestdori";
-              const fullExported = exportedPayload?.profileId === profile.id && exportedPayload.format === "full";
-              const isExportingBestdori = busyAction?.type === "export" && busyAction.profileId === profile.id && busyAction.format === "bestdori";
-              const isExportingFull = busyAction?.type === "export" && busyAction.profileId === profile.id && busyAction.format === "full";
+              const profileExported = exportedPayload?.profileId === profile.id;
+              const isExportingProfile = busyAction?.type === "export" && busyAction.profileId === profile.id;
               const isUploading = busyAction?.type === "upload" && busyAction.profileId === profile.id;
               const isDownloading = busyAction?.type === "download" && busyAction.profileId === profile.id;
               const isCopying = busyAction?.type === "copy" && busyAction.profileId === profile.id;
@@ -537,21 +531,12 @@ export default function GameProfilesPanel({ refreshSignal = 0 }: GameProfilesPan
                     </a>
                     <button
                       type="button"
-                      onClick={() => exportProfile(profile, "bestdori")}
+                      onClick={() => exportProfile(profile)}
                       disabled={busy}
-                      className={`inline-flex h-9 items-center justify-center gap-2 rounded-xl border px-3 text-sm font-semibold transition disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400 ${bestdoriExported ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-slate-200 bg-white text-slate-700 hover:border-sky-200 hover:text-sky-600"}`}
+                      className={`inline-flex h-9 items-center justify-center gap-2 rounded-xl border px-3 text-sm font-semibold transition disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400 ${profileExported ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-slate-200 bg-white text-slate-700 hover:border-sky-200 hover:text-sky-600"}`}
                     >
-                      {isExportingBestdori ? <RefreshCw className="h-4 w-4 animate-spin" /> : bestdoriExported ? <CheckCircle2 className="h-4 w-4" /> : <Download className="h-4 w-4" />}
-                      {isExportingBestdori ? "导出中" : bestdoriExported ? "导出成功" : "导出为 Bestdori 格式"}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => exportProfile(profile, "full")}
-                      disabled={busy}
-                      className={`inline-flex h-9 items-center justify-center gap-2 rounded-xl border px-3 text-sm font-semibold transition disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400 ${fullExported ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-slate-200 bg-white text-slate-700 hover:border-sky-200 hover:text-sky-600"}`}
-                    >
-                      {isExportingFull ? <RefreshCw className="h-4 w-4 animate-spin" /> : fullExported ? <CheckCircle2 className="h-4 w-4" /> : <Download className="h-4 w-4" />}
-                      {isExportingFull ? "导出中" : fullExported ? "导出成功" : "完整导出"}
+                      {isExportingProfile ? <RefreshCw className="h-4 w-4 animate-spin" /> : profileExported ? <CheckCircle2 className="h-4 w-4" /> : <Download className="h-4 w-4" />}
+                      {isExportingProfile ? "导出中" : profileExported ? "导出成功" : "导出 Profile"}
                     </button>
                     {profile.location === "local" ? (
                       <button

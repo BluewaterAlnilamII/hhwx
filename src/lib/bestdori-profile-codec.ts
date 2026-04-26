@@ -24,6 +24,7 @@ export type BestdoriProfile = {
     cards: BestdoriCardProfile;
     items: BestdoriItemsProfile;
   };
+  hhwx?: unknown;
 };
 
 export type NormalizedBestdoriCard = {

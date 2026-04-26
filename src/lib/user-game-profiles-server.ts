@@ -24,13 +24,12 @@ import {
   compactMissionBonusRecords,
   compactPotentialRecords,
   exportBestdoriGameProfilePayload,
-  exportCompactGameProfilePayload,
   getGameProfileAreaItems,
   getGameProfileCardCount,
   getGameProfileCards,
   getGameProfileCharacterMissionBonuses,
   getGameProfileCharacterPotentials,
-  type CompleteGameProfileExport,
+  importBestdoriGameProfilePayload,
   type CompressedGameProfilePayload,
   type UserGameProfileCardRecord,
   type UserGameProfileMissionBonusRecord,
@@ -458,6 +457,18 @@ function snapshotToNormalizedProfile(gameUid: string, snapshot: TrackerUserSnaps
   };
 }
 
+function assertUsableSnapshot(gameUid: string, snapshot: TrackerUserSnapshotPayload, normalizedProfile: NormalizedBestdoriProfile): void {
+  const suiteUser = getSnapshotSuiteUser(snapshot);
+  if (!Array.isArray(suiteUser.cards) || normalizedProfile.cards.length === 0) {
+    throw new ApiRouteError(
+      503,
+      "GAME_SNAPSHOT_EMPTY",
+      "游戏服务器可能正在维护，当前同步结果为空。已取消保存，避免覆盖现有 Profile。",
+      { gameUid },
+    );
+  }
+}
+
 function compressedFromRow(row: Pick<UserGameProfileRow, "storage_codec" | "payload_compressed" | "payload_sha256" | "payload_size">): CompressedGameProfilePayload {
   return {
     storageCodec: row.storage_codec as typeof USER_GAME_PROFILE_STORAGE_CODEC,
@@ -537,8 +548,8 @@ export async function createManualGameProfile(webUserId: string, name: unknown):
 
 export async function importManualGameProfile(webUserId: string, rawProfile: unknown): Promise<UserGameProfileSummary> {
   const bestdoriProfile = parseBestdoriProfile(rawProfile);
-  const normalizedProfile = decodeBestdoriProfile(bestdoriProfile);
-  const payload = toPayloadFromNormalizedProfile(normalizedProfile, { bestdoriProfile });
+  const payload = importBestdoriGameProfilePayload(bestdoriProfile);
+  const normalizedProfile = decodeBestdoriProfile(payload.bestdoriProfile);
   const compressed = encodeGameProfilePayload(payload);
   const serviceClient = createServerSupabaseClient();
   const { data, error } = await serviceClient.rpc("create_manual_game_profile", {
@@ -634,6 +645,7 @@ export async function syncAutoGameProfile(webUserId: string, gameUid: string): P
 
   const snapshot = await fetchGameUserSnapshot(gameUid);
   const normalizedProfile = snapshotToNormalizedProfile(gameUid, snapshot);
+  assertUsableSnapshot(gameUid, snapshot, normalizedProfile);
   const summary = isRecord(snapshot.summary) ? snapshot.summary : {};
   const suiteUser = getSnapshotSuiteUser(snapshot);
   const syncedAt = new Date().toISOString();
@@ -713,12 +725,6 @@ export async function updateGameProfilePayload(
 
 export async function exportBestdoriGameProfile(webUserId: string, profileId: string): Promise<BestdoriProfile> {
   return readGameProfilePayload(webUserId, profileId).then(exportBestdoriGameProfilePayload);
-}
-
-export async function exportCompleteGameProfile(webUserId: string, profileId: string): Promise<CompleteGameProfileExport> {
-  const row = await readGameProfileRow(webUserId, profileId);
-  const payload = decodeGameProfilePayload(compressedFromRow(row));
-  return exportCompactGameProfilePayload(payload);
 }
 
 export async function deleteGameProfile(webUserId: string, profileId: string): Promise<void> {
