@@ -3,7 +3,7 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Menu, X } from "lucide-react";
+import { X } from "lucide-react";
 import { siteNavigationGroups, type SectionSidebarNavItem } from "@/lib/section-navigation";
 import { cn } from "@/lib/utils";
 
@@ -65,7 +65,7 @@ export default function SectionSidebarShell({ children, isMobileDrawerOpen, onCl
 
   return (
     <div className="relative flex min-h-0 flex-1 overflow-hidden">
-      <aside className="hidden h-full w-[270px] shrink-0 border-r border-white/80 bg-white/86 shadow-[0_18px_48px_rgba(15,23,42,0.08)] backdrop-blur-xl lg:flex lg:flex-col">
+      <aside className="hidden h-full w-[270px] shrink-0 border-r border-[#ffe374]/85 bg-[#ffed7a]/74 shadow-[0_18px_48px_rgba(128,91,0,0.12)] lg:flex lg:flex-col">
         {sidebarContent}
       </aside>
 
@@ -84,16 +84,16 @@ export default function SectionSidebarShell({ children, isMobileDrawerOpen, onCl
           type="button"
           aria-label="关闭页面导航"
           className={cn(
-            "absolute inset-0 transition-[opacity,backdrop-filter,background-color] duration-300 ease-out",
+            "absolute inset-0 transition-[opacity,background-color] duration-300 ease-out",
             isMobileDrawerOpen
-              ? "pointer-events-auto bg-white/48 opacity-100 backdrop-blur-md"
-              : "pointer-events-none bg-white/0 opacity-0 backdrop-blur-none",
+              ? "pointer-events-auto bg-[#fff3a3]/76 opacity-100"
+              : "pointer-events-none bg-white/0 opacity-0",
           )}
           onClick={onCloseMobileDrawer}
         />
         <div
           className={cn(
-            "absolute bottom-0 left-0 top-[58px] w-[286px] max-w-[88vw] overflow-hidden border-r border-white/85 bg-white/94 shadow-[0_24px_64px_rgba(15,23,42,0.18)] backdrop-blur-xl transition-transform duration-300 ease-out will-change-transform",
+            "absolute bottom-0 left-0 top-[58px] w-[286px] max-w-[88vw] overflow-hidden border-r border-[#ffe374]/85 bg-[#fff3a3]/96 shadow-[0_24px_64px_rgba(128,91,0,0.18)] transition-transform duration-300 ease-out will-change-transform",
             isMobileDrawerOpen ? "translate-x-0" : "-translate-x-full",
           )}
         >

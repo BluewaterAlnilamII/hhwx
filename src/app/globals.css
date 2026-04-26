@@ -28,8 +28,8 @@
 
 
 :root {
-  --bg-yellow: #FFEE22;
-  --fog-white: rgba(255, 255, 255, 0.35);
+  --bg-yellow: #ffea2f;
+  --fog-white: rgba(255, 255, 228, 0.18);
 }
 
 * {
@@ -301,8 +301,7 @@ body::before {
 .result-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.6);
-  backdrop-filter: blur(8px);
+  background: rgba(0, 0, 0, 0.68);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -326,8 +325,7 @@ body::before {
 .resume-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.6);
-  backdrop-filter: blur(8px);
+  background: rgba(0, 0, 0, 0.68);
   display: flex;
   align-items: center;
   justify-content: center;

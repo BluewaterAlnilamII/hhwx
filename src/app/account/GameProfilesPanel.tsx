@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Copy, Download, FileJson, Plus, RefreshCw, Trash2, Upload } from "lucide-react";
+import { CheckCircle2, Copy, Download, FileJson, Plus, RefreshCw, Trash2, Upload } from "lucide-react";
 import { getApiErrorMessage, parseApiSuccessData } from "@/lib/api-contracts";
 import type { GameAccountBinding } from "@/lib/game-account-binding";
 import {
@@ -46,6 +46,22 @@ type CloudGameProfileSummary = {
 };
 
 type ProfileSummary = (CloudGameProfileSummary & { location: "cloud" }) | LocalGameProfileSummary;
+type BusyAction =
+  | { type: "create" }
+  | { type: "import" }
+  | { type: "sync"; gameUid: string }
+  | { type: "copy"; profileId: string }
+  | { type: "upload"; profileId: string }
+  | { type: "download"; profileId: string }
+  | { type: "export"; profileId: string; format: ExportFormat }
+  | { type: "delete"; profileId: string };
+type ExportFormat = "bestdori" | "full";
+type ExportedProfilePayload = {
+  profileId: string;
+  format: ExportFormat;
+  label: string;
+  json: string;
+};
 
 const USER_GAME_BINDING_LIMIT = 5;
 const USER_GAME_AUTO_PROFILE_LIMIT = 5;
@@ -128,16 +144,22 @@ function blankPayload(name: string): UserGameProfilePayload {
   });
 }
 
-export default function GameProfilesPanel() {
+type GameProfilesPanelProps = {
+  refreshSignal?: number;
+};
+
+export default function GameProfilesPanel({ refreshSignal = 0 }: GameProfilesPanelProps) {
   const [cloudProfiles, setCloudProfiles] = useState<CloudGameProfileSummary[]>([]);
   const [localProfiles, setLocalProfiles] = useState<LocalGameProfileSummary[]>([]);
   const [bindings, setBindings] = useState<GameAccountBinding[]>([]);
   const [profileName, setProfileName] = useState("");
   const [importText, setImportText] = useState("");
   const [loading, setLoading] = useState(true);
-  const [busy, setBusy] = useState(false);
+  const [busyAction, setBusyAction] = useState<BusyAction | null>(null);
+  const [exportedPayload, setExportedPayload] = useState<ExportedProfilePayload | null>(null);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const busy = busyAction !== null;
 
   const profiles = useMemo<ProfileSummary[]>(() => [
     ...cloudProfiles.map((profile) => ({ ...profile, location: "cloud" as const })),
@@ -178,12 +200,13 @@ export default function GameProfilesPanel() {
 
   useEffect(() => {
     void loadData();
-  }, [loadData]);
+  }, [loadData, refreshSignal]);
 
   const createManualProfile = useCallback(async () => {
-    setBusy(true);
+    setBusyAction({ type: "create" });
     setError("");
     setMessage("");
+    setExportedPayload(null);
     try {
       const name = profileName.trim() || "Manual Profile";
       await saveLocalGameProfilePayload(blankPayload(name), name);
@@ -193,14 +216,15 @@ export default function GameProfilesPanel() {
     } catch (createError) {
       setError(createError instanceof Error ? createError.message : "创建本地手动 Profile 失败");
     } finally {
-      setBusy(false);
+      setBusyAction(null);
     }
   }, [loadData, profileName]);
 
   const importProfile = useCallback(async () => {
-    setBusy(true);
+    setBusyAction({ type: "import" });
     setError("");
     setMessage("");
+    setExportedPayload(null);
     try {
       const bestdoriProfile = parseBestdoriProfile(JSON.parse(importText));
       const normalizedProfile = decodeBestdoriProfile(bestdoriProfile);
@@ -211,7 +235,7 @@ export default function GameProfilesPanel() {
     } catch (importError) {
       setError(importError instanceof Error ? importError.message : "导入 Bestdori Profile 失败");
     } finally {
-      setBusy(false);
+      setBusyAction(null);
     }
   }, [importText, loadData]);
 
@@ -223,9 +247,10 @@ export default function GameProfilesPanel() {
       return;
     }
 
-    setBusy(true);
+    setBusyAction({ type: "sync", gameUid });
     setError("");
     setMessage("");
+    setExportedPayload(null);
     try {
       await requestJson<CloudGameProfileSummary>("/api/account/game-profiles/sync", {
         method: "POST",
@@ -236,14 +261,15 @@ export default function GameProfilesPanel() {
     } catch (syncError) {
       setError(syncError instanceof Error ? syncError.message : "同步游戏数据失败");
     } finally {
-      setBusy(false);
+      setBusyAction(null);
     }
   }, [loadData]);
 
   const copyProfile = useCallback(async (profile: ProfileSummary) => {
-    setBusy(true);
+    setBusyAction({ type: "copy", profileId: profile.id });
     setError("");
     setMessage("");
+    setExportedPayload(null);
     try {
       const name = `${profile.name} Copy`;
       if (profile.location === "local") {
@@ -258,14 +284,15 @@ export default function GameProfilesPanel() {
     } catch (copyError) {
       setError(copyError instanceof Error ? copyError.message : "拷贝 Profile 失败");
     } finally {
-      setBusy(false);
+      setBusyAction(null);
     }
   }, [loadData]);
 
   const uploadLocalProfile = useCallback(async (profile: LocalGameProfileSummary) => {
-    setBusy(true);
+    setBusyAction({ type: "upload", profileId: profile.id });
     setError("");
     setMessage("");
+    setExportedPayload(null);
     try {
       await requestJson<CloudGameProfileSummary>("/api/account/game-profiles/upload", {
         method: "POST",
@@ -279,14 +306,15 @@ export default function GameProfilesPanel() {
     } catch (uploadError) {
       setError(uploadError instanceof Error ? uploadError.message : "上传 Profile 失败");
     } finally {
-      setBusy(false);
+      setBusyAction(null);
     }
   }, [loadData]);
 
   const downloadCloudProfile = useCallback(async (profile: CloudGameProfileSummary) => {
-    setBusy(true);
+    setBusyAction({ type: "download", profileId: profile.id });
     setError("");
     setMessage("");
+    setExportedPayload(null);
     try {
       const payload = await decodeCompressedGameProfilePayload(await requestCloudCompressedPayload(profile.id));
       await saveLocalGameProfilePayload(payload, profile.name);
@@ -295,21 +323,22 @@ export default function GameProfilesPanel() {
     } catch (downloadError) {
       setError(downloadError instanceof Error ? downloadError.message : "下载 Profile 失败");
     } finally {
-      setBusy(false);
+      setBusyAction(null);
     }
   }, [loadData]);
 
-  const exportProfile = useCallback(async (profile: ProfileSummary, format: "bestdori" | "full") => {
-    setBusy(true);
+  const exportProfile = useCallback(async (profile: ProfileSummary, format: ExportFormat) => {
+    setBusyAction({ type: "export", profileId: profile.id, format });
     setError("");
     setMessage("");
+    setExportedPayload(null);
     try {
+      let exportPayload: unknown;
       if (profile.location === "local") {
         const payload = await readLocalGameProfilePayload(profile.id);
-        const exportPayload = format === "full"
+        exportPayload = format === "full"
           ? exportCompactGameProfilePayload(payload)
           : exportBestdoriGameProfilePayload(payload);
-        await navigator.clipboard.writeText(JSON.stringify(exportPayload));
       } else {
         const accessToken = await getAccessToken();
         if (!accessToken) {
@@ -325,13 +354,20 @@ export default function GameProfilesPanel() {
         if (!response.ok) {
           throw new Error(getApiErrorMessage(payload) || `请求失败（HTTP ${response.status}）`);
         }
-        await navigator.clipboard.writeText(JSON.stringify(payload));
+        exportPayload = payload;
       }
-      setMessage(format === "full" ? "完整 Profile JSON 已复制。" : "Bestdori Profile JSON 已复制。");
+      const json = JSON.stringify(exportPayload, null, 2);
+      await navigator.clipboard.writeText(json);
+      setExportedPayload({
+        profileId: profile.id,
+        format,
+        label: format === "full" ? "完整导出" : "Bestdori 格式导出",
+        json,
+      });
     } catch (exportError) {
       setError(exportError instanceof Error ? exportError.message : "导出 Profile 失败");
     } finally {
-      setBusy(false);
+      setBusyAction(null);
     }
   }, []);
 
@@ -340,9 +376,10 @@ export default function GameProfilesPanel() {
       return;
     }
 
-    setBusy(true);
+    setBusyAction({ type: "delete", profileId: profile.id });
     setError("");
     setMessage("");
+    setExportedPayload(null);
     try {
       if (profile.location === "local") {
         await deleteLocalGameProfile(profile.id);
@@ -356,7 +393,7 @@ export default function GameProfilesPanel() {
     } catch (deleteError) {
       setError(deleteError instanceof Error ? deleteError.message : "删除 Profile 失败");
     } finally {
-      setBusy(false);
+      setBusyAction(null);
     }
   }, [loadData]);
 
@@ -366,7 +403,7 @@ export default function GameProfilesPanel() {
         <div>
           <h2 className="text-xl font-semibold text-slate-900">游戏数据 Profile</h2>
           <p className="mt-2 text-sm leading-6 text-slate-600">
-            自动 Profile 来自绑定 UID 的手动同步且不可编辑；手动 Profile 默认保存在本地，可按需上传到服务器或从服务器下载。
+            自动 Profile 由绑定 UID 同步生成，只作为服务器侧只读档案；手动 Profile 默认保存在本地，可导入、上传或下载云端手动档案。
           </p>
         </div>
         <div className="text-sm text-slate-500">
@@ -374,17 +411,7 @@ export default function GameProfilesPanel() {
         </div>
       </div>
 
-      {(message || error) && (
-        <div className={`mt-4 rounded-2xl px-4 py-3 text-sm ${error ? "bg-rose-50 text-rose-700" : "bg-emerald-50 text-emerald-700"}`}>
-          {error || message}
-        </div>
-      )}
-
-      <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-800">
-        同步游戏数据可能导致对应 UID 当前登录中的游戏客户端掉线一次；自动同步 Profile 不允许直接编辑，可拷贝为本地手动 Profile 后修改。
-      </div>
-
-      <div className="mt-6 grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
+      <div className="mt-5 grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
         <input
           value={profileName}
           onChange={(event) => setProfileName(event.target.value)}
@@ -397,8 +424,8 @@ export default function GameProfilesPanel() {
           disabled={busy || manualProfileCount >= USER_GAME_MANUAL_PROFILE_LIMIT}
           className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl bg-sky-600 px-5 text-sm font-semibold text-white transition hover:bg-sky-500 disabled:cursor-not-allowed disabled:bg-slate-300"
         >
-          <Plus className="h-4 w-4" />
-          新建
+          {busyAction?.type === "create" ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+          {busyAction?.type === "create" ? "新建中" : "新建"}
         </button>
       </div>
 
@@ -415,8 +442,8 @@ export default function GameProfilesPanel() {
           disabled={busy || !importText.trim() || manualProfileCount >= USER_GAME_MANUAL_PROFILE_LIMIT}
           className="mt-3 inline-flex h-10 items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:border-sky-200 hover:text-sky-600 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
         >
-          <Upload className="h-4 w-4" />
-          导入到本地
+          {busyAction?.type === "import" ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+          {busyAction?.type === "import" ? "导入中" : "导入到本地"}
         </button>
       </div>
 
@@ -428,6 +455,7 @@ export default function GameProfilesPanel() {
           <div className="mt-3 grid gap-3">
             {bindings.map((binding) => {
               const profile = profilesByUid.get(binding.gameUid);
+              const isSyncing = busyAction?.type === "sync" && busyAction.gameUid === binding.gameUid;
               return (
                 <div key={binding.gameUid} className="rounded-2xl border border-slate-200 p-4">
                   <div className="flex flex-wrap items-center justify-between gap-3">
@@ -441,8 +469,8 @@ export default function GameProfilesPanel() {
                       disabled={busy || (!profile && autoProfileCount >= USER_GAME_AUTO_PROFILE_LIMIT)}
                       className="inline-flex h-10 items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-4 text-sm font-semibold text-white transition hover:bg-emerald-500 disabled:cursor-not-allowed disabled:bg-slate-300"
                     >
-                      <RefreshCw className="h-4 w-4" />
-                      同步
+                      <RefreshCw className={`h-4 w-4 ${isSyncing ? "animate-spin" : ""}`} />
+                      {isSyncing ? "同步中" : "同步"}
                     </button>
                   </div>
                 </div>
@@ -450,7 +478,16 @@ export default function GameProfilesPanel() {
             })}
           </div>
         )}
+        <div className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-800">
+          同步会请求游戏接口，可能让该 UID 当前登录中的游戏客户端掉线一次；如需修改自动 Profile，请先拷贝为本地手动 Profile。
+        </div>
       </div>
+
+      {(message || error) && (
+        <div aria-live="polite" className={`mt-4 rounded-2xl px-4 py-3 text-sm ${error ? "bg-rose-50 text-rose-700" : "bg-emerald-50 text-emerald-700"}`}>
+          {error || message}
+        </div>
+      )}
 
       <div className="mt-6 border-t border-slate-100 pt-5">
         <h3 className="text-base font-semibold text-slate-900">Profile 列表</h3>
@@ -460,7 +497,17 @@ export default function GameProfilesPanel() {
           <p className="mt-3 text-sm text-slate-500">暂无 Profile。</p>
         ) : (
           <div className="mt-3 grid gap-3">
-            {profiles.map((profile) => (
+            {profiles.map((profile) => {
+              const bestdoriExported = exportedPayload?.profileId === profile.id && exportedPayload.format === "bestdori";
+              const fullExported = exportedPayload?.profileId === profile.id && exportedPayload.format === "full";
+              const isExportingBestdori = busyAction?.type === "export" && busyAction.profileId === profile.id && busyAction.format === "bestdori";
+              const isExportingFull = busyAction?.type === "export" && busyAction.profileId === profile.id && busyAction.format === "full";
+              const isUploading = busyAction?.type === "upload" && busyAction.profileId === profile.id;
+              const isDownloading = busyAction?.type === "download" && busyAction.profileId === profile.id;
+              const isCopying = busyAction?.type === "copy" && busyAction.profileId === profile.id;
+              const isDeleting = busyAction?.type === "delete" && busyAction.profileId === profile.id;
+
+              return (
               <div key={profile.id} className="rounded-2xl border border-slate-200 p-4">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
@@ -492,19 +539,19 @@ export default function GameProfilesPanel() {
                       type="button"
                       onClick={() => exportProfile(profile, "bestdori")}
                       disabled={busy}
-                      className="inline-flex h-9 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 transition hover:border-sky-200 hover:text-sky-600"
+                      className={`inline-flex h-9 items-center justify-center gap-2 rounded-xl border px-3 text-sm font-semibold transition disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400 ${bestdoriExported ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-slate-200 bg-white text-slate-700 hover:border-sky-200 hover:text-sky-600"}`}
                     >
-                      <Download className="h-4 w-4" />
-                      导出为Bestdori格式
+                      {isExportingBestdori ? <RefreshCw className="h-4 w-4 animate-spin" /> : bestdoriExported ? <CheckCircle2 className="h-4 w-4" /> : <Download className="h-4 w-4" />}
+                      {isExportingBestdori ? "导出中" : bestdoriExported ? "导出成功" : "导出为 Bestdori 格式"}
                     </button>
                     <button
                       type="button"
                       onClick={() => exportProfile(profile, "full")}
                       disabled={busy}
-                      className="inline-flex h-9 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 transition hover:border-sky-200 hover:text-sky-600 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
+                      className={`inline-flex h-9 items-center justify-center gap-2 rounded-xl border px-3 text-sm font-semibold transition disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400 ${fullExported ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-slate-200 bg-white text-slate-700 hover:border-sky-200 hover:text-sky-600"}`}
                     >
-                      <Download className="h-4 w-4" />
-                      完整导出
+                      {isExportingFull ? <RefreshCw className="h-4 w-4 animate-spin" /> : fullExported ? <CheckCircle2 className="h-4 w-4" /> : <Download className="h-4 w-4" />}
+                      {isExportingFull ? "导出中" : fullExported ? "导出成功" : "完整导出"}
                     </button>
                     {profile.location === "local" ? (
                       <button
@@ -513,28 +560,28 @@ export default function GameProfilesPanel() {
                         disabled={busy}
                         className="inline-flex h-9 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 transition hover:border-sky-200 hover:text-sky-600 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
                       >
-                        <Upload className="h-4 w-4" />
-                        上传
+                        {isUploading ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                        {isUploading ? "上传中" : "上传"}
                       </button>
-                    ) : (
+                    ) : profile.kind === "manual" ? (
                       <button
                         type="button"
                         onClick={() => downloadCloudProfile(profile)}
                         disabled={busy || manualProfileCount >= USER_GAME_MANUAL_PROFILE_LIMIT}
                         className="inline-flex h-9 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 transition hover:border-sky-200 hover:text-sky-600 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
                       >
-                        <Download className="h-4 w-4" />
-                        下载到本地
+                        {isDownloading ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+                        {isDownloading ? "下载中" : "下载到本地"}
                       </button>
-                    )}
+                    ) : null}
                     <button
                       type="button"
                       onClick={() => copyProfile(profile)}
                       disabled={busy || manualProfileCount >= USER_GAME_MANUAL_PROFILE_LIMIT}
                       className="inline-flex h-9 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 transition hover:border-sky-200 hover:text-sky-600 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
                     >
-                      <Copy className="h-4 w-4" />
-                      拷贝
+                      {isCopying ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Copy className="h-4 w-4" />}
+                      {isCopying ? "拷贝中" : "拷贝"}
                     </button>
                     <button
                       type="button"
@@ -542,8 +589,8 @@ export default function GameProfilesPanel() {
                       disabled={busy}
                       className="inline-flex h-9 items-center justify-center gap-2 rounded-xl border border-rose-200 bg-white px-3 text-sm font-semibold text-rose-600 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
                     >
-                      <Trash2 className="h-4 w-4" />
-                      删除
+                      {isDeleting ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                      {isDeleting ? "删除中" : "删除"}
                     </button>
                   </div>
                 </div>
@@ -553,8 +600,22 @@ export default function GameProfilesPanel() {
                     {isLocalGameProfileId(profile.id) ? "保存在本地浏览器" : "保存在服务器"}
                   </div>
                 )}
+                {exportedPayload?.profileId === profile.id && (
+                  <div className="mt-4 rounded-2xl border border-emerald-100 bg-emerald-50/60 p-3">
+                    <div className="mb-2 flex flex-wrap items-center justify-between gap-2 text-sm font-semibold text-emerald-700">
+                      <span>{exportedPayload.label} payload</span>
+                      <span>导出成功，已复制到剪贴板</span>
+                    </div>
+                    <textarea
+                      readOnly
+                      value={exportedPayload.json}
+                      className="h-52 w-full resize-y rounded-xl border border-emerald-100 bg-white px-3 py-2 font-mono text-xs leading-5 text-slate-700 outline-none"
+                    />
+                  </div>
+                )}
               </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>

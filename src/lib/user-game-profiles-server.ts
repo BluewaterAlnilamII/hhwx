@@ -272,9 +272,9 @@ function toNormalizedCards(cards: unknown): NormalizedBestdoriCard[] {
 const BESTDORI_BAND_ITEM_MAP: Record<string, number[]> = {
   PoppinParty: [1, 6, 11, 16, 21, 26, 31],
   Afterglow: [2, 7, 12, 17, 22, 27, 32],
-  HelloHappyWorld: [3, 8, 13, 18, 23, 28, 33],
-  PastelPalettes: [4, 9, 14, 19, 24, 29, 34],
-  Roselia: [5, 10, 15, 20, 25, 30, 35],
+  PastelPalettes: [3, 8, 13, 18, 23, 28, 33],
+  Roselia: [4, 9, 14, 19, 24, 29, 34],
+  HelloHappyWorld: [5, 10, 15, 20, 25, 30, 35],
   Everyone: [73, 74, 75, 76, 77, 78, 79],
   Morfonica: [83, 84, 85, 86, 87, 88, 89],
   RaiseASuilen: [90, 91, 92, 93, 94, 95, 96],
@@ -286,7 +286,6 @@ const BESTDORI_BAND_ITEM_MAP: Record<string, number[]> = {
 
 const BESTDORI_AREA_ITEM_IDS = new Set(Object.values(BESTDORI_BAND_ITEM_MAP).flat());
 const MAX_BANDORI_CHARACTER_ID = 50;
-const BESTDORI_POTENTIAL_MAX_LEVEL = 50;
 
 function isPlayableCharacterId(characterId: number): boolean {
   return characterId > 0 && characterId <= MAX_BANDORI_CHARACTER_ID;
@@ -368,61 +367,7 @@ function normalizeMissionBonusTenthPercent(value: unknown): number {
   return Math.round(numericValue);
 }
 
-function collectMissionBonusByCharacter(missionBonuses: unknown): Map<number, number> {
-  const bonusSums = new Map<number, { performance: number; technique: number; visual: number }>();
-  if (!Array.isArray(missionBonuses)) {
-    return new Map();
-  }
-
-  missionBonuses.filter(isRecord).forEach((bonus: TrackerMissionBonus) => {
-    const characterId = toInteger(bonus.character_id);
-    if (!isPlayableCharacterId(characterId)) {
-      return;
-    }
-
-    const current = bonusSums.get(characterId) ?? { performance: 0, technique: 0, visual: 0 };
-    current.performance += normalizeMissionBonusTenthPercent(bonus.performance);
-    current.technique += normalizeMissionBonusTenthPercent(bonus.technique);
-    current.visual += normalizeMissionBonusTenthPercent(bonus.visual);
-    bonusSums.set(characterId, current);
-  });
-
-  const bonuses = new Map<number, number>();
-  bonusSums.forEach((bonus, characterId) => {
-    bonuses.set(characterId, Math.round((bonus.performance + bonus.technique + bonus.visual) / 3));
-  });
-
-  return bonuses;
-}
-
-function toBestdoriPotentials(potentials: unknown, missionBonuses: unknown): number[] {
-  const valuesByCharacter = new Map<number, number>();
-  if (Array.isArray(potentials)) {
-    potentials.filter(isRecord).forEach((item: TrackerPotential) => {
-      const characterId = toInteger(item.character_id);
-      if (!isPlayableCharacterId(characterId)) {
-        return;
-      }
-
-      const level = Math.max(
-        toInteger(item.performance_level),
-        toInteger(item.technique_level),
-        toInteger(item.visual_level),
-      );
-      valuesByCharacter.set(characterId, level);
-    });
-  }
-
-  const missionBonusByCharacter = collectMissionBonusByCharacter(missionBonuses);
-  const characterCount = Math.min(MAX_BANDORI_CHARACTER_ID, Math.max(0, ...valuesByCharacter.keys(), ...missionBonusByCharacter.keys()));
-  const values: number[] = [];
-  for (let characterId = 1; characterId <= characterCount; characterId += 1) {
-    values.push((valuesByCharacter.get(characterId) ?? 0) + (missionBonusByCharacter.get(characterId) ?? 0));
-  }
-  return values;
-}
-
-function toPotentialPayloadRows(potentials: number[], rawPotentials: unknown): UserGameProfilePotentialRecord[] {
+function toPotentialPayloadRows(rawPotentials: unknown): UserGameProfilePotentialRecord[] {
   if (Array.isArray(rawPotentials)) {
     const rows = rawPotentials.filter(isRecord).map((item: TrackerPotential) => {
       const performanceLevel = toInteger(item.performance_level);
@@ -430,7 +375,6 @@ function toPotentialPayloadRows(potentials: number[], rawPotentials: unknown): U
       const visualLevel = toInteger(item.visual_level);
       return {
         characterId: toInteger(item.character_id),
-        level: Math.max(performanceLevel, techniqueLevel, visualLevel),
         performanceLevel,
         techniqueLevel,
         visualLevel,
@@ -442,26 +386,7 @@ function toPotentialPayloadRows(potentials: number[], rawPotentials: unknown): U
     }
   }
 
-  return potentials.map((level, index) => ({
-    characterId: index + 1,
-    level: Math.min(Math.max(0, level), BESTDORI_POTENTIAL_MAX_LEVEL),
-    performanceLevel: null,
-    techniqueLevel: null,
-    visualLevel: null,
-  })).filter((item) => isPlayableCharacterId(item.characterId));
-}
-
-function toImportedPotentialMissionBonusRows(potentials: number[]): UserGameProfileMissionBonusRecord[] {
-  return potentials.map((level, index) => {
-    const extraLevel = Math.max(0, level - BESTDORI_POTENTIAL_MAX_LEVEL);
-    return {
-      characterId: index + 1,
-      bonusType: "bestdori_import",
-      performance: extraLevel,
-      technique: extraLevel,
-      visual: extraLevel,
-    };
-  }).filter((bonus) => isPlayableCharacterId(bonus.characterId) && bonus.performance > 0);
+  return [];
 }
 
 function completeMissionBonusRows(records: UserGameProfileMissionBonusRecord[], characterCount: number): UserGameProfileMissionBonusRecord[] {
@@ -487,9 +412,9 @@ function completeMissionBonusRows(records: UserGameProfileMissionBonusRecord[], 
   return completed;
 }
 
-function toMissionBonusPayloadRows(missionBonuses: unknown, importedPotentials: number[] = []): UserGameProfileMissionBonusRecord[] {
+function toMissionBonusPayloadRows(missionBonuses: unknown, characterCount = 0): UserGameProfileMissionBonusRecord[] {
   if (!Array.isArray(missionBonuses)) {
-    return toImportedPotentialMissionBonusRows(importedPotentials);
+    return [];
   }
 
   const rows = missionBonuses.filter(isRecord).map((bonus: TrackerMissionBonus) => ({
@@ -499,7 +424,7 @@ function toMissionBonusPayloadRows(missionBonuses: unknown, importedPotentials: 
     technique: normalizeMissionBonusTenthPercent(bonus.technique),
     visual: normalizeMissionBonusTenthPercent(bonus.visual),
   })).filter((bonus) => isPlayableCharacterId(bonus.characterId));
-  return completeMissionBonusRows(rows, importedPotentials.length);
+  return completeMissionBonusRows(rows, characterCount);
 }
 
 function toPayloadFromNormalizedProfile(
@@ -521,11 +446,11 @@ function toPayloadFromNormalizedProfile(
   };
 
   if (options.potentialLevels !== undefined) {
-    payload.characterPotentials = compactPotentialRecords(toPotentialPayloadRows(normalizedProfile.potentials, options.potentialLevels));
+    payload.characterPotentials = compactPotentialRecords(toPotentialPayloadRows(options.potentialLevels));
   }
 
   if (options.missionBonuses !== undefined) {
-    payload.characterMissionBonuses = compactMissionBonusRecords(toMissionBonusPayloadRows(options.missionBonuses, normalizedProfile.potentials));
+    payload.characterMissionBonuses = compactMissionBonusRecords(toMissionBonusPayloadRows(options.missionBonuses, getGameProfileCharacterPotentials(payload).length));
   }
 
   return payload;
@@ -541,7 +466,7 @@ function snapshotToNormalizedProfile(gameUid: string, snapshot: TrackerUserSnaps
     server: BESTDORI_CN_SERVER_ID,
     cards: toNormalizedCards(suiteUser.cards),
     items: toBestdoriItems(suiteUser.area_items, snapshot.snapshot?.area_item_details),
-    potentials: toBestdoriPotentials(suiteUser.character_potential_levels, suiteUser.character_mission_bonuses),
+    potentials: [],
   };
 }
 
@@ -756,6 +681,46 @@ export async function readCompressedGameProfilePayload(webUserId: string, profil
 
 export async function readGameProfilePayload(webUserId: string, profileId: string): Promise<UserGameProfilePayload> {
   return decodeGameProfilePayload(await readCompressedGameProfilePayload(webUserId, profileId));
+}
+
+export async function updateGameProfilePayload(
+  webUserId: string,
+  profileId: string,
+  payload: UserGameProfilePayload,
+): Promise<UserGameProfileSummary> {
+  const existing = await readGameProfileRow(webUserId, profileId);
+  if (existing.profile_kind !== "manual") {
+    throw new ApiRouteError(403, "GAME_PROFILE_NOT_EDITABLE", "自动同步 Profile 不允许编辑");
+  }
+
+  const compressed = encodeGameProfilePayload(payload);
+  const serviceClient = createServerSupabaseClient();
+  const { data, error } = await serviceClient
+    .from(USER_GAME_PROFILES_TABLE)
+    .update({
+      storage_codec: compressed.storageCodec,
+      payload_compressed: compressed.payloadCompressed,
+      payload_sha256: compressed.payloadSha256,
+      payload_size: compressed.payloadSize,
+      card_count: getGameProfileCardCount(payload),
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", profileId)
+    .eq("web_user_id", webUserId)
+    .select("id, profile_kind, profile_name, server, source_game_uid, storage_codec, payload_compressed, payload_sha256, payload_size, card_count, summary, synced_at, updated_at")
+    .maybeSingle();
+
+  if (error) {
+    throw new ApiRouteError(500, "GAME_PROFILE_UPDATE_FAILED", "保存 Profile 数据失败", error.message);
+  }
+  if (!data) {
+    throw new ApiRouteError(404, "GAME_PROFILE_NOT_FOUND", "Profile 不存在");
+  }
+
+  return toProfileSummary({
+    ...existing,
+    ...(data as UserGameProfileRow),
+  });
 }
 
 export async function exportBestdoriGameProfile(webUserId: string, profileId: string): Promise<BestdoriProfile> {

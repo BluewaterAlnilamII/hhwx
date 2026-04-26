@@ -35,7 +35,7 @@ export function TrackerTooltip({
     if (projectionLabelTime === undefined) return null;
 
     return (
-      <div className="bg-white/90 backdrop-blur-xl p-4 rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] border border-white/40 dark:bg-[#131A2B]/90 dark:border-gray-800 min-w-[210px]">
+      <div className="bg-white/95 p-4 rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] border border-white/40 dark:bg-[#131A2B]/95 dark:border-gray-800 min-w-[210px]">
         <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-2">
           {format(projectionLabelTime, "yyyy/MM/dd HH:mm:ss")}
         </p>
@@ -114,7 +114,7 @@ export function TrackerTooltip({
   }
 
   return (
-    <div className="bg-white/90 backdrop-blur-xl p-4 rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] border border-white/40 dark:bg-[#131A2B]/90 dark:border-gray-800 min-w-[180px]">
+    <div className="bg-white/95 p-4 rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] border border-white/40 dark:bg-[#131A2B]/95 dark:border-gray-800 min-w-[180px]">
       <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-2">
         {format(label, "yyyy/MM/dd HH:mm:ss")}
       </p>

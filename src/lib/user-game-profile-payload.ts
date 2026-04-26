@@ -30,7 +30,6 @@ export type UserGameProfileItemRecord = {
 
 export type UserGameProfilePotentialRecord = {
   characterId: number;
-  level: number;
   performanceLevel: number | null;
   techniqueLevel: number | null;
   visualLevel: number | null;
@@ -46,7 +45,6 @@ export type UserGameProfileMissionBonusRecord = {
 
 export type CompactGameProfilePotentialRecords = {
   ids: string;
-  levels: unknown[];
   performance: unknown[];
   technique: unknown[];
   visual: unknown[];
@@ -88,9 +86,9 @@ export type CompressedGameProfilePayload = {
 const BESTDORI_BAND_ITEM_MAP: Record<string, number[]> = {
   PoppinParty: [1, 6, 11, 16, 21, 26, 31],
   Afterglow: [2, 7, 12, 17, 22, 27, 32],
-  HelloHappyWorld: [3, 8, 13, 18, 23, 28, 33],
-  PastelPalettes: [4, 9, 14, 19, 24, 29, 34],
-  Roselia: [5, 10, 15, 20, 25, 30, 35],
+  PastelPalettes: [3, 8, 13, 18, 23, 28, 33],
+  Roselia: [4, 9, 14, 19, 24, 29, 34],
+  HelloHappyWorld: [5, 10, 15, 20, 25, 30, 35],
   Everyone: [73, 74, 75, 76, 77, 78, 79],
   Morfonica: [83, 84, 85, 86, 87, 88, 89],
   RaiseASuilen: [90, 91, 92, 93, 94, 95, 96],
@@ -101,7 +99,6 @@ const BESTDORI_BAND_ITEM_MAP: Record<string, number[]> = {
 };
 
 const MAX_BANDORI_CHARACTER_ID = 50;
-const BESTDORI_POTENTIAL_MAX_LEVEL = 50;
 
 function toFiniteNumber(value: unknown, fallback = 0): number {
   const numberValue = typeof value === "number" ? value : Number(value);
@@ -130,13 +127,7 @@ export function getGameProfileCharacterPotentials(payload: UserGameProfilePayloa
     return decodeCompactPotentialRecords(payload.characterPotentials);
   }
 
-  return decodeBestdoriProfile(payload.bestdoriProfile).potentials.map((level, index) => ({
-    characterId: index + 1,
-    level: Math.min(Math.max(0, level), BESTDORI_POTENTIAL_MAX_LEVEL),
-    performanceLevel: null,
-    techniqueLevel: null,
-    visualLevel: null,
-  })).filter((item) => item.characterId <= MAX_BANDORI_CHARACTER_ID);
+  return [];
 }
 
 export function getGameProfileCharacterMissionBonuses(payload: UserGameProfilePayload): UserGameProfileMissionBonusRecord[] {
@@ -144,16 +135,7 @@ export function getGameProfileCharacterMissionBonuses(payload: UserGameProfilePa
     return decodeCompactMissionBonusRecords(payload.characterMissionBonuses);
   }
 
-  return decodeBestdoriProfile(payload.bestdoriProfile).potentials.map((level, index) => {
-    const extraLevel = Math.max(0, level - BESTDORI_POTENTIAL_MAX_LEVEL);
-    return {
-      characterId: index + 1,
-      bonusType: "bestdori_import",
-      performance: extraLevel,
-      technique: extraLevel,
-      visual: extraLevel,
-    };
-  }).filter((item) => item.characterId <= MAX_BANDORI_CHARACTER_ID && item.performance > 0);
+  return [];
 }
 
 export function getGameProfileCardCount(payload: UserGameProfilePayload): number {
@@ -165,13 +147,25 @@ function normalizePotentialExportValue(value: number): number {
   return normalizedValue === 1 ? 0 : normalizedValue;
 }
 
-export function exportBestdoriGameProfilePayload(payload: UserGameProfilePayload): BestdoriProfile {
-  const compactPayload = compactGameProfilePayload(payload);
-  if (!compactPayload.characterPotentials && !compactPayload.characterMissionBonuses) {
-    return compactPayload.bestdoriProfile;
+function normalizeAreaItemExportLevel(level: number | null): number | null {
+  if (level === null) {
+    return null;
   }
 
+  const normalizedLevel = Math.max(0, Math.trunc(toFiniteNumber(level)));
+  return normalizedLevel > 0 ? normalizedLevel - 1 : null;
+}
+
+export function exportBestdoriGameProfilePayload(payload: UserGameProfilePayload): BestdoriProfile {
+  const compactPayload = compactGameProfilePayload(payload);
   const normalizedProfile = decodeBestdoriProfile(compactPayload.bestdoriProfile);
+  normalizedProfile.items = Object.fromEntries(
+    Object.entries(normalizedProfile.items).map(([itemKey, levels]) => [
+      itemKey,
+      levels.map(normalizeAreaItemExportLevel),
+    ]),
+  );
+
   const potentials = getGameProfileCharacterPotentials(compactPayload);
   const missionBonuses = getGameProfileCharacterMissionBonuses(compactPayload);
   const missionBonusByCharacter = new Map<number, { performance: number; technique: number; visual: number }>();
@@ -193,9 +187,9 @@ export function exportBestdoriGameProfilePayload(payload: UserGameProfilePayload
     const characterId = index + 1;
     const potential = potentialByCharacter.get(characterId);
     const missionBonus = missionBonusByCharacter.get(characterId) ?? { performance: 0, technique: 0, visual: 0 };
-    const performancePotential = normalizePotentialExportValue(potential?.performanceLevel ?? potential?.level ?? 0);
-    const techniquePotential = normalizePotentialExportValue(potential?.techniqueLevel ?? potential?.level ?? 0);
-    const visualPotential = normalizePotentialExportValue(potential?.visualLevel ?? potential?.level ?? 0);
+    const performancePotential = normalizePotentialExportValue(potential?.performanceLevel ?? 0);
+    const techniquePotential = normalizePotentialExportValue(potential?.techniqueLevel ?? 0);
+    const visualPotential = normalizePotentialExportValue(potential?.visualLevel ?? 0);
     const total = Math.round((
       performancePotential + missionBonus.performance
       + techniquePotential + missionBonus.technique
@@ -221,7 +215,6 @@ export function compactPotentialRecords(records?: UserGameProfilePotentialRecord
     .sort((left, right) => left.characterId - right.characterId);
   return {
     ids: encodeBestdoriCardIds(sortedRecords.map((record) => record.characterId)),
-    levels: encodeRunLengthPairs(sortedRecords.map((record) => record.level)),
     performance: encodeRunLengthPairs(sortedRecords.map((record) => record.performanceLevel)),
     technique: encodeRunLengthPairs(sortedRecords.map((record) => record.techniqueLevel)),
     visual: encodeRunLengthPairs(sortedRecords.map((record) => record.visualLevel)),
@@ -231,13 +224,11 @@ export function compactPotentialRecords(records?: UserGameProfilePotentialRecord
 function decodeCompactPotentialRecords(records: CompactGameProfilePotentialRecords): UserGameProfilePotentialRecord[] {
   const characterIds = decodeBestdoriCardIds(records.ids);
   const expectedLength = characterIds.length;
-  const levels = decodeRunLengthPairs<number>(records.levels, expectedLength);
   const performance = decodeRunLengthPairs<number | null>(records.performance, expectedLength);
   const technique = decodeRunLengthPairs<number | null>(records.technique, expectedLength);
   const visual = decodeRunLengthPairs<number | null>(records.visual, expectedLength);
   return characterIds.map((characterId, index) => ({
     characterId,
-    level: Math.max(0, toFiniteNumber(levels[index])),
     performanceLevel: performance[index] === null ? null : Math.max(0, toFiniteNumber(performance[index])),
     techniqueLevel: technique[index] === null ? null : Math.max(0, toFiniteNumber(technique[index])),
     visualLevel: visual[index] === null ? null : Math.max(0, toFiniteNumber(visual[index])),
@@ -319,12 +310,11 @@ function decodeCompactMissionBonusRecords(records: CompactGameProfileMissionBonu
 }
 
 export function compactGameProfilePayload(payload: UserGameProfilePayload): UserGameProfilePayload {
-  const bestdoriProfile = payload.source?.gameUid
-    ? encodeBestdoriProfile(decodeBestdoriProfile(payload.bestdoriProfile))
-    : payload.bestdoriProfile;
+  const normalizedProfile = decodeBestdoriProfile(payload.bestdoriProfile);
+  normalizedProfile.potentials = [];
 
   return {
-    bestdoriProfile,
+    bestdoriProfile: encodeBestdoriProfile(normalizedProfile),
     characterPotentials: compactPotentialRecords(payload.characterPotentials),
     characterMissionBonuses: compactMissionBonusRecords(payload.characterMissionBonuses),
     source: payload.source,

@@ -96,7 +96,7 @@ export default function Toolbar({ showDebugButton = true, isSidebarOpen = false,
                     <button
                         type="button"
                         onClick={onToggleSidebar}
-                        className="group relative flex h-8 w-8 items-center justify-center rounded-[14px] border border-white/45 bg-white/16 text-left shadow-[0_6px_16px_rgba(122,61,0,0.16)] backdrop-blur-sm transition duration-200 hover:-translate-y-0.5 hover:scale-[1.03] hover:border-white/75 hover:bg-white/30 hover:shadow-[0_10px_24px_rgba(122,61,0,0.22)]"
+                        className="group relative flex h-8 w-8 items-center justify-center rounded-[14px] border border-white/45 bg-white/22 text-left shadow-[0_6px_16px_rgba(122,61,0,0.16)] transition duration-200 hover:-translate-y-0.5 hover:scale-[1.03] hover:border-white/75 hover:bg-white/34 hover:shadow-[0_10px_24px_rgba(122,61,0,0.22)]"
                         aria-label={isSidebarOpen ? "关闭页面导航" : "打开页面导航"}
                     >
                         <span className="relative flex h-6 w-6 items-center justify-center rounded-[12px] bg-[#fff4db] text-[#c76400] transition duration-200 group-hover:scale-105 group-hover:bg-[#fff7e7]">
@@ -109,9 +109,9 @@ export default function Toolbar({ showDebugButton = true, isSidebarOpen = false,
                     {shouldShowDebugButton && (
                         <button
                             onClick={toggleDebugMode}
-                            className={`inline-flex h-8 w-8 items-center justify-center rounded-[14px] border backdrop-blur-sm transition duration-200 ${debugMode
+                            className={`inline-flex h-8 w-8 items-center justify-center rounded-[14px] border transition duration-200 ${debugMode
                                     ? "border-white/80 bg-white text-[#c76400] shadow-[0_8px_20px_rgba(122,61,0,0.2)]"
-                                    : "border-white/45 bg-white/16 text-white shadow-[0_6px_16px_rgba(122,61,0,0.14)] hover:-translate-y-0.5 hover:scale-[1.03] hover:border-white/70 hover:bg-white/30 hover:shadow-[0_10px_24px_rgba(122,61,0,0.2)]"
+                                    : "border-white/45 bg-white/22 text-white shadow-[0_6px_16px_rgba(122,61,0,0.14)] hover:-translate-y-0.5 hover:scale-[1.03] hover:border-white/70 hover:bg-white/34 hover:shadow-[0_10px_24px_rgba(122,61,0,0.2)]"
                                 }`}
                             title="开启后在 AI 回合显示落子权重"
                             aria-label={debugMode ? "关闭调试模式" : "开启调试模式"}
@@ -124,7 +124,7 @@ export default function Toolbar({ showDebugButton = true, isSidebarOpen = false,
                         <button
                             type="button"
                             onClick={() => setShowMenu((currentValue) => !currentValue)}
-                            className="group relative flex h-8 w-8 items-center justify-center rounded-[14px] border border-white/45 bg-white/16 text-left shadow-[0_6px_16px_rgba(122,61,0,0.16)] backdrop-blur-sm transition duration-200 hover:-translate-y-0.5 hover:scale-[1.03] hover:border-white/75 hover:bg-white/30 hover:shadow-[0_10px_24px_rgba(122,61,0,0.22)]"
+                            className="group relative flex h-8 w-8 items-center justify-center rounded-[14px] border border-white/45 bg-white/22 text-left shadow-[0_6px_16px_rgba(122,61,0,0.16)] transition duration-200 hover:-translate-y-0.5 hover:scale-[1.03] hover:border-white/75 hover:bg-white/34 hover:shadow-[0_10px_24px_rgba(122,61,0,0.22)]"
                             aria-label={userId ? "打开账户菜单" : "打开登录入口"}
                         >
                             <span className="relative flex h-6 w-6 items-center justify-center rounded-[12px] bg-[#fff4db] text-[#c76400] transition duration-200 group-hover:scale-105 group-hover:bg-[#fff7e7]">

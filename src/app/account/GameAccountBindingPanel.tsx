@@ -55,7 +55,11 @@ function formatDate(value: string): string {
   });
 }
 
-export default function GameAccountBindingPanel() {
+type GameAccountBindingPanelProps = {
+  onBindingsChange?: () => void;
+};
+
+export default function GameAccountBindingPanel({ onBindingsChange }: GameAccountBindingPanelProps) {
   const [gameUid, setGameUid] = useState("");
   const [challenge, setChallenge] = useState<GameBindChallenge | null>(null);
   const [bindings, setBindings] = useState<GameAccountBinding[]>([]);
@@ -120,12 +124,13 @@ export default function GameAccountBindingPanel() {
       setCopiedChallenge(false);
       setGameUid("");
       await loadBindings();
+      onBindingsChange?.();
     } catch (verifyError) {
       setError(verifyError instanceof Error ? verifyError.message : "验证失败");
     } finally {
       setBusy(false);
     }
-  }, [challenge, loadBindings]);
+  }, [challenge, loadBindings, onBindingsChange]);
 
   const unbindGameUid = useCallback(async (targetUid: string) => {
     if (!window.confirm(`确认解绑游戏 UID ${targetUid}？解绑会删除该 UID 与当前网页账号关联的数据。`)) {
@@ -141,12 +146,13 @@ export default function GameAccountBindingPanel() {
       });
       setMessage("已解绑游戏账号。");
       await loadBindings();
+      onBindingsChange?.();
     } catch (unbindError) {
       setError(unbindError instanceof Error ? unbindError.message : "解绑失败");
     } finally {
       setBusy(false);
     }
-  }, [loadBindings]);
+  }, [loadBindings, onBindingsChange]);
 
   const copyChallenge = useCallback(() => {
     if (!challenge) {

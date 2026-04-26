@@ -35,7 +35,7 @@ export default function CharacterSelect() {
                         {/* 黑方按钮 */}
                         <button
                             onClick={() => setPlayerColor("black")}
-                            className="group flex min-w-[160px] flex-col items-center gap-4 rounded-2xl border-2 border-transparent bg-white/80 p-8 shadow-lg backdrop-blur-sm transition-all duration-300 hover:scale-105 hover:border-gray-800 hover:shadow-2xl"
+                            className="group flex min-w-[160px] flex-col items-center gap-4 rounded-2xl border-2 border-transparent bg-white/92 p-8 shadow-lg transition-[border-color,box-shadow,transform] duration-300 hover:scale-[1.03] hover:border-gray-800 hover:shadow-xl"
                         >
                             <div className="h-16 w-16 rounded-full bg-gradient-to-br from-gray-700 to-black shadow-lg" />
                             <div className="text-center">
@@ -47,7 +47,7 @@ export default function CharacterSelect() {
                         {/* 白方按钮 */}
                         <button
                             onClick={() => setPlayerColor("white")}
-                            className="group flex min-w-[160px] flex-col items-center gap-4 rounded-2xl border-2 border-transparent bg-white/80 p-8 shadow-lg backdrop-blur-sm transition-all duration-300 hover:scale-105 hover:border-gray-400 hover:shadow-2xl"
+                            className="group flex min-w-[160px] flex-col items-center gap-4 rounded-2xl border-2 border-transparent bg-white/92 p-8 shadow-lg transition-[border-color,box-shadow,transform] duration-300 hover:scale-[1.03] hover:border-gray-400 hover:shadow-xl"
                         >
                             <div className="h-16 w-16 rounded-full border-2 border-gray-300 bg-gradient-to-br from-white to-gray-200 shadow-lg" />
                             <div className="text-center">
@@ -102,7 +102,7 @@ export default function CharacterSelect() {
                         <button
                             key={char.id}
                             onClick={() => handleSelect(char)}
-                            className="group flex flex-col items-center gap-3 rounded-2xl border-2 border-transparent bg-white/80 p-4 shadow-lg backdrop-blur-sm transition-all duration-300 hover:scale-105 hover:border-blue-400 hover:shadow-2xl lg:p-5"
+                            className="group flex flex-col items-center gap-3 rounded-2xl border-2 border-transparent bg-white/92 p-4 shadow-lg transition-[border-color,box-shadow,transform] duration-300 hover:scale-[1.03] hover:border-blue-400 hover:shadow-xl lg:p-5"
                         >
                             <CharacterAvatar
                                 characterId={char.id}

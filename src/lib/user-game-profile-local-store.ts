@@ -119,6 +119,26 @@ export async function saveLocalGameProfilePayload(
   return record;
 }
 
+export async function updateLocalGameProfilePayload(
+  profileId: string,
+  payload: UserGameProfilePayload,
+): Promise<LocalGameProfileSummary> {
+  const current = await withStore<LocalGameProfileRecord | undefined>("readonly", (store) => store.get(profileId));
+  if (!current) {
+    throw new Error("本地 Profile 不存在");
+  }
+
+  const compressed = await encodeCompressedGameProfilePayload(payload);
+  const record: LocalGameProfileRecord = {
+    ...current,
+    cardCount: getGameProfileCardCount(payload),
+    updatedAt: new Date().toISOString(),
+    ...compressed,
+  };
+  await withStore("readwrite", (store) => store.put(record));
+  return record;
+}
+
 export async function deleteLocalGameProfile(profileId: string): Promise<void> {
   await withStore("readwrite", (store) => store.delete(profileId));
 }

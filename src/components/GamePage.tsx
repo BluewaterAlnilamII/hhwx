@@ -496,7 +496,7 @@ export default function GamePage() {
                 {/* 中间按钮/状态核心区 */}
                 <div className="flex flex-col items-center gap-3 mb-2 flex-1 px-2">
                     {/* 回合指示器 */}
-                    <div className="px-4 py-2 rounded-full bg-white/70 backdrop-blur-sm text-xs font-medium text-gray-600 shadow-sm text-center whitespace-nowrap">
+                    <div className="px-4 py-2 rounded-full bg-white/88 text-xs font-medium text-gray-600 shadow-sm text-center whitespace-nowrap">
                         {state.gamePhase === "playing" && state.currentPlayer === playerColor
                             ? "🎮 你的回合"
                             : state.gamePhase === "aiThinking" || state.currentPlayer === aiColor
@@ -510,7 +510,7 @@ export default function GamePage() {
                     {state.gamePhase !== "ended" ? (
                         <button
                             onClick={handleGiveUp}
-                            className="w-full max-w-[120px] px-3 py-2 bg-white/50 backdrop-blur-sm border border-gray-300 text-xs font-medium text-gray-600 rounded-full hover:bg-red-50 hover:border-red-300 hover:text-red-600 shadow-sm"
+                            className="w-full max-w-[120px] px-3 py-2 bg-white/82 border border-gray-300 text-xs font-medium text-gray-600 rounded-full hover:bg-red-50 hover:border-red-300 hover:text-red-600 shadow-sm"
                         >
                             🚪 放弃这局
                         </button>
@@ -524,7 +524,7 @@ export default function GamePage() {
                             </button>
                             <button
                                 onClick={handleReturnToSelect}
-                                className="w-full px-3 py-2 bg-white/50 backdrop-blur-sm border border-gray-300 text-xs font-medium text-gray-600 rounded-full hover:bg-white/80 shadow-sm"
+                                className="w-full px-3 py-2 bg-white/82 border border-gray-300 text-xs font-medium text-gray-600 rounded-full hover:bg-white/92 shadow-sm"
                             >
                                 🎭 重选角色
                             </button>
@@ -553,7 +553,7 @@ export default function GamePage() {
             {/* 桌面端：中控及按钮区 */}
             <div className="hidden sm:flex flex-col items-center">
                 {/* 回合指示器 */}
-                <div className="mt-4 px-4 py-2 rounded-full bg-white/70 backdrop-blur-sm text-sm font-medium text-gray-600 shadow-sm">
+                <div className="mt-4 px-4 py-2 rounded-full bg-white/88 text-sm font-medium text-gray-600 shadow-sm">
                     {state.gamePhase === "playing" && state.currentPlayer === playerColor
                         ? "🎮 你的回合"
                         : state.gamePhase === "aiThinking" || state.currentPlayer === aiColor
@@ -567,7 +567,7 @@ export default function GamePage() {
                 {state.gamePhase !== "ended" ? (
                     <button
                         onClick={handleGiveUp}
-                        className="mt-3 px-5 py-2 bg-white/50 backdrop-blur-sm border border-gray-300 text-sm font-medium text-gray-600 rounded-full hover:bg-red-50 hover:border-red-300 hover:text-red-600 transition-all duration-200 shadow-sm"
+                        className="mt-3 px-5 py-2 bg-white/82 border border-gray-300 text-sm font-medium text-gray-600 rounded-full hover:bg-red-50 hover:border-red-300 hover:text-red-600 transition-colors duration-200 shadow-sm"
                     >
                         🚪 放弃这局
                     </button>
@@ -581,7 +581,7 @@ export default function GamePage() {
                         </button>
                         <button
                             onClick={handleReturnToSelect}
-                            className="px-5 py-2 bg-white/50 backdrop-blur-sm border border-gray-300 text-sm font-medium text-gray-600 rounded-full hover:bg-white/80 transition-all duration-200 shadow-sm"
+                            className="px-5 py-2 bg-white/82 border border-gray-300 text-sm font-medium text-gray-600 rounded-full hover:bg-white/92 transition-colors duration-200 shadow-sm"
                         >
                             🎭 重选角色
                         </button>

@@ -1,5 +1,6 @@
 "use client";
 
+import { useCallback, useState } from "react";
 import Link from "next/link";
 import { getUsernameAvatarLabel } from "@/lib/username-policy";
 import AccountShell, { AccountErrorState, AccountLoadingState, AccountSignInState } from "./AccountShell";
@@ -9,6 +10,11 @@ import { useAccountProfile } from "./useAccountProfile";
 
 export default function AccountPage() {
   const { userId, userEmail, authReady, profile, loadingProfile, profileError } = useAccountProfile();
+  const [gameBindingsRefreshSignal, setGameBindingsRefreshSignal] = useState(0);
+
+  const handleGameBindingsChange = useCallback(() => {
+    setGameBindingsRefreshSignal((value) => value + 1);
+  }, []);
 
   return (
     <AccountShell
@@ -46,8 +52,8 @@ export default function AccountPage() {
             )}
           </section>
 
-          <GameAccountBindingPanel />
-          <GameProfilesPanel />
+          <GameAccountBindingPanel onBindingsChange={handleGameBindingsChange} />
+          <GameProfilesPanel refreshSignal={gameBindingsRefreshSignal} />
 
           <div className="space-y-4">
             <Link

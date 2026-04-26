@@ -189,7 +189,7 @@ function EventProgressBar({ startDate, endDate }: { startDate: number; endDate: 
   const subSummaryContent = renderRelativeCountdown("距结束", endDate - now, hasEnded ? "活动已结束" : "活动已结束");
 
   return (
-    <div className="bg-white dark:bg-[#131A2B] rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-gray-800">
+    <div className="rounded-2xl border border-[#ffe16c]/90 bg-[#fffef0]/94 p-6 shadow-[0_18px_44px_rgba(232,176,0,0.16),0_2px_10px_rgba(88,69,0,0.07)] dark:border-gray-800 dark:bg-[#131A2B]">
       <div className="mb-2 flex items-start justify-between gap-3 text-sm font-semibold">
         <span className="shrink-0 whitespace-nowrap text-blue-500 font-bold">活动进度</span>
         <span className="min-w-0 flex flex-col items-end gap-0.5 text-right leading-tight">
@@ -683,7 +683,7 @@ export default function EventTrackerPage() {
       <div className="relative z-10 mx-auto max-w-5xl space-y-4 lg:space-y-8">
 
         {/* ========== 页头：活动名称、切换器、活动横幅 ========== */}
-        <div className="relative z-20 flex flex-col gap-6 rounded-3xl border border-gray-100 bg-white p-4 shadow-xl shadow-blue-500/5 dark:border-gray-800 dark:bg-[#131A2B] dark:shadow-blue-500/10 sm:p-8 md:flex-row md:items-center md:justify-between md:gap-8">
+        <div className="relative z-20 flex flex-col gap-6 rounded-3xl border border-[#ffe16c]/95 bg-[#fffef0]/96 p-4 shadow-[0_26px_68px_rgba(232,176,0,0.18),0_4px_18px_rgba(88,69,0,0.08)] dark:border-gray-800 dark:bg-[#131A2B] dark:shadow-blue-500/10 sm:p-8 md:flex-row md:items-center md:justify-between md:gap-8">
           <div className="min-w-0 flex-1 space-y-4">
             <h1 className="block min-h-[4rem] w-full text-3xl font-extrabold leading-tight text-[#f43f5e] md:min-h-[3rem]">
               {cnEventName}
@@ -693,7 +693,7 @@ export default function EventTrackerPage() {
               {allEvents.length > 0 ? (
                 <div className="flex items-center gap-2">
                   <select
-                    className="bg-gray-100 dark:bg-[#0C111C] border border-gray-200 dark:border-gray-700/50 rounded-xl px-4 py-2.5 text-sm font-bold text-gray-700 dark:text-gray-300 focus:ring-2 focus:ring-[#f43f5e] focus:outline-none cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-800 transition-colors shadow-sm w-full max-w-[400px] text-ellipsis sm:min-w-[320px]"
+                    className="bg-white/90 dark:bg-[#0C111C] border border-[#ff3b6b] dark:border-gray-700/50 rounded-xl px-4 py-2.5 text-sm font-bold text-gray-700 dark:text-gray-300 focus:ring-2 focus:ring-[#f43f5e] focus:outline-none cursor-pointer hover:bg-white dark:hover:bg-gray-800 transition-colors shadow-sm w-full max-w-[400px] text-ellipsis sm:min-w-[320px]"
                     value={resolvedCurrentEventId || ""}
                     onChange={(e) => setCurrentEventId(parseInt(e.target.value))}
                   >
@@ -722,7 +722,7 @@ export default function EventTrackerPage() {
                     </Dialog.Trigger>
 
                     <Dialog.Portal>
-                      <Dialog.Overlay className="fixed inset-0 bg-black/40 backdrop-blur-[2px] z-[100] animate-in fade-in duration-200" />
+                      <Dialog.Overlay className="fixed inset-0 bg-black/50 z-[100] animate-in fade-in duration-200" />
                       <Dialog.Content className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-lg bg-white dark:bg-[#131A2B] rounded-2xl shadow-2xl z-[101] flex flex-col overflow-hidden animate-in zoom-in-95 fade-in duration-200">
                         <div className="flex items-center justify-between p-5 border-b border-gray-100 dark:border-gray-800">
                           <Dialog.Title className="text-xl font-bold text-gray-800 dark:text-white">选择活动</Dialog.Title>
@@ -829,7 +829,7 @@ export default function EventTrackerPage() {
         {startDate && endDate && <EventProgressBar startDate={startDate} endDate={endDate} />}
 
         {/* ========== 导航与控制区 ========== */}
-        <div className="bg-white/80 dark:bg-[#131A2B]/80 backdrop-blur-xl rounded-3xl p-3 sm:p-6 shadow-xl border border-white/20 dark:border-gray-800">
+        <div className="rounded-3xl border border-[#ffe16c]/82 bg-[#fff9d7]/86 p-3 shadow-[0_24px_60px_rgba(232,176,0,0.14),0_4px_18px_rgba(88,69,0,0.07)] dark:border-gray-800 dark:bg-[#131A2B]/94 sm:p-6">
           <Tabs.Root
             value={trackingMode}
             onValueChange={handleTrackingModeChange}
@@ -983,7 +983,7 @@ export default function EventTrackerPage() {
               <div className="mt-2 relative bg-[#F9FBFC] dark:bg-[#0C111C] p-1 sm:p-4 rounded-2xl border border-gray-100 dark:border-gray-800/60 shadow-inner">
 
                 {loading && (
-                  <div className="absolute inset-0 bg-white/50 dark:bg-[#0C111C]/50 backdrop-blur-sm z-30 flex items-center justify-center rounded-2xl">
+                  <div className="absolute inset-0 bg-white/75 dark:bg-[#0C111C]/75 z-30 flex items-center justify-center rounded-2xl">
                     <div className="flex flex-col items-center">
                       <div className="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
                       <p className="mt-4 text-sm font-semibold text-blue-600 animate-pulse">正在获取最新数据...</p>
@@ -1198,7 +1198,7 @@ export default function EventTrackerPage() {
                   <div className="absolute top-[70%] right-4 -translate-y-1/2 flex flex-col gap-2 z-20 transition-opacity opacity-70 hover:opacity-100 mix-blend-difference dark:mix-blend-normal">
                     <button
                       onClick={() => setZoomIndex(prev => Math.min(ZOOM_WIDTH_MULTIPLIERS.length - 1, prev + 1))}
-                      className={`p-1.5 text-gray-500 dark:text-gray-400 hover:text-blue-500 dark:hover:text-blue-400 rounded-full transition-transform hover:scale-110 active:scale-95 bg-white/20 dark:bg-black/20 backdrop-blur-sm ${zoomIndex >= ZOOM_WIDTH_MULTIPLIERS.length - 1 ? "invisible pointer-events-none" : ""}`}
+                      className={`p-1.5 text-gray-500 dark:text-gray-400 hover:text-blue-500 dark:hover:text-blue-400 rounded-full transition-transform hover:scale-110 active:scale-95 bg-white/72 dark:bg-black/45 ${zoomIndex >= ZOOM_WIDTH_MULTIPLIERS.length - 1 ? "invisible pointer-events-none" : ""}`}
                       disabled={zoomIndex >= ZOOM_WIDTH_MULTIPLIERS.length - 1}
                       title="放大"
                     >
@@ -1206,7 +1206,7 @@ export default function EventTrackerPage() {
                     </button>
                     <button
                       onClick={() => setZoomIndex(prev => Math.max(0, prev - 1))}
-                      className={`p-1.5 rounded-full transition-all hover:scale-110 active:scale-95 bg-white/20 dark:bg-black/20 backdrop-blur-sm ${zoomIndex <= 0 ? "invisible pointer-events-none" : "text-gray-500 dark:text-gray-400 hover:text-blue-500 dark:hover:text-blue-400"}`}
+                      className={`p-1.5 rounded-full transition-transform hover:scale-110 active:scale-95 bg-white/72 dark:bg-black/45 ${zoomIndex <= 0 ? "invisible pointer-events-none" : "text-gray-500 dark:text-gray-400 hover:text-blue-500 dark:hover:text-blue-400"}`}
                       disabled={zoomIndex <= 0}
                       title="缩小"
                     >
