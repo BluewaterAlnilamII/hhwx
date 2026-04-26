@@ -10,6 +10,10 @@ import {
   type NormalizedBestdoriProfile,
 } from "@/lib/bestdori-profile-codec";
 import { fetchGameUserSnapshot, type TrackerUserSnapshotPayload } from "@/lib/user-game-snapshot-fetcher";
+import {
+  BANDORI_AREA_ITEM_IDS,
+  BANDORI_AREA_ITEM_IDS_BY_GROUP,
+} from "@/lib/bandori-area-item-groups";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
 import {
   USER_GAME_BINDINGS_TABLE,
@@ -269,22 +273,6 @@ function toNormalizedCards(cards: unknown): NormalizedBestdoriCard[] {
     .sort((left, right) => left.cardId - right.cardId);
 }
 
-const BESTDORI_BAND_ITEM_MAP: Record<string, number[]> = {
-  PoppinParty: [1, 6, 11, 16, 21, 26, 31],
-  Afterglow: [2, 7, 12, 17, 22, 27, 32],
-  PastelPalettes: [3, 8, 13, 18, 23, 28, 33],
-  Roselia: [4, 9, 14, 19, 24, 29, 34],
-  HelloHappyWorld: [5, 10, 15, 20, 25, 30, 35],
-  Everyone: [73, 74, 75, 76, 77, 78, 79],
-  Morfonica: [83, 84, 85, 86, 87, 88, 89],
-  RaiseASuilen: [90, 91, 92, 93, 94, 95, 96],
-  MyGO: [97, 98, 99, 100, 101, 102, 103],
-  Magazine: [80, 81, 82],
-  Menu: [56, 57, 58, 60],
-  Plaza: [66, 67, 69, 70],
-};
-
-const BESTDORI_AREA_ITEM_IDS = new Set(Object.values(BESTDORI_BAND_ITEM_MAP).flat());
 const MAX_BANDORI_CHARACTER_ID = 50;
 
 function isPlayableCharacterId(characterId: number): boolean {
@@ -299,7 +287,7 @@ function resolveBestdoriAreaItemId(rawAreaItemId: number, detail?: TrackerAreaIt
     toInteger(detail?.area_item_id),
   ];
 
-  return candidateIds.find((candidateId) => candidateId > 0 && BESTDORI_AREA_ITEM_IDS.has(candidateId)) ?? null;
+  return candidateIds.find((candidateId) => candidateId > 0 && BANDORI_AREA_ITEM_IDS.has(candidateId)) ?? null;
 }
 
 function findAreaItemDetailForUserItem(details: TrackerAreaItemDetail[], item: TrackerAreaItem): TrackerAreaItemDetail | undefined {
@@ -348,7 +336,7 @@ function collectAreaItemLevelsByBestdoriId(areaItems: unknown, areaItemDetails?:
 function toBestdoriItems(areaItems: unknown, areaItemDetails?: unknown): Record<string, Array<number | null>> {
   const levelsById = collectAreaItemLevelsByBestdoriId(areaItems, areaItemDetails);
   const result: Record<string, Array<number | null>> = {};
-  Object.entries(BESTDORI_BAND_ITEM_MAP).forEach(([key, ids]) => {
+  Object.entries(BANDORI_AREA_ITEM_IDS_BY_GROUP).forEach(([key, ids]) => {
     result[key] = ids.map((id) => levelsById.get(id) ?? null);
   });
   return result;

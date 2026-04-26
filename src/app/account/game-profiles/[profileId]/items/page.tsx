@@ -15,6 +15,7 @@ import {
   type UserGameProfilePayload,
 } from "@/lib/user-game-profile-payload";
 import { decodeBestdoriProfile, encodeBestdoriProfile } from "@/lib/bestdori-profile-codec";
+import { BANDORI_AREA_ITEM_GROUPS, BANDORI_AREA_ITEM_IDS } from "@/lib/bandori-area-item-groups";
 import {
   isLocalGameProfileId,
   readLocalGameProfilePayload,
@@ -77,12 +78,6 @@ type MetadataPayload = {
   gameAreaItemResourceAliases: Record<string, number>;
 };
 
-type AreaItemGroup = {
-  key: string;
-  label: string;
-  itemIds: number[];
-};
-
 type CharacterGroup = {
   bandId: number;
   label: string;
@@ -96,20 +91,7 @@ type CharacterBonusRow = {
   collection: MissionBonusRecord;
 };
 
-const AREA_ITEM_GROUPS: AreaItemGroup[] = [
-  { key: "PoppinParty", label: "Poppin'Party 道具", itemIds: [1, 6, 11, 16, 21, 26, 31] },
-  { key: "Afterglow", label: "Afterglow 道具", itemIds: [2, 7, 12, 17, 22, 27, 32] },
-  { key: "HelloHappyWorld", label: "Hello, Happy World! 道具", itemIds: [5, 10, 15, 20, 25, 30, 35] },
-  { key: "PastelPalettes", label: "Pastel＊Palettes 道具", itemIds: [3, 8, 13, 18, 23, 28, 33] },
-  { key: "Roselia", label: "Roselia 道具", itemIds: [4, 9, 14, 19, 24, 29, 34] },
-  { key: "Morfonica", label: "Morfonica 道具", itemIds: [83, 84, 85, 86, 87, 88, 89] },
-  { key: "RaiseASuilen", label: "RAISE A SUILEN 道具", itemIds: [90, 91, 92, 93, 94, 95, 96] },
-  { key: "MyGO", label: "MyGO!!!!! 道具", itemIds: [97, 98, 99, 100, 101, 102, 103] },
-  { key: "Everyone", label: "Everyone 道具", itemIds: [73, 74, 75, 76, 77, 78, 79] },
-  { key: "Magazine", label: "Magazine 道具", itemIds: [80, 81, 82] },
-  { key: "Plaza", label: "Plaza 道具", itemIds: [66, 67, 69, 70] },
-  { key: "Menu", label: "Menu 道具", itemIds: [56, 57, 58, 60] },
-];
+const AREA_ITEM_GROUPS = BANDORI_AREA_ITEM_GROUPS;
 
 const CHARACTER_GROUPS: CharacterGroup[] = [
   { bandId: 1, label: "Poppin'Party" },
@@ -122,7 +104,7 @@ const CHARACTER_GROUPS: CharacterGroup[] = [
   { bandId: 45, label: "MyGO!!!!!" },
 ];
 
-const AREA_ITEM_IDS = new Set(AREA_ITEM_GROUPS.flatMap((group) => group.itemIds));
+const AREA_ITEM_IDS = BANDORI_AREA_ITEM_IDS;
 const CHARACTER_GROUP_BAND_IDS = new Set(CHARACTER_GROUPS.map((group) => group.bandId));
 const MAX_CHARACTER_ID = 50;
 

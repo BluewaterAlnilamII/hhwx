@@ -7,6 +7,10 @@ import {
   encodeRunLengthPairs,
   type BestdoriProfile,
 } from "@/lib/bestdori-profile-codec";
+import {
+  BANDORI_AREA_ITEM_IDS_BY_GROUP,
+  orderBandoriAreaItems,
+} from "@/lib/bandori-area-item-groups";
 
 export const USER_GAME_PROFILE_STORAGE_CODEC = "hhwx-profile+gzip+base64-v1";
 
@@ -83,21 +87,6 @@ export type CompressedGameProfilePayload = {
   payloadSize: number;
 };
 
-const BESTDORI_BAND_ITEM_MAP: Record<string, number[]> = {
-  PoppinParty: [1, 6, 11, 16, 21, 26, 31],
-  Afterglow: [2, 7, 12, 17, 22, 27, 32],
-  PastelPalettes: [3, 8, 13, 18, 23, 28, 33],
-  Roselia: [4, 9, 14, 19, 24, 29, 34],
-  HelloHappyWorld: [5, 10, 15, 20, 25, 30, 35],
-  Everyone: [73, 74, 75, 76, 77, 78, 79],
-  Morfonica: [83, 84, 85, 86, 87, 88, 89],
-  RaiseASuilen: [90, 91, 92, 93, 94, 95, 96],
-  MyGO: [97, 98, 99, 100, 101, 102, 103],
-  Magazine: [80, 81, 82],
-  Menu: [56, 57, 58, 60],
-  Plaza: [66, 67, 69, 70],
-};
-
 const MAX_BANDORI_CHARACTER_ID = 50;
 
 function toFiniteNumber(value: unknown, fallback = 0): number {
@@ -111,8 +100,8 @@ export function getGameProfileCards(payload: UserGameProfilePayload): UserGamePr
 
 export function getGameProfileAreaItems(payload: UserGameProfilePayload): UserGameProfileItemRecord[] {
   const normalizedProfile = decodeBestdoriProfile(payload.bestdoriProfile);
-  return Object.entries(normalizedProfile.items).flatMap(([itemKey, levels]) => {
-    const areaItemIds = BESTDORI_BAND_ITEM_MAP[itemKey] ?? [];
+  return Object.entries(orderBandoriAreaItems(normalizedProfile.items)).flatMap(([itemKey, levels]) => {
+    const areaItemIds = BANDORI_AREA_ITEM_IDS_BY_GROUP[itemKey] ?? [];
     return levels.map((level, index) => ({
       itemKey: `${itemKey}:${index}`,
       areaItemId: areaItemIds[index] ?? null,
@@ -311,6 +300,7 @@ function decodeCompactMissionBonusRecords(records: CompactGameProfileMissionBonu
 
 export function compactGameProfilePayload(payload: UserGameProfilePayload): UserGameProfilePayload {
   const normalizedProfile = decodeBestdoriProfile(payload.bestdoriProfile);
+  normalizedProfile.items = orderBandoriAreaItems(normalizedProfile.items);
   normalizedProfile.potentials = [];
 
   return {
