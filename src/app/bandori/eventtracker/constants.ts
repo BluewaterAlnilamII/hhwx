@@ -1,19 +1,14 @@
-import type { TrackingMode } from "./types";
-
-export const EVENT_TIERS = [1, 10, 20, 30, 40, 50, 100, 200, 300, 400, 500, 1000, 2000, 3000, 4000, 5000, 10000, 20000, 30000, 40000, 50000, 70000, 100000];
-export const SONG_TIERS = [1, 10, 20, 30, 40, 50, 100, 200, 300, 400, 500, 1000, 2000, 5000, 10000, 20000];
-export const MONTHLY_TIERS = [1, 10, 20, 30, 40, 50, 100, 200, 300, 500, 1000, 2000, 3000, 4000];
+export {
+  EVENT_TIERS,
+  getTiersForMode,
+  MONTHLY_TIERS,
+  SONG_TIERS,
+} from "@/lib/bandori-tracker-tiers";
 
 const INSTANT_PROJECTION_STORAGE_KEY = "eventtracker_projection_instant";
 const DAY_PROJECTION_STORAGE_KEY = "eventtracker_projection_24h";
 
 /** 根据追踪模式返回对应的可选排名档位列表。 */
-export function getTiersForMode(mode: TrackingMode): number[] {
-  if (mode === "event") return EVENT_TIERS;
-  if (mode === "song") return SONG_TIERS;
-  return MONTHLY_TIERS;
-}
-
 function readLegacyProjectionCookie(cookieName: string): boolean | null {
   if (typeof document === "undefined") return null;
 

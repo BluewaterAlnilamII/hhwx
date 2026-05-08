@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { LIVE_API_CACHE_CONTROL, withCacheControl } from "@/lib/api-cache";
 import { jsonError } from "@/lib/api-response";
+import { isSupportedTrackerTier } from "@/lib/bandori-tracker-tiers";
 import { supabase } from "@/lib/supabase";
 import { BANDORI_TRACKER_DATA_TABLE } from "@/lib/supabase-table-names";
 
@@ -83,8 +84,8 @@ function buildSongCutoffs(rows: TrackerRow[]): TrackerPoint[] | TrackerSongCutof
  * 统一的 tracker data 服务端处理器。
  *
  * 为什么要抽到共享模块：
- * 1. 新旧路径需要在兼容期内返回完全一致的结构，避免行为漂移。
- * 2. 未来下线旧路径时，只需要删除别名路由，不需要再次搬运查询逻辑。
+ * 1. route.ts 保持薄封装，避免把查询和协议细节堆进入口文件。
+ * 2. 支持档线但暂时没有采集到数据时，继续返回 result/cutoffs 成功体和空数组。
  * 3. 当前成功响应的 result/cutoffs 结构已经被现有 tracker 页面和外部调用方依赖，
  *    因此成功体保持不变；失败体则回到项目统一错误信封，避免继续扩散旧协议。
  */
@@ -130,6 +131,16 @@ export async function handleBandoriTrackerDataRequest(request: Request) {
       });
     }
 
+    if (!isSupportedTrackerTier(typeParam, tier)) {
+      return errorResponse(404, "TRACKER_TIER_NOT_SUPPORTED", "The requested tracker tier is not supported.", {
+        details: {
+          event: eventId,
+          tier,
+          type: typeParam,
+        },
+      });
+    }
+
     if (typeParam === "song") {
       // 为什么 song 模式要一次返回全部 song_id 分组：
       // challenge 活动切歌只是在前端本地切换视图，如果服务端按单曲逐次查询，
@@ -168,12 +179,11 @@ export async function handleBandoriTrackerDataRequest(request: Request) {
       }
 
       if (rows.length === 0) {
-        return errorResponse(404, "TRACKER_DATA_NOT_FOUND", "No song ranking data found for the requested query.", {
-          details: {
-            event: eventId,
-            tier,
-            type: typeParam,
-          },
+        return NextResponse.json({
+          result: true,
+          cutoffs: [],
+        }, {
+          headers: withCacheControl(LIVE_API_CACHE_CONTROL),
         });
       }
 
@@ -221,12 +231,11 @@ export async function handleBandoriTrackerDataRequest(request: Request) {
     const formattedData = formatCutoffs(rows);
 
     if (formattedData.length === 0) {
-      return errorResponse(404, "TRACKER_DATA_NOT_FOUND", "No tracker data found for the requested query.", {
-        details: {
-          event: eventId,
-          tier,
-          type: typeParam,
-        },
+      return NextResponse.json({
+        result: true,
+        cutoffs: [],
+      }, {
+        headers: withCacheControl(LIVE_API_CACHE_CONTROL),
       });
     }
 
