@@ -1,5 +1,5 @@
 import { jsonRouteError, jsonSuccess } from "@/lib/api-response";
-import { requireAuthenticatedUser } from "@/lib/auth-server";
+import { requireVerifiedAccount } from "@/lib/auth-server";
 import { deleteGameProfile, normalizeProfileId } from "@/lib/user-game-profiles-server";
 
 export async function DELETE(
@@ -7,7 +7,7 @@ export async function DELETE(
   context: { params: Promise<{ profileId: string }> },
 ) {
   try {
-    const user = await requireAuthenticatedUser(request);
+    const user = await requireVerifiedAccount(request);
     const { profileId: rawProfileId } = await context.params;
     const profileId = normalizeProfileId(rawProfileId);
     await deleteGameProfile(user.id, profileId);

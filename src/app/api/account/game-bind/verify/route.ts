@@ -1,6 +1,6 @@
 import { ApiRouteError } from "@/lib/api-contracts";
 import { jsonRouteError, jsonSuccess } from "@/lib/api-response";
-import { requireAuthenticatedUser } from "@/lib/auth-server";
+import { requireVerifiedAccount } from "@/lib/auth-server";
 import { GAME_BIND_CHALLENGE_MAX_ATTEMPTS, fetchGameProfileSignature, isSignatureMatch } from "@/lib/game-account-binding";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
 import { USER_GAME_BIND_CHALLENGES_TABLE } from "@/lib/supabase-table-names";
@@ -24,7 +24,7 @@ function normalizeChallengeId(value: unknown): string {
 
 export async function POST(request: Request) {
   try {
-    const user = await requireAuthenticatedUser(request);
+    const user = await requireVerifiedAccount(request);
     let body: { challengeId?: unknown };
 
     try {

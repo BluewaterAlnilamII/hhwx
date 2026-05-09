@@ -52,8 +52,24 @@ export default function AccountPage() {
             )}
           </section>
 
-          <GameAccountBindingPanel onBindingsChange={handleGameBindingsChange} />
-          <GameProfilesPanel refreshSignal={gameBindingsRefreshSignal} />
+          {profile.emailVerified ? (
+            <>
+              <GameAccountBindingPanel onBindingsChange={handleGameBindingsChange} />
+              <GameProfilesPanel refreshSignal={gameBindingsRefreshSignal} />
+            </>
+          ) : (
+            <section className="rounded-3xl border border-amber-200 bg-amber-50 p-6 shadow-sm">
+              <h2 className="text-xl font-semibold text-amber-900">邮箱验证后解锁更多功能</h2>
+              <p className="mt-2 text-sm leading-6 text-amber-700">
+                完成邮箱验证后，可以使用游戏账号绑定、云端 Profile、评论和排期编辑等功能。
+              </p>
+              <div className="mt-5">
+                <Link href="/account/email" className="hhwx-accent-button">
+                  前往验证邮箱
+                </Link>
+              </div>
+            </section>
+          )}
 
           <div className="space-y-4">
             <Link

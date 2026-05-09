@@ -280,17 +280,15 @@ export default function AuthPageContent() {
           throw setSessionError;
         }
 
-        if (result.authSummary.emailVerified) {
-          setAuth({
-            userId: result.authSummary.userId,
-            username: result.authSummary.username,
-            userEmail: result.authSummary.email,
-            emailVerified: result.authSummary.emailVerified,
-          });
+        setAuth({
+          userId: result.authSummary.userId,
+          username: result.authSummary.username,
+          userEmail: result.authSummary.email,
+          emailVerified: result.authSummary.emailVerified,
+        });
 
-          router.replace(nextPath);
-          return;
-        }
+        router.replace(nextPath);
+        return;
       }
 
       setPassword("");

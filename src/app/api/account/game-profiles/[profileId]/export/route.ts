@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { jsonRouteError } from "@/lib/api-response";
-import { requireAuthenticatedUser } from "@/lib/auth-server";
+import { requireVerifiedAccount } from "@/lib/auth-server";
 import { exportBestdoriGameProfile, normalizeProfileId } from "@/lib/user-game-profiles-server";
 
 export async function GET(
@@ -8,7 +8,7 @@ export async function GET(
   context: { params: Promise<{ profileId: string }> },
 ) {
   try {
-    const user = await requireAuthenticatedUser(request);
+    const user = await requireVerifiedAccount(request);
     const { profileId: rawProfileId } = await context.params;
     const profileId = normalizeProfileId(rawProfileId);
     const profile = await exportBestdoriGameProfile(user.id, profileId);

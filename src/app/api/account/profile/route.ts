@@ -1,4 +1,5 @@
 import { ApiRouteError } from "@/lib/api-contracts";
+import { ensureAccountStatus } from "@/lib/account-status-server";
 import { jsonRouteError, jsonSuccess } from "@/lib/api-response";
 import { requireAuthenticatedUser } from "@/lib/auth-server";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
@@ -78,12 +79,12 @@ async function ensureProfileRow(userId: string, preferredUsername: string | null
 async function readAccountProfile(
   userId: string,
   email: string | null,
-  emailVerified: boolean,
   metadataUsername: string | null,
 ) {
   const serviceClient = createServerSupabaseClient();
-  const [profile, rolesResult] = await Promise.all([
+  const [profile, accountStatus, rolesResult] = await Promise.all([
     ensureProfileRow(userId, metadataUsername),
+    ensureAccountStatus(userId),
     serviceClient
       .from(USER_ROLES_TABLE)
       .select("role")
@@ -97,7 +98,7 @@ async function readAccountProfile(
   return {
     userId,
     email,
-    emailVerified,
+    emailVerified: Boolean(accountStatus.email_verified_at),
     username: profile.username,
     createdAt: profile.created_at,
     updatedAt: profile.created_at,
@@ -111,7 +112,6 @@ export async function GET(request: Request) {
     return jsonSuccess(await readAccountProfile(
       user.id,
       user.email,
-      user.emailVerified,
       user.metadataUsername,
     ));
   } catch (error) {
@@ -157,7 +157,6 @@ export async function PUT(request: Request) {
     return jsonSuccess(await readAccountProfile(
       user.id,
       user.email,
-      user.emailVerified,
       username,
     ));
   } catch (error) {

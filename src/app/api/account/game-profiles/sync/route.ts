@@ -1,12 +1,12 @@
 import { ApiRouteError } from "@/lib/api-contracts";
 import { jsonRouteError, jsonSuccess } from "@/lib/api-response";
-import { requireAuthenticatedUser } from "@/lib/auth-server";
+import { requireVerifiedAccount } from "@/lib/auth-server";
 import { normalizeGameUid } from "@/lib/game-account-binding";
 import { syncAutoGameProfile } from "@/lib/user-game-profiles-server";
 
 export async function POST(request: Request) {
   try {
-    const user = await requireAuthenticatedUser(request);
+    const user = await requireVerifiedAccount(request);
     let body: { gameUid?: unknown };
 
     try {

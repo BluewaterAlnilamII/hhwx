@@ -1,11 +1,11 @@
 import { ApiRouteError } from "@/lib/api-contracts";
 import { jsonRouteError, jsonSuccess } from "@/lib/api-response";
-import { requireAuthenticatedUser } from "@/lib/auth-server";
+import { requireVerifiedAccount } from "@/lib/auth-server";
 import { createManualGameProfile, listUserGameProfiles } from "@/lib/user-game-profiles-server";
 
 export async function GET(request: Request) {
   try {
-    const user = await requireAuthenticatedUser(request);
+    const user = await requireVerifiedAccount(request);
     return jsonSuccess(await listUserGameProfiles(user.id));
   } catch (error) {
     console.error("Game profiles GET API error:", error);
@@ -19,7 +19,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const user = await requireAuthenticatedUser(request);
+    const user = await requireVerifiedAccount(request);
     let body: { name?: unknown };
 
     try {

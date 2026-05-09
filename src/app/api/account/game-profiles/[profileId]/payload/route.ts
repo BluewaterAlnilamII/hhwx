@@ -1,5 +1,5 @@
 import { jsonRouteError, jsonSuccess } from "@/lib/api-response";
-import { requireAuthenticatedUser } from "@/lib/auth-server";
+import { requireVerifiedAccount } from "@/lib/auth-server";
 import { ApiRouteError } from "@/lib/api-contracts";
 import { normalizeProfileId, readCompressedGameProfilePayload, updateGameProfilePayload } from "@/lib/user-game-profiles-server";
 import { decodeGameProfilePayload } from "@/lib/user-game-profile-payload-server";
@@ -10,7 +10,7 @@ export async function GET(
   context: { params: Promise<{ profileId: string }> },
 ) {
   try {
-    const user = await requireAuthenticatedUser(request);
+    const user = await requireVerifiedAccount(request);
     const { profileId: rawProfileId } = await context.params;
     const profileId = normalizeProfileId(rawProfileId);
     return jsonSuccess(await readCompressedGameProfilePayload(user.id, profileId));
@@ -29,7 +29,7 @@ export async function PATCH(
   context: { params: Promise<{ profileId: string }> },
 ) {
   try {
-    const user = await requireAuthenticatedUser(request);
+    const user = await requireVerifiedAccount(request);
     const { profileId: rawProfileId } = await context.params;
     const profileId = normalizeProfileId(rawProfileId);
     let body: { compressed?: CompressedGameProfilePayload };

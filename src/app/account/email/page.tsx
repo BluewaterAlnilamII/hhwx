@@ -6,7 +6,7 @@ import AccountShell, { AccountErrorState, AccountLoadingState, AccountSignInStat
 import { getApiErrorMessage } from "@/lib/api-contracts";
 import { formatAuthErrorMessage } from "@/lib/auth-error";
 import { createNativeValidationProps } from "@/lib/native-validation";
-import { buildAuthCallbackUrl, getSafeSession } from "@/lib/supabase";
+import { buildEmailVerificationCallbackUrl, getSafeSession } from "@/lib/supabase";
 import { useTurnstileAvailability } from "@/lib/turnstile";
 import { useAccountProfile } from "../useAccountProfile";
 
@@ -98,7 +98,7 @@ export default function AccountEmailPage() {
           action: "update",
           newEmail: newEmail.trim(),
           captchaToken,
-          redirectTo: buildAuthCallbackUrl("/account/email"),
+          redirectTo: buildEmailVerificationCallbackUrl("/account/email"),
           refreshToken: session.refresh_token,
         }),
       });
@@ -146,7 +146,7 @@ export default function AccountEmailPage() {
         body: JSON.stringify({
           action: "resend-verification",
           captchaToken,
-          redirectTo: buildAuthCallbackUrl("/account/email"),
+          redirectTo: buildEmailVerificationCallbackUrl("/account/email"),
         }),
       });
       const payload = await response.json().catch(() => ({}));

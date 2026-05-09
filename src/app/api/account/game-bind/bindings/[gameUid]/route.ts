@@ -1,6 +1,6 @@
 import { ApiRouteError } from "@/lib/api-contracts";
 import { jsonRouteError, jsonSuccess } from "@/lib/api-response";
-import { requireAuthenticatedUser } from "@/lib/auth-server";
+import { requireVerifiedAccount } from "@/lib/auth-server";
 import { normalizeGameUid } from "@/lib/game-account-binding";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
 
@@ -9,7 +9,7 @@ export async function DELETE(
   context: { params: Promise<{ gameUid: string }> },
 ) {
   try {
-    const user = await requireAuthenticatedUser(request);
+    const user = await requireVerifiedAccount(request);
     const { gameUid: rawGameUid } = await context.params;
     const gameUid = normalizeGameUid(rawGameUid);
     const serviceClient = createServerSupabaseClient();

@@ -1,12 +1,12 @@
 import { ApiRouteError } from "@/lib/api-contracts";
 import { jsonRouteError, jsonSuccess } from "@/lib/api-response";
-import { requireAuthenticatedUser } from "@/lib/auth-server";
+import { requireVerifiedAccount } from "@/lib/auth-server";
 import { uploadManualGameProfilePayload } from "@/lib/user-game-profiles-server";
 import type { CompressedGameProfilePayload } from "@/lib/user-game-profile-payload";
 
 export async function POST(request: Request) {
   try {
-    const user = await requireAuthenticatedUser(request);
+    const user = await requireVerifiedAccount(request);
     let body: { name?: unknown; compressed?: CompressedGameProfilePayload };
 
     try {

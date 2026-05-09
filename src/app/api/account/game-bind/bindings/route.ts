@@ -1,12 +1,12 @@
 import { ApiRouteError } from "@/lib/api-contracts";
 import { jsonRouteError, jsonSuccess } from "@/lib/api-response";
-import { requireAuthenticatedUser } from "@/lib/auth-server";
+import { requireVerifiedAccount } from "@/lib/auth-server";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
 import { USER_GAME_BINDINGS_TABLE } from "@/lib/supabase-table-names";
 
 export async function GET(request: Request) {
   try {
-    const user = await requireAuthenticatedUser(request);
+    const user = await requireVerifiedAccount(request);
     const serviceClient = createServerSupabaseClient();
     const { data, error } = await serviceClient
       .from(USER_GAME_BINDINGS_TABLE)

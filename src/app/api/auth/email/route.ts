@@ -1,4 +1,10 @@
 import { ApiRouteError } from "@/lib/api-contracts";
+import {
+  clearAccountEmailVerification,
+  consumeAccountEmailVerificationToken,
+  createAccountEmailVerificationToken,
+  markAccountEmailVerified,
+} from "@/lib/account-status-server";
 import { requireAuthenticatedUser } from "@/lib/auth-server";
 import { jsonRouteError, jsonSuccess } from "@/lib/api-response";
 import { findAuthUserByEmail, normalizeEmailAddress } from "@/lib/auth-user-server";
@@ -11,6 +17,7 @@ interface EmailRequestBody {
   redirectTo?: unknown;
   newEmail?: unknown;
   refreshToken?: unknown;
+  verificationToken?: unknown;
 }
 
 function parseAccessToken(request: Request): string {
@@ -32,6 +39,23 @@ function readRequiredString(value: unknown, message: string): string {
   return value.trim();
 }
 
+function buildEmailVerificationRedirectUrl(redirectTo: string, token: string): string | undefined {
+  if (!redirectTo) {
+    return undefined;
+  }
+
+  let url: URL;
+  try {
+    url = new URL(redirectTo);
+  } catch {
+    throw new ApiRouteError(400, "INVALID_REDIRECT_URL", "无效的邮箱验证回跳地址");
+  }
+
+  url.searchParams.set("verify_email", "1");
+  url.searchParams.set("verification_token", token);
+  return url.toString();
+}
+
 export async function POST(request: Request) {
   try {
     const user = await requireAuthenticatedUser(request);
@@ -44,11 +68,16 @@ export async function POST(request: Request) {
     }
 
     const action = readRequiredString(body.action, "缺少操作类型");
+    if (action === "confirm") {
+      const verificationToken = readRequiredString(body.verificationToken, "缺少邮箱验证凭证");
+      await consumeAccountEmailVerificationToken(user.id, verificationToken);
+      await markAccountEmailVerified(user.id);
+      return jsonSuccess({ ok: true });
+    }
+
     const captchaToken = typeof body.captchaToken === "string" ? body.captchaToken.trim() : "";
     const redirectTo = typeof body.redirectTo === "string" ? body.redirectTo.trim() : "";
-
     await verifyTurnstileToken(captchaToken, request);
-
     const authClient = createServerAuthSupabaseClient();
 
     if (action === "resend-verification") {
@@ -57,11 +86,12 @@ export async function POST(request: Request) {
         throw new ApiRouteError(400, "EMAIL_REQUIRED", "当前账号缺少邮箱信息，无法发送验证邮件");
       }
 
-      const { error } = await authClient.auth.resend({
-        type: "signup",
+      const verificationToken = await createAccountEmailVerificationToken(user.id);
+      const { error } = await authClient.auth.signInWithOtp({
         email: currentEmail,
         options: {
-          emailRedirectTo: redirectTo || undefined,
+          emailRedirectTo: buildEmailVerificationRedirectUrl(redirectTo, verificationToken),
+          shouldCreateUser: false,
         },
       });
 
@@ -96,14 +126,16 @@ export async function POST(request: Request) {
         throw new ApiRouteError(401, "AUTHENTICATION_FAILED", "认证失败", setSessionError.message);
       }
 
+      const verificationToken = await createAccountEmailVerificationToken(user.id);
       const { error } = await authClient.auth.updateUser({ email: newEmail }, {
-        emailRedirectTo: redirectTo || undefined,
+        emailRedirectTo: buildEmailVerificationRedirectUrl(redirectTo, verificationToken),
       });
 
       if (error) {
         throw new ApiRouteError(400, "EMAIL_UPDATE_FAILED", error.message);
       }
 
+      await clearAccountEmailVerification(user.id);
       return jsonSuccess({ ok: true });
     }
 

@@ -1,6 +1,6 @@
 import { ApiRouteError } from "@/lib/api-contracts";
 import { jsonRouteError, jsonSuccess } from "@/lib/api-response";
-import { ensureVerifiedEmail, requireAuthenticatedUser } from "@/lib/auth-server";
+import { requireVerifiedAccount } from "@/lib/auth-server";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
 
 const MAX_COMMENT_LENGTH = 500;
@@ -28,8 +28,7 @@ function parseCommentContent(body: CreateCommentRequest): string {
 
 export async function POST(request: Request) {
   try {
-    const user = await requireAuthenticatedUser(request);
-    ensureVerifiedEmail(user);
+    const user = await requireVerifiedAccount(request);
 
     let body: CreateCommentRequest;
     try {

@@ -1,4 +1,5 @@
 import { ApiRouteError } from "@/lib/api-contracts";
+import { ensureAccountStatus } from "@/lib/account-status-server";
 import { jsonRouteError, jsonSuccess } from "@/lib/api-response";
 import { findAuthUserByEmail, normalizeEmailAddress } from "@/lib/auth-user-server";
 import { validatePasswordValue } from "@/lib/password-policy";
@@ -113,8 +114,12 @@ export async function POST(request: Request) {
       throw new ApiRouteError(400, "SIGN_UP_FAILED", error.message);
     }
 
+    if (data.user) {
+      await ensureAccountStatus(data.user.id);
+    }
+
     return jsonSuccess({
-      requiresEmailVerification: !(data.session && data.user?.email_confirmed_at),
+      requiresEmailVerification: true,
       session: data.session
         ? {
             accessToken: data.session.access_token,
@@ -126,7 +131,7 @@ export async function POST(request: Request) {
             userId: data.user.id,
             username,
             email: data.user.email ?? email,
-            emailVerified: Boolean(data.user.email_confirmed_at),
+            emailVerified: false,
           }
         : null,
     });

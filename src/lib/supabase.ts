@@ -1,4 +1,5 @@
 import { createClient, type Session, type User } from "@supabase/supabase-js";
+import { ACCOUNT_STATUS_TABLE } from "@/lib/supabase-table-names";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabasePublishableKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!;
@@ -15,10 +16,6 @@ export interface AuthProfileSummary {
 
 export type AuthViewMode = "login" | "register" | "forgot-password";
 export type AuthFlashNotice = "signup-email-sent";
-
-export function isEmailVerified(user: Pick<User, "email_confirmed_at"> | null | undefined): boolean {
-	return Boolean(user?.email_confirmed_at);
-}
 
 function readUserMetadataUsername(user: Pick<User, "user_metadata"> | null | undefined): string | null {
 	const username = typeof user?.user_metadata?.username === "string"
@@ -69,6 +66,12 @@ export function buildAuthCallbackUrl(nextPath = "/account"): string {
 	return url.toString();
 }
 
+export function buildEmailVerificationCallbackUrl(nextPath = "/account/email"): string {
+	const url = new URL(buildAuthCallbackUrl(nextPath));
+	url.searchParams.set("verify_email", "1");
+	return url.toString();
+}
+
 export function buildAuthPath(mode: AuthViewMode = "login", nextPath = "/account", notice?: AuthFlashNotice): string {
 	const safeNextPath = normalizeInternalPath(nextPath, "/account");
 	const params = new URLSearchParams({
@@ -97,6 +100,20 @@ async function readUsername(userId: string, fallbackUsername: string | null = nu
 	return data?.username ?? fallbackUsername ?? "User";
 }
 
+async function readEmailVerified(userId: string): Promise<boolean> {
+	const { data, error } = await supabase
+		.from(ACCOUNT_STATUS_TABLE)
+		.select("email_verified_at")
+		.eq("user_id", userId)
+		.maybeSingle();
+
+	if (error) {
+		throw error;
+	}
+
+	return Boolean(data?.email_verified_at);
+}
+
 export async function readAuthProfileSummary(session?: Session | null): Promise<AuthProfileSummary | null> {
 	const activeSession = session ?? await getSafeSession();
 	const user = activeSession?.user;
@@ -106,12 +123,16 @@ export async function readAuthProfileSummary(session?: Session | null): Promise<
 	}
 
 	const fallbackUsername = readUserMetadataUsername(user);
+	const [username, emailVerified] = await Promise.all([
+		readUsername(user.id, fallbackUsername),
+		readEmailVerified(user.id),
+	]);
 
 	return {
 		userId: user.id,
-		username: await readUsername(user.id, fallbackUsername),
+		username,
 		email: user.email ?? null,
-		emailVerified: isEmailVerified(user),
+		emailVerified,
 	};
 }
 

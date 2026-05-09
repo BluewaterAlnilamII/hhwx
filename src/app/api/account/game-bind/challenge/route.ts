@@ -1,6 +1,6 @@
 import { ApiRouteError } from "@/lib/api-contracts";
 import { jsonRouteError, jsonSuccess } from "@/lib/api-response";
-import { requireAuthenticatedUser } from "@/lib/auth-server";
+import { requireVerifiedAccount } from "@/lib/auth-server";
 import {
   GAME_BIND_CHALLENGE_RETENTION_DAYS,
   createChallengeExpiresAt,
@@ -16,7 +16,7 @@ function getChallengeRetentionCutoff(): string {
 
 export async function POST(request: Request) {
   try {
-    const user = await requireAuthenticatedUser(request);
+    const user = await requireVerifiedAccount(request);
     let body: { gameUid?: unknown };
 
     try {

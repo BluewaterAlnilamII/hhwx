@@ -4,6 +4,7 @@ import Link from "next/link";
 import { type EmailOtpType } from "@supabase/supabase-js";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { getApiErrorMessage } from "@/lib/api-contracts";
 import { formatAuthErrorMessage } from "@/lib/auth-error";
 import { createNativeValidationProps } from "@/lib/native-validation";
 import {
@@ -181,6 +182,31 @@ function AuthConfirmPageContent() {
       }
     };
 
+    const confirmAccountEmail = async () => {
+      const verificationToken = searchParams.get("verification_token") ?? "";
+      const session = await getSafeSession();
+      if (!session?.access_token) {
+        throw new Error("登录状态已失效，请重新登录后再验证邮箱。");
+      }
+
+      const response = await fetch("/api/auth/email", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({
+          action: "confirm",
+          verificationToken,
+        }),
+      });
+      const payload = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(getApiErrorMessage(payload) || `确认邮箱验证失败（HTTP ${response.status}）`);
+      }
+    };
+
     const handleSuccess = async (type: string | null) => {
       if (type === "recovery") {
         if (active) {
@@ -188,6 +214,10 @@ function AuthConfirmPageContent() {
           setMessage("你可以现在设置新密码。");
         }
         return;
+      }
+
+      if (searchParams.get("verify_email") === "1" || type === "email_change") {
+        await confirmAccountEmail();
       }
 
       if (active) {

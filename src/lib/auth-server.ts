@@ -1,5 +1,6 @@
 import { type User } from "@supabase/supabase-js";
 import { ApiRouteError } from "@/lib/api-contracts";
+import { readAccountEmailVerified } from "@/lib/account-status-server";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
 
 export interface AuthenticatedRequestUser {
@@ -23,11 +24,11 @@ function parseBearerToken(request: Request): string {
   return token;
 }
 
-function toAuthenticatedRequestUser(user: User): AuthenticatedRequestUser {
+function toAuthenticatedRequestUser(user: User, emailVerified: boolean): AuthenticatedRequestUser {
   return {
     id: user.id,
     email: user.email ?? null,
-    emailVerified: Boolean(user.email_confirmed_at),
+    emailVerified,
     metadataUsername: typeof user.user_metadata?.username === "string"
       ? user.user_metadata.username.trim() || null
       : null,
@@ -46,11 +47,18 @@ export async function requireAuthenticatedUser(request: Request): Promise<Authen
     throw new ApiRouteError(401, "AUTHENTICATION_FAILED", "认证失败", error?.message);
   }
 
-  return toAuthenticatedRequestUser(user);
+  const emailVerified = await readAccountEmailVerified(user.id);
+  return toAuthenticatedRequestUser(user, emailVerified);
 }
 
 export function ensureVerifiedEmail(user: AuthenticatedRequestUser): void {
   if (!user.emailVerified) {
     throw new ApiRouteError(403, "EMAIL_VERIFICATION_REQUIRED", "请先完成邮箱验证");
   }
+}
+
+export async function requireVerifiedAccount(request: Request): Promise<AuthenticatedRequestUser> {
+  const user = await requireAuthenticatedUser(request);
+  ensureVerifiedEmail(user);
+  return user;
 }

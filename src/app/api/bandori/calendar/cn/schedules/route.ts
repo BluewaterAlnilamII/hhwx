@@ -10,7 +10,7 @@ import {
   withCacheControl,
 } from "@/lib/api-cache";
 import { jsonError, jsonRouteError, jsonSuccess } from "@/lib/api-response";
-import { ensureVerifiedEmail, requireAuthenticatedUser } from "@/lib/auth-server";
+import { requireVerifiedAccount } from "@/lib/auth-server";
 
 export const dynamic = "force-dynamic";
 
@@ -33,8 +33,7 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    const user = await requireAuthenticatedUser(request);
-    ensureVerifiedEmail(user);
+    const user = await requireVerifiedAccount(request);
     await ensureBandoriCalendarEditor(user.id);
 
     let body: unknown;
