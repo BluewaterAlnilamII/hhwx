@@ -7,6 +7,7 @@ import { useGameStore } from "@/store/useGameStore";
 
 export type AccountProfile = {
   userId: string;
+  publicUid: number;
   email: string | null;
   emailVerified: boolean;
   username: string;

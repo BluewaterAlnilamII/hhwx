@@ -12,6 +12,7 @@ import {
 } from "@/lib/username-policy";
 
 type ProfileRow = {
+  public_uid: number;
   username: string;
   created_at: string | null;
 };
@@ -45,7 +46,7 @@ async function ensureProfileRow(userId: string, preferredUsername: string | null
   const serviceClient = createServerSupabaseClient();
   const { data, error } = await serviceClient
     .from(PROFILES_TABLE)
-    .select("username, created_at")
+    .select("public_uid, username, created_at")
     .eq("id", userId)
     .maybeSingle();
 
@@ -66,7 +67,7 @@ async function ensureProfileRow(userId: string, preferredUsername: string | null
     }, {
       onConflict: "id",
     })
-    .select("username, created_at")
+    .select("public_uid, username, created_at")
     .single();
 
   if (createError) {
@@ -97,6 +98,7 @@ async function readAccountProfile(
 
   return {
     userId,
+    publicUid: profile.public_uid,
     email,
     emailVerified: Boolean(accountStatus.email_verified_at),
     username: profile.username,

@@ -39,6 +39,12 @@ export default function AccountPage() {
               <div className="min-w-0 flex-1">
                 <div className="break-words text-xl font-bold sm:text-2xl">{profile.username}</div>
                 <div className="mt-1 break-all text-sm text-slate-300">{profile.email || userEmail || "-"}</div>
+                <Link
+                  href={`/u/${profile.publicUid}`}
+                  className="mt-2 inline-flex rounded-full bg-white/12 px-3 py-1 text-xs font-semibold text-sky-100 transition hover:bg-white/20"
+                >
+                  UID {profile.publicUid}
+                </Link>
               </div>
               <span className={`rounded-full px-3 py-1 text-xs font-semibold sm:ml-auto ${profile.emailVerified ? "bg-emerald-500/20 text-emerald-200" : "bg-amber-500/20 text-amber-200"}`}>
                 {profile.emailVerified ? "邮箱已验证" : "邮箱未验证"}
