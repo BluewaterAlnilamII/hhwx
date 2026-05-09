@@ -46,17 +46,7 @@ export function useTurnstileAvailability() {
   useEffect(() => {
     let active = true;
 
-    if (!TURNSTILE_SITE_KEY) {
-      setIsTurnstileEnabled(false);
-      setIsTurnstileLoading(false);
-      return () => {
-        active = false;
-      };
-    }
-
-    if (cachedTurnstileEnabled !== null) {
-      setIsTurnstileEnabled(cachedTurnstileEnabled);
-      setIsTurnstileLoading(false);
+    if (!TURNSTILE_SITE_KEY || cachedTurnstileEnabled !== null) {
       return () => {
         active = false;
       };

@@ -76,7 +76,7 @@ export default function SectionSidebarShell({ children, isMobileDrawerOpen, onCl
       <div
         aria-hidden={!isMobileDrawerOpen}
         className={cn(
-          "fixed inset-0 z-[240] lg:hidden",
+          "fixed inset-0 z-[240] min-h-[100dvh] lg:hidden",
           isMobileDrawerOpen ? "pointer-events-auto" : "pointer-events-none",
         )}
       >
@@ -93,7 +93,7 @@ export default function SectionSidebarShell({ children, isMobileDrawerOpen, onCl
         />
         <div
           className={cn(
-            "absolute bottom-0 left-0 top-[58px] w-[286px] max-w-[88vw] overflow-hidden border-r border-[#ffe374]/85 bg-[#fff3a3]/96 shadow-[0_24px_64px_rgba(128,91,0,0.18)] transition-transform duration-300 ease-out will-change-transform",
+            "absolute bottom-0 left-0 top-[58px] flex h-[calc(100dvh-58px)] min-h-[calc(100svh-58px)] w-[286px] max-w-[88vw] flex-col overflow-hidden border-r border-[#ffe374]/85 bg-[#fff3a3] shadow-[0_24px_64px_rgba(128,91,0,0.18)] transition-transform duration-300 ease-out will-change-transform",
             isMobileDrawerOpen ? "translate-x-0" : "-translate-x-full",
           )}
         >

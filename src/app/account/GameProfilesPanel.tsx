@@ -393,10 +393,10 @@ export default function GameProfilesPanel({ refreshSignal = 0 }: GameProfilesPan
   }, [loadData]);
 
   return (
-    <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h2 className="text-xl font-semibold text-slate-900">游戏数据 Profile</h2>
+    <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:rounded-3xl sm:p-6">
+      <div className="flex flex-wrap items-start justify-between gap-3 sm:gap-4">
+        <div className="min-w-0">
+          <h2 className="text-lg font-semibold text-slate-900 sm:text-xl">游戏数据 Profile</h2>
           <p className="mt-2 text-sm leading-6 text-slate-600">
             自动 Profile 由绑定 UID 同步生成，只作为服务器侧只读档案；手动 Profile 默认保存在本地，可导入、上传或下载云端手动档案。
           </p>
@@ -417,7 +417,7 @@ export default function GameProfilesPanel({ refreshSignal = 0 }: GameProfilesPan
           type="button"
           onClick={createManualProfile}
           disabled={busy || manualProfileCount >= USER_GAME_MANUAL_PROFILE_LIMIT}
-          className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl bg-sky-600 px-5 text-sm font-semibold text-white transition hover:bg-sky-500 disabled:cursor-not-allowed disabled:bg-slate-300"
+          className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-2xl bg-sky-600 px-5 text-sm font-semibold text-white transition hover:bg-sky-500 disabled:cursor-not-allowed disabled:bg-slate-300 sm:w-auto"
         >
           {busyAction?.type === "create" ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
           {busyAction?.type === "create" ? "新建中" : "新建"}
@@ -435,7 +435,7 @@ export default function GameProfilesPanel({ refreshSignal = 0 }: GameProfilesPan
           type="button"
           onClick={importProfile}
           disabled={busy || !importText.trim() || manualProfileCount >= USER_GAME_MANUAL_PROFILE_LIMIT}
-          className="mt-3 inline-flex h-10 items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:border-sky-200 hover:text-sky-600 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
+          className="mt-3 inline-flex h-10 w-full items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:border-sky-200 hover:text-sky-600 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400 sm:w-auto"
         >
           {busyAction?.type === "import" ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
           {busyAction?.type === "import" ? "导入中" : "导入到本地"}
@@ -452,9 +452,9 @@ export default function GameProfilesPanel({ refreshSignal = 0 }: GameProfilesPan
               const profile = profilesByUid.get(binding.gameUid);
               const isSyncing = busyAction?.type === "sync" && busyAction.gameUid === binding.gameUid;
               return (
-                <div key={binding.gameUid} className="rounded-2xl border border-slate-200 p-4">
+                <div key={binding.gameUid} className="rounded-2xl border border-slate-200 p-3 sm:p-4">
                   <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div>
+                    <div className="min-w-0">
                       <div className="font-semibold text-slate-900">UID {binding.gameUid}</div>
                       <div className="mt-1 text-sm text-slate-500">最后同步：{formatDate(profile?.syncedAt ?? null)}</div>
                     </div>
@@ -462,7 +462,7 @@ export default function GameProfilesPanel({ refreshSignal = 0 }: GameProfilesPan
                       type="button"
                       onClick={() => syncAutoProfile(binding.gameUid)}
                       disabled={busy || (!profile && autoProfileCount >= USER_GAME_AUTO_PROFILE_LIMIT)}
-                      className="inline-flex h-10 items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-4 text-sm font-semibold text-white transition hover:bg-emerald-500 disabled:cursor-not-allowed disabled:bg-slate-300"
+                      className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-4 text-sm font-semibold text-white transition hover:bg-emerald-500 disabled:cursor-not-allowed disabled:bg-slate-300 sm:w-auto"
                     >
                       <RefreshCw className={`h-4 w-4 ${isSyncing ? "animate-spin" : ""}`} />
                       {isSyncing ? "同步中" : "同步"}
@@ -501,11 +501,11 @@ export default function GameProfilesPanel({ refreshSignal = 0 }: GameProfilesPan
               const isDeleting = busyAction?.type === "delete" && busyAction.profileId === profile.id;
 
               return (
-              <div key={profile.id} className="rounded-2xl border border-slate-200 p-4">
+              <div key={profile.id} className="rounded-2xl border border-slate-200 p-3 sm:p-4">
                 <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div>
+                  <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className="font-semibold text-slate-900">{profile.name}</span>
+                      <span className="min-w-0 break-words font-semibold text-slate-900">{profile.name}</span>
                       <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${profile.kind === "auto" ? "bg-emerald-50 text-emerald-700" : "bg-sky-50 text-sky-700"}`}>
                         {profileKindLabel(profile)}
                       </span>
@@ -515,7 +515,7 @@ export default function GameProfilesPanel({ refreshSignal = 0 }: GameProfilesPan
                       卡牌 {profile.cardCount}
                     </div>
                   </div>
-                  <div className="flex flex-wrap gap-2">
+                  <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-wrap">
                     <a
                       href={`/account/game-profiles/${encodeURIComponent(profile.id)}/cards`}
                       className="inline-flex h-9 items-center justify-center rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 transition hover:border-sky-200 hover:text-sky-600"

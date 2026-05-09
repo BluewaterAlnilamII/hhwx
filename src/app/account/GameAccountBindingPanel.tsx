@@ -166,10 +166,10 @@ export default function GameAccountBindingPanel({ onBindingsChange }: GameAccoun
   }, [challenge]);
 
   return (
-    <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h2 className="text-xl font-semibold text-slate-900">绑定游戏账号</h2>
+    <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:rounded-3xl sm:p-6">
+      <div className="flex flex-wrap items-start justify-between gap-3 sm:gap-4">
+        <div className="min-w-0">
+          <h2 className="text-lg font-semibold text-slate-900 sm:text-xl">绑定游戏账号</h2>
           <p className="mt-2 text-sm leading-6 text-slate-600">输入游戏 UID，生成验证码后填入游戏内个性签名，再返回这里验证。</p>
         </div>
       </div>
@@ -186,17 +186,17 @@ export default function GameAccountBindingPanel({ onBindingsChange }: GameAccoun
           type="button"
           onClick={createChallenge}
           disabled={busy || !normalizedUid || bindings.length >= USER_GAME_BINDING_LIMIT}
-          className="h-11 rounded-2xl bg-sky-600 px-5 text-sm font-semibold text-white transition hover:bg-sky-500 disabled:cursor-not-allowed disabled:bg-slate-300"
+          className="h-11 w-full rounded-2xl bg-sky-600 px-5 text-sm font-semibold text-white transition hover:bg-sky-500 disabled:cursor-not-allowed disabled:bg-slate-300 sm:w-auto"
         >
           {challenge ? "刷新验证码" : "生成验证码"}
         </button>
       </div>
 
       {challenge && (
-        <div className="mt-5 rounded-2xl border border-sky-100 bg-sky-50 p-4">
+        <div className="mt-5 rounded-2xl border border-sky-100 bg-sky-50 p-3 sm:p-4">
           <div className="text-xs font-semibold uppercase tracking-wide text-sky-700">验证码</div>
           <div className="mt-2 flex flex-wrap items-center gap-3">
-            <code className="rounded-xl bg-white px-3 py-2 text-lg font-bold text-slate-900 shadow-sm">{challenge.challenge}</code>
+            <code className="min-w-0 break-all rounded-xl bg-white px-3 py-2 text-base font-bold text-slate-900 shadow-sm sm:text-lg">{challenge.challenge}</code>
             <button
               type="button"
               onClick={copyChallenge}
@@ -232,8 +232,8 @@ export default function GameAccountBindingPanel({ onBindingsChange }: GameAccoun
         ) : (
           <div className="mt-3 space-y-3">
             {bindings.map((binding) => (
-              <div key={binding.gameUid} className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3">
-                <div>
+              <div key={binding.gameUid} className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-slate-50 px-3 py-3 sm:px-4">
+                <div className="min-w-0">
                   <div className="font-semibold text-slate-900">UID {binding.gameUid}</div>
                   <div className="mt-1 text-xs text-slate-500">绑定时间：{formatDate(binding.boundAt)}</div>
                 </div>

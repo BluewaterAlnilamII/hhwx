@@ -21,25 +21,25 @@ export default function AccountShell({
   children,
 }: AccountShellProps) {
   return (
-    <main className="relative min-h-full px-4 py-10 sm:px-6 lg:px-8">
-      <div className="mx-auto max-w-4xl">
-        <div className="rounded-[32px] border border-white/50 bg-white/80 p-8 shadow-[0_20px_80px_rgba(15,23,42,0.12)] backdrop-blur-xl">
-          <div className="flex flex-col gap-3 border-b border-slate-200 pb-6 sm:flex-row sm:items-end sm:justify-between">
-            <div>
-              <p className="text-sm font-semibold uppercase tracking-[0.3em] text-sky-500">Account</p>
+    <main className="relative min-h-full w-full min-w-0 overflow-hidden px-0 py-4 sm:px-6 sm:py-10 lg:px-8">
+      <div className="mx-auto w-full max-w-full sm:max-w-4xl">
+        <div className="w-full max-w-full overflow-hidden border-y border-white/55 bg-white/90 px-4 py-6 shadow-[0_12px_42px_rgba(15,23,42,0.08)] backdrop-blur-xl sm:rounded-[32px] sm:border sm:bg-white/80 sm:p-8 sm:shadow-[0_20px_80px_rgba(15,23,42,0.12)]">
+          <div className="flex flex-col gap-4 border-b border-slate-200 pb-5 sm:flex-row sm:items-end sm:justify-between sm:gap-3 sm:pb-6">
+            <div className="min-w-0">
+              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-sky-500 sm:text-sm">Account</p>
                             <p className="text-sm font-semibold uppercase tracking-[0.3em] text-sky-500">账号</p>
-              <h1 className="mt-2 text-3xl font-bold text-slate-900">{title}</h1>
-              <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">{description}</p>
+              <h1 className="mt-2 text-2xl font-bold text-slate-900 sm:text-3xl">{title}</h1>
+              <p className="mt-2 w-full max-w-[14rem] break-all text-sm leading-6 text-slate-600 min-[390px]:max-w-full sm:max-w-2xl">{description}</p>
             </div>
             <Link
               href={backHref}
-              className="inline-flex items-center justify-center rounded-full border border-slate-200 bg-white px-5 py-2 text-sm font-semibold text-slate-700 transition hover:border-sky-200 hover:text-sky-600"
+              className="inline-flex w-full items-center justify-center rounded-full border border-slate-200 bg-white px-5 py-2 text-sm font-semibold text-slate-700 transition hover:border-sky-200 hover:text-sky-600 sm:w-auto"
             >
               {backLabel}
             </Link>
           </div>
 
-          <div className="mt-8">{children}</div>
+          <div className="mt-5 sm:mt-8">{children}</div>
         </div>
       </div>
     </main>
