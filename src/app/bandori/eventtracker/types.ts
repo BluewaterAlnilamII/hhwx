@@ -9,6 +9,8 @@ export type TrackerData = {
   ep: number;
   /** 标记该点是否为清挂后的最终结果。 */
   isFinal?: boolean;
+  /** 标记该点是否只是为了绘图补出的基准点，不代表真实采集数据。 */
+  isBaseline?: boolean;
   /** 相邻两点推导出的瞬时速度，单位为分数每小时。 */
   speed?: number;
   /** 以约 24 小时窗口估算的速度，单位为分数每天。 */

@@ -112,9 +112,9 @@ export function useProcessedData(
     // 当域起点明确且存在有效数据时，在序列头部补一个原点，
     // 让折线从活动起点开始绘制，而不是从第一个采集点突然出现。
     // 歌曲排行没有统一的起始时刻，因此不补原点。
-    if (apiHasResult && typeof domainStart === "number" && trackingMode !== "song") {
+    if (apiHasResult && raw.length > 0 && typeof domainStart === "number" && trackingMode !== "song") {
       if (raw.length === 0 || raw[0].time > domainStart) {
-        raw = [{ time: domainStart, ep: 0 }, ...raw];
+        raw = [{ time: domainStart, ep: 0, isBaseline: true }, ...raw];
       }
     }
 

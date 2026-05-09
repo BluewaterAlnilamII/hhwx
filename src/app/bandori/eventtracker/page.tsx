@@ -23,7 +23,7 @@ import {
   buildBandoriEventBannerPublicUrl,
   resolveBandoriEventBannerBundleName,
 } from "@/lib/bandori-asset-proxy";
-import type { TrackerDotProps, TrackerMouseState, TrackerTooltipPayloadEntry, TrackingMode } from "./types";
+import type { TrackerData, TrackerDotProps, TrackerMouseState, TrackerTooltipPayloadEntry, TrackingMode } from "./types";
 import {
   INSTANT_PROJECTION_STORAGE_KEY,
   DAY_PROJECTION_STORAGE_KEY,
@@ -77,6 +77,30 @@ type ModeIndicatorStyle = {
 
 function isInvalidMarkerPosition(cx?: number, cy?: number): boolean {
   return typeof cx !== "number" || Number.isNaN(cx) || typeof cy !== "number" || Number.isNaN(cy);
+}
+
+function isActualTrackerPoint(
+  point: TrackerData,
+  domainStart: number | "auto",
+  trackingMode: TrackingMode,
+  seriesLength: number,
+): boolean {
+  if (point.isBaseline) {
+    return false;
+  }
+
+  if (
+    seriesLength === 1 &&
+    trackingMode !== "song" &&
+    typeof domainStart === "number" &&
+    point.time === domainStart &&
+    point.ep === 0 &&
+    !point.isFinal
+  ) {
+    return false;
+  }
+
+  return true;
 }
 
 function renderHiddenMarker(key?: string) {
@@ -400,9 +424,17 @@ export default function EventTrackerPage() {
     : "";
 
   const { domainStart, domainEnd, cutoffEnd, midnights } = useChartDomain(trackingMode, startDate, endDate);
+  const hasActualTrackerData = useMemo(
+    () => chartData.some((point) => isActualTrackerPoint(point, domainStart, trackingMode, chartData.length)),
+    [chartData, domainStart, trackingMode],
+  );
   const fullProcessedData = useProcessedData(chartData, apiHasResult, domainStart, trackingMode);
   const status = useEventStatus(domainStart, domainEnd);
   const finalDisplayedData = useFinalDisplayedData(fullProcessedData, cutoffEnd, status, showInstantProjection, showDayProjection);
+  const scoreData = useMemo(
+    () => fullProcessedData.filter((point) => isActualTrackerPoint(point, domainStart, trackingMode, fullProcessedData.length)),
+    [domainStart, fullProcessedData, trackingMode],
+  );
   const holidayLookup = useMemo(() => buildChinaMainlandHolidayLookup(holidayData), [holidayData]);
   const nonWorkingDayBands = useMemo(
     () => buildNonWorkingDayBands(domainStart, domainEnd, holidayLookup),
@@ -649,8 +681,8 @@ export default function EventTrackerPage() {
     let endScore: number | null = null;
     let finalScore: number | null = null;
 
-    if (fullProcessedData.length > 0) {
-      const latestPt = fullProcessedData[fullProcessedData.length - 1];
+    if (scoreData.length > 0) {
+      const latestPt = scoreData[scoreData.length - 1];
       latestScore = latestPt.ep;
       latestUpdateTime = latestPt.time;
 
@@ -658,20 +690,20 @@ export default function EventTrackerPage() {
         if (trackingMode === "monthly" && typeof domainEnd === "number") {
           const nextMonth1st0000 = domainEnd + 1;
           const nextMonth1st0015 = nextMonth1st0000 + 15 * 60 * 1000;
-          endScore = getScoreAtTime(fullProcessedData, nextMonth1st0000);
-          finalScore = getFinalScore(fullProcessedData) ?? getScoreAtTime(fullProcessedData, nextMonth1st0015);
+          endScore = getScoreAtTime(scoreData, nextMonth1st0000);
+          finalScore = getFinalScore(scoreData) ?? getScoreAtTime(scoreData, nextMonth1st0015);
         } else if (endDate) {
           const ed = new Date(endDate);
           const endDay2300 = new Date(ed.getFullYear(), ed.getMonth(), ed.getDate(), 23, 0, 0).getTime();
           const endDay2315 = new Date(ed.getFullYear(), ed.getMonth(), ed.getDate(), 23, 15, 0).getTime();
-          endScore = getScoreAtTime(fullProcessedData, endDay2300);
-          finalScore = getFinalScore(fullProcessedData) ?? getScoreAtTime(fullProcessedData, endDay2315);
+          endScore = getScoreAtTime(scoreData, endDay2300);
+          finalScore = getFinalScore(scoreData) ?? getScoreAtTime(scoreData, endDay2315);
         }
       }
     }
 
     return { latestScore, latestUpdateTime, endScore, finalScore };
-  }, [fullProcessedData, status, trackingMode, domainEnd, endDate]);
+  }, [scoreData, status, trackingMode, domainEnd, endDate]);
 
   // ===== 活动搜索对话框 =====
   const [isPickerOpen, setIsPickerOpen] = useState(false);
@@ -992,7 +1024,7 @@ export default function EventTrackerPage() {
                 )}
 
                 <div className="h-[400px] w-full relative group">
-                  {finalDisplayedData.length > 0 ? (
+                  {hasActualTrackerData && finalDisplayedData.length > 0 ? (
                     <div className="flex h-full w-full overflow-hidden rounded-xl">
                       <FixedYAxis
                         ticks={yTicks}
