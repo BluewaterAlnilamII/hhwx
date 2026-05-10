@@ -1,8 +1,13 @@
 export type BandoriAssetRegion = "jp" | "cn";
 
 const BESTDORI_ASSET_ORIGIN = "https://bestdori.com/assets";
+const BESTDORI_RES_ICON_ORIGIN = "https://bestdori.com/res/icon";
+const BESTDORI_RES_IMAGE_ORIGIN = "https://bestdori.com/res/image";
 const BANDORI_ASSET_OBJECT_KEY_PREFIX = "bandori/assets";
+const BANDORI_RES_ICON_OBJECT_KEY_PREFIX = "bandori/res/icon";
+const BANDORI_RES_IMAGE_OBJECT_KEY_PREFIX = "bandori/res/image";
 const SAFE_ASSET_SEGMENT_PATTERN = /^[A-Za-z0-9_-]+$/;
+const CARD_TRAIN_TYPES = new Set(["normal", "after_training"]);
 
 function normalizeBandoriAssetSegment(value: string): string {
   return value.replace(/\.png$/i, "").trim();
@@ -72,6 +77,18 @@ export function buildBandoriAssetCdnUrl(assetKey: string, baseUrl?: string | nul
   return `${normalizedBaseUrl}/${encodeBandoriAssetKeyPath(assetKey)}`;
 }
 
+export function buildBandoriResIconPublicUrl(iconName: string): string {
+  const normalizedIconName = iconName.trim().replace(/^\/+/, "");
+  const assetKey = `${BANDORI_RES_ICON_OBJECT_KEY_PREFIX}/${normalizedIconName}`;
+  return buildBandoriAssetCdnUrl(assetKey) ?? `${BESTDORI_RES_ICON_ORIGIN}/${encodeURIComponent(normalizedIconName)}`;
+}
+
+export function buildBandoriResImagePublicUrl(imageName: string): string {
+  const normalizedImageName = imageName.trim().replace(/^\/+/, "");
+  const assetKey = `${BANDORI_RES_IMAGE_OBJECT_KEY_PREFIX}/${normalizedImageName}`;
+  return buildBandoriAssetCdnUrl(assetKey) ?? `${BESTDORI_RES_IMAGE_ORIGIN}/${encodeURIComponent(normalizedImageName)}`;
+}
+
 export function buildBandoriEventBannerProxyPath(region: BandoriAssetRegion, bundleName: string): string {
   const normalizedBundleName = encodeURIComponent(normalizeBandoriAssetSegment(bundleName));
   // 代理路径显式保留 banner.png 后缀，
@@ -82,6 +99,63 @@ export function buildBandoriEventBannerProxyPath(region: BandoriAssetRegion, bun
 export function buildBandoriEventBannerPublicUrl(region: BandoriAssetRegion, bundleName: string): string {
   const assetKey = buildBandoriEventBannerAssetKey(region, bundleName);
   return buildBandoriAssetCdnUrl(assetKey) ?? buildBandoriEventBannerProxyPath(region, bundleName);
+}
+
+export function normalizeBandoriCardTrainType(value: string | null | undefined): "normal" | "after_training" {
+  return value === "after_training" ? "after_training" : "normal";
+}
+
+export function isBandoriCardTrainType(value: string): value is "normal" | "after_training" {
+  return CARD_TRAIN_TYPES.has(value);
+}
+
+export function buildBandoriCardResourceSetAssetKey(
+  region: BandoriAssetRegion,
+  resourceSetName: string,
+  assetType: "card" | "trim",
+  trainType: "normal" | "after_training",
+): string {
+  const normalizedResourceSetName = normalizeBandoriAssetSegment(resourceSetName);
+  return `${BANDORI_ASSET_OBJECT_KEY_PREFIX}/${region}/characters/resourceset/${normalizedResourceSetName}_rip/${assetType}_${trainType}.png`;
+}
+
+export function buildBandoriCardThumbnailAssetKey(
+  region: BandoriAssetRegion,
+  cardId: number,
+  resourceSetName: string,
+  trainType: "normal" | "after_training",
+): string {
+  const normalizedResourceSetName = normalizeBandoriAssetSegment(resourceSetName);
+  const bundleIndex = Math.floor(Math.max(0, Math.trunc(cardId)) / 50).toString().padStart(5, "0");
+  return `${BANDORI_ASSET_OBJECT_KEY_PREFIX}/${region}/thumb/chara/card${bundleIndex}_rip/${normalizedResourceSetName}_${trainType}.png`;
+}
+
+function buildBandoriAssetProxyPath(assetKey: string): string {
+  return `/api/bandori/assets/${encodeBandoriAssetKeyPath(assetKey.replace(`${BANDORI_ASSET_OBJECT_KEY_PREFIX}/`, ""))}`;
+}
+
+export function buildBandoriCardResourceSetPublicUrl(
+  region: BandoriAssetRegion,
+  resourceSetName: string,
+  assetType: "card" | "trim",
+  trainType: "normal" | "after_training",
+): string {
+  const assetKey = buildBandoriCardResourceSetAssetKey(region, resourceSetName, assetType, trainType);
+  return buildBandoriAssetCdnUrl(assetKey) ?? buildBandoriAssetProxyPath(assetKey);
+}
+
+export function buildBandoriCardThumbnailPublicUrl(
+  region: BandoriAssetRegion,
+  cardId: number,
+  resourceSetName: string,
+  trainType: "normal" | "after_training",
+): string {
+  const assetKey = buildBandoriCardThumbnailAssetKey(region, cardId, resourceSetName, trainType);
+  return buildBandoriAssetCdnUrl(assetKey) ?? buildBandoriAssetProxyPath(assetKey);
+}
+
+export function buildBestdoriAssetOriginUrl(region: BandoriAssetRegion, assetPath: string[]): string {
+  return `${BESTDORI_ASSET_ORIGIN}/${region}/${assetPath.map((segment) => encodeURIComponent(segment)).join("/")}`;
 }
 
 export function buildBestdoriEventBannerOriginUrl(region: BandoriAssetRegion, bundleName: string): string {

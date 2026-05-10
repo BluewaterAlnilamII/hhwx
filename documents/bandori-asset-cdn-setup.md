@@ -8,6 +8,31 @@
 - R2 对象 key：`bandori/assets/{region}/event/{assetBundleName}/images_rip/banner.png`
 - 资源预抓取命令：`python tracker_job.py --test-sync-event-banners`
 
+卡牌页资源使用同一套 CDN/R2 前缀。当前优先同步缩略图：
+
+- 缩略图：`https://cdn.hhwx.org/bandori/assets/{region}/thumb/chara/card{floor(cardId / 50).padStart(5, "0")}_rip/{resourceSetName}_{normal|after_training}.png`
+- 资源预抓取命令：`python tracker_job.py --test-sync-card-assets`
+
+完整卡面和透明卡面先不作为默认同步对象。未来需要时再显式加 `--include-card-art`：
+
+- 卡面：`https://cdn.hhwx.org/bandori/assets/{region}/characters/resourceset/{resourceSetName}_rip/card_{normal|after_training}.png`
+- 透明卡面：`https://cdn.hhwx.org/bandori/assets/{region}/characters/resourceset/{resourceSetName}_rip/trim_{normal|after_training}.png`
+
+Bestdori 站点级图标使用单独前缀：
+
+- 浏览器公开 URL：`https://cdn.hhwx.org/bandori/res/icon/{iconName}`
+- R2 对象 key：`bandori/res/icon/{iconName}`
+- 资源预抓取命令：`python tracker_job.py --test-sync-res-icons`
+- 枚举范围只包含 `chara_icon_1.png` 到 `chara_icon_40.png`、有效 band id `1,2,3,4,5,18,21,45`、星级/卡牌框/属性/master 图标。
+
+卡牌稀有度边框在 Bestdori 的 `res/image` 下：
+
+- 浏览器公开 URL：`https://cdn.hhwx.org/bandori/res/image/card-{rarity}.png`
+- R2 对象 key：`bandori/res/image/card-{rarity}.png`
+- 资源预抓取命令：`python tracker_job.py --test-sync-res-images`
+- 当前同步 `card-2.png` 到 `card-5.png`，以及 1 星属性边框 `card-1-cool.png`、`card-1-happy.png`、`card-1-powerful.png`、`card-1-pure.png`。
+- `card-1.png` 在 Bestdori 返回 HTML fallback，不作为有效资源。
+
 注意：
 
 - 存储桶名称现在是 `cdn`
@@ -258,3 +283,68 @@ https://cdn.hhwx.org/bandori/assets/cn/event/banner_event13/images_rip/banner.pn
 这类样本会在 tracker 同步输出里以 `回源失败` 或 `同步失败` 记录出来，需要再补额外的数据源。
 
 4. 打开 eventtracker 页面，确认 banner 请求不再经过 `/_next/image`。
+
+5. 首次执行 card 缩略图静态资源预抓取。建议先限制数量确认凭据和路径正确：
+
+```powershell
+cd D:\Workspace\hhwx-tracker
+d:/Workspace/.venv/Scripts/python.exe tracker_job.py --test-sync-card-assets 20
+```
+
+确认输出正常后再全量补齐缩略图：
+
+```powershell
+cd D:\Workspace\hhwx-tracker
+d:/Workspace/.venv/Scripts/python.exe tracker_job.py --test-sync-card-assets
+```
+
+如果此前已经同步过完整卡面和透明卡面，可以先 dry-run 检查历史对象：
+
+```powershell
+cd D:\Workspace\hhwx-tracker
+d:/Workspace/.venv/Scripts/python.exe tracker_job.py --delete-card-art-assets
+```
+
+确认匹配范围只包含 `characters/resourceset/*/(card|trim)_*.png` 后再执行：
+
+```powershell
+cd D:\Workspace\hhwx-tracker
+d:/Workspace/.venv/Scripts/python.exe tracker_job.py --delete-card-art-assets --execute
+```
+
+如果当前只需要卡牌资料页的国服资源，优先跑国服并发同步：
+
+```powershell
+cd D:\Workspace\hhwx-tracker
+d:/Workspace/.venv/Scripts/python.exe tracker_job.py --test-sync-card-assets --regions=cn --workers=8
+```
+
+说明：
+
+- `--regions=cn` 会跳过 JP 资源，资源量接近减半，也能避开部分 JP 老资源返回 HTML fallback 的噪声。
+- `--workers=8` 会并发回源与上传，适合首次补齐；如果 Bestdori 或 R2 明显限速，可以降到 `4`。
+- HTML fallback、404 和空响应会计入 `missing_origin`，不会再混进真正的 `failed`。
+
+可验证样本：
+
+```text
+https://cdn.hhwx.org/bandori/assets/cn/thumb/chara/card00000_rip/res001001_normal.png
+https://cdn.hhwx.org/bandori/assets/cn/thumb/chara/card00021_rip/res011049_normal.png
+```
+
+6. 同步 `res/icon` 通用图标。建议先跑样本：
+
+```powershell
+cd D:\Workspace\hhwx-tracker
+d:/Workspace/.venv/Scripts/python.exe tracker_job.py --test-sync-res-icons --icons=chara_icon_1.png,band_1.svg,star.png,star_trained.png,master.svg
+```
+
+验证样本：
+
+```text
+https://cdn.hhwx.org/bandori/res/icon/chara_icon_1.png
+https://cdn.hhwx.org/bandori/res/icon/band_1.svg
+https://cdn.hhwx.org/bandori/res/icon/star.png
+https://cdn.hhwx.org/bandori/res/icon/star_trained.png
+https://cdn.hhwx.org/bandori/res/icon/master.svg
+```
