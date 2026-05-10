@@ -14,6 +14,7 @@ import {
   BANDORI_AREA_ITEM_IDS,
   BANDORI_AREA_ITEM_IDS_BY_GROUP,
 } from "@/lib/bandori-area-item-groups";
+import { LEGACY_GAME_AREA_ITEM_RESOURCE_ALIASES } from "@/lib/bandori-area-items";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
 import {
   USER_GAME_BINDINGS_TABLE,
@@ -289,6 +290,16 @@ function resolveBestdoriAreaItemId(rawAreaItemId: number, detail?: TrackerAreaIt
   return candidateIds.find((candidateId) => candidateId > 0 && BANDORI_AREA_ITEM_IDS.has(candidateId)) ?? null;
 }
 
+function resolveBestdoriAreaItemIdFromAlias(value: unknown): number | null {
+  const rawId = toInteger(value);
+  if (rawId <= 0) {
+    return null;
+  }
+
+  const directId = BANDORI_AREA_ITEM_IDS.has(rawId) ? rawId : null;
+  return directId ?? LEGACY_GAME_AREA_ITEM_RESOURCE_ALIASES[String(rawId)] ?? null;
+}
+
 function findAreaItemDetailForUserItem(details: TrackerAreaItemDetail[], item: TrackerAreaItem): TrackerAreaItemDetail | undefined {
   const rawAreaItemId = toInteger(item.area_item_id);
   const areaItemCategory = toInteger(item.area_item_category);
@@ -322,7 +333,9 @@ function collectAreaItemLevelsByBestdoriId(areaItems: unknown, areaItemDetails?:
     areaItems.filter(isRecord).forEach((item: TrackerAreaItem) => {
       const rawAreaItemId = toInteger(item.area_item_id);
       const detail = findAreaItemDetailForUserItem(details, item);
-      const bestdoriAreaItemId = resolveBestdoriAreaItemId(rawAreaItemId, detail);
+      const bestdoriAreaItemId = resolveBestdoriAreaItemId(rawAreaItemId, detail)
+        ?? resolveBestdoriAreaItemIdFromAlias(item.area_item_id)
+        ?? resolveBestdoriAreaItemIdFromAlias(item.area_item_category);
       if (bestdoriAreaItemId !== null) {
         levelsById.set(bestdoriAreaItemId, Math.max(0, toInteger(item.level)));
       }
@@ -646,7 +659,6 @@ export async function syncAutoGameProfile(webUserId: string, gameUid: string): P
   const snapshot = await fetchGameUserSnapshot(gameUid);
   const normalizedProfile = snapshotToNormalizedProfile(gameUid, snapshot);
   assertUsableSnapshot(gameUid, snapshot, normalizedProfile);
-  const summary = isRecord(snapshot.summary) ? snapshot.summary : {};
   const suiteUser = getSnapshotSuiteUser(snapshot);
   const syncedAt = new Date().toISOString();
   const payload = toPayloadFromNormalizedProfile(normalizedProfile, {
@@ -665,7 +677,7 @@ export async function syncAutoGameProfile(webUserId: string, gameUid: string): P
     p_payload_sha256: compressed.payloadSha256,
     p_payload_size: compressed.payloadSize,
     p_card_count: getGameProfileCardCount(payload),
-    p_summary: summary,
+    p_summary: {},
   });
 
   if (error) {

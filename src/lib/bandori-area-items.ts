@@ -25,7 +25,7 @@ const CN_ONLY_AREA_ITEMS: Record<string, BandoriAreaItemMetadata> = {
   "72": createCnOnlyAllMemberAreaItem(72, "极上咖啡", 5),
 };
 
-const LEGACY_GAME_AREA_ITEM_RESOURCE_ALIASES: Record<string, number> = {
+export const LEGACY_GAME_AREA_ITEM_RESOURCE_ALIASES: Record<string, number> = {
   "295": 59,
   "340": 68,
   "477": 72,
