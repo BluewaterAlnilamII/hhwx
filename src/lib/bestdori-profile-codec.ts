@@ -202,7 +202,7 @@ export function decodeBestdoriProfile(value: unknown): NormalizedBestdoriProfile
   const rawPotentials = Array.isArray(profile.data.items.potentials) ? profile.data.items.potentials : [];
 
   return {
-    name: typeof profile.name === "string" && profile.name.trim() ? profile.name.trim() : "Profile",
+    name: typeof profile.name === "string" && profile.name.trim() ? profile.name.trim() : "档案",
     server: toFiniteInteger(profile.server, BESTDORI_CN_SERVER_ID),
     cards: cardIds.map((cardId, index) => ({
       cardId,
@@ -236,7 +236,7 @@ export function encodeBestdoriProfile(profile: NormalizedBestdoriProfile): Bestd
   items.potentials = encodeRunLengthNumberPairs(profile.potentials);
 
   return {
-    name: profile.name || "Profile",
+    name: profile.name || "档案",
     server: profile.server || BESTDORI_CN_SERVER_ID,
     compression: BESTDORI_PROFILE_COMPRESSION_VERSION,
     data: {

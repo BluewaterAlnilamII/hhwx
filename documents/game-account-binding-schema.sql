@@ -56,7 +56,7 @@ alter table public.user_game_bindings
 
 -- Normalize existing challenge data before tightening generated-code constraints.
 delete from public.user_game_bind_challenges
-where challenge !~ '^hhwx[a-z2-9]{8}$';
+where challenge !~ '^hhwx[0-9]{6}$';
 
 update public.user_game_bind_challenges
 set attempt_count = 0
@@ -67,7 +67,7 @@ alter table public.user_game_bind_challenges
 
 alter table public.user_game_bind_challenges
   add constraint user_game_bind_challenges_challenge_check
-  check (challenge ~ '^hhwx[a-z2-9]{8}$');
+  check (challenge ~ '^hhwx[0-9]{6}$');
 
 alter table public.user_game_bind_challenges
   add constraint user_game_bind_challenges_attempt_count_check
@@ -176,7 +176,7 @@ begin
     raise exception 'game_uid is required';
   end if;
 
-  if p_challenge !~ '^hhwx[a-z2-9]{8}$' then
+  if p_challenge !~ '^hhwx[0-9]{6}$' then
     raise exception 'challenge format is invalid';
   end if;
 

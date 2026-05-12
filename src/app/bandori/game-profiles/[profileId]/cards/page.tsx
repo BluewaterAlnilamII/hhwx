@@ -76,11 +76,6 @@ type MetadataPayload = {
   characters: CharacterRecord[];
 };
 
-type CloudGameProfileSummary = {
-  id: string;
-  isEditable: boolean;
-};
-
 type CardFilterState = {
   query: string;
   attribute: "all" | CardAttribute;
@@ -200,33 +195,14 @@ async function requestProfilePayload(profileId: string): Promise<UserGameProfile
 
   const compressed = parseApiSuccessData<CompressedGameProfilePayload>(payload);
   if (!compressed) {
-    throw new Error("Profile 数据为空");
+    throw new Error("档案数据为空");
   }
 
   return decodeCompressedGameProfilePayload(compressed);
 }
 
 async function requestProfileEditable(profileId: string): Promise<boolean> {
-  if (isLocalGameProfileId(profileId)) {
-    return true;
-  }
-
-  const accessToken = await getAccessToken();
-  if (!accessToken) {
-    throw new Error("请先登录");
-  }
-
-  const response = await fetch("/api/account/game-profiles", {
-    headers: { Authorization: `Bearer ${accessToken}` },
-  });
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    throw new Error(getApiErrorMessage(payload) || `读取 Profile 信息失败（HTTP ${response.status}）`);
-  }
-
-  const profiles = parseApiSuccessData<CloudGameProfileSummary[]>(payload);
-  const profile = profiles?.find((candidate) => candidate.id === profileId);
-  return profile?.isEditable === true;
+  return isLocalGameProfileId(profileId);
 }
 
 async function saveProfilePayload(profileId: string, payload: UserGameProfilePayload): Promise<void> {
@@ -778,11 +754,11 @@ export default function GameProfileCardsPage({ params }: { params: Promise<{ pro
   }
 
   return (
-    <AccountShell title="Profile 卡牌" description="查看、筛选并编辑当前 Profile 的卡牌资料。" backHref="/account" backLabel="返回账号中心">
+    <AccountShell title="档案卡牌" description="查看、筛选并编辑当前档案的卡牌资料。" backHref="/bandori/game-profiles" backLabel="返回游戏档案">
       {!authReady || loadingProfile ? (
         <AccountLoadingState message="正在读取账号信息..." />
       ) : !userId ? (
-        <AccountSignInState nextPath={`/account/game-profiles/${profileId}/cards`} />
+        <AccountSignInState nextPath={`/bandori/game-profiles/${profileId}/cards`} />
       ) : profileError || error ? (
         <AccountErrorState message={profileError || error} />
       ) : loadingCards ? (
@@ -805,8 +781,8 @@ export default function GameProfileCardsPage({ params }: { params: Promise<{ pro
                       {saveMessage}
                     </span>
                   ) : null}
-                  <Link href="/account" className="inline-flex h-10 items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 transition hover:border-sky-200 hover:text-sky-600">
-                    Profile 管理
+                  <Link href="/bandori/game-profiles" className="inline-flex h-10 items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 transition hover:border-sky-200 hover:text-sky-600">
+                    档案管理
                   </Link>
                 </div>
               </div>

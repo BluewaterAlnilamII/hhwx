@@ -25,7 +25,7 @@ export async function POST(
     return jsonRouteError(error, {
       status: 500,
       code: "GAME_PROFILE_COPY_FAILED",
-      message: "复制游戏 Profile 失败",
+      message: "复制游戏档案失败",
     });
   }
 }

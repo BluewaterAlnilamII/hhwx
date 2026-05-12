@@ -51,6 +51,7 @@ export type UserGameProfileSummary = {
   name: string;
   server: number;
   sourceGameUid: string | null;
+  localProfileId: string | null;
   isEditable: boolean;
   cardCount: number;
   syncedAt: string | null;
@@ -194,12 +195,14 @@ function inferEpisodeCountFromAppendParameter(cardId: number, masterRank: number
 }
 
 function toProfileSummary(row: UserGameProfileRow): UserGameProfileSummary {
+  const summary = isRecord(row.summary) ? row.summary : {};
   return {
     id: row.id,
     kind: row.profile_kind,
     name: row.profile_name,
     server: row.server,
     sourceGameUid: row.source_game_uid,
+    localProfileId: row.profile_kind === "manual" ? toStringOrNull(summary.localProfileId) : null,
     isEditable: row.profile_kind === "manual",
     cardCount: row.card_count ?? 0,
     syncedAt: row.synced_at,
@@ -210,11 +213,11 @@ function toProfileSummary(row: UserGameProfileRow): UserGameProfileSummary {
 function normalizeProfileName(value: unknown): string {
   const name = typeof value === "string" ? value.trim() : "";
   if (!name) {
-    throw new ApiRouteError(400, "INVALID_PROFILE_NAME", "请输入 Profile 名称");
+    throw new ApiRouteError(400, "INVALID_PROFILE_NAME", "请输入档案名称");
   }
 
   if (name.length > 40) {
-    throw new ApiRouteError(400, "PROFILE_NAME_TOO_LONG", "Profile 名称不能超过 40 个字符");
+    throw new ApiRouteError(400, "PROFILE_NAME_TOO_LONG", "档案名称不能超过 40 个字符");
   }
 
   return name;
@@ -223,7 +226,20 @@ function normalizeProfileName(value: unknown): string {
 export function normalizeProfileId(value: unknown): string {
   const profileId = typeof value === "string" ? value.trim() : "";
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(profileId)) {
-    throw new ApiRouteError(400, "INVALID_PROFILE_ID", "无效的 Profile ID");
+    throw new ApiRouteError(400, "INVALID_PROFILE_ID", "无效的档案 ID");
+  }
+
+  return profileId;
+}
+
+function normalizeLocalProfileId(value: unknown): string | null {
+  const profileId = typeof value === "string" ? value.trim() : "";
+  if (!profileId) {
+    return null;
+  }
+
+  if (!/^local_[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(profileId)) {
+    throw new ApiRouteError(400, "INVALID_LOCAL_PROFILE_ID", "无效的本地档案 ID");
   }
 
   return profileId;
@@ -476,7 +492,7 @@ function assertUsableSnapshot(gameUid: string, snapshot: TrackerUserSnapshotPayl
     throw new ApiRouteError(
       503,
       "GAME_SNAPSHOT_EMPTY",
-      "游戏服务器可能正在维护，当前同步结果为空。已取消保存，避免覆盖现有 Profile。",
+      "游戏服务器可能正在维护，当前同步结果为空。已取消保存，避免覆盖现有档案。",
       { gameUid },
     );
   }
@@ -501,10 +517,10 @@ async function readGameProfileRow(webUserId: string, profileId: string): Promise
     .maybeSingle();
 
   if (error) {
-    throw new ApiRouteError(500, "GAME_PROFILE_READ_FAILED", "读取游戏 Profile 失败", error.message);
+    throw new ApiRouteError(500, "GAME_PROFILE_READ_FAILED", "读取游戏档案失败", error.message);
   }
   if (!data) {
-    throw new ApiRouteError(404, "GAME_PROFILE_NOT_FOUND", "Profile 不存在");
+    throw new ApiRouteError(404, "GAME_PROFILE_NOT_FOUND", "档案不存在");
   }
 
   return data as UserGameProfileRow;
@@ -524,7 +540,7 @@ export async function listUserGameProfiles(webUserId: string): Promise<UserGameP
     .order("updated_at", { ascending: false });
 
   if (error) {
-    throw new ApiRouteError(500, "GAME_PROFILES_READ_FAILED", "读取游戏 Profile 失败", error.message);
+    throw new ApiRouteError(500, "GAME_PROFILES_READ_FAILED", "读取游戏档案失败", error.message);
   }
 
   return ((data ?? []) as UserGameProfileRow[]).map(toProfileSummary);
@@ -553,7 +569,7 @@ export async function createManualGameProfile(webUserId: string, name: unknown):
   });
 
   if (error) {
-    throw new ApiRouteError(400, "MANUAL_GAME_PROFILE_CREATE_FAILED", "创建手动 Profile 失败", error.message);
+    throw new ApiRouteError(400, "MANUAL_GAME_PROFILE_CREATE_FAILED", "创建手动档案失败", error.message);
   }
 
   return toProfileSummary(data as UserGameProfileRow);
@@ -576,7 +592,7 @@ export async function importManualGameProfile(webUserId: string, rawProfile: unk
   });
 
   if (error) {
-    throw new ApiRouteError(400, "MANUAL_GAME_PROFILE_IMPORT_FAILED", "导入 Bestdori Profile 失败", error.message);
+    throw new ApiRouteError(400, "MANUAL_GAME_PROFILE_IMPORT_FAILED", "导入 Bestdori 档案失败", error.message);
   }
 
   return toProfileSummary(data as UserGameProfileRow);
@@ -586,12 +602,71 @@ export async function uploadManualGameProfilePayload(
   webUserId: string,
   name: unknown,
   compressed: CompressedGameProfilePayload,
+  options: {
+    localProfileId?: unknown;
+    cloudProfileId?: unknown;
+  } = {},
 ): Promise<UserGameProfileSummary> {
   const payload = decodeGameProfilePayload(compressed);
-  const profileName = normalizeProfileName(name || payload.bestdoriProfile.name || "Manual Profile");
+  const profileName = normalizeProfileName(name || payload.bestdoriProfile.name || "手动档案");
   payload.bestdoriProfile.name = profileName;
   const nextCompressed = encodeGameProfilePayload(payload);
+  const localProfileId = normalizeLocalProfileId(options.localProfileId);
+  const cloudProfileId = options.cloudProfileId ? normalizeProfileId(options.cloudProfileId) : null;
   const serviceClient = createServerSupabaseClient();
+
+  let existing: UserGameProfileRow | null = null;
+  if (cloudProfileId) {
+    const cloudRow = await readGameProfileRow(webUserId, cloudProfileId);
+    if (cloudRow.profile_kind !== "manual") {
+      throw new ApiRouteError(403, "GAME_PROFILE_NOT_EDITABLE", "自动同步档案不允许编辑");
+    }
+    existing = cloudRow;
+  } else if (localProfileId) {
+    const { data: matchedRow, error: matchError } = await serviceClient
+      .from(USER_GAME_PROFILES_TABLE)
+      .select("id, profile_kind, profile_name, server, source_game_uid, storage_codec, payload_compressed, payload_sha256, payload_size, card_count, summary, synced_at, updated_at")
+      .eq("web_user_id", webUserId)
+      .eq("profile_kind", "manual")
+      .contains("summary", { localProfileId })
+      .maybeSingle();
+
+    if (matchError) {
+      throw new ApiRouteError(500, "GAME_PROFILE_READ_FAILED", "读取游戏档案失败", matchError.message);
+    }
+    existing = matchedRow as UserGameProfileRow | null;
+  }
+
+  if (existing) {
+    const previousSummary = isRecord(existing.summary) ? existing.summary : {};
+    const { data, error } = await serviceClient
+      .from(USER_GAME_PROFILES_TABLE)
+      .update({
+        profile_name: profileName,
+        server: payload.bestdoriProfile.server,
+        storage_codec: nextCompressed.storageCodec,
+        payload_compressed: nextCompressed.payloadCompressed,
+        payload_sha256: nextCompressed.payloadSha256,
+        payload_size: nextCompressed.payloadSize,
+        card_count: getGameProfileCardCount(payload),
+        summary: localProfileId ? { ...previousSummary, localProfileId } : previousSummary,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", existing.id)
+      .eq("web_user_id", webUserId)
+      .select("id, profile_kind, profile_name, server, source_game_uid, storage_codec, payload_compressed, payload_sha256, payload_size, card_count, summary, synced_at, updated_at")
+      .maybeSingle();
+
+    if (error) {
+      throw new ApiRouteError(500, "MANUAL_GAME_PROFILE_UPLOAD_FAILED", "上传手动档案失败", error.message);
+    }
+    if (!data) {
+      throw new ApiRouteError(404, "GAME_PROFILE_NOT_FOUND", "档案不存在");
+    }
+
+    return toProfileSummary(data as UserGameProfileRow);
+  }
+
   const { data, error } = await serviceClient.rpc("create_manual_game_profile", {
     p_web_user_id: webUserId,
     p_profile_name: profileName,
@@ -599,11 +674,11 @@ export async function uploadManualGameProfilePayload(
     p_payload_sha256: nextCompressed.payloadSha256,
     p_payload_size: nextCompressed.payloadSize,
     p_card_count: getGameProfileCardCount(payload),
-    p_summary: {},
+    p_summary: localProfileId ? { localProfileId } : {},
   });
 
   if (error) {
-    throw new ApiRouteError(400, "MANUAL_GAME_PROFILE_UPLOAD_FAILED", "上传手动 Profile 失败", error.message);
+    throw new ApiRouteError(400, "MANUAL_GAME_PROFILE_UPLOAD_FAILED", "上传手动档案失败", error.message);
   }
 
   return toProfileSummary(data as UserGameProfileRow);
@@ -634,7 +709,7 @@ export async function copyGameProfileToManual(webUserId: string, profileId: stri
   });
 
   if (error) {
-    throw new ApiRouteError(400, "GAME_PROFILE_COPY_FAILED", "复制 Profile 失败", error.message);
+    throw new ApiRouteError(400, "GAME_PROFILE_COPY_FAILED", "复制档案失败", error.message);
   }
 
   return toProfileSummary(data as UserGameProfileRow);
@@ -681,7 +756,7 @@ export async function syncAutoGameProfile(webUserId: string, gameUid: string): P
   });
 
   if (error) {
-    throw new ApiRouteError(400, "AUTO_GAME_PROFILE_SYNC_FAILED", "保存自动 Profile 失败", error.message);
+    throw new ApiRouteError(400, "AUTO_GAME_PROFILE_SYNC_FAILED", "保存自动档案失败", error.message);
   }
 
   return readGameProfileSummary(webUserId, (data as UserGameProfileRow).id);
@@ -702,7 +777,7 @@ export async function updateGameProfilePayload(
 ): Promise<UserGameProfileSummary> {
   const existing = await readGameProfileRow(webUserId, profileId);
   if (existing.profile_kind !== "manual") {
-    throw new ApiRouteError(403, "GAME_PROFILE_NOT_EDITABLE", "自动同步 Profile 不允许编辑");
+    throw new ApiRouteError(403, "GAME_PROFILE_NOT_EDITABLE", "自动同步档案不允许编辑");
   }
 
   const compressed = encodeGameProfilePayload(payload);
@@ -723,10 +798,10 @@ export async function updateGameProfilePayload(
     .maybeSingle();
 
   if (error) {
-    throw new ApiRouteError(500, "GAME_PROFILE_UPDATE_FAILED", "保存 Profile 数据失败", error.message);
+    throw new ApiRouteError(500, "GAME_PROFILE_UPDATE_FAILED", "保存档案数据失败", error.message);
   }
   if (!data) {
-    throw new ApiRouteError(404, "GAME_PROFILE_NOT_FOUND", "Profile 不存在");
+    throw new ApiRouteError(404, "GAME_PROFILE_NOT_FOUND", "档案不存在");
   }
 
   return toProfileSummary({
@@ -748,7 +823,7 @@ export async function deleteGameProfile(webUserId: string, profileId: string): P
     .eq("web_user_id", webUserId);
 
   if (error) {
-    throw new ApiRouteError(500, "GAME_PROFILE_DELETE_FAILED", "删除 Profile 失败", error.message);
+    throw new ApiRouteError(500, "GAME_PROFILE_DELETE_FAILED", "删除档案失败", error.message);
   }
 }
 

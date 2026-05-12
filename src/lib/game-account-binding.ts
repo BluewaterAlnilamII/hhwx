@@ -1,14 +1,13 @@
 import { ApiRouteError } from "@/lib/api-contracts";
 
-export const GAME_BIND_CHALLENGE_TTL_MINUTES = 30;
+export const GAME_BIND_CHALLENGE_TTL_MINUTES = 10;
 export const GAME_BIND_CHALLENGE_MAX_ATTEMPTS = 5;
 export const GAME_BIND_CHALLENGE_RETENTION_DAYS = 7;
 
 
 const CHALLENGE_PREFIX = "hhwx";
-const CHALLENGE_ALPHABET = "abcdefghijkmnpqrstuvwxyz23456789";
 const GAME_UID_PATTERN = /^[1-9][0-9]{3,15}$/;
-const CHALLENGE_SUFFIX_LENGTH = 8;
+const CHALLENGE_SUFFIX_LENGTH = 6;
 
 export type GameAccountBinding = {
   gameUid: string;
@@ -38,11 +37,21 @@ export function normalizeGameUid(value: unknown): string {
 }
 
 export function createGameBindChallenge(): string {
-  const randomBytes = crypto.getRandomValues(new Uint8Array(CHALLENGE_SUFFIX_LENGTH));
   let suffix = "";
 
-  for (const byte of randomBytes) {
-    suffix += CHALLENGE_ALPHABET[byte % CHALLENGE_ALPHABET.length];
+  while (suffix.length < CHALLENGE_SUFFIX_LENGTH) {
+    const randomBytes = crypto.getRandomValues(new Uint8Array(CHALLENGE_SUFFIX_LENGTH));
+
+    for (const byte of randomBytes) {
+      if (byte >= 250) {
+        continue;
+      }
+
+      suffix += String(byte % 10);
+      if (suffix.length === CHALLENGE_SUFFIX_LENGTH) {
+        break;
+      }
+    }
   }
 
   return `${CHALLENGE_PREFIX}${suffix}`;

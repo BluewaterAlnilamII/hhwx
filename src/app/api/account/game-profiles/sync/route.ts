@@ -22,7 +22,7 @@ export async function POST(request: Request) {
     return jsonRouteError(error, {
       status: 500,
       code: "GAME_PROFILE_SYNC_FAILED",
-      message: "同步游戏 Profile 失败",
+      message: "同步游戏档案失败",
     });
   }
 }

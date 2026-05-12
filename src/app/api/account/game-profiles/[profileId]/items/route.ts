@@ -16,7 +16,7 @@ export async function GET(
     return jsonRouteError(error, {
       status: 500,
       code: "GAME_PROFILE_ITEMS_READ_FAILED",
-      message: "读取 Profile 道具失败",
+      message: "读取档案道具失败",
     });
   }
 }

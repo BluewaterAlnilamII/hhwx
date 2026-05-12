@@ -28,12 +28,12 @@ hhwx/
 ## src/app
 
 - account/: 账号中心及资料、邮箱、密码页面
-- account/game-profiles/: 游戏 Profile 的 Cards 和 Items 查看页面
+- bandori/game-profiles/: 游戏档案的 Cards 和 Items 查看页面
 - auth/: 登录、注册、找回密码等认证页面
 - bandori/: 日历与活动追踪器页面
 - api/: 前端同域 API 路由
 - api/account/game-bind/: 游戏账号绑定的验证码生成、验证、绑定列表和解绑 API
-- api/account/game-profiles/: 游戏 Profile 的同步、导入、导出、复制和删除 API
+- api/account/game-profiles/: 游戏档案的同步、导入、导出、复制和删除 API
 - api/bandori/: Bandori 角色、歌曲与区域道具等公开元数据 API
 - layout.tsx: 根布局与全站壳层入口
 - globals.css: 全局样式、动画和共享视觉规则
@@ -51,7 +51,7 @@ hhwx/
 - auth-*.ts、supabase-*.ts、turnstile-*.ts: 鉴权、安全验证与服务端客户端封装
 - bandori-*.ts、calendar-*.ts: Bandori 页面与公开元数据相关服务逻辑
 - api-*.ts: API 响应约定与缓存策略
-- bestdori-profile-codec.ts、user-game-*-server.ts: 游戏 Profile 兼容、同步与服务端持久化逻辑
+- bestdori-profile-codec.ts、user-game-*-server.ts: 游戏档案兼容、同步与服务端持久化逻辑
 - characters.ts、othello.ts、ai/: 首页黑白棋与角色逻辑
 
 ## 文档维护规则

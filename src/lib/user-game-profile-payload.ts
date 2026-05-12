@@ -240,7 +240,7 @@ function importMissionBonusRecordsFromBestdoriTotals(potentials: number[]): User
 export function importBestdoriGameProfilePayload(bestdoriProfile: BestdoriProfile): UserGameProfilePayload {
   const normalizedProfile = decodeBestdoriProfile(bestdoriProfile);
   if (bestdoriProfile.data.cards.ids.trim() && normalizedProfile.cards.length === 0) {
-    throw new Error("Bestdori Profile 卡牌数据解析为空，已取消导入以避免创建空档案");
+    throw new Error("Bestdori 档案卡牌数据解析为空，已取消导入以避免创建空档案");
   }
 
   const bestdoriPotentials = normalizedProfile.potentials;

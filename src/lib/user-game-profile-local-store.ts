@@ -18,6 +18,7 @@ export type LocalGameProfileSummary = {
   name: string;
   server: number;
   sourceGameUid: null;
+  cloudProfileId?: string | null;
   isEditable: true;
   cardCount: number;
   syncedAt: null;
@@ -37,7 +38,7 @@ function openDatabase(): Promise<IDBDatabase> {
       }
     };
     request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error ?? new Error("打开本地 Profile 数据库失败"));
+    request.onerror = () => reject(request.error ?? new Error("打开本地档案数据库失败"));
   });
 }
 
@@ -47,11 +48,11 @@ async function withStore<T>(mode: IDBTransactionMode, action: (store: IDBObjectS
     const transaction = db.transaction(STORE_NAME, mode);
     const request = action(transaction.objectStore(STORE_NAME));
     request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error ?? new Error("访问本地 Profile 失败"));
+    request.onerror = () => reject(request.error ?? new Error("访问本地档案失败"));
     transaction.oncomplete = () => db.close();
     transaction.onerror = () => {
       db.close();
-      reject(transaction.error ?? new Error("访问本地 Profile 失败"));
+      reject(transaction.error ?? new Error("访问本地档案失败"));
     };
   });
 }
@@ -69,6 +70,7 @@ export async function listLocalGameProfiles(): Promise<LocalGameProfileSummary[]
       name: record.name,
       server: record.server,
       sourceGameUid: record.sourceGameUid,
+      cloudProfileId: record.cloudProfileId ?? null,
       isEditable: record.isEditable,
       cardCount: record.cardCount,
       syncedAt: record.syncedAt,
@@ -81,7 +83,7 @@ export async function listLocalGameProfiles(): Promise<LocalGameProfileSummary[]
 export async function readLocalCompressedGameProfile(profileId: string): Promise<CompressedGameProfilePayload> {
   const record = await withStore<LocalGameProfileRecord | undefined>("readonly", (store) => store.get(profileId));
   if (!record) {
-    throw new Error("本地 Profile 不存在");
+    throw new Error("本地档案不存在");
   }
 
   return {
@@ -98,16 +100,21 @@ export async function readLocalGameProfilePayload(profileId: string): Promise<Us
 
 export async function saveLocalGameProfilePayload(
   payload: UserGameProfilePayload,
-  name = payload.bestdoriProfile.name || "Manual Profile",
+  name = payload.bestdoriProfile.name || "手动档案",
+  options: {
+    profileId?: string;
+    cloudProfileId?: string | null;
+  } = {},
 ): Promise<LocalGameProfileSummary> {
   const compressed = await encodeCompressedGameProfilePayload(payload);
   const now = new Date().toISOString();
   const record: LocalGameProfileRecord = {
-    id: `local_${crypto.randomUUID()}`,
+    id: options.profileId ?? `local_${crypto.randomUUID()}`,
     kind: "manual",
     name,
     server: payload.bestdoriProfile.server,
     sourceGameUid: null,
+    cloudProfileId: options.cloudProfileId ?? null,
     isEditable: true,
     cardCount: getGameProfileCardCount(payload),
     syncedAt: null,
@@ -122,15 +129,21 @@ export async function saveLocalGameProfilePayload(
 export async function updateLocalGameProfilePayload(
   profileId: string,
   payload: UserGameProfilePayload,
+  options: {
+    cloudProfileId?: string | null;
+  } = {},
 ): Promise<LocalGameProfileSummary> {
   const current = await withStore<LocalGameProfileRecord | undefined>("readonly", (store) => store.get(profileId));
   if (!current) {
-    throw new Error("本地 Profile 不存在");
+    throw new Error("本地档案不存在");
   }
 
   const compressed = await encodeCompressedGameProfilePayload(payload);
   const record: LocalGameProfileRecord = {
     ...current,
+    name: payload.bestdoriProfile.name || current.name,
+    server: payload.bestdoriProfile.server,
+    cloudProfileId: options.cloudProfileId ?? current.cloudProfileId ?? null,
     cardCount: getGameProfileCardCount(payload),
     updatedAt: new Date().toISOString(),
     ...compressed,

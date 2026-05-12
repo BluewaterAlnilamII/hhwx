@@ -16,7 +16,7 @@ export async function GET(
     return jsonRouteError(error, {
       status: 500,
       code: "GAME_PROFILE_CARDS_READ_FAILED",
-      message: "读取 Profile 卡牌失败",
+      message: "读取档案卡牌失败",
     });
   }
 }

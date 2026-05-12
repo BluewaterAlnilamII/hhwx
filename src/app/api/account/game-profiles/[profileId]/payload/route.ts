@@ -19,7 +19,7 @@ export async function GET(
     return jsonRouteError(error, {
       status: 500,
       code: "GAME_PROFILE_PAYLOAD_READ_FAILED",
-      message: "读取 Profile 数据失败",
+      message: "读取档案数据失败",
     });
   }
 }
@@ -41,7 +41,7 @@ export async function PATCH(
     }
 
     if (!body.compressed) {
-      throw new ApiRouteError(400, "MISSING_PROFILE_PAYLOAD", "请提供 Profile 数据");
+      throw new ApiRouteError(400, "MISSING_PROFILE_PAYLOAD", "请提供档案数据");
     }
 
     const payload = decodeGameProfilePayload(body.compressed);
@@ -51,7 +51,7 @@ export async function PATCH(
     return jsonRouteError(error, {
       status: 500,
       code: "GAME_PROFILE_PAYLOAD_UPDATE_FAILED",
-      message: "保存 Profile 数据失败",
+      message: "保存档案数据失败",
     });
   }
 }

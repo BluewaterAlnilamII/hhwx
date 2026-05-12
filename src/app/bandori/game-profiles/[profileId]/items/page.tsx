@@ -212,7 +212,7 @@ async function requestProfilePayload(profileId: string): Promise<UserGameProfile
 
   const compressed = parseApiSuccessData<CompressedGameProfilePayload>(payload);
   if (!compressed) {
-    throw new Error("Profile 数据为空");
+    throw new Error("档案数据为空");
   }
 
   return decodeCompressedGameProfilePayload(compressed);
@@ -585,7 +585,7 @@ export default function GameProfileItemsPage({ params }: { params: Promise<{ pro
       .sort((left, right) => (left.areaItemId ?? 0) - (right.areaItemId ?? 0))
   ), [areaItemsById]);
 
-  const isEditableProfile = isLocalGameProfileId(profileId) || !profilePayload?.source?.gameUid;
+  const isEditableProfile = isLocalGameProfileId(profileId);
   const hasChanges = useMemo(() => !isSameItemsPayload(items, baselineItems), [baselineItems, items]);
 
   function updateAreaItemLevel(areaItemId: number, level: number) {
@@ -682,11 +682,11 @@ export default function GameProfileItemsPage({ params }: { params: Promise<{ pro
   }
 
   return (
-    <AccountShell title="Profile 道具" description="查看和编辑当前 Profile 的区域道具、潜能解放和角色任务加成。" backHref="/account" backLabel="返回账号中心">
+    <AccountShell title="档案道具" description="查看和编辑当前档案的区域道具、潜能解放和角色任务加成。" backHref="/bandori/game-profiles" backLabel="返回游戏档案">
       {!authReady || loadingProfile ? (
         <AccountLoadingState message="正在读取账号信息..." />
       ) : !userId ? (
-        <AccountSignInState nextPath={`/account/game-profiles/${profileId}/items`} />
+        <AccountSignInState nextPath={`/bandori/game-profiles/${profileId}/items`} />
       ) : profileError || error ? (
         <AccountErrorState message={profileError || error} />
       ) : loadingItems ? (
@@ -714,13 +714,13 @@ export default function GameProfileItemsPage({ params }: { params: Promise<{ pro
                   <button type="button" onClick={() => setEditing(true)} className="inline-flex h-10 items-center justify-center rounded-xl bg-sky-600 px-4 text-sm font-semibold text-white transition hover:bg-sky-500">
                     编辑
                   </button>
-                  <Link href="/account" className="inline-flex h-10 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:border-sky-200 hover:text-sky-600">
-                    Profile 管理
+                  <Link href="/bandori/game-profiles" className="inline-flex h-10 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:border-sky-200 hover:text-sky-600">
+                    档案管理
                   </Link>
                 </>
               ) : (
-                <Link href="/account" className="inline-flex h-10 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:border-sky-200 hover:text-sky-600">
-                  Profile 管理
+                <Link href="/bandori/game-profiles" className="inline-flex h-10 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:border-sky-200 hover:text-sky-600">
+                  档案管理
                 </Link>
               )}
             </div>

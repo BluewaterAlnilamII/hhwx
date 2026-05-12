@@ -21,7 +21,7 @@ export async function GET(
     return jsonRouteError(error, {
       status: 500,
       code: "GAME_PROFILE_EXPORT_FAILED",
-      message: "导出游戏 Profile 失败",
+      message: "导出游戏档案失败",
     });
   }
 }

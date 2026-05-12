@@ -40,6 +40,12 @@ export const siteNavigationGroups: SectionSidebarNavGroup[] = [
         label: "分数追踪器",
         matchMode: "prefix",
       },
+      {
+        id: "game-profiles",
+        href: "/bandori/game-profiles",
+        label: "游戏档案",
+        matchMode: "prefix",
+      },
     ],
   },
 ];

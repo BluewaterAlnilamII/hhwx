@@ -17,7 +17,7 @@ export async function DELETE(
     return jsonRouteError(error, {
       status: 500,
       code: "GAME_PROFILE_DELETE_FAILED",
-      message: "删除游戏 Profile 失败",
+      message: "删除游戏档案失败",
     });
   }
 }

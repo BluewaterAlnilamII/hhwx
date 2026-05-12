@@ -15,7 +15,7 @@ export async function POST(request: Request) {
     }
 
     if (!body.profile) {
-      throw new ApiRouteError(400, "MISSING_PROFILE", "请提供 Bestdori Profile 数据");
+      throw new ApiRouteError(400, "MISSING_PROFILE", "请提供 Bestdori 档案数据");
     }
 
     return jsonSuccess(await importManualGameProfile(user.id, body.profile), { status: 201 });
@@ -24,7 +24,7 @@ export async function POST(request: Request) {
     return jsonRouteError(error, {
       status: 500,
       code: "GAME_PROFILE_IMPORT_FAILED",
-      message: "导入游戏 Profile 失败",
+      message: "导入游戏档案失败",
     });
   }
 }

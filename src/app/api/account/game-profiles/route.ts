@@ -12,7 +12,7 @@ export async function GET(request: Request) {
     return jsonRouteError(error, {
       status: 500,
       code: "GAME_PROFILES_READ_FAILED",
-      message: "读取游戏 Profile 失败",
+      message: "读取游戏档案失败",
     });
   }
 }
@@ -34,7 +34,7 @@ export async function POST(request: Request) {
     return jsonRouteError(error, {
       status: 500,
       code: "GAME_PROFILE_CREATE_FAILED",
-      message: "创建游戏 Profile 失败",
+      message: "创建游戏档案失败",
     });
   }
 }
