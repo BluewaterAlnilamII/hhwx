@@ -31,10 +31,17 @@ hhwx/
 │   ├── hooks/      # 自定义 Hooks
 │   ├── lib/        # 服务端与共享业务逻辑
 │   └── store/      # Zustand 状态
+├── supabase/       # 数据库 schema 归档与手动维护 runbook
 └── package.json    # 脚本与依赖
 ```
 
 更细的结构说明见 documents/layout.md。
+
+## Supabase 文件约定
+
+- `supabase/schema/` 是 hhwx 数据库结构的 canonical source，包含账号、评论、Bandori 日历和追踪器数据表结构。
+- `supabase/maintenance/` 只放手动观察与维护 runbook，不作为 schema migration；其中 `bandori_tracker_maintenance.sql` 用于排查 `bandori_tracker_data` 的表大小、索引大小、死元组和统计信息，不是自动清理脚本。
+- `documents/*.sql` 保留历史和增量 SQL，例如账号验证、公开 UID、游戏绑定和游戏档案；后续再单独整理成正式 migrations。
 
 ## 关键约定
 
