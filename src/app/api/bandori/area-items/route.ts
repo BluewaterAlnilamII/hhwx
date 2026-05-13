@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic";
 
 const readBandoriAreaItemsResponse = unstable_cache(
   fetchBandoriAreaItemsMetadata,
-  ["bandori-area-items-route:v5"],
+  ["bandori-area-items-route:v6"],
   { revalidate: 86400 },
 );
 

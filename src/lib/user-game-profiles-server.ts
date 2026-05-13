@@ -14,7 +14,6 @@ import {
   BANDORI_AREA_ITEM_IDS,
   BANDORI_AREA_ITEM_IDS_BY_GROUP,
 } from "@/lib/bandori-area-item-groups";
-import { LEGACY_GAME_AREA_ITEM_RESOURCE_ALIASES } from "@/lib/bandori-area-items";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
 import {
   USER_GAME_BINDINGS_TABLE,
@@ -88,13 +87,6 @@ type TrackerAreaItem = {
   area_item_id?: unknown;
   area_item_category?: unknown;
   level?: unknown;
-};
-
-type TrackerAreaItemDetail = TrackerAreaItem & {
-  category_id?: unknown;
-  resource_id?: unknown;
-  user_level?: unknown;
-  is_owned?: unknown;
 };
 
 type TrackerPotential = {
@@ -295,65 +287,13 @@ function isPlayableCharacterId(characterId: number): boolean {
   return characterId > 0 && characterId <= MAX_BANDORI_CHARACTER_ID;
 }
 
-function resolveBestdoriAreaItemId(rawAreaItemId: number, detail?: TrackerAreaItemDetail): number | null {
-  const candidateIds = [
-    toInteger(detail?.resource_id),
-    toInteger(detail?.category_id),
-    rawAreaItemId,
-    toInteger(detail?.area_item_id),
-  ];
-
-  return candidateIds.find((candidateId) => candidateId > 0 && BANDORI_AREA_ITEM_IDS.has(candidateId)) ?? null;
-}
-
-function resolveBestdoriAreaItemIdFromAlias(value: unknown): number | null {
-  const rawId = toInteger(value);
-  if (rawId <= 0) {
-    return null;
-  }
-
-  const directId = BANDORI_AREA_ITEM_IDS.has(rawId) ? rawId : null;
-  return directId ?? LEGACY_GAME_AREA_ITEM_RESOURCE_ALIASES[String(rawId)] ?? null;
-}
-
-function findAreaItemDetailForUserItem(details: TrackerAreaItemDetail[], item: TrackerAreaItem): TrackerAreaItemDetail | undefined {
-  const rawAreaItemId = toInteger(item.area_item_id);
-  const areaItemCategory = toInteger(item.area_item_category);
-  const level = toInteger(item.level);
-
-  return details.find((detail) => toInteger(detail.area_item_id) === rawAreaItemId)
-    ?? details.find((detail) => (
-      areaItemCategory > 0
-      && level > 0
-      && toInteger(detail.category_id) === areaItemCategory
-      && toInteger(detail.level) === level
-    ));
-}
-
-function collectAreaItemLevelsByBestdoriId(areaItems: unknown, areaItemDetails?: unknown): Map<number, number> {
+function collectAreaItemLevelsByBestdoriId(areaItems: unknown): Map<number, number> {
   const levelsById = new Map<number, number>();
-  const details = Array.isArray(areaItemDetails)
-    ? areaItemDetails.filter(isRecord) as TrackerAreaItemDetail[]
-    : [];
-
-  details.forEach((detail) => {
-    const rawAreaItemId = toInteger(detail.area_item_id);
-    const bestdoriAreaItemId = resolveBestdoriAreaItemId(rawAreaItemId, detail);
-    const userLevel = detail.user_level === null || detail.user_level === undefined ? null : Math.max(0, toInteger(detail.user_level));
-    if (bestdoriAreaItemId !== null && detail.is_owned === true && userLevel !== null) {
-      levelsById.set(bestdoriAreaItemId, userLevel);
-    }
-  });
-
   if (Array.isArray(areaItems)) {
     areaItems.filter(isRecord).forEach((item: TrackerAreaItem) => {
-      const rawAreaItemId = toInteger(item.area_item_id);
-      const detail = findAreaItemDetailForUserItem(details, item);
-      const bestdoriAreaItemId = resolveBestdoriAreaItemId(rawAreaItemId, detail)
-        ?? resolveBestdoriAreaItemIdFromAlias(item.area_item_id)
-        ?? resolveBestdoriAreaItemIdFromAlias(item.area_item_category);
-      if (bestdoriAreaItemId !== null) {
-        levelsById.set(bestdoriAreaItemId, Math.max(0, toInteger(item.level)));
+      const areaItemCategory = toInteger(item.area_item_category);
+      if (areaItemCategory > 0 && BANDORI_AREA_ITEM_IDS.has(areaItemCategory)) {
+        levelsById.set(areaItemCategory, Math.max(0, toInteger(item.level)));
       }
     });
   }
@@ -361,8 +301,8 @@ function collectAreaItemLevelsByBestdoriId(areaItems: unknown, areaItemDetails?:
   return levelsById;
 }
 
-function toBestdoriItems(areaItems: unknown, areaItemDetails?: unknown): Record<string, Array<number | null>> {
-  const levelsById = collectAreaItemLevelsByBestdoriId(areaItems, areaItemDetails);
+function toBestdoriItems(areaItems: unknown): Record<string, Array<number | null>> {
+  const levelsById = collectAreaItemLevelsByBestdoriId(areaItems);
   const result: Record<string, Array<number | null>> = {};
   Object.entries(BANDORI_AREA_ITEM_IDS_BY_GROUP).forEach(([key, ids]) => {
     result[key] = ids.map((id) => levelsById.get(id) ?? null);
@@ -481,7 +421,7 @@ function snapshotToNormalizedProfile(gameUid: string, snapshot: TrackerUserSnaps
     name: profileName,
     server: BESTDORI_CN_SERVER_ID,
     cards: toNormalizedCards(suiteUser.cards),
-    items: toBestdoriItems(suiteUser.area_items, snapshot.snapshot?.area_item_details),
+    items: toBestdoriItems(suiteUser.area_items),
     potentials: [],
   };
 }

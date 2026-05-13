@@ -25,80 +25,6 @@ const CN_ONLY_AREA_ITEMS: Record<string, BandoriAreaItemMetadata> = {
   "72": createCnOnlyAllMemberAreaItem(72, "极上咖啡", 5),
 };
 
-export const LEGACY_GAME_AREA_ITEM_RESOURCE_ALIASES: Record<string, number> = {
-  "295": 59,
-  "340": 68,
-  "477": 72,
-  "478": 72,
-  "479": 72,
-  "480": 72,
-  "481": 72,
-  "697": 56,
-  "698": 57,
-  "699": 58,
-  "700": 60,
-};
-
-for (let resourceId = 1; resourceId <= 35; resourceId += 1) {
-  LEGACY_GAME_AREA_ITEM_RESOURCE_ALIASES[String(348 + resourceId * 5)] = resourceId;
-}
-
-for (let resourceId = 56; resourceId <= 60; resourceId += 1) {
-  LEGACY_GAME_AREA_ITEM_RESOURCE_ALIASES[String(291 + (resourceId - 56) * 5)] = resourceId;
-}
-
-for (let resourceId = 66; resourceId <= 70; resourceId += 1) {
-  LEGACY_GAME_AREA_ITEM_RESOURCE_ALIASES[String(331 + (resourceId - 66) * 5)] = resourceId;
-}
-
-for (let resourceId = 73; resourceId <= 103; resourceId += 1) {
-  LEGACY_GAME_AREA_ITEM_RESOURCE_ALIASES[String(138 + resourceId * 5)] = resourceId;
-}
-
-for (let resourceId = 73; resourceId <= 77; resourceId += 1) {
-  LEGACY_GAME_AREA_ITEM_RESOURCE_ALIASES[String(656 + (resourceId - 73) * 3)] = resourceId;
-}
-
-for (let resourceId = 83; resourceId <= 87; resourceId += 1) {
-  LEGACY_GAME_AREA_ITEM_RESOURCE_ALIASES[String(750 + (resourceId - 83))] = resourceId;
-}
-
-for (let resourceId = 90; resourceId <= 94; resourceId += 1) {
-  LEGACY_GAME_AREA_ITEM_RESOURCE_ALIASES[String(755 + (resourceId - 90))] = resourceId;
-}
-
-for (let resourceId = 97; resourceId <= 101; resourceId += 1) {
-  LEGACY_GAME_AREA_ITEM_RESOURCE_ALIASES[String(760 + (resourceId - 97))] = resourceId;
-}
-
-Object.assign(LEGACY_GAME_AREA_ITEM_RESOURCE_ALIASES, {
-  "765": 66,
-  "766": 67,
-  "767": 69,
-  "768": 70,
-  "769": 80,
-  "770": 81,
-  "771": 82,
-  "772": 26,
-  "773": 27,
-  "774": 28,
-  "775": 29,
-  "776": 30,
-  "777": 88,
-  "778": 95,
-  "779": 78,
-  "780": 102,
-  "781": 31,
-  "782": 32,
-  "783": 33,
-  "784": 34,
-  "785": 35,
-  "786": 89,
-  "787": 96,
-  "788": 79,
-  "789": 103,
-});
-
 function createCnOnlyAllMemberAreaItem(areaItemId: number, nameCn: string, maxLevel: number): BandoriAreaItemMetadata {
   const names: Array<string | null> = [null, null, null, nameCn, null];
   const level = Array.from({ length: REGION_COUNT }, () => maxLevel);
@@ -168,6 +94,5 @@ export async function fetchBandoriAreaItems(): Promise<Record<string, BandoriAre
 export async function fetchBandoriAreaItemsMetadata() {
   return {
     areaItems: await fetchBandoriAreaItems(),
-    gameAreaItemResourceAliases: LEGACY_GAME_AREA_ITEM_RESOURCE_ALIASES,
   };
 }

@@ -76,7 +76,6 @@ type ItemsPayload = {
 type MetadataPayload = {
   characters: CharacterRecord[];
   areaItems: Record<string, AreaItemMetadata>;
-  gameAreaItemResourceAliases: Record<string, number>;
 };
 
 type CharacterGroup = {
@@ -118,80 +117,6 @@ function itemsFromProfilePayload(payload: UserGameProfilePayload): ItemsPayload 
   };
 }
 
-const clientGameAreaItemResourceAliases: Record<string, number> = {
-  "295": 59,
-  "340": 68,
-  "477": 72,
-  "478": 72,
-  "479": 72,
-  "480": 72,
-  "481": 72,
-  "697": 56,
-  "698": 57,
-  "699": 58,
-  "700": 60,
-};
-
-for (let resourceId = 1; resourceId <= 35; resourceId += 1) {
-  clientGameAreaItemResourceAliases[String(348 + resourceId * 5)] = resourceId;
-}
-
-for (let resourceId = 56; resourceId <= 60; resourceId += 1) {
-  clientGameAreaItemResourceAliases[String(291 + (resourceId - 56) * 5)] = resourceId;
-}
-
-for (let resourceId = 66; resourceId <= 70; resourceId += 1) {
-  clientGameAreaItemResourceAliases[String(331 + (resourceId - 66) * 5)] = resourceId;
-}
-
-for (let resourceId = 73; resourceId <= 103; resourceId += 1) {
-  clientGameAreaItemResourceAliases[String(138 + resourceId * 5)] = resourceId;
-}
-
-for (let resourceId = 73; resourceId <= 77; resourceId += 1) {
-  clientGameAreaItemResourceAliases[String(656 + (resourceId - 73) * 3)] = resourceId;
-}
-
-for (let resourceId = 83; resourceId <= 87; resourceId += 1) {
-  clientGameAreaItemResourceAliases[String(750 + (resourceId - 83))] = resourceId;
-}
-
-for (let resourceId = 90; resourceId <= 94; resourceId += 1) {
-  clientGameAreaItemResourceAliases[String(755 + (resourceId - 90))] = resourceId;
-}
-
-for (let resourceId = 97; resourceId <= 101; resourceId += 1) {
-  clientGameAreaItemResourceAliases[String(760 + (resourceId - 97))] = resourceId;
-}
-
-Object.assign(clientGameAreaItemResourceAliases, {
-  "765": 66,
-  "766": 67,
-  "767": 69,
-  "768": 70,
-  "769": 80,
-  "770": 81,
-  "771": 82,
-  "772": 26,
-  "773": 27,
-  "774": 28,
-  "775": 29,
-  "776": 30,
-  "777": 88,
-  "778": 95,
-  "779": 78,
-  "780": 102,
-  "781": 31,
-  "782": 32,
-  "783": 33,
-  "784": 34,
-  "785": 35,
-  "786": 89,
-  "787": 96,
-  "788": 79,
-  "789": 103,
-});
-
 async function requestProfilePayload(profileId: string): Promise<UserGameProfilePayload> {
   if (isLocalGameProfileId(profileId)) {
     return readLocalGameProfilePayload(profileId);
@@ -232,13 +157,11 @@ async function requestMetadata(): Promise<MetadataPayload> {
   const characterData = parseApiSuccessData<{ characters?: CharacterRecord[] }>(charactersPayload);
   const areaItemData = parseApiSuccessData<{
     areaItems?: Record<string, AreaItemMetadata>;
-    gameAreaItemResourceAliases?: Record<string, number>;
   }>(areaItemsPayload);
 
   return {
     characters: Array.isArray(characterData?.characters) ? characterData.characters : [],
     areaItems: areaItemData?.areaItems ?? {},
-    gameAreaItemResourceAliases: areaItemData?.gameAreaItemResourceAliases ?? {},
   };
 }
 
@@ -276,9 +199,7 @@ function resolveAreaItemId(areaItemId: number | null, metadata: MetadataPayload)
     return areaItemId;
   }
 
-  return metadata.gameAreaItemResourceAliases[String(areaItemId)]
-    ?? clientGameAreaItemResourceAliases[String(areaItemId)]
-    ?? areaItemId;
+  return areaItemId;
 }
 
 function getAreaItemMaxLevel(areaItem: AreaItemMetadata | undefined, currentLevel: number): number {
@@ -475,7 +396,6 @@ export default function GameProfileItemsPage({ params }: { params: Promise<{ pro
   const [metadata, setMetadata] = useState<MetadataPayload>({
     characters: [],
     areaItems: {},
-    gameAreaItemResourceAliases: {},
   });
   const [activeTab, setActiveTab] = useState<"area" | "characters">("area");
   const [editing, setEditing] = useState(false);
