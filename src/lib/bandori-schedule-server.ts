@@ -108,6 +108,13 @@ function isScheduleDeletionPayload(event: BandoriScheduleWritePayload) {
   return !event.predictedStart && !event.predictedEnd;
 }
 
+function canonicalizeScheduleOrder(events: BandoriScheduleWritePayload[]): BandoriScheduleWritePayload[] {
+  return events.map((event, index) => ({
+    ...event,
+    sortOrder: index,
+  }));
+}
+
 function normalizeExternalErrorText(value: string | null | undefined): string | null {
   if (!value) {
     return null;
@@ -401,7 +408,9 @@ export async function saveBandoriScheduleEvents(
     return shouldPersistScheduleEvent(event, source, nowMs, todayChinaDate);
   });
 
-  const upsertEvents = editableEvents.filter((event) => !isScheduleDeletionPayload(event));
+  const upsertEvents = canonicalizeScheduleOrder(
+    editableEvents.filter((event) => !isScheduleDeletionPayload(event)),
+  );
 
   if (upsertEvents.length === 0) {
     if (didMutate) {

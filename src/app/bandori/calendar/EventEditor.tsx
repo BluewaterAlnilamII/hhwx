@@ -120,6 +120,21 @@ function recalculateFrom(events: EditableEvent[], fromIndex: number, lockedUntil
   return result;
 }
 
+function renumberEvents(events: EditableEvent[]): EditableEvent[] {
+  return events.map((event, index) => ({
+    ...event,
+    sortOrder: index,
+  }));
+}
+
+function renumberAndRecalculateFrom(
+  events: EditableEvent[],
+  fromIndex: number,
+  lockedUntilDate: string | null,
+): EditableEvent[] {
+  return recalculateFrom(renumberEvents(events), Math.max(0, fromIndex), lockedUntilDate);
+}
+
 function formatDate(date: Date): string {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, "0");
@@ -280,12 +295,12 @@ export default function EventEditor({ allEvents, onSaved }: EventEditorProps) {
     setEditableEvents((previous) => {
       const oldIndex = previous.findIndex((item) => item.eventId === active.id);
       const newIndex = previous.findIndex((item) => item.eventId === over.id);
-      const reordered = arrayMove(previous, oldIndex, newIndex).map((item, index) => ({
-        ...item,
-        sortOrder: index,
-      }));
+      if (oldIndex === -1 || newIndex === -1) {
+        return previous;
+      }
 
-      return recalculateFrom(reordered, Math.min(oldIndex, newIndex), lockedUntilDate);
+      const reordered = arrayMove(previous, oldIndex, newIndex);
+      return renumberAndRecalculateFrom(reordered, Math.min(oldIndex, newIndex), lockedUntilDate);
     });
   }, [lockedUntilDate]);
 
@@ -329,7 +344,7 @@ export default function EventEditor({ allEvents, onSaved }: EventEditorProps) {
         .map((item, sortIndex) => ({ ...item, sortOrder: sortIndex }));
 
       const newIndex = sorted.findIndex((item) => item.eventId === id);
-      return recalculateFrom(sorted, newIndex + 1, lockedUntilDate);
+      return renumberAndRecalculateFrom(sorted, newIndex + 1, lockedUntilDate);
     });
   }, [earliestSelectableDate, lockedUntilDate]);
 
@@ -354,7 +369,7 @@ export default function EventEditor({ allEvents, onSaved }: EventEditorProps) {
         durationDays: diffDays,
       };
 
-      return recalculateFrom(updated, index + 1, lockedUntilDate);
+      return renumberAndRecalculateFrom(updated, index + 1, lockedUntilDate);
     });
   }, [lockedUntilDate]);
 
@@ -377,7 +392,7 @@ export default function EventEditor({ allEvents, onSaved }: EventEditorProps) {
         predictedEnd: formatDate(endDate),
       };
 
-      return recalculateFrom(updated, index + 1, lockedUntilDate);
+      return renumberAndRecalculateFrom(updated, index + 1, lockedUntilDate);
     });
   }, [lockedUntilDate]);
 
@@ -390,7 +405,7 @@ export default function EventEditor({ allEvents, onSaved }: EventEditorProps) {
 
       const updated = [...previous];
       updated[index] = { ...updated[index], hasRestDay: !updated[index].hasRestDay };
-      return recalculateFrom(updated, index, lockedUntilDate);
+      return renumberAndRecalculateFrom(updated, index, lockedUntilDate);
     });
   }, [lockedUntilDate]);
 
