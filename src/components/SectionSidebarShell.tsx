@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { X } from "lucide-react";
@@ -23,13 +23,28 @@ function isItemActive(pathname: string, item: SectionSidebarNavItem) {
 
 export default function SectionSidebarShell({ children, isMobileDrawerOpen, onCloseMobileDrawer }: SectionSidebarShellProps) {
   const pathname = usePathname();
+  const [prefetchIntents, setPrefetchIntents] = useState<Record<string, boolean>>({});
   const isHomePage = pathname === "/";
   const contentWrapperClassName = isHomePage
     ? "relative h-full px-4 py-0 sm:px-6 sm:py-0 lg:px-6 lg:py-0"
     : "relative min-h-full px-4 py-5 sm:px-6 lg:px-8 lg:py-6";
 
+  const requestPrefetch = (href: string) => {
+    setPrefetchIntents((currentValue) => {
+      if (currentValue[href]) {
+        return currentValue;
+      }
+
+      return {
+        ...currentValue,
+        [href]: true,
+      };
+    });
+  };
+
   const renderNavItem = (item: SectionSidebarNavItem) => {
     const active = isItemActive(pathname, item);
+    const shouldPrefetch = !active && prefetchIntents[item.href];
     const itemClassName = cn(
       "block rounded-[14px] px-4 py-2.5 text-[15px] font-medium transition duration-200",
       active
@@ -41,6 +56,9 @@ export default function SectionSidebarShell({ children, isMobileDrawerOpen, onCl
       <Link
         key={item.id}
         href={item.href}
+        prefetch={shouldPrefetch ? null : false}
+        onPointerEnter={() => requestPrefetch(item.href)}
+        onFocus={() => requestPrefetch(item.href)}
         onClick={onCloseMobileDrawer}
         aria-current={active ? "page" : undefined}
         className={itemClassName}

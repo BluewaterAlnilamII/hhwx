@@ -160,9 +160,9 @@ function AuthConfirmPageContent() {
 
     let active = true;
 
-    const syncStore = async () => {
+    const syncStore = async (options?: { forceRefresh?: boolean }) => {
       try {
-        const summary = await readAuthProfileSummary();
+        const summary = await readAuthProfileSummary(null, options);
         if (!summary) {
           logout();
           return null;
@@ -216,7 +216,8 @@ function AuthConfirmPageContent() {
         return;
       }
 
-      if (searchParams.get("verify_email") === "1" || type === "email_change") {
+      const shouldVerifyEmail = searchParams.get("verify_email") === "1" || type === "email_change";
+      if (shouldVerifyEmail) {
         await confirmAccountEmail();
       }
 
@@ -225,7 +226,7 @@ function AuthConfirmPageContent() {
         setMessage(getSuccessMessage(type));
       }
 
-      await syncStore();
+      await syncStore({ forceRefresh: shouldVerifyEmail });
     };
 
     const run = async () => {

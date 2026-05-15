@@ -181,7 +181,7 @@ export default function AuthPageContent() {
         throw signInError;
       }
 
-      const summary = await readAuthProfileSummary(data.session);
+      const summary = await readAuthProfileSummary(data.session, { forceRefresh: true });
       if (!summary) {
         throw new Error("登录后未能读取账号信息");
       }

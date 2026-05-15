@@ -1,9 +1,10 @@
-import { createClient, type Session, type User } from "@supabase/supabase-js";
-import { ACCOUNT_STATUS_TABLE } from "@/lib/supabase-table-names";
+import { createClient, type Session } from "@supabase/supabase-js";
+import { parseApiSuccessData } from "@/lib/api-contracts";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabasePublishableKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!;
 const DEFAULT_SITE_URL = "http://localhost:3000";
+const AUTH_SUMMARY_CACHE_TTL_MS = 5 * 60 * 1000;
 
 export const supabase = createClient(supabaseUrl, supabasePublishableKey);
 
@@ -14,16 +15,24 @@ export interface AuthProfileSummary {
 	emailVerified: boolean;
 }
 
+type AuthSummaryCacheEntry = {
+	userId: string;
+	value: AuthProfileSummary;
+	updatedAt: number;
+};
+
+type AuthSummaryRequestEntry = {
+	userId: string;
+	forceRefresh: boolean;
+	promise: Promise<AuthProfileSummary | null>;
+};
+
 export type AuthViewMode = "login" | "register" | "forgot-password";
 export type AuthFlashNotice = "signup-email-sent";
 
-function readUserMetadataUsername(user: Pick<User, "user_metadata"> | null | undefined): string | null {
-	const username = typeof user?.user_metadata?.username === "string"
-		? user.user_metadata.username.trim()
-		: "";
-
-	return username || null;
-}
+let authSummaryCache: AuthSummaryCacheEntry | null = null;
+let authSummaryRequestInFlight: AuthSummaryRequestEntry | null = null;
+let authSummaryRequestGeneration = 0;
 
 function trimTrailingSlash(value: string): string {
 	return value.replace(/\/+$/, "");
@@ -86,54 +95,98 @@ export function buildAuthPath(mode: AuthViewMode = "login", nextPath = "/account
 	return `/auth?${params.toString()}`;
 }
 
-async function readUsername(userId: string, fallbackUsername: string | null = null): Promise<string> {
-	const { data, error } = await supabase
-		.from("profiles")
-		.select("username")
-		.eq("id", userId)
-		.maybeSingle();
-
-	if (error) {
-		throw error;
+function readCachedAuthSummary(userId: string): AuthProfileSummary | null {
+	if (!authSummaryCache || authSummaryCache.userId !== userId) {
+		return null;
 	}
 
-	return data?.username ?? fallbackUsername ?? "User";
-}
-
-async function readEmailVerified(userId: string): Promise<boolean> {
-	const { data, error } = await supabase
-		.from(ACCOUNT_STATUS_TABLE)
-		.select("email_verified_at")
-		.eq("user_id", userId)
-		.maybeSingle();
-
-	if (error) {
-		throw error;
+	if (Date.now() - authSummaryCache.updatedAt >= AUTH_SUMMARY_CACHE_TTL_MS) {
+		return null;
 	}
 
-	return Boolean(data?.email_verified_at);
+	return authSummaryCache.value;
 }
 
-export async function readAuthProfileSummary(session?: Session | null): Promise<AuthProfileSummary | null> {
+export function clearAuthProfileSummaryCache(): void {
+	authSummaryCache = null;
+	authSummaryRequestInFlight = null;
+	authSummaryRequestGeneration += 1;
+}
+
+export async function readAuthProfileSummary(
+	session?: Session | null,
+	options?: { forceRefresh?: boolean },
+): Promise<AuthProfileSummary | null> {
 	const activeSession = session ?? await getSafeSession();
 	const user = activeSession?.user;
 
 	if (!user) {
+		clearAuthProfileSummaryCache();
 		return null;
 	}
 
-	const fallbackUsername = readUserMetadataUsername(user);
-	const [username, emailVerified] = await Promise.all([
-		readUsername(user.id, fallbackUsername),
-		readEmailVerified(user.id),
-	]);
+	if (!options?.forceRefresh) {
+		const cachedSummary = readCachedAuthSummary(user.id);
+		if (cachedSummary) {
+			return cachedSummary;
+		}
+	}
 
-	return {
+	const forceRefresh = options?.forceRefresh === true;
+	if (
+		authSummaryRequestInFlight?.userId === user.id
+		&& (!forceRefresh || authSummaryRequestInFlight.forceRefresh)
+	) {
+		return authSummaryRequestInFlight.promise;
+	}
+
+	const requestGeneration = authSummaryRequestGeneration + 1;
+	authSummaryRequestGeneration = requestGeneration;
+	const requestPromise = fetch("/api/account/auth-summary", {
+		headers: {
+			Authorization: `Bearer ${activeSession.access_token}`,
+		},
+	})
+		.then(async (response) => {
+			if (response.status === 401) {
+				clearAuthProfileSummaryCache();
+				return null;
+			}
+
+			if (!response.ok) {
+				throw new Error(`Auth summary request failed: HTTP ${response.status}`);
+			}
+
+			const summary = parseApiSuccessData<AuthProfileSummary>(await response.json());
+			if (!summary) {
+				throw new Error("Auth summary response is invalid");
+			}
+
+			if (authSummaryRequestGeneration !== requestGeneration) {
+				return readCachedAuthSummary(summary.userId);
+			}
+
+			authSummaryCache = {
+				userId: summary.userId,
+				value: summary,
+				updatedAt: Date.now(),
+			};
+
+			return summary;
+		})
+		.finally(() => {
+			if (authSummaryRequestInFlight?.promise === requestPromise) {
+				authSummaryRequestInFlight = null;
+			}
+		});
+
+	authSummaryRequestInFlight = {
 		userId: user.id,
-		username,
-		email: user.email ?? null,
-		emailVerified,
+		forceRefresh,
+		promise: requestPromise,
 	};
+
+	return requestPromise;
 }
 
 function isInvalidRefreshTokenError(error: unknown): boolean {

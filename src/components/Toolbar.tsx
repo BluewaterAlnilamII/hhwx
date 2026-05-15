@@ -5,7 +5,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { Menu, X } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { getUsernameAvatarLabel } from "@/lib/username-policy";
-import { buildAuthPath, readAuthProfileSummary, supabase } from "@/lib/supabase";
+import { buildAuthPath, clearAuthProfileSummaryCache, readAuthProfileSummary, supabase } from "@/lib/supabase";
 import { useGameStore } from "@/store/useGameStore";
 
 interface ToolbarProps {
@@ -23,34 +23,19 @@ export default function Toolbar({ showDebugButton = true, isSidebarOpen = false,
     const loginHref = buildAuthPath("login", returnPath);
     const shouldShowDebugButton = showDebugButton && pathname === "/";
 
-    // Restore session on mount
     useEffect(() => {
-        const syncAuthState = async () => {
-            const summary = await readAuthProfileSummary();
-            if (!summary) {
-                logout();
-                return;
-            }
+        let disposed = false;
 
-            setAuth({
-                userId: summary.userId,
-                username: summary.username,
-                userEmail: summary.email,
-                emailVerified: summary.emailVerified,
-            });
-        };
+        const applyAuthSummary = async (
+            session: Parameters<typeof readAuthProfileSummary>[0],
+            options?: { forceRefresh?: boolean },
+        ) => {
+            try {
+                const summary = await readAuthProfileSummary(session, options);
+                if (disposed) {
+                    return;
+                }
 
-        void syncAuthState();
-
-        const {
-            data: { subscription },
-        } = supabase.auth.onAuthStateChange((_event, session) => {
-            if (!session) {
-                logout();
-                return;
-            }
-
-            void readAuthProfileSummary(session).then((summary) => {
                 if (!summary) {
                     logout();
                     return;
@@ -62,10 +47,41 @@ export default function Toolbar({ showDebugButton = true, isSidebarOpen = false,
                     userEmail: summary.email,
                     emailVerified: summary.emailVerified,
                 });
+            } catch (error) {
+                console.error("Failed to restore auth summary:", error);
+                if (!disposed) {
+                    logout();
+                }
+            }
+        };
+
+        const {
+            data: { subscription },
+        } = supabase.auth.onAuthStateChange((event, session) => {
+            if (event === "SIGNED_OUT") {
+                clearAuthProfileSummaryCache();
+                logout();
+                return;
+            }
+
+            if (!session) {
+                logout();
+                return;
+            }
+
+            if (event === "TOKEN_REFRESHED") {
+                return;
+            }
+
+            void applyAuthSummary(session, {
+                forceRefresh: event === "USER_UPDATED",
             });
         });
 
-        return () => subscription.unsubscribe();
+        return () => {
+            disposed = true;
+            subscription.unsubscribe();
+        };
     }, [setAuth, logout]);
 
     useEffect(() => {
@@ -85,6 +101,7 @@ export default function Toolbar({ showDebugButton = true, isSidebarOpen = false,
 
     const handleLogout = async () => {
         await supabase.auth.signOut();
+        clearAuthProfileSummaryCache();
         logout();
         setShowMenu(false);
     };
