@@ -1,4 +1,4 @@
-const BESTDORI_AREA_ITEMS_URL = "https://bestdori.com/api/areaItems/main.2.json";
+const BESTDORI_AREA_ITEMS_URL = "https://bestdori.com/api/areaItems/main.5.json";
 
 export type BandoriAreaItemMetadata = {
   areaItemId: number;

@@ -1,7 +1,7 @@
 import { LIVE_API_CACHE_CONTROL, PUBLIC_METADATA_API_CACHE_CONTROL, withCacheControl } from "@/lib/api-cache";
 import { jsonError, jsonRouteError, jsonSuccess } from "@/lib/api-response";
 
-const BESTDORI_SONGS_URL = "https://bestdori.com/api/songs/all.5.json";
+const BESTDORI_SONGS_URL = "https://bestdori.com/api/songs/all.7.json";
 const TITLE_PREFERENCE_ORDER = [3, 2, 1, 0, 4] as const;
 
 type BestdoriSongMetadata = {
