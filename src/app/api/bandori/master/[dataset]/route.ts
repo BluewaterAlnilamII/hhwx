@@ -9,6 +9,7 @@ import {
   BESTDORI_MASTER_DATASET_ALIASES,
   BESTDORI_MASTER_DATASETS,
   fetchBestdoriMasterDataset,
+  filterBestdoriSongsForJpOrCn,
   type BestdoriMasterDatasetKey,
 } from "@/lib/bestdori-master-data";
 
@@ -17,9 +18,11 @@ export const dynamic = "force-dynamic";
 const readBestdoriMasterDataset = unstable_cache(
   async (dataset: BestdoriMasterDatasetKey) => ({
     dataset,
-    payload: await fetchBestdoriMasterDataset(dataset),
+    payload: dataset === "songs"
+      ? filterBestdoriSongsForJpOrCn(await fetchBestdoriMasterDataset(dataset))
+      : await fetchBestdoriMasterDataset(dataset),
   }),
-  ["bandori-master-dataset-route:v1"],
+  ["bandori-master-dataset-route:v2"],
   { revalidate: 86400 },
 );
 

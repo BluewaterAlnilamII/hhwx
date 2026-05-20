@@ -13,8 +13,7 @@ export async function GET(
     const profileId = normalizeProfileId(rawProfileId);
     const profile = await exportBestdoriGameProfile(user.id, profileId);
 
-    // The export is Bestdori-compatible and carries HHWX-only fields in a top-level
-    // extension object so third-party readers can ignore it.
+    // 导出保留兼容格式，并把 HHWX 专用字段放在顶层扩展里，方便其他读取方忽略。
     return NextResponse.json(profile);
   } catch (error) {
     console.error("Game profile export API error:", error);

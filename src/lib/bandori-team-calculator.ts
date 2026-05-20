@@ -1,3 +1,9 @@
+/*
+ * Bandori 队伍计算基础层。
+ *
+ * 本模块只处理单张卡、区域道具、活动加成和技能上下文解析等纯计算。
+ * 搜索算法不在这里实现，方便单曲、组曲和验证脚本复用同一套综合力与技能口径。
+ */
 export type BandoriCardAttribute = "powerful" | "cool" | "happy" | "pure";
 
 export type BandoriJudge = "perfect" | "great" | "good" | "bad" | "miss";
@@ -27,6 +33,8 @@ export type BandoriCharacterBonusState = {
   characterId: number;
   potential?: Partial<Record<BandoriParamKey, number | null>>;
   missionBonusPercent?: Partial<Record<BandoriParamKey, number | null>>;
+  missionBonusPercentByType?: Partial<Record<"collection" | "training", Partial<Record<BandoriParamKey, number | null>>>>;
+  missionBonusRoundingMode?: "combined" | "split-by-type";
 };
 
 export type BestdoriParamObject = {
@@ -127,6 +135,11 @@ export type BandoriCardEventBonus = {
   pointBonusRate: number;
 };
 
+export type BandoriSupportCardEventBonus = {
+  supportBonusRate: number;
+  supportPower: number;
+};
+
 export type CalculatedBandoriTeam = {
   cards: CalculatedBandoriCard[];
   context: BandoriTeamContext;
@@ -160,8 +173,7 @@ const SCORE_EFFECT_TYPES = new Set([
   "score_rate_up_with_perfect",
 ]);
 
-// Bestdori's current card power helper uses rarity-specific growth curves for
-// non-max levels instead of linear interpolation.
+// 非满级卡牌按稀有度成长曲线计算，不能用线性插值近似，否则低等级卡会稳定偏差。
 export const BANDORI_CARD_LEVEL_GROWTH_CURVES: readonly (readonly number[])[] = [
   [0, 0.027741577148418566, 0.05827079766928518, 0.09157023784727926, 0.12763157919247634, 0.16646335421245123, 0.2080467329810958, 0.2523725635815978, 0.29945970809515476, 0.3493549269647502, 0.4019829891560635, 0.45737145350963615, 0.5155589441139967, 0.5765070194790465, 0.6401879689268755, 0.7066399177484718, 0.77583438444173, 0.8477702087090347, 0.922495295719485, 1],
   [0, 0.017856719467337606, 0.036896819500198366, 0.05712720353262898, 0.0785481410852151, 0.10115068684022054, 0.12493367020010375, 0.14991873595264252, 0.17609001362625878, 0.20343906942389595, 0.23198087664087155, 0.26171208783900635, 0.2926379539012518, 0.324741136882865, 0.3580344489450513, 0.3925231410698117, 0.4281932552740394, 0.46505212999997836, 0.5031024182461973, 0.5423349324988558, 0.5827566752115649, 0.6243699948827242, 0.6671642798084607, 0.7111523418284023, 0.7563202420759938, 0.802684231316528, 0.8502340870909751, 0.8989700203928614, 0.9488922676005076, 1],
@@ -214,6 +226,10 @@ function sumParamVector(value: BandoriParamVector): number {
 
 function multiplyParamVector(value: BandoriParamVector, rates: BandoriParamVector): BandoriParamVector {
   return [value[0] * rates[0], value[1] * rates[1], value[2] * rates[2]];
+}
+
+export function calculateBandoriRoundedParamBonusPower(value: BandoriParamVector, rates: BandoriParamVector): number {
+  return value[0] * rates[0] + value[1] * rates[1] + value[2] * rates[2];
 }
 
 function bestdoriParamToVector(value: unknown): BandoriParamVector {
@@ -291,6 +307,7 @@ function getCardLevelGrowthRate(rarity: number, level: number, maxLevel: number)
     return 1;
   }
 
+  // master 数据存在旧卡和异常输入，缺失曲线时才退回线性值，正常卡不能走这个近似。
   const curve = BANDORI_CARD_LEVEL_GROWTH_CURVES[rarity - 1];
   return curve?.[level - 1] ?? (maxLevel > 1 ? (level - 1) / (maxLevel - 1) : 0);
 }
@@ -302,6 +319,17 @@ function getCharacterMissionBonusVector(
   const bonus = characterBonusesById[String(characterId)];
   return PARAM_KEYS.map((key) => (
     (toFiniteNumber(bonus?.missionBonusPercent?.[key]) ?? 0) / 100
+  )) as unknown as BandoriParamVector;
+}
+
+function getCharacterMissionBonusVectorByType(
+  characterId: number,
+  characterBonusesById: Record<string, BandoriCharacterBonusState | undefined>,
+  bonusType: "collection" | "training",
+): BandoriParamVector {
+  const bonus = characterBonusesById[String(characterId)];
+  return PARAM_KEYS.map((key) => (
+    (toFiniteNumber(bonus?.missionBonusPercentByType?.[bonusType]?.[key]) ?? 0) / 100
   )) as unknown as BandoriParamVector;
 }
 
@@ -418,9 +446,26 @@ export function calculateBandoriCard(
   }
 
   const potentialRates = getCharacterPotentialVector(characterId, characterBonusesById);
-  const missionBonusRates = getCharacterMissionBonusVector(characterId, characterBonusesById);
-  const characterBonusRates = addParamVector(potentialRates, missionBonusRates);
-  const characterBonusParam = floorParamVector(multiplyParamVector(baseParam, characterBonusRates));
+  const bonus = characterBonusesById[String(characterId)];
+  const hasMissionBonusTypes = Boolean(bonus?.missionBonusPercentByType);
+  const shouldSplitMissionBonusTypes = bonus?.missionBonusRoundingMode !== "combined";
+  const characterBonusParam = hasMissionBonusTypes && shouldSplitMissionBonusTypes
+    ? addParamVector(
+      addParamVector(
+        floorParamVector(multiplyParamVector(baseParam, potentialRates)),
+        floorParamVector(multiplyParamVector(baseParam, getCharacterMissionBonusVectorByType(characterId, characterBonusesById, "collection"))),
+      ),
+      floorParamVector(multiplyParamVector(baseParam, getCharacterMissionBonusVectorByType(characterId, characterBonusesById, "training"))),
+    )
+    : hasMissionBonusTypes
+      ? addParamVector(
+        floorParamVector(multiplyParamVector(baseParam, potentialRates)),
+        floorParamVector(multiplyParamVector(baseParam, getCharacterMissionBonusVector(characterId, characterBonusesById))),
+      )
+    : floorParamVector(multiplyParamVector(
+      baseParam,
+      addParamVector(potentialRates, getCharacterMissionBonusVector(characterId, characterBonusesById)),
+    ));
   const characterParam = addParamVector(baseParam, characterBonusParam);
   const bandId = toFiniteNumber(charactersById[String(characterId)]?.bandId);
 
@@ -475,7 +520,7 @@ export function calculateBandoriAreaItemPower(
           return sum;
         }
 
-        return sum + sumParamVector(multiplyParamVector(card.characterParam, rates));
+        return sum + calculateBandoriRoundedParamBonusPower(card.characterParam, rates);
       }, 0);
 
       if (groupPower > bestGroupPower) {
@@ -491,7 +536,7 @@ export function calculateBandoriAreaItemPower(
   }
 
   return {
-    power: Math.floor(power),
+    power,
     selectedAreaItemIds,
   };
 }
@@ -503,11 +548,12 @@ export function calculateBandoriSelectedAreaItemPower(
   selectedAreaItemIds: number[],
   server = 3,
 ): { power: number; selectedAreaItemIds: number[] } {
-  const rawPower = selectedAreaItemIds.reduce((power, areaItemId) => {
+  // 搜索层会枚举一个全局区域配置；这里按传入配置求值，不能再逐 group 自行取最大。
+  const power = selectedAreaItemIds.reduce((totalPower, areaItemId) => {
     const areaItem = areaItemsById[String(areaItemId)];
     const level = Math.max(0, toInteger(userAreaItemsById[String(areaItemId)]?.level));
     if (!areaItem || level <= 0) {
-      return power;
+      return totalPower;
     }
 
     const targetAttributes = Array.isArray(areaItem.targetAttributes) ? areaItem.targetAttributes : [];
@@ -518,17 +564,17 @@ export function calculateBandoriSelectedAreaItemPower(
       (getRegionalNumber(areaItem.visual?.[String(level)], server) ?? 0) / 100,
     ];
 
-    return power + cards.reduce((cardPower, card) => {
+    return totalPower + cards.reduce((cardPower, card) => {
       if (!targetAttributes.includes(card.attribute) || card.bandId === null || !targetBandIds.includes(card.bandId)) {
         return cardPower;
       }
 
-      return cardPower + sumParamVector(multiplyParamVector(card.characterParam, rates));
+      return cardPower + calculateBandoriRoundedParamBonusPower(card.characterParam, rates);
     }, 0);
   }, 0);
 
   return {
-    power: Math.floor(rawPower),
+    power,
     selectedAreaItemIds,
   };
 }
@@ -545,14 +591,32 @@ export function calculateBandoriCardEventBonus(
   const matchParameterPercent = matchesAttributeAndCharacter ? (toFiniteNumber(eventBonus?.parameterPercent) ?? 0) / 100 : 0;
   const matchPointPercent = matchesAttributeAndCharacter ? (toFiniteNumber(eventBonus?.pointPercent) ?? 0) / 100 : 0;
   const baseRate = attributePercent + characterPercent + memberPercent + masterRankPercent + matchParameterPercent;
-  const roomRates = matchesAttributeAndCharacter
+  const parameterRates = matchesAttributeAndCharacter
     ? addParamVector([baseRate, baseRate, baseRate], getEventRoomParameterPercentVector(eventBonus))
     : [baseRate, baseRate, baseRate] as BandoriParamVector;
 
   return {
-    parameterBonus: multiplyParamVector(card.characterParam, [baseRate, baseRate, baseRate]),
-    parameterBonusWithRoom: multiplyParamVector(card.characterParam, roomRates),
+    parameterBonus: multiplyParamVector(card.characterParam, parameterRates),
+    parameterBonusWithRoom: multiplyParamVector(card.characterParam, parameterRates),
     pointBonusRate: attributePercent + characterPercent + memberPercent + masterRankPercent + matchPointPercent,
+  };
+}
+
+export function calculateBandoriSupportCardEventBonus(
+  card: CalculatedBandoriCard,
+  eventBonus: BandoriEventBonus | null | undefined,
+): BandoriSupportCardEventBonus {
+  const supportBonusRate = Math.max(
+    0,
+    getEventAttributePercent(eventBonus, card.attribute)
+      + getEventCharacterPercent(eventBonus, card.characterId)
+      + getEventMemberPercent(eventBonus, card.cardId)
+      + getEventMasterRankPercent(eventBonus, card.rarity, card.masterRank),
+  );
+
+  return {
+    supportBonusRate,
+    supportPower: card.totalPower * (1 + supportBonusRate),
   };
 }
 
@@ -606,6 +670,7 @@ export function calculateBandoriTeamPower(options: {
   };
 }
 
+// 技能解析必须包含队伍上下文：同团/同属性条件技能在队伍确定前不能复用同一个缓存值。
 export function buildBandoriSkillCacheKey(
   skillId: number,
   skillLevel: number,
@@ -678,6 +743,7 @@ export function getBandoriScoreSkillMultiplier(
   effect: ResolvedBandoriScoreSkillEffect,
   judge: BandoriJudge,
 ): number {
+  // 当前搜索准率模型只区分 PERFECT/GREAT；GOOD/BAD/MISS 打断由调用侧决定是否生成。
   if (effect.condition === "none") {
     return 1 + effect.valuePercent / 100;
   }

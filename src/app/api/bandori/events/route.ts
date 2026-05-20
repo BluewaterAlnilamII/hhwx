@@ -14,11 +14,12 @@ export const dynamic = "force-dynamic";
 const readBandoriEventsListResponse = unstable_cache(
   async () => {
     const records = await fetchBandoriEventRecords();
-    return toBandoriEventsListResponse(records);
+    const recordsByEventId = [...records].sort((left, right) => left.event_id - right.event_id);
+    return toBandoriEventsListResponse(recordsByEventId);
   },
   // 当 events DTO 结构发生破坏性调整时，需要同步提升 cache key 版本，
   // 否则 data cache 可能继续回放旧 schema 的对象形状。
-  ["bandori-events-route:v3"],
+  ["bandori-events-route:v4"],
   { revalidate: 300, tags: [BANDORI_EVENTS_CACHE_TAG, BANDORI_SCHEDULE_CACHE_TAG] },
 );
 

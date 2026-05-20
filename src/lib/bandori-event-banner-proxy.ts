@@ -26,7 +26,7 @@ type UpstreamBannerFailure = {
 // 这里按“真实 event bundle -> 当前请求 bundle -> legacy homebanner”排序尝试，
 // 是为了优先命中更稳定的原始活动资源路径，同时保留 banner_eventXXX 旧值的回退能力。
 // 老活动往往只有 event/{bundle}/images_rip/banner.png；
-// 如果一开始就把 banner_eventXXX 当主资源名，更容易命中 Bestdori 返回的 HTML 占位页。
+// 如果一开始就把 banner_eventXXX 当主资源名，更容易命中上游返回的 HTML 占位页。
 async function resolveEventBannerCandidateUrls(region: BandoriAssetRegion, bundleName: string): Promise<string[]> {
   const candidateUrls = new Set<string>();
   const legacyEventId = extractBandoriEventIdFromLegacyBannerBundleName(bundleName);
@@ -57,7 +57,7 @@ async function resolveEventBannerCandidateUrls(region: BandoriAssetRegion, bundl
 }
 
 // 这里必须把“200 但不是 image/*”和“空 body”都当成失败，
-// 因为 Bestdori 对不存在的资源经常返回 HTML 页面而不是 404。
+// 因为上游对不存在的资源经常返回 HTML 页面而不是 404。
 // 如果把这类响应当成功图片透传，再叠加长缓存头，就会把错误页面缓存成稳定静态资源。
 async function fetchUpstreamBannerImage(upstreamUrl: string): Promise<
   | { ok: true; contentType: string; buffer: ArrayBuffer }

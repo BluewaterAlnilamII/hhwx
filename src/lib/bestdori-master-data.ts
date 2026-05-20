@@ -27,6 +27,48 @@ export function isBestdoriChartDifficulty(value: string): value is BestdoriChart
   return (BESTDORI_CHART_DIFFICULTIES as readonly string[]).includes(value);
 }
 
+type BestdoriRegionalMetadata = {
+  musicTitle?: Array<string | null> | null;
+  publishedAt?: Array<string | number | null> | null;
+};
+
+function hasRegionalValue(values: unknown, regionIndex: number): boolean {
+  if (!Array.isArray(values)) {
+    return false;
+  }
+
+  const value = values[regionIndex];
+  if (typeof value === "string") {
+    return value.trim().length > 0;
+  }
+  return value !== null && value !== undefined;
+}
+
+export function isBestdoriSongSupportedByJpOrCn(song: BestdoriRegionalMetadata | null | undefined): boolean {
+  if (!song) {
+    return false;
+  }
+
+  return hasRegionalValue(song.publishedAt, 0)
+    || hasRegionalValue(song.publishedAt, 3)
+    || hasRegionalValue(song.musicTitle, 0)
+    || hasRegionalValue(song.musicTitle, 3);
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+export function filterBestdoriSongsForJpOrCn(payload: unknown): unknown {
+  if (!isRecord(payload)) {
+    return payload;
+  }
+
+  return Object.fromEntries(
+    Object.entries(payload).filter(([, song]) => isBestdoriSongSupportedByJpOrCn(song as BestdoriRegionalMetadata)),
+  );
+}
+
 function buildBestdoriApiUrl(path: string): string {
   return `${BESTDORI_API_ORIGIN}/${path}`;
 }

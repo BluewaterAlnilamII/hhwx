@@ -244,8 +244,8 @@ export function importBestdoriGameProfilePayload(bestdoriProfile: BestdoriProfil
   }
 
   const bestdoriPotentials = normalizedProfile.potentials;
-  // Public profile JSON always uses Bestdori's area-item level encoding.
-  // The HHWX extension only restores fields that Bestdori does not model.
+  // 公开档案 JSON 沿用兼容格式的区域道具等级编码。
+  // HHWX 扩展只恢复兼容格式未覆盖的字段。
   normalizedProfile.items = Object.fromEntries(
     Object.entries(normalizedProfile.items).map(([itemKey, levels]) => [
       itemKey,

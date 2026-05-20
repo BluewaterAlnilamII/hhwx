@@ -46,6 +46,12 @@ export const siteNavigationGroups: SectionSidebarNavGroup[] = [
         label: "游戏档案",
         matchMode: "prefix",
       },
+      {
+        id: "teambuilder",
+        href: "/bandori/teambuilder",
+        label: "组队计算器",
+        matchMode: "prefix",
+      },
     ],
   },
 ];

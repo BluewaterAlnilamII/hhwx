@@ -1,14 +1,16 @@
 import { LIVE_API_CACHE_CONTROL, PUBLIC_METADATA_API_CACHE_CONTROL, withCacheControl } from "@/lib/api-cache";
 import { jsonError, jsonRouteError, jsonSuccess } from "@/lib/api-response";
+import { isBestdoriSongSupportedByJpOrCn } from "@/lib/bestdori-master-data";
 
 const BESTDORI_SONGS_URL = "https://bestdori.com/api/songs/all.7.json";
-const TITLE_PREFERENCE_ORDER = [3, 2, 1, 0, 4] as const;
+const TITLE_PREFERENCE_ORDER = [3, 0] as const;
 
 type BestdoriSongMetadata = {
   musicTitle?: Array<string | null>;
+  publishedAt?: Array<string | number | null>;
 };
 
-// 当前 songs 仍直接请求 Bestdori，是因为我们本地只同步了活动目录三表，
+// 当前 songs 仍直接请求上游，是因为我们本地只同步了活动目录三表，
 // 还没有把歌曲名称目录纳入数据库。这里先把外部依赖收敛到单一路由，
 // 未来若补 songs 同步任务，只需要替换这一层实现即可。
 
@@ -78,7 +80,12 @@ export async function GET(request: Request) {
     const songs: Record<string, string> = {};
 
     for (const songId of songIds) {
-      const title = pickBestSongTitle(payload[String(songId)]?.musicTitle);
+      const metadata = payload[String(songId)];
+      if (!isBestdoriSongSupportedByJpOrCn(metadata)) {
+        continue;
+      }
+
+      const title = pickBestSongTitle(metadata?.musicTitle);
       if (title) {
         songs[String(songId)] = title;
       }
