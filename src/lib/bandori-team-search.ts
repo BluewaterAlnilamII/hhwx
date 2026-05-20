@@ -180,7 +180,7 @@ export type BandoriTeamSearchEventType =
 
 export type BandoriTeamSearchLiveType = "free" | "multi" | "challenge" | "versus";
 
-export type BandoriTeamSearchTarget = "bandPower" | "score" | "eventPoint";
+export type BandoriTeamSearchTarget = "score" | "eventPoint";
 
 export type BandoriTeamSearchEventMode = "none" | "parameterPower" | "pointBonus";
 
@@ -3095,6 +3095,9 @@ function isSearchUpperBoundBelowResultThreshold(
   if (isUpperBoundBelowThreshold(targetUpperBound, thresholdResult.targetValue)) {
     return true;
   }
+  if (thresholdResult.target === "eventPoint" && targetUpperBound === thresholdResult.targetValue) {
+    return false;
+  }
   return targetUpperBound === thresholdResult.targetValue && scoreUpperBound < thresholdResult.score;
 }
 
@@ -4039,14 +4042,31 @@ function buildSeedTeams(
     .slice(0, maxSeedTeams);
 }
 
-function sortResults(results: BandoriTeamSearchResult[]): void {
-  results.sort((left, right) => (
-    right.targetValue - left.targetValue
-    || right.score - left.score
+function getResultCardIdsKey(result: BandoriTeamSearchResult): string {
+  return result.cards.map((card) => card.cardId).join(",");
+}
+
+function compareResults(left: BandoriTeamSearchResult, right: BandoriTeamSearchResult): number {
+  const targetComparison = right.targetValue - left.targetValue;
+  if (targetComparison !== 0) {
+    return targetComparison;
+  }
+
+  if (left.target === "eventPoint" && right.target === "eventPoint") {
+    return right.totalPower - left.totalPower
+      || right.score - left.score
+      || right.skills[0].skillId - left.skills[0].skillId
+      || getResultCardIdsKey(left).localeCompare(getResultCardIdsKey(right));
+  }
+
+  return right.score - left.score
     || right.totalPower - left.totalPower
     || right.skills[0].skillId - left.skills[0].skillId
-    || left.cards.map((card) => card.cardId).join(",").localeCompare(right.cards.map((card) => card.cardId).join(","))
-  ));
+    || getResultCardIdsKey(left).localeCompare(getResultCardIdsKey(right));
+}
+
+function sortResults(results: BandoriTeamSearchResult[]): void {
+  results.sort(compareResults);
   results.forEach((result, index) => {
     result.rank = index + 1;
   });
@@ -4097,7 +4117,7 @@ function getTeamCardSetKey(cards: Array<{ cardId: number }>): string {
 }
 
 function normalizeSearchTarget(value: BandoriTeamSearchTarget | undefined): BandoriTeamSearchTarget {
-  return value === "bandPower" || value === "eventPoint" ? value : "score";
+  return value === "eventPoint" ? value : "score";
 }
 
 function normalizeSearchLiveType(value: BandoriTeamSearchLiveType | undefined): BandoriTeamSearchLiveType {
@@ -4579,8 +4599,6 @@ function getTargetValue(result: {
   eventMode: BandoriTeamSearchEventMode;
 }, target: BandoriTeamSearchTarget): number {
   switch (target) {
-    case "bandPower":
-      return result.totalPower;
     case "eventPoint":
       return result.eventPoint ?? (
         result.eventMode === "pointBonus" ? Number.NEGATIVE_INFINITY : result.averageScore
@@ -4866,7 +4884,7 @@ function pushResult(results: BandoriTeamSearchResult[], result: BandoriTeamSearc
   const cardSetKey = getTeamCardSetKey(result.cards);
   const existingIndex = results.findIndex((item) => getTeamCardSetKey(item.cards) === cardSetKey);
   if (existingIndex >= 0) {
-    if (results[existingIndex].targetValue >= result.targetValue) {
+    if (compareResults(results[existingIndex], result) <= 0) {
       return;
     }
     results.splice(existingIndex, 1);

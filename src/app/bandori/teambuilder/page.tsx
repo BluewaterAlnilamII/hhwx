@@ -185,7 +185,6 @@ const EVENT_TYPE_LABELS: Record<string, string> = {
   medley: "巡回演出",
 };
 const TARGET_LABELS: Record<BandoriTeamSearchTarget, string> = {
-  bandPower: "总合力",
   score: "分数",
   eventPoint: "活动Pt",
 };
@@ -1604,7 +1603,7 @@ function TeamBuilderPanel() {
   const showCoopLiveSettings = shouldUseCoopLiveSettings(selectedEventType, liveType);
   const scoreLinkedEventPointTarget = isScoreLinkedEventPointTarget(selectedEventType, liveType);
   const targetOptions = useMemo<BandoriTeamSearchTarget[]>(() => (
-    scoreLinkedEventPointTarget ? ["bandPower", "eventPoint"] : ["bandPower", "score", "eventPoint"]
+    scoreLinkedEventPointTarget ? ["eventPoint"] : ["score", "eventPoint"]
   ), [scoreLinkedEventPointTarget]);
   const targetLabels = useMemo<Record<BandoriTeamSearchTarget, string>>(() => ({
     ...TARGET_LABELS,
