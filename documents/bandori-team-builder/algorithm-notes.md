@@ -19,7 +19,7 @@
 - 用户档案：持有卡牌、等级、技能等级、Master Rank、训练状态、剧情解锁、排除标记、区域道具、角色潜能、角色任务加成。
 - Master 数据：卡牌、角色、乐团、属性、技能、区域道具、歌曲、谱面。
 - 活动加成：优先使用数据库 `bandori_event_bonuses`，也支持手动 `bonusOverride` 合并到同一加成模型。
-- 请求参数：歌曲、难度、活动、LIVE 类型、目标、准率、房间综合力、协力外部技能、火/CP 的默认显示档位。
+- 请求参数：歌曲、难度、活动、LIVE 类型、目标、准率、房间综合力、协力外部技能、Live Boost/CP 的默认显示档位。
 
 ## 卡牌综合力
 
@@ -33,10 +33,10 @@
 区域道具不是逐项独立取最大值，而是枚举全局配置：
 
 ```text
-(bandSet, attributeSet, parameterSet | null)
+(optional bandSet, optional attributeSet, optional parameterSet)
 ```
 
-同一支队伍必须在同一个区域道具配置下计算有效综合力。活动参数加成若作用于综合力，也叠加到每张卡的有效综合力上。
+每个配置层都可以为空，表示本次全局配置不选择该类区域道具。实现上，若玩家拥有 band 或 attribute 道具，空 band/attribute 配置通常会被非负加成配置支配，因此不需要显式保留；parameter 层会先显式枚举空配置，再交给支配剪枝处理。同一支队伍必须在同一个区域道具配置下计算有效综合力。活动参数加成若作用于综合力，也叠加到每张卡的有效综合力上。
 
 ## 谱面预处理与分数公式
 
@@ -113,10 +113,10 @@ roomScore = floor(rawAverageScore + otherTeamScore)
 ```text
 basePt = basePtFormula(score, roomScore)
 eventPointBase = floor(basePt * (1 + mainPointBonusRate))
-eventPoint = floor(eventPointBase * flameMultiplier)
+eventPoint = floor(eventPointBase * liveBoostMultiplier)
 ```
 
-挑战 LIVE、竞演 LIVE、Team Festival 的火、CP、排名、胜负只影响结果展示，不改变队伍优劣。结果中会返回 `eventPointOptions`，前端切换显示值时不重新搜索。
+挑战 LIVE、竞演 LIVE、Team Festival 的 Live Boost、CP、排名、胜负只影响结果展示，不改变队伍优劣。结果中会返回 `eventPointOptions`，前端切换显示值时不重新搜索。
 
 ## 任务活动支援队伍
 
