@@ -5,14 +5,14 @@ paths:
   - "src/lib/bandori-event-banner-proxy.ts"
 ---
 
-# 服务端模块与数据库边界规则
+# Server Module and Database Boundary Rules
 
-- 服务端模块负责承接数据库、外部 API、缓存标签与领域转换；对外暴露的结果应尽量是已归一化、已命名规范化的领域对象。
-- 资源代理模块（如 bandori-asset-proxy.ts、bandori-event-banner-proxy.ts）主要适用本文件中的安全校验和错误处理条目；数据库 Row/DTO 映射相关条目对其不适用。
-- 数据库 Row 类型可以保持 snake_case，以准确映射表字段；但服务端模块对外返回的 DTO 和共享对象应转换为小驼峰命名法。
-- 依赖环境变量的服务端模块必须快速失败，并给出明确错误信息；不要在缺少关键配置时静默降级。
-- 含 service role、私密环境变量、RLS 绕过逻辑或其他特权能力的模块必须保持 server-only 边界；客户端组件、Hook、浏览器可执行模块不得导入 `*-server.ts`。
-- 所有写操作都必须在服务端路径上重新做认证与授权检查；需要绕过 RLS 的行为必须被限制在明确的服务端模块中。
-- 仅当调用已识别为瞬时故障、且本次操作具备幂等性或可安全重试时，才使用有限次重试和退避；对非幂等写操作或会产生外部副作用的调用，不要默认重试。达到上限后返回稳定、可处理的错误结果。
-- 服务端模块应优先收敛共享查询、DTO 映射和兼容逻辑，避免多个 API 路由各自维护一套近似实现。
-- 新增数据库实体命名时遵循“复数 snake_case 表名、snake_case 列名、camelCase DTO 字段名”的边界分层，不要混用。
+- Server modules bridge databases, external APIs, cache tags, and domain transformations. Exposed results should usually be normalized domain objects with standardized naming.
+- Asset proxy modules such as `bandori-asset-proxy.ts` and `bandori-event-banner-proxy.ts` mainly use the security validation and error-handling rules in this file. Database Row/DTO mapping rules do not apply to them.
+- Database Row types may keep `snake_case` to accurately map table fields. DTOs and shared objects returned from server modules should be converted to camelCase.
+- Server modules that depend on environment variables must fail fast with clear error messages. Do not silently degrade when required configuration is missing.
+- Modules containing service role usage, private environment variables, RLS-bypass logic, or other privileged capabilities must keep a server-only boundary. Client components, hooks, and browser-executable modules must not import `*-server.ts`.
+- All write operations must re-check authentication and authorization on the server path. RLS-bypass behavior must be limited to explicit server-side modules.
+- Use limited retries and backoff only when a call is known to be a transient failure and the operation is idempotent or safe to retry. Do not retry non-idempotent writes or calls with external side effects by default. After the retry limit is reached, return a stable, handleable error result.
+- Server modules should centralize shared queries, DTO mapping, and compatibility logic. Avoid each API route maintaining its own similar implementation.
+- When adding database entities, follow the layered boundary of plural `snake_case` table names, `snake_case` column names, and camelCase DTO fields. Do not mix naming conventions.

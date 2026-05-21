@@ -1,5 +1,7 @@
 # Security Policy
 
+中文说明见 [SECURITY.zh-CN.md](SECURITY.zh-CN.md).
+
 ## Reporting
 
 Please report security issues privately by emailing:

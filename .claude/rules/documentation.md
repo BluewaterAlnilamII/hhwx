@@ -1,8 +1,12 @@
-# 文档与注释规则
+# Documentation and Comment Rules
 
-- 所有项目文档、代码注释和设计说明默认使用简体中文。
-- 对关键逻辑、复杂算法和业务规则，注释重点解释“为什么这样做”，不要只重复代码已经表达出来的“做了什么”。
-- 复杂 Hook、核心服务模块、关键 API 路由默认保留简短头部说明，写清职责、关键约束和设计原因；逻辑足够直接时可以省略。
-- 注释和文档应保持高信息密度，避免“变量赋值”“调用函数”这类低价值描述。
-- 当脚本命令、部署方式、环境变量、数据协议或外部依赖约束发生变化时，相关文档必须同步更新。
-- 新增、删除、重命名顶层目录、重要业务目录或公共模块目录时，必须同步更新 `documents/layout.md`；普通组件文件、局部样式文件、测试文件变更不要求更新。
+- Public project documentation, design notes, and code comments default to English.
+- Existing Chinese documentation and comments do not need a one-time bulk translation. When a file is substantially edited, migrate the touched long-lived documentation or comments to English where practical.
+- User-facing Chinese product copy, Chinese operational notes, and historical Chinese-only materials may remain Chinese when they serve the target audience better.
+- Important public collaboration documents use English as the canonical file and keep a Chinese translation next to it with a `.zh-CN.md` suffix. This applies to README, contributing, security, notice, setup, CDN, and layout documentation.
+- When changing one of those important documents, update or explicitly review the matching `.zh-CN.md` file in the same change. The Chinese version does not need to be word-for-word, but it must preserve license, security, deployment, and compatibility boundaries.
+- Comments for critical logic, complex algorithms, and business rules should explain why the design exists, not restate what the code already says.
+- Complex hooks, core service modules, and key API routes should keep short header comments that describe responsibility, constraints, and design reasons when that context is not obvious.
+- Comments and documentation should stay dense and useful. Avoid low-value descriptions such as "assigns a variable" or "calls a function."
+- When script commands, deployment flow, environment variables, data contracts, or external dependency constraints change, update the related documentation in the same change.
+- When adding, deleting, or renaming top-level directories, major business directories, or shared module directories, update `documents/layout.md`. Ordinary component files, local style files, and test files do not require layout documentation updates.

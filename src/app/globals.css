@@ -53,7 +53,7 @@ body {
 /* 白色雾化遮罩层 */
 /* 注意：此处故意不使用 backdrop-filter，因为任何全屏 fixed 伪元素若带有 backdrop-filter，
    会强制将页面上的每一个元素都提升为独立的 GPU 合成层，造成显著的 GPU 开销。
-   PRD 允许"可通过 backdrop-filter 或半透明遮罩实现"，故直接使用半透明背景色替代。 */
+   这里用半透明背景色保留柔和视觉效果，同时避免全页合成层开销。 */
 body::before {
   content: '';
   position: fixed;

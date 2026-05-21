@@ -1,5 +1,7 @@
 # Supabase Setup
 
+中文说明见 [supabase-setup.zh-CN.md](supabase-setup.zh-CN.md).
+
 This document describes the current repository-local SQL layout for a fresh HHWX deployment.
 
 ## Files

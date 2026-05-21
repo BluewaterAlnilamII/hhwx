@@ -1,36 +1,40 @@
-# hhwx Codex 项目规则
+# hhwx Codex Project Rules
 
-本文件是 Codex 在 hhwx 仓库中的规则入口。仓库长期规则源保存在 `.claude/`；执行任务时应先遵循本文件，再按需读取 `.claude/CLAUDE.md` 和匹配路径的 `.claude/rules/*.md`。
+This file is the Codex rule entry point for the hhwx repository. Long-lived repository rules are stored in `.claude/`; when working in this repository, follow this file first, then read `.claude/CLAUDE.md` and matching `.claude/rules/*.md` files as needed.
 
-## 规则优先级
+## Rule Priority
 
-- 用户当前明确要求优先于仓库规则；但不得绕过安全、鉴权、隐私和数据完整性边界。
-- 本文件与 `.claude/CLAUDE.md` 为全局规则入口；路径匹配的 `.claude/rules/*.md` 提供更具体的执行约束。
-- 规则与既有公开协议冲突时，先保持兼容并说明原因；需要破坏性变更时必须有迁移方案。
-- 规则与现有局部代码风格冲突时，优先遵循规则；但不要在无关任务中做大规模格式化、重命名或结构迁移。
+- The user's current explicit request takes priority over repository rules, but it must not bypass security, authorization, privacy, or data-integrity boundaries.
+- This file and `.claude/CLAUDE.md` are global rule entry points. Path-matched `.claude/rules/*.md` files provide more specific execution constraints.
+- If a rule conflicts with an existing public license or contract, keep compatibility first and explain why. Breaking changes require a migration plan.
+- If a rule conflicts with local code style, prefer the rule, but do not perform broad formatting, renaming, or structural migrations in unrelated tasks.
 
-## 全局默认
+## Global Defaults
 
-- 与项目相关的回复、代码注释和文档默认使用简体中文；外部接口或用户明确要求除外。
-- 技术栈遵循 Next.js App Router、React、TypeScript strict mode、Tailwind CSS、Supabase。
-- 导入路径优先使用 `@/*` 指向 `src/`，减少深层相对路径。
-- 新功能和重构必须保持模块边界清晰，避免把多个职责耦合进同一个组件、Hook、路由或服务模块。
-- 页面组件负责组合 UI，API 路由负责参数解析、鉴权和响应封装，业务规则下沉到 Hook、`src/lib` 或 `src/lib/*-server.ts`。
-- 浏览器端仅使用匿名公钥客户端；service role、私密环境变量、RLS 绕过逻辑仅允许出现在服务端模块中。
-- 修改脚本命令、部署方式、环境变量、数据协议或外部依赖约束时，同步更新相关文档。
+- Use the user's current language when talking with the user. Public project documentation, design notes, and code comments default to English.
+- Existing Chinese documentation and comments do not require a one-time bulk migration. When a related file is substantially edited, migrate touched long-lived documentation or comments to English where practical.
+- User-facing Chinese product copy, Chinese operational notes, and historical Chinese-only materials may remain Chinese. External protocols, API fields, error codes, and deployment documentation should prefer English.
+- Important public collaboration documents keep Chinese translations with `.zh-CN.md` siblings. When editing README, contributing, security, notice, setup, CDN, or layout docs, update or explicitly review the matching Chinese document in the same change.
+- The technical stack is Next.js App Router, React, TypeScript strict mode, Tailwind CSS, and Supabase.
+- Prefer `@/*` imports that point to `src/` to reduce deep relative paths.
+- New features and refactors must keep module boundaries clear. Avoid coupling multiple responsibilities into the same component, hook, route, or service module.
+- Page components compose UI. API routes parse parameters, enforce authorization, and format responses. Business rules should live in hooks, `src/lib`, or `src/lib/*-server.ts`.
+- Browser code must only use anonymous publishable clients. Service role keys, private environment variables, and RLS-bypass logic are only allowed in server-side modules.
+- When script commands, deployment flow, environment variables, data contracts, or external dependency constraints change, update the related documentation in the same change.
+- Verify changes with the narrowest relevant check. For broad code, schema, route, or open-source-readiness changes, run `npm run lint` and `npm run build` when feasible.
 
-## `.claude` 规则映射
+## `.claude` Rule Map
 
-- 全局基础规则：读取 `.claude/rules/core.md`。
-- 文档与注释：读取 `.claude/rules/documentation.md`。
-- API 路由 `src/app/api/**/route.ts`：读取 `.claude/rules/api-routes.md`。
-- React 组件与页面 `src/components/**/*.tsx`、`src/app/**/*.tsx`：读取 `.claude/rules/frontend-components.md`。
-- Hooks 与状态管理 `src/hooks/**/*.{ts,tsx}`、`src/app/**/use*.{ts,tsx}`：读取 `.claude/rules/react-hooks.md`。
-- 服务端模块 `src/lib/**/*-server.ts`、资源代理模块：读取 `.claude/rules/server-services.md`。
-- 命名、文件组织、API JSON 键名和数据库命名：读取 `.claude/rules/naming-and-contracts.md`。
+- Global foundation rules: read `.claude/rules/core.md`.
+- Documentation and comments: read `.claude/rules/documentation.md`.
+- API routes under `src/app/api/**/route.ts`: read `.claude/rules/api-routes.md`.
+- React components and pages under `src/components/**/*.tsx` and `src/app/**/*.tsx`: read `.claude/rules/frontend-components.md`.
+- Hooks and state management under `src/hooks/**/*.{ts,tsx}` and `src/app/**/use*.{ts,tsx}`: read `.claude/rules/react-hooks.md`.
+- Server-side modules under `src/lib/**/*-server.ts` and asset proxy modules: read `.claude/rules/server-services.md`.
+- Naming, file organization, API JSON keys, and database naming: read `.claude/rules/naming-and-contracts.md`.
 
-## 维护要求
+## Maintenance
 
-- 不要把 `.claude` 规则全文复制到本文件；本文件只保留 Codex 执行所需的入口、摘要和映射，避免双份规则漂移。
-- 修改 `.claude` 中会影响 Codex 执行方式的规则时，必须同步更新本文件的摘要或映射。
-- 新增、删除、重命名顶层目录、重要业务目录或公共模块目录时，必须同步更新 `documents/layout.md`；普通组件文件、局部样式文件、测试文件变更不要求更新。
+- Do not copy the full `.claude` rule set into this file. Keep this file limited to the entry point, summary, and rule map needed by Codex to avoid duplicated rules drifting apart.
+- When `.claude` changes in a way that affects Codex execution, update the relevant summary or mapping in this file.
+- When adding, deleting, or renaming top-level directories, major business directories, or shared module directories, update `documents/layout.md`. Ordinary component files, local style files, and test files do not require layout documentation updates.

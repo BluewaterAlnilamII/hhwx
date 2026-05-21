@@ -4,12 +4,12 @@ paths:
   - "src/app/**/*.tsx"
 ---
 
-# React 组件与页面规则
+# React Component and Page Rules
 
-- 组件应优先承担视图组合和交互编排职责，不要在组件内部堆叠大量数据清洗、协议兼容和数据库语义判断。
-- 可复用组件的 Props 类型命名为 ComponentNameProps，并尽量放在组件附近，方便阅读与重构。页面入口文件（page.tsx、layout.tsx）不强制遵循此 Props 命名约定。
-- 只在确实需要浏览器 API、交互状态、事件处理或客户端 Hook 时添加 "use client"；纯展示和纯服务端逻辑保持默认服务端组件语义。
-- 复杂状态派生应下沉到 Hook 或 lib 纯函数，避免在 JSX 里夹杂大段条件分支和映射转换。
-- 当组件需要消费服务端返回数据时，优先使用已经完成 camelCase 映射的 DTO，不要在组件层直接处理 snake_case 数据。
-- 页面和组件不得直接拼接数据库协议或历史 API 兼容逻辑；需要兼容旧协议时，应在服务、adapter 或 route 边界完成映射。
-- 对计算量高、动画时序复杂或具有演出状态机特征的 UI，优先显式拆分阶段状态与流程函数，不要把时序逻辑散落在多个匿名回调中。
+- Components should primarily handle view composition and interaction orchestration. Do not stack large amounts of data cleanup, protocol compatibility, or database semantics inside components.
+- Name reusable component prop types `ComponentNameProps` and keep them near the component where possible for readability and refactoring. Entry files such as `page.tsx` and `layout.tsx` are not required to follow this props naming convention.
+- Add `"use client"` only when browser APIs, interactive state, event handlers, or client hooks are actually needed. Keep pure presentation and pure server logic as server components by default.
+- Move complex derived state into hooks or pure `lib` functions. Avoid large conditional branches and mapping transformations inside JSX.
+- When a component consumes server-returned data, prefer DTOs that have already been mapped to camelCase. Do not handle `snake_case` data directly at the component layer.
+- Pages and components must not directly assemble database protocols or historical API compatibility logic. When legacy protocol compatibility is needed, map it at the service, adapter, or route boundary.
+- For UI with expensive computation, complex animation timing, or presentation state-machine behavior, explicitly split phase state and flow functions. Do not scatter timing logic across anonymous callbacks.

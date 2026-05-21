@@ -1,5 +1,7 @@
 # HHWX
 
+中文说明见 [README.zh-CN.md](README.zh-CN.md).
+
 HHWX is a Next.js App Router application for a small set of community tools and experiments:
 
 - an Othello-style home page with character interactions;
@@ -17,7 +19,7 @@ The repository is suitable for local development and self-hosted deployment, but
 - Supabase provides auth, database, realtime, and server-side service access.
 - Cloudflare Turnstile is optional and protects sensitive flows when configured.
 - `cdn.hhwx.org` is the current production CDN for static site and Bandori asset mirrors. Self-hosted deployments should use their own CDN or asset host, and must not treat the production domain as part of the open-source license.
-- `hhwx-tracker` is a separate service used for tracker data ingestion and game-account sync. This repository only contains the web application.
+- Production data ingestion, asset mirroring, and game-account sync services are private HHWX operations and are not included in this repository. Self-hosted deployments need compatible private services for those workflows, or should treat the related features as unavailable.
 
 ## Requirements
 
@@ -25,7 +27,7 @@ The repository is suitable for local development and self-hosted deployment, but
 - npm
 - A Supabase project for account-backed features
 - Optional: Cloudflare Turnstile site and secret keys
-- Optional: a deployed HHWX user fetcher service for game-account binding and manual sync
+- Optional/private: a compatible HHWX user fetcher endpoint for game-account binding and manual sync. This repository does not include that service.
 
 ## Quick Start
 
@@ -48,7 +50,7 @@ Important rules:
 - `NEXT_PUBLIC_*` values are exposed to browsers.
 - `SUPABASE_SECRET_KEY`, `TURNSTILE_SECRET_KEY`, and `HHWX_USER_FETCHER_TOKEN` are server-side secrets and must not be committed.
 - `NEXT_PUBLIC_SITE_ASSET_CDN_BASE_URL` and `NEXT_PUBLIC_BANDORI_ASSET_CDN_BASE_URL` should point to your own CDN. The production `cdn.hhwx.org` value is only a public static asset host and does not grant rights to third-party game assets.
-- Asset and CDN examples are deployment configuration only. See [NOTICE.md](NOTICE.md) before mirroring, caching, or redistributing third-party game content.
+- Asset and CDN examples are deployment configuration only. This repository defines the web app's expected URL contract, but does not include the private ingestion tools used to populate HHWX production mirrors. See [NOTICE.md](NOTICE.md) before mirroring, caching, or redistributing third-party game content.
 
 ## Scripts
 
@@ -61,25 +63,31 @@ npm run start
 
 ## Supabase Setup
 
-The canonical schema files are under [supabase/schema](supabase/schema), with older incremental SQL still kept under [documents](documents). See [documents/supabase-setup.md](documents/supabase-setup.md) for the recommended execution order and notes on RLS and service-role-only functions.
+The base schema files are under [supabase/schema](supabase/schema). Application feature schemas that are still maintained as standalone SQL files live under [documents](documents). See [documents/supabase-setup.md](documents/supabase-setup.md) for the full execution order, including RLS and service-role-only review notes.
 
 ## Repository Layout
 
 ```text
 hhwx/
-├── documents/      # product notes, setup notes, and historical SQL
-├── public/         # static assets served directly by Next.js
-├── src/
-│   ├── app/        # App Router pages, layouts, metadata, and API routes
-│   ├── components/ # shared React UI components
-│   ├── hooks/      # reusable hooks
-│   ├── lib/        # server and shared business logic
-│   └── store/      # client state
-├── supabase/       # canonical schema and manual maintenance SQL
-└── package.json    # scripts and dependencies
+|-- documents/      # product notes, setup notes, and feature SQL
+|-- public/         # static assets served directly by Next.js
+|-- src/
+|   |-- app/        # App Router pages, layouts, metadata, and API routes
+|   |-- components/ # shared React UI components
+|   |-- hooks/      # reusable hooks
+|   |-- lib/        # server and shared business logic
+|   `-- store/      # client state
+|-- supabase/       # base schema and manual maintenance SQL
+`-- package.json    # scripts and dependencies
 ```
 
 More detail is available in [documents/layout.md](documents/layout.md).
+
+## Documentation Language
+
+English is the canonical language for public project documentation and deployment notes. Important collaboration documents also keep Chinese translations with a `.zh-CN.md` suffix. When changing README, contributing, security, notice, setup, CDN, or layout documentation, update or explicitly review the matching Chinese document.
+
+Chinese remains appropriate for user-facing product copy, China-region operational notes, and historical design notes that primarily serve the existing project audience.
 
 ## Security
 

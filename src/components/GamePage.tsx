@@ -147,7 +147,7 @@ export default function GamePage() {
      *
      * 为什么设计成异步流水线：整个 AI 回合包含"思考 → 落子 → 攻击台词"三个阶段，
      * 每个阶段都有独立的动画延迟和气泡展示时长。使用 async/await 串联这些阶段，
-     * 既保证了演出时序的严格性（符合 PRD 第 5 节要求），又通过 processingRef 互斥锁
+     * 既保证了思考、落子和台词展示的严格时序，又通过 processingRef 互斥锁
      * 防止 useEffect 重复触发导致并发执行。
      */
     useEffect(() => {

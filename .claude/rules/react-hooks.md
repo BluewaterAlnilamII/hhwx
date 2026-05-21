@@ -4,12 +4,12 @@ paths:
   - "src/app/**/use*.{ts,tsx}"
 ---
 
-# Hooks 与状态管理规则
+# Hooks and State Management Rules
 
-- Hook 应围绕单一职责组织，例如“数据获取与缓存”“交互流程编排”“领域状态机”；不要把不相干职责捆在同一个 Hook 中。
-- Hook 对外暴露的返回值、回调名和状态字段统一使用小驼峰命名法。
-- 跨组件复用的状态编排优先抽到 Hook 或 Zustand store，不要在多个页面复制同一段 useEffect / useState 逻辑。
-- 涉及缓存、订阅合并、并发竞态或可见性刷新时，必须在注释中说明关键设计原因，尤其是为何这样做能避免状态回退或重复请求。
-- Hook 内的网络请求、订阅、计时器和异步回调必须具备清理或竞态保护，避免参数变化、身份变化或组件卸载后写入陈旧状态。
-- Zustand store 中可以按职责分组状态和 action，但不要把完全无关的业务域塞进同一个 store。
-- Hook 的边界应清晰：如果逻辑已经不再依赖 React 生命周期或状态，应继续下沉为 lib 纯函数或服务模块。
+- Organize hooks around a single responsibility, such as data fetching and caching, interaction flow orchestration, or a domain state machine. Do not bundle unrelated responsibilities into one hook.
+- Hook return values, callback names, and state fields exposed to callers use camelCase.
+- Shared state orchestration across components should move into hooks or a Zustand store. Do not copy the same `useEffect` / `useState` logic across pages.
+- When caching, subscription merging, concurrency races, or visibility refresh behavior is involved, comments must explain the key design reason, especially why the approach avoids state rollback or duplicate requests.
+- Network requests, subscriptions, timers, and async callbacks inside hooks must include cleanup or race protection so parameter changes, identity changes, or component unmounts do not write stale state.
+- Zustand stores may group state and actions by responsibility, but do not put unrelated business domains into the same store.
+- Hook boundaries should stay clear. If logic no longer depends on React lifecycle or state, move it further down into a pure `lib` function or service module.

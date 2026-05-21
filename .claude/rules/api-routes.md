@@ -3,18 +3,18 @@ paths:
   - "src/app/api/**/route.ts"
 ---
 
-# API 路由规则
+# API Route Rules
 
-- API 路由保持轻量：负责解析请求、鉴权、调用服务、格式化响应，不要在 route.ts 中堆叠大段查询和领域规则。
-- 所有请求参数、查询字符串和请求体都必须在入口处完成解析、归一化和范围校验；不要把未经校验的值直接传进数据库查询或服务层。
-- 数值解析优先使用 Number.parseInt(value, 10) 或 Number(value)，并配合 Number.isFinite() 和业务范围判断。
-- 除二进制响应、文件下载、图片代理、流式响应、SSE、ICS、204/304 无正文响应，以及明确原样透传的第三方协议外，JSON API 默认使用统一响应结构：成功 { success: true, data, meta? }；失败 { success: false, error: { code, message, details? } }。
-- “明确原样透传的第三方协议”仅指以兼容上游协议为目标的边界路由：若已经做了字段改名、字段筛选、结构聚合、缓存 DTO 化或错误结构改造，就不再视为透传，应回到项目统一 JSON 规则。
-- 历史兼容 JSON 接口必须是仓库中已存在、已有调用方依赖的公开协议，并在路由或共享处理器注释中明确兼容原因；需要新增字段或发生破坏性变更时，应迁移到统一信封，而不是继续扩展旧结构。
-- 新增历史兼容例外必须在本文件登记路径、成功体形状、失败体形状和保留原因；未经登记的新增 JSON API 必须使用统一响应结构。
-- /api/bandori/tracker/data 属于登记例外：成功响应继续沿用现有 result/cutoffs 协议；支持但暂无数据的档线返回 200 + { result: true, cutoffs: [] }；失败响应使用统一 { success: false, error } 和非 2xx 状态码。除非提供新版本接口或迁移方案，不要改动其成功响应字段形状。
-- 历史兼容例外不得作为新接口模板；新增 JSON API 不得继续复制 result/cutoffs 这类旧协议形状。
-- 新增 JSON API 的失败响应必须使用语义正确的非 2xx HTTP 状态码；200 + success: false 仅允许用于已登记的历史兼容公共协议。
-- 错误响应中的 message 应面向调用方可理解；内部异常细节优先写日志，必要时只通过 code 和受控的 details 暴露。
-- 需要缓存的路由应复用集中缓存策略与缓存标签；涉及数据写入时，必须同步处理缓存失效或标签刷新。
-- 涉及认证或角色权限的写操作，必须在服务端重新校验，不得依赖前端传入的角色状态。
+- Keep API routes lightweight: parse requests, enforce authorization, call services, and format responses. Do not stack large queries or domain rules in `route.ts`.
+- All request parameters, query strings, and request bodies must be parsed, normalized, and range-checked at the entry point. Do not pass unvalidated values directly into database queries or service layers.
+- Prefer `Number.parseInt(value, 10)` or `Number(value)` for numeric parsing, together with `Number.isFinite()` and domain range checks.
+- Except for binary responses, file downloads, image proxies, streaming responses, SSE, ICS, 204/304 responses without bodies, and explicitly pass-through third-party protocols, JSON APIs should use the unified response shape: success `{ success: true, data, meta? }`; failure `{ success: false, error: { code, message, details? } }`.
+- An "explicitly pass-through third-party protocol" is only a boundary route whose purpose is upstream protocol compatibility. If fields are renamed, filtered, aggregated, converted to cache DTOs, or errors are reshaped, it is no longer pass-through and must return to the project JSON convention.
+- Historical compatibility JSON APIs must be existing public contracts in the repository with existing callers. The route or shared handler must comment why compatibility is kept. When fields are added or breaking changes are needed, migrate to the unified envelope instead of extending the legacy shape.
+- New historical compatibility exceptions must be registered in this file with the path, success body shape, failure body shape, and reason for keeping them. Any new unregistered JSON API must use the unified response shape.
+- `/api/bandori/tracker/data` is a registered exception: successful responses continue using the existing `result`/`cutoffs` contract; supported cutoff types with no data return `200 + { result: true, cutoffs: [] }`; failure responses use unified `{ success: false, error }` with a non-2xx status code. Do not change its successful response field shape unless a new versioned API or migration plan is provided.
+- Historical compatibility exceptions must not be used as templates for new APIs. New JSON APIs must not copy legacy shapes such as `result`/`cutoffs`.
+- Failure responses from new JSON APIs must use semantically correct non-2xx HTTP status codes. `200 + success: false` is only allowed for registered historical compatibility public contracts.
+- Error `message` values should be understandable to callers. Prefer logging internal exception details; expose them only through `code` and controlled `details` when necessary.
+- Routes that need caching should reuse centralized cache policies and cache tags. When data is written, handle cache invalidation or tag refresh in the same flow.
+- Write operations involving authentication or role permissions must revalidate authorization on the server. Do not rely on role state passed from the frontend.

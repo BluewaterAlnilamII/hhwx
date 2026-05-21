@@ -1,5 +1,7 @@
 # Notices
 
+中文说明见 [NOTICE.zh-CN.md](NOTICE.zh-CN.md).
+
 Copyright (c) 2026 BluewaterAlnilamII.
 
 HHWX is an unofficial fan/tool project. It is not affiliated with, endorsed by, sponsored by, or otherwise connected to BanG Dream!, Bushiroad, Craft Egg, Bestdori, Bilibili, Cloudflare, Supabase, or any other referenced third party.

@@ -1,60 +1,63 @@
-# 项目文件结构说明
+# Project Layout
 
-这份文档只记录长期稳定的目录职责，不再展开到每个单文件层级，避免随着页面和组件迭代而迅速过期。
+中文说明见 [layout.zh-CN.md](layout.zh-CN.md).
 
-同时，以下本地产物不属于源码结构的一部分：
+This document records long-lived directory responsibilities only. It intentionally avoids listing every file so it does not become stale as pages and components evolve.
 
-- .next/
-- node_modules/
-- tsconfig.tsbuildinfo
+These local artifacts are not part of the source layout:
 
-## 顶层结构
+- `.next/`
+- `node_modules/`
+- `tsconfig.tsbuildinfo`
+
+## Top-Level Layout
 
 ```text
 hhwx/
-├── .claude/          # 项目规则与协作约束
-├── documents/        # 产品和结构文档
-├── public/           # 直接对外提供的静态资源
-├── src/
-│   ├── app/          # App Router 页面、布局、元数据与 API 路由
-│   ├── components/   # 通用 UI 组件与全站壳层组件
-│   ├── hooks/        # 复用状态与数据获取 Hook
-│   ├── lib/          # 服务端逻辑、业务服务、校验与工具函数
-│   └── store/        # 全局客户端状态
-└── package.json      # 前端依赖与脚本入口
+|-- .claude/          # Project rules and collaboration constraints
+|-- documents/        # Product notes, setup notes, and feature SQL
+|-- public/           # Static assets served directly by Next.js
+|-- src/
+|   |-- app/          # App Router pages, layouts, metadata, and API routes
+|   |-- components/   # Shared UI components and site shell components
+|   |-- hooks/        # Reusable state and data-fetching hooks
+|   |-- lib/          # Server logic, business services, validation, and utilities
+|   `-- store/        # Shared client-side state
+|-- supabase/         # Base Supabase schema and manual maintenance SQL
+`-- package.json      # Frontend dependencies and script entry points
 ```
 
 ## src/app
 
-- account/: 账号中心及资料、邮箱、密码页面
-- bandori/game-profiles/: 游戏档案的 Cards 和 Items 查看页面
-- auth/: 登录、注册、找回密码等认证页面
-- bandori/: 日历与活动追踪器页面
-- api/: 前端同域 API 路由
-- api/account/game-bind/: 游戏账号绑定的验证码生成、验证、绑定列表和解绑 API
-- api/account/game-profiles/: 游戏档案的同步、导入、导出、复制和删除 API
-- api/bandori/: Bandori 角色、歌曲与区域道具等公开元数据 API
-- layout.tsx: 根布局与全站壳层入口
-- globals.css: 全局样式、动画和共享视觉规则
+- `account/`: account center, profile, email, and password pages.
+- `bandori/game-profiles/`: game profile card and item views.
+- `auth/`: sign-in, registration, and password recovery pages.
+- `bandori/`: calendar and event tracker pages.
+- `api/`: same-origin API routes used by the frontend.
+- `api/account/game-bind/`: game account binding challenge, verification, listing, and unlinking APIs.
+- `api/account/game-profiles/`: game profile sync, import, export, copy, and deletion APIs.
+- `api/bandori/`: public Bandori metadata APIs for characters, songs, area items, and related data.
+- `layout.tsx`: root layout and site shell entry point.
+- `globals.css`: global styles, animations, and shared visual rules.
 
 ## src/components
 
-- AppChrome.tsx: 全站布局壳层，统一页眉与侧边栏状态
-- Toolbar.tsx: 顶部工具栏
-- SectionSidebarShell.tsx: 全站侧边栏容器
-- TurnstileChallenge.tsx: 敏感操作用安全验证组件
-- 其余组件按功能划分到首页游戏、账号与 Bandori 页面复用场景
+- `AppChrome.tsx`: site layout shell for shared header and sidebar state.
+- `Toolbar.tsx`: top toolbar.
+- `SectionSidebarShell.tsx`: shared sidebar container.
+- `TurnstileChallenge.tsx`: security verification component for sensitive actions.
+- Other components are grouped by home-page game, account, and Bandori reuse contexts.
 
 ## src/lib
 
-- auth-*.ts、supabase-*.ts、turnstile-*.ts: 鉴权、安全验证与服务端客户端封装
-- bandori-*.ts、calendar-*.ts: Bandori 页面与公开元数据相关服务逻辑
-- api-*.ts: API 响应约定与缓存策略
-- bestdori-profile-codec.ts、user-game-*-server.ts: 游戏档案兼容、同步与服务端持久化逻辑
-- characters.ts、othello.ts、ai/: 首页黑白棋与角色逻辑
+- `auth-*.ts`, `supabase-*.ts`, and `turnstile-*.ts`: authentication, security verification, and server/client wrappers.
+- `bandori-*.ts` and `calendar-*.ts`: service logic for Bandori pages and public metadata.
+- `api-*.ts`: API response conventions and cache policies.
+- `bestdori-profile-codec.ts` and `user-game-*-server.ts`: game profile compatibility, sync, and server-side persistence logic.
+- `characters.ts`, `othello.ts`, and `ai/`: home-page Othello and character logic.
 
-## 文档维护规则
+## Maintenance Rules
 
-- README.md 负责项目级入口说明
-- 本文件只保留稳定目录职责
-- 新增页面或服务时，只在其改变目录职责边界时更新本文档
+- `README.md` is the project-level entry point.
+- This file keeps only stable directory responsibilities.
+- When adding a page or service, update this file only if the change modifies directory responsibility boundaries.

@@ -1,29 +1,33 @@
-# hhwx Claude 规则
+# hhwx Claude Rules
 
-本目录用于统一管理 hhwx 的 Claude Code 项目规则。Codex 的兼容入口是仓库根目录的 `AGENTS.md`；影响 Codex 执行方式的规则变更必须同步更新该文件。
+This directory centralizes hhwx project rules for Claude Code. The compatible Codex entry point is `AGENTS.md` at the repository root. Rule changes that affect Codex behavior must also update that file.
 
-## 规则优先级
+## Rule Priority
 
-- 用户当前明确要求优先于仓库规则；但不得绕过安全、鉴权、隐私和数据完整性边界。
-- `.claude/CLAUDE.md` 和无 paths frontmatter 的规则文件全局生效；有 paths frontmatter 的规则仅在处理匹配文件时生效。
-- 规则与既有公开协议冲突时，先保持兼容并说明原因；需要破坏性变更时必须有迁移方案。
-- 规则与现有局部代码风格冲突时，优先遵循规则；但不要在无关任务中做大规模格式化、重命名或结构迁移。
+- The user's current explicit request takes priority over repository rules, but it must not bypass security, authorization, privacy, or data-integrity boundaries.
+- `.claude/CLAUDE.md` and rule files without `paths` frontmatter apply globally. Rule files with `paths` frontmatter apply only when handling matching files.
+- If a rule conflicts with an existing public license or contract, keep compatibility first and explain why. Breaking changes require a migration plan.
+- If a rule conflicts with local code style, prefer the rule, but do not perform broad formatting, renaming, or structural migrations in unrelated tasks.
 
-## 全局要求
+## Global Requirements
 
-- 与项目相关的回复、代码注释和文档默认使用简体中文；只有在用户或外部接口明确要求时才切换语言。
-- 新功能和重构必须保证模块边界清晰，避免把多个职责耦合进同一个组件、Hook、路由或服务模块。
-- 新增代码必须遵循命名规范；当前任务触及的代码如果命名明显违反规范，可以顺手修正。
-- 新增、删除、重命名顶层目录、重要业务目录或公共模块目录时，必须同步更新 `documents/layout.md`；普通组件文件、局部样式文件、测试文件变更不要求更新。
+- Use the user's current language when talking with the user. Public project documentation, design notes, and code comments default to English.
+- Existing Chinese documentation and comments do not require a one-time bulk migration. When a related file is substantially edited, migrate touched long-lived documentation or comments to English where practical.
+- User-facing Chinese product copy, Chinese operational notes, and historical Chinese-only materials may remain Chinese. External protocols, API fields, error codes, and deployment documentation should prefer English.
+- Important public collaboration documents keep Chinese translations with `.zh-CN.md` siblings. When editing README, contributing, security, notice, setup, CDN, or layout docs, update or explicitly review the matching Chinese document in the same change.
+- New features and refactors must keep module boundaries clear. Avoid coupling multiple responsibilities into the same component, hook, route, or service module.
+- New code must follow the naming rules. If code touched by the current task clearly violates them, it may be corrected as part of the same change.
+- When adding, deleting, or renaming top-level directories, major business directories, or shared module directories, update `documents/layout.md`. Ordinary component files, local style files, and test files do not require layout documentation updates.
+- Verify changes with the narrowest relevant check. For broad code, schema, route, or open-source-readiness changes, run `npm run lint` and `npm run build` when feasible.
 
-## 规则组织
+## Rule Organization
 
-- 规则按主题拆分到 `.claude/rules/` 目录下，一个文件对应一个主题。
-- 规则应优先描述“必须”“默认做法”和“允许例外”，避免只写模糊口号。
-- 若新增规则与现有规则冲突，应先收敛旧规则而不是继续叠加。
+- Rules are split by topic under `.claude/rules/`; each file should cover one topic.
+- Rules should describe requirements, defaults, and allowed exceptions. Avoid vague slogans.
+- If a new rule conflicts with an existing rule, consolidate the old rule instead of layering another exception on top.
 
-## 维护约束
+## Maintenance Constraints
 
-- 这里只保留长期有效、可复用、可验证的项目规则。
-- 如果某条规则只服务于一次性任务，不要写入 `.claude`。
-- 如果某条规则已经失效，应直接更新或删除，不保留过时约定。
+- Keep only long-lived, reusable, and verifiable project rules here.
+- If a rule only serves a one-off task, do not write it into `.claude`.
+- If a rule is obsolete, update or delete it directly instead of preserving outdated guidance.

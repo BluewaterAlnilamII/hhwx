@@ -1,32 +1,32 @@
-# 命名与数据契约规则
+# Naming and Data Contract Rules
 
-## 代码命名
+## Code Naming
 
-- 变量名、函数名、普通对象键名、Hook 名和内部 DTO 字段名统一使用小驼峰命名法。
-- React 组件名、类型名、接口名、枚举名使用大驼峰命名法。
-- 常量使用语义化命名；模块级不可变常量优先使用全大写下划线命名法。
-- 布尔变量应使用可读前缀，如 is、has、should、can，避免语义不明的缩写。
-- 不要使用难以理解的缩写；除 DTO、API、URL、ID 这类已广泛接受的术语外，优先使用完整单词。
+- Variables, functions, ordinary object keys, hook names, and internal DTO fields use camelCase.
+- React component names, type names, interface names, and enum names use PascalCase.
+- Constants should be semantically named. Prefer UPPER_SNAKE_CASE for module-level immutable constants.
+- Boolean variables should use readable prefixes such as `is`, `has`, `should`, or `can`. Avoid unclear abbreviations.
+- Avoid hard-to-understand abbreviations. Prefer full words except for widely accepted terms such as DTO, API, URL, and ID.
 
-## 文件与目录命名
+## File and Directory Naming
 
-- React 组件文件使用 PascalCase.tsx。
-- Hook 文件使用 useCamelCase.ts 或 useCamelCase.tsx。
-- 通用工具、服务模块、缓存模块、适配器模块使用 kebab-case.ts。
-- Next.js 路由处理器统一使用 route.ts，并按 App Router 目录语义组织。
+- React component files use `PascalCase.tsx`.
+- Hook files use `useCamelCase.ts` or `useCamelCase.tsx`.
+- Shared utilities, service modules, cache modules, and adapter modules use `kebab-case.ts`.
+- Next.js route handlers use `route.ts` and follow App Router directory semantics.
 
-## API JSON 键名
+## API JSON Keys
 
-- 默认情况下，项目自有 API 返回的 JSON 键名统一使用小驼峰命名法；已登记的历史兼容公共协议除外。
-- 数据库返回的 snake_case 字段和第三方接口字段，默认必须在服务边界完成映射后再返回给前端；已登记的历史兼容公共协议仅允许在兼容边界保留原键名。
-- 只有在“明确原样透传的第三方协议”或“已登记的历史兼容公共接口”时，才允许保留非小驼峰键名；此时应在路由或适配器中写明兼容原因。
-- 新增 JSON API 的响应信封和历史兼容例外的完整定义见 .claude/rules/api-routes.md；此处不重复列举具体结构，以避免两份规则漂移。
-- 默认不要在同一路由里混用两套结构；已登记的历史兼容边界如果必须保留旧成功体并统一失败体，必须在路由或共享处理器中写明原因。
+- By default, JSON keys returned by project-owned APIs use camelCase, except for registered historical compatibility public contracts.
+- `snake_case` fields returned from the database and fields from third-party APIs must normally be mapped at the service boundary before they are returned to the frontend. Registered historical compatibility public contracts may keep original key names only at the compatibility boundary.
+- Non-camelCase keys are allowed only for explicitly pass-through third-party protocols or registered historical compatibility public APIs. In those cases, document the compatibility reason in the route or adapter.
+- The full definition of new JSON API response envelopes and historical compatibility exceptions lives in `.claude/rules/api-routes.md`. Do not duplicate concrete structures here to avoid rule drift.
+- Do not mix two response structures in the same route by default. If a registered historical compatibility boundary must keep the old success body while using the unified failure body, document the reason in the route or shared handler.
 
-## 数据库命名
+## Database Naming
 
-- 新增数据库表、视图、物化视图、关联表名称统一使用复数的 snake_case 名词短语。
-- 不再新增单数表名；现有单数表名属于历史包袱，在未被明确要求前不要顺手重构，也不要在无关任务里提出数据库改名方案。
-- 数据库列名、SQL 结果字段名、Row 类型字段名统一使用 snake_case，以保持和数据库实体一致。
-- 代码中的领域模型、服务返回值、前端消费对象统一转换为小驼峰命名，避免把数据库命名泄漏到 UI 或公共 JSON 协议。
-- 对同一实体，数据库层名称、Row 类型名称、DTO 名称应同根可追溯，避免同义多名。示例：数据库表 `bandori_events` → Row 类型 `EventRow` → DTO `BandoriEventRecord`，三者都围绕 event 核心词，通过层级后缀区分。
+- New database tables, views, materialized views, and join tables use plural `snake_case` noun phrases.
+- Do not add new singular table names. Existing singular table names are legacy debt; do not opportunistically refactor them or propose database renames in unrelated tasks.
+- Database column names, SQL result field names, and Row type fields use `snake_case` to stay aligned with database entities.
+- Domain models, service return values, and frontend-consumed objects in code are converted to camelCase to avoid leaking database naming into UI or public JSON protocols.
+- Names for the same entity should be traceable across layers. Example: database table `bandori_events` -> Row type `EventRow` -> DTO `BandoriEventRecord`; all three keep the `event` core term and differ by layer suffix.
