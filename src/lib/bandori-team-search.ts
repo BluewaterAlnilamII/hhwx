@@ -71,14 +71,14 @@ export type BandoriTeamSearchEventPointOption = {
   eventPoint: number;
   eventPointBase: number;
   multiplier: number;
-  flameCount?: 0 | 1 | 2 | 3;
+  liveBoostCount?: 0 | 1 | 2 | 3;
   challengeCpCost?: 200 | 400 | 800 | 1600;
   placement?: 1 | 2 | 3 | 4 | 5;
   festivalResult?: "win" | "lose";
 };
 
 export type BandoriTeamSearchEventPointOptions = {
-  mode: "none" | "flame" | "challengeCp" | "versus" | "festival";
+  mode: "none" | "liveBoost" | "challengeCp" | "versus" | "festival";
   defaultKey: string | null;
   options: BandoriTeamSearchEventPointOption[];
 };
@@ -214,7 +214,7 @@ export type BandoriTeamSearchInput = {
   otherPlayersAveragePower?: number;
   otherPlayerSkills?: BandoriTeamSearchExternalSkill[];
   encoreSkillSource?: "self" | "other1" | "other2" | "other3" | "other4";
-  flameCount?: 0 | 1 | 2 | 3;
+  liveBoostCount?: 0 | 1 | 2 | 3;
   challengeCpCost?: 200 | 400 | 800 | 1600;
   server?: number;
   maxSearchDurationMs?: number;
@@ -4334,17 +4334,17 @@ function estimateTotalRoomScoreUpperBound(
   return Math.ceil(scoreUpperBound + Math.max(0, scoreRateUpper ?? 0) * otherPlayersPower);
 }
 
-const FLAME_COUNTS = [0, 1, 2, 3] as const;
+const LIVE_BOOST_COUNTS = [0, 1, 2, 3] as const;
 const CHALLENGE_CP_COSTS = [200, 400, 800, 1600] as const;
 const EVENT_PLACEMENTS = [1, 2, 3, 4, 5] as const;
 
-function normalizeFlameCount(flameCount: number | undefined): 0 | 1 | 2 | 3 {
-  const normalized = clamp(Math.trunc(toFiniteNumber(flameCount, 3)), 0, 3);
+function normalizeLiveBoostCount(liveBoostCount: number | undefined): 0 | 1 | 2 | 3 {
+  const normalized = clamp(Math.trunc(toFiniteNumber(liveBoostCount, 3)), 0, 3);
   return normalized as 0 | 1 | 2 | 3;
 }
 
-function getFlameMultiplier(flameCount: number | undefined): number {
-  return [1, 5, 10, 15][normalizeFlameCount(flameCount)] ?? 15;
+function getLiveBoostMultiplier(liveBoostCount: number | undefined): number {
+  return [1, 5, 10, 15][normalizeLiveBoostCount(liveBoostCount)] ?? 15;
 }
 
 function normalizeChallengeCpCost(challengeCpCost: number | undefined): 200 | 400 | 800 | 1600 {
@@ -4373,7 +4373,7 @@ function getChallengeCpMultiplier(challengeCpCost: number | undefined): number {
 function getEventPointMultiplier(input: BandoriTeamSearchInput): number {
   return isChallengeLiveEventPointInput(input)
     ? getChallengeCpMultiplier(input.challengeCpCost)
-    : getFlameMultiplier(input.flameCount);
+    : getLiveBoostMultiplier(input.liveBoostCount);
 }
 
 function isChallengeLiveEventPointInput(input: Pick<BandoriTeamSearchInput, "eventType" | "liveType">): boolean {
@@ -4502,7 +4502,7 @@ function createEventPointOptions(
   eventPointBase: number | null,
   input: BandoriTeamSearchInput,
 ): BandoriTeamSearchEventPointOptions {
-  // 火、CP、排名、胜负只改变展示 PT，不参与队伍排序，避免 UI 切换触发重新搜索。
+  // Live Boost、CP、排名、胜负只改变展示 PT，不参与队伍排序，避免 UI 切换触发重新搜索。
   const eventType = normalizeSearchEventType(input.eventType);
   const eventFormula = input.eventFormula ?? 0;
   if (isChallengeLiveEventPointInput(input)) {
@@ -4525,16 +4525,16 @@ function createEventPointOptions(
   }
 
   if (eventType === "versus") {
-    const defaultFlameCount = normalizeFlameCount(input.flameCount);
+    const defaultLiveBoostCount = normalizeLiveBoostCount(input.liveBoostCount);
     return {
       mode: "versus",
-      defaultKey: `flame-${defaultFlameCount}-rank-1`,
-      options: FLAME_COUNTS.flatMap((flameCount) => EVENT_PLACEMENTS.map((placement) => {
+      defaultKey: `liveBoost-${defaultLiveBoostCount}-rank-1`,
+      options: LIVE_BOOST_COUNTS.flatMap((liveBoostCount) => EVENT_PLACEMENTS.map((placement) => {
         const base = calculateVersusLiveEventPointBase(score, eventFormula, placement);
-        const multiplier = getFlameMultiplier(flameCount);
+        const multiplier = getLiveBoostMultiplier(liveBoostCount);
         return {
-          key: `flame-${flameCount}-rank-${placement}`,
-          flameCount,
+          key: `liveBoost-${liveBoostCount}-rank-${placement}`,
+          liveBoostCount,
           placement,
           eventPointBase: base,
           multiplier,
@@ -4545,17 +4545,17 @@ function createEventPointOptions(
   }
 
   if (eventType === "festival") {
-    const defaultFlameCount = normalizeFlameCount(input.flameCount);
+    const defaultLiveBoostCount = normalizeLiveBoostCount(input.liveBoostCount);
     return {
       mode: "festival",
-      defaultKey: `flame-${defaultFlameCount}-win-rank-1`,
-      options: FLAME_COUNTS.flatMap((flameCount) => (
+      defaultKey: `liveBoost-${defaultLiveBoostCount}-win-rank-1`,
+      options: LIVE_BOOST_COUNTS.flatMap((liveBoostCount) => (
         (["win", "lose"] as const).flatMap((festivalResult) => EVENT_PLACEMENTS.map((placement) => {
           const base = calculateFestivalEventPointBase(score, eventFormula, festivalResult, placement);
-          const multiplier = getFlameMultiplier(flameCount);
+          const multiplier = getLiveBoostMultiplier(liveBoostCount);
           return {
-            key: `flame-${flameCount}-${festivalResult}-rank-${placement}`,
-            flameCount,
+            key: `liveBoost-${liveBoostCount}-${festivalResult}-rank-${placement}`,
+            liveBoostCount,
             festivalResult,
             placement,
             eventPointBase: base,
@@ -4568,15 +4568,15 @@ function createEventPointOptions(
   }
 
   if (eventPointBase !== null) {
-    const defaultFlameCount = normalizeFlameCount(input.flameCount);
+    const defaultLiveBoostCount = normalizeLiveBoostCount(input.liveBoostCount);
     return {
-      mode: "flame",
-      defaultKey: `flame-${defaultFlameCount}`,
-      options: FLAME_COUNTS.map((flameCount) => {
-        const multiplier = getFlameMultiplier(flameCount);
+      mode: "liveBoost",
+      defaultKey: `liveBoost-${defaultLiveBoostCount}`,
+      options: LIVE_BOOST_COUNTS.map((liveBoostCount) => {
+        const multiplier = getLiveBoostMultiplier(liveBoostCount);
         return {
-          key: `flame-${flameCount}`,
-          flameCount,
+          key: `liveBoost-${liveBoostCount}`,
+          liveBoostCount,
           eventPointBase,
           multiplier,
           eventPoint: Math.floor(eventPointBase * multiplier),

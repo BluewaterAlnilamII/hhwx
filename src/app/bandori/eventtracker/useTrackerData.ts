@@ -4,6 +4,10 @@ import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { supabase } from "@/lib/supabase";
 import { useCachedFetch, updateFetchCache } from "@/hooks/useCachedFetch";
 import { parseApiSuccessData } from "@/lib/api-contracts";
+import {
+  hasBandoriOfficialCnEventContent,
+  resolveBandoriCnScheduleWindow,
+} from "@/lib/bandori-event-region";
 import { BANDORI_TRACKER_DATA_TABLE } from "@/lib/supabase-table-names";
 import {
   EXTERNAL_REFERENCE_CACHE_PROFILE,
@@ -174,22 +178,6 @@ function resolvePreferredEventName(event: Pick<BandoriEventSummary, "eventId" | 
   return `活动 #${event.eventId}`;
 }
 
-function resolveCnScheduleWindow(event: Pick<BandoriEventSummary, "timeline">): { startAt: number | null; endAt: number | null } {
-  if (event.timeline.cn.startAt !== null || event.timeline.cn.endAt !== null) {
-    return {
-      startAt: event.timeline.cn.startAt,
-      endAt: event.timeline.cn.endAt,
-    };
-  }
-
-  const predictedWindow = event.timeline.cnSchedule;
-  if (predictedWindow) {
-    return predictedWindow;
-  }
-
-  return { startAt: null, endAt: null };
-}
-
 function findBestEvent(events: MinimalEvent[], now: number): MinimalEvent | null {
   const ongoing = events.find(ev => ev.startAt !== null && ev.endAt !== null && now >= ev.startAt && now <= ev.endAt);
   if (ongoing) {
@@ -299,14 +287,18 @@ export function useTrackerData(
 
   const allEvents = useMemo<MinimalEvent[]>(() => {
     return (eventCatalog?.events ?? [])
-      .map((event) => ({
-        id: event.eventId,
-        name: resolvePreferredEventName(event),
-        startAt: resolveCnScheduleWindow(event).startAt,
-        endAt: resolveCnScheduleWindow(event).endAt,
-        hasCn: Boolean(event.name.cn?.trim()),
-        hasJp: Boolean(event.name.jp.trim()),
-      }))
+      .map((event) => {
+        const scheduleWindow = resolveBandoriCnScheduleWindow(event);
+
+        return {
+          id: event.eventId,
+          name: resolvePreferredEventName(event),
+          startAt: scheduleWindow.startAt,
+          endAt: scheduleWindow.endAt,
+          hasCn: hasBandoriOfficialCnEventContent(event),
+          hasJp: Boolean(event.name.jp.trim()),
+        };
+      })
       .sort((left, right) => right.id - left.id);
   }, [eventCatalog]);
 
@@ -569,7 +561,7 @@ export function useTrackerData(
       return { startDate: null, endDate: null };
     }
 
-    const currentWindow = eventMeta ? resolveCnScheduleWindow(eventMeta) : null;
+    const currentWindow = eventMeta ? resolveBandoriCnScheduleWindow(eventMeta) : null;
 
     return {
       startDate: currentWindow?.startAt ?? null,

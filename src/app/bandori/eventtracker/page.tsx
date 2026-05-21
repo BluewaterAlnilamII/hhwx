@@ -22,6 +22,7 @@ import {
   buildBandoriEventBannerPublicUrl,
   resolveBandoriEventBannerBundleName,
 } from "@/lib/bandori-asset-proxy";
+import { resolveBandoriEventAssetRegion } from "@/lib/bandori-event-region";
 import type { TrackerData, TrackerDotProps, TrackerMouseState, TrackerTooltipPayloadEntry, TrackingMode } from "./types";
 import {
   INSTANT_PROJECTION_STORAGE_KEY,
@@ -412,7 +413,7 @@ export default function EventTrackerPage() {
 
   // ===== 数据派生层 =====
   const cnEventName = eventMeta?.name.cn?.trim() || eventMeta?.name.jp.trim() || "Loading Event...";
-  const bannerPath = eventMeta?.name.cn?.trim() ? "cn" : "jp";
+  const bannerPath = eventMeta ? resolveBandoriEventAssetRegion(eventMeta) : "jp";
   const bannerAssetSegment = eventMeta ? resolveBandoriEventBannerBundleName(eventMeta.asset) : null;
   const bannerUrl = bannerAssetSegment
     ? buildBandoriEventBannerPublicUrl(bannerPath, bannerAssetSegment)

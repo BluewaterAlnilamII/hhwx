@@ -21,12 +21,18 @@ import { AccountErrorState, AccountLoadingState, AccountSignInState } from "@/ap
 import { getAccessToken, useAccountProfile } from "@/app/account/useAccountProfile";
 import { getApiErrorMessage, parseApiSuccessData } from "@/lib/api-contracts";
 import {
+  type BandoriAssetRegion,
   buildBandoriCardThumbnailPublicUrl,
   buildBandoriEventBannerPublicUrl,
   buildBandoriResIconPublicUrl,
   buildBandoriResImagePublicUrl,
   resolveBandoriEventBannerBundleName,
 } from "@/lib/bandori-asset-proxy";
+import {
+  hasBandoriOfficialCnEventContent,
+  resolveBandoriCnScheduleWindow,
+  resolveBandoriEventAssetRegion,
+} from "@/lib/bandori-event-region";
 import type { BandoriCardAttribute, BandoriEventBonus, BestdoriSkillMaster } from "@/lib/bandori-team-calculator";
 import type {
   BandoriTeamSearchDifficulty,
@@ -53,7 +59,7 @@ type StepId = "event" | "live" | "song" | "profile" | "calculate";
 type LiveType = "free" | "multi" | "challenge" | "versus";
 type EncoreSkillSource = NonNullable<TeamSearchWorkerRequest["live"]["encoreSkillSource"]>;
 type EventFormulaOption = "0" | "1" | "2";
-type FlameCountOption = "0" | "1" | "2" | "3";
+type LiveBoostCountOption = "0" | "1" | "2" | "3";
 type ChallengeCpCostOption = "200" | "400" | "800" | "1600";
 type ResultPlacementOption = "1" | "2" | "3" | "4" | "5";
 type FestivalResultOption = "win" | "lose";
@@ -94,6 +100,7 @@ type BandoriEventSummary = {
   timeline: {
     jp: { startAt: number; endAt: number };
     cn: { startAt: number | null; endAt: number | null };
+    cnSchedule?: { startAt: number; endAt: number };
   };
   musicIds: {
     jp: number[];
@@ -145,6 +152,7 @@ type OtherPlayerDraft = {
 
 type LivePreferenceState = {
   liveType?: LiveType;
+  perfectRate?: string;
   otherPlayersAveragePower?: string;
   encoreSkillSource?: EncoreSkillSource;
   otherPlayers?: OtherPlayerDraft[];
@@ -161,6 +169,7 @@ const STEPS: Array<{ id: StepId; label: string; icon: React.ComponentType<{ clas
 const SUPPORTED_EVENT_TYPES = new Set(["story", "challenge", "versus", "live_try", "mission_live", "festival", "medley"]);
 const DEFAULT_SONG_ID = "306";
 const DEFAULT_DIFFICULTY: BandoriTeamSearchDifficulty = "expert";
+const DEFAULT_PERFECT_RATE = "97";
 const TEAMBUILDER_LIVE_PREFERENCES_STORAGE_KEY = "hhwx-bandori-teambuilder-live-preferences:v1";
 const DIFFICULTIES: BandoriTeamSearchDifficulty[] = ["easy", "normal", "hard", "expert", "special"];
 const DIFFICULTY_KEYS: Record<BandoriTeamSearchDifficulty, string> = {
@@ -170,19 +179,19 @@ const DIFFICULTY_KEYS: Record<BandoriTeamSearchDifficulty, string> = {
   expert: "3",
   special: "4",
 };
-const FLAME_OPTIONS: FlameCountOption[] = ["0", "1", "2", "3"];
+const LIVE_BOOST_OPTIONS: LiveBoostCountOption[] = ["0", "1", "2", "3"];
 const CHALLENGE_CP_OPTIONS: ChallengeCpCostOption[] = ["200", "400", "800", "1600"];
 const RESULT_PLACEMENT_OPTIONS: ResultPlacementOption[] = ["1", "2", "3", "4", "5"];
 const FESTIVAL_RESULT_OPTIONS: FestivalResultOption[] = ["win", "lose"];
 const EVENT_TYPE_LABELS: Record<string, string> = {
   none: "无活动",
   story: "普通活动",
-  challenge: "挑战演出",
-  versus: "竞演演出",
-  live_try: "试炼演出",
-  mission_live: "任务演出",
-  festival: "团队演出FES",
-  medley: "巡回演出",
+  challenge: "挑战活动",
+  versus: "竞演活动",
+  live_try: "试炼活动",
+  mission_live: "任务活动",
+  festival: "团队FES活动",
+  medley: "巡回活动",
 };
 const TARGET_LABELS: Record<BandoriTeamSearchTarget, string> = {
   score: "分数",
@@ -200,7 +209,7 @@ const EVENT_FORMULA_LABELS: Record<EventFormulaOption, string> = {
   "1": "V2",
   "2": "V3",
 };
-const FLAME_LABELS: Record<FlameCountOption, string> = {
+const LIVE_BOOST_LABELS: Record<LiveBoostCountOption, string> = {
   "0": "0",
   "1": "1",
   "2": "2",
@@ -243,6 +252,11 @@ const ATTRIBUTE_LABELS: Record<BandoriCardAttribute, string> = {
   cool: "Cool",
   happy: "Happy",
   pure: "Pure",
+};
+const AREA_ITEM_PARAMETER_LABELS: Record<"performance" | "technique" | "visual", string> = {
+  performance: "演出",
+  technique: "技巧",
+  visual: "形象",
 };
 const ATTRIBUTE_SWATCH_CLASSES: Record<BandoriCardAttribute, string> = {
   powerful: "bg-rose-500",
@@ -303,11 +317,11 @@ function formatDate(value: number | null): string {
 }
 
 function getEventStartAt(event: BandoriEventSummary): number | null {
-  return event.timeline.cn.startAt ?? event.timeline.jp.startAt ?? null;
+  return resolveBandoriCnScheduleWindow(event).startAt;
 }
 
 function getEventEndAt(event: BandoriEventSummary): number | null {
-  return event.timeline.cn.endAt ?? event.timeline.jp.endAt ?? null;
+  return resolveBandoriCnScheduleWindow(event).endAt;
 }
 
 function getEventStatus(event: BandoriEventSummary, now: number): "ongoing" | "upcoming" | "ended" | "unknown" {
@@ -364,6 +378,14 @@ function formatNumber(value: number | null | undefined): string {
     return "-";
   }
   return Math.round(value).toLocaleString("zh-CN");
+}
+
+function formatAreaItemAttribute(attribute: BandoriCardAttribute | null): string {
+  return attribute ? attribute.toUpperCase() : "-";
+}
+
+function formatAreaItemParameter(parameter: "performance" | "technique" | "visual" | null): string {
+  return parameter ? AREA_ITEM_PARAMETER_LABELS[parameter] : "-";
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -572,7 +594,7 @@ function pickCardDisplayName(cardId: number, metadata: CardMetadata | undefined)
 function getDisplayedEventPointOption(
   result: BandoriTeamSearchResult,
   selections: {
-    flameCount: FlameCountOption;
+    liveBoostCount: LiveBoostCountOption;
     challengeCpCost: ChallengeCpCostOption;
     placement: ResultPlacementOption;
     festivalResult: FestivalResultOption;
@@ -583,7 +605,7 @@ function getDisplayedEventPointOption(
     return null;
   }
 
-  const flameCount = Number(selections.flameCount);
+  const liveBoostCount = Number(selections.liveBoostCount);
   const challengeCpCost = Number(selections.challengeCpCost);
   const placement = Number(selections.placement);
   const matchedOption = options.find((option) => {
@@ -591,15 +613,15 @@ function getDisplayedEventPointOption(
       return option.challengeCpCost === challengeCpCost;
     }
     if (result.eventPointOptions.mode === "versus") {
-      return option.flameCount === flameCount && option.placement === placement;
+      return option.liveBoostCount === liveBoostCount && option.placement === placement;
     }
     if (result.eventPointOptions.mode === "festival") {
-      return option.flameCount === flameCount
+      return option.liveBoostCount === liveBoostCount
         && option.placement === placement
         && option.festivalResult === selections.festivalResult;
     }
-    if (result.eventPointOptions.mode === "flame") {
-      return option.flameCount === flameCount;
+    if (result.eventPointOptions.mode === "liveBoost") {
+      return option.liveBoostCount === liveBoostCount;
     }
     return false;
   });
@@ -708,6 +730,7 @@ function readLivePreferences(): LivePreferenceState {
     const value = JSON.parse(rawValue) as Partial<LivePreferenceState>;
     return {
       liveType: isLiveType(value.liveType) ? value.liveType : undefined,
+      perfectRate: typeof value.perfectRate === "string" ? value.perfectRate : undefined,
       otherPlayersAveragePower: typeof value.otherPlayersAveragePower === "string" ? value.otherPlayersAveragePower : undefined,
       encoreSkillSource: isEncoreSkillSource(value.encoreSkillSource) ? value.encoreSkillSource : undefined,
       otherPlayers: normalizeOtherPlayersPreference(value.otherPlayers),
@@ -1085,10 +1108,12 @@ function BonusCardThumbnail({
   cardId,
   metadata,
   percent,
+  assetRegion,
 }: {
   cardId: number;
   metadata: CardMetadata | undefined;
   percent: number;
+  assetRegion: BandoriAssetRegion;
 }) {
   const rarity = Math.min(5, Math.max(1, Math.trunc(Number(metadata?.rarity) || 1)));
   return (
@@ -1104,6 +1129,7 @@ function BonusCardThumbnail({
       }}
       metadata={metadata}
       badge={formatPercent(percent)}
+      assetRegion={assetRegion}
     />
   );
 }
@@ -1113,18 +1139,20 @@ function TeamBuilderCardTile({
   metadata,
   badge,
   leader,
+  assetRegion = "cn",
 }: {
   card: DisplayCardLike;
   metadata: CardMetadata | undefined;
   badge?: string;
   leader?: boolean;
+  assetRegion?: BandoriAssetRegion;
 }) {
   const cardId = card.cardId;
   const cardName = pickCardDisplayName(cardId, metadata);
   const rarity = Math.min(5, Math.max(1, Math.trunc(Number(metadata?.rarity ?? card.rarity) || 1)));
   const attribute = isKnownAttribute(metadata?.attribute) ? metadata.attribute : card.attribute;
   const thumbnailUrl = metadata?.resourceSetName
-    ? buildBandoriCardThumbnailPublicUrl("cn", cardId, metadata.resourceSetName, rarity >= 3 ? "after_training" : "normal")
+    ? buildBandoriCardThumbnailPublicUrl(assetRegion, cardId, metadata.resourceSetName, rarity >= 3 ? "after_training" : "normal")
     : null;
   const frameUrl = rarity >= 2
     ? buildBandoriResImagePublicUrl(`card-${rarity}.png`)
@@ -1237,6 +1265,7 @@ function EventBonusPanel({
   eventBonusError,
   characters,
   cardMetadata,
+  assetRegion,
   eventFormula,
 }: {
   eventType: BandoriTeamSearchEventType;
@@ -1245,6 +1274,7 @@ function EventBonusPanel({
   eventBonusError: string;
   characters: Record<string, CharacterMaster | undefined>;
   cardMetadata: Record<string, CardMetadata | undefined>;
+  assetRegion: BandoriAssetRegion;
   eventFormula: EventFormulaOption;
 }) {
   const attributeItems = readAttributeBonusItems(eventBonus);
@@ -1315,7 +1345,7 @@ function EventBonusPanel({
 
         <EventBonusInfoRow label="卡牌">
           {memberItems.length > 0 ? memberItems.map((item) => (
-            <BonusCardThumbnail key={item.cardId} cardId={item.cardId} metadata={item.metadata} percent={item.percent} />
+            <BonusCardThumbnail key={item.cardId} cardId={item.cardId} metadata={item.metadata} percent={item.percent} assetRegion={assetRegion} />
           )) : <BonusChip tone="muted">无</BonusChip>}
         </EventBonusInfoRow>
 
@@ -1395,20 +1425,22 @@ function MultiLiveSettingsPanel({
 function ResultCard({
   result,
   cardMetadata,
-  displayFlameCount,
+  assetRegion,
+  displayLiveBoostCount,
   displayChallengeCpCost,
   displayPlacement,
   displayFestivalResult,
 }: {
   result: BandoriTeamSearchResult;
   cardMetadata: Record<string, CardMetadata | undefined>;
-  displayFlameCount: FlameCountOption;
+  assetRegion: BandoriAssetRegion;
+  displayLiveBoostCount: LiveBoostCountOption;
   displayChallengeCpCost: ChallengeCpCostOption;
   displayPlacement: ResultPlacementOption;
   displayFestivalResult: FestivalResultOption;
 }) {
   const displayedEventPointOption = getDisplayedEventPointOption(result, {
-    flameCount: displayFlameCount,
+    liveBoostCount: displayLiveBoostCount,
     challengeCpCost: displayChallengeCpCost,
     placement: displayPlacement,
     festivalResult: displayFestivalResult,
@@ -1466,6 +1498,7 @@ function ResultCard({
             card={card}
             metadata={cardMetadata[String(card.cardId)]}
             leader={card.cardId === result.leaderCardId}
+            assetRegion={assetRegion}
           />
         ))}
       </div>
@@ -1478,8 +1511,8 @@ function ResultCard({
         <div className="rounded-xl bg-slate-50 p-3">
           <div className="font-semibold text-slate-800">区域道具配置</div>
           <div className="mt-1">
-            {result.areaItemConfiguration.bandKey ?? "-"} · {result.areaItemConfiguration.attribute ?? "-"} ·{" "}
-            {result.areaItemConfiguration.parameter ?? "-"}
+            {result.areaItemConfiguration.bandKey ?? "-"} · {formatAreaItemAttribute(result.areaItemConfiguration.attribute)} ·{" "}
+            {formatAreaItemParameter(result.areaItemConfiguration.parameter)}
           </div>
         </div>
         <div className="rounded-xl bg-slate-50 p-3">
@@ -1523,10 +1556,10 @@ function TeamBuilderPanel() {
   const [songSearch, setSongSearch] = useState("");
   const [songId, setSongId] = useState(DEFAULT_SONG_ID);
   const [difficulty, setDifficulty] = useState<BandoriTeamSearchDifficulty>(DEFAULT_DIFFICULTY);
-  const [perfectRate, setPerfectRate] = useState("100");
+  const [perfectRate, setPerfectRate] = useState(() => readLivePreferences().perfectRate ?? DEFAULT_PERFECT_RATE);
   const [liveType, setLiveType] = useState<LiveType>(() => readLivePreferences().liveType ?? "multi");
   const eventFormula: EventFormulaOption = "2";
-  const flameCount: FlameCountOption = "3";
+  const liveBoostCount: LiveBoostCountOption = "3";
   const challengeCpCost: ChallengeCpCostOption = "1600";
   const roomPower = "";
   const [otherPlayersAveragePower, setOtherPlayersAveragePower] = useState(() => readLivePreferences().otherPlayersAveragePower ?? "380000");
@@ -1540,7 +1573,7 @@ function TeamBuilderPanel() {
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<BandoriTeamSearchResponse | null>(null);
   const [resultError, setResultError] = useState("");
-  const [resultFlameCount, setResultFlameCount] = useState<FlameCountOption>("3");
+  const [resultLiveBoostCount, setResultLiveBoostCount] = useState<LiveBoostCountOption>("3");
   const [resultChallengeCpCost, setResultChallengeCpCost] = useState<ChallengeCpCostOption>("1600");
   const [resultPlacement, setResultPlacement] = useState<ResultPlacementOption>("1");
   const [resultFestivalResult, setResultFestivalResult] = useState<FestivalResultOption>("win");
@@ -1576,6 +1609,9 @@ function TeamBuilderPanel() {
   const selectedEventType = useMemo<BandoriTeamSearchEventType>(() => (
     selectedEvent ? eventTypeFromValue(selectedEvent.eventType) : "none"
   ), [selectedEvent]);
+  const selectedEventAssetRegion = useMemo<BandoriAssetRegion>(() => (
+    selectedEvent ? resolveBandoriEventAssetRegion(selectedEvent) : "cn"
+  ), [selectedEvent]);
   const recommendedEventStatus = recommendedEvent ? getEventStatus(recommendedEvent, referenceNow) : "unknown";
   const selectedEventSwitcherId = selectedEventId ?? (recommendedEvent ? String(recommendedEvent.eventId) : "none");
   const availableLiveTypes = useMemo(() => allowedLiveTypes(selectedEventType), [selectedEventType]);
@@ -1587,6 +1623,10 @@ function TeamBuilderPanel() {
   const updateLiveType = useCallback((value: LiveType) => {
     setLiveType(value);
     writeLivePreferences({ liveType: value });
+  }, []);
+  const updatePerfectRate = useCallback((value: string) => {
+    setPerfectRate(value);
+    writeLivePreferences({ perfectRate: value });
   }, []);
   const updateOtherPlayersAveragePower = useCallback((value: string) => {
     setOtherPlayersAveragePower(value);
@@ -1617,7 +1657,7 @@ function TeamBuilderPanel() {
         name: event.name.cn ?? event.name.jp,
         startAt: getEventStartAt(event),
         endAt: getEventEndAt(event),
-        hasCn: Boolean(event.name.cn),
+        hasCn: hasBandoriOfficialCnEventContent(event),
         hasJp: Boolean(event.name.jp),
         typeLabel: EVENT_TYPE_LABELS[event.eventType] ?? event.eventType,
         statusLabel: getEventStatusLabel(status),
@@ -1633,8 +1673,8 @@ function TeamBuilderPanel() {
     if (!bundleName) {
       return "";
     }
-    return buildBandoriEventBannerPublicUrl(selectedEvent.name.cn?.trim() ? "cn" : "jp", bundleName);
-  }, [selectedEvent]);
+    return buildBandoriEventBannerPublicUrl(selectedEventAssetRegion, bundleName);
+  }, [selectedEvent, selectedEventAssetRegion]);
   const eventSongOptions = useMemo(() => {
     if (!canShowEventSongPicker(selectedEventType, liveType)) {
       return [];
@@ -1989,7 +2029,7 @@ function TeamBuilderPanel() {
           otherPlayersAveragePower: otherPlayersAveragePower.trim() ? Number(otherPlayersAveragePower) : undefined,
           useSpecialRoomBonus,
           encoreSkillSource,
-          flameCount: Number(flameCount) as TeamSearchWorkerRequest["live"]["flameCount"],
+          liveBoostCount: Number(liveBoostCount) as TeamSearchWorkerRequest["live"]["liveBoostCount"],
           challengeCpCost: Number(challengeCpCost) as TeamSearchWorkerRequest["live"]["challengeCpCost"],
           otherPlayerSkills: otherPlayers.map((player) => ({
             skillId: Number(player.skillId),
@@ -2014,7 +2054,7 @@ function TeamBuilderPanel() {
       if (response.type !== "search") {
         throw new Error("计算线程返回格式无效");
       }
-      setResultFlameCount(flameCount);
+      setResultLiveBoostCount(liveBoostCount);
       setResultChallengeCpCost(challengeCpCost);
       setResultPlacement("1");
       setResultFestivalResult("win");
@@ -2066,6 +2106,7 @@ function TeamBuilderPanel() {
             eventBonusError={eventBonusError}
             characters={data.characters}
             cardMetadata={cardMetadata}
+            assetRegion={selectedEventAssetRegion}
             eventFormula={eventFormula}
           />
         </section>
@@ -2109,7 +2150,7 @@ function TeamBuilderPanel() {
               </div>
               <label className="space-y-2">
                 <span className="block text-xs font-semibold text-slate-500">Perfect率</span>
-                <TextInput value={perfectRate} onChange={(event) => setPerfectRate(event.target.value)} inputMode="decimal" />
+                <TextInput value={perfectRate} onChange={(event) => updatePerfectRate(event.target.value)} inputMode="decimal" />
               </label>
             </div>
           </div>
@@ -2221,10 +2262,10 @@ function TeamBuilderPanel() {
               </div>
               {resultEventPointMode !== "none" ? (
                 <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-slate-200 bg-white p-4 text-sm">
-                  {resultEventPointMode === "flame" || resultEventPointMode === "versus" || resultEventPointMode === "festival" ? (
+                  {resultEventPointMode === "liveBoost" || resultEventPointMode === "versus" || resultEventPointMode === "festival" ? (
                     <div className="flex items-center gap-2">
                       <span className="font-semibold text-slate-600">Live Boost</span>
-                      <Segment value={resultFlameCount} options={FLAME_OPTIONS} onChange={setResultFlameCount} labels={FLAME_LABELS} />
+                      <Segment value={resultLiveBoostCount} options={LIVE_BOOST_OPTIONS} onChange={setResultLiveBoostCount} labels={LIVE_BOOST_LABELS} />
                     </div>
                   ) : null}
                   {resultEventPointMode === "challengeCp" ? (
@@ -2253,7 +2294,8 @@ function TeamBuilderPanel() {
                     key={item.rank}
                     result={item}
                     cardMetadata={cardMetadata}
-                    displayFlameCount={resultFlameCount}
+                    assetRegion={selectedEventAssetRegion}
+                    displayLiveBoostCount={resultLiveBoostCount}
                     displayChallengeCpCost={resultChallengeCpCost}
                     displayPlacement={resultPlacement}
                     displayFestivalResult={resultFestivalResult}

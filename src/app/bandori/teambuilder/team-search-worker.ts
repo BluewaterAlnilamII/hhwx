@@ -50,7 +50,7 @@ type TeamSearchWorkerSearchRequest = {
     otherPlayersAveragePower?: number;
     otherPlayerSkills?: BandoriTeamSearchExternalSkill[];
     encoreSkillSource?: "self" | "other1" | "other2" | "other3" | "other4";
-    flameCount?: 0 | 1 | 2 | 3;
+    liveBoostCount?: 0 | 1 | 2 | 3;
     challengeCpCost?: 200 | 400 | 800 | 1600;
   };
   song: {
@@ -289,7 +289,7 @@ async function runSearch(request: TeamSearchWorkerSearchRequest): Promise<Bandor
     otherPlayersAveragePower: request.live.otherPlayersAveragePower,
     otherPlayerSkills: request.live.otherPlayerSkills,
     encoreSkillSource: request.live.encoreSkillSource,
-    flameCount: request.live.flameCount,
+    liveBoostCount: request.live.liveBoostCount,
     challengeCpCost: request.live.challengeCpCost,
     server: request.profilePayload.bestdoriProfile.server,
     maxSearchDurationMs: request.calculation.maxSearchDurationMs,
