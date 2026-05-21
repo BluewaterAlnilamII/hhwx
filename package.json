@@ -2,6 +2,12 @@
   "name": "hhwx",
   "version": "0.1.0",
   "private": true,
+  "author": "BluewaterAlnilamII",
+  "license": "AGPL-3.0-only",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/BluewaterAlnilamII/hhwx.git"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -22,7 +28,7 @@
     "clsx": "^2.1.0",
     "date-fns": "^3.6.0",
     "lucide-react": "^0.460.0",
-    "next": "^16.2.3",
+    "next": "^16.2.6",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "recharts": "^2.15.4",
@@ -37,8 +43,11 @@
     "babel-plugin-react-compiler": "1.0.0",
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
-    "postcss": "^8.4.0",
+    "postcss": "8.5.15",
     "tailwindcss": "^3.4.0",
     "typescript": "^5"
+  },
+  "overrides": {
+    "postcss": "8.5.15"
   }
 }

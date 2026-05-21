@@ -26,13 +26,15 @@
 - Medley 主实现：`src/lib/bandori-medley-team-search.ts`
 - 单队共享逻辑：`src/lib/bandori-team-search.ts`
 - 兼容导出：`bandori-team-search.ts` 继续 re-export medley 类型和 `searchBandoriBestMedleyTeams()`
-- Benchmark：`temp/bandori-team-builder/benchmark-medley-team-search.cjs`
-- 计分一致性校验：`temp/bandori-team-builder/verify-medley-scoring-consistency.cjs`
+- Benchmark：`temp/bandori-team-builder/benchmark-medley-team-search.cjs`（历史内部验证脚本，未随开源仓库发布）
+- 计分一致性校验：`temp/bandori-team-builder/verify-medley-scoring-consistency.cjs`（历史内部验证脚本，未随开源仓库发布）
 - 本文档：`documents/bandori-team-builder/medley-algorithm-notes.md`
 
 ## 分数一致性
 
 Medley 不重新实现音符计分。所有完整 5 卡队伍都复用单队 `evaluateTeam()`。
+
+本节中的 `temp/bandori-team-builder/` 命令记录历史内部验证口径；原始 fixture 和本地兼容基线不包含在开源仓库中，因此不作为可复现测试套件。
 
 每个 medley slot 调用共享计分时会传入：
 

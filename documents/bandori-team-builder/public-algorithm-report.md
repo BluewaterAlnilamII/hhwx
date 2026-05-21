@@ -754,7 +754,7 @@ User-facing meaning:
 
 Bestdori Team Builder is an important reference, but its team search is heuristic and does not provide an exact optimality proof. It also optimizes around compact skill tags and skill matrices, historically keyed around `skillId + skillLevel`, which cannot fully represent same-band and same-attribute conditions during partial-team optimization.
 
-The benchmark comparison below is against a local Bestdori-compatible baseline, not a claim about every current or future production deployment of Bestdori. The local baseline is built from the saved Bestdori Team Builder asset bundle used during validation, currently represented by `ToolTeamBuilder.6367a448.js`, and wrapped so it can run against the same local fixtures and master data as HHWX.
+The benchmark comparison below is against a local Bestdori-compatible baseline, not a claim about every current or future production deployment of Bestdori. The local baseline is built from the saved Bestdori Team Builder asset bundle used during validation, currently represented by `ToolTeamBuilder.6367a448.js`, and wrapped so it can run against the same local fixtures and master data as HHWX. The raw fixtures, local wrapper, and validation scripts are not distributed with this repository, so the figures are design evidence rather than a public reproducibility suite.
 
 Bestdori also uses important performance techniques:
 

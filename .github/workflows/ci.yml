@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  lint-and-build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=moderate
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build
+        run: npm run build
+        env:
+          NEXT_PUBLIC_SITE_URL: http://localhost:3000
+          NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: example_publishable_key
+          SUPABASE_SECRET_KEY: example_secret_key
+          NEXT_PUBLIC_SITE_ASSET_CDN_BASE_URL: https://your-site-asset-cdn.example.com
+          NEXT_PUBLIC_BANDORI_ASSET_CDN_BASE_URL: https://your-bandori-asset-cdn.example.com
+          BANDORI_ASSET_CDN_BASE_URL: https://your-bandori-asset-cdn.example.com

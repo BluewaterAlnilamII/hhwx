@@ -1,49 +1,100 @@
 # HHWX
 
-HHWX 是一个基于 Next.js App Router 的前端站点，当前包含以下主要能力：
+HHWX is a Next.js App Router application for a small set of community tools and experiments:
 
-- 首页黑白棋与角色交互
-- Bandori 国服活动日历
-- Bandori 活动分数追踪器展示
-- 账号中心、邮箱与密码管理
-- 基于 Supabase 的鉴权与服务端 API
+- an Othello-style home page with character interactions;
+- Bandori CN event calendar views;
+- Bandori event tracker data display;
+- Bandori game profile import, sync, card, item, and team-builder tools;
+- account, email, password, comments, and verified-user workflows backed by Supabase.
 
-## 常用命令
+This is an unofficial fan/tool project. It is not affiliated with, endorsed by, or sponsored by BanG Dream!, Bushiroad, Craft Egg, Bestdori, Bilibili, Cloudflare, Supabase, or any other referenced third party. Third-party names, trademarks, game data, and media remain the property of their respective owners.
+
+## Status
+
+The repository is suitable for local development and self-hosted deployment, but some production services are intentionally external:
+
+- Supabase provides auth, database, realtime, and server-side service access.
+- Cloudflare Turnstile is optional and protects sensitive flows when configured.
+- `cdn.hhwx.org` is the current production CDN for static site and Bandori asset mirrors. Self-hosted deployments should use their own CDN or asset host, and must not treat the production domain as part of the open-source license.
+- `hhwx-tracker` is a separate service used for tracker data ingestion and game-account sync. This repository only contains the web application.
+
+## Requirements
+
+- Node.js 20.9 or newer
+- npm
+- A Supabase project for account-backed features
+- Optional: Cloudflare Turnstile site and secret keys
+- Optional: a deployed HHWX user fetcher service for game-account binding and manual sync
+
+## Quick Start
 
 ```bash
 npm install
+cp .env.example .env.local
 npm run dev
-npm run build
 ```
 
-默认开发地址为 http://localhost:3000 。
+The default local URL is `http://localhost:3000`.
 
-## 目录概览
+Public Bandori metadata pages can render with only the public environment values. Account-backed pages and write APIs require the Supabase schema and service key described below.
+
+## Environment
+
+Copy [.env.example](.env.example) to `.env.local` and fill in the values for your own deployment.
+
+Important rules:
+
+- `NEXT_PUBLIC_*` values are exposed to browsers.
+- `SUPABASE_SECRET_KEY`, `TURNSTILE_SECRET_KEY`, and `HHWX_USER_FETCHER_TOKEN` are server-side secrets and must not be committed.
+- `NEXT_PUBLIC_SITE_ASSET_CDN_BASE_URL` and `NEXT_PUBLIC_BANDORI_ASSET_CDN_BASE_URL` should point to your own CDN. The production `cdn.hhwx.org` value is only a public static asset host and does not grant rights to third-party game assets.
+- Asset and CDN examples are deployment configuration only. See [NOTICE.md](NOTICE.md) before mirroring, caching, or redistributing third-party game content.
+
+## Scripts
+
+```bash
+npm run dev
+npm run lint
+npm run build
+npm run start
+```
+
+## Supabase Setup
+
+The canonical schema files are under [supabase/schema](supabase/schema), with older incremental SQL still kept under [documents](documents). See [documents/supabase-setup.md](documents/supabase-setup.md) for the recommended execution order and notes on RLS and service-role-only functions.
+
+## Repository Layout
 
 ```text
 hhwx/
-├── documents/      # 项目文档
-├── public/         # 直接公开的静态资源
+├── documents/      # product notes, setup notes, and historical SQL
+├── public/         # static assets served directly by Next.js
 ├── src/
-│   ├── app/        # App Router 页面、布局和 API 路由
-│   ├── components/ # 通用 React 组件
-│   ├── hooks/      # 自定义 Hooks
-│   ├── lib/        # 服务端与共享业务逻辑
-│   └── store/      # Zustand 状态
-├── supabase/       # 数据库 schema 归档与手动维护 runbook
-└── package.json    # 脚本与依赖
+│   ├── app/        # App Router pages, layouts, metadata, and API routes
+│   ├── components/ # shared React UI components
+│   ├── hooks/      # reusable hooks
+│   ├── lib/        # server and shared business logic
+│   └── store/      # client state
+├── supabase/       # canonical schema and manual maintenance SQL
+└── package.json    # scripts and dependencies
 ```
 
-更细的结构说明见 documents/layout.md。
+More detail is available in [documents/layout.md](documents/layout.md).
 
-## Supabase 文件约定
+## Security
 
-- `supabase/schema/` 是 hhwx 数据库结构的 canonical source，包含账号、评论、Bandori 日历和追踪器数据表结构。
-- `supabase/maintenance/` 只放手动观察与维护 runbook，不作为 schema migration；其中 `bandori_tracker_maintenance.sql` 用于排查 `bandori_tracker_data` 的表大小、索引大小、死元组和统计信息，不是自动清理脚本。
-- `documents/*.sql` 保留历史和增量 SQL，例如账号验证、公开 UID、游戏绑定和游戏档案；后续再单独整理成正式 migrations。
+Please report security issues privately instead of opening a public issue. See [SECURITY.md](SECURITY.md).
 
-## 关键约定
+## Contributing
 
-- 账号与敏感操作的安全校验放在服务端 API 中完成。
-- 全站壳层、页眉和侧边栏由共享组件统一管理。
-- 文档只保留长期有效的信息，不记录 .next、node_modules、tsconfig.tsbuildinfo 这类本地产物。
+Contributions should keep secrets out of the repository, keep public docs free of private deployment details, and run `npm run lint` plus `npm run build` before review. See [CONTRIBUTING.md](CONTRIBUTING.md).
+
+## License
+
+Copyright (c) 2026 BluewaterAlnilamII.
+
+The code, documentation, and original project materials in this repository are licensed under the GNU Affero General Public License v3.0 only. See [LICENSE](LICENSE).
+
+The AGPL permits study, modification, redistribution, and self-hosted deployment under its terms. If you modify the software and make it available to users over a network, the AGPL requires you to offer the corresponding source code to those users.
+
+This license does not grant any rights to third-party game assets, media, trademarks, or CDN-hosted content that are not part of this repository. See [NOTICE.md](NOTICE.md).

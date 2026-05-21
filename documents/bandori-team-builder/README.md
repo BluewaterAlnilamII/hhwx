@@ -1,6 +1,6 @@
 # Bandori 组队计算文档索引
 
-本目录记录 Bandori 组队计算器的正式设计说明。临时脚本、fixture、缓存和验证报告保存在 `temp/bandori-team-builder/`，不作为产品源码的一部分。
+本目录记录 Bandori 组队计算器的正式设计说明。临时脚本、fixture、缓存和验证报告保存在 `temp/bandori-team-builder/`，不作为产品源码的一部分，也不随开源仓库发布；相关 benchmark 结果用于设计说明，不作为可复现测试套件。
 
 ## 文档
 

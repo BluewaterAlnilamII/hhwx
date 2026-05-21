@@ -754,7 +754,7 @@ searchMode = "exact"
 
 Bestdori Team Builder 是重要参考，但它的队伍搜索是启发式的，不提供 exact 最优性证明。它也围绕紧凑 skill tag 和 skill matrix 做优化，历史上 key 接近 `skillId + skillLevel`，这无法在半成品队伍优化阶段完整表达同团、同属性条件。
 
-下方 benchmark 比较的是本地 Bestdori-compatible baseline，不是对 Bestdori 当前或未来线上部署的普遍结论。这个本地基线来自验证时保存的 Bestdori Team Builder 资源包，目前对应 `ToolTeamBuilder.6367a448.js`，并被包装成可以使用与 HHWX 相同的本地 fixture 和 master data 运行。
+下方 benchmark 比较的是本地 Bestdori-compatible baseline，不是对 Bestdori 当前或未来线上部署的普遍结论。这个本地基线来自验证时保存的 Bestdori Team Builder 资源包，目前对应 `ToolTeamBuilder.6367a448.js`，并被包装成可以使用与 HHWX 相同的本地 fixture 和 master data 运行。原始 fixture、本地包装器和验证脚本不随本仓库发布，因此这些数字是设计论证材料，不是公开可复现测试套件。
 
 Bestdori 也使用重要的性能技术：
 
