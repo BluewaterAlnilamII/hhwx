@@ -20,6 +20,7 @@ import {
   buildBandoriResImagePublicUrl,
   type BandoriAssetRegion,
 } from "@/lib/bandori-asset-proxy";
+import { pickBestdoriCnThenJpName } from "@/lib/bestdori-regional-names";
 import { decodeBestdoriProfile, encodeBestdoriProfile } from "@/lib/bestdori-profile-codec";
 import {
   decodeCompressedGameProfilePayload,
@@ -136,10 +137,7 @@ function pickCharacterName(character: CharacterRecord | undefined, characterId: 
 
 function pickCardName(cardId: number, metadata?: BestdoriCardMetadata): string {
   return metadata?.displayName
-    ?? metadata?.prefix?.[3]
-    ?? metadata?.prefix?.[2]
-    ?? metadata?.prefix?.[1]
-    ?? metadata?.prefix?.[0]
+    ?? pickBestdoriCnThenJpName(metadata?.prefix)
     ?? `卡牌 ${cardId}`;
 }
 

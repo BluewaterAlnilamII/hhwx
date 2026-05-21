@@ -1,8 +1,8 @@
 import { LIVE_API_CACHE_CONTROL, PUBLIC_METADATA_API_CACHE_CONTROL, withCacheControl } from "@/lib/api-cache";
 import { jsonError, jsonRouteError, jsonSuccess } from "@/lib/api-response";
+import { pickBestdoriCnThenJpName } from "@/lib/bestdori-regional-names";
 
 const BESTDORI_CARDS_URL = "https://bestdori.com/api/cards/all.5.json";
-const NAME_PREFERENCE_ORDER = [3, 2, 1, 0, 4] as const;
 
 type BestdoriCardMetadata = {
   characterId?: number;
@@ -38,28 +38,6 @@ function parseRequestedCardIds(request: Request): number[] {
   );
 }
 
-function pickBestName(names: Array<string | null> | undefined): string | null {
-  if (!Array.isArray(names)) {
-    return null;
-  }
-
-  for (const index of NAME_PREFERENCE_ORDER) {
-    const name = names[index]?.trim();
-    if (name) {
-      return name;
-    }
-  }
-
-  for (const candidate of names) {
-    const name = candidate?.trim();
-    if (name) {
-      return name;
-    }
-  }
-
-  return null;
-}
-
 export async function GET(request: Request) {
   const cardIds = parseRequestedCardIds(request);
 
@@ -90,7 +68,7 @@ export async function GET(request: Request) {
       if (card) {
         cards[String(cardId)] = {
           ...card,
-          displayName: pickBestName(card.prefix),
+          displayName: pickBestdoriCnThenJpName(card.prefix),
         };
       }
     }
