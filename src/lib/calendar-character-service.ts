@@ -1,3 +1,5 @@
+import { buildBandoriResIconPublicUrl } from "@/lib/bandori-asset-proxy";
+
 export type CalendarBandType = "ppp" | "ag" | "hhw" | "pp" | "roselia" | "morfonica" | "ras" | "mygo" | "mix";
 
 export interface CalendarCharacter {
@@ -171,5 +173,5 @@ export function getSubscriptionEventColor(
 }
 
 export function getCharacterIconUrl(characterId: number): string {
-  return `/res/bandori/icon/chara_icon_${characterId}.png`;
+  return buildBandoriResIconPublicUrl(`chara_icon_${characterId}.png`);
 }

@@ -15,7 +15,6 @@ hhwx/
 ├── .claude/          # 项目规则与协作约束
 ├── documents/        # 产品和结构文档
 ├── public/           # 直接对外提供的静态资源
-├── res/              # 设计源文件与原始素材
 ├── src/
 │   ├── app/          # App Router 页面、布局、元数据与 API 路由
 │   ├── components/   # 通用 UI 组件与全站壳层组件

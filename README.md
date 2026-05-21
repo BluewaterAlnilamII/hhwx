@@ -24,7 +24,6 @@ npm run build
 hhwx/
 ├── documents/      # 项目文档
 ├── public/         # 直接公开的静态资源
-├── res/            # 设计源资源
 ├── src/
 │   ├── app/        # App Router 页面、布局和 API 路由
 │   ├── components/ # 通用 React 组件

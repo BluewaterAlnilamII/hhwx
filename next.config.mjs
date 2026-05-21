@@ -4,6 +4,7 @@ const STATIC_SITE_ASSET_CACHE_CONTROL = "public, max-age=2592000, s-maxage=25920
 // 因此这里单独缩短浏览器 TTL，避免发布后长时间拿到旧元数据。
 const MANIFEST_SITE_ASSET_CACHE_CONTROL = "public, max-age=3600, s-maxage=86400, stale-while-revalidate=604800";
 const CSP_REPORT_ENDPOINT = "/api/security/csp-report";
+const DEFAULT_SITE_ASSET_CDN_BASE_URL = "https://cdn.hhwx.org";
 
 function normalizeOrigin(value) {
     if (typeof value !== "string" || !value.trim()) {
@@ -27,6 +28,30 @@ function buildSupabaseConnectSources() {
     return [...new Set([supabaseOrigin, websocketOrigin])];
 }
 
+function buildImageSources() {
+    const origins = [
+        DEFAULT_SITE_ASSET_CDN_BASE_URL,
+        process.env.NEXT_PUBLIC_SITE_ASSET_CDN_BASE_URL,
+        process.env.NEXT_PUBLIC_BANDORI_ASSET_CDN_BASE_URL,
+    ]
+        .map(normalizeOrigin)
+        .filter(Boolean);
+
+    return [...new Set(origins)];
+}
+
+function buildRemoteImagePatterns() {
+    return buildImageSources().map((origin) => {
+        const url = new URL(origin);
+        return {
+            protocol: url.protocol.replace(":", ""),
+            hostname: url.hostname,
+            port: url.port,
+            pathname: "/**",
+        };
+    });
+}
+
 function buildContentSecurityPolicyReportOnly() {
     const directives = [
         ["default-src", ["'self'"]],
@@ -37,7 +62,7 @@ function buildContentSecurityPolicyReportOnly() {
         ["object-src", ["'none'"]],
         ["manifest-src", ["'self'"]],
         ["worker-src", ["'self'", "blob:"]],
-        ["img-src", ["'self'", "data:", "blob:"]],
+        ["img-src", ["'self'", "data:", "blob:", ...buildImageSources()]],
         ["font-src", ["'self'", "data:"]],
         ["style-src", ["'self'", "'unsafe-inline'"]],
         ["script-src", ["'self'", "'unsafe-inline'"]],
@@ -70,7 +95,7 @@ const PAGE_SECURITY_HEADERS = [
 const nextConfig = {
     poweredByHeader: false,
     images: {
-        remotePatterns: [],
+        remotePatterns: buildRemoteImagePatterns(),
     },
     async headers() {
         return [
@@ -110,12 +135,6 @@ const nextConfig = {
                 source: "/manifest.webmanifest",
                 headers: [
                     { key: "Cache-Control", value: MANIFEST_SITE_ASSET_CACHE_CONTROL },
-                ],
-            },
-            {
-                source: "/res/bandori/icon/:path*",
-                headers: [
-                    { key: "Cache-Control", value: STATIC_SITE_ASSET_CACHE_CONTROL },
                 ],
             },
         ];

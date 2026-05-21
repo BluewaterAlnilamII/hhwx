@@ -1,3 +1,5 @@
+import { buildHhwxSiteResCdnUrl } from "@/lib/site-assets";
+
 export type ThinkTime = "short" | "medium" | "long";
 
 export interface Character {
@@ -19,7 +21,7 @@ export const CHARACTERS: Character[] = [
         name: "Kokoro",
         nameJp: "弦巻 こころ",
         color: "#FFD700",
-        avatar: "/res/kokoro.png",
+        avatar: buildHhwxSiteResCdnUrl("kokoro.png"),
         description: "依靠直觉的战略型选手，热衷于稳固自身棋子并对边角区域展开激烈争夺。",
         thinkTime: "short",
         thinkLines: [
@@ -42,7 +44,7 @@ export const CHARACTERS: Character[] = [
         name: "Kaoru",
         nameJp: "瀬田 薫",
         color: "#9B59B6",
-        avatar: "/res/kaoru.png",
+        avatar: buildHhwxSiteResCdnUrl("kaoru.png"),
         description: "极其梦幻的神秘人物，并在这里拥有极其梦幻的实力，正在等待极其梦幻的挑战者。",
         thinkTime: "long",
         thinkLines: [
@@ -65,7 +67,7 @@ export const CHARACTERS: Character[] = [
         name: "Hagumi",
         nameJp: "北沢 はぐみ",
         color: "#FF6B35",
-        avatar: "/res/hagumi.png",
+        avatar: buildHhwxSiteResCdnUrl("hagumi.png"),
         description: "下棋有气势，倾向翻转最多棋子，常忽略边角战略。",
         thinkTime: "medium",
         thinkLines: [
@@ -88,7 +90,7 @@ export const CHARACTERS: Character[] = [
         name: "Kanon",
         nameJp: "松原 花音",
         color: "#FF69B4",
-        avatar: "/res/kanon.png",
+        avatar: buildHhwxSiteResCdnUrl("kanon.png"),
         description: "精通行动力压制战术，但在部分回合会因犯迷糊而出现失误。",
         thinkTime: "long",
         thinkLines: [
@@ -112,7 +114,7 @@ export const CHARACTERS: Character[] = [
         name: "Michelle",
         nameJp: "ミッシェル",
         color: "#FF91A4",
-        avatar: "/res/michelle.png",
+        avatar: buildHhwxSiteResCdnUrl("michelle.png"),
         description: "是一只神秘的熊。",
         thinkTime: "medium",
         thinkLines: [
