@@ -1,18 +1,37 @@
-# Bandori 组队计算文档索引
+# Bandori Team Builder Documentation Index
 
-本目录记录 Bandori 组队计算器的正式设计说明。临时脚本、fixture、缓存和验证报告保存在 `temp/bandori-team-builder/`，不作为产品源码的一部分，也不随开源仓库发布；相关 benchmark 结果用于设计说明，不作为可复现测试套件。
+This directory keeps the durable design notes for the HHWX Bandori team builder.
+Temporary runners, fixtures, raw benchmark output, and Bestdori caches live under
+`temp/bandori-team-builder/` and are not treated as product documentation.
 
-## 文档
+## Code Structure
 
-- `algorithm-notes.md`：单曲 exact 搜索的完整算法说明、分数公式、活动 PT、支援队伍和正确性证明。
-- `single-song-search-optimization.md`：单曲搜索优化结构、共享缓存、剪枝策略和后续优化方向。
-- `benchmark-results-and-next-plan.md`：当前验证结果、Supabase 实际卡池矩阵、与 Bestdori 兼容基线的性能对比和发布门禁。
-- `public-algorithm-report.md`：可对外发布的脱敏算法说明，包含实现方法、正确性证明和匿名聚合性能对比。
-- `public-algorithm-report.zh-CN.md`：中文版公开算法说明，与英文公开报告保持同一结构和口径。
-- `medley-algorithm-notes.md`：组曲搜索的独立问题建模和后续设计记录。
+The team-builder code is split into four layers:
 
-## 维护要求
+- `src/lib/bandori/team-builder/core/`: shared game-rule and scoring primitives used by both single-song and medley search. This layer owns card preparation, chart preparation, event handling, score calculation, five-card team evaluation, common upper bounds, and shared data contracts. It must not import `single`, `medley`, or `shared`.
+- `src/lib/bandori/team-builder/single/`: single-song search orchestration and helpers. This layer owns single-only scopes, seed teams, result ordering, stats finalization, objective policy, and exact DFS.
+- `src/lib/bandori/team-builder/medley/`: medley search orchestration and helpers. This layer owns three-song slot preparation, shared area-item configuration search, cross-slot card-disjoint DFS, medley upper bounds, witness diagnostics, and opt-in experimental solvers.
+- `src/lib/bandori/team-builder/shared/`: legacy compatibility facade. New internal code should import from `core`, `single`, or `medley` directly.
 
-- 任何会影响分数、PT、支援队伍或剪枝正确性的代码改动，都需要同步更新 `algorithm-notes.md`。
-- 任何性能优化若引入新的上界、压缩或缓存策略，需要同步更新 `single-song-search-optimization.md`。
-- 任何发布门禁、benchmark 结果或兼容基线口径变化，需要同步更新 `benchmark-results-and-next-plan.md`。
+Public compatibility entrypoints remain:
+
+- `src/lib/bandori-team-search.ts`
+- `src/lib/bandori-medley-team-search.ts`
+
+## Documents
+
+- `algorithm-notes.md`: single-song exact search formulas, event point behavior, support band handling, and correctness notes.
+- `single-song-search-optimization.md`: single-song search optimization notes, cache strategy, pruning strategy, and remaining work.
+- `benchmark-results-and-next-plan.md`: benchmark results, Supabase-backed sample matrix, Bestdori compatibility baseline, and release gates.
+- `medley-algorithm-notes.md`: medley-specific problem model, scoring consistency, upper-bound strategy, and benchmark commands.
+- `medley-optimization-review-2026-05-22.md`: 30s/120s medley optimization review matrix and conclusion report.
+- `public-algorithm-report.md`: public English algorithm report.
+- `public-algorithm-report.zh-CN.md`: public Chinese algorithm report matching the English report structure.
+
+## Maintenance Rules
+
+- Update `algorithm-notes.md` when score, event point, support band, or pruning correctness changes.
+- Update `single-song-search-optimization.md` when single-search upper bounds, compression, caches, or seed logic change.
+- Update `medley-algorithm-notes.md` when medley slot construction, shared area-item decisions, cross-slot DFS, medley upper bounds, or experimental solvers change.
+- Update benchmark reports only when benchmark methodology, result matrix, or compatibility baseline changes.
+- Keep module header comments short and explicit: state ownership, correctness boundaries, and whether a helper is heuristic, diagnostic, or proof-critical.
