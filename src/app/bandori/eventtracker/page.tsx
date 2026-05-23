@@ -14,7 +14,7 @@ import {
   ReferenceLine,
 } from "recharts";
 import * as Tabs from "@radix-ui/react-tabs";
-import { ZoomIn, ZoomOut } from "lucide-react";
+import { Plus, X, ZoomIn, ZoomOut } from "lucide-react";
 
 import { useCachedFetch } from "@/hooks/useCachedFetch";
 import { parseApiSuccessData } from "@/lib/api-contracts";
@@ -23,10 +23,13 @@ import {
   resolveBandoriEventBannerBundleName,
 } from "@/lib/bandori-asset-proxy";
 import { resolveBandoriEventAssetRegion } from "@/lib/bandori-event-region";
-import type { TrackerData, TrackerDotProps, TrackerMouseState, TrackerTooltipPayloadEntry, TrackingMode } from "./types";
+import type { ComparisonConfig, TrackerData, TrackerDotProps, TrackerMouseState, TrackerTooltipPayloadEntry, TrackingMode } from "./types";
 import {
+  COMPARISON_LINE_COLORS,
+  EVENT_TIERS,
   INSTANT_PROJECTION_STORAGE_KEY,
   DAY_PROJECTION_STORAGE_KEY,
+  MAX_COMPARISON_LINES,
   getTiersForMode,
 } from "./constants";
 import { useTrackerData } from "./useTrackerData";
@@ -42,6 +45,8 @@ import {
 import { TrackerTooltip } from "./TrackerTooltip";
 import FixedYAxis from "./FixedYAxis";
 import { useProjectionPreference } from "./useProjectionPreference";
+import { useComparisonPreferences } from "./useComparisonPreferences";
+import { mergeComparisonLines, useComparisonTrackerData } from "./useComparisonTrackerData";
 import BandoriPageShell from "../BandoriPageShell";
 import BandoriEventSwitcher from "../BandoriEventSwitcher";
 import {
@@ -107,6 +112,17 @@ function isActualTrackerPoint(
 
 function renderHiddenMarker(key?: string) {
   return <circle key={key} cx={0} cy={0} r={0} stroke="none" />;
+}
+
+function getComparisonStatusLabel(status: string): string {
+  if (status === "loading") return "加载中";
+  if (status === "no-data") return "无数据";
+  if (status === "time-missing") return "时间缺失";
+  return "正常";
+}
+
+function createComparisonConfigId(): string {
+  return `comparison-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
 function formatBandoriCnDateTime(timestamp: number) {
@@ -312,6 +328,12 @@ export default function EventTrackerPage() {
   // ===== 投影偏好持久化 =====
   const [showInstantProjection, setShowInstantProjection] = useProjectionPreference(INSTANT_PROJECTION_STORAGE_KEY, true);
   const [showDayProjection, setShowDayProjection] = useProjectionPreference(DAY_PROJECTION_STORAGE_KEY, true);
+  const {
+    comparisonConfigs,
+    setComparisonConfigs,
+    comparisonAlignment,
+    setComparisonAlignment,
+  } = useComparisonPreferences();
 
   const handleTrackingModeChange = useCallback((value: string) => {
     const nextMode = value as TrackingMode;
@@ -411,6 +433,57 @@ export default function EventTrackerPage() {
       ? "max-w-[23.5rem] grid-cols-1 sm:grid-cols-2"
       : "max-w-[31.5rem] grid-cols-1 sm:grid-cols-2 xl:grid-cols-3";
 
+  const comparisonEventOptions = useMemo(
+    () => allEvents.filter((event) => event.startAt !== null && event.endAt !== null),
+    [allEvents],
+  );
+  const activeComparisonConfigs = useMemo(
+    () => comparisonConfigs.filter((config) => config.enabled && config.eventId !== null && config.tier !== null),
+    [comparisonConfigs],
+  );
+  const canAddComparisonRow = trackingMode === "event" && comparisonConfigs.length < MAX_COMPARISON_LINES;
+
+  const handleAddComparison = useCallback(() => {
+    if (!canAddComparisonRow) return;
+
+    setComparisonConfigs((previous) => [
+      ...previous,
+      { id: createComparisonConfigId(), eventId: resolvedCurrentEventId, tier: null, enabled: true },
+    ]);
+  }, [canAddComparisonRow, resolvedCurrentEventId, setComparisonConfigs]);
+
+  const handleUpdateComparison = useCallback((id: string, patch: Partial<ComparisonConfig>) => {
+    setComparisonConfigs((previous) => previous.map((config) => {
+      if (config.id !== id) return config;
+
+      const nextConfig = { ...config, ...patch };
+      const nextKey = nextConfig.eventId !== null && nextConfig.tier !== null
+        ? `${nextConfig.eventId}:${nextConfig.tier}`
+        : null;
+      const isDuplicate = nextKey !== null && previous.some((other) => (
+        other.id !== id &&
+        other.eventId === nextConfig.eventId &&
+        other.tier === nextConfig.tier
+      ));
+
+      if (isDuplicate) {
+        return config;
+      }
+
+      return nextConfig;
+    }));
+  }, [setComparisonConfigs]);
+
+  const handleToggleComparison = useCallback((id: string) => {
+    setComparisonConfigs((previous) => previous.map((config) => (
+      config.id === id ? { ...config, enabled: !config.enabled } : config
+    )));
+  }, [setComparisonConfigs]);
+
+  const handleRemoveComparison = useCallback((id: string) => {
+    setComparisonConfigs((previous) => previous.filter((config) => config.id !== id));
+  }, [setComparisonConfigs]);
+
   // ===== 数据派生层 =====
   const cnEventName = eventMeta?.name.cn?.trim() || eventMeta?.name.jp.trim() || "Loading Event...";
   const bannerPath = eventMeta ? resolveBandoriEventAssetRegion(eventMeta) : "jp";
@@ -427,6 +500,23 @@ export default function EventTrackerPage() {
   const fullProcessedData = useProcessedData(chartData, apiHasResult, domainStart, trackingMode);
   const status = useEventStatus(domainStart, domainEnd);
   const finalDisplayedData = useFinalDisplayedData(fullProcessedData, cutoffEnd, status, showInstantProjection, showDayProjection);
+  const { comparisonLines } = useComparisonTrackerData({
+    enabled: trackingMode === "event",
+    configs: activeComparisonConfigs,
+    events: allEvents,
+    alignment: comparisonAlignment,
+    currentStart: typeof domainStart === "number" ? domainStart : null,
+    currentEnd: typeof domainEnd === "number" ? domainEnd : null,
+  });
+  const comparisonLineById = useMemo(
+    () => new Map(comparisonLines.map((line) => [line.config.id, line])),
+    [comparisonLines],
+  );
+  const displayedChartData = useMemo(
+    () => mergeComparisonLines(finalDisplayedData, comparisonLines),
+    [comparisonLines, finalDisplayedData],
+  );
+  const hasRenderableChartData = hasActualTrackerData || comparisonLines.some((line) => line.points.length > 0);
   const scoreData = useMemo(
     () => fullProcessedData.filter((point) => isActualTrackerPoint(point, domainStart, trackingMode, fullProcessedData.length)),
     [domainStart, fullProcessedData, trackingMode],
@@ -665,10 +755,11 @@ export default function EventTrackerPage() {
   }, [trackingMode, updateModeIndicator]);
 
   const { ticks: yTicks, domain: yDomainInfo } = useMemo(
-    () => generateYTicks(finalDisplayedData),
-    [finalDisplayedData],
+    () => generateYTicks(displayedChartData),
+    [displayedChartData],
   );
-  const chartContainerKey = `${resolvedCurrentEventId ?? "none"}-${trackingMode}-${selectedTier}-${resolvedSelectedSongId}-${chartRenderRevision}`;
+  const comparisonChartKey = comparisonConfigs.map((config) => `${config.eventId}:${config.tier}`).join(",");
+  const chartContainerKey = `${resolvedCurrentEventId ?? "none"}-${trackingMode}-${selectedTier}-${resolvedSelectedSongId}-${comparisonChartKey}-${comparisonAlignment}-${chartRenderRevision}`;
 
   // ===== 分数摘要 =====
   const scoreSummary = useMemo(() => {
@@ -885,7 +976,7 @@ export default function EventTrackerPage() {
                 )}
 
                 <div className="h-[400px] w-full relative group">
-                  {hasActualTrackerData && finalDisplayedData.length > 0 ? (
+                  {hasRenderableChartData && displayedChartData.length > 0 ? (
                     <div className="flex h-full w-full overflow-hidden rounded-xl">
                       <FixedYAxis
                         ticks={yTicks}
@@ -905,7 +996,7 @@ export default function EventTrackerPage() {
                           <div ref={chartViewportRef} className="relative h-full overflow-hidden">
                             <ResponsiveContainer key={chartContainerKey} width="100%" height="100%">
                               <LineChart
-                                data={finalDisplayedData}
+                                data={displayedChartData}
                                 margin={CHART_MARGIN}
                                 onMouseMove={(state: TrackerMouseState) => {
                                   if (!state?.isTooltipActive || !state?.activeCoordinate || !state?.activePayload?.length) {
@@ -1013,6 +1104,7 @@ export default function EventTrackerPage() {
                                     if (!payload?.isProjection || isInvalidMarkerPosition(cx, cy)) return renderHiddenMarker();
                                     return <circle cx={cx} cy={cy} r={6} fill="#ef4444" stroke="none" />;
                                   }}
+                                  connectNulls
                                   isAnimationActive={false}
                                 />
                               )}
@@ -1028,8 +1120,31 @@ export default function EventTrackerPage() {
                                   if (payload?.isProjection || isInvalidMarkerPosition(cx, cy)) return renderHiddenMarker();
                                   return <circle cx={cx} cy={cy} r={6} fill="#3B82F6" stroke="none" />;
                                 }}
+                                connectNulls
                                 isAnimationActive={false}
                               />
+
+                              {comparisonLines.map((line) => (
+                                line.points.length > 0 ? (
+                                  <Line
+                                    key={line.dataKey}
+                                    type="linear"
+                                    dataKey={line.dataKey}
+                                    stroke={line.color}
+                                    strokeWidth={2}
+                                    strokeOpacity={0.82}
+                                    strokeDasharray="5 4"
+                                    dot={false}
+                                    activeDot={(props: TrackerDotProps) => {
+                                      const { cx, cy, payload } = props;
+                                      if (!payload?.comparisonPoints?.[line.dataKey] || isInvalidMarkerPosition(cx, cy)) return renderHiddenMarker();
+                                      return <circle cx={cx} cy={cy} r={5.5} fill={line.color} stroke="none" />;
+                                    }}
+                                    connectNulls
+                                    isAnimationActive={false}
+                                  />
+                                ) : null
+                              ))}
 
                               {showDayProjection && (
                                 <Line
@@ -1050,6 +1165,7 @@ export default function EventTrackerPage() {
                                     if (!payload?.isProjection || isInvalidMarkerPosition(cx, cy)) return renderHiddenMarker();
                                     return <circle cx={cx} cy={cy} r={6} fill="#3b82f6" stroke="none" />;
                                   }}
+                                  connectNulls
                                   isAnimationActive={false}
                                 />
                               )}
@@ -1066,7 +1182,7 @@ export default function EventTrackerPage() {
                                   payload={hoverTooltip.payload}
                                   label={hoverTooltip.label}
                                   trackingMode={trackingMode}
-                                  displayedData={finalDisplayedData}
+                                  displayedData={displayedChartData}
                                 />
                               </div>
                             ) : null}
@@ -1108,37 +1224,162 @@ export default function EventTrackerPage() {
                   </div>
                 </div>
 
-                {/* 投影开关 */}
-                {status === "进行中" && (
+                {/* 投影与对比开关 */}
+                {trackingMode === "event" && (
                   <div className="px-1 pt-4 sm:px-2">
-                    <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-3">
-                      <button
-                        type="button"
-                        aria-pressed={showInstantProjection}
-                        onClick={() => setShowInstantProjection(prev => !prev)}
-                        className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs sm:text-sm font-semibold transition-all ${
-                          showInstantProjection
-                            ? "border-red-300 bg-red-50 text-red-600 dark:border-red-500/40 dark:bg-red-500/15 dark:text-red-300"
-                            : "border-gray-200 bg-white text-gray-500 dark:border-gray-700 dark:bg-[#131A2B] dark:text-gray-400"
-                        }`}
-                      >
-                        <span className={`h-2.5 w-2.5 rounded-full ${showInstantProjection ? "bg-red-500" : "bg-gray-300 dark:bg-gray-600"}`} />
-                        线性投影（瞬时）
-                      </button>
+                    <div className="flex flex-col items-center gap-3.5">
+                      <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-3">
+                        {status === "进行中" && (
+                          <>
+                            <button
+                              type="button"
+                              aria-pressed={showInstantProjection}
+                              onClick={() => setShowInstantProjection(prev => !prev)}
+                              className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs sm:text-sm font-semibold transition-all ${
+                                showInstantProjection
+                                  ? "border-red-300 bg-red-50 text-red-600 dark:border-red-500/40 dark:bg-red-500/15 dark:text-red-300"
+                                  : "border-gray-200 bg-white text-gray-500 dark:border-gray-700 dark:bg-[#131A2B] dark:text-gray-400"
+                              }`}
+                            >
+                              <span className={`h-2.5 w-2.5 rounded-full ${showInstantProjection ? "bg-red-500" : "bg-gray-300 dark:bg-gray-600"}`} />
+                              线性投影（瞬时）
+                            </button>
 
-                      <button
-                        type="button"
-                        aria-pressed={showDayProjection}
-                        onClick={() => setShowDayProjection(prev => !prev)}
-                        className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs sm:text-sm font-semibold transition-all ${
-                          showDayProjection
-                            ? "border-blue-300 bg-blue-50 text-blue-600 dark:border-blue-500/40 dark:bg-blue-500/15 dark:text-blue-300"
-                            : "border-gray-200 bg-white text-gray-500 dark:border-gray-700 dark:bg-[#131A2B] dark:text-gray-400"
-                        }`}
-                      >
-                        <span className={`h-2.5 w-2.5 rounded-full ${showDayProjection ? "bg-blue-500" : "bg-gray-300 dark:bg-gray-600"}`} />
-                        线性投影（24h）
-                      </button>
+                            <button
+                              type="button"
+                              aria-pressed={showDayProjection}
+                              onClick={() => setShowDayProjection(prev => !prev)}
+                              className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs sm:text-sm font-semibold transition-all ${
+                                showDayProjection
+                                  ? "border-blue-300 bg-blue-50 text-blue-600 dark:border-blue-500/40 dark:bg-blue-500/15 dark:text-blue-300"
+                                  : "border-gray-200 bg-white text-gray-500 dark:border-gray-700 dark:bg-[#131A2B] dark:text-gray-400"
+                              }`}
+                            >
+                              <span className={`h-2.5 w-2.5 rounded-full ${showDayProjection ? "bg-blue-500" : "bg-gray-300 dark:bg-gray-600"}`} />
+                              线性投影（24h）
+                            </button>
+                          </>
+                        )}
+                      </div>
+
+                      <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-3">
+                        {comparisonConfigs.filter((config) => config.eventId !== null && config.tier !== null).map((config, index) => {
+                          const line = comparisonLineById.get(config.id);
+                          const color = line?.color ?? COMPARISON_LINE_COLORS[index % COMPARISON_LINE_COLORS.length];
+                          const label = `第${config.eventId}期 T${config.tier}`;
+                          const statusLabel = config.enabled ? getComparisonStatusLabel(line?.status ?? "loading") : "隐藏";
+
+                          return (
+                            <button
+                              key={config.id}
+                              type="button"
+                              aria-pressed={config.enabled}
+                              onClick={() => handleToggleComparison(config.id)}
+                              className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold transition-all sm:text-sm ${
+                                config.enabled
+                                  ? "border-gray-200 bg-white text-gray-700 shadow-sm dark:border-gray-700 dark:bg-[#131A2B] dark:text-gray-200"
+                                  : "border-gray-200 bg-white text-gray-400 dark:border-gray-700 dark:bg-[#131A2B] dark:text-gray-500"
+                              }`}
+                              title={`${label}: ${statusLabel}`}
+                            >
+                              <span
+                                className={`h-2.5 w-2.5 rounded-full ${config.enabled ? "" : "opacity-35"}`}
+                                style={{ backgroundColor: color }}
+                              />
+                              <span>{label}</span>
+                              <span className="text-[11px] text-gray-400 dark:text-gray-500">{statusLabel}</span>
+                            </button>
+                          );
+                        })}
+
+                        {comparisonConfigs.some((config) => config.eventId !== null && config.tier !== null) && (
+                          <div className="inline-flex overflow-hidden rounded-full border border-gray-200 bg-white text-xs font-semibold shadow-sm dark:border-gray-700 dark:bg-[#131A2B] sm:text-sm">
+                          <button
+                            type="button"
+                            aria-pressed={comparisonAlignment === "start"}
+                            onClick={() => setComparisonAlignment("start")}
+                            className={`px-3 py-1.5 transition-colors ${
+                              comparisonAlignment === "start"
+                                ? "bg-blue-600 text-white"
+                                : "text-gray-500 hover:bg-blue-50 hover:text-blue-600 dark:text-gray-400 dark:hover:bg-blue-500/10"
+                            }`}
+                          >
+                            左对齐
+                          </button>
+                          <button
+                            type="button"
+                            aria-pressed={comparisonAlignment === "end"}
+                            onClick={() => setComparisonAlignment("end")}
+                            className={`px-3 py-1.5 transition-colors ${
+                              comparisonAlignment === "end"
+                                ? "bg-blue-600 text-white"
+                                : "text-gray-500 hover:bg-blue-50 hover:text-blue-600 dark:text-gray-400 dark:hover:bg-blue-500/10"
+                            }`}
+                          >
+                            右对齐
+                          </button>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="flex w-full flex-col items-center gap-2">
+                        {comparisonConfigs.map((config) => (
+                          <div key={config.id} className="flex max-w-full flex-wrap items-center justify-center gap-2">
+                            <select
+                              className="h-8 min-w-[13rem] rounded-full border border-gray-200 bg-white px-3 text-xs font-semibold text-gray-600 outline-none transition-colors hover:border-blue-300 focus:ring-2 focus:ring-blue-500/30 dark:border-gray-700 dark:bg-[#131A2B] dark:text-gray-300 sm:h-9 sm:text-sm"
+                              value={config.eventId ?? ""}
+                              onChange={(event) => {
+                                const nextEventId = event.target.value ? Number(event.target.value) : null;
+                                handleUpdateComparison(config.id, { eventId: nextEventId });
+                              }}
+                            >
+                              <option value="">选择对比活动</option>
+                              {comparisonEventOptions.map((event) => (
+                                <option key={event.id} value={event.id}>
+                                  第{event.id}期: {event.name}
+                                </option>
+                              ))}
+                            </select>
+
+                            <select
+                              className="h-8 rounded-full border border-gray-200 bg-white px-3 text-xs font-semibold text-gray-600 outline-none transition-colors hover:border-blue-300 focus:ring-2 focus:ring-blue-500/30 dark:border-gray-700 dark:bg-[#131A2B] dark:text-gray-300 sm:h-9 sm:text-sm"
+                              value={config.tier ?? ""}
+                              onChange={(event) => {
+                                const nextTier = event.target.value ? Number(event.target.value) : null;
+                                handleUpdateComparison(config.id, { tier: nextTier });
+                              }}
+                            >
+                              <option value="">选择档位</option>
+                              {EVENT_TIERS.map((tier) => (
+                                <option key={tier} value={tier}>
+                                  T{tier}
+                                </option>
+                              ))}
+                            </select>
+
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveComparison(config.id)}
+                              className="inline-flex h-8 items-center gap-1.5 rounded-full border border-gray-200 bg-white px-3 text-xs font-semibold text-gray-500 transition-colors hover:border-red-200 hover:bg-red-50 hover:text-red-500 dark:border-gray-700 dark:bg-[#131A2B] dark:text-gray-400 dark:hover:border-red-500/30 dark:hover:bg-red-500/10 dark:hover:text-red-300 sm:h-9 sm:text-sm"
+                              aria-label="移除对比行"
+                            >
+                              <X size={13} />
+                              移除
+                            </button>
+                          </div>
+                        ))}
+
+                        <button
+                          type="button"
+                          onClick={handleAddComparison}
+                          disabled={!canAddComparisonRow}
+                          title={comparisonConfigs.length >= MAX_COMPARISON_LINES ? "最多添加 5 条对比线" : "添加一条空白对比线"}
+                          className="inline-flex h-8 items-center gap-1.5 rounded-full border border-emerald-300 bg-emerald-50 px-3 text-xs font-semibold text-emerald-700 transition-all hover:bg-emerald-100 disabled:cursor-not-allowed disabled:border-gray-200 disabled:bg-white disabled:text-gray-300 dark:border-emerald-500/40 dark:bg-emerald-500/15 dark:text-emerald-300 dark:disabled:border-gray-700 dark:disabled:bg-[#131A2B] dark:disabled:text-gray-500 sm:h-9 sm:text-sm"
+                        >
+                          <Plus size={15} />
+                          添加对比
+                        </button>
+                      </div>
                     </div>
                   </div>
                 )}

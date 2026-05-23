@@ -255,9 +255,12 @@ export function generateYTicks(data: TrackerData[]): { ticks: number[] | undefin
   const minEp = 0;
   let maxEp = minEp;
   for (const d of data) {
-    if (d.ep !== undefined && d.ep > maxEp) maxEp = d.ep;
+    if (d.ep !== undefined && Number.isFinite(d.ep) && d.ep > maxEp) maxEp = d.ep;
     if (d.instantEp !== undefined && d.instantEp > maxEp) maxEp = d.instantEp;
     if (d.dayEp !== undefined && d.dayEp > maxEp) maxEp = d.dayEp;
+    for (const point of Object.values(d.comparisonPoints ?? {})) {
+      if (point.ep > maxEp) maxEp = point.ep;
+    }
   }
 
   const range = Math.max(maxEp - minEp, 100);

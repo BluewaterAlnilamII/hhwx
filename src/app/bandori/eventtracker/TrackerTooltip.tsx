@@ -63,10 +63,44 @@ export function TrackerTooltip({
 
   // ===== 真实数据点的悬浮提示 =====
   const mainEntry = payload.find(
-    (entry: TrackerTooltipPayloadEntry) => entry?.dataKey === "ep" && !entry?.payload?.isProjection
+    (entry: TrackerTooltipPayloadEntry) => (
+      entry?.dataKey === "ep" &&
+      !entry?.payload?.isProjection &&
+      entry?.payload?.ep !== undefined &&
+      Number.isFinite(entry.payload.ep)
+    )
   );
-  if (!mainEntry?.payload) return null;
   if (label === undefined) return null;
+
+  if (!mainEntry?.payload) {
+    const comparisonEntry = payload.find((entry: TrackerTooltipPayloadEntry) => {
+      if (typeof entry?.dataKey !== "string") return false;
+      return entry.dataKey.startsWith("compare_") && entry.payload?.comparisonPoints?.[entry.dataKey];
+    });
+    const comparisonKey = typeof comparisonEntry?.dataKey === "string" ? comparisonEntry.dataKey : null;
+    const comparisonPoint = comparisonKey ? comparisonEntry?.payload?.comparisonPoints?.[comparisonKey] : null;
+
+    if (!comparisonPoint) return null;
+
+    return (
+      <div className="bg-white/95 p-4 rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] border border-white/40 dark:bg-[#131A2B]/95 dark:border-gray-800 min-w-[220px]">
+        <p className="text-xs font-semibold text-gray-500 dark:text-gray-400">
+          {format(comparisonPoint.shiftedTime, "yyyy/MM/dd HH:mm:ss")}
+        </p>
+        <p className="mt-1 text-[11px] font-semibold text-gray-400 dark:text-gray-500">
+          原始时间 {format(comparisonPoint.originalTime, "yyyy/MM/dd HH:mm:ss")}
+        </p>
+        <div className="mt-3 flex justify-between items-center gap-6">
+          <span className="text-xs font-bold" style={{ color: comparisonPoint.color }}>
+            第{comparisonPoint.eventId}期 T{comparisonPoint.tier}
+          </span>
+          <span className="text-sm font-bold" style={{ color: comparisonPoint.color }}>
+            {new Intl.NumberFormat().format(comparisonPoint.ep)} {unit}
+          </span>
+        </div>
+      </div>
+    );
+  }
 
   const currentPoint = mainEntry.payload;
   const currentIndex = displayedData.findIndex((d: TrackerData) => d.time === currentPoint.time);

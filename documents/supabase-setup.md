@@ -12,6 +12,7 @@ This document describes the current repository-local SQL layout for a fresh HHWX
 - `supabase/schema/bandori_tracker_data_schema.sql`: tracker ranking data table and indexes.
 - `documents/account-status-schema.sql`: application-side email verification state.
 - `documents/account-status-backfill-auth-confirmed.sql`: optional backfill from Supabase Auth confirmation state.
+- `documents/account-auth-flow.md`: account registration, email verification, resend, and account-management behavior.
 - `documents/profile-public-uid-schema.sql`: public numeric profile UID support.
 - `documents/game-profile-schema.sql`: persisted user game profiles.
 - `documents/game-account-binding-schema.sql`: game-account binding challenges and bindings.
@@ -38,6 +39,7 @@ Then run `documents/account-status-backfill-auth-confirmed.sql` only when migrat
 - Treat `security definer` functions as privileged code: verify argument checks, ownership checks, grants, and `search_path` behavior before production use.
 - Grant direct table or function access only where the application requires it.
 - Keep service-role operations server-side. Browser code must use only public Supabase keys and authenticated user sessions.
+- Keep Supabase Auth email provider enabled, but keep Dashboard Confirm email disabled (`mailer_autoconfirm: true`). HHWX uses application-side email verification; Supabase's built-in signup confirmation email does not complete `account_status.email_verified_at`.
 
 ## Environment
 

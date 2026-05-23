@@ -7,6 +7,10 @@ export {
 
 const INSTANT_PROJECTION_STORAGE_KEY = "eventtracker_projection_instant";
 const DAY_PROJECTION_STORAGE_KEY = "eventtracker_projection_24h";
+const COMPARISON_CONFIG_STORAGE_KEY = "eventtracker_compare_event_lines";
+const COMPARISON_ALIGNMENT_STORAGE_KEY = "eventtracker_compare_alignment";
+const MAX_COMPARISON_LINES = 5;
+const COMPARISON_LINE_COLORS = ["#10b981", "#f59e0b", "#8b5cf6", "#06b6d4", "#ec4899"] as const;
 
 /** 根据追踪模式返回对应的可选排名档位列表。 */
 function readLegacyProjectionCookie(cookieName: string): boolean | null {
@@ -68,4 +72,11 @@ export function writeProjectionPreference(storageKey: string, value: boolean) {
   clearLegacyProjectionCookie(storageKey);
 }
 
-export { INSTANT_PROJECTION_STORAGE_KEY, DAY_PROJECTION_STORAGE_KEY };
+export {
+  INSTANT_PROJECTION_STORAGE_KEY,
+  DAY_PROJECTION_STORAGE_KEY,
+  COMPARISON_CONFIG_STORAGE_KEY,
+  COMPARISON_ALIGNMENT_STORAGE_KEY,
+  MAX_COMPARISON_LINES,
+  COMPARISON_LINE_COLORS,
+};

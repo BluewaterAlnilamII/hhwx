@@ -12,6 +12,7 @@ English version: [supabase-setup.md](supabase-setup.md)
 - `supabase/schema/bandori_tracker_data_schema.sql`：追踪器排名数据表和索引。
 - `documents/account-status-schema.sql`：应用侧邮箱验证状态。
 - `documents/account-status-backfill-auth-confirmed.sql`：从 Supabase Auth 确认状态回填的可选脚本。
+- `documents/account-auth-flow.zh-CN.md`：账号注册、邮箱验证、重发和账号管理行为说明。
 - `documents/profile-public-uid-schema.sql`：公开数字 profile UID 支持。
 - `documents/game-profile-schema.sql`：持久化用户游戏档案。
 - `documents/game-account-binding-schema.sql`：游戏账号绑定验证码和绑定关系。
@@ -38,6 +39,7 @@ English version: [supabase-setup.md](supabase-setup.md)
 - 将 `security definer` 函数视为特权代码：生产前复查参数检查、所有权检查、grants 和 `search_path` 行为。
 - 只在应用确实需要时授予直接 table 或 function 访问权限。
 - service-role 操作必须保持在服务端。浏览器代码只能使用公开 Supabase key 和已认证用户 session。
+- Supabase Auth 的 Email provider 保持启用，但 Dashboard 的 Confirm email 保持关闭（`mailer_autoconfirm: true`）。HHWX 使用应用侧邮箱验证；Supabase 内置 signup 确认邮件不能完成 `account_status.email_verified_at`。
 
 ## 环境变量
 

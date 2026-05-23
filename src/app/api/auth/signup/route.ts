@@ -1,5 +1,6 @@
 import { ApiRouteError } from "@/lib/api-contracts";
 import { ensureAccountStatus } from "@/lib/account-status-server";
+import { sendAccountEmailVerificationEmail } from "@/lib/account-email-verification-server";
 import { jsonRouteError, jsonSuccess } from "@/lib/api-response";
 import { findAuthUserByEmail, normalizeEmailAddress } from "@/lib/auth-user-server";
 import { validatePasswordValue } from "@/lib/password-policy";
@@ -116,6 +117,12 @@ export async function POST(request: Request) {
 
     if (data.user) {
       await ensureAccountStatus(data.user.id);
+      await sendAccountEmailVerificationEmail({
+        userId: data.user.id,
+        email: data.user.email ?? email,
+        redirectTo,
+        failureCode: "SIGN_UP_VERIFICATION_EMAIL_FAILED",
+      });
     }
 
     return jsonSuccess({

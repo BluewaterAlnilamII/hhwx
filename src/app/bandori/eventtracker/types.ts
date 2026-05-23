@@ -27,6 +27,44 @@ export type TrackerData = {
   projectionType?: "instant" | "24h" | "both";
   /** 投影线对应的理论结束时间。 */
   projectionEndTime?: number;
+  /** 对比线在该图表时间点的原始信息。 */
+  comparisonPoints?: Record<string, ComparisonPointInfo>;
+  /** 对比线动态数据键。 */
+  [key: `compare_${number}_ep`]: number | undefined;
+};
+
+export type ComparisonAlignment = "start" | "end";
+
+export type ComparisonConfig = {
+  id: string;
+  eventId: number | null;
+  tier: number | null;
+  enabled: boolean;
+};
+
+export type ComparisonStatus = "loading" | "ready" | "no-data" | "time-missing";
+
+export type ComparisonPointInfo = {
+  eventId: number;
+  tier: number;
+  eventName: string;
+  originalTime: number;
+  shiftedTime: number;
+  ep: number;
+  color: string;
+};
+
+export type ComparisonLinePoint = ComparisonPointInfo & {
+  dataKey: `compare_${number}_ep`;
+};
+
+export type ComparisonLine = {
+  config: ComparisonConfig;
+  dataKey: `compare_${number}_ep`;
+  color: string;
+  label: string;
+  status: ComparisonStatus;
+  points: ComparisonLinePoint[];
 };
 
 export type TrackerTooltipPayloadEntry = {

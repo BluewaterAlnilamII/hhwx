@@ -5,6 +5,10 @@ import {
   createAccountEmailVerificationToken,
   markAccountEmailVerified,
 } from "@/lib/account-status-server";
+import {
+  buildEmailVerificationRedirectUrl,
+  sendAccountEmailVerificationEmail,
+} from "@/lib/account-email-verification-server";
 import { requireAuthenticatedUser } from "@/lib/auth-server";
 import { jsonRouteError, jsonSuccess } from "@/lib/api-response";
 import { findAuthUserByEmail, normalizeEmailAddress } from "@/lib/auth-user-server";
@@ -39,23 +43,6 @@ function readRequiredString(value: unknown, message: string): string {
   return value.trim();
 }
 
-function buildEmailVerificationRedirectUrl(redirectTo: string, token: string): string | undefined {
-  if (!redirectTo) {
-    return undefined;
-  }
-
-  let url: URL;
-  try {
-    url = new URL(redirectTo);
-  } catch {
-    throw new ApiRouteError(400, "INVALID_REDIRECT_URL", "无效的邮箱验证回跳地址");
-  }
-
-  url.searchParams.set("verify_email", "1");
-  url.searchParams.set("verification_token", token);
-  return url.toString();
-}
-
 export async function POST(request: Request) {
   try {
     const user = await requireAuthenticatedUser(request);
@@ -78,7 +65,6 @@ export async function POST(request: Request) {
     const captchaToken = typeof body.captchaToken === "string" ? body.captchaToken.trim() : "";
     const redirectTo = typeof body.redirectTo === "string" ? body.redirectTo.trim() : "";
     await verifyTurnstileToken(captchaToken, request);
-    const authClient = createServerAuthSupabaseClient();
 
     if (action === "resend-verification") {
       const currentEmail = user.email?.trim() || "";
@@ -86,18 +72,12 @@ export async function POST(request: Request) {
         throw new ApiRouteError(400, "EMAIL_REQUIRED", "当前账号缺少邮箱信息，无法发送验证邮件");
       }
 
-      const verificationToken = await createAccountEmailVerificationToken(user.id);
-      const { error } = await authClient.auth.signInWithOtp({
+      await sendAccountEmailVerificationEmail({
+        userId: user.id,
         email: currentEmail,
-        options: {
-          emailRedirectTo: buildEmailVerificationRedirectUrl(redirectTo, verificationToken),
-          shouldCreateUser: false,
-        },
+        redirectTo,
+        failureCode: "EMAIL_RESEND_FAILED",
       });
-
-      if (error) {
-        throw new ApiRouteError(400, "EMAIL_RESEND_FAILED", error.message);
-      }
 
       return jsonSuccess({ ok: true });
     }
@@ -107,6 +87,7 @@ export async function POST(request: Request) {
       const currentEmail = normalizeEmailAddress(user.email ?? "");
       const refreshToken = readRequiredString(body.refreshToken, "缺少刷新凭证");
       const accessToken = parseAccessToken(request);
+      const authClient = createServerAuthSupabaseClient();
 
       if (currentEmail && newEmail === currentEmail) {
         throw new ApiRouteError(400, "EMAIL_UNCHANGED", "新邮箱需要与当前邮箱不同");
