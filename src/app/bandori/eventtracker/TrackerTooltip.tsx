@@ -1,7 +1,53 @@
 "use client";
 
 import { format } from "date-fns";
-import type { TrackerData, TrackerTooltipPayloadEntry, TrackingMode } from "./types";
+import type { ComparisonPointInfo, TrackerData, TrackerTooltipPayloadEntry, TrackingMode } from "./types";
+
+function getComparisonPointsFromPayload(payload: TrackerTooltipPayloadEntry[]): ComparisonPointInfo[] {
+  const byKey = new Map<string, ComparisonPointInfo>();
+
+  for (const entry of payload) {
+    const comparisonPoints = entry.payload?.comparisonPoints;
+    if (!comparisonPoints) continue;
+
+    for (const [key, point] of Object.entries(comparisonPoints)) {
+      byKey.set(key, point);
+    }
+  }
+
+  return Array.from(byKey.values()).sort((left, right) => left.shiftedTime - right.shiftedTime);
+}
+
+function ComparisonPointRows({
+  points,
+  unit,
+}: {
+  points: ComparisonPointInfo[];
+  unit: string;
+}) {
+  if (points.length === 0) return null;
+
+  return (
+    <div className="mt-3 border-t border-gray-100 pt-2 dark:border-gray-700/50">
+      {points.map((point) => (
+        <div key={`${point.eventId}-${point.tier}-${point.shiftedTime}`} className="mt-1.5">
+          <div className="flex items-center justify-between gap-5">
+            <span className="inline-flex min-w-0 items-center gap-1.5 text-xs font-bold" style={{ color: point.color }}>
+              <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: point.color }} />
+              <span className="truncate">{point.eventId}期 T{point.tier}</span>
+            </span>
+            <span className="shrink-0 text-sm font-bold" style={{ color: point.color }}>
+              {new Intl.NumberFormat().format(point.ep)} {unit}
+            </span>
+          </div>
+          <p className="mt-0.5 text-[10px] font-semibold text-gray-400 dark:text-gray-500">
+            {format(point.originalTime, "yyyy/MM/dd HH:mm:ss")}
+          </p>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 /**
  * TrackerTooltip —— 图表悬浮提示组件。
@@ -26,6 +72,7 @@ export function TrackerTooltip({
   if (!active || !payload || payload.length === 0) return null;
 
   const unit = trackingMode === "song" ? "Pt" : "P";
+  const comparisonPoints = getComparisonPointsFromPayload(payload);
 
   // ===== 投影点的悬浮提示 =====
   if (payload[0]?.payload?.isProjection) {
@@ -57,6 +104,8 @@ export function TrackerTooltip({
             </span>
           </div>
         )}
+
+        <ComparisonPointRows points={comparisonPoints} unit={unit} />
       </div>
     );
   }
@@ -73,31 +122,17 @@ export function TrackerTooltip({
   if (label === undefined) return null;
 
   if (!mainEntry?.payload) {
-    const comparisonEntry = payload.find((entry: TrackerTooltipPayloadEntry) => {
-      if (typeof entry?.dataKey !== "string") return false;
-      return entry.dataKey.startsWith("compare_") && entry.payload?.comparisonPoints?.[entry.dataKey];
-    });
-    const comparisonKey = typeof comparisonEntry?.dataKey === "string" ? comparisonEntry.dataKey : null;
-    const comparisonPoint = comparisonKey ? comparisonEntry?.payload?.comparisonPoints?.[comparisonKey] : null;
-
-    if (!comparisonPoint) return null;
+    if (comparisonPoints.length === 0) return null;
 
     return (
       <div className="bg-white/95 p-4 rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] border border-white/40 dark:bg-[#131A2B]/95 dark:border-gray-800 min-w-[220px]">
         <p className="text-xs font-semibold text-gray-500 dark:text-gray-400">
-          {format(comparisonPoint.shiftedTime, "yyyy/MM/dd HH:mm:ss")}
+          {format(label, "yyyy/MM/dd HH:mm:ss")}
         </p>
         <p className="mt-1 text-[11px] font-semibold text-gray-400 dark:text-gray-500">
-          原始时间 {format(comparisonPoint.originalTime, "yyyy/MM/dd HH:mm:ss")}
+          对比参考
         </p>
-        <div className="mt-3 flex justify-between items-center gap-6">
-          <span className="text-xs font-bold" style={{ color: comparisonPoint.color }}>
-            第{comparisonPoint.eventId}期 T{comparisonPoint.tier}
-          </span>
-          <span className="text-sm font-bold" style={{ color: comparisonPoint.color }}>
-            {new Intl.NumberFormat().format(comparisonPoint.ep)} {unit}
-          </span>
-        </div>
+        <ComparisonPointRows points={comparisonPoints} unit={unit} />
       </div>
     );
   }
@@ -160,6 +195,7 @@ export function TrackerTooltip({
       </div>
       {speedRender}
       {speed24Render}
+      <ComparisonPointRows points={comparisonPoints} unit={unit} />
     </div>
   );
 }

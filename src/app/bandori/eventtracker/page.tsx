@@ -23,7 +23,7 @@ import {
   resolveBandoriEventBannerBundleName,
 } from "@/lib/bandori-asset-proxy";
 import { resolveBandoriEventAssetRegion } from "@/lib/bandori-event-region";
-import type { ComparisonConfig, TrackerData, TrackerDotProps, TrackerMouseState, TrackerTooltipPayloadEntry, TrackingMode } from "./types";
+import type { ComparisonConfig, ComparisonLine, ComparisonLinePoint, TrackerData, TrackerDotProps, TrackerMouseState, TrackerTooltipPayloadEntry, TrackingMode } from "./types";
 import {
   COMPARISON_LINE_COLORS,
   EVENT_TIERS,
@@ -63,6 +63,7 @@ type NonWorkingDayBand = {
 const ZOOM_WIDTH_MULTIPLIERS = [1, 2, 4, 8, 16, 32] as const;
 const TOOLTIP_OFFSET = 12;
 const TOOLTIP_EDGE_PADDING = 8;
+const TOOLTIP_TIME_TOLERANCE_MS = 15_000;
 const FIXED_Y_AXIS_WIDTH = 38;
 const CHART_MARGIN = { top: 20, right: 5, left: 0, bottom: 20 } as const;
 const X_AXIS_HEIGHT = 30;
@@ -72,6 +73,7 @@ type HoverTooltipState = {
   coordinate: { x: number; y: number };
   label?: number;
   payload?: TrackerTooltipPayloadEntry[];
+  signature?: string;
 };
 
 type ModeIndicatorStyle = {
@@ -112,6 +114,90 @@ function isActualTrackerPoint(
 
 function renderHiddenMarker(key?: string) {
   return <circle key={key} cx={0} cy={0} r={0} stroke="none" />;
+}
+
+function getTooltipPointTime(point: TrackerData): number {
+  return point.isProjection ? point.projectionEndTime ?? point.time : point.time;
+}
+
+function isMainTooltipPoint(point: TrackerData): boolean {
+  if (point.isProjection) {
+    return (
+      (point.instantEp !== undefined && Number.isFinite(point.instantEp)) ||
+      (point.dayEp !== undefined && Number.isFinite(point.dayEp))
+    );
+  }
+
+  return (
+    !point.isBaseline &&
+    !point.isFinal &&
+    point.ep !== undefined &&
+    Number.isFinite(point.ep)
+  );
+}
+
+function findNearestMainTooltipPoint(points: TrackerData[], targetTime: number): TrackerData | null {
+  let nearestPoint: TrackerData | null = null;
+  let nearestDistance = Number.POSITIVE_INFINITY;
+
+  for (const point of points) {
+    if (!isMainTooltipPoint(point)) continue;
+
+    const distance = Math.abs(getTooltipPointTime(point) - targetTime);
+    if (distance <= TOOLTIP_TIME_TOLERANCE_MS && distance < nearestDistance) {
+      nearestPoint = point;
+      nearestDistance = distance;
+    }
+  }
+
+  return nearestPoint;
+}
+
+function collectNearbyComparisonPoints(lines: ComparisonLine[], targetTime: number): ComparisonLinePoint[] {
+  return lines.flatMap((line) => {
+    let nearestPoint: ComparisonLinePoint | null = null;
+    let nearestDistance = Number.POSITIVE_INFINITY;
+
+    for (const point of line.points) {
+      const distance = Math.abs(point.shiftedTime - targetTime);
+      if (distance <= TOOLTIP_TIME_TOLERANCE_MS && distance < nearestDistance) {
+        nearestPoint = point;
+        nearestDistance = distance;
+      }
+    }
+
+    return nearestPoint ? [nearestPoint] : [];
+  });
+}
+
+function buildComparisonPointMap(points: ComparisonLinePoint[]) {
+  return Object.fromEntries(points.map((point) => [point.dataKey, point]));
+}
+
+function buildTooltipSignature(label: number | undefined, payload: TrackerTooltipPayloadEntry[]): string {
+  const payloadSignature = payload
+    .map((entry) => {
+      const dataKey = String(entry.dataKey ?? "");
+      const point = entry.payload;
+      const comparisonKeys = Object.keys(point?.comparisonPoints ?? {}).sort().join(",");
+      return `${dataKey}:${point?.time ?? ""}:${point?.projectionType ?? ""}:${comparisonKeys}`;
+    })
+    .join("|");
+
+  return `${label ?? ""}:${payloadSignature}`;
+}
+
+function isComparisonPointActive(
+  hoverTooltip: HoverTooltipState | null,
+  dataKey: `compare_${number}_ep`,
+  point: ComparisonLinePoint | undefined,
+): boolean {
+  if (!hoverTooltip?.active || !point) return false;
+
+  return hoverTooltip.payload?.some((entry) => {
+    const activePoint = entry.payload?.comparisonPoints?.[dataKey];
+    return activePoint?.shiftedTime === point.shiftedTime;
+  }) ?? false;
 }
 
 function getComparisonStatusLabel(status: string): string {
@@ -437,9 +523,15 @@ export default function EventTrackerPage() {
     () => allEvents.filter((event) => event.startAt !== null && event.endAt !== null),
     [allEvents],
   );
-  const activeComparisonConfigs = useMemo(
-    () => comparisonConfigs.filter((config) => config.enabled && config.eventId !== null && config.tier !== null),
+  const resolvedComparisonConfigs = useMemo(
+    () => comparisonConfigs
+      .filter((config) => config.eventId !== null && config.tier !== null)
+      .map((config, colorIndex) => ({ ...config, colorIndex })),
     [comparisonConfigs],
+  );
+  const activeComparisonConfigs = useMemo(
+    () => resolvedComparisonConfigs.filter((config) => config.enabled),
+    [resolvedComparisonConfigs],
   );
   const canAddComparisonRow = trackingMode === "event" && comparisonConfigs.length < MAX_COMPARISON_LINES;
 
@@ -448,9 +540,9 @@ export default function EventTrackerPage() {
 
     setComparisonConfigs((previous) => [
       ...previous,
-      { id: createComparisonConfigId(), eventId: resolvedCurrentEventId, tier: null, enabled: true },
+      { id: createComparisonConfigId(), eventId: resolvedCurrentEventId, tier: selectedTier, enabled: true },
     ]);
-  }, [canAddComparisonRow, resolvedCurrentEventId, setComparisonConfigs]);
+  }, [canAddComparisonRow, resolvedCurrentEventId, selectedTier, setComparisonConfigs]);
 
   const handleUpdateComparison = useCallback((id: string, patch: Partial<ComparisonConfig>) => {
     setComparisonConfigs((previous) => previous.map((config) => {
@@ -516,6 +608,63 @@ export default function EventTrackerPage() {
     () => mergeComparisonLines(finalDisplayedData, comparisonLines),
     [comparisonLines, finalDisplayedData],
   );
+  const buildHoverTooltip = useCallback((state: TrackerMouseState): HoverTooltipState | null => {
+    if (!state?.isTooltipActive || !state?.activeCoordinate) {
+      return null;
+    }
+
+    const activeLabel = typeof state.activeLabel === "number"
+      ? state.activeLabel
+      : Number(state.activeLabel);
+    if (!Number.isFinite(activeLabel)) {
+      return null;
+    }
+
+    const mainPoint = findNearestMainTooltipPoint(finalDisplayedData, activeLabel);
+    const targetTime = mainPoint ? getTooltipPointTime(mainPoint) : activeLabel;
+    const nearbyComparisonPoints = collectNearbyComparisonPoints(comparisonLines, targetTime);
+
+    let payload: TrackerTooltipPayloadEntry[] = [];
+    let label = targetTime;
+
+    if (mainPoint) {
+      const comparisonPointMap = buildComparisonPointMap(nearbyComparisonPoints);
+      const payloadPoint = {
+        ...mainPoint,
+        comparisonPoints: {
+          ...(mainPoint.comparisonPoints ?? {}),
+          ...comparisonPointMap,
+        },
+      };
+      payload = [{ dataKey: mainPoint.isProjection ? "instantEp" : "ep", payload: payloadPoint }];
+      label = getTooltipPointTime(mainPoint);
+    } else if (nearbyComparisonPoints.length > 0) {
+      const comparisonPointMap = buildComparisonPointMap(nearbyComparisonPoints);
+      const firstPoint = nearbyComparisonPoints[0];
+      payload = [{
+        dataKey: firstPoint.dataKey,
+        payload: {
+          time: activeLabel,
+          ep: 0,
+          comparisonPoints: comparisonPointMap,
+          tooltipMode: "comparison",
+        },
+      }];
+    } else {
+      return null;
+    }
+
+    return {
+      active: true,
+      coordinate: {
+        x: state.activeCoordinate.x,
+        y: state.activeCoordinate.y,
+      },
+      label,
+      payload,
+      signature: buildTooltipSignature(label, payload),
+    };
+  }, [comparisonLines, finalDisplayedData]);
   const hasRenderableChartData = hasActualTrackerData || comparisonLines.some((line) => line.points.length > 0);
   const scoreData = useMemo(
     () => fullProcessedData.filter((point) => isActualTrackerPoint(point, domainStart, trackingMode, fullProcessedData.length)),
@@ -999,25 +1148,13 @@ export default function EventTrackerPage() {
                                 data={displayedChartData}
                                 margin={CHART_MARGIN}
                                 onMouseMove={(state: TrackerMouseState) => {
-                                  if (!state?.isTooltipActive || !state?.activeCoordinate || !state?.activePayload?.length) {
+                                  const nextHoverTooltip = buildHoverTooltip(state);
+
+                                  if (!nextHoverTooltip) {
                                     hoverTooltipRef.current = null;
                                     setHoverTooltip(null);
                                     return;
                                   }
-
-                                  const nextLabel = typeof state.activeLabel === "number"
-                                    ? state.activeLabel
-                                    : Number(state.activeLabel);
-
-                                  const nextHoverTooltip: HoverTooltipState = {
-                                    active: true,
-                                    coordinate: {
-                                      x: state.activeCoordinate.x,
-                                      y: state.activeCoordinate.y,
-                                    },
-                                    label: Number.isFinite(nextLabel) ? nextLabel : undefined,
-                                    payload: state.activePayload,
-                                  };
 
                                   hoverTooltipRef.current = nextHoverTooltip;
                                   scheduleTooltipPositionUpdate();
@@ -1025,9 +1162,7 @@ export default function EventTrackerPage() {
                                   setHoverTooltip((previous) => {
                                     if (
                                       previous?.active &&
-                                      previous.label === nextHoverTooltip.label &&
-                                      previous.payload?.[0]?.payload?.time === nextHoverTooltip.payload?.[0]?.payload?.time &&
-                                      previous.payload?.[0]?.payload?.projectionType === nextHoverTooltip.payload?.[0]?.payload?.projectionType
+                                      previous.signature === nextHoverTooltip.signature
                                     ) {
                                       return previous;
                                     }
@@ -1134,7 +1269,18 @@ export default function EventTrackerPage() {
                                     strokeWidth={2}
                                     strokeOpacity={0.82}
                                     strokeDasharray="5 4"
-                                    dot={false}
+                                    dot={(props: TrackerDotProps) => {
+                                      const { cx, cy, payload, index } = props;
+                                      const point = payload?.comparisonPoints?.[line.dataKey] as ComparisonLinePoint | undefined;
+                                      if (
+                                        !isComparisonPointActive(hoverTooltip, line.dataKey, point) ||
+                                        isInvalidMarkerPosition(cx, cy)
+                                      ) {
+                                        return renderHiddenMarker(`dot-hidden-${line.dataKey}-${index}`);
+                                      }
+
+                                      return <circle key={`dot-${line.dataKey}-${index}`} cx={cx} cy={cy} r={5.5} fill={line.color} stroke="none" />;
+                                    }}
                                     activeDot={(props: TrackerDotProps) => {
                                       const { cx, cy, payload } = props;
                                       if (!payload?.comparisonPoints?.[line.dataKey] || isInvalidMarkerPosition(cx, cy)) return renderHiddenMarker();
@@ -1263,10 +1409,10 @@ export default function EventTrackerPage() {
                       </div>
 
                       <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-3">
-                        {comparisonConfigs.filter((config) => config.eventId !== null && config.tier !== null).map((config, index) => {
+                        {resolvedComparisonConfigs.map((config) => {
                           const line = comparisonLineById.get(config.id);
-                          const color = line?.color ?? COMPARISON_LINE_COLORS[index % COMPARISON_LINE_COLORS.length];
-                          const label = `第${config.eventId}期 T${config.tier}`;
+                          const color = line?.color ?? COMPARISON_LINE_COLORS[(config.colorIndex ?? 0) % COMPARISON_LINE_COLORS.length];
+                          const label = `${config.eventId}期 T${config.tier}`;
                           const statusLabel = config.enabled ? getComparisonStatusLabel(line?.status ?? "loading") : "隐藏";
 
                           return (
@@ -1277,9 +1423,13 @@ export default function EventTrackerPage() {
                               onClick={() => handleToggleComparison(config.id)}
                               className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold transition-all sm:text-sm ${
                                 config.enabled
-                                  ? "border-gray-200 bg-white text-gray-700 shadow-sm dark:border-gray-700 dark:bg-[#131A2B] dark:text-gray-200"
+                                  ? "text-gray-700 shadow-sm dark:text-gray-200"
                                   : "border-gray-200 bg-white text-gray-400 dark:border-gray-700 dark:bg-[#131A2B] dark:text-gray-500"
                               }`}
+                              style={config.enabled ? {
+                                borderColor: `${color}66`,
+                                backgroundColor: `${color}14`,
+                              } : undefined}
                               title={`${label}: ${statusLabel}`}
                             >
                               <span
@@ -1292,7 +1442,7 @@ export default function EventTrackerPage() {
                           );
                         })}
 
-                        {comparisonConfigs.some((config) => config.eventId !== null && config.tier !== null) && (
+                        {resolvedComparisonConfigs.length > 0 && (
                           <div className="inline-flex overflow-hidden rounded-full border border-gray-200 bg-white text-xs font-semibold shadow-sm dark:border-gray-700 dark:bg-[#131A2B] sm:text-sm">
                           <button
                             type="button"
@@ -1336,7 +1486,7 @@ export default function EventTrackerPage() {
                               <option value="">选择对比活动</option>
                               {comparisonEventOptions.map((event) => (
                                 <option key={event.id} value={event.id}>
-                                  第{event.id}期: {event.name}
+                                  {event.id}期: {event.name}
                                 </option>
                               ))}
                             </select>

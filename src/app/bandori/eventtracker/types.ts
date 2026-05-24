@@ -29,6 +29,8 @@ export type TrackerData = {
   projectionEndTime?: number;
   /** 对比线在该图表时间点的原始信息。 */
   comparisonPoints?: Record<string, ComparisonPointInfo>;
+  /** Tooltip mode used for synthetic hover payloads. */
+  tooltipMode?: "comparison";
   /** 对比线动态数据键。 */
   [key: `compare_${number}_ep`]: number | undefined;
 };
@@ -40,6 +42,7 @@ export type ComparisonConfig = {
   eventId: number | null;
   tier: number | null;
   enabled: boolean;
+  colorIndex?: number;
 };
 
 export type ComparisonStatus = "loading" | "ready" | "no-data" | "time-missing";

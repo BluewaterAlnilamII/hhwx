@@ -78,7 +78,7 @@ async function fetchComparison(config: ComparisonConfig): Promise<TrackerData[]>
 
 function eventLabel(event: MinimalEvent | undefined, eventId: number): string {
   const name = event?.name.trim();
-  return name ? name : `第${eventId}期`;
+  return name ? name : `${eventId}期`;
 }
 
 function buildLine(
@@ -91,8 +91,9 @@ function buildLine(
   currentStart: number | null,
   currentEnd: number | null,
 ): ComparisonLine {
-  const dataKey = `compare_${index}_ep` as const;
-  const color = COMPARISON_LINE_COLORS[index % COMPARISON_LINE_COLORS.length];
+  const colorIndex = config.colorIndex ?? index;
+  const dataKey = `compare_${colorIndex}_ep` as const;
+  const color = COMPARISON_LINE_COLORS[colorIndex % COMPARISON_LINE_COLORS.length];
   const name = eventLabel(event, config.eventId ?? 0);
   let status: ComparisonStatus = "ready";
   let shiftedPoints: ComparisonLinePoint[] = [];
@@ -130,7 +131,7 @@ function buildLine(
     config,
     dataKey,
     color,
-    label: `第${config.eventId ?? "-"}期 T${config.tier ?? "-"}`,
+    label: `${config.eventId ?? "-"}期 T${config.tier ?? "-"}`,
     status,
     points: shiftedPoints,
   };
