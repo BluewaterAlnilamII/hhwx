@@ -71,7 +71,7 @@ export default function BandoriEventSwitcher({
   return (
     <div className="relative z-20 grid grid-cols-1 gap-6 rounded-3xl border border-[#ffe16c]/95 bg-[#fffef0]/96 p-4 shadow-[0_26px_68px_rgba(232,176,0,0.18),0_4px_18px_rgba(88,69,0,0.08)] dark:border-gray-800 dark:bg-[#131A2B] dark:shadow-blue-500/10 sm:p-8 xl:grid-cols-[minmax(0,1fr)_minmax(320px,420px)] xl:items-center xl:gap-10">
       <div className="flex min-w-0 flex-1 flex-col gap-4">
-        <h1 className="block min-h-[4rem] w-full text-3xl font-extrabold leading-tight text-[#f43f5e] md:min-h-[3rem]">
+        <h1 className="block min-h-[5.25rem] max-h-[5.25rem] w-full overflow-hidden break-words text-3xl font-extrabold leading-tight text-[#f43f5e] md:min-h-[3.5rem] md:max-h-[3.5rem]">
           {title}
         </h1>
 

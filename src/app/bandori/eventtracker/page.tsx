@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useMemo, useCallback, useLayoutEffect } from "react";
+import { startTransition, useState, useEffect, useRef, useMemo, useCallback, useLayoutEffect } from "react";
 import { format } from "date-fns";
 import {
   LineChart,
@@ -84,6 +84,16 @@ type ModeIndicatorStyle = {
   ready: boolean;
 };
 
+type MainTooltipPointIndexEntry = {
+  time: number;
+  point: TrackerData;
+};
+
+type ComparisonTooltipPointIndexEntry = {
+  dataKey: `compare_${number}_ep`;
+  points: ComparisonLinePoint[];
+};
+
 function isInvalidMarkerPosition(cx?: number, cy?: number): boolean {
   return typeof cx !== "number" || Number.isNaN(cx) || typeof cy !== "number" || Number.isNaN(cy);
 }
@@ -136,14 +146,32 @@ function isMainTooltipPoint(point: TrackerData): boolean {
   );
 }
 
-function findNearestMainTooltipPoint(points: TrackerData[], targetTime: number): TrackerData | null {
-  let nearestPoint: TrackerData | null = null;
+function findNearestSortedPoint<T>(
+  points: T[],
+  targetTime: number,
+  getTime: (point: T) => number,
+): T | null {
+  if (points.length === 0) return null;
+
+  let low = 0;
+  let high = points.length - 1;
+  while (low < high) {
+    const mid = Math.floor((low + high) / 2);
+    if (getTime(points[mid]) < targetTime) {
+      low = mid + 1;
+    } else {
+      high = mid;
+    }
+  }
+
+  const candidates = [points[low]];
+  if (low > 0) candidates.push(points[low - 1]);
+  if (low + 1 < points.length) candidates.push(points[low + 1]);
+
+  let nearestPoint: T | null = null;
   let nearestDistance = Number.POSITIVE_INFINITY;
-
-  for (const point of points) {
-    if (!isMainTooltipPoint(point)) continue;
-
-    const distance = Math.abs(getTooltipPointTime(point) - targetTime);
+  for (const point of candidates) {
+    const distance = Math.abs(getTime(point) - targetTime);
     if (distance <= TOOLTIP_TIME_TOLERANCE_MS && distance < nearestDistance) {
       nearestPoint = point;
       nearestDistance = distance;
@@ -153,19 +181,27 @@ function findNearestMainTooltipPoint(points: TrackerData[], targetTime: number):
   return nearestPoint;
 }
 
-function collectNearbyComparisonPoints(lines: ComparisonLine[], targetTime: number): ComparisonLinePoint[] {
-  return lines.flatMap((line) => {
-    let nearestPoint: ComparisonLinePoint | null = null;
-    let nearestDistance = Number.POSITIVE_INFINITY;
+function buildMainTooltipPointIndex(points: TrackerData[]): MainTooltipPointIndexEntry[] {
+  return points
+    .filter(isMainTooltipPoint)
+    .map((point) => ({ time: getTooltipPointTime(point), point }))
+    .sort((left, right) => left.time - right.time);
+}
 
-    for (const point of line.points) {
-      const distance = Math.abs(point.shiftedTime - targetTime);
-      if (distance <= TOOLTIP_TIME_TOLERANCE_MS && distance < nearestDistance) {
-        nearestPoint = point;
-        nearestDistance = distance;
-      }
-    }
+function buildComparisonTooltipPointIndex(lines: ComparisonLine[]): ComparisonTooltipPointIndexEntry[] {
+  return lines.map((line) => ({
+    dataKey: line.dataKey,
+    points: [...line.points].sort((left, right) => left.shiftedTime - right.shiftedTime),
+  }));
+}
 
+function findNearestMainTooltipPoint(index: MainTooltipPointIndexEntry[], targetTime: number): TrackerData | null {
+  return findNearestSortedPoint(index, targetTime, (entry) => entry.time)?.point ?? null;
+}
+
+function collectNearbyComparisonPoints(index: ComparisonTooltipPointIndexEntry[], targetTime: number): ComparisonLinePoint[] {
+  return index.flatMap((entry) => {
+    const nearestPoint = findNearestSortedPoint(entry.points, targetTime, (point) => point.shiftedTime);
     return nearestPoint ? [nearestPoint] : [];
   });
 }
@@ -179,8 +215,11 @@ function buildTooltipSignature(label: number | undefined, payload: TrackerToolti
     .map((entry) => {
       const dataKey = String(entry.dataKey ?? "");
       const point = entry.payload;
-      const comparisonKeys = Object.keys(point?.comparisonPoints ?? {}).sort().join(",");
-      return `${dataKey}:${point?.time ?? ""}:${point?.projectionType ?? ""}:${comparisonKeys}`;
+      const comparisonSignature = Object.entries(point?.comparisonPoints ?? {})
+        .sort(([leftKey], [rightKey]) => leftKey.localeCompare(rightKey))
+        .map(([key, comparisonPoint]) => `${key}:${comparisonPoint.shiftedTime}:${comparisonPoint.ep}`)
+        .join(",");
+      return `${dataKey}:${point?.time ?? ""}:${point?.projectionType ?? ""}:${comparisonSignature}`;
     })
     .join("|");
 
@@ -621,6 +660,14 @@ export default function EventTrackerPage() {
     () => mergeComparisonLines(finalDisplayedData, comparisonLines),
     [comparisonLines, finalDisplayedData],
   );
+  const mainTooltipPointIndex = useMemo(
+    () => buildMainTooltipPointIndex(finalDisplayedData),
+    [finalDisplayedData],
+  );
+  const comparisonTooltipPointIndex = useMemo(
+    () => buildComparisonTooltipPointIndex(comparisonLines),
+    [comparisonLines],
+  );
   const buildHoverTooltip = useCallback((state: TrackerMouseState): HoverTooltipState | null => {
     if (!state?.isTooltipActive || !state?.activeCoordinate) {
       return null;
@@ -633,9 +680,9 @@ export default function EventTrackerPage() {
       return null;
     }
 
-    const mainPoint = findNearestMainTooltipPoint(finalDisplayedData, activeLabel);
+    const mainPoint = findNearestMainTooltipPoint(mainTooltipPointIndex, activeLabel);
     const targetTime = mainPoint ? getTooltipPointTime(mainPoint) : activeLabel;
-    const nearbyComparisonPoints = collectNearbyComparisonPoints(comparisonLines, targetTime);
+    const nearbyComparisonPoints = collectNearbyComparisonPoints(comparisonTooltipPointIndex, targetTime);
 
     let payload: TrackerTooltipPayloadEntry[] = [];
     let label = targetTime;
@@ -677,7 +724,7 @@ export default function EventTrackerPage() {
       payload,
       signature: buildTooltipSignature(label, payload),
     };
-  }, [comparisonLines, finalDisplayedData]);
+  }, [comparisonTooltipPointIndex, mainTooltipPointIndex]);
   const hasRenderableChartData = hasActualTrackerData || comparisonLines.some((line) => line.points.length > 0);
   const scoreData = useMemo(
     () => fullProcessedData.filter((point) => isActualTrackerPoint(point, domainStart, trackingMode, fullProcessedData.length)),
@@ -768,8 +815,7 @@ export default function EventTrackerPage() {
     let top = currentHoverTooltip.coordinate.y - tooltipHeight / 2;
     top = Math.max(TOOLTIP_EDGE_PADDING, Math.min(top, containerHeight - tooltipHeight - TOOLTIP_EDGE_PADDING));
 
-    tooltip.style.left = `${Math.round(left)}px`;
-    tooltip.style.top = `${Math.round(top)}px`;
+    tooltip.style.transform = `translate3d(${Math.round(left)}px, ${Math.round(top)}px, 0)`;
   }, []);
 
   const scheduleTooltipPositionUpdate = useCallback(() => {
@@ -1165,7 +1211,7 @@ export default function EventTrackerPage() {
 
                                   if (!nextHoverTooltip) {
                                     hoverTooltipRef.current = null;
-                                    setHoverTooltip(null);
+                                    setHoverTooltip((previous) => previous === null ? previous : null);
                                     return;
                                   }
 
@@ -1185,7 +1231,7 @@ export default function EventTrackerPage() {
                                 }}
                                 onMouseLeave={() => {
                                   hoverTooltipRef.current = null;
-                                  setHoverTooltip(null);
+                                  setHoverTooltip((previous) => previous === null ? previous : null);
                                 }}
                               >
                               {nonWorkingDayBands.map((band) => (
@@ -1364,12 +1410,16 @@ export default function EventTrackerPage() {
                               )}
                               </LineChart>
                             </ResponsiveContainer>
-                            {hoverTooltip?.active && hoverTooltip.payload?.length ? (
-                              <div
-                                ref={tooltipRef}
-                                className="pointer-events-none absolute z-20"
-                                style={{ left: "-9999px", top: 0 }}
-                              >
+                            <div
+                              ref={tooltipRef}
+                              className="pointer-events-none absolute left-0 top-0 z-20 transform-gpu transition-opacity duration-75 will-change-transform"
+                              style={{
+                                opacity: hoverTooltip?.active && hoverTooltip.payload?.length ? 1 : 0,
+                                transform: "translate3d(0, 0, 0)",
+                                visibility: hoverTooltip?.active && hoverTooltip.payload?.length ? "visible" : "hidden",
+                              }}
+                            >
+                              {hoverTooltip?.active && hoverTooltip.payload?.length ? (
                                 <TrackerTooltip
                                   active={hoverTooltip.active}
                                   payload={hoverTooltip.payload}
@@ -1377,8 +1427,8 @@ export default function EventTrackerPage() {
                                   trackingMode={trackingMode}
                                   displayedData={displayedChartData}
                                 />
-                              </div>
-                            ) : null}
+                              ) : null}
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -1399,7 +1449,7 @@ export default function EventTrackerPage() {
                   {/* 缩放控制浮层 */}
                   <div className="absolute top-[70%] right-4 -translate-y-1/2 flex flex-col gap-2 z-20 transition-opacity opacity-70 hover:opacity-100 mix-blend-difference dark:mix-blend-normal">
                     <button
-                      onClick={() => setZoomIndex(prev => Math.min(ZOOM_WIDTH_MULTIPLIERS.length - 1, prev + 1))}
+                      onClick={() => startTransition(() => setZoomIndex(prev => Math.min(ZOOM_WIDTH_MULTIPLIERS.length - 1, prev + 1)))}
                       className={`p-1.5 text-gray-500 dark:text-gray-400 hover:text-blue-500 dark:hover:text-blue-400 rounded-full transition-transform hover:scale-110 active:scale-95 bg-white/72 dark:bg-black/45 ${zoomIndex >= ZOOM_WIDTH_MULTIPLIERS.length - 1 ? "invisible pointer-events-none" : ""}`}
                       disabled={zoomIndex >= ZOOM_WIDTH_MULTIPLIERS.length - 1}
                       title="放大"
@@ -1407,7 +1457,7 @@ export default function EventTrackerPage() {
                       <ZoomIn size={22} strokeWidth={2.5} />
                     </button>
                     <button
-                      onClick={() => setZoomIndex(prev => Math.max(0, prev - 1))}
+                      onClick={() => startTransition(() => setZoomIndex(prev => Math.max(0, prev - 1)))}
                       className={`p-1.5 rounded-full transition-transform hover:scale-110 active:scale-95 bg-white/72 dark:bg-black/45 ${zoomIndex <= 0 ? "invisible pointer-events-none" : "text-gray-500 dark:text-gray-400 hover:text-blue-500 dark:hover:text-blue-400"}`}
                       disabled={zoomIndex <= 0}
                       title="缩小"
