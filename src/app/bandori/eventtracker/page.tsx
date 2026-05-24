@@ -63,7 +63,7 @@ type NonWorkingDayBand = {
 const ZOOM_WIDTH_MULTIPLIERS = [1, 2, 4, 8, 16, 32] as const;
 const TOOLTIP_OFFSET = 12;
 const TOOLTIP_EDGE_PADDING = 8;
-const TOOLTIP_TIME_TOLERANCE_MS = 15_000;
+const TOOLTIP_TIME_TOLERANCE_MS = 30_000;
 const FIXED_Y_AXIS_WIDTH = 38;
 const CHART_MARGIN = { top: 20, right: 5, left: 0, bottom: 20 } as const;
 const X_AXIS_HEIGHT = 30;
@@ -198,6 +198,19 @@ function isComparisonPointActive(
     const activePoint = entry.payload?.comparisonPoints?.[dataKey];
     return activePoint?.shiftedTime === point.shiftedTime;
   }) ?? false;
+}
+
+function isMainPointActive(hoverTooltip: HoverTooltipState | null, point: TrackerData | undefined): boolean {
+  if (!hoverTooltip?.active || !point) return false;
+
+  const activePoint = hoverTooltip.payload?.find((entry) => entry.dataKey === "ep" || entry.dataKey === "instantEp")?.payload;
+  if (!activePoint) return false;
+
+  if (point.isProjection || activePoint.isProjection) {
+    return Boolean(point.isProjection && activePoint.isProjection && point.time === activePoint.time);
+  }
+
+  return point.time === activePoint.time;
 }
 
 function getComparisonStatusLabel(status: string): string {
@@ -1232,7 +1245,16 @@ export default function EventTrackerPage() {
                                     if (!payload?.isProjection || isInvalidMarkerPosition(cx, cy)) {
                                       return renderHiddenMarker(`dot-hidden-instant-${index}`);
                                     }
-                                    return <circle key={`dot-instant-${index}`} cx={cx} cy={cy} r={2.5} fill="#ef4444" stroke="none" />;
+                                    return (
+                                      <circle
+                                        key={`dot-instant-${index}`}
+                                        cx={cx}
+                                        cy={cy}
+                                        r={isMainPointActive(hoverTooltip, payload) ? 6 : 2.5}
+                                        fill="#ef4444"
+                                        stroke="none"
+                                      />
+                                    );
                                   }}
                                   activeDot={(props: TrackerDotProps) => {
                                     const { cx, cy, payload } = props;
@@ -1249,7 +1271,23 @@ export default function EventTrackerPage() {
                                 stroke="#3B82F6"
                                 strokeWidth={2}
                                 strokeOpacity={0.6}
-                                dot={{ r: 2.5, fill: "#3B82F6", strokeWidth: 0 }}
+                                dot={(props: TrackerDotProps) => {
+                                  const { cx, cy, payload, index } = props;
+                                  if (payload?.isProjection || isInvalidMarkerPosition(cx, cy)) {
+                                    return renderHiddenMarker(`dot-hidden-main-${index}`);
+                                  }
+
+                                  return (
+                                    <circle
+                                      key={`dot-main-${index}`}
+                                      cx={cx}
+                                      cy={cy}
+                                      r={isMainPointActive(hoverTooltip, payload) ? 6 : 2.5}
+                                      fill="#3B82F6"
+                                      stroke="none"
+                                    />
+                                  );
+                                }}
                                 activeDot={(props: TrackerDotProps) => {
                                   const { cx, cy, payload } = props;
                                   if (payload?.isProjection || isInvalidMarkerPosition(cx, cy)) return renderHiddenMarker();
@@ -1304,7 +1342,16 @@ export default function EventTrackerPage() {
                                     if (!payload?.isProjection || isInvalidMarkerPosition(cx, cy)) {
                                       return renderHiddenMarker(`dot-hidden-day-${index}`);
                                     }
-                                    return <circle key={`dot-day-${index}`} cx={cx} cy={cy} r={2.5} fill="#3b82f6" stroke="none" />;
+                                    return (
+                                      <circle
+                                        key={`dot-day-${index}`}
+                                        cx={cx}
+                                        cy={cy}
+                                        r={isMainPointActive(hoverTooltip, payload) ? 6 : 2.5}
+                                        fill="#3b82f6"
+                                        stroke="none"
+                                      />
+                                    );
                                   }}
                                   activeDot={(props: TrackerDotProps) => {
                                     const { cx, cy, payload } = props;
@@ -1483,7 +1530,6 @@ export default function EventTrackerPage() {
                                 handleUpdateComparison(config.id, { eventId: nextEventId });
                               }}
                             >
-                              <option value="">选择对比活动</option>
                               {comparisonEventOptions.map((event) => (
                                 <option key={event.id} value={event.id}>
                                   {event.id}期: {event.name}
@@ -1499,7 +1545,6 @@ export default function EventTrackerPage() {
                                 handleUpdateComparison(config.id, { tier: nextTier });
                               }}
                             >
-                              <option value="">选择档位</option>
                               {EVENT_TIERS.map((tier) => (
                                 <option key={tier} value={tier}>
                                   T{tier}

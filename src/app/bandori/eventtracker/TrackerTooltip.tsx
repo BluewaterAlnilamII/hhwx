@@ -15,7 +15,9 @@ function getComparisonPointsFromPayload(payload: TrackerTooltipPayloadEntry[]): 
     }
   }
 
-  return Array.from(byKey.values()).sort((left, right) => left.shiftedTime - right.shiftedTime);
+  return Array.from(byKey.entries())
+    .sort(([leftKey], [rightKey]) => leftKey.localeCompare(rightKey, undefined, { numeric: true }))
+    .map(([, point]) => point);
 }
 
 function ComparisonPointRows({

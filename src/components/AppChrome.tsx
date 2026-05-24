@@ -13,12 +13,11 @@ export default function AppChrome({ children }: AppChromeProps) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   return (
-    <div className="relative flex h-screen flex-col overflow-hidden">
+    <div className="relative flex min-h-dvh flex-col">
       <Toolbar
         isSidebarOpen={isSidebarOpen}
         onToggleSidebar={() => setIsSidebarOpen((currentValue) => !currentValue)}
       />
-      <div className="h-[58px] shrink-0" aria-hidden="true" />
       <SectionSidebarShell
         isMobileDrawerOpen={isSidebarOpen}
         onCloseMobileDrawer={() => setIsSidebarOpen(false)}
