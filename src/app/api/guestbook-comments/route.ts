@@ -40,7 +40,7 @@ export async function POST(request: Request) {
     const content = parseCommentContent(body);
     const serviceClient = createServerSupabaseClient();
     const { data, error } = await serviceClient
-      .from("comments")
+      .from("guestbook_comments")
       .insert({
         user_id: user.id,
         content,

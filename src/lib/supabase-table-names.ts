@@ -6,6 +6,7 @@ export const PROFILES_TABLE = "profiles";
 export const ACCOUNT_STATUS_TABLE = "account_status";
 export const ACCOUNT_EMAIL_VERIFICATIONS_TABLE = "account_email_verifications";
 export const COMMENTS_TABLE = "comments";
+export const GUESTBOOK_COMMENTS_TABLE = "guestbook_comments";
 export const USER_ROLES_TABLE = "user_roles";
 export const BANDORI_TRACKER_DATA_TABLE = "bandori_tracker_data";
 export const USER_GAME_BIND_CHALLENGES_TABLE = "user_game_bind_challenges";

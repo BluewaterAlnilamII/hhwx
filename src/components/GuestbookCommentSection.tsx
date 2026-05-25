@@ -21,7 +21,7 @@ function getErrorMessage(error: unknown, fallbackMessage: string): string {
     return fallbackMessage;
 }
 
-export default function CommentSection() {
+export default function GuestbookCommentSection() {
     const [comments, setComments] = useState<Comment[]>([]);
     const [newComment, setNewComment] = useState("");
     const [loading, setLoading] = useState(false);
@@ -30,7 +30,7 @@ export default function CommentSection() {
 
     const fetchComments = useCallback(async () => {
         const { data } = await supabase
-            .from("comments")
+            .from("guestbook_comments")
             .select("id, content, created_at, profiles(username)")
             .order("created_at", { ascending: false })
             .limit(50);
@@ -53,7 +53,7 @@ export default function CommentSection() {
                 return;
             }
 
-            const response = await fetch("/api/comments", {
+            const response = await fetch("/api/guestbook-comments", {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",

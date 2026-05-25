@@ -17,7 +17,7 @@ import Board from "@/components/Board";
 import CharacterAvatar from "@/components/CharacterAvatar";
 import SpeechBubble from "@/components/SpeechBubble";
 import ResultPanel from "@/components/ResultPanel";
-import CommentSection from "@/components/CommentSection";
+import GuestbookCommentSection from "@/components/GuestbookCommentSection";
 
 // AI 策略模块导入
 import { kokoroAI } from "@/lib/ai/kokoro";
@@ -609,7 +609,7 @@ export default function GamePage() {
             )}
 
             {/* 评论区 */}
-            <CommentSection />
+            <GuestbookCommentSection />
         </div>
     );
 }

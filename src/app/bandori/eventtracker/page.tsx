@@ -49,6 +49,7 @@ import { useComparisonPreferences } from "./useComparisonPreferences";
 import { mergeComparisonLines, useComparisonTrackerData } from "./useComparisonTrackerData";
 import BandoriPageShell from "../BandoriPageShell";
 import BandoriEventSwitcher from "../BandoriEventSwitcher";
+import EventComments from "./EventComments";
 import {
   buildChinaMainlandHolidayLookup,
   isChinaMainlandRestDay,
@@ -412,7 +413,12 @@ function MinutesAgo({ timestamp }: { timestamp: number }) {
 // ─────────────────────────── 页面主组件 ───────────────────────────
 
 export default function EventTrackerPage() {
-  const [currentEventId, setCurrentEventId] = useState<number | null>(null);
+  const [currentEventId, setCurrentEventId] = useState<number | null>(() => {
+    if (typeof window === "undefined") return null;
+    const eventParam = new URLSearchParams(window.location.search).get("event");
+    const eventId = eventParam ? Number.parseInt(eventParam, 10) : NaN;
+    return Number.isInteger(eventId) && eventId > 0 ? eventId : null;
+  });
   const [trackingMode, setTrackingMode] = useState<TrackingMode>("event");
   const [selectedTier, setSelectedTier] = useState<number>(1000);
   const [selectedSongId, setSelectedSongId] = useState<number>(0);
@@ -1632,6 +1638,7 @@ export default function EventTrackerPage() {
             </Tabs.Content>
           </Tabs.Root>
         </div>
+        <EventComments eventId={resolvedCurrentEventId} />
     </BandoriPageShell>
   );
 }
