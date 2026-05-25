@@ -46,6 +46,7 @@ export type BandoriTeamSearchResultCard = {
   skillLevel: number;
   level: number;
   masterRank: number;
+  isTrained: boolean;
   totalPower: number;
 };
 

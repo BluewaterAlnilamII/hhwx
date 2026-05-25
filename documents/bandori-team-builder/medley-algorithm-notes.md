@@ -7,8 +7,21 @@
 - 组曲搜索已经能稳定给出强 `bounded` 结果；当前主要瓶颈是快速证明全局最优，而不是找到强解。
 - 只有 `isExhaustive=true` 且 `searchMode="exact"` 才能称为已证明全局最优。
 - `bounded` 结果必须同时暴露 `observedScoreUpperBound` 和 `observedScoreUpperBoundGap`，不能写成 exact。
+- 优化评估以 proof gap 为主：`relativeGap`、`gapClosureFromBaseline`、time-to-gap、upper replay 和 witness 归因比最终 score 是否变化更重要。
 - locked band/attribute 是当前最现实的产品路径：先锁定 `(bandKey, attribute)`，再搜索 parameter、三队卡片分配和技能顺序。
-- 1000+ 大卡池的默认目标是 30s/120s 内给出高质量 bounded 结果；exact proof 只在搜索空间实际耗尽时成立。
+- 1000+ 大卡池的默认目标是 1s/3s/10s/30s/120s 阶梯内给出可比较的 bounded 结果；exact proof 只在搜索空间实际耗尽时成立。
+
+## 2026-05-25 当前复测结论
+
+本轮复测使用 3 个无活动卡池，组曲搜索不预设 band/attribute；大池会默认进入 auto coarse，选 3 个 coarse groups / 9 个共享道具配置。strict greedy baseline 是“枚举共享道具配置后，按同一最优道具组合做 3 次单曲贪心，并按组曲 combo 重新验算”的结果。
+
+| 场景 | strict greedy | 10s x3 组曲结果 | 30s 组曲结果 | 结论 |
+| --- | ---: | --- | --- | --- |
+| 119-no-event | 1542003 | 1693959 / 1693959 / 1693959，time-to-best 0.77-0.82s | 1693959，gap 115628，relGap 6.83% | 稳定高于 greedy 151956 |
+| 1329-no-event | 8448069 | 8533987 / 8533987 / 8533987，time-to-best 约 10.05-10.09s；10s 未稳定产出 gap | 8533987，gap 306739，relGap 3.59% | 稳定高于 greedy 85918，但 proof 主要要到 30s |
+| 1889-no-event | 9055290 | 9125980 / 9125980 / 9125980，time-to-best 1.52-1.64s，relGap 0.91% | 9128583，gap 80282，relGap 0.88% | 稳定高于 greedy 70690-73293 |
+
+因此当前可以回答为：在这 3 个卡池上，组曲已能稳定在 10-30s 内找到不劣于 strict 3x 单曲贪心的结果。后续主要瓶颈不是找不到强解，而是 proof gap：10s 档在 1329 大池仍可能只有 incumbent 没有 observed upper/gap；30s 档能给出 gap，但仍是 `bounded`，不能标 exact。
 
 ## 文件边界
 
@@ -20,6 +33,7 @@
 - 组曲公开兼容入口：`src/lib/bandori-medley-team-search.ts`
 - Benchmark runner：`temp/bandori-team-builder/benchmark-medley-team-search.cjs`
 - 复盘 runner：`temp/bandori-team-builder/run-medley-optimization-review.cjs`
+- 3x 单曲贪心基线 runner：`temp/bandori-team-builder/benchmark-medley-three-single-greedy.cjs`
 
 依赖方向必须保持：
 
@@ -53,12 +67,13 @@ shared -> compatibility facade only
 ## 搜索流程
 
 1. 为三首歌构造三个 medley slot。每个 slot 包含 chart、combo options、当前共享道具配置下的 `SearchCard[]`、score cache 和 upper-bound index。
-2. 枚举共享 area item configuration。locked coarse 模式只保留指定 `(bandKey, attribute)`，但仍枚举该组合下的 parameter。
+2. 枚举共享 area item configuration。locked coarse 模式只保留指定 `(bandKey, attribute)`，但仍枚举该组合下的 parameter。大池无显式 coarse filter 时默认进入 auto coarse，避免 10s 预算被 100+ 道具配置耗尽。
 3. 对每个 slot 做同角色 skyline dominance 剪枝。剪枝必须 exact-safe：只有当一张卡在所有 slot 的 power/skill upper 都被另一张同角色卡支配时才能删除。
 4. 用 slot candidate join、greedy order、reverse song order、固定 15 卡重排和小规模邻域优化提升 incumbent。
 5. 主 DFS 在三个 slot 间搜索互斥卡片分配。节点状态包含 `currentScore`、`bannedCardIds` 和剩余 slot。
 6. 每个 DFS 节点计算 safe remaining upper。若 `currentScore + remainingUpper < incumbentThreshold`，才允许剪枝。
 7. 最后一个 slot 可用 constrained single-slot solve 快速补全，但仍必须满足卡片互斥和角色约束。
+8. DFS upper cache miss 会抽样做 upper-state replay：同一状态对比当前 tight upper 和基础 coefficient upper，只记录 upper 降幅、可转化剪枝率和耗时，不参与剪枝决策。
 
 ## 上界与证明
 
@@ -70,6 +85,9 @@ shared -> compatibility facade only
 - `upper/common.ts` 保存模型中立的卡片 bucketing helper，避免上界模型之间互相 import。
 - `upper/witness.ts` 只负责解释 gap 来源；witness 不参与剪枝。
 - `experiments/exact-candidate-join.ts` 和 `experiments/conflict-bnb.ts` 保持 opt-in，不能默认影响 baseline。
+- `profiling.relativeGap` 记录 `observedScoreUpperBoundGap / score`；`gapClosureFromBaseline` 由 benchmark runner 按同场景 baseline 回填。
+- `upperReplayStateCount`、`upperReplayPrunableStateCount`、`upperReplayAverageImprovement` 和 `upperReplayElapsedMs` 用于判断新 upper 是否值得进入完整矩阵。
+- `rootUpperPrunedConfigurationCount` 记录共享道具配置 root upper 低于 incumbent 后被安全跳过的次数。
 
 任何 upper-bound 改动都必须说明：
 
@@ -77,6 +95,13 @@ shared -> compatibility facade only
 - 它是否只是 heuristic ordering，还是参与 proof pruning；
 - 它的 profiling counter 如何证明路径实际触发；
 - 它在 timeout 时如何影响 `observedScoreUpperBoundGap`。
+
+评估门槛：
+
+- proof 类优化：目标场景 `gapClosureFromBaseline >= 10%` 或 replay 可剪枝率 `>= 5%`。
+- speed 类优化：同 score/gap 下 elapsed 或 evaluated count 降低 `>= 10%`。
+- incumbent 类优化：在 `<= 10s` 档提升 score 或缩短 `timeToBestScoreMs`。
+- 任一方案不得把 bounded 结果标成 exact。
 
 ## 维护规则
 
@@ -116,7 +141,7 @@ $env:HHWX_MEDLEY_BENCHMARK_MS='30000'
 node .\temp\bandori-team-builder\benchmark-medley-team-search.cjs
 ```
 
-期望 spot check：top score `1407785`，gap `86440`。
+期望 spot check：top score `1693959`，gap 约 `115628`。
 
 组曲 locked 大池 event：
 

@@ -179,26 +179,24 @@ function resolvePreferredEventName(event: Pick<BandoriEventSummary, "eventId" | 
 }
 
 function findBestEvent(events: MinimalEvent[], now: number): MinimalEvent | null {
-  const ongoing = events.find(ev => ev.startAt !== null && ev.endAt !== null && now >= ev.startAt && now <= ev.endAt);
+  const withStart = events
+    .filter((event): event is MinimalEvent & { startAt: number } => event.startAt !== null);
+
+  const ongoing = withStart
+    .filter((event) => event.endAt !== null && event.startAt <= now && now < event.endAt)
+    .sort((left, right) => (left.endAt ?? 0) - (right.endAt ?? 0))[0];
   if (ongoing) {
     return ongoing;
   }
 
-  const upcoming = events
-    .filter(ev => ev.startAt === null || ev.startAt > now)
-    .sort((a, b) => a.id - b.id);
-  if (upcoming.length > 0) {
-    return upcoming[0];
+  const upcoming = withStart
+    .filter((event) => event.startAt > now)
+    .sort((left, right) => left.startAt - right.startAt)[0];
+  if (upcoming) {
+    return upcoming;
   }
 
-  const finished = events
-    .filter(ev => ev.endAt !== null && ev.endAt < now)
-    .sort((a, b) => b.id - a.id);
-  if (finished.length > 0) {
-    return finished[0];
-  }
-
-  return null;
+  return withStart.sort((left, right) => right.startAt - left.startAt)[0] ?? null;
 }
 
 function getAvailableChallengeSongIds(eventMeta: EventMetadata | null): number[] {

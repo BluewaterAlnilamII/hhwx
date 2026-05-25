@@ -6,7 +6,6 @@ import { createPortal } from "react-dom";
 import {
   Check,
   Filter,
-  ImageOff,
   RotateCcw,
   Save,
   Search,
@@ -14,12 +13,7 @@ import {
   X,
 } from "lucide-react";
 import { getApiErrorMessage, parseApiSuccessData } from "@/lib/api-contracts";
-import {
-  buildBandoriCardThumbnailPublicUrl,
-  buildBandoriResIconPublicUrl,
-  buildBandoriResImagePublicUrl,
-  type BandoriAssetRegion,
-} from "@/lib/bandori-asset-proxy";
+import { type BandoriAssetRegion } from "@/lib/bandori-asset-proxy";
 import { pickBestdoriCnThenJpName } from "@/lib/bestdori-regional-names";
 import { decodeBestdoriProfile, encodeBestdoriProfile } from "@/lib/bestdori-profile-codec";
 import {
@@ -37,10 +31,10 @@ import {
 } from "@/lib/user-game-profile-local-store";
 import AccountShell, { AccountErrorState, AccountLoadingState, AccountSignInState } from "@/app/account/AccountShell";
 import { getAccessToken, useAccountProfile } from "@/app/account/useAccountProfile";
+import SharedBandoriCardThumbnail from "@/app/bandori/BandoriCardThumbnail";
 import { cn } from "@/lib/utils";
 
 type CardAttribute = "powerful" | "pure" | "cool" | "happy";
-type TrainType = "normal" | "after_training";
 
 type BestdoriCardMetadata = {
   characterId?: number;
@@ -143,10 +137,6 @@ function pickCardName(cardId: number, metadata?: BestdoriCardMetadata): string {
 
 function isKnownAttribute(value: string | undefined): value is CardAttribute {
   return value === "powerful" || value === "pure" || value === "cool" || value === "happy";
-}
-
-function getCardTrainType(card: UserGameProfileCardRecord): TrainType {
-  return card.hasTrainedArt || card.isTrained ? "after_training" : "normal";
 }
 
 function getCardLevelLimit(card: UserGameProfileCardRecord, metadata?: BestdoriCardMetadata): number {
@@ -266,45 +256,6 @@ async function requestMetadata(cardIds: number[]): Promise<MetadataPayload> {
   };
 }
 
-function BrokenImageFallback({ label }: { label: string }) {
-  return (
-    <div className="flex h-full w-full flex-col items-center justify-center gap-1 bg-white/70 text-center text-[10px] font-semibold text-slate-400">
-      <ImageOff className="h-5 w-5" aria-hidden="true" />
-      <span>{label}</span>
-    </div>
-  );
-}
-
-function CardAssetImage({
-  src,
-  alt,
-  className,
-  fallbackLabel = "无资源",
-}: {
-  src: string | null;
-  alt: string;
-  className?: string;
-  fallbackLabel?: string;
-}) {
-  const [failedSrc, setFailedSrc] = useState<string | null>(null);
-  const failed = Boolean(src && failedSrc === src);
-
-  if (!src || failed) {
-    return <BrokenImageFallback label={fallbackLabel} />;
-  }
-
-  return (
-    // eslint-disable-next-line @next/next/no-img-element
-    <img
-      src={src}
-      alt={alt}
-      loading="lazy"
-      className={className}
-      onError={() => setFailedSrc(src)}
-    />
-  );
-}
-
 function SegmentedControl<T extends string | number | boolean>({
   label,
   value,
@@ -355,75 +306,17 @@ function CardThumbnail({
   alt: string;
   size?: "tile" | "preview";
 }) {
-  const trainType = getCardTrainType(card);
-  const thumbnailUrl = metadata?.resourceSetName
-    ? buildBandoriCardThumbnailPublicUrl(region, card.cardId, metadata.resourceSetName, trainType)
-    : null;
-  const rarity = Math.min(5, Math.max(1, Math.trunc(Number(metadata?.rarity) || 1)));
-  const attribute = isKnownAttribute(metadata?.attribute) ? metadata.attribute : null;
-  const frameUrl = rarity >= 2
-    ? buildBandoriResImagePublicUrl(`card-${rarity}.png`)
-    : attribute ? buildBandoriResImagePublicUrl(`card-1-${attribute}.png`) : null;
-  const attributeIconUrl = attribute ? buildBandoriResIconPublicUrl(`${attribute}.svg`) : null;
-  const bandIconUrl = bandId ? buildBandoriResIconPublicUrl(`band_${bandId}.svg`) : null;
-  const starIconUrl = buildBandoriResIconPublicUrl(card.isTrained ? "star_trained.png" : "star.png");
-  const masterIconUrl = buildBandoriResIconPublicUrl("master.svg");
-  const starSlots = Array.from({ length: rarity }, (_, index) => index);
-  const isPreview = size === "preview";
-
   return (
-    <div className="relative h-full w-full overflow-hidden rounded-[5px] bg-white">
-      <div className="absolute inset-0">
-        <CardAssetImage src={thumbnailUrl} alt={alt} className="h-full w-full object-cover" fallbackLabel={isPreview ? "缩略图" : "无图"} />
-      </div>
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      {frameUrl ? <img src={frameUrl} alt="" aria-hidden="true" loading="lazy" className="pointer-events-none absolute inset-0 h-full w-full object-fill" /> : null}
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      {bandIconUrl ? <img src={bandIconUrl} alt="" aria-hidden="true" loading="lazy" className={cn("pointer-events-none absolute left-0 top-0", isPreview ? "h-[31px] w-[31px]" : "h-[21px] w-[21px]")} /> : null}
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      {attributeIconUrl ? <img src={attributeIconUrl} alt="" aria-hidden="true" loading="lazy" className={cn("pointer-events-none absolute", isPreview ? "right-[3px] top-[3px] h-[27px] w-[27px]" : "right-[2px] top-[2px] h-[18px] w-[18px]")} /> : null}
-      <div className={cn("pointer-events-none absolute z-10 flex flex-col-reverse items-start gap-0", isPreview ? "bottom-[4px] left-[3px]" : "bottom-[2px] left-[2px]")}>
-        {starSlots.map((slot) => (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            key={slot}
-            src={starIconUrl}
-            alt=""
-            aria-hidden="true"
-            loading="lazy"
-            className={cn("object-contain drop-shadow-[0_1px_1px_rgba(0,0,0,0.55)]", isPreview ? "-mt-[3.5px] h-[19px] w-[20px]" : "-mt-[2.5px] h-[13px] w-[14px]")}
-          />
-        ))}
-      </div>
-      {card.masterRank > 0 ? (
-        <div className={cn("pointer-events-none absolute z-10 drop-shadow-[0_1px_2px_rgba(15,23,42,0.55)]", isPreview ? "right-[-1px] top-[30px] h-[31px] w-[31px]" : "right-[-1px] top-[20px] h-[21px] w-[21px]")}>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={masterIconUrl} alt="" aria-hidden="true" loading="lazy" className="h-full w-full object-contain" />
-          <span className={cn("absolute inset-0 flex items-center justify-center font-black leading-none text-white [text-shadow:0_1px_1px_rgba(0,0,0,0.68)]", isPreview ? "pb-[2px] text-sm" : "pb-[1px] text-[10px]")}>
-            {card.masterRank}
-          </span>
-        </div>
-      ) : null}
-      {card.skillLevel > 1 ? (
-        <div className={cn("pointer-events-none absolute z-10 flex items-center justify-center rounded-[3px] border border-white/80 bg-rose-500 font-black leading-none text-white shadow-[0_1px_2px_rgba(15,23,42,0.5)] [text-shadow:0_1px_1px_rgba(0,0,0,0.55)]", isPreview ? "right-[-1px] top-[61px] h-[22px] min-w-[31px] px-1 text-sm" : "right-[-1px] top-[41px] h-[15px] min-w-[21px] px-[3px] text-[10px]")}>
-          {card.skillLevel}
-        </div>
-      ) : null}
-      <div
-        className={cn("pointer-events-none absolute right-[2px] z-10", isPreview ? "bottom-[3px] h-[22px] w-[70px]" : "bottom-[2px] h-[15px] w-[48px]")}
-        style={{
-          backgroundColor: "rgba(0, 0, 0, 0.42)",
-          clipPath: "polygon(22% 0, 100% 0, 100% 100%, 0 100%)",
-        }}
-        aria-hidden="true"
-      />
-      <div className={cn("pointer-events-none absolute z-20 flex items-center justify-end font-semibold leading-none text-white [text-shadow:0_1px_1px_rgba(0,0,0,0.72)]", isPreview ? "bottom-[5px] right-[6px] h-[17px] text-sm" : "bottom-[3px] right-[4px] h-[12px] text-[10px]")}>
-        <span>Lv.{card.level}</span>
-      </div>
-    </div>
+    <SharedBandoriCardThumbnail
+      card={card}
+      metadata={metadata}
+      bandId={bandId}
+      region={region}
+      alt={alt}
+      size={size}
+    />
   );
 }
-
 function CardEditorDialog({
   card,
   baselineCard,

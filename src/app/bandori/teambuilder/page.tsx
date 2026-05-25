@@ -16,16 +16,15 @@ import {
   Users,
 } from "lucide-react";
 import BandoriAccountShell from "@/app/bandori/BandoriAccountShell";
+import BandoriCardThumbnail from "@/app/bandori/BandoriCardThumbnail";
 import BandoriEventSwitcher, { type BandoriEventSwitcherEvent } from "@/app/bandori/BandoriEventSwitcher";
 import { AccountErrorState, AccountLoadingState, AccountSignInState } from "@/app/account/AccountShell";
 import { getAccessToken, useAccountProfile } from "@/app/account/useAccountProfile";
 import { getApiErrorMessage, parseApiSuccessData } from "@/lib/api-contracts";
 import {
   type BandoriAssetRegion,
-  buildBandoriCardThumbnailPublicUrl,
   buildBandoriEventBannerPublicUrl,
   buildBandoriResIconPublicUrl,
-  buildBandoriResImagePublicUrl,
   resolveBandoriEventBannerBundleName,
 } from "@/lib/bandori-asset-proxy";
 import {
@@ -117,6 +116,7 @@ type SongMaster = {
 type CharacterMaster = {
   firstName?: string[] | string;
   characterName?: string[] | string;
+  bandId?: number | null;
   colorCode?: string | null;
 };
 
@@ -132,6 +132,7 @@ type CardMetadata = {
   characterId?: number;
   rarity?: number;
   attribute?: string;
+  levelLimit?: number;
   resourceSetName?: string;
   displayName?: string | null;
 };
@@ -178,6 +179,20 @@ const DIFFICULTY_KEYS: Record<BandoriTeamSearchDifficulty, string> = {
   hard: "2",
   expert: "3",
   special: "4",
+};
+const DIFFICULTY_LABELS: Record<BandoriTeamSearchDifficulty, string> = {
+  easy: "Easy",
+  normal: "Normal",
+  hard: "Hard",
+  expert: "Expert",
+  special: "Special",
+};
+const DIFFICULTY_LEVEL_CLASSES: Record<BandoriTeamSearchDifficulty, string> = {
+  easy: "bg-[#2F52FD] text-white ring-[#2F52FD]/35",
+  normal: "bg-[#18B721] text-white ring-[#18B721]/35",
+  hard: "bg-[#FFA922] text-white ring-[#FFA922]/45",
+  expert: "bg-[#ED2D2E] text-white ring-[#ED2D2E]/35",
+  special: "bg-[#ED268D] text-white ring-[#ED268D]/35",
 };
 const LIVE_BOOST_OPTIONS: LiveBoostCountOption[] = ["0", "1", "2", "3"];
 const CHALLENGE_CP_OPTIONS: ChallengeCpCostOption[] = ["200", "400", "800", "1600"];
@@ -591,6 +606,16 @@ function pickCardDisplayName(cardId: number, metadata: CardMetadata | undefined)
   return metadata?.displayName?.trim() || `Card ${cardId}`;
 }
 
+function getCardBandId(metadata: CardMetadata | undefined, characters: Record<string, CharacterMaster | undefined>): number | null {
+  const characterId = Number(metadata?.characterId);
+  if (!Number.isFinite(characterId)) {
+    return null;
+  }
+
+  const bandId = Number(characters[String(Math.trunc(characterId))]?.bandId);
+  return Number.isFinite(bandId) && bandId > 0 ? Math.trunc(bandId) : null;
+}
+
 function getDisplayedEventPointOption(
   result: BandoriTeamSearchResult,
   selections: {
@@ -796,7 +821,7 @@ function runTeamSearchWorker(request: TeamSearchWorkerRequest): Promise<BandoriT
 }
 */
 
-type DisplayCardLike = Pick<BandoriTeamSearchResultCard, "cardId" | "rarity" | "attribute" | "bandId" | "level" | "masterRank" | "skillLevel">;
+type DisplayCardLike = Pick<BandoriTeamSearchResultCard, "cardId" | "rarity" | "attribute" | "bandId" | "level" | "masterRank" | "skillLevel" | "isTrained">;
 
 function orderResultCardsWithLeaderCenter(cards: BandoriTeamSearchResultCard[], leaderCardId: number): BandoriTeamSearchResultCard[] {
   if (cards.length !== 5) {
@@ -886,6 +911,65 @@ function Segment<T extends string>({
   );
 }
 
+function SongDifficultyLevelBadge({
+  difficulty,
+  song,
+  selected = false,
+  className = "",
+}: {
+  difficulty: BandoriTeamSearchDifficulty;
+  song: SongMaster | null | undefined;
+  selected?: boolean;
+  className?: string;
+}) {
+  const playLevel = getSongDifficulty(song, difficulty)?.playLevel ?? "-";
+
+  return (
+    <span
+      title={`${DIFFICULTY_LABELS[difficulty]} ${playLevel}`}
+      className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-sm font-black leading-none shadow-sm ring-1 ${DIFFICULTY_LEVEL_CLASSES[difficulty]} ${
+        selected ? "outline outline-2 outline-offset-2 outline-sky-400" : "outline outline-2 outline-offset-2 outline-transparent"
+      } ${className}`}
+    >
+      {playLevel}
+    </span>
+  );
+}
+
+function SongDifficultyPicker({
+  value,
+  options,
+  song,
+  onChange,
+}: {
+  value: BandoriTeamSearchDifficulty;
+  options: BandoriTeamSearchDifficulty[];
+  song: SongMaster | null | undefined;
+  onChange: (value: BandoriTeamSearchDifficulty) => void;
+}) {
+  return (
+    <div className="flex max-w-full flex-wrap items-center gap-2" role="radiogroup" aria-label="歌曲难度">
+      {options.map((option) => {
+        const selected = option === value;
+
+        return (
+          <button
+            type="button"
+            key={option}
+            role="radio"
+            aria-checked={selected}
+            title={`${DIFFICULTY_LABELS[option]} ${getSongDifficulty(song, option)?.playLevel ?? "-"}`}
+            onClick={() => onChange(option)}
+            className="rounded-full transition hover:-translate-y-0.5 hover:shadow-md"
+          >
+            <SongDifficultyLevelBadge difficulty={option} song={song} selected={selected} />
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 function FieldRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label className="grid gap-2 text-sm sm:grid-cols-[9rem_1fr] sm:items-center">
@@ -925,10 +1009,21 @@ function SongOptionList({
   selectedSongId: string;
   onSelect: (songId: string) => void;
 }) {
+  const containerRef = useRef<HTMLDivElement | null>(null);
   const selectedOptionRef = useRef<HTMLButtonElement | null>(null);
 
   useEffect(() => {
-    selectedOptionRef.current?.scrollIntoView({ block: "center" });
+    const container = containerRef.current;
+    const selectedOption = selectedOptionRef.current;
+    if (!container || !selectedOption) {
+      return;
+    }
+
+    const containerRect = container.getBoundingClientRect();
+    const selectedOptionRect = selectedOption.getBoundingClientRect();
+    const selectedOptionCenter = selectedOptionRect.top - containerRect.top + container.scrollTop + selectedOptionRect.height / 2;
+    const nextScrollTop = selectedOptionCenter - container.clientHeight / 2;
+    container.scrollTop = Math.max(0, nextScrollTop);
   }, [selectedSongId, options]);
 
   if (options.length === 0) {
@@ -940,7 +1035,7 @@ function SongOptionList({
   }
 
   return (
-    <div className="max-h-72 overflow-y-auto rounded-2xl border border-slate-200 bg-white p-1 shadow-sm">
+    <div ref={containerRef} className="max-h-72 overflow-y-auto rounded-2xl border border-slate-200 bg-white p-1 shadow-sm">
       {options.map((option) => {
         const selected = option.id === selectedSongId;
         return (
@@ -1109,23 +1204,27 @@ function BonusCardThumbnail({
   metadata,
   percent,
   assetRegion,
+  bandId,
 }: {
   cardId: number;
   metadata: CardMetadata | undefined;
   percent: number;
   assetRegion: BandoriAssetRegion;
+  bandId: number | null;
 }) {
   const rarity = Math.min(5, Math.max(1, Math.trunc(Number(metadata?.rarity) || 1)));
+  const level = Math.max(1, Math.trunc(Number(metadata?.levelLimit) || (rarity >= 5 ? 60 : rarity >= 4 ? 50 : rarity >= 3 ? 40 : rarity >= 2 ? 30 : 20)));
   return (
     <TeamBuilderCardTile
       card={{
         cardId,
         rarity,
         attribute: isKnownAttribute(metadata?.attribute) ? metadata.attribute : "powerful",
-        bandId: null,
-        level: 1,
+        bandId,
+        level,
         masterRank: 0,
         skillLevel: 1,
+        isTrained: rarity >= 3,
       }}
       metadata={metadata}
       badge={formatPercent(percent)}
@@ -1151,80 +1250,17 @@ function TeamBuilderCardTile({
   const cardName = pickCardDisplayName(cardId, metadata);
   const rarity = Math.min(5, Math.max(1, Math.trunc(Number(metadata?.rarity ?? card.rarity) || 1)));
   const attribute = isKnownAttribute(metadata?.attribute) ? metadata.attribute : card.attribute;
-  const thumbnailUrl = metadata?.resourceSetName
-    ? buildBandoriCardThumbnailPublicUrl(assetRegion, cardId, metadata.resourceSetName, rarity >= 3 ? "after_training" : "normal")
-    : null;
-  const frameUrl = rarity >= 2
-    ? buildBandoriResImagePublicUrl(`card-${rarity}.png`)
-    : attribute ? buildBandoriResImagePublicUrl(`card-1-${attribute}.png`) : null;
-  const attributeIconUrl = attribute ? buildBandoriResIconPublicUrl(`${attribute}.svg`) : null;
-  const bandIconUrl = card.bandId ? buildBandoriResIconPublicUrl(`band_${card.bandId}.svg`) : null;
-  const starIconUrl = buildBandoriResIconPublicUrl("star.png");
-  const masterIconUrl = buildBandoriResIconPublicUrl("master.svg");
 
   return (
     <article className="group relative h-[74px] w-[74px] overflow-visible rounded-[5px] outline outline-1 outline-white/80 transition hover:z-40 hover:-translate-y-0.5 hover:outline-2 hover:outline-sky-400 focus-within:z-40 focus-within:outline-2 focus-within:outline-sky-400 sm:h-[76px] sm:w-[76px]">
-      <div className="relative h-full w-full overflow-hidden rounded-[5px] bg-white text-left shadow-[0_2px_7px_rgba(15,23,42,0.22)]">
-        <div className="absolute inset-0">
-          {thumbnailUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={thumbnailUrl} alt={cardName} loading="lazy" decoding="async" className="h-full w-full object-cover" />
-          ) : (
-            <div className="flex h-full w-full items-center justify-center bg-slate-100 text-xs font-black text-slate-400">
-              {cardId}
-            </div>
-          )}
-        </div>
-        {frameUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={frameUrl} alt="" aria-hidden="true" loading="lazy" className="pointer-events-none absolute inset-0 h-full w-full object-fill" />
-        ) : null}
-        {bandIconUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={bandIconUrl} alt="" aria-hidden="true" loading="lazy" className="pointer-events-none absolute left-0 top-0 h-[21px] w-[21px]" />
-        ) : null}
-        {attributeIconUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={attributeIconUrl} alt="" aria-hidden="true" loading="lazy" className="pointer-events-none absolute right-[2px] top-[2px] h-[18px] w-[18px]" />
-        ) : null}
-        <div className="pointer-events-none absolute bottom-[2px] left-[2px] z-10 flex flex-col-reverse items-start gap-0">
-          {Array.from({ length: rarity }, (_, index) => (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              key={index}
-              src={starIconUrl}
-              alt=""
-              aria-hidden="true"
-              loading="lazy"
-              className="-mt-[2.5px] h-[13px] w-[14px] object-contain drop-shadow-[0_1px_1px_rgba(0,0,0,0.55)]"
-            />
-          ))}
-        </div>
-        {card.masterRank > 0 ? (
-          <div className="pointer-events-none absolute right-[-1px] top-[20px] z-10 h-[21px] w-[21px] drop-shadow-[0_1px_2px_rgba(15,23,42,0.55)]">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={masterIconUrl} alt="" aria-hidden="true" loading="lazy" className="h-full w-full object-contain" />
-            <span className="absolute inset-0 flex items-center justify-center pb-[1px] text-[10px] font-black leading-none text-white [text-shadow:0_1px_1px_rgba(0,0,0,0.68)]">
-              {card.masterRank}
-            </span>
-          </div>
-        ) : null}
-        {card.skillLevel > 1 ? (
-          <div className="pointer-events-none absolute right-[-1px] top-[41px] z-10 flex h-[15px] min-w-[21px] items-center justify-center rounded-[3px] border border-white/80 bg-rose-500 px-[3px] text-[10px] font-black leading-none text-white shadow-[0_1px_2px_rgba(15,23,42,0.5)] [text-shadow:0_1px_1px_rgba(0,0,0,0.55)]">
-            {card.skillLevel}
-          </div>
-        ) : null}
-        <div
-          className="pointer-events-none absolute bottom-[2px] right-[2px] z-10 h-[15px] w-[48px]"
-          style={{
-            backgroundColor: "rgba(0, 0, 0, 0.42)",
-            clipPath: "polygon(22% 0, 100% 0, 100% 100%, 0 100%)",
-          }}
-          aria-hidden="true"
+      <div className="h-full w-full overflow-visible rounded-[5px] shadow-[0_2px_7px_rgba(15,23,42,0.22)]">
+        <BandoriCardThumbnail
+          card={card}
+          metadata={{ ...metadata, rarity, attribute }}
+          bandId={card.bandId}
+          region={assetRegion}
+          alt={cardName}
         />
-        <div className="pointer-events-none absolute bottom-[3px] right-[4px] z-20 flex h-[12px] items-center justify-end text-[10px] font-semibold leading-none text-white [text-shadow:0_1px_1px_rgba(0,0,0,0.72)]">
-          <span>Lv.{card.level}</span>
-        </div>
       </div>
       {badge ? (
         <span className="absolute -right-2 -top-2 z-30 rounded-full border border-rose-200 bg-rose-50 px-1.5 py-0.5 text-[11px] font-black leading-none text-rose-600 shadow-sm">
@@ -1345,7 +1381,14 @@ function EventBonusPanel({
 
         <EventBonusInfoRow label="卡牌">
           {memberItems.length > 0 ? memberItems.map((item) => (
-            <BonusCardThumbnail key={item.cardId} cardId={item.cardId} metadata={item.metadata} percent={item.percent} assetRegion={assetRegion} />
+            <BonusCardThumbnail
+              key={item.cardId}
+              cardId={item.cardId}
+              metadata={item.metadata}
+              percent={item.percent}
+              assetRegion={assetRegion}
+              bandId={getCardBandId(item.metadata, characters)}
+            />
           )) : <BonusChip tone="muted">无</BonusChip>}
         </EventBonusInfoRow>
 
@@ -1675,6 +1718,7 @@ function TeamBuilderPanel() {
     }
     return buildBandoriEventBannerPublicUrl(selectedEventAssetRegion, bundleName);
   }, [selectedEvent, selectedEventAssetRegion]);
+  const shouldLimitSongsToEventSongs = selectedEventType === "challenge" && liveType === "challenge";
   const eventSongOptions = useMemo(() => {
     if (!canShowEventSongPicker(selectedEventType, liveType)) {
       return [];
@@ -1703,9 +1747,15 @@ function TeamBuilderPanel() {
   }, [data.songs, liveType, selectedEvent, selectedEventType]);
   const songOptions = useMemo(() => {
     const normalizedSearch = songSearch.trim().toLowerCase();
+    const eventSongIdSet = shouldLimitSongsToEventSongs
+      ? new Set(eventSongOptions.map((option) => option.id))
+      : null;
     const entries = Object.entries(data.songs)
       .flatMap(([id, song]) => {
         if (!song) {
+          return [];
+        }
+        if (eventSongIdSet && !eventSongIdSet.has(id)) {
           return [];
         }
         const title = pickLocalizedName(song.musicTitle, `#${id}`);
@@ -1716,7 +1766,7 @@ function TeamBuilderPanel() {
       })
       .sort((left, right) => Number(right.id) - Number(left.id));
     return entries;
-  }, [data.songs, songSearch]);
+  }, [data.songs, eventSongOptions, shouldLimitSongsToEventSongs, songSearch]);
   const selectedSong = songId ? data.songs[songId] ?? null : null;
   const selectedSongDifficulties = useMemo(() => (
     DIFFICULTIES.filter((item) => getSongDifficulty(selectedSong, item))
@@ -1914,6 +1964,16 @@ function TeamBuilderPanel() {
       setTarget(targetOptions.includes("eventPoint") ? "eventPoint" : targetOptions[0]);
     }
   }, [target, targetOptions]);
+
+  useEffect(() => {
+    if (!shouldLimitSongsToEventSongs || eventSongOptions.length === 0) {
+      return;
+    }
+
+    if (!eventSongOptions.some((option) => option.id === songId)) {
+      setSongId(eventSongOptions[0].id);
+    }
+  }, [eventSongOptions, shouldLimitSongsToEventSongs, songId]);
 
   useEffect(() => {
     if (!selectedEvent) {
@@ -2141,12 +2201,12 @@ function TeamBuilderPanel() {
             <div className="mt-4 grid gap-4 lg:grid-cols-[1fr_16rem] lg:items-end">
               <div className="space-y-2">
                 <div className="text-xs font-semibold text-slate-500">难度</div>
-                <div className="flex flex-wrap items-center gap-3">
-                  <Segment value={difficulty} options={selectedSongDifficulties.length ? selectedSongDifficulties : DIFFICULTIES} onChange={setDifficulty} />
-                  <div className="text-sm text-slate-600">
-                    难度 {getSongDifficulty(selectedSong, difficulty)?.playLevel ?? "-"}
-                  </div>
-                </div>
+                <SongDifficultyPicker
+                  value={difficulty}
+                  options={selectedSongDifficulties.length ? selectedSongDifficulties : DIFFICULTIES}
+                  song={selectedSong}
+                  onChange={setDifficulty}
+                />
               </div>
               <label className="space-y-2">
                 <span className="block text-xs font-semibold text-slate-500">Perfect率</span>
@@ -2162,9 +2222,10 @@ function TeamBuilderPanel() {
               <EventSongQuickPicker songs={eventSongOptions} selectedSongId={songId} onSelect={setSongId} />
             </FieldRow>
           ) : null}
-          <FieldRow label="歌曲">
+          <div className="grid gap-2 text-sm sm:grid-cols-[9rem_1fr] sm:items-start">
+            <span className="font-semibold text-slate-600">歌曲</span>
             <SongOptionList options={songOptions} selectedSongId={songId} onSelect={setSongId} />
-          </FieldRow>
+          </div>
         </section>
       ) : null}
 
@@ -2205,7 +2266,12 @@ function TeamBuilderPanel() {
             </div>
             <div className="rounded-2xl border border-slate-200 bg-white p-4">
               <div className="text-xs font-semibold text-slate-500">歌曲</div>
-              <div className="mt-1 font-bold text-slate-900">{selectedSong ? pickLocalizedName(selectedSong.musicTitle, `#${songId}`) : "未选择"}</div>
+              <div className="mt-1 flex min-w-0 items-center gap-2">
+                <div className="min-w-0 truncate font-bold text-slate-900">{selectedSong ? pickLocalizedName(selectedSong.musicTitle, `#${songId}`) : "未选择"}</div>
+                {selectedSong ? (
+                  <SongDifficultyLevelBadge difficulty={difficulty} song={selectedSong} className="h-6 w-6" />
+                ) : null}
+              </div>
             </div>
             <div className="rounded-2xl border border-slate-200 bg-white p-4">
               <div className="text-xs font-semibold text-slate-500">档案</div>

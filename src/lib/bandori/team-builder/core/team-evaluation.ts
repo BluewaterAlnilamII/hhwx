@@ -25,6 +25,7 @@ function toCoreResultCards(cards: CalculatedBandoriCard[]): BandoriTeamSearchRes
     skillLevel: card.skillLevel,
     level: card.level,
     masterRank: card.masterRank,
+    isTrained: card.isTrained,
     totalPower: card.totalPower,
   }));
 }
@@ -40,6 +41,7 @@ function toCoreSupportResultCards(cards: SupportBandCandidate[]): BandoriTeamSea
     skillLevel: candidate.card.skillLevel,
     level: candidate.card.level,
     masterRank: candidate.card.masterRank,
+    isTrained: candidate.card.isTrained,
     totalPower: candidate.card.totalPower,
     supportPower: candidate.supportPower,
   }));

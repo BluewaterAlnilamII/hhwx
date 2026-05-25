@@ -7,6 +7,7 @@
  */
 
 import {
+  estimateMedleyStaticCoarsePotential,
   estimateMedleyLockedConfigurationPotential,
   filterMedleyConfigurationsByCoarseKeys,
   getMedleyAreaItemCoarseKey,
@@ -73,6 +74,8 @@ import type {
   MedleyObservedUpperBoundSource,
   MedleyTeamCandidate,
 } from "./types";
+
+const MEDLEY_UPPER_REPLAY_SAMPLE_LIMIT = 256;
 
 export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput): BandoriMedleyTeamSearchResponse {
   const startedAt = performance.now();
@@ -188,7 +191,38 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
 
   let visitedBranchCount = 0;
   let observedScoreUpperBound = Number.NEGATIVE_INFINITY;
+  let bestObservedScore = Number.NEGATIVE_INFINITY;
   const deadlineCheckInterval = isLockedCoarseFilter && calculatedCards.length > 250 ? 256 : 2048;
+  const recordBestScoreMilestone = (): void => {
+    const score = results[0]?.score;
+    if (score !== undefined && score > bestObservedScore) {
+      bestObservedScore = score;
+      profiling.timeToBestScoreMs = Math.round(performance.now() - startedAt);
+    }
+  };
+  const recordUpperReplay = (
+    baselineUpperBound: number,
+    replayUpperBound: number,
+    pruningCutoff: number | null,
+  ): void => {
+    if (!Number.isFinite(baselineUpperBound) || !Number.isFinite(replayUpperBound)) {
+      return;
+    }
+    const nextStateCount = profiling.upperReplayStateCount + 1;
+    const improvement = Math.max(0, baselineUpperBound - replayUpperBound);
+    profiling.upperReplayAverageImprovement = (
+      (profiling.upperReplayAverageImprovement * profiling.upperReplayStateCount) + improvement
+    ) / nextStateCount;
+    profiling.upperReplayStateCount = nextStateCount;
+    if (
+      pruningCutoff !== null
+      && Number.isFinite(pruningCutoff)
+      && baselineUpperBound >= pruningCutoff
+      && replayUpperBound < pruningCutoff
+    ) {
+      profiling.upperReplayPrunableStateCount += 1;
+    }
+  };
   const observeUpperBound = (
     upperBound: number,
     source: MedleyObservedUpperBoundSource,
@@ -217,6 +251,40 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
   const configurationCoarseSeedScores = new Map<string, number>();
   const configurationSeedScores = new Map<number, number>();
   const configurationWarmupCache = new Map<number, MedleyConfigurationWarmupCache>();
+  const configurationRootUpperBounds = new Map<number, number>();
+  const getConfigurationWarmupCache = (configurationIndex: number): MedleyConfigurationWarmupCache => {
+    const cached = configurationWarmupCache.get(configurationIndex);
+    if (cached) {
+      return cached;
+    }
+    const warmupCache = {
+      slots: pruneDominatedMedleySlotCards(buildMedleySlotSearches(
+        input,
+        songInputs,
+        calculatedCards,
+        configurations[configurationIndex],
+        server,
+      )),
+      bestSlotTeamCache: new Map<string, MedleyBestSlotTeamCacheEntry>(),
+      fixedCardSetOptimizationCache: new Map<string, MedleyFixedCardSetOptimizationCacheEntry>(),
+    };
+    configurationWarmupCache.set(configurationIndex, warmupCache);
+    return warmupCache;
+  };
+  const getConfigurationRootUpperBound = (configurationIndex: number): number => {
+    const cached = configurationRootUpperBounds.get(configurationIndex);
+    if (cached !== undefined) {
+      return cached;
+    }
+    const warmupCache = getConfigurationWarmupCache(configurationIndex);
+    const rootUpperBound = warmupCache.slots.reduce((sum, slot) => sum + slot.rootScoreUpperBound, 0);
+    configurationRootUpperBounds.set(configurationIndex, rootUpperBound);
+    profiling.rootUpperBestConfigurationUpperBound = Math.max(
+      profiling.rootUpperBestConfigurationUpperBound ?? Number.NEGATIVE_INFINITY,
+      rootUpperBound,
+    );
+    return rootUpperBound;
+  };
   const lockedConfigurationPotentialScores = new Map<number, number>();
   const getLockedConfigurationPotentialScore = (configurationIndex: number): number => {
     const cached = lockedConfigurationPotentialScores.get(configurationIndex);
@@ -232,15 +300,35 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
     lockedConfigurationPotentialScores.set(configurationIndex, score);
     return score;
   };
+  const getStaticAutoCoarseKeys = (limit: number): string[] => {
+    const rankedKeys: string[] = [];
+    const seenKeys = new Set<string>();
+    configurations
+      .map((configuration, index) => ({
+        configuration,
+        index,
+        coarseKey: getMedleyAreaItemCoarseKey(configuration),
+        potential: estimateMedleyStaticCoarsePotential(input, calculatedCards, configuration),
+      }))
+      .sort((left, right) => right.potential - left.potential || left.index - right.index)
+      .forEach((entry) => {
+        if (rankedKeys.length >= limit || seenKeys.has(entry.coarseKey)) {
+          return;
+        }
+        seenKeys.add(entry.coarseKey);
+        rankedKeys.push(entry.coarseKey);
+      });
+    return rankedKeys;
+  };
   let didApplyAutoCoarseRestriction = false;
 
   // This seed pass is an ordering and incumbent-improvement pass. When it auto-selects only a
   // subset of coarse item groups, the final response must remain bounded even if DFS exhausts
   // that reduced subset.
   const isAutoCoarseFilter = coarseFilter?.mode === "auto"
-    || (!coarseFilter && maxSearchDurationMs >= 30000 && calculatedCards.length > 250);
+    || (!coarseFilter && calculatedCards.length > 250);
   if (
-    (coarseFilter?.mode === "auto" || isLockedCoarseFilter || maxSearchDurationMs >= 30000)
+    (isAutoCoarseFilter || isLockedCoarseFilter || maxSearchDurationMs >= 30000)
     && calculatedCards.length > 250
     && configurations.length > 1
   ) {
@@ -277,15 +365,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
           break;
         }
         const configuration = configurations[parameterConfigurationIndex];
-        let warmupCache = configurationWarmupCache.get(parameterConfigurationIndex);
-        if (!warmupCache) {
-          warmupCache = {
-            slots: pruneDominatedMedleySlotCards(buildMedleySlotSearches(input, songInputs, calculatedCards, configuration, server)),
-            bestSlotTeamCache: new Map(),
-            fixedCardSetOptimizationCache: new Map(),
-          };
-          configurationWarmupCache.set(parameterConfigurationIndex, warmupCache);
-        }
+        const warmupCache = getConfigurationWarmupCache(parameterConfigurationIndex);
         const { slots, bestSlotTeamCache, fixedCardSetOptimizationCache } = warmupCache;
         const primarySeedOrder = getMedleyGreedySeedSlotIndices(slots);
         const reverseSongOrder = slots
@@ -354,6 +434,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
           );
         }
         if (scoreAfter > scoreBefore) {
+          recordBestScoreMilestone();
           profiling.configurationSeedPassImprovementCount += 1;
           profiling.bestConfigurationSeedPassScore = Math.max(
             profiling.bestConfigurationSeedPassScore ?? Number.NEGATIVE_INFINITY,
@@ -375,23 +456,65 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
           return rightSeedScore - leftSeedScore || left.index - right.index;
         })
         .map(({ configuration }) => configuration);
-      if (isAutoCoarseFilter) {
-        const candidateLimit = clamp(Math.trunc(coarseFilter?.candidateLimit ?? 3), 1, configurationCoarseSeedScores.size);
-        const selectedCoarseKeys = new Set(
-          [...configurationCoarseSeedScores.entries()]
-            .sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]))
-            .slice(0, candidateLimit)
-            .map(([coarseKey]) => coarseKey),
-        );
-        const filteredConfigurations = filterMedleyConfigurationsByCoarseKeys(orderedConfigurations, selectedCoarseKeys);
-        if (filteredConfigurations.length > 0 && filteredConfigurations.length < configurations.length) {
-          orderedConfigurations = filteredConfigurations;
-          didApplyAutoCoarseRestriction = true;
-          profiling.coarseAutoSelectedConfigurationCount = filteredConfigurations.length;
-          profiling.coarseAutoSelectedGroupCount = selectedCoarseKeys.size;
+    }
+    if (isAutoCoarseFilter) {
+      const candidateLimit = clamp(Math.trunc(coarseFilter?.candidateLimit ?? 3), 1, configurations.length);
+      const selectedCoarseKeys = new Set<string>();
+      [...configurationCoarseSeedScores.entries()]
+        .sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]))
+        .slice(0, candidateLimit)
+        .forEach(([coarseKey]) => selectedCoarseKeys.add(coarseKey));
+      getStaticAutoCoarseKeys(candidateLimit).forEach((coarseKey) => {
+        if (selectedCoarseKeys.size < candidateLimit) {
+          selectedCoarseKeys.add(coarseKey);
         }
+      });
+      const filteredConfigurations = filterMedleyConfigurationsByCoarseKeys(orderedConfigurations, selectedCoarseKeys);
+      if (filteredConfigurations.length > 0 && filteredConfigurations.length < configurations.length) {
+        orderedConfigurations = filteredConfigurations;
+        didApplyAutoCoarseRestriction = true;
+        profiling.coarseAutoSelectedConfigurationCount = filteredConfigurations.length;
+        profiling.coarseAutoSelectedGroupCount = selectedCoarseKeys.size;
       }
     }
+  }
+
+  const shouldSortByRootUpper = (
+    orderedConfigurations.length > 1
+    && performance.now() < deadlineAt
+    && (
+      calculatedCards.length <= 250
+      || orderedConfigurations.length <= 24
+      || configurationCoarseSeedScores.size > 0
+    )
+  );
+  if (shouldSortByRootUpper) {
+    orderedConfigurations = orderedConfigurations
+      .map((configuration) => {
+        const index = configurations.indexOf(configuration);
+        const seedScore = index >= 0
+          ? (
+            configurationSeedScores.get(index)
+            ?? configurationCoarseSeedScores.get(getMedleyAreaItemCoarseKey(configuration))
+            ?? Number.NEGATIVE_INFINITY
+          )
+          : Number.NEGATIVE_INFINITY;
+        const rootUpperBound = index >= 0
+          ? getConfigurationRootUpperBound(index)
+          : Number.NEGATIVE_INFINITY;
+        return {
+          configuration,
+          index,
+          seedScore,
+          rootUpperBound,
+        };
+      })
+      .sort((left, right) => (
+        right.seedScore - left.seedScore
+        || right.rootUpperBound - left.rootUpperBound
+        || left.index - right.index
+      ))
+      .map(({ configuration }) => configuration);
   }
 
   // Each area-item configuration is a separate global decision shared by all three teams.
@@ -407,7 +530,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
     }
 
     const configurationIndex = configurations.indexOf(configuration);
-    const warmupCache = configurationIndex >= 0 ? configurationWarmupCache.get(configurationIndex) : undefined;
+    const warmupCache = configurationIndex >= 0 ? getConfigurationWarmupCache(configurationIndex) : undefined;
     let slots = warmupCache?.slots
       ?? pruneDominatedMedleySlotCards(buildMedleySlotSearches(input, songInputs, calculatedCards, configuration, server));
     const bestSlotTeamCache = warmupCache?.bestSlotTeamCache ?? new Map<string, MedleyBestSlotTeamCacheEntry>();
@@ -426,6 +549,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
       useSkillAwareCapacityUpper = false,
       useParetoCapacityUpper = false,
       useBucketedCapacityUpper = false,
+      upperReplayPruningCutoff: number | null = null,
     ): number => {
       profiling.remainingUpperBoundCallCount += 1;
       if (remainingSlotIndices.length === 0) {
@@ -562,13 +686,50 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
           profiling,
         );
       }
+      const shouldSampleReplay = (
+        results.length >= resultLimit
+        && profiling.upperReplayStateCount < MEDLEY_UPPER_REPLAY_SAMPLE_LIMIT
+        && Number.isFinite(upperBound)
+        && (
+          useContextualSkillUpper
+          || useSkillAwareCapacityUpper
+          || useParetoCapacityUpper
+          || useBucketedCapacityUpper
+          || enableTeamSharedCoefficientUpper
+          || enableAnchorSlotUpper
+          || shouldEnableOpportunityCostUpper
+        )
+      );
+      if (shouldSampleReplay) {
+        const replayStartedAt = performance.now();
+        const baselineUpperBound = estimateMedleyRemainingScoreUpperBound(
+          slots,
+          remainingSlotIndices,
+          bannedCards,
+          undefined,
+          false,
+          false,
+          false,
+          false,
+          false,
+        );
+        profiling.upperReplayElapsedMs += performance.now() - replayStartedAt;
+        recordUpperReplay(baselineUpperBound, upperBound, upperReplayPruningCutoff);
+      }
       remainingUpperBoundCache.set(key, upperBound);
       return upperBound;
     };
-    const rootScoreUpperBound = slots.reduce((sum, slot) => sum + slot.rootScoreUpperBound, 0);
+    const rootScoreUpperBound = configurationIndex >= 0
+      ? getConfigurationRootUpperBound(configurationIndex)
+      : slots.reduce((sum, slot) => sum + slot.rootScoreUpperBound, 0);
+    profiling.rootUpperBestConfigurationUpperBound = Math.max(
+      profiling.rootUpperBestConfigurationUpperBound ?? Number.NEGATIVE_INFINITY,
+      rootScoreUpperBound,
+    );
     const threshold = getMedleyPruningThreshold(results, resultLimit);
     if (results.length >= resultLimit && rootScoreUpperBound < threshold) {
       stats.prunedBranchCount += 1;
+      profiling.rootUpperPrunedConfigurationCount += 1;
       continue;
     }
 
@@ -607,6 +768,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
         profiling,
         fixedCardSetOptimizationCache,
       );
+      recordBestScoreMilestone();
     }
     if (stats.timedOut) {
       break;
@@ -628,6 +790,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
       buildPermutations(seedSlotIndices),
       true,
     );
+    recordBestScoreMilestone();
     if (stats.timedOut) {
       break;
     }
@@ -645,6 +808,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
         profiling,
         maxSearchDurationMs >= 30000 ? 3 : 2,
       );
+      recordBestScoreMilestone();
     }
 
     if (resultLimit === 1 && calculatedCards.length <= 250 && results.length >= resultLimit) {
@@ -674,6 +838,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
       );
       if (conflictBnbResult.result) {
         pushMedleyResult(results, conflictBnbResult.result, resultLimit);
+        recordBestScoreMilestone();
       }
       if (stats.timedOut && conflictBnbResult.observedUpperBound !== null && results.length >= resultLimit) {
         observedScoreUpperBound = Math.max(observedScoreUpperBound, conflictBnbResult.observedUpperBound);
@@ -708,6 +873,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
       );
       if (exactJoinResult.result) {
         pushMedleyResult(results, exactJoinResult.result, resultLimit);
+        recordBestScoreMilestone();
       }
       if (stats.timedOut) {
         break;
@@ -747,6 +913,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
         useTightRemainingUpper,
         useParetoRemainingUpper,
         useBucketedRemainingUpper,
+        thresholdNow - currentScore,
       );
       const branchUpperBound = currentScore + remainingUpperBound;
       observeUpperBound(branchUpperBound, "dfs-remaining", remainingSlotIndices.length);
@@ -759,6 +926,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
         const result = buildMedleyResult(slots, selectedBySong, configuration);
         if (result) {
           pushMedleyResult(results, result, resultLimit);
+          recordBestScoreMilestone();
         }
         return;
       }
@@ -819,6 +987,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
           const result = buildMedleyResult(slots, selectedBySong, configuration);
           if (result) {
             pushMedleyResult(results, result, resultLimit);
+            recordBestScoreMilestone();
           }
           selectedBySong[slot.songIndex] = undefined;
         }
@@ -915,13 +1084,30 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
     : observedUpperBound !== null && comparisonScore !== null
       ? Math.max(0, observedUpperBound - comparisonScore)
       : null;
+  const elapsedMs = Math.round(performance.now() - startedAt);
+  const relativeGap = comparisonScore !== null && comparisonScore > 0 && observedUpperBoundGap !== null
+    ? observedUpperBoundGap / comparisonScore
+    : null;
+  profiling.relativeGap = isSearchExhaustive ? 0 : relativeGap;
+  if (profiling.relativeGap !== null) {
+    if (profiling.relativeGap <= 0.01) {
+      profiling.timeToGap1PctMs = elapsedMs;
+    }
+    if (profiling.relativeGap <= 0.005) {
+      profiling.timeToGap05PctMs = elapsedMs;
+    }
+    if (profiling.relativeGap <= 0.001) {
+      profiling.timeToGap01PctMs = elapsedMs;
+    }
+  }
+  profiling.upperReplayElapsedMs = Math.round(profiling.upperReplayElapsedMs);
   return {
     results,
     stats: {
       ...stats,
       isExhaustive: isSearchExhaustive,
       searchMode: isSearchExhaustive ? stats.searchMode : "bounded",
-      elapsedMs: Math.round(performance.now() - startedAt),
+      elapsedMs,
       observedScoreUpperBound: isSearchExhaustive ? null : observedUpperBound,
       observedScoreUpperBoundGap: observedUpperBoundGap,
     },

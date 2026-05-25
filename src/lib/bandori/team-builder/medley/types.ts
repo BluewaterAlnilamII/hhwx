@@ -154,6 +154,18 @@ export type BandoriMedleyUpperWitness = {
 export type BandoriMedleyTeamSearchProfilingStats = {
   startedAreaItemConfigurationCount: number;
   completedAreaItemConfigurationCount: number;
+  rootUpperPrunedConfigurationCount: number;
+  rootUpperBestConfigurationUpperBound: number | null;
+  relativeGap: number | null;
+  gapClosureFromBaseline: number | null;
+  timeToBestScoreMs: number | null;
+  timeToGap1PctMs: number | null;
+  timeToGap05PctMs: number | null;
+  timeToGap01PctMs: number | null;
+  upperReplayStateCount: number;
+  upperReplayPrunableStateCount: number;
+  upperReplayAverageImprovement: number;
+  upperReplayElapsedMs: number;
   bestGreedySeedScore: number | null;
   reverseSongOrderGreedySeedScore: number | null;
   visitedBranchCount: number;
