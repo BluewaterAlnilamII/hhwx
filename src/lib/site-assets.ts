@@ -1,12 +1,22 @@
+const DEFAULT_SITE_ASSET_CDN_BASE_URL = "https://cdn.hhwx.org";
 const HHWX_SITE_RES_OBJECT_KEY_PREFIX = "hhwx/res";
 
 function normalizeCdnBaseUrl(value: string | null | undefined): string {
-  const trimmedValue = value?.trim();
+  const trimmedValue = value?.trim().replace(/\/+$/, "");
   if (!trimmedValue) {
-    return "";
+    return DEFAULT_SITE_ASSET_CDN_BASE_URL;
   }
 
-  return trimmedValue.replace(/\/+$/, "");
+  try {
+    const url = new URL(trimmedValue);
+    if (url.protocol === "http:" || url.protocol === "https:") {
+      return trimmedValue;
+    }
+  } catch {
+    return DEFAULT_SITE_ASSET_CDN_BASE_URL;
+  }
+
+  return DEFAULT_SITE_ASSET_CDN_BASE_URL;
 }
 
 function encodeAssetKeyPath(assetKey: string): string {
@@ -22,5 +32,5 @@ export function buildHhwxSiteResCdnUrl(assetName: string, baseUrl?: string | nul
   const assetKey = `${HHWX_SITE_RES_OBJECT_KEY_PREFIX}/${normalizedAssetName}`;
   const normalizedBaseUrl = normalizeCdnBaseUrl(baseUrl ?? process.env.NEXT_PUBLIC_SITE_ASSET_CDN_BASE_URL);
   const encodedAssetKey = encodeAssetKeyPath(assetKey);
-  return normalizedBaseUrl ? `${normalizedBaseUrl}/${encodedAssetKey}` : `/${encodedAssetKey}`;
+  return `${normalizedBaseUrl}/${encodedAssetKey}`;
 }

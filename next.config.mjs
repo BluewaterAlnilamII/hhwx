@@ -4,6 +4,7 @@ const STATIC_SITE_ASSET_CACHE_CONTROL = "public, max-age=2592000, s-maxage=25920
 // 因此这里单独缩短浏览器 TTL，避免发布后长时间拿到旧元数据。
 const MANIFEST_SITE_ASSET_CACHE_CONTROL = "public, max-age=3600, s-maxage=86400, stale-while-revalidate=604800";
 const CSP_REPORT_ENDPOINT = "/api/security/csp-report";
+const DEFAULT_SITE_ASSET_CDN_BASE_URL = "https://cdn.hhwx.org";
 
 function normalizeOrigin(value) {
     if (typeof value !== "string" || !value.trim()) {
@@ -29,6 +30,7 @@ function buildSupabaseConnectSources() {
 
 function buildImageSources() {
     const origins = [
+        DEFAULT_SITE_ASSET_CDN_BASE_URL,
         process.env.NEXT_PUBLIC_SITE_ASSET_CDN_BASE_URL,
         process.env.NEXT_PUBLIC_BANDORI_ASSET_CDN_BASE_URL,
     ]
