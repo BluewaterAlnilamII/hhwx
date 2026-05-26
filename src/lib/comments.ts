@@ -47,6 +47,8 @@ export type CommentNode = {
   moderationStatus: string;
   canEdit: boolean;
   canDelete: boolean;
+  replyToCommentId: string | null;
+  replyToUsername: string | null;
   previewReplies: CommentNode[];
 };
 
@@ -54,6 +56,7 @@ type ListCommentsOptions = {
   targetType: string;
   targetId: string;
   parentId: string | null;
+  rootId?: string | null;
   cursor?: string | null;
   viewerUserId?: string | null;
 };
@@ -104,9 +107,14 @@ export function parseCommentContent(value: unknown): string {
   return content;
 }
 
-function toCommentNode(row: CommentRow, viewerUserId?: string | null): CommentNode {
+function toCommentNode(
+  row: CommentRow,
+  viewerUserId?: string | null,
+  replyToUsernames?: Map<string, string | null>,
+): CommentNode {
   const isOwner = Boolean(viewerUserId && viewerUserId === row.user_id);
   const isDeleted = Boolean(row.deleted_at);
+  const shouldShowReplyTarget = Boolean(row.parent_id && row.root_id && row.parent_id !== row.root_id);
 
   return {
     id: row.id,
@@ -126,25 +134,60 @@ function toCommentNode(row: CommentRow, viewerUserId?: string | null): CommentNo
     moderationStatus: row.moderation_status,
     canEdit: isOwner && !isDeleted,
     canDelete: isOwner && !isDeleted,
+    replyToCommentId: shouldShowReplyTarget ? row.parent_id : null,
+    replyToUsername: shouldShowReplyTarget && row.parent_id ? replyToUsernames?.get(row.parent_id) ?? null : null,
     previewReplies: [],
   };
 }
 
-async function fetchEarliestDirectReplies(
-  parentIds: string[],
-  viewerUserId?: string | null,
-): Promise<Map<string, CommentNode[]>> {
-  const result = new Map<string, CommentNode[]>();
+async function readReplyToUsernames(rows: CommentRow[]): Promise<Map<string, string | null>> {
+  const parentIds = Array.from(new Set(rows
+    .filter((row) => row.parent_id && row.root_id && row.parent_id !== row.root_id)
+    .map((row) => row.parent_id as string)));
+
+  const result = new Map<string, string | null>();
   if (parentIds.length === 0) {
     return result;
   }
 
   const client = createServerSupabaseClient();
-  await Promise.all(parentIds.map(async (parentId) => {
+  const { data, error } = await client
+    .from(COMMENTS_TABLE)
+    .select("id, profiles:profiles!user_id(username)")
+    .in("id", parentIds);
+
+  if (error) {
+    throw new ApiRouteError(500, "COMMENT_REPLY_TARGET_READ_FAILED", "无法读取被回复用户", error.message);
+  }
+
+  for (const row of (data ?? []) as unknown as Array<{ id: string; profiles: CommentProfile | null }>) {
+    result.set(row.id, row.profiles?.username ?? null);
+  }
+
+  return result;
+}
+
+async function toCommentNodes(rows: CommentRow[], viewerUserId?: string | null): Promise<CommentNode[]> {
+  const replyToUsernames = await readReplyToUsernames(rows);
+  return rows.map((row) => toCommentNode(row, viewerUserId, replyToUsernames));
+}
+
+async function fetchEarliestThreadReplies(
+  rootIds: string[],
+  viewerUserId?: string | null,
+): Promise<Map<string, CommentNode[]>> {
+  const result = new Map<string, CommentNode[]>();
+  if (rootIds.length === 0) {
+    return result;
+  }
+
+  const client = createServerSupabaseClient();
+  await Promise.all(rootIds.map(async (rootId) => {
     const { data, error } = await client
       .from(COMMENTS_TABLE)
       .select(COMMENT_SELECT)
-      .eq("parent_id", parentId)
+      .eq("root_id", rootId)
+      .not("parent_id", "is", null)
       .eq("moderation_status", "visible")
       .order("created_at", { ascending: true })
       .order("id", { ascending: true })
@@ -154,7 +197,7 @@ async function fetchEarliestDirectReplies(
       throw new ApiRouteError(500, "COMMENT_REPLY_PREVIEW_FAILED", "无法读取回复预览", error.message);
     }
 
-    result.set(parentId, ((data ?? []) as unknown as CommentRow[]).map((row) => toCommentNode(row, viewerUserId)));
+    result.set(rootId, await toCommentNodes((data ?? []) as unknown as CommentRow[], viewerUserId));
   }));
 
   return result;
@@ -177,7 +220,12 @@ export async function listComments(options: ListCommentsOptions): Promise<{
     .order("id", { ascending: true })
     .limit(COMMENT_PAGE_SIZE + 1);
 
-  query = options.parentId === null ? query.is("parent_id", null) : query.eq("parent_id", options.parentId);
+  if (options.rootId) {
+    query = query.eq("root_id", options.rootId).not("parent_id", "is", null);
+  } else {
+    query = options.parentId === null ? query.is("parent_id", null) : query.eq("parent_id", options.parentId);
+  }
+
   if (cursor) {
     query = query.or(`created_at.gt.${cursor.createdAt},and(created_at.eq.${cursor.createdAt},id.gt.${cursor.id})`);
   }
@@ -188,8 +236,10 @@ export async function listComments(options: ListCommentsOptions): Promise<{
   }
 
   const rows = ((data ?? []) as unknown as CommentRow[]).slice(0, COMMENT_PAGE_SIZE);
-  const comments = rows.map((row) => toCommentNode(row, options.viewerUserId));
-  const previews = await fetchEarliestDirectReplies(comments.map((comment) => comment.id), options.viewerUserId);
+  const comments = await toCommentNodes(rows, options.viewerUserId);
+  const previews = options.rootId
+    ? new Map<string, CommentNode[]>()
+    : await fetchEarliestThreadReplies(comments.map((comment) => comment.id), options.viewerUserId);
 
   for (const comment of comments) {
     comment.previewReplies = previews.get(comment.id) ?? [];
@@ -246,7 +296,28 @@ export async function createComment(options: {
     throw new ApiRouteError(500, "COMMENT_CREATE_FAILED", "评论发送失败", error?.message);
   }
 
-  return toCommentNode(data as unknown as CommentRow, options.userId);
+  return (await toCommentNodes([data as unknown as CommentRow], options.userId))[0];
+}
+
+export async function listThreadReplies(options: {
+  targetType: string;
+  targetId: string;
+  rootId: string;
+  cursor?: string | null;
+  viewerUserId?: string | null;
+}): Promise<{
+  comments: CommentNode[];
+  nextCursor: string | null;
+  hasMore: boolean;
+}> {
+  return listComments({
+    targetType: options.targetType,
+    targetId: options.targetId,
+    parentId: null,
+    rootId: options.rootId,
+    cursor: options.cursor,
+    viewerUserId: options.viewerUserId,
+  });
 }
 
 export async function getCommentContext(options: {
@@ -273,7 +344,7 @@ export async function getCommentContext(options: {
     throw new ApiRouteError(404, "COMMENT_NOT_FOUND", "评论不存在", error?.message);
   }
 
-  const comment = toCommentNode(data as unknown as CommentRow, options.viewerUserId);
+  const comment = (await toCommentNodes([data as unknown as CommentRow], options.viewerUserId))[0];
   const chainRows: CommentRow[] = [];
   let parentId = comment.parentId;
   let guard = 0;
@@ -298,7 +369,7 @@ export async function getCommentContext(options: {
     guard += 1;
   }
 
-  const ancestors = chainRows.map((row) => toCommentNode(row, options.viewerUserId));
+  const ancestors = await toCommentNodes(chainRows, options.viewerUserId);
   const root = ancestors[0] ?? comment;
 
   return { root, ancestors, comment };
@@ -331,7 +402,7 @@ export async function updateComment(options: {
     throw new ApiRouteError(404, "COMMENT_UPDATE_FAILED", "评论不存在或不可编辑", error?.message);
   }
 
-  return toCommentNode(data as unknown as CommentRow, options.userId);
+  return (await toCommentNodes([data as unknown as CommentRow], options.userId))[0];
 }
 
 export async function softDeleteComment(options: {
@@ -360,5 +431,5 @@ export async function softDeleteComment(options: {
     throw new ApiRouteError(404, "COMMENT_DELETE_FAILED", "评论不存在或不可删除", error?.message);
   }
 
-  return toCommentNode(data as unknown as CommentRow, options.userId);
+  return (await toCommentNodes([data as unknown as CommentRow], options.userId))[0];
 }

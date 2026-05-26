@@ -1,7 +1,7 @@
 import { ApiRouteError } from "@/lib/api-contracts";
 import { jsonRouteError, jsonSuccess } from "@/lib/api-response";
 import { requireAuthenticatedUser } from "@/lib/auth-server";
-import { COMMENT_TARGET_BANDORI_EVENT, listComments } from "@/lib/comments";
+import { COMMENT_TARGET_BANDORI_EVENT, listThreadReplies } from "@/lib/comments";
 
 type RouteContext = {
   params: Promise<{ eventId: string; commentId: string }>;
@@ -35,10 +35,10 @@ export async function GET(request: Request, context: RouteContext) {
     const url = new URL(request.url);
     const viewerUserId = await readViewerUserId(request);
 
-    return jsonSuccess(await listComments({
+    return jsonSuccess(await listThreadReplies({
       targetType: COMMENT_TARGET_BANDORI_EVENT,
       targetId: eventId,
-      parentId: commentId,
+      rootId: commentId,
       cursor: url.searchParams.get("cursor"),
       viewerUserId,
     }));
@@ -51,4 +51,3 @@ export async function GET(request: Request, context: RouteContext) {
     });
   }
 }
-

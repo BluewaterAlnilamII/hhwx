@@ -130,6 +130,13 @@ BEGIN
       SET reply_count = reply_count + 1,
           updated_at = NOW()
       WHERE id = NEW.parent_id;
+
+    IF NEW.root_id IS NOT NULL AND NEW.root_id <> NEW.parent_id THEN
+      UPDATE public.comments
+        SET reply_count = reply_count + 1,
+            updated_at = NOW()
+        WHERE id = NEW.root_id;
+    END IF;
   END IF;
 
   RETURN NEW;

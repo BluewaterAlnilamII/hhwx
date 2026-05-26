@@ -1,8 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { Check, Edit3, Link2, MessageSquare, MoreHorizontal, Reply, Trash2, X } from "lucide-react";
+import type { ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Image from "next/image";
+import { Check, Edit3, Link2, MessageSquare, MoreHorizontal, Reply, Smile, Trash2, X } from "lucide-react";
 import { getApiErrorMessage, parseApiSuccessData } from "@/lib/api-contracts";
+import { COMMENT_EMOJI_NAMES, getCommentEmojiSrc } from "@/lib/comment-emojis";
 import { getSafeSession } from "@/lib/supabase";
 import { getUsernameAvatarLabel } from "@/lib/username-policy";
 import { cn } from "@/lib/utils";
@@ -23,6 +26,8 @@ type CommentNode = {
   deletedAt: string | null;
   canEdit: boolean;
   canDelete: boolean;
+  replyToCommentId: string | null;
+  replyToUsername: string | null;
   previewReplies: CommentNode[];
 };
 
@@ -38,7 +43,6 @@ type CommentContextResponse = {
   comment: CommentNode;
 };
 
-const MAX_DEPTH_INDENT = 5;
 
 function getErrorMessage(payload: unknown, fallback: string): string {
   return getApiErrorMessage(payload) ?? fallback;
@@ -53,16 +57,57 @@ function formatCommentTime(value: string): string {
   });
 }
 
-function buildFocusedTree(context: CommentContextResponse): CommentNode {
-  const chain = context.ancestors.length > 0 ? [...context.ancestors, context.comment] : [context.comment];
-  const root: CommentNode = { ...context.root, previewReplies: [] };
-  let cursor = root;
+function renderCommentContent(content: string) {
+  const nodes: ReactNode[] = [];
+  const emojiPattern = /:([A-Za-z0-9_+-]+):/g;
+  let cursor = 0;
+  let match: RegExpExecArray | null;
 
-  for (const item of chain.slice(root.id === chain[0]?.id ? 1 : 0)) {
-    const next: CommentNode = { ...item, previewReplies: [] };
-    cursor.previewReplies = [next];
-    cursor = next;
+  while ((match = emojiPattern.exec(content)) !== null) {
+    const [raw, name] = match;
+    const src = getCommentEmojiSrc(name);
+    if (!src) continue;
+
+    if (match.index > cursor) {
+      nodes.push(content.slice(cursor, match.index));
+    }
+
+    nodes.push(
+      <Image
+        key={`${name}-${match.index}`}
+        src={src}
+        alt={raw}
+        title={raw}
+        width={32}
+        height={32}
+        loading="lazy"
+        className="mx-0.5 inline-block h-8 w-8 align-[-0.35em]"
+      />,
+    );
+    cursor = match.index + raw.length;
   }
+
+  if (cursor < content.length) {
+    nodes.push(content.slice(cursor));
+  }
+
+  return nodes.length > 0 ? nodes : content;
+}
+
+function buildContextThread(context: CommentContextResponse): CommentNode {
+  const root: CommentNode = { ...context.root, previewReplies: [] };
+  const repliesById = new Map<string, CommentNode>();
+
+  for (const item of [...context.ancestors, context.comment]) {
+    if (item.id !== root.id) {
+      repliesById.set(item.id, { ...item, previewReplies: [] });
+    }
+  }
+
+  root.previewReplies = [...repliesById.values()].sort((left, right) => {
+    const timeDelta = new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime();
+    return timeDelta !== 0 ? timeDelta : left.id.localeCompare(right.id);
+  });
 
   return root;
 }
@@ -116,9 +161,56 @@ function appendUniqueComment(nodes: CommentNode[], next: CommentNode): CommentNo
   return [...nodes, next];
 }
 
-function bumpReplyCount(nodes: CommentNode[], parentId: string, child: CommentNode): CommentNode[] {
+function mergePreviewReplies(current: CommentNode[], next: CommentNode[]): CommentNode[] {
+  const byId = new Map<string, CommentNode>();
+
+  for (const item of current) {
+    byId.set(item.id, item);
+  }
+
+  for (const item of next) {
+    byId.set(item.id, item);
+  }
+
+  return [...byId.values()].sort((left, right) => {
+    const timeDelta = new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime();
+    return timeDelta !== 0 ? timeDelta : left.id.localeCompare(right.id);
+  });
+}
+
+function mergeContextRoot(nodes: CommentNode[], contextRoot: CommentNode): CommentNode[] {
+  let found = false;
+  const merged = nodes.map((node) => {
+    if (node.id !== contextRoot.id) {
+      return node;
+    }
+
+    found = true;
+    return {
+      ...node,
+      replyCount: Math.max(node.replyCount, contextRoot.replyCount),
+      previewReplies: mergePreviewReplies(node.previewReplies, contextRoot.previewReplies),
+    };
+  });
+
+  return found ? merged : [...merged, contextRoot];
+}
+
+function findThreadRootId(nodes: CommentNode[], comment: CommentNode): string | null {
+  if (!comment.parentId) {
+    return comment.id;
+  }
+
+  if (comment.rootId) {
+    return comment.rootId;
+  }
+
+  return findComment(nodes, comment.parentId)?.rootId ?? comment.parentId;
+}
+
+function bumpThreadReplyCount(nodes: CommentNode[], rootId: string, child: CommentNode): CommentNode[] {
   return nodes.map((node) => {
-    if (node.id === parentId) {
+    if (node.id === rootId) {
       const hasPreview = node.previewReplies.some((reply) => reply.id === child.id);
       return {
         ...node,
@@ -127,7 +219,7 @@ function bumpReplyCount(nodes: CommentNode[], parentId: string, child: CommentNo
       };
     }
 
-    return { ...node, previewReplies: bumpReplyCount(node.previewReplies, parentId, child) };
+    return node;
   });
 }
 
@@ -141,8 +233,10 @@ type ComposerProps = {
 
 function CommentComposer({ placeholder, submitLabel, onSubmit, onCancel, autoFocus = false }: ComposerProps) {
   const [content, setContent] = useState("");
+  const [emojiOpen, setEmojiOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const handleSubmit = async () => {
     if (!content.trim() || submitting) return;
@@ -158,9 +252,28 @@ function CommentComposer({ placeholder, submitLabel, onSubmit, onCancel, autoFoc
     }
   };
 
+  const insertEmoji = (name: string) => {
+    const textarea = textareaRef.current;
+    const shortcode = `:${name}:`;
+    const start = textarea?.selectionStart ?? content.length;
+    const end = textarea?.selectionEnd ?? content.length;
+    const prefix = start > 0 && !/\s/.test(content[start - 1] ?? "") ? " " : "";
+    const suffix = !/\s/.test(content[end] ?? "") ? " " : "";
+    const nextContent = `${content.slice(0, start)}${prefix}${shortcode}${suffix}${content.slice(end)}`.slice(0, 500);
+    const nextCursor = Math.min(start + prefix.length + shortcode.length + suffix.length, nextContent.length);
+
+    setContent(nextContent);
+    setEmojiOpen(false);
+    window.requestAnimationFrame(() => {
+      textarea?.focus();
+      textarea?.setSelectionRange(nextCursor, nextCursor);
+    });
+  };
+
   return (
     <div className="rounded-2xl border border-sky-100 bg-white/82 p-3 shadow-sm dark:border-slate-700 dark:bg-slate-900/72">
       <textarea
+        ref={textareaRef}
         value={content}
         onChange={(event) => setContent(event.target.value)}
         placeholder={placeholder}
@@ -170,9 +283,49 @@ function CommentComposer({ placeholder, submitLabel, onSubmit, onCancel, autoFoc
         className="min-h-[5.25rem] w-full resize-y rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm leading-6 text-slate-700 outline-none transition focus:border-sky-400 focus:ring-2 focus:ring-sky-200 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:focus:border-sky-500 dark:focus:ring-sky-500/20"
       />
       <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
-        <span className={cn("text-xs", content.length > 460 ? "text-amber-600" : "text-slate-400")}>
-          {content.length}/500
-        </span>
+        <div className="relative flex items-center gap-2">
+          <span className={cn("text-xs", content.length > 460 ? "text-amber-600" : "text-slate-400")}>
+            {content.length}/500
+          </span>
+          <button
+            type="button"
+            onClick={() => setEmojiOpen((value) => !value)}
+            className={cn(
+              "inline-flex h-8 w-8 items-center justify-center rounded-full border text-slate-500 transition hover:bg-sky-50 hover:text-sky-700 dark:hover:bg-sky-500/10 dark:hover:text-sky-300",
+              emojiOpen
+                ? "border-sky-300 bg-sky-50 text-sky-700 dark:border-sky-500/50 dark:bg-sky-500/10 dark:text-sky-300"
+                : "border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900",
+            )}
+            aria-expanded={emojiOpen}
+            aria-label="选择表情"
+            title="选择表情"
+          >
+            <Smile size={15} />
+          </button>
+          {emojiOpen ? (
+            <div className="absolute bottom-10 left-0 z-20 w-[min(24rem,calc(100vw-4rem))] rounded-2xl border border-sky-100 bg-white p-2 shadow-xl dark:border-slate-700 dark:bg-slate-900">
+              <div className="grid max-h-64 grid-cols-9 gap-1 overflow-y-auto pr-1 [scrollbar-color:#94a3b8_#e5e7eb] [scrollbar-width:thin] [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-slate-400 [&::-webkit-scrollbar-track]:rounded-full [&::-webkit-scrollbar-track]:bg-slate-200">
+                {COMMENT_EMOJI_NAMES.map((name) => {
+                  const src = getCommentEmojiSrc(name);
+                  if (!src) return null;
+
+                  return (
+                    <button
+                      key={name}
+                      type="button"
+                      onClick={() => insertEmoji(name)}
+                      className="flex h-9 w-9 items-center justify-center rounded-lg transition hover:bg-sky-50 focus:bg-sky-50 focus:outline-none focus:ring-2 focus:ring-sky-200 dark:hover:bg-sky-500/10 dark:focus:bg-sky-500/10 dark:focus:ring-sky-500/30"
+                      aria-label={`:${name}:`}
+                      title={`:${name}:`}
+                    >
+                      <Image src={src} alt={`:${name}:`} width={32} height={32} className="h-8 w-8 object-contain" />
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ) : null}
+        </div>
         <div className="flex items-center gap-2">
           {onCancel ? (
             <button
@@ -206,6 +359,8 @@ type CommentItemProps = {
   highlightedId: string | null;
   replies: Record<string, CommentListResponse>;
   loadingReplies: Record<string, boolean>;
+  isReply?: boolean;
+  rootCommentId?: string | null;
   onCreateReply: (parentId: string, content: string) => Promise<void>;
   onUpdate: (commentId: string, content: string) => Promise<void>;
   onDelete: (commentId: string) => Promise<void>;
@@ -218,6 +373,8 @@ function CommentItem({
   highlightedId,
   replies,
   loadingReplies,
+  isReply = false,
+  rootCommentId = null,
   onCreateReply,
   onUpdate,
   onDelete,
@@ -227,10 +384,10 @@ function CommentItem({
   const [editing, setEditing] = useState(false);
   const [editValue, setEditValue] = useState(comment.content ?? "");
   const [actionError, setActionError] = useState("");
-  const loadedReplies = replies[comment.id];
-  const visibleReplies = loadedReplies?.comments ?? comment.previewReplies;
-  const hiddenReplyCount = Math.max(0, comment.replyCount - visibleReplies.length);
-  const indentDepth = Math.min(comment.depth, MAX_DEPTH_INDENT);
+  const threadRootId = rootCommentId ?? comment.id;
+  const loadedReplies = replies[threadRootId];
+  const visibleReplies = isReply ? [] : loadedReplies?.comments ?? comment.previewReplies;
+  const hiddenReplyCount = isReply ? 0 : Math.max(0, comment.replyCount - visibleReplies.length);
   const isHighlighted = highlightedId === comment.id;
   const isDeleted = Boolean(comment.deletedAt);
 
@@ -275,12 +432,8 @@ function CommentItem({
         isHighlighted
           ? "border-amber-300 ring-4 ring-amber-200/70 dark:border-amber-400 dark:ring-amber-400/20"
           : "border-sky-100/80 dark:border-slate-700",
-      )}
-      style={{ marginLeft: `${indentDepth * 18}px` }}
-    >
-      {comment.depth > MAX_DEPTH_INDENT ? (
-        <div className="mb-2 text-xs text-slate-400">回复给上级评论</div>
-      ) : null}
+      )}
+    >
       <div className="flex items-start gap-3">
         <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-sky-400 to-emerald-400 text-xs font-bold text-white shadow-sm">
           {getUsernameAvatarLabel(comment.username, "?")}
@@ -291,6 +444,11 @@ function CommentItem({
               {comment.username ?? "匿名用户"}
             </span>
             <span className="text-xs text-slate-400">{formatCommentTime(comment.createdAt)}</span>
+            {comment.replyToUsername ? (
+              <span className="text-xs font-medium text-sky-600 dark:text-sky-300">
+                回复 @{comment.replyToUsername}
+              </span>
+            ) : null}
             {comment.editedAt && !isDeleted ? <span className="text-xs text-slate-400">（已编辑）</span> : null}
           </div>
 
@@ -313,7 +471,7 @@ function CommentItem({
             </div>
           ) : (
             <p className={cn("mt-2 whitespace-pre-wrap text-sm leading-6", isDeleted ? "text-slate-400" : "text-slate-600 dark:text-slate-200")}>
-              {isDeleted ? "（已删除）" : comment.content}
+              {isDeleted ? "（已删除）" : renderCommentContent(comment.content ?? "")}
             </p>
           )}
 
@@ -369,6 +527,8 @@ function CommentItem({
                   highlightedId={highlightedId}
                   replies={replies}
                   loadingReplies={loadingReplies}
+                  isReply
+                  rootCommentId={comment.id}
                   onCreateReply={onCreateReply}
                   onUpdate={onUpdate}
                   onDelete={onDelete}
@@ -381,12 +541,12 @@ function CommentItem({
           {comment.replyCount > 0 && hiddenReplyCount > 0 ? (
             <button
               type="button"
-              onClick={() => onLoadReplies(comment.id, loadedReplies?.nextCursor)}
-              disabled={loadingReplies[comment.id]}
+              onClick={() => onLoadReplies(threadRootId, loadedReplies?.nextCursor)}
+              disabled={loadingReplies[threadRootId]}
               className="mt-3 inline-flex h-8 items-center gap-1.5 rounded-full border border-sky-200 bg-sky-50 px-3 text-xs font-semibold text-sky-700 transition hover:bg-sky-100 disabled:opacity-60 dark:border-sky-500/30 dark:bg-sky-500/10 dark:text-sky-300"
             >
               <MoreHorizontal size={14} />
-              {loadingReplies[comment.id] ? "加载中" : loadedReplies?.hasMore ? "再展开 10 条回复" : `展开 ${hiddenReplyCount} 条回复`}
+              {loadingReplies[threadRootId] ? "加载中" : loadedReplies?.hasMore ? "再展开 10 条回复" : `展开 ${hiddenReplyCount} 条回复`}
             </button>
           ) : null}
         </div>
@@ -402,7 +562,6 @@ export default function EventComments({ eventId }: { eventId: number | null }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [focusedCommentId, setFocusedCommentId] = useState<string | null>(null);
-  const [focusedMode, setFocusedMode] = useState(false);
   const [replies, setReplies] = useState<Record<string, CommentListResponse>>({});
   const [loadingReplies, setLoadingReplies] = useState<Record<string, boolean>>({});
   const { userId, username, emailVerified, authReady } = useGameStore();
@@ -420,7 +579,6 @@ export default function EventComments({ eventId }: { eventId: number | null }) {
       setComments((current) => cursor ? [...current, ...data.comments] : data.comments);
       setNextCursor(data.nextCursor);
       setHasMore(data.hasMore);
-      setFocusedMode(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : "评论加载失败");
     } finally {
@@ -428,40 +586,48 @@ export default function EventComments({ eventId }: { eventId: number | null }) {
     }
   }, [apiBase]);
 
-  const loadFocusedComment = useCallback(async (commentId: string) => {
+  const locateLinkedComment = useCallback(async (commentId: string) => {
     if (!apiBase) return;
-    setLoading(true);
-    setError("");
     try {
       const headers = await authHeaders();
       const data = await requestJson<CommentContextResponse>(`${apiBase}/${commentId}`, { headers });
-      setComments([buildFocusedTree(data)]);
+      const contextRoot = buildContextThread(data);
+      setComments((current) => mergeContextRoot(current, contextRoot));
+      if (contextRoot.previewReplies.length > 0) {
+        setReplies((current) => {
+          const existing = current[contextRoot.id];
+          return {
+            ...current,
+            [contextRoot.id]: {
+              comments: mergePreviewReplies(existing?.comments ?? [], contextRoot.previewReplies),
+              nextCursor: existing?.nextCursor ?? null,
+              hasMore: existing?.hasMore ?? false,
+            },
+          };
+        });
+      }
       setFocusedCommentId(commentId);
-      setFocusedMode(true);
       window.setTimeout(() => document.getElementById(`comment-${commentId}`)?.scrollIntoView({ block: "center", behavior: "smooth" }), 80);
     } catch (err) {
       setError(err instanceof Error ? err.message : "无法定位评论");
-      await loadRootComments(null);
-    } finally {
-      setLoading(false);
     }
-  }, [apiBase, loadRootComments]);
+  }, [apiBase]);
 
   useEffect(() => {
     setComments([]);
     setReplies({});
-    setFocusedMode(false);
+    setFocusedCommentId(null);
     if (!eventId || !apiBase) return;
 
     const params = new URLSearchParams(window.location.search);
     const commentId = params.get("comment");
-    if (commentId) {
-      void loadFocusedComment(commentId);
-      return;
-    }
-
-    void loadRootComments(null);
-  }, [apiBase, eventId, loadFocusedComment, loadRootComments]);
+    void (async () => {
+      await loadRootComments(null);
+      if (commentId) {
+        await locateLinkedComment(commentId);
+      }
+    })();
+  }, [apiBase, eventId, loadRootComments, locateLinkedComment]);
 
   const createComment = async (content: string, parentId?: string | null) => {
     if (!apiBase) return;
@@ -473,15 +639,16 @@ export default function EventComments({ eventId }: { eventId: number | null }) {
     });
 
     if (parentId) {
-      setComments((current) => bumpReplyCount(current, parentId, created));
+      const rootId = findThreadRootId(comments, created) ?? parentId;
+      setComments((current) => bumpThreadReplyCount(current, rootId, created));
       setReplies((current) => {
-        const existing = current[parentId];
+        const existing = current[rootId];
         if (!existing) {
-          const parent = findComment(comments, parentId);
-          const baseReplies = parent?.previewReplies ?? [];
+          const root = findComment(comments, rootId);
+          const baseReplies = root?.previewReplies ?? [];
           return {
             ...current,
-            [parentId]: {
+            [rootId]: {
               comments: appendUniqueComment(baseReplies, created),
               nextCursor: null,
               hasMore: false,
@@ -491,7 +658,7 @@ export default function EventComments({ eventId }: { eventId: number | null }) {
 
         return {
           ...current,
-          [parentId]: { ...existing, comments: appendUniqueComment(existing.comments, created) },
+          [rootId]: { ...existing, comments: appendUniqueComment(existing.comments, created) },
         };
       });
       setFocusedCommentId(created.id);
@@ -569,22 +736,7 @@ export default function EventComments({ eventId }: { eventId: number | null }) {
             活动评论
           </div>
           <h2 className="mt-3 text-xl font-bold text-slate-900 dark:text-white">本期活动讨论</h2>
-        </div>
-        {focusedMode ? (
-          <button
-            type="button"
-            onClick={() => {
-              const url = new URL(window.location.href);
-              url.searchParams.delete("comment");
-              window.history.replaceState(null, "", url.toString());
-              setFocusedCommentId(null);
-              void loadRootComments(null);
-            }}
-            className="inline-flex h-9 items-center justify-center rounded-full border border-amber-200 bg-amber-50 px-3 text-xs font-semibold text-amber-700 hover:bg-amber-100 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200"
-          >
-            返回全部评论
-          </button>
-        ) : null}
+        </div>
       </div>
 
       <div className="mt-4">
@@ -630,7 +782,7 @@ export default function EventComments({ eventId }: { eventId: number | null }) {
         ) : null}
       </div>
 
-      {!focusedMode && hasMore ? (
+      {hasMore ? (
         <div className="mt-5 flex justify-center">
           <button
             type="button"

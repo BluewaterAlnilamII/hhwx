@@ -1,0 +1,757 @@
+[
+  {
+    "name": "KasumiCry",
+    "shortcode": ":KasumiCry:",
+    "src": "/res/emoji/KasumiCry.png"
+  },
+  {
+    "name": "KasumiYay",
+    "shortcode": ":KasumiYay:",
+    "src": "/res/emoji/KasumiYay.png"
+  },
+  {
+    "name": "NotLikeKasumi",
+    "shortcode": ":NotLikeKasumi:",
+    "src": "/res/emoji/NotLikeKasumi.png"
+  },
+  {
+    "name": "Tae",
+    "shortcode": ":Tae:",
+    "src": "/res/emoji/Tae.png"
+  },
+  {
+    "name": "TaeHuh",
+    "shortcode": ":TaeHuh:",
+    "src": "/res/emoji/TaeHuh.png"
+  },
+  {
+    "name": "TaeSpook",
+    "shortcode": ":TaeSpook:",
+    "src": "/res/emoji/TaeSpook.png"
+  },
+  {
+    "name": "RimiBoo",
+    "shortcode": ":RimiBoo:",
+    "src": "/res/emoji/RimiBoo.png"
+  },
+  {
+    "name": "RimiDrool",
+    "shortcode": ":RimiDrool:",
+    "src": "/res/emoji/RimiDrool.png"
+  },
+  {
+    "name": "RimiShook",
+    "shortcode": ":RimiShook:",
+    "src": "/res/emoji/RimiShook.png"
+  },
+  {
+    "name": "SaayaMelt",
+    "shortcode": ":SaayaMelt:",
+    "src": "/res/emoji/SaayaMelt.png"
+  },
+  {
+    "name": "SaayaWhat",
+    "shortcode": ":SaayaWhat:",
+    "src": "/res/emoji/SaayaWhat.png"
+  },
+  {
+    "name": "SaayaXD",
+    "shortcode": ":SaayaXD:",
+    "src": "/res/emoji/SaayaXD.png"
+  },
+  {
+    "name": "ArisaAngery",
+    "shortcode": ":ArisaAngery:",
+    "src": "/res/emoji/ArisaAngery.png"
+  },
+  {
+    "name": "ArisaHuh",
+    "shortcode": ":ArisaHuh:",
+    "src": "/res/emoji/ArisaHuh.png"
+  },
+  {
+    "name": "ArisaJii",
+    "shortcode": ":ArisaJii:",
+    "src": "/res/emoji/ArisaJii.png"
+  },
+  {
+    "name": "RanBlush",
+    "shortcode": ":RanBlush:",
+    "src": "/res/emoji/RanBlush.png"
+  },
+  {
+    "name": "Ranguish",
+    "shortcode": ":Ranguish:",
+    "src": "/res/emoji/Ranguish.png"
+  },
+  {
+    "name": "RanPat",
+    "shortcode": ":RanPat:",
+    "src": "/res/emoji/RanPat.png"
+  },
+  {
+    "name": "Mocappa",
+    "shortcode": ":Mocappa:",
+    "src": "/res/emoji/Mocappa.png"
+  },
+  {
+    "name": "MocaSmirk",
+    "shortcode": ":MocaSmirk:",
+    "src": "/res/emoji/MocaSmirk.png"
+  },
+  {
+    "name": "MocaThink",
+    "shortcode": ":MocaThink:",
+    "src": "/res/emoji/MocaThink.png"
+  },
+  {
+    "name": "HimariLewd",
+    "shortcode": ":HimariLewd:",
+    "src": "/res/emoji/HimariLewd.png"
+  },
+  {
+    "name": "HimariLul",
+    "shortcode": ":HimariLul:",
+    "src": "/res/emoji/HimariLul.png"
+  },
+  {
+    "name": "HimariPout",
+    "shortcode": ":HimariPout:",
+    "src": "/res/emoji/HimariPout.png"
+  },
+  {
+    "name": "TomoeDrool",
+    "shortcode": ":TomoeDrool:",
+    "src": "/res/emoji/TomoeDrool.png"
+  },
+  {
+    "name": "TomoeEmbarassed",
+    "shortcode": ":TomoeEmbarassed:",
+    "src": "/res/emoji/TomoeEmbarassed.png"
+  },
+  {
+    "name": "TomoeSmug",
+    "shortcode": ":TomoeSmug:",
+    "src": "/res/emoji/TomoeSmug.png"
+  },
+  {
+    "name": "NotLikeTsugu",
+    "shortcode": ":NotLikeTsugu:",
+    "src": "/res/emoji/NotLikeTsugu.png"
+  },
+  {
+    "name": "Tsugu",
+    "shortcode": ":Tsugu:",
+    "src": "/res/emoji/Tsugu.png"
+  },
+  {
+    "name": "Tsugurific",
+    "shortcode": ":Tsugurific:",
+    "src": "/res/emoji/Tsugurific.png"
+  },
+  {
+    "name": "KokoroPeek",
+    "shortcode": ":KokoroPeek:",
+    "src": "/res/emoji/KokoroPeek.png"
+  },
+  {
+    "name": "KokoroSlain",
+    "shortcode": ":KokoroSlain:",
+    "src": "/res/emoji/KokoroSlain.png"
+  },
+  {
+    "name": "KokoroYay",
+    "shortcode": ":KokoroYay:",
+    "src": "/res/emoji/KokoroYay.png"
+  },
+  {
+    "name": "KaoruBrag",
+    "shortcode": ":KaoruBrag:",
+    "src": "/res/emoji/KaoruBrag.png"
+  },
+  {
+    "name": "KaoruFiget",
+    "shortcode": ":KaoruFiget:",
+    "src": "/res/emoji/KaoruFiget.png"
+  },
+  {
+    "name": "KaoruShrug",
+    "shortcode": ":KaoruShrug:",
+    "src": "/res/emoji/KaoruShrug.png"
+  },
+  {
+    "name": "HagumiAngry",
+    "shortcode": ":HagumiAngry:",
+    "src": "/res/emoji/HagumiAngry.png"
+  },
+  {
+    "name": "HagumiCry",
+    "shortcode": ":HagumiCry:",
+    "src": "/res/emoji/HagumiCry.png"
+  },
+  {
+    "name": "HagumiXD",
+    "shortcode": ":HagumiXD:",
+    "src": "/res/emoji/HagumiXD.png"
+  },
+  {
+    "name": "KanonFuee",
+    "shortcode": ":KanonFuee:",
+    "src": "/res/emoji/KanonFuee.png"
+  },
+  {
+    "name": "KanonHurt",
+    "shortcode": ":KanonHurt:",
+    "src": "/res/emoji/KanonHurt.png"
+  },
+  {
+    "name": "KanonLove",
+    "shortcode": ":KanonLove:",
+    "src": "/res/emoji/KanonLove.png"
+  },
+  {
+    "name": "MichelleDab",
+    "shortcode": ":MichelleDab:",
+    "src": "/res/emoji/MichelleDab.png"
+  },
+  {
+    "name": "MisakiSleeper",
+    "shortcode": ":MisakiSleeper:",
+    "src": "/res/emoji/MisakiSleeper.png"
+  },
+  {
+    "name": "MisakiWoah",
+    "shortcode": ":MisakiWoah:",
+    "src": "/res/emoji/MisakiWoah.png"
+  },
+  {
+    "name": "AyaDed",
+    "shortcode": ":AyaDed:",
+    "src": "/res/emoji/AyaDed.png"
+  },
+  {
+    "name": "AyaJii",
+    "shortcode": ":AyaJii:",
+    "src": "/res/emoji/AyaJii.png"
+  },
+  {
+    "name": "AyaWow",
+    "shortcode": ":AyaWow:",
+    "src": "/res/emoji/AyaWow.png"
+  },
+  {
+    "name": "HinaAAA",
+    "shortcode": ":HinaAAA:",
+    "src": "/res/emoji/HinaAAA.png"
+  },
+  {
+    "name": "HinaSmug",
+    "shortcode": ":HinaSmug:",
+    "src": "/res/emoji/HinaSmug.png"
+  },
+  {
+    "name": "HinaYay",
+    "shortcode": ":HinaYay:",
+    "src": "/res/emoji/HinaYay.png"
+  },
+  {
+    "name": "ChisatoJii",
+    "shortcode": ":ChisatoJii:",
+    "src": "/res/emoji/ChisatoJii.png"
+  },
+  {
+    "name": "ChisatoWorry",
+    "shortcode": ":ChisatoWorry:",
+    "src": "/res/emoji/ChisatoWorry.png"
+  },
+  {
+    "name": "ChisatoWTF",
+    "shortcode": ":ChisatoWTF:",
+    "src": "/res/emoji/ChisatoWTF.png"
+  },
+  {
+    "name": "MayaBomb",
+    "shortcode": ":MayaBomb:",
+    "src": "/res/emoji/MayaBomb.png"
+  },
+  {
+    "name": "MayaShook",
+    "shortcode": ":MayaShook:",
+    "src": "/res/emoji/MayaShook.png"
+  },
+  {
+    "name": "MayaThink",
+    "shortcode": ":MayaThink:",
+    "src": "/res/emoji/MayaThink.png"
+  },
+  {
+    "name": "Eve",
+    "shortcode": ":Eve:",
+    "src": "/res/emoji/Eve.png"
+  },
+  {
+    "name": "EveBushido",
+    "shortcode": ":EveBushido:",
+    "src": "/res/emoji/EveBushido.png"
+  },
+  {
+    "name": "NotLikeEve",
+    "shortcode": ":NotLikeEve:",
+    "src": "/res/emoji/NotLikeEve.png"
+  },
+  {
+    "name": "YukinaShrug",
+    "shortcode": ":YukinaShrug:",
+    "src": "/res/emoji/YukinaShrug.png"
+  },
+  {
+    "name": "YukinaYay",
+    "shortcode": ":YukinaYay:",
+    "src": "/res/emoji/YukinaYay.png"
+  },
+  {
+    "name": "Yukinya",
+    "shortcode": ":Yukinya:",
+    "src": "/res/emoji/Yukinya.png"
+  },
+  {
+    "name": "SayoAngery",
+    "shortcode": ":SayoAngery:",
+    "src": "/res/emoji/SayoAngery.png"
+  },
+  {
+    "name": "SayoBruh",
+    "shortcode": ":SayoBruh:",
+    "src": "/res/emoji/SayoBruh.png"
+  },
+  {
+    "name": "SayoPensive",
+    "shortcode": ":SayoPensive:",
+    "src": "/res/emoji/SayoPensive.png"
+  },
+  {
+    "name": "LisaMelt",
+    "shortcode": ":LisaMelt:",
+    "src": "/res/emoji/LisaMelt.png"
+  },
+  {
+    "name": "LisaSmug",
+    "shortcode": ":LisaSmug:",
+    "src": "/res/emoji/LisaSmug.png"
+  },
+  {
+    "name": "LisaSparkle",
+    "shortcode": ":LisaSparkle:",
+    "src": "/res/emoji/LisaSparkle.png"
+  },
+  {
+    "name": "AkoCop",
+    "shortcode": ":AkoCop:",
+    "src": "/res/emoji/AkoCop.png"
+  },
+  {
+    "name": "AkoFuee",
+    "shortcode": ":AkoFuee:",
+    "src": "/res/emoji/AkoFuee.png"
+  },
+  {
+    "name": "AkoPanic",
+    "shortcode": ":AkoPanic:",
+    "src": "/res/emoji/AkoPanic.png"
+  },
+  {
+    "name": "RinkoDed",
+    "shortcode": ":RinkoDed:",
+    "src": "/res/emoji/RinkoDed.png"
+  },
+  {
+    "name": "RinkoSparkle",
+    "shortcode": ":RinkoSparkle:",
+    "src": "/res/emoji/RinkoSparkle.png"
+  },
+  {
+    "name": "RinkoWhat",
+    "shortcode": ":RinkoWhat:",
+    "src": "/res/emoji/RinkoWhat.png"
+  },
+  {
+    "name": "MashiroJii",
+    "shortcode": ":MashiroJii:",
+    "src": "/res/emoji/MashiroJii.png"
+  },
+  {
+    "name": "MashiroGlasses",
+    "shortcode": ":MashiroGlasses:",
+    "src": "/res/emoji/MashiroGlasses.png"
+  },
+  {
+    "name": "MashiroSweat",
+    "shortcode": ":MashiroSweat:",
+    "src": "/res/emoji/MashiroSweat.png"
+  },
+  {
+    "name": "ToukoNya",
+    "shortcode": ":ToukoNya:",
+    "src": "/res/emoji/ToukoNya.png"
+  },
+  {
+    "name": "ToukoJii",
+    "shortcode": ":ToukoJii:",
+    "src": "/res/emoji/ToukoJii.png"
+  },
+  {
+    "name": "ToukoCheer",
+    "shortcode": ":ToukoCheer:",
+    "src": "/res/emoji/ToukoCheer.png"
+  },
+  {
+    "name": "NanamiVibin",
+    "shortcode": ":NanamiVibin:",
+    "src": "/res/emoji/NanamiVibin.png"
+  },
+  {
+    "name": "NanamiJii",
+    "shortcode": ":NanamiJii:",
+    "src": "/res/emoji/NanamiJii.png"
+  },
+  {
+    "name": "NanamiWink",
+    "shortcode": ":NanamiWink:",
+    "src": "/res/emoji/NanamiWink.png"
+  },
+  {
+    "name": "TsukushiFidget",
+    "shortcode": ":TsukushiFidget:",
+    "src": "/res/emoji/TsukushiFidget.png"
+  },
+  {
+    "name": "TsukushiShook",
+    "shortcode": ":TsukushiShook:",
+    "src": "/res/emoji/TsukushiShook.png"
+  },
+  {
+    "name": "TsukushiShock",
+    "shortcode": ":TsukushiShock:",
+    "src": "/res/emoji/TsukushiShock.png"
+  },
+  {
+    "name": "RuiPerfect",
+    "shortcode": ":RuiPerfect:",
+    "src": "/res/emoji/RuiPerfect.png"
+  },
+  {
+    "name": "RuiFuee",
+    "shortcode": ":RuiFuee:",
+    "src": "/res/emoji/RuiFuee.png"
+  },
+  {
+    "name": "RuiThink",
+    "shortcode": ":RuiThink:",
+    "src": "/res/emoji/RuiThink.png"
+  },
+  {
+    "name": "LayerBliss",
+    "shortcode": ":LayerBliss:",
+    "src": "/res/emoji/LayerBliss.png"
+  },
+  {
+    "name": "LayerShock",
+    "shortcode": ":LayerShock:",
+    "src": "/res/emoji/LayerShock.png"
+  },
+  {
+    "name": "LayerSit",
+    "shortcode": ":LayerSit:",
+    "src": "/res/emoji/LayerSit.png"
+  },
+  {
+    "name": "LockBliss",
+    "shortcode": ":LockBliss:",
+    "src": "/res/emoji/LockBliss.png"
+  },
+  {
+    "name": "LockScared",
+    "shortcode": ":LockScared:",
+    "src": "/res/emoji/LockScared.png"
+  },
+  {
+    "name": "LockSleeper",
+    "shortcode": ":LockSleeper:",
+    "src": "/res/emoji/LockSleeper.png"
+  },
+  {
+    "name": "MaskingGlare",
+    "shortcode": ":MaskingGlare:",
+    "src": "/res/emoji/MaskingGlare.png"
+  },
+  {
+    "name": "MaskingJii",
+    "shortcode": ":MaskingJii:",
+    "src": "/res/emoji/MaskingJii.png"
+  },
+  {
+    "name": "MaskingPensive",
+    "shortcode": ":MaskingPensive:",
+    "src": "/res/emoji/MaskingPensive.png"
+  },
+  {
+    "name": "PareoJii",
+    "shortcode": ":PareoJii:",
+    "src": "/res/emoji/PareoJii.png"
+  },
+  {
+    "name": "PareoThink",
+    "shortcode": ":PareoThink:",
+    "src": "/res/emoji/PareoThink.png"
+  },
+  {
+    "name": "PareoXD",
+    "shortcode": ":PareoXD:",
+    "src": "/res/emoji/PareoXD.png"
+  },
+  {
+    "name": "Chu2Peek",
+    "shortcode": ":Chu2Peek:",
+    "src": "/res/emoji/Chu2Peek.png"
+  },
+  {
+    "name": "Chu2Ping",
+    "shortcode": ":Chu2Ping:",
+    "src": "/res/emoji/Chu2Ping.png"
+  },
+  {
+    "name": "Chu2Pog",
+    "shortcode": ":Chu2Pog:",
+    "src": "/res/emoji/Chu2Pog.png"
+  },
+  {
+    "name": "KasumiToyama",
+    "shortcode": ":KasumiToyama:",
+    "src": "/res/emoji/KasumiToyama.png"
+  },
+  {
+    "name": "TaeHanazono",
+    "shortcode": ":TaeHanazono:",
+    "src": "/res/emoji/TaeHanazono.png"
+  },
+  {
+    "name": "RimiUshigome",
+    "shortcode": ":RimiUshigome:",
+    "src": "/res/emoji/RimiUshigome.png"
+  },
+  {
+    "name": "SayaYamabuki",
+    "shortcode": ":SayaYamabuki:",
+    "src": "/res/emoji/SayaYamabuki.png"
+  },
+  {
+    "name": "ArisaIchigaya",
+    "shortcode": ":ArisaIchigaya:",
+    "src": "/res/emoji/ArisaIchigaya.png"
+  },
+  {
+    "name": "RanMitake",
+    "shortcode": ":RanMitake:",
+    "src": "/res/emoji/RanMitake.png"
+  },
+  {
+    "name": "MocaAoba",
+    "shortcode": ":MocaAoba:",
+    "src": "/res/emoji/MocaAoba.png"
+  },
+  {
+    "name": "HimariUehara",
+    "shortcode": ":HimariUehara:",
+    "src": "/res/emoji/HimariUehara.png"
+  },
+  {
+    "name": "TomoeUdagawa",
+    "shortcode": ":TomoeUdagawa:",
+    "src": "/res/emoji/TomoeUdagawa.png"
+  },
+  {
+    "name": "TsugumiHazawa",
+    "shortcode": ":TsugumiHazawa:",
+    "src": "/res/emoji/TsugumiHazawa.png"
+  },
+  {
+    "name": "KokoroTsurumaki",
+    "shortcode": ":KokoroTsurumaki:",
+    "src": "/res/emoji/KokoroTsurumaki.png"
+  },
+  {
+    "name": "KaoruSeta",
+    "shortcode": ":KaoruSeta:",
+    "src": "/res/emoji/KaoruSeta.png"
+  },
+  {
+    "name": "HagumiKitazawa",
+    "shortcode": ":HagumiKitazawa:",
+    "src": "/res/emoji/HagumiKitazawa.png"
+  },
+  {
+    "name": "KanonMatsubara",
+    "shortcode": ":KanonMatsubara:",
+    "src": "/res/emoji/KanonMatsubara.png"
+  },
+  {
+    "name": "MisakiOkusawa",
+    "shortcode": ":MisakiOkusawa:",
+    "src": "/res/emoji/MisakiOkusawa.png"
+  },
+  {
+    "name": "AyaMaruyama",
+    "shortcode": ":AyaMaruyama:",
+    "src": "/res/emoji/AyaMaruyama.png"
+  },
+  {
+    "name": "HinaHikawa",
+    "shortcode": ":HinaHikawa:",
+    "src": "/res/emoji/HinaHikawa.png"
+  },
+  {
+    "name": "ChisatoShirasagi",
+    "shortcode": ":ChisatoShirasagi:",
+    "src": "/res/emoji/ChisatoShirasagi.png"
+  },
+  {
+    "name": "MayaYamato",
+    "shortcode": ":MayaYamato:",
+    "src": "/res/emoji/MayaYamato.png"
+  },
+  {
+    "name": "EveWakamiya",
+    "shortcode": ":EveWakamiya:",
+    "src": "/res/emoji/EveWakamiya.png"
+  },
+  {
+    "name": "YukinaMinato",
+    "shortcode": ":YukinaMinato:",
+    "src": "/res/emoji/YukinaMinato.png"
+  },
+  {
+    "name": "SayoHikawa",
+    "shortcode": ":SayoHikawa:",
+    "src": "/res/emoji/SayoHikawa.png"
+  },
+  {
+    "name": "LisaImai",
+    "shortcode": ":LisaImai:",
+    "src": "/res/emoji/LisaImai.png"
+  },
+  {
+    "name": "AkoUdagawa",
+    "shortcode": ":AkoUdagawa:",
+    "src": "/res/emoji/AkoUdagawa.png"
+  },
+  {
+    "name": "RinkoShirokane",
+    "shortcode": ":RinkoShirokane:",
+    "src": "/res/emoji/RinkoShirokane.png"
+  },
+  {
+    "name": "MashiroKurata",
+    "shortcode": ":MashiroKurata:",
+    "src": "/res/emoji/MashiroKurata.png"
+  },
+  {
+    "name": "ToukoKirigaya",
+    "shortcode": ":ToukoKirigaya:",
+    "src": "/res/emoji/ToukoKirigaya.png"
+  },
+  {
+    "name": "NanamiHiromachi",
+    "shortcode": ":NanamiHiromachi:",
+    "src": "/res/emoji/NanamiHiromachi.png"
+  },
+  {
+    "name": "TsukushiFutaba",
+    "shortcode": ":TsukushiFutaba:",
+    "src": "/res/emoji/TsukushiFutaba.png"
+  },
+  {
+    "name": "RuiYashio",
+    "shortcode": ":RuiYashio:",
+    "src": "/res/emoji/RuiYashio.png"
+  },
+  {
+    "name": "ReiWakana",
+    "shortcode": ":ReiWakana:",
+    "src": "/res/emoji/ReiWakana.png"
+  },
+  {
+    "name": "RokkaAsahi",
+    "shortcode": ":RokkaAsahi:",
+    "src": "/res/emoji/RokkaAsahi.png"
+  },
+  {
+    "name": "MasukiSato",
+    "shortcode": ":MasukiSato:",
+    "src": "/res/emoji/MasukiSato.png"
+  },
+  {
+    "name": "ReonaNyubara",
+    "shortcode": ":ReonaNyubara:",
+    "src": "/res/emoji/ReonaNyubara.png"
+  },
+  {
+    "name": "ChiyuTamade",
+    "shortcode": ":ChiyuTamade:",
+    "src": "/res/emoji/ChiyuTamade.png"
+  },
+  {
+    "name": "PoPiPa",
+    "shortcode": ":PoPiPa:",
+    "src": "/res/emoji/PoPiPa.png"
+  },
+  {
+    "name": "Afterglow",
+    "shortcode": ":Afterglow:",
+    "src": "/res/emoji/Afterglow.png"
+  },
+  {
+    "name": "HaroHapi",
+    "shortcode": ":HaroHapi:",
+    "src": "/res/emoji/HaroHapi.png"
+  },
+  {
+    "name": "PasuPare",
+    "shortcode": ":PasuPare:",
+    "src": "/res/emoji/PasuPare.png"
+  },
+  {
+    "name": "Roselia",
+    "shortcode": ":Roselia:",
+    "src": "/res/emoji/Roselia.png"
+  },
+  {
+    "name": "Morfonica",
+    "shortcode": ":Morfonica:",
+    "src": "/res/emoji/Morfonica.png"
+  },
+  {
+    "name": "RAS",
+    "shortcode": ":RAS:",
+    "src": "/res/emoji/RAS.png"
+  },
+  {
+    "name": "Power",
+    "shortcode": ":Power:",
+    "src": "/res/emoji/Power.png"
+  },
+  {
+    "name": "Cool",
+    "shortcode": ":Cool:",
+    "src": "/res/emoji/Cool.png"
+  },
+  {
+    "name": "Happy",
+    "shortcode": ":Happy:",
+    "src": "/res/emoji/Happy.png"
+  },
+  {
+    "name": "Pure",
+    "shortcode": ":Pure:",
+    "src": "/res/emoji/Pure.png"
+  }
+]
