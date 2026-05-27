@@ -135,6 +135,11 @@ type CardMetadata = {
   levelLimit?: number;
   resourceSetName?: string;
   displayName?: string | null;
+  stat?: {
+    training?: {
+      levelLimit?: number;
+    };
+  };
 };
 
 type TeamBuilderData = {
@@ -1213,7 +1218,10 @@ function BonusCardThumbnail({
   bandId: number | null;
 }) {
   const rarity = Math.min(5, Math.max(1, Math.trunc(Number(metadata?.rarity) || 1)));
-  const level = Math.max(1, Math.trunc(Number(metadata?.levelLimit) || (rarity >= 5 ? 60 : rarity >= 4 ? 50 : rarity >= 3 ? 40 : rarity >= 2 ? 30 : 20)));
+  const trainedLevelFallback = rarity >= 5 ? 60 : rarity >= 4 ? 60 : rarity >= 3 ? 50 : rarity >= 2 ? 30 : 20;
+  const baseLevelLimit = Math.trunc(Number(metadata?.levelLimit) || 0);
+  const trainingLevelLimit = Math.trunc(Number(metadata?.stat?.training?.levelLimit) || 0);
+  const level = Math.max(1, baseLevelLimit + trainingLevelLimit || trainedLevelFallback);
   return (
     <TeamBuilderCardTile
       card={{

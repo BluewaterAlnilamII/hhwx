@@ -43,6 +43,8 @@ type CommentContextResponse = {
   comment: CommentNode;
 };
 
+const COMMENT_INPUT_MAX_LENGTH = 500;
+
 
 function getErrorMessage(payload: unknown, fallback: string): string {
   return getApiErrorMessage(payload) ?? fallback;
@@ -92,6 +94,89 @@ function renderCommentContent(content: string) {
   }
 
   return nodes.length > 0 ? nodes : content;
+}
+
+function insertEmojiShortcode(
+  value: string,
+  name: string,
+  start: number,
+  end: number,
+): { nextValue: string; nextCursor: number } {
+  const shortcode = `:${name}:`;
+  const prefix = start > 0 && !/\s/.test(value[start - 1] ?? "") ? " " : "";
+  const suffix = !/\s/.test(value[end] ?? "") ? " " : "";
+  const nextValue = `${value.slice(0, start)}${prefix}${shortcode}${suffix}${value.slice(end)}`.slice(
+    0,
+    COMMENT_INPUT_MAX_LENGTH,
+  );
+  const nextCursor = Math.min(start + prefix.length + shortcode.length + suffix.length, nextValue.length);
+
+  return { nextValue, nextCursor };
+}
+
+type EmojiPickerButtonProps = {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onSelect: (name: string) => void;
+};
+
+function EmojiPickerButton({ open, onOpenChange, onSelect }: EmojiPickerButtonProps) {
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (containerRef.current?.contains(event.target as Node)) return;
+      onOpenChange(false);
+    };
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    return () => document.removeEventListener("pointerdown", handlePointerDown);
+  }, [onOpenChange, open]);
+
+  return (
+    <div ref={containerRef} className="relative flex items-center">
+      <button
+        type="button"
+        onClick={() => onOpenChange(!open)}
+        className={cn(
+          "inline-flex h-8 w-8 items-center justify-center rounded-full border text-slate-500 transition hover:bg-sky-50 hover:text-sky-700 dark:hover:bg-sky-500/10 dark:hover:text-sky-300",
+          open
+            ? "border-sky-300 bg-sky-50 text-sky-700 dark:border-sky-500/50 dark:bg-sky-500/10 dark:text-sky-300"
+            : "border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900",
+        )}
+        aria-expanded={open}
+        aria-label="选择表情"
+        title="选择表情"
+      >
+        <Smile size={15} />
+      </button>
+      {open ? (
+        <div className="absolute bottom-10 left-0 z-20 w-[min(24rem,calc(100vw-4rem))] rounded-2xl border border-sky-100 bg-white p-2 shadow-xl dark:border-slate-700 dark:bg-slate-900">
+          <div className="grid max-h-64 grid-cols-9 gap-1 overflow-y-auto pr-1 [scrollbar-color:#94a3b8_#e5e7eb] [scrollbar-width:thin] [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-slate-400 [&::-webkit-scrollbar-track]:rounded-full [&::-webkit-scrollbar-track]:bg-slate-200">
+            {COMMENT_EMOJI_NAMES.map((name) => {
+              const src = getCommentEmojiSrc(name);
+              if (!src) return null;
+
+              return (
+                <button
+                  key={name}
+                  type="button"
+                  onClick={() => onSelect(name)}
+                  className="flex h-9 w-9 items-center justify-center rounded-lg transition hover:bg-sky-50 focus:bg-sky-50 focus:outline-none focus:ring-2 focus:ring-sky-200 dark:hover:bg-sky-500/10 dark:focus:bg-sky-500/10 dark:focus:ring-sky-500/30"
+                  aria-label={`:${name}:`}
+                  title={`:${name}:`}
+                >
+                  <Image src={src} alt={`:${name}:`} width={32} height={32} className="h-8 w-8 object-contain" />
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
 }
 
 function buildContextThread(context: CommentContextResponse): CommentNode {
@@ -245,6 +330,7 @@ function CommentComposer({ placeholder, submitLabel, onSubmit, onCancel, autoFoc
     try {
       await onSubmit(content.trim());
       setContent("");
+      setEmojiOpen(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : "提交失败");
     } finally {
@@ -254,15 +340,11 @@ function CommentComposer({ placeholder, submitLabel, onSubmit, onCancel, autoFoc
 
   const insertEmoji = (name: string) => {
     const textarea = textareaRef.current;
-    const shortcode = `:${name}:`;
     const start = textarea?.selectionStart ?? content.length;
     const end = textarea?.selectionEnd ?? content.length;
-    const prefix = start > 0 && !/\s/.test(content[start - 1] ?? "") ? " " : "";
-    const suffix = !/\s/.test(content[end] ?? "") ? " " : "";
-    const nextContent = `${content.slice(0, start)}${prefix}${shortcode}${suffix}${content.slice(end)}`.slice(0, 500);
-    const nextCursor = Math.min(start + prefix.length + shortcode.length + suffix.length, nextContent.length);
+    const { nextValue, nextCursor } = insertEmojiShortcode(content, name, start, end);
 
-    setContent(nextContent);
+    setContent(nextValue);
     setEmojiOpen(false);
     window.requestAnimationFrame(() => {
       textarea?.focus();
@@ -278,53 +360,16 @@ function CommentComposer({ placeholder, submitLabel, onSubmit, onCancel, autoFoc
         onChange={(event) => setContent(event.target.value)}
         placeholder={placeholder}
         rows={3}
-        maxLength={500}
+        maxLength={COMMENT_INPUT_MAX_LENGTH}
         autoFocus={autoFocus}
         className="min-h-[5.25rem] w-full resize-y rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm leading-6 text-slate-700 outline-none transition focus:border-sky-400 focus:ring-2 focus:ring-sky-200 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:focus:border-sky-500 dark:focus:ring-sky-500/20"
       />
       <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
-        <div className="relative flex items-center gap-2">
+        <div className="flex items-center gap-2">
           <span className={cn("text-xs", content.length > 460 ? "text-amber-600" : "text-slate-400")}>
             {content.length}/500
           </span>
-          <button
-            type="button"
-            onClick={() => setEmojiOpen((value) => !value)}
-            className={cn(
-              "inline-flex h-8 w-8 items-center justify-center rounded-full border text-slate-500 transition hover:bg-sky-50 hover:text-sky-700 dark:hover:bg-sky-500/10 dark:hover:text-sky-300",
-              emojiOpen
-                ? "border-sky-300 bg-sky-50 text-sky-700 dark:border-sky-500/50 dark:bg-sky-500/10 dark:text-sky-300"
-                : "border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900",
-            )}
-            aria-expanded={emojiOpen}
-            aria-label="选择表情"
-            title="选择表情"
-          >
-            <Smile size={15} />
-          </button>
-          {emojiOpen ? (
-            <div className="absolute bottom-10 left-0 z-20 w-[min(24rem,calc(100vw-4rem))] rounded-2xl border border-sky-100 bg-white p-2 shadow-xl dark:border-slate-700 dark:bg-slate-900">
-              <div className="grid max-h-64 grid-cols-9 gap-1 overflow-y-auto pr-1 [scrollbar-color:#94a3b8_#e5e7eb] [scrollbar-width:thin] [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-slate-400 [&::-webkit-scrollbar-track]:rounded-full [&::-webkit-scrollbar-track]:bg-slate-200">
-                {COMMENT_EMOJI_NAMES.map((name) => {
-                  const src = getCommentEmojiSrc(name);
-                  if (!src) return null;
-
-                  return (
-                    <button
-                      key={name}
-                      type="button"
-                      onClick={() => insertEmoji(name)}
-                      className="flex h-9 w-9 items-center justify-center rounded-lg transition hover:bg-sky-50 focus:bg-sky-50 focus:outline-none focus:ring-2 focus:ring-sky-200 dark:hover:bg-sky-500/10 dark:focus:bg-sky-500/10 dark:focus:ring-sky-500/30"
-                      aria-label={`:${name}:`}
-                      title={`:${name}:`}
-                    >
-                      <Image src={src} alt={`:${name}:`} width={32} height={32} className="h-8 w-8 object-contain" />
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          ) : null}
+          <EmojiPickerButton open={emojiOpen} onOpenChange={setEmojiOpen} onSelect={insertEmoji} />
         </div>
         <div className="flex items-center gap-2">
           {onCancel ? (
@@ -383,7 +428,9 @@ function CommentItem({
   const [replying, setReplying] = useState(false);
   const [editing, setEditing] = useState(false);
   const [editValue, setEditValue] = useState(comment.content ?? "");
+  const [editEmojiOpen, setEditEmojiOpen] = useState(false);
   const [actionError, setActionError] = useState("");
+  const editTextareaRef = useRef<HTMLTextAreaElement>(null);
   const threadRootId = rootCommentId ?? comment.id;
   const loadedReplies = replies[threadRootId];
   const visibleReplies = isReply ? [] : loadedReplies?.comments ?? comment.previewReplies;
@@ -410,6 +457,7 @@ function CommentItem({
     try {
       await onUpdate(comment.id, editValue);
       setEditing(false);
+      setEditEmojiOpen(false);
     } catch (err) {
       setActionError(err instanceof Error ? err.message : "更新失败");
     }
@@ -422,6 +470,20 @@ function CommentItem({
     } catch (err) {
       setActionError(err instanceof Error ? err.message : "删除失败");
     }
+  };
+
+  const insertEditEmoji = (name: string) => {
+    const textarea = editTextareaRef.current;
+    const start = textarea?.selectionStart ?? editValue.length;
+    const end = textarea?.selectionEnd ?? editValue.length;
+    const { nextValue, nextCursor } = insertEmojiShortcode(editValue, name, start, end);
+
+    setEditValue(nextValue);
+    setEditEmojiOpen(false);
+    window.requestAnimationFrame(() => {
+      textarea?.focus();
+      textarea?.setSelectionRange(nextCursor, nextCursor);
+    });
   };
 
   return (
@@ -455,18 +517,34 @@ function CommentItem({
           {editing ? (
             <div className="mt-2">
               <textarea
+                ref={editTextareaRef}
                 value={editValue}
                 onChange={(event) => setEditValue(event.target.value)}
-                maxLength={500}
+                maxLength={COMMENT_INPUT_MAX_LENGTH}
                 className="min-h-[5rem] w-full resize-y rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm leading-6 outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-200 dark:border-slate-700 dark:bg-slate-950"
               />
-              <div className="mt-2 flex justify-end gap-2">
-                <button type="button" onClick={() => setEditing(false)} className="rounded-full px-3 py-1.5 text-xs font-semibold text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800">
-                  取消
-                </button>
-                <button type="button" onClick={handleEdit} className="rounded-full bg-sky-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-sky-500">
-                  保存
-                </button>
+              <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <span className={cn("text-xs", editValue.length > 460 ? "text-amber-600" : "text-slate-400")}>
+                    {editValue.length}/500
+                  </span>
+                  <EmojiPickerButton open={editEmojiOpen} onOpenChange={setEditEmojiOpen} onSelect={insertEditEmoji} />
+                </div>
+                <div className="flex justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditing(false);
+                      setEditEmojiOpen(false);
+                    }}
+                    className="rounded-full px-3 py-1.5 text-xs font-semibold text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"
+                  >
+                    取消
+                  </button>
+                  <button type="button" onClick={handleEdit} className="rounded-full bg-sky-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-sky-500">
+                    保存
+                  </button>
+                </div>
               </div>
             </div>
           ) : (
@@ -487,7 +565,15 @@ function CommentItem({
               链接
             </button>
             {comment.canEdit ? (
-              <button type="button" onClick={() => setEditing(true)} className="inline-flex h-7 items-center gap-1 rounded-full px-2 text-xs font-semibold text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800">
+              <button
+                type="button"
+                onClick={() => {
+                  setEditValue(comment.content ?? "");
+                  setEditEmojiOpen(false);
+                  setEditing(true);
+                }}
+                className="inline-flex h-7 items-center gap-1 rounded-full px-2 text-xs font-semibold text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800"
+              >
                 <Edit3 size={13} />
                 编辑
               </button>
