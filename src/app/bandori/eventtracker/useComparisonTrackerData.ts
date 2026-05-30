@@ -81,6 +81,11 @@ function eventLabel(event: MinimalEvent | undefined, eventId: number): string {
   return name ? name : `${eventId}期`;
 }
 
+function getLocalDayStart(timestamp: number): number {
+  const date = new Date(timestamp);
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+}
+
 function buildLine(
   config: ComparisonConfig,
   index: number,
@@ -105,7 +110,10 @@ function buildLine(
   } else if (!points || points.length === 0) {
     status = "no-data";
   } else {
-    const offset = alignment === "end" ? currentEnd - event.endAt : currentStart - event.startAt;
+    const currentEndAt = currentEnd - 1000;
+    const offset = alignment === "end"
+      ? currentEndAt - event.endAt
+      : getLocalDayStart(currentStart) - getLocalDayStart(event.startAt);
     const visibleEnd = currentEnd + 1000;
 
     shiftedPoints = points.flatMap((point) => {

@@ -50,6 +50,7 @@ export async function GET(request: Request, context: RouteContext) {
       targetId: eventId,
       parentId: null,
       cursor: url.searchParams.get("cursor"),
+      page: Number.parseInt(url.searchParams.get("page") ?? "1", 10),
       viewerUserId,
     }));
   } catch (error) {
@@ -94,4 +95,3 @@ export async function POST(request: Request, context: RouteContext) {
     });
   }
 }
-

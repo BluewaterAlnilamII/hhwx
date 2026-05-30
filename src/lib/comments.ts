@@ -58,6 +58,7 @@ type ListCommentsOptions = {
   parentId: string | null;
   rootId?: string | null;
   cursor?: string | null;
+  page?: number | null;
   viewerUserId?: string | null;
 };
 
@@ -207,18 +208,22 @@ export async function listComments(options: ListCommentsOptions): Promise<{
   comments: CommentNode[];
   nextCursor: string | null;
   hasMore: boolean;
+  page: number;
+  totalPages: number;
+  totalCount: number;
 }> {
   const client = createServerSupabaseClient();
   const cursor = parseCursor(options.cursor);
+  const requestedPage = Math.max(1, Math.trunc(Number(options.page) || 1));
+  const usePagePagination = !cursor && !options.rootId;
   let query = client
     .from(COMMENTS_TABLE)
-    .select(COMMENT_SELECT)
+    .select(COMMENT_SELECT, { count: "exact" })
     .eq("target_type", options.targetType)
     .eq("target_id", options.targetId)
     .eq("moderation_status", "visible")
     .order("created_at", { ascending: true })
-    .order("id", { ascending: true })
-    .limit(COMMENT_PAGE_SIZE + 1);
+    .order("id", { ascending: true });
 
   if (options.rootId) {
     query = query.eq("root_id", options.rootId).not("parent_id", "is", null);
@@ -230,13 +235,22 @@ export async function listComments(options: ListCommentsOptions): Promise<{
     query = query.or(`created_at.gt.${cursor.createdAt},and(created_at.eq.${cursor.createdAt},id.gt.${cursor.id})`);
   }
 
-  const { data, error } = await query;
+  if (usePagePagination) {
+    const offset = (requestedPage - 1) * COMMENT_PAGE_SIZE;
+    query = query.range(offset, offset + COMMENT_PAGE_SIZE - 1);
+  } else {
+    query = query.limit(COMMENT_PAGE_SIZE + 1);
+  }
+
+  const { data, error, count } = await query;
   if (error) {
     throw new ApiRouteError(500, "COMMENTS_READ_FAILED", "无法读取评论", error.message);
   }
 
   const rows = ((data ?? []) as unknown as CommentRow[]).slice(0, COMMENT_PAGE_SIZE);
   const comments = await toCommentNodes(rows, options.viewerUserId);
+  const totalCount = count ?? 0;
+  const totalPages = Math.max(1, Math.ceil(totalCount / COMMENT_PAGE_SIZE));
   const previews = options.rootId
     ? new Map<string, CommentNode[]>()
     : await fetchEarliestThreadReplies(comments.map((comment) => comment.id), options.viewerUserId);
@@ -247,8 +261,11 @@ export async function listComments(options: ListCommentsOptions): Promise<{
 
   return {
     comments,
-    hasMore: (data?.length ?? 0) > COMMENT_PAGE_SIZE,
+    hasMore: usePagePagination ? requestedPage < totalPages : (data?.length ?? 0) > COMMENT_PAGE_SIZE,
     nextCursor: comments.length > 0 ? `${comments[comments.length - 1].createdAt}|${comments[comments.length - 1].id}` : null,
+    page: requestedPage,
+    totalPages,
+    totalCount,
   };
 }
 

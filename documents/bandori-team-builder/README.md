@@ -20,18 +20,14 @@ Public compatibility entrypoints remain:
 
 ## Documents
 
-- `algorithm-notes.md`: single-song exact search formulas, event point behavior, support band handling, and correctness notes.
-- `single-song-search-optimization.md`: single-song search optimization notes, cache strategy, pruning strategy, and remaining work.
-- `benchmark-results-and-next-plan.md`: benchmark results, Supabase-backed sample matrix, Bestdori compatibility baseline, and release gates.
+- `single-song-algorithm.md`: canonical single-song algorithm specification, including formulas, event point behavior, support band handling, exact search contract, performance design, correctness notes, validation gates, and benchmark boundaries.
+- `single-song-algorithm.zh-CN.md`: Chinese version of the canonical single-song algorithm specification.
 - `medley-algorithm-notes.md`: medley-specific problem model, scoring consistency, upper-bound strategy, and benchmark commands.
 - `medley-optimization-review-2026-05-22.md`: 30s/120s medley optimization review matrix and conclusion report.
-- `public-algorithm-report.md`: public English algorithm report.
-- `public-algorithm-report.zh-CN.md`: public Chinese algorithm report matching the English report structure.
 
 ## Maintenance Rules
 
-- Update `algorithm-notes.md` when score, event point, support band, or pruning correctness changes.
-- Update `single-song-search-optimization.md` when single-search upper bounds, compression, caches, or seed logic change.
+- Update `single-song-algorithm.md` and `single-song-algorithm.zh-CN.md` together when single-song score formulas, event point behavior, support band handling, exact/bounded semantics, upper bounds, compression, caches, seed logic, validation gates, or benchmark interpretation changes.
 - Update `medley-algorithm-notes.md` when medley slot construction, shared area-item decisions, cross-slot DFS, medley upper bounds, or experimental solvers change.
-- Update benchmark reports only when benchmark methodology, result matrix, or compatibility baseline changes.
+- Update dated medley review reports only when their benchmark methodology, result matrix, or compatibility baseline changes.
 - Keep module header comments short and explicit: state ownership, correctness boundaries, and whether a helper is heuristic, diagnostic, or proof-critical.

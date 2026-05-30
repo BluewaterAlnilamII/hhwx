@@ -1,9 +1,9 @@
 "use client";
 
-import type { ReactNode } from "react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { CSSProperties, MouseEvent, ReactNode } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
-import { Check, Edit3, Link2, MessageSquare, MoreHorizontal, Reply, Smile, Trash2, X } from "lucide-react";
+import { Check, ChevronFirst, ChevronLast, ChevronLeft, ChevronRight, Edit3, Link2, MessageSquare, MoreHorizontal, Reply, Smile, Trash2, X } from "lucide-react";
 import { getApiErrorMessage, parseApiSuccessData } from "@/lib/api-contracts";
 import { COMMENT_EMOJI_NAMES, getCommentEmojiSrc } from "@/lib/comment-emojis";
 import { getSafeSession } from "@/lib/supabase";
@@ -35,6 +35,9 @@ type CommentListResponse = {
   comments: CommentNode[];
   nextCursor: string | null;
   hasMore: boolean;
+  page?: number;
+  totalPages?: number;
+  totalCount?: number;
 };
 
 type CommentContextResponse = {
@@ -44,6 +47,7 @@ type CommentContextResponse = {
 };
 
 const COMMENT_INPUT_MAX_LENGTH = 500;
+const COMMENT_ROOT_PAGE_SIZE = 10;
 
 
 function getErrorMessage(payload: unknown, fallback: string): string {
@@ -122,6 +126,27 @@ type EmojiPickerButtonProps = {
 
 function EmojiPickerButton({ open, onOpenChange, onSelect }: EmojiPickerButtonProps) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const [popoverStyle, setPopoverStyle] = useState<CSSProperties>({});
+
+  const updatePopoverPosition = useCallback(() => {
+    if (!open || !buttonRef.current || !containerRef.current) return;
+
+    const rect = buttonRef.current.getBoundingClientRect();
+    const containerRect = containerRef.current.getBoundingClientRect();
+    const viewportWidth = window.innerWidth;
+    const horizontalPadding = 16;
+    const width = Math.min(384, Math.max(0, viewportWidth - horizontalPadding * 2));
+    const viewportLeft = Math.min(
+      Math.max(horizontalPadding, rect.left + rect.width / 2 - width / 2),
+      viewportWidth - width - horizontalPadding,
+    );
+
+    setPopoverStyle({
+      width,
+      left: viewportLeft - containerRect.left,
+    });
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
@@ -135,9 +160,21 @@ function EmojiPickerButton({ open, onOpenChange, onSelect }: EmojiPickerButtonPr
     return () => document.removeEventListener("pointerdown", handlePointerDown);
   }, [onOpenChange, open]);
 
+  useLayoutEffect(() => {
+    if (!open) return;
+
+    updatePopoverPosition();
+    window.addEventListener("resize", updatePopoverPosition);
+
+    return () => {
+      window.removeEventListener("resize", updatePopoverPosition);
+    };
+  }, [open, updatePopoverPosition]);
+
   return (
     <div ref={containerRef} className="relative flex items-center">
       <button
+        ref={buttonRef}
         type="button"
         onClick={() => onOpenChange(!open)}
         className={cn(
@@ -153,8 +190,11 @@ function EmojiPickerButton({ open, onOpenChange, onSelect }: EmojiPickerButtonPr
         <Smile size={15} />
       </button>
       {open ? (
-        <div className="absolute bottom-10 left-0 z-20 w-[min(24rem,calc(100vw-4rem))] rounded-2xl border border-sky-100 bg-white p-2 shadow-xl dark:border-slate-700 dark:bg-slate-900">
-          <div className="grid max-h-64 grid-cols-9 gap-1 overflow-y-auto pr-1 [scrollbar-color:#94a3b8_#e5e7eb] [scrollbar-width:thin] [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-slate-400 [&::-webkit-scrollbar-track]:rounded-full [&::-webkit-scrollbar-track]:bg-slate-200">
+        <div
+          style={popoverStyle}
+          className="absolute bottom-10 z-20 overflow-x-hidden rounded-2xl border border-sky-100 bg-white p-2 shadow-xl dark:border-slate-700 dark:bg-slate-900"
+        >
+          <div className="grid max-h-64 grid-cols-[repeat(9,minmax(0,1fr))] gap-1 overflow-x-hidden overflow-y-auto pr-1 [scrollbar-color:#94a3b8_#e5e7eb] [scrollbar-width:thin] [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-slate-400 [&::-webkit-scrollbar-track]:rounded-full [&::-webkit-scrollbar-track]:bg-slate-200">
             {COMMENT_EMOJI_NAMES.map((name) => {
               const src = getCommentEmojiSrc(name);
               if (!src) return null;
@@ -164,11 +204,11 @@ function EmojiPickerButton({ open, onOpenChange, onSelect }: EmojiPickerButtonPr
                   key={name}
                   type="button"
                   onClick={() => onSelect(name)}
-                  className="flex h-9 w-9 items-center justify-center rounded-lg transition hover:bg-sky-50 focus:bg-sky-50 focus:outline-none focus:ring-2 focus:ring-sky-200 dark:hover:bg-sky-500/10 dark:focus:bg-sky-500/10 dark:focus:ring-sky-500/30"
+                  className="flex aspect-square w-full min-w-0 items-center justify-center rounded-lg transition hover:bg-sky-50 focus:bg-sky-50 focus:outline-none focus:ring-2 focus:ring-sky-200 dark:hover:bg-sky-500/10 dark:focus:bg-sky-500/10 dark:focus:ring-sky-500/30"
                   aria-label={`:${name}:`}
                   title={`:${name}:`}
                 >
-                  <Image src={src} alt={`:${name}:`} width={32} height={32} className="h-8 w-8 object-contain" />
+                  <Image src={src} alt={`:${name}:`} width={32} height={32} className="h-full max-h-8 w-full max-w-8 object-contain" />
                 </button>
               );
             })}
@@ -353,7 +393,7 @@ function CommentComposer({ placeholder, submitLabel, onSubmit, onCancel, autoFoc
   };
 
   return (
-    <div className="rounded-2xl border border-sky-100 bg-white/82 p-3 shadow-sm dark:border-slate-700 dark:bg-slate-900/72">
+    <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-700 dark:bg-slate-900">
       <textarea
         ref={textareaRef}
         value={content}
@@ -362,7 +402,7 @@ function CommentComposer({ placeholder, submitLabel, onSubmit, onCancel, autoFoc
         rows={3}
         maxLength={COMMENT_INPUT_MAX_LENGTH}
         autoFocus={autoFocus}
-        className="min-h-[5.25rem] w-full resize-y rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm leading-6 text-slate-700 outline-none transition focus:border-sky-400 focus:ring-2 focus:ring-sky-200 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:focus:border-sky-500 dark:focus:ring-sky-500/20"
+        className="min-h-[5.25rem] w-full resize-y rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm leading-6 text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-sky-400 focus:bg-white focus:ring-2 focus:ring-sky-100 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:focus:border-sky-500 dark:focus:ring-sky-500/20"
       />
       <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
@@ -410,6 +450,7 @@ type CommentItemProps = {
   onUpdate: (commentId: string, content: string) => Promise<void>;
   onDelete: (commentId: string) => Promise<void>;
   onLoadReplies: (commentId: string, cursor?: string | null) => Promise<void>;
+  onLocateComment: (commentId: string) => Promise<void>;
 };
 
 function CommentItem({
@@ -424,6 +465,7 @@ function CommentItem({
   onUpdate,
   onDelete,
   onLoadReplies,
+  onLocateComment,
 }: CommentItemProps) {
   const [replying, setReplying] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -445,11 +487,25 @@ function CommentItem({
     url.searchParams.set("comment", comment.id);
     return url.toString();
   }, [comment.id, eventId]);
+  const replyToPermalink = useMemo(() => {
+    if (typeof window === "undefined" || !comment.replyToCommentId) return "";
+    const url = new URL(window.location.href);
+    url.searchParams.set("event", String(eventId));
+    url.searchParams.set("comment", comment.replyToCommentId);
+    return url.toString();
+  }, [comment.replyToCommentId, eventId]);
 
   const handleCopyLink = async () => {
     if (!permalink) return;
     await navigator.clipboard?.writeText(permalink).catch(() => undefined);
     window.history.replaceState(null, "", permalink);
+  };
+
+  const handleReplyToClick = (event: MouseEvent<HTMLAnchorElement>) => {
+    if (!comment.replyToCommentId) return;
+    if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return;
+    event.preventDefault();
+    void onLocateComment(comment.replyToCommentId);
   };
 
   const handleEdit = async () => {
@@ -490,14 +546,14 @@ function CommentItem({
     <article
       id={`comment-${comment.id}`}
       className={cn(
-        "relative rounded-2xl border bg-white/84 p-3 shadow-sm transition dark:bg-slate-900/72",
+        "relative rounded-2xl border bg-white p-4 shadow-sm transition dark:bg-slate-900",
         isHighlighted
-          ? "border-amber-300 ring-4 ring-amber-200/70 dark:border-amber-400 dark:ring-amber-400/20"
-          : "border-sky-100/80 dark:border-slate-700",
+          ? "border-sky-300 ring-4 ring-sky-100 dark:border-sky-500 dark:ring-sky-500/20"
+          : "border-slate-200 dark:border-slate-700",
       )}
     >
       <div className="flex items-start gap-3">
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-sky-400 to-emerald-400 text-xs font-bold text-white shadow-sm">
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-sky-500 text-xs font-black text-white shadow-sm ring-1 ring-sky-200">
           {getUsernameAvatarLabel(comment.username, "?")}
         </div>
         <div className="min-w-0 flex-1">
@@ -507,9 +563,19 @@ function CommentItem({
             </span>
             <span className="text-xs text-slate-400">{formatCommentTime(comment.createdAt)}</span>
             {comment.replyToUsername ? (
-              <span className="text-xs font-medium text-sky-600 dark:text-sky-300">
-                回复 @{comment.replyToUsername}
-              </span>
+              comment.replyToCommentId && replyToPermalink ? (
+                <a
+                  href={replyToPermalink}
+                  onClick={handleReplyToClick}
+                  className="rounded-full text-xs font-medium text-sky-600 underline-offset-2 hover:text-sky-700 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-200 dark:text-sky-300 dark:hover:text-sky-200"
+                >
+                  回复 @{comment.replyToUsername}
+                </a>
+              ) : (
+                <span className="text-xs font-medium text-sky-600 dark:text-sky-300">
+                  回复 @{comment.replyToUsername}
+                </span>
+              )
             ) : null}
             {comment.editedAt && !isDeleted ? <span className="text-xs text-slate-400">（已编辑）</span> : null}
           </div>
@@ -521,7 +587,7 @@ function CommentItem({
                 value={editValue}
                 onChange={(event) => setEditValue(event.target.value)}
                 maxLength={COMMENT_INPUT_MAX_LENGTH}
-                className="min-h-[5rem] w-full resize-y rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm leading-6 outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-200 dark:border-slate-700 dark:bg-slate-950"
+                className="min-h-[5rem] w-full resize-y rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm leading-6 text-slate-800 outline-none transition focus:border-sky-400 focus:bg-white focus:ring-2 focus:ring-sky-100 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
               />
               <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
@@ -548,7 +614,7 @@ function CommentItem({
               </div>
             </div>
           ) : (
-            <p className={cn("mt-2 whitespace-pre-wrap text-sm leading-6", isDeleted ? "text-slate-400" : "text-slate-600 dark:text-slate-200")}>
+            <p className={cn("mt-2 whitespace-pre-wrap text-sm leading-7", isDeleted ? "text-slate-400" : "text-slate-700 dark:text-slate-200")}>
               {isDeleted ? "（已删除）" : renderCommentContent(comment.content ?? "")}
             </p>
           )}
@@ -604,7 +670,7 @@ function CommentItem({
           ) : null}
 
           {visibleReplies.length > 0 ? (
-            <div className="mt-3 space-y-3 border-l border-sky-100 pl-3 dark:border-slate-700">
+            <div className="mt-3 space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-950/60">
               {visibleReplies.map((reply) => (
                 <CommentItem
                   key={reply.id}
@@ -619,6 +685,7 @@ function CommentItem({
                   onUpdate={onUpdate}
                   onDelete={onDelete}
                   onLoadReplies={onLoadReplies}
+                  onLocateComment={onLocateComment}
                 />
               ))}
             </div>
@@ -629,7 +696,7 @@ function CommentItem({
               type="button"
               onClick={() => onLoadReplies(threadRootId, loadedReplies?.nextCursor)}
               disabled={loadingReplies[threadRootId]}
-              className="mt-3 inline-flex h-8 items-center gap-1.5 rounded-full border border-sky-200 bg-sky-50 px-3 text-xs font-semibold text-sky-700 transition hover:bg-sky-100 disabled:opacity-60 dark:border-sky-500/30 dark:bg-sky-500/10 dark:text-sky-300"
+              className="mt-3 inline-flex h-8 items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 text-xs font-semibold text-sky-700 shadow-sm transition hover:border-sky-200 hover:bg-sky-50 disabled:opacity-60 dark:border-slate-700 dark:bg-slate-900 dark:text-sky-300"
             >
               <MoreHorizontal size={14} />
               {loadingReplies[threadRootId] ? "加载中" : loadedReplies?.hasMore ? "再展开 10 条回复" : `展开 ${hiddenReplyCount} 条回复`}
@@ -643,8 +710,10 @@ function CommentItem({
 
 export default function EventComments({ eventId }: { eventId: number | null }) {
   const [comments, setComments] = useState<CommentNode[]>([]);
-  const [nextCursor, setNextCursor] = useState<string | null>(null);
-  const [hasMore, setHasMore] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageInput, setPageInput] = useState("1");
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [focusedCommentId, setFocusedCommentId] = useState<string | null>(null);
@@ -654,17 +723,18 @@ export default function EventComments({ eventId }: { eventId: number | null }) {
 
   const apiBase = eventId ? `/api/bandori/events/${eventId}/comments` : null;
 
-  const loadRootComments = useCallback(async (cursor?: string | null) => {
+  const loadRootComments = useCallback(async (page = 1) => {
     if (!apiBase) return;
     setLoading(true);
     setError("");
     try {
       const headers = await authHeaders();
-      const suffix = cursor ? `?cursor=${encodeURIComponent(cursor)}` : "";
+      const suffix = `?page=${encodeURIComponent(String(Math.max(1, Math.trunc(page))))}`;
       const data = await requestJson<CommentListResponse>(`${apiBase}${suffix}`, { headers });
-      setComments((current) => cursor ? [...current, ...data.comments] : data.comments);
-      setNextCursor(data.nextCursor);
-      setHasMore(data.hasMore);
+      setComments(data.comments);
+      setCurrentPage(data.page ?? page);
+      setTotalPages(data.totalPages ?? 1);
+      setTotalCount(data.totalCount ?? data.comments.length);
     } catch (err) {
       setError(err instanceof Error ? err.message : "评论加载失败");
     } finally {
@@ -699,16 +769,34 @@ export default function EventComments({ eventId }: { eventId: number | null }) {
     }
   }, [apiBase]);
 
+  const navigateToComment = useCallback(async (commentId: string) => {
+    if (typeof window !== "undefined" && eventId) {
+      const url = new URL(window.location.href);
+      url.searchParams.set("event", String(eventId));
+      url.searchParams.set("comment", commentId);
+      window.history.replaceState(null, "", url.toString());
+    }
+    await locateLinkedComment(commentId);
+  }, [eventId, locateLinkedComment]);
+
+  useEffect(() => {
+    setPageInput(String(currentPage));
+  }, [currentPage]);
+
   useEffect(() => {
     setComments([]);
     setReplies({});
+    setCurrentPage(1);
+    setPageInput("1");
+    setTotalPages(1);
+    setTotalCount(0);
     setFocusedCommentId(null);
     if (!eventId || !apiBase) return;
 
     const params = new URLSearchParams(window.location.search);
     const commentId = params.get("comment");
     void (async () => {
-      await loadRootComments(null);
+      await loadRootComments(1);
       if (commentId) {
         await locateLinkedComment(commentId);
       }
@@ -752,7 +840,7 @@ export default function EventComments({ eventId }: { eventId: number | null }) {
       return;
     }
 
-    setComments((current) => appendUniqueComment(current, created));
+    await loadRootComments(Math.max(1, Math.ceil((totalCount + 1) / COMMENT_ROOT_PAGE_SIZE)));
     setFocusedCommentId(created.id);
     window.setTimeout(() => document.getElementById(`comment-${created.id}`)?.scrollIntoView({ block: "center", behavior: "smooth" }), 80);
   };
@@ -802,7 +890,7 @@ export default function EventComments({ eventId }: { eventId: number | null }) {
         return {
           ...current,
           [commentId]: {
-            comments: cursor && existing ? [...existing.comments, ...data.comments] : data.comments,
+            comments: cursor && existing ? mergePreviewReplies(existing.comments, data.comments) : data.comments,
             nextCursor: data.nextCursor,
             hasMore: data.hasMore,
           },
@@ -813,21 +901,34 @@ export default function EventComments({ eventId }: { eventId: number | null }) {
     }
   };
 
+  const submitPageInput = () => {
+    const parsed = Number.parseInt(pageInput, 10);
+    if (!Number.isFinite(parsed)) {
+      setPageInput(String(currentPage));
+      return;
+    }
+    const nextPage = Math.min(totalPages, Math.max(1, parsed));
+    setPageInput(String(nextPage));
+    if (nextPage !== currentPage) {
+      void loadRootComments(nextPage);
+    }
+  };
+
   return (
-    <section className="rounded-3xl border border-sky-100/90 bg-gradient-to-b from-white/92 to-sky-50/72 p-4 shadow-[0_24px_60px_rgba(14,116,144,0.11)] dark:border-slate-800 dark:from-slate-950/94 dark:to-slate-900/84 sm:p-6">
-      <div className="flex flex-col gap-3 border-b border-sky-100 pb-4 dark:border-slate-800 sm:flex-row sm:items-end sm:justify-between">
+    <section className="rounded-3xl border border-slate-200 bg-white/95 p-4 shadow-[0_16px_44px_rgba(15,23,42,0.06)] backdrop-blur dark:border-slate-800 dark:bg-slate-950/95 sm:p-5">
+      <div className="flex flex-col gap-3 border-b border-slate-100 pb-4 dark:border-slate-800 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <div className="inline-flex items-center gap-2 rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-xs font-semibold text-sky-700 dark:border-sky-500/30 dark:bg-sky-500/10 dark:text-sky-300">
+          <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-sky-700 shadow-sm dark:border-slate-700 dark:bg-slate-900 dark:text-sky-300">
             <MessageSquare size={14} />
             活动评论
           </div>
-          <h2 className="mt-3 text-xl font-bold text-slate-900 dark:text-white">本期活动讨论</h2>
+          <h2 className="mt-3 text-xl font-black text-slate-900 dark:text-white">本期活动讨论</h2>
         </div>
       </div>
 
       <div className="mt-4">
         {!authReady ? (
-          <div className="rounded-2xl border border-slate-200 bg-white/70 p-4 text-center text-sm text-slate-500 dark:border-slate-700 dark:bg-slate-900/70">
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-center text-sm font-semibold text-slate-500 dark:border-slate-700 dark:bg-slate-900">
             正在读取登录状态...
           </div>
         ) : userId && emailVerified ? (
@@ -837,7 +938,7 @@ export default function EventComments({ eventId }: { eventId: number | null }) {
             完成邮箱验证后可以发表评论和回复。
           </div>
         ) : (
-          <div className="rounded-2xl border border-slate-200 bg-white/70 p-4 text-center text-sm text-slate-500 dark:border-slate-700 dark:bg-slate-900/70">
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-center text-sm font-semibold text-slate-500 dark:border-slate-700 dark:bg-slate-900">
             登录后可以参与本期活动讨论。
           </div>
         )}
@@ -858,27 +959,88 @@ export default function EventComments({ eventId }: { eventId: number | null }) {
             onUpdate={updateCommentContent}
             onDelete={deleteComment}
             onLoadReplies={loadReplies}
+            onLocateComment={navigateToComment}
           />
         ))}
 
         {!loading && comments.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-sky-200 bg-white/62 py-10 text-center text-sm text-slate-400 dark:border-slate-700 dark:bg-slate-900/50">
+          <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 py-10 text-center text-sm font-semibold text-slate-400 dark:border-slate-700 dark:bg-slate-900/50">
             还没有评论，来留下本期活动的第一条讨论。
           </div>
         ) : null}
       </div>
 
-      {hasMore ? (
+      {totalCount > COMMENT_ROOT_PAGE_SIZE ? (
         <div className="mt-5 flex justify-center">
-          <button
-            type="button"
-            onClick={() => loadRootComments(nextCursor)}
-            disabled={loading}
-            className="inline-flex h-10 items-center rounded-full border border-sky-200 bg-white px-4 text-sm font-semibold text-sky-700 shadow-sm transition hover:bg-sky-50 disabled:opacity-60 dark:border-sky-500/30 dark:bg-slate-900 dark:text-sky-300"
-          >
-            {loading ? "加载中" : "加载更多主评论"}
-          </button>
+          <div className="inline-flex max-w-full items-center gap-1 rounded-full border border-slate-200 bg-slate-50 p-1 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+            <button
+              type="button"
+              onClick={() => loadRootComments(1)}
+              disabled={loading || currentPage <= 1}
+              className="inline-flex h-8 w-8 items-center justify-center rounded-full text-slate-500 transition hover:bg-white hover:text-sky-700 disabled:cursor-not-allowed disabled:text-slate-300 disabled:hover:bg-transparent dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-sky-300 dark:disabled:text-slate-600"
+              aria-label="第一页"
+              title="第一页"
+            >
+              <ChevronFirst size={16} />
+            </button>
+            <button
+              type="button"
+              onClick={() => loadRootComments(currentPage - 1)}
+              disabled={loading || currentPage <= 1}
+              className="inline-flex h-8 w-8 items-center justify-center rounded-full text-slate-500 transition hover:bg-white hover:text-sky-700 disabled:cursor-not-allowed disabled:text-slate-300 disabled:hover:bg-transparent dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-sky-300 dark:disabled:text-slate-600"
+              aria-label="上一页"
+              title="上一页"
+            >
+              <ChevronLeft size={16} />
+            </button>
+            <div className="flex h-8 min-w-28 items-center justify-center rounded-full bg-white px-3 text-sm font-semibold text-slate-700 shadow-sm ring-1 ring-inset ring-sky-200 dark:bg-slate-950 dark:text-slate-200 dark:ring-slate-700">
+              <input
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                value={pageInput}
+                onChange={(event) => setPageInput(event.target.value.replace(/\D/g, ""))}
+                onBlur={() => setPageInput(String(currentPage))}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    submitPageInput();
+                  }
+                }}
+                disabled={loading}
+                aria-label="跳转到页码"
+                title="输入页码后按回车跳转"
+                className="h-6 w-10 rounded-md border border-transparent bg-transparent text-center text-sm font-semibold text-slate-700 outline-none transition focus:border-sky-200 focus:bg-sky-50 disabled:cursor-not-allowed disabled:text-slate-400 dark:text-slate-200 dark:focus:border-slate-600 dark:focus:bg-slate-900"
+              />
+              <span className="mx-1 text-slate-300 dark:text-slate-600">/</span>
+              <span className="min-w-8 text-center">{totalPages}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => loadRootComments(currentPage + 1)}
+              disabled={loading || currentPage >= totalPages}
+              className="inline-flex h-8 w-8 items-center justify-center rounded-full text-slate-500 transition hover:bg-white hover:text-sky-700 disabled:cursor-not-allowed disabled:text-slate-300 disabled:hover:bg-transparent dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-sky-300 dark:disabled:text-slate-600"
+              aria-label="下一页"
+              title="下一页"
+            >
+              <ChevronRight size={16} />
+            </button>
+            <button
+              type="button"
+              onClick={() => loadRootComments(totalPages)}
+              disabled={loading || currentPage >= totalPages}
+              className="inline-flex h-8 w-8 items-center justify-center rounded-full text-slate-500 transition hover:bg-white hover:text-sky-700 disabled:cursor-not-allowed disabled:text-slate-300 disabled:hover:bg-transparent dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-sky-300 dark:disabled:text-slate-600"
+              aria-label="最后一页"
+              title="最后一页"
+            >
+              <ChevronLast size={16} />
+            </button>
+          </div>
         </div>
+      ) : null}
+
+      {loading && comments.length > 0 ? (
+        <div className="mt-3 text-center text-xs text-slate-400">加载中</div>
       ) : null}
     </section>
   );
