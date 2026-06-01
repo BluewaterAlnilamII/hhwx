@@ -5,7 +5,7 @@ model, scoring model, exact search contract, performance design, correctness
 argument, validation gates, and implementation ownership.
 
 Medley search is a separate optimization problem and is documented in
-`medley-algorithm-notes.md`.
+`medley-algorithm.md`.
 
 ## Problem Definition
 
@@ -270,6 +270,36 @@ order branches, build stronger thresholds, or produce bounded fallback results,
 but they must not remove a candidate from the exact search space unless the
 removal has a safety proof.
 
+### Where The Speedup Comes From
+
+The main performance gain does not come from making a single score formula
+evaluation substantially less costly. It comes from preventing weak branches from
+reaching the high-cost part of the pipeline: real skill-context resolution,
+leader comparison, skill-window scoring, event-point conversion, support-band
+selection, and result object construction.
+
+The important mechanisms are:
+
+- candidate compression reduces DFS width before five-card enumeration starts;
+  because a team has five card slots, even moderate per-character reduction can
+  compound into a much smaller team space;
+- seed teams fill the top-N list early, so branch-and-bound has a useful
+  threshold sooner;
+- suffix upper-bound indexes make the frequent "can this branch still enter
+  top-N?" check low-cost enough to run throughout DFS;
+- objective-specific bounds use score, point bonus, and support-band dimensions
+  according to the selected target instead of using one generic power proxy;
+- the optional correlated bound removes near-threshold optimistic combinations
+  that cannot be realized by any remaining card set;
+- mission-live support opportunity cost is included before real support
+  selection, so branches affected by support opportunity cost can be rejected
+  before scanning and constructing the actual support band;
+- target-only evaluation delays detailed max/min skill order, support card
+  details, and display metadata until a team can enter the current top-N list.
+
+In short, HHWX uses low-cost checks to prove many branches cannot affect the
+result list, and reserves high-cost exact scoring for teams that still can.
+
 ### Objective Adapters
 
 The three single-song targets share one branch-and-bound kernel. Target-specific
@@ -342,7 +372,7 @@ The branch threshold is the current N-th result in the sorted result list, where
 N is `resultLimit`. Before the list has `resultLimit` entries, score and target
 threshold pruning is disabled because there is no complete top-N boundary.
 
-The first-level bound is cheap and called frequently. The second-level bound is
+The first-level bound is low-cost and called frequently. The second-level bound is
 attempted only near the current threshold. It uses a small Pareto/DP estimate to
 bind remaining power, skill contribution, and point bonus together instead of
 combining unrelated maxima from different cards. If the tighter bound cannot be
@@ -493,12 +523,10 @@ The current implementation is split into these layers:
 - `src/lib/bandori/team-builder/single/`: single-song search orchestration. It
   owns single-song scopes, objective adapters, seed teams, result ordering,
   stats finalization, and exact DFS.
-- `src/lib/bandori/team-builder/shared/`: legacy compatibility facade. New
-  internal code should import from `core` or `single` directly.
 - `src/lib/bandori-team-search.ts`: public compatibility entrypoint that
   re-exports the single-song search API.
 
-The core layer must not import `single`, `medley`, or `shared`.
+The core layer must not import `single` or `medley`.
 
 ## Validation Gates
 

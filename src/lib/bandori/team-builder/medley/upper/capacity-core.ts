@@ -143,17 +143,60 @@ export function addMedleyCapacityParetoState(
   nextState: MedleyCapacityParetoState,
   slotCount: number,
 ): boolean {
-  for (const state of states) {
-    if (medleyCapacityParetoStateDominates(state, nextState, slotCount)) {
+  let writeIndex = 0;
+  for (let readIndex = 0; readIndex < states.length; readIndex += 1) {
+    const state = states[readIndex];
+    const stateDominatesNext = !(
+      state.power0 + 0.000001 < nextState.power0
+      || state.averageRate0 + 0.000001 < nextState.averageRate0
+      || state.leaderRate0 + 0.000001 < nextState.leaderRate0
+      || (
+        slotCount >= 2
+        && (
+          state.power1 + 0.000001 < nextState.power1
+          || state.averageRate1 + 0.000001 < nextState.averageRate1
+          || state.leaderRate1 + 0.000001 < nextState.leaderRate1
+        )
+      )
+      || (
+        slotCount >= 3
+        && (
+          state.power2 + 0.000001 < nextState.power2
+          || state.averageRate2 + 0.000001 < nextState.averageRate2
+          || state.leaderRate2 + 0.000001 < nextState.leaderRate2
+        )
+      )
+    );
+    if (stateDominatesNext) {
       return false;
     }
-  }
-
-  for (let index = states.length - 1; index >= 0; index -= 1) {
-    if (medleyCapacityParetoStateDominates(nextState, states[index], slotCount)) {
-      states.splice(index, 1);
+    const nextDominatesState = !(
+      nextState.power0 + 0.000001 < state.power0
+      || nextState.averageRate0 + 0.000001 < state.averageRate0
+      || nextState.leaderRate0 + 0.000001 < state.leaderRate0
+      || (
+        slotCount >= 2
+        && (
+          nextState.power1 + 0.000001 < state.power1
+          || nextState.averageRate1 + 0.000001 < state.averageRate1
+          || nextState.leaderRate1 + 0.000001 < state.leaderRate1
+        )
+      )
+      || (
+        slotCount >= 3
+        && (
+          nextState.power2 + 0.000001 < state.power2
+          || nextState.averageRate2 + 0.000001 < state.averageRate2
+          || nextState.leaderRate2 + 0.000001 < state.leaderRate2
+        )
+      )
+    );
+    if (!nextDominatesState) {
+      states[writeIndex] = state;
+      writeIndex += 1;
     }
   }
+  states.length = writeIndex;
   states.push(nextState);
   return true;
 }

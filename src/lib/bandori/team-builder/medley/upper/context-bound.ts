@@ -51,6 +51,7 @@ import {
   estimateMedleyLeaderFixedCardSpecificSkillCoefficient,
 } from "./card-bound";
 import { buildMedleyCapacityCardsByCharacter } from "./common";
+import { calculateSkillScoreUpperBoundsForPower } from "@/lib/bandori/team-builder/core/scoring";
 import {
   buildMedleySkillContextUppers,
   getMedleyCardSkillAverageRateForContext,
@@ -73,6 +74,50 @@ import type {
   MedleySlotSearch,
 } from "../types";
 import type { SearchCard } from "@/lib/bandori/team-builder/core";
+
+type MedleyContextBoundSkillScoreUpper = {
+  averageScore: number;
+  leaderScore: number;
+  leaderTotalScore: number;
+};
+
+function estimateMedleyContextBoundSkillScoreUpper(
+  slot: MedleySlotSearch,
+  card: SearchCard,
+  cardBoundPowerUpper: number,
+  averageRate: number,
+  leaderRate: number,
+  floorAwareCache: Map<string, { averageScore: number; leaderScore: number }>,
+): MedleyContextBoundSkillScoreUpper {
+  const bandPowerUpper = Math.floor(Math.max(0, cardBoundPowerUpper));
+  const cacheKey = `${card.skillSearchSignature}:${bandPowerUpper}`;
+  let floorAwareScoreUpper = floorAwareCache.get(cacheKey);
+  if (floorAwareScoreUpper === undefined) {
+    floorAwareScoreUpper = calculateSkillScoreUpperBoundsForPower(
+      slot.chart,
+      slot.input.skillsById[String(card.skillId)],
+      card.skillLevel,
+      slot.input.server ?? 0,
+      bandPowerUpper,
+      slot.comboOptions,
+    );
+    floorAwareCache.set(cacheKey, floorAwareScoreUpper);
+  }
+
+  const continuousAverageScore = cardBoundPowerUpper * averageRate;
+  const continuousLeaderScore = cardBoundPowerUpper * leaderRate;
+  const averageScore = Math.min(continuousAverageScore, floorAwareScoreUpper.averageScore);
+  const leaderScore = Math.min(continuousLeaderScore, floorAwareScoreUpper.leaderScore);
+  return {
+    averageScore,
+    leaderScore,
+    leaderTotalScore: Math.min(
+      averageScore + leaderScore,
+      continuousAverageScore + continuousLeaderScore,
+      floorAwareScoreUpper.averageScore + floorAwareScoreUpper.leaderScore,
+    ),
+  };
+}
 
 export function buildMedleyLeaderFixedCardSpecificCoefficientUpper(
   slot: MedleySlotSearch,
@@ -484,6 +529,7 @@ export function buildMedleyContextBoundUpperGroup(
   const averageScoreUpperByCardId = new Map<number, number>();
   const leaderScoreUpperByCardId = new Map<number, number>();
   const powerUpperByCardId = buildMedleyContextCardBoundPowerUpper(slot, context, bannedCardIds);
+  const floorAwareCache = new Map<string, { averageScore: number; leaderScore: number }>();
 
   for (const card of slot.searchCards) {
     if (bannedCardIds.has(card.cardId) || !medleyCardMatchesSkillContext(card, context)) {
@@ -495,16 +541,24 @@ export function buildMedleyContextBoundUpperGroup(
     }
     const averageRate = getMedleyCardSkillAverageRateForContext(card, context.mode);
     const leaderRate = getMedleyCardSkillLeaderRateForContext(card, context.mode);
+    const skillScoreUpper = estimateMedleyContextBoundSkillScoreUpper(
+      slot,
+      card,
+      cardBoundPowerUpper,
+      averageRate,
+      leaderRate,
+      floorAwareCache,
+    );
     averageRateUpperByCardId.set(card.cardId, averageRate);
     leaderRateUpperByCardId.set(card.cardId, leaderRate);
     averageScoreUpperByCardId.set(
       card.cardId,
       card.effectivePower * slot.baseScoreRatePerPower
-        + cardBoundPowerUpper * averageRate,
+        + skillScoreUpper.averageScore,
     );
     leaderScoreUpperByCardId.set(
       card.cardId,
-      cardBoundPowerUpper * leaderRate,
+      Math.max(0, skillScoreUpper.leaderTotalScore - skillScoreUpper.averageScore),
     );
   }
 
@@ -1741,6 +1795,9 @@ export function estimateMedleyCapacityContextBoundCardBoundScoreUpperBoundForCom
     remainingSlotIndices,
     contextBoundUpperBySlot,
   );
+  const floorAwareCachesBySlot = remainingSlotIndices.map(() => (
+    new Map<string, { averageScore: number; leaderScore: number }>()
+  ));
   let states = new Float64Array(transition.stateCount * leaderMaskCount);
   states.fill(Number.NEGATIVE_INFINITY);
   states[0] = 0;
@@ -1778,8 +1835,17 @@ export function estimateMedleyCapacityContextBoundCardBoundScoreUpperBoundForCom
 
             const nextMask = mask | (1 << slotPosition);
             const slot = slots[remainingSlotIndices[slotPosition]];
-            const averageContribution = card.effectivePower * slot.baseScoreRatePerPower
-              + cardBoundPowerUpper * averageRate;
+            const leaderRate = contextBoundUpper.leaderRateUpperByCardId.get(card.cardId);
+            const skillScoreUpper = estimateMedleyContextBoundSkillScoreUpper(
+              slot,
+              card,
+              cardBoundPowerUpper,
+              averageRate,
+              leaderRate !== undefined && Number.isFinite(leaderRate) ? leaderRate : 0,
+              floorAwareCachesBySlot[slotPosition],
+            );
+            const baseContribution = card.effectivePower * slot.baseScoreRatePerPower;
+            const averageContribution = baseContribution + skillScoreUpper.averageScore;
             const nextIndex = nextMask * leaderMaskCount + leaderMask;
             nextCharacterOptions[nextIndex] = Math.max(
               nextCharacterOptions[nextIndex],
@@ -1788,7 +1854,6 @@ export function estimateMedleyCapacityContextBoundCardBoundScoreUpperBoundForCom
 
             const leaderBit = 1 << slotPosition;
             if ((leaderMask & leaderBit) === 0) {
-              const leaderRate = contextBoundUpper.leaderRateUpperByCardId.get(card.cardId);
               if (leaderRate === undefined || !Number.isFinite(leaderRate)) {
                 continue;
               }
@@ -1796,7 +1861,7 @@ export function estimateMedleyCapacityContextBoundCardBoundScoreUpperBoundForCom
               const leaderIndex = nextMask * leaderMaskCount + nextLeaderMask;
               nextCharacterOptions[leaderIndex] = Math.max(
                 nextCharacterOptions[leaderIndex],
-                currentValue + averageContribution + cardBoundPowerUpper * leaderRate,
+                currentValue + baseContribution + skillScoreUpper.leaderTotalScore,
               );
             }
           }

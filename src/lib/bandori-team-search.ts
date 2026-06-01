@@ -1,7 +1,9 @@
 export * from "@/lib/bandori/team-builder/single/search";
 
 export type {
+  BandoriMedleyAreaItemCoarseFilter,
   BandoriMedleySongSearchInput,
+  BandoriMedleySearchOptimizationOptions,
   BandoriMedleyTeamSearchInput,
   BandoriMedleyTeamSearchResult,
   BandoriMedleyTeamSearchProfilingStats,

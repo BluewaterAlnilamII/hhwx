@@ -340,6 +340,37 @@ function calculateBaseScoreFromRates(bandPower: number, innerScoreRates: Float64
   return total;
 }
 
+function getCachedBaseScoreFromRates(
+  chart: PreparedChart,
+  bandPower: number,
+  perfectRate: number,
+  comboOptions: ScoreComboOptions | undefined,
+  innerScoreRates: Float64Array,
+  cache: ScoreCalculationCache | undefined,
+): number {
+  if (!cache?.baseScoresByChart) {
+    return calculateBaseScoreFromRates(bandPower, innerScoreRates);
+  }
+  let chartCache = cache.baseScoresByChart.get(chart);
+  if (!chartCache) {
+    chartCache = new Map();
+    cache.baseScoresByChart.set(chart, chartCache);
+  }
+  const cacheKey = [
+    bandPower,
+    perfectRate,
+    comboOptions?.startCombo ?? 0,
+    comboOptions?.useMedleyCombo ? 1 : 0,
+  ].join(":");
+  const cached = chartCache.get(cacheKey);
+  if (cached !== undefined) {
+    return cached;
+  }
+  const score = calculateBaseScoreFromRates(bandPower, innerScoreRates);
+  chartCache.set(cacheKey, score);
+  return score;
+}
+
 function calculateConstantWindowContributionsFromRates(
   chart: PreparedChart,
   skill: ResolvedBandoriSkill,
@@ -419,6 +450,39 @@ function calculateSkillExtraContribution(
   return contribution;
 }
 
+function getCachedSkillWindowContributions(
+  chart: PreparedChart,
+  bandPower: number,
+  skill: ResolvedBandoriSkill,
+  perfectRate: number,
+  comboOptions: ScoreComboOptions | undefined,
+  cache: ScoreCalculationCache | undefined,
+  calculate: () => number[],
+): number[] {
+  if (!cache?.skillWindowContributionsByChart) {
+    return calculate();
+  }
+  let chartCache = cache.skillWindowContributionsByChart.get(chart);
+  if (!chartCache) {
+    chartCache = new Map();
+    cache.skillWindowContributionsByChart.set(chart, chartCache);
+  }
+  const cacheKey = [
+    bandPower,
+    perfectRate,
+    comboOptions?.startCombo ?? 0,
+    comboOptions?.useMedleyCombo ? 1 : 0,
+    skill.cacheKey,
+  ].join(":");
+  const cached = chartCache.get(cacheKey);
+  if (cached) {
+    return cached;
+  }
+  const contributions = calculate();
+  chartCache.set(cacheKey, contributions);
+  return contributions;
+}
+
 export type SkillWindowScoreResult = {
   score: number;
   averageScore: number;
@@ -443,6 +507,7 @@ type SkillAssignmentOptimization = {
 const SKILL_ASSIGNMENT_SIZE = 5;
 const SKILL_ASSIGNMENT_STATE_COUNT = 1 << SKILL_ASSIGNMENT_SIZE;
 const SKILL_ASSIGNMENT_FULL_MASK = SKILL_ASSIGNMENT_STATE_COUNT - 1;
+const ZERO_SKILL_WINDOW_CONTRIBUTIONS = [0, 0, 0, 0, 0, 0] as const;
 
 // When skill windows do not overlap, bitmask DP is exactly equivalent to enumerating all 5! skill-window assignments.
 const SKILL_ASSIGNMENT_SLOT_BY_MASK = Array.from(
@@ -654,6 +719,102 @@ function getCachedResolvedSkillNoFloorRatesPerPower(
   return rates;
 }
 
+export function calculateBestScoreForNonOverlappingSkillWindowsTargetOnly(
+  chart: PreparedChart,
+  bandPower: number,
+  skills: Array<ResolvedBandoriSkill | null>,
+  perfectRate: number,
+  cache?: ScoreCalculationCache,
+  comboOptions?: ScoreComboOptions,
+): SkillWindowScoreResult {
+  const judgeList = getCachedJudgeList(chart.notesCount, perfectRate, cache);
+  const canUseConstantOnlyScoring = skills.every((skill) => (
+    !skill || Number.isFinite(getGeneratedJudgeConstantSkillMultiplier(skill, perfectRate))
+  ));
+  const innerScoreRates = canUseConstantOnlyScoring
+    ? getCachedInnerScoreRates(chart, judgeList, perfectRate, comboOptions, cache)
+    : null;
+  const innerScoreResult = innerScoreRates
+    ? null
+    : buildInnerScoreResult(chart, bandPower, judgeList, perfectRate, comboOptions, cache);
+  const innerScores = innerScoreResult?.scores ?? null;
+  const baseScore = innerScoreRates
+    ? getCachedBaseScoreFromRates(chart, bandPower, perfectRate, comboOptions, innerScoreRates, cache)
+    : innerScoreResult?.total ?? 0;
+  const constantWindowContributionCache = new Map<string, Int32Array>();
+  let averageTriggerContribution = 0;
+  let bestLeaderContribution = Number.NEGATIVE_INFINITY;
+  let selectedLeaderIndex = 0;
+
+  for (let skillIndex = 0; skillIndex < skills.length; skillIndex += 1) {
+    const skill = skills[skillIndex];
+    const contributions = skill
+      ? getCachedSkillWindowContributions(
+        chart,
+        bandPower,
+        skill,
+        perfectRate,
+        comboOptions,
+        cache,
+        () => {
+          const constantMultiplier = getGeneratedJudgeConstantSkillMultiplier(skill, perfectRate);
+          if (innerScoreRates && Number.isFinite(constantMultiplier)) {
+            const windowContributions = calculateConstantWindowContributionsFromRates(
+              chart,
+              skill,
+              constantMultiplier,
+              bandPower,
+              innerScoreRates,
+              constantWindowContributionCache,
+            );
+            return Array.from(windowContributions);
+          }
+          if (canUseConstantOnlyScoring) {
+            return Array.from(ZERO_SKILL_WINDOW_CONTRIBUTIONS);
+          }
+          if (!innerScores) {
+            return Array.from(ZERO_SKILL_WINDOW_CONTRIBUTIONS);
+          }
+          return Array.from({ length: 6 }, (_, slotIndex) => (
+            calculateSkillExtraContribution(
+              chart,
+              skill,
+              slotIndex,
+              judgeList,
+              innerScores,
+              perfectRate,
+              cache,
+              constantWindowContributionCache,
+            )
+          ));
+        },
+      )
+      : ZERO_SKILL_WINDOW_CONTRIBUTIONS;
+    averageTriggerContribution += (
+      contributions[0]
+      + contributions[1]
+      + contributions[2]
+      + contributions[3]
+      + contributions[4]
+    ) / 5;
+    if (contributions[5] > bestLeaderContribution) {
+      bestLeaderContribution = contributions[5];
+      selectedLeaderIndex = skillIndex;
+    }
+  }
+
+  const averageScore = Math.floor(baseScore + averageTriggerContribution + Math.max(0, bestLeaderContribution));
+  return {
+    score: averageScore,
+    averageScore,
+    minScore: averageScore,
+    maxScoreOrderCount: 0,
+    maxScoreOrderTotal: SKILL_ORDER_PERMUTATIONS.length,
+    leaderIndex: selectedLeaderIndex,
+    permutation: SKILL_ORDER_PERMUTATIONS[0],
+  };
+}
+
 export function calculateBestMultiLiveScoreForSkillWindows(
   chart: PreparedChart,
   bandPower: number,
@@ -682,7 +843,7 @@ export function calculateBestMultiLiveScoreForSkillWindows(
     : buildInnerScoreResult(chart, bandPower, judgeList, perfectRate, comboOptions, cache);
   const innerScores = innerScoreResult?.scores ?? null;
   const baseScore = innerScoreRates
-    ? calculateBaseScoreFromRates(bandPower, innerScoreRates)
+    ? getCachedBaseScoreFromRates(chart, bandPower, perfectRate, comboOptions, innerScoreRates, cache)
     : innerScoreResult?.total ?? 0;
   const zeroContributions = [0, 0, 0, 0, 0, 0];
   const contributionCache = new Map<string, number[]>();
@@ -695,35 +856,46 @@ export function calculateBestMultiLiveScoreForSkillWindows(
     if (cached) {
       return cached;
     }
-    const constantMultiplier = getGeneratedJudgeConstantSkillMultiplier(skill, perfectRate);
-    if (innerScoreRates && Number.isFinite(constantMultiplier)) {
-      const windowContributions = calculateConstantWindowContributionsFromRates(
-        chart,
-        skill,
-        constantMultiplier,
-        bandPower,
-        innerScoreRates,
-        constantWindowContributionCache,
-      );
-      const contributions = Array.from(windowContributions);
-      contributionCache.set(skill.cacheKey, contributions);
-      return contributions;
-    }
-    if (!innerScores) {
-      return zeroContributions;
-    }
-    const contributions = Array.from({ length: 6 }, (_, slotIndex) => (
-      calculateSkillExtraContribution(
-        chart,
-        skill,
-        slotIndex,
-        judgeList,
-        innerScores,
-        perfectRate,
-        cache,
-        constantWindowContributionCache,
-      )
-    ));
+    const contributions = getCachedSkillWindowContributions(
+      chart,
+      bandPower,
+      skill,
+      perfectRate,
+      comboOptions,
+      cache,
+      () => {
+        const constantMultiplier = getGeneratedJudgeConstantSkillMultiplier(skill, perfectRate);
+        if (innerScoreRates && Number.isFinite(constantMultiplier)) {
+          const windowContributions = calculateConstantWindowContributionsFromRates(
+            chart,
+            skill,
+            constantMultiplier,
+            bandPower,
+            innerScoreRates,
+            constantWindowContributionCache,
+          );
+          return Array.from(windowContributions);
+        }
+        if (canUseConstantOnlyScoring) {
+          return zeroContributions;
+        }
+        if (!innerScores) {
+          return zeroContributions;
+        }
+        return Array.from({ length: 6 }, (_, slotIndex) => (
+          calculateSkillExtraContribution(
+            chart,
+            skill,
+            slotIndex,
+            judgeList,
+            innerScores,
+            perfectRate,
+            cache,
+            constantWindowContributionCache,
+          )
+        ));
+      },
+    );
     contributionCache.set(skill.cacheKey, contributions);
     return contributions;
   };
@@ -926,7 +1098,7 @@ export function calculateBestScoreForNonOverlappingSkillWindows(
     : buildInnerScoreResult(chart, bandPower, judgeList, perfectRate, comboOptions, cache);
   const innerScores = innerScoreResult?.scores ?? null;
   const baseScore = innerScoreRates
-    ? calculateBaseScoreFromRates(bandPower, innerScoreRates)
+    ? getCachedBaseScoreFromRates(chart, bandPower, perfectRate, comboOptions, innerScoreRates, cache)
     : innerScoreResult?.total ?? 0;
 
   const constantWindowContributionCache = new Map<string, Int32Array>();
@@ -940,35 +1112,46 @@ export function calculateBestScoreForNonOverlappingSkillWindows(
     if (cached) {
       return cached;
     }
-    const constantMultiplier = getGeneratedJudgeConstantSkillMultiplier(skill, perfectRate);
-    if (innerScoreRates && Number.isFinite(constantMultiplier)) {
-      const windowContributions = calculateConstantWindowContributionsFromRates(
-        chart,
-        skill,
-        constantMultiplier,
-        bandPower,
-        innerScoreRates,
-        constantWindowContributionCache,
-      );
-      const contributions = Array.from(windowContributions);
-      contributionCache.set(skill.cacheKey, contributions);
-      return contributions;
-    }
-    if (!innerScores) {
-      return zeroContributions;
-    }
-    const contributions = Array.from({ length: 6 }, (_, slotIndex) => (
-      calculateSkillExtraContribution(
-        chart,
-        skill,
-        slotIndex,
-        judgeList,
-        innerScores,
-        perfectRate,
-        cache,
-        constantWindowContributionCache,
-      )
-    ));
+    const contributions = getCachedSkillWindowContributions(
+      chart,
+      bandPower,
+      skill,
+      perfectRate,
+      comboOptions,
+      cache,
+      () => {
+        const constantMultiplier = getGeneratedJudgeConstantSkillMultiplier(skill, perfectRate);
+        if (innerScoreRates && Number.isFinite(constantMultiplier)) {
+          const windowContributions = calculateConstantWindowContributionsFromRates(
+            chart,
+            skill,
+            constantMultiplier,
+            bandPower,
+            innerScoreRates,
+            constantWindowContributionCache,
+          );
+          return Array.from(windowContributions);
+        }
+        if (canUseConstantOnlyScoring) {
+          return zeroContributions;
+        }
+        if (!innerScores) {
+          return zeroContributions;
+        }
+        return Array.from({ length: 6 }, (_, slotIndex) => (
+          calculateSkillExtraContribution(
+            chart,
+            skill,
+            slotIndex,
+            judgeList,
+            innerScores,
+            perfectRate,
+            cache,
+            constantWindowContributionCache,
+          )
+        ));
+      },
+    );
     contributionCache.set(skill.cacheKey, contributions);
     return contributions;
   };
@@ -1162,6 +1345,61 @@ export function calculateSkillUpperRatesPerPower(
     maxRate: bestWindowRate * (valuePercent / 100),
     averageRate: (triggerWindowRateSum / 5) * (valuePercent / 100),
     leaderRate: leaderWindowRate * (valuePercent / 100),
+  };
+}
+
+export type SkillScoreUpperBounds = {
+  averageScore: number;
+  leaderScore: number;
+};
+
+export function calculateSkillScoreUpperBoundsForPower(
+  chart: PreparedChart,
+  skill: BestdoriSkillMaster | undefined,
+  skillLevel: number,
+  server: number,
+  bandPowerUpper: number,
+  comboOptions?: ScoreComboOptions,
+): SkillScoreUpperBounds {
+  // Mirrors calculateSkillUpperRatesPerPower, but keeps the note-level score floors.
+  const valuePercent = getSkillMaxValuePercent(skill, server);
+  const durationSeconds = getSkillDurationSeconds(skill, skillLevel, server);
+  const bandPower = Math.floor(Math.max(0, bandPowerUpper));
+  if (valuePercent <= 0 || durationSeconds <= 0 || chart.notesCount === 0 || bandPower <= 0) {
+    return {
+      averageScore: 0,
+      leaderScore: 0,
+    };
+  }
+
+  const baseScorePerPower = 3 * (1 + (chart.playLevel - 5) / 100) / chart.notesCount;
+  let triggerWindowScoreSum = 0;
+  let leaderScore = 0;
+  for (let slotIndex = 0; slotIndex < 6; slotIndex += 1) {
+    const start = chart.skillStartNotes[slotIndex] ?? chart.notesCount;
+    const end = getSkillEndNote(chart, slotIndex, durationSeconds);
+    let windowScore = 0;
+    for (let noteIndex = start; noteIndex < end; noteIndex += 1) {
+      const note = chart.notes[noteIndex];
+      const innerScore = Math.floor(
+        bandPower
+        * baseScorePerPower
+        * JUDGE_PERCENT.perfect
+        * getScoreComboMultiplier(noteIndex, comboOptions)
+        * (note.fever ? 2 : 1),
+      );
+      windowScore += Math.floor(innerScore * (1 + valuePercent / 100)) - innerScore;
+    }
+    if (slotIndex < 5) {
+      triggerWindowScoreSum += windowScore;
+    } else {
+      leaderScore = windowScore;
+    }
+  }
+
+  return {
+    averageScore: triggerWindowScoreSum / 5,
+    leaderScore,
   };
 }
 

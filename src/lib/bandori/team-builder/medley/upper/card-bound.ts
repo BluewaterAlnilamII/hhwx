@@ -32,6 +32,7 @@ import {
   medleyCardMatchesSkillContext,
 } from "./skill-context";
 import { insertTopValue } from "@/lib/bandori/team-builder/core";
+import { calculateSkillScoreUpperBoundsForPower } from "@/lib/bandori/team-builder/core/scoring";
 import type {
   BandoriMedleyTeamSearchProfilingStats,
   MedleyCapacityAssignmentWitness,
@@ -47,6 +48,17 @@ import type {
   MedleySlotSkillCoefficientEstimate,
 } from "../types";
 import type { SearchCard } from "@/lib/bandori/team-builder/core";
+
+type MedleyCardBoundSkillScoreUpper = {
+  averageScore: number;
+  leaderScore: number;
+  leaderTotalScore: number;
+};
+
+type MedleySkillWindowScoreUpper = {
+  averageScore: number;
+  leaderScore: number;
+};
 
 export function buildMedleyCardBoundPowerUpperBySlot(
   slots: MedleySlotSearch[],
@@ -93,6 +105,54 @@ export function buildMedleyCardBoundPowerUpperBySlot(
   });
 }
 
+function buildMedleyCardBoundSkillScoreUpperBySlot(
+  slots: MedleySlotSearch[],
+  remainingSlotIndices: number[],
+  cardBoundPowerUpperBySlot: MedleyCardBoundPowerUpperBySlot,
+): Array<Map<number, MedleyCardBoundSkillScoreUpper>> {
+  return remainingSlotIndices.map((slotIndex, slotPosition) => {
+    const slot = slots[slotIndex];
+    const skillScoreUpperByCardId = new Map<number, MedleyCardBoundSkillScoreUpper>();
+    const floorAwareCache = new Map<string, MedleySkillWindowScoreUpper>();
+    for (const card of slot.searchCards) {
+      const cardBoundPowerUpper = cardBoundPowerUpperBySlot[slotPosition].get(card.cardId);
+      if (cardBoundPowerUpper === undefined || !Number.isFinite(cardBoundPowerUpper)) {
+        continue;
+      }
+
+      const bandPowerUpper = Math.floor(Math.max(0, cardBoundPowerUpper));
+      const cacheKey = `${card.skillSearchSignature}:${bandPowerUpper}`;
+      let floorAwareScoreUpper = floorAwareCache.get(cacheKey);
+      if (floorAwareScoreUpper === undefined) {
+        floorAwareScoreUpper = calculateSkillScoreUpperBoundsForPower(
+          slot.chart,
+          slot.input.skillsById[String(card.skillId)],
+          card.skillLevel,
+          slot.input.server ?? 0,
+          bandPowerUpper,
+          slot.comboOptions,
+        );
+        floorAwareCache.set(cacheKey, floorAwareScoreUpper);
+      }
+      const continuousAverageScore = cardBoundPowerUpper * getMedleyCardSkillAverageRateUpper(card);
+      const continuousLeaderScore = cardBoundPowerUpper * getMedleyCardSkillLeaderRateUpper(card);
+      const averageScore = Math.min(continuousAverageScore, floorAwareScoreUpper.averageScore);
+      const leaderScore = Math.min(continuousLeaderScore, floorAwareScoreUpper.leaderScore);
+      const scoreUpper = {
+        averageScore,
+        leaderScore,
+        leaderTotalScore: Math.min(
+          averageScore + leaderScore,
+          continuousAverageScore + continuousLeaderScore,
+          floorAwareScoreUpper.averageScore + floorAwareScoreUpper.leaderScore,
+        ),
+      };
+      skillScoreUpperByCardId.set(card.cardId, scoreUpper);
+    }
+    return skillScoreUpperByCardId;
+  });
+}
+
 export function estimateMedleyCapacityCardBoundSkillAwareScoreUpperBound(
   slots: MedleySlotSearch[],
   remainingSlotIndices: number[],
@@ -115,6 +175,11 @@ export function estimateMedleyCapacityCardBoundSkillAwareScoreUpperBound(
   const leaderMaskCount = 1 << slotCount;
   const targetLeaderMask = leaderMaskCount - 1;
   const transition = getMedleyCapacityTransition(slotCount);
+  const skillScoreUpperBySlot = buildMedleyCardBoundSkillScoreUpperBySlot(
+    slots,
+    remainingSlotIndices,
+    cardBoundPowerUpperBySlot,
+  );
   let states = new Float64Array(transition.stateCount * leaderMaskCount);
   states.fill(Number.NEGATIVE_INFINITY);
   states[0] = 0;
@@ -144,11 +209,15 @@ export function estimateMedleyCapacityCardBoundSkillAwareScoreUpperBound(
             if (cardBoundPowerUpper === undefined || !Number.isFinite(cardBoundPowerUpper)) {
               continue;
             }
+            const skillScoreUpper = skillScoreUpperBySlot[slotPosition].get(card.cardId);
+            if (!skillScoreUpper) {
+              continue;
+            }
 
             const nextMask = mask | (1 << slotPosition);
-            const averageContribution = card.effectivePower
+            const baseContribution = card.effectivePower
               * slots[remainingSlotIndices[slotPosition]].baseScoreRatePerPower
-              + cardBoundPowerUpper * getMedleyCardSkillAverageRateUpper(card);
+            const averageContribution = baseContribution + skillScoreUpper.averageScore;
             const nextIndex = nextMask * leaderMaskCount + leaderMask;
             nextCharacterOptions[nextIndex] = Math.max(
               nextCharacterOptions[nextIndex],
@@ -162,8 +231,8 @@ export function estimateMedleyCapacityCardBoundSkillAwareScoreUpperBound(
               nextCharacterOptions[leaderIndex] = Math.max(
                 nextCharacterOptions[leaderIndex],
                 currentValue
-                  + averageContribution
-                  + cardBoundPowerUpper * getMedleyCardSkillLeaderRateUpper(card),
+                  + baseContribution
+                  + skillScoreUpper.leaderTotalScore,
               );
             }
           }
@@ -552,6 +621,11 @@ export function estimateMedleyCapacityCardBoundBucketedJointScoreUpperBoundForBu
   const targetLeaderMask = leaderMaskCount - 1;
   const transition = getMedleyCapacityTransition(slotCount);
   let processedStateCount = 0;
+  const skillScoreUpperBySlot = buildMedleyCardBoundSkillScoreUpperBySlot(
+    slots,
+    remainingSlotIndices,
+    cardBoundPowerUpperBySlot,
+  );
 
   const abort = (): null => {
     if (profiling) {
@@ -610,6 +684,10 @@ export function estimateMedleyCapacityCardBoundBucketedJointScoreUpperBoundForBu
               if (cardBoundPowerUpper === undefined || !Number.isFinite(cardBoundPowerUpper)) {
                 continue;
               }
+              const skillScoreUpper = skillScoreUpperBySlot[slotPosition].get(card.cardId);
+              if (!skillScoreUpper) {
+                continue;
+              }
 
               const nextMask = mask | (1 << slotPosition);
               const coefficientContribution = card.effectivePower * slotCoefficients[slotPosition];
@@ -617,9 +695,9 @@ export function estimateMedleyCapacityCardBoundBucketedJointScoreUpperBoundForBu
                 coefficientBucket * bucketSize + coefficientContribution,
                 bucketSize,
               );
-              const cardBoundBaseContribution = card.effectivePower
+              const baseContribution = card.effectivePower
                 * slots[remainingSlotIndices[slotPosition]].baseScoreRatePerPower
-                + cardBoundPowerUpper * getMedleyCardSkillAverageRateUpper(card);
+              const cardBoundBaseContribution = baseContribution + skillScoreUpper.averageScore;
               if (!accountState()) {
                 return abort();
               }
@@ -639,8 +717,8 @@ export function estimateMedleyCapacityCardBoundBucketedJointScoreUpperBoundForBu
                   nextCharacterOptions[nextMask * leaderMaskCount + nextLeaderMask],
                   nextCoefficientBucket,
                   cardBoundScore
-                    + cardBoundBaseContribution
-                    + cardBoundPowerUpper * getMedleyCardSkillLeaderRateUpper(card),
+                    + baseContribution
+                    + skillScoreUpper.leaderTotalScore,
                 );
               }
             }

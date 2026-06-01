@@ -135,6 +135,9 @@ export function medleyConfigurationMatchesCoarseFilter(
   if (filter.attribute !== undefined && configuration.attribute !== filter.attribute) {
     return false;
   }
+  if (filter.parameter !== undefined && configuration.parameter !== filter.parameter) {
+    return false;
+  }
   return true;
 }
 

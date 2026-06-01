@@ -7,7 +7,7 @@
 import { calculateBandoriCardEventBonus, calculateBandoriSelectedAreaItemPower } from "@/lib/bandori-team-calculator";
 import { buildCalculatedCards, buildSearchCardsForConfiguration, buildSearchCardSkillRateProfiles, createSupportBandContext, resolveSupportBandForTeam, toAreaItemStateMap } from "./cards";
 import { getCachedPreparedChart } from "./chart";
-import { calculateBestMultiLiveScoreForSkillWindows, calculateBestScoreForNonOverlappingSkillWindows, type SkillWindowScoreResult } from "./scoring";
+import { calculateBestMultiLiveScoreForSkillWindows, calculateBestScoreForNonOverlappingSkillWindows, calculateBestScoreForNonOverlappingSkillWindowsTargetOnly, type SkillWindowScoreResult } from "./scoring";
 import { calculateChallengeLiveEventPoint, calculateChallengeLiveEventPointBase, calculateEventPoint, calculateEventPointBeforeMultiplier, calculateRoomScore, createEventPointOptions, getSearchCardsTeamContext, getEventPointMultiplier, getTargetValue, isChallengeLiveEventPointInput, normalizeSearchEventType, normalizeSearchLiveType, normalizeSearchTarget, resolveCachedBandoriSkill, resolveEncoreSkill, resolveOtherPlayerSkills, resolveBandoriTeamSearchEventMode } from "./events";
 import { isSearchUpperBoundBelowResultThreshold } from "./character-bounds";
 import type { CalculatedBandoriCard } from "@/lib/bandori-team-calculator";
@@ -62,7 +62,92 @@ export type EvaluateTeamOptions = {
   comboOptions?: ScoreComboOptions;
   supportBandContext?: SupportBandContext;
   pruningThresholdResult?: BandoriTeamSearchResult;
+  scoreOnly?: boolean;
 };
+
+export type EvaluateMedleyScoreOnlyTeamOptions = {
+  cards: SearchCard[];
+  input: BandoriTeamSearchInput;
+  chart: PreparedChart;
+  configuration: BandoriAreaItemConfiguration;
+  server: number;
+  perfectRate: number;
+  scoreCache?: ScoreCalculationCache;
+  comboOptions?: ScoreComboOptions;
+  pruningThresholdResult?: BandoriTeamSearchResult;
+};
+
+export function evaluateMedleyScoreOnlyTeam(options: EvaluateMedleyScoreOnlyTeamOptions): BandoriTeamSearchResult | null {
+  const {
+    cards,
+    input,
+    chart,
+    configuration,
+    server,
+    perfectRate,
+    scoreCache,
+    comboOptions,
+    pruningThresholdResult,
+  } = options;
+  const context = getSearchCardsTeamContext(cards);
+  const resolvedSkills = cards.map((card) => {
+    const skill = input.skillsById[String(card.skillId)];
+    return resolveCachedBandoriSkill(card.skillId, skill, card.skillLevel, context, server, scoreCache);
+  });
+  const totalPower = Math.floor(cards.reduce((sum, card) => sum + card.effectivePower, 0));
+  const best = calculateBestScoreForNonOverlappingSkillWindowsTargetOnly(
+    chart,
+    totalPower,
+    resolvedSkills,
+    perfectRate,
+    scoreCache,
+    comboOptions,
+  );
+
+  if (!Number.isFinite(best.score)) {
+    return null;
+  }
+  if (
+    pruningThresholdResult
+    && isSearchUpperBoundBelowResultThreshold(best.averageScore, best.averageScore, pruningThresholdResult)
+  ) {
+    return null;
+  }
+
+  return {
+    rank: 0,
+    score: best.averageScore,
+    targetValue: best.averageScore,
+    averageScore: best.averageScore,
+    maxScore: best.score,
+    minScore: best.minScore,
+    maxScoreOrderCount: best.maxScoreOrderCount,
+    maxScoreOrderTotal: best.maxScoreOrderTotal,
+    totalPower,
+    rawCardPower: 0,
+    areaItemPower: 0,
+    eventPower: 0,
+    eventPowerWithRoom: 0,
+    pointBonusRate: 0,
+    eventPointBase: null,
+    eventPointMultiplier: 1,
+    eventPoint: null,
+    eventPointOptions: { mode: "none", defaultKey: null, options: [] },
+    eventMode: "parameterPower",
+    roomScore: null,
+    supportBandPower: null,
+    supportCards: [],
+    liveType: "free",
+    eventType: "medley",
+    target: "score",
+    leaderCardId: cards[best.leaderIndex]?.cardId ?? cards[0]?.cardId ?? 0,
+    skillOrderCardIds: [],
+    areaItemConfiguration: configuration,
+    context,
+    cards: [],
+    skills: [],
+  };
+}
 
 export function evaluateTeam(options: EvaluateTeamOptions): BandoriTeamSearchResult | null {
   const {
@@ -76,6 +161,7 @@ export function evaluateTeam(options: EvaluateTeamOptions): BandoriTeamSearchRes
     comboOptions,
     supportBandContext,
     pruningThresholdResult,
+    scoreOnly = false,
   } = options;
   // evaluateTeam is the only path that hydrates five candidate cards into display results:
   // resolve skills with full team context, then calculate score, room score, event points, support band, and presentation fields.
@@ -155,7 +241,7 @@ export function evaluateTeam(options: EvaluateTeamOptions): BandoriTeamSearchRes
       targetOnly,
       shouldCalculateDetailedScore,
     );
-  const best = calculateBest(false);
+  const best = calculateBest(scoreOnly);
 
   if (!Number.isFinite(best.score)) {
     return null;
@@ -189,6 +275,42 @@ export function evaluateTeam(options: EvaluateTeamOptions): BandoriTeamSearchRes
       }
       return null;
     }
+  }
+
+  if (scoreOnly) {
+    return {
+      rank: 0,
+      score: best.averageScore,
+      targetValue: best.averageScore,
+      averageScore: best.averageScore,
+      maxScore: best.score,
+      minScore: best.minScore,
+      maxScoreOrderCount: best.maxScoreOrderCount,
+      maxScoreOrderTotal: best.maxScoreOrderTotal,
+      totalPower,
+      rawCardPower: 0,
+      areaItemPower: 0,
+      eventPower: 0,
+      eventPowerWithRoom: 0,
+      pointBonusRate,
+      eventPointBase: null,
+      eventPointMultiplier: 1,
+      eventPoint: null,
+      eventPointOptions: { mode: "none", defaultKey: null, options: [] },
+      eventMode,
+      roomScore: null,
+      supportBandPower: null,
+      supportCards: [],
+      liveType,
+      eventType,
+      target,
+      leaderCardId: cards[best.leaderIndex]?.cardId ?? cards[0]?.cardId ?? 0,
+      skillOrderCardIds: [],
+      areaItemConfiguration: configuration,
+      context,
+      cards: [],
+      skills: [],
+    };
   }
 
   const supportBand = resolveSupportBandForTeam(cards, supportBandContext);
@@ -330,9 +452,11 @@ export function evaluateBandoriTeamByCardIds(
     scoreCache: {
       judgeLists: new Map(),
       innerScoreRates: new Map(),
+      baseScoresByChart: new WeakMap(),
       noFloorBaseScoreRates: new Map(),
       skillMultiplierLists: new Map(),
       noFloorSkillRates: new Map(),
+      skillWindowContributionsByChart: new WeakMap(),
       resolvedSkills: new Map(),
     },
     comboOptions,
@@ -344,9 +468,11 @@ export function createScoreCalculationCache(): ScoreCalculationCache {
   return {
     judgeLists: new Map(),
     innerScoreRates: new Map(),
+    baseScoresByChart: new WeakMap(),
     noFloorBaseScoreRates: new Map(),
     skillMultiplierLists: new Map(),
     noFloorSkillRates: new Map(),
+    skillWindowContributionsByChart: new WeakMap(),
     resolvedSkills: new Map(),
   };
 }

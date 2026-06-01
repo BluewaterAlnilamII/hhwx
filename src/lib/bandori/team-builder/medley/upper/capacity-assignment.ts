@@ -18,6 +18,7 @@ import {
   MEDLEY_ENABLE_LEADER_GROUP_CARD_SPECIFIC_UPPER,
   MEDLEY_SKILL_COEFFICIENT_EPSILON,
   MEDLEY_TEAM_COUNT,
+  MEDLEY_TEAM_SIZE,
 } from "../constants";
 import {
   estimateMedleyCapacityBucketedScoreUpperBound,
@@ -59,6 +60,755 @@ import type {
   MedleyCapacityUpperMode,
   MedleySlotSearch,
 } from "../types";
+import type { SearchCard } from "@/lib/bandori/team-builder/core";
+
+type MedleyTwoSlotCapacityCardRecord = {
+  cardId: number;
+  card0: SearchCard | null;
+  card1: SearchCard | null;
+  card0AverageRate: number;
+  card1AverageRate: number;
+  card0LeaderRate: number;
+  card1LeaderRate: number;
+};
+
+type MedleyTwoSlotCapacityCharacterGroup = {
+  records: MedleyTwoSlotCapacityCardRecord[];
+};
+
+type MedleyTwoSlotCapacityValueRecord = {
+  cardId: number;
+  value: number;
+};
+
+type MedleyTwoSlotCapacitySlotCharacterSummary = {
+  characterId: number;
+  powerRecords: MedleyTwoSlotCapacityValueRecord[];
+  averageRateRecords: MedleyTwoSlotCapacityValueRecord[];
+  leaderRateRecords: MedleyTwoSlotCapacityValueRecord[];
+};
+
+type MedleyTwoSlotCapacitySlotBounds = {
+  powerUpperBound: number;
+  leaderConstant: number;
+  coefficientEstimate: ReturnType<typeof estimateMedleySlotSkillCoefficient>;
+};
+
+type MedleyTwoSlotCardBoundSlotContext = {
+  slot: MedleySlotSearch;
+  topCharacterPowers: Array<{ characterId: number; power: number }>;
+};
+
+type MedleyTwoSlotCardBoundTransitionRecord = {
+  currentIndex: number;
+  characterOptionIndex: number;
+  nextIndex: number;
+};
+
+const medleyTwoSlotCapacityGroupCache = new WeakMap<
+  MedleySlotSearch,
+  WeakMap<MedleySlotSearch, MedleyTwoSlotCapacityCharacterGroup[]>
+>();
+const medleyTwoSlotCapacitySlotSummaryCache = new WeakMap<
+  MedleySlotSearch,
+  MedleyTwoSlotCapacitySlotCharacterSummary[]
+>();
+let medleyTwoSlotCardBoundTransitionRecords: MedleyTwoSlotCardBoundTransitionRecord[] | null = null;
+
+function getMedleyTwoSlotCardBoundTransitionRecords(): MedleyTwoSlotCardBoundTransitionRecord[] {
+  if (medleyTwoSlotCardBoundTransitionRecords) {
+    return medleyTwoSlotCardBoundTransitionRecords;
+  }
+
+  const transition = getMedleyCapacityTransition(2);
+  const records: MedleyTwoSlotCardBoundTransitionRecord[] = [];
+  for (let stateIndex = 0; stateIndex < transition.stateCount; stateIndex += 1) {
+    for (let leaderMask = 0; leaderMask < 4; leaderMask += 1) {
+      const currentIndex = stateIndex * 4 + leaderMask;
+      for (let characterMask = 1; characterMask < 4; characterMask += 1) {
+        const nextStateIndex = transition.nextIndexByMask[stateIndex * 4 + characterMask];
+        if (nextStateIndex < 0) {
+          continue;
+        }
+        for (let characterLeaderMask = 0; characterLeaderMask < 4; characterLeaderMask += 1) {
+          if (
+            (characterLeaderMask & ~characterMask) !== 0
+            || (leaderMask & characterLeaderMask) !== 0
+          ) {
+            continue;
+          }
+          records.push({
+            currentIndex,
+            characterOptionIndex: characterMask * 4 + characterLeaderMask,
+            nextIndex: nextStateIndex * 4 + (leaderMask | characterLeaderMask),
+          });
+        }
+      }
+    }
+  }
+  medleyTwoSlotCardBoundTransitionRecords = records;
+  return records;
+}
+
+function insertDescendingTopValue(values: number[], value: number, limit: number): void {
+  let index = 0;
+  while (index < values.length && values[index] >= value) {
+    index += 1;
+  }
+  if (index >= limit) {
+    return;
+  }
+  values.splice(index, 0, value);
+  if (values.length > limit) {
+    values.length = limit;
+  }
+}
+
+function insertDescendingTopCharacterRate(
+  values: Array<{ characterId: number; value: number }>,
+  characterId: number,
+  value: number,
+  limit: number,
+): void {
+  let index = 0;
+  while (index < values.length && values[index].value >= value) {
+    index += 1;
+  }
+  if (index >= limit) {
+    return;
+  }
+  values.splice(index, 0, { characterId, value });
+  if (values.length > limit) {
+    values.length = limit;
+  }
+}
+
+function getFirstUnbannedMedleyTwoSlotValue(
+  records: MedleyTwoSlotCapacityValueRecord[],
+  bannedCardIds: Set<number>,
+): number {
+  for (const record of records) {
+    if (!bannedCardIds.has(record.cardId)) {
+      return record.value;
+    }
+  }
+  return Number.NEGATIVE_INFINITY;
+}
+
+function sumTopMedleyTwoSlotAverageRatesExcluding(
+  topAverageRates: Array<{ characterId: number; value: number }>,
+  excludedCharacterId: number,
+): number {
+  let sum = 0;
+  let count = 0;
+  for (const rate of topAverageRates) {
+    if (rate.characterId === excludedCharacterId) {
+      continue;
+    }
+    sum += rate.value;
+    count += 1;
+    if (count >= MEDLEY_TEAM_SIZE - 1) {
+      break;
+    }
+  }
+  return count >= MEDLEY_TEAM_SIZE - 1 ? sum : Number.NEGATIVE_INFINITY;
+}
+
+function getMedleyTwoSlotCapacitySlotSummary(
+  slot: MedleySlotSearch,
+): MedleyTwoSlotCapacitySlotCharacterSummary[] {
+  const cached = medleyTwoSlotCapacitySlotSummaryCache.get(slot);
+  if (cached) {
+    return cached;
+  }
+
+  const recordsByCharacter = new Map<number, {
+    powerRecords: MedleyTwoSlotCapacityValueRecord[];
+    averageRateRecords: MedleyTwoSlotCapacityValueRecord[];
+    leaderRateRecords: MedleyTwoSlotCapacityValueRecord[];
+  }>();
+  for (const card of slot.searchCards) {
+    let records = recordsByCharacter.get(card.characterId);
+    if (!records) {
+      records = {
+        powerRecords: [],
+        averageRateRecords: [],
+        leaderRateRecords: [],
+      };
+      recordsByCharacter.set(card.characterId, records);
+    }
+    records.powerRecords.push({ cardId: card.cardId, value: card.effectivePower });
+    records.averageRateRecords.push({ cardId: card.cardId, value: getMedleyCardSkillAverageRateUpper(card) });
+    records.leaderRateRecords.push({ cardId: card.cardId, value: getMedleyCardSkillLeaderRateUpper(card) });
+  }
+
+  const summary = [...recordsByCharacter.entries()].map(([characterId, records]) => {
+    records.powerRecords.sort((left, right) => right.value - left.value);
+    records.averageRateRecords.sort((left, right) => right.value - left.value);
+    records.leaderRateRecords.sort((left, right) => right.value - left.value);
+    return {
+      characterId,
+      powerRecords: records.powerRecords,
+      averageRateRecords: records.averageRateRecords,
+      leaderRateRecords: records.leaderRateRecords,
+    };
+  });
+  medleyTwoSlotCapacitySlotSummaryCache.set(slot, summary);
+  return summary;
+}
+
+function estimateMedleyTwoSlotCapacitySlotBounds(
+  slot: MedleySlotSearch,
+  bannedCardIds: Set<number>,
+): MedleyTwoSlotCapacitySlotBounds {
+  const topPowers: number[] = [];
+  const topAverageRates: Array<{ characterId: number; value: number }> = [];
+  const characterRates: Array<{ characterId: number; averageRate: number; leaderRate: number }> = [];
+  let maxLeaderRate = 0;
+
+  for (const characterSummary of getMedleyTwoSlotCapacitySlotSummary(slot)) {
+    const power = getFirstUnbannedMedleyTwoSlotValue(characterSummary.powerRecords, bannedCardIds);
+    const averageRate = getFirstUnbannedMedleyTwoSlotValue(characterSummary.averageRateRecords, bannedCardIds);
+    const leaderRate = getFirstUnbannedMedleyTwoSlotValue(characterSummary.leaderRateRecords, bannedCardIds);
+    if (!Number.isFinite(power) || !Number.isFinite(averageRate) || !Number.isFinite(leaderRate)) {
+      continue;
+    }
+    insertDescendingTopValue(topPowers, power, MEDLEY_TEAM_SIZE);
+    insertDescendingTopCharacterRate(topAverageRates, characterSummary.characterId, averageRate, MEDLEY_TEAM_SIZE);
+    characterRates.push({
+      characterId: characterSummary.characterId,
+      averageRate,
+      leaderRate,
+    });
+    maxLeaderRate = Math.max(maxLeaderRate, leaderRate);
+  }
+
+  if (topPowers.length < MEDLEY_TEAM_SIZE || characterRates.length < MEDLEY_TEAM_SIZE) {
+    return {
+      powerUpperBound: Number.NEGATIVE_INFINITY,
+      leaderConstant: Number.NEGATIVE_INFINITY,
+      coefficientEstimate: {
+        coefficient: Number.NEGATIVE_INFINITY,
+        legacyCoefficient: Number.NEGATIVE_INFINITY,
+        improvement: 0,
+      },
+    };
+  }
+
+  const powerUpperBound = topPowers
+    .slice(0, MEDLEY_TEAM_SIZE)
+    .reduce((sum, power) => sum + power, 0);
+  let bestCharacterDistinctSkillRate = Number.NEGATIVE_INFINITY;
+  for (const rate of characterRates) {
+    const topOtherAverageRates = sumTopMedleyTwoSlotAverageRatesExcluding(
+      topAverageRates,
+      rate.characterId,
+    );
+    if (!Number.isFinite(topOtherAverageRates)) {
+      continue;
+    }
+    bestCharacterDistinctSkillRate = Math.max(
+      bestCharacterDistinctSkillRate,
+      rate.leaderRate + rate.averageRate + topOtherAverageRates,
+    );
+  }
+  const coefficient = Number.isFinite(bestCharacterDistinctSkillRate)
+    ? slot.baseScoreRatePerPower + bestCharacterDistinctSkillRate
+    : Number.NEGATIVE_INFINITY;
+
+  return {
+    powerUpperBound,
+    leaderConstant: powerUpperBound * maxLeaderRate,
+    coefficientEstimate: {
+      coefficient,
+      legacyCoefficient: coefficient,
+      improvement: 0,
+    },
+  };
+}
+
+function getMedleyTwoSlotCapacityCharacterGroups(
+  firstSlot: MedleySlotSearch,
+  secondSlot: MedleySlotSearch,
+): MedleyTwoSlotCapacityCharacterGroup[] {
+  const cachedBySecondSlot = medleyTwoSlotCapacityGroupCache.get(firstSlot);
+  const cached = cachedBySecondSlot?.get(secondSlot);
+  if (cached) {
+    return cached;
+  }
+
+  const recordsByCharacter = new Map<number, Map<number, MedleyTwoSlotCapacityCardRecord>>();
+  const addCard = (card: SearchCard, slotPosition: 0 | 1): void => {
+    let recordsByCardId = recordsByCharacter.get(card.characterId);
+    if (!recordsByCardId) {
+      recordsByCardId = new Map<number, MedleyTwoSlotCapacityCardRecord>();
+      recordsByCharacter.set(card.characterId, recordsByCardId);
+    }
+    let record = recordsByCardId.get(card.cardId);
+    if (!record) {
+      record = {
+        cardId: card.cardId,
+        card0: null,
+        card1: null,
+        card0AverageRate: 0,
+        card1AverageRate: 0,
+        card0LeaderRate: 0,
+        card1LeaderRate: 0,
+      };
+      recordsByCardId.set(card.cardId, record);
+    }
+    if (slotPosition === 0) {
+      record.card0 = card;
+      record.card0AverageRate = getMedleyCardSkillAverageRateUpper(card);
+      record.card0LeaderRate = getMedleyCardSkillLeaderRateUpper(card);
+    } else {
+      record.card1 = card;
+      record.card1AverageRate = getMedleyCardSkillAverageRateUpper(card);
+      record.card1LeaderRate = getMedleyCardSkillLeaderRateUpper(card);
+    }
+  };
+
+  for (const card of firstSlot.searchCards) {
+    addCard(card, 0);
+  }
+  for (const card of secondSlot.searchCards) {
+    addCard(card, 1);
+  }
+
+  const groups = [...recordsByCharacter.values()].map((recordsByCardId) => ({
+    records: [...recordsByCardId.values()],
+  }));
+  const nextCachedBySecondSlot = cachedBySecondSlot ?? new WeakMap<MedleySlotSearch, MedleyTwoSlotCapacityCharacterGroup[]>();
+  nextCachedBySecondSlot.set(secondSlot, groups);
+  if (!cachedBySecondSlot) {
+    medleyTwoSlotCapacityGroupCache.set(firstSlot, nextCachedBySecondSlot);
+  }
+  return groups;
+}
+
+function buildMedleyTwoSlotCardBoundSlotContext(
+  slot: MedleySlotSearch,
+  bannedCardIds: Set<number>,
+): MedleyTwoSlotCardBoundSlotContext {
+  const topCharacterPowers: Array<{ characterId: number; power: number }> = [];
+  for (const characterSummary of getMedleyTwoSlotCapacitySlotSummary(slot)) {
+    const power = getFirstUnbannedMedleyTwoSlotValue(characterSummary.powerRecords, bannedCardIds);
+    if (!Number.isFinite(power)) {
+      continue;
+    }
+    let index = 0;
+    while (index < topCharacterPowers.length && topCharacterPowers[index].power >= power) {
+      index += 1;
+    }
+    if (index >= MEDLEY_TEAM_SIZE) {
+      continue;
+    }
+    topCharacterPowers.splice(index, 0, { characterId: characterSummary.characterId, power });
+    if (topCharacterPowers.length > MEDLEY_TEAM_SIZE) {
+      topCharacterPowers.length = MEDLEY_TEAM_SIZE;
+    }
+  }
+  return { slot, topCharacterPowers };
+}
+
+function getMedleyTwoSlotCardBoundTopOtherPowerSum(
+  context: MedleyTwoSlotCardBoundSlotContext,
+  excludedCharacterId: number,
+): number {
+  let sum = 0;
+  let count = 0;
+  for (const entry of context.topCharacterPowers) {
+    if (entry.characterId === excludedCharacterId) {
+      continue;
+    }
+    sum += entry.power;
+    count += 1;
+    if (count >= MEDLEY_TEAM_SIZE - 1) {
+      break;
+    }
+  }
+  return count >= MEDLEY_TEAM_SIZE - 1 ? sum : Number.NEGATIVE_INFINITY;
+}
+
+function estimateMedleyTwoSlotCardBoundSkillScores(
+  bandPowerUpper: number,
+  averageRate: number,
+  leaderRate: number,
+): { averageScore: number; leaderTotalScore: number } {
+  const continuousAverageScore = bandPowerUpper * averageRate;
+  const continuousLeaderScore = bandPowerUpper * leaderRate;
+  return {
+    averageScore: continuousAverageScore,
+    leaderTotalScore: continuousAverageScore + continuousLeaderScore,
+  };
+}
+
+function addMedleyTwoSlotCardBoundOption(
+  characterOptions: Float64Array,
+  nextCharacterOptions: Float64Array,
+  slotPosition: 0 | 1,
+  context: MedleyTwoSlotCardBoundSlotContext,
+  card: SearchCard | null,
+  averageRate: number,
+  leaderRate: number,
+  bannedCardIds: Set<number>,
+): void {
+  if (!card || bannedCardIds.has(card.cardId)) {
+    return;
+  }
+
+  const topOtherPowerSum = getMedleyTwoSlotCardBoundTopOtherPowerSum(
+    context,
+    card.characterId,
+  );
+  if (!Number.isFinite(topOtherPowerSum)) {
+    return;
+  }
+
+  const cardBoundPowerUpper = card.effectivePower + topOtherPowerSum;
+  const skillScores = estimateMedleyTwoSlotCardBoundSkillScores(
+    cardBoundPowerUpper,
+    averageRate,
+    leaderRate,
+  );
+  const slotBit = 1 << slotPosition;
+  const baseContribution = card.effectivePower * context.slot.baseScoreRatePerPower;
+  for (let mask = 0; mask < 4; mask += 1) {
+    if ((mask & slotBit) !== 0) {
+      continue;
+    }
+    const nextMask = mask | slotBit;
+    for (let leaderMask = 0; leaderMask < 4; leaderMask += 1) {
+      const currentValue = characterOptions[mask * 4 + leaderMask];
+      if (!Number.isFinite(currentValue)) {
+        continue;
+      }
+
+      const averageIndex = nextMask * 4 + leaderMask;
+      nextCharacterOptions[averageIndex] = Math.max(
+        nextCharacterOptions[averageIndex],
+        currentValue + baseContribution + skillScores.averageScore,
+      );
+
+      if ((leaderMask & slotBit) === 0) {
+        const leaderIndex = nextMask * 4 + (leaderMask | slotBit);
+        nextCharacterOptions[leaderIndex] = Math.max(
+          nextCharacterOptions[leaderIndex],
+          currentValue + baseContribution + skillScores.leaderTotalScore,
+        );
+      }
+    }
+  }
+}
+
+function computeMedleyTwoSlotCardBoundCharacterOptions(
+  group: MedleyTwoSlotCapacityCharacterGroup,
+  slotContexts: [MedleyTwoSlotCardBoundSlotContext, MedleyTwoSlotCardBoundSlotContext],
+  bannedCardIds: Set<number>,
+  characterOptionsScratch: Float64Array,
+  nextCharacterOptionsScratch: Float64Array,
+): Float64Array {
+  let characterOptions = characterOptionsScratch;
+  characterOptions.fill(Number.NEGATIVE_INFINITY);
+  characterOptions[0] = 0;
+  let nextCharacterOptions = nextCharacterOptionsScratch;
+
+  for (const record of group.records) {
+    nextCharacterOptions.set(characterOptions);
+    addMedleyTwoSlotCardBoundOption(
+      characterOptions,
+      nextCharacterOptions,
+      0,
+      slotContexts[0],
+      record.card0,
+      record.card0AverageRate,
+      record.card0LeaderRate,
+      bannedCardIds,
+    );
+    addMedleyTwoSlotCardBoundOption(
+      characterOptions,
+      nextCharacterOptions,
+      1,
+      slotContexts[1],
+      record.card1,
+      record.card1AverageRate,
+      record.card1LeaderRate,
+      bannedCardIds,
+    );
+    const previousCharacterOptions = characterOptions;
+    characterOptions = nextCharacterOptions;
+    nextCharacterOptions = previousCharacterOptions;
+  }
+
+  return characterOptions;
+}
+
+function estimateMedleyFastTwoSlotCardBoundSkillAwareScoreUpperBound(
+  slots: MedleySlotSearch[],
+  remainingSlotIndices: number[],
+  bannedCardIds: Set<number>,
+  profiling?: BandoriMedleyTeamSearchProfilingStats,
+): number | null {
+  if (profiling) {
+    profiling.capacityCardBoundUpperCallCount += 1;
+  }
+  if (remainingSlotIndices.length !== 2) {
+    if (profiling) {
+      profiling.capacityCardBoundUpperSkippedCount += 1;
+    }
+    return null;
+  }
+
+  const remainingSlots = remainingSlotIndices.map((slotIndex) => slots[slotIndex]);
+  const slotContexts = remainingSlots.map((slot) => (
+    buildMedleyTwoSlotCardBoundSlotContext(slot, bannedCardIds)
+  )) as [MedleyTwoSlotCardBoundSlotContext, MedleyTwoSlotCardBoundSlotContext];
+  const groups = getMedleyTwoSlotCapacityCharacterGroups(remainingSlots[0], remainingSlots[1]);
+  const transition = getMedleyCapacityTransition(2);
+  let states = new Float64Array(transition.stateCount * 4);
+  states.fill(Number.NEGATIVE_INFINITY);
+  states[0] = 0;
+  let nextStates = new Float64Array(transition.stateCount * 4);
+  const characterOptionsScratch = new Float64Array(16);
+  const nextCharacterOptionsScratch = new Float64Array(16);
+  const transitionRecords = getMedleyTwoSlotCardBoundTransitionRecords();
+
+  for (const group of groups) {
+    const characterOptions = computeMedleyTwoSlotCardBoundCharacterOptions(
+      group,
+      slotContexts,
+      bannedCardIds,
+      characterOptionsScratch,
+      nextCharacterOptionsScratch,
+    );
+
+    nextStates.set(states);
+    for (const transitionRecord of transitionRecords) {
+      const currentValue = states[transitionRecord.currentIndex];
+      if (!Number.isFinite(currentValue)) {
+        continue;
+      }
+      const characterValue = characterOptions[transitionRecord.characterOptionIndex];
+      if (!Number.isFinite(characterValue)) {
+        continue;
+      }
+      nextStates[transitionRecord.nextIndex] = Math.max(
+        nextStates[transitionRecord.nextIndex],
+        currentValue + characterValue,
+      );
+    }
+    const previousStates = states;
+    states = nextStates;
+    nextStates = previousStates;
+  }
+
+  if (profiling) {
+    profiling.capacityCardBoundUpperCompletedCount += 1;
+  }
+  return states[transition.targetIndex * 4 + 3];
+}
+
+function estimateMedleyFastTwoSlotCapacityAssignmentScoreUpperBound(
+  slots: MedleySlotSearch[],
+  remainingSlotIndices: number[],
+  bannedCardIds: Set<number>,
+  profiling?: BandoriMedleyTeamSearchProfilingStats,
+): MedleyCapacityAssignmentScoreUpperBound {
+  const cardBoundUpperBound = estimateMedleyFastTwoSlotCardBoundSkillAwareScoreUpperBound(
+    slots,
+    remainingSlotIndices,
+    bannedCardIds,
+    profiling,
+  );
+  if (
+    cardBoundUpperBound !== null
+    && Number.isFinite(cardBoundUpperBound)
+  ) {
+    return {
+      upperBound: cardBoundUpperBound,
+      coefficientUpperBound: cardBoundUpperBound,
+      skillAwareUpperBound: cardBoundUpperBound,
+      paretoUpperBound: null,
+      mode: "card-bound-skill-aware",
+    };
+  }
+  return estimateMedleyBasicTwoSlotCapacityAssignmentScoreUpperBound(
+    slots,
+    remainingSlotIndices,
+    bannedCardIds,
+    profiling,
+  );
+}
+
+function observeMedleySlotCoefficientEstimates(
+  slotCoefficientEstimates: ReturnType<typeof estimateMedleySlotSkillCoefficient>[],
+  profiling?: BandoriMedleyTeamSearchProfilingStats,
+): void {
+  if (!profiling) {
+    return;
+  }
+  profiling.capacityCoefficientTighteningCallCount += 1;
+  for (const estimate of slotCoefficientEstimates) {
+    if (Number.isFinite(estimate.improvement) && estimate.improvement > MEDLEY_SKILL_COEFFICIENT_EPSILON) {
+      profiling.capacityCoefficientTighteningSlotImprovementCount += 1;
+      profiling.capacityCoefficientTighteningSlotImprovementTotal += estimate.improvement;
+      profiling.bestCapacityCoefficientTighteningSlotImprovement = Math.max(
+        profiling.bestCapacityCoefficientTighteningSlotImprovement,
+        estimate.improvement,
+      );
+    }
+  }
+}
+
+function estimateMedleyBasicTwoSlotCapacityAssignmentScoreUpperBound(
+  slots: MedleySlotSearch[],
+  remainingSlotIndices: number[],
+  bannedCardIds: Set<number>,
+  profiling?: BandoriMedleyTeamSearchProfilingStats,
+): MedleyCapacityAssignmentScoreUpperBound {
+  const remainingSlots = remainingSlotIndices.map((slotIndex) => slots[slotIndex]);
+  const slotBounds = remainingSlots.map((slot) => estimateMedleyTwoSlotCapacitySlotBounds(slot, bannedCardIds));
+  const slotPowerUpperBounds = slotBounds.map((bounds) => bounds.powerUpperBound);
+  if (slotPowerUpperBounds.some((powerUpperBound) => !Number.isFinite(powerUpperBound))) {
+    return {
+      upperBound: Number.NEGATIVE_INFINITY,
+      coefficientUpperBound: Number.NEGATIVE_INFINITY,
+      skillAwareUpperBound: Number.NEGATIVE_INFINITY,
+      paretoUpperBound: null,
+      mode: "skill-aware",
+    };
+  }
+
+  const slotLeaderConstants = slotBounds.map((bounds) => bounds.leaderConstant);
+  const slotCoefficientEstimates = slotBounds.map((bounds) => bounds.coefficientEstimate);
+  observeMedleySlotCoefficientEstimates(slotCoefficientEstimates, profiling);
+  const slotCoefficients = slotCoefficientEstimates.map((estimate) => estimate.coefficient);
+  if (slotCoefficients.some((coefficient) => !Number.isFinite(coefficient))) {
+    return {
+      upperBound: Number.NEGATIVE_INFINITY,
+      coefficientUpperBound: Number.NEGATIVE_INFINITY,
+      skillAwareUpperBound: Number.NEGATIVE_INFINITY,
+      paretoUpperBound: null,
+      mode: "skill-aware",
+    };
+  }
+
+  const groups = getMedleyTwoSlotCapacityCharacterGroups(remainingSlots[0], remainingSlots[1]);
+  const transition = getMedleyCapacityTransition(2);
+  let coefficientStates = new Float64Array(transition.stateCount);
+  coefficientStates.fill(Number.NEGATIVE_INFINITY);
+  coefficientStates[0] = 0;
+  let nextCoefficientStates = new Float64Array(transition.stateCount);
+  let skillAwareStates = new Float64Array(transition.stateCount);
+  skillAwareStates.fill(Number.NEGATIVE_INFINITY);
+  skillAwareStates[0] = 0;
+  let nextSkillAwareStates = new Float64Array(transition.stateCount);
+  const characterCoefficientValues = new Float64Array(4);
+  const characterSkillAwareValues = new Float64Array(4);
+
+  for (const group of groups) {
+    characterCoefficientValues.fill(Number.NEGATIVE_INFINITY);
+    characterCoefficientValues[0] = 0;
+    characterSkillAwareValues.fill(Number.NEGATIVE_INFINITY);
+    characterSkillAwareValues[0] = 0;
+
+    for (const record of group.records) {
+      if (bannedCardIds.has(record.cardId)) {
+        continue;
+      }
+
+      const coefficient0 = characterCoefficientValues[0];
+      const coefficient1 = characterCoefficientValues[1];
+      const coefficient2 = characterCoefficientValues[2];
+      const skillAware0 = characterSkillAwareValues[0];
+      const skillAware1 = characterSkillAwareValues[1];
+      const skillAware2 = characterSkillAwareValues[2];
+      if (record.card0) {
+        const coefficientValue = record.card0.effectivePower * slotCoefficients[0];
+        const skillAwareValue = (
+          record.card0.effectivePower * remainingSlots[0].baseScoreRatePerPower
+          + slotPowerUpperBounds[0] * record.card0AverageRate
+        );
+        if (Number.isFinite(coefficient0)) {
+          characterCoefficientValues[1] = Math.max(characterCoefficientValues[1], coefficient0 + coefficientValue);
+        }
+        if (Number.isFinite(coefficient2)) {
+          characterCoefficientValues[3] = Math.max(characterCoefficientValues[3], coefficient2 + coefficientValue);
+        }
+        if (Number.isFinite(skillAware0)) {
+          characterSkillAwareValues[1] = Math.max(characterSkillAwareValues[1], skillAware0 + skillAwareValue);
+        }
+        if (Number.isFinite(skillAware2)) {
+          characterSkillAwareValues[3] = Math.max(characterSkillAwareValues[3], skillAware2 + skillAwareValue);
+        }
+      }
+      if (record.card1) {
+        const coefficientValue = record.card1.effectivePower * slotCoefficients[1];
+        const skillAwareValue = (
+          record.card1.effectivePower * remainingSlots[1].baseScoreRatePerPower
+          + slotPowerUpperBounds[1] * record.card1AverageRate
+        );
+        if (Number.isFinite(coefficient0)) {
+          characterCoefficientValues[2] = Math.max(characterCoefficientValues[2], coefficient0 + coefficientValue);
+        }
+        if (Number.isFinite(coefficient1)) {
+          characterCoefficientValues[3] = Math.max(characterCoefficientValues[3], coefficient1 + coefficientValue);
+        }
+        if (Number.isFinite(skillAware0)) {
+          characterSkillAwareValues[2] = Math.max(characterSkillAwareValues[2], skillAware0 + skillAwareValue);
+        }
+        if (Number.isFinite(skillAware1)) {
+          characterSkillAwareValues[3] = Math.max(characterSkillAwareValues[3], skillAware1 + skillAwareValue);
+        }
+      }
+    }
+
+    nextCoefficientStates.set(coefficientStates);
+    nextSkillAwareStates.set(skillAwareStates);
+    for (let stateIndex = 0; stateIndex < coefficientStates.length; stateIndex += 1) {
+      const currentCoefficientValue = coefficientStates[stateIndex];
+      const currentSkillAwareValue = skillAwareStates[stateIndex];
+      for (let mask = 1; mask < 4; mask += 1) {
+        const nextIndex = transition.nextIndexByMask[stateIndex * 4 + mask];
+        if (nextIndex < 0) {
+          continue;
+        }
+        const coefficientValue = characterCoefficientValues[mask];
+        if (Number.isFinite(currentCoefficientValue) && Number.isFinite(coefficientValue)) {
+          nextCoefficientStates[nextIndex] = Math.max(
+            nextCoefficientStates[nextIndex],
+            currentCoefficientValue + coefficientValue,
+          );
+        }
+        const skillAwareValue = characterSkillAwareValues[mask];
+        if (Number.isFinite(currentSkillAwareValue) && Number.isFinite(skillAwareValue)) {
+          nextSkillAwareStates[nextIndex] = Math.max(
+            nextSkillAwareStates[nextIndex],
+            currentSkillAwareValue + skillAwareValue,
+          );
+        }
+      }
+    }
+    const previousCoefficientStates = coefficientStates;
+    coefficientStates = nextCoefficientStates;
+    nextCoefficientStates = previousCoefficientStates;
+    const previousSkillAwareStates = skillAwareStates;
+    skillAwareStates = nextSkillAwareStates;
+    nextSkillAwareStates = previousSkillAwareStates;
+  }
+
+  const coefficientUpperBound = coefficientStates[transition.targetIndex];
+  const skillAwareUpperBound = skillAwareStates[transition.targetIndex]
+    + slotLeaderConstants.reduce((sum, value) => sum + value, 0);
+  const useSkillAwareBound = skillAwareUpperBound < coefficientUpperBound;
+  return {
+    upperBound: useSkillAwareBound ? skillAwareUpperBound : coefficientUpperBound,
+    coefficientUpperBound,
+    skillAwareUpperBound,
+    paretoUpperBound: null,
+    mode: useSkillAwareBound ? "skill-aware" : "coefficient",
+  };
+}
 
 // Assign cards to relaxed per-slot capacity states. The relaxation allows one character bucket
 // to contribute independently across remaining slots, so the result can be loose but must stay
@@ -72,6 +822,7 @@ export function estimateMedleyCapacityAssignmentScoreUpperBound(
   useParetoUpper = false,
   useBucketedUpper = false,
   enableTeamSharedCoefficientUpper = false,
+  useBasicSkillAwareOnly = false,
 ): MedleyCapacityAssignmentScoreUpperBound {
   if (remainingSlotIndices.length === 0) {
     return {
@@ -81,6 +832,30 @@ export function estimateMedleyCapacityAssignmentScoreUpperBound(
       paretoUpperBound: null,
       mode: "coefficient",
     };
+  }
+
+  if (useSkillAwareUpper && useBasicSkillAwareOnly && remainingSlotIndices.length === 2) {
+    return estimateMedleyBasicTwoSlotCapacityAssignmentScoreUpperBound(
+      slots,
+      remainingSlotIndices,
+      bannedCardIds,
+      profiling,
+    );
+  }
+
+  if (
+    useSkillAwareUpper
+    && remainingSlotIndices.length === 2
+    && !useParetoUpper
+    && !useBucketedUpper
+    && !enableTeamSharedCoefficientUpper
+  ) {
+    return estimateMedleyFastTwoSlotCapacityAssignmentScoreUpperBound(
+      slots,
+      remainingSlotIndices,
+      bannedCardIds,
+      profiling,
+    );
   }
 
   const usesPowerUpperBounds = useSkillAwareUpper || useBucketedUpper;
@@ -115,19 +890,7 @@ export function estimateMedleyCapacityAssignmentScoreUpperBound(
   ));
   const slotCoefficients = slotCoefficientEstimates.map((estimate) => estimate.coefficient);
   const legacySlotCoefficients = slotCoefficientEstimates.map((estimate) => estimate.legacyCoefficient);
-  if (profiling) {
-    profiling.capacityCoefficientTighteningCallCount += 1;
-    for (const estimate of slotCoefficientEstimates) {
-      if (Number.isFinite(estimate.improvement) && estimate.improvement > MEDLEY_SKILL_COEFFICIENT_EPSILON) {
-        profiling.capacityCoefficientTighteningSlotImprovementCount += 1;
-        profiling.capacityCoefficientTighteningSlotImprovementTotal += estimate.improvement;
-        profiling.bestCapacityCoefficientTighteningSlotImprovement = Math.max(
-          profiling.bestCapacityCoefficientTighteningSlotImprovement,
-          estimate.improvement,
-        );
-      }
-    }
-  }
+  observeMedleySlotCoefficientEstimates(slotCoefficientEstimates, profiling);
 
   if (slotCoefficients.some((coefficient) => !Number.isFinite(coefficient))) {
     return {
@@ -293,6 +1056,15 @@ export function estimateMedleyCapacityAssignmentScoreUpperBound(
   if (skillAwareUpperBound < upperBound) {
     upperBound = skillAwareUpperBound;
     mode = "skill-aware";
+  }
+  if (useBasicSkillAwareOnly) {
+    return {
+      upperBound,
+      coefficientUpperBound,
+      skillAwareUpperBound,
+      paretoUpperBound: null,
+      mode,
+    };
   }
 
   const cardSpecificCoefficientUpperBySlot = useSkillAwareUpper

@@ -5,7 +5,9 @@
  */
 export { searchBandoriBestMedleyTeams } from "@/lib/bandori/team-builder/medley/search";
 export type {
+  BandoriMedleyAreaItemCoarseFilter,
   BandoriMedleySongSearchInput,
+  BandoriMedleySearchOptimizationOptions,
   BandoriMedleyTeamSearchInput,
   BandoriMedleyTeamSearchResult,
   BandoriMedleyTeamSearchProfilingStats,

@@ -14,6 +14,68 @@ import type {
 } from "../types";
 import type { SearchCard } from "@/lib/bandori/team-builder/core";
 
+type ForcedSlotSkillContextInfo = {
+  bandId?: number;
+  attribute?: SearchCard["attribute"];
+};
+
+type UpperState = {
+  power: number;
+  averageRate: number;
+  leaderRate: number;
+};
+
+const forcedSlotSkillContextInfoBySlot = new WeakMap<MedleySlotSearch, ForcedSlotSkillContextInfo | null>();
+const forcedBothSkillContextUppersBySlot = new WeakMap<MedleySlotSearch, MedleySkillContextUpper[]>();
+
+function addState(states: UpperState[], nextState: UpperState): void {
+  let writeIndex = 0;
+  for (let readIndex = 0; readIndex < states.length; readIndex += 1) {
+    const state = states[readIndex];
+    if (
+      state.power >= nextState.power
+      && state.averageRate >= nextState.averageRate
+      && state.leaderRate >= nextState.leaderRate
+    ) {
+      return;
+    }
+    if (
+      nextState.power < state.power
+      || nextState.averageRate < state.averageRate
+      || nextState.leaderRate < state.leaderRate
+    ) {
+      states[writeIndex] = state;
+      writeIndex += 1;
+    }
+  }
+  states.length = writeIndex;
+  states.push(nextState);
+}
+
+function getForcedSlotSkillContextInfo(slot: MedleySlotSearch): ForcedSlotSkillContextInfo | null {
+  const cached = forcedSlotSkillContextInfoBySlot.get(slot);
+  if (cached !== undefined) {
+    return cached;
+  }
+
+  const firstCard = slot.searchCards[0];
+  const forcedInfo: ForcedSlotSkillContextInfo | null = firstCard
+    ? {
+      ...(firstCard.bandId !== null && slot.searchCards.every((card) => card.bandId === firstCard.bandId)
+        ? { bandId: firstCard.bandId }
+        : {}),
+      ...(slot.searchCards.every((card) => card.attribute === firstCard.attribute)
+        ? { attribute: firstCard.attribute }
+        : {}),
+    }
+    : null;
+  const normalizedInfo = forcedInfo && (forcedInfo.bandId !== undefined || forcedInfo.attribute !== undefined)
+    ? forcedInfo
+    : null;
+  forcedSlotSkillContextInfoBySlot.set(slot, normalizedInfo);
+  return normalizedInfo;
+}
+
 export function getMedleyCardSkillAverageRateForContext(card: SearchCard, mode: MedleySkillContextUpperMode): number {
   if (mode === "optimistic") {
     return card.skillAverageRate;
@@ -104,6 +166,30 @@ export function buildMedleySkillContextUppers(
   slot: MedleySlotSearch,
   selectedCards: SearchCard[],
 ): MedleySkillContextUpper[] {
+  const forcedInfo = getForcedSlotSkillContextInfo(slot);
+  if (forcedInfo?.bandId !== undefined && forcedInfo.attribute !== undefined) {
+    let contexts = forcedBothSkillContextUppersBySlot.get(slot);
+    if (!contexts) {
+      contexts = [{ mode: "both", bandId: forcedInfo.bandId, attribute: forcedInfo.attribute }];
+      forcedBothSkillContextUppersBySlot.set(slot, contexts);
+    }
+    return contexts;
+  }
+  if (forcedInfo?.bandId !== undefined) {
+    const contexts: MedleySkillContextUpper[] = [{ mode: "same-band", bandId: forcedInfo.bandId }];
+    for (const attribute of getMedleyPossibleSameAttributes(slot, selectedCards)) {
+      contexts.push({ mode: "both", bandId: forcedInfo.bandId, attribute });
+    }
+    return contexts;
+  }
+  if (forcedInfo?.attribute !== undefined) {
+    const contexts: MedleySkillContextUpper[] = [{ mode: "same-attribute", attribute: forcedInfo.attribute }];
+    for (const bandId of getMedleyPossibleSameBandIds(slot, selectedCards)) {
+      contexts.push({ mode: "both", bandId, attribute: forcedInfo.attribute });
+    }
+    return contexts;
+  }
+
   const contexts: MedleySkillContextUpper[] = [{ mode: "mixed" }];
   const possibleSameBandIds = getMedleyPossibleSameBandIds(slot, selectedCards);
   const possibleSameAttributes = getMedleyPossibleSameAttributes(slot, selectedCards);
@@ -134,36 +220,14 @@ export function estimateMedleySlotBranchScoreUpperBoundForContext(
   context: MedleySkillContextUpper,
   profiling?: BandoriMedleyTeamSearchProfilingStats,
 ): number {
-  type UpperState = {
-    power: number;
-    averageRate: number;
-    leaderRate: number;
-  };
-  const addState = (states: UpperState[], nextState: UpperState): void => {
-    for (const state of states) {
-      if (
-        state.power >= nextState.power
-        && state.averageRate >= nextState.averageRate
-        && state.leaderRate >= nextState.leaderRate
-      ) {
-        return;
-      }
-    }
-    for (let index = states.length - 1; index >= 0; index -= 1) {
-      const state = states[index];
-      if (
-        nextState.power >= state.power
-        && nextState.averageRate >= state.averageRate
-        && nextState.leaderRate >= state.leaderRate
-      ) {
-        states.splice(index, 1);
-      }
-    }
-    states.push(nextState);
-  };
-
   const remaining = 5 - selectedCards.length;
-  if (selectedCards.some((card) => !medleyCardMatchesSkillContext(card, context))) {
+  const forcedInfo = getForcedSlotSkillContextInfo(slot);
+  const contextMatchesAllSlotCards = (
+    context.mode === "both"
+    && forcedInfo?.bandId === context.bandId
+    && forcedInfo?.attribute === context.attribute
+  );
+  if (!contextMatchesAllSlotCards && selectedCards.some((card) => !medleyCardMatchesSkillContext(card, context))) {
     return Number.NEGATIVE_INFINITY;
   }
   const selectedAverageRate = selectedCards.reduce(
@@ -177,6 +241,94 @@ export function estimateMedleySlotBranchScoreUpperBoundForContext(
   if (remaining === 0) {
     return Math.floor(selectedPower) * (slot.baseScoreRatePerPower + selectedAverageRate + selectedLeaderRate);
   }
+  if (remaining === 1) {
+    let bestUpperBound = Number.NEGATIVE_INFINITY;
+    let stateCount = 0;
+    for (let index = startIndex; index < slot.searchCards.length; index += 1) {
+      const card = slot.searchCards[index];
+      if (bannedCardIds.has(card.cardId) || (!contextMatchesAllSlotCards && !medleyCardMatchesSkillContext(card, context))) {
+        continue;
+      }
+      const characterIndex = slot.upperBoundIndex.characterIndexById.get(card.characterId);
+      if (
+        characterIndex === undefined
+        || hasCharacterIndexInMask(usedCharacterMaskLow, usedCharacterMaskHigh, characterIndex)
+      ) {
+        continue;
+      }
+      stateCount += 1;
+      const power = selectedPower + card.effectivePower;
+      const averageRate = selectedAverageRate + getMedleyCardSkillAverageRateForContext(card, context.mode);
+      const leaderRate = Math.max(selectedLeaderRate, getMedleyCardSkillLeaderRateForContext(card, context.mode));
+      bestUpperBound = Math.max(
+        bestUpperBound,
+        Math.floor(power) * (slot.baseScoreRatePerPower + averageRate + leaderRate),
+      );
+    }
+    if (profiling) {
+      profiling.slotBranchUpperBoundStateCount += stateCount;
+    }
+    return bestUpperBound;
+  }
+  if (remaining === 2) {
+    const statesByCharacterIndex = new Map<number, UpperState[]>();
+    for (let index = startIndex; index < slot.searchCards.length; index += 1) {
+      const card = slot.searchCards[index];
+      if (bannedCardIds.has(card.cardId) || (!contextMatchesAllSlotCards && !medleyCardMatchesSkillContext(card, context))) {
+        continue;
+      }
+      const characterIndex = slot.upperBoundIndex.characterIndexById.get(card.characterId);
+      if (
+        characterIndex === undefined
+        || hasCharacterIndexInMask(usedCharacterMaskLow, usedCharacterMaskHigh, characterIndex)
+      ) {
+        continue;
+      }
+      let states = statesByCharacterIndex.get(characterIndex);
+      if (!states) {
+        states = [];
+        statesByCharacterIndex.set(characterIndex, states);
+      }
+      addState(states, {
+        power: card.effectivePower,
+        averageRate: getMedleyCardSkillAverageRateForContext(card, context.mode),
+        leaderRate: getMedleyCardSkillLeaderRateForContext(card, context.mode),
+      });
+    }
+
+    const groupedStates = [...statesByCharacterIndex.values()];
+    if (groupedStates.length < remaining) {
+      return Number.NEGATIVE_INFINITY;
+    }
+
+    let bestUpperBound = Number.NEGATIVE_INFINITY;
+    let stateCount = groupedStates.reduce((sum, states) => sum + states.length, 0);
+    for (let leftGroupIndex = 0; leftGroupIndex < groupedStates.length - 1; leftGroupIndex += 1) {
+      const leftStates = groupedStates[leftGroupIndex];
+      for (let rightGroupIndex = leftGroupIndex + 1; rightGroupIndex < groupedStates.length; rightGroupIndex += 1) {
+        const rightStates = groupedStates[rightGroupIndex];
+        for (const leftState of leftStates) {
+          const leftPower = selectedPower + leftState.power;
+          const leftAverageRate = selectedAverageRate + leftState.averageRate;
+          const leftLeaderRate = Math.max(selectedLeaderRate, leftState.leaderRate);
+          for (const rightState of rightStates) {
+            stateCount += 1;
+            const power = leftPower + rightState.power;
+            const averageRate = leftAverageRate + rightState.averageRate;
+            const leaderRate = Math.max(leftLeaderRate, rightState.leaderRate);
+            bestUpperBound = Math.max(
+              bestUpperBound,
+              Math.floor(power) * (slot.baseScoreRatePerPower + averageRate + leaderRate),
+            );
+          }
+        }
+      }
+    }
+    if (profiling) {
+      profiling.slotBranchUpperBoundStateCount += stateCount;
+    }
+    return bestUpperBound;
+  }
 
   const cardsByCharacterIndex = new Map<number, SearchCard[]>();
   for (let index = startIndex; index < slot.searchCards.length; index += 1) {
@@ -184,7 +336,7 @@ export function estimateMedleySlotBranchScoreUpperBoundForContext(
     if (bannedCardIds.has(card.cardId)) {
       continue;
     }
-    if (!medleyCardMatchesSkillContext(card, context)) {
+    if (!contextMatchesAllSlotCards && !medleyCardMatchesSkillContext(card, context)) {
       continue;
     }
     const characterIndex = slot.upperBoundIndex.characterIndexById.get(card.characterId);

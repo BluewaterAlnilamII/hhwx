@@ -41,10 +41,12 @@ import {
   seedMedleyResultsFromSlotCandidates,
 } from "./seeds";
 import {
+  buildMedleySlotBuildContexts,
   buildMedleySlotSearches,
   chooseNextMedleySlotIndex,
   createMedleySlotInput,
   enumerateMedleySlotTeams,
+  estimateMedleyConfigurationBasicSkillAwareRootUpperBound,
   estimateRelaxedMedleyRemainingBestScoreUpperBound,
   findBestMedleySlotTeamWithCache,
   pruneDominatedMedleySlotCards,
@@ -54,7 +56,9 @@ import {
   estimateMedleyAnchorSlotDecompositionUpperBound,
   estimateMedleyOpportunityCostUpperBound,
 } from "./upper/anchor-opportunity";
-import { estimateMedleyRemainingScoreUpperBound } from "./upper/capacity";
+import {
+  estimateMedleyRemainingScoreUpperBound,
+} from "./upper/capacity";
 import { captureMedleyCapacityUpperWitness, captureMedleyRootUpperWitness } from "./upper/witness";
 import {
   buildCalculatedCards,
@@ -76,6 +80,9 @@ import type {
 } from "./types";
 
 const MEDLEY_UPPER_REPLAY_SAMPLE_LIMIT = 256;
+const MEDLEY_EXACT_JOIN_AUTO_MAX_SLOT_CARDS = 300;
+const MEDLEY_EXACT_JOIN_AUTO_HIGH_CANDIDATE_SOFT_LIMIT = 400_000;
+const MEDLEY_WIDE_ROOT_GAP_INCLUSION_PRUNE_SKIP = 0;
 
 export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput): BandoriMedleyTeamSearchResponse {
   const startedAt = performance.now();
@@ -92,6 +99,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
   const captureCapacityUpperWitness = optimization.captureCapacityUpperWitness === true;
   const enableOpportunityCostUpper = optimization.enableOpportunityCostUpper === true;
   const enableTeamSharedCoefficientUpper = optimization.enableTeamSharedCoefficientUpper === true;
+  const debugConfigurationTrace = optimization.debugConfigurationTrace === true;
   const parsedAnchorCandidateLimit = optimization.anchorCandidateLimit !== undefined
     ? Math.trunc(optimization.anchorCandidateLimit)
     : Number.NaN;
@@ -107,7 +115,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
   const parsedExactCandidateSoftLimit = optimization.exactCandidateSoftLimit !== undefined
     ? Math.trunc(optimization.exactCandidateSoftLimit)
     : Number.NaN;
-  const exactCandidateSoftLimit = Number.isFinite(parsedExactCandidateSoftLimit)
+  let exactCandidateSoftLimit = Number.isFinite(parsedExactCandidateSoftLimit)
     ? Math.max(1, parsedExactCandidateSoftLimit)
     : MEDLEY_EXACT_CANDIDATE_JOIN_DEFAULT_CANDIDATE_SOFT_LIMIT;
   const parsedExactNodeSoftLimit = optimization.exactNodeSoftLimit !== undefined
@@ -119,9 +127,6 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
   const parsedConflictExactNodeLimit = optimization.conflictExactNodeLimit !== undefined
     ? Math.trunc(optimization.conflictExactNodeLimit)
     : Number.NaN;
-  const conflictExactNodeLimit = Number.isFinite(parsedConflictExactNodeLimit)
-    ? Math.max(1, parsedConflictExactNodeLimit)
-    : MEDLEY_CONFLICT_EXACT_BNB_DEFAULT_NODE_LIMIT;
   const parsedConflictSlotSolveNodeLimit = optimization.conflictSlotSolveNodeLimit !== undefined
     ? Math.trunc(optimization.conflictSlotSolveNodeLimit)
     : Number.NaN;
@@ -135,6 +140,16 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
   const songInputs = input.songs.slice(0, 3);
   const firstSlotInput = songInputs[0] ? createMedleySlotInput(input, songInputs[0]) : null;
   const calculatedCards = firstSlotInput ? buildCalculatedCards(firstSlotInput) : [];
+  let slotBuildContexts: ReturnType<typeof buildMedleySlotBuildContexts> | null = null;
+  const getSlotBuildContexts = (): ReturnType<typeof buildMedleySlotBuildContexts> => {
+    if (!firstSlotInput) {
+      return [];
+    }
+    if (!slotBuildContexts) {
+      slotBuildContexts = buildMedleySlotBuildContexts(input, songInputs, calculatedCards, server);
+    }
+    return slotBuildContexts;
+  };
   const shouldEnableOpportunityCostUpper = enableOpportunityCostUpper;
   const rawConfigurations = firstSlotInput ? createAreaItemConfigurations(input.userAreaItems) : [];
   const prunedConfigurations = firstSlotInput
@@ -142,18 +157,46 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
     : [];
   const coarseFilter = input.coarseAreaItemFilter;
   const isLockedCoarseFilter = coarseFilter?.mode === "locked";
-  const enableExactCandidateJoin = optimization.enableExactCandidateJoin === true
+  const isAllCoarseFilter = coarseFilter?.mode === "all";
+  const shouldAutoEnableExactCandidateJoin = (
+    resultLimit === 1
+    && maxSearchDurationMs >= 30000
+    && calculatedCards.length > 250
+    && (isLockedCoarseFilter || isAllCoarseFilter)
+  );
+  const shouldAutoEnableConflictExactBnb = (
+    resultLimit === 1
+    && maxSearchDurationMs >= 30000
+    && calculatedCards.length <= 250
+    && (isLockedCoarseFilter || isAllCoarseFilter)
+  );
+  const enableExactCandidateJoin = resultLimit === 1
+    && (optimization.enableExactCandidateJoin === true || shouldAutoEnableExactCandidateJoin)
+    && (
+      calculatedCards.length <= 250
+      || isLockedCoarseFilter
+      || isAllCoarseFilter
+    );
+  if (
+    !Number.isFinite(parsedExactCandidateSoftLimit)
+    && shouldAutoEnableExactCandidateJoin
+    && maxSearchDurationMs >= 60000
+    && calculatedCards.length >= 900
+    && calculatedCards.length < 1500
+  ) {
+    exactCandidateSoftLimit = MEDLEY_EXACT_JOIN_AUTO_HIGH_CANDIDATE_SOFT_LIMIT;
+  }
+  const enableConflictExactBnb = (optimization.enableConflictExactBnb === true || shouldAutoEnableConflictExactBnb)
     && resultLimit === 1
     && (
       calculatedCards.length <= 250
       || isLockedCoarseFilter
     );
-  const enableConflictExactBnb = optimization.enableConflictExactBnb === true
-    && resultLimit === 1
-    && (
-      calculatedCards.length <= 250
-      || isLockedCoarseFilter
-    );
+  const conflictExactNodeLimit = Number.isFinite(parsedConflictExactNodeLimit)
+    ? Math.max(1, parsedConflictExactNodeLimit)
+    : shouldAutoEnableConflictExactBnb
+      ? 200_000
+      : MEDLEY_CONFLICT_EXACT_BNB_DEFAULT_NODE_LIMIT;
   const configurations = isLockedCoarseFilter
     ? prunedConfigurations.filter((configuration) => medleyConfigurationMatchesCoarseFilter(configuration, coarseFilter))
     : prunedConfigurations;
@@ -162,6 +205,13 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
   // specific upper-bound family staying loose, not by the final score calculation.
   const results: BandoriMedleyTeamSearchResult[] = [];
   const profiling = createInitialMedleyProfilingStats(isLockedCoarseFilter ? configurations.length : 0);
+  const configurationTrace: Array<Record<string, unknown>> | null = debugConfigurationTrace ? [] : null;
+  if (configurationTrace) {
+    profiling.configurationTrace = configurationTrace;
+  }
+  if (optimization.exactCandidateJoinDebugAnchorSlotIndex !== undefined) {
+    profiling.exactCandidateJoinDebugAnchorSlotIndex = Math.trunc(optimization.exactCandidateJoinDebugAnchorSlotIndex);
+  }
   const stats: BandoriMedleyTeamSearchStats = {
     candidateCardCount: calculatedCards.length,
     rawAreaItemConfigurationCount: rawConfigurations.length,
@@ -252,6 +302,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
   const configurationSeedScores = new Map<number, number>();
   const configurationWarmupCache = new Map<number, MedleyConfigurationWarmupCache>();
   const configurationRootUpperBounds = new Map<number, number>();
+  const configurationBasicSkillAwareRootUpperBounds = new Map<number, number>();
   const getConfigurationWarmupCache = (configurationIndex: number): MedleyConfigurationWarmupCache => {
     const cached = configurationWarmupCache.get(configurationIndex);
     if (cached) {
@@ -285,6 +336,20 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
     );
     return rootUpperBound;
   };
+  const getConfigurationBasicSkillAwareRootUpperBound = (configurationIndex: number): number => {
+    const cached = configurationBasicSkillAwareRootUpperBounds.get(configurationIndex);
+    if (cached !== undefined) {
+      return cached;
+    }
+    const upperBound = estimateMedleyConfigurationBasicSkillAwareRootUpperBound(
+      calculatedCards,
+      configurations[configurationIndex],
+      server,
+      getSlotBuildContexts(),
+    );
+    configurationBasicSkillAwareRootUpperBounds.set(configurationIndex, upperBound);
+    return upperBound;
+  };
   const lockedConfigurationPotentialScores = new Map<number, number>();
   const getLockedConfigurationPotentialScore = (configurationIndex: number): number => {
     const cached = lockedConfigurationPotentialScores.get(configurationIndex);
@@ -298,6 +363,16 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
       server,
     );
     lockedConfigurationPotentialScores.set(configurationIndex, score);
+    return score;
+  };
+  const staticConfigurationPotentialScores = new Map<number, number>();
+  const getStaticConfigurationPotentialScore = (configurationIndex: number): number => {
+    const cached = staticConfigurationPotentialScores.get(configurationIndex);
+    if (cached !== undefined) {
+      return cached;
+    }
+    const score = estimateMedleyStaticCoarsePotential(input, calculatedCards, configurations[configurationIndex]);
+    staticConfigurationPotentialScores.set(configurationIndex, score);
     return score;
   };
   const getStaticAutoCoarseKeys = (limit: number): string[] => {
@@ -327,15 +402,24 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
   // that reduced subset.
   const isAutoCoarseFilter = coarseFilter?.mode === "auto"
     || (!coarseFilter && calculatedCards.length > 250);
+  const shouldUseBasicSkillAwareRootCapacityPrefilter = (
+    shouldAutoEnableExactCandidateJoin
+    && (isLockedCoarseFilter || isAllCoarseFilter)
+    && maxSearchDurationMs >= 30000
+  );
   if (
     (isAutoCoarseFilter || isLockedCoarseFilter || maxSearchDurationMs >= 30000)
     && calculatedCards.length > 250
     && configurations.length > 1
   ) {
     const seedPassStartedAt = performance.now();
-    const requestedSeedPassDurationMs = maxSearchDurationMs >= 30000
-      ? Math.max(9000, Math.trunc(maxSearchDurationMs * 0.2))
-      : Math.max(1500, Math.trunc(maxSearchDurationMs * 0.25));
+    const requestedSeedPassDurationMs = shouldAutoEnableExactCandidateJoin && isLockedCoarseFilter
+      ? Math.max(2500, Math.trunc(maxSearchDurationMs * 0.04))
+      : shouldAutoEnableExactCandidateJoin && isAllCoarseFilter
+        ? Math.max(1000, Math.trunc(maxSearchDurationMs * 0.02))
+        : maxSearchDurationMs >= 30000
+        ? Math.max(9000, Math.trunc(maxSearchDurationMs * 0.2))
+        : Math.max(1500, Math.trunc(maxSearchDurationMs * 0.25));
     const seedPassDurationMs = Math.min(
       requestedSeedPassDurationMs,
       Math.max(0, deadlineAt - seedPassStartedAt - 2000),
@@ -384,7 +468,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
           profiling.visitedBranchCount = visitedBranchCount;
           return visitedBranchCount % deadlineCheckInterval === 0 && performance.now() >= seedPassDeadlineAt;
         };
-        const useFastLockedSeedPass = isLockedCoarseFilter && maxSearchDurationMs < 30000;
+        const useFastLockedSeedPass = isLockedCoarseFilter && shouldAutoEnableExactCandidateJoin;
         const configurationSeedScore = useFastLockedSeedPass
           ? seedMedleyResultsFromFastGreedyOrders(
             results,
@@ -449,10 +533,10 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
         .sort((left, right) => {
           const leftSeedScore = configurationSeedScores.get(left.index)
             ?? configurationCoarseSeedScores.get(getMedleyAreaItemCoarseKey(left.configuration))
-            ?? Number.NEGATIVE_INFINITY;
+            ?? getStaticConfigurationPotentialScore(left.index);
           const rightSeedScore = configurationSeedScores.get(right.index)
             ?? configurationCoarseSeedScores.get(getMedleyAreaItemCoarseKey(right.configuration))
-            ?? Number.NEGATIVE_INFINITY;
+            ?? getStaticConfigurationPotentialScore(right.index);
           return rightSeedScore - leftSeedScore || left.index - right.index;
         })
         .map(({ configuration }) => configuration);
@@ -482,11 +566,17 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
   const shouldSortByRootUpper = (
     orderedConfigurations.length > 1
     && performance.now() < deadlineAt
+    && !(shouldAutoEnableExactCandidateJoin && isAllCoarseFilter)
     && (
       calculatedCards.length <= 250
+      || ((isLockedCoarseFilter || isAllCoarseFilter) && maxSearchDurationMs >= 30000)
       || orderedConfigurations.length <= 24
       || configurationCoarseSeedScores.size > 0
     )
+  );
+  const shouldPrioritizeRootUpperForProof = (
+    (isLockedCoarseFilter || isAllCoarseFilter)
+    && maxSearchDurationMs >= 30000
   );
   if (shouldSortByRootUpper) {
     orderedConfigurations = orderedConfigurations
@@ -502,17 +592,24 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
         const rootUpperBound = index >= 0
           ? getConfigurationRootUpperBound(index)
           : Number.NEGATIVE_INFINITY;
+        const lockedPotentialScore = index >= 0 && isLockedCoarseFilter
+          ? getLockedConfigurationPotentialScore(index)
+          : Number.NEGATIVE_INFINITY;
         return {
           configuration,
           index,
           seedScore,
           rootUpperBound,
+          lockedPotentialScore,
         };
       })
       .sort((left, right) => (
-        right.seedScore - left.seedScore
-        || right.rootUpperBound - left.rootUpperBound
-        || left.index - right.index
+        shouldPrioritizeRootUpperForProof && !(isLockedCoarseFilter && shouldAutoEnableExactCandidateJoin)
+          ? right.rootUpperBound - left.rootUpperBound || right.seedScore - left.seedScore || left.index - right.index
+          : right.seedScore - left.seedScore
+            || right.lockedPotentialScore - left.lockedPotentialScore
+            || right.rootUpperBound - left.rootUpperBound
+            || left.index - right.index
       ))
       .map(({ configuration }) => configuration);
   }
@@ -530,14 +627,178 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
     }
 
     const configurationIndex = configurations.indexOf(configuration);
+    if (
+      results.length >= resultLimit
+      && shouldUseBasicSkillAwareRootCapacityPrefilter
+      && configurationIndex >= 0
+    ) {
+      const fastRootPruneStartedAt = performance.now();
+      const threshold = getMedleyPruningThreshold(results, resultLimit);
+      const basicSkillAwareRootUpperBound = getConfigurationBasicSkillAwareRootUpperBound(configurationIndex);
+      observeUpperBound(basicSkillAwareRootUpperBound, "configuration-root", MEDLEY_TEAM_COUNT);
+      if (basicSkillAwareRootUpperBound < threshold) {
+        stats.prunedBranchCount += 1;
+        profiling.rootUpperPrunedConfigurationCount += 1;
+        if (configurationTrace) {
+          configurationTrace.push({
+            order: profiling.startedAreaItemConfigurationCount,
+            configurationIndex,
+            bandKey: configuration.bandKey,
+            attribute: configuration.attribute,
+            parameter: configuration.parameter,
+            status: "fast-basic-root-pruned",
+            startedAtMs: Math.round(fastRootPruneStartedAt - startedAt),
+            elapsedMs: Math.round(performance.now() - fastRootPruneStartedAt),
+            initialBestScore: results[0]?.score ?? null,
+            basicSkillAwareRootUpperBound,
+          });
+        }
+        continue;
+      }
+    }
     const warmupCache = configurationIndex >= 0 ? getConfigurationWarmupCache(configurationIndex) : undefined;
     let slots = warmupCache?.slots
-      ?? pruneDominatedMedleySlotCards(buildMedleySlotSearches(input, songInputs, calculatedCards, configuration, server));
+      ?? pruneDominatedMedleySlotCards(buildMedleySlotSearches(
+        input,
+        songInputs,
+        calculatedCards,
+        configuration,
+        server,
+      ));
     const bestSlotTeamCache = warmupCache?.bestSlotTeamCache ?? new Map<string, MedleyBestSlotTeamCacheEntry>();
     const remainingUpperBoundCache = new Map<string, number>();
     const fixedCardSetOptimizationCache = warmupCache?.fixedCardSetOptimizationCache ?? new Map<string, MedleyFixedCardSetOptimizationCacheEntry>();
     let slotCandidateLimits: number[] = [];
     let slotCandidates: MedleyTeamCandidate[][] = [];
+    const traceStartedAt = performance.now();
+    const traceStartCounters = {
+      evaluatedTeamCount: stats.evaluatedTeamCount,
+      enumeratedTeamCount: stats.enumeratedTeamCount,
+      visitedBranchCount,
+      exactCandidateJoinCallCount: profiling.exactCandidateJoinCallCount,
+      exactCandidateJoinCompletedCount: profiling.exactCandidateJoinCompletedCount,
+      exactCandidateJoinAbortCount: profiling.exactCandidateJoinAbortCount,
+      exactCandidateJoinGeneratedCandidateCount: profiling.exactCandidateJoinGeneratedCandidateCount,
+      exactCandidateJoinPairCount: profiling.exactCandidateJoinPairCount,
+      exactCandidateJoinThirdQueryCount: profiling.exactCandidateJoinThirdQueryCount,
+      exactCandidateJoinInitialCandidateElapsedMs: profiling.exactCandidateJoinInitialCandidateElapsedMs,
+      exactCandidateJoinPairUpperElapsedMs: profiling.exactCandidateJoinPairUpperElapsedMs,
+      exactCandidateJoinCandidateFillElapsedMs: profiling.exactCandidateJoinCandidateFillElapsedMs,
+      exactCandidateJoinSolveElapsedMs: profiling.exactCandidateJoinSolveElapsedMs,
+      exactCandidateJoinGlobalHeapRekeyElapsedMs: profiling.exactCandidateJoinGlobalHeapRekeyElapsedMs,
+      exactCandidateJoinPairComplementQueryCount: profiling.exactCandidateJoinPairComplementQueryCount,
+      exactCandidateJoinPairComplementScanCount: profiling.exactCandidateJoinPairComplementScanCount,
+      exactCandidateJoinPairComplementHighPairBuildCount: profiling.exactCandidateJoinPairComplementHighPairBuildCount,
+      exactCandidateJoinPairComplementHighPairBuildElapsedMs: profiling.exactCandidateJoinPairComplementHighPairBuildElapsedMs,
+      inclusionUpperAnalysisCount: profiling.inclusionUpperAnalysisCount,
+      inclusionUpperPrunedCardCount: profiling.inclusionUpperPrunedCardCount,
+      capacityParetoUpperCallCount: profiling.capacityParetoUpperCallCount,
+      capacityCardBoundUpperCallCount: profiling.capacityCardBoundUpperCallCount,
+    };
+    const traceEntry: Record<string, unknown> | null = configurationTrace
+      ? {
+        order: profiling.startedAreaItemConfigurationCount,
+        configurationIndex,
+        bandKey: configuration.bandKey,
+        attribute: configuration.attribute,
+        parameter: configuration.parameter,
+        startedAtMs: Math.round(traceStartedAt - startedAt),
+        initialBestScore: results[0]?.score ?? null,
+        initialBestSeedPassScore: profiling.bestConfigurationSeedPassScore,
+        slotCardCounts: slots.map((slot) => slot.searchCards.length),
+      }
+      : null;
+    const finishConfigurationTrace = (status: string): void => {
+      if (!configurationTrace || !traceEntry || traceEntry.status !== undefined) {
+        return;
+      }
+      Object.assign(traceEntry, {
+        status,
+        elapsedMs: Math.round(performance.now() - traceStartedAt),
+        bestScore: results[0]?.score ?? null,
+        evaluatedTeamCountDelta: stats.evaluatedTeamCount - traceStartCounters.evaluatedTeamCount,
+        enumeratedTeamCountDelta: stats.enumeratedTeamCount - traceStartCounters.enumeratedTeamCount,
+        visitedBranchCountDelta: visitedBranchCount - traceStartCounters.visitedBranchCount,
+        exactCandidateJoinCallCountDelta: profiling.exactCandidateJoinCallCount - traceStartCounters.exactCandidateJoinCallCount,
+        exactCandidateJoinCompletedCountDelta: (
+          profiling.exactCandidateJoinCompletedCount - traceStartCounters.exactCandidateJoinCompletedCount
+        ),
+        exactCandidateJoinAbortCountDelta: profiling.exactCandidateJoinAbortCount - traceStartCounters.exactCandidateJoinAbortCount,
+        exactCandidateJoinGeneratedCandidateCountDelta: (
+          profiling.exactCandidateJoinGeneratedCandidateCount
+          - traceStartCounters.exactCandidateJoinGeneratedCandidateCount
+        ),
+        exactCandidateJoinPairCountDelta: profiling.exactCandidateJoinPairCount - traceStartCounters.exactCandidateJoinPairCount,
+        exactCandidateJoinThirdQueryCountDelta: (
+          profiling.exactCandidateJoinThirdQueryCount - traceStartCounters.exactCandidateJoinThirdQueryCount
+        ),
+        exactCandidateJoinInitialCandidateElapsedMsDelta: Math.round(
+          profiling.exactCandidateJoinInitialCandidateElapsedMs
+          - traceStartCounters.exactCandidateJoinInitialCandidateElapsedMs,
+        ),
+        exactCandidateJoinPairUpperElapsedMsDelta: Math.round(
+          profiling.exactCandidateJoinPairUpperElapsedMs - traceStartCounters.exactCandidateJoinPairUpperElapsedMs,
+        ),
+        exactCandidateJoinCandidateFillElapsedMsDelta: Math.round(
+          profiling.exactCandidateJoinCandidateFillElapsedMs
+          - traceStartCounters.exactCandidateJoinCandidateFillElapsedMs,
+        ),
+        exactCandidateJoinSolveElapsedMsDelta: Math.round(
+          profiling.exactCandidateJoinSolveElapsedMs - traceStartCounters.exactCandidateJoinSolveElapsedMs,
+        ),
+        exactCandidateJoinGlobalHeapRekeyElapsedMsDelta: Math.round(
+          profiling.exactCandidateJoinGlobalHeapRekeyElapsedMs
+          - traceStartCounters.exactCandidateJoinGlobalHeapRekeyElapsedMs,
+        ),
+        exactCandidateJoinPairComplementQueryCountDelta: (
+          profiling.exactCandidateJoinPairComplementQueryCount
+          - traceStartCounters.exactCandidateJoinPairComplementQueryCount
+        ),
+        exactCandidateJoinPairComplementScanCountDelta: (
+          profiling.exactCandidateJoinPairComplementScanCount
+          - traceStartCounters.exactCandidateJoinPairComplementScanCount
+        ),
+        exactCandidateJoinPairComplementHighPairBuildCountDelta: (
+          profiling.exactCandidateJoinPairComplementHighPairBuildCount
+          - traceStartCounters.exactCandidateJoinPairComplementHighPairBuildCount
+        ),
+        exactCandidateJoinPairComplementHighPairBuildElapsedMsDelta: Math.round(
+          profiling.exactCandidateJoinPairComplementHighPairBuildElapsedMs
+          - traceStartCounters.exactCandidateJoinPairComplementHighPairBuildElapsedMs,
+        ),
+        inclusionUpperAnalysisCountDelta: profiling.inclusionUpperAnalysisCount - traceStartCounters.inclusionUpperAnalysisCount,
+        inclusionUpperPrunedCardCountDelta: profiling.inclusionUpperPrunedCardCount - traceStartCounters.inclusionUpperPrunedCardCount,
+        capacityParetoUpperCallCountDelta: profiling.capacityParetoUpperCallCount - traceStartCounters.capacityParetoUpperCallCount,
+        capacityCardBoundUpperCallCountDelta: profiling.capacityCardBoundUpperCallCount - traceStartCounters.capacityCardBoundUpperCallCount,
+      });
+      if (profiling.exactCandidateJoinCallCount > traceStartCounters.exactCandidateJoinCallCount) {
+        Object.assign(traceEntry, {
+          exactCandidateJoinBestSlotScores: [...profiling.exactCandidateJoinLastBestSlotScores],
+          exactCandidateJoinPairUpperByExcludedSlot: [...profiling.exactCandidateJoinLastPairUpperByExcludedSlot],
+          exactCandidateJoinPairUnseenUpperByExcludedSlot: [
+            ...profiling.exactCandidateJoinLastPairUnseenUpperByExcludedSlot,
+          ],
+          exactCandidateJoinPairRootUpperBound: profiling.exactCandidateJoinLastPairRootUpperBound,
+          exactCandidateJoinCandidateCutoffsBySlot: [
+            ...profiling.exactCandidateJoinLastCandidateCutoffsBySlot,
+          ],
+          exactCandidateJoinOtherUpperBySlot: [...profiling.exactCandidateJoinLastOtherUpperBySlot],
+          exactCandidateJoinRelaxedOtherUpperBySlot: [
+            ...profiling.exactCandidateJoinLastRelaxedOtherUpperBySlot,
+          ],
+          exactCandidateJoinRemainingOtherUpperBySlot: [
+            ...profiling.exactCandidateJoinLastRemainingOtherUpperBySlot,
+          ],
+          exactCandidateJoinLastCandidateCountsBySlot: [
+            ...profiling.exactCandidateJoinLastCandidateCountsBySlot,
+          ],
+          exactCandidateJoinLastCandidateFillElapsedMsBySlot: [
+            ...profiling.exactCandidateJoinLastCandidateFillElapsedMsBySlot.map((elapsedMs) => Math.round(elapsedMs)),
+          ],
+        });
+      }
+      configurationTrace.push(traceEntry);
+    };
 
     // This is the central proof boundary for DFS. Callers may ask for tighter model families,
     // but every returned value must remain an optimistic upper bound for all feasible remaining
@@ -555,7 +816,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
       if (remainingSlotIndices.length === 0) {
         return 0;
       }
-      const key = `${enableAnchorSlotUpper ? `anchor-${anchorCandidateLimit}` : "no-anchor"}:${shouldEnableOpportunityCostUpper ? `opportunity-${opportunityAnchorLimit}` : "no-opportunity"}:${enableTeamSharedCoefficientUpper ? "team-shared" : "no-team-shared"}:${useContextualSkillUpper ? "contextual" : "optimistic"}:${useSkillAwareCapacityUpper ? "tight-capacity" : "coefficient"}:${useParetoCapacityUpper ? "pareto" : "scalar"}:${useBucketedCapacityUpper ? "bucketed" : "unbucketed"}:${remainingSlotIndices.join(",")}:${[...bannedCards].sort((left, right) => left - right).join(",")}`;
+      const key = `${slotCandidates.length === slots.length ? "candidates-ready" : "candidates-pending"}:${enableAnchorSlotUpper ? `anchor-${anchorCandidateLimit}` : "no-anchor"}:${shouldEnableOpportunityCostUpper ? `opportunity-${opportunityAnchorLimit}` : "no-opportunity"}:${enableTeamSharedCoefficientUpper ? "team-shared" : "no-team-shared"}:${useContextualSkillUpper ? "contextual" : "optimistic"}:${useSkillAwareCapacityUpper ? "tight-capacity" : "coefficient"}:${useParetoCapacityUpper ? "pareto" : "scalar"}:${useBucketedCapacityUpper ? "bucketed" : "unbucketed"}:${remainingSlotIndices.join(",")}:${[...bannedCards].sort((left, right) => left - right).join(",")}`;
       const cached = remainingUpperBoundCache.get(key);
       if (cached !== undefined) {
         profiling.remainingUpperBoundCacheHitCount += 1;
@@ -722,6 +983,9 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
     const rootScoreUpperBound = configurationIndex >= 0
       ? getConfigurationRootUpperBound(configurationIndex)
       : slots.reduce((sum, slot) => sum + slot.rootScoreUpperBound, 0);
+    if (traceEntry) {
+      traceEntry.rootScoreUpperBound = rootScoreUpperBound;
+    }
     profiling.rootUpperBestConfigurationUpperBound = Math.max(
       profiling.rootUpperBestConfigurationUpperBound ?? Number.NEGATIVE_INFINITY,
       rootScoreUpperBound,
@@ -730,7 +994,198 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
     if (results.length >= resultLimit && rootScoreUpperBound < threshold) {
       stats.prunedBranchCount += 1;
       profiling.rootUpperPrunedConfigurationCount += 1;
+      finishConfigurationTrace("root-pruned");
       continue;
+    }
+    let basicSkillAwareRootUpperBoundForConfiguration: number | null = null;
+    const getBasicSkillAwareRootUpperBoundForConfiguration = (): number | null => {
+      if (
+        !shouldUseBasicSkillAwareRootCapacityPrefilter
+        || configurationIndex < 0
+      ) {
+        return null;
+      }
+      if (basicSkillAwareRootUpperBoundForConfiguration === null) {
+        basicSkillAwareRootUpperBoundForConfiguration = Math.min(
+          rootScoreUpperBound,
+          getConfigurationBasicSkillAwareRootUpperBound(configurationIndex),
+        );
+        if (traceEntry) {
+          traceEntry.basicSkillAwareRootUpperBound = basicSkillAwareRootUpperBoundForConfiguration;
+        }
+      }
+      return basicSkillAwareRootUpperBoundForConfiguration;
+    };
+    if (
+      results.length >= resultLimit
+      && shouldUseBasicSkillAwareRootCapacityPrefilter
+      && configurationIndex >= 0
+    ) {
+      const basicSkillAwareRootUpperBound = getBasicSkillAwareRootUpperBoundForConfiguration();
+      if (basicSkillAwareRootUpperBound !== null) {
+        observeUpperBound(basicSkillAwareRootUpperBound, "configuration-root", MEDLEY_TEAM_COUNT);
+        if (basicSkillAwareRootUpperBound < threshold) {
+          stats.prunedBranchCount += 1;
+          profiling.rootUpperPrunedConfigurationCount += 1;
+          finishConfigurationTrace("basic-root-pruned");
+          continue;
+        }
+      }
+    }
+    const canRunExactCandidateJoinForCurrentSlots = (): boolean => (
+      enableExactCandidateJoin
+      && (
+        optimization.enableExactCandidateJoin === true
+        || slots.every((slot) => slot.searchCards.length <= MEDLEY_EXACT_JOIN_AUTO_MAX_SLOT_CARDS)
+      )
+    );
+    let shouldRunExactCandidateJoinForConfiguration = canRunExactCandidateJoinForCurrentSlots();
+    const incumbentScore = results[0]?.score ?? Number.NEGATIVE_INFINITY;
+    const bestSeedPassScore = profiling.bestConfigurationSeedPassScore ?? Number.NEGATIVE_INFINITY;
+    const hasStrictIncumbentOverSeedPass = incumbentScore > bestSeedPassScore;
+    const canUseEqualSeedPassForPreSeedingExactJoin = (
+      shouldUseBasicSkillAwareRootCapacityPrefilter
+      && calculatedCards.length >= 1500
+      && incumbentScore >= bestSeedPassScore
+    );
+    const shouldDeferTightRootUpperForExactJoin = (
+      shouldRunExactCandidateJoinForConfiguration
+    && results.length >= resultLimit
+    && (isLockedCoarseFilter || isAllCoarseFilter)
+    && maxSearchDurationMs >= 30000
+  );
+    if (results.length >= resultLimit && !shouldDeferTightRootUpperForExactJoin) {
+      const rootSlotIndices = slots.map((_, index) => index);
+      const useTightRootUpper = isLockedCoarseFilter || calculatedCards.length > 250 || maxSearchDurationMs >= 30000;
+      const useParetoRootUpper = useTightRootUpper && calculatedCards.length <= 250;
+      const useBucketedRootUpper = MEDLEY_ENABLE_BUCKETED_CAPACITY_UPPER
+        && useTightRootUpper
+        && calculatedCards.length <= 250;
+      const proofRootUpperBound = Math.min(
+        rootScoreUpperBound,
+        getRemainingUpperBound(
+          rootSlotIndices,
+          new Set<number>(),
+          false,
+          useTightRootUpper,
+          useParetoRootUpper,
+          useBucketedRootUpper,
+          threshold,
+        ),
+      );
+      if (traceEntry) {
+        traceEntry.proofRootUpperBound = proofRootUpperBound;
+      }
+      observeUpperBound(proofRootUpperBound, "configuration-root", MEDLEY_TEAM_COUNT);
+      if (proofRootUpperBound < threshold) {
+        stats.prunedBranchCount += 1;
+        profiling.rootUpperPrunedConfigurationCount += 1;
+        finishConfigurationTrace("proof-root-pruned");
+        continue;
+      }
+    }
+
+    const canTryExactCandidateJoinBeforeSeeding = (
+      enableExactCandidateJoin
+      && (hasStrictIncumbentOverSeedPass || canUseEqualSeedPassForPreSeedingExactJoin)
+      && results.length >= resultLimit
+      && resultLimit === 1
+      && (
+        calculatedCards.length <= 250
+        || ((isLockedCoarseFilter || isAllCoarseFilter) && maxSearchDurationMs >= 30000)
+      )
+    );
+    const shouldSkipInclusionPruneForWideRootGap = (pruningThreshold: number): boolean => {
+      const basicSkillAwareRootUpperBound = getBasicSkillAwareRootUpperBoundForConfiguration();
+      return (
+        basicSkillAwareRootUpperBound !== null
+        && basicSkillAwareRootUpperBound - pruningThreshold >= MEDLEY_WIDE_ROOT_GAP_INCLUSION_PRUNE_SKIP
+      );
+    };
+    let didRunPreSeedingInclusionPrune = false;
+    if (canTryExactCandidateJoinBeforeSeeding && !shouldRunExactCandidateJoinForConfiguration) {
+      const thresholdBeforeInclusionPrune = getMedleyPruningThreshold(results, resultLimit);
+      if (!shouldSkipInclusionPruneForWideRootGap(thresholdBeforeInclusionPrune)) {
+        didRunPreSeedingInclusionPrune = true;
+        const prunedSlots = pruneMedleyCardsByInclusionUpper(
+          slots,
+          thresholdBeforeInclusionPrune,
+          profiling,
+          () => performance.now() >= deadlineAt - 250,
+        );
+        if (prunedSlots !== slots) {
+          slots = prunedSlots;
+          shouldRunExactCandidateJoinForConfiguration = canRunExactCandidateJoinForCurrentSlots();
+          bestSlotTeamCache.clear();
+          remainingUpperBoundCache.clear();
+        }
+      } else if (traceEntry) {
+        traceEntry.skippedInclusionPrune = "wide-root-gap";
+      }
+    }
+    const shouldPreferExactCandidateJoinBeforeSeeding = (
+      shouldRunExactCandidateJoinForConfiguration
+      && canTryExactCandidateJoinBeforeSeeding
+    );
+    let didAttemptExactCandidateJoin = false;
+    if (shouldPreferExactCandidateJoinBeforeSeeding) {
+      if (traceEntry) {
+        traceEntry.exactBeforeSeeding = true;
+      }
+      if (
+        !didRunPreSeedingInclusionPrune
+        && resultLimit === 1
+        && (
+          calculatedCards.length <= 250
+          || ((isLockedCoarseFilter || isAllCoarseFilter) && maxSearchDurationMs >= 30000)
+        )
+      ) {
+        const thresholdBeforeInclusionPrune = getMedleyPruningThreshold(results, resultLimit);
+        if (!shouldSkipInclusionPruneForWideRootGap(thresholdBeforeInclusionPrune)) {
+          const prunedSlots = pruneMedleyCardsByInclusionUpper(
+            slots,
+            thresholdBeforeInclusionPrune,
+            profiling,
+            () => performance.now() >= deadlineAt - 250,
+          );
+          if (prunedSlots !== slots) {
+            slots = prunedSlots;
+            shouldRunExactCandidateJoinForConfiguration = canRunExactCandidateJoinForCurrentSlots();
+            bestSlotTeamCache.clear();
+            remainingUpperBoundCache.clear();
+          }
+        } else if (traceEntry) {
+          traceEntry.skippedInclusionPrune = "wide-root-gap";
+        }
+      }
+      didAttemptExactCandidateJoin = true;
+      const exactJoinResult = searchMedleyConfigurationByExactCandidateJoin(
+        results,
+        resultLimit,
+        slots,
+        configuration,
+        server,
+        perfectRate,
+        stats,
+        profiling,
+        isPastDeadline,
+        deadlineAt,
+        exactCandidateSoftLimit,
+        exactNodeSoftLimit,
+      );
+      if (exactJoinResult.result) {
+        pushMedleyResult(results, exactJoinResult.result, resultLimit);
+        recordBestScoreMilestone();
+      }
+      if (stats.timedOut) {
+        finishConfigurationTrace("exact-before-seeding-timeout");
+        break;
+      }
+      if (exactJoinResult.proved) {
+        profiling.completedAreaItemConfigurationCount += 1;
+        finishConfigurationTrace("exact-before-seeding-proved");
+        continue;
+      }
     }
 
     // Incumbent seeding happens before DFS so that upper-bound pruning has a real threshold.
@@ -770,7 +1225,12 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
       );
       recordBestScoreMilestone();
     }
+    if (traceEntry) {
+      traceEntry.afterSlotCandidateSeedingMs = Math.round(performance.now() - traceStartedAt);
+      traceEntry.bestScoreAfterSlotCandidateSeeding = results[0]?.score ?? null;
+    }
     if (stats.timedOut) {
+      finishConfigurationTrace("slot-candidate-seeding-timeout");
       break;
     }
 
@@ -791,11 +1251,19 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
       true,
     );
     recordBestScoreMilestone();
+    if (traceEntry) {
+      traceEntry.afterGreedySeedingMs = Math.round(performance.now() - traceStartedAt);
+      traceEntry.bestScoreAfterGreedySeeding = results[0]?.score ?? null;
+    }
     if (stats.timedOut) {
+      finishConfigurationTrace("greedy-seeding-timeout");
       break;
     }
 
-    if ((calculatedCards.length <= 250 || maxSearchDurationMs >= 30000 || isLockedCoarseFilter) && results.length > 0) {
+    if (
+      (calculatedCards.length <= 250 || maxSearchDurationMs >= 30000 || isLockedCoarseFilter)
+      && results.length > 0
+    ) {
       optimizeMedleySeedNeighborhood(
         results,
         resultLimit,
@@ -810,14 +1278,36 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
       );
       recordBestScoreMilestone();
     }
+    if (traceEntry) {
+      traceEntry.afterSeedingMs = Math.round(performance.now() - traceStartedAt);
+      traceEntry.bestScoreAfterSeeding = results[0]?.score ?? null;
+    }
 
-    if (resultLimit === 1 && calculatedCards.length <= 250 && results.length >= resultLimit) {
+    if (
+      !didAttemptExactCandidateJoin
+      && resultLimit === 1
+      && results.length >= resultLimit
+      && (
+        calculatedCards.length <= 250
+        || ((isLockedCoarseFilter || isAllCoarseFilter) && maxSearchDurationMs >= 30000)
+      )
+    ) {
       const thresholdBeforeInclusionPrune = getMedleyPruningThreshold(results, resultLimit);
-      const prunedSlots = pruneMedleyCardsByInclusionUpper(slots, thresholdBeforeInclusionPrune, profiling);
-      if (prunedSlots !== slots) {
-        slots = prunedSlots;
-        bestSlotTeamCache.clear();
-        remainingUpperBoundCache.clear();
+      if (!shouldSkipInclusionPruneForWideRootGap(thresholdBeforeInclusionPrune)) {
+        const prunedSlots = pruneMedleyCardsByInclusionUpper(
+          slots,
+          thresholdBeforeInclusionPrune,
+          profiling,
+          () => performance.now() >= deadlineAt - 250,
+        );
+        if (prunedSlots !== slots) {
+          slots = prunedSlots;
+          shouldRunExactCandidateJoinForConfiguration = canRunExactCandidateJoinForCurrentSlots();
+          bestSlotTeamCache.clear();
+          remainingUpperBoundCache.clear();
+        }
+      } else if (traceEntry) {
+        traceEntry.skippedInclusionPrune = "wide-root-gap";
       }
     }
 
@@ -846,17 +1336,20 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
         profiling.observedUpperBoundRemainingSlotCount = MEDLEY_TEAM_COUNT;
       }
       if (stats.timedOut) {
+        finishConfigurationTrace("conflict-bnb-timeout");
         break;
       }
       if (conflictBnbResult.proved) {
         profiling.completedAreaItemConfigurationCount += 1;
+        finishConfigurationTrace("conflict-bnb-proved");
         continue;
       }
     }
 
-    // Experimental exact sub-solvers can prove the current configuration early. They are kept
-    // opt-in because their candidate and node budgets can be worse than the main DFS path.
-    if (enableExactCandidateJoin && results.length >= resultLimit) {
+    // Exact sub-solvers can prove the current configuration before DFS. They may be auto-enabled
+    // for large locked/all scopes, but failure to close their frontier only means this
+    // configuration remains bounded and must continue through the fallback proof path.
+    if (!didAttemptExactCandidateJoin && shouldRunExactCandidateJoinForConfiguration && results.length >= resultLimit) {
       const exactJoinResult = searchMedleyConfigurationByExactCandidateJoin(
         results,
         resultLimit,
@@ -876,10 +1369,12 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
         recordBestScoreMilestone();
       }
       if (stats.timedOut) {
+        finishConfigurationTrace("exact-after-seeding-timeout");
         break;
       }
       if (exactJoinResult.proved) {
         profiling.completedAreaItemConfigurationCount += 1;
+        finishConfigurationTrace("exact-after-seeding-proved");
         continue;
       }
     }
@@ -1065,9 +1560,11 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
 
     visit(slots.map((_, index) => index), 0);
     if (stats.timedOut) {
+      finishConfigurationTrace("dfs-timeout");
       break;
     }
     profiling.completedAreaItemConfigurationCount += 1;
+    finishConfigurationTrace("dfs-proved");
   }
 
   sortMedleyResults(results);

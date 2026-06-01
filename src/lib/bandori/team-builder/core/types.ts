@@ -357,9 +357,11 @@ export type SkillUpperRates = {
 export type ScoreCalculationCache = {
   judgeLists?: Map<string, BandoriJudge[]>;
   innerScoreRates?: Map<string, Float64Array>;
+  baseScoresByChart?: WeakMap<PreparedChart, Map<string, number>>;
   noFloorBaseScoreRates?: Map<string, number>;
   skillMultiplierLists: Map<string, Float64Array>;
   noFloorSkillRates: Map<string, SkillUpperRates>;
+  skillWindowContributionsByChart?: WeakMap<PreparedChart, Map<string, number[]>>;
   resolvedSkills?: Map<string, ResolvedBandoriSkill | null>;
 };
 

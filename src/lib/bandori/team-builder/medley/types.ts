@@ -30,6 +30,43 @@ export type BandoriMedleySongSearchInput = {
   useFever?: boolean;
 };
 
+export type BandoriMedleyAreaItemCoarseFilter = {
+  /**
+   * `all` is the exact frontend mode for proving the full area-item search space.
+   * `locked` is for an explicit band/attribute/parameter subspace.
+   * `auto` may narrow the space for responsiveness and must be reported as bounded.
+   */
+  mode?: "auto" | "locked" | "all";
+  bandKey?: string | null;
+  attribute?: BandoriCardAttribute | null;
+  parameter?: "performance" | "technique" | "visual" | null;
+  candidateLimit?: number;
+};
+
+export type BandoriMedleySearchOptimizationOptions = {
+  /**
+   * Debug/profiling options are intentionally exposed for local benchmark runners.
+   * Frontend code should treat these as unstable and prefer `maxSearchDurationMs`,
+   * `resultLimit`, and `coarseAreaItemFilter` for user-facing control.
+   */
+  captureUpperWitness?: boolean;
+  captureCapacityUpperWitness?: boolean;
+  enableAnchorSlotUpper?: boolean;
+  enableAnchorPairUpper?: boolean;
+  anchorCandidateLimit?: number;
+  enableOpportunityCostUpper?: boolean;
+  opportunityAnchorLimit?: number;
+  enableTeamSharedCoefficientUpper?: boolean;
+  enableExactCandidateJoin?: boolean;
+  exactCandidateSoftLimit?: number;
+  exactNodeSoftLimit?: number;
+  enableConflictExactBnb?: boolean;
+  conflictExactNodeLimit?: number;
+  conflictSlotSolveNodeLimit?: number;
+  debugConfigurationTrace?: boolean;
+  exactCandidateJoinDebugAnchorSlotIndex?: number;
+};
+
 export type BandoriMedleyTeamSearchInput = Omit<
   BandoriTeamSearchInput,
   | "chart"
@@ -46,28 +83,8 @@ export type BandoriMedleyTeamSearchInput = Omit<
 > & {
   songs: BandoriMedleySongSearchInput[];
   target?: "score";
-  coarseAreaItemFilter?: {
-    mode?: "auto" | "locked";
-    bandKey?: string | null;
-    attribute?: BandoriCardAttribute | null;
-    candidateLimit?: number;
-  };
-  optimization?: {
-    captureUpperWitness?: boolean;
-    captureCapacityUpperWitness?: boolean;
-    enableAnchorSlotUpper?: boolean;
-    enableAnchorPairUpper?: boolean;
-    anchorCandidateLimit?: number;
-    enableOpportunityCostUpper?: boolean;
-    opportunityAnchorLimit?: number;
-    enableTeamSharedCoefficientUpper?: boolean;
-    enableExactCandidateJoin?: boolean;
-    exactCandidateSoftLimit?: number;
-    exactNodeSoftLimit?: number;
-    enableConflictExactBnb?: boolean;
-    conflictExactNodeLimit?: number;
-    conflictSlotSolveNodeLimit?: number;
-  };
+  coarseAreaItemFilter?: BandoriMedleyAreaItemCoarseFilter;
+  optimization?: BandoriMedleySearchOptimizationOptions;
 };
 
 export type BandoriMedleyTeamSearchResult = {
@@ -152,6 +169,7 @@ export type BandoriMedleyUpperWitness = {
 };
 
 export type BandoriMedleyTeamSearchProfilingStats = {
+  // Configuration-level proof progress and final gap timing.
   startedAreaItemConfigurationCount: number;
   completedAreaItemConfigurationCount: number;
   rootUpperPrunedConfigurationCount: number;
@@ -162,10 +180,12 @@ export type BandoriMedleyTeamSearchProfilingStats = {
   timeToGap1PctMs: number | null;
   timeToGap05PctMs: number | null;
   timeToGap01PctMs: number | null;
+  // Replay-only diagnostics for comparing observed states against newer upper models.
   upperReplayStateCount: number;
   upperReplayPrunableStateCount: number;
   upperReplayAverageImprovement: number;
   upperReplayElapsedMs: number;
+  // Incumbent discovery and hot-path cache behavior.
   bestGreedySeedScore: number | null;
   reverseSongOrderGreedySeedScore: number | null;
   visitedBranchCount: number;
@@ -178,6 +198,7 @@ export type BandoriMedleyTeamSearchProfilingStats = {
   bestSlotTeamCacheMissCount: number;
   teamEvaluationCacheHitCount: number;
   teamEvaluationCacheMissCount: number;
+  // Seed and local-improvement passes raise the incumbent but do not prove optimality.
   proofFriendlySlotChoiceCount: number;
   fixedCardSetOptimizationCount: number;
   fixedCardSetOptimizationCacheHitCount: number;
@@ -190,11 +211,16 @@ export type BandoriMedleyTeamSearchProfilingStats = {
   configurationSeedPassCount: number;
   configurationSeedPassImprovementCount: number;
   bestConfigurationSeedPassScore: number | null;
+  configurationTrace?: Array<Record<string, unknown>>;
+  // Coarse filters can reduce the requested configuration set; search.ts converts that into
+  // bounded status unless the original requested scope is still proved.
   coarseLockedConfigurationCount: number;
   coarseAutoSelectedConfigurationCount: number;
   coarseAutoSelectedGroupCount: number;
+  // Inclusion pruning is proof-sensitive and only uses optimistic per-card upper bounds.
   inclusionUpperAnalysisCount: number;
   inclusionUpperPrunedCardCount: number;
+  // User-facing bounded-gap fields are derived from these observed upper sources.
   observedUpperBoundSource: MedleyObservedUpperBoundSource | null;
   observedUpperBoundRemainingSlotCount: number | null;
   remainingUpperBoundMax: number | null;
@@ -203,6 +229,8 @@ export type BandoriMedleyTeamSearchProfilingStats = {
   remainingUpperBoundMaxCapacityMode: MedleyCapacityUpperMode | null;
   remainingUpperBoundMaxSlotCount: number | null;
   remainingUpperBoundMaxLimiter: MedleyRemainingUpperBoundLimiter | null;
+  // Remaining-slot capacity upper families. Abort counters mean the model was skipped for
+  // runtime safety, not that the search failed correctness.
   capacityParetoUpperCallCount: number;
   capacityParetoUpperCompletedCount: number;
   capacityParetoUpperAbortCount: number;
@@ -369,6 +397,7 @@ export type BandoriMedleyTeamSearchProfilingStats = {
   capacityAnchorSlotUpperImprovementTotal: number;
   bestCapacityAnchorSlotUpperImprovement: number;
   capacityAnchorSlotUpperElapsedMs: number;
+  // Witnesses explain proof gaps for benchmark review and must not feed pruning decisions.
   upperWitnessCaptureCount: number;
   upperWitnessUpperBound: number | null;
   upperWitnessEvaluatedScore: number | null;
@@ -381,6 +410,7 @@ export type BandoriMedleyTeamSearchProfilingStats = {
   capacityUpperWitnessCrossSlotDuplicateCardCount: number;
   capacityUpperWitnessContextOrProductGap: number | null;
   upperWitness: BandoriMedleyUpperWitness | null;
+  // Exact candidate join counters describe one-configuration proof attempts.
   exactCandidateJoinCallCount: number;
   exactCandidateJoinCompletedCount: number;
   exactCandidateJoinAbortCount: number;
@@ -389,8 +419,38 @@ export type BandoriMedleyTeamSearchProfilingStats = {
   exactCandidateJoinPoppedNodeCount: number;
   exactCandidateJoinPairCount: number;
   exactCandidateJoinThirdQueryCount: number;
+  exactCandidateJoinInitialCandidateElapsedMs: number;
+  exactCandidateJoinInitialCandidateElapsedMsBySlot: number[];
+  exactCandidateJoinPairUpperElapsedMs: number;
+  exactCandidateJoinCandidateFillElapsedMs: number;
+  exactCandidateJoinSolveElapsedMs: number;
+  exactCandidateJoinLeafScoreUpperPrunedCount: number;
+  exactCandidateJoinLeafScoreUpperElapsedMs: number;
+  exactCandidateJoinGlobalHeapRekeyCount: number;
+  exactCandidateJoinGlobalHeapRekeyElapsedMs: number;
+  exactCandidateJoinPairComplementQueryCount: number;
+  exactCandidateJoinPairComplementScanCount: number;
+  exactCandidateJoinPairComplementHighPairBuildCount: number;
+  exactCandidateJoinPairComplementHighPairBuildElapsedMs: number;
+  exactCandidateJoinPairComplementHighPairRecordCount: number;
+  exactCandidateJoinLastBestSlotScores: number[];
+  exactCandidateJoinLastPairUpperByExcludedSlot: Array<number | null>;
+  exactCandidateJoinLastPairUnseenUpperByExcludedSlot: Array<number | null>;
+  exactCandidateJoinLastPairRootUpperBound: number | null;
+  exactCandidateJoinLastCandidateCutoffsBySlot: number[];
+  exactCandidateJoinLastOtherUpperBySlot: number[];
+  exactCandidateJoinLastRelaxedOtherUpperBySlot: number[];
+  exactCandidateJoinLastRemainingOtherUpperBySlot: number[];
+  exactCandidateJoinLastCandidateCountsBySlot: number[];
+  exactCandidateJoinLastCandidateFillElapsedMsBySlot: number[];
+  exactCandidateJoinDebugKnownCardIdsBySlot?: number[][];
+  exactCandidateJoinDebugKnownCandidatePresentBySlot?: boolean[];
+  exactCandidateJoinDebugKnownCandidateScoresBySlot?: Array<number | null>;
+  exactCandidateJoinDebugKnownCandidateCutoffsBySlot?: number[];
+  exactCandidateJoinDebugAnchorSlotIndex?: number;
   exactCandidateJoinImprovementCount: number;
   bestExactCandidateJoinImprovement: number;
+  // Conflict BnB is an alternate exact subsolver for small conflict-heavy scopes.
   conflictExactBnbCallCount: number;
   conflictExactBnbCompletedCount: number;
   conflictExactBnbAbortCount: number;
@@ -415,11 +475,17 @@ export type BandoriMedleyTeamSearchStats = {
   evaluatedTeamCount: number;
   prunedBranchCount: number;
   elapsedMs: number;
+  /** True only when the requested search space was fully proved. */
   isExhaustive: boolean;
+  /** True when `maxSearchDurationMs` stopped the run before proof completion. */
   timedOut: boolean;
+  /** Frontend status label: `exact` is proven globally for the requested scope; `bounded` is best-so-far plus gap. */
   searchMode: "exact" | "bounded";
+  /** Optimistic upper bound for bounded runs; null when no meaningful bound is available. */
   observedScoreUpperBound: number | null;
+  /** Difference between the optimistic upper bound and the displayed result score. Exact runs report 0. */
   observedScoreUpperBoundGap: number | null;
+  /** Verbose diagnostics for benchmark/development views. Do not rely on individual counters in product UI. */
   profiling: BandoriMedleyTeamSearchProfilingStats;
 };
 
@@ -451,6 +517,7 @@ export type MedleyTeamCandidate = {
 
 export type MedleyExactSlotCandidateSearchNode = {
   key: number;
+  slotUpperBound: number;
   selectedCards: SearchCard[];
   startIndex: number;
   usedCharacterMaskLow: number;
@@ -459,9 +526,24 @@ export type MedleyExactSlotCandidateSearchNode = {
   candidate: MedleyTeamCandidate | null;
 };
 
+export type MedleyExactSlotCandidateGlobalPruning = {
+  slots: MedleySlotSearch[];
+  remainingSlotIndices: number[];
+  scoreCutoff: number;
+  candidatesBySlot?: MedleyTeamCandidate[][];
+  pairUnseenUpperBound?: number;
+  useCapacityComplementUpper?: boolean;
+  capacityComplementMargin?: number;
+  excludedCandidateKeys?: Set<string>;
+};
+
 export type MedleyExactSlotCandidateGenerator = {
-  next: () => MedleyTeamCandidate | null;
+  next: (
+    scoreCutoff?: number,
+    globalPruning?: MedleyExactSlotCandidateGlobalPruning,
+  ) => MedleyTeamCandidate | null;
   peekUpperBound: () => number;
+  canReuseForScoreCutoff: (scoreCutoff: number) => boolean;
   hasAborted: () => boolean;
   poppedNodeCount: () => number;
 };

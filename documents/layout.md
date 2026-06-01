@@ -52,7 +52,7 @@ hhwx/
 
 - `auth-*.ts`, `supabase-*.ts`, and `turnstile-*.ts`: authentication, security verification, and server/client wrappers.
 - `bandori-*.ts` and `calendar-*.ts`: compatibility entry points and service logic for Bandori pages and public metadata.
-- `bandori/`: domain-organized Bandori modules. `bandori/team-builder/shared/` contains single/medley team-search calculation helpers, and `bandori/team-builder/single/` contains the single-song exact search orchestration behind the legacy `bandori-team-search.ts` facade.
+- `bandori/`: domain-organized Bandori modules. `bandori/team-builder/core/` contains shared team-search primitives, `bandori/team-builder/single/` contains single-song exact search orchestration, and `bandori/team-builder/medley/` contains medley exact/bounded search orchestration behind the public compatibility facades.
 - `api-*.ts`: API response conventions and cache policies.
 - `bestdori-profile-codec.ts` and `user-game-*-server.ts`: game profile compatibility, sync, and server-side persistence logic.
 - `characters.ts`, `othello.ts`, and `ai/`: home-page Othello and character logic.

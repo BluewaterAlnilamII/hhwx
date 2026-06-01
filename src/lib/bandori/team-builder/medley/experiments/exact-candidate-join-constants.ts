@@ -1,0 +1,17 @@
+/*
+ * Tuning constants for exact candidate-join search.
+ *
+ * Margins, bucket sizes, and shortlist lengths control how much proof work is attempted before
+ * falling back to bounded search. They are not proof assumptions by themselves; exact status
+ * still requires closed frontiers and exact card-disjoint triple search.
+ */
+
+export const MEDLEY_EXACT_CANDIDATE_JOIN_DEEP_PAIR_UNSEEN_MARGIN = 50_000;
+export const MEDLEY_EXACT_CANDIDATE_JOIN_HIGH_BUDGET_DEEP_PAIR_UNSEEN_MARGIN = 200_000;
+export const MEDLEY_EXACT_CANDIDATE_JOIN_CAPACITY_COMPLEMENT_MARGIN = 120_000;
+export const MEDLEY_EXACT_CANDIDATE_JOIN_THIRD_SHORTLIST_SIZE = 64;
+export const MEDLEY_EXACT_CANDIDATE_JOIN_HIGH_PAIR_COARSE_CACHE_BUCKET = 25_000;
+export const MEDLEY_EXACT_CANDIDATE_JOIN_HIGH_PAIR_FINE_CACHE_BUCKET = 2_500;
+export const MEDLEY_EXACT_CANDIDATE_JOIN_HIGH_PAIR_FINE_RECORD_THRESHOLD = 20_000_000;
+export const MEDLEY_EXACT_CANDIDATE_JOIN_HIGH_PAIR_FINE_MIN_RECORD_COUNT = 150_000;
+export const MEDLEY_EXACT_CANDIDATE_JOIN_PARETO_REMAINING_MAX_SLOT_CARDS = 250;

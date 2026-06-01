@@ -6,7 +6,9 @@
  */
 export { searchBandoriBestMedleyTeams } from "./search";
 export type {
+  BandoriMedleyAreaItemCoarseFilter,
   BandoriMedleySongSearchInput,
+  BandoriMedleySearchOptimizationOptions,
   BandoriMedleyTeamSearchInput,
   BandoriMedleyTeamSearchResult,
   BandoriMedleyTeamSearchProfilingStats,
