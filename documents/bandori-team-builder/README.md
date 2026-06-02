@@ -28,7 +28,7 @@ Public compatibility entrypoints remain:
 - `medley-algorithm.zh-CN.md`: Chinese version of the canonical medley algorithm specification.
 - `medley-algorithm-notes.md`: historical medley optimization notes, dated experiment context, proof-gap investigations, and maintenance context that should not be treated as the frontend or algorithm contract.
 - `medley-frontend-contract.md`: stable medley request/response fields, exact/bounded display semantics, and frontend readiness checklist.
-- `medley-real-profile-benchmark-2026-05-31.md`: live `user_game_profiles` sample benchmark for all-configuration medley exact-proof performance, including 60s/120s completion counts and the current per-configuration bottleneck.
+- `medley-real-profile-benchmark-2026-05-31.md`: live `user_game_profiles` sample benchmark for all-configuration medley exact-proof performance, including 60s/120s completion counts, the 2026-06-02 four-event matrix, bounded-case causes, and the current per-configuration bottleneck.
 - `medley-optimization-review-2026-05-22.md`: 30s/120s medley optimization review matrix and conclusion report.
 
 ## Hard-Case Benchmark Wrapper
@@ -50,6 +50,10 @@ hard cases must prove exact within 120s.
 
 Before frontend integration work, run `gate-120` after solver changes and use
 `p05-visual` plus `p01-locked` as shorter spot checks during UI wiring.
+For broader all-scope review, use the ignored local matrix runner rather than
+the wrapper gate. The latest retained 2026-06-02 matrix covers 10 profiles
+across `none`, `323`, `244`, and `260`, and records `36/40` exact with no
+timeouts under 300s.
 
 ## Maintenance Rules
 

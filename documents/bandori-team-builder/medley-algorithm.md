@@ -283,6 +283,13 @@ Failure to generate enough candidates is not a correctness failure; it is a
 proof failure. The configuration then remains bounded and must be completed by
 DFS or reported through the final observed upper-bound gap.
 
+In large all-scope runs, the caller may intentionally skip DFS after an
+unproved exact join when the candidate frontier has already produced a safe
+observed upper bound. This is a runtime policy, not a proof shortcut: the
+configuration remains unclosed, contributes to the final bounded gap, and keeps
+the overall result from reporting exact unless its upper bound is later below
+the incumbent.
+
 ### Bounded DFS
 
 When exact candidate join does not prove a configuration, DFS searches the
@@ -321,6 +328,21 @@ stats.observedScoreUpperBoundGap === 0
 If the run times out, applies auto coarse narrowing, or leaves any requested
 space unproved, the result must be treated as bounded. Bounded results should
 display the best observed score and `observedScoreUpperBoundGap` when available.
+
+The current large all-scope path can produce bounded results without timing out.
+That happens when it records an unresolved configuration upper and then skips
+additional work that cannot recover exact status within the current run. Common
+trace statuses are:
+
+- `exact-unproved-skip-dfs`: exact candidate join aborted or remained unproved,
+  and the all-scope high-card path preserved the observed exact-join upper
+  instead of entering DFS fallback;
+- `bounded-dominated-root-skip`: a previous unresolved configuration already
+  has an upper bound at least as high as the current root upper, so proving the
+  current configuration would not close the global bounded gap;
+- `bounded-near-deadline-root-skip`: a same-coarse proof-time forecast shows
+  that another exact join would likely consume the remaining budget, so the root
+  upper is recorded and the response stays bounded rather than timing out.
 
 Exact in a locked scope is not exact for the full area-item space. It proves
 only the requested locked subspace.
@@ -413,6 +435,21 @@ The current 120s milestone is intentionally conservative:
   120s;
 - known locked band/attribute hard cases must prove exact within 120s.
 
+Current evidence is split into two tiers:
+
+- the tracked wrapper gate keeps the fixed none-event all-mode sample exact
+  within 300s/profile and the known locked/single hard cases exact within 120s;
+- the broader 2026-06-02 event matrix covers 10 real profiles across
+  `none`, `323`, `244`, and `260` with a 300s limit. It completed without
+  timeout and proved `36/40` all-scope cases exact. The median all-scope elapsed
+  time was `51919ms`, P95 was `231981ms`, and max was `295714ms`.
+
+The broader matrix is evidence that most sampled scenarios now finish within a
+reasonable 300s budget, but it is not a guarantee of exact completion for every
+event/profile combination. The four bounded cases were retained because their
+unresolved upper bounds remained close enough to the incumbent that proving or
+eliminating them would require more proof work.
+
 60s is not yet a stable guarantee for all tracked hard cases.
 
 ## Implementation Ownership
@@ -477,6 +514,12 @@ node .\scripts\bandori-medley-hard-case-benchmark.cjs p01-locked
 The latest detailed evidence is recorded in
 `medley-real-profile-benchmark-2026-05-31.md`.
 
+The latest broader event-matrix evidence is
+`temp/bandori-team-builder/real-profile-medley-scope-matrix-2026-06-02T04-06-27-272Z.json`.
+It is review evidence, not a wrapper gate: exact completion was `36/40` with no
+timeouts under the 300s limit, and the four bounded rows are documented in the
+benchmark report.
+
 Passing this gate means:
 
 - the tracked all-mode sample proves exact within the wrapper's 300s profile
@@ -517,8 +560,10 @@ display.
 
 - The 120s gate is satisfied for the fixed hard-case sample set, but 60s is not
   yet guaranteed.
-- Full all-mode proof can take close to three minutes on hard real profiles, so
-  frontend integration needs cancellation and clear status display.
+- Full all-mode proof can take close to the 300s review budget on hard real
+  profiles, so frontend integration needs cancellation and clear status display.
+- Some all-scope event/profile combinations still return bounded within the
+  300s budget when multiple configuration uppers remain close to the incumbent.
 - The largest remaining proof opportunity is cross-parameter sharing inside a
   locked band/attribute scope, or a tighter post-incumbent upper that can prove
   non-winning parameter configurations without full exact candidate join.

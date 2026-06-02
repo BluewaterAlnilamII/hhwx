@@ -467,3 +467,61 @@ After splitting exact candidate-join constants, heap helpers, and candidate-conf
 | P01 `PoppinParty/cool` locked | yes | 110345 | <=120s |
 
 This refactor was intended to reduce maintenance risk before frontend integration. It did not change the exact proof condition, and it reinforces that the current committed gate is 120s, not 60s.
+
+### 2026-06-02 Four-Event All-Scope Matrix
+
+The latest consolidation run used the same fixed 10 real-profile sample and
+songs `385,193,619`, then ran all-scope search for four event contexts:
+`none`, `323`, `244`, and `260`. Duration was `300000ms` per case. Artifact:
+`temp/bandori-team-builder/real-profile-medley-scope-matrix-2026-06-02T04-06-27-272Z.json`.
+
+Summary:
+
+- cases: `40`;
+- exact all-scope cases: `36/40`;
+- timed out cases: `0`;
+- all-scope median elapsed: `51919ms`;
+- all-scope P95 elapsed: `231981ms`;
+- all-scope max elapsed: `295714ms`.
+
+| profile | cards | none | 323 | 244 | 260 |
+| --- | ---: | --- | --- | --- | --- |
+| P01 | 1161 | 38.1s exact | 64.0s exact | 68.2s exact | 26.9s exact |
+| P02 | 1747 | 37.7s exact | 22.4s exact | 55.0s exact | 122.5s bounded |
+| P03 | 1211 | 73.6s exact | 68.9s exact | 92.4s exact | 74.8s exact |
+| P04 | 1229 | 58.2s exact | 38.9s exact | 232.0s exact | 272.4s bounded |
+| P05 | 1036 | 21.1s exact | 32.7s exact | 21.9s exact | 21.2s exact |
+| P06 | 1433 | 38.1s exact | 50.2s exact | 85.6s exact | 55.5s exact |
+| P07 | 1703 | 85.8s exact | 51.9s exact | 31.0s exact | 36.1s exact |
+| P08 | 1513 | 104.1s exact | 31.4s bounded | 97.5s exact | 295.7s exact |
+| P09 | 962 | 18.5s exact | 19.4s exact | 21.5s exact | 19.8s exact |
+| P10 | 1127 | 117.6s exact | 143.3s exact | 39.3s bounded | 145.4s exact |
+
+Bounded rows were not timeouts. They are retained bounded statuses because the
+search preserved unresolved configuration upper bounds instead of spending the
+remaining budget on work that could not prove the whole all-scope request in
+that run.
+
+| case | elapsed ms | score | upper | gap | primary cause |
+| --- | ---: | ---: | ---: | ---: | --- |
+| P02 / event `260` | 122524 | 9376984 | 9761094 | 384110 | Three `Everyone/happy/*` exact-join attempts aborted at the high-card candidate limit, then 15 later configurations were `bounded-dominated-root-skip`. |
+| P04 / event `260` | 272368 | 8432514 | 8596906 | 164392 | Sixteen configurations were proved exact, then `Everyone/happy/performance` was `bounded-near-deadline-root-skip` with about `41804ms` remaining versus a same-coarse proof forecast of about `54511ms` plus reserve. |
+| P08 / event `323` | 31450 | 9249509 | 9681466 | 431957 | `PastelPalettes/cool/technique` exact join remained unproved, then two later configurations were dominated by the unresolved upper. |
+| P10 / event `244` | 39265 | 8729634 | 9284161 | 554527 | `HelloHappyWorld/happy/technique` exact join remained unproved, then eight later configurations were dominated by the unresolved upper. |
+
+The P08/event `260` case is the main retained success risk: it completed exact
+at `295714ms`, close to the 300s review budget. The retained improvement was to
+apply observed-root sorting to all all-scope exact-candidate-join runs,
+including card pools above 1500 cards. Without that ordering, this case had
+previously missed exact proof near the deadline.
+
+Current interpretation:
+
+1. Most sampled all-scope event/profile cases now finish exact within a
+   reasonable 300s budget.
+2. The remaining bounded cases are proof-frontier cases, not score-formula or
+   timeout failures.
+3. The next proof optimization should target unresolved configuration uppers in
+   high-card all-scope runs, especially when exact join hits the `400000`
+   candidate cap or when several nearby root uppers survive after a strong
+   incumbent.

@@ -26,6 +26,7 @@ import {
   MEDLEY_EXACT_CANDIDATE_JOIN_HIGH_PAIR_FINE_CACHE_BUCKET,
   MEDLEY_EXACT_CANDIDATE_JOIN_HIGH_PAIR_FINE_MIN_RECORD_COUNT,
   MEDLEY_EXACT_CANDIDATE_JOIN_HIGH_PAIR_FINE_RECORD_THRESHOLD,
+  MEDLEY_EXACT_CANDIDATE_JOIN_MIDDLE_FIRST_THIRD_SHORTLIST_SIZE,
   MEDLEY_EXACT_CANDIDATE_JOIN_PARETO_REMAINING_MAX_SLOT_CARDS,
   MEDLEY_EXACT_CANDIDATE_JOIN_THIRD_SHORTLIST_SIZE,
 } from "./exact-candidate-join-constants";
@@ -1175,7 +1176,7 @@ export function solveMedleyExactCandidateJoin(
   }
   type ThirdCandidateShortlist = { candidateIndices: Uint32Array; count: number; exhaustive: boolean };
 
-  const slotOrder = slots
+  const candidateCountSlotOrder = slots
     .map((_, index) => index)
     .sort((left, right) => (
       candidatesBySlot[left].length - candidatesBySlot[right].length
@@ -1183,6 +1184,24 @@ export function solveMedleyExactCandidateJoin(
         - (candidatesBySlot[left][0]?.result.score ?? Number.NEGATIVE_INFINITY)
       || left - right
   ));
+  const smallestCandidateCount = candidatesBySlot[candidateCountSlotOrder[0]]?.length ?? 0;
+  const middleCandidateCount = candidatesBySlot[candidateCountSlotOrder[1]]?.length ?? 0;
+  const largestCandidateCount = candidatesBySlot[candidateCountSlotOrder[2]]?.length ?? 0;
+  // Extremely imbalanced lists can spend too much time joining the smallest
+  // list first because the second-list frontier stays wide. Trying the middle
+  // list first is still exact; it only changes enumeration order and the
+  // bounded shortlist used for third-slot acceleration.
+  const shouldUseMiddleFirstJoinOrder = (
+    smallestCandidateCount >= 5_000
+    && middleCandidateCount >= smallestCandidateCount * 2
+    && largestCandidateCount >= middleCandidateCount * 2
+  );
+  const slotOrder = shouldUseMiddleFirstJoinOrder
+    ? [candidateCountSlotOrder[1], candidateCountSlotOrder[0], candidateCountSlotOrder[2]]
+    : candidateCountSlotOrder;
+  const thirdShortlistSize = shouldUseMiddleFirstJoinOrder
+    ? MEDLEY_EXACT_CANDIDATE_JOIN_MIDDLE_FIRST_THIRD_SHORTLIST_SIZE
+    : MEDLEY_EXACT_CANDIDATE_JOIN_THIRD_SHORTLIST_SIZE;
   const firstSlotIndex = slotOrder[0];
   const secondSlotIndex = slotOrder[1];
   const thirdSlotIndex = slotOrder[2];
@@ -1268,7 +1287,7 @@ export function solveMedleyExactCandidateJoin(
     return null;
   };
   const buildThirdShortlistForCandidate = (candidate: MedleyTeamCandidate): ThirdCandidateShortlist => {
-    const candidateIndices = new Uint32Array(MEDLEY_EXACT_CANDIDATE_JOIN_THIRD_SHORTLIST_SIZE);
+    const candidateIndices = new Uint32Array(thirdShortlistSize);
     let candidateIndexCount = 0;
     let exhaustive = true;
     const forbiddenThirdCandidateBits = getForbiddenThirdCandidateBits(candidate);
@@ -1292,7 +1311,7 @@ export function solveMedleyExactCandidateJoin(
         }
         candidateIndices[candidateIndexCount] = thirdCandidateIndex;
         candidateIndexCount += 1;
-        if (candidateIndexCount >= MEDLEY_EXACT_CANDIDATE_JOIN_THIRD_SHORTLIST_SIZE) {
+        if (candidateIndexCount >= thirdShortlistSize) {
           exhaustive = false;
           break;
         }
@@ -1863,6 +1882,44 @@ export function searchMedleyConfigurationByExactCandidateJoin(
   ));
   const candidatesBySlot: MedleyTeamCandidate[][] = Array.from({ length: slots.length }, () => []);
   const bestSlotScores: number[] = [];
+  const exactPairUpperByExcludedSlot: Array<number | null> = Array.from({ length: slots.length }, () => null);
+  const exactPairUnseenUpperByExcludedSlot: Array<number | null> = Array.from({ length: slots.length }, () => null);
+  const getObservedExactCandidateJoinUpperBound = (): number | null => {
+    // An aborted exact join may still have pair-level proof information. Return
+    // the tightest safe triple upper we observed so the caller can report a
+    // bounded gap instead of discarding useful proof progress.
+    let observedUpperBound = Number.POSITIVE_INFINITY;
+    for (let slotIndex = 0; slotIndex < slots.length; slotIndex += 1) {
+      const pairUpperBound = exactPairUpperByExcludedSlot[slotIndex];
+      const slotBestScore = bestSlotScores[slotIndex];
+      if (pairUpperBound !== null && Number.isFinite(pairUpperBound) && Number.isFinite(slotBestScore)) {
+        observedUpperBound = Math.min(observedUpperBound, pairUpperBound + slotBestScore);
+      }
+    }
+    let pairUpperBoundSum = 0;
+    let hasAllPairUpperBounds = true;
+    for (const pairUpperBound of exactPairUpperByExcludedSlot) {
+      if (pairUpperBound === null || !Number.isFinite(pairUpperBound)) {
+        hasAllPairUpperBounds = false;
+        break;
+      }
+      pairUpperBoundSum += pairUpperBound;
+    }
+    if (hasAllPairUpperBounds) {
+      observedUpperBound = Math.min(
+        observedUpperBound,
+        pairUpperBoundSum / 2,
+      );
+    }
+    return Number.isFinite(observedUpperBound) ? observedUpperBound : null;
+  };
+  const buildUnprovedExactCandidateJoinResult = (
+    result: BandoriMedleyTeamSearchResult | null = null,
+  ): MedleyExactCandidateJoinResult => ({
+    proved: false,
+    result,
+    observedUpperBound: getObservedExactCandidateJoinUpperBound(),
+  });
 
   const initialCandidateStartedAt = performance.now();
   for (let slotIndex = 0; slotIndex < slots.length; slotIndex += 1) {
@@ -1885,8 +1942,6 @@ export function searchMedleyConfigurationByExactCandidateJoin(
   profiling.exactCandidateJoinLastBestSlotScores = [...bestSlotScores];
   profiling.exactCandidateJoinInitialCandidateElapsedMs += performance.now() - initialCandidateStartedAt;
 
-  const exactPairUpperByExcludedSlot: Array<number | null> = Array.from({ length: slots.length }, () => null);
-  const exactPairUnseenUpperByExcludedSlot: Array<number | null> = Array.from({ length: slots.length }, () => null);
   const pairUpperStartedAt = performance.now();
   const shouldUseRootPruneOnlyPairProbe = candidateSoftLimit > 20_000;
   for (let excludedSlotIndex = 0; excludedSlotIndex < slots.length; excludedSlotIndex += 1) {
@@ -1918,7 +1973,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
       profiling.exactCandidateJoinPoppedNodeCount += generators.reduce((sum, currentGenerator) => (
         sum + currentGenerator.poppedNodeCount()
       ), 0);
-      return { proved: false, result: null };
+      return buildUnprovedExactCandidateJoinResult();
     }
     if (pairUpperResult.proved) {
       exactPairUpperByExcludedSlot[excludedSlotIndex] = pairUpperResult.upperBound;
@@ -1997,7 +2052,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
         profiling.exactCandidateJoinPoppedNodeCount += generators.reduce((sum, currentGenerator) => (
           sum + currentGenerator.poppedNodeCount()
         ), 0);
-        return { proved: false, result: null };
+        return buildUnprovedExactCandidateJoinResult();
       }
       if (deepPairUpperResult.proved) {
         exactPairUpperByExcludedSlot[deepPairExcludedSlotIndex] = deepPairUpperResult.upperBound;
@@ -2032,7 +2087,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
       profiling.exactCandidateJoinPoppedNodeCount += generators.reduce((sum, currentGenerator) => (
         sum + currentGenerator.poppedNodeCount()
       ), 0);
-      return { proved: false, result: null };
+      return buildUnprovedExactCandidateJoinResult();
     }
     if (highBudgetDeepPairUpperResult.proved) {
       exactPairUpperByExcludedSlot[0] = highBudgetDeepPairUpperResult.upperBound;
@@ -2099,7 +2154,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
       profiling.exactCandidateJoinPoppedNodeCount += generators.reduce((sum, generator) => (
         sum + generator.poppedNodeCount()
       ), 0);
-      return { proved: false, result: anchoredJoinResult.result };
+      return buildUnprovedExactCandidateJoinResult(anchoredJoinResult.result);
     }
     if (anchoredJoinResult.proved) {
       profiling.exactCandidateJoinLastCandidateCountsBySlot = candidatesBySlot.map((candidates) => candidates.length);
@@ -2204,7 +2259,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
       profiling.exactCandidateJoinPoppedNodeCount += getCandidateFillProfilingGenerators().reduce((sum, currentGenerator) => (
         sum + currentGenerator.poppedNodeCount()
       ), 0);
-      return { proved: false, result: null };
+      return buildUnprovedExactCandidateJoinResult();
     }
     const relaxedOtherUpper = bestSlotScores.reduce((sum, score, index) => (
       index === slotIndex ? sum : sum + score
@@ -2265,7 +2320,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
         profiling.exactCandidateJoinPoppedNodeCount += getCandidateFillProfilingGenerators().reduce((sum, currentGenerator) => (
           sum + currentGenerator.poppedNodeCount()
         ), 0);
-        return { proved: false, result: null };
+        return buildUnprovedExactCandidateJoinResult();
       }
       if (candidatesBySlot[slotIndex].length >= candidateSoftLimit) {
         profiling.exactCandidateJoinCandidateFillElapsedMs += performance.now() - candidateFillStartedAt;
@@ -2284,7 +2339,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
         profiling.exactCandidateJoinPoppedNodeCount += getCandidateFillProfilingGenerators().reduce((sum, currentGenerator) => (
           sum + currentGenerator.poppedNodeCount()
         ), 0);
-        return { proved: false, result: null };
+        return buildUnprovedExactCandidateJoinResult();
       }
 
       const globalPruning = {
@@ -2315,7 +2370,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
         profiling.exactCandidateJoinPoppedNodeCount += generators.reduce((sum, currentGenerator) => (
           sum + currentGenerator.poppedNodeCount()
         ), 0);
-        return { proved: false, result: null };
+        return buildUnprovedExactCandidateJoinResult();
       }
       if (!candidate) {
         break;
@@ -2375,7 +2430,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
   profiling.exactCandidateJoinSolveElapsedMs += performance.now() - solveStartedAt;
   if (joinResult.timedOut) {
     profiling.exactCandidateJoinAbortCount += 1;
-    return { proved: false, result: joinResult.result };
+    return buildUnprovedExactCandidateJoinResult(joinResult.result);
   }
   const result = joinResult.result;
   if (result && result.score > incumbentScore) {

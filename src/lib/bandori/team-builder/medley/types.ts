@@ -63,6 +63,7 @@ export type BandoriMedleySearchOptimizationOptions = {
   enableConflictExactBnb?: boolean;
   conflictExactNodeLimit?: number;
   conflictSlotSolveNodeLimit?: number;
+  configurationSeedPassDurationMs?: number;
   debugConfigurationTrace?: boolean;
   exactCandidateJoinDebugAnchorSlotIndex?: number;
 };
@@ -105,6 +106,7 @@ export type BandoriMedleyTeamSearchResult = {
 export type MedleyObservedUpperBoundSource =
   | "configuration-root"
   | "dfs-remaining"
+  | "exact-candidate-join"
   | "last-slot-completion"
   | "slot-branch";
 
@@ -551,6 +553,7 @@ export type MedleyExactSlotCandidateGenerator = {
 export type MedleyExactCandidateJoinResult = {
   proved: boolean;
   result: BandoriMedleyTeamSearchResult | null;
+  observedUpperBound?: number | null;
 };
 
 export type MedleyExactCandidateJoinSolveResult = {
