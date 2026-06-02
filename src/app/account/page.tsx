@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { getUsernameAvatarLabel } from "@/lib/username-policy";
 import AccountShell, { AccountErrorState, AccountLoadingState, AccountSignInState } from "./AccountShell";
+import AccountAvatarCardControl from "./AccountAvatarCardControl";
 import { useAccountProfile } from "./useAccountProfile";
 
 type AccountEntry = {
@@ -52,7 +52,7 @@ function AccountEntryLink({ href, title, description }: AccountEntry) {
 }
 
 export default function AccountPage() {
-  const { userId, userEmail, authReady, profile, loadingProfile, profileError } = useAccountProfile();
+  const { userId, userEmail, authReady, profile, setProfile, loadingProfile, profileError } = useAccountProfile();
 
   return (
     <AccountShell
@@ -71,9 +71,7 @@ export default function AccountPage() {
         <div className="space-y-4 sm:space-y-6">
           <section className="rounded-2xl bg-[#006699] p-4 text-white shadow-lg sm:rounded-3xl sm:p-6">
             <div className="flex flex-wrap items-center gap-3 sm:gap-4">
-              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-sky-400 to-indigo-500 text-lg font-bold sm:h-14 sm:w-14 sm:text-xl">
-                {getUsernameAvatarLabel(profile.username)}
-              </div>
+              <AccountAvatarCardControl profile={profile} onProfileChange={setProfile} />
               <div className="min-w-0 flex-1">
                 <div className="break-words text-xl font-bold sm:text-2xl">{profile.username}</div>
                 <div className="mt-1 break-all text-sm text-slate-300">{profile.email || userEmail || "-"}</div>

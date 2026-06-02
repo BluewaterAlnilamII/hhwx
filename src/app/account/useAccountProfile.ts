@@ -11,6 +11,8 @@ export type AccountProfile = {
   email: string | null;
   emailVerified: boolean;
   username: string;
+  avatarCardId: number;
+  avatarCardTrainType: "normal" | "after_training";
   createdAt: string | null;
   updatedAt: string | null;
   roles: string[];

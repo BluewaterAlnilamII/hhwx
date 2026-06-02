@@ -1,4 +1,12 @@
 import { ApiRouteError } from "@/lib/api-contracts";
+import {
+  DEFAULT_ACCOUNT_AVATAR_CARD_ID,
+  DEFAULT_ACCOUNT_AVATAR_CARD_TRAIN_TYPE,
+  type AccountAvatarCardTrainType,
+} from "@/lib/account-avatar-defaults";
+import { type BandoriAssetRegion } from "@/lib/bandori-asset-proxy";
+import { fetchBestdoriMasterDataset } from "@/lib/bestdori-master-data";
+import { pickBestdoriCnThenJpRegionalName } from "@/lib/bestdori-regional-names";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
 
 export const COMMENTS_TABLE = "comments";
@@ -9,6 +17,16 @@ export const MAX_COMMENT_LENGTH = 500;
 
 export type CommentProfile = {
   username: string | null;
+  avatar_card_id: number | null;
+  avatar_card_train_type: AccountAvatarCardTrainType | null;
+};
+
+export type CommentAvatar = {
+  cardId: number;
+  trainType: AccountAvatarCardTrainType;
+  resourceSetName: string | null;
+  assetRegion: BandoriAssetRegion;
+  displayName: string | null;
 };
 
 export type CommentRow = {
@@ -37,6 +55,7 @@ export type CommentNode = {
   rootId: string | null;
   userId: string;
   username: string | null;
+  avatar: CommentAvatar;
   content: string | null;
   depth: number;
   replyCount: number;
@@ -77,8 +96,24 @@ const COMMENT_SELECT = [
   "edited_at",
   "deleted_at",
   "moderation_status",
-  "profiles:profiles!user_id(username)",
+  "profiles:profiles!user_id(username, avatar_card_id, avatar_card_train_type)",
 ].join(", ");
+
+type BestdoriCardMetadata = {
+  prefix?: Array<string | null>;
+  releasedAt?: Array<string | number | null>;
+  resourceSetName?: string;
+  stat?: {
+    training?: unknown;
+  } & Record<string, unknown>;
+};
+
+type CommentAvatarCardMetadata = {
+  resourceSetName: string;
+  assetRegion: BandoriAssetRegion;
+  displayName: string | null;
+  hasTrainedArt: boolean;
+};
 
 function parseCursor(cursor: string | null | undefined): { createdAt: string; id: string } | null {
   if (!cursor) return null;
@@ -89,6 +124,81 @@ function parseCursor(cursor: string | null | undefined): { createdAt: string; id
   }
 
   return { createdAt: date.toISOString(), id };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function readRegionalTimestampAt(values: BestdoriCardMetadata["releasedAt"], index: number): number {
+  if (!Array.isArray(values)) {
+    return 0;
+  }
+
+  const parsed = Number(values[index]);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+}
+
+function normalizeCommentAvatarCardId(profile: CommentProfile | null): number {
+  const cardId = Number(profile?.avatar_card_id);
+  return Number.isInteger(cardId) && cardId > 0 ? cardId : DEFAULT_ACCOUNT_AVATAR_CARD_ID;
+}
+
+function normalizeCommentAvatarTrainType(profile: CommentProfile | null): AccountAvatarCardTrainType {
+  return profile?.avatar_card_train_type === "after_training" ? "after_training" : DEFAULT_ACCOUNT_AVATAR_CARD_TRAIN_TYPE;
+}
+
+function buildCommentAvatar(
+  profile: CommentProfile | null,
+  avatarCards: ReadonlyMap<number, CommentAvatarCardMetadata>,
+): CommentAvatar {
+  const cardId = normalizeCommentAvatarCardId(profile);
+  const card = avatarCards.get(cardId);
+  const requestedTrainType = normalizeCommentAvatarTrainType(profile);
+  const trainType = card?.hasTrainedArt ? requestedTrainType : DEFAULT_ACCOUNT_AVATAR_CARD_TRAIN_TYPE;
+
+  return {
+    cardId,
+    trainType,
+    resourceSetName: card?.resourceSetName ?? null,
+    assetRegion: card?.assetRegion ?? "cn",
+    displayName: card?.displayName ?? null,
+  };
+}
+
+async function readCommentAvatarCards(rows: CommentRow[]): Promise<Map<number, CommentAvatarCardMetadata>> {
+  const cardIds = Array.from(new Set(rows.map((row) => normalizeCommentAvatarCardId(row.profiles))));
+  if (cardIds.length === 0) {
+    return new Map();
+  }
+
+  try {
+    const payload = await fetchBestdoriMasterDataset("cards");
+    if (!isRecord(payload)) {
+      return new Map();
+    }
+
+    const result = new Map<number, CommentAvatarCardMetadata>();
+    for (const cardId of cardIds) {
+      const card = payload[String(cardId)] as BestdoriCardMetadata | null | undefined;
+      const resourceSetName = card?.resourceSetName?.trim();
+      if (!resourceSetName) {
+        continue;
+      }
+
+      const displayName = pickBestdoriCnThenJpRegionalName(card?.prefix);
+      result.set(cardId, {
+        resourceSetName,
+        assetRegion: displayName?.assetRegion ?? (readRegionalTimestampAt(card?.releasedAt, 3) > 0 ? "cn" : "jp"),
+        displayName: displayName?.name ?? null,
+        hasTrainedArt: isRecord(card?.stat) && isRecord(card.stat.training),
+      });
+    }
+
+    return result;
+  } catch {
+    return new Map();
+  }
 }
 
 export function parseCommentContent(value: unknown): string {
@@ -112,6 +222,7 @@ function toCommentNode(
   row: CommentRow,
   viewerUserId?: string | null,
   replyToUsernames?: Map<string, string | null>,
+  avatarCards: ReadonlyMap<number, CommentAvatarCardMetadata> = new Map(),
 ): CommentNode {
   const isOwner = Boolean(viewerUserId && viewerUserId === row.user_id);
   const isDeleted = Boolean(row.deleted_at);
@@ -125,6 +236,7 @@ function toCommentNode(
     rootId: row.root_id,
     userId: row.user_id,
     username: row.profiles?.username ?? null,
+    avatar: buildCommentAvatar(row.profiles, avatarCards),
     content: row.content,
     depth: row.depth,
     replyCount: row.reply_count,
@@ -169,8 +281,11 @@ async function readReplyToUsernames(rows: CommentRow[]): Promise<Map<string, str
 }
 
 async function toCommentNodes(rows: CommentRow[], viewerUserId?: string | null): Promise<CommentNode[]> {
-  const replyToUsernames = await readReplyToUsernames(rows);
-  return rows.map((row) => toCommentNode(row, viewerUserId, replyToUsernames));
+  const [replyToUsernames, avatarCards] = await Promise.all([
+    readReplyToUsernames(rows),
+    readCommentAvatarCards(rows),
+  ]);
+  return rows.map((row) => toCommentNode(row, viewerUserId, replyToUsernames, avatarCards));
 }
 
 async function fetchEarliestThreadReplies(

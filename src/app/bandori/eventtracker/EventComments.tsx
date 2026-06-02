@@ -4,12 +4,22 @@ import type { CSSProperties, MouseEvent, ReactNode } from "react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import { Check, ChevronFirst, ChevronLast, ChevronLeft, ChevronRight, Edit3, Link2, MessageSquare, MoreHorizontal, Reply, Smile, Trash2, X } from "lucide-react";
+import AccountCardAvatar from "@/components/account/AccountCardAvatar";
+import { type AccountAvatarCardTrainType } from "@/lib/account-avatar-defaults";
 import { getApiErrorMessage, parseApiSuccessData } from "@/lib/api-contracts";
+import { type BandoriAssetRegion } from "@/lib/bandori-asset-proxy";
 import { COMMENT_EMOJI_NAMES, getCommentEmojiSrc } from "@/lib/comment-emojis";
 import { getSafeSession } from "@/lib/supabase";
-import { getUsernameAvatarLabel } from "@/lib/username-policy";
 import { cn } from "@/lib/utils";
 import { useGameStore } from "@/store/useGameStore";
+
+type CommentAvatar = {
+  cardId: number;
+  trainType: AccountAvatarCardTrainType;
+  resourceSetName: string | null;
+  assetRegion: BandoriAssetRegion;
+  displayName: string | null;
+};
 
 type CommentNode = {
   id: string;
@@ -17,6 +27,7 @@ type CommentNode = {
   rootId: string | null;
   userId: string;
   username: string | null;
+  avatar: CommentAvatar;
   content: string | null;
   depth: number;
   replyCount: number;
@@ -553,9 +564,16 @@ function CommentItem({
       )}
     >
       <div className="flex items-start gap-3">
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-sky-500 text-xs font-black text-white shadow-sm ring-1 ring-sky-200">
-          {getUsernameAvatarLabel(comment.username, "?")}
-        </div>
+        <AccountCardAvatar
+          username={comment.username}
+          cardId={comment.avatar.cardId}
+          trainType={comment.avatar.trainType}
+          resourceSetName={comment.avatar.resourceSetName}
+          assetRegion={comment.avatar.assetRegion}
+          displayName={comment.avatar.displayName}
+          size="comment"
+          className="ring-1 ring-sky-200 dark:ring-slate-700"
+        />
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
             <span className="truncate text-sm font-semibold text-slate-800 dark:text-slate-100">

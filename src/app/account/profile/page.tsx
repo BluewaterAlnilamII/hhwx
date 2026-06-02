@@ -11,10 +11,10 @@ import {
   PUBLIC_USERNAME_LABEL,
   PUBLIC_USERNAME_PLACEHOLDER,
   USERNAME_REQUIRED_MESSAGE,
-  getUsernameAvatarLabel,
   normalizeUsernameValue,
   validateUsernameValue,
 } from "@/lib/username-policy";
+import AccountAvatarCardControl from "../AccountAvatarCardControl";
 
 export default function AccountProfilePage() {
   const {
@@ -116,9 +116,7 @@ export default function AccountProfilePage() {
         <div className="space-y-6">
           <div className="rounded-3xl border border-slate-200 bg-[#006699] p-6 text-white shadow-lg">
             <div className="flex flex-wrap items-center gap-4">
-              <div className="flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-sky-400 to-indigo-500 text-xl font-bold">
-                {getUsernameAvatarLabel(profile.username)}
-              </div>
+              <AccountAvatarCardControl profile={profile} onProfileChange={setProfile} />
               <div>
                 <div className="text-2xl font-bold">{profile.username}</div>
                 <div className="mt-1 text-sm text-slate-300">{profile.email || userEmail || "-"}</div>

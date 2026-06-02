@@ -1,6 +1,7 @@
 import { LIVE_API_CACHE_CONTROL, PUBLIC_METADATA_API_CACHE_CONTROL, withCacheControl } from "@/lib/api-cache";
 import { jsonError, jsonRouteError, jsonSuccess } from "@/lib/api-response";
-import { pickBestdoriCnThenJpName } from "@/lib/bestdori-regional-names";
+import { pickBestdoriCnThenJpRegionalName } from "@/lib/bestdori-regional-names";
+import { type BandoriAssetRegion } from "@/lib/bandori-asset-proxy";
 
 const BESTDORI_CARDS_URL = "https://bestdori.com/api/cards/all.5.json";
 
@@ -20,6 +21,21 @@ type BestdoriCardMetadata = {
   } & Record<string, unknown>;
 };
 
+type BestdoriCardMetadataResponse = BestdoriCardMetadata & {
+  displayName: string | null;
+  assetRegion: BandoriAssetRegion;
+  hasTrainedArt: boolean;
+};
+
+function hasCnRelease(values: BestdoriCardMetadata["releasedAt"]): boolean {
+  if (!Array.isArray(values)) {
+    return false;
+  }
+
+  const parsed = Number(values[3]);
+  return Number.isFinite(parsed) && parsed > 0;
+}
+
 function parseRequestedCardIds(request: Request): number[] {
   const { searchParams } = new URL(request.url);
   const rawIds = searchParams.get("ids");
@@ -36,6 +52,10 @@ function parseRequestedCardIds(request: Request): number[] {
         .filter((cardId) => Number.isFinite(cardId) && cardId > 0),
     ),
   );
+}
+
+function hasTrainedCardArt(card: BestdoriCardMetadata | null | undefined): boolean {
+  return typeof card?.stat?.training === "object" && card.stat.training !== null;
 }
 
 export async function GET(request: Request) {
@@ -61,14 +81,17 @@ export async function GET(request: Request) {
     }
 
     const payload = await response.json() as Record<string, BestdoriCardMetadata>;
-    const cards: Record<string, BestdoriCardMetadata & { displayName: string | null }> = {};
+    const cards: Record<string, BestdoriCardMetadataResponse> = {};
 
     for (const cardId of cardIds) {
       const card = payload[String(cardId)];
       if (card) {
+        const displayName = pickBestdoriCnThenJpRegionalName(card.prefix);
         cards[String(cardId)] = {
           ...card,
-          displayName: pickBestdoriCnThenJpName(card.prefix),
+          displayName: displayName?.name ?? null,
+          assetRegion: displayName?.assetRegion ?? (hasCnRelease(card.releasedAt) ? "cn" : "jp"),
+          hasTrainedArt: hasTrainedCardArt(card),
         };
       }
     }

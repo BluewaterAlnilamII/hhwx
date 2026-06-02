@@ -1,8 +1,19 @@
+import { type BandoriAssetRegion } from "@/lib/bandori-asset-proxy";
+
 const BESTDORI_CN_THEN_JP_NAME_PREFERENCE_ORDER = [3, 0, 2, 1, 4] as const;
 
-export function pickBestdoriCnThenJpName(
+export type BestdoriRegionalName = {
+  name: string;
+  assetRegion: BandoriAssetRegion;
+};
+
+function getBestdoriAssetRegionForNameIndex(index: number): BandoriAssetRegion {
+  return index === 3 ? "cn" : "jp";
+}
+
+export function pickBestdoriCnThenJpRegionalName(
   names: readonly (string | null | undefined)[] | null | undefined,
-): string | null {
+): BestdoriRegionalName | null {
   if (!Array.isArray(names)) {
     return null;
   }
@@ -12,7 +23,10 @@ export function pickBestdoriCnThenJpName(
     visitedIndexes.add(index);
     const name = names[index]?.trim();
     if (name) {
-      return name;
+      return {
+        name,
+        assetRegion: getBestdoriAssetRegionForNameIndex(index),
+      };
     }
   }
 
@@ -22,9 +36,18 @@ export function pickBestdoriCnThenJpName(
     }
     const name = names[index]?.trim();
     if (name) {
-      return name;
+      return {
+        name,
+        assetRegion: getBestdoriAssetRegionForNameIndex(index),
+      };
     }
   }
 
   return null;
+}
+
+export function pickBestdoriCnThenJpName(
+  names: readonly (string | null | undefined)[] | null | undefined,
+): string | null {
+  return pickBestdoriCnThenJpRegionalName(names)?.name ?? null;
 }
