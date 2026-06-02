@@ -258,6 +258,7 @@ export function generateYTicks(data: TrackerData[]): { ticks: number[] | undefin
     if (d.ep !== undefined && Number.isFinite(d.ep) && d.ep > maxEp) maxEp = d.ep;
     if (d.instantEp !== undefined && d.instantEp > maxEp) maxEp = d.instantEp;
     if (d.dayEp !== undefined && d.dayEp > maxEp) maxEp = d.dayEp;
+    if (d.bestdoriPredictionEp !== undefined && d.bestdoriPredictionEp > maxEp) maxEp = d.bestdoriPredictionEp;
     for (const point of Object.values(d.comparisonPoints ?? {})) {
       if (point.ep > maxEp) maxEp = point.ep;
     }

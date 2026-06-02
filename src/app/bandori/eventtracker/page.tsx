@@ -26,6 +26,9 @@ import { resolveBandoriEventAssetRegion } from "@/lib/bandori-event-region";
 import type { ComparisonConfig, ComparisonLine, ComparisonLinePoint, TrackerData, TrackerDotProps, TrackerMouseState, TrackerTooltipPayloadEntry, TrackingMode } from "./types";
 import {
   COMPARISON_LINE_COLORS,
+  BESTDORI_PREDICTION_COLOR,
+  BESTDORI_PREDICTION_DATA_KEY,
+  BESTDORI_PREDICTION_STORAGE_KEY,
   EVENT_TIERS,
   INSTANT_PROJECTION_STORAGE_KEY,
   DAY_PROJECTION_STORAGE_KEY,
@@ -47,6 +50,7 @@ import FixedYAxis from "./FixedYAxis";
 import { useProjectionPreference } from "./useProjectionPreference";
 import { useComparisonPreferences } from "./useComparisonPreferences";
 import { mergeComparisonLines, useComparisonTrackerData } from "./useComparisonTrackerData";
+import { mergeBestdoriPredictionData, useBestdoriPrediction } from "./useBestdoriPrediction";
 import BandoriPageShell from "../BandoriPageShell";
 import BandoriEventSwitcher from "../BandoriEventSwitcher";
 import EventComments from "./EventComments";
@@ -472,6 +476,7 @@ export default function EventTrackerPage() {
   // ===== 投影偏好持久化 =====
   const [showInstantProjection, setShowInstantProjection] = useProjectionPreference(INSTANT_PROJECTION_STORAGE_KEY, true);
   const [showDayProjection, setShowDayProjection] = useProjectionPreference(DAY_PROJECTION_STORAGE_KEY, true);
+  const [showBestdoriPrediction, setShowBestdoriPrediction] = useProjectionPreference(BESTDORI_PREDICTION_STORAGE_KEY, false);
   const {
     comparisonConfigs,
     setComparisonConfigs,
@@ -650,6 +655,11 @@ export default function EventTrackerPage() {
   const fullProcessedData = useProcessedData(chartData, apiHasResult, domainStart, trackingMode);
   const status = useEventStatus(domainStart, domainEnd);
   const finalDisplayedData = useFinalDisplayedData(fullProcessedData, cutoffEnd, status, showInstantProjection, showDayProjection);
+  const bestdoriPrediction = useBestdoriPrediction({
+    enabled: trackingMode === "event" && status === "进行中" && showBestdoriPrediction,
+    eventId: resolvedCurrentEventId,
+    tier: selectedTier,
+  });
   const { comparisonLines } = useComparisonTrackerData({
     enabled: trackingMode === "event",
     configs: activeComparisonConfigs,
@@ -662,13 +672,17 @@ export default function EventTrackerPage() {
     () => new Map(comparisonLines.map((line) => [line.config.id, line])),
     [comparisonLines],
   );
+  const bestdoriDisplayedData = useMemo(
+    () => mergeBestdoriPredictionData(finalDisplayedData, bestdoriPrediction.predictionPoints),
+    [bestdoriPrediction.predictionPoints, finalDisplayedData],
+  );
   const displayedChartData = useMemo(
-    () => mergeComparisonLines(finalDisplayedData, comparisonLines),
-    [comparisonLines, finalDisplayedData],
+    () => mergeComparisonLines(bestdoriDisplayedData, comparisonLines),
+    [bestdoriDisplayedData, comparisonLines],
   );
   const mainTooltipPointIndex = useMemo(
-    () => buildMainTooltipPointIndex(finalDisplayedData),
-    [finalDisplayedData],
+    () => buildMainTooltipPointIndex(bestdoriDisplayedData),
+    [bestdoriDisplayedData],
   );
   const comparisonTooltipPointIndex = useMemo(
     () => buildComparisonTooltipPointIndex(comparisonLines),
@@ -702,7 +716,8 @@ export default function EventTrackerPage() {
           ...comparisonPointMap,
         },
       };
-      payload = [{ dataKey: mainPoint.isProjection ? "instantEp" : "ep", payload: payloadPoint }];
+      const dataKey = mainPoint.isProjection ? "instantEp" : "ep";
+      payload = [{ dataKey, payload: payloadPoint }];
       label = getTooltipPointTime(mainPoint);
     } else if (nearbyComparisonPoints.length > 0) {
       const comparisonPointMap = buildComparisonPointMap(nearbyComparisonPoints);
@@ -731,7 +746,9 @@ export default function EventTrackerPage() {
       signature: buildTooltipSignature(label, payload),
     };
   }, [comparisonTooltipPointIndex, mainTooltipPointIndex]);
-  const hasRenderableChartData = hasActualTrackerData || comparisonLines.some((line) => line.points.length > 0);
+  const hasRenderableChartData = hasActualTrackerData ||
+    bestdoriPrediction.predictionPoints.length > 0 ||
+    comparisonLines.some((line) => line.points.length > 0);
   const scoreData = useMemo(
     () => fullProcessedData.filter((point) => isActualTrackerPoint(point, domainStart, trackingMode, fullProcessedData.length)),
     [domainStart, fullProcessedData, trackingMode],
@@ -973,7 +990,7 @@ export default function EventTrackerPage() {
     [displayedChartData],
   );
   const comparisonChartKey = comparisonConfigs.map((config) => `${config.eventId}:${config.tier}`).join(",");
-  const chartContainerKey = `${resolvedCurrentEventId ?? "none"}-${trackingMode}-${selectedTier}-${resolvedSelectedSongId}-${comparisonChartKey}-${comparisonAlignment}-${chartRenderRevision}`;
+  const chartContainerKey = `${resolvedCurrentEventId ?? "none"}-${trackingMode}-${selectedTier}-${resolvedSelectedSongId}-${comparisonChartKey}-${comparisonAlignment}-${showBestdoriPrediction}-${bestdoriPrediction.status}-${chartRenderRevision}`;
 
   // ===== 分数摘要 =====
   const scoreSummary = useMemo(() => {
@@ -1148,6 +1165,18 @@ export default function EventTrackerPage() {
                         : <span className="text-base font-medium text-gray-600 dark:text-gray-300">-</span>
                       }
                     </div>
+                    {showBestdoriPrediction && (
+                      <div className="flex justify-between items-center p-4">
+                        <span className="text-base text-gray-500 dark:text-gray-400">Bestdori预测</span>
+                        <span className="text-base font-bold" style={{ color: BESTDORI_PREDICTION_COLOR }}>
+                          {bestdoriPrediction.status === "loading"
+                            ? "加载中"
+                            : bestdoriPrediction.latestPrediction !== null
+                              ? new Intl.NumberFormat().format(bestdoriPrediction.latestPrediction)
+                              : "不可用"}
+                        </span>
+                      </div>
+                    )}
                   </>
                 )}
                 {status === "已结束" && (
@@ -1349,6 +1378,22 @@ export default function EventTrackerPage() {
                                 isAnimationActive={false}
                               />
 
+                              {showBestdoriPrediction && bestdoriPrediction.predictionPoints.length > 0 && (
+                                <Line
+                                  type="linear"
+                                  dataKey={BESTDORI_PREDICTION_DATA_KEY}
+                                  tooltipType="none"
+                                  stroke={BESTDORI_PREDICTION_COLOR}
+                                  strokeWidth={2}
+                                  strokeOpacity={0.9}
+                                  strokeDasharray="7 4"
+                                  dot={false}
+                                  activeDot={false}
+                                  connectNulls
+                                  isAnimationActive={false}
+                                />
+                              )}
+
                               {comparisonLines.map((line) => (
                                 line.points.length > 0 ? (
                                   <Line
@@ -1506,6 +1551,24 @@ export default function EventTrackerPage() {
                             >
                               <span className={`h-2.5 w-2.5 rounded-full ${showDayProjection ? "bg-blue-500" : "bg-gray-300 dark:bg-gray-600"}`} />
                               线性投影（24h）
+                            </button>
+
+                            <button
+                              type="button"
+                              aria-pressed={showBestdoriPrediction}
+                              onClick={() => setShowBestdoriPrediction(prev => !prev)}
+                              className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs sm:text-sm font-semibold transition-all ${
+                                showBestdoriPrediction
+                                  ? "border-slate-400 bg-slate-100 text-slate-900 dark:border-slate-400/50 dark:bg-slate-400/15 dark:text-slate-100"
+                                  : "border-gray-200 bg-white text-gray-500 dark:border-gray-700 dark:bg-[#131A2B] dark:text-gray-400"
+                              }`}
+                              title={showBestdoriPrediction && bestdoriPrediction.status === "no-data" ? "Bestdori预测当前不可用" : "显示 Bestdori Prediction"}
+                            >
+                              <span
+                                className={`h-2.5 w-2.5 rounded-full ${showBestdoriPrediction ? "" : "bg-gray-300 dark:bg-gray-600"}`}
+                                style={showBestdoriPrediction ? { backgroundColor: BESTDORI_PREDICTION_COLOR } : undefined}
+                              />
+                              Bestdori预测
                             </button>
                           </>
                         )}

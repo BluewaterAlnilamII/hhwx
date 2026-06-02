@@ -1,6 +1,7 @@
 "use client";
 
 import { format } from "date-fns";
+import { BESTDORI_PREDICTION_DATA_KEY } from "./constants";
 import type { ComparisonPointInfo, TrackerData, TrackerTooltipPayloadEntry, TrackingMode } from "./types";
 
 function getComparisonPointsFromPayload(payload: TrackerTooltipPayloadEntry[]): ComparisonPointInfo[] {
@@ -73,12 +74,14 @@ export function TrackerTooltip({
 }) {
   if (!active || !payload || payload.length === 0) return null;
 
-  const unit = trackingMode === "song" ? "Pt" : "P";
-  const comparisonPoints = getComparisonPointsFromPayload(payload);
+  const visiblePayload = payload.filter((entry) => entry.dataKey !== BESTDORI_PREDICTION_DATA_KEY);
+  if (visiblePayload.length === 0) return null;
 
+  const unit = trackingMode === "song" ? "Pt" : "P";
+  const comparisonPoints = getComparisonPointsFromPayload(visiblePayload);
   // ===== 投影点的悬浮提示 =====
-  if (payload[0]?.payload?.isProjection) {
-    const p = payload[0].payload;
+  if (visiblePayload[0]?.payload?.isProjection) {
+    const p = visiblePayload[0].payload;
     if (!p) return null;
     const projectionLabelTime = p.projectionEndTime ?? label;
     if (projectionLabelTime === undefined) return null;
@@ -113,7 +116,7 @@ export function TrackerTooltip({
   }
 
   // ===== 真实数据点的悬浮提示 =====
-  const mainEntry = payload.find(
+  const mainEntry = visiblePayload.find(
     (entry: TrackerTooltipPayloadEntry) => (
       entry?.dataKey === "ep" &&
       !entry?.payload?.isProjection &&

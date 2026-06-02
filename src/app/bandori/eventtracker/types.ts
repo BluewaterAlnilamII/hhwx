@@ -31,8 +31,18 @@ export type TrackerData = {
   comparisonPoints?: Record<string, ComparisonPointInfo>;
   /** Tooltip mode used for synthetic hover payloads. */
   tooltipMode?: "comparison";
+  /** Bestdori Prediction line value at this timestamp. */
+  bestdoriPredictionEp?: number;
+  /** Bestdori Prediction metadata used by the tooltip. */
+  bestdoriPrediction?: BestdoriPredictionPointInfo;
   /** 对比线动态数据键。 */
   [key: `compare_${number}_ep`]: number | undefined;
+};
+
+export type BestdoriPredictionPointInfo = {
+  time: number;
+  ep: number;
+  source: "bestdori";
 };
 
 export type ComparisonAlignment = "start" | "end";
