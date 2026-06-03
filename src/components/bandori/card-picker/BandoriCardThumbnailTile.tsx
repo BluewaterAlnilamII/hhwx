@@ -73,6 +73,7 @@ export default function BandoriCardThumbnailTile({
           bandId={card.bandId}
           region={assetRegion}
           alt={card.displayName}
+          loading="eager"
         />
       </button>
 

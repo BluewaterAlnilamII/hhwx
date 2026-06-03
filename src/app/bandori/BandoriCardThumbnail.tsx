@@ -51,11 +51,13 @@ function CardAssetImage({
   alt,
   className,
   fallbackLabel = "无资源",
+  loading = "lazy",
 }: {
   src: string | null;
   alt: string;
   className?: string;
   fallbackLabel?: string;
+  loading?: "eager" | "lazy";
 }) {
   const [failedSrc, setFailedSrc] = useState<string | null>(null);
   const failed = Boolean(src && failedSrc === src);
@@ -69,7 +71,7 @@ function CardAssetImage({
     <img
       src={src}
       alt={alt}
-      loading="lazy"
+      loading={loading}
       className={className}
       onError={() => setFailedSrc(src)}
     />
@@ -83,6 +85,7 @@ export default function BandoriCardThumbnail({
   region,
   alt,
   size = "tile",
+  loading = "lazy",
 }: {
   card: BandoriCardThumbnailCard;
   metadata?: BandoriCardThumbnailMetadata;
@@ -90,6 +93,7 @@ export default function BandoriCardThumbnail({
   region: BandoriAssetRegion;
   alt: string;
   size?: "tile" | "preview";
+  loading?: "eager" | "lazy";
 }) {
   const trainType = getCardTrainType(card);
   const thumbnailUrl = metadata?.resourceSetName
@@ -111,15 +115,15 @@ export default function BandoriCardThumbnail({
     <div className="relative h-full w-full rounded-[5px] bg-white">
       <div className="absolute inset-0">
         <div className="h-full w-full overflow-hidden rounded-[5px]">
-          <CardAssetImage src={thumbnailUrl} alt={alt} className="h-full w-full object-cover" fallbackLabel={isPreview ? "缩略图" : "无图"} />
+          <CardAssetImage src={thumbnailUrl} alt={alt} loading={loading} className="h-full w-full object-cover" fallbackLabel={isPreview ? "缩略图" : "无图"} />
         </div>
       </div>
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      {frameUrl ? <img src={frameUrl} alt="" aria-hidden="true" loading="lazy" className="pointer-events-none absolute inset-0 h-full w-full object-fill" /> : null}
+      {frameUrl ? <img src={frameUrl} alt="" aria-hidden="true" loading={loading} className="pointer-events-none absolute inset-0 h-full w-full object-fill" /> : null}
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      {bandIconUrl ? <img src={bandIconUrl} alt="" aria-hidden="true" loading="lazy" className={cn("pointer-events-none absolute left-0 top-0", isPreview ? "h-[31px] w-[31px]" : "h-[21px] w-[21px]")} /> : null}
+      {bandIconUrl ? <img src={bandIconUrl} alt="" aria-hidden="true" loading={loading} className={cn("pointer-events-none absolute left-0 top-0", isPreview ? "h-[31px] w-[31px]" : "h-[21px] w-[21px]")} /> : null}
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      {attributeIconUrl ? <img src={attributeIconUrl} alt="" aria-hidden="true" loading="lazy" className={cn("pointer-events-none absolute right-[0.8%]", isPreview ? "top-[1.6px] h-[28.4px] w-[28.4px]" : "top-[0.8px] h-[19.4px] w-[19.4px]")} /> : null}
+      {attributeIconUrl ? <img src={attributeIconUrl} alt="" aria-hidden="true" loading={loading} className={cn("pointer-events-none absolute right-[0.8%]", isPreview ? "top-[1.6px] h-[28.4px] w-[28.4px]" : "top-[0.8px] h-[19.4px] w-[19.4px]")} /> : null}
       <div className={cn("pointer-events-none absolute z-10 flex flex-col-reverse items-start gap-0", isPreview ? "bottom-[2px] left-[3px]" : "bottom-0 left-[2px]")}>
         {starSlots.map((slot) => (
           // eslint-disable-next-line @next/next/no-img-element
@@ -128,7 +132,7 @@ export default function BandoriCardThumbnail({
             src={starIconUrl}
             alt=""
             aria-hidden="true"
-            loading="lazy"
+            loading={loading}
             className={cn("object-contain drop-shadow-[0_1px_1px_rgba(0,0,0,0.55)]", isPreview ? "-mt-[3.5px] h-[19px] w-[20px]" : "-mt-[2.5px] h-[13px] w-[14px]")}
           />
         ))}
@@ -136,7 +140,7 @@ export default function BandoriCardThumbnail({
       {card.masterRank > 0 ? (
         <div className={cn("pointer-events-none absolute z-30 drop-shadow-[0_1px_2px_rgba(15,23,42,0.55)]", isPreview ? "right-[-4px] top-[30px] h-[31px] w-[31px]" : "right-[-4px] top-[20px] h-[21px] w-[21px]")}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={masterIconUrl} alt="" aria-hidden="true" loading="lazy" className="h-full w-full object-contain" />
+          <img src={masterIconUrl} alt="" aria-hidden="true" loading={loading} className="h-full w-full object-contain" />
           <span className={cn("absolute inset-0 flex items-center justify-center font-black leading-none text-white [text-shadow:0_1px_1px_rgba(0,0,0,0.68)]", isPreview ? "pb-[2px] text-sm" : "pb-[1px] text-[10px]")}>
             {card.masterRank}
           </span>

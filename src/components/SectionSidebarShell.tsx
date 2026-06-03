@@ -26,7 +26,7 @@ export default function SectionSidebarShell({ children, isMobileDrawerOpen, onCl
   const [prefetchIntents, setPrefetchIntents] = useState<Record<string, boolean>>({});
   const isHomePage = pathname === "/";
   const contentWrapperClassName = isHomePage
-    ? "relative h-[calc(100dvh-58px)] min-h-[calc(100dvh-58px)] px-4 py-0 sm:px-6 sm:py-0 lg:px-6 lg:py-0"
+    ? "relative h-[calc(100svh-58px)] min-h-[calc(100svh-58px)] px-4 py-0 sm:px-6 sm:py-0 lg:px-6 lg:py-0"
     : "relative min-h-full px-4 py-5 sm:px-6 lg:px-8 lg:py-6";
 
   const requestPrefetch = (href: string) => {
@@ -83,7 +83,7 @@ export default function SectionSidebarShell({ children, isMobileDrawerOpen, onCl
 
   return (
     <div className="relative flex flex-1">
-      <aside className="sticky top-[58px] hidden h-[calc(100dvh-58px)] w-[270px] shrink-0 border-r border-[#ffe374]/85 bg-[#ffed7a]/74 shadow-[0_18px_48px_rgba(128,91,0,0.12)] lg:flex lg:flex-col">
+      <aside className="sticky top-[58px] hidden h-[calc(100svh-58px)] w-[270px] shrink-0 border-r border-[#ffe374]/85 bg-[#ffed7a]/74 shadow-[0_18px_48px_rgba(128,91,0,0.12)] lg:flex lg:flex-col">
         {sidebarContent}
       </aside>
 
@@ -94,7 +94,7 @@ export default function SectionSidebarShell({ children, isMobileDrawerOpen, onCl
       <div
         aria-hidden={!isMobileDrawerOpen}
         className={cn(
-          "fixed inset-0 z-[240] min-h-[100dvh] lg:hidden",
+          "fixed inset-0 z-[240] min-h-[100svh] lg:hidden",
           isMobileDrawerOpen ? "pointer-events-auto" : "pointer-events-none",
         )}
       >
@@ -111,7 +111,7 @@ export default function SectionSidebarShell({ children, isMobileDrawerOpen, onCl
         />
         <div
           className={cn(
-            "absolute bottom-0 left-0 top-[58px] flex h-[calc(100dvh-58px)] min-h-[calc(100svh-58px)] w-[286px] max-w-[88vw] flex-col overflow-hidden border-r border-[#ffe374]/85 bg-[#fff3a3] shadow-[0_24px_64px_rgba(128,91,0,0.18)] transition-transform duration-300 ease-out will-change-transform",
+            "absolute bottom-0 left-0 top-[58px] flex h-[calc(100svh-58px)] min-h-[calc(100svh-58px)] w-[286px] max-w-[88vw] flex-col overflow-hidden border-r border-[#ffe374]/85 bg-[#fff3a3] shadow-[0_24px_64px_rgba(128,91,0,0.18)] transition-transform duration-300 ease-out will-change-transform",
             isMobileDrawerOpen ? "translate-x-0" : "-translate-x-full",
           )}
         >

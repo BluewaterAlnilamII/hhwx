@@ -108,7 +108,9 @@ function renderCommentContent(content: string) {
         width={32}
         height={32}
         loading="lazy"
-        className="mx-0.5 inline-block h-8 w-auto max-w-[5rem] object-contain align-[-0.35em]"
+        unoptimized
+        style={{ width: "auto", height: "auto" }}
+        className="mx-0.5 inline-block h-auto max-h-6 w-auto max-w-9 object-contain align-[-0.25em]"
       />,
     );
     cursor = match.index + raw.length;
@@ -229,7 +231,7 @@ function EmojiPickerButton({ open, onOpenChange, onSelect }: EmojiPickerButtonPr
                   aria-label={`:${name}:`}
                   title={`:${name}:`}
                 >
-                  <Image src={src} alt={`:${name}:`} width={32} height={32} className="h-full max-h-8 w-full max-w-8 object-contain" />
+                  <Image src={src} alt={`:${name}:`} width={32} height={32} unoptimized style={{ width: "auto", height: "auto" }} className="h-full max-h-8 w-full max-w-8 object-contain" />
                 </button>
               );
             })}
@@ -677,7 +679,7 @@ function CommentItem({
               </div>
             </div>
           ) : (
-            <p className={cn("mt-2 whitespace-pre-wrap text-sm leading-7", isDeleted ? "text-slate-400" : "text-slate-700 dark:text-slate-200")}>
+            <p className={cn("mt-2 whitespace-pre-wrap text-[15px] leading-[26px]", isDeleted ? "text-slate-400" : "text-slate-700 dark:text-slate-200")}>
               {isDeleted ? "（已删除）" : renderCommentContent(comment.content ?? "")}
             </p>
           )}
@@ -1038,7 +1040,7 @@ export default function EventComments({ eventId }: { eventId: number | null }) {
   };
 
   return (
-    <section className="rounded-3xl border border-slate-200 bg-white/95 p-4 shadow-[0_16px_44px_rgba(15,23,42,0.06)] backdrop-blur dark:border-slate-800 dark:bg-slate-950/95 sm:p-5">
+    <section className="rounded-3xl border border-slate-200 bg-white/95 p-4 shadow-[0_16px_44px_rgba(15,23,42,0.06)] dark:border-slate-800 dark:bg-slate-950/95 sm:p-5 sm:backdrop-blur">
       <div className="flex flex-col gap-3 border-b border-slate-100 pb-4 dark:border-slate-800 sm:flex-row sm:items-end sm:justify-between">
         <h2 className="inline-flex items-center gap-2 text-xl font-black text-slate-900 dark:text-white">
           <MessageSquare size={20} className="text-sky-600 dark:text-sky-300" />

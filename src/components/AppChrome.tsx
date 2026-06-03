@@ -13,7 +13,7 @@ export default function AppChrome({ children }: AppChromeProps) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   return (
-    <div className="relative flex min-h-dvh flex-col">
+    <div className="relative flex min-h-screen min-h-svh flex-col">
       <Toolbar
         isSidebarOpen={isSidebarOpen}
         onToggleSidebar={() => setIsSidebarOpen((currentValue) => !currentValue)}

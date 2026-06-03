@@ -448,6 +448,7 @@ export default function EventTrackerPage() {
   const hoverTooltipRef = useRef<HoverTooltipState | null>(null);
   const tooltipAnimationFrameRef = useRef<number | null>(null);
   const isUserScrollingRef = useRef(false);
+  const modeIndicatorViewportWidthRef = useRef<number | null>(null);
   const isProgrammaticScrollRef = useRef(false);
   const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [hoverTooltip, setHoverTooltip] = useState<HoverTooltipState | null>(null);
@@ -976,12 +977,23 @@ export default function EventTrackerPage() {
       updateModeIndicator();
     });
 
-    window.addEventListener("resize", updateModeIndicator);
+    modeIndicatorViewportWidthRef.current = window.innerWidth;
+    const handleWindowResize = () => {
+      const nextViewportWidth = window.innerWidth;
+      if (modeIndicatorViewportWidthRef.current === nextViewportWidth) {
+        return;
+      }
+
+      modeIndicatorViewportWidthRef.current = nextViewportWidth;
+      updateModeIndicator();
+    };
+
+    window.addEventListener("resize", handleWindowResize);
 
     return () => {
       resizeObserver.disconnect();
       cancelAnimationFrame(animationFrame);
-      window.removeEventListener("resize", updateModeIndicator);
+      window.removeEventListener("resize", handleWindowResize);
     };
   }, [trackingMode, updateModeIndicator]);
 

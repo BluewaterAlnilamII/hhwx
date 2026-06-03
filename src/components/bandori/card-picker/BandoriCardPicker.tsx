@@ -220,7 +220,7 @@ function RarityIcon({ rarity }: { rarity: number }) {
     <img
       src={buildBandoriResIconPublicUrl(`star_${rarity}.png`)}
       alt={`${rarity} 星`}
-      loading="lazy"
+      loading="eager"
       decoding="async"
       className="h-6 w-6 object-contain"
     />
@@ -233,7 +233,7 @@ function CharacterIcon({ characterId, label }: { characterId: number; label: str
     <img
       src={buildBandoriResIconPublicUrl(`chara_icon_${characterId}.png`)}
       alt={label}
-      loading="lazy"
+      loading="eager"
       decoding="async"
       className="h-7 w-7 rounded-full object-cover"
     />
@@ -246,7 +246,7 @@ function AttributeIcon({ attribute, label }: { attribute: BandoriCardAttribute; 
     <img
       src={buildBandoriResIconPublicUrl(`${attribute}.svg`)}
       alt={label}
-      loading="lazy"
+      loading="eager"
       decoding="async"
       className="h-7 w-7 object-contain"
     />
@@ -259,7 +259,7 @@ function BandIcon({ bandId, label }: { bandId: number; label: string }) {
     <img
       src={buildBandoriResIconPublicUrl(`band_${bandId}.svg`)}
       alt={label}
-      loading="lazy"
+      loading="eager"
       decoding="async"
       className="h-7 w-7 object-contain"
     />

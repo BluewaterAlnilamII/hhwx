@@ -31,7 +31,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="zh-CN">
-      <body className="min-h-dvh overflow-x-hidden text-slate-900">
+      <body className="min-h-screen min-h-svh overflow-x-hidden text-slate-900">
         <BackgroundEffects />
         <AppChrome>{children}</AppChrome>
       </body>
