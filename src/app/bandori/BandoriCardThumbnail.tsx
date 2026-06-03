@@ -86,6 +86,7 @@ export default function BandoriCardThumbnail({
   alt,
   size = "tile",
   loading = "lazy",
+  showLevel = true,
 }: {
   card: BandoriCardThumbnailCard;
   metadata?: BandoriCardThumbnailMetadata;
@@ -94,6 +95,7 @@ export default function BandoriCardThumbnail({
   alt: string;
   size?: "tile" | "preview";
   loading?: "eager" | "lazy";
+  showLevel?: boolean;
 }) {
   const trainType = getCardTrainType(card);
   const thumbnailUrl = metadata?.resourceSetName
@@ -151,17 +153,21 @@ export default function BandoriCardThumbnail({
           {card.skillLevel}
         </div>
       ) : null}
-      <div
-        className={cn("pointer-events-none absolute right-[2px] z-10", isPreview ? "bottom-[3px] h-[22px] w-[70px]" : "bottom-[2px] h-[15px] w-[48px]")}
-        style={{
-          backgroundColor: "rgba(0, 0, 0, 0.42)",
-          clipPath: "polygon(22% 0, 100% 0, 100% 100%, 0 100%)",
-        }}
-        aria-hidden="true"
-      />
-      <div className={cn("pointer-events-none absolute z-20 flex items-center justify-end font-semibold leading-none text-white [text-shadow:0_1px_1px_rgba(0,0,0,0.72)]", isPreview ? "bottom-[5px] right-[6px] h-[17px] text-sm" : "bottom-[3px] right-[4px] h-[12px] text-[10px]")}>
-        <span>Lv.{card.level}</span>
-      </div>
+      {showLevel ? (
+        <>
+          <div
+            className={cn("pointer-events-none absolute right-[2px] z-10", isPreview ? "bottom-[3px] h-[22px] w-[70px]" : "bottom-[2px] h-[15px] w-[48px]")}
+            style={{
+              backgroundColor: "rgba(0, 0, 0, 0.42)",
+              clipPath: "polygon(22% 0, 100% 0, 100% 100%, 0 100%)",
+            }}
+            aria-hidden="true"
+          />
+          <div className={cn("pointer-events-none absolute z-20 flex items-center justify-end font-semibold leading-none text-white [text-shadow:0_1px_1px_rgba(0,0,0,0.72)]", isPreview ? "bottom-[5px] right-[6px] h-[17px] text-sm" : "bottom-[3px] right-[4px] h-[12px] text-[10px]")}>
+            <span>Lv.{card.level}</span>
+          </div>
+        </>
+      ) : null}
     </div>
   );
 }

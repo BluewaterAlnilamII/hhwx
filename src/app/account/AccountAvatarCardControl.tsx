@@ -134,9 +134,9 @@ export default function AccountAvatarCardControl({
       </button>
 
       {open ? (
-        <div data-testid="account-avatar-card-dialog" className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 p-3 sm:p-6">
-          <div className="flex max-h-[92vh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl bg-slate-50 shadow-2xl">
-            <div className="flex items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-3 sm:px-5">
+        <div data-testid="account-avatar-card-dialog" className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto overscroll-contain bg-slate-950/55 p-2 py-3 sm:p-6">
+          <div className="flex max-h-[calc(100svh-1.5rem)] w-full max-w-6xl flex-col overflow-hidden rounded-2xl bg-slate-50 shadow-2xl sm:max-h-[calc(100svh-3rem)]">
+            <div className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-3 sm:px-5">
               <div className="min-w-0">
                 <h2 className="text-lg font-bold text-slate-900">选择头像卡面</h2>
                 <p className="mt-1 text-sm text-slate-500">默认使用特训后卡面，可在选择后切换卡面版本。</p>
@@ -151,11 +151,11 @@ export default function AccountAvatarCardControl({
               </button>
             </div>
 
-            <div className="min-h-0 flex-1 overflow-y-auto p-3 sm:p-5">
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-3 sm:p-5">
               <BandoriCardPicker value={draftValue} onValueChange={setDraftValue} />
             </div>
 
-            <div className="flex flex-col gap-3 border-t border-slate-200 bg-white px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+            <div className="flex shrink-0 flex-col gap-3 border-t border-slate-200 bg-white px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5">
               <div className="min-h-5 text-sm font-semibold text-rose-600">
                 {message}
               </div>
