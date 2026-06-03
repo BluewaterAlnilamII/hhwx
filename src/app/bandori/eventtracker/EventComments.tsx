@@ -505,14 +505,40 @@ function CommentItem({
   const [editValue, setEditValue] = useState(comment.content ?? "");
   const [editEmojiOpen, setEditEmojiOpen] = useState(false);
   const [liking, setLiking] = useState(false);
+  const [deleteConfirming, setDeleteConfirming] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [actionError, setActionError] = useState("");
   const editTextareaRef = useRef<HTMLTextAreaElement>(null);
+  const deleteConfirmRef = useRef<HTMLSpanElement>(null);
   const threadRootId = rootCommentId ?? comment.id;
   const loadedReplies = replies[threadRootId];
   const visibleReplies = isReply ? [] : loadedReplies?.comments ?? comment.previewReplies;
   const hiddenReplyCount = isReply ? 0 : Math.max(0, comment.replyCount - visibleReplies.length);
   const isHighlighted = highlightedId === comment.id;
   const isDeleted = Boolean(comment.deletedAt);
+
+  useEffect(() => {
+    setDeleteConfirming(false);
+    setDeleting(false);
+  }, [comment.id, isDeleted]);
+
+  useEffect(() => {
+    if (!deleteConfirming || deleting) {
+      return;
+    }
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (deleteConfirmRef.current?.contains(event.target as Node)) {
+        return;
+      }
+
+      setDeleteConfirming(false);
+      setActionError("");
+    };
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    return () => document.removeEventListener("pointerdown", handlePointerDown);
+  }, [deleteConfirming, deleting]);
 
   const permalink = useMemo(() => {
     if (typeof window === "undefined") return "";
@@ -543,6 +569,7 @@ function CommentItem({
   };
 
   const handleEdit = async () => {
+    setDeleteConfirming(false);
     setActionError("");
     try {
       await onUpdate(comment.id, editValue);
@@ -554,11 +581,24 @@ function CommentItem({
   };
 
   const handleDelete = async () => {
+    if (!deleteConfirming) {
+      setActionError("");
+      setDeleteConfirming(true);
+      return;
+    }
+
+    if (deleting) {
+      return;
+    }
+
     setActionError("");
+    setDeleting(true);
     try {
       await onDelete(comment.id);
     } catch (err) {
       setActionError(err instanceof Error ? err.message : "删除失败");
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -686,7 +726,14 @@ function CommentItem({
 
           <div className="mt-3 flex flex-wrap items-center gap-1.5">
             {!isDeleted ? (
-              <button type="button" onClick={() => setReplying((value) => !value)} className="inline-flex h-7 items-center gap-1 rounded-full px-2 text-xs font-semibold text-sky-700 hover:bg-sky-50 dark:text-sky-300 dark:hover:bg-sky-500/10">
+              <button
+                type="button"
+                onClick={() => {
+                  setDeleteConfirming(false);
+                  setReplying((value) => !value);
+                }}
+                className="inline-flex h-7 items-center gap-1 rounded-full px-2 text-xs font-semibold text-sky-700 hover:bg-sky-50 dark:text-sky-300 dark:hover:bg-sky-500/10"
+              >
                 <Reply size={13} />
                 回复
               </button>
@@ -718,6 +765,7 @@ function CommentItem({
                 onClick={() => {
                   setEditValue(comment.content ?? "");
                   setEditEmojiOpen(false);
+                  setDeleteConfirming(false);
                   setEditing(true);
                 }}
                 className="inline-flex h-7 items-center gap-1 rounded-full px-2 text-xs font-semibold text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800"
@@ -727,10 +775,37 @@ function CommentItem({
               </button>
             ) : null}
             {comment.canDelete ? (
-              <button type="button" onClick={handleDelete} className="inline-flex h-7 items-center gap-1 rounded-full px-2 text-xs font-semibold text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10">
-                <Trash2 size={13} />
-                删除
-              </button>
+              deleteConfirming ? (
+                <span ref={deleteConfirmRef} className="inline-flex items-center gap-1 rounded-full bg-red-50 p-0.5 dark:bg-red-500/10">
+                  <button
+                    type="button"
+                    onClick={handleDelete}
+                    disabled={deleting}
+                    className="inline-flex h-7 items-center gap-1 rounded-full px-2 text-xs font-semibold text-red-600 hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-60 dark:text-red-300 dark:hover:bg-red-500/20"
+                  >
+                    <Check size={13} />
+                    {deleting ? "删除中" : "确认删除"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDeleteConfirming(false);
+                      setActionError("");
+                    }}
+                    disabled={deleting}
+                    aria-label="取消删除"
+                    className="inline-flex h-7 items-center gap-1 rounded-full px-2 text-xs font-semibold text-slate-500 hover:bg-white disabled:cursor-not-allowed disabled:opacity-60 dark:text-slate-300 dark:hover:bg-slate-800"
+                  >
+                    <X size={13} />
+                    取消
+                  </button>
+                </span>
+              ) : (
+                <button type="button" onClick={handleDelete} className="inline-flex h-7 items-center gap-1 rounded-full px-2 text-xs font-semibold text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10">
+                  <Trash2 size={13} />
+                  删除
+                </button>
+              )
             ) : null}
           </div>
 
