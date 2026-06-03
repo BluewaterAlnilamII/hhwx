@@ -27,7 +27,7 @@ Public compatibility entrypoints remain:
 - `medley-algorithm.md`: canonical medley algorithm specification, including problem definition, scoring model, exact/bounded contract, proof strategy, validation gates, and implementation ownership.
 - `medley-algorithm.zh-CN.md`: Chinese version of the canonical medley algorithm specification.
 - `medley-algorithm-notes.md`: historical medley optimization notes, dated experiment context, proof-gap investigations, and maintenance context that should not be treated as the frontend or algorithm contract.
-- `medley-frontend-contract.md`: stable medley request/response fields, exact/bounded display semantics, and frontend readiness checklist.
+- `medley-frontend-contract.md`: stable medley request/response fields, preview UI binding, proof-status display semantics, memory/debug reporting, and frontend readiness checklist.
 - `medley-real-profile-benchmark-2026-05-31.md`: live `user_game_profiles` sample benchmark for all-configuration medley exact-proof performance, including 60s/120s completion counts, the 2026-06-02 four-event matrix, bounded-case causes, and the current per-configuration bottleneck.
 - `medley-optimization-review-2026-05-22.md`: 30s/120s medley optimization review matrix and conclusion report.
 
@@ -41,19 +41,25 @@ The fixed real-profile medley benchmark uses the local ignored fixture
 node .\scripts\bandori-medley-hard-case-benchmark.cjs <scenario>
 ```
 
-Available scenarios are `gate-120`, `all-300`, `p01-locked`, `p01-visual`,
-`p01-performance`, `p01-technique`, `p05-visual`, and `p09-visual`. The wrapper delegates to the ignored local
+Core scenarios are `focus-6-300`, `all-300`, `gate-120`, `p01-locked`,
+`p01-visual`, `p01-performance`, `p01-technique`, `p05-visual`, and
+`p09-visual`. Additional trace-only scenarios exist for bounded-case
+investigation. The wrapper delegates to the ignored local
 runner under `temp/bandori-team-builder/` so benchmark payloads stay out of Git.
-It also asserts the expected exactness and elapsed-time gate after each run:
-`all-300` must prove all 10 profiles exact within 300s, and the locked/single
-hard cases must prove exact within 120s.
+It also asserts the expected exactness, elapsed-time, bounded-gap, and memory
+reporting gates after each run where the scenario defines them.
 
-Before frontend integration work, run `gate-120` after solver changes and use
-`p05-visual` plus `p01-locked` as shorter spot checks during UI wiring.
-For broader all-scope review, use the ignored local matrix runner rather than
-the wrapper gate. The latest retained 2026-06-02 matrix covers 10 profiles
-across `none`, `323`, `244`, and `260`, and records `36/40` exact with no
-timeouts under 300s.
+For current all-scope optimizer work, run `focus-6-300` before the full matrix.
+It covers the six retained focus cases `P02:260`, `P04:260`, `P08:323`,
+`P10:244`, `P04:244`, and `P08:260`, writes JSON/Markdown focus reports, and
+records peak working set in MiB. If the focus set is acceptable, run `all-300`
+for the full P01-P10 x `none`/`244`/`260`/`323` matrix at 300s per case. The
+latest retained 2026-06-02 baseline records `36/40` exact with no timeouts, P95
+`231981ms`, max `295714ms`, and bounded-gap total `1534986`.
+
+`gate-120` remains the composite regression gate: it runs `all-300` plus the
+known locked/single hard cases. During UI wiring, use `p05-visual` and
+`p01-locked` as shorter spot checks.
 
 ## Maintenance Rules
 

@@ -12,7 +12,6 @@ import {
   ListFilter,
   Loader2,
   Music2,
-  SlidersHorizontal,
   Users,
 } from "lucide-react";
 import BandoriAccountShell from "@/app/bandori/BandoriAccountShell";
@@ -42,6 +41,10 @@ import type {
   BandoriTeamSearchSkillOrderActor,
   BandoriTeamSearchTarget,
 } from "@/lib/bandori-team-search";
+import type {
+  BandoriMedleyTeamSearchResponse,
+  BandoriMedleyTeamSearchResult,
+} from "@/lib/bandori/team-builder/medley";
 import {
   listLocalGameProfiles,
   readLocalGameProfilePayload,
@@ -70,6 +73,19 @@ type PreloadState = {
   eventBonus: PreloadStatus;
   profile: PreloadStatus;
   message: string;
+};
+type MedleySongSource = "custom" | "event-cn" | "event-jp";
+type MedleyCalculationMode = "maximize" | "legacy-greedy-single";
+type TeamBuilderSearchResponse = BandoriTeamSearchResponse | BandoriMedleyTeamSearchResponse;
+type BrowserMemoryPerformance = Performance & {
+  memory?: {
+    usedJSHeapSize?: number;
+    jsHeapSizeLimit?: number;
+  };
+  measureUserAgentSpecificMemory?: () => Promise<{
+    bytes?: number;
+    breakdown?: Array<{ bytes?: number }>;
+  }>;
 };
 
 type CloudGameProfileSummary = {
@@ -175,6 +191,18 @@ const STEPS: Array<{ id: StepId; label: string; icon: React.ComponentType<{ clas
 const SUPPORTED_EVENT_TYPES = new Set(["story", "challenge", "versus", "live_try", "mission_live", "festival", "medley"]);
 const DEFAULT_SONG_ID = "306";
 const DEFAULT_DIFFICULTY: BandoriTeamSearchDifficulty = "expert";
+const MEDLEY_SLOT_COUNT = 3;
+const DEFAULT_MEDLEY_SONG_IDS: [string, string, string] = [DEFAULT_SONG_ID, DEFAULT_SONG_ID, DEFAULT_SONG_ID];
+const DEFAULT_MEDLEY_DIFFICULTIES: [BandoriTeamSearchDifficulty, BandoriTeamSearchDifficulty, BandoriTeamSearchDifficulty] = [
+  DEFAULT_DIFFICULTY,
+  DEFAULT_DIFFICULTY,
+  DEFAULT_DIFFICULTY,
+];
+const DEFAULT_SEARCH_DURATION_SECONDS = "30";
+const MEDLEY_PREVIEW_SEARCH_DURATION_SECONDS = "300";
+const MEDLEY_BROWSER_MEMORY_WATCHDOG_LIMIT_MIB = 3000;
+const MEDLEY_BROWSER_MEMORY_WATCHDOG_HEAP_LIMIT_RATIO = 0.7;
+const MEDLEY_BROWSER_MEMORY_WATCHDOG_INTERVAL_MS = 200;
 const DEFAULT_PERFECT_RATE = "97";
 const TEAMBUILDER_LIVE_PREFERENCES_STORAGE_KEY = "hhwx-bandori-teambuilder-live-preferences:v1";
 const DIFFICULTIES: BandoriTeamSearchDifficulty[] = ["easy", "normal", "hard", "expert", "special"];
@@ -216,6 +244,10 @@ const EVENT_TYPE_LABELS: Record<string, string> = {
 const TARGET_LABELS: Record<BandoriTeamSearchTarget, string> = {
   score: "分数",
   eventPoint: "活动Pt",
+};
+const MEDLEY_CALCULATION_MODE_LABELS: Record<MedleyCalculationMode, string> = {
+  maximize: "最大化",
+  "legacy-greedy-single": "传统3次单曲贪心",
 };
 const LIVE_LABELS: Record<LiveType, string> = {
   free: "自由LIVE",
@@ -398,6 +430,65 @@ function formatNumber(value: number | null | undefined): string {
     return "-";
   }
   return Math.round(value).toLocaleString("zh-CN");
+}
+
+function formatDurationLabel(totalSeconds: number): string {
+  const seconds = Math.max(0, Math.floor(totalSeconds));
+  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
+}
+
+function buildBrowserHeapSnapshot(
+  usedBytes: number,
+  heapLimitBytes: number | null,
+  source: "agent" | "heap",
+): { usedMiB: number; limitMiB: number | null; effectiveLimitMiB: number; source: "agent" | "heap" } {
+  const dynamicLimitMiB = heapLimitBytes !== null
+    ? Math.floor((heapLimitBytes / (1024 * 1024)) * MEDLEY_BROWSER_MEMORY_WATCHDOG_HEAP_LIMIT_RATIO)
+    : Number.POSITIVE_INFINITY;
+  const effectiveLimitMiB = Math.min(MEDLEY_BROWSER_MEMORY_WATCHDOG_LIMIT_MIB, dynamicLimitMiB);
+  return {
+    usedMiB: Math.ceil(usedBytes / (1024 * 1024)),
+    limitMiB: heapLimitBytes !== null ? Math.floor(heapLimitBytes / (1024 * 1024)) : null,
+    effectiveLimitMiB,
+    source,
+  };
+}
+
+async function readBrowserHeapSnapshot(): Promise<{
+  usedMiB: number;
+  limitMiB: number | null;
+  effectiveLimitMiB: number;
+  source: "agent" | "heap";
+} | null> {
+  const runtimePerformance = performance as BrowserMemoryPerformance;
+  const memory = runtimePerformance.memory;
+  const heapLimitBytes = typeof memory?.jsHeapSizeLimit === "number" && Number.isFinite(memory.jsHeapSizeLimit) && memory.jsHeapSizeLimit > 0
+    ? memory.jsHeapSizeLimit
+    : null;
+
+  if (typeof runtimePerformance.measureUserAgentSpecificMemory === "function") {
+    try {
+      const measurement = await runtimePerformance.measureUserAgentSpecificMemory();
+      const measuredBytes = typeof measurement.bytes === "number" && Number.isFinite(measurement.bytes)
+        ? measurement.bytes
+        : measurement.breakdown?.reduce((sum, item) => (
+          sum + (typeof item.bytes === "number" && Number.isFinite(item.bytes) ? item.bytes : 0)
+        ), 0) ?? null;
+      if (measuredBytes !== null && measuredBytes > 0) {
+        return buildBrowserHeapSnapshot(measuredBytes, heapLimitBytes, "agent");
+      }
+    } catch {
+      // Fall through to the older Chrome heap counter when process-wide memory is unavailable.
+    }
+  }
+
+  const usedBytes = typeof memory?.usedJSHeapSize === "number" && Number.isFinite(memory.usedJSHeapSize)
+    ? memory.usedJSHeapSize
+    : null;
+  if (usedBytes === null) {
+    return null;
+  }
+  return buildBrowserHeapSnapshot(usedBytes, heapLimitBytes, "heap");
 }
 
 function formatAreaItemAttribute(attribute: BandoriCardAttribute | null): string {
@@ -687,6 +778,9 @@ function isEncoreSkillSource(value: unknown): value is EncoreSkillSource {
 }
 
 function getLiveLabel(liveType: LiveType, eventType: BandoriTeamSearchEventType): string {
+  if (eventType === "medley") {
+    return "组曲LIVE";
+  }
   if (liveType === "versus" && (eventType === "versus" || eventType === "festival")) {
     return "共演LIVE";
   }
@@ -712,6 +806,14 @@ function getEventSongIds(event: BandoriEventSummary | null | undefined): number[
   ])).filter((songId) => Number.isFinite(songId) && songId > 0);
 }
 
+function getMedleyEventSongIdsForSource(event: BandoriEventSummary | null | undefined, source: "CN" | "JP"): number[] {
+  if (!event) {
+    return [];
+  }
+  const sourceSongIds = source === "CN" ? event.musicIds.cn : event.musicIds.jp;
+  return sourceSongIds.filter((songId) => Number.isFinite(songId) && songId > 0).slice(0, MEDLEY_SLOT_COUNT);
+}
+
 function canShowEventSongPicker(eventType: BandoriTeamSearchEventType, liveType: LiveType): boolean {
   if (eventType === "challenge") {
     return liveType === "challenge";
@@ -720,8 +822,7 @@ function canShowEventSongPicker(eventType: BandoriTeamSearchEventType, liveType:
 }
 
 function isScoreLinkedEventPointTarget(eventType: BandoriTeamSearchEventType, liveType: LiveType): boolean {
-  return eventType === "medley"
-    || eventType === "versus"
+  return eventType === "versus"
     || eventType === "festival"
     || (eventType === "challenge" && liveType === "challenge");
 }
@@ -840,6 +941,294 @@ function orderResultCardsWithLeaderCenter(cards: BandoriTeamSearchResultCard[], 
 
   const others = cards.filter((card) => card.cardId !== leaderCardId);
   return [others[0], others[1], leader, others[2], others[3]].filter(Boolean) as BandoriTeamSearchResultCard[];
+}
+
+function isMedleySearchResult(result: BandoriTeamSearchResult | BandoriMedleyTeamSearchResult): result is BandoriMedleyTeamSearchResult {
+  return "songResults" in result;
+}
+
+function isMedleySearchResponse(result: TeamBuilderSearchResponse): result is BandoriMedleyTeamSearchResponse {
+  return result.results.some((item) => "songResults" in item);
+}
+
+function isMedleySearchStats(stats: TeamBuilderSearchResponse["stats"]): stats is BandoriMedleyTeamSearchResponse["stats"] {
+  return "profiling" in stats;
+}
+
+function getSearchTimeLimitLabel(maxSearchDurationSeconds?: string): string | null {
+  if (!maxSearchDurationSeconds) {
+    return null;
+  }
+  const seconds = Number(maxSearchDurationSeconds);
+  return Number.isFinite(seconds) && seconds > 0 ? `${seconds} 秒` : null;
+}
+
+function getExactCandidateJoinAbortReasonLabel(
+  reason: string | null | undefined,
+  stats: BandoriMedleyTeamSearchResponse["stats"],
+  maxSearchDurationSeconds?: string,
+): string | null {
+  if (!reason) {
+    return null;
+  }
+  const profiling = stats.profiling;
+  const timeLimitLabel = getSearchTimeLimitLabel(maxSearchDurationSeconds);
+  const candidateSoftLimit = profiling.exactCandidateJoinLastAbortCandidateSoftLimit;
+  const candidateCount = profiling.exactCandidateJoinLastAbortCandidateCount;
+  const nodeSoftLimit = profiling.exactCandidateJoinLastAbortNodeSoftLimit;
+  const labels: Record<string, string> = {
+    "candidate-fill-deadline": `候选补全达到时间限制${timeLimitLabel ? `（限制 ${timeLimitLabel}）` : ""}`,
+    "candidate-fill-soft-limit": `候选数量达到软上限${candidateSoftLimit !== null ? `（上限 ${formatNumber(candidateSoftLimit)}${candidateCount !== null ? `，已生成 ${formatNumber(candidateCount)}` : ""}）` : ""}`,
+    "candidate-fill-generator-aborted": "候选生成提前中止",
+    "memory-soft-limit": "达到内存保护上限",
+    "solve-workload-limit": "精确子问题工作量达到上限",
+    "solve-timeout": `子问题达到时间限制${timeLimitLabel ? `（限制 ${timeLimitLabel}）` : ""}`,
+    "anchored-join-timeout": `锚定候选拼接达到时间限制${timeLimitLabel ? `（限制 ${timeLimitLabel}）` : ""}`,
+    "candidate-fill-pair-refine": "候选补全阶段仍需继续细化",
+    "initial-candidate": "初始候选生成未完成",
+    "pair-upper": "双队伍上界证明未闭合",
+    "deep-pair-upper": "深层双队伍上界证明未闭合",
+    "high-budget-pair-upper": "高预算双队伍上界证明未闭合",
+    "invalid-input": "精确子问题输入无效",
+  };
+  if (reason === "solve-workload-limit" && nodeSoftLimit !== null) {
+    return `精确子问题工作量达到上限（上限 ${formatNumber(nodeSoftLimit)} 节点）`;
+  }
+  return labels[reason] ?? reason;
+}
+
+function getConfigurationTraceStringValue(entry: Record<string, unknown>, key: string): string | null {
+  const value = entry[key];
+  return typeof value === "string" && value.length > 0 ? value : null;
+}
+
+function isClosedConfigurationTraceStatus(status: string | null): boolean {
+  return Boolean(status && (status.endsWith("-proved") || status.endsWith("-pruned")));
+}
+
+function getConfigurationTraceStatusLabel(status: string | null): string {
+  const labels: Record<string, string> = {
+    "bounded-dominated-root-skip": "因已有未闭合配置而跳过",
+    "bounded-near-deadline-root-skip": "接近时间限制，跳过证明",
+    "exact-unproved-skip-dfs": "候选拼接未能完成证明，跳过 DFS",
+    "exact-before-seeding-timeout": "种子生成前达到时间限制",
+    "slot-candidate-seeding-timeout": "slot 候选种子阶段达到时间限制",
+    "greedy-seeding-timeout": "贪心种子阶段达到时间限制",
+    "conflict-bnb-timeout": "冲突分支定界达到时间限制",
+    "exact-after-seeding-timeout": "种子生成后候选拼接达到时间限制",
+    "dfs-timeout": "DFS 证明达到时间限制",
+  };
+  return status ? labels[status] ?? status : "未记录完成状态";
+}
+
+function formatConfigurationTraceEntry(entry: Record<string, unknown>): string {
+  const bandKey = getConfigurationTraceStringValue(entry, "bandKey") ?? "-";
+  const attribute = getConfigurationTraceStringValue(entry, "attribute");
+  const parameter = getConfigurationTraceStringValue(entry, "parameter");
+  const attributeLabel = attribute && attribute in ATTRIBUTE_LABELS
+    ? ATTRIBUTE_LABELS[attribute as BandoriCardAttribute]
+    : "-";
+  const parameterLabel = parameter === "performance" || parameter === "technique" || parameter === "visual"
+    ? formatAreaItemParameter(parameter)
+    : "-";
+  const status = getConfigurationTraceStringValue(entry, "status");
+  return `${bandKey} / ${attributeLabel} / ${parameterLabel}（${getConfigurationTraceStatusLabel(status)}）`;
+}
+
+function getFirstUnclosedConfigurationTrace(stats: BandoriMedleyTeamSearchResponse["stats"]): Record<string, unknown> | null {
+  return stats.profiling.configurationTrace?.find((entry) => (
+    !isClosedConfigurationTraceStatus(getConfigurationTraceStringValue(entry, "status"))
+  )) ?? null;
+}
+
+function buildConfigurationProgressReason(stats: BandoriMedleyTeamSearchResponse["stats"]): string | null {
+  const totalCount = stats.areaItemConfigurationCount;
+  if (totalCount <= 0) {
+    return null;
+  }
+  const closedCount = Math.min(
+    totalCount,
+    stats.profiling.completedAreaItemConfigurationCount + stats.profiling.rootUpperPrunedConfigurationCount,
+  );
+  const startedCount = Math.min(totalCount, stats.profiling.startedAreaItemConfigurationCount);
+  if (closedCount >= totalCount) {
+    return null;
+  }
+
+  const firstUnclosedTrace = getFirstUnclosedConfigurationTrace(stats);
+  const traceLabel = firstUnclosedTrace ? `；第一个未完成配置：${formatConfigurationTraceEntry(firstUnclosedTrace)}` : "";
+  return `配置证明进度 ${closedCount}/${totalCount}，已开始 ${startedCount}/${totalCount}${traceLabel}`;
+}
+
+function buildBoundedEarlyStopReason(stats: TeamBuilderSearchResponse["stats"], maxSearchDurationSeconds?: string): string {
+  const reasons: string[] = [];
+
+  if ("memoryLimited" in stats && stats.memoryLimited) {
+    const limitLabel = stats.memorySoftLimitMiB !== null ? `（上限 ${stats.memorySoftLimitMiB} MiB）` : "";
+    reasons.push(`达到内存保护上限${limitLabel}`);
+  }
+  if (stats.timedOut) {
+    const timeLimitLabel = getSearchTimeLimitLabel(maxSearchDurationSeconds);
+    reasons.push(`达到时间限制${timeLimitLabel ? `（限制 ${timeLimitLabel}）` : ""}`);
+  }
+
+  if (isMedleySearchStats(stats)) {
+    const abortReason = getExactCandidateJoinAbortReasonLabel(
+      stats.profiling.exactCandidateJoinLastAbortReason,
+      stats,
+      maxSearchDurationSeconds,
+    );
+    if (abortReason && !reasons.includes(abortReason)) {
+      reasons.push(`候选拼接未完成：${abortReason}`);
+    }
+    const configurationProgressReason = buildConfigurationProgressReason(stats);
+    if (configurationProgressReason) {
+      reasons.push(configurationProgressReason);
+    }
+  }
+
+  if (reasons.length === 0) {
+    reasons.push("搜索空间尚未完全证明，已按当前最佳结果返回");
+  }
+  return reasons.join("；");
+}
+
+function buildSearchCompletionSummary(result: TeamBuilderSearchResponse, maxSearchDurationSeconds?: string): string {
+  const { stats } = result;
+  const isMedleyResult = isMedleySearchResponse(result);
+  const elapsedLabel = isMedleyResult
+    ? `${(stats.elapsedMs / 1000).toFixed(1)}s`
+    : `${stats.elapsedMs}ms`;
+  const parts = [`完成：用时 ${elapsedLabel}`];
+  if (stats.searchMode === "exact" && isMedleyResult) {
+    parts.push("已完成精确的全局最优证明");
+  } else if (stats.searchMode === "bounded") {
+    parts.push(`无法完成精确的全局最优证明，提前结束：${buildBoundedEarlyStopReason(stats, maxSearchDurationSeconds)}`);
+    if (stats.observedScoreUpperBoundGap !== null) {
+      parts.push(`gap ${formatNumber(stats.observedScoreUpperBoundGap)}`);
+    }
+  }
+  return parts.join("\n");
+}
+
+function getSearchProofStatusLabel(result: TeamBuilderSearchResponse): string | null {
+  if (!isMedleySearchResponse(result)) {
+    return null;
+  }
+  if (result.stats.searchMode === "exact") {
+    return "已完成精确的全局最优证明";
+  }
+  if (result.stats.searchMode === "bounded") {
+    return "未完成精确的全局最优证明";
+  }
+  return null;
+}
+
+function getSearchResultCardIds(result: TeamBuilderSearchResponse | null): number[] {
+  if (!result) {
+    return [];
+  }
+  return result.results.flatMap((item) => (
+    isMedleySearchResult(item)
+      ? item.songResults.flatMap((songResult) => songResult.cards.map((card) => card.cardId))
+      : item.cards.map((card) => card.cardId)
+  ));
+}
+
+function buildMedleyDebugPayload({
+  result,
+  selectedEvent,
+  medleySongIds,
+  medleyDifficulties,
+  songs,
+  profileLabel,
+  selectedProfileCacheKey,
+  perfectRate,
+  maxSearchDurationSeconds,
+  medleyCalculationMode,
+}: {
+  result: BandoriMedleyTeamSearchResponse;
+  selectedEvent: BandoriEventSummary | null;
+  medleySongIds: [string, string, string];
+  medleyDifficulties: [BandoriTeamSearchDifficulty, BandoriTeamSearchDifficulty, BandoriTeamSearchDifficulty];
+  songs: Record<string, SongMaster | undefined>;
+  profileLabel: string;
+  selectedProfileCacheKey: string;
+  perfectRate: string;
+  maxSearchDurationSeconds: string;
+  medleyCalculationMode: MedleyCalculationMode;
+}) {
+  return {
+    version: 1,
+    generatedAt: new Date().toISOString(),
+    page: "bandori/teambuilder",
+    mode: "medley-preview",
+    input: {
+      medleyCalculationMode,
+      event: selectedEvent ? {
+        eventId: selectedEvent.eventId,
+        eventType: selectedEvent.eventType,
+        name: selectedEvent.name,
+        musicIds: selectedEvent.musicIds,
+      } : null,
+      songs: medleySongIds.map((songId, index) => ({
+        slot: index + 1,
+        songId: Number(songId),
+        title: pickLocalizedName(songs[songId]?.musicTitle, `#${songId}`),
+        difficulty: medleyDifficulties[index],
+      })),
+      profileLabel,
+      profileCacheKey: selectedProfileCacheKey,
+      perfectRate,
+      maxSearchDurationSeconds,
+    },
+    proof: {
+      searchMode: result.stats.searchMode,
+      isExhaustive: result.stats.isExhaustive,
+      timedOut: result.stats.timedOut,
+      memoryLimited: result.stats.memoryLimited,
+      observedScoreUpperBound: result.stats.observedScoreUpperBound,
+      observedScoreUpperBoundGap: result.stats.observedScoreUpperBoundGap,
+      memorySoftLimitMiB: result.stats.memorySoftLimitMiB,
+      peakUsedHeapMiB: result.stats.peakUsedHeapMiB,
+    },
+    stats: result.stats,
+    results: result.results.map((item) => ({
+      rank: item.rank,
+      score: item.score,
+      averageScore: item.averageScore,
+      maxScore: item.maxScore,
+      minScore: item.minScore,
+      areaItemConfiguration: item.areaItemConfiguration,
+      cardIds: item.cardIds,
+      songResults: item.songResults.map((songResult) => ({
+        songIndex: songResult.songIndex,
+        score: songResult.score,
+        averageScore: songResult.averageScore,
+        maxScore: songResult.maxScore,
+        minScore: songResult.minScore,
+        startCombo: songResult.startCombo,
+        notesCount: songResult.notesCount,
+        totalPower: songResult.totalPower,
+        eventPower: songResult.eventPower,
+        pointBonusRate: songResult.pointBonusRate,
+        leaderCardId: songResult.leaderCardId,
+        skillOrderCardIds: songResult.skillOrderCardIds,
+        skillOrderActors: songResult.skillOrderActors,
+        areaItemConfiguration: songResult.areaItemConfiguration,
+        cards: songResult.cards.map((card) => ({
+          cardId: card.cardId,
+          characterId: card.characterId,
+          attribute: card.attribute,
+          bandId: card.bandId,
+          rarity: card.rarity,
+          skillId: card.skillId,
+          skillLevel: card.skillLevel,
+          totalPower: card.totalPower,
+        })),
+      })),
+    })),
+  };
 }
 
 function getSkillOrderActorLabel(actor: BandoriTeamSearchSkillOrderActor): string {
@@ -1062,6 +1451,47 @@ function SongOptionList({
   );
 }
 
+function QuickPickerPanel({
+  options,
+  selectedId,
+  onSelect,
+}: {
+  options: Array<{ id: string; title: string; badges?: string[] }>;
+  selectedId: string | null;
+  onSelect: (id: string) => void;
+}) {
+  if (options.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="rounded-2xl border border-sky-100 bg-sky-50/60 p-3">
+      <div className="flex flex-wrap gap-2">
+        {options.map((option) => {
+          const selected = option.id === selectedId;
+          return (
+            <button
+              type="button"
+              key={option.id}
+              onClick={() => onSelect(option.id)}
+              className={`inline-flex max-w-full items-center gap-2 rounded-full border px-3 py-1.5 text-sm font-semibold transition ${
+                selected
+                  ? "border-sky-300 bg-white text-sky-800 shadow-sm"
+                  : "border-sky-100 bg-white/70 text-slate-700 hover:border-sky-200 hover:bg-white"
+              }`}
+            >
+              <span className="max-w-56 truncate">{option.title}</span>
+              {(option.badges ?? []).map((badge) => (
+                <span key={badge} className="shrink-0 rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-500">{badge}</span>
+              ))}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function EventSongQuickPicker({
   songs,
   selectedSongId,
@@ -1071,35 +1501,30 @@ function EventSongQuickPicker({
   selectedSongId: string;
   onSelect: (songId: string) => void;
 }) {
-  if (songs.length === 0) {
-    return null;
-  }
-
   return (
-    <div className="rounded-2xl border border-sky-100 bg-sky-50/60 p-3">
-      <div className="flex flex-wrap gap-2">
-        {songs.map((song) => {
-          const selected = song.id === selectedSongId;
-          return (
-            <button
-              type="button"
-              key={song.id}
-              onClick={() => onSelect(song.id)}
-              className={`inline-flex max-w-full items-center gap-2 rounded-full border px-3 py-1.5 text-sm font-semibold transition ${
-                selected
-                  ? "border-sky-300 bg-white text-sky-800 shadow-sm"
-                  : "border-sky-100 bg-white/70 text-slate-700 hover:border-sky-200 hover:bg-white"
-              }`}
-            >
-              <span className="max-w-56 truncate">{song.title}</span>
-              {song.sourceLabels.map((sourceLabel) => (
-                <span key={sourceLabel} className="shrink-0 rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-500">{sourceLabel}</span>
-              ))}
-            </button>
-          );
-        })}
-      </div>
-    </div>
+    <QuickPickerPanel
+      options={songs.map((song) => ({ id: song.id, title: song.title, badges: song.sourceLabels }))}
+      selectedId={selectedSongId}
+      onSelect={onSelect}
+    />
+  );
+}
+
+function MedleyEventSongQuickPicker({
+  options,
+  selectedSource,
+  onSelect,
+}: {
+  options: Array<{ id: MedleySongSource; title: string; sourceLabel: "JP" | "CN" }>;
+  selectedSource: MedleySongSource;
+  onSelect: (source: MedleySongSource) => void;
+}) {
+  return (
+    <QuickPickerPanel
+      options={options.map((option) => ({ id: option.id, title: option.title, badges: [option.sourceLabel] }))}
+      selectedId={selectedSource === "custom" ? null : selectedSource}
+      onSelect={(id) => onSelect(id as MedleySongSource)}
+    />
   );
 }
 
@@ -1591,6 +2016,124 @@ function ResultCard({
   );
 }
 
+function MedleyResultCard({
+  result,
+  cardMetadata,
+  assetRegion,
+  songs,
+}: {
+  result: BandoriMedleyTeamSearchResult;
+  cardMetadata: Record<string, CardMetadata | undefined>;
+  assetRegion: BandoriAssetRegion;
+  songs: Array<SongMaster | null>;
+}) {
+  return (
+    <article className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div className="flex items-center gap-4">
+          <div className="w-12 text-right text-lg font-bold text-slate-700">#{result.rank}</div>
+          <div>
+            <div className="text-xl font-bold text-slate-900">{formatNumber(result.score)}</div>
+            <div className="mt-1 text-xs font-semibold text-slate-500">
+              组曲LIVE · 平均 {formatNumber(result.averageScore)} · 区间 {formatNumber(result.minScore)} / {formatNumber(result.maxScore)}
+            </div>
+          </div>
+        </div>
+        <div className="grid grid-cols-3 gap-2 text-center text-xs">
+          {result.songResults.map((songResult) => (
+            <div key={songResult.songIndex} className="rounded-xl bg-slate-50 px-3 py-2">
+              <div className="font-semibold text-slate-500">第 {songResult.songIndex + 1} 首</div>
+              <div className="mt-1 font-bold text-slate-900">{formatNumber(songResult.score)}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="mt-4 space-y-4">
+        {result.songResults.map((songResult) => {
+          const displayedCards = orderResultCardsWithLeaderCenter(songResult.cards, songResult.leaderCardId);
+          const songTitle = pickLocalizedName(songs[songResult.songIndex]?.musicTitle, `第 ${songResult.songIndex + 1} 首`);
+          const skillOrderDisplay = buildSkillOrderDisplay(songResult.skillOrderCardIds, displayedCards, songResult.skillOrderActors);
+          return (
+            <section key={songResult.songIndex} className="rounded-2xl border border-slate-100 bg-slate-50/70 p-3">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <div className="text-sm font-bold text-slate-900">第 {songResult.songIndex + 1} 首 · {songTitle}</div>
+                  <div className="mt-1 text-xs font-semibold text-slate-500">
+                    分数 {formatNumber(songResult.score)} · 起始 Combo {songResult.startCombo} · Notes {songResult.notesCount}
+                  </div>
+                </div>
+                <div className="text-sm font-bold text-slate-700">{formatNumber(songResult.totalPower)}</div>
+              </div>
+              <div className="mt-3 flex flex-wrap items-start gap-2 overflow-visible">
+                {displayedCards.map((card) => (
+                  <TeamBuilderCardTile
+                    key={card.cardId}
+                    card={card}
+                    metadata={cardMetadata[String(card.cardId)]}
+                    leader={card.cardId === songResult.leaderCardId}
+                    assetRegion={assetRegion}
+                  />
+                ))}
+              </div>
+              <div className="mt-3 grid gap-3 text-sm text-slate-600 lg:grid-cols-2">
+                <div className="rounded-xl bg-white p-3">
+                  <div className="font-semibold text-slate-800">最佳技能顺序</div>
+                  <div className="mt-1 break-all">{skillOrderDisplay}</div>
+                </div>
+                <div className="rounded-xl bg-white p-3">
+                  <div className="font-semibold text-slate-800">区域道具配置</div>
+                  <div className="mt-1">
+                    {songResult.areaItemConfiguration.bandKey ?? "-"} · {formatAreaItemAttribute(songResult.areaItemConfiguration.attribute)} ·{" "}
+                    {formatAreaItemParameter(songResult.areaItemConfiguration.parameter)}
+                  </div>
+                </div>
+              </div>
+            </section>
+          );
+        })}
+      </div>
+    </article>
+  );
+}
+
+function MedleyDebugInfoPanel({
+  debugText,
+  copied,
+  onCopy,
+}: {
+  debugText: string;
+  copied: boolean;
+  onCopy: () => void;
+}) {
+  return (
+    <details className="rounded-2xl border border-red-200 bg-white p-4 text-sm shadow-sm">
+      <summary className="cursor-pointer select-none rounded-xl bg-red-50 px-3 py-2 font-bold text-red-700 transition hover:bg-red-100">
+        组曲调试信息
+      </summary>
+      <div className="mt-4 space-y-3">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-sm leading-6 text-slate-500">
+            反馈问题时可以复制这一段 JSON，里面包含输入摘要、证明状态、内存/耗时和算法统计。
+          </p>
+          <button
+            type="button"
+            onClick={onCopy}
+            className="shrink-0 rounded-full border border-red-200 bg-red-50 px-4 py-2 text-sm font-bold text-red-700 transition hover:border-red-300 hover:bg-red-100"
+          >
+            {copied ? "已复制" : "复制调试信息"}
+          </button>
+        </div>
+        <textarea
+          readOnly
+          value={debugText}
+          className="h-80 w-full resize-y rounded-xl border border-slate-200 bg-slate-950 p-3 font-mono text-xs leading-5 text-slate-100 outline-none"
+        />
+      </div>
+    </details>
+  );
+}
+
 function TeamBuilderPanel() {
   const [data, setData] = useState<TeamBuilderData>({
     cloudProfiles: [],
@@ -1606,6 +2149,10 @@ function TeamBuilderPanel() {
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
   const [songSearch, setSongSearch] = useState("");
   const [songId, setSongId] = useState(DEFAULT_SONG_ID);
+  const [medleySongIds, setMedleySongIds] = useState<[string, string, string]>(DEFAULT_MEDLEY_SONG_IDS);
+  const [activeMedleySongSlot, setActiveMedleySongSlot] = useState(0);
+  const [medleySongSource, setMedleySongSource] = useState<MedleySongSource>("custom");
+  const [medleyDifficulties, setMedleyDifficulties] = useState<[BandoriTeamSearchDifficulty, BandoriTeamSearchDifficulty, BandoriTeamSearchDifficulty]>(DEFAULT_MEDLEY_DIFFICULTIES);
   const [difficulty, setDifficulty] = useState<BandoriTeamSearchDifficulty>(DEFAULT_DIFFICULTY);
   const [perfectRate, setPerfectRate] = useState(() => readLivePreferences().perfectRate ?? DEFAULT_PERFECT_RATE);
   const [liveType, setLiveType] = useState<LiveType>(() => readLivePreferences().liveType ?? "multi");
@@ -1619,11 +2166,15 @@ function TeamBuilderPanel() {
   const [otherPlayers, setOtherPlayers] = useState<OtherPlayerDraft[]>(() => readLivePreferences().otherPlayers ?? DEFAULT_OTHER_PLAYERS);
   const [profileChoice, setProfileChoice] = useState<ProfileChoice | null>(null);
   const [target, setTarget] = useState<BandoriTeamSearchTarget>("eventPoint");
+  const [medleyCalculationMode, setMedleyCalculationMode] = useState<MedleyCalculationMode>("maximize");
   const [resultLimit, setResultLimit] = useState("10");
-  const [maxSearchDurationSeconds, setMaxSearchDurationSeconds] = useState("30");
+  const [maxSearchDurationSeconds, setMaxSearchDurationSeconds] = useState(DEFAULT_SEARCH_DURATION_SECONDS);
   const [submitting, setSubmitting] = useState(false);
-  const [result, setResult] = useState<BandoriTeamSearchResponse | null>(null);
+  const [calculationStartedAt, setCalculationStartedAt] = useState<number | null>(null);
+  const [calculationNow, setCalculationNow] = useState<number | null>(null);
+  const [result, setResult] = useState<TeamBuilderSearchResponse | null>(null);
   const [resultError, setResultError] = useState("");
+  const [debugInfoCopied, setDebugInfoCopied] = useState(false);
   const [resultLiveBoostCount, setResultLiveBoostCount] = useState<LiveBoostCountOption>("3");
   const [resultChallengeCpCost, setResultChallengeCpCost] = useState<ChallengeCpCostOption>("1600");
   const [resultPlacement, setResultPlacement] = useState<ResultPlacementOption>("1");
@@ -1643,6 +2194,7 @@ function TeamBuilderPanel() {
   const workerCallbacksRef = useRef(new Map<string, {
     resolve: (response: TeamSearchWorkerResponse) => void;
     reject: (error: Error) => void;
+    cleanup?: () => void;
   }>());
   const profilePayloadCacheRef = useRef(new Map<string, UserGameProfilePayload>());
 
@@ -1660,6 +2212,7 @@ function TeamBuilderPanel() {
   const selectedEventType = useMemo<BandoriTeamSearchEventType>(() => (
     selectedEvent ? eventTypeFromValue(selectedEvent.eventType) : "none"
   ), [selectedEvent]);
+  const isMedleyEvent = selectedEventType === "medley";
   const selectedEventAssetRegion = useMemo<BandoriAssetRegion>(() => (
     selectedEvent ? resolveBandoriEventAssetRegion(selectedEvent) : "cn"
   ), [selectedEvent]);
@@ -1668,12 +2221,28 @@ function TeamBuilderPanel() {
   const availableLiveTypes = useMemo(() => allowedLiveTypes(selectedEventType), [selectedEventType]);
   const liveTypeLabels = useMemo<Record<LiveType, string>>(() => ({
     ...LIVE_LABELS,
+    free: getLiveLabel("free", selectedEventType),
     multi: getLiveLabel("multi", selectedEventType),
     versus: getLiveLabel("versus", selectedEventType),
   }), [selectedEventType]);
   const updateLiveType = useCallback((value: LiveType) => {
     setLiveType(value);
     writeLivePreferences({ liveType: value });
+  }, []);
+  const updateMedleySongId = useCallback((slotIndex: number, value: string) => {
+    setMedleySongIds((current) => {
+      const next = [...current] as [string, string, string];
+      next[slotIndex] = value;
+      return next;
+    });
+    setMedleySongSource("custom");
+  }, []);
+  const updateMedleyDifficulty = useCallback((slotIndex: number, value: BandoriTeamSearchDifficulty) => {
+    setMedleyDifficulties((current) => {
+      const next = [...current] as [BandoriTeamSearchDifficulty, BandoriTeamSearchDifficulty, BandoriTeamSearchDifficulty];
+      next[slotIndex] = value;
+      return next;
+    });
   }, []);
   const updatePerfectRate = useCallback((value: string) => {
     setPerfectRate(value);
@@ -1694,8 +2263,8 @@ function TeamBuilderPanel() {
   const showCoopLiveSettings = shouldUseCoopLiveSettings(selectedEventType, liveType);
   const scoreLinkedEventPointTarget = isScoreLinkedEventPointTarget(selectedEventType, liveType);
   const targetOptions = useMemo<BandoriTeamSearchTarget[]>(() => (
-    scoreLinkedEventPointTarget ? ["eventPoint"] : ["score", "eventPoint"]
-  ), [scoreLinkedEventPointTarget]);
+    isMedleyEvent ? ["score"] : scoreLinkedEventPointTarget ? ["eventPoint"] : ["score", "eventPoint"]
+  ), [isMedleyEvent, scoreLinkedEventPointTarget]);
   const targetLabels = useMemo<Record<BandoriTeamSearchTarget, string>>(() => ({
     ...TARGET_LABELS,
     eventPoint: scoreLinkedEventPointTarget ? "分数/活动Pt" : TARGET_LABELS.eventPoint,
@@ -1727,8 +2296,34 @@ function TeamBuilderPanel() {
     return buildBandoriEventBannerPublicUrl(selectedEventAssetRegion, bundleName);
   }, [selectedEvent, selectedEventAssetRegion]);
   const shouldLimitSongsToEventSongs = selectedEventType === "challenge" && liveType === "challenge";
+  const medleyEventSongOptions = useMemo(() => {
+    const sources: Array<{ source: "CN" | "JP"; id: MedleySongSource }> = [
+      { source: "CN", id: "event-cn" },
+      { source: "JP", id: "event-jp" },
+    ];
+    return sources.flatMap(({ source, id }) => {
+      const songIds = getMedleyEventSongIdsForSource(selectedEvent, source);
+      if (songIds.length !== MEDLEY_SLOT_COUNT) {
+        return [];
+      }
+      return [{
+        id,
+        title: `活动曲目 ${source}`,
+        sourceLabel: source,
+        songIds: songIds.map(String) as [string, string, string],
+      }];
+    });
+  }, [selectedEvent]);
+  const useEventMedleySongs = useCallback((source: MedleySongSource) => {
+    const option = medleyEventSongOptions.find((item) => item.id === source);
+    if (!option) {
+      return;
+    }
+    setMedleySongIds(option.songIds);
+    setMedleySongSource(option.id);
+  }, [medleyEventSongOptions]);
   const eventSongOptions = useMemo(() => {
-    if (!canShowEventSongPicker(selectedEventType, liveType)) {
+    if (isMedleyEvent || !canShowEventSongPicker(selectedEventType, liveType)) {
       return [];
     }
 
@@ -1752,7 +2347,7 @@ function TeamBuilderPanel() {
         sourceLabels,
       }];
     });
-  }, [data.songs, liveType, selectedEvent, selectedEventType]);
+  }, [data.songs, isMedleyEvent, liveType, selectedEvent, selectedEventType]);
   const songOptions = useMemo(() => {
     const normalizedSearch = songSearch.trim().toLowerCase();
     const eventSongIdSet = shouldLimitSongsToEventSongs
@@ -1776,6 +2371,14 @@ function TeamBuilderPanel() {
     return entries;
   }, [data.songs, eventSongOptions, shouldLimitSongsToEventSongs, songSearch]);
   const selectedSong = songId ? data.songs[songId] ?? null : null;
+  const selectedMedleySongs = useMemo(() => (
+    medleySongIds.map((id) => data.songs[id] ?? null)
+  ), [data.songs, medleySongIds]);
+  const activeMedleySong = selectedMedleySongs[activeMedleySongSlot] ?? null;
+  const activeMedleyDifficulty = medleyDifficulties[activeMedleySongSlot];
+  const activeMedleySongDifficulties = useMemo(() => (
+    DIFFICULTIES.filter((item) => getSongDifficulty(activeMedleySong, item))
+  ), [activeMedleySong]);
   const selectedSongDifficulties = useMemo(() => (
     DIFFICULTIES.filter((item) => getSongDifficulty(selectedSong, item))
   ), [selectedSong]);
@@ -1796,11 +2399,15 @@ function TeamBuilderPanel() {
         return;
       }
       workerCallbacksRef.current.delete(event.data.requestId);
+      callback.cleanup?.();
       callback.resolve(event.data);
     };
     worker.onerror = (event) => {
       const error = new Error(event.message || "计算线程启动失败");
-      workerCallbacksRef.current.forEach((callback) => callback.reject(error));
+      workerCallbacksRef.current.forEach((callback) => {
+        callback.cleanup?.();
+        callback.reject(error);
+      });
       workerCallbacksRef.current.clear();
       worker.terminate();
       if (workerRef.current === worker) {
@@ -1811,18 +2418,75 @@ function TeamBuilderPanel() {
     return worker;
   }, []);
 
-  const postTeamSearchWorkerMessage = useCallback((message: TeamSearchWorkerMessage): Promise<TeamSearchWorkerResponse> => (
+  const postTeamSearchWorkerMessage = useCallback((
+    message: TeamSearchWorkerMessage,
+    options?: { memoryWatchdog?: boolean },
+  ): Promise<TeamSearchWorkerResponse> => (
     new Promise((resolve, reject) => {
-      workerCallbacksRef.current.set(message.requestId, { resolve, reject });
-      getTeamSearchWorker().postMessage(message);
+      const worker = getTeamSearchWorker();
+      let watchdogIntervalId: number | null = null;
+      const cleanup = (): void => {
+        if (watchdogIntervalId !== null) {
+          window.clearInterval(watchdogIntervalId);
+          watchdogIntervalId = null;
+        }
+      };
+      const rejectAllAndResetWorker = (error: Error): void => {
+        workerCallbacksRef.current.forEach((callback) => {
+          callback.cleanup?.();
+          callback.reject(error);
+        });
+        workerCallbacksRef.current.clear();
+        worker.terminate();
+        if (workerRef.current === worker) {
+          workerRef.current = null;
+        }
+      };
+
+      if (options?.memoryWatchdog) {
+        let isCheckingMemory = false;
+        watchdogIntervalId = window.setInterval(() => {
+          if (isCheckingMemory) {
+            return;
+          }
+          isCheckingMemory = true;
+          void readBrowserHeapSnapshot()
+            .then((heap) => {
+              if (!heap || heap.usedMiB < heap.effectiveLimitMiB || !workerCallbacksRef.current.has(message.requestId)) {
+                return;
+              }
+              rejectAllAndResetWorker(new Error(
+                `已触发浏览器内存保护，计算已停止（当前约 ${heap.usedMiB} MiB，保护上限 ${heap.effectiveLimitMiB} MiB${heap.limitMiB !== null ? `，浏览器 heap 上限 ${heap.limitMiB} MiB` : ""}，来源 ${heap.source === "agent" ? "浏览器进程级统计" : "JS heap 统计"}）。`,
+              ));
+            })
+            .finally(() => {
+              isCheckingMemory = false;
+            });
+        }, MEDLEY_BROWSER_MEMORY_WATCHDOG_INTERVAL_MS);
+      }
+
+      workerCallbacksRef.current.set(message.requestId, { resolve, reject, cleanup });
+      worker.postMessage(message);
     })
   ), [getTeamSearchWorker]);
 
   useEffect(() => () => {
     workerRef.current?.terminate();
     workerRef.current = null;
+    workerCallbacksRef.current.forEach((callback) => callback.cleanup?.());
     workerCallbacksRef.current.clear();
   }, []);
+
+  useEffect(() => {
+    if (!submitting || calculationStartedAt === null) {
+      return undefined;
+    }
+    setCalculationNow(Date.now());
+    const intervalId = window.setInterval(() => {
+      setCalculationNow(Date.now());
+    }, 1000);
+    return () => window.clearInterval(intervalId);
+  }, [calculationStartedAt, submitting]);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -1863,10 +2527,16 @@ function TeamBuilderPanel() {
   useEffect(() => {
     const requestId = crypto.randomUUID();
     let active = true;
+    const preloadSongs = isMedleyEvent
+      ? medleySongIds.map((id, index) => ({ songId: Number(id), difficulty: medleyDifficulties[index] }))
+      : undefined;
+    const canPreloadCharts = isMedleyEvent
+      ? medleySongIds.every((id) => id && Number.isFinite(Number(id)))
+      : Boolean(songId);
     setPreloadState((current) => ({
       ...current,
       master: current.master === "ready" ? "ready" : "loading",
-      chart: songId ? "loading" : "idle",
+      chart: canPreloadCharts ? "loading" : "idle",
       eventBonus: selectedEvent ? "loading" : "ready",
       message: "",
     }));
@@ -1874,7 +2544,8 @@ function TeamBuilderPanel() {
     void postTeamSearchWorkerMessage({
       type: "preload",
       requestId,
-      song: songId ? { songId: Number(songId), difficulty } : undefined,
+      song: !isMedleyEvent && songId ? { songId: Number(songId), difficulty } : undefined,
+      songs: preloadSongs,
       event: selectedEvent ? { eventId: selectedEvent.eventId } : undefined,
     })
       .then((response) => {
@@ -1885,7 +2556,7 @@ function TeamBuilderPanel() {
           setPreloadState((current) => ({
             ...current,
             master: "ready",
-            chart: songId ? "ready" : "idle",
+            chart: canPreloadCharts ? "ready" : "idle",
             eventBonus: selectedEvent ? "ready" : "ready",
             message: "",
           }));
@@ -1893,7 +2564,7 @@ function TeamBuilderPanel() {
           setPreloadState((current) => ({
             ...current,
             master: current.master === "ready" ? "ready" : "error",
-            chart: songId ? "error" : "idle",
+            chart: canPreloadCharts ? "error" : "idle",
             eventBonus: selectedEvent ? "error" : "ready",
             message: response.error,
           }));
@@ -1906,7 +2577,7 @@ function TeamBuilderPanel() {
         setPreloadState((current) => ({
           ...current,
           master: current.master === "ready" ? "ready" : "error",
-          chart: songId ? "error" : "idle",
+          chart: canPreloadCharts ? "error" : "idle",
           eventBonus: selectedEvent ? "error" : "ready",
           message: preloadError instanceof Error ? preloadError.message : "准备数据失败",
         }));
@@ -1915,7 +2586,7 @@ function TeamBuilderPanel() {
     return () => {
       active = false;
     };
-  }, [difficulty, postTeamSearchWorkerMessage, selectedEvent, songId]);
+  }, [difficulty, isMedleyEvent, medleyDifficulties, medleySongIds, postTeamSearchWorkerMessage, selectedEvent, songId]);
 
   useEffect(() => {
     if (!profileChoice) {
@@ -1966,6 +2637,31 @@ function TeamBuilderPanel() {
       setLiveType(availableLiveTypes.includes("multi") ? "multi" : availableLiveTypes[0] ?? "free");
     }
   }, [availableLiveTypes, liveType]);
+
+  useEffect(() => {
+    if (isMedleyEvent) {
+      setLiveType("free");
+      setResultLimit("1");
+      setMaxSearchDurationSeconds(MEDLEY_PREVIEW_SEARCH_DURATION_SECONDS);
+      return;
+    }
+    setResultLimit((current) => (current === "1" ? "10" : current));
+    setMaxSearchDurationSeconds((current) => (
+      current === MEDLEY_PREVIEW_SEARCH_DURATION_SECONDS ? DEFAULT_SEARCH_DURATION_SECONDS : current
+    ));
+  }, [isMedleyEvent]);
+
+  useEffect(() => {
+    if (!isMedleyEvent || medleySongSource === "custom") {
+      return;
+    }
+    const option = medleyEventSongOptions.find((item) => item.id === medleySongSource);
+    if (!option) {
+      setMedleySongSource("custom");
+      return;
+    }
+    setMedleySongIds(option.songIds);
+  }, [isMedleyEvent, medleyEventSongOptions, medleySongSource]);
 
   useEffect(() => {
     if (!targetOptions.includes(target)) {
@@ -2024,7 +2720,32 @@ function TeamBuilderPanel() {
   }, [difficulty, selectedSongDifficulties]);
 
   useEffect(() => {
-    const resultCardIds = result?.results.flatMap((item) => item.cards.map((card) => card.cardId)) ?? [];
+    if (!isMedleyEvent || activeMedleySongDifficulties.length === 0 || activeMedleySongDifficulties.includes(activeMedleyDifficulty)) {
+      return;
+    }
+    updateMedleyDifficulty(activeMedleySongSlot, activeMedleySongDifficulties[activeMedleySongDifficulties.length - 1]);
+  }, [activeMedleyDifficulty, activeMedleySongDifficulties, activeMedleySongSlot, isMedleyEvent, updateMedleyDifficulty]);
+
+  useEffect(() => {
+    if (!isMedleyEvent) {
+      return;
+    }
+    let changed = false;
+    const nextDifficulties = [...medleyDifficulties] as [BandoriTeamSearchDifficulty, BandoriTeamSearchDifficulty, BandoriTeamSearchDifficulty];
+    selectedMedleySongs.forEach((song, index) => {
+      const availableDifficulties = DIFFICULTIES.filter((item) => getSongDifficulty(song, item));
+      if (availableDifficulties.length > 0 && !availableDifficulties.includes(nextDifficulties[index])) {
+        nextDifficulties[index] = availableDifficulties[availableDifficulties.length - 1];
+        changed = true;
+      }
+    });
+    if (changed) {
+      setMedleyDifficulties(nextDifficulties);
+    }
+  }, [isMedleyEvent, medleyDifficulties, selectedMedleySongs]);
+
+  useEffect(() => {
+    const resultCardIds = getSearchResultCardIds(result);
     const cardIds = [...getEventBonusMemberCardIds(eventBonus), ...resultCardIds];
     const uniqueCardIds = Array.from(new Set(cardIds)).filter((cardId) => !cardMetadata[String(cardId)]);
     if (uniqueCardIds.length === 0) {
@@ -2039,9 +2760,12 @@ function TeamBuilderPanel() {
     ? allProfiles.find((profile) => profile.type === profileChoice.source && profile.id === profileChoice.id)?.name ?? "已选择档案"
     : "未选择档案";
 
-  const resultEventPointMode = useMemo(() => (
-    result?.results.find((item) => item.eventPointOptions.mode !== "none")?.eventPointOptions.mode ?? "none"
-  ), [result]);
+  const resultEventPointMode = useMemo(() => {
+    const singleResult = result?.results.find((item): item is BandoriTeamSearchResult => (
+      !isMedleySearchResult(item) && item.eventPointOptions.mode !== "none"
+    ));
+    return singleResult?.eventPointOptions.mode ?? "none";
+  }, [result]);
   const selectedProfileCacheKey = profileChoice ? `${profileChoice.source}:${profileChoice.id}` : "";
   const isPreloadReady = preloadState.master === "ready"
     && preloadState.chart === "ready"
@@ -2054,6 +2778,52 @@ function TeamBuilderPanel() {
   const preloadStatusMessage = preloadState.message || (
     isPreloadLoading ? "正在准备计算数据" : ""
   );
+  const calculationElapsedSeconds = submitting && calculationStartedAt !== null && calculationNow !== null
+    ? Math.max(0, Math.floor((calculationNow - calculationStartedAt) / 1000))
+    : 0;
+  const calculationElapsedLabel = formatDurationLabel(calculationElapsedSeconds);
+  const medleyPreviewSearchDurationLabel = formatDurationLabel(Number(MEDLEY_PREVIEW_SEARCH_DURATION_SECONDS));
+  const medleyDebugText = useMemo(() => {
+    if (!result || !isMedleySearchResponse(result)) {
+      return "";
+    }
+    return JSON.stringify(buildMedleyDebugPayload({
+      result,
+      selectedEvent,
+      medleySongIds,
+      medleyDifficulties,
+      songs: data.songs,
+      profileLabel: selectedProfileLabel,
+      selectedProfileCacheKey,
+      perfectRate,
+      maxSearchDurationSeconds,
+      medleyCalculationMode,
+    }), null, 2);
+  }, [
+    data.songs,
+    maxSearchDurationSeconds,
+    medleyCalculationMode,
+    medleyDifficulties,
+    medleySongIds,
+    perfectRate,
+    result,
+    selectedEvent,
+    selectedProfileCacheKey,
+    selectedProfileLabel,
+  ]);
+  const copyMedleyDebugInfo = useCallback(() => {
+    if (!medleyDebugText) {
+      return;
+    }
+    void navigator.clipboard.writeText(medleyDebugText)
+      .then(() => {
+        setDebugInfoCopied(true);
+        window.setTimeout(() => setDebugInfoCopied(false), 1600);
+      })
+      .catch(() => {
+        setDebugInfoCopied(false);
+      });
+  }, [medleyDebugText]);
 
   async function handleCalculate() {
     if (!profileChoice) {
@@ -2061,7 +2831,12 @@ function TeamBuilderPanel() {
       setActiveStep("profile");
       return;
     }
-    if (!songId) {
+    if (isMedleyEvent && !medleySongIds.every((id) => id && Number.isFinite(Number(id)))) {
+      setResultError("组曲LIVE需要选择 3 首歌曲");
+      setActiveStep("song");
+      return;
+    }
+    if (!isMedleyEvent && !songId) {
       setResultError("请选择歌曲");
       setActiveStep("song");
       return;
@@ -2078,8 +2853,12 @@ function TeamBuilderPanel() {
     }
 
     setSubmitting(true);
+    const startedAt = Date.now();
+    setCalculationStartedAt(startedAt);
+    setCalculationNow(startedAt);
     setResultError("");
     setResult(null);
+    setDebugInfoCopied(false);
     try {
       const response = await postTeamSearchWorkerMessage({
         type: "search",
@@ -2092,7 +2871,7 @@ function TeamBuilderPanel() {
           bonusOverride: undefined,
         },
         live: {
-          type: liveType,
+          type: isMedleyEvent ? "free" : liveType,
           roomPower: roomPower.trim() ? Number(roomPower) : undefined,
           otherPlayersAveragePower: otherPlayersAveragePower.trim() ? Number(otherPlayersAveragePower) : undefined,
           useSpecialRoomBonus,
@@ -2105,17 +2884,24 @@ function TeamBuilderPanel() {
           })),
         },
         song: {
-          songId: Number(songId),
-          difficulty,
+          songId: Number(isMedleyEvent ? medleySongIds[0] : songId),
+          difficulty: isMedleyEvent ? medleyDifficulties[0] : difficulty,
           perfectRate: Math.max(0, Math.min(1, Number(perfectRate) / 100)),
         },
+        songs: isMedleyEvent
+          ? medleySongIds.map((id, index) => ({ songId: Number(id), difficulty: medleyDifficulties[index] }))
+          : undefined,
         cards: { excludedCardIds: [] },
         calculation: {
-          target,
-          resultLimit: Number(resultLimit),
-          maxSearchDurationMs: Math.max(1, Number(maxSearchDurationSeconds)) * 1000,
+          target: isMedleyEvent ? "score" : target,
+          resultLimit: isMedleyEvent ? 1 : Number(resultLimit),
+          maxSearchDurationMs: Math.min(
+            isMedleyEvent ? 300000 : Number.POSITIVE_INFINITY,
+            Math.max(1, Number(maxSearchDurationSeconds)) * 1000,
+          ),
+          medleyMode: isMedleyEvent ? medleyCalculationMode : undefined,
         },
-      });
+      }, { memoryWatchdog: isMedleyEvent });
       if (!response.ok) {
         throw new Error(response.error);
       }
@@ -2132,6 +2918,8 @@ function TeamBuilderPanel() {
       setResultError(calculateError instanceof Error ? calculateError.message : "计算失败");
     } finally {
       setSubmitting(false);
+      setCalculationStartedAt(null);
+      setCalculationNow(null);
     }
   }
 
@@ -2183,7 +2971,11 @@ function TeamBuilderPanel() {
       {activeStep === "live" ? (
         <section className="space-y-5">
           <FieldRow label="种类">
-            <Segment value={liveType} options={availableLiveTypes} onChange={updateLiveType} labels={liveTypeLabels} />
+            {isMedleyEvent ? (
+              <Segment value="medley" options={["medley"]} onChange={() => undefined} labels={{ medley: "组曲LIVE" }} />
+            ) : (
+              <Segment value={liveType} options={availableLiveTypes} onChange={updateLiveType} labels={liveTypeLabels} />
+            )}
           </FieldRow>
           {showCoopLiveSettings ? (
             <MultiLiveSettingsPanel
@@ -2201,39 +2993,112 @@ function TeamBuilderPanel() {
 
       {activeStep === "song" ? (
         <section className="space-y-5">
-          <div className="rounded-2xl border border-sky-100 bg-white p-4 shadow-sm">
-            <div className="text-lg font-bold text-slate-900">{selectedSong ? pickLocalizedName(selectedSong.musicTitle, `#${songId}`) : "未选择歌曲"}</div>
-            {selectedSong && pickLocalizedName(selectedSong.bandName) ? (
-              <div className="mt-1 text-sm text-slate-500">{pickLocalizedName(selectedSong.bandName)}</div>
-            ) : null}
-            <div className="mt-4 grid gap-4 lg:grid-cols-[1fr_16rem] lg:items-end">
-              <div className="space-y-2">
-                <div className="text-xs font-semibold text-slate-500">难度</div>
-                <SongDifficultyPicker
-                  value={difficulty}
-                  options={selectedSongDifficulties.length ? selectedSongDifficulties : DIFFICULTIES}
-                  song={selectedSong}
-                  onChange={setDifficulty}
+          {isMedleyEvent ? (
+            <>
+              <div className="rounded-2xl border border-sky-100 bg-white p-4 shadow-sm">
+                <div className="grid gap-3 lg:grid-cols-3">
+                  {medleySongIds.map((slotSongId, index) => {
+                    const slotSong = data.songs[slotSongId] ?? null;
+                    const active = activeMedleySongSlot === index;
+                    return (
+                      <button
+                        type="button"
+                        key={index}
+                        onClick={() => setActiveMedleySongSlot(index)}
+                        className={`min-h-28 rounded-2xl border p-4 text-left transition ${
+                          active
+                            ? "border-sky-400 bg-sky-50 ring-2 ring-sky-100"
+                            : "border-slate-200 bg-white hover:border-sky-200"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="text-xs font-bold text-slate-500">第 {index + 1} 首</div>
+                          <SongDifficultyLevelBadge difficulty={medleyDifficulties[index]} song={slotSong} className="h-6 w-6 text-xs" />
+                        </div>
+                        <div className="mt-2 flex min-w-0 items-start gap-2">
+                          <div className="line-clamp-2 min-w-0 text-base font-bold text-slate-900">
+                            {slotSong ? pickLocalizedName(slotSong.musicTitle, `#${slotSongId}`) : "未选择歌曲"}
+                          </div>
+                        </div>
+                        <div className="mt-2 text-xs font-semibold text-slate-400">#{slotSongId}</div>
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="mt-4 grid gap-4 lg:grid-cols-[1fr_16rem] lg:items-end">
+                  <div className="space-y-2">
+                    <div className="text-xs font-semibold text-slate-500">难度</div>
+                    <SongDifficultyPicker
+                      value={activeMedleyDifficulty}
+                      options={activeMedleySongDifficulties.length ? activeMedleySongDifficulties : DIFFICULTIES}
+                      song={activeMedleySong}
+                      onChange={(nextDifficulty) => updateMedleyDifficulty(activeMedleySongSlot, nextDifficulty)}
+                    />
+                  </div>
+                  <label className="space-y-2">
+                    <span className="block text-xs font-semibold text-slate-500">Perfect率</span>
+                    <TextInput value={perfectRate} onChange={(event) => updatePerfectRate(event.target.value)} inputMode="decimal" />
+                  </label>
+                </div>
+              </div>
+              <FieldRow label={`第 ${activeMedleySongSlot + 1} 首搜索`}>
+                <TextInput value={songSearch} onChange={(event) => setSongSearch(event.target.value)} placeholder="输入歌曲名或 ID" />
+              </FieldRow>
+              {medleyEventSongOptions.length > 0 ? (
+                <FieldRow label="活动曲目">
+                  <MedleyEventSongQuickPicker
+                    options={medleyEventSongOptions}
+                    selectedSource={medleySongSource}
+                    onSelect={useEventMedleySongs}
+                  />
+                </FieldRow>
+              ) : null}
+              <div className="grid gap-2 text-sm sm:grid-cols-[9rem_1fr] sm:items-start">
+                <span className="font-semibold text-slate-600">歌曲</span>
+                <SongOptionList
+                  options={songOptions}
+                  selectedSongId={medleySongIds[activeMedleySongSlot]}
+                  onSelect={(nextSongId) => updateMedleySongId(activeMedleySongSlot, nextSongId)}
                 />
               </div>
-              <label className="space-y-2">
-                <span className="block text-xs font-semibold text-slate-500">Perfect率</span>
-                <TextInput value={perfectRate} onChange={(event) => updatePerfectRate(event.target.value)} inputMode="decimal" />
-              </label>
-            </div>
-          </div>
-          <FieldRow label="歌曲搜索">
-            <TextInput value={songSearch} onChange={(event) => setSongSearch(event.target.value)} placeholder="输入歌曲名或 ID" />
-          </FieldRow>
-          {eventSongOptions.length > 0 ? (
-            <FieldRow label="活动曲目">
-              <EventSongQuickPicker songs={eventSongOptions} selectedSongId={songId} onSelect={setSongId} />
-            </FieldRow>
-          ) : null}
-          <div className="grid gap-2 text-sm sm:grid-cols-[9rem_1fr] sm:items-start">
-            <span className="font-semibold text-slate-600">歌曲</span>
-            <SongOptionList options={songOptions} selectedSongId={songId} onSelect={setSongId} />
-          </div>
+            </>
+          ) : (
+            <>
+              <div className="rounded-2xl border border-sky-100 bg-white p-4 shadow-sm">
+                <div className="text-lg font-bold text-slate-900">{selectedSong ? pickLocalizedName(selectedSong.musicTitle, `#${songId}`) : "未选择歌曲"}</div>
+                {selectedSong && pickLocalizedName(selectedSong.bandName) ? (
+                  <div className="mt-1 text-sm text-slate-500">{pickLocalizedName(selectedSong.bandName)}</div>
+                ) : null}
+                <div className="mt-4 grid gap-4 lg:grid-cols-[1fr_16rem] lg:items-end">
+                  <div className="space-y-2">
+                    <div className="text-xs font-semibold text-slate-500">难度</div>
+                    <SongDifficultyPicker
+                      value={difficulty}
+                      options={selectedSongDifficulties.length ? selectedSongDifficulties : DIFFICULTIES}
+                      song={selectedSong}
+                      onChange={setDifficulty}
+                    />
+                  </div>
+                  <label className="space-y-2">
+                    <span className="block text-xs font-semibold text-slate-500">Perfect率</span>
+                    <TextInput value={perfectRate} onChange={(event) => updatePerfectRate(event.target.value)} inputMode="decimal" />
+                  </label>
+                </div>
+              </div>
+              <FieldRow label="歌曲搜索">
+                <TextInput value={songSearch} onChange={(event) => setSongSearch(event.target.value)} placeholder="输入歌曲名或 ID" />
+              </FieldRow>
+              {eventSongOptions.length > 0 ? (
+                <FieldRow label="活动曲目">
+                  <EventSongQuickPicker songs={eventSongOptions} selectedSongId={songId} onSelect={setSongId} />
+                </FieldRow>
+              ) : null}
+              <div className="grid gap-2 text-sm sm:grid-cols-[9rem_1fr] sm:items-start">
+                <span className="font-semibold text-slate-600">歌曲</span>
+                <SongOptionList options={songOptions} selectedSongId={songId} onSelect={setSongId} />
+              </div>
+            </>
+          )}
         </section>
       ) : null}
 
@@ -2273,13 +3138,31 @@ function TeamBuilderPanel() {
               <div className="mt-1 font-bold text-slate-900">{selectedEvent ? selectedEvent.name.cn ?? selectedEvent.name.jp : "无活动"}</div>
             </div>
             <div className="rounded-2xl border border-slate-200 bg-white p-4">
-              <div className="text-xs font-semibold text-slate-500">歌曲</div>
-              <div className="mt-1 flex min-w-0 items-center gap-2">
-                <div className="min-w-0 truncate font-bold text-slate-900">{selectedSong ? pickLocalizedName(selectedSong.musicTitle, `#${songId}`) : "未选择"}</div>
-                {selectedSong ? (
-                  <SongDifficultyLevelBadge difficulty={difficulty} song={selectedSong} className="h-6 w-6" />
-                ) : null}
-              </div>
+              <div className="text-xs font-semibold text-slate-500">{isMedleyEvent ? "组曲LIVE" : "歌曲"}</div>
+              {isMedleyEvent ? (
+                <div className="mt-2 space-y-1">
+                  {medleySongIds.map((slotSongId, index) => (
+                    <div key={index} className="flex min-w-0 items-center gap-2 text-sm">
+                      <span className="shrink-0 font-bold text-slate-400">{index + 1}</span>
+                      <span className="min-w-0 truncate font-bold text-slate-900">
+                        {pickLocalizedName(data.songs[slotSongId]?.musicTitle, `#${slotSongId}`)}
+                      </span>
+                      <SongDifficultyLevelBadge
+                        difficulty={medleyDifficulties[index]}
+                        song={data.songs[slotSongId] ?? null}
+                        className="h-6 w-6 text-xs"
+                      />
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="mt-1 flex min-w-0 items-center gap-2">
+                  <div className="min-w-0 truncate font-bold text-slate-900">{selectedSong ? pickLocalizedName(selectedSong.musicTitle, `#${songId}`) : "未选择"}</div>
+                  {selectedSong ? (
+                    <SongDifficultyLevelBadge difficulty={difficulty} song={selectedSong} className="h-6 w-6" />
+                  ) : null}
+                </div>
+              )}
             </div>
             <div className="rounded-2xl border border-slate-200 bg-white p-4">
               <div className="text-xs font-semibold text-slate-500">档案</div>
@@ -2288,20 +3171,48 @@ function TeamBuilderPanel() {
           </div>
           <div className="grid gap-4 rounded-2xl border border-slate-200 bg-white p-4">
             <FieldRow label="模式">
-              <Segment value="maximize" options={["maximize"]} onChange={() => undefined} labels={{ maximize: "最大化" }} />
+              {isMedleyEvent ? (
+                <Segment
+                  value={medleyCalculationMode}
+                  options={["maximize", "legacy-greedy-single"]}
+                  onChange={setMedleyCalculationMode}
+                  labels={MEDLEY_CALCULATION_MODE_LABELS}
+                />
+              ) : (
+                <Segment value="maximize" options={["maximize"]} onChange={() => undefined} labels={{ maximize: "最大化" }} />
+              )}
             </FieldRow>
             <FieldRow label="目标">
               <Segment value={target} options={targetOptions} onChange={setTarget} labels={targetLabels} />
             </FieldRow>
             <FieldRow label="组队结果">
-              <Segment value={resultLimit} options={["10", "20", "50"]} onChange={setResultLimit} />
+              {isMedleyEvent ? (
+                <Segment value="1" options={["1"]} onChange={() => undefined} />
+              ) : (
+                <Segment value={resultLimit} options={["10", "20", "50"]} onChange={setResultLimit} />
+              )}
             </FieldRow>
             <FieldRow label="时间限制">
               <div className="flex items-center gap-2">
-                <TextInput value={maxSearchDurationSeconds} onChange={(event) => setMaxSearchDurationSeconds(event.target.value)} inputMode="numeric" />
+                <TextInput
+                  value={maxSearchDurationSeconds}
+                  onChange={(event) => setMaxSearchDurationSeconds(event.target.value)}
+                  inputMode="numeric"
+                  max={isMedleyEvent ? MEDLEY_PREVIEW_SEARCH_DURATION_SECONDS : undefined}
+                />
                 <span className="shrink-0 text-sm font-semibold text-slate-500">秒</span>
               </div>
             </FieldRow>
+            {isMedleyEvent ? (
+              <div className="space-y-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm font-semibold leading-6 text-amber-800">
+                <p>
+                  组曲组队计算器为当前开发中的测试预览版本，仅供参考。如有发现“最大化”模式的分数结果低于“传统3次单曲贪心”模式的，或发现“传统3次单曲贪心”结果低于手动组队结果的，欢迎将你的档案名称/结果报告/页面最下方的调试信息（或在Out of Memory崩溃时直接反馈档案名称/OOM）发送至 bluewater.alnilam.ii@gmail.com 反馈。请在64位操作系统的电脑上通过最新版 Chrome 浏览器运行，以减少因内存不足崩溃的可能。
+                </p>
+                <p>
+                  巡回活动将使用组曲LIVE计算，默认最多计算 300 秒。最大化模式会尝试精确证明全局最优结果。若无法在限制内完成证明，会提前返回已找到的最佳结果。传统3次单曲贪心仅作为临时对照，不提供最优性证明。
+                </p>
+              </div>
+            ) : null}
             <div className="flex justify-center">
               <button
                 type="button"
@@ -2313,6 +3224,12 @@ function TeamBuilderPanel() {
                 {isPreloadReady ? "计算" : "准备数据中"}
               </button>
             </div>
+            {submitting ? (
+              <div className="rounded-xl bg-slate-50 p-3 text-center text-sm font-semibold text-slate-600">
+                计算中 {calculationElapsedLabel}
+                {isMedleyEvent ? ` / ${medleyPreviewSearchDurationLabel}` : ""}
+              </div>
+            ) : null}
             {!isPreloadReady && preloadStatusMessage ? (
               <div className={`rounded-xl p-3 text-center text-sm font-semibold ${
                 preloadState.message ? "bg-amber-50 text-amber-700" : "bg-slate-50 text-slate-500"
@@ -2322,10 +3239,9 @@ function TeamBuilderPanel() {
             ) : null}
             {resultError ? <div className="rounded-xl bg-red-50 p-3 text-center text-sm font-semibold text-red-600">{resultError}</div> : null}
             {result ? (
-              <div className="rounded-xl bg-emerald-50 p-3 text-center text-sm font-semibold text-emerald-600">
+              <div className="whitespace-pre-line rounded-xl bg-emerald-50 p-3 text-left text-sm font-semibold leading-6 text-emerald-600 sm:text-center">
                 <CheckCircle2 className="mr-1 inline h-4 w-4" />
-                完成：用时 {result.stats.elapsedMs}ms
-                {result.stats.timedOut ? "，已按当前最佳结果返回" : ""}
+                {buildSearchCompletionSummary(result, maxSearchDurationSeconds)}
               </div>
             ) : null}
           </div>
@@ -2364,35 +3280,52 @@ function TeamBuilderPanel() {
               ) : null}
               <div className="space-y-3">
                 {result.results.map((item) => (
-                  <ResultCard
-                    key={item.rank}
-                    result={item}
-                    cardMetadata={cardMetadata}
-                    assetRegion={selectedEventAssetRegion}
-                    displayLiveBoostCount={resultLiveBoostCount}
-                    displayChallengeCpCost={resultChallengeCpCost}
-                    displayPlacement={resultPlacement}
-                    displayFestivalResult={resultFestivalResult}
-                  />
+                  isMedleySearchResult(item) ? (
+                    <MedleyResultCard
+                      key={item.rank}
+                      result={item}
+                      cardMetadata={cardMetadata}
+                      assetRegion={selectedEventAssetRegion}
+                      songs={medleySongIds.map((id) => data.songs[id] ?? null)}
+                    />
+                  ) : (
+                    <ResultCard
+                      key={item.rank}
+                      result={item}
+                      cardMetadata={cardMetadata}
+                      assetRegion={selectedEventAssetRegion}
+                      displayLiveBoostCount={resultLiveBoostCount}
+                      displayChallengeCpCost={resultChallengeCpCost}
+                      displayPlacement={resultPlacement}
+                      displayFestivalResult={resultFestivalResult}
+                    />
+                  )
                 ))}
               </div>
               <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
                 <ListFilter className="mr-2 inline h-4 w-4" />
-                候选卡牌 {result.stats.candidateCardCount} · 区域道具配置 {result.stats.areaItemConfigurationCount} · 搜索模式 {result.stats.searchMode}
-                {result.stats.supportBandEnabled
+                候选卡牌 {result.stats.candidateCardCount} · 区域道具配置 {result.stats.areaItemConfigurationCount}
+                {getSearchProofStatusLabel(result) ? ` · ${getSearchProofStatusLabel(result)}` : ""}
+                {"peakUsedHeapMiB" in result.stats && result.stats.peakUsedHeapMiB !== null
+                  ? ` · 峰值内存 ${result.stats.peakUsedHeapMiB} MiB`
+                  : ""}
+                {"supportBandEnabled" in result.stats && result.stats.supportBandEnabled
                   ? ` · 支援候选 ${result.stats.supportCandidateCount} · 支援评估 ${result.stats.supportEvaluationCount}`
                   : ""}
               </div>
+              {medleyDebugText ? (
+                <MedleyDebugInfoPanel
+                  debugText={medleyDebugText}
+                  copied={debugInfoCopied}
+                  onCopy={copyMedleyDebugInfo}
+                />
+              ) : null}
             </div>
           ) : null}
         </section>
       ) : null}
 
-      <div className="flex flex-col gap-3 border-t border-slate-200 pt-5 sm:flex-row sm:items-center sm:justify-between">
-        <div className="text-sm text-slate-500">
-          <SlidersHorizontal className="mr-1 inline h-4 w-4" />
-          目前支持除 medley 外的活动类型；控分模式后续再接入。
-        </div>
+      <div className="flex flex-col gap-3 border-t border-slate-200 pt-5 sm:flex-row sm:items-center sm:justify-end">
         <div className="flex gap-2">
           {STEPS.map((step, index) => (
             activeStep === step.id && STEPS[index + 1] ? (

@@ -290,6 +290,30 @@ configuration remains unclosed, contributes to the final bounded gap, and keeps
 the overall result from reporting exact unless its upper bound is later below
 the incumbent.
 
+### Candidate And Memory Soft Limits
+
+Candidate and workload soft limits are proof-budget controls, not correctness
+shortcuts. If a limit fires before a configuration is closed, the configuration
+remains unproved and the final response must stay bounded unless another proof
+path closes it.
+
+The default exact candidate-join candidate soft limit is `20000` and is
+intentionally modest for small searches. For locked/all scopes with at least a
+60s budget and 900+ calculated cards, the solver auto-raises the candidate soft
+limit to `400000`. Frontend preview code should not lower this limit by default;
+doing so can create early bounded results that diagnose the override rather than
+the real proof frontier.
+
+`optimization.memorySoftLimitMiB` is a best-effort runtime guard. In browser
+workers the solver samples `performance.memory.usedJSHeapSize` every 50ms and
+uses the lower of the configured MiB limit and 65% of the browser-reported JS
+heap limit. When the guard fires, the response sets `memoryLimited = true`,
+marks the run non-exhaustive, and reports bounded instead of claiming proof.
+
+Browser memory APIs are incomplete. The JS heap counter may be lower than the
+Chrome task-manager working set for a tab or dedicated worker. The guard reduces
+OOM risk, but it is not a hard process-memory cap.
+
 ### Bounded DFS
 
 When exact candidate join does not prove a configuration, DFS searches the
@@ -403,6 +427,13 @@ can find a strong incumbent quickly, but it cannot prove that a weaker-looking
 slot-local team is not required for a better global triple after shared items
 and card conflicts are considered.
 
+The frontend preview contains a temporary `legacy-greedy-single` comparison
+mode. It still enumerates shared area-item configurations and tries all three
+slot-order permutations while enforcing cross-slot card disjointness and medley
+combo carry-over. It is useful for user-facing comparison only; it is not a
+proof path, does not report bounded/exact status, and should remain removable
+without changing the public medley search API.
+
 The saved Bestdori-compatible material is still useful for formula compatibility
 and historical comparison. It does not provide an exact proof for HHWX medley
 search because the medley problem includes shared item coupling, sequential
@@ -507,9 +538,16 @@ node .\scripts\bandori-medley-hard-case-benchmark.cjs gate-120
 Important shorter spot checks:
 
 ```powershell
+node .\scripts\bandori-medley-hard-case-benchmark.cjs focus-6-300
 node .\scripts\bandori-medley-hard-case-benchmark.cjs p05-visual
 node .\scripts\bandori-medley-hard-case-benchmark.cjs p01-locked
 ```
+
+`focus-6-300` is the preferred pre-matrix check for current all-scope optimizer
+work. It runs the six retained focus cases `P02:260`, `P04:260`, `P08:323`,
+`P10:244`, `P04:244`, and `P08:260`, records exact-join diagnostics, and samples
+peak process working set in MiB. Run the full 40-case `all-300` matrix only
+after this focus set is acceptable.
 
 The latest detailed evidence is recorded in
 `medley-real-profile-benchmark-2026-05-31.md`.
@@ -543,18 +581,22 @@ response fields only:
   `stats.observedScoreUpperBoundGap`, and `stats.elapsedMs`.
 
 Do not build product behavior around individual profiling counters or
-`configurationTrace`.
+`configurationTrace`. The current preview may copy diagnostic counters and
+configuration trace into a debug report for maintainers, but those fields should
+not become durable UI contracts.
 
 Before shipping the UI, run at least:
 
 ```powershell
+node .\scripts\bandori-medley-hard-case-benchmark.cjs focus-6-300
 node .\scripts\bandori-medley-hard-case-benchmark.cjs p05-visual
 node .\scripts\bandori-medley-hard-case-benchmark.cjs p01-locked
 ```
 
 and manually verify that the UI exposes running state, elapsed time,
-cancellation, exact/bounded status, locked-scope wording, and bounded gap
-display.
+cancellation, proof status, early-stop reasons, memory/debug information, and
+bounded gap display without exposing raw `exact` / `bounded` strings as
+user-facing labels.
 
 ## Remaining Risks And Future Work
 

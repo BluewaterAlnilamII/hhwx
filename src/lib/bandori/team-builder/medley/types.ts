@@ -60,6 +60,7 @@ export type BandoriMedleySearchOptimizationOptions = {
   enableExactCandidateJoin?: boolean;
   exactCandidateSoftLimit?: number;
   exactNodeSoftLimit?: number;
+  memorySoftLimitMiB?: number;
   enableConflictExactBnb?: boolean;
   conflictExactNodeLimit?: number;
   conflictSlotSolveNodeLimit?: number;
@@ -123,6 +124,8 @@ export type MedleyExactCandidateJoinAbortReason =
   | "candidate-fill-deadline"
   | "candidate-fill-soft-limit"
   | "candidate-fill-generator-aborted"
+  | "memory-soft-limit"
+  | "solve-workload-limit"
   | "solve-timeout"
   | null;
 
@@ -435,6 +438,11 @@ export type BandoriMedleyTeamSearchProfilingStats = {
   exactCandidateJoinPoppedNodeCount: number;
   exactCandidateJoinPairCount: number;
   exactCandidateJoinThirdQueryCount: number;
+  exactCandidateJoinThirdShortlistQueryCount: number;
+  exactCandidateJoinThirdShortlistHitCount: number;
+  exactCandidateJoinThirdShortlistFallbackCount: number;
+  exactCandidateJoinThirdShortlistExhaustiveMissCount: number;
+  exactCandidateJoinThirdFallbackWordScanCount: number;
   exactCandidateJoinInitialCandidateElapsedMs: number;
   exactCandidateJoinInitialCandidateElapsedMsBySlot: number[];
   exactCandidateJoinPairUpperElapsedMs: number;
@@ -505,8 +513,16 @@ export type BandoriMedleyTeamSearchStats = {
   isExhaustive: boolean;
   /** True when `maxSearchDurationMs` stopped the run before proof completion. */
   timedOut: boolean;
-  /** Frontend status label: `exact` is proven globally for the requested scope; `bounded` is best-so-far plus gap. */
-  searchMode: "exact" | "bounded";
+  /** True when a runtime heap guard stopped the run before proof completion. */
+  memoryLimited: boolean;
+  memorySoftLimitMiB: number | null;
+  peakUsedHeapMiB: number | null;
+  /**
+   * Frontend status label: `exact` is proven globally for the requested scope;
+   * `bounded` is best-so-far plus gap. Null means the caller intentionally used
+   * a non-proof comparison mode, so no exact/bounded label should be inferred.
+   */
+  searchMode: "exact" | "bounded" | null;
   /** Optimistic upper bound for bounded runs; null when no meaningful bound is available. */
   observedScoreUpperBound: number | null;
   /** Difference between the optimistic upper bound and the displayed result score. Exact runs report 0. */

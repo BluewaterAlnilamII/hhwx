@@ -11,6 +11,32 @@ import {
   type BestdoriSongMaster,
 } from "@/lib/bandori-team-search";
 import {
+  searchBandoriBestMedleyTeams,
+  type BandoriMedleySongSearchInput,
+  type BandoriMedleyTeamSearchResult,
+  type BandoriMedleyTeamSearchInput,
+  type BandoriMedleyTeamSearchResponse,
+  type BandoriMedleyTeamSearchStats,
+} from "@/lib/bandori/team-builder/medley";
+import {
+  buildCalculatedCards,
+  createAreaItemConfigurations,
+  pruneDominatedAreaItemConfigurations,
+} from "@/lib/bandori/team-builder/core";
+import { buildMedleyResult, pushMedleyResult, sortMedleyResults } from "@/lib/bandori/team-builder/medley/results";
+import {
+  buildFastGreedyMedleySlotCandidate,
+  getMedleyGreedySeedSlotIndices,
+} from "@/lib/bandori/team-builder/medley/seeds";
+import {
+  buildMedleySlotBuildContexts,
+  buildMedleySlotSearches,
+  createMedleySlotInput,
+  pruneDominatedMedleySlotCards,
+} from "@/lib/bandori/team-builder/medley/slots";
+import { createInitialMedleyProfilingStats } from "@/lib/bandori/team-builder/medley/profiling";
+import type { MedleyTeamCandidate } from "@/lib/bandori/team-builder/medley/types";
+import {
   type BandoriCharacterBonusState,
   type BandoriEventBonus,
   type BestdoriAreaItemMaster,
@@ -32,6 +58,9 @@ type MasterResponse<T> = {
 type EventBonusResponse = {
   bonuses: BandoriEventBonus[];
 };
+
+const MEDLEY_FRONTEND_MEMORY_SOFT_LIMIT_MIB = 2800;
+type MedleyCalculationMode = "maximize" | "legacy-greedy-single";
 
 type TeamSearchWorkerSearchRequest = {
   type: "search";
@@ -58,6 +87,10 @@ type TeamSearchWorkerSearchRequest = {
     difficulty: BandoriTeamSearchDifficulty;
     perfectRate: number;
   };
+  songs?: Array<{
+    songId: number;
+    difficulty: BandoriTeamSearchDifficulty;
+  }>;
   cards: {
     excludedCardIds: number[];
   };
@@ -65,6 +98,7 @@ type TeamSearchWorkerSearchRequest = {
     target: BandoriTeamSearchTarget;
     resultLimit: number;
     maxSearchDurationMs: number;
+    medleyMode?: MedleyCalculationMode;
   };
 };
 
@@ -75,6 +109,10 @@ export type TeamSearchWorkerPreloadRequest = {
     songId: number;
     difficulty: BandoriTeamSearchDifficulty;
   };
+  songs?: Array<{
+    songId: number;
+    difficulty: BandoriTeamSearchDifficulty;
+  }>;
   event?: {
     eventId?: number;
   };
@@ -94,7 +132,7 @@ export type TeamSearchWorkerResponse =
       requestId: string;
       type: "search";
       ok: true;
-      result: BandoriTeamSearchResponse;
+      result: BandoriTeamSearchResponse | BandoriMedleyTeamSearchResponse;
     }
   | {
       requestId: string;
@@ -206,6 +244,238 @@ function mergeEventBonus(base: BandoriEventBonus | null, override: Partial<Bando
   return Object.keys(merged).length > 0 ? merged : null;
 }
 
+function buildMedleyGreedySlotOrders(slotCount: number, preferredOrder: number[]): number[][] {
+  const orders: number[][] = [];
+  const pushUniqueOrder = (order: number[]): void => {
+    const key = order.join(",");
+    if (order.length === slotCount && !orders.some((existing) => existing.join(",") === key)) {
+      orders.push(order);
+    }
+  };
+
+  pushUniqueOrder(preferredOrder);
+  if (slotCount === 3) {
+    pushUniqueOrder([2, 1, 0]);
+    pushUniqueOrder([2, 0, 1]);
+    pushUniqueOrder([1, 2, 0]);
+    pushUniqueOrder([1, 0, 2]);
+    pushUniqueOrder([0, 2, 1]);
+    pushUniqueOrder([0, 1, 2]);
+  } else {
+    pushUniqueOrder(Array.from({ length: slotCount }, (_, index) => slotCount - index - 1));
+    pushUniqueOrder(Array.from({ length: slotCount }, (_, index) => index));
+  }
+  return orders;
+}
+
+function buildSharedConfigurationLegacyGreedyMedleyResponse({
+  input,
+  songInputs,
+  server,
+  perfectRate,
+  resultLimit,
+  startedAt,
+  deadlineAt,
+}: {
+  input: BandoriMedleyTeamSearchInput;
+  songInputs: BandoriMedleySongSearchInput[];
+  server: number;
+  perfectRate: number;
+  resultLimit: number;
+  startedAt: number;
+  deadlineAt: number;
+}): BandoriMedleyTeamSearchResponse {
+  const firstSongInput = songInputs[0];
+  if (!firstSongInput) {
+    const profiling = createInitialMedleyProfilingStats(0);
+    return {
+      results: [],
+      stats: {
+        candidateCardCount: 0,
+        rawAreaItemConfigurationCount: 0,
+        areaItemConfigurationCount: 0,
+        prunedAreaItemConfigurationCount: 0,
+        enumeratedTeamCount: 0,
+        evaluatedTeamCount: 0,
+        prunedBranchCount: 0,
+        elapsedMs: Math.round(performance.now() - startedAt),
+        isExhaustive: false,
+        timedOut: false,
+        memoryLimited: false,
+        memorySoftLimitMiB: null,
+        peakUsedHeapMiB: null,
+        searchMode: null,
+        observedScoreUpperBound: null,
+        observedScoreUpperBoundGap: null,
+        profiling,
+      },
+    };
+  }
+
+  const firstSlotInput = createMedleySlotInput(input, firstSongInput);
+  const calculatedCards = buildCalculatedCards(firstSlotInput);
+  const rawConfigurations = createAreaItemConfigurations(input.userAreaItems);
+  const configurations = pruneDominatedAreaItemConfigurations(rawConfigurations, calculatedCards, firstSlotInput, server);
+  const profiling = createInitialMedleyProfilingStats(configurations.length);
+  const stats: BandoriMedleyTeamSearchStats = {
+    candidateCardCount: calculatedCards.length,
+    rawAreaItemConfigurationCount: rawConfigurations.length,
+    areaItemConfigurationCount: configurations.length,
+    prunedAreaItemConfigurationCount: rawConfigurations.length - configurations.length,
+    enumeratedTeamCount: 0,
+    evaluatedTeamCount: 0,
+    prunedBranchCount: 0,
+    elapsedMs: 0,
+    isExhaustive: false,
+    timedOut: false,
+    memoryLimited: false,
+    memorySoftLimitMiB: null,
+    peakUsedHeapMiB: null,
+    searchMode: null,
+    observedScoreUpperBound: null,
+    observedScoreUpperBoundGap: null,
+    profiling,
+  };
+  const results: BandoriMedleyTeamSearchResult[] = [];
+  const buildContexts = buildMedleySlotBuildContexts(input, songInputs, calculatedCards, server);
+  const isPastDeadline = (): boolean => {
+    const timedOut = performance.now() >= deadlineAt;
+    if (timedOut) {
+      stats.timedOut = true;
+    }
+    return timedOut;
+  };
+
+  for (const configuration of configurations) {
+    if (isPastDeadline()) {
+      break;
+    }
+    profiling.startedAreaItemConfigurationCount += 1;
+    const slots = pruneDominatedMedleySlotCards(buildMedleySlotSearches(
+      input,
+      songInputs,
+      calculatedCards,
+      configuration,
+      server,
+      buildContexts,
+    ));
+    const seedOrders = buildMedleyGreedySlotOrders(slots.length, getMedleyGreedySeedSlotIndices(slots));
+    let completedConfiguration = false;
+
+    for (const seedOrder of seedOrders) {
+      const selectedBySong: Array<MedleyTeamCandidate | undefined> = [];
+      const bannedCardIds = new Set<number>();
+      let completedSeedOrder = true;
+
+      for (const slotIndex of seedOrder) {
+        if (isPastDeadline()) {
+          completedSeedOrder = false;
+          break;
+        }
+        const slot = slots[slotIndex];
+        const candidate = buildFastGreedyMedleySlotCandidate(
+          slot,
+          bannedCardIds,
+          server,
+          perfectRate,
+          stats,
+          profiling,
+        );
+        if (!candidate) {
+          completedSeedOrder = false;
+          break;
+        }
+        selectedBySong[slot.songIndex] = candidate;
+        for (const cardId of candidate.cardIds) {
+          bannedCardIds.add(cardId);
+        }
+      }
+
+      const result = completedSeedOrder
+        ? buildMedleyResult(slots, selectedBySong, configuration)
+        : null;
+      if (result) {
+        completedConfiguration = true;
+        pushMedleyResult(results, result, resultLimit);
+        profiling.bestGreedySeedScore = Math.max(profiling.bestGreedySeedScore ?? Number.NEGATIVE_INFINITY, result.score);
+        if (seedOrder.map((slotIndex) => slots[slotIndex].songIndex).join(",") === "2,1,0") {
+          profiling.reverseSongOrderGreedySeedScore = Math.max(
+            profiling.reverseSongOrderGreedySeedScore ?? Number.NEGATIVE_INFINITY,
+            result.score,
+          );
+        }
+      }
+      if (stats.timedOut) {
+        break;
+      }
+    }
+
+    if (completedConfiguration) {
+      profiling.completedAreaItemConfigurationCount += 1;
+    }
+    if (stats.timedOut) {
+      break;
+    }
+  }
+  sortMedleyResults(results);
+  if (profiling.bestGreedySeedScore === Number.NEGATIVE_INFINITY) {
+    profiling.bestGreedySeedScore = null;
+  }
+  stats.elapsedMs = Math.round(performance.now() - startedAt);
+
+  return {
+    results,
+    stats,
+  };
+}
+
+function buildLegacyGreedyMedleyInput({
+  userCards,
+  userAreaItems,
+  characterBonuses,
+  cardsById,
+  charactersById,
+  skillsById,
+  areaItemsById,
+  songs,
+  eventBonus,
+  eventFormula,
+  perfectRate,
+  server,
+}: {
+  userCards: BandoriMedleyTeamSearchInput["userCards"];
+  userAreaItems: BandoriMedleyTeamSearchInput["userAreaItems"];
+  characterBonuses: BandoriMedleyTeamSearchInput["characterBonuses"];
+  cardsById: BandoriMedleyTeamSearchInput["cardsById"];
+  charactersById: BandoriMedleyTeamSearchInput["charactersById"];
+  skillsById: BandoriMedleyTeamSearchInput["skillsById"];
+  areaItemsById: BandoriMedleyTeamSearchInput["areaItemsById"];
+  songs: BandoriMedleySongSearchInput[];
+  eventBonus: BandoriMedleyTeamSearchInput["eventBonus"];
+  eventFormula: 0 | 1 | 2;
+  perfectRate: number;
+  server: number;
+}): BandoriMedleyTeamSearchInput {
+  return {
+    userCards,
+    userAreaItems,
+    characterBonuses,
+    cardsById,
+    charactersById,
+    skillsById,
+    areaItemsById,
+    songs,
+    eventBonus,
+    eventType: "medley",
+    eventFormula,
+    target: "score",
+    resultLimit: 1,
+    perfectRate,
+    useSpecialRoomBonus: false,
+    server,
+  };
+}
+
 async function preloadSearchData(request: TeamSearchWorkerPreloadRequest): Promise<void> {
   const preloadRequests: Array<Promise<unknown>> = [
     requestJson<MasterResponse<Record<string, BestdoriCardMaster | undefined>>>("/api/bandori/master/cards"),
@@ -219,6 +489,10 @@ async function preloadSearchData(request: TeamSearchWorkerPreloadRequest): Promi
     const songId = Math.trunc(request.song.songId);
     preloadRequests.push(requestJson<{ chart: BestdoriChartEntity[] }>(`/api/bandori/charts/${songId}/${request.song.difficulty}`));
   }
+  for (const song of request.songs ?? []) {
+    const songId = Math.trunc(song.songId);
+    preloadRequests.push(requestJson<{ chart: BestdoriChartEntity[] }>(`/api/bandori/charts/${songId}/${song.difficulty}`));
+  }
 
   if (request.event?.eventId) {
     preloadRequests.push(requestJson<EventBonusResponse>(`/api/bandori/events/bonuses?event=${request.event.eventId}`));
@@ -227,15 +501,29 @@ async function preloadSearchData(request: TeamSearchWorkerPreloadRequest): Promi
   await Promise.all(preloadRequests);
 }
 
-async function runSearch(request: TeamSearchWorkerSearchRequest): Promise<BandoriTeamSearchResponse> {
+async function runSearch(request: TeamSearchWorkerSearchRequest): Promise<BandoriTeamSearchResponse | BandoriMedleyTeamSearchResponse> {
   const songId = Math.trunc(request.song.songId);
-  const [cardsPayload, charactersPayload, skillsPayload, areaItemsPayload, songsPayload, chartPayload, eventBonuses] = await Promise.all([
+  const medleySongs = request.event.eventType === "medley" ? request.songs?.slice(0, 3) ?? [] : [];
+  const chartRequests = medleySongs.length > 0
+    ? medleySongs.map((song) => (
+      requireCachedJson<{ chart: BestdoriChartEntity[] }>(
+        `/api/bandori/charts/${Math.trunc(song.songId)}/${song.difficulty}`,
+        "谱面数据",
+      )
+    ))
+    : [
+      requireCachedJson<{ chart: BestdoriChartEntity[] }>(
+        `/api/bandori/charts/${songId}/${request.song.difficulty}`,
+        "谱面数据",
+      ),
+    ];
+  const [cardsPayload, charactersPayload, skillsPayload, areaItemsPayload, songsPayload, chartPayloads, eventBonuses] = await Promise.all([
     requireCachedJson<MasterResponse<Record<string, BestdoriCardMaster | undefined>>>("/api/bandori/master/cards", "卡牌数据"),
     requireCachedJson<MasterResponse<Record<string, { bandId?: number | null } | undefined>>>("/api/bandori/master/characters", "角色数据"),
     requireCachedJson<MasterResponse<Record<string, BestdoriSkillMaster | undefined>>>("/api/bandori/master/skills", "技能数据"),
     requireCachedJson<MasterResponse<Record<string, BestdoriAreaItemMaster | undefined>>>("/api/bandori/master/areaItems", "区域道具数据"),
     requireCachedJson<MasterResponse<Record<string, BestdoriSongMaster | undefined>>>("/api/bandori/master/songs", "歌曲数据"),
-    requireCachedJson<{ chart: BestdoriChartEntity[] }>(`/api/bandori/charts/${songId}/${request.song.difficulty}`, "谱面数据"),
+    Promise.all(chartRequests),
     request.event.eventId
       ? requireCachedJson<EventBonusResponse>(`/api/bandori/events/bonuses?event=${request.event.eventId}`, "活动加成").then((response) => response.bonuses)
       : Promise.resolve([]),
@@ -245,7 +533,8 @@ async function runSearch(request: TeamSearchWorkerSearchRequest): Promise<Bandor
   if (!song) {
     throw new Error("歌曲数据不存在");
   }
-  if (!Array.isArray(chartPayload.chart)) {
+  const chartPayload = chartPayloads[0];
+  if (!chartPayload || !Array.isArray(chartPayload.chart)) {
     throw new Error("谱面数据格式无效");
   }
 
@@ -261,6 +550,87 @@ async function runSearch(request: TeamSearchWorkerSearchRequest): Promise<Bandor
     }
   ));
   const eventBonus = mergeEventBonus(eventBonuses[0] ?? null, request.event.bonusOverride);
+
+  if (request.event.eventType === "medley") {
+    if (medleySongs.length !== 3) {
+      throw new Error("组曲LIVE需要选择 3 首歌曲");
+    }
+    const medleySongInputs = medleySongs.map((medleySong, index) => {
+      const medleySongId = Math.trunc(medleySong.songId);
+      const medleySongMaster = songsPayload.payload[String(medleySongId)];
+      const medleyChartPayload = chartPayloads[index];
+      if (!medleySongMaster) {
+        throw new Error(`第 ${index + 1} 首歌曲数据不存在`);
+      }
+      if (!medleyChartPayload || !Array.isArray(medleyChartPayload.chart)) {
+        throw new Error(`第 ${index + 1} 首谱面数据格式无效`);
+      }
+      return {
+        chart: medleyChartPayload.chart,
+        chartCacheKey: `${medleySongId}:${medleySong.difficulty}:medley:${index}`,
+        song: medleySongMaster,
+        difficulty: medleySong.difficulty,
+      };
+    });
+    const characterBonuses = buildCharacterBonuses(
+      getGameProfileCharacterPotentials(request.profilePayload),
+      getGameProfileCharacterMissionBonuses(request.profilePayload),
+    );
+
+    if (request.calculation.medleyMode === "legacy-greedy-single") {
+      const startedAt = performance.now();
+      const deadlineAt = startedAt + Math.min(300000, Math.max(1000, request.calculation.maxSearchDurationMs));
+      const server = request.profilePayload.bestdoriProfile.server;
+      const medleyInput = buildLegacyGreedyMedleyInput({
+        userCards,
+        userAreaItems,
+        characterBonuses,
+        cardsById: cardsPayload.payload,
+        charactersById: charactersPayload.payload,
+        skillsById: skillsPayload.payload,
+        areaItemsById: areaItemsPayload.payload,
+        songs: medleySongInputs,
+        eventBonus,
+        eventFormula: request.event.formula,
+        perfectRate: request.song.perfectRate,
+        server,
+      });
+      return buildSharedConfigurationLegacyGreedyMedleyResponse({
+        input: medleyInput,
+        songInputs: medleySongInputs,
+        server,
+        perfectRate: request.song.perfectRate,
+        resultLimit: request.calculation.resultLimit,
+        startedAt,
+        deadlineAt,
+      });
+    }
+
+    return searchBandoriBestMedleyTeams({
+      userCards,
+      userAreaItems,
+      characterBonuses,
+      cardsById: cardsPayload.payload,
+      charactersById: charactersPayload.payload,
+      skillsById: skillsPayload.payload,
+      areaItemsById: areaItemsPayload.payload,
+      songs: medleySongInputs,
+      eventBonus,
+      eventType: "medley",
+      eventFormula: request.event.formula,
+      target: "score",
+      resultLimit: request.calculation.resultLimit,
+      perfectRate: request.song.perfectRate,
+      useSpecialRoomBonus: false,
+      server: request.profilePayload.bestdoriProfile.server,
+      maxSearchDurationMs: Math.min(300000, Math.max(1000, request.calculation.maxSearchDurationMs)),
+      coarseAreaItemFilter: { mode: "all" },
+          optimization: {
+            debugConfigurationTrace: true,
+            memorySoftLimitMiB: MEDLEY_FRONTEND_MEMORY_SOFT_LIMIT_MIB,
+          },
+        });
+  }
 
   return searchBandoriBestTeams({
     userCards,

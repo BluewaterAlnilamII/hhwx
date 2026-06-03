@@ -28,6 +28,14 @@ const expectedProfileIdentityByLabel = new Map(
   expectedProfileIdentities20260602.map((profile) => [profile.label, profile]),
 );
 
+const medleyAllScopeEventKeys20260602 = ["none", "244", "260", "323"];
+
+function makeAllScopeCases(profileLabels, eventKeys = medleyAllScopeEventKeys20260602) {
+  return profileLabels.flatMap((profileLabel) => (
+    eventKeys.map((eventKey) => ({ profileLabel, eventKey }))
+  ));
+}
+
 const scenarios = {
   "gate-120": {
     description: "Composite gate: all-300 plus known locked/single hard cases at 120s.",
@@ -55,6 +63,18 @@ const scenarios = {
       HHWX_REAL_PROFILE_EVENT_KEYS: "none,244,260,323",
     },
   },
+  "all-40-focus-300": {
+    description: "P01-P10 x none/244/260/323 all-scope record-only run, one process per case, 300s per case.",
+    reportKind: "focus",
+    recordOnly: true,
+    maxElapsedMs: 300000,
+    env: {
+      HHWX_REAL_PROFILE_SCOPE_MATRIX: "1",
+      HHWX_REAL_PROFILE_MATRIX_LOCKED_SCOPES: "0",
+      HHWX_REAL_PROFILE_DURATION_MS: "300000",
+    },
+    cases: makeAllScopeCases(expectedProfileIdentities20260602.map((profile) => profile.label)),
+  },
   "focus-6-300": {
     description: "Six focused all-scope cases at 300s with memory monitoring.",
     reportKind: "focus",
@@ -73,6 +93,131 @@ const scenarios = {
       { profileLabel: "P10", eventKey: "244", baselineExact: false, baselineGap: 554527 },
       { profileLabel: "P04", eventKey: "244", baselineExact: true, baselineElapsedMs: 231981 },
       { profileLabel: "P08", eventKey: "260", baselineExact: true, baselineElapsedMs: 295714 },
+    ],
+  },
+  "bounded-3-trace-300": {
+    description: "Trace three bounded non-OOM all-scope cases at 300s.",
+    reportKind: "focus",
+    recordOnly: true,
+    maxElapsedMs: 300000,
+    env: {
+      HHWX_REAL_PROFILE_SCOPE_MATRIX: "1",
+      HHWX_REAL_PROFILE_MATRIX_LOCKED_SCOPES: "0",
+      HHWX_REAL_PROFILE_DURATION_MS: "300000",
+      HHWX_REAL_PROFILE_OPTIMIZATION_JSON: "{\"debugConfigurationTrace\":true}",
+    },
+    cases: [
+      { profileLabel: "P08", eventKey: "323" },
+      { profileLabel: "P10", eventKey: "244" },
+      { profileLabel: "P08", eventKey: "260" },
+    ],
+  },
+  "p02-260-trace-300": {
+    description: "Trace P02:260 all-scope at 300s.",
+    reportKind: "focus",
+    recordOnly: true,
+    maxElapsedMs: 300000,
+    env: {
+      HHWX_REAL_PROFILE_SCOPE_MATRIX: "1",
+      HHWX_REAL_PROFILE_MATRIX_LOCKED_SCOPES: "0",
+      HHWX_REAL_PROFILE_DURATION_MS: "300000",
+      HHWX_REAL_PROFILE_OPTIMIZATION_JSON: "{\"debugConfigurationTrace\":true}",
+    },
+    cases: [
+      { profileLabel: "P02", eventKey: "260" },
+    ],
+  },
+  "p04-260-trace-300": {
+    description: "Trace P04:260 all-scope at 300s.",
+    reportKind: "focus",
+    recordOnly: true,
+    maxElapsedMs: 300000,
+    env: {
+      HHWX_REAL_PROFILE_SCOPE_MATRIX: "1",
+      HHWX_REAL_PROFILE_MATRIX_LOCKED_SCOPES: "0",
+      HHWX_REAL_PROFILE_DURATION_MS: "300000",
+      HHWX_REAL_PROFILE_OPTIMIZATION_JSON: "{\"debugConfigurationTrace\":true}",
+    },
+    cases: [
+      { profileLabel: "P04", eventKey: "260" },
+    ],
+  },
+  "bounded-2-fill-trace-300": {
+    description: "Trace two candidate-fill bounded all-scope cases at 300s.",
+    reportKind: "focus",
+    recordOnly: true,
+    maxElapsedMs: 300000,
+    env: {
+      HHWX_REAL_PROFILE_SCOPE_MATRIX: "1",
+      HHWX_REAL_PROFILE_MATRIX_LOCKED_SCOPES: "0",
+      HHWX_REAL_PROFILE_DURATION_MS: "300000",
+      HHWX_REAL_PROFILE_OPTIMIZATION_JSON: "{\"debugConfigurationTrace\":true}",
+    },
+    cases: [
+      { profileLabel: "P08", eventKey: "323" },
+      { profileLabel: "P10", eventKey: "244" },
+    ],
+  },
+  "bounded-2-soft600-trace-300": {
+    description: "Trace two candidate-fill bounded all-scope cases at 300s with a 600k exact candidate soft limit.",
+    reportKind: "focus",
+    recordOnly: true,
+    maxElapsedMs: 300000,
+    env: {
+      HHWX_REAL_PROFILE_SCOPE_MATRIX: "1",
+      HHWX_REAL_PROFILE_MATRIX_LOCKED_SCOPES: "0",
+      HHWX_REAL_PROFILE_DURATION_MS: "300000",
+      HHWX_REAL_PROFILE_OPTIMIZATION_JSON: "{\"debugConfigurationTrace\":true,\"exactCandidateSoftLimit\":600000}",
+    },
+    cases: [
+      { profileLabel: "P08", eventKey: "323" },
+      { profileLabel: "P10", eventKey: "244" },
+    ],
+  },
+  "bounded-2-soft520-trace-300": {
+    description: "Trace two candidate-fill bounded all-scope cases at 300s with a 520k exact candidate soft limit.",
+    reportKind: "focus",
+    recordOnly: true,
+    maxElapsedMs: 300000,
+    env: {
+      HHWX_REAL_PROFILE_SCOPE_MATRIX: "1",
+      HHWX_REAL_PROFILE_MATRIX_LOCKED_SCOPES: "0",
+      HHWX_REAL_PROFILE_DURATION_MS: "300000",
+      HHWX_REAL_PROFILE_OPTIMIZATION_JSON: "{\"debugConfigurationTrace\":true,\"exactCandidateSoftLimit\":520000}",
+    },
+    cases: [
+      { profileLabel: "P08", eventKey: "323" },
+      { profileLabel: "P10", eventKey: "244" },
+    ],
+  },
+  "p10-244-soft800-trace-300": {
+    description: "Trace P10:244 at 300s with an 800k exact candidate soft limit.",
+    reportKind: "focus",
+    recordOnly: true,
+    maxElapsedMs: 300000,
+    env: {
+      HHWX_REAL_PROFILE_SCOPE_MATRIX: "1",
+      HHWX_REAL_PROFILE_MATRIX_LOCKED_SCOPES: "0",
+      HHWX_REAL_PROFILE_DURATION_MS: "300000",
+      HHWX_REAL_PROFILE_OPTIMIZATION_JSON: "{\"debugConfigurationTrace\":true,\"exactCandidateSoftLimit\":800000}",
+    },
+    cases: [
+      { profileLabel: "P10", eventKey: "244" },
+    ],
+  },
+  "p08-260-trace-300": {
+    description: "Trace P08:260 all-scope at 300s.",
+    reportKind: "focus",
+    recordOnly: true,
+    maxElapsedMs: 300000,
+    env: {
+      HHWX_REAL_PROFILE_SCOPE_MATRIX: "1",
+      HHWX_REAL_PROFILE_MATRIX_LOCKED_SCOPES: "0",
+      HHWX_REAL_PROFILE_DURATION_MS: "300000",
+      HHWX_REAL_PROFILE_OPTIMIZATION_JSON: "{\"debugConfigurationTrace\":true}",
+    },
+    cases: [
+      { profileLabel: "P08", eventKey: "260" },
     ],
   },
   "p05-p09-300": {
@@ -376,7 +521,7 @@ function assertMatrixReport(scenarioName, scenario) {
 }
 
 function summarizeFocusRows(rows, scenario) {
-  const boundedRows = rows.filter((row) => !row.baselineExact);
+  const boundedRows = rows.filter((row) => row.baselineExact === false);
   const exactConvertedCount = boundedRows.filter((row) => row.result.exact === true).length;
   const boundedGapTotal = boundedRows.reduce((sum, row) => {
     if (row.result.exact) {
@@ -391,6 +536,7 @@ function summarizeFocusRows(rows, scenario) {
     total: rows.length,
     exactCount: rows.filter((row) => row.result.exact === true).length,
     timeoutCount: rows.filter((row) => row.result.timedOut === true).length,
+    failedCount: rows.filter((row) => row.result.failed === true).length,
     maxElapsedMs: rows.reduce((max, row) => Math.max(max, row.result.elapsedMs ?? 0), 0),
     boundedBaselineCount: boundedRows.length,
     boundedExactConvertedCount: exactConvertedCount,
@@ -400,6 +546,7 @@ function summarizeFocusRows(rows, scenario) {
       ? (baselineBoundedGapTotal - boundedGapTotal) / baselineBoundedGapTotal
       : null,
     peakWorkingSetBytes: rows.reduce((max, row) => Math.max(max, row.memory.peakWorkingSetBytes ?? 0), 0),
+    memorySampleCount: rows.reduce((sum, row) => sum + (row.memory.sampleCount ?? 0), 0),
   };
 }
 
@@ -413,16 +560,21 @@ function toFocusMarkdown(report) {
     "",
     `Cases: ${report.summary.exactCount}/${report.summary.total} exact`,
     `Timeouts: ${report.summary.timeoutCount}`,
+    `Failures: ${report.summary.failedCount}`,
     `Bounded conversions: ${report.summary.boundedExactConvertedCount}/${report.summary.boundedBaselineCount}`,
     `Bounded gap total: ${Number.isFinite(report.summary.boundedGapTotal) ? report.summary.boundedGapTotal : "unknown"} / baseline ${report.summary.boundedBaselineGapTotal}`,
     `Bounded gap reduction: ${report.summary.boundedGapReductionRatio === null ? "unknown" : `${Math.round(report.summary.boundedGapReductionRatio * 1000) / 10}%`}`,
     `Peak working set: ${formatMiB(report.summary.peakWorkingSetBytes)} MiB`,
     "",
-    "| case | baseline | exact | elapsed ms | gap | abort reason | abort slot | soft limit | candidates | peak MiB |",
-    "| --- | --- | --- | ---: | ---: | --- | ---: | ---: | ---: | ---: |",
+    "| case | baseline | exact | elapsed ms | gap | abort reason | abort slot | soft limit | candidates | third fallback | fallback words | peak MiB | status |",
+    "| --- | --- | --- | ---: | ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |",
     ...report.rows.map((row) => [
       row.caseKey,
-      row.baselineExact ? `exact ${row.baselineElapsedMs ?? ""}`.trim() : `bounded gap ${row.baselineGap}`,
+      row.baselineExact === true
+        ? `exact ${row.baselineElapsedMs ?? ""}`.trim()
+        : row.baselineExact === false
+          ? `bounded gap ${row.baselineGap}`
+          : "",
       row.result.exact ? "yes" : "no",
       row.result.elapsedMs ?? "",
       row.result.observedScoreUpperBoundGap ?? "",
@@ -430,7 +582,10 @@ function toFocusMarkdown(report) {
       row.result.exactCandidateJoinAbortSlotIndex ?? "",
       row.result.exactCandidateJoinAbortCandidateSoftLimit ?? "",
       row.result.exactCandidateJoinAbortCandidateCount ?? "",
+      row.result.exactCandidateJoinThirdShortlistFallbackCount ?? "",
+      row.result.exactCandidateJoinThirdFallbackWordScanCount ?? "",
       formatMiB(row.memory.peakWorkingSetBytes),
+      row.result.failureReason ?? row.result.searchMode ?? "",
     ].join(" | ")).map((line) => `| ${line} |`),
     "",
   ].join("\n");
@@ -452,6 +607,14 @@ function assertFocusReport(scenarioName, scenario, report) {
     throw new Error(`${scenarioName}: expected ${scenario.cases.length} cases, got ${report.rows.length}`);
   }
   assertReportProfileIdentities(scenarioName, report.rows);
+  if (scenario.recordOnly) {
+    console.log(
+      `record ${scenarioName}: exact ${report.summary.exactCount}/${report.summary.total}, `
+      + `failures=${report.summary.failedCount}, `
+      + `peak=${formatMiB(report.summary.peakWorkingSetBytes)} MiB`,
+    );
+    return;
+  }
   if (report.summary.timeoutCount > 0) {
     throw new Error(`${scenarioName}: ${report.summary.timeoutCount} case(s) timed out`);
   }
@@ -521,7 +684,34 @@ async function runFocusScenario(scenarioName, scenario) {
       `${scenarioName}:${caseKey}`,
     );
     if (result.status !== 0) {
-      throw new Error(`${scenarioName} ${caseKey}: runner exited with status ${result.status}`);
+      if (!scenario.recordOnly) {
+        throw new Error(`${scenarioName} ${caseKey}: runner exited with status ${result.status}`);
+      }
+      rows.push({
+        caseKey,
+        profileLabel: caseSpec.profileLabel,
+        eventKey: caseSpec.eventKey,
+        baselineExact: caseSpec.baselineExact,
+        baselineGap: caseSpec.baselineGap ?? null,
+        baselineElapsedMs: caseSpec.baselineElapsedMs ?? null,
+        result: {
+          exact: false,
+          elapsedMs: null,
+          timedOut: false,
+          failed: true,
+          failureReason: result.signal
+            ? `runner-signal-${result.signal}`
+            : `runner-exit-${result.status}`,
+        },
+        profile: expectedProfileIdentityByLabel.get(caseSpec.profileLabel) ?? {
+          label: caseSpec.profileLabel,
+          profileHash: null,
+          cardCount: null,
+        },
+        memory: result.memory,
+        matrixRow: null,
+      });
+      continue;
     }
     const matrixReport = loadJson(path.join(benchmarkDir, "last-real-profile-medley-scope-matrix.json"));
     if (!Array.isArray(matrixReport.rows) || matrixReport.rows.length !== 1) {

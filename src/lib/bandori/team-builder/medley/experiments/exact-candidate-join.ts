@@ -28,6 +28,8 @@ import {
   MEDLEY_EXACT_CANDIDATE_JOIN_HIGH_PAIR_FINE_RECORD_THRESHOLD,
   MEDLEY_EXACT_CANDIDATE_JOIN_MIDDLE_FIRST_THIRD_SHORTLIST_SIZE,
   MEDLEY_EXACT_CANDIDATE_JOIN_PARETO_REMAINING_MAX_SLOT_CARDS,
+  MEDLEY_EXACT_CANDIDATE_JOIN_SOLVE_CACHE_ENTRY_LIMIT,
+  MEDLEY_EXACT_CANDIDATE_JOIN_SOLVE_MAX_SMALLEST_CANDIDATES,
   MEDLEY_EXACT_CANDIDATE_JOIN_THIRD_SHORTLIST_SIZE,
 } from "./exact-candidate-join-constants";
 import {
@@ -425,7 +427,7 @@ export function createMedleyExactSlotCandidateGenerator(
     }
 
     for (let index = node.startIndex; index <= slot.searchCards.length - remaining; index += 1) {
-      if ((index & 31) === 0 && performance.now() >= deadlineAt) {
+      if ((index & 31) === 0 && (performance.now() >= deadlineAt || isPastDeadline())) {
         stats.isExhaustive = false;
         stats.timedOut = true;
         stats.searchMode = "bounded";
@@ -1225,80 +1227,255 @@ export function solveMedleyExactCandidateJoin(
   const thirdCandidateLastWordMask = thirdCandidateLastWordRemainder === 0
     ? 0xffffffff
     : 0xffffffff >>> (32 - thirdCandidateLastWordRemainder);
-  const forbiddenThirdCandidateBitsCache = new WeakMap<MedleyTeamCandidate, Uint32Array>();
-  const getForbiddenThirdCandidateBits = (candidate: MedleyTeamCandidate): Uint32Array => {
-    const cached = forbiddenThirdCandidateBitsCache.get(candidate);
+  const containingThirdBitsByCandidate = new WeakMap<MedleyTeamCandidate, Uint32Array[]>();
+  let containingThirdBitsCacheEntryCount = 0;
+  const getContainingThirdBitsForCandidate = (candidate: MedleyTeamCandidate): Uint32Array[] => {
+    const cached = containingThirdBitsByCandidate.get(candidate);
     if (cached) {
       return cached;
     }
-    const forbiddenBits = buildMedleyExactForbiddenCandidateBits(
-      candidate,
-      containingThirdCandidateBitsByCardId,
-      thirdCandidateBitsetWordCount,
-    );
-    forbiddenThirdCandidateBitsCache.set(candidate, forbiddenBits);
-    return forbiddenBits;
+    const containingBits: Uint32Array[] = [];
+    for (const cardId of candidate.cardIds) {
+      const currentContainingBits = containingThirdCandidateBitsByCardId.get(cardId);
+      if (currentContainingBits) {
+        containingBits.push(currentContainingBits);
+      }
+    }
+    if (containingThirdBitsCacheEntryCount < MEDLEY_EXACT_CANDIDATE_JOIN_SOLVE_CACHE_ENTRY_LIMIT) {
+      containingThirdBitsByCandidate.set(candidate, containingBits);
+      containingThirdBitsCacheEntryCount += 1;
+    }
+    return containingBits;
+  };
+  const readCombinedContainingBitsWord = (containingBits: Uint32Array[], wordIndex: number): number => {
+    switch (containingBits.length) {
+      case 0:
+        return 0;
+      case 1:
+        return containingBits[0][wordIndex];
+      case 2:
+        return containingBits[0][wordIndex] | containingBits[1][wordIndex];
+      case 3:
+        return containingBits[0][wordIndex] | containingBits[1][wordIndex] | containingBits[2][wordIndex];
+      case 4:
+        return (
+          containingBits[0][wordIndex]
+          | containingBits[1][wordIndex]
+          | containingBits[2][wordIndex]
+          | containingBits[3][wordIndex]
+        );
+      default:
+        return (
+          containingBits[0][wordIndex]
+          | containingBits[1][wordIndex]
+          | containingBits[2][wordIndex]
+          | containingBits[3][wordIndex]
+          | containingBits[4][wordIndex]
+        );
+    }
   };
   const findBestDisjointThirdCandidateByForbiddenBits = (
     primaryForbiddenBits: Uint32Array,
-    secondaryForbiddenBits?: Uint32Array,
+    secondaryContainingBits?: Uint32Array[],
   ): MedleyTeamCandidate | null => {
     localThirdQueryCount += 1;
-    if (secondaryForbiddenBits) {
+    let scannedWordCount = 0;
+    const finishAvailableWord = (availableBits: number, wordIndex: number): MedleyTeamCandidate | null => {
+      const lowestAvailableBit = availableBits & -availableBits;
+      const bitIndex = 31 - Math.clz32(lowestAvailableBit);
+      localThirdFallbackWordScanCount += scannedWordCount;
+      return thirdCandidates[wordIndex * 32 + bitIndex] ?? null;
+    };
+    const scanLastWord = (availableBits: number): MedleyTeamCandidate | null => {
+      const maskedAvailableBits = availableBits & thirdCandidateLastWordMask;
+      return maskedAvailableBits !== 0 ? finishAvailableWord(maskedAvailableBits, thirdCandidateLastWordIndex) : null;
+    };
+    if (!secondaryContainingBits || secondaryContainingBits.length === 0) {
       for (let wordIndex = 0; wordIndex < thirdCandidateLastWordIndex; wordIndex += 1) {
-        const availableBits = (~(
-          primaryForbiddenBits[wordIndex]
-          | secondaryForbiddenBits[wordIndex]
-        )) >>> 0;
+        scannedWordCount += 1;
+        const availableBits = (~primaryForbiddenBits[wordIndex]) >>> 0;
         if (availableBits !== 0) {
-          const lowestAvailableBit = availableBits & -availableBits;
-          const bitIndex = 31 - Math.clz32(lowestAvailableBit);
-          return thirdCandidates[wordIndex * 32 + bitIndex] ?? null;
+          return finishAvailableWord(availableBits, wordIndex);
         }
       }
       if (thirdCandidateLastWordIndex >= 0) {
-        const availableBits = (~(
-          primaryForbiddenBits[thirdCandidateLastWordIndex]
-          | secondaryForbiddenBits[thirdCandidateLastWordIndex]
-        )) >>> 0 & thirdCandidateLastWordMask;
-        if (availableBits !== 0) {
-          const lowestAvailableBit = availableBits & -availableBits;
-          const bitIndex = 31 - Math.clz32(lowestAvailableBit);
-          return thirdCandidates[thirdCandidateLastWordIndex * 32 + bitIndex] ?? null;
+        scannedWordCount += 1;
+        const candidate = scanLastWord((~primaryForbiddenBits[thirdCandidateLastWordIndex]) >>> 0);
+        if (candidate) {
+          return candidate;
         }
       }
+      localThirdFallbackWordScanCount += scannedWordCount;
       return null;
     }
-    for (let wordIndex = 0; wordIndex < thirdCandidateLastWordIndex; wordIndex += 1) {
-      const availableBits = (~primaryForbiddenBits[wordIndex]) >>> 0;
-      if (availableBits !== 0) {
-        const lowestAvailableBit = availableBits & -availableBits;
-        const bitIndex = 31 - Math.clz32(lowestAvailableBit);
-        return thirdCandidates[wordIndex * 32 + bitIndex] ?? null;
+    if (secondaryContainingBits.length === 1) {
+      const bits0 = secondaryContainingBits[0];
+      for (let wordIndex = 0; wordIndex < thirdCandidateLastWordIndex; wordIndex += 1) {
+        scannedWordCount += 1;
+        const availableBits = (~(primaryForbiddenBits[wordIndex] | bits0[wordIndex])) >>> 0;
+        if (availableBits !== 0) {
+          return finishAvailableWord(availableBits, wordIndex);
+        }
+      }
+      if (thirdCandidateLastWordIndex >= 0) {
+        scannedWordCount += 1;
+        const candidate = scanLastWord((~(
+          primaryForbiddenBits[thirdCandidateLastWordIndex] | bits0[thirdCandidateLastWordIndex]
+        )) >>> 0);
+        if (candidate) {
+          return candidate;
+        }
+      }
+    } else if (secondaryContainingBits.length === 2) {
+      const bits0 = secondaryContainingBits[0];
+      const bits1 = secondaryContainingBits[1];
+      for (let wordIndex = 0; wordIndex < thirdCandidateLastWordIndex; wordIndex += 1) {
+        scannedWordCount += 1;
+        const availableBits = (~(primaryForbiddenBits[wordIndex] | bits0[wordIndex] | bits1[wordIndex])) >>> 0;
+        if (availableBits !== 0) {
+          return finishAvailableWord(availableBits, wordIndex);
+        }
+      }
+      if (thirdCandidateLastWordIndex >= 0) {
+        scannedWordCount += 1;
+        const candidate = scanLastWord((~(
+          primaryForbiddenBits[thirdCandidateLastWordIndex]
+          | bits0[thirdCandidateLastWordIndex]
+          | bits1[thirdCandidateLastWordIndex]
+        )) >>> 0);
+        if (candidate) {
+          return candidate;
+        }
+      }
+    } else if (secondaryContainingBits.length === 3) {
+      const bits0 = secondaryContainingBits[0];
+      const bits1 = secondaryContainingBits[1];
+      const bits2 = secondaryContainingBits[2];
+      for (let wordIndex = 0; wordIndex < thirdCandidateLastWordIndex; wordIndex += 1) {
+        scannedWordCount += 1;
+        const availableBits = (~(
+          primaryForbiddenBits[wordIndex] | bits0[wordIndex] | bits1[wordIndex] | bits2[wordIndex]
+        )) >>> 0;
+        if (availableBits !== 0) {
+          return finishAvailableWord(availableBits, wordIndex);
+        }
+      }
+      if (thirdCandidateLastWordIndex >= 0) {
+        scannedWordCount += 1;
+        const candidate = scanLastWord((~(
+          primaryForbiddenBits[thirdCandidateLastWordIndex]
+          | bits0[thirdCandidateLastWordIndex]
+          | bits1[thirdCandidateLastWordIndex]
+          | bits2[thirdCandidateLastWordIndex]
+        )) >>> 0);
+        if (candidate) {
+          return candidate;
+        }
+      }
+    } else if (secondaryContainingBits.length === 4) {
+      const bits0 = secondaryContainingBits[0];
+      const bits1 = secondaryContainingBits[1];
+      const bits2 = secondaryContainingBits[2];
+      const bits3 = secondaryContainingBits[3];
+      for (let wordIndex = 0; wordIndex < thirdCandidateLastWordIndex; wordIndex += 1) {
+        scannedWordCount += 1;
+        const availableBits = (~(
+          primaryForbiddenBits[wordIndex]
+          | bits0[wordIndex]
+          | bits1[wordIndex]
+          | bits2[wordIndex]
+          | bits3[wordIndex]
+        )) >>> 0;
+        if (availableBits !== 0) {
+          return finishAvailableWord(availableBits, wordIndex);
+        }
+      }
+      if (thirdCandidateLastWordIndex >= 0) {
+        scannedWordCount += 1;
+        const candidate = scanLastWord((~(
+          primaryForbiddenBits[thirdCandidateLastWordIndex]
+          | bits0[thirdCandidateLastWordIndex]
+          | bits1[thirdCandidateLastWordIndex]
+          | bits2[thirdCandidateLastWordIndex]
+          | bits3[thirdCandidateLastWordIndex]
+        )) >>> 0);
+        if (candidate) {
+          return candidate;
+        }
+      }
+    } else if (secondaryContainingBits.length === 5) {
+      const bits0 = secondaryContainingBits[0];
+      const bits1 = secondaryContainingBits[1];
+      const bits2 = secondaryContainingBits[2];
+      const bits3 = secondaryContainingBits[3];
+      const bits4 = secondaryContainingBits[4];
+      for (let wordIndex = 0; wordIndex < thirdCandidateLastWordIndex; wordIndex += 1) {
+        scannedWordCount += 1;
+        const availableBits = (~(
+          primaryForbiddenBits[wordIndex]
+          | bits0[wordIndex]
+          | bits1[wordIndex]
+          | bits2[wordIndex]
+          | bits3[wordIndex]
+          | bits4[wordIndex]
+        )) >>> 0;
+        if (availableBits !== 0) {
+          return finishAvailableWord(availableBits, wordIndex);
+        }
+      }
+      if (thirdCandidateLastWordIndex >= 0) {
+        scannedWordCount += 1;
+        const candidate = scanLastWord((~(
+          primaryForbiddenBits[thirdCandidateLastWordIndex]
+          | bits0[thirdCandidateLastWordIndex]
+          | bits1[thirdCandidateLastWordIndex]
+          | bits2[thirdCandidateLastWordIndex]
+          | bits3[thirdCandidateLastWordIndex]
+          | bits4[thirdCandidateLastWordIndex]
+        )) >>> 0);
+        if (candidate) {
+          return candidate;
+        }
+      }
+    } else {
+      for (let wordIndex = 0; wordIndex < thirdCandidateLastWordIndex; wordIndex += 1) {
+        scannedWordCount += 1;
+        const availableBits = (~(
+          primaryForbiddenBits[wordIndex] | readCombinedContainingBitsWord(secondaryContainingBits, wordIndex)
+        )) >>> 0;
+        if (availableBits !== 0) {
+          return finishAvailableWord(availableBits, wordIndex);
+        }
+      }
+      if (thirdCandidateLastWordIndex >= 0) {
+        scannedWordCount += 1;
+        const candidate = scanLastWord((~(
+          primaryForbiddenBits[thirdCandidateLastWordIndex]
+          | readCombinedContainingBitsWord(secondaryContainingBits, thirdCandidateLastWordIndex)
+        )) >>> 0);
+        if (candidate) {
+          return candidate;
+        }
       }
     }
-    if (thirdCandidateLastWordIndex >= 0) {
-      const availableBits = ((~primaryForbiddenBits[thirdCandidateLastWordIndex]) >>> 0) & thirdCandidateLastWordMask;
-      if (availableBits !== 0) {
-        const lowestAvailableBit = availableBits & -availableBits;
-        const bitIndex = 31 - Math.clz32(lowestAvailableBit);
-        return thirdCandidates[thirdCandidateLastWordIndex * 32 + bitIndex] ?? null;
-      }
-    }
+    localThirdFallbackWordScanCount += scannedWordCount;
     return null;
   };
   const buildThirdShortlistForCandidate = (candidate: MedleyTeamCandidate): ThirdCandidateShortlist => {
     const candidateIndices = new Uint32Array(thirdShortlistSize);
     let candidateIndexCount = 0;
     let exhaustive = true;
-    const forbiddenThirdCandidateBits = getForbiddenThirdCandidateBits(candidate);
+    const forbiddenThirdCandidateContainingBits = getContainingThirdBitsForCandidate(candidate);
     const lastWordIndex = thirdCandidateBitsetWordCount - 1;
     const lastWordRemainder = thirdCandidates.length & 31;
     const lastWordMask = lastWordRemainder === 0
       ? 0xffffffff
       : 0xffffffff >>> (32 - lastWordRemainder);
     for (let wordIndex = 0; wordIndex < thirdCandidateBitsetWordCount; wordIndex += 1) {
-      let availableThirdBits = (~forbiddenThirdCandidateBits[wordIndex]) >>> 0;
+      let availableThirdBits = (~readCombinedContainingBitsWord(
+        forbiddenThirdCandidateContainingBits,
+        wordIndex,
+      )) >>> 0;
       if (wordIndex === lastWordIndex) {
         availableThirdBits &= lastWordMask;
       }
@@ -1324,6 +1501,7 @@ export function solveMedleyExactCandidateJoin(
     return { candidateIndices, count: candidateIndexCount, exhaustive };
   };
   const thirdShortlistCache = new WeakMap<MedleyTeamCandidate, ThirdCandidateShortlist>();
+  let thirdShortlistCacheEntryCount = 0;
   const getThirdShortlistForCandidate = (
     candidate: MedleyTeamCandidate,
   ): ThirdCandidateShortlist => {
@@ -1332,22 +1510,34 @@ export function solveMedleyExactCandidateJoin(
       return cached;
     }
     const shortlist = buildThirdShortlistForCandidate(candidate);
-    thirdShortlistCache.set(candidate, shortlist);
+    if (thirdShortlistCacheEntryCount < MEDLEY_EXACT_CANDIDATE_JOIN_SOLVE_CACHE_ENTRY_LIMIT) {
+      thirdShortlistCache.set(candidate, shortlist);
+      thirdShortlistCacheEntryCount += 1;
+    }
     return shortlist;
   };
   const bestThirdByCardIdsCache = new WeakMap<MedleyTeamCandidate, MedleyTeamCandidate | null>();
+  let bestThirdByCardIdsCacheEntryCount = 0;
   const getBestThirdByCardIds = (candidate: MedleyTeamCandidate): MedleyTeamCandidate | null => {
     if (bestThirdByCardIdsCache.has(candidate)) {
       return bestThirdByCardIdsCache.get(candidate) ?? null;
     }
     const bestThirdCandidate = findBestDisjointMedleyExactCandidateByCardIds(thirdCandidates, candidate.cardIds);
-    bestThirdByCardIdsCache.set(candidate, bestThirdCandidate);
+    if (bestThirdByCardIdsCacheEntryCount < MEDLEY_EXACT_CANDIDATE_JOIN_SOLVE_CACHE_ENTRY_LIMIT) {
+      bestThirdByCardIdsCache.set(candidate, bestThirdCandidate);
+      bestThirdByCardIdsCacheEntryCount += 1;
+    }
     return bestThirdCandidate;
   };
   let bestResult: BandoriMedleyTeamSearchResult | null = null;
   let currentScoreCutoff = incumbentScore + 1;
   let localPairCount = 0;
   let localThirdQueryCount = 0;
+  let localThirdShortlistQueryCount = 0;
+  let localThirdShortlistHitCount = 0;
+  let localThirdShortlistFallbackCount = 0;
+  let localThirdShortlistExhaustiveMissCount = 0;
+  let localThirdFallbackWordScanCount = 0;
   let nextDeadlineCheckPairCount = 4096;
   const firstForbiddenSecondCandidateBitsScratch = new Uint32Array(secondCandidateBitsetWordCount);
   const firstForbiddenThirdCandidateBitsScratch = new Uint32Array(thirdCandidateBitsetWordCount);
@@ -1423,6 +1613,11 @@ export function solveMedleyExactCandidateJoin(
             stats.searchMode = "bounded";
             profiling.exactCandidateJoinPairCount += localPairCount;
             profiling.exactCandidateJoinThirdQueryCount += localThirdQueryCount;
+            profiling.exactCandidateJoinThirdShortlistQueryCount += localThirdShortlistQueryCount;
+            profiling.exactCandidateJoinThirdShortlistHitCount += localThirdShortlistHitCount;
+            profiling.exactCandidateJoinThirdShortlistFallbackCount += localThirdShortlistFallbackCount;
+            profiling.exactCandidateJoinThirdShortlistExhaustiveMissCount += localThirdShortlistExhaustiveMissCount;
+            profiling.exactCandidateJoinThirdFallbackWordScanCount += localThirdFallbackWordScanCount;
             return { timedOut: true, result: bestResult };
           }
           nextDeadlineCheckPairCount += 4096;
@@ -1451,6 +1646,7 @@ export function solveMedleyExactCandidateJoin(
 
         const secondThirdShortlist = getThirdShortlistForCandidate(secondCandidate);
         let thirdCandidate: MedleyTeamCandidate | null = null;
+        localThirdShortlistQueryCount += 1;
         for (let shortlistIndex = 0; shortlistIndex < secondThirdShortlist.count; shortlistIndex += 1) {
           const currentThirdCandidateIndex = secondThirdShortlist.candidateIndices[shortlistIndex];
           if (
@@ -1458,15 +1654,19 @@ export function solveMedleyExactCandidateJoin(
               & (1 << (currentThirdCandidateIndex & 31))) === 0
           ) {
             thirdCandidate = thirdCandidates[currentThirdCandidateIndex] ?? null;
+            localThirdShortlistHitCount += 1;
             break;
           }
         }
         if (!thirdCandidate && !secondThirdShortlist.exhaustive) {
-          const secondForbiddenThirdCandidateBits = getForbiddenThirdCandidateBits(secondCandidate);
+          localThirdShortlistFallbackCount += 1;
+          const secondForbiddenThirdCandidateContainingBits = getContainingThirdBitsForCandidate(secondCandidate);
           thirdCandidate = findBestDisjointThirdCandidateByForbiddenBits(
             firstForbiddenThirdCandidateBits,
-            secondForbiddenThirdCandidateBits,
+            secondForbiddenThirdCandidateContainingBits,
           );
+        } else if (!thirdCandidate) {
+          localThirdShortlistExhaustiveMissCount += 1;
         }
         if (!thirdCandidate) {
           continue;
@@ -1516,6 +1716,11 @@ export function solveMedleyExactCandidateJoin(
   }
   profiling.exactCandidateJoinPairCount += localPairCount;
   profiling.exactCandidateJoinThirdQueryCount += localThirdQueryCount;
+  profiling.exactCandidateJoinThirdShortlistQueryCount += localThirdShortlistQueryCount;
+  profiling.exactCandidateJoinThirdShortlistHitCount += localThirdShortlistHitCount;
+  profiling.exactCandidateJoinThirdShortlistFallbackCount += localThirdShortlistFallbackCount;
+  profiling.exactCandidateJoinThirdShortlistExhaustiveMissCount += localThirdShortlistExhaustiveMissCount;
+  profiling.exactCandidateJoinThirdFallbackWordScanCount += localThirdFallbackWordScanCount;
   return { timedOut: false, result: bestResult };
 }
 
@@ -2375,7 +2580,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     const generator = getCandidateFillGenerator(slotIndex, cutoff);
     activeGeneratorsBySlot[slotIndex] = generator;
     while (generator.peekUpperBound() >= cutoff) {
-      if (performance.now() >= deadlineAt) {
+      if (performance.now() >= deadlineAt || isPastDeadline()) {
         profiling.exactCandidateJoinCandidateFillElapsedMs += performance.now() - candidateFillStartedAt;
         profiling.exactCandidateJoinLastCandidateCountsBySlot = candidatesBySlot.map((candidates) => candidates.length);
         profiling.exactCandidateJoinLastCandidateFillElapsedMsBySlot[slotIndex] = (
@@ -2385,7 +2590,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
         stats.timedOut = true;
         stats.searchMode = "bounded";
         profiling.exactCandidateJoinAbortCount += 1;
-        recordAbortDiagnostics("candidate-fill-deadline", {
+        recordAbortDiagnostics(stats.memoryLimited ? "memory-soft-limit" : "candidate-fill-deadline", {
           slotIndex,
           candidateCount: candidatesBySlot[slotIndex].length,
           cutoff,
@@ -2513,6 +2718,15 @@ export function searchMedleyConfigurationByExactCandidateJoin(
   profiling.exactCandidateJoinPoppedNodeCount += getCandidateFillProfilingGenerators().reduce((sum, generator) => (
     sum + generator.poppedNodeCount()
   ), 0);
+  const solveCandidateCounts = candidatesBySlot.map((candidates) => candidates.length).sort((left, right) => left - right);
+  if (solveCandidateCounts[0] > MEDLEY_EXACT_CANDIDATE_JOIN_SOLVE_MAX_SMALLEST_CANDIDATES) {
+    profiling.exactCandidateJoinAbortCount += 1;
+    recordAbortDiagnostics("solve-workload-limit", {
+      candidateCount: solveCandidateCounts[2] ?? solveCandidateCounts[0],
+      observedUpperBound: getObservedExactCandidateJoinUpperBound(),
+    });
+    return buildUnprovedExactCandidateJoinResult();
+  }
   const solveStartedAt = performance.now();
   const joinResult = solveMedleyExactCandidateJoin(
     slots,

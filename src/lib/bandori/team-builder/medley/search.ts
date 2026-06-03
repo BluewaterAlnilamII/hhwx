@@ -83,6 +83,8 @@ import type {
 const MEDLEY_UPPER_REPLAY_SAMPLE_LIMIT = 256;
 const MEDLEY_EXACT_JOIN_AUTO_MAX_SLOT_CARDS = 300;
 const MEDLEY_EXACT_JOIN_AUTO_HIGH_CANDIDATE_SOFT_LIMIT = 400_000;
+const MEDLEY_EXACT_JOIN_ALL_SCOPE_SAFE_MAX_CARD_COUNT = 1_699;
+const MEDLEY_EXACT_JOIN_ALL_SCOPE_EVERYONE_SAFE_MAX_CARD_COUNT = 900;
 const MEDLEY_WIDE_ROOT_GAP_INCLUSION_PRUNE_SKIP = 0;
 const MEDLEY_DOMINATED_BOUNDED_SKIP_MIN_GAP = 50_000;
 const MEDLEY_NEAR_DEADLINE_BOUNDED_SKIP_REMAINING_MS = 15_000;
@@ -90,6 +92,16 @@ const MEDLEY_NEAR_DEADLINE_BOUNDED_SKIP_MIN_PROOF_RESERVE_MS = 5_000;
 const MEDLEY_NEAR_DEADLINE_BOUNDED_SKIP_MAX_PROOF_RESERVE_MS = 20_000;
 const MEDLEY_NEAR_DEADLINE_BOUNDED_SKIP_PROOF_RESERVE_RATIO = 0.35;
 const MEDLEY_NEAR_DEADLINE_BOUNDED_SKIP_MIN_GAP = 50_000;
+const BYTES_PER_MIB = 1024 * 1024;
+const MEMORY_SOFT_LIMIT_CHECK_INTERVAL_MS = 50;
+const RUNTIME_HEAP_LIMIT_RATIO = 0.65;
+
+type RuntimeMemoryPerformance = Performance & {
+  memory?: {
+    usedJSHeapSize?: number;
+    jsHeapSizeLimit?: number;
+  };
+};
 
 export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput): BandoriMedleyTeamSearchResponse {
   const startedAt = performance.now();
@@ -143,6 +155,13 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
   const parsedConfigurationSeedPassDurationMs = optimization.configurationSeedPassDurationMs !== undefined
     ? Math.trunc(optimization.configurationSeedPassDurationMs)
     : Number.NaN;
+  const parsedMemorySoftLimitMiB = optimization.memorySoftLimitMiB !== undefined
+    ? Math.trunc(optimization.memorySoftLimitMiB)
+    : Number.NaN;
+  const memorySoftLimitMiB = Number.isFinite(parsedMemorySoftLimitMiB)
+    ? Math.max(256, parsedMemorySoftLimitMiB)
+    : null;
+  const memorySoftLimitBytes = memorySoftLimitMiB !== null ? memorySoftLimitMiB * BYTES_PER_MIB : null;
   const deadlineAt = startedAt + maxSearchDurationMs;
 
   // Shared preprocessing mirrors single search: cards, area items, and event math are built by
@@ -232,6 +251,9 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
     elapsedMs: 0,
     isExhaustive: true,
     timedOut: false,
+    memoryLimited: false,
+    memorySoftLimitMiB,
+    peakUsedHeapMiB: null,
     searchMode: "exact",
     observedScoreUpperBound: null,
     observedScoreUpperBoundGap: null,
@@ -267,6 +289,58 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
   let didLeaveUnclosedAreaItemConfiguration = false;
   let unclosedConfigurationUpperBoundMax = Number.NEGATIVE_INFINITY;
   let hasUnclosedConfigurationWithoutFiniteUpperBound = false;
+  let peakUsedHeapBytes: number | null = null;
+  let lastMemoryCheckAt = Number.NEGATIVE_INFINITY;
+  let runtimeHeapLimitBytes: number | null = null;
+  const getEffectiveMemorySoftLimitBytes = (): number | null => {
+    if (memorySoftLimitBytes === null && runtimeHeapLimitBytes === null) {
+      return null;
+    }
+    return Math.min(
+      memorySoftLimitBytes ?? Number.POSITIVE_INFINITY,
+      runtimeHeapLimitBytes !== null ? runtimeHeapLimitBytes * RUNTIME_HEAP_LIMIT_RATIO : Number.POSITIVE_INFINITY,
+    );
+  };
+  const readUsedHeapBytes = (): number | null => {
+    const memory = (performance as RuntimeMemoryPerformance).memory;
+    if (typeof memory?.jsHeapSizeLimit === "number" && Number.isFinite(memory.jsHeapSizeLimit) && memory.jsHeapSizeLimit > 0) {
+      runtimeHeapLimitBytes = memory.jsHeapSizeLimit;
+      const effectiveLimitBytes = getEffectiveMemorySoftLimitBytes();
+      if (effectiveLimitBytes !== null) {
+        stats.memorySoftLimitMiB = Math.floor(effectiveLimitBytes / BYTES_PER_MIB);
+      }
+    }
+    const usedHeapBytes = typeof memory?.usedJSHeapSize === "number" && Number.isFinite(memory.usedJSHeapSize)
+      ? memory.usedJSHeapSize
+      : null;
+    if (usedHeapBytes !== null) {
+      peakUsedHeapBytes = Math.max(peakUsedHeapBytes ?? 0, usedHeapBytes);
+      stats.peakUsedHeapMiB = Math.ceil((peakUsedHeapBytes ?? usedHeapBytes) / BYTES_PER_MIB);
+    }
+    return usedHeapBytes;
+  };
+  const markMemoryLimited = (): boolean => {
+    stats.isExhaustive = false;
+    stats.timedOut = true;
+    stats.memoryLimited = true;
+    stats.searchMode = "bounded";
+    return true;
+  };
+  const isPastMemorySoftLimit = (): boolean => {
+    if (stats.memoryLimited) {
+      return true;
+    }
+    const now = performance.now();
+    if (now - lastMemoryCheckAt < MEMORY_SOFT_LIMIT_CHECK_INTERVAL_MS) {
+      return false;
+    }
+    lastMemoryCheckAt = now;
+    const usedHeapBytes = readUsedHeapBytes();
+    const effectiveMemorySoftLimitBytes = getEffectiveMemorySoftLimitBytes();
+    return usedHeapBytes !== null && effectiveMemorySoftLimitBytes !== null && usedHeapBytes >= effectiveMemorySoftLimitBytes
+      ? markMemoryLimited()
+      : false;
+  };
   let bestObservedScore = Number.NEGATIVE_INFINITY;
   const deadlineCheckInterval = isLockedCoarseFilter && calculatedCards.length > 250 ? 256 : 2048;
   const recordBestScoreMilestone = (): void => {
@@ -360,11 +434,12 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
   const isPastDeadline = (): boolean => {
     visitedBranchCount += 1;
     profiling.visitedBranchCount = visitedBranchCount;
-    return (
+    const shouldCheck = (
       enableExactCandidateJoin
       || enableConflictExactBnb
       || visitedBranchCount % deadlineCheckInterval === 0
-    ) && performance.now() >= deadlineAt;
+    );
+    return shouldCheck && (performance.now() >= deadlineAt || isPastMemorySoftLimit());
   };
   const getRemainingSearchMs = (): number => Math.max(0, deadlineAt - performance.now());
 
@@ -599,7 +674,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
         .map(({ configurationIndex }) => configurationIndex);
     }
     for (const configurationIndex of seedPassConfigurationIndices) {
-      if (performance.now() >= seedPassDeadlineAt || performance.now() >= deadlineAt) {
+      if (performance.now() >= seedPassDeadlineAt || performance.now() >= deadlineAt || isPastMemorySoftLimit()) {
         break;
       }
       const coarseKey = getMedleyAreaItemCoarseKey(configurations[configurationIndex]);
@@ -617,7 +692,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
         .map(({ index }) => index);
 
       for (const parameterConfigurationIndex of parameterConfigurationIndices) {
-        if (performance.now() >= seedPassDeadlineAt || performance.now() >= deadlineAt) {
+        if (performance.now() >= seedPassDeadlineAt || performance.now() >= deadlineAt || isPastMemorySoftLimit()) {
           break;
         }
         const configuration = configurations[parameterConfigurationIndex];
@@ -810,7 +885,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
   // assignment has been covered without timeout.
   for (const configuration of orderedConfigurations) {
     profiling.startedAreaItemConfigurationCount += 1;
-    if (performance.now() >= deadlineAt) {
+    if (performance.now() >= deadlineAt || isPastMemorySoftLimit()) {
       stats.isExhaustive = false;
       stats.timedOut = true;
       stats.searchMode = "bounded";
@@ -922,6 +997,13 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
       exactCandidateJoinGeneratedCandidateCount: profiling.exactCandidateJoinGeneratedCandidateCount,
       exactCandidateJoinPairCount: profiling.exactCandidateJoinPairCount,
       exactCandidateJoinThirdQueryCount: profiling.exactCandidateJoinThirdQueryCount,
+      exactCandidateJoinThirdShortlistQueryCount: profiling.exactCandidateJoinThirdShortlistQueryCount,
+      exactCandidateJoinThirdShortlistHitCount: profiling.exactCandidateJoinThirdShortlistHitCount,
+      exactCandidateJoinThirdShortlistFallbackCount: profiling.exactCandidateJoinThirdShortlistFallbackCount,
+      exactCandidateJoinThirdShortlistExhaustiveMissCount: (
+        profiling.exactCandidateJoinThirdShortlistExhaustiveMissCount
+      ),
+      exactCandidateJoinThirdFallbackWordScanCount: profiling.exactCandidateJoinThirdFallbackWordScanCount,
       exactCandidateJoinInitialCandidateElapsedMs: profiling.exactCandidateJoinInitialCandidateElapsedMs,
       exactCandidateJoinPairUpperElapsedMs: profiling.exactCandidateJoinPairUpperElapsedMs,
       exactCandidateJoinCandidateFillElapsedMs: profiling.exactCandidateJoinCandidateFillElapsedMs,
@@ -987,11 +1069,31 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
           profiling.exactCandidateJoinGeneratedCandidateCount
           - traceStartCounters.exactCandidateJoinGeneratedCandidateCount
         ),
-        exactCandidateJoinPairCountDelta: profiling.exactCandidateJoinPairCount - traceStartCounters.exactCandidateJoinPairCount,
-        exactCandidateJoinThirdQueryCountDelta: (
-          profiling.exactCandidateJoinThirdQueryCount - traceStartCounters.exactCandidateJoinThirdQueryCount
-        ),
-        exactCandidateJoinInitialCandidateElapsedMsDelta: Math.round(
+      exactCandidateJoinPairCountDelta: profiling.exactCandidateJoinPairCount - traceStartCounters.exactCandidateJoinPairCount,
+      exactCandidateJoinThirdQueryCountDelta: (
+        profiling.exactCandidateJoinThirdQueryCount - traceStartCounters.exactCandidateJoinThirdQueryCount
+      ),
+      exactCandidateJoinThirdShortlistQueryCountDelta: (
+        profiling.exactCandidateJoinThirdShortlistQueryCount
+        - traceStartCounters.exactCandidateJoinThirdShortlistQueryCount
+      ),
+      exactCandidateJoinThirdShortlistHitCountDelta: (
+        profiling.exactCandidateJoinThirdShortlistHitCount
+        - traceStartCounters.exactCandidateJoinThirdShortlistHitCount
+      ),
+      exactCandidateJoinThirdShortlistFallbackCountDelta: (
+        profiling.exactCandidateJoinThirdShortlistFallbackCount
+        - traceStartCounters.exactCandidateJoinThirdShortlistFallbackCount
+      ),
+      exactCandidateJoinThirdShortlistExhaustiveMissCountDelta: (
+        profiling.exactCandidateJoinThirdShortlistExhaustiveMissCount
+        - traceStartCounters.exactCandidateJoinThirdShortlistExhaustiveMissCount
+      ),
+      exactCandidateJoinThirdFallbackWordScanCountDelta: (
+        profiling.exactCandidateJoinThirdFallbackWordScanCount
+        - traceStartCounters.exactCandidateJoinThirdFallbackWordScanCount
+      ),
+      exactCandidateJoinInitialCandidateElapsedMsDelta: Math.round(
           profiling.exactCandidateJoinInitialCandidateElapsedMs
           - traceStartCounters.exactCandidateJoinInitialCandidateElapsedMs,
         ),
@@ -1367,6 +1469,35 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
         || ((isLockedCoarseFilter || isAllCoarseFilter) && maxSearchDurationMs >= 30000)
       )
     );
+    const shouldPreSkipAllScopeExactJoin = (
+      shouldRunExactCandidateJoinForConfiguration
+      && canTryExactCandidateJoinBeforeSeeding
+      && shouldAutoEnableExactCandidateJoin
+      && isAllCoarseFilter
+      && resultLimit === 1
+      && maxSearchDurationMs >= 30000
+      && configurationIndex >= 0
+      && (
+        calculatedCards.length > MEDLEY_EXACT_JOIN_ALL_SCOPE_SAFE_MAX_CARD_COUNT
+        || (
+          configuration.bandKey === "Everyone"
+          && calculatedCards.length > MEDLEY_EXACT_JOIN_ALL_SCOPE_EVERYONE_SAFE_MAX_CARD_COUNT
+        )
+      )
+    );
+    if (shouldPreSkipAllScopeExactJoin) {
+      const boundedSkipUpperBound = getBasicSkillAwareRootUpperBoundForConfiguration()
+        ?? rootScoreUpperBound;
+      observeUpperBound(boundedSkipUpperBound, "configuration-root", MEDLEY_TEAM_COUNT);
+      didLeaveUnclosedAreaItemConfiguration = true;
+      rememberActiveConfigurationUpperBound();
+      finishConfigurationTrace(
+        configuration.bandKey === "Everyone"
+          ? "bounded-everyone-exact-join-skip"
+          : "bounded-large-scope-exact-join-skip",
+      );
+      continue;
+    }
     if (
       shouldRunExactCandidateJoinForConfiguration
       && canTryExactCandidateJoinBeforeSeeding
@@ -1411,11 +1542,39 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
         && basicSkillAwareRootUpperBound - thresholdBeforeNearDeadlineSkip
           >= MEDLEY_NEAR_DEADLINE_BOUNDED_SKIP_MIN_GAP
       ) {
+        const rootSlotIndices = slots.map((_, index) => index);
+        const tightNearDeadlineRootUpperBound = Math.min(
+          basicSkillAwareRootUpperBound,
+          getRemainingUpperBound(
+            rootSlotIndices,
+            new Set<number>(),
+            false,
+            true,
+            false,
+            false,
+            thresholdBeforeNearDeadlineSkip,
+          ),
+        );
+        if (Number.isFinite(tightNearDeadlineRootUpperBound)) {
+          if (traceEntry) {
+            traceEntry.nearDeadlineTightRootUpperBound = tightNearDeadlineRootUpperBound;
+          }
+          if (tightNearDeadlineRootUpperBound < thresholdBeforeNearDeadlineSkip) {
+            stats.prunedBranchCount += 1;
+            profiling.rootUpperPrunedConfigurationCount += 1;
+            finishConfigurationTrace("near-deadline-tight-root-pruned");
+            closeActiveConfiguration();
+            continue;
+          }
+        }
+        const rememberedNearDeadlineUpperBound = Number.isFinite(tightNearDeadlineRootUpperBound)
+          ? tightNearDeadlineRootUpperBound
+          : basicSkillAwareRootUpperBound;
         didLeaveUnclosedAreaItemConfiguration = true;
         rememberUnclosedConfigurationUpperBound(
           configurationIndex,
-          basicSkillAwareRootUpperBound,
-          "configuration-root",
+          rememberedNearDeadlineUpperBound,
+          Number.isFinite(tightNearDeadlineRootUpperBound) ? "dfs-remaining" : "configuration-root",
           MEDLEY_TEAM_COUNT,
         );
         if (traceEntry) {
@@ -1446,7 +1605,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
           slots,
           thresholdBeforeInclusionPrune,
           profiling,
-          () => performance.now() >= deadlineAt - 250,
+          () => performance.now() >= deadlineAt - 250 || isPastMemorySoftLimit(),
         );
         if (prunedSlots !== slots) {
           slots = prunedSlots;
@@ -1489,7 +1648,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
             slots,
             thresholdBeforeInclusionPrune,
             profiling,
-            () => performance.now() >= deadlineAt - 250,
+            () => performance.now() >= deadlineAt - 250 || isPastMemorySoftLimit(),
           );
           if (prunedSlots !== slots) {
             slots = prunedSlots;
@@ -1657,7 +1816,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
           slots,
           thresholdBeforeInclusionPrune,
           profiling,
-          () => performance.now() >= deadlineAt - 250,
+          () => performance.now() >= deadlineAt - 250 || isPastMemorySoftLimit(),
         );
         if (prunedSlots !== slots) {
           slots = prunedSlots;
@@ -2005,6 +2164,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
     : observedUpperBound !== null && comparisonScore !== null
       ? Math.max(0, observedUpperBound - comparisonScore)
       : null;
+  readUsedHeapBytes();
   const elapsedMs = Math.round(performance.now() - startedAt);
   const relativeGap = comparisonScore !== null && comparisonScore > 0 && observedUpperBoundGap !== null
     ? observedUpperBoundGap / comparisonScore
