@@ -2,6 +2,7 @@
 
 let fs;
 let path;
+let spawn;
 let spawnSync;
 let repoRoot;
 let defaultRunnerPath;
@@ -9,6 +10,23 @@ let defaultFixturePath;
 let benchmarkDir;
 let baseEnv;
 let cleanBaseEnv;
+
+const expectedProfileIdentities20260602 = [
+  { label: "P01", cardCount: 1161, profileHash: "04eade1b0884" },
+  { label: "P02", cardCount: 1747, profileHash: "95cfb075da58" },
+  { label: "P03", cardCount: 1211, profileHash: "83a95dcc90c6" },
+  { label: "P04", cardCount: 1229, profileHash: "ba51d3283cf7" },
+  { label: "P05", cardCount: 1036, profileHash: "26285f7f1b36" },
+  { label: "P06", cardCount: 1433, profileHash: "ea4686707f70" },
+  { label: "P07", cardCount: 1703, profileHash: "440f106f6740" },
+  { label: "P08", cardCount: 1513, profileHash: "96a1a1bd4e09" },
+  { label: "P09", cardCount: 962, profileHash: "53d1017c73a9" },
+  { label: "P10", cardCount: 1127, profileHash: "d33da319c911" },
+];
+
+const expectedProfileIdentityByLabel = new Map(
+  expectedProfileIdentities20260602.map((profile) => [profile.label, profile]),
+);
 
 const scenarios = {
   "gate-120": {
@@ -24,14 +42,59 @@ const scenarios = {
     ],
   },
   "all-300": {
-    description: "P01-P10 all-mode exact proof, 300s per profile.",
+    description: "P01-P10 x none/244/260/323 all-mode proof, 300s per case.",
     reportKind: "matrix",
-    expectedProfileCount: 10,
+    expectedProfileCount: 40,
+    baselineAllExactCount: 36,
+    baselineBoundedGapTotal: 1534986,
+    maxP95ElapsedMs: 231981,
     maxElapsedMs: 300000,
     env: {
       HHWX_REAL_PROFILE_SCOPE_MATRIX: "1",
       HHWX_REAL_PROFILE_MATRIX_LOCKED_SCOPES: "0",
+      HHWX_REAL_PROFILE_EVENT_KEYS: "none,244,260,323",
     },
+  },
+  "focus-6-300": {
+    description: "Six focused all-scope cases at 300s with memory monitoring.",
+    reportKind: "focus",
+    maxElapsedMs: 300000,
+    baselineBoundedGapTotal: 1534986,
+    env: {
+      HHWX_REAL_PROFILE_SCOPE_MATRIX: "1",
+      HHWX_REAL_PROFILE_MATRIX_LOCKED_SCOPES: "0",
+      HHWX_REAL_PROFILE_DURATION_MS: "300000",
+      HHWX_REAL_PROFILE_OPTIMIZATION_JSON: "{\"debugConfigurationTrace\":true}",
+    },
+    cases: [
+      { profileLabel: "P02", eventKey: "260", baselineExact: false, baselineGap: 384110 },
+      { profileLabel: "P04", eventKey: "260", baselineExact: false, baselineGap: 164392 },
+      { profileLabel: "P08", eventKey: "323", baselineExact: false, baselineGap: 431957 },
+      { profileLabel: "P10", eventKey: "244", baselineExact: false, baselineGap: 554527 },
+      { profileLabel: "P04", eventKey: "244", baselineExact: true, baselineElapsedMs: 231981 },
+      { profileLabel: "P08", eventKey: "260", baselineExact: true, baselineElapsedMs: 295714 },
+    ],
+  },
+  "p05-p09-300": {
+    description: "P05/P09 fast-profile regression check across none/244/260/323 at 300s.",
+    reportKind: "focus",
+    maxElapsedMs: 300000,
+    baselineExactElapsedRegressionRatio: 2,
+    env: {
+      HHWX_REAL_PROFILE_SCOPE_MATRIX: "1",
+      HHWX_REAL_PROFILE_MATRIX_LOCKED_SCOPES: "0",
+      HHWX_REAL_PROFILE_DURATION_MS: "300000",
+    },
+    cases: [
+      { profileLabel: "P05", eventKey: "none", baselineExact: true, baselineElapsedMs: 21096 },
+      { profileLabel: "P05", eventKey: "244", baselineExact: true, baselineElapsedMs: 21924 },
+      { profileLabel: "P05", eventKey: "260", baselineExact: true, baselineElapsedMs: 21211 },
+      { profileLabel: "P05", eventKey: "323", baselineExact: true, baselineElapsedMs: 32686 },
+      { profileLabel: "P09", eventKey: "none", baselineExact: true, baselineElapsedMs: 18532 },
+      { profileLabel: "P09", eventKey: "244", baselineExact: true, baselineElapsedMs: 21517 },
+      { profileLabel: "P09", eventKey: "260", baselineExact: true, baselineElapsedMs: 19772 },
+      { profileLabel: "P09", eventKey: "323", baselineExact: true, baselineElapsedMs: 19399 },
+    ],
   },
   "p01-locked": {
     description: "Known hard locked band/attribute scope: P01 PoppinParty/cool.",
@@ -138,9 +201,106 @@ function loadJson(filePath) {
   return JSON.parse(fs.readFileSync(filePath, "utf8"));
 }
 
+function sampleProcessMemoryBytes(pid) {
+  if (!pid) {
+    return null;
+  }
+  try {
+    if (process.platform === "win32") {
+      const result = spawnSync(
+        "powershell.exe",
+        [
+          "-NoProfile",
+          "-Command",
+          `$p = Get-Process -Id ${pid} -ErrorAction SilentlyContinue; if ($p) { [Console]::Write($p.WorkingSet64) }`,
+        ],
+        { encoding: "utf8", windowsHide: true },
+      );
+      const value = Number(String(result.stdout ?? "").trim());
+      return Number.isFinite(value) && value > 0 ? value : null;
+    }
+    const result = spawnSync("ps", ["-o", "rss=", "-p", String(pid)], { encoding: "utf8" });
+    const rssKb = Number(String(result.stdout ?? "").trim());
+    return Number.isFinite(rssKb) && rssKb > 0 ? rssKb * 1024 : null;
+  } catch {
+    return null;
+  }
+}
+
+function formatMiB(bytes) {
+  return Number.isFinite(bytes) ? (bytes / 1024 / 1024).toFixed(1) : "";
+}
+
+function formatProfileIdentity(profile) {
+  if (!profile) {
+    return "missing";
+  }
+  return `${profile.label ?? "?"}:${profile.cardCount ?? "?"}:${profile.profileHash ?? "?"}`;
+}
+
+function assertProfileIdentity(context, profile) {
+  const expected = expectedProfileIdentityByLabel.get(profile?.label);
+  if (!expected) {
+    throw new Error(`${context}: unexpected profile identity ${formatProfileIdentity(profile)}`);
+  }
+  if (profile.profileHash !== expected.profileHash || profile.cardCount !== expected.cardCount) {
+    throw new Error(
+      `${context}: profile ${profile.label} identity drifted, `
+      + `expected ${expected.cardCount}:${expected.profileHash}, `
+      + `got ${profile.cardCount}:${profile.profileHash}`,
+    );
+  }
+}
+
+function assertReportProfileIdentities(context, rows) {
+  for (const row of rows ?? []) {
+    assertProfileIdentity(context, row.profile);
+  }
+}
+
+function runRunner(env, label) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, [defaultRunnerPath], {
+      cwd: repoRoot,
+      env,
+      stdio: "inherit",
+    });
+    const memory = {
+      sampleCount: 0,
+      peakWorkingSetBytes: null,
+      lastWorkingSetBytes: null,
+    };
+    const sample = () => {
+      const bytes = sampleProcessMemoryBytes(child.pid);
+      if (bytes === null) {
+        return;
+      }
+      memory.sampleCount += 1;
+      memory.lastWorkingSetBytes = bytes;
+      memory.peakWorkingSetBytes = Math.max(memory.peakWorkingSetBytes ?? 0, bytes);
+    };
+    const sampleMs = 1000;
+    const interval = setInterval(sample, sampleMs);
+    child.once("spawn", sample);
+    child.once("error", (error) => {
+      clearInterval(interval);
+      reject(error);
+    });
+    child.once("exit", (status, signal) => {
+      clearInterval(interval);
+      sample();
+      console.log(
+        `memory ${label}: peakWorkingSet=${formatMiB(memory.peakWorkingSetBytes)} MiB samples=${memory.sampleCount}`,
+      );
+      resolve({ status: status ?? 1, signal, memory });
+    });
+  });
+}
+
 function assertSingleReport(scenarioName, scenario) {
   const reportPath = path.join(benchmarkDir, "last-real-profile-medley-benchmark.json");
   const report = loadJson(reportPath);
+  assertReportProfileIdentities(scenarioName, report.rows);
   const total = report.summary?.total;
   const exactWithinDuration = report.summary?.exactWithinDuration;
   const maxElapsedMs = Math.max(...(report.rows ?? []).map((row) => (
@@ -171,17 +331,167 @@ function assertMatrixReport(scenarioName, scenario) {
   const report = loadJson(reportPath);
   const profileCount = report.summary?.profileCount;
   const allExactCount = report.summary?.allExactCount;
+  const allP95ElapsedMs = report.summary?.allP95ElapsedMs ?? Number.POSITIVE_INFINITY;
   const maxElapsedMs = report.summary?.allMaxElapsedMs ?? Number.POSITIVE_INFINITY;
+  const rows = report.rows ?? [];
+  assertReportProfileIdentities(scenarioName, rows);
+  const timedOutCount = rows.filter((row) => row.all?.timedOut === true).length;
+  const boundedGapTotal = rows.reduce((sum, row) => {
+    if (row.all?.exact) {
+      return sum;
+    }
+    const gap = row.all?.observedScoreUpperBoundGap;
+    return Number.isFinite(gap) ? sum + gap : Number.POSITIVE_INFINITY;
+  }, 0);
   if (profileCount !== scenario.expectedProfileCount) {
     throw new Error(`${scenarioName}: expected ${scenario.expectedProfileCount} profiles, got ${profileCount}`);
   }
-  if (allExactCount !== scenario.expectedProfileCount) {
+  if (timedOutCount > 0) {
+    throw new Error(`${scenarioName}: ${timedOutCount} all-mode case(s) timed out`);
+  }
+  if (scenario.baselineAllExactCount !== undefined) {
+    const exactImproved = allExactCount > scenario.baselineAllExactCount;
+    const gapImproved = (
+      Number.isFinite(boundedGapTotal)
+      && Number.isFinite(scenario.baselineBoundedGapTotal)
+      && boundedGapTotal <= scenario.baselineBoundedGapTotal * 0.75
+    );
+    if (!exactImproved && !gapImproved) {
+      throw new Error(`${scenarioName}: all-mode exact ${allExactCount}/${profileCount}, gap ${boundedGapTotal} did not beat baseline`);
+    }
+  } else if (allExactCount !== scenario.expectedProfileCount) {
     throw new Error(`${scenarioName}: all-mode exact ${allExactCount}/${scenario.expectedProfileCount}`);
+  }
+  if (scenario.maxP95ElapsedMs !== undefined && allP95ElapsedMs > scenario.maxP95ElapsedMs) {
+    throw new Error(`${scenarioName}: all-mode P95 ${allP95ElapsedMs}ms exceeded ${scenario.maxP95ElapsedMs}ms`);
   }
   if (maxElapsedMs > scenario.maxElapsedMs) {
     throw new Error(`${scenarioName}: all-mode max ${maxElapsedMs}ms exceeded ${scenario.maxElapsedMs}ms`);
   }
-  console.log(`assert ${scenarioName}: all exact ${allExactCount}/${profileCount}, max ${maxElapsedMs}ms <= ${scenario.maxElapsedMs}ms`);
+  console.log(
+    `assert ${scenarioName}: all exact ${allExactCount}/${profileCount}, `
+    + `gap=${Number.isFinite(boundedGapTotal) ? boundedGapTotal : "unknown"}, `
+    + `p95=${allP95ElapsedMs}ms, max ${maxElapsedMs}ms <= ${scenario.maxElapsedMs}ms`,
+  );
+}
+
+function summarizeFocusRows(rows, scenario) {
+  const boundedRows = rows.filter((row) => !row.baselineExact);
+  const exactConvertedCount = boundedRows.filter((row) => row.result.exact === true).length;
+  const boundedGapTotal = boundedRows.reduce((sum, row) => {
+    if (row.result.exact) {
+      return sum;
+    }
+    const gap = row.result.observedScoreUpperBoundGap;
+    return Number.isFinite(gap) ? sum + gap : Number.POSITIVE_INFINITY;
+  }, 0);
+  const baselineBoundedGapTotal = scenario.baselineBoundedGapTotal
+    ?? boundedRows.reduce((sum, row) => sum + (row.baselineGap ?? 0), 0);
+  return {
+    total: rows.length,
+    exactCount: rows.filter((row) => row.result.exact === true).length,
+    timeoutCount: rows.filter((row) => row.result.timedOut === true).length,
+    maxElapsedMs: rows.reduce((max, row) => Math.max(max, row.result.elapsedMs ?? 0), 0),
+    boundedBaselineCount: boundedRows.length,
+    boundedExactConvertedCount: exactConvertedCount,
+    boundedBaselineGapTotal: baselineBoundedGapTotal,
+    boundedGapTotal,
+    boundedGapReductionRatio: Number.isFinite(boundedGapTotal) && baselineBoundedGapTotal > 0
+      ? (baselineBoundedGapTotal - boundedGapTotal) / baselineBoundedGapTotal
+      : null,
+    peakWorkingSetBytes: rows.reduce((max, row) => Math.max(max, row.memory.peakWorkingSetBytes ?? 0), 0),
+  };
+}
+
+function toFocusMarkdown(report) {
+  return [
+    `# ${report.scenarioName}`,
+    "",
+    report.description,
+    "",
+    "## Summary",
+    "",
+    `Cases: ${report.summary.exactCount}/${report.summary.total} exact`,
+    `Timeouts: ${report.summary.timeoutCount}`,
+    `Bounded conversions: ${report.summary.boundedExactConvertedCount}/${report.summary.boundedBaselineCount}`,
+    `Bounded gap total: ${Number.isFinite(report.summary.boundedGapTotal) ? report.summary.boundedGapTotal : "unknown"} / baseline ${report.summary.boundedBaselineGapTotal}`,
+    `Bounded gap reduction: ${report.summary.boundedGapReductionRatio === null ? "unknown" : `${Math.round(report.summary.boundedGapReductionRatio * 1000) / 10}%`}`,
+    `Peak working set: ${formatMiB(report.summary.peakWorkingSetBytes)} MiB`,
+    "",
+    "| case | baseline | exact | elapsed ms | gap | abort reason | abort slot | soft limit | candidates | peak MiB |",
+    "| --- | --- | --- | ---: | ---: | --- | ---: | ---: | ---: | ---: |",
+    ...report.rows.map((row) => [
+      row.caseKey,
+      row.baselineExact ? `exact ${row.baselineElapsedMs ?? ""}`.trim() : `bounded gap ${row.baselineGap}`,
+      row.result.exact ? "yes" : "no",
+      row.result.elapsedMs ?? "",
+      row.result.observedScoreUpperBoundGap ?? "",
+      row.result.exactCandidateJoinAbortReason ?? "",
+      row.result.exactCandidateJoinAbortSlotIndex ?? "",
+      row.result.exactCandidateJoinAbortCandidateSoftLimit ?? "",
+      row.result.exactCandidateJoinAbortCandidateCount ?? "",
+      formatMiB(row.memory.peakWorkingSetBytes),
+    ].join(" | ")).map((line) => `| ${line} |`),
+    "",
+  ].join("\n");
+}
+
+function writeFocusReportFiles(report) {
+  const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+  const jsonPath = path.join(benchmarkDir, `focus-medley-cases-${stamp}.json`);
+  const markdownPath = path.join(benchmarkDir, `focus-medley-cases-${stamp}.md`);
+  fs.writeFileSync(jsonPath, JSON.stringify(report, null, 2), "utf8");
+  fs.writeFileSync(markdownPath, toFocusMarkdown(report), "utf8");
+  fs.writeFileSync(path.join(benchmarkDir, "last-focus-medley-cases.json"), JSON.stringify(report, null, 2), "utf8");
+  fs.writeFileSync(path.join(benchmarkDir, "last-focus-medley-cases.md"), toFocusMarkdown(report), "utf8");
+  return { jsonPath, markdownPath };
+}
+
+function assertFocusReport(scenarioName, scenario, report) {
+  if (report.rows.length !== scenario.cases.length) {
+    throw new Error(`${scenarioName}: expected ${scenario.cases.length} cases, got ${report.rows.length}`);
+  }
+  assertReportProfileIdentities(scenarioName, report.rows);
+  if (report.summary.timeoutCount > 0) {
+    throw new Error(`${scenarioName}: ${report.summary.timeoutCount} case(s) timed out`);
+  }
+  for (const row of report.rows) {
+    if ((row.result.elapsedMs ?? Number.POSITIVE_INFINITY) > scenario.maxElapsedMs) {
+      throw new Error(`${scenarioName}: ${row.caseKey} exceeded ${scenario.maxElapsedMs}ms`);
+    }
+  }
+  for (const row of report.rows.filter((currentRow) => currentRow.baselineExact)) {
+    if (!row.result.exact) {
+      throw new Error(`${scenarioName}: ${row.caseKey} regressed from exact to bounded`);
+    }
+    const maxRegressionRatio = scenario.baselineExactElapsedRegressionRatio ?? 1.15;
+    if (
+      report.summary.boundedExactConvertedCount === 0
+      && Number.isFinite(row.baselineElapsedMs)
+      && (row.result.elapsedMs ?? Number.POSITIVE_INFINITY) > row.baselineElapsedMs * maxRegressionRatio
+    ) {
+      throw new Error(
+        `${scenarioName}: ${row.caseKey} exact elapsed regressed beyond `
+        + `${Math.round((maxRegressionRatio - 1) * 100)}% without a bounded conversion`,
+      );
+    }
+  }
+  const gapAccepted = (
+    report.summary.boundedExactConvertedCount >= 1
+    || (
+      report.summary.boundedGapReductionRatio !== null
+      && report.summary.boundedGapReductionRatio >= 0.25
+    )
+  );
+  if (report.summary.boundedBaselineCount > 0 && !gapAccepted) {
+    throw new Error(`${scenarioName}: no bounded case converted and bounded gap reduction was below 25%`);
+  }
+  console.log(
+    `assert ${scenarioName}: exact ${report.summary.exactCount}/${report.summary.total}, `
+    + `converted ${report.summary.boundedExactConvertedCount}/${report.summary.boundedBaselineCount}, `
+    + `gapReduction=${report.summary.boundedGapReductionRatio === null ? "unknown" : `${Math.round(report.summary.boundedGapReductionRatio * 1000) / 10}%`}, `
+    + `peak=${formatMiB(report.summary.peakWorkingSetBytes)} MiB`,
+  );
 }
 
 function assertScenarioReport(scenarioName, scenario) {
@@ -194,30 +504,85 @@ function assertScenarioReport(scenarioName, scenario) {
   }
 }
 
-function runScenario(scenarioName) {
+async function runFocusScenario(scenarioName, scenario) {
+  console.log(`Running ${scenarioName}: ${scenario.description}`);
+  const rows = [];
+  for (const caseSpec of scenario.cases) {
+    const caseKey = `${caseSpec.profileLabel}:${caseSpec.eventKey}`;
+    console.log(`Running ${scenarioName} case ${caseKey}`);
+    const result = await runRunner(
+      {
+        ...cleanBaseEnv,
+        ...baseEnv,
+        ...scenario.env,
+        HHWX_REAL_PROFILE_LABELS: caseSpec.profileLabel,
+        HHWX_REAL_PROFILE_EVENT_KEYS: caseSpec.eventKey,
+      },
+      `${scenarioName}:${caseKey}`,
+    );
+    if (result.status !== 0) {
+      throw new Error(`${scenarioName} ${caseKey}: runner exited with status ${result.status}`);
+    }
+    const matrixReport = loadJson(path.join(benchmarkDir, "last-real-profile-medley-scope-matrix.json"));
+    if (!Array.isArray(matrixReport.rows) || matrixReport.rows.length !== 1) {
+      throw new Error(`${scenarioName} ${caseKey}: expected one matrix row, got ${matrixReport.rows?.length ?? "none"}`);
+    }
+    const matrixRow = matrixReport.rows[0];
+    assertProfileIdentity(`${scenarioName} ${caseKey}`, matrixRow.profile);
+    rows.push({
+      caseKey,
+      profileLabel: caseSpec.profileLabel,
+      eventKey: caseSpec.eventKey,
+      baselineExact: caseSpec.baselineExact,
+      baselineGap: caseSpec.baselineGap ?? null,
+      baselineElapsedMs: caseSpec.baselineElapsedMs ?? null,
+      result: matrixRow.all,
+      profile: matrixRow.profile,
+      memory: result.memory,
+      matrixRow,
+    });
+  }
+  const report = {
+    scenarioName,
+    description: scenario.description,
+    generatedAt: new Date().toISOString(),
+    durationMs: scenario.maxElapsedMs,
+    cases: scenario.cases,
+    summary: summarizeFocusRows(rows, scenario),
+    rows,
+  };
+  const { jsonPath, markdownPath } = writeFocusReportFiles(report);
+  assertFocusReport(scenarioName, scenario, report);
+  console.log(JSON.stringify({ jsonPath, markdownPath, summary: report.summary }, null, 2));
+}
+
+async function runScenario(scenarioName) {
   const scenario = scenarios[scenarioName];
   if (!scenario) {
     throw new Error(`Unknown scenario: ${scenarioName}`);
   }
   if (scenario.scenarios) {
     for (const childScenarioName of scenario.scenarios) {
-      runScenario(childScenarioName);
+      await runScenario(childScenarioName);
     }
+    return;
+  }
+  if (scenario.reportKind === "focus") {
+    await runFocusScenario(scenarioName, scenario);
     return;
   }
 
   console.log(`Running ${scenarioName}: ${scenario.description}`);
-  const result = spawnSync(process.execPath, [defaultRunnerPath], {
-    cwd: repoRoot,
-    env: {
+  const result = await runRunner(
+    {
       ...cleanBaseEnv,
       ...baseEnv,
       ...scenario.env,
     },
-    stdio: "inherit",
-  });
-  if ((result.status ?? 1) !== 0) {
-    throw new Error(`${scenarioName}: runner exited with status ${result.status ?? 1}`);
+    scenarioName,
+  );
+  if (result.status !== 0) {
+    throw new Error(`${scenarioName}: runner exited with status ${result.status}`);
   }
   assertScenarioReport(scenarioName, scenario);
 }
@@ -230,11 +595,12 @@ async function main() {
   ]);
   fs = fsModule.default ?? fsModule;
   path = pathModule.default ?? pathModule;
+  spawn = childProcessModule.spawn;
   spawnSync = childProcessModule.spawnSync;
 
   repoRoot = path.resolve(__dirname, "..");
   defaultRunnerPath = path.join(repoRoot, "temp", "bandori-team-builder", "benchmark-real-profiles-medley.cjs");
-  defaultFixturePath = path.join(repoRoot, "temp", "bandori-team-builder", "hard-case-profiles-2026-05-31.json");
+  defaultFixturePath = path.join(repoRoot, "temp", "bandori-team-builder", "hard-case-profiles-2026-06-02.json");
   benchmarkDir = path.dirname(defaultRunnerPath);
   baseEnv = {
     HHWX_REAL_PROFILE_FIXTURE_PATH: defaultFixturePath,
@@ -271,7 +637,7 @@ async function main() {
   }
 
   try {
-    runScenario(scenarioName);
+    await runScenario(scenarioName);
   } catch (error) {
     console.error(error instanceof Error ? error.message : error);
     process.exit(1);

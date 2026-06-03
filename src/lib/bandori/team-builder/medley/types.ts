@@ -112,6 +112,20 @@ export type MedleyObservedUpperBoundSource =
 
 export type MedleyRemainingUpperBoundLimiter = "capacity" | "correlated";
 
+export type MedleyExactCandidateJoinAbortReason =
+  | "invalid-input"
+  | "initial-candidate"
+  | "pair-upper"
+  | "deep-pair-upper"
+  | "high-budget-pair-upper"
+  | "anchored-join-timeout"
+  | "candidate-fill-pair-refine"
+  | "candidate-fill-deadline"
+  | "candidate-fill-soft-limit"
+  | "candidate-fill-generator-aborted"
+  | "solve-timeout"
+  | null;
+
 export type MedleyCapacityUpperMode =
   | "coefficient"
   | "skill-aware"
@@ -445,6 +459,16 @@ export type BandoriMedleyTeamSearchProfilingStats = {
   exactCandidateJoinLastRemainingOtherUpperBySlot: number[];
   exactCandidateJoinLastCandidateCountsBySlot: number[];
   exactCandidateJoinLastCandidateFillElapsedMsBySlot: number[];
+  exactCandidateJoinLastAbortReason: MedleyExactCandidateJoinAbortReason;
+  exactCandidateJoinLastAbortSlotIndex: number | null;
+  exactCandidateJoinLastAbortCandidateSoftLimit: number | null;
+  exactCandidateJoinLastAbortNodeSoftLimit: number | null;
+  exactCandidateJoinLastAbortCandidateCount: number | null;
+  exactCandidateJoinLastAbortCutoff: number | null;
+  exactCandidateJoinLastAbortPeekUpperBound: number | null;
+  exactCandidateJoinLastAbortOtherUpper: number | null;
+  exactCandidateJoinLastAbortObservedUpperBound: number | null;
+  exactCandidateJoinLastAbortRemainingMs: number | null;
   exactCandidateJoinDebugKnownCardIdsBySlot?: number[][];
   exactCandidateJoinDebugKnownCandidatePresentBySlot?: boolean[];
   exactCandidateJoinDebugKnownCandidateScoresBySlot?: Array<number | null>;

@@ -53,6 +53,7 @@ import type {
   BandoriMedleyTeamSearchProfilingStats,
   BandoriMedleyTeamSearchResult,
   BandoriMedleyTeamSearchStats,
+  MedleyExactCandidateJoinAbortReason,
   MedleyExactCandidateJoinResult,
   MedleyExactCandidateJoinSolveResult,
   MedleyExactSlotCandidateGlobalPruning,
@@ -1854,9 +1855,52 @@ export function searchMedleyConfigurationByExactCandidateJoin(
   // This wrapper proves one area-item configuration. The caller remains responsible for
   // aggregating configuration-level proof across locked/all scopes before reporting exact.
   profiling.exactCandidateJoinCallCount += 1;
+  const normalizeDiagnosticNumber = (value: number | null | undefined): number | null => (
+    value !== null && value !== undefined && Number.isFinite(value) ? value : null
+  );
+  const resetAbortDiagnostics = (): void => {
+    profiling.exactCandidateJoinLastAbortReason = null;
+    profiling.exactCandidateJoinLastAbortSlotIndex = null;
+    profiling.exactCandidateJoinLastAbortCandidateSoftLimit = null;
+    profiling.exactCandidateJoinLastAbortNodeSoftLimit = null;
+    profiling.exactCandidateJoinLastAbortCandidateCount = null;
+    profiling.exactCandidateJoinLastAbortCutoff = null;
+    profiling.exactCandidateJoinLastAbortPeekUpperBound = null;
+    profiling.exactCandidateJoinLastAbortOtherUpper = null;
+    profiling.exactCandidateJoinLastAbortObservedUpperBound = null;
+    profiling.exactCandidateJoinLastAbortRemainingMs = null;
+  };
+  const recordAbortDiagnostics = (
+    reason: Exclude<MedleyExactCandidateJoinAbortReason, null>,
+    diagnostics: {
+      slotIndex?: number | null;
+      candidateCount?: number | null;
+      cutoff?: number | null;
+      peekUpperBound?: number | null;
+      otherUpper?: number | null;
+      observedUpperBound?: number | null;
+    } = {},
+  ): void => {
+    profiling.exactCandidateJoinLastAbortReason = reason;
+    profiling.exactCandidateJoinLastAbortSlotIndex = diagnostics.slotIndex ?? null;
+    profiling.exactCandidateJoinLastAbortCandidateSoftLimit = candidateSoftLimit;
+    profiling.exactCandidateJoinLastAbortNodeSoftLimit = nodeSoftLimit;
+    profiling.exactCandidateJoinLastAbortCandidateCount = diagnostics.candidateCount ?? null;
+    profiling.exactCandidateJoinLastAbortCutoff = normalizeDiagnosticNumber(diagnostics.cutoff);
+    profiling.exactCandidateJoinLastAbortPeekUpperBound = normalizeDiagnosticNumber(diagnostics.peekUpperBound);
+    profiling.exactCandidateJoinLastAbortOtherUpper = normalizeDiagnosticNumber(diagnostics.otherUpper);
+    profiling.exactCandidateJoinLastAbortObservedUpperBound = normalizeDiagnosticNumber(
+      diagnostics.observedUpperBound,
+    );
+    profiling.exactCandidateJoinLastAbortRemainingMs = Number.isFinite(deadlineAt)
+      ? Math.max(0, Math.round(deadlineAt - performance.now()))
+      : null;
+  };
+  resetAbortDiagnostics();
   const incumbentScore = getMedleyPruningThreshold(results, resultLimit);
   if (resultLimit !== 1 || slots.length !== MEDLEY_TEAM_COUNT || !Number.isFinite(incumbentScore)) {
     profiling.exactCandidateJoinAbortCount += 1;
+    recordAbortDiagnostics("invalid-input");
     return { proved: false, result: null };
   }
   profiling.exactCandidateJoinLastBestSlotScores = [];
@@ -1931,6 +1975,11 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     if (stats.timedOut || generators[slotIndex].hasAborted() || !topCandidate) {
       profiling.exactCandidateJoinInitialCandidateElapsedMs += performance.now() - initialCandidateStartedAt;
       profiling.exactCandidateJoinAbortCount += 1;
+      recordAbortDiagnostics("initial-candidate", {
+        slotIndex,
+        candidateCount: candidatesBySlot[slotIndex]?.length ?? 0,
+        peekUpperBound: generators[slotIndex].peekUpperBound(),
+      });
       profiling.exactCandidateJoinPoppedNodeCount += generators.reduce((sum, generator) => (
         sum + generator.poppedNodeCount()
       ), 0);
@@ -1963,6 +2012,12 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     if (stats.timedOut || generators.some((generator) => generator.hasAborted())) {
       profiling.exactCandidateJoinPairUpperElapsedMs += performance.now() - pairUpperStartedAt;
       profiling.exactCandidateJoinAbortCount += 1;
+      recordAbortDiagnostics("pair-upper", {
+        slotIndex: excludedSlotIndex,
+        candidateCount: candidatesBySlot.reduce((max, candidates) => Math.max(max, candidates.length), 0),
+        cutoff: rootPrunePairTarget,
+        observedUpperBound: getObservedExactCandidateJoinUpperBound(),
+      });
       profiling.exactCandidateJoinGeneratedCandidateCount += candidatesBySlot.reduce((sum, candidates) => (
         sum + candidates.length
       ), 0);
@@ -2042,6 +2097,12 @@ export function searchMedleyConfigurationByExactCandidateJoin(
       profiling.exactCandidateJoinPairUpperElapsedMs += performance.now() - deepPairStartedAt;
       if (stats.timedOut || generators.some((generator) => generator.hasAborted())) {
         profiling.exactCandidateJoinAbortCount += 1;
+        recordAbortDiagnostics("deep-pair-upper", {
+          slotIndex: deepPairExcludedSlotIndex,
+          candidateCount: candidatesBySlot.reduce((max, candidates) => Math.max(max, candidates.length), 0),
+          cutoff: targetUnseenUpperBound,
+          observedUpperBound: getObservedExactCandidateJoinUpperBound(),
+        });
         profiling.exactCandidateJoinGeneratedCandidateCount += candidatesBySlot.reduce((sum, candidates) => (
           sum + candidates.length
         ), 0);
@@ -2077,6 +2138,11 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     profiling.exactCandidateJoinPairUpperElapsedMs += performance.now() - highBudgetDeepPairStartedAt;
     if (stats.timedOut || generators.some((generator) => generator.hasAborted())) {
       profiling.exactCandidateJoinAbortCount += 1;
+      recordAbortDiagnostics("high-budget-pair-upper", {
+        slotIndex: 0,
+        candidateCount: candidatesBySlot.reduce((max, candidates) => Math.max(max, candidates.length), 0),
+        observedUpperBound: getObservedExactCandidateJoinUpperBound(),
+      });
       profiling.exactCandidateJoinGeneratedCandidateCount += candidatesBySlot.reduce((sum, candidates) => (
         sum + candidates.length
       ), 0);
@@ -2143,6 +2209,10 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     profiling.exactCandidateJoinSolveElapsedMs += performance.now() - anchoredJoinStartedAt;
     if (anchoredJoinResult.timedOut) {
       profiling.exactCandidateJoinAbortCount += 1;
+      recordAbortDiagnostics("anchored-join-timeout", {
+        candidateCount: candidatesBySlot.reduce((max, candidates) => Math.max(max, candidates.length), 0),
+        observedUpperBound: getObservedExactCandidateJoinUpperBound(),
+      });
       profiling.exactCandidateJoinLastCandidateCountsBySlot = candidatesBySlot.map((candidates) => candidates.length);
       profiling.exactCandidateJoinGeneratedCandidateCount += candidatesBySlot.reduce((sum, candidates) => (
         sum + candidates.length
@@ -2249,6 +2319,11 @@ export function searchMedleyConfigurationByExactCandidateJoin(
         performance.now() - slotFillStartedAt
       );
       profiling.exactCandidateJoinAbortCount += 1;
+      recordAbortDiagnostics("candidate-fill-pair-refine", {
+        slotIndex,
+        candidateCount: candidatesBySlot[slotIndex]?.length ?? null,
+        observedUpperBound: getObservedExactCandidateJoinUpperBound(),
+      });
       profiling.exactCandidateJoinGeneratedCandidateCount += candidatesBySlot.reduce((sum, candidates) => (
         sum + candidates.length
       ), 0);
@@ -2310,6 +2385,14 @@ export function searchMedleyConfigurationByExactCandidateJoin(
         stats.timedOut = true;
         stats.searchMode = "bounded";
         profiling.exactCandidateJoinAbortCount += 1;
+        recordAbortDiagnostics("candidate-fill-deadline", {
+          slotIndex,
+          candidateCount: candidatesBySlot[slotIndex].length,
+          cutoff,
+          peekUpperBound: generator.peekUpperBound(),
+          otherUpper,
+          observedUpperBound: getObservedExactCandidateJoinUpperBound(),
+        });
         profiling.exactCandidateJoinGeneratedCandidateCount += candidatesBySlot.reduce((sum, candidates) => (
           sum + candidates.length
         ), 0);
@@ -2329,6 +2412,14 @@ export function searchMedleyConfigurationByExactCandidateJoin(
           performance.now() - slotFillStartedAt
         );
         profiling.exactCandidateJoinAbortCount += 1;
+        recordAbortDiagnostics("candidate-fill-soft-limit", {
+          slotIndex,
+          candidateCount: candidatesBySlot[slotIndex].length,
+          cutoff,
+          peekUpperBound: generator.peekUpperBound(),
+          otherUpper,
+          observedUpperBound: getObservedExactCandidateJoinUpperBound(),
+        });
         profiling.exactCandidateJoinGeneratedCandidateCount += candidatesBySlot.reduce((sum, candidates) => (
           sum + candidates.length
         ), 0);
@@ -2360,6 +2451,14 @@ export function searchMedleyConfigurationByExactCandidateJoin(
           performance.now() - slotFillStartedAt
         );
         profiling.exactCandidateJoinAbortCount += 1;
+        recordAbortDiagnostics("candidate-fill-generator-aborted", {
+          slotIndex,
+          candidateCount: candidatesBySlot[slotIndex].length,
+          cutoff,
+          peekUpperBound: generator.peekUpperBound(),
+          otherUpper,
+          observedUpperBound: getObservedExactCandidateJoinUpperBound(),
+        });
         profiling.exactCandidateJoinGeneratedCandidateCount += candidatesBySlot.reduce((sum, candidates) => (
           sum + candidates.length
         ), 0);
@@ -2430,6 +2529,10 @@ export function searchMedleyConfigurationByExactCandidateJoin(
   profiling.exactCandidateJoinSolveElapsedMs += performance.now() - solveStartedAt;
   if (joinResult.timedOut) {
     profiling.exactCandidateJoinAbortCount += 1;
+    recordAbortDiagnostics("solve-timeout", {
+      candidateCount: candidatesBySlot.reduce((max, candidates) => Math.max(max, candidates.length), 0),
+      observedUpperBound: getObservedExactCandidateJoinUpperBound(),
+    });
     return buildUnprovedExactCandidateJoinResult(joinResult.result);
   }
   const result = joinResult.result;

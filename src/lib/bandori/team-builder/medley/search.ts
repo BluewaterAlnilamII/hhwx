@@ -366,6 +366,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
       || visitedBranchCount % deadlineCheckInterval === 0
     ) && performance.now() >= deadlineAt;
   };
+  const getRemainingSearchMs = (): number => Math.max(0, deadlineAt - performance.now());
 
   let orderedConfigurations = configurations;
   const configurationCoarseSeedScores = new Map<string, number>();
@@ -952,10 +953,28 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
       if (!configurationTrace || !traceEntry || traceEntry.status !== undefined) {
         return;
       }
+      const rememberedUnclosedUpperBound = configurationIndex >= 0
+        ? unclosedConfigurationUpperBounds.get(configurationIndex)
+        : undefined;
       Object.assign(traceEntry, {
         status,
         elapsedMs: Math.round(performance.now() - traceStartedAt),
+        remainingBudgetMs: Math.round(getRemainingSearchMs()),
         bestScore: results[0]?.score ?? null,
+        observedRootUpperBound: configurationIndex >= 0
+          ? getConfigurationObservedRootUpperBound(configurationIndex)
+          : null,
+        activeObservedUpperBound: Number.isFinite(activeConfigurationObservedScoreUpperBound)
+          ? activeConfigurationObservedScoreUpperBound
+          : null,
+        activeObservedUpperSource: activeConfigurationObservedUpperBoundSource,
+        activeTightUpperBound: Number.isFinite(activeConfigurationTightScoreUpperBound)
+          ? activeConfigurationTightScoreUpperBound
+          : null,
+        activeTightUpperSource: activeConfigurationTightUpperBoundSource,
+        rememberedUnclosedUpperBound: rememberedUnclosedUpperBound?.upperBound ?? null,
+        rememberedUnclosedUpperSource: rememberedUnclosedUpperBound?.source ?? null,
+        rememberedUnclosedUpperRemainingSlotCount: rememberedUnclosedUpperBound?.remainingSlotCount ?? null,
         evaluatedTeamCountDelta: stats.evaluatedTeamCount - traceStartCounters.evaluatedTeamCount,
         enumeratedTeamCountDelta: stats.enumeratedTeamCount - traceStartCounters.enumeratedTeamCount,
         visitedBranchCountDelta: visitedBranchCount - traceStartCounters.visitedBranchCount,
@@ -1035,6 +1054,16 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
           exactCandidateJoinLastCandidateFillElapsedMsBySlot: [
             ...profiling.exactCandidateJoinLastCandidateFillElapsedMsBySlot.map((elapsedMs) => Math.round(elapsedMs)),
           ],
+          exactCandidateJoinAbortReason: profiling.exactCandidateJoinLastAbortReason,
+          exactCandidateJoinAbortSlotIndex: profiling.exactCandidateJoinLastAbortSlotIndex,
+          exactCandidateJoinAbortCandidateSoftLimit: profiling.exactCandidateJoinLastAbortCandidateSoftLimit,
+          exactCandidateJoinAbortNodeSoftLimit: profiling.exactCandidateJoinLastAbortNodeSoftLimit,
+          exactCandidateJoinAbortCandidateCount: profiling.exactCandidateJoinLastAbortCandidateCount,
+          exactCandidateJoinAbortCutoff: profiling.exactCandidateJoinLastAbortCutoff,
+          exactCandidateJoinAbortPeekUpperBound: profiling.exactCandidateJoinLastAbortPeekUpperBound,
+          exactCandidateJoinAbortOtherUpper: profiling.exactCandidateJoinLastAbortOtherUpper,
+          exactCandidateJoinAbortObservedUpperBound: profiling.exactCandidateJoinLastAbortObservedUpperBound,
+          exactCandidateJoinAbortRemainingMs: profiling.exactCandidateJoinLastAbortRemainingMs,
         });
       }
       configurationTrace.push(traceEntry);
