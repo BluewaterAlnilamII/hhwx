@@ -6,10 +6,11 @@ import { type BandoriAssetRegion } from "@/lib/bandori-asset-proxy";
 import { getUsernameAvatarLabel } from "@/lib/username-policy";
 import { cn } from "@/lib/utils";
 
-type AccountCardAvatarSize = "comment" | "default" | "large";
+type AccountCardAvatarSize = "toolbar" | "comment" | "default" | "large";
 
 const SIZE_CLASS_NAMES: Record<AccountCardAvatarSize, string> = {
-  comment: "h-9 w-9 text-xs",
+  toolbar: "h-7 w-7 text-[11px]",
+  comment: "h-11 w-11 text-sm",
   default: "h-14 w-14 text-xl",
   large: "h-20 w-20 text-2xl",
 };

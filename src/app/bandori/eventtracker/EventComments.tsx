@@ -3,7 +3,7 @@
 import type { CSSProperties, MouseEvent, ReactNode } from "react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
-import { Check, ChevronFirst, ChevronLast, ChevronLeft, ChevronRight, Edit3, Link2, MessageSquare, MoreHorizontal, Reply, Smile, Trash2, X } from "lucide-react";
+import { Check, ChevronFirst, ChevronLast, ChevronLeft, ChevronRight, Edit3, Heart, Link2, MessageSquare, MoreHorizontal, Reply, Smile, Trash2, X } from "lucide-react";
 import AccountCardAvatar from "@/components/account/AccountCardAvatar";
 import { type AccountAvatarCardTrainType } from "@/lib/account-avatar-defaults";
 import { getApiErrorMessage, parseApiSuccessData } from "@/lib/api-contracts";
@@ -31,6 +31,8 @@ type CommentNode = {
   content: string | null;
   depth: number;
   replyCount: number;
+  likeCount: number;
+  likedByViewer: boolean;
   createdAt: string;
   updatedAt: string;
   editedAt: string | null;
@@ -49,12 +51,20 @@ type CommentListResponse = {
   page?: number;
   totalPages?: number;
   totalCount?: number;
+  totalCommentCount?: number;
 };
 
 type CommentContextResponse = {
   root: CommentNode;
   ancestors: CommentNode[];
   comment: CommentNode;
+  rootPage: number;
+};
+
+type CommentReactionState = {
+  commentId: string;
+  likeCount: number;
+  likedByViewer: boolean;
 };
 
 const COMMENT_INPUT_MAX_LENGTH = 500;
@@ -98,7 +108,7 @@ function renderCommentContent(content: string) {
         width={32}
         height={32}
         loading="lazy"
-        className="mx-0.5 inline-block h-8 w-8 align-[-0.35em]"
+        className="mx-0.5 inline-block h-8 w-auto max-w-[5rem] object-contain align-[-0.35em]"
       />,
     );
     cursor = match.index + raw.length;
@@ -314,22 +324,18 @@ function mergePreviewReplies(current: CommentNode[], next: CommentNode[]): Comme
   });
 }
 
-function mergeContextRoot(nodes: CommentNode[], contextRoot: CommentNode): CommentNode[] {
-  let found = false;
-  const merged = nodes.map((node) => {
-    if (node.id !== contextRoot.id) {
-      return node;
+function updateCommentReaction(nodes: CommentNode[], reaction: CommentReactionState): CommentNode[] {
+  return nodes.map((node) => {
+    if (node.id === reaction.commentId) {
+      return {
+        ...node,
+        likeCount: reaction.likeCount,
+        likedByViewer: reaction.likedByViewer,
+      };
     }
 
-    found = true;
-    return {
-      ...node,
-      replyCount: Math.max(node.replyCount, contextRoot.replyCount),
-      previewReplies: mergePreviewReplies(node.previewReplies, contextRoot.previewReplies),
-    };
+    return { ...node, previewReplies: updateCommentReaction(node.previewReplies, reaction) };
   });
-
-  return found ? merged : [...merged, contextRoot];
 }
 
 function findThreadRootId(nodes: CommentNode[], comment: CommentNode): string | null {
@@ -342,6 +348,16 @@ function findThreadRootId(nodes: CommentNode[], comment: CommentNode): string | 
   }
 
   return findComment(nodes, comment.parentId)?.rootId ?? comment.parentId;
+}
+
+function scrollToRenderedComment(commentId: string): boolean {
+  const element = document.getElementById(`comment-${commentId}`);
+  if (!element) {
+    return false;
+  }
+
+  element.scrollIntoView({ block: "center", behavior: "smooth" });
+  return true;
 }
 
 function bumpThreadReplyCount(nodes: CommentNode[], rootId: string, child: CommentNode): CommentNode[] {
@@ -455,9 +471,11 @@ type CommentItemProps = {
   highlightedId: string | null;
   replies: Record<string, CommentListResponse>;
   loadingReplies: Record<string, boolean>;
+  canReact: boolean;
   isReply?: boolean;
   rootCommentId?: string | null;
   onCreateReply: (parentId: string, content: string) => Promise<void>;
+  onToggleLike: (commentId: string, likedByViewer: boolean) => Promise<void>;
   onUpdate: (commentId: string, content: string) => Promise<void>;
   onDelete: (commentId: string) => Promise<void>;
   onLoadReplies: (commentId: string, cursor?: string | null) => Promise<void>;
@@ -470,9 +488,11 @@ function CommentItem({
   highlightedId,
   replies,
   loadingReplies,
+  canReact,
   isReply = false,
   rootCommentId = null,
   onCreateReply,
+  onToggleLike,
   onUpdate,
   onDelete,
   onLoadReplies,
@@ -482,6 +502,7 @@ function CommentItem({
   const [editing, setEditing] = useState(false);
   const [editValue, setEditValue] = useState(comment.content ?? "");
   const [editEmojiOpen, setEditEmojiOpen] = useState(false);
+  const [liking, setLiking] = useState(false);
   const [actionError, setActionError] = useState("");
   const editTextareaRef = useRef<HTMLTextAreaElement>(null);
   const threadRootId = rootCommentId ?? comment.id;
@@ -539,6 +560,24 @@ function CommentItem({
     }
   };
 
+  const handleToggleLike = async () => {
+    if (liking || isDeleted) return;
+    setActionError("");
+    if (!canReact) {
+      setActionError("登录并完成邮箱验证后可以点赞");
+      return;
+    }
+
+    setLiking(true);
+    try {
+      await onToggleLike(comment.id, comment.likedByViewer);
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "点赞失败");
+    } finally {
+      setLiking(false);
+    }
+  };
+
   const insertEditEmoji = (name: string) => {
     const textarea = editTextareaRef.current;
     const start = textarea?.selectionStart ?? editValue.length;
@@ -557,13 +596,19 @@ function CommentItem({
     <article
       id={`comment-${comment.id}`}
       className={cn(
-        "relative rounded-2xl border bg-white p-4 shadow-sm transition dark:bg-slate-900",
-        isHighlighted
+        "relative transition",
+        isReply
+          ? "rounded-xl bg-transparent py-1"
+          : "rounded-2xl border bg-white p-3 shadow-sm dark:bg-slate-900 sm:p-4",
+        isHighlighted && isReply
+          ? "bg-sky-50/80 ring-2 ring-sky-200 dark:bg-sky-500/10 dark:ring-sky-500/25"
+          : null,
+        !isReply && (isHighlighted
           ? "border-sky-300 ring-4 ring-sky-100 dark:border-sky-500 dark:ring-sky-500/20"
-          : "border-slate-200 dark:border-slate-700",
+          : "border-slate-200 dark:border-slate-700"),
       )}
     >
-      <div className="flex items-start gap-3">
+      <div className={cn("flex items-start", isReply ? "gap-2" : "gap-3")}>
         <AccountCardAvatar
           username={comment.username}
           cardId={comment.avatar.cardId}
@@ -644,6 +689,23 @@ function CommentItem({
                 回复
               </button>
             ) : null}
+            {!isDeleted ? (
+              <button
+                type="button"
+                onClick={handleToggleLike}
+                disabled={liking}
+                aria-pressed={comment.likedByViewer}
+                className={cn(
+                  "inline-flex h-7 items-center gap-1 rounded-full px-2 text-xs font-semibold transition disabled:opacity-60",
+                  comment.likedByViewer
+                    ? "bg-rose-50 text-rose-600 hover:bg-rose-100 dark:bg-rose-500/10 dark:text-rose-300 dark:hover:bg-rose-500/20"
+                    : "text-slate-500 hover:bg-rose-50 hover:text-rose-600 dark:text-slate-400 dark:hover:bg-rose-500/10 dark:hover:text-rose-300",
+                )}
+              >
+                <Heart size={13} className={comment.likedByViewer ? "fill-current" : undefined} />
+                {comment.likeCount}
+              </button>
+            ) : null}
             <button type="button" onClick={handleCopyLink} className="inline-flex h-7 items-center gap-1 rounded-full px-2 text-xs font-semibold text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800">
               <Link2 size={13} />
               链接
@@ -688,7 +750,7 @@ function CommentItem({
           ) : null}
 
           {visibleReplies.length > 0 ? (
-            <div className="mt-3 space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-950/60">
+            <div className="mt-3 -ml-[1.375rem] space-y-3 border-l border-slate-200 pl-2 dark:border-slate-700 sm:ml-0 sm:pl-3">
               {visibleReplies.map((reply) => (
                 <CommentItem
                   key={reply.id}
@@ -697,9 +759,11 @@ function CommentItem({
                   highlightedId={highlightedId}
                   replies={replies}
                   loadingReplies={loadingReplies}
+                  canReact={canReact}
                   isReply
                   rootCommentId={comment.id}
                   onCreateReply={onCreateReply}
+                  onToggleLike={onToggleLike}
                   onUpdate={onUpdate}
                   onDelete={onDelete}
                   onLoadReplies={onLoadReplies}
@@ -732,14 +796,25 @@ export default function EventComments({ eventId }: { eventId: number | null }) {
   const [pageInput, setPageInput] = useState("1");
   const [totalPages, setTotalPages] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
+  const [totalCommentCount, setTotalCommentCount] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [focusedCommentId, setFocusedCommentId] = useState<string | null>(null);
   const [replies, setReplies] = useState<Record<string, CommentListResponse>>({});
   const [loadingReplies, setLoadingReplies] = useState<Record<string, boolean>>({});
+  const commentsRef = useRef<CommentNode[]>([]);
+  const currentPageRef = useRef(1);
   const { userId, username, emailVerified, authReady } = useGameStore();
 
   const apiBase = eventId ? `/api/bandori/events/${eventId}/comments` : null;
+
+  useEffect(() => {
+    commentsRef.current = comments;
+  }, [comments]);
+
+  useEffect(() => {
+    currentPageRef.current = currentPage;
+  }, [currentPage]);
 
   const loadRootComments = useCallback(async (page = 1) => {
     if (!apiBase) return;
@@ -753,6 +828,7 @@ export default function EventComments({ eventId }: { eventId: number | null }) {
       setCurrentPage(data.page ?? page);
       setTotalPages(data.totalPages ?? 1);
       setTotalCount(data.totalCount ?? data.comments.length);
+      setTotalCommentCount(data.totalCommentCount ?? data.totalCount ?? data.comments.length);
     } catch (err) {
       setError(err instanceof Error ? err.message : "评论加载失败");
     } finally {
@@ -762,11 +838,19 @@ export default function EventComments({ eventId }: { eventId: number | null }) {
 
   const locateLinkedComment = useCallback(async (commentId: string) => {
     if (!apiBase) return;
+    setFocusedCommentId(commentId);
+    if (scrollToRenderedComment(commentId)) {
+      return;
+    }
+
     try {
       const headers = await authHeaders();
       const data = await requestJson<CommentContextResponse>(`${apiBase}/${commentId}`, { headers });
       const contextRoot = buildContextThread(data);
-      setComments((current) => mergeContextRoot(current, contextRoot));
+      const rootVisible = commentsRef.current.some((comment) => comment.id === contextRoot.id);
+      if (data.rootPage !== currentPageRef.current || !rootVisible) {
+        await loadRootComments(data.rootPage);
+      }
       if (contextRoot.previewReplies.length > 0) {
         setReplies((current) => {
           const existing = current[contextRoot.id];
@@ -780,12 +864,13 @@ export default function EventComments({ eventId }: { eventId: number | null }) {
           };
         });
       }
-      setFocusedCommentId(commentId);
-      window.setTimeout(() => document.getElementById(`comment-${commentId}`)?.scrollIntoView({ block: "center", behavior: "smooth" }), 80);
+      window.requestAnimationFrame(() => {
+        scrollToRenderedComment(commentId);
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : "无法定位评论");
     }
-  }, [apiBase]);
+  }, [apiBase, loadRootComments]);
 
   const navigateToComment = useCallback(async (commentId: string) => {
     if (typeof window !== "undefined" && eventId) {
@@ -808,16 +893,18 @@ export default function EventComments({ eventId }: { eventId: number | null }) {
     setPageInput("1");
     setTotalPages(1);
     setTotalCount(0);
+    setTotalCommentCount(0);
     setFocusedCommentId(null);
     if (!eventId || !apiBase) return;
 
     const params = new URLSearchParams(window.location.search);
     const commentId = params.get("comment");
     void (async () => {
-      await loadRootComments(1);
       if (commentId) {
         await locateLinkedComment(commentId);
+        return;
       }
+      await loadRootComments(1);
     })();
   }, [apiBase, eventId, loadRootComments, locateLinkedComment]);
 
@@ -832,6 +919,7 @@ export default function EventComments({ eventId }: { eventId: number | null }) {
 
     if (parentId) {
       const rootId = findThreadRootId(comments, created) ?? parentId;
+      setTotalCommentCount((value) => value + 1);
       setComments((current) => bumpThreadReplyCount(current, rootId, created));
       setReplies((current) => {
         const existing = current[rootId];
@@ -896,6 +984,23 @@ export default function EventComments({ eventId }: { eventId: number | null }) {
     ));
   };
 
+  const toggleCommentLike = async (commentId: string, likedByViewer: boolean) => {
+    if (!apiBase) return;
+    const headers = await authHeaders();
+    const reaction = await requestJson<CommentReactionState>(`${apiBase}/${commentId}/like`, {
+      method: likedByViewer ? "DELETE" : "PUT",
+      headers,
+    });
+
+    setComments((current) => updateCommentReaction(current, reaction));
+    setReplies((current) => Object.fromEntries(
+      Object.entries(current).map(([parentId, response]) => [
+        parentId,
+        { ...response, comments: updateCommentReaction(response.comments, reaction) },
+      ]),
+    ));
+  };
+
   const loadReplies = async (commentId: string, cursor?: string | null) => {
     if (!apiBase || loadingReplies[commentId]) return;
     setLoadingReplies((current) => ({ ...current, [commentId]: true }));
@@ -935,13 +1040,11 @@ export default function EventComments({ eventId }: { eventId: number | null }) {
   return (
     <section className="rounded-3xl border border-slate-200 bg-white/95 p-4 shadow-[0_16px_44px_rgba(15,23,42,0.06)] backdrop-blur dark:border-slate-800 dark:bg-slate-950/95 sm:p-5">
       <div className="flex flex-col gap-3 border-b border-slate-100 pb-4 dark:border-slate-800 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-sky-700 shadow-sm dark:border-slate-700 dark:bg-slate-900 dark:text-sky-300">
-            <MessageSquare size={14} />
-            活动评论
-          </div>
-          <h2 className="mt-3 text-xl font-black text-slate-900 dark:text-white">本期活动讨论</h2>
-        </div>
+        <h2 className="inline-flex items-center gap-2 text-xl font-black text-slate-900 dark:text-white">
+          <MessageSquare size={20} className="text-sky-600 dark:text-sky-300" />
+          活动评论
+          <span className="text-sm font-semibold text-slate-400 dark:text-slate-500">（{totalCommentCount}）</span>
+        </h2>
       </div>
 
       <div className="mt-4">
@@ -973,7 +1076,9 @@ export default function EventComments({ eventId }: { eventId: number | null }) {
             highlightedId={focusedCommentId}
             replies={replies}
             loadingReplies={loadingReplies}
+            canReact={Boolean(userId && emailVerified)}
             onCreateReply={(parentId, content) => createComment(content, parentId)}
+            onToggleLike={toggleCommentLike}
             onUpdate={updateCommentContent}
             onDelete={deleteComment}
             onLoadReplies={loadReplies}

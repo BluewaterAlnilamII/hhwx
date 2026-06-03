@@ -13,6 +13,7 @@ English version: [supabase-setup.md](supabase-setup.md)
 - `documents/account-status-schema.sql`：应用侧邮箱验证状态。
 - `documents/account-status-backfill-auth-confirmed.sql`：从 Supabase Auth 确认状态回填的可选脚本。
 - `documents/account-auth-flow.zh-CN.md`：账号注册、邮箱验证、重发和账号管理行为说明。
+- `documents/comment-likes-notifications-schema.sql`：已存在 `comments` 部署的评论点赞、回复/点赞提醒和点赞计数增量迁移。
 - `documents/profile-public-uid-schema.sql`：公开数字 profile UID 支持。
 - `documents/game-profile-schema.sql`：持久化用户游戏档案。
 - `documents/game-account-binding-schema.sql`：游戏账号绑定验证码和绑定关系。
@@ -32,6 +33,8 @@ English version: [supabase-setup.md](supabase-setup.md)
 8. `documents/game-account-binding-schema.sql`
 
 只有在从已有 Supabase Auth 项目迁移、并且需要把已确认邮箱用户变为应用侧已验证用户时，才执行 `documents/account-status-backfill-auth-confirmed.sql`。
+
+如果既有项目已经执行过旧版 `auth_schema.sql`，还需要执行 `documents/comment-likes-notifications-schema.sql`，补齐评论点赞、提醒记录和评论点赞计数。
 
 ## 复查要点
 

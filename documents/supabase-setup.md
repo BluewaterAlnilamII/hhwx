@@ -13,6 +13,7 @@ This document describes the current repository-local SQL layout for a fresh HHWX
 - `documents/account-status-schema.sql`: application-side email verification state.
 - `documents/account-status-backfill-auth-confirmed.sql`: optional backfill from Supabase Auth confirmation state.
 - `documents/account-auth-flow.md`: account registration, email verification, resend, and account-management behavior.
+- `documents/comment-likes-notifications-schema.sql`: incremental migration for comment likes and reply/like notifications on deployments that already have `comments`.
 - `documents/profile-public-uid-schema.sql`: public numeric profile UID support.
 - `documents/game-profile-schema.sql`: persisted user game profiles.
 - `documents/game-account-binding-schema.sql`: game-account binding challenges and bindings.
@@ -32,6 +33,8 @@ For a new project, run these in the Supabase SQL editor or your migration system
 8. `documents/game-account-binding-schema.sql`
 
 Then run `documents/account-status-backfill-auth-confirmed.sql` only when migrating users from an existing Supabase Auth project where confirmed users should become application-verified users.
+
+If an existing project already ran an older `auth_schema.sql`, also run `documents/comment-likes-notifications-schema.sql` to add comment likes, notification rows, and comment like counters.
 
 ## Review Notes
 

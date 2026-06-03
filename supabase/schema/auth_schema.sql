@@ -38,6 +38,7 @@ CREATE TABLE IF NOT EXISTS comments (
   content           TEXT,
   depth             INTEGER NOT NULL DEFAULT 0,
   reply_count       INTEGER NOT NULL DEFAULT 0,
+  like_count        INTEGER NOT NULL DEFAULT 0,
   created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   edited_at         TIMESTAMPTZ,
@@ -51,6 +52,7 @@ CREATE TABLE IF NOT EXISTS comments (
   CHECK (content IS NULL OR (char_length(btrim(content)) > 0 AND char_length(content) <= 500)),
   CHECK (depth >= 0),
   CHECK (reply_count >= 0),
+  CHECK (like_count >= 0),
   CHECK (moderation_status IN ('visible', 'removed_by_admin', 'hidden')),
   CHECK (
     (deleted_at IS NULL AND content IS NOT NULL) OR
@@ -70,6 +72,61 @@ CREATE INDEX IF NOT EXISTS idx_comments_target_root_id
   ON comments (target_type, target_id, root_id);
 
 CREATE INDEX IF NOT EXISTS idx_comments_user_id ON comments (user_id);
+
+CREATE TABLE IF NOT EXISTS comment_likes (
+  comment_id UUID NOT NULL REFERENCES comments(id) ON DELETE CASCADE,
+  user_id    UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (comment_id, user_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_comment_likes_user_id_created_at
+  ON comment_likes (user_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS comment_notifications (
+  id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  recipient_user_id   UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  actor_user_id       UUID REFERENCES profiles(id) ON DELETE SET NULL,
+  type                TEXT NOT NULL,
+  target_type         TEXT NOT NULL,
+  target_id           TEXT NOT NULL,
+  comment_id          UUID NOT NULL REFERENCES comments(id) ON DELETE CASCADE,
+  activity_comment_id UUID REFERENCES comments(id) ON DELETE CASCADE,
+  read_at             TIMESTAMPTZ,
+  created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CHECK (type IN ('comment_reply', 'comment_like')),
+  CHECK (target_type IN ('bandori_event')),
+  CHECK (char_length(target_id) BETWEEN 1 AND 128),
+  CHECK (
+    (type = 'comment_reply' AND activity_comment_id IS NOT NULL) OR
+    (type = 'comment_like' AND activity_comment_id IS NULL)
+  )
+);
+
+CREATE INDEX IF NOT EXISTS idx_comment_notifications_recipient_read_created
+  ON comment_notifications (recipient_user_id, read_at, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_comment_notifications_recipient_created
+  ON comment_notifications (recipient_user_id, created_at DESC, id DESC);
+
+CREATE INDEX IF NOT EXISTS idx_comment_notifications_actor_user_id
+  ON comment_notifications (actor_user_id)
+  WHERE actor_user_id IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS idx_comment_notifications_comment_id
+  ON comment_notifications (comment_id);
+
+CREATE INDEX IF NOT EXISTS idx_comment_notifications_activity_comment_id
+  ON comment_notifications (activity_comment_id)
+  WHERE activity_comment_id IS NOT NULL;
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_comment_notifications_unique_reply
+  ON comment_notifications (recipient_user_id, type, activity_comment_id)
+  WHERE type = 'comment_reply' AND activity_comment_id IS NOT NULL;
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_comment_notifications_unique_like
+  ON comment_notifications (recipient_user_id, actor_user_id, type, comment_id)
+  WHERE type = 'comment_like';
 
 CREATE TABLE IF NOT EXISTS comment_reports (
   id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -147,6 +204,30 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+CREATE OR REPLACE FUNCTION public.update_comment_like_count()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF TG_OP = 'INSERT' THEN
+    UPDATE public.comments
+      SET like_count = like_count + 1,
+          updated_at = NOW()
+      WHERE id = NEW.comment_id;
+    RETURN NEW;
+  END IF;
+
+  IF TG_OP = 'DELETE' THEN
+    UPDATE public.comments
+      SET like_count = GREATEST(like_count - 1, 0),
+          updated_at = NOW()
+      WHERE id = OLD.comment_id;
+    RETURN OLD;
+  END IF;
+
+  RETURN NULL;
+END;
+$$ LANGUAGE plpgsql
+SET search_path = public, pg_temp;
+
 -- 用户注册后自动创建 profiles 记录，优先使用注册时提交的用户名。
 -- TODO: 后续评估是否将 SECURITY DEFINER 函数迁到非暴露 schema；
 -- 本次只整理文件归属，不改变函数位置或权限行为。
@@ -176,6 +257,7 @@ $$;
 DROP TRIGGER IF EXISTS set_profiles_updated_at ON profiles;
 DROP TRIGGER IF EXISTS prepare_comment_insert ON comments;
 DROP TRIGGER IF EXISTS increment_comment_reply_count ON comments;
+DROP TRIGGER IF EXISTS update_comment_like_count ON comment_likes;
 DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 
 CREATE TRIGGER set_profiles_updated_at
@@ -193,6 +275,11 @@ CREATE TRIGGER increment_comment_reply_count
   FOR EACH ROW
   EXECUTE FUNCTION public.increment_comment_reply_count();
 
+CREATE TRIGGER update_comment_like_count
+  AFTER INSERT OR DELETE ON comment_likes
+  FOR EACH ROW
+  EXECUTE FUNCTION public.update_comment_like_count();
+
 CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW
@@ -201,6 +288,8 @@ CREATE TRIGGER on_auth_user_created
 ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE guestbook_comments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE comments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE comment_likes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE comment_notifications ENABLE ROW LEVEL SECURITY;
 ALTER TABLE comment_reports ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS profiles_select_public ON profiles;
@@ -213,6 +302,11 @@ DROP POLICY IF EXISTS comments_select_public ON comments;
 DROP POLICY IF EXISTS comments_insert_own ON comments;
 DROP POLICY IF EXISTS comments_delete_own ON comments;
 DROP POLICY IF EXISTS comments_update_own ON comments;
+DROP POLICY IF EXISTS comment_likes_select_own ON comment_likes;
+DROP POLICY IF EXISTS comment_likes_insert_own ON comment_likes;
+DROP POLICY IF EXISTS comment_likes_delete_own ON comment_likes;
+DROP POLICY IF EXISTS comment_notifications_select_own ON comment_notifications;
+DROP POLICY IF EXISTS comment_notifications_update_own ON comment_notifications;
 DROP POLICY IF EXISTS comment_reports_insert_own ON comment_reports;
 
 -- profiles 允许公开读取，仅允许本人创建和更新自己的资料。
@@ -254,6 +348,32 @@ CREATE POLICY comments_update_own
   ON comments FOR UPDATE
   USING (auth.uid() = user_id AND deleted_at IS NULL AND moderation_status = 'visible')
   WITH CHECK (auth.uid() = user_id AND moderation_status = 'visible');
+
+CREATE POLICY comment_likes_select_own
+  ON comment_likes FOR SELECT
+  TO authenticated
+  USING ((select auth.uid()) = user_id);
+
+CREATE POLICY comment_likes_insert_own
+  ON comment_likes FOR INSERT
+  TO authenticated
+  WITH CHECK ((select auth.uid()) = user_id);
+
+CREATE POLICY comment_likes_delete_own
+  ON comment_likes FOR DELETE
+  TO authenticated
+  USING ((select auth.uid()) = user_id);
+
+CREATE POLICY comment_notifications_select_own
+  ON comment_notifications FOR SELECT
+  TO authenticated
+  USING ((select auth.uid()) = recipient_user_id);
+
+CREATE POLICY comment_notifications_update_own
+  ON comment_notifications FOR UPDATE
+  TO authenticated
+  USING ((select auth.uid()) = recipient_user_id)
+  WITH CHECK ((select auth.uid()) = recipient_user_id);
 
 CREATE POLICY comment_reports_insert_own
   ON comment_reports FOR INSERT

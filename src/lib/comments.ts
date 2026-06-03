@@ -7,11 +7,17 @@ import {
 import { type BandoriAssetRegion } from "@/lib/bandori-asset-proxy";
 import { fetchBestdoriMasterDataset } from "@/lib/bestdori-master-data";
 import { pickBestdoriCnThenJpRegionalName } from "@/lib/bestdori-regional-names";
+import {
+  createCommentLikeNotification,
+  createCommentReplyNotification,
+  type CommentNotificationCommentRef,
+} from "@/lib/comment-notifications-server";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
+import { COMMENT_LIKES_TABLE } from "@/lib/supabase-table-names";
 
 export const COMMENTS_TABLE = "comments";
 export const COMMENT_PAGE_SIZE = 10;
-export const COMMENT_PREVIEW_REPLY_LIMIT = 1;
+export const COMMENT_PREVIEW_REPLY_LIMIT = 3;
 export const COMMENT_TARGET_BANDORI_EVENT = "bandori_event";
 export const MAX_COMMENT_LENGTH = 500;
 
@@ -39,6 +45,7 @@ export type CommentRow = {
   content: string | null;
   depth: number;
   reply_count: number;
+  like_count: number;
   created_at: string;
   updated_at: string;
   edited_at: string | null;
@@ -59,6 +66,8 @@ export type CommentNode = {
   content: string | null;
   depth: number;
   replyCount: number;
+  likeCount: number;
+  likedByViewer: boolean;
   createdAt: string;
   updatedAt: string;
   editedAt: string | null;
@@ -91,6 +100,7 @@ const COMMENT_SELECT = [
   "content",
   "depth",
   "reply_count",
+  "like_count",
   "created_at",
   "updated_at",
   "edited_at",
@@ -222,6 +232,7 @@ function toCommentNode(
   row: CommentRow,
   viewerUserId?: string | null,
   replyToUsernames?: Map<string, string | null>,
+  likedCommentIds: ReadonlySet<string> = new Set(),
   avatarCards: ReadonlyMap<number, CommentAvatarCardMetadata> = new Map(),
 ): CommentNode {
   const isOwner = Boolean(viewerUserId && viewerUserId === row.user_id);
@@ -240,6 +251,8 @@ function toCommentNode(
     content: row.content,
     depth: row.depth,
     replyCount: row.reply_count,
+    likeCount: row.like_count,
+    likedByViewer: likedCommentIds.has(row.id),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     editedAt: row.edited_at,
@@ -280,12 +293,33 @@ async function readReplyToUsernames(rows: CommentRow[]): Promise<Map<string, str
   return result;
 }
 
+async function readViewerLikedCommentIds(rows: CommentRow[], viewerUserId?: string | null): Promise<Set<string>> {
+  const commentIds = rows.map((row) => row.id);
+  if (!viewerUserId || commentIds.length === 0) {
+    return new Set();
+  }
+
+  const client = createServerSupabaseClient();
+  const { data, error } = await client
+    .from(COMMENT_LIKES_TABLE)
+    .select("comment_id")
+    .eq("user_id", viewerUserId)
+    .in("comment_id", commentIds);
+
+  if (error) {
+    throw new ApiRouteError(500, "COMMENT_LIKES_READ_FAILED", "无法读取点赞状态", error.message);
+  }
+
+  return new Set((data ?? []).map((row) => row.comment_id as string));
+}
+
 async function toCommentNodes(rows: CommentRow[], viewerUserId?: string | null): Promise<CommentNode[]> {
-  const [replyToUsernames, avatarCards] = await Promise.all([
+  const [replyToUsernames, likedCommentIds, avatarCards] = await Promise.all([
     readReplyToUsernames(rows),
+    readViewerLikedCommentIds(rows, viewerUserId),
     readCommentAvatarCards(rows),
   ]);
-  return rows.map((row) => toCommentNode(row, viewerUserId, replyToUsernames, avatarCards));
+  return rows.map((row) => toCommentNode(row, viewerUserId, replyToUsernames, likedCommentIds, avatarCards));
 }
 
 async function fetchEarliestThreadReplies(
@@ -319,6 +353,25 @@ async function fetchEarliestThreadReplies(
   return result;
 }
 
+async function countVisibleTargetComments(options: {
+  targetType: string;
+  targetId: string;
+}): Promise<number> {
+  const client = createServerSupabaseClient();
+  const { count, error } = await client
+    .from(COMMENTS_TABLE)
+    .select("id", { count: "exact", head: true })
+    .eq("target_type", options.targetType)
+    .eq("target_id", options.targetId)
+    .eq("moderation_status", "visible");
+
+  if (error) {
+    throw new ApiRouteError(500, "COMMENTS_COUNT_FAILED", "无法读取评论总数", error.message);
+  }
+
+  return count ?? 0;
+}
+
 export async function listComments(options: ListCommentsOptions): Promise<{
   comments: CommentNode[];
   nextCursor: string | null;
@@ -326,6 +379,7 @@ export async function listComments(options: ListCommentsOptions): Promise<{
   page: number;
   totalPages: number;
   totalCount: number;
+  totalCommentCount: number;
 }> {
   const client = createServerSupabaseClient();
   const cursor = parseCursor(options.cursor);
@@ -366,6 +420,9 @@ export async function listComments(options: ListCommentsOptions): Promise<{
   const comments = await toCommentNodes(rows, options.viewerUserId);
   const totalCount = count ?? 0;
   const totalPages = Math.max(1, Math.ceil(totalCount / COMMENT_PAGE_SIZE));
+  const totalCommentCount = usePagePagination
+    ? await countVisibleTargetComments({ targetType: options.targetType, targetId: options.targetId })
+    : totalCount;
   const previews = options.rootId
     ? new Map<string, CommentNode[]>()
     : await fetchEarliestThreadReplies(comments.map((comment) => comment.id), options.viewerUserId);
@@ -381,6 +438,7 @@ export async function listComments(options: ListCommentsOptions): Promise<{
     page: requestedPage,
     totalPages,
     totalCount,
+    totalCommentCount,
   };
 }
 
@@ -392,12 +450,12 @@ export async function createComment(options: {
   content: string;
 }): Promise<CommentNode> {
   const client = createServerSupabaseClient();
-  let parent: Pick<CommentRow, "id" | "target_type" | "target_id" | "root_id" | "depth"> | null = null;
+  let parent: Pick<CommentRow, "id" | "target_type" | "target_id" | "root_id" | "user_id" | "depth"> | null = null;
 
   if (options.parentId) {
     const { data, error } = await client
       .from(COMMENTS_TABLE)
-      .select("id, target_type, target_id, root_id, depth")
+      .select("id, target_type, target_id, root_id, user_id, depth")
       .eq("id", options.parentId)
       .eq("target_type", options.targetType)
       .eq("target_id", options.targetId)
@@ -407,7 +465,7 @@ export async function createComment(options: {
       throw new ApiRouteError(404, "PARENT_COMMENT_NOT_FOUND", "被回复的评论不存在", error?.message);
     }
 
-    parent = data as Pick<CommentRow, "id" | "target_type" | "target_id" | "root_id" | "depth">;
+    parent = data as Pick<CommentRow, "id" | "target_type" | "target_id" | "root_id" | "user_id" | "depth">;
   }
 
   const { data, error } = await client
@@ -426,6 +484,14 @@ export async function createComment(options: {
 
   if (error || !data) {
     throw new ApiRouteError(500, "COMMENT_CREATE_FAILED", "评论发送失败", error?.message);
+  }
+
+  if (parent) {
+    await createCommentReplyNotification({
+      actorUserId: options.userId,
+      parentComment: parent as CommentNotificationCommentRef,
+      replyCommentId: (data as unknown as CommentRow).id,
+    });
   }
 
   return (await toCommentNodes([data as unknown as CommentRow], options.userId))[0];
@@ -461,6 +527,7 @@ export async function getCommentContext(options: {
   root: CommentNode;
   ancestors: CommentNode[];
   comment: CommentNode;
+  rootPage: number;
 }> {
   const client = createServerSupabaseClient();
   const { data, error } = await client
@@ -476,9 +543,9 @@ export async function getCommentContext(options: {
     throw new ApiRouteError(404, "COMMENT_NOT_FOUND", "评论不存在", error?.message);
   }
 
-  const comment = (await toCommentNodes([data as unknown as CommentRow], options.viewerUserId))[0];
+  const commentRow = data as unknown as CommentRow;
   const chainRows: CommentRow[] = [];
-  let parentId = comment.parentId;
+  let parentId = commentRow.parent_id;
   let guard = 0;
 
   while (parentId && guard < 100) {
@@ -501,10 +568,30 @@ export async function getCommentContext(options: {
     guard += 1;
   }
 
-  const ancestors = await toCommentNodes(chainRows, options.viewerUserId);
+  const chainNodes = await toCommentNodes([...chainRows, commentRow], options.viewerUserId);
+  const ancestors = chainNodes.slice(0, -1);
+  const comment = chainNodes[chainNodes.length - 1];
   const root = ancestors[0] ?? comment;
+  const rootRow = chainRows[0] ?? commentRow;
+  const beforeRootResult = await client
+    .from(COMMENTS_TABLE)
+    .select("id", { count: "exact", head: true })
+    .eq("target_type", options.targetType)
+    .eq("target_id", options.targetId)
+    .eq("moderation_status", "visible")
+    .is("parent_id", null)
+    .or(`created_at.lt.${rootRow.created_at},and(created_at.eq.${rootRow.created_at},id.lt.${rootRow.id})`);
 
-  return { root, ancestors, comment };
+  if (beforeRootResult.error) {
+    throw new ApiRouteError(500, "COMMENT_ROOT_PAGE_READ_FAILED", "无法定位评论页码", beforeRootResult.error.message);
+  }
+
+  return {
+    root,
+    ancestors,
+    comment,
+    rootPage: Math.floor((beforeRootResult.count ?? 0) / COMMENT_PAGE_SIZE) + 1,
+  };
 }
 
 export async function updateComment(options: {
@@ -564,4 +651,123 @@ export async function softDeleteComment(options: {
   }
 
   return (await toCommentNodes([data as unknown as CommentRow], options.userId))[0];
+}
+
+export type CommentReactionState = {
+  commentId: string;
+  likeCount: number;
+  likedByViewer: boolean;
+};
+
+type LikeableCommentRow = Pick<CommentRow, "id" | "target_type" | "target_id" | "user_id" | "like_count" | "deleted_at" | "moderation_status">;
+
+async function readLikeableComment(options: {
+  targetType: string;
+  targetId: string;
+  commentId: string;
+}): Promise<LikeableCommentRow> {
+  const client = createServerSupabaseClient();
+  const { data, error } = await client
+    .from(COMMENTS_TABLE)
+    .select("id, target_type, target_id, user_id, like_count, deleted_at, moderation_status")
+    .eq("id", options.commentId)
+    .eq("target_type", options.targetType)
+    .eq("target_id", options.targetId)
+    .eq("moderation_status", "visible")
+    .is("deleted_at", null)
+    .single();
+
+  if (error || !data) {
+    throw new ApiRouteError(404, "COMMENT_NOT_FOUND", "评论不存在或不可点赞", error?.message);
+  }
+
+  return data as LikeableCommentRow;
+}
+
+async function readCommentReactionState(options: {
+  commentId: string;
+  userId: string;
+}): Promise<CommentReactionState> {
+  const client = createServerSupabaseClient();
+  const [commentResult, likeResult] = await Promise.all([
+    client
+      .from(COMMENTS_TABLE)
+      .select("id, like_count")
+      .eq("id", options.commentId)
+      .single(),
+    client
+      .from(COMMENT_LIKES_TABLE)
+      .select("comment_id")
+      .eq("comment_id", options.commentId)
+      .eq("user_id", options.userId)
+      .maybeSingle(),
+  ]);
+
+  if (commentResult.error || !commentResult.data) {
+    throw new ApiRouteError(404, "COMMENT_NOT_FOUND", "评论不存在", commentResult.error?.message);
+  }
+
+  if (likeResult.error) {
+    throw new ApiRouteError(500, "COMMENT_LIKE_STATE_READ_FAILED", "点赞状态读取失败", likeResult.error.message);
+  }
+
+  return {
+    commentId: options.commentId,
+    likeCount: Number(commentResult.data.like_count) || 0,
+    likedByViewer: Boolean(likeResult.data),
+  };
+}
+
+function isDuplicateError(error: { code?: string | null } | null | undefined): boolean {
+  return error?.code === "23505";
+}
+
+export async function likeComment(options: {
+  targetType: string;
+  targetId: string;
+  commentId: string;
+  userId: string;
+}): Promise<CommentReactionState> {
+  const client = createServerSupabaseClient();
+  const comment = await readLikeableComment(options);
+  const { error } = await client
+    .from(COMMENT_LIKES_TABLE)
+    .insert({
+      comment_id: options.commentId,
+      user_id: options.userId,
+    });
+
+  if (error && !isDuplicateError(error)) {
+    throw new ApiRouteError(500, "COMMENT_LIKE_FAILED", "点赞失败", error.message);
+  }
+
+  if (!error) {
+    await createCommentLikeNotification({
+      actorUserId: options.userId,
+      comment,
+    });
+  }
+
+  return readCommentReactionState(options);
+}
+
+export async function unlikeComment(options: {
+  targetType: string;
+  targetId: string;
+  commentId: string;
+  userId: string;
+}): Promise<CommentReactionState> {
+  const client = createServerSupabaseClient();
+  await readLikeableComment(options);
+  const { error } = await client
+    .from(COMMENT_LIKES_TABLE)
+    .delete()
+    .eq("comment_id", options.commentId)
+    .eq("user_id", options.userId);
+
+  if (error) {
+    throw new ApiRouteError(500, "COMMENT_UNLIKE_FAILED", "取消点赞失败", error.message);
+  }
+
+  return readCommentReactionState(options);
 }
