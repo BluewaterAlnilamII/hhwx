@@ -33,6 +33,8 @@ import {
   INSTANT_PROJECTION_STORAGE_KEY,
   DAY_PROJECTION_STORAGE_KEY,
   MAX_COMPARISON_LINES,
+  NON_WORKING_DAY_BAND_FILL,
+  NON_WORKING_DAY_BAND_STROKE,
   getTiersForMode,
 } from "./constants";
 import { useTrackerData } from "./useTrackerData";
@@ -374,7 +376,7 @@ function EventProgressBar({ startDate, endDate }: { startDate: number; endDate: 
   const subSummaryContent = renderRelativeCountdown("距结束", endDate - now, hasEnded ? "活动已结束" : "活动已结束");
 
   return (
-    <div className="rounded-2xl border border-[#ffe16c]/90 bg-[#fffef0]/94 p-6 shadow-[0_18px_44px_rgba(232,176,0,0.16),0_2px_10px_rgba(88,69,0,0.07)] dark:border-gray-800 dark:bg-[#131A2B]">
+    <div className="rounded-2xl border border-[#ffe16c]/90 bg-[#fffef0]/94 p-6 shadow-[0_18px_44px_rgba(232,176,0,0.16),0_2px_10px_rgba(88,69,0,0.07)] dark:border-slate-700/80 dark:bg-[#111827] dark:shadow-[0_18px_44px_rgba(0,0,0,0.22)]">
       <div className="mb-2 flex items-start justify-between gap-3 text-sm font-semibold">
         <span className="shrink-0 whitespace-nowrap text-blue-500 font-bold">活动进度</span>
         <span className="min-w-0 flex flex-col items-end gap-0.5 text-right leading-tight">
@@ -382,7 +384,7 @@ function EventProgressBar({ startDate, endDate }: { startDate: number; endDate: 
           <span className="inline-flex justify-end">{subSummaryContent}</span>
         </span>
       </div>
-      <div className="h-3 w-full bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
+      <div className="h-3 w-full bg-gray-100 dark:bg-slate-950/70 rounded-full overflow-hidden">
         <div
           className="h-full bg-gradient-to-r from-blue-400 to-blue-600 rounded-full transition-all duration-1000 ease-out"
           style={{ width: `${progress}%` }}
@@ -1056,7 +1058,7 @@ export default function EventTrackerPage() {
         {startDate && endDate && <EventProgressBar startDate={startDate} endDate={endDate} />}
 
         {/* ========== 导航与控制区 ========== */}
-        <div className="rounded-3xl border border-[#ffe16c]/82 bg-[#fff9d7]/86 p-3 shadow-[0_24px_60px_rgba(232,176,0,0.14),0_4px_18px_rgba(88,69,0,0.07)] dark:border-gray-800 dark:bg-[#131A2B]/94 sm:p-6">
+        <div className="rounded-3xl border border-[#ffe16c]/82 bg-[#fff9d7]/86 p-3 shadow-[0_24px_60px_rgba(232,176,0,0.14),0_4px_18px_rgba(88,69,0,0.07)] dark:border-slate-700/80 dark:bg-[#111827] dark:shadow-[0_24px_60px_rgba(0,0,0,0.24)] sm:p-6">
           <Tabs.Root
             value={trackingMode}
             onValueChange={handleTrackingModeChange}
@@ -1066,11 +1068,11 @@ export default function EventTrackerPage() {
               {/* 追踪模式切换 */}
               <Tabs.List
                 ref={modeTabsListRef}
-                className="relative flex w-full flex-row justify-center gap-1 overflow-x-auto rounded-[20px] border border-white/70 bg-white/65 p-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.72)] dark:border-gray-800/70 dark:bg-[#0F1728]/84 xl:w-[7.1rem] xl:flex-none xl:flex-col xl:self-start xl:overflow-visible"
+                className="relative flex w-full flex-row justify-center gap-1 overflow-x-auto rounded-[20px] border border-white/70 bg-white/65 p-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.72)] dark:border-slate-700/80 dark:bg-slate-950/70 dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] xl:w-[7.1rem] xl:flex-none xl:flex-col xl:self-start xl:overflow-visible"
               >
                 <span
                   aria-hidden="true"
-                  className="pointer-events-none absolute left-0 top-0 z-0 rounded-[16px] bg-white shadow-[0_8px_18px_rgba(59,130,246,0.14)] ring-1 ring-blue-100 transition-[transform,width,height,opacity] duration-300 ease-out dark:bg-[#182133] dark:ring-blue-500/20"
+                  className="pointer-events-none absolute left-0 top-0 z-0 rounded-[16px] bg-white shadow-[0_8px_18px_rgba(59,130,246,0.14)] ring-1 ring-blue-100 transition-[transform,width,height,opacity] duration-300 ease-out dark:bg-slate-800 dark:ring-sky-400/30"
                   style={{
                     width: `${modeIndicatorStyle.width}px`,
                     height: `${modeIndicatorStyle.height}px`,
@@ -1091,7 +1093,7 @@ export default function EventTrackerPage() {
                     value={mode.id}
                     className="relative z-10 min-h-[2.85rem] flex-1 rounded-[16px] px-3 py-1.5 text-[14px] font-semibold tracking-[0.01em] text-center whitespace-nowrap transition-colors duration-300
                       data-[state=active]:text-blue-600 dark:data-[state=active]:text-blue-300
-                      data-[state=inactive]:text-gray-500 hover:text-gray-700 dark:data-[state=inactive]:text-gray-400 dark:hover:text-gray-200 xl:flex-none"
+                      data-[state=inactive]:text-gray-500 hover:text-gray-700 dark:data-[state=inactive]:text-slate-300 dark:hover:text-white xl:flex-none"
                   >
                     {mode.label}
                   </Tabs.Trigger>
@@ -1101,7 +1103,7 @@ export default function EventTrackerPage() {
               <div className="flex-1 min-w-0 flex flex-col gap-3 xl:max-w-[41rem] xl:mx-auto">
                 {trackingMode === "song" && availableChallengeSongIds.length > 0 && (
                   <div className="overflow-visible rounded-none border border-transparent bg-transparent p-2 sm:p-2.5 shadow-none">
-                    <div className="mb-2 px-1 text-xs font-bold tracking-[0.1em] text-blue-500/85 dark:text-blue-300/85 sm:text-[13px]">
+                    <div className="mb-2 px-1 text-xs font-bold tracking-[0.1em] text-blue-500/85 dark:text-sky-200 sm:text-[13px]">
                       挑战曲目
                     </div>
                     <div className={`grid w-full gap-2 sm:gap-2.5 ${challengeSongGridClassName}`}>
@@ -1116,8 +1118,8 @@ export default function EventTrackerPage() {
                             title={`曲目 ${songId}`}
                             className={`group relative flex min-h-[2.75rem] w-full items-center justify-center overflow-hidden rounded-[17px] border px-3 py-1.5 text-center transition-all duration-300 sm:min-h-[3.35rem] sm:px-3.5 sm:py-2 ${
                               resolvedSelectedSongId === songId
-                                ? "border-blue-500 bg-blue-600 text-white shadow-[0_10px_20px_rgba(37,99,235,0.2)] ring-2 ring-blue-500/85 ring-offset-2 ring-offset-white dark:ring-offset-[#131A2B]"
-                                : "border-slate-300/90 bg-slate-50 text-slate-800 shadow-[0_6px_16px_rgba(15,23,42,0.06)] hover:border-blue-300 hover:bg-white hover:text-blue-700 hover:shadow-[0_10px_24px_rgba(59,130,246,0.14)] dark:border-slate-600/80 dark:bg-[#1B2436] dark:text-slate-100 dark:hover:border-blue-400/45 dark:hover:text-blue-200"
+                                ? "border-blue-500 bg-blue-600 text-white shadow-[0_10px_20px_rgba(37,99,235,0.2)] ring-2 ring-blue-500/85 ring-offset-2 ring-offset-white dark:ring-offset-[#111827]"
+                                : "border-slate-300/90 bg-slate-50 text-slate-800 shadow-[0_6px_16px_rgba(15,23,42,0.06)] hover:border-blue-300 hover:bg-white hover:text-blue-700 hover:shadow-[0_10px_24px_rgba(59,130,246,0.14)] dark:border-slate-600/80 dark:bg-slate-800 dark:text-slate-100 dark:hover:border-sky-400/60 dark:hover:bg-slate-700 dark:hover:text-sky-100"
                             }`}
                           >
                             <span className="eventtracker-song-button-label text-[13px] font-semibold tracking-[0.005em] sm:text-sm">
@@ -1132,7 +1134,7 @@ export default function EventTrackerPage() {
 
                 {/* 排名档位选择 */}
                 <div className="overflow-visible rounded-none border border-transparent bg-transparent p-2 sm:p-2.5 shadow-none">
-                  <div className="mb-2 px-1 text-xs font-bold tracking-[0.1em] text-blue-500/85 dark:text-blue-300/85 sm:text-[13px]">
+                  <div className="mb-2 px-1 text-xs font-bold tracking-[0.1em] text-blue-500/85 dark:text-sky-200 sm:text-[13px]">
                     选择排名
                   </div>
                   <div className="flex flex-wrap gap-1.5 sm:gap-2">
@@ -1143,8 +1145,8 @@ export default function EventTrackerPage() {
                         onClick={() => setSelectedTier(tier)}
                         className={`h-8 min-w-[2.9rem] rounded-[12px] border px-2 text-[11px] font-semibold tracking-[0.01em] transition-all duration-300 sm:h-9 sm:min-w-[3.15rem] sm:rounded-[14px] sm:px-2.5 sm:text-[12px] ${
                           selectedTier === tier
-                            ? "border-blue-500 bg-blue-600 text-white shadow-[0_8px_18px_rgba(37,99,235,0.2)] ring-2 ring-blue-500/85 ring-offset-2 ring-offset-white dark:ring-offset-[#131A2B]"
-                            : "border-slate-300/90 bg-slate-50 text-slate-700 shadow-[0_4px_12px_rgba(15,23,42,0.06)] hover:border-blue-300 hover:bg-white hover:text-blue-700 hover:shadow-[0_8px_18px_rgba(59,130,246,0.14)] dark:border-slate-600/80 dark:bg-[#1B2436] dark:text-slate-100 dark:hover:border-blue-400/45 dark:hover:text-blue-200"
+                            ? "border-blue-500 bg-blue-600 text-white shadow-[0_8px_18px_rgba(37,99,235,0.2)] ring-2 ring-blue-500/85 ring-offset-2 ring-offset-white dark:ring-offset-[#111827]"
+                            : "border-slate-300/90 bg-slate-50 text-slate-700 shadow-[0_4px_12px_rgba(15,23,42,0.06)] hover:border-blue-300 hover:bg-white hover:text-blue-700 hover:shadow-[0_8px_18px_rgba(59,130,246,0.14)] dark:border-slate-600/80 dark:bg-slate-800 dark:text-slate-100 dark:hover:border-sky-400/60 dark:hover:bg-slate-700 dark:hover:text-sky-100"
                         }`}
                       >
                         T{tier}
@@ -1155,31 +1157,31 @@ export default function EventTrackerPage() {
               </div>
 
               {/* 状态信息面板 */}
-              <div className="flex min-w-[280px] flex-col justify-center divide-y divide-gray-200 rounded-none border border-transparent bg-transparent px-2 py-2 shadow-none dark:divide-gray-800 sm:px-2.5 sm:py-2.5 xl:w-[17.25rem] xl:flex-shrink-0">
+              <div className="flex min-w-[280px] flex-col justify-center divide-y divide-gray-200 rounded-none border border-transparent bg-transparent px-2 py-2 shadow-none dark:divide-slate-700/70 dark:rounded-2xl dark:border-slate-700/60 dark:bg-slate-950/28 sm:px-2.5 sm:py-2.5 xl:w-[17.25rem] xl:flex-shrink-0">
                 <div className="flex justify-between items-center p-4">
-                  <span className="text-base font-bold text-gray-500 dark:text-gray-400">活动状态</span>
-                  <span className={`text-base font-bold tracking-wider ${status === "进行中" ? "text-green-500" : status === "已结束" ? "text-gray-500" : "text-blue-500"}`}>
+                  <span className="text-base font-bold text-gray-500 dark:text-slate-300">活动状态</span>
+                  <span className={`text-base font-bold tracking-wider ${status === "进行中" ? "text-emerald-500 dark:text-emerald-300" : status === "已结束" ? "text-gray-500 dark:text-slate-300" : "text-blue-500 dark:text-sky-300"}`}>
                     {status}
                   </span>
                 </div>
                 {status === "进行中" && (
                   <>
                     <div className="flex justify-between items-center p-4">
-                      <span className="text-base text-gray-500 dark:text-gray-400">最新分数</span>
-                      <span className="text-base font-bold text-blue-500">
+                      <span className="text-base text-gray-500 dark:text-slate-300">最新分数</span>
+                      <span className="text-base font-bold text-blue-500 dark:text-sky-300">
                         {scoreSummary.latestScore !== null ? new Intl.NumberFormat().format(scoreSummary.latestScore) : "-"}
                       </span>
                     </div>
                     <div className="flex justify-between items-center p-4">
-                      <span className="text-base text-gray-500 dark:text-gray-400">更新时间</span>
+                      <span className="text-base text-gray-500 dark:text-slate-300">更新时间</span>
                       {scoreSummary.latestUpdateTime !== null
                         ? <MinutesAgo timestamp={scoreSummary.latestUpdateTime} />
-                        : <span className="text-base font-medium text-gray-600 dark:text-gray-300">-</span>
+                        : <span className="text-base font-medium text-gray-600 dark:text-slate-200">-</span>
                       }
                     </div>
                     {showBestdoriPrediction && (
                       <div className="flex justify-between items-center p-4">
-                        <span className="text-base text-gray-500 dark:text-gray-400">Bestdori预测</span>
+                        <span className="text-base text-gray-500 dark:text-slate-300">Bestdori预测</span>
                         <span className="text-base font-bold" style={{ color: BESTDORI_PREDICTION_COLOR }}>
                           {bestdoriPrediction.status === "loading"
                             ? "加载中"
@@ -1194,15 +1196,15 @@ export default function EventTrackerPage() {
                 {status === "已结束" && (
                   <>
                     <div className="flex justify-between items-center p-4">
-                      <span className="text-base text-gray-500 dark:text-gray-400">结束分数</span>
-                      <span className="text-base font-bold text-gray-700 dark:text-gray-300">
+                      <span className="text-base text-gray-500 dark:text-slate-300">结束分数</span>
+                      <span className="text-base font-bold text-gray-700 dark:text-slate-200">
                         {scoreSummary.endScore !== null ? new Intl.NumberFormat().format(scoreSummary.endScore) : "结算中"}
                       </span>
                     </div>
                     <div className="flex justify-between items-center p-4">
-                      <span className="text-base text-gray-500 dark:text-gray-400">最终分数</span>
+                      <span className="text-base text-gray-500 dark:text-slate-300">最终分数</span>
                       <div className="flex items-center gap-1.5">
-                        <span className="text-base font-bold text-gray-700 dark:text-gray-300">
+                        <span className="text-base font-bold text-gray-700 dark:text-slate-200">
                           {scoreSummary.finalScore !== null ? new Intl.NumberFormat().format(scoreSummary.finalScore) : "结算中"}
                         </span>
                         {scoreSummary.finalScore !== null && scoreSummary.endScore !== null && scoreSummary.finalScore < scoreSummary.endScore && (
@@ -1286,9 +1288,9 @@ export default function EventTrackerPage() {
                                   key={band.key}
                                   x1={band.start}
                                   x2={band.end}
-                                  fill="#FFD966"
-                                  fillOpacity={0.7}
-                                  strokeOpacity={0}
+                                  fill={NON_WORKING_DAY_BAND_FILL}
+                                  stroke={NON_WORKING_DAY_BAND_STROKE}
+                                  strokeOpacity={1}
                                   ifOverflow="extendDomain"
                                 />
                               ))}
@@ -1396,9 +1398,9 @@ export default function EventTrackerPage() {
                                   dataKey={BESTDORI_PREDICTION_DATA_KEY}
                                   tooltipType="none"
                                   stroke={BESTDORI_PREDICTION_COLOR}
-                                  strokeWidth={2}
-                                  strokeOpacity={0.9}
-                                  strokeDasharray="7 4"
+                                  strokeWidth={2.25}
+                                  strokeOpacity={0.96}
+                                  strokeDasharray="6 5"
                                   dot={false}
                                   activeDot={false}
                                   connectNulls

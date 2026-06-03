@@ -30,6 +30,17 @@
 :root {
   --bg-yellow: #ffea2f;
   --fog-white: rgba(255, 255, 228, 0.18);
+  --eventtracker-bestdori-color: #475569;
+  --eventtracker-nonworking-band-fill: rgba(250, 204, 21, 0.38);
+  --eventtracker-nonworking-band-stroke: rgba(202, 138, 4, 0.36);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --eventtracker-bestdori-color: #cbd5e1;
+    --eventtracker-nonworking-band-fill: rgba(245, 158, 11, 0.24);
+    --eventtracker-nonworking-band-stroke: rgba(251, 191, 36, 0.28);
+  }
 }
 
 * {

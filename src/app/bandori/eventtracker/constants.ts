@@ -12,8 +12,10 @@ const COMPARISON_CONFIG_STORAGE_KEY = "eventtracker_compare_event_lines";
 const COMPARISON_ALIGNMENT_STORAGE_KEY = "eventtracker_compare_alignment";
 const MAX_COMPARISON_LINES = 5;
 const COMPARISON_LINE_COLORS = ["#10b981", "#f59e0b", "#8b5cf6", "#06b6d4", "#ec4899"] as const;
-const BESTDORI_PREDICTION_COLOR = "#111827";
+const BESTDORI_PREDICTION_COLOR = "var(--eventtracker-bestdori-color)";
 const BESTDORI_PREDICTION_DATA_KEY = "bestdoriPredictionEp";
+const NON_WORKING_DAY_BAND_FILL = "var(--eventtracker-nonworking-band-fill)";
+const NON_WORKING_DAY_BAND_STROKE = "var(--eventtracker-nonworking-band-stroke)";
 
 /** 根据追踪模式返回对应的可选排名档位列表。 */
 function readLegacyProjectionCookie(cookieName: string): boolean | null {
@@ -85,4 +87,6 @@ export {
   COMPARISON_LINE_COLORS,
   BESTDORI_PREDICTION_COLOR,
   BESTDORI_PREDICTION_DATA_KEY,
+  NON_WORKING_DAY_BAND_FILL,
+  NON_WORKING_DAY_BAND_STROKE,
 };
