@@ -376,6 +376,14 @@ function formatMiB(bytes) {
   return Number.isFinite(bytes) ? (bytes / 1024 / 1024).toFixed(1) : "";
 }
 
+function formatSeconds(ms) {
+  return Number.isFinite(ms) ? `${(ms / 1000).toFixed(1)}s` : "";
+}
+
+function escapeMarkdownCell(value) {
+  return String(value ?? "").replace(/\|/g, "\\|");
+}
+
 function formatProfileIdentity(profile) {
   if (!profile) {
     return "missing";
@@ -475,6 +483,7 @@ function assertMatrixReport(scenarioName, scenario) {
   const reportPath = path.join(benchmarkDir, "last-real-profile-medley-scope-matrix.json");
   const report = loadJson(reportPath);
   const profileCount = report.summary?.profileCount;
+  const caseCount = report.summary?.caseCount ?? profileCount;
   const allExactCount = report.summary?.allExactCount;
   const allP95ElapsedMs = report.summary?.allP95ElapsedMs ?? Number.POSITIVE_INFINITY;
   const maxElapsedMs = report.summary?.allMaxElapsedMs ?? Number.POSITIVE_INFINITY;
@@ -488,8 +497,8 @@ function assertMatrixReport(scenarioName, scenario) {
     const gap = row.all?.observedScoreUpperBoundGap;
     return Number.isFinite(gap) ? sum + gap : Number.POSITIVE_INFINITY;
   }, 0);
-  if (profileCount !== scenario.expectedProfileCount) {
-    throw new Error(`${scenarioName}: expected ${scenario.expectedProfileCount} profiles, got ${profileCount}`);
+  if (caseCount !== scenario.expectedProfileCount) {
+    throw new Error(`${scenarioName}: expected ${scenario.expectedProfileCount} cases, got ${caseCount}`);
   }
   if (timedOutCount > 0) {
     throw new Error(`${scenarioName}: ${timedOutCount} all-mode case(s) timed out`);
@@ -502,7 +511,7 @@ function assertMatrixReport(scenarioName, scenario) {
       && boundedGapTotal <= scenario.baselineBoundedGapTotal * 0.75
     );
     if (!exactImproved && !gapImproved) {
-      throw new Error(`${scenarioName}: all-mode exact ${allExactCount}/${profileCount}, gap ${boundedGapTotal} did not beat baseline`);
+      throw new Error(`${scenarioName}: all-mode exact ${allExactCount}/${caseCount}, gap ${boundedGapTotal} did not beat baseline`);
     }
   } else if (allExactCount !== scenario.expectedProfileCount) {
     throw new Error(`${scenarioName}: all-mode exact ${allExactCount}/${scenario.expectedProfileCount}`);
@@ -514,7 +523,7 @@ function assertMatrixReport(scenarioName, scenario) {
     throw new Error(`${scenarioName}: all-mode max ${maxElapsedMs}ms exceeded ${scenario.maxElapsedMs}ms`);
   }
   console.log(
-    `assert ${scenarioName}: all exact ${allExactCount}/${profileCount}, `
+    `assert ${scenarioName}: all exact ${allExactCount}/${caseCount}, `
     + `gap=${Number.isFinite(boundedGapTotal) ? boundedGapTotal : "unknown"}, `
     + `p95=${allP95ElapsedMs}ms, max ${maxElapsedMs}ms <= ${scenario.maxElapsedMs}ms`,
   );
@@ -550,6 +559,102 @@ function summarizeFocusRows(rows, scenario) {
   };
 }
 
+function getFocusStatusLabel(row) {
+  if (row.result.failed) {
+    return "failed";
+  }
+  if (row.result.timedOut) {
+    return "timeout";
+  }
+  return row.result.exact ? "exact" : "bounded";
+}
+
+function getFocusPivotEventKeys(rows) {
+  const present = new Set(rows.map((row) => row.eventKey));
+  const preferred = ["none", "323", "244", "260"];
+  const ordered = preferred.filter((eventKey) => present.has(eventKey));
+  for (const eventKey of present) {
+    if (!ordered.includes(eventKey)) {
+      ordered.push(eventKey);
+    }
+  }
+  return ordered;
+}
+
+function getFocusPivotProfiles(rows) {
+  const rowsByProfile = new Map();
+  const orderByLabel = new Map(expectedProfileIdentities20260602.map((profile, index) => [profile.label, index]));
+  for (const row of rows) {
+    const label = row.profile?.label ?? row.profileLabel;
+    if (!rowsByProfile.has(label)) {
+      rowsByProfile.set(label, {
+        label,
+        cardCount: row.profile?.cardCount ?? null,
+        rows: [],
+      });
+    }
+    const bucket = rowsByProfile.get(label);
+    bucket.rows.push(row);
+    if (bucket.cardCount === null && row.profile?.cardCount !== undefined) {
+      bucket.cardCount = row.profile.cardCount;
+    }
+  }
+  return [...rowsByProfile.values()].sort((left, right) => (
+    (orderByLabel.get(left.label) ?? Number.MAX_SAFE_INTEGER)
+    - (orderByLabel.get(right.label) ?? Number.MAX_SAFE_INTEGER)
+    || left.label.localeCompare(right.label)
+  ));
+}
+
+function buildFocusPivotTable(report, kind) {
+  const eventKeys = getFocusPivotEventKeys(report.rows);
+  if (eventKeys.length <= 1 || report.rows.length <= eventKeys.length) {
+    return [];
+  }
+
+  const profiles = getFocusPivotProfiles(report.rows);
+  const rowByProfileEvent = new Map(report.rows.map((row) => [
+    `${row.profile?.label ?? row.profileLabel}:${row.eventKey}`,
+    row,
+  ]));
+  const title = kind === "time" ? "Time Matrix" : "Memory Matrix";
+  const header = ["profile", "cards", ...eventKeys];
+  const separator = ["---", "---:", ...eventKeys.map(() => "---")];
+  const lines = [
+    `## ${title}`,
+    "",
+    `Units: ${kind === "time" ? "s" : "MiB"}.`,
+    "",
+    `| ${header.join(" | ")} |`,
+    `| ${separator.join(" | ")} |`,
+  ];
+
+  for (const profile of profiles) {
+    const cells = [
+      profile.label,
+      profile.cardCount ?? "",
+    ];
+    for (const eventKey of eventKeys) {
+      const row = rowByProfileEvent.get(`${profile.label}:${eventKey}`);
+      if (!row) {
+        cells.push("");
+        continue;
+      }
+      const status = getFocusStatusLabel(row);
+      if (kind === "time") {
+        cells.push(status === "exact" ? `${formatSeconds(row.result.elapsedMs)} exact` : status);
+      } else {
+        const peakMiB = formatMiB(row.memory?.peakWorkingSetBytes);
+        cells.push(peakMiB ? `${peakMiB} MiB ${status}` : status);
+      }
+    }
+    lines.push(`| ${cells.map(escapeMarkdownCell).join(" | ")} |`);
+  }
+
+  lines.push("");
+  return lines;
+}
+
 function toFocusMarkdown(report) {
   return [
     `# ${report.scenarioName}`,
@@ -566,6 +671,8 @@ function toFocusMarkdown(report) {
     `Bounded gap reduction: ${report.summary.boundedGapReductionRatio === null ? "unknown" : `${Math.round(report.summary.boundedGapReductionRatio * 1000) / 10}%`}`,
     `Peak working set: ${formatMiB(report.summary.peakWorkingSetBytes)} MiB`,
     "",
+    ...buildFocusPivotTable(report, "time"),
+    ...buildFocusPivotTable(report, "memory"),
     "| case | baseline | exact | elapsed ms | gap | abort reason | abort slot | soft limit | candidates | third fallback | fallback words | peak MiB | status |",
     "| --- | --- | --- | ---: | ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |",
     ...report.rows.map((row) => [

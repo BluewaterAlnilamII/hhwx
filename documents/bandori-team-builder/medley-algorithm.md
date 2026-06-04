@@ -428,11 +428,16 @@ slot-local team is not required for a better global triple after shared items
 and card conflicts are considered.
 
 The frontend preview contains a temporary `legacy-greedy-single` comparison
-mode. It still enumerates shared area-item configurations and tries all three
-slot-order permutations while enforcing cross-slot card disjointness and medley
-combo carry-over. It is useful for user-facing comparison only; it is not a
-proof path, does not report bounded/exact status, and should remain removable
-without changing the public medley search API.
+mode. It still enumerates shared area-item configurations, orders them by a
+cheap static potential estimate, and skips a configuration only when safe upper
+bounds cannot beat the current greedy result. The skip checks include summed
+per-slot root upper bounds and, during the fixed `3/2/1` strict greedy seed,
+banned-card-aware remaining-slot upper bounds. The seed finds the best available
+team for slot 3, removes those card IDs, then repeats for slots 2 and 1. It
+enforces cross-slot card disjointness and medley combo carry-over. It is useful
+for user-facing comparison only; it is not a proof path, does not report
+bounded/exact status, and should remain removable without changing the public
+medley search API.
 
 The saved Bestdori-compatible material is still useful for formula compatibility
 and historical comparison. It does not provide an exact proof for HHWX medley

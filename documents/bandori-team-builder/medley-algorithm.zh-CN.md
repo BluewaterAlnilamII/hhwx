@@ -297,7 +297,7 @@ Exact candidate join 安全需要同时满足：
 
 Strict 3x greedy baseline 也只是参考材料。贪心分配可以快速找到强 incumbent，但不能证明在共享道具和卡牌冲突共同作用下，某个局部看起来较弱的 slot 队伍不会带来更好的全局三队组合。
 
-前端预览包含一个临时的 `legacy-greedy-single` 对照模式。它仍会枚举共享区域道具配置，并尝试三首歌的所有 slot 顺序排列，同时强制跨 slot 卡牌互斥和组曲 combo carry-over。它只适合作为用户可见的对照，不是证明路径，不报告 bounded/exact 状态，并且应保持可在不修改公开组曲搜索 API 的情况下干净删除。
+前端预览包含一个临时的 `legacy-greedy-single` 对照模式。它仍会枚举共享区域道具配置，但会先按低成本静态潜力排序，让较强贪心 incumbent 更早出现；只有当安全上界无法超过当前贪心结果时才跳过配置。跳过条件包括每个 slot root upper 总和，以及固定 `3/2/1` strict greedy seed 过程中考虑已禁用卡牌后的剩余 slot upper。该 seed 会先为第 3 个 slot 找当前剩余卡池下的最优队伍，排除这些 card ID 后再依次处理第 2 个和第 1 个 slot。它强制跨 slot 卡牌互斥和组曲 combo carry-over。它只适合作为用户可见的对照，不是证明路径，不报告 bounded/exact 状态，并且应保持可在不修改公开组曲搜索 API 的情况下干净删除。
 
 保存的 Bestdori-compatible 材料仍然适合做公式兼容和历史比较。它不能为 HHWX 组曲搜索提供 exact proof，因为组曲问题包含共享道具耦合、顺序 combo carry-over 和全局 card-disjoint 队伍分配。
 

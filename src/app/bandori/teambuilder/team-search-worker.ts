@@ -23,19 +23,24 @@ import {
   createAreaItemConfigurations,
   pruneDominatedAreaItemConfigurations,
 } from "@/lib/bandori/team-builder/core";
+import { estimateMedleyStaticCoarsePotential } from "@/lib/bandori/team-builder/medley/configurations";
 import { buildMedleyResult, pushMedleyResult, sortMedleyResults } from "@/lib/bandori/team-builder/medley/results";
 import {
-  buildFastGreedyMedleySlotCandidate,
   getMedleyGreedySeedSlotIndices,
 } from "@/lib/bandori/team-builder/medley/seeds";
 import {
   buildMedleySlotBuildContexts,
   buildMedleySlotSearches,
   createMedleySlotInput,
+  estimateMedleySlotAvailability,
+  findBestMedleySlotTeamWithCache,
   pruneDominatedMedleySlotCards,
 } from "@/lib/bandori/team-builder/medley/slots";
 import { createInitialMedleyProfilingStats } from "@/lib/bandori/team-builder/medley/profiling";
-import type { MedleyTeamCandidate } from "@/lib/bandori/team-builder/medley/types";
+import type {
+  MedleyBestSlotTeamCacheEntry,
+  MedleyTeamCandidate,
+} from "@/lib/bandori/team-builder/medley/types";
 import {
   type BandoriCharacterBonusState,
   type BandoriEventBonus,
@@ -245,27 +250,12 @@ function mergeEventBonus(base: BandoriEventBonus | null, override: Partial<Bando
 }
 
 function buildMedleyGreedySlotOrders(slotCount: number, preferredOrder: number[]): number[][] {
-  const orders: number[][] = [];
-  const pushUniqueOrder = (order: number[]): void => {
-    const key = order.join(",");
-    if (order.length === slotCount && !orders.some((existing) => existing.join(",") === key)) {
-      orders.push(order);
-    }
-  };
-
-  pushUniqueOrder(preferredOrder);
   if (slotCount === 3) {
-    pushUniqueOrder([2, 1, 0]);
-    pushUniqueOrder([2, 0, 1]);
-    pushUniqueOrder([1, 2, 0]);
-    pushUniqueOrder([1, 0, 2]);
-    pushUniqueOrder([0, 2, 1]);
-    pushUniqueOrder([0, 1, 2]);
-  } else {
-    pushUniqueOrder(Array.from({ length: slotCount }, (_, index) => slotCount - index - 1));
-    pushUniqueOrder(Array.from({ length: slotCount }, (_, index) => index));
+    return [[2, 1, 0]];
   }
-  return orders;
+  return preferredOrder.length === slotCount
+    ? [preferredOrder]
+    : [Array.from({ length: slotCount }, (_, index) => slotCount - index - 1)];
 }
 
 function buildSharedConfigurationLegacyGreedyMedleyResponse({
@@ -316,6 +306,14 @@ function buildSharedConfigurationLegacyGreedyMedleyResponse({
   const calculatedCards = buildCalculatedCards(firstSlotInput);
   const rawConfigurations = createAreaItemConfigurations(input.userAreaItems);
   const configurations = pruneDominatedAreaItemConfigurations(rawConfigurations, calculatedCards, firstSlotInput, server);
+  const orderedConfigurations = configurations
+    .map((configuration, index) => ({
+      configuration,
+      index,
+      potential: estimateMedleyStaticCoarsePotential(input, calculatedCards, configuration),
+    }))
+    .sort((left, right) => right.potential - left.potential || left.index - right.index)
+    .map(({ configuration }) => configuration);
   const profiling = createInitialMedleyProfilingStats(configurations.length);
   const stats: BandoriMedleyTeamSearchStats = {
     candidateCardCount: calculatedCards.length,
@@ -338,6 +336,11 @@ function buildSharedConfigurationLegacyGreedyMedleyResponse({
   };
   const results: BandoriMedleyTeamSearchResult[] = [];
   const buildContexts = buildMedleySlotBuildContexts(input, songInputs, calculatedCards, server);
+  const getPruningThreshold = (): number => (
+    results.length >= resultLimit
+      ? results[resultLimit - 1]?.score ?? Number.NEGATIVE_INFINITY
+      : Number.NEGATIVE_INFINITY
+  );
   const isPastDeadline = (): boolean => {
     const timedOut = performance.now() >= deadlineAt;
     if (timedOut) {
@@ -346,7 +349,7 @@ function buildSharedConfigurationLegacyGreedyMedleyResponse({
     return timedOut;
   };
 
-  for (const configuration of configurations) {
+  for (const configuration of orderedConfigurations) {
     if (isPastDeadline()) {
       break;
     }
@@ -359,35 +362,79 @@ function buildSharedConfigurationLegacyGreedyMedleyResponse({
       server,
       buildContexts,
     ));
+    const configurationRootUpperBound = slots.reduce((sum, slot) => sum + slot.rootScoreUpperBound, 0);
+    const currentThreshold = getPruningThreshold();
+    if (Number.isFinite(currentThreshold) && configurationRootUpperBound < currentThreshold) {
+      profiling.rootUpperPrunedConfigurationCount += 1;
+      profiling.rootUpperBestConfigurationUpperBound = Math.max(
+        profiling.rootUpperBestConfigurationUpperBound ?? Number.NEGATIVE_INFINITY,
+        configurationRootUpperBound,
+      );
+      continue;
+    }
     const seedOrders = buildMedleyGreedySlotOrders(slots.length, getMedleyGreedySeedSlotIndices(slots));
+    const bestSlotTeamCache = new Map<string, MedleyBestSlotTeamCacheEntry>();
+    const getRemainingScoreUpperBound = (
+      remainingSlotIndices: number[],
+      bannedCardIds: Set<number>,
+    ): number => remainingSlotIndices.reduce((sum, remainingSlotIndex) => (
+      sum + estimateMedleySlotAvailability(slots[remainingSlotIndex], bannedCardIds, profiling).scoreUpperBound
+    ), 0);
     let completedConfiguration = false;
 
     for (const seedOrder of seedOrders) {
       const selectedBySong: Array<MedleyTeamCandidate | undefined> = [];
       const bannedCardIds = new Set<number>();
       let completedSeedOrder = true;
+      let currentScore = 0;
 
-      for (const slotIndex of seedOrder) {
+      for (let orderIndex = 0; orderIndex < seedOrder.length; orderIndex += 1) {
+        const slotIndex = seedOrder[orderIndex];
+        const remainingSlotIndices = seedOrder.slice(orderIndex + 1);
         if (isPastDeadline()) {
           completedSeedOrder = false;
           break;
         }
         const slot = slots[slotIndex];
-        const candidate = buildFastGreedyMedleySlotCandidate(
+        const threshold = getPruningThreshold();
+        const remainingScoreUpperBound = Number.isFinite(threshold)
+          ? getRemainingScoreUpperBound(remainingSlotIndices, bannedCardIds)
+          : Number.POSITIVE_INFINITY;
+        const minimumScore = Number.isFinite(threshold)
+          ? threshold - currentScore - remainingScoreUpperBound
+          : Number.NEGATIVE_INFINITY;
+        const candidate = findBestMedleySlotTeamWithCache(
+          bestSlotTeamCache,
+          slotIndex,
           slot,
           bannedCardIds,
           server,
           perfectRate,
           stats,
+          isPastDeadline,
+          () => undefined,
           profiling,
+          minimumScore,
         );
         if (!candidate) {
+          if (Number.isFinite(minimumScore)) {
+            stats.prunedBranchCount += 1;
+          }
           completedSeedOrder = false;
           break;
         }
         selectedBySong[slot.songIndex] = candidate;
         for (const cardId of candidate.cardIds) {
           bannedCardIds.add(cardId);
+        }
+        currentScore += candidate.result.score;
+        if (Number.isFinite(threshold)) {
+          const nextRemainingScoreUpperBound = getRemainingScoreUpperBound(remainingSlotIndices, bannedCardIds);
+          if (currentScore + nextRemainingScoreUpperBound < threshold) {
+            stats.prunedBranchCount += 1;
+            completedSeedOrder = false;
+            break;
+          }
         }
       }
 

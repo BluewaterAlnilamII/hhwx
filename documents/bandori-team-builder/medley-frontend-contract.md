@@ -101,8 +101,10 @@ The preview contains a removable `legacy-greedy-single` comparison mode. It exis
 This mode must stay independent from the maximize path:
 
 - It enumerates the same shared area-item configurations, because medley requires all three teams to use one area-item setup.
-- It greedily picks one team per slot while enforcing cross-slot card disjointness.
-- It tries all slot-order permutations for the three songs, so orders such as `3/1/2` are covered.
+- It orders configurations by a cheap static potential estimate so stronger greedy incumbents are found earlier.
+- It skips a shared configuration only when safe upper bounds cannot beat the current greedy result: first by summed per-slot root upper, then during the `3/2/1` seed by banned-card-aware remaining-slot upper bounds.
+- It uses a fixed `3/2/1` strict greedy seed: find the best available team for slot 3, remove those card IDs, then repeat for slot 2 and slot 1.
+- It enforces cross-slot card disjointness.
 - It uses the same medley scoring model, including sequential combo carry-over.
 - It does not prove optimality and should not return or display bounded/heuristic proof status.
 
