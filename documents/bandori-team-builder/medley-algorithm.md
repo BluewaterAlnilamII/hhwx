@@ -299,6 +299,15 @@ that the 2026-06-02 matrix had proved exact. The recovery was to keep
 enables it, then validate the default path with `p02-p07-default-300` before any
 full 40-case matrix run.
 
+The 2026-06-04 solve recovery keeps exact semantics but reduces third-candidate
+lookup cost. The normal third shortlist stays bounded, and a lazy extended
+shortlist is built only after a shortlist miss. Extended entries are capped per
+cache and per solve so the optimization cannot turn into an unbounded memory or
+time sink. If both shortlists miss and the candidate list is not exhaustive, the
+solver falls back to the existing bitset word scan. This preserves proof safety:
+the shortlist path only accelerates finding a compatible candidate; it never
+proves absence unless the existing exhaustive/frontier checks do.
+
 ### Candidate And Memory Soft Limits
 
 Candidate and workload soft limits are proof-budget controls, not correctness
@@ -312,6 +321,14 @@ intentionally modest for small searches. For locked/all scopes with at least a
 limit to `400000`. Frontend preview code should not lower this limit by default;
 doing so can create early bounded results that diagnose the override rather than
 the real proof frontier.
+
+Hard all-scope proof may use one guarded candidate extension for the active
+configuration: `400000` to `600000` candidates only when the abort reason is
+`candidate-fill-soft-limit`, enough budget remains, the memory guard has not
+fired, and the card count is still in the configured large-profile range. This is
+not a global default increase. If the extension still cannot close the
+configuration, the result remains bounded and the trace records the extension
+limit, remaining budget, and observed memory.
 
 `optimization.memorySoftLimitMiB` is a best-effort runtime guard. In browser
 workers the solver samples `performance.memory.usedJSHeapSize` every 50ms and
@@ -561,8 +578,8 @@ node .\scripts\bandori-medley-hard-case-benchmark.cjs p01-locked
 `focus-6-300` is the preferred pre-matrix check for current all-scope optimizer
 work. It runs the six retained focus cases `P02:260`, `P04:260`, `P08:323`,
 `P10:244`, `P04:244`, and `P08:260`, records exact-join diagnostics, and samples
-peak process working set in MiB. Run the full 40-case `all-300` matrix only
-after this focus set is acceptable.
+peak process working set in MiB. Run the full 40-case `all-40-focus-300` matrix
+only after this focus set is acceptable.
 
 `p02-p07-default-300` is the regression guard for the all-scope exact-join
 pre-skip recovery. It must use the default optimizer path, with no optimization
@@ -575,11 +592,16 @@ unclosed-configuration shortcut before running the full matrix.
 The latest detailed evidence is recorded in
 `medley-real-profile-benchmark-2026-05-31.md`.
 
-The latest broader event-matrix evidence is
+The 2026-06-02 event matrix remains the baseline comparison:
 `temp/bandori-team-builder/real-profile-medley-scope-matrix-2026-06-02T04-06-27-272Z.json`.
-It is review evidence, not a wrapper gate: exact completion was `36/40` with no
-timeouts under the 300s limit, and the four bounded rows are documented in the
-benchmark report.
+It proved `36/40` all-scope cases exact with no timeouts under the 300s limit.
+
+The latest post-recovery 40-case evidence is
+`temp/bandori-team-builder/focus-medley-cases-2026-06-04T14-14-48-198Z.json`.
+It proved `37/40` exact, had no failed or timeout rows, reduced bounded gap total
+from `1534986` to `1012798`, recorded P95 `219289ms`, max `293227ms`, and sampled
+peak working set `4201.2 MiB`. The peak row was `P02:260`; process working set is
+a diagnostic sample, not a hard in-engine memory cap.
 
 Passing this gate means:
 
@@ -629,20 +651,17 @@ user-facing labels.
   profiles, so frontend integration needs cancellation and clear status display.
 - Some all-scope event/profile combinations still return bounded within the
   300s budget when multiple configuration uppers remain close to the incumbent.
-- As of the 2026-06-04 `focus-6-300` audit, the current hard failures split into
-  three classes:
-  - `P08:260` is dominated by exact-join solve time and third-candidate fallback
-    scans. It reached 300s bounded after about `224.7s` in solve, with roughly
-    `27.7B` fallback word scans.
-  - `P08:323` and `P10:244` are candidate-fill soft-limit cases at the automatic
-    `400000` candidate limit. Raising that limit globally is not acceptable;
-    any extension must be guarded by remaining budget and proof impact.
-  - `P04:260` now has a small bounded gap but spends almost the full 300s budget
-    in pair upper, candidate fill, and solve work. It needs tighter
-    configuration-level upper closure or cheaper solve-workload pruning.
-- The largest remaining proof opportunity is cross-parameter sharing inside a
-  locked band/attribute scope, a tighter post-incumbent upper that can prove
-  non-winning parameter configurations without full exact candidate join, and
-  faster third-candidate lookup in exact-join solve.
+- As of the 2026-06-04 post-recovery matrix, the remaining bounded rows are:
+  - `P02:260`: pair-upper bounded, gap `416575`, and the highest sampled working
+    set at about `4201.2 MiB`.
+  - `P04:260`: small-gap bounded, gap `41696`, with elapsed `293227ms`.
+  - `P10:244`: candidate-fill soft-limit bounded even after guarded extension to
+    `600000`, gap `554527`.
+- `P08:260`, `P08:323`, and `P10:260` are no longer current regressions in the
+  fixed matrix. Keep them in `focus-6-300` so third-shortlist and guarded-fill
+  changes cannot silently regress.
+- The largest remaining proof opportunity is tighter pair/frontier upper closure
+  for `P02:260`, a cheaper small-gap proof sprint for `P04:260`, and a more
+  selective candidate-fill strategy for `P10:244`.
 - `medley-algorithm-notes.md` still contains historical experiments and should
   be treated as maintenance context, not the canonical contract.

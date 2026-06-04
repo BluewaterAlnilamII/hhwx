@@ -1068,6 +1068,24 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
         profiling.exactCandidateJoinThirdShortlistExhaustiveMissCount
       ),
       exactCandidateJoinThirdFallbackWordScanCount: profiling.exactCandidateJoinThirdFallbackWordScanCount,
+      exactCandidateJoinExtendedThirdShortlistQueryCount: (
+        profiling.exactCandidateJoinExtendedThirdShortlistQueryCount
+      ),
+      exactCandidateJoinExtendedThirdShortlistHitCount: (
+        profiling.exactCandidateJoinExtendedThirdShortlistHitCount
+      ),
+      exactCandidateJoinExtendedThirdShortlistFallbackCount: (
+        profiling.exactCandidateJoinExtendedThirdShortlistFallbackCount
+      ),
+      exactCandidateJoinExtendedThirdShortlistExhaustiveMissCount: (
+        profiling.exactCandidateJoinExtendedThirdShortlistExhaustiveMissCount
+      ),
+      exactCandidateJoinExtendedThirdShortlistCacheEntryCount: (
+        profiling.exactCandidateJoinExtendedThirdShortlistCacheEntryCount
+      ),
+      exactCandidateJoinGuardedCandidateExtensionCount: (
+        profiling.exactCandidateJoinGuardedCandidateExtensionCount
+      ),
       exactCandidateJoinInitialCandidateElapsedMs: profiling.exactCandidateJoinInitialCandidateElapsedMs,
       exactCandidateJoinPairUpperElapsedMs: profiling.exactCandidateJoinPairUpperElapsedMs,
       exactCandidateJoinCandidateFillElapsedMs: profiling.exactCandidateJoinCandidateFillElapsedMs,
@@ -1176,6 +1194,30 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
         profiling.exactCandidateJoinThirdFallbackWordScanCount
         - traceStartCounters.exactCandidateJoinThirdFallbackWordScanCount
       ),
+      exactCandidateJoinExtendedThirdShortlistQueryCountDelta: (
+        profiling.exactCandidateJoinExtendedThirdShortlistQueryCount
+        - traceStartCounters.exactCandidateJoinExtendedThirdShortlistQueryCount
+      ),
+      exactCandidateJoinExtendedThirdShortlistHitCountDelta: (
+        profiling.exactCandidateJoinExtendedThirdShortlistHitCount
+        - traceStartCounters.exactCandidateJoinExtendedThirdShortlistHitCount
+      ),
+      exactCandidateJoinExtendedThirdShortlistFallbackCountDelta: (
+        profiling.exactCandidateJoinExtendedThirdShortlistFallbackCount
+        - traceStartCounters.exactCandidateJoinExtendedThirdShortlistFallbackCount
+      ),
+      exactCandidateJoinExtendedThirdShortlistExhaustiveMissCountDelta: (
+        profiling.exactCandidateJoinExtendedThirdShortlistExhaustiveMissCount
+        - traceStartCounters.exactCandidateJoinExtendedThirdShortlistExhaustiveMissCount
+      ),
+      exactCandidateJoinExtendedThirdShortlistCacheEntryCountDelta: (
+        profiling.exactCandidateJoinExtendedThirdShortlistCacheEntryCount
+        - traceStartCounters.exactCandidateJoinExtendedThirdShortlistCacheEntryCount
+      ),
+      exactCandidateJoinGuardedCandidateExtensionCountDelta: (
+        profiling.exactCandidateJoinGuardedCandidateExtensionCount
+        - traceStartCounters.exactCandidateJoinGuardedCandidateExtensionCount
+      ),
       exactCandidateJoinInitialCandidateElapsedMsDelta: Math.round(
           profiling.exactCandidateJoinInitialCandidateElapsedMs
           - traceStartCounters.exactCandidateJoinInitialCandidateElapsedMs,
@@ -1249,6 +1291,19 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
           exactCandidateJoinAbortOtherUpper: profiling.exactCandidateJoinLastAbortOtherUpper,
           exactCandidateJoinAbortObservedUpperBound: profiling.exactCandidateJoinLastAbortObservedUpperBound,
           exactCandidateJoinAbortRemainingMs: profiling.exactCandidateJoinLastAbortRemainingMs,
+          exactCandidateJoinLastGuardedExtensionSlotIndex: (
+            profiling.exactCandidateJoinLastGuardedExtensionSlotIndex
+          ),
+          exactCandidateJoinLastGuardedExtensionLimit: profiling.exactCandidateJoinLastGuardedExtensionLimit,
+          exactCandidateJoinLastGuardedExtensionRemainingMs: (
+            profiling.exactCandidateJoinLastGuardedExtensionRemainingMs
+          ),
+          exactCandidateJoinLastGuardedExtensionPeakHeapMiB: (
+            profiling.exactCandidateJoinLastGuardedExtensionPeakHeapMiB
+          ),
+          exactCandidateJoinLastGuardedExtensionObservedUpperBound: (
+            profiling.exactCandidateJoinLastGuardedExtensionObservedUpperBound
+          ),
         });
       }
       configurationTrace.push(traceEntry);
@@ -1781,6 +1836,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
         deadlineAt,
         exactCandidateSoftLimit,
         exactNodeSoftLimit,
+        { calculatedCardCount: calculatedCards.length },
       );
       if (exactJoinResult.result) {
         pushMedleyResult(results, exactJoinResult.result, resultLimit);
@@ -1987,6 +2043,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
         deadlineAt,
         exactCandidateSoftLimit,
         exactNodeSoftLimit,
+        { calculatedCardCount: calculatedCards.length },
       );
       if (exactJoinResult.result) {
         pushMedleyResult(results, exactJoinResult.result, resultLimit);

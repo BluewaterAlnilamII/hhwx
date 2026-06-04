@@ -448,6 +448,17 @@ export type BandoriMedleyTeamSearchProfilingStats = {
   exactCandidateJoinThirdShortlistFallbackCount: number;
   exactCandidateJoinThirdShortlistExhaustiveMissCount: number;
   exactCandidateJoinThirdFallbackWordScanCount: number;
+  exactCandidateJoinExtendedThirdShortlistQueryCount: number;
+  exactCandidateJoinExtendedThirdShortlistHitCount: number;
+  exactCandidateJoinExtendedThirdShortlistFallbackCount: number;
+  exactCandidateJoinExtendedThirdShortlistExhaustiveMissCount: number;
+  exactCandidateJoinExtendedThirdShortlistCacheEntryCount: number;
+  exactCandidateJoinGuardedCandidateExtensionCount: number;
+  exactCandidateJoinLastGuardedExtensionSlotIndex: number | null;
+  exactCandidateJoinLastGuardedExtensionLimit: number | null;
+  exactCandidateJoinLastGuardedExtensionRemainingMs: number | null;
+  exactCandidateJoinLastGuardedExtensionPeakHeapMiB: number | null;
+  exactCandidateJoinLastGuardedExtensionObservedUpperBound: number | null;
   exactCandidateJoinInitialCandidateElapsedMs: number;
   exactCandidateJoinInitialCandidateElapsedMsBySlot: number[];
   exactCandidateJoinPairUpperElapsedMs: number;

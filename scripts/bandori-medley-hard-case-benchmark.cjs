@@ -274,6 +274,21 @@ const scenarios = {
       { profileLabel: "P08", eventKey: "260" },
     ],
   },
+  "p10-260-trace-300": {
+    description: "Trace P10:260 all-scope at 300s.",
+    reportKind: "focus",
+    recordOnly: true,
+    maxElapsedMs: 300000,
+    env: {
+      HHWX_REAL_PROFILE_SCOPE_MATRIX: "1",
+      HHWX_REAL_PROFILE_MATRIX_LOCKED_SCOPES: "0",
+      HHWX_REAL_PROFILE_DURATION_MS: "300000",
+      HHWX_REAL_PROFILE_OPTIMIZATION_JSON: "{\"debugConfigurationTrace\":true}",
+    },
+    cases: [
+      { profileLabel: "P10", eventKey: "260" },
+    ],
+  },
   "p05-p09-300": {
     description: "P05/P09 fast-profile regression check across none/244/260/323 at 300s.",
     reportKind: "focus",
@@ -737,8 +752,8 @@ function toFocusMarkdown(report) {
     "",
     ...buildFocusPivotTable(report, "time"),
     ...buildFocusPivotTable(report, "memory"),
-    "| case | baseline | exact | elapsed ms | gap | abort reason | abort slot | soft limit | candidates | third fallback | fallback words | peak MiB | status |",
-    "| --- | --- | --- | ---: | ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |",
+    "| case | baseline | exact | elapsed ms | gap | abort reason | abort slot | soft limit | candidates | third fallback | extended hits | extended fallback | fallback words | guarded limit | peak MiB | status |",
+    "| --- | --- | --- | ---: | ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |",
     ...report.rows.map((row) => [
       row.caseKey,
       row.baselineExact === true
@@ -754,7 +769,10 @@ function toFocusMarkdown(report) {
       row.result.exactCandidateJoinAbortCandidateSoftLimit ?? "",
       row.result.exactCandidateJoinAbortCandidateCount ?? "",
       row.result.exactCandidateJoinThirdShortlistFallbackCount ?? "",
+      row.result.exactCandidateJoinExtendedThirdShortlistHitCount ?? "",
+      row.result.exactCandidateJoinExtendedThirdShortlistFallbackCount ?? "",
       row.result.exactCandidateJoinThirdFallbackWordScanCount ?? "",
+      row.result.exactCandidateJoinLastGuardedExtensionLimit ?? "",
       formatMiB(row.memory.peakWorkingSetBytes),
       row.result.failureReason ?? row.result.searchMode ?? "",
     ].join(" | ")).map((line) => `| ${line} |`),
