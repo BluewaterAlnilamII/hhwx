@@ -290,6 +290,15 @@ configuration remains unclosed, contributes to the final bounded gap, and keeps
 the overall result from reporting exact unless its upper bound is later below
 the incumbent.
 
+All-scope exact-join pre-skip is deliberately opt-in. It must not be enabled by
+default merely because a profile has many cards or an `Everyone` configuration.
+The 2026-06-04 regression audit showed that default pre-skip made `P02` and
+`P07` return fast bounded results by never entering exact join for configurations
+that the 2026-06-02 matrix had proved exact. The recovery was to keep
+`enableAllScopeExactJoinPreSkip` false unless a benchmark experiment explicitly
+enables it, then validate the default path with `p02-p07-default-300` before any
+full 40-case matrix run.
+
 ### Candidate And Memory Soft Limits
 
 Candidate and workload soft limits are proof-budget controls, not correctness
@@ -544,6 +553,7 @@ Important shorter spot checks:
 
 ```powershell
 node .\scripts\bandori-medley-hard-case-benchmark.cjs focus-6-300
+node .\scripts\bandori-medley-hard-case-benchmark.cjs p02-p07-default-300
 node .\scripts\bandori-medley-hard-case-benchmark.cjs p05-visual
 node .\scripts\bandori-medley-hard-case-benchmark.cjs p01-locked
 ```
@@ -553,6 +563,14 @@ work. It runs the six retained focus cases `P02:260`, `P04:260`, `P08:323`,
 `P10:244`, `P04:244`, and `P08:260`, records exact-join diagnostics, and samples
 peak process working set in MiB. Run the full 40-case `all-300` matrix only
 after this focus set is acceptable.
+
+`p02-p07-default-300` is the regression guard for the all-scope exact-join
+pre-skip recovery. It must use the default optimizer path, with no optimization
+JSON override. The expected diagnostic shape is that `P02:none`, `P02:244`,
+`P02:323`, and all four `P07` event cases are exact; `P02:260` may remain
+bounded, matching the 2026-06-02 baseline class. If these cases become fast
+bounded with zero exact-join calls, inspect any newly enabled pre-skip or
+unclosed-configuration shortcut before running the full matrix.
 
 The latest detailed evidence is recorded in
 `medley-real-profile-benchmark-2026-05-31.md`.
@@ -611,8 +629,20 @@ user-facing labels.
   profiles, so frontend integration needs cancellation and clear status display.
 - Some all-scope event/profile combinations still return bounded within the
   300s budget when multiple configuration uppers remain close to the incumbent.
+- As of the 2026-06-04 `focus-6-300` audit, the current hard failures split into
+  three classes:
+  - `P08:260` is dominated by exact-join solve time and third-candidate fallback
+    scans. It reached 300s bounded after about `224.7s` in solve, with roughly
+    `27.7B` fallback word scans.
+  - `P08:323` and `P10:244` are candidate-fill soft-limit cases at the automatic
+    `400000` candidate limit. Raising that limit globally is not acceptable;
+    any extension must be guarded by remaining budget and proof impact.
+  - `P04:260` now has a small bounded gap but spends almost the full 300s budget
+    in pair upper, candidate fill, and solve work. It needs tighter
+    configuration-level upper closure or cheaper solve-workload pruning.
 - The largest remaining proof opportunity is cross-parameter sharing inside a
-  locked band/attribute scope, or a tighter post-incumbent upper that can prove
-  non-winning parameter configurations without full exact candidate join.
+  locked band/attribute scope, a tighter post-incumbent upper that can prove
+  non-winning parameter configurations without full exact candidate join, and
+  faster third-candidate lookup in exact-join solve.
 - `medley-algorithm-notes.md` still contains historical experiments and should
   be treated as maintenance context, not the canonical contract.

@@ -75,6 +75,44 @@ const scenarios = {
     },
     cases: makeAllScopeCases(expectedProfileIdentities20260602.map((profile) => profile.label)),
   },
+  "p02-p07-no-proof-skips-300": {
+    description: "Ablation for P02/P07 all-scope regressions with bounded proof shortcuts disabled, 300s per case.",
+    reportKind: "focus",
+    recordOnly: true,
+    maxElapsedMs: 300000,
+    env: {
+      HHWX_REAL_PROFILE_SCOPE_MATRIX: "1",
+      HHWX_REAL_PROFILE_MATRIX_LOCKED_SCOPES: "0",
+      HHWX_REAL_PROFILE_DURATION_MS: "300000",
+      HHWX_REAL_PROFILE_OPTIMIZATION_JSON: "{\"debugConfigurationTrace\":true,\"disableDominatedRootSkip\":true,\"disableAllScopeExactJoinPreSkip\":true,\"disableNearDeadlineRootSkip\":true,\"disableSkipDfsAfterUnprovedExactCandidateJoin\":true}",
+    },
+    cases: makeAllScopeCases(["P02", "P07"]),
+  },
+  "p02-p07-no-pre-skip-300": {
+    description: "Ablation for P02/P07 all-scope regressions with exact-join pre-skip disabled, 300s per case.",
+    reportKind: "focus",
+    recordOnly: true,
+    maxElapsedMs: 300000,
+    env: {
+      HHWX_REAL_PROFILE_SCOPE_MATRIX: "1",
+      HHWX_REAL_PROFILE_MATRIX_LOCKED_SCOPES: "0",
+      HHWX_REAL_PROFILE_DURATION_MS: "300000",
+      HHWX_REAL_PROFILE_OPTIMIZATION_JSON: "{\"debugConfigurationTrace\":true,\"disableAllScopeExactJoinPreSkip\":true}",
+    },
+    cases: makeAllScopeCases(["P02", "P07"]),
+  },
+  "p02-p07-default-300": {
+    description: "Default-path validation for P02/P07 all-scope regression cases, 300s per case.",
+    reportKind: "focus",
+    recordOnly: true,
+    maxElapsedMs: 300000,
+    env: {
+      HHWX_REAL_PROFILE_SCOPE_MATRIX: "1",
+      HHWX_REAL_PROFILE_MATRIX_LOCKED_SCOPES: "0",
+      HHWX_REAL_PROFILE_DURATION_MS: "300000",
+    },
+    cases: makeAllScopeCases(["P02", "P07"]),
+  },
   "focus-6-300": {
     description: "Six focused all-scope cases at 300s with memory monitoring.",
     reportKind: "focus",
@@ -139,6 +177,22 @@ const scenarios = {
       HHWX_REAL_PROFILE_OPTIMIZATION_JSON: "{\"debugConfigurationTrace\":true}",
     },
     cases: [
+      { profileLabel: "P04", eventKey: "260" },
+    ],
+  },
+  "p04-oom-2-trace-300": {
+    description: "Trace P04:244/260 all-scope OOM candidates at 300s.",
+    reportKind: "focus",
+    recordOnly: true,
+    maxElapsedMs: 300000,
+    env: {
+      HHWX_REAL_PROFILE_SCOPE_MATRIX: "1",
+      HHWX_REAL_PROFILE_MATRIX_LOCKED_SCOPES: "0",
+      HHWX_REAL_PROFILE_DURATION_MS: "300000",
+      HHWX_REAL_PROFILE_OPTIMIZATION_JSON: "{\"debugConfigurationTrace\":true}",
+    },
+    cases: [
+      { profileLabel: "P04", eventKey: "244" },
       { profileLabel: "P04", eventKey: "260" },
     ],
   },
@@ -391,6 +445,13 @@ function formatProfileIdentity(profile) {
   return `${profile.label ?? "?"}:${profile.cardCount ?? "?"}:${profile.profileHash ?? "?"}`;
 }
 
+function isRunnerTimeoutResult(result) {
+  if (!result?.failed) {
+    return false;
+  }
+  return /timeout/i.test(String(result.failureReason ?? ""));
+}
+
 function assertProfileIdentity(context, profile) {
   const expected = expectedProfileIdentityByLabel.get(profile?.label);
   if (!expected) {
@@ -489,7 +550,7 @@ function assertMatrixReport(scenarioName, scenario) {
   const maxElapsedMs = report.summary?.allMaxElapsedMs ?? Number.POSITIVE_INFINITY;
   const rows = report.rows ?? [];
   assertReportProfileIdentities(scenarioName, rows);
-  const timedOutCount = rows.filter((row) => row.all?.timedOut === true).length;
+  const timedOutCount = rows.filter((row) => isRunnerTimeoutResult(row.all)).length;
   const boundedGapTotal = rows.reduce((sum, row) => {
     if (row.all?.exact) {
       return sum;
@@ -544,7 +605,7 @@ function summarizeFocusRows(rows, scenario) {
   return {
     total: rows.length,
     exactCount: rows.filter((row) => row.result.exact === true).length,
-    timeoutCount: rows.filter((row) => row.result.timedOut === true).length,
+    timeoutCount: rows.filter((row) => isRunnerTimeoutResult(row.result)).length,
     failedCount: rows.filter((row) => row.result.failed === true).length,
     maxElapsedMs: rows.reduce((max, row) => Math.max(max, row.result.elapsedMs ?? 0), 0),
     boundedBaselineCount: boundedRows.length,
@@ -560,13 +621,16 @@ function summarizeFocusRows(rows, scenario) {
 }
 
 function getFocusStatusLabel(row) {
+  if (row.result.exact) {
+    return "exact";
+  }
+  if (isRunnerTimeoutResult(row.result)) {
+    return "timeout";
+  }
   if (row.result.failed) {
     return "failed";
   }
-  if (row.result.timedOut) {
-    return "timeout";
-  }
-  return row.result.exact ? "exact" : "bounded";
+  return "bounded";
 }
 
 function getFocusPivotEventKeys(rows) {

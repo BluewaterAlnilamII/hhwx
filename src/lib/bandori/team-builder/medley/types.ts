@@ -67,6 +67,11 @@ export type BandoriMedleySearchOptimizationOptions = {
   configurationSeedPassDurationMs?: number;
   debugConfigurationTrace?: boolean;
   exactCandidateJoinDebugAnchorSlotIndex?: number;
+  disableDominatedRootSkip?: boolean;
+  enableAllScopeExactJoinPreSkip?: boolean;
+  disableAllScopeExactJoinPreSkip?: boolean;
+  disableNearDeadlineRootSkip?: boolean;
+  disableSkipDfsAfterUnprovedExactCandidateJoin?: boolean;
 };
 
 export type BandoriMedleyTeamSearchInput = Omit<

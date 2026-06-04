@@ -77,6 +77,7 @@ import type {
   MedleyConfigurationWarmupCache,
   MedleyFixedCardSetOptimizationCacheEntry,
   MedleyObservedUpperBoundSource,
+  MedleySlotSearch,
   MedleyTeamCandidate,
 } from "./types";
 
@@ -88,18 +89,23 @@ const MEDLEY_EXACT_JOIN_ALL_SCOPE_EVERYONE_SAFE_MAX_CARD_COUNT = 900;
 const MEDLEY_WIDE_ROOT_GAP_INCLUSION_PRUNE_SKIP = 0;
 const MEDLEY_DOMINATED_BOUNDED_SKIP_MIN_GAP = 50_000;
 const MEDLEY_NEAR_DEADLINE_BOUNDED_SKIP_REMAINING_MS = 15_000;
-const MEDLEY_NEAR_DEADLINE_BOUNDED_SKIP_MIN_PROOF_RESERVE_MS = 5_000;
-const MEDLEY_NEAR_DEADLINE_BOUNDED_SKIP_MAX_PROOF_RESERVE_MS = 20_000;
-const MEDLEY_NEAR_DEADLINE_BOUNDED_SKIP_PROOF_RESERVE_RATIO = 0.35;
 const MEDLEY_NEAR_DEADLINE_BOUNDED_SKIP_MIN_GAP = 50_000;
 const BYTES_PER_MIB = 1024 * 1024;
 const MEMORY_SOFT_LIMIT_CHECK_INTERVAL_MS = 50;
 const RUNTIME_HEAP_LIMIT_RATIO = 0.65;
+const MEDLEY_NODE_AUTO_MEMORY_SOFT_LIMIT_MIB = 4_200;
 
 type RuntimeMemoryPerformance = Performance & {
   memory?: {
     usedJSHeapSize?: number;
     jsHeapSizeLimit?: number;
+  };
+};
+
+type RuntimeNodeProcess = {
+  memoryUsage?: () => {
+    heapUsed?: number;
+    rss?: number;
   };
 };
 
@@ -119,6 +125,15 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
   const enableOpportunityCostUpper = optimization.enableOpportunityCostUpper === true;
   const enableTeamSharedCoefficientUpper = optimization.enableTeamSharedCoefficientUpper === true;
   const debugConfigurationTrace = optimization.debugConfigurationTrace === true;
+  const disableDominatedRootSkip = optimization.disableDominatedRootSkip === true;
+  const disableAllScopeExactJoinPreSkip = optimization.disableAllScopeExactJoinPreSkip === true;
+  const enableAllScopeExactJoinPreSkip = (
+    optimization.enableAllScopeExactJoinPreSkip === true
+    && !disableAllScopeExactJoinPreSkip
+  );
+  const disableNearDeadlineRootSkip = optimization.disableNearDeadlineRootSkip === true;
+  const disableSkipDfsAfterUnprovedExactCandidateJoin =
+    optimization.disableSkipDfsAfterUnprovedExactCandidateJoin === true;
   const parsedAnchorCandidateLimit = optimization.anchorCandidateLimit !== undefined
     ? Math.trunc(optimization.anchorCandidateLimit)
     : Number.NaN;
@@ -214,6 +229,14 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
   ) {
     exactCandidateSoftLimit = MEDLEY_EXACT_JOIN_AUTO_HIGH_CANDIDATE_SOFT_LIMIT;
   }
+  const nodeAutoMemorySoftLimitBytes = (
+    memorySoftLimitBytes === null
+    && shouldAutoEnableExactCandidateJoin
+    && maxSearchDurationMs >= 60000
+    && calculatedCards.length >= 900
+  )
+    ? MEDLEY_NODE_AUTO_MEMORY_SOFT_LIMIT_MIB * BYTES_PER_MIB
+    : null;
   const enableConflictExactBnb = (optimization.enableConflictExactBnb === true || shouldAutoEnableConflictExactBnb)
     && resultLimit === 1
     && (
@@ -293,12 +316,13 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
   let lastMemoryCheckAt = Number.NEGATIVE_INFINITY;
   let runtimeHeapLimitBytes: number | null = null;
   const getEffectiveMemorySoftLimitBytes = (): number | null => {
-    if (memorySoftLimitBytes === null && runtimeHeapLimitBytes === null) {
+    if (memorySoftLimitBytes === null && runtimeHeapLimitBytes === null && nodeAutoMemorySoftLimitBytes === null) {
       return null;
     }
     return Math.min(
       memorySoftLimitBytes ?? Number.POSITIVE_INFINITY,
       runtimeHeapLimitBytes !== null ? runtimeHeapLimitBytes * RUNTIME_HEAP_LIMIT_RATIO : Number.POSITIVE_INFINITY,
+      nodeAutoMemorySoftLimitBytes ?? Number.POSITIVE_INFINITY,
     );
   };
   const readUsedHeapBytes = (): number | null => {
@@ -310,9 +334,28 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
         stats.memorySoftLimitMiB = Math.floor(effectiveLimitBytes / BYTES_PER_MIB);
       }
     }
-    const usedHeapBytes = typeof memory?.usedJSHeapSize === "number" && Number.isFinite(memory.usedJSHeapSize)
+    let usedHeapBytes = typeof memory?.usedJSHeapSize === "number" && Number.isFinite(memory.usedJSHeapSize)
       ? memory.usedJSHeapSize
       : null;
+    if (usedHeapBytes === null) {
+      const nodeProcess = (globalThis as { process?: RuntimeNodeProcess }).process;
+      const nodeMemoryUsage = nodeProcess?.memoryUsage?.();
+      const nodeHeapUsed = nodeMemoryUsage?.heapUsed;
+      const nodeRss = nodeMemoryUsage?.rss;
+      if (typeof nodeHeapUsed === "number" && Number.isFinite(nodeHeapUsed)) {
+        usedHeapBytes = nodeHeapUsed;
+      }
+      if (
+        typeof nodeRss === "number"
+        && Number.isFinite(nodeRss)
+        && (
+          nodeAutoMemorySoftLimitBytes !== null
+          || memorySoftLimitBytes !== null
+        )
+      ) {
+        usedHeapBytes = Math.max(usedHeapBytes ?? 0, nodeRss);
+      }
+    }
     if (usedHeapBytes !== null) {
       peakUsedHeapBytes = Math.max(peakUsedHeapBytes ?? 0, usedHeapBytes);
       stats.peakUsedHeapMiB = Math.ceil((peakUsedHeapBytes ?? usedHeapBytes) / BYTES_PER_MIB);
@@ -335,8 +378,11 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
       return false;
     }
     lastMemoryCheckAt = now;
-    const usedHeapBytes = readUsedHeapBytes();
     const effectiveMemorySoftLimitBytes = getEffectiveMemorySoftLimitBytes();
+    if (effectiveMemorySoftLimitBytes === null) {
+      return false;
+    }
+    const usedHeapBytes = readUsedHeapBytes();
     return usedHeapBytes !== null && effectiveMemorySoftLimitBytes !== null && usedHeapBytes >= effectiveMemorySoftLimitBytes
       ? markMemoryLimited()
       : false;
@@ -449,6 +495,11 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
   const configurationWarmupCache = new Map<number, MedleyConfigurationWarmupCache>();
   const configurationRootUpperBounds = new Map<number, number>();
   const configurationBasicSkillAwareRootUpperBounds = new Map<number, number>();
+  const releaseSlotSearchCaches = (slots: MedleySlotSearch[]): void => {
+    for (const slot of slots) {
+      slot.teamEvaluationCache.clear();
+    }
+  };
   const getConfigurationWarmupCache = (configurationIndex: number): MedleyConfigurationWarmupCache => {
     const cached = configurationWarmupCache.get(configurationIndex);
     if (cached) {
@@ -467,6 +518,16 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
     };
     configurationWarmupCache.set(configurationIndex, warmupCache);
     return warmupCache;
+  };
+  const releaseConfigurationWarmupCache = (configurationIndex: number): void => {
+    const warmupCache = configurationWarmupCache.get(configurationIndex);
+    if (!warmupCache) {
+      return;
+    }
+    releaseSlotSearchCaches(warmupCache.slots);
+    warmupCache.bestSlotTeamCache.clear();
+    warmupCache.fixedCardSetOptimizationCache.clear();
+    configurationWarmupCache.delete(configurationIndex);
   };
   const getConfigurationRootUpperBound = (configurationIndex: number): number => {
     const cached = configurationRootUpperBounds.get(configurationIndex);
@@ -921,6 +982,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
           });
         }
         closeActiveConfiguration();
+        releaseConfigurationWarmupCache(configurationIndex);
         continue;
       }
     }
@@ -930,6 +992,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
     // same proof frontier.
     if (
       results.length >= resultLimit
+      && !disableDominatedRootSkip
       && shouldAutoEnableExactCandidateJoin
       && isAllCoarseFilter
       && resultLimit === 1
@@ -969,6 +1032,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
             dominatingUnclosedUpperBound: unclosedConfigurationUpperBoundMax,
           });
         }
+        releaseConfigurationWarmupCache(configurationIndex);
         continue;
       }
     }
@@ -1031,8 +1095,27 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
         slotCardCounts: slots.map((slot) => slot.searchCards.length),
       }
       : null;
+    let didReleaseConfigurationSearchCaches = false;
+    const releaseConfigurationSearchCaches = (): void => {
+      if (didReleaseConfigurationSearchCaches) {
+        return;
+      }
+      didReleaseConfigurationSearchCaches = true;
+      releaseSlotSearchCaches(slots);
+      bestSlotTeamCache.clear();
+      remainingUpperBoundCache.clear();
+      fixedCardSetOptimizationCache.clear();
+      for (const candidates of slotCandidates) {
+        candidates.length = 0;
+      }
+      slotCandidates = [];
+      if (configurationIndex >= 0) {
+        releaseConfigurationWarmupCache(configurationIndex);
+      }
+    };
     const finishConfigurationTrace = (status: string): void => {
       if (!configurationTrace || !traceEntry || traceEntry.status !== undefined) {
+        releaseConfigurationSearchCaches();
         return;
       }
       const rememberedUnclosedUpperBound = configurationIndex >= 0
@@ -1169,6 +1252,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
         });
       }
       configurationTrace.push(traceEntry);
+      releaseConfigurationSearchCaches();
     };
 
     // This is the central proof boundary for DFS. Callers may ask for tighter model families,
@@ -1470,7 +1554,8 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
       )
     );
     const shouldPreSkipAllScopeExactJoin = (
-      shouldRunExactCandidateJoinForConfiguration
+      enableAllScopeExactJoinPreSkip
+      && shouldRunExactCandidateJoinForConfiguration
       && canTryExactCandidateJoinBeforeSeeding
       && shouldAutoEnableExactCandidateJoin
       && isAllCoarseFilter
@@ -1486,9 +1571,52 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
       )
     );
     if (shouldPreSkipAllScopeExactJoin) {
-      const boundedSkipUpperBound = getBasicSkillAwareRootUpperBoundForConfiguration()
+      const basicSkillAwareRootUpperBound = getBasicSkillAwareRootUpperBoundForConfiguration()
         ?? rootScoreUpperBound;
-      observeUpperBound(boundedSkipUpperBound, "configuration-root", MEDLEY_TEAM_COUNT);
+      const rootSlotIndices = slots.map((_, index) => index);
+      const thresholdBeforeSkip = getMedleyPruningThreshold(results, resultLimit);
+      const tightRootUpperBound = getRemainingUpperBound(
+        rootSlotIndices,
+        new Set<number>(),
+        false,
+        true,
+        false,
+        false,
+        thresholdBeforeSkip,
+      );
+      const boundedSkipUpperBound = Math.min(
+        basicSkillAwareRootUpperBound,
+        Number.isFinite(tightRootUpperBound) ? tightRootUpperBound : Number.POSITIVE_INFINITY,
+      );
+      const boundedSkipUpperSource: MedleyObservedUpperBoundSource = (
+        Number.isFinite(tightRootUpperBound)
+        && tightRootUpperBound <= basicSkillAwareRootUpperBound
+      )
+        ? "dfs-remaining"
+        : "configuration-root";
+      if (traceEntry) {
+        traceEntry.preSkipBasicRootUpperBound = basicSkillAwareRootUpperBound;
+        traceEntry.preSkipTightRootUpperBound = Number.isFinite(tightRootUpperBound)
+          ? tightRootUpperBound
+          : null;
+      }
+      observeUpperBound(boundedSkipUpperBound, boundedSkipUpperSource, MEDLEY_TEAM_COUNT);
+      tightenActiveConfigurationUpperBound(
+        boundedSkipUpperBound,
+        boundedSkipUpperSource,
+        MEDLEY_TEAM_COUNT,
+      );
+      if (boundedSkipUpperBound < thresholdBeforeSkip) {
+        stats.prunedBranchCount += 1;
+        profiling.rootUpperPrunedConfigurationCount += 1;
+        finishConfigurationTrace(
+          configuration.bandKey === "Everyone"
+            ? "everyone-tight-root-pruned"
+            : "large-scope-tight-root-pruned",
+        );
+        closeActiveConfiguration();
+        continue;
+      }
       didLeaveUnclosedAreaItemConfiguration = true;
       rememberActiveConfigurationUpperBound();
       finishConfigurationTrace(
@@ -1500,6 +1628,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
     }
     if (
       shouldRunExactCandidateJoinForConfiguration
+      && !disableNearDeadlineRootSkip
       && canTryExactCandidateJoinBeforeSeeding
       && shouldAutoEnableExactCandidateJoin
       && isAllCoarseFilter
@@ -1512,30 +1641,11 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
       // upper is still above the incumbent, so the final response remains
       // bounded with that unresolved configuration recorded.
       const remainingBeforeNearDeadlineSkip = deadlineAt - performance.now();
-      const sameCoarseProofElapsedMs = exactCandidateJoinProofElapsedMsByCoarseKey.get(
-        getMedleyAreaItemCoarseKey(configuration),
-      );
-      const dynamicProofReserveMs = sameCoarseProofElapsedMs !== undefined
-        ? clamp(
-          Math.trunc(sameCoarseProofElapsedMs * MEDLEY_NEAR_DEADLINE_BOUNDED_SKIP_PROOF_RESERVE_RATIO),
-          MEDLEY_NEAR_DEADLINE_BOUNDED_SKIP_MIN_PROOF_RESERVE_MS,
-          MEDLEY_NEAR_DEADLINE_BOUNDED_SKIP_MAX_PROOF_RESERVE_MS,
-        )
-        : 0;
-      const nearDeadlineSkipRemainingMs = sameCoarseProofElapsedMs !== undefined
-        ? Math.max(
-          MEDLEY_NEAR_DEADLINE_BOUNDED_SKIP_REMAINING_MS,
-          sameCoarseProofElapsedMs + dynamicProofReserveMs,
-        )
-        : MEDLEY_NEAR_DEADLINE_BOUNDED_SKIP_REMAINING_MS;
+      const nearDeadlineSkipRemainingMs = MEDLEY_NEAR_DEADLINE_BOUNDED_SKIP_REMAINING_MS;
       const thresholdBeforeNearDeadlineSkip = getMedleyPruningThreshold(results, resultLimit);
       const basicSkillAwareRootUpperBound = getBasicSkillAwareRootUpperBoundForConfiguration();
       if (
         remainingBeforeNearDeadlineSkip <= nearDeadlineSkipRemainingMs
-        && (
-          sameCoarseProofElapsedMs !== undefined
-          || remainingBeforeNearDeadlineSkip <= MEDLEY_NEAR_DEADLINE_BOUNDED_SKIP_REMAINING_MS
-        )
         &&
         basicSkillAwareRootUpperBound !== null
         && Number.isFinite(basicSkillAwareRootUpperBound)
@@ -1579,10 +1689,6 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
         );
         if (traceEntry) {
           traceEntry.nearDeadlineRemainingMs = Math.max(0, Math.round(remainingBeforeNearDeadlineSkip));
-          traceEntry.nearDeadlineProofForecastMs = sameCoarseProofElapsedMs !== undefined
-            ? Math.round(sameCoarseProofElapsedMs)
-            : null;
-          traceEntry.nearDeadlineProofReserveMs = Math.round(dynamicProofReserveMs);
           traceEntry.nearDeadlineSkipThresholdMs = Math.round(nearDeadlineSkipRemainingMs);
         }
         finishConfigurationTrace("bounded-near-deadline-root-skip");
@@ -1624,7 +1730,8 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
     let didAttemptExactCandidateJoin = false;
     let shouldSkipDfsAfterUnprovedExactCandidateJoin = false;
     const canSkipDfsAfterUnprovedExactCandidateJoin = (
-      shouldAutoEnableExactCandidateJoin
+      !disableSkipDfsAfterUnprovedExactCandidateJoin
+      && shouldAutoEnableExactCandidateJoin
       && isAllCoarseFilter
       && resultLimit === 1
       && maxSearchDurationMs >= 30000
@@ -2134,6 +2241,9 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
         rememberedUpperBound.remainingSlotCount,
       );
     }
+  }
+  for (const configurationIndex of [...configurationWarmupCache.keys()]) {
+    releaseConfigurationWarmupCache(configurationIndex);
   }
 
   sortMedleyResults(results);
