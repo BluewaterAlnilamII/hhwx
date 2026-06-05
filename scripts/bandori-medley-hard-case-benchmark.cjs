@@ -68,6 +68,7 @@ const scenarios = {
     reportKind: "focus",
     recordOnly: true,
     maxElapsedMs: 300000,
+    baselineBoundedGapTotal: 1534986,
     env: {
       HHWX_REAL_PROFILE_SCOPE_MATRIX: "1",
       HHWX_REAL_PROFILE_MATRIX_LOCKED_SCOPES: "0",
@@ -165,6 +166,21 @@ const scenarios = {
       { profileLabel: "P02", eventKey: "260" },
     ],
   },
+  "p02-260-soft600-trace-300": {
+    description: "Trace P02:260 all-scope at 300s with a 600k exact candidate soft limit.",
+    reportKind: "focus",
+    recordOnly: true,
+    maxElapsedMs: 300000,
+    env: {
+      HHWX_REAL_PROFILE_SCOPE_MATRIX: "1",
+      HHWX_REAL_PROFILE_MATRIX_LOCKED_SCOPES: "0",
+      HHWX_REAL_PROFILE_DURATION_MS: "300000",
+      HHWX_REAL_PROFILE_OPTIMIZATION_JSON: "{\"debugConfigurationTrace\":true,\"exactCandidateSoftLimit\":600000}",
+    },
+    cases: [
+      { profileLabel: "P02", eventKey: "260" },
+    ],
+  },
   "p04-260-trace-300": {
     description: "Trace P04:260 all-scope at 300s.",
     reportKind: "focus",
@@ -175,6 +191,110 @@ const scenarios = {
       HHWX_REAL_PROFILE_MATRIX_LOCKED_SCOPES: "0",
       HHWX_REAL_PROFILE_DURATION_MS: "300000",
       HHWX_REAL_PROFILE_OPTIMIZATION_JSON: "{\"debugConfigurationTrace\":true}",
+    },
+    cases: [
+      { profileLabel: "P04", eventKey: "260" },
+    ],
+  },
+  "p04-260-default-300": {
+    description: "Run P04:260 all-scope at 300s on the default no-trace path.",
+    reportKind: "focus",
+    recordOnly: true,
+    maxElapsedMs: 300000,
+    env: {
+      HHWX_REAL_PROFILE_SCOPE_MATRIX: "1",
+      HHWX_REAL_PROFILE_MATRIX_LOCKED_SCOPES: "0",
+      HHWX_REAL_PROFILE_DURATION_MS: "300000",
+    },
+    cases: [
+      { profileLabel: "P04", eventKey: "260" },
+    ],
+  },
+  "p04-260-no-skip-dfs-trace-300": {
+    description: "Trace P04:260 with fallback DFS after unproved exact-join enabled.",
+    reportKind: "focus",
+    recordOnly: true,
+    maxElapsedMs: 300000,
+    env: {
+      HHWX_REAL_PROFILE_SCOPE_MATRIX: "1",
+      HHWX_REAL_PROFILE_MATRIX_LOCKED_SCOPES: "0",
+      HHWX_REAL_PROFILE_DURATION_MS: "300000",
+      HHWX_REAL_PROFILE_OPTIMIZATION_JSON: "{\"debugConfigurationTrace\":true,\"disableSkipDfsAfterUnprovedExactCandidateJoin\":true}",
+    },
+    cases: [
+      { profileLabel: "P04", eventKey: "260" },
+    ],
+  },
+  "p04-260-no-exact-join-trace-300": {
+    description: "Trace P04:260 with exact candidate-join disabled for DFS-first diagnosis.",
+    reportKind: "focus",
+    recordOnly: true,
+    maxElapsedMs: 300000,
+    env: {
+      HHWX_REAL_PROFILE_SCOPE_MATRIX: "1",
+      HHWX_REAL_PROFILE_MATRIX_LOCKED_SCOPES: "0",
+      HHWX_REAL_PROFILE_DURATION_MS: "300000",
+      HHWX_REAL_PROFILE_OPTIMIZATION_JSON: "{\"debugConfigurationTrace\":true,\"disableExactCandidateJoin\":true}",
+    },
+    cases: [
+      { profileLabel: "P04", eventKey: "260" },
+    ],
+  },
+  "p04-260-anchor2-trace-300": {
+    description: "Trace P04:260 with exact candidate-join anchored on slot 2.",
+    reportKind: "focus",
+    recordOnly: true,
+    maxElapsedMs: 300000,
+    env: {
+      HHWX_REAL_PROFILE_SCOPE_MATRIX: "1",
+      HHWX_REAL_PROFILE_MATRIX_LOCKED_SCOPES: "0",
+      HHWX_REAL_PROFILE_DURATION_MS: "300000",
+      HHWX_REAL_PROFILE_OPTIMIZATION_JSON: "{\"debugConfigurationTrace\":true,\"exactCandidateJoinDebugAnchorSlotIndex\":2}",
+    },
+    cases: [
+      { profileLabel: "P04", eventKey: "260" },
+    ],
+  },
+  "p04-260-upper-trace-300": {
+    description: "Trace P04:260 with additional capacity upper options enabled.",
+    reportKind: "focus",
+    recordOnly: true,
+    maxElapsedMs: 300000,
+    env: {
+      HHWX_REAL_PROFILE_SCOPE_MATRIX: "1",
+      HHWX_REAL_PROFILE_MATRIX_LOCKED_SCOPES: "0",
+      HHWX_REAL_PROFILE_DURATION_MS: "300000",
+      HHWX_REAL_PROFILE_OPTIMIZATION_JSON: "{\"debugConfigurationTrace\":true,\"enableAnchorSlotUpper\":true,\"enableOpportunityCostUpper\":true,\"enableTeamSharedCoefficientUpper\":true}",
+    },
+    cases: [
+      { profileLabel: "P04", eventKey: "260" },
+    ],
+  },
+  "p04-260-upper-no-skip-dfs-trace-300": {
+    description: "Trace P04:260 with capacity upper options and DFS fallback after unproved exact-join.",
+    reportKind: "focus",
+    recordOnly: true,
+    maxElapsedMs: 300000,
+    env: {
+      HHWX_REAL_PROFILE_SCOPE_MATRIX: "1",
+      HHWX_REAL_PROFILE_MATRIX_LOCKED_SCOPES: "0",
+      HHWX_REAL_PROFILE_DURATION_MS: "300000",
+      HHWX_REAL_PROFILE_OPTIMIZATION_JSON: "{\"debugConfigurationTrace\":true,\"enableAnchorSlotUpper\":true,\"enableOpportunityCostUpper\":true,\"enableTeamSharedCoefficientUpper\":true,\"disableSkipDfsAfterUnprovedExactCandidateJoin\":true}",
+    },
+    cases: [
+      { profileLabel: "P04", eventKey: "260" },
+    ],
+  },
+  "p04-260-upper-trailing-dfs-trace-300": {
+    description: "Trace P04:260 with capacity uppers, DFS fallback, and trailing same-coarse DFS-only.",
+    reportKind: "focus",
+    recordOnly: true,
+    maxElapsedMs: 300000,
+    env: {
+      HHWX_REAL_PROFILE_SCOPE_MATRIX: "1",
+      HHWX_REAL_PROFILE_MATRIX_LOCKED_SCOPES: "0",
+      HHWX_REAL_PROFILE_DURATION_MS: "300000",
+      HHWX_REAL_PROFILE_OPTIMIZATION_JSON: "{\"debugConfigurationTrace\":true,\"enableAnchorSlotUpper\":true,\"enableOpportunityCostUpper\":true,\"enableTeamSharedCoefficientUpper\":true,\"disableSkipDfsAfterUnprovedExactCandidateJoin\":true,\"enableTrailingSameCoarseDfsOnly\":true}",
     },
     cases: [
       { profileLabel: "P04", eventKey: "260" },
@@ -244,6 +364,22 @@ const scenarios = {
       { profileLabel: "P10", eventKey: "244" },
     ],
   },
+  "bounded-2-no-skip-dfs-trace-300": {
+    description: "Diagnostic trace P02:260 and P10:244 at 300s with DFS after unproved exact join enabled.",
+    reportKind: "focus",
+    recordOnly: true,
+    maxElapsedMs: 300000,
+    env: {
+      HHWX_REAL_PROFILE_SCOPE_MATRIX: "1",
+      HHWX_REAL_PROFILE_MATRIX_LOCKED_SCOPES: "0",
+      HHWX_REAL_PROFILE_DURATION_MS: "300000",
+      HHWX_REAL_PROFILE_OPTIMIZATION_JSON: "{\"debugConfigurationTrace\":true,\"disableSkipDfsAfterUnprovedExactCandidateJoin\":true}",
+    },
+    cases: [
+      { profileLabel: "P02", eventKey: "260" },
+      { profileLabel: "P10", eventKey: "244" },
+    ],
+  },
   "p10-244-soft800-trace-300": {
     description: "Trace P10:244 at 300s with an 800k exact candidate soft limit.",
     reportKind: "focus",
@@ -254,6 +390,51 @@ const scenarios = {
       HHWX_REAL_PROFILE_MATRIX_LOCKED_SCOPES: "0",
       HHWX_REAL_PROFILE_DURATION_MS: "300000",
       HHWX_REAL_PROFILE_OPTIMIZATION_JSON: "{\"debugConfigurationTrace\":true,\"exactCandidateSoftLimit\":800000}",
+    },
+    cases: [
+      { profileLabel: "P10", eventKey: "244" },
+    ],
+  },
+  "p10-244-trace-300": {
+    description: "Trace P10:244 at 300s using the default optimizer path.",
+    reportKind: "focus",
+    recordOnly: true,
+    maxElapsedMs: 300000,
+    env: {
+      HHWX_REAL_PROFILE_SCOPE_MATRIX: "1",
+      HHWX_REAL_PROFILE_MATRIX_LOCKED_SCOPES: "0",
+      HHWX_REAL_PROFILE_DURATION_MS: "300000",
+      HHWX_REAL_PROFILE_OPTIMIZATION_JSON: "{\"debugConfigurationTrace\":true}",
+    },
+    cases: [
+      { profileLabel: "P10", eventKey: "244" },
+    ],
+  },
+  "p10-244-preskip-trace-300": {
+    description: "Diagnostic trace P10:244 at 300s with all-scope exact-join pre-skip explicitly enabled.",
+    reportKind: "focus",
+    recordOnly: true,
+    maxElapsedMs: 300000,
+    env: {
+      HHWX_REAL_PROFILE_SCOPE_MATRIX: "1",
+      HHWX_REAL_PROFILE_MATRIX_LOCKED_SCOPES: "0",
+      HHWX_REAL_PROFILE_DURATION_MS: "300000",
+      HHWX_REAL_PROFILE_OPTIMIZATION_JSON: "{\"debugConfigurationTrace\":true,\"enableAllScopeExactJoinPreSkip\":true}",
+    },
+    cases: [
+      { profileLabel: "P10", eventKey: "244" },
+    ],
+  },
+  "p10-244-staged-trace-300": {
+    description: "Trace P10:244 at 300s with experimental staged candidate extension explicitly enabled.",
+    reportKind: "focus",
+    recordOnly: true,
+    maxElapsedMs: 300000,
+    env: {
+      HHWX_REAL_PROFILE_SCOPE_MATRIX: "1",
+      HHWX_REAL_PROFILE_MATRIX_LOCKED_SCOPES: "0",
+      HHWX_REAL_PROFILE_DURATION_MS: "300000",
+      HHWX_REAL_PROFILE_OPTIMIZATION_JSON: "{\"debugConfigurationTrace\":true,\"enableExperimentalStagedCandidateExtension\":true}",
     },
     cases: [
       { profileLabel: "P10", eventKey: "244" },
@@ -460,7 +641,19 @@ function formatProfileIdentity(profile) {
   return `${profile.label ?? "?"}:${profile.cardCount ?? "?"}:${profile.profileHash ?? "?"}`;
 }
 
+function formatTopBoundedFrontierGroup(result) {
+  const group = result.boundedFrontierGroups?.[0];
+  if (!group) {
+    return "";
+  }
+  const gap = Number.isFinite(group.maxGap) ? Math.round(group.maxGap) : "";
+  return gap === "" ? group.coarseKey : `${group.coarseKey}:${gap}`;
+}
+
 function isRunnerTimeoutResult(result) {
+  if (result?.timedOut === true) {
+    return true;
+  }
   if (!result?.failed) {
     return false;
   }
@@ -606,9 +799,12 @@ function assertMatrixReport(scenarioName, scenario) {
 }
 
 function summarizeFocusRows(rows, scenario) {
-  const boundedRows = rows.filter((row) => row.baselineExact === false);
-  const exactConvertedCount = boundedRows.filter((row) => row.result.exact === true).length;
-  const boundedGapTotal = boundedRows.reduce((sum, row) => {
+  const baselineBoundedRows = rows.filter((row) => row.baselineExact === false);
+  const measuredBoundedRows = baselineBoundedRows.length > 0
+    ? baselineBoundedRows
+    : rows.filter((row) => row.result.exact !== true);
+  const exactConvertedCount = baselineBoundedRows.filter((row) => row.result.exact === true).length;
+  const boundedGapTotal = measuredBoundedRows.reduce((sum, row) => {
     if (row.result.exact) {
       return sum;
     }
@@ -616,14 +812,14 @@ function summarizeFocusRows(rows, scenario) {
     return Number.isFinite(gap) ? sum + gap : Number.POSITIVE_INFINITY;
   }, 0);
   const baselineBoundedGapTotal = scenario.baselineBoundedGapTotal
-    ?? boundedRows.reduce((sum, row) => sum + (row.baselineGap ?? 0), 0);
+    ?? baselineBoundedRows.reduce((sum, row) => sum + (row.baselineGap ?? 0), 0);
   return {
     total: rows.length,
     exactCount: rows.filter((row) => row.result.exact === true).length,
     timeoutCount: rows.filter((row) => isRunnerTimeoutResult(row.result)).length,
     failedCount: rows.filter((row) => row.result.failed === true).length,
     maxElapsedMs: rows.reduce((max, row) => Math.max(max, row.result.elapsedMs ?? 0), 0),
-    boundedBaselineCount: boundedRows.length,
+    boundedBaselineCount: baselineBoundedRows.length,
     boundedExactConvertedCount: exactConvertedCount,
     boundedBaselineGapTotal: baselineBoundedGapTotal,
     boundedGapTotal,
@@ -752,8 +948,8 @@ function toFocusMarkdown(report) {
     "",
     ...buildFocusPivotTable(report, "time"),
     ...buildFocusPivotTable(report, "memory"),
-    "| case | baseline | exact | elapsed ms | gap | abort reason | abort slot | soft limit | candidates | third fallback | extended hits | extended fallback | fallback words | guarded limit | peak MiB | status |",
-    "| --- | --- | --- | ---: | ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |",
+    "| case | baseline | exact | elapsed ms | gap | abort reason | abort slot | soft limit | candidates | third fallback | extended hits | extended fallback | fallback words | guarded limit | staged limit | staged gap | small retry | retry timebox | same-coarse mem skip | top frontier | peak MiB | status |",
+    "| --- | --- | --- | ---: | ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- | ---: | --- |",
     ...report.rows.map((row) => [
       row.caseKey,
       row.baselineExact === true
@@ -773,6 +969,12 @@ function toFocusMarkdown(report) {
       row.result.exactCandidateJoinExtendedThirdShortlistFallbackCount ?? "",
       row.result.exactCandidateJoinThirdFallbackWordScanCount ?? "",
       row.result.exactCandidateJoinLastGuardedExtensionLimit ?? "",
+      row.result.exactCandidateJoinLastStagedExtensionLimit ?? "",
+      row.result.exactCandidateJoinLastStagedExtensionPeekCutoffGap ?? "",
+      row.result.exactCandidateJoinSmallGapSolveRetryCount ?? "",
+      row.result.exactCandidateJoinSmallGapSolveRetryTimeboxCount ?? "",
+      row.result.sameCoarseMemoryRootSkipCount ?? "",
+      formatTopBoundedFrontierGroup(row.result),
       formatMiB(row.memory.peakWorkingSetBytes),
       row.result.failureReason ?? row.result.searchMode ?? "",
     ].join(" | ")).map((line) => `| ${line} |`),
