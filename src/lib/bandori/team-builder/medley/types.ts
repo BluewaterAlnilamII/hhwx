@@ -58,6 +58,7 @@ export type BandoriMedleySearchOptimizationOptions = {
   opportunityAnchorLimit?: number;
   enableTeamSharedCoefficientUpper?: boolean;
   enableExactCandidateJoin?: boolean;
+  disableExactCandidateJoin?: boolean;
   exactCandidateSoftLimit?: number;
   exactNodeSoftLimit?: number;
   memorySoftLimitMiB?: number;
@@ -67,6 +68,8 @@ export type BandoriMedleySearchOptimizationOptions = {
   configurationSeedPassDurationMs?: number;
   debugConfigurationTrace?: boolean;
   exactCandidateJoinDebugAnchorSlotIndex?: number;
+  enableExperimentalStagedCandidateExtension?: boolean;
+  enableTrailingSameCoarseDfsOnly?: boolean;
   disableDominatedRootSkip?: boolean;
   enableAllScopeExactJoinPreSkip?: boolean;
   disableAllScopeExactJoinPreSkip?: boolean;
@@ -131,6 +134,7 @@ export type MedleyExactCandidateJoinAbortReason =
   | "candidate-fill-generator-aborted"
   | "memory-soft-limit"
   | "solve-workload-limit"
+  | "small-gap-solve-timebox"
   | "solve-timeout"
   | null;
 
@@ -421,6 +425,7 @@ export type BandoriMedleyTeamSearchProfilingStats = {
   capacityAnchorSlotUpperImprovementTotal: number;
   bestCapacityAnchorSlotUpperImprovement: number;
   capacityAnchorSlotUpperElapsedMs: number;
+  sameCoarseMemoryRootSkipCount: number;
   // Witnesses explain proof gaps for benchmark review and must not feed pruning decisions.
   upperWitnessCaptureCount: number;
   upperWitnessUpperBound: number | null;
@@ -459,6 +464,22 @@ export type BandoriMedleyTeamSearchProfilingStats = {
   exactCandidateJoinLastGuardedExtensionRemainingMs: number | null;
   exactCandidateJoinLastGuardedExtensionPeakHeapMiB: number | null;
   exactCandidateJoinLastGuardedExtensionObservedUpperBound: number | null;
+  exactCandidateJoinStagedCandidateExtensionCount: number;
+  exactCandidateJoinLastStagedExtensionSlotIndex: number | null;
+  exactCandidateJoinLastStagedExtensionLimit: number | null;
+  exactCandidateJoinLastStagedExtensionPeekCutoffGap: number | null;
+  exactCandidateJoinLastStagedExtensionCandidateCountsBySlot: number[];
+  exactCandidateJoinLastStagedExtensionOtherSlotCandidateCounts: number[];
+  exactCandidateJoinLastStagedExtensionRemainingMs: number | null;
+  exactCandidateJoinLastStagedExtensionPeakHeapMiB: number | null;
+  exactCandidateJoinSmallGapSolveRetryCount: number;
+  exactCandidateJoinSmallGapSolveRetryTimeboxCount: number;
+  exactCandidateJoinLastSmallGapSolveRetryCandidateLimit: number | null;
+  exactCandidateJoinLastSmallGapSolveRetryCandidateCountsBySlot: number[];
+  exactCandidateJoinLastSmallGapSolveRetryUpperGap: number | null;
+  exactCandidateJoinLastSmallGapSolveRetryRemainingMs: number | null;
+  exactCandidateJoinLastSmallGapSolveRetryTimeboxMs: number | null;
+  exactCandidateJoinLastSmallGapSolveRetryPeakHeapMiB: number | null;
   exactCandidateJoinInitialCandidateElapsedMs: number;
   exactCandidateJoinInitialCandidateElapsedMsBySlot: number[];
   exactCandidateJoinPairUpperElapsedMs: number;
@@ -514,6 +535,7 @@ export type BandoriMedleyTeamSearchProfilingStats = {
   conflictExactBnbBestUpper: number | null;
   conflictExactBnbBestGap: number | null;
   conflictExactBnbMaxDepth: number;
+  boundedFrontierGroups: Array<Record<string, unknown>> | null;
 };
 
 export type BandoriMedleyTeamSearchStats = {
@@ -614,6 +636,7 @@ export type MedleyExactCandidateJoinResult = {
 
 export type MedleyExactCandidateJoinSolveResult = {
   timedOut: boolean;
+  localTimedOut?: boolean;
   result: BandoriMedleyTeamSearchResult | null;
 };
 

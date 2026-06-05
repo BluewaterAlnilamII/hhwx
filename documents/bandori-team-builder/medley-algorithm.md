@@ -330,6 +330,60 @@ not a global default increase. If the extension still cannot close the
 configuration, the result remains bounded and the trace records the extension
 limit, remaining budget, and observed memory.
 
+A stricter staged extension path exists for frontier-tight single-slot cases. It
+can raise the current configuration to `800000` candidates only when the current
+slot has already reached `600000`, the other two slots are narrow, the
+peek-versus-cutoff gap is small, and at least `270000ms` remains. The 2026-06-04
+`P10:244` trial showed why this must stay conservative: extending the first
+`HelloHappyWorld/happy` sibling closed that configuration, but exposed another
+nearby sibling and increased elapsed time and working set without materially
+reducing the global bounded gap.
+
+The staged extension path is diagnostic/experimental only. Default
+`focus-6-300` and full-matrix runs keep it disabled through
+`enableExperimentalStagedCandidateExtension !== true`; they use only the guarded
+`400000` to `600000` extension. The benchmark harness keeps
+`p10-244-staged-trace-300` for explicit reproduction.
+
+Small-gap solve retry is also local. It can raise the solve workload cap from a
+`100000` smallest candidate list to `200000`, with a `35000ms` per-configuration
+timebox and at most three retries per run, only for `solve-workload-limit`
+frontiers with gap `<= 100000`, `<= 1300` calculated cards, enough remaining
+budget, no memory guard, and no unresolved same-coarse sibling above the
+incumbent. The same-coarse guard was added after `P04:260` showed that proving
+one `Everyone/happy` parameter early could consume enough budget for another
+parameter to take over the final bounded gap with a looser near-deadline upper.
+
+Small-gap DFS fallback is the current default closure path for the hard
+all-scope cases that are too wide for another exact-join solve but still have a
+small finite proof gap. For all-scope high-card exact joins with at most `1600`
+calculated cards, the solver enables the local upper helpers
+`enableAnchorSlotUpper`, `enableOpportunityCostUpper`, and
+`enableTeamSharedCoefficientUpper`. If exact candidate join leaves a finite
+upper gap `<= 100000` and at least `45000ms` remains, the first two same-coarse
+sibling configurations may continue into DFS after the unproved join instead of
+stopping at `exact-unproved-skip-dfs`. Once two siblings in the same
+`(band, attribute)` group are proven by DFS after an unproved exact join, a
+trailing sibling can skip exact candidate join and go directly to DFS if at
+least `30000ms` remains. This is still exact-safe: DFS must prove the
+configuration, otherwise the result remains bounded or times out. Trace rows
+record `smallGapDfsFallbackAfterUnprovedExactJoin`,
+`smallGapDfsFallbackObservedUpperGap`, `smallGapDfsFallbackRemainingMs`,
+`trailingSameCoarseDfsOnly`, `sameCoarseClosedSiblingCount`, and
+`sameCoarseDfsAfterUnprovedProofCount`.
+
+Candidate-fill bounded same-coarse groups use a conservative root-tightening
+skip instead of spending the same proof budget on sibling exact joins after the
+first unclosed sibling makes the current run bounded. For profiles up to `1300`
+calculated cards, a candidate-fill abort can trigger a post-exact root upper
+check; subsequent siblings in the same `(band, attribute)` group reuse the same
+root-level capacity proof path and are recorded as
+`bounded-same-coarse-tight-root-skip`. For larger profiles, remembered unclosed
+same-coarse siblings also allow the existing memory-root skip to trigger without
+depending on process memory sampling crossing a fragile threshold. These paths
+only lower remembered upper bounds or leave the configuration bounded; they do
+not convert an unproved configuration to exact.
+
 `optimization.memorySoftLimitMiB` is a best-effort runtime guard. In browser
 workers the solver samples `performance.memory.usedJSHeapSize` every 50ms and
 uses the lower of the configured MiB limit and 65% of the browser-reported JS
@@ -390,6 +444,11 @@ trace statuses are:
 - `bounded-dominated-root-skip`: a previous unresolved configuration already
   has an upper bound at least as high as the current root upper, so proving the
   current configuration would not close the global bounded gap;
+- `bounded-same-coarse-memory-root-skip`: a high-card all-scope run already has
+  an unresolved sibling in the same `(band, attribute)` group whose root upper
+  dominates the current sibling while sampled memory is near the soft limit. The
+  solver records a tight root upper for the current sibling and keeps the result
+  bounded instead of spending more memory on another exact join;
 - `bounded-near-deadline-root-skip`: a same-coarse proof-time forecast shows
   that another exact join would likely consume the remaining budget, so the root
   upper is recorded and the response stays bounded rather than timing out.
@@ -597,11 +656,12 @@ The 2026-06-02 event matrix remains the baseline comparison:
 It proved `36/40` all-scope cases exact with no timeouts under the 300s limit.
 
 The latest post-recovery 40-case evidence is
-`temp/bandori-team-builder/focus-medley-cases-2026-06-04T14-14-48-198Z.json`.
-It proved `37/40` exact, had no failed or timeout rows, reduced bounded gap total
-from `1534986` to `1012798`, recorded P95 `219289ms`, max `293227ms`, and sampled
-peak working set `4201.2 MiB`. The peak row was `P02:260`; process working set is
-a diagnostic sample, not a hard in-engine memory cap.
+`temp/bandori-team-builder/focus-medley-cases-2026-06-04T23-49-44-396Z.json`.
+It proved `38/40` exact, had no failed or timeout rows, reduced bounded gap total
+from `1534986` to `798416`, recorded P95 `213990ms`, max `292425ms`, and sampled
+peak working set `3935.8 MiB`. The remaining bounded rows are `P02:260` and
+`P10:244`; process working set is a diagnostic sample, not a hard in-engine
+memory cap.
 
 Passing this gate means:
 
@@ -651,17 +711,27 @@ user-facing labels.
   profiles, so frontend integration needs cancellation and clear status display.
 - Some all-scope event/profile combinations still return bounded within the
   300s budget when multiple configuration uppers remain close to the incumbent.
-- As of the 2026-06-04 post-recovery matrix, the remaining bounded rows are:
-  - `P02:260`: pair-upper bounded, gap `416575`, and the highest sampled working
-    set at about `4201.2 MiB`.
-  - `P04:260`: small-gap bounded, gap `41696`, with elapsed `293227ms`.
+- As of the 2026-06-04T23-49 full matrix, the remaining bounded rows are
+  `P02:260` and `P10:244`; `P04:260` is now exact in the default path.
+  - `P02:260`: the same-coarse memory-root skip keeps the case bounded while
+    reducing memory pressure. In the latest full matrix it remains
+    candidate-fill bounded with gap `382812`, slot `0`, soft limit `400000`,
+    candidate counts `[400000, 212825, 134977]`, elapsed `48618ms`, and peak
+    working set about `3100.0 MiB`.
   - `P10:244`: candidate-fill soft-limit bounded even after guarded extension to
-    `600000`, gap `554527`.
+    `600000`. The latest full matrix gap is `415604`, slot `0`, candidate
+    counts `[600000, 46599, 29117]`, elapsed `45469ms`, and peak working set
+    about `3100.1 MiB`. Same-coarse root tightening reduced this row's gap
+    without making the run exact.
+- `P04:260` is closed by small-gap DFS fallback but remains near the 300s review
+  budget: the latest full matrix proved it exact in `292425ms` and it was the
+  matrix peak working-set row at about `3935.8 MiB`. Keep it in `focus-6-300` so
+  the same-coarse fallback cannot silently regress.
 - `P08:260`, `P08:323`, and `P10:260` are no longer current regressions in the
   fixed matrix. Keep them in `focus-6-300` so third-shortlist and guarded-fill
   changes cannot silently regress.
 - The largest remaining proof opportunity is tighter pair/frontier upper closure
-  for `P02:260`, a cheaper small-gap proof sprint for `P04:260`, and a more
-  selective candidate-fill strategy for `P10:244`.
+  for `P02:260` and a more selective same-coarse sibling strategy for
+  `P10:244`.
 - `medley-algorithm-notes.md` still contains historical experiments and should
   be treated as maintenance context, not the canonical contract.

@@ -39,6 +39,15 @@ import {
   MEDLEY_EXACT_CANDIDATE_JOIN_PARETO_REMAINING_MAX_SLOT_CARDS,
   MEDLEY_EXACT_CANDIDATE_JOIN_SOLVE_CACHE_ENTRY_LIMIT,
   MEDLEY_EXACT_CANDIDATE_JOIN_SOLVE_MAX_SMALLEST_CANDIDATES,
+  MEDLEY_EXACT_CANDIDATE_JOIN_SMALL_GAP_SOLVE_RETRY_MAX_CARD_COUNT,
+  MEDLEY_EXACT_CANDIDATE_JOIN_SMALL_GAP_SOLVE_RETRY_MAX_SMALLEST_CANDIDATES,
+  MEDLEY_EXACT_CANDIDATE_JOIN_SMALL_GAP_SOLVE_RETRY_MAX_UPPER_GAP,
+  MEDLEY_EXACT_CANDIDATE_JOIN_SMALL_GAP_SOLVE_RETRY_MIN_REMAINING_MS,
+  MEDLEY_EXACT_CANDIDATE_JOIN_SMALL_GAP_SOLVE_RETRY_TIMEBOX_MS,
+  MEDLEY_EXACT_CANDIDATE_JOIN_STAGED_CANDIDATE_SOFT_LIMITS,
+  MEDLEY_EXACT_CANDIDATE_JOIN_STAGED_EXTENSION_MIN_REMAINING_MS,
+  MEDLEY_EXACT_CANDIDATE_JOIN_STAGED_EXTENSION_MAX_OTHER_SLOT_CANDIDATES,
+  MEDLEY_EXACT_CANDIDATE_JOIN_STAGED_EXTENSION_MAX_PEEK_CUTOFF_GAP,
   MEDLEY_EXACT_CANDIDATE_JOIN_THIRD_SHORTLIST_SIZE,
 } from "./exact-candidate-join-constants";
 import {
@@ -1180,6 +1189,7 @@ export function solveMedleyExactCandidateJoin(
   stats: BandoriMedleyTeamSearchStats,
   isPastDeadline: () => boolean,
   deadlineAt: number,
+  localDeadlineAt: number | null = null,
 ): MedleyExactCandidateJoinSolveResult {
   // The final join is exact only over candidate lists whose unseen frontier was already
   // bounded. Bitsets accelerate card-disjoint checks but never approximate the conflict rule.
@@ -1692,12 +1702,17 @@ export function solveMedleyExactCandidateJoin(
         const firstSecondScore = firstScore + secondScore;
         localPairCount += 1;
         if (localPairCount >= nextDeadlineCheckPairCount) {
-          if (stats.timedOut || performance.now() >= deadlineAt || isPastDeadline()) {
-            stats.isExhaustive = false;
-            stats.timedOut = true;
-            stats.searchMode = "bounded";
+          const now = performance.now();
+          const hitLocalDeadline = localDeadlineAt !== null && now >= localDeadlineAt;
+          const hitGlobalDeadline = stats.timedOut || now >= deadlineAt || isPastDeadline();
+          if (hitLocalDeadline || hitGlobalDeadline) {
+            if (hitGlobalDeadline) {
+              stats.isExhaustive = false;
+              stats.timedOut = true;
+              stats.searchMode = "bounded";
+            }
             flushSolveProfilingCounters();
-            return { timedOut: true, result: bestResult };
+            return { timedOut: true, localTimedOut: hitLocalDeadline && !hitGlobalDeadline, result: bestResult };
           }
           nextDeadlineCheckPairCount += 4096;
         }
@@ -2182,6 +2197,8 @@ export function searchMedleyConfigurationByExactCandidateJoin(
   nodeSoftLimit: number,
   context: {
     calculatedCardCount?: number;
+    enableExperimentalStagedCandidateExtension?: boolean;
+    enableSmallGapSolveRetry?: boolean;
   } = {},
 ): MedleyExactCandidateJoinResult {
   // This wrapper proves one area-item configuration. The caller remains responsible for
@@ -2206,6 +2223,19 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     profiling.exactCandidateJoinLastGuardedExtensionRemainingMs = null;
     profiling.exactCandidateJoinLastGuardedExtensionPeakHeapMiB = null;
     profiling.exactCandidateJoinLastGuardedExtensionObservedUpperBound = null;
+    profiling.exactCandidateJoinLastStagedExtensionSlotIndex = null;
+    profiling.exactCandidateJoinLastStagedExtensionLimit = null;
+    profiling.exactCandidateJoinLastStagedExtensionPeekCutoffGap = null;
+    profiling.exactCandidateJoinLastStagedExtensionCandidateCountsBySlot = [];
+    profiling.exactCandidateJoinLastStagedExtensionOtherSlotCandidateCounts = [];
+    profiling.exactCandidateJoinLastStagedExtensionRemainingMs = null;
+    profiling.exactCandidateJoinLastStagedExtensionPeakHeapMiB = null;
+    profiling.exactCandidateJoinLastSmallGapSolveRetryCandidateLimit = null;
+    profiling.exactCandidateJoinLastSmallGapSolveRetryCandidateCountsBySlot = [];
+    profiling.exactCandidateJoinLastSmallGapSolveRetryUpperGap = null;
+    profiling.exactCandidateJoinLastSmallGapSolveRetryRemainingMs = null;
+    profiling.exactCandidateJoinLastSmallGapSolveRetryTimeboxMs = null;
+    profiling.exactCandidateJoinLastSmallGapSolveRetryPeakHeapMiB = null;
   };
   const recordAbortDiagnostics = (
     reason: Exclude<MedleyExactCandidateJoinAbortReason, null>,
@@ -2304,36 +2334,121 @@ export function searchMedleyConfigurationByExactCandidateJoin(
   });
   let effectiveCandidateSoftLimit = candidateSoftLimit;
   let didGuardedCandidateExtension = false;
+  let stagedCandidateExtensionSlotIndex: number | null = null;
   const calculatedCardCount = context.calculatedCardCount ?? Number.POSITIVE_INFINITY;
-  const maybeExtendCandidateSoftLimit = (slotIndex: number): boolean => {
+  const enableExperimentalStagedCandidateExtension = context.enableExperimentalStagedCandidateExtension === true;
+  const getGuardedExtensionRemainingMs = (): number => (
+    Number.isFinite(deadlineAt) ? deadlineAt - performance.now() : Number.POSITIVE_INFINITY
+  );
+  const canUseCandidateSoftLimitExtension = (remainingMs: number): boolean => (
+    candidateSoftLimit === MEDLEY_EXACT_CANDIDATE_JOIN_GUARDED_EXTENSION_BASE_SOFT_LIMIT
+    && calculatedCardCount <= MEDLEY_EXACT_CANDIDATE_JOIN_GUARDED_EXTENSION_MAX_CARD_COUNT
+    && !stats.memoryLimited
+    && remainingMs >= MEDLEY_EXACT_CANDIDATE_JOIN_GUARDED_EXTENSION_MIN_REMAINING_MS
+  );
+  const shouldContinueUnprovedExactJoin = (): boolean => {
+    const observedUpperBound = getObservedExactCandidateJoinUpperBound();
+    return observedUpperBound === null || observedUpperBound > incumbentScore;
+  };
+  const recordStagedCandidateExtension = (
+    slotIndex: number,
+    limit: number,
+    peekCutoffGap: number,
+    remainingMs: number,
+  ): void => {
+    const candidateCountsBySlot = candidatesBySlot.map((candidates) => candidates.length);
+    profiling.exactCandidateJoinStagedCandidateExtensionCount += 1;
+    profiling.exactCandidateJoinLastStagedExtensionSlotIndex = slotIndex;
+    profiling.exactCandidateJoinLastStagedExtensionLimit = limit;
+    profiling.exactCandidateJoinLastStagedExtensionPeekCutoffGap = Number.isFinite(peekCutoffGap)
+      ? Math.max(0, Math.round(peekCutoffGap))
+      : null;
+    profiling.exactCandidateJoinLastStagedExtensionCandidateCountsBySlot = candidateCountsBySlot;
+    profiling.exactCandidateJoinLastStagedExtensionOtherSlotCandidateCounts = candidateCountsBySlot.filter(
+      (_, index) => index !== slotIndex,
+    );
+    profiling.exactCandidateJoinLastStagedExtensionRemainingMs = Number.isFinite(remainingMs)
+      ? Math.max(0, Math.round(remainingMs))
+      : null;
+    profiling.exactCandidateJoinLastStagedExtensionPeakHeapMiB = stats.peakUsedHeapMiB;
+  };
+  const maybeExtendCandidateSoftLimit = (
+    slotIndex: number,
+    cutoff: number,
+    peekUpperBound: number,
+  ): boolean => {
+    const remainingMs = getGuardedExtensionRemainingMs();
     if (
-      didGuardedCandidateExtension
-      || effectiveCandidateSoftLimit >= MEDLEY_EXACT_CANDIDATE_JOIN_GUARDED_CANDIDATE_SOFT_LIMIT
-      || candidateSoftLimit !== MEDLEY_EXACT_CANDIDATE_JOIN_GUARDED_EXTENSION_BASE_SOFT_LIMIT
-      || candidateSoftLimit >= MEDLEY_EXACT_CANDIDATE_JOIN_GUARDED_CANDIDATE_SOFT_LIMIT
-      || calculatedCardCount > MEDLEY_EXACT_CANDIDATE_JOIN_GUARDED_EXTENSION_MAX_CARD_COUNT
-      || stats.memoryLimited
+      !didGuardedCandidateExtension
+      && effectiveCandidateSoftLimit < MEDLEY_EXACT_CANDIDATE_JOIN_GUARDED_CANDIDATE_SOFT_LIMIT
+    ) {
+      if (
+        candidateSoftLimit >= MEDLEY_EXACT_CANDIDATE_JOIN_GUARDED_CANDIDATE_SOFT_LIMIT
+        || !canUseCandidateSoftLimitExtension(remainingMs)
+        || !shouldContinueUnprovedExactJoin()
+      ) {
+        return false;
+      }
+      didGuardedCandidateExtension = true;
+      effectiveCandidateSoftLimit = MEDLEY_EXACT_CANDIDATE_JOIN_GUARDED_CANDIDATE_SOFT_LIMIT;
+      profiling.exactCandidateJoinGuardedCandidateExtensionCount += 1;
+      profiling.exactCandidateJoinLastGuardedExtensionSlotIndex = slotIndex;
+      profiling.exactCandidateJoinLastGuardedExtensionLimit = effectiveCandidateSoftLimit;
+      profiling.exactCandidateJoinLastGuardedExtensionRemainingMs = Number.isFinite(remainingMs)
+        ? Math.max(0, Math.round(remainingMs))
+        : null;
+      profiling.exactCandidateJoinLastGuardedExtensionPeakHeapMiB = stats.peakUsedHeapMiB;
+      profiling.exactCandidateJoinLastGuardedExtensionObservedUpperBound = getObservedExactCandidateJoinUpperBound();
+      return true;
+    }
+
+    if (!enableExperimentalStagedCandidateExtension) {
+      return false;
+    }
+    const nextStagedLimit = MEDLEY_EXACT_CANDIDATE_JOIN_STAGED_CANDIDATE_SOFT_LIMITS.find(
+      (limit) => limit > effectiveCandidateSoftLimit,
+    );
+    if (nextStagedLimit === undefined) {
+      return false;
+    }
+    if (
+      !didGuardedCandidateExtension
+      || profiling.exactCandidateJoinLastGuardedExtensionSlotIndex !== slotIndex
+      || !canUseCandidateSoftLimitExtension(remainingMs)
+      || remainingMs < MEDLEY_EXACT_CANDIDATE_JOIN_STAGED_EXTENSION_MIN_REMAINING_MS
+      || !shouldContinueUnprovedExactJoin()
     ) {
       return false;
     }
-    const remainingMs = Number.isFinite(deadlineAt) ? deadlineAt - performance.now() : Number.POSITIVE_INFINITY;
-    if (remainingMs < MEDLEY_EXACT_CANDIDATE_JOIN_GUARDED_EXTENSION_MIN_REMAINING_MS) {
+    if (
+      stagedCandidateExtensionSlotIndex !== null
+      && stagedCandidateExtensionSlotIndex !== slotIndex
+    ) {
       return false;
     }
-    const observedUpperBound = getObservedExactCandidateJoinUpperBound();
-    if (observedUpperBound !== null && observedUpperBound <= incumbentScore) {
+    const otherSlotCandidateCounts = candidatesBySlot
+      .map((candidates, index) => (index === slotIndex ? 0 : candidates.length))
+      .filter((count) => count > 0);
+    if (
+      otherSlotCandidateCounts.length !== slots.length - 1
+      || otherSlotCandidateCounts.some(
+        (count) => count > MEDLEY_EXACT_CANDIDATE_JOIN_STAGED_EXTENSION_MAX_OTHER_SLOT_CANDIDATES,
+      )
+    ) {
       return false;
     }
-    didGuardedCandidateExtension = true;
-    effectiveCandidateSoftLimit = MEDLEY_EXACT_CANDIDATE_JOIN_GUARDED_CANDIDATE_SOFT_LIMIT;
-    profiling.exactCandidateJoinGuardedCandidateExtensionCount += 1;
-    profiling.exactCandidateJoinLastGuardedExtensionSlotIndex = slotIndex;
-    profiling.exactCandidateJoinLastGuardedExtensionLimit = effectiveCandidateSoftLimit;
-    profiling.exactCandidateJoinLastGuardedExtensionRemainingMs = Number.isFinite(remainingMs)
-      ? Math.max(0, Math.round(remainingMs))
-      : null;
-    profiling.exactCandidateJoinLastGuardedExtensionPeakHeapMiB = stats.peakUsedHeapMiB;
-    profiling.exactCandidateJoinLastGuardedExtensionObservedUpperBound = observedUpperBound;
+    const peekCutoffGap = peekUpperBound - cutoff;
+    if (
+      !Number.isFinite(peekCutoffGap)
+      || peekCutoffGap < 0
+      || peekCutoffGap > MEDLEY_EXACT_CANDIDATE_JOIN_STAGED_EXTENSION_MAX_PEEK_CUTOFF_GAP
+    ) {
+      return false;
+    }
+
+    stagedCandidateExtensionSlotIndex = slotIndex;
+    effectiveCandidateSoftLimit = nextStagedLimit;
+    recordStagedCandidateExtension(slotIndex, effectiveCandidateSoftLimit, peekCutoffGap, remainingMs);
     return true;
   };
 
@@ -2789,7 +2904,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
         return buildUnprovedExactCandidateJoinResult();
       }
       if (candidatesBySlot[slotIndex].length >= effectiveCandidateSoftLimit) {
-        if (maybeExtendCandidateSoftLimit(slotIndex)) {
+        if (maybeExtendCandidateSoftLimit(slotIndex, cutoff, generator.peekUpperBound())) {
           continue;
         }
         profiling.exactCandidateJoinCandidateFillElapsedMs += performance.now() - candidateFillStartedAt;
@@ -2892,13 +3007,59 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     sum + generator.poppedNodeCount()
   ), 0);
   const solveCandidateCounts = candidatesBySlot.map((candidates) => candidates.length).sort((left, right) => left - right);
-  if (solveCandidateCounts[0] > MEDLEY_EXACT_CANDIDATE_JOIN_SOLVE_MAX_SMALLEST_CANDIDATES) {
+  const observedUpperBoundBeforeSolve = getObservedExactCandidateJoinUpperBound();
+  const solveUpperGap = observedUpperBoundBeforeSolve !== null
+    ? observedUpperBoundBeforeSolve - incumbentScore
+    : null;
+  const remainingBeforeSolveMs = Number.isFinite(deadlineAt)
+    ? deadlineAt - performance.now()
+    : Number.POSITIVE_INFINITY;
+  const canUseSmallGapSolveRetry = (
+    solveCandidateCounts[0] > MEDLEY_EXACT_CANDIDATE_JOIN_SOLVE_MAX_SMALLEST_CANDIDATES
+    && context.enableSmallGapSolveRetry === true
+    && calculatedCardCount <= MEDLEY_EXACT_CANDIDATE_JOIN_SMALL_GAP_SOLVE_RETRY_MAX_CARD_COUNT
+    && !stats.memoryLimited
+    && remainingBeforeSolveMs >= MEDLEY_EXACT_CANDIDATE_JOIN_SMALL_GAP_SOLVE_RETRY_MIN_REMAINING_MS
+    && solveUpperGap !== null
+    && Number.isFinite(solveUpperGap)
+    && solveUpperGap >= 0
+    && solveUpperGap <= MEDLEY_EXACT_CANDIDATE_JOIN_SMALL_GAP_SOLVE_RETRY_MAX_UPPER_GAP
+    && solveCandidateCounts[0] <= MEDLEY_EXACT_CANDIDATE_JOIN_SMALL_GAP_SOLVE_RETRY_MAX_SMALLEST_CANDIDATES
+  );
+  if (
+    solveCandidateCounts[0] > MEDLEY_EXACT_CANDIDATE_JOIN_SOLVE_MAX_SMALLEST_CANDIDATES
+    && !canUseSmallGapSolveRetry
+  ) {
     profiling.exactCandidateJoinAbortCount += 1;
     recordAbortDiagnostics("solve-workload-limit", {
       candidateCount: solveCandidateCounts[2] ?? solveCandidateCounts[0],
-      observedUpperBound: getObservedExactCandidateJoinUpperBound(),
+      observedUpperBound: observedUpperBoundBeforeSolve,
     });
     return buildUnprovedExactCandidateJoinResult();
+  }
+  let solveDeadlineAt = deadlineAt;
+  let didUseSmallGapSolveRetry = false;
+  if (canUseSmallGapSolveRetry) {
+    didUseSmallGapSolveRetry = true;
+    solveDeadlineAt = Math.min(
+      deadlineAt,
+      performance.now() + MEDLEY_EXACT_CANDIDATE_JOIN_SMALL_GAP_SOLVE_RETRY_TIMEBOX_MS,
+    );
+    profiling.exactCandidateJoinSmallGapSolveRetryCount += 1;
+    profiling.exactCandidateJoinLastSmallGapSolveRetryCandidateLimit = (
+      MEDLEY_EXACT_CANDIDATE_JOIN_SMALL_GAP_SOLVE_RETRY_MAX_SMALLEST_CANDIDATES
+    );
+    profiling.exactCandidateJoinLastSmallGapSolveRetryCandidateCountsBySlot = [...solveCandidateCounts];
+    profiling.exactCandidateJoinLastSmallGapSolveRetryUpperGap = solveUpperGap !== null
+      ? Math.max(0, Math.round(solveUpperGap))
+      : null;
+    profiling.exactCandidateJoinLastSmallGapSolveRetryRemainingMs = Number.isFinite(remainingBeforeSolveMs)
+      ? Math.max(0, Math.round(remainingBeforeSolveMs))
+      : null;
+    profiling.exactCandidateJoinLastSmallGapSolveRetryTimeboxMs = (
+      MEDLEY_EXACT_CANDIDATE_JOIN_SMALL_GAP_SOLVE_RETRY_TIMEBOX_MS
+    );
+    profiling.exactCandidateJoinLastSmallGapSolveRetryPeakHeapMiB = stats.peakUsedHeapMiB;
   }
   const solveStartedAt = performance.now();
   const joinResult = solveMedleyExactCandidateJoin(
@@ -2912,11 +3073,15 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     stats,
     isPastDeadline,
     deadlineAt,
+    didUseSmallGapSolveRetry ? solveDeadlineAt : null,
   );
   profiling.exactCandidateJoinSolveElapsedMs += performance.now() - solveStartedAt;
   if (joinResult.timedOut) {
     profiling.exactCandidateJoinAbortCount += 1;
-    recordAbortDiagnostics("solve-timeout", {
+    if (joinResult.localTimedOut) {
+      profiling.exactCandidateJoinSmallGapSolveRetryTimeboxCount += 1;
+    }
+    recordAbortDiagnostics(joinResult.localTimedOut ? "small-gap-solve-timebox" : "solve-timeout", {
       candidateCount: candidatesBySlot.reduce((max, candidates) => Math.max(max, candidates.length), 0),
       observedUpperBound: getObservedExactCandidateJoinUpperBound(),
     });
