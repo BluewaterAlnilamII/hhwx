@@ -57,6 +57,7 @@ export type BandoriMedleySearchOptimizationOptions = {
   enableOpportunityCostUpper?: boolean;
   opportunityAnchorLimit?: number;
   enableTeamSharedCoefficientUpper?: boolean;
+  enableSharedPowerSkillUpper?: boolean;
   enableExactCandidateJoin?: boolean;
   disableExactCandidateJoin?: boolean;
   exactCandidateSoftLimit?: number;
@@ -71,6 +72,7 @@ export type BandoriMedleySearchOptimizationOptions = {
   enableExperimentalStagedCandidateExtension?: boolean;
   enableTrailingSameCoarseDfsOnly?: boolean;
   disableDominatedRootSkip?: boolean;
+  disableSameCoarseTightRootSkip?: boolean;
   enableAllScopeExactJoinPreSkip?: boolean;
   disableAllScopeExactJoinPreSkip?: boolean;
   disableNearDeadlineRootSkip?: boolean;
@@ -133,6 +135,7 @@ export type MedleyExactCandidateJoinAbortReason =
   | "candidate-fill-soft-limit"
   | "candidate-fill-generator-aborted"
   | "memory-soft-limit"
+  | "solve-dominated-same-coarse-frontier"
   | "solve-workload-limit"
   | "small-gap-solve-timebox"
   | "solve-timeout"
@@ -159,6 +162,7 @@ export type MedleyCapacityUpperMode =
   | "team-shared-coefficient"
   | "card-specific-lagrangian"
   | "card-min-coefficient"
+  | "card-bound-shared-power-skill"
   | "anchor-slot-decomposition"
   | "pareto"
   | "pareto-relaxed-pair";
@@ -391,6 +395,15 @@ export type BandoriMedleyTeamSearchProfilingStats = {
   capacityCardBoundUpperImprovementCount: number;
   capacityCardBoundUpperImprovementTotal: number;
   bestCapacityCardBoundUpperImprovement: number;
+  capacityCardBoundSharedPowerUpperCallCount: number;
+  capacityCardBoundSharedPowerUpperCompletedCount: number;
+  capacityCardBoundSharedPowerUpperAbortCount: number;
+  capacityCardBoundSharedPowerUpperStateCount: number;
+  capacityCardBoundSharedPowerUpperMaxStateCount: number;
+  capacityCardBoundSharedPowerUpperBucketSize: number | null;
+  capacityCardBoundSharedPowerUpperImprovementCount: number;
+  capacityCardBoundSharedPowerUpperImprovementTotal: number;
+  bestCapacityCardBoundSharedPowerUpperImprovement: number;
   capacityCardBoundDualUpperCallCount: number;
   capacityCardBoundDualUpperCompletedCount: number;
   capacityCardBoundDualUpperAbortCount: number;
@@ -464,6 +477,50 @@ export type BandoriMedleyTeamSearchProfilingStats = {
   exactCandidateJoinLastGuardedExtensionRemainingMs: number | null;
   exactCandidateJoinLastGuardedExtensionPeakHeapMiB: number | null;
   exactCandidateJoinLastGuardedExtensionObservedUpperBound: number | null;
+  exactCandidateJoinAnchorFrontierProofTriggerCount: number;
+  exactCandidateJoinAnchorFrontierProofCompletedCount: number;
+  exactCandidateJoinAnchorFrontierProofTimeboxCount: number;
+  exactCandidateJoinAnchorFrontierProofSkipCount: number;
+  exactCandidateJoinLastAnchorFrontierProofSkipReason: string | null;
+  exactCandidateJoinLastAnchorFrontierProofHighPairRecordUpperCount: number | null;
+  exactCandidateJoinAnchorFrontierCheapUpperCount: number;
+  exactCandidateJoinAnchorFrontierCheapUpperImprovementCount: number;
+  exactCandidateJoinAnchorFrontierCheapUpperTimeboxCount: number;
+  exactCandidateJoinLastAnchorFrontierCheapUpperSlotIndex: number | null;
+  exactCandidateJoinLastAnchorFrontierCheapUpperProcessedAnchorCount: number | null;
+  exactCandidateJoinLastAnchorFrontierCheapUpperResidualUpperBound: number | null;
+  exactCandidateJoinLastAnchorFrontierCheapUpperResidualGap: number | null;
+  exactCandidateJoinLastAnchorFrontierCheapUpperElapsedMs: number | null;
+  exactCandidateJoinLastAnchorFrontierCheapUpperTimeboxMs: number | null;
+  exactCandidateJoinLastAnchorFrontierCheapUpperOtherSlotCandidateCounts: number[];
+  exactCandidateJoinLastAnchorFrontierCheapUpperPeakHeapMiB: number | null;
+  exactCandidateJoinLastAnchorFrontierCheapUpperMaxSource: string | null;
+  exactCandidateJoinLastAnchorFrontierCheapUpperMaxAnchorScore: number | null;
+  exactCandidateJoinLastAnchorFrontierCheapUpperMaxPairUpper: number | null;
+  exactCandidateJoinLastAnchorFrontierCheapUpperMaxGeneratedPairUpper: number | null;
+  exactCandidateJoinLastAnchorFrontierCheapUpperMaxLeftUnseenUpper: number | null;
+  exactCandidateJoinLastAnchorFrontierCheapUpperMaxRightUnseenUpper: number | null;
+  exactCandidateJoinLastAnchorFrontierCheapUpperMaxGeneratedPairOverlaps: boolean | null;
+  exactCandidateJoinLastAnchorFrontierCheapUpperMaxGeneratedPairScoreOnly: number | null;
+  exactCandidateJoinLastAnchorFrontierCheapUpperMaxGeneratedPairFullScore: number | null;
+  exactCandidateJoinLastAnchorFrontierCheapUpperMaxGeneratedPairScoreSlack: number | null;
+  exactCandidateJoinLastAnchorFrontierCheapUpperSplitAttemptCount: number | null;
+  exactCandidateJoinLastAnchorFrontierCheapUpperSplitStateCount: number | null;
+  exactCandidateJoinLastAnchorFrontierCheapUpperSplitAbortReason: string | null;
+  exactCandidateJoinAnchorFrontierImprovementProbeCount: number;
+  exactCandidateJoinAnchorFrontierImprovementProbeHitCount: number;
+  exactCandidateJoinAnchorFrontierImprovementProbeTimeboxCount: number;
+  exactCandidateJoinLastAnchorFrontierImprovementProbeProcessedAnchorCount: number | null;
+  exactCandidateJoinLastAnchorFrontierImprovementProbeElapsedMs: number | null;
+  exactCandidateJoinLastAnchorFrontierImprovementProbeScore: number | null;
+  exactCandidateJoinLastAnchorFrontierProofSlotIndex: number | null;
+  exactCandidateJoinLastAnchorFrontierProofProcessedAnchorCount: number | null;
+  exactCandidateJoinLastAnchorFrontierProofResidualUpperBound: number | null;
+  exactCandidateJoinLastAnchorFrontierProofResidualGap: number | null;
+  exactCandidateJoinLastAnchorFrontierProofElapsedMs: number | null;
+  exactCandidateJoinLastAnchorFrontierProofTimeboxMs: number | null;
+  exactCandidateJoinLastAnchorFrontierProofOtherSlotCandidateCounts: number[];
+  exactCandidateJoinLastAnchorFrontierProofPeakHeapMiB: number | null;
   exactCandidateJoinStagedCandidateExtensionCount: number;
   exactCandidateJoinLastStagedExtensionSlotIndex: number | null;
   exactCandidateJoinLastStagedExtensionLimit: number | null;

@@ -32,6 +32,7 @@ import {
   estimateMedleyCapacityCardBoundBucketedJointScoreUpperBound,
   estimateMedleyCapacityCardBoundDualObjectiveScoreUpperBound,
   estimateMedleyCapacityCardBoundLagrangianScoreUpperBound,
+  estimateMedleyCapacityCardBoundSharedPowerSkillScoreUpperBound,
   estimateMedleyCapacityCardBoundSkillAwareScoreUpperBound,
   estimateMedleyCapacityCardSpecificCoefficientScoreUpperBound,
   estimateMedleyCapacityCardSpecificLagrangianScoreUpperBound,
@@ -822,6 +823,7 @@ export function estimateMedleyCapacityAssignmentScoreUpperBound(
   useParetoUpper = false,
   useBucketedUpper = false,
   enableTeamSharedCoefficientUpper = false,
+  enableSharedPowerSkillUpper = false,
   useBasicSkillAwareOnly = false,
 ): MedleyCapacityAssignmentScoreUpperBound {
   if (remainingSlotIndices.length === 0) {
@@ -1380,6 +1382,33 @@ export function estimateMedleyCapacityAssignmentScoreUpperBound(
     mode = "card-bound-skill-aware";
   }
 
+  const sharedPowerSkillUpperBound = enableSharedPowerSkillUpper && cardBoundPowerUpperBySlot
+    ? estimateMedleyCapacityCardBoundSharedPowerSkillScoreUpperBound(
+      slots,
+      remainingSlotIndices,
+      cardsByCharacter,
+      bannedCardIds,
+      profiling,
+    )
+    : null;
+  if (
+    sharedPowerSkillUpperBound !== null
+    && Number.isFinite(sharedPowerSkillUpperBound)
+    && sharedPowerSkillUpperBound < upperBound
+  ) {
+    if (profiling && Number.isFinite(upperBound)) {
+      const improvement = upperBound - sharedPowerSkillUpperBound;
+      profiling.capacityCardBoundSharedPowerUpperImprovementCount += 1;
+      profiling.capacityCardBoundSharedPowerUpperImprovementTotal += improvement;
+      profiling.bestCapacityCardBoundSharedPowerUpperImprovement = Math.max(
+        profiling.bestCapacityCardBoundSharedPowerUpperImprovement,
+        improvement,
+      );
+    }
+    upperBound = sharedPowerSkillUpperBound;
+    mode = "card-bound-shared-power-skill";
+  }
+
   const cardBoundLagrangianUpperBound = cardBoundPowerUpperBySlot
     && remainingSlotIndices.length === MEDLEY_TEAM_COUNT
     && bannedCardIds.size === 0
@@ -1604,6 +1633,7 @@ export function estimateMedleyRemainingScoreUpperBound(
   useParetoCapacityUpper = false,
   useBucketedCapacityUpper = false,
   enableTeamSharedCoefficientUpper = false,
+  enableSharedPowerSkillUpper = false,
 ): number {
   if (remainingSlotIndices.length === 0) {
     return 0;
@@ -1639,6 +1669,7 @@ export function estimateMedleyRemainingScoreUpperBound(
     useParetoCapacityUpper && remainingSlotIndices.length > 1,
     useBucketedCapacityUpper && remainingSlotIndices.length > 1,
     enableTeamSharedCoefficientUpper && remainingSlotIndices.length === MEDLEY_TEAM_COUNT,
+    enableSharedPowerSkillUpper && remainingSlotIndices.length === MEDLEY_TEAM_COUNT,
   );
 
   let capacityUpperBound = capacityAssignmentUpperBound.upperBound;

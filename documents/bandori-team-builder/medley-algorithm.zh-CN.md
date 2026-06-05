@@ -221,6 +221,10 @@ Hard all-scope proof 可以对当前配置使用一次 guarded candidate extensi
 
 Staged extension 现在只作为诊断/实验路径保留。默认 `focus-6-300` 和完整矩阵不会触发它；只有显式设置 `enableExperimentalStagedCandidateExtension === true` 时才启用。benchmark harness 保留 `p10-244-staged-trace-300` 用于复现实验；默认路径只使用 guarded `400000` 到 `600000` 扩展。
 
+Candidate-fill frontier 也可以在返回 soft-limit bounded 前尝试一次受限的 anchor-frontier proof。这个路径的触发条件很窄：anchor slot 必须仍在 guarded candidate 范围内，另外两个 slot 必须足够小，frontier gap 必须接近 incumbent，剩余预算必须充足，并且 memory guard 不能触发。它会先为已处理 anchors 计算一个低成本 pair upper；如果该上界关闭 frontier，则配置被证明，否则 residual upper 会作为安全 bounded upper 报告。只有估算的 high-pair record 数量仍在预算内时，才会进一步运行完整 anchor proof。Trace 会记录 trigger、skip reason、processed anchor count、residual gap、local timebox 和 peak heap。如果该 proof 没有触发或没有关闭，exact/bounded 语义不变。
+
+最新 `P10:244` 默认路径的改善不是来自继续提高候选上限，而是来自 same-coarse frontier target：对于足够小的同 coarse group，exact join 可以只证明当前 sibling 不可能超过已记住的 sibling frontier，或不可能超过 `incumbent + 200000`，随后以 `solve-dominated-same-coarse-frontier` 停止。这是 bounded proof target，不是 exact result target。只有当这个 target 低于此前 root-level upper 时，它才会降低全局 reported gap；未证明配置仍会让整体运行保持 bounded。
+
 Small-gap solve retry 也是局部策略。它只在 `solve-workload-limit`、upper gap `<= 100000`、calculated cards `<= 1300`、剩余预算充足、memory guard 未触发，且同 `(band, attribute)` 没有仍高于 incumbent 的未闭合 sibling 时，把 smallest solve candidate cap 从 `100000` 局部放宽到 `200000`；每个配置 timebox `35000ms`，每次运行最多重试 3 个配置。默认 exact solve cap 不变。加入 same-coarse guard 是因为 `P04:260` 证明一个 `Everyone/happy` parameter 会消耗足够多预算，导致另一个 parameter 以更松的 near-deadline upper 接管最终 bounded gap。
 
 Small-gap DFS fallback 是当前 hard all-scope 小 gap 闭合的默认路径。对于 calculated cards 不超过 `1600` 的 all-scope high-card exact join，solver 会启用局部上界 helper：`enableAnchorSlotUpper`、`enableOpportunityCostUpper` 和 `enableTeamSharedCoefficientUpper`。如果 exact candidate join 留下有限 upper gap `<= 100000`，且剩余预算至少 `45000ms`，同 coarse group 的前两个 sibling 配置可以在 unproved join 后继续进入 DFS，而不是停在 `exact-unproved-skip-dfs`。当同一个 `(band, attribute)` group 已经有两个 sibling 通过“unproved exact join 后的 DFS”证明，最后一个 trailing sibling 可以在剩余预算至少 `30000ms` 时跳过 exact candidate join，直接进入 DFS。该策略仍保持 exact-safe：必须由 DFS 实际证明配置，否则结果继续 bounded 或 timeout。Trace 会记录 `smallGapDfsFallbackAfterUnprovedExactJoin`、`smallGapDfsFallbackObservedUpperGap`、`smallGapDfsFallbackRemainingMs`、`trailingSameCoarseDfsOnly`、`sameCoarseClosedSiblingCount` 和 `sameCoarseDfsAfterUnprovedProofCount`。
@@ -414,7 +418,7 @@ node .\scripts\bandori-medley-hard-case-benchmark.cjs p01-locked
 
 2026-06-02 event matrix 仍作为基线比较：`temp/bandori-team-builder/real-profile-medley-scope-matrix-2026-06-02T04-06-27-272Z.json`。300s 限制下它证明 `36/40` 个 all-scope case exact，且没有 timeout。
 
-最新的恢复后 40-case 证据是 `temp/bandori-team-builder/focus-medley-cases-2026-06-04T23-49-44-396Z.json`。该轮证明 `38/40` exact，没有 failed 或 timeout；bounded gap 总量从 `1534986` 降到 `798416`；P95 为 `213990ms`，max 为 `292425ms`，采样到的 peak working set 为 `3935.8 MiB`。剩余 bounded row 是 `P02:260` 和 `P10:244`；进程 working set 是诊断采样，不是引擎内部硬内存上限。
+最新的恢复后 40-case 证据是 `temp/bandori-team-builder/focus-medley-cases-2026-06-05T18-10-00-676Z.json`。该轮证明 `38/40` exact，没有 failed 或 timeout；bounded gap 总量从 `1534986` 降到 `582812`；P95 为 `208250ms`，max 为 `262539ms`，采样到的 peak working set 为 `3821.7 MiB`。剩余 bounded row 是 `P02:260` 和 `P10:244`；进程 working set 是诊断采样，不是引擎内部硬内存上限。
 
 通过该 gate 表示：
 
@@ -451,10 +455,10 @@ node .\scripts\bandori-medley-hard-case-benchmark.cjs p01-locked
 - 固定 hard-case 样本集已经满足 120s gate，但 60s 尚未保证。
 - Hard real profile 的 full all-mode proof 可能接近 300s review budget，因此前端接入需要取消能力和清晰状态显示。
 - 部分 all-scope event/profile 组合在 300s 预算内仍会返回 bounded，原因是多个配置上界仍接近 incumbent。
-- 截至 2026-06-04T23-49 完整矩阵，剩余 bounded row 是 `P02:260` 和 `P10:244`；`P04:260` 已在默认路径证明 exact。
-  - `P02:260`：same-coarse memory-root skip 继续降低内存压力。最新完整矩阵中它仍是 candidate-fill bounded，gap `382812`，slot `0`，soft limit `400000`，candidate counts `[400000, 212825, 134977]`，elapsed `48618ms`，peak working set 约 `3100.0 MiB`。
-  - `P10:244`：即使 guarded extension 到 `600000`，仍是 candidate-fill soft-limit bounded。最新完整矩阵 gap 为 `415604`，slot `0`，candidate counts `[600000, 46599, 29117]`，elapsed `45469ms`，peak working set 约 `3100.1 MiB`。same-coarse root tightening 降低了该 row 的 gap，但还没有把它推进到 exact。
-- `P04:260` 已通过 small-gap DFS fallback 闭合，但仍接近 300s review budget：最新完整矩阵用 `292425ms` 证明 exact，且是矩阵 peak working-set 行，约 `3935.8 MiB`。仍应保留在 `focus-6-300` 中，避免 same-coarse fallback 静默回退。
+- 截至 2026-06-05T18-10 完整矩阵，剩余 bounded row 是 `P02:260` 和 `P10:244`；`P04:260` 已在默认路径证明 exact。
+  - `P02:260`：same-coarse memory-root skip 继续降低内存压力。最新完整矩阵中它仍是 candidate-fill bounded，gap `382812`，slot `0`，soft limit `400000`，candidate counts `[400000, 212825, 134977]`，elapsed `49296ms`。
+  - `P10:244`：same-coarse frontier proof target 把 bounded gap 降到 `200000`，且没有启用 staged candidate extension。最新完整矩阵记录的 candidate counts 为 `[27067, 41730, 26043]`，elapsed `48186ms`。它仍是 bounded，因为该 target 只证明 unresolved same-coarse frontier 不超过 `incumbent + 200000`，不是证明所有请求的区域道具配置 exact。
+- `P04:260` 已通过 small-gap DFS fallback 闭合，但仍接近 300s review budget：最新完整矩阵用 `262539ms` 证明 exact，也是矩阵 max-elapsed 行。仍应保留在 `focus-6-300` 中，避免 same-coarse fallback 静默回退。
 - `P08:260`、`P08:323` 和 `P10:260` 在固定矩阵中已不再是当前回退点。仍应保留在 `focus-6-300` 中，避免 third-shortlist 和 guarded-fill 相关修改静默回退。
-- 最大的剩余证明机会是为 `P02:260` 提供更紧的 pair/frontier upper closure，并为 `P10:244` 设计更有选择性的同 coarse sibling 策略。
+- 最大的剩余证明机会是为 `P02:260` 提供更紧的 pair/frontier upper closure，并在不重新引入 staged-extension 内存增长的前提下，把 `P10:244` 从 bounded same-coarse target 推进到完整配置证明。
 - `medley-algorithm-notes.md` 仍包含历史实验，应视为维护上下文，而不是 canonical contract。

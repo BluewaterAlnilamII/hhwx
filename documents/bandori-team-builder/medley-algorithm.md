@@ -345,6 +345,28 @@ The staged extension path is diagnostic/experimental only. Default
 `400000` to `600000` extension. The benchmark harness keeps
 `p10-244-staged-trace-300` for explicit reproduction.
 
+Candidate-fill frontiers can also attempt a bounded anchor-frontier proof before
+returning a soft-limit bounded result. This path is deliberately narrow: the
+anchor slot must still be within the guarded candidate range, the other two
+slots must be small, the frontier gap must be close to the incumbent, enough
+budget must remain, and the memory guard must be clear. It first tries a cheap
+pair upper for processed anchors; if that upper closes the frontier the
+configuration is proven, and otherwise the residual upper is reported as a
+safe bounded upper. A fuller anchor proof is attempted only when the estimated
+high-pair record count remains within budget. Trace output records the trigger,
+skip reason, processed anchor count, residual gap, local timebox, and peak heap.
+If this proof does not run or does not close, exact/bounded semantics are
+unchanged.
+
+The latest `P10:244` default improvement did not come from raising the candidate
+limit further. It came from a same-coarse frontier target: for small enough
+same-coarse groups, exact join may prove only that the current sibling cannot
+beat a remembered sibling frontier, or cannot exceed `incumbent + 200000`, and
+then stop with `solve-dominated-same-coarse-frontier`. This is a bounded proof
+target, not an exact result target. It reduces the reported global gap only when
+the solved target is lower than the prior root-level upper; unproved
+configurations still keep the overall run bounded.
+
 Small-gap solve retry is also local. It can raise the solve workload cap from a
 `100000` smallest candidate list to `200000`, with a `35000ms` per-configuration
 timebox and at most three retries per run, only for `solve-workload-limit`
@@ -656,10 +678,10 @@ The 2026-06-02 event matrix remains the baseline comparison:
 It proved `36/40` all-scope cases exact with no timeouts under the 300s limit.
 
 The latest post-recovery 40-case evidence is
-`temp/bandori-team-builder/focus-medley-cases-2026-06-04T23-49-44-396Z.json`.
+`temp/bandori-team-builder/focus-medley-cases-2026-06-05T18-10-00-676Z.json`.
 It proved `38/40` exact, had no failed or timeout rows, reduced bounded gap total
-from `1534986` to `798416`, recorded P95 `213990ms`, max `292425ms`, and sampled
-peak working set `3935.8 MiB`. The remaining bounded rows are `P02:260` and
+from `1534986` to `582812`, recorded P95 `208250ms`, max `262539ms`, and sampled
+peak working set `3821.7 MiB`. The remaining bounded rows are `P02:260` and
 `P10:244`; process working set is a diagnostic sample, not a hard in-engine
 memory cap.
 
@@ -711,27 +733,28 @@ user-facing labels.
   profiles, so frontend integration needs cancellation and clear status display.
 - Some all-scope event/profile combinations still return bounded within the
   300s budget when multiple configuration uppers remain close to the incumbent.
-- As of the 2026-06-04T23-49 full matrix, the remaining bounded rows are
+- As of the 2026-06-05T18-10 full matrix, the remaining bounded rows are
   `P02:260` and `P10:244`; `P04:260` is now exact in the default path.
   - `P02:260`: the same-coarse memory-root skip keeps the case bounded while
     reducing memory pressure. In the latest full matrix it remains
     candidate-fill bounded with gap `382812`, slot `0`, soft limit `400000`,
-    candidate counts `[400000, 212825, 134977]`, elapsed `48618ms`, and peak
-    working set about `3100.0 MiB`.
-  - `P10:244`: candidate-fill soft-limit bounded even after guarded extension to
-    `600000`. The latest full matrix gap is `415604`, slot `0`, candidate
-    counts `[600000, 46599, 29117]`, elapsed `45469ms`, and peak working set
-    about `3100.1 MiB`. Same-coarse root tightening reduced this row's gap
-    without making the run exact.
+    candidate counts `[400000, 212825, 134977]`, and elapsed `49296ms`.
+  - `P10:244`: same-coarse frontier proof targeting reduced the bounded gap to
+    `200000` without enabling staged candidate extension. The latest full
+    matrix recorded candidate counts `[27067, 41730, 26043]` and elapsed
+    `48186ms`. It remains bounded because the target proves only that the
+    unresolved same-coarse frontier is no more than `incumbent + 200000`; it
+    does not prove every requested area-item configuration exact.
 - `P04:260` is closed by small-gap DFS fallback but remains near the 300s review
-  budget: the latest full matrix proved it exact in `292425ms` and it was the
-  matrix peak working-set row at about `3935.8 MiB`. Keep it in `focus-6-300` so
+  budget: the latest full matrix proved it exact in `262539ms` and it was the
+  matrix max-elapsed row. Keep it in `focus-6-300` so
   the same-coarse fallback cannot silently regress.
 - `P08:260`, `P08:323`, and `P10:260` are no longer current regressions in the
   fixed matrix. Keep them in `focus-6-300` so third-shortlist and guarded-fill
   changes cannot silently regress.
 - The largest remaining proof opportunity is tighter pair/frontier upper closure
-  for `P02:260` and a more selective same-coarse sibling strategy for
-  `P10:244`.
+  for `P02:260` and converting `P10:244` from a bounded same-coarse target into
+  a full configuration proof without reintroducing staged-extension memory
+  growth.
 - `medley-algorithm-notes.md` still contains historical experiments and should
   be treated as maintenance context, not the canonical contract.

@@ -10,6 +10,8 @@ import {
   MEDLEY_CAPACITY_CARD_BOUND_DUAL_OBJECTIVE_STATE_BUDGET,
   MEDLEY_CARD_BOUND_BUCKETED_JOINT_GLOBAL_STATE_BUDGET,
   MEDLEY_CARD_BOUND_BUCKETED_JOINT_MIN_BUCKET_SIZE,
+  MEDLEY_CARD_BOUND_SHARED_POWER_SKILL_BUCKET_SIZE,
+  MEDLEY_CARD_BOUND_SHARED_POWER_SKILL_STATE_BUDGET,
   MEDLEY_CARD_BOUND_BUCKETED_JOINT_TARGET_BUCKET_COUNTS,
   MEDLEY_CARD_BOUND_LAGRANGIAN_WEIGHTS,
   MEDLEY_TEAM_COUNT,
@@ -278,6 +280,432 @@ export function estimateMedleyCapacityCardBoundSkillAwareScoreUpperBound(
     profiling.capacityCardBoundUpperCompletedCount += 1;
   }
   return states[transition.targetIndex * leaderMaskCount + targetLeaderMask];
+}
+
+type MedleySharedPowerSkillUpperState = {
+  baseScore: number;
+  averageRate0: number;
+  leaderRate0: number;
+  averageRate1: number;
+  leaderRate1: number;
+  averageRate2: number;
+  leaderRate2: number;
+};
+
+function createEmptySharedPowerSkillUpperState(): MedleySharedPowerSkillUpperState {
+  return {
+    baseScore: 0,
+    averageRate0: 0,
+    leaderRate0: 0,
+    averageRate1: 0,
+    leaderRate1: 0,
+    averageRate2: 0,
+    leaderRate2: 0,
+  };
+}
+
+function sharedPowerSkillUpperStateDominates(
+  left: MedleySharedPowerSkillUpperState,
+  right: MedleySharedPowerSkillUpperState,
+): boolean {
+  return (
+    left.baseScore + 0.000001 >= right.baseScore
+    && left.averageRate0 + 1e-9 >= right.averageRate0
+    && left.leaderRate0 + 1e-9 >= right.leaderRate0
+    && left.averageRate1 + 1e-9 >= right.averageRate1
+    && left.leaderRate1 + 1e-9 >= right.leaderRate1
+    && left.averageRate2 + 1e-9 >= right.averageRate2
+    && left.leaderRate2 + 1e-9 >= right.leaderRate2
+  );
+}
+
+function addSharedPowerSkillUpperState(
+  statesByKey: Map<number, MedleySharedPowerSkillUpperState[]>,
+  key: number,
+  nextState: MedleySharedPowerSkillUpperState,
+): number {
+  const states = statesByKey.get(key);
+  if (!states) {
+    statesByKey.set(key, [nextState]);
+    return 1;
+  }
+
+  let writeIndex = 0;
+  let removedCount = 0;
+  for (let readIndex = 0; readIndex < states.length; readIndex += 1) {
+    const state = states[readIndex];
+    if (sharedPowerSkillUpperStateDominates(state, nextState)) {
+      return 0;
+    }
+    if (sharedPowerSkillUpperStateDominates(nextState, state)) {
+      removedCount += 1;
+      continue;
+    }
+    states[writeIndex] = state;
+    writeIndex += 1;
+  }
+  states.length = writeIndex;
+  states.push(nextState);
+  return 1 - removedCount;
+}
+
+function encodeSharedPowerSkillUpperKey(
+  capacityIndex: number,
+  leaderMask: number,
+  bucket0: number,
+  bucket1: number,
+  bucket2: number,
+  bucketBase: number,
+  leaderMaskCount: number,
+): number {
+  return ((((capacityIndex * leaderMaskCount + leaderMask) * bucketBase + bucket0) * bucketBase + bucket1)
+    * bucketBase + bucket2);
+}
+
+function decodeSharedPowerSkillUpperKey(
+  key: number,
+  bucketBase: number,
+  leaderMaskCount: number,
+): {
+  capacityIndex: number;
+  leaderMask: number;
+  bucket0: number;
+  bucket1: number;
+  bucket2: number;
+} {
+  let rest = key;
+  const bucket2 = rest % bucketBase;
+  rest = Math.floor(rest / bucketBase);
+  const bucket1 = rest % bucketBase;
+  rest = Math.floor(rest / bucketBase);
+  const bucket0 = rest % bucketBase;
+  rest = Math.floor(rest / bucketBase);
+  const leaderMask = rest % leaderMaskCount;
+  const capacityIndex = Math.floor(rest / leaderMaskCount);
+  return { capacityIndex, leaderMask, bucket0, bucket1, bucket2 };
+}
+
+function getSharedPowerSkillUpperStateBucket(
+  powerUpperBound: number,
+  bucketSize: number,
+  bucketBase: number,
+): number {
+  if (!Number.isFinite(powerUpperBound) || powerUpperBound < 0) {
+    return -1;
+  }
+  const bucket = Math.ceil(powerUpperBound / bucketSize);
+  return bucket < bucketBase ? bucket : -1;
+}
+
+function getSharedPowerSkillUpperBucketValue(bucket: number, bucketSize: number): number {
+  return bucket * bucketSize;
+}
+
+function addCardToSharedPowerSkillUpperState(
+  state: MedleySharedPowerSkillUpperState,
+  slot: MedleySlotSearch,
+  slotPosition: number,
+  card: SearchCard,
+  asLeader: boolean,
+): MedleySharedPowerSkillUpperState {
+  const nextState = { ...state };
+  nextState.baseScore += card.effectivePower * slot.baseScoreRatePerPower;
+  const averageRate = getMedleyCardSkillAverageRateUpper(card);
+  const leaderRate = asLeader ? getMedleyCardSkillLeaderRateUpper(card) : 0;
+  if (slotPosition === 0) {
+    nextState.averageRate0 += averageRate;
+    nextState.leaderRate0 += leaderRate;
+  } else if (slotPosition === 1) {
+    nextState.averageRate1 += averageRate;
+    nextState.leaderRate1 += leaderRate;
+  } else {
+    nextState.averageRate2 += averageRate;
+    nextState.leaderRate2 += leaderRate;
+  }
+  return nextState;
+}
+
+function estimateMedleySharedPowerSkillSlotMaxPower(
+  slot: MedleySlotSearch,
+  bannedCardIds: Set<number>,
+): number {
+  const bestPowerByCharacter = new Map<number, number>();
+  for (const card of slot.searchCards) {
+    if (bannedCardIds.has(card.cardId)) {
+      continue;
+    }
+    bestPowerByCharacter.set(
+      card.characterId,
+      Math.max(bestPowerByCharacter.get(card.characterId) ?? Number.NEGATIVE_INFINITY, card.effectivePower),
+    );
+  }
+  return [...bestPowerByCharacter.values()]
+    .sort((left, right) => right - left)
+    .slice(0, MEDLEY_TEAM_SIZE)
+    .reduce((sum, power) => sum + power, 0);
+}
+
+export function estimateMedleyCapacityCardBoundSharedPowerSkillScoreUpperBound(
+  slots: MedleySlotSearch[],
+  remainingSlotIndices: number[],
+  cardsByCharacter: MedleyCapacityCardsByCharacter,
+  bannedCardIds: Set<number>,
+  profiling?: BandoriMedleyTeamSearchProfilingStats,
+): number | null {
+  const slotCount = remainingSlotIndices.length;
+  if (profiling) {
+    profiling.capacityCardBoundSharedPowerUpperCallCount += 1;
+    profiling.capacityCardBoundSharedPowerUpperBucketSize = MEDLEY_CARD_BOUND_SHARED_POWER_SKILL_BUCKET_SIZE;
+  }
+  if (slotCount !== MEDLEY_TEAM_COUNT || bannedCardIds.size > 0) {
+    return null;
+  }
+
+  const bucketSize = MEDLEY_CARD_BOUND_SHARED_POWER_SKILL_BUCKET_SIZE;
+  const maxPowerUpperBound = Math.max(
+    ...remainingSlotIndices.map((slotIndex) => (
+      estimateMedleySharedPowerSkillSlotMaxPower(slots[slotIndex], bannedCardIds)
+    )),
+  );
+  if (!Number.isFinite(maxPowerUpperBound) || maxPowerUpperBound <= 0) {
+    return null;
+  }
+  const bucketBase = Math.ceil(maxPowerUpperBound / bucketSize) + MEDLEY_TEAM_SIZE + 1;
+  const leaderMaskCount = 1 << slotCount;
+  const targetLeaderMask = leaderMaskCount - 1;
+  const maskCount = 1 << slotCount;
+  const transition = getMedleyCapacityTransition(slotCount);
+  const abortWithStateCount = (count: number): null => {
+    if (profiling) {
+      profiling.capacityCardBoundSharedPowerUpperAbortCount += 1;
+      profiling.capacityCardBoundSharedPowerUpperStateCount += count;
+      profiling.capacityCardBoundSharedPowerUpperMaxStateCount = Math.max(
+        profiling.capacityCardBoundSharedPowerUpperMaxStateCount,
+        count,
+      );
+    }
+    return null;
+  };
+
+  let statesByKey = new Map<number, MedleySharedPowerSkillUpperState[]>();
+  let stateCount = 0;
+  stateCount += addSharedPowerSkillUpperState(
+    statesByKey,
+    encodeSharedPowerSkillUpperKey(0, 0, 0, 0, 0, bucketBase, leaderMaskCount),
+    createEmptySharedPowerSkillUpperState(),
+  );
+
+  for (const cardsById of cardsByCharacter.values()) {
+    let characterOptionsByKey = new Map<number, MedleySharedPowerSkillUpperState[]>();
+    let characterOptionCount = 0;
+    characterOptionCount += addSharedPowerSkillUpperState(
+      characterOptionsByKey,
+      encodeSharedPowerSkillUpperKey(0, 0, 0, 0, 0, bucketBase, leaderMaskCount),
+      createEmptySharedPowerSkillUpperState(),
+    );
+
+    for (const slotCards of cardsById.values()) {
+      const nextCharacterOptionsByKey = new Map<number, MedleySharedPowerSkillUpperState[]>();
+      let nextCharacterOptionCount = characterOptionCount;
+      for (const [key, states] of characterOptionsByKey.entries()) {
+        nextCharacterOptionsByKey.set(key, states.slice());
+      }
+
+      for (const [key, states] of characterOptionsByKey.entries()) {
+        const decoded = decodeSharedPowerSkillUpperKey(key, bucketBase, leaderMaskCount);
+        for (const state of states) {
+          for (let slotPosition = 0; slotPosition < slotCount; slotPosition += 1) {
+            if ((decoded.capacityIndex & (1 << slotPosition)) !== 0) {
+              continue;
+            }
+            const card = slotCards[slotPosition];
+            if (!card) {
+              continue;
+            }
+            const buckets = [decoded.bucket0, decoded.bucket1, decoded.bucket2];
+            const currentPowerUpper = getSharedPowerSkillUpperBucketValue(buckets[slotPosition] ?? 0, bucketSize);
+            const nextBucket = getSharedPowerSkillUpperStateBucket(
+              currentPowerUpper + card.effectivePower,
+              bucketSize,
+              bucketBase,
+            );
+            if (nextBucket < 0) {
+              continue;
+            }
+            buckets[slotPosition] = nextBucket;
+            const nextMask = decoded.capacityIndex | (1 << slotPosition);
+            const averageKey = encodeSharedPowerSkillUpperKey(
+              nextMask,
+              decoded.leaderMask,
+              buckets[0] ?? 0,
+              buckets[1] ?? 0,
+              buckets[2] ?? 0,
+              bucketBase,
+              leaderMaskCount,
+            );
+            nextCharacterOptionCount += addSharedPowerSkillUpperState(
+              nextCharacterOptionsByKey,
+              averageKey,
+              addCardToSharedPowerSkillUpperState(
+                state,
+                slots[remainingSlotIndices[slotPosition]],
+                slotPosition,
+                card,
+                false,
+              ),
+            );
+            if (nextCharacterOptionCount > MEDLEY_CARD_BOUND_SHARED_POWER_SKILL_STATE_BUDGET) {
+              return abortWithStateCount(nextCharacterOptionCount);
+            }
+
+            const leaderBit = 1 << slotPosition;
+            if ((decoded.leaderMask & leaderBit) === 0) {
+              const leaderKey = encodeSharedPowerSkillUpperKey(
+                nextMask,
+                decoded.leaderMask | leaderBit,
+                buckets[0] ?? 0,
+                buckets[1] ?? 0,
+                buckets[2] ?? 0,
+                bucketBase,
+                leaderMaskCount,
+              );
+              nextCharacterOptionCount += addSharedPowerSkillUpperState(
+                nextCharacterOptionsByKey,
+                leaderKey,
+                addCardToSharedPowerSkillUpperState(
+                  state,
+                  slots[remainingSlotIndices[slotPosition]],
+                  slotPosition,
+                  card,
+                  true,
+                ),
+              );
+              if (nextCharacterOptionCount > MEDLEY_CARD_BOUND_SHARED_POWER_SKILL_STATE_BUDGET) {
+                return abortWithStateCount(nextCharacterOptionCount);
+              }
+            }
+          }
+        }
+      }
+
+      characterOptionsByKey = nextCharacterOptionsByKey;
+      characterOptionCount = nextCharacterOptionCount;
+      if (characterOptionCount > MEDLEY_CARD_BOUND_SHARED_POWER_SKILL_STATE_BUDGET) {
+        return abortWithStateCount(characterOptionCount);
+      }
+    }
+
+    const nextStatesByKey = new Map<number, MedleySharedPowerSkillUpperState[]>();
+    let nextStateCount = stateCount;
+    for (const [key, states] of statesByKey.entries()) {
+      nextStatesByKey.set(key, states.slice());
+    }
+
+    for (const [stateKey, states] of statesByKey.entries()) {
+      const decodedState = decodeSharedPowerSkillUpperKey(stateKey, bucketBase, leaderMaskCount);
+      for (const [optionKey, optionStates] of characterOptionsByKey.entries()) {
+        const decodedOption = decodeSharedPowerSkillUpperKey(optionKey, bucketBase, leaderMaskCount);
+        if (
+          decodedOption.capacityIndex === 0
+          || (decodedState.leaderMask & decodedOption.leaderMask) !== 0
+        ) {
+          continue;
+        }
+        const nextCapacityIndex = transition.nextIndexByMask[
+          decodedState.capacityIndex * maskCount + decodedOption.capacityIndex
+        ];
+        if (nextCapacityIndex < 0) {
+          continue;
+        }
+        const nextBucket0 = getSharedPowerSkillUpperStateBucket(
+          getSharedPowerSkillUpperBucketValue(decodedState.bucket0, bucketSize)
+            + getSharedPowerSkillUpperBucketValue(decodedOption.bucket0, bucketSize),
+          bucketSize,
+          bucketBase,
+        );
+        const nextBucket1 = getSharedPowerSkillUpperStateBucket(
+          getSharedPowerSkillUpperBucketValue(decodedState.bucket1, bucketSize)
+            + getSharedPowerSkillUpperBucketValue(decodedOption.bucket1, bucketSize),
+          bucketSize,
+          bucketBase,
+        );
+        const nextBucket2 = getSharedPowerSkillUpperStateBucket(
+          getSharedPowerSkillUpperBucketValue(decodedState.bucket2, bucketSize)
+            + getSharedPowerSkillUpperBucketValue(decodedOption.bucket2, bucketSize),
+          bucketSize,
+          bucketBase,
+        );
+        if (nextBucket0 < 0 || nextBucket1 < 0 || nextBucket2 < 0) {
+          continue;
+        }
+        const nextKey = encodeSharedPowerSkillUpperKey(
+          nextCapacityIndex,
+          decodedState.leaderMask | decodedOption.leaderMask,
+          nextBucket0,
+          nextBucket1,
+          nextBucket2,
+          bucketBase,
+          leaderMaskCount,
+        );
+        for (const state of states) {
+          for (const optionState of optionStates) {
+            nextStateCount += addSharedPowerSkillUpperState(
+              nextStatesByKey,
+              nextKey,
+              {
+                baseScore: state.baseScore + optionState.baseScore,
+                averageRate0: state.averageRate0 + optionState.averageRate0,
+                leaderRate0: state.leaderRate0 + optionState.leaderRate0,
+                averageRate1: state.averageRate1 + optionState.averageRate1,
+                leaderRate1: state.leaderRate1 + optionState.leaderRate1,
+                averageRate2: state.averageRate2 + optionState.averageRate2,
+                leaderRate2: state.leaderRate2 + optionState.leaderRate2,
+              },
+            );
+            if (nextStateCount > MEDLEY_CARD_BOUND_SHARED_POWER_SKILL_STATE_BUDGET) {
+              return abortWithStateCount(nextStateCount);
+            }
+          }
+        }
+      }
+    }
+
+    statesByKey = nextStatesByKey;
+    stateCount = nextStateCount;
+    if (stateCount > MEDLEY_CARD_BOUND_SHARED_POWER_SKILL_STATE_BUDGET) {
+      return abortWithStateCount(stateCount);
+    }
+  }
+
+  let upperBound = Number.NEGATIVE_INFINITY;
+  for (const [key, states] of statesByKey.entries()) {
+    const decoded = decodeSharedPowerSkillUpperKey(key, bucketBase, leaderMaskCount);
+    if (decoded.capacityIndex !== transition.targetIndex || decoded.leaderMask !== targetLeaderMask) {
+      continue;
+    }
+    const powerUpper0 = getSharedPowerSkillUpperBucketValue(decoded.bucket0, bucketSize);
+    const powerUpper1 = getSharedPowerSkillUpperBucketValue(decoded.bucket1, bucketSize);
+    const powerUpper2 = getSharedPowerSkillUpperBucketValue(decoded.bucket2, bucketSize);
+    for (const state of states) {
+      upperBound = Math.max(
+        upperBound,
+        state.baseScore
+          + powerUpper0 * (state.averageRate0 + state.leaderRate0)
+          + powerUpper1 * (state.averageRate1 + state.leaderRate1)
+          + powerUpper2 * (state.averageRate2 + state.leaderRate2),
+      );
+    }
+  }
+
+  if (profiling) {
+    profiling.capacityCardBoundSharedPowerUpperCompletedCount += 1;
+    profiling.capacityCardBoundSharedPowerUpperStateCount += stateCount;
+    profiling.capacityCardBoundSharedPowerUpperMaxStateCount = Math.max(
+      profiling.capacityCardBoundSharedPowerUpperMaxStateCount,
+      stateCount,
+    );
+  }
+  return Number.isFinite(upperBound) ? upperBound : null;
 }
 
 export function estimateMedleyCapacityCardBoundWeightedScoreUpperBound(
