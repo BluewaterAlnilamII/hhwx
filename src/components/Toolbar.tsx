@@ -237,7 +237,7 @@ export default function Toolbar({ showDebugButton = true, isSidebarOpen = false,
     };
 
     return (
-        <header className="sticky top-0 z-[250] transform-gpu border-b border-white/85 bg-[#FF9922] shadow-[0_10px_24px_rgba(255,153,34,0.28)] will-change-transform [backface-visibility:hidden]">
+        <header className="sticky top-0 z-[250] border-b border-white/85 bg-[#FF9922] shadow-[0_10px_24px_rgba(255,153,34,0.28)]">
             <div className="flex h-[58px] w-full items-center justify-between gap-2 px-3 sm:px-4 lg:justify-end lg:px-5">
                 <div className="lg:hidden">
                     <button

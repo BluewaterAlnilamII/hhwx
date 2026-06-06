@@ -94,8 +94,8 @@ export default function SectionSidebarShell({ children, isMobileDrawerOpen, onCl
       <div
         aria-hidden={!isMobileDrawerOpen}
         className={cn(
-          "fixed inset-0 z-[240] min-h-[100svh] lg:hidden",
-          isMobileDrawerOpen ? "pointer-events-auto" : "pointer-events-none",
+          "lg:hidden",
+          isMobileDrawerOpen ? "fixed inset-0 z-[240] min-h-[100svh] pointer-events-auto" : "hidden",
         )}
       >
         <button

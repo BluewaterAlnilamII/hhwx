@@ -693,6 +693,48 @@ function getEventBonusMemberCardIds(eventBonus: BandoriEventBonus | null): numbe
   });
 }
 
+function getTemporaryCardParameterKey(
+  card: Pick<UserGameProfileCardRecord, "cardId" | "level" | "masterRank" | "skillLevel" | "episodeCount" | "isTrained" | "hasTrainedArt">,
+): string {
+  return [
+    card.cardId,
+    card.level,
+    card.masterRank,
+    card.skillLevel,
+    card.episodeCount,
+    card.isTrained ? 1 : 0,
+    card.hasTrainedArt ? 1 : 0,
+  ].join(":");
+}
+
+function selectMissingTemporaryCards(
+  profileCards: UserGameProfileCardRecord[],
+  preferences: TeamBuilderCardPreferences,
+  candidateTemporaryCards: TemporaryGameProfileCard[],
+): { cardsToAdd: TemporaryGameProfileCard[]; skippedDuplicateCount: number } {
+  const excludedCardIds = new Set(preferences.excludedCardIds);
+  const existingKeys = new Set([
+    ...profileCards
+      .filter((card) => !card.isExcluded && !excludedCardIds.has(card.cardId))
+      .map(getTemporaryCardParameterKey),
+    ...preferences.temporaryCards.map(getTemporaryCardParameterKey),
+  ]);
+  const cardsToAdd: TemporaryGameProfileCard[] = [];
+  let skippedDuplicateCount = 0;
+
+  candidateTemporaryCards.forEach((card) => {
+    const key = getTemporaryCardParameterKey(card);
+    if (existingKeys.has(key)) {
+      skippedDuplicateCount += 1;
+      return;
+    }
+    existingKeys.add(key);
+    cardsToAdd.push(card);
+  });
+
+  return { cardsToAdd, skippedDuplicateCount };
+}
+
 function buildBandoriCharacterIconUrl(characterId: number): string {
   return buildBandoriResIconPublicUrl(`chara_icon_${characterId}.png`);
 }
@@ -2060,7 +2102,7 @@ function ResultCard({
     : TARGET_LABELS[result.target];
 
   return (
-    <article className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm [contain-intrinsic-size:360px] [content-visibility:auto]">
+    <article className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="flex items-center gap-4">
           <div className="w-12 text-right text-lg font-bold text-slate-700">#{result.rank}</div>
@@ -2162,7 +2204,7 @@ function MedleyResultCard({
   songs: Array<SongMaster | null>;
 }) {
   return (
-    <article className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm [contain-intrinsic-size:720px] [content-visibility:auto]">
+    <article className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="flex items-center gap-4">
           <div className="w-12 text-right text-lg font-bold text-slate-700">#{result.rank}</div>
@@ -2337,6 +2379,9 @@ function TeamBuilderPanel() {
   const [eventBonus, setEventBonus] = useState<BandoriEventBonus | null>(null);
   const [eventBonusLoading, setEventBonusLoading] = useState(false);
   const [eventBonusError, setEventBonusError] = useState("");
+  const [addingCurrentEventCards, setAddingCurrentEventCards] = useState(false);
+  const [temporaryCardActionError, setTemporaryCardActionError] = useState("");
+  const [temporaryCardActionNotice, setTemporaryCardActionNotice] = useState("");
   const [preloadState, setPreloadState] = useState<PreloadState>({
     master: "idle",
     chart: "idle",
@@ -2371,6 +2416,10 @@ function TeamBuilderPanel() {
   const selectedEventAssetRegion = useMemo<BandoriAssetRegion>(() => (
     selectedEvent ? resolveBandoriEventAssetRegion(selectedEvent) : "cn"
   ), [selectedEvent]);
+  const currentEventBonusCardIds = useMemo(
+    () => Array.from(new Set(getEventBonusMemberCardIds(eventBonus))),
+    [eventBonus],
+  );
   const recommendedEventStatus = recommendedEvent ? getEventStatus(recommendedEvent, referenceNow) : "unknown";
   const selectedEventSwitcherId = selectedEventId ?? (recommendedEvent ? String(recommendedEvent.eventId) : "none");
   const availableLiveTypes = useMemo(() => allowedLiveTypes(selectedEventType), [selectedEventType]);
@@ -2459,6 +2508,8 @@ function TeamBuilderPanel() {
     });
   }, [updateCardPreferences]);
   const clearTemporaryCards = useCallback(() => {
+    setTemporaryCardActionError("");
+    setTemporaryCardActionNotice("");
     updateCardPreferences((current) => ({ ...current, temporaryCards: [] }));
   }, [updateCardPreferences]);
   const updateOwnedCardParameters = useCallback((patch: Partial<OwnedCardParameterPreferences>) => {
@@ -2480,6 +2531,8 @@ function TeamBuilderPanel() {
     if (!editingTemporaryCard) {
       return;
     }
+    setTemporaryCardActionError("");
+    setTemporaryCardActionNotice("");
     const nextCard: TemporaryGameProfileCard = {
       ...card,
       instanceId: editingTemporaryCard.instanceId,
@@ -2501,6 +2554,8 @@ function TeamBuilderPanel() {
     if (!editingTemporaryCard) {
       return;
     }
+    setTemporaryCardActionError("");
+    setTemporaryCardActionNotice("");
     updateCardPreferences((current) => ({
       ...current,
       temporaryCards: current.temporaryCards.filter((card) => card.instanceId !== editingTemporaryCard.instanceId),
@@ -2512,15 +2567,24 @@ function TeamBuilderPanel() {
     setEditingTemporaryCard(null);
     setCardPickerValue(null);
   }, []);
-  const ensureCardMetadata = useCallback(async (cardId: number): Promise<CardMetadata | undefined> => {
-    const existing = cardMetadata[String(cardId)];
-    if (existing) {
-      return existing;
+  const ensureCardsMetadata = useCallback(async (cardIds: number[]): Promise<Record<string, CardMetadata | undefined>> => {
+    const normalizedCardIds = Array.from(new Set(cardIds
+      .map((cardId) => Math.trunc(cardId))
+      .filter((cardId) => Number.isFinite(cardId) && cardId > 0)));
+    const missingCardIds = normalizedCardIds.filter((cardId) => !cardMetadata[String(cardId)]);
+    if (missingCardIds.length === 0) {
+      return Object.fromEntries(normalizedCardIds.map((cardId) => [String(cardId), cardMetadata[String(cardId)]]));
     }
-    const payload = await requestJson<{ cards: Record<string, CardMetadata | undefined> }>(`/api/bandori/cards?ids=${cardId}`);
+
+    const payload = await requestJson<{ cards: Record<string, CardMetadata | undefined> }>(`/api/bandori/cards?ids=${missingCardIds.join(",")}`);
+    const mergedMetadata = { ...cardMetadata, ...payload.cards };
     setCardMetadata((current) => ({ ...current, ...payload.cards }));
-    return payload.cards[String(cardId)];
+    return Object.fromEntries(normalizedCardIds.map((cardId) => [String(cardId), mergedMetadata[String(cardId)]]));
   }, [cardMetadata]);
+  const ensureCardMetadata = useCallback(async (cardId: number): Promise<CardMetadata | undefined> => {
+    const cards = await ensureCardsMetadata([cardId]);
+    return cards[String(Math.trunc(cardId))];
+  }, [ensureCardsMetadata]);
   const selectTemporaryCard = useCallback((value: BandoriCardPickerValue | null) => {
     setCardPickerValue(value);
     if (!value || addingTemporaryCard) {
@@ -2697,6 +2761,48 @@ function TeamBuilderPanel() {
       : {},
     [selectedProfilePayload],
   );
+  const addCurrentEventBonusTemporaryCards = useCallback(() => {
+    if (currentEventBonusCardIds.length === 0 || addingCurrentEventCards) {
+      return;
+    }
+
+    const cardIds = currentEventBonusCardIds;
+    setAddingCurrentEventCards(true);
+    setTemporaryCardActionError("");
+    setTemporaryCardActionNotice("");
+    void ensureCardsMetadata(cardIds)
+      .then((metadataById) => {
+        const candidateTemporaryCards = cardIds.map((cardId) => ({
+          ...createMaxGameProfileCard(cardId, metadataById[String(cardId)]),
+          instanceId: crypto.randomUUID(),
+        }));
+        const { cardsToAdd, skippedDuplicateCount } = selectMissingTemporaryCards(
+          selectedProfileCards,
+          cardPreferences,
+          candidateTemporaryCards,
+        );
+        if (skippedDuplicateCount > 0) {
+          setTemporaryCardActionNotice(`${skippedDuplicateCount}张重复卡牌已跳过添加`);
+        }
+        if (cardsToAdd.length > 0) {
+          updateCardPreferences((current) => ({
+            ...current,
+            temporaryCards: [...current.temporaryCards, ...cardsToAdd],
+          }));
+        }
+      })
+      .catch((error) => {
+        setTemporaryCardActionError(error instanceof Error ? `添加当期卡牌失败：${error.message}` : "添加当期卡牌失败");
+      })
+      .finally(() => setAddingCurrentEventCards(false));
+  }, [
+    addingCurrentEventCards,
+    cardPreferences,
+    currentEventBonusCardIds,
+    ensureCardsMetadata,
+    selectedProfileCards,
+    updateCardPreferences,
+  ]);
 
   const getTeamSearchWorker = useCallback(() => {
     if (workerRef.current) {
@@ -3071,7 +3177,7 @@ function TeamBuilderPanel() {
       ...selectedProfileCards.map((card) => card.cardId),
       ...cardPreferences.temporaryCards.map((card) => card.cardId),
     ];
-    const cardIds = [...getEventBonusMemberCardIds(eventBonus), ...resultCardIds, ...preferenceCardIds];
+    const cardIds = [...currentEventBonusCardIds, ...resultCardIds, ...preferenceCardIds];
     const uniqueCardIds = Array.from(new Set(cardIds)).filter((cardId) => !cardMetadata[String(cardId)]);
     if (uniqueCardIds.length === 0) {
       return;
@@ -3079,7 +3185,7 @@ function TeamBuilderPanel() {
     void requestJson<{ cards: Record<string, CardMetadata | undefined> }>(`/api/bandori/cards?ids=${uniqueCardIds.join(",")}`)
       .then((payload) => setCardMetadata((current) => ({ ...current, ...payload.cards })))
       .catch(() => undefined);
-  }, [cardMetadata, cardPreferences.temporaryCards, eventBonus, result, selectedProfileCards]);
+  }, [cardMetadata, cardPreferences.temporaryCards, currentEventBonusCardIds, result, selectedProfileCards]);
 
   const resultEventPointMode = useMemo(() => {
     const singleResult = result?.results.find((item): item is BandoriTeamSearchResult => (
@@ -3472,10 +3578,17 @@ function TeamBuilderPanel() {
               skills={data.skills}
               characterBonusesById={selectedProfileCharacterBonusesById}
               assetRegion={selectedProfileAssetRegion}
+              currentEventBonusCardCount={currentEventBonusCardIds.length}
+              addingCurrentEventCards={addingCurrentEventCards}
+              temporaryCardActionError={temporaryCardActionError}
+              temporaryCardActionNotice={temporaryCardActionNotice}
               onAddTemporary={() => {
+                setTemporaryCardActionError("");
+                setTemporaryCardActionNotice("");
                 setCardPickerValue(null);
                 setCardPickerOpen(true);
               }}
+              onAddCurrentEventCards={addCurrentEventBonusTemporaryCards}
               onEditTemporary={editTemporaryCard}
               onClearTemporaryCards={clearTemporaryCards}
               onUpdateOwnedCardParameters={updateOwnedCardParameters}

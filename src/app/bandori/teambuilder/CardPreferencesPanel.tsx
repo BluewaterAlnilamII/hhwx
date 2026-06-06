@@ -1,7 +1,7 @@
 "use client";
 
 import { useDeferredValue, useMemo, useState } from "react";
-import { ChevronDown, ListFilter, Plus, Trash2 } from "lucide-react";
+import { ChevronDown, ListFilter, Plus, Sparkles, Trash2 } from "lucide-react";
 import VirtualizedBandoriCardGrid from "@/components/bandori/VirtualizedBandoriCardGrid";
 import { type BandoriAssetRegion } from "@/lib/bandori-asset-proxy";
 import { BANDORI_CHARACTER_GROUPS, compareBandoriCharacterIds } from "@/lib/bandori-character-groups";
@@ -43,7 +43,12 @@ export type TeamBuilderCardPreferencesPanelProps = {
   skills: Record<string, TeamBuilderPreferenceSkillMaster | undefined>;
   characterBonusesById: Record<string, BandoriCharacterBonusState | undefined>;
   assetRegion: BandoriAssetRegion;
+  currentEventBonusCardCount: number;
+  addingCurrentEventCards: boolean;
+  temporaryCardActionError: string;
+  temporaryCardActionNotice: string;
   onAddTemporary: () => void;
+  onAddCurrentEventCards: () => void;
   onEditTemporary: (instanceId: string) => void;
   onClearTemporaryCards: () => void;
   onUpdateOwnedCardParameters: (patch: Partial<OwnedCardParameterPreferences>) => void;
@@ -60,7 +65,12 @@ export default function TeamBuilderCardPreferencesPanel({
   skills,
   characterBonusesById,
   assetRegion,
+  currentEventBonusCardCount,
+  addingCurrentEventCards,
+  temporaryCardActionError,
+  temporaryCardActionNotice,
   onAddTemporary,
+  onAddCurrentEventCards,
   onEditTemporary,
   onClearTemporaryCards,
   onUpdateOwnedCardParameters,
@@ -288,7 +298,7 @@ export default function TeamBuilderCardPreferencesPanel({
             className="mt-0.5 h-4 w-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500"
           />
           <span className="min-w-0 leading-5">
-            将所有卡牌设置为满级/满故事/满特训状态
+            将所有卡牌设置为满等级/满故事/满特训状态
           </span>
         </label>
         <label className="grid min-h-11 grid-cols-[auto_minmax(0,1fr)] items-start gap-x-2 rounded-xl bg-white p-2 text-sm font-semibold text-slate-700 shadow-sm">
@@ -299,7 +309,7 @@ export default function TeamBuilderCardPreferencesPanel({
             className="mt-0.5 h-4 w-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500"
           />
           <span className="flex min-w-0 flex-wrap items-center gap-2 leading-5">
-            <span>将指定稀有度及以下的卡牌设置为星光满级状态</span>
+            <span>将指定稀有度及以下的卡牌设置为满星光等级状态</span>
             <select
               value={preferences.ownedCardParameters.maxMasterRankRarityThreshold}
               onChange={(event) => onUpdateOwnedCardParameters({
@@ -322,7 +332,7 @@ export default function TeamBuilderCardPreferencesPanel({
             className="mt-0.5 h-4 w-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500"
           />
           <span className="flex min-w-0 flex-wrap items-center gap-2 leading-5">
-            <span>将指定稀有度及以下的卡牌设置为技能满级状态</span>
+            <span>将指定稀有度及以下的卡牌设置为满技能等级状态</span>
             <select
               value={preferences.ownedCardParameters.maxSkillLevelRarityThreshold}
               onChange={(event) => onUpdateOwnedCardParameters({
@@ -344,11 +354,20 @@ export default function TeamBuilderCardPreferencesPanel({
 
       <div className="space-y-3">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <h3 className="text-lg font-bold text-slate-900">临时卡牌</h3>
-          <div className="flex flex-wrap gap-2">
+          <h3 className="shrink-0 whitespace-nowrap text-lg font-bold text-slate-900">临时卡牌</h3>
+          <div className="flex min-w-0 flex-1 flex-wrap gap-2 sm:justify-end">
             <button type="button" onClick={onAddTemporary} className="inline-flex h-10 items-center gap-2 rounded-2xl bg-sky-600 px-4 text-sm font-bold text-white transition hover:bg-sky-500">
               <Plus className="h-4 w-4" aria-hidden="true" />
               添加临时卡牌
+            </button>
+            <button
+              type="button"
+              onClick={onAddCurrentEventCards}
+              disabled={currentEventBonusCardCount === 0 || addingCurrentEventCards}
+              className="inline-flex h-10 items-center gap-2 rounded-2xl border border-amber-200 bg-white px-4 text-sm font-bold text-amber-700 transition hover:bg-amber-50 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <Sparkles className="h-4 w-4" aria-hidden="true" />
+              {addingCurrentEventCards ? "添加中" : "添加当期卡牌"}
             </button>
             <button type="button" onClick={onClearTemporaryCards} disabled={preferences.temporaryCards.length === 0} className="inline-flex h-10 items-center gap-2 rounded-2xl border border-rose-200 bg-white px-4 text-sm font-bold text-rose-600 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50">
               <Trash2 className="h-4 w-4" aria-hidden="true" />
@@ -356,6 +375,12 @@ export default function TeamBuilderCardPreferencesPanel({
             </button>
           </div>
         </div>
+        {temporaryCardActionError ? (
+          <div className="rounded-xl bg-rose-50 p-3 text-sm font-semibold text-rose-600">{temporaryCardActionError}</div>
+        ) : null}
+        {temporaryCardActionNotice ? (
+          <div role="status" aria-live="polite" className="rounded-xl bg-amber-50 p-3 text-sm font-semibold text-amber-700">{temporaryCardActionNotice}</div>
+        ) : null}
         {temporaryCardEntries.length > 0 ? (
           <div className="grid justify-center gap-[6px] [grid-template-columns:repeat(auto-fill,56px)] sm:[grid-template-columns:repeat(auto-fill,76px)]">
             {temporaryCardEntries.map((entry) => (
@@ -446,7 +471,6 @@ export default function TeamBuilderCardPreferencesPanel({
                     assetRegion={assetRegion}
                     title={excluded ? "恢复参与计算" : "排除卡牌"}
                     compact
-                    selected={excluded}
                     muted={excluded}
                     onClick={() => onToggleExcludedCard(entry.card.cardId)}
                   />

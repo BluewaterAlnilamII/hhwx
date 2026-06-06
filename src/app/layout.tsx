@@ -22,8 +22,6 @@ export const metadata: Metadata = {
   },
 };
 
-import BackgroundEffects from "@/components/BackgroundEffects";
-
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -32,7 +30,6 @@ export default function RootLayout({
   return (
     <html lang="zh-CN">
       <body className="min-h-screen min-h-svh overflow-x-hidden text-slate-900">
-        <BackgroundEffects />
         <AppChrome>{children}</AppChrome>
       </body>
     </html>
