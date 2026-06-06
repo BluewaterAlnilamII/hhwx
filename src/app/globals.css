@@ -30,6 +30,15 @@
 :root {
   --bg-yellow: #ffea2f;
   --fog-white: rgba(255, 255, 228, 0.18);
+  --hhwx-page-background:
+    linear-gradient(var(--fog-white), var(--fog-white)),
+    linear-gradient(90deg, rgba(255, 167, 26, 0.12) 0%, rgba(255, 255, 255, 0.26) 32%, rgba(255, 255, 255, 0.18) 58%, rgba(255, 196, 32, 0.12) 100%),
+    radial-gradient(rgba(105, 72, 0, 0.09) 1px, transparent 1.25px),
+    radial-gradient(ellipse 960px 560px at 36% 18%, rgba(255, 255, 255, 0.82) 0%, rgba(255, 255, 255, 0.46) 34%, rgba(255, 255, 255, 0) 72%),
+    radial-gradient(ellipse 820px 520px at 76% 34%, rgba(255, 232, 55, 0.46) 0%, rgba(255, 232, 55, 0.24) 42%, rgba(255, 232, 55, 0) 78%),
+    radial-gradient(ellipse 780px 560px at 42% 96%, rgba(255, 255, 255, 0.46) 0%, rgba(255, 246, 151, 0.24) 44%, rgba(255, 246, 151, 0) 80%),
+    repeating-linear-gradient(132deg, transparent 0, transparent 118px, rgba(255, 255, 255, 0.24) 118px, rgba(255, 255, 255, 0.24) 154px, transparent 154px, transparent 252px),
+    linear-gradient(90deg, #ffc33a 0%, #ffe45b 18%, #fff7bc 38%, #fffbe2 55%, #fff05a 76%, #ffd22e 100%);
   --eventtracker-bestdori-color: #475569;
   --eventtracker-nonworking-band-fill: rgba(250, 204, 21, 0.38);
   --eventtracker-nonworking-band-stroke: rgba(202, 138, 4, 0.36);
@@ -55,23 +64,20 @@ body {
   font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", "Source Han Sans SC", "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
-body {
+html {
   background-color: var(--bg-yellow);
-  position: relative;
-  overflow-x: hidden;
+  background-image: var(--hhwx-page-background);
+  background-size: auto, auto, 40px 40px, auto, auto, auto, auto, auto;
+  overscroll-behavior-y: none;
 }
 
-/* 白色雾化遮罩层 */
-/* 注意：此处故意不使用 backdrop-filter，因为任何全屏 fixed 伪元素若带有 backdrop-filter，
-   会强制将页面上的每一个元素都提升为独立的 GPU 合成层，造成显著的 GPU 开销。
-   这里用半透明背景色保留柔和视觉效果，同时避免全页合成层开销。 */
-body::before {
-  content: '';
-  position: fixed;
-  inset: 0;
-  background: var(--fog-white);
-  z-index: 0;
-  pointer-events: none;
+body {
+  background-color: var(--bg-yellow);
+  background-image: var(--hhwx-page-background);
+  background-size: auto, auto, 40px 40px, auto, auto, auto, auto, auto;
+  position: relative;
+  overflow-x: hidden;
+  overscroll-behavior-y: none;
 }
 
 /* 飘落图案动画 */

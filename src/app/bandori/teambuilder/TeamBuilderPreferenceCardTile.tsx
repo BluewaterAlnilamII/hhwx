@@ -11,7 +11,6 @@ export type TeamBuilderPreferenceCardTileProps = {
   assetRegion: BandoriAssetRegion;
   title: string;
   compact?: boolean;
-  selected?: boolean;
   muted?: boolean;
   onClick: () => void;
 };
@@ -21,7 +20,6 @@ export default function TeamBuilderPreferenceCardTile({
   assetRegion,
   title,
   compact = false,
-  selected = false,
   muted = false,
   onClick,
 }: TeamBuilderPreferenceCardTileProps) {
@@ -36,20 +34,13 @@ export default function TeamBuilderPreferenceCardTile({
         onMouseEnter={() => setHoverOpen(true)}
         onMouseLeave={() => setHoverOpen(false)}
         title={title}
-        className={`group relative ${compact ? "h-[56px] w-[56px]" : "h-[74px] w-[74px]"} rounded-[5px] outline outline-1 transition hover:z-40 hover:-translate-y-0.5 sm:h-[76px] sm:w-[76px] ${
-          selected ? "outline-2 outline-rose-500 ring-2 ring-rose-200" : "outline-white/80 hover:outline-2 hover:outline-sky-400"
-        }`}
+        className={`group relative ${compact ? "h-[56px] w-[56px]" : "h-[74px] w-[74px]"} rounded-[5px] outline outline-1 outline-white/80 transition hover:z-40 hover:-translate-y-0.5 hover:outline-2 hover:outline-sky-400 sm:h-[76px] sm:w-[76px]`}
       >
         <span className={`relative block h-full w-full overflow-visible rounded-[5px] bg-white text-left shadow-[0_2px_7px_rgba(15,23,42,0.22)] ${
           muted ? "brightness-[0.42] saturate-[0.9] contrast-110" : ""
         }`}
         >
           <BandoriCardThumbnail card={entry.card} metadata={entry.metadata} bandId={entry.bandId} region={assetRegion} alt={entry.cardName} power={entry.totalPower} />
-          {selected ? (
-            <span className="absolute inset-x-1 bottom-1 rounded bg-rose-600/90 px-1 py-0.5 text-center text-[10px] font-black text-white">
-              排除
-            </span>
-          ) : null}
         </span>
       </button>
       {hoverOpen ? (
