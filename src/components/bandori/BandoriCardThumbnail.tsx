@@ -1,5 +1,6 @@
 "use client";
 
+import type { CSSProperties } from "react";
 import { useState } from "react";
 import { ImageOff } from "lucide-react";
 import {
@@ -8,7 +9,6 @@ import {
   buildBandoriResImagePublicUrl,
   type BandoriAssetRegion,
 } from "@/lib/bandori-asset-proxy";
-import { cn } from "@/lib/utils";
 
 type CardAttribute = "powerful" | "pure" | "cool" | "happy";
 type TrainType = "normal" | "after_training";
@@ -30,6 +30,8 @@ export type BandoriCardThumbnailMetadata = {
   assetRegion?: BandoriAssetRegion;
   releasedAt?: Array<string | number | null>;
 };
+
+export type BandoriCardThumbnailSize = "tile" | "preview" | "editor";
 
 function isKnownAttribute(value: string | undefined): value is CardAttribute {
   return value === "powerful" || value === "pure" || value === "cool" || value === "happy";
@@ -58,6 +60,14 @@ function resolveThumbnailRegion(
     return "jp";
   }
   return fallbackRegion;
+}
+
+function formatThumbnailPower(power: number | null | undefined): string | null {
+  if (!Number.isFinite(power) || power === null || power === undefined) {
+    return null;
+  }
+
+  return String(Math.max(0, Math.trunc(power)));
 }
 
 function BrokenImageFallback({ label }: { label: string }) {
@@ -115,15 +125,19 @@ export default function BandoriCardThumbnail({
   size = "tile",
   loading = "lazy",
   showLevel = true,
+  showPower = true,
+  power,
 }: {
   card: BandoriCardThumbnailCard;
   metadata?: BandoriCardThumbnailMetadata;
   bandId: number | null;
   region: BandoriAssetRegion;
   alt: string;
-  size?: "tile" | "preview";
+  size?: BandoriCardThumbnailSize;
   loading?: "eager" | "lazy";
   showLevel?: boolean;
+  showPower?: boolean;
+  power?: number | null;
 }) {
   const trainType = getCardTrainType(card);
   const thumbnailRegion = resolveThumbnailRegion(metadata, region);
@@ -143,10 +157,38 @@ export default function BandoriCardThumbnail({
   const starIconUrl = buildBandoriResIconPublicUrl(card.isTrained ? "star_trained.png" : "star.png");
   const masterIconUrl = buildBandoriResIconPublicUrl("master.svg");
   const starSlots = Array.from({ length: rarity }, (_, index) => index);
-  const isPreview = size === "preview";
+  const isPreview = size !== "tile";
+  const powerLabel = showPower && showLevel ? formatThumbnailPower(power) : null;
+  const starStyle = size === "preview"
+    ? {
+        "--bandori-card-star-left": "3px",
+        "--bandori-card-star-bottom": "0.5px",
+        "--bandori-card-star-width": "24px",
+        "--bandori-card-star-height": "23px",
+        "--bandori-card-star-step": "18.8px",
+      }
+    : size === "editor"
+      ? {
+          "--bandori-card-star-left": "2.4px",
+          "--bandori-card-star-bottom": "0.4px",
+          "--bandori-card-star-width": "18.9px",
+          "--bandori-card-star-height": "18.1px",
+          "--bandori-card-star-step": "14.8px",
+        }
+    : {
+        "--bandori-card-star-left": "1px",
+        "--bandori-card-star-bottom": "0px",
+        "--bandori-card-star-width": "14px",
+        "--bandori-card-star-height": "13px",
+        "--bandori-card-star-step": "10.8px",
+      };
 
   return (
-    <div className="relative h-full w-full rounded-[5px] bg-white">
+    <div
+      className="bandori-card-thumbnail relative h-full w-full rounded-[5px] bg-white [container-type:inline-size]"
+      data-size={size}
+      style={starStyle as CSSProperties}
+    >
       <div className="absolute inset-0">
         <div className="h-full w-full overflow-hidden rounded-[5px]">
           <CardAssetImage
@@ -162,10 +204,26 @@ export default function BandoriCardThumbnail({
       {/* eslint-disable-next-line @next/next/no-img-element */}
       {frameUrl ? <img src={frameUrl} alt="" aria-hidden="true" loading={loading} className="pointer-events-none absolute inset-0 h-full w-full object-fill" /> : null}
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      {bandIconUrl ? <img src={bandIconUrl} alt="" aria-hidden="true" loading={loading} className={cn("pointer-events-none absolute left-0 top-0", isPreview ? "h-[31px] w-[31px]" : "h-[21px] w-[21px]")} /> : null}
+      {bandIconUrl ? (
+        <img
+          src={bandIconUrl}
+          alt=""
+          aria-hidden="true"
+          loading={loading}
+          className="pointer-events-none absolute left-0 top-0 h-[27.6%] w-[27.6%]"
+        />
+      ) : null}
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      {attributeIconUrl ? <img src={attributeIconUrl} alt="" aria-hidden="true" loading={loading} className={cn("pointer-events-none absolute right-[0.8%]", isPreview ? "top-[1.6px] h-[28.4px] w-[28.4px]" : "top-[0.8px] h-[19.4px] w-[19.4px]")} /> : null}
-      <div className={cn("pointer-events-none absolute z-10 flex flex-col-reverse items-start gap-0", isPreview ? "bottom-[2px] left-[3px]" : "bottom-0 left-[2px]")}>
+      {attributeIconUrl ? (
+        <img
+          src={attributeIconUrl}
+          alt=""
+          aria-hidden="true"
+          loading={loading}
+          className="pointer-events-none absolute right-[0.8%] top-[1.1%] h-[25.5%] w-[25.5%]"
+        />
+      ) : null}
+      <div className="pointer-events-none absolute inset-0 z-10">
         {starSlots.map((slot) => (
           // eslint-disable-next-line @next/next/no-img-element
           <img
@@ -174,36 +232,37 @@ export default function BandoriCardThumbnail({
             alt=""
             aria-hidden="true"
             loading={loading}
-            className={cn("object-contain drop-shadow-[0_1px_1px_rgba(0,0,0,0.55)]", isPreview ? "-mt-[3.5px] h-[19px] w-[20px]" : "-mt-[2.5px] h-[13px] w-[14px]")}
+            className="bandori-card-thumbnail-star absolute object-contain drop-shadow-[0_1px_1px_rgba(0,0,0,0.55)]"
+            style={{ "--bandori-card-star-slot": slot } as CSSProperties}
           />
         ))}
       </div>
       {card.masterRank > 0 ? (
-        <div className={cn("pointer-events-none absolute z-30 drop-shadow-[0_1px_2px_rgba(15,23,42,0.55)]", isPreview ? "right-[-4px] top-[30px] h-[31px] w-[31px]" : "right-[-4px] top-[20px] h-[21px] w-[21px]")}>
+        <div className="pointer-events-none absolute right-[-5.3%] top-[26.3%] z-30 h-[27.6%] w-[27.6%] drop-shadow-[0_1px_2px_rgba(15,23,42,0.55)]">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={masterIconUrl} alt="" aria-hidden="true" loading={loading} className="h-full w-full object-contain" />
-          <span className={cn("absolute inset-0 flex items-center justify-center font-black leading-none text-white [text-shadow:0_1px_1px_rgba(0,0,0,0.68)]", isPreview ? "pb-[2px] text-sm" : "pb-[1px] text-[10px]")}>
+          <span className="absolute inset-0 flex items-center justify-center text-[13cqw] font-black leading-none text-white [text-shadow:0_1px_1px_rgba(0,0,0,0.68)]">
             {card.masterRank}
           </span>
         </div>
       ) : null}
       {card.skillLevel > 1 ? (
-        <div className={cn("pointer-events-none absolute z-10 flex items-center justify-center rounded-[3px] border border-white/80 bg-rose-500 font-black leading-none text-white shadow-[0_1px_2px_rgba(15,23,42,0.5)] [text-shadow:0_1px_1px_rgba(0,0,0,0.55)]", isPreview ? "right-[-1px] top-[61px] h-[22px] min-w-[31px] px-1 text-sm" : "right-[-1px] top-[41px] h-[15px] min-w-[21px] px-[3px] text-[10px]")}>
+        <div className="pointer-events-none absolute right-[-1.3%] top-[53.9%] z-10 flex h-[19.7%] min-w-[27.6%] items-center justify-center rounded-[3px] border border-white/80 bg-rose-500 px-[3.9%] text-[13cqw] font-black leading-none text-white shadow-[0_1px_2px_rgba(15,23,42,0.5)] [text-shadow:0_1px_1px_rgba(0,0,0,0.55)]">
           {card.skillLevel}
         </div>
       ) : null}
-      {showLevel ? (
+      {powerLabel ? (
         <>
           <div
-            className={cn("pointer-events-none absolute right-[2px] z-10", isPreview ? "bottom-[3px] h-[22px] w-[70px]" : "bottom-[2px] h-[15px] w-[48px]")}
+            className="pointer-events-none absolute bottom-[2.6%] right-[2.6%] z-10 h-[21.7%] w-[58.5%]"
             style={{
               backgroundColor: "rgba(0, 0, 0, 0.42)",
               clipPath: "polygon(22% 0, 100% 0, 100% 100%, 0 100%)",
             }}
             aria-hidden="true"
           />
-          <div className={cn("pointer-events-none absolute z-20 flex items-center justify-end font-semibold leading-none text-white [text-shadow:0_1px_1px_rgba(0,0,0,0.72)]", isPreview ? "bottom-[5px] right-[6px] h-[17px] text-sm" : "bottom-[3px] right-[4px] h-[12px] text-[10px]")}>
-            <span>Lv.{card.level}</span>
+          <div className="pointer-events-none absolute bottom-[3.9%] right-[5.3%] z-20 flex h-[16.8%] items-center justify-end text-[14cqw] font-normal leading-none text-white [text-shadow:0_1px_1px_rgba(0,0,0,0.72)]">
+            <span>{powerLabel}</span>
           </div>
         </>
       ) : null}

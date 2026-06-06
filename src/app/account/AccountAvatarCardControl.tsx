@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Image as ImageIcon, Loader2, Save, X } from "lucide-react";
 import AccountCardAvatar from "@/components/account/AccountCardAvatar";
 import { BandoriCardPicker, type BandoriCardPickerValue } from "@/components/bandori/card-picker";
@@ -53,6 +54,7 @@ export default function AccountAvatarCardControl({
   const [draftValue, setDraftValue] = useState<BandoriCardPickerValue | null>(() => profileToPickerValue(profile));
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
+  const pickerScrollRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (!open) {
@@ -133,12 +135,12 @@ export default function AccountAvatarCardControl({
         </span>
       </button>
 
-      {open ? (
-        <div data-testid="account-avatar-card-dialog" className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto overscroll-contain bg-slate-950/55 p-2 py-3 sm:p-6">
-          <div className="flex max-h-[calc(100svh-1.5rem)] w-full max-w-6xl flex-col overflow-hidden rounded-2xl bg-slate-50 shadow-2xl sm:max-h-[calc(100svh-3rem)]">
+      {open && typeof document !== "undefined" ? createPortal((
+        <div data-testid="account-avatar-card-dialog" className="fixed inset-0 z-[1000] flex h-dvh items-center justify-center overflow-hidden overscroll-contain bg-slate-950/55 p-3 sm:p-6" role="dialog" aria-modal="true" aria-labelledby="account-avatar-card-dialog-title">
+          <div className="flex max-h-[calc(100dvh-1.5rem)] w-full max-w-6xl flex-col overflow-hidden rounded-2xl bg-slate-50 shadow-2xl sm:max-h-[calc(100dvh-3rem)]">
             <div className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-3 sm:px-5">
               <div className="min-w-0">
-                <h2 className="text-lg font-bold text-slate-900">选择头像卡面</h2>
+                <h2 id="account-avatar-card-dialog-title" className="text-lg font-bold text-slate-900">选择头像卡面</h2>
                 <p className="mt-1 text-sm text-slate-500">默认使用特训后卡面，可在选择后切换卡面版本。</p>
               </div>
               <button
@@ -151,8 +153,8 @@ export default function AccountAvatarCardControl({
               </button>
             </div>
 
-            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-3 sm:p-5">
-              <BandoriCardPicker value={draftValue} onValueChange={setDraftValue} />
+            <div ref={pickerScrollRef} className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-3 sm:p-5">
+              <BandoriCardPicker value={draftValue} onValueChange={setDraftValue} scrollElementRef={pickerScrollRef} />
             </div>
 
             <div className="flex shrink-0 flex-col gap-3 border-t border-slate-200 bg-white px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5">
@@ -190,7 +192,7 @@ export default function AccountAvatarCardControl({
             </div>
           </div>
         </div>
-      ) : null}
+      ), document.body) : null}
     </>
   );
 }

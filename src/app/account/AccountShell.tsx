@@ -3,8 +3,8 @@ import { buildAuthPath } from "@/lib/supabase";
 
 export interface AccountShellProps {
   title: string;
-  description: string;
-  backHref?: string;
+  description?: string | null;
+  backHref?: string | null;
   backLabel?: string;
   containerClassName?: string;
   hideEyebrow?: boolean;
@@ -37,14 +37,18 @@ export default function AccountShell({
                 </>
               ) : null}
               <h1 className="mt-2 text-2xl font-bold text-slate-900 sm:text-3xl">{title}</h1>
-              <p className="mt-2 w-full max-w-[14rem] break-all text-sm leading-6 text-slate-600 min-[390px]:max-w-full sm:max-w-2xl">{description}</p>
+              {description ? (
+                <p className="mt-2 w-full max-w-[14rem] break-all text-sm leading-6 text-slate-600 min-[390px]:max-w-full sm:max-w-2xl">{description}</p>
+              ) : null}
             </div>
-            <Link
-              href={backHref}
-              className="inline-flex w-full items-center justify-center rounded-full border border-slate-200 bg-white px-5 py-2 text-sm font-semibold text-slate-700 transition hover:border-sky-200 hover:text-sky-600 sm:w-auto"
-            >
-              {backLabel}
-            </Link>
+            {backHref ? (
+              <Link
+                href={backHref}
+                className="inline-flex w-full items-center justify-center rounded-full border border-slate-200 bg-white px-5 py-2 text-sm font-semibold text-slate-700 transition hover:border-sky-200 hover:text-sky-600 sm:w-auto"
+              >
+                {backLabel}
+              </Link>
+            ) : null}
           </div>
 
           <div className="mt-5 sm:mt-8">{children}</div>

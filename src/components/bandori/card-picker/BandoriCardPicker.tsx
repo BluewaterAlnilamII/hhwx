@@ -1,6 +1,6 @@
 "use client";
 
-import { useDeferredValue, useEffect, useMemo, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useState, type RefObject } from "react";
 import { ArrowDownWideNarrow, ArrowUpNarrowWide, Filter, Loader2, RotateCcw, Search, X } from "lucide-react";
 import { useCachedFetch } from "@/hooks/useCachedFetch";
 import {
@@ -13,6 +13,7 @@ import {
   type BandoriSkillLabelMaster,
 } from "@/lib/bandori-skill-label";
 import { cn } from "@/lib/utils";
+import VirtualizedBandoriCardGrid from "@/components/bandori/VirtualizedBandoriCardGrid";
 import {
   bandoriCardCatalogTransforms,
   buildBandoriCardCatalog,
@@ -43,8 +44,8 @@ const SORT_OPTIONS: Array<{ value: BandoriCardPickerSortBy; label: string }> = [
   { value: "release_cn", label: "发布日期（CN）" },
   { value: "id", label: "卡牌 ID" },
 ];
-const INITIAL_VISIBLE_COUNT = 96;
-const PAGE_SIZE = 96;
+const INITIAL_VISIBLE_COUNT = 60;
+const PAGE_SIZE = 60;
 const PREFERENCES_STORAGE_KEY = "hhwx-bandori-card-picker-preferences-v1";
 
 const DEFAULT_FILTER: BandoriCardPickerFilter = {
@@ -127,19 +128,10 @@ function readStoredPreferences(
   }
 }
 
-function writeStoredPreferences(filter: BandoriCardPickerFilter) {
+function writeStoredPreferences(preferences: BandoriCardPickerPreferences) {
   if (typeof window === "undefined") {
     return;
   }
-
-  const preferences: BandoriCardPickerPreferences = {
-    bandIds: filter.bandIds,
-    attributes: filter.attributes,
-    rarities: filter.rarities,
-    characterIds: filter.characterIds,
-    sortBy: filter.sortBy,
-    sortDirection: filter.sortDirection,
-  };
 
   try {
     window.localStorage.setItem(PREFERENCES_STORAGE_KEY, JSON.stringify(preferences));
@@ -345,12 +337,14 @@ export default function BandoriCardPicker({
   region = "cn",
   className,
   showArtToggle = true,
+  scrollElementRef,
 }: {
   value: BandoriCardPickerValue | null;
   onValueChange: (value: BandoriCardPickerValue | null) => void;
   region?: BandoriAssetRegion;
   className?: string;
   showArtToggle?: boolean;
+  scrollElementRef?: RefObject<HTMLElement | null>;
 }) {
   const { data: cardMetadata, loading: cardsLoading } = useCachedFetch(
     "bandori-card-picker-cards-v3",
@@ -411,6 +405,25 @@ export default function BandoriCardPicker({
 
   const bandIds = useMemo(() => bandOptions.map((option) => option.bandId), [bandOptions]);
   const characterIds = useMemo(() => characterOptions.map((option) => option.characterId), [characterOptions]);
+  const persistedPreferences = useMemo<BandoriCardPickerPreferences>(() => ({
+    bandIds: filter.bandIds,
+    attributes: filter.attributes,
+    rarities: filter.rarities,
+    characterIds: filter.characterIds,
+    sortBy: filter.sortBy,
+    sortDirection: filter.sortDirection,
+  }), [
+    filter.attributes,
+    filter.bandIds,
+    filter.characterIds,
+    filter.rarities,
+    filter.sortBy,
+    filter.sortDirection,
+  ]);
+  const deferredFilter = useMemo<BandoriCardPickerFilter>(() => ({
+    ...persistedPreferences,
+    query: deferredQuery,
+  }), [deferredQuery, persistedPreferences]);
 
   useEffect(() => {
     if (preferencesReady || loading || bandIds.length === 0 || characterIds.length === 0) {
@@ -434,12 +447,12 @@ export default function BandoriCardPicker({
       return;
     }
 
-    writeStoredPreferences(filter);
-  }, [filter, preferencesReady]);
+    writeStoredPreferences(persistedPreferences);
+  }, [persistedPreferences, preferencesReady]);
 
   const filteredCards = useMemo(
-    () => filterBandoriCardCatalog(catalog, { ...filter, query: deferredQuery }),
-    [catalog, deferredQuery, filter],
+    () => filterBandoriCardCatalog(catalog, deferredFilter),
+    [catalog, deferredFilter],
   );
 
   const filterKey = useMemo(
@@ -459,9 +472,18 @@ export default function BandoriCardPicker({
     () => catalog.find((card) => card.cardId === value?.cardId) ?? null,
     [catalog, value?.cardId],
   );
+  const virtualGridLayoutKey = useMemo(
+    () => [
+      showArtToggle ? "art-toggle" : "no-art-toggle",
+      value?.cardId ?? "no-card",
+      value?.trainType ?? "no-train-type",
+    ].join(":"),
+    [showArtToggle, value?.cardId, value?.trainType],
+  );
 
   const visibleCount = visibleState.key === filterKey ? visibleState.count : INITIAL_VISIBLE_COUNT;
-  const displayedCards = filteredCards.slice(0, visibleCount);
+  const visibleCardCount = Math.min(visibleCount, filteredCards.length);
+  const hiddenCardCount = Math.max(0, filteredCards.length - visibleCardCount);
 
   const updateFilter = (patch: Partial<BandoriCardPickerFilter>) => {
     setFilter((current) => ({ ...current, ...patch }));
@@ -614,17 +636,19 @@ export default function BandoriCardPicker({
       </div>
 
       {value && showArtToggle ? (
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
-          <div className="min-w-0 text-sm text-slate-600">
+        <div className="sticky top-[-0.75rem] z-[80] -mx-3 bg-slate-50/95 px-3 pb-2 pt-3 backdrop-blur sm:top-[-1.25rem] sm:-mx-5 sm:px-5 sm:pt-5">
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white/95 p-3 shadow-sm">
+            <div className="min-w-0 text-sm text-slate-600">
             当前选择：
             <span className="font-semibold text-slate-900">
               {selectedCard ? `${selectedCard.displayName} / #${selectedCard.cardId}` : `Card #${value.cardId}`}
             </span>
           </div>
-          <ArtToggle
-            trainType={previewTrainType}
-            onChange={handlePreviewTrainTypeChange}
-          />
+            <ArtToggle
+              trainType={previewTrainType}
+              onChange={handlePreviewTrainTypeChange}
+            />
+          </div>
         </div>
       ) : null}
 
@@ -634,10 +658,15 @@ export default function BandoriCardPicker({
             <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" />
             正在读取卡牌
           </div>
-        ) : displayedCards.length > 0 ? (
+        ) : filteredCards.length > 0 ? (
           <>
-            <div className="grid justify-center gap-[6px] [grid-template-columns:repeat(auto-fill,74px)] sm:[grid-template-columns:repeat(auto-fill,76px)]">
-              {displayedCards.map((card) => {
+            <VirtualizedBandoriCardGrid
+              items={filteredCards}
+              visibleLimit={visibleCount}
+              scrollElementRef={scrollElementRef}
+              layoutKey={virtualGridLayoutKey}
+              getKey={(card) => card.cardId}
+              renderItem={(card) => {
                 const selected = value?.cardId === card.cardId;
                 const activeTrainType = resolveCardTrainType(card, previewTrainType);
                 return (
@@ -651,16 +680,26 @@ export default function BandoriCardPicker({
                     onSelect={() => handleCardSelect(card)}
                   />
                 );
-              })}
-            </div>
-            {visibleCount < filteredCards.length ? (
-              <div className="mt-4 flex justify-center">
+              }}
+            />
+            {hiddenCardCount > 0 ? (
+              <div className="mt-4 flex flex-wrap justify-center gap-2">
                 <button
                   type="button"
-                  onClick={() => setVisibleState({ key: filterKey, count: visibleCount + PAGE_SIZE })}
-                  className="inline-flex h-10 items-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:border-blue-300 hover:text-blue-600"
+                  onClick={() => setVisibleState({
+                    key: filterKey,
+                    count: Math.min(visibleCount + PAGE_SIZE, filteredCards.length),
+                  })}
+                  className="inline-flex h-10 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 shadow-sm transition hover:border-blue-300 hover:text-blue-600"
                 >
-                  加载更多
+                  显示更多 {Math.min(PAGE_SIZE, hiddenCardCount)} 张
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setVisibleState({ key: filterKey, count: filteredCards.length })}
+                  className="inline-flex h-10 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 shadow-sm transition hover:border-blue-300 hover:text-blue-600"
+                >
+                  显示全部
                 </button>
               </div>
             ) : null}
