@@ -15,6 +15,7 @@ import {
   pruneDominatedAreaItemConfigurations,
 } from "../core/cards";
 import { createScoreCalculationCache } from "../core/team-evaluation";
+import { getCardInstanceKey } from "../core/card-identity";
 import { createInitialTeamSearchStats, finishTeamSearchResponse, sortResults } from "./results";
 import { normalizeSearchTarget, resolveBandoriTeamSearchEventMode, resolveBandoriTeamSearchUseFever } from "../core/events";
 import { clamp } from "../core/utils";
@@ -86,11 +87,12 @@ export function searchBandoriBestTeams(input: BandoriTeamSearchInput): BandoriTe
 
   // Stage 2: initialize runtime state. Detailed result fields are built only after a team reaches top-N.
   const skillRateProfiles = new Map(calculatedCards.map((card) => {
-    const staticProfile = searchPrecomputed.cardStaticProfilesById.get(card.cardId);
+    const cardKey = getCardInstanceKey(card);
+    const staticProfile = searchPrecomputed.cardStaticProfilesByKey.get(cardKey);
     if (!staticProfile) {
-      return [card.cardId, getCachedSearchCardSkillRateProfile(card, input, chart, server)] as const;
+      return [cardKey, getCachedSearchCardSkillRateProfile(card, input, chart, server)] as const;
     }
-    return [card.cardId, staticProfile] as const;
+    return [cardKey, staticProfile] as const;
   }));
   const results: BandoriTeamSearchResult[] = [];
   const stats = createInitialTeamSearchStats({

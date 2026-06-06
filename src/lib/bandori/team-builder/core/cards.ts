@@ -22,6 +22,7 @@ import { ATTRIBUTE_AREA_ITEM_IDS, BAND_AREA_ITEM_GROUP_KEYS, PARAMETER_AREA_ITEM
 import { calculateResolvedSkillUpperRatesPerPower, calculateSkillUpperRatesPerPower, getSkillDurationSeconds } from "./scoring";
 import { clamp, getRegionalNumber, toFiniteNumber } from "./utils";
 import { normalizeSearchEventType, normalizeSearchTarget, resolveBandoriTeamSearchEventMode, resolveBandoriTeamSearchUseFever } from "./events";
+import { compareCardInstanceKey, getCardInstanceKey, getCardInstanceKeys } from "./card-identity";
 import type { BandoriAreaItemConfiguration, BandoriTeamSearchEventMode, BandoriTeamSearchInput, BandoriTeamSearchTarget, CharacterUpperBoundIndex, PreparedChart, ScoreComboOptions, SearchCard, SearchCardSkillRateProfile, SearchCardGroup, SearchObjectiveAdapter, SearchPrecomputedData, SupportBandCandidate, SupportBandContext, SupportBandSelection } from "./types";
 
 const SKILL_RATE_PROFILE_CACHE_LIMIT = 20000;
@@ -213,9 +214,9 @@ export function buildSearchCardSkillRateProfiles(
   chart: PreparedChart,
   server: number,
   comboOptions?: ScoreComboOptions,
-): Map<number, SearchCardSkillRateProfile> {
+): Map<string, SearchCardSkillRateProfile> {
   return new Map(cards.map((card) => [
-    card.cardId,
+    getCardInstanceKey(card),
     getCachedSearchCardSkillRateProfile(card, input, chart, server, comboOptions),
   ]));
 }
@@ -337,21 +338,21 @@ function compareSupportBandCandidates(left: SupportBandCandidate, right: Support
   return (
     right.supportPower - left.supportPower
     || right.card.totalPower - left.card.totalPower
-    || left.card.cardId - right.card.cardId
+    || compareCardInstanceKey(left.card, right.card)
   );
 }
 
 function selectSupportBandCandidates(
   candidates: SupportBandCandidate[],
-  excludedCardIds: readonly number[],
+  excludedCardKeys: readonly string[],
 ): SupportBandSelection {
   const supportCards: SupportBandCandidate[] = [];
-  const excludedCardIdSet = new Set(excludedCardIds);
+  const excludedCardKeySet = new Set(excludedCardKeys);
   const usedCharacterIds = new Set<number>();
   let supportBandPower = 0;
 
   for (const candidate of candidates) {
-    if (excludedCardIdSet.has(candidate.card.cardId) || usedCharacterIds.has(candidate.card.characterId)) {
+    if (excludedCardKeySet.has(getCardInstanceKey(candidate.card)) || usedCharacterIds.has(candidate.card.characterId)) {
       continue;
     }
 
@@ -375,7 +376,7 @@ export function createSupportBandContext(input: BandoriTeamSearchInput, cards: C
     return {
       enabled: false,
       candidates: [],
-      supportPowerByCardId: new Map(),
+      supportPowerByCardKey: new Map(),
       supportBandPowerUpperBound: 0,
       supportBandPointUpperBound: 0,
       evaluationCount: 0,
@@ -392,15 +393,15 @@ export function createSupportBandContext(input: BandoriTeamSearchInput, cards: C
     .sort(compareSupportBandCandidates);
   const upperSelection = selectSupportBandCandidates(candidates, []);
   // supportBandPointUpperBound contributes to the PT bound; real team evaluation reselects after excluding main-team cards and duplicate characters.
-  const supportPowerByCardId = new Map(candidates.map((candidate) => [
-    candidate.card.cardId,
+  const supportPowerByCardKey = new Map(candidates.map((candidate) => [
+    getCardInstanceKey(candidate.card),
     candidate.supportPower,
   ]));
 
   return {
     enabled: true,
     candidates,
-    supportPowerByCardId,
+    supportPowerByCardKey,
     supportBandPowerUpperBound: upperSelection.supportBandPower,
     supportBandPointUpperBound: Math.floor(upperSelection.supportBandPower / 3000),
     evaluationCount: 0,
@@ -410,10 +411,7 @@ export function createSupportBandContext(input: BandoriTeamSearchInput, cards: C
 }
 
 function getSupportSelectionKey(cards: readonly SearchCard[]): string {
-  return cards
-    .map((card) => card.cardId)
-    .sort((left, right) => left - right)
-    .join(",");
+  return getCardInstanceKeys(cards).sort().join(",");
 }
 
 export function resolveSupportBandForTeam(cards: readonly SearchCard[], context?: SupportBandContext): SupportBandSelection | null {
@@ -430,7 +428,7 @@ export function resolveSupportBandForTeam(cards: readonly SearchCard[], context?
   context.evaluationCount += 1;
   const selection = selectSupportBandCandidates(
     context.candidates,
-    cards.map((card) => card.cardId),
+    getCardInstanceKeys(cards),
   );
   context.selectionCache.set(key, selection);
   return selection;
@@ -441,7 +439,7 @@ export function buildSearchCardsForConfiguration(
   input: BandoriTeamSearchInput,
   configuration: BandoriAreaItemConfiguration,
   server: number,
-  skillRateProfiles: Map<number, SearchCardSkillRateProfile>,
+  skillRateProfiles: Map<string, SearchCardSkillRateProfile>,
   supportBandContext?: SupportBandContext,
   precomputed?: SearchPrecomputedData,
 ): SearchCard[] {
@@ -459,7 +457,8 @@ export function buildSearchCardsForConfiguration(
       configuration.selectedAreaItemIds,
       server,
     );
-    const staticProfile = precomputed?.cardStaticProfilesById.get(card.cardId);
+    const cardKey = getCardInstanceKey(card);
+    const staticProfile = precomputed?.cardStaticProfilesByKey.get(cardKey);
     const eventBonus = staticProfile ? null : calculateBandoriCardEventBonus(card, input.eventBonus);
     const eventPower = eventMode === "parameterPower"
       ? staticProfile?.eventPower ?? (
@@ -468,7 +467,7 @@ export function buildSearchCardsForConfiguration(
           : PARAMETER_KEYS.reduce((sum, _, bonusIndex) => sum + (eventBonus?.parameterBonus[bonusIndex] ?? 0), 0)
       )
       : 0;
-    const skillRateProfile = staticProfile ?? skillRateProfiles.get(card.cardId);
+    const skillRateProfile = staticProfile ?? skillRateProfiles.get(cardKey);
     if (!skillRateProfile) {
       throw new Error(`Missing search skill rate profile for card ${card.cardId}`);
     }
@@ -476,7 +475,7 @@ export function buildSearchCardsForConfiguration(
       ...card,
       effectivePower: card.totalPower + itemPower + eventPower,
       pointBonusRate: staticProfile?.pointBonusRate ?? eventBonus?.pointBonusRate ?? 0,
-      supportPower: staticProfile?.supportPower ?? supportBandContext?.supportPowerByCardId.get(card.cardId) ?? 0,
+      supportPower: staticProfile?.supportPower ?? supportBandContext?.supportPowerByCardKey.get(cardKey) ?? 0,
       skillSearchSignature: staticProfile?.skillSignature
         ?? buildSkillSearchSignature(card.skillId, input.skillsById[String(card.skillId)], card.skillLevel, server),
       ...skillRateProfile,
@@ -585,7 +584,7 @@ export function sortSearchCardsForTraversal(
       || left.supportPower - right.supportPower
       || right.effectivePower - left.effectivePower
       || right.totalPower - left.totalPower
-      || left.cardId - right.cardId
+      || compareCardInstanceKey(left, right)
     );
   });
 }

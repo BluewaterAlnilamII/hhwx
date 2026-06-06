@@ -1,5 +1,6 @@
 import { pickBestdoriCnThenJpName, pickBestdoriCnThenJpRegionalName } from "@/lib/bestdori-regional-names";
 import { parseApiSuccessData } from "@/lib/api-contracts";
+import type { BandoriSkillLabelMaster } from "@/lib/bandori-skill-label";
 import type { BandoriCardAttribute, BandoriCardCatalogEntry, BandoriCardPickerFilter } from "./types";
 
 type BestdoriMasterResponse<T> = {
@@ -8,6 +9,7 @@ type BestdoriMasterResponse<T> = {
 
 type BestdoriCardMetadata = {
   characterId?: number;
+  skillId?: unknown;
   rarity?: number;
   attribute?: string;
   levelLimit?: number;
@@ -23,6 +25,7 @@ type BestdoriCardMetadata = {
 
 type BestdoriCharacterMetadata = {
   bandId?: number;
+  nickname?: Array<string | null>;
   characterName?: Array<string | null>;
   firstName?: Array<string | null>;
 };
@@ -71,9 +74,14 @@ function transformCharactersResponse(raw: unknown): Record<string, BestdoriChara
   return parseApiSuccessData<BestdoriMasterResponse<BestdoriCharacterMetadata>>(raw)?.payload ?? {};
 }
 
+function transformSkillsResponse(raw: unknown): Record<string, BandoriSkillLabelMaster | null | undefined> {
+  return parseApiSuccessData<BestdoriMasterResponse<BandoriSkillLabelMaster>>(raw)?.payload ?? {};
+}
+
 export const bandoriCardCatalogTransforms = {
   cards: transformCardsResponse,
   characters: transformCharactersResponse,
+  skills: transformSkillsResponse,
 };
 
 export function buildBandoriCardCatalog(
@@ -83,6 +91,7 @@ export function buildBandoriCardCatalog(
   return Object.entries(cards).flatMap(([rawCardId, card]) => {
     const cardId = toPositiveInteger(rawCardId);
     const characterId = toPositiveInteger(card?.characterId);
+    const skillId = toPositiveInteger(card?.skillId);
     const rarity = toPositiveInteger(card?.rarity);
     const resourceSetName = card?.resourceSetName?.trim();
     if (!cardId || !characterId || !rarity || !resourceSetName) {
@@ -94,7 +103,8 @@ export function buildBandoriCardCatalog(
     const displayNameResult = pickBestdoriCnThenJpRegionalName(card?.prefix);
     const displayName = displayNameResult?.name ?? `Card ${cardId}`;
     const assetRegion = displayNameResult?.assetRegion ?? (hasCnRelease(card?.releasedAt) ? "cn" : "jp");
-    const characterName = pickBestdoriCnThenJpName(character?.characterName)
+    const characterName = pickBestdoriCnThenJpName(character?.nickname)
+      ?? pickBestdoriCnThenJpName(character?.characterName)
       ?? pickBestdoriCnThenJpName(character?.firstName)
       ?? `Character ${characterId}`;
     const attribute = isKnownAttribute(card?.attribute) ? card.attribute : null;
@@ -118,6 +128,7 @@ export function buildBandoriCardCatalog(
     return [{
       cardId,
       characterId,
+      skillId,
       characterName,
       bandId,
       rarity,

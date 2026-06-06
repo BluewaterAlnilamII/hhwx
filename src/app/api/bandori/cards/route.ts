@@ -7,12 +7,13 @@ const BESTDORI_CARDS_URL = "https://bestdori.com/api/cards/all.5.json";
 
 type BestdoriCardMetadata = {
   characterId?: number;
+  skillId?: number;
   rarity?: number;
   attribute?: string;
   levelLimit?: number;
   resourceSetName?: string;
   prefix?: Array<string | null>;
-  releasedAt?: Array<string | null>;
+  releasedAt?: Array<string | number | null>;
   type?: string;
   stat?: {
     training?: {

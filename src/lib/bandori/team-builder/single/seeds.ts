@@ -5,6 +5,7 @@
  * correctness; every seed is evaluated through the same exact team-evaluation path.
  */
 import { ATTRIBUTE_KEYS } from "../core/constants";
+import { compareCardInstanceKey, getSortedCardInstanceKey } from "../core/card-identity";
 import type { BandoriCardAttribute } from "@/lib/bandori-team-calculator";
 import type { BandoriTeamSearchEventMode, BandoriTeamSearchTarget, SearchCard, SearchObjectiveAdapter } from "../core/types";
 
@@ -61,13 +62,13 @@ export function buildSeedTeams(
       (right.effectivePower * (1 + right.skillUpperRate)) - (left.effectivePower * (1 + left.skillUpperRate))
       || left.supportPower - right.supportPower
       || right.effectivePower - left.effectivePower
-      || left.cardId - right.cardId
+      || compareCardInstanceKey(left, right)
     )),
     [...cards].sort((left, right) => (
       right.skillUpperRate - left.skillUpperRate
       || left.supportPower - right.supportPower
       || right.effectivePower - left.effectivePower
-      || left.cardId - right.cardId
+      || compareCardInstanceKey(left, right)
     )),
   ];
   if (target === "eventPoint" && eventMode === "pointBonus") {
@@ -76,14 +77,14 @@ export function buildSeedTeams(
         right.pointBonusRate - left.pointBonusRate
         || (right.effectivePower * (1 + right.skillUpperRate)) - (left.effectivePower * (1 + left.skillUpperRate))
         || left.supportPower - right.supportPower
-        || left.cardId - right.cardId
+        || compareCardInstanceKey(left, right)
       )),
       [...cards].sort((left, right) => (
         (right.effectivePower * (1 + right.skillAverageRate + right.skillLeaderRate) * (1 + Math.max(0, right.pointBonusRate)))
         - (left.effectivePower * (1 + left.skillAverageRate + left.skillLeaderRate) * (1 + Math.max(0, left.pointBonusRate)))
         || right.pointBonusRate - left.pointBonusRate
         || left.supportPower - right.supportPower
-        || left.cardId - right.cardId
+        || compareCardInstanceKey(left, right)
       )),
     );
     if (objective?.usesMissionSupport) {
@@ -92,7 +93,7 @@ export function buildSeedTeams(
           left.supportPower - right.supportPower
           || right.pointBonusRate - left.pointBonusRate
           || (right.effectivePower * (1 + right.skillUpperRate)) - (left.effectivePower * (1 + left.skillUpperRate))
-          || left.cardId - right.cardId
+          || compareCardInstanceKey(left, right)
         )),
       );
     }
@@ -104,7 +105,7 @@ export function buildSeedTeams(
     if (!team) {
       return;
     }
-    const key = team.map((card) => card.cardId).sort((left, right) => left - right).join(",");
+    const key = getSortedCardInstanceKey(team);
     if (!seen.has(key)) {
       seen.add(key);
       teams.push(team);

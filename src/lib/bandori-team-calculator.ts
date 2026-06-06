@@ -21,6 +21,7 @@ export type BandoriCharacterMaster = {
 
 export type BandoriUserCardState = {
   cardId: number;
+  cardInstanceKey?: string;
   level: number;
   masterRank: number;
   skillLevel: number;
@@ -153,6 +154,7 @@ export type CalculatedBandoriTeam = {
   selectedAreaItemIds: number[];
   skills: Array<{
     cardId: number;
+    cardInstanceKey?: string;
     skillId: number;
     skillLevel: number;
     resolvedSkill: ResolvedBandoriSkill | null;

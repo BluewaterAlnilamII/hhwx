@@ -1,19 +1,19 @@
 "use client";
 
 import Link from "next/link";
-import { memo, use, useDeferredValue, useEffect, useMemo, useState } from "react";
-import { createPortal } from "react-dom";
+import { memo, use, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import {
   Check,
   Filter,
   RotateCcw,
-  Save,
   Search,
-  Trash2,
-  X,
 } from "lucide-react";
 import { getApiErrorMessage, parseApiSuccessData } from "@/lib/api-contracts";
 import { type BandoriAssetRegion } from "@/lib/bandori-asset-proxy";
+import {
+  normalizeBandoriSkillLabel,
+  type BandoriSkillLabelMaster,
+} from "@/lib/bandori-skill-label";
 import { pickBestdoriCnThenJpName } from "@/lib/bestdori-regional-names";
 import { decodeBestdoriProfile, encodeBestdoriProfile } from "@/lib/bestdori-profile-codec";
 import {
@@ -32,20 +32,25 @@ import {
 import AccountShell, { AccountErrorState, AccountLoadingState, AccountSignInState } from "@/app/account/AccountShell";
 import { getAccessToken, useAccountProfile } from "@/app/account/useAccountProfile";
 import SharedBandoriCardThumbnail from "@/app/bandori/BandoriCardThumbnail";
+import { BandoriCardHoverTooltipPortal } from "@/components/bandori/BandoriCardHoverTooltip";
+import GameProfileCardEditorDialog from "@/components/bandori/GameProfileCardEditorDialog";
 import { cn } from "@/lib/utils";
 
 type CardAttribute = "powerful" | "pure" | "cool" | "happy";
 
 type BestdoriCardMetadata = {
   characterId?: number;
+  skillId?: number;
   rarity?: number;
   attribute?: CardAttribute | string;
   levelLimit?: number;
   resourceSetName?: string;
+  assetRegion?: BandoriAssetRegion;
   prefix?: Array<string | null>;
-  releasedAt?: Array<string | null>;
+  releasedAt?: Array<string | number | null>;
   type?: string;
   displayName?: string | null;
+  hasTrainedArt?: boolean;
   stat?: {
     training?: {
       levelLimit?: number;
@@ -69,6 +74,7 @@ type CharacterRecord = {
 type MetadataPayload = {
   cards: Record<string, BestdoriCardMetadata>;
   characters: CharacterRecord[];
+  skills: Record<string, BandoriSkillLabelMaster | undefined>;
 };
 
 type CardFilterState = {
@@ -78,36 +84,14 @@ type CardFilterState = {
   training: "all" | "trained" | "untrained";
 };
 
-type EditableCardField = keyof Pick<
-  UserGameProfileCardRecord,
-  "level" | "masterRank" | "skillLevel" | "episodeCount" | "isTrained" | "hasTrainedArt"
->;
-
 const CARD_METADATA_CHUNK_SIZE = 150;
 const CARD_PAGE_SIZE = 36;
-const ATTRIBUTE_LABELS: Record<CardAttribute, string> = {
-  powerful: "Powerful",
-  pure: "Pure",
-  cool: "Cool",
-  happy: "Happy",
-};
-const ATTRIBUTE_CLASSES: Record<CardAttribute, string> = {
-  powerful: "border-rose-300 bg-rose-50 text-rose-600",
-  pure: "border-emerald-300 bg-emerald-50 text-emerald-600",
-  cool: "border-sky-300 bg-sky-50 text-sky-600",
-  happy: "border-orange-300 bg-orange-50 text-orange-600",
-};
 const DEFAULT_FILTERS: CardFilterState = {
   query: "",
   attribute: "all",
   rarity: "all",
   training: "all",
 };
-
-function clampInteger(value: number, min: number, max: number): number {
-  const normalizedValue = Number.isFinite(value) ? Math.trunc(value) : min;
-  return Math.min(max, Math.max(min, normalizedValue));
-}
 
 function uniqueNumbers(values: number[]): number[] {
   return Array.from(new Set(values.filter((value) => Number.isFinite(value) && value > 0)));
@@ -117,16 +101,42 @@ function getRegionFromProfileServer(server: number | undefined): BandoriAssetReg
   return server === 3 ? "cn" : "jp";
 }
 
+function pickNonEmptyText(...values: Array<string | null | undefined>): string | null {
+  for (const value of values) {
+    const trimmed = value?.trim();
+    if (trimmed) {
+      return trimmed;
+    }
+  }
+  return null;
+}
+
 function pickCharacterName(character: CharacterRecord | undefined, characterId: number | undefined): string {
-  return character?.nicknameCn
-    ?? character?.nicknameTw
-    ?? character?.nicknameJp
-    ?? character?.nicknameEn
-    ?? character?.characterNameCn
-    ?? character?.characterNameTw
-    ?? character?.characterNameJp
-    ?? character?.characterNameEn
+  return pickNonEmptyText(
+    character?.nicknameCn,
+    character?.nicknameTw,
+    character?.nicknameJp,
+    character?.nicknameEn,
+    character?.characterNameCn,
+    character?.characterNameTw,
+    character?.characterNameJp,
+    character?.characterNameEn,
+  )
     ?? (characterId ? `角色 ${characterId}` : "未知角色");
+}
+
+function pickFullCharacterName(character: CharacterRecord | undefined, characterId: number | undefined): string {
+  return pickNonEmptyText(
+    character?.nicknameCn,
+    character?.nicknameTw,
+    character?.nicknameJp,
+    character?.nicknameEn,
+    character?.characterNameCn,
+    character?.characterNameTw,
+    character?.characterNameJp,
+    character?.characterNameEn,
+  )
+    ?? pickCharacterName(character, characterId);
 }
 
 function pickCardName(cardId: number, metadata?: BestdoriCardMetadata): string {
@@ -139,15 +149,13 @@ function isKnownAttribute(value: string | undefined): value is CardAttribute {
   return value === "powerful" || value === "pure" || value === "cool" || value === "happy";
 }
 
-function getCardLevelLimit(card: UserGameProfileCardRecord, metadata?: BestdoriCardMetadata): number {
-  const baseLevelLimit = Math.max(1, Math.trunc(Number(metadata?.levelLimit) || card.level || 60));
-  const trainingLevelLimit = Math.max(0, Math.trunc(Number(metadata?.stat?.training?.levelLimit) || 0));
-  const trainedLimit = card.isTrained ? baseLevelLimit + trainingLevelLimit : baseLevelLimit;
-  return Math.max(trainedLimit, card.level, 1);
-}
-
-function hasCardChanged(left: UserGameProfileCardRecord, right: UserGameProfileCardRecord): boolean {
-  return JSON.stringify(left) !== JSON.stringify(right);
+function getCardSkillEffectLabel(
+  card: UserGameProfileCardRecord,
+  metadata: BestdoriCardMetadata | undefined,
+  skills: Record<string, BandoriSkillLabelMaster | undefined>,
+): string {
+  const skillId = Number(metadata?.skillId);
+  return normalizeBandoriSkillLabel(Number.isFinite(skillId) && skillId > 0 ? skills[String(Math.trunc(skillId))] : undefined, card.skillLevel, 5);
 }
 
 function buildPayloadWithCards(
@@ -239,56 +247,28 @@ async function requestCardMetadata(cardIds: number[]): Promise<Record<string, Be
 }
 
 async function requestMetadata(cardIds: number[]): Promise<MetadataPayload> {
-  const [cards, charactersResponse] = await Promise.all([
+  const [cards, charactersResponse, skillsResponse] = await Promise.all([
     requestCardMetadata(cardIds),
     fetch("/api/bandori/characters"),
+    fetch("/api/bandori/master/skills"),
   ]);
   const charactersPayload = await charactersResponse.json().catch(() => ({}));
   const characterData = parseApiSuccessData<{ characters?: CharacterRecord[] }>(charactersPayload);
+  const skillsPayload = await skillsResponse.json().catch(() => ({}));
+  const skillData = parseApiSuccessData<{ payload?: Record<string, BandoriSkillLabelMaster | undefined> }>(skillsPayload);
 
   if (!charactersResponse.ok) {
     throw new Error(getApiErrorMessage(charactersPayload) || `读取角色资料失败（HTTP ${charactersResponse.status}）`);
+  }
+  if (!skillsResponse.ok) {
+    throw new Error(getApiErrorMessage(skillsPayload) || `读取技能资料失败（HTTP ${skillsResponse.status}）`);
   }
 
   return {
     cards,
     characters: Array.isArray(characterData?.characters) ? characterData.characters : [],
+    skills: skillData?.payload ?? {},
   };
-}
-
-function SegmentedControl<T extends string | number | boolean>({
-  label,
-  value,
-  options,
-  onChange,
-}: {
-  label: string;
-  value: T;
-  options: Array<{ value: T; label: string }>;
-  onChange: (value: T) => void;
-}) {
-  return (
-    <div className="grid gap-2 sm:grid-cols-[128px_minmax(0,1fr)] sm:items-center">
-      <div className="text-sm font-semibold text-slate-600 sm:text-right">{label}</div>
-      <div className="inline-flex w-fit overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm" role="radiogroup" aria-label={label}>
-        {options.map((option) => (
-          <button
-            key={String(option.value)}
-            type="button"
-            role="radio"
-            aria-checked={Object.is(option.value, value)}
-            onClick={() => onChange(option.value)}
-            className={cn(
-              "min-w-10 border-r border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 transition last:border-r-0 hover:bg-sky-50 hover:text-sky-700",
-              Object.is(option.value, value) && "bg-sky-600 text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,0.45)] hover:bg-sky-600 hover:text-white",
-            )}
-          >
-            {option.label}
-          </button>
-        ))}
-      </div>
-    </div>
-  );
 }
 
 function CardThumbnail({
@@ -317,149 +297,11 @@ function CardThumbnail({
     />
   );
 }
-function CardEditorDialog({
-  card,
-  baselineCard,
-  metadata,
-  characterName,
-  bandId,
-  region,
-  saving,
-  onClose,
-  onSave,
-  onDelete,
-}: {
-  card: UserGameProfileCardRecord;
-  baselineCard: UserGameProfileCardRecord | null;
-  metadata?: BestdoriCardMetadata;
-  characterName: string;
-  bandId: number | null;
-  region: BandoriAssetRegion;
-  saving: boolean;
-  onClose: () => void;
-  onSave: (card: UserGameProfileCardRecord) => void;
-  onDelete: (cardId: number) => void;
-}) {
-  const [draft, setDraft] = useState(card);
-  const levelLimit = getCardLevelLimit(draft, metadata);
-  const cardName = pickCardName(draft.cardId, metadata);
-  const hasChanges = baselineCard ? hasCardChanged(draft, baselineCard) : hasCardChanged(draft, card);
-
-  function updateDraft(field: EditableCardField, value: number | boolean) {
-    setDraft((currentDraft) => {
-      const nextDraft = {
-        ...currentDraft,
-        [field]: value,
-      };
-      if (field === "isTrained" && value === false) {
-        nextDraft.hasTrainedArt = false;
-      }
-      if (field === "isTrained" && value === true) {
-        nextDraft.hasTrainedArt = true;
-      }
-      return {
-        ...nextDraft,
-        level: clampInteger(nextDraft.level, 1, getCardLevelLimit(nextDraft, metadata)),
-        masterRank: clampInteger(nextDraft.masterRank, 0, 4),
-        skillLevel: clampInteger(nextDraft.skillLevel, 1, 5),
-        episodeCount: clampInteger(nextDraft.episodeCount, 0, 2),
-      };
-    });
-  }
-
-  const dialog = (
-    <div className="fixed inset-0 z-[1000] flex items-end justify-center bg-slate-950/72 px-0 py-0 backdrop-blur-md sm:items-center sm:px-4 sm:py-8" role="dialog" aria-modal="true" aria-labelledby="card-editor-title">
-      <div className="flex max-h-[96dvh] w-full max-w-3xl flex-col overflow-hidden rounded-t-[28px] border border-white/90 bg-white shadow-[0_30px_100px_rgba(15,23,42,0.42)] sm:rounded-[28px]">
-        <header className="flex items-center justify-between gap-3 border-b border-slate-200 bg-white px-5 py-4 sm:px-6">
-          <div>
-            <h2 id="card-editor-title" className="text-xl font-bold text-slate-900">编辑卡牌资料</h2>
-            <p className="mt-1 text-xs font-semibold text-slate-500">Card #{draft.cardId}</p>
-          </div>
-          <button type="button" onClick={onClose} className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-500 transition hover:border-rose-200 hover:text-rose-500" aria-label="关闭编辑器">
-            <X className="h-4 w-4" aria-hidden="true" />
-          </button>
-        </header>
-
-        <div className="min-h-0 overflow-y-auto px-5 py-5 sm:px-6">
-          <div className="grid gap-5 lg:grid-cols-[132px_minmax(0,1fr)]">
-            <div className="mx-auto flex w-full max-w-[132px] flex-col items-center">
-              <div className="h-[112px] w-[112px] overflow-hidden rounded-[8px] border border-white/80 bg-white shadow-[0_14px_32px_rgba(15,23,42,0.18)]">
-                <CardThumbnail card={draft} metadata={metadata} bandId={bandId} region={region} alt={`${cardName} 缩略图`} size="preview" />
-              </div>
-            </div>
-
-            <div className="min-w-0">
-              <div className="rounded-3xl border border-sky-100 bg-gradient-to-br from-white via-sky-50/80 to-rose-50/70 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)]">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <h3 className="truncate text-2xl font-bold text-slate-900">{cardName}</h3>
-                    <p className="mt-1 text-sm font-semibold text-slate-600">{characterName}</p>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {metadata?.rarity ? <span className="rounded-full border border-amber-200 bg-white px-3 py-1 text-xs font-bold text-amber-600">★{metadata.rarity}</span> : null}
-                    {isKnownAttribute(metadata?.attribute) ? (
-                      <span className={cn("rounded-full border px-3 py-1 text-xs font-bold", ATTRIBUTE_CLASSES[metadata.attribute])}>
-                        {ATTRIBUTE_LABELS[metadata.attribute]}
-                      </span>
-                    ) : null}
-                  </div>
-                </div>
-              </div>
-
-              <div className="mt-5 grid gap-4">
-                <label className="grid gap-2 sm:grid-cols-[128px_minmax(0,1fr)] sm:items-center">
-                  <span className="text-sm font-semibold text-slate-600 sm:text-right">等级</span>
-                  <select
-                    value={draft.level}
-                    onChange={(event) => updateDraft("level", Number(event.target.value))}
-                    className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-900 outline-none transition focus:border-sky-300 focus:ring-4 focus:ring-sky-100"
-                  >
-                    {Array.from({ length: levelLimit }, (_, index) => index + 1).map((level) => (
-                      <option key={level} value={level}>{level}</option>
-                    ))}
-                  </select>
-                </label>
-
-                <SegmentedControl label="星光等级" value={draft.masterRank} options={[0, 1, 2, 3, 4].map((value) => ({ value, label: String(value) }))} onChange={(value) => updateDraft("masterRank", value)} />
-                <SegmentedControl label="技能等级" value={draft.skillLevel} options={[1, 2, 3, 4, 5].map((value) => ({ value, label: String(value) }))} onChange={(value) => updateDraft("skillLevel", value)} />
-                <SegmentedControl label="故事" value={draft.episodeCount} options={[0, 1, 2].map((value) => ({ value, label: String(value) }))} onChange={(value) => updateDraft("episodeCount", value)} />
-                <SegmentedControl label="特训" value={draft.isTrained} options={[{ value: false, label: "否" }, { value: true, label: "是" }]} onChange={(value) => updateDraft("isTrained", value)} />
-                <SegmentedControl label="特训后图" value={draft.hasTrainedArt} options={[{ value: false, label: "否" }, { value: true, label: "是" }]} onChange={(value) => updateDraft("hasTrainedArt", value)} />
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <footer className="flex flex-col-reverse gap-3 border-t border-slate-200 bg-white/82 px-5 py-4 sm:flex-row sm:items-center sm:justify-end sm:px-6">
-          <button type="button" onClick={() => onDelete(draft.cardId)} disabled={saving} className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl border border-rose-200 bg-white px-4 text-sm font-bold text-rose-600 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-60">
-            <Trash2 className="h-4 w-4" aria-hidden="true" />
-            删除
-          </button>
-          <button type="button" onClick={onClose} disabled={saving} className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60">
-            <X className="h-4 w-4" aria-hidden="true" />
-            取消
-          </button>
-          <button type="button" onClick={() => onSave(draft)} disabled={saving || !hasChanges} className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl bg-sky-600 px-5 text-sm font-bold text-white shadow-[0_12px_28px_rgba(37,99,235,0.26)] transition hover:bg-sky-500 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:shadow-none">
-            <Save className="h-4 w-4" aria-hidden="true" />
-            {saving ? "保存中..." : "保存"}
-          </button>
-        </footer>
-      </div>
-    </div>
-  );
-
-  const portalRoot = typeof document === "undefined" ? null : document.body;
-  if (!portalRoot) {
-    return null;
-  }
-
-  return createPortal(dialog, portalRoot);
-}
-
 const CardTile = memo(function CardTile({
   card,
   metadata,
   characterName,
+  skillEffectLabel,
   bandId,
   region,
   canEdit,
@@ -468,15 +310,21 @@ const CardTile = memo(function CardTile({
   card: UserGameProfileCardRecord;
   metadata?: BestdoriCardMetadata;
   characterName: string;
+  skillEffectLabel: string;
   bandId: number | null;
   region: BandoriAssetRegion;
   canEdit: boolean;
   onEdit: () => void;
 }) {
   const cardName = pickCardName(card.cardId, metadata);
+  const tileRef = useRef<HTMLElement | null>(null);
+  const [hoverOpen, setHoverOpen] = useState(false);
 
   return (
     <article
+      ref={tileRef}
+      onMouseEnter={() => setHoverOpen(true)}
+      onMouseLeave={() => setHoverOpen(false)}
       className="group relative h-[74px] w-[74px] overflow-visible rounded-[5px] outline outline-1 outline-white/80 transition hover:z-40 hover:-translate-y-0.5 hover:outline-2 hover:outline-sky-400 focus-within:z-40 focus-within:outline-2 focus-within:outline-sky-400 sm:h-[76px] sm:w-[76px]"
     >
       <button
@@ -492,15 +340,16 @@ const CardTile = memo(function CardTile({
         <CardThumbnail card={card} metadata={metadata} bandId={bandId} region={region} alt={cardName} />
       </button>
 
-      <div className="pointer-events-none absolute left-1/2 top-[calc(100%+8px)] z-50 hidden w-56 -translate-x-1/2 rounded-[18px] border border-white/90 bg-white p-3 text-center shadow-[0_18px_48px_rgba(15,23,42,0.22)] ring-1 ring-slate-950/5 group-hover:block group-focus-within:block">
-        <div className="truncate text-sm font-black text-slate-900">{cardName}</div>
-        <div className="mt-1 truncate text-xs font-semibold text-slate-500">{characterName}</div>
-        <div className="mt-2 flex justify-center gap-2 text-[11px] font-black">
-          <span className="rounded-full border border-amber-100 bg-amber-50 px-2 py-1 text-amber-700">★{metadata?.rarity ?? "-"}</span>
-          <span className="rounded-full border border-sky-100 bg-sky-50 px-2 py-1 text-sky-700">星光 {card.masterRank}</span>
-          <span className="rounded-full border border-rose-100 bg-rose-50 px-2 py-1 text-rose-700">技能 {card.skillLevel}</span>
-        </div>
-      </div>
+      <BandoriCardHoverTooltipPortal
+        anchorRef={tileRef}
+        open={hoverOpen}
+        cardName={cardName}
+        characterName={characterName}
+      >
+        <span className="block w-full whitespace-normal break-words rounded-xl bg-slate-50 px-2 py-1 text-slate-700">
+          {skillEffectLabel}
+        </span>
+      </BandoriCardHoverTooltipPortal>
     </article>
   );
 });
@@ -511,7 +360,7 @@ export default function GameProfileCardsPage({ params }: { params: Promise<{ pro
   const [profilePayload, setProfilePayload] = useState<UserGameProfilePayload | null>(null);
   const [cards, setCards] = useState<UserGameProfileCardRecord[]>([]);
   const [baselineCards, setBaselineCards] = useState<UserGameProfileCardRecord[]>([]);
-  const [metadata, setMetadata] = useState<MetadataPayload>({ cards: {}, characters: [] });
+  const [metadata, setMetadata] = useState<MetadataPayload>({ cards: {}, characters: [], skills: {} });
   const [filters, setFilters] = useState<CardFilterState>(DEFAULT_FILTERS);
   const [editingCardId, setEditingCardId] = useState<number | null>(null);
   const [canEditProfile, setCanEditProfile] = useState(true);
@@ -724,13 +573,15 @@ export default function GameProfileCardsPage({ params }: { params: Promise<{ pro
                       <div className="grid justify-center gap-[6px] [grid-template-columns:repeat(auto-fill,74px)] sm:[grid-template-columns:repeat(auto-fill,76px)]">
                         {visibleCards.map((card) => {
                           const cardMetadata = metadata.cards[String(card.cardId)];
-                          const characterName = pickCharacterName(charactersById.get(cardMetadata?.characterId ?? 0), cardMetadata?.characterId);
+                          const characterName = pickFullCharacterName(charactersById.get(cardMetadata?.characterId ?? 0), cardMetadata?.characterId);
+                          const skillEffectLabel = getCardSkillEffectLabel(card, cardMetadata, metadata.skills);
                           return (
                             <CardTile
                               key={card.cardId}
                               card={card}
                               metadata={cardMetadata}
                               characterName={characterName}
+                              skillEffectLabel={skillEffectLabel}
                               bandId={charactersById.get(cardMetadata?.characterId ?? 0)?.bandId ?? null}
                               region={region}
                               canEdit={canEditProfile}
@@ -760,17 +611,17 @@ export default function GameProfileCardsPage({ params }: { params: Promise<{ pro
           </div>
 
           {editingCard && canEditProfile ? (
-            <CardEditorDialog
+            <GameProfileCardEditorDialog
               card={editingCard}
               baselineCard={baselineCards.find((card) => card.cardId === editingCard.cardId) ?? null}
               metadata={metadata.cards[String(editingCard.cardId)]}
-              characterName={pickCharacterName(charactersById.get(metadata.cards[String(editingCard.cardId)]?.characterId ?? 0), metadata.cards[String(editingCard.cardId)]?.characterId)}
+              characterName={pickFullCharacterName(charactersById.get(metadata.cards[String(editingCard.cardId)]?.characterId ?? 0), metadata.cards[String(editingCard.cardId)]?.characterId)}
               bandId={charactersById.get(metadata.cards[String(editingCard.cardId)]?.characterId ?? 0)?.bandId ?? null}
               region={region}
               saving={saving}
               onClose={() => setEditingCardId(null)}
               onSave={replaceCard}
-              onDelete={deleteCard}
+              onDelete={() => deleteCard(editingCard.cardId)}
             />
           ) : null}
         </section>

@@ -70,6 +70,7 @@ import {
   createAreaItemConfigurations,
   pruneDominatedAreaItemConfigurations,
 } from "@/lib/bandori/team-builder/core";
+import { getCardInstanceKey } from "@/lib/bandori/team-builder/core/card-identity";
 import type { BandoriAreaItemConfiguration } from "@/lib/bandori/team-builder/core";
 import type {
   BandoriMedleyTeamSearchInput,
@@ -369,6 +370,23 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
   const songInputs = input.songs.slice(0, 3);
   const firstSlotInput = songInputs[0] ? createMedleySlotInput(input, songInputs[0]) : null;
   const calculatedCards = firstSlotInput ? buildCalculatedCards(firstSlotInput) : [];
+  const cardIdByInstanceKey = new Map(calculatedCards.map((card) => [getCardInstanceKey(card), card.cardId]));
+  const cardInstanceKeyByCardId = new Map(calculatedCards.map((card) => [card.cardId, getCardInstanceKey(card)]));
+  const hasDuplicateCardIds = new Set(calculatedCards.map((card) => card.cardId)).size !== calculatedCards.length;
+  const toBannedCardKeys = (bannedCardIds: Set<number>): Set<string> => (
+    new Set([...bannedCardIds].flatMap((cardId) => {
+      const cardKey = cardInstanceKeyByCardId.get(cardId);
+      return cardKey === undefined ? [] : [cardKey];
+    }))
+  );
+  const toUpperBannedCardIds = (bannedCardKeys: Set<string>): Set<number> => (
+    hasDuplicateCardIds
+      ? new Set<number>()
+      : new Set([...bannedCardKeys].flatMap((cardKey) => {
+        const cardId = cardIdByInstanceKey.get(cardKey);
+        return cardId === undefined ? [] : [cardId];
+      }))
+  );
   let slotBuildContexts: ReturnType<typeof buildMedleySlotBuildContexts> | null = null;
   const getSlotBuildContexts = (): ReturnType<typeof buildMedleySlotBuildContexts> => {
     if (!firstSlotInput) {
@@ -414,6 +432,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
   const shouldEnableOpportunityCostUpper = enableOpportunityCostUpper;
   const enableExactCandidateJoin = resultLimit === 1
     && !disableExactCandidateJoin
+    && !hasDuplicateCardIds
     && (optimization.enableExactCandidateJoin === true || shouldAutoEnableExactCandidateJoin)
     && (
       calculatedCards.length <= 250
@@ -436,7 +455,8 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
   )
     ? MEDLEY_NODE_AUTO_MEMORY_SOFT_LIMIT_MIB * BYTES_PER_MIB
     : null;
-  const enableConflictExactBnb = (optimization.enableConflictExactBnb === true || shouldAutoEnableConflictExactBnb)
+  const enableConflictExactBnb = !hasDuplicateCardIds
+    && (optimization.enableConflictExactBnb === true || shouldAutoEnableConflictExactBnb)
     && resultLimit === 1
     && (
       calculatedCards.length <= 250
@@ -1785,7 +1805,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
     // slot assignments under the current banned-card set.
     const getRemainingUpperBound = (
       remainingSlotIndices: number[],
-      bannedCards: Set<number>,
+      bannedCards: Set<string>,
       useContextualSkillUpper = false,
       useSkillAwareCapacityUpper = false,
       useParetoCapacityUpper = false,
@@ -1796,7 +1816,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
       if (remainingSlotIndices.length === 0) {
         return 0;
       }
-      const key = `${slotCandidates.length === slots.length ? "candidates-ready" : "candidates-pending"}:${enableAnchorSlotUpper ? `anchor-${anchorCandidateLimit}` : "no-anchor"}:${shouldEnableOpportunityCostUpper ? `opportunity-${opportunityAnchorLimit}` : "no-opportunity"}:${enableTeamSharedCoefficientUpper ? "team-shared" : "no-team-shared"}:${enableSharedPowerSkillUpper ? "shared-power" : "no-shared-power"}:${useContextualSkillUpper ? "contextual" : "optimistic"}:${useSkillAwareCapacityUpper ? "tight-capacity" : "coefficient"}:${useParetoCapacityUpper ? "pareto" : "scalar"}:${useBucketedCapacityUpper ? "bucketed" : "unbucketed"}:${remainingSlotIndices.join(",")}:${[...bannedCards].sort((left, right) => left - right).join(",")}`;
+      const key = `${slotCandidates.length === slots.length ? "candidates-ready" : "candidates-pending"}:${enableAnchorSlotUpper ? `anchor-${anchorCandidateLimit}` : "no-anchor"}:${shouldEnableOpportunityCostUpper ? `opportunity-${opportunityAnchorLimit}` : "no-opportunity"}:${enableTeamSharedCoefficientUpper ? "team-shared" : "no-team-shared"}:${enableSharedPowerSkillUpper ? "shared-power" : "no-shared-power"}:${useContextualSkillUpper ? "contextual" : "optimistic"}:${useSkillAwareCapacityUpper ? "tight-capacity" : "coefficient"}:${useParetoCapacityUpper ? "pareto" : "scalar"}:${useBucketedCapacityUpper ? "bucketed" : "unbucketed"}:${remainingSlotIndices.join(",")}:${[...bannedCards].sort().join(",")}`;
       const cached = remainingUpperBoundCache.get(key);
       if (cached !== undefined) {
         profiling.remainingUpperBoundCacheHitCount += 1;
@@ -1811,10 +1831,26 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
         remainingUpperBoundMaxSlotCount: profiling.remainingUpperBoundMaxSlotCount,
         remainingUpperBoundMaxLimiter: profiling.remainingUpperBoundMaxLimiter,
       };
+      const upperBannedCardIds = toUpperBannedCardIds(bannedCards);
+      const getRemainingUpperBoundFromCardIds = (
+        nextRemainingSlotIndices: number[],
+        bannedCardIds: Set<number>,
+        nextUseContextualSkillUpper = false,
+        nextUseSkillAwareCapacityUpper = false,
+        nextUseParetoCapacityUpper = false,
+        nextUseBucketedCapacityUpper = false,
+      ): number => getRemainingUpperBound(
+        nextRemainingSlotIndices,
+        toBannedCardKeys(bannedCardIds),
+        nextUseContextualSkillUpper,
+        nextUseSkillAwareCapacityUpper,
+        nextUseParetoCapacityUpper,
+        nextUseBucketedCapacityUpper,
+      );
       let upperBound = estimateMedleyRemainingScoreUpperBound(
         slots,
         remainingSlotIndices,
-        bannedCards,
+        upperBannedCardIds,
         profiling,
         useContextualSkillUpper,
         useSkillAwareCapacityUpper,
@@ -1833,10 +1869,10 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
         const anchorUpperEstimate = estimateMedleyAnchorSlotDecompositionUpperBound(
           slots,
           remainingSlotIndices,
-          bannedCards,
+          upperBannedCardIds,
           slotCandidates,
           slotCandidateLimits,
-          getRemainingUpperBound,
+          getRemainingUpperBoundFromCardIds,
           useContextualSkillUpper,
           useSkillAwareCapacityUpper,
           useParetoCapacityUpper,
@@ -1879,9 +1915,9 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
         const opportunityUpperEstimate = estimateMedleyOpportunityCostUpperBound(
           slots,
           remainingSlotIndices,
-          bannedCards,
+          upperBannedCardIds,
           slotCandidates,
-          getRemainingUpperBound,
+          getRemainingUpperBoundFromCardIds,
           useContextualSkillUpper,
           useSkillAwareCapacityUpper,
           useParetoCapacityUpper,
@@ -1921,7 +1957,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
         captureMedleyCapacityUpperWitness(
           slots,
           remainingSlotIndices,
-          bannedCards,
+          upperBannedCardIds,
           upperBound,
           server,
           perfectRate,
@@ -1947,7 +1983,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
         const baselineUpperBound = estimateMedleyRemainingScoreUpperBound(
           slots,
           remainingSlotIndices,
-          bannedCards,
+          upperBannedCardIds,
           undefined,
           false,
           false,
@@ -2090,7 +2126,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
         rootScoreUpperBound,
         getRemainingUpperBound(
           rootSlotIndices,
-          new Set<number>(),
+          new Set<string>(),
           false,
           useTightRootUpper,
           useParetoRootUpper,
@@ -2195,7 +2231,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
         observedRootUpperBoundForSameCoarseMemorySkip,
         getRemainingUpperBound(
           rootSlotIndices,
-          new Set<number>(),
+          new Set<string>(),
           false,
           true,
           false,
@@ -2271,7 +2307,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
         observedRootUpperBoundForSameCoarseMemorySkip,
         getRemainingUpperBound(
           rootSlotIndices,
-          new Set<number>(),
+          new Set<string>(),
           false,
           true,
           false,
@@ -2366,7 +2402,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
       const thresholdBeforeSkip = getMedleyPruningThreshold(results, resultLimit);
       const tightRootUpperBound = getRemainingUpperBound(
         rootSlotIndices,
-        new Set<number>(),
+        new Set<string>(),
         false,
         true,
         false,
@@ -2451,7 +2487,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
           basicSkillAwareRootUpperBound,
           getRemainingUpperBound(
             rootSlotIndices,
-            new Set<number>(),
+            new Set<string>(),
             false,
             true,
             false,
@@ -2503,7 +2539,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
       );
     };
     let didRunPreSeedingInclusionPrune = false;
-    if (canTryExactCandidateJoinBeforeSeeding && !shouldRunExactCandidateJoinForConfiguration) {
+    if (!hasDuplicateCardIds && canTryExactCandidateJoinBeforeSeeding && !shouldRunExactCandidateJoinForConfiguration) {
       const thresholdBeforeInclusionPrune = getMedleyPruningThreshold(results, resultLimit);
       if (!shouldSkipInclusionPruneForWideRootGap(thresholdBeforeInclusionPrune)) {
         didRunPreSeedingInclusionPrune = true;
@@ -2578,7 +2614,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
         basicSkillAwareRootUpperBound,
         getRemainingUpperBound(
           rootSlotIndices,
-          new Set<number>(),
+          new Set<string>(),
           false,
           true,
           false,
@@ -2611,6 +2647,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
       }
       if (
         !didRunPreSeedingInclusionPrune
+        && !hasDuplicateCardIds
         && resultLimit === 1
         && (
           calculatedCards.length <= 250
@@ -2822,6 +2859,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
 
     if (
       !didAttemptExactCandidateJoin
+      && !hasDuplicateCardIds
       && resultLimit === 1
       && results.length >= resultLimit
       && (
@@ -2977,7 +3015,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
     }
 
     const selectedBySong: Array<MedleyTeamCandidate | undefined> = [];
-    const bannedCardIds = new Set<number>();
+    const bannedCardKeys = new Set<string>();
 
     // Main cross-slot DFS. It chooses one unresolved song slot, enumerates valid five-card teams
     // for that slot, and carries card bans forward so the three teams remain disjoint.
@@ -3000,7 +3038,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
       const thresholdNow = getMedleyPruningThreshold(results, resultLimit);
       const remainingUpperBound = getRemainingUpperBound(
         remainingSlotIndices,
-        bannedCardIds,
+        bannedCardKeys,
         false,
         useTightRemainingUpper,
         useParetoRemainingUpper,
@@ -3030,13 +3068,14 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
       const slotIndex = chooseNextMedleySlotIndex(
         slots,
         remainingSlotIndices,
-        bannedCardIds,
+        bannedCardKeys,
+        toUpperBannedCardIds(bannedCardKeys),
         useProofFriendlySlotOrder
           ? (candidateSlotIndex) => {
             const candidateNextRemainingSlotIndices = remainingSlotIndices.filter((index) => index !== candidateSlotIndex);
             return thresholdNow - currentScore - getRemainingUpperBound(
               candidateNextRemainingSlotIndices,
-              bannedCardIds,
+              bannedCardKeys,
               false,
               useTightRemainingUpper,
               useParetoRemainingUpper,
@@ -3065,7 +3104,8 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
           bestSlotTeamCache,
           slotIndex,
           slot,
-          bannedCardIds,
+          bannedCardKeys,
+          toUpperBannedCardIds(bannedCardKeys),
           server,
           perfectRate,
           stats,
@@ -3088,7 +3128,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
 
       let futureUpperBound = getRemainingUpperBound(
         nextRemainingSlotIndices,
-        bannedCardIds,
+        bannedCardKeys,
         false,
         useTightRemainingUpper,
         useParetoRemainingUpper,
@@ -3099,7 +3139,8 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
           bestSlotTeamCache,
           slots,
           nextRemainingSlotIndices,
-          bannedCardIds,
+          bannedCardKeys,
+          toUpperBannedCardIds(bannedCardKeys),
           server,
           perfectRate,
           stats,
@@ -3113,7 +3154,8 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
       }
       enumerateMedleySlotTeams(
         slot,
-        bannedCardIds,
+        bannedCardKeys,
+        toUpperBannedCardIds(bannedCardKeys),
         server,
         perfectRate,
         stats,
@@ -3121,13 +3163,13 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
         (currentSlotCards) => {
           let dynamicFutureUpperBound = futureUpperBound;
           if (currentSlotCards.length >= 3 && nextRemainingSlotIndices.length > 0) {
-            const dynamicBannedCardIds = new Set(bannedCardIds);
-            currentSlotCards.forEach((card) => dynamicBannedCardIds.add(card.cardId));
+            const dynamicBannedCardKeys = new Set(bannedCardKeys);
+            currentSlotCards.forEach((card) => dynamicBannedCardKeys.add(getCardInstanceKey(card)));
             dynamicFutureUpperBound = Math.min(
               dynamicFutureUpperBound,
               getRemainingUpperBound(
                 nextRemainingSlotIndices,
-                dynamicBannedCardIds,
+                dynamicBannedCardKeys,
                 false,
                 useTightRemainingUpper,
                 useParetoRemainingUpper,
@@ -3147,9 +3189,9 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
         profiling,
         (candidate) => {
           selectedBySong[slot.songIndex] = candidate;
-          candidate.cards.forEach((card) => bannedCardIds.add(card.cardId));
+          candidate.cards.forEach((card) => bannedCardKeys.add(getCardInstanceKey(card)));
           visit(nextRemainingSlotIndices, currentScore + candidate.result.score);
-          candidate.cards.forEach((card) => bannedCardIds.delete(card.cardId));
+          candidate.cards.forEach((card) => bannedCardKeys.delete(getCardInstanceKey(card)));
           selectedBySong[slot.songIndex] = undefined;
         },
       );

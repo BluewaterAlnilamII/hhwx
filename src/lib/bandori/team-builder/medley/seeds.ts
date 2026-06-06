@@ -12,6 +12,7 @@ import { optimizeFixedMedleyCardSetWithCache, optimizeMedleyCardPool } from "./o
 import { buildMedleyResult, pushMedleyResult } from "./results";
 import { enumerateMedleySlotTeams, findBestMedleySlotTeamWithCache } from "./slots";
 import { evaluateTeam } from "@/lib/bandori/team-builder/core";
+import { getCardInstanceKey, getCardInstanceKeys } from "@/lib/bandori/team-builder/core/card-identity";
 import type {
   BandoriMedleyTeamSearchProfilingStats,
   BandoriMedleyTeamSearchResult,
@@ -65,13 +66,15 @@ export function collectTopMedleySlotTeams(
   isPastDeadline: () => boolean,
   observeUpperBound: (upperBound: number) => void,
   profiling: BandoriMedleyTeamSearchProfilingStats,
-  bannedCardIds: Set<number> = new Set<number>(),
+  bannedCardKeys: Set<string> = new Set<string>(),
+  upperBannedCardIds: Set<number> = new Set<number>(),
   useContextualSkillUpper = false,
 ): MedleyTeamCandidate[] {
   const candidates: MedleyTeamCandidate[] = [];
   enumerateMedleySlotTeams(
     slot,
-    bannedCardIds,
+    bannedCardKeys,
+    upperBannedCardIds,
     server,
     perfectRate,
     stats,
@@ -86,6 +89,10 @@ export function collectTopMedleySlotTeams(
 }
 
 export function medleyCandidatesOverlap(left: MedleyTeamCandidate, right: MedleyTeamCandidate): boolean {
+  if (left.cardInstanceKeys && right.cardInstanceKeys) {
+    const leftKeys = new Set(left.cardInstanceKeys);
+    return right.cardInstanceKeys.some((cardKey) => leftKeys.has(cardKey));
+  }
   const leftIds = new Set(left.cardIds);
   return right.cardIds.some((cardId) => leftIds.has(cardId));
 }
@@ -286,7 +293,7 @@ export function seedMedleyResultsFromGreedyOrders(
       break;
     }
     const selectedBySong: Array<MedleyTeamCandidate | undefined> = [];
-    const bannedCardIds = new Set<number>();
+    const bannedCardKeys = new Set<string>();
     let completeSeed = true;
     for (const slotIndex of seedOrder) {
       const slot = slots[slotIndex];
@@ -294,7 +301,8 @@ export function seedMedleyResultsFromGreedyOrders(
         bestSlotTeamCache,
         slotIndex,
         slot,
-        bannedCardIds,
+        bannedCardKeys,
+        new Set<number>(),
         server,
         perfectRate,
         stats,
@@ -307,7 +315,7 @@ export function seedMedleyResultsFromGreedyOrders(
         break;
       }
       selectedBySong[slot.songIndex] = best;
-      best.cards.forEach((card) => bannedCardIds.add(card.cardId));
+      best.cards.forEach((card) => bannedCardKeys.add(getCardInstanceKey(card)));
     }
     if (!completeSeed || stats.timedOut) {
       continue;
@@ -393,6 +401,7 @@ export function buildFastGreedyMedleySlotCandidate(
       result,
       cards: selectedCards,
       cardIds: selectedCards.map((card) => card.cardId),
+      cardInstanceKeys: getCardInstanceKeys(selectedCards),
     }
     : null;
 }

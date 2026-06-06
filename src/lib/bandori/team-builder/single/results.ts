@@ -5,10 +5,11 @@
  * ranking, stats, and bounded/exact response metadata.
  */
 import type { CalculatedBandoriCard } from "@/lib/bandori-team-calculator";
+import { getSortedCardInstanceKey } from "../core/card-identity";
 import type { BandoriAreaItemConfiguration, BandoriTeamSearchEventMode, BandoriTeamSearchResponse, BandoriTeamSearchResult, BandoriTeamSearchResultCard, BandoriTeamSearchStats, BandoriTeamSearchSupportCard, SearchCard, SupportBandCandidate, SupportBandContext } from "../core/types";
 
 function getResultCardIdsKey(result: BandoriTeamSearchResult): string {
-  return result.cards.map((card) => card.cardId).join(",");
+  return getSortedCardInstanceKey(result.cards);
 }
 
 export function compareResults(left: BandoriTeamSearchResult, right: BandoriTeamSearchResult): number {
@@ -40,6 +41,7 @@ export function sortResults(results: BandoriTeamSearchResult[]): void {
 export function toResultCards(cards: CalculatedBandoriCard[]): BandoriTeamSearchResultCard[] {
   return cards.map((card) => ({
     cardId: card.cardId,
+    cardInstanceKey: card.cardInstanceKey,
     characterId: card.characterId,
     bandId: card.bandId,
     attribute: card.attribute,
@@ -56,6 +58,7 @@ export function toResultCards(cards: CalculatedBandoriCard[]): BandoriTeamSearch
 export function toSupportResultCards(cards: SupportBandCandidate[]): BandoriTeamSearchSupportCard[] {
   return cards.map((candidate) => ({
     cardId: candidate.card.cardId,
+    cardInstanceKey: candidate.card.cardInstanceKey,
     characterId: candidate.card.characterId,
     bandId: candidate.card.bandId,
     attribute: candidate.card.attribute,
@@ -75,13 +78,13 @@ export function getBaseCardPower(card: CalculatedBandoriCard): number {
 }
 
 export function getTeamEvaluationKey(cards: SearchCard[], configuration: BandoriAreaItemConfiguration): string {
-  const cardKey = cards.map((card) => card.cardId).sort((left, right) => left - right).join(",");
+  const cardKey = getSortedCardInstanceKey(cards);
   const configurationKey = configuration.selectedAreaItemIds.slice().sort((left, right) => left - right).join(",");
   return `${configurationKey}|${cardKey}`;
 }
 
-export function getTeamCardSetKey(cards: Array<{ cardId: number }>): string {
-  return cards.map((card) => card.cardId).sort((left, right) => left - right).join(",");
+export function getTeamCardSetKey(cards: Array<{ cardId: number; cardInstanceKey?: string }>): string {
+  return getSortedCardInstanceKey(cards);
 }
 
 export function pushResult(results: BandoriTeamSearchResult[], result: BandoriTeamSearchResult, resultLimit: number): void {

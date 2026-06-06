@@ -1,25 +1,15 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
+import { useRef, useState } from "react";
 import { Check } from "lucide-react";
 import SharedBandoriCardThumbnail, {
   type BandoriCardThumbnailCard,
   type BandoriCardThumbnailMetadata,
 } from "@/app/bandori/BandoriCardThumbnail";
+import { BandoriCardHoverTooltipPortal } from "@/components/bandori/BandoriCardHoverTooltip";
 import { type BandoriAssetRegion } from "@/lib/bandori-asset-proxy";
 import { cn } from "@/lib/utils";
 import type { BandoriCardArtVariant, BandoriCardCatalogEntry } from "./types";
-
-const PREVIEW_WIDTH = 224;
-const PREVIEW_HEIGHT = 92;
-const PREVIEW_GAP = 8;
-const PREVIEW_MARGIN = 12;
-
-type PreviewPosition = {
-  left: number;
-  top: number;
-};
 
 function buildThumbnailCard(
   card: BandoriCardCatalogEntry,
@@ -42,6 +32,7 @@ function buildThumbnailMetadata(card: BandoriCardCatalogEntry): BandoriCardThumb
     attribute: card.attribute ?? undefined,
     resourceSetName: card.resourceSetName,
     levelLimit: card.levelLimit,
+    assetRegion: card.assetRegion,
   };
 }
 
@@ -50,6 +41,7 @@ export default function BandoriCardThumbnailTile({
   trainType,
   selected = false,
   region,
+  skillEffectLabel = "未知技能",
   onSelect,
   className,
 }: {
@@ -57,75 +49,28 @@ export default function BandoriCardThumbnailTile({
   trainType: BandoriCardArtVariant;
   selected?: boolean;
   region: BandoriAssetRegion;
+  skillEffectLabel?: string;
   onSelect: () => void;
   className?: string;
 }) {
   const label = `${card.displayName} / ${card.characterName} / Card #${card.cardId}`;
   const assetRegion = card.assetRegion ?? region;
   const tileRef = useRef<HTMLElement | null>(null);
-  const [previewPosition, setPreviewPosition] = useState<PreviewPosition | null>(null);
-
-  const updatePreviewPosition = useCallback(() => {
-    const tile = tileRef.current;
-    if (!tile || typeof window === "undefined") {
-      return;
-    }
-
-    const rect = tile.getBoundingClientRect();
-    const viewportWidth = window.innerWidth;
-    const viewportHeight = window.innerHeight;
-    const minLeft = PREVIEW_MARGIN + PREVIEW_WIDTH / 2;
-    const maxLeft = Math.max(minLeft, viewportWidth - PREVIEW_MARGIN - PREVIEW_WIDTH / 2);
-    const preferredLeft = rect.left + rect.width / 2;
-    const left = Math.min(maxLeft, Math.max(minLeft, preferredLeft));
-    const preferredTop = rect.bottom + PREVIEW_GAP;
-    const top = preferredTop + PREVIEW_HEIGHT <= viewportHeight - PREVIEW_MARGIN
-      ? preferredTop
-      : Math.max(PREVIEW_MARGIN, rect.top - PREVIEW_GAP - PREVIEW_HEIGHT);
-
-    setPreviewPosition({ left, top });
-  }, []);
+  const [previewOpen, setPreviewOpen] = useState(false);
 
   const showPreview = () => {
-    updatePreviewPosition();
+    setPreviewOpen(true);
   };
 
   const hidePreview = () => {
-    setPreviewPosition(null);
+    setPreviewOpen(false);
   };
-
-  useEffect(() => {
-    if (!previewPosition) {
-      return;
-    }
-
-    const dismissPreview = () => {
-      setPreviewPosition(null);
-    };
-
-    window.addEventListener("resize", dismissPreview);
-    window.addEventListener("scroll", dismissPreview, true);
-    window.addEventListener("wheel", dismissPreview, { capture: true, passive: true });
-    window.addEventListener("touchmove", dismissPreview, { capture: true, passive: true });
-    return () => {
-      window.removeEventListener("resize", dismissPreview);
-      window.removeEventListener("scroll", dismissPreview, true);
-      window.removeEventListener("wheel", dismissPreview, true);
-      window.removeEventListener("touchmove", dismissPreview, true);
-    };
-  }, [previewPosition]);
 
   return (
     <article
       ref={tileRef}
       onMouseEnter={showPreview}
       onMouseLeave={hidePreview}
-      onFocus={showPreview}
-      onBlur={(event) => {
-        if (!event.currentTarget.contains(event.relatedTarget)) {
-          hidePreview();
-        }
-      }}
       className={cn(
         "relative h-[74px] w-[74px] overflow-visible rounded-[5px] outline outline-1 outline-white/80 transition hover:z-40 hover:-translate-y-0.5 hover:outline-2 hover:outline-sky-400 focus-within:z-40 focus-within:outline-2 focus-within:outline-sky-400 sm:h-[76px] sm:w-[76px]",
         selected && "z-30 outline-2 outline-sky-500 ring-2 ring-sky-300/70",
@@ -151,22 +96,16 @@ export default function BandoriCardThumbnailTile({
         />
       </button>
 
-      {previewPosition && typeof document !== "undefined"
-        ? createPortal(
-          <div
-            className="pointer-events-none fixed z-[70] w-56 -translate-x-1/2 rounded-[18px] border border-white/90 bg-white p-3 text-center shadow-[0_18px_48px_rgba(15,23,42,0.22)] ring-1 ring-slate-950/5"
-            style={{ left: previewPosition.left, top: previewPosition.top }}
-          >
-            <div className="truncate text-sm font-black text-slate-900">{card.displayName}</div>
-            <div className="mt-1 truncate text-xs font-semibold text-slate-500">{card.characterName}</div>
-            <div className="mt-2 flex justify-center gap-2 text-[11px] font-black">
-              <span className="rounded-full border border-amber-100 bg-amber-50 px-2 py-1 text-amber-700">★{card.rarity}</span>
-              <span className="rounded-full border border-sky-100 bg-sky-50 px-2 py-1 text-sky-700">#{card.cardId}</span>
-            </div>
-          </div>,
-          document.body,
-        )
-        : null}
+      <BandoriCardHoverTooltipPortal
+        anchorRef={tileRef}
+        open={previewOpen}
+        cardName={card.displayName}
+        characterName={card.characterName}
+      >
+        <span className="block w-full whitespace-normal break-words rounded-xl bg-slate-50 px-2 py-1 text-slate-700">
+          {skillEffectLabel}
+        </span>
+      </BandoriCardHoverTooltipPortal>
 
       {selected ? (
         <span className="pointer-events-none absolute -right-2 -top-2 z-40 inline-flex h-6 w-6 items-center justify-center rounded-full border border-white bg-sky-600 text-white shadow-[0_6px_16px_rgba(2,132,199,0.35)]">

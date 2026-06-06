@@ -8,6 +8,10 @@ import {
   type BandoriAssetRegion,
 } from "@/lib/bandori-asset-proxy";
 import { BANDORI_CHARACTER_GROUPS, compareBandoriCharacterIds } from "@/lib/bandori-character-groups";
+import {
+  normalizeBandoriSkillLabel,
+  type BandoriSkillLabelMaster,
+} from "@/lib/bandori-skill-label";
 import { cn } from "@/lib/utils";
 import {
   bandoriCardCatalogTransforms,
@@ -313,12 +317,14 @@ function CardGridItem({
   selected,
   activeTrainType,
   region,
+  skillEffectLabel,
   onSelect,
 }: {
   card: BandoriCardCatalogEntry;
   selected: boolean;
   activeTrainType: BandoriCardPickerValue["trainType"];
   region: BandoriAssetRegion;
+  skillEffectLabel: string;
   onSelect: () => void;
 }) {
   return (
@@ -327,6 +333,7 @@ function CardGridItem({
       selected={selected}
       trainType={activeTrainType}
       region={region}
+      skillEffectLabel={skillEffectLabel}
       onSelect={onSelect}
     />
   );
@@ -337,11 +344,13 @@ export default function BandoriCardPicker({
   onValueChange,
   region = "cn",
   className,
+  showArtToggle = true,
 }: {
   value: BandoriCardPickerValue | null;
   onValueChange: (value: BandoriCardPickerValue | null) => void;
   region?: BandoriAssetRegion;
   className?: string;
+  showArtToggle?: boolean;
 }) {
   const { data: cardMetadata, loading: cardsLoading } = useCachedFetch(
     "bandori-card-picker-cards-v3",
@@ -355,12 +364,18 @@ export default function BandoriCardPicker({
     bandoriCardCatalogTransforms.characters,
     { staleTimeMs: 86400000 },
   );
+  const { data: skillMetadata, loading: skillsLoading } = useCachedFetch<Record<string, BandoriSkillLabelMaster | null | undefined>>(
+    "bandori-card-picker-skills-v1",
+    "/api/bandori/master/skills",
+    bandoriCardCatalogTransforms.skills,
+    { staleTimeMs: 86400000 },
+  );
   const [filter, setFilter] = useState<BandoriCardPickerFilter>(DEFAULT_FILTER);
   const [preferencesReady, setPreferencesReady] = useState(false);
   const [previewTrainType, setPreviewTrainType] = useState<BandoriCardArtVariant>(() => value?.trainType ?? "after_training");
   const deferredQuery = useDeferredValue(filter.query);
   const [visibleState, setVisibleState] = useState({ key: "", count: INITIAL_VISIBLE_COUNT });
-  const loading = cardsLoading || charactersLoading;
+  const loading = cardsLoading || charactersLoading || skillsLoading;
 
   const catalog = useMemo(
     () => buildBandoriCardCatalog(cardMetadata ?? {}, characterMetadata ?? {}),
@@ -598,7 +613,7 @@ export default function BandoriCardPicker({
         </div>
       </div>
 
-      {value ? (
+      {value && showArtToggle ? (
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
           <div className="min-w-0 text-sm text-slate-600">
             当前选择：
@@ -632,6 +647,7 @@ export default function BandoriCardPicker({
                     selected={selected}
                     activeTrainType={activeTrainType}
                     region={region}
+                    skillEffectLabel={normalizeBandoriSkillLabel(card.skillId ? skillMetadata?.[String(card.skillId)] ?? undefined : undefined, 5, 5)}
                     onSelect={() => handleCardSelect(card)}
                   />
                 );

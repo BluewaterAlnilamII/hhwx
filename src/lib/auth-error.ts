@@ -18,6 +18,14 @@ export function formatAuthErrorMessage(error: unknown, fallbackMessage: string, 
         : "安全验证未通过，请重新完成后再试。";
     }
 
+    if (
+      normalizedMessage.includes("failed to fetch")
+      || normalizedMessage.includes("networkerror")
+      || normalizedMessage.includes("network request failed")
+    ) {
+      return "认证服务连接失败，请检查 Supabase 环境变量和本地网络后再试。";
+    }
+
     if (normalizedMessage.includes("invalid login credentials")) {
       return "邮箱或密码不正确。";
     }

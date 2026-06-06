@@ -12,6 +12,7 @@ export type BandoriCardAttribute = "powerful" | "pure" | "cool" | "happy";
 export type BandoriCardCatalogEntry = {
   cardId: number;
   characterId: number;
+  skillId: number | null;
   characterName: string;
   bandId: number | null;
   rarity: number;
