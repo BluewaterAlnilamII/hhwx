@@ -14,12 +14,23 @@ import {
   normalizeBandoriSkillLabel,
   type BandoriSkillLabelMaster,
 } from "@/lib/bandori-skill-label";
+import {
+  calculateBandoriCard,
+  type BandoriCharacterBonusState,
+  type BestdoriCardMaster,
+} from "@/lib/bandori-team-calculator";
+import {
+  buildBandoriCharacterBonuses,
+  toBandoriCharacterBonusMap,
+} from "@/lib/bandori-character-bonuses";
 import { pickBestdoriCnThenJpName } from "@/lib/bestdori-regional-names";
 import { decodeBestdoriProfile, encodeBestdoriProfile } from "@/lib/bestdori-profile-codec";
 import {
   decodeCompressedGameProfilePayload,
   encodeCompressedGameProfilePayload,
   getGameProfileCards,
+  getGameProfileCharacterMissionBonuses,
+  getGameProfileCharacterPotentials,
   type CompressedGameProfilePayload,
   type UserGameProfileCardRecord,
   type UserGameProfilePayload,
@@ -31,8 +42,9 @@ import {
 } from "@/lib/user-game-profile-local-store";
 import AccountShell, { AccountErrorState, AccountLoadingState, AccountSignInState } from "@/app/account/AccountShell";
 import { getAccessToken, useAccountProfile } from "@/app/account/useAccountProfile";
-import SharedBandoriCardThumbnail from "@/app/bandori/BandoriCardThumbnail";
+import SharedBandoriCardThumbnail from "@/components/bandori/BandoriCardThumbnail";
 import { BandoriCardHoverTooltipPortal } from "@/components/bandori/BandoriCardHoverTooltip";
+import VirtualizedBandoriCardGrid from "@/components/bandori/VirtualizedBandoriCardGrid";
 import GameProfileCardEditorDialog from "@/components/bandori/GameProfileCardEditorDialog";
 import { cn } from "@/lib/utils";
 
@@ -85,7 +97,7 @@ type CardFilterState = {
 };
 
 const CARD_METADATA_CHUNK_SIZE = 150;
-const CARD_PAGE_SIZE = 36;
+const CARD_PAGE_SIZE = 60;
 const DEFAULT_FILTERS: CardFilterState = {
   query: "",
   attribute: "all",
@@ -275,6 +287,7 @@ function CardThumbnail({
   card,
   metadata,
   bandId,
+  characterBonusesById,
   region,
   alt,
   size = "tile",
@@ -282,10 +295,25 @@ function CardThumbnail({
   card: UserGameProfileCardRecord;
   metadata?: BestdoriCardMetadata;
   bandId: number | null;
+  characterBonusesById: Record<string, BandoriCharacterBonusState | undefined>;
   region: BandoriAssetRegion;
   alt: string;
   size?: "tile" | "preview";
 }) {
+  let totalPower: number | null = null;
+  if (metadata) {
+    try {
+      totalPower = calculateBandoriCard(
+        card,
+        metadata as BestdoriCardMaster,
+        metadata.characterId ? { [String(metadata.characterId)]: { bandId } } : {},
+        characterBonusesById,
+      ).totalPower;
+    } catch {
+      totalPower = null;
+    }
+  }
+
   return (
     <SharedBandoriCardThumbnail
       card={card}
@@ -294,6 +322,7 @@ function CardThumbnail({
       region={region}
       alt={alt}
       size={size}
+      power={totalPower}
     />
   );
 }
@@ -303,6 +332,7 @@ const CardTile = memo(function CardTile({
   characterName,
   skillEffectLabel,
   bandId,
+  characterBonusesById,
   region,
   canEdit,
   onEdit,
@@ -312,6 +342,7 @@ const CardTile = memo(function CardTile({
   characterName: string;
   skillEffectLabel: string;
   bandId: number | null;
+  characterBonusesById: Record<string, BandoriCharacterBonusState | undefined>;
   region: BandoriAssetRegion;
   canEdit: boolean;
   onEdit: () => void;
@@ -325,31 +356,33 @@ const CardTile = memo(function CardTile({
       ref={tileRef}
       onMouseEnter={() => setHoverOpen(true)}
       onMouseLeave={() => setHoverOpen(false)}
-      className="group relative h-[74px] w-[74px] overflow-visible rounded-[5px] outline outline-1 outline-white/80 transition hover:z-40 hover:-translate-y-0.5 hover:outline-2 hover:outline-sky-400 focus-within:z-40 focus-within:outline-2 focus-within:outline-sky-400 sm:h-[76px] sm:w-[76px]"
+      className="group relative h-[56px] w-[56px] overflow-visible rounded-[5px] outline outline-1 outline-white/80 transition hover:z-40 hover:-translate-y-0.5 hover:outline-2 hover:outline-sky-400 focus-within:z-40 focus-within:outline-2 focus-within:outline-sky-400 sm:h-[76px] sm:w-[76px]"
     >
       <button
         type="button"
         onClick={canEdit ? onEdit : undefined}
         disabled={!canEdit}
         className={cn(
-          "relative block h-full w-full overflow-hidden rounded-[5px] bg-white text-left shadow-[0_2px_7px_rgba(15,23,42,0.22)]",
+          "relative block h-full w-full overflow-visible rounded-[5px] bg-white text-left shadow-[0_2px_7px_rgba(15,23,42,0.22)]",
           !canEdit && "cursor-default",
         )}
         aria-label={canEdit ? `编辑 ${cardName}` : cardName}
       >
-        <CardThumbnail card={card} metadata={metadata} bandId={bandId} region={region} alt={cardName} />
+        <CardThumbnail card={card} metadata={metadata} bandId={bandId} characterBonusesById={characterBonusesById} region={region} alt={cardName} />
       </button>
 
-      <BandoriCardHoverTooltipPortal
-        anchorRef={tileRef}
-        open={hoverOpen}
-        cardName={cardName}
-        characterName={characterName}
-      >
-        <span className="block w-full whitespace-normal break-words rounded-xl bg-slate-50 px-2 py-1 text-slate-700">
-          {skillEffectLabel}
-        </span>
-      </BandoriCardHoverTooltipPortal>
+      {hoverOpen ? (
+        <BandoriCardHoverTooltipPortal
+          anchorRef={tileRef}
+          open={hoverOpen}
+          cardName={cardName}
+          characterName={characterName}
+        >
+          <span className="block w-full whitespace-normal break-words rounded-xl bg-slate-50 px-2 py-1 text-slate-700">
+            {skillEffectLabel}
+          </span>
+        </BandoriCardHoverTooltipPortal>
+      ) : null}
     </article>
   );
 });
@@ -370,6 +403,15 @@ export default function GameProfileCardsPage({ params }: { params: Promise<{ pro
   const [error, setError] = useState("");
   const [saveMessage, setSaveMessage] = useState("");
   const deferredQuery = useDeferredValue(filters.query);
+  const characterBonusesById = useMemo(
+    () => profilePayload
+      ? toBandoriCharacterBonusMap(buildBandoriCharacterBonuses(
+        getGameProfileCharacterPotentials(profilePayload),
+        getGameProfileCharacterMissionBonuses(profilePayload),
+      ))
+      : {},
+    [profilePayload],
+  );
 
   useEffect(() => {
     if (!profileId || !userId) {
@@ -444,8 +486,8 @@ export default function GameProfileCardsPage({ params }: { params: Promise<{ pro
       return true;
     });
   }, [cards, charactersById, deferredQuery, filters.attribute, filters.rarity, filters.training, metadata.cards]);
-  const visibleCards = useMemo(() => filteredCards.slice(0, visibleCount), [filteredCards, visibleCount]);
-  const remainingCards = Math.max(0, filteredCards.length - visibleCards.length);
+  const visibleCardCount = Math.min(visibleCount, filteredCards.length);
+  const remainingCards = Math.max(0, filteredCards.length - visibleCardCount);
 
   useEffect(() => {
     setVisibleCount(CARD_PAGE_SIZE);
@@ -511,7 +553,7 @@ export default function GameProfileCardsPage({ params }: { params: Promise<{ pro
                 <div>
                   <h2 className="text-2xl font-black text-slate-900">卡牌资料工作台</h2>
                   <p className="mt-1 text-sm font-semibold text-slate-600">
-                    共 {cards.length} 张卡牌 · 匹配 {filteredCards.length} 张 · 已加载 {visibleCards.length} 张 · 资源区服 {region.toUpperCase()}
+                    共 {cards.length} 张卡牌 · 匹配 {filteredCards.length} 张 · 已加载 {visibleCardCount} 张 · 资源区服 {region.toUpperCase()}
                   </p>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
@@ -570,8 +612,11 @@ export default function GameProfileCardsPage({ params }: { params: Promise<{ pro
                     </div>
                   ) : (
                     <>
-                      <div className="grid justify-center gap-[6px] [grid-template-columns:repeat(auto-fill,74px)] sm:[grid-template-columns:repeat(auto-fill,76px)]">
-                        {visibleCards.map((card) => {
+                      <VirtualizedBandoriCardGrid
+                        items={filteredCards}
+                        visibleLimit={visibleCount}
+                        getKey={(card) => card.cardId}
+                        renderItem={(card) => {
                           const cardMetadata = metadata.cards[String(card.cardId)];
                           const characterName = pickFullCharacterName(charactersById.get(cardMetadata?.characterId ?? 0), cardMetadata?.characterId);
                           const skillEffectLabel = getCardSkillEffectLabel(card, cardMetadata, metadata.skills);
@@ -583,19 +628,20 @@ export default function GameProfileCardsPage({ params }: { params: Promise<{ pro
                               characterName={characterName}
                               skillEffectLabel={skillEffectLabel}
                               bandId={charactersById.get(cardMetadata?.characterId ?? 0)?.bandId ?? null}
+                              characterBonusesById={characterBonusesById}
                               region={region}
                               canEdit={canEditProfile}
                               onEdit={() => setEditingCardId(card.cardId)}
                             />
                           );
-                        })}
-                      </div>
+                        }}
+                      />
 
                       {remainingCards > 0 ? (
                         <div className="mt-4 grid gap-2 sm:mx-auto sm:max-w-xl">
                           <button type="button" onClick={() => setVisibleCount((current) => Math.min(filteredCards.length, current + CARD_PAGE_SIZE))} className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white text-sm font-bold text-slate-700 transition hover:border-sky-200 hover:text-sky-600">
                             <span className="text-xl leading-none">+</span>
-                            显示更多（{remainingCards}）
+                            显示更多 {Math.min(CARD_PAGE_SIZE, remainingCards)} 张
                           </button>
                           <button type="button" onClick={() => setVisibleCount(filteredCards.length)} className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white text-sm font-bold text-slate-700 transition hover:border-sky-200 hover:text-sky-600">
                             <span className="text-xl leading-none">+</span>
@@ -617,6 +663,7 @@ export default function GameProfileCardsPage({ params }: { params: Promise<{ pro
               metadata={metadata.cards[String(editingCard.cardId)]}
               characterName={pickFullCharacterName(charactersById.get(metadata.cards[String(editingCard.cardId)]?.characterId ?? 0), metadata.cards[String(editingCard.cardId)]?.characterId)}
               bandId={charactersById.get(metadata.cards[String(editingCard.cardId)]?.characterId ?? 0)?.bandId ?? null}
+              characterBonusesById={characterBonusesById}
               region={region}
               saving={saving}
               onClose={() => setEditingCardId(null)}

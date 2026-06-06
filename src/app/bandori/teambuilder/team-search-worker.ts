@@ -38,12 +38,12 @@ import {
 } from "@/lib/bandori/team-builder/medley/slots";
 import { getCardInstanceKey } from "@/lib/bandori/team-builder/core/card-identity";
 import { createInitialMedleyProfilingStats } from "@/lib/bandori/team-builder/medley/profiling";
+import { buildBandoriCharacterBonuses } from "@/lib/bandori-character-bonuses";
 import type {
   MedleyBestSlotTeamCacheEntry,
   MedleyTeamCandidate,
 } from "@/lib/bandori/team-builder/medley/types";
 import {
-  type BandoriCharacterBonusState,
   type BandoriEventBonus,
   type BestdoriAreaItemMaster,
   type BestdoriCardMaster,
@@ -198,54 +198,6 @@ async function requestJsonUncached<T>(path: string): Promise<T> {
     throw new Error("接口返回格式无效");
   }
   return data;
-}
-
-function buildCharacterBonuses(
-  potentials: ReturnType<typeof getGameProfileCharacterPotentials>,
-  missionBonuses: ReturnType<typeof getGameProfileCharacterMissionBonuses>,
-): BandoriCharacterBonusState[] {
-  const records = new Map<number, BandoriCharacterBonusState>();
-  const usesDetailedCharacterBonuses = potentials.some((potential) => (
-    potential.performanceLevel !== potential.techniqueLevel
-    || potential.performanceLevel !== potential.visualLevel
-  )) || missionBonuses.some((bonus) => (
-    bonus.performance !== bonus.technique
-    || bonus.performance !== bonus.visual
-  ));
-
-  potentials.forEach((potential) => {
-    const record = records.get(potential.characterId) ?? { characterId: potential.characterId };
-    record.potential = {
-      performance: potential.performanceLevel,
-      technique: potential.techniqueLevel,
-      visual: potential.visualLevel,
-    };
-    records.set(potential.characterId, record);
-  });
-
-  missionBonuses.forEach((bonus) => {
-    const record = records.get(bonus.characterId) ?? { characterId: bonus.characterId };
-    const current = record.missionBonusPercent ?? {};
-    const bonusType = bonus.bonusType.toUpperCase() === "TRAINING" ? "training" : "collection";
-    const currentByType = record.missionBonusPercentByType ?? {};
-    record.missionBonusPercent = {
-      performance: (current.performance ?? 0) + bonus.performance / 10,
-      technique: (current.technique ?? 0) + bonus.technique / 10,
-      visual: (current.visual ?? 0) + bonus.visual / 10,
-    };
-    record.missionBonusPercentByType = {
-      ...currentByType,
-      [bonusType]: {
-        performance: bonus.performance / 10,
-        technique: bonus.technique / 10,
-        visual: bonus.visual / 10,
-      },
-    };
-    record.missionBonusRoundingMode = usesDetailedCharacterBonuses ? "combined" : "split-by-type";
-    records.set(bonus.characterId, record);
-  });
-
-  return [...records.values()];
 }
 
 function mergeEventBonus(base: BandoriEventBonus | null, override: Partial<BandoriEventBonus> | undefined): BandoriEventBonus | null {
@@ -715,7 +667,7 @@ async function runSearch(request: TeamSearchWorkerSearchRequest): Promise<Bandor
         difficulty: medleySong.difficulty,
       };
     });
-    const characterBonuses = buildCharacterBonuses(
+    const characterBonuses = buildBandoriCharacterBonuses(
       getGameProfileCharacterPotentials(request.profilePayload),
       getGameProfileCharacterMissionBonuses(request.profilePayload),
     );
@@ -778,7 +730,7 @@ async function runSearch(request: TeamSearchWorkerSearchRequest): Promise<Bandor
   return searchBandoriBestTeams({
     userCards,
     userAreaItems,
-    characterBonuses: buildCharacterBonuses(
+    characterBonuses: buildBandoriCharacterBonuses(
       getGameProfileCharacterPotentials(request.profilePayload),
       getGameProfileCharacterMissionBonuses(request.profilePayload),
     ),

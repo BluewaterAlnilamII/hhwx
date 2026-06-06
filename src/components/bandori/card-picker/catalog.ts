@@ -146,10 +146,6 @@ export function buildBandoriCardCatalog(
   }).sort((left, right) => right.releasedAtJp - left.releasedAtJp || right.cardId - left.cardId);
 }
 
-function hasAnySelected<T>(selected: readonly T[], value: T): boolean {
-  return selected.includes(value);
-}
-
 export function filterBandoriCardCatalog(
   cards: readonly BandoriCardCatalogEntry[],
   filter: BandoriCardPickerFilter,
@@ -164,26 +160,30 @@ export function filterBandoriCardCatalog(
   }
 
   const query = filter.query.trim().toLowerCase();
+  const bandIds = new Set(filter.bandIds);
+  const attributes = new Set(filter.attributes);
+  const rarities = new Set(filter.rarities);
+  const characterIds = new Set(filter.characterIds);
   const filtered = cards.filter((card) => {
     if (query && !card.searchText.includes(query)) {
       return false;
     }
-    if (!hasAnySelected(filter.rarities, card.rarity)) {
+    if (!rarities.has(card.rarity)) {
       return false;
     }
-    if (card.attribute && !hasAnySelected(filter.attributes, card.attribute)) {
+    if (card.attribute && !attributes.has(card.attribute)) {
       return false;
     }
     if (!card.attribute && filter.attributes.length > 0) {
       return false;
     }
-    if (card.bandId !== null && !hasAnySelected(filter.bandIds, card.bandId)) {
+    if (card.bandId !== null && !bandIds.has(card.bandId)) {
       return false;
     }
     if (card.bandId === null && filter.bandIds.length > 0) {
       return false;
     }
-    if (!hasAnySelected(filter.characterIds, card.characterId)) {
+    if (!characterIds.has(card.characterId)) {
       return false;
     }
     if (filter.sortBy === "release_jp" && (card.releasedAtJp <= 0 || card.releasedAtJp >= JP_RELEASE_SORT_CUTOFF_TIMESTAMP)) {

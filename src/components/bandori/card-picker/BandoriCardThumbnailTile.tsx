@@ -5,7 +5,7 @@ import { Check } from "lucide-react";
 import SharedBandoriCardThumbnail, {
   type BandoriCardThumbnailCard,
   type BandoriCardThumbnailMetadata,
-} from "@/app/bandori/BandoriCardThumbnail";
+} from "@/components/bandori/BandoriCardThumbnail";
 import { BandoriCardHoverTooltipPortal } from "@/components/bandori/BandoriCardHoverTooltip";
 import { type BandoriAssetRegion } from "@/lib/bandori-asset-proxy";
 import { cn } from "@/lib/utils";
@@ -72,7 +72,7 @@ export default function BandoriCardThumbnailTile({
       onMouseEnter={showPreview}
       onMouseLeave={hidePreview}
       className={cn(
-        "relative h-[74px] w-[74px] overflow-visible rounded-[5px] outline outline-1 outline-white/80 transition hover:z-40 hover:-translate-y-0.5 hover:outline-2 hover:outline-sky-400 focus-within:z-40 focus-within:outline-2 focus-within:outline-sky-400 sm:h-[76px] sm:w-[76px]",
+        "relative h-[56px] w-[56px] overflow-visible rounded-[5px] outline outline-1 outline-white/80 transition hover:z-40 hover:-translate-y-0.5 hover:outline-2 hover:outline-sky-400 focus-within:z-40 focus-within:outline-2 focus-within:outline-sky-400 sm:h-[76px] sm:w-[76px]",
         selected && "z-30 outline-2 outline-sky-500 ring-2 ring-sky-300/70",
         className,
       )}
@@ -83,7 +83,7 @@ export default function BandoriCardThumbnailTile({
         onClick={onSelect}
         title={label}
         aria-pressed={selected}
-        className="relative block h-full w-full overflow-hidden rounded-[5px] bg-white text-left shadow-[0_2px_7px_rgba(15,23,42,0.22)]"
+        className="relative block h-full w-full overflow-visible rounded-[5px] bg-white text-left shadow-[0_2px_7px_rgba(15,23,42,0.22)]"
       >
         <SharedBandoriCardThumbnail
           card={buildThumbnailCard(card, trainType)}
@@ -96,16 +96,18 @@ export default function BandoriCardThumbnailTile({
         />
       </button>
 
-      <BandoriCardHoverTooltipPortal
-        anchorRef={tileRef}
-        open={previewOpen}
-        cardName={card.displayName}
-        characterName={card.characterName}
-      >
-        <span className="block w-full whitespace-normal break-words rounded-xl bg-slate-50 px-2 py-1 text-slate-700">
-          {skillEffectLabel}
-        </span>
-      </BandoriCardHoverTooltipPortal>
+      {previewOpen ? (
+        <BandoriCardHoverTooltipPortal
+          anchorRef={tileRef}
+          open={previewOpen}
+          cardName={card.displayName}
+          characterName={card.characterName}
+        >
+          <span className="block w-full whitespace-normal break-words rounded-xl bg-slate-50 px-2 py-1 text-slate-700">
+            {skillEffectLabel}
+          </span>
+        </BandoriCardHoverTooltipPortal>
+      ) : null}
 
       {selected ? (
         <span className="pointer-events-none absolute -right-2 -top-2 z-40 inline-flex h-6 w-6 items-center justify-center rounded-full border border-white bg-sky-600 text-white shadow-[0_6px_16px_rgba(2,132,199,0.35)]">

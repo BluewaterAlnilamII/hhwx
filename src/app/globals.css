@@ -355,6 +355,31 @@ body::before {
   animation: bubbleIn 0.3s ease-out forwards;
 }
 
+.bandori-card-thumbnail-star {
+  bottom: calc(var(--bandori-card-star-bottom) + var(--bandori-card-star-slot) * var(--bandori-card-star-step));
+  height: var(--bandori-card-star-height);
+  left: var(--bandori-card-star-left);
+  width: var(--bandori-card-star-width);
+}
+
+@container (max-width: 60px) {
+  .bandori-card-thumbnail[data-size="tile"] .bandori-card-thumbnail-star {
+    bottom: calc(0px + var(--bandori-card-star-slot) * 8.5px);
+    height: 9.5px;
+    left: 1px;
+    width: 10.5px;
+  }
+}
+
+@container (min-width: 120px) {
+  .bandori-card-thumbnail[data-size="editor"] .bandori-card-thumbnail-star {
+    bottom: calc(0.5px + var(--bandori-card-star-slot) * 18.8px);
+    height: 23px;
+    left: 3px;
+    width: 24px;
+  }
+}
+
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
