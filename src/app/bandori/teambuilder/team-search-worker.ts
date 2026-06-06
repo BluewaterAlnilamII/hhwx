@@ -36,6 +36,7 @@ import {
   findBestMedleySlotTeamWithCache,
   pruneDominatedMedleySlotCards,
 } from "@/lib/bandori/team-builder/medley/slots";
+import { getCardInstanceKey } from "@/lib/bandori/team-builder/core/card-identity";
 import { createInitialMedleyProfilingStats } from "@/lib/bandori/team-builder/medley/profiling";
 import type {
   MedleyBestSlotTeamCacheEntry,
@@ -53,11 +54,22 @@ import {
   getGameProfileCards,
   getGameProfileCharacterMissionBonuses,
   getGameProfileCharacterPotentials,
+  type UserGameProfileCardRecord,
   type UserGameProfilePayload,
 } from "@/lib/user-game-profile-payload";
 
 type MasterResponse<T> = {
   payload: T;
+};
+
+type CardPreferenceRarityThreshold = 3 | 4 | 5;
+
+type OwnedCardParameterPreferences = {
+  maxLevelEpisodeTraining: boolean;
+  maxMasterRank: boolean;
+  maxMasterRankRarityThreshold: CardPreferenceRarityThreshold;
+  maxSkillLevel: boolean;
+  maxSkillLevelRarityThreshold: CardPreferenceRarityThreshold;
 };
 
 type EventBonusResponse = {
@@ -98,6 +110,8 @@ type TeamSearchWorkerSearchRequest = {
   }>;
   cards: {
     excludedCardIds: number[];
+    ownedCardParameters?: OwnedCardParameterPreferences;
+    temporaryCards: Array<UserGameProfileCardRecord & { instanceId?: string; cardInstanceKey?: string }>;
   };
   calculation: {
     target: BandoriTeamSearchTarget;
@@ -249,6 +263,73 @@ function mergeEventBonus(base: BandoriEventBonus | null, override: Partial<Bando
   return Object.keys(merged).length > 0 ? merged : null;
 }
 
+function readPositiveInteger(value: unknown, fallback = 0): number {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric) || numeric <= 0) {
+    return fallback;
+  }
+  return Math.trunc(numeric);
+}
+
+function getMasterCardRarity(card: BestdoriCardMaster | undefined): number {
+  return readPositiveInteger(card?.rarity, 0);
+}
+
+function hasMasterCardTraining(card: BestdoriCardMaster | undefined): boolean {
+  return typeof card?.stat?.training === "object" && card.stat.training !== null;
+}
+
+function getMasterCardMaxLevel(card: BestdoriCardMaster | undefined): number {
+  if (!card) {
+    return 0;
+  }
+  const baseLevelLimit = Math.max(1, readPositiveInteger(card.levelLimit, 1));
+  const trainingLevelLimit = hasMasterCardTraining(card)
+    ? Math.max(0, readPositiveInteger(card.stat?.training?.levelLimit, 0))
+    : 0;
+  return baseLevelLimit + trainingLevelLimit;
+}
+
+function getMasterCardMaxEpisodeCount(card: BestdoriCardMaster | undefined): number {
+  if (!card) {
+    return 2;
+  }
+  return Math.min(2, Math.max(0, Array.isArray(card.stat?.episodes) ? card.stat.episodes.length : 2));
+}
+
+function applyOwnedCardParameterPreferences(
+  card: UserGameProfileCardRecord,
+  masterCard: BestdoriCardMaster | undefined,
+  preferences: OwnedCardParameterPreferences | undefined,
+): UserGameProfileCardRecord {
+  if (!preferences || !masterCard) {
+    return card;
+  }
+
+  const rarity = getMasterCardRarity(masterCard);
+  const hasTraining = hasMasterCardTraining(masterCard);
+  const nextCard: UserGameProfileCardRecord = { ...card };
+
+  if (preferences.maxLevelEpisodeTraining) {
+    nextCard.level = Math.max(nextCard.level, getMasterCardMaxLevel(masterCard) || nextCard.level);
+    nextCard.episodeCount = Math.max(nextCard.episodeCount, getMasterCardMaxEpisodeCount(masterCard));
+    if (hasTraining) {
+      nextCard.isTrained = true;
+      nextCard.hasTrainedArt = true;
+    }
+  }
+
+  if (preferences.maxMasterRank && rarity > 0 && rarity <= preferences.maxMasterRankRarityThreshold) {
+    nextCard.masterRank = 4;
+  }
+
+  if (preferences.maxSkillLevel && rarity > 0 && rarity <= preferences.maxSkillLevelRarityThreshold) {
+    nextCard.skillLevel = 5;
+  }
+
+  return nextCard;
+}
+
 function buildMedleyGreedySlotOrders(slotCount: number, preferredOrder: number[]): number[][] {
   if (slotCount === 3) {
     return [[2, 1, 0]];
@@ -376,15 +457,15 @@ function buildSharedConfigurationLegacyGreedyMedleyResponse({
     const bestSlotTeamCache = new Map<string, MedleyBestSlotTeamCacheEntry>();
     const getRemainingScoreUpperBound = (
       remainingSlotIndices: number[],
-      bannedCardIds: Set<number>,
+      bannedCardKeys: Set<string>,
     ): number => remainingSlotIndices.reduce((sum, remainingSlotIndex) => (
-      sum + estimateMedleySlotAvailability(slots[remainingSlotIndex], bannedCardIds, profiling).scoreUpperBound
+      sum + estimateMedleySlotAvailability(slots[remainingSlotIndex], bannedCardKeys, new Set<number>(), profiling).scoreUpperBound
     ), 0);
     let completedConfiguration = false;
 
     for (const seedOrder of seedOrders) {
       const selectedBySong: Array<MedleyTeamCandidate | undefined> = [];
-      const bannedCardIds = new Set<number>();
+      const bannedCardKeys = new Set<string>();
       let completedSeedOrder = true;
       let currentScore = 0;
 
@@ -398,7 +479,7 @@ function buildSharedConfigurationLegacyGreedyMedleyResponse({
         const slot = slots[slotIndex];
         const threshold = getPruningThreshold();
         const remainingScoreUpperBound = Number.isFinite(threshold)
-          ? getRemainingScoreUpperBound(remainingSlotIndices, bannedCardIds)
+          ? getRemainingScoreUpperBound(remainingSlotIndices, bannedCardKeys)
           : Number.POSITIVE_INFINITY;
         const minimumScore = Number.isFinite(threshold)
           ? threshold - currentScore - remainingScoreUpperBound
@@ -407,7 +488,8 @@ function buildSharedConfigurationLegacyGreedyMedleyResponse({
           bestSlotTeamCache,
           slotIndex,
           slot,
-          bannedCardIds,
+          bannedCardKeys,
+          new Set<number>(),
           server,
           perfectRate,
           stats,
@@ -424,12 +506,12 @@ function buildSharedConfigurationLegacyGreedyMedleyResponse({
           break;
         }
         selectedBySong[slot.songIndex] = candidate;
-        for (const cardId of candidate.cardIds) {
-          bannedCardIds.add(cardId);
+        for (const card of candidate.cards) {
+          bannedCardKeys.add(getCardInstanceKey(card));
         }
         currentScore += candidate.result.score;
         if (Number.isFinite(threshold)) {
-          const nextRemainingScoreUpperBound = getRemainingScoreUpperBound(remainingSlotIndices, bannedCardIds);
+          const nextRemainingScoreUpperBound = getRemainingScoreUpperBound(remainingSlotIndices, bannedCardKeys);
           if (currentScore + nextRemainingScoreUpperBound < threshold) {
             stats.prunedBranchCount += 1;
             completedSeedOrder = false;
@@ -586,10 +668,24 @@ async function runSearch(request: TeamSearchWorkerSearchRequest): Promise<Bandor
   }
 
   const excludedCardIds = new Set(request.cards.excludedCardIds);
-  const userCards = getGameProfileCards(request.profilePayload).map((card) => ({
+  const profileCards = getGameProfileCards(request.profilePayload).map((card) => {
+    const effectiveCard = applyOwnedCardParameterPreferences(
+      card,
+      cardsPayload.payload[String(card.cardId)],
+      request.cards.ownedCardParameters,
+    );
+    return {
+      ...effectiveCard,
+      cardInstanceKey: `profile:${card.cardId}`,
+      isExcluded: effectiveCard.isExcluded || excludedCardIds.has(card.cardId),
+    };
+  });
+  const temporaryCards = request.cards.temporaryCards.map((card, index) => ({
     ...card,
-    isExcluded: card.isExcluded || excludedCardIds.has(card.cardId),
+    cardInstanceKey: card.cardInstanceKey ?? `temporary:${card.instanceId ?? `${index}:${card.cardId}`}`,
+    isExcluded: false,
   }));
+  const userCards = [...profileCards, ...temporaryCards];
   const userAreaItems = getGameProfileAreaItems(request.profilePayload).flatMap((item) => (
     item.areaItemId === null ? [] : {
       areaItemId: item.areaItemId,
@@ -600,7 +696,7 @@ async function runSearch(request: TeamSearchWorkerSearchRequest): Promise<Bandor
 
   if (request.event.eventType === "medley") {
     if (medleySongs.length !== 3) {
-      throw new Error("组曲LIVE需要选择 3 首歌曲");
+      throw new Error("巡回演出需要选择 3 首歌曲");
     }
     const medleySongInputs = medleySongs.map((medleySong, index) => {
       const medleySongId = Math.trunc(medleySong.songId);

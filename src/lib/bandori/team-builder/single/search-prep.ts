@@ -14,6 +14,7 @@ import {
   getCachedSearchCardSkillRateProfile,
   toAreaItemStateMap,
 } from "../core/cards";
+import { compareCardInstanceKey, getCardInstanceKey } from "../core/card-identity";
 import { PARAMETER_KEYS } from "../core/constants";
 import { resolveBandoriTeamSearchEventMode } from "../core/events";
 import type {
@@ -40,7 +41,7 @@ export function buildSearchPrecomputedData(
   // support opportunity cost, skill signatures, and skill bounds.
   // Store area-item power per configuration as Float64Array so buildSearchCards does not repeatedly traverse masters.
   const eventMode = resolveBandoriTeamSearchEventMode(input.eventType, input.liveType);
-  const cardStaticProfilesById = new Map<number, SearchCardStaticProfile>();
+  const cardStaticProfilesByKey = new Map<string, SearchCardStaticProfile>();
   for (const card of cards) {
     const eventBonus = calculateBandoriCardEventBonus(card, input.eventBonus);
     const eventPower = eventMode === "parameterPower"
@@ -48,11 +49,12 @@ export function buildSearchPrecomputedData(
         ? PARAMETER_KEYS.reduce((sum, _, index) => sum + eventBonus.parameterBonusWithRoom[index], 0)
         : PARAMETER_KEYS.reduce((sum, _, index) => sum + eventBonus.parameterBonus[index], 0)
       : 0;
-    cardStaticProfilesById.set(card.cardId, {
+    const cardKey = getCardInstanceKey(card);
+    cardStaticProfilesByKey.set(cardKey, {
       ...getCachedSearchCardSkillRateProfile(card, input, chart, server),
       skillSignature: buildSkillSearchSignature(card.skillId, input.skillsById[String(card.skillId)], card.skillLevel, server),
       pointBonusRate: eventBonus.pointBonusRate,
-      supportPower: supportBandContext?.supportPowerByCardId.get(card.cardId) ?? 0,
+      supportPower: supportBandContext?.supportPowerByCardKey.get(cardKey) ?? 0,
       eventPower,
     });
   }
@@ -77,7 +79,7 @@ export function buildSearchPrecomputedData(
   }
 
   return {
-    cardStaticProfilesById,
+    cardStaticProfilesByKey,
     areaItemPowerByConfigurationKey,
   };
 }
@@ -105,7 +107,7 @@ function estimateAreaItemConfigurationPowerUpper(
       configuration.selectedAreaItemIds,
       server,
     );
-    const staticProfile = precomputed?.cardStaticProfilesById.get(card.cardId);
+    const staticProfile = precomputed?.cardStaticProfilesByKey.get(getCardInstanceKey(card));
     const eventBonus = staticProfile ? null : calculateBandoriCardEventBonus(card, input.eventBonus);
     const eventPower = eventMode === "parameterPower"
       ? staticProfile?.eventPower ?? (
@@ -157,7 +159,7 @@ function compareSearchCardsForCompression(left: SearchCard, right: SearchCard): 
     || right.pointBonusRate - left.pointBonusRate
     || left.supportPower - right.supportPower
     || right.totalPower - left.totalPower
-    || left.cardId - right.cardId
+    || compareCardInstanceKey(left, right)
   );
 }
 
@@ -206,7 +208,7 @@ export function compressSearchCards(
     ].join(":");
     const current = bestCards.get(key);
     if (!current || card.effectivePower > current.effectivePower || (
-      card.effectivePower === current.effectivePower && card.cardId > current.cardId
+      card.effectivePower === current.effectivePower && compareCardInstanceKey(card, current) > 0
     )) {
       if (current) {
         prunedCount += 1;

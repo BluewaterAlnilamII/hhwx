@@ -180,7 +180,7 @@ export function buildConfigurationSearches(options: {
   state: SingleSearchExecutionState;
   configurations: BandoriAreaItemConfiguration[];
   calculatedCards: CalculatedBandoriCard[];
-  skillRateProfiles: Map<number, SearchCardSkillRateProfile>;
+  skillRateProfiles: Map<string, SearchCardSkillRateProfile>;
   searchPrecomputed: SearchPrecomputedData;
   useContextPartitioning: boolean;
 }): SearchConfiguration[] {

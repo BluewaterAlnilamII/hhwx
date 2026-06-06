@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { format } from "date-fns";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import {
   Calculator,
   CheckCircle2,
@@ -12,13 +12,18 @@ import {
   ListFilter,
   Loader2,
   Music2,
+  Plus,
+  Search,
+  Trash2,
   Users,
+  X,
 } from "lucide-react";
 import BandoriAccountShell from "@/app/bandori/BandoriAccountShell";
 import BandoriCardThumbnail from "@/app/bandori/BandoriCardThumbnail";
 import BandoriEventSwitcher, { type BandoriEventSwitcherEvent } from "@/app/bandori/BandoriEventSwitcher";
 import { AccountErrorState, AccountLoadingState, AccountSignInState } from "@/app/account/AccountShell";
 import { getAccessToken, useAccountProfile } from "@/app/account/useAccountProfile";
+import { BandoriCardHoverTooltipPortal } from "@/components/bandori/BandoriCardHoverTooltip";
 import { getApiErrorMessage, parseApiSuccessData } from "@/lib/api-contracts";
 import {
   type BandoriAssetRegion,
@@ -31,7 +36,17 @@ import {
   resolveBandoriCnScheduleWindow,
   resolveBandoriEventAssetRegion,
 } from "@/lib/bandori-event-region";
-import type { BandoriCardAttribute, BandoriEventBonus, BestdoriSkillMaster } from "@/lib/bandori-team-calculator";
+import { BANDORI_CHARACTER_GROUPS, compareBandoriCharacterIds } from "@/lib/bandori-character-groups";
+import {
+  calculateBandoriCard,
+  type BandoriCardAttribute,
+  type BandoriEventBonus,
+  type BestdoriCardMaster,
+} from "@/lib/bandori-team-calculator";
+import {
+  normalizeBandoriSkillLabel,
+  type BandoriSkillLabelMaster,
+} from "@/lib/bandori-skill-label";
 import type {
   BandoriTeamSearchDifficulty,
   BandoriTeamSearchEventType,
@@ -52,9 +67,16 @@ import {
 } from "@/lib/user-game-profile-local-store";
 import {
   decodeCompressedGameProfilePayload,
+  getGameProfileCards,
   type CompressedGameProfilePayload,
+  type UserGameProfileCardRecord,
   type UserGameProfilePayload,
 } from "@/lib/user-game-profile-payload";
+import { BandoriCardPicker, type BandoriCardPickerSortBy, type BandoriCardPickerValue } from "@/components/bandori/card-picker";
+import GameProfileCardEditorDialog, {
+  createMaxGameProfileCard,
+  pickGameProfileCardName,
+} from "@/components/bandori/GameProfileCardEditorDialog";
 import type { TeamSearchWorkerMessage, TeamSearchWorkerRequest, TeamSearchWorkerResponse } from "./team-search-worker";
 
 type StepId = "event" | "live" | "song" | "profile" | "calculate";
@@ -67,6 +89,16 @@ type ResultPlacementOption = "1" | "2" | "3" | "4" | "5";
 type FestivalResultOption = "win" | "lose";
 type ProfileChoice = { source: "cloud"; id: string } | { source: "local"; id: string };
 type PreloadStatus = "idle" | "loading" | "ready" | "error";
+type TeamBuilderExcludedCardSortBy = BandoriCardPickerSortBy | "power";
+type TeamBuilderExcludedCardFilterState = {
+  query: string;
+  bandIds: number[];
+  attributes: BandoriCardAttribute[];
+  rarities: number[];
+  characterIds: number[];
+  sortBy: TeamBuilderExcludedCardSortBy;
+  sortDirection: "desc" | "asc";
+};
 type PreloadState = {
   master: PreloadStatus;
   chart: PreloadStatus;
@@ -130,27 +162,26 @@ type SongMaster = {
 };
 
 type CharacterMaster = {
+  nickname?: string[] | string;
   firstName?: string[] | string;
   characterName?: string[] | string;
   bandId?: number | null;
   colorCode?: string | null;
 };
 
-type SkillMaster = BestdoriSkillMaster & {
-  description?: Array<string | null>;
-  simpleDescription?: Array<string | null>;
-  onceEffect?: {
-    onceEffectValue?: unknown;
-  };
-};
+type SkillMaster = BandoriSkillLabelMaster;
 
 type CardMetadata = {
   characterId?: number;
   rarity?: number;
   attribute?: string;
+  skillId?: number;
   levelLimit?: number;
   resourceSetName?: string;
+  assetRegion?: BandoriAssetRegion;
+  releasedAt?: Array<string | number | null>;
   displayName?: string | null;
+  hasTrainedArt?: boolean;
   stat?: {
     training?: {
       levelLimit?: number;
@@ -172,12 +203,32 @@ type OtherPlayerDraft = {
   skillLevel: string;
 };
 
+type TemporaryGameProfileCard = UserGameProfileCardRecord & {
+  instanceId: string;
+};
+
+type CardPreferenceRarityThreshold = 3 | 4 | 5;
+
+type OwnedCardParameterPreferences = {
+  maxLevelEpisodeTraining: boolean;
+  maxMasterRank: boolean;
+  maxMasterRankRarityThreshold: CardPreferenceRarityThreshold;
+  maxSkillLevel: boolean;
+  maxSkillLevelRarityThreshold: CardPreferenceRarityThreshold;
+};
+
 type LivePreferenceState = {
   liveType?: LiveType;
   perfectRate?: string;
   otherPlayersAveragePower?: string;
   encoreSkillSource?: EncoreSkillSource;
   otherPlayers?: OtherPlayerDraft[];
+};
+
+type TeamBuilderCardPreferences = {
+  excludedCardIds: number[];
+  temporaryCards: TemporaryGameProfileCard[];
+  ownedCardParameters: OwnedCardParameterPreferences;
 };
 
 const STEPS: Array<{ id: StepId; label: string; icon: React.ComponentType<{ className?: string }> }> = [
@@ -205,6 +256,15 @@ const MEDLEY_BROWSER_MEMORY_WATCHDOG_HEAP_LIMIT_RATIO = 0.7;
 const MEDLEY_BROWSER_MEMORY_WATCHDOG_INTERVAL_MS = 200;
 const DEFAULT_PERFECT_RATE = "97";
 const TEAMBUILDER_LIVE_PREFERENCES_STORAGE_KEY = "hhwx-bandori-teambuilder-live-preferences:v1";
+const TEAMBUILDER_CARD_PREFERENCES_STORAGE_KEY = "hhwx-bandori-teambuilder-card-preferences:v1";
+const DEFAULT_OWNED_CARD_PARAMETER_PREFERENCES: OwnedCardParameterPreferences = {
+  maxLevelEpisodeTraining: false,
+  maxMasterRank: false,
+  maxMasterRankRarityThreshold: 4,
+  maxSkillLevel: false,
+  maxSkillLevelRarityThreshold: 3,
+};
+const CARD_PARAMETER_RARITY_THRESHOLD_OPTIONS: CardPreferenceRarityThreshold[] = [3, 4, 5];
 const DIFFICULTIES: BandoriTeamSearchDifficulty[] = ["easy", "normal", "hard", "expert", "special"];
 const DIFFICULTY_KEYS: Record<BandoriTeamSearchDifficulty, string> = {
   easy: "0",
@@ -250,10 +310,10 @@ const MEDLEY_CALCULATION_MODE_LABELS: Record<MedleyCalculationMode, string> = {
   "legacy-greedy-single": "传统3次单曲贪心",
 };
 const LIVE_LABELS: Record<LiveType, string> = {
-  free: "自由LIVE",
-  multi: "协力LIVE",
-  challenge: "挑战LIVE",
-  versus: "对战LIVE",
+  free: "自由演出",
+  multi: "协力演出",
+  challenge: "挑战演出",
+  versus: "巡回演出",
 };
 
 const EVENT_FORMULA_LABELS: Record<EventFormulaOption, string> = {
@@ -305,6 +365,20 @@ const ATTRIBUTE_LABELS: Record<BandoriCardAttribute, string> = {
   happy: "Happy",
   pure: "Pure",
 };
+const CARD_FILTER_ATTRIBUTE_OPTIONS: Array<{ value: BandoriCardAttribute; label: string }> = [
+  { value: "powerful", label: ATTRIBUTE_LABELS.powerful },
+  { value: "cool", label: ATTRIBUTE_LABELS.cool },
+  { value: "happy", label: ATTRIBUTE_LABELS.happy },
+  { value: "pure", label: ATTRIBUTE_LABELS.pure },
+];
+const CARD_FILTER_ATTRIBUTE_VALUES = CARD_FILTER_ATTRIBUTE_OPTIONS.map((option) => option.value);
+const CARD_FILTER_RARITY_OPTIONS = [1, 2, 3, 4, 5];
+const CARD_FILTER_SORT_OPTIONS: Array<{ value: TeamBuilderExcludedCardSortBy; label: string }> = [
+  { value: "power", label: "综合力" },
+  { value: "release_jp", label: "发布日期（JP）" },
+  { value: "release_cn", label: "发布日期（CN）" },
+  { value: "id", label: "卡牌 ID" },
+];
 const AREA_ITEM_PARAMETER_LABELS: Record<"performance" | "technique" | "visual", string> = {
   performance: "演出",
   technique: "技巧",
@@ -355,6 +429,13 @@ function pickLocalizedName(value: string[] | string | undefined, fallback = ""):
     return fallback;
   }
   return value[3]?.trim() || value[0]?.trim() || fallback;
+}
+
+function pickCharacterDisplayName(character: CharacterMaster | undefined, fallback = ""): string {
+  return pickLocalizedName(character?.nickname)
+    || pickLocalizedName(character?.characterName)
+    || pickLocalizedName(character?.firstName)
+    || fallback;
 }
 
 function formatDate(value: number | null): string {
@@ -528,53 +609,8 @@ function formatPercentSequence(values: number[]): string {
   }).join("/");
 }
 
-function pickRegionalText(value: unknown): string {
-  if (Array.isArray(value)) {
-    return String(value[3] ?? value[2] ?? value[1] ?? value[0] ?? value[4] ?? "").trim();
-  }
-  return typeof value === "string" ? value.trim() : "";
-}
-
-function normalizeSkillOptionLevel(skillLevel: string | number): number {
-  const level = Math.min(5, Math.max(1, Math.trunc(Number(skillLevel) || 1)));
-  return level;
-}
-
-function pickSkillLevelNumber(value: unknown, skillLevel: string | number): number | null {
-  const level = normalizeSkillOptionLevel(skillLevel);
-  const rawValue = Array.isArray(value) ? value[level - 1] : value;
-  const numeric = Number(rawValue);
-  return Number.isFinite(numeric) ? numeric : null;
-}
-
-function formatSkillNumber(value: number): string {
-  return Number.isInteger(value) ? value.toFixed(0) : value.toFixed(1);
-}
-
-function getSkillDurationByLevel(skill: SkillMaster | undefined, skillLevel: string | number): number | null {
-  return pickSkillLevelNumber(skill?.duration, skillLevel);
-}
-
-function getSkillOnceEffectValueByLevel(skill: SkillMaster | undefined, skillLevel: string | number): number | null {
-  return pickSkillLevelNumber(skill?.onceEffect?.onceEffectValue, skillLevel);
-}
-
 function normalizeSkillLabel(skill: SkillMaster | undefined, skillLevel: string | number): string {
-  const description = pickRegionalText(skill?.description) || pickRegionalText(skill?.simpleDescription);
-  const duration = getSkillDurationByLevel(skill, skillLevel);
-  const onceEffectValue = getSkillOnceEffectValueByLevel(skill, skillLevel);
-  const durationText = duration !== null ? `${formatSkillNumber(duration)}秒` : "";
-  const onceEffectText = onceEffectValue !== null ? formatSkillNumber(onceEffectValue) : "";
-  const usesSecondaryPlaceholder = description.includes("{1}");
-  const primaryText = usesSecondaryPlaceholder ? onceEffectText : durationText;
-  const resolvedDescription = description
-    .replace(/\{1\}秒/g, durationText)
-    .replace(/\{1\}/g, durationText)
-    .replace(/\{0\}秒/g, usesSecondaryPlaceholder && primaryText ? `${primaryText}秒` : primaryText)
-    .replace(/\{0\}/g, primaryText)
-    .replace(/\s+/g, " ")
-    .trim();
-  return resolvedDescription || "未知技能";
+  return normalizeBandoriSkillLabel(skill, skillLevel);
 }
 
 function buildSkillOptions(
@@ -622,7 +658,7 @@ function readCharacterBonusItems(
     const character = characters[String(characterId)];
     return [{
       characterId,
-      label: pickLocalizedName(character?.firstName ?? character?.characterName),
+      label: pickCharacterDisplayName(character),
       color: character?.colorCode ?? null,
       percent,
     }];
@@ -779,10 +815,10 @@ function isEncoreSkillSource(value: unknown): value is EncoreSkillSource {
 
 function getLiveLabel(liveType: LiveType, eventType: BandoriTeamSearchEventType): string {
   if (eventType === "medley") {
-    return "组曲LIVE";
+    return "巡回演出";
   }
   if (liveType === "versus" && (eventType === "versus" || eventType === "festival")) {
-    return "共演LIVE";
+    return "团队演出";
   }
   return LIVE_LABELS[liveType];
 }
@@ -883,6 +919,134 @@ function writeLivePreferences(patch: LivePreferenceState): void {
   }));
 }
 
+function normalizePreferenceInteger(value: unknown, min: number, max: number, fallback: number): number {
+  const numberValue = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(numberValue)) {
+    return fallback;
+  }
+  return Math.min(max, Math.max(min, Math.trunc(numberValue)));
+}
+
+function normalizeRarityThreshold(value: unknown, fallback: CardPreferenceRarityThreshold): CardPreferenceRarityThreshold {
+  const normalized = normalizePreferenceInteger(value, 3, 5, fallback);
+  return normalized === 3 || normalized === 4 || normalized === 5 ? normalized : fallback;
+}
+
+function normalizeOwnedCardParameterPreferences(value: unknown): OwnedCardParameterPreferences {
+  if (typeof value !== "object" || value === null) {
+    return { ...DEFAULT_OWNED_CARD_PARAMETER_PREFERENCES };
+  }
+  const record = value as Partial<OwnedCardParameterPreferences>;
+  return {
+    maxLevelEpisodeTraining: record.maxLevelEpisodeTraining === true,
+    maxMasterRank: record.maxMasterRank === true,
+    maxMasterRankRarityThreshold: normalizeRarityThreshold(
+      record.maxMasterRankRarityThreshold,
+      DEFAULT_OWNED_CARD_PARAMETER_PREFERENCES.maxMasterRankRarityThreshold,
+    ),
+    maxSkillLevel: record.maxSkillLevel === true,
+    maxSkillLevelRarityThreshold: normalizeRarityThreshold(
+      record.maxSkillLevelRarityThreshold,
+      DEFAULT_OWNED_CARD_PARAMETER_PREFERENCES.maxSkillLevelRarityThreshold,
+    ),
+  };
+}
+
+function normalizeTemporaryCard(value: unknown): TemporaryGameProfileCard | null {
+  if (typeof value !== "object" || value === null) {
+    return null;
+  }
+  const record = value as Partial<TemporaryGameProfileCard>;
+  const cardId = normalizePreferenceInteger(record.cardId, 1, 999999, 0);
+  const instanceId = typeof record.instanceId === "string" && record.instanceId.trim()
+    ? record.instanceId.trim()
+    : "";
+  if (!cardId || !instanceId) {
+    return null;
+  }
+  return {
+    instanceId,
+    cardId,
+    level: normalizePreferenceInteger(record.level, 1, 200, 1),
+    masterRank: normalizePreferenceInteger(record.masterRank, 0, 4, 0),
+    skillLevel: normalizePreferenceInteger(record.skillLevel, 1, 5, 1),
+    episodeCount: normalizePreferenceInteger(record.episodeCount, 0, 2, 0),
+    isTrained: record.isTrained === true,
+    hasTrainedArt: record.hasTrainedArt === true,
+    isExcluded: false,
+  };
+}
+
+function normalizeCardPreferences(value: unknown): TeamBuilderCardPreferences {
+  if (typeof value !== "object" || value === null) {
+    return {
+      excludedCardIds: [],
+      temporaryCards: [],
+      ownedCardParameters: { ...DEFAULT_OWNED_CARD_PARAMETER_PREFERENCES },
+    };
+  }
+  const record = value as Partial<TeamBuilderCardPreferences>;
+  const excludedCardIds = Array.isArray(record.excludedCardIds)
+    ? Array.from(new Set(record.excludedCardIds
+      .map((cardId) => normalizePreferenceInteger(cardId, 1, 999999, 0))
+      .filter((cardId) => cardId > 0)))
+    : [];
+  const temporaryCards = Array.isArray(record.temporaryCards)
+    ? record.temporaryCards.flatMap((card) => {
+      const normalized = normalizeTemporaryCard(card);
+      return normalized ? [normalized] : [];
+    })
+    : [];
+  return {
+    excludedCardIds,
+    temporaryCards,
+    ownedCardParameters: normalizeOwnedCardParameterPreferences(record.ownedCardParameters),
+  };
+}
+
+function readCardPreferences(profileCacheKey: string): TeamBuilderCardPreferences {
+  if (typeof window === "undefined" || !profileCacheKey) {
+    return {
+      excludedCardIds: [],
+      temporaryCards: [],
+      ownedCardParameters: { ...DEFAULT_OWNED_CARD_PARAMETER_PREFERENCES },
+    };
+  }
+  try {
+    const rawValue = window.localStorage.getItem(TEAMBUILDER_CARD_PREFERENCES_STORAGE_KEY);
+    if (!rawValue) {
+      return {
+        excludedCardIds: [],
+        temporaryCards: [],
+        ownedCardParameters: { ...DEFAULT_OWNED_CARD_PARAMETER_PREFERENCES },
+      };
+    }
+    const stored = JSON.parse(rawValue) as Record<string, unknown>;
+    return normalizeCardPreferences(stored[profileCacheKey]);
+  } catch {
+    return {
+      excludedCardIds: [],
+      temporaryCards: [],
+      ownedCardParameters: { ...DEFAULT_OWNED_CARD_PARAMETER_PREFERENCES },
+    };
+  }
+}
+
+function writeCardPreferences(profileCacheKey: string, preferences: TeamBuilderCardPreferences): void {
+  if (typeof window === "undefined" || !profileCacheKey) {
+    return;
+  }
+  let stored: Record<string, unknown> = {};
+  try {
+    const rawValue = window.localStorage.getItem(TEAMBUILDER_CARD_PREFERENCES_STORAGE_KEY);
+    stored = rawValue ? JSON.parse(rawValue) as Record<string, unknown> : {};
+  } catch {
+    stored = {};
+  }
+  stored[profileCacheKey] = normalizeCardPreferences(preferences);
+  window.localStorage.setItem(TEAMBUILDER_CARD_PREFERENCES_STORAGE_KEY, JSON.stringify(stored));
+}
+
 function shouldShowParameterBonus(eventType: BandoriTeamSearchEventType): boolean {
   return eventType === "challenge" || eventType === "versus" || eventType === "festival" || eventType === "medley";
 }
@@ -927,19 +1091,45 @@ function runTeamSearchWorker(request: TeamSearchWorkerRequest): Promise<BandoriT
 }
 */
 
-type DisplayCardLike = Pick<BandoriTeamSearchResultCard, "cardId" | "rarity" | "attribute" | "bandId" | "level" | "masterRank" | "skillLevel" | "isTrained">;
+type DisplayCardLike = Pick<BandoriTeamSearchResultCard, "cardId" | "cardInstanceKey" | "skillId" | "rarity" | "attribute" | "bandId" | "level" | "masterRank" | "skillLevel" | "isTrained">;
 
-function orderResultCardsWithLeaderCenter(cards: BandoriTeamSearchResultCard[], leaderCardId: number): BandoriTeamSearchResultCard[] {
+function getDisplayCardKey(card: Pick<BandoriTeamSearchResultCard, "cardId" | "cardInstanceKey">): string {
+  return card.cardInstanceKey ?? `profile:${card.cardId}`;
+}
+
+function getCardSkillId(card: { skillId?: unknown } | undefined, metadata: CardMetadata | undefined): number | null {
+  const rawSkillId = card?.skillId ?? metadata?.skillId;
+  const skillId = Number(rawSkillId);
+  return Number.isFinite(skillId) && skillId > 0 ? Math.trunc(skillId) : null;
+}
+
+function getCardSkillEffectLabel(
+  card: { skillId?: unknown; skillLevel?: unknown } | undefined,
+  metadata: CardMetadata | undefined,
+  skills: Record<string, SkillMaster | undefined> | undefined,
+): string {
+  const skillId = getCardSkillId(card, metadata);
+  return normalizeBandoriSkillLabel(skillId ? skills?.[String(skillId)] : undefined, card?.skillLevel, 5);
+}
+
+function orderResultCardsWithLeaderCenter(
+  cards: BandoriTeamSearchResultCard[],
+  leaderCardId: number,
+  leaderCardInstanceKey?: string,
+): BandoriTeamSearchResultCard[] {
   if (cards.length !== 5) {
     return cards;
   }
 
-  const leader = cards.find((card) => card.cardId === leaderCardId);
+  const leaderKey = leaderCardInstanceKey ?? `profile:${leaderCardId}`;
+  const leader = cards.find((card) => getDisplayCardKey(card) === leaderKey)
+    ?? cards.find((card) => card.cardId === leaderCardId);
   if (!leader) {
     return cards;
   }
 
-  const others = cards.filter((card) => card.cardId !== leaderCardId);
+  const leaderDisplayKey = getDisplayCardKey(leader);
+  const others = cards.filter((card) => getDisplayCardKey(card) !== leaderDisplayKey);
   return [others[0], others[1], leader, others[2], others[3]].filter(Boolean) as BandoriTeamSearchResultCard[];
 }
 
@@ -1242,9 +1432,14 @@ function buildSkillOrderDisplay(
   skillOrderCardIds: number[],
   displayedCards: BandoriTeamSearchResultCard[],
   skillOrderActors?: BandoriTeamSearchSkillOrderActor[],
+  skillOrderCardInstanceKeys?: string[],
 ): string {
   if (skillOrderActors && skillOrderActors.length > 0) {
     return skillOrderActors.map(getSkillOrderActorLabel).join(" → ");
+  }
+  if (skillOrderCardInstanceKeys && skillOrderCardInstanceKeys.length > 0) {
+    const positionByCardKey = new Map(displayedCards.map((card, index) => [getDisplayCardKey(card), index + 1]));
+    return skillOrderCardInstanceKeys.map((cardKey) => positionByCardKey.get(cardKey) ?? "?").join(" → ");
   }
   const positionByCardId = new Map(displayedCards.map((card, index) => [card.cardId, index + 1]));
   return skillOrderCardIds.map((cardId) => positionByCardId.get(cardId) ?? "?").join(" → ");
@@ -1632,12 +1827,16 @@ function RarityIcon({ rarity }: { rarity: number }) {
 function BonusCardThumbnail({
   cardId,
   metadata,
+  characters,
+  skills,
   percent,
   assetRegion,
   bandId,
 }: {
   cardId: number;
   metadata: CardMetadata | undefined;
+  characters: Record<string, CharacterMaster | undefined>;
+  skills: Record<string, SkillMaster | undefined>;
   percent: number;
   assetRegion: BandoriAssetRegion;
   bandId: number | null;
@@ -1651,6 +1850,7 @@ function BonusCardThumbnail({
     <TeamBuilderCardTile
       card={{
         cardId,
+        skillId: getCardSkillId(undefined, metadata) ?? 0,
         rarity,
         attribute: isKnownAttribute(metadata?.attribute) ? metadata.attribute : "powerful",
         bandId,
@@ -1660,6 +1860,9 @@ function BonusCardThumbnail({
         isTrained: rarity >= 3,
       }}
       metadata={metadata}
+      characters={characters}
+      skills={skills}
+      skillEffectLevel={5}
       badge={formatPercent(percent)}
       assetRegion={assetRegion}
     />
@@ -1669,23 +1872,41 @@ function BonusCardThumbnail({
 function TeamBuilderCardTile({
   card,
   metadata,
+  characters,
+  skills,
+  skillEffectLevel,
   badge,
   leader,
   assetRegion = "cn",
 }: {
   card: DisplayCardLike;
   metadata: CardMetadata | undefined;
+  characters?: Record<string, CharacterMaster | undefined>;
+  skills?: Record<string, SkillMaster | undefined>;
+  skillEffectLevel?: unknown;
   badge?: string;
   leader?: boolean;
   assetRegion?: BandoriAssetRegion;
 }) {
   const cardId = card.cardId;
   const cardName = pickCardDisplayName(cardId, metadata);
+  const tileRef = useRef<HTMLElement | null>(null);
+  const [hoverOpen, setHoverOpen] = useState(false);
   const rarity = Math.min(5, Math.max(1, Math.trunc(Number(metadata?.rarity ?? card.rarity) || 1)));
   const attribute = isKnownAttribute(metadata?.attribute) ? metadata.attribute : card.attribute;
+  const skillEffectLabel = getCardSkillEffectLabel(
+    skillEffectLevel === undefined ? card : { ...card, skillLevel: skillEffectLevel },
+    metadata,
+    skills,
+  );
 
   return (
-    <article className="group relative h-[74px] w-[74px] overflow-visible rounded-[5px] outline outline-1 outline-white/80 transition hover:z-40 hover:-translate-y-0.5 hover:outline-2 hover:outline-sky-400 focus-within:z-40 focus-within:outline-2 focus-within:outline-sky-400 sm:h-[76px] sm:w-[76px]">
+    <article
+      ref={tileRef}
+      onMouseEnter={() => setHoverOpen(true)}
+      onMouseLeave={() => setHoverOpen(false)}
+      className="group relative h-[74px] w-[74px] overflow-visible rounded-[5px] outline outline-1 outline-white/80 transition hover:z-40 hover:-translate-y-0.5 hover:outline-2 hover:outline-sky-400 focus-within:z-40 focus-within:outline-2 focus-within:outline-sky-400 sm:h-[76px] sm:w-[76px]"
+    >
       <div className="h-full w-full overflow-visible rounded-[5px] shadow-[0_2px_7px_rgba(15,23,42,0.22)]">
         <BandoriCardThumbnail
           card={card}
@@ -1705,15 +1926,16 @@ function TeamBuilderCardTile({
           队长
         </span>
       ) : null}
-      <div className="pointer-events-none absolute left-1/2 top-[calc(100%+8px)] z-50 hidden w-56 -translate-x-1/2 rounded-[18px] border border-white/90 bg-white p-3 text-center shadow-[0_18px_48px_rgba(15,23,42,0.22)] ring-1 ring-slate-950/5 group-hover:block group-focus-within:block">
-        <div className="truncate text-sm font-black text-slate-900">{cardName}</div>
-        <div className="mt-1 truncate text-xs font-semibold text-slate-500">Card #{cardId}</div>
-        <div className="mt-2 flex justify-center gap-2 text-[11px] font-black">
-          <span className="rounded-full border border-amber-100 bg-amber-50 px-2 py-1 text-amber-700">★{rarity}</span>
-          <span className="rounded-full border border-sky-100 bg-sky-50 px-2 py-1 text-sky-700">星光 {card.masterRank}</span>
-          <span className="rounded-full border border-rose-100 bg-rose-50 px-2 py-1 text-rose-700">技能 {card.skillLevel}</span>
-        </div>
-      </div>
+      <BandoriCardHoverTooltipPortal
+        anchorRef={tileRef}
+        open={hoverOpen}
+        cardName={cardName}
+        characterName={characters ? getCardCharacterLabel(metadata, characters) : `Card #${cardId}`}
+      >
+        <span className="block w-full whitespace-normal break-words rounded-xl bg-slate-50 px-2 py-1 text-slate-700">
+          {skillEffectLabel}
+        </span>
+      </BandoriCardHoverTooltipPortal>
     </article>
   );
 }
@@ -1734,6 +1956,7 @@ function EventBonusPanel({
   eventBonusError,
   characters,
   cardMetadata,
+  skills,
   assetRegion,
   eventFormula,
 }: {
@@ -1743,6 +1966,7 @@ function EventBonusPanel({
   eventBonusError: string;
   characters: Record<string, CharacterMaster | undefined>;
   cardMetadata: Record<string, CardMetadata | undefined>;
+  skills: Record<string, SkillMaster | undefined>;
   assetRegion: BandoriAssetRegion;
   eventFormula: EventFormulaOption;
 }) {
@@ -1818,6 +2042,8 @@ function EventBonusPanel({
               key={item.cardId}
               cardId={item.cardId}
               metadata={item.metadata}
+              characters={characters}
+              skills={skills}
               percent={item.percent}
               assetRegion={assetRegion}
               bandId={getCardBandId(item.metadata, characters)}
@@ -1901,6 +2127,8 @@ function MultiLiveSettingsPanel({
 function ResultCard({
   result,
   cardMetadata,
+  characters,
+  skills,
   assetRegion,
   displayLiveBoostCount,
   displayChallengeCpCost,
@@ -1909,6 +2137,8 @@ function ResultCard({
 }: {
   result: BandoriTeamSearchResult;
   cardMetadata: Record<string, CardMetadata | undefined>;
+  characters: Record<string, CharacterMaster | undefined>;
+  skills: Record<string, SkillMaster | undefined>;
   assetRegion: BandoriAssetRegion;
   displayLiveBoostCount: LiveBoostCountOption;
   displayChallengeCpCost: ChallengeCpCostOption;
@@ -1925,8 +2155,8 @@ function ResultCard({
   const displayedTargetValue = result.target === "eventPoint" && displayedEventPoint !== null
     ? displayedEventPoint
     : result.targetValue;
-  const displayedCards = orderResultCardsWithLeaderCenter(result.cards, result.leaderCardId);
-  const skillOrderDisplay = buildSkillOrderDisplay(result.skillOrderCardIds, displayedCards, result.skillOrderActors);
+  const displayedCards = orderResultCardsWithLeaderCenter(result.cards, result.leaderCardId, result.leaderCardInstanceKey);
+  const skillOrderDisplay = buildSkillOrderDisplay(result.skillOrderCardIds, displayedCards, result.skillOrderActors, result.skillOrderCardInstanceKeys);
   const targetLabel = isScoreLinkedEventPointTarget(result.eventType, result.liveType) && result.target === "eventPoint"
     ? "分数/活动Pt"
     : TARGET_LABELS[result.target];
@@ -1970,10 +2200,12 @@ function ResultCard({
       <div className="mt-4 flex flex-wrap items-start gap-2 overflow-visible">
         {displayedCards.map((card) => (
           <TeamBuilderCardTile
-            key={card.cardId}
+            key={getDisplayCardKey(card)}
             card={card}
             metadata={cardMetadata[String(card.cardId)]}
-            leader={card.cardId === result.leaderCardId}
+            characters={characters}
+            skills={skills}
+            leader={getDisplayCardKey(card) === (result.leaderCardInstanceKey ?? `profile:${result.leaderCardId}`)}
             assetRegion={assetRegion}
           />
         ))}
@@ -2019,11 +2251,15 @@ function ResultCard({
 function MedleyResultCard({
   result,
   cardMetadata,
+  characters,
+  skills,
   assetRegion,
   songs,
 }: {
   result: BandoriMedleyTeamSearchResult;
   cardMetadata: Record<string, CardMetadata | undefined>;
+  characters: Record<string, CharacterMaster | undefined>;
+  skills: Record<string, SkillMaster | undefined>;
   assetRegion: BandoriAssetRegion;
   songs: Array<SongMaster | null>;
 }) {
@@ -2035,7 +2271,7 @@ function MedleyResultCard({
           <div>
             <div className="text-xl font-bold text-slate-900">{formatNumber(result.score)}</div>
             <div className="mt-1 text-xs font-semibold text-slate-500">
-              组曲LIVE · 平均 {formatNumber(result.averageScore)} · 区间 {formatNumber(result.minScore)} / {formatNumber(result.maxScore)}
+              巡回演出 · 平均 {formatNumber(result.averageScore)} · 区间 {formatNumber(result.minScore)} / {formatNumber(result.maxScore)}
             </div>
           </div>
         </div>
@@ -2051,9 +2287,9 @@ function MedleyResultCard({
 
       <div className="mt-4 space-y-4">
         {result.songResults.map((songResult) => {
-          const displayedCards = orderResultCardsWithLeaderCenter(songResult.cards, songResult.leaderCardId);
+          const displayedCards = orderResultCardsWithLeaderCenter(songResult.cards, songResult.leaderCardId, songResult.leaderCardInstanceKey);
           const songTitle = pickLocalizedName(songs[songResult.songIndex]?.musicTitle, `第 ${songResult.songIndex + 1} 首`);
-          const skillOrderDisplay = buildSkillOrderDisplay(songResult.skillOrderCardIds, displayedCards, songResult.skillOrderActors);
+          const skillOrderDisplay = buildSkillOrderDisplay(songResult.skillOrderCardIds, displayedCards, songResult.skillOrderActors, songResult.skillOrderCardInstanceKeys);
           return (
             <section key={songResult.songIndex} className="rounded-2xl border border-slate-100 bg-slate-50/70 p-3">
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -2068,10 +2304,12 @@ function MedleyResultCard({
               <div className="mt-3 flex flex-wrap items-start gap-2 overflow-visible">
                 {displayedCards.map((card) => (
                   <TeamBuilderCardTile
-                    key={card.cardId}
+                    key={getDisplayCardKey(card)}
                     card={card}
                     metadata={cardMetadata[String(card.cardId)]}
-                    leader={card.cardId === songResult.leaderCardId}
+                    characters={characters}
+                    skills={skills}
+                    leader={getDisplayCardKey(card) === (songResult.leaderCardInstanceKey ?? `profile:${songResult.leaderCardId}`)}
                     assetRegion={assetRegion}
                   />
                 ))}
@@ -2134,6 +2372,685 @@ function MedleyDebugInfoPanel({
   );
 }
 
+function getCardCharacterLabel(metadata: CardMetadata | undefined, characters: Record<string, CharacterMaster | undefined>): string {
+  const characterId = Number(metadata?.characterId);
+  if (!Number.isFinite(characterId)) {
+    return "";
+  }
+  const character = characters[String(Math.trunc(characterId))];
+  return pickCharacterDisplayName(character);
+}
+
+function TeamBuilderPreferenceCardTile({
+  card,
+  metadata,
+  characters,
+  skills,
+  assetRegion,
+  title,
+  selected = false,
+  muted = false,
+  onClick,
+}: {
+  card: UserGameProfileCardRecord;
+  metadata: CardMetadata | undefined;
+  characters: Record<string, CharacterMaster | undefined>;
+  skills: Record<string, SkillMaster | undefined>;
+  assetRegion: BandoriAssetRegion;
+  title: string;
+  selected?: boolean;
+  muted?: boolean;
+  onClick: () => void;
+}) {
+  const cardName = pickGameProfileCardName(card.cardId, metadata);
+  const buttonRef = useRef<HTMLButtonElement | null>(null);
+  const [hoverOpen, setHoverOpen] = useState(false);
+  const skillEffectLabel = getCardSkillEffectLabel(card, metadata, skills);
+  return (
+    <>
+      <button
+        ref={buttonRef}
+        type="button"
+        onClick={onClick}
+        onMouseEnter={() => setHoverOpen(true)}
+        onMouseLeave={() => setHoverOpen(false)}
+        title={title}
+        className={`group relative h-[74px] w-[74px] rounded-[5px] outline outline-1 transition hover:z-40 hover:-translate-y-0.5 sm:h-[76px] sm:w-[76px] ${
+          selected ? "outline-2 outline-rose-500 ring-2 ring-rose-200" : "outline-white/80 hover:outline-2 hover:outline-sky-400"
+        }`}
+      >
+      <span className={`relative block h-full w-full overflow-hidden rounded-[5px] bg-white text-left shadow-[0_2px_7px_rgba(15,23,42,0.22)] ${
+        muted ? "brightness-[0.42] saturate-[0.9] contrast-110" : ""
+      }`}
+      >
+        <BandoriCardThumbnail card={card} metadata={metadata} bandId={getCardBandId(metadata, characters)} region={assetRegion} alt={cardName} />
+        {selected ? (
+          <span className="absolute inset-x-1 bottom-1 rounded bg-rose-600/90 px-1 py-0.5 text-center text-[10px] font-black text-white">
+            排除
+          </span>
+        ) : null}
+      </span>
+      </button>
+      <BandoriCardHoverTooltipPortal
+        anchorRef={buttonRef}
+        open={hoverOpen}
+        cardName={cardName}
+        characterName={getCardCharacterLabel(metadata, characters)}
+      >
+        <span className="block w-full whitespace-normal break-words rounded-xl bg-slate-50 px-2 py-1 text-slate-700">
+          {skillEffectLabel}
+        </span>
+      </BandoriCardHoverTooltipPortal>
+    </>
+  );
+}
+
+function toggleCardFilterSelection<T>(values: readonly T[], value: T): T[] {
+  return values.includes(value)
+    ? values.filter((item) => item !== value)
+    : [...values, value];
+}
+
+function areAllCardFilterOptionsSelected<T>(selectedValues: readonly T[], availableValues: readonly T[]): boolean {
+  return availableValues.length > 0 && availableValues.every((value) => selectedValues.includes(value));
+}
+
+function buildDefaultExcludedCardFilter(
+  bandIds: number[],
+  characterIds: number[],
+): TeamBuilderExcludedCardFilterState {
+  return {
+    query: "",
+    bandIds,
+    attributes: CARD_FILTER_ATTRIBUTE_VALUES,
+    rarities: CARD_FILTER_RARITY_OPTIONS,
+    characterIds,
+    sortBy: "power",
+    sortDirection: "desc",
+  };
+}
+
+function readCardReleaseTimestamp(metadata: CardMetadata | undefined, sortBy: TeamBuilderExcludedCardSortBy): number {
+  if (sortBy === "id") {
+    return 0;
+  }
+  const index = sortBy === "release_cn" ? 3 : 0;
+  const value = metadata?.releasedAt?.[index];
+  const timestamp = Number(value);
+  return Number.isFinite(timestamp) && timestamp > 0 ? timestamp : 0;
+}
+
+function calculateProfileCardTotalPower(
+  card: UserGameProfileCardRecord,
+  metadata: CardMetadata | undefined,
+  characters: Record<string, CharacterMaster | undefined>,
+): number {
+  if (!metadata) {
+    return 0;
+  }
+
+  try {
+    return calculateBandoriCard(card, metadata as BestdoriCardMaster, characters).totalPower;
+  } catch {
+    return 0;
+  }
+}
+
+function CardFilterSelectionButton({
+  selected,
+  title,
+  children,
+  onClick,
+  className = "",
+}: {
+  selected: boolean;
+  title: string;
+  children: React.ReactNode;
+  onClick: () => void;
+  className?: string;
+}) {
+  return (
+    <button
+      type="button"
+      title={title}
+      aria-pressed={selected}
+      onClick={onClick}
+      className={`inline-flex h-9 min-w-9 items-center justify-center rounded-full border bg-white px-2 text-sm font-semibold text-slate-700 shadow-sm transition ${
+        selected
+          ? "border-blue-500 ring-2 ring-blue-400/70"
+          : "border-slate-200 hover:border-blue-300 hover:ring-2 hover:ring-blue-100"
+      } ${className}`}
+    >
+      {children}
+    </button>
+  );
+}
+
+function CardFilterToggleAllButton({
+  selected,
+  onClick,
+}: {
+  selected: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <CardFilterSelectionButton
+      selected={selected}
+      title={selected ? "取消全部" : "选择全部"}
+      onClick={onClick}
+      className="min-w-[3.25rem] rounded-full px-3 text-xs"
+    >
+      全部
+    </CardFilterSelectionButton>
+  );
+}
+
+function CardFilterRow({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="grid gap-2 sm:grid-cols-[5.5rem_1fr] sm:items-start">
+      <div className="pt-2 text-sm font-medium text-slate-600">{label}</div>
+      <div className="flex min-w-0 flex-wrap items-center gap-2">{children}</div>
+    </div>
+  );
+}
+
+function TeamBuilderCardPreferencesPanel({
+  profileCards,
+  preferences,
+  cardMetadata,
+  characters,
+  skills,
+  assetRegion,
+  onAddTemporary,
+  onEditTemporary,
+  onClearTemporaryCards,
+  onUpdateOwnedCardParameters,
+  onToggleExcludedCard,
+  onBulkSetExcludedCards,
+}: {
+  profileCards: UserGameProfileCardRecord[];
+  preferences: TeamBuilderCardPreferences;
+  cardMetadata: Record<string, CardMetadata | undefined>;
+  characters: Record<string, CharacterMaster | undefined>;
+  skills: Record<string, SkillMaster | undefined>;
+  assetRegion: BandoriAssetRegion;
+  onAddTemporary: () => void;
+  onEditTemporary: (instanceId: string) => void;
+  onClearTemporaryCards: () => void;
+  onUpdateOwnedCardParameters: (patch: Partial<OwnedCardParameterPreferences>) => void;
+  onToggleExcludedCard: (cardId: number) => void;
+  onBulkSetExcludedCards: (cardIds: number[], excluded: boolean) => void;
+}) {
+  const excludedCardIdSet = new Set(preferences.excludedCardIds);
+  const [excludedFiltersOpen, setExcludedFiltersOpen] = useState(false);
+  const [excludedCardFilter, setExcludedCardFilter] = useState<TeamBuilderExcludedCardFilterState | null>(null);
+
+  const profileCardEntries = useMemo(() => profileCards.map((card) => {
+    const metadata = cardMetadata[String(card.cardId)];
+    const characterId = Number(metadata?.characterId);
+    const normalizedCharacterId = Number.isFinite(characterId) && characterId > 0 ? Math.trunc(characterId) : null;
+    const bandId = getCardBandId(metadata, characters);
+    const attribute = isKnownAttribute(metadata?.attribute) ? metadata.attribute : null;
+    const rarity = Number(metadata?.rarity);
+    const normalizedRarity = Number.isFinite(rarity) && rarity > 0 ? Math.trunc(rarity) : null;
+    const cardName = pickGameProfileCardName(card.cardId, metadata);
+    const characterName = getCardCharacterLabel(metadata, characters);
+    const totalPower = calculateProfileCardTotalPower(card, metadata, characters);
+    return {
+      card,
+      metadata,
+      bandId,
+      characterId: normalizedCharacterId,
+      attribute,
+      rarity: normalizedRarity,
+      totalPower,
+      cardName,
+      characterName,
+      searchText: [
+        card.cardId,
+        cardName,
+        characterName,
+        normalizedCharacterId,
+        bandId,
+        attribute,
+        normalizedRarity,
+        totalPower,
+      ].join(" ").toLowerCase(),
+    };
+  }), [cardMetadata, characters, profileCards]);
+
+  const bandOptions = useMemo(() => {
+    const knownLabels = new Map(BANDORI_CHARACTER_GROUPS.map((group) => [group.bandId, group.label]));
+    return Array.from(new Set(profileCardEntries.flatMap((entry) => entry.bandId === null ? [] : [entry.bandId])))
+      .sort((left, right) => left - right)
+      .map((bandId) => ({
+        bandId,
+        label: knownLabels.get(bandId) ?? `Band ${bandId}`,
+      }));
+  }, [profileCardEntries]);
+  const characterOptions = useMemo(() => {
+    const labelByCharacterId = new Map<number, string>();
+    profileCardEntries.forEach((entry) => {
+      if (entry.characterId !== null && !labelByCharacterId.has(entry.characterId)) {
+        labelByCharacterId.set(entry.characterId, entry.characterName || `Character ${entry.characterId}`);
+      }
+    });
+    return Array.from(labelByCharacterId.entries())
+      .map(([characterId, label]) => ({ characterId, label }))
+      .sort((left, right) => compareBandoriCharacterIds(left.characterId, right.characterId));
+  }, [profileCardEntries]);
+  const bandIds = useMemo(() => bandOptions.map((option) => option.bandId), [bandOptions]);
+  const characterIds = useMemo(() => characterOptions.map((option) => option.characterId), [characterOptions]);
+
+  const effectiveExcludedCardFilter = useMemo(() => {
+    if (!excludedCardFilter) {
+      return buildDefaultExcludedCardFilter(bandIds, characterIds);
+    }
+    return {
+      ...excludedCardFilter,
+      bandIds: excludedCardFilter.bandIds.filter((bandId) => bandIds.includes(bandId)),
+      attributes: excludedCardFilter.attributes.filter((attribute) => CARD_FILTER_ATTRIBUTE_VALUES.includes(attribute)),
+      rarities: excludedCardFilter.rarities.filter((rarity) => CARD_FILTER_RARITY_OPTIONS.includes(rarity)),
+      characterIds: excludedCardFilter.characterIds.filter((characterId) => characterIds.includes(characterId)),
+    };
+  }, [bandIds, characterIds, excludedCardFilter]);
+  const deferredExcludedQuery = useDeferredValue(effectiveExcludedCardFilter.query);
+
+  const updateExcludedCardFilter = (patch: Partial<TeamBuilderExcludedCardFilterState>) => {
+    setExcludedCardFilter((current) => ({
+      ...(current ?? buildDefaultExcludedCardFilter(bandIds, characterIds)),
+      ...patch,
+    }));
+  };
+
+  const filteredProfileCards = useMemo(() => {
+    if (
+      effectiveExcludedCardFilter.bandIds.length === 0
+      || effectiveExcludedCardFilter.attributes.length === 0
+      || effectiveExcludedCardFilter.rarities.length === 0
+      || effectiveExcludedCardFilter.characterIds.length === 0
+    ) {
+      return [];
+    }
+
+    const query = deferredExcludedQuery.trim().toLowerCase();
+    const direction = effectiveExcludedCardFilter.sortDirection === "asc" ? 1 : -1;
+    return profileCardEntries.filter((entry) => {
+      if (query && !entry.searchText.includes(query)) {
+        return false;
+      }
+      if (entry.bandId === null || !effectiveExcludedCardFilter.bandIds.includes(entry.bandId)) {
+        return false;
+      }
+      if (entry.attribute === null || !effectiveExcludedCardFilter.attributes.includes(entry.attribute)) {
+        return false;
+      }
+      if (entry.rarity === null || !effectiveExcludedCardFilter.rarities.includes(entry.rarity)) {
+        return false;
+      }
+      if (entry.characterId === null || !effectiveExcludedCardFilter.characterIds.includes(entry.characterId)) {
+        return false;
+      }
+      if (effectiveExcludedCardFilter.sortBy === "release_cn" && readCardReleaseTimestamp(entry.metadata, "release_cn") <= 0) {
+        return false;
+      }
+      return true;
+    }).sort((left, right) => {
+      if (effectiveExcludedCardFilter.sortBy === "power") {
+        return direction * (left.totalPower - right.totalPower) || direction * (left.card.cardId - right.card.cardId);
+      }
+      if (effectiveExcludedCardFilter.sortBy === "id") {
+        return direction * (left.card.cardId - right.card.cardId);
+      }
+      return direction * (
+        readCardReleaseTimestamp(left.metadata, effectiveExcludedCardFilter.sortBy)
+        - readCardReleaseTimestamp(right.metadata, effectiveExcludedCardFilter.sortBy)
+      ) || direction * (left.card.cardId - right.card.cardId);
+    }).map((entry) => entry.card);
+  }, [deferredExcludedQuery, effectiveExcludedCardFilter, profileCardEntries]);
+  const filteredProfileCardIds = useMemo(
+    () => filteredProfileCards.map((card) => card.cardId),
+    [filteredProfileCards],
+  );
+
+  return (
+    <div className="space-y-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+      <div>
+        <div>
+          <h3 className="text-lg font-bold text-slate-900">计算卡牌偏好</h3>
+          <p className="mt-1 text-sm font-semibold text-slate-500">
+            临时卡牌 {preferences.temporaryCards.length} 张 · 排除卡牌 {preferences.excludedCardIds.length} 张
+          </p>
+        </div>
+      </div>
+
+      <div className="space-y-2 rounded-2xl border border-slate-200 bg-slate-50/70 p-3">
+        <div>
+          <div className="text-sm font-bold text-slate-700">档案卡牌参数标准化</div>
+          <div className="mt-1 text-xs font-semibold text-slate-500">只影响当前档案拥有的卡牌参与计算时的参数，不影响临时卡牌</div>
+        </div>
+        <label className="grid min-h-11 grid-cols-[auto_minmax(0,1fr)] items-start gap-x-2 rounded-xl bg-white p-2 text-sm font-semibold text-slate-700 shadow-sm">
+          <input
+            type="checkbox"
+            checked={preferences.ownedCardParameters.maxLevelEpisodeTraining}
+            onChange={(event) => onUpdateOwnedCardParameters({ maxLevelEpisodeTraining: event.target.checked })}
+            className="mt-0.5 h-4 w-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500"
+          />
+          <span className="min-w-0 leading-5">
+            将所有卡牌设置为满级/满故事/满特训状态
+          </span>
+        </label>
+        <label className="grid min-h-11 grid-cols-[auto_minmax(0,1fr)] items-start gap-x-2 rounded-xl bg-white p-2 text-sm font-semibold text-slate-700 shadow-sm">
+          <input
+            type="checkbox"
+            checked={preferences.ownedCardParameters.maxMasterRank}
+            onChange={(event) => onUpdateOwnedCardParameters({ maxMasterRank: event.target.checked })}
+            className="mt-0.5 h-4 w-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500"
+          />
+          <span className="flex min-w-0 flex-wrap items-center gap-2 leading-5">
+            <span>将指定稀有度及以下的卡牌设置为星光满级状态</span>
+            <select
+              value={preferences.ownedCardParameters.maxMasterRankRarityThreshold}
+              onChange={(event) => onUpdateOwnedCardParameters({
+                maxMasterRankRarityThreshold: normalizeRarityThreshold(event.target.value, 4),
+              })}
+              disabled={!preferences.ownedCardParameters.maxMasterRank}
+              className="h-7 rounded-md border border-slate-200 bg-white px-2 text-sm font-bold text-slate-700 outline-none transition focus:border-sky-300 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {CARD_PARAMETER_RARITY_THRESHOLD_OPTIONS.map((rarity) => (
+                <option key={rarity} value={rarity}>{rarity} 星及以下</option>
+              ))}
+            </select>
+          </span>
+        </label>
+        <label className="grid min-h-11 grid-cols-[auto_minmax(0,1fr)] items-start gap-x-2 rounded-xl bg-white p-2 text-sm font-semibold text-slate-700 shadow-sm">
+          <input
+            type="checkbox"
+            checked={preferences.ownedCardParameters.maxSkillLevel}
+            onChange={(event) => onUpdateOwnedCardParameters({ maxSkillLevel: event.target.checked })}
+            className="mt-0.5 h-4 w-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500"
+          />
+          <span className="flex min-w-0 flex-wrap items-center gap-2 leading-5">
+            <span>将指定稀有度及以下的卡牌设置为技能满级状态</span>
+            <select
+              value={preferences.ownedCardParameters.maxSkillLevelRarityThreshold}
+              onChange={(event) => onUpdateOwnedCardParameters({
+                maxSkillLevelRarityThreshold: normalizeRarityThreshold(
+                  event.target.value,
+                  DEFAULT_OWNED_CARD_PARAMETER_PREFERENCES.maxSkillLevelRarityThreshold,
+                ),
+              })}
+              disabled={!preferences.ownedCardParameters.maxSkillLevel}
+              className="h-7 rounded-md border border-slate-200 bg-white px-2 text-sm font-bold text-slate-700 outline-none transition focus:border-sky-300 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {CARD_PARAMETER_RARITY_THRESHOLD_OPTIONS.map((rarity) => (
+                <option key={rarity} value={rarity}>{rarity} 星及以下</option>
+              ))}
+            </select>
+          </span>
+        </label>
+      </div>
+
+      <div className="space-y-3">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <h3 className="text-lg font-bold text-slate-900">临时卡牌</h3>
+          <div className="flex flex-wrap gap-2">
+            <button type="button" onClick={onAddTemporary} className="inline-flex h-10 items-center gap-2 rounded-2xl bg-sky-600 px-4 text-sm font-bold text-white transition hover:bg-sky-500">
+              <Plus className="h-4 w-4" aria-hidden="true" />
+              添加临时卡牌
+            </button>
+            <button type="button" onClick={onClearTemporaryCards} disabled={preferences.temporaryCards.length === 0} className="inline-flex h-10 items-center gap-2 rounded-2xl border border-rose-200 bg-white px-4 text-sm font-bold text-rose-600 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50">
+              <Trash2 className="h-4 w-4" aria-hidden="true" />
+              清除所有临时卡牌
+            </button>
+          </div>
+        </div>
+        {preferences.temporaryCards.length > 0 ? (
+          <div className="grid justify-center gap-[6px] [grid-template-columns:repeat(auto-fill,74px)] sm:[grid-template-columns:repeat(auto-fill,76px)]">
+            {preferences.temporaryCards.map((card) => (
+              <TeamBuilderPreferenceCardTile
+                key={card.instanceId}
+                card={card}
+                metadata={cardMetadata[String(card.cardId)]}
+                characters={characters}
+                skills={skills}
+                assetRegion={assetRegion}
+                title="编辑临时卡牌"
+                onClick={() => onEditTemporary(card.instanceId)}
+              />
+            ))}
+          </div>
+        ) : (
+          <div className="rounded-xl bg-slate-50 p-3 text-sm font-semibold text-slate-500">当前档案没有临时卡牌</div>
+        )}
+      </div>
+
+      <div className="space-y-3">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h3 className="text-lg font-bold text-slate-900">排除卡牌</h3>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => onBulkSetExcludedCards(filteredProfileCardIds, false)}
+              disabled={filteredProfileCardIds.length === 0}
+              className="inline-flex h-10 items-center justify-center rounded-xl border border-emerald-200 bg-white px-3 text-sm font-bold text-emerald-700 transition hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              保留全部
+            </button>
+            <button
+              type="button"
+              onClick={() => onBulkSetExcludedCards(filteredProfileCardIds, true)}
+              disabled={filteredProfileCardIds.length === 0}
+              className="inline-flex h-10 items-center justify-center rounded-xl border border-rose-200 bg-white px-3 text-sm font-bold text-rose-600 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              排除全部
+            </button>
+            <button
+              type="button"
+              onClick={() => setExcludedFiltersOpen((current) => !current)}
+              aria-expanded={excludedFiltersOpen}
+              className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-700 transition hover:border-blue-300 hover:text-blue-600"
+            >
+              <ListFilter className="h-4 w-4" aria-hidden="true" />
+              {excludedFiltersOpen ? "收起筛选" : "展开筛选"}
+              <ChevronDown className={`h-4 w-4 transition ${excludedFiltersOpen ? "rotate-180" : ""}`} aria-hidden="true" />
+            </button>
+          </div>
+        </div>
+        {excludedFiltersOpen ? (
+          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+              <div className="relative flex-1">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" aria-hidden="true" />
+                <input
+                  type="search"
+                  value={effectiveExcludedCardFilter.query}
+                  onChange={(event) => updateExcludedCardFilter({ query: event.target.value })}
+                  placeholder="搜索卡牌名称、角色名或卡牌 ID"
+                  className="h-10 w-full rounded-xl border border-slate-200 bg-white pl-9 pr-3 text-sm text-slate-900 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="inline-flex h-10 items-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-3 text-sm font-semibold text-blue-700">
+                  <ListFilter className="h-4 w-4" aria-hidden="true" />
+                  {filteredProfileCards.length} 张
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setExcludedCardFilter({
+                    query: "",
+                    bandIds: [],
+                    attributes: [],
+                    rarities: [],
+                    characterIds: [],
+                    sortBy: "power",
+                    sortDirection: "desc",
+                  })}
+                  className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 transition hover:border-blue-300 hover:text-blue-600"
+                >
+                  <X className="h-4 w-4" aria-hidden="true" />
+                  清空
+                </button>
+              </div>
+            </div>
+
+            <div className="mt-4 space-y-3">
+              <CardFilterRow label="乐队">
+                {bandOptions.map((option) => (
+                  <CardFilterSelectionButton
+                    key={option.bandId}
+                    title={option.label}
+                    selected={effectiveExcludedCardFilter.bandIds.includes(option.bandId)}
+                    onClick={() => updateExcludedCardFilter({
+                      bandIds: toggleCardFilterSelection(effectiveExcludedCardFilter.bandIds, option.bandId),
+                    })}
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={buildBandoriResIconPublicUrl(`band_${option.bandId}.svg`)}
+                      alt={option.label}
+                      loading="lazy"
+                      decoding="async"
+                      className="h-7 w-7 object-contain"
+                    />
+                  </CardFilterSelectionButton>
+                ))}
+                <CardFilterToggleAllButton
+                  selected={areAllCardFilterOptionsSelected(effectiveExcludedCardFilter.bandIds, bandIds)}
+                  onClick={() => updateExcludedCardFilter({
+                    bandIds: areAllCardFilterOptionsSelected(effectiveExcludedCardFilter.bandIds, bandIds) ? [] : bandIds,
+                  })}
+                />
+              </CardFilterRow>
+
+              <CardFilterRow label="属性">
+                {CARD_FILTER_ATTRIBUTE_OPTIONS.map((option) => (
+                  <CardFilterSelectionButton
+                    key={option.value}
+                    title={option.label}
+                    selected={effectiveExcludedCardFilter.attributes.includes(option.value)}
+                    onClick={() => updateExcludedCardFilter({
+                      attributes: toggleCardFilterSelection(effectiveExcludedCardFilter.attributes, option.value),
+                    })}
+                  >
+                    <AttributeIcon attribute={option.value} />
+                  </CardFilterSelectionButton>
+                ))}
+                <CardFilterToggleAllButton
+                  selected={areAllCardFilterOptionsSelected(effectiveExcludedCardFilter.attributes, CARD_FILTER_ATTRIBUTE_VALUES)}
+                  onClick={() => updateExcludedCardFilter({
+                    attributes: areAllCardFilterOptionsSelected(effectiveExcludedCardFilter.attributes, CARD_FILTER_ATTRIBUTE_VALUES)
+                      ? []
+                      : CARD_FILTER_ATTRIBUTE_VALUES,
+                  })}
+                />
+              </CardFilterRow>
+
+              <CardFilterRow label="稀有度">
+                {CARD_FILTER_RARITY_OPTIONS.map((rarity) => (
+                  <CardFilterSelectionButton
+                    key={rarity}
+                    title={`${rarity} 星`}
+                    selected={effectiveExcludedCardFilter.rarities.includes(rarity)}
+                    onClick={() => updateExcludedCardFilter({
+                      rarities: toggleCardFilterSelection(effectiveExcludedCardFilter.rarities, rarity),
+                    })}
+                  >
+                    <RarityIcon rarity={rarity} />
+                  </CardFilterSelectionButton>
+                ))}
+                <CardFilterToggleAllButton
+                  selected={areAllCardFilterOptionsSelected(effectiveExcludedCardFilter.rarities, CARD_FILTER_RARITY_OPTIONS)}
+                  onClick={() => updateExcludedCardFilter({
+                    rarities: areAllCardFilterOptionsSelected(effectiveExcludedCardFilter.rarities, CARD_FILTER_RARITY_OPTIONS)
+                      ? []
+                      : CARD_FILTER_RARITY_OPTIONS,
+                  })}
+                />
+              </CardFilterRow>
+
+              <CardFilterRow label="角色">
+                {characterOptions.map((option) => (
+                  <CardFilterSelectionButton
+                    key={option.characterId}
+                    title={option.label}
+                    selected={effectiveExcludedCardFilter.characterIds.includes(option.characterId)}
+                    onClick={() => updateExcludedCardFilter({
+                      characterIds: toggleCardFilterSelection(effectiveExcludedCardFilter.characterIds, option.characterId),
+                    })}
+                  >
+                    <CharacterIcon characterId={option.characterId} label={option.label} />
+                  </CardFilterSelectionButton>
+                ))}
+                <CardFilterToggleAllButton
+                  selected={areAllCardFilterOptionsSelected(effectiveExcludedCardFilter.characterIds, characterIds)}
+                  onClick={() => updateExcludedCardFilter({
+                    characterIds: areAllCardFilterOptionsSelected(effectiveExcludedCardFilter.characterIds, characterIds) ? [] : characterIds,
+                  })}
+                />
+              </CardFilterRow>
+
+              <CardFilterRow label="排序">
+                <div className="flex min-w-0 flex-wrap items-center gap-2">
+                  <select
+                    value={effectiveExcludedCardFilter.sortBy}
+                    onChange={(event) => updateExcludedCardFilter({ sortBy: event.target.value as TeamBuilderExcludedCardSortBy })}
+                    className="h-10 min-w-64 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
+                  >
+                    {CARD_FILTER_SORT_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>{option.label}</option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    onClick={() => updateExcludedCardFilter({
+                      sortDirection: effectiveExcludedCardFilter.sortDirection === "desc" ? "asc" : "desc",
+                    })}
+                    className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 transition hover:border-blue-300 hover:text-blue-600"
+                    title={effectiveExcludedCardFilter.sortDirection === "desc" ? "当前为倒序，点击切换为正序" : "当前为正序，点击切换为倒序"}
+                  >
+                    {effectiveExcludedCardFilter.sortDirection === "desc" ? "倒序" : "正序"}
+                  </button>
+                </div>
+              </CardFilterRow>
+            </div>
+          </div>
+        ) : null}
+        {profileCards.length > 0 ? (
+          <div className="grid max-h-[420px] justify-center gap-[6px] overflow-y-auto rounded-2xl bg-[#fffdf1]/72 p-3 [grid-template-columns:repeat(auto-fill,74px)] sm:[grid-template-columns:repeat(auto-fill,76px)]">
+            {filteredProfileCards.map((card) => {
+              const excluded = excludedCardIdSet.has(card.cardId);
+              return (
+                <TeamBuilderPreferenceCardTile
+                  key={card.cardId}
+                  card={card}
+                  metadata={cardMetadata[String(card.cardId)]}
+                  characters={characters}
+                  skills={skills}
+                  assetRegion={assetRegion}
+                  title={excluded ? "恢复参与计算" : "排除卡牌"}
+                  selected={excluded}
+                  muted={excluded}
+                  onClick={() => onToggleExcludedCard(card.cardId)}
+                />
+              );
+            })}
+            {filteredProfileCards.length === 0 ? (
+              <div className="col-span-full rounded-xl bg-white/80 p-3 text-center text-sm font-semibold text-slate-500">
+                没有符合筛选条件的卡牌
+              </div>
+            ) : null}
+          </div>
+        ) : (
+          <div className="rounded-xl bg-slate-50 p-3 text-sm font-semibold text-slate-500">档案卡牌尚未加载</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function TeamBuilderPanel() {
   const [data, setData] = useState<TeamBuilderData>({
     cloudProfiles: [],
@@ -2165,6 +3082,15 @@ function TeamBuilderPanel() {
   const [encoreSkillSource, setEncoreSkillSource] = useState<EncoreSkillSource>(() => readLivePreferences().encoreSkillSource ?? "self");
   const [otherPlayers, setOtherPlayers] = useState<OtherPlayerDraft[]>(() => readLivePreferences().otherPlayers ?? DEFAULT_OTHER_PLAYERS);
   const [profileChoice, setProfileChoice] = useState<ProfileChoice | null>(null);
+  const [cardPreferences, setCardPreferences] = useState<TeamBuilderCardPreferences>({
+    excludedCardIds: [],
+    temporaryCards: [],
+    ownedCardParameters: { ...DEFAULT_OWNED_CARD_PARAMETER_PREFERENCES },
+  });
+  const [cardPickerOpen, setCardPickerOpen] = useState(false);
+  const [cardPickerValue, setCardPickerValue] = useState<BandoriCardPickerValue | null>(null);
+  const [editingTemporaryCard, setEditingTemporaryCard] = useState<TemporaryGameProfileCard | null>(null);
+  const [addingTemporaryCard, setAddingTemporaryCard] = useState(false);
   const [target, setTarget] = useState<BandoriTeamSearchTarget>("eventPoint");
   const [medleyCalculationMode, setMedleyCalculationMode] = useState<MedleyCalculationMode>("maximize");
   const [resultLimit, setResultLimit] = useState("10");
@@ -2197,6 +3123,7 @@ function TeamBuilderPanel() {
     cleanup?: () => void;
   }>());
   const profilePayloadCacheRef = useRef(new Map<string, UserGameProfilePayload>());
+  const selectedProfileCacheKey = profileChoice ? `${profileChoice.source}:${profileChoice.id}` : "";
 
   const [referenceNow] = useState(() => Date.now());
   const recommendedEvent = useMemo(() => findRecommendedEvent(data.events, referenceNow), [data.events, referenceNow]);
@@ -2260,6 +3187,115 @@ function TeamBuilderPanel() {
     setOtherPlayers(value);
     writeLivePreferences({ otherPlayers: value });
   }, []);
+  const updateCardPreferences = useCallback((updater: (current: TeamBuilderCardPreferences) => TeamBuilderCardPreferences) => {
+    setCardPreferences((current) => {
+      const next = normalizeCardPreferences(updater(current));
+      if (selectedProfileCacheKey) {
+        writeCardPreferences(selectedProfileCacheKey, next);
+      }
+      return next;
+    });
+  }, [selectedProfileCacheKey]);
+  const toggleExcludedCard = useCallback((cardId: number) => {
+    updateCardPreferences((current) => {
+      const excluded = new Set(current.excludedCardIds);
+      if (excluded.has(cardId)) {
+        excluded.delete(cardId);
+      } else {
+        excluded.add(cardId);
+      }
+      return { ...current, excludedCardIds: [...excluded] };
+    });
+  }, [updateCardPreferences]);
+  const bulkSetExcludedCards = useCallback((cardIds: number[], excludedState: boolean) => {
+    updateCardPreferences((current) => {
+      const excluded = new Set(current.excludedCardIds);
+      cardIds.forEach((cardId) => {
+        if (!Number.isFinite(cardId) || cardId <= 0) {
+          return;
+        }
+        const normalizedCardId = Math.trunc(cardId);
+        if (excludedState) {
+          excluded.add(normalizedCardId);
+        } else {
+          excluded.delete(normalizedCardId);
+        }
+      });
+      return { ...current, excludedCardIds: [...excluded] };
+    });
+  }, [updateCardPreferences]);
+  const clearTemporaryCards = useCallback(() => {
+    updateCardPreferences((current) => ({ ...current, temporaryCards: [] }));
+  }, [updateCardPreferences]);
+  const updateOwnedCardParameters = useCallback((patch: Partial<OwnedCardParameterPreferences>) => {
+    updateCardPreferences((current) => ({
+      ...current,
+      ownedCardParameters: normalizeOwnedCardParameterPreferences({
+        ...current.ownedCardParameters,
+        ...patch,
+      }),
+    }));
+  }, [updateCardPreferences]);
+  const editTemporaryCard = useCallback((instanceId: string) => {
+    const card = cardPreferences.temporaryCards.find((item) => item.instanceId === instanceId);
+    if (card) {
+      setEditingTemporaryCard(card);
+    }
+  }, [cardPreferences.temporaryCards]);
+  const saveTemporaryCard = useCallback((card: UserGameProfileCardRecord) => {
+    if (!editingTemporaryCard) {
+      return;
+    }
+    const nextCard: TemporaryGameProfileCard = {
+      ...card,
+      instanceId: editingTemporaryCard.instanceId,
+      isExcluded: false,
+    };
+    updateCardPreferences((current) => {
+      const exists = current.temporaryCards.some((item) => item.instanceId === nextCard.instanceId);
+      return {
+        ...current,
+        temporaryCards: exists
+          ? current.temporaryCards.map((item) => item.instanceId === nextCard.instanceId ? nextCard : item)
+          : [...current.temporaryCards, nextCard],
+      };
+    });
+    setEditingTemporaryCard(null);
+  }, [editingTemporaryCard, updateCardPreferences]);
+  const deleteTemporaryCard = useCallback(() => {
+    if (!editingTemporaryCard) {
+      return;
+    }
+    updateCardPreferences((current) => ({
+      ...current,
+      temporaryCards: current.temporaryCards.filter((card) => card.instanceId !== editingTemporaryCard.instanceId),
+    }));
+    setEditingTemporaryCard(null);
+  }, [editingTemporaryCard, updateCardPreferences]);
+  const ensureCardMetadata = useCallback(async (cardId: number): Promise<CardMetadata | undefined> => {
+    const existing = cardMetadata[String(cardId)];
+    if (existing) {
+      return existing;
+    }
+    const payload = await requestJson<{ cards: Record<string, CardMetadata | undefined> }>(`/api/bandori/cards?ids=${cardId}`);
+    setCardMetadata((current) => ({ ...current, ...payload.cards }));
+    return payload.cards[String(cardId)];
+  }, [cardMetadata]);
+  const selectTemporaryCard = useCallback((value: BandoriCardPickerValue | null) => {
+    setCardPickerValue(value);
+    if (!value || addingTemporaryCard) {
+      return;
+    }
+    setAddingTemporaryCard(true);
+    void ensureCardMetadata(value.cardId)
+      .then((metadata) => {
+        const card = createMaxGameProfileCard(value.cardId, metadata);
+        setEditingTemporaryCard({ ...card, instanceId: crypto.randomUUID() });
+        setCardPickerOpen(false);
+        setCardPickerValue(null);
+      })
+      .finally(() => setAddingTemporaryCard(false));
+  }, [addingTemporaryCard, ensureCardMetadata]);
   const showCoopLiveSettings = shouldUseCoopLiveSettings(selectedEventType, liveType);
   const scoreLinkedEventPointTarget = isScoreLinkedEventPointTarget(selectedEventType, liveType);
   const targetOptions = useMemo<BandoriTeamSearchTarget[]>(() => (
@@ -2386,6 +3422,19 @@ function TeamBuilderPanel() {
     ...data.cloudProfiles.map((profile) => ({ type: "cloud" as const, id: profile.id, name: profile.name, cardCount: profile.cardCount })),
     ...data.localProfiles.map((profile) => ({ type: "local" as const, id: profile.id, name: profile.name, cardCount: profile.cardCount })),
   ], [data.cloudProfiles, data.localProfiles]);
+  const selectedProfileLabel = profileChoice
+    ? allProfiles.find((profile) => profile.type === profileChoice.source && profile.id === profileChoice.id)?.name ?? "已选择档案"
+    : "未选择档案";
+  const selectedProfilePayload = selectedProfileCacheKey
+    ? profilePayloadCacheRef.current.get(selectedProfileCacheKey) ?? null
+    : null;
+  const selectedProfileCards = useMemo(
+    () => selectedProfilePayload ? getGameProfileCards(selectedProfilePayload) : [],
+    [selectedProfilePayload],
+  );
+  const selectedProfileAssetRegion = useMemo<BandoriAssetRegion>(() => (
+    selectedProfilePayload?.bestdoriProfile.server === 3 ? "cn" : "jp"
+  ), [selectedProfilePayload]);
 
   const getTeamSearchWorker = useCallback(() => {
     if (workerRef.current) {
@@ -2633,6 +3682,13 @@ function TeamBuilderPanel() {
   }, [profileChoice]);
 
   useEffect(() => {
+    setCardPreferences(readCardPreferences(selectedProfileCacheKey));
+    setCardPickerOpen(false);
+    setCardPickerValue(null);
+    setEditingTemporaryCard(null);
+  }, [selectedProfileCacheKey]);
+
+  useEffect(() => {
     if (!availableLiveTypes.includes(liveType)) {
       setLiveType(availableLiveTypes.includes("multi") ? "multi" : availableLiveTypes[0] ?? "free");
     }
@@ -2746,7 +3802,11 @@ function TeamBuilderPanel() {
 
   useEffect(() => {
     const resultCardIds = getSearchResultCardIds(result);
-    const cardIds = [...getEventBonusMemberCardIds(eventBonus), ...resultCardIds];
+    const preferenceCardIds = [
+      ...selectedProfileCards.map((card) => card.cardId),
+      ...cardPreferences.temporaryCards.map((card) => card.cardId),
+    ];
+    const cardIds = [...getEventBonusMemberCardIds(eventBonus), ...resultCardIds, ...preferenceCardIds];
     const uniqueCardIds = Array.from(new Set(cardIds)).filter((cardId) => !cardMetadata[String(cardId)]);
     if (uniqueCardIds.length === 0) {
       return;
@@ -2754,11 +3814,7 @@ function TeamBuilderPanel() {
     void requestJson<{ cards: Record<string, CardMetadata | undefined> }>(`/api/bandori/cards?ids=${uniqueCardIds.join(",")}`)
       .then((payload) => setCardMetadata((current) => ({ ...current, ...payload.cards })))
       .catch(() => undefined);
-  }, [cardMetadata, eventBonus, result]);
-
-  const selectedProfileLabel = profileChoice
-    ? allProfiles.find((profile) => profile.type === profileChoice.source && profile.id === profileChoice.id)?.name ?? "已选择档案"
-    : "未选择档案";
+  }, [cardMetadata, cardPreferences.temporaryCards, eventBonus, result, selectedProfileCards]);
 
   const resultEventPointMode = useMemo(() => {
     const singleResult = result?.results.find((item): item is BandoriTeamSearchResult => (
@@ -2766,7 +3822,6 @@ function TeamBuilderPanel() {
     ));
     return singleResult?.eventPointOptions.mode ?? "none";
   }, [result]);
-  const selectedProfileCacheKey = profileChoice ? `${profileChoice.source}:${profileChoice.id}` : "";
   const isPreloadReady = preloadState.master === "ready"
     && preloadState.chart === "ready"
     && preloadState.eventBonus === "ready"
@@ -2832,7 +3887,7 @@ function TeamBuilderPanel() {
       return;
     }
     if (isMedleyEvent && !medleySongIds.every((id) => id && Number.isFinite(Number(id)))) {
-      setResultError("组曲LIVE需要选择 3 首歌曲");
+      setResultError("巡回演出需要选择 3 首歌曲");
       setActiveStep("song");
       return;
     }
@@ -2891,7 +3946,14 @@ function TeamBuilderPanel() {
         songs: isMedleyEvent
           ? medleySongIds.map((id, index) => ({ songId: Number(id), difficulty: medleyDifficulties[index] }))
           : undefined,
-        cards: { excludedCardIds: [] },
+        cards: {
+          excludedCardIds: cardPreferences.excludedCardIds,
+          ownedCardParameters: cardPreferences.ownedCardParameters,
+          temporaryCards: cardPreferences.temporaryCards.map((card) => ({
+            ...card,
+            cardInstanceKey: `temporary:${card.instanceId}`,
+          })),
+        },
         calculation: {
           target: isMedleyEvent ? "score" : target,
           resultLimit: isMedleyEvent ? 1 : Number(resultLimit),
@@ -2962,6 +4024,7 @@ function TeamBuilderPanel() {
             eventBonusError={eventBonusError}
             characters={data.characters}
             cardMetadata={cardMetadata}
+            skills={data.skills}
             assetRegion={selectedEventAssetRegion}
             eventFormula={eventFormula}
           />
@@ -2972,7 +4035,7 @@ function TeamBuilderPanel() {
         <section className="space-y-5">
           <FieldRow label="种类">
             {isMedleyEvent ? (
-              <Segment value="medley" options={["medley"]} onChange={() => undefined} labels={{ medley: "组曲LIVE" }} />
+              <Segment value="medley" options={["medley"]} onChange={() => undefined} labels={{ medley: "巡回演出" }} />
             ) : (
               <Segment value={liveType} options={availableLiveTypes} onChange={updateLiveType} labels={liveTypeLabels} />
             )}
@@ -3127,6 +4190,25 @@ function TeamBuilderPanel() {
               );
             })}
           </div>
+          {profileChoice ? (
+            <TeamBuilderCardPreferencesPanel
+              profileCards={selectedProfileCards}
+              preferences={cardPreferences}
+              cardMetadata={cardMetadata}
+              characters={data.characters}
+              skills={data.skills}
+              assetRegion={selectedProfileAssetRegion}
+              onAddTemporary={() => {
+                setCardPickerValue(null);
+                setCardPickerOpen(true);
+              }}
+              onEditTemporary={editTemporaryCard}
+              onClearTemporaryCards={clearTemporaryCards}
+              onUpdateOwnedCardParameters={updateOwnedCardParameters}
+              onToggleExcludedCard={toggleExcludedCard}
+              onBulkSetExcludedCards={bulkSetExcludedCards}
+            />
+          ) : null}
         </section>
       ) : null}
 
@@ -3138,7 +4220,7 @@ function TeamBuilderPanel() {
               <div className="mt-1 font-bold text-slate-900">{selectedEvent ? selectedEvent.name.cn ?? selectedEvent.name.jp : "无活动"}</div>
             </div>
             <div className="rounded-2xl border border-slate-200 bg-white p-4">
-              <div className="text-xs font-semibold text-slate-500">{isMedleyEvent ? "组曲LIVE" : "歌曲"}</div>
+              <div className="text-xs font-semibold text-slate-500">{isMedleyEvent ? "巡回演出" : "歌曲"}</div>
               {isMedleyEvent ? (
                 <div className="mt-2 space-y-1">
                   {medleySongIds.map((slotSongId, index) => (
@@ -3209,7 +4291,7 @@ function TeamBuilderPanel() {
                   组曲组队计算器为当前开发中的测试预览版本，仅供参考。如有发现“最大化”模式的分数结果低于“传统3次单曲贪心”模式的，或发现“传统3次单曲贪心”结果低于手动组队结果的，欢迎将你的档案名称/结果报告/页面最下方的调试信息（或在Out of Memory崩溃时直接反馈档案名称/OOM）发送至 bluewater.alnilam.ii@gmail.com 反馈。请在64位操作系统的电脑上通过最新版 Chrome 浏览器运行，以减少因内存不足崩溃的可能。
                 </p>
                 <p>
-                  巡回活动将使用组曲LIVE计算，默认最多计算 300 秒。最大化模式会尝试精确证明全局最优结果。若无法在限制内完成证明，会提前返回已找到的最佳结果。传统3次单曲贪心仅作为临时对照，不提供最优性证明。
+                  巡回活动将使用巡回演出计算，默认最多计算 300 秒。最大化模式会尝试精确证明全局最优结果。若无法在限制内完成证明，会提前返回已找到的最佳结果。传统3次单曲贪心仅作为临时对照，不提供最优性证明。
                 </p>
               </div>
             ) : null}
@@ -3266,7 +4348,7 @@ function TeamBuilderPanel() {
                   ) : null}
                   {resultEventPointMode === "versus" || resultEventPointMode === "festival" ? (
                     <div className="flex items-center gap-2">
-                      <span className="font-semibold text-slate-600">公演LIVE排名</span>
+                      <span className="font-semibold text-slate-600">团队演出排名</span>
                       <Segment value={resultPlacement} options={RESULT_PLACEMENT_OPTIONS} onChange={setResultPlacement} labels={RESULT_PLACEMENT_LABELS} />
                     </div>
                   ) : null}
@@ -3285,6 +4367,8 @@ function TeamBuilderPanel() {
                       key={item.rank}
                       result={item}
                       cardMetadata={cardMetadata}
+                      characters={data.characters}
+                      skills={data.skills}
                       assetRegion={selectedEventAssetRegion}
                       songs={medleySongIds.map((id) => data.songs[id] ?? null)}
                     />
@@ -3293,6 +4377,8 @@ function TeamBuilderPanel() {
                       key={item.rank}
                       result={item}
                       cardMetadata={cardMetadata}
+                      characters={data.characters}
+                      skills={data.skills}
                       assetRegion={selectedEventAssetRegion}
                       displayLiveBoostCount={resultLiveBoostCount}
                       displayChallengeCpCost={resultChallengeCpCost}
@@ -3323,6 +4409,58 @@ function TeamBuilderPanel() {
             </div>
           ) : null}
         </section>
+      ) : null}
+
+      {cardPickerOpen ? (
+        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto overscroll-contain bg-slate-950/55 p-2 py-3 sm:p-6">
+          <div className="flex max-h-[calc(100svh-1.5rem)] w-full max-w-6xl flex-col overflow-hidden rounded-2xl bg-slate-50 shadow-2xl sm:max-h-[calc(100svh-3rem)]">
+            <div className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-3 sm:px-5">
+              <div className="min-w-0">
+                <h2 className="text-lg font-bold text-slate-900">添加临时卡牌</h2>
+                <p className="mt-1 text-sm text-slate-500">选择卡牌后会进入参数确认。</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setCardPickerOpen(false);
+                  setCardPickerValue(null);
+                }}
+                className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 transition hover:border-slate-300 hover:text-slate-900"
+                title="关闭"
+              >
+                <X className="h-5 w-5" aria-hidden="true" />
+              </button>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-3 sm:p-5">
+              <BandoriCardPicker value={cardPickerValue} onValueChange={selectTemporaryCard} region={selectedProfileAssetRegion} showArtToggle={false} />
+              {addingTemporaryCard ? (
+                <div className="mt-3 flex items-center justify-center gap-2 rounded-xl bg-white p-3 text-sm font-bold text-slate-600">
+                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                  正在准备卡牌参数
+                </div>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {editingTemporaryCard ? (
+        <GameProfileCardEditorDialog
+          card={editingTemporaryCard}
+          baselineCard={cardPreferences.temporaryCards.find((card) => card.instanceId === editingTemporaryCard.instanceId) ?? null}
+          metadata={cardMetadata[String(editingTemporaryCard.cardId)]}
+          characterName={getCardCharacterLabel(cardMetadata[String(editingTemporaryCard.cardId)], data.characters)}
+          bandId={getCardBandId(cardMetadata[String(editingTemporaryCard.cardId)], data.characters)}
+          region={selectedProfileAssetRegion}
+          saving={false}
+          title="编辑临时卡牌"
+          saveLabel={cardPreferences.temporaryCards.some((card) => card.instanceId === editingTemporaryCard.instanceId) ? "保存" : "添加"}
+          deleteLabel={cardPreferences.temporaryCards.some((card) => card.instanceId === editingTemporaryCard.instanceId) ? "删除" : "取消添加"}
+          allowSaveWithoutChanges={!cardPreferences.temporaryCards.some((card) => card.instanceId === editingTemporaryCard.instanceId)}
+          onClose={() => setEditingTemporaryCard(null)}
+          onSave={saveTemporaryCard}
+          onDelete={deleteTemporaryCard}
+        />
       ) : null}
 
       <div className="flex flex-col gap-3 border-t border-slate-200 pt-5 sm:flex-row sm:items-center sm:justify-end">

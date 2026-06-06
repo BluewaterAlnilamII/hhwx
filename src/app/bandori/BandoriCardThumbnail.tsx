@@ -27,6 +27,8 @@ export type BandoriCardThumbnailMetadata = {
   attribute?: CardAttribute | string;
   resourceSetName?: string;
   levelLimit?: number;
+  assetRegion?: BandoriAssetRegion;
+  releasedAt?: Array<string | number | null>;
 };
 
 function isKnownAttribute(value: string | undefined): value is CardAttribute {
@@ -34,7 +36,28 @@ function isKnownAttribute(value: string | undefined): value is CardAttribute {
 }
 
 function getCardTrainType(card: BandoriCardThumbnailCard): TrainType {
-  return card.hasTrainedArt || card.isTrained ? "after_training" : "normal";
+  return card.isTrained ? "after_training" : "normal";
+}
+
+function readRegionalTimestampAt(values: BandoriCardThumbnailMetadata["releasedAt"], index: number): number {
+  if (!Array.isArray(values)) {
+    return 0;
+  }
+  const parsed = Number(values[index]);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+}
+
+function resolveThumbnailRegion(
+  metadata: BandoriCardThumbnailMetadata | undefined,
+  fallbackRegion: BandoriAssetRegion,
+): BandoriAssetRegion {
+  if (metadata?.assetRegion) {
+    return metadata.assetRegion;
+  }
+  if (fallbackRegion === "cn" && metadata?.releasedAt && readRegionalTimestampAt(metadata.releasedAt, 3) <= 0) {
+    return "jp";
+  }
+  return fallbackRegion;
 }
 
 function BrokenImageFallback({ label }: { label: string }) {
@@ -48,32 +71,37 @@ function BrokenImageFallback({ label }: { label: string }) {
 
 function CardAssetImage({
   src,
+  fallbackSrc,
   alt,
   className,
   fallbackLabel = "无资源",
   loading = "lazy",
 }: {
   src: string | null;
+  fallbackSrc?: string | null;
   alt: string;
   className?: string;
   fallbackLabel?: string;
   loading?: "eager" | "lazy";
 }) {
-  const [failedSrc, setFailedSrc] = useState<string | null>(null);
-  const failed = Boolean(src && failedSrc === src);
+  const [failedSrcs, setFailedSrcs] = useState<string[]>([]);
+  const sourceCandidates = [src, fallbackSrc].filter((candidate): candidate is string => Boolean(candidate));
+  const activeSrc = sourceCandidates.find((candidate, index) => (
+    sourceCandidates.indexOf(candidate) === index && !failedSrcs.includes(candidate)
+  )) ?? null;
 
-  if (!src || failed) {
+  if (!activeSrc) {
     return <BrokenImageFallback label={fallbackLabel} />;
   }
 
   return (
     // eslint-disable-next-line @next/next/no-img-element
     <img
-      src={src}
+      src={activeSrc}
       alt={alt}
       loading={loading}
       className={className}
-      onError={() => setFailedSrc(src)}
+      onError={() => setFailedSrcs((current) => current.includes(activeSrc) ? current : [...current, activeSrc])}
     />
   );
 }
@@ -98,8 +126,12 @@ export default function BandoriCardThumbnail({
   showLevel?: boolean;
 }) {
   const trainType = getCardTrainType(card);
+  const thumbnailRegion = resolveThumbnailRegion(metadata, region);
   const thumbnailUrl = metadata?.resourceSetName
-    ? buildBandoriCardThumbnailPublicUrl(region, card.cardId, metadata.resourceSetName, trainType)
+    ? buildBandoriCardThumbnailPublicUrl(thumbnailRegion, card.cardId, metadata.resourceSetName, trainType)
+    : null;
+  const fallbackThumbnailUrl = metadata?.resourceSetName && thumbnailRegion === "cn"
+    ? buildBandoriCardThumbnailPublicUrl("jp", card.cardId, metadata.resourceSetName, trainType)
     : null;
   const rarity = Math.min(5, Math.max(1, Math.trunc(Number(metadata?.rarity) || 1)));
   const attribute = isKnownAttribute(metadata?.attribute) ? metadata.attribute : null;
@@ -117,7 +149,14 @@ export default function BandoriCardThumbnail({
     <div className="relative h-full w-full rounded-[5px] bg-white">
       <div className="absolute inset-0">
         <div className="h-full w-full overflow-hidden rounded-[5px]">
-          <CardAssetImage src={thumbnailUrl} alt={alt} loading={loading} className="h-full w-full object-cover" fallbackLabel={isPreview ? "缩略图" : "无图"} />
+          <CardAssetImage
+            src={thumbnailUrl}
+            fallbackSrc={fallbackThumbnailUrl}
+            alt={alt}
+            loading={loading}
+            className="h-full w-full object-cover"
+            fallbackLabel={isPreview ? "缩略图" : "无图"}
+          />
         </div>
       </div>
       {/* eslint-disable-next-line @next/next/no-img-element */}

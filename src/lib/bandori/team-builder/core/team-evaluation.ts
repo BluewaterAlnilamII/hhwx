@@ -10,6 +10,7 @@ import { getCachedPreparedChart } from "./chart";
 import { calculateBestMultiLiveScoreForSkillWindows, calculateBestScoreForNonOverlappingSkillWindows, calculateBestScoreForNonOverlappingSkillWindowsTargetOnly, type SkillWindowScoreResult } from "./scoring";
 import { calculateChallengeLiveEventPoint, calculateChallengeLiveEventPointBase, calculateEventPoint, calculateEventPointBeforeMultiplier, calculateRoomScore, createEventPointOptions, getSearchCardsTeamContext, getEventPointMultiplier, getTargetValue, isChallengeLiveEventPointInput, normalizeSearchEventType, normalizeSearchLiveType, normalizeSearchTarget, resolveCachedBandoriSkill, resolveEncoreSkill, resolveOtherPlayerSkills, resolveBandoriTeamSearchEventMode } from "./events";
 import { isSearchUpperBoundBelowResultThreshold } from "./character-bounds";
+import { getCardInstanceKey } from "./card-identity";
 import type { CalculatedBandoriCard } from "@/lib/bandori-team-calculator";
 import type { BandoriAreaItemConfiguration, BandoriTeamSearchResult, BandoriTeamSearchInput, PreparedChart, ScoreCalculationCache, ScoreComboOptions, SearchCard, SupportBandCandidate, SupportBandContext, BandoriTeamSearchResultCard, BandoriTeamSearchSupportCard } from "./types";
 import { clamp } from "./utils";
@@ -17,6 +18,7 @@ import { clamp } from "./utils";
 function toCoreResultCards(cards: CalculatedBandoriCard[]): BandoriTeamSearchResultCard[] {
   return cards.map((card) => ({
     cardId: card.cardId,
+    cardInstanceKey: card.cardInstanceKey,
     characterId: card.characterId,
     bandId: card.bandId,
     attribute: card.attribute,
@@ -33,6 +35,7 @@ function toCoreResultCards(cards: CalculatedBandoriCard[]): BandoriTeamSearchRes
 function toCoreSupportResultCards(cards: SupportBandCandidate[]): BandoriTeamSearchSupportCard[] {
   return cards.map((candidate) => ({
     cardId: candidate.card.cardId,
+    cardInstanceKey: candidate.card.cardInstanceKey,
     characterId: candidate.card.characterId,
     bandId: candidate.card.bandId,
     attribute: candidate.card.attribute,
@@ -141,6 +144,7 @@ export function evaluateMedleyScoreOnlyTeam(options: EvaluateMedleyScoreOnlyTeam
     eventType: "medley",
     target: "score",
     leaderCardId: cards[best.leaderIndex]?.cardId ?? cards[0]?.cardId ?? 0,
+    leaderCardInstanceKey: cards[best.leaderIndex] ? getCardInstanceKey(cards[best.leaderIndex]) : cards[0] ? getCardInstanceKey(cards[0]) : undefined,
     skillOrderCardIds: [],
     areaItemConfiguration: configuration,
     context,
@@ -305,6 +309,7 @@ export function evaluateTeam(options: EvaluateTeamOptions): BandoriTeamSearchRes
       eventType,
       target,
       leaderCardId: cards[best.leaderIndex]?.cardId ?? cards[0]?.cardId ?? 0,
+      leaderCardInstanceKey: cards[best.leaderIndex] ? getCardInstanceKey(cards[best.leaderIndex]) : cards[0] ? getCardInstanceKey(cards[0]) : undefined,
       skillOrderCardIds: [],
       areaItemConfiguration: configuration,
       context,
@@ -347,6 +352,12 @@ export function evaluateTeam(options: EvaluateTeamOptions): BandoriTeamSearchRes
     ...best.permutation.map((cardIndex) => cards[cardIndex].cardId),
     cards[best.leaderIndex].cardId,
   ];
+  const skillOrderCardInstanceKeys = best.skillOrderCardIds
+    ? undefined
+    : [
+      ...best.permutation.map((cardIndex) => getCardInstanceKey(cards[cardIndex])),
+      getCardInstanceKey(cards[best.leaderIndex]),
+    ];
   const skillOrderActors = best.skillOrderActors;
   const baseCardPower = cards.reduce((sum, card) => sum + getCoreBaseCardPower(card), 0);
   const userAreaItemsById = toAreaItemStateMap(input.userAreaItems);
@@ -391,7 +402,9 @@ export function evaluateTeam(options: EvaluateTeamOptions): BandoriTeamSearchRes
     eventType,
     target,
     leaderCardId: cards[best.leaderIndex].cardId,
+    leaderCardInstanceKey: getCardInstanceKey(cards[best.leaderIndex]),
     skillOrderCardIds,
+    skillOrderCardInstanceKeys,
     skillOrderActors,
     areaItemConfiguration: {
       ...configuration,
@@ -401,6 +414,7 @@ export function evaluateTeam(options: EvaluateTeamOptions): BandoriTeamSearchRes
     cards: toCoreResultCards(cards),
     skills: cards.map((card, index) => ({
       cardId: card.cardId,
+      cardInstanceKey: card.cardInstanceKey,
       skillId: card.skillId,
       skillLevel: card.skillLevel,
       resolvedSkill: resolvedSkills[index],

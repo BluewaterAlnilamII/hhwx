@@ -650,6 +650,7 @@ export type MedleyTeamCandidate = {
   result: BandoriTeamSearchResult;
   cards: SearchCard[];
   cardIds: number[];
+  cardInstanceKeys?: string[];
 };
 
 export type MedleyExactSlotCandidateSearchNode = {

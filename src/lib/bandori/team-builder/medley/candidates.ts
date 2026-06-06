@@ -6,6 +6,7 @@
  */
 
 import { evaluateMedleyScoreOnlyTeam, evaluateTeam } from "@/lib/bandori/team-builder/core";
+import { getCardInstanceKeys } from "@/lib/bandori/team-builder/core/card-identity";
 import type {
   BandoriMedleyTeamSearchProfilingStats,
   BandoriMedleyTeamSearchResult,
@@ -18,21 +19,22 @@ import type { BandoriTeamSearchResult, SearchCard } from "@/lib/bandori/team-bui
 const scoreOnlyTeamEvaluationCacheBySlot = new WeakMap<MedleySlotSearch, Map<string, BandoriTeamSearchResult | null>>();
 
 export function getMedleyTeamEvaluationCacheKey(cards: SearchCard[]): string {
+  const keys = getCardInstanceKeys(cards);
   switch (cards.length) {
     case 0:
       return "";
     case 1:
-      return String(cards[0].cardId);
+      return keys[0];
     case 2:
-      return `${cards[0].cardId},${cards[1].cardId}`;
+      return `${keys[0]},${keys[1]}`;
     case 3:
-      return `${cards[0].cardId},${cards[1].cardId},${cards[2].cardId}`;
+      return `${keys[0]},${keys[1]},${keys[2]}`;
     case 4:
-      return `${cards[0].cardId},${cards[1].cardId},${cards[2].cardId},${cards[3].cardId}`;
+      return `${keys[0]},${keys[1]},${keys[2]},${keys[3]}`;
     case 5:
-      return `${cards[0].cardId},${cards[1].cardId},${cards[2].cardId},${cards[3].cardId},${cards[4].cardId}`;
+      return `${keys[0]},${keys[1]},${keys[2]},${keys[3]},${keys[4]}`;
     default:
-      return cards.map((card) => card.cardId).join(",");
+      return keys.join(",");
   }
 }
 
@@ -56,6 +58,11 @@ function getMedleyCandidateCardIds(cards: SearchCard[]): number[] {
 }
 
 function compareMedleyCandidateCardIds(left: MedleyTeamCandidate, right: MedleyTeamCandidate): number {
+  const leftKeys = left.cardInstanceKeys ?? [];
+  const rightKeys = right.cardInstanceKeys ?? [];
+  if (leftKeys.length > 0 || rightKeys.length > 0) {
+    return leftKeys.join(",").localeCompare(rightKeys.join(","));
+  }
   const length = Math.min(left.cardIds.length, right.cardIds.length);
   for (let index = 0; index < length; index += 1) {
     const delta = left.cardIds[index] - right.cardIds[index];
@@ -161,6 +168,7 @@ export function evaluateMedleySlotCandidateWithCache(
       result,
       cards: selectedCards,
       cardIds: getMedleyCandidateCardIds(selectedCards),
+      cardInstanceKeys: getCardInstanceKeys(selectedCards),
     }
     : null;
 }

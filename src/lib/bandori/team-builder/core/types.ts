@@ -38,6 +38,7 @@ export type BandoriAreaItemConfiguration = {
 
 export type BandoriTeamSearchResultCard = {
   cardId: number;
+  cardInstanceKey?: string;
   characterId: number;
   bandId: number | null;
   attribute: BandoriCardAttribute;
@@ -102,7 +103,9 @@ export type BandoriTeamSearchResult = {
   eventType: BandoriTeamSearchEventType;
   target: BandoriTeamSearchTarget;
   leaderCardId: number;
+  leaderCardInstanceKey?: string;
   skillOrderCardIds: number[];
+  skillOrderCardInstanceKeys?: string[];
   skillOrderActors?: BandoriTeamSearchSkillOrderActor[];
   areaItemConfiguration: BandoriAreaItemConfiguration;
   context: {
@@ -112,6 +115,7 @@ export type BandoriTeamSearchResult = {
   cards: BandoriTeamSearchResultCard[];
   skills: Array<{
     cardId: number;
+    cardInstanceKey?: string;
     skillId: number;
     skillLevel: number;
     resolvedSkill: ResolvedBandoriSkill | null;
@@ -284,7 +288,7 @@ export type SupportBandContext = {
   enabled: boolean;
   candidates: SupportBandCandidate[];
   // Mission live support excludes main-team cards and duplicate characters; this keeps each card's opportunity cost.
-  supportPowerByCardId: Map<number, number>;
+  supportPowerByCardKey: Map<string, number>;
   supportBandPowerUpperBound: number;
   supportBandPointUpperBound: number;
   evaluationCount: number;
@@ -300,7 +304,7 @@ export type SearchCardStaticProfile = SearchCardSkillRateProfile & {
 };
 
 export type SearchPrecomputedData = {
-  cardStaticProfilesById: Map<number, SearchCardStaticProfile>;
+  cardStaticProfilesByKey: Map<string, SearchCardStaticProfile>;
   areaItemPowerByConfigurationKey: Map<string, Float64Array>;
 };
 
