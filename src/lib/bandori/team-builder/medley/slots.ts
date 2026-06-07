@@ -75,6 +75,13 @@ type LightweightMedleySlot = {
   baseScoreRatePerPower: number;
 };
 
+function medleySlotsHaveDuplicateCardIds(slots: MedleySlotSearch[]): boolean {
+  return slots.some((slot) => {
+    const cardIds = slot.searchCards.map((card) => card.cardId);
+    return new Set(cardIds).size !== cardIds.length;
+  });
+}
+
 export function createMedleySlotInput(
   input: BandoriMedleyTeamSearchInput,
   songInput: BandoriMedleySongSearchInput,
@@ -378,7 +385,7 @@ export function estimateMedleyConfigurationBasicSkillAwareRootUpperBound(
 
 export function estimateMedleySlotAvailability(
   slot: MedleySlotSearch,
-  bannedCardKeys: Set<string>,
+  bannedCardIds: Set<number>,
   upperBannedCardIds: Set<number>,
   profiling?: BandoriMedleyTeamSearchProfilingStats,
   useContextualSkillUpper = false,
@@ -386,7 +393,7 @@ export function estimateMedleySlotAvailability(
   const availableCharacterIds = new Set<number>();
   let availableCardCount = 0;
   for (const card of slot.searchCards) {
-    if (bannedCardKeys.has(getCardInstanceKey(card))) {
+    if (bannedCardIds.has(card.cardId)) {
       continue;
     }
     availableCardCount += 1;
@@ -413,7 +420,7 @@ export function estimateMedleySlotAvailability(
 export function chooseNextMedleySlotIndex(
   slots: MedleySlotSearch[],
   remainingSlotIndices: number[],
-  bannedCardKeys: Set<string>,
+  bannedCardIds: Set<number>,
   upperBannedCardIds: Set<number>,
   getMinimumScore?: (slotIndex: number) => number,
   profiling?: BandoriMedleyTeamSearchProfilingStats,
@@ -426,7 +433,7 @@ export function chooseNextMedleySlotIndex(
   for (const slotIndex of remainingSlotIndices) {
     const availability = estimateMedleySlotAvailability(
       slots[slotIndex],
-      bannedCardKeys,
+      bannedCardIds,
       upperBannedCardIds,
       profiling,
       useContextualSkillUpper,
@@ -501,7 +508,7 @@ export function medleyCardDominatesInSlot(
 }
 
 export function pruneDominatedMedleySlotCards(slots: MedleySlotSearch[]): MedleySlotSearch[] {
-  if (slots.length !== MEDLEY_TEAM_COUNT) {
+  if (slots.length !== MEDLEY_TEAM_COUNT || medleySlotsHaveDuplicateCardIds(slots)) {
     return slots;
   }
 
@@ -640,7 +647,7 @@ export function pruneMedleyCardsByInclusionUpper(
   profiling: BandoriMedleyTeamSearchProfilingStats,
   shouldStop?: () => boolean,
 ): MedleySlotSearch[] {
-  if (slots.length !== MEDLEY_TEAM_COUNT || !Number.isFinite(threshold)) {
+  if (slots.length !== MEDLEY_TEAM_COUNT || !Number.isFinite(threshold) || medleySlotsHaveDuplicateCardIds(slots)) {
     return slots;
   }
 
@@ -694,7 +701,7 @@ export function rebuildMedleySlotWithSearchCards(slot: MedleySlotSearch, searchC
 
 export function enumerateMedleySlotTeams(
   slot: MedleySlotSearch,
-  bannedCardKeys: Set<string>,
+  bannedCardIds: Set<number>,
   upperBannedCardIds: Set<number>,
   server: number,
   perfectRate: number,
@@ -792,7 +799,7 @@ export function enumerateMedleySlotTeams(
 
     for (let index = startIndex; index < slot.searchCards.length; index += 1) {
       const card = slot.searchCards[index];
-      if (bannedCardKeys.has(getCardInstanceKey(card))) {
+      if (bannedCardIds.has(card.cardId)) {
         continue;
       }
       const characterIndex = slot.upperBoundIndex.characterIndexById.get(card.characterId);
@@ -830,7 +837,7 @@ export function enumerateMedleySlotTeams(
 
 export function findBestMedleySlotTeam(
   slot: MedleySlotSearch,
-  bannedCardKeys: Set<string>,
+  bannedCardIds: Set<number>,
   upperBannedCardIds: Set<number>,
   server: number,
   perfectRate: number,
@@ -844,7 +851,7 @@ export function findBestMedleySlotTeam(
   let best: MedleyTeamCandidate | null = null;
   enumerateMedleySlotTeams(
     slot,
-    bannedCardKeys,
+    bannedCardIds,
     upperBannedCardIds,
     server,
     perfectRate,
@@ -863,15 +870,15 @@ export function findBestMedleySlotTeam(
   return best;
 }
 
-export function getMedleyBestSlotTeamCacheKey(slotIndex: number, bannedCardKeys: Set<string>): string {
-  return `${slotIndex}:${[...bannedCardKeys].sort().join(",")}`;
+export function getMedleyBestSlotTeamCacheKey(slotIndex: number, bannedCardIds: Set<number>): string {
+  return `${slotIndex}:${[...bannedCardIds].sort((left, right) => left - right).join(",")}`;
 }
 
 export function findBestMedleySlotTeamWithCache(
   cache: Map<string, MedleyBestSlotTeamCacheEntry>,
   slotIndex: number,
   slot: MedleySlotSearch,
-  bannedCardKeys: Set<string>,
+  bannedCardIds: Set<number>,
   upperBannedCardIds: Set<number>,
   server: number,
   perfectRate: number,
@@ -882,7 +889,7 @@ export function findBestMedleySlotTeamWithCache(
   minimumScore = Number.NEGATIVE_INFINITY,
   useContextualSkillUpper = false,
 ): MedleyTeamCandidate | null {
-  const key = getMedleyBestSlotTeamCacheKey(slotIndex, bannedCardKeys);
+  const key = getMedleyBestSlotTeamCacheKey(slotIndex, bannedCardIds);
   const cached = cache.get(key);
   if (cached) {
     profiling.bestSlotTeamCacheHitCount += 1;
@@ -895,7 +902,7 @@ export function findBestMedleySlotTeamWithCache(
   const shouldCache = !Number.isFinite(minimumScore);
   const candidate = findBestMedleySlotTeam(
     slot,
-    bannedCardKeys,
+    bannedCardIds,
     upperBannedCardIds,
     server,
     perfectRate,
@@ -916,7 +923,7 @@ export function estimateRelaxedMedleyRemainingBestScoreUpperBound(
   cache: Map<string, MedleyBestSlotTeamCacheEntry>,
   slots: MedleySlotSearch[],
   remainingSlotIndices: number[],
-  bannedCardKeys: Set<string>,
+  bannedCardIds: Set<number>,
   upperBannedCardIds: Set<number>,
   server: number,
   perfectRate: number,
@@ -931,7 +938,7 @@ export function estimateRelaxedMedleyRemainingBestScoreUpperBound(
       cache,
       slotIndex,
       slots[slotIndex],
-      bannedCardKeys,
+      bannedCardIds,
       upperBannedCardIds,
       server,
       perfectRate,

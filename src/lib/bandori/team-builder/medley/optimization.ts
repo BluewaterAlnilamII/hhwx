@@ -16,6 +16,7 @@ import type {
   BandoriMedleyTeamSearchStats,
   FixedMedleyCardSetMaskEntry,
   MedleyFixedCardSetOptimizationCacheEntry,
+  MedleyEvaluatedResultObserver,
   MedleySlotSearch,
   MedleyTeamCandidate,
 } from "./types";
@@ -168,6 +169,7 @@ export function optimizeMedleyCardPool(
   perfectRate: number,
   stats: BandoriMedleyTeamSearchStats,
   profiling: BandoriMedleyTeamSearchProfilingStats,
+  observeEvaluatedResult?: MedleyEvaluatedResultObserver,
 ): BandoriMedleyTeamSearchResult | null {
   if (
     slots.length !== MEDLEY_TEAM_COUNT
@@ -254,6 +256,9 @@ export function optimizeMedleyCardPool(
       selectedBySong[slots[1].songIndex] = secondCandidate;
       selectedBySong[slots[2].songIndex] = thirdCandidate;
       const result = buildMedleyResult(slots, selectedBySong, configuration);
+      if (result) {
+        observeEvaluatedResult?.(result);
+      }
       if (
         result
         && (
@@ -279,6 +284,7 @@ export function optimizeFixedMedleyCardSet(
   perfectRate: number,
   stats: BandoriMedleyTeamSearchStats,
   profiling: BandoriMedleyTeamSearchProfilingStats,
+  observeEvaluatedResult?: MedleyEvaluatedResultObserver,
 ): BandoriMedleyTeamSearchResult | null {
   profiling.fixedCardSetOptimizationCount += 1;
   if (cardIds.length !== MEDLEY_TEAM_COUNT * MEDLEY_TEAM_SIZE) {
@@ -292,6 +298,7 @@ export function optimizeFixedMedleyCardSet(
     perfectRate,
     stats,
     profiling,
+    observeEvaluatedResult,
   );
 }
 
@@ -304,11 +311,15 @@ export function optimizeFixedMedleyCardSetWithCache(
   perfectRate: number,
   stats: BandoriMedleyTeamSearchStats,
   profiling: BandoriMedleyTeamSearchProfilingStats,
+  observeEvaluatedResult?: MedleyEvaluatedResultObserver,
 ): BandoriMedleyTeamSearchResult | null {
   const key = getFixedMedleyCardSetCacheKey(cardIds);
   const cached = cache.get(key);
   if (cached) {
     profiling.fixedCardSetOptimizationCacheHitCount += 1;
+    if (cached.result) {
+      observeEvaluatedResult?.(cached.result);
+    }
     return cached.result;
   }
   profiling.fixedCardSetOptimizationCacheMissCount += 1;
@@ -320,6 +331,7 @@ export function optimizeFixedMedleyCardSetWithCache(
     perfectRate,
     stats,
     profiling,
+    observeEvaluatedResult,
   );
   cache.set(key, { result });
   return result;

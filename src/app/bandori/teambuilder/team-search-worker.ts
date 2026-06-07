@@ -24,7 +24,12 @@ import {
   pruneDominatedAreaItemConfigurations,
 } from "@/lib/bandori/team-builder/core";
 import { estimateMedleyStaticCoarsePotential } from "@/lib/bandori/team-builder/medley/configurations";
-import { buildMedleyResult, pushMedleyResult, sortMedleyResults } from "@/lib/bandori/team-builder/medley/results";
+import {
+  buildMedleyResult,
+  createMedleyEvaluatedCandidateTracker,
+  pushMedleyResult,
+  sortMedleyResults,
+} from "@/lib/bandori/team-builder/medley/results";
 import {
   getMedleyGreedySeedSlotIndices,
 } from "@/lib/bandori/team-builder/medley/seeds";
@@ -36,7 +41,6 @@ import {
   findBestMedleySlotTeamWithCache,
   pruneDominatedMedleySlotCards,
 } from "@/lib/bandori/team-builder/medley/slots";
-import { getCardInstanceKey } from "@/lib/bandori/team-builder/core/card-identity";
 import { createInitialMedleyProfilingStats } from "@/lib/bandori/team-builder/medley/profiling";
 import { buildBandoriCharacterBonuses } from "@/lib/bandori-character-bonuses";
 import type {
@@ -313,6 +317,8 @@ function buildSharedConfigurationLegacyGreedyMedleyResponse({
     const profiling = createInitialMedleyProfilingStats(0);
     return {
       results: [],
+      maxScoreCandidate: null,
+      evaluatedAverageTopCandidates: [],
       stats: {
         candidateCardCount: 0,
         rawAreaItemConfigurationCount: 0,
@@ -368,6 +374,8 @@ function buildSharedConfigurationLegacyGreedyMedleyResponse({
     profiling,
   };
   const results: BandoriMedleyTeamSearchResult[] = [];
+  const evaluatedCandidateTracker = createMedleyEvaluatedCandidateTracker();
+  const observeEvaluatedMedleyResult = evaluatedCandidateTracker.observe;
   const buildContexts = buildMedleySlotBuildContexts(input, songInputs, calculatedCards, server);
   const getPruningThreshold = (): number => (
     results.length >= resultLimit
@@ -409,15 +417,15 @@ function buildSharedConfigurationLegacyGreedyMedleyResponse({
     const bestSlotTeamCache = new Map<string, MedleyBestSlotTeamCacheEntry>();
     const getRemainingScoreUpperBound = (
       remainingSlotIndices: number[],
-      bannedCardKeys: Set<string>,
+      bannedCardIds: Set<number>,
     ): number => remainingSlotIndices.reduce((sum, remainingSlotIndex) => (
-      sum + estimateMedleySlotAvailability(slots[remainingSlotIndex], bannedCardKeys, new Set<number>(), profiling).scoreUpperBound
+      sum + estimateMedleySlotAvailability(slots[remainingSlotIndex], bannedCardIds, bannedCardIds, profiling).scoreUpperBound
     ), 0);
     let completedConfiguration = false;
 
     for (const seedOrder of seedOrders) {
       const selectedBySong: Array<MedleyTeamCandidate | undefined> = [];
-      const bannedCardKeys = new Set<string>();
+      const bannedCardIds = new Set<number>();
       let completedSeedOrder = true;
       let currentScore = 0;
 
@@ -431,7 +439,7 @@ function buildSharedConfigurationLegacyGreedyMedleyResponse({
         const slot = slots[slotIndex];
         const threshold = getPruningThreshold();
         const remainingScoreUpperBound = Number.isFinite(threshold)
-          ? getRemainingScoreUpperBound(remainingSlotIndices, bannedCardKeys)
+          ? getRemainingScoreUpperBound(remainingSlotIndices, bannedCardIds)
           : Number.POSITIVE_INFINITY;
         const minimumScore = Number.isFinite(threshold)
           ? threshold - currentScore - remainingScoreUpperBound
@@ -440,8 +448,8 @@ function buildSharedConfigurationLegacyGreedyMedleyResponse({
           bestSlotTeamCache,
           slotIndex,
           slot,
-          bannedCardKeys,
-          new Set<number>(),
+          bannedCardIds,
+          bannedCardIds,
           server,
           perfectRate,
           stats,
@@ -459,11 +467,11 @@ function buildSharedConfigurationLegacyGreedyMedleyResponse({
         }
         selectedBySong[slot.songIndex] = candidate;
         for (const card of candidate.cards) {
-          bannedCardKeys.add(getCardInstanceKey(card));
+          bannedCardIds.add(card.cardId);
         }
         currentScore += candidate.result.score;
         if (Number.isFinite(threshold)) {
-          const nextRemainingScoreUpperBound = getRemainingScoreUpperBound(remainingSlotIndices, bannedCardKeys);
+          const nextRemainingScoreUpperBound = getRemainingScoreUpperBound(remainingSlotIndices, bannedCardIds);
           if (currentScore + nextRemainingScoreUpperBound < threshold) {
             stats.prunedBranchCount += 1;
             completedSeedOrder = false;
@@ -477,7 +485,7 @@ function buildSharedConfigurationLegacyGreedyMedleyResponse({
         : null;
       if (result) {
         completedConfiguration = true;
-        pushMedleyResult(results, result, resultLimit);
+        pushMedleyResult(results, result, resultLimit, observeEvaluatedMedleyResult);
         profiling.bestGreedySeedScore = Math.max(profiling.bestGreedySeedScore ?? Number.NEGATIVE_INFINITY, result.score);
         if (seedOrder.map((slotIndex) => slots[slotIndex].songIndex).join(",") === "2,1,0") {
           profiling.reverseSongOrderGreedySeedScore = Math.max(
@@ -504,8 +512,13 @@ function buildSharedConfigurationLegacyGreedyMedleyResponse({
   }
   stats.elapsedMs = Math.round(performance.now() - startedAt);
 
+  const maxScoreCandidate = evaluatedCandidateTracker.getMaxScoreCandidate(results[0] ?? null);
   return {
     results,
+    maxScoreCandidate,
+    evaluatedAverageTopCandidates: evaluatedCandidateTracker.getEvaluatedAverageTopCandidates(
+      maxScoreCandidate ? [...results, maxScoreCandidate] : results,
+    ),
     stats,
   };
 }

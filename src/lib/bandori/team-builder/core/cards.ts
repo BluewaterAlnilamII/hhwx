@@ -344,15 +344,15 @@ function compareSupportBandCandidates(left: SupportBandCandidate, right: Support
 
 function selectSupportBandCandidates(
   candidates: SupportBandCandidate[],
-  excludedCardKeys: readonly string[],
+  excludedCardIds: readonly number[],
 ): SupportBandSelection {
   const supportCards: SupportBandCandidate[] = [];
-  const excludedCardKeySet = new Set(excludedCardKeys);
+  const excludedCardIdSet = new Set(excludedCardIds);
   const usedCharacterIds = new Set<number>();
   let supportBandPower = 0;
 
   for (const candidate of candidates) {
-    if (excludedCardKeySet.has(getCardInstanceKey(candidate.card)) || usedCharacterIds.has(candidate.card.characterId)) {
+    if (excludedCardIdSet.has(candidate.card.cardId) || usedCharacterIds.has(candidate.card.characterId)) {
       continue;
     }
 
@@ -428,7 +428,7 @@ export function resolveSupportBandForTeam(cards: readonly SearchCard[], context?
   context.evaluationCount += 1;
   const selection = selectSupportBandCandidates(
     context.candidates,
-    getCardInstanceKeys(cards),
+    cards.map((card) => card.cardId),
   );
   context.selectionCache.set(key, selection);
   return selection;

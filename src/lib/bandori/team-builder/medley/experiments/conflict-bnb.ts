@@ -24,6 +24,7 @@ import type {
   MedleyConflictExactBnbResult,
   MedleyConflictExactNode,
   MedleyConstrainedSlotSolveResult,
+  MedleyEvaluatedResultObserver,
   MedleySlotSearch,
   MedleySlotTeamConstraint,
   MedleyTeamCandidate,
@@ -347,6 +348,7 @@ export function searchMedleyConfigurationByConflictExactBnb(
   deadlineAt: number,
   nodeLimit: number,
   slotSolveNodeLimit: number,
+  observeEvaluatedResult?: MedleyEvaluatedResultObserver,
 ): MedleyConflictExactBnbResult {
   profiling.conflictExactBnbCallCount += 1;
   if (resultLimit !== 1 || slots.length !== MEDLEY_TEAM_COUNT || results.length < resultLimit) {
@@ -458,6 +460,7 @@ export function searchMedleyConfigurationByConflictExactBnb(
       });
       const result = buildMedleyResult(slots, selectedBySong, configuration);
       if (result) {
+        observeEvaluatedResult?.(result);
         bestResult = compareMedleyResultLike(bestResult, result);
         if (result.score > incumbentScore) {
           incumbentScore = result.score;
