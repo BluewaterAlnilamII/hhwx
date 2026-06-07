@@ -4,6 +4,8 @@
  * 本模块只处理单张卡、区域道具、活动加成和技能上下文解析等纯计算。
  * 搜索算法不在这里实现，方便单曲、组曲和验证脚本复用同一套综合力与技能口径。
  */
+import { getRegionalLevelNumber } from "./utils";
+
 export type BandoriCardAttribute = "powerful" | "cool" | "happy" | "pure";
 
 export type BandoriJudge = "perfect" | "great" | "good" | "bad" | "miss";
@@ -513,9 +515,9 @@ export function calculateBandoriAreaItemPower(
       const targetAttributes = Array.isArray(areaItem.targetAttributes) ? areaItem.targetAttributes : [];
       const targetBandIds = Array.isArray(areaItem.targetBandIds) ? areaItem.targetBandIds.map((item) => toInteger(item)) : [];
       const rates: BandoriParamVector = [
-        (getRegionalNumber(areaItem.performance?.[String(level)], server) ?? 0) / 100,
-        (getRegionalNumber(areaItem.technique?.[String(level)], server) ?? 0) / 100,
-        (getRegionalNumber(areaItem.visual?.[String(level)], server) ?? 0) / 100,
+        getRegionalLevelNumber(areaItem.performance, level, server) / 100,
+        getRegionalLevelNumber(areaItem.technique, level, server) / 100,
+        getRegionalLevelNumber(areaItem.visual, level, server) / 100,
       ];
       const groupPower = cards.reduce((sum, card) => {
         if (!targetAttributes.includes(card.attribute) || card.bandId === null || !targetBandIds.includes(card.bandId)) {
@@ -561,9 +563,9 @@ export function calculateBandoriSelectedAreaItemPower(
     const targetAttributes = Array.isArray(areaItem.targetAttributes) ? areaItem.targetAttributes : [];
     const targetBandIds = Array.isArray(areaItem.targetBandIds) ? areaItem.targetBandIds.map((item) => toInteger(item)) : [];
     const rates: BandoriParamVector = [
-      (getRegionalNumber(areaItem.performance?.[String(level)], server) ?? 0) / 100,
-      (getRegionalNumber(areaItem.technique?.[String(level)], server) ?? 0) / 100,
-      (getRegionalNumber(areaItem.visual?.[String(level)], server) ?? 0) / 100,
+      getRegionalLevelNumber(areaItem.performance, level, server) / 100,
+      getRegionalLevelNumber(areaItem.technique, level, server) / 100,
+      getRegionalLevelNumber(areaItem.visual, level, server) / 100,
     ];
 
     return totalPower + cards.reduce((cardPower, card) => {

@@ -12,6 +12,7 @@ import {
   MEDLEY_TEAM_SIZE,
 } from "./constants";
 import { calculateBandoriCardEventBonus } from "@/lib/bandori-team-calculator";
+import { getRegionalLevelNumber } from "@/lib/bandori/team-builder/core/utils";
 import type { BandoriMedleyTeamSearchInput, BandoriMedleyTeamSearchResult, MedleySlotSearch } from "./types";
 import type { CalculatedBandoriCard } from "@/lib/bandori-team-calculator";
 import type { BandoriAreaItemConfiguration } from "@/lib/bandori/team-builder/core";
@@ -86,7 +87,7 @@ export function estimateMedleyConfigurationCardPower(
     }
 
     return power + MEDLEY_PARAMETER_KEYS.reduce((sum, key, index) => {
-      const rate = getMedleyRegionalNumber(areaItem[key]?.[String(level)], server) / 100;
+      const rate = getRegionalLevelNumber(areaItem[key], level, server) / 100;
       return sum + card.characterParam[index] * rate;
     }, 0);
   }, card.totalPower + eventPower);
