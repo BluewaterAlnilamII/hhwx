@@ -1623,6 +1623,16 @@ export function estimateMedleyCapacityAssignmentScoreUpperBound(
 // Public dispatcher used by DFS. It computes the cheap correlated bound and the selected
 // capacity-bound families, then returns the tighter safe value while recording the limiting
 // model for diagnostics.
+function medleyRemainingSlotsHaveDuplicateCardIds(
+  slots: MedleySlotSearch[],
+  remainingSlotIndices: number[],
+): boolean {
+  return remainingSlotIndices.some((slotIndex) => {
+    const cardIds = slots[slotIndex].searchCards.map((card) => card.cardId);
+    return new Set(cardIds).size !== cardIds.length;
+  });
+}
+
 export function estimateMedleyRemainingScoreUpperBound(
   slots: MedleySlotSearch[],
   remainingSlotIndices: number[],
@@ -1658,6 +1668,22 @@ export function estimateMedleyRemainingScoreUpperBound(
     }
     correlatedSlotUpperBounds.push(slotUpperBound);
     correlatedSlotUpperBound += slotUpperBound;
+  }
+
+  if (medleyRemainingSlotsHaveDuplicateCardIds(slots, remainingSlotIndices)) {
+    if (
+      profiling
+      && Number.isFinite(correlatedSlotUpperBound)
+      && correlatedSlotUpperBound > (profiling.remainingUpperBoundMax ?? Number.NEGATIVE_INFINITY)
+    ) {
+      profiling.remainingUpperBoundMax = correlatedSlotUpperBound;
+      profiling.remainingUpperBoundMaxCorrelated = correlatedSlotUpperBound;
+      profiling.remainingUpperBoundMaxCapacity = null;
+      profiling.remainingUpperBoundMaxCapacityMode = null;
+      profiling.remainingUpperBoundMaxSlotCount = remainingSlotIndices.length;
+      profiling.remainingUpperBoundMaxLimiter = "correlated";
+    }
+    return correlatedSlotUpperBound;
   }
 
   const capacityAssignmentUpperBound = estimateMedleyCapacityAssignmentScoreUpperBound(

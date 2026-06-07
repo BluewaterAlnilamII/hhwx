@@ -87,6 +87,7 @@ import type {
   BandoriMedleyTeamSearchProfilingStats,
   BandoriMedleyTeamSearchResult,
   BandoriMedleyTeamSearchStats,
+  MedleyEvaluatedResultObserver,
   MedleyExactCandidateJoinAbortReason,
   MedleyExactCandidateJoinResult,
   MedleyExactCandidateJoinSolveResult,
@@ -1366,6 +1367,7 @@ export function solveMedleyExactCandidateJoin(
   deadlineAt: number,
   localDeadlineAt: number | null = null,
   proofUpperTarget: number | null = null,
+  observeEvaluatedResult?: MedleyEvaluatedResultObserver,
 ): MedleyExactCandidateJoinSolveResult {
   // The final join is exact only over candidate lists whose unseen frontier was already
   // bounded. Bitsets accelerate card-disjoint checks but never approximate the conflict rule.
@@ -2030,7 +2032,11 @@ export function solveMedleyExactCandidateJoin(
         selectedBySong[slots[firstSlotIndex].songIndex] = firstResultCandidate;
         selectedBySong[slots[secondSlotIndex].songIndex] = secondResultCandidate;
         selectedBySong[slots[thirdSlotIndex].songIndex] = thirdResultCandidate;
-        bestResult = compareMedleyResultLike(bestResult, buildMedleyResult(slots, selectedBySong, configuration));
+        const result = buildMedleyResult(slots, selectedBySong, configuration);
+        if (result) {
+          observeEvaluatedResult?.(result);
+        }
+        bestResult = compareMedleyResultLike(bestResult, result);
         currentScoreCutoff = Math.max(currentScoreCutoff, (bestResult?.score ?? Number.NEGATIVE_INFINITY) + 1);
       }
       if (shouldStopSecondLoop) {
@@ -2485,6 +2491,7 @@ function proveMedleyExactCandidateAnchorFrontier(
   stats: BandoriMedleyTeamSearchStats,
   isPastDeadline: () => boolean,
   deadlineAt: number,
+  observeEvaluatedResult?: MedleyEvaluatedResultObserver,
 ): MedleyExactCandidateAnchorFrontierProofResult {
   const startedAt = performance.now();
   const localDeadlineAt = Math.min(
@@ -2525,6 +2532,9 @@ function proveMedleyExactCandidateAnchorFrontier(
     const observedUpperBound = normalizedResidualUpperBound !== null && result
       ? Math.max(normalizedResidualUpperBound, result.score)
       : normalizedResidualUpperBound;
+    if (result) {
+      observeEvaluatedResult?.(result);
+    }
     if (proved) {
       profiling.exactCandidateJoinAnchorFrontierProofCompletedCount += 1;
     }
@@ -2743,6 +2753,7 @@ function findMedleyExactCandidateAnchorFrontierImprovement(
   perfectRate: number,
   profiling: BandoriMedleyTeamSearchProfilingStats,
   stats: BandoriMedleyTeamSearchStats,
+  observeEvaluatedResult?: MedleyEvaluatedResultObserver,
 ): {
   result: BandoriMedleyTeamSearchResult | null;
   processedAnchorCount: number;
@@ -2844,7 +2855,11 @@ function findMedleyExactCandidateAnchorFrontierImprovement(
     selectedBySong[slots[anchorSlotIndex].songIndex] = anchorResultCandidate;
     selectedBySong[slots[pairSlotIndices[0]].songIndex] = leftResultCandidate;
     selectedBySong[slots[pairSlotIndices[1]].songIndex] = rightResultCandidate;
-    return finish(buildMedleyResult(slots, selectedBySong, configuration), false);
+    const result = buildMedleyResult(slots, selectedBySong, configuration);
+    if (result) {
+      observeEvaluatedResult?.(result);
+    }
+    return finish(result, false);
   }
 
   return finish(null, false);
@@ -3325,6 +3340,7 @@ function solveMedleyExactCandidateJoinByAnchor(
   stats: BandoriMedleyTeamSearchStats,
   isPastDeadline: () => boolean,
   deadlineAt: number,
+  observeEvaluatedResult?: MedleyEvaluatedResultObserver,
 ): MedleyExactCandidateAnchoredJoinResult {
   const debugAnchorSlotIndex = profiling.exactCandidateJoinDebugAnchorSlotIndex;
   const anchorSlotIndex = debugAnchorSlotIndex !== undefined
@@ -3441,7 +3457,11 @@ function solveMedleyExactCandidateJoinByAnchor(
       selectedBySong[slots[anchorSlotIndex].songIndex] = anchorResultCandidate;
       selectedBySong[slots[pairSlotIndices[0]].songIndex] = leftResultCandidate;
       selectedBySong[slots[pairSlotIndices[1]].songIndex] = rightResultCandidate;
-      bestResult = compareMedleyResultLike(bestResult, buildMedleyResult(slots, selectedBySong, configuration));
+      const result = buildMedleyResult(slots, selectedBySong, configuration);
+      if (result) {
+        observeEvaluatedResult?.(result);
+      }
+      bestResult = compareMedleyResultLike(bestResult, result);
       if ((bestResult?.score ?? Number.NEGATIVE_INFINITY) > incumbentScore) {
         return { proved: true, timedOut: false, result: bestResult };
       }
@@ -3469,6 +3489,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     skipSolveWhenObservedUpperAtOrBelow?: number;
     solveOnlyAboveUpperTarget?: number;
   } = {},
+  observeEvaluatedResult?: MedleyEvaluatedResultObserver,
 ): MedleyExactCandidateJoinResult {
   // This wrapper proves one area-item configuration. The caller remains responsible for
   // aggregating configuration-level proof across locked/all scopes before reporting exact.
@@ -3863,6 +3884,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
       perfectRate,
       profiling,
       stats,
+      observeEvaluatedResult,
     );
     if (improvementProbe.result && improvementProbe.result.score > incumbentScore) {
       return {
@@ -4584,6 +4606,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     deadlineAt,
     didUseSmallGapSolveRetry ? solveDeadlineAt : null,
     solveOnlyAboveUpperTarget,
+    observeEvaluatedResult,
   );
   profiling.exactCandidateJoinSolveElapsedMs += performance.now() - solveStartedAt;
   if (joinResult.timedOut) {

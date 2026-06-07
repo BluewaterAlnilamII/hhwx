@@ -12,12 +12,13 @@ import { optimizeFixedMedleyCardSetWithCache, optimizeMedleyCardPool } from "./o
 import { buildMedleyResult, pushMedleyResult } from "./results";
 import { enumerateMedleySlotTeams, findBestMedleySlotTeamWithCache } from "./slots";
 import { evaluateTeam } from "@/lib/bandori/team-builder/core";
-import { getCardInstanceKey, getCardInstanceKeys } from "@/lib/bandori/team-builder/core/card-identity";
+import { getCardInstanceKeys } from "@/lib/bandori/team-builder/core/card-identity";
 import type {
   BandoriMedleyTeamSearchProfilingStats,
   BandoriMedleyTeamSearchResult,
   BandoriMedleyTeamSearchStats,
   MedleyBestSlotTeamCacheEntry,
+  MedleyEvaluatedResultObserver,
   MedleyFixedCardSetOptimizationCacheEntry,
   MedleySlotSearch,
   MedleyTeamCandidate,
@@ -35,8 +36,10 @@ export function pushMedleySeedResult(
   stats: BandoriMedleyTeamSearchStats,
   profiling: BandoriMedleyTeamSearchProfilingStats,
   fixedCardSetOptimizationCache: Map<string, MedleyFixedCardSetOptimizationCacheEntry>,
+  observeEvaluatedResult?: MedleyEvaluatedResultObserver,
 ): BandoriMedleyTeamSearchResult {
   let bestResult = result;
+  observeEvaluatedResult?.(result);
   const optimized = optimizeFixedMedleyCardSetWithCache(
     fixedCardSetOptimizationCache,
     result.cardIds,
@@ -46,6 +49,7 @@ export function pushMedleySeedResult(
     perfectRate,
     stats,
     profiling,
+    observeEvaluatedResult,
   );
   if (optimized && optimized.score > result.score) {
     const improvement = optimized.score - result.score;
@@ -53,7 +57,7 @@ export function pushMedleySeedResult(
     profiling.bestFixedCardSetImprovement = Math.max(profiling.bestFixedCardSetImprovement, improvement);
     bestResult = optimized;
   }
-  pushMedleyResult(results, bestResult, resultLimit);
+  pushMedleyResult(results, bestResult, resultLimit, observeEvaluatedResult);
   return bestResult;
 }
 
@@ -66,14 +70,14 @@ export function collectTopMedleySlotTeams(
   isPastDeadline: () => boolean,
   observeUpperBound: (upperBound: number) => void,
   profiling: BandoriMedleyTeamSearchProfilingStats,
-  bannedCardKeys: Set<string> = new Set<string>(),
-  upperBannedCardIds: Set<number> = new Set<number>(),
+  bannedCardIds: Set<number> = new Set<number>(),
+  upperBannedCardIds: Set<number> = bannedCardIds,
   useContextualSkillUpper = false,
 ): MedleyTeamCandidate[] {
   const candidates: MedleyTeamCandidate[] = [];
   enumerateMedleySlotTeams(
     slot,
-    bannedCardKeys,
+    bannedCardIds,
     upperBannedCardIds,
     server,
     perfectRate,
@@ -89,10 +93,6 @@ export function collectTopMedleySlotTeams(
 }
 
 export function medleyCandidatesOverlap(left: MedleyTeamCandidate, right: MedleyTeamCandidate): boolean {
-  if (left.cardInstanceKeys && right.cardInstanceKeys) {
-    const leftKeys = new Set(left.cardInstanceKeys);
-    return right.cardInstanceKeys.some((cardKey) => leftKeys.has(cardKey));
-  }
   const leftIds = new Set(left.cardIds);
   return right.cardIds.some((cardId) => leftIds.has(cardId));
 }
@@ -103,6 +103,7 @@ export function seedMedleyResultsFromSlotCandidates(
   slots: MedleySlotSearch[],
   slotCandidates: MedleyTeamCandidate[][],
   configuration: BandoriAreaItemConfiguration,
+  observeEvaluatedResult?: MedleyEvaluatedResultObserver,
 ): void {
   const [firstCandidates, secondCandidates, thirdCandidates] = slotCandidates;
   const bestSecondScore = secondCandidates[0]?.result.score ?? Number.NEGATIVE_INFINITY;
@@ -129,7 +130,7 @@ export function seedMedleyResultsFromSlotCandidates(
         selectedBySong[slots[2].songIndex] = third;
         const result = buildMedleyResult(slots, selectedBySong, configuration);
         if (result) {
-          pushMedleyResult(results, result, resultLimit);
+          pushMedleyResult(results, result, resultLimit, observeEvaluatedResult);
         }
         break;
       }
@@ -147,6 +148,7 @@ export function optimizeCurrentMedleySeedResults(
   stats: BandoriMedleyTeamSearchStats,
   profiling: BandoriMedleyTeamSearchProfilingStats,
   fixedCardSetOptimizationCache: Map<string, MedleyFixedCardSetOptimizationCacheEntry>,
+  observeEvaluatedResult?: MedleyEvaluatedResultObserver,
 ): void {
   const seedResults = [...results].slice(0, Math.min(results.length, Math.max(3, resultLimit * 3)));
   for (const result of seedResults) {
@@ -161,6 +163,7 @@ export function optimizeCurrentMedleySeedResults(
       stats,
       profiling,
       fixedCardSetOptimizationCache,
+      observeEvaluatedResult,
     );
   }
 }
@@ -219,6 +222,7 @@ export function optimizeMedleySeedNeighborhood(
   stats: BandoriMedleyTeamSearchStats,
   profiling: BandoriMedleyTeamSearchProfilingStats,
   alternateCardLimit: number,
+  observeEvaluatedResult?: MedleyEvaluatedResultObserver,
 ): void {
   const seed = results[0];
   if (!seed || seed.cardIds.length !== MEDLEY_TEAM_COUNT * MEDLEY_TEAM_SIZE) {
@@ -246,6 +250,7 @@ export function optimizeMedleySeedNeighborhood(
       perfectRate,
       stats,
       profiling,
+      observeEvaluatedResult,
     );
     if (optimized && (!bestOptimized || optimized.score > bestOptimized.score)) {
       bestOptimized = optimized;
@@ -258,7 +263,7 @@ export function optimizeMedleySeedNeighborhood(
     const improvement = bestOptimized.score - seed.score;
     profiling.cardPoolOptimizationImprovementCount += 1;
     profiling.bestCardPoolOptimizationImprovement = Math.max(profiling.bestCardPoolOptimizationImprovement, improvement);
-    pushMedleyResult(results, bestOptimized, resultLimit);
+    pushMedleyResult(results, bestOptimized, resultLimit, observeEvaluatedResult);
   }
 }
 
@@ -286,6 +291,7 @@ export function seedMedleyResultsFromGreedyOrders(
   fixedCardSetOptimizationCache: Map<string, MedleyFixedCardSetOptimizationCacheEntry>,
   seedOrders: number[][],
   recordGreedyStats: boolean,
+  observeEvaluatedResult?: MedleyEvaluatedResultObserver,
 ): number | null {
   let bestSeedScore: number | null = null;
   for (const seedOrder of seedOrders) {
@@ -293,7 +299,7 @@ export function seedMedleyResultsFromGreedyOrders(
       break;
     }
     const selectedBySong: Array<MedleyTeamCandidate | undefined> = [];
-    const bannedCardKeys = new Set<string>();
+    const bannedCardIds = new Set<number>();
     let completeSeed = true;
     for (const slotIndex of seedOrder) {
       const slot = slots[slotIndex];
@@ -301,8 +307,8 @@ export function seedMedleyResultsFromGreedyOrders(
         bestSlotTeamCache,
         slotIndex,
         slot,
-        bannedCardKeys,
-        new Set<number>(),
+        bannedCardIds,
+        bannedCardIds,
         server,
         perfectRate,
         stats,
@@ -315,7 +321,7 @@ export function seedMedleyResultsFromGreedyOrders(
         break;
       }
       selectedBySong[slot.songIndex] = best;
-      best.cards.forEach((card) => bannedCardKeys.add(getCardInstanceKey(card)));
+      best.cards.forEach((card) => bannedCardIds.add(card.cardId));
     }
     if (!completeSeed || stats.timedOut) {
       continue;
@@ -336,6 +342,7 @@ export function seedMedleyResultsFromGreedyOrders(
       stats,
       profiling,
       fixedCardSetOptimizationCache,
+      observeEvaluatedResult,
     );
     bestSeedScore = Math.max(bestSeedScore ?? Number.NEGATIVE_INFINITY, pushedResult.score);
     if (recordGreedyStats) {
@@ -417,6 +424,7 @@ export function seedMedleyResultsFromFastGreedyOrders(
   profiling: BandoriMedleyTeamSearchProfilingStats,
   fixedCardSetOptimizationCache: Map<string, MedleyFixedCardSetOptimizationCacheEntry>,
   seedOrders: number[][],
+  observeEvaluatedResult?: MedleyEvaluatedResultObserver,
 ): number | null {
   let bestSeedScore: number | null = null;
   for (const seedOrder of seedOrders) {
@@ -459,6 +467,7 @@ export function seedMedleyResultsFromFastGreedyOrders(
       stats,
       profiling,
       fixedCardSetOptimizationCache,
+      observeEvaluatedResult,
     );
     bestSeedScore = Math.max(bestSeedScore ?? Number.NEGATIVE_INFINITY, pushedResult.score);
   }

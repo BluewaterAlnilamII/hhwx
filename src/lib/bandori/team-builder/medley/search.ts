@@ -33,7 +33,7 @@ import {
 } from "./experiments/exact-candidate-join-constants";
 import { searchMedleyConfigurationByExactCandidateJoin } from "./experiments/exact-candidate-join";
 import { createInitialMedleyProfilingStats } from "./profiling";
-import { buildMedleyResult, pushMedleyResult, sortMedleyResults } from "./results";
+import { buildMedleyResult, createMedleyEvaluatedCandidateTracker, pushMedleyResult, sortMedleyResults } from "./results";
 import {
   collectTopMedleySlotTeams,
   getMedleyGreedySeedSlotIndices,
@@ -70,7 +70,6 @@ import {
   createAreaItemConfigurations,
   pruneDominatedAreaItemConfigurations,
 } from "@/lib/bandori/team-builder/core";
-import { getCardInstanceKey } from "@/lib/bandori/team-builder/core/card-identity";
 import type { BandoriAreaItemConfiguration } from "@/lib/bandori/team-builder/core";
 import type {
   BandoriMedleyTeamSearchInput,
@@ -370,22 +369,9 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
   const songInputs = input.songs.slice(0, 3);
   const firstSlotInput = songInputs[0] ? createMedleySlotInput(input, songInputs[0]) : null;
   const calculatedCards = firstSlotInput ? buildCalculatedCards(firstSlotInput) : [];
-  const cardIdByInstanceKey = new Map(calculatedCards.map((card) => [getCardInstanceKey(card), card.cardId]));
-  const cardInstanceKeyByCardId = new Map(calculatedCards.map((card) => [card.cardId, getCardInstanceKey(card)]));
   const hasDuplicateCardIds = new Set(calculatedCards.map((card) => card.cardId)).size !== calculatedCards.length;
-  const toBannedCardKeys = (bannedCardIds: Set<number>): Set<string> => (
-    new Set([...bannedCardIds].flatMap((cardId) => {
-      const cardKey = cardInstanceKeyByCardId.get(cardId);
-      return cardKey === undefined ? [] : [cardKey];
-    }))
-  );
-  const toUpperBannedCardIds = (bannedCardKeys: Set<string>): Set<number> => (
-    hasDuplicateCardIds
-      ? new Set<number>()
-      : new Set([...bannedCardKeys].flatMap((cardKey) => {
-        const cardId = cardIdByInstanceKey.get(cardKey);
-        return cardId === undefined ? [] : [cardId];
-      }))
+  const toUpperBannedCardIds = (bannedCardIds: Set<number>): Set<number> => (
+    hasDuplicateCardIds ? new Set<number>() : bannedCardIds
   );
   let slotBuildContexts: ReturnType<typeof buildMedleySlotBuildContexts> | null = null;
   const getSlotBuildContexts = (): ReturnType<typeof buildMedleySlotBuildContexts> => {
@@ -474,6 +460,8 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
   // Profiling is intentionally verbose because medley proof failures are usually caused by a
   // specific upper-bound family staying loose, not by the final score calculation.
   const results: BandoriMedleyTeamSearchResult[] = [];
+  const evaluatedCandidateTracker = createMedleyEvaluatedCandidateTracker();
+  const observeEvaluatedMedleyResult = evaluatedCandidateTracker.observe;
   const profiling = createInitialMedleyProfilingStats(isLockedCoarseFilter ? configurations.length : 0);
   const configurationTrace: Array<Record<string, unknown>> | null = debugConfigurationTrace ? [] : null;
   if (configurationTrace) {
@@ -501,15 +489,23 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
     observedScoreUpperBoundGap: null,
     profiling,
   };
+  const buildResponse = (responseStats: BandoriMedleyTeamSearchStats): BandoriMedleyTeamSearchResponse => {
+    const maxScoreCandidate = evaluatedCandidateTracker.getMaxScoreCandidate(results[0] ?? null);
+    return {
+      results,
+      maxScoreCandidate,
+      evaluatedAverageTopCandidates: evaluatedCandidateTracker.getEvaluatedAverageTopCandidates(
+        maxScoreCandidate ? [...results, maxScoreCandidate] : results,
+      ),
+      stats: responseStats,
+    };
+  };
 
   if (songInputs.length !== 3 || calculatedCards.length < 15) {
-    return {
-      results: [],
-      stats: {
+    return buildResponse({
         ...stats,
         elapsedMs: Math.round(performance.now() - startedAt),
-      },
-    };
+    });
   }
 
   let visitedBranchCount = 0;
@@ -957,6 +953,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
     || (!coarseFilter && calculatedCards.length > 250);
   const shouldUseBasicSkillAwareRootCapacityPrefilter = (
     shouldAutoEnableExactCandidateJoin
+    && !hasDuplicateCardIds
     && (isLockedCoarseFilter || isAllCoarseFilter)
     && maxSearchDurationMs >= 30000
   );
@@ -1048,6 +1045,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
             profiling,
             fixedCardSetOptimizationCache,
             seedOrders,
+            observeEvaluatedMedleyResult,
           )
           : seedMedleyResultsFromGreedyOrders(
             results,
@@ -1063,6 +1061,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
             fixedCardSetOptimizationCache,
             seedOrders,
             false,
+            observeEvaluatedMedleyResult,
           );
         if (stats.timedOut && performance.now() < deadlineAt) {
           stats.timedOut = wasTimedOut;
@@ -1805,7 +1804,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
     // slot assignments under the current banned-card set.
     const getRemainingUpperBound = (
       remainingSlotIndices: number[],
-      bannedCards: Set<string>,
+      bannedCardIds: Set<number>,
       useContextualSkillUpper = false,
       useSkillAwareCapacityUpper = false,
       useParetoCapacityUpper = false,
@@ -1816,7 +1815,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
       if (remainingSlotIndices.length === 0) {
         return 0;
       }
-      const key = `${slotCandidates.length === slots.length ? "candidates-ready" : "candidates-pending"}:${enableAnchorSlotUpper ? `anchor-${anchorCandidateLimit}` : "no-anchor"}:${shouldEnableOpportunityCostUpper ? `opportunity-${opportunityAnchorLimit}` : "no-opportunity"}:${enableTeamSharedCoefficientUpper ? "team-shared" : "no-team-shared"}:${enableSharedPowerSkillUpper ? "shared-power" : "no-shared-power"}:${useContextualSkillUpper ? "contextual" : "optimistic"}:${useSkillAwareCapacityUpper ? "tight-capacity" : "coefficient"}:${useParetoCapacityUpper ? "pareto" : "scalar"}:${useBucketedCapacityUpper ? "bucketed" : "unbucketed"}:${remainingSlotIndices.join(",")}:${[...bannedCards].sort().join(",")}`;
+      const key = `${slotCandidates.length === slots.length ? "candidates-ready" : "candidates-pending"}:${enableAnchorSlotUpper ? `anchor-${anchorCandidateLimit}` : "no-anchor"}:${shouldEnableOpportunityCostUpper ? `opportunity-${opportunityAnchorLimit}` : "no-opportunity"}:${enableTeamSharedCoefficientUpper ? "team-shared" : "no-team-shared"}:${enableSharedPowerSkillUpper ? "shared-power" : "no-shared-power"}:${useContextualSkillUpper ? "contextual" : "optimistic"}:${useSkillAwareCapacityUpper ? "tight-capacity" : "coefficient"}:${useParetoCapacityUpper ? "pareto" : "scalar"}:${useBucketedCapacityUpper ? "bucketed" : "unbucketed"}:${remainingSlotIndices.join(",")}:${[...bannedCardIds].sort((left, right) => left - right).join(",")}`;
       const cached = remainingUpperBoundCache.get(key);
       if (cached !== undefined) {
         profiling.remainingUpperBoundCacheHitCount += 1;
@@ -1831,17 +1830,17 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
         remainingUpperBoundMaxSlotCount: profiling.remainingUpperBoundMaxSlotCount,
         remainingUpperBoundMaxLimiter: profiling.remainingUpperBoundMaxLimiter,
       };
-      const upperBannedCardIds = toUpperBannedCardIds(bannedCards);
+      const upperBannedCardIds = toUpperBannedCardIds(bannedCardIds);
       const getRemainingUpperBoundFromCardIds = (
         nextRemainingSlotIndices: number[],
-        bannedCardIds: Set<number>,
+        nextBannedCardIds: Set<number>,
         nextUseContextualSkillUpper = false,
         nextUseSkillAwareCapacityUpper = false,
         nextUseParetoCapacityUpper = false,
         nextUseBucketedCapacityUpper = false,
       ): number => getRemainingUpperBound(
         nextRemainingSlotIndices,
-        toBannedCardKeys(bannedCardIds),
+        nextBannedCardIds,
         nextUseContextualSkillUpper,
         nextUseSkillAwareCapacityUpper,
         nextUseParetoCapacityUpper,
@@ -1863,7 +1862,8 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
         enableAnchorSlotUpper
         && useSkillAwareCapacityUpper
         && remainingSlotIndices.length === MEDLEY_TEAM_COUNT
-        && bannedCards.size === 0
+        && bannedCardIds.size === 0
+        && !hasDuplicateCardIds
         && slotCandidates.length === slots.length
       ) {
         const anchorUpperEstimate = estimateMedleyAnchorSlotDecompositionUpperBound(
@@ -1909,7 +1909,8 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
         shouldEnableOpportunityCostUpper
         && useSkillAwareCapacityUpper
         && remainingSlotIndices.length === MEDLEY_TEAM_COUNT
-        && bannedCards.size === 0
+        && bannedCardIds.size === 0
+        && !hasDuplicateCardIds
         && slotCandidates.length === slots.length
       ) {
         const opportunityUpperEstimate = estimateMedleyOpportunityCostUpperBound(
@@ -1950,10 +1951,15 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
           }
         }
       }
-      if (captureUpperWitness && remainingSlotIndices.length === MEDLEY_TEAM_COUNT && bannedCards.size === 0) {
+      if (captureUpperWitness && remainingSlotIndices.length === MEDLEY_TEAM_COUNT && bannedCardIds.size === 0) {
         captureMedleyRootUpperWitness(slots, remainingSlotIndices, slotCandidates, upperBound, profiling);
       }
-      if (captureCapacityUpperWitness && remainingSlotIndices.length === MEDLEY_TEAM_COUNT && bannedCards.size === 0) {
+      if (
+        captureCapacityUpperWitness
+        && remainingSlotIndices.length === MEDLEY_TEAM_COUNT
+        && bannedCardIds.size === 0
+        && !hasDuplicateCardIds
+      ) {
         captureMedleyCapacityUpperWitness(
           slots,
           remainingSlotIndices,
@@ -2126,11 +2132,11 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
         rootScoreUpperBound,
         getRemainingUpperBound(
           rootSlotIndices,
-          new Set<string>(),
+          new Set<number>(),
           false,
-          useTightRootUpper,
-          useParetoRootUpper,
-          useBucketedRootUpper,
+          useTightRootUpper && !hasDuplicateCardIds,
+          useParetoRootUpper && !hasDuplicateCardIds,
+          useBucketedRootUpper && !hasDuplicateCardIds,
           threshold,
         ),
       );
@@ -2231,9 +2237,9 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
         observedRootUpperBoundForSameCoarseMemorySkip,
         getRemainingUpperBound(
           rootSlotIndices,
-          new Set<string>(),
+          new Set<number>(),
           false,
-          true,
+          !hasDuplicateCardIds,
           false,
           false,
           threshold,
@@ -2307,9 +2313,9 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
         observedRootUpperBoundForSameCoarseMemorySkip,
         getRemainingUpperBound(
           rootSlotIndices,
-          new Set<string>(),
+          new Set<number>(),
           false,
-          true,
+          !hasDuplicateCardIds,
           false,
           false,
           threshold,
@@ -2402,9 +2408,9 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
       const thresholdBeforeSkip = getMedleyPruningThreshold(results, resultLimit);
       const tightRootUpperBound = getRemainingUpperBound(
         rootSlotIndices,
-        new Set<string>(),
+        new Set<number>(),
         false,
-        true,
+        !hasDuplicateCardIds,
         false,
         false,
         thresholdBeforeSkip,
@@ -2487,9 +2493,9 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
           basicSkillAwareRootUpperBound,
           getRemainingUpperBound(
             rootSlotIndices,
-            new Set<string>(),
+            new Set<number>(),
             false,
-            true,
+            !hasDuplicateCardIds,
             false,
             false,
             thresholdBeforeNearDeadlineSkip,
@@ -2614,9 +2620,9 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
         basicSkillAwareRootUpperBound,
         getRemainingUpperBound(
           rootSlotIndices,
-          new Set<string>(),
+          new Set<number>(),
           false,
-          true,
+          !hasDuplicateCardIds,
           false,
           false,
           threshold,
@@ -2699,9 +2705,10 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
           skipSolveWhenObservedUpperAtOrBelow: exactJoinFrontierProofTargetUpperBound ?? undefined,
           solveOnlyAboveUpperTarget: exactJoinFrontierProofTargetUpperBound ?? undefined,
         },
+        observeEvaluatedMedleyResult,
       );
       if (exactJoinResult.result) {
-        pushMedleyResult(results, exactJoinResult.result, resultLimit);
+        pushMedleyResult(results, exactJoinResult.result, resultLimit, observeEvaluatedMedleyResult);
         recordBestScoreMilestone();
       }
       if (!exactJoinResult.proved) {
@@ -2785,6 +2792,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
         slots,
         slotCandidates,
         configuration,
+        observeEvaluatedMedleyResult,
       );
       optimizeCurrentMedleySeedResults(
         results,
@@ -2796,6 +2804,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
         stats,
         profiling,
         fixedCardSetOptimizationCache,
+        observeEvaluatedMedleyResult,
       );
       recordBestScoreMilestone();
     }
@@ -2823,6 +2832,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
       fixedCardSetOptimizationCache,
       buildPermutations(seedSlotIndices),
       true,
+      observeEvaluatedMedleyResult,
     );
     recordBestScoreMilestone();
     if (traceEntry) {
@@ -2849,6 +2859,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
         stats,
         profiling,
         maxSearchDurationMs >= 30000 ? 3 : 2,
+        observeEvaluatedMedleyResult,
       );
       recordBestScoreMilestone();
     }
@@ -2900,9 +2911,10 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
         deadlineAt,
         conflictExactNodeLimit,
         conflictSlotSolveNodeLimit,
+        observeEvaluatedMedleyResult,
       );
       if (conflictBnbResult.result) {
-        pushMedleyResult(results, conflictBnbResult.result, resultLimit);
+        pushMedleyResult(results, conflictBnbResult.result, resultLimit, observeEvaluatedMedleyResult);
         recordBestScoreMilestone();
       }
       if (stats.timedOut && conflictBnbResult.observedUpperBound !== null && results.length >= resultLimit) {
@@ -2950,9 +2962,10 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
           skipSolveWhenObservedUpperAtOrBelow: exactJoinFrontierProofTargetUpperBound ?? undefined,
           solveOnlyAboveUpperTarget: exactJoinFrontierProofTargetUpperBound ?? undefined,
         },
+        observeEvaluatedMedleyResult,
       );
       if (exactJoinResult.result) {
-        pushMedleyResult(results, exactJoinResult.result, resultLimit);
+        pushMedleyResult(results, exactJoinResult.result, resultLimit, observeEvaluatedMedleyResult);
         recordBestScoreMilestone();
       }
       if (!exactJoinResult.proved) {
@@ -3015,7 +3028,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
     }
 
     const selectedBySong: Array<MedleyTeamCandidate | undefined> = [];
-    const bannedCardKeys = new Set<string>();
+    const bannedCardIds = new Set<number>();
 
     // Main cross-slot DFS. It chooses one unresolved song slot, enumerates valid five-card teams
     // for that slot, and carries card bans forward so the three teams remain disjoint.
@@ -3038,11 +3051,11 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
       const thresholdNow = getMedleyPruningThreshold(results, resultLimit);
       const remainingUpperBound = getRemainingUpperBound(
         remainingSlotIndices,
-        bannedCardKeys,
+        bannedCardIds,
         false,
-        useTightRemainingUpper,
-        useParetoRemainingUpper,
-        useBucketedRemainingUpper,
+        useTightRemainingUpper && !hasDuplicateCardIds,
+        useParetoRemainingUpper && !hasDuplicateCardIds,
+        useBucketedRemainingUpper && !hasDuplicateCardIds,
         thresholdNow - currentScore,
       );
       const branchUpperBound = currentScore + remainingUpperBound;
@@ -3055,7 +3068,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
       if (remainingSlotIndices.length === 0) {
         const result = buildMedleyResult(slots, selectedBySong, configuration);
         if (result) {
-          pushMedleyResult(results, result, resultLimit);
+          pushMedleyResult(results, result, resultLimit, observeEvaluatedMedleyResult);
           recordBestScoreMilestone();
         }
         return;
@@ -3068,18 +3081,18 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
       const slotIndex = chooseNextMedleySlotIndex(
         slots,
         remainingSlotIndices,
-        bannedCardKeys,
-        toUpperBannedCardIds(bannedCardKeys),
+        bannedCardIds,
+        toUpperBannedCardIds(bannedCardIds),
         useProofFriendlySlotOrder
           ? (candidateSlotIndex) => {
             const candidateNextRemainingSlotIndices = remainingSlotIndices.filter((index) => index !== candidateSlotIndex);
             return thresholdNow - currentScore - getRemainingUpperBound(
               candidateNextRemainingSlotIndices,
-              bannedCardKeys,
+              bannedCardIds,
               false,
-              useTightRemainingUpper,
-              useParetoRemainingUpper,
-              useBucketedRemainingUpper,
+              useTightRemainingUpper && !hasDuplicateCardIds,
+              useParetoRemainingUpper && !hasDuplicateCardIds,
+              useBucketedRemainingUpper && !hasDuplicateCardIds,
             );
           }
           : undefined,
@@ -3104,8 +3117,8 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
           bestSlotTeamCache,
           slotIndex,
           slot,
-          bannedCardKeys,
-          toUpperBannedCardIds(bannedCardKeys),
+          bannedCardIds,
+          toUpperBannedCardIds(bannedCardIds),
           server,
           perfectRate,
           stats,
@@ -3118,7 +3131,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
           selectedBySong[slot.songIndex] = bestCompletion;
           const result = buildMedleyResult(slots, selectedBySong, configuration);
           if (result) {
-            pushMedleyResult(results, result, resultLimit);
+            pushMedleyResult(results, result, resultLimit, observeEvaluatedMedleyResult);
             recordBestScoreMilestone();
           }
           selectedBySong[slot.songIndex] = undefined;
@@ -3128,19 +3141,19 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
 
       let futureUpperBound = getRemainingUpperBound(
         nextRemainingSlotIndices,
-        bannedCardKeys,
+        bannedCardIds,
         false,
-        useTightRemainingUpper,
-        useParetoRemainingUpper,
-        useBucketedRemainingUpper,
+        useTightRemainingUpper && !hasDuplicateCardIds,
+        useParetoRemainingUpper && !hasDuplicateCardIds,
+        useBucketedRemainingUpper && !hasDuplicateCardIds,
       );
       if (results.length >= resultLimit && nextRemainingSlotIndices.length > 0) {
         const relaxedFutureUpperBound = estimateRelaxedMedleyRemainingBestScoreUpperBound(
           bestSlotTeamCache,
           slots,
           nextRemainingSlotIndices,
-          bannedCardKeys,
-          toUpperBannedCardIds(bannedCardKeys),
+          bannedCardIds,
+          toUpperBannedCardIds(bannedCardIds),
           server,
           perfectRate,
           stats,
@@ -3154,8 +3167,8 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
       }
       enumerateMedleySlotTeams(
         slot,
-        bannedCardKeys,
-        toUpperBannedCardIds(bannedCardKeys),
+        bannedCardIds,
+        toUpperBannedCardIds(bannedCardIds),
         server,
         perfectRate,
         stats,
@@ -3163,17 +3176,17 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
         (currentSlotCards) => {
           let dynamicFutureUpperBound = futureUpperBound;
           if (currentSlotCards.length >= 3 && nextRemainingSlotIndices.length > 0) {
-            const dynamicBannedCardKeys = new Set(bannedCardKeys);
-            currentSlotCards.forEach((card) => dynamicBannedCardKeys.add(getCardInstanceKey(card)));
+            const dynamicBannedCardIds = new Set(bannedCardIds);
+            currentSlotCards.forEach((card) => dynamicBannedCardIds.add(card.cardId));
             dynamicFutureUpperBound = Math.min(
               dynamicFutureUpperBound,
               getRemainingUpperBound(
                 nextRemainingSlotIndices,
-                dynamicBannedCardKeys,
+                dynamicBannedCardIds,
                 false,
-                useTightRemainingUpper,
-                useParetoRemainingUpper,
-                useBucketedRemainingUpper,
+                useTightRemainingUpper && !hasDuplicateCardIds,
+                useParetoRemainingUpper && !hasDuplicateCardIds,
+                useBucketedRemainingUpper && !hasDuplicateCardIds,
               ),
             );
           }
@@ -3189,9 +3202,9 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
         profiling,
         (candidate) => {
           selectedBySong[slot.songIndex] = candidate;
-          candidate.cards.forEach((card) => bannedCardKeys.add(getCardInstanceKey(card)));
+          candidate.cards.forEach((card) => bannedCardIds.add(card.cardId));
           visit(nextRemainingSlotIndices, currentScore + candidate.result.score);
-          candidate.cards.forEach((card) => bannedCardKeys.delete(getCardInstanceKey(card)));
+          candidate.cards.forEach((card) => bannedCardIds.delete(card.cardId));
           selectedBySong[slot.songIndex] = undefined;
         },
       );
@@ -3300,15 +3313,12 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
     profiling.boundedFrontierGroups = buildBoundedFrontierGroups(configurationTrace);
   }
   profiling.upperReplayElapsedMs = Math.round(profiling.upperReplayElapsedMs);
-  return {
-    results,
-    stats: {
+  return buildResponse({
       ...stats,
       isExhaustive: isSearchExhaustive,
       searchMode: isSearchExhaustive ? stats.searchMode : "bounded",
       elapsedMs,
       observedScoreUpperBound: isSearchExhaustive ? null : observedUpperBound,
       observedScoreUpperBoundGap: observedUpperBoundGap,
-    },
-  };
+  });
 }

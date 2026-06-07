@@ -1058,7 +1058,7 @@ function isMedleySearchResult(result: BandoriTeamSearchResult | BandoriMedleyTea
 }
 
 function isMedleySearchResponse(result: TeamBuilderSearchResponse): result is BandoriMedleyTeamSearchResponse {
-  return result.results.some((item) => "songResults" in item);
+  return "evaluatedAverageTopCandidates" in result || result.results.some((item) => "songResults" in item);
 }
 
 function isMedleySearchStats(stats: TeamBuilderSearchResponse["stats"]): stats is BandoriMedleyTeamSearchResponse["stats"] {
@@ -1218,6 +1218,9 @@ function buildSearchCompletionSummary(result: TeamBuilderSearchResponse, maxSear
       parts.push(`gap ${formatNumber(stats.observedScoreUpperBoundGap)}`);
     }
   }
+  if (isMedleyResult && result.maxScoreCandidate) {
+    parts.push("在最高平均分结果之外，有另外的最高最高分结果");
+  }
   return parts.join("\n");
 }
 
@@ -1243,6 +1246,47 @@ function getSearchResultCardIds(result: TeamBuilderSearchResponse | null): numbe
       ? item.songResults.flatMap((songResult) => songResult.cards.map((card) => card.cardId))
       : item.cards.map((card) => card.cardId)
   ));
+}
+
+function serializeMedleyDebugResult(item: BandoriMedleyTeamSearchResult) {
+  return {
+    rank: item.rank,
+    score: item.score,
+    averageScore: item.averageScore,
+    maxScore: item.maxScore,
+    minScore: item.minScore,
+    areaItemConfiguration: item.areaItemConfiguration,
+    cardIds: item.cardIds,
+    songResults: item.songResults.map((songResult) => ({
+      songIndex: songResult.songIndex,
+      score: songResult.score,
+      averageScore: songResult.averageScore,
+      maxScore: songResult.maxScore,
+      minScore: songResult.minScore,
+      startCombo: songResult.startCombo,
+      notesCount: songResult.notesCount,
+      totalPower: songResult.totalPower,
+      eventPower: songResult.eventPower,
+      pointBonusRate: songResult.pointBonusRate,
+      leaderCardId: songResult.leaderCardId,
+      leaderCardInstanceKey: songResult.leaderCardInstanceKey,
+      skillOrderCardIds: songResult.skillOrderCardIds,
+      skillOrderCardInstanceKeys: songResult.skillOrderCardInstanceKeys,
+      skillOrderActors: songResult.skillOrderActors,
+      areaItemConfiguration: songResult.areaItemConfiguration,
+      cards: songResult.cards.map((card) => ({
+        cardId: card.cardId,
+        cardInstanceKey: card.cardInstanceKey,
+        characterId: card.characterId,
+        attribute: card.attribute,
+        bandId: card.bandId,
+        rarity: card.rarity,
+        skillId: card.skillId,
+        skillLevel: card.skillLevel,
+        totalPower: card.totalPower,
+      })),
+    })),
+  };
 }
 
 function buildMedleyDebugPayload({
@@ -1303,41 +1347,11 @@ function buildMedleyDebugPayload({
       peakUsedHeapMiB: result.stats.peakUsedHeapMiB,
     },
     stats: result.stats,
-    results: result.results.map((item) => ({
-      rank: item.rank,
-      score: item.score,
-      averageScore: item.averageScore,
-      maxScore: item.maxScore,
-      minScore: item.minScore,
-      areaItemConfiguration: item.areaItemConfiguration,
-      cardIds: item.cardIds,
-      songResults: item.songResults.map((songResult) => ({
-        songIndex: songResult.songIndex,
-        score: songResult.score,
-        averageScore: songResult.averageScore,
-        maxScore: songResult.maxScore,
-        minScore: songResult.minScore,
-        startCombo: songResult.startCombo,
-        notesCount: songResult.notesCount,
-        totalPower: songResult.totalPower,
-        eventPower: songResult.eventPower,
-        pointBonusRate: songResult.pointBonusRate,
-        leaderCardId: songResult.leaderCardId,
-        skillOrderCardIds: songResult.skillOrderCardIds,
-        skillOrderActors: songResult.skillOrderActors,
-        areaItemConfiguration: songResult.areaItemConfiguration,
-        cards: songResult.cards.map((card) => ({
-          cardId: card.cardId,
-          characterId: card.characterId,
-          attribute: card.attribute,
-          bandId: card.bandId,
-          rarity: card.rarity,
-          skillId: card.skillId,
-          skillLevel: card.skillLevel,
-          totalPower: card.totalPower,
-        })),
-      })),
-    })),
+    maxScoreCandidate: result.maxScoreCandidate
+      ? serializeMedleyDebugResult(result.maxScoreCandidate)
+      : null,
+    evaluatedAverageTopCandidates: result.evaluatedAverageTopCandidates.map(serializeMedleyDebugResult),
+    results: result.results.map(serializeMedleyDebugResult),
   };
 }
 
@@ -2198,6 +2212,10 @@ function MedleyResultCard({
   skills,
   assetRegion,
   songs,
+  rankLabel,
+  badgeLabel,
+  description,
+  variant = "default",
 }: {
   result: BandoriMedleyTeamSearchResult;
   cardMetadata: Record<string, CardMetadata | undefined>;
@@ -2205,14 +2223,33 @@ function MedleyResultCard({
   skills: Record<string, SkillMaster | undefined>;
   assetRegion: BandoriAssetRegion;
   songs: Array<SongMaster | null>;
+  rankLabel?: string;
+  badgeLabel?: string;
+  description?: string;
+  variant?: "default" | "candidate";
 }) {
+  const articleClassName = variant === "candidate"
+    ? "rounded-2xl border border-amber-200 bg-amber-50/70 p-4 shadow-sm"
+    : "rounded-2xl border border-slate-200 bg-white p-4 shadow-sm";
   return (
-    <article className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+    <article className={articleClassName}>
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="flex items-center gap-4">
-          <div className="w-12 text-right text-lg font-bold text-slate-700">#{result.rank}</div>
+          <div className="w-20 text-right text-lg font-bold text-slate-700">{rankLabel ?? `#${result.rank}`}</div>
           <div>
             <div className="text-xl font-bold text-slate-900">{formatNumber(result.score)}</div>
+            {badgeLabel || description ? (
+              <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+                {badgeLabel ? (
+                  <span className="rounded-full border border-amber-200 bg-white px-2 py-0.5 font-bold text-amber-700">
+                    {badgeLabel}
+                  </span>
+                ) : null}
+                {description ? (
+                  <span className="font-semibold text-slate-500">{description}</span>
+                ) : null}
+              </div>
+            ) : null}
             <div className="mt-1 text-xs font-semibold text-slate-500">
               巡回演出 · 平均 {formatNumber(result.averageScore)} · 区间 {formatNumber(result.minScore)} / {formatNumber(result.maxScore)}
             </div>
@@ -3746,7 +3783,47 @@ function TeamBuilderPanel() {
                   ) : null}
                 </div>
               ) : null}
-              <div className="space-y-3">
+              <div className="flex flex-col gap-3">
+                {isMedleySearchResponse(result) && (result.maxScoreCandidate || result.evaluatedAverageTopCandidates.length > 0) ? (
+                  <div className="order-2 space-y-3">
+                    <div>
+                      <div className="text-sm font-bold text-slate-900">已评估候选</div>
+                      <div className="mt-1 text-xs font-semibold text-slate-500">
+                        来自搜索过程中已经完整评估出的候选，不代表全局完整排名证明。
+                      </div>
+                    </div>
+                    {result.maxScoreCandidate ? (
+                      <MedleyResultCard
+                        key="max-score-candidate"
+                        result={result.maxScoreCandidate}
+                        cardMetadata={cardMetadata}
+                        characters={data.characters}
+                        skills={data.skills}
+                        assetRegion={selectedEventAssetRegion}
+                        songs={medleySongIds.map((id) => data.songs[id] ?? null)}
+                        rankLabel="候选"
+                        badgeLabel="候选最高分"
+                        description="来自已评估候选"
+                        variant="candidate"
+                      />
+                    ) : null}
+                    {result.evaluatedAverageTopCandidates.map((item, index) => (
+                      <MedleyResultCard
+                        key={`evaluated-average-${index}`}
+                        result={item}
+                        cardMetadata={cardMetadata}
+                        characters={data.characters}
+                        skills={data.skills}
+                        assetRegion={selectedEventAssetRegion}
+                        songs={medleySongIds.map((id) => data.songs[id] ?? null)}
+                        rankLabel={`候选 ${index + 1}`}
+                        badgeLabel="已评估平均分候选"
+                        description="来自已评估候选"
+                        variant="candidate"
+                      />
+                    ))}
+                  </div>
+                ) : null}
                 {result.results.map((item) => (
                   isMedleySearchResult(item) ? (
                     <MedleyResultCard

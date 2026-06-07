@@ -114,6 +114,8 @@ export type BandoriMedleyTeamSearchResult = {
   cardIds: number[];
 };
 
+export type MedleyEvaluatedResultObserver = (result: BandoriMedleyTeamSearchResult) => void;
+
 export type MedleyObservedUpperBoundSource =
   | "configuration-root"
   | "dfs-remaining"
@@ -628,6 +630,8 @@ export type BandoriMedleyTeamSearchStats = {
 
 export type BandoriMedleyTeamSearchResponse = {
   results: BandoriMedleyTeamSearchResult[];
+  maxScoreCandidate: BandoriMedleyTeamSearchResult | null;
+  evaluatedAverageTopCandidates: BandoriMedleyTeamSearchResult[];
   stats: BandoriMedleyTeamSearchStats;
 };
 

@@ -5,8 +5,15 @@
  * expands winning teams into the public per-song result shape.
  */
 
-import type { BandoriMedleyTeamSearchResult, MedleySlotSearch, MedleyTeamCandidate } from "./types";
+import type {
+  BandoriMedleyTeamSearchResult,
+  MedleyEvaluatedResultObserver,
+  MedleySlotSearch,
+  MedleyTeamCandidate,
+} from "./types";
 import type { BandoriAreaItemConfiguration } from "@/lib/bandori/team-builder/core";
+
+const EVALUATED_AVERAGE_TOP_CANDIDATE_LIMIT = 10;
 
 export function buildMedleyResult(
   slots: MedleySlotSearch[],
@@ -29,6 +36,11 @@ export function buildMedleyResult(
     });
   }
 
+  const cardIds = songResults.flatMap((result) => result.cards.map((card) => card.cardId));
+  if (new Set(cardIds).size !== cardIds.length) {
+    return null;
+  }
+
   const score = songResults.reduce((sum, result) => sum + result.score, 0);
   return {
     rank: 0,
@@ -38,7 +50,7 @@ export function buildMedleyResult(
     minScore: songResults.reduce((sum, result) => sum + result.minScore, 0),
     areaItemConfiguration: configuration,
     songResults,
-    cardIds: songResults.flatMap((result) => result.cards.map((card) => card.cardId)),
+    cardIds,
   };
 }
 
@@ -53,11 +65,121 @@ export function sortMedleyResults(results: BandoriMedleyTeamSearchResult[]): voi
   });
 }
 
+function getMedleyAreaItemConfigurationIdentityKey(configuration: BandoriAreaItemConfiguration): string {
+  return [
+    configuration.bandKey ?? "",
+    configuration.attribute ?? "",
+    configuration.parameter ?? "",
+    [...configuration.selectedAreaItemIds].sort((left, right) => left - right).join(","),
+  ].join(":");
+}
+
+function getMedleyResultCardIdentityKey(card: { cardId: number; cardInstanceKey?: string }): string {
+  return card.cardInstanceKey ?? `profile:${card.cardId}`;
+}
+
+export function getMedleyResultIdentityKey(result: BandoriMedleyTeamSearchResult): string {
+  return [
+    getMedleyAreaItemConfigurationIdentityKey(result.areaItemConfiguration),
+    ...result.songResults
+      .map((songResult) => [
+        songResult.songIndex,
+        songResult.cards
+          .map(getMedleyResultCardIdentityKey)
+          .sort()
+          .join(","),
+      ].join(":"))
+      .sort(),
+  ].join("|");
+}
+
+function isDisplayableMedleyResult(result: BandoriMedleyTeamSearchResult): boolean {
+  return result.songResults.length === 3
+    && result.songResults.every((songResult) => songResult.cards.length === 5);
+}
+
+function compareMedleyResultsByMaxScore(
+  left: BandoriMedleyTeamSearchResult,
+  right: BandoriMedleyTeamSearchResult,
+): number {
+  return right.maxScore - left.maxScore
+    || right.averageScore - left.averageScore
+    || getMedleyResultIdentityKey(left).localeCompare(getMedleyResultIdentityKey(right));
+}
+
+function compareMedleyResultsByAverageScore(
+  left: BandoriMedleyTeamSearchResult,
+  right: BandoriMedleyTeamSearchResult,
+): number {
+  return right.averageScore - left.averageScore
+    || right.maxScore - left.maxScore
+    || getMedleyResultIdentityKey(left).localeCompare(getMedleyResultIdentityKey(right));
+}
+
+export function createMedleyEvaluatedCandidateTracker(): {
+  observe: MedleyEvaluatedResultObserver;
+  getMaxScoreCandidate: (primaryResult: BandoriMedleyTeamSearchResult | null) => BandoriMedleyTeamSearchResult | null;
+  getEvaluatedAverageTopCandidates: (
+    displayedResults: BandoriMedleyTeamSearchResult[],
+    limit?: number,
+  ) => BandoriMedleyTeamSearchResult[];
+} {
+  const maxScoreCandidatesByKey = new Map<string, BandoriMedleyTeamSearchResult>();
+  const averageCandidatesByKey = new Map<string, BandoriMedleyTeamSearchResult>();
+
+  const observe: MedleyEvaluatedResultObserver = (result) => {
+    if (!isDisplayableMedleyResult(result)) {
+      return;
+    }
+    const key = getMedleyResultIdentityKey(result);
+    const currentMaxCandidate = maxScoreCandidatesByKey.get(key);
+    if (!currentMaxCandidate || compareMedleyResultsByMaxScore(currentMaxCandidate, result) > 0) {
+      maxScoreCandidatesByKey.set(key, result);
+    }
+    const currentAverageCandidate = averageCandidatesByKey.get(key);
+    if (!currentAverageCandidate || compareMedleyResultsByAverageScore(currentAverageCandidate, result) > 0) {
+      averageCandidatesByKey.set(key, result);
+    }
+  };
+
+  const getMaxScoreCandidate = (primaryResult: BandoriMedleyTeamSearchResult | null): BandoriMedleyTeamSearchResult | null => {
+    if (!primaryResult) {
+      return null;
+    }
+    const primaryKey = getMedleyResultIdentityKey(primaryResult);
+    const candidate = [...maxScoreCandidatesByKey.entries()]
+      .filter(([key, result]) => key !== primaryKey && result.maxScore > primaryResult.maxScore)
+      .map(([, result]) => result)
+      .sort(compareMedleyResultsByMaxScore)[0] ?? null;
+    return candidate;
+  };
+
+  const getEvaluatedAverageTopCandidates = (
+    displayedResults: BandoriMedleyTeamSearchResult[],
+    limit = EVALUATED_AVERAGE_TOP_CANDIDATE_LIMIT,
+  ): BandoriMedleyTeamSearchResult[] => {
+    const displayedKeys = new Set(displayedResults.map(getMedleyResultIdentityKey));
+    return [...averageCandidatesByKey.entries()]
+      .filter(([key]) => !displayedKeys.has(key))
+      .map(([, result]) => result)
+      .sort(compareMedleyResultsByAverageScore)
+      .slice(0, limit);
+  };
+
+  return {
+    observe,
+    getMaxScoreCandidate,
+    getEvaluatedAverageTopCandidates,
+  };
+}
+
 export function pushMedleyResult(
   results: BandoriMedleyTeamSearchResult[],
   result: BandoriMedleyTeamSearchResult,
   resultLimit: number,
+  observeEvaluatedResult?: MedleyEvaluatedResultObserver,
 ): void {
+  observeEvaluatedResult?.(result);
   results.push(result);
   sortMedleyResults(results);
   if (results.length > resultLimit) {
