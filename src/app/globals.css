@@ -68,7 +68,6 @@ html {
   background-color: var(--bg-yellow);
   background-image: var(--hhwx-page-background);
   background-size: auto, auto, 40px 40px, auto, auto, auto, auto, auto;
-  overscroll-behavior-y: none;
 }
 
 body {
@@ -77,7 +76,6 @@ body {
   background-size: auto, auto, 40px 40px, auto, auto, auto, auto, auto;
   position: relative;
   overflow-x: hidden;
-  overscroll-behavior-y: none;
 }
 
 /* 飘落图案动画 */

@@ -1,7 +1,7 @@
 "use client";
 
 import { type ReactNode } from "react";
-import { ListFilter, Search, X } from "lucide-react";
+import { ArrowDownWideNarrow, ArrowUpNarrowWide, Filter, Search, X } from "lucide-react";
 import { type BandoriCardPickerSortBy } from "@/components/bandori/card-picker";
 import { buildBandoriResIconPublicUrl } from "@/lib/bandori-asset-proxy";
 import { type BandoriCardAttribute } from "@/lib/bandori-team-calculator";
@@ -253,7 +253,7 @@ export default function ExcludedCardFilterControls({
         </div>
         <div className="flex items-center gap-2">
           <span className="inline-flex h-10 items-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-3 text-sm font-semibold text-blue-700">
-            <ListFilter className="h-4 w-4" aria-hidden="true" />
+            <Filter className="h-4 w-4" aria-hidden="true" />
             {resultCountLabel}
           </span>
           <button
@@ -381,7 +381,9 @@ export default function ExcludedCardFilterControls({
               })}
               className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 transition hover:border-blue-300 hover:text-blue-600"
               title={filter.sortDirection === "desc" ? "当前为倒序，点击切换为正序" : "当前为正序，点击切换为倒序"}
+              aria-label={filter.sortDirection === "desc" ? "排序方向：倒序" : "排序方向：正序"}
             >
+              {filter.sortDirection === "desc" ? <ArrowDownWideNarrow className="h-4 w-4" aria-hidden="true" /> : <ArrowUpNarrowWide className="h-4 w-4" aria-hidden="true" />}
               {filter.sortDirection === "desc" ? "倒序" : "正序"}
             </button>
           </div>

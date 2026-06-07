@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { type BandoriAssetRegion } from "@/lib/bandori-asset-proxy";
 import {
   calculateBandoriCard,
@@ -182,20 +182,25 @@ export function buildPreferenceCardEntry(
   };
 }
 
-function buildPreferenceCardEntryCacheKey(
-  dependencyVersion: string,
-  card: UserGameProfileCardRecord,
-  metadata: TeamBuilderPreferenceCardMetadata | undefined,
-): string {
+function getNormalizedMetadataCharacterId(metadata: TeamBuilderPreferenceCardMetadata | undefined): number | null {
+  const characterId = Number(metadata?.characterId);
+  return Number.isFinite(characterId) && characterId > 0 ? Math.trunc(characterId) : null;
+}
+
+function buildCachePart(value: unknown): string {
+  if (value === undefined) {
+    return "";
+  }
+
+  try {
+    return JSON.stringify(value) ?? "";
+  } catch {
+    return String(value);
+  }
+}
+
+function buildPreferenceCardMetadataCachePart(metadata: TeamBuilderPreferenceCardMetadata | undefined): string {
   return [
-    dependencyVersion,
-    card.cardId,
-    card.level,
-    card.masterRank,
-    card.skillLevel,
-    card.episodeCount,
-    card.isTrained ? 1 : 0,
-    card.hasTrainedArt ? 1 : 0,
     metadata?.characterId ?? "",
     metadata?.rarity ?? "",
     metadata?.attribute ?? "",
@@ -205,8 +210,73 @@ function buildPreferenceCardEntryCacheKey(
     metadata?.assetRegion ?? "",
     metadata?.displayName ?? "",
     metadata?.hasTrainedArt === undefined ? "" : metadata.hasTrainedArt ? 1 : 0,
-    metadata?.stat?.training?.levelLimit ?? "",
-    metadata?.releasedAt?.join(",") ?? "",
+    buildCachePart(metadata?.stat),
+    buildCachePart(metadata?.releasedAt),
+  ].join("|");
+}
+
+function buildPreferenceCardCharacterCachePart(
+  metadata: TeamBuilderPreferenceCardMetadata | undefined,
+  characters: Record<string, TeamBuilderPreferenceCharacterMaster | undefined>,
+): string {
+  const characterId = getNormalizedMetadataCharacterId(metadata);
+  const character = characterId === null ? undefined : characters[String(characterId)];
+  return [
+    characterId ?? "",
+    character?.bandId ?? "",
+    buildCachePart(character?.nickname),
+    buildCachePart(character?.firstName),
+    buildCachePart(character?.characterName),
+  ].join("|");
+}
+
+function buildPreferenceCardSkillCachePart(
+  card: UserGameProfileCardRecord,
+  metadata: TeamBuilderPreferenceCardMetadata | undefined,
+  skills: Record<string, TeamBuilderPreferenceSkillMaster | undefined>,
+): string {
+  const skillId = getCardSkillId(undefined, metadata);
+  const skill = skillId === null ? undefined : skills[String(skillId)];
+  return [
+    skillId ?? "",
+    card.skillLevel,
+    buildCachePart(skill?.description),
+    buildCachePart(skill?.simpleDescription),
+    buildCachePart(skill?.duration),
+    buildCachePart(skill?.onceEffect?.onceEffectValue),
+  ].join("|");
+}
+
+function buildPreferenceCardBonusCachePart(
+  metadata: TeamBuilderPreferenceCardMetadata | undefined,
+  characterBonusesById: Record<string, BandoriCharacterBonusState | undefined>,
+): string {
+  const characterId = getNormalizedMetadataCharacterId(metadata);
+  return characterId === null ? "" : buildCachePart(characterBonusesById[String(characterId)]);
+}
+
+function buildPreferenceCardEntryCacheKey(
+  cacheScopeKey: string,
+  card: UserGameProfileCardRecord,
+  metadata: TeamBuilderPreferenceCardMetadata | undefined,
+  characters: Record<string, TeamBuilderPreferenceCharacterMaster | undefined>,
+  skills: Record<string, TeamBuilderPreferenceSkillMaster | undefined>,
+  characterBonusesById: Record<string, BandoriCharacterBonusState | undefined>,
+): string {
+  return [
+    cacheScopeKey,
+    card.cardId,
+    card.level,
+    card.masterRank,
+    card.skillLevel,
+    card.episodeCount,
+    card.isTrained ? 1 : 0,
+    card.hasTrainedArt ? 1 : 0,
+    card.isExcluded ? 1 : 0,
+    buildPreferenceCardMetadataCachePart(metadata),
+    buildPreferenceCardCharacterCachePart(metadata, characters),
+    buildPreferenceCardSkillCachePart(card, metadata, skills),
+    buildPreferenceCardBonusCachePart(metadata, characterBonusesById),
   ].join("|");
 }
 
@@ -226,23 +296,19 @@ export function useTeamBuilderPreferenceCardEntries({
   characterBonusesById: Record<string, BandoriCharacterBonusState | undefined>;
 }): { entries: TeamBuilderPreferenceCardEntry[]; ready: boolean } {
   const entryCacheRef = useRef(new Map<string, TeamBuilderPreferenceCardEntry>());
+  const cacheScopeKeyRef = useRef(cacheScopeKey);
   const [state, setState] = useState<{ entries: TeamBuilderPreferenceCardEntry[]; ready: boolean }>({
     entries: [],
     ready: profileCards.length === 0,
   });
-  const dependencyVersion = useMemo(() => [
-    cacheScopeKey,
-    Object.keys(cardMetadata).length,
-    Object.keys(characters).length,
-    Object.keys(skills).length,
-    Object.keys(characterBonusesById).length,
-  ].join(":"), [cacheScopeKey, cardMetadata, characterBonusesById, characters, skills]);
 
   useEffect(() => {
-    entryCacheRef.current.clear();
-  }, [cacheScopeKey, cardMetadata, characterBonusesById, characters, skills]);
+    const cacheScopeChanged = cacheScopeKeyRef.current !== cacheScopeKey;
+    if (cacheScopeChanged) {
+      cacheScopeKeyRef.current = cacheScopeKey;
+      entryCacheRef.current.clear();
+    }
 
-  useEffect(() => {
     if (profileCards.length === 0) {
       setState({ entries: [], ready: true });
       return;
@@ -252,24 +318,37 @@ export function useTeamBuilderPreferenceCardEntries({
     let timer: number | null = null;
     let index = 0;
     const nextEntries: TeamBuilderPreferenceCardEntry[] = [];
-    const entryCache = entryCacheRef.current;
+    const previousEntryCache = entryCacheRef.current;
+    const nextEntryCache = new Map<string, TeamBuilderPreferenceCardEntry>();
 
-    setState({ entries: [], ready: false });
+    // Keep same-profile entries visible while changed metadata is rebuilt in chunks.
+    setState((current) => ({
+      entries: cacheScopeChanged ? [] : current.entries,
+      ready: false,
+    }));
 
     const buildChunk = () => {
       const endIndex = Math.min(index + PROFILE_CARD_ENTRY_BUILD_CHUNK_SIZE, profileCards.length);
       for (; index < endIndex; index += 1) {
         const card = profileCards[index];
         const metadata = cardMetadata[String(card.cardId)];
-        const entryCacheKey = buildPreferenceCardEntryCacheKey(dependencyVersion, card, metadata);
-        const cachedEntry = entryCache.get(entryCacheKey);
+        const entryCacheKey = buildPreferenceCardEntryCacheKey(
+          cacheScopeKey,
+          card,
+          metadata,
+          characters,
+          skills,
+          characterBonusesById,
+        );
+        const cachedEntry = previousEntryCache.get(entryCacheKey);
         if (cachedEntry) {
+          nextEntryCache.set(entryCacheKey, cachedEntry);
           nextEntries.push(cachedEntry);
           continue;
         }
 
         const entry = buildPreferenceCardEntry(card, cardMetadata, characters, skills, characterBonusesById);
-        entryCache.set(entryCacheKey, entry);
+        nextEntryCache.set(entryCacheKey, entry);
         nextEntries.push(entry);
       }
 
@@ -282,6 +361,7 @@ export function useTeamBuilderPreferenceCardEntries({
         return;
       }
 
+      entryCacheRef.current = nextEntryCache;
       setState({ entries: nextEntries, ready: true });
     };
 
@@ -293,7 +373,7 @@ export function useTeamBuilderPreferenceCardEntries({
         window.clearTimeout(timer);
       }
     };
-  }, [cardMetadata, characterBonusesById, characters, dependencyVersion, profileCards, skills]);
+  }, [cacheScopeKey, cardMetadata, characterBonusesById, characters, profileCards, skills]);
 
   return state;
 }

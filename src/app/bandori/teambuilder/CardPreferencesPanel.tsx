@@ -210,10 +210,6 @@ export default function TeamBuilderCardPreferencesPanel({
   };
 
   const filteredProfileCardEntries = useMemo(() => {
-    if (!profileCardEntriesReady) {
-      return [];
-    }
-
     if (
       effectiveExcludedCardFilterCriteria.bandIds.length === 0
       || effectiveExcludedCardFilterCriteria.attributes.length === 0
@@ -262,7 +258,6 @@ export default function TeamBuilderCardPreferencesPanel({
     effectiveExcludedCardFilterCriteria,
     effectiveExcludedCardFilterSets,
     profileCardEntries,
-    profileCardEntriesReady,
   ]);
   const filteredProfileCardIds = useMemo(
     () => filteredProfileCardEntries.map((entry) => entry.card.cardId),
@@ -273,6 +268,8 @@ export default function TeamBuilderCardPreferencesPanel({
     : EXCLUDED_PROFILE_CARD_INITIAL_VISIBLE_COUNT;
   const visibleExcludedProfileCardCountClamped = Math.min(visibleExcludedProfileCardCount, filteredProfileCardEntries.length);
   const hiddenExcludedProfileCardCount = Math.max(0, filteredProfileCardEntries.length - visibleExcludedProfileCardCountClamped);
+  const profileCardEntriesInitialLoading = !profileCardEntriesReady && profileCardEntries.length === 0;
+  const profileCardEntriesRefreshing = !profileCardEntriesReady && profileCardEntries.length > 0;
 
   return (
     <div className="space-y-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
@@ -436,7 +433,13 @@ export default function TeamBuilderCardPreferencesPanel({
         {excludedFiltersOpen ? (
           <ExcludedCardFilterControls
             filter={effectiveExcludedCardFilter}
-            resultCountLabel={profileCardEntriesReady ? `${filteredProfileCardEntries.length} 张` : "准备中"}
+            resultCountLabel={
+              profileCardEntriesReady
+                ? `${filteredProfileCardEntries.length} 张`
+                : profileCardEntriesRefreshing
+                  ? `${filteredProfileCardEntries.length} 张（更新中）`
+                  : "准备中"
+            }
             bandOptions={bandOptions}
             characterOptions={characterOptions}
             bandIds={bandIds}
@@ -454,10 +457,15 @@ export default function TeamBuilderCardPreferencesPanel({
           />
         ) : null}
         {profileCards.length > 0 ? (
-          !profileCardEntriesReady ? (
+          profileCardEntriesInitialLoading ? (
             <div className="rounded-xl bg-slate-50 p-3 text-sm font-semibold text-slate-500">正在准备卡牌列表</div>
           ) : (
           <>
+            {profileCardEntriesRefreshing ? (
+              <div role="status" aria-live="polite" className="rounded-xl bg-slate-50 p-3 text-sm font-semibold text-slate-500">
+                正在更新卡牌列表
+              </div>
+            ) : null}
             <VirtualizedBandoriCardGrid
               items={filteredProfileCardEntries}
               visibleLimit={visibleExcludedProfileCardCount}

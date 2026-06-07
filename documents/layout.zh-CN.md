@@ -50,9 +50,9 @@ hhwx/
 
 ## src/lib
 
-- `auth-*.ts`、`supabase-*.ts` 和 `turnstile-*.ts`：认证、安全验证以及服务端/客户端封装。
+- `auth-*.ts`、`supabase-*.ts`、`turnstile-server.ts` 和 `turnstile-public.ts`：认证、安全验证以及服务端/公开配置封装。
 - `bandori-*.ts` 和 `calendar-*.ts`：Bandori 页面和公开元数据相关兼容入口与服务逻辑。
-- `bandori/`：按领域整理的 Bandori 模块。`bandori/team-builder/core/` 包含组队搜索共享基础设施，`bandori/team-builder/single/` 包含单曲 exact 搜索编排，`bandori/team-builder/medley/` 包含组曲 exact/bounded 搜索编排，并由公开兼容 facade 对外导出。
+- `bandori/`：按领域整理的 Bandori 模块。`bandori/data/` 包含生成数据和参考数据，`bandori/team-builder/core/` 包含组队搜索共享基础设施和计算辅助逻辑，`bandori/team-builder/single/` 包含单曲 exact 搜索编排，`bandori/team-builder/medley/` 包含组曲 exact/bounded 搜索编排，并由公开兼容 facade 对外导出。
 - `api-*.ts`：API 响应约定和缓存策略。
 - `bestdori-profile-codec.ts` 和 `user-game-*-server.ts`：游戏档案兼容、同步和服务端持久化逻辑。
 - `characters.ts`、`othello.ts` 和 `ai/`：首页黑白棋和角色逻辑。
