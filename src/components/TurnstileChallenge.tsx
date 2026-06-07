@@ -2,7 +2,7 @@
 
 import { forwardRef, useImperativeHandle, useRef, useState } from "react";
 import { Turnstile, type TurnstileInstance, type TurnstileTheme } from "@marsidev/react-turnstile";
-import { TURNSTILE_SITE_KEY } from "@/lib/turnstile";
+import { TURNSTILE_SITE_KEY } from "@/lib/turnstile-public";
 
 export interface TurnstileChallengeHandle {
   getToken: () => string | null;

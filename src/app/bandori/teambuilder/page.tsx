@@ -1,9 +1,9 @@
 "use client";
 
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { format } from "date-fns";
-import { type ReactNode, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Calculator,
   CheckCircle2,
@@ -14,7 +14,6 @@ import {
   Loader2,
   Music2,
   Users,
-  X,
 } from "lucide-react";
 import BandoriAccountShell from "@/app/bandori/BandoriAccountShell";
 import BandoriCardThumbnail from "@/components/bandori/BandoriCardThumbnail";
@@ -34,7 +33,6 @@ import {
   resolveBandoriCnScheduleWindow,
   resolveBandoriEventAssetRegion,
 } from "@/lib/bandori-event-region";
-import { BANDORI_CHARACTER_GROUPS, compareBandoriCharacterIds } from "@/lib/bandori-character-groups";
 import {
   type BandoriCardAttribute,
   type BandoriEventBonus,
@@ -74,10 +72,10 @@ import {
   type UserGameProfileCardRecord,
   type UserGameProfilePayload,
 } from "@/lib/user-game-profile-payload";
-import { BandoriCardPicker, type BandoriCardPickerValue } from "@/components/bandori/card-picker";
-import GameProfileCardEditorDialog from "@/components/bandori/GameProfileCardEditorDialog";
+import { type BandoriCardPickerValue } from "@/components/bandori/card-picker/types";
 import { createMaxGameProfileCard } from "@/lib/bandori-game-profile-card";
 import TeamBuilderCardPreferencesPanel from "./CardPreferencesPanel";
+import { type TemporaryCardEditorDialogProps, type TemporaryCardPickerDialogProps } from "./TemporaryCardDialogs";
 import {
   createDefaultCardPreferences,
   normalizeCardPreferences,
@@ -120,6 +118,36 @@ type BrowserMemoryPerformance = Performance & {
     breakdown?: Array<{ bytes?: number }>;
   }>;
 };
+
+const DynamicTemporaryCardPickerDialog = dynamic<TemporaryCardPickerDialogProps>(
+  () => import("./TemporaryCardDialogs").then((module) => module.TemporaryCardPickerDialog),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="fixed inset-0 z-[1000] flex h-dvh items-center justify-center overflow-hidden overscroll-contain bg-slate-950/55 p-3 sm:p-6" role="dialog" aria-modal="true">
+        <div className="inline-flex items-center gap-2 rounded-2xl bg-white px-4 py-3 text-sm font-bold text-slate-600 shadow-2xl">
+          <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+          正在载入临时卡牌选择器
+        </div>
+      </div>
+    ),
+  },
+);
+
+const DynamicTemporaryCardEditorDialog = dynamic<TemporaryCardEditorDialogProps>(
+  () => import("./TemporaryCardDialogs").then((module) => module.TemporaryCardEditorDialog),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="fixed inset-0 z-[1100] flex h-dvh items-center justify-center overflow-hidden overscroll-contain bg-slate-950/72 p-3 backdrop-blur-md sm:p-6" role="dialog" aria-modal="true">
+        <div className="inline-flex items-center gap-2 rounded-2xl bg-white px-4 py-3 text-sm font-bold text-slate-600 shadow-2xl">
+          <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+          正在载入临时卡牌编辑器
+        </div>
+      </div>
+    ),
+  },
+);
 
 type CloudGameProfileSummary = {
   id: string;
@@ -982,31 +1010,6 @@ function readEventParameterBonusItems(eventBonus: BandoriEventBonus | null): Arr
 function createTeamSearchWorker(): Worker {
   return new Worker(new URL("./team-search-worker.ts", import.meta.url), { type: "module" });
 }
-
-/*
-function runTeamSearchWorker(request: TeamSearchWorkerRequest): Promise<BandoriTeamSearchResponse> {
-  return new Promise((resolve, reject) => {
-    const worker = createTeamSearchWorker();
-    const finish = () => worker.terminate();
-    worker.onmessage = (event: MessageEvent<TeamSearchWorkerResponse>) => {
-      if (event.data.requestId !== request.requestId) {
-        return;
-      }
-      finish();
-      if (event.data.ok) {
-        resolve(event.data.result);
-      } else {
-        reject(new Error(event.data.error));
-      }
-    };
-    worker.onerror = (event) => {
-      finish();
-      reject(new Error(event.message || "计算线程启动失败"));
-    };
-    worker.postMessage(request);
-  });
-}
-*/
 
 type DisplayCardLike = Pick<BandoriTeamSearchResultCard, "cardId" | "cardInstanceKey" | "skillId" | "rarity" | "attribute" | "bandId" | "level" | "masterRank" | "skillLevel" | "isTrained" | "totalPower">;
 
@@ -3794,46 +3797,23 @@ function TeamBuilderPanel() {
         </section>
       ) : null}
 
-      {cardPickerOpen && typeof document !== "undefined" ? createPortal((
-        <div className="fixed inset-0 z-[1000] flex h-dvh items-center justify-center overflow-hidden overscroll-contain bg-slate-950/55 p-3 sm:p-6" role="dialog" aria-modal="true" aria-labelledby="temporary-card-picker-title">
-          <div className="flex max-h-[calc(100dvh-1.5rem)] w-full max-w-6xl flex-col overflow-hidden rounded-2xl bg-slate-50 shadow-2xl sm:max-h-[calc(100dvh-3rem)]">
-            <div className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-3 sm:px-5">
-              <div className="min-w-0">
-                <h2 id="temporary-card-picker-title" className="text-lg font-bold text-slate-900">添加临时卡牌</h2>
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  setCardPickerOpen(false);
-                  setCardPickerValue(null);
-                }}
-                className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 transition hover:border-slate-300 hover:text-slate-900"
-                title="关闭"
-              >
-                <X className="h-5 w-5" aria-hidden="true" />
-              </button>
-            </div>
-            <div ref={cardPickerScrollRef} className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-3 sm:p-5">
-              <BandoriCardPicker
-                value={cardPickerValue}
-                onValueChange={selectTemporaryCard}
-                region={selectedProfileAssetRegion}
-                showArtToggle={false}
-                scrollElementRef={cardPickerScrollRef}
-              />
-              {addingTemporaryCard ? (
-                <div className="mt-3 flex items-center justify-center gap-2 rounded-xl bg-white p-3 text-sm font-bold text-slate-600">
-                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-                  正在准备卡牌参数
-                </div>
-              ) : null}
-            </div>
-          </div>
-        </div>
-      ), document.body) : null}
+      {cardPickerOpen ? (
+        <DynamicTemporaryCardPickerDialog
+          open={cardPickerOpen}
+          value={cardPickerValue}
+          adding={addingTemporaryCard}
+          region={selectedProfileAssetRegion}
+          scrollElementRef={cardPickerScrollRef}
+          onValueChange={selectTemporaryCard}
+          onClose={() => {
+            setCardPickerOpen(false);
+            setCardPickerValue(null);
+          }}
+        />
+      ) : null}
 
       {editingTemporaryCard ? (
-        <GameProfileCardEditorDialog
+        <DynamicTemporaryCardEditorDialog
           card={editingTemporaryCard}
           baselineCard={editingTemporaryCardExists ? cardPreferences.temporaryCards.find((card) => card.instanceId === editingTemporaryCard.instanceId) ?? null : null}
           metadata={cardMetadata[String(editingTemporaryCard.cardId)]}
@@ -3841,13 +3821,7 @@ function TeamBuilderPanel() {
           bandId={getCardBandId(cardMetadata[String(editingTemporaryCard.cardId)], data.characters)}
           characterBonusesById={selectedProfileCharacterBonusesById}
           region={selectedProfileAssetRegion}
-          saving={false}
-          title="编辑临时卡牌"
-          saveLabel={editingTemporaryCardExists ? "保存" : "添加"}
-          deleteLabel="删除"
-          showDeleteButton={editingTemporaryCardExists}
-          showTrainedArtControl={false}
-          allowSaveWithoutChanges={!editingTemporaryCardExists}
+          exists={editingTemporaryCardExists}
           onClose={closeTemporaryCardEditor}
           onSave={saveTemporaryCard}
           onDelete={deleteTemporaryCard}

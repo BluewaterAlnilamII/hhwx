@@ -4,6 +4,7 @@
  * This folder contains only code shared by single-song and medley search: card/chart
  * preparation, scoring, event handling, five-card team evaluation, and safe bounds.
  */
+export * from "./calculator";
 export * from "./types";
 export { clamp, buildPermutations } from "./utils";
 export { prepareBandoriChart, getCachedPreparedChart } from "./chart";

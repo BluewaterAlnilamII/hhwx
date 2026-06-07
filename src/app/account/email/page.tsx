@@ -7,7 +7,7 @@ import { getApiErrorMessage } from "@/lib/api-contracts";
 import { formatAuthErrorMessage } from "@/lib/auth-error";
 import { createNativeValidationProps } from "@/lib/native-validation";
 import { buildEmailVerificationCallbackUrl, getSafeSession } from "@/lib/supabase";
-import { useTurnstileAvailability } from "@/lib/turnstile";
+import { useTurnstileAvailability } from "@/hooks/useTurnstileAvailability";
 import { useAccountProfile } from "../useAccountProfile";
 
 export default function AccountEmailPage() {

@@ -331,6 +331,15 @@ function CardGridItem({
   );
 }
 
+export type BandoriCardPickerProps = {
+  value: BandoriCardPickerValue | null;
+  onValueChange: (value: BandoriCardPickerValue | null) => void;
+  region?: BandoriAssetRegion;
+  className?: string;
+  showArtToggle?: boolean;
+  scrollElementRef?: RefObject<HTMLElement | null>;
+};
+
 export default function BandoriCardPicker({
   value,
   onValueChange,
@@ -338,14 +347,7 @@ export default function BandoriCardPicker({
   className,
   showArtToggle = true,
   scrollElementRef,
-}: {
-  value: BandoriCardPickerValue | null;
-  onValueChange: (value: BandoriCardPickerValue | null) => void;
-  region?: BandoriAssetRegion;
-  className?: string;
-  showArtToggle?: boolean;
-  scrollElementRef?: RefObject<HTMLElement | null>;
-}) {
+}: BandoriCardPickerProps) {
   const { data: cardMetadata, loading: cardsLoading } = useCachedFetch(
     "bandori-card-picker-cards-v3",
     "/api/bandori/master/cards",

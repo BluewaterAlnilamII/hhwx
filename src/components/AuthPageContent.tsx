@@ -31,7 +31,7 @@ import {
   PASSWORD_POLICY_MESSAGE,
   validatePasswordValue,
 } from "@/lib/password-policy";
-import { useTurnstileAvailability } from "@/lib/turnstile";
+import { useTurnstileAvailability } from "@/hooks/useTurnstileAvailability";
 import { useGameStore } from "@/store/useGameStore";
 import TurnstileChallenge, { type TurnstileChallengeHandle } from "./TurnstileChallenge";
 
