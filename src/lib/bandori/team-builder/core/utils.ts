@@ -9,6 +9,14 @@ export function toFiniteNumber(value: unknown, fallback = 0): number {
   return Number.isFinite(numberValue) ? numberValue : fallback;
 }
 
+function toRegionalFiniteNumber(value: unknown): number | null {
+  if (value === null || value === undefined) {
+    return null;
+  }
+  const numberValue = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(numberValue) ? numberValue : null;
+}
+
 export function toPositiveInteger(value: unknown, fallback: number): number {
   const numberValue = Math.trunc(toFiniteNumber(value, fallback));
   return numberValue > 0 ? numberValue : fallback;
@@ -28,6 +36,30 @@ export function getRegionalNumber(value: unknown, server: number): number {
   }
 
   return toFiniteNumber(value, 0);
+}
+
+function getRegionalNumberForExactServer(value: unknown, server: number): number | null {
+  if (Array.isArray(value)) {
+    return toRegionalFiniteNumber(value[server]);
+  }
+
+  return toRegionalFiniteNumber(value);
+}
+
+export function getRegionalLevelNumber(
+  levels: Record<string, unknown> | undefined,
+  level: number,
+  server: number,
+): number {
+  const normalizedLevel = Math.trunc(toFiniteNumber(level, 0));
+  for (let currentLevel = normalizedLevel; currentLevel > 0; currentLevel -= 1) {
+    const regionalValue = getRegionalNumberForExactServer(levels?.[String(currentLevel)], server);
+    if (regionalValue !== null) {
+      return regionalValue;
+    }
+  }
+
+  return 0;
 }
 
 export function buildPermutations(values: number[]): number[][] {

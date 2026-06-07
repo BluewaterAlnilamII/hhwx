@@ -98,6 +98,8 @@ type ResultPlacementOption = "1" | "2" | "3" | "4" | "5";
 type FestivalResultOption = "win" | "lose";
 type ProfileChoice = { source: "cloud"; id: string } | { source: "local"; id: string };
 type PreloadStatus = "idle" | "loading" | "ready" | "error";
+type MedleySongIdTuple = [string, string, string];
+type MedleyDifficultyTuple = [BandoriTeamSearchDifficulty, BandoriTeamSearchDifficulty, BandoriTeamSearchDifficulty];
 type PreloadState = {
   master: PreloadStatus;
   chart: PreloadStatus;
@@ -108,6 +110,17 @@ type PreloadState = {
 type MedleySongSource = "custom" | "event-cn" | "event-jp";
 type MedleyCalculationMode = "maximize" | "legacy-greedy-single";
 type TeamBuilderSearchResponse = BandoriTeamSearchResponse | BandoriMedleyTeamSearchResponse;
+type MedleyResultInputSnapshot = {
+  selectedEvent: BandoriEventSummary | null;
+  medleySongIds: MedleySongIdTuple;
+  medleyDifficulties: MedleyDifficultyTuple;
+  profileLabel: string;
+  selectedProfileCacheKey: string;
+  perfectRate: string;
+  maxSearchDurationSeconds: string;
+  medleyCalculationMode: MedleyCalculationMode;
+  assetRegion: BandoriAssetRegion;
+};
 type BrowserMemoryPerformance = Performance & {
   memory?: {
     usedJSHeapSize?: number;
@@ -236,8 +249,8 @@ type LivePreferenceState = {
   liveType?: LiveType;
   songId?: string;
   difficulty?: BandoriTeamSearchDifficulty;
-  medleySongIds?: [string, string, string];
-  medleyDifficulties?: [BandoriTeamSearchDifficulty, BandoriTeamSearchDifficulty, BandoriTeamSearchDifficulty];
+  medleySongIds?: MedleySongIdTuple;
+  medleyDifficulties?: MedleyDifficultyTuple;
   perfectRate?: string;
   otherPlayersAveragePower?: string;
   encoreSkillSource?: EncoreSkillSource;
@@ -256,8 +269,8 @@ const SUPPORTED_EVENT_TYPES = new Set(["story", "challenge", "versus", "live_try
 const DEFAULT_SONG_ID = "306";
 const DEFAULT_DIFFICULTY: BandoriTeamSearchDifficulty = "expert";
 const MEDLEY_SLOT_COUNT = 3;
-const DEFAULT_MEDLEY_SONG_IDS: [string, string, string] = [DEFAULT_SONG_ID, DEFAULT_SONG_ID, DEFAULT_SONG_ID];
-const DEFAULT_MEDLEY_DIFFICULTIES: [BandoriTeamSearchDifficulty, BandoriTeamSearchDifficulty, BandoriTeamSearchDifficulty] = [
+const DEFAULT_MEDLEY_SONG_IDS: MedleySongIdTuple = [DEFAULT_SONG_ID, DEFAULT_SONG_ID, DEFAULT_SONG_ID];
+const DEFAULT_MEDLEY_DIFFICULTIES: MedleyDifficultyTuple = [
   DEFAULT_DIFFICULTY,
   DEFAULT_DIFFICULTY,
   DEFAULT_DIFFICULTY,
@@ -937,7 +950,7 @@ function isTeamSearchDifficulty(value: unknown): value is BandoriTeamSearchDiffi
   return typeof value === "string" && DIFFICULTIES.includes(value as BandoriTeamSearchDifficulty);
 }
 
-function normalizeMedleySongIdsPreference(value: unknown): [string, string, string] | undefined {
+function normalizeMedleySongIdsPreference(value: unknown): MedleySongIdTuple | undefined {
   if (!Array.isArray(value) || value.length !== MEDLEY_SLOT_COUNT || !value.every(isSongPreferenceId)) {
     return undefined;
   }
@@ -945,7 +958,7 @@ function normalizeMedleySongIdsPreference(value: unknown): [string, string, stri
   return [value[0], value[1], value[2]];
 }
 
-function normalizeMedleyDifficultiesPreference(value: unknown): [BandoriTeamSearchDifficulty, BandoriTeamSearchDifficulty, BandoriTeamSearchDifficulty] | undefined {
+function normalizeMedleyDifficultiesPreference(value: unknown): MedleyDifficultyTuple | undefined {
   if (!Array.isArray(value) || value.length !== MEDLEY_SLOT_COUNT || !value.every(isTeamSearchDifficulty)) {
     return undefined;
   }
@@ -1303,8 +1316,8 @@ function buildMedleyDebugPayload({
 }: {
   result: BandoriMedleyTeamSearchResponse;
   selectedEvent: BandoriEventSummary | null;
-  medleySongIds: [string, string, string];
-  medleyDifficulties: [BandoriTeamSearchDifficulty, BandoriTeamSearchDifficulty, BandoriTeamSearchDifficulty];
+  medleySongIds: MedleySongIdTuple;
+  medleyDifficulties: MedleyDifficultyTuple;
   songs: Record<string, SongMaster | undefined>;
   profileLabel: string;
   selectedProfileCacheKey: string;
@@ -2377,10 +2390,10 @@ function TeamBuilderPanel() {
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
   const [songSearch, setSongSearch] = useState("");
   const [songId, setSongId] = useState(() => initialLivePreferences.songId ?? DEFAULT_SONG_ID);
-  const [medleySongIds, setMedleySongIds] = useState<[string, string, string]>(() => initialLivePreferences.medleySongIds ?? DEFAULT_MEDLEY_SONG_IDS);
+  const [medleySongIds, setMedleySongIds] = useState<MedleySongIdTuple>(() => initialLivePreferences.medleySongIds ?? DEFAULT_MEDLEY_SONG_IDS);
   const [activeMedleySongSlot, setActiveMedleySongSlot] = useState(0);
   const [medleySongSource, setMedleySongSource] = useState<MedleySongSource>("custom");
-  const [medleyDifficulties, setMedleyDifficulties] = useState<[BandoriTeamSearchDifficulty, BandoriTeamSearchDifficulty, BandoriTeamSearchDifficulty]>(() => (
+  const [medleyDifficulties, setMedleyDifficulties] = useState<MedleyDifficultyTuple>(() => (
     initialLivePreferences.medleyDifficulties ?? DEFAULT_MEDLEY_DIFFICULTIES
   ));
   const [difficulty, setDifficulty] = useState<BandoriTeamSearchDifficulty>(() => initialLivePreferences.difficulty ?? DEFAULT_DIFFICULTY);
@@ -2409,6 +2422,7 @@ function TeamBuilderPanel() {
   const [calculationStartedAt, setCalculationStartedAt] = useState<number | null>(null);
   const [calculationNow, setCalculationNow] = useState<number | null>(null);
   const [result, setResult] = useState<TeamBuilderSearchResponse | null>(null);
+  const [medleyResultInputSnapshot, setMedleyResultInputSnapshot] = useState<MedleyResultInputSnapshot | null>(null);
   const [resultError, setResultError] = useState("");
   const [debugInfoCopied, setDebugInfoCopied] = useState(false);
   const [resultLiveBoostCount, setResultLiveBoostCount] = useState<LiveBoostCountOption>("3");
@@ -2482,14 +2496,14 @@ function TeamBuilderPanel() {
     writeLivePreferences({ difficulty: value });
   }, []);
   const updateMedleySongId = useCallback((slotIndex: number, value: string) => {
-    const next = [...medleySongIds] as [string, string, string];
+    const next = [...medleySongIds] as MedleySongIdTuple;
     next[slotIndex] = value;
     setMedleySongIds(next);
     setMedleySongSource("custom");
     writeLivePreferences({ medleySongIds: next });
   }, [medleySongIds]);
   const updateMedleyDifficulty = useCallback((slotIndex: number, value: BandoriTeamSearchDifficulty) => {
-    const next = [...medleyDifficulties] as [BandoriTeamSearchDifficulty, BandoriTeamSearchDifficulty, BandoriTeamSearchDifficulty];
+    const next = [...medleyDifficulties] as MedleyDifficultyTuple;
     next[slotIndex] = value;
     setMedleyDifficulties(next);
     writeLivePreferences({ medleyDifficulties: next });
@@ -2688,7 +2702,7 @@ function TeamBuilderPanel() {
         id,
         title: `活动曲目 ${source}`,
         sourceLabel: source,
-        songIds: songIds.map(String) as [string, string, string],
+        songIds: songIds.map(String) as MedleySongIdTuple,
       }];
     });
   }, [selectedEvent]);
@@ -3197,7 +3211,7 @@ function TeamBuilderPanel() {
       return;
     }
     let changed = false;
-    const nextDifficulties = [...medleyDifficulties] as [BandoriTeamSearchDifficulty, BandoriTeamSearchDifficulty, BandoriTeamSearchDifficulty];
+    const nextDifficulties = [...medleyDifficulties] as MedleyDifficultyTuple;
     selectedMedleySongs.forEach((song, index) => {
       const availableDifficulties = DIFFICULTIES.filter((item) => getSongDifficulty(song, item));
       if (availableDifficulties.length > 0 && !availableDifficulties.includes(nextDifficulties[index])) {
@@ -3249,33 +3263,39 @@ function TeamBuilderPanel() {
     : 0;
   const calculationElapsedLabel = formatDurationLabel(calculationElapsedSeconds);
   const medleyPreviewSearchDurationLabel = formatDurationLabel(Number(MEDLEY_PREVIEW_SEARCH_DURATION_SECONDS));
+  const displayedResultIsMedley = result !== null && isMedleySearchResponse(result);
+  const displayedMedleySongs = useMemo(() => {
+    const sourceSongIds = displayedResultIsMedley && medleyResultInputSnapshot
+      ? medleyResultInputSnapshot.medleySongIds
+      : medleySongIds;
+    return sourceSongIds.map((id) => data.songs[id] ?? null);
+  }, [data.songs, displayedResultIsMedley, medleyResultInputSnapshot, medleySongIds]);
+  const displayedMedleyAssetRegion = displayedResultIsMedley && medleyResultInputSnapshot
+    ? medleyResultInputSnapshot.assetRegion
+    : selectedEventAssetRegion;
+  const displayedMaxSearchDurationSeconds = displayedResultIsMedley && medleyResultInputSnapshot
+    ? medleyResultInputSnapshot.maxSearchDurationSeconds
+    : maxSearchDurationSeconds;
   const medleyDebugText = useMemo(() => {
-    if (!result || !isMedleySearchResponse(result)) {
+    if (!result || !isMedleySearchResponse(result) || !medleyResultInputSnapshot) {
       return "";
     }
     return JSON.stringify(buildMedleyDebugPayload({
       result,
-      selectedEvent,
-      medleySongIds,
-      medleyDifficulties,
+      selectedEvent: medleyResultInputSnapshot.selectedEvent,
+      medleySongIds: medleyResultInputSnapshot.medleySongIds,
+      medleyDifficulties: medleyResultInputSnapshot.medleyDifficulties,
       songs: data.songs,
-      profileLabel: selectedProfileLabel,
-      selectedProfileCacheKey,
-      perfectRate,
-      maxSearchDurationSeconds,
-      medleyCalculationMode,
+      profileLabel: medleyResultInputSnapshot.profileLabel,
+      selectedProfileCacheKey: medleyResultInputSnapshot.selectedProfileCacheKey,
+      perfectRate: medleyResultInputSnapshot.perfectRate,
+      maxSearchDurationSeconds: medleyResultInputSnapshot.maxSearchDurationSeconds,
+      medleyCalculationMode: medleyResultInputSnapshot.medleyCalculationMode,
     }), null, 2);
   }, [
     data.songs,
-    maxSearchDurationSeconds,
-    medleyCalculationMode,
-    medleyDifficulties,
-    medleySongIds,
-    perfectRate,
+    medleyResultInputSnapshot,
     result,
-    selectedEvent,
-    selectedProfileCacheKey,
-    selectedProfileLabel,
   ]);
   const copyMedleyDebugInfo = useCallback(() => {
     if (!medleyDebugText) {
@@ -3318,12 +3338,27 @@ function TeamBuilderPanel() {
       return;
     }
 
+    const medleyInputSnapshot: MedleyResultInputSnapshot | null = isMedleyEvent
+      ? {
+        selectedEvent,
+        medleySongIds: [...medleySongIds] as MedleySongIdTuple,
+        medleyDifficulties: [...medleyDifficulties] as MedleyDifficultyTuple,
+        profileLabel: selectedProfileLabel,
+        selectedProfileCacheKey,
+        perfectRate,
+        maxSearchDurationSeconds,
+        medleyCalculationMode,
+        assetRegion: selectedEventAssetRegion,
+      }
+      : null;
+
     setSubmitting(true);
     const startedAt = Date.now();
     setCalculationStartedAt(startedAt);
     setCalculationNow(startedAt);
     setResultError("");
     setResult(null);
+    setMedleyResultInputSnapshot(null);
     setDebugInfoCopied(false);
     try {
       const response = await postTeamSearchWorkerMessage({
@@ -3350,12 +3385,15 @@ function TeamBuilderPanel() {
           })),
         },
         song: {
-          songId: Number(isMedleyEvent ? medleySongIds[0] : songId),
-          difficulty: isMedleyEvent ? medleyDifficulties[0] : difficulty,
+          songId: Number(isMedleyEvent && medleyInputSnapshot ? medleyInputSnapshot.medleySongIds[0] : songId),
+          difficulty: isMedleyEvent && medleyInputSnapshot ? medleyInputSnapshot.medleyDifficulties[0] : difficulty,
           perfectRate: Math.max(0, Math.min(1, Number(perfectRate) / 100)),
         },
-        songs: isMedleyEvent
-          ? medleySongIds.map((id, index) => ({ songId: Number(id), difficulty: medleyDifficulties[index] }))
+        songs: isMedleyEvent && medleyInputSnapshot
+          ? medleyInputSnapshot.medleySongIds.map((id, index) => ({
+            songId: Number(id),
+            difficulty: medleyInputSnapshot.medleyDifficulties[index],
+          }))
           : undefined,
         cards: {
           excludedCardIds: cardPreferences.excludedCardIds,
@@ -3385,6 +3423,7 @@ function TeamBuilderPanel() {
       setResultChallengeCpCost(challengeCpCost);
       setResultPlacement("1");
       setResultFestivalResult("win");
+      setMedleyResultInputSnapshot(isMedleySearchResponse(response.result) ? medleyInputSnapshot : null);
       setResult(response.result);
       setActiveStep("calculate");
     } catch (calculateError) {
@@ -3750,7 +3789,7 @@ function TeamBuilderPanel() {
             {result ? (
               <div className="whitespace-pre-line rounded-xl bg-emerald-50 p-3 text-center text-sm font-semibold leading-6 text-emerald-600">
                 <CheckCircle2 className="mr-1 inline h-4 w-4" />
-                {buildSearchCompletionSummary(result, maxSearchDurationSeconds)}
+                {buildSearchCompletionSummary(result, displayedMaxSearchDurationSeconds)}
               </div>
             ) : null}
           </div>
@@ -3799,8 +3838,8 @@ function TeamBuilderPanel() {
                         cardMetadata={cardMetadata}
                         characters={data.characters}
                         skills={data.skills}
-                        assetRegion={selectedEventAssetRegion}
-                        songs={medleySongIds.map((id) => data.songs[id] ?? null)}
+                        assetRegion={displayedMedleyAssetRegion}
+                        songs={displayedMedleySongs}
                         rankLabel="候选"
                         badgeLabel="候选最高分"
                         description="来自已评估候选"
@@ -3814,8 +3853,8 @@ function TeamBuilderPanel() {
                         cardMetadata={cardMetadata}
                         characters={data.characters}
                         skills={data.skills}
-                        assetRegion={selectedEventAssetRegion}
-                        songs={medleySongIds.map((id) => data.songs[id] ?? null)}
+                        assetRegion={displayedMedleyAssetRegion}
+                        songs={displayedMedleySongs}
                         rankLabel={`候选 ${index + 1}`}
                         badgeLabel="已评估平均分候选"
                         description="来自已评估候选"
@@ -3832,8 +3871,8 @@ function TeamBuilderPanel() {
                       cardMetadata={cardMetadata}
                       characters={data.characters}
                       skills={data.skills}
-                      assetRegion={selectedEventAssetRegion}
-                      songs={medleySongIds.map((id) => data.songs[id] ?? null)}
+                      assetRegion={displayedMedleyAssetRegion}
+                      songs={displayedMedleySongs}
                     />
                   ) : (
                     <ResultCard

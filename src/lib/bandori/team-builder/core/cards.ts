@@ -20,7 +20,7 @@ import {
 } from "@/lib/bandori-team-calculator";
 import { ATTRIBUTE_AREA_ITEM_IDS, BAND_AREA_ITEM_GROUP_KEYS, PARAMETER_AREA_ITEM_IDS, PARAMETER_KEYS } from "./constants";
 import { calculateResolvedSkillUpperRatesPerPower, calculateSkillUpperRatesPerPower, getSkillDurationSeconds } from "./scoring";
-import { clamp, getRegionalNumber, toFiniteNumber } from "./utils";
+import { clamp, getRegionalLevelNumber, getRegionalNumber, toFiniteNumber } from "./utils";
 import { normalizeSearchEventType, normalizeSearchTarget, resolveBandoriTeamSearchEventMode, resolveBandoriTeamSearchUseFever } from "./events";
 import { compareCardInstanceKey, getCardInstanceKey, getCardInstanceKeys } from "./card-identity";
 import type { BandoriAreaItemConfiguration, BandoriTeamSearchEventMode, BandoriTeamSearchInput, BandoriTeamSearchTarget, CharacterUpperBoundIndex, PreparedChart, ScoreComboOptions, SearchCard, SearchCardSkillRateProfile, SearchCardGroup, SearchObjectiveAdapter, SearchPrecomputedData, SupportBandCandidate, SupportBandContext, SupportBandSelection } from "./types";
@@ -302,9 +302,9 @@ export function getAreaItemBonusForCard(
     }
 
     return power + calculateBandoriRoundedParamBonusPower(card.characterParam, [
-      getRegionalNumber(areaItem.performance?.[String(level)], server) / 100,
-      getRegionalNumber(areaItem.technique?.[String(level)], server) / 100,
-      getRegionalNumber(areaItem.visual?.[String(level)], server) / 100,
+      getRegionalLevelNumber(areaItem.performance, level, server) / 100,
+      getRegionalLevelNumber(areaItem.technique, level, server) / 100,
+      getRegionalLevelNumber(areaItem.visual, level, server) / 100,
     ]);
   }, 0);
 }
