@@ -103,6 +103,11 @@ const MEDLEY_EXACT_JOIN_PREFIX_SEED_MIN_REMAINING_MS = 500;
 const MEDLEY_EXACT_JOIN_PREFIX_SEED_MIN_PROOF_BUDGET_MS = 30_000;
 const MEDLEY_EXACT_JOIN_PREFIX_SEED_MIN_MEMORY_HEADROOM_MIB = 256;
 const MEDLEY_EXACT_JOIN_PREFIX_SEED_MAX_OBSERVED_GAP = 100_000;
+const BYTES_PER_MIB = 1024 * 1024;
+
+function roundMiB(bytes: number): number {
+  return Math.round((bytes / BYTES_PER_MIB) * 100) / 100;
+}
 
 function createMedleyExactCandidateSlotThresholdResult(scoreCutoff: number): BandoriTeamSearchResult | undefined {
   if (!Number.isFinite(scoreCutoff)) {
@@ -651,6 +656,40 @@ export function createMedleyExactSlotCandidateGenerator(
     ),
     hasAborted: () => aborted,
     poppedNodeCount: () => poppedNodes,
+    memoryProfile: () => {
+      let highPairRecordCount = 0;
+      let highPairRecordBitsetBytes = 0;
+      let rightCandidateBitsetBytes = 0;
+      for (const query of pairUpperQueryCache.values()) {
+        highPairRecordCount += query.highPairRecords?.length ?? 0;
+        if (
+          query.highPairRecordBitsetWordCount !== undefined
+          && query.containingHighPairRecordBitsByCardId
+        ) {
+          highPairRecordBitsetBytes += (
+            query.highPairRecordBitsetWordCount
+            * query.containingHighPairRecordBitsByCardId.size
+            * Uint32Array.BYTES_PER_ELEMENT
+          );
+        }
+        rightCandidateBitsetBytes += (
+          query.rightCandidateBitsetWordCount
+          * query.containingRightCandidateBitsByCardId.size
+          * Uint32Array.BYTES_PER_ELEMENT
+        );
+      }
+      return {
+        heapNodeCount: heap.length,
+        slotUpperHeapNodeCount: slotUpperHeap.length,
+        activeHeapNodeCount: activeHeapNodes.size,
+        globalComplementUpperCacheSize: globalComplementUpperCache.size,
+        globalPairComplementUpperCacheSize: globalPairComplementUpperCache.size,
+        pairUpperQueryCacheSize: pairUpperQueryCache.size,
+        highPairRecordCount,
+        highPairRecordBitsetMiB: roundMiB(highPairRecordBitsetBytes),
+        rightCandidateBitsetMiB: roundMiB(rightCandidateBitsetBytes),
+      };
+    },
   };
 }
 
@@ -3726,11 +3765,13 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     exactJoinPrefixSeedMaxObservedGap?: number;
     lowMemoryHighPairScanMinRecordCount?: number | null;
     lowMemoryHighPairPrefixRecordLimit?: number | null;
+    debugExactCandidateJoinMemoryAttribution?: boolean;
   } = {},
   observeEvaluatedResult?: MedleyEvaluatedResultObserver,
 ): MedleyExactCandidateJoinResult {
   // This wrapper proves one area-item configuration. The caller remains responsible for
   // aggregating configuration-level proof across locked/all scopes before reporting exact.
+  const exactJoinStartedAt = performance.now();
   profiling.exactCandidateJoinCallCount += 1;
   const normalizeDiagnosticNumber = (value: number | null | undefined): number | null => (
     value !== null && value !== undefined && Number.isFinite(value) ? value : null
@@ -4501,6 +4542,38 @@ export function searchMedleyConfigurationByExactCandidateJoin(
       candidateKeysBySlot[slotIndex] = new Set(candidatesBySlot[slotIndex].map(getMedleyExactCandidateCardKey));
     }
   };
+  const recordExactJoinMemorySnapshot = (
+    phase: string,
+    extra: Record<string, unknown> = {},
+  ): void => {
+    if (context.debugExactCandidateJoinMemoryAttribution !== true) {
+      return;
+    }
+    const uniqueGenerators = [...new Set(getCandidateFillProfilingGenerators())];
+    const generatorProfiles = uniqueGenerators.map((generator, index) => ({
+      index,
+      ...(generator.memoryProfile ? generator.memoryProfile() : {}),
+    }));
+    const candidateCountsBySlot = candidatesBySlot.map((candidates) => candidates.length);
+    const candidateKeyCountsBySlot = candidateKeysBySlot.map((keys) => keys.size);
+    profiling.exactCandidateJoinMemorySnapshots.push({
+      phase,
+      elapsedMs: Math.round(performance.now() - exactJoinStartedAt),
+      peakUsedHeapMiB: stats.peakUsedHeapMiB,
+      candidateCountsBySlot,
+      candidateCountTotal: candidateCountsBySlot.reduce((sum, count) => sum + count, 0),
+      candidateKeyCountsBySlot,
+      candidateKeyCountTotal: candidateKeyCountsBySlot.reduce((sum, count) => sum + count, 0),
+      exactCandidateJoinPairCount: profiling.exactCandidateJoinPairCount,
+      exactCandidateJoinPairComplementQueryCount: profiling.exactCandidateJoinPairComplementQueryCount,
+      exactCandidateJoinPairComplementHighPairRecordCount: (
+        profiling.exactCandidateJoinPairComplementHighPairRecordCount
+      ),
+      generatorProfiles,
+      ...extra,
+    });
+  };
+  recordExactJoinMemorySnapshot("after-pair-upper");
   const refineCandidateFillPairUpper = (excludedSlotIndex: number): boolean => {
     const pairSlotIndices = slots
       .map((_, index) => index)
@@ -4719,6 +4792,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
       profiling.exactCandidateJoinPoppedNodeCount += getCandidateFillProfilingGenerators().reduce((sum, currentGenerator) => (
         sum + currentGenerator.poppedNodeCount()
       ), 0);
+      recordExactJoinMemorySnapshot("candidate-fill-pair-refine-abort", { slotIndex });
       return buildUnprovedExactCandidateJoinResult();
     }
     const relaxedOtherUpper = bestSlotScores.reduce((sum, score, index) => (
@@ -4799,6 +4873,9 @@ export function searchMedleyConfigurationByExactCandidateJoin(
         profiling.exactCandidateJoinPoppedNodeCount += getCandidateFillProfilingGenerators().reduce((sum, currentGenerator) => (
           sum + currentGenerator.poppedNodeCount()
         ), 0);
+        recordExactJoinMemorySnapshot(stats.memoryLimited ? "candidate-fill-memory-limit" : "candidate-fill-deadline", {
+          slotIndex,
+        });
         return buildUnprovedExactCandidateJoinResult();
       }
       if (candidatesBySlot[slotIndex].length >= effectiveCandidateSoftLimit) {
@@ -4832,6 +4909,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
             sum + currentGenerator.poppedNodeCount()
           ), 0);
           profiling.exactCandidateJoinCompletedCount += 1;
+          recordExactJoinMemorySnapshot("anchor-frontier-proved", { slotIndex });
           return { proved: true, result: anchorFrontierProof.result };
         }
         const anchorFrontierObservedUpperBound = anchorFrontierProof?.observedUpperBound ?? null;
@@ -4863,6 +4941,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
         profiling.exactCandidateJoinPoppedNodeCount += getCandidateFillProfilingGenerators().reduce((sum, currentGenerator) => (
           sum + currentGenerator.poppedNodeCount()
         ), 0);
+        recordExactJoinMemorySnapshot("candidate-fill-soft-limit", { slotIndex });
         return buildUnprovedExactCandidateJoinResult(
           anchorFrontierResult,
           anchorFrontierObservedUpperBound ?? getObservedExactCandidateJoinUpperBound(),
@@ -4896,6 +4975,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
         profiling.exactCandidateJoinPoppedNodeCount += generators.reduce((sum, currentGenerator) => (
           sum + currentGenerator.poppedNodeCount()
         ), 0);
+        recordExactJoinMemorySnapshot("candidate-fill-generator-aborted", { slotIndex });
         return buildUnprovedExactCandidateJoinResult();
       }
       if (!candidate) {
@@ -4915,10 +4995,12 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     );
   }
   profiling.exactCandidateJoinCandidateFillElapsedMs += performance.now() - candidateFillStartedAt;
+  recordExactJoinMemorySnapshot("after-candidate-fill");
 
   candidatesBySlot.forEach(sortMedleyCandidates);
   maybeSeedFromExactJoinPrefix();
   if (stats.timedOut) {
+    recordExactJoinMemorySnapshot("after-prefix-seed-timeout");
     return buildUnprovedExactCandidateJoinResult();
   }
   if (profiling.exactCandidateJoinDebugKnownCardIdsBySlot) {
@@ -4964,6 +5046,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
       candidateCount: solveCandidateCounts[2] ?? solveCandidateCounts[0],
       observedUpperBound: observedUpperBoundBeforeSolve,
     });
+    recordExactJoinMemorySnapshot("solve-dominated-skip", { solveCandidateCounts });
     return buildUnprovedExactCandidateJoinResult(null, observedUpperBoundBeforeSolve);
   }
   const canUseSmallGapSolveRetry = (
@@ -4987,6 +5070,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
       candidateCount: solveCandidateCounts[2] ?? solveCandidateCounts[0],
       observedUpperBound: observedUpperBoundBeforeSolve,
     });
+    recordExactJoinMemorySnapshot("solve-workload-limit", { solveCandidateCounts });
     return buildUnprovedExactCandidateJoinResult();
   }
   let solveDeadlineAt = deadlineAt;
@@ -5013,6 +5097,13 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     );
     profiling.exactCandidateJoinLastSmallGapSolveRetryPeakHeapMiB = stats.peakUsedHeapMiB;
   }
+  recordExactJoinMemorySnapshot("before-solve", {
+    solveCandidateCounts,
+    solveUpperGap,
+    remainingBeforeSolveMs: Number.isFinite(remainingBeforeSolveMs)
+      ? Math.max(0, Math.round(remainingBeforeSolveMs))
+      : null,
+  });
   const solveStartedAt = performance.now();
   const joinResult = solveMedleyExactCandidateJoin(
     slots,
@@ -5030,6 +5121,11 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     observeEvaluatedResult,
   );
   profiling.exactCandidateJoinSolveElapsedMs += performance.now() - solveStartedAt;
+  recordExactJoinMemorySnapshot("after-solve", {
+    solveCandidateCounts,
+    solveTimedOut: joinResult.timedOut,
+    solveLocalTimedOut: joinResult.localTimedOut === true,
+  });
   if (joinResult.timedOut) {
     profiling.exactCandidateJoinAbortCount += 1;
     if (joinResult.localTimedOut) {
@@ -5038,6 +5134,9 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     recordAbortDiagnostics(joinResult.localTimedOut ? "small-gap-solve-timebox" : "solve-timeout", {
       candidateCount: candidatesBySlot.reduce((max, candidates) => Math.max(max, candidates.length), 0),
       observedUpperBound: getObservedExactCandidateJoinUpperBound(),
+    });
+    recordExactJoinMemorySnapshot(joinResult.localTimedOut ? "small-gap-solve-timebox" : "solve-timeout", {
+      solveCandidateCounts,
     });
     return buildUnprovedExactCandidateJoinResult(joinResult.result);
   }
@@ -5052,6 +5151,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
       candidateCount: candidatesBySlot.reduce((max, candidates) => Math.max(max, candidates.length), 0),
       observedUpperBound: solveOnlyAboveUpperTarget,
     });
+    recordExactJoinMemorySnapshot("solve-dominated-after-solve", { solveCandidateCounts });
     return buildUnprovedExactCandidateJoinResult(result, solveOnlyAboveUpperTarget);
   }
   if (result && result.score > incumbentScore) {
@@ -5062,6 +5162,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     );
   }
   profiling.exactCandidateJoinCompletedCount += 1;
+  recordExactJoinMemorySnapshot("proved", { solveCandidateCounts });
   releaseCandidateArrays();
   return { proved: true, result: applyPrefixSeedResult(result) };
 }

@@ -598,6 +598,9 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
   const requestedEnableTeamSharedCoefficientUpper = optimization.enableTeamSharedCoefficientUpper === true;
   const enableSharedPowerSkillUpper = optimization.enableSharedPowerSkillUpper === true;
   const debugConfigurationTrace = optimization.debugConfigurationTrace === true;
+  const debugExactCandidateJoinMemoryAttribution = (
+    optimization.debugExactCandidateJoinMemoryAttribution === true
+  );
   const enableExperimentalStagedCandidateExtension = (
     optimization.enableExperimentalStagedCandidateExtension === true
   );
@@ -3116,6 +3119,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
           exactJoinPrefixSeedMemorySoftLimitMiB: stats.memorySoftLimitMiB,
           lowMemoryHighPairScanMinRecordCount,
           lowMemoryHighPairPrefixRecordLimit,
+          debugExactCandidateJoinMemoryAttribution,
         },
         observeEvaluatedMedleyResult,
       );
@@ -3393,6 +3397,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
           exactJoinPrefixSeedMemorySoftLimitMiB: stats.memorySoftLimitMiB,
           lowMemoryHighPairScanMinRecordCount,
           lowMemoryHighPairPrefixRecordLimit,
+          debugExactCandidateJoinMemoryAttribution,
         },
         observeEvaluatedMedleyResult,
       );

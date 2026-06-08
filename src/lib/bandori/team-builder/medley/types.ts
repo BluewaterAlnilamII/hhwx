@@ -80,6 +80,7 @@ export type BandoriMedleySearchOptimizationOptions = {
   lowMemoryHighPairScanMinRecordCount?: number;
   enableLowMemoryHighPairPrefixUpper?: boolean;
   lowMemoryHighPairPrefixRecordLimit?: number;
+  debugExactCandidateJoinMemoryAttribution?: boolean;
   enableTrailingSameCoarseDfsOnly?: boolean;
   disableDominatedRootSkip?: boolean;
   disableSameCoarseTightRootSkip?: boolean;
@@ -565,6 +566,7 @@ export type BandoriMedleyTeamSearchProfilingStats = {
   exactCandidateJoinPairComplementHighPairBuildCount: number;
   exactCandidateJoinPairComplementHighPairBuildElapsedMs: number;
   exactCandidateJoinPairComplementHighPairRecordCount: number;
+  exactCandidateJoinMemorySnapshots: Array<Record<string, unknown>>;
   exactCandidateJoinLastBestSlotScores: number[];
   exactCandidateJoinLastPairUpperByExcludedSlot: Array<number | null>;
   exactCandidateJoinLastPairUnseenUpperByExcludedSlot: Array<number | null>;
@@ -713,6 +715,7 @@ export type MedleyExactSlotCandidateGenerator = {
   canReuseForScoreCutoff: (scoreCutoff: number) => boolean;
   hasAborted: () => boolean;
   poppedNodeCount: () => number;
+  memoryProfile?: () => Record<string, unknown>;
 };
 
 export type MedleyExactCandidateJoinResult = {
