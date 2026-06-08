@@ -530,7 +530,9 @@ export function createMedleyExactSlotCandidateGenerator(
           continue;
         }
         const candidateKey = globalPruning?.excludedCandidateKeys
-          ? getMedleyExactCandidateCardIdKey(nextSelectedCards.map((selectedCard) => selectedCard.cardId))
+          ? nextSelectedCards
+            .map((selectedCard) => selectedCard.cardId)
+            .join(",")
           : null;
         if (candidateKey && globalPruning?.excludedCandidateKeys?.has(candidateKey)) {
           continue;
@@ -2579,19 +2581,8 @@ function findBestHydratedGeneratedMedleyExactCandidatePairForAnchor(
   };
 }
 
-function getMedleyExactCandidateCardIdKey(cardIds: readonly number[]): string {
-  let packed = "p";
-  for (const cardId of cardIds) {
-    if (!Number.isInteger(cardId) || cardId < 0 || cardId > 0xffff) {
-      return `j${cardIds.join(",")}`;
-    }
-    packed += String.fromCharCode(cardId);
-  }
-  return packed;
-}
-
 function getMedleyExactCandidateCardKey(candidate: MedleyTeamCandidate): string {
-  return getMedleyExactCandidateCardIdKey(candidate.cardIds);
+  return candidate.cardIds.join(",");
 }
 
 function hydrateMedleyExactCandidateForResult(
