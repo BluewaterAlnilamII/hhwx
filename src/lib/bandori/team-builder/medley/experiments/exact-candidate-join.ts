@@ -3772,7 +3772,6 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     exactJoinPrefixSeedMinMemoryHeadroomMiB?: number;
     exactJoinPrefixSeedMaxObservedGap?: number;
     enableExactJoinSlotProofCutoff?: boolean;
-    enableExactCandidateAnchorJoinBeforeHighBudgetPairUpper?: boolean;
     lowMemoryHighPairScanMinRecordCount?: number | null;
     lowMemoryHighPairPrefixRecordLimit?: number | null;
     debugExactCandidateJoinMemoryAttribution?: boolean;
@@ -4404,79 +4403,6 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     }
   }
 
-  const runAnchoredJoinProof = (): MedleyExactCandidateJoinResult | null => {
-    const anchoredJoinStartedAt = performance.now();
-    const anchoredJoinResult = solveMedleyExactCandidateJoinByAnchor(
-      slots,
-      candidatesBySlot,
-      generators,
-      exactPairUpperByExcludedSlot,
-      configuration,
-      incumbentScore,
-      server,
-      perfectRate,
-      candidateSoftLimit,
-      profiling,
-      stats,
-      isPastDeadline,
-      deadlineAt,
-      observeEvaluatedResult,
-    );
-    profiling.exactCandidateJoinSolveElapsedMs += performance.now() - anchoredJoinStartedAt;
-    if (anchoredJoinResult.timedOut) {
-      profiling.exactCandidateJoinAbortCount += 1;
-      recordAbortDiagnostics("anchored-join-timeout", {
-        candidateCount: candidatesBySlot.reduce((max, candidates) => Math.max(max, candidates.length), 0),
-        observedUpperBound: getObservedExactCandidateJoinUpperBound(),
-      });
-      profiling.exactCandidateJoinLastCandidateCountsBySlot = candidatesBySlot.map((candidates) => candidates.length);
-      profiling.exactCandidateJoinGeneratedCandidateCount += candidatesBySlot.reduce((sum, candidates) => (
-        sum + candidates.length
-      ), 0);
-      profiling.exactCandidateJoinMaxCandidateCount = Math.max(
-        profiling.exactCandidateJoinMaxCandidateCount,
-        ...candidatesBySlot.map((candidates) => candidates.length),
-      );
-      profiling.exactCandidateJoinPoppedNodeCount += generators.reduce((sum, generator) => (
-        sum + generator.poppedNodeCount()
-      ), 0);
-      return buildUnprovedExactCandidateJoinResult(anchoredJoinResult.result);
-    }
-    if (anchoredJoinResult.proved) {
-      profiling.exactCandidateJoinLastCandidateCountsBySlot = candidatesBySlot.map((candidates) => candidates.length);
-      profiling.exactCandidateJoinGeneratedCandidateCount += candidatesBySlot.reduce((sum, candidates) => (
-        sum + candidates.length
-      ), 0);
-      profiling.exactCandidateJoinMaxCandidateCount = Math.max(
-        profiling.exactCandidateJoinMaxCandidateCount,
-        ...candidatesBySlot.map((candidates) => candidates.length),
-      );
-      profiling.exactCandidateJoinPoppedNodeCount += generators.reduce((sum, generator) => (
-        sum + generator.poppedNodeCount()
-      ), 0);
-      if (anchoredJoinResult.result && anchoredJoinResult.result.score > incumbentScore) {
-        profiling.exactCandidateJoinImprovementCount += 1;
-        profiling.bestExactCandidateJoinImprovement = Math.max(
-          profiling.bestExactCandidateJoinImprovement,
-          anchoredJoinResult.result.score - incumbentScore,
-        );
-      }
-      profiling.exactCandidateJoinCompletedCount += 1;
-      return { proved: true, result: anchoredJoinResult.result };
-    }
-    return null;
-  };
-
-  if (
-    context.enableExactCandidateAnchorJoinBeforeHighBudgetPairUpper === true
-    && shouldUseRootPruneOnlyPairProbe
-  ) {
-    const anchoredJoinResult = runAnchoredJoinProof();
-    if (anchoredJoinResult) {
-      return anchoredJoinResult;
-    }
-  }
-
   if (shouldUseRootPruneOnlyPairProbe && exactPairUpperByExcludedSlot[0] !== null) {
     const highBudgetDeepPairStartedAt = performance.now();
     const highBudgetDeepPairUpperResult = proveMedleyExactCandidatePairUpper(
@@ -4551,9 +4477,63 @@ export function searchMedleyConfigurationByExactCandidateJoin(
   }
 
   if (profiling.exactCandidateJoinDebugAnchorSlotIndex !== undefined) {
-    const anchoredJoinResult = runAnchoredJoinProof();
-    if (anchoredJoinResult) {
-      return anchoredJoinResult;
+    const anchoredJoinStartedAt = performance.now();
+    const anchoredJoinResult = solveMedleyExactCandidateJoinByAnchor(
+      slots,
+      candidatesBySlot,
+      generators,
+      exactPairUpperByExcludedSlot,
+      configuration,
+      incumbentScore,
+      server,
+      perfectRate,
+      candidateSoftLimit,
+      profiling,
+      stats,
+      isPastDeadline,
+      deadlineAt,
+    );
+    profiling.exactCandidateJoinSolveElapsedMs += performance.now() - anchoredJoinStartedAt;
+    if (anchoredJoinResult.timedOut) {
+      profiling.exactCandidateJoinAbortCount += 1;
+      recordAbortDiagnostics("anchored-join-timeout", {
+        candidateCount: candidatesBySlot.reduce((max, candidates) => Math.max(max, candidates.length), 0),
+        observedUpperBound: getObservedExactCandidateJoinUpperBound(),
+      });
+      profiling.exactCandidateJoinLastCandidateCountsBySlot = candidatesBySlot.map((candidates) => candidates.length);
+      profiling.exactCandidateJoinGeneratedCandidateCount += candidatesBySlot.reduce((sum, candidates) => (
+        sum + candidates.length
+      ), 0);
+      profiling.exactCandidateJoinMaxCandidateCount = Math.max(
+        profiling.exactCandidateJoinMaxCandidateCount,
+        ...candidatesBySlot.map((candidates) => candidates.length),
+      );
+      profiling.exactCandidateJoinPoppedNodeCount += generators.reduce((sum, generator) => (
+        sum + generator.poppedNodeCount()
+      ), 0);
+      return buildUnprovedExactCandidateJoinResult(anchoredJoinResult.result);
+    }
+    if (anchoredJoinResult.proved) {
+      profiling.exactCandidateJoinLastCandidateCountsBySlot = candidatesBySlot.map((candidates) => candidates.length);
+      profiling.exactCandidateJoinGeneratedCandidateCount += candidatesBySlot.reduce((sum, candidates) => (
+        sum + candidates.length
+      ), 0);
+      profiling.exactCandidateJoinMaxCandidateCount = Math.max(
+        profiling.exactCandidateJoinMaxCandidateCount,
+        ...candidatesBySlot.map((candidates) => candidates.length),
+      );
+      profiling.exactCandidateJoinPoppedNodeCount += generators.reduce((sum, generator) => (
+        sum + generator.poppedNodeCount()
+      ), 0);
+      if (anchoredJoinResult.result && anchoredJoinResult.result.score > incumbentScore) {
+        profiling.exactCandidateJoinImprovementCount += 1;
+        profiling.bestExactCandidateJoinImprovement = Math.max(
+          profiling.bestExactCandidateJoinImprovement,
+          anchoredJoinResult.result.score - incumbentScore,
+        );
+      }
+      profiling.exactCandidateJoinCompletedCount += 1;
+      return { proved: true, result: anchoredJoinResult.result };
     }
   }
 
