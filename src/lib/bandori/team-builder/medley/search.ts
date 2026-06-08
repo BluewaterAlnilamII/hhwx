@@ -2584,13 +2584,13 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
       0,
       ...slots.map((slot) => slot.searchCards.length),
     );
-    const hasLowMemoryInitialCandidateSyncSlotWidth = (
-      !hasEventBonus
-      || maxLowMemoryInitialCandidateSyncSlotCardCount <= lowMemoryInitialCandidateSyncMaxSlotCardCount
-    );
     const hasFullWidthEventExactJoinMemoryRisk = (
       hasEventBonus
+      && configurationIndex === 0
       && maxLowMemoryInitialCandidateSyncSlotCardCount > lowMemoryInitialCandidateSyncMaxSlotCardCount
+    );
+    const hasLowMemoryInitialCandidateSyncSlotWidth = (
+      !hasFullWidthEventExactJoinMemoryRisk
     );
     if (hasFullWidthEventExactJoinMemoryRisk) {
       activeConfigurationMemorySoftLimitBytes = (
