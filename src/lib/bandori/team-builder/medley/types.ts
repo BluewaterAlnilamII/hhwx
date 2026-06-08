@@ -92,6 +92,7 @@ export type BandoriMedleyTeamSearchInput = Omit<
   | "otherPlayersAveragePower"
   | "otherPlayerSkills"
   | "encoreSkillSource"
+  | "constraints"
 > & {
   songs: BandoriMedleySongSearchInput[];
   target?: "score";

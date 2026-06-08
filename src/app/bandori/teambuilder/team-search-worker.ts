@@ -2,6 +2,7 @@ import { getApiErrorMessage, parseApiSuccessData } from "@/lib/api-contracts";
 import {
   searchBandoriBestTeams,
   type BandoriTeamSearchDifficulty,
+  type BandoriTeamSearchConstraints,
   type BandoriTeamSearchEventType,
   type BandoriTeamSearchExternalSkill,
   type BandoriTeamSearchLiveType,
@@ -122,6 +123,7 @@ type TeamSearchWorkerSearchRequest = {
     resultLimit: number;
     maxSearchDurationMs: number;
     medleyMode?: MedleyCalculationMode;
+    constraints?: BandoriTeamSearchConstraints;
   };
 };
 
@@ -771,6 +773,7 @@ async function runSearch(request: TeamSearchWorkerSearchRequest): Promise<Bandor
     challengeCpCost: request.live.challengeCpCost,
     server: request.profilePayload.bestdoriProfile.server,
     maxSearchDurationMs: request.calculation.maxSearchDurationMs,
+    constraints: request.calculation.constraints,
   });
 }
 

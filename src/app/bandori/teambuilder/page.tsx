@@ -252,6 +252,8 @@ type LivePreferenceState = {
   medleySongIds?: MedleySongIdTuple;
   medleyDifficulties?: MedleyDifficultyTuple;
   perfectRate?: string;
+  minLeaderScoreUpPercent?: string;
+  minTotalPower?: string;
   otherPlayersAveragePower?: string;
   encoreSkillSource?: EncoreSkillSource;
   otherPlayers?: OtherPlayerDraft[];
@@ -984,6 +986,8 @@ function readLivePreferences(): LivePreferenceState {
       medleySongIds: normalizeMedleySongIdsPreference(value.medleySongIds),
       medleyDifficulties: normalizeMedleyDifficultiesPreference(value.medleyDifficulties),
       perfectRate: typeof value.perfectRate === "string" ? value.perfectRate : undefined,
+      minLeaderScoreUpPercent: typeof value.minLeaderScoreUpPercent === "string" ? value.minLeaderScoreUpPercent : undefined,
+      minTotalPower: typeof value.minTotalPower === "string" ? value.minTotalPower : undefined,
       otherPlayersAveragePower: typeof value.otherPlayersAveragePower === "string" ? value.otherPlayersAveragePower : undefined,
       encoreSkillSource: isEncoreSkillSource(value.encoreSkillSource) ? value.encoreSkillSource : undefined,
       otherPlayers: normalizeOtherPlayersPreference(value.otherPlayers),
@@ -1084,6 +1088,11 @@ function getSearchTimeLimitLabel(maxSearchDurationSeconds?: string): string | nu
   }
   const seconds = Number(maxSearchDurationSeconds);
   return Number.isFinite(seconds) && seconds > 0 ? `${seconds} 秒` : null;
+}
+
+function parsePositiveConstraintInput(value: string): number | undefined {
+  const numeric = Number(value.trim());
+  return Number.isFinite(numeric) && numeric > 0 ? numeric : undefined;
 }
 
 function getExactCandidateJoinAbortReasonLabel(
@@ -2418,6 +2427,8 @@ function TeamBuilderPanel() {
   const [medleyCalculationMode, setMedleyCalculationMode] = useState<MedleyCalculationMode>("maximize");
   const [resultLimit, setResultLimit] = useState("10");
   const [maxSearchDurationSeconds, setMaxSearchDurationSeconds] = useState(DEFAULT_SEARCH_DURATION_SECONDS);
+  const [minLeaderScoreUpPercent, setMinLeaderScoreUpPercent] = useState(() => initialLivePreferences.minLeaderScoreUpPercent ?? "");
+  const [minTotalPower, setMinTotalPower] = useState(() => initialLivePreferences.minTotalPower ?? "");
   const [submitting, setSubmitting] = useState(false);
   const [calculationStartedAt, setCalculationStartedAt] = useState<number | null>(null);
   const [calculationNow, setCalculationNow] = useState<number | null>(null);
@@ -2511,6 +2522,14 @@ function TeamBuilderPanel() {
   const updatePerfectRate = useCallback((value: string) => {
     setPerfectRate(value);
     writeLivePreferences({ perfectRate: value });
+  }, []);
+  const updateMinLeaderScoreUpPercent = useCallback((value: string) => {
+    setMinLeaderScoreUpPercent(value);
+    writeLivePreferences({ minLeaderScoreUpPercent: value });
+  }, []);
+  const updateMinTotalPower = useCallback((value: string) => {
+    setMinTotalPower(value);
+    writeLivePreferences({ minTotalPower: value });
   }, []);
   const updateOtherPlayersAveragePower = useCallback((value: string) => {
     setOtherPlayersAveragePower(value);
@@ -3351,6 +3370,19 @@ function TeamBuilderPanel() {
         assetRegion: selectedEventAssetRegion,
       }
       : null;
+    let constraints: TeamSearchWorkerRequest["calculation"]["constraints"];
+    if (!isMedleyEvent) {
+      const nextConstraints: NonNullable<TeamSearchWorkerRequest["calculation"]["constraints"]> = {};
+      const minLeaderScoreUpPercentConstraint = parsePositiveConstraintInput(minLeaderScoreUpPercent);
+      const minTotalPowerConstraint = parsePositiveConstraintInput(minTotalPower);
+      if (minLeaderScoreUpPercentConstraint !== undefined) {
+        nextConstraints.minLeaderScoreUpPercent = minLeaderScoreUpPercentConstraint;
+      }
+      if (minTotalPowerConstraint !== undefined) {
+        nextConstraints.minTotalPower = minTotalPowerConstraint;
+      }
+      constraints = Object.keys(nextConstraints).length > 0 ? nextConstraints : undefined;
+    }
 
     setSubmitting(true);
     const startedAt = Date.now();
@@ -3411,6 +3443,7 @@ function TeamBuilderPanel() {
             Math.max(1, Number(maxSearchDurationSeconds)) * 1000,
           ),
           medleyMode: isMedleyEvent ? medleyCalculationMode : undefined,
+          constraints,
         },
       }, { memoryWatchdog: isMedleyEvent });
       if (!response.ok) {
@@ -3751,6 +3784,31 @@ function TeamBuilderPanel() {
                 <span className="shrink-0 text-sm font-semibold text-slate-500">秒</span>
               </div>
             </FieldRow>
+            {!isMedleyEvent ? (
+              <>
+                <FieldRow label="最低队长技能倍率">
+                  <div className="flex items-center gap-2">
+                    <TextInput
+                      value={minLeaderScoreUpPercent}
+                      onChange={(event) => updateMinLeaderScoreUpPercent(event.target.value)}
+                      inputMode="decimal"
+                      placeholder="不限制"
+                      aria-label="最低队长技能倍率"
+                    />
+                    <span className="shrink-0 text-sm font-semibold text-slate-500">%</span>
+                  </div>
+                </FieldRow>
+                <FieldRow label="最低综合力">
+                  <TextInput
+                    value={minTotalPower}
+                    onChange={(event) => updateMinTotalPower(event.target.value)}
+                    inputMode="numeric"
+                    placeholder="不限制"
+                    aria-label="最低综合力"
+                  />
+                </FieldRow>
+              </>
+            ) : null}
             {isMedleyEvent ? (
               <div className="space-y-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm font-semibold leading-6 text-amber-800">
                 <p>

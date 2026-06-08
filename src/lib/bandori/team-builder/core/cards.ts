@@ -19,7 +19,7 @@ import {
   type CalculatedBandoriCard,
 } from "@/lib/bandori-team-calculator";
 import { ATTRIBUTE_AREA_ITEM_IDS, BAND_AREA_ITEM_GROUP_KEYS, PARAMETER_AREA_ITEM_IDS, PARAMETER_KEYS } from "./constants";
-import { calculateResolvedSkillUpperRatesPerPower, calculateSkillUpperRatesPerPower, getSkillDurationSeconds } from "./scoring";
+import { calculateResolvedSkillUpperRatesPerPower, calculateSkillUpperRatesPerPower, getResolvedSkillMaxScoreUpPercent, getSkillDurationSeconds } from "./scoring";
 import { clamp, getRegionalLevelNumber, getRegionalNumber, toFiniteNumber } from "./utils";
 import { normalizeSearchEventType, normalizeSearchTarget, resolveBandoriTeamSearchEventMode, resolveBandoriTeamSearchUseFever } from "./events";
 import { compareCardInstanceKey, getCardInstanceKey, getCardInstanceKeys } from "./card-identity";
@@ -120,26 +120,34 @@ function buildSearchCardSkillRateProfile(
     sameBandId: card.bandId,
     sameAttribute: card.attribute,
   };
+  const sameBandResolvedSkill = skill ? resolveBandoriSkill(card.skillId, skill, card.skillLevel, sameBandContext, server) : null;
+  const sameAttributeResolvedSkill = skill ? resolveBandoriSkill(card.skillId, skill, card.skillLevel, sameAttributeContext, server) : null;
+  const bothResolvedSkill = skill ? resolveBandoriSkill(card.skillId, skill, card.skillLevel, bothContext, server) : null;
+  const mixedResolvedSkill = skill ? resolveBandoriSkill(card.skillId, skill, card.skillLevel, mixedContext, server) : null;
   const sameBandSkillUpperRates = calculateResolvedSkillUpperRatesPerPower(
     chart,
-    skill ? resolveBandoriSkill(card.skillId, skill, card.skillLevel, sameBandContext, server) : null,
+    sameBandResolvedSkill,
     comboOptions,
   );
   const sameAttributeSkillUpperRates = calculateResolvedSkillUpperRatesPerPower(
     chart,
-    skill ? resolveBandoriSkill(card.skillId, skill, card.skillLevel, sameAttributeContext, server) : null,
+    sameAttributeResolvedSkill,
     comboOptions,
   );
   const bothSkillUpperRates = calculateResolvedSkillUpperRatesPerPower(
     chart,
-    skill ? resolveBandoriSkill(card.skillId, skill, card.skillLevel, bothContext, server) : null,
+    bothResolvedSkill,
     comboOptions,
   );
   const mixedSkillUpperRates = calculateResolvedSkillUpperRatesPerPower(
     chart,
-    skill ? resolveBandoriSkill(card.skillId, skill, card.skillLevel, mixedContext, server) : null,
+    mixedResolvedSkill,
     comboOptions,
   );
+  const leaderSameBandScoreUpPercent = getResolvedSkillMaxScoreUpPercent(sameBandResolvedSkill);
+  const leaderSameAttributeScoreUpPercent = getResolvedSkillMaxScoreUpPercent(sameAttributeResolvedSkill);
+  const leaderBothScoreUpPercent = getResolvedSkillMaxScoreUpPercent(bothResolvedSkill);
+  const leaderMixedScoreUpPercent = getResolvedSkillMaxScoreUpPercent(mixedResolvedSkill);
 
   return {
     skillUpperRate: skillUpperRates.maxRate,
@@ -153,6 +161,16 @@ function buildSearchCardSkillRateProfile(
     skillBothLeaderRate: bothSkillUpperRates.leaderRate,
     skillMixedAverageRate: mixedSkillUpperRates.averageRate,
     skillMixedLeaderRate: mixedSkillUpperRates.leaderRate,
+    leaderScoreUpPercent: Math.max(
+      leaderSameBandScoreUpPercent,
+      leaderSameAttributeScoreUpPercent,
+      leaderBothScoreUpPercent,
+      leaderMixedScoreUpPercent,
+    ),
+    leaderSameBandScoreUpPercent,
+    leaderSameAttributeScoreUpPercent,
+    leaderBothScoreUpPercent,
+    leaderMixedScoreUpPercent,
   };
 }
 

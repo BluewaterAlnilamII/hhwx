@@ -7,10 +7,11 @@
 import { calculateBandoriCardEventBonus, calculateBandoriSelectedAreaItemPower } from "@/lib/bandori-team-calculator";
 import { buildCalculatedCards, buildSearchCardsForConfiguration, buildSearchCardSkillRateProfiles, createSupportBandContext, resolveSupportBandForTeam, toAreaItemStateMap } from "./cards";
 import { getCachedPreparedChart } from "./chart";
-import { calculateBestMultiLiveScoreForSkillWindows, calculateBestScoreForNonOverlappingSkillWindows, calculateBestScoreForNonOverlappingSkillWindowsTargetOnly, type SkillWindowScoreResult } from "./scoring";
+import { calculateBestMultiLiveScoreForSkillWindows, calculateBestScoreForNonOverlappingSkillWindows, calculateBestScoreForNonOverlappingSkillWindowsTargetOnly, getResolvedSkillMaxScoreUpPercent, type SkillWindowScoreResult } from "./scoring";
 import { calculateChallengeLiveEventPoint, calculateChallengeLiveEventPointBase, calculateEventPoint, calculateEventPointBeforeMultiplier, calculateRoomScore, createEventPointOptions, getSearchCardsTeamContext, getEventPointMultiplier, getTargetValue, isChallengeLiveEventPointInput, normalizeSearchEventType, normalizeSearchLiveType, normalizeSearchTarget, resolveCachedBandoriSkill, resolveEncoreSkill, resolveOtherPlayerSkills, resolveBandoriTeamSearchEventMode } from "./events";
 import { isSearchUpperBoundBelowResultThreshold } from "./character-bounds";
 import { getCardInstanceKey } from "./card-identity";
+import { normalizeTeamSearchConstraints } from "./constraints";
 import type { CalculatedBandoriCard } from "@/lib/bandori-team-calculator";
 import type { BandoriAreaItemConfiguration, BandoriTeamSearchResult, BandoriTeamSearchInput, PreparedChart, ScoreCalculationCache, ScoreComboOptions, SearchCard, SupportBandCandidate, SupportBandContext, BandoriTeamSearchResultCard, BandoriTeamSearchSupportCard } from "./types";
 import { clamp } from "./utils";
@@ -169,17 +170,32 @@ export function evaluateTeam(options: EvaluateTeamOptions): BandoriTeamSearchRes
   } = options;
   // evaluateTeam is the only path that hydrates five candidate cards into display results:
   // resolve skills with full team context, then calculate score, room score, event points, support band, and presentation fields.
+  const constraints = normalizeTeamSearchConstraints(input.constraints);
   const context = getSearchCardsTeamContext(cards);
+  const totalPower = Math.floor(cards.reduce((sum, card) => sum + card.effectivePower, 0));
+  if (constraints.minTotalPower !== null && totalPower < constraints.minTotalPower) {
+    return null;
+  }
+
   const resolvedSkills = cards.map((card) => {
     const skill = input.skillsById[String(card.skillId)];
     return resolveCachedBandoriSkill(card.skillId, skill, card.skillLevel, context, server, scoreCache);
   });
+  const minLeaderScoreUpPercent = constraints.minLeaderScoreUpPercent;
+  const eligibleLeaderIndexes = minLeaderScoreUpPercent === null
+    ? undefined
+    : resolvedSkills.map((skill) => (
+      getResolvedSkillMaxScoreUpPercent(skill) >= minLeaderScoreUpPercent
+    ));
+  if (eligibleLeaderIndexes && !eligibleLeaderIndexes.some(Boolean)) {
+    return null;
+  }
+
   const eventMode = resolveBandoriTeamSearchEventMode(input.eventType, input.liveType);
   const eventBonuses = cards.map((card) => calculateBandoriCardEventBonus(card, input.eventBonus));
   const pointBonusRate = eventMode === "pointBonus"
     ? Math.round(eventBonuses.reduce((sum, bonus) => sum + bonus.pointBonusRate, 0) * 100) / 100
     : 0;
-  const totalPower = Math.floor(cards.reduce((sum, card) => sum + card.effectivePower, 0));
   const target = normalizeSearchTarget(input.target);
   const liveType = normalizeSearchLiveType(input.liveType);
   const eventType = normalizeSearchEventType(input.eventType);
@@ -233,6 +249,7 @@ export function evaluateTeam(options: EvaluateTeamOptions): BandoriTeamSearchRes
       comboOptions,
       targetOnly,
       shouldCalculateDetailedScore,
+      eligibleLeaderIndexes,
     )
     : calculateBestScoreForNonOverlappingSkillWindows(
       chart,
@@ -244,6 +261,7 @@ export function evaluateTeam(options: EvaluateTeamOptions): BandoriTeamSearchRes
       comboOptions,
       targetOnly,
       shouldCalculateDetailedScore,
+      eligibleLeaderIndexes,
     );
   const best = calculateBest(scoreOnly);
 

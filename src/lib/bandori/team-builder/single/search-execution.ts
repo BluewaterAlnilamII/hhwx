@@ -17,16 +17,21 @@ import {
   CHARACTER_MASK_SEGMENT_BITS,
   compareUpperBoundDesc,
   estimateCorrelatedSearchScopeTargetUpperBound,
+  estimateSearchScopeLeaderScoreUpPercentUpperBound,
+  estimateSearchScopePowerUpperBound,
+  estimateSearchScopeScoreUpperBoundWithLeaderConstraint,
   estimateSearchScopeScoreUpperBound,
   estimateSearchScopeTargetUpperBoundFromScore,
   getCardSkillAverageRateForUpperMode,
   getCardSkillLeaderRateForUpperMode,
+  getCardLeaderScoreUpPercentForUpperMode,
   hasCharacterIndexInMask,
   isSearchUpperBoundBelowResultThreshold,
   pruneCardsByInclusionTargetUpperBound,
   shouldUseCorrelatedUpperBound,
 } from "../core/character-bounds";
 import { evaluateTeam } from "../core/team-evaluation";
+import type { NormalizedBandoriTeamSearchConstraints } from "../core/constraints";
 import { getTeamEvaluationKey, markTeamSearchTimedOut, pushResult } from "./results";
 import { buildSeedTeams } from "./seeds";
 import { createSearchScopes, scopeOwnsCompleteTeam } from "./scopes";
@@ -66,6 +71,7 @@ export type SingleSearchExecutionState = {
   deadlineAt: number;
   observedScoreUpperBound: number;
   visitedBranchCount: number;
+  constraints: NormalizedBandoriTeamSearchConstraints;
 };
 
 function getPruningThresholdResult(state: SingleSearchExecutionState): BandoriTeamSearchResult | undefined {
@@ -88,6 +94,60 @@ function shouldPruneByUpperBound(
     scoreUpperBound,
     getPruningThresholdResult(state),
   );
+}
+
+function shouldPruneByPowerConstraint(options: {
+  state: SingleSearchExecutionState;
+  selectedCards: SearchCard[];
+  upperBoundIndex: SearchConfiguration["upperBoundIndex"];
+  searchCards: SearchCard[];
+  startIndex: number;
+  usedCharacterMaskLow: number;
+  usedCharacterMaskHigh: number;
+  selectedPower?: number;
+}): boolean {
+  const minTotalPower = options.state.constraints.minTotalPower;
+  if (minTotalPower === null) {
+    return false;
+  }
+
+  const powerUpperBound = estimateSearchScopePowerUpperBound(
+    options.selectedCards,
+    options.upperBoundIndex,
+    options.searchCards,
+    options.startIndex,
+    options.usedCharacterMaskLow,
+    options.usedCharacterMaskHigh,
+    options.selectedPower,
+  );
+  return powerUpperBound < minTotalPower;
+}
+
+function shouldPruneByLeaderConstraint(options: {
+  state: SingleSearchExecutionState;
+  selectedCards: SearchCard[];
+  upperBoundIndex: SearchConfiguration["upperBoundIndex"];
+  searchCards: SearchCard[];
+  startIndex: number;
+  usedCharacterMaskLow: number;
+  usedCharacterMaskHigh: number;
+  skillContextUpperMode?: SearchConfiguration["skillContextUpperMode"];
+}): boolean {
+  const minLeaderScoreUpPercent = options.state.constraints.minLeaderScoreUpPercent;
+  if (minLeaderScoreUpPercent === null) {
+    return false;
+  }
+
+  const leaderScoreUpPercentUpperBound = estimateSearchScopeLeaderScoreUpPercentUpperBound(
+    options.selectedCards,
+    options.upperBoundIndex,
+    options.searchCards,
+    options.startIndex,
+    options.usedCharacterMaskLow,
+    options.usedCharacterMaskHigh,
+    options.skillContextUpperMode,
+  );
+  return leaderScoreUpPercentUpperBound < minLeaderScoreUpPercent;
 }
 
 function evaluateUniqueTeam(
@@ -160,6 +220,7 @@ function tryCorrelatedUpperBoundPrune(options: {
     options.selectedSkillAverageRate,
     options.selectedSkillLeaderRate,
     options.selectedPointBonusRate,
+    state.constraints.minLeaderScoreUpPercent,
   );
   if (
     tightTargetUpperBound !== null
@@ -174,6 +235,67 @@ function tryCorrelatedUpperBoundPrune(options: {
     return true;
   }
   return false;
+}
+
+function getSelectedEligibleLeaderSkillRate(options: {
+  state: SingleSearchExecutionState;
+  selectedCards: SearchCard[];
+  skillContextUpperMode: SearchConfiguration["skillContextUpperMode"];
+}): number | undefined {
+  const minLeaderScoreUpPercent = options.state.constraints.minLeaderScoreUpPercent;
+  const skillContextUpperMode = options.skillContextUpperMode;
+  if (minLeaderScoreUpPercent === null || !skillContextUpperMode) {
+    return undefined;
+  }
+
+  let leaderSkillRate = 0;
+  for (const card of options.selectedCards) {
+    if (getCardLeaderScoreUpPercentForUpperMode(card, skillContextUpperMode) < minLeaderScoreUpPercent) {
+      continue;
+    }
+    leaderSkillRate = Math.max(
+      leaderSkillRate,
+      getCardSkillLeaderRateForUpperMode(card, skillContextUpperMode),
+    );
+  }
+  return leaderSkillRate;
+}
+
+function estimateLeaderConstrainedScoreUpperBound(options: {
+  state: SingleSearchExecutionState;
+  selectedCards: SearchCard[];
+  upperBoundIndex: SearchConfiguration["upperBoundIndex"];
+  searchCards: SearchCard[];
+  startIndex: number;
+  usedCharacterMaskLow: number;
+  usedCharacterMaskHigh: number;
+  skillContextUpperMode: SearchConfiguration["skillContextUpperMode"];
+  selectedPower: number;
+  selectedSkillAverageRate: number;
+}): number | null {
+  return estimateSearchScopeScoreUpperBoundWithLeaderConstraint(
+    options.selectedCards,
+    options.upperBoundIndex,
+    options.searchCards,
+    options.startIndex,
+    options.usedCharacterMaskLow,
+    options.usedCharacterMaskHigh,
+    options.state.baseScoreRatePerPower,
+    options.skillContextUpperMode,
+    options.state.constraints.minLeaderScoreUpPercent,
+    options.selectedPower,
+    options.skillContextUpperMode ? options.selectedSkillAverageRate : undefined,
+  );
+}
+
+function canPruneCardsByInclusion(
+  state: SingleSearchExecutionState,
+  useContextPartitioning: boolean,
+): boolean {
+  return state.results.length >= state.resultLimit && (
+    ((state.target === "score" || (state.target === "eventPoint" && state.eventMode === "parameterPower")) && useContextPartitioning)
+    || (state.target === "eventPoint" && state.eventMode === "pointBonus")
+  );
 }
 
 export function buildConfigurationSearches(options: {
@@ -193,6 +315,7 @@ export function buildConfigurationSearches(options: {
     useContextPartitioning,
   } = options;
   const configurationSearches: SearchConfiguration[] = [];
+  const includeLeaderScoreUpBounds = state.constraints.minLeaderScoreUpPercent !== null;
 
   // Build seeds and root bounds for each area configuration, raising the top-N threshold before deciding whether to enter DFS.
   for (const configuration of configurations) {
@@ -232,7 +355,36 @@ export function buildConfigurationSearches(options: {
       }
 
       let scopeCards = groupSearchCardsByCharacter(scope.searchCards);
-      let upperBoundIndex = buildCharacterUpperBoundIndex(scopeCards, scope.skillContextUpperMode);
+      let upperBoundIndex = buildCharacterUpperBoundIndex(scopeCards, scope.skillContextUpperMode, includeLeaderScoreUpBounds);
+      if (shouldPruneByPowerConstraint({
+        state,
+        selectedCards: [],
+        upperBoundIndex,
+        searchCards: scopeCards,
+        startIndex: 0,
+        usedCharacterMaskLow: 0,
+        usedCharacterMaskHigh: 0,
+        selectedPower: 0,
+      })) {
+        state.stats.prunedBranchCount += 1;
+        state.stats.rootConfigSkippedCount += 1;
+        continue;
+      }
+      if (shouldPruneByLeaderConstraint({
+        state,
+        selectedCards: [],
+        upperBoundIndex,
+        searchCards: scopeCards,
+        startIndex: 0,
+        usedCharacterMaskLow: 0,
+        usedCharacterMaskHigh: 0,
+        skillContextUpperMode: scope.skillContextUpperMode,
+      })) {
+        state.stats.prunedBranchCount += 1;
+        state.stats.rootConfigSkippedCount += 1;
+        continue;
+      }
+
       let rootScoreUpperBound = estimateSearchScopeScoreUpperBound(
         [],
         upperBoundIndex,
@@ -290,10 +442,7 @@ export function buildConfigurationSearches(options: {
         break;
       }
 
-      const shouldPruneScopeCardsByInclusion = state.results.length >= state.resultLimit && (
-        (state.target === "score" && useContextPartitioning)
-        || (state.target === "eventPoint" && state.eventMode === "pointBonus")
-      );
+      const shouldPruneScopeCardsByInclusion = canPruneCardsByInclusion(state, useContextPartitioning);
       if (shouldPruneScopeCardsByInclusion) {
         const prunedScopeCards = pruneCardsByInclusionTargetUpperBound(
           scopeCards,
@@ -309,7 +458,7 @@ export function buildConfigurationSearches(options: {
         );
         if (prunedScopeCards.length < scopeCards.length) {
           scopeCards = prunedScopeCards;
-          upperBoundIndex = buildCharacterUpperBoundIndex(scopeCards, scope.skillContextUpperMode);
+          upperBoundIndex = buildCharacterUpperBoundIndex(scopeCards, scope.skillContextUpperMode, includeLeaderScoreUpBounds);
           rootScoreUpperBound = estimateSearchScopeScoreUpperBound(
             [],
             upperBoundIndex,
@@ -338,6 +487,34 @@ export function buildConfigurationSearches(options: {
           );
           state.observedScoreUpperBound = Math.max(state.observedScoreUpperBound, rootScoreUpperBound);
         }
+      }
+      if (shouldPruneByPowerConstraint({
+        state,
+        selectedCards: [],
+        upperBoundIndex,
+        searchCards: scopeCards,
+        startIndex: 0,
+        usedCharacterMaskLow: 0,
+        usedCharacterMaskHigh: 0,
+        selectedPower: 0,
+      })) {
+        state.stats.prunedBranchCount += 1;
+        state.stats.rootConfigSkippedCount += 1;
+        continue;
+      }
+      if (shouldPruneByLeaderConstraint({
+        state,
+        selectedCards: [],
+        upperBoundIndex,
+        searchCards: scopeCards,
+        startIndex: 0,
+        usedCharacterMaskLow: 0,
+        usedCharacterMaskHigh: 0,
+        skillContextUpperMode: scope.skillContextUpperMode,
+      })) {
+        state.stats.prunedBranchCount += 1;
+        state.stats.rootConfigSkippedCount += 1;
+        continue;
       }
       if (shouldPruneByUpperBound(state, rootTargetUpperBound, rootScoreUpperBound)) {
         state.stats.prunedBranchCount += 1;
@@ -378,6 +555,7 @@ export function runExactDfsSearch(
   useContextPartitioning: boolean,
 ): void {
   // Exact DFS. Every prune must come from an optimistic upper bound, never from fixed Top-K truncation.
+  const includeLeaderScoreUpBounds = state.constraints.minLeaderScoreUpPercent !== null;
   for (const search of configurationSearches) {
     if (performance.now() >= state.deadlineAt) {
       markTeamSearchTimedOut(state.stats);
@@ -387,10 +565,7 @@ export function runExactDfsSearch(
     const { configuration, skillContextUpperMode } = search;
     let searchCards = search.searchCards;
     let upperBoundIndex = search.upperBoundIndex;
-    const shouldPruneSearchCardsByInclusion = state.results.length >= state.resultLimit && (
-      (state.target === "score" && useContextPartitioning)
-      || (state.target === "eventPoint" && state.eventMode === "pointBonus")
-    );
+    const shouldPruneSearchCardsByInclusion = canPruneCardsByInclusion(state, useContextPartitioning);
     if (shouldPruneSearchCardsByInclusion) {
       const prunedSearchCards = pruneCardsByInclusionTargetUpperBound(
         searchCards,
@@ -406,7 +581,7 @@ export function runExactDfsSearch(
       );
       if (prunedSearchCards.length < searchCards.length) {
         searchCards = prunedSearchCards;
-        upperBoundIndex = buildCharacterUpperBoundIndex(searchCards, skillContextUpperMode);
+        upperBoundIndex = buildCharacterUpperBoundIndex(searchCards, skillContextUpperMode, includeLeaderScoreUpBounds);
       }
       const rootScoreUpperBound = estimateSearchScopeScoreUpperBound(
         [],
@@ -441,6 +616,35 @@ export function runExactDfsSearch(
         continue;
       }
     }
+    if (shouldPruneByPowerConstraint({
+      state,
+      selectedCards: [],
+      upperBoundIndex,
+      searchCards,
+      startIndex: 0,
+      usedCharacterMaskLow: 0,
+      usedCharacterMaskHigh: 0,
+      selectedPower: 0,
+    })) {
+      state.stats.prunedBranchCount += 1;
+      state.stats.rootConfigSkippedCount += 1;
+      continue;
+    }
+    if (shouldPruneByLeaderConstraint({
+      state,
+      selectedCards: [],
+      upperBoundIndex,
+      searchCards,
+      startIndex: 0,
+      usedCharacterMaskLow: 0,
+      usedCharacterMaskHigh: 0,
+      skillContextUpperMode,
+    })) {
+      state.stats.prunedBranchCount += 1;
+      state.stats.rootConfigSkippedCount += 1;
+      continue;
+    }
+
     const selectedCards: SearchCard[] = [];
     const searchCardGroups = buildSearchCardGroups(searchCards, upperBoundIndex);
     let selectedPower = 0;
@@ -464,8 +668,50 @@ export function runExactDfsSearch(
         if (!scopeOwnsCompleteTeam(selectedCards, skillContextUpperMode)) {
           return;
         }
+        if (shouldPruneByLeaderConstraint({
+          state,
+          selectedCards,
+          upperBoundIndex,
+          searchCards,
+          startIndex,
+          usedCharacterMaskLow,
+          usedCharacterMaskHigh,
+          skillContextUpperMode,
+        })) {
+          state.stats.prunedBranchCount += 1;
+          return;
+        }
+        if (shouldPruneByPowerConstraint({
+          state,
+          selectedCards,
+          upperBoundIndex,
+          searchCards,
+          startIndex,
+          usedCharacterMaskLow,
+          usedCharacterMaskHigh,
+          selectedPower,
+        })) {
+          state.stats.prunedBranchCount += 1;
+          return;
+        }
         if (state.results.length >= state.resultLimit) {
-          const completeTeamScoreUpperBound = estimateSearchScopeScoreUpperBound(
+          const selectedLeaderSkillRateForUpperBound = getSelectedEligibleLeaderSkillRate({
+            state,
+            selectedCards,
+            skillContextUpperMode,
+          }) ?? selectedSkillLeaderRate;
+          const completeTeamScoreUpperBound = estimateLeaderConstrainedScoreUpperBound({
+            state,
+            selectedCards,
+            upperBoundIndex,
+            searchCards,
+            startIndex,
+            usedCharacterMaskLow,
+            usedCharacterMaskHigh,
+            skillContextUpperMode,
+            selectedPower,
+            selectedSkillAverageRate,
+          }) ?? estimateSearchScopeScoreUpperBound(
             selectedCards,
             upperBoundIndex,
             searchCards,
@@ -476,7 +722,7 @@ export function runExactDfsSearch(
             skillContextUpperMode,
             selectedPower,
             skillContextUpperMode ? selectedSkillAverageRate : undefined,
-            skillContextUpperMode ? selectedSkillLeaderRate : undefined,
+            skillContextUpperMode ? selectedLeaderSkillRateForUpperBound : undefined,
           );
           const completeTeamTargetUpperBound = estimateSearchScopeTargetUpperBoundFromScore(
             completeTeamScoreUpperBound,
@@ -510,7 +756,7 @@ export function runExactDfsSearch(
             skillContextUpperMode,
             selectedPower,
             selectedSkillAverageRate: skillContextUpperMode ? selectedSkillAverageRate : undefined,
-            selectedSkillLeaderRate: skillContextUpperMode ? selectedSkillLeaderRate : undefined,
+            selectedSkillLeaderRate: skillContextUpperMode ? selectedLeaderSkillRateForUpperBound : undefined,
             selectedPointBonusRate,
             looseTargetUpperBound: completeTeamTargetUpperBound,
             scoreUpperBound: completeTeamScoreUpperBound,
@@ -530,20 +776,58 @@ export function runExactDfsSearch(
         return;
       }
 
+      if (shouldPruneByPowerConstraint({
+        state,
+        selectedCards,
+        upperBoundIndex,
+        searchCards,
+        startIndex,
+        usedCharacterMaskLow,
+        usedCharacterMaskHigh,
+        selectedPower,
+      })) {
+        state.stats.prunedBranchCount += 1;
+        return;
+      }
+      if (shouldPruneByLeaderConstraint({
+        state,
+        selectedCards,
+        upperBoundIndex,
+        searchCards,
+        startIndex,
+        usedCharacterMaskLow,
+        usedCharacterMaskHigh,
+        skillContextUpperMode,
+      })) {
+        state.stats.prunedBranchCount += 1;
+        return;
+      }
+
       if (state.results.length >= state.resultLimit) {
-        const branchScoreUpperBound = estimateSearchScopeScoreUpperBound(
+        const branchScoreUpperBound = estimateLeaderConstrainedScoreUpperBound({
+          state,
           selectedCards,
           upperBoundIndex,
           searchCards,
           startIndex,
           usedCharacterMaskLow,
           usedCharacterMaskHigh,
-          state.baseScoreRatePerPower,
           skillContextUpperMode,
           selectedPower,
-          skillContextUpperMode ? selectedSkillAverageRate : undefined,
-          skillContextUpperMode ? selectedSkillLeaderRate : undefined,
-        );
+          selectedSkillAverageRate,
+        }) ?? estimateSearchScopeScoreUpperBound(
+            selectedCards,
+            upperBoundIndex,
+            searchCards,
+            startIndex,
+            usedCharacterMaskLow,
+            usedCharacterMaskHigh,
+            state.baseScoreRatePerPower,
+            skillContextUpperMode,
+            selectedPower,
+            skillContextUpperMode ? selectedSkillAverageRate : undefined,
+            skillContextUpperMode ? selectedSkillLeaderRate : undefined,
+          );
         const branchTargetUpperBound = estimateSearchScopeTargetUpperBoundFromScore(
           branchScoreUpperBound,
           selectedCards,
