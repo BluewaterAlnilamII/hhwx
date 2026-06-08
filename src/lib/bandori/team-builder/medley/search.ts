@@ -28,6 +28,7 @@ import {
   MEDLEY_TEAM_COUNT,
 } from "./constants";
 import { searchMedleyConfigurationByConflictExactBnb } from "./experiments/conflict-bnb";
+import { releaseMedleyScoreOnlyTeamEvaluationCache } from "./candidates";
 import {
   MEDLEY_EXACT_CANDIDATE_JOIN_LOW_MEMORY_HIGH_PAIR_PREFIX_RECORD_LIMIT,
   MEDLEY_EXACT_CANDIDATE_JOIN_LOW_MEMORY_HIGH_PAIR_SCAN_MIN_RECORD_COUNT,
@@ -1134,9 +1135,21 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
   const configurationWarmupCache = new Map<number, MedleyConfigurationWarmupCache>();
   const configurationRootUpperBounds = new Map<number, number>();
   const configurationBasicSkillAwareRootUpperBounds = new Map<number, number>();
+  const releaseSlotScoreCalculationCache = (slot: MedleySlotSearch): void => {
+    slot.scoreCache.judgeLists?.clear();
+    slot.scoreCache.innerScoreRates?.clear();
+    slot.scoreCache.baseScoresByChart = new WeakMap();
+    slot.scoreCache.noFloorBaseScoreRates?.clear();
+    slot.scoreCache.skillMultiplierLists.clear();
+    slot.scoreCache.noFloorSkillRates.clear();
+    slot.scoreCache.skillWindowContributionsByChart = new WeakMap();
+    slot.scoreCache.resolvedSkills?.clear();
+  };
   const releaseSlotSearchCaches = (slots: MedleySlotSearch[]): void => {
     for (const slot of slots) {
       slot.teamEvaluationCache.clear();
+      releaseMedleyScoreOnlyTeamEvaluationCache(slot);
+      releaseSlotScoreCalculationCache(slot);
     }
   };
   const getConfigurationWarmupCache = (configurationIndex: number): MedleyConfigurationWarmupCache => {
