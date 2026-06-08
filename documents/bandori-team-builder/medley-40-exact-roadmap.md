@@ -1,6 +1,6 @@
 # Medley 40/40 Exact Roadmap
 
-Last updated: 2026-06-08
+Last updated: 2026-06-08 23:30 CST
 
 This file is the persistent working note for the current medley optimizer goal.
 Keep it current before and after benchmark runs or proof-path changes, so future
@@ -14,7 +14,7 @@ Primary target:
 - Events: `none`, `244`, `260`, and `323`.
 - Matrix size: `10 profiles * 4 events = 40 all-scope cases`.
 - Search budget: `300000ms` per case.
-- Stage gate: at least `37/40` exact, with no failed run and no OOM.
+- Active stage gate: at least `38/40` exact, with no failed run and no OOM.
 - Final success condition: `40/40` exact, with no failed run and no OOM.
 
 Out of scope for the primary target:
@@ -83,6 +83,17 @@ row, especially `P08:260`, `P10:260`, `P08:323`, and `P10:244`.
   `5609 MiB` peak, so the proof path is logically capable of closing; the
   remaining problem is reducing candidate/frontier residency by roughly 1 GiB
   without changing tie order or proof semantics.
+- A lightweight score-only result object experiment was rejected. It lowered
+  retained result payloads, but `P07:244` stayed bounded and the high-memory
+  diagnostic degraded to gap `300781`, aborting at `candidate-fill-soft-limit`
+  instead of proving exact.
+- Explicitly clearing the score-only WeakMap cache at configuration release was
+  also rejected. It reduced `P07:244` peak heap from roughly `4210 MiB` to
+  `3544 MiB`, but worsened the bounded gap from `55265` to `300781` and changed
+  the failure shape to `candidate-fill-soft-limit`. This is diagnostic evidence
+  that memory reduction alone can remove useful frontier work; acceptable
+  patches must preserve or replace the proof strength that the retained cache
+  currently enables.
 
 Rejected/diagnostic 2026-06-08 evidence:
 
@@ -254,6 +265,11 @@ Phase 1: memory-capped exact-join proof patch.
   limits and do not add seed stages.
 - Guardrail exact cases: `P08:260`, `P10:260`, `P08:323`, and `P10:244` must
   remain exact.
+- Avoid cache-only or result-only memory reductions as default paths. The
+  rejected 2026-06-08 experiments showed lower heap but worse proof closure.
+  The preferred implementation shape is an exact-join internal compact or
+  streamed representation that keeps deterministic candidate order and upper
+  proof semantics while reducing duplicate object/string/record residency.
 
 Phase 2: no-op equivalence gate, required only when touching prefix/seed
 diagnostic paths again.
@@ -291,8 +307,9 @@ Each patch must pass:
 The next actionable step is not another seed experiment. It is:
 
 1. Implement a low-memory exact-join proof path focused on `P07:244`:
-   chunk/stream pair upper or high-pair proof state so the final small-gap
-   frontier can close without retaining all pair records.
+   chunk/stream pair upper or high-pair proof state, or an internal compact
+   candidate representation, so the final small-gap frontier can close without
+   retaining all pair records and duplicate candidate/result/key objects.
 2. Re-run the 5 bounded rows plus the 4 guardrail exact rows.
 3. If at least two bounded rows convert and guardrails stay exact, re-run the
    full isolated 40-case matrix and generate another timestamped report.
