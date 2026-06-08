@@ -1,0 +1,30 @@
+{
+  "actions": {
+    "enter": "进入",
+    "view": "查看",
+    "backHome": "返回首页",
+    "backAccount": "返回账号中心",
+    "continue": "立即继续",
+    "save": "保存",
+    "saving": "保存中...",
+    "send": "发送",
+    "sending": "发送中...",
+    "loadMore": "加载更多",
+    "loading": "加载中...",
+    "markAllRead": "全部标为已读"
+  },
+  "states": {
+    "loadingPage": "请稍候，页面马上就好。",
+    "loadingAccount": "正在读取账号信息...",
+    "loadingProfile": "正在读取资料...",
+    "unknown": "未知",
+    "notConfigured": "未配置",
+    "yes": "是",
+    "no": "否"
+  },
+  "language": {
+    "label": "语言",
+    "zh-CN": "简体中文",
+    "en": "English"
+  }
+}

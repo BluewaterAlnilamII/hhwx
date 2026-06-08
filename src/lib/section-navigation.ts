@@ -1,55 +1,55 @@
 export interface SectionSidebarNavItem {
   id: string;
-  label: string;
+  labelKey: string;
   href: string;
   matchMode?: "exact" | "prefix";
 }
 
 export interface SectionSidebarNavGroup {
   id: string;
-  label: string;
+  labelKey: string;
   items: SectionSidebarNavItem[];
 }
 
 export const siteNavigationGroups: SectionSidebarNavGroup[] = [
   {
     id: "game",
-    label: "游戏",
+    labelKey: "groups.game",
     items: [
       {
         id: "home",
         href: "/",
-        label: "首页",
+        labelKey: "items.home",
         matchMode: "exact",
       },
     ],
   },
   {
     id: "bandori",
-    label: "Bandori",
+    labelKey: "groups.bandori",
     items: [
       {
         id: "calendar",
         href: "/bandori/calendar",
-        label: "日历",
+        labelKey: "items.calendar",
         matchMode: "prefix",
       },
       {
         id: "tracker",
         href: "/bandori/eventtracker",
-        label: "分数追踪器",
+        labelKey: "items.tracker",
         matchMode: "prefix",
       },
       {
         id: "game-profiles",
         href: "/bandori/game-profiles",
-        label: "游戏档案",
+        labelKey: "items.gameProfiles",
         matchMode: "prefix",
       },
       {
         id: "teambuilder",
         href: "/bandori/teambuilder",
-        label: "组队计算器",
+        labelKey: "items.teambuilder",
         matchMode: "prefix",
       },
     ],

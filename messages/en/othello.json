@@ -1,0 +1,66 @@
+{
+  "resume": {
+    "title": "🎮 Continue the previous game?",
+    "you": "You",
+    "opponent": "Opponent",
+    "accept": "✅ Yes, continue",
+    "decline": "❌ No, restart"
+  },
+  "characterSelect": {
+    "appTitle": "🎭 Happy! Lucky! Othello!",
+    "title": "Choose characters",
+    "pickColor": "Choose your disc color",
+    "playerLabel": "Your character",
+    "opponentLabel": "Opponent",
+    "pickedPrefix": "You chose",
+    "black": "● Black",
+    "white": "○ White",
+    "first": "First",
+    "second": "Second",
+    "thinkSpeed": "Think",
+    "thinkShort": "Fast",
+    "thinkMedium": "Medium",
+    "thinkLong": "Slow",
+    "start": "Start game",
+    "descriptions": {
+      "kokoro": "An instinctive strategist who likes securing her pieces and fighting hard for corners.",
+      "kaoru": "A wonderfully dramatic player with wonderfully dramatic strength, waiting for a wonderfully dramatic challenger.",
+      "hagumi": "An energetic player who flips as many pieces as possible and often overlooks corner strategy.",
+      "kanon": "Skilled at mobility control, but sometimes makes mistakes when she gets flustered.",
+      "michelle": "A mysterious bear."
+    }
+  },
+  "game": {
+    "yourTurn": "🎮 Your turn",
+    "aiThinking": "🤔 AI thinking...",
+    "gameOver": "🏁 Game over",
+    "resign": "🚪 Resign",
+    "restart": "🔄 Restart",
+    "reselect": "🎭 Reselect characters",
+    "aiPass": "AI has no legal move. Turn skipped.",
+    "playerPass": "No legal move. Turn skipped.",
+    "score": "Score"
+  },
+  "result": {
+    "win": "🎉 You won!",
+    "lose": "😢 You lost...",
+    "draw": "🤝 Draw!",
+    "restart": "Restart",
+    "review": "📋 Review board",
+    "reselect": "Reselect characters"
+  },
+  "comments": {
+    "title": "💬 Game comments",
+    "loadingAuth": "Loading login status...",
+    "placeholder": "Say something...",
+    "submit": "Send",
+    "submitting": "Sending...",
+    "loginRequired": "Log in before commenting",
+    "verifyRequired": "Verify your email before commenting",
+    "empty": "No comments yet. Start the conversation.",
+    "anonymous": "Anonymous",
+    "loginError": "Please log in first",
+    "submitFailed": "Failed to send comment",
+    "httpSubmitFailed": "Failed to send comment (HTTP {status})"
+  }
+}

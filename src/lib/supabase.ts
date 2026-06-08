@@ -1,5 +1,13 @@
 import { createClient, type Session } from "@supabase/supabase-js";
 import { parseApiSuccessData } from "@/lib/api-contracts";
+import {
+	buildLocalizedPathname,
+	DEFAULT_LOCALE,
+	getLocaleFromPathname,
+	isSupportedLocale,
+	stripLocalePrefix,
+	type AppLocale,
+} from "@/i18n/routing";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabasePublishableKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!;
@@ -43,7 +51,7 @@ export function normalizeInternalPath(path: string | null | undefined, fallback 
 		return fallback;
 	}
 
-	return path;
+	return stripLocalePrefix(path);
 }
 
 export function normalizeAuthMode(mode: string | null | undefined, fallback: AuthViewMode = "login"): AuthViewMode {
@@ -68,20 +76,39 @@ export function getSiteUrl(): string {
 	return DEFAULT_SITE_URL;
 }
 
-export function buildAuthCallbackUrl(nextPath = "/account"): string {
-	const url = new URL("/auth/confirm", getSiteUrl());
+function resolveCurrentLocale(locale?: AppLocale | string | null): AppLocale | undefined {
+	if (isSupportedLocale(locale)) {
+		return locale;
+	}
+
+	if (typeof window === "undefined") {
+		return undefined;
+	}
+
+	return getLocaleFromPathname(window.location.pathname) ?? undefined;
+}
+
+export function buildAuthCallbackUrl(nextPath = "/account", locale?: AppLocale | string | null): string {
+	const resolvedLocale = resolveCurrentLocale(locale);
+	const authCallbackPath = buildLocalizedPathname("/auth/confirm", resolvedLocale ?? DEFAULT_LOCALE);
+	const url = new URL(authCallbackPath, getSiteUrl());
 	const safeNextPath = normalizeInternalPath(nextPath, "/account");
 	url.searchParams.set("next", safeNextPath);
 	return url.toString();
 }
 
-export function buildEmailVerificationCallbackUrl(nextPath = "/account/email"): string {
-	const url = new URL(buildAuthCallbackUrl(nextPath));
+export function buildEmailVerificationCallbackUrl(nextPath = "/account/email", locale?: AppLocale | string | null): string {
+	const url = new URL(buildAuthCallbackUrl(nextPath, locale));
 	url.searchParams.set("verify_email", "1");
 	return url.toString();
 }
 
-export function buildAuthPath(mode: AuthViewMode = "login", nextPath = "/account", notice?: AuthFlashNotice): string {
+export function buildAuthPath(
+	mode: AuthViewMode = "login",
+	nextPath = "/account",
+	notice?: AuthFlashNotice,
+	locale?: AppLocale | string | null,
+): string {
 	const safeNextPath = normalizeInternalPath(nextPath, "/account");
 	const params = new URLSearchParams({
 		mode,
@@ -92,7 +119,9 @@ export function buildAuthPath(mode: AuthViewMode = "login", nextPath = "/account
 		params.set("notice", notice);
 	}
 
-	return `/auth?${params.toString()}`;
+	const resolvedLocale = resolveCurrentLocale(locale);
+	const authPath = buildLocalizedPathname("/auth", resolvedLocale ?? DEFAULT_LOCALE);
+	return `${authPath}?${params.toString()}`;
 }
 
 function readCachedAuthSummary(userId: string): AuthProfileSummary | null {

@@ -14,31 +14,68 @@ export const PASSWORD_DIGIT_MESSAGE = "密码需包含数字。";
 
 const PASSWORD_ALLOWED_CHARACTER_PATTERN = /^[ -~]+$/;
 
-export function validatePasswordValue(password: string): string | null {
+export type PasswordValidationIssue =
+  | "length"
+  | "edgeSpace"
+  | "character"
+  | "letterAndDigit"
+  | "letter"
+  | "digit";
+
+export function validatePasswordValueIssue(password: string): PasswordValidationIssue | null {
   if (password.length < PASSWORD_MIN_LENGTH || password.length > PASSWORD_MAX_LENGTH) {
-    return PASSWORD_LENGTH_MESSAGE;
+    return "length";
   }
 
   if (password.startsWith(" ") || password.endsWith(" ")) {
-    return PASSWORD_EDGE_SPACE_MESSAGE;
+    return "edgeSpace";
   }
 
   if (!PASSWORD_ALLOWED_CHARACTER_PATTERN.test(password)) {
-    return PASSWORD_CHARACTER_MESSAGE;
+    return "character";
   }
 
   const hasLetter = /[A-Za-z]/.test(password);
   const hasDigit = /\d/.test(password);
 
   if (!hasLetter && !hasDigit) {
-    return PASSWORD_LETTER_AND_DIGIT_MESSAGE;
+    return "letterAndDigit";
   }
 
   if (!hasLetter) {
-    return PASSWORD_LETTER_MESSAGE;
+    return "letter";
   }
 
   if (!hasDigit) {
+    return "digit";
+  }
+
+  return null;
+}
+
+export function validatePasswordValue(password: string): string | null {
+  const issue = validatePasswordValueIssue(password);
+  if (issue === "length") {
+    return PASSWORD_LENGTH_MESSAGE;
+  }
+
+  if (issue === "edgeSpace") {
+    return PASSWORD_EDGE_SPACE_MESSAGE;
+  }
+
+  if (issue === "character") {
+    return PASSWORD_CHARACTER_MESSAGE;
+  }
+
+  if (issue === "letterAndDigit") {
+    return PASSWORD_LETTER_AND_DIGIT_MESSAGE;
+  }
+
+  if (issue === "letter") {
+    return PASSWORD_LETTER_MESSAGE;
+  }
+
+  if (issue === "digit") {
     return PASSWORD_DIGIT_MESSAGE;
   }
 

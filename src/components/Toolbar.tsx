@@ -1,11 +1,12 @@
 "use client";
 
-import Link from "next/link";
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { Menu, X } from "lucide-react";
-import { usePathname } from "next/navigation";
+import { Languages, Menu, X } from "lucide-react";
+import { useLocale, useTranslations } from "next-intl";
+import { Link, usePathname } from "@/i18n/navigation";
 import AccountCardAvatar from "@/components/account/AccountCardAvatar";
 import { useCachedFetch } from "@/hooks/useCachedFetch";
+import { LOCALE_LABELS, routing, type AppLocale } from "@/i18n/routing";
 import { type AccountAvatarCardTrainType } from "@/lib/account-avatar-defaults";
 import { getApiErrorMessage, parseApiSuccessData } from "@/lib/api-contracts";
 import { type BandoriAssetRegion } from "@/lib/bandori-asset-proxy";
@@ -45,13 +46,16 @@ function formatUnreadCount(count: number): string {
 
 export default function Toolbar({ showDebugButton = true, isSidebarOpen = false, onToggleSidebar }: ToolbarProps) {
     const pathname = usePathname();
+    const locale = useLocale() as AppLocale;
+    const t = useTranslations("navigation.toolbar");
     const { userId, username, emailVerified, setAuth, logout, debugMode, toggleDebugMode } = useGameStore();
     const [showMenu, setShowMenu] = useState(false);
     const [toolbarProfileState, setToolbarProfileState] = useState<{ userId: string; profile: ToolbarAccountProfile } | null>(null);
     const [notificationUnreadState, setNotificationUnreadState] = useState<{ userId: string; unreadCount: number } | null>(null);
     const menuRef = useRef<HTMLDivElement | null>(null);
     const returnPath = pathname && !pathname.startsWith("/auth") ? pathname : "/account";
-    const loginHref = buildAuthPath("login", returnPath);
+    const loginHref = buildAuthPath("login", returnPath, undefined, locale);
+    const alternateLocale = routing.locales.find((candidate) => candidate !== locale) ?? routing.defaultLocale;
     const shouldShowDebugButton = showDebugButton && pathname === "/";
     const toolbarProfile = toolbarProfileState?.userId === userId ? toolbarProfileState.profile : null;
     const toolbarUsername = toolbarProfile?.username ?? username;
@@ -244,7 +248,7 @@ export default function Toolbar({ showDebugButton = true, isSidebarOpen = false,
                         type="button"
                         onClick={onToggleSidebar}
                         className="group relative flex h-8 w-8 items-center justify-center rounded-[14px] border border-white/45 bg-white/22 text-left shadow-[0_6px_16px_rgba(122,61,0,0.16)] transition duration-200 hover:-translate-y-0.5 hover:scale-[1.03] hover:border-white/75 hover:bg-white/34 hover:shadow-[0_10px_24px_rgba(122,61,0,0.22)]"
-                        aria-label={isSidebarOpen ? "关闭页面导航" : "打开页面导航"}
+                        aria-label={isSidebarOpen ? t("closeNavigation") : t("openNavigation")}
                     >
                         <span className="relative flex h-6 w-6 items-center justify-center rounded-[12px] bg-[#fff4db] text-[#c76400] transition duration-200 group-hover:scale-105 group-hover:bg-[#fff7e7]">
                             {isSidebarOpen ? <X className="h-4 w-4" aria-hidden="true" /> : <Menu className="h-4 w-4" aria-hidden="true" />}
@@ -260,19 +264,31 @@ export default function Toolbar({ showDebugButton = true, isSidebarOpen = false,
                                     ? "border-white/80 bg-white text-[#c76400] shadow-[0_8px_20px_rgba(122,61,0,0.2)]"
                                     : "border-white/45 bg-white/22 text-white shadow-[0_6px_16px_rgba(122,61,0,0.14)] hover:-translate-y-0.5 hover:scale-[1.03] hover:border-white/70 hover:bg-white/34 hover:shadow-[0_10px_24px_rgba(122,61,0,0.2)]"
                                 }`}
-                            title="开启后在 AI 回合显示落子权重"
-                            aria-label={debugMode ? "关闭调试模式" : "开启调试模式"}
+                            title={t("debugTitle")}
+                            aria-label={debugMode ? t("disableDebug") : t("enableDebug")}
                         >
                             <span aria-hidden="true">🔍</span>
                         </button>
                     )}
+
+                    <Link
+                        href={pathname}
+                        locale={alternateLocale}
+                        className="group relative flex h-8 w-8 items-center justify-center rounded-[14px] border border-white/45 bg-white/22 text-left text-white shadow-[0_6px_16px_rgba(122,61,0,0.14)] transition duration-200 hover:-translate-y-0.5 hover:scale-[1.03] hover:border-white/70 hover:bg-white/34 hover:shadow-[0_10px_24px_rgba(122,61,0,0.2)]"
+                        title={t("switchLanguage", { language: LOCALE_LABELS[alternateLocale] })}
+                        aria-label={t("switchLanguage", { language: LOCALE_LABELS[alternateLocale] })}
+                    >
+                        <span className="relative flex h-6 w-6 items-center justify-center rounded-[12px] bg-[#fff4db] text-[#c76400] transition duration-200 group-hover:scale-105 group-hover:bg-[#fff7e7]">
+                            <Languages className="h-4 w-4" aria-hidden="true" />
+                        </span>
+                    </Link>
 
                     <div ref={menuRef} className="relative">
                         <button
                             type="button"
                             onClick={() => setShowMenu((currentValue) => !currentValue)}
                             className="group relative flex h-9 w-9 items-center justify-center rounded-[15px] border border-white/45 bg-white/22 text-left shadow-[0_6px_16px_rgba(122,61,0,0.16)] transition duration-200 hover:-translate-y-0.5 hover:scale-[1.03] hover:border-white/75 hover:bg-white/34 hover:shadow-[0_10px_24px_rgba(122,61,0,0.22)]"
-                            aria-label={userId ? "打开账户菜单" : "打开登录入口"}
+                            aria-label={userId ? t("openAccountMenu") : t("openLogin")}
                         >
                             <span className="relative flex h-7 w-7 items-center justify-center rounded-[13px] bg-[#fff4db] text-[#c76400] transition duration-200 group-hover:scale-105 group-hover:bg-[#fff7e7]">
                                 {userId ? (
@@ -312,14 +328,14 @@ export default function Toolbar({ showDebugButton = true, isSidebarOpen = false,
                                             onClick={() => setShowMenu(false)}
                                             className="block px-5 py-3 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
                                         >
-                                            {emailVerified ? "账号中心" : "账号中心（待验证）"}
+                                            {emailVerified ? t("accountCenter") : t("accountCenterUnverified")}
                                         </Link>
                                         <Link
                                             href="/account/notifications"
                                             onClick={() => setShowMenu(false)}
                                             className="flex items-center justify-between gap-3 px-5 py-3 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
                                         >
-                                            <span>提醒</span>
+                                            <span>{t("notifications")}</span>
                                             {notificationBadgeLabel ? (
                                                 <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1.5 text-[11px] font-bold leading-none text-white">
                                                     {notificationBadgeLabel}
@@ -331,7 +347,7 @@ export default function Toolbar({ showDebugButton = true, isSidebarOpen = false,
                                             onClick={handleLogout}
                                             className="block w-full px-5 py-3 text-left text-sm font-medium text-red-500 transition hover:bg-red-50"
                                         >
-                                            登出
+                                            {t("logout")}
                                         </button>
                                     </div>
                                 ) : (
@@ -341,7 +357,7 @@ export default function Toolbar({ showDebugButton = true, isSidebarOpen = false,
                                             onClick={() => setShowMenu(false)}
                                             className="block px-5 py-3 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
                                         >
-                                            登录
+                                            {t("login")}
                                         </Link>
                                     </div>
                                 )}

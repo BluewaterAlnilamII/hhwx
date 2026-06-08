@@ -13,6 +13,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "i18n:check": "node scripts/check-i18n-messages.mjs",
     "typecheck": "tsc --noEmit --pretty false"
   },
   "dependencies": {
@@ -31,6 +32,7 @@
     "date-fns": "^3.6.0",
     "lucide-react": "^0.577.0",
     "next": "^16.2.7",
+    "next-intl": "^4.13.0",
     "react": "19.2.7",
     "react-dom": "19.2.7",
     "recharts": "^2.15.4",

@@ -1,0 +1,23 @@
+{
+  "root": {
+    "title": "🎭 Happy! Lucky! Othello!",
+    "applicationName": "Happy! Lucky! Othello!",
+    "description": "Play Othello with the members of Hello, Happy World!"
+  },
+  "calendar": {
+    "title": "Event Calendar - HHWX"
+  },
+  "eventtracker": {
+    "title": "Event Tracker - HHWX"
+  },
+  "publicProfile": {
+    "missingTitle": "User not found",
+    "title": "{username}'s profile",
+    "description": "Public profile for UID {publicUid}"
+  },
+  "manifest": {
+    "name": "Happy! Lucky! Othello!",
+    "shortName": "HHW Othello",
+    "description": "Play Othello with the members of Hello, Happy World!"
+  }
+}

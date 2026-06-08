@@ -1,0 +1,23 @@
+{
+  "root": {
+    "title": "🎭 Happy！Lucky！黑白棋！",
+    "applicationName": "Happy！Lucky！黑白棋！",
+    "description": "与 Hello, Happy World! 的成员们来一场黑白棋对决吧！"
+  },
+  "calendar": {
+    "title": "活动日历 - HHWX"
+  },
+  "eventtracker": {
+    "title": "Event Tracker - HHWX"
+  },
+  "publicProfile": {
+    "missingTitle": "用户不存在",
+    "title": "{username} 的个人主页",
+    "description": "UID {publicUid} 的公开个人主页"
+  },
+  "manifest": {
+    "name": "Happy！Lucky！黑白棋！",
+    "shortName": "HHW黑白棋",
+    "description": "与 Hello, Happy World! 的成员们来一场黑白棋对决吧！"
+  }
+}
