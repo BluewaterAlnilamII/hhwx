@@ -1,7 +1,7 @@
 import { jsonRouteError, jsonSuccess } from "@/lib/api-response";
 import { requireVerifiedAccount } from "@/lib/auth-server";
 import { ApiRouteError } from "@/lib/api-contracts";
-import { normalizeProfileId, readCompressedGameProfilePayload, updateGameProfilePayload } from "@/lib/user-game-profiles-server";
+import { normalizeProfileId, readGameProfilePayloadResponse, updateGameProfilePayload } from "@/lib/user-game-profiles-server";
 import { decodeGameProfilePayload } from "@/lib/user-game-profile-payload-server";
 import type { CompressedGameProfilePayload } from "@/lib/user-game-profile-payload";
 
@@ -13,7 +13,7 @@ export async function GET(
     const user = await requireVerifiedAccount(request);
     const { profileId: rawProfileId } = await context.params;
     const profileId = normalizeProfileId(rawProfileId);
-    return jsonSuccess(await readCompressedGameProfilePayload(user.id, profileId));
+    return jsonSuccess(await readGameProfilePayloadResponse(user.id, profileId));
   } catch (error) {
     console.error("Game profile payload API error:", error);
     return jsonRouteError(error, {
@@ -32,7 +32,10 @@ export async function PATCH(
     const user = await requireVerifiedAccount(request);
     const { profileId: rawProfileId } = await context.params;
     const profileId = normalizeProfileId(rawProfileId);
-    let body: { compressed?: CompressedGameProfilePayload };
+    let body: {
+      basePayloadSha256?: unknown;
+      compressed?: CompressedGameProfilePayload;
+    };
 
     try {
       body = await request.json();
@@ -45,7 +48,7 @@ export async function PATCH(
     }
 
     const payload = decodeGameProfilePayload(body.compressed);
-    return jsonSuccess(await updateGameProfilePayload(user.id, profileId, payload));
+    return jsonSuccess(await updateGameProfilePayload(user.id, profileId, payload, body.basePayloadSha256));
   } catch (error) {
     console.error("Game profile payload PATCH API error:", error);
     return jsonRouteError(error, {

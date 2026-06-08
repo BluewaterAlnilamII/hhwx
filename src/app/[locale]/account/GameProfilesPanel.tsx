@@ -8,27 +8,14 @@ import { getApiErrorMessage, parseApiSuccessData } from "@/lib/api-contracts";
 import BandoriCnExclusiveNotice from "@/app/[locale]/bandori/BandoriCnExclusiveNotice";
 import type { GameAccountBinding, GameBindChallenge } from "@/lib/game-account-binding";
 import {
-  BESTDORI_CN_SERVER_ID,
-  decodeBestdoriProfile,
-  encodeBestdoriProfile,
-  parseBestdoriProfile,
-  type BestdoriProfile,
-  type NormalizedBestdoriProfile,
-} from "@/lib/bestdori-profile-codec";
-import {
   decodeCompressedGameProfilePayload,
   exportBestdoriGameProfilePayload,
-  importBestdoriGameProfilePayload,
-  type CompressedGameProfilePayload,
-  type UserGameProfilePayload,
 } from "@/lib/user-game-profile-payload";
 import {
   deleteLocalGameProfile,
-  duplicateLocalGameProfile,
   listLocalGameProfiles,
   readLocalCompressedGameProfile,
   readLocalGameProfilePayload,
-  saveLocalGameProfilePayload,
   updateLocalGameProfilePayload,
   type LocalGameProfileSummary,
 } from "@/lib/user-game-profile-local-store";
@@ -75,7 +62,6 @@ type BusyAction =
   | { type: "import" }
   | { type: "copy"; profileId: string }
   | { type: "upload"; profileId: string }
-  | { type: "download"; profileId: string }
   | { type: "export"; profileId: string }
   | { type: "delete"; profileId: string };
 
@@ -117,10 +103,6 @@ async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
   return data;
 }
 
-async function requestCloudCompressedPayload(profileId: string): Promise<CompressedGameProfilePayload> {
-  return requestJson<CompressedGameProfilePayload>(`/api/account/game-profiles/${profileId}/payload`);
-}
-
 function formatDate(value: string | null): string {
   if (!value) {
     return "无";
@@ -151,25 +133,6 @@ function compareGameUid(left: string | null, right: string | null): number {
     return leftNumber - rightNumber;
   }
   return (left ?? "").localeCompare(right ?? "");
-}
-
-function payloadFromNormalizedProfile(
-  profile: NormalizedBestdoriProfile,
-  bestdoriProfile?: BestdoriProfile,
-): UserGameProfilePayload {
-  return {
-    bestdoriProfile: bestdoriProfile ?? encodeBestdoriProfile(profile),
-  };
-}
-
-function blankPayload(name: string): UserGameProfilePayload {
-  return payloadFromNormalizedProfile({
-    name,
-    server: BESTDORI_CN_SERVER_ID,
-    cards: [],
-    items: {},
-    potentials: [],
-  });
 }
 
 export default function GameProfilesPanel() {
@@ -209,43 +172,16 @@ export default function GameProfilesPanel() {
       }));
 
     const manualCloudProfiles = cloudProfiles.filter((profile) => profile.kind === "manual");
-    const cloudById = new Map(manualCloudProfiles.map((profile) => [profile.id, profile]));
-    const cloudByLocalId = new Map(
-      manualCloudProfiles
-        .filter((profile) => profile.localProfileId)
-        .map((profile) => [profile.localProfileId as string, profile]),
-    );
-    const pairedCloudIds = new Set<string>();
+    const cloudByLocalId = new Map(manualCloudProfiles
+      .filter((profile) => profile.localProfileId)
+      .map((profile) => [profile.localProfileId as string, profile]));
 
-    const manualProfiles = localProfiles.map((profile) => {
-      const cloudProfile = (profile.cloudProfileId ? cloudById.get(profile.cloudProfileId) : undefined)
-        ?? cloudByLocalId.get(profile.id)
-        ?? null;
-      if (cloudProfile) {
-        pairedCloudIds.add(cloudProfile.id);
-      }
-
-      return {
-        id: `local:${profile.id}`,
-        name: profile.name,
-        kind: profile.kind,
-        label: "手动档案",
-        sourceGameUid: null,
-        cardCount: profile.cardCount,
-        syncAt: cloudProfile?.updatedAt ?? null,
-        viewProfileId: profile.id,
-        localProfile: profile,
-        cloudProfile,
-      };
-    }).sort((left, right) => profileSortTime(right).localeCompare(profileSortTime(left)));
-
-    const cloudOnlyProfiles = manualCloudProfiles
-      .filter((profile) => !pairedCloudIds.has(profile.id))
+    const cloudManualProfiles = manualCloudProfiles
       .map((profile) => ({
         id: `cloud:${profile.id}`,
         name: profile.name,
         kind: profile.kind,
-        label: "云端档案",
+        label: "云端手动",
         sourceGameUid: profile.sourceGameUid,
         cardCount: profile.cardCount,
         syncAt: profile.updatedAt,
@@ -255,10 +191,28 @@ export default function GameProfilesPanel() {
       }))
       .sort((left, right) => profileSortTime(right).localeCompare(profileSortTime(left)));
 
+    const localMigrationProfiles = localProfiles.map((profile) => {
+      const cloudProfile = (profile.cloudProfileId ? manualCloudProfiles.find((candidate) => candidate.id === profile.cloudProfileId) : undefined)
+        ?? cloudByLocalId.get(profile.id)
+        ?? null;
+      return {
+        id: `local:${profile.id}`,
+        name: profile.name,
+        kind: profile.kind,
+        label: cloudProfile ? "本地副本" : "本地待迁移",
+        sourceGameUid: null,
+        cardCount: profile.cardCount,
+        syncAt: cloudProfile?.updatedAt ?? null,
+        viewProfileId: profile.id,
+        localProfile: profile,
+        cloudProfile,
+      };
+    }).sort((left, right) => profileSortTime(right).localeCompare(profileSortTime(left)));
+
     return [
       ...autoProfiles.sort((left, right) => compareGameUid(left.sourceGameUid, right.sourceGameUid)),
-      ...cloudOnlyProfiles,
-      ...manualProfiles,
+      ...cloudManualProfiles,
+      ...localMigrationProfiles,
     ];
   }, [cloudProfiles, localProfiles]);
 
@@ -276,7 +230,7 @@ export default function GameProfilesPanel() {
     [...bindings].sort((left, right) => compareGameUid(left.gameUid, right.gameUid))
   ), [bindings]);
 
-  const manualProfileCount = localProfiles.length;
+  const manualProfileCount = cloudProfiles.filter((profile) => profile.kind === "manual").length;
   const autoProfileCount = cloudProfiles.filter((profile) => profile.kind === "auto").length;
 
   const loadData = useCallback(async () => {
@@ -418,12 +372,15 @@ export default function GameProfilesPanel() {
     setExportedPayload(null);
     try {
       const name = profileName.trim() || "手动档案";
-      await saveLocalGameProfilePayload(blankPayload(name), name);
+      await requestJson<CloudGameProfileSummary>("/api/account/game-profiles", {
+        method: "POST",
+        body: JSON.stringify({ name }),
+      });
       setProfileName("");
-      setMessage("本地手动档案已创建。");
+      setMessage("云端手动档案已创建。");
       await loadData();
     } catch (createError) {
-      setError(createError instanceof Error ? createError.message : "创建本地手动档案失败");
+      setError(createError instanceof Error ? createError.message : "创建云端手动档案失败");
     } finally {
       setBusyAction(null);
     }
@@ -435,12 +392,12 @@ export default function GameProfilesPanel() {
     setMessage("");
     setExportedPayload(null);
     try {
-      const bestdoriProfile = parseBestdoriProfile(JSON.parse(importText));
-      const payload = importBestdoriGameProfilePayload(bestdoriProfile);
-      const normalizedProfile = decodeBestdoriProfile(payload.bestdoriProfile);
-      await saveLocalGameProfilePayload(payload, normalizedProfile.name);
+      await requestJson<CloudGameProfileSummary>("/api/account/game-profiles/import", {
+        method: "POST",
+        body: JSON.stringify({ profile: JSON.parse(importText) }),
+      });
       setImportText("");
-      setMessage("Bestdori 档案已导入到本地。");
+      setMessage("Bestdori 档案已导入到云端。");
       await loadData();
     } catch (importError) {
       setError(importError instanceof Error ? importError.message : "导入 Bestdori 档案失败");
@@ -456,17 +413,14 @@ export default function GameProfilesPanel() {
     setExportedPayload(null);
     try {
       const name = `${profile.name} Copy`;
-      if (profile.localProfile) {
-        await duplicateLocalGameProfile(profile.localProfile.id, name);
-      } else {
-        if (!profile.cloudProfile) {
-          throw new Error("档案不存在");
-        }
-        const payload = await decodeCompressedGameProfilePayload(await requestCloudCompressedPayload(profile.cloudProfile.id));
-        payload.bestdoriProfile.name = name;
-        await saveLocalGameProfilePayload(payload, name);
+      if (!profile.cloudProfile) {
+        throw new Error("档案不存在");
       }
-      setMessage("档案已拷贝为本地手动档案。");
+      await requestJson<CloudGameProfileSummary>(`/api/account/game-profiles/${profile.cloudProfile.id}/copy`, {
+        method: "POST",
+        body: JSON.stringify({ name }),
+      });
+      setMessage("档案已拷贝为云端手动档案。");
       await loadData();
     } catch (copyError) {
       setError(copyError instanceof Error ? copyError.message : "拷贝档案失败");
@@ -475,7 +429,7 @@ export default function GameProfilesPanel() {
     }
   }, [loadData]);
 
-  const uploadLocalProfile = useCallback(async (profile: LocalGameProfileSummary) => {
+  const migrateLocalProfile = useCallback(async (profile: LocalGameProfileSummary) => {
     setBusyAction({ type: "upload", profileId: profile.id });
     setError("");
     setMessage("");
@@ -493,38 +447,14 @@ export default function GameProfilesPanel() {
       });
       const payload = await decodeCompressedGameProfilePayload(compressed);
       await updateLocalGameProfilePayload(profile.id, payload, { cloudProfileId: uploadedProfile.id });
-      setMessage("本地档案已上传到服务器。");
+      setMessage("本地档案已迁移到云端。");
       await loadData();
     } catch (uploadError) {
-      setError(uploadError instanceof Error ? uploadError.message : "上传档案失败");
+      setError(uploadError instanceof Error ? uploadError.message : "迁移档案失败");
     } finally {
       setBusyAction(null);
     }
   }, [loadData]);
-
-  const downloadCloudProfile = useCallback(async (profile: CloudGameProfileSummary) => {
-    setBusyAction({ type: "download", profileId: profile.id });
-    setError("");
-    setMessage("");
-    setExportedPayload(null);
-    try {
-      const localProfile = localProfiles.find((candidate) => (
-        candidate.cloudProfileId === profile.id || candidate.id === profile.localProfileId
-      ));
-      if (!localProfile) {
-        throw new Error("请先在本地创建或上传对应的手动档案");
-      }
-      const payload = await decodeCompressedGameProfilePayload(await requestCloudCompressedPayload(profile.id));
-      payload.bestdoriProfile.name = profile.name;
-      await updateLocalGameProfilePayload(localProfile.id, payload, { cloudProfileId: profile.id });
-      setMessage("云端档案已下载到本地。");
-      await loadData();
-    } catch (downloadError) {
-      setError(downloadError instanceof Error ? downloadError.message : "下载档案失败");
-    } finally {
-      setBusyAction(null);
-    }
-  }, [loadData, localProfiles]);
 
   const exportProfile = useCallback(async (profile: ManagedProfileSummary) => {
     setBusyAction({ type: "export", profileId: profile.id });
@@ -582,8 +512,7 @@ export default function GameProfilesPanel() {
     try {
       if (profile.localProfile) {
         await deleteLocalGameProfile(profile.localProfile.id);
-      }
-      if (profile.cloudProfile) {
+      } else if (profile.cloudProfile) {
         await requestJson<{ profileId: string }>(`/api/account/game-profiles/${profile.cloudProfile.id}`, {
           method: "DELETE",
         });
@@ -747,7 +676,7 @@ export default function GameProfilesPanel() {
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <h3 className="text-base font-semibold text-slate-900">手动档案</h3>
-            <p className="mt-1 text-sm text-slate-500">新建本地档案，或粘贴 Bestdori JSON 导入到本地。</p>
+            <p className="mt-1 text-sm text-slate-500">新建云端档案，或粘贴 Bestdori JSON 导入到云端。</p>
           </div>
           <div className="text-sm text-slate-500">手动 {manualProfileCount}/{USER_GAME_MANUAL_PROFILE_LIMIT}</div>
         </div>
@@ -756,7 +685,7 @@ export default function GameProfilesPanel() {
           <input
             value={profileName}
             onChange={(event) => setProfileName(event.target.value)}
-            placeholder="新建本地手动档案名称"
+            placeholder="新建云端手动档案名称"
             className="h-11 rounded-2xl border border-slate-200 px-4 text-sm outline-none transition focus:border-sky-300 focus:ring-4 focus:ring-sky-100"
           />
           <button
@@ -784,7 +713,7 @@ export default function GameProfilesPanel() {
             className="mt-3 inline-flex h-10 w-full items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:border-sky-200 hover:text-sky-600 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400 sm:w-auto"
           >
             {busyAction?.type === "import" ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
-            {busyAction?.type === "import" ? "导入中" : "导入到本地"}
+            {busyAction?.type === "import" ? "导入中" : "导入到云端"}
           </button>
         </div>
       </div>
@@ -792,7 +721,7 @@ export default function GameProfilesPanel() {
       <div className="mt-6 border-t border-slate-100 pt-5">
         <h3 className="text-base font-semibold text-slate-900">档案列表</h3>
         <div className="mt-2 rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3 text-sm leading-6 text-slate-600">
-          自动同步档案由 UID 同步生成，作为服务器侧只读数据使用；手动档案默认保存在当前浏览器，可通过上传保存到云端，或从云端下载覆盖本地副本。导出会复制 Bestdori 兼容 JSON，拷贝会生成新的本地手动档案。
+          自动同步档案由 UID 同步生成，作为服务器侧只读数据使用；手动档案直接在云端创建和管理。本地旧档案仅作为迁移副本保留，可迁移到云端或删除本地副本。导出会复制 Bestdori 兼容 JSON，拷贝会生成新的云端手动档案。
         </div>
         {loading ? (
           <p className="mt-3 text-sm text-slate-500">正在读取...</p>
@@ -804,9 +733,9 @@ export default function GameProfilesPanel() {
               const profileExported = exportedPayload?.profileId === profile.id;
               const isExportingProfile = busyAction?.type === "export" && busyAction.profileId === profile.id;
               const isUploading = busyAction?.type === "upload" && busyAction.profileId === profile.localProfile?.id;
-              const isDownloading = busyAction?.type === "download" && busyAction.profileId === profile.cloudProfile?.id;
               const isCopying = busyAction?.type === "copy" && busyAction.profileId === profile.id;
               const isDeleting = busyAction?.type === "delete" && busyAction.profileId === profile.id;
+              const localProfileCanMigrate = Boolean(profile.localProfile) && (Boolean(profile.cloudProfile) || manualProfileCount < USER_GAME_MANUAL_PROFILE_LIMIT);
 
               return (
                 <div key={profile.id} className="rounded-2xl border border-slate-200 p-3 sm:p-4">
@@ -848,34 +777,25 @@ export default function GameProfilesPanel() {
                       {profile.localProfile ? (
                         <button
                           type="button"
-                          onClick={() => uploadLocalProfile(profile.localProfile as LocalGameProfileSummary)}
-                          disabled={writeBusy}
+                          onClick={() => migrateLocalProfile(profile.localProfile as LocalGameProfileSummary)}
+                          disabled={writeBusy || !localProfileCanMigrate}
                           className="inline-flex h-9 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 transition hover:border-sky-200 hover:text-sky-600 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
                         >
                           {isUploading ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
-                          {isUploading ? "上传中" : "上传"}
+                          {isUploading ? "迁移中" : profile.cloudProfile ? "更新云端" : "迁移到云端"}
                         </button>
                       ) : null}
-                      {profile.localProfile && profile.cloudProfile ? (
+                      {profile.cloudProfile ? (
                         <button
                           type="button"
-                          onClick={() => downloadCloudProfile(profile.cloudProfile as CloudGameProfileSummary)}
-                          disabled={writeBusy}
+                          onClick={() => copyProfile(profile)}
+                          disabled={writeBusy || manualProfileCount >= USER_GAME_MANUAL_PROFILE_LIMIT}
                           className="inline-flex h-9 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 transition hover:border-sky-200 hover:text-sky-600 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
                         >
-                          {isDownloading ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
-                          {isDownloading ? "下载中" : "下载到本地"}
+                          {isCopying ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Copy className="h-4 w-4" />}
+                          {isCopying ? "拷贝中" : "拷贝"}
                         </button>
                       ) : null}
-                      <button
-                        type="button"
-                        onClick={() => copyProfile(profile)}
-                        disabled={writeBusy || manualProfileCount >= USER_GAME_MANUAL_PROFILE_LIMIT}
-                        className="inline-flex h-9 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 transition hover:border-sky-200 hover:text-sky-600 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
-                      >
-                        {isCopying ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Copy className="h-4 w-4" />}
-                        {isCopying ? "拷贝中" : "拷贝"}
-                      </button>
                       <button
                         type="button"
                         onClick={() => deleteProfile(profile)}

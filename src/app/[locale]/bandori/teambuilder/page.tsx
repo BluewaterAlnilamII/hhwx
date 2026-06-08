@@ -213,6 +213,10 @@ type CharacterMaster = {
 
 type SkillMaster = BandoriSkillLabelMaster;
 
+type GameProfilePayloadResponse = {
+  compressed: CompressedGameProfilePayload;
+};
+
 type CardMetadata = {
   characterId?: number;
   rarity?: number;
@@ -3093,11 +3097,11 @@ function TeamBuilderPanel() {
     let active = true;
     setPreloadState((current) => ({ ...current, profile: "loading", message: "" }));
     const profilePayloadPromise = profileChoice.source === "cloud"
-      ? requestJson<CompressedGameProfilePayload>(
+      ? requestJson<GameProfilePayloadResponse>(
         `/api/account/game-profiles/${profileChoice.id}/payload`,
         undefined,
         true,
-      ).then(decodeCompressedGameProfilePayload)
+      ).then((response) => decodeCompressedGameProfilePayload(response.compressed))
       : readLocalGameProfilePayload(profileChoice.id);
 
     void profilePayloadPromise
