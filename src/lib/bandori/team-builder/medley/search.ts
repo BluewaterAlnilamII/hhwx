@@ -3390,6 +3390,25 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
       }
     }
 
+    const hasFiniteActiveConfigurationUpperBoundBeforeSeeding = (
+      Number.isFinite(activeConfigurationTightScoreUpperBound)
+      || Number.isFinite(activeConfigurationObservedScoreUpperBound)
+    );
+    if (
+      hasFullWidthEventExactJoinMemoryRisk
+      && results.length >= resultLimit
+      && hasFiniteActiveConfigurationUpperBoundBeforeSeeding
+    ) {
+      if (traceEntry) {
+        traceEntry.fullWidthEventSkipSeeding = true;
+        traceEntry.bestScoreAfterSeeding = results[0]?.score ?? null;
+      }
+      didLeaveUnclosedAreaItemConfiguration = true;
+      rememberActiveConfigurationUpperBound();
+      finishConfigurationTrace("full-width-event-skip-seeding");
+      continue;
+    }
+
     // Incumbent seeding happens before DFS so that upper-bound pruning has a real threshold.
     // These passes may improve runtime, but they are never treated as proof by themselves.
     slotCandidateLimits = getMedleySlotCandidateLimits(slots, calculatedCards.length);
