@@ -127,9 +127,30 @@ export function evaluateMedleyScoreOnlyTeam(options: EvaluateMedleyScoreOnlyTeam
     maxScoreOrderCount: best.maxScoreOrderCount,
     maxScoreOrderTotal: best.maxScoreOrderTotal,
     totalPower,
+    rawCardPower: 0,
+    areaItemPower: 0,
+    eventPower: 0,
+    eventPowerWithRoom: 0,
+    pointBonusRate: 0,
+    eventPointBase: null,
+    eventPointMultiplier: 1,
+    eventPoint: null,
+    eventPointOptions: { mode: "none", defaultKey: null, options: [] },
+    eventMode: "parameterPower",
+    roomScore: null,
+    supportBandPower: null,
+    supportCards: [],
+    liveType: "free",
+    eventType: "medley",
+    target: "score",
     leaderCardId: cards[best.leaderIndex]?.cardId ?? cards[0]?.cardId ?? 0,
     leaderCardInstanceKey: cards[best.leaderIndex] ? getCardInstanceKey(cards[best.leaderIndex]) : cards[0] ? getCardInstanceKey(cards[0]) : undefined,
-  } as BandoriTeamSearchResult;
+    skillOrderCardIds: [],
+    areaItemConfiguration: configuration,
+    context,
+    cards: [],
+    skills: [],
+  };
 }
 
 export function evaluateTeam(options: EvaluateTeamOptions): BandoriTeamSearchResult | null {
