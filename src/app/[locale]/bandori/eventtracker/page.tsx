@@ -1,6 +1,7 @@
 "use client";
 
 import { startTransition, useState, useEffect, useRef, useMemo, useCallback, useLayoutEffect } from "react";
+import { useTranslations } from "next-intl";
 import { format } from "date-fns";
 import {
   LineChart,
@@ -54,6 +55,7 @@ import { useComparisonPreferences } from "./useComparisonPreferences";
 import { mergeComparisonLines, useComparisonTrackerData } from "./useComparisonTrackerData";
 import { mergeBestdoriPredictionData, useBestdoriPrediction } from "./useBestdoriPrediction";
 import BandoriPageShell from "../BandoriPageShell";
+import BandoriCnExclusiveNotice from "../BandoriCnExclusiveNotice";
 import BandoriEventSwitcher from "../BandoriEventSwitcher";
 import EventComments from "./EventComments";
 import {
@@ -419,6 +421,7 @@ function MinutesAgo({ timestamp }: { timestamp: number }) {
 // ─────────────────────────── 页面主组件 ───────────────────────────
 
 export default function EventTrackerPage() {
+  const cnExclusiveT = useTranslations("bandori.notices.cnExclusive");
   const [currentEventId, setCurrentEventId] = useState<number | null>(() => {
     if (typeof window === "undefined") return null;
     const eventParam = new URLSearchParams(window.location.search).get("event");
@@ -1052,6 +1055,11 @@ export default function EventTrackerPage() {
           endText={endDate ? `${formatBandoriCnDateTime(endDate)} (CN)` : null}
           recommendedEventId={recommendedEventId !== null ? String(recommendedEventId) : null}
           recommendedLabel="最新活动"
+        />
+
+        <BandoriCnExclusiveNotice
+          label={cnExclusiveT("label")}
+          description={cnExclusiveT("eventtrackerDescription")}
         />
 
         {/* ========== 进度条 ========== */}

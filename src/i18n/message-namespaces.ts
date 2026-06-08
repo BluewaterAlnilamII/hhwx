@@ -4,6 +4,7 @@ export const MESSAGE_NAMESPACES = [
   "navigation",
   "auth",
   "account",
+  "bandori",
   "othello",
   "errors",
 ] as const;

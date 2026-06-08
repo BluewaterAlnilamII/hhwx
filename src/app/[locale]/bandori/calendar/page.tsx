@@ -1,10 +1,12 @@
 "use client";
 
 import { useState, useCallback, useMemo } from "react";
+import { useTranslations } from "next-intl";
 import { useCalendarData, useCalendarPermission, BAND_COLORS } from "./useCalendarData";
 import CalendarGrid from "./CalendarGrid";
 import EventEditor from "./EventEditor";
 import { CALENDAR_BAND_OPTIONS } from "./options";
+import BandoriCnExclusiveNotice from "../BandoriCnExclusiveNotice";
 import {
   buildStampCharacterOptions,
   CALENDAR_BAND_ORDER,
@@ -186,6 +188,7 @@ function CalendarPageSkeleton({ showEditorPlaceholder }: { showEditorPlaceholder
  * 负责组合月历视图、订阅参数配置、权限控制和活动编辑入口。
  */
 export default function CalendarPage() {
+  const cnExclusiveT = useTranslations("bandori.notices.cnExclusive");
   const { allEvents, allCharacters, calendarEvents, holidayData, loading, refresh } = useCalendarData();
   const hasPermission = useCalendarPermission();
   const [showIcsModal, setShowIcsModal] = useState(false);
@@ -397,6 +400,11 @@ export default function CalendarPage() {
             <p className="mx-auto max-w-2xl text-sm leading-6 text-[#24506d] md:text-base">
               查看国服活动时间安排，并生成可自动更新的日历订阅链接
             </p>
+            <BandoriCnExclusiveNotice
+              label={cnExclusiveT("label")}
+              description={cnExclusiveT("calendarDescription")}
+              className="mx-auto mt-4 max-w-3xl text-left"
+            />
           </div>
         </div>
 

@@ -16,6 +16,8 @@
     "debugTitle": "Show AI move weights during AI turns",
     "enableDebug": "Enable debug mode",
     "disableDebug": "Disable debug mode",
+    "openLanguageMenu": "Open language menu",
+    "currentLanguage": "Current language",
     "openAccountMenu": "Open account menu",
     "openLogin": "Open login entry",
     "accountCenter": "Account Center",

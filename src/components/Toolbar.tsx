@@ -1,13 +1,13 @@
 "use client";
 
 import React, { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Languages, Menu, X } from "lucide-react";
+import { Check, Languages, Menu, X } from "lucide-react";
 import { useLocale, useTranslations } from "next-intl";
 import { useSearchParams } from "next/navigation";
 import { Link, usePathname } from "@/i18n/navigation";
 import AccountCardAvatar from "@/components/account/AccountCardAvatar";
 import { useCachedFetch } from "@/hooks/useCachedFetch";
-import { LOCALE_LABELS, routing, type AppLocale } from "@/i18n/routing";
+import { buildLocalizedPathname, routing, type AppLocale } from "@/i18n/routing";
 import { type AccountAvatarCardTrainType } from "@/lib/account-avatar-defaults";
 import { getApiErrorMessage, parseApiSuccessData } from "@/lib/api-contracts";
 import { type BandoriAssetRegion } from "@/lib/bandori-asset-proxy";
@@ -36,7 +36,9 @@ type CardMetadataResponse = {
 };
 
 const NOTIFICATIONS_UPDATED_EVENT = "hhwx:notifications-updated";
-const languageSwitchClassName = "group relative flex h-8 w-8 items-center justify-center rounded-[14px] border border-white/45 bg-white/22 text-left text-white shadow-[0_6px_16px_rgba(122,61,0,0.14)] transition duration-200 hover:-translate-y-0.5 hover:scale-[1.03] hover:border-white/70 hover:bg-white/34 hover:shadow-[0_10px_24px_rgba(122,61,0,0.2)]";
+const toolbarIconButtonClassName = "group relative flex h-9 w-9 items-center justify-center rounded-[15px] border border-white/45 bg-white/22 text-left text-white shadow-[0_6px_16px_rgba(122,61,0,0.16)] transition duration-200 hover:-translate-y-0.5 hover:scale-[1.03] hover:border-white/75 hover:bg-white/34 hover:shadow-[0_10px_24px_rgba(122,61,0,0.22)]";
+const toolbarIconInnerClassName = "relative flex h-7 w-7 items-center justify-center rounded-[13px] bg-[#fff4db] text-[#c76400] transition duration-200 group-hover:scale-105 group-hover:bg-[#fff7e7]";
+const toolbarMenuClassName = "absolute right-0 top-full mt-3 w-64 overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-[0_20px_60px_rgba(15,23,42,0.16)]";
 
 function transformCardMetadata(raw: unknown): CardMetadataResponse {
     return parseApiSuccessData<CardMetadataResponse>(raw) ?? {};
@@ -48,26 +50,30 @@ function formatUnreadCount(count: number): string {
 
 function LanguageSwitchIcon() {
     return (
-        <span className="relative flex h-6 w-6 items-center justify-center rounded-[12px] bg-[#fff4db] text-[#c76400] transition duration-200 group-hover:scale-105 group-hover:bg-[#fff7e7]">
+        <span className={toolbarIconInnerClassName}>
             <Languages className="h-4 w-4" aria-hidden="true" />
         </span>
     );
 }
 
-interface LanguageSwitchLinkProps {
+interface LanguageMenuContentProps {
     pathname: string;
-    alternateLocale: AppLocale;
-    label: string;
+    currentLocale: AppLocale;
+    onSelect: () => void;
 }
 
-function LanguageSwitchLink({ pathname, alternateLocale, label }: LanguageSwitchLinkProps) {
+function LanguageMenuContent({ pathname, currentLocale, onSelect }: LanguageMenuContentProps) {
     const searchParams = useSearchParams();
-    const [currentHash, setCurrentHash] = useState("");
+    const t = useTranslations("navigation.toolbar");
+    const languageT = useTranslations("common.language");
+    const [currentHash, setCurrentHash] = useState(() => (
+        typeof window === "undefined" ? "" : window.location.hash
+    ));
     const queryText = searchParams.toString();
-    const languageHref = useMemo(() => {
+    const languageSuffix = useMemo(() => {
         const querySuffix = queryText ? `?${queryText}` : "";
-        return `${pathname}${querySuffix}${currentHash}`;
-    }, [currentHash, pathname, queryText]);
+        return `${querySuffix}${currentHash}`;
+    }, [currentHash, queryText]);
 
     useEffect(() => {
         const updateCurrentHash = () => setCurrentHash(window.location.hash);
@@ -77,29 +83,58 @@ function LanguageSwitchLink({ pathname, alternateLocale, label }: LanguageSwitch
     }, []);
 
     return (
-        <Link
-            href={languageHref}
-            locale={alternateLocale}
-            className={languageSwitchClassName}
-            title={label}
-            aria-label={label}
-        >
-            <LanguageSwitchIcon />
-        </Link>
+        <div className={toolbarMenuClassName}>
+            <div className="border-b border-slate-100 px-5 py-3 text-xs font-semibold text-slate-500">
+                {languageT("label")}
+            </div>
+            <div className="py-2">
+                {routing.locales.map((targetLocale) => {
+                    const label = languageT(targetLocale);
+                    const isCurrentLocale = targetLocale === currentLocale;
+                    const languageHref = `${buildLocalizedPathname(pathname, targetLocale)}${languageSuffix}`;
+
+                    if (isCurrentLocale) {
+                        return (
+                            <div
+                                key={targetLocale}
+                                className="flex items-center justify-between gap-3 px-5 py-3 text-sm font-semibold text-slate-900"
+                                aria-current="true"
+                            >
+                                <span>{label}</span>
+                                <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-sky-50 text-sky-600">
+                                    <Check className="h-3.5 w-3.5" aria-hidden="true" />
+                                    <span className="sr-only">{t("currentLanguage")}</span>
+                                </span>
+                            </div>
+                        );
+                    }
+
+                    return (
+                        <a
+                            key={targetLocale}
+                            href={languageHref}
+                            onClick={onSelect}
+                            className="flex items-center justify-between gap-3 px-5 py-3 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+                            aria-label={t("switchLanguage", { language: label })}
+                        >
+                            <span>{label}</span>
+                        </a>
+                    );
+                })}
+            </div>
+        </div>
     );
 }
 
-function LanguageSwitchFallback({ pathname, alternateLocale, label }: LanguageSwitchLinkProps) {
+function LanguageMenuLoading() {
+    const languageT = useTranslations("common.language");
+
     return (
-        <Link
-            href={pathname}
-            locale={alternateLocale}
-            className={languageSwitchClassName}
-            title={label}
-            aria-label={label}
-        >
-            <LanguageSwitchIcon />
-        </Link>
+        <div className={toolbarMenuClassName}>
+            <div className="border-b border-slate-100 px-5 py-3 text-xs font-semibold text-slate-500">
+                {languageT("label")}
+            </div>
+        </div>
     );
 }
 
@@ -107,15 +142,17 @@ export default function Toolbar({ showDebugButton = true, isSidebarOpen = false,
     const pathname = usePathname();
     const locale = useLocale() as AppLocale;
     const t = useTranslations("navigation.toolbar");
+    const languageT = useTranslations("common.language");
     const { userId, username, emailVerified, setAuth, logout, debugMode, toggleDebugMode } = useGameStore();
     const [showMenu, setShowMenu] = useState(false);
+    const [showLanguageMenu, setShowLanguageMenu] = useState(false);
     const [toolbarProfileState, setToolbarProfileState] = useState<{ userId: string; profile: ToolbarAccountProfile } | null>(null);
     const [notificationUnreadState, setNotificationUnreadState] = useState<{ userId: string; unreadCount: number } | null>(null);
     const menuRef = useRef<HTMLDivElement | null>(null);
+    const languageMenuRef = useRef<HTMLDivElement | null>(null);
     const returnPath = pathname && !pathname.startsWith("/auth") ? pathname : "/account";
     const loginHref = buildAuthPath("login", returnPath, undefined, locale);
-    const alternateLocale = routing.locales.find((candidate) => candidate !== locale) ?? routing.defaultLocale;
-    const languageSwitchLabel = t("switchLanguage", { language: LOCALE_LABELS[alternateLocale] });
+    const currentLanguageLabel = languageT(locale);
     const shouldShowDebugButton = showDebugButton && pathname === "/";
     const toolbarProfile = toolbarProfileState?.userId === userId ? toolbarProfileState.profile : null;
     const toolbarUsername = toolbarProfile?.username ?? username;
@@ -206,6 +243,21 @@ export default function Toolbar({ showDebugButton = true, isSidebarOpen = false,
         document.addEventListener("mousedown", handlePointerDown);
         return () => document.removeEventListener("mousedown", handlePointerDown);
     }, [showMenu]);
+
+    useEffect(() => {
+        if (!showLanguageMenu) {
+            return;
+        }
+
+        const handlePointerDown = (event: MouseEvent) => {
+            if (languageMenuRef.current && !languageMenuRef.current.contains(event.target as Node)) {
+                setShowLanguageMenu(false);
+            }
+        };
+
+        document.addEventListener("mousedown", handlePointerDown);
+        return () => document.removeEventListener("mousedown", handlePointerDown);
+    }, [showLanguageMenu]);
 
     const loadAccountHeaderData = useCallback(async () => {
         if (!userId) {
@@ -300,6 +352,16 @@ export default function Toolbar({ showDebugButton = true, isSidebarOpen = false,
         setShowMenu(false);
     };
 
+    const toggleLanguageMenu = () => {
+        setShowLanguageMenu((currentValue) => !currentValue);
+        setShowMenu(false);
+    };
+
+    const toggleAccountMenu = () => {
+        setShowMenu((currentValue) => !currentValue);
+        setShowLanguageMenu(false);
+    };
+
     return (
         <header className="sticky top-0 z-[250] border-b border-white/85 bg-[#FF9922] shadow-[0_10px_24px_rgba(255,153,34,0.28)]">
             <div className="flex h-[58px] w-full items-center justify-between gap-2 px-3 sm:px-4 lg:justify-end lg:px-5">
@@ -331,18 +393,40 @@ export default function Toolbar({ showDebugButton = true, isSidebarOpen = false,
                         </button>
                     )}
 
-                    <Suspense fallback={<LanguageSwitchFallback pathname={pathname} alternateLocale={alternateLocale} label={languageSwitchLabel} />}>
-                        <LanguageSwitchLink pathname={pathname} alternateLocale={alternateLocale} label={languageSwitchLabel} />
-                    </Suspense>
+                    <div ref={languageMenuRef} className="relative">
+                        <button
+                            type="button"
+                            onClick={toggleLanguageMenu}
+                            className={toolbarIconButtonClassName}
+                            title={currentLanguageLabel}
+                            aria-label={t("openLanguageMenu")}
+                            aria-expanded={showLanguageMenu}
+                            aria-haspopup="menu"
+                        >
+                            <LanguageSwitchIcon />
+                        </button>
+
+                        {showLanguageMenu && (
+                            <Suspense fallback={<LanguageMenuLoading />}>
+                                <LanguageMenuContent
+                                    pathname={pathname}
+                                    currentLocale={locale}
+                                    onSelect={() => setShowLanguageMenu(false)}
+                                />
+                            </Suspense>
+                        )}
+                    </div>
 
                     <div ref={menuRef} className="relative">
                         <button
                             type="button"
-                            onClick={() => setShowMenu((currentValue) => !currentValue)}
-                            className="group relative flex h-9 w-9 items-center justify-center rounded-[15px] border border-white/45 bg-white/22 text-left shadow-[0_6px_16px_rgba(122,61,0,0.16)] transition duration-200 hover:-translate-y-0.5 hover:scale-[1.03] hover:border-white/75 hover:bg-white/34 hover:shadow-[0_10px_24px_rgba(122,61,0,0.22)]"
+                            onClick={toggleAccountMenu}
+                            className={toolbarIconButtonClassName}
                             aria-label={userId ? t("openAccountMenu") : t("openLogin")}
+                            aria-expanded={showMenu}
+                            aria-haspopup="menu"
                         >
-                            <span className="relative flex h-7 w-7 items-center justify-center rounded-[13px] bg-[#fff4db] text-[#c76400] transition duration-200 group-hover:scale-105 group-hover:bg-[#fff7e7]">
+                            <span className={toolbarIconInnerClassName}>
                                 {userId ? (
                                     <AccountCardAvatar
                                         username={toolbarUsername}
@@ -372,7 +456,7 @@ export default function Toolbar({ showDebugButton = true, isSidebarOpen = false,
                         </button>
 
                         {showMenu && (
-                            <div className="absolute right-0 top-full mt-3 w-64 overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-[0_20px_60px_rgba(15,23,42,0.16)]">
+                            <div className={toolbarMenuClassName}>
                                 {userId ? (
                                     <div className="py-2">
                                         <Link
