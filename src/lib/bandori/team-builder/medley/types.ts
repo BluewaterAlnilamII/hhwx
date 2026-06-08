@@ -700,7 +700,12 @@ export type MedleyExactSlotCandidateSearchNode = {
   key: number;
   slotUpperBound: number;
   activeInSlotUpperHeap?: boolean;
-  selectedCards: SearchCard[];
+  selectedCardCount: number;
+  selectedCard0?: SearchCard;
+  selectedCard1?: SearchCard;
+  selectedCard2?: SearchCard;
+  selectedCard3?: SearchCard;
+  selectedCard4?: SearchCard;
   startIndex: number;
   usedCharacterMaskLow: number;
   usedCharacterMaskHigh: number;

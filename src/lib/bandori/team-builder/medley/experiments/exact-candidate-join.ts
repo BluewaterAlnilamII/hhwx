@@ -188,6 +188,47 @@ export function createMedleyExactSlotCandidateGenerator(
   let heapKeyMode: "slot" | "global" = "slot";
   let heapGlobalKeySignature: string | null = null;
   let maxPruningScoreCutoff = Number.NEGATIVE_INFINITY;
+  type CreateSearchNodeInput = {
+    key: number;
+    slotUpperBound: number;
+    selectedCards: SearchCard[];
+    startIndex: number;
+    usedCharacterMaskLow: number;
+    usedCharacterMaskHigh: number;
+    selectedPower: number;
+    candidate: MedleyTeamCandidate | null;
+  };
+  const createSearchNode = (input: CreateSearchNodeInput): MedleyExactSlotCandidateSearchNode => ({
+    key: input.key,
+    slotUpperBound: input.slotUpperBound,
+    selectedCardCount: input.selectedCards.length,
+    selectedCard0: input.selectedCards[0],
+    selectedCard1: input.selectedCards[1],
+    selectedCard2: input.selectedCards[2],
+    selectedCard3: input.selectedCards[3],
+    selectedCard4: input.selectedCards[4],
+    startIndex: input.startIndex,
+    usedCharacterMaskLow: input.usedCharacterMaskLow,
+    usedCharacterMaskHigh: input.usedCharacterMaskHigh,
+    selectedPower: input.selectedPower,
+    candidate: input.candidate,
+  });
+  const getSelectedCardsForNode = (node: MedleyExactSlotCandidateSearchNode): SearchCard[] => {
+    switch (node.selectedCardCount) {
+      case 0:
+        return [];
+      case 1:
+        return [node.selectedCard0!];
+      case 2:
+        return [node.selectedCard0!, node.selectedCard1!];
+      case 3:
+        return [node.selectedCard0!, node.selectedCard1!, node.selectedCard2!];
+      case 4:
+        return [node.selectedCard0!, node.selectedCard1!, node.selectedCard2!, node.selectedCard3!];
+      default:
+        return [node.selectedCard0!, node.selectedCard1!, node.selectedCard2!, node.selectedCard3!, node.selectedCard4!];
+    }
+  };
   const pushHeapNode = (node: MedleyExactSlotCandidateSearchNode): void => {
     pushMedleyExactSlotNode(heap, node);
     if (heapKeyMode === "global") {
@@ -213,7 +254,7 @@ export function createMedleyExactSlotCandidateGenerator(
     Number.NEGATIVE_INFINITY,
   );
   if (Number.isFinite(rootUpperBound)) {
-    pushHeapNode({
+    pushHeapNode(createSearchNode({
       key: rootUpperBound,
       slotUpperBound: rootUpperBound,
       selectedCards: [],
@@ -222,7 +263,7 @@ export function createMedleyExactSlotCandidateGenerator(
       usedCharacterMaskHigh: 0,
       selectedPower: 0,
       candidate: null,
-    });
+    }));
   }
 
   const estimateGeneratedPairComplementUpperBound = (
@@ -388,7 +429,7 @@ export function createMedleyExactSlotCandidateGenerator(
     if (!Number.isFinite(node.slotUpperBound)) {
       return Number.NEGATIVE_INFINITY;
     }
-    const selectedCardIds = node.selectedCards
+    const selectedCardIds = getSelectedCardsForNode(node)
       .map((card) => card.cardId)
       .sort((left, right) => left - right);
     const pairComplementUpperBound = estimateGeneratedPairComplementUpperBound(
@@ -472,7 +513,8 @@ export function createMedleyExactSlotCandidateGenerator(
     if (Number.isFinite(scoreCutoff)) {
       maxPruningScoreCutoff = Math.max(maxPruningScoreCutoff, scoreCutoff);
     }
-    const remaining = MEDLEY_TEAM_SIZE - node.selectedCards.length;
+    const nodeSelectedCards = getSelectedCardsForNode(node);
+    const remaining = MEDLEY_TEAM_SIZE - node.selectedCardCount;
     if (slot.searchCards.length - node.startIndex < remaining) {
       return;
     }
@@ -503,7 +545,7 @@ export function createMedleyExactSlotCandidateGenerator(
       const nextUsedCharacterMaskHigh = isLowCharacterMask
         ? node.usedCharacterMaskHigh
         : node.usedCharacterMaskHigh | characterBit;
-      const nextSelectedCards = [...node.selectedCards, card];
+      const nextSelectedCards = [...nodeSelectedCards, card];
       const nextSelectedPower = node.selectedPower + card.effectivePower;
       const nextStartIndex = index + 1;
 
@@ -549,7 +591,7 @@ export function createMedleyExactSlotCandidateGenerator(
           true,
         );
         if (candidate && candidate.result.score >= scoreCutoff) {
-          pushSearchNode({
+          pushSearchNode(createSearchNode({
             key: candidate.result.score,
             slotUpperBound: candidate.result.score,
             selectedCards: nextSelectedCards,
@@ -558,7 +600,7 @@ export function createMedleyExactSlotCandidateGenerator(
             usedCharacterMaskHigh: nextUsedCharacterMaskHigh,
             selectedPower: nextSelectedPower,
             candidate,
-          }, scoreCutoff, globalPruning);
+          }), scoreCutoff, globalPruning);
         }
         continue;
       }
@@ -596,7 +638,7 @@ export function createMedleyExactSlotCandidateGenerator(
         && upperBound >= scoreCutoff
         && passesPairGlobalPruning
       ) {
-        pushSearchNode({
+        pushSearchNode(createSearchNode({
           key: upperBound,
           slotUpperBound: upperBound,
           selectedCards: nextSelectedCards,
@@ -605,7 +647,7 @@ export function createMedleyExactSlotCandidateGenerator(
           usedCharacterMaskHigh: nextUsedCharacterMaskHigh,
           selectedPower: nextSelectedPower,
           candidate: null,
-        }, scoreCutoff, globalPruning);
+        }), scoreCutoff, globalPruning);
       }
     }
   };
