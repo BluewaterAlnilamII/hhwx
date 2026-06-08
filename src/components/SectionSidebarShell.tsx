@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
-import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { useTranslations } from "next-intl";
+import { Link, usePathname } from "@/i18n/navigation";
 import { X } from "lucide-react";
 import { siteNavigationGroups, type SectionSidebarNavItem } from "@/lib/section-navigation";
 import { cn } from "@/lib/utils";
@@ -23,6 +23,7 @@ function isItemActive(pathname: string, item: SectionSidebarNavItem) {
 
 export default function SectionSidebarShell({ children, isMobileDrawerOpen, onCloseMobileDrawer }: SectionSidebarShellProps) {
   const pathname = usePathname();
+  const t = useTranslations("navigation");
   const [prefetchIntents, setPrefetchIntents] = useState<Record<string, boolean>>({});
   const isHomePage = pathname === "/";
   const contentWrapperClassName = isHomePage
@@ -63,7 +64,7 @@ export default function SectionSidebarShell({ children, isMobileDrawerOpen, onCl
         aria-current={active ? "page" : undefined}
         className={itemClassName}
       >
-        {item.label}
+        {t(item.labelKey)}
       </Link>
     );
   };
@@ -73,7 +74,7 @@ export default function SectionSidebarShell({ children, isMobileDrawerOpen, onCl
       <div className="space-y-7">
         {siteNavigationGroups.map((group) => (
           <section key={group.id} className="space-y-2">
-            <p className="px-4 text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-400">{group.label}</p>
+            <p className="px-4 text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-400">{t(group.labelKey)}</p>
             <div className="space-y-1">{group.items.map(renderNavItem)}</div>
           </section>
         ))}
@@ -100,7 +101,7 @@ export default function SectionSidebarShell({ children, isMobileDrawerOpen, onCl
       >
         <button
           type="button"
-          aria-label="关闭页面导航"
+          aria-label={t("toolbar.closeNavigation")}
           className={cn(
             "absolute inset-0 transition-[opacity,background-color] duration-300 ease-out",
             isMobileDrawerOpen
@@ -120,7 +121,7 @@ export default function SectionSidebarShell({ children, isMobileDrawerOpen, onCl
               type="button"
               onClick={onCloseMobileDrawer}
               className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-[#ffe0b5] bg-[#fff3df] text-[#b86100]"
-              aria-label="关闭页面导航"
+              aria-label={t("toolbar.closeNavigation")}
             >
               <X className="h-4 w-4" aria-hidden="true" />
             </button>

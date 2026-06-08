@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useCallback, useRef, useState } from "react";
+import { useTranslations } from "next-intl";
 import { useGameStore } from "@/store/useGameStore";
 import { useOthelloGame, GamePhase } from "@/hooks/useOthelloGame";
 import {
@@ -89,6 +90,7 @@ function getAIMove(
 }
 
 export default function GamePage() {
+    const t = useTranslations("othello.game");
     const {
         playerCharacter,
         aiCharacter,
@@ -168,7 +170,7 @@ export default function GamePage() {
                 return;
             }
             // 跳过回合 —— 必须重置所有状态锁和阶段标记，否则会卡住
-            showPass("AI 无处落子，回合跳过");
+            showPass(t("aiPass"));
             setTimeout(() => {
                 switchTurn();
                 setPhase("playing"); // 关键：将 gamePhase 恢复为 playing，否则玩家无法操作
@@ -279,6 +281,7 @@ export default function GamePage() {
         setPhase,
         switchTurn,
         showPass,
+        t,
         endGame,
         placePiece,
     ]);
@@ -300,7 +303,7 @@ export default function GamePage() {
                 }
                 // 玩家无处落子 → 自动跳过回合并交还给 AI
                 lock(); // 锁定棋盘，防止状态异常
-                showPass("无处落子，回合跳过");
+                showPass(t("playerPass"));
                 setTimeout(() => {
                     switchTurn();
                     setPhase("playing"); // 恢复 phase 以便 AI useEffect 能正确触发
@@ -313,7 +316,7 @@ export default function GamePage() {
                 }
             }
         }
-    }, [state.currentPlayer, state.gamePhase, state.board, playerColor, showPass, switchTurn, endGame, lock, unlock, setPhase]);
+    }, [state.currentPlayer, state.gamePhase, state.board, playerColor, showPass, t, switchTurn, endGame, lock, unlock, setPhase]);
 
     /**
      * 处理玩家点击棋盘。
@@ -498,12 +501,12 @@ export default function GamePage() {
                     {/* 回合指示器 */}
                     <div className="px-4 py-2 rounded-full bg-white/88 text-xs font-medium text-gray-600 shadow-sm text-center whitespace-nowrap">
                         {state.gamePhase === "playing" && state.currentPlayer === playerColor
-                            ? "🎮 你的回合"
+                            ? t("yourTurn")
                             : state.gamePhase === "aiThinking" || state.currentPlayer === aiColor
-                                ? "🤔 AI 思考中..."
+                                ? t("aiThinking")
                                 : state.gamePhase === "ended"
-                                    ? "🏁 游戏结束"
-                                    : "🎮 你的回合"}
+                                    ? t("gameOver")
+                                    : t("yourTurn")}
                     </div>
 
                     {/* 按钮区域 */}
@@ -512,7 +515,7 @@ export default function GamePage() {
                             onClick={handleGiveUp}
                             className="w-full max-w-[120px] px-3 py-2 bg-white/82 border border-gray-300 text-xs font-medium text-gray-600 rounded-full hover:bg-red-50 hover:border-red-300 hover:text-red-600 shadow-sm"
                         >
-                            🚪 放弃这局
+                            {t("resign")}
                         </button>
                     ) : reviewingBoard ? (
                         <div className="flex flex-col gap-2 w-full max-w-[120px]">
@@ -520,13 +523,13 @@ export default function GamePage() {
                                 onClick={handleRestart}
                                 className="w-full px-3 py-2 bg-gradient-to-r from-blue-500 to-purple-600 text-white font-semibold rounded-full hover:opacity-90 shadow-sm text-xs"
                             >
-                                🔄 重新开始
+                                {t("restart")}
                             </button>
                             <button
                                 onClick={handleReturnToSelect}
                                 className="w-full px-3 py-2 bg-white/82 border border-gray-300 text-xs font-medium text-gray-600 rounded-full hover:bg-white/92 shadow-sm"
                             >
-                                🎭 重选角色
+                                {t("reselect")}
                             </button>
                         </div>
                     ) : null}
@@ -555,12 +558,12 @@ export default function GamePage() {
                 {/* 回合指示器 */}
                 <div className="mt-4 px-4 py-2 rounded-full bg-white/88 text-sm font-medium text-gray-600 shadow-sm">
                     {state.gamePhase === "playing" && state.currentPlayer === playerColor
-                        ? "🎮 你的回合"
+                        ? t("yourTurn")
                         : state.gamePhase === "aiThinking" || state.currentPlayer === aiColor
-                            ? "🤔 AI 思考中..."
+                            ? t("aiThinking")
                             : state.gamePhase === "ended"
-                                ? "🏁 游戏结束"
-                                : "🎮 你的回合"}
+                                ? t("gameOver")
+                                : t("yourTurn")}
                 </div>
 
                 {/* 底部按钮区域 */}
@@ -569,7 +572,7 @@ export default function GamePage() {
                         onClick={handleGiveUp}
                         className="mt-3 px-5 py-2 bg-white/82 border border-gray-300 text-sm font-medium text-gray-600 rounded-full hover:bg-red-50 hover:border-red-300 hover:text-red-600 transition-colors duration-200 shadow-sm"
                     >
-                        🚪 放弃这局
+                        {t("resign")}
                     </button>
                 ) : reviewingBoard ? (
                     <div className="mt-3 flex flex-col gap-3">
@@ -577,13 +580,13 @@ export default function GamePage() {
                             onClick={handleRestart}
                             className="px-5 py-2 bg-gradient-to-r from-blue-500 to-purple-600 text-white font-semibold rounded-full hover:opacity-90 transition text-sm shadow-sm"
                         >
-                            🔄 重新开始
+                            {t("restart")}
                         </button>
                         <button
                             onClick={handleReturnToSelect}
                             className="px-5 py-2 bg-white/82 border border-gray-300 text-sm font-medium text-gray-600 rounded-full hover:bg-white/92 transition-colors duration-200 shadow-sm"
                         >
-                            🎭 重选角色
+                            {t("reselect")}
                         </button>
                     </div>
                 ) : null}

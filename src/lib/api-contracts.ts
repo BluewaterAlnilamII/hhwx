@@ -61,3 +61,11 @@ export function getApiErrorMessage(payload: unknown): string | null {
 
   return null;
 }
+
+export function getApiErrorCode(payload: unknown): string | null {
+  if (isRecord(payload) && payload.success === false && isRecord(payload.error)) {
+    return typeof payload.error.code === "string" ? payload.error.code : null;
+  }
+
+  return null;
+}

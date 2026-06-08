@@ -1,0 +1,10 @@
+{
+  "notices": {
+    "cnExclusive": {
+      "label": "CN exclusive",
+      "calendarDescription": "此日历仅覆盖国服活动，不支持日服、国际服、台服。",
+      "eventtrackerDescription": "此分数追踪器仅支持国服榜线与预测数据，不支持日服、国际服、台服。",
+      "gameProfileBindingDescription": "UID 绑定与自动同步档案仅支持国服，不支持日服、国际服、台服。"
+    }
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "groups": {
+    "game": "Game",
+    "bandori": "Bandori"
+  },
+  "items": {
+    "home": "Home",
+    "calendar": "Calendar",
+    "tracker": "Event Tracker",
+    "gameProfiles": "Game Profiles",
+    "teambuilder": "Team Builder"
+  },
+  "toolbar": {
+    "openNavigation": "Open page navigation",
+    "closeNavigation": "Close page navigation",
+    "debugTitle": "Show AI move weights during AI turns",
+    "enableDebug": "Enable debug mode",
+    "disableDebug": "Disable debug mode",
+    "openLanguageMenu": "Open language menu",
+    "currentLanguage": "Current language",
+    "openAccountMenu": "Open account menu",
+    "openLogin": "Open login entry",
+    "accountCenter": "Account Center",
+    "accountCenterUnverified": "Account Center (verification pending)",
+    "notifications": "Notifications",
+    "logout": "Log out",
+    "login": "Log in",
+    "switchLanguage": "Switch to {language}"
+  }
+}

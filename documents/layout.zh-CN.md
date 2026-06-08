@@ -16,11 +16,14 @@ English version: [layout.md](layout.md)
 hhwx/
 |-- .claude/          # 项目规则和协作约束
 |-- documents/        # 产品说明、设置说明和功能 SQL
+|-- messages/         # UI 翻译使用的语言消息目录
 |-- public/           # 由 Next.js 直接提供的静态资源
+|-- scripts/          # 本地维护和校验脚本
 |-- src/
 |   |-- app/          # App Router 页面、布局、元数据和 API 路由
 |   |-- components/   # 共享 UI 组件和站点壳层组件
 |   |-- hooks/        # 可复用状态和数据获取 hooks
+|   |-- i18n/         # 语言路由、请求配置和导航封装
 |   |-- lib/          # 服务端逻辑、业务服务、校验和工具函数
 |   `-- store/        # 共享客户端状态
 |-- supabase/         # 基础 Supabase schema 和手动维护 SQL
@@ -29,16 +32,30 @@ hhwx/
 
 ## src/app
 
-- `account/`：账号中心、资料、邮箱和密码页面。
-- `bandori/game-profiles/`：游戏档案卡牌和道具视图。
-- `auth/`：登录、注册和找回密码页面。
-- `bandori/`：日历和活动追踪器页面。
+- `[locale]/`：本地化应用路由。默认 `zh-CN` 不带 URL 前缀，非默认语言使用 `/en` 等语言前缀。
+- `[locale]/account/`：账号中心、资料、邮箱和密码页面。
+- `[locale]/bandori/game-profiles/`：游戏档案卡牌和道具视图。
+- `[locale]/auth/`：登录、注册和找回密码页面。
+- `[locale]/bandori/`：日历和活动追踪器页面。
 - `api/`：前端使用的同源 API 路由。
 - `api/account/game-bind/`：游戏账号绑定验证码、验证、列表和解绑 API。
 - `api/account/game-profiles/`：游戏档案同步、导入、导出、复制和删除 API。
 - `api/bandori/`：角色、歌曲、区域道具等 Bandori 公开元数据 API。
-- `layout.tsx`：根布局和站点壳层入口。
+- `manifest.ts`：保留在 `/manifest.webmanifest` 的默认语言网页应用清单。
 - `globals.css`：全局样式、动画和共享视觉规则。
+
+## messages
+
+- `zh-CN/`：源语言，也是所有命名空间的键结构基线。
+- `en/`：英文翻译，命名空间文件和键结构必须与 `zh-CN/` 一致。
+- 命名空间文件使用稳定语义 key 和 ICU 风格占位符。修改消息后运行 `npm run i18n:check`。
+
+## src/i18n
+
+- `routing.ts`：支持语言、默认语言、URL 前缀策略和语言路径辅助函数。
+- `navigation.ts`：面向 `Link`、router、pathname 和路径生成的语言感知封装。
+- `request.ts`：next-intl 请求配置和消息命名空间加载。
+- `src/proxy.ts`：语言协商 proxy，排除 API 路由、Next 内部路径、Vercel 内部路径和静态文件。
 
 ## src/components
 
@@ -56,6 +73,10 @@ hhwx/
 - `api-*.ts`：API 响应约定和缓存策略。
 - `bestdori-profile-codec.ts` 和 `user-game-*-server.ts`：游戏档案兼容、同步和服务端持久化逻辑。
 - `characters.ts`、`othello.ts` 和 `ai/`：首页黑白棋和角色逻辑。
+
+## scripts
+
+- `check-i18n-messages.mjs`：以 `messages/zh-CN` 为基线校验各语言命名空间和占位符一致性。
 
 ## 维护规则
 

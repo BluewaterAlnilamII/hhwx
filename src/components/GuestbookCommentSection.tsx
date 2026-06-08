@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
+import { useLocale, useTranslations } from "next-intl";
 import { getApiErrorMessage } from "@/lib/api-contracts";
 import { getUsernameAvatarLabel } from "@/lib/username-policy";
 import { getSafeSession, supabase } from "@/lib/supabase";
@@ -22,6 +23,8 @@ function getErrorMessage(error: unknown, fallbackMessage: string): string {
 }
 
 export default function GuestbookCommentSection() {
+    const t = useTranslations("othello.comments");
+    const locale = useLocale();
     const [comments, setComments] = useState<Comment[]>([]);
     const [newComment, setNewComment] = useState("");
     const [loading, setLoading] = useState(false);
@@ -49,7 +52,7 @@ export default function GuestbookCommentSection() {
         try {
             const session = await getSafeSession();
             if (!session?.access_token) {
-                setSubmitError("请先登录");
+                setSubmitError(t("loginError"));
                 return;
             }
 
@@ -66,7 +69,7 @@ export default function GuestbookCommentSection() {
 
             const payload = await response.json().catch(() => ({}));
             if (!response.ok) {
-                setSubmitError(getApiErrorMessage(payload) || `评论发送失败（HTTP ${response.status}）`);
+                setSubmitError(getApiErrorMessage(payload) || t("httpSubmitFailed", { status: response.status }));
                 return;
             }
 
@@ -75,7 +78,7 @@ export default function GuestbookCommentSection() {
             fetchComments();
         } catch (err: unknown) {
             console.error("Failed to post comment:", err);
-            setSubmitError(getErrorMessage(err, "评论发送失败"));
+            setSubmitError(getErrorMessage(err, t("submitFailed")));
         } finally {
             setLoading(false);
         }
@@ -83,7 +86,7 @@ export default function GuestbookCommentSection() {
 
     const formatTime = (iso: string) => {
         const d = new Date(iso);
-        return d.toLocaleDateString("zh-CN", {
+        return d.toLocaleDateString(locale, {
             month: "short",
             day: "numeric",
             hour: "2-digit",
@@ -93,12 +96,12 @@ export default function GuestbookCommentSection() {
 
     return (
         <div className="w-full max-w-2xl mx-auto mt-8 mb-12 px-4">
-            <h3 className="text-lg font-bold text-gray-800 mb-4">💬 游戏评论区</h3>
+            <h3 className="text-lg font-bold text-gray-800 mb-4">{t("title")}</h3>
 
             {/* Comment input */}
             {!authReady ? (
                 <div className="mb-6 p-4 bg-white/60 backdrop-blur-sm rounded-xl text-center text-gray-500 text-sm">
-                    正在读取登录状态...
+                    {t("loadingAuth")}
                 </div>
             ) : userId ? (
                 emailVerified ? (
@@ -111,7 +114,7 @@ export default function GuestbookCommentSection() {
                             <textarea
                                 value={newComment}
                                 onChange={(e) => setNewComment(e.target.value)}
-                                placeholder="说点什么吧..."
+                                placeholder={t("placeholder")}
                                 className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-blue-400 focus:ring-2 focus:ring-blue-400/20 outline-none transition resize-none text-gray-800 bg-white/80 backdrop-blur-sm text-sm"
                                 rows={2}
                             />
@@ -121,7 +124,7 @@ export default function GuestbookCommentSection() {
                                     disabled={loading || !newComment.trim()}
                                     className="px-5 py-1.5 bg-gradient-to-r from-blue-500 to-purple-600 text-white text-sm font-medium rounded-full hover:opacity-90 transition disabled:opacity-40"
                                 >
-                                    {loading ? "发送中..." : "发送"}
+                                    {loading ? t("submitting") : t("submit")}
                                 </button>
                             </div>
                             {submitError && (
@@ -132,12 +135,12 @@ export default function GuestbookCommentSection() {
                 </form>
                 ) : (
                     <div className="mb-6 p-4 bg-amber-50 rounded-xl text-center text-amber-700 text-sm">
-                        请先完成邮箱验证后再发表评论
+                        {t("verifyRequired")}
                     </div>
                 )
             ) : (
                 <div className="mb-6 p-4 bg-white/60 backdrop-blur-sm rounded-xl text-center text-gray-500 text-sm">
-                    请先登录后发表评论
+                    {t("loginRequired")}
                 </div>
             )}
 
@@ -145,7 +148,7 @@ export default function GuestbookCommentSection() {
             <div className="space-y-3">
                 {comments.length === 0 && (
                     <div className="text-center text-gray-400 text-sm py-8">
-                        暂无评论，来说点什么吧！
+                        {t("empty")}
                     </div>
                 )}
                 {comments.map((c) => (
@@ -158,7 +161,7 @@ export default function GuestbookCommentSection() {
                                 {getUsernameAvatarLabel(c.profiles?.username, "?")}
                             </div>
                             <span className="text-sm font-semibold text-gray-700">
-                                {c.profiles?.username || "匿名"}
+                                {c.profiles?.username || t("anonymous")}
                             </span>
                             <span className="text-xs text-gray-400 ml-auto">
                                 {formatTime(c.created_at)}

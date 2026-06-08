@@ -1,0 +1,66 @@
+{
+  "resume": {
+    "title": "🎮 是否继续上轮棋局？",
+    "you": "你",
+    "opponent": "对手",
+    "accept": "✅ 是，继续",
+    "decline": "❌ 否，重新开始"
+  },
+  "characterSelect": {
+    "appTitle": "🎭 Happy！Lucky！黑白棋！",
+    "title": "选择角色",
+    "pickColor": "选择你的执子颜色",
+    "playerLabel": "你的角色",
+    "opponentLabel": "对手",
+    "pickedPrefix": "你选择了",
+    "black": "● 黑方",
+    "white": "○ 白方",
+    "first": "先手",
+    "second": "后手",
+    "thinkSpeed": "思考",
+    "thinkShort": "快",
+    "thinkMedium": "中",
+    "thinkLong": "慢",
+    "start": "开始对局",
+    "descriptions": {
+      "kokoro": "依靠直觉的战略型选手，热衷于稳固自身棋子并对边角区域展开激烈争夺。",
+      "kaoru": "极其梦幻的神秘人物，并在这里拥有极其梦幻的实力，正在等待极其梦幻的挑战者。",
+      "hagumi": "下棋有气势，倾向翻转最多棋子，常忽略边角战略。",
+      "kanon": "精通行动力压制战术，但在部分回合会因犯迷糊而出现失误。",
+      "michelle": "是一只神秘的熊。"
+    }
+  },
+  "game": {
+    "yourTurn": "🎮 你的回合",
+    "aiThinking": "🤔 AI 思考中...",
+    "gameOver": "🏁 游戏结束",
+    "resign": "🚪 放弃这局",
+    "restart": "🔄 重新开始",
+    "reselect": "🎭 重选角色",
+    "aiPass": "AI 无处落子，回合跳过",
+    "playerPass": "无处落子，回合跳过",
+    "score": "分数"
+  },
+  "result": {
+    "win": "🎉 你赢了！",
+    "lose": "😢 你输了…",
+    "draw": "🤝 平局！",
+    "restart": "重新开始",
+    "review": "📋 回看棋盘",
+    "reselect": "重选角色"
+  },
+  "comments": {
+    "title": "💬 游戏评论区",
+    "loadingAuth": "正在读取登录状态...",
+    "placeholder": "说点什么吧...",
+    "submit": "发送",
+    "submitting": "发送中...",
+    "loginRequired": "请先登录后发表评论",
+    "verifyRequired": "请先完成邮箱验证后再发表评论",
+    "empty": "暂无评论，来说点什么吧！",
+    "anonymous": "匿名",
+    "loginError": "请先登录",
+    "submitFailed": "评论发送失败",
+    "httpSubmitFailed": "评论发送失败（HTTP {status}）"
+  }
+}
