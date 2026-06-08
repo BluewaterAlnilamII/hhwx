@@ -5,20 +5,14 @@
  * runtime, but they do not prove optimality and must not decide exact vs bounded status.
  */
 
-import {
-  createMedleyTeamCandidate,
-  getMedleyCandidateCards,
-  getMedleyCandidateCardIds,
-  getMedleyTeamEvaluationCacheKey,
-  medleyCandidatesOverlap,
-  pushMedleyCandidate,
-} from "./candidates";
+import { getMedleyTeamEvaluationCacheKey, pushMedleyCandidate } from "./candidates";
 import { getMedleyPruningThreshold } from "./configurations";
 import { MEDLEY_TEAM_COUNT, MEDLEY_TEAM_SIZE } from "./constants";
 import { optimizeFixedMedleyCardSetWithCache, optimizeMedleyCardPool } from "./optimization";
 import { buildMedleyResult, pushMedleyResult } from "./results";
 import { enumerateMedleySlotTeams, findBestMedleySlotTeamWithCache } from "./slots";
 import { evaluateTeam } from "@/lib/bandori/team-builder/core";
+import { getCardInstanceKeys } from "@/lib/bandori/team-builder/core/card-identity";
 import type {
   BandoriMedleyTeamSearchProfilingStats,
   BandoriMedleyTeamSearchResult,
@@ -96,6 +90,11 @@ export function collectTopMedleySlotTeams(
     useContextualSkillUpper,
   );
   return candidates;
+}
+
+export function medleyCandidatesOverlap(left: MedleyTeamCandidate, right: MedleyTeamCandidate): boolean {
+  const leftIds = new Set(left.cardIds);
+  return right.cardIds.some((cardId) => leftIds.has(cardId));
 }
 
 export function seedMedleyResultsFromSlotCandidates(
@@ -189,7 +188,7 @@ export function collectMedleyNeighborhoodAlternateCardIds(
     const slotWeight = rankedSlotIndices.length - slotRank;
     for (const [candidateRank, candidate] of candidates.entries()) {
       const candidateWeight = slotWeight * (candidates.length - candidateRank);
-      for (const cardId of getMedleyCandidateCardIds(candidate)) {
+      for (const cardId of candidate.cardIds) {
         if (selectedCardIds.has(cardId)) {
           continue;
         }
@@ -322,7 +321,7 @@ export function seedMedleyResultsFromGreedyOrders(
         break;
       }
       selectedBySong[slot.songIndex] = best;
-      getMedleyCandidateCards(best).forEach((card) => bannedCardIds.add(card.cardId));
+      best.cards.forEach((card) => bannedCardIds.add(card.cardId));
     }
     if (!completeSeed || stats.timedOut) {
       continue;
@@ -405,7 +404,12 @@ export function buildFastGreedyMedleySlotCandidate(
   }
 
   return result
-    ? createMedleyTeamCandidate(result, selectedCards)
+    ? {
+      result,
+      cards: selectedCards,
+      cardIds: selectedCards.map((card) => card.cardId),
+      cardInstanceKeys: getCardInstanceKeys(selectedCards),
+    }
     : null;
 }
 
@@ -442,7 +446,7 @@ export function seedMedleyResultsFromFastGreedyOrders(
         break;
       }
       selectedBySong[slot.songIndex] = candidate;
-      getMedleyCandidateCards(candidate).forEach((card) => bannedCardIds.add(card.cardId));
+      candidate.cards.forEach((card) => bannedCardIds.add(card.cardId));
     }
     if (!completeSeed) {
       continue;

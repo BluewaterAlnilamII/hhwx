@@ -24,7 +24,6 @@ import {
   pruneDominatedAreaItemConfigurations,
 } from "@/lib/bandori/team-builder/core";
 import { estimateMedleyStaticCoarsePotential } from "@/lib/bandori/team-builder/medley/configurations";
-import { getMedleyCandidateCards } from "@/lib/bandori/team-builder/medley/candidates";
 import {
   buildMedleyResult,
   createMedleyEvaluatedCandidateTracker,
@@ -467,7 +466,7 @@ function buildSharedConfigurationLegacyGreedyMedleyResponse({
           break;
         }
         selectedBySong[slot.songIndex] = candidate;
-        for (const card of getMedleyCandidateCards(candidate)) {
+        for (const card of candidate.cards) {
           bannedCardIds.add(card.cardId);
         }
         currentScore += candidate.result.score;

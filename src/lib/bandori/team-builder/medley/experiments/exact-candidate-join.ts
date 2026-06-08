@@ -6,14 +6,7 @@
  * abort, timeout, or unclosed frontier must leave the configuration bounded.
  */
 
-import {
-  compareMedleyResultLike,
-  evaluateMedleySlotCandidateWithCache,
-  getMedleyCandidateCardIds,
-  getMedleyCandidateCards,
-  medleyCandidateHasAnyCardId,
-  sortMedleyCandidates,
-} from "../candidates";
+import { compareMedleyResultLike, evaluateMedleySlotCandidateWithCache, sortMedleyCandidates } from "../candidates";
 import { getMedleyPruningThreshold } from "../configurations";
 import { MEDLEY_TEAM_COUNT, MEDLEY_TEAM_SIZE } from "../constants";
 import { buildMedleyResult } from "../results";
@@ -1005,8 +998,8 @@ function getFirstMedleyExactCandidateOverlapCardId(
   leftCandidate: MedleyTeamCandidate,
   rightCandidate: MedleyTeamCandidate,
 ): number | null {
-  for (const leftCardId of getMedleyCandidateCardIds(leftCandidate)) {
-    for (const rightCardId of getMedleyCandidateCardIds(rightCandidate)) {
+  for (const leftCardId of leftCandidate.cardIds) {
+    for (const rightCardId of rightCandidate.cardIds) {
       if (leftCardId === rightCardId) {
         return leftCardId;
       }
@@ -1264,8 +1257,8 @@ function getHighMedleyExactCandidatePairRecords(
       }
       const record = {
         score,
-        leftCardIds: getMedleyCandidateCardIds(leftCandidate),
-        rightCardIds: getMedleyCandidateCardIds(rightCandidate),
+        leftCardIds: leftCandidate.cardIds,
+        rightCardIds: rightCandidate.cardIds,
       };
       if (shouldUseBoundedPrefix) {
         pushMedleyExactCandidatePairRecordPrefix(records, record, prefixRecordLimit);
@@ -1356,7 +1349,7 @@ function estimateGeneratedMedleyExactCandidatePairUpperExcludingCardIdsByScan(
   let scannedRightWordCount = 0;
   for (const leftCandidate of query.leftCandidates) {
     scannedLeftCandidateCount += 1;
-    if (medleyCandidateHasAnyCardId(leftCandidate, bannedCardIdSet)) {
+    if (leftCandidate.cardIds.some((cardId) => bannedCardIdSet.has(cardId))) {
       continue;
     }
     const cutoff = Math.max(bestScore, minimumRelevantScore);
@@ -1366,7 +1359,7 @@ function estimateGeneratedMedleyExactCandidatePairUpperExcludingCardIdsByScan(
     const rightQueryResult = findBestAvailableMedleyExactRightCandidateByForbiddenCardIds(
       query,
       bannedCardIdList,
-      getMedleyCandidateCardIds(leftCandidate),
+      leftCandidate.cardIds,
     );
     scannedRightWordCount += rightQueryResult.scannedWordCount;
     const rightCandidate = rightQueryResult.candidate;
@@ -1746,7 +1739,7 @@ export function solveMedleyExactCandidateJoin(
       return cached;
     }
     const containingBits: Uint32Array[] = [];
-    for (const cardId of getMedleyCandidateCardIds(candidate)) {
+    for (const cardId of candidate.cardIds) {
       const currentContainingBits = containingThirdCandidateBitsByCardId.get(cardId);
       if (currentContainingBits) {
         containingBits.push(currentContainingBits);
@@ -2086,10 +2079,7 @@ export function solveMedleyExactCandidateJoin(
     if (bestThirdByCardIdsCache.has(candidate)) {
       return bestThirdByCardIdsCache.get(candidate) ?? null;
     }
-    const bestThirdCandidate = findBestDisjointMedleyExactCandidateByCardIds(
-      thirdCandidates,
-      getMedleyCandidateCardIds(candidate),
-    );
+    const bestThirdCandidate = findBestDisjointMedleyExactCandidateByCardIds(thirdCandidates, candidate.cardIds);
     if (bestThirdByCardIdsCacheEntryCount < MEDLEY_EXACT_CANDIDATE_JOIN_SOLVE_CACHE_ENTRY_LIMIT) {
       bestThirdByCardIdsCache.set(candidate, bestThirdCandidate);
       bestThirdByCardIdsCacheEntryCount += 1;
@@ -2423,11 +2413,11 @@ function findBestGeneratedMedleyExactCandidatePairForAnchorByBits(
   let bestScore = scoreCutoff;
   let bestLeftCandidate: MedleyTeamCandidate | null = null;
   let bestRightCandidate: MedleyTeamCandidate | null = null;
-  const bannedCardIdSet = new Set(getMedleyCandidateCardIds(anchorCandidate));
+  const bannedCardIdSet = new Set(anchorCandidate.cardIds);
   const bannedRightCandidateBits = buildBannedMedleyExactRightCandidateBits(query, bannedCardIdSet);
   const bestRightScore = query.rightCandidates[0]?.result.score ?? Number.NEGATIVE_INFINITY;
   for (const leftCandidate of query.leftCandidates) {
-    if (medleyCandidateHasAnyCardId(leftCandidate, bannedCardIdSet)) {
+    if (leftCandidate.cardIds.some((cardId) => bannedCardIdSet.has(cardId))) {
       continue;
     }
     if (leftCandidate.result.score + bestRightScore <= bestScore) {
@@ -2473,7 +2463,7 @@ function findBestGeneratedMedleyExactCandidatePairForAnchorByBitsExhaustive(
   let bestScore = scoreCutoff;
   let bestLeftCandidate: MedleyTeamCandidate | null = null;
   let bestRightCandidate: MedleyTeamCandidate | null = null;
-  const bannedCardIdSet = new Set(getMedleyCandidateCardIds(anchorCandidate));
+  const bannedCardIdSet = new Set(anchorCandidate.cardIds);
   const bannedRightCandidateBits = buildBannedMedleyExactRightCandidateBits(query, bannedCardIdSet);
   const rightCandidateForAnchor = findBestAvailableMedleyExactCandidateByBits(
     query.rightCandidates,
@@ -2493,7 +2483,7 @@ function findBestGeneratedMedleyExactCandidatePairForAnchorByBitsExhaustive(
         rightCandidate: bestRightCandidate,
       };
     }
-    if (medleyCandidateHasAnyCardId(leftCandidate, bannedCardIdSet)) {
+    if (leftCandidate.cardIds.some((cardId) => bannedCardIdSet.has(cardId))) {
       continue;
     }
     if (leftCandidate.result.score + bestRightScoreForAnchor <= bestScore) {
@@ -2545,7 +2535,7 @@ function findBestHydratedGeneratedMedleyExactCandidatePairForAnchor(
   let bestScore = Number.NEGATIVE_INFINITY;
   let bestLeftCandidate: MedleyTeamCandidate | null = null;
   let bestRightCandidate: MedleyTeamCandidate | null = null;
-  const bannedCardIdSet = new Set(getMedleyCandidateCardIds(anchorCandidate));
+  const bannedCardIdSet = new Set(anchorCandidate.cardIds);
   const bannedRightCandidateBits = buildBannedMedleyExactRightCandidateBits(query, bannedCardIdSet);
   const rightCandidateForAnchor = findBestAvailableMedleyExactCandidateByBits(
     query.rightCandidates,
@@ -2566,7 +2556,7 @@ function findBestHydratedGeneratedMedleyExactCandidatePairForAnchor(
         rightCandidate: bestRightCandidate,
       };
     }
-    if (medleyCandidateHasAnyCardId(leftCandidate, bannedCardIdSet)) {
+    if (leftCandidate.cardIds.some((cardId) => bannedCardIdSet.has(cardId))) {
       continue;
     }
     if (leftCandidate.result.score + bestRightScoreForAnchor <= bestScore) {
@@ -2593,7 +2583,7 @@ function findBestHydratedGeneratedMedleyExactCandidatePairForAnchor(
         break;
       }
       if (
-        medleyCandidateHasAnyCardId(rightCandidate, bannedCardIdSet)
+        rightCandidate.cardIds.some((cardId) => bannedCardIdSet.has(cardId))
         || medleyExactCandidatesOverlap(leftCandidate, rightCandidate)
       ) {
         continue;
@@ -2635,7 +2625,7 @@ function findBestHydratedGeneratedMedleyExactCandidatePairForAnchor(
 }
 
 function getMedleyExactCandidateCardKey(candidate: MedleyTeamCandidate): string {
-  return getMedleyCandidateCardIds(candidate).join(",");
+  return candidate.cardIds.join(",");
 }
 
 function hydrateMedleyExactCandidateForResult(
@@ -2648,7 +2638,7 @@ function hydrateMedleyExactCandidateForResult(
 ): MedleyTeamCandidate | null {
   return evaluateMedleySlotCandidateWithCache(
     slot,
-    getMedleyCandidateCards(candidate),
+    candidate.cards,
     server,
     perfectRate,
     stats,
@@ -3302,11 +3292,11 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
   } => {
     const leftGeneratedCandidate = findBestAvailableMedleyExactCandidateExcludingCardIds(
       leftAvailabilityQuery,
-      getMedleyCandidateCardIds(anchorCandidate),
+      anchorCandidate.cardIds,
     );
     const rightGeneratedCandidate = findBestAvailableMedleyExactCandidateExcludingCardIds(
       rightAvailabilityQuery,
-      getMedleyCandidateCardIds(anchorCandidate),
+      anchorCandidate.cardIds,
     );
     const leftGeneratedScore = finiteScore(leftGeneratedCandidate?.result.score ?? Number.NEGATIVE_INFINITY);
     const rightGeneratedScore = finiteScore(rightGeneratedCandidate?.result.score ?? Number.NEGATIVE_INFINITY);
@@ -3431,7 +3421,7 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
         const splitUpper = estimateGeneratedMedleyExactCandidatePairConflictSplitUpper(
           leftAvailabilityQuery,
           rightAvailabilityQuery,
-          getMedleyCandidateCardIds(entry.anchorCandidate),
+          entry.anchorCandidate.cardIds,
           localDeadlineAt,
         );
         splitAttemptCount += 1;
@@ -5060,7 +5050,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     profiling.exactCandidateJoinDebugKnownCardIdsBySlot.forEach((knownCardIds, slotIndex) => {
       const knownKey = [...knownCardIds].sort((left, right) => left - right).join(",");
       const candidate = candidatesBySlot[slotIndex]?.find((currentCandidate) => (
-        getMedleyCandidateCardIds(currentCandidate).sort((left, right) => left - right).join(",") === knownKey
+        [...currentCandidate.cardIds].sort((left, right) => left - right).join(",") === knownKey
       )) ?? null;
       profiling.exactCandidateJoinDebugKnownCandidatePresentBySlot?.push(Boolean(candidate));
       profiling.exactCandidateJoinDebugKnownCandidateScoresBySlot?.push(candidate?.result.score ?? null);

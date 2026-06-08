@@ -36,7 +36,6 @@ import {
 import { searchMedleyConfigurationByExactCandidateJoin } from "./experiments/exact-candidate-join";
 import { createInitialMedleyProfilingStats } from "./profiling";
 import { buildMedleyResult, createMedleyEvaluatedCandidateTracker, pushMedleyResult, sortMedleyResults } from "./results";
-import { getMedleyCandidateCards } from "./candidates";
 import {
   collectTopMedleySlotTeams,
   getMedleyGreedySeedSlotIndices,
@@ -3683,9 +3682,9 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
         profiling,
         (candidate) => {
           selectedBySong[slot.songIndex] = candidate;
-          getMedleyCandidateCards(candidate).forEach((card) => bannedCardIds.add(card.cardId));
+          candidate.cards.forEach((card) => bannedCardIds.add(card.cardId));
           visit(nextRemainingSlotIndices, currentScore + candidate.result.score);
-          getMedleyCandidateCards(candidate).forEach((card) => bannedCardIds.delete(card.cardId));
+          candidate.cards.forEach((card) => bannedCardIds.delete(card.cardId));
           selectedBySong[slot.songIndex] = undefined;
         },
       );
