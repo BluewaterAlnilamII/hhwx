@@ -808,6 +808,13 @@ export function createMedleyExactSlotCandidateGenerator(
     }
     return null;
   };
+  const release = (): void => {
+    heap.length = 0;
+    slotUpperHeap.length = 0;
+    globalComplementUpperCache.clear();
+    globalPairComplementUpperCache.clear();
+    pairUpperQueryCache.clear();
+  };
 
   return {
     next,
@@ -821,6 +828,7 @@ export function createMedleyExactSlotCandidateGenerator(
     ),
     hasAborted: () => aborted,
     poppedNodeCount: () => poppedNodes,
+    release,
     memoryProfile: () => {
       let highPairRecordCount = 0;
       let highPairRecordBitsetBytes = 0;
@@ -4051,6 +4059,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
   const bestSlotScores: number[] = [];
   const exactPairUpperByExcludedSlot: Array<number | null> = Array.from({ length: slots.length }, () => null);
   const exactPairUnseenUpperByExcludedSlot: Array<number | null> = Array.from({ length: slots.length }, () => null);
+  let candidateFillGenerators: MedleyExactSlotCandidateGenerator[] = [];
   let prefixSeedResult: BandoriMedleyTeamSearchResult | null = null;
   const applyPrefixSeedResult = (
     result: BandoriMedleyTeamSearchResult | null,
@@ -4063,6 +4072,17 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     didReleaseCandidateArrays = true;
     for (const candidates of candidatesBySlot) {
       candidates.length = 0;
+    }
+  };
+  let didReleaseExactJoinWorkingSet = false;
+  const releaseExactJoinWorkingSet = (): void => {
+    releaseCandidateArrays();
+    if (didReleaseExactJoinWorkingSet) {
+      return;
+    }
+    didReleaseExactJoinWorkingSet = true;
+    for (const generator of new Set([...generators, ...candidateFillGenerators])) {
+      generator.release();
     }
   };
   const getObservedExactCandidateJoinUpperBound = (): number | null => {
@@ -4098,7 +4118,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     result: BandoriMedleyTeamSearchResult | null = null,
     observedUpperBound: number | null = getObservedExactCandidateJoinUpperBound(),
   ): MedleyExactCandidateJoinResult => {
-    releaseCandidateArrays();
+    releaseExactJoinWorkingSet();
     const resultWithPrefixSeed = applyPrefixSeedResult(result);
     const observedUpperBoundWithPrefixSeed = (
       observedUpperBound !== null && resultWithPrefixSeed
@@ -4110,6 +4130,12 @@ export function searchMedleyConfigurationByExactCandidateJoin(
       result: resultWithPrefixSeed,
       observedUpperBound: observedUpperBoundWithPrefixSeed,
     };
+  };
+  const buildProvedExactCandidateJoinResult = (
+    result: BandoriMedleyTeamSearchResult | null = null,
+  ): MedleyExactCandidateJoinResult => {
+    releaseExactJoinWorkingSet();
+    return { proved: true, result: applyPrefixSeedResult(result) };
   };
   let effectiveCandidateSoftLimit = candidateSoftLimit;
   let didGuardedCandidateExtension = false;
@@ -4402,7 +4428,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
       profiling.exactCandidateJoinPoppedNodeCount += generators.reduce((sum, generator) => (
         sum + generator.poppedNodeCount()
       ), 0);
-      return { proved: false, result: null };
+      return buildUnprovedExactCandidateJoinResult();
     }
     candidatesBySlot[slotIndex].push(topCandidate);
     bestSlotScores[slotIndex] = topCandidate.result.score;
@@ -4474,7 +4500,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
           return buildUnprovedExactCandidateJoinResult(null, exactJoinProofCutoffScore);
         }
         profiling.exactCandidateJoinCompletedCount += 1;
-        return { proved: true, result: null };
+        return buildProvedExactCandidateJoinResult();
       }
     } else if (shouldUseRootPruneOnlyPairProbe) {
       if (Number.isFinite(pairUpperResult.upperBound)) {
@@ -4621,7 +4647,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
         return buildUnprovedExactCandidateJoinResult(null, exactJoinProofCutoffScore);
       }
       profiling.exactCandidateJoinCompletedCount += 1;
-      return { proved: true, result: null };
+      return buildProvedExactCandidateJoinResult();
     }
   }
 
@@ -4682,7 +4708,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
         );
       }
       profiling.exactCandidateJoinCompletedCount += 1;
-      return { proved: true, result: anchoredJoinResult.result };
+      return buildProvedExactCandidateJoinResult(anchoredJoinResult.result);
     }
   }
 
@@ -4690,7 +4716,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
   const candidateOtherUpperBySlot = new Array<number>(slots.length).fill(Number.POSITIVE_INFINITY);
   const candidateRelaxedOtherUpperBySlot = new Array<number>(slots.length).fill(Number.POSITIVE_INFINITY);
   const candidateRemainingOtherUpperBySlot = new Array<number>(slots.length).fill(Number.POSITIVE_INFINITY);
-  const candidateFillGenerators = slots.map((slot) => createMedleyExactSlotCandidateGenerator(
+  candidateFillGenerators = slots.map((slot) => createMedleyExactSlotCandidateGenerator(
     slot,
     server,
     perfectRate,
@@ -5085,7 +5111,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
             sum + currentGenerator.poppedNodeCount()
           ), 0);
           profiling.exactCandidateJoinCompletedCount += 1;
-          return { proved: true, result: anchorFrontierProof.result };
+          return buildProvedExactCandidateJoinResult(anchorFrontierProof.result);
         }
         const anchorFrontierObservedUpperBound = anchorFrontierProof?.observedUpperBound ?? null;
         const anchorFrontierResult = anchorFrontierProof?.result ?? null;
@@ -5324,6 +5350,5 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     );
   }
   profiling.exactCandidateJoinCompletedCount += 1;
-  releaseCandidateArrays();
-  return { proved: true, result: applyPrefixSeedResult(result) };
+  return buildProvedExactCandidateJoinResult(result);
 }

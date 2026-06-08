@@ -733,6 +733,7 @@ export type MedleyExactSlotCandidateGenerator = {
   canReuseForScoreCutoff: (scoreCutoff: number) => boolean;
   hasAborted: () => boolean;
   poppedNodeCount: () => number;
+  release: () => void;
   memoryProfile?: () => Record<string, unknown>;
 };
 
