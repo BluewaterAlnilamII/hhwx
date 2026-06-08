@@ -57,18 +57,11 @@ function getMedleyCandidateCardIds(cards: SearchCard[]): number[] {
   }
 }
 
-function getMedleyCandidateCardInstanceKeySignature(candidate: MedleyTeamCandidate): string {
-  return candidate.cardInstanceKeySignature
-    ?? candidate.cardInstanceKeys?.join(",")
-    ?? getMedleyTeamEvaluationCacheKey(candidate.cards);
-}
-
 function compareMedleyCandidateCardIds(left: MedleyTeamCandidate, right: MedleyTeamCandidate): number {
-  const signatureDelta = getMedleyCandidateCardInstanceKeySignature(left).localeCompare(
-    getMedleyCandidateCardInstanceKeySignature(right),
-  );
-  if (signatureDelta !== 0) {
-    return signatureDelta;
+  const leftKeys = left.cardInstanceKeys ?? [];
+  const rightKeys = right.cardInstanceKeys ?? [];
+  if (leftKeys.length > 0 || rightKeys.length > 0) {
+    return leftKeys.join(",").localeCompare(rightKeys.join(","));
   }
   const length = Math.min(left.cardIds.length, right.cardIds.length);
   for (let index = 0; index < length; index += 1) {
@@ -175,7 +168,7 @@ export function evaluateMedleySlotCandidateWithCache(
       result,
       cards: selectedCards,
       cardIds: getMedleyCandidateCardIds(selectedCards),
-      cardInstanceKeySignature: cacheKey,
+      cardInstanceKeys: getCardInstanceKeys(selectedCards),
     }
     : null;
 }

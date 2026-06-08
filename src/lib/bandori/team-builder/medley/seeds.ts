@@ -12,6 +12,7 @@ import { optimizeFixedMedleyCardSetWithCache, optimizeMedleyCardPool } from "./o
 import { buildMedleyResult, pushMedleyResult } from "./results";
 import { enumerateMedleySlotTeams, findBestMedleySlotTeamWithCache } from "./slots";
 import { evaluateTeam } from "@/lib/bandori/team-builder/core";
+import { getCardInstanceKeys } from "@/lib/bandori/team-builder/core/card-identity";
 import type {
   BandoriMedleyTeamSearchProfilingStats,
   BandoriMedleyTeamSearchResult,
@@ -407,7 +408,7 @@ export function buildFastGreedyMedleySlotCandidate(
       result,
       cards: selectedCards,
       cardIds: selectedCards.map((card) => card.cardId),
-      cardInstanceKeySignature: cacheKey,
+      cardInstanceKeys: getCardInstanceKeys(selectedCards),
     }
     : null;
 }

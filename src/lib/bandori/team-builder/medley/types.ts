@@ -693,7 +693,6 @@ export type MedleyTeamCandidate = {
   result: BandoriTeamSearchResult;
   cards: SearchCard[];
   cardIds: number[];
-  cardInstanceKeySignature?: string;
   cardInstanceKeys?: string[];
 };
 
