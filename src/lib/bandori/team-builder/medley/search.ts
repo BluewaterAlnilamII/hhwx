@@ -108,7 +108,7 @@ const MEDLEY_EXACT_JOIN_PREFIX_SEED_DEFAULT_MIN_CANDIDATE_COUNTS: [number, numbe
 const MEDLEY_LOW_MEMORY_INITIAL_CANDIDATE_SYNC_TIMEBOX_MS = 2_000;
 const MEDLEY_LOW_MEMORY_INITIAL_CANDIDATE_SYNC_MAX_SAME_COARSE_PROOF_ELAPSED_MS = 8_000;
 const MEDLEY_LOW_MEMORY_INITIAL_CANDIDATE_SYNC_MIN_MEMORY_HEADROOM_MIB = 800;
-const MEDLEY_LOW_MEMORY_INITIAL_CANDIDATE_SYNC_MAX_SLOT_CARD_COUNT = MEDLEY_EXACT_JOIN_AUTO_MAX_SLOT_CARDS;
+const MEDLEY_LOW_MEMORY_INITIAL_CANDIDATE_SYNC_MAX_SLOT_CARD_COUNT = 249;
 const MEDLEY_LOW_MEMORY_INITIAL_CANDIDATE_SYNC_SAME_COARSE_GUARD_MAX_SLOT_CARD_COUNT = 249;
 const MEDLEY_POST_EXACT_JOIN_TIGHT_ROOT_MAX_CARD_COUNT = 1_300;
 const MEDLEY_POST_EXACT_JOIN_TIGHT_ROOT_MIN_REMAINING_MS = 30_000;
@@ -607,6 +607,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
   const resultLimit = clamp(Math.trunc(input.resultLimit ?? 1), 1, 20);
   const perfectRate = clamp(input.perfectRate ?? 1, 0, 1);
   const maxSearchDurationMs = Math.max(1000, Math.trunc(input.maxSearchDurationMs ?? 9500));
+  const hasEventBonus = Boolean(input.eventBonus);
 
   // Runtime options only select already-defined search paths. Exact proof status is decided
   // later from actual exhaustion, timeout, and whether auto coarse filtering narrowed the space.
@@ -2570,7 +2571,8 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
       ...slots.map((slot) => slot.searchCards.length),
     );
     const hasLowMemoryInitialCandidateSyncSlotWidth = (
-      maxLowMemoryInitialCandidateSyncSlotCardCount <= lowMemoryInitialCandidateSyncMaxSlotCardCount
+      !hasEventBonus
+      || maxLowMemoryInitialCandidateSyncSlotCardCount <= lowMemoryInitialCandidateSyncMaxSlotCardCount
     );
     const shouldApplyLowMemoryInitialCandidateSyncSameCoarseProofElapsedGuard = (
       maxLowMemoryInitialCandidateSyncSlotCardCount
@@ -2650,6 +2652,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
       traceEntry.lowMemoryInitialCandidateSyncObservedMaxSlotCardCount = (
         maxLowMemoryInitialCandidateSyncSlotCardCount
       );
+      traceEntry.lowMemoryInitialCandidateSyncHasEventBonus = hasEventBonus;
       traceEntry.lowMemoryInitialCandidateSyncSameCoarseProofElapsedGuardMaxSlotCardCount = (
         MEDLEY_LOW_MEMORY_INITIAL_CANDIDATE_SYNC_SAME_COARSE_GUARD_MAX_SLOT_CARD_COUNT
       );
