@@ -656,15 +656,6 @@ export function createMedleyExactSlotCandidateGenerator(
     ),
     hasAborted: () => aborted,
     poppedNodeCount: () => poppedNodes,
-    release: () => {
-      heap.length = 0;
-      slotUpperHeap.length = 0;
-      activeHeapNodes.clear();
-      bannedCardIds.clear();
-      globalComplementUpperCache.clear();
-      globalPairComplementUpperCache.clear();
-      pairUpperQueryCache.clear();
-    },
     memoryProfile: () => {
       let highPairRecordCount = 0;
       let highPairRecordBitsetBytes = 0;
@@ -3899,9 +3890,6 @@ export function searchMedleyConfigurationByExactCandidateJoin(
   const applyPrefixSeedResult = (
     result: BandoriMedleyTeamSearchResult | null,
   ): BandoriMedleyTeamSearchResult | null => compareMedleyResultLike(result, prefixSeedResult);
-  let releasableCandidateKeysBySlot: Array<Set<string>> = [];
-  let releasableCandidateFillGenerators: MedleyExactSlotCandidateGenerator[] = [];
-  let releasableActiveGeneratorsBySlot: MedleyExactSlotCandidateGenerator[] = [];
   let didReleaseCandidateArrays = false;
   const releaseCandidateArrays = (): void => {
     if (didReleaseCandidateArrays) {
@@ -3910,16 +3898,6 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     didReleaseCandidateArrays = true;
     for (const candidates of candidatesBySlot) {
       candidates.length = 0;
-    }
-    for (const candidateKeys of releasableCandidateKeysBySlot) {
-      candidateKeys.clear();
-    }
-    for (const generator of new Set([
-      ...generators,
-      ...releasableCandidateFillGenerators,
-      ...releasableActiveGeneratorsBySlot,
-    ])) {
-      generator.release?.();
     }
   };
   const getObservedExactCandidateJoinUpperBound = (): number | null => {
@@ -4547,21 +4525,18 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     context.lowMemoryHighPairScanMinRecordCount ?? null,
     context.lowMemoryHighPairPrefixRecordLimit ?? null,
   ));
-  releasableCandidateFillGenerators = candidateFillGenerators;
   const getCandidateFillGenerator = (slotIndex: number, scoreCutoff: number): MedleyExactSlotCandidateGenerator => (
     generators[slotIndex].canReuseForScoreCutoff(scoreCutoff)
       ? generators[slotIndex]
       : candidateFillGenerators[slotIndex]
   );
   const activeGeneratorsBySlot = [...generators];
-  releasableActiveGeneratorsBySlot = activeGeneratorsBySlot;
   const getCandidateFillProfilingGenerators = (): MedleyExactSlotCandidateGenerator[] => (
     [...new Set([...generators, ...candidateFillGenerators, ...activeGeneratorsBySlot])]
   );
   const candidateKeysBySlot = candidatesBySlot.map((candidates) => (
     new Set(candidates.map(getMedleyExactCandidateCardKey))
   ));
-  releasableCandidateKeysBySlot = candidateKeysBySlot;
   const rebuildCandidateKeys = (...slotIndices: number[]): void => {
     for (const slotIndex of slotIndices) {
       candidateKeysBySlot[slotIndex] = new Set(candidatesBySlot[slotIndex].map(getMedleyExactCandidateCardKey));
