@@ -1,6 +1,6 @@
 # Medley 40/40 Exact Roadmap
 
-Last updated: 2026-06-08 23:30 CST
+Last updated: 2026-06-09 00:31 CST
 
 This file is the persistent working note for the current medley optimizer goal.
 Keep it current before and after benchmark runs or proof-path changes, so future
@@ -123,13 +123,35 @@ Rejected/diagnostic 2026-06-08 evidence:
 
 Current acceptance standard:
 
-- Minimum stage pass: `>=37/40` exact.
+- Minimum stage pass: `>=38/40` exact.
 - Final target: `40/40` exact.
 - Bounded-gap total must not regress against the latest clean pinned-fixture
   baseline.
 - Failed runs and OOM are always failures.
 - Peak working set must not exceed the latest clean pinned-fixture baseline by
   more than the active memory gate.
+
+2026-06-09 diagnostic checkpoint:
+
+- The branch checkpoint `ee8546a` added opt-in exact-join memory attribution,
+  and `f292989` narrowed it to terminal-only snapshots after the first
+  attribution run proved intrusive.
+- Do not use `debugExactCandidateJoinMemoryAttribution=true` as proof-quality
+  evidence yet. On `P07:244`, the clean current-branch baseline reproduced the
+  pinned shape: `bounded`, elapsed `149709ms`, gap `55265`, peak `4210 MiB`,
+  `candidate-fill-pair-refine`, `16/17` exact-join configurations completed,
+  and pair count `8778953`.
+- The same case with attribution enabled changed the frontier to an earlier
+  bounded result even after terminal-only sampling: elapsed `128282ms`, gap
+  `395539`, peak `4202 MiB`, `memory-soft-limit`, `3/4` exact-join
+  configurations completed, and pair count `3776496`. Because the only snapshot
+  was recorded after the abort, the likely issue is hard-case sensitivity to the
+  debug option/input shape or runtime memory sampling, not the snapshot payload
+  itself.
+- Until attribution has its own no-op equivalence gate, rely on clean isolated
+  baseline fields for acceptance analysis. If memory-source instrumentation is
+  needed again, first prove `P07:244` equivalence against the no-debug baseline
+  on status, score, gap, completed configurations, abort reason, and pair count.
 
 ## Evidence Hygiene Rules
 
@@ -171,6 +193,10 @@ report. Raw JSON is not enough. The report must include:
   risk;
 - a clear statement of whether the run is an acceptance baseline, diagnostic
   variant, or rejected experiment.
+
+This report is a sequencing requirement: after any full 40-case run finishes,
+write the timestamped report and update this roadmap before starting the next
+exploration run, optimization patch, or benchmark round.
 
 The report must include the analysis parameters needed for replay and causal
 review:
@@ -338,7 +364,8 @@ Each patch must pass:
 The next actionable step is not another seed experiment. It is:
 
 1. Implement a low-memory exact-join proof path focused on `P07:244`:
-   first add memory-source attribution for exact join, then implement either
+   use the clean baseline counters first, and only use memory-source
+   attribution after it passes a no-op equivalence gate. Then implement either
    chunk/stream pair upper or an internal compact candidate representation so
    the final small-gap frontier can close without retaining all pair records
    and duplicate candidate/result/key objects.
