@@ -1,6 +1,6 @@
 # Medley 40/40 Exact Roadmap
 
-Last updated: 2026-06-09 03:09 CST
+Last updated: 2026-06-09 03:55 CST
 
 This file is the persistent working note for the current medley optimizer goal.
 Keep it current before and after benchmark runs or proof-path changes, so future
@@ -446,6 +446,54 @@ Phase 1: memory-capped exact-join proof patch.
   candidate proof is necessary for this case; the problem is the memory shape
   of high-budget pair/candidate proof, not simply K being too large.
 
+2026-06-09 runtime memory telemetry and generic-frontier diagnostics:
+
+- Commit `b13c39e` added default runtime memory telemetry fields under
+  `stats.profiling`: Node heap, RSS, external, arrayBuffers, and the actual
+  memory-guard value. This is diagnostic-only and keeps the historical
+  `peakUsedHeapMiB` field unchanged for compatibility.
+- Current default 5-bounded diagnostic:
+  `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-08T19-43-01-660Z.json`.
+  It reproduced the clean bounded total exactly: `0/5` exact, bounded-gap total
+  `1819282`, no failed subprocess, all five rows `memoryLimited=true`.
+- The five bounded rows all hit RSS/working-set pressure, not pure V8 heap:
+  RSS minus heap was about `679-718 MiB` on `P03:260`, `P07:244`, `P07:260`,
+  and `P08:244`; `P06:323` was similar at about `692 MiB` but reached
+  `4472 MiB` before the initial-candidate abort.
+- Per-case telemetry from the current default 5-bounded run:
+  - `P03:260`: gap `370472`, abort `candidate-fill-generator-aborted`, peak
+    RSS/heap `4201/3522 MiB`, generated candidates `168316`, max candidate
+    count `152377`.
+  - `P06:323`: gap `607201`, abort `initial-candidate`, peak RSS/heap
+    `4472/3780 MiB`, no candidate/pair work reached. This is a slot candidate
+    generator residency problem before exact-join candidate fill.
+  - `P07:244`: gap `55265`, abort `candidate-fill-pair-refine`, peak RSS/heap
+    `4208/3504 MiB`, generated candidates `1063396`, pair count `8778953`.
+  - `P07:260`: gap `296599`, abort `candidate-fill-generator-aborted`, peak
+    RSS/heap `4201/3508 MiB`, generated candidates `373136`, pair count
+    `5437641`.
+  - `P08:244`: gap `489745`, abort `candidate-fill-generator-aborted`, peak
+    RSS/heap `4201/3483 MiB`, generated candidates `742274`, pair count
+    `16365204`, high-pair records `60030`.
+- Raising `memorySoftLimitMiB` only to `4290` on `P07:244` was rejected. It
+  stayed bounded, widened gap to `307404`, hit peak `4291 MiB`, and changed the
+  abort to `candidate-fill-generator-aborted`. Do not use a simple +2% memory
+  budget bump as an optimization route.
+- Opt-in targeted candidate-fill pair-refine was implemented in `41a0e85`,
+  tested on `P07:244`, then reverted in `7fe6d05`. It stayed bounded, widened
+  gap to `307404`, and aborted earlier at `high-budget-pair-upper`.
+- Opt-in near-frontier proof sweep was implemented in `e9e6318`, tested on
+  `P07:244`, then reverted in `0cb61d7`. Default sweep widened gap to
+  `176105`; conservative `rootPrefix=16` stayed bounded at gap `56994`.
+  Do not continue proof-order tuning without a stronger proof-cost model.
+- Commit `3c5ac7b` removed one lossless generator residency source by avoiding
+  slotUpperHeap/active Set maintenance while the exact slot generator is in
+  slot-key mode and replacing the active Set with a node flag in global-key
+  mode. P06/P07 smoke showed no exact or peak-memory improvement:
+  `P06:323` remained bounded at gap `607201`, peak `4469 MiB`; `P07:244`
+  remained bounded at gap `55265`, peak `4209 MiB`. Keep the patch only as a
+  small lossless cleanup; it is not sufficient for the 38/40 gate.
+
 Phase 2: no-op equivalence gate, required only when touching prefix/seed
 diagnostic paths again.
 
@@ -489,21 +537,19 @@ The next actionable step is not another seed experiment. It is:
    acceptance and hard-case diagnostics unless a run explicitly records a new
    cache checkpoint.
 2. Implement a controller-safe low-memory exact-join proof path focused on
-   `P07:244`: use the clean
-   baseline counters first, and only use memory-source attribution after it
-   passes a no-op equivalence gate. The next patch must preserve the baseline
-   proof route when memory pressure is reduced, especially incumbent quality,
-   completed exact-join configuration count, and root-prune timing. Only after
-   that gate passes should chunk/stream pair upper or compact candidate
-   representation be retried.
+   `P07:244`, `P03:260`, `P07:260`, and `P08:244`: use the clean baseline and
+   telemetry counters first. The next viable patch must reduce exact slot
+   candidate / pair frontier residency without lowering proof strength or
+   changing controller route. Simple memory-limit bumps, proof-order tuning,
+   pair-refine target changes, and cache clearing have all failed.
 3. For `P06:323`, do not spend the next iteration on slot proof cutoff. If it
    is targeted, build a low-memory initial-candidate fallback that can return a
    proof-relevant upper or partial frontier when node expansion hits the soft
    limit.
-4. Before adding another proof path, add or run a no-op-safe memory metric
-   diagnostic that separates Node `heapUsed` from RSS/working-set. Current
-   `peakUsedHeapMiB` is deliberately conservative and can be RSS-backed; without
-   heap/RSS separation, memory-limit changes are hard to interpret.
+4. For generator/candidate memory, the next generic implementation candidate is
+   a deeper compact node representation: avoid per-node `selectedCards` array
+   copies by using fixed slots or parent-linked compact nodes, while preserving
+   deterministic candidate order and exact upper semantics.
 5. Re-run the 5 bounded rows plus the 4 guardrail exact rows.
 6. If at least two bounded rows convert and guardrails stay exact, re-run the
    full isolated 40-case matrix and generate another timestamped report.
