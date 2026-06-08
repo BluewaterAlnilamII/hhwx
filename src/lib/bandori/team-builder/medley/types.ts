@@ -729,7 +729,6 @@ export type MedleyExactSlotCandidateGenerator = {
     scoreCutoff?: number,
     globalPruning?: MedleyExactSlotCandidateGlobalPruning,
   ) => MedleyTeamCandidate | null;
-  findBestCandidate: () => MedleyTeamCandidate | null;
   peekUpperBound: () => number;
   canReuseForScoreCutoff: (scoreCutoff: number) => boolean;
   hasAborted: () => boolean;

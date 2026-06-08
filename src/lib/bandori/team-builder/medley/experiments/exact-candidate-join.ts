@@ -9,6 +9,7 @@
 import {
   compareMedleyResultLike,
   evaluateMedleySlotCandidateWithCache,
+  pushMedleyCandidate,
   sortMedleyCandidates,
 } from "../candidates";
 import { getMedleyPruningThreshold } from "../configurations";
@@ -84,9 +85,11 @@ import {
 } from "../upper/skill-context";
 import {
   CHARACTER_MASK_SEGMENT_BITS,
+  evaluateMedleyScoreOnlyTeam,
   estimateSearchScopeScoreUpperBound,
   hasCharacterIndexInMask,
 } from "@/lib/bandori/team-builder/core";
+import { getCardInstanceKeys } from "@/lib/bandori/team-builder/core/card-identity";
 import type {
   BandoriMedleyTeamSearchProfilingStats,
   BandoriMedleyTeamSearchResult,
@@ -122,6 +125,121 @@ function createMedleyExactCandidateSlotThresholdResult(scoreCutoff: number): Ban
     targetValue: scoreCutoff,
     target: "score",
   } as BandoriTeamSearchResult;
+}
+
+function findBestMedleyExactSlotCandidateLowMemory(
+  slot: MedleySlotSearch,
+  server: number,
+  perfectRate: number,
+  stats: BandoriMedleyTeamSearchStats,
+  profiling: BandoriMedleyTeamSearchProfilingStats,
+  isPastDeadline: () => boolean,
+  deadlineAt: number,
+  nodeSoftLimit: number,
+): { aborted: boolean; candidate: MedleyTeamCandidate | null } {
+  const bannedCardIds = new Set<number>();
+  const selectedCards: SearchCard[] = [];
+  const bestCandidates: MedleyTeamCandidate[] = [];
+  let visitedNodeCount = 0;
+  let aborted = false;
+
+  const visit = (
+    startIndex: number,
+    usedCharacterMaskLow: number,
+    usedCharacterMaskHigh: number,
+    selectedPower: number,
+  ): void => {
+    if (aborted || stats.timedOut) {
+      return;
+    }
+    visitedNodeCount += 1;
+    if (visitedNodeCount >= nodeSoftLimit) {
+      aborted = true;
+      return;
+    }
+    if ((visitedNodeCount & 2047) === 0 && (performance.now() >= deadlineAt || isPastDeadline())) {
+      stats.isExhaustive = false;
+      stats.timedOut = true;
+      stats.searchMode = "bounded";
+      return;
+    }
+
+    const remaining = MEDLEY_TEAM_SIZE - selectedCards.length;
+    if (slot.searchCards.length - startIndex < remaining) {
+      return;
+    }
+    const scoreCutoff = bestCandidates[0]?.result.score ?? Number.NEGATIVE_INFINITY;
+    const upperBound = estimateMedleyExactSlotNodeUpperBound(
+      slot,
+      selectedCards,
+      startIndex,
+      bannedCardIds,
+      usedCharacterMaskLow,
+      usedCharacterMaskHigh,
+      selectedPower,
+      profiling,
+      scoreCutoff,
+    );
+    if (!Number.isFinite(upperBound) || upperBound < scoreCutoff) {
+      return;
+    }
+
+    if (selectedCards.length === MEDLEY_TEAM_SIZE) {
+      stats.enumeratedTeamCount += 1;
+      profiling.teamEvaluationCacheMissCount += 1;
+      const result = evaluateMedleyScoreOnlyTeam({
+        cards: selectedCards,
+        input: slot.input,
+        chart: slot.chart,
+        configuration: slot.configuration,
+        server,
+        perfectRate,
+        scoreCache: slot.scoreCache,
+        comboOptions: slot.comboOptions,
+        pruningThresholdResult: createMedleyExactCandidateSlotThresholdResult(scoreCutoff),
+      });
+      stats.evaluatedTeamCount += 1;
+      if (!result || result.score < scoreCutoff) {
+        return;
+      }
+      pushMedleyCandidate(bestCandidates, {
+        result,
+        cards: [...selectedCards],
+        cardIds: selectedCards.map((card) => card.cardId),
+        cardInstanceKeys: getCardInstanceKeys(selectedCards),
+      }, 1);
+      return;
+    }
+
+    for (let index = startIndex; index <= slot.searchCards.length - remaining; index += 1) {
+      const card = slot.searchCards[index];
+      const characterIndex = slot.upperBoundIndex.characterIndexById.get(card.characterId);
+      if (
+        characterIndex === undefined
+        || hasCharacterIndexInMask(usedCharacterMaskLow, usedCharacterMaskHigh, characterIndex)
+      ) {
+        continue;
+      }
+      const isLowCharacterMask = characterIndex < CHARACTER_MASK_SEGMENT_BITS;
+      const characterBit = isLowCharacterMask
+        ? 1 << characterIndex
+        : 1 << (characterIndex - CHARACTER_MASK_SEGMENT_BITS);
+      selectedCards.push(card);
+      visit(
+        index + 1,
+        isLowCharacterMask ? usedCharacterMaskLow | characterBit : usedCharacterMaskLow,
+        isLowCharacterMask ? usedCharacterMaskHigh : usedCharacterMaskHigh | characterBit,
+        selectedPower + card.effectivePower,
+      );
+      selectedCards.pop();
+      if (aborted || stats.timedOut) {
+        return;
+      }
+    }
+  };
+
+  visit(0, 0, 0, 0);
+  return { aborted, candidate: bestCandidates[0] ?? null };
 }
 
 export function estimateMedleyExactSlotNodeUpperBound(
@@ -690,40 +808,6 @@ export function createMedleyExactSlotCandidateGenerator(
     }
     return null;
   };
-  const findBestCandidate = (): MedleyTeamCandidate | null => {
-    let bestCandidate: MedleyTeamCandidate | null = null;
-    while (heap.length > 0) {
-      const bestScore = bestCandidate?.result.score ?? Number.NEGATIVE_INFINITY;
-      if ((heap[0]?.key ?? Number.NEGATIVE_INFINITY) <= bestScore) {
-        return bestCandidate;
-      }
-      if (poppedNodes >= nodeSoftLimit) {
-        aborted = true;
-        return null;
-      }
-      if (stats.timedOut || performance.now() >= deadlineAt || isPastDeadline()) {
-        stats.isExhaustive = false;
-        stats.timedOut = true;
-        stats.searchMode = "bounded";
-        return null;
-      }
-
-      const node = popMedleyExactSlotNode(heap);
-      if (!node) {
-        return bestCandidate;
-      }
-      poppedNodes += 1;
-      node.activeInSlotUpperHeap = false;
-      if (node.candidate) {
-        if (!bestCandidate || node.candidate.result.score > bestCandidate.result.score) {
-          bestCandidate = node.candidate;
-        }
-        continue;
-      }
-      expandNode(node, bestScore);
-    }
-    return bestCandidate;
-  };
   const release = (): void => {
     heap.length = 0;
     slotUpperHeap.length = 0;
@@ -734,7 +818,6 @@ export function createMedleyExactSlotCandidateGenerator(
 
   return {
     next,
-    findBestCandidate,
     peekUpperBound: () => (
       heapKeyMode === "slot"
         ? heap[0]?.key ?? Number.NEGATIVE_INFINITY
@@ -4318,7 +4401,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
   const initialCandidateStartedAt = performance.now();
   for (let slotIndex = 0; slotIndex < slots.length; slotIndex += 1) {
     const slotInitialCandidateStartedAt = performance.now();
-    const topCandidateProbeGenerator = createMedleyExactSlotCandidateGenerator(
+    const lowMemoryTopCandidate = findBestMedleyExactSlotCandidateLowMemory(
       slots[slotIndex],
       server,
       perfectRate,
@@ -4327,20 +4410,14 @@ export function searchMedleyConfigurationByExactCandidateJoin(
       isPastDeadline,
       deadlineAt,
       nodeSoftLimit,
-      context.lowMemoryHighPairScanMinRecordCount ?? null,
-      context.lowMemoryHighPairPrefixRecordLimit ?? null,
     );
-    const topCandidateProbe = topCandidateProbeGenerator.findBestCandidate();
-    const topCandidateProbeAborted = topCandidateProbeGenerator.hasAborted();
-    profiling.exactCandidateJoinPoppedNodeCount += topCandidateProbeGenerator.poppedNodeCount();
-    topCandidateProbeGenerator.release();
-    const topCandidate = topCandidateProbe
-      ? generators[slotIndex].next(topCandidateProbe.result.score)
+    const topCandidate = lowMemoryTopCandidate.candidate
+      ? generators[slotIndex].next(lowMemoryTopCandidate.candidate.result.score)
       : null;
     profiling.exactCandidateJoinInitialCandidateElapsedMsBySlot[slotIndex] = (
       performance.now() - slotInitialCandidateStartedAt
     );
-    if (stats.timedOut || topCandidateProbeAborted || generators[slotIndex].hasAborted() || !topCandidate) {
+    if (stats.timedOut || lowMemoryTopCandidate.aborted || generators[slotIndex].hasAborted() || !topCandidate) {
       profiling.exactCandidateJoinInitialCandidateElapsedMs += performance.now() - initialCandidateStartedAt;
       profiling.exactCandidateJoinAbortCount += 1;
       recordAbortDiagnostics("initial-candidate", {
