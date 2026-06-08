@@ -1,6 +1,6 @@
 # Medley 40/40 Exact Roadmap
 
-Last updated: 2026-06-09 00:31 CST
+Last updated: 2026-06-09 00:58 CST
 
 This file is the persistent working note for the current medley optimizer goal.
 Keep it current before and after benchmark runs or proof-path changes, so future
@@ -167,6 +167,17 @@ Current acceptance standard:
   configurations. This proves the next blocker is not only representation
   memory; lowering memory can flip the controller into a worse low-incumbent /
   high-root-prune route.
+- Two existing controller-disable switches were checked on `P07:244` and are
+  not default candidates. `disableSkipDfsAfterUnprovedExactCandidateJoin=true`
+  preserved the best score but widened the gap from `55265` to `307404`, raised
+  peak memory from `4210` to `4552 MiB`, and changed the route to the known
+  bad `candidate-fill-soft-limit` / `3/4` completion shape.
+  `disableSameCoarseTightRootSkip=true` narrowly improved the gap
+  (`55265 -> 52777`) and completed `17/18` exact-join configurations, but it
+  increased elapsed time from about `144s` to `239s` and still remained
+  bounded. This suggests the same-coarse tight-root skip is not the root cause;
+  the reusable direction is a cheaper frontier-proof refinement, not broad
+  skip removal.
 
 ## Evidence Hygiene Rules
 
