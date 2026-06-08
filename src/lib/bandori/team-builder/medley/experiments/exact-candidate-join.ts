@@ -179,7 +179,6 @@ export function createMedleyExactSlotCandidateGenerator(
   // caller so exact status is not inferred from a truncated prefix.
   const heap: MedleyExactSlotCandidateSearchNode[] = [];
   const slotUpperHeap: MedleyExactSlotUpperHeapNode[] = [];
-  const activeHeapNodes = new Set<MedleyExactSlotCandidateSearchNode>();
   const bannedCardIds = new Set<number>();
   const globalComplementUpperCache = new Map<string, number>();
   const globalPairComplementUpperCache = new Map<string, number>();
@@ -190,12 +189,14 @@ export function createMedleyExactSlotCandidateGenerator(
   let heapGlobalKeySignature: string | null = null;
   let maxPruningScoreCutoff = Number.NEGATIVE_INFINITY;
   const pushHeapNode = (node: MedleyExactSlotCandidateSearchNode): void => {
-    activeHeapNodes.add(node);
     pushMedleyExactSlotNode(heap, node);
-    pushMedleyExactSlotUpperNode(slotUpperHeap, { key: node.slotUpperBound, node });
+    if (heapKeyMode === "global") {
+      node.activeInSlotUpperHeap = true;
+      pushMedleyExactSlotUpperNode(slotUpperHeap, { key: node.slotUpperBound, node });
+    }
   };
   const peekMaxHeapSlotUpperBound = (): number => {
-    while (slotUpperHeap.length > 0 && !activeHeapNodes.has(slotUpperHeap[0].node)) {
+    while (slotUpperHeap.length > 0 && slotUpperHeap[0].node.activeInSlotUpperHeap !== true) {
       popMedleyExactSlotUpperNode(slotUpperHeap);
     }
     return slotUpperHeap[0]?.key ?? Number.NEGATIVE_INFINITY;
@@ -437,8 +438,8 @@ export function createMedleyExactSlotCandidateGenerator(
     heapKeyMode = globalPruning ? "global" : "slot";
     heapGlobalKeySignature = globalKeySignature;
     slotUpperHeap.length = 0;
-    activeHeapNodes.clear();
     for (const node of nodes) {
+      node.activeInSlotUpperHeap = false;
       node.key = globalPruning
         ? estimateGlobalSearchKey(node, scoreCutoff, globalPruning)
         : estimateSlotSearchKey(node);
@@ -635,7 +636,7 @@ export function createMedleyExactSlotCandidateGenerator(
         return null;
       }
       poppedNodes += 1;
-      activeHeapNodes.delete(node);
+      node.activeInSlotUpperHeap = false;
       if (node.candidate) {
         return node.candidate;
       }
@@ -681,7 +682,7 @@ export function createMedleyExactSlotCandidateGenerator(
       return {
         heapNodeCount: heap.length,
         slotUpperHeapNodeCount: slotUpperHeap.length,
-        activeHeapNodeCount: activeHeapNodes.size,
+        activeHeapNodeCount: heapKeyMode === "global" ? heap.length : 0,
         globalComplementUpperCacheSize: globalComplementUpperCache.size,
         globalPairComplementUpperCacheSize: globalPairComplementUpperCache.size,
         pairUpperQueryCacheSize: pairUpperQueryCache.size,

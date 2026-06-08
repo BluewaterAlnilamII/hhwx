@@ -699,6 +699,7 @@ export type MedleyTeamCandidate = {
 export type MedleyExactSlotCandidateSearchNode = {
   key: number;
   slotUpperBound: number;
+  activeInSlotUpperHeap?: boolean;
   selectedCards: SearchCard[];
   startIndex: number;
   usedCharacterMaskLow: number;
