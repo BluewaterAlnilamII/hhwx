@@ -3396,6 +3396,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
     );
     if (
       hasFullWidthEventExactJoinMemoryRisk
+      && configurationIndex === 0
       && results.length >= resultLimit
       && hasFiniteActiveConfigurationUpperBoundBeforeSeeding
     ) {
@@ -3514,6 +3515,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
     );
     if (
       hasFullWidthEventExactJoinMemoryRisk
+      && configurationIndex === 0
       && results.length >= resultLimit
       && hasFiniteActiveConfigurationUpperBound
     ) {
