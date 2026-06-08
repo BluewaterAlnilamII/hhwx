@@ -686,6 +686,21 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
       ? Math.max(1, parsedLowMemoryHighPairPrefixRecordLimit)
       : MEDLEY_EXACT_CANDIDATE_JOIN_LOW_MEMORY_HIGH_PAIR_PREFIX_RECORD_LIMIT
     : null;
+  const enableNearFrontierProofSweep = optimization.enableNearFrontierProofSweep === true;
+  const parsedNearFrontierProofSweepMaxGap = optimization.nearFrontierProofSweepMaxGap !== undefined
+    ? Math.trunc(optimization.nearFrontierProofSweepMaxGap)
+    : Number.NaN;
+  const nearFrontierProofSweepMaxGap = Number.isFinite(parsedNearFrontierProofSweepMaxGap)
+    ? Math.max(0, parsedNearFrontierProofSweepMaxGap)
+    : 250_000;
+  const parsedNearFrontierProofSweepRootPrefixCount = (
+    optimization.nearFrontierProofSweepRootPrefixCount !== undefined
+      ? Math.trunc(optimization.nearFrontierProofSweepRootPrefixCount)
+      : Number.NaN
+  );
+  const nearFrontierProofSweepRootPrefixCount = Number.isFinite(parsedNearFrontierProofSweepRootPrefixCount)
+    ? Math.max(0, parsedNearFrontierProofSweepRootPrefixCount)
+    : 6;
   const exactJoinPrefixSeedForceNoop = optimization.exactJoinPrefixSeedForceNoop === true;
   const exactJoinPrefixSeedGuardOnly = optimization.exactJoinPrefixSeedGuardOnly === true;
   const parsedExactJoinPrefixSeedTimeboxMs = optimization.exactJoinPrefixSeedTimeboxMs !== undefined
@@ -1574,9 +1589,34 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
       || left.index - right.index
     );
     if (shouldUseAllScopeObservedRootSort) {
-      orderedConfigurations = configurationEntries
-        .sort(compareObservedRootUpper)
-        .map(({ configuration }) => configuration);
+      const rootSortedConfigurationEntries = configurationEntries.sort(compareObservedRootUpper);
+      if (enableNearFrontierProofSweep) {
+        const referenceScore = profiling.bestConfigurationSeedPassScore ?? results[0]?.score ?? Number.NEGATIVE_INFINITY;
+        const canUseNearFrontierSweep = Number.isFinite(referenceScore);
+        const prefixCount = Math.min(nearFrontierProofSweepRootPrefixCount, rootSortedConfigurationEntries.length);
+        const rootPrefix = rootSortedConfigurationEntries.slice(0, prefixCount);
+        const remainingEntries = rootSortedConfigurationEntries.slice(prefixCount);
+        const readGap = (entry: typeof configurationEntries[number]): number => (
+          entry.observedRootUpperBound - referenceScore
+        );
+        const nearFrontierEntries = canUseNearFrontierSweep
+          ? remainingEntries
+            .filter((entry) => readGap(entry) <= nearFrontierProofSweepMaxGap)
+            .sort((left, right) => readGap(left) - readGap(right) || compareObservedRootUpper(left, right))
+          : [];
+        const nearFrontierEntryIndices = new Set(nearFrontierEntries.map((entry) => entry.index));
+        const farEntries = canUseNearFrontierSweep
+          ? remainingEntries.filter((entry) => !nearFrontierEntryIndices.has(entry.index))
+          : remainingEntries;
+        orderedConfigurations = [
+          ...rootPrefix,
+          ...nearFrontierEntries,
+          ...farEntries,
+        ].map(({ configuration }) => configuration);
+      } else {
+        orderedConfigurations = rootSortedConfigurationEntries
+          .map(({ configuration }) => configuration);
+      }
     } else {
       orderedConfigurations = configurationEntries
         .sort((left, right) => (

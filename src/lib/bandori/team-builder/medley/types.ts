@@ -80,6 +80,9 @@ export type BandoriMedleySearchOptimizationOptions = {
   lowMemoryHighPairScanMinRecordCount?: number;
   enableLowMemoryHighPairPrefixUpper?: boolean;
   lowMemoryHighPairPrefixRecordLimit?: number;
+  enableNearFrontierProofSweep?: boolean;
+  nearFrontierProofSweepMaxGap?: number;
+  nearFrontierProofSweepRootPrefixCount?: number;
   debugExactCandidateJoinMemoryAttribution?: boolean;
   enableTrailingSameCoarseDfsOnly?: boolean;
   disableDominatedRootSkip?: boolean;
