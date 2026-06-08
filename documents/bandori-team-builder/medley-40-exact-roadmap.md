@@ -1,6 +1,6 @@
 # Medley 40/40 Exact Roadmap
 
-Last updated: 2026-06-09 04:20 CST
+Last updated: 2026-06-09 04:34 CST
 
 This file is the persistent working note for the current medley optimizer goal.
 Keep it current before and after benchmark runs or proof-path changes, so future
@@ -509,6 +509,14 @@ Phase 1: memory-capped exact-join proof patch.
   `P03:260` peaked at `4724 MiB` and `P07:260` peaked at `5430 MiB`, with
   both cases moving into `initial-candidate` memory pressure. Do not continue
   candidate instance-key compaction as a default route.
+- Commit `a01dc32` tried minimizing `evaluateMedleyScoreOnlyTeam` result
+  payloads, then `14b372c` reverted it. The P06/P07 smoke again had a small
+  `P07:244` gap improvement, but the 5-bounded run failed the memory gate:
+  `P07:260` peaked at `5603 MiB` and moved into `initial-candidate` memory
+  pressure. This confirms score-only/candidate payload compaction can perturb
+  GC and controller timing enough to create worse hard-case memory spikes.
+  Do not default score-only payload minimization without a stronger no-op /
+  memory-equivalence gate.
 
 Phase 2: no-op equivalence gate, required only when touching prefix/seed
 diagnostic paths again.
