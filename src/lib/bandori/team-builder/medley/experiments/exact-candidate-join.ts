@@ -137,6 +137,7 @@ function findBestMedleyExactSlotCandidateLowMemory(
   deadlineAt: number,
   nodeSoftLimit: number,
   localDeadlineAt: number | null = null,
+  shouldAbortLocalSearch: (() => boolean) | null = null,
 ): { aborted: boolean; candidate: MedleyTeamCandidate | null } {
   const bannedCardIds = new Set<number>();
   const selectedCards: SearchCard[] = [];
@@ -158,9 +159,13 @@ function findBestMedleyExactSlotCandidateLowMemory(
       aborted = true;
       return;
     }
-    if ((visitedNodeCount & 2047) === 0) {
+    if ((visitedNodeCount & 511) === 0) {
       const now = performance.now();
       if (localDeadlineAt !== null && now >= localDeadlineAt) {
+        aborted = true;
+        return;
+      }
+      if (shouldAbortLocalSearch?.()) {
         aborted = true;
         return;
       }
@@ -3946,6 +3951,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     exactJoinPrefixSeedMaxObservedGap?: number;
     enableLowMemoryInitialCandidateSync?: boolean;
     lowMemoryInitialCandidateSyncTimeboxMs?: number;
+    shouldAbortLowMemoryInitialCandidateSync?: () => boolean;
     lowMemoryHighPairScanMinRecordCount?: number | null;
     lowMemoryHighPairPrefixRecordLimit?: number | null;
     debugExactCandidateJoinMemoryAttribution?: boolean;
@@ -4432,6 +4438,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
         deadlineAt,
         nodeSoftLimit,
         lowMemoryInitialCandidateSyncDeadlineAt,
+        context.shouldAbortLowMemoryInitialCandidateSync ?? null,
       );
       if (lowMemoryTopCandidate.aborted) {
         topCandidate = generators[slotIndex].next();

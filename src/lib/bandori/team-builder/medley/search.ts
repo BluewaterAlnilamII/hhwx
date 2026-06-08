@@ -2567,6 +2567,14 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
       lowMemoryInitialCandidateSyncMemoryHeadroomMiB === null
       || lowMemoryInitialCandidateSyncMemoryHeadroomMiB >= lowMemoryInitialCandidateSyncMinMemoryHeadroomMiB
     );
+    const shouldAbortLowMemoryInitialCandidateSync = (): boolean => {
+      const usedHeapBytes = readUsedHeapBytes();
+      if (usedHeapBytes === null || stats.memorySoftLimitMiB === null) {
+        return false;
+      }
+      const usedMiB = Math.ceil(usedHeapBytes / BYTES_PER_MIB);
+      return stats.memorySoftLimitMiB - usedMiB < lowMemoryInitialCandidateSyncMinMemoryHeadroomMiB;
+    };
     const shouldUseLowMemoryInitialCandidateSync = (
       !disableLowMemoryInitialCandidateSync
       && sameCoarseMaxExactJoinProofElapsedMs < lowMemoryInitialCandidateSyncMaxSameCoarseProofElapsedMs
@@ -3239,6 +3247,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
           exactJoinPrefixSeedMemorySoftLimitMiB: stats.memorySoftLimitMiB,
           enableLowMemoryInitialCandidateSync: shouldUseLowMemoryInitialCandidateSync,
           lowMemoryInitialCandidateSyncTimeboxMs,
+          shouldAbortLowMemoryInitialCandidateSync,
           lowMemoryHighPairScanMinRecordCount,
           lowMemoryHighPairPrefixRecordLimit,
           debugExactCandidateJoinMemoryAttribution,
@@ -3519,6 +3528,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
           exactJoinPrefixSeedMemorySoftLimitMiB: stats.memorySoftLimitMiB,
           enableLowMemoryInitialCandidateSync: shouldUseLowMemoryInitialCandidateSync,
           lowMemoryInitialCandidateSyncTimeboxMs,
+          shouldAbortLowMemoryInitialCandidateSync,
           lowMemoryHighPairScanMinRecordCount,
           lowMemoryHighPairPrefixRecordLimit,
           debugExactCandidateJoinMemoryAttribution,
