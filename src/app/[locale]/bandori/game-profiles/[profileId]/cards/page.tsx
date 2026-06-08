@@ -27,7 +27,6 @@ import { pickBestdoriCnThenJpName } from "@/lib/bestdori-regional-names";
 import { decodeBestdoriProfile, encodeBestdoriProfile } from "@/lib/bestdori-profile-codec";
 import {
   decodeCompressedGameProfilePayload,
-  encodeCompressedGameProfilePayload,
   getGameProfileCards,
   getGameProfileCharacterMissionBonuses,
   getGameProfileCharacterPotentials,
@@ -87,6 +86,32 @@ type MetadataPayload = {
   cards: Record<string, BestdoriCardMetadata>;
   characters: CharacterRecord[];
   skills: Record<string, BandoriSkillLabelMaster | undefined>;
+};
+
+type GameProfilePayloadResponse = {
+  compressed: CompressedGameProfilePayload;
+  profile: {
+    id: string;
+    kind: "auto" | "manual";
+    name: string;
+    isEditable: boolean;
+    updatedAt: string;
+  };
+  sectionVersions: {
+    cardsHash: string;
+    itemsHash: string;
+  };
+};
+
+type GameProfileSectionUpdateResult = {
+  profile: GameProfilePayloadResponse["profile"];
+  sectionVersions: GameProfilePayloadResponse["sectionVersions"];
+};
+
+type LoadedProfilePayload = {
+  payload: UserGameProfilePayload;
+  isEditable: boolean;
+  cardsHash: string | null;
 };
 
 type CardFilterState = {
@@ -183,9 +208,24 @@ function buildPayloadWithCards(
   };
 }
 
-async function requestProfilePayload(profileId: string): Promise<UserGameProfilePayload> {
+function getProfileApiErrorMessage(payload: unknown, fallback: string): string {
+  if (typeof payload === "object" && payload !== null && "success" in payload && payload.success === false && "error" in payload) {
+    const error = payload.error;
+    if (typeof error === "object" && error !== null && "message" in error && typeof error.message === "string") {
+      return error.message;
+    }
+  }
+
+  return getApiErrorMessage(payload) || fallback;
+}
+
+async function requestProfilePayload(profileId: string): Promise<LoadedProfilePayload> {
   if (isLocalGameProfileId(profileId)) {
-    return readLocalGameProfilePayload(profileId);
+    return {
+      payload: await readLocalGameProfilePayload(profileId),
+      isEditable: true,
+      cardsHash: null,
+    };
   }
 
   const accessToken = await getAccessToken();
@@ -201,22 +241,22 @@ async function requestProfilePayload(profileId: string): Promise<UserGameProfile
     throw new Error(getApiErrorMessage(payload) || `请求失败（HTTP ${response.status}）`);
   }
 
-  const compressed = parseApiSuccessData<CompressedGameProfilePayload>(payload);
-  if (!compressed) {
+  const data = parseApiSuccessData<GameProfilePayloadResponse>(payload);
+  if (!data) {
     throw new Error("档案数据为空");
   }
 
-  return decodeCompressedGameProfilePayload(compressed);
+  return {
+    payload: await decodeCompressedGameProfilePayload(data.compressed),
+    isEditable: data.profile.isEditable,
+    cardsHash: data.sectionVersions.cardsHash,
+  };
 }
 
-async function requestProfileEditable(profileId: string): Promise<boolean> {
-  return isLocalGameProfileId(profileId);
-}
-
-async function saveProfilePayload(profileId: string, payload: UserGameProfilePayload): Promise<void> {
+async function saveProfileCards(profileId: string, cards: UserGameProfileCardRecord[], payload: UserGameProfilePayload, baseCardsHash: string | null): Promise<string | null> {
   if (isLocalGameProfileId(profileId)) {
     await updateLocalGameProfilePayload(profileId, payload);
-    return;
+    return null;
   }
 
   const accessToken = await getAccessToken();
@@ -224,18 +264,27 @@ async function saveProfilePayload(profileId: string, payload: UserGameProfilePay
     throw new Error("请先登录");
   }
 
-  const response = await fetch(`/api/account/game-profiles/${profileId}/payload`, {
+  if (!baseCardsHash) {
+    throw new Error("档案版本缺失，请重新载入后再保存");
+  }
+
+  const response = await fetch(`/api/account/game-profiles/${profileId}/cards`, {
     method: "PATCH",
     headers: {
       Authorization: `Bearer ${accessToken}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ compressed: await encodeCompressedGameProfilePayload(payload) }),
+    body: JSON.stringify({ baseCardsHash, cards }),
   });
   const responsePayload = await response.json().catch(() => ({}));
   if (!response.ok) {
-    throw new Error(getApiErrorMessage(responsePayload) || `保存失败（HTTP ${response.status}）`);
+    throw new Error(getProfileApiErrorMessage(responsePayload, `保存失败（HTTP ${response.status}）`));
   }
+  const data = parseApiSuccessData<GameProfileSectionUpdateResult>(responsePayload);
+  if (!data) {
+    throw new Error("保存结果格式无效");
+  }
+  return data.sectionVersions.cardsHash;
 }
 
 async function requestCardMetadata(cardIds: number[]): Promise<Record<string, BestdoriCardMetadata>> {
@@ -397,6 +446,7 @@ export default function GameProfileCardsPage({ params }: { params: Promise<{ pro
   const [filters, setFilters] = useState<CardFilterState>(DEFAULT_FILTERS);
   const [editingCardId, setEditingCardId] = useState<number | null>(null);
   const [canEditProfile, setCanEditProfile] = useState(true);
+  const [baseCardsHash, setBaseCardsHash] = useState<string | null>(null);
   const [visibleCount, setVisibleCount] = useState(CARD_PAGE_SIZE);
   const [loadingCards, setLoadingCards] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -422,15 +472,14 @@ export default function GameProfileCardsPage({ params }: { params: Promise<{ pro
     async function loadCards() {
       setLoadingCards(true);
       try {
-        const [nextPayload, nextCanEditProfile] = await Promise.all([
-          requestProfilePayload(profileId),
-          requestProfileEditable(profileId),
-        ]);
+        const nextProfile = await requestProfilePayload(profileId);
+        const nextPayload = nextProfile.payload;
         const nextCards = getGameProfileCards(nextPayload);
         const nextMetadata = await requestMetadata(uniqueNumbers(nextCards.map((card) => card.cardId)));
         if (!canceled) {
           setProfilePayload(nextPayload);
-          setCanEditProfile(nextCanEditProfile);
+          setCanEditProfile(nextProfile.isEditable);
+          setBaseCardsHash(nextProfile.cardsHash);
           setCards(nextCards);
           setBaselineCards(nextCards);
           setMetadata(nextMetadata);
@@ -502,9 +551,10 @@ export default function GameProfileCardsPage({ params }: { params: Promise<{ pro
     setSaveMessage("");
     try {
       const nextPayload = buildPayloadWithCards(profilePayload, nextCards);
-      await saveProfilePayload(profileId, nextPayload);
+      const nextCardsHash = await saveProfileCards(profileId, nextCards, nextPayload, baseCardsHash);
       const savedCards = getGameProfileCards(nextPayload);
       setProfilePayload(nextPayload);
+      setBaseCardsHash(nextCardsHash);
       setCards(savedCards);
       setBaselineCards(savedCards);
       setEditingCardId(null);

@@ -5,7 +5,6 @@ import { use, useEffect, useMemo, useState } from "react";
 import { getApiErrorMessage, parseApiSuccessData } from "@/lib/api-contracts";
 import {
   decodeCompressedGameProfilePayload,
-  encodeCompressedGameProfilePayload,
   compactMissionBonusRecords,
   compactPotentialRecords,
   getGameProfileAreaItems,
@@ -73,6 +72,32 @@ type ItemsPayload = {
   characterMissionBonuses: MissionBonusRecord[];
 };
 
+type GameProfilePayloadResponse = {
+  compressed: CompressedGameProfilePayload;
+  profile: {
+    id: string;
+    kind: "auto" | "manual";
+    name: string;
+    isEditable: boolean;
+    updatedAt: string;
+  };
+  sectionVersions: {
+    cardsHash: string;
+    itemsHash: string;
+  };
+};
+
+type GameProfileSectionUpdateResult = {
+  profile: GameProfilePayloadResponse["profile"];
+  sectionVersions: GameProfilePayloadResponse["sectionVersions"];
+};
+
+type LoadedProfilePayload = {
+  payload: UserGameProfilePayload;
+  isEditable: boolean;
+  itemsHash: string | null;
+};
+
 type MetadataPayload = {
   characters: CharacterRecord[];
   areaItems: Record<string, AreaItemMetadata>;
@@ -117,9 +142,24 @@ function itemsFromProfilePayload(payload: UserGameProfilePayload): ItemsPayload 
   };
 }
 
-async function requestProfilePayload(profileId: string): Promise<UserGameProfilePayload> {
+function getProfileApiErrorMessage(payload: unknown, fallback: string): string {
+  if (typeof payload === "object" && payload !== null && "success" in payload && payload.success === false && "error" in payload) {
+    const error = payload.error;
+    if (typeof error === "object" && error !== null && "message" in error && typeof error.message === "string") {
+      return error.message;
+    }
+  }
+
+  return getApiErrorMessage(payload) || fallback;
+}
+
+async function requestProfilePayload(profileId: string): Promise<LoadedProfilePayload> {
   if (isLocalGameProfileId(profileId)) {
-    return readLocalGameProfilePayload(profileId);
+    return {
+      payload: await readLocalGameProfilePayload(profileId),
+      isEditable: true,
+      itemsHash: null,
+    };
   }
 
   const accessToken = await getAccessToken();
@@ -135,12 +175,16 @@ async function requestProfilePayload(profileId: string): Promise<UserGameProfile
     throw new Error(getApiErrorMessage(payload) || `请求失败（HTTP ${response.status}）`);
   }
 
-  const compressed = parseApiSuccessData<CompressedGameProfilePayload>(payload);
-  if (!compressed) {
+  const data = parseApiSuccessData<GameProfilePayloadResponse>(payload);
+  if (!data) {
     throw new Error("档案数据为空");
   }
 
-  return decodeCompressedGameProfilePayload(compressed);
+  return {
+    payload: await decodeCompressedGameProfilePayload(data.compressed),
+    isEditable: data.profile.isEditable,
+    itemsHash: data.sectionVersions.itemsHash,
+  };
 }
 
 async function requestMetadata(): Promise<MetadataPayload> {
@@ -399,6 +443,8 @@ export default function GameProfileItemsPage({ params }: { params: Promise<{ pro
   });
   const [activeTab, setActiveTab] = useState<"area" | "characters">("area");
   const [editing, setEditing] = useState(false);
+  const [isEditableProfile, setIsEditableProfile] = useState(true);
+  const [baseItemsHash, setBaseItemsHash] = useState<string | null>(null);
   const [loadingItems, setLoadingItems] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -413,13 +459,16 @@ export default function GameProfileItemsPage({ params }: { params: Promise<{ pro
     async function loadItems() {
       setLoadingItems(true);
       try {
-        const [nextPayload, nextMetadata] = await Promise.all([
+        const [nextProfile, nextMetadata] = await Promise.all([
           requestProfilePayload(profileId),
           requestMetadata(),
         ]);
+        const nextPayload = nextProfile.payload;
         const nextItems = itemsFromProfilePayload(nextPayload);
         if (!canceled) {
           setProfilePayload(nextPayload);
+          setIsEditableProfile(nextProfile.isEditable);
+          setBaseItemsHash(nextProfile.itemsHash);
           setItems(nextItems);
           setBaselineItems(nextItems);
           setMetadata(nextMetadata);
@@ -505,7 +554,6 @@ export default function GameProfileItemsPage({ params }: { params: Promise<{ pro
       .sort((left, right) => (left.areaItemId ?? 0) - (right.areaItemId ?? 0))
   ), [areaItemsById]);
 
-  const isEditableProfile = isLocalGameProfileId(profileId);
   const hasChanges = useMemo(() => !isSameItemsPayload(items, baselineItems), [baselineItems, items]);
 
   function updateAreaItemLevel(areaItemId: number, level: number) {
@@ -563,23 +611,37 @@ export default function GameProfileItemsPage({ params }: { params: Promise<{ pro
       const nextPayload = buildPayloadWithItems(profilePayload, items);
       if (isLocalGameProfileId(profileId)) {
         await updateLocalGameProfilePayload(profileId, nextPayload);
+        setBaseItemsHash(null);
       } else {
         const accessToken = await getAccessToken();
         if (!accessToken) {
           throw new Error("请先登录");
         }
-        const response = await fetch(`/api/account/game-profiles/${profileId}/payload`, {
+        if (!baseItemsHash) {
+          throw new Error("档案版本缺失，请重新载入后再保存");
+        }
+        const response = await fetch(`/api/account/game-profiles/${profileId}/items`, {
           method: "PATCH",
           headers: {
             Authorization: `Bearer ${accessToken}`,
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({ compressed: await encodeCompressedGameProfilePayload(nextPayload) }),
+          body: JSON.stringify({
+            baseItemsHash,
+            areaItems: items.areaItems,
+            characterPotentials: items.characterPotentials,
+            characterMissionBonuses: items.characterMissionBonuses,
+          }),
         });
-        const payload = await response.json().catch(() => ({}));
+        const responsePayload = await response.json().catch(() => ({}));
         if (!response.ok) {
-          throw new Error(getApiErrorMessage(payload) || `保存失败（HTTP ${response.status}）`);
+          throw new Error(getProfileApiErrorMessage(responsePayload, `保存失败（HTTP ${response.status}）`));
         }
+        const data = parseApiSuccessData<GameProfileSectionUpdateResult>(responsePayload);
+        if (!data) {
+          throw new Error("保存结果格式无效");
+        }
+        setBaseItemsHash(data.sectionVersions.itemsHash);
       }
 
       const savedItems = itemsFromProfilePayload(nextPayload);
