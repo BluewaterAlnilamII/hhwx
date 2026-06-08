@@ -22,6 +22,7 @@ import type {
   BandoriSongOptimizerOffset,
   BandoriSongOptimizerProofStats,
   BandoriSongOptimizerResult,
+  BandoriSongOptimizerSearchScope,
   BandoriSongOptimizerSkillWindow,
   BandoriSongOptimizerUnsupportedReason,
   OptimizeBandoriSongScoreForFixedTeamOptions,
@@ -31,6 +32,7 @@ const DEFAULT_STEP_FRAMES = 0.5;
 const DEFAULT_MAX_EXACT_CANDIDATE_EVENTS = 32000;
 const DEFAULT_MAX_EXACT_DP_STATES = 120000;
 const SKILL_WINDOW_COUNT = 6;
+const SKILL_ASSIGNMENT_FULL_MASK = (1 << 5) - 1;
 const DEFAULT_LIFE = 1000;
 const EPSILON = 1e-7;
 const SKILL_ORDER_PERMUTATIONS = buildPermutations([0, 1, 2, 3, 4]);
@@ -93,6 +95,35 @@ type CompactDpState = {
   trailIndex: number;
 };
 
+type CompactGlobalDpState = {
+  score: number;
+  hitCount: number;
+  selectedMask: number;
+  nextTriggerSlot: number;
+  assignedSkillMask: number;
+  leaderIndex: number;
+  currentWindowEventIndex: number;
+  currentWindowStartFrame: number;
+  currentWindowEndFrame: number;
+  currentSkillCardIndex: number;
+  perfectCount: number;
+  continuedActive: boolean;
+  offsetMagnitude: number;
+  trailIndex: number;
+};
+
+type CompactGlobalStateStore = {
+  items: CompactGlobalDpState[];
+  indexBySelectedMask: Map<number, Map<number, number>>;
+  dynamicDominanceBySelectedMask: Map<number, Map<number, number[]>>;
+  staticAssignmentDominanceBySelectedMask: Map<number, Map<number, number[]>>;
+};
+
+type StaticAssignmentDominanceContext = {
+  skillDominates: boolean[][];
+  maskDominates: boolean[][];
+};
+
 type StaticDpState = {
   score: number;
   hitCount: number;
@@ -131,6 +162,8 @@ type IntegratedSolveResult = {
   scoreUpperBound: number;
   choices: DpChoice[];
   windows: BandoriSongOptimizerSkillWindow[];
+  leaderIndex?: number | null;
+  skillOrder?: number[];
   maxStateCount: number;
   prunedStateCount: number;
   candidateEventCount: number;
@@ -146,12 +179,21 @@ function normalizeStepFrames(value: number | undefined): number {
   return normalized > 0 ? normalized : DEFAULT_STEP_FRAMES;
 }
 
-function createStats(noteCount: number, skillTriggerCount: number): BandoriSongOptimizerProofStats {
+function createStats(
+  noteCount: number,
+  skillTriggerCount: number,
+  searchScope: BandoriSongOptimizerSearchScope,
+): BandoriSongOptimizerProofStats {
   return {
     noteCount,
     skillTriggerCount,
+    searchScope,
     leaderCount: 0,
     skillOrderCount: 0,
+    assignmentStateCount: 0,
+    skillAssignmentTransitionCount: 0,
+    leaderChoiceTransitionCount: 0,
+    assignmentUpperBoundPrunedCount: 0,
     attemptedWindowLayoutCount: 0,
     exactWindowLayoutCount: 0,
     boundedWindowLayoutCount: 0,
@@ -221,6 +263,7 @@ function makeUnsupportedResult(
   return {
     score: 0,
     searchMode: "unsupported",
+    searchScope: stats.searchScope,
     scoreUpperBound,
     pgSearchUpperBound: scoreUpperBound,
     lowJudgementUpperBound: scoreUpperBound,
@@ -458,6 +501,38 @@ function buildStaticSkillMultipliers(slotSkills: ReadonlyArray<ResolvedBandoriSk
   return multipliers;
 }
 
+function buildStaticAssignmentDominanceContext(
+  skills: ReadonlyArray<ResolvedBandoriSkill | null>,
+): StaticAssignmentDominanceContext | null {
+  const firstDuration = skills[0]?.durationSeconds ?? 0;
+  if (
+    skills.some((skill) => requiresDynamicSkillState(skill ?? null))
+    || skills.some((skill) => Math.abs((skill?.durationSeconds ?? 0) - firstDuration) > EPSILON)
+  ) {
+    return null;
+  }
+  const multipliers = buildStaticSkillMultipliers(skills);
+  const skillDominates = Array.from({ length: skills.length }, (_, leftIndex) => (
+    Array.from({ length: skills.length }, (_, rightIndex) => {
+      for (let judgeIndex = 0; judgeIndex < 4; judgeIndex += 1) {
+        if (
+          (multipliers[leftIndex * 4 + judgeIndex] ?? 1)
+          < (multipliers[rightIndex * 4 + judgeIndex] ?? 1) - EPSILON
+        ) {
+          return false;
+        }
+      }
+      return true;
+    })
+  ));
+  const maskDominates = Array.from({ length: SKILL_ASSIGNMENT_FULL_MASK + 1 }, (_, leftMask) => (
+    Array.from({ length: SKILL_ASSIGNMENT_FULL_MASK + 1 }, (_, rightMask) => (
+      remainingSkillsDominate(leftMask, rightMask, skillDominates)
+    ))
+  ));
+  return { skillDominates, maskDominates };
+}
+
 function frameKey(frame: number): string {
   return Math.round(frame * 1_000_000).toString();
 }
@@ -486,6 +561,7 @@ function compressCandidateLists(
   triggerSlotByNoteIndex: ReadonlyMap<number, number>,
   slotSkills: ReadonlyArray<ResolvedBandoriSkill | null>,
   collapseDominatedJudgements: boolean,
+  globalSkillPool?: ReadonlyArray<ResolvedBandoriSkill | null>,
 ): OptimizerProofHitCandidate[][] {
   const globalFrameCounts = new Map<string, { frame: number; count: number }>();
   const noteFrameCounts = candidateLists.map((candidates) => {
@@ -505,10 +581,14 @@ function compressCandidateLists(
     .sort((a, b) => a.frame - b.frame);
   const boundaryFrames = new Map<string, number>();
   triggerSlotByNoteIndex.forEach((slotIndex, noteIndex) => {
-    const durationFrames = (slotSkills[slotIndex]?.durationSeconds ?? 0) * 60;
+    const durationFramesList = globalSkillPool
+      ? globalSkillPool.map((skill) => (skill?.durationSeconds ?? 0) * 60)
+      : [(slotSkills[slotIndex]?.durationSeconds ?? 0) * 60];
     candidateLists[noteIndex]?.forEach((candidate) => {
       boundaryFrames.set(frameKey(candidate.hitFrame), candidate.hitFrame);
-      boundaryFrames.set(frameKey(candidate.hitFrame + durationFrames), candidate.hitFrame + durationFrames);
+      durationFramesList.forEach((durationFrames) => {
+        boundaryFrames.set(frameKey(candidate.hitFrame + durationFrames), candidate.hitFrame + durationFrames);
+      });
     });
   });
   const sortedBoundaryFrames = [...boundaryFrames.values()].sort((a, b) => a - b);
@@ -691,6 +771,11 @@ function reconstructTrail(trail: readonly TrailNode[], trailIndex: number): { ch
   choices.reverse();
   windows.reverse();
   return { choices, windows };
+}
+
+function getSkillOrderFromWindows(windows: readonly BandoriSongOptimizerSkillWindow[]): number[] {
+  const ordered = windows.slice().sort((left, right) => left.slotIndex - right.slotIndex);
+  return ordered.length === SKILL_WINDOW_COUNT ? ordered.map((window) => window.cardIndex) : [];
 }
 
 function getSelectedNoteKey(selectedNoteIndexes: readonly number[]): string {
@@ -1130,6 +1215,315 @@ function mergeCompactChosenValues(
   });
 }
 
+function createCompactGlobalStateStore(): CompactGlobalStateStore {
+  return {
+    items: [],
+    indexBySelectedMask: new Map(),
+    dynamicDominanceBySelectedMask: new Map(),
+    staticAssignmentDominanceBySelectedMask: new Map(),
+  };
+}
+
+function getCompactGlobalSmallKey(state: CompactGlobalDpState, usesDynamicSkillState: boolean): number {
+  let key = state.hitCount;
+  key = key * 7 + state.nextTriggerSlot;
+  key = key * 32 + state.assignedSkillMask;
+  key = key * 6 + state.leaderIndex + 1;
+  key = key * 6 + state.currentSkillCardIndex + 1;
+  key = key * 65536 + state.currentWindowEventIndex + 1;
+  if (usesDynamicSkillState) {
+    key = key * 128 + state.perfectCount;
+    key = key * 2 + (state.continuedActive ? 1 : 0);
+  }
+  return key;
+}
+
+function getCompactGlobalDominanceBucket(
+  store: CompactGlobalStateStore,
+  selectedMask: number,
+  dominanceKey: number,
+): number[] {
+  let indexByDominanceKey = store.dynamicDominanceBySelectedMask.get(selectedMask);
+  if (!indexByDominanceKey) {
+    indexByDominanceKey = new Map();
+    store.dynamicDominanceBySelectedMask.set(selectedMask, indexByDominanceKey);
+  }
+  let indexes = indexByDominanceKey.get(dominanceKey);
+  if (!indexes) {
+    indexes = [];
+    indexByDominanceKey.set(dominanceKey, indexes);
+  }
+  return indexes;
+}
+
+function dynamicStateDominates(left: CompactGlobalDpState, right: CompactGlobalDpState): boolean {
+  return Number.isFinite(left.score)
+    && left.score >= right.score
+    && left.perfectCount >= right.perfectCount
+    && (left.continuedActive || !right.continuedActive);
+}
+
+function isDominatedByCompactGlobalState(
+  store: CompactGlobalStateStore,
+  state: CompactGlobalDpState,
+): boolean {
+  const dominanceKey = getCompactGlobalSmallKey(state, false);
+  const indexes = store.dynamicDominanceBySelectedMask.get(state.selectedMask)?.get(dominanceKey);
+  if (!indexes) {
+    return false;
+  }
+  for (const index of indexes) {
+    const existing = store.items[index];
+    if (existing && dynamicStateDominates(existing, state)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function markDominatedCompactGlobalStates(
+  store: CompactGlobalStateStore,
+  state: CompactGlobalDpState,
+  stateIndex: number,
+): void {
+  const dominanceKey = getCompactGlobalSmallKey(state, false);
+  const indexes = getCompactGlobalDominanceBucket(store, state.selectedMask, dominanceKey);
+  for (const index of indexes) {
+    const existing = store.items[index];
+    if (existing && index !== stateIndex && dynamicStateDominates(state, existing)) {
+      existing.score = Number.NEGATIVE_INFINITY;
+    }
+  }
+  indexes.push(stateIndex);
+}
+
+function getCompactGlobalStaticAssignmentDominanceKey(state: CompactGlobalDpState): number {
+  let key = state.hitCount;
+  key = key * 7 + state.nextTriggerSlot;
+  key = key * 6 + state.leaderIndex + 1;
+  key = key * 65536 + state.currentWindowEventIndex + 1;
+  return key;
+}
+
+function getCompactGlobalStaticAssignmentBucket(
+  store: CompactGlobalStateStore,
+  selectedMask: number,
+  dominanceKey: number,
+): number[] {
+  let indexByDominanceKey = store.staticAssignmentDominanceBySelectedMask.get(selectedMask);
+  if (!indexByDominanceKey) {
+    indexByDominanceKey = new Map();
+    store.staticAssignmentDominanceBySelectedMask.set(selectedMask, indexByDominanceKey);
+  }
+  let indexes = indexByDominanceKey.get(dominanceKey);
+  if (!indexes) {
+    indexes = [];
+    indexByDominanceKey.set(dominanceKey, indexes);
+  }
+  return indexes;
+}
+
+function remainingSkillsDominate(
+  leftAssignedMask: number,
+  rightAssignedMask: number,
+  skillDominates: readonly (readonly boolean[])[],
+): boolean {
+  const leftUnused: number[] = [];
+  const rightUnused: number[] = [];
+  for (let cardIndex = 0; cardIndex < 5; cardIndex += 1) {
+    const cardBit = 1 << cardIndex;
+    if ((leftAssignedMask & cardBit) === 0) {
+      leftUnused.push(cardIndex);
+    }
+    if ((rightAssignedMask & cardBit) === 0) {
+      rightUnused.push(cardIndex);
+    }
+  }
+  if (leftUnused.length !== rightUnused.length) {
+    return false;
+  }
+  const usedLeft = new Array<boolean>(leftUnused.length).fill(false);
+  const match = (rightOffset: number): boolean => {
+    if (rightOffset >= rightUnused.length) {
+      return true;
+    }
+    const rightSkillIndex = rightUnused[rightOffset];
+    for (let leftOffset = 0; leftOffset < leftUnused.length; leftOffset += 1) {
+      if (usedLeft[leftOffset]) {
+        continue;
+      }
+      const leftSkillIndex = leftUnused[leftOffset];
+      if (!skillDominates[leftSkillIndex]?.[rightSkillIndex]) {
+        continue;
+      }
+      usedLeft[leftOffset] = true;
+      if (match(rightOffset + 1)) {
+        return true;
+      }
+      usedLeft[leftOffset] = false;
+    }
+    return false;
+  };
+  return match(0);
+}
+
+function staticAssignmentStateDominates(
+  left: CompactGlobalDpState,
+  right: CompactGlobalDpState,
+  dominance: StaticAssignmentDominanceContext,
+): boolean {
+  if (!Number.isFinite(left.score) || left.score < right.score) {
+    return false;
+  }
+  if (right.currentSkillCardIndex >= 0) {
+    if (
+      left.currentSkillCardIndex < 0
+      || !dominance.skillDominates[left.currentSkillCardIndex]?.[right.currentSkillCardIndex]
+    ) {
+      return false;
+    }
+  } else if (left.currentSkillCardIndex >= 0) {
+    return false;
+  }
+  return dominance.maskDominates[left.assignedSkillMask]?.[right.assignedSkillMask] === true;
+}
+
+function isDominatedByStaticAssignmentState(
+  store: CompactGlobalStateStore,
+  state: CompactGlobalDpState,
+  dominance: StaticAssignmentDominanceContext,
+): boolean {
+  const dominanceKey = getCompactGlobalStaticAssignmentDominanceKey(state);
+  const indexes = store.staticAssignmentDominanceBySelectedMask.get(state.selectedMask)?.get(dominanceKey);
+  if (!indexes) {
+    return false;
+  }
+  for (const index of indexes) {
+    const existing = store.items[index];
+    if (existing && staticAssignmentStateDominates(existing, state, dominance)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function markDominatedStaticAssignmentStates(
+  store: CompactGlobalStateStore,
+  state: CompactGlobalDpState,
+  stateIndex: number,
+  dominance: StaticAssignmentDominanceContext,
+): void {
+  const dominanceKey = getCompactGlobalStaticAssignmentDominanceKey(state);
+  const indexes = getCompactGlobalStaticAssignmentBucket(store, state.selectedMask, dominanceKey);
+  for (const index of indexes) {
+    const existing = store.items[index];
+    if (existing && index !== stateIndex && staticAssignmentStateDominates(state, existing, dominance)) {
+      existing.score = Number.NEGATIVE_INFINITY;
+    }
+  }
+  indexes.push(stateIndex);
+}
+
+function mergeCompactGlobalState(
+  store: CompactGlobalStateStore,
+  state: CompactGlobalDpState,
+  usesDynamicSkillState: boolean,
+  staticAssignmentDominance: StaticAssignmentDominanceContext | null = null,
+): void {
+  if (usesDynamicSkillState && isDominatedByCompactGlobalState(store, state)) {
+    return;
+  }
+  if (staticAssignmentDominance && isDominatedByStaticAssignmentState(store, state, staticAssignmentDominance)) {
+    return;
+  }
+  const key = getCompactGlobalSmallKey(state, usesDynamicSkillState);
+  let indexBySmallKey = store.indexBySelectedMask.get(state.selectedMask);
+  if (!indexBySmallKey) {
+    indexBySmallKey = new Map();
+    store.indexBySelectedMask.set(state.selectedMask, indexBySmallKey);
+  }
+  const existingIndex = indexBySmallKey.get(key);
+  const existing = existingIndex === undefined ? undefined : store.items[existingIndex];
+  if (
+    !existing
+    || !Number.isFinite(existing.score)
+    || state.score > existing.score
+    || (state.score === existing.score && state.offsetMagnitude < existing.offsetMagnitude)
+  ) {
+    let acceptedIndex: number;
+    if (existingIndex === undefined) {
+      acceptedIndex = store.items.length;
+      indexBySmallKey.set(key, acceptedIndex);
+      store.items.push(state);
+    } else {
+      acceptedIndex = existingIndex;
+      store.items[existingIndex] = state;
+    }
+    if (usesDynamicSkillState) {
+      markDominatedCompactGlobalStates(store, state, acceptedIndex);
+    }
+    if (staticAssignmentDominance) {
+      markDominatedStaticAssignmentStates(store, state, acceptedIndex, staticAssignmentDominance);
+    }
+  }
+}
+
+function mergeCompactGlobalChosenState(
+  store: CompactGlobalStateStore,
+  trail: TrailNode[],
+  parentTrailIndex: number,
+  note: OptimizerNote,
+  event: CandidateEvent,
+  window: BandoriSongOptimizerSkillWindow | null,
+  state: CompactGlobalDpState,
+  usesDynamicSkillState: boolean,
+  staticAssignmentDominance: StaticAssignmentDominanceContext | null = null,
+): void {
+  if (usesDynamicSkillState && isDominatedByCompactGlobalState(store, state)) {
+    return;
+  }
+  if (staticAssignmentDominance && isDominatedByStaticAssignmentState(store, state, staticAssignmentDominance)) {
+    return;
+  }
+  const key = getCompactGlobalSmallKey(state, usesDynamicSkillState);
+  let indexBySmallKey = store.indexBySelectedMask.get(state.selectedMask);
+  if (!indexBySmallKey) {
+    indexBySmallKey = new Map();
+    store.indexBySelectedMask.set(state.selectedMask, indexBySmallKey);
+  }
+  const existingIndex = indexBySmallKey.get(key);
+  const existing = existingIndex === undefined ? undefined : store.items[existingIndex];
+  if (
+    existing
+    && Number.isFinite(existing.score)
+    && (
+      existing.score > state.score
+      || (existing.score === state.score && existing.offsetMagnitude <= state.offsetMagnitude)
+    )
+  ) {
+    return;
+  }
+  const nextState = {
+    ...state,
+    trailIndex: pushTrail(trail, parentTrailIndex, note, event, window),
+  };
+  let acceptedIndex: number;
+  if (existingIndex === undefined) {
+    acceptedIndex = store.items.length;
+    indexBySmallKey.set(key, acceptedIndex);
+    store.items.push(nextState);
+  } else {
+    acceptedIndex = existingIndex;
+    store.items[existingIndex] = nextState;
+  }
+  if (usesDynamicSkillState) {
+    markDominatedCompactGlobalStates(store, nextState, acceptedIndex);
+  }
+  if (staticAssignmentDominance) {
+    markDominatedStaticAssignmentStates(store, nextState, acceptedIndex, staticAssignmentDominance);
+  }
+}
+
 function buildOriginalPerfectIncumbent(
   context: SearchContext,
   triggerSlotByNoteIndex: ReadonlyMap<number, number>,
@@ -1264,6 +1658,92 @@ function scoreCompactEvent(
   };
 }
 
+function getCompactGlobalActiveSkillIndex(state: CompactGlobalDpState, hitFrame: number): number | null {
+  if (state.nextTriggerSlot <= 0 || state.currentSkillCardIndex < 0) {
+    return null;
+  }
+  return hitFrame > state.currentWindowStartFrame + EPSILON && hitFrame <= state.currentWindowEndFrame + EPSILON
+    ? state.currentSkillCardIndex
+    : null;
+}
+
+function scoreCompactGlobalEvent(
+  context: SearchContext,
+  skills: ReadonlyArray<ResolvedBandoriSkill | null>,
+  staticSkillMultipliers: Float64Array,
+  dynamicSkillByIndex: readonly boolean[],
+  state: CompactGlobalDpState,
+  event: CandidateEvent,
+): { noteScore: number; perfectCount: number; continuedActive: boolean } {
+  const activeSkillIndex = getCompactGlobalActiveSkillIndex(state, event.hitFrame);
+  const innerScore = getBaseNoteScore(context, event.noteIndex, event.judgement, state.hitCount);
+  if (activeSkillIndex === null) {
+    return { noteScore: innerScore, perfectCount: 0, continuedActive: true };
+  }
+  if (!dynamicSkillByIndex[activeSkillIndex]) {
+    return {
+      noteScore: Math.floor(
+        innerScore
+        * (staticSkillMultipliers[activeSkillIndex * 4 + getJudgeIndex(event.judgement)] ?? 1)
+        + SCORE_FLOOR_EPSILON,
+      ),
+      perfectCount: 0,
+      continuedActive: true,
+    };
+  }
+  const skill = skills[activeSkillIndex] ?? null;
+  const skillResult = evaluateSkillMultiplier(
+    skill,
+    event.judgement,
+    state.perfectCount,
+    state.continuedActive,
+  );
+  return {
+    noteScore: Math.floor(innerScore * skillResult.multiplier + SCORE_FLOOR_EPSILON),
+    perfectCount: skillResult.perfectCount,
+    continuedActive: skillResult.continuedActive,
+  };
+}
+
+function normalizeExpiredGlobalWindowState(
+  state: CompactGlobalDpState,
+  hitFrame: number,
+): CompactGlobalDpState {
+  if (state.currentSkillCardIndex < 0 || hitFrame <= state.currentWindowEndFrame + EPSILON) {
+    return state;
+  }
+  return {
+    ...state,
+    currentWindowEventIndex: -1,
+    currentWindowStartFrame: Number.NEGATIVE_INFINITY,
+    currentWindowEndFrame: Number.NEGATIVE_INFINITY,
+    currentSkillCardIndex: -1,
+    perfectCount: 0,
+    continuedActive: true,
+  };
+}
+
+function compactGlobalStateStoreForFrame(
+  store: CompactGlobalStateStore,
+  hitFrame: number,
+  usesDynamicSkillState: boolean,
+  staticAssignmentDominance: StaticAssignmentDominanceContext | null,
+): CompactGlobalStateStore {
+  const nextStore = createCompactGlobalStateStore();
+  for (const state of store.items) {
+    if (!Number.isFinite(state.score)) {
+      continue;
+    }
+    mergeCompactGlobalState(
+      nextStore,
+      normalizeExpiredGlobalWindowState(state, hitFrame),
+      usesDynamicSkillState,
+      staticAssignmentDominance,
+    );
+  }
+  return nextStore;
+}
+
 function solveIntegratedCompactDp(
   context: SearchContext,
   events: readonly CandidateEvent[],
@@ -1305,7 +1785,6 @@ function solveIntegratedCompactDp(
         boundedReason: "timeBudgetExceeded",
       };
     }
-
     const noteBit = noteBits[event.noteIndex];
     const currentStates = [...states.values()];
     const nextStates = event.isLastForNote ? new Map<string, CompactDpState>() : states;
@@ -1433,6 +1912,308 @@ function solveIntegratedCompactDp(
     scoreUpperBound: best?.score ?? incumbentScore,
     choices: reconstructed.choices,
     windows: reconstructed.windows,
+    maxStateCount,
+    prunedStateCount,
+    candidateEventCount: events.length,
+  };
+}
+
+function solveIntegratedGlobalDp(
+  context: SearchContext,
+  candidateLists: ReadonlyArray<readonly OptimizerProofHitCandidate[]>,
+  triggerSlotByNoteIndex: ReadonlyMap<number, number>,
+  skills: ReadonlyArray<ResolvedBandoriSkill | null>,
+  leaderIndexes: readonly number[],
+  incumbentScore: number,
+  collapseDominatedJudgements: boolean,
+): IntegratedSolveResult {
+  const compressedCandidateLists = compressCandidateLists(
+    candidateLists,
+    triggerSlotByNoteIndex,
+    skills,
+    collapseDominatedJudgements,
+    skills,
+  );
+  const events = buildCandidateEvents(compressedCandidateLists);
+  if (!events) {
+    return {
+      status: "bounded",
+      score: Number.NEGATIVE_INFINITY,
+      scoreUpperBound: context.generalScoreUpperBound,
+      choices: [],
+      windows: [],
+      maxStateCount: 0,
+      prunedStateCount: 0,
+      candidateEventCount: 0,
+      boundedReason: "emptyCandidateDomain",
+    };
+  }
+  if (events.length > context.limits.maxExactCandidateEvents) {
+    return {
+      status: "bounded",
+      score: Number.NEGATIVE_INFINITY,
+      scoreUpperBound: context.generalScoreUpperBound,
+      choices: [],
+      windows: [],
+      maxStateCount: 0,
+      prunedStateCount: 0,
+      candidateEventCount: events.length,
+      boundedReason: "candidateEventLimitExceeded",
+    };
+  }
+  const noteBits = buildCompactNoteBits(events, context.notes.length);
+  if (!noteBits) {
+    return {
+      status: "bounded",
+      score: Number.NEGATIVE_INFINITY,
+      scoreUpperBound: context.generalScoreUpperBound,
+      choices: [],
+      windows: [],
+      maxStateCount: 0,
+      prunedStateCount: 0,
+      candidateEventCount: events.length,
+      boundedReason: "compactStateDomainTooWide",
+    };
+  }
+
+  const staticSkillMultipliers = buildStaticSkillMultipliers(skills);
+  const dynamicSkillByIndex = skills.map((skill) => requiresDynamicSkillState(skill ?? null));
+  const staticAssignmentDominance: StaticAssignmentDominanceContext | null = null;
+  const trail: TrailNode[] = [];
+  let states = createCompactGlobalStateStore();
+  mergeCompactGlobalState(
+    states,
+    {
+      score: 0,
+      hitCount: 0,
+      selectedMask: 0,
+      nextTriggerSlot: 0,
+      assignedSkillMask: 0,
+      leaderIndex: -1,
+      currentWindowEventIndex: -1,
+      currentWindowStartFrame: Number.NEGATIVE_INFINITY,
+      currentWindowEndFrame: Number.NEGATIVE_INFINITY,
+      currentSkillCardIndex: -1,
+      perfectCount: 0,
+      continuedActive: true,
+      offsetMagnitude: 0,
+      trailIndex: -1,
+    },
+    context.usesDynamicSkillState,
+    staticAssignmentDominance,
+  );
+
+  let maxStateCount = states.items.length;
+  let prunedStateCount = 0;
+  for (const event of events) {
+    if (event.eventIndex % 64 === 0 && hasTimedOut(context.limits, context.stats)) {
+      return {
+        status: "bounded",
+        score: Number.NEGATIVE_INFINITY,
+        scoreUpperBound: context.generalScoreUpperBound,
+        choices: [],
+        windows: [],
+        maxStateCount,
+        prunedStateCount,
+        candidateEventCount: events.length,
+        boundedReason: "timeBudgetExceeded",
+      };
+    }
+    if (event.eventIndex % 64 === 0) {
+      states = compactGlobalStateStoreForFrame(
+        states,
+        event.hitFrame,
+        context.usesDynamicSkillState,
+        staticAssignmentDominance,
+      );
+    }
+
+    const noteBit = noteBits[event.noteIndex];
+    const currentStates = event.isLastForNote ? states.items.slice() : states.items;
+    const currentStateCount = event.isLastForNote ? currentStates.length : states.items.length;
+    const nextStates = event.isLastForNote ? createCompactGlobalStateStore() : states;
+    for (let stateIndex = 0; stateIndex < currentStateCount; stateIndex += 1) {
+      const rawState = currentStates[stateIndex];
+      if (!Number.isFinite(rawState.score)) {
+        continue;
+      }
+      const state = normalizeExpiredGlobalWindowState(rawState, event.hitFrame);
+      const selected = compactMaskHas(state.selectedMask, noteBit);
+      if (event.isLastForNote && selected) {
+        mergeCompactGlobalState(
+          nextStates,
+          {
+            ...state,
+            selectedMask: state.selectedMask - noteBit,
+          },
+          context.usesDynamicSkillState,
+          staticAssignmentDominance,
+        );
+      }
+      if (selected) {
+        continue;
+      }
+
+      const triggerSlot = triggerSlotByNoteIndex.get(event.noteIndex);
+      if (triggerSlot !== undefined) {
+        if (triggerSlot !== state.nextTriggerSlot) {
+          continue;
+        }
+        if (triggerSlot > 0 && event.hitFrame <= state.currentWindowEndFrame + EPSILON) {
+          context.stats.overlapPrunedWindowCount += 1;
+          continue;
+        }
+      }
+
+      const scored = triggerSlot === undefined
+        ? scoreCompactGlobalEvent(context, skills, staticSkillMultipliers, dynamicSkillByIndex, state, event)
+        : {
+          noteScore: getBaseNoteScore(context, event.noteIndex, event.judgement, state.hitCount),
+          perfectCount: 0,
+          continuedActive: true,
+        };
+      const nextScore = state.score + scored.noteScore;
+      const futureUpper = context.futureUpperByHitCount[state.hitCount + 1] ?? 0;
+      if (nextScore + futureUpper <= incumbentScore) {
+        prunedStateCount += 1;
+        context.stats.assignmentUpperBoundPrunedCount += 1;
+        continue;
+      }
+
+      const note = context.notes[event.noteIndex];
+      const baseNextState: CompactGlobalDpState = {
+        ...state,
+        score: nextScore,
+        hitCount: state.hitCount + 1,
+        selectedMask: event.isLastForNote ? state.selectedMask : state.selectedMask + noteBit,
+        perfectCount: scored.perfectCount,
+        continuedActive: scored.continuedActive,
+        offsetMagnitude: state.offsetMagnitude + Math.abs(event.offsetFrames),
+      };
+
+      if (triggerSlot === undefined) {
+        mergeCompactGlobalChosenState(
+          nextStates,
+          trail,
+          state.trailIndex,
+          note,
+          event,
+          null,
+          baseNextState,
+          context.usesDynamicSkillState,
+          staticAssignmentDominance,
+        );
+        continue;
+      }
+
+      const choices: number[] = [];
+      if (triggerSlot < 5) {
+        for (let cardIndex = 0; cardIndex < skills.length; cardIndex += 1) {
+          const cardBit = 1 << cardIndex;
+          if ((state.assignedSkillMask & cardBit) === 0) {
+            choices.push(cardIndex);
+          }
+        }
+      } else if (state.assignedSkillMask === SKILL_ASSIGNMENT_FULL_MASK) {
+        choices.push(...leaderIndexes);
+      }
+
+      for (const cardIndex of choices) {
+        const skill = skills[cardIndex] ?? null;
+        const nextAssignedSkillMask = triggerSlot < 5
+          ? state.assignedSkillMask | (1 << cardIndex)
+          : state.assignedSkillMask;
+        const nextLeaderIndex = triggerSlot === 5 ? cardIndex : state.leaderIndex;
+        const window = createSkillWindow(
+          triggerSlot,
+          cardIndex,
+          note,
+          event,
+          skill?.durationSeconds ?? 0,
+        );
+        if (triggerSlot < 5) {
+          context.stats.skillAssignmentTransitionCount += 1;
+        } else {
+          context.stats.leaderChoiceTransitionCount += 1;
+        }
+        mergeCompactGlobalChosenState(
+          nextStates,
+          trail,
+          state.trailIndex,
+          note,
+          event,
+          window,
+          {
+            ...baseNextState,
+            nextTriggerSlot: triggerSlot + 1,
+            assignedSkillMask: nextAssignedSkillMask,
+            leaderIndex: nextLeaderIndex,
+            currentWindowEventIndex: event.eventIndex,
+            currentWindowStartFrame: window.startFrame,
+            currentWindowEndFrame: window.endFrame,
+            currentSkillCardIndex: cardIndex,
+            perfectCount: 0,
+            continuedActive: true,
+          },
+          context.usesDynamicSkillState,
+          staticAssignmentDominance,
+        );
+      }
+    }
+
+    states = nextStates;
+    maxStateCount = Math.max(maxStateCount, states.items.length);
+    context.stats.assignmentStateCount = Math.max(context.stats.assignmentStateCount, states.items.length);
+    if (states.items.length > context.limits.maxExactDpStates) {
+      return {
+        status: "bounded",
+        score: Number.NEGATIVE_INFINITY,
+        scoreUpperBound: context.generalScoreUpperBound,
+        choices: [],
+        windows: [],
+        maxStateCount,
+        prunedStateCount,
+        candidateEventCount: events.length,
+        boundedReason: "dpStateLimitExceeded",
+      };
+    }
+    if (states.items.length === 0) {
+      break;
+    }
+  }
+
+  let best: CompactGlobalDpState | null = null;
+  for (const state of states.items) {
+    if (!Number.isFinite(state.score)) {
+      continue;
+    }
+    if (
+      state.hitCount !== context.notes.length
+      || state.selectedMask !== 0
+      || state.nextTriggerSlot !== SKILL_WINDOW_COUNT
+      || state.assignedSkillMask !== SKILL_ASSIGNMENT_FULL_MASK
+      || state.leaderIndex < 0
+    ) {
+      continue;
+    }
+    if (
+      !best
+      || state.score > best.score
+      || (state.score === best.score && state.offsetMagnitude < best.offsetMagnitude)
+    ) {
+      best = state;
+    }
+  }
+  const reconstructed = best ? reconstructTrail(trail, best.trailIndex) : { choices: [], windows: [] };
+  const skillOrder = getSkillOrderFromWindows(reconstructed.windows);
+  return {
+    status: "exact",
+    score: best?.score ?? Number.NEGATIVE_INFINITY,
+    scoreUpperBound: best?.score ?? incumbentScore,
+    choices: reconstructed.choices,
+    windows: reconstructed.windows,
+    leaderIndex: best?.leaderIndex ?? null,
+    skillOrder,
     maxStateCount,
     prunedStateCount,
     candidateEventCount: events.length,
@@ -2087,7 +2868,11 @@ export function optimizeBandoriSongScoreForFixedTeam(
 ): BandoriSongOptimizerResult {
   const stepFrames = normalizeStepFrames(options.stepFrames);
   const timeline = buildOptimizerTimeline(options.chart, options.useFever ?? true);
-  const stats = createStats(timeline.notes.length, timeline.skillTriggerNoteIndexes.length);
+  const hasFixedSkillOrder = options.fixedSkillOrder !== undefined;
+  const requestedSearchScope: BandoriSongOptimizerSearchScope = options.searchScope
+    ?? (hasFixedSkillOrder ? "fixedOrder" : "globalSkillAssignment");
+  const searchScope: BandoriSongOptimizerSearchScope = hasFixedSkillOrder ? "fixedOrder" : requestedSearchScope;
+  const stats = createStats(timeline.notes.length, timeline.skillTriggerNoteIndexes.length, searchScope);
   const startedAt = nowMs();
   const limits: SearchLimits = {
     stepFrames,
@@ -2172,7 +2957,64 @@ export function optimizeBandoriSongScoreForFixedTeam(
   stats.pgSearchProofMode = hasScoringSkills ? "integratedAllJudgementDp" : "noSkillCandidateDp";
   stats.lowJudgementProofMode = hasScoringSkills ? "integratedAllJudgement" : "exactNoSkill";
 
-  for (const leaderIndex of leaderIndexes) {
+  if (searchScope === "globalSkillAssignment") {
+    if (hasTimedOut(limits, stats)) {
+      bounded = true;
+    } else {
+      for (const leaderIndex of leaderIndexes) {
+        for (const skillOrderPrefix of skillOrders) {
+          const skillOrder = [...skillOrderPrefix, leaderIndex];
+          const slotSkills = skillOrder.map((cardIndex) => skills[cardIndex] ?? null);
+          const incumbent = buildOriginalPerfectIncumbent(context, triggerSlotByNoteIndex, skillOrder, slotSkills);
+          if (incumbent) {
+            sawAnyLayout = true;
+            if (incumbent.score > bestScore) {
+              bestScore = incumbent.score;
+              bestLeaderIndex = leaderIndex;
+              bestSkillOrder = skillOrder;
+              bestWindows = incumbent.windows;
+              bestChoices = incumbent.choices;
+            }
+          }
+        }
+      }
+      stats.integratedDpPassCount += 1;
+      stats.attemptedWindowLayoutCount = stats.integratedDpPassCount;
+      const result = solveIntegratedGlobalDp(
+        context,
+        candidateLists,
+        triggerSlotByNoteIndex,
+        skills,
+        leaderIndexes,
+        bestScore,
+        hasMonotonicLowJudgementSkills,
+      );
+      stats.maxDpStateCount = Math.max(stats.maxDpStateCount, result.maxStateCount);
+      stats.prunedDpStateCount += result.prunedStateCount;
+      stats.maxCandidateEventCount = Math.max(stats.maxCandidateEventCount, result.candidateEventCount);
+      if (result.status === "bounded") {
+        bounded = true;
+        stats.boundedIntegratedDpPassCount += 1;
+        stats.boundedWindowLayoutCount = stats.boundedIntegratedDpPassCount;
+        stats.lowJudgementProofMode = "integratedAllJudgementBounded";
+        addBoundedReason(stats, result.boundedReason ?? "integratedDpNotClosed");
+      } else {
+        stats.exactIntegratedDpPassCount += 1;
+        stats.exactWindowLayoutCount = stats.exactIntegratedDpPassCount;
+        if (Number.isFinite(result.score)) {
+          sawAnyLayout = true;
+          if (result.score > bestScore) {
+            bestScore = result.score;
+            bestLeaderIndex = result.leaderIndex ?? null;
+            bestSkillOrder = result.skillOrder ?? [];
+            bestWindows = result.windows;
+            bestChoices = result.choices;
+          }
+        }
+      }
+    }
+  } else {
+    for (const leaderIndex of leaderIndexes) {
     for (const skillOrderPrefix of skillOrders) {
       if (bounded || hasTimedOut(limits, stats)) {
         bounded = true;
@@ -2226,6 +3068,7 @@ export function optimizeBandoriSongScoreForFixedTeam(
         bestChoices = result.choices;
       }
     }
+    }
   }
 
   stats.elapsedMs = nowMs() - startedAt;
@@ -2248,6 +3091,7 @@ export function optimizeBandoriSongScoreForFixedTeam(
   return {
     score,
     searchMode: exact ? "exact" : "bounded",
+    searchScope: stats.searchScope,
     scoreUpperBound,
     pgSearchUpperBound: scoreUpperBound,
     lowJudgementUpperBound: scoreUpperBound,

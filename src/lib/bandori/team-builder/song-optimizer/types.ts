@@ -8,6 +8,8 @@ import type { BandoriJudge, BestdoriChartEntity, ResolvedBandoriSkill } from "..
 
 export type BandoriSongOptimizerSearchMode = "exact" | "bounded" | "unsupported";
 
+export type BandoriSongOptimizerSearchScope = "fixedOrder" | "globalSkillAssignment";
+
 export type BandoriSongOptimizerUnsupportedReason =
   | "emptyChart"
   | "invalidInput"
@@ -40,8 +42,13 @@ export type BandoriSongOptimizerSkillWindow = {
 export type BandoriSongOptimizerProofStats = {
   noteCount: number;
   skillTriggerCount: number;
+  searchScope: BandoriSongOptimizerSearchScope;
   leaderCount: number;
   skillOrderCount: number;
+  assignmentStateCount: number;
+  skillAssignmentTransitionCount: number;
+  leaderChoiceTransitionCount: number;
+  assignmentUpperBoundPrunedCount: number;
   attemptedWindowLayoutCount: number;
   exactWindowLayoutCount: number;
   boundedWindowLayoutCount: number;
@@ -79,6 +86,7 @@ export type OptimizeBandoriSongScoreForFixedTeamOptions = {
   totalPower: number;
   leaderIndex?: number | "auto";
   fixedSkillOrder?: readonly number[];
+  searchScope?: BandoriSongOptimizerSearchScope;
   stepFrames?: number;
   maxSearchDurationMs?: number;
   useFever?: boolean;
@@ -90,6 +98,7 @@ export type OptimizeBandoriSongScoreForFixedTeamOptions = {
 export type BandoriSongOptimizerResult = {
   score: number;
   searchMode: BandoriSongOptimizerSearchMode;
+  searchScope: BandoriSongOptimizerSearchScope;
   scoreUpperBound: number;
   pgSearchUpperBound: number;
   lowJudgementUpperBound: number;

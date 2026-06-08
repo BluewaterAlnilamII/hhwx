@@ -16,6 +16,7 @@ const cacheDir = path.join(repoRoot, "temp", "bandori-team-builder", "song-optim
 const outputDir = path.join(repoRoot, "temp", "bandori-team-builder", "song-optimizer-performance");
 const supportedProfiles = new Set(["interactive", "analysis30", "offline"]);
 const supportedOrders = new Set(["original", "heavy-first", "random"]);
+const supportedScopes = new Set(["global", "fixed"]);
 const difficultyIndex = { easy: "0", normal: "1", hard: "2", expert: "3", special: "4" };
 
 function enableExplicitGarbageCollection() {
@@ -79,6 +80,7 @@ function parseArgs(argv) {
   const args = {
     profile: "interactive",
     order: "original",
+    scope: "global",
     seed: 20260608,
     refresh: false,
     caseFilter: null,
@@ -95,6 +97,8 @@ function parseArgs(argv) {
     else if (arg === "--profile") args.profile = argv[++index] ?? args.profile;
     else if (arg.startsWith("--order=")) args.order = arg.slice("--order=".length);
     else if (arg === "--order") args.order = argv[++index] ?? args.order;
+    else if (arg.startsWith("--scope=")) args.scope = arg.slice("--scope=".length);
+    else if (arg === "--scope") args.scope = argv[++index] ?? args.scope;
     else if (arg.startsWith("--seed=")) args.seed = Number(arg.slice("--seed=".length));
     else if (arg === "--seed") args.seed = Number(argv[++index] ?? args.seed);
     else if (arg.startsWith("--case=")) args.caseFilter = arg.slice("--case=".length);
@@ -104,6 +108,7 @@ function parseArgs(argv) {
   }
   if (!supportedProfiles.has(args.profile)) throw new Error(`Unsupported profile: ${args.profile}`);
   if (!supportedOrders.has(args.order)) throw new Error(`Unsupported order: ${args.order}`);
+  if (!supportedScopes.has(args.scope)) throw new Error(`Unsupported scope: ${args.scope}`);
   if (!Number.isFinite(args.seed)) throw new Error(`Invalid seed: ${args.seed}`);
   if (args.maxElapsedMs !== null && (!Number.isFinite(args.maxElapsedMs) || args.maxElapsedMs <= 0)) {
     throw new Error(`Invalid --max-elapsed-ms: ${args.maxElapsedMs}`);
@@ -220,17 +225,24 @@ function profileOverrides(profile, overrides) {
 }
 
 function buildOptions(testCase) {
-  return {
+  const options = {
     chart: testCase.chart,
     playLevel: testCase.playLevel,
     totalPower: 300000,
     skills: testCase.skillSet,
-    leaderIndex: 0,
-    fixedSkillOrder: [0, 1, 2, 3, 4],
     useFever: true,
     ...testCase.overrides,
     ...profileOverrides(testCase.profile, testCase.overrides),
   };
+  if (testCase.scope === "fixed") {
+    options.searchScope = "fixedOrder";
+    options.leaderIndex = 0;
+    options.fixedSkillOrder = [0, 1, 2, 3, 4];
+  } else {
+    options.searchScope = "globalSkillAssignment";
+    options.leaderIndex = "auto";
+  }
+  return options;
 }
 
 function runPriority(spec) {
@@ -301,12 +313,16 @@ function runCase(testCase) {
       maxSearchDurationMs: options.maxSearchDurationMs,
       maxExactCandidateEvents: options.maxExactCandidateEvents,
       maxExactDpStates: options.maxExactDpStates,
+      searchScope: options.searchScope,
       leaderIndex: options.leaderIndex,
       fixedSkillOrder: options.fixedSkillOrder,
     },
     elapsedMs: round(elapsedMs),
     searchMode: result.searchMode,
+    searchScope: result.searchScope,
     score: result.score,
+    leaderIndex: result.leaderIndex,
+    skillOrder: result.skillOrder,
     scoreUpperBound: result.scoreUpperBound,
     upperBoundGap: Math.max(0, result.scoreUpperBound - result.score),
     pgSearchUpperBoundGap: Math.max(0, result.pgSearchUpperBound - result.score),
@@ -361,6 +377,7 @@ function renderMarkdown(report) {
     `Generated at: ${report.generatedAt}`,
     `Profile: ${report.profile}`,
     `Order: ${report.order}`,
+    `Scope: ${report.scope}`,
     `Seed: ${report.seed}`,
     "",
     "## Summary",
@@ -396,7 +413,10 @@ async function main() {
   const songsMetadata = await getSongsMetadata(args.refresh);
   const cases = [];
   for (const spec of ordered) {
-    cases.push(await resolveCase(spec, songsMetadata, args.profile, args.refresh));
+    cases.push({
+      ...await resolveCase(spec, songsMetadata, args.profile, args.refresh),
+      scope: args.scope,
+    });
   }
   const results = cases.map((testCase) => {
     const result = runCase(testCase);
@@ -408,6 +428,7 @@ async function main() {
     node: process.version,
     profile: args.profile,
     order: args.order,
+    scope: args.scope,
     seed: args.seed,
     argv: process.argv.slice(2),
     summary: summarize(results),
