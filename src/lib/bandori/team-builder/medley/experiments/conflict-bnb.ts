@@ -5,7 +5,13 @@
  * is useful for diagnostics but can spend its node budget without tightening the global proof.
  */
 
-import { compareMedleyResultLike, evaluateMedleySlotCandidateWithCache } from "../candidates";
+import {
+  compareMedleyResultLike,
+  evaluateMedleySlotCandidateWithCache,
+  getMedleyCandidateCards,
+  getMedleyCandidateCardIds,
+  medleyCandidateHasCardId,
+} from "../candidates";
 import { getMedleyPruningThreshold } from "../configurations";
 import { MEDLEY_TEAM_COUNT, MEDLEY_TEAM_SIZE } from "../constants";
 import { compareMedleyTeamCandidates } from "../optimization";
@@ -267,7 +273,7 @@ export function getMedleyConflictCardId(
   const usage = new Map<number, { count: number; weightedScore: number }>();
   bestTeams.forEach((team, slotIndex) => {
     const slotWeight = 1 + slots[slotIndex].startCombo / 3000;
-    for (const card of team.cards) {
+    for (const card of getMedleyCandidateCards(team)) {
       const current = usage.get(card.cardId) ?? { count: 0, weightedScore: 0 };
       current.count += 1;
       current.weightedScore += team.result.score * slotWeight;
@@ -287,7 +293,7 @@ export function getMedleyConflictCardId(
 export function medleyConflictTeamsAreDisjoint(bestTeams: MedleyTeamCandidate[]): boolean {
   const usedCardIds = new Set<number>();
   for (const team of bestTeams) {
-    for (const cardId of team.cardIds) {
+    for (const cardId of getMedleyCandidateCardIds(team)) {
       if (usedCardIds.has(cardId)) {
         return false;
       }
@@ -304,7 +310,7 @@ export function buildMedleyConflictChildNodes(
 ): MedleyConflictExactNode[] {
   const currentOwnerSlotIndices = bestTeams
     .map((team, slotIndex) => ({ team, slotIndex }))
-    .filter(({ team }) => team.cardIds.includes(conflictCardId))
+    .filter(({ team }) => medleyCandidateHasCardId(team, conflictCardId))
     .sort((left, right) => right.team.result.score - left.team.result.score || left.slotIndex - right.slotIndex)
     .map(({ slotIndex }) => slotIndex);
   const slotOrder = [

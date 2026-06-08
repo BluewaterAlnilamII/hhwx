@@ -5,7 +5,7 @@
  * They are incumbent improvers, not global proof mechanisms.
  */
 
-import { getMedleyTeamEvaluationCacheKey } from "./candidates";
+import { createMedleyTeamCandidate, getMedleyTeamEvaluationCacheKey } from "./candidates";
 import { MEDLEY_TEAM_COUNT, MEDLEY_TEAM_SIZE } from "./constants";
 import { buildMedleyResult } from "./results";
 import { evaluateTeam } from "@/lib/bandori/team-builder/core";
@@ -136,12 +136,7 @@ export function evaluateFixedMedleyMaskCandidate(
   }
 
   return result
-    ? {
-      result,
-      cards: selectedCards,
-      cardIds: selectedCards.map((card) => card.cardId),
-      cardInstanceKeys: getCardInstanceKeys(selectedCards),
-    }
+    ? createMedleyTeamCandidate(result, selectedCards)
     : null;
 }
 

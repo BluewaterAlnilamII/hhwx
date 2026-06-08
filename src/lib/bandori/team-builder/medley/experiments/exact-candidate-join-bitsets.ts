@@ -5,6 +5,11 @@
  * so bitset availability checks are equivalent to cardId disjointness checks.
  */
 
+import {
+  forEachMedleyCandidateCardId,
+  getMedleyCandidateCardIds,
+  medleyCandidatesOverlap,
+} from "../candidates";
 import type { BandoriMedleyTeamSearchProfilingStats, MedleyTeamCandidate } from "../types";
 
 export function buildMedleyExactContainingCandidateBitsByCardId(
@@ -15,14 +20,14 @@ export function buildMedleyExactContainingCandidateBitsByCardId(
   candidates.forEach((candidate, candidateIndex) => {
     const wordIndex = candidateIndex >> 5;
     const bit = 1 << (candidateIndex & 31);
-    for (const cardId of candidate.cardIds) {
+    forEachMedleyCandidateCardId(candidate, (cardId) => {
       let containingCandidateBits = containingCandidateBitsByCardId.get(cardId);
       if (!containingCandidateBits) {
         containingCandidateBits = new Uint32Array(wordCount);
         containingCandidateBitsByCardId.set(cardId, containingCandidateBits);
       }
       containingCandidateBits[wordIndex] |= bit;
-    }
+    });
   });
   return containingCandidateBitsByCardId;
 }
@@ -39,10 +44,10 @@ export function writeMedleyExactForbiddenCandidateBits(
   let containingBits3: Uint32Array | undefined;
   let containingBits4: Uint32Array | undefined;
   let containingBitsCount = 0;
-  for (const cardId of candidate.cardIds) {
+  forEachMedleyCandidateCardId(candidate, (cardId) => {
     const containingCandidateBits = containingCandidateBitsByCardId.get(cardId);
     if (!containingCandidateBits) {
-      continue;
+      return;
     }
     switch (containingBitsCount) {
       case 0:
@@ -62,7 +67,7 @@ export function writeMedleyExactForbiddenCandidateBits(
         break;
     }
     containingBitsCount += 1;
-  }
+  });
   switch (containingBitsCount) {
     case 0:
       forbiddenBits.fill(0);
@@ -191,7 +196,7 @@ export function medleyCandidateCardIdsOverlap(leftCardIds: number[], rightCardId
 }
 
 export function medleyExactCandidatesOverlap(left: MedleyTeamCandidate, right: MedleyTeamCandidate): boolean {
-  return medleyCandidateCardIdsOverlap(left.cardIds, right.cardIds);
+  return medleyCandidatesOverlap(left, right);
 }
 
 export function findBestDisjointMedleyExactCandidateByCardIds(
@@ -199,7 +204,7 @@ export function findBestDisjointMedleyExactCandidateByCardIds(
   forbiddenCardIds: number[],
 ): MedleyTeamCandidate | null {
   for (const candidate of candidates) {
-    if (!medleyCandidateCardIdsOverlap(forbiddenCardIds, candidate.cardIds)) {
+    if (!medleyCandidateCardIdsOverlap(forbiddenCardIds, getMedleyCandidateCardIds(candidate))) {
       return candidate;
     }
   }

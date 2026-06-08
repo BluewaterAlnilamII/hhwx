@@ -5,7 +5,7 @@
  * view for each slot, prunes dominated slot cards, and solves constrained single-slot teams.
  */
 
-import { getMedleyTeamEvaluationCacheKey } from "./candidates";
+import { createMedleyTeamCandidate, getMedleyTeamEvaluationCacheKey } from "./candidates";
 import { MEDLEY_TEAM_COUNT, MEDLEY_TEAM_SIZE } from "./constants";
 import { estimateMedleyRemainingScoreUpperBound } from "./upper/capacity";
 import { getMedleyCapacityTransition } from "./upper/capacity-core";
@@ -749,12 +749,7 @@ export function enumerateMedleySlotTeams(
         profiling.teamEvaluationCacheHitCount += 1;
       }
       if (result && result.score >= getMinimumScore(selectedCards)) {
-        onTeam({
-          result,
-          cards: [...selectedCards],
-          cardIds: selectedCards.map((card) => card.cardId),
-          cardInstanceKeys: getCardInstanceKeys(selectedCards),
-        });
+        onTeam(createMedleyTeamCandidate(result, [...selectedCards]));
       }
       return;
     }

@@ -17,6 +17,7 @@ import {
   getMedleyCardSkillAverageRateUpper,
   getMedleyCardSkillLeaderRateUpper,
 } from "./skill-context";
+import { getMedleyCandidateCards, getMedleyCandidateCardIds } from "../candidates";
 import { clamp } from "@/lib/bandori/team-builder/core";
 import type {
   BandoriMedleyTeamSearchProfilingStats,
@@ -78,7 +79,7 @@ export function estimateMedleyAnchorSlotDecompositionUpperBound(
     for (let candidateIndex = 0; candidateIndex < selectedCount; candidateIndex += 1) {
       const candidate = candidates[candidateIndex];
       const candidateBannedCardIds = new Set(bannedCardIds);
-      candidate.cardIds.forEach((cardId) => candidateBannedCardIds.add(cardId));
+      getMedleyCandidateCardIds(candidate).forEach((cardId) => candidateBannedCardIds.add(cardId));
       const futureUpperBound = getRemainingUpperBound(
         futureSlotIndices,
         candidateBannedCardIds,
@@ -161,7 +162,7 @@ export function collectMedleyOpportunityAnchorCards(
 
   for (const [candidateRank, candidate] of slotCandidates.entries()) {
     const candidateWeight = Math.max(1, slotCandidates.length - candidateRank);
-    for (const card of candidate.cards) {
+    for (const card of getMedleyCandidateCards(candidate)) {
       addCard(card, candidate.result.score * candidateWeight);
     }
   }

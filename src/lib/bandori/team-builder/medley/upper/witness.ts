@@ -11,6 +11,11 @@ import {
   buildMedleyCardSpecificCoefficientUpperBySlot,
   estimateMedleyCapacityCardSpecificCoefficientAssignmentWitness,
 } from "./capacity";
+import {
+  getMedleyCandidateCards,
+  getMedleyCandidateCardIds,
+  medleyCandidateHasAnyCardId,
+} from "../candidates";
 import { evaluateTeam } from "@/lib/bandori/team-builder/core";
 import type {
   BandoriMedleyTeamSearchProfilingStats,
@@ -35,8 +40,8 @@ export function toMedleyUpperWitnessSlot(
     eventPower: candidate.result.eventPower,
     eventMode: candidate.result.eventMode,
     leaderCardId: candidate.result.leaderCardId,
-    cardIds: candidate.cardIds,
-    characterIds: candidate.cards.map((card) => card.characterId),
+    cardIds: getMedleyCandidateCardIds(candidate),
+    characterIds: getMedleyCandidateCards(candidate).map((card) => card.characterId),
   };
 }
 
@@ -64,7 +69,7 @@ export function captureMedleyRootUpperWitness(
     }
     const slot = slots[slotIndex];
     evaluatedScore += candidate.result.score;
-    for (const cardId of candidate.cardIds) {
+    for (const cardId of getMedleyCandidateCardIds(candidate)) {
       cardUseCounts.set(cardId, (cardUseCounts.get(cardId) ?? 0) + 1);
     }
     witnessSlots.push(toMedleyUpperWitnessSlot(slot, slotIndex, candidate));
@@ -84,14 +89,14 @@ export function captureMedleyRootUpperWitness(
     }
     const slotIndex = remainingSlotIndices[slotPosition];
     for (const candidate of slotCandidates[slotIndex] ?? []) {
-      if (candidate.cardIds.some((cardId) => usedDisjointCardIds.has(cardId))) {
+      if (medleyCandidateHasAnyCardId(candidate, usedDisjointCardIds)) {
         continue;
       }
-      candidate.cardIds.forEach((cardId) => usedDisjointCardIds.add(cardId));
+      getMedleyCandidateCardIds(candidate).forEach((cardId) => usedDisjointCardIds.add(cardId));
       selectedDisjoint.push({ slotIndex, candidate });
       visitDisjointCandidates(slotPosition + 1, score + candidate.result.score);
       selectedDisjoint.pop();
-      candidate.cardIds.forEach((cardId) => usedDisjointCardIds.delete(cardId));
+      getMedleyCandidateCardIds(candidate).forEach((cardId) => usedDisjointCardIds.delete(cardId));
     }
   };
   visitDisjointCandidates(0, 0);

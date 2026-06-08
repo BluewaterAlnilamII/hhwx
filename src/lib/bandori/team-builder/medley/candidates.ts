@@ -38,7 +38,7 @@ export function getMedleyTeamEvaluationCacheKey(cards: SearchCard[]): string {
   }
 }
 
-function getMedleyCandidateCardIds(cards: SearchCard[]): number[] {
+function buildMedleyCandidateCardIds(cards: SearchCard[]): number[] {
   switch (cards.length) {
     case 0:
       return [];
@@ -57,20 +57,150 @@ function getMedleyCandidateCardIds(cards: SearchCard[]): number[] {
   }
 }
 
+export function getMedleyCandidateCards(candidate: MedleyTeamCandidate): SearchCard[] {
+  if (candidate.cards) {
+    return candidate.cards;
+  }
+  switch (candidate.cardCount) {
+    case 0:
+      return [];
+    case 1:
+      return [candidate.card0!];
+    case 2:
+      return [candidate.card0!, candidate.card1!];
+    case 3:
+      return [candidate.card0!, candidate.card1!, candidate.card2!];
+    case 4:
+      return [candidate.card0!, candidate.card1!, candidate.card2!, candidate.card3!];
+    default:
+      return [candidate.card0!, candidate.card1!, candidate.card2!, candidate.card3!, candidate.card4!];
+  }
+}
+
+export function getMedleyCandidateCardIds(candidate: MedleyTeamCandidate): number[] {
+  if (candidate.cardIds) {
+    return candidate.cardIds;
+  }
+  switch (candidate.cardCount) {
+    case 0:
+      return [];
+    case 1:
+      return [candidate.cardId0!];
+    case 2:
+      return [candidate.cardId0!, candidate.cardId1!];
+    case 3:
+      return [candidate.cardId0!, candidate.cardId1!, candidate.cardId2!];
+    case 4:
+      return [candidate.cardId0!, candidate.cardId1!, candidate.cardId2!, candidate.cardId3!];
+    default:
+      return [candidate.cardId0!, candidate.cardId1!, candidate.cardId2!, candidate.cardId3!, candidate.cardId4!];
+  }
+}
+
+export function forEachMedleyCandidateCardId(
+  candidate: MedleyTeamCandidate,
+  callback: (cardId: number) => void,
+): void {
+  if (candidate.cardIds) {
+    for (const cardId of candidate.cardIds) {
+      callback(cardId);
+    }
+    return;
+  }
+  if (candidate.cardCount >= 1) callback(candidate.cardId0!);
+  if (candidate.cardCount >= 2) callback(candidate.cardId1!);
+  if (candidate.cardCount >= 3) callback(candidate.cardId2!);
+  if (candidate.cardCount >= 4) callback(candidate.cardId3!);
+  if (candidate.cardCount >= 5) callback(candidate.cardId4!);
+}
+
+export function medleyCandidateHasCardId(candidate: MedleyTeamCandidate, cardId: number): boolean {
+  if (candidate.cardIds) {
+    return candidate.cardIds.includes(cardId);
+  }
+  return (
+    candidate.cardId0 === cardId
+    || candidate.cardId1 === cardId
+    || candidate.cardId2 === cardId
+    || candidate.cardId3 === cardId
+    || candidate.cardId4 === cardId
+  );
+}
+
+export function medleyCandidateHasAnyCardId(
+  candidate: MedleyTeamCandidate,
+  cardIds: Set<number>,
+): boolean {
+  if (candidate.cardIds) {
+    return candidate.cardIds.some((cardId) => cardIds.has(cardId));
+  }
+  return (
+    candidate.cardId0 !== undefined && cardIds.has(candidate.cardId0)
+    || candidate.cardId1 !== undefined && cardIds.has(candidate.cardId1)
+    || candidate.cardId2 !== undefined && cardIds.has(candidate.cardId2)
+    || candidate.cardId3 !== undefined && cardIds.has(candidate.cardId3)
+    || candidate.cardId4 !== undefined && cardIds.has(candidate.cardId4)
+  );
+}
+
+export function medleyCandidatesOverlap(left: MedleyTeamCandidate, right: MedleyTeamCandidate): boolean {
+  if (left.cardIds && right.cardIds) {
+    for (const leftCardId of left.cardIds) {
+      if (right.cardIds.includes(leftCardId)) {
+        return true;
+      }
+    }
+    return false;
+  }
+  let overlaps = false;
+  forEachMedleyCandidateCardId(left, (cardId) => {
+    if (!overlaps && medleyCandidateHasCardId(right, cardId)) {
+      overlaps = true;
+    }
+  });
+  return overlaps;
+}
+
+export function createMedleyTeamCandidate(
+  result: BandoriTeamSearchResult,
+  selectedCards: SearchCard[],
+  retainArrays = true,
+): MedleyTeamCandidate {
+  const cardIds = buildMedleyCandidateCardIds(selectedCards);
+  return {
+    result,
+    ...(retainArrays ? { cards: selectedCards, cardIds } : {}),
+    cardCount: selectedCards.length,
+    card0: selectedCards[0],
+    card1: selectedCards[1],
+    card2: selectedCards[2],
+    card3: selectedCards[3],
+    card4: selectedCards[4],
+    cardId0: cardIds[0],
+    cardId1: cardIds[1],
+    cardId2: cardIds[2],
+    cardId3: cardIds[3],
+    cardId4: cardIds[4],
+    cardInstanceKeys: getCardInstanceKeys(selectedCards),
+  };
+}
+
 function compareMedleyCandidateCardIds(left: MedleyTeamCandidate, right: MedleyTeamCandidate): number {
   const leftKeys = left.cardInstanceKeys ?? [];
   const rightKeys = right.cardInstanceKeys ?? [];
   if (leftKeys.length > 0 || rightKeys.length > 0) {
     return leftKeys.join(",").localeCompare(rightKeys.join(","));
   }
-  const length = Math.min(left.cardIds.length, right.cardIds.length);
+  const leftCardIds = getMedleyCandidateCardIds(left);
+  const rightCardIds = getMedleyCandidateCardIds(right);
+  const length = Math.min(leftCardIds.length, rightCardIds.length);
   for (let index = 0; index < length; index += 1) {
-    const delta = left.cardIds[index] - right.cardIds[index];
+    const delta = leftCardIds[index] - rightCardIds[index];
     if (delta !== 0) {
       return delta;
     }
   }
-  return left.cardIds.length - right.cardIds.length;
+  return leftCardIds.length - rightCardIds.length;
 }
 
 export function sortMedleyCandidates(candidates: MedleyTeamCandidate[]): void {
@@ -164,11 +294,6 @@ export function evaluateMedleySlotCandidateWithCache(
   }
 
   return result
-    ? {
-      result,
-      cards: selectedCards,
-      cardIds: getMedleyCandidateCardIds(selectedCards),
-      cardInstanceKeys: getCardInstanceKeys(selectedCards),
-    }
+    ? createMedleyTeamCandidate(result, selectedCards, !scoreOnly)
     : null;
 }
