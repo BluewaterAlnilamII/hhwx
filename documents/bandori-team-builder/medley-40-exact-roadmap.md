@@ -1,6 +1,6 @@
 # Medley 40/40 Exact Roadmap
 
-Last updated: 2026-06-09 01:42 CST
+Last updated: 2026-06-09 02:21 CST
 
 This file is the persistent working note for the current medley optimizer goal.
 Keep it current before and after benchmark runs or proof-path changes, so future
@@ -401,6 +401,31 @@ Phase 1: memory-capped exact-join proof patch.
   diagnostic consumed the proof budget before the normal multi-configuration
   route could improve the incumbent, causing a much worse bounded gap.
 
+2026-06-09 baseline drift checkpoint:
+
+- The earlier statement that current-branch clean `P07:244` reproduces the
+  pinned `55265` gap route is now superseded. After reverting the later
+  slot-cutoff, pre-anchor, and Node memory-profiling experiments, the current
+  branch still consistently reproduces the worse `P07:244` default route:
+  `bounded`, gap about `300781`, score `8476866`, abort
+  `candidate-fill-soft-limit`, roughly `3/4` exact-join configurations
+  completed, and `rootPrunedConfigurations` around `85`.
+- The fixture row was checked against the pinned baseline: profile id
+  `61fde1e7-9201-4dd8-83ae-9cb332a0a3e5`, card count `1252`,
+  payload hash
+  `759eddb4f283ca2e5b5756c0c2af57c47fe3f698876088b63c6392a7b6e9f84d`.
+  This does not look like sample contamination.
+- `bestdori-cache` drift was also checked by replacing the current cache with
+  the older cache from the baseline-era origin-main worktree. The bad
+  `P07:244` route persisted, so cache drift alone does not explain the
+  difference.
+- The likely source is a tracked medley-source change between the clean pinned
+  baseline commit `4579723` and the current branch, especially the proof-ledger
+  / low-memory high-pair / prefix-upper commits before the later reverted
+  experiments. Do not treat any new run on the current branch as acceptance
+  progress until this default baseline drift is isolated and either justified
+  or repaired.
+
 Phase 2: no-op equivalence gate, required only when touching prefix/seed
 diagnostic paths again.
 
@@ -439,21 +464,28 @@ Each patch must pass:
 
 The next actionable step is not another seed experiment. It is:
 
-1. Implement a controller-safe low-memory exact-join proof path focused on
-   `P07:244`: use the clean baseline counters first, and only use memory-source
-   attribution after it passes a no-op equivalence gate. The next patch must
-   preserve the baseline proof route when memory pressure is reduced, especially
-   incumbent quality, completed exact-join configuration count, and root-prune
-   timing. Only after that gate passes should chunk/stream pair upper or compact
-   candidate representation be retried.
-2. For `P06:323`, do not spend the next iteration on slot proof cutoff. If it
+1. Restore or explain current default baseline equivalence before adding more
+   proof logic. First run a commit-level P07:244 check between `4579723` and the
+   current branch to find where the pinned `55265` gap route became the current
+   `300781` gap route. If the drift came from an opt-in diagnostic commit that
+   changed default behavior, fix or revert that default change and push before
+   any new optimization test.
+2. After baseline equivalence is restored, implement a controller-safe
+   low-memory exact-join proof path focused on `P07:244`: use the clean
+   baseline counters first, and only use memory-source attribution after it
+   passes a no-op equivalence gate. The next patch must preserve the baseline
+   proof route when memory pressure is reduced, especially incumbent quality,
+   completed exact-join configuration count, and root-prune timing. Only after
+   that gate passes should chunk/stream pair upper or compact candidate
+   representation be retried.
+3. For `P06:323`, do not spend the next iteration on slot proof cutoff. If it
    is targeted, build a low-memory initial-candidate fallback that can return a
    proof-relevant upper or partial frontier when node expansion hits the soft
    limit.
-3. Before adding another proof path, add or run a no-op-safe memory metric
+4. Before adding another proof path, add or run a no-op-safe memory metric
    diagnostic that separates Node `heapUsed` from RSS/working-set. Current
    `peakUsedHeapMiB` is deliberately conservative and can be RSS-backed; without
    heap/RSS separation, memory-limit changes are hard to interpret.
-4. Re-run the 5 bounded rows plus the 4 guardrail exact rows.
-5. If at least two bounded rows convert and guardrails stay exact, re-run the
+5. Re-run the 5 bounded rows plus the 4 guardrail exact rows.
+6. If at least two bounded rows convert and guardrails stay exact, re-run the
    full isolated 40-case matrix and generate another timestamped report.
