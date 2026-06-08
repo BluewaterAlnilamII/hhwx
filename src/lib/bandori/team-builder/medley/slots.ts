@@ -31,7 +31,7 @@ import {
   getAreaItemBonusForCard,
   toAreaItemStateMap,
 } from "@/lib/bandori/team-builder/core/cards";
-import { getCardInstanceKey, getCardInstanceKeys } from "@/lib/bandori/team-builder/core/card-identity";
+import { getCardInstanceKey } from "@/lib/bandori/team-builder/core/card-identity";
 import type {
   BandoriMedleySongSearchInput,
   BandoriMedleyTeamSearchInput,
@@ -753,7 +753,7 @@ export function enumerateMedleySlotTeams(
           result,
           cards: [...selectedCards],
           cardIds: selectedCards.map((card) => card.cardId),
-          cardInstanceKeys: getCardInstanceKeys(selectedCards),
+          cardInstanceKeySignature: cacheKey,
         });
       }
       return;

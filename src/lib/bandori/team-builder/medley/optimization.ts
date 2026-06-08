@@ -9,7 +9,6 @@ import { getMedleyTeamEvaluationCacheKey } from "./candidates";
 import { MEDLEY_TEAM_COUNT, MEDLEY_TEAM_SIZE } from "./constants";
 import { buildMedleyResult } from "./results";
 import { evaluateTeam } from "@/lib/bandori/team-builder/core";
-import { getCardInstanceKeys } from "@/lib/bandori/team-builder/core/card-identity";
 import type {
   BandoriMedleyTeamSearchProfilingStats,
   BandoriMedleyTeamSearchResult,
@@ -140,7 +139,7 @@ export function evaluateFixedMedleyMaskCandidate(
       result,
       cards: selectedCards,
       cardIds: selectedCards.map((card) => card.cardId),
-      cardInstanceKeys: getCardInstanceKeys(selectedCards),
+      cardInstanceKeySignature: cacheKey,
     }
     : null;
 }
