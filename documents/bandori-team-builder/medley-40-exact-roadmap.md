@@ -1,6 +1,6 @@
 # Medley 40/40 Exact Roadmap
 
-Last updated: 2026-06-09 00:58 CST
+Last updated: 2026-06-09 01:17 CST
 
 This file is the persistent working note for the current medley optimizer goal.
 Keep it current before and after benchmark runs or proof-path changes, so future
@@ -178,6 +178,17 @@ Current acceptance standard:
   bounded. This suggests the same-coarse tight-root skip is not the root cause;
   the reusable direction is a cheaper frontier-proof refinement, not broad
   skip removal.
+- The opt-in `enableExactJoinSlotProofCutoff` path was implemented for
+  diagnosis in `b05b32f`, then instrumented in `24ee519`. The first hard-case
+  check on `P06:323` did not improve proof status: clean baseline was
+  `bounded`, elapsed `41878ms`, gap `607201`, peak `4488 MiB`,
+  `initial-candidate`; slot-proof-cutoff was still `bounded`, elapsed
+  `51785ms`, gap `607201`, peak `4485 MiB`, `initial-candidate`. The computed
+  per-slot minimum score cutoffs were only `[1332603, 1747729, 1978233]`,
+  while the aborting slot-0 frontier peek upper stayed
+  `3383411.5265578935`. This cutoff is too loose to reduce the initial
+  candidate frontier, so do not continue this route by tuning the same cutoff
+  formula or promoting it as a default.
 
 ## Evidence Hygiene Rules
 
@@ -359,6 +370,10 @@ Phase 1: memory-capped exact-join proof patch.
   so the next patch should instrument candidate arrays, generator heaps,
   score-only caches, pair query caches, and solve bitsets separately before
   adding more high-pair variants.
+- Keep `enableExactJoinSlotProofCutoff` research-only. On `P06:323`, the
+  safe per-slot proof cutoff was far below the high-score frontier that causes
+  the `initial-candidate` abort, so it gives neither proof conversion nor a
+  useful memory win.
 
 Phase 2: no-op equivalence gate, required only when touching prefix/seed
 diagnostic paths again.
@@ -378,7 +393,10 @@ Prioritize by the clean 40-case proof ledger, not by seed score:
 
 1. memory-capped candidate fill / pair upper work for `P07:244`, `P03:260`,
    `P08:244`, and `P07:260`.
-2. `initial-candidate` low-memory fallback for `P06:323`.
+2. `initial-candidate` low-memory fallback for `P06:323`. The next generic
+   direction here is a generator/proof path that can advance or bound the
+   high-score frontier without materializing the full first candidate, not a
+   simple per-slot minimum-score cutoff.
 3. same-coarse proof-cost scheduling for expensive closed or near-closed groups
    after memory pressure is reduced.
 
@@ -402,6 +420,10 @@ The next actionable step is not another seed experiment. It is:
    incumbent quality, completed exact-join configuration count, and root-prune
    timing. Only after that gate passes should chunk/stream pair upper or compact
    candidate representation be retried.
-2. Re-run the 5 bounded rows plus the 4 guardrail exact rows.
-3. If at least two bounded rows convert and guardrails stay exact, re-run the
+2. For `P06:323`, do not spend the next iteration on slot proof cutoff. If it
+   is targeted, build a low-memory initial-candidate fallback that can return a
+   proof-relevant upper or partial frontier when node expansion hits the soft
+   limit.
+3. Re-run the 5 bounded rows plus the 4 guardrail exact rows.
+4. If at least two bounded rows convert and guardrails stay exact, re-run the
    full isolated 40-case matrix and generate another timestamped report.
