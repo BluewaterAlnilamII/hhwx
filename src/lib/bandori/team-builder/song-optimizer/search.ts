@@ -1225,15 +1225,39 @@ function createCompactGlobalStateStore(): CompactGlobalStateStore {
 }
 
 function getCompactGlobalSmallKey(state: CompactGlobalDpState, usesDynamicSkillState: boolean): number {
-  let key = state.hitCount;
-  key = key * 7 + state.nextTriggerSlot;
-  key = key * 32 + state.assignedSkillMask;
-  key = key * 6 + state.leaderIndex + 1;
-  key = key * 6 + state.currentSkillCardIndex + 1;
-  key = key * 65536 + state.currentWindowEventIndex + 1;
+  return getCompactGlobalSmallKeyFromValues(
+    state.hitCount,
+    state.nextTriggerSlot,
+    state.assignedSkillMask,
+    state.leaderIndex,
+    state.currentSkillCardIndex,
+    state.currentWindowEventIndex,
+    state.perfectCount,
+    state.continuedActive,
+    usesDynamicSkillState,
+  );
+}
+
+function getCompactGlobalSmallKeyFromValues(
+  hitCount: number,
+  nextTriggerSlot: number,
+  assignedSkillMask: number,
+  leaderIndex: number,
+  currentSkillCardIndex: number,
+  currentWindowEventIndex: number,
+  perfectCount: number,
+  continuedActive: boolean,
+  usesDynamicSkillState: boolean,
+): number {
+  let key = hitCount;
+  key = key * 7 + nextTriggerSlot;
+  key = key * 32 + assignedSkillMask;
+  key = key * 6 + leaderIndex + 1;
+  key = key * 6 + currentSkillCardIndex + 1;
+  key = key * 65536 + currentWindowEventIndex + 1;
   if (usesDynamicSkillState) {
-    key = key * 128 + state.perfectCount;
-    key = key * 2 + (state.continuedActive ? 1 : 0);
+    key = key * 128 + perfectCount;
+    key = key * 2 + (continuedActive ? 1 : 0);
   }
   return key;
 }
@@ -1521,6 +1545,79 @@ function mergeCompactGlobalChosenState(
   }
   if (staticAssignmentDominance) {
     markDominatedStaticAssignmentStates(store, nextState, acceptedIndex, staticAssignmentDominance);
+  }
+}
+
+function mergeCompactGlobalChosenValuesFast(
+  store: CompactGlobalStateStore,
+  trail: TrailNode[],
+  parentTrailIndex: number,
+  note: OptimizerNote,
+  event: CandidateEvent,
+  window: BandoriSongOptimizerSkillWindow | null,
+  score: number,
+  hitCount: number,
+  selectedMask: number,
+  nextTriggerSlot: number,
+  assignedSkillMask: number,
+  leaderIndex: number,
+  currentWindowEventIndex: number,
+  currentWindowStartFrame: number,
+  currentWindowEndFrame: number,
+  currentSkillCardIndex: number,
+  perfectCount: number,
+  continuedActive: boolean,
+  offsetMagnitude: number,
+): void {
+  const key = getCompactGlobalSmallKeyFromValues(
+    hitCount,
+    nextTriggerSlot,
+    assignedSkillMask,
+    leaderIndex,
+    currentSkillCardIndex,
+    currentWindowEventIndex,
+    perfectCount,
+    continuedActive,
+    false,
+  );
+  let indexBySmallKey = store.indexBySelectedMask.get(selectedMask);
+  if (!indexBySmallKey) {
+    indexBySmallKey = new Map();
+    store.indexBySelectedMask.set(selectedMask, indexBySmallKey);
+  }
+  const existingIndex = indexBySmallKey.get(key);
+  const existing = existingIndex === undefined ? undefined : store.items[existingIndex];
+  if (
+    existing
+    && Number.isFinite(existing.score)
+    && (
+      existing.score > score
+      || (existing.score === score && existing.offsetMagnitude <= offsetMagnitude)
+    )
+  ) {
+    return;
+  }
+  const nextState: CompactGlobalDpState = {
+    score,
+    hitCount,
+    selectedMask,
+    nextTriggerSlot,
+    assignedSkillMask,
+    leaderIndex,
+    currentWindowEventIndex,
+    currentWindowStartFrame,
+    currentWindowEndFrame,
+    currentSkillCardIndex,
+    perfectCount,
+    continuedActive,
+    offsetMagnitude,
+    trailIndex: pushTrail(trail, parentTrailIndex, note, event, window),
+  };
+  if (existingIndex === undefined) {
+    indexBySmallKey.set(key, store.items.length);
+    store.items.push(nextState);
+  } else {
+    store.items[existingIndex] = nextState;
   }
 }
 
@@ -1979,6 +2076,7 @@ function solveIntegratedGlobalDp(
   const staticSkillMultipliers = buildStaticSkillMultipliers(skills);
   const dynamicSkillByIndex = skills.map((skill) => requiresDynamicSkillState(skill ?? null));
   const staticAssignmentDominance: StaticAssignmentDominanceContext | null = null;
+  const fastGlobalStatic = !context.usesDynamicSkillState && !staticAssignmentDominance;
   const trail: TrailNode[] = [];
   let states = createCompactGlobalStateStore();
   mergeCompactGlobalState(
@@ -2081,28 +2179,54 @@ function solveIntegratedGlobalDp(
       }
 
       const note = context.notes[event.noteIndex];
-      const baseNextState: CompactGlobalDpState = {
-        ...state,
-        score: nextScore,
-        hitCount: state.hitCount + 1,
-        selectedMask: event.isLastForNote ? state.selectedMask : state.selectedMask + noteBit,
-        perfectCount: scored.perfectCount,
-        continuedActive: scored.continuedActive,
-        offsetMagnitude: state.offsetMagnitude + Math.abs(event.offsetFrames),
-      };
+      const nextHitCount = state.hitCount + 1;
+      const nextSelectedMask = event.isLastForNote ? state.selectedMask : state.selectedMask + noteBit;
+      const nextOffsetMagnitude = state.offsetMagnitude + Math.abs(event.offsetFrames);
 
       if (triggerSlot === undefined) {
-        mergeCompactGlobalChosenState(
-          nextStates,
-          trail,
-          state.trailIndex,
-          note,
-          event,
-          null,
-          baseNextState,
-          context.usesDynamicSkillState,
-          staticAssignmentDominance,
-        );
+        if (fastGlobalStatic) {
+          mergeCompactGlobalChosenValuesFast(
+            nextStates,
+            trail,
+            state.trailIndex,
+            note,
+            event,
+            null,
+            nextScore,
+            nextHitCount,
+            nextSelectedMask,
+            state.nextTriggerSlot,
+            state.assignedSkillMask,
+            state.leaderIndex,
+            state.currentWindowEventIndex,
+            state.currentWindowStartFrame,
+            state.currentWindowEndFrame,
+            state.currentSkillCardIndex,
+            scored.perfectCount,
+            scored.continuedActive,
+            nextOffsetMagnitude,
+          );
+        } else {
+          mergeCompactGlobalChosenState(
+            nextStates,
+            trail,
+            state.trailIndex,
+            note,
+            event,
+            null,
+            {
+              ...state,
+              score: nextScore,
+              hitCount: nextHitCount,
+              selectedMask: nextSelectedMask,
+              perfectCount: scored.perfectCount,
+              continuedActive: scored.continuedActive,
+              offsetMagnitude: nextOffsetMagnitude,
+            },
+            context.usesDynamicSkillState,
+            staticAssignmentDominance,
+          );
+        }
         continue;
       }
 
@@ -2136,28 +2260,56 @@ function solveIntegratedGlobalDp(
         } else {
           context.stats.leaderChoiceTransitionCount += 1;
         }
-        mergeCompactGlobalChosenState(
-          nextStates,
-          trail,
-          state.trailIndex,
-          note,
-          event,
-          window,
-          {
-            ...baseNextState,
-            nextTriggerSlot: triggerSlot + 1,
-            assignedSkillMask: nextAssignedSkillMask,
-            leaderIndex: nextLeaderIndex,
-            currentWindowEventIndex: event.eventIndex,
-            currentWindowStartFrame: window.startFrame,
-            currentWindowEndFrame: window.endFrame,
-            currentSkillCardIndex: cardIndex,
-            perfectCount: 0,
-            continuedActive: true,
-          },
-          context.usesDynamicSkillState,
-          staticAssignmentDominance,
-        );
+        if (fastGlobalStatic) {
+          mergeCompactGlobalChosenValuesFast(
+            nextStates,
+            trail,
+            state.trailIndex,
+            note,
+            event,
+            window,
+            nextScore,
+            nextHitCount,
+            nextSelectedMask,
+            triggerSlot + 1,
+            nextAssignedSkillMask,
+            nextLeaderIndex,
+            event.eventIndex,
+            window.startFrame,
+            window.endFrame,
+            cardIndex,
+            0,
+            true,
+            nextOffsetMagnitude,
+          );
+        } else {
+          mergeCompactGlobalChosenState(
+            nextStates,
+            trail,
+            state.trailIndex,
+            note,
+            event,
+            window,
+            {
+              ...state,
+              score: nextScore,
+              hitCount: nextHitCount,
+              selectedMask: nextSelectedMask,
+              nextTriggerSlot: triggerSlot + 1,
+              assignedSkillMask: nextAssignedSkillMask,
+              leaderIndex: nextLeaderIndex,
+              currentWindowEventIndex: event.eventIndex,
+              currentWindowStartFrame: window.startFrame,
+              currentWindowEndFrame: window.endFrame,
+              currentSkillCardIndex: cardIndex,
+              perfectCount: 0,
+              continuedActive: true,
+              offsetMagnitude: nextOffsetMagnitude,
+            },
+            context.usesDynamicSkillState,
+            staticAssignmentDominance,
+          );
+        }
       }
     }
 
