@@ -663,6 +663,9 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
     : null;
   const enableLowMemoryHighPairPrefixUpper = optimization.enableLowMemoryHighPairPrefixUpper === true;
   const enableExactJoinSlotProofCutoff = optimization.enableExactJoinSlotProofCutoff === true;
+  const enableExactCandidateAnchorJoinBeforeHighBudgetPairUpper = (
+    optimization.enableExactCandidateAnchorJoinBeforeHighBudgetPairUpper === true
+  );
   const parsedLowMemoryHighPairPrefixRecordLimit = (
     optimization.lowMemoryHighPairPrefixRecordLimit !== undefined
       ? Math.trunc(optimization.lowMemoryHighPairPrefixRecordLimit)
@@ -3119,6 +3122,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
           exactJoinPrefixSeedPreviousLocalTimeout: exactJoinPrefixSeedDisabledCoarseKeys.has(currentCoarseKey),
           exactJoinPrefixSeedMemorySoftLimitMiB: stats.memorySoftLimitMiB,
           enableExactJoinSlotProofCutoff,
+          enableExactCandidateAnchorJoinBeforeHighBudgetPairUpper,
           lowMemoryHighPairScanMinRecordCount,
           lowMemoryHighPairPrefixRecordLimit,
           debugExactCandidateJoinMemoryAttribution,
@@ -3398,6 +3402,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
           exactJoinPrefixSeedPreviousLocalTimeout: exactJoinPrefixSeedDisabledCoarseKeys.has(currentCoarseKey),
           exactJoinPrefixSeedMemorySoftLimitMiB: stats.memorySoftLimitMiB,
           enableExactJoinSlotProofCutoff,
+          enableExactCandidateAnchorJoinBeforeHighBudgetPairUpper,
           lowMemoryHighPairScanMinRecordCount,
           lowMemoryHighPairPrefixRecordLimit,
           debugExactCandidateJoinMemoryAttribution,
