@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { CheckCircle2, Copy, Download, FileJson, Plus, RefreshCw, Trash2, Upload } from "lucide-react";
 import { useTranslations } from "next-intl";
+import { Link } from "@/i18n/navigation";
 import { getApiErrorMessage, parseApiSuccessData } from "@/lib/api-contracts";
 import BandoriCnExclusiveNotice from "@/app/[locale]/bandori/BandoriCnExclusiveNotice";
 import type { GameAccountBinding, GameBindChallenge } from "@/lib/game-account-binding";
@@ -823,18 +824,18 @@ export default function GameProfilesPanel() {
                       </div>
                     </div>
                     <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-wrap">
-                      <a
+                      <Link
                         href={`/bandori/game-profiles/${encodeURIComponent(profile.viewProfileId)}/cards`}
                         className="inline-flex h-9 items-center justify-center rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 transition hover:border-sky-200 hover:text-sky-600"
                       >
                         卡牌
-                      </a>
-                      <a
+                      </Link>
+                      <Link
                         href={`/bandori/game-profiles/${encodeURIComponent(profile.viewProfileId)}/items`}
                         className="inline-flex h-9 items-center justify-center rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 transition hover:border-sky-200 hover:text-sky-600"
                       >
                         道具
-                      </a>
+                      </Link>
                       <button
                         type="button"
                         onClick={() => exportProfile(profile)}
