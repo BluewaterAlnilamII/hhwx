@@ -1,6 +1,6 @@
 # Medley 40/40 Exact Roadmap
 
-Last updated: 2026-06-09 04:34 CST
+Last updated: 2026-06-09 04:54 CST
 
 This file is the persistent working note for the current medley optimizer goal.
 Keep it current before and after benchmark runs or proof-path changes, so future
@@ -517,6 +517,14 @@ Phase 1: memory-capped exact-join proof patch.
   GC and controller timing enough to create worse hard-case memory spikes.
   Do not default score-only payload minimization without a stronger no-op /
   memory-equivalence gate.
+- Commit `d70a675` tried a deeper compact score-only `MedleyTeamCandidate`
+  representation by removing retained `cards[]` and `cardIds[]` arrays from
+  exact score-only candidates, then `6f2cce6` reverted it. The P06/P07 smoke
+  did not improve proof status (`P06:323` gap `607201`, `P07:244` gap
+  `55265`). The 5-bounded run failed the memory gate again: `P03:260` peaked
+  at `4731 MiB`, `P07:260` peaked at `5438 MiB`, and bounded-gap total stayed
+  effectively baseline-level at `1813280`. This rules out broad candidate
+  object shape compaction as the next default route.
 
 Phase 2: no-op equivalence gate, required only when touching prefix/seed
 diagnostic paths again.
