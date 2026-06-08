@@ -108,7 +108,8 @@ const MEDLEY_EXACT_JOIN_PREFIX_SEED_DEFAULT_MIN_CANDIDATE_COUNTS: [number, numbe
 const MEDLEY_LOW_MEMORY_INITIAL_CANDIDATE_SYNC_TIMEBOX_MS = 2_000;
 const MEDLEY_LOW_MEMORY_INITIAL_CANDIDATE_SYNC_MAX_SAME_COARSE_PROOF_ELAPSED_MS = 8_000;
 const MEDLEY_LOW_MEMORY_INITIAL_CANDIDATE_SYNC_MIN_MEMORY_HEADROOM_MIB = 800;
-const MEDLEY_LOW_MEMORY_INITIAL_CANDIDATE_SYNC_MAX_SLOT_CARD_COUNT = 249;
+const MEDLEY_LOW_MEMORY_INITIAL_CANDIDATE_SYNC_MAX_SLOT_CARD_COUNT = MEDLEY_EXACT_JOIN_AUTO_MAX_SLOT_CARDS;
+const MEDLEY_LOW_MEMORY_INITIAL_CANDIDATE_SYNC_SAME_COARSE_GUARD_MAX_SLOT_CARD_COUNT = 249;
 const MEDLEY_POST_EXACT_JOIN_TIGHT_ROOT_MAX_CARD_COUNT = 1_300;
 const MEDLEY_POST_EXACT_JOIN_TIGHT_ROOT_MIN_REMAINING_MS = 30_000;
 const MEDLEY_SAME_COARSE_FRONTIER_RETRY_MAX_CARD_COUNT = 1_300;
@@ -2571,6 +2572,10 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
     const hasLowMemoryInitialCandidateSyncSlotWidth = (
       maxLowMemoryInitialCandidateSyncSlotCardCount <= lowMemoryInitialCandidateSyncMaxSlotCardCount
     );
+    const shouldApplyLowMemoryInitialCandidateSyncSameCoarseProofElapsedGuard = (
+      maxLowMemoryInitialCandidateSyncSlotCardCount
+        <= MEDLEY_LOW_MEMORY_INITIAL_CANDIDATE_SYNC_SAME_COARSE_GUARD_MAX_SLOT_CARD_COUNT
+    );
     const lowMemoryInitialCandidateSyncUsedHeapBytes = readUsedHeapBytes();
     const lowMemoryInitialCandidateSyncUsedMiB = lowMemoryInitialCandidateSyncUsedHeapBytes !== null
       ? Math.ceil(lowMemoryInitialCandidateSyncUsedHeapBytes / BYTES_PER_MIB)
@@ -2596,7 +2601,10 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
     const shouldUseLowMemoryInitialCandidateSync = (
       !disableLowMemoryInitialCandidateSync
       && hasLowMemoryInitialCandidateSyncSlotWidth
-      && sameCoarseMaxExactJoinProofElapsedMs < lowMemoryInitialCandidateSyncMaxSameCoarseProofElapsedMs
+      && (
+        !shouldApplyLowMemoryInitialCandidateSyncSameCoarseProofElapsedGuard
+        || sameCoarseMaxExactJoinProofElapsedMs < lowMemoryInitialCandidateSyncMaxSameCoarseProofElapsedMs
+      )
       && hasLowMemoryInitialCandidateSyncMemoryHeadroom
     );
     const sameCoarseSiblingFrontier = configurationIndex >= 0
@@ -2641,6 +2649,12 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
       );
       traceEntry.lowMemoryInitialCandidateSyncObservedMaxSlotCardCount = (
         maxLowMemoryInitialCandidateSyncSlotCardCount
+      );
+      traceEntry.lowMemoryInitialCandidateSyncSameCoarseProofElapsedGuardMaxSlotCardCount = (
+        MEDLEY_LOW_MEMORY_INITIAL_CANDIDATE_SYNC_SAME_COARSE_GUARD_MAX_SLOT_CARD_COUNT
+      );
+      traceEntry.lowMemoryInitialCandidateSyncSameCoarseProofElapsedGuard = (
+        shouldApplyLowMemoryInitialCandidateSyncSameCoarseProofElapsedGuard
       );
     }
     const sameCoarseClosedSiblingCount = sameCoarseSiblingFrontier.filter((entry) => entry.closed === true).length;

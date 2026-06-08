@@ -4440,9 +4440,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
         lowMemoryInitialCandidateSyncDeadlineAt,
         context.shouldAbortLowMemoryInitialCandidateSync ?? null,
       );
-      if (lowMemoryTopCandidate.aborted) {
-        topCandidate = generators[slotIndex].next();
-      } else if (lowMemoryTopCandidate.candidate) {
+      if (!lowMemoryTopCandidate.aborted && lowMemoryTopCandidate.candidate) {
         topCandidate = generators[slotIndex].next(lowMemoryTopCandidate.candidate.result.score);
       }
     }
