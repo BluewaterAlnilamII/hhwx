@@ -496,11 +496,7 @@ export default function AuthPageContent() {
 
               <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
                 <div className="text-sm text-slate-500">
-                  {mode === "register"
-                    ? t("mode.register.description")
-                    : mode === "forgot-password"
-                      ? t("mode.forgotPassword.description")
-                      : t("mode.register.description")}
+                  {t(`mode.${modeMessageKey}.footerDescription`)}
                 </div>
                 <button
                   type="submit"

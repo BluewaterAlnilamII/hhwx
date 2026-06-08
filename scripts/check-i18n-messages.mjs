@@ -5,7 +5,8 @@ import process from "node:process";
 const messagesRoot = "messages";
 const sourceLocale = "zh-CN";
 const sourceDir = join(messagesRoot, sourceLocale);
-const placeholderPattern = /\{([A-Za-z][A-Za-z0-9_]*)\}/g;
+const messageNamespaceConfigFile = "src/i18n/message-namespaces.ts";
+const placeholderPattern = /\{\s*([A-Za-z][A-Za-z0-9_]*)\s*(?:,|\})/g;
 
 function readJsonFile(filePath) {
   try {
@@ -24,6 +25,18 @@ function listLocaleDirs() {
 function listNamespaceFiles(locale) {
   return readdirSync(join(messagesRoot, locale))
     .filter((entry) => entry.endsWith(".json"))
+    .sort();
+}
+
+function listConfiguredNamespaces() {
+  const content = readFileSync(messageNamespaceConfigFile, "utf8");
+  const namespacesMatch = content.match(/MESSAGE_NAMESPACES\s*=\s*\[([\s\S]*?)\]/);
+  if (!namespacesMatch) {
+    throw new Error(`${messageNamespaceConfigFile}: MESSAGE_NAMESPACES array was not found`);
+  }
+
+  return [...namespacesMatch[1].matchAll(/"([^"]+)"/g)]
+    .map((match) => match[1])
     .sort();
 }
 
@@ -97,11 +110,15 @@ function compareNamespace(locale, namespaceFile, errors) {
 
 const errors = [];
 const sourceNamespaces = listNamespaceFiles(sourceLocale);
+const sourceNamespaceNames = sourceNamespaces.map((namespaceFile) => namespaceFile.replace(/\.json$/, ""));
 const locales = listLocaleDirs();
+const configuredNamespaces = listConfiguredNamespaces();
 
 if (!locales.includes(sourceLocale)) {
   errors.push(`Missing source locale directory: ${sourceDir}`);
 }
+
+compareSets("message namespace config", sourceNamespaceNames, configuredNamespaces, errors);
 
 for (const locale of locales) {
   const localeNamespaces = listNamespaceFiles(locale);

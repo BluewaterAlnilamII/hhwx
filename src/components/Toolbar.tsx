@@ -1,8 +1,9 @@
 "use client";
 
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Languages, Menu, X } from "lucide-react";
 import { useLocale, useTranslations } from "next-intl";
+import { useSearchParams } from "next/navigation";
 import { Link, usePathname } from "@/i18n/navigation";
 import AccountCardAvatar from "@/components/account/AccountCardAvatar";
 import { useCachedFetch } from "@/hooks/useCachedFetch";
@@ -35,6 +36,7 @@ type CardMetadataResponse = {
 };
 
 const NOTIFICATIONS_UPDATED_EVENT = "hhwx:notifications-updated";
+const languageSwitchClassName = "group relative flex h-8 w-8 items-center justify-center rounded-[14px] border border-white/45 bg-white/22 text-left text-white shadow-[0_6px_16px_rgba(122,61,0,0.14)] transition duration-200 hover:-translate-y-0.5 hover:scale-[1.03] hover:border-white/70 hover:bg-white/34 hover:shadow-[0_10px_24px_rgba(122,61,0,0.2)]";
 
 function transformCardMetadata(raw: unknown): CardMetadataResponse {
     return parseApiSuccessData<CardMetadataResponse>(raw) ?? {};
@@ -42,6 +44,63 @@ function transformCardMetadata(raw: unknown): CardMetadataResponse {
 
 function formatUnreadCount(count: number): string {
     return count > 99 ? "99+" : String(count);
+}
+
+function LanguageSwitchIcon() {
+    return (
+        <span className="relative flex h-6 w-6 items-center justify-center rounded-[12px] bg-[#fff4db] text-[#c76400] transition duration-200 group-hover:scale-105 group-hover:bg-[#fff7e7]">
+            <Languages className="h-4 w-4" aria-hidden="true" />
+        </span>
+    );
+}
+
+interface LanguageSwitchLinkProps {
+    pathname: string;
+    alternateLocale: AppLocale;
+    label: string;
+}
+
+function LanguageSwitchLink({ pathname, alternateLocale, label }: LanguageSwitchLinkProps) {
+    const searchParams = useSearchParams();
+    const [currentHash, setCurrentHash] = useState("");
+    const queryText = searchParams.toString();
+    const languageHref = useMemo(() => {
+        const querySuffix = queryText ? `?${queryText}` : "";
+        return `${pathname}${querySuffix}${currentHash}`;
+    }, [currentHash, pathname, queryText]);
+
+    useEffect(() => {
+        const updateCurrentHash = () => setCurrentHash(window.location.hash);
+        updateCurrentHash();
+        window.addEventListener("hashchange", updateCurrentHash);
+        return () => window.removeEventListener("hashchange", updateCurrentHash);
+    }, []);
+
+    return (
+        <Link
+            href={languageHref}
+            locale={alternateLocale}
+            className={languageSwitchClassName}
+            title={label}
+            aria-label={label}
+        >
+            <LanguageSwitchIcon />
+        </Link>
+    );
+}
+
+function LanguageSwitchFallback({ pathname, alternateLocale, label }: LanguageSwitchLinkProps) {
+    return (
+        <Link
+            href={pathname}
+            locale={alternateLocale}
+            className={languageSwitchClassName}
+            title={label}
+            aria-label={label}
+        >
+            <LanguageSwitchIcon />
+        </Link>
+    );
 }
 
 export default function Toolbar({ showDebugButton = true, isSidebarOpen = false, onToggleSidebar }: ToolbarProps) {
@@ -56,6 +115,7 @@ export default function Toolbar({ showDebugButton = true, isSidebarOpen = false,
     const returnPath = pathname && !pathname.startsWith("/auth") ? pathname : "/account";
     const loginHref = buildAuthPath("login", returnPath, undefined, locale);
     const alternateLocale = routing.locales.find((candidate) => candidate !== locale) ?? routing.defaultLocale;
+    const languageSwitchLabel = t("switchLanguage", { language: LOCALE_LABELS[alternateLocale] });
     const shouldShowDebugButton = showDebugButton && pathname === "/";
     const toolbarProfile = toolbarProfileState?.userId === userId ? toolbarProfileState.profile : null;
     const toolbarUsername = toolbarProfile?.username ?? username;
@@ -271,17 +331,9 @@ export default function Toolbar({ showDebugButton = true, isSidebarOpen = false,
                         </button>
                     )}
 
-                    <Link
-                        href={pathname}
-                        locale={alternateLocale}
-                        className="group relative flex h-8 w-8 items-center justify-center rounded-[14px] border border-white/45 bg-white/22 text-left text-white shadow-[0_6px_16px_rgba(122,61,0,0.14)] transition duration-200 hover:-translate-y-0.5 hover:scale-[1.03] hover:border-white/70 hover:bg-white/34 hover:shadow-[0_10px_24px_rgba(122,61,0,0.2)]"
-                        title={t("switchLanguage", { language: LOCALE_LABELS[alternateLocale] })}
-                        aria-label={t("switchLanguage", { language: LOCALE_LABELS[alternateLocale] })}
-                    >
-                        <span className="relative flex h-6 w-6 items-center justify-center rounded-[12px] bg-[#fff4db] text-[#c76400] transition duration-200 group-hover:scale-105 group-hover:bg-[#fff7e7]">
-                            <Languages className="h-4 w-4" aria-hidden="true" />
-                        </span>
-                    </Link>
+                    <Suspense fallback={<LanguageSwitchFallback pathname={pathname} alternateLocale={alternateLocale} label={languageSwitchLabel} />}>
+                        <LanguageSwitchLink pathname={pathname} alternateLocale={alternateLocale} label={languageSwitchLabel} />
+                    </Suspense>
 
                     <div ref={menuRef} className="relative">
                         <button

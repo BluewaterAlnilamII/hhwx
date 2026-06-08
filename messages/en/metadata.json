@@ -10,6 +10,18 @@
   "eventtracker": {
     "title": "Event Tracker - HHWX"
   },
+  "auth": {
+    "title": "Account Sign-In - HHWX",
+    "description": "Log in, create an account, or reset your HHWX web account password."
+  },
+  "authConfirm": {
+    "title": "Account Confirmation - HHWX",
+    "description": "Complete email verification, sign-in confirmation, or password reset for your HHWX account."
+  },
+  "account": {
+    "title": "Account Center - HHWX",
+    "description": "Manage your HHWX web account, email, security settings, and game profiles."
+  },
   "publicProfile": {
     "missingTitle": "User not found",
     "title": "{username}'s profile",

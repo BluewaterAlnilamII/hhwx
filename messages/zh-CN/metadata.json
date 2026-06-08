@@ -10,6 +10,18 @@
   "eventtracker": {
     "title": "Event Tracker - HHWX"
   },
+  "auth": {
+    "title": "账号登录 - HHWX",
+    "description": "登录、注册或重置 HHWX 网页账号密码。"
+  },
+  "authConfirm": {
+    "title": "账号确认 - HHWX",
+    "description": "处理 HHWX 账号邮箱验证、登录确认和密码重置。"
+  },
+  "account": {
+    "title": "账号中心 - HHWX",
+    "description": "管理 HHWX 网页账号、邮箱、安全设置和游戏档案。"
+  },
   "publicProfile": {
     "missingTitle": "用户不存在",
     "title": "{username} 的个人主页",

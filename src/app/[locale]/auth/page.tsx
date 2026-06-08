@@ -1,6 +1,11 @@
+import type { Metadata } from "next";
 import { Suspense } from "react";
 import { getTranslations } from "next-intl/server";
 import AuthPageContent from "@/components/AuthPageContent";
+
+type AuthPageProps = {
+  params: Promise<{ locale: string }>;
+};
 
 interface AuthPageFallbackProps {
   section: string;
@@ -23,6 +28,15 @@ function AuthPageFallback({ section, title, description }: AuthPageFallbackProps
       </div>
     </main>
   );
+}
+
+export async function generateMetadata({ params }: AuthPageProps): Promise<Metadata> {
+  const { locale } = await params;
+  const t = await getTranslations({ locale, namespace: "metadata.auth" });
+  return {
+    title: t("title"),
+    description: t("description"),
+  };
 }
 
 export default async function AuthPage() {
