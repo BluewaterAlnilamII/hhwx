@@ -112,16 +112,23 @@ type CompactGlobalDpState = {
   trailIndex: number;
 };
 
+type StaticAssignmentDominanceTable = {
+  scores: Float64Array;
+  indexes: Int32Array;
+};
+
 type CompactGlobalStateStore = {
   items: CompactGlobalDpState[];
   indexBySelectedMask: Map<number, Map<number, number>>;
   dynamicDominanceBySelectedMask: Map<number, Map<number, number[]>>;
-  staticAssignmentDominanceBySelectedMask: Map<number, Map<number, number[]>>;
+  staticAssignmentDominanceBySelectedMask: Map<number, Map<number, StaticAssignmentDominanceTable>>;
 };
 
 type StaticAssignmentDominanceContext = {
   skillDominates: boolean[][];
   maskDominates: boolean[][];
+  dominatorComboIndexes: number[][];
+  dominatedComboIndexes: number[][];
 };
 
 type StaticDpState = {
@@ -149,11 +156,11 @@ type CompactStaticDpState = {
   trailIndex: number;
 };
 
-type TrailNode = {
-  parentIndex: number;
-  note: OptimizerNote;
-  event: OptimizerProofHitCandidate;
-  window: BandoriSongOptimizerSkillWindow | null;
+type TrailStore = {
+  parentIndexes: number[];
+  notes: OptimizerNote[];
+  events: OptimizerProofHitCandidate[];
+  windows: Array<BandoriSongOptimizerSkillWindow | null>;
 };
 
 type IntegratedSolveResult = {
@@ -530,7 +537,33 @@ function buildStaticAssignmentDominanceContext(
       remainingSkillsDominate(leftMask, rightMask, skillDominates)
     ))
   ));
-  return { skillDominates, maskDominates };
+  const comboCount = (SKILL_ASSIGNMENT_FULL_MASK + 1) * 6;
+  const dominatorComboIndexes = Array.from({ length: comboCount }, (_, rightComboIndex) => {
+    const rightAssignedMask = Math.trunc(rightComboIndex / 6);
+    const rightCurrentSkillIndex = rightComboIndex % 6 - 1;
+    const dominators: number[] = [];
+    for (let leftAssignedMask = 0; leftAssignedMask <= SKILL_ASSIGNMENT_FULL_MASK; leftAssignedMask += 1) {
+      if (!maskDominates[leftAssignedMask][rightAssignedMask]) {
+        continue;
+      }
+      for (let leftCurrentSkillIndex = -1; leftCurrentSkillIndex < 5; leftCurrentSkillIndex += 1) {
+        const currentSkillDominates = rightCurrentSkillIndex >= 0
+          ? leftCurrentSkillIndex >= 0 && skillDominates[leftCurrentSkillIndex][rightCurrentSkillIndex]
+          : leftCurrentSkillIndex === -1;
+        if (currentSkillDominates) {
+          dominators.push(leftAssignedMask * 6 + leftCurrentSkillIndex + 1);
+        }
+      }
+    }
+    return dominators;
+  });
+  const dominatedComboIndexes = Array.from({ length: comboCount }, () => [] as number[]);
+  dominatorComboIndexes.forEach((dominators, dominatedComboIndex) => {
+    dominators.forEach((dominatorComboIndex) => {
+      dominatedComboIndexes[dominatorComboIndex].push(dominatedComboIndex);
+    });
+  });
+  return { skillDominates, maskDominates, dominatorComboIndexes, dominatedComboIndexes };
 }
 
 function frameKey(frame: number): string {
@@ -752,21 +785,42 @@ function createChoice(note: OptimizerNote, event: OptimizerProofHitCandidate): D
   };
 }
 
-function pushTrail(trail: TrailNode[], parentIndex: number, note: OptimizerNote, event: OptimizerProofHitCandidate, window: BandoriSongOptimizerSkillWindow | null): number {
-  trail.push({ parentIndex, note, event, window });
-  return trail.length - 1;
+function createTrailStore(): TrailStore {
+  return {
+    parentIndexes: [],
+    notes: [],
+    events: [],
+    windows: [],
+  };
 }
 
-function reconstructTrail(trail: readonly TrailNode[], trailIndex: number): { choices: DpChoice[]; windows: BandoriSongOptimizerSkillWindow[] } {
+function pushTrail(
+  trail: TrailStore,
+  parentIndex: number,
+  note: OptimizerNote,
+  event: OptimizerProofHitCandidate,
+  window: BandoriSongOptimizerSkillWindow | null,
+): number {
+  const index = trail.parentIndexes.length;
+  trail.parentIndexes.push(parentIndex);
+  trail.notes.push(note);
+  trail.events.push(event);
+  trail.windows.push(window);
+  return index;
+}
+
+function reconstructTrail(trail: TrailStore, trailIndex: number): { choices: DpChoice[]; windows: BandoriSongOptimizerSkillWindow[] } {
   const choices: DpChoice[] = [];
   const windows: BandoriSongOptimizerSkillWindow[] = [];
   for (let index = trailIndex; index >= 0;) {
-    const node = trail[index];
-    choices.push(createChoice(node.note, node.event));
-    if (node.window) {
-      windows.push(node.window);
+    const note = trail.notes[index];
+    const event = trail.events[index];
+    const window = trail.windows[index];
+    choices.push(createChoice(note, event));
+    if (window) {
+      windows.push(window);
     }
-    index = node.parentIndex;
+    index = trail.parentIndexes[index];
   }
   choices.reverse();
   windows.reverse();
@@ -904,7 +958,7 @@ function mergeState(
 
 function mergeChosenValues(
   states: Map<string, DpState>,
-  trail: TrailNode[],
+  trail: TrailStore,
   parentTrailIndex: number,
   note: OptimizerNote,
   event: CandidateEvent,
@@ -981,7 +1035,7 @@ function mergeStaticState(states: Map<string, StaticDpState>, state: StaticDpSta
 
 function mergeStaticChosenValues(
   states: Map<string, StaticDpState>,
-  trail: TrailNode[],
+  trail: TrailStore,
   parentTrailIndex: number,
   note: OptimizerNote,
   event: CandidateEvent,
@@ -1096,7 +1150,7 @@ function mergeCompactStaticState(states: Map<string, CompactStaticDpState>, stat
 
 function mergeCompactStaticChosenValues(
   states: Map<string, CompactStaticDpState>,
-  trail: TrailNode[],
+  trail: TrailStore,
   parentTrailIndex: number,
   note: OptimizerNote,
   event: CandidateEvent,
@@ -1167,7 +1221,7 @@ function mergeCompactState(states: Map<string, CompactDpState>, state: CompactDp
 
 function mergeCompactChosenValues(
   states: Map<string, CompactDpState>,
-  trail: TrailNode[],
+  trail: TrailStore,
   parentTrailIndex: number,
   note: OptimizerNote,
   event: CandidateEvent,
@@ -1329,22 +1383,31 @@ function getCompactGlobalStaticAssignmentDominanceKey(state: CompactGlobalDpStat
   return key;
 }
 
-function getCompactGlobalStaticAssignmentBucket(
+function getCompactGlobalStaticAssignmentScores(
   store: CompactGlobalStateStore,
   selectedMask: number,
   dominanceKey: number,
-): number[] {
+): StaticAssignmentDominanceTable {
   let indexByDominanceKey = store.staticAssignmentDominanceBySelectedMask.get(selectedMask);
   if (!indexByDominanceKey) {
     indexByDominanceKey = new Map();
     store.staticAssignmentDominanceBySelectedMask.set(selectedMask, indexByDominanceKey);
   }
-  let indexes = indexByDominanceKey.get(dominanceKey);
-  if (!indexes) {
-    indexes = [];
-    indexByDominanceKey.set(dominanceKey, indexes);
+  let table = indexByDominanceKey.get(dominanceKey);
+  if (!table) {
+    table = {
+      scores: new Float64Array((SKILL_ASSIGNMENT_FULL_MASK + 1) * 6),
+      indexes: new Int32Array((SKILL_ASSIGNMENT_FULL_MASK + 1) * 6),
+    };
+    table.scores.fill(Number.NEGATIVE_INFINITY);
+    table.indexes.fill(-1);
+    indexByDominanceKey.set(dominanceKey, table);
   }
-  return indexes;
+  return table;
+}
+
+function getStaticAssignmentComboIndex(state: Pick<CompactGlobalDpState, "assignedSkillMask" | "currentSkillCardIndex">): number {
+  return state.assignedSkillMask * 6 + state.currentSkillCardIndex + 1;
 }
 
 function remainingSkillsDominate(
@@ -1391,40 +1454,19 @@ function remainingSkillsDominate(
   return match(0);
 }
 
-function staticAssignmentStateDominates(
-  left: CompactGlobalDpState,
-  right: CompactGlobalDpState,
-  dominance: StaticAssignmentDominanceContext,
-): boolean {
-  if (!Number.isFinite(left.score) || left.score < right.score) {
-    return false;
-  }
-  if (right.currentSkillCardIndex >= 0) {
-    if (
-      left.currentSkillCardIndex < 0
-      || !dominance.skillDominates[left.currentSkillCardIndex]?.[right.currentSkillCardIndex]
-    ) {
-      return false;
-    }
-  } else if (left.currentSkillCardIndex >= 0) {
-    return false;
-  }
-  return dominance.maskDominates[left.assignedSkillMask]?.[right.assignedSkillMask] === true;
-}
-
 function isDominatedByStaticAssignmentState(
   store: CompactGlobalStateStore,
   state: CompactGlobalDpState,
   dominance: StaticAssignmentDominanceContext,
 ): boolean {
   const dominanceKey = getCompactGlobalStaticAssignmentDominanceKey(state);
-  const indexes = store.staticAssignmentDominanceBySelectedMask.get(state.selectedMask)?.get(dominanceKey);
-  if (!indexes) {
+  const table = store.staticAssignmentDominanceBySelectedMask.get(state.selectedMask)?.get(dominanceKey);
+  if (!table) {
     return false;
   }
-  for (const index of indexes) {
-    const existing = store.items[index];
-    if (existing && staticAssignmentStateDominates(existing, state, dominance)) {
+  const comboIndex = getStaticAssignmentComboIndex(state);
+  for (const dominatorComboIndex of dominance.dominatorComboIndexes[comboIndex] ?? []) {
+    if (table.scores[dominatorComboIndex] >= state.score) {
       return true;
     }
   }
@@ -1438,14 +1480,25 @@ function markDominatedStaticAssignmentStates(
   dominance: StaticAssignmentDominanceContext,
 ): void {
   const dominanceKey = getCompactGlobalStaticAssignmentDominanceKey(state);
-  const indexes = getCompactGlobalStaticAssignmentBucket(store, state.selectedMask, dominanceKey);
-  for (const index of indexes) {
-    const existing = store.items[index];
-    if (existing && index !== stateIndex && staticAssignmentStateDominates(state, existing, dominance)) {
-      existing.score = Number.NEGATIVE_INFINITY;
+  const table = getCompactGlobalStaticAssignmentScores(store, state.selectedMask, dominanceKey);
+  const comboIndex = getStaticAssignmentComboIndex(state);
+  if (state.score >= table.scores[comboIndex]) {
+    table.scores[comboIndex] = state.score;
+    table.indexes[comboIndex] = stateIndex;
+  }
+  for (const dominatedComboIndex of dominance.dominatedComboIndexes[comboIndex] ?? []) {
+    const dominatedIndex = table.indexes[dominatedComboIndex];
+    if (
+      dominatedIndex >= 0
+      && dominatedIndex !== stateIndex
+      && table.scores[dominatedComboIndex] <= state.score
+    ) {
+      const dominatedState = store.items[dominatedIndex];
+      if (dominatedState) {
+        dominatedState.score = Number.NEGATIVE_INFINITY;
+      }
     }
   }
-  indexes.push(stateIndex);
 }
 
 function mergeCompactGlobalState(
@@ -1494,7 +1547,7 @@ function mergeCompactGlobalState(
 
 function mergeCompactGlobalChosenState(
   store: CompactGlobalStateStore,
-  trail: TrailNode[],
+  trail: TrailStore,
   parentTrailIndex: number,
   note: OptimizerNote,
   event: CandidateEvent,
@@ -1550,7 +1603,7 @@ function mergeCompactGlobalChosenState(
 
 function mergeCompactGlobalChosenValuesFast(
   store: CompactGlobalStateStore,
-  trail: TrailNode[],
+  trail: TrailStore,
   parentTrailIndex: number,
   note: OptimizerNote,
   event: CandidateEvent,
@@ -1589,7 +1642,6 @@ function mergeCompactGlobalChosenValuesFast(
   const existing = existingIndex === undefined ? undefined : store.items[existingIndex];
   if (
     existing
-    && Number.isFinite(existing.score)
     && (
       existing.score > score
       || (existing.score === score && existing.offsetMagnitude <= offsetMagnitude)
@@ -1597,27 +1649,41 @@ function mergeCompactGlobalChosenValuesFast(
   ) {
     return;
   }
-  const nextState: CompactGlobalDpState = {
-    score,
-    hitCount,
-    selectedMask,
-    nextTriggerSlot,
-    assignedSkillMask,
-    leaderIndex,
-    currentWindowEventIndex,
-    currentWindowStartFrame,
-    currentWindowEndFrame,
-    currentSkillCardIndex,
-    perfectCount,
-    continuedActive,
-    offsetMagnitude,
-    trailIndex: pushTrail(trail, parentTrailIndex, note, event, window),
-  };
+  const trailIndex = pushTrail(trail, parentTrailIndex, note, event, window);
   if (existingIndex === undefined) {
     indexBySmallKey.set(key, store.items.length);
-    store.items.push(nextState);
+    store.items.push({
+      score,
+      hitCount,
+      selectedMask,
+      nextTriggerSlot,
+      assignedSkillMask,
+      leaderIndex,
+      currentWindowEventIndex,
+      currentWindowStartFrame,
+      currentWindowEndFrame,
+      currentSkillCardIndex,
+      perfectCount,
+      continuedActive,
+      offsetMagnitude,
+      trailIndex,
+    });
   } else {
-    store.items[existingIndex] = nextState;
+    const target = existing ?? store.items[existingIndex];
+    target.score = score;
+    target.hitCount = hitCount;
+    target.selectedMask = selectedMask;
+    target.nextTriggerSlot = nextTriggerSlot;
+    target.assignedSkillMask = assignedSkillMask;
+    target.leaderIndex = leaderIndex;
+    target.currentWindowEventIndex = currentWindowEventIndex;
+    target.currentWindowStartFrame = currentWindowStartFrame;
+    target.currentWindowEndFrame = currentWindowEndFrame;
+    target.currentSkillCardIndex = currentSkillCardIndex;
+    target.perfectCount = perfectCount;
+    target.continuedActive = continuedActive;
+    target.offsetMagnitude = offsetMagnitude;
+    target.trailIndex = trailIndex;
   }
 }
 
@@ -1850,7 +1916,7 @@ function solveIntegratedCompactDp(
   slotSkills: ReadonlyArray<ResolvedBandoriSkill | null>,
   incumbentScore: number,
 ): IntegratedSolveResult {
-  const trail: TrailNode[] = [];
+  const trail = createTrailStore();
   let states = new Map<string, CompactDpState>();
   mergeCompactState(states, {
     score: 0,
@@ -2077,7 +2143,7 @@ function solveIntegratedGlobalDp(
   const dynamicSkillByIndex = skills.map((skill) => requiresDynamicSkillState(skill ?? null));
   const staticAssignmentDominance: StaticAssignmentDominanceContext | null = null;
   const fastGlobalStatic = !context.usesDynamicSkillState && !staticAssignmentDominance;
-  const trail: TrailNode[] = [];
+  const trail = createTrailStore();
   let states = createCompactGlobalStateStore();
   mergeCompactGlobalState(
     states,
@@ -2382,7 +2448,7 @@ function solveIntegratedCompactStaticDp(
   incumbentScore: number,
 ): IntegratedSolveResult {
   const staticSkillMultipliers = buildStaticSkillMultipliers(slotSkills);
-  const trail: TrailNode[] = [];
+  const trail = createTrailStore();
   let states = new Map<string, CompactStaticDpState>();
   mergeCompactStaticState(states, {
     score: 0,
@@ -2553,7 +2619,7 @@ function solveIntegratedStaticDp(
   incumbentScore: number,
 ): IntegratedSolveResult {
   const staticSkillMultipliers = buildStaticSkillMultipliers(slotSkills);
-  const trail: TrailNode[] = [];
+  const trail = createTrailStore();
   let states = new Map<string, StaticDpState>();
   mergeStaticState(states, {
     score: 0,
@@ -2804,7 +2870,7 @@ function solveIntegratedDp(
   }
 
   const staticSkillMultipliers = context.usesDynamicSkillState ? null : buildStaticSkillMultipliers(slotSkills);
-  const trail: TrailNode[] = [];
+  const trail = createTrailStore();
   let states = new Map<string, DpState>();
   mergeState(
     states,
