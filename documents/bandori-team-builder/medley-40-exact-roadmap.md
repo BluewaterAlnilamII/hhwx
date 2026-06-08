@@ -160,6 +160,13 @@ Current acceptance standard:
   and reduced completed exact-join configurations from `16/17` to `3/4`.
   Treat local release/clear-only patches as rejected unless they also preserve
   the same proof-trigger behavior.
+- A lossless compact candidate-key patch was also tested and reverted. It
+  reduced `P07:244` peak heap more strongly (`4210 -> 3308 MiB`), but produced
+  the same controller failure shape: gap `300781`, `candidate-fill-soft-limit`,
+  `3/4` completed exact-join configurations, and `85` root-pruned
+  configurations. This proves the next blocker is not only representation
+  memory; lowering memory can flip the controller into a worse low-incumbent /
+  high-root-prune route.
 
 ## Evidence Hygiene Rules
 
@@ -325,6 +332,9 @@ Phase 1: memory-capped exact-join proof patch.
 - Avoid release/clear-only local working-set patches as well. The 2026-06-09
   release experiment showed that reducing memory after a configuration closes
   can still change later memory/proof gates and produce a worse frontier.
+- Avoid memory compaction patches without a controller gate. The 2026-06-09
+  lossless compact-key experiment reduced memory substantially but still
+  worsened proof because controller behavior changed.
 - Avoid simply relaxing guarded/staged candidate extension thresholds. The
   diagnostic `P07:244` run showed that generating more candidates can increase
   memory pressure and widen the final bounded gap if pair/frontier proof remains
@@ -374,12 +384,13 @@ Each patch must pass:
 
 The next actionable step is not another seed experiment. It is:
 
-1. Implement a low-memory exact-join proof path focused on `P07:244`:
-   use the clean baseline counters first, and only use memory-source
-   attribution after it passes a no-op equivalence gate. Then implement either
-   chunk/stream pair upper or an internal compact candidate representation so
-   the final small-gap frontier can close without retaining all pair records
-   and duplicate candidate/result/key objects.
+1. Implement a controller-safe low-memory exact-join proof path focused on
+   `P07:244`: use the clean baseline counters first, and only use memory-source
+   attribution after it passes a no-op equivalence gate. The next patch must
+   preserve the baseline proof route when memory pressure is reduced, especially
+   incumbent quality, completed exact-join configuration count, and root-prune
+   timing. Only after that gate passes should chunk/stream pair upper or compact
+   candidate representation be retried.
 2. Re-run the 5 bounded rows plus the 4 guardrail exact rows.
 3. If at least two bounded rows convert and guardrails stay exact, re-run the
    full isolated 40-case matrix and generate another timestamped report.
