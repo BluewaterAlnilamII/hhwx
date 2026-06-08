@@ -497,6 +497,22 @@ export type SkillWindowScoreResult = {
   roomScoreRatePerPower?: number;
 };
 
+function isEligibleLeaderIndex(eligibleLeaderIndexes: readonly boolean[] | undefined, leaderIndex: number): boolean {
+  return eligibleLeaderIndexes === undefined || eligibleLeaderIndexes[leaderIndex] === true;
+}
+
+function createEmptySkillWindowScoreResult(): SkillWindowScoreResult {
+  return {
+    score: Number.NEGATIVE_INFINITY,
+    averageScore: Number.NEGATIVE_INFINITY,
+    minScore: 0,
+    maxScoreOrderCount: 0,
+    maxScoreOrderTotal: SKILL_ORDER_PERMUTATIONS.length,
+    leaderIndex: 0,
+    permutation: SKILL_ORDER_PERMUTATIONS[0],
+  };
+}
+
 type SkillAssignmentOptimization = {
   maxScore: number;
   minScore: number;
@@ -827,6 +843,7 @@ export function calculateBestMultiLiveScoreForSkillWindows(
   comboOptions?: ScoreComboOptions,
   targetOnly = false,
   shouldCalculateDetailed?: (targetOnlyResult: SkillWindowScoreResult) => boolean,
+  eligibleLeaderIndexes?: readonly boolean[],
 ): SkillWindowScoreResult {
   // In multi live, the leader skill and other-player skills share the first 5 trigger windows; the 6th window is chosen by encore source.
   // Calculate averageScore first as the search target, then fill max/min and skill-order details only if the team can still enter top-N.
@@ -933,6 +950,10 @@ export function calculateBestMultiLiveScoreForSkillWindows(
   let targetOnlyResult: SkillWindowScoreResult | null = null;
 
   for (let leaderIndex = 0; leaderIndex < selfSkills.length; leaderIndex += 1) {
+    if (!isEligibleLeaderIndex(eligibleLeaderIndexes, leaderIndex)) {
+      continue;
+    }
+
     const leaderContributions = selfContributions[leaderIndex] ?? zeroContributions;
     const averageTriggerContribution = otherTriggerContributionAverage
       + (leaderContributions[0] + leaderContributions[1] + leaderContributions[2] + leaderContributions[3] + leaderContributions[4]) / 5;
@@ -980,20 +1001,16 @@ export function calculateBestMultiLiveScoreForSkillWindows(
       && !shouldCalculateDetailed(targetOnlyResult)
     )
   ) {
-    return targetOnlyResult ?? {
-      score: Number.NEGATIVE_INFINITY,
-      averageScore: Number.NEGATIVE_INFINITY,
-      minScore: 0,
-      maxScoreOrderCount: 0,
-      maxScoreOrderTotal: SKILL_ORDER_PERMUTATIONS.length,
-      leaderIndex: 0,
-      permutation: SKILL_ORDER_PERMUTATIONS[0],
-    };
+    return targetOnlyResult ?? createEmptySkillWindowScoreResult();
   }
 
   let bestResult: SkillWindowScoreResult | null = null;
 
   for (let leaderIndex = 0; leaderIndex < selfSkills.length; leaderIndex += 1) {
+    if (!isEligibleLeaderIndex(eligibleLeaderIndexes, leaderIndex)) {
+      continue;
+    }
+
     const leaderContributions = selfContributions[leaderIndex] ?? zeroContributions;
     const triggerContributions = [
       leaderContributions,
@@ -1061,15 +1078,7 @@ export function calculateBestMultiLiveScoreForSkillWindows(
     }
   }
 
-  return bestResult ?? {
-    score: Number.NEGATIVE_INFINITY,
-    averageScore: Number.NEGATIVE_INFINITY,
-    minScore: 0,
-    maxScoreOrderCount: 0,
-    maxScoreOrderTotal: SKILL_ORDER_PERMUTATIONS.length,
-    leaderIndex: 0,
-    permutation: SKILL_ORDER_PERMUTATIONS[0],
-  };
+  return bestResult ?? createEmptySkillWindowScoreResult();
 }
 
 export function calculateBestScoreForNonOverlappingSkillWindows(
@@ -1082,6 +1091,7 @@ export function calculateBestScoreForNonOverlappingSkillWindows(
   comboOptions?: ScoreComboOptions,
   targetOnly = false,
   shouldCalculateDetailed?: (targetOnlyResult: SkillWindowScoreResult) => boolean,
+  eligibleLeaderIndexes?: readonly boolean[],
 ): SkillWindowScoreResult {
   // Solo/normal scoring assumes the 5 normal skill windows do not overlap, so trigger order only maps cards onto windows.
   // When encoreSkill is defined, the 6th window is fixed to that external/leader skill.
@@ -1162,6 +1172,10 @@ export function calculateBestScoreForNonOverlappingSkillWindows(
 
   let targetOnlyResult: SkillWindowScoreResult | null = null;
   if (encoreSkill !== undefined) {
+    if (!isEligibleLeaderIndex(eligibleLeaderIndexes, 0)) {
+      return createEmptySkillWindowScoreResult();
+    }
+
     const leaderContribution = getContributions(encoreSkill)[5];
     const averageScore = Math.floor(baseScore + averageTriggerContribution + leaderContribution);
     targetOnlyResult = {
@@ -1177,6 +1191,10 @@ export function calculateBestScoreForNonOverlappingSkillWindows(
     let bestAverageScore = Number.NEGATIVE_INFINITY;
     let selectedLeaderIndex = 0;
     for (let leaderIndex = 0; leaderIndex < skills.length; leaderIndex += 1) {
+      if (!isEligibleLeaderIndex(eligibleLeaderIndexes, leaderIndex)) {
+        continue;
+      }
+
       const averageScore = Math.floor(baseScore + averageTriggerContribution + contributions[leaderIndex][5]);
       if (averageScore > bestAverageScore) {
         bestAverageScore = averageScore;
@@ -1231,6 +1249,10 @@ export function calculateBestScoreForNonOverlappingSkillWindows(
   }
 
   for (let leaderIndex = 0; leaderIndex < skills.length; leaderIndex += 1) {
+    if (!isEligibleLeaderIndex(eligibleLeaderIndexes, leaderIndex)) {
+      continue;
+    }
+
     const leaderContribution = contributions[leaderIndex][5];
     const leaderAverageScore = Math.floor(baseScore + averageTriggerContribution + leaderContribution);
     if (leaderAverageScore < bestAverageScore) {
@@ -1403,7 +1425,7 @@ export function calculateSkillScoreUpperBoundsForPower(
   };
 }
 
-function getResolvedSkillMaxValuePercent(skill: ResolvedBandoriSkill | null): number {
+export function getResolvedSkillMaxScoreUpPercent(skill: ResolvedBandoriSkill | null): number {
   if (!skill) {
     return 0;
   }
@@ -1420,7 +1442,7 @@ export function calculateResolvedSkillUpperRatesPerPower(
   comboOptions?: ScoreComboOptions,
 ): SkillUpperRates {
   // Resolved skills can include same-band/same-attribute conditions, so these feed tighter context-partitioned bounds.
-  const valuePercent = getResolvedSkillMaxValuePercent(skill);
+  const valuePercent = getResolvedSkillMaxScoreUpPercent(skill);
   const durationSeconds = skill?.durationSeconds ?? 0;
   if (valuePercent <= 0 || durationSeconds <= 0 || chart.notesCount === 0) {
     return {

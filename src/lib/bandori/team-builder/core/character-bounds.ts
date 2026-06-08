@@ -11,6 +11,7 @@ import type { BandoriTeamSearchEventMode, BandoriTeamSearchInput, BandoriTeamSea
 export function buildCharacterUpperBoundIndex(
   cards: SearchCard[],
   skillContextUpperMode?: SkillContextUpperMode,
+  includeLeaderScoreUpBounds = false,
 ): CharacterUpperBoundIndex {
   // Build suffix upper-bound indexes in traversal order. Each startIndex answers:
   // "From here onward, what is the best power / point bonus / skill rate each character can still provide?"
@@ -52,6 +53,11 @@ export function buildCharacterUpperBoundIndex(
   let skillBothLeaderRate = new Float64Array(characterIds.length);
   let skillMixedAverageRate = new Float64Array(characterIds.length);
   let skillMixedLeaderRate = new Float64Array(characterIds.length);
+  let leaderScoreUpPercent = new Float64Array(characterIds.length);
+  let leaderSameBandScoreUpPercent = new Float64Array(characterIds.length);
+  let leaderSameAttributeScoreUpPercent = new Float64Array(characterIds.length);
+  let leaderBothScoreUpPercent = new Float64Array(characterIds.length);
+  let leaderMixedScoreUpPercent = new Float64Array(characterIds.length);
   const powerByStartIndex = new Array<Float64Array>(cards.length + 1);
   const pointBonusRateByStartIndex = new Array<Float64Array>(cards.length + 1);
   const skillAverageRateByStartIndex = new Array<Float64Array>(cards.length + 1);
@@ -64,6 +70,11 @@ export function buildCharacterUpperBoundIndex(
   const skillBothLeaderRateByStartIndex = new Array<Float64Array>(cards.length + 1);
   const skillMixedAverageRateByStartIndex = new Array<Float64Array>(cards.length + 1);
   const skillMixedLeaderRateByStartIndex = new Array<Float64Array>(cards.length + 1);
+  const leaderScoreUpPercentByStartIndex = includeLeaderScoreUpBounds ? new Array<Float64Array>(cards.length + 1) : [];
+  const leaderSameBandScoreUpPercentByStartIndex = includeLeaderScoreUpBounds ? new Array<Float64Array>(cards.length + 1) : [];
+  const leaderSameAttributeScoreUpPercentByStartIndex = includeLeaderScoreUpBounds ? new Array<Float64Array>(cards.length + 1) : [];
+  const leaderBothScoreUpPercentByStartIndex = includeLeaderScoreUpBounds ? new Array<Float64Array>(cards.length + 1) : [];
+  const leaderMixedScoreUpPercentByStartIndex = includeLeaderScoreUpBounds ? new Array<Float64Array>(cards.length + 1) : [];
 
   powerByStartIndex[cards.length] = power.slice();
   pointBonusRateByStartIndex[cards.length] = pointBonusRate.slice();
@@ -77,6 +88,13 @@ export function buildCharacterUpperBoundIndex(
   skillBothLeaderRateByStartIndex[cards.length] = shouldBuildBothSkillMode ? skillBothLeaderRate.slice() : emptySkillRates;
   skillMixedAverageRateByStartIndex[cards.length] = shouldBuildMixedSkillMode ? skillMixedAverageRate.slice() : emptySkillRates;
   skillMixedLeaderRateByStartIndex[cards.length] = shouldBuildMixedSkillMode ? skillMixedLeaderRate.slice() : emptySkillRates;
+  if (includeLeaderScoreUpBounds) {
+    leaderScoreUpPercentByStartIndex[cards.length] = shouldBuildDefaultSkillMode ? leaderScoreUpPercent.slice() : emptySkillRates;
+    leaderSameBandScoreUpPercentByStartIndex[cards.length] = shouldBuildSameBandSkillMode ? leaderSameBandScoreUpPercent.slice() : emptySkillRates;
+    leaderSameAttributeScoreUpPercentByStartIndex[cards.length] = shouldBuildSameAttributeSkillMode ? leaderSameAttributeScoreUpPercent.slice() : emptySkillRates;
+    leaderBothScoreUpPercentByStartIndex[cards.length] = shouldBuildBothSkillMode ? leaderBothScoreUpPercent.slice() : emptySkillRates;
+    leaderMixedScoreUpPercentByStartIndex[cards.length] = shouldBuildMixedSkillMode ? leaderMixedScoreUpPercent.slice() : emptySkillRates;
+  }
 
   for (let index = cards.length - 1; index >= 0; index -= 1) {
     const card = cards[index];
@@ -103,28 +121,60 @@ export function buildCharacterUpperBoundIndex(
       skillMixedAverageRate = skillMixedAverageRate.slice();
       skillMixedLeaderRate = skillMixedLeaderRate.slice();
     }
+    if (includeLeaderScoreUpBounds) {
+      if (shouldBuildDefaultSkillMode) {
+        leaderScoreUpPercent = leaderScoreUpPercent.slice();
+      }
+      if (shouldBuildSameBandSkillMode) {
+        leaderSameBandScoreUpPercent = leaderSameBandScoreUpPercent.slice();
+      }
+      if (shouldBuildSameAttributeSkillMode) {
+        leaderSameAttributeScoreUpPercent = leaderSameAttributeScoreUpPercent.slice();
+      }
+      if (shouldBuildBothSkillMode) {
+        leaderBothScoreUpPercent = leaderBothScoreUpPercent.slice();
+      }
+      if (shouldBuildMixedSkillMode) {
+        leaderMixedScoreUpPercent = leaderMixedScoreUpPercent.slice();
+      }
+    }
     if (characterIndex !== undefined) {
       power[characterIndex] = Math.max(power[characterIndex], card.effectivePower);
       pointBonusRate[characterIndex] = Math.max(pointBonusRate[characterIndex], card.pointBonusRate);
       if (shouldBuildDefaultSkillMode) {
         skillAverageRate[characterIndex] = Math.max(skillAverageRate[characterIndex], card.skillAverageRate);
         skillLeaderRate[characterIndex] = Math.max(skillLeaderRate[characterIndex], card.skillLeaderRate);
+        if (includeLeaderScoreUpBounds) {
+          leaderScoreUpPercent[characterIndex] = Math.max(leaderScoreUpPercent[characterIndex], card.leaderScoreUpPercent);
+        }
       }
       if (shouldBuildSameBandSkillMode) {
         skillSameBandAverageRate[characterIndex] = Math.max(skillSameBandAverageRate[characterIndex], card.skillSameBandAverageRate);
         skillSameBandLeaderRate[characterIndex] = Math.max(skillSameBandLeaderRate[characterIndex], card.skillSameBandLeaderRate);
+        if (includeLeaderScoreUpBounds) {
+          leaderSameBandScoreUpPercent[characterIndex] = Math.max(leaderSameBandScoreUpPercent[characterIndex], card.leaderSameBandScoreUpPercent);
+        }
       }
       if (shouldBuildSameAttributeSkillMode) {
         skillSameAttributeAverageRate[characterIndex] = Math.max(skillSameAttributeAverageRate[characterIndex], card.skillSameAttributeAverageRate);
         skillSameAttributeLeaderRate[characterIndex] = Math.max(skillSameAttributeLeaderRate[characterIndex], card.skillSameAttributeLeaderRate);
+        if (includeLeaderScoreUpBounds) {
+          leaderSameAttributeScoreUpPercent[characterIndex] = Math.max(leaderSameAttributeScoreUpPercent[characterIndex], card.leaderSameAttributeScoreUpPercent);
+        }
       }
       if (shouldBuildBothSkillMode) {
         skillBothAverageRate[characterIndex] = Math.max(skillBothAverageRate[characterIndex], card.skillBothAverageRate);
         skillBothLeaderRate[characterIndex] = Math.max(skillBothLeaderRate[characterIndex], card.skillBothLeaderRate);
+        if (includeLeaderScoreUpBounds) {
+          leaderBothScoreUpPercent[characterIndex] = Math.max(leaderBothScoreUpPercent[characterIndex], card.leaderBothScoreUpPercent);
+        }
       }
       if (shouldBuildMixedSkillMode) {
         skillMixedAverageRate[characterIndex] = Math.max(skillMixedAverageRate[characterIndex], card.skillMixedAverageRate);
         skillMixedLeaderRate[characterIndex] = Math.max(skillMixedLeaderRate[characterIndex], card.skillMixedLeaderRate);
+        if (includeLeaderScoreUpBounds) {
+          leaderMixedScoreUpPercent[characterIndex] = Math.max(leaderMixedScoreUpPercent[characterIndex], card.leaderMixedScoreUpPercent);
+        }
       }
     }
     powerByStartIndex[index] = power;
@@ -139,6 +189,13 @@ export function buildCharacterUpperBoundIndex(
     skillBothLeaderRateByStartIndex[index] = shouldBuildBothSkillMode ? skillBothLeaderRate : emptySkillRates;
     skillMixedAverageRateByStartIndex[index] = shouldBuildMixedSkillMode ? skillMixedAverageRate : emptySkillRates;
     skillMixedLeaderRateByStartIndex[index] = shouldBuildMixedSkillMode ? skillMixedLeaderRate : emptySkillRates;
+    if (includeLeaderScoreUpBounds) {
+      leaderScoreUpPercentByStartIndex[index] = shouldBuildDefaultSkillMode ? leaderScoreUpPercent : emptySkillRates;
+      leaderSameBandScoreUpPercentByStartIndex[index] = shouldBuildSameBandSkillMode ? leaderSameBandScoreUpPercent : emptySkillRates;
+      leaderSameAttributeScoreUpPercentByStartIndex[index] = shouldBuildSameAttributeSkillMode ? leaderSameAttributeScoreUpPercent : emptySkillRates;
+      leaderBothScoreUpPercentByStartIndex[index] = shouldBuildBothSkillMode ? leaderBothScoreUpPercent : emptySkillRates;
+      leaderMixedScoreUpPercentByStartIndex[index] = shouldBuildMixedSkillMode ? leaderMixedScoreUpPercent : emptySkillRates;
+    }
   }
 
   return {
@@ -158,6 +215,11 @@ export function buildCharacterUpperBoundIndex(
     skillBothLeaderRateByStartIndex,
     skillMixedAverageRateByStartIndex,
     skillMixedLeaderRateByStartIndex,
+    leaderScoreUpPercentByStartIndex,
+    leaderSameBandScoreUpPercentByStartIndex,
+    leaderSameAttributeScoreUpPercentByStartIndex,
+    leaderBothScoreUpPercentByStartIndex,
+    leaderMixedScoreUpPercentByStartIndex,
   };
 }
 
@@ -201,6 +263,118 @@ export function sumTopFiveValues(
     sum += Math.max(0, fifth);
   }
   return sum;
+}
+
+function sumTopFiveValuesExcluding(
+  count: number,
+  excludedIndex: number,
+  first: number,
+  firstIndex: number,
+  second: number,
+  secondIndex: number,
+  third: number,
+  thirdIndex: number,
+  fourth: number,
+  fourthIndex: number,
+  fifth: number,
+  fifthIndex: number,
+): number {
+  if (count <= 0) {
+    return 0;
+  }
+
+  let sum = 0;
+  let includedCount = 0;
+  if (firstIndex !== excludedIndex && count >= includedCount + 1) {
+    sum += Math.max(0, first);
+    includedCount += 1;
+  }
+  if (secondIndex !== excludedIndex && count >= includedCount + 1) {
+    sum += Math.max(0, second);
+    includedCount += 1;
+  }
+  if (thirdIndex !== excludedIndex && count >= includedCount + 1) {
+    sum += Math.max(0, third);
+    includedCount += 1;
+  }
+  if (fourthIndex !== excludedIndex && count >= includedCount + 1) {
+    sum += Math.max(0, fourth);
+    includedCount += 1;
+  }
+  if (fifthIndex !== excludedIndex && count >= includedCount + 1) {
+    sum += Math.max(0, fifth);
+    includedCount += 1;
+  }
+
+  return includedCount >= count ? sum : Number.NEGATIVE_INFINITY;
+}
+
+export function estimateSearchScopePowerUpperBound(
+  selectedCards: SearchCard[],
+  upperBoundIndex: CharacterUpperBoundIndex,
+  searchCards: SearchCard[],
+  startIndex: number,
+  usedCharacterMaskLow: number,
+  usedCharacterMaskHigh: number,
+  selectedPower?: number,
+): number {
+  const remaining = 5 - selectedCards.length;
+  const currentPower = selectedPower ?? selectedCards.reduce((sum, card) => sum + card.effectivePower, 0);
+  if (remaining === 0) {
+    return Math.floor(currentPower);
+  }
+
+  const boundedStartIndex = clamp(startIndex, 0, searchCards.length);
+  const powerByCharacter = upperBoundIndex.powerByStartIndex[boundedStartIndex];
+  let topPower1 = Number.NEGATIVE_INFINITY;
+  let topPower2 = Number.NEGATIVE_INFINITY;
+  let topPower3 = Number.NEGATIVE_INFINITY;
+  let topPower4 = Number.NEGATIVE_INFINITY;
+  let topPower5 = Number.NEGATIVE_INFINITY;
+  let availableCharacterCount = 0;
+
+  for (let characterIndex = 0; characterIndex < upperBoundIndex.characterIds.length; characterIndex += 1) {
+    if (hasCharacterIndexInMask(usedCharacterMaskLow, usedCharacterMaskHigh, characterIndex)) {
+      continue;
+    }
+
+    const power = powerByCharacter[characterIndex] ?? 0;
+    availableCharacterCount += 1;
+    if (power > topPower1) {
+      topPower5 = topPower4;
+      topPower4 = topPower3;
+      topPower3 = topPower2;
+      topPower2 = topPower1;
+      topPower1 = power;
+    } else if (power > topPower2) {
+      topPower5 = topPower4;
+      topPower4 = topPower3;
+      topPower3 = topPower2;
+      topPower2 = power;
+    } else if (power > topPower3) {
+      topPower5 = topPower4;
+      topPower4 = topPower3;
+      topPower3 = power;
+    } else if (power > topPower4) {
+      topPower5 = topPower4;
+      topPower4 = power;
+    } else if (power > topPower5) {
+      topPower5 = power;
+    }
+  }
+
+  if (availableCharacterCount < remaining) {
+    return Number.NEGATIVE_INFINITY;
+  }
+
+  return Math.floor(currentPower + sumTopFiveValues(
+    remaining,
+    topPower1,
+    topPower2,
+    topPower3,
+    topPower4,
+    topPower5,
+  ));
 }
 
 function getSkillAverageRateUpperArray(
@@ -303,6 +477,78 @@ export function getCardSkillLeaderRateForUpperMode(card: SearchCard, mode: Skill
     return card.skillBothLeaderRate;
   }
   return card.skillLeaderRate;
+}
+
+export function getCardLeaderScoreUpPercentForUpperMode(card: SearchCard, mode: SkillContextUpperMode): number {
+  if (mode === "mixed") {
+    return card.leaderMixedScoreUpPercent;
+  }
+  if (mode === "same-band") {
+    return card.leaderSameBandScoreUpPercent;
+  }
+  if (mode === "same-attribute") {
+    return card.leaderSameAttributeScoreUpPercent;
+  }
+  if (mode === "both") {
+    return card.leaderBothScoreUpPercent;
+  }
+  return card.leaderScoreUpPercent;
+}
+
+function getLeaderScoreUpPercentUpperArray(
+  upperBoundIndex: CharacterUpperBoundIndex,
+  startIndex: number,
+  mode?: SkillContextUpperMode,
+): Float64Array {
+  if (mode === "mixed") {
+    return upperBoundIndex.leaderMixedScoreUpPercentByStartIndex[startIndex];
+  }
+  if (mode === "same-band") {
+    return upperBoundIndex.leaderSameBandScoreUpPercentByStartIndex[startIndex];
+  }
+  if (mode === "same-attribute") {
+    return upperBoundIndex.leaderSameAttributeScoreUpPercentByStartIndex[startIndex];
+  }
+  if (mode === "both") {
+    return upperBoundIndex.leaderBothScoreUpPercentByStartIndex[startIndex];
+  }
+  return upperBoundIndex.leaderScoreUpPercentByStartIndex[startIndex];
+}
+
+export function estimateSearchScopeLeaderScoreUpPercentUpperBound(
+  selectedCards: SearchCard[],
+  upperBoundIndex: CharacterUpperBoundIndex,
+  searchCards: SearchCard[],
+  startIndex: number,
+  usedCharacterMaskLow: number,
+  usedCharacterMaskHigh: number,
+  skillContextUpperMode?: SkillContextUpperMode,
+): number {
+  const boundedStartIndex = clamp(startIndex, 0, searchCards.length);
+  const leaderScoreUpPercentByCharacter = getLeaderScoreUpPercentUpperArray(
+    upperBoundIndex,
+    boundedStartIndex,
+    skillContextUpperMode,
+  );
+  let upperBound = 0;
+
+  for (const card of selectedCards) {
+    upperBound = Math.max(
+      upperBound,
+      skillContextUpperMode
+        ? getCardLeaderScoreUpPercentForUpperMode(card, skillContextUpperMode)
+        : card.leaderScoreUpPercent,
+    );
+  }
+
+  for (let characterIndex = 0; characterIndex < upperBoundIndex.characterIds.length; characterIndex += 1) {
+    if (hasCharacterIndexInMask(usedCharacterMaskLow, usedCharacterMaskHigh, characterIndex)) {
+      continue;
+    }
+    upperBound = Math.max(upperBound, leaderScoreUpPercentByCharacter[characterIndex] ?? 0);
+  }
+
+  return upperBound;
 }
 
 function sumSelectedSkillAverageRateForUpperMode(cards: SearchCard[], mode: SkillContextUpperMode): number {
@@ -617,6 +863,256 @@ export function estimateSearchScopeScoreUpperBound(
   );
 }
 
+export function estimateSearchScopeScoreUpperBoundWithLeaderConstraint(
+  selectedCards: SearchCard[],
+  upperBoundIndex: CharacterUpperBoundIndex,
+  searchCards: SearchCard[],
+  startIndex: number,
+  usedCharacterMaskLow: number,
+  usedCharacterMaskHigh: number,
+  baseScoreRatePerPower: number,
+  skillContextUpperMode: SkillContextUpperMode | undefined,
+  minLeaderScoreUpPercent: number | null,
+  selectedPower?: number,
+  selectedSkillAverageRate?: number,
+): number | null {
+  if (!skillContextUpperMode || minLeaderScoreUpPercent === null) {
+    return null;
+  }
+
+  const remaining = 5 - selectedCards.length;
+  const currentPower = selectedPower ?? selectedCards.reduce((sum, card) => sum + card.effectivePower, 0);
+  const selectedAverageRate = selectedSkillAverageRate
+    ?? sumSelectedSkillAverageRateForUpperMode(selectedCards, skillContextUpperMode);
+  let leaderSkillRateUpper = 0;
+  let selectedHasEligibleLeader = false;
+
+  for (const card of selectedCards) {
+    if (getCardLeaderScoreUpPercentForUpperMode(card, skillContextUpperMode) < minLeaderScoreUpPercent) {
+      continue;
+    }
+    selectedHasEligibleLeader = true;
+    leaderSkillRateUpper = Math.max(
+      leaderSkillRateUpper,
+      getCardSkillLeaderRateForUpperMode(card, skillContextUpperMode),
+    );
+  }
+
+  if (remaining === 0) {
+    if (!selectedHasEligibleLeader) {
+      return Number.NEGATIVE_INFINITY;
+    }
+    return Math.floor(currentPower) * (baseScoreRatePerPower + selectedAverageRate + leaderSkillRateUpper);
+  }
+
+  const boundedStartIndex = clamp(startIndex, 0, searchCards.length);
+  const powerByCharacter = upperBoundIndex.powerByStartIndex[boundedStartIndex];
+  const skillAverageRateByCharacter = getSkillAverageRateUpperArray(upperBoundIndex, boundedStartIndex, skillContextUpperMode);
+  const skillLeaderRateByCharacter = getSkillLeaderRateUpperArray(upperBoundIndex, boundedStartIndex, skillContextUpperMode);
+  const leaderScoreUpPercentByCharacter = getLeaderScoreUpPercentUpperArray(
+    upperBoundIndex,
+    boundedStartIndex,
+    skillContextUpperMode,
+  );
+  let topPower1 = Number.NEGATIVE_INFINITY;
+  let topPower2 = Number.NEGATIVE_INFINITY;
+  let topPower3 = Number.NEGATIVE_INFINITY;
+  let topPower4 = Number.NEGATIVE_INFINITY;
+  let topPower5 = Number.NEGATIVE_INFINITY;
+  let topPowerIndex1 = -1;
+  let topPowerIndex2 = -1;
+  let topPowerIndex3 = -1;
+  let topPowerIndex4 = -1;
+  let topPowerIndex5 = -1;
+  let topSkillAverageRate1 = Number.NEGATIVE_INFINITY;
+  let topSkillAverageRate2 = Number.NEGATIVE_INFINITY;
+  let topSkillAverageRate3 = Number.NEGATIVE_INFINITY;
+  let topSkillAverageRate4 = Number.NEGATIVE_INFINITY;
+  let topSkillAverageRate5 = Number.NEGATIVE_INFINITY;
+  let topSkillAverageRateIndex1 = -1;
+  let topSkillAverageRateIndex2 = -1;
+  let topSkillAverageRateIndex3 = -1;
+  let topSkillAverageRateIndex4 = -1;
+  let topSkillAverageRateIndex5 = -1;
+  let availableCharacterCount = 0;
+  let hasEligibleRemainingLeader = false;
+  let requiredLeaderPowerUpper = Number.NEGATIVE_INFINITY;
+  let requiredLeaderSkillAverageRateUpper = Number.NEGATIVE_INFINITY;
+
+  for (let characterIndex = 0; characterIndex < upperBoundIndex.characterIds.length; characterIndex += 1) {
+    if (hasCharacterIndexInMask(usedCharacterMaskLow, usedCharacterMaskHigh, characterIndex)) {
+      continue;
+    }
+
+    const power = powerByCharacter[characterIndex] ?? 0;
+    if (power <= 0) {
+      continue;
+    }
+    availableCharacterCount += 1;
+    if (power > topPower1) {
+      topPower5 = topPower4;
+      topPowerIndex5 = topPowerIndex4;
+      topPower4 = topPower3;
+      topPowerIndex4 = topPowerIndex3;
+      topPower3 = topPower2;
+      topPowerIndex3 = topPowerIndex2;
+      topPower2 = topPower1;
+      topPowerIndex2 = topPowerIndex1;
+      topPower1 = power;
+      topPowerIndex1 = characterIndex;
+    } else if (power > topPower2) {
+      topPower5 = topPower4;
+      topPowerIndex5 = topPowerIndex4;
+      topPower4 = topPower3;
+      topPowerIndex4 = topPowerIndex3;
+      topPower3 = topPower2;
+      topPowerIndex3 = topPowerIndex2;
+      topPower2 = power;
+      topPowerIndex2 = characterIndex;
+    } else if (power > topPower3) {
+      topPower5 = topPower4;
+      topPowerIndex5 = topPowerIndex4;
+      topPower4 = topPower3;
+      topPowerIndex4 = topPowerIndex3;
+      topPower3 = power;
+      topPowerIndex3 = characterIndex;
+    } else if (power > topPower4) {
+      topPower5 = topPower4;
+      topPowerIndex5 = topPowerIndex4;
+      topPower4 = power;
+      topPowerIndex4 = characterIndex;
+    } else if (power > topPower5) {
+      topPower5 = power;
+      topPowerIndex5 = characterIndex;
+    }
+
+    const skillAverageRate = skillAverageRateByCharacter[characterIndex] ?? 0;
+    if (skillAverageRate > topSkillAverageRate1) {
+      topSkillAverageRate5 = topSkillAverageRate4;
+      topSkillAverageRateIndex5 = topSkillAverageRateIndex4;
+      topSkillAverageRate4 = topSkillAverageRate3;
+      topSkillAverageRateIndex4 = topSkillAverageRateIndex3;
+      topSkillAverageRate3 = topSkillAverageRate2;
+      topSkillAverageRateIndex3 = topSkillAverageRateIndex2;
+      topSkillAverageRate2 = topSkillAverageRate1;
+      topSkillAverageRateIndex2 = topSkillAverageRateIndex1;
+      topSkillAverageRate1 = skillAverageRate;
+      topSkillAverageRateIndex1 = characterIndex;
+    } else if (skillAverageRate > topSkillAverageRate2) {
+      topSkillAverageRate5 = topSkillAverageRate4;
+      topSkillAverageRateIndex5 = topSkillAverageRateIndex4;
+      topSkillAverageRate4 = topSkillAverageRate3;
+      topSkillAverageRateIndex4 = topSkillAverageRateIndex3;
+      topSkillAverageRate3 = topSkillAverageRate2;
+      topSkillAverageRateIndex3 = topSkillAverageRateIndex2;
+      topSkillAverageRate2 = skillAverageRate;
+      topSkillAverageRateIndex2 = characterIndex;
+    } else if (skillAverageRate > topSkillAverageRate3) {
+      topSkillAverageRate5 = topSkillAverageRate4;
+      topSkillAverageRateIndex5 = topSkillAverageRateIndex4;
+      topSkillAverageRate4 = topSkillAverageRate3;
+      topSkillAverageRateIndex4 = topSkillAverageRateIndex3;
+      topSkillAverageRate3 = skillAverageRate;
+      topSkillAverageRateIndex3 = characterIndex;
+    } else if (skillAverageRate > topSkillAverageRate4) {
+      topSkillAverageRate5 = topSkillAverageRate4;
+      topSkillAverageRateIndex5 = topSkillAverageRateIndex4;
+      topSkillAverageRate4 = skillAverageRate;
+      topSkillAverageRateIndex4 = characterIndex;
+    } else if (skillAverageRate > topSkillAverageRate5) {
+      topSkillAverageRate5 = skillAverageRate;
+      topSkillAverageRateIndex5 = characterIndex;
+    }
+
+    if ((leaderScoreUpPercentByCharacter[characterIndex] ?? 0) >= minLeaderScoreUpPercent) {
+      hasEligibleRemainingLeader = true;
+      leaderSkillRateUpper = Math.max(
+        leaderSkillRateUpper,
+        skillLeaderRateByCharacter[characterIndex] ?? 0,
+      );
+    }
+  }
+
+  if (availableCharacterCount < remaining || (!selectedHasEligibleLeader && !hasEligibleRemainingLeader)) {
+    return Number.NEGATIVE_INFINITY;
+  }
+
+  if (!selectedHasEligibleLeader) {
+    const remainingAfterLeader = remaining - 1;
+    for (let characterIndex = 0; characterIndex < upperBoundIndex.characterIds.length; characterIndex += 1) {
+      if (hasCharacterIndexInMask(usedCharacterMaskLow, usedCharacterMaskHigh, characterIndex)) {
+        continue;
+      }
+      if ((leaderScoreUpPercentByCharacter[characterIndex] ?? 0) < minLeaderScoreUpPercent) {
+        continue;
+      }
+      const power = powerByCharacter[characterIndex] ?? 0;
+      if (power <= 0) {
+        continue;
+      }
+      requiredLeaderPowerUpper = Math.max(
+        requiredLeaderPowerUpper,
+        power + sumTopFiveValuesExcluding(
+          remainingAfterLeader,
+          characterIndex,
+          topPower1,
+          topPowerIndex1,
+          topPower2,
+          topPowerIndex2,
+          topPower3,
+          topPowerIndex3,
+          topPower4,
+          topPowerIndex4,
+          topPower5,
+          topPowerIndex5,
+        ),
+      );
+      const skillAverageRate = skillAverageRateByCharacter[characterIndex] ?? 0;
+      requiredLeaderSkillAverageRateUpper = Math.max(
+        requiredLeaderSkillAverageRateUpper,
+        skillAverageRate + sumTopFiveValuesExcluding(
+          remainingAfterLeader,
+          characterIndex,
+          topSkillAverageRate1,
+          topSkillAverageRateIndex1,
+          topSkillAverageRate2,
+          topSkillAverageRateIndex2,
+          topSkillAverageRate3,
+          topSkillAverageRateIndex3,
+          topSkillAverageRate4,
+          topSkillAverageRateIndex4,
+          topSkillAverageRate5,
+          topSkillAverageRateIndex5,
+        ),
+      );
+    }
+  }
+
+  const remainingPowerUpper = selectedHasEligibleLeader
+    ? sumTopFiveValues(
+      remaining,
+      topPower1,
+      topPower2,
+      topPower3,
+      topPower4,
+      topPower5,
+    )
+    : requiredLeaderPowerUpper;
+  const remainingSkillAverageRateUpper = selectedHasEligibleLeader
+    ? sumTopFiveValues(
+      remaining,
+      topSkillAverageRate1,
+      topSkillAverageRate2,
+      topSkillAverageRate3,
+      topSkillAverageRate4,
+      topSkillAverageRate5,
+    )
+    : requiredLeaderSkillAverageRateUpper;
+  const upperPower = currentPower + remainingPowerUpper;
+  const skillAverageRateUpper = selectedAverageRate + remainingSkillAverageRateUpper;
+  return Math.floor(upperPower) * (baseScoreRatePerPower + skillAverageRateUpper + leaderSkillRateUpper);
+}
+
 function estimateSearchScopePointBonusRateUpper(
   selectedCards: SearchCard[],
   upperBoundIndex: CharacterUpperBoundIndex,
@@ -792,10 +1288,12 @@ export type CorrelatedUpperState = {
   skillAverageRate: number;
   skillLeaderRate: number;
   pointBonusRate: number;
+  hasEligibleLeader: boolean;
 };
 
 function dominatesCorrelatedUpperState(left: CorrelatedUpperState, right: CorrelatedUpperState): boolean {
-  return left.power >= right.power
+  return (!right.hasEligibleLeader || left.hasEligibleLeader)
+    && left.power >= right.power
     && left.skillAverageRate >= right.skillAverageRate
     && left.skillLeaderRate >= right.skillLeaderRate
     && left.pointBonusRate >= right.pointBonusRate;
@@ -845,6 +1343,7 @@ export function estimateCorrelatedSearchScopeTargetUpperBound(
   selectedSkillAverageRate: number | undefined,
   selectedSkillLeaderRate: number | undefined,
   selectedPointBonusRate: number,
+  minLeaderScoreUpPercent: number | null = null,
 ): number | null {
   // The normal bound maximizes power, skill, and point bonus separately, which can combine mutually exclusive cards.
   // This small skyline DP preserves those correlations near the threshold; if it exceeds budget, return null rather than risk pruning.
@@ -853,13 +1352,34 @@ export function estimateCorrelatedSearchScopeTargetUpperBound(
   }
 
   const remaining = 5 - selectedCards.length;
+  const hasLeaderConstraint = minLeaderScoreUpPercent !== null;
+  let selectedEligibleLeaderRate = 0;
+  let selectedHasEligibleLeader = !hasLeaderConstraint;
+  if (hasLeaderConstraint) {
+    for (const card of selectedCards) {
+      if (getCardLeaderScoreUpPercentForUpperMode(card, skillContextUpperMode) < minLeaderScoreUpPercent) {
+        continue;
+      }
+      selectedHasEligibleLeader = true;
+      selectedEligibleLeaderRate = Math.max(
+        selectedEligibleLeaderRate,
+        getCardSkillLeaderRateForUpperMode(card, skillContextUpperMode),
+      );
+    }
+  }
   const selectedState: CorrelatedUpperState = {
     power: selectedPower,
     skillAverageRate: selectedSkillAverageRate ?? sumSelectedSkillAverageRateForUpperMode(selectedCards, skillContextUpperMode),
-    skillLeaderRate: selectedSkillLeaderRate ?? maxSelectedSkillLeaderRateForUpperMode(selectedCards, skillContextUpperMode),
+    skillLeaderRate: hasLeaderConstraint
+      ? selectedEligibleLeaderRate
+      : selectedSkillLeaderRate ?? maxSelectedSkillLeaderRateForUpperMode(selectedCards, skillContextUpperMode),
     pointBonusRate: selectedPointBonusRate,
+    hasEligibleLeader: selectedHasEligibleLeader,
   };
   if (remaining === 0) {
+    if (!selectedState.hasEligibleLeader) {
+      return Number.NEGATIVE_INFINITY;
+    }
     const scoreUpperBound = Math.floor(selectedState.power) * (
       baseScoreRatePerPower + selectedState.skillAverageRate + selectedState.skillLeaderRate
     );
@@ -875,6 +1395,9 @@ export function estimateCorrelatedSearchScopeTargetUpperBound(
   const powerByCharacter = upperBoundIndex.powerByStartIndex[boundedStartIndex];
   const skillAverageRateByCharacter = getSkillAverageRateUpperArray(upperBoundIndex, boundedStartIndex, skillContextUpperMode);
   const skillLeaderRateByCharacter = getSkillLeaderRateUpperArray(upperBoundIndex, boundedStartIndex, skillContextUpperMode);
+  const leaderScoreUpPercentByCharacter = hasLeaderConstraint
+    ? getLeaderScoreUpPercentUpperArray(upperBoundIndex, boundedStartIndex, skillContextUpperMode)
+    : null;
   const pointBonusRateByCharacter = upperBoundIndex.pointBonusRateByStartIndex[boundedStartIndex];
   const statesByCount: CorrelatedUpperState[][] = Array.from({ length: remaining + 1 }, () => []);
   statesByCount[0] = [selectedState];
@@ -891,11 +1414,14 @@ export function estimateCorrelatedSearchScopeTargetUpperBound(
       continue;
     }
     availableCharacterCount += 1;
+    const characterHasEligibleLeader = !hasLeaderConstraint
+      || (leaderScoreUpPercentByCharacter?.[characterIndex] ?? 0) >= minLeaderScoreUpPercent;
     const characterState: CorrelatedUpperState = {
       power,
       skillAverageRate: skillAverageRateByCharacter[characterIndex] ?? 0,
-      skillLeaderRate: skillLeaderRateByCharacter[characterIndex] ?? 0,
+      skillLeaderRate: characterHasEligibleLeader ? skillLeaderRateByCharacter[characterIndex] ?? 0 : 0,
       pointBonusRate: Math.max(0, pointBonusRateByCharacter[characterIndex] ?? 0),
+      hasEligibleLeader: characterHasEligibleLeader,
     };
     const upperCount = Math.min(remaining - 1, availableCharacterCount - 1);
     for (let count = upperCount; count >= 0; count -= 1) {
@@ -913,6 +1439,7 @@ export function estimateCorrelatedSearchScopeTargetUpperBound(
           skillAverageRate: state.skillAverageRate + characterState.skillAverageRate,
           skillLeaderRate: Math.max(state.skillLeaderRate, characterState.skillLeaderRate),
           pointBonusRate: state.pointBonusRate + characterState.pointBonusRate,
+          hasEligibleLeader: state.hasEligibleLeader || characterState.hasEligibleLeader,
         };
         statesByCount[count + 1] = addCorrelatedUpperState(statesByCount[count + 1], next);
       }
@@ -925,6 +1452,9 @@ export function estimateCorrelatedSearchScopeTargetUpperBound(
 
   let targetUpperBound = Number.NEGATIVE_INFINITY;
   for (const state of statesByCount[remaining]) {
+    if (!state.hasEligibleLeader) {
+      continue;
+    }
     const scoreUpperBound = Math.floor(state.power) * (
       baseScoreRatePerPower + state.skillAverageRate + state.skillLeaderRate
     );

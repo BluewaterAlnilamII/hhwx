@@ -14,6 +14,7 @@ import {
   getCachedSearchCardSkillRateProfile,
   pruneDominatedAreaItemConfigurations,
 } from "../core/cards";
+import { normalizeTeamSearchConstraints } from "../core/constraints";
 import { createScoreCalculationCache } from "../core/team-evaluation";
 import { getCardInstanceKey } from "../core/card-identity";
 import { createInitialTeamSearchStats, finishTeamSearchResponse, sortResults } from "./results";
@@ -60,6 +61,7 @@ export function searchBandoriBestTeams(input: BandoriTeamSearchInput): BandoriTe
   const useFever = resolveBandoriTeamSearchUseFever(input);
   const maxSearchDurationMs = Math.max(1000, Math.trunc(input.maxSearchDurationMs ?? 9000));
   const deadlineAt = startedAt + maxSearchDurationMs;
+  const constraints = normalizeTeamSearchConstraints(input.constraints);
 
   // Stage 1: normalize input and precompute chart, skill, and support data that do not depend on search runtime state.
   const chart = getCachedPreparedChart(input);
@@ -135,10 +137,13 @@ export function searchBandoriBestTeams(input: BandoriTeamSearchInput): BandoriTe
     deadlineAt,
     observedScoreUpperBound: Number.NEGATIVE_INFINITY,
     visitedBranchCount: 0,
+    constraints,
   };
 
   // Stage 3: evaluate seeds and prepare only the area configurations whose root bounds can still matter.
-  const useContextPartitioning = calculatedCards.length >= 1800 || (target === "eventPoint" && eventMode === "pointBonus");
+  const useContextPartitioning = constraints.minLeaderScoreUpPercent !== null
+    || calculatedCards.length >= 1800
+    || (target === "eventPoint" && eventMode === "pointBonus");
   const configurationSearches = buildConfigurationSearches({
     state,
     configurations,
