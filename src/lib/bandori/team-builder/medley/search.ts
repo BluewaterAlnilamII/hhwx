@@ -616,7 +616,6 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
   const disableNearDeadlineRootSkip = optimization.disableNearDeadlineRootSkip === true;
   const disableSkipDfsAfterUnprovedExactCandidateJoin =
     optimization.disableSkipDfsAfterUnprovedExactCandidateJoin === true;
-  const enableSeedFirstAllScopeProofOrder = optimization.enableSeedFirstAllScopeProofOrder === true;
   const parsedAnchorCandidateLimit = optimization.anchorCandidateLimit !== undefined
     ? Math.trunc(optimization.anchorCandidateLimit)
     : Number.NaN;
@@ -1536,23 +1535,9 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
       || right.rootUpperBound - left.rootUpperBound
       || left.index - right.index
     );
-    const compareSeedFirstAllScopeProofOrder = (
-      left: typeof configurationEntries[number],
-      right: typeof configurationEntries[number],
-    ): number => {
-      const leftHasSeed = Number.isFinite(left.seedScore);
-      const rightHasSeed = Number.isFinite(right.seedScore);
-      return Number(rightHasSeed) - Number(leftHasSeed)
-        || right.seedScore - left.seedScore
-        || right.observedRootUpperBound - left.observedRootUpperBound
-        || right.rootUpperBound - left.rootUpperBound
-        || left.index - right.index;
-    };
     if (shouldUseAllScopeObservedRootSort) {
       orderedConfigurations = configurationEntries
-        .sort(enableSeedFirstAllScopeProofOrder
-          ? compareSeedFirstAllScopeProofOrder
-          : compareObservedRootUpper)
+        .sort(compareObservedRootUpper)
         .map(({ configuration }) => configuration);
     } else {
       orderedConfigurations = configurationEntries

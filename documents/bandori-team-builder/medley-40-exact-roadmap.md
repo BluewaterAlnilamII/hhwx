@@ -1,6 +1,6 @@
 # Medley 40/40 Exact Roadmap
 
-Last updated: 2026-06-09 02:49 CST
+Last updated: 2026-06-09 03:09 CST
 
 This file is the persistent working note for the current medley optimizer goal.
 Keep it current before and after benchmark runs or proof-path changes, so future
@@ -384,6 +384,12 @@ Phase 1: memory-capped exact-join proof patch.
   diagnostic `P07:244` run showed that generating more candidates can increase
   memory pressure and widen the final bounded gap if pair/frontier proof remains
   unclosed.
+- Avoid seed-first all-scope proof ordering as a default route. The direct
+  restored-cache diagnostic worsened `P07:244` bounded gap from `55265` to
+  `307404` by moving into a worse memory-limited frontier.
+- Avoid reducing the exact candidate soft limit to escape memory pressure. The
+  direct 20k run confirmed a large memory reduction but a much weaker upper
+  and incumbent.
 - Keep `enableLowMemoryHighPairScan` research-only. It is useful as a
   memory-pressure diagnostic, but not fast enough to improve exact count. A
   viable follow-up must answer repeated pair-complement queries from a bounded
@@ -421,6 +427,24 @@ Phase 1: memory-capped exact-join proof patch.
   benchmark reports must record the active cache source/checkpoint alongside
   fixture hash, profile hash, event key, optimization JSON, Node version, and
   `NODE_OPTIONS`.
+
+2026-06-09 proof-order and K diagnostics:
+
+- `temp/bandori-team-builder/run-medley-40case-isolated.cjs` deliberately
+  deletes `HHWX_REAL_PROFILE_OPTIMIZATION_JSON` for baseline isolation. Opt-in
+  optimization diagnostics must use the direct
+  `benchmark-real-profiles-medley.cjs` runner or a future explicit passthrough
+  variable; otherwise the run is just baseline and the conclusion is invalid.
+- An opt-in seed-first all-scope proof ordering was implemented and rejected.
+  With direct runner on restored-cache `P07:244`, it preserved the score
+  `8551590` but worsened the gap from `55265` to `307404`, completed only
+  `4/5` exact-join configurations, and still hit memory limit around
+  `4201 MiB`. Revert this path; do not default seed-first proof ordering.
+- Direct `exactCandidateSoftLimit=20000` was also rejected. It lowered peak
+  memory to about `2314 MiB`, but widened `P07:244` gap to `375585`, found only
+  score `8476866`, and aborted at the 20k candidate soft limit. High-budget
+  candidate proof is necessary for this case; the problem is the memory shape
+  of high-budget pair/candidate proof, not simply K being too large.
 
 Phase 2: no-op equivalence gate, required only when touching prefix/seed
 diagnostic paths again.
