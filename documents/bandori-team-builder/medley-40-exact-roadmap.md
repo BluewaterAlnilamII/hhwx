@@ -99,6 +99,13 @@ row, especially `P08:260`, `P10:260`, `P08:323`, and `P10:244`.
   candidates with about `180052ms` remaining, but the case still ended bounded,
   gap `395539`, peak `4201 MiB`, and `memoryLimited=true`; staged extension did
   not trigger. Do not loosen extension thresholds as the next default strategy.
+- Opt-in low-memory high-pair direct scan was added as a research path and
+  tested on `P07:244`. It confirmed the memory hypothesis, dropping peak heap
+  to about `2038-2095 MiB`, but it timed out at `300s`, completed no
+  configurations, and ended with gap `505642`. The direct scan is not an
+  acceptance candidate; it is evidence that the next memory-safe proof path
+  needs a bounded prefix/high-pair upper cache or chunked proof, not pure
+  per-query scanning.
 
 Rejected/diagnostic 2026-06-08 evidence:
 
@@ -279,6 +286,10 @@ Phase 1: memory-capped exact-join proof patch.
   diagnostic `P07:244` run showed that generating more candidates can increase
   memory pressure and widen the final bounded gap if pair/frontier proof remains
   unclosed.
+- Keep `enableLowMemoryHighPairScan` research-only. It is useful as a
+  memory-pressure diagnostic, but not fast enough to improve exact count. A
+  viable follow-up must answer repeated pair-complement queries from a bounded
+  memory structure instead of recomputing them from scratch.
 
 Phase 2: no-op equivalence gate, required only when touching prefix/seed
 diagnostic paths again.
@@ -316,9 +327,10 @@ Each patch must pass:
 The next actionable step is not another seed experiment. It is:
 
 1. Implement a low-memory exact-join proof path focused on `P07:244`:
-   chunk/stream pair upper or high-pair proof state, or an internal compact
-   candidate representation, so the final small-gap frontier can close without
-   retaining all pair records and duplicate candidate/result/key objects.
+   chunk/stream pair upper, a bounded high-pair prefix upper cache, or an
+   internal compact candidate representation, so the final small-gap frontier
+   can close without retaining all pair records and duplicate
+   candidate/result/key objects.
 2. Re-run the 5 bounded rows plus the 4 guardrail exact rows.
 3. If at least two bounded rows convert and guardrails stay exact, re-run the
    full isolated 40-case matrix and generate another timestamped report.
