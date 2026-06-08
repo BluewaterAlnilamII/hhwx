@@ -1,6 +1,6 @@
 # Medley 40/40 Exact Roadmap
 
-Last updated: 2026-06-09 01:17 CST
+Last updated: 2026-06-09 01:42 CST
 
 This file is the persistent working note for the current medley optimizer goal.
 Keep it current before and after benchmark runs or proof-path changes, so future
@@ -189,6 +189,28 @@ Current acceptance standard:
   `3383411.5265578935`. This cutoff is too loose to reduce the initial
   candidate frontier, so do not continue this route by tuning the same cutoff
   formula or promoting it as a default.
+- `exactNodeSoftLimit=1800000` was checked on `P06:323` and did not change the
+  outcome: still `bounded`, gap `607201`, peak `4515 MiB`, and abort
+  `initial-candidate`. The initial slot `next()` took only about `0.38ms`,
+  showing that the immediate blocker was the memory guard, not the 900k node
+  soft limit.
+- Raising `memorySoftLimitMiB` on `P06:323` was diagnostic only, not an
+  acceptance route. At `4560 MiB`, the case progressed past initial candidates
+  but still stayed bounded at gap `607201`, peak `4564 MiB`, abort
+  `candidate-fill-generator-aborted`, with candidate counts
+  `[2251, 80879, 50858]`. At `6000 MiB`, it still stayed bounded at the same
+  score/gap, peak `6010 MiB`, abort `candidate-fill-generator-aborted`, with
+  candidate counts `[262522, 80879, 50858]`. This proves `P06:323` needs a
+  lower-residency proof/generator strategy, not a simple memory or node limit
+  increase.
+- The opt-in `enableExactCandidateAnchorJoinBeforeHighBudgetPairUpper` path was
+  added in `d4d828e` and rejected by first diagnostics. On `P06:323` with
+  `memorySoftLimitMiB=4560`, it still failed before useful anchor proof work,
+  aborting in `pair-upper`. On `P07:244` with default memory, it regressed the
+  route badly: elapsed `248341ms`, score `8476866`, gap `520997`, peak
+  `4201 MiB`, only `0/1` configurations completed, and abort
+  `anchored-join-timeout`. Do not promote pre-high-budget anchored join as a
+  default path.
 
 ## Evidence Hygiene Rules
 
@@ -292,6 +314,7 @@ These routes are diagnostic or research-only for now:
 
 - `enablePreProofSeedWarmup`
 - `enableExactJoinPrefixSeed`
+- `enableExactCandidateAnchorJoinBeforeHighBudgetPairUpper`
 - larger seed timeboxes
 - larger top-K / candidate limits as a default strategy
 - fixed-card repair and neighborhood repair as proof strategy
@@ -374,6 +397,9 @@ Phase 1: memory-capped exact-join proof patch.
   safe per-slot proof cutoff was far below the high-score frontier that causes
   the `initial-candidate` abort, so it gives neither proof conversion nor a
   useful memory win.
+- Keep pre-high-budget anchored join research-only. Its first `P07:244`
+  diagnostic consumed the proof budget before the normal multi-configuration
+  route could improve the incumbent, causing a much worse bounded gap.
 
 Phase 2: no-op equivalence gate, required only when touching prefix/seed
 diagnostic paths again.
@@ -424,6 +450,10 @@ The next actionable step is not another seed experiment. It is:
    is targeted, build a low-memory initial-candidate fallback that can return a
    proof-relevant upper or partial frontier when node expansion hits the soft
    limit.
-3. Re-run the 5 bounded rows plus the 4 guardrail exact rows.
-4. If at least two bounded rows convert and guardrails stay exact, re-run the
+3. Before adding another proof path, add or run a no-op-safe memory metric
+   diagnostic that separates Node `heapUsed` from RSS/working-set. Current
+   `peakUsedHeapMiB` is deliberately conservative and can be RSS-backed; without
+   heap/RSS separation, memory-limit changes are hard to interpret.
+4. Re-run the 5 bounded rows plus the 4 guardrail exact rows.
+5. If at least two bounded rows convert and guardrails stay exact, re-run the
    full isolated 40-case matrix and generate another timestamped report.
