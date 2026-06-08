@@ -67,6 +67,12 @@ export type BandoriMedleySearchOptimizationOptions = {
   conflictExactNodeLimit?: number;
   conflictSlotSolveNodeLimit?: number;
   configurationSeedPassDurationMs?: number;
+  enableExactJoinPrefixSeed?: boolean;
+  exactJoinPrefixSeedForceNoop?: boolean;
+  exactJoinPrefixSeedGuardOnly?: boolean;
+  exactJoinPrefixSeedTimeboxMs?: number;
+  exactJoinPrefixSeedMaxSmallestCandidateCount?: number;
+  exactJoinPrefixSeedMinCandidateCounts?: [number, number, number];
   debugConfigurationTrace?: boolean;
   exactCandidateJoinDebugAnchorSlotIndex?: number;
   enableExperimentalStagedCandidateExtension?: boolean;
@@ -246,6 +252,8 @@ export type BandoriMedleyTeamSearchProfilingStats = {
   configurationSeedPassImprovementCount: number;
   bestConfigurationSeedPassScore: number | null;
   configurationTrace?: Array<Record<string, unknown>>;
+  proofLedger?: Array<Record<string, unknown>>;
+  proofLedgerSummary?: Record<string, unknown> | null;
   // Coarse filters can reduce the requested configuration set; search.ts converts that into
   // bounded status unless the original requested scope is still proved.
   coarseLockedConfigurationCount: number;
@@ -580,6 +588,19 @@ export type BandoriMedleyTeamSearchProfilingStats = {
   exactCandidateJoinDebugAnchorSlotIndex?: number;
   exactCandidateJoinImprovementCount: number;
   bestExactCandidateJoinImprovement: number;
+  exactJoinPrefixSeedCallCount: number;
+  exactJoinPrefixSeedHitCount: number;
+  exactJoinPrefixSeedElapsedMs: number;
+  exactJoinPrefixSeedBestScore: number | null;
+  exactJoinPrefixSeedBestImprovement: number;
+  exactJoinPrefixSeedTimedOutCount: number;
+  exactJoinPrefixSeedNoHitLocalTimeoutCount: number;
+  exactJoinPrefixSeedSkippedByCandidateCount: number;
+  exactJoinPrefixSeedGuardSkipCount: number;
+  exactJoinPrefixSeedGuardSkipReasonCounts: Record<string, number>;
+  exactJoinPrefixSeedLastGuardSkipReason: string | null;
+  exactJoinPrefixSeedCandidateCountsBySlot: number[];
+  exactJoinPrefixSeedPeakHeapMiB: number | null;
   // Conflict BnB is an alternate exact subsolver for small conflict-heavy scopes.
   conflictExactBnbCallCount: number;
   conflictExactBnbCompletedCount: number;

@@ -99,6 +99,11 @@ import type {
 } from "../types";
 import type { BandoriAreaItemConfiguration, BandoriTeamSearchResult, SearchCard } from "@/lib/bandori/team-builder/core";
 
+const MEDLEY_EXACT_JOIN_PREFIX_SEED_MIN_REMAINING_MS = 500;
+const MEDLEY_EXACT_JOIN_PREFIX_SEED_MIN_PROOF_BUDGET_MS = 30_000;
+const MEDLEY_EXACT_JOIN_PREFIX_SEED_MIN_MEMORY_HEADROOM_MIB = 256;
+const MEDLEY_EXACT_JOIN_PREFIX_SEED_MAX_OBSERVED_GAP = 100_000;
+
 function createMedleyExactCandidateSlotThresholdResult(scoreCutoff: number): BandoriTeamSearchResult | undefined {
   if (!Number.isFinite(scoreCutoff)) {
     return undefined;
@@ -1368,6 +1373,7 @@ export function solveMedleyExactCandidateJoin(
   localDeadlineAt: number | null = null,
   proofUpperTarget: number | null = null,
   observeEvaluatedResult?: MedleyEvaluatedResultObserver,
+  recordSolveProfiling = true,
 ): MedleyExactCandidateJoinSolveResult {
   // The final join is exact only over candidate lists whose unseen frontier was already
   // bounded. Bitsets accelerate card-disjoint checks but never approximate the conflict rule.
@@ -1799,6 +1805,9 @@ export function solveMedleyExactCandidateJoin(
   let localExtendedThirdShortlistFallbackCount = 0;
   let localExtendedThirdShortlistExhaustiveMissCount = 0;
   const flushSolveProfilingCounters = (): void => {
+    if (!recordSolveProfiling) {
+      return;
+    }
     profiling.exactCandidateJoinPairCount += localPairCount;
     profiling.exactCandidateJoinThirdQueryCount += localThirdQueryCount;
     profiling.exactCandidateJoinThirdShortlistQueryCount += localThirdShortlistQueryCount;
@@ -3488,6 +3497,17 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     enableSmallGapSolveRetry?: boolean;
     skipSolveWhenObservedUpperAtOrBelow?: number;
     solveOnlyAboveUpperTarget?: number;
+    enableExactJoinPrefixSeed?: boolean;
+    exactJoinPrefixSeedForceNoop?: boolean;
+    exactJoinPrefixSeedGuardOnly?: boolean;
+    exactJoinPrefixSeedTimeboxMs?: number;
+    exactJoinPrefixSeedMaxSmallestCandidateCount?: number;
+    exactJoinPrefixSeedMinCandidateCounts?: [number, number, number];
+    exactJoinPrefixSeedPreviousLocalTimeout?: boolean;
+    exactJoinPrefixSeedMemorySoftLimitMiB?: number | null;
+    exactJoinPrefixSeedMinProofBudgetMs?: number;
+    exactJoinPrefixSeedMinMemoryHeadroomMiB?: number;
+    exactJoinPrefixSeedMaxObservedGap?: number;
   } = {},
   observeEvaluatedResult?: MedleyEvaluatedResultObserver,
 ): MedleyExactCandidateJoinResult {
@@ -3579,7 +3599,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     && context.solveOnlyAboveUpperTarget > incumbentScore
     ? context.solveOnlyAboveUpperTarget
     : null;
-  const exactJoinProofCutoffScore = solveOnlyAboveUpperTarget ?? incumbentScore;
+  let exactJoinProofCutoffScore = solveOnlyAboveUpperTarget ?? incumbentScore;
   profiling.exactCandidateJoinLastBestSlotScores = [];
   profiling.exactCandidateJoinLastPairUpperByExcludedSlot = [];
   profiling.exactCandidateJoinLastPairUnseenUpperByExcludedSlot = [];
@@ -3605,6 +3625,10 @@ export function searchMedleyConfigurationByExactCandidateJoin(
   const bestSlotScores: number[] = [];
   const exactPairUpperByExcludedSlot: Array<number | null> = Array.from({ length: slots.length }, () => null);
   const exactPairUnseenUpperByExcludedSlot: Array<number | null> = Array.from({ length: slots.length }, () => null);
+  let prefixSeedResult: BandoriMedleyTeamSearchResult | null = null;
+  const applyPrefixSeedResult = (
+    result: BandoriMedleyTeamSearchResult | null,
+  ): BandoriMedleyTeamSearchResult | null => compareMedleyResultLike(result, prefixSeedResult);
   let didReleaseCandidateArrays = false;
   const releaseCandidateArrays = (): void => {
     if (didReleaseCandidateArrays) {
@@ -3649,10 +3673,16 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     observedUpperBound: number | null = getObservedExactCandidateJoinUpperBound(),
   ): MedleyExactCandidateJoinResult => {
     releaseCandidateArrays();
+    const resultWithPrefixSeed = applyPrefixSeedResult(result);
+    const observedUpperBoundWithPrefixSeed = (
+      observedUpperBound !== null && resultWithPrefixSeed
+        ? Math.max(observedUpperBound, resultWithPrefixSeed.score)
+        : observedUpperBound
+    );
     return {
       proved: false,
-      result,
-      observedUpperBound,
+      result: resultWithPrefixSeed,
+      observedUpperBound: observedUpperBoundWithPrefixSeed,
     };
   };
   let effectiveCandidateSoftLimit = candidateSoftLimit;
@@ -4278,6 +4308,171 @@ export function searchMedleyConfigurationByExactCandidateJoin(
   const canUseParetoRemainingUpper = slots.every((slot) => (
     slot.searchCards.length <= MEDLEY_EXACT_CANDIDATE_JOIN_PARETO_REMAINING_MAX_SLOT_CARDS
   ));
+  const recordPrefixSeedPeakHeap = (): void => {
+    if (stats.peakUsedHeapMiB === null || !Number.isFinite(stats.peakUsedHeapMiB)) {
+      return;
+    }
+    profiling.exactJoinPrefixSeedPeakHeapMiB = Math.max(
+      profiling.exactJoinPrefixSeedPeakHeapMiB ?? 0,
+      stats.peakUsedHeapMiB,
+    );
+  };
+  const recordPrefixSeedGuardSkip = (reason: string): void => {
+    profiling.exactJoinPrefixSeedGuardSkipCount += 1;
+    profiling.exactJoinPrefixSeedLastGuardSkipReason = reason;
+    profiling.exactJoinPrefixSeedGuardSkipReasonCounts[reason] = (
+      (profiling.exactJoinPrefixSeedGuardSkipReasonCounts[reason] ?? 0) + 1
+    );
+  };
+  const maybeSeedFromExactJoinPrefix = (): void => {
+    if (context.enableExactJoinPrefixSeed !== true) {
+      return;
+    }
+    if (context.exactJoinPrefixSeedForceNoop === true) {
+      return;
+    }
+    if (stats.memoryLimited || stats.timedOut) {
+      return;
+    }
+    const candidateCountsBySlot = candidatesBySlot.map((candidates) => candidates.length);
+    profiling.exactJoinPrefixSeedCandidateCountsBySlot = [...candidateCountsBySlot];
+    if (context.exactJoinPrefixSeedPreviousLocalTimeout === true) {
+      recordPrefixSeedGuardSkip("previous-local-timeout");
+      return;
+    }
+
+    const minCandidateCounts = context.exactJoinPrefixSeedMinCandidateCounts ?? [1, 1, 1];
+    const hasTooFewCandidates = candidateCountsBySlot.some((count, index) => {
+      const minCount = Math.max(0, Math.trunc(minCandidateCounts[index] ?? 1));
+      return count < minCount;
+    });
+    if (hasTooFewCandidates) {
+      profiling.exactJoinPrefixSeedSkippedByCandidateCount += 1;
+      recordPrefixSeedGuardSkip("candidate-count");
+      return;
+    }
+
+    const sortedCandidateCounts = [...candidateCountsBySlot].sort((left, right) => left - right);
+    const maxSmallestCandidateCount = Math.max(
+      1,
+      Math.trunc(context.exactJoinPrefixSeedMaxSmallestCandidateCount ?? 20_000),
+    );
+    if ((sortedCandidateCounts[0] ?? 0) > maxSmallestCandidateCount) {
+      profiling.exactJoinPrefixSeedSkippedByCandidateCount += 1;
+      recordPrefixSeedGuardSkip("candidate-count");
+      return;
+    }
+
+    const remainingMs = Number.isFinite(deadlineAt)
+      ? deadlineAt - performance.now()
+      : Number.POSITIVE_INFINITY;
+    const timeboxMs = Math.max(0, Math.trunc(context.exactJoinPrefixSeedTimeboxMs ?? 300));
+    const minProofBudgetMs = Math.max(
+      0,
+      Math.trunc(context.exactJoinPrefixSeedMinProofBudgetMs ?? MEDLEY_EXACT_JOIN_PREFIX_SEED_MIN_PROOF_BUDGET_MS),
+    );
+    if (
+      timeboxMs <= 0
+      || remainingMs < Math.max(MEDLEY_EXACT_JOIN_PREFIX_SEED_MIN_REMAINING_MS, timeboxMs + minProofBudgetMs)
+    ) {
+      recordPrefixSeedGuardSkip("low-remaining-budget");
+      return;
+    }
+
+    const memorySoftLimitMiB = context.exactJoinPrefixSeedMemorySoftLimitMiB ?? stats.memorySoftLimitMiB;
+    const minMemoryHeadroomMiB = Math.max(
+      0,
+      Math.trunc(
+        context.exactJoinPrefixSeedMinMemoryHeadroomMiB
+        ?? MEDLEY_EXACT_JOIN_PREFIX_SEED_MIN_MEMORY_HEADROOM_MIB,
+      ),
+    );
+    if (
+      memorySoftLimitMiB !== null
+      && Number.isFinite(memorySoftLimitMiB)
+      && stats.peakUsedHeapMiB !== null
+      && Number.isFinite(stats.peakUsedHeapMiB)
+      && memorySoftLimitMiB - stats.peakUsedHeapMiB < minMemoryHeadroomMiB
+    ) {
+      recordPrefixSeedGuardSkip("low-memory-headroom");
+      return;
+    }
+
+    const observedUpperBound = getObservedExactCandidateJoinUpperBound();
+    const observedGap = observedUpperBound !== null
+      ? observedUpperBound - exactJoinProofCutoffScore
+      : null;
+    const maxObservedGap = Math.max(
+      0,
+      Math.trunc(context.exactJoinPrefixSeedMaxObservedGap ?? MEDLEY_EXACT_JOIN_PREFIX_SEED_MAX_OBSERVED_GAP),
+    );
+    if (observedGap === null || observedGap > maxObservedGap) {
+      recordPrefixSeedGuardSkip("large-gap");
+      return;
+    }
+    if (context.exactJoinPrefixSeedGuardOnly === true) {
+      recordPrefixSeedGuardSkip("guard-only");
+      return;
+    }
+
+    profiling.exactJoinPrefixSeedCallCount += 1;
+    recordPrefixSeedPeakHeap();
+    const startedAt = performance.now();
+    const localDeadlineAt = Math.min(deadlineAt, startedAt + timeboxMs);
+    const wasTimedOut = stats.timedOut;
+    const wasExhaustive = stats.isExhaustive;
+    const previousSearchMode = stats.searchMode;
+    const seedJoinResult = solveMedleyExactCandidateJoin(
+      slots,
+      candidatesBySlot,
+      configuration,
+      incumbentScore,
+      server,
+      perfectRate,
+      profiling,
+      stats,
+      isPastDeadline,
+      deadlineAt,
+      localDeadlineAt,
+      null,
+      undefined,
+      false,
+    );
+    profiling.exactJoinPrefixSeedElapsedMs += performance.now() - startedAt;
+    recordPrefixSeedPeakHeap();
+    if (seedJoinResult.localTimedOut) {
+      profiling.exactJoinPrefixSeedTimedOutCount += 1;
+    }
+    if (
+      seedJoinResult.localTimedOut
+      && !stats.memoryLimited
+      && performance.now() < deadlineAt
+      && !isPastDeadline()
+    ) {
+      stats.timedOut = wasTimedOut;
+      stats.isExhaustive = wasExhaustive;
+      stats.searchMode = previousSearchMode;
+    }
+
+    const result = seedJoinResult.result;
+    if (seedJoinResult.localTimedOut && (!result || result.score <= incumbentScore)) {
+      profiling.exactJoinPrefixSeedNoHitLocalTimeoutCount += 1;
+    }
+    if (!result || result.score <= incumbentScore) {
+      return;
+    }
+    profiling.exactJoinPrefixSeedHitCount += 1;
+    profiling.exactJoinPrefixSeedBestScore = Math.max(
+      profiling.exactJoinPrefixSeedBestScore ?? Number.NEGATIVE_INFINITY,
+      result.score,
+    );
+    profiling.exactJoinPrefixSeedBestImprovement = Math.max(
+      profiling.exactJoinPrefixSeedBestImprovement,
+      result.score - incumbentScore,
+    );
+    prefixSeedResult = compareMedleyResultLike(prefixSeedResult, result);
+    exactJoinProofCutoffScore = Math.max(exactJoinProofCutoffScore, result.score);
+  };
   for (let slotIndex = 0; slotIndex < slots.length; slotIndex += 1) {
     const slotFillStartedAt = performance.now();
     if (shouldUseRootPruneOnlyPairProbe && slotIndex > 0 && !refineCandidateFillPairUpper(slotIndex)) {
@@ -4500,6 +4695,10 @@ export function searchMedleyConfigurationByExactCandidateJoin(
   profiling.exactCandidateJoinCandidateFillElapsedMs += performance.now() - candidateFillStartedAt;
 
   candidatesBySlot.forEach(sortMedleyCandidates);
+  maybeSeedFromExactJoinPrefix();
+  if (stats.timedOut) {
+    return buildUnprovedExactCandidateJoinResult();
+  }
   if (profiling.exactCandidateJoinDebugKnownCardIdsBySlot) {
     profiling.exactCandidateJoinDebugKnownCandidateCutoffsBySlot = candidateCutoffsBySlot;
     profiling.exactCandidateJoinDebugKnownCandidatePresentBySlot = [];
@@ -4526,7 +4725,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
   const solveCandidateCounts = candidatesBySlot.map((candidates) => candidates.length).sort((left, right) => left - right);
   const observedUpperBoundBeforeSolve = getObservedExactCandidateJoinUpperBound();
   const solveUpperGap = observedUpperBoundBeforeSolve !== null
-    ? observedUpperBoundBeforeSolve - incumbentScore
+    ? observedUpperBoundBeforeSolve - exactJoinProofCutoffScore
     : null;
   const remainingBeforeSolveMs = Number.isFinite(deadlineAt)
     ? deadlineAt - performance.now()
@@ -4597,7 +4796,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     slots,
     candidatesBySlot,
     configuration,
-    incumbentScore,
+    exactJoinProofCutoffScore,
     server,
     perfectRate,
     profiling,
@@ -4623,6 +4822,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
   const result = joinResult.result;
   if (
     solveOnlyAboveUpperTarget !== null
+    && exactJoinProofCutoffScore <= solveOnlyAboveUpperTarget
     && (!result || result.score <= solveOnlyAboveUpperTarget)
   ) {
     profiling.exactCandidateJoinAbortCount += 1;
@@ -4641,5 +4841,5 @@ export function searchMedleyConfigurationByExactCandidateJoin(
   }
   profiling.exactCandidateJoinCompletedCount += 1;
   releaseCandidateArrays();
-  return { proved: true, result };
+  return { proved: true, result: applyPrefixSeedResult(result) };
 }

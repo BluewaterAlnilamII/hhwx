@@ -239,6 +239,24 @@ core -> no single / medley imports
 - incumbent 类优化：在 `<= 10s` 档提升 score 或缩短 `timeToBestScoreMs`。
 - 任一方案不得把 bounded 结果标成 exact。
 
+## Medley seed 实验路线（2026-06-08）
+
+- score-oriented pre-proof warmup 不继续默认化，也不再靠扩大 timebox、top-K 或 fixed-card/neighborhood repair 推进；它只能保留为诊断路径。前一轮问题是 seed 分数提升没有稳定转化为 root pruning / exact proof，而且会抬高内存峰值。
+- 第一批改为 opt-in `enableExactJoinPrefixSeed`：在 exact candidate join 完成候选 fill 和排序后，复用已有 `candidatesBySlot` 做短 timebox seed-only join。它不额外生成候选、不扩大 candidate limit、不保留第二套候选数组，也不改变 proved/unproved/exact/bounded 语义。
+- 默认 benchmark 参数为 `exactJoinPrefixSeedTimeboxMs=300`、`exactJoinPrefixSeedMaxSmallestCandidateCount=20000`、`exactJoinPrefixSeedMinCandidateCounts=[1,1,1]`。命中只会把更好的 result 返回给 caller 作为 incumbent，并提升后续 proof cutoff。
+- 观测重点从 seed score 改为 proof conversion：`exactJoinPrefixSeedHitCount`、`exactJoinPrefixSeedBestImprovement`、候选数、seed-only timeout、root-pruned configurations、candidate fill/solve elapsed 和 working set 峰值。
+- 4-case hard fixture gate 已失败：`baseline` 为 2/4 exact、gap total 582102；guarded `exactJoinPrefixSeed` 为 1/4 exact、gap total 1005031；无新增 OOM，峰值 working set 仍在 2% 门槛内。结论是保留 opt-in 诊断，不进入完整 focus/live acceptance，不默认启用。完整记录见 `documents/bandori-team-builder/medley-proof-frontier-ledger-analysis-2026-06-08.md`。
+- `proofAwareTinyGreedySeed` 暂不实现。只有 exact-join prefix seed 仍无法改善 proof conversion，且诊断显示 seed 质量确实不足时，才进入第二阶段。
+
+## Medley proof frontier ledger（2026-06-08）
+
+- 下一轮优化方向从 score seed 转为 proof frontier tightening。默认路径不启用 `enablePreProofSeedWarmup` 或 `enableExactJoinPrefixSeed`；prefix seed 仅保留为 research-only 诊断。
+- `debugConfigurationTrace=true` 时，`profiling.configurationTrace` 会继续保留 raw per-configuration trace，同时派生 `profiling.proofLedger` 和 `profiling.proofLedgerSummary`。Ledger 只用于 benchmark/debug，不改变 exact/bounded 语义。
+- Ledger 重点回答：哪个 configuration/coarse frontier 未闭合、gap 来自哪个 upper、exact candidate join 的 abort reason 是什么、candidate fill/solve/pair-upper 花了多少时间，以及 optional probe 是否消耗预算但没有关闭 upper。
+- `enableExactJoinPrefixSeed=true` 时新增 guard：candidate count、剩余 proof budget、memory headroom、observed gap、same-coarse previous no-hit local timeout 都必须通过；skip reason 记录到 `exactJoinPrefixSeedGuardSkipReasonCounts` 和 proof ledger。
+- Acceptance runner 现在包含 `baseline`、`baselineProofLedger`、`prefixForceNoop`、`prefixGuardOnly` 和 `currentGuardedPrefix`。主 no-op gate 先比较 baseline/ledger 与 force-noop、guard-only；`currentGuardedPrefix` 只作为 research-only 诊断参考。
+- 当 `exactJoinPrefixSeedCallCount=0` 时，force-noop 和 guard-only 不得改变 score/searchMode/gap/completed/rootPruned/configuration status sequence；允许差异只限 elapsed、memory sampling 和 guard skip counters。若 no-op gate 未稳定通过，不进入新的 proof-only patch。
+
 下一步优化计划：
 
 1. 保留 locked 大池 inclusion upper 作为默认的 30s+ proof pass；它不改变计分语义，也不会把 bounded 标成 exact。
