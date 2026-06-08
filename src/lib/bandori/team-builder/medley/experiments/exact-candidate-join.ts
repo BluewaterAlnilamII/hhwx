@@ -838,6 +838,59 @@ function findBestAvailableMedleyExactCandidateExcludingCardIds(
   );
 }
 
+function findBestAvailableMedleyExactRightCandidateByForbiddenCardIds(
+  query: MedleyExactCandidatePairUpperQuery,
+  primaryForbiddenCardIds: readonly number[],
+  secondaryForbiddenCardIds: readonly number[],
+): { candidate: MedleyTeamCandidate | null; scannedWordCount: number } {
+  if (query.rightCandidates.length === 0) {
+    return { candidate: null, scannedWordCount: 0 };
+  }
+  const containingBits: Uint32Array[] = [];
+  const appendContainingBits = (cardIds: readonly number[]): void => {
+    for (const cardId of cardIds) {
+      const bits = query.containingRightCandidateBitsByCardId.get(cardId);
+      if (bits) {
+        containingBits.push(bits);
+      }
+    }
+  };
+  appendContainingBits(primaryForbiddenCardIds);
+  appendContainingBits(secondaryForbiddenCardIds);
+  const lastWordIndex = query.rightCandidateBitsetWordCount - 1;
+  const lastWordRemainder = query.rightCandidates.length & 31;
+  const lastWordMask = lastWordRemainder === 0
+    ? 0xffffffff
+    : 0xffffffff >>> (32 - lastWordRemainder);
+  const finishAvailableWord = (availableBits: number, wordIndex: number, scannedWordCount: number) => {
+    const lowestAvailableBit = availableBits & -availableBits;
+    const bitIndex = 31 - Math.clz32(lowestAvailableBit);
+    return {
+      candidate: query.rightCandidates[wordIndex * 32 + bitIndex] ?? null,
+      scannedWordCount,
+    };
+  };
+  if (containingBits.length === 0) {
+    return { candidate: query.rightCandidates[0] ?? null, scannedWordCount: 1 };
+  }
+  let scannedWordCount = 0;
+  for (let wordIndex = 0; wordIndex < query.rightCandidateBitsetWordCount; wordIndex += 1) {
+    scannedWordCount += 1;
+    let forbiddenBits = 0;
+    for (const bits of containingBits) {
+      forbiddenBits |= bits[wordIndex];
+    }
+    let availableBits = (~forbiddenBits) >>> 0;
+    if (wordIndex === lastWordIndex) {
+      availableBits &= lastWordMask;
+    }
+    if (availableBits !== 0) {
+      return finishAvailableWord(availableBits, wordIndex, scannedWordCount);
+    }
+  }
+  return { candidate: null, scannedWordCount };
+}
+
 function addSortedUniqueCardId(cardIds: readonly number[], cardId: number): number[] {
   if (cardIds.includes(cardId)) {
     return [...cardIds];
@@ -1102,9 +1155,10 @@ function estimateGeneratedMedleyExactCandidatePairUpperExcludingCardIdsByScan(
 ): number {
   let bestScore = Number.NEGATIVE_INFINITY;
   const bannedCardIdSet = bannedCardIds instanceof Set ? bannedCardIds : new Set<number>(bannedCardIds);
-  const bannedRightCandidateBits = buildBannedMedleyExactRightCandidateBits(query, bannedCardIdSet);
+  const bannedCardIdList = [...bannedCardIdSet];
   const bestRightScore = query.rightCandidates[0]?.result.score ?? Number.NEGATIVE_INFINITY;
   let scannedLeftCandidateCount = 0;
+  let scannedRightWordCount = 0;
   for (const leftCandidate of query.leftCandidates) {
     scannedLeftCandidateCount += 1;
     if (leftCandidate.cardIds.some((cardId) => bannedCardIdSet.has(cardId))) {
@@ -1114,12 +1168,13 @@ function estimateGeneratedMedleyExactCandidatePairUpperExcludingCardIdsByScan(
     if (leftCandidate.result.score + bestRightScore <= cutoff) {
       break;
     }
-    const rightCandidate = findBestAvailableMedleyExactCandidateByBits(
-      query.rightCandidates,
-      query.rightCandidateBitsetWordCount,
-      bannedRightCandidateBits,
-      getForbiddenMedleyExactRightCandidateBits(query, leftCandidate),
+    const rightQueryResult = findBestAvailableMedleyExactRightCandidateByForbiddenCardIds(
+      query,
+      bannedCardIdList,
+      leftCandidate.cardIds,
     );
+    scannedRightWordCount += rightQueryResult.scannedWordCount;
+    const rightCandidate = rightQueryResult.candidate;
     if (!rightCandidate) {
       continue;
     }
@@ -1129,7 +1184,7 @@ function estimateGeneratedMedleyExactCandidatePairUpperExcludingCardIdsByScan(
     }
   }
   if (profiling) {
-    profiling.exactCandidateJoinPairComplementScanCount += scannedLeftCandidateCount;
+    profiling.exactCandidateJoinPairComplementScanCount += scannedLeftCandidateCount + scannedRightWordCount;
   }
   return bestScore;
 }
