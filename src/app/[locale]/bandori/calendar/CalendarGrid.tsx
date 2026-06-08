@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { CalendarEvent, CalendarHolidayData, filterEventsForMonth } from "./useCalendarData";
-import { buildChinaMainlandHolidayLookup, isChinaMainlandRestDay } from "./chinaMainlandHolidayCalendar";
+import { buildChinaMainlandHolidayLookup, isChinaMainlandRestDay } from "@/lib/bandori-china-mainland-holiday-calendar";
 
 const WEEKDAY_LABELS = ["一", "二", "三", "四", "五", "六", "日"];
 

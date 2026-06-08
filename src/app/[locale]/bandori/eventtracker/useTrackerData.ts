@@ -14,7 +14,7 @@ import {
   MUTABLE_DIRECTORY_CACHE_PROFILE,
   REALTIME_HOT_CACHE_PROFILE,
 } from "@/lib/api-cache";
-import type { ChinaMainlandHolidayCalendarData } from "@/app/[locale]/bandori/calendar/chinaMainlandHolidayCalendar";
+import type { ChinaMainlandHolidayCalendarData } from "@/lib/bandori-china-mainland-holiday-calendar";
 import type { TrackerData, TrackerResult, TrackerSongGroup, EventMetadata, MinimalEvent, TrackingMode, BandoriEventSummary } from "./types";
 import { getMonthlyRankingWindow } from "./useChartData";
 import { useBoundaryClock } from "./useBoundaryClock";
@@ -175,7 +175,7 @@ function resolvePreferredEventName(event: Pick<BandoriEventSummary, "eventId" | 
     return fallbackName;
   }
 
-  return `娲诲姩 #${event.eventId}`;
+  return `活动 #${event.eventId}`;
 }
 
 function findBestEvent(events: MinimalEvent[], now: number): MinimalEvent | null {
@@ -237,17 +237,13 @@ function resolveSelectedSongId(
 }
 
 /**
- * useTrackerData 鈥斺€?娲诲姩杩借釜椤甸潰鐨勬暟鎹幏鍙栧眰閽╁瓙銆?
+ * Data hook for the Bandori event tracker page.
  *
- * 鑱岃矗锛?
- * 1. 閫氳繃 useCachedFetch 鑾峰彇娲诲姩鍒楄〃銆佹椿鍔ㄥ厓鏁版嵁銆佽拷韪暟鎹?
- * 2. 寤虹珛 Supabase 瀹炴椂璁㈤槄锛屽皢鏂版暟鎹拷鍔犲埌 chartData 骞跺悓姝ュ洖缂撳瓨
- * 3. 鎻愪緵闃茬珵鎬佺殑鏁版嵁鍚堝苟绛栫暐锛岀‘淇濆墠鍙版仮澶嶅悗鐨勬帴鍙ｅ埛鏂颁笉浼氳鐩?
- *    瀹炴椂鎺ㄩ€佸凡缁忚拷鍔犵殑鏁版嵁鐐?
- *
- * 璁捐鍙栬垗锛?
- * - 椤甸潰缁勪欢鍚屾椂鎵挎媴鏁版嵁鑾峰彇銆佹淳鐢熻绠楀拰鐣岄潰娓叉煋鏃讹紝鑱岃矗杈圭晫浼氳繃浜庢ā绯?
- * - 灏嗘帴鍙ｈ姹傘€佸疄鏃舵帹閫佷笌缂撳瓨鍚屾鎶界鍚庯紝鏇翠究浜庣嫭绔嬪鏌ョ珵鎬佷慨澶嶆槸鍚︽纭?
+ * Responsibilities:
+ * 1. Load event catalog, event metadata, and tracker series via useCachedFetch.
+ * 2. Subscribe to Supabase realtime inserts and mirror new points into local cache.
+ * 3. Merge API refreshes with realtime points so foreground refreshes do not drop
+ *    points that arrived while the request was in flight.
  */
 export function useTrackerData(
   currentEventId: number | null,
@@ -259,7 +255,7 @@ export function useTrackerData(
   const [liveSongGroupsByKey, setLiveSongGroupsByKey] = useState<Record<string, TrackerSongGroup[]>>({});
   const [liveHasResultByKey, setLiveHasResultByKey] = useState<Record<string, boolean>>({});
 
-  // ===== 缂撳瓨 + 鍓嶅彴鑷姩鍒锋柊锛氭椿鍔ㄥ垪琛?=====
+  // Event catalog cache and foreground refresh.
   const { data: eventCatalog } = useCachedFetch<{ events: BandoriEventSummary[] }>(
     "bandori-events-v3",
     "/api/bandori/events",
@@ -327,8 +323,8 @@ export function useTrackerData(
     ? currentEventId
     : recommendedEventId;
 
-  // eventtracker 褰撳墠鍙秷璐圭洰褰曟憳瑕侀噷宸茬粡瀛樺湪鐨勫瓧娈碉紝
-  // 鍥犳鐩存帴浠?events 鍒楄〃涓€夊嚭褰撳墠娲诲姩锛岄伩鍏嶅啀鍙戜竴娆?detail 璇锋眰銆?
+  // The tracker currently only needs fields already present in the event catalog,
+  // so derive the current event from that list instead of issuing a detail request.
   const eventMeta = useMemo<EventMetadata | null>(() => {
     if (resolvedCurrentEventId === null) {
       return null;
@@ -342,11 +338,10 @@ export function useTrackerData(
     [eventMeta, selectedSongId, trackingMode],
   );
 
-  // ===== 缂撳瓨 + 鍓嶅彴鑷姩鍒锋柊锛氳拷韪暟鎹?=====
-  // 鏈堝害鎺掕鎸夊綋鍓嶆湁鏁堟湀浠借嚜鍔ㄥ垏鎹?month id锛屽叾浣欐ā寮忔部鐢ㄥ綋鍓嶉€変腑鐨勬椿鍔ㄧ紪鍙枫€?
-  // challenge 鐨?song 妯″紡鎺ュ彛浼氫竴娆¤繑鍥炲綋鍓嶆椿鍔ㄨ妗ｄ綅涓嬬殑鍏ㄩ儴 song_id 鍒嗙粍锛?
-  // 鏅€氭椿鍔ㄥ垯浠嶈繑鍥炲崟鏉℃椂闂村簭鍒椼€傚墠绔紦瀛橀敭涓嶅尯鍒?selectedSongId锛?
-  // 閬垮厤鍚屼竴鎵?challenge 鏁版嵁閲嶅缂撳瓨澶氫唤銆?
+  // Tracker data cache and foreground refresh.
+  // Monthly ranking uses the current month id. Other modes use the selected event id.
+  // Challenge song mode returns every song_id group for the selected event and tier,
+  // so the cache key intentionally does not include selectedSongId.
   const monthlyWindow = getMonthlyRankingWindow();
   const targetEventParam = trackingMode === "monthly" ? monthlyWindow.monthId : resolvedCurrentEventId;
   const trackerCacheKey = targetEventParam !== null
@@ -354,15 +349,12 @@ export function useTrackerData(
     : null;
 
   /**
-    * 杩借釜鏁版嵁鐨勫悎骞剁瓥鐣?鈥斺€?闃叉鎺ュ彛闈欓粯鍒锋柊瑕嗙洊瀹炴椂鎺ㄩ€佸凡杩藉姞鐨勬柊鏁版嵁銆?
+   * Merge tracker API refreshes with realtime data.
    *
-    * 绔炴€佸満鏅細鐢ㄦ埛鍒囧洖鍓嶅彴鍚庯紝`useCachedFetch` 瑙﹀彂鎺ュ彛闈欓粯鍒锋柊锛?
-    * 璇锋眰灏氭湭杩斿洖鏃讹紝瀹炴椂鎺ㄩ€佸凡缁忓啓鍏ヤ簡鏇存柊鐨勬暟鎹偣銆傝嫢鐩存帴鐢ㄦ帴鍙ｇ粨鏋滆鐩栫紦瀛橈紝
-    * 鍥捐〃浼氫涪澶辫繖娈靛閲忓苟鍑虹幇鍥為€€銆?
-   *
-    * 鍚堝苟閫昏緫锛氫互鎺ュ彛杩斿洖鐨勫畬鏁寸粨鏋滀负鍩哄噯锛?
-    * 鍐嶈ˉ鍏ョ紦瀛樹腑鏃堕棿鎴虫櫄浜庢帴鍙ｆ渶鏂扮偣鐨勬暟鎹紝涔熷氨鏄疄鏃舵帹閫佹湡闂磋拷鍔犵殑澧為噺锛?
-   * 纭繚涓や釜鏁版嵁婧愮殑缁撴灉閮戒笉浼氫涪澶便€?
+   * If the user returns to the foreground, useCachedFetch can start a background
+   * API refresh while Supabase realtime inserts are already adding newer points.
+   * The merge keeps the API response as the baseline and preserves cached points
+   * that are newer than the latest API point.
    */
   const trackerMerge = useCallback(
     (incoming: TrackerResult, existing: TrackerResult): TrackerResult => {
@@ -405,8 +397,7 @@ export function useTrackerData(
     }
   );
 
-  // 璁㈤槄鍦ㄧ粍浠剁敓鍛藉懆鏈熷唴鍙缓绔嬩竴娆★紝鍥犳閫氳繃 ref 缁存寔鏈€鏂拌鍥惧弬鏁帮紝
-  // 浠ヤ究瀹炴椂鍥炶皟鑳藉鍑嗙‘鍒ゆ柇鎺ㄩ€佹暟鎹槸鍚﹀睘浜庡綋鍓嶉〉闈㈣鍥俱€?
+  // The subscription is established once, so keep the latest view parameters in a ref.
   const currentViewRef = useRef({ targetEventId: targetEventParam, mode: trackingMode, tier: selectedTier, songId: resolvedSelectedSongId });
   useEffect(() => {
     currentViewRef.current = { targetEventId: targetEventParam, mode: trackingMode, tier: selectedTier, songId: resolvedSelectedSongId };
@@ -440,7 +431,7 @@ export function useTrackerData(
     };
   }, [mergedCutoffsForView, mergedSongGroupsForView, trackerCacheKey]);
 
-  // ===== Supabase 瀹炴椂璁㈤槄锛氱洃鍚柊杩借釜鏁版嵁鎻掑叆 =====
+  // Supabase realtime subscription for newly inserted tracker points.
   useEffect(() => {
     const channel = supabase
       .channel("bandori_tracker_realtime")
@@ -453,7 +444,7 @@ export function useTrackerData(
 
           const view = currentViewRef.current;
 
-          // 浠呭綋鏂版暟鎹尮閰嶅綋鍓嶅浘琛ㄨ鍥撅紙娲诲姩+妯″紡+鎺掑悕锛夋椂鎵嶈拷鍔?
+          // Append only points that match the active chart view.
           if (
             newRow.event_id === view.targetEventId &&
             newRow.type === view.mode &&
@@ -465,8 +456,8 @@ export function useTrackerData(
             const incomingIsFinal = Boolean(newRow.is_final ?? false);
 
             if (view.mode === "song") {
-              // song 妯″紡缁存姢瀹屾暣 songGroups锛屽浘琛ㄥ綋鍓嶆洸鐩彧鏄湪鏈湴鍋氭姇褰变笌鍒囨崲锛?
-              // 涓嶉渶瑕佷负姣忎釜 song_id 鍗曠嫭寤轰竴鏉″疄鏃惰闃呴摼璺€?
+              // Song mode keeps the full songGroups payload and projects the selected
+              // song locally, so each song_id does not need a separate subscription.
               const cacheKey = `tracker-3-${view.targetEventId}-${view.mode}-${view.tier}`;
 
               setLiveSongGroupsByKey((prev) => {
@@ -509,14 +500,14 @@ export function useTrackerData(
 
               return {
                 ...prev,
-                // 涓㈠純鏃堕棿鎴充笉閫掑鐨勬暟鎹紝閬垮厤涔卞簭鎻掑叆瀵艰嚧鎶樼嚎鍥剧粯鍒舵壄鏇?
+                // Drop non-increasing timestamps so out-of-order inserts do not distort the line chart.
                 [cacheKey]: appendTrackerPoint(baseCutoffs, time, ep, incomingIsFinal),
               };
             });
             setLiveHasResultByKey((prev) => ({ ...prev, [cacheKey]: true }));
 
-            // 瀹炴椂鎺ㄩ€佷笉浠呰鏇存柊缁勪欢鐘舵€侊紝涔熻鍚屾鍐欏洖缂撳瓨锛?
-            // 鍚﹀垯鐢ㄦ埛鍒囨崲瑙嗗浘鍐嶈繑鍥炴椂浠嶄細璇诲埌鏃х紦瀛橈紝瀵艰嚧澧為噺鏁版嵁涓㈠け銆?
+            // Mirror realtime points back into cache so switching views does not
+            // resurrect stale cached series and lose the incremental data.
             if (view.targetEventId !== null) {
               updateFetchCache<TrackerResult>(cacheKey, (cached) => {
                 const prevCutoffs = cached?.cutoffs ?? [];

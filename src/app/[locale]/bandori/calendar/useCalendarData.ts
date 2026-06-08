@@ -9,7 +9,7 @@ import {
 } from "@/lib/api-cache";
 import { getApiErrorMessage, parseApiSuccessData } from "@/lib/api-contracts";
 import { getSafeSession, supabase } from "@/lib/supabase";
-import { ChinaMainlandHolidayCalendarData } from "./chinaMainlandHolidayCalendar";
+import { ChinaMainlandHolidayCalendarData } from "@/lib/bandori-china-mainland-holiday-calendar";
 import {
   CalendarCharacter,
   formatCalendarEventTitle,

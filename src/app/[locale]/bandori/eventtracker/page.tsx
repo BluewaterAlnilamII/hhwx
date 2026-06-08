@@ -59,7 +59,7 @@ import EventComments from "./EventComments";
 import {
   buildChinaMainlandHolidayLookup,
   isChinaMainlandRestDay,
-} from "../calendar/chinaMainlandHolidayCalendar";
+} from "@/lib/bandori-china-mainland-holiday-calendar";
 
 type NonWorkingDayBand = {
   key: string;

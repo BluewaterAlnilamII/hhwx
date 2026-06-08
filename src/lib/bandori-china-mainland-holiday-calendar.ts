@@ -1,7 +1,7 @@
 const UTC8_OFFSET_MINUTES = 8 * 60;
 const MILLISECONDS_PER_DAY = 86400000;
 
-/** 将毫秒时间戳映射到 UTC+8 日期键。 */
+/** Maps a millisecond timestamp to a UTC+8 date key. */
 function formatDateKeyInUtc8(timestamp: number): string {
   const utc8Date = new Date(timestamp + UTC8_OFFSET_MINUTES * 60 * 1000);
   const year = utc8Date.getUTCFullYear();
@@ -10,13 +10,13 @@ function formatDateKeyInUtc8(timestamp: number): string {
   return `${year}-${month}-${day}`;
 }
 
-/** 基于 UTC+8 日期键计算星期编号，0 表示周日，6 表示周六。 */
+/** Calculates the weekday from a UTC+8 date key; Sunday is 0 and Saturday is 6. */
 function getUtc8Weekday(dateKey: string): number {
   const [yearText, monthText, dayText] = dateKey.split("-");
   return new Date(Date.UTC(Number(yearText), Number(monthText) - 1, Number(dayText))).getUTCDay();
 }
 
-/** 按年份维护的法定休息日区间，格式为“开始日期:结束日期”。 */
+/** Statutory rest-day ranges by year, stored as inclusive start:end date pairs. */
 const REST_DAY_RANGES: Record<number, string[]> = {
   2024: [
     "2024-01-01:2024-01-01",
@@ -46,37 +46,37 @@ const REST_DAY_RANGES: Record<number, string[]> = {
   ],
 };
 
-/** 按年份维护的调休上班日期。 */
+/** Makeup workdays by year. */
 const MAKEUP_WORK_DAYS: Record<number, string[]> = {
   2024: ["2024-02-04", "2024-02-18", "2024-04-07", "2024-04-28", "2024-05-11", "2024-09-14", "2024-09-29", "2024-10-12"],
   2025: ["2025-01-26", "2025-02-08", "2025-04-27", "2025-09-28", "2025-10-11"],
   2026: ["2026-01-04", "2026-02-14", "2026-02-28", "2026-05-09", "2026-09-20", "2026-10-10"],
 };
 
-/** 中国大陆节假日数据源的统一结构。 */
+/** Shared shape for China mainland holiday calendar data. */
 export interface ChinaMainlandHolidayCalendarData {
-  /** 法定休息日列表，格式为 YYYY-MM-DD。 */
+  /** Statutory rest days in YYYY-MM-DD format. */
   restDays: string[];
-  /** 调休上班日列表，格式为 YYYY-MM-DD。 */
+  /** Makeup workdays in YYYY-MM-DD format. */
   makeupWorkDays: string[];
-  /** 当前数据来源。 */
+  /** Source used for the current payload. */
   source?: "icloud" | "fallback";
 }
 
-/** 便于高频查询的节假日集合结构。 */
+/** Set-based lookup for high-frequency holiday checks. */
 export interface ChinaMainlandHolidayLookup {
-  /** 法定休息日集合。 */
+  /** Statutory rest days. */
   restDays: Set<string>;
-  /** 调休上班日集合。 */
+  /** Makeup workdays. */
   makeupWorkDays: Set<string>;
 }
 
-/** 将日期对象格式化为 UTC+8 下的 YYYY-MM-DD 键值。 */
+/** Formats a date object as a UTC+8 YYYY-MM-DD key. */
 function formatDateKey(date: Date): string {
   return formatDateKeyInUtc8(date.getTime());
 }
 
-/** 枚举闭区间内的所有日期键，用于将区间配置展开成逐日集合。 */
+/** Expands an inclusive date range into per-day keys. */
 function enumerateDateRange(startDateText: string, endDateText: string): string[] {
   const values: string[] = [];
   let cursor = new Date(`${startDateText}T00:00:00+08:00`).getTime();
@@ -90,7 +90,7 @@ function enumerateDateRange(startDateText: string, endDateText: string): string[
   return values;
 }
 
-/** 将按年份定义的休息日区间展开为集合，降低运行期查询成本。 */
+/** Expands yearly rest-day ranges to sets for cheaper runtime lookup. */
 function buildRestDayMap(): Record<number, Set<string>> {
   const result: Record<number, Set<string>> = {};
 
@@ -114,7 +114,7 @@ const MAKEUP_WORKDAY_MAP: Record<number, Set<string>> = Object.fromEntries(
   Object.entries(MAKEUP_WORK_DAYS).map(([yearText, dates]) => [Number(yearText), new Set(dates)]),
 );
 
-/** 将数组结构的节假日数据转换为查询集合。 */
+/** Converts array-based holiday data into lookup sets. */
 export function buildChinaMainlandHolidayLookup(
   calendarData: ChinaMainlandHolidayCalendarData | null | undefined,
 ): ChinaMainlandHolidayLookup | null {
@@ -128,7 +128,7 @@ export function buildChinaMainlandHolidayLookup(
   };
 }
 
-/** 返回内置的本地节假日回退数据，供远程数据不可用时使用。 */
+/** Returns the built-in holiday fallback used when the remote calendar is unavailable. */
 export function getFallbackChinaMainlandHolidayCalendarData(): ChinaMainlandHolidayCalendarData {
   const restDays = Object.values(REST_DAY_MAP).flatMap((values) => Array.from(values));
   const makeupWorkDays = Object.values(MAKEUP_WORKDAY_MAP).flatMap((values) => Array.from(values));
@@ -141,12 +141,12 @@ export function getFallbackChinaMainlandHolidayCalendarData(): ChinaMainlandHoli
 }
 
 /**
- * 判断某个日期是否为中国大陆的非工作日。
+ * Determines whether a date is a non-working day in mainland China.
  *
- * 判定顺序：
- * 1. 若存在远程节假日查询表，则优先使用远程结果；
- * 2. 调休上班日优先级高于周末；
- * 3. 若无显式配置，再按周六、周日视为休息日。
+ * Precedence:
+ * 1. Remote holiday lookup wins when available.
+ * 2. Makeup workdays override weekends.
+ * 3. Otherwise Saturday and Sunday are treated as rest days.
  */
 export function isChinaMainlandRestDay(date: Date, holidayLookup?: ChinaMainlandHolidayLookup | null): boolean {
   const dateKey = formatDateKey(date);
