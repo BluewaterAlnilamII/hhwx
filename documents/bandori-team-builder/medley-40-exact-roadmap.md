@@ -152,6 +152,14 @@ Current acceptance standard:
   baseline fields for acceptance analysis. If memory-source instrumentation is
   needed again, first prove `P07:244` equivalence against the no-debug baseline
   on status, score, gap, completed configurations, abort reason, and pair count.
+- A local exact-join working-set release patch was tested and reverted. It
+  cleared per-configuration generator heaps/caches and candidate key sets after
+  each exact-join configuration. On `P07:244` it lowered peak heap only
+  modestly (`4210 -> 4146 MiB`) but worsened the proof frontier from gap
+  `55265` to `300781`, changed the abort reason to `candidate-fill-soft-limit`,
+  and reduced completed exact-join configurations from `16/17` to `3/4`.
+  Treat local release/clear-only patches as rejected unless they also preserve
+  the same proof-trigger behavior.
 
 ## Evidence Hygiene Rules
 
@@ -314,6 +322,9 @@ Phase 1: memory-capped exact-join proof patch.
   The preferred implementation shape is an exact-join internal compact or
   streamed representation that keeps deterministic candidate order and upper
   proof semantics while reducing duplicate object/string/record residency.
+- Avoid release/clear-only local working-set patches as well. The 2026-06-09
+  release experiment showed that reducing memory after a configuration closes
+  can still change later memory/proof gates and produce a worse frontier.
 - Avoid simply relaxing guarded/staged candidate extension thresholds. The
   diagnostic `P07:244` run showed that generating more candidates can increase
   memory pressure and widen the final bounded gap if pair/frontier proof remains
