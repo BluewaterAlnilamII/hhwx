@@ -886,12 +886,8 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
   let unclosedConfigurationUpperBoundMax = Number.NEGATIVE_INFINITY;
   let hasUnclosedConfigurationWithoutFiniteUpperBound = false;
   let peakUsedHeapBytes: number | null = null;
-  let peakNodeHeapUsedBytes: number | null = null;
-  let peakNodeRssBytes: number | null = null;
-  let peakMemoryGuardUsedBytes: number | null = null;
   let lastMemoryCheckAt = Number.NEGATIVE_INFINITY;
   let runtimeHeapLimitBytes: number | null = null;
-  const bytesToMiB = (bytes: number): number => Math.ceil(bytes / BYTES_PER_MIB);
   const getEffectiveMemorySoftLimitBytes = (): number | null => {
     if (memorySoftLimitBytes === null && runtimeHeapLimitBytes === null && nodeAutoMemorySoftLimitBytes === null) {
       return null;
@@ -921,9 +917,6 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
       const nodeRss = nodeMemoryUsage?.rss;
       if (typeof nodeHeapUsed === "number" && Number.isFinite(nodeHeapUsed)) {
         usedHeapBytes = nodeHeapUsed;
-        peakNodeHeapUsedBytes = Math.max(peakNodeHeapUsedBytes ?? 0, nodeHeapUsed);
-        profiling.lastNodeHeapUsedMiB = bytesToMiB(nodeHeapUsed);
-        profiling.peakNodeHeapUsedMiB = bytesToMiB(peakNodeHeapUsedBytes);
       }
       if (
         typeof nodeRss === "number"
@@ -933,18 +926,12 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
           || memorySoftLimitBytes !== null
         )
       ) {
-        peakNodeRssBytes = Math.max(peakNodeRssBytes ?? 0, nodeRss);
-        profiling.lastNodeRssMiB = bytesToMiB(nodeRss);
-        profiling.peakNodeRssMiB = bytesToMiB(peakNodeRssBytes);
         usedHeapBytes = Math.max(usedHeapBytes ?? 0, nodeRss);
       }
     }
     if (usedHeapBytes !== null) {
-      peakMemoryGuardUsedBytes = Math.max(peakMemoryGuardUsedBytes ?? 0, usedHeapBytes);
-      profiling.lastMemoryGuardUsedMiB = bytesToMiB(usedHeapBytes);
-      profiling.peakMemoryGuardUsedMiB = bytesToMiB(peakMemoryGuardUsedBytes);
       peakUsedHeapBytes = Math.max(peakUsedHeapBytes ?? 0, usedHeapBytes);
-      stats.peakUsedHeapMiB = bytesToMiB(peakUsedHeapBytes ?? usedHeapBytes);
+      stats.peakUsedHeapMiB = Math.ceil((peakUsedHeapBytes ?? usedHeapBytes) / BYTES_PER_MIB);
     }
     return usedHeapBytes;
   };

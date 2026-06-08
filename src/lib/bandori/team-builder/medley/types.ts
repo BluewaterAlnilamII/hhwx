@@ -221,12 +221,6 @@ export type BandoriMedleyTeamSearchProfilingStats = {
   completedAreaItemConfigurationCount: number;
   rootUpperPrunedConfigurationCount: number;
   rootUpperBestConfigurationUpperBound: number | null;
-  lastNodeHeapUsedMiB: number | null;
-  peakNodeHeapUsedMiB: number | null;
-  lastNodeRssMiB: number | null;
-  peakNodeRssMiB: number | null;
-  lastMemoryGuardUsedMiB: number | null;
-  peakMemoryGuardUsedMiB: number | null;
   relativeGap: number | null;
   gapClosureFromBaseline: number | null;
   timeToBestScoreMs: number | null;
