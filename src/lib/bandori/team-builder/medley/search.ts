@@ -109,6 +109,7 @@ const MEDLEY_LOW_MEMORY_INITIAL_CANDIDATE_SYNC_TIMEBOX_MS = 2_000;
 const MEDLEY_LOW_MEMORY_INITIAL_CANDIDATE_SYNC_MAX_SAME_COARSE_PROOF_ELAPSED_MS = 8_000;
 const MEDLEY_LOW_MEMORY_INITIAL_CANDIDATE_SYNC_MIN_MEMORY_HEADROOM_MIB = 800;
 const MEDLEY_LOW_MEMORY_INITIAL_CANDIDATE_SYNC_MAX_SLOT_CARD_COUNT = 249;
+const MEDLEY_LOW_MEMORY_INITIAL_CANDIDATE_SYNC_EVENT_ROOT_RISK_SLOT_CARD_COUNT = 250;
 const MEDLEY_LOW_MEMORY_INITIAL_CANDIDATE_SYNC_SAME_COARSE_GUARD_MAX_SLOT_CARD_COUNT = 249;
 const MEDLEY_FULL_WIDTH_EVENT_EXACT_JOIN_MEMORY_SOFT_LIMIT_MIB = 3_200;
 const MEDLEY_POST_EXACT_JOIN_TIGHT_ROOT_MAX_CARD_COUNT = 1_300;
@@ -2584,10 +2585,12 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
       0,
       ...slots.map((slot) => slot.searchCards.length),
     );
+    const isFirstStartedAreaItemConfiguration = profiling.startedAreaItemConfigurationCount === 1;
     const hasFullWidthEventExactJoinMemoryRisk = (
       hasEventBonus
-      && configurationIndex === 0
-      && maxLowMemoryInitialCandidateSyncSlotCardCount > lowMemoryInitialCandidateSyncMaxSlotCardCount
+      && isFirstStartedAreaItemConfiguration
+      && maxLowMemoryInitialCandidateSyncSlotCardCount
+        === MEDLEY_LOW_MEMORY_INITIAL_CANDIDATE_SYNC_EVENT_ROOT_RISK_SLOT_CARD_COUNT
     );
     const hasLowMemoryInitialCandidateSyncSlotWidth = (
       !hasFullWidthEventExactJoinMemoryRisk
@@ -2676,7 +2679,11 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
         maxLowMemoryInitialCandidateSyncSlotCardCount
       );
       traceEntry.lowMemoryInitialCandidateSyncHasEventBonus = hasEventBonus;
+      traceEntry.lowMemoryInitialCandidateSyncFirstStartedConfiguration = isFirstStartedAreaItemConfiguration;
       traceEntry.fullWidthEventExactJoinMemoryRisk = hasFullWidthEventExactJoinMemoryRisk;
+      traceEntry.fullWidthEventExactJoinMemoryRiskSlotCardCount = (
+        MEDLEY_LOW_MEMORY_INITIAL_CANDIDATE_SYNC_EVENT_ROOT_RISK_SLOT_CARD_COUNT
+      );
       traceEntry.fullWidthEventExactJoinMemorySoftLimitMiB = hasFullWidthEventExactJoinMemoryRisk
         ? MEDLEY_FULL_WIDTH_EVENT_EXACT_JOIN_MEMORY_SOFT_LIMIT_MIB
         : null;
@@ -3396,7 +3403,6 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
     );
     if (
       hasFullWidthEventExactJoinMemoryRisk
-      && configurationIndex === 0
       && results.length >= resultLimit
       && hasFiniteActiveConfigurationUpperBoundBeforeSeeding
     ) {
@@ -3515,7 +3521,6 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
     );
     if (
       hasFullWidthEventExactJoinMemoryRisk
-      && configurationIndex === 0
       && results.length >= resultLimit
       && hasFiniteActiveConfigurationUpperBound
     ) {
