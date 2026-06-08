@@ -106,6 +106,12 @@ row, especially `P08:260`, `P10:260`, `P08:323`, and `P10:244`.
   acceptance candidate; it is evidence that the next memory-safe proof path
   needs a bounded prefix/high-pair upper cache or chunked proof, not pure
   per-query scanning.
+- Opt-in bounded high-pair prefix upper was also tested on `P07:244` with the
+  default `500000` retained-record limit. It was faster than pure scan
+  (`115272ms`) but still bounded, gap `395539`, `memoryLimited=true`, peak
+  `4220 MiB`, and only `3/4` configurations completed. This means high-pair
+  record materialization is not the only live memory source in this case; do
+  not promote the prefix implementation without a broader memory-source audit.
 
 Rejected/diagnostic 2026-06-08 evidence:
 
@@ -290,6 +296,11 @@ Phase 1: memory-capped exact-join proof patch.
   memory-pressure diagnostic, but not fast enough to improve exact count. A
   viable follow-up must answer repeated pair-complement queries from a bounded
   memory structure instead of recomputing them from scratch.
+- Keep `enableLowMemoryHighPairPrefixUpper` research-only as well. The first
+  bounded-prefix implementation did not reduce `P07:244` peak memory enough,
+  so the next patch should instrument candidate arrays, generator heaps,
+  score-only caches, pair query caches, and solve bitsets separately before
+  adding more high-pair variants.
 
 Phase 2: no-op equivalence gate, required only when touching prefix/seed
 diagnostic paths again.
@@ -327,10 +338,10 @@ Each patch must pass:
 The next actionable step is not another seed experiment. It is:
 
 1. Implement a low-memory exact-join proof path focused on `P07:244`:
-   chunk/stream pair upper, a bounded high-pair prefix upper cache, or an
-   internal compact candidate representation, so the final small-gap frontier
-   can close without retaining all pair records and duplicate
-   candidate/result/key objects.
+   first add memory-source attribution for exact join, then implement either
+   chunk/stream pair upper or an internal compact candidate representation so
+   the final small-gap frontier can close without retaining all pair records
+   and duplicate candidate/result/key objects.
 2. Re-run the 5 bounded rows plus the 4 guardrail exact rows.
 3. If at least two bounded rows convert and guardrails stay exact, re-run the
    full isolated 40-case matrix and generate another timestamped report.
