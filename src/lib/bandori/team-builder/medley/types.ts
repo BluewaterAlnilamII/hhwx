@@ -578,6 +578,8 @@ export type BandoriMedleyTeamSearchProfilingStats = {
   exactCandidateJoinLastRemainingOtherUpperBySlot: number[];
   exactCandidateJoinLastCandidateCountsBySlot: number[];
   exactCandidateJoinLastCandidateFillElapsedMsBySlot: number[];
+  exactCandidateJoinSlotProofCutoffEnabledCount: number;
+  exactCandidateJoinLastSlotProofMinimumScoreCutoffs: number[];
   exactCandidateJoinLastAbortReason: MedleyExactCandidateJoinAbortReason;
   exactCandidateJoinLastAbortSlotIndex: number | null;
   exactCandidateJoinLastAbortCandidateSoftLimit: number | null;

@@ -358,6 +358,8 @@ export function createInitialMedleyProfilingStats(
     exactCandidateJoinLastRemainingOtherUpperBySlot: [],
     exactCandidateJoinLastCandidateCountsBySlot: [],
     exactCandidateJoinLastCandidateFillElapsedMsBySlot: [],
+    exactCandidateJoinSlotProofCutoffEnabledCount: 0,
+    exactCandidateJoinLastSlotProofMinimumScoreCutoffs: [],
     exactCandidateJoinLastAbortReason: null,
     exactCandidateJoinLastAbortSlotIndex: null,
     exactCandidateJoinLastAbortCandidateSoftLimit: null,
