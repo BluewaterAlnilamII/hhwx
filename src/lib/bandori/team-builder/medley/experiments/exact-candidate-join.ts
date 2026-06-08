@@ -136,6 +136,7 @@ function findBestMedleyExactSlotCandidateLowMemory(
   isPastDeadline: () => boolean,
   deadlineAt: number,
   nodeSoftLimit: number,
+  localDeadlineAt: number | null = null,
 ): { aborted: boolean; candidate: MedleyTeamCandidate | null } {
   const bannedCardIds = new Set<number>();
   const selectedCards: SearchCard[] = [];
@@ -157,11 +158,18 @@ function findBestMedleyExactSlotCandidateLowMemory(
       aborted = true;
       return;
     }
-    if ((visitedNodeCount & 2047) === 0 && (performance.now() >= deadlineAt || isPastDeadline())) {
-      stats.isExhaustive = false;
-      stats.timedOut = true;
-      stats.searchMode = "bounded";
-      return;
+    if ((visitedNodeCount & 2047) === 0) {
+      const now = performance.now();
+      if (localDeadlineAt !== null && now >= localDeadlineAt) {
+        aborted = true;
+        return;
+      }
+      if (now >= deadlineAt || isPastDeadline()) {
+        stats.isExhaustive = false;
+        stats.timedOut = true;
+        stats.searchMode = "bounded";
+        return;
+      }
     }
 
     const remaining = MEDLEY_TEAM_SIZE - selectedCards.length;
@@ -3937,6 +3945,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     exactJoinPrefixSeedMinMemoryHeadroomMiB?: number;
     exactJoinPrefixSeedMaxObservedGap?: number;
     enableLowMemoryInitialCandidateSync?: boolean;
+    lowMemoryInitialCandidateSyncTimeboxMs?: number;
     lowMemoryHighPairScanMinRecordCount?: number | null;
     lowMemoryHighPairPrefixRecordLimit?: number | null;
     debugExactCandidateJoinMemoryAttribution?: boolean;
@@ -4403,10 +4412,16 @@ export function searchMedleyConfigurationByExactCandidateJoin(
   for (let slotIndex = 0; slotIndex < slots.length; slotIndex += 1) {
     const slotInitialCandidateStartedAt = performance.now();
     let topCandidate: MedleyTeamCandidate | null = null;
-    let didAbortLowMemoryInitialCandidateSync = false;
     if (context.enableLowMemoryInitialCandidateSync === false) {
       topCandidate = generators[slotIndex].next();
     } else {
+      const lowMemoryInitialCandidateSyncTimeboxMs = context.lowMemoryInitialCandidateSyncTimeboxMs !== undefined
+        && Number.isFinite(context.lowMemoryInitialCandidateSyncTimeboxMs)
+        ? Math.max(0, context.lowMemoryInitialCandidateSyncTimeboxMs)
+        : Number.POSITIVE_INFINITY;
+      const lowMemoryInitialCandidateSyncDeadlineAt = Number.isFinite(lowMemoryInitialCandidateSyncTimeboxMs)
+        ? Math.min(deadlineAt, performance.now() + lowMemoryInitialCandidateSyncTimeboxMs)
+        : null;
       const lowMemoryTopCandidate = findBestMedleyExactSlotCandidateLowMemory(
         slots[slotIndex],
         server,
@@ -4416,16 +4431,18 @@ export function searchMedleyConfigurationByExactCandidateJoin(
         isPastDeadline,
         deadlineAt,
         nodeSoftLimit,
+        lowMemoryInitialCandidateSyncDeadlineAt,
       );
-      didAbortLowMemoryInitialCandidateSync = lowMemoryTopCandidate.aborted;
-      topCandidate = lowMemoryTopCandidate.candidate
-        ? generators[slotIndex].next(lowMemoryTopCandidate.candidate.result.score)
-        : null;
+      if (lowMemoryTopCandidate.aborted) {
+        topCandidate = generators[slotIndex].next();
+      } else if (lowMemoryTopCandidate.candidate) {
+        topCandidate = generators[slotIndex].next(lowMemoryTopCandidate.candidate.result.score);
+      }
     }
     profiling.exactCandidateJoinInitialCandidateElapsedMsBySlot[slotIndex] = (
       performance.now() - slotInitialCandidateStartedAt
     );
-    if (stats.timedOut || didAbortLowMemoryInitialCandidateSync || generators[slotIndex].hasAborted() || !topCandidate) {
+    if (stats.timedOut || generators[slotIndex].hasAborted() || !topCandidate) {
       profiling.exactCandidateJoinInitialCandidateElapsedMs += performance.now() - initialCandidateStartedAt;
       profiling.exactCandidateJoinAbortCount += 1;
       recordAbortDiagnostics("initial-candidate", {

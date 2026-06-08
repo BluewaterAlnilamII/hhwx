@@ -104,6 +104,7 @@ const MEDLEY_TRAILING_SAME_COARSE_DFS_ONLY_MIN_PROOF_COUNT = 1;
 const MEDLEY_EXACT_JOIN_PREFIX_SEED_DEFAULT_TIMEBOX_MS = 300;
 const MEDLEY_EXACT_JOIN_PREFIX_SEED_DEFAULT_MAX_SMALLEST_CANDIDATE_COUNT = 20_000;
 const MEDLEY_EXACT_JOIN_PREFIX_SEED_DEFAULT_MIN_CANDIDATE_COUNTS: [number, number, number] = [1, 1, 1];
+const MEDLEY_LOW_MEMORY_INITIAL_CANDIDATE_SYNC_TIMEBOX_MS = 2_000;
 const MEDLEY_LOW_MEMORY_INITIAL_CANDIDATE_SYNC_MAX_SAME_COARSE_PROOF_ELAPSED_MS = 8_000;
 const MEDLEY_LOW_MEMORY_INITIAL_CANDIDATE_SYNC_MIN_MEMORY_HEADROOM_MIB = 800;
 const MEDLEY_POST_EXACT_JOIN_TIGHT_ROOT_MAX_CARD_COUNT = 1_300;
@@ -689,6 +690,14 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
       : MEDLEY_EXACT_CANDIDATE_JOIN_LOW_MEMORY_HIGH_PAIR_PREFIX_RECORD_LIMIT
     : null;
   const disableLowMemoryInitialCandidateSync = optimization.disableLowMemoryInitialCandidateSync === true;
+  const parsedLowMemoryInitialCandidateSyncTimeboxMs = (
+    optimization.lowMemoryInitialCandidateSyncTimeboxMs !== undefined
+      ? Math.trunc(optimization.lowMemoryInitialCandidateSyncTimeboxMs)
+      : Number.NaN
+  );
+  const lowMemoryInitialCandidateSyncTimeboxMs = Number.isFinite(parsedLowMemoryInitialCandidateSyncTimeboxMs)
+    ? Math.max(0, parsedLowMemoryInitialCandidateSyncTimeboxMs)
+    : MEDLEY_LOW_MEMORY_INITIAL_CANDIDATE_SYNC_TIMEBOX_MS;
   const parsedLowMemoryInitialCandidateSyncMaxSameCoarseProofElapsedMs = (
     optimization.lowMemoryInitialCandidateSyncMaxSameCoarseProofElapsedMs !== undefined
       ? Math.trunc(optimization.lowMemoryInitialCandidateSyncMaxSameCoarseProofElapsedMs)
@@ -2578,6 +2587,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
       traceEntry.lowMemoryInitialCandidateSyncSameCoarseProofElapsedMs = Math.round(
         sameCoarseMaxExactJoinProofElapsedMs,
       );
+      traceEntry.lowMemoryInitialCandidateSyncTimeboxMs = lowMemoryInitialCandidateSyncTimeboxMs;
       traceEntry.lowMemoryInitialCandidateSyncMaxSameCoarseProofElapsedMs = (
         lowMemoryInitialCandidateSyncMaxSameCoarseProofElapsedMs
       );
@@ -3215,6 +3225,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
           exactJoinPrefixSeedPreviousLocalTimeout: exactJoinPrefixSeedDisabledCoarseKeys.has(currentCoarseKey),
           exactJoinPrefixSeedMemorySoftLimitMiB: stats.memorySoftLimitMiB,
           enableLowMemoryInitialCandidateSync: shouldUseLowMemoryInitialCandidateSync,
+          lowMemoryInitialCandidateSyncTimeboxMs,
           lowMemoryHighPairScanMinRecordCount,
           lowMemoryHighPairPrefixRecordLimit,
           debugExactCandidateJoinMemoryAttribution,
@@ -3494,6 +3505,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
           exactJoinPrefixSeedPreviousLocalTimeout: exactJoinPrefixSeedDisabledCoarseKeys.has(currentCoarseKey),
           exactJoinPrefixSeedMemorySoftLimitMiB: stats.memorySoftLimitMiB,
           enableLowMemoryInitialCandidateSync: shouldUseLowMemoryInitialCandidateSync,
+          lowMemoryInitialCandidateSyncTimeboxMs,
           lowMemoryHighPairScanMinRecordCount,
           lowMemoryHighPairPrefixRecordLimit,
           debugExactCandidateJoinMemoryAttribution,
