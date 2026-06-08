@@ -225,6 +225,18 @@ export type BandoriMedleyTeamSearchProfilingStats = {
   timeToGap1PctMs: number | null;
   timeToGap05PctMs: number | null;
   timeToGap01PctMs: number | null;
+  // Runtime memory telemetry is diagnostic-only. The historical peakUsedHeapMiB
+  // stat may include RSS when the Node memory guard is active.
+  lastNodeHeapUsedMiB: number | null;
+  peakNodeHeapUsedMiB: number | null;
+  lastNodeRssMiB: number | null;
+  peakNodeRssMiB: number | null;
+  lastNodeExternalMiB: number | null;
+  peakNodeExternalMiB: number | null;
+  lastNodeArrayBuffersMiB: number | null;
+  peakNodeArrayBuffersMiB: number | null;
+  lastMemoryGuardUsedMiB: number | null;
+  peakMemoryGuardUsedMiB: number | null;
   // Replay-only diagnostics for comparing observed states against newer upper models.
   upperReplayStateCount: number;
   upperReplayPrunableStateCount: number;

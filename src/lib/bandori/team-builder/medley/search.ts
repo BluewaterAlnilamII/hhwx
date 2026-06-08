@@ -578,8 +578,22 @@ type RuntimeNodeProcess = {
   memoryUsage?: () => {
     heapUsed?: number;
     rss?: number;
+    external?: number;
+    arrayBuffers?: number;
   };
 };
+
+type RuntimeMemoryProfilingKey =
+  | "lastNodeHeapUsedMiB"
+  | "peakNodeHeapUsedMiB"
+  | "lastNodeRssMiB"
+  | "peakNodeRssMiB"
+  | "lastNodeExternalMiB"
+  | "peakNodeExternalMiB"
+  | "lastNodeArrayBuffersMiB"
+  | "peakNodeArrayBuffersMiB"
+  | "lastMemoryGuardUsedMiB"
+  | "peakMemoryGuardUsedMiB";
 
 export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput): BandoriMedleyTeamSearchResponse {
   const startedAt = performance.now();
@@ -884,6 +898,21 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
   let peakUsedHeapBytes: number | null = null;
   let lastMemoryCheckAt = Number.NEGATIVE_INFINITY;
   let runtimeHeapLimitBytes: number | null = null;
+  const recordRuntimeMemoryMiB = (
+    lastKey: RuntimeMemoryProfilingKey,
+    peakKey: RuntimeMemoryProfilingKey,
+    bytes: number | undefined,
+  ): void => {
+    if (typeof bytes !== "number" || !Number.isFinite(bytes)) {
+      return;
+    }
+    const valueMiB = Math.ceil(bytes / BYTES_PER_MIB);
+    const previousPeak = profiling[peakKey];
+    profiling[lastKey] = valueMiB;
+    profiling[peakKey] = typeof previousPeak === "number"
+      ? Math.max(previousPeak, valueMiB)
+      : valueMiB;
+  };
   const getEffectiveMemorySoftLimitBytes = (): number | null => {
     if (memorySoftLimitBytes === null && runtimeHeapLimitBytes === null && nodeAutoMemorySoftLimitBytes === null) {
       return null;
@@ -911,6 +940,14 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
       const nodeMemoryUsage = nodeProcess?.memoryUsage?.();
       const nodeHeapUsed = nodeMemoryUsage?.heapUsed;
       const nodeRss = nodeMemoryUsage?.rss;
+      recordRuntimeMemoryMiB("lastNodeHeapUsedMiB", "peakNodeHeapUsedMiB", nodeHeapUsed);
+      recordRuntimeMemoryMiB("lastNodeRssMiB", "peakNodeRssMiB", nodeRss);
+      recordRuntimeMemoryMiB("lastNodeExternalMiB", "peakNodeExternalMiB", nodeMemoryUsage?.external);
+      recordRuntimeMemoryMiB(
+        "lastNodeArrayBuffersMiB",
+        "peakNodeArrayBuffersMiB",
+        nodeMemoryUsage?.arrayBuffers,
+      );
       if (typeof nodeHeapUsed === "number" && Number.isFinite(nodeHeapUsed)) {
         usedHeapBytes = nodeHeapUsed;
       }
@@ -926,6 +963,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
       }
     }
     if (usedHeapBytes !== null) {
+      recordRuntimeMemoryMiB("lastMemoryGuardUsedMiB", "peakMemoryGuardUsedMiB", usedHeapBytes);
       peakUsedHeapBytes = Math.max(peakUsedHeapBytes ?? 0, usedHeapBytes);
       stats.peakUsedHeapMiB = Math.ceil((peakUsedHeapBytes ?? usedHeapBytes) / BYTES_PER_MIB);
     }
