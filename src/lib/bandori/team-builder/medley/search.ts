@@ -108,6 +108,7 @@ const MEDLEY_EXACT_JOIN_PREFIX_SEED_DEFAULT_MIN_CANDIDATE_COUNTS: [number, numbe
 const MEDLEY_LOW_MEMORY_INITIAL_CANDIDATE_SYNC_TIMEBOX_MS = 2_000;
 const MEDLEY_LOW_MEMORY_INITIAL_CANDIDATE_SYNC_MAX_SAME_COARSE_PROOF_ELAPSED_MS = 8_000;
 const MEDLEY_LOW_MEMORY_INITIAL_CANDIDATE_SYNC_MIN_MEMORY_HEADROOM_MIB = 800;
+const MEDLEY_LOW_MEMORY_INITIAL_CANDIDATE_SYNC_MAX_SLOT_CARD_COUNT = 249;
 const MEDLEY_POST_EXACT_JOIN_TIGHT_ROOT_MAX_CARD_COUNT = 1_300;
 const MEDLEY_POST_EXACT_JOIN_TIGHT_ROOT_MIN_REMAINING_MS = 30_000;
 const MEDLEY_SAME_COARSE_FRONTIER_RETRY_MAX_CARD_COUNT = 1_300;
@@ -719,6 +720,16 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
   )
     ? Math.max(0, parsedLowMemoryInitialCandidateSyncMinMemoryHeadroomMiB)
     : MEDLEY_LOW_MEMORY_INITIAL_CANDIDATE_SYNC_MIN_MEMORY_HEADROOM_MIB;
+  const parsedLowMemoryInitialCandidateSyncMaxSlotCardCount = (
+    optimization.lowMemoryInitialCandidateSyncMaxSlotCardCount !== undefined
+      ? Math.trunc(optimization.lowMemoryInitialCandidateSyncMaxSlotCardCount)
+      : Number.NaN
+  );
+  const lowMemoryInitialCandidateSyncMaxSlotCardCount = Number.isFinite(
+    parsedLowMemoryInitialCandidateSyncMaxSlotCardCount,
+  )
+    ? Math.max(0, parsedLowMemoryInitialCandidateSyncMaxSlotCardCount)
+    : MEDLEY_LOW_MEMORY_INITIAL_CANDIDATE_SYNC_MAX_SLOT_CARD_COUNT;
   const exactJoinPrefixSeedForceNoop = optimization.exactJoinPrefixSeedForceNoop === true;
   const exactJoinPrefixSeedGuardOnly = optimization.exactJoinPrefixSeedGuardOnly === true;
   const parsedExactJoinPrefixSeedTimeboxMs = optimization.exactJoinPrefixSeedTimeboxMs !== undefined
@@ -2553,6 +2564,13 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
     const sameCoarseMaxExactJoinProofElapsedMs = exactCandidateJoinProofElapsedMsByCoarseKey.get(
       currentCoarseKey,
     ) ?? 0;
+    const maxLowMemoryInitialCandidateSyncSlotCardCount = Math.max(
+      0,
+      ...slots.map((slot) => slot.searchCards.length),
+    );
+    const hasLowMemoryInitialCandidateSyncSlotWidth = (
+      maxLowMemoryInitialCandidateSyncSlotCardCount <= lowMemoryInitialCandidateSyncMaxSlotCardCount
+    );
     const lowMemoryInitialCandidateSyncUsedHeapBytes = readUsedHeapBytes();
     const lowMemoryInitialCandidateSyncUsedMiB = lowMemoryInitialCandidateSyncUsedHeapBytes !== null
       ? Math.ceil(lowMemoryInitialCandidateSyncUsedHeapBytes / BYTES_PER_MIB)
@@ -2577,6 +2595,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
     };
     const shouldUseLowMemoryInitialCandidateSync = (
       !disableLowMemoryInitialCandidateSync
+      && hasLowMemoryInitialCandidateSyncSlotWidth
       && sameCoarseMaxExactJoinProofElapsedMs < lowMemoryInitialCandidateSyncMaxSameCoarseProofElapsedMs
       && hasLowMemoryInitialCandidateSyncMemoryHeadroom
     );
@@ -2616,6 +2635,12 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
       traceEntry.lowMemoryInitialCandidateSyncMemoryHeadroomMiB = lowMemoryInitialCandidateSyncMemoryHeadroomMiB;
       traceEntry.lowMemoryInitialCandidateSyncMinMemoryHeadroomMiB = (
         lowMemoryInitialCandidateSyncMinMemoryHeadroomMiB
+      );
+      traceEntry.lowMemoryInitialCandidateSyncMaxSlotCardCount = (
+        lowMemoryInitialCandidateSyncMaxSlotCardCount
+      );
+      traceEntry.lowMemoryInitialCandidateSyncObservedMaxSlotCardCount = (
+        maxLowMemoryInitialCandidateSyncSlotCardCount
       );
     }
     const sameCoarseClosedSiblingCount = sameCoarseSiblingFrontier.filter((entry) => entry.closed === true).length;
