@@ -7,6 +7,8 @@ const fs = require("node:fs");
 const Module = require("node:module");
 const path = require("node:path");
 const { performance } = require("node:perf_hooks");
+const v8 = require("node:v8");
+const vm = require("node:vm");
 
 const repoRoot = path.resolve(__dirname, "..");
 const bestdoriApiOrigin = "https://bestdori.com/api";
@@ -15,6 +17,20 @@ const outputDir = path.join(repoRoot, "temp", "bandori-team-builder", "song-opti
 const supportedProfiles = new Set(["interactive", "analysis30", "offline"]);
 const supportedOrders = new Set(["original", "heavy-first", "random"]);
 const difficultyIndex = { easy: "0", normal: "1", hard: "2", expert: "3", special: "4" };
+
+function enableExplicitGarbageCollection() {
+  if (global.gc) {
+    return;
+  }
+  try {
+    v8.setFlagsFromString("--expose-gc");
+    global.gc = vm.runInNewContext("gc");
+  } catch {
+    // Best-effort only; benchmarks still run without explicit GC.
+  }
+}
+
+enableExplicitGarbageCollection();
 
 function resolveSourcePath(request) {
   const direct = path.resolve(repoRoot, request);

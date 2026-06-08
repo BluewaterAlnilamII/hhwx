@@ -20,7 +20,6 @@ import {
 } from "./chart";
 import type {
   BandoriSongOptimizerOffset,
-  BandoriSongOptimizerProofJudgement,
   BandoriSongOptimizerProofStats,
   BandoriSongOptimizerResult,
   BandoriSongOptimizerSkillWindow,
@@ -34,14 +33,11 @@ const DEFAULT_MAX_EXACT_DP_STATES = 120000;
 const SKILL_WINDOW_COUNT = 6;
 const DEFAULT_LIFE = 1000;
 const EPSILON = 1e-7;
-const ZERO_MASK = BigInt(0);
-const ONE_MASK = BigInt(1);
 const SKILL_ORDER_PERMUTATIONS = buildPermutations([0, 1, 2, 3, 4]);
 
 type CandidateEvent = OptimizerProofHitCandidate & {
   eventIndex: number;
   isLastForNote: boolean;
-  noteMask: bigint;
 };
 
 type SearchLimits = {
@@ -71,7 +67,7 @@ type DpChoice = BandoriSongOptimizerOffset;
 type DpState = {
   score: number;
   hitCount: number;
-  selectedMask: bigint;
+  selectedNoteIndexes: readonly number[];
   selectedKey: string;
   nextTriggerSlot: number;
   currentWindowEventIndex: number;
@@ -79,6 +75,45 @@ type DpState = {
   currentWindowEndFrame: number;
   perfectCount: number;
   continuedActive: boolean;
+  offsetMagnitude: number;
+  trailIndex: number;
+};
+
+type CompactDpState = {
+  score: number;
+  hitCount: number;
+  selectedMask: number;
+  nextTriggerSlot: number;
+  currentWindowEventIndex: number;
+  currentWindowStartFrame: number;
+  currentWindowEndFrame: number;
+  perfectCount: number;
+  continuedActive: boolean;
+  offsetMagnitude: number;
+  trailIndex: number;
+};
+
+type StaticDpState = {
+  score: number;
+  hitCount: number;
+  selectedNoteIndexes: readonly number[];
+  selectedKey: string;
+  nextTriggerSlot: number;
+  currentWindowEventIndex: number;
+  currentWindowStartFrame: number;
+  currentWindowEndFrame: number;
+  offsetMagnitude: number;
+  trailIndex: number;
+};
+
+type CompactStaticDpState = {
+  score: number;
+  hitCount: number;
+  selectedMask: number;
+  nextTriggerSlot: number;
+  currentWindowEventIndex: number;
+  currentWindowStartFrame: number;
+  currentWindowEndFrame: number;
   offsetMagnitude: number;
   trailIndex: number;
 };
@@ -386,18 +421,17 @@ function buildBaseNoteScoreTable(
 ): Int32Array {
   const table = new Int32Array(notes.length * 4 * notes.length);
   const judgePercents = [JUDGE_PERCENT.perfect, JUDGE_PERCENT.great, JUDGE_PERCENT.good, JUDGE_PERCENT.bad];
+  const comboMultipliers = Array.from({ length: notes.length }, (_, hitCount) => getScoreComboMultiplier(hitCount));
+  const commonByHitCount = comboMultipliers.map((comboMultiplier) => (
+    totalPower * baseScorePerPower * comboMultiplier
+  ));
   for (const note of notes) {
     const feverMultiplier = note.fever ? 2 : 1;
     for (let judgeIndex = 0; judgeIndex < judgePercents.length; judgeIndex += 1) {
+      const noteJudgeMultiplier = judgePercents[judgeIndex] * feverMultiplier;
       const baseOffset = (note.noteIndex * 4 + judgeIndex) * notes.length;
       for (let hitCount = 0; hitCount < notes.length; hitCount += 1) {
-        table[baseOffset + hitCount] = Math.floor(
-          totalPower
-          * baseScorePerPower
-          * judgePercents[judgeIndex]
-          * getScoreComboMultiplier(hitCount)
-          * feverMultiplier,
-        );
+        table[baseOffset + hitCount] = Math.floor(commonByHitCount[hitCount] * noteJudgeMultiplier);
       }
     }
   }
@@ -431,6 +465,20 @@ function frameKey(frame: number): string {
 function compareCandidateEvents(left: Pick<OptimizerProofHitCandidate, "hitFrame" | "noteIndex">, right: Pick<OptimizerProofHitCandidate, "hitFrame" | "noteIndex">): number {
   return Math.round(left.hitFrame * 1_000_000) - Math.round(right.hitFrame * 1_000_000)
     || left.noteIndex - right.noteIndex;
+}
+
+function lowerBoundNumbers(values: readonly number[], target: number): number {
+  let low = 0;
+  let high = values.length;
+  while (low < high) {
+    const middle = Math.floor((low + high) / 2);
+    if (values[middle] < target) {
+      low = middle + 1;
+    } else {
+      high = middle;
+    }
+  }
+  return low;
 }
 
 function compressCandidateLists(
@@ -496,10 +544,7 @@ function compressCandidateLists(
     const sortedCritical = [...criticalFrames.values()].sort((a, b) => a - b);
     const compressed = new Map<string, OptimizerProofHitCandidate>();
     for (const candidate of candidates) {
-      let lowerBound = 0;
-      while (lowerBound < sortedCritical.length && sortedCritical[lowerBound] < candidate.hitFrame - EPSILON) {
-        lowerBound += 1;
-      }
+      const lowerBound = lowerBoundNumbers(sortedCritical, candidate.hitFrame - EPSILON);
       const isEqual = lowerBound < sortedCritical.length
         && Math.abs(sortedCritical[lowerBound] - candidate.hitFrame) <= EPSILON;
       const cellKey = `${lowerBound}:${isEqual ? 1 : 0}:${collapseDominatedJudgements ? "" : candidate.judgement}`;
@@ -535,7 +580,6 @@ function buildCandidateEvents(candidateLists: ReadonlyArray<readonly OptimizerPr
         ...candidate,
         eventIndex: 0,
         isLastForNote: false,
-        noteMask: ONE_MASK << BigInt(candidate.noteIndex),
       });
     }
   }
@@ -649,14 +693,109 @@ function reconstructTrail(trail: readonly TrailNode[], trailIndex: number): { ch
   return { choices, windows };
 }
 
-function toMaskKey(mask: bigint): string {
-  return mask === ZERO_MASK ? "" : mask.toString(36);
+function getSelectedNoteKey(selectedNoteIndexes: readonly number[]): string {
+  if (selectedNoteIndexes.length === 0) {
+    return "";
+  }
+  if (selectedNoteIndexes.length === 1) {
+    return String(selectedNoteIndexes[0]);
+  }
+  return selectedNoteIndexes.join(",");
+}
+
+function insertSortedNoteIndex(selectedNoteIndexes: readonly number[], noteIndex: number): number[] {
+  if (selectedNoteIndexes.length === 0) {
+    return [noteIndex];
+  }
+  const first = selectedNoteIndexes[0];
+  const last = selectedNoteIndexes[selectedNoteIndexes.length - 1];
+  if (noteIndex < first) {
+    return [noteIndex, ...selectedNoteIndexes];
+  }
+  if (noteIndex > last) {
+    return [...selectedNoteIndexes, noteIndex];
+  }
+  const result: number[] = [];
+  let inserted = false;
+  for (const selectedNoteIndex of selectedNoteIndexes) {
+    if (!inserted && noteIndex < selectedNoteIndex) {
+      result.push(noteIndex);
+      inserted = true;
+    }
+    result.push(selectedNoteIndex);
+  }
+  return result;
+}
+
+function addSelectedNote(state: Pick<DpState, "selectedNoteIndexes" | "selectedKey">, noteIndex: number): {
+  selectedNoteIndexes: readonly number[];
+  selectedKey: string;
+} {
+  if (state.selectedNoteIndexes.length === 0) {
+    return { selectedNoteIndexes: [noteIndex], selectedKey: String(noteIndex) };
+  }
+  const first = state.selectedNoteIndexes[0];
+  const last = state.selectedNoteIndexes[state.selectedNoteIndexes.length - 1];
+  if (noteIndex < first) {
+    const selectedNoteIndexes = [noteIndex, ...state.selectedNoteIndexes];
+    return { selectedNoteIndexes, selectedKey: `${noteIndex},${state.selectedKey}` };
+  }
+  if (noteIndex > last) {
+    const selectedNoteIndexes = [...state.selectedNoteIndexes, noteIndex];
+    return { selectedNoteIndexes, selectedKey: `${state.selectedKey},${noteIndex}` };
+  }
+  const selectedNoteIndexes = insertSortedNoteIndex(state.selectedNoteIndexes, noteIndex);
+  return { selectedNoteIndexes, selectedKey: getSelectedNoteKey(selectedNoteIndexes) };
+}
+
+function removeSelectedNote(state: Pick<DpState, "selectedNoteIndexes" | "selectedKey">, noteIndex: number): {
+  selectedNoteIndexes: readonly number[];
+  selectedKey: string;
+} {
+  if (state.selectedNoteIndexes.length === 1) {
+    return { selectedNoteIndexes: [], selectedKey: "" };
+  }
+  const first = state.selectedNoteIndexes[0];
+  const last = state.selectedNoteIndexes[state.selectedNoteIndexes.length - 1];
+  if (noteIndex === first) {
+    const selectedNoteIndexes = state.selectedNoteIndexes.slice(1);
+    const commaIndex = state.selectedKey.indexOf(",");
+    return {
+      selectedNoteIndexes,
+      selectedKey: commaIndex >= 0 ? state.selectedKey.slice(commaIndex + 1) : "",
+    };
+  }
+  if (noteIndex === last) {
+    const selectedNoteIndexes = state.selectedNoteIndexes.slice(0, -1);
+    const commaIndex = state.selectedKey.lastIndexOf(",");
+    return {
+      selectedNoteIndexes,
+      selectedKey: commaIndex >= 0 ? state.selectedKey.slice(0, commaIndex) : "",
+    };
+  }
+  const selectedNoteIndexes = state.selectedNoteIndexes.filter((selectedNoteIndex) => selectedNoteIndex !== noteIndex);
+  return { selectedNoteIndexes, selectedKey: getSelectedNoteKey(selectedNoteIndexes) };
 }
 
 function getStateKey(state: DpState, usesDynamicSkillState: boolean): string {
-  const baseKey = `${state.hitCount}:${state.selectedKey}:${state.nextTriggerSlot}:${state.currentWindowEventIndex}`;
+  const baseKey = `${state.hitCount}:${state.selectedKey}:${state.currentWindowEventIndex}`;
   return usesDynamicSkillState
     ? `${baseKey}:${state.perfectCount}:${state.continuedActive ? 1 : 0}`
+    : baseKey;
+}
+
+function getStateKeyFromValues(
+  hitCount: number,
+  selectedKey: string,
+  _nextTriggerSlot: number,
+  currentWindowEventIndex: number,
+  perfectCount: number,
+  continuedActive: boolean,
+  usesDynamicSkillState: boolean,
+): string {
+  const baseKey = `${hitCount}:${selectedKey}:${currentWindowEventIndex}`;
+  return usesDynamicSkillState
+    ? `${baseKey}:${perfectCount}:${continuedActive ? 1 : 0}`
     : baseKey;
 }
 
@@ -665,7 +804,9 @@ function mergeState(
   state: DpState,
   usesDynamicSkillState: boolean,
 ): void {
-  const key = getStateKey(state, usesDynamicSkillState);
+  const key = usesDynamicSkillState
+    ? getStateKey(state, true)
+    : `${state.hitCount}:${state.selectedKey}:${state.currentWindowEventIndex}`;
   const existing = states.get(key);
   if (
     !existing
@@ -676,29 +817,317 @@ function mergeState(
   }
 }
 
-function mergeChosenState(
+function mergeChosenValues(
   states: Map<string, DpState>,
-  state: DpState,
   trail: TrailNode[],
   parentTrailIndex: number,
   note: OptimizerNote,
   event: CandidateEvent,
   window: BandoriSongOptimizerSkillWindow | null,
+  score: number,
+  hitCount: number,
+  selectedNoteIndexes: readonly number[],
+  selectedKey: string,
+  nextTriggerSlot: number,
+  currentWindowEventIndex: number,
+  currentWindowStartFrame: number,
+  currentWindowEndFrame: number,
+  perfectCount: number,
+  continuedActive: boolean,
+  offsetMagnitude: number,
   usesDynamicSkillState: boolean,
 ): void {
-  const key = getStateKey(state, usesDynamicSkillState);
+  const key = usesDynamicSkillState
+    ? getStateKeyFromValues(
+      hitCount,
+      selectedKey,
+      nextTriggerSlot,
+      currentWindowEventIndex,
+      perfectCount,
+      continuedActive,
+      true,
+    )
+    : `${hitCount}:${selectedKey}:${currentWindowEventIndex}`;
   const existing = states.get(key);
   if (
     existing
     && (
-      existing.score > state.score
-      || (existing.score === state.score && existing.offsetMagnitude <= state.offsetMagnitude)
+      existing.score > score
+      || (existing.score === score && existing.offsetMagnitude <= offsetMagnitude)
     )
   ) {
     return;
   }
-  state.trailIndex = pushTrail(trail, parentTrailIndex, note, event, window);
-  states.set(key, state);
+  states.set(key, {
+    score,
+    hitCount,
+    selectedNoteIndexes,
+    selectedKey,
+    nextTriggerSlot,
+    currentWindowEventIndex,
+    currentWindowStartFrame,
+    currentWindowEndFrame,
+    perfectCount,
+    continuedActive,
+    offsetMagnitude,
+    trailIndex: pushTrail(trail, parentTrailIndex, note, event, window),
+  });
+}
+
+function getStaticStateKey(
+  hitCount: number,
+  selectedKey: string,
+  currentWindowEventIndex: number,
+): string {
+  return `${hitCount}:${selectedKey}:${currentWindowEventIndex}`;
+}
+
+function mergeStaticState(states: Map<string, StaticDpState>, state: StaticDpState): void {
+  const key = getStaticStateKey(state.hitCount, state.selectedKey, state.currentWindowEventIndex);
+  const existing = states.get(key);
+  if (
+    !existing
+    || state.score > existing.score
+    || (state.score === existing.score && state.offsetMagnitude < existing.offsetMagnitude)
+  ) {
+    states.set(key, state);
+  }
+}
+
+function mergeStaticChosenValues(
+  states: Map<string, StaticDpState>,
+  trail: TrailNode[],
+  parentTrailIndex: number,
+  note: OptimizerNote,
+  event: CandidateEvent,
+  window: BandoriSongOptimizerSkillWindow | null,
+  score: number,
+  hitCount: number,
+  selectedNoteIndexes: readonly number[],
+  selectedKey: string,
+  nextTriggerSlot: number,
+  currentWindowEventIndex: number,
+  currentWindowStartFrame: number,
+  currentWindowEndFrame: number,
+  offsetMagnitude: number,
+): void {
+  const key = getStaticStateKey(hitCount, selectedKey, currentWindowEventIndex);
+  const existing = states.get(key);
+  if (
+    existing
+    && (
+      existing.score > score
+      || (existing.score === score && existing.offsetMagnitude <= offsetMagnitude)
+    )
+  ) {
+    return;
+  }
+  states.set(key, {
+    score,
+    hitCount,
+    selectedNoteIndexes,
+    selectedKey,
+    nextTriggerSlot,
+    currentWindowEventIndex,
+    currentWindowStartFrame,
+    currentWindowEndFrame,
+    offsetMagnitude,
+    trailIndex: pushTrail(trail, parentTrailIndex, note, event, window),
+  });
+}
+
+const MAX_COMPACT_MASK_BITS = 53;
+
+function buildCompactNoteBits(events: readonly CandidateEvent[], noteCount: number): Float64Array | null {
+  const firstEventIndexByNote = new Int32Array(noteCount).fill(-1);
+  const lastEventIndexByNote = new Int32Array(noteCount).fill(-1);
+  for (const event of events) {
+    if (firstEventIndexByNote[event.noteIndex] < 0) {
+      firstEventIndexByNote[event.noteIndex] = event.eventIndex;
+    }
+    lastEventIndexByNote[event.noteIndex] = event.eventIndex;
+  }
+
+  const intervals: Array<{ noteIndex: number; start: number; end: number }> = [];
+  for (let noteIndex = 0; noteIndex < noteCount; noteIndex += 1) {
+    const start = firstEventIndexByNote[noteIndex];
+    if (start >= 0) {
+      intervals.push({ noteIndex, start, end: lastEventIndexByNote[noteIndex] });
+    }
+  }
+  intervals.sort((left, right) => left.start - right.start || left.end - right.end);
+
+  const noteBits = new Float64Array(noteCount);
+  const active: Array<{ end: number; slot: number }> = [];
+  const freeSlots: number[] = [];
+  let nextSlot = 0;
+  for (const interval of intervals) {
+    for (let index = active.length - 1; index >= 0; index -= 1) {
+      if (active[index].end < interval.start) {
+        freeSlots.push(active[index].slot);
+        active.splice(index, 1);
+      }
+    }
+    const slot = freeSlots.pop() ?? nextSlot;
+    if (slot === nextSlot) {
+      nextSlot += 1;
+    }
+    if (nextSlot > MAX_COMPACT_MASK_BITS) {
+      return null;
+    }
+    noteBits[interval.noteIndex] = 2 ** slot;
+    active.push({ end: interval.end, slot });
+  }
+  return noteBits;
+}
+
+function compactMaskHas(mask: number, bit: number): boolean {
+  return bit <= 0x40000000
+    ? (mask & bit) !== 0
+    : Math.floor(mask / bit) % 2 >= 1;
+}
+
+function getCompactStaticStateKey(
+  hitCount: number,
+  selectedMask: number,
+  currentWindowEventIndex: number,
+): string {
+  return selectedMask === 0
+    ? `${hitCount}::${currentWindowEventIndex}`
+    : `${hitCount}:${selectedMask.toString(36)}:${currentWindowEventIndex}`;
+}
+
+function mergeCompactStaticState(states: Map<string, CompactStaticDpState>, state: CompactStaticDpState): void {
+  const key = getCompactStaticStateKey(state.hitCount, state.selectedMask, state.currentWindowEventIndex);
+  const existing = states.get(key);
+  if (
+    !existing
+    || state.score > existing.score
+    || (state.score === existing.score && state.offsetMagnitude < existing.offsetMagnitude)
+  ) {
+    states.set(key, state);
+  }
+}
+
+function mergeCompactStaticChosenValues(
+  states: Map<string, CompactStaticDpState>,
+  trail: TrailNode[],
+  parentTrailIndex: number,
+  note: OptimizerNote,
+  event: CandidateEvent,
+  window: BandoriSongOptimizerSkillWindow | null,
+  score: number,
+  hitCount: number,
+  selectedMask: number,
+  nextTriggerSlot: number,
+  currentWindowEventIndex: number,
+  currentWindowStartFrame: number,
+  currentWindowEndFrame: number,
+  offsetMagnitude: number,
+): void {
+  const key = getCompactStaticStateKey(hitCount, selectedMask, currentWindowEventIndex);
+  const existing = states.get(key);
+  if (
+    existing
+    && (
+      existing.score > score
+      || (existing.score === score && existing.offsetMagnitude <= offsetMagnitude)
+    )
+  ) {
+    return;
+  }
+  states.set(key, {
+    score,
+    hitCount,
+    selectedMask,
+    nextTriggerSlot,
+    currentWindowEventIndex,
+    currentWindowStartFrame,
+    currentWindowEndFrame,
+    offsetMagnitude,
+    trailIndex: pushTrail(trail, parentTrailIndex, note, event, window),
+  });
+}
+
+function getCompactStateKey(
+  hitCount: number,
+  selectedMask: number,
+  currentWindowEventIndex: number,
+  perfectCount: number,
+  continuedActive: boolean,
+): string {
+  const baseKey = selectedMask === 0
+    ? `${hitCount}::${currentWindowEventIndex}`
+    : `${hitCount}:${selectedMask.toString(36)}:${currentWindowEventIndex}`;
+  return `${baseKey}:${perfectCount}:${continuedActive ? 1 : 0}`;
+}
+
+function mergeCompactState(states: Map<string, CompactDpState>, state: CompactDpState): void {
+  const key = getCompactStateKey(
+    state.hitCount,
+    state.selectedMask,
+    state.currentWindowEventIndex,
+    state.perfectCount,
+    state.continuedActive,
+  );
+  const existing = states.get(key);
+  if (
+    !existing
+    || state.score > existing.score
+    || (state.score === existing.score && state.offsetMagnitude < existing.offsetMagnitude)
+  ) {
+    states.set(key, state);
+  }
+}
+
+function mergeCompactChosenValues(
+  states: Map<string, CompactDpState>,
+  trail: TrailNode[],
+  parentTrailIndex: number,
+  note: OptimizerNote,
+  event: CandidateEvent,
+  window: BandoriSongOptimizerSkillWindow | null,
+  score: number,
+  hitCount: number,
+  selectedMask: number,
+  nextTriggerSlot: number,
+  currentWindowEventIndex: number,
+  currentWindowStartFrame: number,
+  currentWindowEndFrame: number,
+  perfectCount: number,
+  continuedActive: boolean,
+  offsetMagnitude: number,
+): void {
+  const key = getCompactStateKey(
+    hitCount,
+    selectedMask,
+    currentWindowEventIndex,
+    perfectCount,
+    continuedActive,
+  );
+  const existing = states.get(key);
+  if (
+    existing
+    && (
+      existing.score > score
+      || (existing.score === score && existing.offsetMagnitude <= offsetMagnitude)
+    )
+  ) {
+    return;
+  }
+  states.set(key, {
+    score,
+    hitCount,
+    selectedMask,
+    nextTriggerSlot,
+    currentWindowEventIndex,
+    currentWindowStartFrame,
+    currentWindowEndFrame,
+    perfectCount,
+    continuedActive,
+    offsetMagnitude,
+    trailIndex: pushTrail(trail, parentTrailIndex, note, event, window),
+  });
 }
 
 function buildOriginalPerfectIncumbent(
@@ -713,7 +1142,7 @@ function buildOriginalPerfectIncumbent(
   let state: DpState = {
     score: 0,
     hitCount: 0,
-    selectedMask: ZERO_MASK,
+    selectedNoteIndexes: [],
     selectedKey: "",
     nextTriggerSlot: 0,
     currentWindowEventIndex: -1,
@@ -783,6 +1212,585 @@ function buildOriginalPerfectIncumbent(
     : null;
 }
 
+function getStaticActiveWindowIndex(state: StaticDpState, hitFrame: number): number | null {
+  if (state.nextTriggerSlot <= 0) {
+    return null;
+  }
+  const slotIndex = state.nextTriggerSlot - 1;
+  return hitFrame > state.currentWindowStartFrame + EPSILON && hitFrame <= state.currentWindowEndFrame + EPSILON
+    ? slotIndex
+    : null;
+}
+
+function getCompactStaticActiveWindowIndex(state: CompactStaticDpState, hitFrame: number): number | null {
+  if (state.nextTriggerSlot <= 0) {
+    return null;
+  }
+  const slotIndex = state.nextTriggerSlot - 1;
+  return hitFrame > state.currentWindowStartFrame + EPSILON && hitFrame <= state.currentWindowEndFrame + EPSILON
+    ? slotIndex
+    : null;
+}
+
+function getCompactActiveWindowIndex(state: CompactDpState, hitFrame: number): number | null {
+  if (state.nextTriggerSlot <= 0) {
+    return null;
+  }
+  const slotIndex = state.nextTriggerSlot - 1;
+  return hitFrame > state.currentWindowStartFrame + EPSILON && hitFrame <= state.currentWindowEndFrame + EPSILON
+    ? slotIndex
+    : null;
+}
+
+function scoreCompactEvent(
+  context: SearchContext,
+  slotSkills: ReadonlyArray<ResolvedBandoriSkill | null>,
+  state: CompactDpState,
+  event: CandidateEvent,
+): { noteScore: number; perfectCount: number; continuedActive: boolean } {
+  const activeWindowIndex = getCompactActiveWindowIndex(state, event.hitFrame);
+  const innerScore = getBaseNoteScore(context, event.noteIndex, event.judgement, state.hitCount);
+  const skill = activeWindowIndex === null ? null : slotSkills[activeWindowIndex] ?? null;
+  const skillResult = evaluateSkillMultiplier(
+    skill,
+    event.judgement,
+    activeWindowIndex === null ? 0 : state.perfectCount,
+    activeWindowIndex === null ? true : state.continuedActive,
+  );
+  return {
+    noteScore: Math.floor(innerScore * skillResult.multiplier + SCORE_FLOOR_EPSILON),
+    perfectCount: activeWindowIndex === null ? 0 : skillResult.perfectCount,
+    continuedActive: activeWindowIndex === null ? true : skillResult.continuedActive,
+  };
+}
+
+function solveIntegratedCompactDp(
+  context: SearchContext,
+  events: readonly CandidateEvent[],
+  noteBits: Float64Array,
+  triggerSlotByNoteIndex: ReadonlyMap<number, number>,
+  skillOrder: readonly number[],
+  slotSkills: ReadonlyArray<ResolvedBandoriSkill | null>,
+  incumbentScore: number,
+): IntegratedSolveResult {
+  const trail: TrailNode[] = [];
+  let states = new Map<string, CompactDpState>();
+  mergeCompactState(states, {
+    score: 0,
+    hitCount: 0,
+    selectedMask: 0,
+    nextTriggerSlot: 0,
+    currentWindowEventIndex: -1,
+    currentWindowStartFrame: Number.NEGATIVE_INFINITY,
+    currentWindowEndFrame: Number.NEGATIVE_INFINITY,
+    perfectCount: 0,
+    continuedActive: true,
+    offsetMagnitude: 0,
+    trailIndex: -1,
+  });
+
+  let maxStateCount = states.size;
+  let prunedStateCount = 0;
+  for (const event of events) {
+    if (event.eventIndex % 64 === 0 && hasTimedOut(context.limits, context.stats)) {
+      return {
+        status: "bounded",
+        score: Number.NEGATIVE_INFINITY,
+        scoreUpperBound: context.generalScoreUpperBound,
+        choices: [],
+        windows: [],
+        maxStateCount,
+        prunedStateCount,
+        candidateEventCount: events.length,
+        boundedReason: "timeBudgetExceeded",
+      };
+    }
+
+    const noteBit = noteBits[event.noteIndex];
+    const currentStates = [...states.values()];
+    const nextStates = event.isLastForNote ? new Map<string, CompactDpState>() : states;
+    for (const state of currentStates) {
+      const selected = compactMaskHas(state.selectedMask, noteBit);
+      if (event.isLastForNote && selected) {
+        mergeCompactState(nextStates, {
+          ...state,
+          selectedMask: state.selectedMask - noteBit,
+        });
+      }
+      if (selected) {
+        continue;
+      }
+
+      const triggerSlot = triggerSlotByNoteIndex.get(event.noteIndex);
+      if (triggerSlot !== undefined) {
+        if (triggerSlot !== state.nextTriggerSlot) {
+          continue;
+        }
+        if (triggerSlot > 0 && event.hitFrame <= state.currentWindowEndFrame + EPSILON) {
+          context.stats.overlapPrunedWindowCount += 1;
+          continue;
+        }
+      }
+
+      const scored = triggerSlot === undefined
+        ? scoreCompactEvent(context, slotSkills, state, event)
+        : {
+          noteScore: getBaseNoteScore(context, event.noteIndex, event.judgement, state.hitCount),
+          perfectCount: 0,
+          continuedActive: true,
+        };
+      const nextScore = state.score + scored.noteScore;
+      const futureUpper = context.futureUpperByHitCount[state.hitCount + 1] ?? 0;
+      if (nextScore + futureUpper <= incumbentScore) {
+        prunedStateCount += 1;
+        continue;
+      }
+
+      const note = context.notes[event.noteIndex];
+      let nextTriggerSlot = state.nextTriggerSlot;
+      let currentWindowEventIndex = state.currentWindowEventIndex;
+      let currentWindowStartFrame = state.currentWindowStartFrame;
+      let currentWindowEndFrame = state.currentWindowEndFrame;
+      let perfectCount = scored.perfectCount;
+      let continuedActive = scored.continuedActive;
+      let window: BandoriSongOptimizerSkillWindow | null = null;
+      if (triggerSlot !== undefined) {
+        window = createSkillWindow(
+          triggerSlot,
+          skillOrder[triggerSlot],
+          note,
+          event,
+          slotSkills[triggerSlot]?.durationSeconds ?? 0,
+        );
+        nextTriggerSlot = triggerSlot + 1;
+        currentWindowEventIndex = event.eventIndex;
+        currentWindowStartFrame = window.startFrame;
+        currentWindowEndFrame = window.endFrame;
+        perfectCount = 0;
+        continuedActive = true;
+      }
+      mergeCompactChosenValues(
+        nextStates,
+        trail,
+        state.trailIndex,
+        note,
+        event,
+        window,
+        nextScore,
+        state.hitCount + 1,
+        event.isLastForNote ? state.selectedMask : state.selectedMask + noteBit,
+        nextTriggerSlot,
+        currentWindowEventIndex,
+        currentWindowStartFrame,
+        currentWindowEndFrame,
+        perfectCount,
+        continuedActive,
+        state.offsetMagnitude + Math.abs(event.offsetFrames),
+      );
+    }
+
+    states = nextStates;
+    maxStateCount = Math.max(maxStateCount, states.size);
+    if (states.size > context.limits.maxExactDpStates) {
+      return {
+        status: "bounded",
+        score: Number.NEGATIVE_INFINITY,
+        scoreUpperBound: context.generalScoreUpperBound,
+        choices: [],
+        windows: [],
+        maxStateCount,
+        prunedStateCount,
+        candidateEventCount: events.length,
+        boundedReason: "dpStateLimitExceeded",
+      };
+    }
+    if (states.size === 0) {
+      break;
+    }
+  }
+
+  let best: CompactDpState | null = null;
+  for (const state of states.values()) {
+    if (
+      state.hitCount !== context.notes.length
+      || state.selectedMask !== 0
+      || state.nextTriggerSlot !== SKILL_WINDOW_COUNT
+    ) {
+      continue;
+    }
+    if (
+      !best
+      || state.score > best.score
+      || (state.score === best.score && state.offsetMagnitude < best.offsetMagnitude)
+    ) {
+      best = state;
+    }
+  }
+  const reconstructed = best ? reconstructTrail(trail, best.trailIndex) : { choices: [], windows: [] };
+  return {
+    status: "exact",
+    score: best?.score ?? Number.NEGATIVE_INFINITY,
+    scoreUpperBound: best?.score ?? incumbentScore,
+    choices: reconstructed.choices,
+    windows: reconstructed.windows,
+    maxStateCount,
+    prunedStateCount,
+    candidateEventCount: events.length,
+  };
+}
+
+function solveIntegratedCompactStaticDp(
+  context: SearchContext,
+  events: readonly CandidateEvent[],
+  noteBits: Float64Array,
+  triggerSlotByNoteIndex: ReadonlyMap<number, number>,
+  skillOrder: readonly number[],
+  slotSkills: ReadonlyArray<ResolvedBandoriSkill | null>,
+  incumbentScore: number,
+): IntegratedSolveResult {
+  const staticSkillMultipliers = buildStaticSkillMultipliers(slotSkills);
+  const trail: TrailNode[] = [];
+  let states = new Map<string, CompactStaticDpState>();
+  mergeCompactStaticState(states, {
+    score: 0,
+    hitCount: 0,
+    selectedMask: 0,
+    nextTriggerSlot: 0,
+    currentWindowEventIndex: -1,
+    currentWindowStartFrame: Number.NEGATIVE_INFINITY,
+    currentWindowEndFrame: Number.NEGATIVE_INFINITY,
+    offsetMagnitude: 0,
+    trailIndex: -1,
+  });
+
+  let maxStateCount = states.size;
+  let prunedStateCount = 0;
+  for (const event of events) {
+    if (event.eventIndex % 64 === 0 && hasTimedOut(context.limits, context.stats)) {
+      return {
+        status: "bounded",
+        score: Number.NEGATIVE_INFINITY,
+        scoreUpperBound: context.generalScoreUpperBound,
+        choices: [],
+        windows: [],
+        maxStateCount,
+        prunedStateCount,
+        candidateEventCount: events.length,
+        boundedReason: "timeBudgetExceeded",
+      };
+    }
+
+    const noteBit = noteBits[event.noteIndex];
+    const currentStates = [...states.values()];
+    const nextStates = event.isLastForNote ? new Map<string, CompactStaticDpState>() : states;
+    for (const state of currentStates) {
+      const selected = compactMaskHas(state.selectedMask, noteBit);
+      if (event.isLastForNote && selected) {
+        mergeCompactStaticState(nextStates, {
+          ...state,
+          selectedMask: state.selectedMask - noteBit,
+        });
+      }
+      if (selected) {
+        continue;
+      }
+
+      const triggerSlot = triggerSlotByNoteIndex.get(event.noteIndex);
+      if (triggerSlot !== undefined) {
+        if (triggerSlot !== state.nextTriggerSlot) {
+          continue;
+        }
+        if (triggerSlot > 0 && event.hitFrame <= state.currentWindowEndFrame + EPSILON) {
+          context.stats.overlapPrunedWindowCount += 1;
+          continue;
+        }
+      }
+
+      const activeWindowIndex = triggerSlot === undefined
+        ? getCompactStaticActiveWindowIndex(state, event.hitFrame)
+        : null;
+      const innerScore = getBaseNoteScore(context, event.noteIndex, event.judgement, state.hitCount);
+      const noteScore = activeWindowIndex === null
+        ? innerScore
+        : Math.floor(
+          innerScore
+          * (staticSkillMultipliers[activeWindowIndex * 4 + getJudgeIndex(event.judgement)] ?? 1)
+          + SCORE_FLOOR_EPSILON,
+        );
+      const nextScore = state.score + noteScore;
+      const futureUpper = context.futureUpperByHitCount[state.hitCount + 1] ?? 0;
+      if (nextScore + futureUpper <= incumbentScore) {
+        prunedStateCount += 1;
+        continue;
+      }
+
+      const note = context.notes[event.noteIndex];
+      let nextTriggerSlot = state.nextTriggerSlot;
+      let currentWindowEventIndex = state.currentWindowEventIndex;
+      let currentWindowStartFrame = state.currentWindowStartFrame;
+      let currentWindowEndFrame = state.currentWindowEndFrame;
+      let window: BandoriSongOptimizerSkillWindow | null = null;
+      if (triggerSlot !== undefined) {
+        window = createSkillWindow(
+          triggerSlot,
+          skillOrder[triggerSlot],
+          note,
+          event,
+          slotSkills[triggerSlot]?.durationSeconds ?? 0,
+        );
+        nextTriggerSlot = triggerSlot + 1;
+        currentWindowEventIndex = event.eventIndex;
+        currentWindowStartFrame = window.startFrame;
+        currentWindowEndFrame = window.endFrame;
+      }
+      mergeCompactStaticChosenValues(
+        nextStates,
+        trail,
+        state.trailIndex,
+        note,
+        event,
+        window,
+        nextScore,
+        state.hitCount + 1,
+        event.isLastForNote ? state.selectedMask : state.selectedMask + noteBit,
+        nextTriggerSlot,
+        currentWindowEventIndex,
+        currentWindowStartFrame,
+        currentWindowEndFrame,
+        state.offsetMagnitude + Math.abs(event.offsetFrames),
+      );
+    }
+
+    states = nextStates;
+    maxStateCount = Math.max(maxStateCount, states.size);
+    if (states.size > context.limits.maxExactDpStates) {
+      return {
+        status: "bounded",
+        score: Number.NEGATIVE_INFINITY,
+        scoreUpperBound: context.generalScoreUpperBound,
+        choices: [],
+        windows: [],
+        maxStateCount,
+        prunedStateCount,
+        candidateEventCount: events.length,
+        boundedReason: "dpStateLimitExceeded",
+      };
+    }
+    if (states.size === 0) {
+      break;
+    }
+  }
+
+  let best: CompactStaticDpState | null = null;
+  for (const state of states.values()) {
+    if (
+      state.hitCount !== context.notes.length
+      || state.selectedMask !== 0
+      || state.nextTriggerSlot !== SKILL_WINDOW_COUNT
+    ) {
+      continue;
+    }
+    if (
+      !best
+      || state.score > best.score
+      || (state.score === best.score && state.offsetMagnitude < best.offsetMagnitude)
+    ) {
+      best = state;
+    }
+  }
+  const reconstructed = best ? reconstructTrail(trail, best.trailIndex) : { choices: [], windows: [] };
+  return {
+    status: "exact",
+    score: best?.score ?? Number.NEGATIVE_INFINITY,
+    scoreUpperBound: best?.score ?? incumbentScore,
+    choices: reconstructed.choices,
+    windows: reconstructed.windows,
+    maxStateCount,
+    prunedStateCount,
+    candidateEventCount: events.length,
+  };
+}
+
+function solveIntegratedStaticDp(
+  context: SearchContext,
+  events: readonly CandidateEvent[],
+  triggerSlotByNoteIndex: ReadonlyMap<number, number>,
+  skillOrder: readonly number[],
+  slotSkills: ReadonlyArray<ResolvedBandoriSkill | null>,
+  incumbentScore: number,
+): IntegratedSolveResult {
+  const staticSkillMultipliers = buildStaticSkillMultipliers(slotSkills);
+  const trail: TrailNode[] = [];
+  let states = new Map<string, StaticDpState>();
+  mergeStaticState(states, {
+    score: 0,
+    hitCount: 0,
+    selectedNoteIndexes: [],
+    selectedKey: "",
+    nextTriggerSlot: 0,
+    currentWindowEventIndex: -1,
+    currentWindowStartFrame: Number.NEGATIVE_INFINITY,
+    currentWindowEndFrame: Number.NEGATIVE_INFINITY,
+    offsetMagnitude: 0,
+    trailIndex: -1,
+  });
+
+  let maxStateCount = states.size;
+  let prunedStateCount = 0;
+  for (const event of events) {
+    if (event.eventIndex % 64 === 0 && hasTimedOut(context.limits, context.stats)) {
+      return {
+        status: "bounded",
+        score: Number.NEGATIVE_INFINITY,
+        scoreUpperBound: context.generalScoreUpperBound,
+        choices: [],
+        windows: [],
+        maxStateCount,
+        prunedStateCount,
+        candidateEventCount: events.length,
+        boundedReason: "timeBudgetExceeded",
+      };
+    }
+
+    const currentStates = [...states.values()];
+    const nextStates = event.isLastForNote ? new Map<string, StaticDpState>() : states;
+    for (const state of currentStates) {
+      const selected = state.selectedNoteIndexes.includes(event.noteIndex);
+      if (event.isLastForNote && selected) {
+        const nextSelected = removeSelectedNote(state, event.noteIndex);
+        mergeStaticState(nextStates, {
+          ...state,
+          selectedNoteIndexes: nextSelected.selectedNoteIndexes,
+          selectedKey: nextSelected.selectedKey,
+        });
+      }
+      if (selected) {
+        continue;
+      }
+
+      const triggerSlot = triggerSlotByNoteIndex.get(event.noteIndex);
+      if (triggerSlot !== undefined) {
+        if (triggerSlot !== state.nextTriggerSlot) {
+          continue;
+        }
+        if (triggerSlot > 0 && event.hitFrame <= state.currentWindowEndFrame + EPSILON) {
+          context.stats.overlapPrunedWindowCount += 1;
+          continue;
+        }
+      }
+
+      const activeWindowIndex = triggerSlot === undefined
+        ? getStaticActiveWindowIndex(state, event.hitFrame)
+        : null;
+      const innerScore = getBaseNoteScore(context, event.noteIndex, event.judgement, state.hitCount);
+      const noteScore = activeWindowIndex === null
+        ? innerScore
+        : Math.floor(
+          innerScore
+          * (staticSkillMultipliers[activeWindowIndex * 4 + getJudgeIndex(event.judgement)] ?? 1)
+          + SCORE_FLOOR_EPSILON,
+        );
+      const nextScore = state.score + noteScore;
+      const futureUpper = context.futureUpperByHitCount[state.hitCount + 1] ?? 0;
+      if (nextScore + futureUpper <= incumbentScore) {
+        prunedStateCount += 1;
+        continue;
+      }
+
+      const note = context.notes[event.noteIndex];
+      let nextTriggerSlot = state.nextTriggerSlot;
+      let currentWindowEventIndex = state.currentWindowEventIndex;
+      let currentWindowStartFrame = state.currentWindowStartFrame;
+      let currentWindowEndFrame = state.currentWindowEndFrame;
+      let window: BandoriSongOptimizerSkillWindow | null = null;
+      if (triggerSlot !== undefined) {
+        window = createSkillWindow(
+          triggerSlot,
+          skillOrder[triggerSlot],
+          note,
+          event,
+          slotSkills[triggerSlot]?.durationSeconds ?? 0,
+        );
+        nextTriggerSlot = triggerSlot + 1;
+        currentWindowEventIndex = event.eventIndex;
+        currentWindowStartFrame = window.startFrame;
+        currentWindowEndFrame = window.endFrame;
+      }
+      const nextSelected = event.isLastForNote
+        ? {
+          selectedNoteIndexes: state.selectedNoteIndexes,
+          selectedKey: state.selectedKey,
+        }
+        : addSelectedNote(state, event.noteIndex);
+      mergeStaticChosenValues(
+        nextStates,
+        trail,
+        state.trailIndex,
+        note,
+        event,
+        window,
+        nextScore,
+        state.hitCount + 1,
+        nextSelected.selectedNoteIndexes,
+        nextSelected.selectedKey,
+        nextTriggerSlot,
+        currentWindowEventIndex,
+        currentWindowStartFrame,
+        currentWindowEndFrame,
+        state.offsetMagnitude + Math.abs(event.offsetFrames),
+      );
+    }
+
+    states = nextStates;
+    maxStateCount = Math.max(maxStateCount, states.size);
+    if (states.size > context.limits.maxExactDpStates) {
+      return {
+        status: "bounded",
+        score: Number.NEGATIVE_INFINITY,
+        scoreUpperBound: context.generalScoreUpperBound,
+        choices: [],
+        windows: [],
+        maxStateCount,
+        prunedStateCount,
+        candidateEventCount: events.length,
+        boundedReason: "dpStateLimitExceeded",
+      };
+    }
+    if (states.size === 0) {
+      break;
+    }
+  }
+
+  let best: StaticDpState | null = null;
+  for (const state of states.values()) {
+    if (
+      state.hitCount !== context.notes.length
+      || state.selectedNoteIndexes.length !== 0
+      || state.nextTriggerSlot !== SKILL_WINDOW_COUNT
+    ) {
+      continue;
+    }
+    if (
+      !best
+      || state.score > best.score
+      || (state.score === best.score && state.offsetMagnitude < best.offsetMagnitude)
+    ) {
+      best = state;
+    }
+  }
+  const reconstructed = best ? reconstructTrail(trail, best.trailIndex) : { choices: [], windows: [] };
+  return {
+    status: "exact",
+    score: best?.score ?? Number.NEGATIVE_INFINITY,
+    scoreUpperBound: best?.score ?? incumbentScore,
+    choices: reconstructed.choices,
+    windows: reconstructed.windows,
+    maxStateCount,
+    prunedStateCount,
+    candidateEventCount: events.length,
+  };
+}
+
 function solveIntegratedDp(
   context: SearchContext,
   candidateLists: ReadonlyArray<readonly OptimizerProofHitCandidate[]>,
@@ -826,6 +1834,42 @@ function solveIntegratedDp(
     };
   }
 
+  if (!context.usesDynamicSkillState) {
+    const compactNoteBits = buildCompactNoteBits(events, context.notes.length);
+    if (compactNoteBits) {
+      return solveIntegratedCompactStaticDp(
+        context,
+        events,
+        compactNoteBits,
+        triggerSlotByNoteIndex,
+        skillOrder,
+        slotSkills,
+        incumbentScore,
+      );
+    }
+    return solveIntegratedStaticDp(
+      context,
+      events,
+      triggerSlotByNoteIndex,
+      skillOrder,
+      slotSkills,
+      incumbentScore,
+    );
+  }
+
+  const compactNoteBits = buildCompactNoteBits(events, context.notes.length);
+  if (compactNoteBits) {
+    return solveIntegratedCompactDp(
+      context,
+      events,
+      compactNoteBits,
+      triggerSlotByNoteIndex,
+      skillOrder,
+      slotSkills,
+      incumbentScore,
+    );
+  }
+
   const staticSkillMultipliers = context.usesDynamicSkillState ? null : buildStaticSkillMultipliers(slotSkills);
   const trail: TrailNode[] = [];
   let states = new Map<string, DpState>();
@@ -834,7 +1878,7 @@ function solveIntegratedDp(
     {
       score: 0,
       hitCount: 0,
-      selectedMask: ZERO_MASK,
+      selectedNoteIndexes: [],
       selectedKey: "",
       nextTriggerSlot: 0,
       currentWindowEventIndex: -1,
@@ -868,15 +1912,15 @@ function solveIntegratedDp(
     const currentStates = [...states.values()];
     const nextStates = event.isLastForNote ? new Map<string, DpState>() : states;
     for (const state of currentStates) {
-      const selected = (state.selectedMask & event.noteMask) !== ZERO_MASK;
+      const selected = state.selectedNoteIndexes.includes(event.noteIndex);
       if (event.isLastForNote && selected) {
-        const nextMask = state.selectedMask & ~event.noteMask;
+        const nextSelected = removeSelectedNote(state, event.noteIndex);
         mergeState(
           nextStates,
           {
             ...state,
-            selectedMask: nextMask,
-            selectedKey: toMaskKey(nextMask),
+            selectedNoteIndexes: nextSelected.selectedNoteIndexes,
+            selectedKey: nextSelected.selectedKey,
           },
           context.usesDynamicSkillState,
         );
@@ -933,28 +1977,30 @@ function solveIntegratedDp(
         perfectCount = 0;
         continuedActive = true;
       }
-      const nextMask = event.isLastForNote ? state.selectedMask : state.selectedMask | event.noteMask;
-      mergeChosenState(
+      const nextSelected = event.isLastForNote
+        ? {
+          selectedNoteIndexes: state.selectedNoteIndexes,
+          selectedKey: state.selectedKey,
+        }
+        : addSelectedNote(state, event.noteIndex);
+      mergeChosenValues(
         nextStates,
-        {
-          score: nextScore,
-          hitCount: state.hitCount + 1,
-          selectedMask: nextMask,
-          selectedKey: toMaskKey(nextMask),
-          nextTriggerSlot,
-          currentWindowEventIndex,
-          currentWindowStartFrame,
-          currentWindowEndFrame,
-          perfectCount,
-          continuedActive,
-          offsetMagnitude: state.offsetMagnitude + Math.abs(event.offsetFrames),
-          trailIndex: state.trailIndex,
-        },
         trail,
         state.trailIndex,
         note,
         event,
         window,
+        nextScore,
+        state.hitCount + 1,
+        nextSelected.selectedNoteIndexes,
+        nextSelected.selectedKey,
+        nextTriggerSlot,
+        currentWindowEventIndex,
+        currentWindowStartFrame,
+        currentWindowEndFrame,
+        perfectCount,
+        continuedActive,
+        state.offsetMagnitude + Math.abs(event.offsetFrames),
         context.usesDynamicSkillState,
       );
     }
@@ -981,7 +2027,11 @@ function solveIntegratedDp(
 
   let best: DpState | null = null;
   for (const state of states.values()) {
-    if (state.hitCount !== context.notes.length || state.selectedMask !== ZERO_MASK || state.nextTriggerSlot !== SKILL_WINDOW_COUNT) {
+    if (
+      state.hitCount !== context.notes.length
+      || state.selectedNoteIndexes.length !== 0
+      || state.nextTriggerSlot !== SKILL_WINDOW_COUNT
+    ) {
       continue;
     }
     if (
