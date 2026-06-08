@@ -173,6 +173,7 @@ export function createMedleyExactSlotCandidateGenerator(
   nodeSoftLimit: number,
   lowMemoryHighPairScanMinRecordCount: number | null = null,
   lowMemoryHighPairPrefixRecordLimit: number | null = null,
+  minimumProofScoreCutoff = Number.NEGATIVE_INFINITY,
 ): MedleyExactSlotCandidateGenerator {
   // The generator is ordered by optimistic slot upper bound. Exhaustion proves that no unseen
   // slot candidate remains above the active cutoff; budget/deadline aborts are reported to the
@@ -189,6 +190,12 @@ export function createMedleyExactSlotCandidateGenerator(
   let heapKeyMode: "slot" | "global" = "slot";
   let heapGlobalKeySignature: string | null = null;
   let maxPruningScoreCutoff = Number.NEGATIVE_INFINITY;
+  const slotProofMinimumScoreCutoff = Number.isFinite(minimumProofScoreCutoff)
+    ? minimumProofScoreCutoff
+    : Number.NEGATIVE_INFINITY;
+  const getEffectiveScoreCutoff = (scoreCutoff: number): number => (
+    Math.max(scoreCutoff, slotProofMinimumScoreCutoff)
+  );
   const pushHeapNode = (node: MedleyExactSlotCandidateSearchNode): void => {
     activeHeapNodes.add(node);
     pushMedleyExactSlotNode(heap, node);
@@ -613,8 +620,9 @@ export function createMedleyExactSlotCandidateGenerator(
     scoreCutoff = Number.NEGATIVE_INFINITY,
     globalPruning?: MedleyExactSlotCandidateGlobalPruning,
   ): MedleyTeamCandidate | null => {
-    rebuildHeapKeys(scoreCutoff, globalPruning);
-    const exhaustedKeyCutoff = globalPruning ? 0 : scoreCutoff;
+    const effectiveScoreCutoff = getEffectiveScoreCutoff(scoreCutoff);
+    rebuildHeapKeys(effectiveScoreCutoff, globalPruning);
+    const exhaustedKeyCutoff = globalPruning ? 0 : effectiveScoreCutoff;
     while (heap.length > 0) {
       if ((heap[0]?.key ?? Number.NEGATIVE_INFINITY) < exhaustedKeyCutoff) {
         return null;
@@ -639,7 +647,7 @@ export function createMedleyExactSlotCandidateGenerator(
       if (node.candidate) {
         return node.candidate;
       }
-      expandNode(node, scoreCutoff, globalPruning);
+      expandNode(node, effectiveScoreCutoff, globalPruning);
     }
     return null;
   };
@@ -652,7 +660,7 @@ export function createMedleyExactSlotCandidateGenerator(
         : peekMaxHeapSlotUpperBound()
     ),
     canReuseForScoreCutoff: (scoreCutoff: number) => (
-      !Number.isFinite(scoreCutoff) || scoreCutoff >= maxPruningScoreCutoff
+      !Number.isFinite(scoreCutoff) || getEffectiveScoreCutoff(scoreCutoff) >= maxPruningScoreCutoff
     ),
     hasAborted: () => aborted,
     poppedNodeCount: () => poppedNodes,
@@ -3763,6 +3771,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     exactJoinPrefixSeedMinProofBudgetMs?: number;
     exactJoinPrefixSeedMinMemoryHeadroomMiB?: number;
     exactJoinPrefixSeedMaxObservedGap?: number;
+    enableExactJoinSlotProofCutoff?: boolean;
     lowMemoryHighPairScanMinRecordCount?: number | null;
     lowMemoryHighPairPrefixRecordLimit?: number | null;
     debugExactCandidateJoinMemoryAttribution?: boolean;
@@ -3859,6 +3868,18 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     ? context.solveOnlyAboveUpperTarget
     : null;
   let exactJoinProofCutoffScore = solveOnlyAboveUpperTarget ?? incumbentScore;
+  const slotRootScoreUpperBounds = slots.map((slot) => slot.rootScoreUpperBound);
+  const slotProofMinimumScoreCutoffs = context.enableExactJoinSlotProofCutoff === true
+    ? slots.map((_, slotIndex) => {
+      const otherRootUpperBound = slotRootScoreUpperBounds.reduce((sum, upperBound, currentSlotIndex) => (
+        currentSlotIndex === slotIndex
+          ? sum
+          : sum + (Number.isFinite(upperBound) ? upperBound : Number.POSITIVE_INFINITY)
+      ), 0);
+      const minimumScoreCutoff = exactJoinProofCutoffScore - otherRootUpperBound;
+      return Number.isFinite(minimumScoreCutoff) ? minimumScoreCutoff : Number.NEGATIVE_INFINITY;
+    })
+    : slots.map(() => Number.NEGATIVE_INFINITY);
   profiling.exactCandidateJoinLastBestSlotScores = [];
   profiling.exactCandidateJoinLastPairUpperByExcludedSlot = [];
   profiling.exactCandidateJoinLastPairUnseenUpperByExcludedSlot = [];
@@ -3870,7 +3891,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
   profiling.exactCandidateJoinLastCandidateCountsBySlot = [];
   profiling.exactCandidateJoinLastCandidateFillElapsedMsBySlot = [];
 
-  const generators = slots.map((slot) => createMedleyExactSlotCandidateGenerator(
+  const generators = slots.map((slot, slotIndex) => createMedleyExactSlotCandidateGenerator(
     slot,
     server,
     perfectRate,
@@ -3881,6 +3902,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     nodeSoftLimit,
     context.lowMemoryHighPairScanMinRecordCount ?? null,
     context.lowMemoryHighPairPrefixRecordLimit ?? null,
+    slotProofMinimumScoreCutoffs[slotIndex],
   ));
   const candidatesBySlot: MedleyTeamCandidate[][] = Array.from({ length: slots.length }, () => []);
   const bestSlotScores: number[] = [];
@@ -4513,7 +4535,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
   const candidateOtherUpperBySlot = new Array<number>(slots.length).fill(Number.POSITIVE_INFINITY);
   const candidateRelaxedOtherUpperBySlot = new Array<number>(slots.length).fill(Number.POSITIVE_INFINITY);
   const candidateRemainingOtherUpperBySlot = new Array<number>(slots.length).fill(Number.POSITIVE_INFINITY);
-  const candidateFillGenerators = slots.map((slot) => createMedleyExactSlotCandidateGenerator(
+  const candidateFillGenerators = slots.map((slot, slotIndex) => createMedleyExactSlotCandidateGenerator(
     slot,
     server,
     perfectRate,
@@ -4524,6 +4546,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     nodeSoftLimit,
     context.lowMemoryHighPairScanMinRecordCount ?? null,
     context.lowMemoryHighPairPrefixRecordLimit ?? null,
+    slotProofMinimumScoreCutoffs[slotIndex],
   ));
   const getCandidateFillGenerator = (slotIndex: number, scoreCutoff: number): MedleyExactSlotCandidateGenerator => (
     generators[slotIndex].canReuseForScoreCutoff(scoreCutoff)
