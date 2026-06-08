@@ -1,6 +1,6 @@
 # Medley 40/40 Exact Roadmap
 
-Last updated: 2026-06-09 04:05 CST
+Last updated: 2026-06-09 04:20 CST
 
 This file is the persistent working note for the current medley optimizer goal.
 Keep it current before and after benchmark runs or proof-path changes, so future
@@ -502,6 +502,13 @@ Phase 1: memory-capped exact-join proof patch.
   source. The next generic route should target exact candidate/result payloads,
   pair query caches, or streamed/chunked frontier proof rather than further
   node-shape tweaks.
+- Commit `0dfba16` tried compacting candidate instance-key arrays into one
+  signature string, then `e89e22b` reverted it. The P06/P07 smoke had a small
+  positive signal on `P07:244` (`55265 -> 52777` gap, peak about
+  `4202 MiB`), but the 5-bounded verification failed the memory gate:
+  `P03:260` peaked at `4724 MiB` and `P07:260` peaked at `5430 MiB`, with
+  both cases moving into `initial-candidate` memory pressure. Do not continue
+  candidate instance-key compaction as a default route.
 
 Phase 2: no-op equivalence gate, required only when touching prefix/seed
 diagnostic paths again.
