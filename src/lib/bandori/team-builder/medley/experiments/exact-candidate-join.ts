@@ -3936,6 +3936,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     exactJoinPrefixSeedMinProofBudgetMs?: number;
     exactJoinPrefixSeedMinMemoryHeadroomMiB?: number;
     exactJoinPrefixSeedMaxObservedGap?: number;
+    enableLowMemoryInitialCandidateSync?: boolean;
     lowMemoryHighPairScanMinRecordCount?: number | null;
     lowMemoryHighPairPrefixRecordLimit?: number | null;
     debugExactCandidateJoinMemoryAttribution?: boolean;
@@ -4401,23 +4402,30 @@ export function searchMedleyConfigurationByExactCandidateJoin(
   const initialCandidateStartedAt = performance.now();
   for (let slotIndex = 0; slotIndex < slots.length; slotIndex += 1) {
     const slotInitialCandidateStartedAt = performance.now();
-    const lowMemoryTopCandidate = findBestMedleyExactSlotCandidateLowMemory(
-      slots[slotIndex],
-      server,
-      perfectRate,
-      stats,
-      profiling,
-      isPastDeadline,
-      deadlineAt,
-      nodeSoftLimit,
-    );
-    const topCandidate = lowMemoryTopCandidate.candidate
-      ? generators[slotIndex].next(lowMemoryTopCandidate.candidate.result.score)
-      : null;
+    let topCandidate: MedleyTeamCandidate | null = null;
+    let didAbortLowMemoryInitialCandidateSync = false;
+    if (context.enableLowMemoryInitialCandidateSync === false) {
+      topCandidate = generators[slotIndex].next();
+    } else {
+      const lowMemoryTopCandidate = findBestMedleyExactSlotCandidateLowMemory(
+        slots[slotIndex],
+        server,
+        perfectRate,
+        stats,
+        profiling,
+        isPastDeadline,
+        deadlineAt,
+        nodeSoftLimit,
+      );
+      didAbortLowMemoryInitialCandidateSync = lowMemoryTopCandidate.aborted;
+      topCandidate = lowMemoryTopCandidate.candidate
+        ? generators[slotIndex].next(lowMemoryTopCandidate.candidate.result.score)
+        : null;
+    }
     profiling.exactCandidateJoinInitialCandidateElapsedMsBySlot[slotIndex] = (
       performance.now() - slotInitialCandidateStartedAt
     );
-    if (stats.timedOut || lowMemoryTopCandidate.aborted || generators[slotIndex].hasAborted() || !topCandidate) {
+    if (stats.timedOut || didAbortLowMemoryInitialCandidateSync || generators[slotIndex].hasAborted() || !topCandidate) {
       profiling.exactCandidateJoinInitialCandidateElapsedMs += performance.now() - initialCandidateStartedAt;
       profiling.exactCandidateJoinAbortCount += 1;
       recordAbortDiagnostics("initial-candidate", {

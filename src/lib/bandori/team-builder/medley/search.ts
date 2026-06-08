@@ -104,6 +104,7 @@ const MEDLEY_TRAILING_SAME_COARSE_DFS_ONLY_MIN_PROOF_COUNT = 1;
 const MEDLEY_EXACT_JOIN_PREFIX_SEED_DEFAULT_TIMEBOX_MS = 300;
 const MEDLEY_EXACT_JOIN_PREFIX_SEED_DEFAULT_MAX_SMALLEST_CANDIDATE_COUNT = 20_000;
 const MEDLEY_EXACT_JOIN_PREFIX_SEED_DEFAULT_MIN_CANDIDATE_COUNTS: [number, number, number] = [1, 1, 1];
+const MEDLEY_LOW_MEMORY_INITIAL_CANDIDATE_SYNC_MAX_SAME_COARSE_PROOF_ELAPSED_MS = 8_000;
 const MEDLEY_POST_EXACT_JOIN_TIGHT_ROOT_MAX_CARD_COUNT = 1_300;
 const MEDLEY_POST_EXACT_JOIN_TIGHT_ROOT_MIN_REMAINING_MS = 30_000;
 const MEDLEY_SAME_COARSE_FRONTIER_RETRY_MAX_CARD_COUNT = 1_300;
@@ -686,6 +687,17 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
       ? Math.max(1, parsedLowMemoryHighPairPrefixRecordLimit)
       : MEDLEY_EXACT_CANDIDATE_JOIN_LOW_MEMORY_HIGH_PAIR_PREFIX_RECORD_LIMIT
     : null;
+  const disableLowMemoryInitialCandidateSync = optimization.disableLowMemoryInitialCandidateSync === true;
+  const parsedLowMemoryInitialCandidateSyncMaxSameCoarseProofElapsedMs = (
+    optimization.lowMemoryInitialCandidateSyncMaxSameCoarseProofElapsedMs !== undefined
+      ? Math.trunc(optimization.lowMemoryInitialCandidateSyncMaxSameCoarseProofElapsedMs)
+      : Number.NaN
+  );
+  const lowMemoryInitialCandidateSyncMaxSameCoarseProofElapsedMs = Number.isFinite(
+    parsedLowMemoryInitialCandidateSyncMaxSameCoarseProofElapsedMs,
+  )
+    ? Math.max(0, parsedLowMemoryInitialCandidateSyncMaxSameCoarseProofElapsedMs)
+    : MEDLEY_LOW_MEMORY_INITIAL_CANDIDATE_SYNC_MAX_SAME_COARSE_PROOF_ELAPSED_MS;
   const exactJoinPrefixSeedForceNoop = optimization.exactJoinPrefixSeedForceNoop === true;
   const exactJoinPrefixSeedGuardOnly = optimization.exactJoinPrefixSeedGuardOnly === true;
   const parsedExactJoinPrefixSeedTimeboxMs = optimization.exactJoinPrefixSeedTimeboxMs !== undefined
@@ -2505,6 +2517,13 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
     const incumbentScore = results[0]?.score ?? Number.NEGATIVE_INFINITY;
     const bestSeedPassScore = profiling.bestConfigurationSeedPassScore ?? Number.NEGATIVE_INFINITY;
     const currentCoarseKey = getMedleyAreaItemCoarseKey(configuration);
+    const sameCoarseMaxExactJoinProofElapsedMs = exactCandidateJoinProofElapsedMsByCoarseKey.get(
+      currentCoarseKey,
+    ) ?? 0;
+    const shouldUseLowMemoryInitialCandidateSync = (
+      !disableLowMemoryInitialCandidateSync
+      && sameCoarseMaxExactJoinProofElapsedMs < lowMemoryInitialCandidateSyncMaxSameCoarseProofElapsedMs
+    );
     const sameCoarseSiblingFrontier = configurationIndex >= 0
       ? getSameCoarseSiblingFrontier(configurationIndex, threshold)
       : [];
@@ -2527,6 +2546,15 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
       traceEntry.sameCoarseSiblingBlocked = sameCoarseSiblingBlockedSmallGapSolveRetry;
       traceEntry.sameCoarseSiblingBlockedStagedExtension = sameCoarseSiblingBlockedStagedExtension;
       traceEntry.sameCoarseSiblingBlockedSmallGapSolveRetry = sameCoarseSiblingBlockedSmallGapSolveRetry;
+    }
+    if (traceEntry) {
+      traceEntry.lowMemoryInitialCandidateSync = shouldUseLowMemoryInitialCandidateSync;
+      traceEntry.lowMemoryInitialCandidateSyncSameCoarseProofElapsedMs = Math.round(
+        sameCoarseMaxExactJoinProofElapsedMs,
+      );
+      traceEntry.lowMemoryInitialCandidateSyncMaxSameCoarseProofElapsedMs = (
+        lowMemoryInitialCandidateSyncMaxSameCoarseProofElapsedMs
+      );
     }
     const sameCoarseClosedSiblingCount = sameCoarseSiblingFrontier.filter((entry) => entry.closed === true).length;
     const shouldUseTrailingSameCoarseDfsOnly = (
@@ -3155,6 +3183,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
           exactJoinPrefixSeedMinCandidateCounts,
           exactJoinPrefixSeedPreviousLocalTimeout: exactJoinPrefixSeedDisabledCoarseKeys.has(currentCoarseKey),
           exactJoinPrefixSeedMemorySoftLimitMiB: stats.memorySoftLimitMiB,
+          enableLowMemoryInitialCandidateSync: shouldUseLowMemoryInitialCandidateSync,
           lowMemoryHighPairScanMinRecordCount,
           lowMemoryHighPairPrefixRecordLimit,
           debugExactCandidateJoinMemoryAttribution,
@@ -3433,6 +3462,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
           exactJoinPrefixSeedMinCandidateCounts,
           exactJoinPrefixSeedPreviousLocalTimeout: exactJoinPrefixSeedDisabledCoarseKeys.has(currentCoarseKey),
           exactJoinPrefixSeedMemorySoftLimitMiB: stats.memorySoftLimitMiB,
+          enableLowMemoryInitialCandidateSync: shouldUseLowMemoryInitialCandidateSync,
           lowMemoryHighPairScanMinRecordCount,
           lowMemoryHighPairPrefixRecordLimit,
           debugExactCandidateJoinMemoryAttribution,
