@@ -4573,7 +4573,6 @@ export function searchMedleyConfigurationByExactCandidateJoin(
       ...extra,
     });
   };
-  recordExactJoinMemorySnapshot("after-pair-upper");
   const refineCandidateFillPairUpper = (excludedSlotIndex: number): boolean => {
     const pairSlotIndices = slots
       .map((_, index) => index)
@@ -4909,7 +4908,6 @@ export function searchMedleyConfigurationByExactCandidateJoin(
             sum + currentGenerator.poppedNodeCount()
           ), 0);
           profiling.exactCandidateJoinCompletedCount += 1;
-          recordExactJoinMemorySnapshot("anchor-frontier-proved", { slotIndex });
           return { proved: true, result: anchorFrontierProof.result };
         }
         const anchorFrontierObservedUpperBound = anchorFrontierProof?.observedUpperBound ?? null;
@@ -4995,7 +4993,6 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     );
   }
   profiling.exactCandidateJoinCandidateFillElapsedMs += performance.now() - candidateFillStartedAt;
-  recordExactJoinMemorySnapshot("after-candidate-fill");
 
   candidatesBySlot.forEach(sortMedleyCandidates);
   maybeSeedFromExactJoinPrefix();
@@ -5097,13 +5094,6 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     );
     profiling.exactCandidateJoinLastSmallGapSolveRetryPeakHeapMiB = stats.peakUsedHeapMiB;
   }
-  recordExactJoinMemorySnapshot("before-solve", {
-    solveCandidateCounts,
-    solveUpperGap,
-    remainingBeforeSolveMs: Number.isFinite(remainingBeforeSolveMs)
-      ? Math.max(0, Math.round(remainingBeforeSolveMs))
-      : null,
-  });
   const solveStartedAt = performance.now();
   const joinResult = solveMedleyExactCandidateJoin(
     slots,
@@ -5121,11 +5111,6 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     observeEvaluatedResult,
   );
   profiling.exactCandidateJoinSolveElapsedMs += performance.now() - solveStartedAt;
-  recordExactJoinMemorySnapshot("after-solve", {
-    solveCandidateCounts,
-    solveTimedOut: joinResult.timedOut,
-    solveLocalTimedOut: joinResult.localTimedOut === true,
-  });
   if (joinResult.timedOut) {
     profiling.exactCandidateJoinAbortCount += 1;
     if (joinResult.localTimedOut) {
@@ -5162,7 +5147,6 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     );
   }
   profiling.exactCandidateJoinCompletedCount += 1;
-  recordExactJoinMemorySnapshot("proved", { solveCandidateCounts });
   releaseCandidateArrays();
   return { proved: true, result: applyPrefixSeedResult(result) };
 }
