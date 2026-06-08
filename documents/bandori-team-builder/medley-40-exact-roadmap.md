@@ -94,6 +94,11 @@ row, especially `P08:260`, `P10:260`, `P08:323`, and `P10:244`.
   that memory reduction alone can remove useful frontier work; acceptable
   patches must preserve or replace the proof strength that the retained cache
   currently enables.
+- The existing opt-in staged/guarded candidate extension was rechecked on
+  `P07:244`. Guarded extension did trigger from `400000` to `600000`
+  candidates with about `180052ms` remaining, but the case still ended bounded,
+  gap `395539`, peak `4201 MiB`, and `memoryLimited=true`; staged extension did
+  not trigger. Do not loosen extension thresholds as the next default strategy.
 
 Rejected/diagnostic 2026-06-08 evidence:
 
@@ -270,6 +275,10 @@ Phase 1: memory-capped exact-join proof patch.
   The preferred implementation shape is an exact-join internal compact or
   streamed representation that keeps deterministic candidate order and upper
   proof semantics while reducing duplicate object/string/record residency.
+- Avoid simply relaxing guarded/staged candidate extension thresholds. The
+  diagnostic `P07:244` run showed that generating more candidates can increase
+  memory pressure and widen the final bounded gap if pair/frontier proof remains
+  unclosed.
 
 Phase 2: no-op equivalence gate, required only when touching prefix/seed
 diagnostic paths again.
