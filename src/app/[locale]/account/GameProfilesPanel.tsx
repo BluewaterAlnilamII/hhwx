@@ -2,7 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { CheckCircle2, Copy, Download, FileJson, Plus, RefreshCw, Trash2, Upload } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { getApiErrorMessage, parseApiSuccessData } from "@/lib/api-contracts";
+import BandoriCnExclusiveNotice from "@/app/[locale]/bandori/BandoriCnExclusiveNotice";
 import type { GameAccountBinding, GameBindChallenge } from "@/lib/game-account-binding";
 import {
   BESTDORI_CN_SERVER_ID,
@@ -170,6 +172,7 @@ function blankPayload(name: string): UserGameProfilePayload {
 }
 
 export default function GameProfilesPanel() {
+  const cnExclusiveT = useTranslations("bandori.notices.cnExclusive");
   const [cloudProfiles, setCloudProfiles] = useState<CloudGameProfileSummary[]>([]);
   const [localProfiles, setLocalProfiles] = useState<LocalGameProfileSummary[]>([]);
   const [bindings, setBindings] = useState<GameAccountBinding[]>([]);
@@ -609,6 +612,11 @@ export default function GameProfilesPanel() {
 
       <div className="mt-6 border-t border-slate-100 pt-5">
         <h3 className="text-base font-semibold text-slate-900">绑定新 UID</h3>
+        <BandoriCnExclusiveNotice
+          label={cnExclusiveT("label")}
+          description={cnExclusiveT("gameProfileBindingDescription")}
+          className="mt-3"
+        />
         <div className="mt-3 grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
           <input
             value={gameUid}

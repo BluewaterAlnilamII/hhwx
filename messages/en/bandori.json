@@ -2,8 +2,9 @@
   "notices": {
     "cnExclusive": {
       "label": "CN exclusive",
-      "calendarDescription": "This calendar only covers the CN server. JP, EN, KR, TW, and other servers are not supported here.",
-      "eventtrackerDescription": "This event tracker only supports CN server rankings and prediction data. JP, EN, KR, TW, and other servers are not supported here."
+      "calendarDescription": "This calendar only covers the CN server. JP, EN, and TW servers are not supported here.",
+      "eventtrackerDescription": "This event tracker only supports CN server rankings and prediction data. JP, EN, and TW servers are not supported here.",
+      "gameProfileBindingDescription": "UID binding and automatic profile sync only support the CN server. JP, EN, and TW servers are not supported here."
     }
   }
 }
