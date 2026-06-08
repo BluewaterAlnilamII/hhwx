@@ -109,6 +109,7 @@ export function buildAuthPath(
 	notice?: AuthFlashNotice,
 	locale?: AppLocale | string | null,
 ): string {
+	void locale;
 	const safeNextPath = normalizeInternalPath(nextPath, "/account");
 	const params = new URLSearchParams({
 		mode,
@@ -119,9 +120,7 @@ export function buildAuthPath(
 		params.set("notice", notice);
 	}
 
-	const resolvedLocale = resolveCurrentLocale(locale);
-	const authPath = buildLocalizedPathname("/auth", resolvedLocale ?? DEFAULT_LOCALE);
-	return `${authPath}?${params.toString()}`;
+	return `/auth?${params.toString()}`;
 }
 
 function readCachedAuthSummary(userId: string): AuthProfileSummary | null {
