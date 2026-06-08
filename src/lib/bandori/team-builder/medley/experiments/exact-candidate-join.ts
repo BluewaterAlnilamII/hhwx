@@ -3765,7 +3765,6 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     exactJoinPrefixSeedMaxObservedGap?: number;
     lowMemoryHighPairScanMinRecordCount?: number | null;
     lowMemoryHighPairPrefixRecordLimit?: number | null;
-    enableTargetedPairRefineForCandidateFill?: boolean;
     debugExactCandidateJoinMemoryAttribution?: boolean;
   } = {},
   observeEvaluatedResult?: MedleyEvaluatedResultObserver,
@@ -4574,10 +4573,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
       ...extra,
     });
   };
-  const refineCandidateFillPairUpper = (
-    excludedSlotIndex: number,
-    targetUpperBound = Number.POSITIVE_INFINITY,
-  ): boolean => {
+  const refineCandidateFillPairUpper = (excludedSlotIndex: number): boolean => {
     const pairSlotIndices = slots
       .map((_, index) => index)
       .filter((index) => index !== excludedSlotIndex) as [number, number];
@@ -4590,8 +4586,6 @@ export function searchMedleyConfigurationByExactCandidateJoin(
       stats,
       isPastDeadline,
       deadlineAt,
-      targetUpperBound,
-      Number.isFinite(targetUpperBound),
     );
     profiling.exactCandidateJoinPairUpperElapsedMs += performance.now() - refineStartedAt;
     rebuildCandidateKeys(...pairSlotIndices);
@@ -4775,17 +4769,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
   };
   for (let slotIndex = 0; slotIndex < slots.length; slotIndex += 1) {
     const slotFillStartedAt = performance.now();
-    const relaxedOtherUpper = bestSlotScores.reduce((sum, score, index) => (
-      index === slotIndex ? sum : sum + score
-    ), 0);
-    const pairRefineTargetUpperBound = context.enableTargetedPairRefineForCandidateFill === true
-      ? relaxedOtherUpper
-      : Number.POSITIVE_INFINITY;
-    if (
-      shouldUseRootPruneOnlyPairProbe
-      && slotIndex > 0
-      && !refineCandidateFillPairUpper(slotIndex, pairRefineTargetUpperBound)
-    ) {
+    if (shouldUseRootPruneOnlyPairProbe && slotIndex > 0 && !refineCandidateFillPairUpper(slotIndex)) {
       profiling.exactCandidateJoinCandidateFillElapsedMs += performance.now() - candidateFillStartedAt;
       profiling.exactCandidateJoinLastCandidateCountsBySlot = candidatesBySlot.map((candidates) => candidates.length);
       profiling.exactCandidateJoinLastCandidateFillElapsedMsBySlot[slotIndex] = (
@@ -4810,6 +4794,9 @@ export function searchMedleyConfigurationByExactCandidateJoin(
       recordExactJoinMemorySnapshot("candidate-fill-pair-refine-abort", { slotIndex });
       return buildUnprovedExactCandidateJoinResult();
     }
+    const relaxedOtherUpper = bestSlotScores.reduce((sum, score, index) => (
+      index === slotIndex ? sum : sum + score
+    ), 0);
     const exactPairUpper = exactPairUpperByExcludedSlot[slotIndex];
     const shouldSkipRemainingOtherUpper = (
       shouldUseRootPruneOnlyPairProbe
