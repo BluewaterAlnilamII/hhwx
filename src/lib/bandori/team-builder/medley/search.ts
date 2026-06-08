@@ -3489,6 +3489,24 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
       traceEntry.bestScoreAfterSeeding = results[0]?.score ?? null;
     }
 
+    const hasFiniteActiveConfigurationUpperBound = (
+      Number.isFinite(activeConfigurationTightScoreUpperBound)
+      || Number.isFinite(activeConfigurationObservedScoreUpperBound)
+    );
+    if (
+      hasFullWidthEventExactJoinMemoryRisk
+      && results.length >= resultLimit
+      && hasFiniteActiveConfigurationUpperBound
+    ) {
+      if (traceEntry) {
+        traceEntry.fullWidthEventSkipDfs = true;
+      }
+      didLeaveUnclosedAreaItemConfiguration = true;
+      rememberActiveConfigurationUpperBound();
+      finishConfigurationTrace("full-width-event-skip-dfs");
+      continue;
+    }
+
     if (
       !didAttemptExactCandidateJoin
       && !hasDuplicateCardIds
