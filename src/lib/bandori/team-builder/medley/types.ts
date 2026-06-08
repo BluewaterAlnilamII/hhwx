@@ -716,6 +716,7 @@ export type MedleyExactSlotCandidateGenerator = {
   hasAborted: () => boolean;
   poppedNodeCount: () => number;
   memoryProfile?: () => Record<string, unknown>;
+  release?: () => void;
 };
 
 export type MedleyExactCandidateJoinResult = {
