@@ -76,6 +76,8 @@ export type BandoriMedleySearchOptimizationOptions = {
   debugConfigurationTrace?: boolean;
   exactCandidateJoinDebugAnchorSlotIndex?: number;
   enableExperimentalStagedCandidateExtension?: boolean;
+  enableLowMemoryHighPairScan?: boolean;
+  lowMemoryHighPairScanMinRecordCount?: number;
   enableTrailingSameCoarseDfsOnly?: boolean;
   disableDominatedRootSkip?: boolean;
   disableSameCoarseTightRootSkip?: boolean;

@@ -29,6 +29,7 @@ import {
 } from "./constants";
 import { searchMedleyConfigurationByConflictExactBnb } from "./experiments/conflict-bnb";
 import {
+  MEDLEY_EXACT_CANDIDATE_JOIN_LOW_MEMORY_HIGH_PAIR_SCAN_MIN_RECORD_COUNT,
   MEDLEY_EXACT_CANDIDATE_JOIN_SMALL_GAP_SOLVE_RETRY_MAX_PER_RUN,
 } from "./experiments/exact-candidate-join-constants";
 import { searchMedleyConfigurationByExactCandidateJoin } from "./experiments/exact-candidate-join";
@@ -645,6 +646,17 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
     ? Math.max(1, parsedConflictSlotSolveNodeLimit)
     : MEDLEY_CONFLICT_SLOT_SOLVE_DEFAULT_NODE_LIMIT;
   const enableExactJoinPrefixSeed = optimization.enableExactJoinPrefixSeed === true;
+  const enableLowMemoryHighPairScan = optimization.enableLowMemoryHighPairScan === true;
+  const parsedLowMemoryHighPairScanMinRecordCount = (
+    optimization.lowMemoryHighPairScanMinRecordCount !== undefined
+      ? Math.trunc(optimization.lowMemoryHighPairScanMinRecordCount)
+      : Number.NaN
+  );
+  const lowMemoryHighPairScanMinRecordCount = enableLowMemoryHighPairScan
+    ? Number.isFinite(parsedLowMemoryHighPairScanMinRecordCount)
+      ? Math.max(1, parsedLowMemoryHighPairScanMinRecordCount)
+      : MEDLEY_EXACT_CANDIDATE_JOIN_LOW_MEMORY_HIGH_PAIR_SCAN_MIN_RECORD_COUNT
+    : null;
   const exactJoinPrefixSeedForceNoop = optimization.exactJoinPrefixSeedForceNoop === true;
   const exactJoinPrefixSeedGuardOnly = optimization.exactJoinPrefixSeedGuardOnly === true;
   const parsedExactJoinPrefixSeedTimeboxMs = optimization.exactJoinPrefixSeedTimeboxMs !== undefined
@@ -3090,6 +3102,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
           exactJoinPrefixSeedMinCandidateCounts,
           exactJoinPrefixSeedPreviousLocalTimeout: exactJoinPrefixSeedDisabledCoarseKeys.has(currentCoarseKey),
           exactJoinPrefixSeedMemorySoftLimitMiB: stats.memorySoftLimitMiB,
+          lowMemoryHighPairScanMinRecordCount,
         },
         observeEvaluatedMedleyResult,
       );
@@ -3365,6 +3378,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
           exactJoinPrefixSeedMinCandidateCounts,
           exactJoinPrefixSeedPreviousLocalTimeout: exactJoinPrefixSeedDisabledCoarseKeys.has(currentCoarseKey),
           exactJoinPrefixSeedMemorySoftLimitMiB: stats.memorySoftLimitMiB,
+          lowMemoryHighPairScanMinRecordCount,
         },
         observeEvaluatedMedleyResult,
       );
