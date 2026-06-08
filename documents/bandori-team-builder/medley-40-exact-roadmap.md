@@ -1,6 +1,6 @@
 # Medley 40/40 Exact Roadmap
 
-Last updated: 2026-06-09 03:55 CST
+Last updated: 2026-06-09 04:05 CST
 
 This file is the persistent working note for the current medley optimizer goal.
 Keep it current before and after benchmark runs or proof-path changes, so future
@@ -493,6 +493,15 @@ Phase 1: memory-capped exact-join proof patch.
   `P06:323` remained bounded at gap `607201`, peak `4469 MiB`; `P07:244`
   remained bounded at gap `55265`, peak `4209 MiB`. Keep the patch only as a
   small lossless cleanup; it is not sufficient for the 38/40 gate.
+- Commit `a49a73f` compacted exact slot generator nodes by replacing retained
+  per-node `selectedCards` arrays with fixed card fields. Typecheck and
+  `git diff --check` passed. The P06/P07 hard smoke still showed no proof or
+  memory improvement: `P06:323` remained bounded at gap `607201`, peak
+  `4475 MiB`; `P07:244` remained bounded at gap `55265`, peak `4208 MiB`.
+  This indicates slot-generator node array copies are not a primary memory
+  source. The next generic route should target exact candidate/result payloads,
+  pair query caches, or streamed/chunked frontier proof rather than further
+  node-shape tweaks.
 
 Phase 2: no-op equivalence gate, required only when touching prefix/seed
 diagnostic paths again.
@@ -546,10 +555,12 @@ The next actionable step is not another seed experiment. It is:
    is targeted, build a low-memory initial-candidate fallback that can return a
    proof-relevant upper or partial frontier when node expansion hits the soft
    limit.
-4. For generator/candidate memory, the next generic implementation candidate is
-   a deeper compact node representation: avoid per-node `selectedCards` array
-   copies by using fixed slots or parent-linked compact nodes, while preserving
-   deterministic candidate order and exact upper semantics.
-5. Re-run the 5 bounded rows plus the 4 guardrail exact rows.
+4. For generator/candidate memory, compact node representation has now been
+   tried and did not move the hard cases. The next generic implementation
+   candidate is compact or streamed exact candidate/frontier data: reduce
+   duplicate result/card-id/pair-query residency while preserving deterministic
+   candidate order, incumbent score quality, and exact upper semantics.
+5. Re-run the 5 bounded rows plus the 4 guardrail exact rows after the next
+   candidate/frontier patch.
 6. If at least two bounded rows convert and guardrails stay exact, re-run the
    full isolated 40-case matrix and generate another timestamped report.
