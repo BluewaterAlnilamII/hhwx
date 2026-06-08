@@ -3880,12 +3880,6 @@ export function searchMedleyConfigurationByExactCandidateJoin(
       return Number.isFinite(minimumScoreCutoff) ? minimumScoreCutoff : Number.NEGATIVE_INFINITY;
     })
     : slots.map(() => Number.NEGATIVE_INFINITY);
-  if (context.enableExactJoinSlotProofCutoff === true) {
-    profiling.exactCandidateJoinSlotProofCutoffEnabledCount += 1;
-    profiling.exactCandidateJoinLastSlotProofMinimumScoreCutoffs = slotProofMinimumScoreCutoffs.map((cutoff) => (
-      Number.isFinite(cutoff) ? Math.round(cutoff) : cutoff
-    ));
-  }
   profiling.exactCandidateJoinLastBestSlotScores = [];
   profiling.exactCandidateJoinLastPairUpperByExcludedSlot = [];
   profiling.exactCandidateJoinLastPairUnseenUpperByExcludedSlot = [];
