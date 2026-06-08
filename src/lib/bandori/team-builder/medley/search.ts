@@ -29,6 +29,7 @@ import {
 } from "./constants";
 import { searchMedleyConfigurationByConflictExactBnb } from "./experiments/conflict-bnb";
 import {
+  MEDLEY_EXACT_CANDIDATE_JOIN_LOW_MEMORY_HIGH_PAIR_PREFIX_RECORD_LIMIT,
   MEDLEY_EXACT_CANDIDATE_JOIN_LOW_MEMORY_HIGH_PAIR_SCAN_MIN_RECORD_COUNT,
   MEDLEY_EXACT_CANDIDATE_JOIN_SMALL_GAP_SOLVE_RETRY_MAX_PER_RUN,
 } from "./experiments/exact-candidate-join-constants";
@@ -656,6 +657,17 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
     ? Number.isFinite(parsedLowMemoryHighPairScanMinRecordCount)
       ? Math.max(1, parsedLowMemoryHighPairScanMinRecordCount)
       : MEDLEY_EXACT_CANDIDATE_JOIN_LOW_MEMORY_HIGH_PAIR_SCAN_MIN_RECORD_COUNT
+    : null;
+  const enableLowMemoryHighPairPrefixUpper = optimization.enableLowMemoryHighPairPrefixUpper === true;
+  const parsedLowMemoryHighPairPrefixRecordLimit = (
+    optimization.lowMemoryHighPairPrefixRecordLimit !== undefined
+      ? Math.trunc(optimization.lowMemoryHighPairPrefixRecordLimit)
+      : Number.NaN
+  );
+  const lowMemoryHighPairPrefixRecordLimit = enableLowMemoryHighPairPrefixUpper
+    ? Number.isFinite(parsedLowMemoryHighPairPrefixRecordLimit)
+      ? Math.max(1, parsedLowMemoryHighPairPrefixRecordLimit)
+      : MEDLEY_EXACT_CANDIDATE_JOIN_LOW_MEMORY_HIGH_PAIR_PREFIX_RECORD_LIMIT
     : null;
   const exactJoinPrefixSeedForceNoop = optimization.exactJoinPrefixSeedForceNoop === true;
   const exactJoinPrefixSeedGuardOnly = optimization.exactJoinPrefixSeedGuardOnly === true;
@@ -3103,6 +3115,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
           exactJoinPrefixSeedPreviousLocalTimeout: exactJoinPrefixSeedDisabledCoarseKeys.has(currentCoarseKey),
           exactJoinPrefixSeedMemorySoftLimitMiB: stats.memorySoftLimitMiB,
           lowMemoryHighPairScanMinRecordCount,
+          lowMemoryHighPairPrefixRecordLimit,
         },
         observeEvaluatedMedleyResult,
       );
@@ -3379,6 +3392,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
           exactJoinPrefixSeedPreviousLocalTimeout: exactJoinPrefixSeedDisabledCoarseKeys.has(currentCoarseKey),
           exactJoinPrefixSeedMemorySoftLimitMiB: stats.memorySoftLimitMiB,
           lowMemoryHighPairScanMinRecordCount,
+          lowMemoryHighPairPrefixRecordLimit,
         },
         observeEvaluatedMedleyResult,
       );
