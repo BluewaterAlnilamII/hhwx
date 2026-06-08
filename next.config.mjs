@@ -137,6 +137,12 @@ const nextConfig = {
                 ],
             },
             {
+                source: "/res/:path*",
+                headers: [
+                    { key: "Cache-Control", value: STATIC_SITE_ASSET_CACHE_CONTROL },
+                ],
+            },
+            {
                 source: "/manifest.webmanifest",
                 headers: [
                     { key: "Cache-Control", value: MANIFEST_SITE_ASSET_CACHE_CONTROL },

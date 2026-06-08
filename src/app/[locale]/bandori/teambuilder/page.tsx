@@ -287,6 +287,7 @@ const MEDLEY_BROWSER_MEMORY_WATCHDOG_LIMIT_MIB = 3000;
 const MEDLEY_BROWSER_MEMORY_WATCHDOG_HEAP_LIMIT_RATIO = 0.7;
 const MEDLEY_BROWSER_MEMORY_WATCHDOG_INTERVAL_MS = 200;
 const DEFAULT_PERFECT_RATE = "100";
+const NO_EVENT_BANNER_URL = "/res/530.png";
 const TEAMBUILDER_LIVE_PREFERENCES_STORAGE_KEY = "hhwx-bandori-teambuilder-live-preferences:v1";
 const DIFFICULTIES: BandoriTeamSearchDifficulty[] = ["easy", "normal", "hard", "expert", "special"];
 const DIFFICULTY_KEYS: Record<BandoriTeamSearchDifficulty, string> = {
@@ -2702,7 +2703,7 @@ function TeamBuilderPanel() {
   ), [data.events, referenceNow]);
   const selectedEventBannerUrl = useMemo(() => {
     if (!selectedEvent) {
-      return "";
+      return NO_EVENT_BANNER_URL;
     }
     const bundleName = resolveBandoriEventBannerBundleName(selectedEvent.asset);
     if (!bundleName) {
