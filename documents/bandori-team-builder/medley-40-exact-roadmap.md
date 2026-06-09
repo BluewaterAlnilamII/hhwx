@@ -1,6 +1,6 @@
 # Medley 40/40 Exact Roadmap
 
-Last updated: 2026-06-09 12:49 CST
+Last updated: 2026-06-09 15:58 CST
 
 This file is the persistent working note for the current medley optimizer goal.
 Keep it current before and after benchmark runs or proof-path changes, so future
@@ -822,6 +822,42 @@ Current target:
 - Intermediate target `>=39/40` is passed.
 - Final target remains `40/40 exact` for P01-P10 / four events, excluding P11.
 
+2026-06-09 P03 post-39/40 diagnostics:
+
+- Clean diagnostic row:
+  `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-09T07-29-04-900Z.json`.
+- Options matched the `39/40` event-root probe path, with additional opt-in
+  diagnostic controls:
+  `eventRootFrontierProbeAnchorProofMaxFrontierGap=120000`,
+  `eventRootFrontierProbeAnchorProofMinRemainingMs=15000`,
+  `eventRootFrontierProbeAnchorCheapUpperTimeboxMs=60000`, and
+  `eventRootFrontierProbeAnchorCheapUpperMaxAnchors=20000`.
+- Result stayed bounded: score `9213846`, reported gap `370472`, elapsed
+  `70161ms`, peak `1982 MiB`, `timedOut=false`, `memoryLimited=false`.
+- The diagnostic event-root cheap upper improved the local upper to `9334022`
+  and local residual gap to `120176`, but it remains above incumbent and is not
+  a proof closure. It processed `10502` anchors in `11507ms`.
+- The max residual source is `right-unseen`: max anchor score `2760598`, max
+  pair upper `6573424`, generated-pair upper `6387732`, left-unseen upper
+  `6572389`, right-unseen upper `6573424`.
+- Full anchor-frontier proof is still blocked by
+  `high-pair-record-upper=2001600`, just over the current `2,000,000` guard.
+  Raising this guard to `3,000,000` and `5,000,000` was tested earlier and
+  still skipped (`3002400` and `5004000` upper counts), so this is not a
+  small-threshold miss.
+- Rejected: applying the unproved `9334022` upper back into active same-coarse
+  scheduling. It lowered the reported gap but exposed
+  `RaiseASuilen/happy/visual`, which then hit initial-candidate memory pressure
+  (`memoryLimited=true`, peak `4710 MiB`). This confirms the current
+  39/40 restriction is necessary: unproved diagnostic upper may be recorded,
+  but must not drive same-coarse scheduling.
+- Rejected: banned-card-aware slot upper inside the cheap upper. It increased
+  cheap-upper elapsed to about `40331ms` while leaving residual gap unchanged
+  at `120176`.
+- Rejected: `lowMemoryInitialCandidateSyncLightUpper=false` after applying the
+  unproved upper. It worsened the same visual initial-candidate pressure, peak
+  `5489 MiB`, with no exact improvement.
+
 Next optimization direction:
 
 1. Keep seed, greedy, prefix-seed, broad candidate-limit changes, and broad
@@ -831,13 +867,19 @@ Next optimization direction:
 3. The next patch must be proof-only: it may record diagnostic upper
    improvements freely, but it may not feed an unproved upper back into active
    same-coarse scheduling.
-4. A likely next route is a residual pair/frontier proof for the full-width
-   event root: prove that all candidate mass above the incumbent is exhausted
-   without materializing a full exact-candidate frontier, with strict local
-   memory accounting and a hard local timebox.
-5. Any accepted P03 patch must first pass the hard guard set:
+4. The next generic route should target the residual `right-unseen` pair
+   frontier, not incumbent quality and not a wider high-pair guard. The desired
+   proof is a card-conflict-aware pair-unseen upper that can reduce the
+   `6573424` right-unseen pair upper below the required threshold without
+   materializing the full high-pair record frontier.
+5. A secondary route, only after the performance frontier is truly closed, is
+   the same-coarse `visual` initial-candidate memory path. The failed
+   scheduling diagnostic shows it will become the next blocker if performance
+   is closed or tightened enough to expose siblings; it needs a lower-allocation
+   single-slot top proof rather than tighter skill-context upper.
+6. Any accepted P03 patch must first pass the hard guard set:
    `P03:260`, `P06:323`, `P07:260`, `P08:323`, `P10:244`, `P10:260`,
    `P07:244`, and `P08:244`.
-6. After any guard-set pass, rerun the full isolated 40-case matrix and create
+7. After any guard-set pass, rerun the full isolated 40-case matrix and create
    a new timestamped report with timing, memory, exact/bounded status, bounded
    reasons, failure analysis, and next recommendations.

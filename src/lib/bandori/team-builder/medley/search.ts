@@ -692,6 +692,42 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
   )
     ? Math.max(0, parsedEventRootFrontierProbeMinMemoryHeadroomMiB)
     : MEDLEY_EVENT_ROOT_FRONTIER_PROBE_MIN_MEMORY_HEADROOM_MIB;
+  const parsedEventRootFrontierProbeAnchorProofMaxFrontierGap =
+    optimization.eventRootFrontierProbeAnchorProofMaxFrontierGap !== undefined
+      ? Math.trunc(optimization.eventRootFrontierProbeAnchorProofMaxFrontierGap)
+      : Number.NaN;
+  const eventRootFrontierProbeAnchorProofMaxFrontierGap = Number.isFinite(
+    parsedEventRootFrontierProbeAnchorProofMaxFrontierGap,
+  )
+    ? Math.max(0, parsedEventRootFrontierProbeAnchorProofMaxFrontierGap)
+    : null;
+  const parsedEventRootFrontierProbeAnchorProofMinRemainingMs =
+    optimization.eventRootFrontierProbeAnchorProofMinRemainingMs !== undefined
+      ? Math.trunc(optimization.eventRootFrontierProbeAnchorProofMinRemainingMs)
+      : Number.NaN;
+  const eventRootFrontierProbeAnchorProofMinRemainingMs = Number.isFinite(
+    parsedEventRootFrontierProbeAnchorProofMinRemainingMs,
+  )
+    ? Math.max(0, parsedEventRootFrontierProbeAnchorProofMinRemainingMs)
+    : null;
+  const parsedEventRootFrontierProbeAnchorCheapUpperTimeboxMs =
+    optimization.eventRootFrontierProbeAnchorCheapUpperTimeboxMs !== undefined
+      ? Math.trunc(optimization.eventRootFrontierProbeAnchorCheapUpperTimeboxMs)
+      : Number.NaN;
+  const eventRootFrontierProbeAnchorCheapUpperTimeboxMs = Number.isFinite(
+    parsedEventRootFrontierProbeAnchorCheapUpperTimeboxMs,
+  )
+    ? Math.max(0, parsedEventRootFrontierProbeAnchorCheapUpperTimeboxMs)
+    : null;
+  const parsedEventRootFrontierProbeAnchorCheapUpperMaxAnchors =
+    optimization.eventRootFrontierProbeAnchorCheapUpperMaxAnchors !== undefined
+      ? Math.trunc(optimization.eventRootFrontierProbeAnchorCheapUpperMaxAnchors)
+      : Number.NaN;
+  const eventRootFrontierProbeAnchorCheapUpperMaxAnchors = Number.isFinite(
+    parsedEventRootFrontierProbeAnchorCheapUpperMaxAnchors,
+  )
+    ? Math.max(1, parsedEventRootFrontierProbeAnchorCheapUpperMaxAnchors)
+    : null;
   const parsedAnchorCandidateLimit = optimization.anchorCandidateLimit !== undefined
     ? Math.trunc(optimization.anchorCandidateLimit)
     : Number.NaN;
@@ -3754,6 +3790,18 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
         traceEntry.eventRootFrontierProbeRemainingMs = Math.round(remainingBeforeProbeMs);
         traceEntry.eventRootFrontierProbeMemoryHeadroomMiB = memoryHeadroomMiBBeforeProbe;
         traceEntry.eventRootFrontierProbeMinMemoryHeadroomMiB = eventRootFrontierProbeMinMemoryHeadroomMiB;
+        traceEntry.eventRootFrontierProbeAnchorProofMaxFrontierGap = (
+          eventRootFrontierProbeAnchorProofMaxFrontierGap
+        );
+        traceEntry.eventRootFrontierProbeAnchorProofMinRemainingMs = (
+          eventRootFrontierProbeAnchorProofMinRemainingMs
+        );
+        traceEntry.eventRootFrontierProbeAnchorCheapUpperTimeboxMs = (
+          eventRootFrontierProbeAnchorCheapUpperTimeboxMs
+        );
+        traceEntry.eventRootFrontierProbeAnchorCheapUpperMaxAnchors = (
+          eventRootFrontierProbeAnchorCheapUpperMaxAnchors
+        );
       }
       const exactJoinResult = searchMedleyConfigurationByExactCandidateJoin(
         results,
@@ -3785,6 +3833,10 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
           lowMemoryHighPairScanMinRecordCount,
           lowMemoryHighPairPrefixRecordLimit,
           debugExactCandidateJoinMemoryAttribution,
+          anchorFrontierProofMaxFrontierGap: eventRootFrontierProbeAnchorProofMaxFrontierGap,
+          anchorFrontierProofMinRemainingMs: eventRootFrontierProbeAnchorProofMinRemainingMs,
+          anchorFrontierCheapUpperTimeboxMs: eventRootFrontierProbeAnchorCheapUpperTimeboxMs,
+          anchorFrontierCheapUpperMaxAnchors: eventRootFrontierProbeAnchorCheapUpperMaxAnchors,
         },
         observeEvaluatedMedleyResult,
       );

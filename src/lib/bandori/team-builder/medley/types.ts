@@ -102,6 +102,10 @@ export type BandoriMedleySearchOptimizationOptions = {
   eventRootFrontierProbeCandidateSoftLimit?: number;
   eventRootFrontierProbeMinRemainingMs?: number;
   eventRootFrontierProbeMinMemoryHeadroomMiB?: number;
+  eventRootFrontierProbeAnchorProofMaxFrontierGap?: number;
+  eventRootFrontierProbeAnchorProofMinRemainingMs?: number;
+  eventRootFrontierProbeAnchorCheapUpperTimeboxMs?: number;
+  eventRootFrontierProbeAnchorCheapUpperMaxAnchors?: number;
 };
 
 export type BandoriMedleyTeamSearchInput = Omit<

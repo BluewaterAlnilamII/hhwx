@@ -3350,11 +3350,22 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
   profiling: BandoriMedleyTeamSearchProfilingStats,
   stats: BandoriMedleyTeamSearchStats,
   deadlineAt: number,
+  options: {
+    timeboxMs?: number | null;
+    maxAnchors?: number | null;
+  } = {},
 ): MedleyExactCandidateAnchorFrontierProofResult {
   const startedAt = performance.now();
+  const timeboxMs = (
+    options.timeboxMs !== null
+    && options.timeboxMs !== undefined
+    && Number.isFinite(options.timeboxMs)
+  )
+    ? Math.max(0, Math.trunc(options.timeboxMs))
+    : MEDLEY_EXACT_CANDIDATE_JOIN_ANCHOR_FRONTIER_CHEAP_UPPER_TIMEBOX_MS;
   const localDeadlineAt = Math.min(
     deadlineAt,
-    startedAt + MEDLEY_EXACT_CANDIDATE_JOIN_ANCHOR_FRONTIER_CHEAP_UPPER_TIMEBOX_MS,
+    startedAt + timeboxMs,
   );
   const pairSlotIndices = candidatesBySlot
     .map((_, index) => index)
@@ -3371,7 +3382,13 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
   const rightAvailabilityQuery = buildMedleyExactCandidateSlotAvailabilityQuery(rightCandidates);
   const maxAnchorCount = Math.min(
     anchorCandidates.length,
-    MEDLEY_EXACT_CANDIDATE_JOIN_ANCHOR_FRONTIER_CHEAP_UPPER_MAX_ANCHORS,
+    (
+      options.maxAnchors !== null
+      && options.maxAnchors !== undefined
+      && Number.isFinite(options.maxAnchors)
+    )
+      ? Math.max(1, Math.trunc(options.maxAnchors))
+      : MEDLEY_EXACT_CANDIDATE_JOIN_ANCHOR_FRONTIER_CHEAP_UPPER_MAX_ANCHORS,
   );
   const leftPeekUpperBound = generators[leftSlotIndex].peekUpperBound();
   const rightPeekUpperBound = generators[rightSlotIndex].peekUpperBound();
@@ -3417,9 +3434,7 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
   profiling.exactCandidateJoinLastAnchorFrontierCheapUpperResidualUpperBound = null;
   profiling.exactCandidateJoinLastAnchorFrontierCheapUpperResidualGap = null;
   profiling.exactCandidateJoinLastAnchorFrontierCheapUpperElapsedMs = null;
-  profiling.exactCandidateJoinLastAnchorFrontierCheapUpperTimeboxMs = (
-    MEDLEY_EXACT_CANDIDATE_JOIN_ANCHOR_FRONTIER_CHEAP_UPPER_TIMEBOX_MS
-  );
+  profiling.exactCandidateJoinLastAnchorFrontierCheapUpperTimeboxMs = timeboxMs;
   profiling.exactCandidateJoinLastAnchorFrontierCheapUpperOtherSlotCandidateCounts = pairSlotIndices.map(
     (slotIndex) => candidatesBySlot[slotIndex].length,
   );
@@ -3979,6 +3994,10 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     lowMemoryHighPairScanMinRecordCount?: number | null;
     lowMemoryHighPairPrefixRecordLimit?: number | null;
     debugExactCandidateJoinMemoryAttribution?: boolean;
+    anchorFrontierProofMaxFrontierGap?: number | null;
+    anchorFrontierProofMinRemainingMs?: number | null;
+    anchorFrontierCheapUpperTimeboxMs?: number | null;
+    anchorFrontierCheapUpperMaxAnchors?: number | null;
   } = {},
   observeEvaluatedResult?: MedleyEvaluatedResultObserver,
 ): MedleyExactCandidateJoinResult {
@@ -4303,10 +4322,17 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     peekUpperBound: number,
     otherUpper: number,
   ): MedleyExactCandidateAnchorFrontierProofResult | null => {
+    const recordAnchorFrontierProofSkip = (reason: string): null => {
+      profiling.exactCandidateJoinAnchorFrontierProofSkipCount += 1;
+      profiling.exactCandidateJoinLastAnchorFrontierProofSkipReason = reason;
+      return null;
+    };
     if (didAnchorFrontierProof || stats.memoryLimited || calculatedCardCount > (
       MEDLEY_EXACT_CANDIDATE_JOIN_ANCHOR_FRONTIER_PROOF_MAX_CARD_COUNT
     )) {
-      return null;
+      return recordAnchorFrontierProofSkip(
+        didAnchorFrontierProof ? "already-attempted" : stats.memoryLimited ? "memory-limited" : "card-count",
+      );
     }
     const anchorCandidateCount = candidatesBySlot[slotIndex]?.length ?? 0;
     if (
@@ -4315,7 +4341,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
       || !Number.isFinite(peekUpperBound)
       || !Number.isFinite(otherUpper)
     ) {
-      return null;
+      return recordAnchorFrontierProofSkip("anchor-frontier-input");
     }
     const otherSlotCandidateCounts = candidatesBySlot
       .map((candidates, index) => (index === slotIndex ? 0 : candidates.length))
@@ -4328,19 +4354,33 @@ export function searchMedleyConfigurationByExactCandidateJoin(
       || otherSlotCandidateCounts.reduce((sum, count) => sum + count, 0)
         > MEDLEY_EXACT_CANDIDATE_JOIN_ANCHOR_FRONTIER_PROOF_MAX_OTHER_SLOT_CANDIDATE_TOTAL
     ) {
-      return null;
+      return recordAnchorFrontierProofSkip("other-slot-candidate-count");
     }
+    const maxFrontierGap = (
+      context.anchorFrontierProofMaxFrontierGap !== null
+      && context.anchorFrontierProofMaxFrontierGap !== undefined
+      && Number.isFinite(context.anchorFrontierProofMaxFrontierGap)
+    )
+      ? Math.max(0, context.anchorFrontierProofMaxFrontierGap)
+      : MEDLEY_EXACT_CANDIDATE_JOIN_ANCHOR_FRONTIER_PROOF_MAX_FRONTIER_GAP;
     const frontierGap = peekUpperBound + otherUpper - incumbentScore;
     if (
       !Number.isFinite(frontierGap)
       || frontierGap < 0
-      || frontierGap > MEDLEY_EXACT_CANDIDATE_JOIN_ANCHOR_FRONTIER_PROOF_MAX_FRONTIER_GAP
+      || frontierGap > maxFrontierGap
     ) {
-      return null;
+      return recordAnchorFrontierProofSkip("frontier-gap");
     }
     const remainingMs = getGuardedExtensionRemainingMs();
-    if (remainingMs < MEDLEY_EXACT_CANDIDATE_JOIN_ANCHOR_FRONTIER_PROOF_MIN_REMAINING_MS) {
-      return null;
+    const minRemainingMs = (
+      context.anchorFrontierProofMinRemainingMs !== null
+      && context.anchorFrontierProofMinRemainingMs !== undefined
+      && Number.isFinite(context.anchorFrontierProofMinRemainingMs)
+    )
+      ? Math.max(0, context.anchorFrontierProofMinRemainingMs)
+      : MEDLEY_EXACT_CANDIDATE_JOIN_ANCHOR_FRONTIER_PROOF_MIN_REMAINING_MS;
+    if (remainingMs < minRemainingMs) {
+      return recordAnchorFrontierProofSkip("low-remaining-budget");
     }
     let cheapUpperResult: MedleyExactCandidateAnchorFrontierProofResult | null = null;
     if (!didAnchorFrontierCheapUpper) {
@@ -4358,6 +4398,10 @@ export function searchMedleyConfigurationByExactCandidateJoin(
         profiling,
         stats,
         deadlineAt,
+        {
+          timeboxMs: context.anchorFrontierCheapUpperTimeboxMs,
+          maxAnchors: context.anchorFrontierCheapUpperMaxAnchors,
+        },
       );
       if (candidateCheapUpperResult.proved) {
         return candidateCheapUpperResult;
