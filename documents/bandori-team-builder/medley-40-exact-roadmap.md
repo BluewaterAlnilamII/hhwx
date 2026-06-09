@@ -1,6 +1,6 @@
 # Medley 40/40 Exact Roadmap
 
-Last updated: 2026-06-09 22:33 CST
+Last updated: 2026-06-09 22:58 CST
 
 This file is the persistent working note for the current medley optimizer goal.
 Keep it current before and after benchmark runs or proof-path changes, so future
@@ -1132,3 +1132,10 @@ Updated conclusion:
   payloads with a no-op memory-equivalence gate, or a same-coarse sibling proof
   protocol that releases heavy frontier state between siblings without relying
   on runtime GC behavior.
+- Rejected diagnostic: anchor-limited peek inside the event-root cheap upper
+  (`temp/bandori-team-builder/real-profile-medley-scope-matrix-2026-06-09T14-27-13-467Z.json`).
+  It kept the same dominant `right-unseen` pair upper (`6573424`) while slowing
+  the cheap pass from about `14980ms` to `21989ms`, processing only `5835`
+  anchors, and worsening residual gap from `120176` to `150972`. The code was
+  reverted. Do not continue this route by only raising the event-root timebox;
+  the max pair term did not tighten.
