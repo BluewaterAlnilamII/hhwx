@@ -1,6 +1,6 @@
 # Medley 40/40 Exact Roadmap
 
-Last updated: 2026-06-09 20:45 CST
+Last updated: 2026-06-09 20:49 CST
 
 This file is the persistent working note for the current medley optimizer goal.
 Keep it current before and after benchmark runs or proof-path changes, so future
@@ -1105,6 +1105,15 @@ Updated conclusion:
     (`temp/bandori-team-builder/real-profile-medley-scope-matrix-2026-06-09T12-42-19-238Z.json`)
     regressed the residual gap to `296638` and consumed the local event-root
     budget. The code was reverted.
+  - Direct initial-candidate plus `200000` event-root candidate soft limit
+    (`temp/bandori-team-builder/real-profile-medley-scope-matrix-2026-06-09T12-47-37-560Z.json`)
+    is not acceptable as a fallback. It let the event-root probe reach `proved`,
+    but the overall case still ended bounded after later same-coarse work hit
+    `timedOut=true`, `memoryLimited=true`, peak `4806 MiB`, and final abort
+    `initial-candidate`. This confirms the remaining problem is not just
+    proving the first full-width root; proof work for same-coarse siblings must
+    be scheduled or released without accumulating a larger transient working
+    set.
 - Revised next implementation target: keep the compact-key representation as a
   safe lower-residency building block, but do not count it as proof-quality
   progress. The next proof patch must target genuinely lower-residency proof
