@@ -1,6 +1,6 @@
 # Medley 40/40 Exact Roadmap
 
-Last updated: 2026-06-09 20:18 CST
+Last updated: 2026-06-09 20:45 CST
 
 This file is the persistent working note for the current medley optimizer goal.
 Keep it current before and after benchmark runs or proof-path changes, so future
@@ -1079,6 +1079,32 @@ Updated conclusion:
   peak sampled heap `4185 MiB`. The exact guard rows stayed exact:
   `P06:323`, `P07:260`, `P08:323`, `P10:244`, `P10:260`, `P07:244`, and
   `P08:244`.
+- Rejected diagnostics after the compact-key guard:
+  - Existing opt-in unseen refine on `P03:260`
+    (`temp/bandori-team-builder/real-profile-medley-scope-matrix-2026-06-09T12-24-34-978Z.json`)
+    did not improve proof. It stayed bounded, increased the event-root residual
+    gap from `120176` to `220268`, and consumed the `30s` event-root probe
+    budget.
+  - Raising only `eventRootFrontierProbeCandidateSoftLimit` to `80000` or
+    `120000`
+    (`temp/bandori-team-builder/real-profile-medley-scope-matrix-2026-06-09T12-27-17-090Z.json`,
+    `temp/bandori-team-builder/real-profile-medley-scope-matrix-2026-06-09T12-31-59-393Z.json`)
+    did not close `P03:260`. Both stayed bounded with residual gap `170144`,
+    and slot `0` still hit `candidate-fill-soft-limit`.
+  - A direct `200000` soft-limit diagnostic without the isolated runner's
+    `NODE_OPTIONS=--max-old-space-size=8192` crashed at the V8 heap limit, so it
+    is invalid as algorithm evidence. It reinforces that high-K probes must use
+    the isolated runner environment and still require the hard guard.
+  - Temporarily raising
+    `MEDLEY_EXACT_CANDIDATE_JOIN_ANCHOR_FRONTIER_PROOF_MAX_HIGH_PAIR_RECORDS`
+    to `2.05M` and then `2.1M` did not enter useful anchor proof. The reported
+    high-pair count simply stopped just above the current threshold
+    (`2051640`, then `2101680`), so this knob is a scan-budget expansion, not a
+    true proof improvement. The code was reverted.
+  - A trial patch that forced one cheap-upper unseen refine entry by default
+    (`temp/bandori-team-builder/real-profile-medley-scope-matrix-2026-06-09T12-42-19-238Z.json`)
+    regressed the residual gap to `296638` and consumed the local event-root
+    budget. The code was reverted.
 - Revised next implementation target: keep the compact-key representation as a
   safe lower-residency building block, but do not count it as proof-quality
   progress. The next proof patch must target genuinely lower-residency proof
