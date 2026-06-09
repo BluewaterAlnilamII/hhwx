@@ -122,6 +122,10 @@ const MEDLEY_SAME_COARSE_FRONTIER_PROOF_TARGET_GAP = 200_000;
 const MEDLEY_SAME_COARSE_FRONTIER_PROOF_TARGET_MAX_SLOT_CARDS = 225;
 const MEDLEY_SAME_COARSE_FRONTIER_PROOF_TARGET_MIN_REMAINING_MS = 120_000;
 const MEDLEY_SAME_COARSE_FRONTIER_PROOF_TARGET_MIN_ROOT_DELTA = 350_000;
+const MEDLEY_EVENT_ROOT_FRONTIER_PROBE_TIMEBOX_MS = 30_000;
+const MEDLEY_EVENT_ROOT_FRONTIER_PROBE_CANDIDATE_SOFT_LIMIT = 100_000;
+const MEDLEY_EVENT_ROOT_FRONTIER_PROBE_MIN_REMAINING_MS = 60_000;
+const MEDLEY_EVENT_ROOT_FRONTIER_PROBE_MIN_MEMORY_HEADROOM_MIB = 1_024;
 const BYTES_PER_MIB = 1024 * 1024;
 const MEMORY_SOFT_LIMIT_CHECK_INTERVAL_MS = 50;
 const MEDLEY_PROGRESS_CHECK_INTERVAL_MS = 250;
@@ -278,6 +282,21 @@ function buildProofLedger(
         ),
         smallGapSolveRetryCount: asFiniteNumber(entry.exactCandidateJoinSmallGapSolveRetryCountDelta),
         smallGapSolveRetryTimeboxCount: asFiniteNumber(entry.exactCandidateJoinSmallGapSolveRetryTimeboxCountDelta),
+        eventRootFrontierProbeCallCount: asFiniteNumber(entry.eventRootFrontierProbeCallCountDelta),
+        eventRootFrontierProbeProvedCount: asFiniteNumber(entry.eventRootFrontierProbeProvedCountDelta),
+        eventRootFrontierProbePrunedCount: asFiniteNumber(entry.eventRootFrontierProbePrunedCountDelta),
+        eventRootFrontierProbeUpperImprovementCount: (
+          asFiniteNumber(entry.eventRootFrontierProbeUpperImprovementCountDelta)
+        ),
+        eventRootFrontierProbeTimeboxCount: asFiniteNumber(entry.eventRootFrontierProbeTimeboxCountDelta),
+        eventRootFrontierProbeSkipCount: asFiniteNumber(entry.eventRootFrontierProbeSkipCountDelta),
+        eventRootFrontierProbeElapsedMs: asFiniteNumber(entry.eventRootFrontierProbeElapsedMsDelta),
+        eventRootFrontierProbeLastReason: entry.eventRootFrontierProbeLastReason ?? null,
+        eventRootFrontierProbeLastStatus: entry.eventRootFrontierProbeLastStatus ?? null,
+        eventRootFrontierProbeLastUpperBefore: asFiniteNumber(entry.eventRootFrontierProbeLastUpperBefore),
+        eventRootFrontierProbeLastUpperAfter: asFiniteNumber(entry.eventRootFrontierProbeLastUpperAfter),
+        eventRootFrontierProbeLastResidualGap: asFiniteNumber(entry.eventRootFrontierProbeLastResidualGap),
+        eventRootFrontierProbeLastPeakHeapMiB: asFiniteNumber(entry.eventRootFrontierProbeLastPeakHeapMiB),
       },
       sameCoarse: {
         siblingBlocked: entry.sameCoarseSiblingBlocked ?? null,
@@ -641,6 +660,38 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
   const disableNearDeadlineRootSkip = optimization.disableNearDeadlineRootSkip === true;
   const disableSkipDfsAfterUnprovedExactCandidateJoin =
     optimization.disableSkipDfsAfterUnprovedExactCandidateJoin === true;
+  const enableEventRootFrontierProbe = optimization.enableEventRootFrontierProbe === true;
+  const parsedEventRootFrontierProbeTimeboxMs = optimization.eventRootFrontierProbeTimeboxMs !== undefined
+    ? Math.trunc(optimization.eventRootFrontierProbeTimeboxMs)
+    : Number.NaN;
+  const eventRootFrontierProbeTimeboxMs = Number.isFinite(parsedEventRootFrontierProbeTimeboxMs)
+    ? Math.max(0, parsedEventRootFrontierProbeTimeboxMs)
+    : MEDLEY_EVENT_ROOT_FRONTIER_PROBE_TIMEBOX_MS;
+  const parsedEventRootFrontierProbeCandidateSoftLimit =
+    optimization.eventRootFrontierProbeCandidateSoftLimit !== undefined
+      ? Math.trunc(optimization.eventRootFrontierProbeCandidateSoftLimit)
+      : Number.NaN;
+  const eventRootFrontierProbeCandidateSoftLimit = Number.isFinite(
+    parsedEventRootFrontierProbeCandidateSoftLimit,
+  )
+    ? Math.max(1, parsedEventRootFrontierProbeCandidateSoftLimit)
+    : MEDLEY_EVENT_ROOT_FRONTIER_PROBE_CANDIDATE_SOFT_LIMIT;
+  const parsedEventRootFrontierProbeMinRemainingMs =
+    optimization.eventRootFrontierProbeMinRemainingMs !== undefined
+      ? Math.trunc(optimization.eventRootFrontierProbeMinRemainingMs)
+      : Number.NaN;
+  const eventRootFrontierProbeMinRemainingMs = Number.isFinite(parsedEventRootFrontierProbeMinRemainingMs)
+    ? Math.max(0, parsedEventRootFrontierProbeMinRemainingMs)
+    : MEDLEY_EVENT_ROOT_FRONTIER_PROBE_MIN_REMAINING_MS;
+  const parsedEventRootFrontierProbeMinMemoryHeadroomMiB =
+    optimization.eventRootFrontierProbeMinMemoryHeadroomMiB !== undefined
+      ? Math.trunc(optimization.eventRootFrontierProbeMinMemoryHeadroomMiB)
+      : Number.NaN;
+  const eventRootFrontierProbeMinMemoryHeadroomMiB = Number.isFinite(
+    parsedEventRootFrontierProbeMinMemoryHeadroomMiB,
+  )
+    ? Math.max(0, parsedEventRootFrontierProbeMinMemoryHeadroomMiB)
+    : MEDLEY_EVENT_ROOT_FRONTIER_PROBE_MIN_MEMORY_HEADROOM_MIB;
   const parsedAnchorCandidateLimit = optimization.anchorCandidateLimit !== undefined
     ? Math.trunc(optimization.anchorCandidateLimit)
     : Number.NaN;
@@ -1965,6 +2016,13 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
         ...profiling.exactJoinPrefixSeedGuardSkipReasonCounts,
       },
       sameCoarseMemoryRootSkipCount: profiling.sameCoarseMemoryRootSkipCount,
+      eventRootFrontierProbeCallCount: profiling.eventRootFrontierProbeCallCount,
+      eventRootFrontierProbeProvedCount: profiling.eventRootFrontierProbeProvedCount,
+      eventRootFrontierProbePrunedCount: profiling.eventRootFrontierProbePrunedCount,
+      eventRootFrontierProbeUpperImprovementCount: profiling.eventRootFrontierProbeUpperImprovementCount,
+      eventRootFrontierProbeTimeboxCount: profiling.eventRootFrontierProbeTimeboxCount,
+      eventRootFrontierProbeSkipCount: profiling.eventRootFrontierProbeSkipCount,
+      eventRootFrontierProbeElapsedMs: profiling.eventRootFrontierProbeElapsedMs,
       exactCandidateJoinInitialCandidateElapsedMs: profiling.exactCandidateJoinInitialCandidateElapsedMs,
       exactCandidateJoinPairUpperElapsedMs: profiling.exactCandidateJoinPairUpperElapsedMs,
       exactCandidateJoinCandidateFillElapsedMs: profiling.exactCandidateJoinCandidateFillElapsedMs,
@@ -2180,6 +2238,34 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
         profiling.exactJoinPrefixSeedGuardSkipReasonCounts,
         traceStartCounters.exactJoinPrefixSeedGuardSkipReasonCounts,
       ),
+      eventRootFrontierProbeCallCountDelta: (
+        profiling.eventRootFrontierProbeCallCount - traceStartCounters.eventRootFrontierProbeCallCount
+      ),
+      eventRootFrontierProbeProvedCountDelta: (
+        profiling.eventRootFrontierProbeProvedCount - traceStartCounters.eventRootFrontierProbeProvedCount
+      ),
+      eventRootFrontierProbePrunedCountDelta: (
+        profiling.eventRootFrontierProbePrunedCount - traceStartCounters.eventRootFrontierProbePrunedCount
+      ),
+      eventRootFrontierProbeUpperImprovementCountDelta: (
+        profiling.eventRootFrontierProbeUpperImprovementCount
+        - traceStartCounters.eventRootFrontierProbeUpperImprovementCount
+      ),
+      eventRootFrontierProbeTimeboxCountDelta: (
+        profiling.eventRootFrontierProbeTimeboxCount - traceStartCounters.eventRootFrontierProbeTimeboxCount
+      ),
+      eventRootFrontierProbeSkipCountDelta: (
+        profiling.eventRootFrontierProbeSkipCount - traceStartCounters.eventRootFrontierProbeSkipCount
+      ),
+      eventRootFrontierProbeElapsedMsDelta: Math.round(
+        profiling.eventRootFrontierProbeElapsedMs - traceStartCounters.eventRootFrontierProbeElapsedMs,
+      ),
+      eventRootFrontierProbeLastReason: profiling.eventRootFrontierProbeLastReason,
+      eventRootFrontierProbeLastStatus: profiling.eventRootFrontierProbeLastStatus,
+      eventRootFrontierProbeLastUpperBefore: profiling.eventRootFrontierProbeLastUpperBefore,
+      eventRootFrontierProbeLastUpperAfter: profiling.eventRootFrontierProbeLastUpperAfter,
+      eventRootFrontierProbeLastResidualGap: profiling.eventRootFrontierProbeLastResidualGap,
+      eventRootFrontierProbeLastPeakHeapMiB: profiling.eventRootFrontierProbeLastPeakHeapMiB,
       exactCandidateJoinInitialCandidateElapsedMsDelta: Math.round(
           profiling.exactCandidateJoinInitialCandidateElapsedMs
           - traceStartCounters.exactCandidateJoinInitialCandidateElapsedMs,
@@ -3532,6 +3618,289 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
       }
     }
 
+    type EventRootFrontierProbeOutcome = "not-run" | "continue-search" | "break-search";
+    const getActiveConfigurationEffectiveUpperBound = (): number | null => {
+      if (
+        Number.isFinite(activeConfigurationTightScoreUpperBound)
+        && (
+          !Number.isFinite(activeConfigurationObservedScoreUpperBound)
+          || activeConfigurationTightScoreUpperBound < activeConfigurationObservedScoreUpperBound
+        )
+      ) {
+        return activeConfigurationTightScoreUpperBound;
+      }
+      return Number.isFinite(activeConfigurationObservedScoreUpperBound)
+        ? activeConfigurationObservedScoreUpperBound
+        : null;
+    };
+    const recordEventRootFrontierProbeSkip = (
+      reason: string,
+      upperBefore: number | null,
+    ): void => {
+      profiling.eventRootFrontierProbeSkipCount += 1;
+      profiling.eventRootFrontierProbeLastReason = reason;
+      profiling.eventRootFrontierProbeLastStatus = "skipped";
+      profiling.eventRootFrontierProbeLastUpperBefore = upperBefore;
+      profiling.eventRootFrontierProbeLastUpperAfter = upperBefore;
+      profiling.eventRootFrontierProbeLastResidualGap = (
+        upperBefore !== null && Number.isFinite(incumbentScore)
+          ? upperBefore - incumbentScore
+          : null
+      );
+      profiling.eventRootFrontierProbeLastPeakHeapMiB = stats.peakUsedHeapMiB;
+      if (traceEntry) {
+        traceEntry.eventRootFrontierProbe = false;
+        traceEntry.eventRootFrontierProbeSkipReason = reason;
+      }
+    };
+    const maybeRunEventRootFrontierProbe = (
+      triggerStatus: "full-width-event-skip-seeding" | "large-gap-event-skip-seeding",
+    ): EventRootFrontierProbeOutcome => {
+      const upperBefore = getActiveConfigurationEffectiveUpperBound();
+      if (!enableEventRootFrontierProbe) {
+        return "not-run";
+      }
+      if (!shouldRunExactCandidateJoinForConfiguration) {
+        recordEventRootFrontierProbeSkip("exact-join-disabled", upperBefore);
+        return "not-run";
+      }
+      if (didAttemptExactCandidateJoin) {
+        recordEventRootFrontierProbeSkip("already-attempted", upperBefore);
+        return "not-run";
+      }
+      if (
+        !shouldAutoEnableExactCandidateJoin
+        || !isAllCoarseFilter
+        || resultLimit !== 1
+        || results.length < resultLimit
+      ) {
+        recordEventRootFrontierProbeSkip("unsupported-scope", upperBefore);
+        return "not-run";
+      }
+      if (stats.timedOut || stats.memoryLimited || isPastMemorySoftLimit()) {
+        recordEventRootFrontierProbeSkip("global-guard", upperBefore);
+        return "not-run";
+      }
+      if (
+        upperBefore === null
+        || !Number.isFinite(upperBefore)
+        || !Number.isFinite(incumbentScore)
+        || upperBefore <= incumbentScore
+      ) {
+        recordEventRootFrontierProbeSkip("no-positive-gap", upperBefore);
+        return "not-run";
+      }
+      if (activeConfigurationObservedUpperBoundSource !== "configuration-root") {
+        recordEventRootFrontierProbeSkip("non-root-upper", upperBefore);
+        return "not-run";
+      }
+      const remainingBeforeProbeMs = getRemainingSearchMs();
+      if (remainingBeforeProbeMs < eventRootFrontierProbeMinRemainingMs) {
+        recordEventRootFrontierProbeSkip("low-remaining-budget", upperBefore);
+        return "not-run";
+      }
+      const usedHeapBytesBeforeProbe = readUsedHeapBytes();
+      const usedHeapMiBBeforeProbe = usedHeapBytesBeforeProbe !== null
+        ? Math.ceil(usedHeapBytesBeforeProbe / BYTES_PER_MIB)
+        : null;
+      const memorySoftLimitMiBBeforeProbe = getEffectiveMemorySoftLimitMiB();
+      const memoryHeadroomMiBBeforeProbe = (
+        memorySoftLimitMiBBeforeProbe !== null
+        && usedHeapMiBBeforeProbe !== null
+      )
+        ? memorySoftLimitMiBBeforeProbe - usedHeapMiBBeforeProbe
+        : null;
+      if (
+        memoryHeadroomMiBBeforeProbe === null
+        || memoryHeadroomMiBBeforeProbe < eventRootFrontierProbeMinMemoryHeadroomMiB
+      ) {
+        recordEventRootFrontierProbeSkip("low-memory-headroom", upperBefore);
+        if (traceEntry) {
+          traceEntry.eventRootFrontierProbeMemoryHeadroomMiB = memoryHeadroomMiBBeforeProbe;
+          traceEntry.eventRootFrontierProbeMinMemoryHeadroomMiB = eventRootFrontierProbeMinMemoryHeadroomMiB;
+        }
+        return "not-run";
+      }
+      const probeCandidateSoftLimit = Math.min(
+        exactCandidateSoftLimit,
+        eventRootFrontierProbeCandidateSoftLimit,
+      );
+      if (!Number.isFinite(probeCandidateSoftLimit) || probeCandidateSoftLimit <= 0) {
+        recordEventRootFrontierProbeSkip("candidate-count", upperBefore);
+        return "not-run";
+      }
+      const probeStartedAt = performance.now();
+      const probeDeadlineAt = Math.min(
+        deadlineAt,
+        probeStartedAt + eventRootFrontierProbeTimeboxMs,
+      );
+      const previousTimedOut = stats.timedOut;
+      const previousIsExhaustive = stats.isExhaustive;
+      const previousMemoryLimited = stats.memoryLimited;
+      const previousSearchMode = stats.searchMode;
+      profiling.eventRootFrontierProbeCallCount += 1;
+      profiling.eventRootFrontierProbeLastReason = triggerStatus;
+      profiling.eventRootFrontierProbeLastStatus = "running";
+      profiling.eventRootFrontierProbeLastUpperBefore = upperBefore;
+      profiling.eventRootFrontierProbeLastUpperAfter = upperBefore;
+      profiling.eventRootFrontierProbeLastResidualGap = upperBefore - incumbentScore;
+      profiling.eventRootFrontierProbeLastPeakHeapMiB = stats.peakUsedHeapMiB;
+      if (traceEntry) {
+        traceEntry.eventRootFrontierProbe = true;
+        traceEntry.eventRootFrontierProbeTriggerStatus = triggerStatus;
+        traceEntry.eventRootFrontierProbeUpperBefore = upperBefore;
+        traceEntry.eventRootFrontierProbeTimeboxMs = eventRootFrontierProbeTimeboxMs;
+        traceEntry.eventRootFrontierProbeCandidateSoftLimit = probeCandidateSoftLimit;
+        traceEntry.eventRootFrontierProbeRemainingMs = Math.round(remainingBeforeProbeMs);
+        traceEntry.eventRootFrontierProbeMemoryHeadroomMiB = memoryHeadroomMiBBeforeProbe;
+        traceEntry.eventRootFrontierProbeMinMemoryHeadroomMiB = eventRootFrontierProbeMinMemoryHeadroomMiB;
+      }
+      const exactJoinResult = searchMedleyConfigurationByExactCandidateJoin(
+        results,
+        resultLimit,
+        slots,
+        configuration,
+        server,
+        perfectRate,
+        stats,
+        profiling,
+        isPastDeadline,
+        probeDeadlineAt,
+        probeCandidateSoftLimit,
+        exactNodeSoftLimit,
+        {
+          calculatedCardCount: calculatedCards.length,
+          enableExperimentalStagedCandidateExtension: false,
+          enableSmallGapSolveRetry: false,
+          skipSolveWhenObservedUpperAtOrBelow: incumbentScore,
+          solveOnlyAboveUpperTarget: incumbentScore,
+          enableExactJoinPrefixSeed: false,
+          exactJoinPrefixSeedForceNoop: true,
+          exactJoinPrefixSeedGuardOnly: true,
+          enableLowMemoryInitialCandidateSync: shouldUseLowMemoryInitialCandidateSync,
+          lowMemoryInitialCandidateSyncLocalAbortOnly,
+          lowMemoryInitialCandidateSyncLightUpper,
+          lowMemoryInitialCandidateSyncTimeboxMs,
+          shouldAbortLowMemoryInitialCandidateSync,
+          lowMemoryHighPairScanMinRecordCount,
+          lowMemoryHighPairPrefixRecordLimit,
+          debugExactCandidateJoinMemoryAttribution,
+        },
+        observeEvaluatedMedleyResult,
+      );
+      const elapsedMs = performance.now() - probeStartedAt;
+      profiling.eventRootFrontierProbeElapsedMs += elapsedMs;
+      const didLocalTimebox = (
+        stats.timedOut
+        && !stats.memoryLimited
+        && performance.now() < deadlineAt
+      );
+      const didLocalMemoryLimit = (
+        stats.memoryLimited
+        && !previousMemoryLimited
+        && performance.now() < deadlineAt
+      );
+      if (didLocalTimebox || didLocalMemoryLimit) {
+        stats.timedOut = previousTimedOut;
+        stats.isExhaustive = previousIsExhaustive;
+        stats.memoryLimited = previousMemoryLimited;
+        stats.searchMode = previousSearchMode;
+        if (didLocalTimebox) {
+          profiling.eventRootFrontierProbeTimeboxCount += 1;
+        }
+      }
+      if (exactJoinResult.result) {
+        pushMedleyResult(results, exactJoinResult.result, resultLimit, observeEvaluatedMedleyResult);
+        recordBestScoreMilestone();
+      }
+      const probeObservedUpper = (
+        exactJoinResult.observedUpperBound !== null
+        && exactJoinResult.observedUpperBound !== undefined
+        && Number.isFinite(exactJoinResult.observedUpperBound)
+      )
+        ? exactJoinResult.observedUpperBound
+        : null;
+      const currentThresholdAfterProbeResult = getMedleyPruningThreshold(results, resultLimit);
+      const canApplyProbeUpperAsProof = (
+        probeObservedUpper !== null
+        && Number.isFinite(currentThresholdAfterProbeResult)
+        && probeObservedUpper < currentThresholdAfterProbeResult
+      );
+      if (
+        probeObservedUpper !== null
+        && (exactJoinResult.proved || canApplyProbeUpperAsProof)
+      ) {
+        tightenActiveConfigurationUpperBound(
+          probeObservedUpper,
+          "exact-candidate-join",
+          MEDLEY_TEAM_COUNT,
+        );
+      }
+      const activeUpperAfter = getActiveConfigurationEffectiveUpperBound();
+      const upperAfter = (
+        probeObservedUpper !== null
+        && probeObservedUpper < upperBefore
+      )
+        ? probeObservedUpper
+        : activeUpperAfter;
+      if (
+        upperAfter !== null
+        && Number.isFinite(upperAfter)
+        && upperAfter < upperBefore
+      ) {
+        profiling.eventRootFrontierProbeUpperImprovementCount += 1;
+      }
+      profiling.eventRootFrontierProbeLastStatus = exactJoinResult.proved
+        ? "proved"
+        : didLocalTimebox
+          ? "timebox"
+          : didLocalMemoryLimit
+            ? "memory-soft-limit"
+            : "unproved";
+      profiling.eventRootFrontierProbeLastUpperAfter = upperAfter;
+      profiling.eventRootFrontierProbeLastResidualGap = (
+        upperAfter !== null && Number.isFinite(incumbentScore)
+          ? upperAfter - incumbentScore
+          : null
+      );
+      profiling.eventRootFrontierProbeLastPeakHeapMiB = stats.peakUsedHeapMiB;
+      if (traceEntry) {
+        traceEntry.eventRootFrontierProbeElapsedMs = Math.round(elapsedMs);
+        traceEntry.eventRootFrontierProbeStatus = profiling.eventRootFrontierProbeLastStatus;
+        traceEntry.eventRootFrontierProbeUpperAfter = upperAfter;
+        traceEntry.eventRootFrontierProbeAppliedUpper = exactJoinResult.proved || canApplyProbeUpperAsProof;
+        traceEntry.eventRootFrontierProbeResidualGap = profiling.eventRootFrontierProbeLastResidualGap;
+        traceEntry.eventRootFrontierProbeObservedUpper = probeObservedUpper;
+        traceEntry.eventRootFrontierProbePeakHeapMiB = stats.peakUsedHeapMiB;
+      }
+      if (stats.timedOut) {
+        finishConfigurationTrace("event-root-frontier-probe-timeout");
+        return "break-search";
+      }
+      if (exactJoinResult.proved) {
+        profiling.eventRootFrontierProbeProvedCount += 1;
+        profiling.completedAreaItemConfigurationCount += 1;
+        rememberExactCandidateJoinProofElapsed(configuration, performance.now() - traceStartedAt);
+        finishConfigurationTrace("event-root-frontier-probe-proved");
+        closeActiveConfiguration();
+        return "continue-search";
+      }
+      if (
+        activeUpperAfter !== null
+        && Number.isFinite(activeUpperAfter)
+        && Number.isFinite(currentThresholdAfterProbeResult)
+        && activeUpperAfter < currentThresholdAfterProbeResult
+      ) {
+        profiling.eventRootFrontierProbePrunedCount += 1;
+        stats.prunedBranchCount += 1;
+        profiling.rootUpperPrunedConfigurationCount += 1;
+        finishConfigurationTrace("event-root-frontier-probe-pruned");
+        closeActiveConfiguration();
+        return "continue-search";
+      }
+      return "not-run";
+    };
+
     const hasFiniteActiveConfigurationUpperBoundBeforeSeeding = (
       Number.isFinite(activeConfigurationTightScoreUpperBound)
       || Number.isFinite(activeConfigurationObservedScoreUpperBound)
@@ -3541,6 +3910,13 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
       && results.length >= resultLimit
       && hasFiniteActiveConfigurationUpperBoundBeforeSeeding
     ) {
+      const eventRootProbe = maybeRunEventRootFrontierProbe("full-width-event-skip-seeding");
+      if (eventRootProbe === "continue-search") {
+        continue;
+      }
+      if (eventRootProbe === "break-search") {
+        break;
+      }
       if (traceEntry) {
         traceEntry.fullWidthEventSkipSeeding = true;
         traceEntry.bestScoreAfterSeeding = results[0]?.score ?? null;
@@ -3563,6 +3939,13 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
       && largeGapEventObservedGapBeforeSeeding !== null
       && largeGapEventObservedGapBeforeSeeding >= MEDLEY_LARGE_GAP_EVENT_SKIP_PROOF_MIN_GAP
     ) {
+      const eventRootProbe = maybeRunEventRootFrontierProbe("large-gap-event-skip-seeding");
+      if (eventRootProbe === "continue-search") {
+        continue;
+      }
+      if (eventRootProbe === "break-search") {
+        break;
+      }
       if (traceEntry) {
         traceEntry.largeGapEventSkipSeeding = true;
         traceEntry.bestScoreAfterSeeding = results[0]?.score ?? null;

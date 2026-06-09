@@ -97,6 +97,11 @@ export type BandoriMedleySearchOptimizationOptions = {
   disableAllScopeExactJoinPreSkip?: boolean;
   disableNearDeadlineRootSkip?: boolean;
   disableSkipDfsAfterUnprovedExactCandidateJoin?: boolean;
+  enableEventRootFrontierProbe?: boolean;
+  eventRootFrontierProbeTimeboxMs?: number;
+  eventRootFrontierProbeCandidateSoftLimit?: number;
+  eventRootFrontierProbeMinRemainingMs?: number;
+  eventRootFrontierProbeMinMemoryHeadroomMiB?: number;
 };
 
 export type BandoriMedleyTeamSearchInput = Omit<
@@ -481,6 +486,19 @@ export type BandoriMedleyTeamSearchProfilingStats = {
   bestCapacityAnchorSlotUpperImprovement: number;
   capacityAnchorSlotUpperElapsedMs: number;
   sameCoarseMemoryRootSkipCount: number;
+  eventRootFrontierProbeCallCount: number;
+  eventRootFrontierProbeProvedCount: number;
+  eventRootFrontierProbePrunedCount: number;
+  eventRootFrontierProbeUpperImprovementCount: number;
+  eventRootFrontierProbeTimeboxCount: number;
+  eventRootFrontierProbeSkipCount: number;
+  eventRootFrontierProbeElapsedMs: number;
+  eventRootFrontierProbeLastReason: string | null;
+  eventRootFrontierProbeLastStatus: string | null;
+  eventRootFrontierProbeLastUpperBefore: number | null;
+  eventRootFrontierProbeLastUpperAfter: number | null;
+  eventRootFrontierProbeLastResidualGap: number | null;
+  eventRootFrontierProbeLastPeakHeapMiB: number | null;
   // Witnesses explain proof gaps for benchmark review and must not feed pruning decisions.
   upperWitnessCaptureCount: number;
   upperWitnessUpperBound: number | null;
