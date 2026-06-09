@@ -1,6 +1,6 @@
 # Medley 40/40 Exact Roadmap
 
-Last updated: 2026-06-09 11:56 CST
+Last updated: 2026-06-09 12:49 CST
 
 This file is the persistent working note for the current medley optimizer goal.
 Keep it current before and after benchmark runs or proof-path changes, so future
@@ -671,6 +671,76 @@ Each patch must pass:
 - peak working set not above baseline by more than the selected memory gate.
 
 ## Current Next Step
+
+2026-06-09 `38/40` bounded-root analysis:
+
+- `P03:260` and `P06:323` are no longer memory, timeout, or seed-quality
+  failures in the current pinned run. Both completed quickly, stayed far below
+  the memory soft limit, and made zero exact-candidate-join calls.
+- `P03:260` ended `bounded` with score `9213846`, observed upper `9584318`,
+  gap `370472`, elapsed `51620ms`, peak `1980 MiB`, `timedOut=false`, and
+  `memoryLimited=false`. The ledger shape was `1`
+  `full-width-event-skip-seeding`, `5` `bounded-dominated-root-skip`, and
+  `102` `fast-basic-root-pruned`. The top unclosed row was
+  `RaiseASuilen/happy/performance`, sourced from `configuration-root`, with
+  effective upper `9584317.729644679`.
+- `P06:323` ended `bounded` with score `9486961`, observed upper `10094162`,
+  gap `607201`, elapsed `22295ms`, peak `1295 MiB`, `timedOut=false`, and
+  `memoryLimited=false`. The ledger shape was `1`
+  `large-gap-event-skip-seeding`, `8` `bounded-dominated-root-skip`, and
+  `99` `fast-basic-root-pruned`. The top unclosed row was
+  `PastelPalettes/cool/performance`, sourced from `configuration-root`, with
+  effective upper `10094161.91213159`.
+- The current gap is therefore a deliberately retained proof upper, not a
+  found-score problem. In both cases, the incumbent was already available; the
+  search stopped because the event/root frontier guard remembered a loose root
+  upper instead of spending memory and time on proof work that earlier
+  diagnostics showed to be risky.
+- The `bounded-dominated-root-skip` siblings are consequences of the same
+  unclosed coarse frontier. For `P03:260`, the three leading rows are all
+  `RaiseASuilen/happy`; for `P06:323`, the three leading rows are all
+  `PastelPalettes/cool`. Closing or tightening the first sibling should also
+  collapse most of the remaining same-coarse ledger entries.
+- This is a different problem from the earlier `P07:260` conversion. The
+  successful `P07:260` work made an existing proof route fit the memory gate.
+  The remaining two rows currently do not enter exact join or candidate fill at
+  all, so further cache compaction, candidate K tuning, warmup, or seed work is
+  unlikely to move the exact count.
+
+40/40 path from the current checkpoint:
+
+- Stage A: add an opt-in event-root frontier probe before the
+  `full-width-event-skip-seeding` and `large-gap-event-skip-seeding` exits.
+  The probe should only run for the leading remembered configuration, only
+  when the remaining budget and memory headroom are healthy, and only under a
+  benchmark/debug flag until it proves no regression.
+- Stage B: the probe should first attempt upper tightening, not score
+  improvement. Its success criterion is lowering the effective upper below the
+  incumbent, or at least lowering it enough that the sibling
+  `bounded-dominated-root-skip` entries become root-prunable. It must report
+  residual upper, residual gap, processed frontier count, elapsed time, peak
+  memory, and skip/timebox reason.
+- Stage C: make the proof shape memory-safe by reusing existing slot/root
+  upper machinery and bounded prefixes, not by materializing the full
+  exact-candidate frontier. The intended implementation is a cheap
+  branch-upper / anchor-frontier upper pass over the top event-root slot,
+  escalating to exact join only if the cheap pass narrows the gap and the
+  candidate counts remain under a strict local cap.
+- Stage D: test the two active blockers first:
+  `P03:260` and `P06:323`. The immediate `39/40` gate passes if either one
+  becomes exact without regressing score/gap/memory on the guard set. The
+  `40/40` gate requires both to become exact.
+- Stage E: guard set for every patch remains `P03:260`, `P06:323`,
+  `P07:260`, `P08:323`, `P10:244`, `P10:260`, `P07:244`, and `P08:244`.
+  Full isolated 40-case acceptance is required after any guard-set pass.
+- Acceptance thresholds: exact count must not drop below `38/40`, bounded-gap
+  total must not exceed `977673`, no currently exact guard case may become
+  bounded, peak working set must stay within the active memory gate, and there
+  must be no OOM or failed subprocess.
+- Do not continue with broader seed, greedy, prefix-seed, candidate-limit, or
+  memory-compaction experiments until the event-root frontier probe has a
+  clean opt-in diagnostic result. The remaining upper gap is proof-conversion
+  work, not incumbent discovery.
 
 The next actionable step is not another seed experiment. It is:
 
