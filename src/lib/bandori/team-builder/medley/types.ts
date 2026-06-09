@@ -85,6 +85,7 @@ export type BandoriMedleySearchOptimizationOptions = {
   lowMemoryInitialCandidateSyncMaxSameCoarseProofElapsedMs?: number;
   lowMemoryInitialCandidateSyncMinMemoryHeadroomMiB?: number;
   lowMemoryInitialCandidateSyncMaxSlotCardCount?: number;
+  enableLowMemoryInitialCandidateSyncGcProbe?: boolean;
   debugExactCandidateJoinMemoryAttribution?: boolean;
   enableTrailingSameCoarseDfsOnly?: boolean;
   disableDominatedRootSkip?: boolean;

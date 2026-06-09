@@ -735,6 +735,9 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
   )
     ? Math.max(0, parsedLowMemoryInitialCandidateSyncMaxSlotCardCount)
     : MEDLEY_LOW_MEMORY_INITIAL_CANDIDATE_SYNC_MAX_SLOT_CARD_COUNT;
+  const enableLowMemoryInitialCandidateSyncGcProbe = (
+    optimization.enableLowMemoryInitialCandidateSyncGcProbe === true
+  );
   const exactJoinPrefixSeedForceNoop = optimization.exactJoinPrefixSeedForceNoop === true;
   const exactJoinPrefixSeedGuardOnly = optimization.exactJoinPrefixSeedGuardOnly === true;
   const parsedExactJoinPrefixSeedTimeboxMs = optimization.exactJoinPrefixSeedTimeboxMs !== undefined
@@ -2314,6 +2317,30 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
       }
       configurationTrace.push(traceEntry);
       releaseConfigurationSearchCaches();
+      if (
+        enableLowMemoryInitialCandidateSyncGcProbe
+        && traceEntry.lowMemoryInitialCandidateSync === true
+      ) {
+        const gc = (globalThis as { gc?: () => void }).gc;
+        if (typeof gc === "function") {
+          const beforeGcBytes = readUsedHeapBytes();
+          const gcStartedAt = performance.now();
+          gc();
+          const afterGcBytes = readUsedHeapBytes();
+          Object.assign(traceEntry, {
+            lowMemoryInitialCandidateSyncGcProbe: true,
+            lowMemoryInitialCandidateSyncGcProbeElapsedMs: Math.round(performance.now() - gcStartedAt),
+            lowMemoryInitialCandidateSyncGcProbeBeforeMiB: beforeGcBytes !== null
+              ? Math.ceil(beforeGcBytes / BYTES_PER_MIB)
+              : null,
+            lowMemoryInitialCandidateSyncGcProbeAfterMiB: afterGcBytes !== null
+              ? Math.ceil(afterGcBytes / BYTES_PER_MIB)
+              : null,
+          });
+        } else {
+          traceEntry.lowMemoryInitialCandidateSyncGcProbeUnavailable = true;
+        }
+      }
     };
 
     // This is the central proof boundary for DFS. Callers may ask for tighter model families,
