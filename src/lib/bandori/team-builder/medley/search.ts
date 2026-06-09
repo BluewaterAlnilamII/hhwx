@@ -1233,6 +1233,11 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
     warmupCache.fixedCardSetOptimizationCache.clear();
     configurationWarmupCache.delete(configurationIndex);
   };
+  const releaseAllConfigurationWarmupCaches = (): void => {
+    for (const configurationIndex of [...configurationWarmupCache.keys()]) {
+      releaseConfigurationWarmupCache(configurationIndex);
+    }
+  };
   const getConfigurationRootUpperBound = (configurationIndex: number): number => {
     const cached = configurationRootUpperBounds.get(configurationIndex);
     if (cached !== undefined) {
@@ -1687,6 +1692,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
         .map(({ configuration }) => configuration);
     }
   }
+  releaseAllConfigurationWarmupCaches();
 
   // Each area-item configuration is a separate global decision shared by all three teams.
   // Exhaustiveness is only true after every searched configuration and every cross-slot card
@@ -4045,9 +4051,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
       );
     }
   }
-  for (const configurationIndex of [...configurationWarmupCache.keys()]) {
-    releaseConfigurationWarmupCache(configurationIndex);
-  }
+  releaseAllConfigurationWarmupCaches();
 
   sortMedleyResults(results);
   const observedUpperBound = Number.isFinite(observedScoreUpperBound)
