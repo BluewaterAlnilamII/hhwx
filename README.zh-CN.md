@@ -50,6 +50,7 @@ npm run dev
 - `NEXT_PUBLIC_*` 会暴露给浏览器。
 - `SUPABASE_SECRET_KEY`、`TURNSTILE_SECRET_KEY` 和 `HHWX_USER_FETCHER_TOKEN` 是服务端密钥，不能提交。
 - `NEXT_PUBLIC_SITE_ASSET_CDN_BASE_URL` 和 `NEXT_PUBLIC_BANDORI_ASSET_CDN_BASE_URL` 应指向你自己的 CDN。生产 `cdn.hhwx.org` 只是公开静态资源主机，不授予任何第三方游戏素材权利。
+- `public/res` 下的静态文件会使用长期 immutable 缓存；替换资源内容时应更换文件名或路径。
 - 资源和 CDN 示例只描述部署配置。本仓库只定义 Web 应用期望的 URL 契约，不包含用于填充 HHWX 生产镜像的私有采集工具。镜像、缓存或再分发第三方游戏内容前，请阅读 [NOTICE.zh-CN.md](NOTICE.zh-CN.md)。
 
 ## 脚本

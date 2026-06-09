@@ -50,6 +50,7 @@ Important rules:
 - `NEXT_PUBLIC_*` values are exposed to browsers.
 - `SUPABASE_SECRET_KEY`, `TURNSTILE_SECRET_KEY`, and `HHWX_USER_FETCHER_TOKEN` are server-side secrets and must not be committed.
 - `NEXT_PUBLIC_SITE_ASSET_CDN_BASE_URL` and `NEXT_PUBLIC_BANDORI_ASSET_CDN_BASE_URL` should point to your own CDN. The production `cdn.hhwx.org` value is only a public static asset host and does not grant rights to third-party game assets.
+- Static files under `public/res` are served with long-lived immutable cache headers. Rename the file or path when replacing asset content.
 - Asset and CDN examples are deployment configuration only. This repository defines the web app's expected URL contract, but does not include the private ingestion tools used to populate HHWX production mirrors. See [NOTICE.md](NOTICE.md) before mirroring, caching, or redistributing third-party game content.
 
 ## Scripts
