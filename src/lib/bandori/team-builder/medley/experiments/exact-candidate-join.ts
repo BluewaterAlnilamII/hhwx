@@ -140,7 +140,56 @@ function findBestMedleyExactSlotCandidateLowMemory(
 ): { aborted: boolean; score: number | null } {
   const bannedCardIds = new Set<number>();
   const selectedCards: SearchCard[] = [];
+  const evaluateScoreOnlyCards = (
+    cards: SearchCard[],
+    scoreCutoff: number,
+  ): number | null => evaluateMedleyScoreOnlyTeamScore({
+    cards,
+    input: slot.input,
+    chart: slot.chart,
+    configuration: slot.configuration,
+    server,
+    perfectRate,
+    scoreCache: slot.scoreCache,
+    comboOptions: slot.comboOptions,
+    pruningThresholdResult: createMedleyExactCandidateSlotThresholdResult(scoreCutoff),
+  });
+  const greedyCards: SearchCard[] = [];
+  let greedyCharacterMaskLow = 0;
+  let greedyCharacterMaskHigh = 0;
+  for (const card of slot.searchCards) {
+    const characterIndex = slot.upperBoundIndex.characterIndexById.get(card.characterId);
+    if (
+      characterIndex === undefined
+      || hasCharacterIndexInMask(greedyCharacterMaskLow, greedyCharacterMaskHigh, characterIndex)
+    ) {
+      continue;
+    }
+    const isLowCharacterMask = characterIndex < CHARACTER_MASK_SEGMENT_BITS;
+    const characterBit = isLowCharacterMask
+      ? 1 << characterIndex
+      : 1 << (characterIndex - CHARACTER_MASK_SEGMENT_BITS);
+    greedyCharacterMaskLow = isLowCharacterMask
+      ? greedyCharacterMaskLow | characterBit
+      : greedyCharacterMaskLow;
+    greedyCharacterMaskHigh = isLowCharacterMask
+      ? greedyCharacterMaskHigh
+      : greedyCharacterMaskHigh | characterBit;
+    greedyCards.push(card);
+    if (greedyCards.length >= MEDLEY_TEAM_SIZE) {
+      break;
+    }
+  }
   let bestScore = Number.NEGATIVE_INFINITY;
+  if (greedyCards.length === MEDLEY_TEAM_SIZE) {
+    stats.enumeratedTeamCount += 1;
+    profiling.teamEvaluationCacheMissCount += 1;
+    const greedyScore = evaluateScoreOnlyCards(greedyCards, Number.NEGATIVE_INFINITY);
+    stats.evaluatedTeamCount += 1;
+    if (greedyScore !== null) {
+      bestScore = greedyScore;
+    }
+  }
   let visitedNodeCount = 0;
   let aborted = false;
 
@@ -199,17 +248,7 @@ function findBestMedleyExactSlotCandidateLowMemory(
     if (selectedCards.length === MEDLEY_TEAM_SIZE) {
       stats.enumeratedTeamCount += 1;
       profiling.teamEvaluationCacheMissCount += 1;
-      const score = evaluateMedleyScoreOnlyTeamScore({
-        cards: selectedCards,
-        input: slot.input,
-        chart: slot.chart,
-        configuration: slot.configuration,
-        server,
-        perfectRate,
-        scoreCache: slot.scoreCache,
-        comboOptions: slot.comboOptions,
-        pruningThresholdResult: createMedleyExactCandidateSlotThresholdResult(scoreCutoff),
-      });
+      const score = evaluateScoreOnlyCards(selectedCards, scoreCutoff);
       stats.evaluatedTeamCount += 1;
       if (score === null || score < scoreCutoff) {
         return;
