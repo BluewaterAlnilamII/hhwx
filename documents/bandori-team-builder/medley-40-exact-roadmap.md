@@ -1,6 +1,6 @@
 # Medley 40/40 Exact Roadmap
 
-Last updated: 2026-06-09 23:24 CST
+Last updated: 2026-06-09 23:55 CST
 
 This file is the persistent working note for the current medley optimizer goal.
 Keep it current before and after benchmark runs or proof-path changes, so future
@@ -27,6 +27,28 @@ Goal tool note:
 - The active Codex goal object was created earlier in this thread and cannot be
   edited in place except to mark it complete or blocked. Treat this section as
   the authoritative detailed goal contract for the current execution phase.
+- The execution target for the active goal is now the full `40/40` exact
+  milestone. Intermediate `37/40`, `38/40`, and `39/40` evidence is retained
+  only as benchmark history and anti-regression baselines, not as the current
+  stopping point.
+
+Current execution contract:
+
+- Objective: convert the remaining `P03:260` bounded row to exact without
+  regressing any of the other 39 exact rows.
+- Primary blocker: `RaiseASuilen/happy/visual` in the same-coarse
+  `P03:260` event-root proof sequence. Recent diagnostics show the first two
+  siblings can be proved, then the third hits a low-memory initial-candidate
+  proof wall before pair upper, candidate fill, or solve.
+- Current working direction: prove or safely upper-bound the remaining
+  same-coarse frontier with lower live residency, preferably by parameter-aware
+  same-coarse proof transfer, streamed pair-unseen proof, or another
+  proof-preserving representation that does not expand K or keep a second
+  candidate universe alive.
+- Rejected for this phase: seed quality work, greedy/prefix seed, wider
+  top-K/candidate limits, larger default memory gates, broad result/candidate
+  compaction without no-op equivalence, and any patch that only shifts the
+  memory wall to another hard case.
 
 Current pinned acceptance baseline:
 
@@ -179,9 +201,8 @@ Current pinned 2026-06-09 `38/40` checkpoint:
     configuration `PastelPalettes/cool/performance`, effective upper
     `10094162`, no timeout and no memory limit.
 
-The active `38/40` stage target is achieved. The next working target is
-`39/40` exact, with `P03:260` and `P06:323` as the only remaining exact
-blockers.
+The historical `38/40` stage target is achieved and superseded by the current
+`39/40` checkpoint. The only remaining exact blocker is `P03:260`.
 
 2026-06-08 checkpoint toward the `38/40` stage:
 
@@ -1156,3 +1177,21 @@ Updated conclusion:
   `memoryLimited=true`, peak `4771 MiB`, and final abort `initial-candidate` on
   `RaiseASuilen/happy/visual`. The code was reverted. The cache is not the
   primary memory wall for this blocker.
+- Rejected diagnostic: disabling the light low-memory upper and using the
+  stronger skill-context upper in the same high-limit no-direct path
+  (`temp/bandori-team-builder/real-profile-medley-scope-matrix-2026-06-09T14-39-37-293Z.json`).
+  It stayed bounded with gap `354570`, elapsed `103725ms`,
+  `timedOut=true`, `memoryLimited=true`, peak `5494 MiB`, and final abort
+  `initial-candidate`. The first two siblings proved, but the third
+  `RaiseASuilen/happy/visual` still failed. This rules out "use a stronger
+  per-candidate upper inside the same proof path" as a safe fix; it increases
+  live memory pressure without changing the proof frontier enough to close.
+
+Next execution step:
+
+- Before implementing another proof patch, run a narrow diagnostic to estimate
+  whether a mathematically safe same-coarse parameter-transfer upper can close
+  `P03:260` after the first two sibling proofs. If the estimated transfer gap
+  is not below the remaining `354570`/`370472` gap, record the rejection and
+  pivot to lower-allocation slot-top proof instrumentation instead of widening
+  candidate limits.
