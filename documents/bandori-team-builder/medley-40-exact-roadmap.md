@@ -1,6 +1,6 @@
 # Medley 40/40 Exact Roadmap
 
-Last updated: 2026-06-09 19:38 CST
+Last updated: 2026-06-09 20:00 CST
 
 This file is the persistent working note for the current medley optimizer goal.
 Keep it current before and after benchmark runs or proof-path changes, so future
@@ -1060,6 +1060,16 @@ Updated conclusion:
   `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-09T11-41-36-790Z.json`.
   Result: `P03:260` stayed bounded at gap `370472`, `P06:323` stayed exact,
   no timeout, no memory-limited row, peak `3211 MiB`.
+- Rejected and reverted: opt-in two-slot capacity upper for the cheap-upper
+  `bothUnseenUpper` term. The 60s cheap-upper diagnostic
+  `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-09T11-54-30-647Z.json`
+  stayed bounded and worsened diagnostic residual gap to `187702` after
+  processing only `2840` anchors. A 120s diagnostic
+  `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-09T11-56-14-837Z.json`
+  still stayed bounded with residual gap `123718` after `80007ms`, slightly
+  worse than the earlier `120176` cheap-upper diagnostic. This route is too
+  slow and not tighter enough; do not continue by only raising cheap-upper
+  timebox.
 - Revised next implementation target: keep the compact-key representation only
   if the baseline guard confirms no regression, and design the next proof patch
   around genuinely lower-residency exact proof work: streamed pair-unseen upper,
