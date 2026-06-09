@@ -983,14 +983,16 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
       activeConfigurationMemorySoftLimitBytes ?? Number.POSITIVE_INFINITY,
     );
   };
+  const getEffectiveMemorySoftLimitMiB = (): number | null => {
+    const effectiveLimitBytes = getEffectiveMemorySoftLimitBytes();
+    return effectiveLimitBytes !== null
+      ? Math.floor(effectiveLimitBytes / BYTES_PER_MIB)
+      : null;
+  };
   const readUsedHeapBytes = (): number | null => {
     const memory = (performance as RuntimeMemoryPerformance).memory;
     if (typeof memory?.jsHeapSizeLimit === "number" && Number.isFinite(memory.jsHeapSizeLimit) && memory.jsHeapSizeLimit > 0) {
       runtimeHeapLimitBytes = memory.jsHeapSizeLimit;
-      const effectiveLimitBytes = getEffectiveMemorySoftLimitBytes();
-      if (effectiveLimitBytes !== null) {
-        stats.memorySoftLimitMiB = Math.floor(effectiveLimitBytes / BYTES_PER_MIB);
-      }
     }
     let usedHeapBytes = typeof memory?.usedJSHeapSize === "number" && Number.isFinite(memory.usedJSHeapSize)
       ? memory.usedJSHeapSize
@@ -1023,6 +1025,10 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
       }
     }
     if (usedHeapBytes !== null) {
+      const effectiveLimitMiB = getEffectiveMemorySoftLimitMiB();
+      if (effectiveLimitMiB !== null) {
+        stats.memorySoftLimitMiB = effectiveLimitMiB;
+      }
       recordRuntimeMemoryMiB("lastMemoryGuardUsedMiB", "peakMemoryGuardUsedMiB", usedHeapBytes);
       peakUsedHeapBytes = Math.max(peakUsedHeapBytes ?? 0, usedHeapBytes);
       stats.peakUsedHeapMiB = Math.ceil((peakUsedHeapBytes ?? usedHeapBytes) / BYTES_PER_MIB);
@@ -2609,11 +2615,12 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
     const lowMemoryInitialCandidateSyncUsedMiB = lowMemoryInitialCandidateSyncUsedHeapBytes !== null
       ? Math.ceil(lowMemoryInitialCandidateSyncUsedHeapBytes / BYTES_PER_MIB)
       : null;
+    const lowMemoryInitialCandidateSyncSoftLimitMiB = getEffectiveMemorySoftLimitMiB();
     const lowMemoryInitialCandidateSyncMemoryHeadroomMiB = (
-      stats.memorySoftLimitMiB !== null
+      lowMemoryInitialCandidateSyncSoftLimitMiB !== null
       && lowMemoryInitialCandidateSyncUsedMiB !== null
     )
-      ? stats.memorySoftLimitMiB - lowMemoryInitialCandidateSyncUsedMiB
+      ? lowMemoryInitialCandidateSyncSoftLimitMiB - lowMemoryInitialCandidateSyncUsedMiB
       : null;
     const hasLowMemoryInitialCandidateSyncMemoryHeadroom = (
       lowMemoryInitialCandidateSyncMemoryHeadroomMiB === null
@@ -2621,11 +2628,14 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
     );
     const shouldAbortLowMemoryInitialCandidateSync = (): boolean => {
       const usedHeapBytes = readUsedHeapBytes();
-      if (usedHeapBytes === null || stats.memorySoftLimitMiB === null) {
+      const effectiveLimitBytes = getEffectiveMemorySoftLimitBytes();
+      if (usedHeapBytes === null || effectiveLimitBytes === null) {
         return false;
       }
-      const usedMiB = Math.ceil(usedHeapBytes / BYTES_PER_MIB);
-      return stats.memorySoftLimitMiB - usedMiB < lowMemoryInitialCandidateSyncMinMemoryHeadroomMiB;
+      return (
+        effectiveLimitBytes - usedHeapBytes
+        < lowMemoryInitialCandidateSyncMinMemoryHeadroomMiB * BYTES_PER_MIB
+      );
     };
     const shouldUseLowMemoryInitialCandidateSync = (
       !disableLowMemoryInitialCandidateSync
@@ -2669,6 +2679,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
         lowMemoryInitialCandidateSyncMaxSameCoarseProofElapsedMs
       );
       traceEntry.lowMemoryInitialCandidateSyncUsedMiB = lowMemoryInitialCandidateSyncUsedMiB;
+      traceEntry.lowMemoryInitialCandidateSyncSoftLimitMiB = lowMemoryInitialCandidateSyncSoftLimitMiB;
       traceEntry.lowMemoryInitialCandidateSyncMemoryHeadroomMiB = lowMemoryInitialCandidateSyncMemoryHeadroomMiB;
       traceEntry.lowMemoryInitialCandidateSyncMinMemoryHeadroomMiB = (
         lowMemoryInitialCandidateSyncMinMemoryHeadroomMiB
