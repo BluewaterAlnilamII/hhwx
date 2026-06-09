@@ -765,3 +765,79 @@ The next actionable step is not another seed experiment. It is:
 7. If either remaining blocker converts and the guard set does not regress,
    re-run the full isolated 40-case matrix and generate another timestamped
    report.
+
+## Current Checkpoint - 2026-06-09 39/40
+
+Accepted branch checkpoint:
+
+- Branch: `dev/medley-39-exact-frontier`
+- Code commit: `4bf5a28` (`Add opt-in medley event-root frontier probe`)
+- Full 40-case report:
+  `documents/bandori-team-builder/medley-40-exact-report-2026-06-09-141817.md`
+- Full raw result:
+  `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-09T05-44-21-186Z.json`
+- Guard-set raw result:
+  `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-09T05-32-38-569Z.json`
+
+Result:
+
+- Exact count improved from `38/40` to `39/40`.
+- `P06:323` converted from bounded to exact.
+- The only remaining bounded case is `P03:260`.
+- Bounded gap total improved from `977673` to `370472`.
+- There were `0` failed subprocesses, `0` timed out cases, and `0`
+  memory-limited cases.
+- Full-run peak working set was `4170 MiB`, below the active `4488 MiB`
+  memory gate.
+
+Implemented path:
+
+- `enableEventRootFrontierProbe` is an opt-in internal optimization.
+- The probe runs before `full-width-event-skip-seeding` and
+  `large-gap-event-skip-seeding`.
+- It is only allowed to affect proof state when it proves the configuration or
+  directly lowers the upper below the incumbent. Otherwise the observed upper
+  is recorded as diagnostic evidence only.
+- This restriction is required. A rejected smoke showed that applying the
+  unproved `P03:260` upper changed same-coarse scheduling and caused later
+  initial-candidate memory pressure.
+
+Evidence by remaining/converted blocker:
+
+- `P06:323` now exact: the probe proved
+  `PastelPalettes/cool/performance` before the former
+  `large-gap-event-skip-seeding` exit. Full-run elapsed was `129716ms`, peak
+  was `3183 MiB`, and gap was `0`.
+- `P03:260` remains bounded: the probe ran on
+  `RaiseASuilen/happy/performance` and reduced the diagnostic upper from
+  `9584317.729644679` to `9566338.5`, but that still leaves a residual
+  diagnostic gap of `352492.5`; because it is not a proof closure, it is not
+  applied. Full-run elapsed was `53636ms`, peak was `1982 MiB`, and reported
+  bounded gap remained `370472`.
+
+Current target:
+
+- Intermediate target `>=37/40` is passed.
+- Intermediate target `>=38/40` is passed.
+- Intermediate target `>=39/40` is passed.
+- Final target remains `40/40 exact` for P01-P10 / four events, excluding P11.
+
+Next optimization direction:
+
+1. Keep seed, greedy, prefix-seed, broad candidate-limit changes, and broad
+   memory-compaction routes frozen for this objective.
+2. Focus exclusively on `P03:260` and its
+   `RaiseASuilen/happy/performance` full-width event root.
+3. The next patch must be proof-only: it may record diagnostic upper
+   improvements freely, but it may not feed an unproved upper back into active
+   same-coarse scheduling.
+4. A likely next route is a residual pair/frontier proof for the full-width
+   event root: prove that all candidate mass above the incumbent is exhausted
+   without materializing a full exact-candidate frontier, with strict local
+   memory accounting and a hard local timebox.
+5. Any accepted P03 patch must first pass the hard guard set:
+   `P03:260`, `P06:323`, `P07:260`, `P08:323`, `P10:244`, `P10:260`,
+   `P07:244`, and `P08:244`.
+6. After any guard-set pass, rerun the full isolated 40-case matrix and create
+   a new timestamped report with timing, memory, exact/bounded status, bounded
+   reasons, failure analysis, and next recommendations.
