@@ -1,6 +1,6 @@
 # Medley 40/40 Exact Roadmap
 
-Last updated: 2026-06-09 23:16 CST
+Last updated: 2026-06-09 23:55 CST
 
 This file is the persistent working note for the current medley optimizer goal.
 Keep it current before and after benchmark runs or proof-path changes, so future
@@ -1227,6 +1227,35 @@ Next execution step:
   and final abort `initial-candidate` on slot `0` after `2/3` exact-join
   completions. This rules out `debugConfigurationTrace` as the primary memory
   wall; trace output can perturb timing but is not the blocker.
+- Diagnostic:
+  low-memory abort memory sampling in the same high-limit no-direct path
+  (`temp/bandori-team-builder/real-profile-medley-scope-matrix-2026-06-09T15-26-25-191Z.json`)
+  showed the third sibling `RaiseASuilen/happy/visual` aborting after exactly
+  `1` evaluated full team. The entry started with about `3008 MiB` used, then
+  the abort sample recorded `4719 MiB` used, `4444 MiB` Node heap, `4719 MiB`
+  RSS, `-231 MiB` headroom against the `4488 MiB` soft gate, and `4655 MiB`
+  after GC. The case stayed bounded at gap `354570`, elapsed `124227ms`,
+  `timedOut=true`, `memoryLimited=true`.
+- Revised blocker interpretation: the remaining P03 wall is not broad DFS
+  width, candidate K, direct-candidate materialization, debug trace, or normal
+  score-cache retention. The immediate spike happens inside or immediately
+  around one low-memory score-only team evaluation. The next diagnostic must
+  identify the exact card/skill set and scoring path for that single evaluated
+  team before attempting another proof patch.
+- Diagnostic:
+  best-team capture for the same path
+  (`temp/bandori-team-builder/real-profile-medley-scope-matrix-2026-06-09T15-40-34-393Z.json`)
+  kept the case bounded at gap `354570`, elapsed `109522ms`,
+  `timedOut=true`, `memoryLimited=true`, peak `4782 MiB`. The third sibling
+  still aborted at slot `0` after `512` visited nodes and `1` evaluated team.
+  The evaluated best team was the same team that the previous `technique`
+  sibling had already accepted: cardIds `[1997,1712,2114,2293,2292]`,
+  skillIds `[43,69,66,66,73]`, all `RaiseASuilen/happy`. Skill `43` is the
+  continued-judge Happy-unified score skill; skill `69` is PERFECT-only
+  score; `66` and `73` are constant score/fail-guard score skills. Since the
+  same team succeeds in the previous sibling, the remaining spike is likely
+  caused by retained same-coarse state plus the next low-memory DFS/scoring
+  allocation, not by a unique card combination.
 - Updated next implementation target: do not continue parameter-transfer or
   score-cache-clear as standalone fixes. The next proof-quality work should
   identify why memory remains around `3.0 GiB` after the second sibling despite

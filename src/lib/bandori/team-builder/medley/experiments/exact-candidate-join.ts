@@ -252,6 +252,13 @@ function findBestMedleyExactSlotCandidateLowMemory(
     evaluatedSinceScoreCacheClear = 0;
     profiling.exactCandidateJoinLowMemoryInitialCandidateScoreCacheClearCount += 1;
   };
+  const recordBestLowMemoryTeam = (score: number): void => {
+    profiling.exactCandidateJoinLastLowMemoryInitialCandidateBestScore = score;
+    profiling.exactCandidateJoinLastLowMemoryInitialCandidateBestCardIds = selectedCards.map((card) => card.cardId);
+    profiling.exactCandidateJoinLastLowMemoryInitialCandidateBestCardInstanceKeys = getCardInstanceKeys(selectedCards);
+    profiling.exactCandidateJoinLastLowMemoryInitialCandidateBestSkillIds = selectedCards.map((card) => card.skillId);
+    profiling.exactCandidateJoinLastLowMemoryInitialCandidateBestPowers = selectedCards.map((card) => card.effectivePower);
+  };
 
   const visit = (
     startIndex: number,
@@ -345,10 +352,12 @@ function findBestMedleyExactSlotCandidateLowMemory(
         if (score > bestScore || isMedleyCandidatePreferred(candidate, bestCandidate)) {
           bestScore = score;
           bestCandidate = candidate;
+          recordBestLowMemoryTeam(score);
         }
         return;
       }
       bestScore = score;
+      recordBestLowMemoryTeam(score);
       return;
     }
 
@@ -4627,6 +4636,10 @@ export function searchMedleyConfigurationByExactCandidateJoin(
   profiling.exactCandidateJoinLastLowMemoryInitialCandidateVisitedNodeCount = null;
   profiling.exactCandidateJoinLastLowMemoryInitialCandidateEvaluatedTeamCount = null;
   profiling.exactCandidateJoinLastLowMemoryInitialCandidateBestScore = null;
+  profiling.exactCandidateJoinLastLowMemoryInitialCandidateBestCardIds = null;
+  profiling.exactCandidateJoinLastLowMemoryInitialCandidateBestCardInstanceKeys = null;
+  profiling.exactCandidateJoinLastLowMemoryInitialCandidateBestSkillIds = null;
+  profiling.exactCandidateJoinLastLowMemoryInitialCandidateBestPowers = null;
   profiling.exactCandidateJoinLastLowMemoryInitialCandidateAbortUsedMiB = null;
   profiling.exactCandidateJoinLastLowMemoryInitialCandidateAbortLimitMiB = null;
   profiling.exactCandidateJoinLastLowMemoryInitialCandidateAbortHeadroomMiB = null;

@@ -145,6 +145,13 @@ function asFiniteNumberArray(value: unknown): number[] | null {
   return numbers.every((number) => number !== null) ? numbers as number[] : null;
 }
 
+function asStringArray(value: unknown): string[] | null {
+  if (!Array.isArray(value) || !value.every((entry) => typeof entry === "string")) {
+    return null;
+  }
+  return value;
+}
+
 function asRecordNumberMap(value: unknown): Record<string, number> | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return null;
@@ -302,6 +309,18 @@ function buildProofLedger(
         ),
         lowMemoryInitialCandidateBestScore: (
           asFiniteNumber(entry.exactCandidateJoinLastLowMemoryInitialCandidateBestScore)
+        ),
+        lowMemoryInitialCandidateBestCardIds: (
+          asFiniteNumberArray(entry.exactCandidateJoinLastLowMemoryInitialCandidateBestCardIds)
+        ),
+        lowMemoryInitialCandidateBestCardInstanceKeys: (
+          asStringArray(entry.exactCandidateJoinLastLowMemoryInitialCandidateBestCardInstanceKeys)
+        ),
+        lowMemoryInitialCandidateBestSkillIds: (
+          asFiniteNumberArray(entry.exactCandidateJoinLastLowMemoryInitialCandidateBestSkillIds)
+        ),
+        lowMemoryInitialCandidateBestPowers: (
+          asFiniteNumberArray(entry.exactCandidateJoinLastLowMemoryInitialCandidateBestPowers)
         ),
         lowMemoryInitialCandidateAbortUsedMiB: (
           asFiniteNumber(entry.exactCandidateJoinLastLowMemoryInitialCandidateAbortUsedMiB)
@@ -2201,6 +2220,18 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
       exactCandidateJoinLastLowMemoryInitialCandidateBestScore: (
         profiling.exactCandidateJoinLastLowMemoryInitialCandidateBestScore
       ),
+      exactCandidateJoinLastLowMemoryInitialCandidateBestCardIds: (
+        profiling.exactCandidateJoinLastLowMemoryInitialCandidateBestCardIds
+      ),
+      exactCandidateJoinLastLowMemoryInitialCandidateBestCardInstanceKeys: (
+        profiling.exactCandidateJoinLastLowMemoryInitialCandidateBestCardInstanceKeys
+      ),
+      exactCandidateJoinLastLowMemoryInitialCandidateBestSkillIds: (
+        profiling.exactCandidateJoinLastLowMemoryInitialCandidateBestSkillIds
+      ),
+      exactCandidateJoinLastLowMemoryInitialCandidateBestPowers: (
+        profiling.exactCandidateJoinLastLowMemoryInitialCandidateBestPowers
+      ),
       exactCandidateJoinLastLowMemoryInitialCandidateAbortUsedMiB: (
         profiling.exactCandidateJoinLastLowMemoryInitialCandidateAbortUsedMiB
       ),
@@ -2681,6 +2712,18 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
           ),
           exactCandidateJoinLastLowMemoryInitialCandidateBestScore: (
             profiling.exactCandidateJoinLastLowMemoryInitialCandidateBestScore
+          ),
+          exactCandidateJoinLastLowMemoryInitialCandidateBestCardIds: (
+            profiling.exactCandidateJoinLastLowMemoryInitialCandidateBestCardIds
+          ),
+          exactCandidateJoinLastLowMemoryInitialCandidateBestCardInstanceKeys: (
+            profiling.exactCandidateJoinLastLowMemoryInitialCandidateBestCardInstanceKeys
+          ),
+          exactCandidateJoinLastLowMemoryInitialCandidateBestSkillIds: (
+            profiling.exactCandidateJoinLastLowMemoryInitialCandidateBestSkillIds
+          ),
+          exactCandidateJoinLastLowMemoryInitialCandidateBestPowers: (
+            profiling.exactCandidateJoinLastLowMemoryInitialCandidateBestPowers
           ),
           exactCandidateJoinLastLowMemoryInitialCandidateAbortUsedMiB: (
             profiling.exactCandidateJoinLastLowMemoryInitialCandidateAbortUsedMiB
