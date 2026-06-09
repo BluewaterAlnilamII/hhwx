@@ -1,6 +1,6 @@
 # Medley 40/40 Exact Roadmap
 
-Last updated: 2026-06-09 08:27 CST
+Last updated: 2026-06-09 09:35 CST
 
 This file is the persistent working note for the current medley optimizer goal.
 Keep it current before and after benchmark runs or proof-path changes, so future
@@ -522,6 +522,52 @@ Phase 1: memory-capped exact-join proof patch.
   source. The next generic route should target exact candidate/result payloads,
   pair query caches, or streamed/chunked frontier proof rather than further
   node-shape tweaks.
+
+2026-06-09 P07:260 low-memory proof checkpoint:
+
+- `P07:260` is now the primary 38/40 conversion target because `P07:244` and
+  `P08:244` converted in the current 37/40 checkpoint, while `P03:260` and
+  `P06:323` are controlled root-skip cases rather than memory-limited proof
+  attempts.
+- High-memory diagnostic with `memorySoftLimitMiB=7900`,
+  same-coarse threshold `60000`, and min headroom `100` proved `P07:260`
+  exact in `82533ms`, peak `7446 MiB`, `completedConfigurations=21`,
+  `rootPrunedConfigurations=87`, generated candidates `63`, and pair count
+  `0`. This proves the proof route is logically sufficient; the blocker is
+  memory residency / allocation pressure inside repeated low-memory initial
+  slot-top proof, not seed quality and not exact-join pair solving.
+- Under the normal memory gate, the same target stays bounded around gap
+  `296599`, peak about `4203-4204 MiB`, and completes only the first
+  configuration. With same-coarse threshold `60000` and min headroom `100`, it
+  completes two configurations but then peaks around `5050-5073 MiB` and still
+  remains bounded around gap `290597`.
+- Existing switches are not useful here. `disableSkipDfsAfterUnprovedExactCandidateJoin=true`
+  did not improve the case. `enableConflictExactBnb=true` with exact join did
+  not run a useful conflict path; with exact join disabled it used the full
+  300s, completed `0` configurations, and widened the gap.
+- Opt-in high-pair/prefix experiments are irrelevant for this row because the
+  successful high-memory proof used `pairCount=0`. Do not spend the next patch
+  on pair-record layout, high-pair prefix solve, or exact-join seed for
+  `P07:260`.
+- Commit `9183b20` reduced low-memory initial slot proof result materialization
+  by keeping only the best score during the score-only proof pass, then asking
+  the normal generator for the official candidate. Typecheck and diff checks
+  passed, but diagnostics showed no meaningful memory improvement. It remains a
+  useful staging point for lower-allocation proof work, not a completed
+  optimization.
+- Commit `a467839` grouped the low-memory slot-proof traversal by character.
+  It improved per-configuration elapsed time slightly, but did not reduce peak
+  memory enough to convert `P07:260`.
+- Commit `3388fa3` tried average-only medley scoring for the score-only proof
+  pass. It was slower and gave no memory improvement, so it was reverted in
+  `32f9eaa`. Do not continue by simplifying score math alone unless profiling
+  first proves the new path reduces allocation residency rather than just CPU.
+- Next generic direction: implement a lower-allocation single-slot exact top
+  proof path. The target is not a new seed or case-specific skip; it is to make
+  the 21 repeated slot-top proofs from the high-memory route fit under the
+  normal memory gate by reducing per-leaf allocation, reusable context objects,
+  retained card/team arrays, and GC pressure while preserving exact upper-bound
+  semantics.
 - Commit `0dfba16` tried compacting candidate instance-key arrays into one
   signature string, then `e89e22b` reverted it. The P06/P07 smoke had a small
   positive signal on `P07:244` (`55265 -> 52777` gap, peak about
