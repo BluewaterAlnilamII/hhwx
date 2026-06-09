@@ -108,7 +108,7 @@ type PreloadState = {
   message: string;
 };
 type MedleySongSource = "custom" | "event-cn" | "event-jp";
-type MedleyCalculationMode = "maximize" | "legacy-greedy-single";
+type MedleyCalculationMode = "maximize";
 type TeamBuilderSearchResponse = BandoriTeamSearchResponse | BandoriMedleyTeamSearchResponse;
 type TeamSearchWorkerProgressResponse = Extract<TeamSearchWorkerResponse, { type: "search-progress" }>;
 type MedleyResultInputSnapshot = {
@@ -332,7 +332,6 @@ const TARGET_LABELS: Record<BandoriTeamSearchTarget, string> = {
 };
 const MEDLEY_CALCULATION_MODE_LABELS: Record<MedleyCalculationMode, string> = {
   maximize: "最大化",
-  "legacy-greedy-single": "传统3次单曲贪心",
 };
 const LIVE_LABELS: Record<LiveType, string> = {
   free: "自由演出",
@@ -1274,24 +1273,12 @@ function buildSearchCompletionSummary(result: TeamBuilderSearchResponse, maxSear
 }
 
 function buildSearchProgressSummary(result: TeamBuilderSearchResponse): string {
-  const { stats } = result;
-  const bestScore = result.results[0]?.score ?? null;
-  const elapsedLabel = formatSearchElapsedMs(stats.elapsedMs) ?? `${stats.elapsedMs}ms`;
-  const parts = [
-    bestScore !== null
-      ? `计算中：当前最佳分数 ${formatNumber(bestScore)}`
-      : "计算中：尚未找到可展示队伍",
-    `已用时 ${elapsedLabel}`,
-  ];
+  const parts = ["计算中"];
   if (isMedleySearchResponse(result)) {
     const medleyStats = result.stats;
     const timeToBestLabel = formatSearchElapsedMs(medleyStats.profiling.timeToBestScoreMs);
     if (timeToBestLabel) {
       parts.push(`找到当前最佳队伍用时 ${timeToBestLabel}`);
-    }
-    const configurationProgressReason = buildConfigurationProgressReason(medleyStats);
-    if (configurationProgressReason) {
-      parts.push(configurationProgressReason);
     }
     parts.push("仍在证明是否存在更高分队伍");
   }
@@ -2206,8 +2193,8 @@ function ResultCard({
         </div>
         <div className="grid grid-cols-3 gap-2 text-center text-xs sm:grid-cols-5">
           <div className="rounded-xl bg-slate-50 px-3 py-2">
-            <div className="font-semibold text-slate-500">分数</div>
-            <div className="mt-1 font-bold text-slate-900">{formatNumber(result.score)}</div>
+            <div className="font-semibold text-slate-500">平均分</div>
+            <div className="mt-1 font-bold text-slate-900">{formatNumber(result.averageScore)}</div>
           </div>
           <div className="rounded-xl bg-slate-50 px-3 py-2">
             <div className="font-semibold text-slate-500">活动Pt</div>
@@ -2244,8 +2231,10 @@ function ResultCard({
 
       <div className="mt-4 grid gap-3 text-sm text-slate-600 lg:grid-cols-2">
         <div className="rounded-xl bg-slate-50 p-3">
-          <div className="font-semibold text-slate-800">最佳技能顺序</div>
-          <div className="mt-1 break-all">{skillOrderDisplay}</div>
+          <div className="font-semibold text-slate-800">分数区间</div>
+          <div className="mt-1">
+            {formatNumber(result.minScore)} / {formatNumber(result.averageScore)} / {formatNumber(result.maxScore)}
+          </div>
         </div>
         <div className="rounded-xl bg-slate-50 p-3">
           <div className="font-semibold text-slate-800">区域道具配置</div>
@@ -2255,15 +2244,13 @@ function ResultCard({
           </div>
         </div>
         <div className="rounded-xl bg-slate-50 p-3">
-          <div className="font-semibold text-slate-800">分数区间</div>
-          <div className="mt-1">
-            {formatNumber(result.minScore)} / {formatNumber(result.averageScore)} / {formatNumber(result.maxScore)}
-          </div>
+          <div className="font-semibold text-slate-800">最佳技能顺序</div>
+          <div className="mt-1 break-all">{skillOrderDisplay}</div>
         </div>
         <div className="rounded-xl bg-slate-50 p-3">
-          <div className="font-semibold text-slate-800">概率</div>
+          <div className="font-semibold text-slate-800">最佳顺序概率</div>
           <div className="mt-1">
-            最高分顺序 {result.maxScoreOrderCount}/{result.maxScoreOrderTotal}
+            {result.maxScoreOrderCount}/{result.maxScoreOrderTotal}
           </div>
         </div>
         {result.supportBandPower !== null ? (
@@ -2300,11 +2287,18 @@ function MedleyResultCard({
   rankLabel?: string;
   badgeLabel?: string;
   description?: string;
-  variant?: "default" | "candidate";
+  variant?: "default" | "candidate" | "max-score-candidate";
 }) {
-  const articleClassName = variant === "candidate"
+  const articleClassName = variant === "max-score-candidate"
+    ? "rounded-2xl border border-emerald-200 bg-emerald-50 p-4 shadow-sm"
+    : variant === "candidate"
     ? "rounded-2xl border border-amber-200 bg-amber-50/70 p-4 shadow-sm"
     : "rounded-2xl border border-slate-200 bg-white p-4 shadow-sm";
+  const badgeClassName = variant === "max-score-candidate"
+    ? "rounded-full border border-emerald-200 bg-white px-2 py-0.5 font-bold text-emerald-700"
+    : "rounded-full border border-amber-200 bg-white px-2 py-0.5 font-bold text-amber-700";
+  const sharedAreaItemConfiguration = result.areaItemConfiguration;
+  const totalPower = result.songResults.reduce((sum, songResult) => sum + songResult.totalPower, 0);
   return (
     <article className={articleClassName}>
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
@@ -2315,7 +2309,7 @@ function MedleyResultCard({
             {badgeLabel || description ? (
               <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
                 {badgeLabel ? (
-                  <span className="rounded-full border border-amber-200 bg-white px-2 py-0.5 font-bold text-amber-700">
+                  <span className={badgeClassName}>
                     {badgeLabel}
                   </span>
                 ) : null}
@@ -2325,18 +2319,42 @@ function MedleyResultCard({
               </div>
             ) : null}
             <div className="mt-1 text-xs font-semibold text-slate-500">
-              巡回演出 · 平均 {formatNumber(result.averageScore)} · 区间 {formatNumber(result.minScore)} / {formatNumber(result.maxScore)}
+              分数/活动Pt · 巡回活动 · 巡回演出
             </div>
           </div>
         </div>
         <div className="grid grid-cols-3 gap-2 text-center text-xs">
-          {result.songResults.map((songResult) => (
-            <div key={songResult.songIndex} className="rounded-xl bg-slate-50 px-3 py-2">
-              <div className="font-semibold text-slate-500">第 {songResult.songIndex + 1} 首</div>
-              <div className="mt-1 font-bold text-slate-900">{formatNumber(songResult.score)}</div>
-            </div>
-          ))}
+          <div className="rounded-xl bg-slate-50 px-3 py-2">
+            <div className="font-semibold text-slate-500">平均分</div>
+            <div className="mt-1 font-bold text-slate-900">{formatNumber(result.averageScore)}</div>
+          </div>
+          <div className="rounded-xl bg-slate-50 px-3 py-2">
+            <div className="font-semibold text-slate-500">活动Pt</div>
+            <div className="mt-1 font-bold text-slate-900">-</div>
+          </div>
+          <div className="rounded-xl bg-slate-50 px-3 py-2">
+            <div className="font-semibold text-slate-500">综合力</div>
+            <div className="mt-1 font-bold text-slate-900">{formatNumber(totalPower)}</div>
+          </div>
         </div>
+      </div>
+
+      <div className="mt-4 grid gap-3 text-sm text-slate-600 lg:grid-cols-2">
+        <div className="rounded-xl bg-slate-50 p-3">
+          <div className="font-semibold text-slate-800">分数区间</div>
+          <div className="mt-1">
+            {formatNumber(result.minScore)} / {formatNumber(result.averageScore)} / {formatNumber(result.maxScore)}
+          </div>
+        </div>
+        {sharedAreaItemConfiguration ? (
+          <div className="rounded-xl bg-slate-50 p-3">
+            <div className="font-semibold text-slate-800">区域道具配置</div>
+            <div className="mt-1">
+              {sharedAreaItemConfiguration.bandKey ?? "-"} · {formatAreaItemAttribute(sharedAreaItemConfiguration.attribute)} ·{" "}
+              {formatAreaItemParameter(sharedAreaItemConfiguration.parameter)}
+            </div>
+          </div>
+        ) : null}
       </div>
 
       <div className="mt-4 space-y-4">
@@ -2350,10 +2368,20 @@ function MedleyResultCard({
                 <div>
                   <div className="text-sm font-bold text-slate-900">第 {songResult.songIndex + 1} 首 · {songTitle}</div>
                   <div className="mt-1 text-xs font-semibold text-slate-500">
-                    分数 {formatNumber(songResult.score)} · 起始 Combo {songResult.startCombo} · Notes {songResult.notesCount}
+                    起始 Combo {songResult.startCombo} · 分数区间{" "}
+                    {formatNumber(songResult.minScore)} / {formatNumber(songResult.averageScore)} / {formatNumber(songResult.maxScore)}
                   </div>
                 </div>
-                <div className="text-sm font-bold text-slate-700">{formatNumber(songResult.totalPower)}</div>
+                <div className="grid w-full grid-cols-2 gap-2 text-center text-xs sm:w-auto sm:min-w-56">
+                  <div className="rounded-xl bg-slate-50 px-3 py-2">
+                    <div className="font-semibold text-slate-500">平均分</div>
+                    <div className="mt-1 font-bold text-slate-900">{formatNumber(songResult.averageScore)}</div>
+                  </div>
+                  <div className="rounded-xl bg-slate-50 px-3 py-2">
+                    <div className="font-semibold text-slate-500">综合力</div>
+                    <div className="mt-1 font-bold text-slate-900">{formatNumber(songResult.totalPower)}</div>
+                  </div>
+                </div>
               </div>
               <div className="mt-3 flex flex-wrap items-start gap-2 overflow-visible">
                 {displayedCards.map((card) => (
@@ -2374,10 +2402,9 @@ function MedleyResultCard({
                   <div className="mt-1 break-all">{skillOrderDisplay}</div>
                 </div>
                 <div className="rounded-xl bg-white p-3">
-                  <div className="font-semibold text-slate-800">区域道具配置</div>
+                  <div className="font-semibold text-slate-800">最佳顺序概率</div>
                   <div className="mt-1">
-                    {songResult.areaItemConfiguration.bandKey ?? "-"} · {formatAreaItemAttribute(songResult.areaItemConfiguration.attribute)} ·{" "}
-                    {formatAreaItemParameter(songResult.areaItemConfiguration.parameter)}
+                    {songResult.maxScoreOrderCount}/{songResult.maxScoreOrderTotal}
                   </div>
                 </div>
               </div>
@@ -2476,7 +2503,7 @@ function TeamBuilderPanel() {
   const [addingTemporaryCard, setAddingTemporaryCard] = useState(false);
   const cardPickerScrollRef = useRef<HTMLDivElement | null>(null);
   const [target, setTarget] = useState<BandoriTeamSearchTarget>("eventPoint");
-  const [medleyCalculationMode, setMedleyCalculationMode] = useState<MedleyCalculationMode>("maximize");
+  const medleyCalculationMode: MedleyCalculationMode = "maximize";
   const [resultLimit, setResultLimit] = useState("10");
   const [maxSearchDurationSeconds, setMaxSearchDurationSeconds] = useState(DEFAULT_SEARCH_DURATION_SECONDS);
   const [minLeaderScoreUpPercent, setMinLeaderScoreUpPercent] = useState(() => initialLivePreferences.minLeaderScoreUpPercent ?? "");
@@ -3361,6 +3388,12 @@ function TeamBuilderPanel() {
   const displayedMaxSearchDurationSeconds = displayedResultIsMedley && medleyResultInputSnapshot
     ? medleyResultInputSnapshot.maxSearchDurationSeconds
     : maxSearchDurationSeconds;
+  const displayedSearchResults = useMemo(() => {
+    if (!result) {
+      return [];
+    }
+    return resultIsPartial ? result.results.slice(0, 1) : result.results;
+  }, [result, resultIsPartial]);
   const medleyDebugText = useMemo(() => {
     if (!result || !isMedleySearchResponse(result) || !medleyResultInputSnapshot) {
       return "";
@@ -3836,8 +3869,8 @@ function TeamBuilderPanel() {
               {isMedleyEvent ? (
                 <Segment
                   value={medleyCalculationMode}
-                  options={["maximize", "legacy-greedy-single"]}
-                  onChange={setMedleyCalculationMode}
+                  options={["maximize"]}
+                  onChange={() => undefined}
                   labels={MEDLEY_CALCULATION_MODE_LABELS}
                 />
               ) : (
@@ -3891,12 +3924,9 @@ function TeamBuilderPanel() {
               </>
             ) : null}
             {isMedleyEvent ? (
-              <div className="space-y-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm font-semibold leading-6 text-amber-800">
+              <div className="space-y-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-center text-sm font-semibold leading-6 text-amber-800">
                 <p>
-                  组曲组队计算器为当前开发中的测试预览版本，仅供参考。如有发现“最大化”模式的分数结果低于“传统3次单曲贪心”模式的，或发现“传统3次单曲贪心”结果低于手动组队结果的，欢迎将你的档案名称/结果报告/页面最下方的调试信息（或在Out of Memory崩溃时直接反馈档案名称/OOM）发送至 bluewater.alnilam.ii@gmail.com 反馈。请在64位操作系统的电脑上通过最新版 Chrome 浏览器运行，以减少因内存不足崩溃的可能。
-                </p>
-                <p>
-                  巡回活动将使用巡回演出计算，默认最多计算 300 秒。最大化模式会尝试精确证明全局最优结果。若无法在限制内完成证明，会提前返回已找到的最佳结果。传统3次单曲贪心仅作为临时对照，不提供最优性证明。
+                  精确证明引擎将占用大量运行内存空间，请使用电脑进行计算以避免网页因内存不足而崩溃
                 </p>
               </div>
             ) : null}
@@ -3968,7 +3998,7 @@ function TeamBuilderPanel() {
                 </div>
               ) : null}
               <div className="flex flex-col gap-3">
-                {isMedleySearchResponse(result) && (result.maxScoreCandidate || result.evaluatedAverageTopCandidates.length > 0) ? (
+                {!resultIsPartial && isMedleySearchResponse(result) && (result.maxScoreCandidate || result.evaluatedAverageTopCandidates.length > 0) ? (
                   <div className="order-2 space-y-3">
                     <div>
                       <div className="text-sm font-bold text-slate-900">已评估候选</div>
@@ -3986,9 +4016,9 @@ function TeamBuilderPanel() {
                         assetRegion={displayedMedleyAssetRegion}
                         songs={displayedMedleySongs}
                         rankLabel="候选"
-                        badgeLabel="候选最高分"
+                        badgeLabel="最高最高分"
                         description="来自已评估候选"
-                        variant="candidate"
+                        variant="max-score-candidate"
                       />
                     ) : null}
                     {result.evaluatedAverageTopCandidates.map((item, index) => (
@@ -4008,7 +4038,7 @@ function TeamBuilderPanel() {
                     ))}
                   </div>
                 ) : null}
-                {result.results.map((item) => (
+                {displayedSearchResults.map((item) => (
                   isMedleySearchResult(item) ? (
                     <MedleyResultCard
                       key={item.rank}
