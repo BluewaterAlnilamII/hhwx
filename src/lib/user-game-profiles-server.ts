@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { ApiRouteError } from "@/lib/api-contracts";
 import { BANDORI_CARD_EPISODE_METADATA } from "@/lib/bandori/data/card-episode-metadata";
 import {
@@ -32,6 +33,7 @@ import {
   importBestdoriGameProfilePayload,
   type CompressedGameProfilePayload,
   type UserGameProfileCardRecord,
+  type UserGameProfileItemRecord,
   type UserGameProfileMissionBonusRecord,
   type UserGameProfilePayload,
   type UserGameProfilePotentialRecord,
@@ -55,6 +57,27 @@ export type UserGameProfileSummary = {
   cardCount: number;
   syncedAt: string | null;
   updatedAt: string;
+};
+
+export type UserGameProfilePayloadProfile = Pick<
+  UserGameProfileSummary,
+  "id" | "kind" | "name" | "isEditable" | "updatedAt"
+>;
+
+export type UserGameProfileSectionVersions = {
+  cardsHash: string;
+  itemsHash: string;
+};
+
+export type UserGameProfilePayloadResponse = {
+  compressed: CompressedGameProfilePayload;
+  profile: UserGameProfilePayloadProfile;
+  sectionVersions: UserGameProfileSectionVersions;
+};
+
+export type UserGameProfileSectionUpdateResult = {
+  profile: UserGameProfilePayloadProfile;
+  sectionVersions: UserGameProfileSectionVersions;
 };
 
 type UserGameProfileRow = {
@@ -200,6 +223,95 @@ function toProfileSummary(row: UserGameProfileRow): UserGameProfileSummary {
     syncedAt: row.synced_at,
     updatedAt: row.updated_at,
   };
+}
+
+function toPayloadProfile(row: UserGameProfileRow): UserGameProfilePayloadProfile {
+  const summary = toProfileSummary(row);
+  return {
+    id: summary.id,
+    kind: summary.kind,
+    name: summary.name,
+    isEditable: summary.isEditable,
+    updatedAt: summary.updatedAt,
+  };
+}
+
+function hashStableJson(value: unknown): string {
+  return createHash("sha256").update(JSON.stringify(value)).digest("hex");
+}
+
+function normalizedCardsForHash(payload: UserGameProfilePayload) {
+  return getGameProfileCards(payload)
+    .map((card) => ({
+      cardId: card.cardId,
+      level: card.level,
+      masterRank: card.masterRank,
+      skillLevel: card.skillLevel,
+      episodeCount: card.episodeCount,
+      isTrained: Boolean(card.isTrained),
+      hasTrainedArt: Boolean(card.hasTrainedArt),
+      isExcluded: Boolean(card.isExcluded),
+    }))
+    .sort((left, right) => left.cardId - right.cardId);
+}
+
+function normalizedItemsForHash(payload: UserGameProfilePayload) {
+  return {
+    areaItems: getGameProfileAreaItems(payload)
+      .map((item) => ({
+        areaItemId: item.areaItemId,
+        itemKey: item.itemKey,
+        itemCount: item.itemCount,
+        level: item.level,
+      }))
+      .sort((left, right) => (left.areaItemId ?? Number.MAX_SAFE_INTEGER) - (right.areaItemId ?? Number.MAX_SAFE_INTEGER)
+        || left.itemKey.localeCompare(right.itemKey)),
+    characterPotentials: getGameProfileCharacterPotentials(payload)
+      .map((record) => ({
+        characterId: record.characterId,
+        performanceLevel: record.performanceLevel ?? 0,
+        techniqueLevel: record.techniqueLevel ?? 0,
+        visualLevel: record.visualLevel ?? 0,
+      }))
+      .sort((left, right) => left.characterId - right.characterId),
+    characterMissionBonuses: getGameProfileCharacterMissionBonuses(payload)
+      .map((record) => ({
+        characterId: record.characterId,
+        bonusType: record.bonusType.toUpperCase(),
+        performance: record.performance,
+        technique: record.technique,
+        visual: record.visual,
+      }))
+      .sort((left, right) => left.characterId - right.characterId || left.bonusType.localeCompare(right.bonusType)),
+  };
+}
+
+function getGameProfileSectionVersions(payload: UserGameProfilePayload): UserGameProfileSectionVersions {
+  return {
+    cardsHash: hashStableJson(normalizedCardsForHash(payload)),
+    itemsHash: hashStableJson(normalizedItemsForHash(payload)),
+  };
+}
+
+function normalizeSectionHash(value: unknown, section: "cards" | "items" | "payload"): string {
+  const hash = typeof value === "string" ? value.trim() : "";
+  if (!/^[0-9a-f]{64}$/i.test(hash)) {
+    throw new ApiRouteError(400, "INVALID_PROFILE_BASE_VERSION", `无效的${section === "cards" ? "卡牌" : section === "items" ? "道具" : "档案"}基线版本`);
+  }
+  return hash.toLowerCase();
+}
+
+function throwSectionConflict(section: "cards" | "items" | "payload"): never {
+  throw new ApiRouteError(
+    409,
+    "GAME_PROFILE_CONFLICT",
+    section === "cards"
+      ? "卡牌资料已在其他页面更新，请重新载入后再保存"
+      : section === "items"
+        ? "道具资料已在其他页面更新，请重新载入后再保存"
+        : "档案已在其他页面更新，请重新载入后再保存",
+    { section },
+  );
 }
 
 function normalizeProfileName(value: unknown): string {
@@ -447,6 +559,23 @@ function compressedFromRow(row: Pick<UserGameProfileRow, "storage_codec" | "payl
   };
 }
 
+function payloadResponseFromRow(row: UserGameProfileRow, payload?: UserGameProfilePayload): UserGameProfilePayloadResponse {
+  const compressed = compressedFromRow(row);
+  const decodedPayload = payload ?? decodeGameProfilePayload(compressed);
+  return {
+    compressed,
+    profile: toPayloadProfile(row),
+    sectionVersions: getGameProfileSectionVersions(decodedPayload),
+  };
+}
+
+function sectionUpdateResultFromRow(row: UserGameProfileRow, payload: UserGameProfilePayload): UserGameProfileSectionUpdateResult {
+  return {
+    profile: toPayloadProfile(row),
+    sectionVersions: getGameProfileSectionVersions(payload),
+  };
+}
+
 async function readGameProfileRow(webUserId: string, profileId: string): Promise<UserGameProfileRow> {
   const serviceClient = createServerSupabaseClient();
   const { data, error } = await serviceClient
@@ -468,6 +597,191 @@ async function readGameProfileRow(webUserId: string, profileId: string): Promise
 
 async function readGameProfileSummary(webUserId: string, profileId: string): Promise<UserGameProfileSummary> {
   return toProfileSummary(await readGameProfileRow(webUserId, profileId));
+}
+
+async function writeManualGameProfilePayload(
+  webUserId: string,
+  profileId: string,
+  payload: UserGameProfilePayload,
+  expectedPayloadSha256: string,
+): Promise<UserGameProfileRow | null> {
+  const compressed = encodeGameProfilePayload(payload);
+  const serviceClient = createServerSupabaseClient();
+  const { data, error } = await serviceClient
+    .from(USER_GAME_PROFILES_TABLE)
+    .update({
+      profile_name: payload.bestdoriProfile.name || "手动档案",
+      server: payload.bestdoriProfile.server,
+      storage_codec: compressed.storageCodec,
+      payload_compressed: compressed.payloadCompressed,
+      payload_sha256: compressed.payloadSha256,
+      payload_size: compressed.payloadSize,
+      card_count: getGameProfileCardCount(payload),
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", profileId)
+    .eq("web_user_id", webUserId)
+    .eq("profile_kind", "manual")
+    .eq("payload_sha256", expectedPayloadSha256)
+    .select("id, profile_kind, profile_name, server, source_game_uid, storage_codec, payload_compressed, payload_sha256, payload_size, card_count, summary, synced_at, updated_at")
+    .maybeSingle();
+
+  if (error) {
+    throw new ApiRouteError(500, "GAME_PROFILE_UPDATE_FAILED", "保存档案数据失败", error.message);
+  }
+
+  return data as UserGameProfileRow | null;
+}
+
+function assertManualProfile(row: UserGameProfileRow): void {
+  if (row.profile_kind !== "manual") {
+    throw new ApiRouteError(403, "GAME_PROFILE_NOT_EDITABLE", "自动同步档案不允许编辑");
+  }
+}
+
+function normalizeCardRows(cards: unknown): UserGameProfileCardRecord[] {
+  if (!Array.isArray(cards)) {
+    throw new ApiRouteError(400, "INVALID_PROFILE_CARDS", "请提供卡牌资料");
+  }
+
+  return cards
+    .filter(isRecord)
+    .map((card) => ({
+      cardId: toInteger(card.cardId),
+      level: Math.max(1, toInteger(card.level, 1)),
+      masterRank: Math.max(0, toInteger(card.masterRank)),
+      skillLevel: Math.max(1, toInteger(card.skillLevel, 1)),
+      episodeCount: Math.max(0, toInteger(card.episodeCount)),
+      isTrained: Boolean(card.isTrained),
+      hasTrainedArt: Boolean(card.hasTrainedArt),
+      isExcluded: Boolean(card.isExcluded),
+    }))
+    .filter((card) => card.cardId > 0)
+    .sort((left, right) => left.cardId - right.cardId);
+}
+
+function normalizeAreaItemRows(areaItems: unknown): UserGameProfileItemRecord[] {
+  if (!Array.isArray(areaItems)) {
+    throw new ApiRouteError(400, "INVALID_PROFILE_ITEMS", "请提供区域道具资料");
+  }
+
+  return areaItems
+    .filter(isRecord)
+    .map((item) => {
+      const areaItemId = item.areaItemId === null ? null : toInteger(item.areaItemId);
+      return {
+        itemKey: typeof item.itemKey === "string" && item.itemKey.trim() ? item.itemKey.trim() : `${areaItemId ?? "unknown"}`,
+        areaItemId: areaItemId && areaItemId > 0 ? areaItemId : null,
+        itemCount: Math.max(0, toInteger(item.itemCount, 1)),
+        level: Math.max(0, toInteger(item.level)),
+      };
+    });
+}
+
+function normalizePotentialRows(potentials: unknown): UserGameProfilePotentialRecord[] {
+  if (!Array.isArray(potentials)) {
+    throw new ApiRouteError(400, "INVALID_PROFILE_POTENTIALS", "请提供角色潜能资料");
+  }
+
+  return potentials
+    .filter(isRecord)
+    .map((record) => ({
+      characterId: toInteger(record.characterId),
+      performanceLevel: Math.max(0, toInteger(record.performanceLevel)),
+      techniqueLevel: Math.max(0, toInteger(record.techniqueLevel)),
+      visualLevel: Math.max(0, toInteger(record.visualLevel)),
+    }))
+    .filter((record) => isPlayableCharacterId(record.characterId))
+    .sort((left, right) => left.characterId - right.characterId);
+}
+
+function normalizeMissionBonusRows(records: unknown): UserGameProfileMissionBonusRecord[] {
+  if (!Array.isArray(records)) {
+    throw new ApiRouteError(400, "INVALID_PROFILE_MISSION_BONUSES", "请提供角色任务加成资料");
+  }
+
+  return records
+    .filter(isRecord)
+    .map((record) => ({
+      characterId: toInteger(record.characterId),
+      bonusType: toStringOrNull(record.bonusType)?.toUpperCase() === "TRAINING" ? "TRAINING" : "COLLECTION",
+      performance: Math.max(0, toInteger(record.performance)),
+      technique: Math.max(0, toInteger(record.technique)),
+      visual: Math.max(0, toInteger(record.visual)),
+    }))
+    .filter((record) => isPlayableCharacterId(record.characterId))
+    .sort((left, right) => left.characterId - right.characterId || left.bonusType.localeCompare(right.bonusType));
+}
+
+function buildPayloadWithCards(payload: UserGameProfilePayload, cards: UserGameProfileCardRecord[]): UserGameProfilePayload {
+  const normalizedProfile = decodeBestdoriProfile(payload.bestdoriProfile);
+  normalizedProfile.cards = cards;
+  return {
+    ...payload,
+    bestdoriProfile: encodeBestdoriProfile(normalizedProfile),
+  };
+}
+
+function buildPayloadWithItems(
+  payload: UserGameProfilePayload,
+  items: {
+    areaItems: UserGameProfileItemRecord[];
+    characterPotentials: UserGameProfilePotentialRecord[];
+    characterMissionBonuses: UserGameProfileMissionBonusRecord[];
+  },
+): UserGameProfilePayload {
+  const normalizedProfile = decodeBestdoriProfile(payload.bestdoriProfile);
+  const levelsByAreaItemId = new Map<number, number>();
+  items.areaItems.forEach((item) => {
+    if (item.areaItemId !== null) {
+      levelsByAreaItemId.set(item.areaItemId, Math.max(0, toInteger(item.level)));
+    }
+  });
+
+  normalizedProfile.items = Object.fromEntries(
+    Object.entries(BANDORI_AREA_ITEM_IDS_BY_GROUP).map(([key, ids]) => [
+      key,
+      ids.map((areaItemId) => levelsByAreaItemId.get(areaItemId) ?? null),
+    ]),
+  );
+
+  return {
+    ...payload,
+    bestdoriProfile: encodeBestdoriProfile(normalizedProfile),
+    characterPotentials: compactPotentialRecords(items.characterPotentials),
+    characterMissionBonuses: compactMissionBonusRecords(items.characterMissionBonuses),
+  };
+}
+
+async function updateGameProfileSection(
+  webUserId: string,
+  profileId: string,
+  section: "cards" | "items",
+  baseSectionHash: string,
+  buildNextPayload: (payload: UserGameProfilePayload) => UserGameProfilePayload,
+): Promise<UserGameProfileSectionUpdateResult> {
+  let row = await readGameProfileRow(webUserId, profileId);
+  assertManualProfile(row);
+
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const payload = decodeGameProfilePayload(compressedFromRow(row));
+    const sectionVersions = getGameProfileSectionVersions(payload);
+    const currentSectionHash = section === "cards" ? sectionVersions.cardsHash : sectionVersions.itemsHash;
+    if (currentSectionHash !== baseSectionHash) {
+      throwSectionConflict(section);
+    }
+
+    const nextPayload = buildNextPayload(payload);
+    const writtenRow = await writeManualGameProfilePayload(webUserId, profileId, nextPayload, row.payload_sha256);
+    if (writtenRow) {
+      return sectionUpdateResultFromRow(writtenRow, nextPayload);
+    }
+
+    row = await readGameProfileRow(webUserId, profileId);
+    assertManualProfile(row);
+  }
+
+  throwSectionConflict(section);
 }
 
 export async function listUserGameProfiles(webUserId: string): Promise<UserGameProfileSummary[]> {
@@ -706,6 +1020,10 @@ export async function readCompressedGameProfilePayload(webUserId: string, profil
   return compressedFromRow(await readGameProfileRow(webUserId, profileId));
 }
 
+export async function readGameProfilePayloadResponse(webUserId: string, profileId: string): Promise<UserGameProfilePayloadResponse> {
+  return payloadResponseFromRow(await readGameProfileRow(webUserId, profileId));
+}
+
 export async function readGameProfilePayload(webUserId: string, profileId: string): Promise<UserGameProfilePayload> {
   return decodeGameProfilePayload(await readCompressedGameProfilePayload(webUserId, profileId));
 }
@@ -714,40 +1032,66 @@ export async function updateGameProfilePayload(
   webUserId: string,
   profileId: string,
   payload: UserGameProfilePayload,
+  basePayloadSha256: unknown,
 ): Promise<UserGameProfileSummary> {
+  const expectedPayloadSha256 = normalizeSectionHash(basePayloadSha256, "payload");
   const existing = await readGameProfileRow(webUserId, profileId);
-  if (existing.profile_kind !== "manual") {
-    throw new ApiRouteError(403, "GAME_PROFILE_NOT_EDITABLE", "自动同步档案不允许编辑");
+  assertManualProfile(existing);
+  if (existing.payload_sha256.toLowerCase() !== expectedPayloadSha256) {
+    throwSectionConflict("payload");
   }
 
-  const compressed = encodeGameProfilePayload(payload);
-  const serviceClient = createServerSupabaseClient();
-  const { data, error } = await serviceClient
-    .from(USER_GAME_PROFILES_TABLE)
-    .update({
-      storage_codec: compressed.storageCodec,
-      payload_compressed: compressed.payloadCompressed,
-      payload_sha256: compressed.payloadSha256,
-      payload_size: compressed.payloadSize,
-      card_count: getGameProfileCardCount(payload),
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", profileId)
-    .eq("web_user_id", webUserId)
-    .select("id, profile_kind, profile_name, server, source_game_uid, storage_codec, payload_compressed, payload_sha256, payload_size, card_count, summary, synced_at, updated_at")
-    .maybeSingle();
-
-  if (error) {
-    throw new ApiRouteError(500, "GAME_PROFILE_UPDATE_FAILED", "保存档案数据失败", error.message);
-  }
-  if (!data) {
-    throw new ApiRouteError(404, "GAME_PROFILE_NOT_FOUND", "档案不存在");
+  const writtenRow = await writeManualGameProfilePayload(webUserId, profileId, payload, expectedPayloadSha256);
+  if (!writtenRow) {
+    throwSectionConflict("payload");
   }
 
   return toProfileSummary({
     ...existing,
-    ...(data as UserGameProfileRow),
+    ...writtenRow,
   });
+}
+
+export async function updateGameProfileCards(
+  webUserId: string,
+  profileId: string,
+  baseCardsHash: unknown,
+  cards: unknown,
+): Promise<UserGameProfileSectionUpdateResult> {
+  const normalizedHash = normalizeSectionHash(baseCardsHash, "cards");
+  const normalizedCards = normalizeCardRows(cards);
+  return updateGameProfileSection(
+    webUserId,
+    profileId,
+    "cards",
+    normalizedHash,
+    (payload) => buildPayloadWithCards(payload, normalizedCards),
+  );
+}
+
+export async function updateGameProfileItems(
+  webUserId: string,
+  profileId: string,
+  baseItemsHash: unknown,
+  body: {
+    areaItems?: unknown;
+    characterPotentials?: unknown;
+    characterMissionBonuses?: unknown;
+  },
+): Promise<UserGameProfileSectionUpdateResult> {
+  const normalizedHash = normalizeSectionHash(baseItemsHash, "items");
+  const items = {
+    areaItems: normalizeAreaItemRows(body.areaItems),
+    characterPotentials: normalizePotentialRows(body.characterPotentials),
+    characterMissionBonuses: normalizeMissionBonusRows(body.characterMissionBonuses),
+  };
+  return updateGameProfileSection(
+    webUserId,
+    profileId,
+    "items",
+    normalizedHash,
+    (payload) => buildPayloadWithItems(payload, items),
+  );
 }
 
 export async function exportBestdoriGameProfile(webUserId: string, profileId: string): Promise<BestdoriProfile> {

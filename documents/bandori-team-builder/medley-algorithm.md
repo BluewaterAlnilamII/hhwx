@@ -189,6 +189,22 @@ At a high level, medley search does this:
    bound gap.
 
 Seeding is used only to improve the incumbent. It is never proof by itself.
+The internal `enableExactJoinPrefixSeed` experiment follows the same rule. It
+runs only after exact candidate join has already filled and sorted its candidate
+prefixes, reuses those existing arrays under a short local timebox, and may only
+return a better incumbent to the caller. It does not generate extra candidates,
+does not widen candidate limits, and does not contribute to exact proof status.
+Score-oriented pre-proof warmup experiments remain diagnostic only and should
+not be default-enabled unless benchmark gates show a proof-conversion benefit.
+For benchmark diagnosis, `debugConfigurationTrace` also derives a proof ledger
+from the existing per-configuration trace. The ledger is not a search mode and
+does not affect proof status; it groups unresolved frontiers, exact-join abort
+reasons, phase timings, phase memory, and optional-probe guard skips so the next
+optimization can target upper-bound closure instead of seed score.
+Benchmark-only no-op variants may receive the prefix-seed flag while bypassing
+the seed path or running only the guard checks. They are diagnostic gates only:
+when no seed solve runs, result status and proof progress must remain equivalent
+apart from timing, memory sampling, and guard counters.
 
 ### Where The Speedup Comes From
 
@@ -538,13 +554,14 @@ The frontend preview contains a temporary `legacy-greedy-single` comparison
 mode. It still enumerates shared area-item configurations, orders them by a
 cheap static potential estimate, and skips a configuration only when safe upper
 bounds cannot beat the current greedy result. The skip checks include summed
-per-slot root upper bounds and, during the fixed `3/2/1` strict greedy seed,
-banned-card-aware remaining-slot upper bounds. The seed finds the best available
-team for slot 3, removes those card IDs, then repeats for slots 2 and 1. It
-enforces cross-slot card disjointness and medley combo carry-over. It is useful
-for user-facing comparison only; it is not a proof path, does not report
-bounded/exact status, and should remain removable without changing the public
-medley search API.
+per-slot root upper bounds and, during each strict greedy seed order,
+banned-card-aware remaining-slot upper bounds. The seed tries the six
+permutations derived from the current preferred slot order; each order picks the
+best available team for the current slot, removes those card IDs, then continues
+to the remaining slots. It enforces cross-slot card disjointness and medley
+combo carry-over. It is useful for user-facing comparison only; it is not a
+proof path, does not report bounded/exact status, and should remain removable
+without changing the public medley search API.
 
 The saved Bestdori-compatible material is still useful for formula compatibility
 and historical comparison. It does not provide an exact proof for HHWX medley

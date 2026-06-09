@@ -139,7 +139,7 @@ noteScore = floor(inner * skill)
 7. 回退到带 safe remaining-slot upper bounds 的跨 slot DFS。
 8. 返回 exact 结果，或返回带 observed upper bound gap 的 bounded 结果。
 
-Seeding 只用于提升 incumbent，本身绝不能作为证明。
+Seeding 只用于提升 incumbent，本身绝不能作为证明。内部实验选项 `enableExactJoinPrefixSeed` 也遵守同一规则：它只会在 exact candidate join 已完成候选 fill 并排序后运行，复用现有 candidate prefix，在很短的局部 timebox 内尝试找更好的 incumbent。它不会额外生成候选、不会扩大 candidate limit，也不会参与 exact proof 状态判定。面向分数的 pre-proof warmup 实验继续只作为诊断路径；除非 benchmark gate 证明它能转化为 proof 收益，否则不应默认启用。Benchmark 诊断可通过 `debugConfigurationTrace` 从现有 per-configuration trace 派生 proof ledger；ledger 不是搜索模式，不改变 proof 状态，只用于汇总未闭合 frontier、exact-join abort reason、阶段耗时/内存和 optional-probe guard skip。Benchmark-only no-op variants 可以接收 prefix-seed flag，但完全绕过 seed 路径或只运行 guard 读数；它们只用于验证没有 seed solve 时结果状态和 proof progress 是否仍等价，允许差异仅限耗时、内存采样和 guard counter。
 
 ### 速度来源
 
@@ -318,7 +318,7 @@ Exact candidate join 安全需要同时满足：
 
 Strict 3x greedy baseline 也只是参考材料。贪心分配可以快速找到强 incumbent，但不能证明在共享道具和卡牌冲突共同作用下，某个局部看起来较弱的 slot 队伍不会带来更好的全局三队组合。
 
-前端预览包含一个临时的 `legacy-greedy-single` 对照模式。它仍会枚举共享区域道具配置，但会先按低成本静态潜力排序，让较强贪心 incumbent 更早出现；只有当安全上界无法超过当前贪心结果时才跳过配置。跳过条件包括每个 slot root upper 总和，以及固定 `3/2/1` strict greedy seed 过程中考虑已禁用卡牌后的剩余 slot upper。该 seed 会先为第 3 个 slot 找当前剩余卡池下的最优队伍，排除这些 card ID 后再依次处理第 2 个和第 1 个 slot。它强制跨 slot 卡牌互斥和组曲 combo carry-over。它只适合作为用户可见的对照，不是证明路径，不报告 bounded/exact 状态，并且应保持可在不修改公开组曲搜索 API 的情况下干净删除。
+前端预览包含一个临时的 `legacy-greedy-single` 对照模式。它仍会枚举共享区域道具配置，但会先按低成本静态潜力排序，让较强贪心 incumbent 更早出现；只有当安全上界无法超过当前贪心结果时才跳过配置。跳过条件包括每个 slot root upper 总和，以及每个 strict greedy seed order 过程中考虑已禁用卡牌后的剩余 slot upper。该 seed 会基于当前 preferred slot order 尝试 6 个排列；每个顺序都会为当前 slot 找剩余卡池下的最优队伍，排除这些 card ID 后继续处理剩余 slot。它强制跨 slot 卡牌互斥和组曲 combo carry-over。它只适合作为用户可见的对照，不是证明路径，不报告 bounded/exact 状态，并且应保持可在不修改公开组曲搜索 API 的情况下干净删除。
 
 保存的 Bestdori-compatible 材料仍然适合做公式兼容和历史比较。它不能为 HHWX 组曲搜索提供 exact proof，因为组曲问题包含共享道具耦合、顺序 combo carry-over 和全局 card-disjoint 队伍分配。
 

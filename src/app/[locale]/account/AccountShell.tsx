@@ -4,6 +4,7 @@ import { useLocale, useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
 import { type AppLocale } from "@/i18n/routing";
 import { buildAuthPath } from "@/lib/supabase";
+import { cn } from "@/lib/utils";
 
 export interface AccountShellProps {
   title: string;
@@ -11,6 +12,7 @@ export interface AccountShellProps {
   backHref?: string | null;
   backLabel?: string;
   containerClassName?: string;
+  flushTop?: boolean;
   hideEyebrow?: boolean;
   children: React.ReactNode;
 }
@@ -25,6 +27,7 @@ export default function AccountShell({
   backHref = "/account",
   backLabel,
   containerClassName = "max-w-full sm:max-w-4xl",
+  flushTop = true,
   hideEyebrow = false,
   children,
 }: AccountShellProps) {
@@ -32,9 +35,14 @@ export default function AccountShell({
   const resolvedBackLabel = backLabel ?? t("defaultBackLabel");
 
   return (
-    <main className="relative min-h-full w-full min-w-0 overflow-hidden px-0 py-4 sm:px-6 sm:py-10 lg:px-8">
+    <main
+      className={cn(
+        "relative min-h-full w-full min-w-0 overflow-hidden px-0 pb-4 sm:px-6 sm:pb-10 lg:px-8",
+        flushTop ? "-mt-5 pt-0 lg:-mt-6" : "pt-4 sm:pt-10",
+      )}
+    >
       <div className={`mx-auto w-full ${containerClassName}`}>
-        <div className="w-full max-w-full overflow-hidden border-y border-white/55 bg-white/90 px-4 py-6 shadow-[0_12px_42px_rgba(15,23,42,0.08)] backdrop-blur-xl sm:rounded-[32px] sm:border sm:bg-white/80 sm:p-8 sm:shadow-[0_20px_80px_rgba(15,23,42,0.12)]">
+        <div className="w-full max-w-full overflow-hidden border-y border-white/55 bg-[#fffef4] px-4 py-6 shadow-[0_12px_42px_rgba(15,23,42,0.08)] sm:rounded-[32px] sm:border sm:p-8 sm:shadow-[0_20px_80px_rgba(15,23,42,0.12)]">
           <div className="flex flex-col gap-4 border-b border-slate-200 pb-5 sm:flex-row sm:items-end sm:justify-between sm:gap-3 sm:pb-6">
             <div className="min-w-0">
               {!hideEyebrow ? (

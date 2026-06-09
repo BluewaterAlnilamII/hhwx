@@ -102,8 +102,8 @@ This mode must stay independent from the maximize path:
 
 - It enumerates the same shared area-item configurations, because medley requires all three teams to use one area-item setup.
 - It orders configurations by a cheap static potential estimate so stronger greedy incumbents are found earlier.
-- It skips a shared configuration only when safe upper bounds cannot beat the current greedy result: first by summed per-slot root upper, then during the `3/2/1` seed by banned-card-aware remaining-slot upper bounds.
-- It uses a fixed `3/2/1` strict greedy seed: find the best available team for slot 3, remove those card IDs, then repeat for slot 2 and slot 1.
+- It skips a shared configuration only when safe upper bounds cannot beat the current greedy result: first by summed per-slot root upper, then during each strict greedy seed order by banned-card-aware remaining-slot upper bounds.
+- It tries the six permutations derived from the current preferred slot order. Each order finds the best available team for the current slot, removes those card IDs, then continues through the remaining slots.
 - It enforces cross-slot card disjointness.
 - It uses the same medley scoring model, including sequential combo carry-over.
 - It does not prove optimality and should not return or display bounded/heuristic proof status.

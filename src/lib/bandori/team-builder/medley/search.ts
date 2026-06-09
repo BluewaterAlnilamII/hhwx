@@ -28,7 +28,10 @@ import {
   MEDLEY_TEAM_COUNT,
 } from "./constants";
 import { searchMedleyConfigurationByConflictExactBnb } from "./experiments/conflict-bnb";
+import { releaseMedleyScoreOnlyTeamEvaluationCache } from "./candidates";
 import {
+  MEDLEY_EXACT_CANDIDATE_JOIN_LOW_MEMORY_HIGH_PAIR_PREFIX_RECORD_LIMIT,
+  MEDLEY_EXACT_CANDIDATE_JOIN_LOW_MEMORY_HIGH_PAIR_SCAN_MIN_RECORD_COUNT,
   MEDLEY_EXACT_CANDIDATE_JOIN_SMALL_GAP_SOLVE_RETRY_MAX_PER_RUN,
 } from "./experiments/exact-candidate-join-constants";
 import { searchMedleyConfigurationByExactCandidateJoin } from "./experiments/exact-candidate-join";
@@ -99,6 +102,17 @@ const MEDLEY_SMALL_GAP_DFS_FALLBACK_MAX_UPPER_GAP = 100_000;
 const MEDLEY_SMALL_GAP_DFS_FALLBACK_MIN_REMAINING_MS = 45_000;
 const MEDLEY_TRAILING_SAME_COARSE_DFS_ONLY_MIN_REMAINING_MS = 30_000;
 const MEDLEY_TRAILING_SAME_COARSE_DFS_ONLY_MIN_PROOF_COUNT = 1;
+const MEDLEY_EXACT_JOIN_PREFIX_SEED_DEFAULT_TIMEBOX_MS = 300;
+const MEDLEY_EXACT_JOIN_PREFIX_SEED_DEFAULT_MAX_SMALLEST_CANDIDATE_COUNT = 20_000;
+const MEDLEY_EXACT_JOIN_PREFIX_SEED_DEFAULT_MIN_CANDIDATE_COUNTS: [number, number, number] = [1, 1, 1];
+const MEDLEY_LOW_MEMORY_INITIAL_CANDIDATE_SYNC_TIMEBOX_MS = 2_000;
+const MEDLEY_LOW_MEMORY_INITIAL_CANDIDATE_SYNC_MAX_SAME_COARSE_PROOF_ELAPSED_MS = 8_000;
+const MEDLEY_LOW_MEMORY_INITIAL_CANDIDATE_SYNC_MIN_MEMORY_HEADROOM_MIB = 800;
+const MEDLEY_LOW_MEMORY_INITIAL_CANDIDATE_SYNC_MAX_SLOT_CARD_COUNT = 249;
+const MEDLEY_LOW_MEMORY_INITIAL_CANDIDATE_SYNC_EVENT_ROOT_RISK_SLOT_CARD_COUNT = 250;
+const MEDLEY_LOW_MEMORY_INITIAL_CANDIDATE_SYNC_SAME_COARSE_GUARD_MAX_SLOT_CARD_COUNT = 249;
+const MEDLEY_FULL_WIDTH_EVENT_EXACT_JOIN_MEMORY_SOFT_LIMIT_MIB = 3_200;
+const MEDLEY_LARGE_GAP_EVENT_SKIP_PROOF_MIN_GAP = 600_000;
 const MEDLEY_POST_EXACT_JOIN_TIGHT_ROOT_MAX_CARD_COUNT = 1_300;
 const MEDLEY_POST_EXACT_JOIN_TIGHT_ROOT_MIN_REMAINING_MS = 30_000;
 const MEDLEY_SAME_COARSE_FRONTIER_RETRY_MAX_CARD_COUNT = 1_300;
@@ -110,12 +124,311 @@ const MEDLEY_SAME_COARSE_FRONTIER_PROOF_TARGET_MIN_REMAINING_MS = 120_000;
 const MEDLEY_SAME_COARSE_FRONTIER_PROOF_TARGET_MIN_ROOT_DELTA = 350_000;
 const BYTES_PER_MIB = 1024 * 1024;
 const MEMORY_SOFT_LIMIT_CHECK_INTERVAL_MS = 50;
+const MEDLEY_PROGRESS_CHECK_INTERVAL_MS = 250;
 const RUNTIME_HEAP_LIMIT_RATIO = 0.65;
 const MEDLEY_NODE_AUTO_MEMORY_SOFT_LIMIT_MIB = 4_200;
 const MEDLEY_SAME_COARSE_MEMORY_SKIP_SOFT_LIMIT_MARGIN_MIB = 1_200;
 
+function createMedleyResultRankSnapshots(
+  results: readonly BandoriMedleyTeamSearchResult[],
+): BandoriMedleyTeamSearchResult[] {
+  return results.map((result, index) => ({
+    ...result,
+    rank: index + 1,
+  }));
+}
+
 function asFiniteNumber(value: unknown): number | null {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function asFiniteNumberArray(value: unknown): number[] | null {
+  if (!Array.isArray(value)) {
+    return null;
+  }
+  const numbers = value.map(asFiniteNumber);
+  return numbers.every((number) => number !== null) ? numbers as number[] : null;
+}
+
+function asRecordNumberMap(value: unknown): Record<string, number> | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+  const result: Record<string, number> = {};
+  for (const [key, entryValue] of Object.entries(value)) {
+    const number = asFiniteNumber(entryValue);
+    if (number !== null) {
+      result[key] = number;
+    }
+  }
+  return result;
+}
+
+function subtractNumberMaps(
+  current: Record<string, number>,
+  previous: Record<string, number>,
+): Record<string, number> {
+  const result: Record<string, number> = {};
+  for (const key of new Set([...Object.keys(current), ...Object.keys(previous)])) {
+    const delta = (current[key] ?? 0) - (previous[key] ?? 0);
+    if (delta !== 0) {
+      result[key] = delta;
+    }
+  }
+  return result;
+}
+
+function getMedleyTraceCoarseKey(entry: Record<string, unknown>): string | null {
+  const bandKey = typeof entry.bandKey === "string" ? entry.bandKey : null;
+  const attribute = typeof entry.attribute === "string" ? entry.attribute : null;
+  return bandKey && attribute ? `${bandKey}/${attribute}` : null;
+}
+
+function getMedleyTraceRootUpperBound(entry: Record<string, unknown>): number | null {
+  return asFiniteNumber(entry.basicSkillAwareRootUpperBound)
+    ?? asFiniteNumber(entry.observedRootUpperBound)
+    ?? asFiniteNumber(entry.rootScoreUpperBound);
+}
+
+function getMedleyTraceEffectiveUpperBound(entry: Record<string, unknown>): number | null {
+  return asFiniteNumber(entry.rememberedUnclosedUpperBound)
+    ?? asFiniteNumber(entry.activeTightUpperBound)
+    ?? asFiniteNumber(entry.activeObservedUpperBound)
+    ?? getMedleyTraceRootUpperBound(entry);
+}
+
+function getMedleyTraceGap(entry: Record<string, unknown>): number | null {
+  const bestScore = asFiniteNumber(entry.bestScore) ?? asFiniteNumber(entry.initialBestScore);
+  const effectiveUpperBound = getMedleyTraceEffectiveUpperBound(entry);
+  return bestScore !== null && effectiveUpperBound !== null
+    ? Math.max(0, effectiveUpperBound - bestScore)
+    : null;
+}
+
+function buildProofLedger(
+  configurationTrace: Array<Record<string, unknown>>,
+): Array<Record<string, unknown>> {
+  return configurationTrace.map((entry) => {
+    const rootUpperBound = getMedleyTraceRootUpperBound(entry);
+    const activeObservedUpperBound = asFiniteNumber(entry.activeObservedUpperBound);
+    const activeTightUpperBound = asFiniteNumber(entry.activeTightUpperBound);
+    const rememberedUnclosedUpperBound = asFiniteNumber(entry.rememberedUnclosedUpperBound);
+    const effectiveUpperBound = getMedleyTraceEffectiveUpperBound(entry);
+    const gap = getMedleyTraceGap(entry);
+    return {
+      order: asFiniteNumber(entry.order),
+      configurationIndex: asFiniteNumber(entry.configurationIndex),
+      coarseKey: getMedleyTraceCoarseKey(entry),
+      bandKey: typeof entry.bandKey === "string" ? entry.bandKey : null,
+      attribute: typeof entry.attribute === "string" ? entry.attribute : null,
+      parameter: typeof entry.parameter === "string" ? entry.parameter : null,
+      status: typeof entry.status === "string" ? entry.status : null,
+      elapsedMs: asFiniteNumber(entry.elapsedMs),
+      remainingBudgetMs: asFiniteNumber(entry.remainingBudgetMs),
+      initialIncumbent: asFiniteNumber(entry.initialBestScore),
+      finalIncumbent: asFiniteNumber(entry.bestScore),
+      rootUpperBound,
+      activeObservedUpperBound,
+      activeObservedUpperSource: entry.activeObservedUpperSource ?? null,
+      activeTightUpperBound,
+      activeTightUpperSource: entry.activeTightUpperSource ?? null,
+      rememberedUnclosedUpperBound,
+      rememberedUnclosedUpperSource: entry.rememberedUnclosedUpperSource ?? null,
+      effectiveUpperBound,
+      gap,
+      exactJoinAbortReason: entry.exactCandidateJoinAbortReason ?? null,
+      exactJoinAbortSlotIndex: entry.exactCandidateJoinAbortSlotIndex ?? null,
+      exactJoinAbortRemainingMs: entry.exactCandidateJoinAbortRemainingMs ?? null,
+      candidateCountsBySlot: asFiniteNumberArray(entry.exactCandidateJoinLastCandidateCountsBySlot),
+      candidateCutoffsBySlot: asFiniteNumberArray(entry.exactCandidateJoinCandidateCutoffsBySlot),
+      pairUpperByExcludedSlot: asFiniteNumberArray(entry.exactCandidateJoinPairUpperByExcludedSlot),
+      pairUnseenUpperByExcludedSlot: asFiniteNumberArray(entry.exactCandidateJoinPairUnseenUpperByExcludedSlot),
+      pairRootUpperBound: asFiniteNumber(entry.exactCandidateJoinPairRootUpperBound),
+      phaseElapsedMs: {
+        initialCandidate: asFiniteNumber(entry.exactCandidateJoinInitialCandidateElapsedMsDelta),
+        pairUpper: asFiniteNumber(entry.exactCandidateJoinPairUpperElapsedMsDelta),
+        candidateFill: asFiniteNumber(entry.exactCandidateJoinCandidateFillElapsedMsDelta),
+        solve: asFiniteNumber(entry.exactCandidateJoinSolveElapsedMsDelta),
+        globalHeapRekey: asFiniteNumber(entry.exactCandidateJoinGlobalHeapRekeyElapsedMsDelta),
+        anchorFrontierCheapUpper: asFiniteNumber(entry.exactCandidateJoinLastAnchorFrontierCheapUpperElapsedMs),
+        anchorFrontierProof: asFiniteNumber(entry.exactCandidateJoinLastAnchorFrontierProofElapsedMs),
+        smallGapSolveRetry: asFiniteNumber(entry.exactCandidateJoinLastSmallGapSolveRetryTimeboxMs),
+        prefixSeed: asFiniteNumber(entry.exactJoinPrefixSeedElapsedMsDelta),
+      },
+      phaseMemoryMiB: {
+        peak: asFiniteNumber(entry.peakUsedHeapMiB),
+        anchorFrontierCheapUpper: asFiniteNumber(entry.exactCandidateJoinLastAnchorFrontierCheapUpperPeakHeapMiB),
+        anchorFrontierProof: asFiniteNumber(entry.exactCandidateJoinLastAnchorFrontierProofPeakHeapMiB),
+        guardedExtension: asFiniteNumber(entry.exactCandidateJoinLastGuardedExtensionPeakHeapMiB),
+        stagedExtension: asFiniteNumber(entry.exactCandidateJoinLastStagedExtensionPeakHeapMiB),
+        smallGapSolveRetry: asFiniteNumber(entry.exactCandidateJoinLastSmallGapSolveRetryPeakHeapMiB),
+        prefixSeed: asFiniteNumber(entry.exactJoinPrefixSeedPeakHeapMiB),
+      },
+      optionalProbeDeltas: {
+        exactJoinPrefixSeedCallCount: asFiniteNumber(entry.exactJoinPrefixSeedCallCountDelta),
+        exactJoinPrefixSeedHitCount: asFiniteNumber(entry.exactJoinPrefixSeedHitCountDelta),
+        exactJoinPrefixSeedElapsedMs: asFiniteNumber(entry.exactJoinPrefixSeedElapsedMsDelta),
+        exactJoinPrefixSeedTimedOutCount: asFiniteNumber(entry.exactJoinPrefixSeedTimedOutCountDelta),
+        exactJoinPrefixSeedNoHitLocalTimeoutCount: asFiniteNumber(
+          entry.exactJoinPrefixSeedNoHitLocalTimeoutCountDelta,
+        ),
+        exactJoinPrefixSeedGuardSkipCount: asFiniteNumber(entry.exactJoinPrefixSeedGuardSkipCountDelta),
+        exactJoinPrefixSeedGuardSkipReasonCounts: asRecordNumberMap(
+          entry.exactJoinPrefixSeedGuardSkipReasonCountsDelta,
+        ),
+        exactJoinPrefixSeedLastGuardSkipReason: entry.exactJoinPrefixSeedLastGuardSkipReason ?? null,
+        anchorFrontierCheapUpperCount: asFiniteNumber(entry.exactCandidateJoinAnchorFrontierCheapUpperCountDelta),
+        anchorFrontierCheapUpperImprovementCount: (
+          asFiniteNumber(entry.exactCandidateJoinAnchorFrontierCheapUpperImprovementCountDelta)
+        ),
+        anchorFrontierProofTriggerCount: asFiniteNumber(entry.exactCandidateJoinAnchorFrontierProofTriggerCountDelta),
+        anchorFrontierProofCompletedCount: (
+          asFiniteNumber(entry.exactCandidateJoinAnchorFrontierProofCompletedCountDelta)
+        ),
+        smallGapSolveRetryCount: asFiniteNumber(entry.exactCandidateJoinSmallGapSolveRetryCountDelta),
+        smallGapSolveRetryTimeboxCount: asFiniteNumber(entry.exactCandidateJoinSmallGapSolveRetryTimeboxCountDelta),
+      },
+      sameCoarse: {
+        siblingBlocked: entry.sameCoarseSiblingBlocked ?? null,
+        siblingBlockedStagedExtension: entry.sameCoarseSiblingBlockedStagedExtension ?? null,
+        frontierRetryCandidate: entry.sameCoarseFrontierRetryCandidate ?? null,
+        frontierRetryTargetUpperBound: entry.sameCoarseFrontierRetryTargetUpperBound ?? null,
+        frontierRetryRootUpperBound: entry.sameCoarseFrontierRetryRootUpperBound ?? null,
+        frontierRetryRootDelta: entry.sameCoarseFrontierRetryRootDelta ?? null,
+        frontierProofTargetUpperBound: entry.sameCoarseFrontierProofTargetUpperBound ?? null,
+        frontierProofTargetRootDelta: entry.sameCoarseFrontierProofTargetRootDelta ?? null,
+      },
+    };
+  });
+}
+
+function buildProofLedgerSummary(
+  proofLedger: Array<Record<string, unknown>>,
+): Record<string, unknown> {
+  const readNumber = (entry: Record<string, unknown>, key: string): number | null => asFiniteNumber(entry[key]);
+  const isUnclosedEntry = (entry: Record<string, unknown>): boolean => {
+    const status = typeof entry.status === "string" ? entry.status : "";
+    return (
+      status.includes("bounded")
+      || status.includes("timeout")
+      || status.includes("unproved")
+      || entry.exactJoinAbortReason !== null && entry.exactJoinAbortReason !== undefined
+      || entry.rememberedUnclosedUpperBound !== null && entry.rememberedUnclosedUpperBound !== undefined
+    );
+  };
+  const topBy = (
+    key: string,
+    entries: Array<Record<string, unknown>> = proofLedger,
+  ): Array<Record<string, unknown>> => (
+    entries
+      .filter((entry) => {
+        const value = readNumber(entry, key);
+        return value !== null && value > 0;
+      })
+      .sort((left, right) => (readNumber(right, key) ?? 0) - (readNumber(left, key) ?? 0))
+      .slice(0, 10)
+  );
+  const topByNestedNumber = (
+    containerKey: string,
+    valueKey: string,
+  ): Array<Record<string, unknown>> => (
+    proofLedger
+      .filter((entry) => {
+        const container = entry[containerKey];
+        if (!container || typeof container !== "object" || Array.isArray(container)) {
+          return false;
+        }
+        const value = asFiniteNumber((container as Record<string, unknown>)[valueKey]);
+        return value !== null && value > 0;
+      })
+      .sort((left, right) => {
+        const leftContainer = left[containerKey] as Record<string, unknown>;
+        const rightContainer = right[containerKey] as Record<string, unknown>;
+        return (asFiniteNumber(rightContainer[valueKey]) ?? 0) - (asFiniteNumber(leftContainer[valueKey]) ?? 0);
+      })
+      .slice(0, 10)
+  );
+  const countByString = (key: string): Record<string, number> => {
+    const counts: Record<string, number> = {};
+    for (const entry of proofLedger) {
+      const value = entry[key];
+      if (typeof value === "string" && value.length > 0) {
+        counts[value] = (counts[value] ?? 0) + 1;
+      }
+    }
+    return counts;
+  };
+  const guardSkipReasonCounts: Record<string, number> = {};
+  let prefixSeedNoHitLocalTimeoutCount = 0;
+  for (const entry of proofLedger) {
+    const optionalProbeDeltas = entry.optionalProbeDeltas;
+    if (!optionalProbeDeltas || typeof optionalProbeDeltas !== "object" || Array.isArray(optionalProbeDeltas)) {
+      continue;
+    }
+    prefixSeedNoHitLocalTimeoutCount += (
+      asFiniteNumber((optionalProbeDeltas as Record<string, unknown>).exactJoinPrefixSeedNoHitLocalTimeoutCount)
+      ?? 0
+    );
+    const reasonCounts = asRecordNumberMap(
+      (optionalProbeDeltas as Record<string, unknown>).exactJoinPrefixSeedGuardSkipReasonCounts,
+    );
+    if (!reasonCounts) {
+      continue;
+    }
+    for (const [reason, count] of Object.entries(reasonCounts)) {
+      guardSkipReasonCounts[reason] = (guardSkipReasonCounts[reason] ?? 0) + count;
+    }
+  }
+  const coarseGroups = new Map<string, Record<string, unknown>>();
+  for (const entry of proofLedger) {
+    const coarseKey = typeof entry.coarseKey === "string" ? entry.coarseKey : "unknown";
+    let group = coarseGroups.get(coarseKey);
+    if (!group) {
+      group = {
+        coarseKey,
+        count: 0,
+        maxGap: null,
+        maxElapsedMs: null,
+        maxPeakUsedHeapMiB: null,
+        abortReasonCounts: {},
+      };
+      coarseGroups.set(coarseKey, group);
+    }
+    group.count = (asFiniteNumber(group.count) ?? 0) + 1;
+    const gap = asFiniteNumber(entry.gap);
+    if (gap !== null) {
+      group.maxGap = Math.max(asFiniteNumber(group.maxGap) ?? Number.NEGATIVE_INFINITY, gap);
+    }
+    const elapsedMs = asFiniteNumber(entry.elapsedMs);
+    if (elapsedMs !== null) {
+      group.maxElapsedMs = Math.max(asFiniteNumber(group.maxElapsedMs) ?? Number.NEGATIVE_INFINITY, elapsedMs);
+    }
+    const phaseMemoryMiB = entry.phaseMemoryMiB;
+    const peakUsedHeapMiB = phaseMemoryMiB && typeof phaseMemoryMiB === "object" && !Array.isArray(phaseMemoryMiB)
+      ? asFiniteNumber((phaseMemoryMiB as Record<string, unknown>).peak)
+      : null;
+    if (peakUsedHeapMiB !== null) {
+      group.maxPeakUsedHeapMiB = Math.max(
+        asFiniteNumber(group.maxPeakUsedHeapMiB) ?? Number.NEGATIVE_INFINITY,
+        peakUsedHeapMiB,
+      );
+    }
+    if (typeof entry.exactJoinAbortReason === "string") {
+      const abortReasonCounts = group.abortReasonCounts as Record<string, number>;
+      abortReasonCounts[entry.exactJoinAbortReason] = (abortReasonCounts[entry.exactJoinAbortReason] ?? 0) + 1;
+    }
+  }
+  return {
+    entryCount: proofLedger.length,
+    topUnclosedByGap: topBy("gap", proofLedger.filter(isUnclosedEntry)),
+    topByElapsedMs: topBy("elapsedMs"),
+    topByMemorySpike: topByNestedNumber("phaseMemoryMiB", "peak"),
+    abortReasonCounts: countByString("exactJoinAbortReason"),
+    prefixSeedNoHitLocalTimeoutCount,
+    prefixSeedGuardSkipReasonCounts: guardSkipReasonCounts,
+    coarseGroups: [...coarseGroups.values()]
+      .sort((left, right) => (asFiniteNumber(right.maxGap) ?? 0) - (asFiniteNumber(left.maxGap) ?? 0)),
+  };
 }
 
 function buildBoundedFrontierGroups(
@@ -284,8 +597,22 @@ type RuntimeNodeProcess = {
   memoryUsage?: () => {
     heapUsed?: number;
     rss?: number;
+    external?: number;
+    arrayBuffers?: number;
   };
 };
+
+type RuntimeMemoryProfilingKey =
+  | "lastNodeHeapUsedMiB"
+  | "peakNodeHeapUsedMiB"
+  | "lastNodeRssMiB"
+  | "peakNodeRssMiB"
+  | "lastNodeExternalMiB"
+  | "peakNodeExternalMiB"
+  | "lastNodeArrayBuffersMiB"
+  | "peakNodeArrayBuffersMiB"
+  | "lastMemoryGuardUsedMiB"
+  | "peakMemoryGuardUsedMiB";
 
 export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput): BandoriMedleyTeamSearchResponse {
   const startedAt = performance.now();
@@ -293,6 +620,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
   const resultLimit = clamp(Math.trunc(input.resultLimit ?? 1), 1, 20);
   const perfectRate = clamp(input.perfectRate ?? 1, 0, 1);
   const maxSearchDurationMs = Math.max(1000, Math.trunc(input.maxSearchDurationMs ?? 9500));
+  const hasEventBonus = Boolean(input.eventBonus);
 
   // Runtime options only select already-defined search paths. Exact proof status is decided
   // later from actual exhaustion, timeout, and whether auto coarse filtering narrowed the space.
@@ -304,6 +632,9 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
   const requestedEnableTeamSharedCoefficientUpper = optimization.enableTeamSharedCoefficientUpper === true;
   const enableSharedPowerSkillUpper = optimization.enableSharedPowerSkillUpper === true;
   const debugConfigurationTrace = optimization.debugConfigurationTrace === true;
+  const debugExactCandidateJoinMemoryAttribution = (
+    optimization.debugExactCandidateJoinMemoryAttribution === true
+  );
   const enableExperimentalStagedCandidateExtension = (
     optimization.enableExperimentalStagedCandidateExtension === true
   );
@@ -352,9 +683,121 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
   const conflictSlotSolveNodeLimit = Number.isFinite(parsedConflictSlotSolveNodeLimit)
     ? Math.max(1, parsedConflictSlotSolveNodeLimit)
     : MEDLEY_CONFLICT_SLOT_SOLVE_DEFAULT_NODE_LIMIT;
+  const enableExactJoinPrefixSeed = optimization.enableExactJoinPrefixSeed === true;
+  const enableLowMemoryHighPairScan = optimization.enableLowMemoryHighPairScan === true;
+  const parsedLowMemoryHighPairScanMinRecordCount = (
+    optimization.lowMemoryHighPairScanMinRecordCount !== undefined
+      ? Math.trunc(optimization.lowMemoryHighPairScanMinRecordCount)
+      : Number.NaN
+  );
+  const lowMemoryHighPairScanMinRecordCount = enableLowMemoryHighPairScan
+    ? Number.isFinite(parsedLowMemoryHighPairScanMinRecordCount)
+      ? Math.max(1, parsedLowMemoryHighPairScanMinRecordCount)
+      : MEDLEY_EXACT_CANDIDATE_JOIN_LOW_MEMORY_HIGH_PAIR_SCAN_MIN_RECORD_COUNT
+    : null;
+  const enableLowMemoryHighPairPrefixUpper = optimization.enableLowMemoryHighPairPrefixUpper === true;
+  const parsedLowMemoryHighPairPrefixRecordLimit = (
+    optimization.lowMemoryHighPairPrefixRecordLimit !== undefined
+      ? Math.trunc(optimization.lowMemoryHighPairPrefixRecordLimit)
+      : Number.NaN
+  );
+  const lowMemoryHighPairPrefixRecordLimit = enableLowMemoryHighPairPrefixUpper
+    ? Number.isFinite(parsedLowMemoryHighPairPrefixRecordLimit)
+      ? Math.max(1, parsedLowMemoryHighPairPrefixRecordLimit)
+      : MEDLEY_EXACT_CANDIDATE_JOIN_LOW_MEMORY_HIGH_PAIR_PREFIX_RECORD_LIMIT
+    : null;
+  const disableLowMemoryInitialCandidateSync = optimization.disableLowMemoryInitialCandidateSync === true;
+  const lowMemoryInitialCandidateSyncLocalAbortOnly = (
+    optimization.lowMemoryInitialCandidateSyncLocalAbortOnly === true
+  );
+  const lowMemoryInitialCandidateSyncLightUpper = optimization.lowMemoryInitialCandidateSyncLightUpper === true;
+  const parsedLowMemoryInitialCandidateSyncTimeboxMs = (
+    optimization.lowMemoryInitialCandidateSyncTimeboxMs !== undefined
+      ? Math.trunc(optimization.lowMemoryInitialCandidateSyncTimeboxMs)
+      : Number.NaN
+  );
+  const lowMemoryInitialCandidateSyncTimeboxMs = Number.isFinite(parsedLowMemoryInitialCandidateSyncTimeboxMs)
+    ? Math.max(0, parsedLowMemoryInitialCandidateSyncTimeboxMs)
+    : MEDLEY_LOW_MEMORY_INITIAL_CANDIDATE_SYNC_TIMEBOX_MS;
+  const parsedLowMemoryInitialCandidateSyncMaxSameCoarseProofElapsedMs = (
+    optimization.lowMemoryInitialCandidateSyncMaxSameCoarseProofElapsedMs !== undefined
+      ? Math.trunc(optimization.lowMemoryInitialCandidateSyncMaxSameCoarseProofElapsedMs)
+      : Number.NaN
+  );
+  const lowMemoryInitialCandidateSyncMaxSameCoarseProofElapsedMs = Number.isFinite(
+    parsedLowMemoryInitialCandidateSyncMaxSameCoarseProofElapsedMs,
+  )
+    ? Math.max(0, parsedLowMemoryInitialCandidateSyncMaxSameCoarseProofElapsedMs)
+    : MEDLEY_LOW_MEMORY_INITIAL_CANDIDATE_SYNC_MAX_SAME_COARSE_PROOF_ELAPSED_MS;
+  const parsedLowMemoryInitialCandidateSyncMinMemoryHeadroomMiB = (
+    optimization.lowMemoryInitialCandidateSyncMinMemoryHeadroomMiB !== undefined
+      ? Math.trunc(optimization.lowMemoryInitialCandidateSyncMinMemoryHeadroomMiB)
+      : Number.NaN
+  );
+  const lowMemoryInitialCandidateSyncMinMemoryHeadroomMiB = Number.isFinite(
+    parsedLowMemoryInitialCandidateSyncMinMemoryHeadroomMiB,
+  )
+    ? Math.max(0, parsedLowMemoryInitialCandidateSyncMinMemoryHeadroomMiB)
+    : MEDLEY_LOW_MEMORY_INITIAL_CANDIDATE_SYNC_MIN_MEMORY_HEADROOM_MIB;
+  const parsedLowMemoryInitialCandidateSyncMaxSlotCardCount = (
+    optimization.lowMemoryInitialCandidateSyncMaxSlotCardCount !== undefined
+      ? Math.trunc(optimization.lowMemoryInitialCandidateSyncMaxSlotCardCount)
+      : Number.NaN
+  );
+  const lowMemoryInitialCandidateSyncMaxSlotCardCount = Number.isFinite(
+    parsedLowMemoryInitialCandidateSyncMaxSlotCardCount,
+  )
+    ? Math.max(0, parsedLowMemoryInitialCandidateSyncMaxSlotCardCount)
+    : MEDLEY_LOW_MEMORY_INITIAL_CANDIDATE_SYNC_MAX_SLOT_CARD_COUNT;
+  const enableLowMemoryInitialCandidateSyncGcProbe = (
+    optimization.enableLowMemoryInitialCandidateSyncGcProbe === true
+  );
+  const exactJoinPrefixSeedForceNoop = optimization.exactJoinPrefixSeedForceNoop === true;
+  const exactJoinPrefixSeedGuardOnly = optimization.exactJoinPrefixSeedGuardOnly === true;
+  const parsedExactJoinPrefixSeedTimeboxMs = optimization.exactJoinPrefixSeedTimeboxMs !== undefined
+    ? Math.trunc(optimization.exactJoinPrefixSeedTimeboxMs)
+    : Number.NaN;
+  const exactJoinPrefixSeedTimeboxMs = Number.isFinite(parsedExactJoinPrefixSeedTimeboxMs)
+    ? Math.max(0, parsedExactJoinPrefixSeedTimeboxMs)
+    : MEDLEY_EXACT_JOIN_PREFIX_SEED_DEFAULT_TIMEBOX_MS;
+  const parsedExactJoinPrefixSeedMaxSmallestCandidateCount = (
+    optimization.exactJoinPrefixSeedMaxSmallestCandidateCount !== undefined
+      ? Math.trunc(optimization.exactJoinPrefixSeedMaxSmallestCandidateCount)
+      : Number.NaN
+  );
+  const exactJoinPrefixSeedMaxSmallestCandidateCount = (
+    Number.isFinite(parsedExactJoinPrefixSeedMaxSmallestCandidateCount)
+      ? Math.max(1, parsedExactJoinPrefixSeedMaxSmallestCandidateCount)
+      : MEDLEY_EXACT_JOIN_PREFIX_SEED_DEFAULT_MAX_SMALLEST_CANDIDATE_COUNT
+  );
+  const exactJoinPrefixSeedMinCandidateCounts: [number, number, number] = (() => {
+    const value = optimization.exactJoinPrefixSeedMinCandidateCounts;
+    if (!Array.isArray(value) || value.length !== MEDLEY_TEAM_COUNT) {
+      return MEDLEY_EXACT_JOIN_PREFIX_SEED_DEFAULT_MIN_CANDIDATE_COUNTS;
+    }
+    const parsed = value.map((count) => Math.trunc(count));
+    if (parsed.some((count) => !Number.isFinite(count))) {
+      return MEDLEY_EXACT_JOIN_PREFIX_SEED_DEFAULT_MIN_CANDIDATE_COUNTS;
+    }
+    return [
+      Math.max(0, parsed[0]),
+      Math.max(0, parsed[1]),
+      Math.max(0, parsed[2]),
+    ];
+  })();
   const parsedConfigurationSeedPassDurationMs = optimization.configurationSeedPassDurationMs !== undefined
     ? Math.trunc(optimization.configurationSeedPassDurationMs)
     : Number.NaN;
+  const parsedSkipConfigurationSeedingWhenMemoryHeadroomBelowMiB = (
+    optimization.skipConfigurationSeedingWhenMemoryHeadroomBelowMiB !== undefined
+      ? Math.trunc(optimization.skipConfigurationSeedingWhenMemoryHeadroomBelowMiB)
+      : Number.NaN
+  );
+  const skipConfigurationSeedingWhenMemoryHeadroomBelowMiB = Number.isFinite(
+    parsedSkipConfigurationSeedingWhenMemoryHeadroomBelowMiB,
+  )
+    ? Math.max(0, parsedSkipConfigurationSeedingWhenMemoryHeadroomBelowMiB)
+    : null;
   const parsedMemorySoftLimitMiB = optimization.memorySoftLimitMiB !== undefined
     ? Math.trunc(optimization.memorySoftLimitMiB)
     : Number.NaN;
@@ -467,6 +910,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
   if (configurationTrace) {
     profiling.configurationTrace = configurationTrace;
   }
+  const exactJoinPrefixSeedDisabledCoarseKeys = new Set<string>();
   if (optimization.exactCandidateJoinDebugAnchorSlotIndex !== undefined) {
     profiling.exactCandidateJoinDebugAnchorSlotIndex = Math.trunc(optimization.exactCandidateJoinDebugAnchorSlotIndex);
   }
@@ -490,13 +934,20 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
     profiling,
   };
   const buildResponse = (responseStats: BandoriMedleyTeamSearchStats): BandoriMedleyTeamSearchResponse => {
+    sortMedleyResults(results);
     const maxScoreCandidate = evaluatedCandidateTracker.getMaxScoreCandidate(results[0] ?? null);
+    const evaluatedAverageTopCandidates = evaluatedCandidateTracker.getEvaluatedAverageTopCandidates(
+      maxScoreCandidate ? [...results, maxScoreCandidate] : results,
+    );
     return {
-      results,
-      maxScoreCandidate,
-      evaluatedAverageTopCandidates: evaluatedCandidateTracker.getEvaluatedAverageTopCandidates(
-        maxScoreCandidate ? [...results, maxScoreCandidate] : results,
-      ),
+      results: createMedleyResultRankSnapshots(results),
+      maxScoreCandidate: maxScoreCandidate
+        ? {
+          ...maxScoreCandidate,
+          rank: 1,
+        }
+        : null,
+      evaluatedAverageTopCandidates: createMedleyResultRankSnapshots(evaluatedAverageTopCandidates),
       stats: responseStats,
     };
   };
@@ -530,7 +981,23 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
   let peakUsedHeapBytes: number | null = null;
   let lastMemoryCheckAt = Number.NEGATIVE_INFINITY;
   let runtimeHeapLimitBytes: number | null = null;
-  const getEffectiveMemorySoftLimitBytes = (): number | null => {
+  let activeConfigurationMemorySoftLimitBytes: number | null = null;
+  const recordRuntimeMemoryMiB = (
+    lastKey: RuntimeMemoryProfilingKey,
+    peakKey: RuntimeMemoryProfilingKey,
+    bytes: number | undefined,
+  ): void => {
+    if (typeof bytes !== "number" || !Number.isFinite(bytes)) {
+      return;
+    }
+    const valueMiB = Math.ceil(bytes / BYTES_PER_MIB);
+    const previousPeak = profiling[peakKey];
+    profiling[lastKey] = valueMiB;
+    profiling[peakKey] = typeof previousPeak === "number"
+      ? Math.max(previousPeak, valueMiB)
+      : valueMiB;
+  };
+  const getBaseEffectiveMemorySoftLimitBytes = (): number | null => {
     if (memorySoftLimitBytes === null && runtimeHeapLimitBytes === null && nodeAutoMemorySoftLimitBytes === null) {
       return null;
     }
@@ -540,14 +1007,26 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
       nodeAutoMemorySoftLimitBytes ?? Number.POSITIVE_INFINITY,
     );
   };
+  const getEffectiveMemorySoftLimitBytes = (): number | null => {
+    const baseLimitBytes = getBaseEffectiveMemorySoftLimitBytes();
+    if (baseLimitBytes === null) {
+      return activeConfigurationMemorySoftLimitBytes;
+    }
+    return Math.min(
+      baseLimitBytes,
+      activeConfigurationMemorySoftLimitBytes ?? Number.POSITIVE_INFINITY,
+    );
+  };
+  const getEffectiveMemorySoftLimitMiB = (): number | null => {
+    const effectiveLimitBytes = getEffectiveMemorySoftLimitBytes();
+    return effectiveLimitBytes !== null
+      ? Math.floor(effectiveLimitBytes / BYTES_PER_MIB)
+      : null;
+  };
   const readUsedHeapBytes = (): number | null => {
     const memory = (performance as RuntimeMemoryPerformance).memory;
     if (typeof memory?.jsHeapSizeLimit === "number" && Number.isFinite(memory.jsHeapSizeLimit) && memory.jsHeapSizeLimit > 0) {
       runtimeHeapLimitBytes = memory.jsHeapSizeLimit;
-      const effectiveLimitBytes = getEffectiveMemorySoftLimitBytes();
-      if (effectiveLimitBytes !== null) {
-        stats.memorySoftLimitMiB = Math.floor(effectiveLimitBytes / BYTES_PER_MIB);
-      }
     }
     let usedHeapBytes = typeof memory?.usedJSHeapSize === "number" && Number.isFinite(memory.usedJSHeapSize)
       ? memory.usedJSHeapSize
@@ -557,6 +1036,14 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
       const nodeMemoryUsage = nodeProcess?.memoryUsage?.();
       const nodeHeapUsed = nodeMemoryUsage?.heapUsed;
       const nodeRss = nodeMemoryUsage?.rss;
+      recordRuntimeMemoryMiB("lastNodeHeapUsedMiB", "peakNodeHeapUsedMiB", nodeHeapUsed);
+      recordRuntimeMemoryMiB("lastNodeRssMiB", "peakNodeRssMiB", nodeRss);
+      recordRuntimeMemoryMiB("lastNodeExternalMiB", "peakNodeExternalMiB", nodeMemoryUsage?.external);
+      recordRuntimeMemoryMiB(
+        "lastNodeArrayBuffersMiB",
+        "peakNodeArrayBuffersMiB",
+        nodeMemoryUsage?.arrayBuffers,
+      );
       if (typeof nodeHeapUsed === "number" && Number.isFinite(nodeHeapUsed)) {
         usedHeapBytes = nodeHeapUsed;
       }
@@ -572,6 +1059,11 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
       }
     }
     if (usedHeapBytes !== null) {
+      const effectiveLimitMiB = getEffectiveMemorySoftLimitMiB();
+      if (effectiveLimitMiB !== null) {
+        stats.memorySoftLimitMiB = effectiveLimitMiB;
+      }
+      recordRuntimeMemoryMiB("lastMemoryGuardUsedMiB", "peakMemoryGuardUsedMiB", usedHeapBytes);
       peakUsedHeapBytes = Math.max(peakUsedHeapBytes ?? 0, usedHeapBytes);
       stats.peakUsedHeapMiB = Math.ceil((peakUsedHeapBytes ?? usedHeapBytes) / BYTES_PER_MIB);
     }
@@ -583,6 +1075,22 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
     stats.memoryLimited = true;
     stats.searchMode = "bounded";
     return true;
+  };
+  const runLowMemoryInitialCandidateSyncGcProbe = (): Record<string, number | boolean | null> => {
+    const gc = (globalThis as { gc?: () => void }).gc;
+    if (typeof gc !== "function") {
+      return { unavailable: true };
+    }
+    const beforeGcBytes = readUsedHeapBytes();
+    const gcStartedAt = performance.now();
+    gc();
+    const afterGcBytes = readUsedHeapBytes();
+    return {
+      ran: true,
+      elapsedMs: Math.round(performance.now() - gcStartedAt),
+      beforeMiB: beforeGcBytes !== null ? Math.ceil(beforeGcBytes / BYTES_PER_MIB) : null,
+      afterMiB: afterGcBytes !== null ? Math.ceil(afterGcBytes / BYTES_PER_MIB) : null,
+    };
   };
   const isPastMemorySoftLimit = (): boolean => {
     if (stats.memoryLimited) {
@@ -602,6 +1110,60 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
       ? markMemoryLimited()
       : false;
   };
+  const progressOptions = input.progress;
+  const progressInitialDelayMs = Math.max(0, Math.trunc(progressOptions?.initialDelayMs ?? 10_000));
+  const progressMinIntervalMs = Math.max(0, Math.trunc(progressOptions?.scoreUpdateMinIntervalMs ?? 5_000));
+  let didEmitInitialProgress = false;
+  let lastProgressCheckAt = Number.NEGATIVE_INFINITY;
+  let lastProgressEmittedAt = Number.NEGATIVE_INFINITY;
+  let lastProgressScore = Number.NEGATIVE_INFINITY;
+  const maybeEmitMedleyProgress = (force = false): void => {
+    if (!progressOptions || results.length === 0) {
+      return;
+    }
+    const now = performance.now();
+    if (!force && now - lastProgressCheckAt < MEDLEY_PROGRESS_CHECK_INTERVAL_MS) {
+      return;
+    }
+    lastProgressCheckAt = now;
+    const elapsedSinceStartMs = now - startedAt;
+    if (!didEmitInitialProgress && elapsedSinceStartMs < progressInitialDelayMs) {
+      return;
+    }
+    const currentScore = results[0]?.score;
+    if (currentScore === undefined) {
+      return;
+    }
+    const hasScoreImprovedSinceLastProgress = currentScore > lastProgressScore;
+    if (
+      didEmitInitialProgress
+      && (
+        !hasScoreImprovedSinceLastProgress
+        || now - lastProgressEmittedAt < progressMinIntervalMs
+      )
+    ) {
+      return;
+    }
+
+    readUsedHeapBytes();
+    const elapsedMs = Math.round(elapsedSinceStartMs);
+    stats.elapsedMs = elapsedMs;
+    try {
+      progressOptions.onProgress(buildResponse({
+        ...stats,
+        elapsedMs,
+        isExhaustive: false,
+        searchMode: null,
+        observedScoreUpperBound: null,
+        observedScoreUpperBoundGap: null,
+      }));
+    } catch {
+      // Progress is a UI convenience and must not affect the proof search.
+    }
+    didEmitInitialProgress = true;
+    lastProgressEmittedAt = now;
+    lastProgressScore = currentScore;
+  };
   let bestObservedScore = Number.NEGATIVE_INFINITY;
   const deadlineCheckInterval = isLockedCoarseFilter && calculatedCards.length > 250 ? 256 : 2048;
   const recordBestScoreMilestone = (): void => {
@@ -610,6 +1172,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
       bestObservedScore = score;
       profiling.timeToBestScoreMs = Math.round(performance.now() - startedAt);
     }
+    maybeEmitMedleyProgress();
   };
   const recordUpperReplay = (
     baselineUpperBound: number,
@@ -700,7 +1263,11 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
       || enableConflictExactBnb
       || visitedBranchCount % deadlineCheckInterval === 0
     );
-    return shouldCheck && (performance.now() >= deadlineAt || isPastMemorySoftLimit());
+    if (!shouldCheck) {
+      return false;
+    }
+    maybeEmitMedleyProgress();
+    return performance.now() >= deadlineAt || isPastMemorySoftLimit();
   };
   const getRemainingSearchMs = (): number => Math.max(0, deadlineAt - performance.now());
 
@@ -710,9 +1277,21 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
   const configurationWarmupCache = new Map<number, MedleyConfigurationWarmupCache>();
   const configurationRootUpperBounds = new Map<number, number>();
   const configurationBasicSkillAwareRootUpperBounds = new Map<number, number>();
+  const releaseSlotScoreCalculationCache = (slot: MedleySlotSearch): void => {
+    slot.scoreCache.judgeLists?.clear();
+    slot.scoreCache.innerScoreRates?.clear();
+    slot.scoreCache.baseScoresByChart = new WeakMap();
+    slot.scoreCache.noFloorBaseScoreRates?.clear();
+    slot.scoreCache.skillMultiplierLists.clear();
+    slot.scoreCache.noFloorSkillRates.clear();
+    slot.scoreCache.skillWindowContributionsByChart = new WeakMap();
+    slot.scoreCache.resolvedSkills?.clear();
+  };
   const releaseSlotSearchCaches = (slots: MedleySlotSearch[]): void => {
     for (const slot of slots) {
       slot.teamEvaluationCache.clear();
+      releaseMedleyScoreOnlyTeamEvaluationCache(slot);
+      releaseSlotScoreCalculationCache(slot);
     }
   };
   const getConfigurationWarmupCache = (configurationIndex: number): MedleyConfigurationWarmupCache => {
@@ -743,6 +1322,11 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
     warmupCache.bestSlotTeamCache.clear();
     warmupCache.fixedCardSetOptimizationCache.clear();
     configurationWarmupCache.delete(configurationIndex);
+  };
+  const releaseAllConfigurationWarmupCaches = (): void => {
+    for (const configurationIndex of [...configurationWarmupCache.keys()]) {
+      releaseConfigurationWarmupCache(configurationIndex);
+    }
   };
   const getConfigurationRootUpperBound = (configurationIndex: number): number => {
     const cached = configurationRootUpperBounds.get(configurationIndex);
@@ -1198,12 +1782,16 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
         .map(({ configuration }) => configuration);
     }
   }
+  releaseAllConfigurationWarmupCaches();
 
   // Each area-item configuration is a separate global decision shared by all three teams.
   // Exhaustiveness is only true after every searched configuration and every cross-slot card
   // assignment has been covered without timeout.
   const sameCoarseDfsAfterUnprovedProofCounts = new Map<string, number>();
   for (const configuration of orderedConfigurations) {
+    const preConfigurationGcProbe = enableLowMemoryInitialCandidateSyncGcProbe
+      ? runLowMemoryInitialCandidateSyncGcProbe()
+      : null;
     profiling.startedAreaItemConfigurationCount += 1;
     if (performance.now() >= deadlineAt || isPastMemorySoftLimit()) {
       stats.isExhaustive = false;
@@ -1382,6 +1970,16 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
       exactCandidateJoinSmallGapSolveRetryTimeboxCount: (
         profiling.exactCandidateJoinSmallGapSolveRetryTimeboxCount
       ),
+      exactJoinPrefixSeedCallCount: profiling.exactJoinPrefixSeedCallCount,
+      exactJoinPrefixSeedHitCount: profiling.exactJoinPrefixSeedHitCount,
+      exactJoinPrefixSeedElapsedMs: profiling.exactJoinPrefixSeedElapsedMs,
+      exactJoinPrefixSeedTimedOutCount: profiling.exactJoinPrefixSeedTimedOutCount,
+      exactJoinPrefixSeedNoHitLocalTimeoutCount: profiling.exactJoinPrefixSeedNoHitLocalTimeoutCount,
+      exactJoinPrefixSeedSkippedByCandidateCount: profiling.exactJoinPrefixSeedSkippedByCandidateCount,
+      exactJoinPrefixSeedGuardSkipCount: profiling.exactJoinPrefixSeedGuardSkipCount,
+      exactJoinPrefixSeedGuardSkipReasonCounts: {
+        ...profiling.exactJoinPrefixSeedGuardSkipReasonCounts,
+      },
       sameCoarseMemoryRootSkipCount: profiling.sameCoarseMemoryRootSkipCount,
       exactCandidateJoinInitialCandidateElapsedMs: profiling.exactCandidateJoinInitialCandidateElapsedMs,
       exactCandidateJoinPairUpperElapsedMs: profiling.exactCandidateJoinPairUpperElapsedMs,
@@ -1408,8 +2006,10 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
         initialBestScore: results[0]?.score ?? null,
         initialBestSeedPassScore: profiling.bestConfigurationSeedPassScore,
         slotCardCounts: slots.map((slot) => slot.searchCards.length),
+        preConfigurationGcProbe,
       }
       : null;
+    activeConfigurationMemorySoftLimitBytes = null;
     let didReleaseConfigurationSearchCaches = false;
     const releaseConfigurationSearchCaches = (): void => {
       if (didReleaseConfigurationSearchCaches) {
@@ -1427,6 +2027,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
       if (configurationIndex >= 0) {
         releaseConfigurationWarmupCache(configurationIndex);
       }
+      activeConfigurationMemorySoftLimitBytes = null;
     };
     const finishConfigurationTrace = (status: string): void => {
       if (!configurationTrace || !traceEntry || traceEntry.status !== undefined) {
@@ -1567,6 +2168,33 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
       exactCandidateJoinSmallGapSolveRetryTimeboxCountDelta: (
         profiling.exactCandidateJoinSmallGapSolveRetryTimeboxCount
         - traceStartCounters.exactCandidateJoinSmallGapSolveRetryTimeboxCount
+      ),
+      exactJoinPrefixSeedCallCountDelta: (
+        profiling.exactJoinPrefixSeedCallCount - traceStartCounters.exactJoinPrefixSeedCallCount
+      ),
+      exactJoinPrefixSeedHitCountDelta: (
+        profiling.exactJoinPrefixSeedHitCount - traceStartCounters.exactJoinPrefixSeedHitCount
+      ),
+      exactJoinPrefixSeedElapsedMsDelta: Math.round(
+        profiling.exactJoinPrefixSeedElapsedMs - traceStartCounters.exactJoinPrefixSeedElapsedMs,
+      ),
+      exactJoinPrefixSeedTimedOutCountDelta: (
+        profiling.exactJoinPrefixSeedTimedOutCount - traceStartCounters.exactJoinPrefixSeedTimedOutCount
+      ),
+      exactJoinPrefixSeedNoHitLocalTimeoutCountDelta: (
+        profiling.exactJoinPrefixSeedNoHitLocalTimeoutCount
+        - traceStartCounters.exactJoinPrefixSeedNoHitLocalTimeoutCount
+      ),
+      exactJoinPrefixSeedSkippedByCandidateCountDelta: (
+        profiling.exactJoinPrefixSeedSkippedByCandidateCount
+        - traceStartCounters.exactJoinPrefixSeedSkippedByCandidateCount
+      ),
+      exactJoinPrefixSeedGuardSkipCountDelta: (
+        profiling.exactJoinPrefixSeedGuardSkipCount - traceStartCounters.exactJoinPrefixSeedGuardSkipCount
+      ),
+      exactJoinPrefixSeedGuardSkipReasonCountsDelta: subtractNumberMaps(
+        profiling.exactJoinPrefixSeedGuardSkipReasonCounts,
+        traceStartCounters.exactJoinPrefixSeedGuardSkipReasonCounts,
       ),
       exactCandidateJoinInitialCandidateElapsedMsDelta: Math.round(
           profiling.exactCandidateJoinInitialCandidateElapsedMs
@@ -1793,10 +2421,34 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
           exactCandidateJoinLastSmallGapSolveRetryPeakHeapMiB: (
             profiling.exactCandidateJoinLastSmallGapSolveRetryPeakHeapMiB
           ),
+          exactJoinPrefixSeedCandidateCountsBySlot: [
+            ...profiling.exactJoinPrefixSeedCandidateCountsBySlot,
+          ],
+          exactJoinPrefixSeedPeakHeapMiB: profiling.exactJoinPrefixSeedPeakHeapMiB,
+          exactJoinPrefixSeedLastGuardSkipReason: profiling.exactJoinPrefixSeedLastGuardSkipReason,
+          exactJoinPrefixSeedGuardSkipReasonCounts: {
+            ...profiling.exactJoinPrefixSeedGuardSkipReasonCounts,
+          },
         });
       }
       configurationTrace.push(traceEntry);
       releaseConfigurationSearchCaches();
+      if (
+        enableLowMemoryInitialCandidateSyncGcProbe
+        && traceEntry.lowMemoryInitialCandidateSync === true
+      ) {
+        const gcProbe = runLowMemoryInitialCandidateSyncGcProbe();
+        if (gcProbe.ran === true) {
+          Object.assign(traceEntry, {
+            lowMemoryInitialCandidateSyncGcProbe: true,
+            lowMemoryInitialCandidateSyncGcProbeElapsedMs: gcProbe.elapsedMs,
+            lowMemoryInitialCandidateSyncGcProbeBeforeMiB: gcProbe.beforeMiB,
+            lowMemoryInitialCandidateSyncGcProbeAfterMiB: gcProbe.afterMiB,
+          });
+        } else {
+          traceEntry.lowMemoryInitialCandidateSyncGcProbeUnavailable = true;
+        }
+      }
     };
 
     // This is the central proof boundary for DFS. Callers may ask for tighter model families,
@@ -2067,11 +2719,73 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
     let shouldRunExactCandidateJoinForConfiguration = canRunExactCandidateJoinForCurrentSlots();
     const incumbentScore = results[0]?.score ?? Number.NEGATIVE_INFINITY;
     const bestSeedPassScore = profiling.bestConfigurationSeedPassScore ?? Number.NEGATIVE_INFINITY;
+    const currentCoarseKey = getMedleyAreaItemCoarseKey(configuration);
+    const sameCoarseMaxExactJoinProofElapsedMs = exactCandidateJoinProofElapsedMsByCoarseKey.get(
+      currentCoarseKey,
+    ) ?? 0;
+    const maxLowMemoryInitialCandidateSyncSlotCardCount = Math.max(
+      0,
+      ...slots.map((slot) => slot.searchCards.length),
+    );
+    const isFirstStartedAreaItemConfiguration = profiling.startedAreaItemConfigurationCount === 1;
+    const hasFullWidthEventExactJoinMemoryRisk = (
+      hasEventBonus
+      && isFirstStartedAreaItemConfiguration
+      && maxLowMemoryInitialCandidateSyncSlotCardCount
+        === MEDLEY_LOW_MEMORY_INITIAL_CANDIDATE_SYNC_EVENT_ROOT_RISK_SLOT_CARD_COUNT
+    );
+    const hasLowMemoryInitialCandidateSyncSlotWidth = (
+      !hasFullWidthEventExactJoinMemoryRisk
+    );
+    if (hasFullWidthEventExactJoinMemoryRisk) {
+      activeConfigurationMemorySoftLimitBytes = (
+        MEDLEY_FULL_WIDTH_EVENT_EXACT_JOIN_MEMORY_SOFT_LIMIT_MIB * BYTES_PER_MIB
+      );
+    }
+    const shouldApplyLowMemoryInitialCandidateSyncSameCoarseProofElapsedGuard = (
+      maxLowMemoryInitialCandidateSyncSlotCardCount
+        <= MEDLEY_LOW_MEMORY_INITIAL_CANDIDATE_SYNC_SAME_COARSE_GUARD_MAX_SLOT_CARD_COUNT
+    );
+    const lowMemoryInitialCandidateSyncUsedHeapBytes = readUsedHeapBytes();
+    const lowMemoryInitialCandidateSyncUsedMiB = lowMemoryInitialCandidateSyncUsedHeapBytes !== null
+      ? Math.ceil(lowMemoryInitialCandidateSyncUsedHeapBytes / BYTES_PER_MIB)
+      : null;
+    const lowMemoryInitialCandidateSyncSoftLimitMiB = getEffectiveMemorySoftLimitMiB();
+    const lowMemoryInitialCandidateSyncMemoryHeadroomMiB = (
+      lowMemoryInitialCandidateSyncSoftLimitMiB !== null
+      && lowMemoryInitialCandidateSyncUsedMiB !== null
+    )
+      ? lowMemoryInitialCandidateSyncSoftLimitMiB - lowMemoryInitialCandidateSyncUsedMiB
+      : null;
+    const hasLowMemoryInitialCandidateSyncMemoryHeadroom = (
+      lowMemoryInitialCandidateSyncMemoryHeadroomMiB === null
+      || lowMemoryInitialCandidateSyncMemoryHeadroomMiB >= lowMemoryInitialCandidateSyncMinMemoryHeadroomMiB
+    );
+    const shouldAbortLowMemoryInitialCandidateSync = (): boolean => {
+      const usedHeapBytes = readUsedHeapBytes();
+      const effectiveLimitBytes = getEffectiveMemorySoftLimitBytes();
+      if (usedHeapBytes === null || effectiveLimitBytes === null) {
+        return false;
+      }
+      return (
+        effectiveLimitBytes - usedHeapBytes
+        < lowMemoryInitialCandidateSyncMinMemoryHeadroomMiB * BYTES_PER_MIB
+      );
+    };
+    const shouldUseLowMemoryInitialCandidateSync = (
+      !disableLowMemoryInitialCandidateSync
+      && hasLowMemoryInitialCandidateSyncSlotWidth
+      && (
+        !shouldApplyLowMemoryInitialCandidateSyncSameCoarseProofElapsedGuard
+        || sameCoarseMaxExactJoinProofElapsedMs < lowMemoryInitialCandidateSyncMaxSameCoarseProofElapsedMs
+      )
+      && hasLowMemoryInitialCandidateSyncMemoryHeadroom
+    );
     const sameCoarseSiblingFrontier = configurationIndex >= 0
       ? getSameCoarseSiblingFrontier(configurationIndex, threshold)
       : [];
     const sameCoarseDfsAfterUnprovedProofCount = sameCoarseDfsAfterUnprovedProofCounts.get(
-      getMedleyAreaItemCoarseKey(configuration),
+      currentCoarseKey,
     ) ?? 0;
     const sameCoarseSiblingBlockedStagedExtension = (
       enableExperimentalStagedCandidateExtension
@@ -2089,6 +2803,45 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
       traceEntry.sameCoarseSiblingBlocked = sameCoarseSiblingBlockedSmallGapSolveRetry;
       traceEntry.sameCoarseSiblingBlockedStagedExtension = sameCoarseSiblingBlockedStagedExtension;
       traceEntry.sameCoarseSiblingBlockedSmallGapSolveRetry = sameCoarseSiblingBlockedSmallGapSolveRetry;
+    }
+    if (traceEntry) {
+      traceEntry.lowMemoryInitialCandidateSync = shouldUseLowMemoryInitialCandidateSync;
+      traceEntry.lowMemoryInitialCandidateSyncLocalAbortOnly = lowMemoryInitialCandidateSyncLocalAbortOnly;
+      traceEntry.lowMemoryInitialCandidateSyncLightUpper = lowMemoryInitialCandidateSyncLightUpper;
+      traceEntry.lowMemoryInitialCandidateSyncSameCoarseProofElapsedMs = Math.round(
+        sameCoarseMaxExactJoinProofElapsedMs,
+      );
+      traceEntry.lowMemoryInitialCandidateSyncTimeboxMs = lowMemoryInitialCandidateSyncTimeboxMs;
+      traceEntry.lowMemoryInitialCandidateSyncMaxSameCoarseProofElapsedMs = (
+        lowMemoryInitialCandidateSyncMaxSameCoarseProofElapsedMs
+      );
+      traceEntry.lowMemoryInitialCandidateSyncUsedMiB = lowMemoryInitialCandidateSyncUsedMiB;
+      traceEntry.lowMemoryInitialCandidateSyncSoftLimitMiB = lowMemoryInitialCandidateSyncSoftLimitMiB;
+      traceEntry.lowMemoryInitialCandidateSyncMemoryHeadroomMiB = lowMemoryInitialCandidateSyncMemoryHeadroomMiB;
+      traceEntry.lowMemoryInitialCandidateSyncMinMemoryHeadroomMiB = (
+        lowMemoryInitialCandidateSyncMinMemoryHeadroomMiB
+      );
+      traceEntry.lowMemoryInitialCandidateSyncMaxSlotCardCount = (
+        lowMemoryInitialCandidateSyncMaxSlotCardCount
+      );
+      traceEntry.lowMemoryInitialCandidateSyncObservedMaxSlotCardCount = (
+        maxLowMemoryInitialCandidateSyncSlotCardCount
+      );
+      traceEntry.lowMemoryInitialCandidateSyncHasEventBonus = hasEventBonus;
+      traceEntry.lowMemoryInitialCandidateSyncFirstStartedConfiguration = isFirstStartedAreaItemConfiguration;
+      traceEntry.fullWidthEventExactJoinMemoryRisk = hasFullWidthEventExactJoinMemoryRisk;
+      traceEntry.fullWidthEventExactJoinMemoryRiskSlotCardCount = (
+        MEDLEY_LOW_MEMORY_INITIAL_CANDIDATE_SYNC_EVENT_ROOT_RISK_SLOT_CARD_COUNT
+      );
+      traceEntry.fullWidthEventExactJoinMemorySoftLimitMiB = hasFullWidthEventExactJoinMemoryRisk
+        ? MEDLEY_FULL_WIDTH_EVENT_EXACT_JOIN_MEMORY_SOFT_LIMIT_MIB
+        : null;
+      traceEntry.lowMemoryInitialCandidateSyncSameCoarseProofElapsedGuardMaxSlotCardCount = (
+        MEDLEY_LOW_MEMORY_INITIAL_CANDIDATE_SYNC_SAME_COARSE_GUARD_MAX_SLOT_CARD_COUNT
+      );
+      traceEntry.lowMemoryInitialCandidateSyncSameCoarseProofElapsedGuard = (
+        shouldApplyLowMemoryInitialCandidateSyncSameCoarseProofElapsedGuard
+      );
     }
     const sameCoarseClosedSiblingCount = sameCoarseSiblingFrontier.filter((entry) => entry.closed === true).length;
     const shouldUseTrailingSameCoarseDfsOnly = (
@@ -2679,6 +3432,11 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
         }
       }
       didAttemptExactCandidateJoin = true;
+      const prefixSeedGuardStart = {
+        hitCount: profiling.exactJoinPrefixSeedHitCount,
+        timedOutCount: profiling.exactJoinPrefixSeedTimedOutCount,
+        noHitLocalTimeoutCount: profiling.exactJoinPrefixSeedNoHitLocalTimeoutCount,
+      };
       const exactJoinResult = searchMedleyConfigurationByExactCandidateJoin(
         results,
         resultLimit,
@@ -2704,9 +3462,30 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
           ),
           skipSolveWhenObservedUpperAtOrBelow: exactJoinFrontierProofTargetUpperBound ?? undefined,
           solveOnlyAboveUpperTarget: exactJoinFrontierProofTargetUpperBound ?? undefined,
+          enableExactJoinPrefixSeed,
+          exactJoinPrefixSeedForceNoop,
+          exactJoinPrefixSeedGuardOnly,
+          exactJoinPrefixSeedTimeboxMs,
+          exactJoinPrefixSeedMaxSmallestCandidateCount,
+          exactJoinPrefixSeedMinCandidateCounts,
+          exactJoinPrefixSeedPreviousLocalTimeout: exactJoinPrefixSeedDisabledCoarseKeys.has(currentCoarseKey),
+          exactJoinPrefixSeedMemorySoftLimitMiB: stats.memorySoftLimitMiB,
+          enableLowMemoryInitialCandidateSync: shouldUseLowMemoryInitialCandidateSync,
+          lowMemoryInitialCandidateSyncLocalAbortOnly,
+          lowMemoryInitialCandidateSyncLightUpper,
+          lowMemoryInitialCandidateSyncTimeboxMs,
+          shouldAbortLowMemoryInitialCandidateSync,
+          lowMemoryHighPairScanMinRecordCount,
+          lowMemoryHighPairPrefixRecordLimit,
+          debugExactCandidateJoinMemoryAttribution,
         },
         observeEvaluatedMedleyResult,
       );
+      if (
+        profiling.exactJoinPrefixSeedNoHitLocalTimeoutCount > prefixSeedGuardStart.noHitLocalTimeoutCount
+      ) {
+        exactJoinPrefixSeedDisabledCoarseKeys.add(currentCoarseKey);
+      }
       if (exactJoinResult.result) {
         pushMedleyResult(results, exactJoinResult.result, resultLimit, observeEvaluatedMedleyResult);
         recordBestScoreMilestone();
@@ -2769,103 +3548,212 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
       }
     }
 
-    // Incumbent seeding happens before DFS so that upper-bound pruning has a real threshold.
-    // These passes may improve runtime, but they are never treated as proof by themselves.
-    slotCandidateLimits = getMedleySlotCandidateLimits(slots, calculatedCards.length);
-    if (enableAnchorSlotUpper) {
-      slotCandidateLimits = slotCandidateLimits.map((limit) => Math.max(limit, anchorCandidateLimit));
-    }
-    slotCandidates = slots.map((slot, slotIndex) => collectTopMedleySlotTeams(
-      slot,
-      slotCandidateLimits[slotIndex],
-      server,
-      perfectRate,
-      stats,
-      isPastDeadline,
-      () => undefined,
-      profiling,
-    ));
-    if (!stats.timedOut && slotCandidates.every((candidates) => candidates.length > 0)) {
-      seedMedleyResultsFromSlotCandidates(
-        results,
-        resultLimit,
-        slots,
-        slotCandidates,
-        configuration,
-        observeEvaluatedMedleyResult,
-      );
-      optimizeCurrentMedleySeedResults(
-        results,
-        resultLimit,
-        slots,
-        configuration,
-        server,
-        perfectRate,
-        stats,
-        profiling,
-        fixedCardSetOptimizationCache,
-        observeEvaluatedMedleyResult,
-      );
-      recordBestScoreMilestone();
-    }
-    if (traceEntry) {
-      traceEntry.afterSlotCandidateSeedingMs = Math.round(performance.now() - traceStartedAt);
-      traceEntry.bestScoreAfterSlotCandidateSeeding = results[0]?.score ?? null;
-    }
-    if (stats.timedOut) {
-      finishConfigurationTrace("slot-candidate-seeding-timeout");
-      break;
-    }
-
-    const seedSlotIndices = getMedleyGreedySeedSlotIndices(slots);
-    seedMedleyResultsFromGreedyOrders(
-      results,
-      resultLimit,
-      slots,
-      configuration,
-      server,
-      perfectRate,
-      stats,
-      isPastDeadline,
-      profiling,
-      bestSlotTeamCache,
-      fixedCardSetOptimizationCache,
-      buildPermutations(seedSlotIndices),
-      true,
-      observeEvaluatedMedleyResult,
+    const hasFiniteActiveConfigurationUpperBoundBeforeSeeding = (
+      Number.isFinite(activeConfigurationTightScoreUpperBound)
+      || Number.isFinite(activeConfigurationObservedScoreUpperBound)
     );
-    recordBestScoreMilestone();
-    if (traceEntry) {
-      traceEntry.afterGreedySeedingMs = Math.round(performance.now() - traceStartedAt);
-      traceEntry.bestScoreAfterGreedySeeding = results[0]?.score ?? null;
+    if (
+      hasFullWidthEventExactJoinMemoryRisk
+      && results.length >= resultLimit
+      && hasFiniteActiveConfigurationUpperBoundBeforeSeeding
+    ) {
+      if (traceEntry) {
+        traceEntry.fullWidthEventSkipSeeding = true;
+        traceEntry.bestScoreAfterSeeding = results[0]?.score ?? null;
+      }
+      didLeaveUnclosedAreaItemConfiguration = true;
+      rememberActiveConfigurationUpperBound();
+      finishConfigurationTrace("full-width-event-skip-seeding");
+      continue;
     }
-    if (stats.timedOut) {
-      finishConfigurationTrace("greedy-seeding-timeout");
-      break;
+    const bestScoreBeforeSeeding = results[0]?.score ?? Number.NEGATIVE_INFINITY;
+    const largeGapEventObservedGapBeforeSeeding = (
+      Number.isFinite(activeConfigurationObservedScoreUpperBound)
+      && Number.isFinite(bestScoreBeforeSeeding)
+        ? activeConfigurationObservedScoreUpperBound - bestScoreBeforeSeeding
+        : null
+    );
+    if (
+      hasEventBonus
+      && activeConfigurationObservedUpperBoundSource === "configuration-root"
+      && largeGapEventObservedGapBeforeSeeding !== null
+      && largeGapEventObservedGapBeforeSeeding >= MEDLEY_LARGE_GAP_EVENT_SKIP_PROOF_MIN_GAP
+    ) {
+      if (traceEntry) {
+        traceEntry.largeGapEventSkipSeeding = true;
+        traceEntry.bestScoreAfterSeeding = results[0]?.score ?? null;
+        traceEntry.largeGapEventSkipProofGap = Math.ceil(largeGapEventObservedGapBeforeSeeding);
+      }
+      didLeaveUnclosedAreaItemConfiguration = true;
+      rememberActiveConfigurationUpperBound();
+      finishConfigurationTrace("large-gap-event-skip-seeding");
+      continue;
     }
 
-    if (
-      (calculatedCards.length <= 250 || maxSearchDurationMs >= 30000 || isLockedCoarseFilter)
-      && results.length > 0
-    ) {
-      optimizeMedleySeedNeighborhood(
+    const configurationSeedingUsedHeapBytes = readUsedHeapBytes();
+    const configurationSeedingUsedMiB = configurationSeedingUsedHeapBytes !== null
+      ? Math.ceil(configurationSeedingUsedHeapBytes / BYTES_PER_MIB)
+      : null;
+    const configurationSeedingSoftLimitMiB = getEffectiveMemorySoftLimitMiB();
+    const configurationSeedingMemoryHeadroomMiB = (
+      configurationSeedingSoftLimitMiB !== null
+      && configurationSeedingUsedMiB !== null
+    )
+      ? configurationSeedingSoftLimitMiB - configurationSeedingUsedMiB
+      : null;
+    const shouldSkipConfigurationSeedingForMemory = (
+      skipConfigurationSeedingWhenMemoryHeadroomBelowMiB !== null
+      && configurationSeedingMemoryHeadroomMiB !== null
+      && configurationSeedingMemoryHeadroomMiB < skipConfigurationSeedingWhenMemoryHeadroomBelowMiB
+    );
+    if (traceEntry) {
+      traceEntry.configurationSeedingUsedMiB = configurationSeedingUsedMiB;
+      traceEntry.configurationSeedingSoftLimitMiB = configurationSeedingSoftLimitMiB;
+      traceEntry.configurationSeedingMemoryHeadroomMiB = configurationSeedingMemoryHeadroomMiB;
+      traceEntry.skipConfigurationSeedingWhenMemoryHeadroomBelowMiB = (
+        skipConfigurationSeedingWhenMemoryHeadroomBelowMiB
+      );
+      traceEntry.skipConfigurationSeedingForMemory = shouldSkipConfigurationSeedingForMemory;
+    }
+    if (!shouldSkipConfigurationSeedingForMemory) {
+      // Incumbent seeding happens before DFS so that upper-bound pruning has a real threshold.
+      // These passes may improve runtime, but they are never treated as proof by themselves.
+      slotCandidateLimits = getMedleySlotCandidateLimits(slots, calculatedCards.length);
+      if (enableAnchorSlotUpper) {
+        slotCandidateLimits = slotCandidateLimits.map((limit) => Math.max(limit, anchorCandidateLimit));
+      }
+      slotCandidates = slots.map((slot, slotIndex) => collectTopMedleySlotTeams(
+        slot,
+        slotCandidateLimits[slotIndex],
+        server,
+        perfectRate,
+        stats,
+        isPastDeadline,
+        () => undefined,
+        profiling,
+      ));
+      if (!stats.timedOut && slotCandidates.every((candidates) => candidates.length > 0)) {
+        seedMedleyResultsFromSlotCandidates(
+          results,
+          resultLimit,
+          slots,
+          slotCandidates,
+          configuration,
+          observeEvaluatedMedleyResult,
+        );
+        optimizeCurrentMedleySeedResults(
+          results,
+          resultLimit,
+          slots,
+          configuration,
+          server,
+          perfectRate,
+          stats,
+          profiling,
+          fixedCardSetOptimizationCache,
+          observeEvaluatedMedleyResult,
+        );
+        recordBestScoreMilestone();
+      }
+      if (traceEntry) {
+        traceEntry.afterSlotCandidateSeedingMs = Math.round(performance.now() - traceStartedAt);
+        traceEntry.bestScoreAfterSlotCandidateSeeding = results[0]?.score ?? null;
+      }
+      if (stats.timedOut) {
+        finishConfigurationTrace("slot-candidate-seeding-timeout");
+        break;
+      }
+
+      const seedSlotIndices = getMedleyGreedySeedSlotIndices(slots);
+      seedMedleyResultsFromGreedyOrders(
         results,
         resultLimit,
         slots,
-        slotCandidates,
         configuration,
         server,
         perfectRate,
         stats,
+        isPastDeadline,
         profiling,
-        maxSearchDurationMs >= 30000 ? 3 : 2,
+        bestSlotTeamCache,
+        fixedCardSetOptimizationCache,
+        buildPermutations(seedSlotIndices),
+        true,
         observeEvaluatedMedleyResult,
       );
       recordBestScoreMilestone();
+      if (traceEntry) {
+        traceEntry.afterGreedySeedingMs = Math.round(performance.now() - traceStartedAt);
+        traceEntry.bestScoreAfterGreedySeeding = results[0]?.score ?? null;
+      }
+      if (stats.timedOut) {
+        finishConfigurationTrace("greedy-seeding-timeout");
+        break;
+      }
+
+      if (
+        (calculatedCards.length <= 250 || maxSearchDurationMs >= 30000 || isLockedCoarseFilter)
+        && results.length > 0
+      ) {
+        optimizeMedleySeedNeighborhood(
+          results,
+          resultLimit,
+          slots,
+          slotCandidates,
+          configuration,
+          server,
+          perfectRate,
+          stats,
+          profiling,
+          maxSearchDurationMs >= 30000 ? 3 : 2,
+          observeEvaluatedMedleyResult,
+        );
+        recordBestScoreMilestone();
+      }
     }
     if (traceEntry) {
       traceEntry.afterSeedingMs = Math.round(performance.now() - traceStartedAt);
       traceEntry.bestScoreAfterSeeding = results[0]?.score ?? null;
+    }
+
+    const hasFiniteActiveConfigurationUpperBound = (
+      Number.isFinite(activeConfigurationTightScoreUpperBound)
+      || Number.isFinite(activeConfigurationObservedScoreUpperBound)
+    );
+    if (
+      hasFullWidthEventExactJoinMemoryRisk
+      && results.length >= resultLimit
+      && hasFiniteActiveConfigurationUpperBound
+    ) {
+      if (traceEntry) {
+        traceEntry.fullWidthEventSkipDfs = true;
+      }
+      didLeaveUnclosedAreaItemConfiguration = true;
+      rememberActiveConfigurationUpperBound();
+      finishConfigurationTrace("full-width-event-skip-dfs");
+      continue;
+    }
+    const bestScoreAfterSeeding = results[0]?.score ?? Number.NEGATIVE_INFINITY;
+    const largeGapEventObservedGapAfterSeeding = (
+      Number.isFinite(activeConfigurationObservedScoreUpperBound)
+      && Number.isFinite(bestScoreAfterSeeding)
+        ? activeConfigurationObservedScoreUpperBound - bestScoreAfterSeeding
+        : null
+    );
+    if (
+      hasEventBonus
+      && activeConfigurationObservedUpperBoundSource === "configuration-root"
+      && largeGapEventObservedGapAfterSeeding !== null
+      && largeGapEventObservedGapAfterSeeding >= MEDLEY_LARGE_GAP_EVENT_SKIP_PROOF_MIN_GAP
+    ) {
+      if (traceEntry) {
+        traceEntry.largeGapEventSkipProof = true;
+        traceEntry.largeGapEventSkipProofGap = Math.ceil(largeGapEventObservedGapAfterSeeding);
+      }
+      didLeaveUnclosedAreaItemConfiguration = true;
+      rememberActiveConfigurationUpperBound();
+      finishConfigurationTrace("large-gap-event-skip-proof");
+      continue;
     }
 
     if (
@@ -2936,6 +3824,11 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
     // for large locked/all scopes, but failure to close their frontier only means this
     // configuration remains bounded and must continue through the fallback proof path.
     if (!didAttemptExactCandidateJoin && shouldRunExactCandidateJoinForConfiguration && results.length >= resultLimit) {
+      const prefixSeedGuardStart = {
+        hitCount: profiling.exactJoinPrefixSeedHitCount,
+        timedOutCount: profiling.exactJoinPrefixSeedTimedOutCount,
+        noHitLocalTimeoutCount: profiling.exactJoinPrefixSeedNoHitLocalTimeoutCount,
+      };
       const exactJoinResult = searchMedleyConfigurationByExactCandidateJoin(
         results,
         resultLimit,
@@ -2961,9 +3854,30 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
           ),
           skipSolveWhenObservedUpperAtOrBelow: exactJoinFrontierProofTargetUpperBound ?? undefined,
           solveOnlyAboveUpperTarget: exactJoinFrontierProofTargetUpperBound ?? undefined,
+          enableExactJoinPrefixSeed,
+          exactJoinPrefixSeedForceNoop,
+          exactJoinPrefixSeedGuardOnly,
+          exactJoinPrefixSeedTimeboxMs,
+          exactJoinPrefixSeedMaxSmallestCandidateCount,
+          exactJoinPrefixSeedMinCandidateCounts,
+          exactJoinPrefixSeedPreviousLocalTimeout: exactJoinPrefixSeedDisabledCoarseKeys.has(currentCoarseKey),
+          exactJoinPrefixSeedMemorySoftLimitMiB: stats.memorySoftLimitMiB,
+          enableLowMemoryInitialCandidateSync: shouldUseLowMemoryInitialCandidateSync,
+          lowMemoryInitialCandidateSyncLocalAbortOnly,
+          lowMemoryInitialCandidateSyncLightUpper,
+          lowMemoryInitialCandidateSyncTimeboxMs,
+          shouldAbortLowMemoryInitialCandidateSync,
+          lowMemoryHighPairScanMinRecordCount,
+          lowMemoryHighPairPrefixRecordLimit,
+          debugExactCandidateJoinMemoryAttribution,
         },
         observeEvaluatedMedleyResult,
       );
+      if (
+        profiling.exactJoinPrefixSeedNoHitLocalTimeoutCount > prefixSeedGuardStart.noHitLocalTimeoutCount
+      ) {
+        exactJoinPrefixSeedDisabledCoarseKeys.add(currentCoarseKey);
+      }
       if (exactJoinResult.result) {
         pushMedleyResult(results, exactJoinResult.result, resultLimit, observeEvaluatedMedleyResult);
         recordBestScoreMilestone();
@@ -3260,9 +4174,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
       );
     }
   }
-  for (const configurationIndex of [...configurationWarmupCache.keys()]) {
-    releaseConfigurationWarmupCache(configurationIndex);
-  }
+  releaseAllConfigurationWarmupCaches();
 
   sortMedleyResults(results);
   const observedUpperBound = Number.isFinite(observedScoreUpperBound)
@@ -3311,6 +4223,8 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
   }
   if (configurationTrace) {
     profiling.boundedFrontierGroups = buildBoundedFrontierGroups(configurationTrace);
+    profiling.proofLedger = buildProofLedger(configurationTrace);
+    profiling.proofLedgerSummary = buildProofLedgerSummary(profiling.proofLedger);
   }
   profiling.upperReplayElapsedMs = Math.round(profiling.upperReplayElapsedMs);
   return buildResponse({

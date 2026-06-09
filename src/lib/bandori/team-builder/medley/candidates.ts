@@ -18,6 +18,11 @@ import type { BandoriTeamSearchResult, SearchCard } from "@/lib/bandori/team-bui
 
 const scoreOnlyTeamEvaluationCacheBySlot = new WeakMap<MedleySlotSearch, Map<string, BandoriTeamSearchResult | null>>();
 
+export function releaseMedleyScoreOnlyTeamEvaluationCache(slot: MedleySlotSearch): void {
+  scoreOnlyTeamEvaluationCacheBySlot.get(slot)?.clear();
+  scoreOnlyTeamEvaluationCacheBySlot.delete(slot);
+}
+
 export function getMedleyTeamEvaluationCacheKey(cards: SearchCard[]): string {
   const keys = getCardInstanceKeys(cards);
   switch (cards.length) {

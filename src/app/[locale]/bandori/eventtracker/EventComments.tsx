@@ -1115,7 +1115,7 @@ export default function EventComments({ eventId }: { eventId: number | null }) {
   };
 
   return (
-    <section className="rounded-3xl border border-slate-200 bg-white/95 p-4 shadow-[0_16px_44px_rgba(15,23,42,0.06)] dark:border-slate-800 dark:bg-slate-950/95 sm:p-5 sm:backdrop-blur">
+    <section className="rounded-3xl border border-slate-200 bg-[#fffef4] p-4 shadow-[0_16px_44px_rgba(15,23,42,0.06)] dark:border-slate-800 dark:bg-slate-950 sm:p-5">
       <div className="flex flex-col gap-3 border-b border-slate-100 pb-4 dark:border-slate-800 sm:flex-row sm:items-end sm:justify-between">
         <h2 className="inline-flex items-center gap-2 text-xl font-black text-slate-900 dark:text-white">
           <MessageSquare size={20} className="text-sky-600 dark:text-sky-300" />

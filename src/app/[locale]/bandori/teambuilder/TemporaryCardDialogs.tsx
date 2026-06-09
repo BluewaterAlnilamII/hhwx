@@ -31,7 +31,7 @@ const DynamicGameProfileCardEditorDialog = dynamic<GameProfileCardEditorDialogPr
   {
     ssr: false,
     loading: () => (
-      <div className="fixed inset-0 z-[1100] flex h-dvh items-center justify-center overflow-hidden overscroll-contain bg-slate-950/72 p-3 backdrop-blur-md sm:p-6" role="dialog" aria-modal="true">
+      <div className="fixed inset-0 z-[1100] flex h-dvh items-center justify-center overflow-hidden overscroll-contain bg-slate-950/55 p-3 sm:p-6" role="dialog" aria-modal="true">
         <div className="inline-flex items-center gap-2 rounded-2xl bg-white px-4 py-3 text-sm font-bold text-slate-600 shadow-2xl">
           <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
           正在载入卡牌编辑器

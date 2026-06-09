@@ -180,7 +180,7 @@ function SortableRow({
     <div
       ref={setNodeRef}
       style={style}
-      className="flex items-center gap-1.5 py-2 px-2 rounded-lg bg-white/50 backdrop-blur-sm mb-1.5"
+      className="flex items-center gap-1.5 py-2 px-2 rounded-lg bg-[#fffef4] mb-1.5"
     >
       {draggable ? (
         <button

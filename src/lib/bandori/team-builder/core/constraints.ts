@@ -18,4 +18,3 @@ export function normalizeTeamSearchConstraints(
     minTotalPower: normalizePositiveConstraint(constraints?.minTotalPower),
   };
 }
-
