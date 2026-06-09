@@ -139,6 +139,7 @@ function findBestMedleyExactSlotCandidateLowMemory(
   nodeSoftLimit: number,
   localDeadlineAt: number | null = null,
   shouldAbortLocalSearch: (() => boolean) | null = null,
+  useSkillContextUpper = true,
 ): { aborted: boolean; score: number | null } {
   const groupedSearchCards = groupSearchCardsByCharacter(slot.searchCards);
   const searchSlot = groupedSearchCards.every((card, index) => card === slot.searchCards[index])
@@ -213,6 +214,7 @@ function findBestMedleyExactSlotCandidateLowMemory(
       selectedPower,
       profiling,
       scoreCutoff,
+      useSkillContextUpper,
     );
     if (!Number.isFinite(upperBound) || upperBound < scoreCutoff) {
       return;
@@ -281,6 +283,7 @@ export function estimateMedleyExactSlotNodeUpperBound(
   selectedPower: number,
   profiling: BandoriMedleyTeamSearchProfilingStats,
   scoreCutoff = Number.NEGATIVE_INFINITY,
+  useSkillContextUpper = true,
 ): number {
   // Candidate generation may drop a branch when any safe optimistic upper is below the
   // cutoff. Taking the lower of two safe uppers stays safe while avoiding wasted exact
@@ -298,6 +301,9 @@ export function estimateMedleyExactSlotNodeUpperBound(
   );
   if (!Number.isFinite(contextBranchScoreUpperBound) || contextBranchScoreUpperBound < scoreCutoff) {
     return Number.NEGATIVE_INFINITY;
+  }
+  if (!useSkillContextUpper) {
+    return contextBranchScoreUpperBound;
   }
   const bannedAwareBranchScoreUpperBound = estimateMedleySlotBranchScoreUpperBound(
     slot,
@@ -3967,6 +3973,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     exactJoinPrefixSeedMaxObservedGap?: number;
     enableLowMemoryInitialCandidateSync?: boolean;
     lowMemoryInitialCandidateSyncLocalAbortOnly?: boolean;
+    lowMemoryInitialCandidateSyncLightUpper?: boolean;
     lowMemoryInitialCandidateSyncTimeboxMs?: number;
     shouldAbortLowMemoryInitialCandidateSync?: () => boolean;
     lowMemoryHighPairScanMinRecordCount?: number | null;
@@ -4456,6 +4463,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
         nodeSoftLimit,
         lowMemoryInitialCandidateSyncDeadlineAt,
         context.shouldAbortLowMemoryInitialCandidateSync ?? null,
+        context.lowMemoryInitialCandidateSyncLightUpper !== true,
       );
       if (lowMemoryTopCandidate.aborted) {
         if (context.lowMemoryInitialCandidateSyncLocalAbortOnly === true) {
