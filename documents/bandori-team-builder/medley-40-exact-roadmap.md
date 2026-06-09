@@ -1,6 +1,6 @@
 # Medley 40/40 Exact Roadmap
 
-Last updated: 2026-06-09 22:58 CST
+Last updated: 2026-06-09 23:07 CST
 
 This file is the persistent working note for the current medley optimizer goal.
 Keep it current before and after benchmark runs or proof-path changes, so future
@@ -1139,3 +1139,12 @@ Updated conclusion:
   anchors, and worsening residual gap from `120176` to `150972`. The code was
   reverted. Do not continue this route by only raising the event-root timebox;
   the max pair term did not tighten.
+- Rejected diagnostic: event-root candidate soft limit `200000` without
+  `lowMemoryInitialCandidateSyncDirectCandidate`
+  (`temp/bandori-team-builder/real-profile-medley-scope-matrix-2026-06-09T14-34-13-427Z.json`).
+  It still stayed bounded with gap `354570`, elapsed `120575ms`,
+  `timedOut=true`, `memoryLimited=true`, peak `4752 MiB`, and final abort
+  `initial-candidate`. It proved `RaiseASuilen/happy/performance` and
+  `technique`, then failed on `visual`. This rules out direct-candidate result
+  materialization as the primary cause; the remaining blocker is the third
+  same-coarse low-memory slot-top proof itself.
