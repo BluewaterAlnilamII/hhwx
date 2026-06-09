@@ -112,6 +112,7 @@ const MEDLEY_LOW_MEMORY_INITIAL_CANDIDATE_SYNC_MAX_SLOT_CARD_COUNT = 249;
 const MEDLEY_LOW_MEMORY_INITIAL_CANDIDATE_SYNC_EVENT_ROOT_RISK_SLOT_CARD_COUNT = 250;
 const MEDLEY_LOW_MEMORY_INITIAL_CANDIDATE_SYNC_SAME_COARSE_GUARD_MAX_SLOT_CARD_COUNT = 249;
 const MEDLEY_FULL_WIDTH_EVENT_EXACT_JOIN_MEMORY_SOFT_LIMIT_MIB = 3_200;
+const MEDLEY_LARGE_GAP_EVENT_SKIP_PROOF_MIN_GAP = 600_000;
 const MEDLEY_POST_EXACT_JOIN_TIGHT_ROOT_MAX_CARD_COUNT = 1_300;
 const MEDLEY_POST_EXACT_JOIN_TIGHT_ROOT_MIN_REMAINING_MS = 30_000;
 const MEDLEY_SAME_COARSE_FRONTIER_RETRY_MAX_CARD_COUNT = 1_300;
@@ -3530,6 +3531,28 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
       didLeaveUnclosedAreaItemConfiguration = true;
       rememberActiveConfigurationUpperBound();
       finishConfigurationTrace("full-width-event-skip-dfs");
+      continue;
+    }
+    const bestScoreAfterSeeding = results[0]?.score ?? Number.NEGATIVE_INFINITY;
+    const largeGapEventObservedGapAfterSeeding = (
+      Number.isFinite(activeConfigurationObservedScoreUpperBound)
+      && Number.isFinite(bestScoreAfterSeeding)
+        ? activeConfigurationObservedScoreUpperBound - bestScoreAfterSeeding
+        : null
+    );
+    if (
+      hasEventBonus
+      && activeConfigurationObservedUpperBoundSource === "configuration-root"
+      && largeGapEventObservedGapAfterSeeding !== null
+      && largeGapEventObservedGapAfterSeeding >= MEDLEY_LARGE_GAP_EVENT_SKIP_PROOF_MIN_GAP
+    ) {
+      if (traceEntry) {
+        traceEntry.largeGapEventSkipProof = true;
+        traceEntry.largeGapEventSkipProofGap = Math.ceil(largeGapEventObservedGapAfterSeeding);
+      }
+      didLeaveUnclosedAreaItemConfiguration = true;
+      rememberActiveConfigurationUpperBound();
+      finishConfigurationTrace("large-gap-event-skip-proof");
       continue;
     }
 
