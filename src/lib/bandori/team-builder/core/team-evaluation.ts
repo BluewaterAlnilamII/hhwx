@@ -11,7 +11,7 @@ import { calculateBestMultiLiveScoreForSkillWindows, calculateBestScoreForNonOve
 import { calculateChallengeLiveEventPoint, calculateChallengeLiveEventPointBase, calculateEventPoint, calculateEventPointBeforeMultiplier, calculateRoomScore, createEventPointOptions, getSearchCardsTeamContext, getEventPointMultiplier, getTargetValue, isChallengeLiveEventPointInput, normalizeSearchEventType, normalizeSearchLiveType, normalizeSearchTarget, resolveCachedBandoriSkill, resolveEncoreSkill, resolveOtherPlayerSkills, resolveBandoriTeamSearchEventMode } from "./events";
 import { isSearchUpperBoundBelowResultThreshold } from "./character-bounds";
 import { getCardInstanceKey } from "./card-identity";
-import type { CalculatedBandoriCard, ResolvedBandoriSkill } from "@/lib/bandori-team-calculator";
+import type { CalculatedBandoriCard } from "@/lib/bandori-team-calculator";
 import type { BandoriAreaItemConfiguration, BandoriTeamSearchResult, BandoriTeamSearchInput, PreparedChart, ScoreCalculationCache, ScoreComboOptions, SearchCard, SupportBandCandidate, SupportBandContext, BandoriTeamSearchResultCard, BandoriTeamSearchSupportCard } from "./types";
 import { clamp } from "./utils";
 
@@ -78,7 +78,6 @@ export type EvaluateMedleyScoreOnlyTeamOptions = {
   scoreCache?: ScoreCalculationCache;
   comboOptions?: ScoreComboOptions;
   pruningThresholdResult?: BandoriTeamSearchResult;
-  resolvedSkillsScratch?: Array<ResolvedBandoriSkill | null>;
 };
 
 export function evaluateMedleyScoreOnlyTeam(options: EvaluateMedleyScoreOnlyTeamOptions): BandoriTeamSearchResult | null {
@@ -92,21 +91,16 @@ export function evaluateMedleyScoreOnlyTeam(options: EvaluateMedleyScoreOnlyTeam
     scoreCache,
     comboOptions,
     pruningThresholdResult,
-    resolvedSkillsScratch,
   } = options;
   const context = getSearchCardsTeamContext(cards);
-  const resolvedSkills = resolvedSkillsScratch ?? new Array<ResolvedBandoriSkill | null>(cards.length);
-  resolvedSkills.length = cards.length;
-  let totalPower = 0;
-  for (let index = 0; index < cards.length; index += 1) {
-    const card = cards[index];
-    totalPower += card.effectivePower;
+  const resolvedSkills = cards.map((card) => {
     const skill = input.skillsById[String(card.skillId)];
-    resolvedSkills[index] = resolveCachedBandoriSkill(card.skillId, skill, card.skillLevel, context, server, scoreCache);
-  }
+    return resolveCachedBandoriSkill(card.skillId, skill, card.skillLevel, context, server, scoreCache);
+  });
+  const totalPower = Math.floor(cards.reduce((sum, card) => sum + card.effectivePower, 0));
   const best = calculateBestScoreForNonOverlappingSkillWindowsTargetOnly(
     chart,
-    Math.floor(totalPower),
+    totalPower,
     resolvedSkills,
     perfectRate,
     scoreCache,
