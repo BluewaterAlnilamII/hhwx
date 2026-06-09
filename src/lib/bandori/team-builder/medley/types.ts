@@ -67,9 +67,29 @@ export type BandoriMedleySearchOptimizationOptions = {
   conflictExactNodeLimit?: number;
   conflictSlotSolveNodeLimit?: number;
   configurationSeedPassDurationMs?: number;
+  skipConfigurationSeedingWhenMemoryHeadroomBelowMiB?: number;
+  enableExactJoinPrefixSeed?: boolean;
+  exactJoinPrefixSeedForceNoop?: boolean;
+  exactJoinPrefixSeedGuardOnly?: boolean;
+  exactJoinPrefixSeedTimeboxMs?: number;
+  exactJoinPrefixSeedMaxSmallestCandidateCount?: number;
+  exactJoinPrefixSeedMinCandidateCounts?: [number, number, number];
   debugConfigurationTrace?: boolean;
   exactCandidateJoinDebugAnchorSlotIndex?: number;
   enableExperimentalStagedCandidateExtension?: boolean;
+  enableLowMemoryHighPairScan?: boolean;
+  lowMemoryHighPairScanMinRecordCount?: number;
+  enableLowMemoryHighPairPrefixUpper?: boolean;
+  lowMemoryHighPairPrefixRecordLimit?: number;
+  disableLowMemoryInitialCandidateSync?: boolean;
+  lowMemoryInitialCandidateSyncLocalAbortOnly?: boolean;
+  lowMemoryInitialCandidateSyncLightUpper?: boolean;
+  lowMemoryInitialCandidateSyncTimeboxMs?: number;
+  lowMemoryInitialCandidateSyncMaxSameCoarseProofElapsedMs?: number;
+  lowMemoryInitialCandidateSyncMinMemoryHeadroomMiB?: number;
+  lowMemoryInitialCandidateSyncMaxSlotCardCount?: number;
+  enableLowMemoryInitialCandidateSyncGcProbe?: boolean;
+  debugExactCandidateJoinMemoryAttribution?: boolean;
   enableTrailingSameCoarseDfsOnly?: boolean;
   disableDominatedRootSkip?: boolean;
   disableSameCoarseTightRootSkip?: boolean;
@@ -98,6 +118,11 @@ export type BandoriMedleyTeamSearchInput = Omit<
   target?: "score";
   coarseAreaItemFilter?: BandoriMedleyAreaItemCoarseFilter;
   optimization?: BandoriMedleySearchOptimizationOptions;
+  progress?: {
+    initialDelayMs?: number;
+    scoreUpdateMinIntervalMs?: number;
+    onProgress: (response: BandoriMedleyTeamSearchResponse) => void;
+  };
 };
 
 export type BandoriMedleyTeamSearchResult = {
@@ -215,6 +240,18 @@ export type BandoriMedleyTeamSearchProfilingStats = {
   timeToGap1PctMs: number | null;
   timeToGap05PctMs: number | null;
   timeToGap01PctMs: number | null;
+  // Runtime memory telemetry is diagnostic-only. The historical peakUsedHeapMiB
+  // stat may include RSS when the Node memory guard is active.
+  lastNodeHeapUsedMiB: number | null;
+  peakNodeHeapUsedMiB: number | null;
+  lastNodeRssMiB: number | null;
+  peakNodeRssMiB: number | null;
+  lastNodeExternalMiB: number | null;
+  peakNodeExternalMiB: number | null;
+  lastNodeArrayBuffersMiB: number | null;
+  peakNodeArrayBuffersMiB: number | null;
+  lastMemoryGuardUsedMiB: number | null;
+  peakMemoryGuardUsedMiB: number | null;
   // Replay-only diagnostics for comparing observed states against newer upper models.
   upperReplayStateCount: number;
   upperReplayPrunableStateCount: number;
@@ -247,6 +284,8 @@ export type BandoriMedleyTeamSearchProfilingStats = {
   configurationSeedPassImprovementCount: number;
   bestConfigurationSeedPassScore: number | null;
   configurationTrace?: Array<Record<string, unknown>>;
+  proofLedger?: Array<Record<string, unknown>>;
+  proofLedgerSummary?: Record<string, unknown> | null;
   // Coarse filters can reduce the requested configuration set; search.ts converts that into
   // bounded status unless the original requested scope is still proved.
   coarseLockedConfigurationCount: number;
@@ -554,6 +593,7 @@ export type BandoriMedleyTeamSearchProfilingStats = {
   exactCandidateJoinPairComplementHighPairBuildCount: number;
   exactCandidateJoinPairComplementHighPairBuildElapsedMs: number;
   exactCandidateJoinPairComplementHighPairRecordCount: number;
+  exactCandidateJoinMemorySnapshots: Array<Record<string, unknown>>;
   exactCandidateJoinLastBestSlotScores: number[];
   exactCandidateJoinLastPairUpperByExcludedSlot: Array<number | null>;
   exactCandidateJoinLastPairUnseenUpperByExcludedSlot: Array<number | null>;
@@ -581,6 +621,19 @@ export type BandoriMedleyTeamSearchProfilingStats = {
   exactCandidateJoinDebugAnchorSlotIndex?: number;
   exactCandidateJoinImprovementCount: number;
   bestExactCandidateJoinImprovement: number;
+  exactJoinPrefixSeedCallCount: number;
+  exactJoinPrefixSeedHitCount: number;
+  exactJoinPrefixSeedElapsedMs: number;
+  exactJoinPrefixSeedBestScore: number | null;
+  exactJoinPrefixSeedBestImprovement: number;
+  exactJoinPrefixSeedTimedOutCount: number;
+  exactJoinPrefixSeedNoHitLocalTimeoutCount: number;
+  exactJoinPrefixSeedSkippedByCandidateCount: number;
+  exactJoinPrefixSeedGuardSkipCount: number;
+  exactJoinPrefixSeedGuardSkipReasonCounts: Record<string, number>;
+  exactJoinPrefixSeedLastGuardSkipReason: string | null;
+  exactJoinPrefixSeedCandidateCountsBySlot: number[];
+  exactJoinPrefixSeedPeakHeapMiB: number | null;
   // Conflict BnB is an alternate exact subsolver for small conflict-heavy scopes.
   conflictExactBnbCallCount: number;
   conflictExactBnbCompletedCount: number;
@@ -661,7 +714,13 @@ export type MedleyTeamCandidate = {
 export type MedleyExactSlotCandidateSearchNode = {
   key: number;
   slotUpperBound: number;
-  selectedCards: SearchCard[];
+  activeInSlotUpperHeap?: boolean;
+  selectedCardCount: number;
+  selectedCard0?: SearchCard;
+  selectedCard1?: SearchCard;
+  selectedCard2?: SearchCard;
+  selectedCard3?: SearchCard;
+  selectedCard4?: SearchCard;
   startIndex: number;
   usedCharacterMaskLow: number;
   usedCharacterMaskHigh: number;
@@ -689,6 +748,8 @@ export type MedleyExactSlotCandidateGenerator = {
   canReuseForScoreCutoff: (scoreCutoff: number) => boolean;
   hasAborted: () => boolean;
   poppedNodeCount: () => number;
+  release: () => void;
+  memoryProfile?: () => Record<string, unknown>;
 };
 
 export type MedleyExactCandidateJoinResult = {

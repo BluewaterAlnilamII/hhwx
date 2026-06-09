@@ -26,6 +26,7 @@ Public compatibility entrypoints remain:
 - `single-song-algorithm.zh-CN.md`: Chinese version of the canonical single-song algorithm specification.
 - `medley-algorithm.md`: canonical medley algorithm specification, including problem definition, scoring model, exact/bounded contract, proof strategy, validation gates, and implementation ownership.
 - `medley-algorithm.zh-CN.md`: Chinese version of the canonical medley algorithm specification.
+- `medley-40-exact-roadmap.md`: persistent current objective, evidence hygiene rules, and execution roadmap for the P01-P10 `40/40` medley exact target.
 - `medley-algorithm-notes.md`: historical medley optimization notes, dated experiment context, proof-gap investigations, and maintenance context that should not be treated as the frontend or algorithm contract.
 - `medley-frontend-contract.md`: stable medley request/response fields, preview UI binding, proof-status display semantics, memory/debug reporting, and frontend readiness checklist.
 - `medley-real-profile-benchmark-2026-05-31.md`: live `user_game_profiles` sample benchmark for all-configuration medley exact-proof performance, including 60s/120s completion counts, the 2026-06-02 four-event matrix, bounded-case causes, and the current per-configuration bottleneck.

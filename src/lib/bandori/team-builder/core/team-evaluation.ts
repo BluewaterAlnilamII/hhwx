@@ -154,6 +154,45 @@ export function evaluateMedleyScoreOnlyTeam(options: EvaluateMedleyScoreOnlyTeam
   };
 }
 
+export function evaluateMedleyScoreOnlyTeamScore(options: EvaluateMedleyScoreOnlyTeamOptions): number | null {
+  const {
+    cards,
+    input,
+    chart,
+    server,
+    perfectRate,
+    scoreCache,
+    comboOptions,
+    pruningThresholdResult,
+  } = options;
+  const context = getSearchCardsTeamContext(cards);
+  const resolvedSkills = cards.map((card) => {
+    const skill = input.skillsById[String(card.skillId)];
+    return resolveCachedBandoriSkill(card.skillId, skill, card.skillLevel, context, server, scoreCache);
+  });
+  const totalPower = Math.floor(cards.reduce((sum, card) => sum + card.effectivePower, 0));
+  const best = calculateBestScoreForNonOverlappingSkillWindowsTargetOnly(
+    chart,
+    totalPower,
+    resolvedSkills,
+    perfectRate,
+    scoreCache,
+    comboOptions,
+  );
+
+  if (!Number.isFinite(best.score)) {
+    return null;
+  }
+  if (
+    pruningThresholdResult
+    && isSearchUpperBoundBelowResultThreshold(best.averageScore, best.averageScore, pruningThresholdResult)
+  ) {
+    return null;
+  }
+
+  return best.averageScore;
+}
+
 export function evaluateTeam(options: EvaluateTeamOptions): BandoriTeamSearchResult | null {
   const {
     cards,
