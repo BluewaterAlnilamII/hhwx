@@ -591,6 +591,18 @@ export type BandoriMedleyTeamSearchProfilingStats = {
   exactCandidateJoinLastLowMemoryInitialCandidateBestCardInstanceKeys: string[] | null;
   exactCandidateJoinLastLowMemoryInitialCandidateBestSkillIds: number[] | null;
   exactCandidateJoinLastLowMemoryInitialCandidateBestPowers: number[] | null;
+  exactCandidateJoinLastLowMemoryInitialCandidateStartUsedMiB: number | null;
+  exactCandidateJoinLastLowMemoryInitialCandidateStartNodeHeapMiB: number | null;
+  exactCandidateJoinLastLowMemoryInitialCandidateStartRssMiB: number | null;
+  exactCandidateJoinLastLowMemoryInitialCandidateBeforeVisitUsedMiB: number | null;
+  exactCandidateJoinLastLowMemoryInitialCandidateBeforeVisitNodeHeapMiB: number | null;
+  exactCandidateJoinLastLowMemoryInitialCandidateBeforeVisitRssMiB: number | null;
+  exactCandidateJoinLastLowMemoryInitialCandidateEvaluationBeforeUsedMiB: number | null;
+  exactCandidateJoinLastLowMemoryInitialCandidateEvaluationAfterUsedMiB: number | null;
+  exactCandidateJoinLastLowMemoryInitialCandidateEvaluationBeforeNodeHeapMiB: number | null;
+  exactCandidateJoinLastLowMemoryInitialCandidateEvaluationAfterNodeHeapMiB: number | null;
+  exactCandidateJoinLastLowMemoryInitialCandidateEvaluationBeforeRssMiB: number | null;
+  exactCandidateJoinLastLowMemoryInitialCandidateEvaluationAfterRssMiB: number | null;
   exactCandidateJoinLastLowMemoryInitialCandidateAbortUsedMiB: number | null;
   exactCandidateJoinLastLowMemoryInitialCandidateAbortLimitMiB: number | null;
   exactCandidateJoinLastLowMemoryInitialCandidateAbortHeadroomMiB: number | null;

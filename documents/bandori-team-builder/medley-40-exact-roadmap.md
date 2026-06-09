@@ -1262,3 +1262,46 @@ Next execution step:
   cache release and GC, or replace the current low-memory slot-top proof with a
   lower-allocation equivalent that can complete `visual` without expanding
   candidate limits.
+- Diagnostic:
+  low-memory stage sampling after best-team capture
+  (`temp/bandori-team-builder/real-profile-medley-scope-matrix-2026-06-09T15-52-08-144Z.json`)
+  showed the third sibling's memory was already high before score evaluation:
+  `visual` recorded about `4709 MiB` before and after evaluating the single
+  team. The `technique` sibling recorded about `3004 MiB` at the equivalent
+  score-evaluation point. This rules out the leaf score calculation itself as
+  the allocation spike.
+- Diagnostic:
+  start/before-visit sampling
+  (`temp/bandori-team-builder/real-profile-medley-scope-matrix-2026-06-09T16-00-32-268Z.json`)
+  moved the spike earlier. Search-level low-memory sampling saw about
+  `3011 MiB`, but the first local sample inside the exact-join low-memory
+  slot-top finder already saw about `4785 MiB`. The allocation or measurement
+  mismatch therefore occurs between the search-layer probe and the low-memory
+  finder start, before visiting the first DFS leaf.
+- Rejected diagnostic:
+  lazy exact-candidate generator initialization
+  (`temp/bandori-team-builder/real-profile-medley-scope-matrix-2026-06-09T16-08-07-803Z.json`)
+  did not convert P03 and did not materially reduce the target peak:
+  `P03:260` stayed bounded at gap `354570`, elapsed `99039ms`, peak
+  `4784 MiB`. The slot-top memory wall is not caused by eagerly creating the
+  normal exact candidate generators before the low-memory finder.
+- Rejected diagnostic:
+  clearing the local `slots` variable after `releaseSlotSearchCaches`
+  (`temp/bandori-team-builder/real-profile-medley-scope-matrix-2026-06-09T16-15-07-374Z.json`)
+  did not convert P03. The row stayed bounded at gap `354570`, elapsed
+  `108617ms`, peak `4764 MiB`. Releasing one additional local reference is not
+  enough to remove the same-coarse transient residency.
+- Rejected diagnostic:
+  copy-on-write suffix upper-bound arrays
+  (`temp/bandori-team-builder/real-profile-medley-scope-matrix-2026-06-09T16-23-19-042Z.json`)
+  preserved typecheck but did not convert P03 or materially lower the peak:
+  the row stayed bounded at gap `354570`, elapsed `98669ms`, peak `4771 MiB`.
+  Keep this only as a possible generic memory-cleanup candidate if it later
+  passes the guard set; it is not a standalone 40/40 path.
+- Current narrow hypothesis: either the search-layer memory probe and the
+  exact-join local sampler are not measuring the same guard value in Node 24,
+  or same-coarse state retained after the second sibling is only becoming
+  visible to the local RSS/heap sampler when the third sibling enters exact
+  join. Before another proof patch, add Node heap/RSS fields to the
+  pre-configuration and low-memory GC probes so the next P03 run can separate
+  measurement mismatch from real allocation growth.

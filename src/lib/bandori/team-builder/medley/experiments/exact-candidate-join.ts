@@ -119,6 +119,26 @@ function roundMiB(bytes: number): number {
   return Math.round((bytes / BYTES_PER_MIB) * 100) / 100;
 }
 
+function sampleNodeMemoryMiB(): { usedMiB: number | null; heapMiB: number | null; rssMiB: number | null } {
+  const nodeProcess = (globalThis as {
+    process?: {
+      memoryUsage?: () => { heapUsed?: number; rss?: number };
+    };
+  }).process;
+  const memoryUsage = nodeProcess?.memoryUsage?.();
+  const heapMiB = typeof memoryUsage?.heapUsed === "number" && Number.isFinite(memoryUsage.heapUsed)
+    ? Math.ceil(memoryUsage.heapUsed / BYTES_PER_MIB)
+    : null;
+  const rssMiB = typeof memoryUsage?.rss === "number" && Number.isFinite(memoryUsage.rss)
+    ? Math.ceil(memoryUsage.rss / BYTES_PER_MIB)
+    : null;
+  return {
+    usedMiB: heapMiB !== null || rssMiB !== null ? Math.max(heapMiB ?? 0, rssMiB ?? 0) : null,
+    heapMiB,
+    rssMiB,
+  };
+}
+
 function createMedleyExactCandidateSlotThresholdResult(scoreCutoff: number): BandoriTeamSearchResult | undefined {
   if (!Number.isFinite(scoreCutoff)) {
     return undefined;
@@ -203,6 +223,10 @@ function findBestMedleyExactSlotCandidateLowMemory(
   score: number | null;
   candidate: MedleyTeamCandidate | null;
 } {
+  const startMemory = sampleNodeMemoryMiB();
+  profiling.exactCandidateJoinLastLowMemoryInitialCandidateStartUsedMiB = startMemory.usedMiB;
+  profiling.exactCandidateJoinLastLowMemoryInitialCandidateStartNodeHeapMiB = startMemory.heapMiB;
+  profiling.exactCandidateJoinLastLowMemoryInitialCandidateStartRssMiB = startMemory.rssMiB;
   const groupedSearchCards = groupSearchCardsByCharacter(slot.searchCards);
   const searchSlot = groupedSearchCards.every((card, index) => card === slot.searchCards[index])
     ? slot
@@ -259,6 +283,10 @@ function findBestMedleyExactSlotCandidateLowMemory(
     profiling.exactCandidateJoinLastLowMemoryInitialCandidateBestSkillIds = selectedCards.map((card) => card.skillId);
     profiling.exactCandidateJoinLastLowMemoryInitialCandidateBestPowers = selectedCards.map((card) => card.effectivePower);
   };
+  const beforeVisitMemory = sampleNodeMemoryMiB();
+  profiling.exactCandidateJoinLastLowMemoryInitialCandidateBeforeVisitUsedMiB = beforeVisitMemory.usedMiB;
+  profiling.exactCandidateJoinLastLowMemoryInitialCandidateBeforeVisitNodeHeapMiB = beforeVisitMemory.heapMiB;
+  profiling.exactCandidateJoinLastLowMemoryInitialCandidateBeforeVisitRssMiB = beforeVisitMemory.rssMiB;
 
   const visit = (
     startIndex: number,
@@ -321,6 +349,16 @@ function findBestMedleyExactSlotCandidateLowMemory(
       stats.enumeratedTeamCount += 1;
       profiling.teamEvaluationCacheMissCount += 1;
       evaluatedTeamCount += 1;
+      const beforeEvaluationMemory = sampleNodeMemoryMiB();
+      profiling.exactCandidateJoinLastLowMemoryInitialCandidateEvaluationBeforeUsedMiB = (
+        beforeEvaluationMemory.usedMiB
+      );
+      profiling.exactCandidateJoinLastLowMemoryInitialCandidateEvaluationBeforeNodeHeapMiB = (
+        beforeEvaluationMemory.heapMiB
+      );
+      profiling.exactCandidateJoinLastLowMemoryInitialCandidateEvaluationBeforeRssMiB = (
+        beforeEvaluationMemory.rssMiB
+      );
       const score = evaluateMedleyScoreOnlyTeamScore({
         cards: selectedCards,
         input: searchSlot.input,
@@ -332,6 +370,16 @@ function findBestMedleyExactSlotCandidateLowMemory(
         comboOptions: searchSlot.comboOptions,
         pruningThresholdResult: createMedleyExactCandidateSlotThresholdResult(scoreCutoff),
       });
+      const afterEvaluationMemory = sampleNodeMemoryMiB();
+      profiling.exactCandidateJoinLastLowMemoryInitialCandidateEvaluationAfterUsedMiB = (
+        afterEvaluationMemory.usedMiB
+      );
+      profiling.exactCandidateJoinLastLowMemoryInitialCandidateEvaluationAfterNodeHeapMiB = (
+        afterEvaluationMemory.heapMiB
+      );
+      profiling.exactCandidateJoinLastLowMemoryInitialCandidateEvaluationAfterRssMiB = (
+        afterEvaluationMemory.rssMiB
+      );
       stats.evaluatedTeamCount += 1;
       evaluatedSinceScoreCacheClear += 1;
       maybeClearScoreCache();
@@ -4640,6 +4688,18 @@ export function searchMedleyConfigurationByExactCandidateJoin(
   profiling.exactCandidateJoinLastLowMemoryInitialCandidateBestCardInstanceKeys = null;
   profiling.exactCandidateJoinLastLowMemoryInitialCandidateBestSkillIds = null;
   profiling.exactCandidateJoinLastLowMemoryInitialCandidateBestPowers = null;
+  profiling.exactCandidateJoinLastLowMemoryInitialCandidateStartUsedMiB = null;
+  profiling.exactCandidateJoinLastLowMemoryInitialCandidateStartNodeHeapMiB = null;
+  profiling.exactCandidateJoinLastLowMemoryInitialCandidateStartRssMiB = null;
+  profiling.exactCandidateJoinLastLowMemoryInitialCandidateBeforeVisitUsedMiB = null;
+  profiling.exactCandidateJoinLastLowMemoryInitialCandidateBeforeVisitNodeHeapMiB = null;
+  profiling.exactCandidateJoinLastLowMemoryInitialCandidateBeforeVisitRssMiB = null;
+  profiling.exactCandidateJoinLastLowMemoryInitialCandidateEvaluationBeforeUsedMiB = null;
+  profiling.exactCandidateJoinLastLowMemoryInitialCandidateEvaluationAfterUsedMiB = null;
+  profiling.exactCandidateJoinLastLowMemoryInitialCandidateEvaluationBeforeNodeHeapMiB = null;
+  profiling.exactCandidateJoinLastLowMemoryInitialCandidateEvaluationAfterNodeHeapMiB = null;
+  profiling.exactCandidateJoinLastLowMemoryInitialCandidateEvaluationBeforeRssMiB = null;
+  profiling.exactCandidateJoinLastLowMemoryInitialCandidateEvaluationAfterRssMiB = null;
   profiling.exactCandidateJoinLastLowMemoryInitialCandidateAbortUsedMiB = null;
   profiling.exactCandidateJoinLastLowMemoryInitialCandidateAbortLimitMiB = null;
   profiling.exactCandidateJoinLastLowMemoryInitialCandidateAbortHeadroomMiB = null;

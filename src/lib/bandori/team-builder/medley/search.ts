@@ -322,6 +322,42 @@ function buildProofLedger(
         lowMemoryInitialCandidateBestPowers: (
           asFiniteNumberArray(entry.exactCandidateJoinLastLowMemoryInitialCandidateBestPowers)
         ),
+        lowMemoryInitialCandidateStartUsedMiB: (
+          asFiniteNumber(entry.exactCandidateJoinLastLowMemoryInitialCandidateStartUsedMiB)
+        ),
+        lowMemoryInitialCandidateStartNodeHeapMiB: (
+          asFiniteNumber(entry.exactCandidateJoinLastLowMemoryInitialCandidateStartNodeHeapMiB)
+        ),
+        lowMemoryInitialCandidateStartRssMiB: (
+          asFiniteNumber(entry.exactCandidateJoinLastLowMemoryInitialCandidateStartRssMiB)
+        ),
+        lowMemoryInitialCandidateBeforeVisitUsedMiB: (
+          asFiniteNumber(entry.exactCandidateJoinLastLowMemoryInitialCandidateBeforeVisitUsedMiB)
+        ),
+        lowMemoryInitialCandidateBeforeVisitNodeHeapMiB: (
+          asFiniteNumber(entry.exactCandidateJoinLastLowMemoryInitialCandidateBeforeVisitNodeHeapMiB)
+        ),
+        lowMemoryInitialCandidateBeforeVisitRssMiB: (
+          asFiniteNumber(entry.exactCandidateJoinLastLowMemoryInitialCandidateBeforeVisitRssMiB)
+        ),
+        lowMemoryInitialCandidateEvaluationBeforeUsedMiB: (
+          asFiniteNumber(entry.exactCandidateJoinLastLowMemoryInitialCandidateEvaluationBeforeUsedMiB)
+        ),
+        lowMemoryInitialCandidateEvaluationAfterUsedMiB: (
+          asFiniteNumber(entry.exactCandidateJoinLastLowMemoryInitialCandidateEvaluationAfterUsedMiB)
+        ),
+        lowMemoryInitialCandidateEvaluationBeforeNodeHeapMiB: (
+          asFiniteNumber(entry.exactCandidateJoinLastLowMemoryInitialCandidateEvaluationBeforeNodeHeapMiB)
+        ),
+        lowMemoryInitialCandidateEvaluationAfterNodeHeapMiB: (
+          asFiniteNumber(entry.exactCandidateJoinLastLowMemoryInitialCandidateEvaluationAfterNodeHeapMiB)
+        ),
+        lowMemoryInitialCandidateEvaluationBeforeRssMiB: (
+          asFiniteNumber(entry.exactCandidateJoinLastLowMemoryInitialCandidateEvaluationBeforeRssMiB)
+        ),
+        lowMemoryInitialCandidateEvaluationAfterRssMiB: (
+          asFiniteNumber(entry.exactCandidateJoinLastLowMemoryInitialCandidateEvaluationAfterRssMiB)
+        ),
         lowMemoryInitialCandidateAbortUsedMiB: (
           asFiniteNumber(entry.exactCandidateJoinLastLowMemoryInitialCandidateAbortUsedMiB)
         ),
@@ -1222,6 +1258,33 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
       ? Math.floor(effectiveLimitBytes / BYTES_PER_MIB)
       : null;
   };
+  const bytesToMiB = (bytes: number | null | undefined): number | null => (
+    typeof bytes === "number" && Number.isFinite(bytes)
+      ? Math.ceil(bytes / BYTES_PER_MIB)
+      : null
+  );
+  const sampleRawRuntimeMemoryBytes = (): {
+    performanceUsedBytes: number | null;
+    nodeHeapBytes: number | null;
+    nodeRssBytes: number | null;
+  } => {
+    const memory = (performance as RuntimeMemoryPerformance).memory;
+    const performanceUsedBytes = typeof memory?.usedJSHeapSize === "number"
+      && Number.isFinite(memory.usedJSHeapSize)
+      ? memory.usedJSHeapSize
+      : null;
+    const nodeProcess = (globalThis as { process?: RuntimeNodeProcess }).process;
+    const nodeMemoryUsage = nodeProcess?.memoryUsage?.();
+    const nodeHeapBytes = typeof nodeMemoryUsage?.heapUsed === "number"
+      && Number.isFinite(nodeMemoryUsage.heapUsed)
+      ? nodeMemoryUsage.heapUsed
+      : null;
+    const nodeRssBytes = typeof nodeMemoryUsage?.rss === "number"
+      && Number.isFinite(nodeMemoryUsage.rss)
+      ? nodeMemoryUsage.rss
+      : null;
+    return { performanceUsedBytes, nodeHeapBytes, nodeRssBytes };
+  };
   const readUsedHeapBytes = (): number | null => {
     const memory = (performance as RuntimeMemoryPerformance).memory;
     if (typeof memory?.jsHeapSizeLimit === "number" && Number.isFinite(memory.jsHeapSizeLimit) && memory.jsHeapSizeLimit > 0) {
@@ -1280,15 +1343,33 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
     if (typeof gc !== "function") {
       return { unavailable: true };
     }
+    const beforeRawMemory = sampleRawRuntimeMemoryBytes();
     const beforeGcBytes = readUsedHeapBytes();
     const gcStartedAt = performance.now();
     gc();
+    const afterRawMemory = sampleRawRuntimeMemoryBytes();
     const afterGcBytes = readUsedHeapBytes();
     return {
       ran: true,
       elapsedMs: Math.round(performance.now() - gcStartedAt),
-      beforeMiB: beforeGcBytes !== null ? Math.ceil(beforeGcBytes / BYTES_PER_MIB) : null,
-      afterMiB: afterGcBytes !== null ? Math.ceil(afterGcBytes / BYTES_PER_MIB) : null,
+      beforeMiB: bytesToMiB(beforeGcBytes),
+      afterMiB: bytesToMiB(afterGcBytes),
+      beforePerformanceMiB: bytesToMiB(beforeRawMemory.performanceUsedBytes),
+      afterPerformanceMiB: bytesToMiB(afterRawMemory.performanceUsedBytes),
+      beforeNodeHeapMiB: bytesToMiB(beforeRawMemory.nodeHeapBytes),
+      afterNodeHeapMiB: bytesToMiB(afterRawMemory.nodeHeapBytes),
+      beforeNodeRssMiB: bytesToMiB(beforeRawMemory.nodeRssBytes),
+      afterNodeRssMiB: bytesToMiB(afterRawMemory.nodeRssBytes),
+      beforeNodeUsedMiB: bytesToMiB(
+        beforeRawMemory.nodeHeapBytes !== null || beforeRawMemory.nodeRssBytes !== null
+          ? Math.max(beforeRawMemory.nodeHeapBytes ?? 0, beforeRawMemory.nodeRssBytes ?? 0)
+          : null,
+      ),
+      afterNodeUsedMiB: bytesToMiB(
+        afterRawMemory.nodeHeapBytes !== null || afterRawMemory.nodeRssBytes !== null
+          ? Math.max(afterRawMemory.nodeHeapBytes ?? 0, afterRawMemory.nodeRssBytes ?? 0)
+          : null,
+      ),
     };
   };
   const isPastMemorySoftLimit = (): boolean => {
@@ -2232,6 +2313,42 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
       exactCandidateJoinLastLowMemoryInitialCandidateBestPowers: (
         profiling.exactCandidateJoinLastLowMemoryInitialCandidateBestPowers
       ),
+      exactCandidateJoinLastLowMemoryInitialCandidateStartUsedMiB: (
+        profiling.exactCandidateJoinLastLowMemoryInitialCandidateStartUsedMiB
+      ),
+      exactCandidateJoinLastLowMemoryInitialCandidateStartNodeHeapMiB: (
+        profiling.exactCandidateJoinLastLowMemoryInitialCandidateStartNodeHeapMiB
+      ),
+      exactCandidateJoinLastLowMemoryInitialCandidateStartRssMiB: (
+        profiling.exactCandidateJoinLastLowMemoryInitialCandidateStartRssMiB
+      ),
+      exactCandidateJoinLastLowMemoryInitialCandidateBeforeVisitUsedMiB: (
+        profiling.exactCandidateJoinLastLowMemoryInitialCandidateBeforeVisitUsedMiB
+      ),
+      exactCandidateJoinLastLowMemoryInitialCandidateBeforeVisitNodeHeapMiB: (
+        profiling.exactCandidateJoinLastLowMemoryInitialCandidateBeforeVisitNodeHeapMiB
+      ),
+      exactCandidateJoinLastLowMemoryInitialCandidateBeforeVisitRssMiB: (
+        profiling.exactCandidateJoinLastLowMemoryInitialCandidateBeforeVisitRssMiB
+      ),
+      exactCandidateJoinLastLowMemoryInitialCandidateEvaluationBeforeUsedMiB: (
+        profiling.exactCandidateJoinLastLowMemoryInitialCandidateEvaluationBeforeUsedMiB
+      ),
+      exactCandidateJoinLastLowMemoryInitialCandidateEvaluationAfterUsedMiB: (
+        profiling.exactCandidateJoinLastLowMemoryInitialCandidateEvaluationAfterUsedMiB
+      ),
+      exactCandidateJoinLastLowMemoryInitialCandidateEvaluationBeforeNodeHeapMiB: (
+        profiling.exactCandidateJoinLastLowMemoryInitialCandidateEvaluationBeforeNodeHeapMiB
+      ),
+      exactCandidateJoinLastLowMemoryInitialCandidateEvaluationAfterNodeHeapMiB: (
+        profiling.exactCandidateJoinLastLowMemoryInitialCandidateEvaluationAfterNodeHeapMiB
+      ),
+      exactCandidateJoinLastLowMemoryInitialCandidateEvaluationBeforeRssMiB: (
+        profiling.exactCandidateJoinLastLowMemoryInitialCandidateEvaluationBeforeRssMiB
+      ),
+      exactCandidateJoinLastLowMemoryInitialCandidateEvaluationAfterRssMiB: (
+        profiling.exactCandidateJoinLastLowMemoryInitialCandidateEvaluationAfterRssMiB
+      ),
       exactCandidateJoinLastLowMemoryInitialCandidateAbortUsedMiB: (
         profiling.exactCandidateJoinLastLowMemoryInitialCandidateAbortUsedMiB
       ),
@@ -2725,6 +2842,42 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
           exactCandidateJoinLastLowMemoryInitialCandidateBestPowers: (
             profiling.exactCandidateJoinLastLowMemoryInitialCandidateBestPowers
           ),
+          exactCandidateJoinLastLowMemoryInitialCandidateStartUsedMiB: (
+            profiling.exactCandidateJoinLastLowMemoryInitialCandidateStartUsedMiB
+          ),
+          exactCandidateJoinLastLowMemoryInitialCandidateStartNodeHeapMiB: (
+            profiling.exactCandidateJoinLastLowMemoryInitialCandidateStartNodeHeapMiB
+          ),
+          exactCandidateJoinLastLowMemoryInitialCandidateStartRssMiB: (
+            profiling.exactCandidateJoinLastLowMemoryInitialCandidateStartRssMiB
+          ),
+          exactCandidateJoinLastLowMemoryInitialCandidateBeforeVisitUsedMiB: (
+            profiling.exactCandidateJoinLastLowMemoryInitialCandidateBeforeVisitUsedMiB
+          ),
+          exactCandidateJoinLastLowMemoryInitialCandidateBeforeVisitNodeHeapMiB: (
+            profiling.exactCandidateJoinLastLowMemoryInitialCandidateBeforeVisitNodeHeapMiB
+          ),
+          exactCandidateJoinLastLowMemoryInitialCandidateBeforeVisitRssMiB: (
+            profiling.exactCandidateJoinLastLowMemoryInitialCandidateBeforeVisitRssMiB
+          ),
+          exactCandidateJoinLastLowMemoryInitialCandidateEvaluationBeforeUsedMiB: (
+            profiling.exactCandidateJoinLastLowMemoryInitialCandidateEvaluationBeforeUsedMiB
+          ),
+          exactCandidateJoinLastLowMemoryInitialCandidateEvaluationAfterUsedMiB: (
+            profiling.exactCandidateJoinLastLowMemoryInitialCandidateEvaluationAfterUsedMiB
+          ),
+          exactCandidateJoinLastLowMemoryInitialCandidateEvaluationBeforeNodeHeapMiB: (
+            profiling.exactCandidateJoinLastLowMemoryInitialCandidateEvaluationBeforeNodeHeapMiB
+          ),
+          exactCandidateJoinLastLowMemoryInitialCandidateEvaluationAfterNodeHeapMiB: (
+            profiling.exactCandidateJoinLastLowMemoryInitialCandidateEvaluationAfterNodeHeapMiB
+          ),
+          exactCandidateJoinLastLowMemoryInitialCandidateEvaluationBeforeRssMiB: (
+            profiling.exactCandidateJoinLastLowMemoryInitialCandidateEvaluationBeforeRssMiB
+          ),
+          exactCandidateJoinLastLowMemoryInitialCandidateEvaluationAfterRssMiB: (
+            profiling.exactCandidateJoinLastLowMemoryInitialCandidateEvaluationAfterRssMiB
+          ),
           exactCandidateJoinLastLowMemoryInitialCandidateAbortUsedMiB: (
             profiling.exactCandidateJoinLastLowMemoryInitialCandidateAbortUsedMiB
           ),
@@ -2833,6 +2986,14 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
             lowMemoryInitialCandidateSyncGcProbeElapsedMs: gcProbe.elapsedMs,
             lowMemoryInitialCandidateSyncGcProbeBeforeMiB: gcProbe.beforeMiB,
             lowMemoryInitialCandidateSyncGcProbeAfterMiB: gcProbe.afterMiB,
+            lowMemoryInitialCandidateSyncGcProbeBeforePerformanceMiB: gcProbe.beforePerformanceMiB,
+            lowMemoryInitialCandidateSyncGcProbeAfterPerformanceMiB: gcProbe.afterPerformanceMiB,
+            lowMemoryInitialCandidateSyncGcProbeBeforeNodeHeapMiB: gcProbe.beforeNodeHeapMiB,
+            lowMemoryInitialCandidateSyncGcProbeAfterNodeHeapMiB: gcProbe.afterNodeHeapMiB,
+            lowMemoryInitialCandidateSyncGcProbeBeforeNodeRssMiB: gcProbe.beforeNodeRssMiB,
+            lowMemoryInitialCandidateSyncGcProbeAfterNodeRssMiB: gcProbe.afterNodeRssMiB,
+            lowMemoryInitialCandidateSyncGcProbeBeforeNodeUsedMiB: gcProbe.beforeNodeUsedMiB,
+            lowMemoryInitialCandidateSyncGcProbeAfterNodeUsedMiB: gcProbe.afterNodeUsedMiB,
           });
         } else {
           traceEntry.lowMemoryInitialCandidateSyncGcProbeUnavailable = true;
