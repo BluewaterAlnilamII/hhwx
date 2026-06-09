@@ -129,6 +129,15 @@ const RUNTIME_HEAP_LIMIT_RATIO = 0.65;
 const MEDLEY_NODE_AUTO_MEMORY_SOFT_LIMIT_MIB = 4_200;
 const MEDLEY_SAME_COARSE_MEMORY_SKIP_SOFT_LIMIT_MARGIN_MIB = 1_200;
 
+function createMedleyResultRankSnapshots(
+  results: readonly BandoriMedleyTeamSearchResult[],
+): BandoriMedleyTeamSearchResult[] {
+  return results.map((result, index) => ({
+    ...result,
+    rank: index + 1,
+  }));
+}
+
 function asFiniteNumber(value: unknown): number | null {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
@@ -925,13 +934,20 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
     profiling,
   };
   const buildResponse = (responseStats: BandoriMedleyTeamSearchStats): BandoriMedleyTeamSearchResponse => {
+    sortMedleyResults(results);
     const maxScoreCandidate = evaluatedCandidateTracker.getMaxScoreCandidate(results[0] ?? null);
+    const evaluatedAverageTopCandidates = evaluatedCandidateTracker.getEvaluatedAverageTopCandidates(
+      maxScoreCandidate ? [...results, maxScoreCandidate] : results,
+    );
     return {
-      results,
-      maxScoreCandidate,
-      evaluatedAverageTopCandidates: evaluatedCandidateTracker.getEvaluatedAverageTopCandidates(
-        maxScoreCandidate ? [...results, maxScoreCandidate] : results,
-      ),
+      results: createMedleyResultRankSnapshots(results),
+      maxScoreCandidate: maxScoreCandidate
+        ? {
+          ...maxScoreCandidate,
+          rank: 1,
+        }
+        : null,
+      evaluatedAverageTopCandidates: createMedleyResultRankSnapshots(evaluatedAverageTopCandidates),
       stats: responseStats,
     };
   };

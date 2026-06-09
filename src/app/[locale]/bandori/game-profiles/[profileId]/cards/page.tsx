@@ -598,7 +598,7 @@ export default function GameProfileCardsPage({ params }: { params: Promise<{ pro
       ) : (
         <section className="mx-auto w-full max-w-[960px] overflow-visible">
           <div className="flex w-full flex-col gap-4">
-            <div className="overflow-hidden rounded-[28px] border border-white/65 bg-white/76 shadow-[0_22px_70px_rgba(128,91,0,0.16)] backdrop-blur-xl">
+            <div className="overflow-hidden rounded-[28px] border border-white/65 bg-[#fffef4] shadow-[0_22px_70px_rgba(128,91,0,0.16)]">
               <div className="flex flex-col gap-4 border-b border-amber-200/80 bg-[#fff6b8]/70 px-4 py-4 lg:flex-row lg:items-center lg:justify-between">
                 <div>
                   <h2 className="text-2xl font-black text-slate-900">卡牌资料工作台</h2>
