@@ -1,6 +1,6 @@
 # Medley 40/40 Exact Roadmap
 
-Last updated: 2026-06-09 04:54 CST
+Last updated: 2026-06-09 08:27 CST
 
 This file is the persistent working note for the current medley optimizer goal.
 Keep it current before and after benchmark runs or proof-path changes, so future
@@ -56,9 +56,29 @@ Current clean pinned 2026-06-08 baseline:
   - `P07:260`: gap `296599`, `memory-soft-limit`, peak `4206 MiB`.
   - `P08:244`: gap `489745`, `candidate-fill-generator-aborted`, peak `4207 MiB`.
 
-The `37/40` stage gate failed. The next practical stage target is to convert at
-least two of these five bounded rows without regressing any near-boundary exact
-row, especially `P08:260`, `P10:260`, `P08:323`, and `P10:244`.
+Current 2026-06-09 checkpoint:
+
+- Report:
+  `documents/bandori-team-builder/medley-40-exact-report-2026-06-09-001029.md`
+- Raw result:
+  `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-09T00-10-29-221Z.json`
+- Branch/commit: `dev/medley-greedy-seed-acceptance` / `edf3879`.
+- Result: `37/40` exact, `3` bounded, `0` failed subprocesses, no process OOM.
+- Bounded-gap total: `1274272`.
+- Elapsed median/P95/max: `18406ms` / `37598ms` / `39932ms`.
+- Peak sampled heap: `4203 MiB`.
+- Converted from the clean pinned baseline: `P07:244` and `P08:244`.
+- Remaining bounded rows:
+  - `P03:260`: gap `370472`, controlled root slot-boundary event skip,
+    peak `1979 MiB`, no timeout and no memory limit.
+  - `P06:323`: gap `607201`, controlled large-gap event skip, peak
+    `1273 MiB`, no timeout and no memory limit.
+  - `P07:260`: gap `296599`, `candidate-fill-generator-aborted`, peak
+    `4203 MiB`, `memoryLimited=true`.
+
+The `37/40` checkpoint is now stable under the current memory gate. The active
+stage target remains `38/40` exact; the next conversion target is `P07:260`
+because it is now the only remaining memory-limited bounded row.
 
 2026-06-08 checkpoint toward the `38/40` stage:
 
@@ -564,26 +584,22 @@ Each patch must pass:
 
 The next actionable step is not another seed experiment. It is:
 
-1. Baseline equivalence has been restored after restoring the active
-   `bestdori-cache` checkpoint. Keep the restored cache in place for all
-   acceptance and hard-case diagnostics unless a run explicitly records a new
-   cache checkpoint.
-2. Implement a controller-safe low-memory exact-join proof path focused on
-   `P07:244`, `P03:260`, `P07:260`, and `P08:244`: use the clean baseline and
-   telemetry counters first. The next viable patch must reduce exact slot
-   candidate / pair frontier residency without lowering proof strength or
-   changing controller route. Simple memory-limit bumps, proof-order tuning,
-   pair-refine target changes, and cache clearing have all failed.
-3. For `P06:323`, do not spend the next iteration on slot proof cutoff. If it
-   is targeted, build a low-memory initial-candidate fallback that can return a
-   proof-relevant upper or partial frontier when node expansion hits the soft
-   limit.
-4. For generator/candidate memory, compact node representation has now been
-   tried and did not move the hard cases. The next generic implementation
-   candidate is compact or streamed exact candidate/frontier data: reduce
-   duplicate result/card-id/pair-query residency while preserving deterministic
-   candidate order, incumbent score quality, and exact upper semantics.
-5. Re-run the 5 bounded rows plus the 4 guardrail exact rows after the next
-   candidate/frontier patch.
-6. If at least two bounded rows convert and guardrails stay exact, re-run the
-   full isolated 40-case matrix and generate another timestamped report.
+1. Treat the `37/40` run from `2026-06-09T00-10-29-221Z` as the current pinned
+   checkpoint for the branch. Do not compare new patches only against the older
+   `35/40` clean baseline.
+2. Target `P07:260` first for the `38/40` stage. It is the only remaining
+   memory-limited bounded row in the new checkpoint and still aborts in
+   `candidate-fill-generator-aborted`.
+3. Keep `P03:260` and `P06:323` as bounded-control guardrails. Future patches
+   must not widen their gaps or reintroduce the high-memory proof attempts that
+   the current controller guards avoided.
+4. The next generic implementation candidate is compact or streamed exact
+   candidate/frontier data for candidate-fill generator aborts, especially the
+   `P07:260` pair/candidate materialization path. Avoid another broad
+   skip/seed/controller patch unless proof-ledger evidence shows it closes
+   `P07:260` without reducing proof strength elsewhere.
+5. Re-run at least this guard set after the next patch:
+   `P07:260`, `P07:244`, `P08:244`, `P03:260`, `P06:323`, `P08:323`,
+   `P10:244`, and `P10:260`.
+6. If `P07:260` converts and the guard set does not regress, re-run the full
+   isolated 40-case matrix and generate another timestamped report.
