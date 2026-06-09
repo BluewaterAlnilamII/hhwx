@@ -124,6 +124,7 @@ const MEDLEY_SAME_COARSE_FRONTIER_PROOF_TARGET_MIN_REMAINING_MS = 120_000;
 const MEDLEY_SAME_COARSE_FRONTIER_PROOF_TARGET_MIN_ROOT_DELTA = 350_000;
 const BYTES_PER_MIB = 1024 * 1024;
 const MEMORY_SOFT_LIMIT_CHECK_INTERVAL_MS = 50;
+const MEDLEY_PROGRESS_CHECK_INTERVAL_MS = 250;
 const RUNTIME_HEAP_LIMIT_RATIO = 0.65;
 const MEDLEY_NODE_AUTO_MEMORY_SOFT_LIMIT_MIB = 4_200;
 const MEDLEY_SAME_COARSE_MEMORY_SKIP_SOFT_LIMIT_MARGIN_MIB = 1_200;
@@ -1093,6 +1094,60 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
       ? markMemoryLimited()
       : false;
   };
+  const progressOptions = input.progress;
+  const progressInitialDelayMs = Math.max(0, Math.trunc(progressOptions?.initialDelayMs ?? 10_000));
+  const progressMinIntervalMs = Math.max(0, Math.trunc(progressOptions?.scoreUpdateMinIntervalMs ?? 5_000));
+  let didEmitInitialProgress = false;
+  let lastProgressCheckAt = Number.NEGATIVE_INFINITY;
+  let lastProgressEmittedAt = Number.NEGATIVE_INFINITY;
+  let lastProgressScore = Number.NEGATIVE_INFINITY;
+  const maybeEmitMedleyProgress = (force = false): void => {
+    if (!progressOptions || results.length === 0) {
+      return;
+    }
+    const now = performance.now();
+    if (!force && now - lastProgressCheckAt < MEDLEY_PROGRESS_CHECK_INTERVAL_MS) {
+      return;
+    }
+    lastProgressCheckAt = now;
+    const elapsedSinceStartMs = now - startedAt;
+    if (!didEmitInitialProgress && elapsedSinceStartMs < progressInitialDelayMs) {
+      return;
+    }
+    const currentScore = results[0]?.score;
+    if (currentScore === undefined) {
+      return;
+    }
+    const hasScoreImprovedSinceLastProgress = currentScore > lastProgressScore;
+    if (
+      didEmitInitialProgress
+      && (
+        !hasScoreImprovedSinceLastProgress
+        || now - lastProgressEmittedAt < progressMinIntervalMs
+      )
+    ) {
+      return;
+    }
+
+    readUsedHeapBytes();
+    const elapsedMs = Math.round(elapsedSinceStartMs);
+    stats.elapsedMs = elapsedMs;
+    try {
+      progressOptions.onProgress(buildResponse({
+        ...stats,
+        elapsedMs,
+        isExhaustive: false,
+        searchMode: null,
+        observedScoreUpperBound: null,
+        observedScoreUpperBoundGap: null,
+      }));
+    } catch {
+      // Progress is a UI convenience and must not affect the proof search.
+    }
+    didEmitInitialProgress = true;
+    lastProgressEmittedAt = now;
+    lastProgressScore = currentScore;
+  };
   let bestObservedScore = Number.NEGATIVE_INFINITY;
   const deadlineCheckInterval = isLockedCoarseFilter && calculatedCards.length > 250 ? 256 : 2048;
   const recordBestScoreMilestone = (): void => {
@@ -1101,6 +1156,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
       bestObservedScore = score;
       profiling.timeToBestScoreMs = Math.round(performance.now() - startedAt);
     }
+    maybeEmitMedleyProgress();
   };
   const recordUpperReplay = (
     baselineUpperBound: number,
@@ -1191,7 +1247,11 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
       || enableConflictExactBnb
       || visitedBranchCount % deadlineCheckInterval === 0
     );
-    return shouldCheck && (performance.now() >= deadlineAt || isPastMemorySoftLimit());
+    if (!shouldCheck) {
+      return false;
+    }
+    maybeEmitMedleyProgress();
+    return performance.now() >= deadlineAt || isPastMemorySoftLimit();
   };
   const getRemainingSearchMs = (): number => Math.max(0, deadlineAt - performance.now());
 

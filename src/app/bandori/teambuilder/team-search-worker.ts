@@ -159,10 +159,21 @@ export type TeamSearchWorkerResponse =
     }
   | {
       requestId: string;
+      type: "search-progress";
+      ok: true;
+      partial: true;
+      result: BandoriMedleyTeamSearchResponse;
+    }
+  | {
+      requestId: string;
       type: "preload" | "search";
       ok: false;
       error: string;
     };
+
+type TeamSearchWorkerRunOptions = {
+  onMedleyProgress?: (result: BandoriMedleyTeamSearchResponse) => void;
+};
 
 const requestJsonCache = new Map<string, Promise<unknown>>();
 
@@ -595,7 +606,10 @@ async function preloadSearchData(request: TeamSearchWorkerPreloadRequest): Promi
   await Promise.all(preloadRequests);
 }
 
-async function runSearch(request: TeamSearchWorkerSearchRequest): Promise<BandoriTeamSearchResponse | BandoriMedleyTeamSearchResponse> {
+async function runSearch(
+  request: TeamSearchWorkerSearchRequest,
+  options: TeamSearchWorkerRunOptions = {},
+): Promise<BandoriTeamSearchResponse | BandoriMedleyTeamSearchResponse> {
   const songId = Math.trunc(request.song.songId);
   const medleySongs = request.event.eventType === "medley" ? request.songs?.slice(0, 3) ?? [] : [];
   const chartRequests = medleySongs.length > 0
@@ -733,11 +747,18 @@ async function runSearch(request: TeamSearchWorkerSearchRequest): Promise<Bandor
       server: request.profilePayload.bestdoriProfile.server,
       maxSearchDurationMs: Math.min(300000, Math.max(1000, request.calculation.maxSearchDurationMs)),
       coarseAreaItemFilter: { mode: "all" },
-          optimization: {
-            debugConfigurationTrace: true,
-            memorySoftLimitMiB: MEDLEY_FRONTEND_MEMORY_SOFT_LIMIT_MIB,
-          },
-        });
+      optimization: {
+        debugConfigurationTrace: true,
+        memorySoftLimitMiB: MEDLEY_FRONTEND_MEMORY_SOFT_LIMIT_MIB,
+      },
+      progress: options.onMedleyProgress
+        ? {
+          initialDelayMs: 10_000,
+          scoreUpdateMinIntervalMs: 5_000,
+          onProgress: options.onMedleyProgress,
+        }
+        : undefined,
+    });
   }
 
   return searchBandoriBestTeams({
@@ -791,7 +812,22 @@ self.onmessage = (event: MessageEvent<TeamSearchWorkerMessage>) => {
     return;
   }
 
-  void runSearch(event.data)
+  const shouldReportMedleyProgress = Boolean(
+    event.data.songs?.length === 3 && event.data.calculation.medleyMode !== "legacy-greedy-single",
+  );
+  void runSearch(event.data, {
+    onMedleyProgress: shouldReportMedleyProgress
+      ? (result) => {
+        self.postMessage({
+          requestId: event.data.requestId,
+          type: "search-progress",
+          ok: true,
+          partial: true,
+          result,
+        } satisfies TeamSearchWorkerResponse);
+      }
+      : undefined,
+  })
     .then((result) => {
       self.postMessage({ requestId: event.data.requestId, type: "search", ok: true, result } satisfies TeamSearchWorkerResponse);
     })

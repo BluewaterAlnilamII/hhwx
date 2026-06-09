@@ -110,6 +110,7 @@ type PreloadState = {
 type MedleySongSource = "custom" | "event-cn" | "event-jp";
 type MedleyCalculationMode = "maximize" | "legacy-greedy-single";
 type TeamBuilderSearchResponse = BandoriTeamSearchResponse | BandoriMedleyTeamSearchResponse;
+type TeamSearchWorkerProgressResponse = Extract<TeamSearchWorkerResponse, { type: "search-progress" }>;
 type MedleyResultInputSnapshot = {
   selectedEvent: BandoriEventSummary | null;
   medleySongIds: MedleySongIdTuple;
@@ -1216,6 +1217,15 @@ function buildBoundedEarlyStopReason(stats: TeamBuilderSearchResponse["stats"], 
   return reasons.join("；");
 }
 
+function formatSearchElapsedMs(elapsedMs: number | null | undefined): string | null {
+  if (elapsedMs === null || elapsedMs === undefined || !Number.isFinite(elapsedMs)) {
+    return null;
+  }
+  return elapsedMs >= 1000
+    ? `${(elapsedMs / 1000).toFixed(1)}s`
+    : `${Math.max(0, Math.round(elapsedMs))}ms`;
+}
+
 function buildSearchCompletionSummary(result: TeamBuilderSearchResponse, maxSearchDurationSeconds?: string): string {
   const { stats } = result;
   const isMedleyResult = isMedleySearchResponse(result);
@@ -1231,8 +1241,45 @@ function buildSearchCompletionSummary(result: TeamBuilderSearchResponse, maxSear
       parts.push(`gap ${formatNumber(stats.observedScoreUpperBoundGap)}`);
     }
   }
+  if (isMedleySearchResponse(result)) {
+    const medleyStats = result.stats;
+    const timeToBestScoreMs = medleyStats.profiling.timeToBestScoreMs;
+    const timeToBestLabel = formatSearchElapsedMs(timeToBestScoreMs);
+    if (timeToBestLabel && timeToBestScoreMs !== null) {
+      parts.push(`找到当前最佳队伍用时 ${timeToBestLabel}`);
+      const proofElapsedLabel = formatSearchElapsedMs(medleyStats.elapsedMs - timeToBestScoreMs);
+      if (proofElapsedLabel) {
+        parts.push(`证明/收敛额外用时 ${proofElapsedLabel}`);
+      }
+    }
+  }
   if (isMedleyResult && result.maxScoreCandidate) {
     parts.push("在最高平均分结果之外，有另外的最高最高分结果");
+  }
+  return parts.join("\n");
+}
+
+function buildSearchProgressSummary(result: TeamBuilderSearchResponse): string {
+  const { stats } = result;
+  const bestScore = result.results[0]?.score ?? null;
+  const elapsedLabel = formatSearchElapsedMs(stats.elapsedMs) ?? `${stats.elapsedMs}ms`;
+  const parts = [
+    bestScore !== null
+      ? `计算中：当前最佳分数 ${formatNumber(bestScore)}`
+      : "计算中：尚未找到可展示队伍",
+    `已用时 ${elapsedLabel}`,
+  ];
+  if (isMedleySearchResponse(result)) {
+    const medleyStats = result.stats;
+    const timeToBestLabel = formatSearchElapsedMs(medleyStats.profiling.timeToBestScoreMs);
+    if (timeToBestLabel) {
+      parts.push(`找到当前最佳队伍用时 ${timeToBestLabel}`);
+    }
+    const configurationProgressReason = buildConfigurationProgressReason(medleyStats);
+    if (configurationProgressReason) {
+      parts.push(configurationProgressReason);
+    }
+    parts.push("仍在证明是否存在更高分队伍");
   }
   return parts.join("\n");
 }
@@ -2422,6 +2469,7 @@ function TeamBuilderPanel() {
   const [calculationStartedAt, setCalculationStartedAt] = useState<number | null>(null);
   const [calculationNow, setCalculationNow] = useState<number | null>(null);
   const [result, setResult] = useState<TeamBuilderSearchResponse | null>(null);
+  const [resultIsPartial, setResultIsPartial] = useState(false);
   const [medleyResultInputSnapshot, setMedleyResultInputSnapshot] = useState<MedleyResultInputSnapshot | null>(null);
   const [resultError, setResultError] = useState("");
   const [debugInfoCopied, setDebugInfoCopied] = useState(false);
@@ -2447,6 +2495,7 @@ function TeamBuilderPanel() {
   const workerCallbacksRef = useRef(new Map<string, {
     resolve: (response: TeamSearchWorkerResponse) => void;
     reject: (error: Error) => void;
+    onProgress?: (response: TeamSearchWorkerProgressResponse) => void;
     cleanup?: () => void;
   }>());
   const profilePayloadCacheRef = useRef(new Map<string, UserGameProfilePayload>());
@@ -2869,6 +2918,10 @@ function TeamBuilderPanel() {
       if (!callback) {
         return;
       }
+      if (event.data.type === "search-progress") {
+        callback.onProgress?.(event.data);
+        return;
+      }
       workerCallbacksRef.current.delete(event.data.requestId);
       callback.cleanup?.();
       callback.resolve(event.data);
@@ -2891,7 +2944,10 @@ function TeamBuilderPanel() {
 
   const postTeamSearchWorkerMessage = useCallback((
     message: TeamSearchWorkerMessage,
-    options?: { memoryWatchdog?: boolean },
+    options?: {
+      memoryWatchdog?: boolean;
+      onProgress?: (response: TeamSearchWorkerProgressResponse) => void;
+    },
   ): Promise<TeamSearchWorkerResponse> => (
     new Promise((resolve, reject) => {
       const worker = getTeamSearchWorker();
@@ -2936,7 +2992,12 @@ function TeamBuilderPanel() {
         }, MEDLEY_BROWSER_MEMORY_WATCHDOG_INTERVAL_MS);
       }
 
-      workerCallbacksRef.current.set(message.requestId, { resolve, reject, cleanup });
+      workerCallbacksRef.current.set(message.requestId, {
+        resolve,
+        reject,
+        cleanup,
+        onProgress: options?.onProgress,
+      });
       worker.postMessage(message);
     })
   ), [getTeamSearchWorker]);
@@ -3358,8 +3419,10 @@ function TeamBuilderPanel() {
     setCalculationNow(startedAt);
     setResultError("");
     setResult(null);
+    setResultIsPartial(false);
     setMedleyResultInputSnapshot(null);
     setDebugInfoCopied(false);
+    const shouldShowMedleyProgress = isMedleyEvent && medleyCalculationMode === "maximize";
     try {
       const response = await postTeamSearchWorkerMessage({
         type: "search",
@@ -3412,7 +3475,17 @@ function TeamBuilderPanel() {
           ),
           medleyMode: isMedleyEvent ? medleyCalculationMode : undefined,
         },
-      }, { memoryWatchdog: isMedleyEvent });
+      }, {
+        memoryWatchdog: isMedleyEvent,
+        onProgress: shouldShowMedleyProgress
+          ? (progress) => {
+            setMedleyResultInputSnapshot(medleyInputSnapshot);
+            setResult(progress.result);
+            setResultIsPartial(true);
+            setActiveStep("calculate");
+          }
+          : undefined,
+      });
       if (!response.ok) {
         throw new Error(response.error);
       }
@@ -3424,9 +3497,12 @@ function TeamBuilderPanel() {
       setResultPlacement("1");
       setResultFestivalResult("win");
       setMedleyResultInputSnapshot(isMedleySearchResponse(response.result) ? medleyInputSnapshot : null);
+      setResultIsPartial(false);
       setResult(response.result);
       setActiveStep("calculate");
     } catch (calculateError) {
+      setResult(null);
+      setResultIsPartial(false);
       setResultError(calculateError instanceof Error ? calculateError.message : "计算失败");
     } finally {
       setSubmitting(false);
@@ -3787,9 +3863,15 @@ function TeamBuilderPanel() {
             ) : null}
             {resultError ? <div className="rounded-xl bg-red-50 p-3 text-center text-sm font-semibold text-red-600">{resultError}</div> : null}
             {result ? (
-              <div className="whitespace-pre-line rounded-xl bg-emerald-50 p-3 text-center text-sm font-semibold leading-6 text-emerald-600">
-                <CheckCircle2 className="mr-1 inline h-4 w-4" />
-                {buildSearchCompletionSummary(result, displayedMaxSearchDurationSeconds)}
+              <div className={`whitespace-pre-line rounded-xl p-3 text-center text-sm font-semibold leading-6 ${
+                resultIsPartial ? "bg-sky-50 text-sky-700" : "bg-emerald-50 text-emerald-600"
+              }`}>
+                {resultIsPartial
+                  ? <Loader2 className="mr-1 inline h-4 w-4 animate-spin" />
+                  : <CheckCircle2 className="mr-1 inline h-4 w-4" />}
+                {resultIsPartial
+                  ? buildSearchProgressSummary(result)
+                  : buildSearchCompletionSummary(result, displayedMaxSearchDurationSeconds)}
               </div>
             ) : null}
           </div>

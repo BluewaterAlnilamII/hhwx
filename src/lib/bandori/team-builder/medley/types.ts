@@ -117,6 +117,11 @@ export type BandoriMedleyTeamSearchInput = Omit<
   target?: "score";
   coarseAreaItemFilter?: BandoriMedleyAreaItemCoarseFilter;
   optimization?: BandoriMedleySearchOptimizationOptions;
+  progress?: {
+    initialDelayMs?: number;
+    scoreUpdateMinIntervalMs?: number;
+    onProgress: (response: BandoriMedleyTeamSearchResponse) => void;
+  };
 };
 
 export type BandoriMedleyTeamSearchResult = {
