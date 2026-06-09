@@ -103,12 +103,7 @@ import type {
   MedleySlotSearch,
   MedleyTeamCandidate,
 } from "../types";
-import type {
-  BandoriAreaItemConfiguration,
-  BandoriTeamSearchResult,
-  ScoreCalculationCache,
-  SearchCard,
-} from "@/lib/bandori/team-builder/core";
+import type { BandoriAreaItemConfiguration, BandoriTeamSearchResult, SearchCard } from "@/lib/bandori/team-builder/core";
 
 const MEDLEY_EXACT_JOIN_PREFIX_SEED_MIN_REMAINING_MS = 500;
 const MEDLEY_EXACT_JOIN_PREFIX_SEED_MIN_PROOF_BUDGET_MS = 30_000;
@@ -145,15 +140,6 @@ function findBestMedleyExactSlotCandidateLowMemory(
 ): { aborted: boolean; score: number | null } {
   const bannedCardIds = new Set<number>();
   const selectedCards: SearchCard[] = [];
-  const scoreCache: ScoreCalculationCache = {
-    judgeLists: slot.scoreCache.judgeLists,
-    innerScoreRates: slot.scoreCache.innerScoreRates,
-    baseScoresByChart: slot.scoreCache.baseScoresByChart,
-    noFloorBaseScoreRates: slot.scoreCache.noFloorBaseScoreRates,
-    skillMultiplierLists: slot.scoreCache.skillMultiplierLists,
-    noFloorSkillRates: slot.scoreCache.noFloorSkillRates,
-    resolvedSkills: slot.scoreCache.resolvedSkills,
-  };
   let bestScore = Number.NEGATIVE_INFINITY;
   let visitedNodeCount = 0;
   let aborted = false;
@@ -220,7 +206,7 @@ function findBestMedleyExactSlotCandidateLowMemory(
         configuration: slot.configuration,
         server,
         perfectRate,
-        scoreCache,
+        scoreCache: slot.scoreCache,
         comboOptions: slot.comboOptions,
         pruningThresholdResult: createMedleyExactCandidateSlotThresholdResult(scoreCutoff),
       });
