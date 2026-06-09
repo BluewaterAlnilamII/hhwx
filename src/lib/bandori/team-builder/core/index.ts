@@ -26,4 +26,10 @@ export {
   estimateSearchScopeScoreUpperBound,
 } from "./character-bounds";
 export { resolveBandoriTeamSearchEventMode, resolveBandoriTeamSearchUseFever } from "./events";
-export { evaluateTeam, evaluateMedleyScoreOnlyTeam, evaluateBandoriTeamByCardIds, createScoreCalculationCache } from "./team-evaluation";
+export {
+  evaluateTeam,
+  evaluateMedleyScoreOnlyTeam,
+  evaluateMedleyScoreOnlyTeamScore,
+  evaluateBandoriTeamByCardIds,
+  createScoreCalculationCache,
+} from "./team-evaluation";

@@ -9,7 +9,6 @@
 import {
   compareMedleyResultLike,
   evaluateMedleySlotCandidateWithCache,
-  pushMedleyCandidate,
   sortMedleyCandidates,
 } from "../candidates";
 import { getMedleyPruningThreshold } from "../configurations";
@@ -86,10 +85,10 @@ import {
 import {
   CHARACTER_MASK_SEGMENT_BITS,
   evaluateMedleyScoreOnlyTeam,
+  evaluateMedleyScoreOnlyTeamScore,
   estimateSearchScopeScoreUpperBound,
   hasCharacterIndexInMask,
 } from "@/lib/bandori/team-builder/core";
-import { getCardInstanceKeys } from "@/lib/bandori/team-builder/core/card-identity";
 import type {
   BandoriMedleyTeamSearchProfilingStats,
   BandoriMedleyTeamSearchResult,
@@ -138,10 +137,10 @@ function findBestMedleyExactSlotCandidateLowMemory(
   nodeSoftLimit: number,
   localDeadlineAt: number | null = null,
   shouldAbortLocalSearch: (() => boolean) | null = null,
-): { aborted: boolean; candidate: MedleyTeamCandidate | null } {
+): { aborted: boolean; score: number | null } {
   const bannedCardIds = new Set<number>();
   const selectedCards: SearchCard[] = [];
-  const bestCandidates: MedleyTeamCandidate[] = [];
+  let bestScore = Number.NEGATIVE_INFINITY;
   let visitedNodeCount = 0;
   let aborted = false;
 
@@ -181,7 +180,7 @@ function findBestMedleyExactSlotCandidateLowMemory(
     if (slot.searchCards.length - startIndex < remaining) {
       return;
     }
-    const scoreCutoff = bestCandidates[0]?.result.score ?? Number.NEGATIVE_INFINITY;
+    const scoreCutoff = bestScore;
     const upperBound = estimateMedleyExactSlotNodeUpperBound(
       slot,
       selectedCards,
@@ -200,7 +199,7 @@ function findBestMedleyExactSlotCandidateLowMemory(
     if (selectedCards.length === MEDLEY_TEAM_SIZE) {
       stats.enumeratedTeamCount += 1;
       profiling.teamEvaluationCacheMissCount += 1;
-      const result = evaluateMedleyScoreOnlyTeam({
+      const score = evaluateMedleyScoreOnlyTeamScore({
         cards: selectedCards,
         input: slot.input,
         chart: slot.chart,
@@ -212,15 +211,10 @@ function findBestMedleyExactSlotCandidateLowMemory(
         pruningThresholdResult: createMedleyExactCandidateSlotThresholdResult(scoreCutoff),
       });
       stats.evaluatedTeamCount += 1;
-      if (!result || result.score < scoreCutoff) {
+      if (score === null || score < scoreCutoff) {
         return;
       }
-      pushMedleyCandidate(bestCandidates, {
-        result,
-        cards: [...selectedCards],
-        cardIds: selectedCards.map((card) => card.cardId),
-        cardInstanceKeys: getCardInstanceKeys(selectedCards),
-      }, 1);
+      bestScore = score;
       return;
     }
 
@@ -252,7 +246,7 @@ function findBestMedleyExactSlotCandidateLowMemory(
   };
 
   visit(0, 0, 0, 0);
-  return { aborted, candidate: bestCandidates[0] ?? null };
+  return { aborted, score: Number.isFinite(bestScore) ? bestScore : null };
 }
 
 export function estimateMedleyExactSlotNodeUpperBound(
@@ -4442,8 +4436,8 @@ export function searchMedleyConfigurationByExactCandidateJoin(
       );
       if (lowMemoryTopCandidate.aborted) {
         topCandidate = generators[slotIndex].next();
-      } else if (lowMemoryTopCandidate.candidate) {
-        topCandidate = generators[slotIndex].next(lowMemoryTopCandidate.candidate.result.score);
+      } else if (lowMemoryTopCandidate.score !== null) {
+        topCandidate = generators[slotIndex].next(lowMemoryTopCandidate.score);
       }
     }
     profiling.exactCandidateJoinInitialCandidateElapsedMsBySlot[slotIndex] = (
