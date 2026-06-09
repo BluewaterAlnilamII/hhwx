@@ -3416,6 +3416,29 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
       finishConfigurationTrace("full-width-event-skip-seeding");
       continue;
     }
+    const bestScoreBeforeSeeding = results[0]?.score ?? Number.NEGATIVE_INFINITY;
+    const largeGapEventObservedGapBeforeSeeding = (
+      Number.isFinite(activeConfigurationObservedScoreUpperBound)
+      && Number.isFinite(bestScoreBeforeSeeding)
+        ? activeConfigurationObservedScoreUpperBound - bestScoreBeforeSeeding
+        : null
+    );
+    if (
+      hasEventBonus
+      && activeConfigurationObservedUpperBoundSource === "configuration-root"
+      && largeGapEventObservedGapBeforeSeeding !== null
+      && largeGapEventObservedGapBeforeSeeding >= MEDLEY_LARGE_GAP_EVENT_SKIP_PROOF_MIN_GAP
+    ) {
+      if (traceEntry) {
+        traceEntry.largeGapEventSkipSeeding = true;
+        traceEntry.bestScoreAfterSeeding = results[0]?.score ?? null;
+        traceEntry.largeGapEventSkipProofGap = Math.ceil(largeGapEventObservedGapBeforeSeeding);
+      }
+      didLeaveUnclosedAreaItemConfiguration = true;
+      rememberActiveConfigurationUpperBound();
+      finishConfigurationTrace("large-gap-event-skip-seeding");
+      continue;
+    }
 
     // Incumbent seeding happens before DFS so that upper-bound pruning has a real threshold.
     // These passes may improve runtime, but they are never treated as proof by themselves.
