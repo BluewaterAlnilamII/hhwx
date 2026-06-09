@@ -1,6 +1,6 @@
 # Medley 40/40 Exact Roadmap
 
-Last updated: 2026-06-09 09:35 CST
+Last updated: 2026-06-09 11:56 CST
 
 This file is the persistent working note for the current medley optimizer goal.
 Keep it current before and after benchmark runs or proof-path changes, so future
@@ -14,7 +14,9 @@ Primary target:
 - Events: `none`, `244`, `260`, and `323`.
 - Matrix size: `10 profiles * 4 events = 40 all-scope cases`.
 - Search budget: `300000ms` per case.
-- Active stage gate: at least `38/40` exact, with no failed run and no OOM.
+- Current pinned stage gate: `38/40` exact, with no failed run and no OOM.
+- Next working stage gate: at least `39/40` exact while preserving the pinned
+  `38/40` checkpoint.
 - Final success condition: `40/40` exact, with no failed run and no OOM.
 
 Out of scope for the primary target:
@@ -76,9 +78,45 @@ Current 2026-06-09 checkpoint:
   - `P07:260`: gap `296599`, `candidate-fill-generator-aborted`, peak
     `4203 MiB`, `memoryLimited=true`.
 
-The `37/40` checkpoint is now stable under the current memory gate. The active
-stage target remains `38/40` exact; the next conversion target is `P07:260`
-because it is now the only remaining memory-limited bounded row.
+The `37/40` checkpoint is retained as historical evidence. It is superseded by
+the `38/40` checkpoint below; compare new patches against the newer checkpoint
+unless specifically investigating the `P07:260` conversion.
+
+Current pinned 2026-06-09 `38/40` checkpoint:
+
+- Report:
+  `documents/bandori-team-builder/medley-40-exact-report-2026-06-09-111704.md`
+- Raw result:
+  `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-09T03-17-04-125Z.json`
+- Rejected same-process report:
+  `documents/bandori-team-builder/medley-40-exact-report-2026-06-09-104805-rejected.md`
+- Branch/commit: `dev/medley-greedy-seed-acceptance` / `6d72c48`.
+- Runner: process-per-case isolated runner, `--expose-gc`, all-scope only.
+- Optimization: `memorySoftLimitMiB=4488`, `exactNodeSoftLimit=5000000`,
+  `skipConfigurationSeedingWhenMemoryHeadroomBelowMiB=400`,
+  `lowMemoryInitialCandidateSyncMaxSameCoarseProofElapsedMs=60000`,
+  `lowMemoryInitialCandidateSyncMinMemoryHeadroomMiB=0`,
+  `lowMemoryInitialCandidateSyncLocalAbortOnly=true`,
+  `lowMemoryInitialCandidateSyncLightUpper=true`,
+  `lowMemoryInitialCandidateSyncTimeboxMs=60000`,
+  `enableLowMemoryInitialCandidateSyncGcProbe=true`, and
+  `debugConfigurationTrace=true`.
+- Result: `38/40` exact, `2` bounded, `0` failed subprocesses, no process OOM.
+- Bounded-gap total: `977673`.
+- Elapsed median/P95/max: `40626ms` / `67744ms` / `198562ms`.
+- Peak sampled heap: `4169 MiB`.
+- Converted from the `37/40` checkpoint: `P07:260`.
+- Remaining bounded rows:
+  - `P03:260`: gap `370472`, `full-width-event-skip-seeding`, first
+    unclosed configuration `RaiseASuilen/happy/performance`, effective upper
+    `9584318`, no timeout and no memory limit.
+  - `P06:323`: gap `607201`, `large-gap-event-skip-seeding`, first unclosed
+    configuration `PastelPalettes/cool/performance`, effective upper
+    `10094162`, no timeout and no memory limit.
+
+The active `38/40` stage target is achieved. The next working target is
+`39/40` exact, with `P03:260` and `P06:323` as the only remaining exact
+blockers.
 
 2026-06-08 checkpoint toward the `38/40` stage:
 
@@ -140,13 +178,21 @@ Rejected/diagnostic 2026-06-08 evidence:
   `P03:260`, later rows became invalid empty/timed-out results.
 - Full proof ledger should be collected only on bounded cases in isolated
   processes, or after memory-safe trace sampling exists.
+- The same-process 2026-06-09 run with the `P07:260` conversion options is
+  explicitly rejected:
+  `documents/bandori-team-builder/medley-40-exact-report-2026-06-09-104805-rejected.md`.
+  It used the correct `P01`-`P10` fixture, but heap carryover pushed later rows
+  into immediate memory-limited bounded states. Do not treat its `24/40` exact
+  result as algorithm-quality evidence.
 
 Current acceptance standard:
 
-- Minimum stage pass: `>=38/40` exact.
+- Current pinned checkpoint: `38/40` exact.
+- Next stage pass: `>=39/40` exact.
 - Final target: `40/40` exact.
 - Bounded-gap total must not regress against the latest clean pinned-fixture
   baseline.
+- New patches must not regress below the pinned `38/40` checkpoint.
 - Failed runs and OOM are always failures.
 - Peak working set must not exceed the latest clean pinned-fixture baseline by
   more than the active memory gate.
@@ -525,10 +571,8 @@ Phase 1: memory-capped exact-join proof patch.
 
 2026-06-09 P07:260 low-memory proof checkpoint:
 
-- `P07:260` is now the primary 38/40 conversion target because `P07:244` and
-  `P08:244` converted in the current 37/40 checkpoint, while `P03:260` and
-  `P06:323` are controlled root-skip cases rather than memory-limited proof
-  attempts.
+- This section is retained as the historical path that produced the current
+  `38/40` checkpoint. `P07:260` is no longer the active conversion target.
 - High-memory diagnostic with `memorySoftLimitMiB=7900`,
   same-coarse threshold `60000`, and min headroom `100` proved `P07:260`
   exact in `82533ms`, peak `7446 MiB`, `completedConfigurations=21`,
@@ -630,22 +674,24 @@ Each patch must pass:
 
 The next actionable step is not another seed experiment. It is:
 
-1. Treat the `37/40` run from `2026-06-09T00-10-29-221Z` as the current pinned
-   checkpoint for the branch. Do not compare new patches only against the older
-   `35/40` clean baseline.
-2. Target `P07:260` first for the `38/40` stage. It is the only remaining
-   memory-limited bounded row in the new checkpoint and still aborts in
-   `candidate-fill-generator-aborted`.
-3. Keep `P03:260` and `P06:323` as bounded-control guardrails. Future patches
-   must not widen their gaps or reintroduce the high-memory proof attempts that
-   the current controller guards avoided.
-4. The next generic implementation candidate is compact or streamed exact
-   candidate/frontier data for candidate-fill generator aborts, especially the
-   `P07:260` pair/candidate materialization path. Avoid another broad
-   skip/seed/controller patch unless proof-ledger evidence shows it closes
-   `P07:260` without reducing proof strength elsewhere.
-5. Re-run at least this guard set after the next patch:
-   `P07:260`, `P07:244`, `P08:244`, `P03:260`, `P06:323`, `P08:323`,
-   `P10:244`, and `P10:260`.
-6. If `P07:260` converts and the guard set does not regress, re-run the full
-   isolated 40-case matrix and generate another timestamped report.
+1. Treat the `38/40` run from `2026-06-09T03-17-04-125Z` as the current pinned
+   checkpoint for the branch. New patches must not regress below it.
+2. Target `39/40` next. The only remaining blockers are `P03:260` and
+   `P06:323`.
+3. Do not solve the remaining rows with broader seeding or warmup. Both rows
+   are now controlled remembered-root upper gaps with no timeout, no memory
+   limit, and no exact-join calls.
+4. The next generic implementation candidate is a bounded, memory-safe
+   event/root frontier proof probe. It should attempt to close or tighten the
+   first remembered unclosed configuration:
+   `RaiseASuilen/happy/performance` for `P03:260` and
+   `PastelPalettes/cool/performance` for `P06:323`.
+5. The probe must be opt-in first, must not materialize the full exact-candidate
+   frontier, and must report proof-ledger deltas for upper reduction, elapsed
+   time, and memory.
+6. Re-run at least this guard set after the next patch:
+   `P03:260`, `P06:323`, `P07:260`, `P08:323`, `P10:244`, `P10:260`,
+   `P07:244`, and `P08:244`.
+7. If either remaining blocker converts and the guard set does not regress,
+   re-run the full isolated 40-case matrix and generate another timestamped
+   report.
