@@ -778,6 +778,16 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
   const parsedConfigurationSeedPassDurationMs = optimization.configurationSeedPassDurationMs !== undefined
     ? Math.trunc(optimization.configurationSeedPassDurationMs)
     : Number.NaN;
+  const parsedSkipConfigurationSeedingWhenMemoryHeadroomBelowMiB = (
+    optimization.skipConfigurationSeedingWhenMemoryHeadroomBelowMiB !== undefined
+      ? Math.trunc(optimization.skipConfigurationSeedingWhenMemoryHeadroomBelowMiB)
+      : Number.NaN
+  );
+  const skipConfigurationSeedingWhenMemoryHeadroomBelowMiB = Number.isFinite(
+    parsedSkipConfigurationSeedingWhenMemoryHeadroomBelowMiB,
+  )
+    ? Math.max(0, parsedSkipConfigurationSeedingWhenMemoryHeadroomBelowMiB)
+    : null;
   const parsedMemorySoftLimitMiB = optimization.memorySoftLimitMiB !== undefined
     ? Math.trunc(optimization.memorySoftLimitMiB)
     : Number.NaN;
@@ -3504,99 +3514,126 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
       continue;
     }
 
-    // Incumbent seeding happens before DFS so that upper-bound pruning has a real threshold.
-    // These passes may improve runtime, but they are never treated as proof by themselves.
-    slotCandidateLimits = getMedleySlotCandidateLimits(slots, calculatedCards.length);
-    if (enableAnchorSlotUpper) {
-      slotCandidateLimits = slotCandidateLimits.map((limit) => Math.max(limit, anchorCandidateLimit));
-    }
-    slotCandidates = slots.map((slot, slotIndex) => collectTopMedleySlotTeams(
-      slot,
-      slotCandidateLimits[slotIndex],
-      server,
-      perfectRate,
-      stats,
-      isPastDeadline,
-      () => undefined,
-      profiling,
-    ));
-    if (!stats.timedOut && slotCandidates.every((candidates) => candidates.length > 0)) {
-      seedMedleyResultsFromSlotCandidates(
-        results,
-        resultLimit,
-        slots,
-        slotCandidates,
-        configuration,
-        observeEvaluatedMedleyResult,
-      );
-      optimizeCurrentMedleySeedResults(
-        results,
-        resultLimit,
-        slots,
-        configuration,
-        server,
-        perfectRate,
-        stats,
-        profiling,
-        fixedCardSetOptimizationCache,
-        observeEvaluatedMedleyResult,
-      );
-      recordBestScoreMilestone();
-    }
-    if (traceEntry) {
-      traceEntry.afterSlotCandidateSeedingMs = Math.round(performance.now() - traceStartedAt);
-      traceEntry.bestScoreAfterSlotCandidateSeeding = results[0]?.score ?? null;
-    }
-    if (stats.timedOut) {
-      finishConfigurationTrace("slot-candidate-seeding-timeout");
-      break;
-    }
-
-    const seedSlotIndices = getMedleyGreedySeedSlotIndices(slots);
-    seedMedleyResultsFromGreedyOrders(
-      results,
-      resultLimit,
-      slots,
-      configuration,
-      server,
-      perfectRate,
-      stats,
-      isPastDeadline,
-      profiling,
-      bestSlotTeamCache,
-      fixedCardSetOptimizationCache,
-      buildPermutations(seedSlotIndices),
-      true,
-      observeEvaluatedMedleyResult,
+    const configurationSeedingUsedHeapBytes = readUsedHeapBytes();
+    const configurationSeedingUsedMiB = configurationSeedingUsedHeapBytes !== null
+      ? Math.ceil(configurationSeedingUsedHeapBytes / BYTES_PER_MIB)
+      : null;
+    const configurationSeedingSoftLimitMiB = getEffectiveMemorySoftLimitMiB();
+    const configurationSeedingMemoryHeadroomMiB = (
+      configurationSeedingSoftLimitMiB !== null
+      && configurationSeedingUsedMiB !== null
+    )
+      ? configurationSeedingSoftLimitMiB - configurationSeedingUsedMiB
+      : null;
+    const shouldSkipConfigurationSeedingForMemory = (
+      skipConfigurationSeedingWhenMemoryHeadroomBelowMiB !== null
+      && configurationSeedingMemoryHeadroomMiB !== null
+      && configurationSeedingMemoryHeadroomMiB < skipConfigurationSeedingWhenMemoryHeadroomBelowMiB
     );
-    recordBestScoreMilestone();
     if (traceEntry) {
-      traceEntry.afterGreedySeedingMs = Math.round(performance.now() - traceStartedAt);
-      traceEntry.bestScoreAfterGreedySeeding = results[0]?.score ?? null;
+      traceEntry.configurationSeedingUsedMiB = configurationSeedingUsedMiB;
+      traceEntry.configurationSeedingSoftLimitMiB = configurationSeedingSoftLimitMiB;
+      traceEntry.configurationSeedingMemoryHeadroomMiB = configurationSeedingMemoryHeadroomMiB;
+      traceEntry.skipConfigurationSeedingWhenMemoryHeadroomBelowMiB = (
+        skipConfigurationSeedingWhenMemoryHeadroomBelowMiB
+      );
+      traceEntry.skipConfigurationSeedingForMemory = shouldSkipConfigurationSeedingForMemory;
     }
-    if (stats.timedOut) {
-      finishConfigurationTrace("greedy-seeding-timeout");
-      break;
-    }
+    if (!shouldSkipConfigurationSeedingForMemory) {
+      // Incumbent seeding happens before DFS so that upper-bound pruning has a real threshold.
+      // These passes may improve runtime, but they are never treated as proof by themselves.
+      slotCandidateLimits = getMedleySlotCandidateLimits(slots, calculatedCards.length);
+      if (enableAnchorSlotUpper) {
+        slotCandidateLimits = slotCandidateLimits.map((limit) => Math.max(limit, anchorCandidateLimit));
+      }
+      slotCandidates = slots.map((slot, slotIndex) => collectTopMedleySlotTeams(
+        slot,
+        slotCandidateLimits[slotIndex],
+        server,
+        perfectRate,
+        stats,
+        isPastDeadline,
+        () => undefined,
+        profiling,
+      ));
+      if (!stats.timedOut && slotCandidates.every((candidates) => candidates.length > 0)) {
+        seedMedleyResultsFromSlotCandidates(
+          results,
+          resultLimit,
+          slots,
+          slotCandidates,
+          configuration,
+          observeEvaluatedMedleyResult,
+        );
+        optimizeCurrentMedleySeedResults(
+          results,
+          resultLimit,
+          slots,
+          configuration,
+          server,
+          perfectRate,
+          stats,
+          profiling,
+          fixedCardSetOptimizationCache,
+          observeEvaluatedMedleyResult,
+        );
+        recordBestScoreMilestone();
+      }
+      if (traceEntry) {
+        traceEntry.afterSlotCandidateSeedingMs = Math.round(performance.now() - traceStartedAt);
+        traceEntry.bestScoreAfterSlotCandidateSeeding = results[0]?.score ?? null;
+      }
+      if (stats.timedOut) {
+        finishConfigurationTrace("slot-candidate-seeding-timeout");
+        break;
+      }
 
-    if (
-      (calculatedCards.length <= 250 || maxSearchDurationMs >= 30000 || isLockedCoarseFilter)
-      && results.length > 0
-    ) {
-      optimizeMedleySeedNeighborhood(
+      const seedSlotIndices = getMedleyGreedySeedSlotIndices(slots);
+      seedMedleyResultsFromGreedyOrders(
         results,
         resultLimit,
         slots,
-        slotCandidates,
         configuration,
         server,
         perfectRate,
         stats,
+        isPastDeadline,
         profiling,
-        maxSearchDurationMs >= 30000 ? 3 : 2,
+        bestSlotTeamCache,
+        fixedCardSetOptimizationCache,
+        buildPermutations(seedSlotIndices),
+        true,
         observeEvaluatedMedleyResult,
       );
       recordBestScoreMilestone();
+      if (traceEntry) {
+        traceEntry.afterGreedySeedingMs = Math.round(performance.now() - traceStartedAt);
+        traceEntry.bestScoreAfterGreedySeeding = results[0]?.score ?? null;
+      }
+      if (stats.timedOut) {
+        finishConfigurationTrace("greedy-seeding-timeout");
+        break;
+      }
+
+      if (
+        (calculatedCards.length <= 250 || maxSearchDurationMs >= 30000 || isLockedCoarseFilter)
+        && results.length > 0
+      ) {
+        optimizeMedleySeedNeighborhood(
+          results,
+          resultLimit,
+          slots,
+          slotCandidates,
+          configuration,
+          server,
+          perfectRate,
+          stats,
+          profiling,
+          maxSearchDurationMs >= 30000 ? 3 : 2,
+          observeEvaluatedMedleyResult,
+        );
+        recordBestScoreMilestone();
+      }
     }
     if (traceEntry) {
       traceEntry.afterSeedingMs = Math.round(performance.now() - traceStartedAt);

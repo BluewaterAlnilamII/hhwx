@@ -67,6 +67,7 @@ export type BandoriMedleySearchOptimizationOptions = {
   conflictExactNodeLimit?: number;
   conflictSlotSolveNodeLimit?: number;
   configurationSeedPassDurationMs?: number;
+  skipConfigurationSeedingWhenMemoryHeadroomBelowMiB?: number;
   enableExactJoinPrefixSeed?: boolean;
   exactJoinPrefixSeedForceNoop?: boolean;
   exactJoinPrefixSeedGuardOnly?: boolean;
