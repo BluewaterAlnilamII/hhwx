@@ -1,6 +1,6 @@
 # Medley 40/40 Exact Roadmap
 
-Last updated: 2026-06-09 23:07 CST
+Last updated: 2026-06-09 23:24 CST
 
 This file is the persistent working note for the current medley optimizer goal.
 Keep it current before and after benchmark runs or proof-path changes, so future
@@ -1148,3 +1148,11 @@ Updated conclusion:
   `technique`, then failed on `visual`. This rules out direct-candidate result
   materialization as the primary cause; the remaining blocker is the third
   same-coarse low-memory slot-top proof itself.
+- Rejected diagnostic: disabling score-cache writes during low-memory
+  initial-candidate
+  (`temp/bandori-team-builder/real-profile-medley-scope-matrix-2026-06-09T14-45-24-172Z.json`).
+  It improved P03 high-limit no-direct elapsed from `120575ms` to `99503ms`, but
+  stayed bounded with the same gap `354570`, `timedOut=true`,
+  `memoryLimited=true`, peak `4771 MiB`, and final abort `initial-candidate` on
+  `RaiseASuilen/happy/visual`. The code was reverted. The cache is not the
+  primary memory wall for this blocker.
