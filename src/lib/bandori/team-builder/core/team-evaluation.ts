@@ -7,7 +7,7 @@
 import { calculateBandoriCardEventBonus, calculateBandoriSelectedAreaItemPower } from "@/lib/bandori-team-calculator";
 import { buildCalculatedCards, buildSearchCardsForConfiguration, buildSearchCardSkillRateProfiles, createSupportBandContext, resolveSupportBandForTeam, toAreaItemStateMap } from "./cards";
 import { getCachedPreparedChart } from "./chart";
-import { calculateBestMultiLiveScoreForSkillWindows, calculateBestScoreForNonOverlappingSkillWindows, calculateBestScoreForNonOverlappingSkillWindowsTargetOnly, type SkillWindowScoreResult } from "./scoring";
+import { calculateAverageScoreForNonOverlappingSkillWindowsTargetOnly, calculateBestMultiLiveScoreForSkillWindows, calculateBestScoreForNonOverlappingSkillWindows, calculateBestScoreForNonOverlappingSkillWindowsTargetOnly, type SkillWindowScoreResult } from "./scoring";
 import { calculateChallengeLiveEventPoint, calculateChallengeLiveEventPointBase, calculateEventPoint, calculateEventPointBeforeMultiplier, calculateRoomScore, createEventPointOptions, getSearchCardsTeamContext, getEventPointMultiplier, getTargetValue, isChallengeLiveEventPointInput, normalizeSearchEventType, normalizeSearchLiveType, normalizeSearchTarget, resolveCachedBandoriSkill, resolveEncoreSkill, resolveOtherPlayerSkills, resolveBandoriTeamSearchEventMode } from "./events";
 import { isSearchUpperBoundBelowResultThreshold } from "./character-bounds";
 import { getCardInstanceKey } from "./card-identity";
@@ -170,7 +170,7 @@ export function evaluateMedleyScoreOnlyTeamScore(options: EvaluateMedleyScoreOnl
     return resolveCachedBandoriSkill(card.skillId, skill, card.skillLevel, context, server, scoreCache);
   });
   const totalPower = Math.floor(cards.reduce((sum, card) => sum + card.effectivePower, 0));
-  const best = calculateBestScoreForNonOverlappingSkillWindowsTargetOnly(
+  const averageScore = calculateAverageScoreForNonOverlappingSkillWindowsTargetOnly(
     chart,
     totalPower,
     resolvedSkills,
@@ -179,17 +179,17 @@ export function evaluateMedleyScoreOnlyTeamScore(options: EvaluateMedleyScoreOnl
     comboOptions,
   );
 
-  if (!Number.isFinite(best.score)) {
+  if (!Number.isFinite(averageScore)) {
     return null;
   }
   if (
     pruningThresholdResult
-    && isSearchUpperBoundBelowResultThreshold(best.averageScore, best.averageScore, pruningThresholdResult)
+    && isSearchUpperBoundBelowResultThreshold(averageScore, averageScore, pruningThresholdResult)
   ) {
     return null;
   }
 
-  return best.averageScore;
+  return averageScore;
 }
 
 export function evaluateTeam(options: EvaluateTeamOptions): BandoriTeamSearchResult | null {
