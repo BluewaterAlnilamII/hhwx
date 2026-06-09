@@ -395,7 +395,7 @@ export default function CalendarGrid({ events, holidayData }: CalendarGridProps)
       </div>
 
       {/* 日历网格 */}
-      <div className="overflow-hidden rounded-[24px] border border-white/70 bg-white/72 backdrop-blur-md shadow-[0_22px_60px_rgba(15,23,42,0.12)] ring-1 ring-white/60">
+      <div className="overflow-hidden rounded-[24px] border border-white/70 bg-[#fffef4] shadow-[0_22px_60px_rgba(15,23,42,0.12)] ring-1 ring-white/60">
         {/* 星期头 */}
         <div className="grid grid-cols-7 border-b border-gray-200/70 bg-gradient-to-r from-white/90 via-white/75 to-white/90">
           {WEEKDAY_LABELS.map((label, i) => (

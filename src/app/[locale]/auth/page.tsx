@@ -16,7 +16,7 @@ interface AuthPageFallbackProps {
 function AuthPageFallback({ section, title, description }: AuthPageFallbackProps) {
   return (
     <main className="relative min-h-full px-4 py-16 sm:px-6 lg:px-8">
-      <div className="mx-auto max-w-xl rounded-[32px] border border-white/50 bg-white/80 p-8 shadow-[0_20px_80px_rgba(15,23,42,0.14)] backdrop-blur-xl">
+      <div className="mx-auto max-w-xl rounded-[32px] border border-white/50 bg-[#fffef4] p-8 shadow-[0_20px_80px_rgba(15,23,42,0.14)]">
         <div className="mb-6 text-center">
           <p className="text-sm font-semibold uppercase tracking-[0.3em] text-sky-500">{section}</p>
           <h1 className="mt-3 text-3xl font-bold text-slate-900">{title}</h1>

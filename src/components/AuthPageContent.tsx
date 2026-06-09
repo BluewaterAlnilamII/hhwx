@@ -350,7 +350,7 @@ export default function AuthPageContent() {
   return (
     <main className="relative min-h-full px-4 py-10 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-xl">
-        <section className="rounded-[32px] border border-white/60 bg-white/85 p-8 shadow-[0_24px_80px_rgba(15,23,42,0.12)] backdrop-blur-xl">
+        <section className="rounded-[32px] border border-white/60 bg-[#fffef4] p-8 shadow-[0_24px_80px_rgba(15,23,42,0.12)]">
           <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-200 pb-5">
             <div>
               <p className="text-sm font-semibold uppercase tracking-[0.28em] text-sky-500">{t("section")}</p>

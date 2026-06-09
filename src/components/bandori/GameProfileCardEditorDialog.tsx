@@ -177,7 +177,7 @@ export default function GameProfileCardEditorDialog({
   }
 
   const dialog = (
-    <div className="fixed inset-0 z-[1100] flex h-dvh items-center justify-center overflow-hidden overscroll-contain bg-slate-950/72 p-3 backdrop-blur-md sm:p-6" role="dialog" aria-modal="true" aria-labelledby="card-editor-title">
+    <div className="fixed inset-0 z-[1100] flex h-dvh items-center justify-center overflow-hidden overscroll-contain bg-slate-950/55 p-3 sm:p-6" role="dialog" aria-modal="true" aria-labelledby="card-editor-title">
       <div className="flex max-h-[calc(100dvh-1.5rem)] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-white/90 bg-white shadow-[0_30px_100px_rgba(15,23,42,0.42)] sm:max-h-[calc(100dvh-3rem)] sm:rounded-[28px]">
         <header className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-200 bg-white px-5 py-3 sm:px-6 sm:py-4">
           <div>

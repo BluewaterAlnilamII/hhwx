@@ -71,11 +71,19 @@ html {
 }
 
 body {
-  background-color: var(--bg-yellow);
-  background-image: var(--hhwx-page-background);
-  background-size: auto, auto, 40px 40px, auto, auto, auto, auto, auto;
+  background: transparent;
   position: relative;
   overflow-x: hidden;
+}
+
+.teambuilder-result-card {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 340px;
+}
+
+.teambuilder-medley-result-card {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 760px;
 }
 
 /* 飘落图案动画 */

@@ -110,6 +110,7 @@ function CardAssetImage({
       src={activeSrc}
       alt={alt}
       loading={loading}
+      decoding="async"
       className={className}
       onError={() => setFailedSrcs((current) => current.includes(activeSrc) ? current : [...current, activeSrc])}
     />
@@ -202,24 +203,26 @@ export default function BandoriCardThumbnail({
         </div>
       </div>
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      {frameUrl ? <img src={frameUrl} alt="" aria-hidden="true" loading={loading} className="pointer-events-none absolute inset-0 h-full w-full object-fill" /> : null}
-      {/* eslint-disable-next-line @next/next/no-img-element */}
+      {frameUrl ? <img src={frameUrl} alt="" aria-hidden="true" loading={loading} decoding="async" className="pointer-events-none absolute inset-0 h-full w-full object-fill" /> : null}
       {bandIconUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element
         <img
           src={bandIconUrl}
           alt=""
           aria-hidden="true"
           loading={loading}
+          decoding="async"
           className="pointer-events-none absolute left-0 top-0 h-[27.6%] w-[27.6%]"
         />
       ) : null}
-      {/* eslint-disable-next-line @next/next/no-img-element */}
       {attributeIconUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element
         <img
           src={attributeIconUrl}
           alt=""
           aria-hidden="true"
           loading={loading}
+          decoding="async"
           className="pointer-events-none absolute right-[0.8%] top-[1.1%] h-[25.5%] w-[25.5%]"
         />
       ) : null}
@@ -232,6 +235,7 @@ export default function BandoriCardThumbnail({
             alt=""
             aria-hidden="true"
             loading={loading}
+            decoding="async"
             className="bandori-card-thumbnail-star absolute object-contain drop-shadow-[0_1px_1px_rgba(0,0,0,0.55)]"
             style={{ "--bandori-card-star-slot": slot } as CSSProperties}
           />
@@ -240,7 +244,7 @@ export default function BandoriCardThumbnail({
       {card.masterRank > 0 ? (
         <div className="pointer-events-none absolute right-[-5.3%] top-[26.3%] z-30 h-[27.6%] w-[27.6%] drop-shadow-[0_1px_2px_rgba(15,23,42,0.55)]">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={masterIconUrl} alt="" aria-hidden="true" loading={loading} className="h-full w-full object-contain" />
+          <img src={masterIconUrl} alt="" aria-hidden="true" loading={loading} decoding="async" className="h-full w-full object-contain" />
           <span className="absolute inset-0 flex items-center justify-center text-[13cqw] font-black leading-none text-white [text-shadow:0_1px_1px_rgba(0,0,0,0.68)]">
             {card.masterRank}
           </span>

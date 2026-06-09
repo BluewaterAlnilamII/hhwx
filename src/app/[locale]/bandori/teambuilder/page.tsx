@@ -153,7 +153,7 @@ const DynamicTemporaryCardEditorDialog = dynamic<TemporaryCardEditorDialogProps>
   {
     ssr: false,
     loading: () => (
-      <div className="fixed inset-0 z-[1100] flex h-dvh items-center justify-center overflow-hidden overscroll-contain bg-slate-950/72 p-3 backdrop-blur-md sm:p-6" role="dialog" aria-modal="true">
+      <div className="fixed inset-0 z-[1100] flex h-dvh items-center justify-center overflow-hidden overscroll-contain bg-slate-950/55 p-3 sm:p-6" role="dialog" aria-modal="true">
         <div className="inline-flex items-center gap-2 rounded-2xl bg-white px-4 py-3 text-sm font-bold text-slate-600 shadow-2xl">
           <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
           正在载入临时卡牌编辑器
@@ -2000,7 +2000,7 @@ function EventBonusPanel({
   const parameterBonusItems = readEventParameterBonusItems(eventBonus);
 
   return (
-    <section className="rounded-3xl border border-slate-200 bg-white/85 p-4 shadow-[0_16px_44px_rgba(15,23,42,0.06)] backdrop-blur sm:p-5">
+    <section className="rounded-3xl border border-slate-200 bg-[#fffef4] p-4 shadow-[0_16px_44px_rgba(15,23,42,0.06)] sm:p-5">
       <div className="flex flex-col gap-2 border-b border-slate-100 pb-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="text-base font-bold text-slate-900">活动加成</h2>
@@ -2180,7 +2180,7 @@ function ResultCard({
     : TARGET_LABELS[result.target];
 
   return (
-    <article className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+    <article className="teambuilder-result-card rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="flex items-center gap-4">
           <div className="w-12 text-right text-lg font-bold text-slate-700">#{result.rank}</div>
@@ -2290,10 +2290,10 @@ function MedleyResultCard({
   variant?: "default" | "candidate" | "max-score-candidate";
 }) {
   const articleClassName = variant === "max-score-candidate"
-    ? "rounded-2xl border border-emerald-200 bg-emerald-50 p-4 shadow-sm"
+    ? "teambuilder-medley-result-card rounded-2xl border border-emerald-200 bg-emerald-50 p-4 shadow-sm"
     : variant === "candidate"
-    ? "rounded-2xl border border-amber-200 bg-amber-50/70 p-4 shadow-sm"
-    : "rounded-2xl border border-slate-200 bg-white p-4 shadow-sm";
+    ? "teambuilder-medley-result-card rounded-2xl border border-amber-200 bg-amber-50/70 p-4 shadow-sm"
+    : "teambuilder-medley-result-card rounded-2xl border border-slate-200 bg-white p-4 shadow-sm";
   const badgeClassName = variant === "max-score-candidate"
     ? "rounded-full border border-emerald-200 bg-white px-2 py-0.5 font-bold text-emerald-700"
     : "rounded-full border border-amber-200 bg-white px-2 py-0.5 font-bold text-amber-700";
@@ -2303,7 +2303,7 @@ function MedleyResultCard({
     <article className={articleClassName}>
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="flex items-center gap-4">
-          <div className="w-20 text-right text-lg font-bold text-slate-700">{rankLabel ?? `#${result.rank}`}</div>
+          <div className="min-w-12 shrink-0 text-right text-lg font-bold text-slate-700">{rankLabel ?? `#${result.rank}`}</div>
           <div>
             <div className="text-xl font-bold text-slate-900">{formatNumber(result.score)}</div>
             {badgeLabel || description ? (
@@ -4030,7 +4030,7 @@ function TeamBuilderPanel() {
                         skills={data.skills}
                         assetRegion={displayedMedleyAssetRegion}
                         songs={displayedMedleySongs}
-                        rankLabel={`候选 ${index + 1}`}
+                        rankLabel={`候选${index + 1}`}
                         badgeLabel="已评估平均分候选"
                         description="来自已评估候选"
                         variant="candidate"

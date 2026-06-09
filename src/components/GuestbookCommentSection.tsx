@@ -100,7 +100,7 @@ export default function GuestbookCommentSection() {
 
             {/* Comment input */}
             {!authReady ? (
-                <div className="mb-6 p-4 bg-white/60 backdrop-blur-sm rounded-xl text-center text-gray-500 text-sm">
+                <div className="mb-6 p-4 bg-[#fffef4] rounded-xl text-center text-gray-500 text-sm">
                     {t("loadingAuth")}
                 </div>
             ) : userId ? (
@@ -115,7 +115,7 @@ export default function GuestbookCommentSection() {
                                 value={newComment}
                                 onChange={(e) => setNewComment(e.target.value)}
                                 placeholder={t("placeholder")}
-                                className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-blue-400 focus:ring-2 focus:ring-blue-400/20 outline-none transition resize-none text-gray-800 bg-white/80 backdrop-blur-sm text-sm"
+                                className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-blue-400 focus:ring-2 focus:ring-blue-400/20 outline-none transition resize-none text-gray-800 bg-[#fffef4] text-sm"
                                 rows={2}
                             />
                             <div className="flex justify-end mt-2">
@@ -139,7 +139,7 @@ export default function GuestbookCommentSection() {
                     </div>
                 )
             ) : (
-                <div className="mb-6 p-4 bg-white/60 backdrop-blur-sm rounded-xl text-center text-gray-500 text-sm">
+                <div className="mb-6 p-4 bg-[#fffef4] rounded-xl text-center text-gray-500 text-sm">
                     {t("loginRequired")}
                 </div>
             )}
@@ -154,7 +154,7 @@ export default function GuestbookCommentSection() {
                 {comments.map((c) => (
                     <div
                         key={c.id}
-                        className="bg-white/70 backdrop-blur-sm rounded-xl p-4 shadow-sm"
+                        className="bg-[#fffef4] rounded-xl p-4 shadow-sm"
                     >
                         <div className="flex items-center gap-2 mb-2">
                             <div className="w-6 h-6 rounded-full bg-gradient-to-br from-gray-300 to-gray-400 flex items-center justify-center text-white text-[10px] font-bold">

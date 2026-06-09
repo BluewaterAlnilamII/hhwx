@@ -56,7 +56,7 @@ export default async function PublicProfilePage({ params }: PublicProfilePagePro
 
   return (
     <main className="mx-auto flex min-h-full w-full max-w-4xl items-center px-0 py-4 sm:px-6 sm:py-10 lg:px-8">
-      <section className="w-full overflow-hidden border-y border-white/55 bg-white/90 px-4 py-6 shadow-[0_12px_42px_rgba(15,23,42,0.08)] backdrop-blur-xl sm:rounded-[32px] sm:border sm:bg-white/80 sm:p-8 sm:shadow-[0_20px_80px_rgba(15,23,42,0.12)]">
+      <section className="w-full overflow-hidden border-y border-white/55 bg-[#fffef4] px-4 py-6 shadow-[0_12px_42px_rgba(15,23,42,0.08)] sm:rounded-[32px] sm:border sm:p-8 sm:shadow-[0_20px_80px_rgba(15,23,42,0.12)]">
         <div className="flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex min-w-0 items-center gap-4">
             <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-sky-400 to-indigo-500 text-2xl font-bold text-white shadow-lg sm:h-20 sm:w-20 sm:text-3xl">

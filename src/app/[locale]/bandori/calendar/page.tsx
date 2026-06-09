@@ -141,7 +141,7 @@ function CalendarPageSkeleton({ showEditorPlaceholder }: { showEditorPlaceholder
         <div className="h-8 w-[15rem] rounded-full bg-white/90 md:h-10 md:w-[18rem]" />
       </div>
 
-      <div className="overflow-hidden rounded-[24px] border border-white/70 bg-white/72 backdrop-blur-md shadow-[0_22px_60px_rgba(15,23,42,0.12)] ring-1 ring-white/60">
+      <div className="overflow-hidden rounded-[24px] border border-white/70 bg-[#fffef4] shadow-[0_22px_60px_rgba(15,23,42,0.12)] ring-1 ring-white/60">
         <div className="grid grid-cols-7 border-b border-gray-200/70 bg-gradient-to-r from-white/90 via-white/75 to-white/90">
           {Array.from({ length: 7 }, (_, index) => (
             <div key={`skeleton-weekday-${index}`} className="py-3 text-center">
@@ -420,7 +420,7 @@ export default function CalendarPage() {
 
         {/* ICS 订阅弹窗 */}
         {showIcsModal && (
-          <div className="mb-6 rounded-2xl border border-white/75 bg-gradient-to-br from-white/85 via-[#fff8d8]/78 to-[#eef9ff]/82 p-5 backdrop-blur-md shadow-[0_14px_40px_rgba(255,184,0,0.16)] ring-1 ring-white/65">
+          <div className="mb-6 rounded-2xl border border-white/75 bg-gradient-to-br from-[#fffef4] via-[#fff8d8] to-[#eef9ff] p-5 shadow-[0_14px_40px_rgba(255,184,0,0.16)] ring-1 ring-white/65">
             <p className="mb-3 text-sm font-bold text-[#7a4a00]">BanGDream 国服活动</p>
             <div className="mb-4">
               <div className="flex items-center justify-between gap-3 mb-2">
