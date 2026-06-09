@@ -1,6 +1,6 @@
 # Medley 40/40 Exact Roadmap
 
-Last updated: 2026-06-09 23:55 CST
+Last updated: 2026-06-10 01:45 CST
 
 This file is the persistent working note for the current medley optimizer goal.
 Keep it current before and after benchmark runs or proof-path changes, so future
@@ -14,65 +14,53 @@ Primary target:
 - Events: `none`, `244`, `260`, and `323`.
 - Matrix size: `10 profiles * 4 events = 40 all-scope cases`.
 - Search budget: `300000ms` per case.
-- Current pinned checkpoint: `39/40` exact, with no failed subprocess, no
+- Current pinned checkpoint: `40/40` exact, with no failed subprocess, no
   timeout, no memory-limited case, and no OOM.
-- Current only bounded row: `P03:260`.
-- Next and final working target: `40/40` exact while preserving the pinned
-  `39/40` checkpoint.
-- Final success condition: `40/40` exact, no failed subprocess, no timeout, no
-  OOM, and no memory-limit regression under the active `4488 MiB` memory gate.
+- Current bounded rows: none.
+- Final working target: achieved for the retained `P01`-`P10` 40-case matrix.
+- Final success condition: achieved under the active `4488 MiB` memory gate;
+  latest peak working set is `3272 MiB`.
 
 Goal tool note:
 
 - The active Codex goal object was created earlier in this thread and cannot be
   edited in place except to mark it complete or blocked. Treat this section as
   the authoritative detailed goal contract for the current execution phase.
-- The execution target for the active goal is now the full `40/40` exact
-  milestone. Intermediate `37/40`, `38/40`, and `39/40` evidence is retained
-  only as benchmark history and anti-regression baselines, not as the current
-  stopping point.
+- The execution target for the active goal was the full `40/40` exact
+  milestone. That target is now achieved by the 2026-06-10 acceptance run.
+  Intermediate `37/40`, `38/40`, and `39/40` evidence is retained only as
+  benchmark history and anti-regression baselines.
 
 Current execution contract:
 
-- Objective: convert the remaining `P03:260` bounded row to exact without
-  regressing any of the other 39 exact rows.
-- Primary blocker: `RaiseASuilen/happy/visual` in the same-coarse
-  `P03:260` event-root proof sequence. Recent diagnostics show the first two
-  siblings can be proved, then the third hits a low-memory initial-candidate
-  proof wall before pair upper, candidate fill, or solve.
-- Current working direction: prove or safely upper-bound the remaining
-  same-coarse frontier with lower live residency, preferably by parameter-aware
-  same-coarse proof transfer, streamed pair-unseen proof, or another
-  proof-preserving representation that does not expand K or keep a second
-  candidate universe alive.
-- Rejected for this phase: seed quality work, greedy/prefix seed, wider
-  top-K/candidate limits, larger default memory gates, broad result/candidate
-  compaction without no-op equivalence, and any patch that only shifts the
-  memory wall to another hard case.
+- Objective: preserve the achieved `40/40` exact checkpoint.
+- Current blocker: none inside the retained `P01`-`P10` / four-event matrix.
+- Current working direction after achievement: reduce p95 proof cost and
+  confirm promotion conditions without weakening exact/bounded semantics.
+- Still rejected for this phase: seed quality work, greedy/prefix seed, wider
+  top-K/candidate limits, larger default memory gates, and any patch that only
+  shifts the memory wall to another hard case.
 
 Current pinned acceptance baseline:
 
 - Raw result:
-  `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-09T05-44-21-186Z.json`.
+  `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-09T17-06-33-445Z.json`.
 - Report:
-  `documents/bandori-team-builder/medley-40-exact-report-2026-06-09-141817.md`.
-- Branch/commit at acceptance: `dev/medley-39-exact-frontier` / `4bf5a28`.
-- Result: `39/40` exact, bounded-gap total `370472`, peak working set
-  `4170 MiB`, bounded row `P03:260` only.
+  `documents/bandori-team-builder/medley-40-exact-report-2026-06-10-014527.md`.
+- Branch/commit at acceptance: `dev/medley-39-exact-frontier` / `3335d69`.
+- Result: `40/40` exact, bounded-gap total `0`, peak working set
+  `3272 MiB`, no bounded rows.
 
 Core plan:
 
 - Keep seed, greedy, prefix-seed, broad candidate-limit increases, and broad
-  memory-compaction paths frozen for the final `40/40` objective.
-- Focus on proof conversion for `P03:260`, specifically the
-  `RaiseASuilen/happy` same-coarse event-root frontier.
-- Prefer lossless lower-residency exact-join/proof representations and
-  proof-only frontier closure over score-oriented incumbent work.
-- Allow opt-in diagnostic probes to record tighter uppers, elapsed time, and
-  memory, but do not feed unproved diagnostic uppers into active proof
-  scheduling.
-- Preserve `P06:323` and all other currently exact hard cases; any P03 win that
-  regresses a guard case is rejected.
+  memory-compaction paths frozen unless a future change first proves no
+  regression against the `40/40` checkpoint.
+- Preserve the `1600` seeding-headroom path that converted `P03:260`.
+- Prefer proof-cost reduction and non-debug confirmation over new proof
+  strategy experiments.
+- Preserve all hard guard cases; any change that regresses a current exact row
+  is rejected.
 
 Important workflow:
 
@@ -91,10 +79,9 @@ Important workflow:
 
 Acceptance gates:
 
-- Stage gate: never regress below the pinned `39/40` exact checkpoint.
+- Stage gate: never regress below the pinned `40/40` exact checkpoint.
 - Final gate: full isolated matrix reaches `40/40` exact.
-- Bounded-gap total must not exceed `370472` before final conversion; after
-  final conversion it must be `0`.
+- Bounded-gap total must remain `0`.
 - No currently exact hard guard case may become bounded. Guard set:
   `P03:260`, `P06:323`, `P07:260`, `P08:323`, `P10:244`, `P10:260`,
   `P07:244`, and `P08:244`.
@@ -273,11 +260,11 @@ Rejected/diagnostic 2026-06-08 evidence:
 
 Current acceptance standard:
 
-- Current pinned checkpoint: `39/40` exact.
-- Final target and next stage pass: `40/40` exact.
-- Bounded-gap total must not regress against the latest clean pinned-fixture
+- Current pinned checkpoint: `40/40` exact.
+- Final target and next stage pass: achieved.
+- Bounded-gap total must remain `0` against the latest clean pinned-fixture
   baseline.
-- New patches must not regress below the pinned `39/40` checkpoint.
+- New patches must not regress below the pinned `40/40` checkpoint.
 - Failed runs and OOM are always failures.
 - Peak working set must not exceed the latest clean pinned-fixture baseline by
   more than the active memory gate.
@@ -864,7 +851,7 @@ Current execution workflow for the `40/40` goal:
 6. Do not promote any opt-in proof experiment unless it first passes
    `P03:260`, then the hard guard set, then the full isolated 40-case matrix.
 
-## Current Checkpoint - 2026-06-09 39/40
+## Historical Checkpoint - 2026-06-09 39/40
 
 Accepted branch checkpoint:
 
@@ -1342,9 +1329,53 @@ Next execution step:
   - `P07:244`: exact, `73517ms`, peak `1063 MiB`, `21/21` exact join.
   - `P08:244`: exact, `17263ms`, peak `1061 MiB`, `3/3` exact join.
 - Current candidate acceptance status:
-  the `1600` headroom skip has passed the targeted `P03` conversion and the
-  hard guard set, but it is not yet a final acceptance baseline. The next
-  required step is a process-per-case isolated full `P01`-`P10` / four-event
-  40-case run using the fixed fixture and the same optimization JSON. If that
-  reaches `40/40` exact, generate the timestamped report and update this file
-  before treating the route as accepted.
+  accepted for the retained `P01`-`P10` 40-case target. The process-per-case
+  isolated full matrix using the same optimization JSON reached `40/40` exact
+  with bounded-gap total `0`, peak `3272 MiB`, `0` failed subprocesses,
+  `0` timeouts, and `0` memory-limited rows.
+
+## Current Checkpoint - 2026-06-10 40/40
+
+Accepted branch checkpoint:
+
+- Branch: `dev/medley-39-exact-frontier`
+- Code commit at run start: `3335d69` (`Record medley headroom guard evidence`)
+- Full 40-case report:
+  `documents/bandori-team-builder/medley-40-exact-report-2026-06-10-014527.md`
+- Full raw result:
+  `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-09T17-06-33-445Z.json`
+- Run id: `medley-40exact-headroom1600-20260609`
+- Optimization: same as the `39/40` event-root probe path, but
+  `skipConfigurationSeedingWhenMemoryHeadroomBelowMiB=1600` and
+  `eventRootFrontierProbeTimeboxMs=240000`,
+  `eventRootFrontierProbeCandidateSoftLimit=200000`.
+
+Result:
+
+- Exact count improved from `39/40` to `40/40`.
+- `P03:260` converted from bounded to exact.
+- There are no bounded rows.
+- Bounded-gap total improved from `370472` to `0`.
+- There were `0` failed subprocesses, `0` timed out cases, and `0`
+  memory-limited cases.
+- Full-run peak working set was `3272 MiB`, below the active `4488 MiB`
+  memory gate and below the previous `39/40` peak `4170 MiB`.
+- Elapsed median/P95/max: `42464ms` / `145234ms` / `156986ms`.
+
+Conversion mechanism:
+
+- `P03:260` was not blocked by seed quality or exact-join generator
+  initialization. Diagnostics showed no-gain configuration seeding was causing
+  the third same-coarse sibling to enter exact join near the memory wall.
+- Raising the existing seeding headroom guard to `1600 MiB` skipped that
+  no-gain seeding when headroom was low, preserved the incumbent, and let exact
+  join close the remaining proof frontier.
+- This is not a proof shortcut. It only avoids memory-heavy incumbent seeding;
+  exactness still comes from exact candidate join/root proof.
+
+Next maintenance target:
+
+- Confirm a non-debug full 40-case run with the same headroom guard before
+  promoting the option as a default production behavior.
+- Keep this 40/40 result as the anti-regression baseline for future proof-cost
+  and memory work.
