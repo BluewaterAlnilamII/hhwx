@@ -12,6 +12,8 @@ export const PUBLIC_USERNAME_DESCRIPTION = "会显示在账号页、评论区等
 
 const USERNAME_ALLOWED_CHARACTER_PATTERN = /^(?:\P{C}|[\u200C\u200D])+$/u;
 
+export type UsernameValidationIssue = "length" | "rule";
+
 type SegmenterConstructor = new (
   locales?: string | string[],
   options?: { granularity: "grapheme" },
@@ -27,7 +29,7 @@ export function countUsernameCharacters(value: string): number {
   return Array.from(value).length;
 }
 
-export function validateUsernameValue(value: string): string | null {
+export function validateUsernameValueIssue(value: string): UsernameValidationIssue | null {
   if (!value) {
     return null;
   }
@@ -35,10 +37,23 @@ export function validateUsernameValue(value: string): string | null {
   const normalizedValue = normalizeUsernameValue(value);
   const characterCount = countUsernameCharacters(normalizedValue);
   if (characterCount < USERNAME_MIN_LENGTH || characterCount > USERNAME_MAX_LENGTH) {
-    return USERNAME_LENGTH_MESSAGE;
+    return "length";
   }
 
   if (!USERNAME_ALLOWED_CHARACTER_PATTERN.test(normalizedValue)) {
+    return "rule";
+  }
+
+  return null;
+}
+
+export function validateUsernameValue(value: string): string | null {
+  const issue = validateUsernameValueIssue(value);
+  if (issue === "length") {
+    return USERNAME_LENGTH_MESSAGE;
+  }
+
+  if (issue === "rule") {
     return USERNAME_RULE_MESSAGE;
   }
 

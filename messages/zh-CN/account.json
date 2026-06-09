@@ -1,0 +1,127 @@
+{
+  "shell": {
+    "eyebrow": "账号",
+    "defaultBackLabel": "返回首页",
+    "signInTitle": "需要登录",
+    "signInDescription": "登录后可以继续使用账号相关功能。",
+    "signInAction": "前往登录"
+  },
+  "home": {
+    "title": "账号中心",
+    "description": "查看账号状态，处理资料、密码和邮箱设置。",
+    "entries": {
+      "profile": {
+        "title": "编辑资料",
+        "description": "修改公开用户名。"
+      },
+      "password": {
+        "title": "修改密码",
+        "description": "向当前邮箱发送重置密码邮件。"
+      },
+      "email": {
+        "title": "更换邮箱",
+        "description": "检查验证状态并更换登录邮箱。"
+      },
+      "gameProfiles": {
+        "title": "游戏档案",
+        "description": "绑定游戏账号，管理本地和云端游戏数据档案。"
+      }
+    },
+    "emailVerified": "邮箱已验证",
+    "emailUnverified": "邮箱未验证",
+    "emailWarning": "邮箱尚未验证。完成验证后可使用游戏档案、评论和排期编辑等功能。"
+  },
+  "profile": {
+    "title": "编辑资料",
+    "description": "修改公开用户名。",
+    "usernameLabel": "公开用户名",
+    "usernameDescription": "会显示在账号页、评论区等位置。",
+    "usernamePlaceholder": "输入公开用户名",
+    "usernameHint": "用户名需在 {min}-{max} 个字符内，支持字母、数字、空格、符号和 emoji",
+    "loadNotSignedIn": "请先登录",
+    "loadFailed": "读取账号资料失败",
+    "httpLoadFailed": "读取账号资料失败（HTTP {status}）",
+    "saveSuccess": "资料已保存。",
+    "saveFailed": "保存失败",
+    "notSignedIn": "请先登录",
+    "invalidResponse": "账号资料返回格式无效",
+    "httpSaveFailed": "保存失败（HTTP {status}）"
+  },
+  "avatar": {
+    "chooseTitle": "选择头像",
+    "dialogTitle": "选择头像卡面",
+    "dialogDescription": "默认使用特训后卡面，可在选择后切换卡面版本。",
+    "close": "关闭",
+    "useDefault": "使用默认头像",
+    "cancel": "取消",
+    "save": "保存头像",
+    "notSignedIn": "请先登录",
+    "saveFailed": "保存失败",
+    "httpSaveFailed": "保存失败：HTTP {status}",
+    "invalidResponse": "账号资料返回格式无效"
+  },
+  "password": {
+    "title": "修改密码",
+    "description": "把重置密码邮件发到当前邮箱。",
+    "sectionTitle": "发送修改邮件",
+    "sectionDescription": "当前接收邮箱如下。邮箱不可用时，请先更换邮箱。",
+    "currentEmail": "当前接收邮箱：{email}",
+    "sessionExpired": "登录状态已失效，请重新登录后再试。",
+    "emailSent": "重置密码邮件已发送到当前邮箱。请打开邮件继续设置新密码。",
+    "sendFailed": "发送修改邮件失败",
+    "httpSendFailed": "发送修改邮件失败（HTTP {status}）",
+    "action": "发送修改邮件"
+  },
+  "email": {
+    "title": "更换邮箱",
+    "description": "新邮箱确认后才会生效。",
+    "currentStatus": "当前邮箱状态",
+    "currentEmail": "当前邮箱：{email}",
+    "verified": "已验证",
+    "unverified": "未验证",
+    "resendTitle": "重新发送验证邮件",
+    "resendDescription": "当前邮箱尚未验证时，可以重新发送验证邮件。",
+    "submitTitle": "提交新邮箱",
+    "submitDescription": "确认完成后，新邮箱会成为新的登录邮箱。",
+    "newEmail": "新邮箱",
+    "sameEmail": "新邮箱需要与当前邮箱不同。",
+    "sessionExpired": "登录状态已失效，请重新登录后再试。",
+    "updateSent": "确认邮件已发送到新邮箱。请按邮件提示完成更换。",
+    "verificationSent": "验证邮件已发送。请检查收件箱和垃圾邮件箱。",
+    "updateFailed": "提交更换邮箱失败",
+    "verificationFailed": "发送验证邮件失败",
+    "httpUpdateFailed": "提交更换邮箱失败（HTTP {status}）",
+    "httpVerificationFailed": "发送验证邮件失败（HTTP {status}）",
+    "resendAction": "重新发送验证邮件",
+    "submitAction": "发送确认邮件",
+    "submitting": "提交中...",
+    "newEmailPlaceholder": "输入新的邮箱地址"
+  },
+  "notifications": {
+    "title": "提醒",
+    "description": "查看活动评论的回复和点赞提醒。",
+    "loading": "正在读取提醒...",
+    "fallbackActor": "有用户",
+    "reply": "{actor} 回复了你的评论",
+    "like": "{actor} 赞了你的评论",
+    "count": "{count} 条提醒",
+    "emptyCount": "暂无提醒",
+    "empty": "还没有新的回复或点赞提醒。",
+    "unreadLabel": "未读",
+    "activityLabel": "活动 #{eventId}",
+    "loadFailed": "提醒读取失败",
+    "updateFailed": "提醒状态更新失败",
+    "requestFailed": "请求失败（HTTP {status}）"
+  },
+  "gameProfiles": {
+    "backAccount": "返回账号中心",
+    "verifyTitle": "邮箱验证后解锁游戏档案",
+    "verifyDescription": "完成邮箱验证后，可以使用游戏账号绑定、云端档案、评论和排期编辑等功能。",
+    "verifyAction": "前往验证邮箱"
+  },
+  "publicProfile": {
+    "eyebrow": "公开主页",
+    "backHome": "返回首页",
+    "joinedAt": "加入时间"
+  }
+}

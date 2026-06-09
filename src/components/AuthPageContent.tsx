@@ -1,11 +1,20 @@
 "use client";
 
-import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useLocale, useTranslations } from "next-intl";
+import { useSearchParams } from "next/navigation";
+import { Link, useRouter } from "@/i18n/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { formatAuthErrorMessage } from "@/lib/auth-error";
-import { getApiErrorMessage, parseApiSuccessData } from "@/lib/api-contracts";
+import { parseApiSuccessData } from "@/lib/api-contracts";
 import { createNativeValidationProps } from "@/lib/native-validation";
+import { getLocalizedApiErrorMessage } from "@/lib/localized-api-errors";
+import { getLocalizedAuthErrorMessages } from "@/lib/localized-auth-errors";
+import {
+  getLocalizedPasswordPolicyMessage,
+  getLocalizedPasswordValidationMessage,
+  getLocalizedUsernameHint,
+  getLocalizedUsernameValidationMessage,
+} from "@/lib/localized-validation";
 import {
   buildAuthCallbackUrl,
   buildAuthPath,
@@ -17,53 +26,19 @@ import {
   type AuthViewMode,
 } from "@/lib/supabase";
 import {
-  PUBLIC_USERNAME_HINT,
-  PUBLIC_USERNAME_LABEL,
-  PUBLIC_USERNAME_PLACEHOLDER,
-  USERNAME_REQUIRED_MESSAGE,
   normalizeUsernameValue,
-  validateUsernameValue,
 } from "@/lib/username-policy";
 import {
   PASSWORD_INPUT_PATTERN,
   PASSWORD_MAX_LENGTH,
   PASSWORD_MIN_LENGTH,
-  PASSWORD_POLICY_MESSAGE,
-  validatePasswordValue,
 } from "@/lib/password-policy";
 import { useTurnstileAvailability } from "@/hooks/useTurnstileAvailability";
 import { useGameStore } from "@/store/useGameStore";
 import TurnstileChallenge, { type TurnstileChallengeHandle } from "./TurnstileChallenge";
 
-function getModeTitle(mode: AuthViewMode): string {
-  switch (mode) {
-    case "register":
-      return "创建账号";
-    case "forgot-password":
-      return "重置密码";
-    default:
-      return "登录";
-  }
-}
-
-function getModeDescription(mode: AuthViewMode): string {
-  switch (mode) {
-    case "register":
-      return "注册后需完成邮箱验证，才能使用完整功能。";
-    case "forgot-password":
-      return "我们会把重置密码邮件发送到你的邮箱。";
-    default:
-      return "使用邮箱登录。";
-  }
-}
-
-function getFlashNoticeMessage(notice: AuthFlashNotice | null): string {
-  switch (notice) {
-    case "signup-email-sent":
-      return "注册成功，验证邮件已发送，请先前往邮箱完成验证，然后再登录。";
-    default:
-      return "";
-  }
+function getModeMessageKey(mode: AuthViewMode): "login" | "register" | "forgotPassword" {
+  return mode === "forgot-password" ? "forgotPassword" : mode;
 }
 
 interface SignUpResponseData {
@@ -81,6 +56,10 @@ interface SignUpResponseData {
 }
 
 export default function AuthPageContent() {
+  const locale = useLocale();
+  const t = useTranslations("auth");
+  const commonT = useTranslations("common");
+  const errorT = useTranslations("errors");
   const router = useRouter();
   const searchParams = useSearchParams();
   const { authReady, userId, username, setAuth } = useGameStore();
@@ -102,27 +81,44 @@ export default function AuthPageContent() {
   const captchaRef = useRef<TurnstileChallengeHandle | null>(null);
   const { isTurnstileEnabled, isTurnstileLoading } = useTurnstileAvailability();
   const mode = searchMode;
+  const modeMessageKey = getModeMessageKey(mode);
   const shouldShowCaptcha = isTurnstileEnabled && mode !== "login";
-  const usernameValidationProps = createNativeValidationProps({ label: PUBLIC_USERNAME_LABEL });
-  const emailValidationProps = createNativeValidationProps({ label: "邮箱", invalidTypeMessage: "请输入有效的邮箱地址。" });
+  const passwordPolicyMessage = getLocalizedPasswordPolicyMessage(t);
+  const usernameHint = getLocalizedUsernameHint(t);
+  const authErrorMessages = useMemo(() => getLocalizedAuthErrorMessages(t), [t]);
+  const usernameValidationProps = createNativeValidationProps({
+    label: t("fields.username"),
+    customValidationMessage: (value) => getLocalizedUsernameValidationMessage(value, t),
+    requiredMessage: t("validation.usernameRequired"),
+    minLengthMessage: usernameHint,
+    maxLengthMessage: usernameHint,
+    patternMessage: usernameHint,
+  });
+  const emailValidationProps = createNativeValidationProps({
+    label: t("fields.email"),
+    invalidTypeMessage: t("validation.invalidEmail"),
+    requiredMessage: t("validation.required", { label: t("fields.email") }),
+  });
   const passwordValidationProps = createNativeValidationProps({
-    label: "密码",
-    customValidationMessage: validatePasswordValue,
-    minLengthMessage: PASSWORD_POLICY_MESSAGE,
-    maxLengthMessage: PASSWORD_POLICY_MESSAGE,
-    patternMessage: PASSWORD_POLICY_MESSAGE,
+    label: t("fields.password"),
+    customValidationMessage: (value) => getLocalizedPasswordValidationMessage(value, t),
+    requiredMessage: t("validation.required", { label: t("fields.password") }),
+    minLengthMessage: passwordPolicyMessage,
+    maxLengthMessage: passwordPolicyMessage,
+    patternMessage: passwordPolicyMessage,
   });
   const confirmPasswordValidationProps = createNativeValidationProps({
-    label: "确认密码",
-    customValidationMessage: validatePasswordValue,
-    minLengthMessage: PASSWORD_POLICY_MESSAGE,
-    maxLengthMessage: PASSWORD_POLICY_MESSAGE,
-    patternMessage: PASSWORD_POLICY_MESSAGE,
+    label: t("fields.confirmPassword"),
+    customValidationMessage: (value) => getLocalizedPasswordValidationMessage(value, t),
+    requiredMessage: t("validation.required", { label: t("fields.confirmPassword") }),
+    minLengthMessage: passwordPolicyMessage,
+    maxLengthMessage: passwordPolicyMessage,
+    patternMessage: passwordPolicyMessage,
   });
 
   const requireCaptchaToken = (): string | undefined => {
     if (mode !== "login" && isTurnstileLoading) {
-      setError("安全验证配置加载中，请稍后再试。");
+      setError(t("messages.captchaLoading"));
       return undefined;
     }
 
@@ -132,7 +128,7 @@ export default function AuthPageContent() {
 
     const token = captchaRef.current?.getToken() ?? undefined;
     if (!token) {
-      setError("请先完成人机验证。");
+      setError(t("messages.captchaRequired"));
       return undefined;
     }
 
@@ -144,8 +140,8 @@ export default function AuthPageContent() {
   };
 
   useEffect(() => {
-    setNotice(getFlashNoticeMessage(flashNotice));
-  }, [flashNotice]);
+    setNotice(flashNotice === "signup-email-sent" ? t("flash.signupEmailSent") : "");
+  }, [flashNotice, t]);
 
   const switchMode = (nextMode: AuthViewMode) => {
     if (nextMode === mode) {
@@ -162,7 +158,7 @@ export default function AuthPageContent() {
     }
 
     resetCaptcha();
-    router.replace(buildAuthPath(nextMode, nextPath));
+    router.replace(buildAuthPath(nextMode, nextPath, undefined, locale));
   };
 
   const handleLogin = async (event: React.FormEvent) => {
@@ -183,7 +179,7 @@ export default function AuthPageContent() {
 
       const summary = await readAuthProfileSummary(data.session, { forceRefresh: true });
       if (!summary) {
-        throw new Error("登录后未能读取账号信息");
+        throw new Error(t("messages.loginMissingSummary"));
       }
 
       setAuth({
@@ -195,7 +191,7 @@ export default function AuthPageContent() {
 
       router.replace(nextPath);
     } catch (authError) {
-      setError(formatAuthErrorMessage(authError, "登录失败", "login"));
+      setError(formatAuthErrorMessage(authError, t("mode.login.title"), "login", authErrorMessages));
     } finally {
       setLoading(false);
       resetCaptcha();
@@ -211,11 +207,11 @@ export default function AuthPageContent() {
     const normalizedEmail = email.trim();
 
     if (!normalizedUsername) {
-      setError(USERNAME_REQUIRED_MESSAGE);
+      setError(t("validation.usernameRequired"));
       return;
     }
 
-    const usernameValidationError = validateUsernameValue(normalizedUsername);
+    const usernameValidationError = getLocalizedUsernameValidationMessage(normalizedUsername, t);
     if (usernameValidationError) {
       setError(usernameValidationError);
       return;
@@ -225,14 +221,14 @@ export default function AuthPageContent() {
       setUsernameInput(normalizedUsername);
     }
 
-    const passwordValidationError = validatePasswordValue(password);
+    const passwordValidationError = getLocalizedPasswordValidationMessage(password, t);
     if (passwordValidationError) {
       setError(passwordValidationError);
       return;
     }
 
     if (password !== confirmPassword) {
-      setError("两次输入的密码不一致");
+      setError(t("messages.passwordMismatch"));
       return;
     }
 
@@ -254,19 +250,19 @@ export default function AuthPageContent() {
           email: normalizedEmail,
           password,
           captchaToken,
-          redirectTo: buildAuthCallbackUrl("/account"),
+          redirectTo: buildAuthCallbackUrl("/account", locale),
         }),
       });
       const payload = await response.json().catch(() => ({}));
 
       if (!response.ok) {
-        setError(getApiErrorMessage(payload) || `注册失败（HTTP ${response.status}）`);
+        setError(getLocalizedApiErrorMessage(payload, errorT) || t("messages.registerFailed", { status: response.status }));
         return;
       }
 
       const result = parseApiSuccessData<SignUpResponseData>(payload);
       if (!result) {
-        setError("注册返回格式无效");
+        setError(t("messages.invalidSignupResponse"));
         return;
       }
 
@@ -295,10 +291,10 @@ export default function AuthPageContent() {
       setConfirmPassword("");
       setError("");
       resetCaptcha();
-      router.replace(buildAuthPath("login", nextPath, "signup-email-sent"));
+      router.replace(buildAuthPath("login", nextPath, "signup-email-sent", locale));
       return;
     } catch (authError) {
-      setError(formatAuthErrorMessage(authError, "注册失败", "register"));
+      setError(formatAuthErrorMessage(authError, t("mode.register.title"), "register", authErrorMessages));
     } finally {
       setLoading(false);
       resetCaptcha();
@@ -312,7 +308,7 @@ export default function AuthPageContent() {
 
     const normalizedEmail = email.trim();
     if (!normalizedEmail) {
-      setError("请输入邮箱地址");
+      setError(t("validation.invalidEmail"));
       return;
     }
 
@@ -332,19 +328,19 @@ export default function AuthPageContent() {
         body: JSON.stringify({
           email: normalizedEmail,
           captchaToken,
-          redirectTo: buildAuthCallbackUrl("/account"),
+          redirectTo: buildAuthCallbackUrl("/account", locale),
         }),
       });
       const payload = await response.json().catch(() => ({}));
 
       if (!response.ok) {
-        setError(getApiErrorMessage(payload) || `发送邮件失败（HTTP ${response.status}）`);
+        setError(getLocalizedApiErrorMessage(payload, errorT) || t("messages.sendMailFailed", { status: response.status }));
         return;
       }
 
-      setNotice("如果该邮箱已绑定账号，我们会向该邮箱发送重置密码邮件。");
+      setNotice(t("messages.resetEmailSent"));
     } catch (authError) {
-      setError(formatAuthErrorMessage(authError, "发送邮件失败", "forgot-password"));
+      setError(formatAuthErrorMessage(authError, t("messages.sendMailFailed", { status: "" }), "forgot-password", authErrorMessages));
     } finally {
       setLoading(false);
       resetCaptcha();
@@ -357,21 +353,21 @@ export default function AuthPageContent() {
         <section className="rounded-[32px] border border-white/60 bg-white/85 p-8 shadow-[0_24px_80px_rgba(15,23,42,0.12)] backdrop-blur-xl">
           <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-200 pb-5">
             <div>
-              <p className="text-sm font-semibold uppercase tracking-[0.28em] text-sky-500">账号</p>
-              <h1 className="mt-2 text-3xl font-bold text-slate-900">{getModeTitle(mode)}</h1>
-              <p className="mt-2 max-w-xl text-sm leading-6 text-slate-600">{getModeDescription(mode)}</p>
+              <p className="text-sm font-semibold uppercase tracking-[0.28em] text-sky-500">{t("section")}</p>
+              <h1 className="mt-2 text-3xl font-bold text-slate-900">{t(`mode.${modeMessageKey}.title`)}</h1>
+              <p className="mt-2 max-w-xl text-sm leading-6 text-slate-600">{t(`mode.${modeMessageKey}.description`)}</p>
             </div>
             <Link
               href="/"
               className="inline-flex items-center justify-center rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-sky-200 hover:text-sky-600"
             >
-              返回首页
+              {t("actions.backHome")}
             </Link>
           </div>
 
           {authReady && userId && (
             <div className="mt-6 rounded-2xl bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
-              当前已登录为 {username || "当前账号"}。如需管理资料，请直接前往账号中心。
+              {t("messages.alreadySignedIn", { username: username || t("messages.currentAccount") })}
             </div>
           )}
 
@@ -381,21 +377,21 @@ export default function AuthPageContent() {
               onClick={() => switchMode("login")}
               className={`rounded-full px-4 py-2 text-sm font-semibold transition ${mode === "login" ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}
             >
-              登录
+              {t("actions.login")}
             </button>
             <button
               type="button"
               onClick={() => switchMode("register")}
               className={`rounded-full px-4 py-2 text-sm font-semibold transition ${mode === "register" ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}
             >
-              注册
+              {t("actions.register")}
             </button>
             <button
               type="button"
               onClick={() => switchMode("forgot-password")}
               className={`rounded-full px-4 py-2 text-sm font-semibold transition ${mode === "forgot-password" ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}
             >
-              忘记密码
+              {t("actions.forgotPassword")}
             </button>
           </div>
 
@@ -414,45 +410,45 @@ export default function AuthPageContent() {
           <form onSubmit={mode === "login" ? handleLogin : mode === "register" ? handleRegister : handleForgotPassword} className="mt-6 space-y-5">
               {mode === "register" && (
                 <label className="block text-sm font-medium text-slate-700">
-                  {PUBLIC_USERNAME_LABEL}
+                  {t("fields.username")}
                   <input
                     type="text"
                     value={usernameInput}
                     onChange={(event) => setUsernameInput(event.target.value)}
                     {...usernameValidationProps}
                     className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 text-slate-900 outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100"
-                    placeholder={PUBLIC_USERNAME_PLACEHOLDER}
+                    placeholder={t("validation.usernamePlaceholder")}
                     required
                   />
                   <span className="mt-2 block text-xs leading-5 text-slate-500">
-                    {PUBLIC_USERNAME_HINT}
+                    {usernameHint}
                   </span>
                 </label>
               )}
 
               <label className="block text-sm font-medium text-slate-700">
-                邮箱
+                {t("fields.email")}
                 <input
                   type="email"
                   value={email}
                   onChange={(event) => setEmail(event.target.value)}
                   {...emailValidationProps}
                   className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 text-slate-900 outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100"
-                  placeholder="输入登录邮箱"
+                  placeholder={t("placeholders.email")}
                   required
                 />
               </label>
 
               {mode !== "forgot-password" && (
                 <label className="block text-sm font-medium text-slate-700">
-                  密码
+                  {t("fields.password")}
                   <input
                     type="password"
                     value={password}
                     onChange={(event) => setPassword(event.target.value)}
                     {...passwordValidationProps}
                     className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 text-slate-900 outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100"
-                    placeholder={mode === "register" ? "设置登录密码" : "输入登录密码"}
+                    placeholder={t("placeholders.password")}
                     minLength={PASSWORD_MIN_LENGTH}
                     maxLength={PASSWORD_MAX_LENGTH}
                     pattern={PASSWORD_INPUT_PATTERN}
@@ -460,7 +456,7 @@ export default function AuthPageContent() {
                   />
                   {mode === "register" && (
                     <span className="mt-2 block text-xs leading-5 text-slate-500">
-                      {PASSWORD_POLICY_MESSAGE}
+                      {passwordPolicyMessage}
                     </span>
                   )}
                 </label>
@@ -468,14 +464,14 @@ export default function AuthPageContent() {
 
               {mode === "register" && (
                 <label className="block text-sm font-medium text-slate-700">
-                  确认密码
+                  {t("fields.confirmPassword")}
                   <input
                     type="password"
                     value={confirmPassword}
                     onChange={(event) => setConfirmPassword(event.target.value)}
                     {...confirmPasswordValidationProps}
                     className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 text-slate-900 outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100"
-                    placeholder="再次输入密码"
+                    placeholder={t("placeholders.confirmPassword")}
                     minLength={PASSWORD_MIN_LENGTH}
                     maxLength={PASSWORD_MAX_LENGTH}
                     pattern={PASSWORD_INPUT_PATTERN}
@@ -488,19 +484,19 @@ export default function AuthPageContent() {
                 <TurnstileChallenge
                   ref={captchaRef}
                   action={`auth-${mode}`}
-                  title="安全验证"
-                  description={mode === "register" ? "创建账号前，请先完成安全验证。" : "发送重置链接前，请先完成安全验证。"}
+                  title={t("messages.captchaTitle")}
+                  description=""
+                  notConfiguredTitle={t("turnstile.notConfiguredTitle")}
+                  notConfiguredDescription={t("turnstile.notConfiguredDescription")}
+                  expiredMessage={t("turnstile.expired")}
+                  loadFailedMessage={t("turnstile.loadFailed")}
                   variant="inline"
                 />
               )}
 
               <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
                 <div className="text-sm text-slate-500">
-                  {mode === "register"
-                    ? "注册后需完成邮箱确认。"
-                    : mode === "forgot-password"
-                      ? "发送完成后，请到邮箱中继续。"
-                      : "还没有账号？切换到“注册”即可创建。"}
+                  {t(`mode.${modeMessageKey}.footerDescription`)}
                 </div>
                 <button
                   type="submit"
@@ -508,19 +504,19 @@ export default function AuthPageContent() {
                   className="hhwx-accent-button"
                 >
                   {loading
-                    ? "处理中..."
+                    ? commonT("actions.loading")
                     : mode === "login"
-                      ? "登录"
+                      ? t("actions.login")
                       : mode === "register"
-                        ? "注册"
-                        : "发送重置链接"}
+                        ? t("actions.register")
+                        : t("actions.sendResetEmail")}
                 </button>
               </div>
 
               {authReady && userId && (
                 <div className="pt-3 text-right">
                   <Link href="/account" className="text-sm font-semibold text-sky-600 transition hover:text-sky-500">
-                    前往账号中心
+                    {t("messages.accountCenter")}
                   </Link>
                 </div>
               )}

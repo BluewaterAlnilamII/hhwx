@@ -1,0 +1,127 @@
+{
+  "shell": {
+    "eyebrow": "Account",
+    "defaultBackLabel": "Back home",
+    "signInTitle": "Sign-in required",
+    "signInDescription": "Log in to continue using account features.",
+    "signInAction": "Go to login"
+  },
+  "home": {
+    "title": "Account Center",
+    "description": "View account status and manage profile, password, and email settings.",
+    "entries": {
+      "profile": {
+        "title": "Edit profile",
+        "description": "Change your public username."
+      },
+      "password": {
+        "title": "Change password",
+        "description": "Send a password reset email to the current inbox."
+      },
+      "email": {
+        "title": "Change email",
+        "description": "Check verification status and change the login email."
+      },
+      "gameProfiles": {
+        "title": "Game profiles",
+        "description": "Bind game accounts and manage local and cloud game data profiles."
+      }
+    },
+    "emailVerified": "Email verified",
+    "emailUnverified": "Email not verified",
+    "emailWarning": "Your email is not verified yet. Verify it to use game profiles, comments, schedule editing, and other features."
+  },
+  "profile": {
+    "title": "Edit profile",
+    "description": "Change your public username.",
+    "usernameLabel": "Public username",
+    "usernameDescription": "Shown on account pages, comments, and similar surfaces.",
+    "usernamePlaceholder": "Enter public username",
+    "usernameHint": "Username must be {min}-{max} characters and may include letters, numbers, spaces, symbols, and emoji",
+    "loadNotSignedIn": "Please log in first",
+    "loadFailed": "Failed to load account profile",
+    "httpLoadFailed": "Failed to load account profile (HTTP {status})",
+    "saveSuccess": "Profile saved.",
+    "saveFailed": "Save failed",
+    "notSignedIn": "Please log in first",
+    "invalidResponse": "Account profile response is invalid",
+    "httpSaveFailed": "Save failed (HTTP {status})"
+  },
+  "avatar": {
+    "chooseTitle": "Choose avatar",
+    "dialogTitle": "Choose avatar card",
+    "dialogDescription": "The after-training art is used by default. You can switch card art after selecting a card.",
+    "close": "Close",
+    "useDefault": "Use default avatar",
+    "cancel": "Cancel",
+    "save": "Save avatar",
+    "notSignedIn": "Please log in first",
+    "saveFailed": "Save failed",
+    "httpSaveFailed": "Save failed: HTTP {status}",
+    "invalidResponse": "Account profile response is invalid"
+  },
+  "password": {
+    "title": "Change password",
+    "description": "Send a password reset email to the current inbox.",
+    "sectionTitle": "Send change email",
+    "sectionDescription": "The current receiving email is shown below. Change email first if this inbox is unavailable.",
+    "currentEmail": "Current receiving email: {email}",
+    "sessionExpired": "Your session expired. Log in again and retry.",
+    "emailSent": "Password reset email sent to the current inbox. Open the email to continue setting a new password.",
+    "sendFailed": "Failed to send change email",
+    "httpSendFailed": "Failed to send change email (HTTP {status})",
+    "action": "Send change email"
+  },
+  "email": {
+    "title": "Change email",
+    "description": "The new email only takes effect after confirmation.",
+    "currentStatus": "Current email status",
+    "currentEmail": "Current email: {email}",
+    "verified": "Verified",
+    "unverified": "Unverified",
+    "resendTitle": "Resend verification email",
+    "resendDescription": "If the current email is not verified, you can send the verification email again.",
+    "submitTitle": "Submit new email",
+    "submitDescription": "After confirmation, the new email becomes the login email.",
+    "newEmail": "New email",
+    "sameEmail": "The new email must be different from the current email.",
+    "sessionExpired": "Your session expired. Log in again and retry.",
+    "updateSent": "A confirmation email has been sent to the new inbox. Follow the email to complete the change.",
+    "verificationSent": "Verification email sent. Check your inbox and spam folder.",
+    "updateFailed": "Failed to submit email change",
+    "verificationFailed": "Failed to send verification email",
+    "httpUpdateFailed": "Failed to submit email change (HTTP {status})",
+    "httpVerificationFailed": "Failed to send verification email (HTTP {status})",
+    "resendAction": "Resend verification email",
+    "submitAction": "Send confirmation email",
+    "submitting": "Submitting...",
+    "newEmailPlaceholder": "Enter the new email address"
+  },
+  "notifications": {
+    "title": "Notifications",
+    "description": "View replies and likes on event comments.",
+    "loading": "Loading notifications...",
+    "fallbackActor": "Someone",
+    "reply": "{actor} replied to your comment",
+    "like": "{actor} liked your comment",
+    "count": "{count} notifications",
+    "emptyCount": "No notifications",
+    "empty": "No new replies or likes yet.",
+    "unreadLabel": "Unread",
+    "activityLabel": "Event #{eventId}",
+    "loadFailed": "Failed to load notifications",
+    "updateFailed": "Failed to update notification status",
+    "requestFailed": "Request failed (HTTP {status})"
+  },
+  "gameProfiles": {
+    "backAccount": "Back to Account Center",
+    "verifyTitle": "Verify email to unlock game profiles",
+    "verifyDescription": "After email verification, you can bind game accounts, use cloud profiles, comment, and edit schedules.",
+    "verifyAction": "Verify email"
+  },
+  "publicProfile": {
+    "eyebrow": "Public Profile",
+    "backHome": "Back home",
+    "joinedAt": "Joined"
+  }
+}

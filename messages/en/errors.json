@@ -1,0 +1,39 @@
+{
+  "api": {
+    "UNAUTHENTICATED": "Not signed in",
+    "INVALID_AUTHORIZATION_HEADER": "Invalid authorization information",
+    "AUTHENTICATION_FAILED": "Authentication failed",
+    "EMAIL_VERIFICATION_REQUIRED": "Verify your email first",
+    "INVALID_JSON": "Request body is not valid JSON",
+    "INVALID_REQUEST": "Invalid request",
+    "INVALID_USERNAME": "Invalid username",
+    "INVALID_PASSWORD": "Password does not meet the requirements",
+    "USERNAME_TAKEN": "This username is already taken",
+    "USERNAME_CHECK_FAILED": "Could not check the username. Try again later",
+    "EMAIL_TAKEN": "This email is already registered",
+    "EMAIL_UNCHANGED": "The new email must be different from the current email",
+    "EMAIL_REQUIRED": "No usable email is available",
+    "SIGN_UP_FAILED": "Registration failed",
+    "PASSWORD_RESET_FAILED": "Failed to send reset email",
+    "EMAIL_UPDATE_FAILED": "Failed to submit email change",
+    "TURNSTILE_SERVER_NOT_CONFIGURED": "Server-side security verification is not configured",
+    "TURNSTILE_REQUIRED": "Complete security verification first",
+    "TURNSTILE_VERIFY_FAILED": "Security verification service is temporarily unavailable",
+    "TURNSTILE_INVALID": "Security verification failed",
+    "PROFILE_READ_FAILED": "Failed to load account profile",
+    "PROFILE_CREATE_FAILED": "Failed to create account profile",
+    "ACCOUNT_PROFILE_UPDATE_FAILED": "Failed to update account profile",
+    "INVALID_AVATAR_CARD_ID": "Choose a valid avatar card",
+    "INVALID_AVATAR_CARD_TRAIN_TYPE": "Choose a valid card art version",
+    "AVATAR_CARD_NOT_FOUND": "The selected card does not exist or is missing card art",
+    "INVALID_COMMENT_CONTENT": "Comment content is invalid",
+    "EMPTY_COMMENT": "Comment content cannot be empty",
+    "COMMENT_TOO_LONG": "Comment content is too long",
+    "COMMENT_CREATE_FAILED": "Failed to post comment",
+    "DEFAULT": "{message}"
+  },
+  "fallback": {
+    "requestFailed": "Request failed (HTTP {status})",
+    "unknown": "Operation failed"
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "groups": {
+    "game": "游戏",
+    "bandori": "Bandori"
+  },
+  "items": {
+    "home": "首页",
+    "calendar": "日历",
+    "tracker": "分数追踪器",
+    "gameProfiles": "游戏档案",
+    "teambuilder": "组队计算器"
+  },
+  "toolbar": {
+    "openNavigation": "打开页面导航",
+    "closeNavigation": "关闭页面导航",
+    "debugTitle": "开启后在 AI 回合显示落子权重",
+    "enableDebug": "开启调试模式",
+    "disableDebug": "关闭调试模式",
+    "openLanguageMenu": "打开语言菜单",
+    "currentLanguage": "当前语言",
+    "openAccountMenu": "打开账户菜单",
+    "openLogin": "打开登录入口",
+    "accountCenter": "账号中心",
+    "accountCenterUnverified": "账号中心（待验证）",
+    "notifications": "提醒",
+    "logout": "登出",
+    "login": "登录",
+    "switchLanguage": "切换到 {language}"
+  }
+}

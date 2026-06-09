@@ -1,7 +1,11 @@
+import createNextIntlPlugin from "next-intl/plugin";
+
+const withNextIntl = createNextIntlPlugin("./src/i18n/request.ts");
+
 const FAVICON_SITE_ASSET_CACHE_CONTROL = "public, max-age=604800, s-maxage=604800, stale-while-revalidate=86400";
 const STATIC_SITE_ASSET_CACHE_CONTROL = "public, max-age=2592000, s-maxage=2592000, stale-while-revalidate=604800";
-// manifest 会影响安装态名称、主题色与图标入口，
-// 因此这里单独缩短浏览器 TTL，避免发布后长时间拿到旧元数据。
+// The manifest controls installed app metadata, theme color, and icon entry points.
+// Keep its browser TTL shorter so deployed metadata updates are not held for too long.
 const MANIFEST_SITE_ASSET_CACHE_CONTROL = "public, max-age=3600, s-maxage=86400, stale-while-revalidate=604800";
 const CSP_REPORT_ENDPOINT = "/api/security/csp-report";
 const DEFAULT_SITE_ASSET_CDN_BASE_URL = "https://cdn.hhwx.org";
@@ -133,6 +137,12 @@ const nextConfig = {
                 ],
             },
             {
+                source: "/res/:path*",
+                headers: [
+                    { key: "Cache-Control", value: STATIC_SITE_ASSET_CACHE_CONTROL },
+                ],
+            },
+            {
                 source: "/manifest.webmanifest",
                 headers: [
                     { key: "Cache-Control", value: MANIFEST_SITE_ASSET_CACHE_CONTROL },
@@ -142,4 +152,4 @@ const nextConfig = {
     },
 };
 
-export default nextConfig;
+export default withNextIntl(nextConfig);

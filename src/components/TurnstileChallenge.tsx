@@ -12,6 +12,10 @@ export interface TurnstileChallengeHandle {
 interface TurnstileChallengeProps {
   title?: string;
   description?: string;
+  notConfiguredTitle?: string;
+  notConfiguredDescription?: string;
+  expiredMessage?: string;
+  loadFailedMessage?: string;
   action: string;
   theme?: TurnstileTheme;
   className?: string;
@@ -25,6 +29,10 @@ const TurnstileChallenge = forwardRef<TurnstileChallengeHandle, TurnstileChallen
   {
     title = "安全验证",
     description = "",
+    notConfiguredTitle = "未配置安全验证",
+    notConfiguredDescription = "当前环境暂时无法渲染安全验证组件，请补齐对应配置后再试。",
+    expiredMessage = "验证已过期，请重新完成。",
+    loadFailedMessage = "验证加载失败，请刷新后重试。",
     action,
     theme = "light",
     className = "",
@@ -51,9 +59,9 @@ const TurnstileChallenge = forwardRef<TurnstileChallengeHandle, TurnstileChallen
   if (!TURNSTILE_SITE_KEY) {
     return (
       <div className={containerClassName}>
-        <div className="text-sm font-semibold text-amber-700">未配置安全验证</div>
+        <div className="text-sm font-semibold text-amber-700">{notConfiguredTitle}</div>
         <p className="mt-2 text-sm leading-6 text-amber-700/90">
-          当前环境暂时无法渲染安全验证组件，请补齐对应配置后再试。
+          {notConfiguredDescription}
         </p>
       </div>
     );
@@ -74,8 +82,8 @@ const TurnstileChallenge = forwardRef<TurnstileChallengeHandle, TurnstileChallen
               size: "flexible",
             }}
             onSuccess={() => setStatusMessage("")}
-            onExpire={() => setStatusMessage("验证已过期，请重新完成。")}
-            onError={() => setStatusMessage("验证加载失败，请刷新后重试。")}
+            onExpire={() => setStatusMessage(expiredMessage)}
+            onError={() => setStatusMessage(loadFailedMessage)}
           />
         </div>
       </div>

@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { useTranslations } from "next-intl";
 
 interface ResultPanelProps {
     blackCount: number;
@@ -23,14 +24,15 @@ export default function ResultPanel({
     onReturnToSelect,
     onReviewBoard,
 }: ResultPanelProps) {
+    const t = useTranslations("othello.result");
     const playerScore = playerColor === "black" ? blackCount : whiteCount;
     const aiScore = playerColor === "black" ? whiteCount : blackCount;
     const result =
         playerScore > aiScore
-            ? "🎉 你赢了！"
+            ? t("win")
             : playerScore < aiScore
-                ? "😢 你输了…"
-                : "🤝 平局！";
+                ? t("lose")
+                : t("draw");
 
     return (
         <div className="result-overlay">
@@ -54,19 +56,19 @@ export default function ResultPanel({
                         onClick={onRestart}
                         className="w-full px-6 py-2.5 bg-gradient-to-r from-blue-500 to-purple-600 text-white font-semibold rounded-xl hover:opacity-90 transition text-sm"
                     >
-                        重新开始
+                        {t("restart")}
                     </button>
                     <button
                         onClick={onReviewBoard}
                         className="w-full px-6 py-2.5 bg-white/10 border border-white/20 text-white font-medium rounded-xl hover:bg-white/20 transition text-sm"
                     >
-                        📋 回看棋盘
+                        {t("review")}
                     </button>
                     <button
                         onClick={onReturnToSelect}
                         className="w-full px-6 py-2.5 bg-white/10 border border-white/20 text-white font-medium rounded-xl hover:bg-white/20 transition text-sm"
                     >
-                        重选角色
+                        {t("reselect")}
                     </button>
                 </div>
             </div>

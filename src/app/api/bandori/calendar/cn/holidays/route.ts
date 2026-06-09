@@ -1,7 +1,7 @@
-import {
+﻿import {
   ChinaMainlandHolidayCalendarData,
   getFallbackChinaMainlandHolidayCalendarData,
-} from "@/app/bandori/calendar/chinaMainlandHolidayCalendar";
+} from "@/lib/bandori-china-mainland-holiday-calendar";
 import {
   EXTERNAL_REFERENCE_CACHE_PROFILE,
   EXTERNAL_REFERENCE_FALLBACK_CACHE_PROFILE,
@@ -75,8 +75,8 @@ function enumerateDateRange(startDate: Date, endDateExclusive: Date | null): str
   return values;
 }
 
-// 这里继续保留 iCloud ICS 解析，而不是把节假日静态写死在数据库里，
-// 是因为调休规则每年都可能变更；线上优先拉权威日历，失败时再回退本地兜底数据。
+// Prefer the iCloud ICS source because mainland China makeup-workday rules can
+// change every year. Fall back to the built-in data only when the remote source fails.
 function parseHolidayCalendar(content: string): ChinaMainlandHolidayCalendarData {
   const restDays = new Set<string>();
   const makeupWorkDays = new Set<string>();
@@ -178,7 +178,7 @@ export async function GET() {
       headers: withCacheControl(EXTERNAL_REFERENCE_CACHE_PROFILE.cacheControl ?? HOLIDAY_API_CACHE_CONTROL),
     });
   } catch (error) {
-    console.error("Bandori calendar/cn/holidays API 错误:", error);
+    console.error("Bandori calendar/cn/holidays API error:", error);
     return jsonSuccess(getFallbackChinaMainlandHolidayCalendarData(), {
       headers: withCacheControl(EXTERNAL_REFERENCE_FALLBACK_CACHE_PROFILE.cacheControl ?? HOLIDAY_FALLBACK_API_CACHE_CONTROL),
       meta: { fallback: true },

@@ -27,6 +27,20 @@ A legal main team must satisfy:
 - no excluded card;
 - one shared global area-item configuration for the whole team.
 
+Optional request constraints can further narrow the legal result set:
+
+- `minLeaderScoreUpPercent` requires the selected leader's resolved score-up
+  value to meet or exceed the threshold. Conditional skills are checked after
+  the full five-card team context is known, so an untriggered conditional
+  high-value skill does not qualify by its displayed maximum. When this
+  constraint is active, search uses team-context partitions even for smaller
+  pools so same-band and same-attribute leader bounds are evaluated in the
+  context where they would actually trigger.
+- `minTotalPower` requires the final five-card team power after the active
+  area-item configuration and event parameter bonuses to meet or exceed the
+  threshold. Support band power, room power, and other-player power are not part
+  of this value.
+
 The current single-song search supports three targets:
 
 - `score`: maximize song score.
@@ -256,9 +270,11 @@ Each area-item configuration is searched independently:
 3. Compress dominated candidate cards safely.
 4. Evaluate high-potential seed teams to establish a top-N threshold early.
 5. Run branch-and-bound DFS over five distinct characters.
-6. Resolve real skill context and exactly score each complete team that survives
+6. Apply request constraints by safe power bounds or by exact full-team
+   evaluation.
+7. Resolve real skill context and exactly score each complete team that survives
    bounds.
-7. Sort results by target value, then by score or power tie-breakers, leader
+8. Sort results by target value, then by score or power tie-breakers, leader
    skill strength, and stable card IDs.
 
 The DFS state tracks selected cards, used-character bitset, current power,
@@ -469,6 +485,10 @@ remaining contribution. It may overestimate the best completion, but it must not
 underestimate it. If even that optimistic value is below the current top-N
 threshold, no completion under the branch can enter the result list, so pruning
 is safe.
+
+The final-power constraint follows the same rule: a branch can be discarded only
+when selected power plus the best remaining distinct-character power upper bound
+is still below `minTotalPower`.
 
 ### Support-Band Greedy Optimality
 

@@ -1,0 +1,35 @@
+{
+  "root": {
+    "title": "🎭 Happy! Lucky! Othello!",
+    "applicationName": "Happy! Lucky! Othello!",
+    "description": "Play Othello with the members of Hello, Happy World!"
+  },
+  "calendar": {
+    "title": "Event Calendar - HHWX"
+  },
+  "eventtracker": {
+    "title": "Event Tracker - HHWX"
+  },
+  "auth": {
+    "title": "Account Sign-In - HHWX",
+    "description": "Log in, create an account, or reset your HHWX web account password."
+  },
+  "authConfirm": {
+    "title": "Account Confirmation - HHWX",
+    "description": "Complete email verification, sign-in confirmation, or password reset for your HHWX account."
+  },
+  "account": {
+    "title": "Account Center - HHWX",
+    "description": "Manage your HHWX web account, email, security settings, and game profiles."
+  },
+  "publicProfile": {
+    "missingTitle": "User not found",
+    "title": "{username}'s profile",
+    "description": "Public profile for UID {publicUid}"
+  },
+  "manifest": {
+    "name": "Happy! Lucky! Othello!",
+    "shortName": "HHW Othello",
+    "description": "Play Othello with the members of Hello, Happy World!"
+  }
+}

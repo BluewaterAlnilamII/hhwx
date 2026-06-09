@@ -9,8 +9,6 @@ export default function manifest(): MetadataRoute.Manifest {
     display: "standalone",
     background_color: "#FFEE22",
     theme_color: "#FFEE22",
-    // App Router 的 icon/apple-icon 文件约定负责浏览器标签图标，
-    // manifest 这里保留 192/512 两个固定尺寸，专门给安装态与启动画面使用。
     icons: [
       {
         src: "/favicon/icon-192.png",

@@ -1,0 +1,39 @@
+{
+  "api": {
+    "UNAUTHENTICATED": "未登录",
+    "INVALID_AUTHORIZATION_HEADER": "无效的认证信息",
+    "AUTHENTICATION_FAILED": "认证失败",
+    "EMAIL_VERIFICATION_REQUIRED": "请先完成邮箱验证",
+    "INVALID_JSON": "请求体不是有效的 JSON",
+    "INVALID_REQUEST": "请求无效",
+    "INVALID_USERNAME": "用户名无效",
+    "INVALID_PASSWORD": "密码不符合要求",
+    "USERNAME_TAKEN": "该用户名已被占用",
+    "USERNAME_CHECK_FAILED": "暂时无法检查用户名，请稍后再试",
+    "EMAIL_TAKEN": "该邮箱已被注册",
+    "EMAIL_UNCHANGED": "新邮箱需要与当前邮箱不同",
+    "EMAIL_REQUIRED": "缺少可用邮箱",
+    "SIGN_UP_FAILED": "注册失败",
+    "PASSWORD_RESET_FAILED": "发送重置邮件失败",
+    "EMAIL_UPDATE_FAILED": "提交更换邮箱失败",
+    "TURNSTILE_SERVER_NOT_CONFIGURED": "缺少服务端安全验证配置",
+    "TURNSTILE_REQUIRED": "请先完成安全验证",
+    "TURNSTILE_VERIFY_FAILED": "安全验证服务暂时不可用",
+    "TURNSTILE_INVALID": "安全验证未通过",
+    "PROFILE_READ_FAILED": "读取账号资料失败",
+    "PROFILE_CREATE_FAILED": "创建账号资料失败",
+    "ACCOUNT_PROFILE_UPDATE_FAILED": "更新账号资料失败",
+    "INVALID_AVATAR_CARD_ID": "请选择有效的头像卡牌",
+    "INVALID_AVATAR_CARD_TRAIN_TYPE": "请选择有效的卡面版本",
+    "AVATAR_CARD_NOT_FOUND": "所选卡牌不存在或缺少卡面资源",
+    "INVALID_COMMENT_CONTENT": "评论内容无效",
+    "EMPTY_COMMENT": "评论内容不能为空",
+    "COMMENT_TOO_LONG": "评论内容过长",
+    "COMMENT_CREATE_FAILED": "评论发送失败",
+    "DEFAULT": "{message}"
+  },
+  "fallback": {
+    "requestFailed": "请求失败（HTTP {status}）",
+    "unknown": "操作失败"
+  }
+}

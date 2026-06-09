@@ -179,6 +179,11 @@ export type BandoriTeamSearchTarget = "score" | "eventPoint";
 
 export type BandoriTeamSearchEventMode = "none" | "parameterPower" | "pointBonus";
 
+export type BandoriTeamSearchConstraints = {
+  minLeaderScoreUpPercent?: number;
+  minTotalPower?: number;
+};
+
 export type BandoriTeamSearchExternalSkill = {
   skillId: number;
   skillLevel: number;
@@ -213,6 +218,7 @@ export type BandoriTeamSearchInput = {
   challengeCpCost?: 200 | 400 | 800 | 1600;
   server?: number;
   maxSearchDurationMs?: number;
+  constraints?: BandoriTeamSearchConstraints;
 };
 
 export type SearchCard = CalculatedBandoriCard & {
@@ -231,6 +237,11 @@ export type SearchCard = CalculatedBandoriCard & {
   skillBothLeaderRate: number;
   skillMixedAverageRate: number;
   skillMixedLeaderRate: number;
+  leaderScoreUpPercent: number;
+  leaderSameBandScoreUpPercent: number;
+  leaderSameAttributeScoreUpPercent: number;
+  leaderBothScoreUpPercent: number;
+  leaderMixedScoreUpPercent: number;
   supportPower: number;
   skillSearchSignature: string;
 };
@@ -248,6 +259,11 @@ export type SearchCardSkillRateProfile = Pick<
   | "skillBothLeaderRate"
   | "skillMixedAverageRate"
   | "skillMixedLeaderRate"
+  | "leaderScoreUpPercent"
+  | "leaderSameBandScoreUpPercent"
+  | "leaderSameAttributeScoreUpPercent"
+  | "leaderBothScoreUpPercent"
+  | "leaderMixedScoreUpPercent"
 >;
 
 export type SearchConfiguration = {
@@ -348,6 +364,11 @@ export type CharacterUpperBoundIndex = {
   skillBothLeaderRateByStartIndex: Float64Array[];
   skillMixedAverageRateByStartIndex: Float64Array[];
   skillMixedLeaderRateByStartIndex: Float64Array[];
+  leaderScoreUpPercentByStartIndex: Float64Array[];
+  leaderSameBandScoreUpPercentByStartIndex: Float64Array[];
+  leaderSameAttributeScoreUpPercentByStartIndex: Float64Array[];
+  leaderBothScoreUpPercentByStartIndex: Float64Array[];
+  leaderMixedScoreUpPercentByStartIndex: Float64Array[];
 };
 
 export type SkillContextUpperMode = "optimistic" | "same-band" | "same-attribute" | "both" | "mixed";
