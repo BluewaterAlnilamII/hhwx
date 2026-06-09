@@ -510,54 +510,25 @@ function estimateBranchScoreUpperBound(
   selectedPower?: number,
 ): number {
   // Without partitioning, enumerate mixed, same-band, same-attribute, and both contexts, then use the max as one optimistic bound.
-  const scoreBounds = [
-    estimateBranchScoreUpperBoundForMode(
-      selectedCards,
-      upperBoundIndex,
-      searchCards,
-      startIndex,
-      usedCharacterMaskLow,
-      usedCharacterMaskHigh,
-      baseScoreRatePerPower,
-      "mixed",
-      undefined,
-      selectedPower,
-    ),
-  ];
+  let maxScore = estimateBranchScoreUpperBoundForMode(
+    selectedCards,
+    upperBoundIndex,
+    searchCards,
+    startIndex,
+    usedCharacterMaskLow,
+    usedCharacterMaskHigh,
+    baseScoreRatePerPower,
+    "mixed",
+    undefined,
+    selectedPower,
+  );
   const possibleSameBandIds = getPossibleSameBandIds(selectedCards, upperBoundIndex);
   const canKeepSameAttribute = canKeepSameAttributeContext(selectedCards);
 
   for (const bandId of possibleSameBandIds) {
-    scoreBounds.push(estimateBranchScoreUpperBoundForMode(
-      selectedCards,
-      upperBoundIndex,
-      searchCards,
-      startIndex,
-      usedCharacterMaskLow,
-      usedCharacterMaskHigh,
-      baseScoreRatePerPower,
-      "same-band",
-      bandId,
-      selectedPower,
-    ));
-  }
-
-  if (canKeepSameAttribute) {
-    scoreBounds.push(estimateBranchScoreUpperBoundForMode(
-      selectedCards,
-      upperBoundIndex,
-      searchCards,
-      startIndex,
-      usedCharacterMaskLow,
-      usedCharacterMaskHigh,
-      baseScoreRatePerPower,
-      "same-attribute",
-      undefined,
-      selectedPower,
-    ));
-
-    for (const bandId of possibleSameBandIds) {
-      scoreBounds.push(estimateBranchScoreUpperBoundForMode(
+    maxScore = Math.max(
+      maxScore,
+      estimateBranchScoreUpperBoundForMode(
         selectedCards,
         upperBoundIndex,
         searchCards,
@@ -565,14 +536,50 @@ function estimateBranchScoreUpperBound(
         usedCharacterMaskLow,
         usedCharacterMaskHigh,
         baseScoreRatePerPower,
-        "both",
+        "same-band",
         bandId,
         selectedPower,
-      ));
+      ),
+    );
+  }
+
+  if (canKeepSameAttribute) {
+    maxScore = Math.max(
+      maxScore,
+      estimateBranchScoreUpperBoundForMode(
+        selectedCards,
+        upperBoundIndex,
+        searchCards,
+        startIndex,
+        usedCharacterMaskLow,
+        usedCharacterMaskHigh,
+        baseScoreRatePerPower,
+        "same-attribute",
+        undefined,
+        selectedPower,
+      ),
+    );
+
+    for (const bandId of possibleSameBandIds) {
+      maxScore = Math.max(
+        maxScore,
+        estimateBranchScoreUpperBoundForMode(
+          selectedCards,
+          upperBoundIndex,
+          searchCards,
+          startIndex,
+          usedCharacterMaskLow,
+          usedCharacterMaskHigh,
+          baseScoreRatePerPower,
+          "both",
+          bandId,
+          selectedPower,
+        ),
+      );
     }
   }
 
-  return scoreBounds.reduce((maxScore, score) => Math.max(maxScore, score), Number.NEGATIVE_INFINITY);
+  return maxScore;
 }
 
 export function estimateSearchScopeScoreUpperBound(
