@@ -3966,6 +3966,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     exactJoinPrefixSeedMinMemoryHeadroomMiB?: number;
     exactJoinPrefixSeedMaxObservedGap?: number;
     enableLowMemoryInitialCandidateSync?: boolean;
+    lowMemoryInitialCandidateSyncLocalAbortOnly?: boolean;
     lowMemoryInitialCandidateSyncTimeboxMs?: number;
     shouldAbortLowMemoryInitialCandidateSync?: () => boolean;
     lowMemoryHighPairScanMinRecordCount?: number | null;
@@ -4457,6 +4458,22 @@ export function searchMedleyConfigurationByExactCandidateJoin(
         context.shouldAbortLowMemoryInitialCandidateSync ?? null,
       );
       if (lowMemoryTopCandidate.aborted) {
+        if (context.lowMemoryInitialCandidateSyncLocalAbortOnly === true) {
+          profiling.exactCandidateJoinInitialCandidateElapsedMsBySlot[slotIndex] = (
+            performance.now() - slotInitialCandidateStartedAt
+          );
+          profiling.exactCandidateJoinInitialCandidateElapsedMs += performance.now() - initialCandidateStartedAt;
+          profiling.exactCandidateJoinAbortCount += 1;
+          recordAbortDiagnostics("initial-candidate", {
+            slotIndex,
+            candidateCount: candidatesBySlot[slotIndex]?.length ?? 0,
+            peekUpperBound: generators[slotIndex].peekUpperBound(),
+          });
+          profiling.exactCandidateJoinPoppedNodeCount += generators.reduce((sum, generator) => (
+            sum + generator.poppedNodeCount()
+          ), 0);
+          return buildUnprovedExactCandidateJoinResult();
+        }
         topCandidate = generators[slotIndex].next();
       } else if (lowMemoryTopCandidate.score !== null) {
         topCandidate = generators[slotIndex].next(lowMemoryTopCandidate.score);

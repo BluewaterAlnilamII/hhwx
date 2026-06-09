@@ -697,6 +697,9 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
       : MEDLEY_EXACT_CANDIDATE_JOIN_LOW_MEMORY_HIGH_PAIR_PREFIX_RECORD_LIMIT
     : null;
   const disableLowMemoryInitialCandidateSync = optimization.disableLowMemoryInitialCandidateSync === true;
+  const lowMemoryInitialCandidateSyncLocalAbortOnly = (
+    optimization.lowMemoryInitialCandidateSyncLocalAbortOnly === true
+  );
   const parsedLowMemoryInitialCandidateSyncTimeboxMs = (
     optimization.lowMemoryInitialCandidateSyncTimeboxMs !== undefined
       ? Math.trunc(optimization.lowMemoryInitialCandidateSyncTimeboxMs)
@@ -2716,6 +2719,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
     }
     if (traceEntry) {
       traceEntry.lowMemoryInitialCandidateSync = shouldUseLowMemoryInitialCandidateSync;
+      traceEntry.lowMemoryInitialCandidateSyncLocalAbortOnly = lowMemoryInitialCandidateSyncLocalAbortOnly;
       traceEntry.lowMemoryInitialCandidateSyncSameCoarseProofElapsedMs = Math.round(
         sameCoarseMaxExactJoinProofElapsedMs,
       );
@@ -3379,6 +3383,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
           exactJoinPrefixSeedPreviousLocalTimeout: exactJoinPrefixSeedDisabledCoarseKeys.has(currentCoarseKey),
           exactJoinPrefixSeedMemorySoftLimitMiB: stats.memorySoftLimitMiB,
           enableLowMemoryInitialCandidateSync: shouldUseLowMemoryInitialCandidateSync,
+          lowMemoryInitialCandidateSyncLocalAbortOnly,
           lowMemoryInitialCandidateSyncTimeboxMs,
           shouldAbortLowMemoryInitialCandidateSync,
           lowMemoryHighPairScanMinRecordCount,
@@ -3742,6 +3747,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
           exactJoinPrefixSeedPreviousLocalTimeout: exactJoinPrefixSeedDisabledCoarseKeys.has(currentCoarseKey),
           exactJoinPrefixSeedMemorySoftLimitMiB: stats.memorySoftLimitMiB,
           enableLowMemoryInitialCandidateSync: shouldUseLowMemoryInitialCandidateSync,
+          lowMemoryInitialCandidateSyncLocalAbortOnly,
           lowMemoryInitialCandidateSyncTimeboxMs,
           shouldAbortLowMemoryInitialCandidateSync,
           lowMemoryHighPairScanMinRecordCount,
