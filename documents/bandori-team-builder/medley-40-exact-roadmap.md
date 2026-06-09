@@ -14,10 +14,11 @@ Primary target:
 - Events: `none`, `244`, `260`, and `323`.
 - Matrix size: `10 profiles * 4 events = 40 all-scope cases`.
 - Search budget: `300000ms` per case.
-- Current pinned stage gate: `38/40` exact, with no failed run and no OOM.
-- Next working stage gate: at least `39/40` exact while preserving the pinned
-  `38/40` checkpoint.
+- Current pinned stage gate: `39/40` exact, with no failed run and no OOM.
+- Next working stage gate: `40/40` exact while preserving the pinned `39/40`
+  checkpoint.
 - Final success condition: `40/40` exact, with no failed run and no OOM.
+- Current only bounded row: `P03:260`.
 
 Out of scope for the primary target:
 
@@ -187,12 +188,11 @@ Rejected/diagnostic 2026-06-08 evidence:
 
 Current acceptance standard:
 
-- Current pinned checkpoint: `38/40` exact.
-- Next stage pass: `>=39/40` exact.
-- Final target: `40/40` exact.
+- Current pinned checkpoint: `39/40` exact.
+- Final target and next stage pass: `40/40` exact.
 - Bounded-gap total must not regress against the latest clean pinned-fixture
   baseline.
-- New patches must not regress below the pinned `38/40` checkpoint.
+- New patches must not regress below the pinned `39/40` checkpoint.
 - Failed runs and OOM are always failures.
 - Peak working set must not exceed the latest clean pinned-fixture baseline by
   more than the active memory gate.
@@ -726,15 +726,14 @@ Each patch must pass:
   branch-upper / anchor-frontier upper pass over the top event-root slot,
   escalating to exact join only if the cheap pass narrows the gap and the
   candidate counts remain under a strict local cap.
-- Stage D: test the two active blockers first:
-  `P03:260` and `P06:323`. The immediate `39/40` gate passes if either one
-  becomes exact without regressing score/gap/memory on the guard set. The
-  `40/40` gate requires both to become exact.
+- Stage D: `P06:323` is already exact. Test `P03:260` first, then the hard
+  guard set. The `40/40` gate passes only when `P03:260` becomes exact without
+  regressing score/gap/memory on the guard set.
 - Stage E: guard set for every patch remains `P03:260`, `P06:323`,
   `P07:260`, `P08:323`, `P10:244`, `P10:260`, `P07:244`, and `P08:244`.
   Full isolated 40-case acceptance is required after any guard-set pass.
-- Acceptance thresholds: exact count must not drop below `38/40`, bounded-gap
-  total must not exceed `977673`, no currently exact guard case may become
+- Acceptance thresholds: exact count must not drop below `39/40`, bounded-gap
+  total must not exceed `370472`, no currently exact guard case may become
   bounded, peak working set must stay within the active memory gate, and there
   must be no OOM or failed subprocess.
 - Do not continue with broader seed, greedy, prefix-seed, candidate-limit, or
@@ -744,27 +743,41 @@ Each patch must pass:
 
 The next actionable step is not another seed experiment. It is:
 
-1. Treat the `38/40` run from `2026-06-09T03-17-04-125Z` as the current pinned
+1. Treat the `39/40` run from `2026-06-09T05-44-21-186Z` as the current pinned
    checkpoint for the branch. New patches must not regress below it.
-2. Target `39/40` next. The only remaining blockers are `P03:260` and
-   `P06:323`.
-3. Do not solve the remaining rows with broader seeding or warmup. Both rows
-   are now controlled remembered-root upper gaps with no timeout, no memory
-   limit, and no exact-join calls.
+2. Target `40/40` next. The only remaining blocker is `P03:260`.
+3. Do not solve the remaining row with broader seeding or warmup. It is now a
+   controlled remembered-root upper gap with no timeout, no memory limit, and
+   no accepted proof closure.
 4. The next generic implementation candidate is a bounded, memory-safe
    event/root frontier proof probe. It should attempt to close or tighten the
    first remembered unclosed configuration:
-   `RaiseASuilen/happy/performance` for `P03:260` and
-   `PastelPalettes/cool/performance` for `P06:323`.
+   `RaiseASuilen/happy/performance` for `P03:260`.
 5. The probe must be opt-in first, must not materialize the full exact-candidate
    frontier, and must report proof-ledger deltas for upper reduction, elapsed
    time, and memory.
 6. Re-run at least this guard set after the next patch:
    `P03:260`, `P06:323`, `P07:260`, `P08:323`, `P10:244`, `P10:260`,
    `P07:244`, and `P08:244`.
-7. If either remaining blocker converts and the guard set does not regress,
-   re-run the full isolated 40-case matrix and generate another timestamped
-   report.
+7. If `P03:260` converts and the guard set does not regress, re-run the full
+   isolated 40-case matrix and generate another timestamped report.
+
+Current execution workflow for the `40/40` goal:
+
+1. Keep all work on `dev/medley-39-exact-frontier`; keep the main checkout out
+   of this experiment.
+2. Commit and push after every stable checkpoint that passes static validation
+   or produces durable benchmark evidence.
+3. Before a proof-path patch, document the hypothesis, the acceptance gate, and
+   the expected diagnostic fields in this file.
+4. After each single-case or guard-set run, record the raw result path, exact
+   status, bounded reason, elapsed time, peak working set, residual upper/gap,
+   and why the result is accepted or rejected.
+5. After every full 40-case run, create a timestamped report containing timing,
+   memory, exact/bounded status, bounded reasons, failure analysis, relevant
+   optimization parameters, and next recommendations.
+6. Do not promote any opt-in proof experiment unless it first passes
+   `P03:260`, then the hard guard set, then the full isolated 40-case matrix.
 
 ## Current Checkpoint - 2026-06-09 39/40
 
@@ -883,3 +896,62 @@ Next optimization direction:
 7. After any guard-set pass, rerun the full isolated 40-case matrix and create
    a new timestamped report with timing, memory, exact/bounded status, bounded
    reasons, failure analysis, and next recommendations.
+
+2026-06-09 follow-up diagnostics after the `39/40` checkpoint:
+
+- `lowMemoryInitialCandidateSyncDirectCandidate=true` was fixed to use the same
+  `score -> maxScore -> cardInstanceKeys/cardIds` candidate ordering as the
+  normal generator. This keeps it suitable as an opt-in diagnostic path, but it
+  is not accepted as a default optimization.
+- P03 diagnostic with direct candidate, default order, event-root soft limit
+  `200000`, and memory soft limit `4488`:
+  `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-09T09-14-15-542Z.json`.
+  Result stayed bounded: gap `354570`, elapsed `74201ms`, peak `4489 MiB`,
+  `memoryLimited=true`. It proved the first sibling and then hit memory at
+  `RaiseASuilen/happy/technique` candidate fill.
+- P03 diagnostic with the same options but memory soft limit `4608`:
+  `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-09T09-16-31-421Z.json`.
+  Result became exact: elapsed `215881ms`, peak `4553 MiB`, no timeout and no
+  memory limit. This proves the remaining P03 proof path is reachable, but only
+  with a higher transient working-set budget.
+- Hard guard with direct candidate, event-root soft limit `200000`, and memory
+  soft limit `4608`:
+  `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-09T09-22-41-861Z.json`.
+  Rejected: `5/8` exact, bounded rows `P03:260`, `P06:323`, and `P07:260`,
+  bounded-gap total `1253867`, peak `4614 MiB`. `P06:323` regressed to
+  `candidate-fill-soft-limit` without timeout or memory limit, so this cannot
+  be a broad guard-set option.
+- Rejected diagnostic: same-coarse low-root-first proof order. It can move the
+  first heavy sibling from performance/technique to visual, but the next sibling
+  still hits memory. It changes where the wall appears rather than removing it.
+- Rejected diagnostic: score-cache clear during low-memory initial-candidate
+  sync. In the tested path the clear counter stayed `0`; memory pressure
+  happens before that lever can matter.
+- Rejected diagnostic: memory-soft-limit GC retry. It recovered one near-limit
+  read but allowed later RSS to grow to more than `5500 MiB` while still
+  ending bounded. Do not reintroduce this as a proof path.
+- Rejected diagnostic: omitting persistent `cardInstanceKeys` for ordinary
+  profile cards. It looked like a possible candidate-memory reduction, but it
+  changed sort/allocation behavior and worsened P03/P06 memory profiles. The
+  implementation was reverted.
+- Pinned-option smoke after reverting the failed memory optimizations:
+  `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-09T10-19-37-132Z.json`.
+  Result preserved expected semantics for the two checked rows:
+  `P03:260` bounded with gap `370472`, and `P06:323` exact. The smoke peak
+  was `4081 MiB`, still below the `4488 MiB` gate but higher than the pinned
+  full-run P06 sample; treat memory sampling on this row as noisy until the next
+  full 40-case run.
+
+Updated conclusion:
+
+- P03 is no longer primarily a seed-quality problem. It is a proof
+  materialization / transient working-set problem.
+- Raising memory can make P03 exact in isolation, but the guard set shows that a
+  broad direct-candidate/high-limit path regresses other hard cases.
+- The next viable generic direction is to reduce candidate materialization
+  during exact join, or to prove the residual pair-unseen frontier without
+  building the full three-slot candidate arrays.
+- The next patch should target one of these low-allocation proof conversions:
+  a compact candidate-key representation, a pair-unseen proof that streams
+  candidates instead of storing them, or a same-coarse sibling proof pass that
+  runs one heavy sibling at a time with a bounded retained frontier.

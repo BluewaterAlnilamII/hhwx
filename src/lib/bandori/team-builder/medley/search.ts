@@ -276,6 +276,24 @@ function buildProofLedger(
         anchorFrontierCheapUpperImprovementCount: (
           asFiniteNumber(entry.exactCandidateJoinAnchorFrontierCheapUpperImprovementCountDelta)
         ),
+        anchorFrontierCheapUpperUnseenRefineAttemptCount: (
+          asFiniteNumber(entry.exactCandidateJoinLastAnchorFrontierCheapUpperUnseenRefineAttemptCount)
+        ),
+        anchorFrontierCheapUpperUnseenRefineCandidateCount: (
+          asFiniteNumber(entry.exactCandidateJoinLastAnchorFrontierCheapUpperUnseenRefineCandidateCount)
+        ),
+        anchorFrontierCheapUpperUnseenRefineImprovementCount: (
+          asFiniteNumber(entry.exactCandidateJoinLastAnchorFrontierCheapUpperUnseenRefineImprovementCount)
+        ),
+        anchorFrontierCheapUpperUnseenRefineAbortReason: (
+          entry.exactCandidateJoinLastAnchorFrontierCheapUpperUnseenRefineAbortReason ?? null
+        ),
+        lowMemoryInitialCandidateScoreCacheClearCount: (
+          asFiniteNumber(entry.exactCandidateJoinLowMemoryInitialCandidateScoreCacheClearCountDelta)
+        ),
+        lowMemoryInitialCandidateScoreCacheClearInterval: (
+          asFiniteNumber(entry.exactCandidateJoinLastLowMemoryInitialCandidateScoreCacheClearInterval)
+        ),
         anchorFrontierProofTriggerCount: asFiniteNumber(entry.exactCandidateJoinAnchorFrontierProofTriggerCountDelta),
         anchorFrontierProofCompletedCount: (
           asFiniteNumber(entry.exactCandidateJoinAnchorFrontierProofCompletedCountDelta)
@@ -549,6 +567,24 @@ function buildBoundedFrontierGroups(
       anchorFrontierCheapUpperSplitAbortReason: (
         entry.exactCandidateJoinLastAnchorFrontierCheapUpperSplitAbortReason ?? null
       ),
+      anchorFrontierCheapUpperUnseenRefineAttemptCount: (
+        entry.exactCandidateJoinLastAnchorFrontierCheapUpperUnseenRefineAttemptCount ?? null
+      ),
+      anchorFrontierCheapUpperUnseenRefineCandidateCount: (
+        entry.exactCandidateJoinLastAnchorFrontierCheapUpperUnseenRefineCandidateCount ?? null
+      ),
+      anchorFrontierCheapUpperUnseenRefineImprovementCount: (
+        entry.exactCandidateJoinLastAnchorFrontierCheapUpperUnseenRefineImprovementCount ?? null
+      ),
+      anchorFrontierCheapUpperUnseenRefineAbortReason: (
+        entry.exactCandidateJoinLastAnchorFrontierCheapUpperUnseenRefineAbortReason ?? null
+      ),
+      lowMemoryInitialCandidateScoreCacheClearCount: (
+        entry.exactCandidateJoinLowMemoryInitialCandidateScoreCacheClearCountDelta ?? null
+      ),
+      lowMemoryInitialCandidateScoreCacheClearInterval: (
+        entry.exactCandidateJoinLastLowMemoryInitialCandidateScoreCacheClearInterval ?? null
+      ),
       anchorFrontierImprovementProbeProcessedAnchorCount: (
         entry.exactCandidateJoinLastAnchorFrontierImprovementProbeProcessedAnchorCount ?? null
       ),
@@ -651,6 +687,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
   const requestedEnableTrailingSameCoarseDfsOnly = optimization.enableTrailingSameCoarseDfsOnly === true;
   const disableDominatedRootSkip = optimization.disableDominatedRootSkip === true;
   const disableSameCoarseTightRootSkip = optimization.disableSameCoarseTightRootSkip === true;
+  const enableSameCoarseLowRootFirstProofOrder = optimization.enableSameCoarseLowRootFirstProofOrder === true;
   const disableAllScopeExactJoinPreSkip = optimization.disableAllScopeExactJoinPreSkip === true;
   const enableAllScopeExactJoinPreSkip = (
     optimization.enableAllScopeExactJoinPreSkip === true
@@ -727,6 +764,17 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
     parsedEventRootFrontierProbeAnchorCheapUpperMaxAnchors,
   )
     ? Math.max(1, parsedEventRootFrontierProbeAnchorCheapUpperMaxAnchors)
+    : null;
+  const eventRootFrontierProbeAnchorCheapUpperRefineUnseen =
+    optimization.eventRootFrontierProbeAnchorCheapUpperRefineUnseen === true;
+  const parsedEventRootFrontierProbeAnchorCheapUpperUnseenRefineMaxGeneratedCandidates =
+    optimization.eventRootFrontierProbeAnchorCheapUpperUnseenRefineMaxGeneratedCandidates !== undefined
+      ? Math.trunc(optimization.eventRootFrontierProbeAnchorCheapUpperUnseenRefineMaxGeneratedCandidates)
+      : Number.NaN;
+  const eventRootFrontierProbeAnchorCheapUpperUnseenRefineMaxGeneratedCandidates = Number.isFinite(
+    parsedEventRootFrontierProbeAnchorCheapUpperUnseenRefineMaxGeneratedCandidates,
+  )
+    ? Math.max(1, parsedEventRootFrontierProbeAnchorCheapUpperUnseenRefineMaxGeneratedCandidates)
     : null;
   const parsedAnchorCandidateLimit = optimization.anchorCandidateLimit !== undefined
     ? Math.trunc(optimization.anchorCandidateLimit)
@@ -827,6 +875,19 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
   )
     ? Math.max(0, parsedLowMemoryInitialCandidateSyncMaxSlotCardCount)
     : MEDLEY_LOW_MEMORY_INITIAL_CANDIDATE_SYNC_MAX_SLOT_CARD_COUNT;
+  const parsedLowMemoryInitialCandidateSyncScoreCacheClearInterval = (
+    optimization.lowMemoryInitialCandidateSyncScoreCacheClearInterval !== undefined
+      ? Math.trunc(optimization.lowMemoryInitialCandidateSyncScoreCacheClearInterval)
+      : Number.NaN
+  );
+  const lowMemoryInitialCandidateSyncScoreCacheClearInterval = Number.isFinite(
+    parsedLowMemoryInitialCandidateSyncScoreCacheClearInterval,
+  )
+    ? Math.max(1, parsedLowMemoryInitialCandidateSyncScoreCacheClearInterval)
+    : null;
+  const lowMemoryInitialCandidateSyncDirectCandidate = (
+    optimization.lowMemoryInitialCandidateSyncDirectCandidate === true
+  );
   const enableLowMemoryInitialCandidateSyncGcProbe = (
     optimization.enableLowMemoryInitialCandidateSyncGcProbe === true
   );
@@ -1837,9 +1898,58 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
       || left.index - right.index
     );
     if (shouldUseAllScopeObservedRootSort) {
-      orderedConfigurations = configurationEntries
-        .sort(compareObservedRootUpper)
-        .map(({ configuration }) => configuration);
+      if (enableSameCoarseLowRootFirstProofOrder) {
+        const groupStats = new Map<string, {
+          maxObservedRootUpperBound: number;
+          maxRootUpperBound: number;
+          maxSeedScore: number;
+          minIndex: number;
+        }>();
+        for (const entry of configurationEntries) {
+          const key = getMedleyAreaItemCoarseKey(entry.configuration);
+          const current = groupStats.get(key);
+          if (!current) {
+            groupStats.set(key, {
+              maxObservedRootUpperBound: entry.observedRootUpperBound,
+              maxRootUpperBound: entry.rootUpperBound,
+              maxSeedScore: entry.seedScore,
+              minIndex: entry.index,
+            });
+            continue;
+          }
+          current.maxObservedRootUpperBound = Math.max(
+            current.maxObservedRootUpperBound,
+            entry.observedRootUpperBound,
+          );
+          current.maxRootUpperBound = Math.max(current.maxRootUpperBound, entry.rootUpperBound);
+          current.maxSeedScore = Math.max(current.maxSeedScore, entry.seedScore);
+          current.minIndex = Math.min(current.minIndex, entry.index);
+        }
+        orderedConfigurations = configurationEntries
+          .sort((left, right) => {
+            const leftGroup = groupStats.get(getMedleyAreaItemCoarseKey(left.configuration));
+            const rightGroup = groupStats.get(getMedleyAreaItemCoarseKey(right.configuration));
+            if (leftGroup && rightGroup && leftGroup !== rightGroup) {
+              return (
+                rightGroup.maxObservedRootUpperBound - leftGroup.maxObservedRootUpperBound
+                || rightGroup.maxSeedScore - leftGroup.maxSeedScore
+                || rightGroup.maxRootUpperBound - leftGroup.maxRootUpperBound
+                || leftGroup.minIndex - rightGroup.minIndex
+              );
+            }
+            return (
+              left.observedRootUpperBound - right.observedRootUpperBound
+              || right.seedScore - left.seedScore
+              || right.rootUpperBound - left.rootUpperBound
+              || left.index - right.index
+            );
+          })
+          .map(({ configuration }) => configuration);
+      } else {
+        orderedConfigurations = configurationEntries
+          .sort(compareObservedRootUpper)
+          .map(({ configuration }) => configuration);
+      }
     } else {
       orderedConfigurations = configurationEntries
         .sort((left, right) => (
@@ -2024,6 +2134,9 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
       ),
       exactCandidateJoinAnchorFrontierCheapUpperTimeboxCount: (
         profiling.exactCandidateJoinAnchorFrontierCheapUpperTimeboxCount
+      ),
+      exactCandidateJoinLowMemoryInitialCandidateScoreCacheClearCount: (
+        profiling.exactCandidateJoinLowMemoryInitialCandidateScoreCacheClearCount
       ),
       exactCandidateJoinAnchorFrontierImprovementProbeCount: (
         profiling.exactCandidateJoinAnchorFrontierImprovementProbeCount
@@ -2222,6 +2335,10 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
       exactCandidateJoinAnchorFrontierCheapUpperTimeboxCountDelta: (
         profiling.exactCandidateJoinAnchorFrontierCheapUpperTimeboxCount
         - traceStartCounters.exactCandidateJoinAnchorFrontierCheapUpperTimeboxCount
+      ),
+      exactCandidateJoinLowMemoryInitialCandidateScoreCacheClearCountDelta: (
+        profiling.exactCandidateJoinLowMemoryInitialCandidateScoreCacheClearCount
+        - traceStartCounters.exactCandidateJoinLowMemoryInitialCandidateScoreCacheClearCount
       ),
       exactCandidateJoinAnchorFrontierImprovementProbeCountDelta: (
         profiling.exactCandidateJoinAnchorFrontierImprovementProbeCount
@@ -2456,6 +2573,21 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
           ),
           exactCandidateJoinLastAnchorFrontierCheapUpperSplitAbortReason: (
             profiling.exactCandidateJoinLastAnchorFrontierCheapUpperSplitAbortReason
+          ),
+          exactCandidateJoinLastAnchorFrontierCheapUpperUnseenRefineAttemptCount: (
+            profiling.exactCandidateJoinLastAnchorFrontierCheapUpperUnseenRefineAttemptCount
+          ),
+          exactCandidateJoinLastAnchorFrontierCheapUpperUnseenRefineCandidateCount: (
+            profiling.exactCandidateJoinLastAnchorFrontierCheapUpperUnseenRefineCandidateCount
+          ),
+          exactCandidateJoinLastAnchorFrontierCheapUpperUnseenRefineImprovementCount: (
+            profiling.exactCandidateJoinLastAnchorFrontierCheapUpperUnseenRefineImprovementCount
+          ),
+          exactCandidateJoinLastAnchorFrontierCheapUpperUnseenRefineAbortReason: (
+            profiling.exactCandidateJoinLastAnchorFrontierCheapUpperUnseenRefineAbortReason
+          ),
+          exactCandidateJoinLastLowMemoryInitialCandidateScoreCacheClearInterval: (
+            profiling.exactCandidateJoinLastLowMemoryInitialCandidateScoreCacheClearInterval
           ),
           exactCandidateJoinLastAnchorFrontierImprovementProbeProcessedAnchorCount: (
             profiling.exactCandidateJoinLastAnchorFrontierImprovementProbeProcessedAnchorCount
@@ -2930,6 +3062,10 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
       traceEntry.lowMemoryInitialCandidateSyncMaxSlotCardCount = (
         lowMemoryInitialCandidateSyncMaxSlotCardCount
       );
+      traceEntry.lowMemoryInitialCandidateSyncScoreCacheClearInterval = (
+        lowMemoryInitialCandidateSyncScoreCacheClearInterval
+      );
+      traceEntry.lowMemoryInitialCandidateSyncDirectCandidate = lowMemoryInitialCandidateSyncDirectCandidate;
       traceEntry.lowMemoryInitialCandidateSyncObservedMaxSlotCardCount = (
         maxLowMemoryInitialCandidateSyncSlotCardCount
       );
@@ -3580,6 +3716,8 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
           lowMemoryInitialCandidateSyncLocalAbortOnly,
           lowMemoryInitialCandidateSyncLightUpper,
           lowMemoryInitialCandidateSyncTimeboxMs,
+          lowMemoryInitialCandidateSyncScoreCacheClearInterval,
+          lowMemoryInitialCandidateSyncDirectCandidate,
           shouldAbortLowMemoryInitialCandidateSync,
           lowMemoryHighPairScanMinRecordCount,
           lowMemoryHighPairPrefixRecordLimit,
@@ -3802,6 +3940,12 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
         traceEntry.eventRootFrontierProbeAnchorCheapUpperMaxAnchors = (
           eventRootFrontierProbeAnchorCheapUpperMaxAnchors
         );
+        traceEntry.eventRootFrontierProbeAnchorCheapUpperRefineUnseen = (
+          eventRootFrontierProbeAnchorCheapUpperRefineUnseen
+        );
+        traceEntry.eventRootFrontierProbeAnchorCheapUpperUnseenRefineMaxGeneratedCandidates = (
+          eventRootFrontierProbeAnchorCheapUpperUnseenRefineMaxGeneratedCandidates
+        );
       }
       const exactJoinResult = searchMedleyConfigurationByExactCandidateJoin(
         results,
@@ -3829,6 +3973,8 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
           lowMemoryInitialCandidateSyncLocalAbortOnly,
           lowMemoryInitialCandidateSyncLightUpper,
           lowMemoryInitialCandidateSyncTimeboxMs,
+          lowMemoryInitialCandidateSyncScoreCacheClearInterval,
+          lowMemoryInitialCandidateSyncDirectCandidate,
           shouldAbortLowMemoryInitialCandidateSync,
           lowMemoryHighPairScanMinRecordCount,
           lowMemoryHighPairPrefixRecordLimit,
@@ -3837,6 +3983,10 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
           anchorFrontierProofMinRemainingMs: eventRootFrontierProbeAnchorProofMinRemainingMs,
           anchorFrontierCheapUpperTimeboxMs: eventRootFrontierProbeAnchorCheapUpperTimeboxMs,
           anchorFrontierCheapUpperMaxAnchors: eventRootFrontierProbeAnchorCheapUpperMaxAnchors,
+          anchorFrontierCheapUpperRefineUnseen: eventRootFrontierProbeAnchorCheapUpperRefineUnseen,
+          anchorFrontierCheapUpperUnseenRefineMaxGeneratedCandidates: (
+            eventRootFrontierProbeAnchorCheapUpperUnseenRefineMaxGeneratedCandidates
+          ),
         },
         observeEvaluatedMedleyResult,
       );
@@ -4285,6 +4435,8 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
           lowMemoryInitialCandidateSyncLocalAbortOnly,
           lowMemoryInitialCandidateSyncLightUpper,
           lowMemoryInitialCandidateSyncTimeboxMs,
+          lowMemoryInitialCandidateSyncScoreCacheClearInterval,
+          lowMemoryInitialCandidateSyncDirectCandidate,
           shouldAbortLowMemoryInitialCandidateSync,
           lowMemoryHighPairScanMinRecordCount,
           lowMemoryHighPairPrefixRecordLimit,

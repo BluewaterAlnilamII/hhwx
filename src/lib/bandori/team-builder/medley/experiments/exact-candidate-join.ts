@@ -35,6 +35,7 @@ import {
   MEDLEY_EXACT_CANDIDATE_JOIN_ANCHOR_FRONTIER_CHEAP_UPPER_REFINE_TOP_ANCHORS,
   MEDLEY_EXACT_CANDIDATE_JOIN_ANCHOR_FRONTIER_CHEAP_UPPER_SPLIT_STATE_BUDGET,
   MEDLEY_EXACT_CANDIDATE_JOIN_ANCHOR_FRONTIER_CHEAP_UPPER_TIMEBOX_MS,
+  MEDLEY_EXACT_CANDIDATE_JOIN_ANCHOR_FRONTIER_CHEAP_UPPER_UNSEEN_REFINE_MAX_GENERATED,
   MEDLEY_EXACT_CANDIDATE_JOIN_ANCHOR_FRONTIER_IMPROVEMENT_PROBE_MAX_ANCHORS,
   MEDLEY_EXACT_CANDIDATE_JOIN_ANCHOR_FRONTIER_IMPROVEMENT_PROBE_TIMEBOX_MS,
   MEDLEY_EXACT_CANDIDATE_JOIN_CAPACITY_COMPLEMENT_MARGIN,
@@ -90,6 +91,7 @@ import {
   estimateSearchScopeScoreUpperBound,
   hasCharacterIndexInMask,
 } from "@/lib/bandori/team-builder/core";
+import { getCardInstanceKeys } from "@/lib/bandori/team-builder/core/card-identity";
 import { groupSearchCardsByCharacter } from "@/lib/bandori/team-builder/core/cards";
 import type {
   BandoriMedleyTeamSearchProfilingStats,
@@ -128,6 +130,57 @@ function createMedleyExactCandidateSlotThresholdResult(scoreCutoff: number): Ban
   } as BandoriTeamSearchResult;
 }
 
+function clearMedleyExactSlotScoreCalculationCache(slot: MedleySlotSearch): void {
+  slot.scoreCache.judgeLists?.clear();
+  slot.scoreCache.innerScoreRates?.clear();
+  slot.scoreCache.baseScoresByChart = new WeakMap();
+  slot.scoreCache.noFloorBaseScoreRates?.clear();
+  slot.scoreCache.skillMultiplierLists.clear();
+  slot.scoreCache.noFloorSkillRates.clear();
+  slot.scoreCache.skillWindowContributionsByChart = new WeakMap();
+  slot.scoreCache.resolvedSkills?.clear();
+}
+
+function createMedleyScoreOnlyCandidate(
+  slot: MedleySlotSearch,
+  selectedCards: SearchCard[],
+  server: number,
+  perfectRate: number,
+  pruningThresholdResult: BandoriTeamSearchResult | undefined,
+): MedleyTeamCandidate | null {
+  const result = evaluateMedleyScoreOnlyTeam({
+    cards: selectedCards,
+    input: slot.input,
+    chart: slot.chart,
+    configuration: slot.configuration,
+    server,
+    perfectRate,
+    scoreCache: slot.scoreCache,
+    comboOptions: slot.comboOptions,
+    pruningThresholdResult,
+  });
+  return result
+    ? {
+      result,
+      cards: [...selectedCards],
+      cardIds: selectedCards.map((card) => card.cardId),
+      cardInstanceKeys: getCardInstanceKeys(selectedCards),
+    }
+    : null;
+}
+
+function isMedleyCandidatePreferred(
+  candidate: MedleyTeamCandidate,
+  incumbent: MedleyTeamCandidate | null,
+): boolean {
+  if (!incumbent) {
+    return true;
+  }
+  const sorted = [incumbent, candidate];
+  sortMedleyCandidates(sorted);
+  return sorted[0] === candidate;
+}
+
 function findBestMedleyExactSlotCandidateLowMemory(
   slot: MedleySlotSearch,
   server: number,
@@ -139,8 +192,10 @@ function findBestMedleyExactSlotCandidateLowMemory(
   nodeSoftLimit: number,
   localDeadlineAt: number | null = null,
   shouldAbortLocalSearch: (() => boolean) | null = null,
+  scoreCacheClearInterval: number | null = null,
   useSkillContextUpper = true,
-): { aborted: boolean; score: number | null } {
+  returnCandidate = false,
+): { aborted: boolean; score: number | null; candidate: MedleyTeamCandidate | null } {
   const groupedSearchCards = groupSearchCardsByCharacter(slot.searchCards);
   const searchSlot = groupedSearchCards.every((card, index) => card === slot.searchCards[index])
     ? slot
@@ -164,8 +219,30 @@ function findBestMedleyExactSlotCandidateLowMemory(
   const bannedCardIds = new Set<number>();
   const selectedCards: SearchCard[] = [];
   let bestScore = Number.NEGATIVE_INFINITY;
+  let bestCandidate: MedleyTeamCandidate | null = null;
   let visitedNodeCount = 0;
+  let evaluatedSinceScoreCacheClear = 0;
   let aborted = false;
+  const effectiveScoreCacheClearInterval = (
+    scoreCacheClearInterval !== null
+    && Number.isFinite(scoreCacheClearInterval)
+  )
+    ? Math.max(1, Math.trunc(scoreCacheClearInterval))
+    : null;
+  profiling.exactCandidateJoinLastLowMemoryInitialCandidateScoreCacheClearInterval = (
+    effectiveScoreCacheClearInterval
+  );
+  const maybeClearScoreCache = (): void => {
+    if (effectiveScoreCacheClearInterval === null) {
+      return;
+    }
+    if (evaluatedSinceScoreCacheClear < effectiveScoreCacheClearInterval) {
+      return;
+    }
+    clearMedleyExactSlotScoreCalculationCache(searchSlot);
+    evaluatedSinceScoreCacheClear = 0;
+    profiling.exactCandidateJoinLowMemoryInitialCandidateScoreCacheClearCount += 1;
+  };
 
   const visit = (
     startIndex: number,
@@ -235,7 +312,26 @@ function findBestMedleyExactSlotCandidateLowMemory(
         pruningThresholdResult: createMedleyExactCandidateSlotThresholdResult(scoreCutoff),
       });
       stats.evaluatedTeamCount += 1;
+      evaluatedSinceScoreCacheClear += 1;
+      maybeClearScoreCache();
       if (score === null || score < scoreCutoff) {
+        return;
+      }
+      if (returnCandidate) {
+        const candidate = createMedleyScoreOnlyCandidate(
+          searchSlot,
+          selectedCards,
+          server,
+          perfectRate,
+          createMedleyExactCandidateSlotThresholdResult(scoreCutoff),
+        );
+        if (!candidate) {
+          return;
+        }
+        if (score > bestScore || isMedleyCandidatePreferred(candidate, bestCandidate)) {
+          bestScore = score;
+          bestCandidate = candidate;
+        }
         return;
       }
       bestScore = score;
@@ -270,7 +366,11 @@ function findBestMedleyExactSlotCandidateLowMemory(
   };
 
   visit(0, 0, 0, 0);
-  return { aborted, score: Number.isFinite(bestScore) ? bestScore : null };
+  return {
+    aborted,
+    score: Number.isFinite(bestScore) ? bestScore : null,
+    candidate: !aborted && !stats.timedOut && returnCandidate ? bestCandidate : null,
+  };
 }
 
 export function estimateMedleyExactSlotNodeUpperBound(
@@ -3353,6 +3453,8 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
   options: {
     timeboxMs?: number | null;
     maxAnchors?: number | null;
+    refineUnseen?: boolean;
+    unseenRefineMaxGeneratedCandidates?: number | null;
   } = {},
 ): MedleyExactCandidateAnchorFrontierProofResult {
   const startedAt = performance.now();
@@ -3390,6 +3492,14 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
       ? Math.max(1, Math.trunc(options.maxAnchors))
       : MEDLEY_EXACT_CANDIDATE_JOIN_ANCHOR_FRONTIER_CHEAP_UPPER_MAX_ANCHORS,
   );
+  const shouldRefineUnseenUpper = options.refineUnseen === true;
+  const unseenRefineMaxGeneratedCandidates = (
+    options.unseenRefineMaxGeneratedCandidates !== null
+    && options.unseenRefineMaxGeneratedCandidates !== undefined
+    && Number.isFinite(options.unseenRefineMaxGeneratedCandidates)
+  )
+    ? Math.max(1, Math.trunc(options.unseenRefineMaxGeneratedCandidates))
+    : MEDLEY_EXACT_CANDIDATE_JOIN_ANCHOR_FRONTIER_CHEAP_UPPER_UNSEEN_REFINE_MAX_GENERATED;
   const leftPeekUpperBound = generators[leftSlotIndex].peekUpperBound();
   const rightPeekUpperBound = generators[rightSlotIndex].peekUpperBound();
   const anchorPeekUpperBound = generators[anchorSlotIndex].peekUpperBound();
@@ -3423,10 +3533,24 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
     pairUpper: number;
     source: string;
     generatedPairUpper: number;
+    leftUnseenUpper: number;
+    rightUnseenUpper: number;
   }>();
   let splitAttemptCount = 0;
   let splitStateCount = 0;
   let splitAbortReason: string | null = null;
+  let unseenRefineAttemptCount = 0;
+  let unseenRefineCandidateCount = 0;
+  let unseenRefineImprovementCount = 0;
+  let unseenRefineAbortReason: string | null = null;
+  const recordUnseenRefineProfiling = (): void => {
+    profiling.exactCandidateJoinLastAnchorFrontierCheapUpperUnseenRefineAttemptCount = unseenRefineAttemptCount;
+    profiling.exactCandidateJoinLastAnchorFrontierCheapUpperUnseenRefineCandidateCount = unseenRefineCandidateCount;
+    profiling.exactCandidateJoinLastAnchorFrontierCheapUpperUnseenRefineImprovementCount = (
+      unseenRefineImprovementCount
+    );
+    profiling.exactCandidateJoinLastAnchorFrontierCheapUpperUnseenRefineAbortReason = unseenRefineAbortReason;
+  };
 
   profiling.exactCandidateJoinAnchorFrontierCheapUpperCount += 1;
   profiling.exactCandidateJoinLastAnchorFrontierCheapUpperSlotIndex = anchorSlotIndex;
@@ -3452,6 +3576,10 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
   profiling.exactCandidateJoinLastAnchorFrontierCheapUpperSplitAttemptCount = 0;
   profiling.exactCandidateJoinLastAnchorFrontierCheapUpperSplitStateCount = 0;
   profiling.exactCandidateJoinLastAnchorFrontierCheapUpperSplitAbortReason = null;
+  profiling.exactCandidateJoinLastAnchorFrontierCheapUpperUnseenRefineAttemptCount = 0;
+  profiling.exactCandidateJoinLastAnchorFrontierCheapUpperUnseenRefineCandidateCount = 0;
+  profiling.exactCandidateJoinLastAnchorFrontierCheapUpperUnseenRefineImprovementCount = 0;
+  profiling.exactCandidateJoinLastAnchorFrontierCheapUpperUnseenRefineAbortReason = null;
 
   const finiteScore = (score: number): number => (
     Number.isFinite(score) ? score : Number.NEGATIVE_INFINITY
@@ -3535,12 +3663,210 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
       processedUpperMaxRightGeneratedCandidate = rightGeneratedCandidate;
     }
   };
+  const hasAnyCardId = (
+    candidate: MedleyTeamCandidate,
+    cardIds: readonly number[],
+  ): boolean => candidate.cardIds.some((cardId) => cardIds.includes(cardId));
+  const buildBannedCardIdSet = (cardIdGroups: Array<readonly number[]>): Set<number> => {
+    const bannedCardIds = new Set<number>();
+    for (const cardIds of cardIdGroups) {
+      for (const cardId of cardIds) {
+        bannedCardIds.add(cardId);
+      }
+    }
+    return bannedCardIds;
+  };
+  const estimateSlotUpperExcludingCardIds = (
+    slotIndex: number,
+    cardIdGroups: Array<readonly number[]>,
+  ): number => finiteScore(estimateMedleyExactSlotNodeUpperBound(
+    slots[slotIndex],
+    [],
+    0,
+    buildBannedCardIdSet(cardIdGroups),
+    0,
+    0,
+    0,
+    profiling,
+  ));
+  const refineGeneratedPlusUnseenUpper = (
+    generatedCandidates: MedleyTeamCandidate[],
+    unseenSlotIndex: number,
+    anchorCandidate: MedleyTeamCandidate,
+    anchorLimitedUnseenUpper: number,
+  ): {
+    upperBound: number;
+    timedOut: boolean;
+    scannedCandidateCount: number;
+  } => {
+    if (!Number.isFinite(anchorLimitedUnseenUpper)) {
+      return {
+        upperBound: Number.NEGATIVE_INFINITY,
+        timedOut: false,
+        scannedCandidateCount: 0,
+      };
+    }
+    let bestUpper = Number.NEGATIVE_INFINITY;
+    let scannedCandidateCount = 0;
+    const maxGeneratedCandidateCount = Math.min(
+      generatedCandidates.length,
+      unseenRefineMaxGeneratedCandidates,
+    );
+    for (let index = 0; index < maxGeneratedCandidateCount; index += 1) {
+      const generatedCandidate = generatedCandidates[index];
+      const fallbackUpper = combineScores(generatedCandidate.result.score, anchorLimitedUnseenUpper);
+      if (performance.now() >= localDeadlineAt) {
+        return {
+          upperBound: Math.max(bestUpper, fallbackUpper),
+          timedOut: true,
+          scannedCandidateCount,
+        };
+      }
+      if (Number.isFinite(bestUpper) && fallbackUpper <= bestUpper) {
+        return {
+          upperBound: bestUpper,
+          timedOut: false,
+          scannedCandidateCount,
+        };
+      }
+      if (hasAnyCardId(generatedCandidate, anchorCandidate.cardIds)) {
+        continue;
+      }
+      const unseenUpper = Math.min(
+        anchorLimitedUnseenUpper,
+        estimateSlotUpperExcludingCardIds(
+          unseenSlotIndex,
+          [anchorCandidate.cardIds, generatedCandidate.cardIds],
+        ),
+      );
+      scannedCandidateCount += 1;
+      const refinedUpper = combineScores(generatedCandidate.result.score, unseenUpper);
+      if (refinedUpper > bestUpper) {
+        bestUpper = refinedUpper;
+      }
+    }
+    const nextGeneratedCandidate = generatedCandidates[maxGeneratedCandidateCount];
+    const remainingGeneratedUpper = nextGeneratedCandidate
+      ? combineScores(nextGeneratedCandidate.result.score, anchorLimitedUnseenUpper)
+      : Number.NEGATIVE_INFINITY;
+    return {
+      upperBound: Math.max(bestUpper, remainingGeneratedUpper),
+      timedOut: false,
+      scannedCandidateCount,
+    };
+  };
+  const refineUnseenPairUpperForEntry = (
+    entry: (typeof processedAnchorUpperEntries)[number],
+    generatedPairUpper: number,
+    leftUnseenUpper: number,
+    rightUnseenUpper: number,
+  ): {
+    pairUpper: number;
+    source: string;
+    generatedPairUpper: number;
+    leftUnseenUpper: number;
+    rightUnseenUpper: number;
+    timedOut: boolean;
+  } => {
+    const targetPairUpper = incumbentScore - entry.anchorScore;
+    const shouldRefineLeftUnseen = (
+      Number.isFinite(leftUnseenUpper)
+      && (!Number.isFinite(targetPairUpper) || leftUnseenUpper > targetPairUpper)
+    );
+    const shouldRefineRightUnseen = (
+      Number.isFinite(rightUnseenUpper)
+      && (!Number.isFinite(targetPairUpper) || rightUnseenUpper > targetPairUpper)
+    );
+    if (!shouldRefineUnseenUpper || (!shouldRefineLeftUnseen && !shouldRefineRightUnseen)) {
+      const pairUpper = Math.max(generatedPairUpper, leftUnseenUpper, rightUnseenUpper);
+      return {
+        pairUpper,
+        source: pairUpper === generatedPairUpper
+          ? "generated-pair"
+          : pairUpper === leftUnseenUpper
+            ? "left-unseen"
+            : "right-unseen",
+        generatedPairUpper,
+        leftUnseenUpper,
+        rightUnseenUpper,
+        timedOut: false,
+      };
+    }
+
+    unseenRefineAttemptCount += 1;
+    let timedOut = false;
+    const anchorLimitedLeftPeekUpperBound = Math.min(
+      finiteScore(leftPeekUpperBound),
+      estimateSlotUpperExcludingCardIds(leftSlotIndex, [entry.anchorCandidate.cardIds]),
+    );
+    const anchorLimitedRightPeekUpperBound = Math.min(
+      finiteScore(rightPeekUpperBound),
+      estimateSlotUpperExcludingCardIds(rightSlotIndex, [entry.anchorCandidate.cardIds]),
+    );
+    const bothUnseenUpper = combineScores(anchorLimitedLeftPeekUpperBound, anchorLimitedRightPeekUpperBound);
+
+    let refinedLeftUnseenUpper = leftUnseenUpper;
+    if (shouldRefineLeftUnseen) {
+      const generatedRightUpper = refineGeneratedPlusUnseenUpper(
+        rightCandidates,
+        leftSlotIndex,
+        entry.anchorCandidate,
+        anchorLimitedLeftPeekUpperBound,
+      );
+      unseenRefineCandidateCount += generatedRightUpper.scannedCandidateCount;
+      timedOut = timedOut || generatedRightUpper.timedOut;
+      refinedLeftUnseenUpper = Math.min(
+        leftUnseenUpper,
+        Math.max(bothUnseenUpper, generatedRightUpper.upperBound),
+      );
+    }
+
+    let refinedRightUnseenUpper = rightUnseenUpper;
+    if (shouldRefineRightUnseen && !timedOut) {
+      const generatedLeftUpper = refineGeneratedPlusUnseenUpper(
+        leftCandidates,
+        rightSlotIndex,
+        entry.anchorCandidate,
+        anchorLimitedRightPeekUpperBound,
+      );
+      unseenRefineCandidateCount += generatedLeftUpper.scannedCandidateCount;
+      timedOut = timedOut || generatedLeftUpper.timedOut;
+      refinedRightUnseenUpper = Math.min(
+        rightUnseenUpper,
+        Math.max(bothUnseenUpper, generatedLeftUpper.upperBound),
+      );
+    }
+
+    if (timedOut) {
+      unseenRefineAbortReason = "timebox";
+    }
+    if (
+      refinedLeftUnseenUpper < leftUnseenUpper
+      || refinedRightUnseenUpper < rightUnseenUpper
+    ) {
+      unseenRefineImprovementCount += 1;
+    }
+    const pairUpper = Math.max(generatedPairUpper, refinedLeftUnseenUpper, refinedRightUnseenUpper);
+    return {
+      pairUpper,
+      source: pairUpper === generatedPairUpper
+        ? "generated-pair"
+        : pairUpper === refinedLeftUnseenUpper
+          ? "left-unseen"
+          : "right-unseen",
+      generatedPairUpper,
+      leftUnseenUpper: refinedLeftUnseenUpper,
+      rightUnseenUpper: refinedRightUnseenUpper,
+      timedOut,
+    };
+  };
   const refineProcessedAnchorUpperEntries = (): boolean => {
     if (processedAnchorUpperEntries.length === 0) {
       return false;
     }
     const sortedEntries = [...processedAnchorUpperEntries].sort((left, right) => right.totalUpper - left.totalUpper);
-    let newRefineCount = 0;
+    let newSplitRefineCount = 0;
+    let newUnseenRefineEntryCount = 0;
     processedUpperMax = Number.NEGATIVE_INFINITY;
     processedUpperMaxSource = null;
     processedUpperMaxAnchorScore = null;
@@ -3553,22 +3879,31 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
 
     for (let index = 0; index < sortedEntries.length; index += 1) {
       const entry = sortedEntries[index];
-      if (entry.source !== "generated-pair") {
-        recordProcessedUpperMax(
-          entry.anchorScore,
-          entry.pairUpper,
-          entry.source,
-          entry.generatedPairUpper,
-          entry.leftUnseenUpper,
-          entry.rightUnseenUpper,
-          entry.leftGeneratedCandidate,
-          entry.rightGeneratedCandidate,
-        );
-        continue;
-      }
-
       let refined = refinedAnchorPairUpperByCandidate.get(entry.anchorCandidate);
-      if (!refined && newRefineCount >= MEDLEY_EXACT_CANDIDATE_JOIN_ANCHOR_FRONTIER_CHEAP_UPPER_REFINE_TOP_ANCHORS) {
+      const targetPairUpper = incumbentScore - entry.anchorScore;
+      const canRefineGeneratedPair = (
+        entry.source === "generated-pair"
+        && newSplitRefineCount < MEDLEY_EXACT_CANDIDATE_JOIN_ANCHOR_FRONTIER_CHEAP_UPPER_REFINE_TOP_ANCHORS
+      );
+      const canRefineUnseenPair = (
+        shouldRefineUnseenUpper
+        && newUnseenRefineEntryCount < MEDLEY_EXACT_CANDIDATE_JOIN_ANCHOR_FRONTIER_CHEAP_UPPER_REFINE_TOP_ANCHORS
+        && (
+          (
+            Number.isFinite(entry.leftUnseenUpper)
+            && (!Number.isFinite(targetPairUpper) || entry.leftUnseenUpper > targetPairUpper)
+          )
+          || (
+            Number.isFinite(entry.rightUnseenUpper)
+            && (!Number.isFinite(targetPairUpper) || entry.rightUnseenUpper > targetPairUpper)
+          )
+        )
+      );
+      const canRefineEntry = canRefineGeneratedPair || canRefineUnseenPair;
+      if (
+        !refined
+        && !canRefineEntry
+      ) {
         recordProcessedUpperMax(
           entry.anchorScore,
           entry.pairUpper,
@@ -3598,25 +3933,95 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
           }
           return true;
         }
-        const splitUpper = estimateGeneratedMedleyExactCandidatePairConflictSplitUpper(
-          leftAvailabilityQuery,
-          rightAvailabilityQuery,
-          entry.anchorCandidate.cardIds,
-          localDeadlineAt,
-        );
-        splitAttemptCount += 1;
-        splitStateCount += splitUpper.stateCount;
-        profiling.exactCandidateJoinLastAnchorFrontierCheapUpperSplitAttemptCount = splitAttemptCount;
-        profiling.exactCandidateJoinLastAnchorFrontierCheapUpperSplitStateCount = splitStateCount;
-        profiling.exactCandidateJoinLastAnchorFrontierCheapUpperSplitAbortReason = splitUpper.abortReason;
-        if (
-          splitUpper.timedOut
-          || Number.isNaN(splitUpper.upperBound)
-          || splitUpper.upperBound === Number.POSITIVE_INFINITY
-        ) {
-          splitAbortReason = splitUpper.abortReason ?? "invalid-upper";
-          profiling.exactCandidateJoinLastAnchorFrontierCheapUpperSplitAbortReason = splitAbortReason;
-          for (let remainingIndex = index; remainingIndex < sortedEntries.length; remainingIndex += 1) {
+        let generatedPairUpper = entry.generatedPairUpper;
+        let generatedPairSource = "generated-pair";
+        if (entry.source === "generated-pair") {
+          const splitUpper = estimateGeneratedMedleyExactCandidatePairConflictSplitUpper(
+            leftAvailabilityQuery,
+            rightAvailabilityQuery,
+            entry.anchorCandidate.cardIds,
+            localDeadlineAt,
+          );
+          splitAttemptCount += 1;
+          splitStateCount += splitUpper.stateCount;
+          profiling.exactCandidateJoinLastAnchorFrontierCheapUpperSplitAttemptCount = splitAttemptCount;
+          profiling.exactCandidateJoinLastAnchorFrontierCheapUpperSplitStateCount = splitStateCount;
+          profiling.exactCandidateJoinLastAnchorFrontierCheapUpperSplitAbortReason = splitUpper.abortReason;
+          if (
+            splitUpper.timedOut
+            || Number.isNaN(splitUpper.upperBound)
+            || splitUpper.upperBound === Number.POSITIVE_INFINITY
+          ) {
+            splitAbortReason = splitUpper.abortReason ?? "invalid-upper";
+            profiling.exactCandidateJoinLastAnchorFrontierCheapUpperSplitAbortReason = splitAbortReason;
+            for (let remainingIndex = index; remainingIndex < sortedEntries.length; remainingIndex += 1) {
+              const remainingEntry = sortedEntries[remainingIndex];
+              recordProcessedUpperMax(
+                remainingEntry.anchorScore,
+                remainingEntry.pairUpper,
+                remainingEntry.source,
+                remainingEntry.generatedPairUpper,
+                remainingEntry.leftUnseenUpper,
+                remainingEntry.rightUnseenUpper,
+                remainingEntry.leftGeneratedCandidate,
+                remainingEntry.rightGeneratedCandidate,
+              );
+            }
+            return true;
+          }
+          generatedPairUpper = splitUpper.upperBound;
+          generatedPairSource = "generated-pair-split";
+          newSplitRefineCount += 1;
+        }
+        const unseenRefineAttemptCountBeforeEntry = unseenRefineAttemptCount;
+        const refinedUnseen = canRefineUnseenPair
+          ? refineUnseenPairUpperForEntry(
+            entry,
+            generatedPairUpper,
+            entry.leftUnseenUpper,
+            entry.rightUnseenUpper,
+          )
+          : (() => {
+            const pairUpper = Math.max(generatedPairUpper, entry.leftUnseenUpper, entry.rightUnseenUpper);
+            return {
+              pairUpper,
+              source: pairUpper === generatedPairUpper
+                ? "generated-pair"
+                : pairUpper === entry.leftUnseenUpper
+                  ? "left-unseen"
+                  : "right-unseen",
+              generatedPairUpper,
+              leftUnseenUpper: entry.leftUnseenUpper,
+              rightUnseenUpper: entry.rightUnseenUpper,
+              timedOut: false,
+            };
+          })();
+        if (unseenRefineAttemptCount > unseenRefineAttemptCountBeforeEntry) {
+          newUnseenRefineEntryCount += 1;
+        }
+        const source = refinedUnseen.source === "generated-pair"
+          ? generatedPairSource
+          : refinedUnseen.source;
+        refined = {
+          pairUpper: refinedUnseen.pairUpper,
+          source,
+          generatedPairUpper,
+          leftUnseenUpper: refinedUnseen.leftUnseenUpper,
+          rightUnseenUpper: refinedUnseen.rightUnseenUpper,
+        };
+        refinedAnchorPairUpperByCandidate.set(entry.anchorCandidate, refined);
+        if (refinedUnseen.timedOut) {
+          recordProcessedUpperMax(
+            entry.anchorScore,
+            refined.pairUpper,
+            refined.source,
+            refined.generatedPairUpper,
+            refined.leftUnseenUpper,
+            refined.rightUnseenUpper,
+            null,
+            null,
+          );
+          for (let remainingIndex = index + 1; remainingIndex < sortedEntries.length; remainingIndex += 1) {
             const remainingEntry = sortedEntries[remainingIndex];
             recordProcessedUpperMax(
               remainingEntry.anchorScore,
@@ -3631,20 +4036,6 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
           }
           return true;
         }
-        const generatedPairUpper = splitUpper.upperBound;
-        const pairUpper = Math.max(generatedPairUpper, entry.leftUnseenUpper, entry.rightUnseenUpper);
-        const source = pairUpper === generatedPairUpper
-          ? "generated-pair-split"
-          : pairUpper === entry.leftUnseenUpper
-            ? "left-unseen"
-            : "right-unseen";
-        refined = {
-          pairUpper,
-          source,
-          generatedPairUpper,
-        };
-        refinedAnchorPairUpperByCandidate.set(entry.anchorCandidate, refined);
-        newRefineCount += 1;
       }
       if (refined) {
         recordProcessedUpperMax(
@@ -3652,8 +4043,8 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
           refined.pairUpper,
           refined.source,
           refined.generatedPairUpper,
-          entry.leftUnseenUpper,
-          entry.rightUnseenUpper,
+          refined.leftUnseenUpper,
+          refined.rightUnseenUpper,
           null,
           null,
         );
@@ -3677,6 +4068,7 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
     profiling.exactCandidateJoinLastAnchorFrontierCheapUpperSplitAttemptCount = splitAttemptCount;
     profiling.exactCandidateJoinLastAnchorFrontierCheapUpperSplitStateCount = splitStateCount;
     profiling.exactCandidateJoinLastAnchorFrontierCheapUpperSplitAbortReason = splitAbortReason;
+    recordUnseenRefineProfiling();
     return false;
   };
   const finish = (
@@ -3684,6 +4076,7 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
     nextAnchorScore: number | null,
   ): MedleyExactCandidateAnchorFrontierProofResult => {
     const refineTimedOut = refineProcessedAnchorUpperEntries();
+    recordUnseenRefineProfiling();
     const elapsedMs = performance.now() - startedAt;
     const observedUpperBound = getResidualUpperBound(nextAnchorScore);
     if (localTimedOut || refineTimedOut) {
@@ -3990,6 +4383,8 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     lowMemoryInitialCandidateSyncLocalAbortOnly?: boolean;
     lowMemoryInitialCandidateSyncLightUpper?: boolean;
     lowMemoryInitialCandidateSyncTimeboxMs?: number;
+    lowMemoryInitialCandidateSyncScoreCacheClearInterval?: number | null;
+    lowMemoryInitialCandidateSyncDirectCandidate?: boolean;
     shouldAbortLowMemoryInitialCandidateSync?: () => boolean;
     lowMemoryHighPairScanMinRecordCount?: number | null;
     lowMemoryHighPairPrefixRecordLimit?: number | null;
@@ -3998,6 +4393,8 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     anchorFrontierProofMinRemainingMs?: number | null;
     anchorFrontierCheapUpperTimeboxMs?: number | null;
     anchorFrontierCheapUpperMaxAnchors?: number | null;
+    anchorFrontierCheapUpperRefineUnseen?: boolean;
+    anchorFrontierCheapUpperUnseenRefineMaxGeneratedCandidates?: number | null;
   } = {},
   observeEvaluatedResult?: MedleyEvaluatedResultObserver,
 ): MedleyExactCandidateJoinResult {
@@ -4101,6 +4498,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
   profiling.exactCandidateJoinLastRemainingOtherUpperBySlot = [];
   profiling.exactCandidateJoinLastCandidateCountsBySlot = [];
   profiling.exactCandidateJoinLastCandidateFillElapsedMsBySlot = [];
+  profiling.exactCandidateJoinLastLowMemoryInitialCandidateScoreCacheClearInterval = null;
 
   const generators = slots.map((slot) => createMedleyExactSlotCandidateGenerator(
     slot,
@@ -4401,6 +4799,8 @@ export function searchMedleyConfigurationByExactCandidateJoin(
         {
           timeboxMs: context.anchorFrontierCheapUpperTimeboxMs,
           maxAnchors: context.anchorFrontierCheapUpperMaxAnchors,
+          refineUnseen: context.anchorFrontierCheapUpperRefineUnseen,
+          unseenRefineMaxGeneratedCandidates: context.anchorFrontierCheapUpperUnseenRefineMaxGeneratedCandidates,
         },
       );
       if (candidateCheapUpperResult.proved) {
@@ -4507,7 +4907,9 @@ export function searchMedleyConfigurationByExactCandidateJoin(
         nodeSoftLimit,
         lowMemoryInitialCandidateSyncDeadlineAt,
         context.shouldAbortLowMemoryInitialCandidateSync ?? null,
+        context.lowMemoryInitialCandidateSyncScoreCacheClearInterval ?? null,
         context.lowMemoryInitialCandidateSyncLightUpper !== true,
+        context.lowMemoryInitialCandidateSyncDirectCandidate === true,
       );
       if (lowMemoryTopCandidate.aborted) {
         if (context.lowMemoryInitialCandidateSyncLocalAbortOnly === true) {
@@ -4527,6 +4929,8 @@ export function searchMedleyConfigurationByExactCandidateJoin(
           return buildUnprovedExactCandidateJoinResult();
         }
         topCandidate = generators[slotIndex].next();
+      } else if (lowMemoryTopCandidate.candidate) {
+        topCandidate = lowMemoryTopCandidate.candidate;
       } else if (lowMemoryTopCandidate.score !== null) {
         topCandidate = generators[slotIndex].next(lowMemoryTopCandidate.score);
       }

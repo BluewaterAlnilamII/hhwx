@@ -88,11 +88,14 @@ export type BandoriMedleySearchOptimizationOptions = {
   lowMemoryInitialCandidateSyncMaxSameCoarseProofElapsedMs?: number;
   lowMemoryInitialCandidateSyncMinMemoryHeadroomMiB?: number;
   lowMemoryInitialCandidateSyncMaxSlotCardCount?: number;
+  lowMemoryInitialCandidateSyncScoreCacheClearInterval?: number;
+  lowMemoryInitialCandidateSyncDirectCandidate?: boolean;
   enableLowMemoryInitialCandidateSyncGcProbe?: boolean;
   debugExactCandidateJoinMemoryAttribution?: boolean;
   enableTrailingSameCoarseDfsOnly?: boolean;
   disableDominatedRootSkip?: boolean;
   disableSameCoarseTightRootSkip?: boolean;
+  enableSameCoarseLowRootFirstProofOrder?: boolean;
   enableAllScopeExactJoinPreSkip?: boolean;
   disableAllScopeExactJoinPreSkip?: boolean;
   disableNearDeadlineRootSkip?: boolean;
@@ -106,6 +109,8 @@ export type BandoriMedleySearchOptimizationOptions = {
   eventRootFrontierProbeAnchorProofMinRemainingMs?: number;
   eventRootFrontierProbeAnchorCheapUpperTimeboxMs?: number;
   eventRootFrontierProbeAnchorCheapUpperMaxAnchors?: number;
+  eventRootFrontierProbeAnchorCheapUpperRefineUnseen?: boolean;
+  eventRootFrontierProbeAnchorCheapUpperUnseenRefineMaxGeneratedCandidates?: number;
 };
 
 export type BandoriMedleyTeamSearchInput = Omit<
@@ -571,6 +576,12 @@ export type BandoriMedleyTeamSearchProfilingStats = {
   exactCandidateJoinLastAnchorFrontierCheapUpperSplitAttemptCount: number | null;
   exactCandidateJoinLastAnchorFrontierCheapUpperSplitStateCount: number | null;
   exactCandidateJoinLastAnchorFrontierCheapUpperSplitAbortReason: string | null;
+  exactCandidateJoinLastAnchorFrontierCheapUpperUnseenRefineAttemptCount: number | null;
+  exactCandidateJoinLastAnchorFrontierCheapUpperUnseenRefineCandidateCount: number | null;
+  exactCandidateJoinLastAnchorFrontierCheapUpperUnseenRefineImprovementCount: number | null;
+  exactCandidateJoinLastAnchorFrontierCheapUpperUnseenRefineAbortReason: string | null;
+  exactCandidateJoinLowMemoryInitialCandidateScoreCacheClearCount: number;
+  exactCandidateJoinLastLowMemoryInitialCandidateScoreCacheClearInterval: number | null;
   exactCandidateJoinAnchorFrontierImprovementProbeCount: number;
   exactCandidateJoinAnchorFrontierImprovementProbeHitCount: number;
   exactCandidateJoinAnchorFrontierImprovementProbeTimeboxCount: number;
