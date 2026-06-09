@@ -1285,6 +1285,21 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
       : null;
     return { performanceUsedBytes, nodeHeapBytes, nodeRssBytes };
   };
+  const sampleDiagnosticMemoryMiB = (): Record<string, number | null> => {
+    const rawMemory = sampleRawRuntimeMemoryBytes();
+    const guardBytes = readUsedHeapBytes();
+    return {
+      guardMiB: bytesToMiB(guardBytes),
+      performanceMiB: bytesToMiB(rawMemory.performanceUsedBytes),
+      nodeHeapMiB: bytesToMiB(rawMemory.nodeHeapBytes),
+      nodeRssMiB: bytesToMiB(rawMemory.nodeRssBytes),
+      nodeUsedMiB: bytesToMiB(
+        rawMemory.nodeHeapBytes !== null || rawMemory.nodeRssBytes !== null
+          ? Math.max(rawMemory.nodeHeapBytes ?? 0, rawMemory.nodeRssBytes ?? 0)
+          : null,
+      ),
+    };
+  };
   const readUsedHeapBytes = (): number | null => {
     const memory = (performance as RuntimeMemoryPerformance).memory;
     if (typeof memory?.jsHeapSizeLimit === "number" && Number.isFinite(memory.jsHeapSizeLimit) && memory.jsHeapSizeLimit > 0) {
@@ -2426,6 +2441,23 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
         preConfigurationGcProbe,
       }
       : null;
+    const appendTraceMemoryProbe = (label: string): void => {
+      if (!traceEntry) {
+        return;
+      }
+      const probe = {
+        label,
+        elapsedMs: Math.round(performance.now() - traceStartedAt),
+        ...sampleDiagnosticMemoryMiB(),
+      };
+      const probes = traceEntry.memoryProbes;
+      if (Array.isArray(probes)) {
+        probes.push(probe);
+      } else {
+        traceEntry.memoryProbes = [probe];
+      }
+    };
+    appendTraceMemoryProbe("post-slot-build");
     activeConfigurationMemorySoftLimitBytes = null;
     let didReleaseConfigurationSearchCaches = false;
     const releaseConfigurationSearchCaches = (): void => {
@@ -4009,6 +4041,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
         timedOutCount: profiling.exactJoinPrefixSeedTimedOutCount,
         noHitLocalTimeoutCount: profiling.exactJoinPrefixSeedNoHitLocalTimeoutCount,
       };
+      appendTraceMemoryProbe("before-exact-candidate-join-before-seeding");
       const exactJoinResult = searchMedleyConfigurationByExactCandidateJoin(
         results,
         resultLimit,
@@ -4728,6 +4761,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
         timedOutCount: profiling.exactJoinPrefixSeedTimedOutCount,
         noHitLocalTimeoutCount: profiling.exactJoinPrefixSeedNoHitLocalTimeoutCount,
       };
+      appendTraceMemoryProbe("before-exact-candidate-join-after-seeding");
       const exactJoinResult = searchMedleyConfigurationByExactCandidateJoin(
         results,
         resultLimit,
