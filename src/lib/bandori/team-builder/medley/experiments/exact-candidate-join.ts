@@ -83,12 +83,14 @@ import {
   estimateMedleySlotBranchScoreUpperBound,
 } from "../upper/skill-context";
 import {
+  buildCharacterUpperBoundIndex,
   CHARACTER_MASK_SEGMENT_BITS,
   evaluateMedleyScoreOnlyTeam,
   evaluateMedleyScoreOnlyTeamScore,
   estimateSearchScopeScoreUpperBound,
   hasCharacterIndexInMask,
 } from "@/lib/bandori/team-builder/core";
+import { groupSearchCardsByCharacter } from "@/lib/bandori/team-builder/core/cards";
 import type {
   BandoriMedleyTeamSearchProfilingStats,
   BandoriMedleyTeamSearchResult,
@@ -138,6 +140,26 @@ function findBestMedleyExactSlotCandidateLowMemory(
   localDeadlineAt: number | null = null,
   shouldAbortLocalSearch: (() => boolean) | null = null,
 ): { aborted: boolean; score: number | null } {
+  const groupedSearchCards = groupSearchCardsByCharacter(slot.searchCards);
+  const searchSlot = groupedSearchCards.every((card, index) => card === slot.searchCards[index])
+    ? slot
+    : (() => {
+      const upperBoundIndex = buildCharacterUpperBoundIndex(groupedSearchCards);
+      return {
+        ...slot,
+        searchCards: groupedSearchCards,
+        upperBoundIndex,
+        rootScoreUpperBound: estimateSearchScopeScoreUpperBound(
+          [],
+          upperBoundIndex,
+          groupedSearchCards,
+          0,
+          0,
+          0,
+          slot.baseScoreRatePerPower,
+        ),
+      };
+    })();
   const bannedCardIds = new Set<number>();
   const selectedCards: SearchCard[] = [];
   let bestScore = Number.NEGATIVE_INFINITY;
@@ -177,12 +199,12 @@ function findBestMedleyExactSlotCandidateLowMemory(
     }
 
     const remaining = MEDLEY_TEAM_SIZE - selectedCards.length;
-    if (slot.searchCards.length - startIndex < remaining) {
+    if (searchSlot.searchCards.length - startIndex < remaining) {
       return;
     }
     const scoreCutoff = bestScore;
     const upperBound = estimateMedleyExactSlotNodeUpperBound(
-      slot,
+      searchSlot,
       selectedCards,
       startIndex,
       bannedCardIds,
@@ -201,13 +223,13 @@ function findBestMedleyExactSlotCandidateLowMemory(
       profiling.teamEvaluationCacheMissCount += 1;
       const score = evaluateMedleyScoreOnlyTeamScore({
         cards: selectedCards,
-        input: slot.input,
-        chart: slot.chart,
-        configuration: slot.configuration,
+        input: searchSlot.input,
+        chart: searchSlot.chart,
+        configuration: searchSlot.configuration,
         server,
         perfectRate,
-        scoreCache: slot.scoreCache,
-        comboOptions: slot.comboOptions,
+        scoreCache: searchSlot.scoreCache,
+        comboOptions: searchSlot.comboOptions,
         pruningThresholdResult: createMedleyExactCandidateSlotThresholdResult(scoreCutoff),
       });
       stats.evaluatedTeamCount += 1;
@@ -218,9 +240,9 @@ function findBestMedleyExactSlotCandidateLowMemory(
       return;
     }
 
-    for (let index = startIndex; index <= slot.searchCards.length - remaining; index += 1) {
-      const card = slot.searchCards[index];
-      const characterIndex = slot.upperBoundIndex.characterIndexById.get(card.characterId);
+    for (let index = startIndex; index <= searchSlot.searchCards.length - remaining; index += 1) {
+      const card = searchSlot.searchCards[index];
+      const characterIndex = searchSlot.upperBoundIndex.characterIndexById.get(card.characterId);
       if (
         characterIndex === undefined
         || hasCharacterIndexInMask(usedCharacterMaskLow, usedCharacterMaskHigh, characterIndex)
