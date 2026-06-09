@@ -585,7 +585,13 @@ export type BandoriMedleyTeamSearchProfilingStats = {
   exactCandidateJoinLastLowMemoryInitialCandidateSlotIndex: number | null;
   exactCandidateJoinLastLowMemoryInitialCandidateAbortReason: string | null;
   exactCandidateJoinLastLowMemoryInitialCandidateVisitedNodeCount: number | null;
+  exactCandidateJoinLastLowMemoryInitialCandidateEvaluatedTeamCount: number | null;
   exactCandidateJoinLastLowMemoryInitialCandidateBestScore: number | null;
+  exactCandidateJoinLastLowMemoryInitialCandidateAbortUsedMiB: number | null;
+  exactCandidateJoinLastLowMemoryInitialCandidateAbortLimitMiB: number | null;
+  exactCandidateJoinLastLowMemoryInitialCandidateAbortHeadroomMiB: number | null;
+  exactCandidateJoinLastLowMemoryInitialCandidateAbortNodeHeapMiB: number | null;
+  exactCandidateJoinLastLowMemoryInitialCandidateAbortRssMiB: number | null;
   exactCandidateJoinAnchorFrontierImprovementProbeCount: number;
   exactCandidateJoinAnchorFrontierImprovementProbeHitCount: number;
   exactCandidateJoinAnchorFrontierImprovementProbeTimeboxCount: number;

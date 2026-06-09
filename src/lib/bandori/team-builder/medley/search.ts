@@ -294,6 +294,30 @@ function buildProofLedger(
         lowMemoryInitialCandidateScoreCacheClearInterval: (
           asFiniteNumber(entry.exactCandidateJoinLastLowMemoryInitialCandidateScoreCacheClearInterval)
         ),
+        lowMemoryInitialCandidateVisitedNodeCount: (
+          asFiniteNumber(entry.exactCandidateJoinLastLowMemoryInitialCandidateVisitedNodeCount)
+        ),
+        lowMemoryInitialCandidateEvaluatedTeamCount: (
+          asFiniteNumber(entry.exactCandidateJoinLastLowMemoryInitialCandidateEvaluatedTeamCount)
+        ),
+        lowMemoryInitialCandidateBestScore: (
+          asFiniteNumber(entry.exactCandidateJoinLastLowMemoryInitialCandidateBestScore)
+        ),
+        lowMemoryInitialCandidateAbortUsedMiB: (
+          asFiniteNumber(entry.exactCandidateJoinLastLowMemoryInitialCandidateAbortUsedMiB)
+        ),
+        lowMemoryInitialCandidateAbortLimitMiB: (
+          asFiniteNumber(entry.exactCandidateJoinLastLowMemoryInitialCandidateAbortLimitMiB)
+        ),
+        lowMemoryInitialCandidateAbortHeadroomMiB: (
+          asFiniteNumber(entry.exactCandidateJoinLastLowMemoryInitialCandidateAbortHeadroomMiB)
+        ),
+        lowMemoryInitialCandidateAbortNodeHeapMiB: (
+          asFiniteNumber(entry.exactCandidateJoinLastLowMemoryInitialCandidateAbortNodeHeapMiB)
+        ),
+        lowMemoryInitialCandidateAbortRssMiB: (
+          asFiniteNumber(entry.exactCandidateJoinLastLowMemoryInitialCandidateAbortRssMiB)
+        ),
         anchorFrontierProofTriggerCount: asFiniteNumber(entry.exactCandidateJoinAnchorFrontierProofTriggerCountDelta),
         anchorFrontierProofCompletedCount: (
           asFiniteNumber(entry.exactCandidateJoinAnchorFrontierProofCompletedCountDelta)
@@ -584,6 +608,30 @@ function buildBoundedFrontierGroups(
       ),
       lowMemoryInitialCandidateScoreCacheClearInterval: (
         entry.exactCandidateJoinLastLowMemoryInitialCandidateScoreCacheClearInterval ?? null
+      ),
+      lowMemoryInitialCandidateVisitedNodeCount: (
+        entry.exactCandidateJoinLastLowMemoryInitialCandidateVisitedNodeCount ?? null
+      ),
+      lowMemoryInitialCandidateEvaluatedTeamCount: (
+        entry.exactCandidateJoinLastLowMemoryInitialCandidateEvaluatedTeamCount ?? null
+      ),
+      lowMemoryInitialCandidateBestScore: (
+        entry.exactCandidateJoinLastLowMemoryInitialCandidateBestScore ?? null
+      ),
+      lowMemoryInitialCandidateAbortUsedMiB: (
+        entry.exactCandidateJoinLastLowMemoryInitialCandidateAbortUsedMiB ?? null
+      ),
+      lowMemoryInitialCandidateAbortLimitMiB: (
+        entry.exactCandidateJoinLastLowMemoryInitialCandidateAbortLimitMiB ?? null
+      ),
+      lowMemoryInitialCandidateAbortHeadroomMiB: (
+        entry.exactCandidateJoinLastLowMemoryInitialCandidateAbortHeadroomMiB ?? null
+      ),
+      lowMemoryInitialCandidateAbortNodeHeapMiB: (
+        entry.exactCandidateJoinLastLowMemoryInitialCandidateAbortNodeHeapMiB ?? null
+      ),
+      lowMemoryInitialCandidateAbortRssMiB: (
+        entry.exactCandidateJoinLastLowMemoryInitialCandidateAbortRssMiB ?? null
       ),
       anchorFrontierImprovementProbeProcessedAnchorCount: (
         entry.exactCandidateJoinLastAnchorFrontierImprovementProbeProcessedAnchorCount ?? null
@@ -2147,8 +2195,26 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
       exactCandidateJoinLastLowMemoryInitialCandidateVisitedNodeCount: (
         profiling.exactCandidateJoinLastLowMemoryInitialCandidateVisitedNodeCount
       ),
+      exactCandidateJoinLastLowMemoryInitialCandidateEvaluatedTeamCount: (
+        profiling.exactCandidateJoinLastLowMemoryInitialCandidateEvaluatedTeamCount
+      ),
       exactCandidateJoinLastLowMemoryInitialCandidateBestScore: (
         profiling.exactCandidateJoinLastLowMemoryInitialCandidateBestScore
+      ),
+      exactCandidateJoinLastLowMemoryInitialCandidateAbortUsedMiB: (
+        profiling.exactCandidateJoinLastLowMemoryInitialCandidateAbortUsedMiB
+      ),
+      exactCandidateJoinLastLowMemoryInitialCandidateAbortLimitMiB: (
+        profiling.exactCandidateJoinLastLowMemoryInitialCandidateAbortLimitMiB
+      ),
+      exactCandidateJoinLastLowMemoryInitialCandidateAbortHeadroomMiB: (
+        profiling.exactCandidateJoinLastLowMemoryInitialCandidateAbortHeadroomMiB
+      ),
+      exactCandidateJoinLastLowMemoryInitialCandidateAbortNodeHeapMiB: (
+        profiling.exactCandidateJoinLastLowMemoryInitialCandidateAbortNodeHeapMiB
+      ),
+      exactCandidateJoinLastLowMemoryInitialCandidateAbortRssMiB: (
+        profiling.exactCandidateJoinLastLowMemoryInitialCandidateAbortRssMiB
       ),
       exactCandidateJoinAnchorFrontierImprovementProbeCount: (
         profiling.exactCandidateJoinAnchorFrontierImprovementProbeCount
@@ -2610,8 +2676,26 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
           exactCandidateJoinLastLowMemoryInitialCandidateVisitedNodeCount: (
             profiling.exactCandidateJoinLastLowMemoryInitialCandidateVisitedNodeCount
           ),
+          exactCandidateJoinLastLowMemoryInitialCandidateEvaluatedTeamCount: (
+            profiling.exactCandidateJoinLastLowMemoryInitialCandidateEvaluatedTeamCount
+          ),
           exactCandidateJoinLastLowMemoryInitialCandidateBestScore: (
             profiling.exactCandidateJoinLastLowMemoryInitialCandidateBestScore
+          ),
+          exactCandidateJoinLastLowMemoryInitialCandidateAbortUsedMiB: (
+            profiling.exactCandidateJoinLastLowMemoryInitialCandidateAbortUsedMiB
+          ),
+          exactCandidateJoinLastLowMemoryInitialCandidateAbortLimitMiB: (
+            profiling.exactCandidateJoinLastLowMemoryInitialCandidateAbortLimitMiB
+          ),
+          exactCandidateJoinLastLowMemoryInitialCandidateAbortHeadroomMiB: (
+            profiling.exactCandidateJoinLastLowMemoryInitialCandidateAbortHeadroomMiB
+          ),
+          exactCandidateJoinLastLowMemoryInitialCandidateAbortNodeHeapMiB: (
+            profiling.exactCandidateJoinLastLowMemoryInitialCandidateAbortNodeHeapMiB
+          ),
+          exactCandidateJoinLastLowMemoryInitialCandidateAbortRssMiB: (
+            profiling.exactCandidateJoinLastLowMemoryInitialCandidateAbortRssMiB
           ),
           exactCandidateJoinLastAnchorFrontierImprovementProbeProcessedAnchorCount: (
             profiling.exactCandidateJoinLastAnchorFrontierImprovementProbeProcessedAnchorCount
@@ -3029,10 +3113,28 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
       if (usedHeapBytes === null || effectiveLimitBytes === null) {
         return false;
       }
-      return (
+      const shouldAbort = (
         effectiveLimitBytes - usedHeapBytes
         < lowMemoryInitialCandidateSyncMinMemoryHeadroomMiB * BYTES_PER_MIB
       );
+      if (shouldAbort) {
+        profiling.exactCandidateJoinLastLowMemoryInitialCandidateAbortUsedMiB = (
+          Math.ceil(usedHeapBytes / BYTES_PER_MIB)
+        );
+        profiling.exactCandidateJoinLastLowMemoryInitialCandidateAbortLimitMiB = (
+          Math.floor(effectiveLimitBytes / BYTES_PER_MIB)
+        );
+        profiling.exactCandidateJoinLastLowMemoryInitialCandidateAbortHeadroomMiB = (
+          Math.floor((effectiveLimitBytes - usedHeapBytes) / BYTES_PER_MIB)
+        );
+        profiling.exactCandidateJoinLastLowMemoryInitialCandidateAbortNodeHeapMiB = (
+          profiling.lastNodeHeapUsedMiB
+        );
+        profiling.exactCandidateJoinLastLowMemoryInitialCandidateAbortRssMiB = (
+          profiling.lastNodeRssMiB
+        );
+      }
+      return shouldAbort;
     };
     const shouldUseLowMemoryInitialCandidateSync = (
       !disableLowMemoryInitialCandidateSync

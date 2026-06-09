@@ -199,6 +199,7 @@ function findBestMedleyExactSlotCandidateLowMemory(
   aborted: boolean;
   abortReason: string | null;
   visitedNodeCount: number;
+  evaluatedTeamCount: number;
   score: number | null;
   candidate: MedleyTeamCandidate | null;
 } {
@@ -227,6 +228,7 @@ function findBestMedleyExactSlotCandidateLowMemory(
   let bestScore = Number.NEGATIVE_INFINITY;
   let bestCandidate: MedleyTeamCandidate | null = null;
   let visitedNodeCount = 0;
+  let evaluatedTeamCount = 0;
   let evaluatedSinceScoreCacheClear = 0;
   let aborted = false;
   let abortReason: string | null = null;
@@ -311,6 +313,7 @@ function findBestMedleyExactSlotCandidateLowMemory(
     if (selectedCards.length === MEDLEY_TEAM_SIZE) {
       stats.enumeratedTeamCount += 1;
       profiling.teamEvaluationCacheMissCount += 1;
+      evaluatedTeamCount += 1;
       const score = evaluateMedleyScoreOnlyTeamScore({
         cards: selectedCards,
         input: searchSlot.input,
@@ -381,6 +384,7 @@ function findBestMedleyExactSlotCandidateLowMemory(
     aborted,
     abortReason,
     visitedNodeCount,
+    evaluatedTeamCount,
     score: Number.isFinite(bestScore) ? bestScore : null,
     candidate: !aborted && !stats.timedOut && returnCandidate ? bestCandidate : null,
   };
@@ -4621,7 +4625,13 @@ export function searchMedleyConfigurationByExactCandidateJoin(
   profiling.exactCandidateJoinLastLowMemoryInitialCandidateSlotIndex = null;
   profiling.exactCandidateJoinLastLowMemoryInitialCandidateAbortReason = null;
   profiling.exactCandidateJoinLastLowMemoryInitialCandidateVisitedNodeCount = null;
+  profiling.exactCandidateJoinLastLowMemoryInitialCandidateEvaluatedTeamCount = null;
   profiling.exactCandidateJoinLastLowMemoryInitialCandidateBestScore = null;
+  profiling.exactCandidateJoinLastLowMemoryInitialCandidateAbortUsedMiB = null;
+  profiling.exactCandidateJoinLastLowMemoryInitialCandidateAbortLimitMiB = null;
+  profiling.exactCandidateJoinLastLowMemoryInitialCandidateAbortHeadroomMiB = null;
+  profiling.exactCandidateJoinLastLowMemoryInitialCandidateAbortNodeHeapMiB = null;
+  profiling.exactCandidateJoinLastLowMemoryInitialCandidateAbortRssMiB = null;
 
   const generators = slots.map((slot) => createMedleyExactSlotCandidateGenerator(
     slot,
@@ -5038,6 +5048,9 @@ export function searchMedleyConfigurationByExactCandidateJoin(
       profiling.exactCandidateJoinLastLowMemoryInitialCandidateAbortReason = lowMemoryTopCandidate.abortReason;
       profiling.exactCandidateJoinLastLowMemoryInitialCandidateVisitedNodeCount = (
         lowMemoryTopCandidate.visitedNodeCount
+      );
+      profiling.exactCandidateJoinLastLowMemoryInitialCandidateEvaluatedTeamCount = (
+        lowMemoryTopCandidate.evaluatedTeamCount
       );
       profiling.exactCandidateJoinLastLowMemoryInitialCandidateBestScore = lowMemoryTopCandidate.score;
       if (lowMemoryTopCandidate.aborted) {

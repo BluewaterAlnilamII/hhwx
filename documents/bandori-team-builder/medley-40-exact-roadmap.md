@@ -1,6 +1,6 @@
 # Medley 40/40 Exact Roadmap
 
-Last updated: 2026-06-10 00:08 CST
+Last updated: 2026-06-09 23:16 CST
 
 This file is the persistent working note for the current medley optimizer goal.
 Keep it current before and after benchmark runs or proof-path changes, so future
@@ -1218,6 +1218,15 @@ Next execution step:
   It still aborted `visual` at `512` nodes with the same best slot score,
   stayed bounded at gap `354570`, and only reduced peak from `4770 MiB` to
   `4736 MiB` while slowing elapsed from `98881ms` to `114729ms`.
+- Rejected diagnostic:
+  no debug trace / no exact-join memory-attribution in the same high-limit
+  no-direct path
+  (`temp/bandori-team-builder/real-profile-medley-scope-matrix-2026-06-09T15-11-13-733Z.json`).
+  It still stayed bounded with score `9213846`, upper `9568416`, gap `354570`,
+  elapsed `116761ms`, `timedOut=true`, `memoryLimited=true`, peak `4713 MiB`,
+  and final abort `initial-candidate` on slot `0` after `2/3` exact-join
+  completions. This rules out `debugConfigurationTrace` as the primary memory
+  wall; trace output can perturb timing but is not the blocker.
 - Updated next implementation target: do not continue parameter-transfer or
   score-cache-clear as standalone fixes. The next proof-quality work should
   identify why memory remains around `3.0 GiB` after the second sibling despite
