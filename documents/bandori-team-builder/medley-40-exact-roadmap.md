@@ -1,6 +1,6 @@
 # Medley 40/40 Exact Roadmap
 
-Last updated: 2026-06-09 20:00 CST
+Last updated: 2026-06-09 20:18 CST
 
 This file is the persistent working note for the current medley optimizer goal.
 Keep it current before and after benchmark runs or proof-path changes, so future
@@ -1070,9 +1070,19 @@ Updated conclusion:
   worse than the earlier `120176` cheap-upper diagnostic. This route is too
   slow and not tighter enough; do not continue by only raising cheap-upper
   timebox.
-- Revised next implementation target: keep the compact-key representation only
-  if the baseline guard confirms no regression, and design the next proof patch
-  around genuinely lower-residency exact proof work: streamed pair-unseen upper,
-  compact candidate/result payloads with a no-op memory-equivalence gate, or a
-  same-coarse sibling proof protocol that releases heavy frontier state between
-  siblings without relying on runtime GC behavior.
+- Accepted as a no-regression implementation baseline, not as final progress:
+  compact-key hard guard
+  `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-09T12-02-54-520Z.json`
+  passed the active guard set at `7/8` exact, one bounded row `P03:260`, bounded
+  gap total `370472`, `0` failed subprocesses, `0` timed out rows, `0`
+  memory-limited rows, median elapsed `47761ms`, max elapsed `283078ms`, and
+  peak sampled heap `4185 MiB`. The exact guard rows stayed exact:
+  `P06:323`, `P07:260`, `P08:323`, `P10:244`, `P10:260`, `P07:244`, and
+  `P08:244`.
+- Revised next implementation target: keep the compact-key representation as a
+  safe lower-residency building block, but do not count it as proof-quality
+  progress. The next proof patch must target genuinely lower-residency proof
+  work for `P03:260`: streamed pair-unseen upper, compact candidate/result
+  payloads with a no-op memory-equivalence gate, or a same-coarse sibling proof
+  protocol that releases heavy frontier state between siblings without relying
+  on runtime GC behavior.
