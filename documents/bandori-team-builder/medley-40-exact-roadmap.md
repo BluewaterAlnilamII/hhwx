@@ -1,6 +1,6 @@
 # Medley 40/40 Exact Roadmap
 
-Last updated: 2026-06-09 23:55 CST
+Last updated: 2026-06-10 00:08 CST
 
 This file is the persistent working note for the current medley optimizer goal.
 Keep it current before and after benchmark runs or proof-path changes, so future
@@ -1194,4 +1194,33 @@ Next execution step:
   `P03:260` after the first two sibling proofs. If the estimated transfer gap
   is not below the remaining `354570`/`370472` gap, record the rejection and
   pivot to lower-allocation slot-top proof instrumentation instead of widening
+  candidate limits.
+- Parameter-transfer estimate result: diagnostic scripts over the fixed
+  `P03:260` fixture showed that `visual` has many positive item-power deltas
+  relative to both proved siblings. Even the optimistic two-sibling crude bound
+  leaves about `83k` score of positive transfer headroom, and a looser top-15
+  bound leaves about `240k`. This can reduce the reported upper but cannot
+  prove exact by itself.
+- Added diagnostic-only low-memory initial-candidate profiling fields:
+  last slot index, abort reason, visited node count, and best score. These do
+  not change search behavior.
+- Diagnostic
+  `temp/bandori-team-builder/real-profile-medley-scope-matrix-2026-06-09T15-04-06-700Z.json`
+  confirmed the `P03:260` high-limit no-direct path still proves
+  `RaiseASuilen/happy/performance` and `technique`, then `visual` aborts in
+  low-memory initial-candidate slot `0` with `local-abort` after only `512`
+  visited nodes. Best observed slot score was `3060181`; the case stayed
+  bounded, gap `354570`, elapsed `98881ms`, `timedOut=true`,
+  `memoryLimited=true`, peak `4770 MiB`.
+- Rejected diagnostic:
+  `lowMemoryInitialCandidateSyncScoreCacheClearInterval=1`
+  (`temp/bandori-team-builder/real-profile-medley-scope-matrix-2026-06-09T15-06-36-696Z.json`).
+  It still aborted `visual` at `512` nodes with the same best slot score,
+  stayed bounded at gap `354570`, and only reduced peak from `4770 MiB` to
+  `4736 MiB` while slowing elapsed from `98881ms` to `114729ms`.
+- Updated next implementation target: do not continue parameter-transfer or
+  score-cache-clear as standalone fixes. The next proof-quality work should
+  identify why memory remains around `3.0 GiB` after the second sibling despite
+  cache release and GC, or replace the current low-memory slot-top proof with a
+  lower-allocation equivalent that can complete `visual` without expanding
   candidate limits.

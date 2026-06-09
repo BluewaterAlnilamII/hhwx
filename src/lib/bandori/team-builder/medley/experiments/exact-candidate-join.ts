@@ -195,7 +195,13 @@ function findBestMedleyExactSlotCandidateLowMemory(
   scoreCacheClearInterval: number | null = null,
   useSkillContextUpper = true,
   returnCandidate = false,
-): { aborted: boolean; score: number | null; candidate: MedleyTeamCandidate | null } {
+): {
+  aborted: boolean;
+  abortReason: string | null;
+  visitedNodeCount: number;
+  score: number | null;
+  candidate: MedleyTeamCandidate | null;
+} {
   const groupedSearchCards = groupSearchCardsByCharacter(slot.searchCards);
   const searchSlot = groupedSearchCards.every((card, index) => card === slot.searchCards[index])
     ? slot
@@ -223,6 +229,7 @@ function findBestMedleyExactSlotCandidateLowMemory(
   let visitedNodeCount = 0;
   let evaluatedSinceScoreCacheClear = 0;
   let aborted = false;
+  let abortReason: string | null = null;
   const effectiveScoreCacheClearInterval = (
     scoreCacheClearInterval !== null
     && Number.isFinite(scoreCacheClearInterval)
@@ -256,22 +263,26 @@ function findBestMedleyExactSlotCandidateLowMemory(
     visitedNodeCount += 1;
     if (visitedNodeCount >= nodeSoftLimit) {
       aborted = true;
+      abortReason = "node-soft-limit";
       return;
     }
     if ((visitedNodeCount & 511) === 0) {
       const now = performance.now();
       if (localDeadlineAt !== null && now >= localDeadlineAt) {
         aborted = true;
+        abortReason = "local-deadline";
         return;
       }
       if (shouldAbortLocalSearch?.()) {
         aborted = true;
+        abortReason = "local-abort";
         return;
       }
       if (now >= deadlineAt || isPastDeadline()) {
         stats.isExhaustive = false;
         stats.timedOut = true;
         stats.searchMode = "bounded";
+        abortReason = "global-deadline";
         return;
       }
     }
@@ -368,6 +379,8 @@ function findBestMedleyExactSlotCandidateLowMemory(
   visit(0, 0, 0, 0);
   return {
     aborted,
+    abortReason,
+    visitedNodeCount,
     score: Number.isFinite(bestScore) ? bestScore : null,
     candidate: !aborted && !stats.timedOut && returnCandidate ? bestCandidate : null,
   };
@@ -4605,6 +4618,10 @@ export function searchMedleyConfigurationByExactCandidateJoin(
   profiling.exactCandidateJoinLastCandidateCountsBySlot = [];
   profiling.exactCandidateJoinLastCandidateFillElapsedMsBySlot = [];
   profiling.exactCandidateJoinLastLowMemoryInitialCandidateScoreCacheClearInterval = null;
+  profiling.exactCandidateJoinLastLowMemoryInitialCandidateSlotIndex = null;
+  profiling.exactCandidateJoinLastLowMemoryInitialCandidateAbortReason = null;
+  profiling.exactCandidateJoinLastLowMemoryInitialCandidateVisitedNodeCount = null;
+  profiling.exactCandidateJoinLastLowMemoryInitialCandidateBestScore = null;
 
   const generators = slots.map((slot) => createMedleyExactSlotCandidateGenerator(
     slot,
@@ -5017,6 +5034,12 @@ export function searchMedleyConfigurationByExactCandidateJoin(
         context.lowMemoryInitialCandidateSyncLightUpper !== true,
         context.lowMemoryInitialCandidateSyncDirectCandidate === true,
       );
+      profiling.exactCandidateJoinLastLowMemoryInitialCandidateSlotIndex = slotIndex;
+      profiling.exactCandidateJoinLastLowMemoryInitialCandidateAbortReason = lowMemoryTopCandidate.abortReason;
+      profiling.exactCandidateJoinLastLowMemoryInitialCandidateVisitedNodeCount = (
+        lowMemoryTopCandidate.visitedNodeCount
+      );
+      profiling.exactCandidateJoinLastLowMemoryInitialCandidateBestScore = lowMemoryTopCandidate.score;
       if (lowMemoryTopCandidate.aborted) {
         if (context.lowMemoryInitialCandidateSyncLocalAbortOnly === true) {
           profiling.exactCandidateJoinInitialCandidateElapsedMsBySlot[slotIndex] = (

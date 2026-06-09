@@ -582,6 +582,10 @@ export type BandoriMedleyTeamSearchProfilingStats = {
   exactCandidateJoinLastAnchorFrontierCheapUpperUnseenRefineAbortReason: string | null;
   exactCandidateJoinLowMemoryInitialCandidateScoreCacheClearCount: number;
   exactCandidateJoinLastLowMemoryInitialCandidateScoreCacheClearInterval: number | null;
+  exactCandidateJoinLastLowMemoryInitialCandidateSlotIndex: number | null;
+  exactCandidateJoinLastLowMemoryInitialCandidateAbortReason: string | null;
+  exactCandidateJoinLastLowMemoryInitialCandidateVisitedNodeCount: number | null;
+  exactCandidateJoinLastLowMemoryInitialCandidateBestScore: number | null;
   exactCandidateJoinAnchorFrontierImprovementProbeCount: number;
   exactCandidateJoinAnchorFrontierImprovementProbeHitCount: number;
   exactCandidateJoinAnchorFrontierImprovementProbeTimeboxCount: number;

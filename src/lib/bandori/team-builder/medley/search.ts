@@ -2138,6 +2138,18 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
       exactCandidateJoinLowMemoryInitialCandidateScoreCacheClearCount: (
         profiling.exactCandidateJoinLowMemoryInitialCandidateScoreCacheClearCount
       ),
+      exactCandidateJoinLastLowMemoryInitialCandidateSlotIndex: (
+        profiling.exactCandidateJoinLastLowMemoryInitialCandidateSlotIndex
+      ),
+      exactCandidateJoinLastLowMemoryInitialCandidateAbortReason: (
+        profiling.exactCandidateJoinLastLowMemoryInitialCandidateAbortReason
+      ),
+      exactCandidateJoinLastLowMemoryInitialCandidateVisitedNodeCount: (
+        profiling.exactCandidateJoinLastLowMemoryInitialCandidateVisitedNodeCount
+      ),
+      exactCandidateJoinLastLowMemoryInitialCandidateBestScore: (
+        profiling.exactCandidateJoinLastLowMemoryInitialCandidateBestScore
+      ),
       exactCandidateJoinAnchorFrontierImprovementProbeCount: (
         profiling.exactCandidateJoinAnchorFrontierImprovementProbeCount
       ),
@@ -2588,6 +2600,18 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
           ),
           exactCandidateJoinLastLowMemoryInitialCandidateScoreCacheClearInterval: (
             profiling.exactCandidateJoinLastLowMemoryInitialCandidateScoreCacheClearInterval
+          ),
+          exactCandidateJoinLastLowMemoryInitialCandidateSlotIndex: (
+            profiling.exactCandidateJoinLastLowMemoryInitialCandidateSlotIndex
+          ),
+          exactCandidateJoinLastLowMemoryInitialCandidateAbortReason: (
+            profiling.exactCandidateJoinLastLowMemoryInitialCandidateAbortReason
+          ),
+          exactCandidateJoinLastLowMemoryInitialCandidateVisitedNodeCount: (
+            profiling.exactCandidateJoinLastLowMemoryInitialCandidateVisitedNodeCount
+          ),
+          exactCandidateJoinLastLowMemoryInitialCandidateBestScore: (
+            profiling.exactCandidateJoinLastLowMemoryInitialCandidateBestScore
           ),
           exactCandidateJoinLastAnchorFrontierImprovementProbeProcessedAnchorCount: (
             profiling.exactCandidateJoinLastAnchorFrontierImprovementProbeProcessedAnchorCount
