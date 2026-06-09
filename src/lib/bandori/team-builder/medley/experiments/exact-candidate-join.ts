@@ -829,12 +829,13 @@ export function createMedleyExactSlotCandidateGenerator(
         if (globalLeafUpperBound < (globalPruning?.scoreCutoff ?? Number.NEGATIVE_INFINITY)) {
           continue;
         }
-        const candidateKey = globalPruning?.excludedCandidateKeys
-          ? nextSelectedCards
-            .map((selectedCard) => selectedCard.cardId)
-            .join(",")
+        const candidateKey = (
+          globalPruning?.excludedCandidateKeys
+          && globalPruning.packCandidateCardsKey
+        )
+          ? globalPruning.packCandidateCardsKey(nextSelectedCards)
           : null;
-        if (candidateKey && globalPruning?.excludedCandidateKeys?.has(candidateKey)) {
+        if (candidateKey !== null && globalPruning?.excludedCandidateKeys?.has(candidateKey)) {
           continue;
         }
         const candidate = evaluateMedleySlotCandidateWithCache(
@@ -2889,8 +2890,113 @@ function findBestHydratedGeneratedMedleyExactCandidatePairForAnchor(
   };
 }
 
-function getMedleyExactCandidateCardKey(candidate: MedleyTeamCandidate): string {
-  return candidate.cardIds.join(",");
+function createMedleyExactCandidateCardKeyPacker(slots: MedleySlotSearch[]): {
+  packCandidateCardKey: (cardIds: readonly number[]) => string;
+  packCandidateCardsKey: (cards: readonly SearchCard[]) => string;
+} {
+  let maxCardId = 0;
+  for (const slot of slots) {
+    for (const card of slot.searchCards) {
+      if (Number.isFinite(card.cardId)) {
+        maxCardId = Math.max(maxCardId, Math.trunc(card.cardId));
+      }
+    }
+  }
+  if (maxCardId <= 0xffff) {
+    const packCandidateCardKey = (cardIds: readonly number[]): string => {
+      switch (cardIds.length) {
+        case 0:
+          return "";
+        case 1:
+          return String.fromCharCode(Math.trunc(cardIds[0]));
+        case 2:
+          return String.fromCharCode(Math.trunc(cardIds[0]), Math.trunc(cardIds[1]));
+        case 3:
+          return String.fromCharCode(Math.trunc(cardIds[0]), Math.trunc(cardIds[1]), Math.trunc(cardIds[2]));
+        case 4:
+          return String.fromCharCode(
+            Math.trunc(cardIds[0]),
+            Math.trunc(cardIds[1]),
+            Math.trunc(cardIds[2]),
+            Math.trunc(cardIds[3]),
+          );
+        case 5:
+          return String.fromCharCode(
+            Math.trunc(cardIds[0]),
+            Math.trunc(cardIds[1]),
+            Math.trunc(cardIds[2]),
+            Math.trunc(cardIds[3]),
+            Math.trunc(cardIds[4]),
+          );
+        default:
+          return String.fromCharCode(...cardIds.map((cardId) => Math.trunc(cardId)));
+      }
+    };
+    const packCandidateCardsKey = (cards: readonly SearchCard[]): string => {
+      switch (cards.length) {
+        case 0:
+          return "";
+        case 1:
+          return String.fromCharCode(Math.trunc(cards[0].cardId));
+        case 2:
+          return String.fromCharCode(Math.trunc(cards[0].cardId), Math.trunc(cards[1].cardId));
+        case 3:
+          return String.fromCharCode(
+            Math.trunc(cards[0].cardId),
+            Math.trunc(cards[1].cardId),
+            Math.trunc(cards[2].cardId),
+          );
+        case 4:
+          return String.fromCharCode(
+            Math.trunc(cards[0].cardId),
+            Math.trunc(cards[1].cardId),
+            Math.trunc(cards[2].cardId),
+            Math.trunc(cards[3].cardId),
+          );
+        case 5:
+          return String.fromCharCode(
+            Math.trunc(cards[0].cardId),
+            Math.trunc(cards[1].cardId),
+            Math.trunc(cards[2].cardId),
+            Math.trunc(cards[3].cardId),
+            Math.trunc(cards[4].cardId),
+          );
+        default:
+          return String.fromCharCode(...cards.map((card) => Math.trunc(card.cardId)));
+      }
+    };
+    return { packCandidateCardKey, packCandidateCardsKey };
+  }
+  const packCandidateCardKey = (cardIds: readonly number[]): string => {
+    const codeUnits: number[] = [];
+    for (const cardId of cardIds) {
+      const finiteCardId = Math.max(0, Math.trunc(cardId));
+      codeUnits.push(
+        Math.floor(finiteCardId / 0x10000),
+        finiteCardId & 0xffff,
+      );
+    }
+    return String.fromCharCode(...codeUnits);
+  };
+  const packCandidateCardsKey = (cards: readonly SearchCard[]): string => {
+    const codeUnits: number[] = [];
+    for (const card of cards) {
+      const finiteCardId = Math.max(0, Math.trunc(card.cardId));
+      codeUnits.push(
+        Math.floor(finiteCardId / 0x10000),
+        finiteCardId & 0xffff,
+      );
+    }
+    return String.fromCharCode(...codeUnits);
+  };
+  return { packCandidateCardKey, packCandidateCardsKey };
+}
+
+function getMedleyExactCandidateCardKey(
+  candidate: MedleyTeamCandidate,
+  packCandidateCardKey: (cardIds: readonly number[]) => string,
+): string {
+  return packCandidateCardKey(candidate.cardIds);
 }
 
 function hydrateMedleyExactCandidateForResult(
@@ -5258,12 +5364,17 @@ export function searchMedleyConfigurationByExactCandidateJoin(
   const getCandidateFillProfilingGenerators = (): MedleyExactSlotCandidateGenerator[] => (
     [...new Set([...generators, ...candidateFillGenerators, ...activeGeneratorsBySlot])]
   );
+  const { packCandidateCardKey, packCandidateCardsKey } = createMedleyExactCandidateCardKeyPacker(slots);
   const candidateKeysBySlot = candidatesBySlot.map((candidates) => (
-    new Set(candidates.map(getMedleyExactCandidateCardKey))
+    new Set(candidates.map((candidate) => getMedleyExactCandidateCardKey(candidate, packCandidateCardKey)))
   ));
   const rebuildCandidateKeys = (...slotIndices: number[]): void => {
     for (const slotIndex of slotIndices) {
-      candidateKeysBySlot[slotIndex] = new Set(candidatesBySlot[slotIndex].map(getMedleyExactCandidateCardKey));
+      candidateKeysBySlot[slotIndex] = new Set(
+        candidatesBySlot[slotIndex].map((candidate) => (
+          getMedleyExactCandidateCardKey(candidate, packCandidateCardKey)
+        )),
+      );
     }
   };
   const recordExactJoinMemorySnapshot = (
@@ -5553,6 +5664,8 @@ export function searchMedleyConfigurationByExactCandidateJoin(
       pairUnseenUpperBound: exactPairUnseenUpperByExcludedSlot[slotIndex] ?? undefined,
       useCapacityComplementUpper: false,
       capacityComplementMargin: MEDLEY_EXACT_CANDIDATE_JOIN_CAPACITY_COMPLEMENT_MARGIN,
+      packCandidateCardKey,
+      packCandidateCardsKey,
       excludedCandidateKeys: candidateKeysBySlot[slotIndex],
     };
     candidateCutoffsBySlot[slotIndex] = cutoff;
@@ -5703,7 +5816,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
       if (!candidate) {
         break;
       }
-      const candidateKey = getMedleyExactCandidateCardKey(candidate);
+      const candidateKey = getMedleyExactCandidateCardKey(candidate, packCandidateCardKey);
       if (candidateKeysBySlot[slotIndex].has(candidateKey)) {
         continue;
       }

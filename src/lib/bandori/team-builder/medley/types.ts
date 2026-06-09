@@ -769,6 +769,8 @@ export type MedleyExactSlotCandidateGlobalPruning = {
   pairUnseenUpperBound?: number;
   useCapacityComplementUpper?: boolean;
   capacityComplementMargin?: number;
+  packCandidateCardKey?: (cardIds: readonly number[]) => string;
+  packCandidateCardsKey?: (cards: readonly SearchCard[]) => string;
   excludedCandidateKeys?: Set<string>;
 };
 

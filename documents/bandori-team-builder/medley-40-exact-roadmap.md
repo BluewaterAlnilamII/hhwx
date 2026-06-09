@@ -1,6 +1,6 @@
 # Medley 40/40 Exact Roadmap
 
-Last updated: 2026-06-09 15:58 CST
+Last updated: 2026-06-09 19:38 CST
 
 This file is the persistent working note for the current medley optimizer goal.
 Keep it current before and after benchmark runs or proof-path changes, so future
@@ -14,11 +14,75 @@ Primary target:
 - Events: `none`, `244`, `260`, and `323`.
 - Matrix size: `10 profiles * 4 events = 40 all-scope cases`.
 - Search budget: `300000ms` per case.
-- Current pinned stage gate: `39/40` exact, with no failed run and no OOM.
-- Next working stage gate: `40/40` exact while preserving the pinned `39/40`
-  checkpoint.
-- Final success condition: `40/40` exact, with no failed run and no OOM.
+- Current pinned checkpoint: `39/40` exact, with no failed subprocess, no
+  timeout, no memory-limited case, and no OOM.
 - Current only bounded row: `P03:260`.
+- Next and final working target: `40/40` exact while preserving the pinned
+  `39/40` checkpoint.
+- Final success condition: `40/40` exact, no failed subprocess, no timeout, no
+  OOM, and no memory-limit regression under the active `4488 MiB` memory gate.
+
+Goal tool note:
+
+- The active Codex goal object was created earlier in this thread and cannot be
+  edited in place except to mark it complete or blocked. Treat this section as
+  the authoritative detailed goal contract for the current execution phase.
+
+Current pinned acceptance baseline:
+
+- Raw result:
+  `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-09T05-44-21-186Z.json`.
+- Report:
+  `documents/bandori-team-builder/medley-40-exact-report-2026-06-09-141817.md`.
+- Branch/commit at acceptance: `dev/medley-39-exact-frontier` / `4bf5a28`.
+- Result: `39/40` exact, bounded-gap total `370472`, peak working set
+  `4170 MiB`, bounded row `P03:260` only.
+
+Core plan:
+
+- Keep seed, greedy, prefix-seed, broad candidate-limit increases, and broad
+  memory-compaction paths frozen for the final `40/40` objective.
+- Focus on proof conversion for `P03:260`, specifically the
+  `RaiseASuilen/happy` same-coarse event-root frontier.
+- Prefer lossless lower-residency exact-join/proof representations and
+  proof-only frontier closure over score-oriented incumbent work.
+- Allow opt-in diagnostic probes to record tighter uppers, elapsed time, and
+  memory, but do not feed unproved diagnostic uppers into active proof
+  scheduling.
+- Preserve `P06:323` and all other currently exact hard cases; any P03 win that
+  regresses a guard case is rejected.
+
+Important workflow:
+
+- Work only in the independent worktree/branch
+  `dev/medley-39-exact-frontier`; keep `D:\Workspace\hhwx` on clean `main`.
+- Before algorithm edits, record the hypothesis and acceptance gate in this
+  file. After benchmark runs, record the raw result path and accept/reject
+  reason here before starting another long run.
+- Commit and push after stable static validation or durable benchmark evidence,
+  so current work is not lost in an unstable local environment.
+- Run targeted single-case diagnostics first, then the hard guard set. Run the
+  full isolated 40-case matrix only after the guard set passes.
+- After every completed full 40-case run, generate a timestamped report with
+  timing, memory, exact/bounded status, bounded reasons, failure analysis,
+  replay parameters, and next recommendations.
+
+Acceptance gates:
+
+- Stage gate: never regress below the pinned `39/40` exact checkpoint.
+- Final gate: full isolated matrix reaches `40/40` exact.
+- Bounded-gap total must not exceed `370472` before final conversion; after
+  final conversion it must be `0`.
+- No currently exact hard guard case may become bounded. Guard set:
+  `P03:260`, `P06:323`, `P07:260`, `P08:323`, `P10:244`, `P10:260`,
+  `P07:244`, and `P08:244`.
+- Peak working set must stay within the active memory gate, with no process
+  OOM or failed subprocess.
+- Static validation for a promotable patch: `npm.cmd run typecheck`,
+  `npm.cmd run lint` when practical before PR, `npm.cmd run build` with safe
+  placeholder env when practical before PR, and `git diff --check`.
+- Benchmark evidence must use the fixed P01-P10 fixture and process-per-case
+  isolation; same-process full-matrix runs are diagnostic-only.
 
 Out of scope for the primary target:
 
@@ -955,3 +1019,50 @@ Updated conclusion:
   a compact candidate-key representation, a pair-unseen proof that streams
   candidates instead of storing them, or a same-coarse sibling proof pass that
   runs one heavy sibling at a time with a bounded retained frontier.
+
+2026-06-09 current execution checkpoint:
+
+- The active Codex goal object still points at the same 40/40 objective, but
+  this roadmap now carries the detailed current goal contract because the goal
+  tool cannot edit an active objective in place.
+- Implemented and checked locally: a lossless compact exact-candidate key
+  representation that packs 5-card candidate keys into fixed UTF-16 strings
+  instead of comma-joined decimal strings. `npm.cmd run typecheck` and
+  `git diff --check` passed before the latest diagnostics. This patch is still
+  a candidate building block, not yet a full 40/40 acceptance patch.
+- Rejected: compact-key plus global direct/high-limit event-root proof as a
+  broad strategy. It produced one isolated `P03:260` exact diagnostic under the
+  active `4488 MiB` gate
+  (`temp/bandori-team-builder/medley-40-exact-isolated-2026-06-09T10-34-44-695Z.json`:
+  exact, elapsed `209643ms`, peak `4249 MiB`, 6/6 exact-join completions), but
+  the hard guard regressed to `5/8` exact and bounded `P03:260`, `P06:323`, and
+  `P07:260`
+  (`temp/bandori-team-builder/medley-40-exact-isolated-2026-06-09T10-38-58-648Z.json`).
+- Rejected: full-width-only high-limit event-root escalation with same-coarse
+  direct-candidate inheritance. `P06:323` stayed exact in the first smoke, but
+  `P03:260` remained bounded and hit the memory edge; the repeat run
+  `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-09T11-22-29-580Z.json`
+  ended `bounded`, gap `354570`, `timedOut=true`, `memoryLimited=true`, peak
+  `4809 MiB`, with 2/3 exact-join completions and final abort
+  `initial-candidate`.
+- Rejected: global direct candidate combined with full-width-only high K and
+  the normal `20k/30s` large-gap probe. The run
+  `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-09T11-30-43-757Z.json`
+  regressed both checked rows: `P03:260` stayed bounded with peak `4703 MiB`,
+  and `P06:323` reverted to bounded with abort `candidate-fill-soft-limit`.
+- Current interpretation: `P03:260` is reachable in principle, but the accepted
+  path cannot depend on broad direct-candidate flags, larger K, or same-coarse
+  sibling inheritance. Those routes move the memory wall and can regress
+  already exact hard cases.
+- Accepted as a narrow no-regression smoke, not as final progress: after
+  removing the failed full-width escalation code, compact-key baseline smoke
+  preserved the current key shape on `P03:260` and `P06:323`:
+  `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-09T11-41-36-790Z.json`.
+  Result: `P03:260` stayed bounded at gap `370472`, `P06:323` stayed exact,
+  no timeout, no memory-limited row, peak `3211 MiB`.
+- Revised next implementation target: keep the compact-key representation only
+  if the baseline guard confirms no regression, and design the next proof patch
+  around genuinely lower-residency exact proof work: streamed pair-unseen upper,
+  compact candidate/result payloads with a no-op memory-equivalence gate, or a
+  same-coarse sibling proof protocol that releases heavy frontier state between
+  siblings without relying on runtime GC behavior.
