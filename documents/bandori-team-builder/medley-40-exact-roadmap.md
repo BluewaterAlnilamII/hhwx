@@ -1,6 +1,6 @@
 # Medley 40/40 Exact Roadmap
 
-Last updated: 2026-06-09 20:49 CST
+Last updated: 2026-06-09 22:33 CST
 
 This file is the persistent working note for the current medley optimizer goal.
 Keep it current before and after benchmark runs or proof-path changes, so future
@@ -1114,6 +1114,17 @@ Updated conclusion:
     proving the first full-width root; proof work for same-coarse siblings must
     be scheduled or released without accumulating a larger transient working
     set.
+  - Direct initial-candidate plus `200000` event-root candidate soft limit and
+    `enableLowMemoryHighPairPrefixUpper=true`
+    (`temp/bandori-team-builder/real-profile-medley-scope-matrix-2026-06-09T14-12-24-604Z.json`)
+    also stayed bounded. It proved the first two `RaiseASuilen/happy` siblings
+    (`performance` and `technique`), but the third sibling
+    `RaiseASuilen/happy/visual` aborted in `initial-candidate` before pair
+    upper, candidate fill, or solve could run. Final result: gap `354570`,
+    elapsed `133963ms`, `timedOut=true`, `memoryLimited=true`, peak `4786 MiB`,
+    exact-join `2/3` completed. The prefix option did not provide an independent
+    useful hit in this path; treat this as same-coarse memory-frontier evidence,
+    not as a viable prefix-upper candidate.
 - Revised next implementation target: keep the compact-key representation as a
   safe lower-residency building block, but do not count it as proof-quality
   progress. The next proof patch must target genuinely lower-residency proof
