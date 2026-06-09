@@ -1045,6 +1045,22 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
     stats.searchMode = "bounded";
     return true;
   };
+  const runLowMemoryInitialCandidateSyncGcProbe = (): Record<string, number | boolean | null> => {
+    const gc = (globalThis as { gc?: () => void }).gc;
+    if (typeof gc !== "function") {
+      return { unavailable: true };
+    }
+    const beforeGcBytes = readUsedHeapBytes();
+    const gcStartedAt = performance.now();
+    gc();
+    const afterGcBytes = readUsedHeapBytes();
+    return {
+      ran: true,
+      elapsedMs: Math.round(performance.now() - gcStartedAt),
+      beforeMiB: beforeGcBytes !== null ? Math.ceil(beforeGcBytes / BYTES_PER_MIB) : null,
+      afterMiB: afterGcBytes !== null ? Math.ceil(afterGcBytes / BYTES_PER_MIB) : null,
+    };
+  };
   const isPastMemorySoftLimit = (): boolean => {
     if (stats.memoryLimited) {
       return true;
@@ -1677,6 +1693,9 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
   // assignment has been covered without timeout.
   const sameCoarseDfsAfterUnprovedProofCounts = new Map<string, number>();
   for (const configuration of orderedConfigurations) {
+    const preConfigurationGcProbe = enableLowMemoryInitialCandidateSyncGcProbe
+      ? runLowMemoryInitialCandidateSyncGcProbe()
+      : null;
     profiling.startedAreaItemConfigurationCount += 1;
     if (performance.now() >= deadlineAt || isPastMemorySoftLimit()) {
       stats.isExhaustive = false;
@@ -1891,6 +1910,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
         initialBestScore: results[0]?.score ?? null,
         initialBestSeedPassScore: profiling.bestConfigurationSeedPassScore,
         slotCardCounts: slots.map((slot) => slot.searchCards.length),
+        preConfigurationGcProbe,
       }
       : null;
     activeConfigurationMemorySoftLimitBytes = null;
@@ -2321,21 +2341,13 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
         enableLowMemoryInitialCandidateSyncGcProbe
         && traceEntry.lowMemoryInitialCandidateSync === true
       ) {
-        const gc = (globalThis as { gc?: () => void }).gc;
-        if (typeof gc === "function") {
-          const beforeGcBytes = readUsedHeapBytes();
-          const gcStartedAt = performance.now();
-          gc();
-          const afterGcBytes = readUsedHeapBytes();
+        const gcProbe = runLowMemoryInitialCandidateSyncGcProbe();
+        if (gcProbe.ran === true) {
           Object.assign(traceEntry, {
             lowMemoryInitialCandidateSyncGcProbe: true,
-            lowMemoryInitialCandidateSyncGcProbeElapsedMs: Math.round(performance.now() - gcStartedAt),
-            lowMemoryInitialCandidateSyncGcProbeBeforeMiB: beforeGcBytes !== null
-              ? Math.ceil(beforeGcBytes / BYTES_PER_MIB)
-              : null,
-            lowMemoryInitialCandidateSyncGcProbeAfterMiB: afterGcBytes !== null
-              ? Math.ceil(afterGcBytes / BYTES_PER_MIB)
-              : null,
+            lowMemoryInitialCandidateSyncGcProbeElapsedMs: gcProbe.elapsedMs,
+            lowMemoryInitialCandidateSyncGcProbeBeforeMiB: gcProbe.beforeMiB,
+            lowMemoryInitialCandidateSyncGcProbeAfterMiB: gcProbe.afterMiB,
           });
         } else {
           traceEntry.lowMemoryInitialCandidateSyncGcProbeUnavailable = true;
