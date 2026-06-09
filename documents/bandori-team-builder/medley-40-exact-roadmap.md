@@ -1305,3 +1305,46 @@ Next execution step:
   join. Before another proof patch, add Node heap/RSS fields to the
   pre-configuration and low-memory GC probes so the next P03 run can separate
   measurement mismatch from real allocation growth.
+- Diagnostic:
+  Node/performance/RSS probe
+  (`temp/bandori-team-builder/real-profile-medley-scope-matrix-2026-06-09T16-39-12-417Z.json`)
+  ruled out a sampler mismatch. In Node 24, `performance.memory` was `null`;
+  both the search-layer probe and the exact-join local sampler used Node
+  heap/RSS. The remaining `P03:260` spike was real: `visual` pre-configuration
+  GC saw about `3008 MiB`, while low-memory finder start saw about `4770 MiB`.
+- Diagnostic:
+  configuration-window memory probes
+  (`temp/bandori-team-builder/real-profile-medley-scope-matrix-2026-06-09T16-46-09-122Z.json`)
+  narrowed the spike to incumbent seeding before exact join. For the third
+  sibling `RaiseASuilen/happy/visual`, `post-slot-build` was about `3007 MiB`,
+  but `before-exact-candidate-join-after-seeding` was about `4769 MiB`.
+  The best score did not improve during slot-candidate, greedy, or neighborhood
+  seeding; `afterSeedingMs` was `27461`, and exact join then aborted at
+  `initial-candidate` before useful proof work.
+- Candidate fix using an existing guard:
+  raising `skipConfigurationSeedingWhenMemoryHeadroomBelowMiB` from `400` to
+  `1600` in the same diagnostic path converted `P03:260` to exact
+  (`temp/bandori-team-builder/real-profile-medley-scope-matrix-2026-06-09T16-49-28-385Z.json`).
+  Result: exact, elapsed `199171ms`, peak `4050 MiB`, `0` timeout,
+  `0` memory limit, `6/6` exact-join completions, and `102` root-pruned
+  configurations. The crucial third sibling skipped no-gain seeding, entered
+  exact join around `3975 MiB`, and proved immediately through low-memory
+  initial candidates.
+- Guard evidence for the `1600` headroom candidate:
+  all eight active hard guard rows remained exact with `0` timeout and `0`
+  memory-limited rows:
+  - `P03:260`: exact, `199171ms`, peak `4050 MiB`, `6/6` exact join.
+  - `P06:323`: exact, `139845ms`, peak `3186 MiB`, `9/9` exact join.
+  - `P07:260`: exact, `146067ms`, peak `2981 MiB`, `21/21` exact join.
+  - `P08:323`: exact, `17394ms`, peak `1068 MiB`, `3/3` exact join.
+  - `P10:244`: exact, `98729ms`, peak `1889 MiB`, `12/12` exact join.
+  - `P10:260`: exact, `56955ms`, peak `1375 MiB`, `6/6` exact join.
+  - `P07:244`: exact, `73517ms`, peak `1063 MiB`, `21/21` exact join.
+  - `P08:244`: exact, `17263ms`, peak `1061 MiB`, `3/3` exact join.
+- Current candidate acceptance status:
+  the `1600` headroom skip has passed the targeted `P03` conversion and the
+  hard guard set, but it is not yet a final acceptance baseline. The next
+  required step is a process-per-case isolated full `P01`-`P10` / four-event
+  40-case run using the fixed fixture and the same optimization JSON. If that
+  reaches `40/40` exact, generate the timestamped report and update this file
+  before treating the route as accepted.
