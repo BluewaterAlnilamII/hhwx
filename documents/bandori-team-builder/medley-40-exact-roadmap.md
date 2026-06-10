@@ -1,6 +1,6 @@
 # Medley 40/40 Exact Roadmap
 
-Last updated: 2026-06-10 14:48 CST
+Last updated: 2026-06-10 17:17 CST
 
 This file is the persistent working note for the current medley optimizer goal.
 Keep it current before and after benchmark runs or proof-path changes, so future
@@ -1875,3 +1875,37 @@ Next proof direction:
 - Re-run P06 non-debug only after the next proof patch can reduce the remaining
   `PastelPalettes/cool` residual gap below the current `347244` without higher
   peak memory.
+
+## First-Oriented Third Shortlist Rejection - 2026-06-10 17:17 CST
+
+Rejected experiment:
+
+- Hypothesis: for the imbalanced `P06:323` staged `800000` exact join, try the
+  current first candidate's third-slot shortlist before the existing
+  second-oriented third shortlist. This should reduce
+  `thirdShortlistFallbackCount` and `thirdFallbackWordScanCount` without
+  changing proof semantics, because the original second-oriented shortlist and
+  bitset fallback remain as backstops.
+- Version 1 cached first-oriented base and extended shortlists through the
+  existing WeakMap caches. It OOMed before report generation at about `72s` in a
+  `120000ms` P06 diagnostic run.
+- Version 2 reused scratch `Uint32Array` buffers for the first-oriented base and
+  extended shortlists so no long-lived first-shortlist cache entries were kept.
+  It still OOMed before report generation at about `73s` in a `90000ms` P06
+  diagnostic run.
+- Both failed runs used ordinary Node, no `--expose-gc`, fixture
+  `temp/bandori-team-builder/real-profile-medley-p01-p10-40exact-fixture.json`,
+  profile `P06`, event `323`, fixed songs `385,193,619`, staged event-root
+  candidate soft limit `800000`, and `debugConfigurationTrace=true`.
+
+Conclusion:
+
+- First-oriented third shortlist lookup is not a viable current path for the
+  no-GC acceptance target. Even after removing long-lived shortlist cache
+  pressure, the added per-first/per-pair allocation and scan work pushes V8 to
+  OOM before the existing 300s bounded baseline.
+- Do not continue tuning this by increasing heap, relying on manual GC, or
+  adding more shortlist stages. The remaining P06 blocker should stay framed as
+  a low-allocation proof-frontier upper-bound problem, especially the
+  `PastelPalettes/cool` high invalid pair / unseen-side residual upper, not as a
+  third-candidate lookup hit-rate problem.
