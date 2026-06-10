@@ -916,6 +916,9 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
     : null;
   const eventRootFrontierProbeAnchorCheapUpperRefineUnseen =
     optimization.eventRootFrontierProbeAnchorCheapUpperRefineUnseen === true;
+  const eventRootFrontierProbeAnchorCheapUpperUseBitsetPairRefine = (
+    optimization.eventRootFrontierProbeAnchorCheapUpperUseBitsetPairRefine === true
+  );
   const parsedEventRootFrontierProbeAnchorCheapUpperUnseenRefineMaxGeneratedCandidates =
     optimization.eventRootFrontierProbeAnchorCheapUpperUnseenRefineMaxGeneratedCandidates !== undefined
       ? Math.trunc(optimization.eventRootFrontierProbeAnchorCheapUpperUnseenRefineMaxGeneratedCandidates)
@@ -936,6 +939,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
       anchorFrontierCheapUpperTimeboxMs: eventRootFrontierProbeAnchorCheapUpperTimeboxMs,
       anchorFrontierCheapUpperMaxAnchors: eventRootFrontierProbeAnchorCheapUpperMaxAnchors,
       anchorFrontierCheapUpperRefineUnseen: eventRootFrontierProbeAnchorCheapUpperRefineUnseen,
+      anchorFrontierCheapUpperUseBitsetPairRefine: eventRootFrontierProbeAnchorCheapUpperUseBitsetPairRefine,
       anchorFrontierCheapUpperUnseenRefineMaxGeneratedCandidates: (
         eventRootFrontierProbeAnchorCheapUpperUnseenRefineMaxGeneratedCandidates
       ),
@@ -4571,6 +4575,9 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
         traceEntry.eventRootFrontierProbeAnchorCheapUpperRefineUnseen = (
           eventRootFrontierProbeAnchorCheapUpperRefineUnseen
         );
+        traceEntry.eventRootFrontierProbeAnchorCheapUpperUseBitsetPairRefine = (
+          eventRootFrontierProbeAnchorCheapUpperUseBitsetPairRefine
+        );
         traceEntry.eventRootFrontierProbeAnchorCheapUpperUnseenRefineMaxGeneratedCandidates = (
           eventRootFrontierProbeAnchorCheapUpperUnseenRefineMaxGeneratedCandidates
         );
@@ -4637,6 +4644,9 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
           anchorFrontierCheapUpperTimeboxMs: eventRootFrontierProbeAnchorCheapUpperTimeboxMs,
           anchorFrontierCheapUpperMaxAnchors: eventRootFrontierProbeAnchorCheapUpperMaxAnchors,
           anchorFrontierCheapUpperRefineUnseen: eventRootFrontierProbeAnchorCheapUpperRefineUnseen,
+          anchorFrontierCheapUpperUseBitsetPairRefine: (
+            eventRootFrontierProbeAnchorCheapUpperUseBitsetPairRefine
+          ),
           anchorFrontierCheapUpperUnseenRefineMaxGeneratedCandidates: (
             eventRootFrontierProbeAnchorCheapUpperUnseenRefineMaxGeneratedCandidates
           ),

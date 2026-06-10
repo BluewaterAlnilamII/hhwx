@@ -123,6 +123,7 @@ export type BandoriMedleySearchOptimizationOptions = {
   eventRootFrontierProbeAnchorCheapUpperTimeboxMs?: number;
   eventRootFrontierProbeAnchorCheapUpperMaxAnchors?: number;
   eventRootFrontierProbeAnchorCheapUpperRefineUnseen?: boolean;
+  eventRootFrontierProbeAnchorCheapUpperUseBitsetPairRefine?: boolean;
   eventRootFrontierProbeAnchorCheapUpperUnseenRefineMaxGeneratedCandidates?: number;
 };
 
