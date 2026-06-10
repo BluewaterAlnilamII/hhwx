@@ -2,7 +2,7 @@
 
 中文说明见 [supabase-setup.zh-CN.md](supabase-setup.zh-CN.md).
 
-This document describes the current repository-local SQL layout for a fresh HHWX deployment.
+This document describes HHWX's Supabase schema workflow. New schema changes should use Supabase CLI migrations as the source of truth. The older standalone SQL files remain as legacy references and compatibility scripts during the transition.
 
 ## Files
 
@@ -10,6 +10,9 @@ This document describes the current repository-local SQL layout for a fresh HHWX
 - `supabase/schema/auth_legacy_patch.sql`: compatibility patch for older auth/profile deployments.
 - `supabase/schema/bandori_calendar_schema.sql`: Bandori character, event, CN schedule, event bonus, and calendar editor-role tables.
 - `supabase/schema/bandori_tracker_data_schema.sql`: tracker ranking data table and indexes.
+- `supabase/config.toml`: Supabase CLI local project configuration.
+- `supabase/migrations/*_baseline_schema.sql`: current migration baseline for new empty HHWX Supabase projects.
+- `supabase/migrations/20260602*_*.sql`, `supabase/migrations/202606030*_*.sql`, and `supabase/migrations/20260610030939_*.sql`: historical production migration records from the pre-baseline MCP/manual transition. These files are intentionally no-op locally because the baseline migration builds the empty-project schema.
 - `documents/account-status-schema.sql`: application-side email verification state.
 - `documents/account-status-backfill-auth-confirmed.sql`: optional backfill from Supabase Auth confirmation state.
 - `documents/account-auth-flow.md`: account registration, email verification, resend, and account-management behavior.
@@ -19,9 +22,28 @@ This document describes the current repository-local SQL layout for a fresh HHWX
 - `documents/game-account-binding-schema.sql`: game-account binding challenges and bindings.
 - `supabase/maintenance/bandori_tracker_maintenance.sql`: manual observation and maintenance queries only. Do not treat this as a migration.
 
-## Suggested Order
+## Migration Workflow
 
-For a new project, run these in the Supabase SQL editor or your migration system:
+Use the project-local Supabase CLI. It is installed as a development dependency, so global installation is not required.
+
+```powershell
+npm exec -- supabase --version
+npm exec -- supabase migration new <name>
+```
+
+For new schema work:
+
+1. Create a migration with `npm exec -- supabase migration new <name>`.
+2. Put the SQL change in the generated `supabase/migrations/<timestamp>_<name>.sql` file.
+3. Review grants, RLS policies, function `search_path`, and service-role boundaries before applying it.
+4. If Docker is available, test against a local Supabase stack with `npm exec -- supabase db reset`.
+5. For a linked remote project, review with `npm exec -- supabase db push --dry-run` before running `npm exec -- supabase db push`.
+
+The current baseline migration is for new empty projects. Do not run it directly against the existing production HHWX project. For the linked production project, keep the historical no-op records for already-applied remote versions and mark the baseline version as applied only after verifying that the live schema already matches it. Run `npm exec -- supabase db push --dry-run` before any production push.
+
+## Legacy Manual Order
+
+For older manual setup, run these in the Supabase SQL editor or your migration system:
 
 1. `supabase/schema/auth_schema.sql`
 2. `supabase/schema/auth_legacy_patch.sql` if you are upgrading an older deployment
@@ -29,8 +51,8 @@ For a new project, run these in the Supabase SQL editor or your migration system
 4. `supabase/schema/bandori_tracker_data_schema.sql`
 5. `documents/account-status-schema.sql`
 6. `documents/profile-public-uid-schema.sql`
-7. `documents/game-profile-schema.sql`
-8. `documents/game-account-binding-schema.sql`
+7. `documents/game-account-binding-schema.sql`
+8. `documents/game-profile-schema.sql`
 
 Then run `documents/account-status-backfill-auth-confirmed.sql` only when migrating users from an existing Supabase Auth project where confirmed users should become application-verified users.
 
@@ -39,11 +61,13 @@ If an existing project already ran an older `auth_schema.sql`, also run `documen
 ## Review Notes
 
 - Keep row-level security enabled on user-owned tables.
+- Use `supabase/migrations/` for new schema changes. Treat the older standalone SQL files as compatibility references unless a migration explicitly reuses them.
 - Supabase no longer automatically exposes new public tables/functions to the Data API for new projects from May 30, 2026, and applies the same default to existing projects from October 30, 2026. Keep explicit `GRANT`/`REVOKE` statements next to RLS policies in every SQL file that creates Data API objects.
 - Treat `security definer` functions as privileged code: verify argument checks, ownership checks, grants, and `search_path` behavior before production use.
 - Grant direct table or function access only where the application requires it.
 - Keep service-role operations server-side. Browser code must use only public Supabase keys and authenticated user sessions.
 - Keep Supabase Auth email provider enabled, but keep Dashboard Confirm email disabled (`mailer_autoconfirm: true`). HHWX uses application-side email verification; Supabase's built-in signup confirmation email does not complete `account_status.email_verified_at`.
+- Docker is needed only for local Supabase stack commands such as `db reset`, `db diff`, or `start`. Creating migration files and generating remote types can use the project-local CLI without Docker.
 
 ## Environment
 

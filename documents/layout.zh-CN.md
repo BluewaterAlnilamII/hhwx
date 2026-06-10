@@ -26,7 +26,7 @@ hhwx/
 |   |-- i18n/         # 语言路由、请求配置和导航封装
 |   |-- lib/          # 服务端逻辑、业务服务、校验和工具函数
 |   `-- store/        # 共享客户端状态
-|-- supabase/         # 基础 Supabase schema 和手动维护 SQL
+|-- supabase/         # Supabase CLI 配置、迁移、旧 schema SQL 和维护 SQL
 `-- package.json      # 前端依赖和脚本入口
 ```
 
@@ -77,6 +77,13 @@ hhwx/
 ## scripts
 
 - `check-i18n-messages.mjs`：以 `messages/zh-CN` 为基线校验各语言命名空间和占位符一致性。
+
+## supabase
+
+- `config.toml`：Supabase CLI 本地项目配置。它与 HHWX 当前 Data API 策略保持一致，默认不自动暴露新建 public 表。
+- `migrations/`：后续 Supabase schema 变更的标准版本化迁移目录。
+- `schema/`：迁移优先流程过渡期间保留的旧 baseline 和兼容 SQL。
+- `maintenance/`：仅用于手动观察和维护查询，不要当作迁移执行。
 
 ## 维护规则
 

@@ -1,0 +1,8 @@
+-- Historical production migration record.
+--
+-- Production applied this migration through Supabase MCP before HHWX adopted a
+-- CLI baseline. Keep this file as an intentionally no-op local history record
+-- so linked CLI projects do not report the remote version as missing.
+--
+-- The current empty-project schema is built by 20260610073410_baseline_schema.sql.
+-- Do not add executable DDL here unless the baseline order is redesigned.

@@ -26,7 +26,7 @@ hhwx/
 |   |-- i18n/         # Locale routing, request config, and navigation wrappers
 |   |-- lib/          # Server logic, business services, validation, and utilities
 |   `-- store/        # Shared client-side state
-|-- supabase/         # Base Supabase schema and manual maintenance SQL
+|-- supabase/         # Supabase CLI config, migrations, legacy schema SQL, and maintenance SQL
 `-- package.json      # Frontend dependencies and script entry points
 ```
 
@@ -77,6 +77,13 @@ hhwx/
 ## scripts
 
 - `check-i18n-messages.mjs`: validates locale namespace parity and placeholder parity against `messages/zh-CN`.
+
+## supabase
+
+- `config.toml`: Supabase CLI local project configuration. It mirrors HHWX's Data API posture by keeping automatic exposure for new public tables disabled.
+- `migrations/`: canonical versioned database migrations for new Supabase schema changes.
+- `schema/`: legacy baseline and compatibility SQL retained during the migration-first transition.
+- `maintenance/`: manual observation and maintenance queries only. Do not treat files here as migrations.
 
 ## Maintenance Rules
 
