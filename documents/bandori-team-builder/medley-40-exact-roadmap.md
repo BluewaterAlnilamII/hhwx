@@ -1,6 +1,6 @@
 # Medley 40/40 Exact Roadmap
 
-Last updated: 2026-06-10 20:52 CST
+Last updated: 2026-06-10 21:50 CST
 
 This file is the persistent working note for the current medley optimizer goal.
 Keep it current before and after benchmark runs or proof-path changes, so future
@@ -2286,3 +2286,66 @@ Next route:
   shared banned-card/pair-frontier index or a coarse conflict certificate that
   can answer many anchor exclusions without rebuilding two slot generators per
   anchor.
+
+## P06 Existing Cheap-Upper Diagnostics - 2026-06-10 21:50 CST
+
+Purpose:
+
+- Before adding another proof patch, test whether existing event-root
+  anchor-frontier cheap upper can close `P06:323` by tuning only opt-in
+  parameters.
+- Scope: single `P06:323`, no `--expose-gc`, non-debug runner, active hard-guard
+  JSON, `enableEventRootFrontierProbe=true`, candidate soft limit `200000`.
+
+Results:
+
+- `eventRootFrontierProbeAnchorCheapUpperTimeboxMs=30000`:
+  `temp/bandori-team-builder/real-profile-medley-scope-matrix-2026-06-10T13-30-20-068Z.json`.
+  Bounded, score `9488172`, gap `285646`, elapsed `133439ms`, peak
+  `4329 MiB`, no timeout/memory-limit, abort
+  `solve-dominated-same-coarse-frontier`. The event-root local upper improved
+  from about `10094162` to `9773818`; residual gap was `286857`. Cheap upper
+  processed `14321` anchors in `29547ms`, with `14320` split attempts and
+  `390696` split states.
+- `eventRootFrontierProbeAnchorCheapUpperTimeboxMs=60000`:
+  `temp/bandori-team-builder/real-profile-medley-scope-matrix-2026-06-10T13-34-08-696Z.json`.
+  Bounded, score `9488172`, gap `587965`, elapsed `111290ms`, peak
+  `4863 MiB`, `timedOut=true`, `memoryLimited=true`, abort
+  `initial-candidate`. The cheap upper did not process more anchors than the
+  30s run; event-root residual gap remained about `286857`, but later memory
+  pressure worsened the reported outer upper.
+- `eventRootFrontierProbeAnchorCheapUpperRefineUnseen=true` with default
+  generated scan:
+  `temp/bandori-team-builder/real-profile-medley-scope-matrix-2026-06-10T13-39-26-601Z.json`.
+  Bounded, score `9488172`, gap `316957`, elapsed `135885ms`, peak
+  `4264 MiB`, no global timeout/memory-limit, abort
+  `solve-dominated-same-coarse-frontier`. Cheap upper hit its local timebox,
+  processed only `8122` anchors, and local residual gap worsened to `318168`.
+- `eventRootFrontierProbeAnchorCheapUpperRefineUnseen=true` with
+  `eventRootFrontierProbeAnchorCheapUpperUnseenRefineMaxGeneratedCandidates=1`:
+  `temp/bandori-team-builder/real-profile-medley-scope-matrix-2026-06-10T13-44-11-711Z.json`.
+  Bounded, score `9488172`, gap `587965`, elapsed `123227ms`, peak
+  `4869 MiB`, `timedOut=true`, `memoryLimited=true`, abort
+  `initial-candidate`. Cheap upper local gap worsened to `340105`.
+
+Interpretation:
+
+- The 30s cheap upper is the best current safe signal for `P06:323`: it cuts
+  the gap from about `606k` to about `286k` without timeout or memory-limit.
+- More time does not help because the 30s run already reaches the cheap-upper
+  stopping condition; the remaining gap is not a timebox artifact.
+- The residual blocker is the pair-unseen upper, not incumbent quality and not
+  generated-pair conflict alone. Existing `refineUnseen` is rejected because it
+  spends the cheap-upper budget before completing the anchor sweep, worsens
+  residual gap, and can push the outer run into memory-limit behavior.
+
+Next route:
+
+- Do not enable existing `eventRootFrontierProbeAnchorCheapUpperRefineUnseen`
+  for the acceptance path.
+- Do not raise cheap-upper timebox or candidate limits as a default strategy.
+- The next implementation should be a lighter residual-unseen upper pass that
+  runs after the normal anchor sweep has identified the residual max source. It
+  should target only the small set of entries that determine the max upper, use
+  cached slot/card exclusion bounds, and never feed an unproved upper back into
+  same-coarse scheduling unless it fully proves the configuration.
