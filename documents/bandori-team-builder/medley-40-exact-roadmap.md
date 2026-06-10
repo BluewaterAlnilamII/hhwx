@@ -2962,3 +2962,55 @@ Compact high-pair record builder experiment:
 - Next validation: run full 300s `P06:323` with no manual GC, 6144 MiB soft
   limit, wide-anchor enabled, and a narrow
   `eventRootFrontierProbeAnchorProofMaxHighPairRecords=2200000` guard.
+
+Validation results:
+
+- Full no-GC `P06:323`, 6144 MiB, wide-anchor, high-pair cap `2200000`,
+  event-root candidate soft limit `200000`:
+  - `temp/bandori-team-builder/real-profile-medley-scope-matrix-2026-06-10T19-41-51-760Z.json`
+  - bounded, elapsed `147882ms`, gap `281917`, peak `4581 MiB`;
+    no timeout and no memory limit.
+  - This is a large memory improvement versus earlier wide-anchor peaks around
+    `5.5 GiB`, but it still does not close P06.
+- Debug ledger for the same route:
+  - `temp/bandori-team-builder/real-profile-medley-scope-matrix-2026-06-10T19-45-14-379Z.json`
+  - bounded, elapsed `150819ms`, gap `292366`, peak `3894 MiB`.
+  - Top unclosed remains `PastelPalettes/cool/performance`, status
+    `large-gap-event-skip-seeding`, abort `candidate-fill-soft-limit`, counts
+    `[200000,80879,50858]`.
+  - Event-root probe tightened the upper from `10094161.912` to `9780538`, but
+    residual gap remained `293577`; `anchorFrontierProofTriggerCount=0`.
+  - Interpretation: after compacting high-pair records, the leading blocker is
+    the event-root probe's cheap upper / candidate-fill frontier, not the JS
+    object array memory spike alone.
+
+Candidate-limit and shared-pair follow-up:
+
+- Raising event-root candidate soft limit to `600000` did not help:
+  - `temp/bandori-team-builder/real-profile-medley-scope-matrix-2026-06-10T19-49-46-761Z.json`
+  - bounded, elapsed `160622ms`, gap worsened to `333869`, peak `4677 MiB`.
+  - Decision: do not continue by widening the event-root candidate limit.
+- Retried shared pair-upper after compacting high-pair records, then removed the
+  uncommitted code again:
+  - cache entries `2`, high-pair cap `2200000`:
+    `temp/bandori-team-builder/real-profile-medley-scope-matrix-2026-06-10T19-58-10-044Z.json`;
+    bounded, elapsed `141915ms`, gap `278368`, peak `3874 MiB`, max source
+    shifted to `right-unseen`.
+  - cache entries `1`, high-pair cap `5000000`:
+    `temp/bandori-team-builder/real-profile-medley-scope-matrix-2026-06-10T20-01-30-598Z.json`;
+    bounded, elapsed `159582ms`, gap worsened to `296759`, peak `5529 MiB`.
+  - Decision: compact builder makes shared pair-upper runnable, but its quality
+    gain is too small and higher record guards reintroduce memory pressure. Do
+    not promote or keep this option.
+
+Current conclusion:
+
+- Keep the compact high-pair record builder: it is behavior-equivalent and
+  materially reduces peak memory in hard P06 probes.
+- Stop the following routes for P06: more event-root candidate limit, larger
+  high-pair cap, shared pair-upper, per-anchor bitset refine, old low-memory
+  high-pair prefix/scan, and longer cheap-upper timeboxes.
+- Next proof work should target the remaining event-root frontier upper itself,
+  especially the `right-unseen` / `left-unseen` residual after generated-pair
+  conflict split. A viable patch should reduce unseen slot upper bounds without
+  repeating expensive per-entry full slot-upper searches.
