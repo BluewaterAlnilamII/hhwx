@@ -3198,3 +3198,31 @@ P07 failed follow-ups after P03 fix:
     certificate for the event-root frontier. Do not continue by widening
     candidate limits, extending seed/warmup, or enabling unguarded low-root
     ordering.
+
+2026-06-11 07:24 CST P06 unseen-refine parameter rejection:
+
+- Correct option name for the cheap-upper unseen refine path is
+  `eventRootFrontierProbeAnchorCheapUpperRefineUnseen`. A diagnostic using
+  `anchorFrontierCheapUpperRefineUnseen` did not actually enable the path and
+  should not be counted as evidence.
+- Correctly enabled unseen refine with the standard `30000ms` cheap-upper
+  timebox:
+  - Raw:
+    `temp/bandori-team-builder/real-profile-medley-scope-matrix-2026-06-10T23-17-09-106Z.json`
+  - Result: bounded, `119660ms`, score `9488172`, gap `307999`,
+    peak `4081 MiB`, `timedOut=false`, `memoryLimited=false`.
+  - It lowered unseen components but shifted the max source to
+    `generated-pair`; split refinement hit `timebox`, so the final upper
+    worsened versus the guarded baseline.
+- Correctly enabled unseen refine with `eventRootFrontierProbeAnchorCheapUpperTimeboxMs=120000`:
+  - Raw:
+    `temp/bandori-team-builder/real-profile-medley-scope-matrix-2026-06-10T23-20-21-262Z.json`
+  - Result: bounded, `149108ms`, score `9488172`, gap `285649`,
+    peak `4039 MiB`, `timedOut=false`, `memoryLimited=false`.
+  - Max source returned to `right-unseen`; residual upper remained
+    `9773821`, essentially matching the guarded baseline despite more local
+    time.
+- Decision: do not pursue unseen refine by only increasing its timebox or
+  generated-candidate count. The remaining P06 gap needs a new proof
+  certificate or a different event-root frontier decomposition, not another
+  parameter increase on the current cheap-upper refine.
