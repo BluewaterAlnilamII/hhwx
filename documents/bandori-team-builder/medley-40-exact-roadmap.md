@@ -1,6 +1,6 @@
 # Medley 40/40 Exact Roadmap
 
-Last updated: 2026-06-10 22:10 CST
+Last updated: 2026-06-10 22:27 CST
 
 This file is the persistent working note for the current medley optimizer goal.
 Keep it current before and after benchmark runs or proof-path changes, so future
@@ -2406,3 +2406,53 @@ Conclusion:
   upper. Prefer either a shared pair-unseen certificate or a lower-allocation way
   to reduce the original candidate-fill/frontier memory wall before event-root
   proof starts.
+
+## Candidate-Fill Pair-Refine Failure Allocation Guard - 2026-06-10 22:27 CST
+
+Observation:
+
+- Current `P06:323` post-revert baseline still showed memory instability around
+  candidate fill:
+  `temp/bandori-team-builder/real-profile-medley-scope-matrix-2026-06-10T14-11-21-759Z.json`.
+  It ran event-root cheap upper and reached local residual gap `286857`, but
+  later ended bounded with score `9488172`, gap `465766`, peak `4500 MiB`,
+  `timedOut=true`, `memoryLimited=true`, abort `candidate-fill-pair-refine`.
+- The failure path in `refineCandidateFillPairUpper()` rebuilt candidate-key
+  sets for pair slots before checking `stats.timedOut` or generator abort. Those
+  sets are useless when the pair-refine probe has already failed and the caller
+  will return unproved.
+
+Patch:
+
+- Move `rebuildCandidateKeys(...pairSlotIndices)` after the abort check inside
+  `refineCandidateFillPairUpper()`.
+- This is semantics-preserving: successful/non-aborted pair-refine still
+  rebuilds keys before further candidate fill; aborted pair-refine skips only
+  allocations that cannot affect proof or result.
+
+Validation:
+
+- Static: `npm.cmd run typecheck`, `git diff --check`.
+- `P06:323` hard-parameter single case after the patch:
+  `temp/bandori-team-builder/real-profile-medley-scope-matrix-2026-06-10T14-17-54-186Z.json`.
+  Still bounded, score `9488172`, gap `587965`, elapsed `98979ms`, peak
+  `4869 MiB`, `timedOut=true`, `memoryLimited=true`, abort `initial-candidate`.
+  Event-root cheap upper itself was healthy: residual gap `286857`, processed
+  `14321` anchors, no cheap-upper timeout.
+- `P07:260` hard-parameter single case after the patch:
+  `temp/bandori-team-builder/real-profile-medley-scope-matrix-2026-06-10T14-20-38-091Z.json`.
+  Still bounded, score `8568618`, gap `62929`, elapsed `149534ms`, peak
+  `4492 MiB`, `timedOut=true`, `memoryLimited=true`, abort
+  `high-budget-pair-upper`.
+
+Conclusion:
+
+- Keep the patch as a small allocation guard on a failed path, but do not count
+  it as progress toward the 40/40 exact acceptance gate.
+- The active blockers remain:
+  - `P06:323`: event-root proof can reduce gap to about `286k`, but subsequent
+    same-coarse/initial-candidate memory pressure still prevents stable closure.
+  - `P07:260`: high-budget pair upper remains memory-limited, though the latest
+    gap sample is lower than the earlier `92335` hard-run gap.
+- Next meaningful work should target the high-budget pair-upper / initial
+  candidate memory path directly, not more seed or per-anchor unseen probes.

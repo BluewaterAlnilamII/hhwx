@@ -5640,10 +5640,10 @@ export function searchMedleyConfigurationByExactCandidateJoin(
       deadlineAt,
     );
     profiling.exactCandidateJoinPairUpperElapsedMs += performance.now() - refineStartedAt;
-    rebuildCandidateKeys(...pairSlotIndices);
     if (stats.timedOut || activeGeneratorsBySlot.some((generator) => generator.hasAborted())) {
       return false;
     }
+    rebuildCandidateKeys(...pairSlotIndices);
     if (pairUpperResult.proved) {
       exactPairUpperByExcludedSlot[excludedSlotIndex] = pairUpperResult.upperBound;
       exactPairUnseenUpperByExcludedSlot[excludedSlotIndex] = pairUpperResult.unseenUpperBound;
