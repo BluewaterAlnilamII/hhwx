@@ -30,6 +30,8 @@ import {
 import { searchMedleyConfigurationByConflictExactBnb } from "./experiments/conflict-bnb";
 import { releaseMedleyScoreOnlyTeamEvaluationCache } from "./candidates";
 import {
+  MEDLEY_EXACT_CANDIDATE_JOIN_GUARDED_CANDIDATE_SOFT_LIMIT,
+  MEDLEY_EXACT_CANDIDATE_JOIN_GUARDED_EXTENSION_MIN_REMAINING_MS,
   MEDLEY_EXACT_CANDIDATE_JOIN_LOW_MEMORY_HIGH_PAIR_PREFIX_RECORD_LIMIT,
   MEDLEY_EXACT_CANDIDATE_JOIN_LOW_MEMORY_HIGH_PAIR_SCAN_MIN_RECORD_COUNT,
   MEDLEY_EXACT_CANDIDATE_JOIN_SMALL_GAP_SOLVE_RETRY_MAX_PER_RUN,
@@ -4326,6 +4328,13 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
           eventRootFrontierProbeAnchorCheapUpperUnseenRefineMaxGeneratedCandidates
         );
       }
+      const enableEventRootFrontierProbeStagedExtension = (
+        eventRootFrontierProbeCandidateSoftLimit
+          > MEDLEY_EXACT_CANDIDATE_JOIN_GUARDED_CANDIDATE_SOFT_LIMIT
+      );
+      if (traceEntry) {
+        traceEntry.eventRootFrontierProbeStagedExtension = enableEventRootFrontierProbeStagedExtension;
+      }
       const exactJoinResult = searchMedleyConfigurationByExactCandidateJoin(
         results,
         resultLimit,
@@ -4341,7 +4350,10 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
         exactNodeSoftLimit,
         {
           calculatedCardCount: calculatedCards.length,
-          enableExperimentalStagedCandidateExtension: false,
+          enableExperimentalStagedCandidateExtension: enableEventRootFrontierProbeStagedExtension,
+          stagedCandidateExtensionMinRemainingMs: enableEventRootFrontierProbeStagedExtension
+            ? MEDLEY_EXACT_CANDIDATE_JOIN_GUARDED_EXTENSION_MIN_REMAINING_MS
+            : null,
           enableSmallGapSolveRetry: false,
           skipSolveWhenObservedUpperAtOrBelow: incumbentScore,
           solveOnlyAboveUpperTarget: incumbentScore,

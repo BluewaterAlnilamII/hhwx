@@ -1,6 +1,6 @@
 # Medley 40/40 Exact Roadmap
 
-Last updated: 2026-06-10 13:00 CST
+Last updated: 2026-06-10 14:00 CST
 
 This file is the persistent working note for the current medley optimizer goal.
 Keep it current before and after benchmark runs or proof-path changes, so future
@@ -84,6 +84,60 @@ No-GC acceptance contract:
   the exact count was `40/40`, but score stability failed when compared with
   the follow-up run. Do not run the third full 40-case confirmation until P06
   direct-repeat and hard-guard stability pass with the demoted low-memory path.
+
+2026-06-10 13:57 CST low-memory demotion follow-up:
+
+- Patch `bae28ad` changed `lowMemoryInitialCandidateSync` from automatic to
+  explicit opt-in (`enableLowMemoryInitialCandidateSync=true`). Default and
+  acceptance paths therefore no longer use the destructive
+  `generator.next(lowMemoryScore)` proof shortcut.
+- P06:244 direct-repeat after the change is score-stable at the higher known
+  score:
+  - `04-55-59-012Z`: exact, `9066914`, `110600ms`, peak `2144 MiB`
+    (`disableLowMemoryInitialCandidateSync=true` diagnostic).
+  - `05-01-32-188Z`: exact, `9066914`, `118688ms`, peak `1973 MiB`.
+  - `05-03-49-474Z`: exact, `9066914`, `111512ms`, peak `2176 MiB`.
+- Hard guard without automatic low-memory sync regressed to `6/8` exact:
+  raw result
+  `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-10T05-07-33-193Z.json`.
+  Summary: exact `6/8`, bounded `2`, bounded-gap total `699536`, peak
+  `4491 MiB`, no failed subprocesses.
+- Bounded rows:
+  - `P06:323`: score `9486961`, gap `607201`, abort
+    `candidate-fill-soft-limit`, candidate counts `[200000,80879,50858]`,
+    peak `2498 MiB`.
+  - `P07:260`: score `8568618`, gap `92335`, abort `pair-upper`,
+    `timedOut=true`, `memoryLimited=true`, peak `4491 MiB`.
+- Interpretation: low-memory sync was not proof-safe, but it was masking real
+  frontier cost. The next accepted route must replace that unsafe pruning with
+  a safe proof/solve optimization; do not restore automatic low-memory sync.
+
+2026-06-10 14:00 CST P06 event-root probe diagnostics:
+
+- `P06:323` proof ledger with low-memory sync disabled:
+  `temp/bandori-team-builder/real-profile-medley-benchmark-2026-06-10T05-34-40-951Z.json`.
+  The single open configuration is `PastelPalettes/cool/performance`; event-root
+  probe aborts at slot0 soft limit `200000`, cutoff `2518348`, peek `2616168`,
+  candidate counts `[200000,80879,50858]`, gap `607201`.
+- Raising only `eventRootFrontierProbeCandidateSoftLimit`:
+  - `300000`: still bounded, peek `2584700`, peak `3193 MiB`.
+  - `600000`: still bounded, peek `2528742`, peak `3140 MiB`.
+- Diagnostic patch: event-root probe may now use existing staged candidate
+  extension only when the caller explicitly sets
+  `eventRootFrontierProbeCandidateSoftLimit > 600000`; the normal default path
+  is unchanged.
+- With staged 800k and `240s` probe timebox:
+  `temp/bandori-team-builder/real-profile-medley-benchmark-2026-06-10T05-43-31-942Z.json`.
+  The run progressed from soft-limit to `solve-timeout`, counts
+  `[679552,189394,50858]`, peak `3534 MiB`, elapsed `251879ms`, still bounded.
+- With staged 800k and `280s` probe timebox:
+  `temp/bandori-team-builder/real-profile-medley-benchmark-2026-06-10T05-48-22-447Z.json`.
+  Still `solve-timeout`, same counts `[679552,189394,50858]`, peak `3509 MiB`,
+  elapsed `292118ms`, still bounded.
+- Conclusion: wider event-root candidate prefixes are not enough; they move
+  `P06:323` from candidate-fill failure to exact-join solve failure. The next
+  useful target is solving/proving the large imbalanced candidate join more
+  cheaply, not further raising K/timebox.
 
 2026-06-10 11:33 CST first no-GC validation:
 

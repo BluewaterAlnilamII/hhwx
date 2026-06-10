@@ -4559,6 +4559,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     exactJoinPrefixSeedMinProofBudgetMs?: number;
     exactJoinPrefixSeedMinMemoryHeadroomMiB?: number;
     exactJoinPrefixSeedMaxObservedGap?: number;
+    stagedCandidateExtensionMinRemainingMs?: number | null;
     enableLowMemoryInitialCandidateSync?: boolean;
     lowMemoryInitialCandidateSyncLocalAbortOnly?: boolean;
     lowMemoryInitialCandidateSyncLightUpper?: boolean;
@@ -4816,6 +4817,13 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     && !stats.memoryLimited
     && remainingMs >= MEDLEY_EXACT_CANDIDATE_JOIN_GUARDED_EXTENSION_MIN_REMAINING_MS
   );
+  const stagedCandidateExtensionMinRemainingMs = (
+    context.stagedCandidateExtensionMinRemainingMs !== undefined
+    && context.stagedCandidateExtensionMinRemainingMs !== null
+    && Number.isFinite(context.stagedCandidateExtensionMinRemainingMs)
+  )
+    ? Math.max(0, context.stagedCandidateExtensionMinRemainingMs)
+    : MEDLEY_EXACT_CANDIDATE_JOIN_STAGED_EXTENSION_MIN_REMAINING_MS;
   const shouldContinueUnprovedExactJoin = (): boolean => {
     const observedUpperBound = getObservedExactCandidateJoinUpperBound();
     return observedUpperBound === null || observedUpperBound > exactJoinProofCutoffScore;
@@ -4885,7 +4893,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
       !didGuardedCandidateExtension
       || profiling.exactCandidateJoinLastGuardedExtensionSlotIndex !== slotIndex
       || !canUseCandidateSoftLimitExtension(remainingMs)
-      || remainingMs < MEDLEY_EXACT_CANDIDATE_JOIN_STAGED_EXTENSION_MIN_REMAINING_MS
+      || remainingMs < stagedCandidateExtensionMinRemainingMs
       || !shouldContinueUnprovedExactJoin()
     ) {
       return false;
