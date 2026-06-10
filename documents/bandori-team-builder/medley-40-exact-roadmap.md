@@ -2718,3 +2718,71 @@ Next route:
   compact/pooled generator nodes, lower-allocation selected-card handling, or a
   chunked high-budget pair proof that releases generator state between chunks
   while preserving generated candidate material.
+
+## P06/P07 Frontier Split - 2026-06-11 02:13 CST
+
+Purpose:
+
+- Separate the remaining blockers after the candidate memory residency pass.
+- Keep the no-GC requirement: no `--expose-gc`, no `global.gc`, non-debug path
+  unless explicitly noted.
+
+Evidence:
+
+- `P07:260`, `memorySoftLimitMiB=6144`:
+  - `temp/bandori-team-builder/real-profile-medley-scope-matrix-2026-06-10T17-35-50-398Z.json`.
+  - Exact, score `8568618`, elapsed `275304ms`, peak working set `5433 MiB`,
+    peak node heap `5077 MiB`, completed configurations `17`, root-pruned `91`.
+  - Interpretation: P07 is primarily a memory headroom problem. With enough
+    no-GC headroom it closes exact, though the 4488 MiB gate is still too low.
+- `P06:323`, same hard JSON but `memorySoftLimitMiB=4488`:
+  - `temp/bandori-team-builder/real-profile-medley-scope-matrix-2026-06-10T17-45-01-322Z.json`.
+  - Bounded, score `9486961`, gap `607201`, elapsed `101652ms`,
+    `timedOut=true`, `memoryLimited=true`, peak `4489 MiB`, completed `0`,
+    started `1`, abort `candidate-fill-generator-aborted`.
+- `P06:323`, `memorySoftLimitMiB=6144`:
+  - `temp/bandori-team-builder/real-profile-medley-scope-matrix-2026-06-10T18-08-10-503Z.json`.
+  - Bounded, score `9486961`, gap `467344`, elapsed `144379ms`,
+    `timedOut=false`, `memoryLimited=false`, peak `5792 MiB`, completed `0`,
+    started `108`, root-pruned `99`, abort `solve-dominated-same-coarse-frontier`.
+  - `eventRootFrontierProbeCallCount=0`, so the current event-root probe does
+    not fire after the main exact join fails.
+
+Post-exact event-root probe diagnostic:
+
+- A post-exact probe was tested under a new opt-in
+  `enablePostExactEventRootFrontierProbe`.
+- Test artifact:
+  `temp/bandori-team-builder/real-profile-medley-scope-matrix-2026-06-10T17-58-55-374Z.json`.
+- Result: bounded, score `9486961`, final gap still `467344`, elapsed
+  `295086ms`, peak `6006 MiB`.
+- The probe did run: `eventRootFrontierProbeCallCount=2`,
+  `eventRootFrontierProbeUpperImprovementCount=2`, elapsed `133158ms`.
+  The last local residual gap improved to `283606`, but another unclosed
+  configuration still preserved the global `467344` gap.
+
+Conclusion:
+
+- Post-exact event-root probing is useful as a diagnostic but not a default
+  path. It spends most of the remaining budget, increases memory peak, and did
+  not improve final exactness for P06.
+- The code keeps it behind `enablePostExactEventRootFrontierProbe=false` by
+  default. The existing `enableEventRootFrontierProbe` behavior is unchanged
+  unless the new opt-in is explicitly set.
+- The P06 blocker is not seed quality and not just memory. It is a same-coarse
+  proof-frontier problem: several configurations are skipped as dominated by an
+  unresolved same-coarse frontier target, but that target itself remains above
+  the incumbent.
+
+Next route:
+
+- Do not expand post-exact probe timebox/K. The next implementation should make
+  same-coarse frontier handling more proof-aware:
+  - identify the highest unclosed same-coarse frontier configuration;
+  - spend proof budget on closing that frontier root instead of re-probing later
+    dominated configurations;
+  - if a frontier remains unclosed, preserve a tighter per-configuration upper
+    only when it actually reduces the global max upper.
+- Before coding another proof patch, run or inspect a debug proof-ledger sample
+  for `P06:323` to list the unclosed configurations by gap and confirm whether
+  one unresolved same-coarse target dominates the final `467344` gap.

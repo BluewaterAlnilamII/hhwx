@@ -108,6 +108,7 @@ export type BandoriMedleySearchOptimizationOptions = {
   disableNearDeadlineRootSkip?: boolean;
   disableSkipDfsAfterUnprovedExactCandidateJoin?: boolean;
   enableEventRootFrontierProbe?: boolean;
+  enablePostExactEventRootFrontierProbe?: boolean;
   eventRootFrontierProbeTimeboxMs?: number;
   eventRootFrontierProbeCandidateSoftLimit?: number;
   eventRootFrontierProbeMinRemainingMs?: number;

@@ -83,6 +83,7 @@ import type {
   BandoriMedleyTeamSearchStats,
   MedleyBestSlotTeamCacheEntry,
   MedleyConfigurationWarmupCache,
+  MedleyExactCandidateJoinAbortReason,
   MedleyFixedCardSetOptimizationCacheEntry,
   MedleyObservedUpperBoundSource,
   MedleySlotSearch,
@@ -804,6 +805,9 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
   const disableSkipDfsAfterUnprovedExactCandidateJoin =
     optimization.disableSkipDfsAfterUnprovedExactCandidateJoin === true;
   const enableEventRootFrontierProbe = optimization.enableEventRootFrontierProbe === true;
+  const enablePostExactEventRootFrontierProbe = (
+    optimization.enablePostExactEventRootFrontierProbe === true
+  );
   const parsedEventRootFrontierProbeTimeboxMs = optimization.eventRootFrontierProbeTimeboxMs !== undefined
     ? Math.trunc(optimization.eventRootFrontierProbeTimeboxMs)
     : Number.NaN;
@@ -4355,12 +4359,6 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
         closeActiveConfiguration();
         continue;
       }
-      if (shouldSkipDfsAfterUnprovedExactCandidateJoin) {
-        didLeaveUnclosedAreaItemConfiguration = true;
-        rememberActiveConfigurationUpperBound();
-        finishConfigurationTrace("exact-unproved-skip-dfs");
-        continue;
-      }
       if (exactJoinResult.proved) {
         profiling.completedAreaItemConfigurationCount += 1;
         rememberExactCandidateJoinProofElapsed(configuration, performance.now() - traceStartedAt);
@@ -4370,7 +4368,21 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
       }
     }
 
+    type EventRootFrontierProbeTriggerStatus =
+      | "full-width-event-skip-seeding"
+      | "large-gap-event-skip-seeding"
+      | "post-exact-frontier";
     type EventRootFrontierProbeOutcome = "not-run" | "continue-search" | "break-search";
+    type EventRootFrontierProbeOptions = {
+      allowAfterExactJoin?: boolean;
+      allowExactCandidateJoinUpper?: boolean;
+    };
+    const canRunPostExactEventRootFrontierProbe = (
+      abortReason: MedleyExactCandidateJoinAbortReason,
+    ): boolean => (
+      abortReason === "solve-dominated-same-coarse-frontier"
+      || abortReason === "solve-workload-limit"
+    );
     const getActiveConfigurationEffectiveUpperBound = (): number | null => {
       if (
         Number.isFinite(activeConfigurationTightScoreUpperBound)
@@ -4406,7 +4418,8 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
       }
     };
     const maybeRunEventRootFrontierProbe = (
-      triggerStatus: "full-width-event-skip-seeding" | "large-gap-event-skip-seeding",
+      triggerStatus: EventRootFrontierProbeTriggerStatus,
+      options: EventRootFrontierProbeOptions = {},
     ): EventRootFrontierProbeOutcome => {
       const upperBefore = getActiveConfigurationEffectiveUpperBound();
       if (!enableEventRootFrontierProbe) {
@@ -4416,7 +4429,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
         recordEventRootFrontierProbeSkip("exact-join-disabled", upperBefore);
         return "not-run";
       }
-      if (didAttemptExactCandidateJoin) {
+      if (didAttemptExactCandidateJoin && options.allowAfterExactJoin !== true) {
         recordEventRootFrontierProbeSkip("already-attempted", upperBefore);
         return "not-run";
       }
@@ -4442,7 +4455,12 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
         recordEventRootFrontierProbeSkip("no-positive-gap", upperBefore);
         return "not-run";
       }
-      if (activeConfigurationObservedUpperBoundSource !== "configuration-root") {
+      const isAllowedUpperSource = activeConfigurationObservedUpperBoundSource === "configuration-root"
+        || (
+          options.allowExactCandidateJoinUpper === true
+          && activeConfigurationObservedUpperBoundSource === "exact-candidate-join"
+        );
+      if (!isAllowedUpperSource) {
         recordEventRootFrontierProbeSkip("non-root-upper", upperBefore);
         return "not-run";
       }
@@ -4729,6 +4747,30 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
       }
       return "not-run";
     };
+
+    if (
+      shouldSkipDfsAfterUnprovedExactCandidateJoin
+      && enablePostExactEventRootFrontierProbe
+      && hasEventBonus
+      && canRunPostExactEventRootFrontierProbe(profiling.exactCandidateJoinLastAbortReason)
+    ) {
+      const eventRootProbe = maybeRunEventRootFrontierProbe("post-exact-frontier", {
+        allowAfterExactJoin: true,
+        allowExactCandidateJoinUpper: true,
+      });
+      if (eventRootProbe === "continue-search") {
+        continue;
+      }
+      if (eventRootProbe === "break-search") {
+        break;
+      }
+    }
+    if (shouldSkipDfsAfterUnprovedExactCandidateJoin) {
+      didLeaveUnclosedAreaItemConfiguration = true;
+      rememberActiveConfigurationUpperBound();
+      finishConfigurationTrace("exact-unproved-skip-dfs");
+      continue;
+    }
 
     const hasFiniteActiveConfigurationUpperBoundBeforeSeeding = (
       Number.isFinite(activeConfigurationTightScoreUpperBound)
@@ -5139,6 +5181,22 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
     }
 
     if (shouldSkipDfsAfterUnprovedExactCandidateJoin) {
+      if (
+        enablePostExactEventRootFrontierProbe
+        && hasEventBonus
+        && canRunPostExactEventRootFrontierProbe(profiling.exactCandidateJoinLastAbortReason)
+      ) {
+        const eventRootProbe = maybeRunEventRootFrontierProbe("post-exact-frontier", {
+          allowAfterExactJoin: true,
+          allowExactCandidateJoinUpper: true,
+        });
+        if (eventRootProbe === "continue-search") {
+          continue;
+        }
+        if (eventRootProbe === "break-search") {
+          break;
+        }
+      }
       didLeaveUnclosedAreaItemConfiguration = true;
       rememberActiveConfigurationUpperBound();
       finishConfigurationTrace("exact-unproved-skip-dfs");
