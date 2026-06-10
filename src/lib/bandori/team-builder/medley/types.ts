@@ -79,6 +79,7 @@ export type BandoriMedleySearchOptimizationOptions = {
   exactJoinPrefixSeedMaxSmallestCandidateCount?: number;
   exactJoinPrefixSeedMinCandidateCounts?: [number, number, number];
   exactCandidateJoinSolveOrderVariant?: string;
+  exactCandidateJoinScoreCacheClearInterval?: number;
   debugConfigurationTrace?: boolean;
   exactCandidateJoinDebugAnchorSlotIndex?: number;
   exactCandidateJoinDebugKnownCardIdsBySlot?: number[][];
@@ -598,6 +599,8 @@ export type BandoriMedleyTeamSearchProfilingStats = {
   exactCandidateJoinLastAnchorFrontierCheapUpperUnseenRefineCandidateCount: number | null;
   exactCandidateJoinLastAnchorFrontierCheapUpperUnseenRefineImprovementCount: number | null;
   exactCandidateJoinLastAnchorFrontierCheapUpperUnseenRefineAbortReason: string | null;
+  exactCandidateJoinScoreCacheClearCount: number;
+  exactCandidateJoinLastScoreCacheClearInterval: number | null;
   exactCandidateJoinLowMemoryInitialCandidateScoreCacheClearCount: number;
   exactCandidateJoinLastLowMemoryInitialCandidateScoreCacheClearInterval: number | null;
   exactCandidateJoinLastLowMemoryInitialCandidateSlotIndex: number | null;

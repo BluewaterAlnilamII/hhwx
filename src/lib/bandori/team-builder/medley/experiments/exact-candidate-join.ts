@@ -524,6 +524,7 @@ export function createMedleyExactSlotCandidateGenerator(
   nodeSoftLimit: number,
   lowMemoryHighPairScanMinRecordCount: number | null = null,
   lowMemoryHighPairPrefixRecordLimit: number | null = null,
+  scoreCacheClearInterval: number | null = null,
 ): MedleyExactSlotCandidateGenerator {
   // The generator is ordered by optimistic slot upper bound. Exhaustion proves that no unseen
   // slot candidate remains above the active cutoff; budget/deadline aborts are reported to the
@@ -535,6 +536,13 @@ export function createMedleyExactSlotCandidateGenerator(
   const globalPairComplementUpperCache = new Map<string, number>();
   const pairUpperQueryCache = new Map<string, MedleyExactCandidatePairUpperQuery>();
   const includeCardInstanceKeys = !canOmitDefaultMedleyCandidateInstanceKeys(slot.searchCards);
+  const effectiveScoreCacheClearInterval = (
+    scoreCacheClearInterval !== null
+    && Number.isFinite(scoreCacheClearInterval)
+  )
+    ? Math.max(1, Math.trunc(scoreCacheClearInterval))
+    : null;
+  let evaluatedSinceScoreCacheClear = 0;
   let aborted = false;
   let poppedNodes = 0;
   let heapKeyMode: "slot" | "global" = "slot";
@@ -617,6 +625,18 @@ export function createMedleyExactSlotCandidateGenerator(
       candidate: null,
     }));
   }
+  profiling.exactCandidateJoinLastScoreCacheClearInterval = effectiveScoreCacheClearInterval;
+  const maybeClearScoreCache = (): void => {
+    if (effectiveScoreCacheClearInterval === null) {
+      return;
+    }
+    if (evaluatedSinceScoreCacheClear < effectiveScoreCacheClearInterval) {
+      return;
+    }
+    clearMedleyExactSlotScoreCalculationCache(slot);
+    evaluatedSinceScoreCacheClear = 0;
+    profiling.exactCandidateJoinScoreCacheClearCount += 1;
+  };
 
   const estimateGeneratedPairComplementUpperBound = (
     selectedCardIds: number[],
@@ -945,6 +965,8 @@ export function createMedleyExactSlotCandidateGenerator(
           includeCardInstanceKeys,
           false,
         );
+        evaluatedSinceScoreCacheClear += 1;
+        maybeClearScoreCache();
         if (candidate && candidate.result.score >= scoreCutoff) {
           pushSearchNode(createSearchNode({
             key: candidate.result.score,
@@ -4700,6 +4722,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     exactJoinPrefixSeedMinMemoryHeadroomMiB?: number;
     exactJoinPrefixSeedMaxObservedGap?: number;
     exactCandidateJoinSolveOrderVariant?: string | null;
+    exactCandidateJoinScoreCacheClearInterval?: number | null;
     stagedCandidateExtensionMinRemainingMs?: number | null;
     enableLowMemoryInitialCandidateSync?: boolean;
     lowMemoryInitialCandidateSyncLocalAbortOnly?: boolean;
@@ -4868,6 +4891,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     nodeSoftLimit,
     context.lowMemoryHighPairScanMinRecordCount ?? null,
     context.lowMemoryHighPairPrefixRecordLimit ?? null,
+    context.exactCandidateJoinScoreCacheClearInterval ?? null,
   ));
   const candidatesBySlot: MedleyTeamCandidate[][] = Array.from({ length: slots.length }, () => []);
   const bestSlotScores: number[] = [];
@@ -5371,6 +5395,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
             nodeSoftLimit,
             context.lowMemoryHighPairScanMinRecordCount ?? null,
             context.lowMemoryHighPairPrefixRecordLimit ?? null,
+            context.exactCandidateJoinScoreCacheClearInterval ?? null,
           );
           try {
             topCandidate = seedGenerator.next(lowMemoryTopCandidate.score);
@@ -5745,6 +5770,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     nodeSoftLimit,
     context.lowMemoryHighPairScanMinRecordCount ?? null,
     context.lowMemoryHighPairPrefixRecordLimit ?? null,
+    context.exactCandidateJoinScoreCacheClearInterval ?? null,
   ));
   const getCandidateFillGenerator = (slotIndex: number, scoreCutoff: number): MedleyExactSlotCandidateGenerator => (
     generators[slotIndex].canReuseForScoreCutoff(scoreCutoff)

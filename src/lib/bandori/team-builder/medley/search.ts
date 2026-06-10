@@ -791,6 +791,16 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
   )
     ? optimization.exactCandidateJoinSolveOrderVariant
     : null;
+  const parsedExactCandidateJoinScoreCacheClearInterval = (
+    optimization.exactCandidateJoinScoreCacheClearInterval !== undefined
+      ? Math.trunc(optimization.exactCandidateJoinScoreCacheClearInterval)
+      : Number.NaN
+  );
+  const exactCandidateJoinScoreCacheClearInterval = Number.isFinite(
+    parsedExactCandidateJoinScoreCacheClearInterval,
+  )
+    ? Math.max(1, parsedExactCandidateJoinScoreCacheClearInterval)
+    : null;
   const debugExactCandidateJoinMemoryAttribution = (
     optimization.debugExactCandidateJoinMemoryAttribution === true
   );
@@ -2532,6 +2542,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
       exactCandidateJoinAnchorFrontierCheapUpperTimeboxCount: (
         profiling.exactCandidateJoinAnchorFrontierCheapUpperTimeboxCount
       ),
+      exactCandidateJoinScoreCacheClearCount: profiling.exactCandidateJoinScoreCacheClearCount,
       exactCandidateJoinLowMemoryInitialCandidateScoreCacheClearCount: (
         profiling.exactCandidateJoinLowMemoryInitialCandidateScoreCacheClearCount
       ),
@@ -2827,6 +2838,10 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
       exactCandidateJoinAnchorFrontierCheapUpperTimeboxCountDelta: (
         profiling.exactCandidateJoinAnchorFrontierCheapUpperTimeboxCount
         - traceStartCounters.exactCandidateJoinAnchorFrontierCheapUpperTimeboxCount
+      ),
+      exactCandidateJoinScoreCacheClearCountDelta: (
+        profiling.exactCandidateJoinScoreCacheClearCount
+        - traceStartCounters.exactCandidateJoinScoreCacheClearCount
       ),
       exactCandidateJoinLowMemoryInitialCandidateScoreCacheClearCountDelta: (
         profiling.exactCandidateJoinLowMemoryInitialCandidateScoreCacheClearCount
@@ -3661,6 +3676,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
       traceEntry.lowMemoryInitialCandidateSyncScoreCacheClearInterval = (
         lowMemoryInitialCandidateSyncScoreCacheClearInterval
       );
+      traceEntry.exactCandidateJoinScoreCacheClearInterval = exactCandidateJoinScoreCacheClearInterval;
       traceEntry.lowMemoryInitialCandidateSyncDirectCandidate = lowMemoryInitialCandidateSyncDirectCandidate;
       traceEntry.lowMemoryInitialCandidateSyncObservedMaxSlotCardCount = (
         maxLowMemoryInitialCandidateSyncSlotCardCount
@@ -4315,6 +4331,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
           exactJoinPrefixSeedPreviousLocalTimeout: exactJoinPrefixSeedDisabledCoarseKeys.has(currentCoarseKey),
           exactJoinPrefixSeedMemorySoftLimitMiB: stats.memorySoftLimitMiB,
           exactCandidateJoinSolveOrderVariant,
+          exactCandidateJoinScoreCacheClearInterval,
           enableLowMemoryInitialCandidateSync: shouldUseLowMemoryInitialCandidateSync,
           lowMemoryInitialCandidateSyncLocalAbortOnly,
           lowMemoryInitialCandidateSyncLightUpper,
@@ -4615,6 +4632,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
           exactJoinPrefixSeedForceNoop: true,
           exactJoinPrefixSeedGuardOnly: true,
           exactCandidateJoinSolveOrderVariant,
+          exactCandidateJoinScoreCacheClearInterval,
           enableLowMemoryInitialCandidateSync: shouldUseLowMemoryInitialCandidateSync,
           lowMemoryInitialCandidateSyncLocalAbortOnly,
           lowMemoryInitialCandidateSyncLightUpper,
@@ -5130,6 +5148,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
           exactJoinPrefixSeedPreviousLocalTimeout: exactJoinPrefixSeedDisabledCoarseKeys.has(currentCoarseKey),
           exactJoinPrefixSeedMemorySoftLimitMiB: stats.memorySoftLimitMiB,
           exactCandidateJoinSolveOrderVariant,
+          exactCandidateJoinScoreCacheClearInterval,
           enableLowMemoryInitialCandidateSync: shouldUseLowMemoryInitialCandidateSync,
           lowMemoryInitialCandidateSyncLocalAbortOnly,
           lowMemoryInitialCandidateSyncLightUpper,

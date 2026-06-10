@@ -334,6 +334,8 @@ export function createInitialMedleyProfilingStats(
     exactCandidateJoinLastAnchorFrontierCheapUpperUnseenRefineCandidateCount: null,
     exactCandidateJoinLastAnchorFrontierCheapUpperUnseenRefineImprovementCount: null,
     exactCandidateJoinLastAnchorFrontierCheapUpperUnseenRefineAbortReason: null,
+    exactCandidateJoinScoreCacheClearCount: 0,
+    exactCandidateJoinLastScoreCacheClearInterval: null,
     exactCandidateJoinLowMemoryInitialCandidateScoreCacheClearCount: 0,
     exactCandidateJoinLastLowMemoryInitialCandidateScoreCacheClearInterval: null,
     exactCandidateJoinLastLowMemoryInitialCandidateSlotIndex: null,

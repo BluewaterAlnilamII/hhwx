@@ -3123,3 +3123,31 @@ P07 failed follow-ups after P03 fix:
   low-root-first ordering. It needs a different pair-upper memory strategy or a
   way to close the small remaining gap without holding the high-memory pair
   structures until the soft limit trips.
+
+2026-06-11 06:17 CST P07 production-safe cache-lifecycle probe:
+
+- Implemented an opt-in exact candidate generator cache-lifecycle switch:
+  `optimization.exactCandidateJoinScoreCacheClearInterval`.
+- Behavior: after the generator evaluates the configured number of complete
+  score-only slot teams, it clears the deterministic per-slot score calculation
+  cache (`judgeLists`, base score/rate maps, skill multiplier/rate maps,
+  resolved skill cache, and skill-window maps). It does not call `global.gc`,
+  does not alter candidate ordering, does not change upper-bound formulas, and
+  does not advance or truncate the proof frontier.
+- Default is `null`, so default production behavior remains no-op until the
+  option is explicitly enabled for benchmark validation.
+- New profiling fields:
+  `exactCandidateJoinScoreCacheClearCount` and
+  `exactCandidateJoinLastScoreCacheClearInterval`.
+- Hypothesis: `P07:260` early `pair-upper` memory pressure is at least partly
+  caused by score calculation cache growth during generator/global-pruning
+  leaf evaluations. If correct, a moderate interval should convert the 6144 MiB
+  memory abort into a lower-peak proof attempt without relying on
+  `--expose-gc`.
+- Validation plan:
+  1. Run `P07:260` isolated at the standard no-GC 6144 MiB settings with
+     intervals such as `2000`, `1000`, and `500`.
+  2. Accept this route only if memory-limited abort disappears without causing
+     a worse 300s bounded gap or score instability.
+  3. If a single-case interval passes, rerun the hard set before considering a
+     full 40-case confirmation.
