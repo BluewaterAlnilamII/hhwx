@@ -110,6 +110,10 @@ export type BandoriMedleySearchOptimizationOptions = {
   eventRootFrontierProbeMinMemoryHeadroomMiB?: number;
   eventRootFrontierProbeAnchorProofMaxFrontierGap?: number;
   eventRootFrontierProbeAnchorProofMinRemainingMs?: number;
+  eventRootFrontierProbeAnchorProofMaxOtherSlotCandidates?: number;
+  eventRootFrontierProbeAnchorProofMaxOtherSlotCandidateTotal?: number;
+  eventRootFrontierProbeAnchorProofMaxHighPairRecords?: number;
+  eventRootFrontierProbeAnchorProofTimeboxMs?: number;
   eventRootFrontierProbeAnchorCheapUpperTimeboxMs?: number;
   eventRootFrontierProbeAnchorCheapUpperMaxAnchors?: number;
   eventRootFrontierProbeAnchorCheapUpperRefineUnseen?: boolean;

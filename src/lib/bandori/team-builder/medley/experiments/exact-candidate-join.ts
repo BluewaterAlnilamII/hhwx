@@ -3262,6 +3262,7 @@ function proveMedleyExactCandidateAnchorFrontier(
   server: number,
   perfectRate: number,
   pairCandidateLimit: number,
+  proofTimeboxMs: number | null | undefined,
   profiling: BandoriMedleyTeamSearchProfilingStats,
   stats: BandoriMedleyTeamSearchStats,
   isPastDeadline: () => boolean,
@@ -3269,9 +3270,14 @@ function proveMedleyExactCandidateAnchorFrontier(
   observeEvaluatedResult?: MedleyEvaluatedResultObserver,
 ): MedleyExactCandidateAnchorFrontierProofResult {
   const startedAt = performance.now();
+  const effectiveProofTimeboxMs = proofTimeboxMs !== null
+    && proofTimeboxMs !== undefined
+    && Number.isFinite(proofTimeboxMs)
+    ? Math.max(0, proofTimeboxMs)
+    : MEDLEY_EXACT_CANDIDATE_JOIN_ANCHOR_FRONTIER_PROOF_TIMEBOX_MS;
   const localDeadlineAt = Math.min(
     deadlineAt,
-    startedAt + MEDLEY_EXACT_CANDIDATE_JOIN_ANCHOR_FRONTIER_PROOF_TIMEBOX_MS,
+    startedAt + effectiveProofTimeboxMs,
   );
   const pairSlotIndices = slots
     .map((_, index) => index)
@@ -3285,9 +3291,7 @@ function proveMedleyExactCandidateAnchorFrontier(
   profiling.exactCandidateJoinLastAnchorFrontierProofResidualUpperBound = null;
   profiling.exactCandidateJoinLastAnchorFrontierProofResidualGap = null;
   profiling.exactCandidateJoinLastAnchorFrontierProofElapsedMs = null;
-  profiling.exactCandidateJoinLastAnchorFrontierProofTimeboxMs = (
-    MEDLEY_EXACT_CANDIDATE_JOIN_ANCHOR_FRONTIER_PROOF_TIMEBOX_MS
-  );
+  profiling.exactCandidateJoinLastAnchorFrontierProofTimeboxMs = effectiveProofTimeboxMs;
   profiling.exactCandidateJoinLastAnchorFrontierProofOtherSlotCandidateCounts = pairSlotIndices.map(
     (slotIndex) => candidatesBySlot[slotIndex].length,
   );
@@ -4596,6 +4600,10 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     debugExactCandidateJoinMemoryAttribution?: boolean;
     anchorFrontierProofMaxFrontierGap?: number | null;
     anchorFrontierProofMinRemainingMs?: number | null;
+    anchorFrontierProofMaxOtherSlotCandidates?: number | null;
+    anchorFrontierProofMaxOtherSlotCandidateTotal?: number | null;
+    anchorFrontierProofMaxHighPairRecords?: number | null;
+    anchorFrontierProofTimeboxMs?: number | null;
     anchorFrontierCheapUpperTimeboxMs?: number | null;
     anchorFrontierCheapUpperMaxAnchors?: number | null;
     anchorFrontierCheapUpperRefineUnseen?: boolean;
@@ -4982,13 +4990,26 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     const otherSlotCandidateCounts = candidatesBySlot
       .map((candidates, index) => (index === slotIndex ? 0 : candidates.length))
       .filter((count) => count > 0);
+    const maxOtherSlotCandidates = (
+      context.anchorFrontierProofMaxOtherSlotCandidates !== null
+      && context.anchorFrontierProofMaxOtherSlotCandidates !== undefined
+      && Number.isFinite(context.anchorFrontierProofMaxOtherSlotCandidates)
+    )
+      ? Math.max(1, Math.trunc(context.anchorFrontierProofMaxOtherSlotCandidates))
+      : MEDLEY_EXACT_CANDIDATE_JOIN_ANCHOR_FRONTIER_PROOF_MAX_OTHER_SLOT_CANDIDATES;
+    const maxOtherSlotCandidateTotal = (
+      context.anchorFrontierProofMaxOtherSlotCandidateTotal !== null
+      && context.anchorFrontierProofMaxOtherSlotCandidateTotal !== undefined
+      && Number.isFinite(context.anchorFrontierProofMaxOtherSlotCandidateTotal)
+    )
+      ? Math.max(1, Math.trunc(context.anchorFrontierProofMaxOtherSlotCandidateTotal))
+      : MEDLEY_EXACT_CANDIDATE_JOIN_ANCHOR_FRONTIER_PROOF_MAX_OTHER_SLOT_CANDIDATE_TOTAL;
     if (
       otherSlotCandidateCounts.length !== slots.length - 1
       || otherSlotCandidateCounts.some(
-        (count) => count > MEDLEY_EXACT_CANDIDATE_JOIN_ANCHOR_FRONTIER_PROOF_MAX_OTHER_SLOT_CANDIDATES,
+        (count) => count > maxOtherSlotCandidates,
       )
-      || otherSlotCandidateCounts.reduce((sum, count) => sum + count, 0)
-        > MEDLEY_EXACT_CANDIDATE_JOIN_ANCHOR_FRONTIER_PROOF_MAX_OTHER_SLOT_CANDIDATE_TOTAL
+      || otherSlotCandidateCounts.reduce((sum, count) => sum + count, 0) > maxOtherSlotCandidateTotal
     ) {
       return recordAnchorFrontierProofSkip("other-slot-candidate-count");
     }
@@ -5066,14 +5087,21 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     const sortedRightCandidates = [...candidatesBySlot[pairSlotIndices[1]]];
     sortMedleyCandidates(sortedLeftCandidates);
     sortMedleyCandidates(sortedRightCandidates);
+    const maxHighPairRecords = (
+      context.anchorFrontierProofMaxHighPairRecords !== null
+      && context.anchorFrontierProofMaxHighPairRecords !== undefined
+      && Number.isFinite(context.anchorFrontierProofMaxHighPairRecords)
+    )
+      ? Math.max(1, Math.trunc(context.anchorFrontierProofMaxHighPairRecords))
+      : MEDLEY_EXACT_CANDIDATE_JOIN_ANCHOR_FRONTIER_PROOF_MAX_HIGH_PAIR_RECORDS;
     const highPairRecordUpperCount = estimateHighMedleyExactCandidatePairRecordUpperCount(
       sortedLeftCandidates,
       sortedRightCandidates,
       incumbentScore - anchorMaxScore,
-      MEDLEY_EXACT_CANDIDATE_JOIN_ANCHOR_FRONTIER_PROOF_MAX_HIGH_PAIR_RECORDS,
+      maxHighPairRecords,
     );
     profiling.exactCandidateJoinLastAnchorFrontierProofHighPairRecordUpperCount = highPairRecordUpperCount;
-    if (highPairRecordUpperCount > MEDLEY_EXACT_CANDIDATE_JOIN_ANCHOR_FRONTIER_PROOF_MAX_HIGH_PAIR_RECORDS) {
+    if (highPairRecordUpperCount > maxHighPairRecords) {
       profiling.exactCandidateJoinAnchorFrontierProofSkipCount += 1;
       profiling.exactCandidateJoinLastAnchorFrontierProofSkipReason = "high-pair-record-upper";
       return cheapUpperResult;
@@ -5112,7 +5140,8 @@ export function searchMedleyConfigurationByExactCandidateJoin(
       incumbentScore,
       server,
       perfectRate,
-      MEDLEY_EXACT_CANDIDATE_JOIN_ANCHOR_FRONTIER_PROOF_MAX_OTHER_SLOT_CANDIDATES,
+      maxOtherSlotCandidates,
+      context.anchorFrontierProofTimeboxMs,
       profiling,
       stats,
       isPastDeadline,

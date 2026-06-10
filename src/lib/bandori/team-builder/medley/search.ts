@@ -120,6 +120,7 @@ const MEDLEY_POST_EXACT_JOIN_TIGHT_ROOT_MIN_REMAINING_MS = 30_000;
 const MEDLEY_SAME_COARSE_FRONTIER_RETRY_MAX_CARD_COUNT = 1_300;
 const MEDLEY_SAME_COARSE_FRONTIER_RETRY_MIN_REMAINING_MS = 90_000;
 const MEDLEY_SAME_COARSE_FRONTIER_RETRY_MIN_ROOT_DELTA = 100_000;
+const MEDLEY_SAME_COARSE_FRONTIER_RETRY_MIN_UNRESOLVED_GAP = 300_000;
 const MEDLEY_SAME_COARSE_FRONTIER_PROOF_TARGET_GAP = 200_000;
 const MEDLEY_SAME_COARSE_FRONTIER_PROOF_TARGET_MAX_SLOT_CARDS = 225;
 const MEDLEY_SAME_COARSE_FRONTIER_PROOF_TARGET_MIN_REMAINING_MS = 120_000;
@@ -851,6 +852,42 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
     parsedEventRootFrontierProbeAnchorProofMinRemainingMs,
   )
     ? Math.max(0, parsedEventRootFrontierProbeAnchorProofMinRemainingMs)
+    : null;
+  const parsedEventRootFrontierProbeAnchorProofMaxOtherSlotCandidates =
+    optimization.eventRootFrontierProbeAnchorProofMaxOtherSlotCandidates !== undefined
+      ? Math.trunc(optimization.eventRootFrontierProbeAnchorProofMaxOtherSlotCandidates)
+      : Number.NaN;
+  const eventRootFrontierProbeAnchorProofMaxOtherSlotCandidates = Number.isFinite(
+    parsedEventRootFrontierProbeAnchorProofMaxOtherSlotCandidates,
+  )
+    ? Math.max(1, parsedEventRootFrontierProbeAnchorProofMaxOtherSlotCandidates)
+    : null;
+  const parsedEventRootFrontierProbeAnchorProofMaxOtherSlotCandidateTotal =
+    optimization.eventRootFrontierProbeAnchorProofMaxOtherSlotCandidateTotal !== undefined
+      ? Math.trunc(optimization.eventRootFrontierProbeAnchorProofMaxOtherSlotCandidateTotal)
+      : Number.NaN;
+  const eventRootFrontierProbeAnchorProofMaxOtherSlotCandidateTotal = Number.isFinite(
+    parsedEventRootFrontierProbeAnchorProofMaxOtherSlotCandidateTotal,
+  )
+    ? Math.max(1, parsedEventRootFrontierProbeAnchorProofMaxOtherSlotCandidateTotal)
+    : null;
+  const parsedEventRootFrontierProbeAnchorProofMaxHighPairRecords =
+    optimization.eventRootFrontierProbeAnchorProofMaxHighPairRecords !== undefined
+      ? Math.trunc(optimization.eventRootFrontierProbeAnchorProofMaxHighPairRecords)
+      : Number.NaN;
+  const eventRootFrontierProbeAnchorProofMaxHighPairRecords = Number.isFinite(
+    parsedEventRootFrontierProbeAnchorProofMaxHighPairRecords,
+  )
+    ? Math.max(1, parsedEventRootFrontierProbeAnchorProofMaxHighPairRecords)
+    : null;
+  const parsedEventRootFrontierProbeAnchorProofTimeboxMs =
+    optimization.eventRootFrontierProbeAnchorProofTimeboxMs !== undefined
+      ? Math.trunc(optimization.eventRootFrontierProbeAnchorProofTimeboxMs)
+      : Number.NaN;
+  const eventRootFrontierProbeAnchorProofTimeboxMs = Number.isFinite(
+    parsedEventRootFrontierProbeAnchorProofTimeboxMs,
+  )
+    ? Math.max(0, parsedEventRootFrontierProbeAnchorProofTimeboxMs)
     : null;
   const parsedEventRootFrontierProbeAnchorCheapUpperTimeboxMs =
     optimization.eventRootFrontierProbeAnchorCheapUpperTimeboxMs !== undefined
@@ -3839,6 +3876,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
       const remainingBeforeSameCoarseFrontierRetryMs = getRemainingSearchMs();
       const sameCoarseFrontierRetryRootDelta = sameCoarseRootSkipUpperBound
         - rememberedSameCoarseSiblingUpperBound;
+      const sameCoarseFrontierRetryUnresolvedGap = sameCoarseRootSkipUpperBound - threshold;
       const hasRememberedSameCoarseFrontierSibling = sameCoarseSiblingFrontier.some((entry) => (
         entry.unresolvedAboveIncumbent === true
         && asFiniteNumber(entry.rememberedUnclosedUpperBound) === rememberedSameCoarseSiblingUpperBound
@@ -3849,7 +3887,10 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
         && hasRememberedSameCoarseFrontierSibling
         && calculatedCards.length <= MEDLEY_SAME_COARSE_FRONTIER_RETRY_MAX_CARD_COUNT
         && remainingBeforeSameCoarseFrontierRetryMs >= MEDLEY_SAME_COARSE_FRONTIER_RETRY_MIN_REMAINING_MS
-        && sameCoarseFrontierRetryRootDelta >= MEDLEY_SAME_COARSE_FRONTIER_RETRY_MIN_ROOT_DELTA
+        && (
+          sameCoarseFrontierRetryRootDelta >= MEDLEY_SAME_COARSE_FRONTIER_RETRY_MIN_ROOT_DELTA
+          || sameCoarseFrontierRetryUnresolvedGap >= MEDLEY_SAME_COARSE_FRONTIER_RETRY_MIN_UNRESOLVED_GAP
+        )
         && !stats.memoryLimited
       );
       if (traceEntry) {
@@ -3857,6 +3898,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
         traceEntry.sameCoarseFrontierRetryTargetUpperBound = rememberedSameCoarseSiblingUpperBound;
         traceEntry.sameCoarseFrontierRetryRootUpperBound = sameCoarseRootSkipUpperBound;
         traceEntry.sameCoarseFrontierRetryRootDelta = sameCoarseFrontierRetryRootDelta;
+        traceEntry.sameCoarseFrontierRetryUnresolvedGap = sameCoarseFrontierRetryUnresolvedGap;
         traceEntry.sameCoarseFrontierRetryHasRememberedSibling = hasRememberedSameCoarseFrontierSibling;
         traceEntry.sameCoarseFrontierRetryRemainingMs = Math.round(remainingBeforeSameCoarseFrontierRetryMs);
       }
@@ -4439,6 +4481,18 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
         traceEntry.eventRootFrontierProbeAnchorProofMinRemainingMs = (
           eventRootFrontierProbeAnchorProofMinRemainingMs
         );
+        traceEntry.eventRootFrontierProbeAnchorProofMaxOtherSlotCandidates = (
+          eventRootFrontierProbeAnchorProofMaxOtherSlotCandidates
+        );
+        traceEntry.eventRootFrontierProbeAnchorProofMaxOtherSlotCandidateTotal = (
+          eventRootFrontierProbeAnchorProofMaxOtherSlotCandidateTotal
+        );
+        traceEntry.eventRootFrontierProbeAnchorProofMaxHighPairRecords = (
+          eventRootFrontierProbeAnchorProofMaxHighPairRecords
+        );
+        traceEntry.eventRootFrontierProbeAnchorProofTimeboxMs = (
+          eventRootFrontierProbeAnchorProofTimeboxMs
+        );
         traceEntry.eventRootFrontierProbeAnchorCheapUpperTimeboxMs = (
           eventRootFrontierProbeAnchorCheapUpperTimeboxMs
         );
@@ -4497,6 +4551,16 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
           debugExactCandidateJoinMemoryAttribution,
           anchorFrontierProofMaxFrontierGap: eventRootFrontierProbeAnchorProofMaxFrontierGap,
           anchorFrontierProofMinRemainingMs: eventRootFrontierProbeAnchorProofMinRemainingMs,
+          anchorFrontierProofMaxOtherSlotCandidates: (
+            eventRootFrontierProbeAnchorProofMaxOtherSlotCandidates
+          ),
+          anchorFrontierProofMaxOtherSlotCandidateTotal: (
+            eventRootFrontierProbeAnchorProofMaxOtherSlotCandidateTotal
+          ),
+          anchorFrontierProofMaxHighPairRecords: (
+            eventRootFrontierProbeAnchorProofMaxHighPairRecords
+          ),
+          anchorFrontierProofTimeboxMs: eventRootFrontierProbeAnchorProofTimeboxMs,
           anchorFrontierCheapUpperTimeboxMs: eventRootFrontierProbeAnchorCheapUpperTimeboxMs,
           anchorFrontierCheapUpperMaxAnchors: eventRootFrontierProbeAnchorCheapUpperMaxAnchors,
           anchorFrontierCheapUpperRefineUnseen: eventRootFrontierProbeAnchorCheapUpperRefineUnseen,
@@ -4544,9 +4608,16 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
         && Number.isFinite(currentThresholdAfterProbeResult)
         && probeObservedUpper < currentThresholdAfterProbeResult
       );
+      const canApplyProbeUpperAsTightBound = (
+        probeObservedUpper !== null
+        && (
+          upperBefore === null
+          || probeObservedUpper < upperBefore
+        )
+      );
       if (
         probeObservedUpper !== null
-        && (exactJoinResult.proved || canApplyProbeUpperAsProof)
+        && (exactJoinResult.proved || canApplyProbeUpperAsProof || canApplyProbeUpperAsTightBound)
       ) {
         tightenActiveConfigurationUpperBound(
           probeObservedUpper,
@@ -4586,7 +4657,12 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
         traceEntry.eventRootFrontierProbeElapsedMs = Math.round(elapsedMs);
         traceEntry.eventRootFrontierProbeStatus = profiling.eventRootFrontierProbeLastStatus;
         traceEntry.eventRootFrontierProbeUpperAfter = upperAfter;
-        traceEntry.eventRootFrontierProbeAppliedUpper = exactJoinResult.proved || canApplyProbeUpperAsProof;
+        traceEntry.eventRootFrontierProbeAppliedUpper = (
+          exactJoinResult.proved
+          || canApplyProbeUpperAsProof
+          || canApplyProbeUpperAsTightBound
+        );
+        traceEntry.eventRootFrontierProbeAppliedTightUpper = canApplyProbeUpperAsTightBound;
         traceEntry.eventRootFrontierProbeResidualGap = profiling.eventRootFrontierProbeLastResidualGap;
         traceEntry.eventRootFrontierProbeObservedUpper = probeObservedUpper;
         traceEntry.eventRootFrontierProbePeakHeapMiB = stats.peakUsedHeapMiB;

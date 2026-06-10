@@ -1731,3 +1731,90 @@ Next proof direction:
 - Do not rely on manual GC or unsafe active-generator advancement. Those paths
   can change proof behavior and previously produced false exact/score
   instability.
+
+## Proof Frontier Checkpoint - 2026-06-10 16:30 CST
+
+Code direction kept:
+
+- Add opt-in event-root anchor proof controls:
+  - `eventRootFrontierProbeAnchorProofMaxOtherSlotCandidates`
+  - `eventRootFrontierProbeAnchorProofMaxOtherSlotCandidateTotal`
+  - `eventRootFrontierProbeAnchorProofMaxHighPairRecords`
+  - `eventRootFrontierProbeAnchorProofTimeboxMs`
+- Allow event-root exact-join probe upper bounds to tighten the active
+  configuration frontier when the bound is below the previous active/root upper,
+  even if the probe does not prove the configuration. This only records a tighter
+  unclosed upper; it does not mark the configuration exact or closed.
+- Let same-coarse frontier retry trigger on large unresolved gap as well as
+  sibling root delta:
+  - existing root-delta trigger: `>=100000`
+  - new unresolved-gap trigger: `>=300000`
+
+P06 diagnostic evidence:
+
+- Baseline after same-coarse sibling re-evaluation:
+  - `temp/bandori-team-builder/real-profile-medley-benchmark-2026-06-10T07-46-51-619Z.json`
+  - score `9488172`, bounded gap `605990`, elapsed `35697ms`, peak `2822 MiB`
+  - anchor proof skip reason: `other-slot-candidate-count`
+- Debug ledger with gap-only relaxed:
+  - `temp/bandori-team-builder/real-profile-medley-benchmark-2026-06-10T07-54-05-010Z.json`
+  - score `9488172`, bounded gap `605990`, elapsed `50325ms`, peak `2337 MiB`
+  - confirmed skip reason `other-slot-candidate-count`
+  - candidate counts `[200000,80879,50858]`
+- Relaxed other-slot candidate gate, default high-pair gate:
+  - `temp/bandori-team-builder/real-profile-medley-benchmark-2026-06-10T08-02-05-101Z.json`
+  - score `9488172`, bounded gap `605990`, elapsed `47361ms`, peak `2490 MiB`
+  - cheap upper found residual gap `367351`, but old caller did not apply it to
+    the active frontier
+  - high-pair skip count was just over the old gate:
+    `2034320 > 2000000`
+- After writing tighter probe upper to the active frontier:
+  - `temp/bandori-team-builder/real-profile-medley-benchmark-2026-06-10T08-06-02-689Z.json`
+  - score `9488172`, bounded gap `447414`, elapsed `89949ms`, peak `3292 MiB`
+  - performance frontier tightened to gap `349297`, but visual became top gap
+    via `bounded-same-coarse-tight-root-skip`
+- After same-coarse retry also considers unresolved gap:
+  - `temp/bandori-team-builder/real-profile-medley-benchmark-2026-06-10T08-16-58-029Z.json`
+  - score `9488172`, bounded gap `347244`, elapsed `100176ms`, peak `3759 MiB`
+  - technique and visual both retried and now share the exact-join frontier
+    upper with performance
+
+Rejected/paused from this checkpoint:
+
+- Fully relaxed anchor proof with `5M` high-pair records and `60s` proof
+  timebox caused V8 OOM before report generation:
+  - stderr log `temp/bandori-team-builder/p06-anchor-frontier-relaxed-20260610-155942.err.log`
+- Increasing cheap-upper timebox from `8s` to `30s` worsened P06:
+  - `temp/bandori-team-builder/real-profile-medley-benchmark-2026-06-10T08-20-00-451Z.json`
+  - bounded gap `429011`, elapsed `122137ms`, peak `3787 MiB`
+  - conclusion: score-only/generated-pair upper can become looser as more
+    generated candidates expose high invalid overlapping pairs; do not default
+    longer cheap-upper timeboxes.
+- Smallly relaxing high-pair proof to `2.1M` records with `35s` proof timebox
+  did not trigger a completed anchor proof and performed worse than the 8s
+  cheap-upper retry path:
+  - `temp/bandori-team-builder/real-profile-medley-benchmark-2026-06-10T08-25-12-035Z.json`
+  - bounded gap `394092`, elapsed `112041ms`, peak `3751 MiB`
+
+Current P06 state:
+
+- Best observed safe no-GC P06 path is still bounded, but gap improved from
+  `605990` to `347244` under the diagnostic relaxed other-slot gate.
+- The remaining top unclosed configurations are all
+  `PastelPalettes/cool/{performance,technique,visual}` and now share the same
+  exact-join frontier upper around `9835416`.
+- The remaining blocker is not incumbent quality. It is proof conversion for
+  high invalid generated-pair upper / overlapping pair frontier.
+
+Next proof direction:
+
+- Do not continue increasing cheap-upper timebox or high-pair proof limits.
+- Investigate a lower-memory, monotonic pair upper for anchor frontier:
+  - avoid retaining millions of JS pair-record objects;
+  - separate invalid overlapping generated-pair score-only upper from valid
+    disjoint pair upper;
+  - make any refined upper monotonic or explicitly record it as diagnostic-only
+    if it can loosen across candidate-fill states.
+- Re-run P06 non-debug only after the next proof patch can reduce the remaining
+  `PastelPalettes/cool` residual gap below the current `347244` without higher
+  peak memory.
