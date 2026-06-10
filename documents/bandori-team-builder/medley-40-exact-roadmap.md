@@ -3014,3 +3014,18 @@ Current conclusion:
   especially the `right-unseen` / `left-unseen` residual after generated-pair
   conflict split. A viable patch should reduce unseen slot upper bounds without
   repeating expensive per-entry full slot-upper searches.
+
+Anchor-limited unseen upper rejection:
+
+- Tested an uncommitted opt-in that replaced cheap-upper's global slot
+  `peekUpperBound` with a per-anchor safe upper excluding the anchor card ids.
+- Result:
+  `temp/bandori-team-builder/real-profile-medley-scope-matrix-2026-06-10T20-13-48-143Z.json`.
+  Bounded, elapsed `164874ms`, gap worsened to `344640`, peak `5550 MiB`.
+- The cheap-upper processed only `5456` anchors before the local timebox,
+  compared with roughly `14k` anchors in the compact-builder baseline. The max
+  residual source remained `right-unseen`.
+- Decision: remove the uncommitted code. Per-anchor full slot-upper calls are
+  too expensive for this frontier; the next unseen-upper attempt needs a
+  cheaper shared certificate or a coarse reusable bound, not per-anchor
+  recomputation.
