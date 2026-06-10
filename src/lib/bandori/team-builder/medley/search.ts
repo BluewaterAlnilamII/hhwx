@@ -1300,7 +1300,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
       ),
     };
   };
-  const readUsedHeapBytes = (): number | null => {
+  const readUsedHeapBytes = (includeNodeRss = true): number | null => {
     const memory = (performance as RuntimeMemoryPerformance).memory;
     if (typeof memory?.jsHeapSizeLimit === "number" && Number.isFinite(memory.jsHeapSizeLimit) && memory.jsHeapSizeLimit > 0) {
       runtimeHeapLimitBytes = memory.jsHeapSizeLimit;
@@ -1325,6 +1325,8 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
         usedHeapBytes = nodeHeapUsed;
       }
       if (
+        includeNodeRss
+        &&
         typeof nodeRss === "number"
         && Number.isFinite(nodeRss)
         && (
@@ -1396,14 +1398,24 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
       return false;
     }
     lastMemoryCheckAt = now;
-    const effectiveMemorySoftLimitBytes = getEffectiveMemorySoftLimitBytes();
-    if (effectiveMemorySoftLimitBytes === null) {
+    const baseMemorySoftLimitBytes = getBaseEffectiveMemorySoftLimitBytes();
+    const activeMemorySoftLimitBytes = activeConfigurationMemorySoftLimitBytes;
+    if (baseMemorySoftLimitBytes === null && activeMemorySoftLimitBytes === null) {
       return false;
     }
-    const usedHeapBytes = readUsedHeapBytes();
-    return usedHeapBytes !== null && effectiveMemorySoftLimitBytes !== null && usedHeapBytes >= effectiveMemorySoftLimitBytes
-      ? markMemoryLimited()
-      : false;
+    const baseUsedBytes = baseMemorySoftLimitBytes !== null
+      ? readUsedHeapBytes()
+      : null;
+    if (baseUsedBytes !== null && baseMemorySoftLimitBytes !== null && baseUsedBytes >= baseMemorySoftLimitBytes) {
+      return markMemoryLimited();
+    }
+    if (activeMemorySoftLimitBytes !== null) {
+      const activeUsedBytes = readUsedHeapBytes(false);
+      if (activeUsedBytes !== null && activeUsedBytes >= activeMemorySoftLimitBytes) {
+        return markMemoryLimited();
+      }
+    }
+    return false;
   };
   const progressOptions = input.progress;
   const progressInitialDelayMs = Math.max(0, Math.trunc(progressOptions?.initialDelayMs ?? 10_000));

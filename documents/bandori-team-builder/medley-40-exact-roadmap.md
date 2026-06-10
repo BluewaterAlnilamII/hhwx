@@ -1,6 +1,6 @@
 # Medley 40/40 Exact Roadmap
 
-Last updated: 2026-06-10 11:08 CST
+Last updated: 2026-06-10 11:30 CST
 
 This file is the persistent working note for the current medley optimizer goal.
 Keep it current before and after benchmark runs or proof-path changes, so future
@@ -20,6 +20,56 @@ Primary target:
 - Final working target: achieved for the retained `P01`-`P10` 40-case matrix.
 - Final success condition: achieved under the active `4488 MiB` memory gate;
   latest peak working set is `3272 MiB`.
+
+2026-06-10 no-GC stability update:
+
+- The active target is tightened from "can reach 40/40 with diagnostic GC" to
+  "stable 40/40 exact without `--expose-gc`, without `global.gc`, and with
+  `debugConfigurationTrace=false`".
+- `enableLowMemoryInitialCandidateSyncGcProbe` is diagnostic-only. It may be
+  used to confirm memory-lifecycle sensitivity, but it is not an acceptance
+  condition and must not be required for production exactness.
+- `P11` remains out of scope for the primary 40-case gate.
+- Current no-GC blocker evidence: `P03:260` can abort during exact candidate
+  fill as `candidate-fill-generator-aborted`, with only about `9599/5508/3679`
+  candidates by slot and more than `240s` remaining. The failure is tied to the
+  first full-width event root memory-risk path, where the local
+  `3200 MiB` active configuration cap can be tripped by Node RSS even though
+  V8 heap remains below the local cap.
+- Current implementation hypothesis: keep the global/base memory guard using
+  RSS for process-level safety, but evaluate the full-width-event active
+  configuration cap against V8 heap usage only. This avoids relying on forced
+  GC while preserving the outer `4488 MiB` RSS-backed safety gate.
+
+No-GC acceptance contract:
+
+- `P03:260` non-debug no-GC single-case repeated at least 5 times, all exact,
+  with `timedOut=false`, `memoryLimited=false`, and stable score/gap.
+- Hard guard set repeated at least twice, all exact: `P03:260`, `P06:323`,
+  `P07:260`, `P08:323`, `P10:244`, `P10:260`, `P07:244`, and `P08:244`.
+- Full process-per-case isolated 40-case matrix repeated at least 3 times under
+  no-GC non-debug settings, each with `40/40` exact, zero bounded rows, zero
+  failed subprocesses, zero timeouts, zero memory-limited rows, and bounded-gap
+  total `0`.
+- Every full 40-case run must generate a timestamped report and update this
+  roadmap with raw path, replay parameters, accept/reject reason, and failure
+  analysis if any row is bounded.
+
+2026-06-10 11:33 CST first no-GC validation:
+
+- Raw result:
+  `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-10T03-31-45-295Z.json`.
+- Case: `P03:260`, process-per-case isolated, no `--expose-gc`,
+  `debugConfigurationTrace=false`, no GC probe.
+- Optimization: `memorySoftLimitMiB=4488`, `exactNodeSoftLimit=5000000`,
+  `skipConfigurationSeedingWhenMemoryHeadroomBelowMiB=1600`,
+  low-memory initial candidate sync local abort/light upper/timebox settings,
+  and event-root frontier probe enabled.
+- Result: exact, elapsed `82082ms`, bounded gap `0`, `timedOut=false`,
+  `memoryLimited=false`, peak working set `3050 MiB`.
+- Interpretation: the active-configuration heap-only cap hypothesis converted
+  the known P03 no-GC failure shape without requiring forced GC. This is not
+  yet accepted; repeat P03 and hard-guard validation are still required.
 
 Goal tool note:
 
