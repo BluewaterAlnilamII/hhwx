@@ -1,6 +1,6 @@
 # Medley 40/40 Exact Roadmap
 
-Last updated: 2026-06-10 21:50 CST
+Last updated: 2026-06-10 22:10 CST
 
 This file is the persistent working note for the current medley optimizer goal.
 Keep it current before and after benchmark runs or proof-path changes, so future
@@ -2349,3 +2349,60 @@ Next route:
   should target only the small set of entries that determine the max upper, use
   cached slot/card exclusion bounds, and never feed an unproved upper back into
   same-coarse scheduling unless it fully proves the configuration.
+
+## Rejected Deferred Unseen Upper Probe - 2026-06-10 22:10 CST
+
+Hypothesis:
+
+- The 30s cheap-upper run left `P06:323` bounded mostly on pair-unseen upper.
+- A lower-risk probe could keep the normal anchor sweep and generated-pair split
+  intact, then run a deferred anchor-only unseen refinement on only the residual
+  max entries. This avoids the existing heavy `refineUnseen` generated-candidate
+  scan.
+
+Implementation tested:
+
+- Added temporary opt-in
+  `eventRootFrontierProbeAnchorCheapUpperDeferredUnseenRefine=true`.
+- The helper did not change default behavior and only ran after
+  `refineProcessedAnchorUpperEntries()`.
+- It used per-anchor slot upper estimates with the anchor card ids banned, and
+  did not scan generated candidates or feed unproved uppers back into
+  same-coarse scheduling.
+
+Results:
+
+- Two acceptance-threshold `4488 MiB` attempts did not reach the probe:
+  - `temp/bandori-team-builder/real-profile-medley-scope-matrix-2026-06-10T13-54-09-866Z.json`:
+    bounded, score `9486961`, gap `607201`, elapsed `83103ms`, peak
+    `4491 MiB`, `timedOut=true`, `memoryLimited=true`, abort
+    `candidate-fill-generator-aborted`, event-root probe call count `0`.
+  - `temp/bandori-team-builder/real-profile-medley-scope-matrix-2026-06-10T13-57-54-506Z.json`:
+    bounded, score `9486961`, gap `607201`, elapsed `66792ms`, peak
+    `4492 MiB`, `timedOut=true`, `memoryLimited=true`, abort
+    `candidate-fill-generator-aborted`, event-root probe call count `0`.
+- Same-code baseline without the new flag also showed current-environment memory
+  instability:
+  `temp/bandori-team-builder/real-profile-medley-scope-matrix-2026-06-10T14-00-37-148Z.json`.
+  It reached event-root probe but ended bounded with score `9488172`, gap
+  `587965`, peak `4873 MiB`, `timedOut=true`, `memoryLimited=true`, and
+  event-root residual gap `472606`.
+- A non-acceptance diagnostic with `memorySoftLimitMiB=6144` did execute the
+  temporary probe:
+  `temp/bandori-team-builder/real-profile-medley-scope-matrix-2026-06-10T14-03-29-442Z.json`.
+  It stayed bounded, score `9488172`, gap `605990`, peak `2484 MiB`, no timeout
+  or memory-limit, abort `candidate-fill-soft-limit`. The event-root upper did
+  not improve; cheap-upper local residual gap worsened to `658127`, with
+  `cheapUpperTimeboxCount=1`.
+
+Conclusion:
+
+- Rejected. The deferred anchor-only unseen refinement did not improve proof
+  quality even when allowed to run under a higher diagnostic soft limit.
+- The source changes were reverted. No production or acceptance path should use
+  this variant.
+- The remaining useful signal is still the original 30s generated-pair split
+  cheap upper. The next direction should not be another per-entry unseen slot
+  upper. Prefer either a shared pair-unseen certificate or a lower-allocation way
+  to reduce the original candidate-fill/frontier memory wall before event-root
+  proof starts.
