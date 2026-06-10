@@ -1,6 +1,6 @@
 # Medley 40/40 Exact Roadmap
 
-Last updated: 2026-06-10 18:56 CST
+Last updated: 2026-06-10 19:55 CST
 
 This file is the persistent working note for the current medley optimizer goal.
 Keep it current before and after benchmark runs or proof-path changes, so future
@@ -1968,3 +1968,66 @@ Follow-up result:
   temporary opt-in code was removed. The active P06 blocker remains the staged
   exact-join solve order / proof frontier, not the anchor-frontier pre-proof
   improvement probe.
+
+## Anchor Cheap-Upper Gate Rejection - 2026-06-10 19:55 CST
+
+Rejected experiment:
+
+- Hypothesis: when the staged `800000` event-root path for `P06:323` completes
+  candidate fill but would spend most of the remaining budget in exact-join
+  solve, run the existing anchor-frontier cheap upper after fill and abort early
+  if the residual upper remains too wide. This was intended as a runtime guard,
+  not as a proof improvement.
+- Comparable long-budget baseline without the gate:
+  `temp/bandori-team-builder/real-profile-medley-benchmark-2026-06-10T09-29-25-764Z.json`.
+  Result: bounded, score `9486961`, gap `595522`, elapsed `300517ms`, peak
+  `3364 MiB`, abort `solve-timeout`, candidate counts
+  `[679552,189394,50858]`.
+- Best prior safe 200k cheap-upper diagnostic:
+  `temp/bandori-team-builder/real-profile-medley-benchmark-2026-06-10T08-32-06-448Z.json`.
+  Result: bounded, score `9488172`, gap `331225`, elapsed `99201ms`, peak
+  `3587 MiB`, abort `solve-dominated-same-coarse-frontier`.
+- Post-fill gate diagnostic with the same fixed songs:
+  `temp/bandori-team-builder/real-profile-medley-benchmark-2026-06-10T11-36-28-545Z.json`.
+  Result: bounded, score `9488172`, gap `378833`, elapsed `131138ms`, peak
+  `3510 MiB`, event-root abort `post-fill-cheap-upper-gate`.
+- Renamed pre/post gate diagnostic:
+  `temp/bandori-team-builder/real-profile-medley-benchmark-2026-06-10T11-42-15-506Z.json`.
+  Result: bounded, score `9488172`, gap `406334`, elapsed `156667ms`, peak
+  `3618 MiB`, abort `anchor-cheap-upper-gate`.
+- Relaxed-gate plus unseen-refine diagnostic:
+  `temp/bandori-team-builder/real-profile-medley-benchmark-2026-06-10T11-47-51-141Z.json`.
+  Result: bounded, score `9488172`, gap `479479`, elapsed `118885ms`, peak
+  `3553 MiB`, abort `solve-dominated-same-coarse-frontier`.
+
+Conclusion:
+
+- The gate can avoid a 300s solve timeout in the staged `800000` path, but it
+  does not improve exactness and its residual gap is worse than the prior 200k
+  cheap-upper diagnostic. It is therefore rejected for the current 40/40 exact
+  path.
+- The attempted source option `enableAnchorCheapUpperGate` was removed instead
+  of kept as an opt-in switch, to avoid carrying low-value algorithm complexity
+  into later proof work.
+- `anchorFrontierCheapUpperRefineUnseen` remains frozen: in this P06 shape it
+  processed a smaller, locally cleaner frontier but produced a looser final
+  observed upper than the existing 200k diagnostic.
+- The current blocker is now narrowed to proof-upper quality, not incumbent
+  quality, K, seed, manual GC, or exact-join solve timebox.
+
+Next proof direction:
+
+- Keep the best-known P06 reference point as the 200k cheap-upper diagnostic
+  (`331225` residual gap). A new proof patch must beat that gap without turning
+  any current exact hard-guard case bounded.
+- Focus on a general, monotonic upper-bound improvement for the
+  `PastelPalettes/cool` same-coarse frontier:
+  - separate generated overlapping-pair upper from valid disjoint-pair upper;
+  - avoid retaining large JS pair-record frontiers;
+  - make any refined upper monotonic across candidate-fill states, or keep it
+    diagnostic-only;
+  - prefer proof-scope reduction and memory release between probes over wider
+    candidate material.
+- Do not continue with larger K, larger staged candidate soft limits, longer
+  full-solve budgets, seed/pre-proof warmups, or forced GC as routes to the
+  primary no-GC 40/40 exact target.
