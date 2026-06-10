@@ -935,7 +935,11 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
       ? Math.max(1, parsedLowMemoryHighPairPrefixRecordLimit)
       : MEDLEY_EXACT_CANDIDATE_JOIN_LOW_MEMORY_HIGH_PAIR_PREFIX_RECORD_LIMIT
     : null;
-  const disableLowMemoryInitialCandidateSync = optimization.disableLowMemoryInitialCandidateSync === true;
+  const enableLowMemoryInitialCandidateSync = optimization.enableLowMemoryInitialCandidateSync === true;
+  const disableLowMemoryInitialCandidateSync = (
+    optimization.disableLowMemoryInitialCandidateSync === true
+    || !enableLowMemoryInitialCandidateSync
+  );
   const lowMemoryInitialCandidateSyncLocalAbortOnly = (
     optimization.lowMemoryInitialCandidateSyncLocalAbortOnly === true
   );

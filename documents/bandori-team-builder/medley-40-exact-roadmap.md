@@ -1,6 +1,6 @@
 # Medley 40/40 Exact Roadmap
 
-Last updated: 2026-06-10 11:30 CST
+Last updated: 2026-06-10 13:00 CST
 
 This file is the persistent working note for the current medley optimizer goal.
 Keep it current before and after benchmark runs or proof-path changes, so future
@@ -14,12 +14,15 @@ Primary target:
 - Events: `none`, `244`, `260`, and `323`.
 - Matrix size: `10 profiles * 4 events = 40 all-scope cases`.
 - Search budget: `300000ms` per case.
-- Current pinned checkpoint: `40/40` exact, with no failed subprocess, no
-  timeout, no memory-limited case, and no OOM.
-- Current bounded rows: none.
-- Final working target: achieved for the retained `P01`-`P10` 40-case matrix.
-- Final success condition: achieved under the active `4488 MiB` memory gate;
-  latest peak working set is `3272 MiB`.
+- Current pinned checkpoint: the earlier `40/40` count is no longer accepted
+  for the active no-GC stability goal because repeat runs found score
+  instability while still reporting `searchMode=exact`.
+- Current bounded rows: none in the latest full runs, but exact correctness is
+  under investigation.
+- Final working target: stable no-GC, non-debug `40/40` exact for the retained
+  `P01`-`P10` 40-case matrix, with identical accepted final scores across
+  repeated full runs.
+- Final success condition: not yet re-achieved after the false-exact finding.
 
 2026-06-10 no-GC stability update:
 
@@ -54,6 +57,33 @@ No-GC acceptance contract:
 - Every full 40-case run must generate a timestamped report and update this
   roadmap with raw path, replay parameters, accept/reject reason, and failure
   analysis if any row is bounded.
+
+2026-06-10 13:00 CST correctness gate reset:
+
+- The first two no-GC full 40-case runs both reported `40/40` exact, but their
+  final scores were not stable. Examples:
+  - `P06:244`: run 1 `9055411`, run 2 `9063959`.
+  - `P07:244`: run 1 `8476866`, run 2 `8551590`.
+  - `P08:323`: run 1 `9229933`, run 2 `9249509`.
+- Direct `P06:244` repeats reproduced the issue under identical fixture input:
+  two non-debug runs returned `9055411`, a later non-debug run returned
+  `9063959`, and debug-trace runs returned `9066914`. All reported exact.
+- `P06` has no duplicate `cardId` or duplicate `cardInstanceKey`, so this is
+  not caused by temporary-card instance identity collision.
+- A/B evidence points to `lowMemoryInitialCandidateSync`: with it enabled, the
+  exact join can prove a configuration after generating only one candidate per
+  slot (`45` total generated candidates across 15 joins). With
+  `disableLowMemoryInitialCandidateSync=true`, `P06:244` returns the higher
+  `9066914` score and still proves exact, but generates the full exact-join
+  frontier (`376344` candidates) and takes `110600ms`.
+- Action taken: `lowMemoryInitialCandidateSync` is demoted from automatic proof
+  path to explicit opt-in (`enableLowMemoryInitialCandidateSync=true`). It is
+  research/diagnostic-only until it has a proof-safe invariant. The active
+  no-GC acceptance path must not depend on it or on `--expose-gc`.
+- Previous no-GC full run 1 is reclassified as rejected for final acceptance:
+  the exact count was `40/40`, but score stability failed when compared with
+  the follow-up run. Do not run the third full 40-case confirmation until P06
+  direct-repeat and hard-guard stability pass with the demoted low-memory path.
 
 2026-06-10 11:33 CST first no-GC validation:
 
@@ -109,25 +139,28 @@ No-GC acceptance contract:
   timeout, no memory-limited row.
 - Timing: median `27148ms`, p95 `54564ms`, max `140346ms`.
 - Peak working set: `3520 MiB`.
-- Gate result: accepted as no-GC full confirmation run 1. At least two more
-  no-GC full confirmation runs are required for the stability target.
+- Gate result: rejected after follow-up score-stability comparison. It remains
+  useful as a timing/memory sample, but it does not count toward final no-GC
+  acceptance.
 
 Goal tool note:
 
 - The active Codex goal object was created earlier in this thread and cannot be
   edited in place except to mark it complete or blocked. Treat this section as
   the authoritative detailed goal contract for the current execution phase.
-- The execution target for the active goal was the full `40/40` exact
-  milestone. That target is now achieved by the 2026-06-10 acceptance run.
-  Intermediate `37/40`, `38/40`, and `39/40` evidence is retained only as
-  benchmark history and anti-regression baselines.
+- The execution target for the active goal is still the full stable `40/40`
+  exact milestone. The 2026-06-10 no-GC runs reached the count target, but are
+  not accepted until score stability and false-exact safety are restored.
 
 Current execution contract:
 
-- Objective: preserve the achieved `40/40` exact checkpoint.
-- Current blocker: none inside the retained `P01`-`P10` / four-event matrix.
-- Current working direction after achievement: reduce p95 proof cost and
-  confirm promotion conditions without weakening exact/bounded semantics.
+- Objective: restore a stable no-GC `40/40` exact checkpoint after the
+  false-exact finding.
+- Current blocker: `lowMemoryInitialCandidateSync` can let exact candidate join
+  report proof from one-candidate slot frontiers when the incumbent is not yet
+  the true best result.
+- Current working direction: keep low-memory initial candidate sync opt-in only,
+  re-run P06 direct repeats, then hard guard, then full 40-case confirmation.
 - Still rejected for this phase: seed quality work, greedy/prefix seed, wider
   top-K/candidate limits, larger default memory gates, and any patch that only
   shifts the memory wall to another hard case.
