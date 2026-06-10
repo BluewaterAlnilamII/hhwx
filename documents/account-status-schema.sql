@@ -12,6 +12,7 @@ create table if not exists public.account_status (
 create or replace function public.set_account_status_updated_at()
 returns trigger
 language plpgsql
+set search_path = public, pg_temp
 as $$
 begin
   new.updated_at = now();
@@ -24,6 +25,8 @@ create trigger set_account_status_updated_at
   before update on public.account_status
   for each row
   execute function public.set_account_status_updated_at();
+
+revoke all on function public.set_account_status_updated_at() from public, anon, authenticated;
 
 alter table public.account_status enable row level security;
 
@@ -50,6 +53,13 @@ create index if not exists account_email_verifications_user_id_idx
   on public.account_email_verifications(user_id, created_at desc);
 
 alter table public.account_email_verifications enable row level security;
+
+drop policy if exists account_email_verifications_service_only on public.account_email_verifications;
+create policy account_email_verifications_service_only
+  on public.account_email_verifications
+  for all
+  using (false)
+  with check (false);
 
 revoke all on public.account_email_verifications from public, anon, authenticated;
 grant all on public.account_email_verifications to service_role;

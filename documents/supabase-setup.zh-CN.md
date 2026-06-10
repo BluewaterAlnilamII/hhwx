@@ -39,6 +39,7 @@ English version: [supabase-setup.md](supabase-setup.md)
 ## 复查要点
 
 - 用户归属表保持 row-level security 开启。
+- Supabase 从 2026-05-30 起不再为新项目自动把 public 新表/函数暴露给 Data API，并会从 2026-10-30 起把同一默认行为应用到既有项目。凡是创建 Data API 对象的 SQL 文件，都应把显式 `GRANT`/`REVOKE` 与 RLS policy 放在一起维护。
 - 将 `security definer` 函数视为特权代码：生产前复查参数检查、所有权检查、grants 和 `search_path` 行为。
 - 只在应用确实需要时授予直接 table 或 function 访问权限。
 - service-role 操作必须保持在服务端。浏览器代码只能使用公开 Supabase key 和已认证用户 session。
