@@ -37,12 +37,12 @@ export default function AccountShell({
   return (
     <main
       className={cn(
-        "relative min-h-full w-full min-w-0 overflow-hidden px-0 pb-4 sm:px-6 sm:pb-10 lg:px-8",
+        "relative min-h-full w-full min-w-0 px-0 pb-4 sm:px-6 sm:pb-10 lg:px-8",
         flushTop ? "-mt-5 pt-0 lg:-mt-6" : "pt-4 sm:pt-10",
       )}
     >
       <div className={`mx-auto w-full ${containerClassName}`}>
-        <div className="w-full max-w-full overflow-hidden border-y border-white/55 bg-[#fffef4] px-4 py-6 shadow-[0_12px_42px_rgba(15,23,42,0.08)] sm:rounded-[32px] sm:border sm:p-8 sm:shadow-[0_20px_80px_rgba(15,23,42,0.12)]">
+        <div className="w-full max-w-full border-y border-white/55 bg-[#fffef4] px-4 py-6 shadow-[0_12px_42px_rgba(15,23,42,0.08)] sm:rounded-[32px] sm:border sm:p-8 sm:shadow-[0_20px_80px_rgba(15,23,42,0.12)]">
           <div className="flex flex-col gap-4 border-b border-slate-200 pb-5 sm:flex-row sm:items-end sm:justify-between sm:gap-3 sm:pb-6">
             <div className="min-w-0">
               {!hideEyebrow ? (

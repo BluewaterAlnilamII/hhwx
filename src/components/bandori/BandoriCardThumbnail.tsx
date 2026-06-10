@@ -265,8 +265,8 @@ export default function BandoriCardThumbnail({
             }}
             aria-hidden="true"
           />
-          <div className="pointer-events-none absolute bottom-[3.9%] right-[5.3%] z-20 flex h-[16.8%] items-center justify-end text-[14cqw] font-normal leading-none text-white [text-shadow:0_1px_1px_rgba(0,0,0,0.72)]">
-            <span>{powerLabel}</span>
+          <div className="pointer-events-none absolute bottom-[3.9%] right-[5.3%] z-20 flex h-[16.8%] w-[58.5%] items-center justify-end overflow-hidden text-right text-[14cqw] font-normal leading-none text-white tabular-nums [text-shadow:0_1px_1px_rgba(0,0,0,0.72)]">
+            <span className="block max-w-full whitespace-nowrap">{powerLabel}</span>
           </div>
         </>
       ) : null}
