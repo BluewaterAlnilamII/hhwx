@@ -3699,7 +3699,6 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
     timeboxMs?: number | null;
     maxAnchors?: number | null;
     refineUnseen?: boolean;
-    useBitsetPairRefine?: boolean;
     unseenRefineMaxGeneratedCandidates?: number | null;
   } = {},
 ): MedleyExactCandidateAnchorFrontierProofResult {
@@ -3728,13 +3727,6 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
   sortMedleyCandidates(rightCandidates);
   const leftAvailabilityQuery = buildMedleyExactCandidateSlotAvailabilityQuery(leftCandidates);
   const rightAvailabilityQuery = buildMedleyExactCandidateSlotAvailabilityQuery(rightCandidates);
-  let generatedPairRefineQuery: MedleyExactCandidatePairUpperQuery | null = null;
-  const getGeneratedPairRefineQuery = (): MedleyExactCandidatePairUpperQuery => {
-    if (!generatedPairRefineQuery) {
-      generatedPairRefineQuery = buildMedleyExactCandidatePairUpperQuery(leftCandidates, rightCandidates);
-    }
-    return generatedPairRefineQuery;
-  };
   const maxAnchorCount = Math.min(
     anchorCandidates.length,
     (
@@ -3746,7 +3738,6 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
       : MEDLEY_EXACT_CANDIDATE_JOIN_ANCHOR_FRONTIER_CHEAP_UPPER_MAX_ANCHORS,
   );
   const shouldRefineUnseenUpper = options.refineUnseen === true;
-  const shouldUseBitsetPairRefine = options.useBitsetPairRefine === true;
   const unseenRefineMaxGeneratedCandidates = (
     options.unseenRefineMaxGeneratedCandidates !== null
     && options.unseenRefineMaxGeneratedCandidates !== undefined
@@ -4190,71 +4181,41 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
         let generatedPairUpper = entry.generatedPairUpper;
         let generatedPairSource = "generated-pair";
         if (entry.source === "generated-pair") {
+          const splitUpper = estimateGeneratedMedleyExactCandidatePairConflictSplitUpper(
+            leftAvailabilityQuery,
+            rightAvailabilityQuery,
+            entry.anchorCandidate.cardIds,
+            localDeadlineAt,
+          );
           splitAttemptCount += 1;
+          splitStateCount += splitUpper.stateCount;
           profiling.exactCandidateJoinLastAnchorFrontierCheapUpperSplitAttemptCount = splitAttemptCount;
-          if (shouldUseBitsetPairRefine) {
-            const bitsetPairUpper = findBestGeneratedMedleyExactCandidatePairForAnchorByBitsExhaustive(
-              getGeneratedPairRefineQuery(),
-              entry.anchorCandidate,
-              Number.isFinite(targetPairUpper) ? targetPairUpper : Number.NEGATIVE_INFINITY,
-              profiling,
-              localDeadlineAt,
-            );
-            if (bitsetPairUpper.timedOut) {
-              splitAbortReason = "timebox";
-              profiling.exactCandidateJoinLastAnchorFrontierCheapUpperSplitAbortReason = splitAbortReason;
-              for (let remainingIndex = index; remainingIndex < sortedEntries.length; remainingIndex += 1) {
-                const remainingEntry = sortedEntries[remainingIndex];
-                recordProcessedUpperMax(
-                  remainingEntry.anchorScore,
-                  remainingEntry.pairUpper,
-                  remainingEntry.source,
-                  remainingEntry.generatedPairUpper,
-                  remainingEntry.leftUnseenUpper,
-                  remainingEntry.rightUnseenUpper,
-                  remainingEntry.leftGeneratedCandidate,
-                  remainingEntry.rightGeneratedCandidate,
-                );
-              }
-              return true;
+          profiling.exactCandidateJoinLastAnchorFrontierCheapUpperSplitStateCount = splitStateCount;
+          profiling.exactCandidateJoinLastAnchorFrontierCheapUpperSplitAbortReason = splitUpper.abortReason;
+          if (
+            splitUpper.timedOut
+            || Number.isNaN(splitUpper.upperBound)
+            || splitUpper.upperBound === Number.POSITIVE_INFINITY
+          ) {
+            splitAbortReason = splitUpper.abortReason ?? "invalid-upper";
+            profiling.exactCandidateJoinLastAnchorFrontierCheapUpperSplitAbortReason = splitAbortReason;
+            for (let remainingIndex = index; remainingIndex < sortedEntries.length; remainingIndex += 1) {
+              const remainingEntry = sortedEntries[remainingIndex];
+              recordProcessedUpperMax(
+                remainingEntry.anchorScore,
+                remainingEntry.pairUpper,
+                remainingEntry.source,
+                remainingEntry.generatedPairUpper,
+                remainingEntry.leftUnseenUpper,
+                remainingEntry.rightUnseenUpper,
+                remainingEntry.leftGeneratedCandidate,
+                remainingEntry.rightGeneratedCandidate,
+              );
             }
-            generatedPairUpper = bitsetPairUpper.score;
-            generatedPairSource = "generated-pair-bitset";
-          } else {
-            const splitUpper = estimateGeneratedMedleyExactCandidatePairConflictSplitUpper(
-              leftAvailabilityQuery,
-              rightAvailabilityQuery,
-              entry.anchorCandidate.cardIds,
-              localDeadlineAt,
-            );
-            splitStateCount += splitUpper.stateCount;
-            profiling.exactCandidateJoinLastAnchorFrontierCheapUpperSplitStateCount = splitStateCount;
-            profiling.exactCandidateJoinLastAnchorFrontierCheapUpperSplitAbortReason = splitUpper.abortReason;
-            if (
-              splitUpper.timedOut
-              || Number.isNaN(splitUpper.upperBound)
-              || splitUpper.upperBound === Number.POSITIVE_INFINITY
-            ) {
-              splitAbortReason = splitUpper.abortReason ?? "invalid-upper";
-              profiling.exactCandidateJoinLastAnchorFrontierCheapUpperSplitAbortReason = splitAbortReason;
-              for (let remainingIndex = index; remainingIndex < sortedEntries.length; remainingIndex += 1) {
-                const remainingEntry = sortedEntries[remainingIndex];
-                recordProcessedUpperMax(
-                  remainingEntry.anchorScore,
-                  remainingEntry.pairUpper,
-                  remainingEntry.source,
-                  remainingEntry.generatedPairUpper,
-                  remainingEntry.leftUnseenUpper,
-                  remainingEntry.rightUnseenUpper,
-                  remainingEntry.leftGeneratedCandidate,
-                  remainingEntry.rightGeneratedCandidate,
-                );
-              }
-              return true;
-            }
-            generatedPairUpper = splitUpper.upperBound;
-            generatedPairSource = "generated-pair-split";
+            return true;
           }
+          generatedPairUpper = splitUpper.upperBound;
+          generatedPairSource = "generated-pair-split";
           newSplitRefineCount += 1;
         }
         const unseenRefineAttemptCountBeforeEntry = unseenRefineAttemptCount;
@@ -4688,7 +4649,6 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     anchorFrontierCheapUpperTimeboxMs?: number | null;
     anchorFrontierCheapUpperMaxAnchors?: number | null;
     anchorFrontierCheapUpperRefineUnseen?: boolean;
-    anchorFrontierCheapUpperUseBitsetPairRefine?: boolean;
     anchorFrontierCheapUpperUnseenRefineMaxGeneratedCandidates?: number | null;
   } = {},
   observeEvaluatedResult?: MedleyEvaluatedResultObserver,
@@ -5172,7 +5132,6 @@ export function searchMedleyConfigurationByExactCandidateJoin(
           timeboxMs: context.anchorFrontierCheapUpperTimeboxMs,
           maxAnchors: context.anchorFrontierCheapUpperMaxAnchors,
           refineUnseen: context.anchorFrontierCheapUpperRefineUnseen,
-          useBitsetPairRefine: context.anchorFrontierCheapUpperUseBitsetPairRefine,
           unseenRefineMaxGeneratedCandidates: context.anchorFrontierCheapUpperUnseenRefineMaxGeneratedCandidates,
         },
       );

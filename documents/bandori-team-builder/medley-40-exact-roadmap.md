@@ -2876,3 +2876,34 @@ Next experiment:
 - Failing signal: timebox or memory pressure rises without closing the gap; in
   that case this route should stop and the next patch should target the
   candidate-fill frontier itself instead of proofing a larger pair-record set.
+
+Follow-up rejection:
+
+- Narrow high-pair cap bump did not help:
+  - `temp/bandori-team-builder/real-profile-medley-scope-matrix-2026-06-10T18-49-41-350Z.json`.
+  - Bounded, elapsed `175750ms`, final gap `467344`, peak `5572 MiB`.
+  - Full anchor proof still did not trigger (`anchorFrontierProofTriggerCount=0`).
+  - Cheap upper processed `13411` anchors in `30012ms` but residual gap was
+    `569971`, with max source `generated-pair` and overlapping generated pair.
+  - Decision: do not continue by raising high-pair cap.
+- Bitset pair refine experiment was implemented as an opt-in and then rejected:
+  - `temp/bandori-team-builder/real-profile-medley-scope-matrix-2026-06-10T19-03-59-155Z.json`.
+  - Bounded, elapsed `179039ms`, final gap `467344`, peak `5465 MiB`.
+  - Cheap upper processed only `1466` anchors in `30001ms`; pair complement
+    queries rose to `1339780`; split state count fell to `0` but the bitset
+    pair refine itself hit the timebox.
+  - Decision: remove the opt-in code. Per-anchor exact pair refinement is too
+    expensive for the `P06:323` frontier.
+
+Updated direction:
+
+- Stop tuning high-pair caps, cheap-upper timeboxes, unseen refinement, and
+  per-anchor exact pair refinement for `P06:323`.
+- The remaining general route is a lower-allocation shared proof certificate:
+  preserve generated candidate prefixes, but answer repeated anchor complement
+  upper queries from compact shared material rather than solving each anchor
+  independently.
+- Candidate next implementation should focus on compact candidate/pair records
+  or chunked high-pair proof that carries reusable upper certificates across the
+  same `PastelPalettes/cool` frontier without widening default candidate limits
+  or requiring manual GC.
