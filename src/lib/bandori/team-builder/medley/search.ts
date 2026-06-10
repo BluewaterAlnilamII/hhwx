@@ -951,6 +951,33 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
   const conflictSlotSolveNodeLimit = Number.isFinite(parsedConflictSlotSolveNodeLimit)
     ? Math.max(1, parsedConflictSlotSolveNodeLimit)
     : MEDLEY_CONFLICT_SLOT_SOLVE_DEFAULT_NODE_LIMIT;
+  const enableConflictPairUpperBnb = optimization.enableConflictPairUpperBnb === true;
+  const parsedConflictPairUpperBnbNodeLimit = (
+    optimization.conflictPairUpperBnbNodeLimit !== undefined
+      ? Math.trunc(optimization.conflictPairUpperBnbNodeLimit)
+      : Number.NaN
+  );
+  const conflictPairUpperBnbNodeLimit = Number.isFinite(parsedConflictPairUpperBnbNodeLimit)
+    ? Math.max(1, parsedConflictPairUpperBnbNodeLimit)
+    : MEDLEY_CONFLICT_EXACT_BNB_DEFAULT_NODE_LIMIT;
+  const parsedConflictPairUpperBnbSlotSolveNodeLimit = (
+    optimization.conflictPairUpperBnbSlotSolveNodeLimit !== undefined
+      ? Math.trunc(optimization.conflictPairUpperBnbSlotSolveNodeLimit)
+      : Number.NaN
+  );
+  const conflictPairUpperBnbSlotSolveNodeLimit = Number.isFinite(parsedConflictPairUpperBnbSlotSolveNodeLimit)
+    ? Math.max(1, parsedConflictPairUpperBnbSlotSolveNodeLimit)
+    : conflictSlotSolveNodeLimit;
+  const parsedConflictPairUpperBnbMaxMemoryHeadroomMiB = (
+    optimization.conflictPairUpperBnbMaxMemoryHeadroomMiB !== undefined
+      ? Math.trunc(optimization.conflictPairUpperBnbMaxMemoryHeadroomMiB)
+      : Number.NaN
+  );
+  const conflictPairUpperBnbMaxMemoryHeadroomMiB = Number.isFinite(
+    parsedConflictPairUpperBnbMaxMemoryHeadroomMiB,
+  )
+    ? Math.max(0, parsedConflictPairUpperBnbMaxMemoryHeadroomMiB)
+    : 512;
   const enableExactJoinPrefixSeed = optimization.enableExactJoinPrefixSeed === true;
   const enableLowMemoryHighPairScan = optimization.enableLowMemoryHighPairScan === true;
   const parsedLowMemoryHighPairScanMinRecordCount = (
@@ -4269,6 +4296,10 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
           lowMemoryHighPairScanMinRecordCount,
           lowMemoryHighPairPrefixRecordLimit,
           debugExactCandidateJoinMemoryAttribution,
+          enableConflictPairUpperBnb,
+          conflictPairUpperBnbNodeLimit,
+          conflictPairUpperBnbSlotSolveNodeLimit,
+          conflictPairUpperBnbMaxMemoryHeadroomMiB,
         },
         observeEvaluatedMedleyResult,
       );
@@ -4549,6 +4580,10 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
           lowMemoryHighPairScanMinRecordCount,
           lowMemoryHighPairPrefixRecordLimit,
           debugExactCandidateJoinMemoryAttribution,
+          enableConflictPairUpperBnb,
+          conflictPairUpperBnbNodeLimit,
+          conflictPairUpperBnbSlotSolveNodeLimit,
+          conflictPairUpperBnbMaxMemoryHeadroomMiB,
           anchorFrontierProofMaxFrontierGap: eventRootFrontierProbeAnchorProofMaxFrontierGap,
           anchorFrontierProofMinRemainingMs: eventRootFrontierProbeAnchorProofMinRemainingMs,
           anchorFrontierProofMaxOtherSlotCandidates: (
@@ -5035,6 +5070,10 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
           lowMemoryHighPairScanMinRecordCount,
           lowMemoryHighPairPrefixRecordLimit,
           debugExactCandidateJoinMemoryAttribution,
+          enableConflictPairUpperBnb,
+          conflictPairUpperBnbNodeLimit,
+          conflictPairUpperBnbSlotSolveNodeLimit,
+          conflictPairUpperBnbMaxMemoryHeadroomMiB,
         },
         observeEvaluatedMedleyResult,
       );

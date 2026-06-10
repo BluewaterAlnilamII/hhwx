@@ -66,6 +66,10 @@ export type BandoriMedleySearchOptimizationOptions = {
   enableConflictExactBnb?: boolean;
   conflictExactNodeLimit?: number;
   conflictSlotSolveNodeLimit?: number;
+  enableConflictPairUpperBnb?: boolean;
+  conflictPairUpperBnbNodeLimit?: number;
+  conflictPairUpperBnbSlotSolveNodeLimit?: number;
+  conflictPairUpperBnbMaxMemoryHeadroomMiB?: number;
   configurationSeedPassDurationMs?: number;
   skipConfigurationSeedingWhenMemoryHeadroomBelowMiB?: number;
   enableExactJoinPrefixSeed?: boolean;
@@ -718,6 +722,17 @@ export type BandoriMedleyTeamSearchProfilingStats = {
   conflictExactBnbBestUpper: number | null;
   conflictExactBnbBestGap: number | null;
   conflictExactBnbMaxDepth: number;
+  conflictPairUpperBnbCallCount: number;
+  conflictPairUpperBnbCompletedCount: number;
+  conflictPairUpperBnbAbortCount: number;
+  conflictPairUpperBnbNodeCount: number;
+  conflictPairUpperBnbPrunedNodeCount: number;
+  conflictPairUpperBnbSolvedNodeCount: number;
+  conflictPairUpperBnbMaxOpenNodeCount: number;
+  conflictPairUpperBnbBestUpper: number | null;
+  conflictPairUpperBnbBestGap: number | null;
+  conflictPairUpperBnbMaxDepth: number;
+  conflictPairUpperBnbElapsedMs: number;
   boundedFrontierGroups: Array<Record<string, unknown>> | null;
 };
 

@@ -1,6 +1,6 @@
 # Medley 40/40 Exact Roadmap
 
-Last updated: 2026-06-10 22:27 CST
+Last updated: 2026-06-11 00:34 CST
 
 This file is the persistent working note for the current medley optimizer goal.
 Keep it current before and after benchmark runs or proof-path changes, so future
@@ -2583,3 +2583,66 @@ Updated conclusion:
   by replacing the full two-slot proof with an exact lower-memory pair frontier
   algorithm. Any candidate must first prove `Everyone/happy/visual` in isolation
   under the `4488 MiB` acceptance gate before being tried in full all-scope.
+
+## Conflict Pair Upper BnB Diagnostics - 2026-06-11 00:34 CST
+
+Purpose:
+
+- Test whether an exact lower-residency two-slot conflict BnB can replace the
+  memory-heavy generated-candidate pair upper without using manual GC.
+- Implementation is opt-in only:
+  `enableConflictPairUpperBnb=true`,
+  `conflictPairUpperBnbNodeLimit`,
+  `conflictPairUpperBnbSlotSolveNodeLimit`, and
+  `conflictPairUpperBnbMaxMemoryHeadroomMiB`.
+- The helper proves score-only pair upper by solving constrained slot optima
+  and branching on duplicate-card conflicts. It is a certificate only when the
+  BnB completes; aborts fall back to the original generated-candidate proof.
+
+Diagnostics:
+
+- High-budget-only BnB with runner counters missing:
+  `temp/bandori-team-builder/real-profile-medley-scope-matrix-2026-06-10T15-46-42-226Z.json`.
+  Result: bounded, score `8568618`, gap `99259`, peak `4495 MiB`,
+  `memoryLimited=true`, abort `pair-upper`, completed `9`. This was worse than
+  the cache-slim baseline gap `62929` and completed `12`.
+- All-pair BnB wrapper:
+  `temp/bandori-team-builder/real-profile-medley-scope-matrix-2026-06-10T16-00-19-670Z.json`.
+  Result: bounded, score `8568618`, gap `48011`, peak `2849 MiB`,
+  `timedOut=false`, `memoryLimited=false`, completed `3`, root-pruned `96`,
+  BnB calls `18/18 completed`. This proves the low-residency certificate can
+  reduce memory and reported gap, but it removes the original pair proof's
+  useful side effect of materializing candidate prefixes, so proof throughput
+  collapses and exactness still fails.
+- Debug ledger for all-pair BnB:
+  `temp/bandori-team-builder/real-profile-medley-scope-matrix-2026-06-10T16-06-38-393Z.json`.
+  Result regressed under debug overhead: timed out at `300052ms`, gap
+  `290597`, peak `2850 MiB`, abort `candidate-fill-pair-refine`. The trace
+  showed `PastelPalettes/powerful/technique` spending `145428ms` in solve and
+  `PastelPalettes/powerful/visual` failing after only `18808ms` remained.
+- Guarded high-budget/refine BnB, headroom `1600 MiB`:
+  `temp/bandori-team-builder/real-profile-medley-scope-matrix-2026-06-10T16-25-26-897Z.json`.
+  Result: bounded, score `8568618`, gap `62165`, peak `4489 MiB`,
+  `memoryLimited=true`, abort `pair-upper`, completed `13`, BnB calls
+  `9/9 completed`. This is a tiny improvement over gap `62929` and completed
+  `12`, but still fails exact and still hits the RSS guard.
+- Guarded high-budget/refine BnB, headroom `2500 MiB`:
+  `temp/bandori-team-builder/real-profile-medley-scope-matrix-2026-06-10T16-29-04-382Z.json`.
+  Result: bounded, gap `151555`, peak `2913 MiB`, `memoryLimited=false`,
+  completed `3`, BnB calls `11` with `10` completed and `1` abort. This repeats
+  the all-pair pattern: lower memory, worse proof throughput.
+
+Conclusion:
+
+- Keep conflict pair-upper BnB as a diagnostic/research-only opt-in. Do not
+  enable it by default and do not include it in the current acceptance JSON.
+- The core tradeoff is now clear: replacing generated pair proof with pure BnB
+  can prove upper bounds with much less resident memory, but it does not retain
+  the candidate material needed by candidate-fill and final solve. The exactness
+  path therefore needs lower-allocation candidate materialization, not a pure
+  upper-only replacement.
+- Next general route: preserve generated candidate prefixes while reducing
+  allocation/RSS churn. Prioritize compact candidate records, generator node
+  pooling/typed storage, or chunked high-budget pair proof that carries forward
+  candidate material and upper certificates without retaining the full transient
+  generator working set.

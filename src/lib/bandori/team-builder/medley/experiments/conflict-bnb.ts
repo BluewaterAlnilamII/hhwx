@@ -5,7 +5,11 @@
  * is useful for diagnostics but can spend its node budget without tightening the global proof.
  */
 
-import { compareMedleyResultLike, evaluateMedleySlotCandidateWithCache } from "../candidates";
+import {
+  compareMedleyResultLike,
+  evaluateMedleySlotCandidateWithCache,
+  releaseMedleyScoreOnlyTeamEvaluationCache,
+} from "../candidates";
 import { getMedleyPruningThreshold } from "../configurations";
 import { MEDLEY_TEAM_COUNT, MEDLEY_TEAM_SIZE } from "../constants";
 import { compareMedleyTeamCandidates } from "../optimization";
@@ -34,9 +38,11 @@ import type { BandoriAreaItemConfiguration, SearchCard } from "@/lib/bandori/tea
 export function getMedleyConstraintCacheKey(
   slotIndex: number,
   constraint: MedleySlotTeamConstraint,
+  scoreOnly = false,
 ): string {
   return [
     slotIndex,
+    scoreOnly ? "score-only" : "full",
     [...constraint.forcedCardIds].sort((left, right) => left - right).join(","),
     [...constraint.bannedCardIds].sort((left, right) => left - right).join(","),
   ].join("|");
@@ -77,6 +83,7 @@ export function findBestMedleySlotTeamWithConstraints(
   isPastDeadline: () => boolean,
   deadlineAt: number,
   slotSolveNodeLimit: number,
+  scoreOnly = false,
 ): MedleyConstrainedSlotSolveResult {
   profiling.conflictExactBnbSlotSolveCount += 1;
   if (constraint.forcedCardIds.size > MEDLEY_TEAM_SIZE) {
@@ -150,6 +157,8 @@ export function findBestMedleySlotTeamWithConstraints(
         perfectRate,
         stats,
         profiling,
+        undefined,
+        scoreOnly,
       );
       best = compareMedleyTeamCandidates(best, candidate);
       return;
@@ -234,8 +243,9 @@ export function findBestMedleySlotTeamWithConstraintsAndCache(
   isPastDeadline: () => boolean,
   deadlineAt: number,
   slotSolveNodeLimit: number,
+  scoreOnly = false,
 ): MedleyConstrainedSlotSolveResult {
-  const key = getMedleyConstraintCacheKey(slotIndex, constraint);
+  const key = getMedleyConstraintCacheKey(slotIndex, constraint, scoreOnly);
   const cached = cache.get(key);
   if (cached) {
     profiling.conflictExactBnbSlotCacheHitCount += 1;
@@ -253,6 +263,7 @@ export function findBestMedleySlotTeamWithConstraintsAndCache(
     isPastDeadline,
     deadlineAt,
     slotSolveNodeLimit,
+    scoreOnly,
   );
   if (!result.aborted) {
     cache.set(key, { candidate: result.candidate });
@@ -333,6 +344,155 @@ export function buildMedleyConflictChildNodes(
     children.push(unusedChild);
   }
   return children;
+}
+
+export type MedleyConflictPairUpperBnbResult = {
+  proved: boolean;
+  upperBound: number | null;
+  timedOut: boolean;
+};
+
+export function proveMedleyScoreOnlyPairUpperByConflictBnb(
+  slots: [MedleySlotSearch, MedleySlotSearch],
+  server: number,
+  perfectRate: number,
+  stats: BandoriMedleyTeamSearchStats,
+  profiling: BandoriMedleyTeamSearchProfilingStats,
+  isPastDeadline: () => boolean,
+  deadlineAt: number,
+  nodeLimit: number,
+  slotSolveNodeLimit: number,
+): MedleyConflictPairUpperBnbResult {
+  const startedAt = performance.now();
+  profiling.conflictPairUpperBnbCallCount += 1;
+  const slotBestCache = new Map<string, MedleyBestSlotTeamCacheEntry>();
+  const openNodes: MedleyConflictExactNode[] = [{
+    forcedCardIdsBySlot: slots.map(() => new Set<number>()),
+    bannedCardIdsBySlot: slots.map(() => new Set<number>()),
+    depth: 0,
+  }];
+  let bestPairScore = Number.NEGATIVE_INFINITY;
+  let observedUpperBound = Number.NEGATIVE_INFINITY;
+  const startNodeCount = profiling.conflictPairUpperBnbNodeCount;
+
+  try {
+    while (openNodes.length > 0) {
+      profiling.conflictPairUpperBnbMaxOpenNodeCount = Math.max(
+        profiling.conflictPairUpperBnbMaxOpenNodeCount,
+        openNodes.length,
+      );
+      if (profiling.conflictPairUpperBnbNodeCount - startNodeCount >= nodeLimit) {
+        profiling.conflictPairUpperBnbAbortCount += 1;
+        return {
+          proved: false,
+          upperBound: Number.isFinite(observedUpperBound) ? observedUpperBound : null,
+          timedOut: false,
+        };
+      }
+      if (stats.timedOut || performance.now() >= deadlineAt || isPastDeadline()) {
+        stats.isExhaustive = false;
+        stats.timedOut = true;
+        stats.searchMode = "bounded";
+        profiling.conflictPairUpperBnbAbortCount += 1;
+        return {
+          proved: false,
+          upperBound: Number.isFinite(observedUpperBound) ? observedUpperBound : null,
+          timedOut: true,
+        };
+      }
+
+      const node = openNodes.shift();
+      if (!node) {
+        break;
+      }
+      profiling.conflictPairUpperBnbNodeCount += 1;
+      profiling.conflictPairUpperBnbMaxDepth = Math.max(profiling.conflictPairUpperBnbMaxDepth, node.depth);
+
+      const bestTeams: MedleyTeamCandidate[] = [];
+      let aborted = false;
+      let infeasible = false;
+      for (let slotIndex = 0; slotIndex < slots.length; slotIndex += 1) {
+        const solveResult = findBestMedleySlotTeamWithConstraintsAndCache(
+          slotBestCache,
+          slotIndex,
+          slots[slotIndex],
+          {
+            forcedCardIds: node.forcedCardIdsBySlot[slotIndex],
+            bannedCardIds: node.bannedCardIdsBySlot[slotIndex],
+          },
+          server,
+          perfectRate,
+          stats,
+          profiling,
+          isPastDeadline,
+          deadlineAt,
+          slotSolveNodeLimit,
+          true,
+        );
+        if (solveResult.aborted) {
+          aborted = true;
+          break;
+        }
+        if (!solveResult.candidate) {
+          infeasible = true;
+          break;
+        }
+        bestTeams.push(solveResult.candidate);
+      }
+      if (aborted) {
+        profiling.conflictPairUpperBnbAbortCount += 1;
+        return {
+          proved: false,
+          upperBound: Number.isFinite(observedUpperBound) ? observedUpperBound : null,
+          timedOut: stats.timedOut,
+        };
+      }
+      if (infeasible) {
+        profiling.conflictPairUpperBnbPrunedNodeCount += 1;
+        continue;
+      }
+
+      const upperBound = bestTeams.reduce((sum, team) => sum + team.result.score, 0);
+      observedUpperBound = Math.max(observedUpperBound, upperBound);
+      const gap = Math.max(0, upperBound - bestPairScore);
+      if (upperBound > (profiling.conflictPairUpperBnbBestUpper ?? Number.NEGATIVE_INFINITY)) {
+        profiling.conflictPairUpperBnbBestUpper = upperBound;
+        profiling.conflictPairUpperBnbBestGap = gap;
+      }
+      if (upperBound <= bestPairScore) {
+        profiling.conflictPairUpperBnbPrunedNodeCount += 1;
+        continue;
+      }
+
+      if (medleyConflictTeamsAreDisjoint(bestTeams)) {
+        bestPairScore = Math.max(bestPairScore, upperBound);
+        profiling.conflictPairUpperBnbSolvedNodeCount += 1;
+        continue;
+      }
+
+      const conflictCardId = getMedleyConflictCardId(slots, bestTeams);
+      if (conflictCardId === null) {
+        profiling.conflictPairUpperBnbPrunedNodeCount += 1;
+        continue;
+      }
+
+      const children = buildMedleyConflictChildNodes(node, bestTeams, conflictCardId);
+      openNodes.unshift(...children);
+    }
+
+    profiling.conflictPairUpperBnbCompletedCount += 1;
+    return {
+      proved: true,
+      upperBound: Number.isFinite(bestPairScore) ? bestPairScore : null,
+      timedOut: false,
+    };
+  } finally {
+    profiling.conflictPairUpperBnbElapsedMs += performance.now() - startedAt;
+    for (const slot of slots) {
+      releaseMedleyScoreOnlyTeamEvaluationCache(slot);
+    }
+    slotBestCache.clear();
+  }
 }
 
 export function searchMedleyConfigurationByConflictExactBnb(

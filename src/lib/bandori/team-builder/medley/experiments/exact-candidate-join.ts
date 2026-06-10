@@ -22,6 +22,7 @@ import {
   medleyExactCandidatesOverlap,
   writeMedleyExactForbiddenCandidateBits,
 } from "./exact-candidate-join-bitsets";
+import { proveMedleyScoreOnlyPairUpperByConflictBnb } from "./conflict-bnb";
 import {
   MEDLEY_EXACT_CANDIDATE_JOIN_ANCHOR_FRONTIER_PROOF_MAX_ANCHOR_CANDIDATES,
   MEDLEY_EXACT_CANDIDATE_JOIN_ANCHOR_FRONTIER_PROOF_MAX_CARD_COUNT,
@@ -4613,6 +4614,10 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     lowMemoryHighPairScanMinRecordCount?: number | null;
     lowMemoryHighPairPrefixRecordLimit?: number | null;
     debugExactCandidateJoinMemoryAttribution?: boolean;
+    enableConflictPairUpperBnb?: boolean;
+    conflictPairUpperBnbNodeLimit?: number | null;
+    conflictPairUpperBnbSlotSolveNodeLimit?: number | null;
+    conflictPairUpperBnbMaxMemoryHeadroomMiB?: number | null;
     anchorFrontierProofMaxFrontierGap?: number | null;
     anchorFrontierProofMinRemainingMs?: number | null;
     anchorFrontierProofMaxOtherSlotCandidates?: number | null;
@@ -5298,6 +5303,54 @@ export function searchMedleyConfigurationByExactCandidateJoin(
 
   const pairUpperStartedAt = performance.now();
   const shouldUseRootPruneOnlyPairProbe = candidateSoftLimit > 20_000;
+  const getConflictPairUpperBnbMemoryHeadroomMiB = (): number => {
+    if (
+      stats.memorySoftLimitMiB === null
+      || !Number.isFinite(stats.memorySoftLimitMiB)
+      || stats.peakUsedHeapMiB === null
+      || !Number.isFinite(stats.peakUsedHeapMiB)
+    ) {
+      return Number.POSITIVE_INFINITY;
+    }
+    return stats.memorySoftLimitMiB - stats.peakUsedHeapMiB;
+  };
+  const shouldTryConflictPairUpperBnb = (): boolean => (
+    context.enableConflictPairUpperBnb === true
+    && getConflictPairUpperBnbMemoryHeadroomMiB() <= Math.max(
+      0,
+      Math.trunc(context.conflictPairUpperBnbMaxMemoryHeadroomMiB ?? 512),
+    )
+  );
+  const tryProveConflictPairUpperByBnb = (
+    pairSlotIndices: [number, number],
+  ): MedleyExactCandidatePairUpperResult | null => {
+    if (!shouldTryConflictPairUpperBnb()) {
+      return null;
+    }
+    const conflictPairUpperResult = proveMedleyScoreOnlyPairUpperByConflictBnb(
+      [slots[pairSlotIndices[0]], slots[pairSlotIndices[1]]],
+      server,
+      perfectRate,
+      stats,
+      profiling,
+      isPastDeadline,
+      deadlineAt,
+      Math.max(1, Math.trunc(context.conflictPairUpperBnbNodeLimit ?? 2_048)),
+      Math.max(1, Math.trunc(context.conflictPairUpperBnbSlotSolveNodeLimit ?? nodeSoftLimit)),
+    );
+    if (
+      conflictPairUpperResult.proved
+      && conflictPairUpperResult.upperBound !== null
+      && Number.isFinite(conflictPairUpperResult.upperBound)
+    ) {
+      return {
+        proved: true,
+        upperBound: conflictPairUpperResult.upperBound,
+        unseenUpperBound: conflictPairUpperResult.upperBound,
+      };
+    }
+    return null;
+  };
   for (let excludedSlotIndex = 0; excludedSlotIndex < slots.length; excludedSlotIndex += 1) {
     const pairSlotIndices = slots
       .map((_, index) => index)
@@ -5441,8 +5494,9 @@ export function searchMedleyConfigurationByExactCandidateJoin(
   }
 
   if (shouldUseRootPruneOnlyPairProbe && exactPairUpperByExcludedSlot[0] !== null) {
+    let highBudgetDeepPairUpperResult = tryProveConflictPairUpperByBnb([1, 2]);
     const highBudgetDeepPairStartedAt = performance.now();
-    const highBudgetDeepPairUpperResult = proveMedleyExactCandidatePairUpper(
+    highBudgetDeepPairUpperResult ??= proveMedleyExactCandidatePairUpper(
       [1, 2],
       candidatesBySlot,
       generators,
@@ -5665,6 +5719,17 @@ export function searchMedleyConfigurationByExactCandidateJoin(
       .map((_, index) => index)
       .filter((index) => index !== excludedSlotIndex) as [number, number];
     const refineStartedAt = performance.now();
+    const conflictPairUpperResult = tryProveConflictPairUpperByBnb(pairSlotIndices);
+    if (conflictPairUpperResult) {
+      profiling.exactCandidateJoinPairUpperElapsedMs += performance.now() - refineStartedAt;
+      exactPairUpperByExcludedSlot[excludedSlotIndex] = conflictPairUpperResult.upperBound;
+      exactPairUnseenUpperByExcludedSlot[excludedSlotIndex] = conflictPairUpperResult.unseenUpperBound;
+      return true;
+    }
+    if (stats.timedOut) {
+      profiling.exactCandidateJoinPairUpperElapsedMs += performance.now() - refineStartedAt;
+      return false;
+    }
     const pairUpperResult = proveMedleyExactCandidatePairUpper(
       pairSlotIndices,
       candidatesBySlot,
