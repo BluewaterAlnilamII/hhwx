@@ -71,6 +71,34 @@ No-GC acceptance contract:
   the known P03 no-GC failure shape without requiring forced GC. This is not
   yet accepted; repeat P03 and hard-guard validation are still required.
 
+2026-06-10 11:42 CST P03 repeat gate:
+
+- Scope: `P03:260`, no `--expose-gc`, `debugConfigurationTrace=false`, no GC
+  probe, same optimization as above.
+- Runs:
+  - `2026-06-10T03-31-45-295Z`: exact, `82082ms`, peak `3050 MiB`.
+  - `2026-06-10T03-34-21-636Z`: exact, `77337ms`, peak `3072 MiB`.
+  - `2026-06-10T03-35-43-500Z`: exact, `84065ms`, peak `3075 MiB`.
+  - `2026-06-10T03-37-12-780Z`: exact, `114805ms`, peak `3491 MiB`.
+  - `2026-06-10T03-39-13-363Z`: exact, `74321ms`, peak `3062 MiB`.
+- Gate result: passed `5/5` exact, no bounded gap, no timeout, no
+  memory-limited row. Proceed to hard guard set.
+
+2026-06-10 11:54 CST hard guard gate:
+
+- Scope: `P03:260`, `P06:323`, `P07:260`, `P08:323`, `P10:244`,
+  `P10:260`, `P07:244`, and `P08:244`, no `--expose-gc`,
+  `debugConfigurationTrace=false`, no GC probe.
+- Round 1 raw result:
+  `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-10T03-41-13-719Z.json`.
+  Result: `8/8` exact, bounded-gap total `0`, no timeout, no memory-limited
+  row, peak `3220 MiB`, max elapsed `71750ms`.
+- Round 2 raw result:
+  `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-10T03-46-59-014Z.json`.
+  Result: `8/8` exact, bounded-gap total `0`, no timeout, no memory-limited
+  row, peak `4095 MiB`, max elapsed `88053ms`.
+- Gate result: passed. Proceed to full 40-case no-GC confirmation runs.
+
 Goal tool note:
 
 - The active Codex goal object was created earlier in this thread and cannot be
