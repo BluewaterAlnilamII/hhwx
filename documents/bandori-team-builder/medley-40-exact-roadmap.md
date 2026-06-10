@@ -3029,3 +3029,49 @@ Anchor-limited unseen upper rejection:
   too expensive for this frontier; the next unseen-upper attempt needs a
   cheaper shared certificate or a coarse reusable bound, not per-anchor
   recomputation.
+
+40-case validation caveat after compact builder:
+
+- A single-process 40-case run was started:
+  `temp/bandori-team-builder/real-profile-medley-scope-matrix-2026-06-10T20-19-28-460Z-partial.json`.
+- It was stopped at `29/40` because the process working set reached about
+  `6.35 GiB`, and later rows began failing from accumulated heap pressure.
+- Completed rows at stop time:
+  - `25/29` exact.
+  - True or suspected hard rows in that partial:
+    `P03:323`, `P06:323`, `P07:260`.
+  - `P08:none` was bounded only in the single-process partial, but isolated
+    rerun proved exact.
+- Decision: do not use one long same-process matrix as the acceptance source
+  for 40-case exactness. The acceptance runner needs per-case or batched
+  process isolation, or the report must clearly mark same-process heap
+  pollution.
+
+Isolated hard-case checks after compact builder:
+
+- `P08:none` isolated:
+  `temp/bandori-team-builder/real-profile-medley-scope-matrix-2026-06-10T21-06-32-716Z.json`.
+  Exact, elapsed `116217ms`; previous bounded in the partial was runner heap
+  pollution.
+- `P03:323` isolated:
+  `temp/bandori-team-builder/real-profile-medley-scope-matrix-2026-06-10T21-08-51-145Z.json`.
+  Bounded, elapsed `300104ms`, gap `429277`, peak `2132 MiB`, abort
+  `solve-timeout`; solve elapsed `238654ms`.
+- `P07:260` isolated at `memorySoftLimitMiB=6144`:
+  `temp/bandori-team-builder/real-profile-medley-scope-matrix-2026-06-10T21-02-55-485Z.json`.
+  Bounded, elapsed `166581ms`, gap `62165`, peak `6150 MiB`,
+  `memoryLimited=true`, abort `pair-upper`.
+- `P07:260` isolated at `memorySoftLimitMiB=7168`:
+  `temp/bandori-team-builder/real-profile-medley-scope-matrix-2026-06-10T21-14-41-907Z.json`.
+  Bounded, elapsed `300033ms`, gap `25235`, peak `6897 MiB`, abort
+  `initial-candidate`; memory no longer limited, but 300s still insufficient.
+
+Current hard-case classification:
+
+- `P03:323`: time/solve-order problem, not memory. The solve phase consumes
+  most of the 300s budget with low heap usage.
+- `P06:323`: proof-frontier upper problem around
+  `PastelPalettes/cool/performance`, not memory after compact builder.
+- `P07:260`: mixed memory/time problem. Raising the soft limit removes the
+  memory abort and narrows the gap, but it still needs a faster proof path to
+  finish under 300s at production-safe settings.
