@@ -1044,7 +1044,7 @@ export function createMedleyExactSlotCandidateGenerator(
       let highPairRecordBitsetBytes = 0;
       let rightCandidateBitsetBytes = 0;
       for (const query of pairUpperQueryCache.values()) {
-        highPairRecordCount += query.highPairRecords?.length ?? 0;
+        highPairRecordCount += query.highPairRecordCount ?? 0;
         if (
           query.highPairRecordBitsetWordCount !== undefined
           && query.containingHighPairRecordBitsByCardId
@@ -1097,8 +1097,8 @@ type MedleyExactCandidatePairRecord = {
 };
 
 type MedleyExactCandidatePairRecordCache = {
-  records: MedleyExactCandidatePairRecord[];
-  scores: number[];
+  recordCount: number;
+  scores: ArrayLike<number>;
   wordCount: number;
   containingRecordBitsByCardId: Map<number, Uint32Array>;
   fallbackUpperScore: number | null;
@@ -1112,8 +1112,8 @@ type MedleyExactCandidatePairUpperQuery = {
   forbiddenRightCandidateBitsByLeftCandidate: WeakMap<MedleyTeamCandidate, Uint32Array>;
   highPairAdaptiveCacheThresholdByCoarseThreshold?: Map<number, number>;
   highPairRecordCache?: Map<number, MedleyExactCandidatePairRecordCache>;
-  highPairRecords?: MedleyExactCandidatePairRecord[];
-  highPairRecordScores?: number[];
+  highPairRecordCount?: number;
+  highPairRecordScores?: ArrayLike<number>;
   highPairRecordThreshold?: number;
   highPairRecordBitsetWordCount?: number;
   containingHighPairRecordBitsByCardId?: Map<number, Uint32Array>;
@@ -1546,7 +1546,7 @@ function getHighMedleyExactCandidatePairRecords(
   threshold: number,
   profiling?: BandoriMedleyTeamSearchProfilingStats,
   useExactThreshold = false,
-): MedleyExactCandidatePairRecord[] {
+): number {
   const coarseCacheThreshold = Number.isFinite(threshold)
     ? useExactThreshold
       ? threshold
@@ -1572,13 +1572,13 @@ function getHighMedleyExactCandidatePairRecords(
   }
   const cachedRecordSet = query.highPairRecordCache?.get(cacheThreshold);
   if (cachedRecordSet) {
-    query.highPairRecords = cachedRecordSet.records;
+    query.highPairRecordCount = cachedRecordSet.recordCount;
     query.highPairRecordScores = cachedRecordSet.scores;
     query.highPairRecordThreshold = cacheThreshold;
     query.highPairRecordBitsetWordCount = cachedRecordSet.wordCount;
     query.containingHighPairRecordBitsByCardId = cachedRecordSet.containingRecordBitsByCardId;
     query.highPairRecordFallbackUpperScore = cachedRecordSet.fallbackUpperScore;
-    return cachedRecordSet.records;
+    return cachedRecordSet.recordCount;
   }
 
   const startedAt = performance.now();
@@ -1637,10 +1637,13 @@ function getHighMedleyExactCandidatePairRecords(
     return getHighMedleyExactCandidatePairRecords(query, threshold, profiling, useExactThreshold);
   }
   records.sort((left, right) => right.score - left.score);
-  const scores = records.map((record) => record.score);
-  const wordCount = Math.ceil(records.length / 32);
+  const recordCount = records.length;
+  const scores = new Int32Array(recordCount);
+  const wordCount = Math.ceil(recordCount / 32);
   const containingRecordBitsByCardId = new Map<number, Uint32Array>();
-  records.forEach((record, recordIndex) => {
+  for (let recordIndex = 0; recordIndex < recordCount; recordIndex += 1) {
+    const record = records[recordIndex];
+    scores[recordIndex] = record.score;
     const wordIndex = recordIndex >> 5;
     const bit = 1 << (recordIndex & 31);
     for (const cardId of record.leftCardIds) {
@@ -1659,17 +1662,19 @@ function getHighMedleyExactCandidatePairRecords(
       }
       bits[wordIndex] |= bit;
     }
-  });
+    records[recordIndex] = null as unknown as MedleyExactCandidatePairRecord;
+  }
+  records.length = 0;
   if (profiling) {
     profiling.exactCandidateJoinPairComplementHighPairBuildCount += 1;
     profiling.exactCandidateJoinPairComplementHighPairBuildElapsedMs += performance.now() - startedAt;
     profiling.exactCandidateJoinPairComplementHighPairRecordCount = Math.max(
       profiling.exactCandidateJoinPairComplementHighPairRecordCount,
-      records.length,
+      recordCount,
     );
   }
   const recordCache = {
-    records,
+    recordCount,
     scores,
     wordCount,
     containingRecordBitsByCardId,
@@ -1677,13 +1682,13 @@ function getHighMedleyExactCandidatePairRecords(
   };
   query.highPairRecordCache ??= new Map();
   query.highPairRecordCache.set(cacheThreshold, recordCache);
-  query.highPairRecords = records;
+  query.highPairRecordCount = recordCount;
   query.highPairRecordScores = scores;
   query.highPairRecordThreshold = cacheThreshold;
   query.highPairRecordBitsetWordCount = wordCount;
   query.containingHighPairRecordBitsByCardId = containingRecordBitsByCardId;
   query.highPairRecordFallbackUpperScore = fallbackUpperScore;
-  return records;
+  return recordCount;
 }
 
 function estimateGeneratedMedleyExactCandidatePairUpperExcludingCardIdsByScan(
@@ -1756,14 +1761,13 @@ function estimateGeneratedMedleyExactCandidatePairUpperExcludingCardIds(
         profiling,
       );
     }
-    const highPairRecords = getHighMedleyExactCandidatePairRecords(
+    const recordCount = getHighMedleyExactCandidatePairRecords(
       query,
       minimumRelevantScore,
       profiling,
       useExactHighPairThreshold,
     );
     const highPairRecordScores = query.highPairRecordScores;
-    const recordCount = highPairRecords.length;
     const wordCount = query.highPairRecordBitsetWordCount ?? Math.ceil(recordCount / 32);
     const containingBitsByCardId = query.containingHighPairRecordBitsByCardId;
     if (!containingBitsByCardId || !highPairRecordScores || wordCount === 0) {
@@ -4821,6 +4825,34 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     }
     return Number.isFinite(observedUpperBound) ? observedUpperBound : null;
   };
+  const recordGeneratorOnlyMemorySnapshot = (
+    phase: string,
+    extra: Record<string, unknown> = {},
+  ): void => {
+    if (context.debugExactCandidateJoinMemoryAttribution !== true) {
+      return;
+    }
+    const uniqueGenerators = [...new Set([...generators, ...candidateFillGenerators])];
+    const generatorProfiles = uniqueGenerators.map((generator, index) => ({
+      index,
+      ...(generator.memoryProfile ? generator.memoryProfile() : {}),
+    }));
+    const candidateCountsBySlot = candidatesBySlot.map((candidates) => candidates.length);
+    profiling.exactCandidateJoinMemorySnapshots.push({
+      phase,
+      elapsedMs: Math.round(performance.now() - exactJoinStartedAt),
+      peakUsedHeapMiB: stats.peakUsedHeapMiB,
+      candidateCountsBySlot,
+      candidateCountTotal: candidateCountsBySlot.reduce((sum, count) => sum + count, 0),
+      exactCandidateJoinPairCount: profiling.exactCandidateJoinPairCount,
+      exactCandidateJoinPairComplementQueryCount: profiling.exactCandidateJoinPairComplementQueryCount,
+      exactCandidateJoinPairComplementHighPairRecordCount: (
+        profiling.exactCandidateJoinPairComplementHighPairRecordCount
+      ),
+      generatorProfiles,
+      ...extra,
+    });
+  };
   const buildUnprovedExactCandidateJoinResult = (
     result: BandoriMedleyTeamSearchResult | null = null,
     observedUpperBound: number | null = getObservedExactCandidateJoinUpperBound(),
@@ -5291,6 +5323,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
         cutoff: rootPrunePairTarget,
         observedUpperBound: getObservedExactCandidateJoinUpperBound(),
       });
+      recordGeneratorOnlyMemorySnapshot("pair-upper-abort", { slotIndex: excludedSlotIndex });
       profiling.exactCandidateJoinGeneratedCandidateCount += candidatesBySlot.reduce((sum, candidates) => (
         sum + candidates.length
       ), 0);
@@ -5385,6 +5418,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
           cutoff: targetUnseenUpperBound,
           observedUpperBound: getObservedExactCandidateJoinUpperBound(),
         });
+        recordGeneratorOnlyMemorySnapshot("deep-pair-upper-abort", { slotIndex: deepPairExcludedSlotIndex });
         profiling.exactCandidateJoinGeneratedCandidateCount += candidatesBySlot.reduce((sum, candidates) => (
           sum + candidates.length
         ), 0);
@@ -5425,6 +5459,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
         candidateCount: candidatesBySlot.reduce((max, candidates) => Math.max(max, candidates.length), 0),
         observedUpperBound: getObservedExactCandidateJoinUpperBound(),
       });
+      recordGeneratorOnlyMemorySnapshot("high-budget-pair-upper-abort", { slotIndex: 0 });
       profiling.exactCandidateJoinGeneratedCandidateCount += candidatesBySlot.reduce((sum, candidates) => (
         sum + candidates.length
       ), 0);

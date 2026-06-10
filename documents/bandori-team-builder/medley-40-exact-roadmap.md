@@ -2456,3 +2456,100 @@ Conclusion:
     gap sample is lower than the earlier `92335` hard-run gap.
 - Next meaningful work should target the high-budget pair-upper / initial
   candidate memory path directly, not more seed or per-anchor unseen probes.
+
+## Rejected Low-Memory High-Pair Existing Flags - 2026-06-10 22:40 CST
+
+Purpose:
+
+- Before adding new code, test whether the existing low-memory high-pair scan
+  and prefix-upper options can improve the current `P07:260` high-budget
+  pair-upper blocker without relying on manual GC.
+- Scope: single `P07:260`, no `--expose-gc`, non-debug runner, active hard-guard
+  JSON, plus `enableLowMemoryHighPairScan=true` and
+  `enableLowMemoryHighPairPrefixUpper=true`.
+
+Result:
+
+- Diagnostic report:
+  `temp/bandori-team-builder/real-profile-medley-scope-matrix-2026-06-10T14-28-24-699Z.json`.
+- The run stayed bounded after the full `300000ms` budget:
+  score `8568618`, upper `8876753`, gap `308135`, elapsed `300195ms`, peak
+  `2421 MiB`, `timedOut=true`, `memoryLimited=false`, abort
+  `candidate-fill-generator-aborted`.
+- The options did reduce memory substantially compared with the immediate prior
+  `P07:260` hard run (`4492 MiB` peak), but proof throughput collapsed:
+  `completedConfigurations=0`, `rootPrunedConfigurations=0`, event-root probe
+  call count `0`, and candidate counts ended at `[151843,48662,6915]`.
+
+Conclusion:
+
+- Rejected for the acceptance path. This flag combination trades away the proof
+  progress needed for `P07:260`: lower RSS is not useful when no configuration
+  closes within the 300s budget and the observed gap grows from the previous
+  `62929` sample to `308135`.
+- Do not add these flags to the hard-guard optimization JSON. The next route
+  should preserve normal candidate-fill throughput while reducing avoidable
+  residency/allocation in the high-budget pair-upper path.
+
+## P07 High-Budget Pair Upper Diagnostics - 2026-06-10 23:10 CST
+
+Changes kept:
+
+- Slimmed the high-pair complement cache so it no longer retains full
+  `{ score, leftCardIds, rightCardIds }` record objects after building the
+  score list and containing-card bitsets. The query now keeps `recordCount`,
+  an `Int32Array` score list, and the bitsets needed for the same exact upper
+  lookup.
+- Added `debugExactCandidateJoinMemoryAttribution` snapshots for pair-upper,
+  deep-pair-upper, and high-budget-pair-upper aborts. This is diagnostic-only
+  and does not run on the default non-debug path.
+
+Validation:
+
+- Static: `npm.cmd run typecheck`, `git diff --check`.
+- `P07:260` with only the cache-slim patch:
+  `temp/bandori-team-builder/real-profile-medley-scope-matrix-2026-06-10T14-40-31-312Z.json`.
+  Result stayed bounded with the same score `8568618`, gap `62929`, peak
+  `4491 MiB`, `timedOut=true`, `memoryLimited=true`, abort
+  `high-budget-pair-upper`. Pair-upper elapsed changed from the previous
+  `54415ms` sample to `40022ms`, but exactness and memory did not improve
+  enough to matter.
+- Pair-upper memory attribution:
+  `temp/bandori-team-builder/real-profile-medley-scope-matrix-2026-06-10T14-50-05-571Z.json`.
+  Abort snapshot showed only about `56k` active generator heap nodes and no
+  high-pair/query cache residency at the abort point. Candidate counts were
+  `[1270,1691,1173]`, but process peak was already `4492 MiB`. This rules out
+  the retained high-pair record objects as the primary P07 blocker.
+- Proof ledger:
+  `temp/bandori-team-builder/real-profile-medley-scope-matrix-2026-06-10T14-55-18-838Z.json`.
+  `P07:260` proved the first 12 configurations, then failed on
+  `Everyone/happy/visual` at order `13` with `high-budget-pair-upper`, peak
+  `4489 MiB`, gap `62929`. The first three expensive configurations were
+  `PastelPalettes/powerful` siblings, including one `34967ms` proof with
+  candidate counts `[151843,48662,6915]`.
+
+Rejected diagnostics:
+
+- Coarse round-robin proof ordering was tested as a temporary opt-in and then
+  removed. It reduced elapsed to `115085ms` but regressed the result:
+  `temp/bandori-team-builder/real-profile-medley-scope-matrix-2026-06-10T15-01-05-901Z.json`
+  stayed bounded with gap `296599`, only `4` completed configurations,
+  `29` root-pruned configurations, and abort `candidate-fill-generator-aborted`.
+- Raising the diagnostic soft limit from `4488 MiB` to `4608 MiB` did not close
+  `P07:260`:
+  `temp/bandori-team-builder/real-profile-medley-scope-matrix-2026-06-10T15-04-35-088Z.json`
+  stayed bounded with gap `62929`, peak `4609 MiB`, `memoryLimited=true`, abort
+  `high-budget-pair-upper`.
+
+Conclusion:
+
+- Keep the cache-slim patch and the debug snapshot hook because they are
+  semantics-preserving and useful, but do not count them as 40/40 progress.
+- Do not pursue coarse proof-ordering or slightly higher memory soft limits for
+  P07. The failure is not a simple ordering issue or a 4488 MiB cliff.
+- The next useful route should change the high-budget pair proof itself:
+  preserve the strong pair upper, but avoid treating a late high-budget
+  refinement memory abort as a total configuration failure when a safe partial
+  pair upper can still feed candidate-fill/solve, or add a bounded/chunked
+  high-budget pair proof that releases intermediate search state between
+  chunks without using manual GC.
