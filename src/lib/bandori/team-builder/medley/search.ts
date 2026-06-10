@@ -997,6 +997,9 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
   const lowMemoryInitialCandidateSyncDirectCandidate = (
     optimization.lowMemoryInitialCandidateSyncDirectCandidate === true
   );
+  const lowMemoryInitialCandidateSyncUnsafeActiveGeneratorAdvance = (
+    optimization.lowMemoryInitialCandidateSyncUnsafeActiveGeneratorAdvance === true
+  );
   const enableLowMemoryInitialCandidateSyncGcProbe = (
     optimization.enableLowMemoryInitialCandidateSyncGcProbe === true
   );
@@ -1161,6 +1164,9 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
   const exactJoinPrefixSeedDisabledCoarseKeys = new Set<string>();
   if (optimization.exactCandidateJoinDebugAnchorSlotIndex !== undefined) {
     profiling.exactCandidateJoinDebugAnchorSlotIndex = Math.trunc(optimization.exactCandidateJoinDebugAnchorSlotIndex);
+  }
+  if (Array.isArray(optimization.exactCandidateJoinDebugKnownCardIdsBySlot)) {
+    profiling.exactCandidateJoinDebugKnownCardIdsBySlot = optimization.exactCandidateJoinDebugKnownCardIdsBySlot;
   }
   const stats: BandoriMedleyTeamSearchStats = {
     candidateCardCount: calculatedCards.length,
@@ -4099,6 +4105,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
           lowMemoryInitialCandidateSyncTimeboxMs,
           lowMemoryInitialCandidateSyncScoreCacheClearInterval,
           lowMemoryInitialCandidateSyncDirectCandidate,
+          lowMemoryInitialCandidateSyncUnsafeActiveGeneratorAdvance,
           shouldAbortLowMemoryInitialCandidateSync,
           lowMemoryHighPairScanMinRecordCount,
           lowMemoryHighPairPrefixRecordLimit,
@@ -4366,6 +4373,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
           lowMemoryInitialCandidateSyncTimeboxMs,
           lowMemoryInitialCandidateSyncScoreCacheClearInterval,
           lowMemoryInitialCandidateSyncDirectCandidate,
+          lowMemoryInitialCandidateSyncUnsafeActiveGeneratorAdvance,
           shouldAbortLowMemoryInitialCandidateSync,
           lowMemoryHighPairScanMinRecordCount,
           lowMemoryHighPairPrefixRecordLimit,
@@ -4829,6 +4837,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
           lowMemoryInitialCandidateSyncTimeboxMs,
           lowMemoryInitialCandidateSyncScoreCacheClearInterval,
           lowMemoryInitialCandidateSyncDirectCandidate,
+          lowMemoryInitialCandidateSyncUnsafeActiveGeneratorAdvance,
           shouldAbortLowMemoryInitialCandidateSync,
           lowMemoryHighPairScanMinRecordCount,
           lowMemoryHighPairPrefixRecordLimit,

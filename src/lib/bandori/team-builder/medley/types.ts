@@ -76,6 +76,7 @@ export type BandoriMedleySearchOptimizationOptions = {
   exactJoinPrefixSeedMinCandidateCounts?: [number, number, number];
   debugConfigurationTrace?: boolean;
   exactCandidateJoinDebugAnchorSlotIndex?: number;
+  exactCandidateJoinDebugKnownCardIdsBySlot?: number[][];
   enableExperimentalStagedCandidateExtension?: boolean;
   enableLowMemoryHighPairScan?: boolean;
   lowMemoryHighPairScanMinRecordCount?: number;
@@ -91,6 +92,7 @@ export type BandoriMedleySearchOptimizationOptions = {
   lowMemoryInitialCandidateSyncMaxSlotCardCount?: number;
   lowMemoryInitialCandidateSyncScoreCacheClearInterval?: number;
   lowMemoryInitialCandidateSyncDirectCandidate?: boolean;
+  lowMemoryInitialCandidateSyncUnsafeActiveGeneratorAdvance?: boolean;
   enableLowMemoryInitialCandidateSyncGcProbe?: boolean;
   debugExactCandidateJoinMemoryAttribution?: boolean;
   enableTrailingSameCoarseDfsOnly?: boolean;

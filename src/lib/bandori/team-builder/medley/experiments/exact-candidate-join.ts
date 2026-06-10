@@ -2032,18 +2032,28 @@ export function solveMedleyExactCandidateJoin(
   const middleCandidateCount = candidatesBySlot[candidateCountSlotOrder[1]]?.length ?? 0;
   const largestCandidateCount = candidatesBySlot[candidateCountSlotOrder[2]]?.length ?? 0;
   // Extremely imbalanced lists can spend too much time joining the smallest
-  // list first because the second-list frontier stays wide. Trying the middle
-  // list first is still exact; it only changes enumeration order and the
-  // bounded shortlist used for third-slot acceleration.
-  const shouldUseMiddleFirstJoinOrder = (
+  // list first because the second-list frontier stays wide. If the largest
+  // list would become the third slot, fallback third scans can dominate solve
+  // time, so keep the smallest list in the third position when it can still use
+  // the bounded shortlist path. These variants are exact; they only change
+  // enumeration order and the shortlist used for third-slot acceleration.
+  const shouldPreferSmallestThirdJoinOrder = (
+    smallestCandidateCount >= 5_000
+    && smallestCandidateCount <= MEDLEY_EXACT_CANDIDATE_JOIN_EXTENDED_THIRD_SHORTLIST_MAX_THIRD_CANDIDATES
+    && largestCandidateCount > MEDLEY_EXACT_CANDIDATE_JOIN_EXTENDED_THIRD_SHORTLIST_MAX_THIRD_CANDIDATES
+    && largestCandidateCount >= middleCandidateCount * 2
+  );
+  const shouldUseMiddleFirstJoinOrder = !shouldPreferSmallestThirdJoinOrder && (
     smallestCandidateCount >= 5_000
     && middleCandidateCount >= smallestCandidateCount * 2
     && largestCandidateCount >= middleCandidateCount * 2
   );
-  const slotOrder = shouldUseMiddleFirstJoinOrder
+  const slotOrder = shouldPreferSmallestThirdJoinOrder
+    ? [candidateCountSlotOrder[1], candidateCountSlotOrder[2], candidateCountSlotOrder[0]]
+    : shouldUseMiddleFirstJoinOrder
     ? [candidateCountSlotOrder[1], candidateCountSlotOrder[0], candidateCountSlotOrder[2]]
     : candidateCountSlotOrder;
-  const thirdShortlistSize = shouldUseMiddleFirstJoinOrder
+  const thirdShortlistSize = (shouldPreferSmallestThirdJoinOrder || shouldUseMiddleFirstJoinOrder)
     ? MEDLEY_EXACT_CANDIDATE_JOIN_MIDDLE_FIRST_THIRD_SHORTLIST_SIZE
     : MEDLEY_EXACT_CANDIDATE_JOIN_THIRD_SHORTLIST_SIZE;
   const firstSlotIndex = slotOrder[0];
@@ -2052,6 +2062,18 @@ export function solveMedleyExactCandidateJoin(
   const firstCandidates = candidatesBySlot[firstSlotIndex];
   const secondCandidates = candidatesBySlot[secondSlotIndex];
   const thirdCandidates = candidatesBySlot[thirdSlotIndex];
+  const scoreSlackUpperBySlot = candidatesBySlot.map((candidates) => (
+    candidates.reduce((maxSlack, candidate) => {
+      const slack = candidate.result.maxScore - candidate.result.score;
+      return Number.isFinite(slack) ? Math.max(maxSlack, Math.max(0, slack)) : maxSlack;
+    }, 0)
+  ));
+  const solveScoreSlackUpper = slotOrder.reduce((sum, slotIndex) => (
+    sum + (scoreSlackUpperBySlot[slotIndex] ?? 0)
+  ), 0);
+  const scoreOnlyUpperCannotReachCutoff = (scoreOnlyUpper: number): boolean => (
+    scoreOnlyUpper + solveScoreSlackUpper < currentScoreCutoff
+  );
   const shouldUseDirectThirdBitsetScan = (
     thirdCandidates.length <= MEDLEY_EXACT_CANDIDATE_JOIN_DIRECT_THIRD_SCAN_MAX_CANDIDATES
   );
@@ -2473,7 +2495,7 @@ export function solveMedleyExactCandidateJoin(
     : 0xffffffff >>> (32 - secondCandidateLastWordRemainder);
   for (const firstCandidate of firstCandidates) {
     const firstScore = firstCandidate.result.score;
-    if (firstScore + bestSecondScore + bestThirdScore < currentScoreCutoff) {
+    if (scoreOnlyUpperCannotReachCutoff(firstScore + bestSecondScore + bestThirdScore)) {
       break;
     }
     const firstForbiddenSecondCandidateBits = writeMedleyExactForbiddenCandidateBits(
@@ -2505,16 +2527,16 @@ export function solveMedleyExactCandidateJoin(
       continue;
     }
     const bestThirdForFirstScore = bestThirdForFirst.result.score;
-    if (firstScore + bestSecondForFirst.result.score + bestThirdForFirstScore < currentScoreCutoff) {
+    if (scoreOnlyUpperCannotReachCutoff(firstScore + bestSecondForFirst.result.score + bestThirdForFirstScore)) {
       continue;
     }
-    if (firstScore + bestSecondScore + bestThirdForFirstScore < currentScoreCutoff) {
+    if (scoreOnlyUpperCannotReachCutoff(firstScore + bestSecondScore + bestThirdForFirstScore)) {
       continue;
     }
     let shouldStopSecondLoop = false;
     for (let wordIndex = 0; wordIndex < secondCandidateBitsetWordCount; wordIndex += 1) {
       const wordTopSecondScore = secondCandidateScores[wordIndex * 32] ?? Number.NEGATIVE_INFINITY;
-      if (firstScore + wordTopSecondScore + bestThirdForFirstScore < currentScoreCutoff) {
+      if (scoreOnlyUpperCannotReachCutoff(firstScore + wordTopSecondScore + bestThirdForFirstScore)) {
         break;
       }
       let availableSecondBits = (~firstForbiddenSecondCandidateBits[wordIndex]) >>> 0;
@@ -2544,11 +2566,11 @@ export function solveMedleyExactCandidateJoin(
           }
           nextDeadlineCheckPairCount += 4096;
         }
-        if (firstSecondScore + bestThirdScore < currentScoreCutoff) {
+        if (scoreOnlyUpperCannotReachCutoff(firstSecondScore + bestThirdScore)) {
           shouldStopSecondLoop = true;
           break;
         }
-        if (firstSecondScore + bestThirdForFirstScore < currentScoreCutoff) {
+        if (scoreOnlyUpperCannotReachCutoff(firstSecondScore + bestThirdForFirstScore)) {
           shouldStopSecondLoop = true;
           break;
         }
@@ -2561,6 +2583,7 @@ export function solveMedleyExactCandidateJoin(
         if (
           firstSecondScore
           + Math.min(bestThirdForFirstScore, bestThirdForSecondScore)
+          + solveScoreSlackUpper
           < currentScoreCutoff
         ) {
           continue;
@@ -2626,7 +2649,7 @@ export function solveMedleyExactCandidateJoin(
             if (!thirdCandidate && shouldRunBitsetFallback && fallbackStartCandidateIndex < thirdCandidates.length) {
               const fallbackThirdScoreUpper = thirdCandidates[fallbackStartCandidateIndex]?.result.score
                 ?? Number.NEGATIVE_INFINITY;
-              if (firstSecondScore + fallbackThirdScoreUpper < currentScoreCutoff) {
+              if (scoreOnlyUpperCannotReachCutoff(firstSecondScore + fallbackThirdScoreUpper)) {
                 continue;
               }
               localExtendedThirdShortlistFallbackCount += 1;
@@ -2644,7 +2667,7 @@ export function solveMedleyExactCandidateJoin(
         if (!thirdCandidate) {
           continue;
         }
-        if (firstSecondScore + thirdCandidate.result.score < currentScoreCutoff) {
+        if (scoreOnlyUpperCannotReachCutoff(firstSecondScore + thirdCandidate.result.score)) {
           continue;
         }
 
@@ -4566,6 +4589,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     lowMemoryInitialCandidateSyncTimeboxMs?: number;
     lowMemoryInitialCandidateSyncScoreCacheClearInterval?: number | null;
     lowMemoryInitialCandidateSyncDirectCandidate?: boolean;
+    lowMemoryInitialCandidateSyncUnsafeActiveGeneratorAdvance?: boolean;
     shouldAbortLowMemoryInitialCandidateSync?: () => boolean;
     lowMemoryHighPairScanMinRecordCount?: number | null;
     lowMemoryHighPairPrefixRecordLimit?: number | null;
@@ -5155,7 +5179,27 @@ export function searchMedleyConfigurationByExactCandidateJoin(
       } else if (lowMemoryTopCandidate.candidate) {
         topCandidate = lowMemoryTopCandidate.candidate;
       } else if (lowMemoryTopCandidate.score !== null) {
-        topCandidate = generators[slotIndex].next(lowMemoryTopCandidate.score);
+        if (context.lowMemoryInitialCandidateSyncUnsafeActiveGeneratorAdvance === true) {
+          topCandidate = generators[slotIndex].next(lowMemoryTopCandidate.score);
+        } else {
+          const seedGenerator = createMedleyExactSlotCandidateGenerator(
+            slots[slotIndex],
+            server,
+            perfectRate,
+            stats,
+            profiling,
+            isPastDeadline,
+            deadlineAt,
+            nodeSoftLimit,
+            context.lowMemoryHighPairScanMinRecordCount ?? null,
+            context.lowMemoryHighPairPrefixRecordLimit ?? null,
+          );
+          try {
+            topCandidate = seedGenerator.next(lowMemoryTopCandidate.score);
+          } finally {
+            seedGenerator.release();
+          }
+        }
       }
     }
     profiling.exactCandidateJoinInitialCandidateElapsedMsBySlot[slotIndex] = (
@@ -5494,6 +5538,22 @@ export function searchMedleyConfigurationByExactCandidateJoin(
       );
     }
   };
+  const recordDebugKnownCandidatePresence = (): void => {
+    if (!profiling.exactCandidateJoinDebugKnownCardIdsBySlot) {
+      return;
+    }
+    profiling.exactCandidateJoinDebugKnownCandidateCutoffsBySlot = candidateCutoffsBySlot;
+    profiling.exactCandidateJoinDebugKnownCandidatePresentBySlot = [];
+    profiling.exactCandidateJoinDebugKnownCandidateScoresBySlot = [];
+    profiling.exactCandidateJoinDebugKnownCardIdsBySlot.forEach((knownCardIds, slotIndex) => {
+      const knownKey = [...knownCardIds].sort((left, right) => left - right).join(",");
+      const candidate = candidatesBySlot[slotIndex]?.find((currentCandidate) => (
+        [...currentCandidate.cardIds].sort((left, right) => left - right).join(",") === knownKey
+      )) ?? null;
+      profiling.exactCandidateJoinDebugKnownCandidatePresentBySlot?.push(Boolean(candidate));
+      profiling.exactCandidateJoinDebugKnownCandidateScoresBySlot?.push(candidate?.result.score ?? null);
+    });
+  };
   const recordExactJoinMemorySnapshot = (
     phase: string,
     extra: Record<string, unknown> = {},
@@ -5826,6 +5886,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
         profiling.exactCandidateJoinPoppedNodeCount += getCandidateFillProfilingGenerators().reduce((sum, currentGenerator) => (
           sum + currentGenerator.poppedNodeCount()
         ), 0);
+        recordDebugKnownCandidatePresence();
         recordExactJoinMemorySnapshot(stats.memoryLimited ? "candidate-fill-memory-limit" : "candidate-fill-deadline", {
           slotIndex,
         });
@@ -5893,6 +5954,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
         profiling.exactCandidateJoinPoppedNodeCount += getCandidateFillProfilingGenerators().reduce((sum, currentGenerator) => (
           sum + currentGenerator.poppedNodeCount()
         ), 0);
+        recordDebugKnownCandidatePresence();
         recordExactJoinMemorySnapshot("candidate-fill-soft-limit", { slotIndex });
         return buildUnprovedExactCandidateJoinResult(
           anchorFrontierResult,
@@ -5927,6 +5989,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
         profiling.exactCandidateJoinPoppedNodeCount += generators.reduce((sum, currentGenerator) => (
           sum + currentGenerator.poppedNodeCount()
         ), 0);
+        recordDebugKnownCandidatePresence();
         recordExactJoinMemorySnapshot("candidate-fill-generator-aborted", { slotIndex });
         return buildUnprovedExactCandidateJoinResult();
       }
@@ -5954,19 +6017,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     recordExactJoinMemorySnapshot("after-prefix-seed-timeout");
     return buildUnprovedExactCandidateJoinResult();
   }
-  if (profiling.exactCandidateJoinDebugKnownCardIdsBySlot) {
-    profiling.exactCandidateJoinDebugKnownCandidateCutoffsBySlot = candidateCutoffsBySlot;
-    profiling.exactCandidateJoinDebugKnownCandidatePresentBySlot = [];
-    profiling.exactCandidateJoinDebugKnownCandidateScoresBySlot = [];
-    profiling.exactCandidateJoinDebugKnownCardIdsBySlot.forEach((knownCardIds, slotIndex) => {
-      const knownKey = [...knownCardIds].sort((left, right) => left - right).join(",");
-      const candidate = candidatesBySlot[slotIndex]?.find((currentCandidate) => (
-        [...currentCandidate.cardIds].sort((left, right) => left - right).join(",") === knownKey
-      )) ?? null;
-      profiling.exactCandidateJoinDebugKnownCandidatePresentBySlot?.push(Boolean(candidate));
-      profiling.exactCandidateJoinDebugKnownCandidateScoresBySlot?.push(candidate?.result.score ?? null);
-    });
-  }
+  recordDebugKnownCandidatePresence();
   profiling.exactCandidateJoinLastCandidateCountsBySlot = candidatesBySlot.map((candidates) => candidates.length);
   const generatedCandidateCount = candidatesBySlot.reduce((sum, candidates) => sum + candidates.length, 0);
   profiling.exactCandidateJoinGeneratedCandidateCount += generatedCandidateCount;

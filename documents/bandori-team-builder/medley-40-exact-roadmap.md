@@ -1,6 +1,6 @@
 # Medley 40/40 Exact Roadmap
 
-Last updated: 2026-06-10 14:00 CST
+Last updated: 2026-06-10 14:48 CST
 
 This file is the persistent working note for the current medley optimizer goal.
 Keep it current before and after benchmark runs or proof-path changes, so future
@@ -138,6 +138,50 @@ No-GC acceptance contract:
   `P06:323` from candidate-fill failure to exact-join solve failure. The next
   useful target is solving/proving the large imbalanced candidate join more
   cheaply, not further raising K/timebox.
+
+2026-06-10 14:48 CST P06 score-only frontier finding:
+
+- New diagnostics used the unsafe low-memory active-generator advance only as a
+  reproduction tool. It remains rejected for acceptance because it advances the
+  active generator with `next(score)` and can falsely close frontier proof.
+- The unsafe reproduction exported the high-scoring `P06:323` team:
+  `PastelPalettes/cool/technique`, score `9488172`, card groups by song:
+  `[1720,2189,1724,415,1753]`,
+  `[1719,1721,1785,1736,1952]`,
+  `[1850,1999,1975,1976,625]`.
+- Safe known-card diagnostics show:
+  - At `200000` event-root candidate limit: target slot1/slot2 candidates are
+    present, target slot0 is missing.
+  - At `600000`: target slot0 is still missing; slot0 peek is only `2528742`
+    versus cutoff `2518348`.
+  - At staged `800000`: all three target candidates are present, with slot
+    score-only values `[2519132, 3123534, 3844295]`.
+- The score-only sum of the exported target is exactly `9486961`, equal to the
+  current safe incumbent, while the hydrated full medley result is `9488172`.
+  This proves the active blocker is not just seed quality or candidate K: the
+  exact-join solve/proof path can order and prune by score-only values that
+  understate the final medley score after full song evaluation.
+- A first exact-safe slack patch changed solve pruning from
+  `scoreOnlySum < cutoff` to `scoreOnlySum + slotMaxScoreSlackUpper < cutoff`,
+  but `P06:323` staged `800000/280s` still timed out without finding the high
+  team. This means the next patch must also change solve ordering/enumeration,
+  not only scalar pruning thresholds.
+- Current promising general direction:
+  - Treat score-only slot candidate score as a lower ordering signal, not as
+    the sole proof upper.
+  - Use `maxScore`/hydrated-score slack in candidate ordering and generated
+    triple solve, especially for near-cutoff candidates.
+  - Add an exact generated-candidate solve path that anchors on the slot with
+    the narrowest frontier and queries/scans pair candidates by safe full-score
+    upper, so lower score-only candidates that can hydrate above incumbent are
+    evaluated before timeout.
+  - Only after generated-candidate solve is full-score-safe should event-root
+    staged `800000` be considered for a guarded default path.
+- Current code experiments in this branch are diagnostic and not accepted yet:
+  isolated low-memory seed generation, explicit unsafe reproduction flag,
+  known-card presence diagnostics, smallest-third join ordering, and the
+  score-only slack pruning patch. The acceptance gate remains unchanged:
+  no-GC, non-debug, stable `40/40` exact with stable final scores.
 
 2026-06-10 11:33 CST first no-GC validation:
 
