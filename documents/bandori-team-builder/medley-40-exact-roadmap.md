@@ -1666,3 +1666,68 @@ P11 conclusion:
   root/effective upper bounds.
 - Keep P11 outside the P01-P10 `40/40` acceptance target, but retain it as a
   separate stress case for future proof-frontier work.
+
+## No-GC Stable 40/40 Target - 2026-06-10
+
+Active goal:
+
+- Scope: fixed P01-P10 fixture, events `none/244/260/323`, `40` cases total.
+- Excluded from acceptance: P11 full-card stress profile.
+- Runtime gate: ordinary Node execution, no `--expose-gc`, no `global.gc`
+  dependency, `debugConfigurationTrace=false` for final confirmation.
+- Final target: stable `40/40` exact within `300000ms` per case.
+
+Acceptance workflow:
+
+- First prove single hard cases without GC/debug, then repeat hard-case matrix,
+  then run complete 40-case matrix.
+- Every complete 40-case matrix run must produce a timestamped report recording
+  optimization JSON, song ids, profile fixture, elapsed time, peak memory,
+  exact/bounded/timedOut/memoryLimited state, bounded reason, failure analysis,
+  and follow-up recommendations.
+- Accepted code changes must pass `npm.cmd run typecheck`, runner syntax checks,
+  `git diff --check`, and must be committed and pushed from the independent
+  worktree branch.
+
+Current hard blocker:
+
+- `P06:323`, fixed songs `385,193,619`, profile `P06`, `1234` cards.
+- Safe no-GC baseline with event-root probe remains bounded:
+  - report `temp/bandori-team-builder/real-profile-medley-benchmark-2026-06-10T07-46-51-619Z.json`
+  - score `9488172`, gap `605990`, elapsed `35697ms`, peak `2822 MiB`
+  - abort reason `candidate-fill-soft-limit`
+  - `sameCoarseSiblingReevaluationCount=2`, hit count `1`, best improvement `1211`
+- The best team is `PastelPalettes/cool/technique`. Before the same-coarse
+  sibling re-evaluation patch, the safe bounded path returned the same 15 card
+  ids under `PastelPalettes/cool/performance` at `9486961`, missing the
+  technique sibling because `bounded-dominated-root-skip` skipped lower-root
+  same-coarse siblings after the performance frontier remained unclosed.
+
+Accepted local change:
+
+- Add incumbent-only same-coarse sibling re-evaluation before dominated bounded
+  skip. It re-evaluates the current best card partition under the skipped
+  same-coarse configuration, updates the incumbent if the score improves, and
+  leaves all proof/upper-bound semantics unchanged.
+- This improves P06 incumbent quality and user-visible best-team reporting, but
+  it does not close the proof frontier by itself.
+
+Rejected/paused experiments from this checkpoint:
+
+- `maxScore` solve-order and first-aware third-shortlist experiments reduced
+  some raw fallback counters but did not make `P06:323` exact within 300s.
+  They were removed from the accepted worktree state.
+- Existing `enableLowMemoryHighPairScan` and
+  `enableLowMemoryHighPairPrefixUpper` did not reduce the P06 root/frontier gap
+  in the 200k diagnostic run and increased elapsed time to `55114ms`.
+
+Next proof direction:
+
+- Focus on `PastelPalettes/cool/performance` frontier proof, not seed score.
+- Prefer general proof-frontier compression: tighter generated-pair/complement
+  upper, pair-record proof for `second+third` against each anchor slot, or
+  tighter event-root upper that can lower the `607k` residual gap before full
+  solve.
+- Do not rely on manual GC or unsafe active-generator advancement. Those paths
+  can change proof behavior and previously produced false exact/score
+  instability.

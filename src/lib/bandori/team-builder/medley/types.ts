@@ -498,6 +498,10 @@ export type BandoriMedleyTeamSearchProfilingStats = {
   bestCapacityAnchorSlotUpperImprovement: number;
   capacityAnchorSlotUpperElapsedMs: number;
   sameCoarseMemoryRootSkipCount: number;
+  sameCoarseSiblingReevaluationCount: number;
+  sameCoarseSiblingReevaluationHitCount: number;
+  sameCoarseSiblingReevaluationElapsedMs: number;
+  sameCoarseSiblingReevaluationBestImprovement: number;
   eventRootFrontierProbeCallCount: number;
   eventRootFrontierProbeProvedCount: number;
   eventRootFrontierProbePrunedCount: number;

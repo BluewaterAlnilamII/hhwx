@@ -28,7 +28,7 @@ import {
   MEDLEY_TEAM_COUNT,
 } from "./constants";
 import { searchMedleyConfigurationByConflictExactBnb } from "./experiments/conflict-bnb";
-import { releaseMedleyScoreOnlyTeamEvaluationCache } from "./candidates";
+import { evaluateMedleySlotCandidateWithCache, releaseMedleyScoreOnlyTeamEvaluationCache } from "./candidates";
 import {
   MEDLEY_EXACT_CANDIDATE_JOIN_GUARDED_CANDIDATE_SOFT_LIMIT,
   MEDLEY_EXACT_CANDIDATE_JOIN_GUARDED_EXTENSION_MIN_REMAINING_MS,
@@ -1613,6 +1613,68 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
       releaseSlotScoreCalculationCache(slot);
     }
   };
+  const reevaluateCurrentBestForSameCoarseConfiguration = (
+    configuration: BandoriAreaItemConfiguration,
+  ): BandoriMedleyTeamSearchResult | null => {
+    const currentBest = results[0];
+    if (!currentBest || currentBest.songResults.length !== MEDLEY_TEAM_COUNT) {
+      return null;
+    }
+    if (
+      getMedleyAreaItemCoarseKey(currentBest.areaItemConfiguration)
+      !== getMedleyAreaItemCoarseKey(configuration)
+    ) {
+      return null;
+    }
+
+    const reevaluationStartedAt = performance.now();
+    profiling.sameCoarseSiblingReevaluationCount += 1;
+    const reevaluationSlots = buildMedleySlotSearches(
+      input,
+      songInputs,
+      calculatedCards,
+      configuration,
+      server,
+      getSlotBuildContexts(),
+    );
+    try {
+      const selectedBySong: Array<MedleyTeamCandidate | undefined> = [];
+      for (const slot of reevaluationSlots) {
+        const sourceSongResult = currentBest.songResults.find((songResult) => (
+          songResult.songIndex === slot.songIndex
+        ));
+        if (!sourceSongResult || sourceSongResult.cards.length !== 5) {
+          return null;
+        }
+        const selectedCards = sourceSongResult.cards.map((sourceCard) => {
+          const sourceInstanceKey = sourceCard.cardInstanceKey;
+          if (sourceInstanceKey) {
+            return slot.searchCards.find((card) => card.cardInstanceKey === sourceInstanceKey) ?? null;
+          }
+          return slot.searchCards.find((card) => card.cardId === sourceCard.cardId) ?? null;
+        });
+        if (selectedCards.some((card) => card === null)) {
+          return null;
+        }
+        const candidate = evaluateMedleySlotCandidateWithCache(
+          slot,
+          selectedCards as NonNullable<(typeof selectedCards)[number]>[],
+          server,
+          perfectRate,
+          stats,
+          profiling,
+        );
+        if (!candidate) {
+          return null;
+        }
+        selectedBySong[slot.songIndex] = candidate;
+      }
+      return buildMedleyResult(reevaluationSlots, selectedBySong, configuration);
+    } finally {
+      profiling.sameCoarseSiblingReevaluationElapsedMs += performance.now() - reevaluationStartedAt;
+      releaseSlotSearchCaches(reevaluationSlots);
+    }
+  };
   const getConfigurationWarmupCache = (configurationIndex: number): MedleyConfigurationWarmupCache => {
     const cached = configurationWarmupCache.get(configurationIndex);
     if (cached) {
@@ -2224,6 +2286,57 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
         && Number.isFinite(observedRootUpperBound)
         && observedRootUpperBound <= unclosedConfigurationUpperBoundMax
       ) {
+        const scoreBeforeSiblingReevaluation = results[0]?.score ?? Number.NEGATIVE_INFINITY;
+        const siblingReevaluationStartedAt = performance.now();
+        const siblingResult = reevaluateCurrentBestForSameCoarseConfiguration(configuration);
+        const siblingReevaluationElapsedMs = Math.round(performance.now() - siblingReevaluationStartedAt);
+        let siblingReevaluationImprovement = 0;
+        let didSiblingReevaluationImprove = false;
+        if (siblingResult) {
+          pushMedleyResult(results, siblingResult, resultLimit, observeEvaluatedMedleyResult);
+          recordBestScoreMilestone();
+          const scoreAfterSiblingReevaluation = results[0]?.score ?? Number.NEGATIVE_INFINITY;
+          siblingReevaluationImprovement = Math.max(
+            0,
+            scoreAfterSiblingReevaluation - scoreBeforeSiblingReevaluation,
+          );
+          if (siblingReevaluationImprovement > 0) {
+            didSiblingReevaluationImprove = true;
+            profiling.sameCoarseSiblingReevaluationHitCount += 1;
+            profiling.sameCoarseSiblingReevaluationBestImprovement = Math.max(
+              profiling.sameCoarseSiblingReevaluationBestImprovement,
+              siblingReevaluationImprovement,
+            );
+          }
+        }
+        const thresholdAfterSiblingReevaluation = getMedleyPruningThreshold(results, resultLimit);
+        if (observedRootUpperBound < thresholdAfterSiblingReevaluation) {
+          stats.prunedBranchCount += 1;
+          profiling.rootUpperPrunedConfigurationCount += 1;
+          if (configurationTrace) {
+            const dominatedSkipStartedAt = performance.now();
+            configurationTrace.push({
+              order: profiling.startedAreaItemConfigurationCount,
+              configurationIndex,
+              bandKey: configuration.bandKey,
+              attribute: configuration.attribute,
+              parameter: configuration.parameter,
+              status: "dominated-sibling-reevaluation-root-pruned",
+              startedAtMs: Math.round(dominatedSkipStartedAt - startedAt),
+              elapsedMs: 0,
+              initialBestScore: scoreBeforeSiblingReevaluation,
+              bestScore: results[0]?.score ?? null,
+              basicSkillAwareRootUpperBound: observedRootUpperBound,
+              dominatingUnclosedUpperBound: unclosedConfigurationUpperBoundMax,
+              sameCoarseSiblingReevaluationElapsedMs: siblingReevaluationElapsedMs,
+              sameCoarseSiblingReevaluationImprovement: siblingReevaluationImprovement,
+              sameCoarseSiblingReevaluationImproved: didSiblingReevaluationImprove,
+            });
+          }
+          closeActiveConfiguration();
+          releaseConfigurationWarmupCache(configurationIndex);
+          continue;
+        }
         didLeaveUnclosedAreaItemConfiguration = true;
         rememberUnclosedConfigurationUpperBound(
           configurationIndex,
@@ -2242,9 +2355,13 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
             status: "bounded-dominated-root-skip",
             startedAtMs: Math.round(dominatedSkipStartedAt - startedAt),
             elapsedMs: 0,
-            initialBestScore: results[0]?.score ?? null,
+            initialBestScore: scoreBeforeSiblingReevaluation,
+            bestScore: results[0]?.score ?? null,
             basicSkillAwareRootUpperBound: observedRootUpperBound,
             dominatingUnclosedUpperBound: unclosedConfigurationUpperBoundMax,
+            sameCoarseSiblingReevaluationElapsedMs: siblingReevaluationElapsedMs,
+            sameCoarseSiblingReevaluationImprovement: siblingReevaluationImprovement,
+            sameCoarseSiblingReevaluationImproved: didSiblingReevaluationImprove,
           });
         }
         releaseConfigurationWarmupCache(configurationIndex);
