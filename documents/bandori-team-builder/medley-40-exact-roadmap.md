@@ -1,6 +1,6 @@
 # Medley 40/40 Exact Roadmap
 
-Last updated: 2026-06-10 17:17 CST
+Last updated: 2026-06-10 17:26 CST
 
 This file is the persistent working note for the current medley optimizer goal.
 Keep it current before and after benchmark runs or proof-path changes, so future
@@ -1909,3 +1909,30 @@ Conclusion:
   a low-allocation proof-frontier upper-bound problem, especially the
   `PastelPalettes/cool` high invalid pair / unseen-side residual upper, not as a
   third-candidate lookup hit-rate problem.
+
+## Mask Split Upper Rejection - 2026-06-10 17:26 CST
+
+Rejected experiment:
+
+- Hypothesis: replace the split-upper DFS state representation from copied
+  sorted card-id arrays plus string keys to a local numeric mask, reducing
+  allocations while preserving the same branch-and-bound semantics.
+- Version 1 used numeric masks plus nested `Map` cache. It typechecked, but
+  `P06:323` staged `800000` OOMed before report generation at about `74s`.
+- Version 2 removed the nested cache entirely, leaving only mask state,
+  recursion, state budget, and best-disjoint pruning. It also OOMed before
+  report generation at about `73s`.
+- Both failed runs used ordinary Node, no `--expose-gc`, profile `P06`, event
+  `323`, fixed songs `385,193,619`, staged event-root candidate soft limit
+  `800000`, and `debugConfigurationTrace=true`.
+
+Conclusion:
+
+- The split-upper bottleneck is not just string/array state allocation. Making
+  the split traversal cheaper or faster can increase downstream/resident
+  working set enough to hit the V8 heap wall before producing a useful report.
+- Do not continue by optimizing split traversal throughput alone. The next
+  viable route needs to reduce resident memory and proof scope, for example by
+  narrowing which same-coarse frontier is kept, releasing candidate/generator
+  state earlier between proof probes, or deriving a tighter upper without
+  widening staged candidate material.
