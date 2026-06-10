@@ -41,3 +41,31 @@ WHERE type = 'song';
 CREATE UNIQUE INDEX IF NOT EXISTS idx_tracker_monthly_unique
 ON public.bandori_tracker_data (event_id, tier, time)
 WHERE type = 'monthly' AND song_id = 0;
+
+ALTER TABLE public.bandori_tracker_data ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS bandori_tracker_data_select_all ON public.bandori_tracker_data;
+
+CREATE POLICY bandori_tracker_data_select_all
+ON public.bandori_tracker_data
+FOR SELECT
+USING (true);
+
+-- Tracker rows are public read data, but writes are reserved for server-side
+-- ingestion/sync code using the service role.
+REVOKE ALL ON TABLE public.bandori_tracker_data FROM PUBLIC, anon, authenticated;
+GRANT SELECT ON TABLE public.bandori_tracker_data TO anon, authenticated;
+GRANT ALL ON TABLE public.bandori_tracker_data TO service_role;
+
+DO $$
+DECLARE
+    tracker_row_id_sequence regclass;
+BEGIN
+    tracker_row_id_sequence := pg_get_serial_sequence('public.bandori_tracker_data', 'row_id')::regclass;
+
+    IF tracker_row_id_sequence IS NOT NULL THEN
+        EXECUTE format('REVOKE ALL ON SEQUENCE %s FROM PUBLIC, anon, authenticated', tracker_row_id_sequence);
+        EXECUTE format('GRANT USAGE, SELECT ON SEQUENCE %s TO service_role', tracker_row_id_sequence);
+    END IF;
+END
+$$;

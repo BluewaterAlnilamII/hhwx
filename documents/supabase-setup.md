@@ -39,6 +39,7 @@ If an existing project already ran an older `auth_schema.sql`, also run `documen
 ## Review Notes
 
 - Keep row-level security enabled on user-owned tables.
+- Supabase no longer automatically exposes new public tables/functions to the Data API for new projects from May 30, 2026, and applies the same default to existing projects from October 30, 2026. Keep explicit `GRANT`/`REVOKE` statements next to RLS policies in every SQL file that creates Data API objects.
 - Treat `security definer` functions as privileged code: verify argument checks, ownership checks, grants, and `search_path` behavior before production use.
 - Grant direct table or function access only where the application requires it.
 - Keep service-role operations server-side. Browser code must use only public Supabase keys and authenticated user sessions.

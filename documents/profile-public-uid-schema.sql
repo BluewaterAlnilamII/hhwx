@@ -9,6 +9,9 @@ create sequence if not exists public.profile_public_uid_seq
   no maxvalue
   cache 1;
 
+revoke all on sequence public.profile_public_uid_seq from public, anon, authenticated;
+grant usage, select on sequence public.profile_public_uid_seq to authenticated, service_role;
+
 alter table public.profiles
   add column if not exists public_uid bigint;
 

@@ -150,7 +150,8 @@ BEGIN
   NEW.depth := parent_comment.depth + 1;
   RETURN NEW;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql
+SET search_path = public, pg_temp;
 
 CREATE OR REPLACE FUNCTION public.increment_comment_reply_count()
 RETURNS TRIGGER AS $$
@@ -171,7 +172,8 @@ BEGIN
 
   RETURN NEW;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql
+SET search_path = public, pg_temp;
 
 CREATE OR REPLACE FUNCTION public.update_comment_like_count()
 RETURNS TRIGGER AS $$
@@ -216,11 +218,38 @@ CREATE TRIGGER update_comment_like_count
   FOR EACH ROW
   EXECUTE FUNCTION public.update_comment_like_count();
 
+REVOKE ALL ON FUNCTION public.prepare_comment_insert() FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.increment_comment_reply_count() FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.update_comment_like_count() FROM PUBLIC, anon, authenticated;
+
 ALTER TABLE public.guestbook_comments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.comments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.comment_likes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.comment_notifications ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.comment_reports ENABLE ROW LEVEL SECURITY;
+
+REVOKE ALL ON TABLE public.guestbook_comments FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON TABLE public.comments FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON TABLE public.comment_likes FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON TABLE public.comment_notifications FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON TABLE public.comment_reports FROM PUBLIC, anon, authenticated;
+
+GRANT SELECT ON TABLE public.guestbook_comments TO anon, authenticated;
+GRANT INSERT, DELETE ON TABLE public.guestbook_comments TO authenticated;
+GRANT ALL ON TABLE public.guestbook_comments TO service_role;
+
+GRANT SELECT ON TABLE public.comments TO anon, authenticated;
+GRANT INSERT, UPDATE ON TABLE public.comments TO authenticated;
+GRANT ALL ON TABLE public.comments TO service_role;
+
+GRANT SELECT, INSERT, DELETE ON TABLE public.comment_likes TO authenticated;
+GRANT ALL ON TABLE public.comment_likes TO service_role;
+
+GRANT SELECT, UPDATE ON TABLE public.comment_notifications TO authenticated;
+GRANT ALL ON TABLE public.comment_notifications TO service_role;
+
+GRANT INSERT ON TABLE public.comment_reports TO authenticated;
+GRANT ALL ON TABLE public.comment_reports TO service_role;
 
 DROP POLICY IF EXISTS guestbook_comments_select_public ON public.guestbook_comments;
 DROP POLICY IF EXISTS guestbook_comments_insert_own ON public.guestbook_comments;

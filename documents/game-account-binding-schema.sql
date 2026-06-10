@@ -90,6 +90,12 @@ drop index if exists public.user_game_bind_challenges_status_idx;
 alter table public.user_game_bind_challenges enable row level security;
 alter table public.user_game_bindings enable row level security;
 
+revoke all on table public.user_game_bind_challenges from public, anon, authenticated;
+revoke all on table public.user_game_bindings from public, anon, authenticated;
+
+grant all on table public.user_game_bind_challenges to service_role;
+grant all on table public.user_game_bindings to service_role;
+
 drop policy if exists "Users can read own game bind challenges" on public.user_game_bind_challenges;
 drop policy if exists "Users can insert own game bind challenges" on public.user_game_bind_challenges;
 drop policy if exists "Users can update own game bind challenges" on public.user_game_bind_challenges;

@@ -88,6 +88,9 @@ create index user_game_profiles_user_kind_idx
 
 alter table public.user_game_profiles enable row level security;
 
+revoke all on table public.user_game_profiles from public, anon, authenticated;
+grant all on table public.user_game_profiles to service_role;
+
 drop policy if exists "Users can read own game profiles" on public.user_game_profiles;
 drop policy if exists "Users can delete own game profiles" on public.user_game_profiles;
 

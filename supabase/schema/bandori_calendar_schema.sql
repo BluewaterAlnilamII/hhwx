@@ -88,6 +88,26 @@ ALTER TABLE bandori_event_bonuses ENABLE ROW LEVEL SECURITY;
 ALTER TABLE bandori_characters ENABLE ROW LEVEL SECURITY;
 ALTER TABLE user_roles ENABLE ROW LEVEL SECURITY;
 
+-- Explicit Data API grants for projects where public tables are not exposed by default.
+REVOKE ALL ON TABLE public.bandori_characters FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON TABLE public.bandori_events FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON TABLE public.bandori_event_schedules_cn FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON TABLE public.bandori_event_bonuses FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON TABLE public.user_roles FROM PUBLIC, anon, authenticated;
+
+GRANT SELECT ON TABLE public.bandori_characters TO anon, authenticated;
+GRANT SELECT ON TABLE public.bandori_events TO anon, authenticated;
+GRANT SELECT ON TABLE public.bandori_event_schedules_cn TO anon, authenticated;
+GRANT INSERT, UPDATE ON TABLE public.bandori_event_schedules_cn TO authenticated;
+GRANT SELECT ON TABLE public.bandori_event_bonuses TO anon, authenticated;
+GRANT SELECT ON TABLE public.user_roles TO authenticated;
+
+GRANT ALL ON TABLE public.bandori_characters TO service_role;
+GRANT ALL ON TABLE public.bandori_events TO service_role;
+GRANT ALL ON TABLE public.bandori_event_schedules_cn TO service_role;
+GRANT ALL ON TABLE public.bandori_event_bonuses TO service_role;
+GRANT ALL ON TABLE public.user_roles TO service_role;
+
 DROP POLICY IF EXISTS bandori_characters_select_all ON bandori_characters;
 DROP POLICY IF EXISTS bandori_events_select_all ON bandori_events;
 DROP POLICY IF EXISTS bandori_event_schedules_cn_select_all ON bandori_event_schedules_cn;

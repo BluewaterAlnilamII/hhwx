@@ -90,6 +90,8 @@ CREATE TRIGGER update_comment_like_count
   FOR EACH ROW
   EXECUTE FUNCTION public.update_comment_like_count();
 
+REVOKE ALL ON FUNCTION public.update_comment_like_count() FROM PUBLIC, anon, authenticated;
+
 UPDATE public.comments AS comment
 SET like_count = COALESCE(counts.like_count, 0)
 FROM (
@@ -101,6 +103,15 @@ WHERE counts.comment_id = comment.id;
 
 ALTER TABLE public.comment_likes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.comment_notifications ENABLE ROW LEVEL SECURITY;
+
+REVOKE ALL ON TABLE public.comment_likes FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON TABLE public.comment_notifications FROM PUBLIC, anon, authenticated;
+
+GRANT SELECT, INSERT, DELETE ON TABLE public.comment_likes TO authenticated;
+GRANT ALL ON TABLE public.comment_likes TO service_role;
+
+GRANT SELECT, UPDATE ON TABLE public.comment_notifications TO authenticated;
+GRANT ALL ON TABLE public.comment_notifications TO service_role;
 
 DROP POLICY IF EXISTS comment_likes_select_own ON public.comment_likes;
 DROP POLICY IF EXISTS comment_likes_insert_own ON public.comment_likes;
