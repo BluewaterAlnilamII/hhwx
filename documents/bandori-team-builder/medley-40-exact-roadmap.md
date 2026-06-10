@@ -1,6 +1,6 @@
 # Medley 40/40 Exact Roadmap
 
-Last updated: 2026-06-10 17:26 CST
+Last updated: 2026-06-10 18:56 CST
 
 This file is the persistent working note for the current medley optimizer goal.
 Keep it current before and after benchmark runs or proof-path changes, so future
@@ -1936,3 +1936,35 @@ Conclusion:
   narrowing which same-coarse frontier is kept, releasing candidate/generator
   state earlier between proof probes, or deriving a tighter upper without
   widening staged candidate material.
+
+## P06 Short-Budget OOM Correction - 2026-06-10 17:40 CST
+
+Correction to the two preceding rejected diagnostics:
+
+- After reverting both shortlist and mask-split experiments, the same `P06:323`
+  staged `800000` command still OOMed with a short `90000ms` duration and
+  `80000ms` event-root probe timebox. Therefore the short-budget OOMs are not
+  sufficient evidence that those patches alone caused the heap failure.
+- A clean 300s reproduction with ordinary Node completed without OOM:
+  `temp/bandori-team-builder/real-profile-medley-benchmark-2026-06-10T09-29-25-764Z.json`.
+  Result: bounded, score `9486961`, gap `595522`, elapsed `300517ms`, peak
+  `3364 MiB`, abort `solve-timeout`.
+- Going forward, P06 staged diagnostics must use 300s long-budget A/B runs, or
+  they must be explicitly marked as smoke tests that are not accepted for proof
+  quality or memory-causality conclusions.
+
+Follow-up result:
+
+- A 300s opt-in test that skipped the anchor-frontier improvement probe did not
+  help:
+  `temp/bandori-team-builder/real-profile-medley-benchmark-2026-06-10T09-36-33-402Z.json`.
+- Result: bounded, score `9486961`, gap `595522`, elapsed `300891ms`, peak
+  `3514 MiB`, abort `solve-timeout`.
+- Anchor-frontier cheap upper/proof counters were all zero. With staged
+  `800000`, the event-root probe completes candidate fill and moves directly to
+  exact-join solve; it does not hit the candidate-fill soft-limit branch where
+  anchor-frontier proof would run.
+- Conclusion: skipping the improvement probe is not a useful route and the
+  temporary opt-in code was removed. The active P06 blocker remains the staged
+  exact-join solve order / proof frontier, not the anchor-frontier pre-proof
+  improvement probe.
