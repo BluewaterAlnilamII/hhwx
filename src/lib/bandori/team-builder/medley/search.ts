@@ -808,6 +808,9 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
   const enablePostExactEventRootFrontierProbe = (
     optimization.enablePostExactEventRootFrontierProbe === true
   );
+  const enableExactJoinWideAnchorFrontierProbe = (
+    optimization.enableExactJoinWideAnchorFrontierProbe === true
+  );
   const parsedEventRootFrontierProbeTimeboxMs = optimization.eventRootFrontierProbeTimeboxMs !== undefined
     ? Math.trunc(optimization.eventRootFrontierProbeTimeboxMs)
     : Number.NaN;
@@ -922,6 +925,22 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
   )
     ? Math.max(1, parsedEventRootFrontierProbeAnchorCheapUpperUnseenRefineMaxGeneratedCandidates)
     : null;
+  const exactJoinWideAnchorFrontierContext = enableExactJoinWideAnchorFrontierProbe
+    ? {
+      anchorFrontierProofMaxFrontierGap: eventRootFrontierProbeAnchorProofMaxFrontierGap,
+      anchorFrontierProofMinRemainingMs: eventRootFrontierProbeAnchorProofMinRemainingMs,
+      anchorFrontierProofMaxOtherSlotCandidates: eventRootFrontierProbeAnchorProofMaxOtherSlotCandidates,
+      anchorFrontierProofMaxOtherSlotCandidateTotal: eventRootFrontierProbeAnchorProofMaxOtherSlotCandidateTotal,
+      anchorFrontierProofMaxHighPairRecords: eventRootFrontierProbeAnchorProofMaxHighPairRecords,
+      anchorFrontierProofTimeboxMs: eventRootFrontierProbeAnchorProofTimeboxMs,
+      anchorFrontierCheapUpperTimeboxMs: eventRootFrontierProbeAnchorCheapUpperTimeboxMs,
+      anchorFrontierCheapUpperMaxAnchors: eventRootFrontierProbeAnchorCheapUpperMaxAnchors,
+      anchorFrontierCheapUpperRefineUnseen: eventRootFrontierProbeAnchorCheapUpperRefineUnseen,
+      anchorFrontierCheapUpperUnseenRefineMaxGeneratedCandidates: (
+        eventRootFrontierProbeAnchorCheapUpperUnseenRefineMaxGeneratedCandidates
+      ),
+    }
+    : {};
   const parsedAnchorCandidateLimit = optimization.anchorCandidateLimit !== undefined
     ? Math.trunc(optimization.anchorCandidateLimit)
     : Number.NaN;
@@ -4304,6 +4323,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
           conflictPairUpperBnbNodeLimit,
           conflictPairUpperBnbSlotSolveNodeLimit,
           conflictPairUpperBnbMaxMemoryHeadroomMiB,
+          ...exactJoinWideAnchorFrontierContext,
         },
         observeEvaluatedMedleyResult,
       );
@@ -5116,6 +5136,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
           conflictPairUpperBnbNodeLimit,
           conflictPairUpperBnbSlotSolveNodeLimit,
           conflictPairUpperBnbMaxMemoryHeadroomMiB,
+          ...exactJoinWideAnchorFrontierContext,
         },
         observeEvaluatedMedleyResult,
       );

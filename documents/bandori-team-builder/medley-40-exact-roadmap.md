@@ -2786,3 +2786,62 @@ Next route:
 - Before coding another proof patch, run or inspect a debug proof-ledger sample
   for `P06:323` to list the unclosed configurations by gap and confirm whether
   one unresolved same-coarse target dominates the final `467344` gap.
+
+## P06 Wide Anchor Frontier Probe - 2026-06-11 02:34 CST
+
+Purpose:
+
+- Test whether the top `P06:323` blocker is the main exact join's conservative
+  anchor frontier guard rather than post-exact probing.
+
+Change under test:
+
+- Added opt-in `enableExactJoinWideAnchorFrontierProbe`.
+- When enabled, the main exact candidate join reuses the configured
+  event-root anchor frontier limits for anchor proof/cheap upper:
+  `eventRootFrontierProbeAnchorProofMaxFrontierGap`,
+  `eventRootFrontierProbeAnchorProofMaxOtherSlotCandidates`,
+  `eventRootFrontierProbeAnchorProofMaxOtherSlotCandidateTotal`,
+  `eventRootFrontierProbeAnchorProofTimeboxMs`,
+  `eventRootFrontierProbeAnchorCheapUpperTimeboxMs`,
+  and related refine limits.
+- Default remains `false`; this does not alter normal max search behavior.
+
+Evidence:
+
+- Baseline no-debug no-GC `P06:323`, `memorySoftLimitMiB=6144`:
+  - `temp/bandori-team-builder/real-profile-medley-scope-matrix-2026-06-10T18-08-10-503Z.json`.
+  - Bounded, elapsed `144379ms`, gap `467344`, peak `5792 MiB`,
+    abort `solve-dominated-same-coarse-frontier`, `eventRootFrontierProbeCallCount=0`.
+- Debug proof ledger for the same baseline:
+  - `temp/bandori-team-builder/real-profile-medley-scope-matrix-2026-06-10T18-15-06-373Z.json`.
+  - Top unclosed frontier:
+    `PastelPalettes/cool/performance`, gap `467344`, status
+    `exact-unproved-skip-dfs`, abort `candidate-fill-soft-limit`,
+    candidate counts `[400000,80879,50858]`, elapsed `115390ms`.
+  - The next two unclosed entries are the same coarse group:
+    `PastelPalettes/cool/technique` gap `455469` and
+    `PastelPalettes/cool/visual` gap `448624`, both
+    `solve-dominated-same-coarse-frontier`.
+  - Other coarse groups are far smaller: `Morfonica/cool` max gap `144489`,
+    `Everyone/cool` max gap `41335`.
+- Wide-anchor opt-in:
+  - `temp/bandori-team-builder/real-profile-medley-scope-matrix-2026-06-10T18-27-50-483Z.json`.
+  - Bounded, elapsed `172670ms`, gap reduced to `285088`, peak `5580 MiB`,
+    no timeout, no memory limit.
+  - `exactCandidateJoinAnchorFrontierCheapUpperCount=1`,
+    `exactCandidateJoinAnchorFrontierCheapUpperImprovementCount=1`,
+    `exactCandidateJoinAnchorFrontierCheapUpperTimeboxCount=1`.
+  - Cheap upper processed `12999` anchors in `30009ms` and used other-slot
+    counts `[80879,50858]`.
+
+Conclusion:
+
+- This is real proof-frontier progress: unlike post-exact probe, main wide
+  anchor reduced the final global gap from `467344` to `285088`.
+- It still does not reach exact. Current evidence points to anchor cheap upper
+  timing out before proof, not to seed quality or same-coarse ordering alone.
+- Keep the switch opt-in until it passes broader acceptance. The next experiment
+  should determine whether stronger cheap-upper refinement or entering full
+  anchor frontier proof can close the remaining `285088` gap without exceeding
+  the memory budget.
