@@ -2924,3 +2924,22 @@ Existing high-pair prefix recheck:
   P06 route under the current hard JSON. Do not promote it; use it only as
   evidence that repeated pair-complement work needs a different shared
   certificate shape.
+
+Shared pair-upper probe rejection:
+
+- Implemented an opt-in cheap-upper variant that reused the existing high-pair
+  record bitset certificate for each anchor's generated-pair upper.
+- Diagnostic command:
+  `P06:323`, no-GC, `memorySoftLimitMiB=6144`, wide-anchor enabled,
+  `eventRootFrontierProbeAnchorCheapUpperUseSharedPairUpper=true`.
+- The run was manually stopped before report generation:
+  - stdout log
+    `temp/bandori-team-builder/p06-wide-anchor-shared-pair-upper-2026-06-10T19-22-33-746Z.out.log`;
+  - stderr log
+    `temp/bandori-team-builder/p06-wide-anchor-shared-pair-upper-2026-06-10T19-22-33-746Z.err.log`;
+  - process working set rose from about `5.4 GiB` to `6.6 GiB`, then
+    `7.3 GiB`, with no JSON output yet.
+- Decision: remove the opt-in source code. Reusing the current high-pair record
+  materialization directly is not the desired shared certificate. The next
+  viable version must avoid the transient JS record array/object materialization
+  and build a genuinely compact/chunked certificate.

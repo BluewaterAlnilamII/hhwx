@@ -916,9 +916,6 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
     : null;
   const eventRootFrontierProbeAnchorCheapUpperRefineUnseen =
     optimization.eventRootFrontierProbeAnchorCheapUpperRefineUnseen === true;
-  const eventRootFrontierProbeAnchorCheapUpperUseSharedPairUpper = (
-    optimization.eventRootFrontierProbeAnchorCheapUpperUseSharedPairUpper === true
-  );
   const parsedEventRootFrontierProbeAnchorCheapUpperUnseenRefineMaxGeneratedCandidates =
     optimization.eventRootFrontierProbeAnchorCheapUpperUnseenRefineMaxGeneratedCandidates !== undefined
       ? Math.trunc(optimization.eventRootFrontierProbeAnchorCheapUpperUnseenRefineMaxGeneratedCandidates)
@@ -939,7 +936,6 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
       anchorFrontierCheapUpperTimeboxMs: eventRootFrontierProbeAnchorCheapUpperTimeboxMs,
       anchorFrontierCheapUpperMaxAnchors: eventRootFrontierProbeAnchorCheapUpperMaxAnchors,
       anchorFrontierCheapUpperRefineUnseen: eventRootFrontierProbeAnchorCheapUpperRefineUnseen,
-      anchorFrontierCheapUpperUseSharedPairUpper: eventRootFrontierProbeAnchorCheapUpperUseSharedPairUpper,
       anchorFrontierCheapUpperUnseenRefineMaxGeneratedCandidates: (
         eventRootFrontierProbeAnchorCheapUpperUnseenRefineMaxGeneratedCandidates
       ),
@@ -4575,9 +4571,6 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
         traceEntry.eventRootFrontierProbeAnchorCheapUpperRefineUnseen = (
           eventRootFrontierProbeAnchorCheapUpperRefineUnseen
         );
-        traceEntry.eventRootFrontierProbeAnchorCheapUpperUseSharedPairUpper = (
-          eventRootFrontierProbeAnchorCheapUpperUseSharedPairUpper
-        );
         traceEntry.eventRootFrontierProbeAnchorCheapUpperUnseenRefineMaxGeneratedCandidates = (
           eventRootFrontierProbeAnchorCheapUpperUnseenRefineMaxGeneratedCandidates
         );
@@ -4644,9 +4637,6 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
           anchorFrontierCheapUpperTimeboxMs: eventRootFrontierProbeAnchorCheapUpperTimeboxMs,
           anchorFrontierCheapUpperMaxAnchors: eventRootFrontierProbeAnchorCheapUpperMaxAnchors,
           anchorFrontierCheapUpperRefineUnseen: eventRootFrontierProbeAnchorCheapUpperRefineUnseen,
-          anchorFrontierCheapUpperUseSharedPairUpper: (
-            eventRootFrontierProbeAnchorCheapUpperUseSharedPairUpper
-          ),
           anchorFrontierCheapUpperUnseenRefineMaxGeneratedCandidates: (
             eventRootFrontierProbeAnchorCheapUpperUnseenRefineMaxGeneratedCandidates
           ),
