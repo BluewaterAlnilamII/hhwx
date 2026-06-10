@@ -1,6 +1,6 @@
 # Medley 40/40 Exact Roadmap
 
-Last updated: 2026-06-10 20:31 CST
+Last updated: 2026-06-10 20:52 CST
 
 This file is the persistent working note for the current medley optimizer goal.
 Keep it current before and after benchmark runs or proof-path changes, so future
@@ -2139,3 +2139,79 @@ Next route:
   estimate each remaining slot's best score excluding the anchor's card ids, and
   use that relaxed per-slot sum only when it is cheaper than the current
   pair-unseen bound.
+
+## Candidate-Fill Relaxed Exclusion Upper Probe - 2026-06-10 20:41 CST
+
+Hypothesis:
+
+- The failed capacity-complement probe was too expensive because it entered
+  generated-pair complement materialization before any capacity upper could run.
+- A cheaper safe probe can avoid pair materialization entirely: when an anchor
+  prefix is close to the proof cutoff, estimate the remaining two slots'
+  relaxed upper after banning the selected anchor card ids. If that safe upper
+  is already below the needed complement score, prune the anchor branch.
+- This can reduce P06's 200k slot0 candidate frontier without increasing K and
+  without changing incumbent search.
+
+Implementation gate:
+
+- Add opt-in `enableCandidateFillRelaxedExclusionUpper?: boolean`, default
+  `false`.
+- Limit calls to near-frontier nodes by reusing
+  `MEDLEY_EXACT_CANDIDATE_JOIN_CAPACITY_COMPLEMENT_MARGIN`.
+- Add profiling counters for calls, improvements, best improvement, and elapsed
+  time.
+- Do not call generated-pair complement or capacity assignment from this probe.
+
+Targeted validation gate:
+
+- First run `P06:323` with active hard-guard JSON plus
+  `enableCandidateFillRelaxedExclusionUpper=true`.
+- Pass only if it reduces bounded gap or proves exact without exceeding the
+  current safe P06 peak memory by more than 2% and without `timedOut=true`.
+- If P06 passes, run `P07:260`; otherwise remove the source option and keep only
+  this roadmap record.
+
+Result:
+
+- Rejected after `P06:323` opt-in diagnostic:
+  `temp/bandori-team-builder/real-profile-medley-scope-matrix-2026-06-10T12-39-55-770Z.json`.
+- Result was bounded, score `9488172`, gap `605990`, elapsed `253188ms`,
+  peak `1989 MiB`, no global timeout/OOM, but event-root frontier probe hit its
+  `240s` timebox.
+- It reduced slot0 generated candidates from `200000` to `15418`, but did not
+  reduce the reported upper/gap because the proof frontier still aborted before
+  closure. The repeated full banned-set slot upper calls are too slow for the
+  acceptance path.
+
+Next route:
+
+- Replace full selected-set exclusion with a cheaper single-ban exclusion cache:
+  for each remaining slot and each selected anchor card id, lazily compute the
+  slot upper with only that one card banned; for a prefix, use the minimum
+  single-ban upper across selected cards for each remaining slot.
+- This is weaker than full selected-set exclusion but safe, avoids generated-pair
+  materialization, and caps expensive upper computations by unique card ids
+  rather than by generated prefixes.
+
+Result:
+
+- Rejected after `P06:323` opt-in diagnostic:
+  `temp/bandori-team-builder/real-profile-medley-scope-matrix-2026-06-10T12-50-06-028Z.json`.
+- Result was bounded, score `9488172`, gap `605990`, elapsed `40012ms`,
+  peak `2471 MiB`, no timeout/OOM, abort `candidate-fill-soft-limit`.
+- Candidate counts and frontier shape remained effectively identical to
+  baseline: `[200000,80879,50858]`, slot0 peek upper `2616168`, other upper
+  `6968613`.
+- Conclusion: single-ban exclusion is cheap but too weak for P06's generated
+  anchor frontier. The source option is removed.
+
+Next route:
+
+- The only successful signal so far was full selected-set exclusion reducing
+  slot0 generated candidates to `15418`, but its repeated upper recomputation
+  is too slow and still did not close proof.
+- A viable next proof patch must either cache/approximate multi-card exclusion
+  more effectively, or attack the generated-anchor/pair frontier directly with
+  a low-memory exact disjoint-pair query that does not materialize millions of
+  pair records.
