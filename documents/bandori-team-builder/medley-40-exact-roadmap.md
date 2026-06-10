@@ -99,6 +99,19 @@ No-GC acceptance contract:
   row, peak `4095 MiB`, max elapsed `88053ms`.
 - Gate result: passed. Proceed to full 40-case no-GC confirmation runs.
 
+2026-06-10 12:18 CST full 40-case no-GC confirmation run 1:
+
+- Raw result:
+  `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-10T03-53-54-972Z.json`.
+- Report:
+  `documents/bandori-team-builder/medley-40-exact-report-2026-06-10-115354-nogc-r1.md`.
+- Result: `40/40` exact, bounded-gap total `0`, no failed subprocess, no
+  timeout, no memory-limited row.
+- Timing: median `27148ms`, p95 `54564ms`, max `140346ms`.
+- Peak working set: `3520 MiB`.
+- Gate result: accepted as no-GC full confirmation run 1. At least two more
+  no-GC full confirmation runs are required for the stability target.
+
 Goal tool note:
 
 - The active Codex goal object was created earlier in this thread and cannot be
