@@ -2943,3 +2943,22 @@ Shared pair-upper probe rejection:
   materialization directly is not the desired shared certificate. The next
   viable version must avoid the transient JS record array/object materialization
   and build a genuinely compact/chunked certificate.
+
+Compact high-pair record builder experiment:
+
+- Code change: replace the previous `MedleyExactCandidatePairRecord[]` object
+  array build/sort path with a score-descending frontier heap that writes pair
+  scores and left/right candidate indices into `Int32Array` buffers.
+- Intended invariant: produced `highPairRecordScores` and
+  `containingHighPairRecordBitsByCardId` are semantically equivalent to the old
+  sorted record list; exact/bounded proof semantics are unchanged.
+- Reason: the previous implementation briefly held millions of JS objects
+  before converting them to typed arrays. P06's wide-anchor frontier is only
+  slightly above the high-pair cap, so reducing this transient allocation is a
+  prerequisite before any guarded cap/proof attempt is credible.
+- Smoke validation:
+  `temp/bandori-team-builder/real-profile-medley-scope-matrix-2026-06-10T19-38-16-881Z.json`.
+  This was a `P06:323` 10s shape check only; it is not proof-quality evidence.
+- Next validation: run full 300s `P06:323` with no manual GC, 6144 MiB soft
+  limit, wide-anchor enabled, and a narrow
+  `eventRootFrontierProbeAnchorProofMaxHighPairRecords=2200000` guard.

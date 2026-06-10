@@ -1113,12 +1113,6 @@ type MedleyExactCandidatePairSearchResult = {
   rightCandidate: MedleyTeamCandidate | null;
 };
 
-type MedleyExactCandidatePairRecord = {
-  score: number;
-  leftCardIds: number[];
-  rightCardIds: number[];
-};
-
 type MedleyExactCandidatePairRecordCache = {
   recordCount: number;
   scores: ArrayLike<number>;
@@ -1156,6 +1150,12 @@ type MedleyExactCandidateAnchoredJoinResult = {
   proved: boolean;
   timedOut: boolean;
   result: BandoriMedleyTeamSearchResult | null;
+};
+
+type MedleyExactCandidatePairFrontierHeapNode = {
+  score: number;
+  leftIndex: number;
+  rightIndex: number;
 };
 
 type MedleyExactCandidateAnchorFrontierProofResult = {
@@ -1491,21 +1491,21 @@ function estimateHighMedleyExactCandidatePairRecordUpperCount(
   return upperCount;
 }
 
-function compareMedleyExactCandidatePairRecordMinHeap(
-  left: MedleyExactCandidatePairRecord,
-  right: MedleyExactCandidatePairRecord,
+function compareMedleyExactCandidatePairFrontierMaxHeap(
+  left: MedleyExactCandidatePairFrontierHeapNode,
+  right: MedleyExactCandidatePairFrontierHeapNode,
 ): number {
   return left.score - right.score;
 }
 
-function siftUpMedleyExactCandidatePairRecordMinHeap(
-  heap: MedleyExactCandidatePairRecord[],
+function siftUpMedleyExactCandidatePairFrontierMaxHeap(
+  heap: MedleyExactCandidatePairFrontierHeapNode[],
   index: number,
 ): void {
   let currentIndex = index;
   while (currentIndex > 0) {
     const parentIndex = (currentIndex - 1) >> 1;
-    if (compareMedleyExactCandidatePairRecordMinHeap(heap[parentIndex], heap[currentIndex]) <= 0) {
+    if (compareMedleyExactCandidatePairFrontierMaxHeap(heap[parentIndex], heap[currentIndex]) >= 0) {
       break;
     }
     const parent = heap[parentIndex];
@@ -1515,53 +1515,71 @@ function siftUpMedleyExactCandidatePairRecordMinHeap(
   }
 }
 
-function siftDownMedleyExactCandidatePairRecordMinHeap(
-  heap: MedleyExactCandidatePairRecord[],
+function siftDownMedleyExactCandidatePairFrontierMaxHeap(
+  heap: MedleyExactCandidatePairFrontierHeapNode[],
   index: number,
 ): void {
   let currentIndex = index;
   while (true) {
     const leftIndex = currentIndex * 2 + 1;
     const rightIndex = leftIndex + 1;
-    let smallestIndex = currentIndex;
+    let largestIndex = currentIndex;
     if (
       leftIndex < heap.length
-      && compareMedleyExactCandidatePairRecordMinHeap(heap[leftIndex], heap[smallestIndex]) < 0
+      && compareMedleyExactCandidatePairFrontierMaxHeap(heap[leftIndex], heap[largestIndex]) > 0
     ) {
-      smallestIndex = leftIndex;
+      largestIndex = leftIndex;
     }
     if (
       rightIndex < heap.length
-      && compareMedleyExactCandidatePairRecordMinHeap(heap[rightIndex], heap[smallestIndex]) < 0
+      && compareMedleyExactCandidatePairFrontierMaxHeap(heap[rightIndex], heap[largestIndex]) > 0
     ) {
-      smallestIndex = rightIndex;
+      largestIndex = rightIndex;
     }
-    if (smallestIndex === currentIndex) {
+    if (largestIndex === currentIndex) {
       break;
     }
-    const next = heap[smallestIndex];
-    heap[smallestIndex] = heap[currentIndex];
+    const next = heap[largestIndex];
+    heap[largestIndex] = heap[currentIndex];
     heap[currentIndex] = next;
-    currentIndex = smallestIndex;
+    currentIndex = largestIndex;
   }
 }
 
-function pushMedleyExactCandidatePairRecordPrefix(
-  heap: MedleyExactCandidatePairRecord[],
-  record: MedleyExactCandidatePairRecord,
-  limit: number,
-): boolean {
-  if (heap.length < limit) {
-    heap.push(record);
-    siftUpMedleyExactCandidatePairRecordMinHeap(heap, heap.length - 1);
-    return true;
+function pushMedleyExactCandidatePairFrontierHeapNode(
+  heap: MedleyExactCandidatePairFrontierHeapNode[],
+  node: MedleyExactCandidatePairFrontierHeapNode,
+): void {
+  heap.push(node);
+  siftUpMedleyExactCandidatePairFrontierMaxHeap(heap, heap.length - 1);
+}
+
+function popMedleyExactCandidatePairFrontierHeapNode(
+  heap: MedleyExactCandidatePairFrontierHeapNode[],
+): MedleyExactCandidatePairFrontierHeapNode | null {
+  if (heap.length === 0) {
+    return null;
   }
-  if (compareMedleyExactCandidatePairRecordMinHeap(record, heap[0]) <= 0) {
-    return false;
+  const top = heap[0];
+  const last = heap.pop();
+  if (last && heap.length > 0) {
+    heap[0] = last;
+    siftDownMedleyExactCandidatePairFrontierMaxHeap(heap, 0);
   }
-  heap[0] = record;
-  siftDownMedleyExactCandidatePairRecordMinHeap(heap, 0);
-  return true;
+  return top;
+}
+
+function growMedleyExactCandidatePairRecordBuffer(
+  buffer: Int32Array<ArrayBufferLike>,
+  minCapacity: number,
+): Int32Array<ArrayBufferLike> {
+  const nextCapacity = Math.max(
+    minCapacity,
+    buffer.length > 0 ? buffer.length * 2 : 1024,
+  );
+  const nextBuffer = new Int32Array(nextCapacity);
+  nextBuffer.set(buffer);
+  return nextBuffer;
 }
 
 function getHighMedleyExactCandidatePairRecords(
@@ -1615,61 +1633,89 @@ function getHighMedleyExactCandidatePairRecords(
       prefixRecordLimit,
     ) > prefixRecordLimit
   );
-  const records: MedleyExactCandidatePairRecord[] = [];
+  const initialRecordCapacity = shouldUseBoundedPrefix
+    ? Math.min(prefixRecordLimit, 65_536)
+    : 65_536;
+  let recordScores: Int32Array<ArrayBufferLike> = new Int32Array(initialRecordCapacity);
+  let recordLeftIndices: Int32Array<ArrayBufferLike> = new Int32Array(initialRecordCapacity);
+  let recordRightIndices: Int32Array<ArrayBufferLike> = new Int32Array(initialRecordCapacity);
+  let recordCount = 0;
+  const appendRecord = (score: number, leftIndex: number, rightIndex: number): void => {
+    if (recordCount >= recordScores.length) {
+      const nextCapacity = shouldUseBoundedPrefix
+        ? prefixRecordLimit
+        : Math.max(recordCount + 1, recordScores.length * 2);
+      recordScores = growMedleyExactCandidatePairRecordBuffer(recordScores, nextCapacity);
+      recordLeftIndices = growMedleyExactCandidatePairRecordBuffer(recordLeftIndices, nextCapacity);
+      recordRightIndices = growMedleyExactCandidatePairRecordBuffer(recordRightIndices, nextCapacity);
+    }
+    recordScores[recordCount] = score;
+    recordLeftIndices[recordCount] = leftIndex;
+    recordRightIndices[recordCount] = rightIndex;
+    recordCount += 1;
+  };
   const bestRightScore = query.rightCandidates[0]?.result.score ?? Number.NEGATIVE_INFINITY;
-  for (const leftCandidate of query.leftCandidates) {
-    if (leftCandidate.result.score + bestRightScore <= cacheThreshold) {
+  const frontierHeap: MedleyExactCandidatePairFrontierHeapNode[] = [];
+  for (let leftIndex = 0; leftIndex < query.leftCandidates.length; leftIndex += 1) {
+    const score = query.leftCandidates[leftIndex].result.score + bestRightScore;
+    if (score <= cacheThreshold) {
       break;
     }
-    for (const rightCandidate of query.rightCandidates) {
-      const score = leftCandidate.result.score + rightCandidate.result.score;
-      if (score <= cacheThreshold) {
+    pushMedleyExactCandidatePairFrontierHeapNode(frontierHeap, { score, leftIndex, rightIndex: 0 });
+  }
+  while (frontierHeap.length > 0) {
+    const node = popMedleyExactCandidatePairFrontierHeapNode(frontierHeap);
+    if (!node) {
+      break;
+    }
+    const leftCandidate = query.leftCandidates[node.leftIndex];
+    const rightCandidate = query.rightCandidates[node.rightIndex];
+    if (!medleyExactCandidatesOverlap(leftCandidate, rightCandidate)) {
+      appendRecord(node.score, node.leftIndex, node.rightIndex);
+      if (shouldUseBoundedPrefix && recordCount >= prefixRecordLimit) {
         break;
       }
-      if (medleyExactCandidatesOverlap(leftCandidate, rightCandidate)) {
-        continue;
-      }
-      const record = {
-        score,
-        leftCardIds: leftCandidate.cardIds,
-        rightCardIds: rightCandidate.cardIds,
-      };
-      if (shouldUseBoundedPrefix) {
-        pushMedleyExactCandidatePairRecordPrefix(records, record, prefixRecordLimit);
-      } else {
-        records.push(record);
+    }
+    const nextRightIndex = node.rightIndex + 1;
+    const nextRightCandidate = query.rightCandidates[nextRightIndex];
+    if (nextRightCandidate) {
+      const nextScore = leftCandidate.result.score + nextRightCandidate.result.score;
+      if (nextScore > cacheThreshold) {
+        pushMedleyExactCandidatePairFrontierHeapNode(
+          frontierHeap,
+          { score: nextScore, leftIndex: node.leftIndex, rightIndex: nextRightIndex },
+        );
       }
     }
   }
-  const fallbackUpperScore = shouldUseBoundedPrefix && records.length >= prefixRecordLimit
-    ? records[0]?.score ?? null
+  frontierHeap.length = 0;
+  const fallbackUpperScore = shouldUseBoundedPrefix && recordCount >= prefixRecordLimit
+    ? recordScores[recordCount - 1] ?? null
     : null;
   if (
     cacheThreshold !== coarseCacheThreshold
-    && records.length < MEDLEY_EXACT_CANDIDATE_JOIN_HIGH_PAIR_FINE_MIN_RECORD_COUNT
+    && recordCount < MEDLEY_EXACT_CANDIDATE_JOIN_HIGH_PAIR_FINE_MIN_RECORD_COUNT
   ) {
     if (profiling) {
       profiling.exactCandidateJoinPairComplementHighPairBuildCount += 1;
       profiling.exactCandidateJoinPairComplementHighPairBuildElapsedMs += performance.now() - startedAt;
       profiling.exactCandidateJoinPairComplementHighPairRecordCount = Math.max(
         profiling.exactCandidateJoinPairComplementHighPairRecordCount,
-        records.length,
+        recordCount,
       );
     }
     query.highPairAdaptiveCacheThresholdByCoarseThreshold?.set(coarseCacheThreshold, coarseCacheThreshold);
     return getHighMedleyExactCandidatePairRecords(query, threshold, profiling, useExactThreshold);
   }
-  records.sort((left, right) => right.score - left.score);
-  const recordCount = records.length;
-  const scores = new Int32Array(recordCount);
+  const scores = recordScores.subarray(0, recordCount);
   const wordCount = Math.ceil(recordCount / 32);
   const containingRecordBitsByCardId = new Map<number, Uint32Array>();
   for (let recordIndex = 0; recordIndex < recordCount; recordIndex += 1) {
-    const record = records[recordIndex];
-    scores[recordIndex] = record.score;
+    const leftCandidate = query.leftCandidates[recordLeftIndices[recordIndex]];
+    const rightCandidate = query.rightCandidates[recordRightIndices[recordIndex]];
     const wordIndex = recordIndex >> 5;
     const bit = 1 << (recordIndex & 31);
-    for (const cardId of record.leftCardIds) {
+    for (const cardId of leftCandidate.cardIds) {
       let bits = containingRecordBitsByCardId.get(cardId);
       if (!bits) {
         bits = new Uint32Array(wordCount);
@@ -1677,7 +1723,7 @@ function getHighMedleyExactCandidatePairRecords(
       }
       bits[wordIndex] |= bit;
     }
-    for (const cardId of record.rightCardIds) {
+    for (const cardId of rightCandidate.cardIds) {
       let bits = containingRecordBitsByCardId.get(cardId);
       if (!bits) {
         bits = new Uint32Array(wordCount);
@@ -1685,9 +1731,7 @@ function getHighMedleyExactCandidatePairRecords(
       }
       bits[wordIndex] |= bit;
     }
-    records[recordIndex] = null as unknown as MedleyExactCandidatePairRecord;
   }
-  records.length = 0;
   if (profiling) {
     profiling.exactCandidateJoinPairComplementHighPairBuildCount += 1;
     profiling.exactCandidateJoinPairComplementHighPairBuildElapsedMs += performance.now() - startedAt;
