@@ -1,6 +1,6 @@
 # Medley 40/40 Exact Roadmap
 
-Last updated: 2026-06-10 01:45 CST
+Last updated: 2026-06-10 11:08 CST
 
 This file is the persistent working note for the current medley optimizer goal.
 Keep it current before and after benchmark runs or proof-path changes, so future
@@ -1375,7 +1375,72 @@ Conversion mechanism:
 
 Next maintenance target:
 
-- Confirm a non-debug full 40-case run with the same headroom guard before
-  promoting the option as a default production behavior.
+- Non-debug confirmation has now been attempted and rejected. The `40/40`
+  checkpoint depends on behavior that is currently exposed through
+  `enableLowMemoryInitialCandidateSyncGcProbe` and/or debug-adjacent runtime
+  shape, so it must not be promoted as a plain non-debug default yet.
+- Before production promotion, convert the GC/probe dependency into an explicit
+  memory recovery option with a production name, then rerun the full isolated
+  P01-P10 40-case matrix.
 - Keep this 40/40 result as the anti-regression baseline for future proof-cost
   and memory work.
+
+## Follow-Up Confirmation And P11 Stress - 2026-06-10
+
+Report:
+
+- `documents/bandori-team-builder/medley-confirmation-and-p11-stress-report-2026-06-10-110853.md`
+
+Non-debug confirmation:
+
+- No-debug/no-GC matrix prefix:
+  `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-10T02-02-20-838Z-partial.json`.
+  Rejected. `P03:260` regressed to bounded with gap `370472`, elapsed
+  `58282ms`, peak `3204 MiB`, `timedOut=true`, and `memoryLimited=true`.
+- No-debug/GC single-case:
+  `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-10T02-11-07-420Z.json`.
+  `P03:260` proved exact in `150527ms`, peak `3029 MiB`.
+- No-debug/GC matrix prefix:
+  `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-10T02-14-34-205Z-partial.json`.
+  Rejected. `P03:260` again regressed to bounded with gap `356069`, elapsed
+  `103647ms`, peak `3216 MiB`, `timedOut=true`, and `memoryLimited=true`.
+
+Conclusion:
+
+- `enableLowMemoryInitialCandidateSyncGcProbe` is behavior-affecting in the
+  current hard path; it is not pure profiling.
+- Reintroducing the GC probe alone is not sufficient to make the non-debug
+  matrix stable, because `P03:260` still fails in the matrix-prefix run.
+- The accepted `40/40` run remains the anti-regression checkpoint, but the
+  promotion gate is now stricter: remove the debug/probe dependency or make the
+  memory recovery behavior explicit and revalidate.
+
+P11 stress:
+
+- Fixture:
+  `temp/bandori-team-builder/real-profile-medley-p11-stress-fixture.json`.
+  Source id `7627fd2f-8a29-4462-99ee-7085789d7561`, `manual`, `2112` cards.
+- 90s smoke:
+  `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-10T02-37-37-697Z.json`.
+  Result `0/4` exact, bounded-gap total `1041476`, peak `1257 MiB`,
+  no failed subprocess, no OOM, no memory-limited row.
+- 300s full stress:
+  `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-10T02-45-04-510Z.json`.
+  Result `0/4` exact, bounded-gap total `1041476`, peak `1282 MiB`,
+  no failed subprocess, no OOM, no memory-limited row.
+
+P11 rows at 300s:
+
+- `P11:none`: bounded, gap `215893`, elapsed `300077ms`, peak `1282 MiB`.
+- `P11:244`: bounded, gap `369450`, elapsed `300049ms`, peak `1199 MiB`.
+- `P11:260`: bounded, gap `191057`, elapsed `300040ms`, peak `1217 MiB`.
+- `P11:323`: bounded, gap `265076`, elapsed `300052ms`, peak `1216 MiB`.
+
+P11 conclusion:
+
+- P11 did not improve from 90s to 300s; all four gaps were identical.
+- The current P11 blocker is proof frontier closure, not memory. Further timeout
+  increases are unlikely to help without changing proof order or tightening
+  root/effective upper bounds.
+- Keep P11 outside the P01-P10 `40/40` acceptance target, but retain it as a
+  separate stress case for future proof-frontier work.
