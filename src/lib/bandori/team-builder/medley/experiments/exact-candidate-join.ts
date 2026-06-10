@@ -9,6 +9,7 @@
 import {
   compareMedleyResultLike,
   evaluateMedleySlotCandidateWithCache,
+  releaseMedleyScoreOnlyTeamEvaluationCache,
   sortMedleyCandidates,
 } from "../candidates";
 import { getMedleyPruningThreshold } from "../configurations";
@@ -162,12 +163,24 @@ function clearMedleyExactSlotScoreCalculationCache(slot: MedleySlotSearch): void
   slot.scoreCache.resolvedSkills?.clear();
 }
 
+function canOmitDefaultMedleyCandidateInstanceKeys(cards: readonly SearchCard[]): boolean {
+  const seenCardIds = new Set<number>();
+  for (const card of cards) {
+    if (card.cardInstanceKey !== undefined || seenCardIds.has(card.cardId)) {
+      return false;
+    }
+    seenCardIds.add(card.cardId);
+  }
+  return true;
+}
+
 function createMedleyScoreOnlyCandidate(
   slot: MedleySlotSearch,
   selectedCards: SearchCard[],
   server: number,
   perfectRate: number,
   pruningThresholdResult: BandoriTeamSearchResult | undefined,
+  includeCardInstanceKeys = true,
 ): MedleyTeamCandidate | null {
   const result = evaluateMedleyScoreOnlyTeam({
     cards: selectedCards,
@@ -180,14 +193,18 @@ function createMedleyScoreOnlyCandidate(
     comboOptions: slot.comboOptions,
     pruningThresholdResult,
   });
-  return result
-    ? {
-      result,
-      cards: [...selectedCards],
-      cardIds: selectedCards.map((card) => card.cardId),
-      cardInstanceKeys: getCardInstanceKeys(selectedCards),
-    }
-    : null;
+  if (!result) {
+    return null;
+  }
+  const candidate: MedleyTeamCandidate = {
+    result,
+    cards: [...selectedCards],
+    cardIds: selectedCards.map((card) => card.cardId),
+  };
+  if (includeCardInstanceKeys) {
+    candidate.cardInstanceKeys = getCardInstanceKeys(selectedCards);
+  }
+  return candidate;
 }
 
 function isMedleyCandidatePreferred(
@@ -250,6 +267,7 @@ function findBestMedleyExactSlotCandidateLowMemory(
     })();
   const bannedCardIds = new Set<number>();
   const selectedCards: SearchCard[] = [];
+  const includeCardInstanceKeys = !canOmitDefaultMedleyCandidateInstanceKeys(searchSlot.searchCards);
   let bestScore = Number.NEGATIVE_INFINITY;
   let bestCandidate: MedleyTeamCandidate | null = null;
   let visitedNodeCount = 0;
@@ -394,6 +412,7 @@ function findBestMedleyExactSlotCandidateLowMemory(
           server,
           perfectRate,
           createMedleyExactCandidateSlotThresholdResult(scoreCutoff),
+          includeCardInstanceKeys,
         );
         if (!candidate) {
           return;
@@ -515,6 +534,7 @@ export function createMedleyExactSlotCandidateGenerator(
   const globalComplementUpperCache = new Map<string, number>();
   const globalPairComplementUpperCache = new Map<string, number>();
   const pairUpperQueryCache = new Map<string, MedleyExactCandidatePairUpperQuery>();
+  const includeCardInstanceKeys = !canOmitDefaultMedleyCandidateInstanceKeys(slot.searchCards);
   let aborted = false;
   let poppedNodes = 0;
   let heapKeyMode: "slot" | "global" = "slot";
@@ -922,6 +942,8 @@ export function createMedleyExactSlotCandidateGenerator(
           profiling,
           createMedleyExactCandidateSlotThresholdResult(scoreCutoff),
           true,
+          includeCardInstanceKeys,
+          false,
         );
         if (candidate && candidate.result.score >= scoreCutoff) {
           pushSearchNode(createSearchNode({
@@ -4800,6 +4822,9 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     for (const generator of new Set([...generators, ...candidateFillGenerators])) {
       generator.release();
     }
+    for (const slot of slots) {
+      releaseMedleyScoreOnlyTeamEvaluationCache(slot);
+    }
   };
   const getObservedExactCandidateJoinUpperBound = (): number | null => {
     // An aborted exact join may still have pair-level proof information. Return
@@ -5655,9 +5680,20 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     [...new Set([...generators, ...candidateFillGenerators, ...activeGeneratorsBySlot])]
   );
   const { packCandidateCardKey, packCandidateCardsKey } = createMedleyExactCandidateCardKeyPacker(slots);
-  const candidateKeysBySlot = candidatesBySlot.map((candidates) => (
-    new Set(candidates.map((candidate) => getMedleyExactCandidateCardKey(candidate, packCandidateCardKey)))
-  ));
+  const candidateKeysBySlot: Array<Set<string> | null> = Array.from({ length: slots.length }, () => null);
+  const getCandidateKeysForSlot = (slotIndex: number): Set<string> => {
+    let keys = candidateKeysBySlot[slotIndex];
+    if (keys) {
+      return keys;
+    }
+    keys = new Set(
+      candidatesBySlot[slotIndex].map((candidate) => (
+        getMedleyExactCandidateCardKey(candidate, packCandidateCardKey)
+      )),
+    );
+    candidateKeysBySlot[slotIndex] = keys;
+    return keys;
+  };
   const rebuildCandidateKeys = (...slotIndices: number[]): void => {
     for (const slotIndex of slotIndices) {
       candidateKeysBySlot[slotIndex] = new Set(
@@ -5696,7 +5732,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
       ...(generator.memoryProfile ? generator.memoryProfile() : {}),
     }));
     const candidateCountsBySlot = candidatesBySlot.map((candidates) => candidates.length);
-    const candidateKeyCountsBySlot = candidateKeysBySlot.map((keys) => keys.size);
+    const candidateKeyCountsBySlot = candidateKeysBySlot.map((keys) => keys?.size ?? 0);
     profiling.exactCandidateJoinMemorySnapshots.push({
       phase,
       elapsedMs: Math.round(performance.now() - exactJoinStartedAt),
@@ -5983,7 +6019,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
       capacityComplementMargin: MEDLEY_EXACT_CANDIDATE_JOIN_CAPACITY_COMPLEMENT_MARGIN,
       packCandidateCardKey,
       packCandidateCardsKey,
-      excludedCandidateKeys: candidateKeysBySlot[slotIndex],
+      excludedCandidateKeys: getCandidateKeysForSlot(slotIndex),
     };
     candidateCutoffsBySlot[slotIndex] = cutoff;
     candidateOtherUpperBySlot[slotIndex] = otherUpper;
@@ -6137,10 +6173,11 @@ export function searchMedleyConfigurationByExactCandidateJoin(
         break;
       }
       const candidateKey = getMedleyExactCandidateCardKey(candidate, packCandidateCardKey);
-      if (candidateKeysBySlot[slotIndex].has(candidateKey)) {
+      const candidateKeys = getCandidateKeysForSlot(slotIndex);
+      if (candidateKeys.has(candidateKey)) {
         continue;
       }
-      candidateKeysBySlot[slotIndex].add(candidateKey);
+      candidateKeys.add(candidateKey);
       if (candidate.result.score >= cutoff) {
         candidatesBySlot[slotIndex].push(candidate);
       }
@@ -6151,6 +6188,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
   }
   profiling.exactCandidateJoinCandidateFillElapsedMs += performance.now() - candidateFillStartedAt;
 
+  candidateKeysBySlot.fill(null);
   candidatesBySlot.forEach(sortMedleyCandidates);
   maybeSeedFromExactJoinPrefix();
   if (stats.timedOut) {
@@ -6176,6 +6214,15 @@ export function searchMedleyConfigurationByExactCandidateJoin(
   const remainingBeforeSolveMs = Number.isFinite(deadlineAt)
     ? deadlineAt - performance.now()
     : Number.POSITIVE_INFINITY;
+  if (
+    solveOnlyAboveUpperTarget === null
+    && observedUpperBoundBeforeSolve !== null
+    && Number.isFinite(observedUpperBoundBeforeSolve)
+    && observedUpperBoundBeforeSolve <= exactJoinProofCutoffScore
+  ) {
+    profiling.exactCandidateJoinCompletedCount += 1;
+    return buildProvedExactCandidateJoinResult();
+  }
   if (
     observedUpperBoundBeforeSolve !== null
     && Number.isFinite(observedUpperBoundBeforeSolve)

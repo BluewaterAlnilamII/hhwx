@@ -1,6 +1,6 @@
 # Medley 40/40 Exact Roadmap
 
-Last updated: 2026-06-11 00:34 CST
+Last updated: 2026-06-11 01:41 CST
 
 This file is the persistent working note for the current medley optimizer goal.
 Keep it current before and after benchmark runs or proof-path changes, so future
@@ -2646,3 +2646,75 @@ Conclusion:
   pooling/typed storage, or chunked high-budget pair proof that carries forward
   candidate material and upper certificates without retaining the full transient
   generator working set.
+
+## Exact Candidate Memory Residency Pass - 2026-06-11 01:41 CST
+
+Purpose:
+
+- Continue the no-GC route without relying on `--expose-gc` or `global.gc`.
+- Test whether lower candidate/material residency can move the remaining
+  `P07:260` blocker from RSS guard failure into proof/solve work.
+
+Changes under test:
+
+- Exact candidate records now omit `cardInstanceKeys` only when the slot card
+  pool has unique `cardId`s and no custom `cardInstanceKey`s. Temporary-card and
+  duplicate-instance cases keep the old instance-key behavior.
+- Candidate-fill duplicate-key sets are now built lazily per slot and released
+  before final solve.
+- Exact-join working-set release now also clears the per-slot score-only team
+  evaluation cache.
+- Exact slot candidate generation can skip score-only cache storage. The exact
+  generator uses this to avoid retaining per-candidate cache keys and duplicate
+  score-only result references.
+- After candidate fill, if the safe observed exact-join upper is already at or
+  below the active proof cutoff, the configuration is marked proved without
+  entering the expensive final join solve. This is disabled for
+  `solveOnlyAboveUpperTarget` diagnostic/probe calls.
+
+Validation:
+
+- Static:
+  - `npm.cmd run typecheck`: pass.
+  - `git diff --check`: pass, with existing CRLF warnings only.
+- `P07:260`, 300s, no-GC, non-debug, active hard-guard JSON at
+  `memorySoftLimitMiB=4488`:
+  - `temp/bandori-team-builder/real-profile-medley-scope-matrix-2026-06-10T17-06-56-594Z.json`
+    showed real memory progress: bounded, score `8568618`, gap `62929`,
+    peak `4082 MiB`, no timeout/memory-limit, completed `12`, started `108`,
+    root-pruned `87`, abort `solve-workload-limit`.
+  - `temp/bandori-team-builder/real-profile-medley-scope-matrix-2026-06-10T17-25-11-186Z.json`
+    with the proof-conversion branch progressed to completed `13`, gap `62165`,
+    but still bounded with `candidate-fill-pair-refine`, peak `4489 MiB`.
+- `P07:260` with `debugExactCandidateJoinMemoryAttribution=true`:
+  - `temp/bandori-team-builder/real-profile-medley-scope-matrix-2026-06-10T17-29-48-018Z.json`.
+  - Abort was `high-budget-pair-upper`, peak `4491 MiB`, node heap peak
+    `4175 MiB`, RSS peak `4491 MiB`.
+  - Snapshot showed only `53897` candidates, no retained high-pair/query cache,
+    and generator heap nodes `[22700,120621,72566]`. Current 4488 failure is
+    therefore dominated by generator node churn/RSS, not by high-pair record
+    cache or candidate-key sets.
+- `P07:260` diagnostic at `memorySoftLimitMiB=6144`:
+  - `temp/bandori-team-builder/real-profile-medley-scope-matrix-2026-06-10T17-35-50-398Z.json`.
+  - Result: exact, score `8568618`, elapsed `275304ms`, peak working set
+    `5433 MiB`, peak node heap `5077 MiB`, completed `17`, root-pruned `91`.
+
+Conclusion:
+
+- This pass is progress but not final acceptance. It proves `P07:260` can close
+  exact under no-GC when allowed about `5.4 GiB` working set, but the current
+  `4488 MiB` hard-guard target is still not stable.
+- The remaining `4488 MiB` blocker is now generator node allocation/RSS during
+  high-budget pair proof. Candidate key sets, high-pair record objects, and
+  score-only cache retention are no longer the dominant explanation.
+
+Next route:
+
+- If the acceptance budget may be raised, run the full hard guard and then the
+  40-case isolated matrix with `memorySoftLimitMiB=6144`, documenting the higher
+  memory cost explicitly.
+- If the `4488 MiB` gate must remain fixed, do not tune seed or pair K. The next
+  implementation should target exact generator node allocation directly:
+  compact/pooled generator nodes, lower-allocation selected-card handling, or a
+  chunked high-budget pair proof that releases generator state between chunks
+  while preserving generated candidate material.
