@@ -785,6 +785,12 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
   const requestedEnableTeamSharedCoefficientUpper = optimization.enableTeamSharedCoefficientUpper === true;
   const enableSharedPowerSkillUpper = optimization.enableSharedPowerSkillUpper === true;
   const debugConfigurationTrace = optimization.debugConfigurationTrace === true;
+  const exactCandidateJoinSolveOrderVariant = (
+    typeof optimization.exactCandidateJoinSolveOrderVariant === "string"
+    && optimization.exactCandidateJoinSolveOrderVariant.length > 0
+  )
+    ? optimization.exactCandidateJoinSolveOrderVariant
+    : null;
   const debugExactCandidateJoinMemoryAttribution = (
     optimization.debugExactCandidateJoinMemoryAttribution === true
   );
@@ -4308,6 +4314,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
           exactJoinPrefixSeedMinCandidateCounts,
           exactJoinPrefixSeedPreviousLocalTimeout: exactJoinPrefixSeedDisabledCoarseKeys.has(currentCoarseKey),
           exactJoinPrefixSeedMemorySoftLimitMiB: stats.memorySoftLimitMiB,
+          exactCandidateJoinSolveOrderVariant,
           enableLowMemoryInitialCandidateSync: shouldUseLowMemoryInitialCandidateSync,
           lowMemoryInitialCandidateSyncLocalAbortOnly,
           lowMemoryInitialCandidateSyncLightUpper,
@@ -4607,6 +4614,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
           enableExactJoinPrefixSeed: false,
           exactJoinPrefixSeedForceNoop: true,
           exactJoinPrefixSeedGuardOnly: true,
+          exactCandidateJoinSolveOrderVariant,
           enableLowMemoryInitialCandidateSync: shouldUseLowMemoryInitialCandidateSync,
           lowMemoryInitialCandidateSyncLocalAbortOnly,
           lowMemoryInitialCandidateSyncLightUpper,
@@ -5121,6 +5129,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
           exactJoinPrefixSeedMinCandidateCounts,
           exactJoinPrefixSeedPreviousLocalTimeout: exactJoinPrefixSeedDisabledCoarseKeys.has(currentCoarseKey),
           exactJoinPrefixSeedMemorySoftLimitMiB: stats.memorySoftLimitMiB,
+          exactCandidateJoinSolveOrderVariant,
           enableLowMemoryInitialCandidateSync: shouldUseLowMemoryInitialCandidateSync,
           lowMemoryInitialCandidateSyncLocalAbortOnly,
           lowMemoryInitialCandidateSyncLightUpper,

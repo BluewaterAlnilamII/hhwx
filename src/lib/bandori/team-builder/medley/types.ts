@@ -78,6 +78,7 @@ export type BandoriMedleySearchOptimizationOptions = {
   exactJoinPrefixSeedTimeboxMs?: number;
   exactJoinPrefixSeedMaxSmallestCandidateCount?: number;
   exactJoinPrefixSeedMinCandidateCounts?: [number, number, number];
+  exactCandidateJoinSolveOrderVariant?: string;
   debugConfigurationTrace?: boolean;
   exactCandidateJoinDebugAnchorSlotIndex?: number;
   exactCandidateJoinDebugKnownCardIdsBySlot?: number[][];

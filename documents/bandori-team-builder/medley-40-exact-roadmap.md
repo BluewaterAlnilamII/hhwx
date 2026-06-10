@@ -3075,3 +3075,30 @@ Current hard-case classification:
 - `P07:260`: mixed memory/time problem. Raising the soft limit removes the
   memory abort and narrows the gap, but it still needs a faster proof path to
   finish under 300s at production-safe settings.
+
+P03 solve-order fix:
+
+- Added a benchmark-only `exactCandidateJoinSolveOrderVariant` diagnostic
+  switch and used it to test exact join slot orders.
+- Default before the fix effectively used `middle-largest-smallest` for
+  `P03:323`; it timed out:
+  `temp/bandori-team-builder/real-profile-medley-scope-matrix-2026-06-10T21-08-51-145Z.json`,
+  bounded, `300104ms`, gap `429277`, solve elapsed `238654ms`.
+- Forced `smallest-largest-middle` was not enough:
+  `temp/bandori-team-builder/real-profile-medley-scope-matrix-2026-06-10T21-32-00-911Z.json`,
+  bounded, `300375ms`, gap `427413`; pair count dropped but third fallback word
+  scan grew sharply.
+- Forced `smallest-middle-largest` succeeded:
+  `temp/bandori-team-builder/real-profile-medley-scope-matrix-2026-06-10T21-37-41-752Z.json`,
+  exact, `188863ms`.
+- Code fix: raise the smallest-third heuristic lower bound from `5000` to
+  `10000`, so very small smallest lists drive the first join instead of being
+  held for the third slot.
+- Default validation after the fix:
+  `temp/bandori-team-builder/real-profile-medley-scope-matrix-2026-06-10T21-46-27-720Z.json`,
+  exact, `153968ms`, peak `1946 MiB`.
+
+Updated hard-case classification after P03 fix:
+
+- `P03:323` is closed under the current 300s no-GC settings.
+- Remaining confirmed hard cases: `P06:323` and `P07:260`.

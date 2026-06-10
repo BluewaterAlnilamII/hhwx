@@ -2094,6 +2094,7 @@ export function solveMedleyExactCandidateJoin(
   proofUpperTarget: number | null = null,
   observeEvaluatedResult?: MedleyEvaluatedResultObserver,
   recordSolveProfiling = true,
+  solveOrderVariant: string | null = null,
 ): MedleyExactCandidateJoinSolveResult {
   // The final join is exact only over candidate lists whose unseen frontier was already
   // bounded. Bitsets accelerate card-disjoint checks but never approximate the conflict rule.
@@ -2117,10 +2118,11 @@ export function solveMedleyExactCandidateJoin(
   // list first because the second-list frontier stays wide. If the largest
   // list would become the third slot, fallback third scans can dominate solve
   // time, so keep the smallest list in the third position when it can still use
-  // the bounded shortlist path. These variants are exact; they only change
-  // enumeration order and the shortlist used for third-slot acceleration.
+  // the bounded shortlist path. Very small "smallest" lists are cheaper as the
+  // first join driver; these variants are exact and only change enumeration
+  // order plus the shortlist used for third-slot acceleration.
   const shouldPreferSmallestThirdJoinOrder = (
-    smallestCandidateCount >= 5_000
+    smallestCandidateCount >= 10_000
     && smallestCandidateCount <= MEDLEY_EXACT_CANDIDATE_JOIN_EXTENDED_THIRD_SHORTLIST_MAX_THIRD_CANDIDATES
     && largestCandidateCount > MEDLEY_EXACT_CANDIDATE_JOIN_EXTENDED_THIRD_SHORTLIST_MAX_THIRD_CANDIDATES
     && largestCandidateCount >= middleCandidateCount * 2
@@ -2130,12 +2132,41 @@ export function solveMedleyExactCandidateJoin(
     && middleCandidateCount >= smallestCandidateCount * 2
     && largestCandidateCount >= middleCandidateCount * 2
   );
-  const slotOrder = shouldPreferSmallestThirdJoinOrder
+  const forcedSlotOrder = (() => {
+    const smallest = candidateCountSlotOrder[0];
+    const middle = candidateCountSlotOrder[1];
+    const largest = candidateCountSlotOrder[2];
+    switch (solveOrderVariant) {
+      case "smallest-middle-largest":
+        return [smallest, middle, largest];
+      case "smallest-largest-middle":
+        return [smallest, largest, middle];
+      case "middle-smallest-largest":
+        return [middle, smallest, largest];
+      case "middle-largest-smallest":
+        return [middle, largest, smallest];
+      case "largest-smallest-middle":
+        return [largest, smallest, middle];
+      case "largest-middle-smallest":
+        return [largest, middle, smallest];
+      default:
+        return null;
+    }
+  })();
+  const slotOrder = forcedSlotOrder ?? (shouldPreferSmallestThirdJoinOrder
     ? [candidateCountSlotOrder[1], candidateCountSlotOrder[2], candidateCountSlotOrder[0]]
     : shouldUseMiddleFirstJoinOrder
     ? [candidateCountSlotOrder[1], candidateCountSlotOrder[0], candidateCountSlotOrder[2]]
-    : candidateCountSlotOrder;
-  const thirdShortlistSize = (shouldPreferSmallestThirdJoinOrder || shouldUseMiddleFirstJoinOrder)
+    : candidateCountSlotOrder);
+  const forcedThirdCandidateCount = forcedSlotOrder
+    ? candidatesBySlot[forcedSlotOrder[2]]?.length ?? 0
+    : null;
+  const thirdShortlistSize = forcedSlotOrder
+    ? forcedThirdCandidateCount !== null
+      && forcedThirdCandidateCount <= MEDLEY_EXACT_CANDIDATE_JOIN_EXTENDED_THIRD_SHORTLIST_MAX_THIRD_CANDIDATES
+      ? MEDLEY_EXACT_CANDIDATE_JOIN_MIDDLE_FIRST_THIRD_SHORTLIST_SIZE
+      : MEDLEY_EXACT_CANDIDATE_JOIN_THIRD_SHORTLIST_SIZE
+    : (shouldPreferSmallestThirdJoinOrder || shouldUseMiddleFirstJoinOrder)
     ? MEDLEY_EXACT_CANDIDATE_JOIN_MIDDLE_FIRST_THIRD_SHORTLIST_SIZE
     : MEDLEY_EXACT_CANDIDATE_JOIN_THIRD_SHORTLIST_SIZE;
   const firstSlotIndex = slotOrder[0];
@@ -4668,6 +4699,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     exactJoinPrefixSeedMinProofBudgetMs?: number;
     exactJoinPrefixSeedMinMemoryHeadroomMiB?: number;
     exactJoinPrefixSeedMaxObservedGap?: number;
+    exactCandidateJoinSolveOrderVariant?: string | null;
     stagedCandidateExtensionMinRemainingMs?: number | null;
     enableLowMemoryInitialCandidateSync?: boolean;
     lowMemoryInitialCandidateSyncLocalAbortOnly?: boolean;
@@ -6345,6 +6377,8 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     didUseSmallGapSolveRetry ? solveDeadlineAt : null,
     solveOnlyAboveUpperTarget,
     observeEvaluatedResult,
+    true,
+    context.exactCandidateJoinSolveOrderVariant ?? null,
   );
   profiling.exactCandidateJoinSolveElapsedMs += performance.now() - solveStartedAt;
   if (joinResult.timedOut) {
