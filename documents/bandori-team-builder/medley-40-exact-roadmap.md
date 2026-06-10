@@ -2553,3 +2553,33 @@ Conclusion:
   pair upper can still feed candidate-fill/solve, or add a bounded/chunked
   high-budget pair proof that releases intermediate search state between
   chunks without using manual GC.
+
+Follow-up rejected diagnostics:
+
+- A temporary opt-in targeted high-budget pair upper was tested and removed.
+  It limited the deep pair proof to the pair0 threshold needed for root closure
+  and stopped when generated pairs already exceeded that target. Diagnostic:
+  `temp/bandori-team-builder/real-profile-medley-scope-matrix-2026-06-10T15-18-03-768Z.json`.
+  Result regressed: bounded, score `8568618`, gap `308135`, elapsed `77639ms`,
+  peak `4493 MiB`, `memoryLimited=true`, abort
+  `candidate-fill-generator-aborted`, `completedConfigurations=0`,
+  candidate counts `[265548,126,89]`. This proves P07 needs the strong
+  high-budget pair upper; simply skipping/target-limiting it makes
+  candidate-fill explode.
+- A locked single-configuration diagnostic for `P07:260` with
+  `Everyone/happy/visual` was started to test whether all-scope ordering was
+  the dominant issue. It was manually stopped at `8384.6 MiB` working set
+  after about `299s` CPU without producing a report:
+  `temp/bandori-team-builder/p07-everyone-happy-visual-locked.out.log`.
+  This indicates the configuration is intrinsically memory-heavy; not merely
+  a late-order victim of earlier configurations.
+
+Updated conclusion:
+
+- Do not pursue targeted skipping of the high-budget pair proof.
+- Do not pursue coarse ordering as the primary P07 fix.
+- The next P07 path should preserve high-budget pair strength while reducing
+  its memory residency, most likely by chunking/releasing pair proof state or
+  by replacing the full two-slot proof with an exact lower-memory pair frontier
+  algorithm. Any candidate must first prove `Everyone/happy/visual` in isolation
+  under the `4488 MiB` acceptance gate before being tried in full all-scope.
