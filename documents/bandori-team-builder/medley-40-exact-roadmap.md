@@ -3102,3 +3102,24 @@ Updated hard-case classification after P03 fix:
 
 - `P03:323` is closed under the current 300s no-GC settings.
 - Remaining confirmed hard cases: `P06:323` and `P07:260`.
+
+P07 failed follow-ups after P03 fix:
+
+- `enableLowMemoryHighPairScan=true`:
+  `temp/bandori-team-builder/real-profile-medley-scope-matrix-2026-06-10T21-50-44-264Z.json`.
+  Bounded, `300009ms`, gap `296599`, peak `3185 MiB`, abort
+  `candidate-fill-generator-aborted`. It solves memory but spends `253290ms`
+  in candidate fill and worsens the gap.
+- `enableLowMemoryHighPairPrefixUpper=true`,
+  `lowMemoryHighPairPrefixRecordLimit=500000`:
+  `temp/bandori-team-builder/real-profile-medley-scope-matrix-2026-06-10T21-56-27-818Z.json`.
+  Bounded, `165524ms`, gap `62165`, peak `6151 MiB`,
+  `memoryLimited=true`; no improvement over default.
+- `enableSameCoarseLowRootFirstProofOrder=true`:
+  `temp/bandori-team-builder/real-profile-medley-scope-matrix-2026-06-10T22-00-05-950Z.json`.
+  Bounded, `168545ms`, gap `62929`, peak `6149 MiB`,
+  `memoryLimited=true`; no meaningful change.
+- Decision: P07 is not solved by existing low-memory high-pair scan/prefix or
+  low-root-first ordering. It needs a different pair-upper memory strategy or a
+  way to close the small remaining gap without holding the high-memory pair
+  structures until the soft limit trips.
