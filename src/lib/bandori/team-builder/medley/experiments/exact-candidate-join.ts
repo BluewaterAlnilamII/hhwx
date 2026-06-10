@@ -3699,6 +3699,7 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
     timeboxMs?: number | null;
     maxAnchors?: number | null;
     refineUnseen?: boolean;
+    useSharedPairUpper?: boolean;
     unseenRefineMaxGeneratedCandidates?: number | null;
   } = {},
 ): MedleyExactCandidateAnchorFrontierProofResult {
@@ -3727,6 +3728,13 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
   sortMedleyCandidates(rightCandidates);
   const leftAvailabilityQuery = buildMedleyExactCandidateSlotAvailabilityQuery(leftCandidates);
   const rightAvailabilityQuery = buildMedleyExactCandidateSlotAvailabilityQuery(rightCandidates);
+  let sharedPairUpperQuery: MedleyExactCandidatePairUpperQuery | null = null;
+  const getSharedPairUpperQuery = (): MedleyExactCandidatePairUpperQuery => {
+    if (!sharedPairUpperQuery) {
+      sharedPairUpperQuery = buildMedleyExactCandidatePairUpperQuery(leftCandidates, rightCandidates);
+    }
+    return sharedPairUpperQuery;
+  };
   const maxAnchorCount = Math.min(
     anchorCandidates.length,
     (
@@ -3738,6 +3746,7 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
       : MEDLEY_EXACT_CANDIDATE_JOIN_ANCHOR_FRONTIER_CHEAP_UPPER_MAX_ANCHORS,
   );
   const shouldRefineUnseenUpper = options.refineUnseen === true;
+  const shouldUseSharedPairUpper = options.useSharedPairUpper === true;
   const unseenRefineMaxGeneratedCandidates = (
     options.unseenRefineMaxGeneratedCandidates !== null
     && options.unseenRefineMaxGeneratedCandidates !== undefined
@@ -3855,12 +3864,30 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
     const rightGeneratedScore = finiteScore(rightGeneratedCandidate?.result.score ?? Number.NEGATIVE_INFINITY);
     const leftBestPossible = Math.max(leftGeneratedScore, finiteScore(leftPeekUpperBound));
     const rightBestPossible = Math.max(rightGeneratedScore, finiteScore(rightPeekUpperBound));
-    const generatedPairUpper = combineScores(leftGeneratedScore, rightGeneratedScore);
+    const targetPairUpper = incumbentScore - anchorCandidate.result.score;
+    const shouldUseSharedGeneratedPairUpper = (
+      shouldUseSharedPairUpper
+      && Number.isFinite(targetPairUpper)
+    );
+    const sharedGeneratedPairUpper = shouldUseSharedGeneratedPairUpper
+      ? estimateGeneratedMedleyExactCandidatePairUpperExcludingCardIds(
+        getSharedPairUpperQuery(),
+        anchorCandidate.cardIds,
+        targetPairUpper,
+        profiling,
+      )
+      : Number.NEGATIVE_INFINITY;
+    const generatedPairUpper = shouldUseSharedGeneratedPairUpper
+      ? Math.max(sharedGeneratedPairUpper, targetPairUpper)
+      : combineScores(leftGeneratedScore, rightGeneratedScore);
+    const generatedPairSource = shouldUseSharedGeneratedPairUpper
+      ? "generated-pair-shared"
+      : "generated-pair";
     const leftUnseenUpper = combineScores(finiteScore(leftPeekUpperBound), rightBestPossible);
     const rightUnseenUpper = combineScores(finiteScore(rightPeekUpperBound), leftBestPossible);
     const upperBound = Math.max(generatedPairUpper, leftUnseenUpper, rightUnseenUpper);
     const source = upperBound === generatedPairUpper
-      ? "generated-pair"
+      ? generatedPairSource
       : upperBound === leftUnseenUpper
         ? "left-unseen"
         : "right-unseen";
@@ -3870,8 +3897,8 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
       generatedPairUpper,
       leftUnseenUpper,
       rightUnseenUpper,
-      leftGeneratedCandidate,
-      rightGeneratedCandidate,
+      leftGeneratedCandidate: shouldUseSharedGeneratedPairUpper ? null : leftGeneratedCandidate,
+      rightGeneratedCandidate: shouldUseSharedGeneratedPairUpper ? null : rightGeneratedCandidate,
     };
   };
   const getResidualUpperBound = (nextAnchorScore: number | null): number | null => {
@@ -4179,7 +4206,9 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
           return true;
         }
         let generatedPairUpper = entry.generatedPairUpper;
-        let generatedPairSource = "generated-pair";
+        let generatedPairSource = entry.source === "generated-pair-shared"
+          ? "generated-pair-shared"
+          : "generated-pair";
         if (entry.source === "generated-pair") {
           const splitUpper = estimateGeneratedMedleyExactCandidatePairConflictSplitUpper(
             leftAvailabilityQuery,
@@ -4649,6 +4678,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     anchorFrontierCheapUpperTimeboxMs?: number | null;
     anchorFrontierCheapUpperMaxAnchors?: number | null;
     anchorFrontierCheapUpperRefineUnseen?: boolean;
+    anchorFrontierCheapUpperUseSharedPairUpper?: boolean;
     anchorFrontierCheapUpperUnseenRefineMaxGeneratedCandidates?: number | null;
   } = {},
   observeEvaluatedResult?: MedleyEvaluatedResultObserver,
@@ -5132,6 +5162,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
           timeboxMs: context.anchorFrontierCheapUpperTimeboxMs,
           maxAnchors: context.anchorFrontierCheapUpperMaxAnchors,
           refineUnseen: context.anchorFrontierCheapUpperRefineUnseen,
+          useSharedPairUpper: context.anchorFrontierCheapUpperUseSharedPairUpper,
           unseenRefineMaxGeneratedCandidates: context.anchorFrontierCheapUpperUnseenRefineMaxGeneratedCandidates,
         },
       );
