@@ -1830,6 +1830,22 @@ Rejected/paused from this checkpoint:
 - Conclusion: heavier per-entry unseen refinement can lower individual unseen
   terms but processes too few anchors inside the timebox, so it is not a good
   default proof path for P06.
+- Disabling same-coarse tight-root skip/retry protection is not viable:
+  - stderr log
+    `temp/bandori-team-builder/p06-disable-samecoarse-tightroot-20260610-164239.err.log`
+  - result: V8 OOM before report generation
+  - conclusion: proving the whole same-coarse frontier directly can exceed the
+    memory envelope; this protection cannot simply be removed for exactness.
+- Adding per-side candidate caches and branch-order prefetch inside the split
+  upper was reverted:
+  - `temp/bandori-team-builder/real-profile-medley-benchmark-2026-06-10T08-45-41-274Z.json`
+  - bounded gap `458043`, elapsed `97688ms`, peak `3756 MiB`
+  - cheap upper processed more anchors (`8744`) and more split states
+    (`219649`), but exposed a higher unresolved generated-pair upper
+    (`7115284`) and worsened the final residual gap.
+  - conclusion: this cheap-upper stage is not monotonic with respect to
+    anchor-throughput; more processed anchors can expose a larger unresolved
+    upper unless the new entries are also fully refined.
 
 Current P06 state:
 
@@ -1848,6 +1864,8 @@ Next proof direction:
 - Do not continue increasing cheap-upper timebox or high-pair proof limits.
 - Do not enable unseen refinement by default; its anchor-throughput cost
   outweighed the local upper tightening in P06.
+- Do not disable same-coarse protection or add split-cache prefetch; both failed
+  the current P06 diagnostic.
 - Investigate a lower-memory, monotonic pair upper for anchor frontier:
   - avoid retaining millions of JS pair-record objects;
   - separate invalid overlapping generated-pair score-only upper from valid
