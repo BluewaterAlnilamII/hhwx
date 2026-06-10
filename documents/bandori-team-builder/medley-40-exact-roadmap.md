@@ -2845,3 +2845,34 @@ Conclusion:
   should determine whether stronger cheap-upper refinement or entering full
   anchor frontier proof can close the remaining `285088` gap without exceeding
   the memory budget.
+
+Follow-up evidence:
+
+- Wide-anchor plus unseen refinement was not useful:
+  - `temp/bandori-team-builder/real-profile-medley-scope-matrix-2026-06-10T18-34-44-152Z.json`.
+  - Bounded, elapsed `210470ms`, final gap worsened to `448625`, peak `5575 MiB`.
+  - Cheap upper processed only `3607` anchors in `60009ms`; split attempts/states
+    rose to `3606` / `75678`.
+  - Decision: do not pursue larger cheap-upper timeboxes or unseen refinement as
+    a default path.
+- Wide-anchor debug ledger:
+  - `temp/bandori-team-builder/real-profile-medley-scope-matrix-2026-06-10T18-40-42-728Z.json`.
+  - Final gap `287176`; top unclosed `PastelPalettes/cool` entries now share the
+    same tightened remembered/effective upper `9774137`.
+  - The leading `performance` entry reached candidate counts
+    `[600000,80879,50858]` and aborted at `candidate-fill-soft-limit`.
+  - Full anchor frontier proof was skipped because
+    `exactCandidateJoinLastAnchorFrontierProofHighPairRecordUpperCount=2034320`
+    exceeded the current `eventRootFrontierProbeAnchorProofMaxHighPairRecords`
+    cap of `2000000`.
+
+Next experiment:
+
+- Run the same no-GC `P06:323` case with wide-anchor enabled and only a narrow
+  opt-in cap bump to `eventRootFrontierProbeAnchorProofMaxHighPairRecords=2200000`.
+- Passing signal: proof trigger runs without OOM and either reaches exact or
+  reduces the final frontier gap without raising peak heap above the established
+  hard-case envelope.
+- Failing signal: timebox or memory pressure rises without closing the gap; in
+  that case this route should stop and the next patch should target the
+  candidate-fill frontier itself instead of proofing a larger pair-record set.
