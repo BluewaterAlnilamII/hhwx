@@ -2215,3 +2215,74 @@ Next route:
   more effectively, or attack the generated-anchor/pair frontier directly with
   a low-memory exact disjoint-pair query that does not materialize millions of
   pair records.
+
+## Anchor-Banned Pair Frontier Proof Probe - 2026-06-10 21:10 CST
+
+Hypothesis:
+
+- P06:323 remains bounded because slot0 reaches the 200k candidate soft limit
+  while the remaining two-slot pair upper is not conditioned on the selected
+  anchor card ids. The latest direct baseline has slot counts
+  `[200000,80879,50858]`, slot0 peek upper `2616168`, pair upper
+  `6968613`, and final observed gap about `606k`.
+- A low-memory proof path can test only the high generated anchors: for each
+  anchor, rebuild the other two slots with the anchor's card ids removed, run a
+  local two-slot pair-upper proof, and combine the processed anchor-specific
+  upper with the unprocessed global anchor frontier.
+- This is exact only when every relevant processed anchor's local pair upper is
+  proved and the unprocessed anchor upper is also below incumbent. Otherwise it
+  may return a tighter bounded upper or an incumbent hit, but it must not mark
+  proof complete.
+
+Implementation gate:
+
+- Add opt-in `enableAnchorBannedPairFrontierProof?: boolean`, default `false`.
+- Add optional limits: `anchorBannedPairFrontierProofTimeboxMs`,
+  `anchorBannedPairFrontierProofMaxAnchors`, and
+  `anchorBannedPairFrontierProofCandidateSoftLimit`.
+- Reuse existing candidate generators on rebuilt filtered slots; do not extend
+  global candidate limits, do not use `--expose-gc`, and do not retain pair
+  record tables.
+- Local timeout restores global `stats.timedOut` when the global deadline has
+  not expired, and is recorded only as a local proof timebox.
+
+Targeted validation gate:
+
+- First run `P06:323` with the active no-GC hard-guard optimization JSON plus
+  `enableAnchorBannedPairFrontierProof=true`,
+  `eventRootFrontierProbeAnchorProofMaxFrontierGap=700000`,
+  `eventRootFrontierProbeAnchorProofMaxOtherSlotCandidates=120000`,
+  `eventRootFrontierProbeAnchorProofMaxOtherSlotCandidateTotal=160000`,
+  `anchorBannedPairFrontierProofTimeboxMs=60000`,
+  `anchorBannedPairFrontierProofMaxAnchors=256`, and
+  `anchorBannedPairFrontierProofCandidateSoftLimit=120000`.
+- Accept only if it proves exact or materially lowers bounded gap without
+  `timedOut=true`, `memoryLimited=true`, or peak memory above the safe direct
+  P06 baseline by more than 2%.
+- If P06 passes, run `P07:260` with the same option before any hard-set or
+  40-case run. If P06 fails, remove or freeze the source option and keep this
+  record as rejected.
+
+Result:
+
+- Rejected after `P06:323` opt-in diagnostic:
+  `temp/bandori-team-builder/real-profile-medley-scope-matrix-2026-06-10T13-17-06-946Z.json`.
+- Result was bounded, score `9486961`, gap `448625`, elapsed `151966ms`,
+  `timedOut=true`, `memoryLimited=true`, peak `4493 MiB`, abort
+  `high-budget-pair-upper`.
+- The new anchor-banned pair proof triggered once and hit local timebox without
+  an incumbent hit. The event-root probe upper did improve to residual gap
+  `378667`, but the run failed the acceptance gate because it introduced
+  timeout/memory-limit behavior and still did not close proof.
+- Conclusion: per-anchor local pair proof is too expensive for the P06 frontier
+  under the no-GC hard guard. The source option is removed instead of kept as an
+  acceptance candidate.
+
+Next route:
+
+- Do not run local two-slot proof independently for each high anchor.
+- The useful signal remains that conflict-aware upper can reduce the root gap,
+  but it must be amortized across anchors. Next proof work should target a
+  shared banned-card/pair-frontier index or a coarse conflict certificate that
+  can answer many anchor exclusions without rebuilding two slot generators per
+  anchor.
