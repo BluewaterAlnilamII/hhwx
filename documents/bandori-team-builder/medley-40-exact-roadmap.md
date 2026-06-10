@@ -2907,3 +2907,20 @@ Updated direction:
   or chunked high-pair proof that carries reusable upper certificates across the
   same `PastelPalettes/cool` frontier without widening default candidate limits
   or requiring manual GC.
+
+Existing high-pair prefix recheck:
+
+- Re-tested current code with no new source changes, wide-anchor enabled, and
+  `enableLowMemoryHighPairScan=true`,
+  `enableLowMemoryHighPairPrefixUpper=true`,
+  `lowMemoryHighPairPrefixRecordLimit=500000`.
+- Result:
+  `temp/bandori-team-builder/real-profile-medley-scope-matrix-2026-06-10T19-13-19-332Z.json`.
+  Bounded, elapsed `210595ms`, final gap `467344`, peak `5449 MiB`.
+- Cheap upper processed `12865` anchors but residual gap worsened to `800275`;
+  max source remained `generated-pair`, split state count `345541`, split abort
+  `timebox`.
+- Decision: existing low-memory high-pair scan/prefix is still not a viable
+  P06 route under the current hard JSON. Do not promote it; use it only as
+  evidence that repeated pair-complement work needs a different shared
+  certificate shape.
