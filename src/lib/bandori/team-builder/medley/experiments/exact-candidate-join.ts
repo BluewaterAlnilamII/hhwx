@@ -1364,6 +1364,7 @@ function estimateGeneratedMedleyExactCandidatePairConflictSplitUpper(
   let stateCount = 0;
   let timedOut = false;
   let abortReason: string | null = null;
+  let bestDisjointUpperBound = Number.NEGATIVE_INFINITY;
 
   const visit = (leftBannedCardIds: readonly number[], rightBannedCardIds: readonly number[]): number => {
     if (timedOut) {
@@ -1391,11 +1392,21 @@ function estimateGeneratedMedleyExactCandidatePairConflictSplitUpper(
       cache.set(key, Number.NEGATIVE_INFINITY);
       return Number.NEGATIVE_INFINITY;
     }
+    const scoreUpperBound = leftCandidate.result.score + rightCandidate.result.score;
+    // Once a valid disjoint pair reaches this independent slot upper, deeper
+    // overlap splitting cannot improve the bound for this branch.
+    if (
+      Number.isFinite(bestDisjointUpperBound)
+      && scoreUpperBound <= bestDisjointUpperBound
+    ) {
+      cache.set(key, scoreUpperBound);
+      return scoreUpperBound;
+    }
     const overlapCardId = getFirstMedleyExactCandidateOverlapCardId(leftCandidate, rightCandidate);
     if (overlapCardId === null) {
-      const upperBound = leftCandidate.result.score + rightCandidate.result.score;
-      cache.set(key, upperBound);
-      return upperBound;
+      bestDisjointUpperBound = Math.max(bestDisjointUpperBound, scoreUpperBound);
+      cache.set(key, scoreUpperBound);
+      return scoreUpperBound;
     }
     const upperBound = Math.max(
       visit(addSortedUniqueCardId(leftBannedCardIds, overlapCardId), rightBannedCardIds),

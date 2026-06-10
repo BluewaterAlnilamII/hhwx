@@ -1796,19 +1796,58 @@ Rejected/paused from this checkpoint:
   - `temp/bandori-team-builder/real-profile-medley-benchmark-2026-06-10T08-25-12-035Z.json`
   - bounded gap `394092`, elapsed `112041ms`, peak `3751 MiB`
 
+## Split-Pruned Cheap Upper Checkpoint - 2026-06-10 16:45 CST
+
+Accepted local diagnostic change:
+
+- In the generated-pair conflict split upper, keep the best valid disjoint pair
+  found so far and stop recursively splitting a branch once the branch's
+  independent left+right slot upper is already no higher than that valid
+  disjoint upper.
+- This is a safe upper-bound pruning: it reduces split DFS work but does not
+  mark any configuration exact and does not lower the bound below what the
+  current branch can still achieve.
+
+P06 evidence:
+
+- With the same 8s cheap-upper path plus split pruning:
+  - `temp/bandori-team-builder/real-profile-medley-benchmark-2026-06-10T08-32-06-448Z.json`
+  - score `9488172`, bounded gap `331225`, elapsed `99201ms`, peak `3587 MiB`
+  - cheap-upper residual gap `332436`
+  - split attempts `6494`, split states `155798`, split abort reason `timebox`
+  - max source moved to `right-unseen`, with max generated-pair upper
+    `6528470` and right-unseen upper `6765779`
+
+Rejected/paused from this checkpoint:
+
+- Enabling unseen-upper refinement with
+  `eventRootFrontierProbeAnchorCheapUpperRefineUnseen=true` and generated
+  prefix `512` was worse:
+  - `temp/bandori-team-builder/real-profile-medley-benchmark-2026-06-10T08-35-24-162Z.json`
+  - bounded gap `402942`, elapsed `93038ms`, peak `3760 MiB`
+  - cheap upper processed only `2235` anchors and residual gap was `404153`
+  - max source returned to `generated-pair`
+- Conclusion: heavier per-entry unseen refinement can lower individual unseen
+  terms but processes too few anchors inside the timebox, so it is not a good
+  default proof path for P06.
+
 Current P06 state:
 
 - Best observed safe no-GC P06 path is still bounded, but gap improved from
-  `605990` to `347244` under the diagnostic relaxed other-slot gate.
+  `605990` to `331225` under the diagnostic relaxed other-slot gate plus
+  split-pruned cheap upper.
 - The remaining top unclosed configurations are all
   `PastelPalettes/cool/{performance,technique,visual}` and now share the same
-  exact-join frontier upper around `9835416`.
+  exact-join frontier upper around `9819397`.
 - The remaining blocker is not incumbent quality. It is proof conversion for
-  high invalid generated-pair upper / overlapping pair frontier.
+  high invalid generated-pair upper, then unseen-side upper after the split
+  pruning removes part of the overlapping-pair inflation.
 
 Next proof direction:
 
 - Do not continue increasing cheap-upper timebox or high-pair proof limits.
+- Do not enable unseen refinement by default; its anchor-throughput cost
+  outweighed the local upper tightening in P06.
 - Investigate a lower-memory, monotonic pair upper for anchor frontier:
   - avoid retaining millions of JS pair-record objects;
   - separate invalid overlapping generated-pair score-only upper from valid
