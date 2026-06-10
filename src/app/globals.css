@@ -76,16 +76,6 @@ body {
   overflow-x: hidden;
 }
 
-.teambuilder-result-card {
-  content-visibility: auto;
-  contain-intrinsic-size: auto 340px;
-}
-
-.teambuilder-medley-result-card {
-  content-visibility: auto;
-  contain-intrinsic-size: auto 760px;
-}
-
 /* 飘落图案动画 */
 @keyframes fall {
   0% {

@@ -2180,7 +2180,7 @@ function ResultCard({
     : TARGET_LABELS[result.target];
 
   return (
-    <article className="teambuilder-result-card rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+    <article className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="flex items-center gap-4">
           <div className="w-12 text-right text-lg font-bold text-slate-700">#{result.rank}</div>
@@ -2290,10 +2290,10 @@ function MedleyResultCard({
   variant?: "default" | "candidate" | "max-score-candidate";
 }) {
   const articleClassName = variant === "max-score-candidate"
-    ? "teambuilder-medley-result-card rounded-2xl border border-emerald-200 bg-emerald-50 p-4 shadow-sm"
+    ? "rounded-2xl border border-emerald-200 bg-emerald-50 p-4 shadow-sm"
     : variant === "candidate"
-    ? "teambuilder-medley-result-card rounded-2xl border border-amber-200 bg-amber-50/70 p-4 shadow-sm"
-    : "teambuilder-medley-result-card rounded-2xl border border-slate-200 bg-white p-4 shadow-sm";
+    ? "rounded-2xl border border-amber-200 bg-amber-50/70 p-4 shadow-sm"
+    : "rounded-2xl border border-slate-200 bg-white p-4 shadow-sm";
   const badgeClassName = variant === "max-score-candidate"
     ? "rounded-full border border-emerald-200 bg-white px-2 py-0.5 font-bold text-emerald-700"
     : "rounded-full border border-amber-200 bg-white px-2 py-0.5 font-bold text-amber-700";
