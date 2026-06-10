@@ -1,6 +1,6 @@
 # Medley 40/40 Exact Roadmap
 
-Last updated: 2026-06-10 19:55 CST
+Last updated: 2026-06-10 20:31 CST
 
 This file is the persistent working note for the current medley optimizer goal.
 Keep it current before and after benchmark runs or proof-path changes, so future
@@ -2031,3 +2031,111 @@ Next proof direction:
 - Do not continue with larger K, larger staged candidate soft limits, longer
   full-solve budgets, seed/pre-proof warmups, or forced GC as routes to the
   primary no-GC 40/40 exact target.
+
+## Medley Score-Only Scoring Alignment - 2026-06-10 20:09 CST
+
+Hypothesis:
+
+- `evaluateMedleyScoreOnlyTeam` and `evaluateMedleyScoreOnlyTeamScore` still
+  use `calculateBestScoreForNonOverlappingSkillWindowsTargetOnly`, while the
+  hydrated `evaluateTeam` path routes through
+  `calculateBestScoreForNonOverlappingSkillWindows(..., targetOnly=true)` for
+  solo/normal lives and `calculateBestMultiLiveScoreForSkillWindows(...,
+  targetOnly=true)` for multilive.
+- The old medley score-only helper does not pass through `resolveEncoreSkill`
+  or `resolveOtherPlayerSkills`. That can make exact-join candidates use a
+  different average score than the final hydrated medley result. If true, this
+  is a general proof-material correctness issue, not a P06-specific heuristic.
+- Aligning score-only with the normal target-only scoring path should improve
+  candidate ordering, remembered upper slack, and proof-frontier quality without
+  expanding candidate limits, timeboxes, or memory footprint. It may also change
+  accepted scores; any score change must be treated as correctness evidence and
+  validated by repeat non-debug no-GC runs.
+
+Implementation gate:
+
+- Replace the medley-specific target-only scoring call with a small shared
+  helper that mirrors `evaluateTeam` score selection while preserving the lean
+  medley result object.
+- Do not restore automatic `lowMemoryInitialCandidateSync`.
+- Do not enable seed or prefix-seed routes.
+- Static checks required before long runs: `npm.cmd run typecheck` and
+  `git diff --check`.
+
+Targeted validation gate:
+
+- First run no-GC non-debug direct diagnostics for `P06:323` and `P07:260`
+  with the active hard-guard optimization JSON.
+- Accept this stage only if `P06:323` improves over the current safe no-GC
+  reference gap (`605990` direct baseline, or `331225` best safe cheap-upper
+  diagnostic) without new timeout/OOM, and `P07:260` does not regress in
+  exactness, peak working set, or bounded gap.
+- If targeted runs pass, rerun the isolated hard set
+  `P03:260,P06:323,P07:260,P08:323,P10:244,P10:260,P07:244,P08:244`.
+- Only after hard-set repeat stability should the full 40-case 3-round
+  acceptance restart.
+
+Result:
+
+- Rejected after first targeted `P06:323` no-GC non-debug diagnostic:
+  `temp/bandori-team-builder/real-profile-medley-scope-matrix-2026-06-10T12-13-57-984Z.json`.
+- Result stayed bounded with score `9488172`, gap `605990`, abort
+  `candidate-fill-soft-limit`, peak `2487 MiB`, and no timeout/OOM.
+- This matches the prior safe direct baseline shape and did not improve proof
+  quality. The source scoring alignment patch is therefore reverted for the
+  active 40/40 path to avoid carrying extra per-candidate scoring overhead.
+
+## Candidate-Fill Capacity Complement Probe - 2026-06-10 20:20 CST
+
+Hypothesis:
+
+- The current candidate-fill global pruning passes
+  `useCapacityComplementUpper: false`, so the slot generator often relies on
+  pair unseen upper alone while filling the hard anchor slot.
+- P06's open frontier is dominated by already-generated high slot0 anchors:
+  the unseen slot0 frontier is close to the cutoff, but generated anchors still
+  combine with a loose pair upper.
+- Enabling the existing capacity-complement upper inside candidate-fill may
+  safely prune anchor branches earlier by considering the selected anchor cards
+  against the remaining two slots. This reuses existing upper-bound code instead
+  of adding seed, increasing K, or expanding candidate material.
+
+Implementation gate:
+
+- Add opt-in `enableCandidateFillCapacityComplementUpper?: boolean`, default
+  `false`.
+- Pass it through both regular exact joins and event-root frontier probes.
+- When disabled, source behavior must remain unchanged.
+
+Targeted validation gate:
+
+- Run `P06:323` with the active hard-guard optimization JSON plus
+  `enableCandidateFillCapacityComplementUpper=true`.
+- Accept only if it improves the current safe no-GC gap without new timeout/OOM
+  and without increasing peak memory beyond the prior `P06:323` direct baseline
+  by more than 2%.
+- If P06 improves, run `P07:260` with the same option to check memory/pair-upper
+  regression before any hard-set run.
+
+Result:
+
+- Rejected after `P06:323` opt-in diagnostic:
+  `temp/bandori-team-builder/real-profile-medley-scope-matrix-2026-06-10T12-23-35-061Z.json`.
+- Result was bounded, score `9486961`, gap `607201`, elapsed `368755ms`,
+  `timedOut=true`, peak `7576 MiB`, abort `candidate-fill-generator-aborted`.
+- The option triggered huge generated-pair complement work during candidate fill:
+  `exactCandidateJoinPairComplementScanCount=419539616`,
+  `exactCandidateJoinPairComplementHighPairRecordCount=14999154`, and
+  `exactCandidateJoinPairComplementHighPairBuildElapsedMs=304002`.
+- Capacity upper counters stayed zero; the generated-pair complement work blew
+  the budget before capacity upper could provide useful pruning. The source
+  option is removed instead of kept as a diagnostic switch.
+
+Next route:
+
+- Do not enable pair-complement exact queries inside candidate-fill ordering.
+- If continuing global-pruning work, use a cheaper selected-card exclusion upper
+  that avoids materializing high-pair records: for an anchor prefix/candidate,
+  estimate each remaining slot's best score excluding the anchor's card ids, and
+  use that relaxed per-slot sum only when it is cheaper than the current
+  pair-unseen bound.
