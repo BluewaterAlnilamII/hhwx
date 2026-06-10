@@ -3402,6 +3402,10 @@ function proveMedleyExactCandidateAnchorFrontier(
   stats: BandoriMedleyTeamSearchStats,
   isPastDeadline: () => boolean,
   deadlineAt: number,
+  options: {
+    lowMemoryHighPairScanMinRecordCount?: number | null;
+    lowMemoryHighPairPrefixRecordLimit?: number | null;
+  } = {},
   observeEvaluatedResult?: MedleyEvaluatedResultObserver,
 ): MedleyExactCandidateAnchorFrontierProofResult {
   const startedAt = performance.now();
@@ -3510,6 +3514,8 @@ function proveMedleyExactCandidateAnchorFrontier(
       generatedPairQuery = buildMedleyExactCandidatePairUpperQuery(
         sortedLeftCandidates,
         sortedRightCandidates,
+        options.lowMemoryHighPairScanMinRecordCount ?? null,
+        options.lowMemoryHighPairPrefixRecordLimit ?? null,
       );
       generatedPairQueryKey = key;
     }
@@ -5274,7 +5280,12 @@ export function searchMedleyConfigurationByExactCandidateJoin(
       maxHighPairRecords,
     );
     profiling.exactCandidateJoinLastAnchorFrontierProofHighPairRecordUpperCount = highPairRecordUpperCount;
-    if (highPairRecordUpperCount > maxHighPairRecords) {
+    const canUseLowMemoryHighPairScanFallback = (
+      context.lowMemoryHighPairScanMinRecordCount !== null
+      && context.lowMemoryHighPairScanMinRecordCount !== undefined
+      && Number.isFinite(context.lowMemoryHighPairScanMinRecordCount)
+    );
+    if (highPairRecordUpperCount > maxHighPairRecords && !canUseLowMemoryHighPairScanFallback) {
       profiling.exactCandidateJoinAnchorFrontierProofSkipCount += 1;
       profiling.exactCandidateJoinLastAnchorFrontierProofSkipReason = "high-pair-record-upper";
       return cheapUpperResult;
@@ -5303,7 +5314,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
       };
     }
     didAnchorFrontierProof = true;
-    return proveMedleyExactCandidateAnchorFrontier(
+    const anchorFrontierProofResult = proveMedleyExactCandidateAnchorFrontier(
       slots,
       candidatesBySlot,
       activeGeneratorsBySlot,
@@ -5319,7 +5330,29 @@ export function searchMedleyConfigurationByExactCandidateJoin(
       stats,
       isPastDeadline,
       deadlineAt,
+      {
+        lowMemoryHighPairScanMinRecordCount: context.lowMemoryHighPairScanMinRecordCount ?? null,
+        lowMemoryHighPairPrefixRecordLimit: context.lowMemoryHighPairPrefixRecordLimit ?? null,
+      },
     );
+    if (
+      !anchorFrontierProofResult.proved
+      && cheapUpperResult?.observedUpperBound !== null
+      && cheapUpperResult?.observedUpperBound !== undefined
+      && Number.isFinite(cheapUpperResult.observedUpperBound)
+      && (
+        anchorFrontierProofResult.observedUpperBound === null
+        || anchorFrontierProofResult.observedUpperBound === undefined
+        || cheapUpperResult.observedUpperBound < anchorFrontierProofResult.observedUpperBound
+      )
+    ) {
+      return {
+        ...anchorFrontierProofResult,
+        observedUpperBound: cheapUpperResult.observedUpperBound,
+        residualUpperBound: cheapUpperResult.observedUpperBound,
+      };
+    }
+    return anchorFrontierProofResult;
   };
 
   const initialCandidateStartedAt = performance.now();

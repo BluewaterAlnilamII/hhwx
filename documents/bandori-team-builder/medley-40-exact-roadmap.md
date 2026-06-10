@@ -1,6 +1,6 @@
 # Medley 40/40 Exact Roadmap
 
-Last updated: 2026-06-11 01:41 CST
+Last updated: 2026-06-11 07:50 CST
 
 This file is the persistent working note for the current medley optimizer goal.
 Keep it current before and after benchmark runs or proof-path changes, so future
@@ -3225,4 +3225,53 @@ P07 failed follow-ups after P03 fix:
 - Decision: do not pursue unseen refine by only increasing its timebox or
   generated-candidate count. The remaining P06 gap needs a new proof
   certificate or a different event-root frontier decomposition, not another
-  parameter increase on the current cheap-upper refine.
+ parameter increase on the current cheap-upper refine.
+
+2026-06-11 07:50 CST P06 high-pair proof diagnostics:
+
+- Raising only `eventRootFrontierProbeCandidateSoftLimit` to `600000` under the
+  guarded/high-incumbent settings did not change the effective frontier:
+  - Raw:
+    `temp/bandori-team-builder/real-profile-medley-scope-matrix-2026-06-10T23-25-04-516Z.json`
+  - Result: bounded, `121610ms`, score `9488172`, gap `285649`,
+    peak `3877 MiB`.
+  - Candidate counts stayed `[33502, 81424, 51220]`, cheap upper stayed
+    `9773821`, and max source stayed `right-unseen`.
+  - Decision: do not pursue P06 by raising the event-root probe candidate soft
+    limit.
+- Debug ledger with the current guarded baseline:
+  - Raw:
+    `temp/bandori-team-builder/real-profile-medley-scope-matrix-2026-06-10T23-32-31-415Z.json`
+  - The only meaningful unclosed frontier remains
+    `PastelPalettes/cool/performance`.
+  - The event-root probe hits slot0 `candidate-fill-soft-limit` at `200000`
+    candidates. Cheap upper tightens from about `10094162` to `9773821`, but
+    leaves residual gap `286860`.
+  - Full anchor proof is skipped by `high-pair-record-upper`; the estimated
+    high-pair record count is `2237752`, just above the experimental
+    `2200000` guard.
+- Raising `eventRootFrontierProbeAnchorProofMaxHighPairRecords` to `2500000`
+  did not start proof:
+  - Raw:
+    `temp/bandori-team-builder/real-profile-medley-scope-matrix-2026-06-10T23-36-04-518Z.json`
+  - The count exceeded the new guard as well (`2542900`), so the true high-pair
+    record count is larger than the current narrow guard window.
+- A diagnostic patch now lets explicit `enableLowMemoryHighPairScan=true`
+  bypass the high-pair bitset guard for anchor proof and use the existing scan
+  fallback inside the proof query. Default behavior is unchanged.
+- Scan fallback diagnostic:
+  - Raw:
+    `temp/bandori-team-builder/real-profile-medley-scope-matrix-2026-06-10T23-44-14-685Z.json`
+  - Result: bounded, `198698ms`, score `9488172`, gap `605990`,
+    peak `2497 MiB`.
+  - Anchor proof triggered and used the 120s timebox, but processed `0`
+    anchors before timing out. It is therefore too slow to be an accepted P06
+    route.
+  - Code follow-up: when an opt-in full anchor proof times out, keep the
+    already tighter cheap-upper observed bound instead of letting the looser
+    proof residual replace it.
+- Current conclusion: P06 should not move forward by wider candidate limits,
+  larger high-pair record guards, or scan-based full anchor proof. The next
+  viable direction is a cheaper certificate for the `right-unseen` pair upper
+  or a different event-root frontier decomposition that avoids spending a full
+  anchor proof on the first unresolved anchor.
