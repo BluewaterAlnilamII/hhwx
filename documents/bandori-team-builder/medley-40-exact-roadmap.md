@@ -3151,3 +3151,50 @@ P07 failed follow-ups after P03 fix:
      a worse 300s bounded gap or score instability.
   3. If a single-case interval passes, rerun the hard set before considering a
      full 40-case confirmation.
+
+2026-06-11 07:12 CST P07 closed, P06 still frontier-bounded:
+
+- Added guarded same-coarse low-root proof scheduling:
+  `sameCoarseLowRootFirstProofMaxGroupRootGap`.
+  - Default remains old behavior when unset.
+  - For experiments, `enableSameCoarseLowRootFirstProofOrder=true` plus
+    `sameCoarseLowRootFirstProofMaxGroupRootGap=350000` lets small/medium-gap
+    same-coarse groups prove their low-root siblings first, while avoiding the
+    P06 failure mode where a large first frontier consumes the full 300s
+    budget.
+- `P07:260`, no-GC, 6144 MiB, `exactCandidateJoinScoreCacheClearInterval=2000`,
+  guarded low-root max group gap `350000`:
+  - Raw:
+    `temp/bandori-team-builder/real-profile-medley-scope-matrix-2026-06-10T23-04-05-939Z.json`
+  - Result: exact, `295823ms`, score `8568618`, peak `6026 MiB`,
+    `timedOut=false`, `memoryLimited=false`.
+  - Interpretation: P07 is now closed in isolated single-case validation, but
+    the margin is only about 4s, so it still needs hard-set repeat validation
+    before being counted as stable.
+- Guard calibration rejected:
+  - `sameCoarseLowRootFirstProofMaxGroupRootGap=200000` and the first `350000`
+    attempt before threshold fallback both failed because sorting-time threshold
+    could be `-Infinity`; the guard now falls back to current/seed-pass best
+    score.
+  - Unbounded old low-root exacted P07 but made P06 spend the full budget in
+    the first large frontier, so it must not be used directly as an acceptance
+    setting.
+- `P06:323`, same guarded settings:
+  - Raw:
+    `temp/bandori-team-builder/real-profile-medley-scope-matrix-2026-06-10T23-09-27-925Z.json`
+  - Result: bounded, `114940ms`, score improved to `9488172`, gap `285649`,
+    peak `4113 MiB`, `timedOut=false`, `memoryLimited=false`.
+  - Event-root probe: unproved `large-gap-event-skip-seeding`; upper tightened
+    from about `10094162` to `9773821`, residual gap `286860`, max source
+    `right-unseen`.
+  - Interpretation: P06 is no longer an incumbent-quality or memory problem in
+    this run. The remaining blocker is still the event-root frontier's unseen
+    upper certificate for `PastelPalettes/cool`, especially the right-unseen
+    residual after generated-pair refinement.
+- Current hard-case status:
+  - Closed in isolated validation: `P03:323`, `P07:260`.
+  - Still open: `P06:323`.
+  - Next useful P06 work should target a reusable or cheaper unseen-upper
+    certificate for the event-root frontier. Do not continue by widening
+    candidate limits, extending seed/warmup, or enabling unguarded low-root
+    ordering.

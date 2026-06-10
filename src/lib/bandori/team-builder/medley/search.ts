@@ -811,6 +811,16 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
   const disableDominatedRootSkip = optimization.disableDominatedRootSkip === true;
   const disableSameCoarseTightRootSkip = optimization.disableSameCoarseTightRootSkip === true;
   const enableSameCoarseLowRootFirstProofOrder = optimization.enableSameCoarseLowRootFirstProofOrder === true;
+  const parsedSameCoarseLowRootFirstProofMaxGroupRootGap = (
+    optimization.sameCoarseLowRootFirstProofMaxGroupRootGap !== undefined
+      ? Number(optimization.sameCoarseLowRootFirstProofMaxGroupRootGap)
+      : Number.NaN
+  );
+  const sameCoarseLowRootFirstProofMaxGroupRootGap = Number.isFinite(
+    parsedSameCoarseLowRootFirstProofMaxGroupRootGap,
+  )
+    ? Math.max(0, parsedSameCoarseLowRootFirstProofMaxGroupRootGap)
+    : Number.POSITIVE_INFINITY;
   const disableAllScopeExactJoinPreSkip = optimization.disableAllScopeExactJoinPreSkip === true;
   const enableAllScopeExactJoinPreSkip = (
     optimization.enableAllScopeExactJoinPreSkip === true
@@ -2251,14 +2261,30 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
     );
     if (shouldUseAllScopeObservedRootSort) {
       if (enableSameCoarseLowRootFirstProofOrder) {
-        const groupStats = new Map<string, {
+        const proofOrderThreshold = getMedleyPruningThreshold(results, resultLimit);
+        const proofOrderReferenceScore = Number.isFinite(proofOrderThreshold)
+          ? proofOrderThreshold
+          : Math.max(
+            results[0]?.score ?? Number.NEGATIVE_INFINITY,
+            profiling.bestConfigurationSeedPassScore ?? Number.NEGATIVE_INFINITY,
+            ...configurationSeedScores.values(),
+          );
+        type SameCoarseProofOrderGroupStats = {
           maxObservedRootUpperBound: number;
           maxRootUpperBound: number;
           maxSeedScore: number;
           minIndex: number;
-        }>();
+          maxObservedRootGap: number;
+        };
+        const groupStats = new Map<string, SameCoarseProofOrderGroupStats>();
         for (const entry of configurationEntries) {
           const key = getMedleyAreaItemCoarseKey(entry.configuration);
+          const observedRootGap = (
+            Number.isFinite(proofOrderReferenceScore)
+            && Number.isFinite(entry.observedRootUpperBound)
+          )
+            ? entry.observedRootUpperBound - proofOrderReferenceScore
+            : Number.POSITIVE_INFINITY;
           const current = groupStats.get(key);
           if (!current) {
             groupStats.set(key, {
@@ -2266,6 +2292,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
               maxRootUpperBound: entry.rootUpperBound,
               maxSeedScore: entry.seedScore,
               minIndex: entry.index,
+              maxObservedRootGap: observedRootGap,
             });
             continue;
           }
@@ -2276,7 +2303,11 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
           current.maxRootUpperBound = Math.max(current.maxRootUpperBound, entry.rootUpperBound);
           current.maxSeedScore = Math.max(current.maxSeedScore, entry.seedScore);
           current.minIndex = Math.min(current.minIndex, entry.index);
+          current.maxObservedRootGap = Math.max(current.maxObservedRootGap, observedRootGap);
         }
+        const shouldUseLowRootOrderForGroup = (group: SameCoarseProofOrderGroupStats): boolean => (
+          group.maxObservedRootGap <= sameCoarseLowRootFirstProofMaxGroupRootGap
+        );
         orderedConfigurations = configurationEntries
           .sort((left, right) => {
             const leftGroup = groupStats.get(getMedleyAreaItemCoarseKey(left.configuration));
@@ -2289,12 +2320,20 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
                 || leftGroup.minIndex - rightGroup.minIndex
               );
             }
-            return (
-              left.observedRootUpperBound - right.observedRootUpperBound
-              || right.seedScore - left.seedScore
-              || right.rootUpperBound - left.rootUpperBound
-              || left.index - right.index
-            );
+            const shouldUseLowRootOrder = leftGroup ? shouldUseLowRootOrderForGroup(leftGroup) : true;
+            return shouldUseLowRootOrder
+              ? (
+                left.observedRootUpperBound - right.observedRootUpperBound
+                || right.seedScore - left.seedScore
+                || right.rootUpperBound - left.rootUpperBound
+                || left.index - right.index
+              )
+              : (
+                right.observedRootUpperBound - left.observedRootUpperBound
+                || right.seedScore - left.seedScore
+                || right.rootUpperBound - left.rootUpperBound
+                || left.index - right.index
+              );
           })
           .map(({ configuration }) => configuration);
       } else {

@@ -112,6 +112,7 @@ export type BandoriMedleySearchOptimizationOptions = {
   enableEventRootFrontierProbe?: boolean;
   enablePostExactEventRootFrontierProbe?: boolean;
   enableExactJoinWideAnchorFrontierProbe?: boolean;
+  sameCoarseLowRootFirstProofMaxGroupRootGap?: number;
   eventRootFrontierProbeTimeboxMs?: number;
   eventRootFrontierProbeCandidateSoftLimit?: number;
   eventRootFrontierProbeMinRemainingMs?: number;
