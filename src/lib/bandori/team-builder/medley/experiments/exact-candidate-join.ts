@@ -79,10 +79,13 @@ import {
   type MedleyExactSlotUpperHeapNode,
 } from "./exact-candidate-join-heap";
 import {
+  buildMedleyCardBoundPowerUpperBySlot,
   buildMedleyCapacityCardsByCharacter,
   estimateMedleyCapacityAssignmentScoreUpperBound,
+  estimateMedleyCapacityCardBoundLagrangianScoreUpperBound,
   estimateMedleyCapacityCardBoundSharedPowerSkillScoreUpperBound,
   estimateMedleyRemainingScoreUpperBound,
+  estimateMedleySlotSkillCoefficient,
 } from "../upper/capacity";
 import {
   estimateMedleySlotBranchScoreUpperBound,
@@ -5027,28 +5030,61 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
       ? Number.NEGATIVE_INFINITY
       : selectedUpper;
     const targetPairUpper = incumbentScore - processedUpperMaxAnchorCandidate.result.score;
+    let lagrangianUpper: number | null = null;
+    let lagrangianWeight: number | null = null;
+    let lagrangianElapsedMs: number | null = null;
     let sharedPowerUpper: number | null = null;
     let sharedPowerElapsedMs: number | null = null;
+    const pairCardsByCharacter = (
+      shouldCapturePairCapacitySharedPowerBreakdown || shouldCapturePairCapacityBreakdown
+        ? buildMedleyCapacityCardsByCharacter(
+          slots,
+          pairSlotIndices,
+          bannedCardIds,
+        )
+        : null
+    );
+    const lagrangianStartedAt = performance.now();
+    const pairSlotCoefficients = pairSlotIndices.map((slotIndex) => (
+      estimateMedleySlotSkillCoefficient(slots[slotIndex], bannedCardIds).coefficient
+    ));
+    if (pairCardsByCharacter && pairSlotCoefficients.every(Number.isFinite)) {
+      const cardBoundPowerUpperBySlot = buildMedleyCardBoundPowerUpperBySlot(
+        slots,
+        pairSlotIndices,
+        bannedCardIds,
+      );
+      const lagrangianEstimate = estimateMedleyCapacityCardBoundLagrangianScoreUpperBound(
+        slots,
+        pairSlotIndices,
+        pairCardsByCharacter,
+        pairSlotCoefficients,
+        cardBoundPowerUpperBySlot,
+        profiling,
+      );
+      if (lagrangianEstimate !== null && Number.isFinite(lagrangianEstimate.upperBound)) {
+        lagrangianUpper = lagrangianEstimate.upperBound;
+        lagrangianWeight = lagrangianEstimate.weight;
+      }
+    }
+    lagrangianElapsedMs = performance.now() - lagrangianStartedAt;
     if (shouldCapturePairCapacitySharedPowerBreakdown) {
       const sharedPowerStartedAt = performance.now();
-      const cardsByCharacter = buildMedleyCapacityCardsByCharacter(
-        slots,
-        pairSlotIndices,
-        bannedCardIds,
-      );
-      sharedPowerUpper = estimateMedleyCapacityCardBoundSharedPowerSkillScoreUpperBound(
-        slots,
-        pairSlotIndices,
-        cardsByCharacter,
-        bannedCardIds,
-        profiling,
-        {
-          allowTwoSlot: true,
-          allowBannedCards: true,
-          stateBudget: pairCapacitySharedPowerStateBudget,
-          deadlineAt: Math.min(deadlineAt, sharedPowerStartedAt + 1000),
-        },
-      );
+      if (pairCardsByCharacter) {
+        sharedPowerUpper = estimateMedleyCapacityCardBoundSharedPowerSkillScoreUpperBound(
+          slots,
+          pairSlotIndices,
+          pairCardsByCharacter,
+          bannedCardIds,
+          profiling,
+          {
+            allowTwoSlot: true,
+            allowBannedCards: true,
+            stateBudget: pairCapacitySharedPowerStateBudget,
+            deadlineAt: Math.min(deadlineAt, sharedPowerStartedAt + 1000),
+          },
+        );
+      }
       sharedPowerElapsedMs = performance.now() - sharedPowerStartedAt;
     }
 
@@ -5089,6 +5125,20 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
     );
     profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacityBreakdownBasicSkillAwareUpper = (
       finiteDiagnostic(basicCapacityUpper.skillAwareUpperBound)
+    );
+    profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacityBreakdownLagrangianUpper = (
+      finiteDiagnostic(lagrangianUpper)
+    );
+    profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacityBreakdownLagrangianGap = (
+      lagrangianUpper !== null && Number.isFinite(lagrangianUpper) && Number.isFinite(targetPairUpper)
+        ? lagrangianUpper - targetPairUpper
+        : null
+    );
+    profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacityBreakdownLagrangianWeight = (
+      finiteDiagnostic(lagrangianWeight)
+    );
+    profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacityBreakdownLagrangianElapsedMs = (
+      Math.round(lagrangianElapsedMs)
     );
     profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacityBreakdownSharedPowerUpper = (
       finiteDiagnostic(sharedPowerUpper)

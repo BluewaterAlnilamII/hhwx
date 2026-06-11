@@ -708,6 +708,10 @@ export type BandoriMedleyTeamSearchProfilingStats = {
   exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacityBreakdownBasicMode: MedleyCapacityUpperMode | null;
   exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacityBreakdownBasicCoefficientUpper: number | null;
   exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacityBreakdownBasicSkillAwareUpper: number | null;
+  exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacityBreakdownLagrangianUpper: number | null;
+  exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacityBreakdownLagrangianGap: number | null;
+  exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacityBreakdownLagrangianWeight: number | null;
+  exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacityBreakdownLagrangianElapsedMs: number | null;
   exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacityBreakdownSharedPowerUpper: number | null;
   exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacityBreakdownSharedPowerGap: number | null;
   exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacityBreakdownSharedPowerStateBudget: number | null;
