@@ -145,6 +145,7 @@ export type BandoriMedleySearchOptimizationOptions = {
   eventRootFrontierProbeAnchorCheapUpperStreamAnchorTail?: boolean;
   eventRootFrontierProbeAnchorCheapUpperStreamAnchorTailMaxCandidates?: number;
   eventRootFrontierProbeAnchorCheapUpperStreamAnchorTailTimeboxMs?: number;
+  eventRootFrontierProbeAnchorCheapUpperStreamAnchorTailGlobalPruning?: boolean;
   eventRootFrontierProbeAnchorCheapUpperRefineUnseen?: boolean;
   eventRootFrontierProbeAnchorCheapUpperRefineTopAnchors?: number;
   eventRootFrontierProbeAnchorCheapUpperUnseenRefineMaxGeneratedCandidates?: number;
@@ -716,6 +717,8 @@ export type BandoriMedleyTeamSearchProfilingStats = {
   exactCandidateJoinLastAnchorFrontierCheapUpperStreamAnchorTailCandidateCount: number | null;
   exactCandidateJoinLastAnchorFrontierCheapUpperStreamAnchorTailPeekBefore: number | null;
   exactCandidateJoinLastAnchorFrontierCheapUpperStreamAnchorTailPeekAfter: number | null;
+  exactCandidateJoinLastAnchorFrontierCheapUpperStreamAnchorTailGlobalPeekBefore: number | null;
+  exactCandidateJoinLastAnchorFrontierCheapUpperStreamAnchorTailGlobalPeekAfter: number | null;
   exactCandidateJoinLastAnchorFrontierCheapUpperStreamAnchorTailUpperBound: number | null;
   exactCandidateJoinLastAnchorFrontierCheapUpperStreamAnchorTailElapsedMs: number | null;
   exactCandidateJoinLastAnchorFrontierCheapUpperStreamAnchorTailAbortReason: string | null;

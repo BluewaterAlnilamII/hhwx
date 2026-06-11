@@ -400,6 +400,8 @@ export function createInitialMedleyProfilingStats(
     exactCandidateJoinLastAnchorFrontierCheapUpperStreamAnchorTailCandidateCount: null,
     exactCandidateJoinLastAnchorFrontierCheapUpperStreamAnchorTailPeekBefore: null,
     exactCandidateJoinLastAnchorFrontierCheapUpperStreamAnchorTailPeekAfter: null,
+    exactCandidateJoinLastAnchorFrontierCheapUpperStreamAnchorTailGlobalPeekBefore: null,
+    exactCandidateJoinLastAnchorFrontierCheapUpperStreamAnchorTailGlobalPeekAfter: null,
     exactCandidateJoinLastAnchorFrontierCheapUpperStreamAnchorTailUpperBound: null,
     exactCandidateJoinLastAnchorFrontierCheapUpperStreamAnchorTailElapsedMs: null,
     exactCandidateJoinLastAnchorFrontierCheapUpperStreamAnchorTailAbortReason: null,

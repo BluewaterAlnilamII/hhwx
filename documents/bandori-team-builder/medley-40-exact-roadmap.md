@@ -1,6 +1,6 @@
 # Medley 40/40 Exact Roadmap
 
-Last updated: 2026-06-12 06:39 CST
+Last updated: 2026-06-12 07:00 CST
 
 This file is the persistent working note for the current medley optimizer goal.
 Keep it current before and after benchmark runs or proof-path changes, so future
@@ -89,6 +89,28 @@ No-GC acceptance contract:
     processed pair-capacity residual, or a scheduling/proof-flow change that
     closes `PastelPalettes/cool` and then revisits cheap dominated roots without
     starving the third same-coarse parameter.
+
+- Stream-tail global-pruning diagnostic:
+  - Code change: added default-off
+    `eventRootFrontierProbeAnchorCheapUpperStreamAnchorTailGlobalPruning`.
+    When enabled, stream-tail may pass the existing exact-join global-pruning
+    context to the active anchor generator and records global tail peek
+    before/after. The default path and normal exact proof semantics are
+    unchanged.
+  - Raw:
+    `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-11T22-54-36-426Z.json`.
+  - Options: same accepted no-GC `P06:323` stream-tail setup as above, plus
+    `eventRootFrontierProbeAnchorCheapUpperStreamAnchorTailGlobalPruning=true`.
+  - Result: bounded, score `9488172`, maxScore `9567356`, upper `9631451`,
+    gap `143279`, elapsed `256369ms`, peak `3613 MiB`, `timedOut=false`,
+    `memoryLimited=false`.
+  - Signal: the final stream-tail still consumed `0` candidates and closed
+    immediately. It surfaced the same global tail upper `9570747` already seen
+    by the accepted proof shape; the local residual gap stayed `82575`.
+  - Decision: rejected as an exactness improvement. It is useful only as a
+    clearer diagnostic that the current `P06:323` blocker is not an unstreamed
+    anchor tail. Continue with processed pair-capacity certificate or
+    same-coarse proof scheduling work.
 
 - Baseline reference for this subsection:
   `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-11T20-56-17-305Z.json`.

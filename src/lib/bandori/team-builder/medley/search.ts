@@ -1561,6 +1561,9 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
   )
     ? Math.max(0, parsedEventRootFrontierProbeAnchorCheapUpperStreamAnchorTailTimeboxMs)
     : null;
+  const eventRootFrontierProbeAnchorCheapUpperStreamAnchorTailGlobalPruning = (
+    optimization.eventRootFrontierProbeAnchorCheapUpperStreamAnchorTailGlobalPruning === true
+  );
   const eventRootFrontierProbeAnchorCheapUpperRefineUnseen =
     optimization.eventRootFrontierProbeAnchorCheapUpperRefineUnseen === true;
   const parsedEventRootFrontierProbeAnchorCheapUpperRefineTopAnchors =
@@ -1757,6 +1760,9 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
       ),
       anchorFrontierCheapUpperStreamAnchorTailTimeboxMs: (
         eventRootFrontierProbeAnchorCheapUpperStreamAnchorTailTimeboxMs
+      ),
+      anchorFrontierCheapUpperStreamAnchorTailGlobalPruning: (
+        eventRootFrontierProbeAnchorCheapUpperStreamAnchorTailGlobalPruning
       ),
       anchorFrontierCheapUpperRefineUnseen: eventRootFrontierProbeAnchorCheapUpperRefineUnseen,
       anchorFrontierCheapUpperRefineTopAnchors: eventRootFrontierProbeAnchorCheapUpperRefineTopAnchors,
@@ -5989,6 +5995,9 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
         traceEntry.eventRootFrontierProbeAnchorCheapUpperStreamAnchorTailTimeboxMs = (
           eventRootFrontierProbeAnchorCheapUpperStreamAnchorTailTimeboxMs
         );
+        traceEntry.eventRootFrontierProbeAnchorCheapUpperStreamAnchorTailGlobalPruning = (
+          eventRootFrontierProbeAnchorCheapUpperStreamAnchorTailGlobalPruning
+        );
         traceEntry.eventRootFrontierProbeAnchorCheapUpperRefineUnseen = (
           eventRootFrontierProbeAnchorCheapUpperRefineUnseen
         );
@@ -6161,6 +6170,9 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
           ),
           anchorFrontierCheapUpperStreamAnchorTailTimeboxMs: (
             eventRootFrontierProbeAnchorCheapUpperStreamAnchorTailTimeboxMs
+          ),
+          anchorFrontierCheapUpperStreamAnchorTailGlobalPruning: (
+            eventRootFrontierProbeAnchorCheapUpperStreamAnchorTailGlobalPruning
           ),
           anchorFrontierCheapUpperRefineUnseen: eventRootFrontierProbeAnchorCheapUpperRefineUnseen,
           anchorFrontierCheapUpperRefineTopAnchors: eventRootFrontierProbeAnchorCheapUpperRefineTopAnchors,
