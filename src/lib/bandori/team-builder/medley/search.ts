@@ -120,6 +120,7 @@ const MEDLEY_POST_EXACT_JOIN_TIGHT_ROOT_MAX_CARD_COUNT = 1_300;
 const MEDLEY_POST_EXACT_JOIN_TIGHT_ROOT_MIN_REMAINING_MS = 30_000;
 const MEDLEY_SAME_COARSE_FRONTIER_RETRY_MAX_CARD_COUNT = 1_300;
 const MEDLEY_SAME_COARSE_FRONTIER_RETRY_MIN_REMAINING_MS = 90_000;
+const MEDLEY_SAME_COARSE_FRONTIER_RETRY_TRAILING_RESERVE_MS = 60_000;
 const MEDLEY_SAME_COARSE_FRONTIER_RETRY_MIN_ROOT_DELTA = 100_000;
 const MEDLEY_SAME_COARSE_FRONTIER_RETRY_MIN_UNRESOLVED_GAP = 300_000;
 const MEDLEY_SAME_COARSE_FRONTIER_PROOF_TARGET_GAP = 200_000;
@@ -475,6 +476,13 @@ function buildProofLedger(
         frontierRetryTargetUpperBound: entry.sameCoarseFrontierRetryTargetUpperBound ?? null,
         frontierRetryRootUpperBound: entry.sameCoarseFrontierRetryRootUpperBound ?? null,
         frontierRetryRootDelta: entry.sameCoarseFrontierRetryRootDelta ?? null,
+        frontierRetryTrailingReserve: entry.sameCoarseFrontierRetryTrailingReserve ?? null,
+        frontierRetryTrailingReserveMs: entry.sameCoarseFrontierRetryTrailingReserveMs ?? null,
+        frontierRetryTrailingSiblingCount: entry.sameCoarseFrontierRetryTrailingSiblingCount ?? null,
+        frontierRetryMaxTrailingSiblingRootGap: entry.sameCoarseFrontierRetryMaxTrailingSiblingRootGap ?? null,
+        frontierRetryWouldStarveTrailingSibling: (
+          entry.sameCoarseFrontierRetryWouldStarveTrailingSibling ?? null
+        ),
         frontierProofTargetUpperBound: entry.sameCoarseFrontierProofTargetUpperBound ?? null,
         frontierProofTargetRootDelta: entry.sameCoarseFrontierProofTargetRootDelta ?? null,
       },
@@ -905,6 +913,15 @@ function buildBoundedFrontierGroups(
       sameCoarseFrontierRetryTargetUpperBound: entry.sameCoarseFrontierRetryTargetUpperBound ?? null,
       sameCoarseFrontierRetryRootUpperBound: entry.sameCoarseFrontierRetryRootUpperBound ?? null,
       sameCoarseFrontierRetryRootDelta: entry.sameCoarseFrontierRetryRootDelta ?? null,
+      sameCoarseFrontierRetryTrailingReserve: entry.sameCoarseFrontierRetryTrailingReserve ?? null,
+      sameCoarseFrontierRetryTrailingReserveMs: entry.sameCoarseFrontierRetryTrailingReserveMs ?? null,
+      sameCoarseFrontierRetryTrailingSiblingCount: entry.sameCoarseFrontierRetryTrailingSiblingCount ?? null,
+      sameCoarseFrontierRetryMaxTrailingSiblingRootGap: (
+        entry.sameCoarseFrontierRetryMaxTrailingSiblingRootGap ?? null
+      ),
+      sameCoarseFrontierRetryWouldStarveTrailingSibling: (
+        entry.sameCoarseFrontierRetryWouldStarveTrailingSibling ?? null
+      ),
       sameCoarseFrontierProofTargetUpperBound: entry.sameCoarseFrontierProofTargetUpperBound ?? null,
       sameCoarseFrontierProofTargetRootDelta: entry.sameCoarseFrontierProofTargetRootDelta ?? null,
     });
@@ -1057,6 +1074,19 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
   )
     ? Math.max(0, parsedSameCoarseFrontierRetryMinRemainingMs)
     : MEDLEY_SAME_COARSE_FRONTIER_RETRY_MIN_REMAINING_MS;
+  const enableSameCoarseFrontierRetryTrailingReserve = (
+    optimization.enableSameCoarseFrontierRetryTrailingReserve === true
+  );
+  const parsedSameCoarseFrontierRetryTrailingReserveMs = (
+    optimization.sameCoarseFrontierRetryTrailingReserveMs !== undefined
+      ? Number(optimization.sameCoarseFrontierRetryTrailingReserveMs)
+      : Number.NaN
+  );
+  const sameCoarseFrontierRetryTrailingReserveMs = Number.isFinite(
+    parsedSameCoarseFrontierRetryTrailingReserveMs,
+  )
+    ? Math.max(0, parsedSameCoarseFrontierRetryTrailingReserveMs)
+    : MEDLEY_SAME_COARSE_FRONTIER_RETRY_TRAILING_RESERVE_MS;
   const parsedSameCoarseLowRootFirstProofMaxGroupRootGap = (
     optimization.sameCoarseLowRootFirstProofMaxGroupRootGap !== undefined
       ? Number(optimization.sameCoarseLowRootFirstProofMaxGroupRootGap)
@@ -4524,12 +4554,31 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
         entry.unresolvedAboveIncumbent === true
         && asFiniteNumber(entry.rememberedUnclosedUpperBound) === rememberedSameCoarseSiblingUpperBound
       ));
+      const trailingUnresolvedSameCoarseSiblings = sameCoarseSiblingFrontier.filter((entry) => {
+        const siblingIndex = asFiniteNumber(entry.configurationIndex);
+        return (
+          entry.unresolvedAboveIncumbent === true
+          && siblingIndex !== null
+          && siblingIndex > configurationIndex
+        );
+      });
+      const maxTrailingSameCoarseSiblingRootGap = trailingUnresolvedSameCoarseSiblings
+        .map((entry) => asFiniteNumber(entry.rootGap))
+        .filter((gap): gap is number => gap !== null)
+        .sort((left, right) => right - left)[0] ?? null;
+      const sameCoarseFrontierRetryWouldStarveTrailingSibling = (
+        enableSameCoarseFrontierRetryTrailingReserve
+        && trailingUnresolvedSameCoarseSiblings.length > 0
+        && remainingBeforeSameCoarseFrontierRetryMs - sameCoarseFrontierRetryTrailingReserveMs
+          < sameCoarseFrontierRetryMinRemainingMs
+      );
       const shouldRetrySameCoarseFrontier = (
         Number.isFinite(sameCoarseRootSkipUpperBound)
         && sameCoarseRootSkipUpperBound >= threshold
         && hasRememberedSameCoarseFrontierSibling
         && calculatedCards.length <= MEDLEY_SAME_COARSE_FRONTIER_RETRY_MAX_CARD_COUNT
         && remainingBeforeSameCoarseFrontierRetryMs >= sameCoarseFrontierRetryMinRemainingMs
+        && !sameCoarseFrontierRetryWouldStarveTrailingSibling
         && (
           sameCoarseFrontierRetryRootDelta >= MEDLEY_SAME_COARSE_FRONTIER_RETRY_MIN_ROOT_DELTA
           || sameCoarseFrontierRetryUnresolvedGap >= MEDLEY_SAME_COARSE_FRONTIER_RETRY_MIN_UNRESOLVED_GAP
@@ -4545,6 +4594,15 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
         traceEntry.sameCoarseFrontierRetryHasRememberedSibling = hasRememberedSameCoarseFrontierSibling;
         traceEntry.sameCoarseFrontierRetryRemainingMs = Math.round(remainingBeforeSameCoarseFrontierRetryMs);
         traceEntry.sameCoarseFrontierRetryMinRemainingMs = Math.round(sameCoarseFrontierRetryMinRemainingMs);
+        traceEntry.sameCoarseFrontierRetryTrailingReserve = enableSameCoarseFrontierRetryTrailingReserve;
+        traceEntry.sameCoarseFrontierRetryTrailingReserveMs = Math.round(
+          sameCoarseFrontierRetryTrailingReserveMs,
+        );
+        traceEntry.sameCoarseFrontierRetryTrailingSiblingCount = trailingUnresolvedSameCoarseSiblings.length;
+        traceEntry.sameCoarseFrontierRetryMaxTrailingSiblingRootGap = maxTrailingSameCoarseSiblingRootGap;
+        traceEntry.sameCoarseFrontierRetryWouldStarveTrailingSibling = (
+          sameCoarseFrontierRetryWouldStarveTrailingSibling
+        );
         traceEntry.sameCoarseFrontierFullProofRetry = (
           shouldRetrySameCoarseFrontier && enableSameCoarseFrontierFullProofRetry
         );
