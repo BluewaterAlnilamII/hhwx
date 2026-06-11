@@ -554,6 +554,7 @@ export function createMedleyExactSlotCandidateGenerator(
   let poppedNodes = 0;
   let heapKeyMode: "slot" | "global" = "slot";
   let heapGlobalKeySignature: string | null = null;
+  let heapGlobalScoreCutoff: number | null = null;
   let maxPruningScoreCutoff = Number.NEGATIVE_INFINITY;
   type CreateSearchNodeInput = {
     key: number;
@@ -857,6 +858,7 @@ export function createMedleyExactSlotCandidateGenerator(
     const nodes = heap.splice(0, heap.length);
     heapKeyMode = globalPruning ? "global" : "slot";
     heapGlobalKeySignature = globalKeySignature;
+    heapGlobalScoreCutoff = globalPruning ? globalPruning.scoreCutoff : null;
     slotUpperHeap.length = 0;
     for (const node of nodes) {
       node.activeInSlotUpperHeap = false;
@@ -1085,6 +1087,19 @@ export function createMedleyExactSlotCandidateGenerator(
         ? heap[0]?.key ?? Number.NEGATIVE_INFINITY
         : peekMaxHeapSlotUpperBound()
     ),
+    peekGlobalUpperBound: () => {
+      if (
+        heapKeyMode !== "global"
+        || heapGlobalScoreCutoff === null
+        || !Number.isFinite(heapGlobalScoreCutoff)
+      ) {
+        return null;
+      }
+      const globalSlack = heap[0]?.key ?? Number.NEGATIVE_INFINITY;
+      return Number.isFinite(globalSlack)
+        ? heapGlobalScoreCutoff + globalSlack
+        : null;
+    },
     canReuseForScoreCutoff: (scoreCutoff: number) => (
       !Number.isFinite(scoreCutoff) || scoreCutoff >= maxPruningScoreCutoff
     ),
@@ -3947,6 +3962,7 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
     suffixGeneratedPairJoin?: boolean;
     suffixUnseenSingleCardJoin?: boolean;
     suffixUnseenFullJoin?: boolean;
+    unprocessedGeneratorUpperBound?: number | null;
   } = {},
   observeEvaluatedResult?: MedleyEvaluatedResultObserver,
 ): MedleyExactCandidateAnchorFrontierProofResult {
@@ -4072,6 +4088,13 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
   const shouldUseSuffixUnseenSingleCardJoin = options.suffixUnseenSingleCardJoin === true;
   const shouldUseSuffixUnseenFullJoin = options.suffixUnseenFullJoin === true;
   const shouldUseSuffixUnseenJoin = shouldUseSuffixUnseenSingleCardJoin || shouldUseSuffixUnseenFullJoin;
+  const globalTailUpperBound = (
+    options.unprocessedGeneratorUpperBound !== null
+    && options.unprocessedGeneratorUpperBound !== undefined
+    && Number.isFinite(options.unprocessedGeneratorUpperBound)
+  )
+    ? options.unprocessedGeneratorUpperBound
+    : null;
   const shouldUsePairCapacityCap = options.pairCapacityCap === true;
   const shouldUsePairCapacityCapPareto = options.pairCapacityCapPareto === true;
   const shouldUsePairCapacityCapBucketed = options.pairCapacityCapBucketed === true;
@@ -4097,7 +4120,13 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
     : 1_000_000;
   let leftPeekUpperBound = generators[leftSlotIndex].peekUpperBound();
   let rightPeekUpperBound = generators[rightSlotIndex].peekUpperBound();
-  const anchorPeekUpperBound = generators[anchorSlotIndex].peekUpperBound();
+  const rawAnchorPeekUpperBound = generators[anchorSlotIndex].peekUpperBound();
+  const anchorPeekUpperBound = (
+    globalTailUpperBound !== null
+    && Number.isFinite(pairUpperBound)
+  )
+    ? Math.min(rawAnchorPeekUpperBound, globalTailUpperBound - pairUpperBound)
+    : rawAnchorPeekUpperBound;
   const initialLooseUpperBound = Math.max(
     anchorCandidates[0]?.result.score ?? Number.NEGATIVE_INFINITY,
     Number.isFinite(anchorPeekUpperBound) ? anchorPeekUpperBound : Number.NEGATIVE_INFINITY,
@@ -4201,6 +4230,27 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
   profiling.exactCandidateJoinLastAnchorFrontierCheapUpperResidualSource = null;
   profiling.exactCandidateJoinLastAnchorFrontierCheapUpperUnprocessedAnchorScore = null;
   profiling.exactCandidateJoinLastAnchorFrontierCheapUpperUnprocessedPairUpper = null;
+  profiling.exactCandidateJoinLastGlobalTailUpperBound = globalTailUpperBound !== null
+    ? Math.ceil(globalTailUpperBound)
+    : null;
+  profiling.exactCandidateJoinLastGlobalTailRawUpperBound = (
+    Number.isFinite(rawAnchorPeekUpperBound)
+    && Number.isFinite(pairUpperBound)
+  )
+    ? Math.ceil(rawAnchorPeekUpperBound + pairUpperBound)
+    : null;
+  profiling.exactCandidateJoinLastGlobalTailImprovement = (
+    globalTailUpperBound !== null
+    && profiling.exactCandidateJoinLastGlobalTailRawUpperBound !== null
+  )
+    ? Math.max(0, profiling.exactCandidateJoinLastGlobalTailRawUpperBound - Math.ceil(globalTailUpperBound))
+    : null;
+  if (
+    profiling.exactCandidateJoinLastGlobalTailImprovement !== null
+    && profiling.exactCandidateJoinLastGlobalTailImprovement > 0
+  ) {
+    profiling.exactCandidateJoinGlobalTailUpperCount += 1;
+  }
   profiling.exactCandidateJoinLastAnchorFrontierCheapUpperSuffixCoverCandidateCount = null;
   profiling.exactCandidateJoinLastAnchorFrontierCheapUpperSuffixCoverDistinctCardCount = null;
   profiling.exactCandidateJoinLastAnchorFrontierCheapUpperSuffixCoverDistinctCardSetCount = null;
@@ -7825,6 +7875,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     exactCandidateJoinExtendedThirdShortlistCacheEntryLimit?: number | null;
     exactCandidateJoinExtendedThirdShortlistQueryLimit?: number | null;
     exactCandidateJoinZeroScoreTargetSlack?: boolean;
+    enableExactCandidateJoinGlobalTailUpper?: boolean;
     stagedCandidateExtensionMinRemainingMs?: number | null;
     enableLowMemoryInitialCandidateSync?: boolean;
     lowMemoryInitialCandidateSyncLocalAbortOnly?: boolean;
@@ -8271,6 +8322,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     slotIndex: number,
     peekUpperBound: number,
     otherUpper: number,
+    globalTailUpperBound: number | null = null,
   ): MedleyExactCandidateAnchorFrontierProofResult | null => {
     const recordAnchorFrontierProofSkip = (reason: string): null => {
       profiling.exactCandidateJoinAnchorFrontierProofSkipCount += 1;
@@ -8326,7 +8378,14 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     )
       ? Math.max(0, context.anchorFrontierProofMaxFrontierGap)
       : MEDLEY_EXACT_CANDIDATE_JOIN_ANCHOR_FRONTIER_PROOF_MAX_FRONTIER_GAP;
-    const frontierGap = peekUpperBound + otherUpper - incumbentScore;
+    const rawFrontierUpperBound = peekUpperBound + otherUpper;
+    const frontierUpperBound = (
+      globalTailUpperBound !== null
+      && Number.isFinite(globalTailUpperBound)
+    )
+      ? Math.min(rawFrontierUpperBound, globalTailUpperBound)
+      : rawFrontierUpperBound;
+    const frontierGap = frontierUpperBound - incumbentScore;
     if (
       !Number.isFinite(frontierGap)
       || frontierGap < 0
@@ -8423,6 +8482,9 @@ export function searchMedleyConfigurationByExactCandidateJoin(
           suffixGeneratedPairJoin: context.anchorFrontierCheapUpperSuffixGeneratedPairJoin,
           suffixUnseenSingleCardJoin: context.anchorFrontierCheapUpperSuffixUnseenSingleCardJoin,
           suffixUnseenFullJoin: context.anchorFrontierCheapUpperSuffixUnseenFullJoin,
+          unprocessedGeneratorUpperBound: context.enableExactCandidateJoinGlobalTailUpper === true
+            ? globalTailUpperBound
+            : null,
         },
         observeEvaluatedResult,
       );
@@ -9403,13 +9465,18 @@ export function searchMedleyConfigurationByExactCandidateJoin(
         return buildUnprovedExactCandidateJoinResult();
       }
       if (candidatesBySlot[slotIndex].length >= effectiveCandidateSoftLimit) {
-        if (maybeExtendCandidateSoftLimit(slotIndex, cutoff, generator.peekUpperBound())) {
+        const rawPeekUpperBound = generator.peekUpperBound();
+        const globalTailUpperBound = context.enableExactCandidateJoinGlobalTailUpper === true
+          ? generator.peekGlobalUpperBound()
+          : null;
+        if (maybeExtendCandidateSoftLimit(slotIndex, cutoff, rawPeekUpperBound)) {
           continue;
         }
         const anchorFrontierProof = maybeProveAnchorFrontier(
           slotIndex,
-          generator.peekUpperBound(),
+          rawPeekUpperBound,
           otherUpper,
+          globalTailUpperBound,
         );
         if (anchorFrontierProof?.proved) {
           profiling.exactCandidateJoinCandidateFillElapsedMs += performance.now() - candidateFillStartedAt;
@@ -9449,7 +9516,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
           slotIndex,
           candidateCount: candidatesBySlot[slotIndex].length,
           cutoff,
-          peekUpperBound: generator.peekUpperBound(),
+          peekUpperBound: rawPeekUpperBound,
           otherUpper,
           observedUpperBound: anchorFrontierObservedUpperBound ?? getObservedExactCandidateJoinUpperBound(),
           candidateSoftLimit: effectiveCandidateSoftLimit,

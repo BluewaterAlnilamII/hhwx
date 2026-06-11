@@ -84,6 +84,7 @@ export type BandoriMedleySearchOptimizationOptions = {
   exactCandidateJoinExtendedThirdShortlistCacheEntryLimit?: number;
   exactCandidateJoinExtendedThirdShortlistQueryLimit?: number;
   exactCandidateJoinZeroScoreTargetSlack?: boolean;
+  enableExactCandidateJoinGlobalTailUpper?: boolean;
   debugConfigurationTrace?: boolean;
   exactCandidateJoinDebugAnchorSlotIndex?: number;
   exactCandidateJoinDebugKnownCardIdsBySlot?: number[][];
@@ -845,6 +846,10 @@ export type BandoriMedleyTeamSearchProfilingStats = {
   exactCandidateJoinLeafScoreUpperElapsedMs: number;
   exactCandidateJoinGlobalHeapRekeyCount: number;
   exactCandidateJoinGlobalHeapRekeyElapsedMs: number;
+  exactCandidateJoinGlobalTailUpperCount: number;
+  exactCandidateJoinLastGlobalTailUpperBound: number | null;
+  exactCandidateJoinLastGlobalTailRawUpperBound: number | null;
+  exactCandidateJoinLastGlobalTailImprovement: number | null;
   exactCandidateJoinPairComplementQueryCount: number;
   exactCandidateJoinPairComplementScanCount: number;
   exactCandidateJoinPairComplementHighPairBuildCount: number;
@@ -1015,6 +1020,7 @@ export type MedleyExactSlotCandidateGenerator = {
     globalPruning?: MedleyExactSlotCandidateGlobalPruning,
   ) => MedleyTeamCandidate | null;
   peekUpperBound: () => number;
+  peekGlobalUpperBound: () => number | null;
   canReuseForScoreCutoff: (scoreCutoff: number) => boolean;
   hasAborted: () => boolean;
   poppedNodeCount: () => number;
