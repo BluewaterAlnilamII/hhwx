@@ -84,6 +84,7 @@ import {
   estimateMedleyCapacityAssignmentScoreUpperBound,
   estimateMedleyCapacityCardBoundLagrangianScoreUpperBound,
   estimateMedleyCapacityCardBoundSharedPowerSkillScoreUpperBound,
+  estimateMedleyFastTwoSlotSharedPowerDualScoreUpperBound,
   estimateMedleyRemainingScoreUpperBound,
   estimateMedleySlotSkillCoefficient,
 } from "../upper/capacity";
@@ -5033,6 +5034,11 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
     let lagrangianUpper: number | null = null;
     let lagrangianWeight: number | null = null;
     let lagrangianElapsedMs: number | null = null;
+    let sharedPowerDualUpper: number | null = null;
+    let sharedPowerDualGap: number | null = null;
+    let sharedPowerDualLeaderShare: number | null = null;
+    let sharedPowerDualLambdaBySlot: [number, number] | null = null;
+    let sharedPowerDualElapsedMs: number | null = null;
     let sharedPowerUpper: number | null = null;
     let sharedPowerElapsedMs: number | null = null;
     const pairCardsByCharacter = (
@@ -5068,6 +5074,21 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
       }
     }
     lagrangianElapsedMs = performance.now() - lagrangianStartedAt;
+    const sharedPowerDualStartedAt = performance.now();
+    const sharedPowerDualEstimate = estimateMedleyFastTwoSlotSharedPowerDualScoreUpperBound(
+      slots,
+      pairSlotIndices,
+      bannedCardIds,
+    );
+    if (sharedPowerDualEstimate !== null && Number.isFinite(sharedPowerDualEstimate.upperBound)) {
+      sharedPowerDualUpper = sharedPowerDualEstimate.upperBound;
+      sharedPowerDualGap = Number.isFinite(targetPairUpper)
+        ? sharedPowerDualEstimate.upperBound - targetPairUpper
+        : null;
+      sharedPowerDualLeaderShare = sharedPowerDualEstimate.leaderPowerShare;
+      sharedPowerDualLambdaBySlot = sharedPowerDualEstimate.lambdaBySlot;
+    }
+    sharedPowerDualElapsedMs = performance.now() - sharedPowerDualStartedAt;
     if (shouldCapturePairCapacitySharedPowerBreakdown) {
       const sharedPowerStartedAt = performance.now();
       if (pairCardsByCharacter) {
@@ -5139,6 +5160,21 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
     );
     profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacityBreakdownLagrangianElapsedMs = (
       Math.round(lagrangianElapsedMs)
+    );
+    profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacityBreakdownSharedPowerDualUpper = (
+      finiteDiagnostic(sharedPowerDualUpper)
+    );
+    profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacityBreakdownSharedPowerDualGap = (
+      finiteDiagnostic(sharedPowerDualGap)
+    );
+    profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacityBreakdownSharedPowerDualLeaderShare = (
+      finiteDiagnostic(sharedPowerDualLeaderShare)
+    );
+    profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacityBreakdownSharedPowerDualLambdaBySlot = (
+      sharedPowerDualLambdaBySlot
+    );
+    profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacityBreakdownSharedPowerDualElapsedMs = (
+      Math.round(sharedPowerDualElapsedMs)
     );
     profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacityBreakdownSharedPowerUpper = (
       finiteDiagnostic(sharedPowerUpper)

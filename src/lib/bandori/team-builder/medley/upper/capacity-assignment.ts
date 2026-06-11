@@ -113,6 +113,29 @@ type MedleyTwoSlotCardBoundTransitionRecord = {
   nextIndex: number;
 };
 
+export type MedleyTwoSlotSharedPowerDualUpperEstimate = {
+  upperBound: number;
+  leaderPowerShare: number;
+  lambdaBySlot: [number, number];
+};
+
+const MEDLEY_TWO_SLOT_SHARED_POWER_DUAL_LEADER_SHARES = [
+  1 / 6,
+  0.25,
+  0.4,
+] as const;
+const MEDLEY_TWO_SLOT_SHARED_POWER_DUAL_LAMBDA_FRACTIONS = [
+  0,
+  0.125,
+  0.25,
+  0.375,
+  0.5,
+  0.625,
+  0.75,
+  0.875,
+  1,
+] as const;
+
 const medleyTwoSlotCapacityGroupCache = new WeakMap<
   MedleySlotSearch,
   WeakMap<MedleySlotSearch, MedleyTwoSlotCapacityCharacterGroup[]>
@@ -683,6 +706,294 @@ function estimateMedleyFastTwoSlotCapacityAssignmentScoreUpperBound(
     bannedCardIds,
     profiling,
   );
+}
+
+function estimateMedleySharedPowerDualSkillSlack(
+  skillRate: number,
+  skillScoreCapAtPowerUpper: number,
+  powerUpper: number,
+  powerPenalty: number,
+): number {
+  if (
+    !Number.isFinite(skillRate)
+    || !Number.isFinite(skillScoreCapAtPowerUpper)
+    || !Number.isFinite(powerUpper)
+    || skillRate <= 0
+    || skillScoreCapAtPowerUpper <= 0
+    || powerUpper <= 0
+  ) {
+    return 0;
+  }
+  if (powerPenalty >= skillRate) {
+    return 0;
+  }
+  const cappedPower = skillScoreCapAtPowerUpper / skillRate;
+  if (Number.isFinite(cappedPower) && cappedPower <= powerUpper) {
+    return Math.max(0, skillScoreCapAtPowerUpper - powerPenalty * cappedPower);
+  }
+  return Math.max(0, (skillRate - powerPenalty) * powerUpper);
+}
+
+function buildMedleyTwoSlotSharedPowerDualLambdaCandidates(
+  slot: MedleySlotSearch,
+  bannedCardIds: Set<number>,
+  averagePowerShare: number,
+  leaderPowerShare: number,
+): number[] {
+  let maxLambda = 0;
+  for (const card of slot.searchCards) {
+    if (bannedCardIds.has(card.cardId)) {
+      continue;
+    }
+    if (averagePowerShare > 0) {
+      maxLambda = Math.max(maxLambda, getMedleyCardSkillAverageRateUpper(card) / averagePowerShare);
+    }
+    if (leaderPowerShare > 0) {
+      maxLambda = Math.max(maxLambda, getMedleyCardSkillLeaderRateUpper(card) / leaderPowerShare);
+    }
+  }
+  if (!Number.isFinite(maxLambda) || maxLambda <= 0) {
+    return [0];
+  }
+  return [...new Set(MEDLEY_TWO_SLOT_SHARED_POWER_DUAL_LAMBDA_FRACTIONS.map((fraction) => (
+    maxLambda * fraction
+  )))].sort((left, right) => left - right);
+}
+
+function addMedleyTwoSlotSharedPowerDualOption(
+  characterOptions: Float64Array,
+  nextCharacterOptions: Float64Array,
+  slotPosition: 0 | 1,
+  context: MedleyTwoSlotCardBoundSlotContext,
+  card: SearchCard | null,
+  averageRate: number,
+  leaderRate: number,
+  bannedCardIds: Set<number>,
+  lambda: number,
+  averagePowerShare: number,
+  leaderPowerShare: number,
+): void {
+  if (!card || bannedCardIds.has(card.cardId)) {
+    return;
+  }
+
+  const topOtherPowerSum = getMedleyTwoSlotCardBoundTopOtherPowerSum(
+    context,
+    card.characterId,
+  );
+  if (!Number.isFinite(topOtherPowerSum)) {
+    return;
+  }
+
+  const cardBoundPowerUpper = card.effectivePower + topOtherPowerSum;
+  const skillScores = estimateMedleyTwoSlotCardBoundSkillScores(
+    context,
+    card,
+    cardBoundPowerUpper,
+    averageRate,
+    leaderRate,
+  );
+  const averageSlack = estimateMedleySharedPowerDualSkillSlack(
+    averageRate,
+    skillScores.averageScore,
+    cardBoundPowerUpper,
+    averagePowerShare * lambda,
+  );
+  const leaderSlack = estimateMedleySharedPowerDualSkillSlack(
+    leaderRate,
+    skillScores.leaderScore,
+    cardBoundPowerUpper,
+    leaderPowerShare * lambda,
+  );
+  const slotBit = 1 << slotPosition;
+  const baseContribution = card.effectivePower * (context.slot.baseScoreRatePerPower + lambda);
+  const averageContribution = baseContribution + averageSlack;
+  for (let mask = 0; mask < 4; mask += 1) {
+    if ((mask & slotBit) !== 0) {
+      continue;
+    }
+    const nextMask = mask | slotBit;
+    for (let leaderMask = 0; leaderMask < 4; leaderMask += 1) {
+      const currentValue = characterOptions[mask * 4 + leaderMask];
+      if (!Number.isFinite(currentValue)) {
+        continue;
+      }
+
+      const averageIndex = nextMask * 4 + leaderMask;
+      nextCharacterOptions[averageIndex] = Math.max(
+        nextCharacterOptions[averageIndex],
+        currentValue + averageContribution,
+      );
+
+      if ((leaderMask & slotBit) === 0) {
+        const leaderIndex = nextMask * 4 + (leaderMask | slotBit);
+        nextCharacterOptions[leaderIndex] = Math.max(
+          nextCharacterOptions[leaderIndex],
+          currentValue + averageContribution + leaderSlack,
+        );
+      }
+    }
+  }
+}
+
+function computeMedleyTwoSlotSharedPowerDualCharacterOptions(
+  group: MedleyTwoSlotCapacityCharacterGroup,
+  slotContexts: [MedleyTwoSlotCardBoundSlotContext, MedleyTwoSlotCardBoundSlotContext],
+  bannedCardIds: Set<number>,
+  lambdaBySlot: [number, number],
+  averagePowerShare: number,
+  leaderPowerShare: number,
+  characterOptionsScratch: Float64Array,
+  nextCharacterOptionsScratch: Float64Array,
+): Float64Array {
+  let characterOptions = characterOptionsScratch;
+  characterOptions.fill(Number.NEGATIVE_INFINITY);
+  characterOptions[0] = 0;
+  let nextCharacterOptions = nextCharacterOptionsScratch;
+
+  for (const record of group.records) {
+    nextCharacterOptions.set(characterOptions);
+    addMedleyTwoSlotSharedPowerDualOption(
+      characterOptions,
+      nextCharacterOptions,
+      0,
+      slotContexts[0],
+      record.card0,
+      record.card0AverageRate,
+      record.card0LeaderRate,
+      bannedCardIds,
+      lambdaBySlot[0],
+      averagePowerShare,
+      leaderPowerShare,
+    );
+    addMedleyTwoSlotSharedPowerDualOption(
+      characterOptions,
+      nextCharacterOptions,
+      1,
+      slotContexts[1],
+      record.card1,
+      record.card1AverageRate,
+      record.card1LeaderRate,
+      bannedCardIds,
+      lambdaBySlot[1],
+      averagePowerShare,
+      leaderPowerShare,
+    );
+    const previousCharacterOptions = characterOptions;
+    characterOptions = nextCharacterOptions;
+    nextCharacterOptions = previousCharacterOptions;
+  }
+
+  return characterOptions;
+}
+
+function estimateMedleyFastTwoSlotSharedPowerDualForParameters(
+  groups: MedleyTwoSlotCapacityCharacterGroup[],
+  slotContexts: [MedleyTwoSlotCardBoundSlotContext, MedleyTwoSlotCardBoundSlotContext],
+  bannedCardIds: Set<number>,
+  lambdaBySlot: [number, number],
+  averagePowerShare: number,
+  leaderPowerShare: number,
+): number {
+  const transition = getMedleyCapacityTransition(2);
+  let states = new Float64Array(transition.stateCount * 4);
+  states.fill(Number.NEGATIVE_INFINITY);
+  states[0] = 0;
+  let nextStates = new Float64Array(transition.stateCount * 4);
+  const characterOptionsScratch = new Float64Array(16);
+  const nextCharacterOptionsScratch = new Float64Array(16);
+  const transitionRecords = getMedleyTwoSlotCardBoundTransitionRecords();
+
+  for (const group of groups) {
+    const characterOptions = computeMedleyTwoSlotSharedPowerDualCharacterOptions(
+      group,
+      slotContexts,
+      bannedCardIds,
+      lambdaBySlot,
+      averagePowerShare,
+      leaderPowerShare,
+      characterOptionsScratch,
+      nextCharacterOptionsScratch,
+    );
+
+    nextStates.set(states);
+    for (const transitionRecord of transitionRecords) {
+      const currentValue = states[transitionRecord.currentIndex];
+      if (!Number.isFinite(currentValue)) {
+        continue;
+      }
+      const characterValue = characterOptions[transitionRecord.characterOptionIndex];
+      if (!Number.isFinite(characterValue)) {
+        continue;
+      }
+      nextStates[transitionRecord.nextIndex] = Math.max(
+        nextStates[transitionRecord.nextIndex],
+        currentValue + characterValue,
+      );
+    }
+    const previousStates = states;
+    states = nextStates;
+    nextStates = previousStates;
+  }
+
+  return states[transition.targetIndex * 4 + 3];
+}
+
+export function estimateMedleyFastTwoSlotSharedPowerDualScoreUpperBound(
+  slots: MedleySlotSearch[],
+  remainingSlotIndices: number[],
+  bannedCardIds: Set<number>,
+): MedleyTwoSlotSharedPowerDualUpperEstimate | null {
+  if (remainingSlotIndices.length !== 2) {
+    return null;
+  }
+
+  const remainingSlots = remainingSlotIndices.map((slotIndex) => slots[slotIndex]);
+  const slotContexts = remainingSlots.map((slot) => (
+    buildMedleyTwoSlotCardBoundSlotContext(slot, bannedCardIds)
+  )) as [MedleyTwoSlotCardBoundSlotContext, MedleyTwoSlotCardBoundSlotContext];
+  const groups = getMedleyTwoSlotCapacityCharacterGroups(remainingSlots[0], remainingSlots[1]);
+  let bestEstimate: MedleyTwoSlotSharedPowerDualUpperEstimate | null = null;
+
+  for (const leaderPowerShare of MEDLEY_TWO_SLOT_SHARED_POWER_DUAL_LEADER_SHARES) {
+    const averagePowerShare = (1 - leaderPowerShare) / MEDLEY_TEAM_SIZE;
+    if (averagePowerShare <= 0) {
+      continue;
+    }
+    const lambdaCandidatesBySlot = remainingSlots.map((slot) => (
+      buildMedleyTwoSlotSharedPowerDualLambdaCandidates(
+        slot,
+        bannedCardIds,
+        averagePowerShare,
+        leaderPowerShare,
+      )
+    )) as [number[], number[]];
+    for (const lambda0 of lambdaCandidatesBySlot[0]) {
+      for (const lambda1 of lambdaCandidatesBySlot[1]) {
+        const lambdaBySlot: [number, number] = [lambda0, lambda1];
+        const upperBound = estimateMedleyFastTwoSlotSharedPowerDualForParameters(
+          groups,
+          slotContexts,
+          bannedCardIds,
+          lambdaBySlot,
+          averagePowerShare,
+          leaderPowerShare,
+        );
+        if (
+          Number.isFinite(upperBound)
+          && (!bestEstimate || upperBound < bestEstimate.upperBound)
+        ) {
+          bestEstimate = {
+            upperBound,
+            leaderPowerShare,
+            lambdaBySlot,
+          };
+        }
+      }
+    }
+  }
+
+  return bestEstimate;
 }
 
 function observeMedleySlotCoefficientEstimates(

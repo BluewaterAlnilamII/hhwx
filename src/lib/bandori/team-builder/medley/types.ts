@@ -712,6 +712,11 @@ export type BandoriMedleyTeamSearchProfilingStats = {
   exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacityBreakdownLagrangianGap: number | null;
   exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacityBreakdownLagrangianWeight: number | null;
   exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacityBreakdownLagrangianElapsedMs: number | null;
+  exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacityBreakdownSharedPowerDualUpper: number | null;
+  exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacityBreakdownSharedPowerDualGap: number | null;
+  exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacityBreakdownSharedPowerDualLeaderShare: number | null;
+  exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacityBreakdownSharedPowerDualLambdaBySlot: [number, number] | null;
+  exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacityBreakdownSharedPowerDualElapsedMs: number | null;
   exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacityBreakdownSharedPowerUpper: number | null;
   exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacityBreakdownSharedPowerGap: number | null;
   exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacityBreakdownSharedPowerStateBudget: number | null;
