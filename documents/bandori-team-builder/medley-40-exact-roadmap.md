@@ -4698,3 +4698,45 @@ P07 failed follow-ups after P03 fix:
     around `9637k`-`9651k`. To reach exact, the next proof patch must lower the
     two-slot pair upper by roughly `150k`-`165k` without relying on skipped
     seeding or manual GC.
+
+2026-06-11 20:20 CST two-slot capacity skill-floor check:
+
+- Code added:
+  - The fast two-slot card-bound capacity upper now reuses
+    `calculateSkillScoreUpperBoundsForPower(...)` for the selected card skill
+    contribution, matching the floor-aware skill score cap already used by the
+    general card-bound upper.
+  - The cache is slot-scoped through a `WeakMap<MedleySlotSearch, Map<...>>`.
+    A first per-call-context cache version was rejected because it added enough
+    allocation churn to turn the target diagnostic into `memoryLimited=true`.
+- Default no-GC, non-debug no-op confirmation:
+  - Raw:
+    `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-11T12-19-29-480Z.json`
+  - `P06:323` remains bounded with score `9488172`, gap `605990`,
+    `timedOut=false`, `memoryLimited=false`, peak `1317 MiB`.
+- Diagnostic rerun, pair-capacity cap plus target suffix,
+  `maxAnchors=13000`, cheap-upper timebox `120000ms`:
+  - Raw:
+    `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-11T12-09-39-123Z.json`
+  - Result: bounded, elapsed `238692ms`, score `9488172`, global upper
+    `9935586`, gap `447414`, no timeout, no memory limit, peak `3989 MiB`.
+  - Local event-root upper improved only from about `9651238` to
+    `9650685`. The capped pair upper moved from about `6784194.33` to
+    `6783641.46`, only about `553` points.
+  - Interpretation: skill-floor slack exists but is far too small; the useful
+    target remains a much stronger two-slot pair-capacity certificate or a
+    proof-order/memory-lifecycle change that avoids leaving the same residual.
+- Rejected and reverted during the same check:
+  - Always computing both the fast card-bound upper and the basic two-slot
+    capacity upper, then taking `min`, was not viable in this high-frequency
+    pair-cap path. Raw:
+    `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-11T12-16-44-050Z.json`.
+  - It did not further reduce the local upper (`pair-capacity` stayed around
+    `6783641.46`) and regressed to `timedOut=true`, `memoryLimited=true`, peak
+    `4991 MiB`.
+- Decision:
+  - Keep the slot-cache floor-aware skill cap as a small safe tightening.
+  - Do not continue the basic-min variant.
+  - Do not spend the next optimization cycle on skill-floor refinements; they
+    are two orders of magnitude smaller than the remaining `150k`-`165k`
+    residual.

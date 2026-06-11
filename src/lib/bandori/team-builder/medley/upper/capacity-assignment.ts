@@ -55,6 +55,7 @@ import {
   getMedleyCardSkillAverageRateUpper,
   getMedleyCardSkillLeaderRateUpper,
 } from "./skill-context";
+import { calculateSkillScoreUpperBoundsForPower } from "@/lib/bandori/team-builder/core/scoring";
 import type {
   BandoriMedleyTeamSearchProfilingStats,
   MedleyCapacityAssignmentScoreUpperBound,
@@ -62,6 +63,12 @@ import type {
   MedleySlotSearch,
 } from "../types";
 import type { SearchCard } from "@/lib/bandori/team-builder/core";
+
+type MedleyTwoSlotCardBoundSkillScoreUpper = {
+  averageScore: number;
+  leaderScore: number;
+  leaderTotalScore: number;
+};
 
 type MedleyTwoSlotCapacityCardRecord = {
   cardId: number;
@@ -115,6 +122,10 @@ const medleyTwoSlotCapacitySlotSummaryCache = new WeakMap<
   MedleyTwoSlotCapacitySlotCharacterSummary[]
 >();
 let medleyTwoSlotCardBoundTransitionRecords: MedleyTwoSlotCardBoundTransitionRecord[] | null = null;
+const medleyTwoSlotCardBoundSkillScoreUpperCache = new WeakMap<
+  MedleySlotSearch,
+  Map<string, MedleyTwoSlotCardBoundSkillScoreUpper>
+>();
 
 function getMedleyTwoSlotCardBoundTransitionRecords(): MedleyTwoSlotCardBoundTransitionRecord[] {
   if (medleyTwoSlotCardBoundTransitionRecords) {
@@ -432,16 +443,47 @@ function getMedleyTwoSlotCardBoundTopOtherPowerSum(
 }
 
 function estimateMedleyTwoSlotCardBoundSkillScores(
+  context: MedleyTwoSlotCardBoundSlotContext,
+  card: SearchCard,
   bandPowerUpper: number,
   averageRate: number,
   leaderRate: number,
-): { averageScore: number; leaderTotalScore: number } {
+): MedleyTwoSlotCardBoundSkillScoreUpper {
+  const roundedBandPowerUpper = Math.floor(Math.max(0, bandPowerUpper));
+  const cacheKey = `${card.skillSearchSignature}:${roundedBandPowerUpper}`;
+  let slotCache = medleyTwoSlotCardBoundSkillScoreUpperCache.get(context.slot);
+  if (!slotCache) {
+    slotCache = new Map();
+    medleyTwoSlotCardBoundSkillScoreUpperCache.set(context.slot, slotCache);
+  }
+  const cached = slotCache.get(cacheKey);
+  if (cached) {
+    return cached;
+  }
+
+  const floorAwareScoreUpper = calculateSkillScoreUpperBoundsForPower(
+    context.slot.chart,
+    context.slot.input.skillsById[String(card.skillId)],
+    card.skillLevel,
+    context.slot.input.server ?? 0,
+    roundedBandPowerUpper,
+    context.slot.comboOptions,
+  );
   const continuousAverageScore = bandPowerUpper * averageRate;
   const continuousLeaderScore = bandPowerUpper * leaderRate;
-  return {
-    averageScore: continuousAverageScore,
-    leaderTotalScore: continuousAverageScore + continuousLeaderScore,
+  const averageScore = Math.min(continuousAverageScore, floorAwareScoreUpper.averageScore);
+  const leaderScore = Math.min(continuousLeaderScore, floorAwareScoreUpper.leaderScore);
+  const scoreUpper = {
+    averageScore,
+    leaderScore,
+    leaderTotalScore: Math.min(
+      averageScore + leaderScore,
+      continuousAverageScore + continuousLeaderScore,
+      floorAwareScoreUpper.averageScore + floorAwareScoreUpper.leaderScore,
+    ),
   };
+  slotCache.set(cacheKey, scoreUpper);
+  return scoreUpper;
 }
 
 function addMedleyTwoSlotCardBoundOption(
@@ -468,6 +510,8 @@ function addMedleyTwoSlotCardBoundOption(
 
   const cardBoundPowerUpper = card.effectivePower + topOtherPowerSum;
   const skillScores = estimateMedleyTwoSlotCardBoundSkillScores(
+    context,
+    card,
     cardBoundPowerUpper,
     averageRate,
     leaderRate,
