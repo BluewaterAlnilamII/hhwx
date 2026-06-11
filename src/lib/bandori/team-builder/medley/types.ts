@@ -106,6 +106,8 @@ export type BandoriMedleySearchOptimizationOptions = {
   debugExactCandidateJoinMemoryAttribution?: boolean;
   enableTrailingSameCoarseDfsOnly?: boolean;
   disableDominatedRootSkip?: boolean;
+  enableDominatedRootSkipTightUpper?: boolean;
+  dominatedRootSkipTightUpperMaxGap?: number;
   disableSameCoarseTightRootSkip?: boolean;
   enableSameCoarseFrontierFullProofRetry?: boolean;
   enableSameCoarseFrontierEventProbeBeforeExactJoin?: boolean;

@@ -242,6 +242,10 @@ function buildProofLedger(
       rememberedUnclosedUpperSource: entry.rememberedUnclosedUpperSource ?? null,
       effectiveUpperBound,
       gap,
+      dominatedRootSkipTightUpperBound: asFiniteNumber(entry.dominatedRootSkipTightUpperBound),
+      dominatedRootSkipTightUpperElapsedMs: asFiniteNumber(entry.dominatedRootSkipTightUpperElapsedMs),
+      dominatedRootSkipUpperBound: asFiniteNumber(entry.dominatedRootSkipUpperBound),
+      dominatedRootSkipUpperSource: entry.dominatedRootSkipUpperSource ?? null,
       exactJoinAbortReason: entry.exactCandidateJoinAbortReason ?? null,
       exactJoinAbortSlotIndex: entry.exactCandidateJoinAbortSlotIndex ?? null,
       exactJoinAbortRemainingMs: entry.exactCandidateJoinAbortRemainingMs ?? null,
@@ -938,6 +942,15 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
   );
   const requestedEnableTrailingSameCoarseDfsOnly = optimization.enableTrailingSameCoarseDfsOnly === true;
   const disableDominatedRootSkip = optimization.disableDominatedRootSkip === true;
+  const enableDominatedRootSkipTightUpper = optimization.enableDominatedRootSkipTightUpper === true;
+  const parsedDominatedRootSkipTightUpperMaxGap = (
+    optimization.dominatedRootSkipTightUpperMaxGap !== undefined
+      ? Number(optimization.dominatedRootSkipTightUpperMaxGap)
+      : Number.NaN
+  );
+  const dominatedRootSkipTightUpperMaxGap = Number.isFinite(parsedDominatedRootSkipTightUpperMaxGap)
+    ? Math.max(0, parsedDominatedRootSkipTightUpperMaxGap)
+    : Number.POSITIVE_INFINITY;
   const disableSameCoarseTightRootSkip = optimization.disableSameCoarseTightRootSkip === true;
   const enableSameCoarseFrontierFullProofRetry = (
     optimization.enableSameCoarseFrontierFullProofRetry === true
@@ -2697,7 +2710,56 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
           }
         }
         const thresholdAfterSiblingReevaluation = getMedleyPruningThreshold(results, resultLimit);
-        if (observedRootUpperBound < thresholdAfterSiblingReevaluation) {
+        let dominatedSkipUpperBound = observedRootUpperBound;
+        let dominatedSkipUpperSource: MedleyObservedUpperBoundSource = "configuration-root";
+        let dominatedSkipTightRootUpperBound: number | null = null;
+        let dominatedSkipTightRootElapsedMs: number | null = null;
+        const dominatedSkipObservedRootGap = observedRootUpperBound - thresholdAfterSiblingReevaluation;
+        if (
+          enableDominatedRootSkipTightUpper
+          && Number.isFinite(dominatedSkipObservedRootGap)
+          && dominatedSkipObservedRootGap >= 0
+          && dominatedSkipObservedRootGap <= dominatedRootSkipTightUpperMaxGap
+          && !hasDuplicateCardIds
+        ) {
+          const tightRootStartedAt = performance.now();
+          const dominatedSlots = pruneDominatedMedleySlotCards(buildMedleySlotSearches(
+            input,
+            songInputs,
+            calculatedCards,
+            configuration,
+            server,
+          ));
+          try {
+            const rootSlotIndices = dominatedSlots.map((_, index) => index);
+            const tightRootUpperBound = estimateMedleyRemainingScoreUpperBound(
+              dominatedSlots,
+              rootSlotIndices,
+              toUpperBannedCardIds(new Set<number>()),
+              profiling,
+              false,
+              true,
+              false,
+              false,
+              enableTeamSharedCoefficientUpper,
+              enableSharedPowerSkillUpper,
+            );
+            dominatedSkipTightRootUpperBound = Number.isFinite(tightRootUpperBound)
+              ? tightRootUpperBound
+              : null;
+            if (
+              dominatedSkipTightRootUpperBound !== null
+              && dominatedSkipTightRootUpperBound < dominatedSkipUpperBound
+            ) {
+              dominatedSkipUpperBound = dominatedSkipTightRootUpperBound;
+              dominatedSkipUpperSource = "dfs-remaining";
+            }
+          } finally {
+            dominatedSkipTightRootElapsedMs = Math.round(performance.now() - tightRootStartedAt);
+            releaseSlotSearchCaches(dominatedSlots);
+          }
+        }
+        if (dominatedSkipUpperBound < thresholdAfterSiblingReevaluation) {
           stats.prunedBranchCount += 1;
           profiling.rootUpperPrunedConfigurationCount += 1;
           if (configurationTrace) {
@@ -2714,6 +2776,10 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
               initialBestScore: scoreBeforeSiblingReevaluation,
               bestScore: results[0]?.score ?? null,
               basicSkillAwareRootUpperBound: observedRootUpperBound,
+              dominatedRootSkipTightUpperBound: dominatedSkipTightRootUpperBound,
+              dominatedRootSkipTightUpperElapsedMs: dominatedSkipTightRootElapsedMs,
+              dominatedRootSkipUpperBound: dominatedSkipUpperBound,
+              dominatedRootSkipUpperSource: dominatedSkipUpperSource,
               dominatingUnclosedUpperBound: unclosedConfigurationUpperBoundMax,
               sameCoarseSiblingReevaluationElapsedMs: siblingReevaluationElapsedMs,
               sameCoarseSiblingReevaluationImprovement: siblingReevaluationImprovement,
@@ -2727,8 +2793,8 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
         didLeaveUnclosedAreaItemConfiguration = true;
         rememberUnclosedConfigurationUpperBound(
           configurationIndex,
-          observedRootUpperBound,
-          "configuration-root",
+          dominatedSkipUpperBound,
+          dominatedSkipUpperSource,
           MEDLEY_TEAM_COUNT,
         );
         if (configurationTrace) {
@@ -2745,6 +2811,10 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
             initialBestScore: scoreBeforeSiblingReevaluation,
             bestScore: results[0]?.score ?? null,
             basicSkillAwareRootUpperBound: observedRootUpperBound,
+            dominatedRootSkipTightUpperBound: dominatedSkipTightRootUpperBound,
+            dominatedRootSkipTightUpperElapsedMs: dominatedSkipTightRootElapsedMs,
+            dominatedRootSkipUpperBound: dominatedSkipUpperBound,
+            dominatedRootSkipUpperSource: dominatedSkipUpperSource,
             dominatingUnclosedUpperBound: unclosedConfigurationUpperBoundMax,
             sameCoarseSiblingReevaluationElapsedMs: siblingReevaluationElapsedMs,
             sameCoarseSiblingReevaluationImprovement: siblingReevaluationImprovement,

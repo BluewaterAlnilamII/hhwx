@@ -3809,3 +3809,47 @@ P07 failed follow-ups after P03 fix:
     incumbent. Any next patch should be opt-in and should avoid forcing full
     exact joins for all skipped configurations unless a cheap tight-root probe
     has already failed.
+
+2026-06-11 12:45 CST P06 dominated-root tight upper diagnostic:
+
+- Code added:
+  - `enableDominatedRootSkipTightUpper` as an internal optimization option.
+  - `dominatedRootSkipTightUpperMaxGap` limits the root gap range where the
+    probe is allowed.
+  - Default behavior remains unchanged because the option defaults to `false`.
+  - `proofLedger` now includes dominated-root tight-upper diagnostics:
+    `dominatedRootSkipTightUpperBound`,
+    `dominatedRootSkipTightUpperElapsedMs`,
+    `dominatedRootSkipUpperBound`, and `dominatedRootSkipUpperSource`.
+- Diagnostic run:
+  - Raw:
+    `temp/bandori-team-builder/real-profile-medley-scope-matrix-2026-06-11T04-38-38-869Z.json`
+  - Options:
+    same as the `60000ms` same-coarse retry run, plus
+    `enableDominatedRootSkipTightUpper=true` and
+    `dominatedRootSkipTightUpperMaxGap=200000`.
+  - Result: bounded, not timed out; elapsed `297216ms`; score `9488172`;
+    global upper `9935586`; gap `447414`; root-pruned `102`; peak
+    `3818 MiB`.
+- Probe effect:
+  - `Everyone/cool/*` was closed by the dominated tight-root probe:
+    - performance `9528295 -> 9460783` in `383ms`;
+    - technique `9512760 -> 9443822` in `1291ms`;
+    - visual `9506394 -> 9437320` in `260ms`.
+  - `Morfonica/cool/*` improved but did not close:
+    - performance `9631450 -> 9567497` in `202ms`;
+    - technique `9612038 -> 9547102` in `189ms`;
+    - visual `9606848 -> 9543807` in `188ms`.
+  - Top gap did not change because `PastelPalettes/cool/visual` remained at
+    `9935585` after near-deadline root skip.
+- Decision:
+  - Dominated tight-root probing is a valid low-cost root-frontier improvement
+    and should remain available as an opt-in diagnostic.
+  - It is not sufficient for P06 exact because the primary gap is still the
+    same-coarse PastelPalettes visual sibling, followed by the
+    PastelPalettes performance/technique `9635008` residual and Morfonica/cool
+    around `9.54-9.57M`.
+  - Next proof work should focus on reducing the first PastelPalettes proof
+    duration or producing a reusable same-coarse proof artifact that lets
+    visual run before the near-deadline skip. After that, dominated tight-root
+    can help remove the remaining Morfonica/Everyone tail.
