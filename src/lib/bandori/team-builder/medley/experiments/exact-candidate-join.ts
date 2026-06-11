@@ -4840,11 +4840,15 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
     const bestGeneratedScore = generatedCandidates[0]?.result.score ?? Number.NEGATIVE_INFINITY;
     for (let entryIndex = 0; entryIndex < processedAnchorUpperEntries.length; entryIndex += 1) {
       const entry = processedAnchorUpperEntries[entryIndex];
+      const refined = refinedAnchorPairUpperByCandidate.get(entry.anchorCandidate);
+      const generatedPairUpper = refined?.generatedPairUpper ?? entry.generatedPairUpper;
+      const leftUnseenUpper = refined?.leftUnseenUpper ?? entry.leftUnseenUpper;
+      const rightUnseenUpper = refined?.rightUnseenUpper ?? entry.rightUnseenUpper;
       const anchorLimitedUnseenUpper = getAnchorLimitedSlotUpper(entryIndex, unseenSlotIndex);
-      const bothUnseenFallbackPairUpper = Math.min(entry.leftUnseenUpper, entry.rightUnseenUpper);
+      const bothUnseenFallbackPairUpper = Math.min(leftUnseenUpper, rightUnseenUpper);
       upperBound = Math.max(
         upperBound,
-        combineScores(entry.anchorScore, entry.generatedPairUpper),
+        combineScores(entry.anchorScore, generatedPairUpper),
         combineScores(entry.anchorScore, bothUnseenFallbackPairUpper),
       );
       if (Number.isFinite(bestGeneratedScore) && Number.isFinite(anchorLimitedUnseenUpper)) {
