@@ -1,6 +1,6 @@
 # Medley 40/40 Exact Roadmap
 
-Last updated: 2026-06-11 16:02 CST
+Last updated: 2026-06-11 19:42 CST
 
 This file is the persistent working note for the current medley optimizer goal.
 Keep it current before and after benchmark runs or proof-path changes, so future
@@ -4583,8 +4583,66 @@ P07 failed follow-ups after P03 fix:
   - The best local proof shape observed so far is suffix generated-pair plus
     full-card unseen join closing the unprocessed suffix, then leaving a
     processed `pair-capacity` residual around `9651k`.
-  - The next implementation should not just reallocate more time among these
+ - The next implementation should not just reallocate more time among these
     probes. The remaining general blocker is a stronger two-slot pair upper or
     a reusable same-coarse proof artifact that can lower the processed
     pair-capacity residual below the accepted incumbent without starving later
     configurations.
+
+2026-06-11 19:42 CST processed-unseen pair-cap carry-over:
+
+- Finding:
+  - `processed-unseen join` did not apply the already-safe pair-capacity cap
+    when recording its own `generated-pair`, `both-unseen-fallback`, or
+    generated-plus-unseen pair upper candidates.
+  - This let raw generated pair uppers re-enter the processed-unseen result
+    after the outer processed frontier had already been capped.
+- Pre-fix diagnostic, pair-capacity cap plus processed-unseen only,
+  `maxAnchors=13000`, cheap-upper timebox `120000ms`:
+  - Raw:
+    `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-11T11-23-29-787Z.json`
+  - Result: bounded, elapsed `147642ms`, score `9486961`, upper `9780501`,
+    gap `293540`, no timeout, no memory limit, peak `3836 MiB`.
+  - Processed-unseen completed but returned a worse upper `10202743`; max
+    source was raw `generated-pair`, anchor score `2818383`, generated pair
+    upper `7384360`.
+- Code added, default-off in effect:
+  - Processed-unseen join now records pair-level uppers through
+    `applyPairCapacityCap(...)`, matching the outer processed-entry proof.
+  - Optional cheap-upper sub probes now return local `timebox` immediately if
+    their local deadline is already exhausted, avoiding avoidable heap/query
+    setup after the proof budget is gone.
+- Post-fix processed-only diagnostic:
+  - Raw:
+    `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-11T11-28-00-156Z.json`
+  - Result: bounded, elapsed `148219ms`, score `9486961`, upper `9780501`,
+    gap `293540`, no timeout, no memory limit, peak `3837 MiB`.
+  - Positive signal: processed-unseen upper dropped from `10202743` to
+    `9651238`, max source became `pair-capacity`, anchor score `2867043`,
+    capped pair upper `6784194.327945923`.
+  - Remaining residual stayed `unprocessed-anchor`, as expected without suffix
+    proof: next anchor score `2811888` plus pair upper `6968613`.
+- Post-fix combined processed-unseen plus suffix diagnostic:
+  - Raw:
+    `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-11T11-31-06-817Z.json`
+  - Result: bounded, elapsed `211079ms`, score `9486961`, upper `9780501`,
+    gap `293540`, no timeout, no memory limit, peak `4012 MiB`.
+  - Suffix generated-pair closed at upper `9486961`; left suffix unseen also
+    closed at `9486961`, but right suffix unseen hit local `timebox`.
+    Processed-unseen then also hit local `timebox`, so the final residual
+    stayed `unprocessed-anchor`.
+- Default no-op confirmation:
+  - Raw:
+    `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-11T11-37-07-142Z.json`
+  - Default no-GC, non-debug `P06:323` remains bounded with score `9488172`,
+    gap `605990`, no timeout, no memory limit, peak `1318 MiB`.
+- Decision:
+  - The carry-over fix is safe and useful: it prevents a diagnostic proof path
+    from undoing a tighter pair-capacity upper.
+  - It is not sufficient for 40/40 exact. The combined path still needs a
+    faster/right-sized suffix unseen certificate and then a stronger processed
+    pair-capacity residual below roughly `9488k`.
+  - Next practical target is to avoid serially spending the full cheap-upper
+    budget on suffix and processed proof. A future proof path should either
+    fuse processed/suffix unseen joins or checkpoint shared slot-upper work,
+    instead of running them as separate full passes.
