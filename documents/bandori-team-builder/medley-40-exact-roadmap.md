@@ -5241,3 +5241,68 @@ P07 failed follow-ups after P03 fix:
     for this banned-anchor case, or a reusable same-coarse certificate that
     proves the relaxed capacity witness cannot be realized as two disjoint
     full teams. Do not continue generated-pair-only joins for this residual.
+
+2026-06-12 02:34 CST P06 pair-capacity breakdown and shared-power probe:
+
+- Code added and pushed:
+  - `bab62bd Add medley pair capacity breakdown probe`.
+  - `39d81ce Add medley shared-power capacity diagnostic`.
+  - `59f9571 Guard medley shared-power diagnostic deadline`.
+  - All changes are default-off diagnostics. Default maximize semantics and
+    proof state are unchanged.
+- Pair-capacity breakdown run:
+  - Raw:
+    `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-11T18-00-33-955Z.json`.
+  - Parameters: regular Node, no `--expose-gc`; `P06:323`;
+    `memorySoftLimitMiB=4488`; event-root probe enabled;
+    same-coarse event probe before exact join enabled; anchor cheap upper with
+    pair-capacity cap, suffix generated-pair join, suffix unseen full join,
+    and pair-capacity breakdown enabled; `debugConfigurationTrace=false`.
+  - Result: bounded, score `9488172`, maxScore `9567356`, upper `9650685`,
+    gap `162513`, elapsed `219887ms`, peak `3430 MiB`, `timedOut=false`,
+    `memoryLimited=false`.
+  - Top residual witness:
+    anchor cardIds `[1975,1952,1720,415,1753]`, anchor score `2865962`,
+    target pair upper `6622210`.
+  - Breakdown:
+    selected/fast pair upper `6770836.939337965`, selected gap
+    `148626.9393379651`, fast mode `card-bound-skill-aware`.
+    Basic skill-aware upper `6839946.4339383105`; correlated left/right
+    uppers `3453761.0388137847` and `3648337.053627675`, total
+    `7102098.09244146`.
+  - Interpretation: basic and correlated certificates are looser than the
+    existing fast card-bound certificate. The remaining blocker is specifically
+    the fast two-slot card-bound relaxation, not missing generated-pair
+    evidence.
+- Shared-power diagnostic without a deadline:
+  - Raw partial:
+    `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-11T18-10-18-536Z-partial.json`.
+  - Result: child process was killed by runner timeout after `390355ms`
+    (`SIGTERM`, `ETIMEDOUT`) and wrote no case result. stderr was empty.
+  - Decision: map-based shared-power DP is too expensive as implemented and
+    cannot be part of the 40/40 route without a strict local guard.
+- Shared-power diagnostic with a 1s local deadline:
+  - Raw:
+    `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-11T18-21-31-787Z.json`.
+  - Parameters: same as above, plus
+    `eventRootFrontierProbeAnchorCheapUpperPairCapacitySharedPowerBreakdown=true`
+    and `eventRootFrontierProbeAnchorCheapUpperPairCapacitySharedPowerStateBudget=1000000`.
+  - Result: bounded, score `9488172`, maxScore `9567356`, upper `9650685`,
+    gap `162513`, elapsed `209963ms`, peak `3565 MiB`, `timedOut=false`,
+    `memoryLimited=false`.
+  - Shared-power fields: call count `3`, completed `0`, abort `3`,
+    state count `301611`, max state count `115975`, bucket size `100000`,
+    top-witness shared-power upper `null`, shared-power elapsed `1000ms`.
+  - Interpretation: the deadline guard fixes diagnostic stability, but the
+    shared-power DP does not produce a usable low-cost certificate. Do not
+    promote this route or increase its timebox as the main optimization path.
+- Current blocker restated:
+  - `P06:323` remains the only known all-scope 40/40 blocker under the current
+    non-GC, non-debug configuration.
+  - The unresolved proof frontier is a single `PastelPalettes/cool` same-coarse
+    residual where the conservative pair upper is about `148.6k` above the
+    incumbent threshold.
+  - Next work should look for a low-memory, deterministic two-slot certificate
+    that tightens the fast card-bound relaxation without building another
+    large candidate/pair surface. A map-heavy shared-power DP is not the right
+    implementation shape for that certificate.
