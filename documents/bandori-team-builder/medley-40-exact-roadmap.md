@@ -98,6 +98,24 @@ No-GC acceptance contract:
     It can push against the generator-tail problem, but it is not stable under
     the current memory gate and can starve later same-coarse proof work.
 
+- Rejected stream-after-repair ordering probe:
+  - Temporary code moved opt-in stream-tail consumption from before
+    `finish()` to after refine/late-repair inside `finish()`, then reverted.
+  - Raw:
+    `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-11T23-40-40-613Z.json`.
+  - Result: bounded, score `9488172`, upper `9631451`, gap `143279`,
+    elapsed `246839ms`, peak `3816 MiB`, no timeout and no memory limit.
+  - Signal: stream-tail did run after repair, consumed `80` tail anchors, and
+    closed in about `875ms`, but it raised the local
+    `PastelPalettes/cool/visual` residual from the previous `9570748` shape to
+    `9602212` with source `unprocessed-anchor-suffix-cover`. The streamed
+    conservative pair-capacity witness was wider than the prior tail bound.
+  - Decision: do not move stream-tail after repair and do not pursue tail
+    streaming as a default exactness route. The result confirms that the
+    blocker is not merely "unprocessed tail not consumed"; the conservative
+    pair/capacity model for tail anchors can itself become the wider proof
+    frontier.
+
 - Dominated-root pass interaction finding:
   - Debug raw:
     `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-11T23-17-37-493Z.json`.
