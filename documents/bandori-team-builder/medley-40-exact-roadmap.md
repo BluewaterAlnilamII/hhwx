@@ -1,6 +1,6 @@
 # Medley 40/40 Exact Roadmap
 
-Last updated: 2026-06-12 01:11 CST
+Last updated: 2026-06-12 01:21 CST
 
 This file is the persistent working note for the current medley optimizer goal.
 Keep it current before and after benchmark runs or proof-path changes, so future
@@ -136,6 +136,30 @@ No-GC acceptance contract:
   A useful next step needs to amortize proof material across the same
   `PastelPalettes/cool` frontier instead of invoking an expensive capacity
   model per anchor card set.
+
+2026-06-12 01:21 CST locked-scope P06 diagnostic:
+
+- Diagnostic: ran `P06:323` with `coarseAreaItemFilter` locked to
+  `PastelPalettes/cool/technique`, same no-GC 300s accepted event-root
+  optimization JSON, and `debugConfigurationTrace=false`.
+- Raw:
+  `temp/bandori-team-builder/real-profile-medley-benchmark-2026-06-11T17-19-25-025Z.json`.
+- Result: bounded, score `9483314`, upper `10082483`, gap `599169`,
+  elapsed `42382ms`, peak `4503 MiB`, `timedOut=true`,
+  `memoryLimited=true`.
+- Profiling signal: only one configuration was active, but event-root probe
+  did not run (`eventRootFrontierProbeCallCount=0`). The ordinary exact join
+  aborted at `candidate-fill-generator-aborted` on slot0 after `184690`
+  candidates with about `257619ms` remaining.
+- Interpretation:
+  - Locking this configuration currently does not automatically allow a deeper
+    or safer proof. It can be worse than all-scope same-coarse event-before,
+    because locked scope bypasses the event-root cheap-upper path and goes
+    straight into the memory-risk exact join.
+  - This is primarily a user-experience and locked-scope scheduling gap, not
+    the main all-scope `40/40` proof-quality gap. A future low-risk UX patch is
+    to let explicit locked event configurations opt into the same event-root
+    probe before ordinary exact join when the configuration is high-risk.
 
 2026-06-11 22:35 CST rejected two-slot shared-power experiment:
 
