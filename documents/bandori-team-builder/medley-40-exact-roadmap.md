@@ -5544,3 +5544,56 @@ P07 failed follow-ups after P03 fix:
   - The next proof-quality work should target a bulk/cached pair-capacity
     certificate that can tighten many processed-anchor witnesses without
     generating another large two-slot candidate surface per anchor.
+
+2026-06-12 05:08 CST shared-power dual parameter reuse diagnostic:
+
+- Code added and pushed:
+  - `914b0b0 Reuse medley shared-power dual parameters`.
+  - The existing opt-in shared-power dual pair-cap certificate now keeps up to
+    two successful dual parameter sets and re-evaluates them cheaply for later
+    anchor card bans before falling back to a full dual solve.
+  - Default maximize behavior is unchanged. Reuse is only active when
+    `eventRootFrontierProbeAnchorCheapUpperPairCapacitySharedPowerDualCap=true`.
+- `P06:323`, no-GC, `debugConfigurationTrace=true`,
+  `pairCapacitySharedPowerDualCapMaxCalls=1`:
+  - Raw:
+    `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-11T20-45-04-920Z.json`.
+  - Result: bounded, score `9488172`, maxScore `9567356`, upper `9646092`,
+    gap `157920`, elapsed `217589ms`, peak `3441 MiB`, no timeout and no
+    memory limit.
+  - Top unclosed entries: `PastelPalettes/cool` performance gap `159130`,
+    technique gap `147459`, visual gap `138631`; `Morfonica/cool`
+    performance already appears nearby at gap `143278`.
+  - Interpretation: reuse is cheap and does tighten many pair-cap witnesses,
+    but one full dual call is not enough to close the remaining frontier.
+- `P06:323`, same setup, `pairCapacitySharedPowerDualCapMaxCalls=16`:
+  - Raw:
+    `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-11T20-50-54-719Z.json`.
+  - Result: bounded, score `9488172`, maxScore `9567356`, upper `9935586`,
+    gap `447414`, elapsed `230360ms`, peak `3550 MiB`.
+  - The performance/technique `PastelPalettes/cool` gaps were compressed to
+    `97820` and `91051`, but the visual frontier regressed to a high upper
+    near the old pre-frontier bound because budget shifted away from the later
+    proof pass.
+  - Interpretation: raising full dual call count is not monotonic. It can
+    improve individual configurations while starving later frontier work.
+- `P06:323`, same setup, `pairCapacitySharedPowerDualCapMaxCalls=4`:
+  - Raw:
+    `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-11T20-56-17-305Z.json`.
+  - Result: bounded, score `9488172`, maxScore `9567356`, upper `9631451`,
+    gap `143279`, elapsed `248584ms`, peak `3851 MiB`, no timeout and no
+    memory limit. This is the best P06 diagnostic result so far.
+  - Top unclosed entries shifted to `Morfonica/cool`:
+    performance gap `143278`, technique gap `123866`, visual gap `118676`,
+    all with status `bounded-dominated-root-skip`.
+  - `PastelPalettes/cool` remained unclosed but lower: performance gap
+    `97820`, technique gap `91051`, visual gap `82576`.
+- Decision:
+  - Keep the parameter-reuse implementation as a low-cost opt-in certificate.
+  - Do not tune by simply increasing `pairCapacitySharedPowerDualCapMaxCalls`;
+    `16` regressed the global upper, while `4` exposed a different blocker.
+  - The next credible direction is a frontier scheduling/revisit patch:
+    `Morfonica/cool` roots were skipped as bounded-dominated before the
+    stronger same-event frontier work lowered `PastelPalettes/cool`. After
+    those high roots are tightened, the previously skipped dominated roots can
+    become the global observed upper and need a controlled final proof pass.

@@ -1327,6 +1327,31 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
   const dominatedRootSkipTightUpperMaxGap = Number.isFinite(parsedDominatedRootSkipTightUpperMaxGap)
     ? Math.max(0, parsedDominatedRootSkipTightUpperMaxGap)
     : Number.POSITIVE_INFINITY;
+  const enableDominatedRootFrontierPass = optimization.enableDominatedRootFrontierPass === true;
+  const parsedDominatedRootFrontierPassMaxCount = (
+    optimization.dominatedRootFrontierPassMaxCount !== undefined
+      ? Math.trunc(Number(optimization.dominatedRootFrontierPassMaxCount))
+      : Number.NaN
+  );
+  const dominatedRootFrontierPassMaxCount = Number.isFinite(parsedDominatedRootFrontierPassMaxCount)
+    ? Math.max(0, parsedDominatedRootFrontierPassMaxCount)
+    : 3;
+  const parsedDominatedRootFrontierPassMinGap = (
+    optimization.dominatedRootFrontierPassMinGap !== undefined
+      ? Number(optimization.dominatedRootFrontierPassMinGap)
+      : Number.NaN
+  );
+  const dominatedRootFrontierPassMinGap = Number.isFinite(parsedDominatedRootFrontierPassMinGap)
+    ? Math.max(0, parsedDominatedRootFrontierPassMinGap)
+    : 100_000;
+  const parsedDominatedRootFrontierPassMinRemainingMs = (
+    optimization.dominatedRootFrontierPassMinRemainingMs !== undefined
+      ? Number(optimization.dominatedRootFrontierPassMinRemainingMs)
+      : Number.NaN
+  );
+  const dominatedRootFrontierPassMinRemainingMs = Number.isFinite(parsedDominatedRootFrontierPassMinRemainingMs)
+    ? Math.max(0, parsedDominatedRootFrontierPassMinRemainingMs)
+    : 60_000;
   const disableSameCoarseTightRootSkip = optimization.disableSameCoarseTightRootSkip === true;
   const enableSameCoarseFrontierFullProofRetry = (
     optimization.enableSameCoarseFrontierFullProofRetry === true
@@ -3189,6 +3214,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
   // Exhaustiveness is only true after every searched configuration and every cross-slot card
   // assignment has been covered without timeout.
   const sameCoarseDfsAfterUnprovedProofCounts = new Map<string, number>();
+  let dominatedRootFrontierPassCount = 0;
   for (const configuration of orderedConfigurations) {
     const preConfigurationGcProbe = enableLowMemoryInitialCandidateSyncGcProbe
       ? runLowMemoryInitialCandidateSyncGcProbe()
@@ -3203,6 +3229,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
 
     const configurationIndex = configurations.indexOf(configuration);
     beginActiveConfiguration(configurationIndex);
+    let dominatedRootFrontierPassTrace: Record<string, unknown> | null = null;
     if (
       results.length >= resultLimit
       && shouldUseBasicSkillAwareRootCapacityPrefilter
@@ -3361,27 +3388,33 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
           releaseConfigurationWarmupCache(configurationIndex);
           continue;
         }
-        didLeaveUnclosedAreaItemConfiguration = true;
-        rememberUnclosedConfigurationUpperBound(
-          configurationIndex,
-          dominatedSkipUpperBound,
-          dominatedSkipUpperSource,
-          MEDLEY_TEAM_COUNT,
+        const dominatedRootFrontierPassGap = dominatedSkipUpperBound - thresholdAfterSiblingReevaluation;
+        const remainingBeforeDominatedRootFrontierPassMs = getRemainingSearchMs();
+        const shouldUseDominatedRootFrontierPass = (
+          enableDominatedRootFrontierPass
+          && enableEventRootFrontierProbe
+          && hasEventBonus
+          && dominatedRootFrontierPassCount < dominatedRootFrontierPassMaxCount
+          && Number.isFinite(dominatedRootFrontierPassGap)
+          && dominatedRootFrontierPassGap >= dominatedRootFrontierPassMinGap
+          && remainingBeforeDominatedRootFrontierPassMs >= dominatedRootFrontierPassMinRemainingMs
+          && !stats.memoryLimited
+          && !isPastMemorySoftLimit()
         );
-        if (configurationTrace) {
-          const dominatedSkipStartedAt = performance.now();
-          configurationTrace.push({
-            order: profiling.startedAreaItemConfigurationCount,
-            configurationIndex,
-            bandKey: configuration.bandKey,
-            attribute: configuration.attribute,
-            parameter: configuration.parameter,
-            status: "bounded-dominated-root-skip",
-            startedAtMs: Math.round(dominatedSkipStartedAt - startedAt),
-            elapsedMs: 0,
-            initialBestScore: scoreBeforeSiblingReevaluation,
-            bestScore: results[0]?.score ?? null,
-            basicSkillAwareRootUpperBound: observedRootUpperBound,
+        if (shouldUseDominatedRootFrontierPass) {
+          dominatedRootFrontierPassCount += 1;
+          tightenActiveConfigurationUpperBound(
+            dominatedSkipUpperBound,
+            dominatedSkipUpperSource,
+            MEDLEY_TEAM_COUNT,
+          );
+          dominatedRootFrontierPassTrace = {
+            dominatedRootFrontierPass: true,
+            dominatedRootFrontierPassCount,
+            dominatedRootFrontierPassGap,
+            dominatedRootFrontierPassMinGap,
+            dominatedRootFrontierPassRemainingMs: Math.round(remainingBeforeDominatedRootFrontierPassMs),
+            dominatedRootFrontierPassMinRemainingMs,
             dominatedRootSkipTightUpperBound: dominatedSkipTightRootUpperBound,
             dominatedRootSkipTightUpperElapsedMs: dominatedSkipTightRootElapsedMs,
             dominatedRootSkipUpperBound: dominatedSkipUpperBound,
@@ -3390,10 +3423,42 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
             sameCoarseSiblingReevaluationElapsedMs: siblingReevaluationElapsedMs,
             sameCoarseSiblingReevaluationImprovement: siblingReevaluationImprovement,
             sameCoarseSiblingReevaluationImproved: didSiblingReevaluationImprove,
-          });
+          };
+        } else {
+          didLeaveUnclosedAreaItemConfiguration = true;
+          rememberUnclosedConfigurationUpperBound(
+            configurationIndex,
+            dominatedSkipUpperBound,
+            dominatedSkipUpperSource,
+            MEDLEY_TEAM_COUNT,
+          );
+          if (configurationTrace) {
+            const dominatedSkipStartedAt = performance.now();
+            configurationTrace.push({
+              order: profiling.startedAreaItemConfigurationCount,
+              configurationIndex,
+              bandKey: configuration.bandKey,
+              attribute: configuration.attribute,
+              parameter: configuration.parameter,
+              status: "bounded-dominated-root-skip",
+              startedAtMs: Math.round(dominatedSkipStartedAt - startedAt),
+              elapsedMs: 0,
+              initialBestScore: scoreBeforeSiblingReevaluation,
+              bestScore: results[0]?.score ?? null,
+              basicSkillAwareRootUpperBound: observedRootUpperBound,
+              dominatedRootSkipTightUpperBound: dominatedSkipTightRootUpperBound,
+              dominatedRootSkipTightUpperElapsedMs: dominatedSkipTightRootElapsedMs,
+              dominatedRootSkipUpperBound: dominatedSkipUpperBound,
+              dominatedRootSkipUpperSource: dominatedSkipUpperSource,
+              dominatingUnclosedUpperBound: unclosedConfigurationUpperBoundMax,
+              sameCoarseSiblingReevaluationElapsedMs: siblingReevaluationElapsedMs,
+              sameCoarseSiblingReevaluationImprovement: siblingReevaluationImprovement,
+              sameCoarseSiblingReevaluationImproved: didSiblingReevaluationImprove,
+            });
+          }
+          releaseConfigurationWarmupCache(configurationIndex);
+          continue;
         }
-        releaseConfigurationWarmupCache(configurationIndex);
-        continue;
       }
     }
     const warmupCache = configurationIndex >= 0 ? getConfigurationWarmupCache(configurationIndex) : undefined;
@@ -3611,6 +3676,9 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
         preConfigurationGcProbe,
       }
       : null;
+    if (traceEntry && dominatedRootFrontierPassTrace) {
+      Object.assign(traceEntry, dominatedRootFrontierPassTrace);
+    }
     const appendTraceMemoryProbe = (label: string): void => {
       if (!traceEntry) {
         return;
@@ -5667,6 +5735,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
       | "full-width-event-skip-seeding"
       | "large-gap-event-skip-seeding"
       | "same-coarse-frontier-skip-seeding"
+      | "dominated-root-frontier-pass"
       | "post-exact-frontier";
     type EventRootFrontierProbeOutcome = "not-run" | "continue-search" | "break-search";
     type EventRootFrontierProbeOptions = {
@@ -6222,6 +6291,25 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
       }
       return "not-run";
     };
+
+    if (
+      dominatedRootFrontierPassTrace !== null
+      && !didAttemptExactCandidateJoin
+    ) {
+      const eventRootProbe = maybeRunEventRootFrontierProbe("dominated-root-frontier-pass", {
+        allowDfsRemainingUpper: true,
+      });
+      if (eventRootProbe === "continue-search") {
+        continue;
+      }
+      if (eventRootProbe === "break-search") {
+        break;
+      }
+      didLeaveUnclosedAreaItemConfiguration = true;
+      rememberActiveConfigurationUpperBound();
+      finishConfigurationTrace("dominated-root-frontier-pass-skip-seeding");
+      continue;
+    }
 
     if (
       shouldUseSameCoarseFrontierEventProbeBeforeExactJoin

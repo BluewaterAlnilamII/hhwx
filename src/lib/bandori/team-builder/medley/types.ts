@@ -109,6 +109,10 @@ export type BandoriMedleySearchOptimizationOptions = {
   disableDominatedRootSkip?: boolean;
   enableDominatedRootSkipTightUpper?: boolean;
   dominatedRootSkipTightUpperMaxGap?: number;
+  enableDominatedRootFrontierPass?: boolean;
+  dominatedRootFrontierPassMaxCount?: number;
+  dominatedRootFrontierPassMinGap?: number;
+  dominatedRootFrontierPassMinRemainingMs?: number;
   disableSameCoarseTightRootSkip?: boolean;
   enableSameCoarseFrontierFullProofRetry?: boolean;
   enableSameCoarseFrontierEventProbeBeforeExactJoin?: boolean;
