@@ -3853,3 +3853,42 @@ P07 failed follow-ups after P03 fix:
     duration or producing a reusable same-coarse proof artifact that lets
     visual run before the near-deadline skip. After that, dominated tight-root
     can help remove the remaining Morfonica/Everyone tail.
+
+2026-06-11 12:58 CST P06 targeted pair BnB diagnostic:
+
+- Code fix:
+  - The existing cheap-upper targeted BnB path computed a local pair-proof
+    deadline but passed the global `deadlineAt` into
+    `proveMedleyScoreOnlyPairUpperByConflictBnb`.
+  - This was corrected so targeted BnB observes the local deadline.
+  - The path remains opt-in only.
+- Diagnostic run:
+  - Raw:
+    `temp/bandori-team-builder/real-profile-medley-scope-matrix-2026-06-11T04-50-13-139Z.json`
+  - Options:
+    same as the dominated tight-root diagnostic, plus
+    `eventRootFrontierProbeAnchorCheapUpperTargetedPairProofTimeboxMs=2000`,
+    `eventRootFrontierProbeAnchorCheapUpperTargetedPairProofMaxEntries=8`,
+    `eventRootFrontierProbeAnchorCheapUpperTargetedPairBnbNodeLimit=1000`,
+    and
+    `eventRootFrontierProbeAnchorCheapUpperTargetedPairBnbSlotSolveNodeLimit=10000`.
+  - Result: bounded timeout; elapsed `300072ms`; score `9488172`; global
+    upper `10082483`; gap `594311`; root-pruned `0`; peak `3667 MiB`.
+  - Performance configuration regressed to `candidate-fill-deadline` with
+    effective upper `9995426`.
+  - Technique then timed out at `initial-candidate`.
+  - BnB counters showed only one local call:
+    `conflictPairUpperBnbCallCount=1`,
+    `conflictPairUpperBnbElapsedMs=2000`,
+    `conflictPairUpperBnbAbortCount=1`,
+    `conflictPairUpperBnbNodeCount=195`,
+    `conflictPairUpperBnbBestUpper=6966473`.
+- Decision:
+  - The local-deadline fix is correct, but targeted pair BnB is not a useful
+    default or near-term route for P06.
+  - Even a conservative 2s local call can push the first hard configuration
+    into a deadline-sensitive path without lowering the residual enough to
+    compensate.
+  - Keep targeted pair BnB as research-only. Do not combine it into the main
+    40/40 acceptance path unless future diagnostics prove it can provide a
+    large residual drop under a stricter global guard.
