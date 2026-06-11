@@ -5597,3 +5597,55 @@ P07 failed follow-ups after P03 fix:
     stronger same-event frontier work lowered `PastelPalettes/cool`. After
     those high roots are tightened, the previously skipped dominated roots can
     become the global observed upper and need a controlled final proof pass.
+
+2026-06-12 05:27 CST dominated-root frontier pass diagnostic:
+
+- Code added and pushed:
+  - `0eb2a43 Add dominated root frontier pass experiment`.
+  - New default-off options:
+    `enableDominatedRootFrontierPass`,
+    `dominatedRootFrontierPassMaxCount`,
+    `dominatedRootFrontierPassMinGap`, and
+    `dominatedRootFrontierPassMinRemainingMs`.
+  - The option lets a bounded-dominated root with a large finite gap continue
+    into the normal proof flow instead of ending immediately at
+    `bounded-dominated-root-skip`. It does not change default maximize
+    behavior and does not alter proof semantics.
+- Diagnostic:
+  - Raw:
+    `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-11T21-10-44-477Z.json`.
+  - Options: same as the `pairCapacitySharedPowerDualCapMaxCalls=4` run, plus
+    `enableDominatedRootFrontierPass=true`,
+    `dominatedRootFrontierPassMaxCount=3`,
+    `dominatedRootFrontierPassMinGap=100000`,
+    `dominatedRootFrontierPassMinRemainingMs=60000`.
+  - Result: bounded, score `9488172`, maxScore `9567356`, upper `9935586`,
+    gap `447414`, elapsed `238177ms`, peak `3558 MiB`, no timeout and no
+    memory limit.
+- Findings:
+  - The pass did what it was allowed to do for `Morfonica/cool`: performance,
+    technique, and visual all moved from `bounded-dominated-root-skip` to
+    `exact-before-seeding-proved` in about `4478ms`, `3369ms`, and `2969ms`.
+  - This confirms `Morfonica/cool` was not inherently hard; it was only a
+    skipped residual upper after `PastelPalettes/cool` was tightened.
+  - The run still regressed globally because `PastelPalettes/cool` visual had
+    only a short frontier pass and never reached the cheap-upper improvement
+    stage. Its upper stayed near `10076136`, producing the `447414` global
+    gap.
+  - Even in the best previous `maxCalls=4` run, proving `Morfonica/cool` alone
+    would not make P06 exact: `PastelPalettes/cool` still had residual gaps of
+    about `97820`, `91051`, and `82576`.
+- Decision:
+  - Keep dominated-root frontier pass as a diagnostic tool only.
+  - Do not make it default and do not spend more time tuning its count or gap
+    thresholds. It can close the next-highest skipped roots, but the main
+    40/40 blocker remains the `PastelPalettes/cool` event-root cheap-upper
+    residual.
+  - Next work should target the `PastelPalettes/cool` residual source:
+    `exactCandidateJoinLastAnchorFrontierCheapUpperResidualSource` is
+    `unprocessed-generator-peek`, with only `13000` processed anchors and a
+    remaining unprocessed anchor/pair upper still about `80k-100k` above the
+    incumbent. More per-configuration time or larger anchor limits are unlikely
+    to be enough; the promising direction is a reusable/cached certificate for
+    the same event-root anchor frontier or a tighter upper for the unprocessed
+    generator peek.
