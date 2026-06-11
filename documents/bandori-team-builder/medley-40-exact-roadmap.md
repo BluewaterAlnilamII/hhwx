@@ -4415,3 +4415,64 @@ P07 failed follow-ups after P03 fix:
     must either build a conflict-aware pair/frontier certificate without
     materializing candidate arrays, or tighten the underlying two-slot upper
     model used for `left-unseen`/`right-unseen`.
+
+2026-06-11 18:25 CST pair capacity cap diagnostics:
+
+- Code added, default-off:
+  - `eventRootFrontierProbeAnchorCheapUpperPairCapacityCap`.
+  - `eventRootFrontierProbeAnchorCheapUpperPairCapacityCapPareto`.
+  - `eventRootFrontierProbeAnchorCheapUpperPairCapacityCapBucketed`.
+  - Profiling fields:
+    `exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacityCapUpperBound`,
+    `...CallCount`, `...ImprovementCount`, `...BestImprovement`, and
+    `...ElapsedMs`.
+- Purpose:
+  - Reuse existing two-slot remaining capacity upper instead of materializing
+    more pair-slot candidates. For each processed anchor, cap its pair upper by
+    `estimateMedleyRemainingScoreUpperBound(pairSlots, bannedAnchorCards, ...)`;
+    for the unprocessed anchor suffix, cap by the no-anchor two-slot capacity
+    upper.
+- Diagnostic run, `P06:323`, no GC, non-debug, fast pair capacity cap, default
+  `16384` anchors:
+  - Raw:
+    `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-11T10-02-24-015Z.json`
+  - Result: bounded, elapsed `126834ms`, score `9488172`, upper `9764367`,
+    gap `276195`, no timeout, no memory limit, peak `4180 MiB`.
+  - Positive signal: gap improved from `285649` to `276195`; max processed
+    source became `pair-capacity`.
+  - Remaining residual was still `unprocessed-anchor`: next anchor score
+    `2795754` plus pair upper `6968613`.
+- Diagnostic run, `P06:323`, no GC, non-debug, fast pair capacity cap with
+  `maxAnchors=40000`, cheap-upper timebox `120000ms`:
+  - Raw:
+    `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-11T10-05-37-570Z.json`
+  - Result: bounded, elapsed `149404ms`, score `9486961`, upper `9732873`,
+    gap `245912`, no timeout, no memory limit, peak `3836 MiB`.
+  - Best result so far among safe diagnostics. The residual source became
+    `pair-capacity`: anchor score `2782739` plus capped pair upper
+    `6950133.095596918`.
+- Diagnostic run, `P06:323`, no GC, non-debug, pair capacity cap + pareto,
+  `maxAnchors=40000`, cheap-upper timebox `120000ms`:
+  - Raw:
+    `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-11T10-10-35-117Z.json`
+  - Result: bounded, elapsed `189743ms`, score `9486961`, upper `9748585`,
+    gap `261624`, no timeout, no memory limit, peak `3896 MiB`.
+  - Pareto was slower and processed fewer anchors (`20579`) within the same
+    timebox, so it did not beat the fast cap.
+- Diagnostic run, `P06:323`, no GC, non-debug, pair capacity cap + bucketed,
+  `maxAnchors=40000`, cheap-upper timebox `120000ms`:
+  - Raw:
+    `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-11T10-16-30-035Z.json`
+  - Result: bounded, elapsed `188451ms`, score `9486961`, upper `9742277`,
+    gap `255316`, no timeout, no memory limit, peak `3909 MiB`.
+  - Bucketed was also slower and did not beat the fast cap.
+- Decision:
+  - Fast pair capacity cap is the first low-memory route with a real proof-gap
+    improvement and no memory regression, but it is still far from exact.
+  - Pareto/bucketed variants are diagnostic-only for now: they spend the
+    timebox before processing enough anchors and do not close the gap.
+  - The next useful optimization is to tighten the two-slot pair-capacity model
+    itself, especially for the residual anchor around score `2782739`, or to add
+    a targeted certificate that can prove the capped pair upper below about
+    `6704222` for that anchor region. More anchor iteration alone cannot close
+    the current residual once `pair-capacity` is the max source.

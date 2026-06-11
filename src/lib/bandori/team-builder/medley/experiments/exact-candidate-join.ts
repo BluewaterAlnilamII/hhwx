@@ -3921,6 +3921,9 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
     localPairSlotExtensionSlotIndex?: number | null;
     localPairSlotExtensionMaxCandidates?: number | null;
     localPairSlotExtensionTimeboxMs?: number | null;
+    pairCapacityCap?: boolean;
+    pairCapacityCapPareto?: boolean;
+    pairCapacityCapBucketed?: boolean;
     targetedPairProofTimeboxMs?: number | null;
     targetedPairProofMaxEntries?: number | null;
     targetedPairProofCandidateLimit?: number | null;
@@ -4056,6 +4059,9 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
   const shouldUseSuffixUnseenSingleCardJoin = options.suffixUnseenSingleCardJoin === true;
   const shouldUseSuffixUnseenFullJoin = options.suffixUnseenFullJoin === true;
   const shouldUseSuffixUnseenJoin = shouldUseSuffixUnseenSingleCardJoin || shouldUseSuffixUnseenFullJoin;
+  const shouldUsePairCapacityCap = options.pairCapacityCap === true;
+  const shouldUsePairCapacityCapPareto = options.pairCapacityCapPareto === true;
+  const shouldUsePairCapacityCapBucketed = options.pairCapacityCapBucketed === true;
   let leftPeekUpperBound = generators[leftSlotIndex].peekUpperBound();
   let rightPeekUpperBound = generators[rightSlotIndex].peekUpperBound();
   const anchorPeekUpperBound = generators[anchorSlotIndex].peekUpperBound();
@@ -4213,6 +4219,11 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
   profiling.exactCandidateJoinLastAnchorFrontierCheapUpperLocalPairExtensionPeekAfter = null;
   profiling.exactCandidateJoinLastAnchorFrontierCheapUpperLocalPairExtensionElapsedMs = null;
   profiling.exactCandidateJoinLastAnchorFrontierCheapUpperLocalPairExtensionAbortReason = null;
+  profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacityCapUpperBound = null;
+  profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacityCapCallCount = 0;
+  profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacityCapImprovementCount = 0;
+  profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacityCapBestImprovement = 0;
+  profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacityCapElapsedMs = 0;
   profiling.exactCandidateJoinLastAnchorFrontierCheapUpperMaxGeneratedPairOverlaps = null;
   profiling.exactCandidateJoinLastAnchorFrontierCheapUpperMaxGeneratedPairScoreOnly = null;
   profiling.exactCandidateJoinLastAnchorFrontierCheapUpperMaxGeneratedPairFullScore = null;
@@ -4239,6 +4250,66 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
       ? leftScore + rightScore
       : Number.NEGATIVE_INFINITY
   );
+  const pairCapacityCapByAnchorKey = new Map<string, number>();
+  const estimatePairCapacityCap = (anchorCardIds: readonly number[]): number => {
+    if (!shouldUsePairCapacityCap) {
+      return Number.POSITIVE_INFINITY;
+    }
+    const key = [...anchorCardIds].sort((left, right) => left - right).join(",");
+    const cached = pairCapacityCapByAnchorKey.get(key);
+    if (cached !== undefined) {
+      return cached;
+    }
+    const startedAt = performance.now();
+    const bannedCardIds = new Set<number>(anchorCardIds);
+    const upperBound = estimateMedleyRemainingScoreUpperBound(
+      slots,
+      pairSlotIndices,
+      bannedCardIds,
+      profiling,
+      true,
+      true,
+      shouldUsePairCapacityCapPareto,
+      shouldUsePairCapacityCapBucketed,
+      false,
+      false,
+    );
+    const normalizedUpperBound = Number.isFinite(upperBound) ? upperBound : Number.POSITIVE_INFINITY;
+    pairCapacityCapByAnchorKey.set(key, normalizedUpperBound);
+    profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacityCapCallCount = (
+      (profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacityCapCallCount ?? 0) + 1
+    );
+    profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacityCapElapsedMs = Math.round(
+      (profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacityCapElapsedMs ?? 0)
+      + performance.now() - startedAt,
+    );
+    profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacityCapUpperBound = (
+      Math.min(
+        profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacityCapUpperBound
+          ?? Number.POSITIVE_INFINITY,
+        normalizedUpperBound,
+      )
+    );
+    return normalizedUpperBound;
+  };
+  const capPairUpper = (pairUpper: number, anchorCardIds: readonly number[]): number => {
+    if (!Number.isFinite(pairUpper)) {
+      return pairUpper;
+    }
+    const capacityUpper = estimatePairCapacityCap(anchorCardIds);
+    if (!Number.isFinite(capacityUpper) || capacityUpper >= pairUpper) {
+      return pairUpper;
+    }
+    const improvement = pairUpper - capacityUpper;
+    profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacityCapImprovementCount = (
+      (profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacityCapImprovementCount ?? 0) + 1
+    );
+    profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacityCapBestImprovement = Math.max(
+      profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacityCapBestImprovement ?? 0,
+      improvement,
+    );
+    return capacityUpper;
+  };
   const getLocalCandidateKey = (candidate: MedleyTeamCandidate): string => (
     candidate.cardInstanceKeys?.length
       ? candidate.cardInstanceKeys.join(",")
@@ -4383,12 +4454,15 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
     const generatedPairUpper = combineScores(leftGeneratedScore, rightGeneratedScore);
     const leftUnseenUpper = combineScores(finiteScore(leftPeekUpperBound), rightBestPossible);
     const rightUnseenUpper = combineScores(finiteScore(rightPeekUpperBound), leftBestPossible);
-    const upperBound = Math.max(generatedPairUpper, leftUnseenUpper, rightUnseenUpper);
+    const rawUpperBound = Math.max(generatedPairUpper, leftUnseenUpper, rightUnseenUpper);
+    const upperBound = capPairUpper(rawUpperBound, anchorCandidate.cardIds);
     const source = upperBound === generatedPairUpper
       ? "generated-pair"
       : upperBound === leftUnseenUpper
         ? "left-unseen"
-        : "right-unseen";
+        : upperBound === rightUnseenUpper
+          ? "right-unseen"
+          : "pair-capacity";
     return {
       upperBound,
       source,
@@ -4690,14 +4764,15 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
     nextAnchorScore: number | null,
     generatedSuffixCoveredUpperBound: number | null = null,
   ): number | null => {
+    const unprocessedPairUpperBound = capPairUpper(pairUpperBound, []);
     const unprocessedGeneratedUpperBound = generatedSuffixCoveredUpperBound !== null
       ? generatedSuffixCoveredUpperBound
-      : Number.isFinite(nextAnchorScore ?? Number.NEGATIVE_INFINITY) && Number.isFinite(pairUpperBound)
-        ? (nextAnchorScore ?? Number.NEGATIVE_INFINITY) + pairUpperBound
+      : Number.isFinite(nextAnchorScore ?? Number.NEGATIVE_INFINITY) && Number.isFinite(unprocessedPairUpperBound)
+        ? (nextAnchorScore ?? Number.NEGATIVE_INFINITY) + unprocessedPairUpperBound
         : Number.NEGATIVE_INFINITY;
     const unprocessedPeekUpperBound = Number.isFinite(finiteScore(anchorPeekUpperBound))
-      && Number.isFinite(pairUpperBound)
-      ? finiteScore(anchorPeekUpperBound) + pairUpperBound
+      && Number.isFinite(unprocessedPairUpperBound)
+      ? finiteScore(anchorPeekUpperBound) + unprocessedPairUpperBound
       : Number.NEGATIVE_INFINITY;
     const unprocessedUpperBound = Math.max(unprocessedGeneratedUpperBound, unprocessedPeekUpperBound);
     const residualUpperBound = Math.max(processedMax, unprocessedUpperBound);
@@ -4720,9 +4795,10 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
     pairUpper: number | null;
     source: string | null;
   } => {
+    const unprocessedPairUpperBound = capPairUpper(pairUpperBound, []);
     const generatedFallbackUpperBound = Number.isFinite(nextAnchorScore ?? Number.NEGATIVE_INFINITY)
-      && Number.isFinite(pairUpperBound)
-      ? (nextAnchorScore ?? Number.NEGATIVE_INFINITY) + pairUpperBound
+      && Number.isFinite(unprocessedPairUpperBound)
+      ? (nextAnchorScore ?? Number.NEGATIVE_INFINITY) + unprocessedPairUpperBound
       : Number.NEGATIVE_INFINITY;
     const generatedUpperBound = generatedSuffixCoveredUpperBound ?? generatedFallbackUpperBound;
     const peekAnchorUpperBound = finiteScore(anchorPeekUpperBound);
@@ -4733,7 +4809,7 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
       return {
         upperBound: generatedUpperBound,
         anchorScore: nextAnchorScore,
-        pairUpper: generatedSuffixCoveredUpperBound !== null ? null : pairUpperBound,
+        pairUpper: generatedSuffixCoveredUpperBound !== null ? null : unprocessedPairUpperBound,
         source: generatedSuffixCoveredUpperBound !== null
           ? "unprocessed-anchor-suffix-cover"
           : "unprocessed-anchor",
@@ -6792,6 +6868,9 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     anchorFrontierCheapUpperLocalPairSlotExtensionSlotIndex?: number | null;
     anchorFrontierCheapUpperLocalPairSlotExtensionMaxCandidates?: number | null;
     anchorFrontierCheapUpperLocalPairSlotExtensionTimeboxMs?: number | null;
+    anchorFrontierCheapUpperPairCapacityCap?: boolean;
+    anchorFrontierCheapUpperPairCapacityCapPareto?: boolean;
+    anchorFrontierCheapUpperPairCapacityCapBucketed?: boolean;
     anchorFrontierCheapUpperTargetedPairProofTimeboxMs?: number | null;
     anchorFrontierCheapUpperTargetedPairProofMaxEntries?: number | null;
     anchorFrontierCheapUpperTargetedPairProofCandidateLimit?: number | null;
@@ -7303,6 +7382,9 @@ export function searchMedleyConfigurationByExactCandidateJoin(
           localPairSlotExtensionTimeboxMs: (
             context.anchorFrontierCheapUpperLocalPairSlotExtensionTimeboxMs
           ),
+          pairCapacityCap: context.anchorFrontierCheapUpperPairCapacityCap,
+          pairCapacityCapPareto: context.anchorFrontierCheapUpperPairCapacityCapPareto,
+          pairCapacityCapBucketed: context.anchorFrontierCheapUpperPairCapacityCapBucketed,
           targetedPairProofTimeboxMs: context.anchorFrontierCheapUpperTargetedPairProofTimeboxMs,
           targetedPairProofMaxEntries: context.anchorFrontierCheapUpperTargetedPairProofMaxEntries,
           targetedPairProofCandidateLimit: context.anchorFrontierCheapUpperTargetedPairProofCandidateLimit,
