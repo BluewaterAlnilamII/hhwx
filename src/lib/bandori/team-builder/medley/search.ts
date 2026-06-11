@@ -372,6 +372,31 @@ function buildProofLedger(
         anchorFrontierCheapUpperSuffixGeneratedPairJoinMaxPairRecordIndex: (
           asFiniteNumber(entry.exactCandidateJoinLastAnchorFrontierCheapUpperSuffixGeneratedPairJoinMaxPairRecordIndex)
         ),
+        anchorFrontierCheapUpperPairCapacitySharedPowerDualReuseCallCount: (
+          asFiniteNumber(
+            entry.exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacitySharedPowerDualReuseCallCount,
+          )
+        ),
+        anchorFrontierCheapUpperPairCapacitySharedPowerDualReuseImprovementCount: (
+          asFiniteNumber(
+            entry.exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacitySharedPowerDualReuseImprovementCount,
+          )
+        ),
+        anchorFrontierCheapUpperPairCapacitySharedPowerDualReuseBestImprovement: (
+          asFiniteNumber(
+            entry.exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacitySharedPowerDualReuseBestImprovement,
+          )
+        ),
+        anchorFrontierCheapUpperPairCapacitySharedPowerDualReuseElapsedMs: (
+          asFiniteNumber(
+            entry.exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacitySharedPowerDualReuseElapsedMs,
+          )
+        ),
+        anchorFrontierCheapUpperPairCapacitySharedPowerDualReuseParameterCount: (
+          asFiniteNumber(
+            entry.exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacitySharedPowerDualReuseParameterCount,
+          )
+        ),
         anchorFrontierCheapUpperPairCapacitySharedPowerDualLateRepairAttemptCount: (
           asFiniteNumber(
             entry
@@ -3965,6 +3990,21 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
           ),
           exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacitySharedPowerDualCapElapsedMs: (
             profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacitySharedPowerDualCapElapsedMs
+          ),
+          exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacitySharedPowerDualReuseCallCount: (
+            profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacitySharedPowerDualReuseCallCount
+          ),
+          exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacitySharedPowerDualReuseImprovementCount: (
+            profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacitySharedPowerDualReuseImprovementCount
+          ),
+          exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacitySharedPowerDualReuseBestImprovement: (
+            profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacitySharedPowerDualReuseBestImprovement
+          ),
+          exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacitySharedPowerDualReuseElapsedMs: (
+            profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacitySharedPowerDualReuseElapsedMs
+          ),
+          exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacitySharedPowerDualReuseParameterCount: (
+            profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacitySharedPowerDualReuseParameterCount
           ),
           exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacitySharedPowerDualLateRepairAttemptCount: (
             profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacitySharedPowerDualLateRepairAttemptCount

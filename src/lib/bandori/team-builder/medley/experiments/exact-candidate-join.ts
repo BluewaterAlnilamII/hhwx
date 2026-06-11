@@ -85,6 +85,7 @@ import {
   estimateMedleyCapacityCardBoundLagrangianScoreUpperBound,
   estimateMedleyCapacityCardBoundSharedPowerSkillScoreUpperBound,
   estimateMedleyFastTwoSlotSharedPowerDualScoreUpperBound,
+  estimateMedleyFastTwoSlotSharedPowerDualScoreUpperBoundForParameters,
   estimateMedleyRemainingScoreUpperBound,
   estimateMedleySlotSkillCoefficient,
 } from "../upper/capacity";
@@ -4277,6 +4278,11 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
   profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacitySharedPowerDualCapImprovementCount = 0;
   profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacitySharedPowerDualCapBestImprovement = 0;
   profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacitySharedPowerDualCapElapsedMs = 0;
+  profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacitySharedPowerDualReuseCallCount = 0;
+  profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacitySharedPowerDualReuseImprovementCount = 0;
+  profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacitySharedPowerDualReuseBestImprovement = 0;
+  profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacitySharedPowerDualReuseElapsedMs = 0;
+  profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacitySharedPowerDualReuseParameterCount = 0;
   profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacitySharedPowerDualLateRepairAttemptCount = 0;
   profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacitySharedPowerDualLateRepairImprovementCount = 0;
   profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacitySharedPowerDualLateRepairBestImprovement = 0;
@@ -4414,6 +4420,38 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
     };
   };
   const pairCapacitySharedPowerDualCapByAnchorKey = new Map<string, number>();
+  const pairCapacitySharedPowerDualParameterSeeds: Array<{
+    leaderPowerShare: number;
+    lambdaBySlot: [number, number];
+  }> = [];
+  const pairCapacitySharedPowerDualReuseMaxParameterSeeds = Math.min(
+    2,
+    pairCapacitySharedPowerDualCapMaxCalls,
+  );
+  const pairCapacitySharedPowerDualReuseMaxCalls = pairCapacitySharedPowerDualCapMaxCalls * 256;
+  const rememberPairCapacitySharedPowerDualParameterSeed = (estimate: {
+    leaderPowerShare: number;
+    lambdaBySlot: [number, number];
+  } | null): void => {
+    if (!estimate || pairCapacitySharedPowerDualParameterSeeds.length >= pairCapacitySharedPowerDualReuseMaxParameterSeeds) {
+      return;
+    }
+    const alreadyKnown = pairCapacitySharedPowerDualParameterSeeds.some((seed) => (
+      Math.abs(seed.leaderPowerShare - estimate.leaderPowerShare) < 1e-12
+      && Math.abs(seed.lambdaBySlot[0] - estimate.lambdaBySlot[0]) < 1e-12
+      && Math.abs(seed.lambdaBySlot[1] - estimate.lambdaBySlot[1]) < 1e-12
+    ));
+    if (alreadyKnown) {
+      return;
+    }
+    pairCapacitySharedPowerDualParameterSeeds.push({
+      leaderPowerShare: estimate.leaderPowerShare,
+      lambdaBySlot: [estimate.lambdaBySlot[0], estimate.lambdaBySlot[1]],
+    });
+    profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacitySharedPowerDualReuseParameterCount = (
+      pairCapacitySharedPowerDualParameterSeeds.length
+    );
+  };
   const estimatePairCapacitySharedPowerDualCap = (anchorCardIds: readonly number[]): number => {
     if (!shouldUsePairCapacitySharedPowerDualCap && !shouldUsePairCapacitySharedPowerDualLateMaxRepair) {
       return Number.POSITIVE_INFINITY;
@@ -4444,6 +4482,9 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
         ? estimate.upperBound
         : Number.POSITIVE_INFINITY
     );
+    if (Number.isFinite(normalizedUpperBound)) {
+      rememberPairCapacitySharedPowerDualParameterSeed(estimate);
+    }
     pairCapacitySharedPowerDualCapByAnchorKey.set(key, normalizedUpperBound);
     profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacitySharedPowerDualCapCallCount = callCount + 1;
     profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacitySharedPowerDualCapElapsedMs = Math.round(
@@ -4451,6 +4492,48 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
       + performance.now() - startedAt,
     );
     return normalizedUpperBound;
+  };
+  const estimatePairCapacitySharedPowerDualReuseCap = (anchorCardIds: readonly number[]): number => {
+    if (!shouldUsePairCapacitySharedPowerDualCap || pairCapacitySharedPowerDualParameterSeeds.length === 0) {
+      return Number.POSITIVE_INFINITY;
+    }
+    const reuseCallCount = (
+      profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacitySharedPowerDualReuseCallCount ?? 0
+    );
+    if (reuseCallCount >= pairCapacitySharedPowerDualReuseMaxCalls) {
+      return Number.POSITIVE_INFINITY;
+    }
+    if (performance.now() + 250 >= localDeadlineAt) {
+      return Number.POSITIVE_INFINITY;
+    }
+    const startedAt = performance.now();
+    const bannedCardIds = new Set<number>(anchorCardIds);
+    let bestUpperBound = Number.POSITIVE_INFINITY;
+    for (const parameters of pairCapacitySharedPowerDualParameterSeeds) {
+      if (performance.now() + 250 >= localDeadlineAt) {
+        break;
+      }
+      const estimate = estimateMedleyFastTwoSlotSharedPowerDualScoreUpperBoundForParameters(
+        slots,
+        pairSlotIndices,
+        bannedCardIds,
+        parameters,
+      );
+      if (estimate && Number.isFinite(estimate.upperBound)) {
+        bestUpperBound = Math.min(bestUpperBound, estimate.upperBound);
+      }
+    }
+    profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacitySharedPowerDualReuseCallCount = (
+      reuseCallCount + 1
+    );
+    profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacitySharedPowerDualReuseElapsedMs = Math.round(
+      (profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacitySharedPowerDualReuseElapsedMs ?? 0)
+      + performance.now() - startedAt,
+    );
+    profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacitySharedPowerDualReuseParameterCount = (
+      pairCapacitySharedPowerDualParameterSeeds.length
+    );
+    return bestUpperBound;
   };
   const applyPairCapacitySharedPowerDualCap = (
     pairUpper: number,
@@ -4466,7 +4549,13 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
         source,
       };
     }
-    const capacityUpper = estimatePairCapacitySharedPowerDualCap(anchorCardIds);
+    const reuseUpper = estimatePairCapacitySharedPowerDualReuseCap(anchorCardIds);
+    let capacityUpper = reuseUpper;
+    let cappedSource = "pair-capacity-shared-power-dual-reuse";
+    if (!Number.isFinite(capacityUpper) || capacityUpper >= pairUpper) {
+      capacityUpper = estimatePairCapacitySharedPowerDualCap(anchorCardIds);
+      cappedSource = "pair-capacity-shared-power-dual";
+    }
     if (!Number.isFinite(capacityUpper) || capacityUpper >= pairUpper) {
       return {
         pairUpper,
@@ -4481,9 +4570,21 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
       profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacitySharedPowerDualCapBestImprovement ?? 0,
       improvement,
     );
+    if (cappedSource === "pair-capacity-shared-power-dual-reuse") {
+      profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacitySharedPowerDualReuseImprovementCount = (
+        (profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacitySharedPowerDualReuseImprovementCount ?? 0)
+        + 1
+      );
+      profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacitySharedPowerDualReuseBestImprovement = (
+        Math.max(
+          profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacitySharedPowerDualReuseBestImprovement ?? 0,
+          improvement,
+        )
+      );
+    }
     return {
       pairUpper: capacityUpper,
-      source: "pair-capacity-shared-power-dual",
+      source: cappedSource,
     };
   };
   const shouldApplyPairCapacitySharedPowerDualCap = (

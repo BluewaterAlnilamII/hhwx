@@ -118,6 +118,10 @@ export type MedleyTwoSlotSharedPowerDualUpperEstimate = {
   leaderPowerShare: number;
   lambdaBySlot: [number, number];
 };
+export type MedleyTwoSlotSharedPowerDualParameters = {
+  leaderPowerShare: number;
+  lambdaBySlot: [number, number];
+};
 
 const MEDLEY_TWO_SLOT_SHARED_POWER_DUAL_LEADER_SHARES = [
   1 / 6,
@@ -1078,6 +1082,57 @@ export function estimateMedleyFastTwoSlotSharedPowerDualScoreUpperBound(
   }
 
   return bestEstimate;
+}
+
+export function estimateMedleyFastTwoSlotSharedPowerDualScoreUpperBoundForParameters(
+  slots: MedleySlotSearch[],
+  remainingSlotIndices: number[],
+  bannedCardIds: Set<number>,
+  parameters: MedleyTwoSlotSharedPowerDualParameters,
+): MedleyTwoSlotSharedPowerDualUpperEstimate | null {
+  if (remainingSlotIndices.length !== 2) {
+    return null;
+  }
+  const leaderPowerShare = parameters.leaderPowerShare;
+  const lambdaBySlot = parameters.lambdaBySlot;
+  if (
+    !Number.isFinite(leaderPowerShare)
+    || leaderPowerShare <= 0
+    || leaderPowerShare >= 1
+    || !Number.isFinite(lambdaBySlot[0])
+    || !Number.isFinite(lambdaBySlot[1])
+    || lambdaBySlot[0] < 0
+    || lambdaBySlot[1] < 0
+  ) {
+    return null;
+  }
+
+  const averagePowerShare = (1 - leaderPowerShare) / MEDLEY_TEAM_SIZE;
+  if (!Number.isFinite(averagePowerShare) || averagePowerShare <= 0) {
+    return null;
+  }
+
+  const remainingSlots = remainingSlotIndices.map((slotIndex) => slots[slotIndex]);
+  const slotContexts = remainingSlots.map((slot) => (
+    buildMedleyTwoSlotCardBoundSlotContext(slot, bannedCardIds)
+  )) as [MedleyTwoSlotCardBoundSlotContext, MedleyTwoSlotCardBoundSlotContext];
+  const groups = getMedleyTwoSlotCapacityCharacterGroups(remainingSlots[0], remainingSlots[1]);
+  const upperBound = estimateMedleyFastTwoSlotSharedPowerDualForParameters(
+    groups,
+    slotContexts,
+    bannedCardIds,
+    lambdaBySlot,
+    averagePowerShare,
+    leaderPowerShare,
+  );
+
+  return Number.isFinite(upperBound)
+    ? {
+      upperBound,
+      leaderPowerShare,
+      lambdaBySlot,
+    }
+    : null;
 }
 
 function observeMedleySlotCoefficientEstimates(
