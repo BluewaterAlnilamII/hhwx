@@ -3827,6 +3827,7 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
     targetedPairBnbNodeLimit?: number | null;
     targetedPairBnbSlotSolveNodeLimit?: number | null;
     suffixCover?: boolean;
+    multiCardSuffixCover?: boolean;
   } = {},
   observeEvaluatedResult?: MedleyEvaluatedResultObserver,
 ): MedleyExactCandidateAnchorFrontierProofResult {
@@ -3909,6 +3910,7 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
     ? Math.max(1, Math.trunc(options.targetedPairBnbSlotSolveNodeLimit))
     : null;
   const shouldUseSuffixCover = options.suffixCover === true;
+  const shouldUseMultiCardSuffixCover = shouldUseSuffixCover && options.multiCardSuffixCover === true;
   const leftPeekUpperBound = generators[leftSlotIndex].peekUpperBound();
   const rightPeekUpperBound = generators[rightSlotIndex].peekUpperBound();
   const anchorPeekUpperBound = generators[anchorSlotIndex].peekUpperBound();
@@ -4010,6 +4012,8 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
   profiling.exactCandidateJoinLastAnchorFrontierCheapUpperUnprocessedPairUpper = null;
   profiling.exactCandidateJoinLastAnchorFrontierCheapUpperSuffixCoverCandidateCount = null;
   profiling.exactCandidateJoinLastAnchorFrontierCheapUpperSuffixCoverDistinctCardCount = null;
+  profiling.exactCandidateJoinLastAnchorFrontierCheapUpperSuffixCoverDistinctCardSetCount = null;
+  profiling.exactCandidateJoinLastAnchorFrontierCheapUpperSuffixCoverMode = null;
   profiling.exactCandidateJoinLastAnchorFrontierCheapUpperSuffixCoverUpperBound = null;
   profiling.exactCandidateJoinLastAnchorFrontierCheapUpperSuffixCoverElapsedMs = null;
   profiling.exactCandidateJoinLastAnchorFrontierCheapUpperSuffixCoverAbortReason = null;
@@ -4080,6 +4084,15 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
     };
   };
   const pairUpperBySingleBannedCardId = new Map<number, number>();
+  const pairUpperByBannedCardSetKey = new Map<string, number>();
+  let suffixCoverPairUpperQuery: MedleyExactCandidatePairUpperQuery | null = null;
+  const getSuffixCoverPairUpperQuery = (): MedleyExactCandidatePairUpperQuery => {
+    suffixCoverPairUpperQuery ??= buildMedleyExactCandidatePairUpperQuery(leftCandidates, rightCandidates);
+    return suffixCoverPairUpperQuery;
+  };
+  const getBannedCardSetKey = (cardIds: readonly number[]): string => (
+    [...cardIds].sort((left, right) => left - right).join(",")
+  );
   const estimatePairUpperExcludingSingleCardId = (cardId: number): number => {
     const cached = pairUpperBySingleBannedCardId.get(cardId);
     if (cached !== undefined) {
@@ -4115,12 +4128,68 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
     pairUpperBySingleBannedCardId.set(cardId, normalizedUpperBound);
     return normalizedUpperBound;
   };
+  const estimatePairUpperExcludingAnchorCardSet = (
+    anchorCandidate: MedleyTeamCandidate,
+    currentSuffixUpperBound: number,
+  ): number => {
+    const key = getBannedCardSetKey(anchorCandidate.cardIds);
+    const cached = pairUpperByBannedCardSetKey.get(key);
+    if (cached !== undefined) {
+      return cached;
+    }
+    const leftGeneratedCandidate = findBestAvailableMedleyExactCandidateExcludingCardIds(
+      leftAvailabilityQuery,
+      anchorCandidate.cardIds,
+    );
+    const rightGeneratedCandidate = findBestAvailableMedleyExactCandidateExcludingCardIds(
+      rightAvailabilityQuery,
+      anchorCandidate.cardIds,
+    );
+    const leftGeneratedScore = finiteScore(leftGeneratedCandidate?.result.score ?? Number.NEGATIVE_INFINITY);
+    const rightGeneratedScore = finiteScore(rightGeneratedCandidate?.result.score ?? Number.NEGATIVE_INFINITY);
+    const leftLimitedPeekUpperBound = Math.min(
+      finiteScore(leftPeekUpperBound),
+      estimateSlotUpperExcludingCardIds(leftSlotIndex, [anchorCandidate.cardIds]),
+    );
+    const rightLimitedPeekUpperBound = Math.min(
+      finiteScore(rightPeekUpperBound),
+      estimateSlotUpperExcludingCardIds(rightSlotIndex, [anchorCandidate.cardIds]),
+    );
+    const leftBestPossible = Math.max(leftGeneratedScore, leftLimitedPeekUpperBound);
+    const rightBestPossible = Math.max(rightGeneratedScore, rightLimitedPeekUpperBound);
+    const relevantTotalThreshold = Math.max(
+      incumbentScore,
+      processedUpperMax,
+      currentSuffixUpperBound,
+    );
+    const relevantPairThreshold = Number.isFinite(relevantTotalThreshold)
+      ? relevantTotalThreshold - anchorCandidate.result.score
+      : Number.NEGATIVE_INFINITY;
+    const generatedPairUpper = Math.max(
+      finiteScore(estimateGeneratedMedleyExactCandidatePairUpperExcludingCardIds(
+        getSuffixCoverPairUpperQuery(),
+        anchorCandidate.cardIds,
+        relevantPairThreshold,
+        profiling,
+      )),
+      finiteScore(relevantPairThreshold),
+    );
+    const upperBound = Math.max(
+      generatedPairUpper,
+      combineScores(leftLimitedPeekUpperBound, rightBestPossible),
+      combineScores(rightLimitedPeekUpperBound, leftBestPossible),
+    );
+    const normalizedUpperBound = Number.isFinite(upperBound) ? upperBound : Number.NEGATIVE_INFINITY;
+    pairUpperByBannedCardSetKey.set(key, normalizedUpperBound);
+    return normalizedUpperBound;
+  };
   const estimateGeneratedAnchorSuffixCoverUpper = (
     startAnchorIndex: number | null,
   ): {
     upperBound: number | null;
     candidateCount: number;
     distinctCardCount: number;
+    distinctCardSetCount: number;
     elapsedMs: number;
     abortReason: string | null;
   } => {
@@ -4129,6 +4198,7 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
         upperBound: null,
         candidateCount: 0,
         distinctCardCount: 0,
+        distinctCardSetCount: 0,
         elapsedMs: 0,
         abortReason: null,
       };
@@ -4142,17 +4212,25 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
           upperBound: null,
           candidateCount,
           distinctCardCount: pairUpperBySingleBannedCardId.size,
+          distinctCardSetCount: pairUpperByBannedCardSetKey.size,
           elapsedMs: performance.now() - suffixCoverStartedAt,
           abortReason: "timebox",
         };
       }
       const anchorCandidate = anchorCandidates[index];
       let coveredPairUpper = pairUpperBound;
-      for (const cardId of anchorCandidate.cardIds) {
+      if (shouldUseMultiCardSuffixCover) {
         coveredPairUpper = Math.min(
           coveredPairUpper,
-          estimatePairUpperExcludingSingleCardId(cardId),
+          estimatePairUpperExcludingAnchorCardSet(anchorCandidate, upperBound),
         );
+      } else {
+        for (const cardId of anchorCandidate.cardIds) {
+          coveredPairUpper = Math.min(
+            coveredPairUpper,
+            estimatePairUpperExcludingSingleCardId(cardId),
+          );
+        }
       }
       if (Number.isFinite(coveredPairUpper)) {
         upperBound = Math.max(upperBound, anchorCandidate.result.score + coveredPairUpper);
@@ -4163,6 +4241,7 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
       upperBound: Number.isFinite(upperBound) ? upperBound : null,
       candidateCount,
       distinctCardCount: pairUpperBySingleBannedCardId.size,
+      distinctCardSetCount: pairUpperByBannedCardSetKey.size,
       elapsedMs: performance.now() - suffixCoverStartedAt,
       abortReason: null,
     };
@@ -4895,6 +4974,14 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
     profiling.exactCandidateJoinLastAnchorFrontierCheapUpperSuffixCoverDistinctCardCount = (
       suffixCover.distinctCardCount
     );
+    profiling.exactCandidateJoinLastAnchorFrontierCheapUpperSuffixCoverDistinctCardSetCount = (
+      suffixCover.distinctCardSetCount
+    );
+    profiling.exactCandidateJoinLastAnchorFrontierCheapUpperSuffixCoverMode = shouldUseSuffixCover
+      ? shouldUseMultiCardSuffixCover
+        ? "multi-card"
+        : "single-card"
+      : null;
     profiling.exactCandidateJoinLastAnchorFrontierCheapUpperSuffixCoverUpperBound = (
       suffixCover.upperBound !== null ? Math.ceil(suffixCover.upperBound) : null
     );
@@ -5232,6 +5319,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     anchorFrontierCheapUpperTargetedPairBnbNodeLimit?: number | null;
     anchorFrontierCheapUpperTargetedPairBnbSlotSolveNodeLimit?: number | null;
     anchorFrontierCheapUpperSuffixCover?: boolean;
+    anchorFrontierCheapUpperMultiCardSuffixCover?: boolean;
   } = {},
   observeEvaluatedResult?: MedleyEvaluatedResultObserver,
 ): MedleyExactCandidateJoinResult {
@@ -5722,6 +5810,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
           targetedPairBnbNodeLimit: context.anchorFrontierCheapUpperTargetedPairBnbNodeLimit,
           targetedPairBnbSlotSolveNodeLimit: context.anchorFrontierCheapUpperTargetedPairBnbSlotSolveNodeLimit,
           suffixCover: context.anchorFrontierCheapUpperSuffixCover,
+          multiCardSuffixCover: context.anchorFrontierCheapUpperMultiCardSuffixCover,
         },
         observeEvaluatedResult,
       );

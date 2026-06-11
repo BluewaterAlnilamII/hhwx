@@ -683,6 +683,12 @@ function buildBoundedFrontierGroups(
       anchorFrontierCheapUpperSuffixCoverDistinctCardCount: (
         entry.exactCandidateJoinLastAnchorFrontierCheapUpperSuffixCoverDistinctCardCount ?? null
       ),
+      anchorFrontierCheapUpperSuffixCoverDistinctCardSetCount: (
+        entry.exactCandidateJoinLastAnchorFrontierCheapUpperSuffixCoverDistinctCardSetCount ?? null
+      ),
+      anchorFrontierCheapUpperSuffixCoverMode: (
+        entry.exactCandidateJoinLastAnchorFrontierCheapUpperSuffixCoverMode ?? null
+      ),
       anchorFrontierCheapUpperSuffixCoverUpperBound: (
         entry.exactCandidateJoinLastAnchorFrontierCheapUpperSuffixCoverUpperBound ?? null
       ),
@@ -1089,6 +1095,9 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
   const eventRootFrontierProbeAnchorCheapUpperSuffixCover = (
     optimization.eventRootFrontierProbeAnchorCheapUpperSuffixCover === true
   );
+  const eventRootFrontierProbeAnchorCheapUpperMultiCardSuffixCover = (
+    optimization.eventRootFrontierProbeAnchorCheapUpperMultiCardSuffixCover === true
+  );
   const exactJoinWideAnchorFrontierContext = enableExactJoinWideAnchorFrontierProbe
     ? {
       anchorFrontierProofMaxFrontierGap: eventRootFrontierProbeAnchorProofMaxFrontierGap,
@@ -1119,6 +1128,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
         eventRootFrontierProbeAnchorCheapUpperTargetedPairBnbSlotSolveNodeLimit
       ),
       anchorFrontierCheapUpperSuffixCover: eventRootFrontierProbeAnchorCheapUpperSuffixCover,
+      anchorFrontierCheapUpperMultiCardSuffixCover: eventRootFrontierProbeAnchorCheapUpperMultiCardSuffixCover,
     }
     : {};
   const parsedAnchorCandidateLimit = optimization.anchorCandidateLimit !== undefined
@@ -3268,6 +3278,12 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
           exactCandidateJoinLastAnchorFrontierCheapUpperSuffixCoverDistinctCardCount: (
             profiling.exactCandidateJoinLastAnchorFrontierCheapUpperSuffixCoverDistinctCardCount
           ),
+          exactCandidateJoinLastAnchorFrontierCheapUpperSuffixCoverDistinctCardSetCount: (
+            profiling.exactCandidateJoinLastAnchorFrontierCheapUpperSuffixCoverDistinctCardSetCount
+          ),
+          exactCandidateJoinLastAnchorFrontierCheapUpperSuffixCoverMode: (
+            profiling.exactCandidateJoinLastAnchorFrontierCheapUpperSuffixCoverMode
+          ),
           exactCandidateJoinLastAnchorFrontierCheapUpperSuffixCoverUpperBound: (
             profiling.exactCandidateJoinLastAnchorFrontierCheapUpperSuffixCoverUpperBound
           ),
@@ -4861,6 +4877,9 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
         traceEntry.eventRootFrontierProbeAnchorCheapUpperSuffixCover = (
           eventRootFrontierProbeAnchorCheapUpperSuffixCover
         );
+        traceEntry.eventRootFrontierProbeAnchorCheapUpperMultiCardSuffixCover = (
+          eventRootFrontierProbeAnchorCheapUpperMultiCardSuffixCover
+        );
       }
       const enableEventRootFrontierProbeStagedExtension = (
         eventRootFrontierProbeCandidateSoftLimit
@@ -4948,6 +4967,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
             eventRootFrontierProbeAnchorCheapUpperTargetedPairBnbSlotSolveNodeLimit
           ),
           anchorFrontierCheapUpperSuffixCover: eventRootFrontierProbeAnchorCheapUpperSuffixCover,
+          anchorFrontierCheapUpperMultiCardSuffixCover: eventRootFrontierProbeAnchorCheapUpperMultiCardSuffixCover,
         },
         observeEvaluatedMedleyResult,
       );

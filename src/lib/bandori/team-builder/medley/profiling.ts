@@ -328,6 +328,8 @@ export function createInitialMedleyProfilingStats(
     exactCandidateJoinLastAnchorFrontierCheapUpperUnprocessedPairUpper: null,
     exactCandidateJoinLastAnchorFrontierCheapUpperSuffixCoverCandidateCount: null,
     exactCandidateJoinLastAnchorFrontierCheapUpperSuffixCoverDistinctCardCount: null,
+    exactCandidateJoinLastAnchorFrontierCheapUpperSuffixCoverDistinctCardSetCount: null,
+    exactCandidateJoinLastAnchorFrontierCheapUpperSuffixCoverMode: null,
     exactCandidateJoinLastAnchorFrontierCheapUpperSuffixCoverUpperBound: null,
     exactCandidateJoinLastAnchorFrontierCheapUpperSuffixCoverElapsedMs: null,
     exactCandidateJoinLastAnchorFrontierCheapUpperSuffixCoverAbortReason: null,

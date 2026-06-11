@@ -3439,3 +3439,35 @@ P07 failed follow-ups after P03 fix:
     the unprocessed anchor suffix, or a much more selective shortlist builder
     that only expands for second candidates proven to dominate the remaining
     score frontier.
+
+2026-06-11 09:55 CST P06 multi-card suffix-cover diagnostic:
+
+- Added opt-in multi-card suffix-cover mode:
+  `eventRootFrontierProbeAnchorCheapUpperMultiCardSuffixCover`. It only takes
+  effect when `eventRootFrontierProbeAnchorCheapUpperSuffixCover=true`.
+  Defaults are off.
+- The diagnostic replaces the single-card pair upper min with a conservative
+  whole-anchor-card-set upper:
+  - exact/generated pair upper through the existing high-pair record query
+    with all anchor card ids banned;
+  - left/right unseen slot upper with all anchor card ids banned;
+  - the final pair upper is the max of generated-pair and generated+unseen
+    terms, so it remains an upper and cannot participate in exact proof
+    unsafely.
+- Raw:
+  `temp/bandori-team-builder/real-profile-medley-scope-matrix-2026-06-11T01-47-42-400Z.json`
+- Result: bounded, `135932ms`, score `9488172`, upper `9773821`,
+  gap `285649`, peak `3864 MiB`, no global timeout.
+- The multi-card suffix cover processed only `1` suffix anchor before local
+  cheap-upper budget ran out. It built `210` high-pair record sets in
+  `10604ms`; suffix-cover elapsed for the final call was `5024ms`, abort
+  reason `timebox`.
+- Decision:
+  - Full multi-card suffix cover is too expensive as a direct route.
+  - The blocker is now clearer: a sound full-card exclusion upper exists, but
+    invoking slot upper plus pair-record proof per suffix anchor cannot scale
+    to the `185681` generated suffix anchors observed in P06.
+  - Do not raise this timebox or default-enable the mode. The next route must
+    amortize the proof, for example by grouping suffix anchors by a smaller
+    shared risk signature, or by proving a global generated-pair threshold once
+    and reusing it across the suffix.
