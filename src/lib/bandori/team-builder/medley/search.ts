@@ -2408,6 +2408,36 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
       releaseSlotSearchCaches(reevaluationSlots);
     }
   };
+  const pushSameCoarseSiblingReevaluationResult = (
+    configuration: BandoriAreaItemConfiguration,
+    traceEntry: Record<string, unknown> | null,
+    tracePrefix: string,
+  ): number => {
+    const scoreBeforeSiblingReevaluation = results[0]?.score ?? Number.NEGATIVE_INFINITY;
+    const siblingResult = reevaluateCurrentBestForSameCoarseConfiguration(configuration);
+    if (!siblingResult) {
+      return 0;
+    }
+    pushMedleyResult(results, siblingResult, resultLimit, observeEvaluatedMedleyResult);
+    recordBestScoreMilestone();
+    const scoreAfterSiblingReevaluation = results[0]?.score ?? Number.NEGATIVE_INFINITY;
+    const siblingReevaluationImprovement = Math.max(
+      0,
+      scoreAfterSiblingReevaluation - scoreBeforeSiblingReevaluation,
+    );
+    if (siblingReevaluationImprovement > 0) {
+      profiling.sameCoarseSiblingReevaluationHitCount += 1;
+      profiling.sameCoarseSiblingReevaluationBestImprovement = Math.max(
+        profiling.sameCoarseSiblingReevaluationBestImprovement,
+        siblingReevaluationImprovement,
+      );
+    }
+    if (traceEntry) {
+      traceEntry[`${tracePrefix}SiblingReevaluationScore`] = scoreAfterSiblingReevaluation;
+      traceEntry[`${tracePrefix}SiblingReevaluationImprovement`] = siblingReevaluationImprovement;
+    }
+    return siblingReevaluationImprovement;
+  };
   const getConfigurationWarmupCache = (configurationIndex: number): MedleyConfigurationWarmupCache => {
     const cached = configurationWarmupCache.get(configurationIndex);
     if (cached) {
@@ -5895,30 +5925,11 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
       shouldUseSameCoarseFrontierEventProbeBeforeExactJoin
       && !didAttemptExactCandidateJoin
     ) {
-      const scoreBeforeSiblingReevaluation = results[0]?.score ?? Number.NEGATIVE_INFINITY;
-      const siblingResult = reevaluateCurrentBestForSameCoarseConfiguration(configuration);
-      if (siblingResult) {
-        pushMedleyResult(results, siblingResult, resultLimit, observeEvaluatedMedleyResult);
-        recordBestScoreMilestone();
-        const scoreAfterSiblingReevaluation = results[0]?.score ?? Number.NEGATIVE_INFINITY;
-        const siblingReevaluationImprovement = Math.max(
-          0,
-          scoreAfterSiblingReevaluation - scoreBeforeSiblingReevaluation,
-        );
-        if (siblingReevaluationImprovement > 0) {
-          profiling.sameCoarseSiblingReevaluationHitCount += 1;
-          profiling.sameCoarseSiblingReevaluationBestImprovement = Math.max(
-            profiling.sameCoarseSiblingReevaluationBestImprovement,
-            siblingReevaluationImprovement,
-          );
-        }
-        if (traceEntry) {
-          traceEntry.sameCoarseFrontierEventProbeSiblingReevaluationScore = scoreAfterSiblingReevaluation;
-          traceEntry.sameCoarseFrontierEventProbeSiblingReevaluationImprovement = (
-            siblingReevaluationImprovement
-          );
-        }
-      }
+      pushSameCoarseSiblingReevaluationResult(
+        configuration,
+        traceEntry,
+        "sameCoarseFrontierEventProbe",
+      );
       const eventRootProbe = maybeRunEventRootFrontierProbe("same-coarse-frontier-skip-seeding", {
         allowDfsRemainingUpper: true,
       });
@@ -5967,6 +5978,13 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
       && results.length >= resultLimit
       && hasFiniteActiveConfigurationUpperBoundBeforeSeeding
     ) {
+      if (enableEventRootFrontierProbe) {
+        pushSameCoarseSiblingReevaluationResult(
+          configuration,
+          traceEntry,
+          "fullWidthEventProbe",
+        );
+      }
       const eventRootProbe = maybeRunEventRootFrontierProbe("full-width-event-skip-seeding");
       if (eventRootProbe === "continue-search") {
         continue;
@@ -5996,6 +6014,13 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
       && largeGapEventObservedGapBeforeSeeding !== null
       && largeGapEventObservedGapBeforeSeeding >= MEDLEY_LARGE_GAP_EVENT_SKIP_PROOF_MIN_GAP
     ) {
+      if (enableEventRootFrontierProbe) {
+        pushSameCoarseSiblingReevaluationResult(
+          configuration,
+          traceEntry,
+          "largeGapEventProbe",
+        );
+      }
       const eventRootProbe = maybeRunEventRootFrontierProbe("large-gap-event-skip-seeding");
       if (eventRootProbe === "continue-search") {
         continue;

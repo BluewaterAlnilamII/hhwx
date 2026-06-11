@@ -1,6 +1,6 @@
 # Medley 40/40 Exact Roadmap
 
-Last updated: 2026-06-11 20:03 CST
+Last updated: 2026-06-11 20:50 CST
 
 This file is the persistent working note for the current medley optimizer goal.
 Keep it current before and after benchmark runs or proof-path changes, so future
@@ -138,6 +138,33 @@ No-GC acceptance contract:
   `P06:323` from candidate-fill failure to exact-join solve failure. The next
   useful target is solving/proving the large imbalanced candidate join more
   cheaply, not further raising K/timebox.
+
+2026-06-11 20:50 CST event-probe incumbent preservation update:
+
+- Patch under validation: same-coarse sibling reevaluation is now reused before
+  `full-width-event-skip-seeding` and `large-gap-event-skip-seeding` event-root
+  probes when `enableEventRootFrontierProbe=true`. This preserves the best
+  already-known sibling team before an opt-in probe path can skip normal
+  seeding/exact work. It does not change default behavior when the event probe
+  is disabled.
+- Validation raw:
+  `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-11T12-34-06-351Z.json`.
+- Scope: `P06:323`, no `--expose-gc`, `debugConfigurationTrace=false`,
+  process-per-case isolated, `300000ms`, event-root probe enabled with the
+  current 200k candidate soft limit and same-coarse probe before exact join.
+- Result: still bounded, score `9488172`, observed upper `9650685`, gap
+  `162513`, elapsed `199925ms`, `timedOut=false`, `memoryLimited=false`, peak
+  working set `3182 MiB`.
+- Profiling: same-coarse sibling reevaluation ran `3` times, hit `1` time, and
+  preserved a best improvement of `1211`; event-root probes ran `3` times and
+  spent `186572ms`. The final probe remained `unproved` with residual gap about
+  `148627`.
+- Interpretation: this is a safe incumbent-preservation cleanup and improves
+  the event-probe diagnostic path, but it is not enough to close `P06:323`.
+  The remaining blocker is proof closure after an unproved small-gap event-root
+  probe. Next experiment should be opt-in only: allow normal seeding/exact work
+  to continue after an unproved event-root probe when the residual gap is below
+  a configured small-gap threshold and enough time remains.
 
 2026-06-10 14:48 CST P06 score-only frontier finding:
 
