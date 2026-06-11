@@ -135,6 +135,7 @@ export type BandoriMedleySearchOptimizationOptions = {
   eventRootFrontierProbeAnchorProofMaxHighPairRecords?: number;
   eventRootFrontierProbeAnchorProofTimeboxMs?: number;
   eventRootFrontierProbeAnchorCheapUpperTimeboxMs?: number;
+  eventRootFrontierProbeAnchorCheapUpperMinRemainingMs?: number;
   eventRootFrontierProbeAnchorCheapUpperMaxAnchors?: number;
   eventRootFrontierProbeAnchorCheapUpperRefineUnseen?: boolean;
   eventRootFrontierProbeAnchorCheapUpperRefineTopAnchors?: number;

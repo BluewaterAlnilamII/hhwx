@@ -4915,3 +4915,51 @@ P07 failed follow-ups after P03 fix:
   - Any further local proof experiment must first pass a no-op confirmation
     against the clean branch state; otherwise it is too easy to mistake
     runner/environment perturbation for an algorithm signal.
+
+2026-06-11 22:50 CST P06 cheap-upper minimum remaining diagnostic:
+
+- Code added, default-off:
+  - New internal option
+    `eventRootFrontierProbeAnchorCheapUpperMinRemainingMs`.
+  - It separates the minimum remaining budget for cheap upper estimation from
+    the heavier anchor frontier proof budget.
+  - Default behavior is unchanged: when the option is absent, cheap upper uses
+    the same remaining-budget gate as full anchor frontier proof.
+  - When the option is set lower than
+    `eventRootFrontierProbeAnchorProofMinRemainingMs`, exact join may run only
+    cheap-upper and return its conservative observed upper, then skip the
+    heavier pair proof if the full proof budget is unavailable.
+- Clean-branch no-op confirmation without the new option:
+  - Raw:
+    `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-11T13-49-37-989Z.json`.
+  - Same optimization JSON as the accepted `P06:323` same-coarse event-before
+    setup, but without the new cheap-min option.
+  - Result: bounded, score `9488172`, global upper `9935586`, gap `447414`,
+    elapsed `241335ms`, peak `3815 MiB`, `timedOut=false`,
+    `memoryLimited=false`.
+  - Interpretation: the previous first-configuration memory-wall raws were not
+    present in clean branch state. However, runtime variance left only about
+    `58666ms` before the last same-coarse event probe, so cheap-upper ran only
+    `2` times and the last probe did not improve upper.
+- Opt-in diagnostic with
+  `eventRootFrontierProbeAnchorCheapUpperMinRemainingMs=30000`:
+  - Raw:
+    `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-11T14-00-35-417Z.json`.
+  - Result: bounded, score `9488172`, global upper `9650685`, gap `162513`,
+    elapsed `290463ms`, peak `2970 MiB`, `timedOut=false`,
+    `memoryLimited=false`.
+  - The third cheap-upper ran: cheap-upper count `3`, improvement count `3`,
+    last cheap residual upper `9636799`, residual gap `148627`, source
+    `pair-capacity`, cheap elapsed `59111ms`.
+  - This stabilizes the diagnostic frontier under low remaining budget, but it
+    is not a 40/40 path. It spends nearly the full `300s` case budget and still
+    leaves the same `PastelPalettes/cool` pair-capacity residual plus later
+    tight-root work unclosed.
+- Decision:
+  - Keep the option as an opt-in diagnostic/proof-scheduling helper.
+  - Do not count it as acceptance progress toward 40/40 exact until a following
+    proof patch actually lowers the residual below incumbent and passes hard
+    cases.
+  - Next work should target the shared `PastelPalettes/cool` pair-capacity
+    residual itself, or produce a reusable same-coarse proof artifact, instead
+    of only making the third cheap-upper more likely to run.

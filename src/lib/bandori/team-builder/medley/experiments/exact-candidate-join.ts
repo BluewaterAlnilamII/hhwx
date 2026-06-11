@@ -6978,6 +6978,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     anchorFrontierProofMaxHighPairRecords?: number | null;
     anchorFrontierProofTimeboxMs?: number | null;
     anchorFrontierCheapUpperTimeboxMs?: number | null;
+    anchorFrontierCheapUpperMinRemainingMs?: number | null;
     anchorFrontierCheapUpperMaxAnchors?: number | null;
     anchorFrontierCheapUpperRefineUnseen?: boolean;
     anchorFrontierCheapUpperRefineTopAnchors?: number | null;
@@ -7465,11 +7466,20 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     )
       ? Math.max(0, context.anchorFrontierProofMinRemainingMs)
       : MEDLEY_EXACT_CANDIDATE_JOIN_ANCHOR_FRONTIER_PROOF_MIN_REMAINING_MS;
-    if (remainingMs < minRemainingMs) {
+    const cheapUpperMinRemainingMs = (
+      context.anchorFrontierCheapUpperMinRemainingMs !== null
+      && context.anchorFrontierCheapUpperMinRemainingMs !== undefined
+      && Number.isFinite(context.anchorFrontierCheapUpperMinRemainingMs)
+    )
+      ? Math.max(0, context.anchorFrontierCheapUpperMinRemainingMs)
+      : minRemainingMs;
+    const canRunFullAnchorFrontierProof = remainingMs >= minRemainingMs;
+    const canRunCheapUpper = remainingMs >= cheapUpperMinRemainingMs;
+    if (!canRunFullAnchorFrontierProof && !canRunCheapUpper) {
       return recordAnchorFrontierProofSkip("low-remaining-budget");
     }
     let cheapUpperResult: MedleyExactCandidateAnchorFrontierProofResult | null = null;
-    if (!didAnchorFrontierCheapUpper) {
+    if (!didAnchorFrontierCheapUpper && canRunCheapUpper) {
       didAnchorFrontierCheapUpper = true;
       const candidateCheapUpperResult = estimateMedleyExactCandidateAnchorFrontierCheapUpper(
         slots,
@@ -7533,6 +7543,9 @@ export function searchMedleyConfigurationByExactCandidateJoin(
       ) {
         cheapUpperResult = candidateCheapUpperResult;
       }
+    }
+    if (!canRunFullAnchorFrontierProof) {
+      return cheapUpperResult ?? recordAnchorFrontierProofSkip("low-remaining-budget");
     }
     const anchorMaxScore = candidatesBySlot[slotIndex].reduce((maxScore, candidate) => (
       Math.max(maxScore, candidate.result.score)

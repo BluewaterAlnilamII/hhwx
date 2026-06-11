@@ -1357,6 +1357,15 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
   )
     ? Math.max(0, parsedEventRootFrontierProbeAnchorCheapUpperTimeboxMs)
     : null;
+  const parsedEventRootFrontierProbeAnchorCheapUpperMinRemainingMs =
+    optimization.eventRootFrontierProbeAnchorCheapUpperMinRemainingMs !== undefined
+      ? Math.trunc(optimization.eventRootFrontierProbeAnchorCheapUpperMinRemainingMs)
+      : Number.NaN;
+  const eventRootFrontierProbeAnchorCheapUpperMinRemainingMs = Number.isFinite(
+    parsedEventRootFrontierProbeAnchorCheapUpperMinRemainingMs,
+  )
+    ? Math.max(0, parsedEventRootFrontierProbeAnchorCheapUpperMinRemainingMs)
+    : null;
   const parsedEventRootFrontierProbeAnchorCheapUpperMaxAnchors =
     optimization.eventRootFrontierProbeAnchorCheapUpperMaxAnchors !== undefined
       ? Math.trunc(optimization.eventRootFrontierProbeAnchorCheapUpperMaxAnchors)
@@ -1524,6 +1533,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
       anchorFrontierProofMaxHighPairRecords: eventRootFrontierProbeAnchorProofMaxHighPairRecords,
       anchorFrontierProofTimeboxMs: eventRootFrontierProbeAnchorProofTimeboxMs,
       anchorFrontierCheapUpperTimeboxMs: eventRootFrontierProbeAnchorCheapUpperTimeboxMs,
+      anchorFrontierCheapUpperMinRemainingMs: eventRootFrontierProbeAnchorCheapUpperMinRemainingMs,
       anchorFrontierCheapUpperMaxAnchors: eventRootFrontierProbeAnchorCheapUpperMaxAnchors,
       anchorFrontierCheapUpperRefineUnseen: eventRootFrontierProbeAnchorCheapUpperRefineUnseen,
       anchorFrontierCheapUpperRefineTopAnchors: eventRootFrontierProbeAnchorCheapUpperRefineTopAnchors,
@@ -5584,6 +5594,9 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
         traceEntry.eventRootFrontierProbeAnchorCheapUpperTimeboxMs = (
           eventRootFrontierProbeAnchorCheapUpperTimeboxMs
         );
+        traceEntry.eventRootFrontierProbeAnchorCheapUpperMinRemainingMs = (
+          eventRootFrontierProbeAnchorCheapUpperMinRemainingMs
+        );
         traceEntry.eventRootFrontierProbeAnchorCheapUpperMaxAnchors = (
           eventRootFrontierProbeAnchorCheapUpperMaxAnchors
         );
@@ -5732,6 +5745,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
           ),
           anchorFrontierProofTimeboxMs: eventRootFrontierProbeAnchorProofTimeboxMs,
           anchorFrontierCheapUpperTimeboxMs: eventRootFrontierProbeAnchorCheapUpperTimeboxMs,
+          anchorFrontierCheapUpperMinRemainingMs: eventRootFrontierProbeAnchorCheapUpperMinRemainingMs,
           anchorFrontierCheapUpperMaxAnchors: eventRootFrontierProbeAnchorCheapUpperMaxAnchors,
           anchorFrontierCheapUpperRefineUnseen: eventRootFrontierProbeAnchorCheapUpperRefineUnseen,
           anchorFrontierCheapUpperRefineTopAnchors: eventRootFrontierProbeAnchorCheapUpperRefineTopAnchors,
