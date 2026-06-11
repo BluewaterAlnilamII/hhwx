@@ -1,6 +1,6 @@
 # Medley 40/40 Exact Roadmap
 
-Last updated: 2026-06-11 21:05 CST
+Last updated: 2026-06-11 21:17 CST
 
 This file is the persistent working note for the current medley optimizer goal.
 Keep it current before and after benchmark runs or proof-path changes, so future
@@ -192,6 +192,35 @@ No-GC acceptance contract:
   should not be promoted. The next useful direction is a proof-only upper
   tightening inside the event-root frontier itself, not falling through to the
   full ordinary exact/DFS path.
+
+2026-06-11 21:17 CST rejected existing proof-only toggles:
+
+- Pair-capacity pareto/bucketed diagnostic:
+  `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-11T13-04-37-953Z.json`.
+  Added `eventRootFrontierProbeAnchorCheapUpperPairCapacityCapPareto=true` and
+  `eventRootFrontierProbeAnchorCheapUpperPairCapacityCapBucketed=true` to the
+  current `P06:323` event-root probe setup. Result: bounded, score `9488172`,
+  gap `447414`, elapsed `255530ms`, peak `2760 MiB`, no timeout/memory limit.
+  The cheap upper residual gap was `153662`, slightly worse than the baseline
+  `148627`, and the higher proof cost left too little budget for the later
+  event-root probe (`low-remaining-budget`). Do not enable these toggles for
+  the current target.
+- Targeted pair BnB diagnostic:
+  `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-11T13-11-23-573Z.json`.
+  Added a small targeted-pair proof budget
+  (`targetedPairProofTimeboxMs=5000`, `targetedPairProofMaxEntries=12`,
+  `targetedPairBnbNodeLimit=100000`,
+  `targetedPairBnbSlotSolveNodeLimit=100000`). Result: bounded, score
+  `9488172`, gap `447414`, elapsed `204692ms`, peak `4528 MiB`, no reported
+  timeout/memory-limited row. Cheap upper residual gap worsened to `207604`,
+  and the final event-root status was `memory-soft-limit`. Do not promote this
+  toggle set.
+- Interpretation: the existing pair-capacity refinements are either too coarse
+  or too expensive for the current hard case. The useful next patch needs to be
+  more selective than whole-mode pareto/bucketed capacity and more deterministic
+  than targeted BnB: likely a small, proof-only refinement of the high residual
+  `pair-capacity` entry and the unprocessed-anchor suffix join, with strict
+  time/memory accounting.
 
 2026-06-10 14:48 CST P06 score-only frontier finding:
 
