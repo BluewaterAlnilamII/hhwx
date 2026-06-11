@@ -3616,3 +3616,74 @@ P07 failed follow-ups after P03 fix:
     explainable and optionally force a sibling proof attempt for diagnosis. A
     cross-parameter proof reuse must be treated as unsafe unless a
     parameter-aware bound can be demonstrated.
+
+2026-06-11 11:45 CST P06 same-coarse and processed-unseen diagnostics:
+
+- Code added as opt-in diagnostics only:
+  - `enableSameCoarseFrontierFullProofRetry`
+  - `enableSameCoarseFrontierEventProbeBeforeExactJoin`
+  - `eventRootFrontierProbeAnchorCheapUpperRefineTopAnchors`
+- Full exact-join proof retry:
+  - Raw:
+    `temp/bandori-team-builder/real-profile-medley-scope-matrix-2026-06-11T02-44-01-657Z.json`
+  - Result: bounded timeout, score `9488172`, upper `10076137`, gap
+    `587965`, peak `4630 MiB`.
+  - `PastelPalettes/cool/technique` consumed the remaining 300s window and
+    aborted at `candidate-fill-soft-limit`.
+  - Decision: do not use full exact-join retry for same-coarse siblings. It is
+    too expensive and regresses proof progress.
+- Post-exact event-root probe:
+  - Raw:
+    `temp/bandori-team-builder/real-profile-medley-scope-matrix-2026-06-11T02-51-13-964Z.json`
+  - Result: bounded timeout, score `9488172`, upper `10076137`, gap
+    `587965`.
+  - `PastelPalettes/cool/technique` did run a post-exact event-root probe, but
+    it started after exact-join had already spent about a minute; the probe had
+    only about `82s`, did not improve below `9636601`, and ended at
+    `candidate-fill-soft-limit`.
+  - Decision: post-exact event-root is too late for P06.
+- Same-coarse event-root before exact-join:
+  - Raw:
+    `temp/bandori-team-builder/real-profile-medley-scope-matrix-2026-06-11T03-08-40-038Z.json`
+  - Result: bounded timeout, score regressed to `9486961`, upper `10076137`,
+    gap `589176`, peak `3849 MiB`.
+  - It successfully routed `PastelPalettes/cool/technique` through
+    `same-coarse-frontier-skip-seeding` and lowered that sibling to `9633672`,
+    but consumed about `135s`; visual then timed out at root.
+  - Decision: event-first ordering confirms the proof material can lower a
+    sibling, but per-parameter event-root proof is still too expensive and can
+    sacrifice incumbent improvement. Do not default this route.
+- Wider processed-unseen refine:
+  - Raw:
+    `temp/bandori-team-builder/real-profile-medley-scope-matrix-2026-06-11T03-22-41-140Z.json`
+  - Options added:
+    `eventRootFrontierProbeAnchorCheapUpperRefineUnseen=true`,
+    `eventRootFrontierProbeAnchorCheapUpperRefineTopAnchors=1024`,
+    `eventRootFrontierProbeAnchorCheapUpperUnseenRefineMaxGeneratedCandidates=512`.
+  - Result: bounded, not timed out, score `9486961`, global upper `9942430`,
+    gap `455469`, root-pruned `99`, peak `2522 MiB`.
+  - The focused configuration improved from `9636601` to `9601844`, but that is
+    the same effective ceiling previously seen from the narrower processed
+    refine route. The residual remained processed `right-unseen`:
+    `3054218 + 6547626 = 9601844`.
+  - Same-coarse siblings then skipped with large root uppers because only about
+    `62s` remained, below the current `90s` same-coarse retry threshold.
+- Current interpretation:
+  - P06 is not blocked by the unprocessed suffix anymore.
+  - P06 is also not solved by spending more on exact-join retry, by moving
+    event-root probe earlier, or by simply increasing the number of refined
+    processed anchors.
+  - The unresolved frontier is processed `generated + unseen`: for high-risk
+    processed anchor/generated combinations, the remaining slot upper is still
+    too loose.
+- Next accepted direction:
+  - Build a processed-unseen join analogous to the successful suffix unseen
+    join: enumerate only high-risk `processed anchor + generated side` pairs,
+    then compute the unseen slot upper excluding the full anchor/generated card
+    set.
+  - The join must be global over the processed frontier, not top-N per anchor,
+    and must stop only when the heap frontier is below the current proof
+    threshold or a safe fallback upper is recorded.
+  - Keep same-coarse event-first and full-proof retry as diagnostic-only unless
+    the processed-unseen join makes each sibling cheap enough to prove within
+    the 300s matrix.
