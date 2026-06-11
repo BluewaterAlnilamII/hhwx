@@ -483,6 +483,7 @@ function buildProofLedger(
         frontierRetryWouldStarveTrailingSibling: (
           entry.sameCoarseFrontierRetryWouldStarveTrailingSibling ?? null
         ),
+        frontierRetryHasTighterTarget: entry.sameCoarseFrontierRetryHasTighterTarget ?? null,
         frontierProofTargetUpperBound: entry.sameCoarseFrontierProofTargetUpperBound ?? null,
         frontierProofTargetRootDelta: entry.sameCoarseFrontierProofTargetRootDelta ?? null,
       },
@@ -922,6 +923,7 @@ function buildBoundedFrontierGroups(
       sameCoarseFrontierRetryWouldStarveTrailingSibling: (
         entry.sameCoarseFrontierRetryWouldStarveTrailingSibling ?? null
       ),
+      sameCoarseFrontierRetryHasTighterTarget: entry.sameCoarseFrontierRetryHasTighterTarget ?? null,
       sameCoarseFrontierProofTargetUpperBound: entry.sameCoarseFrontierProofTargetUpperBound ?? null,
       sameCoarseFrontierProofTargetRootDelta: entry.sameCoarseFrontierProofTargetRootDelta ?? null,
     });
@@ -4572,9 +4574,14 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
         && remainingBeforeSameCoarseFrontierRetryMs - sameCoarseFrontierRetryTrailingReserveMs
           < sameCoarseFrontierRetryMinRemainingMs
       );
+      const sameCoarseFrontierRetryHasTighterTarget = (
+        enableSameCoarseFrontierFullProofRetry
+        || rememberedSameCoarseSiblingUpperBound < sameCoarseRootSkipUpperBound
+      );
       const shouldRetrySameCoarseFrontier = (
         Number.isFinite(sameCoarseRootSkipUpperBound)
         && sameCoarseRootSkipUpperBound >= threshold
+        && sameCoarseFrontierRetryHasTighterTarget
         && hasRememberedSameCoarseFrontierSibling
         && calculatedCards.length <= MEDLEY_SAME_COARSE_FRONTIER_RETRY_MAX_CARD_COUNT
         && remainingBeforeSameCoarseFrontierRetryMs >= sameCoarseFrontierRetryMinRemainingMs
@@ -4603,6 +4610,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
         traceEntry.sameCoarseFrontierRetryWouldStarveTrailingSibling = (
           sameCoarseFrontierRetryWouldStarveTrailingSibling
         );
+        traceEntry.sameCoarseFrontierRetryHasTighterTarget = sameCoarseFrontierRetryHasTighterTarget;
         traceEntry.sameCoarseFrontierFullProofRetry = (
           shouldRetrySameCoarseFrontier && enableSameCoarseFrontierFullProofRetry
         );
