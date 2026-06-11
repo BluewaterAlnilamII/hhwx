@@ -455,6 +455,7 @@ export function estimateMedleyCapacityCardBoundSharedPowerSkillScoreUpperBound(
     allowTwoSlot?: boolean;
     allowBannedCards?: boolean;
     stateBudget?: number | null;
+    deadlineAt?: number | null;
   } = {},
 ): number | null {
   const slotCount = remainingSlotIndices.length;
@@ -503,6 +504,12 @@ export function estimateMedleyCapacityCardBoundSharedPowerSkillScoreUpperBound(
     }
     return null;
   };
+  const isPastDeadline = (): boolean => (
+    options.deadlineAt !== null
+    && options.deadlineAt !== undefined
+    && Number.isFinite(options.deadlineAt)
+    && performance.now() >= options.deadlineAt
+  );
 
   let statesByKey = new Map<number, MedleySharedPowerSkillUpperState[]>();
   let stateCount = 0;
@@ -513,6 +520,9 @@ export function estimateMedleyCapacityCardBoundSharedPowerSkillScoreUpperBound(
   );
 
   for (const cardsById of cardsByCharacter.values()) {
+    if (isPastDeadline()) {
+      return abortWithStateCount(stateCount);
+    }
     let characterOptionsByKey = new Map<number, MedleySharedPowerSkillUpperState[]>();
     let characterOptionCount = 0;
     characterOptionCount += addSharedPowerSkillUpperState(
@@ -522,6 +532,9 @@ export function estimateMedleyCapacityCardBoundSharedPowerSkillScoreUpperBound(
     );
 
     for (const slotCards of cardsById.values()) {
+      if (isPastDeadline()) {
+        return abortWithStateCount(stateCount + characterOptionCount);
+      }
       const nextCharacterOptionsByKey = new Map<number, MedleySharedPowerSkillUpperState[]>();
       let nextCharacterOptionCount = characterOptionCount;
       for (const [key, states] of characterOptionsByKey.entries()) {
@@ -529,6 +542,9 @@ export function estimateMedleyCapacityCardBoundSharedPowerSkillScoreUpperBound(
       }
 
       for (const [key, states] of characterOptionsByKey.entries()) {
+        if (isPastDeadline()) {
+          return abortWithStateCount(stateCount + nextCharacterOptionCount);
+        }
         const decoded = decodeSharedPowerSkillUpperKey(key, bucketBase, leaderMaskCount);
         for (const state of states) {
           for (let slotPosition = 0; slotPosition < slotCount; slotPosition += 1) {
@@ -619,8 +635,14 @@ export function estimateMedleyCapacityCardBoundSharedPowerSkillScoreUpperBound(
     }
 
     for (const [stateKey, states] of statesByKey.entries()) {
+      if (isPastDeadline()) {
+        return abortWithStateCount(nextStateCount);
+      }
       const decodedState = decodeSharedPowerSkillUpperKey(stateKey, bucketBase, leaderMaskCount);
       for (const [optionKey, optionStates] of characterOptionsByKey.entries()) {
+        if (isPastDeadline()) {
+          return abortWithStateCount(nextStateCount);
+        }
         const decodedOption = decodeSharedPowerSkillUpperKey(optionKey, bucketBase, leaderMaskCount);
         if (
           decodedOption.capacityIndex === 0

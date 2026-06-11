@@ -5046,6 +5046,7 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
           allowTwoSlot: true,
           allowBannedCards: true,
           stateBudget: pairCapacitySharedPowerStateBudget,
+          deadlineAt: Math.min(deadlineAt, sharedPowerStartedAt + 1000),
         },
       );
       sharedPowerElapsedMs = performance.now() - sharedPowerStartedAt;
