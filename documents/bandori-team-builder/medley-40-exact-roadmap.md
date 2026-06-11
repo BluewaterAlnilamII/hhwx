@@ -4031,3 +4031,45 @@ P07 failed follow-ups after P03 fix:
     same-coarse proof material reuse or a new decomposition that avoids
     redoing large candidate-fill/proof work separately for performance,
     technique, and visual.
+
+2026-06-11 14:31 CST P06 600s confirmation diagnostics:
+
+- `maxAnchors=13000`, normal skip-after-unproved behavior:
+  - Raw:
+    `temp/bandori-team-builder/real-profile-medley-scope-matrix-2026-06-11T06-13-53-153Z.json`
+  - Result: bounded, not timed out; elapsed `368225ms`; score `9488172`;
+    upper `9629060`; gap `140888`; root-pruned `102`; peak `5380 MiB`.
+  - PastelPalettes/cool:
+    - performance: `214795ms`, upper `9629060`, abort
+      `candidate-fill-soft-limit`;
+    - technique: `79654ms`, upper `9629060`, abort
+      `solve-dominated-same-coarse-frontier`;
+    - visual: `50337ms`, upper `9629060`, abort
+      `solve-dominated-same-coarse-frontier`.
+  - The run ended with about `234s` remaining, so P06 is not merely failing
+    because the global 300s deadline is too short. The current proof policy
+    intentionally stops at a same-coarse dominated frontier.
+  - Top remaining gap became `Morfonica/cool/performance` at
+    `9631450`, slightly above the PastelPalettes `9629060` frontier.
+- `maxAnchors=13000` plus
+  `disableSkipDfsAfterUnprovedExactCandidateJoin=true`:
+  - Raw:
+    `temp/bandori-team-builder/real-profile-medley-scope-matrix-2026-06-11T06-21-01-395Z.json`
+  - Result: bounded timeout; elapsed `600003ms`; score `9488172`; upper
+    `10076137`; gap `587965`; root-pruned `0`; peak `5346 MiB`.
+  - DFS spent the remaining budget on PastelPalettes/cool/technique and timed
+    out (`dfs-timeout`), so the plain DFS fallback is not a viable exact proof
+    path.
+- Current conclusion:
+  - P06 needs a proof artifact that can close or reduce the shared
+    same-coarse frontier around `9.629M`, plus a way to close the
+    Morfonica/cool dominated root around `9.631M`.
+  - Increasing runtime alone, forcing DFS, or full same-coarse retry does not
+    produce exact.
+  - The next useful implementation should target one of:
+    1. a safe same-coarse pair/frontier certificate reusable across
+       performance/technique/visual;
+    2. a best-prefix cheap-upper split that avoids non-monotonic processed
+       both-unseen fallback and can stop earlier;
+    3. a dominated-root tight-upper/proof path strong enough to close
+       Morfonica/cool after PastelPalettes is lowered.
