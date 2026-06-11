@@ -5895,6 +5895,30 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
       shouldUseSameCoarseFrontierEventProbeBeforeExactJoin
       && !didAttemptExactCandidateJoin
     ) {
+      const scoreBeforeSiblingReevaluation = results[0]?.score ?? Number.NEGATIVE_INFINITY;
+      const siblingResult = reevaluateCurrentBestForSameCoarseConfiguration(configuration);
+      if (siblingResult) {
+        pushMedleyResult(results, siblingResult, resultLimit, observeEvaluatedMedleyResult);
+        recordBestScoreMilestone();
+        const scoreAfterSiblingReevaluation = results[0]?.score ?? Number.NEGATIVE_INFINITY;
+        const siblingReevaluationImprovement = Math.max(
+          0,
+          scoreAfterSiblingReevaluation - scoreBeforeSiblingReevaluation,
+        );
+        if (siblingReevaluationImprovement > 0) {
+          profiling.sameCoarseSiblingReevaluationHitCount += 1;
+          profiling.sameCoarseSiblingReevaluationBestImprovement = Math.max(
+            profiling.sameCoarseSiblingReevaluationBestImprovement,
+            siblingReevaluationImprovement,
+          );
+        }
+        if (traceEntry) {
+          traceEntry.sameCoarseFrontierEventProbeSiblingReevaluationScore = scoreAfterSiblingReevaluation;
+          traceEntry.sameCoarseFrontierEventProbeSiblingReevaluationImprovement = (
+            siblingReevaluationImprovement
+          );
+        }
+      }
       const eventRootProbe = maybeRunEventRootFrontierProbe("same-coarse-frontier-skip-seeding", {
         allowDfsRemainingUpper: true,
       });

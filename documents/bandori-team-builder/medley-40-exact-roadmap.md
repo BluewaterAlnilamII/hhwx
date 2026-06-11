@@ -4740,3 +4740,38 @@ P07 failed follow-ups after P03 fix:
   - Do not spend the next optimization cycle on skill-floor refinements; they
     are two orders of magnitude smaller than the remaining `150k`-`165k`
     residual.
+
+2026-06-11 20:27 CST same-coarse event-before incumbent preservation:
+
+- Code added, still opt-in through the existing
+  `enableSameCoarseFrontierEventProbeBeforeExactJoin` path:
+  - Before running the same-coarse event-root probe, the search now calls
+    `reevaluateCurrentBestForSameCoarseConfiguration(...)`.
+  - This is not proof and does not change default behavior; it only preserves a
+    cheap incumbent that the older pre-seeding probe skipped.
+- Default no-GC, non-debug no-op confirmation:
+  - Raw:
+    `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-11T12-27-21-934Z.json`
+  - `P06:323` remains bounded with score `9488172`, gap `605990`,
+    `timedOut=false`, `memoryLimited=false`, peak `1236 MiB`.
+- Same-coarse event-before diagnostic rerun:
+  - Raw:
+    `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-11T12-23-05-503Z.json`
+  - Result: bounded, elapsed `223104ms`, score `9488172`, global upper
+    `9650685`, gap `162513`, no timeout, no memory limit, peak `3490 MiB`.
+  - Compared with the earlier same-coarse event-before run
+    (`temp/bandori-team-builder/medley-40-exact-isolated-2026-06-11T11-46-22-719Z.json`),
+    the incumbent regression is fixed: score improved from `9486961` to the
+    accepted `9488172`. The sibling reevaluation hit once and contributed
+    `1211` points.
+  - Last same-coarse event probe reached local upper `9636799`, residual gap
+    `148627`, with source `unprocessed-anchor-suffix-cover`; the run remains
+    globally bounded because another remembered frontier still sits at about
+    `9650685`.
+- Decision:
+  - Keep this opt-in fix. It makes the same-coarse proof path usable for
+    future proof experiments because it no longer trades away incumbent quality.
+  - It is still not sufficient for 40/40 exact. The next useful diagnostic is a
+    proof-ledger run on this variant to identify the remaining `9650685`
+    frontier, then target that frontier instead of increasing seed/probe
+    timeboxes.
