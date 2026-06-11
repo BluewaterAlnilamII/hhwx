@@ -5306,3 +5306,68 @@ P07 failed follow-ups after P03 fix:
     that tightens the fast card-bound relaxation without building another
     large candidate/pair surface. A map-heavy shared-power DP is not the right
     implementation shape for that certificate.
+
+2026-06-12 03:42 CST shared-power dual proof-cap attempt:
+
+- Code added and pushed:
+  - `3d4dcf1 Add medley shared-power dual diagnostic`.
+  - `3a4276d Refine medley shared-power dual grid`.
+  - `0f42f88 Optimize medley shared-power dual refinement`.
+  - `79be124 Add medley shared-power dual proof cap`.
+  - New opt-in options:
+    `eventRootFrontierProbeAnchorCheapUpperPairCapacitySharedPowerDualCap`
+    and
+    `eventRootFrontierProbeAnchorCheapUpperPairCapacitySharedPowerDualCapMaxCalls`.
+  - Default remains off. The cap only affects cheap-upper proof refinement
+    when explicitly enabled.
+- Diagnostic finding:
+  - Raw:
+    `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-11T18-51-11-118Z.json`.
+  - For the known P06 witness `[1975,1952,1720,415,1753]`, the optimized
+    two-slot shared-power dual certificate produced pair upper
+    `6619230.438176135`, target pair upper `6622210`, gap
+    `-2979.5618238653988`, elapsed `567ms`.
+  - Interpretation: the dual certificate is safe and strong enough for that
+    processed pair-capacity witness.
+- Opt-in proof-cap run with `maxCalls=16`:
+  - Raw:
+    `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-11T19-06-17-952Z.json`.
+  - Result: bounded, score `9488172`, maxScore `9567356`, upper `9650685`,
+    gap `162513`, elapsed `251779ms`, peak `3622 MiB`, `timedOut=false`,
+    `memoryLimited=false`.
+  - Cap counters: calls `16`, improvements `16`, best improvement
+    `84642.56089875475`, cap elapsed `9190ms`.
+  - The last cheap-upper residual was still
+    `unprocessed-anchor-suffix-cover`, upper `9636799`, residual gap
+    `148627`; suffix generated-pair join scanned `187000` suffix anchors and
+    `4055` pair records.
+  - Interpretation: the cap improved processed entries, but the final proof
+    frontier moved to the unprocessed anchor suffix. This is not solved by
+    capping only processed anchor entries.
+- Stressing proof-cap calls and anchor count did not help:
+  - `maxCalls=64` raw:
+    `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-11T19-12-23-306Z.json`.
+    Result: bounded, gap `447414`, elapsed `227984ms`, peak `3572 MiB`;
+    cap calls `64`, cap elapsed `35925ms`. The last residual remained
+    `unprocessed-anchor-suffix-cover`, upper `9641834`, residual gap
+    `153662`.
+  - `maxAnchors=30000`, `maxCalls=16` raw:
+    `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-11T19-18-23-311Z.json`.
+    Result: bounded, gap `447414`, elapsed `252385ms`, peak `3681 MiB`;
+    processed anchors `29999`, suffix anchors `170001`, suffix pair records
+    `264`, suffix upper `9666750`, residual gap `178578`.
+  - Interpretation: simply increasing cap calls or processed anchor count is
+    not monotonic and can consume the budget that would otherwise run a later
+    event-root probe. Do not promote larger call budgets or anchor limits.
+- Updated blocker:
+  - The shared-power dual upper is useful for individual processed
+    pair-capacity witnesses, but current bounded evidence is now dominated by
+    the unprocessed-anchor suffix frontier.
+  - The next proof patch should target suffix/frontier conversion directly:
+    either make suffix proof produce reusable incumbent updates when it finds
+    a concrete disjoint triple above incumbent, or add a low-memory certificate
+    for the unprocessed suffix that is not just another processed-entry cap.
+  - Before making this default, rerun a 4-case hard gate. Acceptance remains:
+    no new bounded regressions, no baseline exact case becoming bounded, peak
+    heap within the established no-GC budget, and P06:323 exact under
+    non-debug no-GC conditions.
