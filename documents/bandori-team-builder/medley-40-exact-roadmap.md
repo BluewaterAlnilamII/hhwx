@@ -58,6 +58,47 @@ No-GC acceptance contract:
   roadmap with raw path, replay parameters, accept/reject reason, and failure
   analysis if any row is bounded.
 
+2026-06-11 22:35 CST rejected two-slot shared-power experiment:
+
+- Hypothesis: the remaining `P06:323` event-root residual gap is dominated by
+  two-slot capacity upper slack after an anchor team is fixed. The existing
+  two-slot fast upper uses per-card band-power bounds independently, while the
+  already implemented shared-power upper tracks a shared per-slot power bucket
+  but is currently restricted to three remaining slots with no banned cards.
+- Planned patch: keep default behavior unchanged, generalize the existing
+  shared-power upper so it can run for two remaining slots and banned anchor
+  cards, then route it through the existing internal
+  `enableSharedPowerSkillUpper` option inside exact-join global pruning and
+  event-root anchor cheap upper. If the model aborts by state budget it must
+  fall back to the existing upper and must not affect proof semantics.
+- Acceptance for this experiment: first validate static checks, then run
+  `P06:323` no-GC non-debug with `enableSharedPowerSkillUpper=true` and the
+  current event-root probe setup. Accept only if it reduces the residual upper
+  without introducing timeout/memory regression; otherwise document and revert
+  or keep diagnostic-only.
+- Result, shared-power route rejected and local code reverted:
+  - Raw:
+    `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-11T14-38-51-450Z.json`.
+  - `P06:323` stayed bounded at score `9488172`, upper `9650685`, gap
+    `162513`, elapsed `231516ms`, peak `3527 MiB`, no timeout and no memory
+    limit. This matches the accepted same-coarse event-before gap but is
+    slower than the `199925ms` baseline and uses more memory than the
+    `3182 MiB` baseline.
+  - Shared-power upper was called `2` times, completed `0` times, aborted `2`
+    times at `120001` states, and recorded zero best improvement. It therefore
+    does not convert the remaining `pair-capacity` residual into proof benefit.
+- Related suffix-cover/multicard diagnostic also rejected:
+  - Raw:
+    `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-11T14-44-45-593Z.json`.
+  - `P06:323` stayed bounded at score `9488172`, upper `9935586`, gap
+    `447414`, elapsed `296112ms`, peak `3201 MiB`, no timeout and no memory
+    limit. Cheap upper ran only `2` times, hit local timebox `2` times, and the
+    last residual stayed at `285981`.
+- Decision: do not extend this line by raising shared-power state budget,
+  suffix-cover timebox, or candidate K. The next useful direction remains a
+  cheaper proof of the processed `pair-capacity` residual or a fused
+  processed/suffix frontier certificate, not another independent upper pass.
+
 2026-06-10 13:00 CST correctness gate reset:
 
 - The first two no-GC full 40-case runs both reported `40/40` exact, but their
