@@ -5688,3 +5688,46 @@ P07 failed follow-ups after P03 fix:
     unmaterialized anchor tail, or amortize suffix/frontier proof across the
     three `PastelPalettes/cool` parameters so the third parameter reliably
     reaches the cheap-upper stage.
+
+2026-06-12 05:43 CST rejected high-pair-record threshold increase:
+
+- Experiment:
+  - Kept the current `P06:323` `maxCalls=4` diagnostic options, but increased
+    `eventRootFrontierProbeAnchorProofMaxHighPairRecords` from `2500000` to
+    `3200000` and then `3500000`.
+  - Goal: test whether the exact anchor frontier proof was only barely blocked
+    by the high-pair-record guard, before investing in a new pair-proof data
+    structure.
+- `3200000` raw:
+  `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-11T21-29-24-660Z.json`.
+  Result: bounded, score `9488172`, upper `9631451`, gap `143279`, elapsed
+  `263678ms`, peak `3844 MiB`, no timeout and no memory limit.
+  The three `PastelPalettes/cool` parameters still skipped exact anchor proof
+  with high-pair-record counts `3204054`, `3211840`, and `3226860`.
+- `3500000` raw:
+  `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-11T21-34-59-911Z.json`.
+  Result: bounded, score `9488172`, upper `9631451`, gap `143279`, elapsed
+  `264517ms`, peak `3853 MiB`, no timeout and no memory limit.
+  The three `PastelPalettes/cool` parameters still skipped exact anchor proof
+  with high-pair-record counts `3509202`, `3512950`, and `3534180`.
+- Finding:
+  - The recorded count tracks the configured ceiling and then skips; it is not
+    evidence that the true requirement is just slightly above the limit.
+  - Raising the ceiling did not improve the residual upper at all. The best
+    bounded shape remained Morfonica/cool at gap `143278` plus
+    PastelPalettes/cool at `97820` / `91051` / `82576`.
+  - Peak memory stayed under the current no-GC budget in these single-case
+    runs, but the elapsed cost increased and no proof progress was observed.
+- Decision:
+  - Do not continue by increasing `anchorProofMaxHighPairRecords`.
+  - The exact anchor proof needs a different representation or pruning rule,
+    not a larger object/record budget.
+  - Current next candidates are:
+    1. compress high-pair proof material into typed-array / bitset structures
+       so larger frontiers can be represented without proportional object
+       overhead;
+    2. make the `unprocessed-generator-peek` upper depend on a generated-anchor
+       tail certificate instead of the global anchor generator peek;
+    3. amortize the same `PastelPalettes/cool` suffix/frontier proof across
+       performance/technique/visual so all three get a complete cheap-upper
+       pass consistently before any cross-coarse cleanup.
