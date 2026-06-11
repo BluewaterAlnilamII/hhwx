@@ -1,6 +1,6 @@
 # Medley 40/40 Exact Roadmap
 
-Last updated: 2026-06-11 19:42 CST
+Last updated: 2026-06-11 20:03 CST
 
 This file is the persistent working note for the current medley optimizer goal.
 Keep it current before and after benchmark runs or proof-path changes, so future
@@ -4646,3 +4646,55 @@ P07 failed follow-ups after P03 fix:
     budget on suffix and processed proof. A future proof path should either
     fuse processed/suffix unseen joins or checkpoint shared slot-upper work,
     instead of running them as separate full passes.
+
+2026-06-11 20:03 CST suffix target upper diagnostic:
+
+- Code added, default-off in effect:
+  - Suffix generated-pair and suffix generated-plus-unseen joins now accept a
+    target upper bound.
+  - In cheap-upper finish, the suffix target is raised from `incumbentScore` to
+    `max(incumbentScore, processedUpperMax)` when the processed prefix is
+    already the dominating residual.
+  - This is exact-safe because the combined residual is
+    `max(processedUpperMax, suffixUpper)`; proving the suffix to the current
+    processed upper is enough when processed is already looser.
+- Diagnostic run, pair-capacity cap plus target suffix,
+  `maxAnchors=13000`, cheap-upper timebox `120000ms`:
+  - Raw:
+    `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-11T11-41-34-519Z.json`
+  - Result: bounded, elapsed `238064ms`, score `9488172`, global upper
+    `9935586`, gap `447414`, no timeout, no memory limit, peak `4039 MiB`.
+  - Local proof signal was positive: event-root cheap upper dropped to
+    `9651238` in `41859ms`; suffix generated-pair upper `9651238` took
+    `4332ms`, and both suffix unseen joins closed at `9651238` in `119ms`.
+  - The remaining global gap came from another unclosed frontier, not from the
+    local suffix proof cost.
+- Diagnostic run, target suffix plus existing same-coarse event-before option:
+  - Raw:
+    `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-11T11-46-22-719Z.json`
+  - Result: bounded, elapsed `203624ms`, score `9486961`, upper `9651238`,
+    gap `164277`, no timeout, no memory limit, peak `2950 MiB`.
+  - The proof quality improved and same-coarse event probes became affordable,
+    but the incumbent regressed from accepted `9488172` to `9486961` because
+    this trigger skips normal seeding/exact work before finding the high team.
+- Rejected trigger experiments:
+  - Target suffix plus `enablePostExactEventRootFrontierProbe=true`:
+    raw
+    `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-11T11-50-27-184Z.json`;
+    regressed to `timedOut=true`, `memoryLimited=true`, gap `587965`, peak
+    `4489 MiB`.
+  - Moving same-coarse event probe after seeding was tested locally and
+    reverted before commit. Raw
+    `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-11T11-54-40-658Z.json`;
+    it preserved score `9488172` but hit `timedOut=true`,
+    `memoryLimited=true`, gap `587965`, peak `4985 MiB`.
+- Decision:
+  - Keep suffix target upper: it is a safe local proof-cost reduction and a
+    useful building block.
+  - Do not promote same-coarse event-before, post-exact event probe, or the
+    reverted after-seeding trigger. The first sacrifices incumbent quality; the
+    latter two trigger memory/timeout regression.
+  - The remaining exact blocker is still the processed pair-capacity residual
+    around `9637k`-`9651k`. To reach exact, the next proof patch must lower the
+    two-slot pair upper by roughly `150k`-`165k` without relying on skipped
+    seeding or manual GC.
