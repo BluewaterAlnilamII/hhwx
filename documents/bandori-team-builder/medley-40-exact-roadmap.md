@@ -3892,3 +3892,62 @@ P07 failed follow-ups after P03 fix:
   - Keep targeted pair BnB as research-only. Do not combine it into the main
     40/40 acceptance path unless future diagnostics prove it can provide a
     large residual drop under a stricter global guard.
+
+2026-06-11 13:24 CST P06 processed-unseen residual source diagnostic:
+
+- Code added:
+  - Processed-unseen cheap-upper now reports the max residual source in
+    profiling, configuration trace, proof ledger, and bounded frontier groups.
+  - New fields include:
+    `anchorFrontierCheapUpperProcessedUnseenJoinMaxSource`,
+    `...MaxAnchorScore`, `...MaxGeneratedPairUpper`,
+    `...MaxBothUnseenFallbackPairUpper`, `...MaxGeneratedCandidateScore`,
+    `...MaxGeneratedUnseenUpper`, `...MaxEntryIndex`,
+    `...MaxGeneratedIndex`, and `...MaxUnseenSlotIndex`.
+  - Default search behavior is unchanged; this is observation only.
+- Baseline diagnostic run:
+  - Raw:
+    `temp/bandori-team-builder/real-profile-medley-scope-matrix-2026-06-11T05-06-53-506Z.json`
+  - Options:
+    same as the dominated tight-root diagnostic, without targeted pair BnB.
+  - Result: bounded, not timed out; elapsed `296353ms`; score `9488172`;
+    upper `9935586`; gap `447414`; root-pruned `102`; peak `3778 MiB`.
+  - `PastelPalettes/cool/performance` spent `208070ms`, with
+    `candidateFill=201245ms` and cheap-upper `177951ms`.
+  - Its residual upper was `9635008`, from
+    `processed-unseen-join` max source `both-unseen-fallback`:
+    anchor score `2804735` + pair upper `6830273`.
+  - `PastelPalettes/cool/technique` reused that residual upper and spent
+    another `73172ms` in retry/fill/solve, improving incumbent from
+    `9486961` to `9488172`.
+  - `PastelPalettes/cool/visual` then had only about `5s` left and was
+    skipped as `bounded-near-deadline-root-skip`; it became the top global gap
+    at `9935585`.
+- Refine-unseen coverage diagnostic:
+  - Raw:
+    `temp/bandori-team-builder/real-profile-medley-scope-matrix-2026-06-11T05-15-54-471Z.json`
+  - Options:
+    same as baseline diagnostic, plus
+    `eventRootFrontierProbeAnchorCheapUpperRefineUnseen=true` and
+    `eventRootFrontierProbeAnchorCheapUpperRefineTopAnchors=20000`.
+  - Result: bounded timeout; elapsed `309505ms`; score `9488172`; upper
+    `10082483`; gap `594311`; root-pruned `0`; peak `3151 MiB`.
+  - The performance residual improved only from `9635008` to `9609395`
+    despite `1082` unseen-refine attempts, `11473` scanned candidates, and
+    `622` improvements.
+  - The extra cheap-upper cost pushed technique to `initial-candidate`
+    timeout, so this route is not viable as a default or near-term acceptance
+    path.
+- Current conclusion:
+  - P06 is not seed-limited.
+  - The remaining exactness issue is a proof frontier and scheduling problem:
+    the first PastelPalettes/cool proof consumes too much of the 300s budget,
+    and the current same-coarse retry then spends the remaining useful time on
+    technique, leaving visual unproved.
+  - Increasing `refineTopAnchors`, targeted pair BnB, or other per-entry pair
+    refinement is too expensive for the observed residual drop.
+  - Next implementation direction should be same-coarse proof scheduling and
+    material reuse: after a first same-coarse sibling produces a residual
+    upper, choose the next sibling by global gap/proof impact instead of raw
+    configuration order, and avoid letting a lower-impact retry starve the
+    highest-gap sibling.
