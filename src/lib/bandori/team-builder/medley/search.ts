@@ -1416,6 +1416,36 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
   )
     ? Math.max(1, parsedEventRootFrontierProbeAnchorCheapUpperPairAnchorCoverMaxPairs)
     : null;
+  const eventRootFrontierProbeAnchorCheapUpperLocalPairSlotExtension = (
+    optimization.eventRootFrontierProbeAnchorCheapUpperLocalPairSlotExtension === true
+  );
+  const parsedEventRootFrontierProbeAnchorCheapUpperLocalPairSlotExtensionSlotIndex =
+    optimization.eventRootFrontierProbeAnchorCheapUpperLocalPairSlotExtensionSlotIndex !== undefined
+      ? Math.trunc(optimization.eventRootFrontierProbeAnchorCheapUpperLocalPairSlotExtensionSlotIndex)
+      : Number.NaN;
+  const eventRootFrontierProbeAnchorCheapUpperLocalPairSlotExtensionSlotIndex = Number.isFinite(
+    parsedEventRootFrontierProbeAnchorCheapUpperLocalPairSlotExtensionSlotIndex,
+  )
+    ? Math.max(0, parsedEventRootFrontierProbeAnchorCheapUpperLocalPairSlotExtensionSlotIndex)
+    : null;
+  const parsedEventRootFrontierProbeAnchorCheapUpperLocalPairSlotExtensionMaxCandidates =
+    optimization.eventRootFrontierProbeAnchorCheapUpperLocalPairSlotExtensionMaxCandidates !== undefined
+      ? Math.trunc(optimization.eventRootFrontierProbeAnchorCheapUpperLocalPairSlotExtensionMaxCandidates)
+      : Number.NaN;
+  const eventRootFrontierProbeAnchorCheapUpperLocalPairSlotExtensionMaxCandidates = Number.isFinite(
+    parsedEventRootFrontierProbeAnchorCheapUpperLocalPairSlotExtensionMaxCandidates,
+  )
+    ? Math.max(1, parsedEventRootFrontierProbeAnchorCheapUpperLocalPairSlotExtensionMaxCandidates)
+    : null;
+  const parsedEventRootFrontierProbeAnchorCheapUpperLocalPairSlotExtensionTimeboxMs =
+    optimization.eventRootFrontierProbeAnchorCheapUpperLocalPairSlotExtensionTimeboxMs !== undefined
+      ? Math.trunc(optimization.eventRootFrontierProbeAnchorCheapUpperLocalPairSlotExtensionTimeboxMs)
+      : Number.NaN;
+  const eventRootFrontierProbeAnchorCheapUpperLocalPairSlotExtensionTimeboxMs = Number.isFinite(
+    parsedEventRootFrontierProbeAnchorCheapUpperLocalPairSlotExtensionTimeboxMs,
+  )
+    ? Math.max(0, parsedEventRootFrontierProbeAnchorCheapUpperLocalPairSlotExtensionTimeboxMs)
+    : null;
   const parsedEventRootFrontierProbeAnchorCheapUpperTargetedPairProofTimeboxMs =
     optimization.eventRootFrontierProbeAnchorCheapUpperTargetedPairProofTimeboxMs !== undefined
       ? Math.trunc(optimization.eventRootFrontierProbeAnchorCheapUpperTargetedPairProofTimeboxMs)
@@ -1500,6 +1530,18 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
       anchorFrontierCheapUpperPairAnchorCover: eventRootFrontierProbeAnchorCheapUpperPairAnchorCover,
       anchorFrontierCheapUpperPairAnchorCoverMaxPairs: (
         eventRootFrontierProbeAnchorCheapUpperPairAnchorCoverMaxPairs
+      ),
+      anchorFrontierCheapUpperLocalPairSlotExtension: (
+        eventRootFrontierProbeAnchorCheapUpperLocalPairSlotExtension
+      ),
+      anchorFrontierCheapUpperLocalPairSlotExtensionSlotIndex: (
+        eventRootFrontierProbeAnchorCheapUpperLocalPairSlotExtensionSlotIndex
+      ),
+      anchorFrontierCheapUpperLocalPairSlotExtensionMaxCandidates: (
+        eventRootFrontierProbeAnchorCheapUpperLocalPairSlotExtensionMaxCandidates
+      ),
+      anchorFrontierCheapUpperLocalPairSlotExtensionTimeboxMs: (
+        eventRootFrontierProbeAnchorCheapUpperLocalPairSlotExtensionTimeboxMs
       ),
       anchorFrontierCheapUpperTargetedPairProofTimeboxMs: (
         eventRootFrontierProbeAnchorCheapUpperTargetedPairProofTimeboxMs
@@ -5526,6 +5568,18 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
         traceEntry.eventRootFrontierProbeAnchorCheapUpperPairAnchorCoverMaxPairs = (
           eventRootFrontierProbeAnchorCheapUpperPairAnchorCoverMaxPairs
         );
+        traceEntry.eventRootFrontierProbeAnchorCheapUpperLocalPairSlotExtension = (
+          eventRootFrontierProbeAnchorCheapUpperLocalPairSlotExtension
+        );
+        traceEntry.eventRootFrontierProbeAnchorCheapUpperLocalPairSlotExtensionSlotIndex = (
+          eventRootFrontierProbeAnchorCheapUpperLocalPairSlotExtensionSlotIndex
+        );
+        traceEntry.eventRootFrontierProbeAnchorCheapUpperLocalPairSlotExtensionMaxCandidates = (
+          eventRootFrontierProbeAnchorCheapUpperLocalPairSlotExtensionMaxCandidates
+        );
+        traceEntry.eventRootFrontierProbeAnchorCheapUpperLocalPairSlotExtensionTimeboxMs = (
+          eventRootFrontierProbeAnchorCheapUpperLocalPairSlotExtensionTimeboxMs
+        );
         traceEntry.eventRootFrontierProbeAnchorCheapUpperTargetedPairProofTimeboxMs = (
           eventRootFrontierProbeAnchorCheapUpperTargetedPairProofTimeboxMs
         );
@@ -5638,6 +5692,18 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
           anchorFrontierCheapUpperPairAnchorCover: eventRootFrontierProbeAnchorCheapUpperPairAnchorCover,
           anchorFrontierCheapUpperPairAnchorCoverMaxPairs: (
             eventRootFrontierProbeAnchorCheapUpperPairAnchorCoverMaxPairs
+          ),
+          anchorFrontierCheapUpperLocalPairSlotExtension: (
+            eventRootFrontierProbeAnchorCheapUpperLocalPairSlotExtension
+          ),
+          anchorFrontierCheapUpperLocalPairSlotExtensionSlotIndex: (
+            eventRootFrontierProbeAnchorCheapUpperLocalPairSlotExtensionSlotIndex
+          ),
+          anchorFrontierCheapUpperLocalPairSlotExtensionMaxCandidates: (
+            eventRootFrontierProbeAnchorCheapUpperLocalPairSlotExtensionMaxCandidates
+          ),
+          anchorFrontierCheapUpperLocalPairSlotExtensionTimeboxMs: (
+            eventRootFrontierProbeAnchorCheapUpperLocalPairSlotExtensionTimeboxMs
           ),
           anchorFrontierCheapUpperTargetedPairProofTimeboxMs: (
             eventRootFrontierProbeAnchorCheapUpperTargetedPairProofTimeboxMs

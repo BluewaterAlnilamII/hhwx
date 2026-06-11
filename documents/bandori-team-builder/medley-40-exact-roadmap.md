@@ -4354,3 +4354,64 @@ P07 failed follow-ups after P03 fix:
     candidate array. A single-slot anchor stream is insufficient because the
     processed-anchor max remains above incumbent until the other-slot unseen
     upper is also lowered.
+
+2026-06-11 17:55 CST local pair-slot extension and pair BnB diagnostics:
+
+- Code added, default-off:
+  - `eventRootFrontierProbeAnchorCheapUpperLocalPairSlotExtension`.
+  - `eventRootFrontierProbeAnchorCheapUpperLocalPairSlotExtensionSlotIndex`.
+  - `eventRootFrontierProbeAnchorCheapUpperLocalPairSlotExtensionMaxCandidates`.
+  - `eventRootFrontierProbeAnchorCheapUpperLocalPairSlotExtensionTimeboxMs`.
+  - Profiling fields:
+    `exactCandidateJoinLastAnchorFrontierCheapUpperLocalPairExtensionSlotIndex`,
+    `...AddedCandidateCount`, `...CandidateCount`, `...PeekBefore`,
+    `...PeekAfter`, `...ElapsedMs`, and `...AbortReason`.
+- Purpose:
+  - Test whether the `right-unseen`/`left-unseen` part of the P06 frontier can
+    be closed by extending only one pair slot inside cheap-upper, without
+    increasing the main exact-join candidate arrays.
+- Diagnostic run, `P06:323`, no GC, non-debug, local extension auto slot,
+  `maxCandidates=50000`:
+  - Raw:
+    `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-11T09-43-15-082Z.json`
+  - Result regressed: bounded, elapsed `93320ms`, score `9486961`, upper
+    `10094162`, gap `607201`, `timedOut=true`, `memoryLimited=true`, peak
+    `4843 MiB`.
+  - Both pair slots grew by about 50k in the first implementation; the upper
+    became dominated by `generated-pair`, so this version was discarded.
+- Diagnostic run, `P06:323`, no GC, non-debug, local extension single auto slot,
+  `maxCandidates=20000`:
+  - Raw:
+    `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-11T09-46-10-059Z.json`
+  - Result regressed: bounded, elapsed `69702ms`, score `9486961`, upper
+    `10082483`, gap `595522`, `timedOut=true`, `memoryLimited=true`, peak
+    `4542 MiB`.
+  - The auto choice extended the left pair slot (`80879 -> 100879`), while the
+    residual source stayed `right-unseen`.
+- Diagnostic run, `P06:323`, no GC, non-debug, forced right pair slot index `2`,
+  `maxCandidates=20000`:
+  - Raw:
+    `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-11T09-50-05-966Z.json`
+  - Result regressed: bounded, elapsed `69460ms`, score `9486961`, upper
+    `10076137`, gap `589176`, `timedOut=true`, `memoryLimited=true`, peak
+    `4490 MiB`.
+  - It lowered `right-unseen` but shifted the max source to `left-unseen` and
+    still exceeded memory budget.
+- Diagnostic run, `P06:323`, no GC, non-debug, existing
+  `enableConflictPairUpperBnb=true`, headroom gate forced open, node limit
+  `200000`:
+  - Raw:
+    `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-11T09-52-57-620Z.json`
+  - Result: bounded, elapsed `122769ms`, score `9488172`, upper `10094162`,
+    gap `605990`, no timeout, no memory limit, peak `2916 MiB`.
+  - Pair BnB completed cheaply (`835` nodes, `4171ms`) but produced
+    `conflictPairUpperBnbBestUpper=7758278`, which is looser than the existing
+    exact pair upper `6968613`, so it did not help proof.
+- Decision:
+  - Do not use local pair-slot extension or pair BnB in acceptance options.
+    Local candidate materialization still moves memory in the wrong direction,
+    and pair BnB's current upper model is too loose.
+  - The remaining general path is not "generate more pair-slot candidates"; it
+    must either build a conflict-aware pair/frontier certificate without
+    materializing candidate arrays, or tighten the underlying two-slot upper
+    model used for `left-unseen`/`right-unseen`.

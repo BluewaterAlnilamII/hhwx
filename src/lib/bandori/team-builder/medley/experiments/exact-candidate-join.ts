@@ -3917,6 +3917,10 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
     bestPrefixSplitMaxAttempts?: number | null;
     pairAnchorCover?: boolean;
     pairAnchorCoverMaxPairs?: number | null;
+    localPairSlotExtension?: boolean;
+    localPairSlotExtensionSlotIndex?: number | null;
+    localPairSlotExtensionMaxCandidates?: number | null;
+    localPairSlotExtensionTimeboxMs?: number | null;
     targetedPairProofTimeboxMs?: number | null;
     targetedPairProofMaxEntries?: number | null;
     targetedPairProofCandidateLimit?: number | null;
@@ -3948,13 +3952,11 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
   const leftSlotIndex = pairSlotIndices[0];
   const rightSlotIndex = pairSlotIndices[1];
   const anchorCandidates = [...candidatesBySlot[anchorSlotIndex]];
-  const leftCandidates = [...candidatesBySlot[leftSlotIndex]];
-  const rightCandidates = [...candidatesBySlot[rightSlotIndex]];
+  let leftCandidates = [...candidatesBySlot[leftSlotIndex]];
+  let rightCandidates = [...candidatesBySlot[rightSlotIndex]];
   sortMedleyCandidates(anchorCandidates);
   sortMedleyCandidates(leftCandidates);
   sortMedleyCandidates(rightCandidates);
-  const leftAvailabilityQuery = buildMedleyExactCandidateSlotAvailabilityQuery(leftCandidates);
-  const rightAvailabilityQuery = buildMedleyExactCandidateSlotAvailabilityQuery(rightCandidates);
   const maxAnchorCount = Math.min(
     anchorCandidates.length,
     (
@@ -3984,6 +3986,21 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
   )
     ? Math.max(1, Math.trunc(options.pairAnchorCoverMaxPairs))
     : 2_500_000;
+  const shouldUseLocalPairSlotExtension = options.localPairSlotExtension === true;
+  const localPairSlotExtensionMaxCandidates = (
+    options.localPairSlotExtensionMaxCandidates !== null
+    && options.localPairSlotExtensionMaxCandidates !== undefined
+    && Number.isFinite(options.localPairSlotExtensionMaxCandidates)
+  )
+    ? Math.max(1, Math.trunc(options.localPairSlotExtensionMaxCandidates))
+    : 50_000;
+  const localPairSlotExtensionTimeboxMs = (
+    options.localPairSlotExtensionTimeboxMs !== null
+    && options.localPairSlotExtensionTimeboxMs !== undefined
+    && Number.isFinite(options.localPairSlotExtensionTimeboxMs)
+  )
+    ? Math.max(0, Math.trunc(options.localPairSlotExtensionTimeboxMs))
+    : 30_000;
   const refineTopAnchorCount = (
     options.refineTopAnchors !== null
     && options.refineTopAnchors !== undefined
@@ -4039,8 +4056,8 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
   const shouldUseSuffixUnseenSingleCardJoin = options.suffixUnseenSingleCardJoin === true;
   const shouldUseSuffixUnseenFullJoin = options.suffixUnseenFullJoin === true;
   const shouldUseSuffixUnseenJoin = shouldUseSuffixUnseenSingleCardJoin || shouldUseSuffixUnseenFullJoin;
-  const leftPeekUpperBound = generators[leftSlotIndex].peekUpperBound();
-  const rightPeekUpperBound = generators[rightSlotIndex].peekUpperBound();
+  let leftPeekUpperBound = generators[leftSlotIndex].peekUpperBound();
+  let rightPeekUpperBound = generators[rightSlotIndex].peekUpperBound();
   const anchorPeekUpperBound = generators[anchorSlotIndex].peekUpperBound();
   const initialLooseUpperBound = Math.max(
     anchorCandidates[0]?.result.score ?? Number.NEGATIVE_INFINITY,
@@ -4189,6 +4206,13 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
   profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairAnchorCoverDistinctCardCount = null;
   profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairAnchorCoverElapsedMs = null;
   profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairAnchorCoverAbortReason = null;
+  profiling.exactCandidateJoinLastAnchorFrontierCheapUpperLocalPairExtensionSlotIndex = null;
+  profiling.exactCandidateJoinLastAnchorFrontierCheapUpperLocalPairExtensionAddedCandidateCount = null;
+  profiling.exactCandidateJoinLastAnchorFrontierCheapUpperLocalPairExtensionCandidateCount = null;
+  profiling.exactCandidateJoinLastAnchorFrontierCheapUpperLocalPairExtensionPeekBefore = null;
+  profiling.exactCandidateJoinLastAnchorFrontierCheapUpperLocalPairExtensionPeekAfter = null;
+  profiling.exactCandidateJoinLastAnchorFrontierCheapUpperLocalPairExtensionElapsedMs = null;
+  profiling.exactCandidateJoinLastAnchorFrontierCheapUpperLocalPairExtensionAbortReason = null;
   profiling.exactCandidateJoinLastAnchorFrontierCheapUpperMaxGeneratedPairOverlaps = null;
   profiling.exactCandidateJoinLastAnchorFrontierCheapUpperMaxGeneratedPairScoreOnly = null;
   profiling.exactCandidateJoinLastAnchorFrontierCheapUpperMaxGeneratedPairFullScore = null;
@@ -4215,6 +4239,126 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
       ? leftScore + rightScore
       : Number.NEGATIVE_INFINITY
   );
+  const getLocalCandidateKey = (candidate: MedleyTeamCandidate): string => (
+    candidate.cardInstanceKeys?.length
+      ? candidate.cardInstanceKeys.join(",")
+      : candidate.cardIds.join(",")
+  );
+  const extendLocalPairSlotCandidates = (slotIndex: number, targetPeekUpperBound: number): void => {
+    if (!shouldUseLocalPairSlotExtension || !Number.isFinite(targetPeekUpperBound)) {
+      return;
+    }
+    const isLeftSlot = slotIndex === leftSlotIndex;
+    const candidates = isLeftSlot ? leftCandidates : rightCandidates;
+    const peekBefore = isLeftSlot ? leftPeekUpperBound : rightPeekUpperBound;
+    if (!Number.isFinite(peekBefore) || peekBefore <= targetPeekUpperBound) {
+      return;
+    }
+
+    const extensionStartedAt = performance.now();
+    const extensionDeadlineAt = Math.min(localDeadlineAt, extensionStartedAt + localPairSlotExtensionTimeboxMs);
+    const candidateKeys = new Set(candidates.map(getLocalCandidateKey));
+    let addedCandidateCount = 0;
+    let abortReason: string | null = null;
+    const extensionGenerator = createMedleyExactSlotCandidateGenerator(
+      slots[slotIndex],
+      server,
+      perfectRate,
+      stats,
+      profiling,
+      () => performance.now() >= deadlineAt,
+      deadlineAt,
+      Math.max(1, Math.trunc(options.targetedPairBnbSlotSolveNodeLimit ?? 1_000_000)),
+    );
+    try {
+      while (extensionGenerator.peekUpperBound() > targetPeekUpperBound) {
+        if (performance.now() >= extensionDeadlineAt) {
+          abortReason = "timebox";
+          break;
+        }
+        if (addedCandidateCount >= localPairSlotExtensionMaxCandidates) {
+          abortReason = "candidate-limit";
+          break;
+        }
+        const candidate = extensionGenerator.next(targetPeekUpperBound);
+        if (!candidate) {
+          abortReason = extensionGenerator.hasAborted() ? "generator-abort" : null;
+          break;
+        }
+        const key = getLocalCandidateKey(candidate);
+        if (candidateKeys.has(key)) {
+          continue;
+        }
+        candidateKeys.add(key);
+        candidates.push(candidate);
+        addedCandidateCount += 1;
+      }
+      const peekAfter = extensionGenerator.peekUpperBound();
+      if (isLeftSlot) {
+        leftCandidates = candidates;
+        leftPeekUpperBound = peekAfter;
+      } else {
+        rightCandidates = candidates;
+        rightPeekUpperBound = peekAfter;
+      }
+      sortMedleyCandidates(candidates);
+      profiling.exactCandidateJoinLastAnchorFrontierCheapUpperLocalPairExtensionSlotIndex = slotIndex;
+      profiling.exactCandidateJoinLastAnchorFrontierCheapUpperLocalPairExtensionAddedCandidateCount = (
+        addedCandidateCount
+      );
+      profiling.exactCandidateJoinLastAnchorFrontierCheapUpperLocalPairExtensionCandidateCount = candidates.length;
+      profiling.exactCandidateJoinLastAnchorFrontierCheapUpperLocalPairExtensionPeekBefore = Math.round(peekBefore);
+      profiling.exactCandidateJoinLastAnchorFrontierCheapUpperLocalPairExtensionPeekAfter = (
+        Number.isFinite(peekAfter) ? Math.round(peekAfter) : null
+      );
+      profiling.exactCandidateJoinLastAnchorFrontierCheapUpperLocalPairExtensionElapsedMs = Math.round(
+        performance.now() - extensionStartedAt,
+      );
+      profiling.exactCandidateJoinLastAnchorFrontierCheapUpperLocalPairExtensionAbortReason = abortReason;
+    } finally {
+      extensionGenerator.release();
+    }
+  };
+  if (shouldUseLocalPairSlotExtension) {
+    const anchorBestPossible = Math.max(
+      finiteScore(anchorCandidates[0]?.result.score ?? Number.NEGATIVE_INFINITY),
+      finiteScore(anchorPeekUpperBound),
+    );
+    const leftBestPossible = Math.max(
+      finiteScore(leftCandidates[0]?.result.score ?? Number.NEGATIVE_INFINITY),
+      finiteScore(leftPeekUpperBound),
+    );
+    const rightBestPossible = Math.max(
+      finiteScore(rightCandidates[0]?.result.score ?? Number.NEGATIVE_INFINITY),
+      finiteScore(rightPeekUpperBound),
+    );
+    const leftTargetPeek = incumbentScore - anchorBestPossible - rightBestPossible;
+    const rightTargetPeek = incumbentScore - anchorBestPossible - leftBestPossible;
+    const extensionOrder = [
+      { slotIndex: leftSlotIndex, peek: finiteScore(leftPeekUpperBound), target: leftTargetPeek },
+      { slotIndex: rightSlotIndex, peek: finiteScore(rightPeekUpperBound), target: rightTargetPeek },
+    ].sort((left, right) => (right.peek - right.target) - (left.peek - left.target));
+    const forcedSlotIndex = (
+      options.localPairSlotExtensionSlotIndex !== null
+      && options.localPairSlotExtensionSlotIndex !== undefined
+      && Number.isFinite(options.localPairSlotExtensionSlotIndex)
+    )
+      ? Math.trunc(options.localPairSlotExtensionSlotIndex)
+      : null;
+    const entry = (
+      forcedSlotIndex === leftSlotIndex || forcedSlotIndex === rightSlotIndex
+        ? extensionOrder.find((current) => current.slotIndex === forcedSlotIndex)
+        : undefined
+    ) ?? extensionOrder.find((current) => current.peek > current.target);
+    if (entry) {
+      extendLocalPairSlotCandidates(entry.slotIndex, entry.target);
+    }
+    profiling.exactCandidateJoinLastAnchorFrontierCheapUpperOtherSlotCandidateCounts = pairSlotIndices.map(
+      (slotIndex) => (slotIndex === leftSlotIndex ? leftCandidates.length : rightCandidates.length),
+    );
+  }
+  const leftAvailabilityQuery = buildMedleyExactCandidateSlotAvailabilityQuery(leftCandidates);
+  const rightAvailabilityQuery = buildMedleyExactCandidateSlotAvailabilityQuery(rightCandidates);
   const estimatePairUpperForAnchor = (anchorCandidate: MedleyTeamCandidate): {
     upperBound: number;
     source: string;
@@ -6644,6 +6788,10 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     anchorFrontierCheapUpperBestPrefixSplitMaxAttempts?: number | null;
     anchorFrontierCheapUpperPairAnchorCover?: boolean;
     anchorFrontierCheapUpperPairAnchorCoverMaxPairs?: number | null;
+    anchorFrontierCheapUpperLocalPairSlotExtension?: boolean;
+    anchorFrontierCheapUpperLocalPairSlotExtensionSlotIndex?: number | null;
+    anchorFrontierCheapUpperLocalPairSlotExtensionMaxCandidates?: number | null;
+    anchorFrontierCheapUpperLocalPairSlotExtensionTimeboxMs?: number | null;
     anchorFrontierCheapUpperTargetedPairProofTimeboxMs?: number | null;
     anchorFrontierCheapUpperTargetedPairProofMaxEntries?: number | null;
     anchorFrontierCheapUpperTargetedPairProofCandidateLimit?: number | null;
@@ -7145,6 +7293,16 @@ export function searchMedleyConfigurationByExactCandidateJoin(
           bestPrefixSplitMaxAttempts: context.anchorFrontierCheapUpperBestPrefixSplitMaxAttempts,
           pairAnchorCover: context.anchorFrontierCheapUpperPairAnchorCover,
           pairAnchorCoverMaxPairs: context.anchorFrontierCheapUpperPairAnchorCoverMaxPairs,
+          localPairSlotExtension: context.anchorFrontierCheapUpperLocalPairSlotExtension,
+          localPairSlotExtensionSlotIndex: (
+            context.anchorFrontierCheapUpperLocalPairSlotExtensionSlotIndex
+          ),
+          localPairSlotExtensionMaxCandidates: (
+            context.anchorFrontierCheapUpperLocalPairSlotExtensionMaxCandidates
+          ),
+          localPairSlotExtensionTimeboxMs: (
+            context.anchorFrontierCheapUpperLocalPairSlotExtensionTimeboxMs
+          ),
           targetedPairProofTimeboxMs: context.anchorFrontierCheapUpperTargetedPairProofTimeboxMs,
           targetedPairProofMaxEntries: context.anchorFrontierCheapUpperTargetedPairProofMaxEntries,
           targetedPairProofCandidateLimit: context.anchorFrontierCheapUpperTargetedPairProofCandidateLimit,

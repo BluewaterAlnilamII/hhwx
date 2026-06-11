@@ -145,6 +145,10 @@ export type BandoriMedleySearchOptimizationOptions = {
   eventRootFrontierProbeAnchorCheapUpperBestPrefixSplitMaxAttempts?: number;
   eventRootFrontierProbeAnchorCheapUpperPairAnchorCover?: boolean;
   eventRootFrontierProbeAnchorCheapUpperPairAnchorCoverMaxPairs?: number;
+  eventRootFrontierProbeAnchorCheapUpperLocalPairSlotExtension?: boolean;
+  eventRootFrontierProbeAnchorCheapUpperLocalPairSlotExtensionSlotIndex?: number;
+  eventRootFrontierProbeAnchorCheapUpperLocalPairSlotExtensionMaxCandidates?: number;
+  eventRootFrontierProbeAnchorCheapUpperLocalPairSlotExtensionTimeboxMs?: number;
   eventRootFrontierProbeAnchorCheapUpperTargetedPairProofTimeboxMs?: number;
   eventRootFrontierProbeAnchorCheapUpperTargetedPairProofMaxEntries?: number;
   eventRootFrontierProbeAnchorCheapUpperTargetedPairProofCandidateLimit?: number;
@@ -670,6 +674,13 @@ export type BandoriMedleyTeamSearchProfilingStats = {
   exactCandidateJoinLastAnchorFrontierCheapUpperPairAnchorCoverDistinctCardCount: number | null;
   exactCandidateJoinLastAnchorFrontierCheapUpperPairAnchorCoverElapsedMs: number | null;
   exactCandidateJoinLastAnchorFrontierCheapUpperPairAnchorCoverAbortReason: string | null;
+  exactCandidateJoinLastAnchorFrontierCheapUpperLocalPairExtensionSlotIndex: number | null;
+  exactCandidateJoinLastAnchorFrontierCheapUpperLocalPairExtensionAddedCandidateCount: number | null;
+  exactCandidateJoinLastAnchorFrontierCheapUpperLocalPairExtensionCandidateCount: number | null;
+  exactCandidateJoinLastAnchorFrontierCheapUpperLocalPairExtensionPeekBefore: number | null;
+  exactCandidateJoinLastAnchorFrontierCheapUpperLocalPairExtensionPeekAfter: number | null;
+  exactCandidateJoinLastAnchorFrontierCheapUpperLocalPairExtensionElapsedMs: number | null;
+  exactCandidateJoinLastAnchorFrontierCheapUpperLocalPairExtensionAbortReason: string | null;
   exactCandidateJoinLastAnchorFrontierCheapUpperMaxGeneratedPairOverlaps: boolean | null;
   exactCandidateJoinLastAnchorFrontierCheapUpperMaxGeneratedPairScoreOnly: number | null;
   exactCandidateJoinLastAnchorFrontierCheapUpperMaxGeneratedPairFullScore: number | null;
