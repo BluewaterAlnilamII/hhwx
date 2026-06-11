@@ -4810,7 +4810,6 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
   };
   const estimateProcessedGeneratedUnseenJoinSideUpper = (
     generatedCandidates: MedleyTeamCandidate[],
-    generatedSlotIndex: number,
     unseenSlotIndex: number,
     baseGeneratedUnseenUpper: number,
     getAnchorLimitedSlotUpper: (entryIndex: number, slotIndex: number) => number,
@@ -4841,13 +4840,12 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
     const bestGeneratedScore = generatedCandidates[0]?.result.score ?? Number.NEGATIVE_INFINITY;
     for (let entryIndex = 0; entryIndex < processedAnchorUpperEntries.length; entryIndex += 1) {
       const entry = processedAnchorUpperEntries[entryIndex];
-      const anchorLimitedGeneratedUpper = getAnchorLimitedSlotUpper(entryIndex, generatedSlotIndex);
       const anchorLimitedUnseenUpper = getAnchorLimitedSlotUpper(entryIndex, unseenSlotIndex);
-      const bothUnseenPairUpper = combineScores(anchorLimitedGeneratedUpper, anchorLimitedUnseenUpper);
+      const bothUnseenFallbackPairUpper = Math.min(entry.leftUnseenUpper, entry.rightUnseenUpper);
       upperBound = Math.max(
         upperBound,
         combineScores(entry.anchorScore, entry.generatedPairUpper),
-        combineScores(entry.anchorScore, bothUnseenPairUpper),
+        combineScores(entry.anchorScore, bothUnseenFallbackPairUpper),
       );
       if (Number.isFinite(bestGeneratedScore) && Number.isFinite(anchorLimitedUnseenUpper)) {
         pushMedleyExactCandidatePairFrontierHeapNode(heap, {
@@ -4954,7 +4952,6 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
     };
     const leftUnseenJoin = estimateProcessedGeneratedUnseenJoinSideUpper(
       rightCandidates,
-      rightSlotIndex,
       leftSlotIndex,
       finiteScore(leftPeekUpperBound),
       getAnchorLimitedSlotUpper,
@@ -4969,7 +4966,6 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
     }
     const rightUnseenJoin = estimateProcessedGeneratedUnseenJoinSideUpper(
       leftCandidates,
-      leftSlotIndex,
       rightSlotIndex,
       finiteScore(rightPeekUpperBound),
       getAnchorLimitedSlotUpper,
