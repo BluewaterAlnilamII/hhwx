@@ -1,6 +1,6 @@
 # Medley 40/40 Exact Roadmap
 
-Last updated: 2026-06-11 20:50 CST
+Last updated: 2026-06-11 21:05 CST
 
 This file is the persistent working note for the current medley optimizer goal.
 Keep it current before and after benchmark runs or proof-path changes, so future
@@ -165,6 +165,33 @@ No-GC acceptance contract:
   probe. Next experiment should be opt-in only: allow normal seeding/exact work
   to continue after an unproved event-root probe when the residual gap is below
   a configured small-gap threshold and enough time remains.
+
+2026-06-11 21:05 CST rejected small-gap continuation experiment:
+
+- Experiment: a local uncommitted opt-in option allowed event-root probe callers
+  to continue normal seeding/exact work after an `unproved` probe when residual
+  gap was below `200000`. The intent was to test whether the `~162k` residual
+  gap in `P06:323` could be closed by the ordinary proof path once the event
+  probe had already tightened the active upper.
+- Raw result, uncapped continuation:
+  `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-11T12-52-33-674Z.json`.
+  Result: bounded, score `9486961`, gap `595522`, elapsed `118900ms`,
+  `timedOut=true`, `memoryLimited=true`, peak `4877 MiB`. The follow-up
+  ordinary exact join used the `400000` auto candidate soft limit and aborted
+  at `initial-candidate`.
+- Raw result, continuation with follow-up exact join capped back to the
+  event-root `200000` soft limit:
+  `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-11T12-57-02-753Z.json`.
+  Result: bounded, score `9486961`, gap `595522`, elapsed `114582ms`,
+  `timedOut=true`, `memoryLimited=true`, peak `4489 MiB`. The follow-up exact
+  join aborted at `pair-upper`.
+- Interpretation: simply continuing after a small-gap event-root probe is not
+  a viable path for `P06:323`. It converts a bounded-but-controlled proof gap
+  (`score 9488172`, gap `162513`, no timeout/memory, peak `3182 MiB`) into a
+  lower incumbent and a memory-limited run. The local code was reverted and
+  should not be promoted. The next useful direction is a proof-only upper
+  tightening inside the event-root frontier itself, not falling through to the
+  full ordinary exact/DFS path.
 
 2026-06-10 14:48 CST P06 score-only frontier finding:
 
