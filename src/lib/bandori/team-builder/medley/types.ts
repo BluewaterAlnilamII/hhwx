@@ -80,6 +80,9 @@ export type BandoriMedleySearchOptimizationOptions = {
   exactJoinPrefixSeedMinCandidateCounts?: [number, number, number];
   exactCandidateJoinSolveOrderVariant?: string;
   exactCandidateJoinScoreCacheClearInterval?: number;
+  exactCandidateJoinExtendedThirdShortlistSize?: number;
+  exactCandidateJoinExtendedThirdShortlistCacheEntryLimit?: number;
+  exactCandidateJoinExtendedThirdShortlistQueryLimit?: number;
   debugConfigurationTrace?: boolean;
   exactCandidateJoinDebugAnchorSlotIndex?: number;
   exactCandidateJoinDebugKnownCardIdsBySlot?: number[][];
@@ -132,6 +135,7 @@ export type BandoriMedleySearchOptimizationOptions = {
   eventRootFrontierProbeAnchorCheapUpperTargetedPairProofCandidateLimit?: number;
   eventRootFrontierProbeAnchorCheapUpperTargetedPairBnbNodeLimit?: number;
   eventRootFrontierProbeAnchorCheapUpperTargetedPairBnbSlotSolveNodeLimit?: number;
+  eventRootFrontierProbeAnchorCheapUpperSuffixCover?: boolean;
 };
 
 export type BandoriMedleyTeamSearchInput = Omit<
@@ -597,6 +601,11 @@ export type BandoriMedleyTeamSearchProfilingStats = {
   exactCandidateJoinLastAnchorFrontierCheapUpperResidualSource: string | null;
   exactCandidateJoinLastAnchorFrontierCheapUpperUnprocessedAnchorScore: number | null;
   exactCandidateJoinLastAnchorFrontierCheapUpperUnprocessedPairUpper: number | null;
+  exactCandidateJoinLastAnchorFrontierCheapUpperSuffixCoverCandidateCount: number | null;
+  exactCandidateJoinLastAnchorFrontierCheapUpperSuffixCoverDistinctCardCount: number | null;
+  exactCandidateJoinLastAnchorFrontierCheapUpperSuffixCoverUpperBound: number | null;
+  exactCandidateJoinLastAnchorFrontierCheapUpperSuffixCoverElapsedMs: number | null;
+  exactCandidateJoinLastAnchorFrontierCheapUpperSuffixCoverAbortReason: string | null;
   exactCandidateJoinLastAnchorFrontierCheapUpperMaxGeneratedPairOverlaps: boolean | null;
   exactCandidateJoinLastAnchorFrontierCheapUpperMaxGeneratedPairScoreOnly: number | null;
   exactCandidateJoinLastAnchorFrontierCheapUpperMaxGeneratedPairFullScore: number | null;
@@ -616,6 +625,9 @@ export type BandoriMedleyTeamSearchProfilingStats = {
   exactCandidateJoinLastAnchorFrontierCheapUpperTargetedPairProofAbortReason: string | null;
   exactCandidateJoinScoreCacheClearCount: number;
   exactCandidateJoinLastScoreCacheClearInterval: number | null;
+  exactCandidateJoinLastExtendedThirdShortlistSize: number | null;
+  exactCandidateJoinLastExtendedThirdShortlistCacheEntryLimit: number | null;
+  exactCandidateJoinLastExtendedThirdShortlistQueryLimit: number | null;
   exactCandidateJoinLowMemoryInitialCandidateScoreCacheClearCount: number;
   exactCandidateJoinLastLowMemoryInitialCandidateScoreCacheClearInterval: number | null;
   exactCandidateJoinLastLowMemoryInitialCandidateSlotIndex: number | null;

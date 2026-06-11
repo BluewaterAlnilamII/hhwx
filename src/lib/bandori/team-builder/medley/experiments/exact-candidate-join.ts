@@ -2117,6 +2117,9 @@ export function solveMedleyExactCandidateJoin(
   observeEvaluatedResult?: MedleyEvaluatedResultObserver,
   recordSolveProfiling = true,
   solveOrderVariant: string | null = null,
+  extendedThirdShortlistSizeOverride: number | null = null,
+  extendedThirdShortlistCacheEntryLimitOverride: number | null = null,
+  extendedThirdShortlistQueryLimitOverride: number | null = null,
 ): MedleyExactCandidateJoinSolveResult {
   // The final join is exact only over candidate lists whose unseen frontier was already
   // bounded. Bitsets accelerate card-disjoint checks but never approximate the conflict rule.
@@ -2191,6 +2194,23 @@ export function solveMedleyExactCandidateJoin(
     : (shouldPreferSmallestThirdJoinOrder || shouldUseMiddleFirstJoinOrder)
     ? MEDLEY_EXACT_CANDIDATE_JOIN_MIDDLE_FIRST_THIRD_SHORTLIST_SIZE
     : MEDLEY_EXACT_CANDIDATE_JOIN_THIRD_SHORTLIST_SIZE;
+  const extendedThirdShortlistSize = extendedThirdShortlistSizeOverride !== null
+    && Number.isFinite(extendedThirdShortlistSizeOverride)
+    ? Math.max(1, Math.trunc(extendedThirdShortlistSizeOverride))
+    : MEDLEY_EXACT_CANDIDATE_JOIN_EXTENDED_THIRD_SHORTLIST_SIZE;
+  const extendedThirdShortlistCacheEntryLimit = extendedThirdShortlistCacheEntryLimitOverride !== null
+    && Number.isFinite(extendedThirdShortlistCacheEntryLimitOverride)
+    ? Math.max(0, Math.trunc(extendedThirdShortlistCacheEntryLimitOverride))
+    : MEDLEY_EXACT_CANDIDATE_JOIN_EXTENDED_THIRD_SHORTLIST_CACHE_ENTRY_LIMIT;
+  const extendedThirdShortlistQueryLimit = extendedThirdShortlistQueryLimitOverride !== null
+    && Number.isFinite(extendedThirdShortlistQueryLimitOverride)
+    ? Math.max(0, Math.trunc(extendedThirdShortlistQueryLimitOverride))
+    : MEDLEY_EXACT_CANDIDATE_JOIN_EXTENDED_THIRD_SHORTLIST_QUERY_LIMIT;
+  if (recordSolveProfiling) {
+    profiling.exactCandidateJoinLastExtendedThirdShortlistSize = extendedThirdShortlistSize;
+    profiling.exactCandidateJoinLastExtendedThirdShortlistCacheEntryLimit = extendedThirdShortlistCacheEntryLimit;
+    profiling.exactCandidateJoinLastExtendedThirdShortlistQueryLimit = extendedThirdShortlistQueryLimit;
+  }
   const firstSlotIndex = slotOrder[0];
   const secondSlotIndex = slotOrder[1];
   const thirdSlotIndex = slotOrder[2];
@@ -2562,9 +2582,9 @@ export function solveMedleyExactCandidateJoin(
     }
     const shortlist = buildThirdShortlistForCandidate(
       candidate,
-      MEDLEY_EXACT_CANDIDATE_JOIN_EXTENDED_THIRD_SHORTLIST_SIZE,
+      extendedThirdShortlistSize,
     );
-    if (extendedThirdShortlistCacheEntryCount < MEDLEY_EXACT_CANDIDATE_JOIN_EXTENDED_THIRD_SHORTLIST_CACHE_ENTRY_LIMIT) {
+    if (extendedThirdShortlistCacheEntryCount < extendedThirdShortlistCacheEntryLimit) {
       extendedThirdShortlistCache.set(candidate, shortlist);
       extendedThirdShortlistCacheEntryCount += 1;
     }
@@ -2753,9 +2773,7 @@ export function solveMedleyExactCandidateJoin(
             let shouldRunBitsetFallback = true;
             const shouldUseExtendedThirdShortlist = (
               thirdCandidates.length <= MEDLEY_EXACT_CANDIDATE_JOIN_EXTENDED_THIRD_SHORTLIST_MAX_THIRD_CANDIDATES
-              && localExtendedThirdShortlistQueryCount < (
-                MEDLEY_EXACT_CANDIDATE_JOIN_EXTENDED_THIRD_SHORTLIST_QUERY_LIMIT
-              )
+              && localExtendedThirdShortlistQueryCount < extendedThirdShortlistQueryLimit
             );
             if (shouldUseExtendedThirdShortlist) {
               const extendedThirdShortlist = getExtendedThirdShortlistForCandidate(secondCandidate);
@@ -3808,6 +3826,7 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
     targetedPairProofCandidateLimit?: number | null;
     targetedPairBnbNodeLimit?: number | null;
     targetedPairBnbSlotSolveNodeLimit?: number | null;
+    suffixCover?: boolean;
   } = {},
   observeEvaluatedResult?: MedleyEvaluatedResultObserver,
 ): MedleyExactCandidateAnchorFrontierProofResult {
@@ -3889,6 +3908,7 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
   )
     ? Math.max(1, Math.trunc(options.targetedPairBnbSlotSolveNodeLimit))
     : null;
+  const shouldUseSuffixCover = options.suffixCover === true;
   const leftPeekUpperBound = generators[leftSlotIndex].peekUpperBound();
   const rightPeekUpperBound = generators[rightSlotIndex].peekUpperBound();
   const anchorPeekUpperBound = generators[anchorSlotIndex].peekUpperBound();
@@ -3988,6 +4008,11 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
   profiling.exactCandidateJoinLastAnchorFrontierCheapUpperResidualSource = null;
   profiling.exactCandidateJoinLastAnchorFrontierCheapUpperUnprocessedAnchorScore = null;
   profiling.exactCandidateJoinLastAnchorFrontierCheapUpperUnprocessedPairUpper = null;
+  profiling.exactCandidateJoinLastAnchorFrontierCheapUpperSuffixCoverCandidateCount = null;
+  profiling.exactCandidateJoinLastAnchorFrontierCheapUpperSuffixCoverDistinctCardCount = null;
+  profiling.exactCandidateJoinLastAnchorFrontierCheapUpperSuffixCoverUpperBound = null;
+  profiling.exactCandidateJoinLastAnchorFrontierCheapUpperSuffixCoverElapsedMs = null;
+  profiling.exactCandidateJoinLastAnchorFrontierCheapUpperSuffixCoverAbortReason = null;
   profiling.exactCandidateJoinLastAnchorFrontierCheapUpperMaxGeneratedPairOverlaps = null;
   profiling.exactCandidateJoinLastAnchorFrontierCheapUpperMaxGeneratedPairScoreOnly = null;
   profiling.exactCandidateJoinLastAnchorFrontierCheapUpperMaxGeneratedPairFullScore = null;
@@ -4054,16 +4079,145 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
       rightGeneratedCandidate,
     };
   };
-  const getResidualUpperBound = (nextAnchorScore: number | null): number | null => {
-    const unprocessedAnchorUpperBound = Math.max(
-      nextAnchorScore ?? Number.NEGATIVE_INFINITY,
-      finiteScore(anchorPeekUpperBound),
+  const pairUpperBySingleBannedCardId = new Map<number, number>();
+  const estimatePairUpperExcludingSingleCardId = (cardId: number): number => {
+    const cached = pairUpperBySingleBannedCardId.get(cardId);
+    if (cached !== undefined) {
+      return cached;
+    }
+    const bannedCardIds = [cardId];
+    const leftGeneratedCandidate = findBestAvailableMedleyExactCandidateExcludingCardIds(
+      leftAvailabilityQuery,
+      bannedCardIds,
     );
-    const unprocessedUpperBound = Number.isFinite(unprocessedAnchorUpperBound) && Number.isFinite(pairUpperBound)
-      ? unprocessedAnchorUpperBound + pairUpperBound
+    const rightGeneratedCandidate = findBestAvailableMedleyExactCandidateExcludingCardIds(
+      rightAvailabilityQuery,
+      bannedCardIds,
+    );
+    const leftGeneratedScore = finiteScore(leftGeneratedCandidate?.result.score ?? Number.NEGATIVE_INFINITY);
+    const rightGeneratedScore = finiteScore(rightGeneratedCandidate?.result.score ?? Number.NEGATIVE_INFINITY);
+    const leftLimitedPeekUpperBound = Math.min(
+      finiteScore(leftPeekUpperBound),
+      estimateSlotUpperExcludingCardIds(leftSlotIndex, [bannedCardIds]),
+    );
+    const rightLimitedPeekUpperBound = Math.min(
+      finiteScore(rightPeekUpperBound),
+      estimateSlotUpperExcludingCardIds(rightSlotIndex, [bannedCardIds]),
+    );
+    const leftBestPossible = Math.max(leftGeneratedScore, leftLimitedPeekUpperBound);
+    const rightBestPossible = Math.max(rightGeneratedScore, rightLimitedPeekUpperBound);
+    const upperBound = Math.max(
+      combineScores(leftGeneratedScore, rightGeneratedScore),
+      combineScores(leftLimitedPeekUpperBound, rightBestPossible),
+      combineScores(rightLimitedPeekUpperBound, leftBestPossible),
+    );
+    const normalizedUpperBound = Number.isFinite(upperBound) ? upperBound : Number.NEGATIVE_INFINITY;
+    pairUpperBySingleBannedCardId.set(cardId, normalizedUpperBound);
+    return normalizedUpperBound;
+  };
+  const estimateGeneratedAnchorSuffixCoverUpper = (
+    startAnchorIndex: number | null,
+  ): {
+    upperBound: number | null;
+    candidateCount: number;
+    distinctCardCount: number;
+    elapsedMs: number;
+    abortReason: string | null;
+  } => {
+    if (!shouldUseSuffixCover || startAnchorIndex === null || startAnchorIndex >= anchorCandidates.length) {
+      return {
+        upperBound: null,
+        candidateCount: 0,
+        distinctCardCount: 0,
+        elapsedMs: 0,
+        abortReason: null,
+      };
+    }
+    const suffixCoverStartedAt = performance.now();
+    let upperBound = Number.NEGATIVE_INFINITY;
+    let candidateCount = 0;
+    for (let index = startAnchorIndex; index < anchorCandidates.length; index += 1) {
+      if (performance.now() >= localDeadlineAt) {
+        return {
+          upperBound: null,
+          candidateCount,
+          distinctCardCount: pairUpperBySingleBannedCardId.size,
+          elapsedMs: performance.now() - suffixCoverStartedAt,
+          abortReason: "timebox",
+        };
+      }
+      const anchorCandidate = anchorCandidates[index];
+      let coveredPairUpper = pairUpperBound;
+      for (const cardId of anchorCandidate.cardIds) {
+        coveredPairUpper = Math.min(
+          coveredPairUpper,
+          estimatePairUpperExcludingSingleCardId(cardId),
+        );
+      }
+      if (Number.isFinite(coveredPairUpper)) {
+        upperBound = Math.max(upperBound, anchorCandidate.result.score + coveredPairUpper);
+      }
+      candidateCount += 1;
+    }
+    return {
+      upperBound: Number.isFinite(upperBound) ? upperBound : null,
+      candidateCount,
+      distinctCardCount: pairUpperBySingleBannedCardId.size,
+      elapsedMs: performance.now() - suffixCoverStartedAt,
+      abortReason: null,
+    };
+  };
+  const getResidualUpperBound = (
+    nextAnchorScore: number | null,
+    generatedSuffixCoveredUpperBound: number | null = null,
+  ): number | null => {
+    const unprocessedGeneratedUpperBound = generatedSuffixCoveredUpperBound !== null
+      ? generatedSuffixCoveredUpperBound
+      : Number.isFinite(nextAnchorScore ?? Number.NEGATIVE_INFINITY) && Number.isFinite(pairUpperBound)
+        ? (nextAnchorScore ?? Number.NEGATIVE_INFINITY) + pairUpperBound
+        : Number.NEGATIVE_INFINITY;
+    const unprocessedPeekUpperBound = Number.isFinite(finiteScore(anchorPeekUpperBound))
+      && Number.isFinite(pairUpperBound)
+      ? finiteScore(anchorPeekUpperBound) + pairUpperBound
       : Number.NEGATIVE_INFINITY;
+    const unprocessedUpperBound = Math.max(unprocessedGeneratedUpperBound, unprocessedPeekUpperBound);
     const residualUpperBound = Math.max(processedUpperMax, unprocessedUpperBound);
     return Number.isFinite(residualUpperBound) ? residualUpperBound : null;
+  };
+  const getUnprocessedUpperBound = (
+    nextAnchorScore: number | null,
+    generatedSuffixCoveredUpperBound: number | null,
+  ): {
+    upperBound: number;
+    anchorScore: number | null;
+    pairUpper: number | null;
+    source: string | null;
+  } => {
+    const generatedFallbackUpperBound = Number.isFinite(nextAnchorScore ?? Number.NEGATIVE_INFINITY)
+      && Number.isFinite(pairUpperBound)
+      ? (nextAnchorScore ?? Number.NEGATIVE_INFINITY) + pairUpperBound
+      : Number.NEGATIVE_INFINITY;
+    const generatedUpperBound = generatedSuffixCoveredUpperBound ?? generatedFallbackUpperBound;
+    const peekAnchorUpperBound = finiteScore(anchorPeekUpperBound);
+    const peekUpperBound = Number.isFinite(peekAnchorUpperBound) && Number.isFinite(pairUpperBound)
+      ? peekAnchorUpperBound + pairUpperBound
+      : Number.NEGATIVE_INFINITY;
+    if (generatedUpperBound >= peekUpperBound) {
+      return {
+        upperBound: generatedUpperBound,
+        anchorScore: nextAnchorScore,
+        pairUpper: generatedSuffixCoveredUpperBound !== null ? null : pairUpperBound,
+        source: generatedSuffixCoveredUpperBound !== null
+          ? "unprocessed-anchor-suffix-cover"
+          : "unprocessed-anchor",
+      };
+    }
+    return {
+      upperBound: peekUpperBound,
+      anchorScore: Number.isFinite(peekAnchorUpperBound) ? peekAnchorUpperBound : null,
+      pairUpper: pairUpperBound,
+      source: "unprocessed-generator-peek",
+    };
   };
   const recordProcessedUpperMax = (
     anchorScore: number,
@@ -4684,25 +4838,23 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
   const finish = (
     localTimedOut: boolean,
     nextAnchorScore: number | null,
+    nextAnchorIndex: number | null,
     skipRefine = false,
   ): MedleyExactCandidateAnchorFrontierProofResult => {
     const refineTimedOut = skipRefine ? false : refineProcessedAnchorUpperEntries();
     recordUnseenRefineProfiling();
     recordTargetedPairProofProfiling();
+    const suffixCover = estimateGeneratedAnchorSuffixCoverUpper(nextAnchorIndex);
+    const suffixCoverTimedOut = suffixCover.abortReason !== null;
+    const suffixCoverUpperBound = suffixCover.abortReason === null ? suffixCover.upperBound : null;
     const elapsedMs = performance.now() - startedAt;
-    const unprocessedAnchorUpperBound = Math.max(
-      nextAnchorScore ?? Number.NEGATIVE_INFINITY,
-      finiteScore(anchorPeekUpperBound),
-    );
-    const unprocessedUpperBound = Number.isFinite(unprocessedAnchorUpperBound) && Number.isFinite(pairUpperBound)
-      ? unprocessedAnchorUpperBound + pairUpperBound
-      : Number.NEGATIVE_INFINITY;
-    const observedUpperBound = getResidualUpperBound(nextAnchorScore);
+    const unprocessedUpper = getUnprocessedUpperBound(nextAnchorScore, suffixCoverUpperBound);
+    const observedUpperBound = getResidualUpperBound(nextAnchorScore, suffixCoverUpperBound);
     const proofThreshold = Math.max(
       incumbentScore,
       targetedPairProofResult?.score ?? Number.NEGATIVE_INFINITY,
     );
-    if (localTimedOut || refineTimedOut) {
+    if (localTimedOut || refineTimedOut || suffixCoverTimedOut) {
       profiling.exactCandidateJoinAnchorFrontierCheapUpperTimeboxCount += 1;
     }
     if (
@@ -4728,19 +4880,28 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
     profiling.exactCandidateJoinLastAnchorFrontierCheapUpperMaxLeftUnseenUpper = processedUpperMaxLeftUnseenUpper;
     profiling.exactCandidateJoinLastAnchorFrontierCheapUpperMaxRightUnseenUpper = processedUpperMaxRightUnseenUpper;
     profiling.exactCandidateJoinLastAnchorFrontierCheapUpperResidualSource = (
-      Number.isFinite(unprocessedUpperBound)
-      && (!Number.isFinite(processedUpperMax) || unprocessedUpperBound >= processedUpperMax)
+      Number.isFinite(unprocessedUpper.upperBound)
+      && (!Number.isFinite(processedUpperMax) || unprocessedUpper.upperBound >= processedUpperMax)
     )
-      ? "unprocessed-anchor"
+      ? unprocessedUpper.source
       : processedUpperMaxSource;
     profiling.exactCandidateJoinLastAnchorFrontierCheapUpperUnprocessedAnchorScore = (
-      Number.isFinite(unprocessedAnchorUpperBound)
-        ? unprocessedAnchorUpperBound
-        : null
+      unprocessedUpper.anchorScore
     );
-    profiling.exactCandidateJoinLastAnchorFrontierCheapUpperUnprocessedPairUpper = Number.isFinite(pairUpperBound)
-      ? pairUpperBound
-      : null;
+    profiling.exactCandidateJoinLastAnchorFrontierCheapUpperUnprocessedPairUpper = unprocessedUpper.pairUpper;
+    profiling.exactCandidateJoinLastAnchorFrontierCheapUpperSuffixCoverCandidateCount = (
+      suffixCover.candidateCount
+    );
+    profiling.exactCandidateJoinLastAnchorFrontierCheapUpperSuffixCoverDistinctCardCount = (
+      suffixCover.distinctCardCount
+    );
+    profiling.exactCandidateJoinLastAnchorFrontierCheapUpperSuffixCoverUpperBound = (
+      suffixCover.upperBound !== null ? Math.ceil(suffixCover.upperBound) : null
+    );
+    profiling.exactCandidateJoinLastAnchorFrontierCheapUpperSuffixCoverElapsedMs = Math.round(
+      suffixCover.elapsedMs,
+    );
+    profiling.exactCandidateJoinLastAnchorFrontierCheapUpperSuffixCoverAbortReason = suffixCover.abortReason;
     if (processedUpperMaxLeftGeneratedCandidate && processedUpperMaxRightGeneratedCandidate) {
       const generatedPairOverlaps = medleyExactCandidatesOverlap(
         processedUpperMaxLeftGeneratedCandidate,
@@ -4783,7 +4944,7 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
     }
     return {
       proved: observedUpperBound !== null && observedUpperBound <= proofThreshold,
-      localTimedOut: localTimedOut || refineTimedOut,
+      localTimedOut: localTimedOut || refineTimedOut || suffixCoverTimedOut,
       result: targetedPairProofResult,
       observedUpperBound,
       processedAnchorCount,
@@ -4795,7 +4956,7 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
   for (let anchorIndex = 0; anchorIndex < maxAnchorCount; anchorIndex += 1) {
     const anchorCandidate = anchorCandidates[anchorIndex];
     if (performance.now() >= localDeadlineAt) {
-      return finish(true, anchorCandidate.result.score);
+      return finish(true, anchorCandidate.result.score, anchorIndex);
     }
     if (
       Number.isFinite(processedUpperMax)
@@ -4808,7 +4969,7 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
         const processedUpperMaxBeforeRefine = processedUpperMax;
         const refineTimedOut = refineProcessedAnchorUpperEntries();
         if (refineTimedOut) {
-          return finish(true, anchorCandidate.result.score, true);
+          return finish(true, anchorCandidate.result.score, anchorIndex, true);
         }
         if (anchorCandidate.result.score + pairUpperBound > processedUpperMax) {
           shouldContinueAfterRefine = true;
@@ -4827,7 +4988,7 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
       if (shouldContinueAfterRefine) {
         continue;
       }
-      return finish(false, anchorCandidate.result.score, true);
+      return finish(false, anchorCandidate.result.score, anchorIndex, true);
     }
     const pairUpperForAnchor = estimatePairUpperForAnchor(anchorCandidate);
     processedAnchorCount += 1;
@@ -4858,7 +5019,7 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
     }
   }
 
-  return finish(false, anchorCandidates[processedAnchorCount]?.result.score ?? null);
+  return finish(false, anchorCandidates[processedAnchorCount]?.result.score ?? null, processedAnchorCount);
 }
 
 function solveMedleyExactCandidateJoinByAnchor(
@@ -5036,6 +5197,9 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     exactJoinPrefixSeedMaxObservedGap?: number;
     exactCandidateJoinSolveOrderVariant?: string | null;
     exactCandidateJoinScoreCacheClearInterval?: number | null;
+    exactCandidateJoinExtendedThirdShortlistSize?: number | null;
+    exactCandidateJoinExtendedThirdShortlistCacheEntryLimit?: number | null;
+    exactCandidateJoinExtendedThirdShortlistQueryLimit?: number | null;
     stagedCandidateExtensionMinRemainingMs?: number | null;
     enableLowMemoryInitialCandidateSync?: boolean;
     lowMemoryInitialCandidateSyncLocalAbortOnly?: boolean;
@@ -5067,6 +5231,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     anchorFrontierCheapUpperTargetedPairProofCandidateLimit?: number | null;
     anchorFrontierCheapUpperTargetedPairBnbNodeLimit?: number | null;
     anchorFrontierCheapUpperTargetedPairBnbSlotSolveNodeLimit?: number | null;
+    anchorFrontierCheapUpperSuffixCover?: boolean;
   } = {},
   observeEvaluatedResult?: MedleyEvaluatedResultObserver,
 ): MedleyExactCandidateJoinResult {
@@ -5556,6 +5721,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
           targetedPairProofCandidateLimit: context.anchorFrontierCheapUpperTargetedPairProofCandidateLimit,
           targetedPairBnbNodeLimit: context.anchorFrontierCheapUpperTargetedPairBnbNodeLimit,
           targetedPairBnbSlotSolveNodeLimit: context.anchorFrontierCheapUpperTargetedPairBnbSlotSolveNodeLimit,
+          suffixCover: context.anchorFrontierCheapUpperSuffixCover,
         },
         observeEvaluatedResult,
       );
@@ -6756,6 +6922,9 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     observeEvaluatedResult,
     true,
     context.exactCandidateJoinSolveOrderVariant ?? null,
+    context.exactCandidateJoinExtendedThirdShortlistSize ?? null,
+    context.exactCandidateJoinExtendedThirdShortlistCacheEntryLimit ?? null,
+    context.exactCandidateJoinExtendedThirdShortlistQueryLimit ?? null,
   );
   profiling.exactCandidateJoinSolveElapsedMs += performance.now() - solveStartedAt;
   if (joinResult.timedOut) {

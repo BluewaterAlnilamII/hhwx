@@ -677,6 +677,21 @@ function buildBoundedFrontierGroups(
       anchorFrontierCheapUpperUnprocessedPairUpper: (
         entry.exactCandidateJoinLastAnchorFrontierCheapUpperUnprocessedPairUpper ?? null
       ),
+      anchorFrontierCheapUpperSuffixCoverCandidateCount: (
+        entry.exactCandidateJoinLastAnchorFrontierCheapUpperSuffixCoverCandidateCount ?? null
+      ),
+      anchorFrontierCheapUpperSuffixCoverDistinctCardCount: (
+        entry.exactCandidateJoinLastAnchorFrontierCheapUpperSuffixCoverDistinctCardCount ?? null
+      ),
+      anchorFrontierCheapUpperSuffixCoverUpperBound: (
+        entry.exactCandidateJoinLastAnchorFrontierCheapUpperSuffixCoverUpperBound ?? null
+      ),
+      anchorFrontierCheapUpperSuffixCoverElapsedMs: (
+        entry.exactCandidateJoinLastAnchorFrontierCheapUpperSuffixCoverElapsedMs ?? null
+      ),
+      anchorFrontierCheapUpperSuffixCoverAbortReason: (
+        entry.exactCandidateJoinLastAnchorFrontierCheapUpperSuffixCoverAbortReason ?? null
+      ),
       anchorFrontierCheapUpperUnseenRefineAttemptCount: (
         entry.exactCandidateJoinLastAnchorFrontierCheapUpperUnseenRefineAttemptCount ?? null
       ),
@@ -845,6 +860,36 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
     parsedExactCandidateJoinScoreCacheClearInterval,
   )
     ? Math.max(1, parsedExactCandidateJoinScoreCacheClearInterval)
+    : null;
+  const parsedExactCandidateJoinExtendedThirdShortlistSize = (
+    optimization.exactCandidateJoinExtendedThirdShortlistSize !== undefined
+      ? Math.trunc(optimization.exactCandidateJoinExtendedThirdShortlistSize)
+      : Number.NaN
+  );
+  const exactCandidateJoinExtendedThirdShortlistSize = Number.isFinite(
+    parsedExactCandidateJoinExtendedThirdShortlistSize,
+  )
+    ? Math.max(1, parsedExactCandidateJoinExtendedThirdShortlistSize)
+    : null;
+  const parsedExactCandidateJoinExtendedThirdShortlistCacheEntryLimit = (
+    optimization.exactCandidateJoinExtendedThirdShortlistCacheEntryLimit !== undefined
+      ? Math.trunc(optimization.exactCandidateJoinExtendedThirdShortlistCacheEntryLimit)
+      : Number.NaN
+  );
+  const exactCandidateJoinExtendedThirdShortlistCacheEntryLimit = Number.isFinite(
+    parsedExactCandidateJoinExtendedThirdShortlistCacheEntryLimit,
+  )
+    ? Math.max(0, parsedExactCandidateJoinExtendedThirdShortlistCacheEntryLimit)
+    : null;
+  const parsedExactCandidateJoinExtendedThirdShortlistQueryLimit = (
+    optimization.exactCandidateJoinExtendedThirdShortlistQueryLimit !== undefined
+      ? Math.trunc(optimization.exactCandidateJoinExtendedThirdShortlistQueryLimit)
+      : Number.NaN
+  );
+  const exactCandidateJoinExtendedThirdShortlistQueryLimit = Number.isFinite(
+    parsedExactCandidateJoinExtendedThirdShortlistQueryLimit,
+  )
+    ? Math.max(0, parsedExactCandidateJoinExtendedThirdShortlistQueryLimit)
     : null;
   const debugExactCandidateJoinMemoryAttribution = (
     optimization.debugExactCandidateJoinMemoryAttribution === true
@@ -1041,6 +1086,9 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
   )
     ? Math.max(1, parsedEventRootFrontierProbeAnchorCheapUpperTargetedPairBnbSlotSolveNodeLimit)
     : null;
+  const eventRootFrontierProbeAnchorCheapUpperSuffixCover = (
+    optimization.eventRootFrontierProbeAnchorCheapUpperSuffixCover === true
+  );
   const exactJoinWideAnchorFrontierContext = enableExactJoinWideAnchorFrontierProbe
     ? {
       anchorFrontierProofMaxFrontierGap: eventRootFrontierProbeAnchorProofMaxFrontierGap,
@@ -1070,6 +1118,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
       anchorFrontierCheapUpperTargetedPairBnbSlotSolveNodeLimit: (
         eventRootFrontierProbeAnchorCheapUpperTargetedPairBnbSlotSolveNodeLimit
       ),
+      anchorFrontierCheapUpperSuffixCover: eventRootFrontierProbeAnchorCheapUpperSuffixCover,
     }
     : {};
   const parsedAnchorCandidateLimit = optimization.anchorCandidateLimit !== undefined
@@ -3213,6 +3262,21 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
           exactCandidateJoinLastAnchorFrontierCheapUpperUnprocessedPairUpper: (
             profiling.exactCandidateJoinLastAnchorFrontierCheapUpperUnprocessedPairUpper
           ),
+          exactCandidateJoinLastAnchorFrontierCheapUpperSuffixCoverCandidateCount: (
+            profiling.exactCandidateJoinLastAnchorFrontierCheapUpperSuffixCoverCandidateCount
+          ),
+          exactCandidateJoinLastAnchorFrontierCheapUpperSuffixCoverDistinctCardCount: (
+            profiling.exactCandidateJoinLastAnchorFrontierCheapUpperSuffixCoverDistinctCardCount
+          ),
+          exactCandidateJoinLastAnchorFrontierCheapUpperSuffixCoverUpperBound: (
+            profiling.exactCandidateJoinLastAnchorFrontierCheapUpperSuffixCoverUpperBound
+          ),
+          exactCandidateJoinLastAnchorFrontierCheapUpperSuffixCoverElapsedMs: (
+            profiling.exactCandidateJoinLastAnchorFrontierCheapUpperSuffixCoverElapsedMs
+          ),
+          exactCandidateJoinLastAnchorFrontierCheapUpperSuffixCoverAbortReason: (
+            profiling.exactCandidateJoinLastAnchorFrontierCheapUpperSuffixCoverAbortReason
+          ),
           exactCandidateJoinLastAnchorFrontierCheapUpperMaxGeneratedPairOverlaps: (
             profiling.exactCandidateJoinLastAnchorFrontierCheapUpperMaxGeneratedPairOverlaps
           ),
@@ -3848,6 +3912,13 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
         lowMemoryInitialCandidateSyncScoreCacheClearInterval
       );
       traceEntry.exactCandidateJoinScoreCacheClearInterval = exactCandidateJoinScoreCacheClearInterval;
+      traceEntry.exactCandidateJoinExtendedThirdShortlistSize = exactCandidateJoinExtendedThirdShortlistSize;
+      traceEntry.exactCandidateJoinExtendedThirdShortlistCacheEntryLimit = (
+        exactCandidateJoinExtendedThirdShortlistCacheEntryLimit
+      );
+      traceEntry.exactCandidateJoinExtendedThirdShortlistQueryLimit = (
+        exactCandidateJoinExtendedThirdShortlistQueryLimit
+      );
       traceEntry.lowMemoryInitialCandidateSyncDirectCandidate = lowMemoryInitialCandidateSyncDirectCandidate;
       traceEntry.lowMemoryInitialCandidateSyncObservedMaxSlotCardCount = (
         maxLowMemoryInitialCandidateSyncSlotCardCount
@@ -4503,6 +4574,9 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
           exactJoinPrefixSeedMemorySoftLimitMiB: stats.memorySoftLimitMiB,
           exactCandidateJoinSolveOrderVariant,
           exactCandidateJoinScoreCacheClearInterval,
+          exactCandidateJoinExtendedThirdShortlistSize,
+          exactCandidateJoinExtendedThirdShortlistCacheEntryLimit,
+          exactCandidateJoinExtendedThirdShortlistQueryLimit,
           enableLowMemoryInitialCandidateSync: shouldUseLowMemoryInitialCandidateSync,
           lowMemoryInitialCandidateSyncLocalAbortOnly,
           lowMemoryInitialCandidateSyncLightUpper,
@@ -4784,6 +4858,9 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
         traceEntry.eventRootFrontierProbeAnchorCheapUpperTargetedPairBnbSlotSolveNodeLimit = (
           eventRootFrontierProbeAnchorCheapUpperTargetedPairBnbSlotSolveNodeLimit
         );
+        traceEntry.eventRootFrontierProbeAnchorCheapUpperSuffixCover = (
+          eventRootFrontierProbeAnchorCheapUpperSuffixCover
+        );
       }
       const enableEventRootFrontierProbeStagedExtension = (
         eventRootFrontierProbeCandidateSoftLimit
@@ -4819,6 +4896,9 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
           exactJoinPrefixSeedGuardOnly: true,
           exactCandidateJoinSolveOrderVariant,
           exactCandidateJoinScoreCacheClearInterval,
+          exactCandidateJoinExtendedThirdShortlistSize,
+          exactCandidateJoinExtendedThirdShortlistCacheEntryLimit,
+          exactCandidateJoinExtendedThirdShortlistQueryLimit,
           enableLowMemoryInitialCandidateSync: shouldUseLowMemoryInitialCandidateSync,
           lowMemoryInitialCandidateSyncLocalAbortOnly,
           lowMemoryInitialCandidateSyncLightUpper,
@@ -4867,6 +4947,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
           anchorFrontierCheapUpperTargetedPairBnbSlotSolveNodeLimit: (
             eventRootFrontierProbeAnchorCheapUpperTargetedPairBnbSlotSolveNodeLimit
           ),
+          anchorFrontierCheapUpperSuffixCover: eventRootFrontierProbeAnchorCheapUpperSuffixCover,
         },
         observeEvaluatedMedleyResult,
       );
@@ -5350,6 +5431,9 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
           exactJoinPrefixSeedMemorySoftLimitMiB: stats.memorySoftLimitMiB,
           exactCandidateJoinSolveOrderVariant,
           exactCandidateJoinScoreCacheClearInterval,
+          exactCandidateJoinExtendedThirdShortlistSize,
+          exactCandidateJoinExtendedThirdShortlistCacheEntryLimit,
+          exactCandidateJoinExtendedThirdShortlistQueryLimit,
           enableLowMemoryInitialCandidateSync: shouldUseLowMemoryInitialCandidateSync,
           lowMemoryInitialCandidateSyncLocalAbortOnly,
           lowMemoryInitialCandidateSyncLightUpper,

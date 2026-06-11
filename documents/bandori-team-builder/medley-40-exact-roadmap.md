@@ -3367,3 +3367,75 @@ P07 failed follow-ups after P03 fix:
   - Keep targeted pair proof, targeted BNB, wider K, larger high-pair guards,
     and scan fallback as diagnostic-only unless new ledger evidence shows a
     different case where they close the dominant residual.
+
+2026-06-11 09:35 CST P06 suffix cover and solve-shortlist diagnostics:
+
+- Added opt-in suffix-cover diagnostics for the cheap upper:
+  `eventRootFrontierProbeAnchorCheapUpperSuffixCover` plus profiling fields for
+  suffix candidate count, distinct banned-card count, suffix upper, elapsed
+  time, and abort reason. Default is off.
+- Suffix-cover diagnostic:
+  - Raw:
+    `temp/bandori-team-builder/real-profile-medley-scope-matrix-2026-06-11T00-48-00-762Z.json`
+  - Result: bounded, `117964ms`, score `9488172`, upper `9773821`,
+    gap `285649`, peak `4171 MiB`.
+  - The suffix cover scanned `185681` generated suffix anchors and only needed
+    `232` distinct single-card pair-upper lookups in `676ms`, but its upper was
+    still `9773821`.
+  - Decision: single-card suffix exclusion is cheap and useful as a diagnostic,
+    but too loose to close P06. It should remain opt-in only.
+- 800k event-root prefix without solve-shortlist changes:
+  - Raw:
+    `temp/bandori-team-builder/real-profile-medley-scope-matrix-2026-06-11T00-51-28-926Z.json`
+  - Result: bounded timeout, `316900ms`, score `9488172`, upper `10082483`,
+    gap `594311`, peak `3223 MiB`.
+  - Dominant open config `PastelPalettes/cool/performance`: counts
+    `[679552,193143,50858]`, pair upper `6054ms`, fill `73613ms`, solve
+    `199639ms`.
+  - Solve counters: `pairCount=3706880`, `thirdQuery=416450`,
+    `extendedThirdShortlistQuery=200000`, `extendedThirdShortlistFallback=416450`,
+    `thirdFallbackWordScan=561304783`.
+  - Decision: wider event-root prefix is not acceptable while solve fallback is
+    this expensive.
+- Rejected pair-frontier solve-order diagnostic:
+  - Raw:
+    `temp/bandori-team-builder/real-profile-medley-scope-matrix-2026-06-11T01-00-23-409Z.json`
+  - Result: bounded timeout, `316972ms`, same score/upper/gap, peak `3224 MiB`.
+  - It reduced some fallback attempts but raised `pairCount` to `148430848`; the
+    third fallback remained dominant. The experimental solve branch was removed
+    before commit.
+- Added opt-in solve-shortlist parameters:
+  `exactCandidateJoinExtendedThirdShortlistSize`,
+  `exactCandidateJoinExtendedThirdShortlistCacheEntryLimit`, and
+  `exactCandidateJoinExtendedThirdShortlistQueryLimit`. Defaults preserve the
+  existing constants (`2048`, `8192`, `200000`), and the effective values are
+  recorded in profiling/trace.
+- Extended-shortlist diagnostic A (`8192/8192/200000`):
+  - Raw:
+    `temp/bandori-team-builder/real-profile-medley-scope-matrix-2026-06-11T01-17-58-154Z.json`
+  - Result: bounded timeout, `316571ms`, score `9488172`, upper `10082483`,
+    gap `594311`, peak `3344 MiB`.
+  - Fallback word scan improved from `561304783` to `394492843`, but solve
+    still spent `198758ms` and timed out.
+- Extended-shortlist diagnostic B (`8192/32768/1000000`):
+  - Raw:
+    `temp/bandori-team-builder/real-profile-medley-scope-matrix-2026-06-11T01-26-02-637Z.json`
+  - Result: bounded timeout, `318884ms`, peak `3526 MiB`.
+  - Fallback word scan collapsed to `14815644`, but solve still spent
+    `200945ms`; the cost moved to building and caching many 8192-entry
+    shortlists.
+- Extended-shortlist diagnostic C (`4096/32768/1000000`):
+  - Raw:
+    `temp/bandori-team-builder/real-profile-medley-scope-matrix-2026-06-11T01-33-07-837Z.json`
+  - Result: bounded timeout, `316907ms`, peak `3333 MiB`.
+  - Fallback word scan was `76852942`, but solve remained `199124ms`.
+- Decision:
+  - Do not continue by larger shortlist size/cache/query defaults. The
+    parameter sweep confirms the bottleneck can be moved from bitset fallback
+    scanning into shortlist construction without closing proof.
+  - Keep the new parameters as research-only instrumentation for future A/B,
+    not as a default quality path.
+  - Next viable route should be a proof-oriented generated-join certificate for
+    the unprocessed anchor suffix, or a much more selective shortlist builder
+    that only expands for second candidates proven to dominate the remaining
+    score frontier.
