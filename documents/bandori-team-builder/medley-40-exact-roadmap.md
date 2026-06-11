@@ -3471,3 +3471,41 @@ P07 failed follow-ups after P03 fix:
     amortize the proof, for example by grouping suffix anchors by a smaller
     shared risk signature, or by proving a global generated-pair threshold once
     and reusing it across the suffix.
+
+2026-06-11 10:15 CST P06 generated-pair suffix join classification:
+
+- Added opt-in generated-pair suffix join diagnostic:
+  `eventRootFrontierProbeAnchorCheapUpperSuffixGeneratedPairJoin`. Default is
+  off and the result is diagnostic-only; it does not change the observed proof
+  upper yet.
+- The diagnostic builds high left/right generated pair records once above the
+  threshold needed to beat the incumbent, then queries the best compatible
+  suffix anchor for each record. This proves the generated-pair part of the
+  suffix frontier without per-anchor pair proof.
+- Raw:
+  `temp/bandori-team-builder/real-profile-medley-scope-matrix-2026-06-11T01-56-48-111Z.json`
+- Result: bounded, `201103ms`, score `9488172`, upper `9773821`,
+  gap `285649`, peak `3913 MiB`, no global timeout.
+- Generated-pair suffix join completed:
+  - suffix anchors: `185681`
+  - high generated pair records: `242120`
+  - elapsed: `71289ms`
+  - generated-pair suffix upper: `9486961`
+  - incumbent: `9488172`
+- Interpretation:
+  - The generated-pair component is already below incumbent by `1211`, so it is
+    not the remaining P06 blocker.
+  - The cheap upper remains `9773821` because the active source is still
+    `unprocessed-anchor` with pair unseen upper `6968613`; the processed max is
+    also `right-unseen`.
+  - `exactCandidateJoinPairUnseenUpperByExcludedSlot[0]` equals
+    `6968613`, confirming the remaining proof gap is the suffix
+    anchor + generated-side + unseen-slot upper, not generated pair conflicts.
+- Next accepted direction:
+  - Build an amortized suffix unseen proof:
+    `suffix anchor + generated left -> right unseen upper` and the symmetric
+    side, with shared risk grouping or threshold ordering so slot-upper calls
+    are not made per suffix anchor.
+  - Do not spend more work on generated-pair join itself until unseen proof can
+    consume its result; the generated-pair join is useful evidence but not yet a
+    standalone exactness improvement.

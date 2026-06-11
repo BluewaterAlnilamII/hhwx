@@ -3828,6 +3828,7 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
     targetedPairBnbSlotSolveNodeLimit?: number | null;
     suffixCover?: boolean;
     multiCardSuffixCover?: boolean;
+    suffixGeneratedPairJoin?: boolean;
   } = {},
   observeEvaluatedResult?: MedleyEvaluatedResultObserver,
 ): MedleyExactCandidateAnchorFrontierProofResult {
@@ -3911,6 +3912,7 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
     : null;
   const shouldUseSuffixCover = options.suffixCover === true;
   const shouldUseMultiCardSuffixCover = shouldUseSuffixCover && options.multiCardSuffixCover === true;
+  const shouldUseSuffixGeneratedPairJoin = options.suffixGeneratedPairJoin === true;
   const leftPeekUpperBound = generators[leftSlotIndex].peekUpperBound();
   const rightPeekUpperBound = generators[rightSlotIndex].peekUpperBound();
   const anchorPeekUpperBound = generators[anchorSlotIndex].peekUpperBound();
@@ -4017,6 +4019,11 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
   profiling.exactCandidateJoinLastAnchorFrontierCheapUpperSuffixCoverUpperBound = null;
   profiling.exactCandidateJoinLastAnchorFrontierCheapUpperSuffixCoverElapsedMs = null;
   profiling.exactCandidateJoinLastAnchorFrontierCheapUpperSuffixCoverAbortReason = null;
+  profiling.exactCandidateJoinLastAnchorFrontierCheapUpperSuffixGeneratedPairJoinAnchorCount = null;
+  profiling.exactCandidateJoinLastAnchorFrontierCheapUpperSuffixGeneratedPairJoinPairRecordCount = null;
+  profiling.exactCandidateJoinLastAnchorFrontierCheapUpperSuffixGeneratedPairJoinUpperBound = null;
+  profiling.exactCandidateJoinLastAnchorFrontierCheapUpperSuffixGeneratedPairJoinElapsedMs = null;
+  profiling.exactCandidateJoinLastAnchorFrontierCheapUpperSuffixGeneratedPairJoinAbortReason = null;
   profiling.exactCandidateJoinLastAnchorFrontierCheapUpperMaxGeneratedPairOverlaps = null;
   profiling.exactCandidateJoinLastAnchorFrontierCheapUpperMaxGeneratedPairScoreOnly = null;
   profiling.exactCandidateJoinLastAnchorFrontierCheapUpperMaxGeneratedPairFullScore = null;
@@ -4243,6 +4250,129 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
       distinctCardCount: pairUpperBySingleBannedCardId.size,
       distinctCardSetCount: pairUpperByBannedCardSetKey.size,
       elapsedMs: performance.now() - suffixCoverStartedAt,
+      abortReason: null,
+    };
+  };
+  const estimateGeneratedAnchorSuffixGeneratedPairJoinUpper = (
+    startAnchorIndex: number | null,
+  ): {
+    upperBound: number | null;
+    anchorCount: number;
+    pairRecordCount: number;
+    elapsedMs: number;
+    abortReason: string | null;
+  } => {
+    if (
+      !shouldUseSuffixGeneratedPairJoin
+      || startAnchorIndex === null
+      || startAnchorIndex >= anchorCandidates.length
+    ) {
+      return {
+        upperBound: null,
+        anchorCount: 0,
+        pairRecordCount: 0,
+        elapsedMs: 0,
+        abortReason: null,
+      };
+    }
+    const joinStartedAt = performance.now();
+    const suffixAnchorCandidates = anchorCandidates.slice(startAnchorIndex);
+    if (suffixAnchorCandidates.length === 0) {
+      return {
+        upperBound: null,
+        anchorCount: 0,
+        pairRecordCount: 0,
+        elapsedMs: performance.now() - joinStartedAt,
+        abortReason: null,
+      };
+    }
+    const maxAnchorScore = suffixAnchorCandidates[0]?.result.score ?? Number.NEGATIVE_INFINITY;
+    if (!Number.isFinite(maxAnchorScore)) {
+      return {
+        upperBound: null,
+        anchorCount: suffixAnchorCandidates.length,
+        pairRecordCount: 0,
+        elapsedMs: performance.now() - joinStartedAt,
+        abortReason: null,
+      };
+    }
+    const pairRecordThreshold = incumbentScore - maxAnchorScore;
+    const anchorAvailabilityQuery = buildMedleyExactCandidateSlotAvailabilityQuery(suffixAnchorCandidates);
+    const bestRightScore = rightCandidates[0]?.result.score ?? Number.NEGATIVE_INFINITY;
+    const frontierHeap: MedleyExactCandidatePairFrontierHeapNode[] = [];
+    for (let leftIndex = 0; leftIndex < leftCandidates.length; leftIndex += 1) {
+      const score = leftCandidates[leftIndex].result.score + bestRightScore;
+      if (score <= pairRecordThreshold) {
+        break;
+      }
+      pushMedleyExactCandidatePairFrontierHeapNode(frontierHeap, {
+        score,
+        leftIndex,
+        rightIndex: 0,
+      });
+    }
+    let upperBound = Number.NEGATIVE_INFINITY;
+    let pairRecordCount = 0;
+    const pairCardIds: number[] = [];
+    while (frontierHeap.length > 0) {
+      if (performance.now() >= localDeadlineAt) {
+        frontierHeap.length = 0;
+        return {
+          upperBound: null,
+          anchorCount: suffixAnchorCandidates.length,
+          pairRecordCount,
+          elapsedMs: performance.now() - joinStartedAt,
+          abortReason: "timebox",
+        };
+      }
+      const node = popMedleyExactCandidatePairFrontierHeapNode(frontierHeap);
+      if (!node || node.score <= pairRecordThreshold) {
+        break;
+      }
+      const leftCandidate = leftCandidates[node.leftIndex];
+      const rightCandidate = rightCandidates[node.rightIndex];
+      if (leftCandidate && rightCandidate) {
+        if (!medleyExactCandidatesOverlap(leftCandidate, rightCandidate)) {
+          pairRecordCount += 1;
+          pairCardIds.length = 0;
+          for (const cardId of leftCandidate.cardIds) {
+            pairCardIds.push(cardId);
+          }
+          for (const cardId of rightCandidate.cardIds) {
+            pairCardIds.push(cardId);
+          }
+          const anchorCandidate = findBestAvailableMedleyExactCandidateExcludingCardIds(
+            anchorAvailabilityQuery,
+            pairCardIds,
+          );
+          if (anchorCandidate) {
+            upperBound = Math.max(upperBound, node.score + anchorCandidate.result.score);
+          }
+        }
+        const nextRightIndex = node.rightIndex + 1;
+        const nextRightCandidate = rightCandidates[nextRightIndex];
+        if (nextRightCandidate) {
+          const nextScore = leftCandidate.result.score + nextRightCandidate.result.score;
+          if (nextScore > pairRecordThreshold) {
+            pushMedleyExactCandidatePairFrontierHeapNode(frontierHeap, {
+              score: nextScore,
+              leftIndex: node.leftIndex,
+              rightIndex: nextRightIndex,
+            });
+          }
+        }
+      }
+    }
+    frontierHeap.length = 0;
+    const fallbackUpper = pairRecordThreshold + maxAnchorScore;
+    return {
+      upperBound: Math.max(
+        Number.isFinite(upperBound) ? upperBound : Number.NEGATIVE_INFINITY,
+        fallbackUpper,
+      ),
+      anchorCount: suffixAnchorCandidates.length,
+      pairRecordCount,
+      elapsedMs: performance.now() - joinStartedAt,
       abortReason: null,
     };
   };
@@ -4926,6 +5056,8 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
     const suffixCover = estimateGeneratedAnchorSuffixCoverUpper(nextAnchorIndex);
     const suffixCoverTimedOut = suffixCover.abortReason !== null;
     const suffixCoverUpperBound = suffixCover.abortReason === null ? suffixCover.upperBound : null;
+    const suffixGeneratedPairJoin = estimateGeneratedAnchorSuffixGeneratedPairJoinUpper(nextAnchorIndex);
+    const suffixGeneratedPairJoinTimedOut = suffixGeneratedPairJoin.abortReason !== null;
     const elapsedMs = performance.now() - startedAt;
     const unprocessedUpper = getUnprocessedUpperBound(nextAnchorScore, suffixCoverUpperBound);
     const observedUpperBound = getResidualUpperBound(nextAnchorScore, suffixCoverUpperBound);
@@ -4933,7 +5065,7 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
       incumbentScore,
       targetedPairProofResult?.score ?? Number.NEGATIVE_INFINITY,
     );
-    if (localTimedOut || refineTimedOut || suffixCoverTimedOut) {
+    if (localTimedOut || refineTimedOut || suffixCoverTimedOut || suffixGeneratedPairJoinTimedOut) {
       profiling.exactCandidateJoinAnchorFrontierCheapUpperTimeboxCount += 1;
     }
     if (
@@ -4989,6 +5121,21 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
       suffixCover.elapsedMs,
     );
     profiling.exactCandidateJoinLastAnchorFrontierCheapUpperSuffixCoverAbortReason = suffixCover.abortReason;
+    profiling.exactCandidateJoinLastAnchorFrontierCheapUpperSuffixGeneratedPairJoinAnchorCount = (
+      suffixGeneratedPairJoin.anchorCount
+    );
+    profiling.exactCandidateJoinLastAnchorFrontierCheapUpperSuffixGeneratedPairJoinPairRecordCount = (
+      suffixGeneratedPairJoin.pairRecordCount
+    );
+    profiling.exactCandidateJoinLastAnchorFrontierCheapUpperSuffixGeneratedPairJoinUpperBound = (
+      suffixGeneratedPairJoin.upperBound !== null ? Math.ceil(suffixGeneratedPairJoin.upperBound) : null
+    );
+    profiling.exactCandidateJoinLastAnchorFrontierCheapUpperSuffixGeneratedPairJoinElapsedMs = Math.round(
+      suffixGeneratedPairJoin.elapsedMs,
+    );
+    profiling.exactCandidateJoinLastAnchorFrontierCheapUpperSuffixGeneratedPairJoinAbortReason = (
+      suffixGeneratedPairJoin.abortReason
+    );
     if (processedUpperMaxLeftGeneratedCandidate && processedUpperMaxRightGeneratedCandidate) {
       const generatedPairOverlaps = medleyExactCandidatesOverlap(
         processedUpperMaxLeftGeneratedCandidate,
@@ -5031,7 +5178,7 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
     }
     return {
       proved: observedUpperBound !== null && observedUpperBound <= proofThreshold,
-      localTimedOut: localTimedOut || refineTimedOut || suffixCoverTimedOut,
+      localTimedOut: localTimedOut || refineTimedOut || suffixCoverTimedOut || suffixGeneratedPairJoinTimedOut,
       result: targetedPairProofResult,
       observedUpperBound,
       processedAnchorCount,
@@ -5320,6 +5467,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     anchorFrontierCheapUpperTargetedPairBnbSlotSolveNodeLimit?: number | null;
     anchorFrontierCheapUpperSuffixCover?: boolean;
     anchorFrontierCheapUpperMultiCardSuffixCover?: boolean;
+    anchorFrontierCheapUpperSuffixGeneratedPairJoin?: boolean;
   } = {},
   observeEvaluatedResult?: MedleyEvaluatedResultObserver,
 ): MedleyExactCandidateJoinResult {
@@ -5811,6 +5959,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
           targetedPairBnbSlotSolveNodeLimit: context.anchorFrontierCheapUpperTargetedPairBnbSlotSolveNodeLimit,
           suffixCover: context.anchorFrontierCheapUpperSuffixCover,
           multiCardSuffixCover: context.anchorFrontierCheapUpperMultiCardSuffixCover,
+          suffixGeneratedPairJoin: context.anchorFrontierCheapUpperSuffixGeneratedPairJoin,
         },
         observeEvaluatedResult,
       );
