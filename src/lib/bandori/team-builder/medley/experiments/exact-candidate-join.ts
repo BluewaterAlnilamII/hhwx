@@ -4975,6 +4975,25 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
       if (leftCandidate && rightCandidate) {
         if (!medleyExactCandidatesOverlap(leftCandidate, rightCandidate)) {
           pairRecordCount += 1;
+          const leftResultCandidate = hydrateMedleyExactCandidateForResult(
+            slots[leftSlotIndex],
+            leftCandidate,
+            server,
+            perfectRate,
+            stats,
+            profiling,
+          );
+          const rightResultCandidate = hydrateMedleyExactCandidateForResult(
+            slots[rightSlotIndex],
+            rightCandidate,
+            server,
+            perfectRate,
+            stats,
+            profiling,
+          );
+          const pairUpper = leftResultCandidate && rightResultCandidate
+            ? leftResultCandidate.result.score + rightResultCandidate.result.score
+            : node.score;
           pairCardIds.length = 0;
           for (const cardId of leftCandidate.cardIds) {
             pairCardIds.push(cardId);
@@ -4987,7 +5006,7 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
             pairCardIds,
           );
           if (anchorCandidate) {
-            const scoreUpper = node.score + anchorCandidate.result.score;
+            const scoreUpper = pairUpper + anchorCandidate.result.score;
             upperBound = Math.max(upperBound, scoreUpper);
             if (scoreUpper > Math.max(incumbentScore, bestResult?.score ?? Number.NEGATIVE_INFINITY)) {
               const result = buildResultFromAnchorAndPairCandidates(
