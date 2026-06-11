@@ -199,6 +199,7 @@ function getMedleyTraceRootUpperBound(entry: Record<string, unknown>): number | 
 
 function getMedleyTraceEffectiveUpperBound(entry: Record<string, unknown>): number | null {
   return asFiniteNumber(entry.rememberedUnclosedUpperBound)
+    ?? asFiniteNumber(entry.dominatedRootSkipUpperBound)
     ?? asFiniteNumber(entry.activeTightUpperBound)
     ?? asFiniteNumber(entry.activeObservedUpperBound)
     ?? getMedleyTraceRootUpperBound(entry);
@@ -651,6 +652,7 @@ function buildBoundedFrontierGroups(
     maxRootUpperBound: number | null;
     maxActiveTightUpperBound: number | null;
     maxRememberedUnclosedUpperBound: number | null;
+    maxDominatedRootSkipUpperBound: number | null;
     maxGap: number | null;
     maxElapsedMs: number | null;
     maxPeakUsedHeapMiB: number | null;
@@ -684,6 +686,7 @@ function buildBoundedFrontierGroups(
         maxRootUpperBound: null,
         maxActiveTightUpperBound: null,
         maxRememberedUnclosedUpperBound: null,
+        maxDominatedRootSkipUpperBound: null,
         maxGap: null,
         maxElapsedMs: null,
         maxPeakUsedHeapMiB: null,
@@ -696,8 +699,11 @@ function buildBoundedFrontierGroups(
       ?? asFiniteNumber(entry.rootScoreUpperBound);
     const activeTightUpperBound = asFiniteNumber(entry.activeTightUpperBound);
     const rememberedUnclosedUpperBound = asFiniteNumber(entry.rememberedUnclosedUpperBound);
+    const dominatedRootSkipUpperBound = asFiniteNumber(entry.dominatedRootSkipUpperBound);
+    const dominatedRootSkipTightUpperBound = asFiniteNumber(entry.dominatedRootSkipTightUpperBound);
     const bestScore = asFiniteNumber(entry.bestScore) ?? asFiniteNumber(entry.initialBestScore);
     const effectiveFrontierUpperBound = rememberedUnclosedUpperBound
+      ?? dominatedRootSkipUpperBound
       ?? activeTightUpperBound
       ?? rootUpperBound;
     const gap = bestScore !== null && effectiveFrontierUpperBound !== null
@@ -711,6 +717,10 @@ function buildBoundedFrontierGroups(
       group.maxRememberedUnclosedUpperBound,
       rememberedUnclosedUpperBound,
     );
+    group.maxDominatedRootSkipUpperBound = updateMax(
+      group.maxDominatedRootSkipUpperBound,
+      dominatedRootSkipUpperBound,
+    );
     group.maxGap = updateMax(group.maxGap, gap);
     group.maxElapsedMs = updateMax(group.maxElapsedMs, elapsedMs);
     group.maxPeakUsedHeapMiB = updateMax(group.maxPeakUsedHeapMiB, peakUsedHeapMiB);
@@ -721,6 +731,9 @@ function buildBoundedFrontierGroups(
       rootUpperBound,
       activeTightUpperBound,
       rememberedUnclosedUpperBound,
+      dominatedRootSkipTightUpperBound,
+      dominatedRootSkipUpperBound,
+      dominatedRootSkipUpperSource: entry.dominatedRootSkipUpperSource ?? null,
       effectiveFrontierUpperBound,
       gap,
       abortReason: entry.exactCandidateJoinAbortReason ?? null,
@@ -979,6 +992,7 @@ function buildBoundedFrontierGroups(
       maxRootUpperBound: group.maxRootUpperBound,
       maxActiveTightUpperBound: group.maxActiveTightUpperBound,
       maxRememberedUnclosedUpperBound: group.maxRememberedUnclosedUpperBound,
+      maxDominatedRootSkipUpperBound: group.maxDominatedRootSkipUpperBound,
       maxGap: group.maxGap,
       maxElapsedMs: group.maxElapsedMs,
       maxPeakUsedHeapMiB: group.maxPeakUsedHeapMiB,
