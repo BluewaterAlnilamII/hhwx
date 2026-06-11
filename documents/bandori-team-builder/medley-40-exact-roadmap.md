@@ -4858,3 +4858,60 @@ P07 failed follow-ups after P03 fix:
     proof-ledger run on this variant to identify the remaining `9650685`
     frontier, then target that frontier instead of increasing seed/probe
     timeboxes.
+
+2026-06-11 21:45 CST rejected P06 upper refinements:
+
+- Processed-unseen join rerun on the current same-coarse event-before setup:
+  - Raw:
+    `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-11T13-16-48-262Z.json`.
+  - Options: event-root probe, same-coarse event-before, pair-capacity cap,
+    suffix generated-pair join, suffix full-card unseen join, and
+    `eventRootFrontierProbeAnchorCheapUpperProcessedUnseenJoin=true`.
+  - Result: bounded, score `9488172`, global upper `9935586`, gap `447414`,
+    elapsed `245675ms`, peak `3382 MiB`, no timeout, no memory limit.
+  - Local cheap upper was `9641834` with residual gap `153662`, elapsed
+    `84241ms`, source `pair-capacity`. The processed-unseen join spent
+    `36183ms`, produced upper `9641834`, and had `0` high-risk pairs.
+  - Decision: reject for this target. It does not close the residual and costs
+    enough time that another same-coarse remembered upper dominates the global
+    result.
+- Refine-unseen rerun on the same setup:
+  - Raw:
+    `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-11T13-22-16-009Z.json`.
+  - Result: bounded, score `9488172`, global upper `9650685`, gap `162513`,
+    elapsed `283525ms`, peak `3400 MiB`, no timeout, no memory limit.
+  - Local cheap upper stayed at `9636799`, residual gap `148627`, elapsed
+    `75869ms`, source `pair-capacity`. This matches the accepted local proof
+    quality but is materially slower.
+  - Decision: reject for default or acceptance use. It is a local diagnostic
+    only and does not improve the proof frontier enough to justify the wall
+    time.
+- A local uncommitted processed-generated-pair join was tried and reverted:
+  - Raw:
+    `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-11T13-30-28-739Z.json`
+    and
+    `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-11T13-35-15-038Z.json`.
+  - Results: both bounded with score `9486961`, gap `607201`,
+    `timedOut=true`, `memoryLimited=true`, peak about `4490 MiB`, and
+    `eventRootFrontierProbeCallCount=0`. Both aborted the first exact join at
+    `candidate-fill-generator-aborted`.
+  - A same-option baseline check in that uncommitted code state also regressed:
+    `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-11T13-38-22-490Z.json`
+    returned score `9486961`, gap `607201`, `timedOut=true`,
+    `memoryLimited=true`, peak `4492 MiB`, with the same first-configuration
+    `candidate-fill-generator-aborted` abort.
+  - Decision: do not treat these raws as algorithm-improvement evidence. The
+    hook was reverted, and the only useful lesson is that adding another
+    generated-pair proof surface can perturb the first exact join into the
+    memory wall before the event-root probe even runs.
+- Updated direction:
+  - Do not continue increasing event-root probe timebox, processed-unseen
+    joins, refine-unseen joins, targeted pair BnB, or continuation after
+    unproved event-root probes.
+  - The next useful change should be lower-memory and proof-oriented: identify
+    which same-coarse remembered frontier keeps the global upper at `9650685`,
+    then tighten or split that frontier without allocating another large
+    candidate/pair surface.
+  - Any further local proof experiment must first pass a no-op confirmation
+    against the clean branch state; otherwise it is too easy to mistake
+    runner/environment perturbation for an algorithm signal.
