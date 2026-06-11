@@ -4310,6 +4310,26 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
     );
     return capacityUpper;
   };
+  const applyPairCapacityCap = (
+    pairUpper: number,
+    source: string,
+    anchorCardIds: readonly number[],
+  ): {
+    pairUpper: number;
+    source: string;
+  } => {
+    const cappedPairUpper = capPairUpper(pairUpper, anchorCardIds);
+    if (cappedPairUpper < pairUpper) {
+      return {
+        pairUpper: cappedPairUpper,
+        source: "pair-capacity",
+      };
+    }
+    return {
+      pairUpper,
+      source,
+    };
+  };
   const getLocalCandidateKey = (candidate: MedleyTeamCandidate): string => (
     candidate.cardInstanceKeys?.length
       ? candidate.cardInstanceKeys.join(",")
@@ -4455,17 +4475,17 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
     const leftUnseenUpper = combineScores(finiteScore(leftPeekUpperBound), rightBestPossible);
     const rightUnseenUpper = combineScores(finiteScore(rightPeekUpperBound), leftBestPossible);
     const rawUpperBound = Math.max(generatedPairUpper, leftUnseenUpper, rightUnseenUpper);
-    const upperBound = capPairUpper(rawUpperBound, anchorCandidate.cardIds);
-    const source = upperBound === generatedPairUpper
+    const rawSource = rawUpperBound === generatedPairUpper
       ? "generated-pair"
-      : upperBound === leftUnseenUpper
+      : rawUpperBound === leftUnseenUpper
         ? "left-unseen"
-        : upperBound === rightUnseenUpper
+        : rawUpperBound === rightUnseenUpper
           ? "right-unseen"
           : "pair-capacity";
+    const capped = applyPairCapacityCap(rawUpperBound, rawSource, anchorCandidate.cardIds);
     return {
-      upperBound,
-      source,
+      upperBound: capped.pairUpper,
+      source: capped.source,
       generatedPairUpper,
       leftUnseenUpper,
       rightUnseenUpper,
@@ -4514,7 +4534,8 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
       combineScores(leftLimitedPeekUpperBound, rightBestPossible),
       combineScores(rightLimitedPeekUpperBound, leftBestPossible),
     );
-    const normalizedUpperBound = Number.isFinite(upperBound) ? upperBound : Number.NEGATIVE_INFINITY;
+    const cappedUpperBound = capPairUpper(upperBound, bannedCardIds);
+    const normalizedUpperBound = Number.isFinite(cappedUpperBound) ? cappedUpperBound : Number.NEGATIVE_INFINITY;
     pairUpperBySingleBannedCardId.set(cardId, normalizedUpperBound);
     return normalizedUpperBound;
   };
@@ -4569,7 +4590,8 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
       combineScores(leftLimitedPeekUpperBound, rightBestPossible),
       combineScores(rightLimitedPeekUpperBound, leftBestPossible),
     );
-    const normalizedUpperBound = Number.isFinite(upperBound) ? upperBound : Number.NEGATIVE_INFINITY;
+    const cappedUpperBound = capPairUpper(upperBound, anchorCandidate.cardIds);
+    const normalizedUpperBound = Number.isFinite(cappedUpperBound) ? cappedUpperBound : Number.NEGATIVE_INFINITY;
     pairUpperByBannedCardSetKey.set(key, normalizedUpperBound);
     return normalizedUpperBound;
   };
@@ -5212,13 +5234,15 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
     );
     if (!shouldRefineUnseenUpper || (!shouldRefineLeftUnseen && !shouldRefineRightUnseen)) {
       const pairUpper = Math.max(generatedPairUpper, leftUnseenUpper, rightUnseenUpper);
+      const rawSource = pairUpper === generatedPairUpper
+        ? "generated-pair"
+        : pairUpper === leftUnseenUpper
+          ? "left-unseen"
+          : "right-unseen";
+      const capped = applyPairCapacityCap(pairUpper, rawSource, entry.anchorCandidate.cardIds);
       return {
-        pairUpper,
-        source: pairUpper === generatedPairUpper
-          ? "generated-pair"
-          : pairUpper === leftUnseenUpper
-            ? "left-unseen"
-            : "right-unseen",
+        pairUpper: capped.pairUpper,
+        source: capped.source,
         generatedPairUpper,
         leftUnseenUpper,
         rightUnseenUpper,
@@ -5280,13 +5304,15 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
       unseenRefineImprovementCount += 1;
     }
     const pairUpper = Math.max(generatedPairUpper, refinedLeftUnseenUpper, refinedRightUnseenUpper);
+    const rawSource = pairUpper === generatedPairUpper
+      ? "generated-pair"
+      : pairUpper === refinedLeftUnseenUpper
+        ? "left-unseen"
+        : "right-unseen";
+    const capped = applyPairCapacityCap(pairUpper, rawSource, entry.anchorCandidate.cardIds);
     return {
-      pairUpper,
-      source: pairUpper === generatedPairUpper
-        ? "generated-pair"
-        : pairUpper === refinedLeftUnseenUpper
-          ? "left-unseen"
-          : "right-unseen",
+      pairUpper: capped.pairUpper,
+      source: capped.source,
       generatedPairUpper,
       leftUnseenUpper: refinedLeftUnseenUpper,
       rightUnseenUpper: refinedRightUnseenUpper,
@@ -5851,7 +5877,8 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
       let refined = refinedAnchorPairUpperByCandidate.get(entry.anchorCandidate);
       const targetPairUpper = incumbentScore - entry.anchorScore;
       const canRefineGeneratedPair = (
-        entry.source === "generated-pair"
+        (entry.source === "generated-pair" || entry.source === "pair-capacity")
+        && (!Number.isFinite(targetPairUpper) || entry.generatedPairUpper > targetPairUpper)
         && newSplitRefineCount < refineTopAnchorCount
       );
       const canRefineUnseenPair = (
@@ -5904,7 +5931,7 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
         }
         let generatedPairUpper = entry.generatedPairUpper;
         let generatedPairSource = "generated-pair";
-        if (entry.source === "generated-pair") {
+        if (canRefineGeneratedPair) {
           const splitUpper = estimateGeneratedMedleyExactCandidatePairConflictSplitUpper(
             leftAvailabilityQuery,
             rightAvailabilityQuery,
@@ -5938,7 +5965,7 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
             }
             return true;
           }
-          generatedPairUpper = splitUpper.upperBound;
+          generatedPairUpper = Math.min(generatedPairUpper, splitUpper.upperBound);
           generatedPairSource = "generated-pair-split";
           newSplitRefineCount += 1;
         }
@@ -5952,13 +5979,15 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
           )
           : (() => {
             const pairUpper = Math.max(generatedPairUpper, entry.leftUnseenUpper, entry.rightUnseenUpper);
+            const rawSource = pairUpper === generatedPairUpper
+              ? "generated-pair"
+              : pairUpper === entry.leftUnseenUpper
+                ? "left-unseen"
+                : "right-unseen";
+            const capped = applyPairCapacityCap(pairUpper, rawSource, entry.anchorCandidate.cardIds);
             return {
-              pairUpper,
-              source: pairUpper === generatedPairUpper
-                ? "generated-pair"
-                : pairUpper === entry.leftUnseenUpper
-                  ? "left-unseen"
-                  : "right-unseen",
+              pairUpper: capped.pairUpper,
+              source: capped.source,
               generatedPairUpper,
               leftUnseenUpper: entry.leftUnseenUpper,
               rightUnseenUpper: entry.rightUnseenUpper,

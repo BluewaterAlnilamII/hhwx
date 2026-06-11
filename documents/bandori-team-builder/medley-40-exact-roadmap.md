@@ -4476,3 +4476,70 @@ P07 failed follow-ups after P03 fix:
     a targeted certificate that can prove the capped pair upper below about
     `6704222` for that anchor region. More anchor iteration alone cannot close
     the current residual once `pair-capacity` is the max source.
+
+2026-06-11 18:48 CST pair-cap refine and suffix diagnostics:
+
+- Code added, default-off:
+  - `pair-capacity` entries now preserve the capacity cap after generated-pair
+    split and unseen refine, instead of recomputing the refined pair upper from
+    raw generated/unseen components only.
+  - `pair-capacity` entries may enter generated-pair split when their generated
+    pair component still exceeds the current incumbent target.
+  - Suffix-cover pair upper helpers also apply the pair-capacity cap when both
+    suffix cover and pair capacity cap are enabled.
+- No-op confirmation:
+  - Raw:
+    `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-11T10-47-37-845Z.json`
+  - Default no-GC non-debug `P06:323` remains bounded with score `9488172`,
+    gap `605990`, no timeout, no memory limit, peak `1908 MiB`.
+- Diagnostic run, `P06:323`, no GC, non-debug, pair capacity cap with
+  `maxAnchors=40000`, cheap-upper timebox `120000ms`:
+  - Raw:
+    `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-11T10-29-36-923Z.json`
+  - Result: bounded, elapsed `197621ms`, score `9486961`, upper `9703439`,
+    gap `216478`, no timeout, no memory limit, peak `3872 MiB`.
+  - This improved the previous best safe pair-cap gap from `245912` to
+    `216478`, but still missed the accepted incumbent score `9488172`.
+  - Residual source moved back to `unprocessed-anchor`: next anchor score
+    `2734826` plus pair upper `6968613`; processed max was `pair-capacity`
+    at anchor score `2735084` plus capped pair upper `6950133.095596918`.
+- Diagnostic run, pair capacity cap plus suffix generated-pair join and
+  full-card unseen join:
+  - Raw:
+    `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-11T10-34-34-111Z.json`
+  - Result: bounded, elapsed `177020ms`, score `9486961`, upper `9703129`,
+    gap `216168`, no timeout, no memory limit, peak `3943 MiB`.
+  - Suffix joins timed out after the anchor/refine pass consumed the local
+    cheap-upper budget, so the improvement was negligible and the residual
+    stayed `unprocessed-anchor`.
+- Diagnostic run, pair capacity cap plus suffix cover, multi-card suffix cover,
+  `maxAnchors=13000`, cheap-upper timebox `120000ms`:
+  - Raw:
+    `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-11T10-39-02-504Z.json`
+  - Result regressed: bounded, elapsed `174011ms`, score `9486961`, upper
+    `9780501`, gap `293540`, no timeout, no memory limit, peak `3927 MiB`.
+  - Suffix cover scanned `15123` suffix anchors and still hit its local
+    timebox without producing an upper; the shorter processed prefix left a
+    worse unprocessed-anchor residual.
+- Diagnostic run, pair capacity cap plus targeted pair proof
+  (`2000ms`, `8` entries):
+  - Raw:
+    `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-11T10-43-42-934Z.json`
+  - Result: bounded, elapsed `197556ms`, score `9488172`, upper `9704139`,
+    gap `215967`, no timeout, no memory limit, peak `3822 MiB`.
+  - This kept the accepted incumbent score and slightly beat the cap-preserving
+    refine gap, but it still left `unprocessed-anchor` as the residual source:
+    next anchor score `2735526` plus pair upper `6968613`.
+- Decision:
+  - Keep these routes diagnostic-only. They improve proof quality without
+    memory regression, but they are still far from the 40/40 exact gate.
+  - The current blocker is no longer just processed pair-cap residual. Once
+    processed entries are lowered, the unprocessed anchor suffix uses the same
+    two-slot pair upper `6968613`, so exact requires either a stronger suffix
+    certificate or a tighter two-slot pair upper below roughly `6753k` for the
+    high-risk anchor region.
+  - Next useful implementation should target a low-memory suffix/pair
+    certificate that does not spend the full cheap-upper timebox before suffix
+    proof, or a stronger two-slot capacity upper model. Do not promote
+    pair-cap/refine, suffix cover, or targeted pair proof into acceptance
+    options yet.
