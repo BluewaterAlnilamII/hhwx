@@ -4308,3 +4308,49 @@ P07 failed follow-ups after P03 fix:
     pair upper (`6968613`). Closing P06 needs a certificate that accounts for
     hydration/full-score slack or otherwise bounds the generated candidate
     frontier by final medley result score, not just score-only candidate order.
+
+2026-06-11 17:35 CST score-target slack and K-limit diagnostics:
+
+- Code added, default-off:
+  - `exactCandidateJoinZeroScoreTargetSlack`.
+  - Profiling fields:
+    `exactCandidateJoinScoreTargetZeroSlackCount`,
+    `exactCandidateJoinLastSolveScoreSlackUpper`, and
+    `exactCandidateJoinLastEffectiveSolveScoreSlackUpper`.
+- Rationale:
+  - `scoreOnly` candidate evaluation returns the same `averageScore` ranking key
+    as full hydration for medley score target. The exact solve previously added
+    `maxScore - score` slack unconditionally when pruning generated triples.
+  - This was a plausible proof looseness source, but it only affects the
+    generated-candidate solve phase.
+- Diagnostic run, `P06:323`, no GC, non-debug, zero-score-target slack enabled:
+  - Raw:
+    `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-11T09-24-25-925Z.json`
+  - Result: bounded, elapsed `108675ms`, score `9488172`, upper `9773821`,
+    gap `285649`, `timedOut=false`, `memoryLimited=false`, peak `4248 MiB`.
+  - Cheap-upper details still show residual source `unprocessed-anchor`.
+    Processed max source is `right-unseen`: anchor score `2804735` plus pair
+    upper `6831866`; unprocessed suffix is anchor score `2805208` plus pair
+    upper `6968613`.
+- Diagnostic run, `P06:323`, no GC, non-debug, candidate soft limit raised to
+  `300000`:
+  - Raw:
+    `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-11T09-30-21-832Z.json`
+  - Result regressed: bounded, elapsed `82897ms`, score `9488172`, upper
+    `10076137`, gap `587965`, `timedOut=true`, `memoryLimited=true`, peak
+    `5107 MiB`.
+  - Abort reason became `initial-candidate`; the higher K route increased memory
+    pressure before closing the frontier.
+- Decision:
+  - Do not promote zero-score-target slack as a P06/40-exact acceptance option.
+    It may remain useful as a diagnostic tightening for generated solves, but it
+    does not close the current hard frontier.
+  - Do not raise candidate K as the next route. The 300k test confirms the old
+    failure mode: more materialized candidates trade a proof gap for memory
+    instability.
+  - The next viable direction is a low-memory multi-slot frontier certificate:
+    stream or certify unseen candidates across the anchor slot and the pair slot
+    that currently contributes `right-unseen`, without retaining a second large
+    candidate array. A single-slot anchor stream is insufficient because the
+    processed-anchor max remains above incumbent until the other-slot unseen
+    upper is also lowered.

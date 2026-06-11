@@ -1186,6 +1186,9 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
   )
     ? Math.max(0, parsedExactCandidateJoinExtendedThirdShortlistQueryLimit)
     : null;
+  const exactCandidateJoinZeroScoreTargetSlack = (
+    optimization.exactCandidateJoinZeroScoreTargetSlack === true
+  );
   const debugExactCandidateJoinMemoryAttribution = (
     optimization.debugExactCandidateJoinMemoryAttribution === true
   );
@@ -4518,6 +4521,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
       traceEntry.exactCandidateJoinExtendedThirdShortlistQueryLimit = (
         exactCandidateJoinExtendedThirdShortlistQueryLimit
       );
+      traceEntry.exactCandidateJoinZeroScoreTargetSlack = exactCandidateJoinZeroScoreTargetSlack;
       traceEntry.lowMemoryInitialCandidateSyncDirectCandidate = lowMemoryInitialCandidateSyncDirectCandidate;
       traceEntry.lowMemoryInitialCandidateSyncObservedMaxSlotCardCount = (
         maxLowMemoryInitialCandidateSyncSlotCardCount
@@ -5228,6 +5232,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
           exactCandidateJoinExtendedThirdShortlistSize,
           exactCandidateJoinExtendedThirdShortlistCacheEntryLimit,
           exactCandidateJoinExtendedThirdShortlistQueryLimit,
+          exactCandidateJoinZeroScoreTargetSlack,
           enableLowMemoryInitialCandidateSync: shouldUseLowMemoryInitialCandidateSync,
           lowMemoryInitialCandidateSyncLocalAbortOnly,
           lowMemoryInitialCandidateSyncLightUpper,
@@ -5589,6 +5594,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
           exactCandidateJoinExtendedThirdShortlistSize,
           exactCandidateJoinExtendedThirdShortlistCacheEntryLimit,
           exactCandidateJoinExtendedThirdShortlistQueryLimit,
+          exactCandidateJoinZeroScoreTargetSlack,
           enableLowMemoryInitialCandidateSync: shouldUseLowMemoryInitialCandidateSync,
           lowMemoryInitialCandidateSyncLocalAbortOnly,
           lowMemoryInitialCandidateSyncLightUpper,
@@ -6164,6 +6170,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
           exactCandidateJoinExtendedThirdShortlistSize,
           exactCandidateJoinExtendedThirdShortlistCacheEntryLimit,
           exactCandidateJoinExtendedThirdShortlistQueryLimit,
+          exactCandidateJoinZeroScoreTargetSlack,
           enableLowMemoryInitialCandidateSync: shouldUseLowMemoryInitialCandidateSync,
           lowMemoryInitialCandidateSyncLocalAbortOnly,
           lowMemoryInitialCandidateSyncLightUpper,

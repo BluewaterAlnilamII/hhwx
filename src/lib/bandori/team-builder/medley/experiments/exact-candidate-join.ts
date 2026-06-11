@@ -2120,6 +2120,7 @@ export function solveMedleyExactCandidateJoin(
   extendedThirdShortlistSizeOverride: number | null = null,
   extendedThirdShortlistCacheEntryLimitOverride: number | null = null,
   extendedThirdShortlistQueryLimitOverride: number | null = null,
+  zeroScoreTargetSlack = false,
 ): MedleyExactCandidateJoinSolveResult {
   // The final join is exact only over candidate lists whose unseen frontier was already
   // bounded. Bitsets accelerate card-disjoint checks but never approximate the conflict rule.
@@ -2229,9 +2230,19 @@ export function solveMedleyExactCandidateJoin(
       return Number.isFinite(slack) ? Math.max(maxSlack, Math.max(0, slack)) : maxSlack;
     }, 0)
   ));
-  const solveScoreSlackUpper = slotOrder.reduce((sum, slotIndex) => (
+  const rawSolveScoreSlackUpper = slotOrder.reduce((sum, slotIndex) => (
     sum + (scoreSlackUpperBySlot[slotIndex] ?? 0)
   ), 0);
+  const canUseZeroScoreTargetSlack = zeroScoreTargetSlack
+    && slots.every((slot) => slot.input.target !== "eventPoint");
+  const solveScoreSlackUpper = canUseZeroScoreTargetSlack ? 0 : rawSolveScoreSlackUpper;
+  if (recordSolveProfiling) {
+    profiling.exactCandidateJoinLastSolveScoreSlackUpper = Math.round(rawSolveScoreSlackUpper);
+    profiling.exactCandidateJoinLastEffectiveSolveScoreSlackUpper = Math.round(solveScoreSlackUpper);
+    if (canUseZeroScoreTargetSlack) {
+      profiling.exactCandidateJoinScoreTargetZeroSlackCount += 1;
+    }
+  }
   const scoreOnlyUpperCannotReachCutoff = (scoreOnlyUpper: number): boolean => (
     scoreOnlyUpper + solveScoreSlackUpper < currentScoreCutoff
   );
@@ -6599,6 +6610,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     exactCandidateJoinExtendedThirdShortlistSize?: number | null;
     exactCandidateJoinExtendedThirdShortlistCacheEntryLimit?: number | null;
     exactCandidateJoinExtendedThirdShortlistQueryLimit?: number | null;
+    exactCandidateJoinZeroScoreTargetSlack?: boolean;
     stagedCandidateExtensionMinRemainingMs?: number | null;
     enableLowMemoryInitialCandidateSync?: boolean;
     lowMemoryInitialCandidateSyncLocalAbortOnly?: boolean;
@@ -7959,6 +7971,11 @@ export function searchMedleyConfigurationByExactCandidateJoin(
       null,
       undefined,
       false,
+      null,
+      null,
+      null,
+      null,
+      context.exactCandidateJoinZeroScoreTargetSlack === true,
     );
     profiling.exactJoinPrefixSeedElapsedMs += performance.now() - startedAt;
     recordPrefixSeedPeakHeap();
@@ -8346,6 +8363,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     context.exactCandidateJoinExtendedThirdShortlistSize ?? null,
     context.exactCandidateJoinExtendedThirdShortlistCacheEntryLimit ?? null,
     context.exactCandidateJoinExtendedThirdShortlistQueryLimit ?? null,
+    context.exactCandidateJoinZeroScoreTargetSlack === true,
   );
   profiling.exactCandidateJoinSolveElapsedMs += performance.now() - solveStartedAt;
   if (joinResult.timedOut) {

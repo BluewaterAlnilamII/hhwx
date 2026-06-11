@@ -83,6 +83,7 @@ export type BandoriMedleySearchOptimizationOptions = {
   exactCandidateJoinExtendedThirdShortlistSize?: number;
   exactCandidateJoinExtendedThirdShortlistCacheEntryLimit?: number;
   exactCandidateJoinExtendedThirdShortlistQueryLimit?: number;
+  exactCandidateJoinZeroScoreTargetSlack?: boolean;
   debugConfigurationTrace?: boolean;
   exactCandidateJoinDebugAnchorSlotIndex?: number;
   exactCandidateJoinDebugKnownCardIdsBySlot?: number[][];
@@ -691,6 +692,9 @@ export type BandoriMedleyTeamSearchProfilingStats = {
   exactCandidateJoinLastExtendedThirdShortlistSize: number | null;
   exactCandidateJoinLastExtendedThirdShortlistCacheEntryLimit: number | null;
   exactCandidateJoinLastExtendedThirdShortlistQueryLimit: number | null;
+  exactCandidateJoinScoreTargetZeroSlackCount: number;
+  exactCandidateJoinLastSolveScoreSlackUpper: number | null;
+  exactCandidateJoinLastEffectiveSolveScoreSlackUpper: number | null;
   exactCandidateJoinLowMemoryInitialCandidateScoreCacheClearCount: number;
   exactCandidateJoinLastLowMemoryInitialCandidateScoreCacheClearInterval: number | null;
   exactCandidateJoinLastLowMemoryInitialCandidateSlotIndex: number | null;
