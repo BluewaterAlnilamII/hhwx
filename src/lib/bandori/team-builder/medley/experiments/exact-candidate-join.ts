@@ -3820,6 +3820,7 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
     timeboxMs?: number | null;
     maxAnchors?: number | null;
     refineUnseen?: boolean;
+    refineTopAnchors?: number | null;
     unseenRefineMaxGeneratedCandidates?: number | null;
     targetedPairProofTimeboxMs?: number | null;
     targetedPairProofMaxEntries?: number | null;
@@ -3870,6 +3871,13 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
       : MEDLEY_EXACT_CANDIDATE_JOIN_ANCHOR_FRONTIER_CHEAP_UPPER_MAX_ANCHORS,
   );
   const shouldRefineUnseenUpper = options.refineUnseen === true;
+  const refineTopAnchorCount = (
+    options.refineTopAnchors !== null
+    && options.refineTopAnchors !== undefined
+    && Number.isFinite(options.refineTopAnchors)
+  )
+    ? Math.max(1, Math.trunc(options.refineTopAnchors))
+    : MEDLEY_EXACT_CANDIDATE_JOIN_ANCHOR_FRONTIER_CHEAP_UPPER_REFINE_TOP_ANCHORS;
   const unseenRefineMaxGeneratedCandidates = (
     options.unseenRefineMaxGeneratedCandidates !== null
     && options.unseenRefineMaxGeneratedCandidates !== undefined
@@ -4999,11 +5007,11 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
       const targetPairUpper = incumbentScore - entry.anchorScore;
       const canRefineGeneratedPair = (
         entry.source === "generated-pair"
-        && newSplitRefineCount < MEDLEY_EXACT_CANDIDATE_JOIN_ANCHOR_FRONTIER_CHEAP_UPPER_REFINE_TOP_ANCHORS
+        && newSplitRefineCount < refineTopAnchorCount
       );
       const canRefineUnseenPair = (
         shouldRefineUnseenUpper
-        && newUnseenRefineEntryCount < MEDLEY_EXACT_CANDIDATE_JOIN_ANCHOR_FRONTIER_CHEAP_UPPER_REFINE_TOP_ANCHORS
+        && newUnseenRefineEntryCount < refineTopAnchorCount
         && (
           (
             Number.isFinite(entry.leftUnseenUpper)
@@ -5682,6 +5690,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     anchorFrontierCheapUpperTimeboxMs?: number | null;
     anchorFrontierCheapUpperMaxAnchors?: number | null;
     anchorFrontierCheapUpperRefineUnseen?: boolean;
+    anchorFrontierCheapUpperRefineTopAnchors?: number | null;
     anchorFrontierCheapUpperUnseenRefineMaxGeneratedCandidates?: number | null;
     anchorFrontierCheapUpperTargetedPairProofTimeboxMs?: number | null;
     anchorFrontierCheapUpperTargetedPairProofMaxEntries?: number | null;
@@ -6176,6 +6185,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
           timeboxMs: context.anchorFrontierCheapUpperTimeboxMs,
           maxAnchors: context.anchorFrontierCheapUpperMaxAnchors,
           refineUnseen: context.anchorFrontierCheapUpperRefineUnseen,
+          refineTopAnchors: context.anchorFrontierCheapUpperRefineTopAnchors,
           unseenRefineMaxGeneratedCandidates: context.anchorFrontierCheapUpperUnseenRefineMaxGeneratedCandidates,
           targetedPairProofTimeboxMs: context.anchorFrontierCheapUpperTargetedPairProofTimeboxMs,
           targetedPairProofMaxEntries: context.anchorFrontierCheapUpperTargetedPairProofMaxEntries,
