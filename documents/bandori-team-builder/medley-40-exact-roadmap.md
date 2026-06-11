@@ -5513,3 +5513,34 @@ P07 failed follow-ups after P03 fix:
     targeted pair attempts to determine whether `candidate-limit` hides a real
     certificate, but this remains diagnostic only. Do not default-enable this
     path unless it improves P06 without regressing no-op behavior.
+
+2026-06-12 04:45 CST targeted pair proof high-limit diagnostic:
+
+- Raw:
+  `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-11T20-32-44-330Z.json`.
+- Options: P06:323 only, non-GC, `debugConfigurationTrace=true`, targeted pair
+  proof timebox `20000ms`, max entries `2`, candidate limit `200000`,
+  shared-power dual cap disabled, late repair disabled.
+- Result: bounded, score `9488172`, upper `9935586`, gap `447414`, elapsed
+  `219032ms`, peak `4356 MiB`, `timedOut=false`, `memoryLimited=false`.
+- Targeted pair proof counters:
+  - PastelPalettes/cool performance: attempts `2`, processed `2`,
+    improvements `0`, abort `candidate-limit`, elapsed `25299ms`,
+    candidate counts `[200000,200000,122898]`.
+  - PastelPalettes/cool technique: attempts `2`, processed `2`,
+    improvements `0`, abort `candidate-limit`, elapsed `24910ms`,
+    candidate counts `[200000,200000,130269]`.
+  - PastelPalettes/cool visual: attempts `2`, processed `2`,
+    improvements `0`, abort `candidate-limit`, elapsed `24910ms`.
+- Interpretation:
+  - Raising the candidate limit does not expose a cheap certificate. It expands
+    candidate arrays, raises peak memory close to the no-GC soft limit, and
+    consumes event-root budget needed by the normal frontier proof.
+  - The visual configuration regressed to upper `10076136`, which matches the
+    pre-frontier high upper rather than the intended tightened frontier upper.
+- Decision:
+  - Freeze targeted pair proof as diagnostic-only. Do not tune timebox, max
+    entries, or candidate limit further for the 40/40 exact path.
+  - The next proof-quality work should target a bulk/cached pair-capacity
+    certificate that can tighten many processed-anchor witnesses without
+    generating another large two-slot candidate surface per anchor.
