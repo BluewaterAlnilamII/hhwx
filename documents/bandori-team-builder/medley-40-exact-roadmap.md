@@ -1,6 +1,6 @@
 # Medley 40/40 Exact Roadmap
 
-Last updated: 2026-06-12 01:32 CST
+Last updated: 2026-06-12 06:20 CST
 
 This file is the persistent working note for the current medley optimizer goal.
 Keep it current before and after benchmark runs or proof-path changes, so future
@@ -57,6 +57,73 @@ No-GC acceptance contract:
 - Every full 40-case run must generate a timestamped report and update this
   roadmap with raw path, replay parameters, accept/reject reason, and failure
   analysis if any row is bounded.
+
+2026-06-12 06:20 CST P06 frontier experiments after max4 dual reuse:
+
+- Baseline reference for this subsection:
+  `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-11T20-56-17-305Z.json`.
+  Scope: `P06:323`, no GC, `debugConfigurationTrace=true`,
+  event-root probe with candidate soft limit `200000`,
+  pair-capacity + shared-power dual cap `maxCalls=4`.
+  Result: bounded, score `9488172`, upper `9631451`, gap `143279`,
+  elapsed `248584ms`, peak `3851 MiB`.
+  The direct blocker remained `PastelPalettes/cool`:
+  performance gap `97820`, technique gap `91051`, visual gap `82576`.
+  Each residual source was `unprocessed-generator-peek`; the generated suffix
+  proof was already slightly lower, but the raw slot generator tail upper still
+  dominated.
+- Rejected low-memory high-pair scan:
+  `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-11T21-44-08-370Z.json`.
+  Options added `enableLowMemoryHighPairScan=true`,
+  `lowMemoryHighPairScanMinRecordCount=2500000`.
+  Result: bounded, upper `10076137`, gap `587965`, elapsed `221531ms`,
+  peak `3896 MiB`. The scan did run (`pairComplementScan` around
+  `102/106`), but it did not reduce the Pastel/cool residual; instead it spent
+  enough budget that technique hit `low-remaining-budget` and visual fell back
+  to a large same-coarse skip. Decision: do not pursue scan thresholds as the
+  primary path.
+- Rejected global-tail-upper probe:
+  `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-11T21-59-22-076Z.json`.
+  Code commit: `dde57d3 Add opt-in global tail upper probe`; option
+  `enableExactCandidateJoinGlobalTailUpper=true`.
+  Result: bounded, upper `9935586`, gap `447414`, elapsed `222050ms`,
+  peak `4041 MiB`. The diagnostic showed almost no real tightening:
+  performance improvement `0`, technique improvement `5`. Interpretation:
+  the candidate generator global key is not materially tighter than
+  `slotPeek + pairUpper` for this frontier. Keep the option diagnostic-only;
+  do not default it.
+- Candidate soft limit 400k/guarded 600k probe:
+  `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-11T22-05-08-533Z.json`.
+  Changed only `eventRootFrontierProbeCandidateSoftLimit=400000`.
+  Result: bounded, upper `9935586`, gap `447414`, elapsed `243702ms`,
+  peak `4142 MiB`. Performance expanded to `600000` anchor candidates and
+  moved from `unprocessed-generator-peek` to
+  `unprocessed-anchor-suffix-cover`, reducing the local gap to about `90460`.
+  Technique reached local gap about `78418`. Visual was starved and retained a
+  large same-coarse upper. Interpretation: more slot candidates can suppress
+  generator-peek, but it is not sufficient for exactness and it spends too much
+  memory/time to be a default route.
+- Targeted pair BnB probe:
+  `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-11T22-11-28-805Z.json`.
+  Options added targeted pair BnB with `timeboxMs=15000`,
+  `maxEntries=2`, `nodeLimit=500000`, and `slotSolveNodeLimit=100000`.
+  Result: bounded, upper `10076137`, gap `587965`, elapsed `213131ms`,
+  peak `4787 MiB`, `timedOut=true`, `memoryLimited=true`.
+  The BnB did improve the processed pair max for the first two entries, but
+  the residual stayed `unprocessed-generator-peek`; memory pressure prevented
+  reaching visual. Decision: targeted pair proof can reduce processed-pair
+  slack, but it does not solve the generator-tail slack by itself and is too
+  memory-heavy in the current form.
+- Current interpretation:
+  P06 needs two independent closures inside the same `PastelPalettes/cool`
+  frontier: generator-tail closure and processed pair-capacity closure. Raising
+  candidate count attacks the first but not the second; targeted pair proof
+  attacks the second but not the first. A credible next implementation should
+  be a low-memory streaming anchor-tail certificate: consume additional anchor
+  generator tail candidates without retaining a second large candidate array,
+  apply the same safe pair upper/capacity upper per streamed anchor, and stop
+  when the tail upper no longer dominates. This must remain opt-in until it
+  proves no-op safety and improves `P06:323` without exceeding the memory gate.
 
 2026-06-12 00:51 CST P06 same-coarse frontier confirmation:
 
