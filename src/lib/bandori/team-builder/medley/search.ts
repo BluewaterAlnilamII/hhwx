@@ -401,6 +401,27 @@ function buildProofLedger(
         anchorFrontierCheapUpperRewindAbortReason: (
           entry.exactCandidateJoinLastAnchorFrontierCheapUpperRewindAbortReason ?? null
         ),
+        anchorFrontierCheapUpperBestPrefixSplitAttemptCount: (
+          asFiniteNumber(entry.exactCandidateJoinLastAnchorFrontierCheapUpperBestPrefixSplitAttemptCount)
+        ),
+        anchorFrontierCheapUpperBestPrefixSplitImprovementCount: (
+          asFiniteNumber(entry.exactCandidateJoinLastAnchorFrontierCheapUpperBestPrefixSplitImprovementCount)
+        ),
+        anchorFrontierCheapUpperBestPrefixSplitUpperBound: (
+          asFiniteNumber(entry.exactCandidateJoinLastAnchorFrontierCheapUpperBestPrefixSplitUpperBound)
+        ),
+        anchorFrontierCheapUpperBestPrefixSplitAnchorIndex: (
+          asFiniteNumber(entry.exactCandidateJoinLastAnchorFrontierCheapUpperBestPrefixSplitAnchorIndex)
+        ),
+        anchorFrontierCheapUpperBestPrefixSplitProcessedEntryCount: (
+          asFiniteNumber(entry.exactCandidateJoinLastAnchorFrontierCheapUpperBestPrefixSplitProcessedEntryCount)
+        ),
+        anchorFrontierCheapUpperBestPrefixSplitElapsedMs: (
+          asFiniteNumber(entry.exactCandidateJoinLastAnchorFrontierCheapUpperBestPrefixSplitElapsedMs)
+        ),
+        anchorFrontierCheapUpperBestPrefixSplitAbortReason: (
+          entry.exactCandidateJoinLastAnchorFrontierCheapUpperBestPrefixSplitAbortReason ?? null
+        ),
         lowMemoryInitialCandidateScoreCacheClearCount: (
           asFiniteNumber(entry.exactCandidateJoinLowMemoryInitialCandidateScoreCacheClearCountDelta)
         ),
@@ -904,6 +925,27 @@ function buildBoundedFrontierGroups(
         anchorFrontierCheapUpperRewindAbortReason: (
           entry.exactCandidateJoinLastAnchorFrontierCheapUpperRewindAbortReason ?? null
         ),
+        anchorFrontierCheapUpperBestPrefixSplitAttemptCount: (
+          entry.exactCandidateJoinLastAnchorFrontierCheapUpperBestPrefixSplitAttemptCount ?? null
+        ),
+        anchorFrontierCheapUpperBestPrefixSplitImprovementCount: (
+          entry.exactCandidateJoinLastAnchorFrontierCheapUpperBestPrefixSplitImprovementCount ?? null
+        ),
+        anchorFrontierCheapUpperBestPrefixSplitUpperBound: (
+          entry.exactCandidateJoinLastAnchorFrontierCheapUpperBestPrefixSplitUpperBound ?? null
+        ),
+        anchorFrontierCheapUpperBestPrefixSplitAnchorIndex: (
+          entry.exactCandidateJoinLastAnchorFrontierCheapUpperBestPrefixSplitAnchorIndex ?? null
+        ),
+        anchorFrontierCheapUpperBestPrefixSplitProcessedEntryCount: (
+          entry.exactCandidateJoinLastAnchorFrontierCheapUpperBestPrefixSplitProcessedEntryCount ?? null
+        ),
+        anchorFrontierCheapUpperBestPrefixSplitElapsedMs: (
+          entry.exactCandidateJoinLastAnchorFrontierCheapUpperBestPrefixSplitElapsedMs ?? null
+        ),
+        anchorFrontierCheapUpperBestPrefixSplitAbortReason: (
+          entry.exactCandidateJoinLastAnchorFrontierCheapUpperBestPrefixSplitAbortReason ?? null
+        ),
         anchorFrontierCheapUpperUnseenRefineAttemptCount: (
           entry.exactCandidateJoinLastAnchorFrontierCheapUpperUnseenRefineAttemptCount ?? null
         ),
@@ -1317,6 +1359,18 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
   const eventRootFrontierProbeAnchorCheapUpperRewindBothUnseen = (
     optimization.eventRootFrontierProbeAnchorCheapUpperRewindBothUnseen === true
   );
+  const eventRootFrontierProbeAnchorCheapUpperBestPrefixSplit = (
+    optimization.eventRootFrontierProbeAnchorCheapUpperBestPrefixSplit === true
+  );
+  const parsedEventRootFrontierProbeAnchorCheapUpperBestPrefixSplitMaxAttempts =
+    optimization.eventRootFrontierProbeAnchorCheapUpperBestPrefixSplitMaxAttempts !== undefined
+      ? Math.trunc(optimization.eventRootFrontierProbeAnchorCheapUpperBestPrefixSplitMaxAttempts)
+      : Number.NaN;
+  const eventRootFrontierProbeAnchorCheapUpperBestPrefixSplitMaxAttempts = Number.isFinite(
+    parsedEventRootFrontierProbeAnchorCheapUpperBestPrefixSplitMaxAttempts,
+  )
+    ? Math.max(1, parsedEventRootFrontierProbeAnchorCheapUpperBestPrefixSplitMaxAttempts)
+    : null;
   const parsedEventRootFrontierProbeAnchorCheapUpperTargetedPairProofTimeboxMs =
     optimization.eventRootFrontierProbeAnchorCheapUpperTargetedPairProofTimeboxMs !== undefined
       ? Math.trunc(optimization.eventRootFrontierProbeAnchorCheapUpperTargetedPairProofTimeboxMs)
@@ -1394,6 +1448,10 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
       ),
       anchorFrontierCheapUpperProcessedUnseenJoin: eventRootFrontierProbeAnchorCheapUpperProcessedUnseenJoin,
       anchorFrontierCheapUpperRewindBothUnseen: eventRootFrontierProbeAnchorCheapUpperRewindBothUnseen,
+      anchorFrontierCheapUpperBestPrefixSplit: eventRootFrontierProbeAnchorCheapUpperBestPrefixSplit,
+      anchorFrontierCheapUpperBestPrefixSplitMaxAttempts: (
+        eventRootFrontierProbeAnchorCheapUpperBestPrefixSplitMaxAttempts
+      ),
       anchorFrontierCheapUpperTargetedPairProofTimeboxMs: (
         eventRootFrontierProbeAnchorCheapUpperTargetedPairProofTimeboxMs
       ),
@@ -3736,6 +3794,27 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
           exactCandidateJoinLastAnchorFrontierCheapUpperRewindAbortReason: (
             profiling.exactCandidateJoinLastAnchorFrontierCheapUpperRewindAbortReason
           ),
+          exactCandidateJoinLastAnchorFrontierCheapUpperBestPrefixSplitAttemptCount: (
+            profiling.exactCandidateJoinLastAnchorFrontierCheapUpperBestPrefixSplitAttemptCount
+          ),
+          exactCandidateJoinLastAnchorFrontierCheapUpperBestPrefixSplitImprovementCount: (
+            profiling.exactCandidateJoinLastAnchorFrontierCheapUpperBestPrefixSplitImprovementCount
+          ),
+          exactCandidateJoinLastAnchorFrontierCheapUpperBestPrefixSplitUpperBound: (
+            profiling.exactCandidateJoinLastAnchorFrontierCheapUpperBestPrefixSplitUpperBound
+          ),
+          exactCandidateJoinLastAnchorFrontierCheapUpperBestPrefixSplitAnchorIndex: (
+            profiling.exactCandidateJoinLastAnchorFrontierCheapUpperBestPrefixSplitAnchorIndex
+          ),
+          exactCandidateJoinLastAnchorFrontierCheapUpperBestPrefixSplitProcessedEntryCount: (
+            profiling.exactCandidateJoinLastAnchorFrontierCheapUpperBestPrefixSplitProcessedEntryCount
+          ),
+          exactCandidateJoinLastAnchorFrontierCheapUpperBestPrefixSplitElapsedMs: (
+            profiling.exactCandidateJoinLastAnchorFrontierCheapUpperBestPrefixSplitElapsedMs
+          ),
+          exactCandidateJoinLastAnchorFrontierCheapUpperBestPrefixSplitAbortReason: (
+            profiling.exactCandidateJoinLastAnchorFrontierCheapUpperBestPrefixSplitAbortReason
+          ),
           exactCandidateJoinLastAnchorFrontierCheapUpperMaxGeneratedPairOverlaps: (
             profiling.exactCandidateJoinLastAnchorFrontierCheapUpperMaxGeneratedPairOverlaps
           ),
@@ -5369,6 +5448,12 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
         traceEntry.eventRootFrontierProbeAnchorCheapUpperRewindBothUnseen = (
           eventRootFrontierProbeAnchorCheapUpperRewindBothUnseen
         );
+        traceEntry.eventRootFrontierProbeAnchorCheapUpperBestPrefixSplit = (
+          eventRootFrontierProbeAnchorCheapUpperBestPrefixSplit
+        );
+        traceEntry.eventRootFrontierProbeAnchorCheapUpperBestPrefixSplitMaxAttempts = (
+          eventRootFrontierProbeAnchorCheapUpperBestPrefixSplitMaxAttempts
+        );
         traceEntry.eventRootFrontierProbeAnchorCheapUpperTargetedPairProofTimeboxMs = (
           eventRootFrontierProbeAnchorCheapUpperTargetedPairProofTimeboxMs
         );
@@ -5473,6 +5558,10 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
           ),
           anchorFrontierCheapUpperProcessedUnseenJoin: eventRootFrontierProbeAnchorCheapUpperProcessedUnseenJoin,
           anchorFrontierCheapUpperRewindBothUnseen: eventRootFrontierProbeAnchorCheapUpperRewindBothUnseen,
+          anchorFrontierCheapUpperBestPrefixSplit: eventRootFrontierProbeAnchorCheapUpperBestPrefixSplit,
+          anchorFrontierCheapUpperBestPrefixSplitMaxAttempts: (
+            eventRootFrontierProbeAnchorCheapUpperBestPrefixSplitMaxAttempts
+          ),
           anchorFrontierCheapUpperTargetedPairProofTimeboxMs: (
             eventRootFrontierProbeAnchorCheapUpperTargetedPairProofTimeboxMs
           ),

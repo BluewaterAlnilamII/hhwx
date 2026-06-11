@@ -3902,6 +3902,8 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
     unseenRefineMaxGeneratedCandidates?: number | null;
     processedUnseenJoin?: boolean;
     rewindBothUnseen?: boolean;
+    bestPrefixSplit?: boolean;
+    bestPrefixSplitMaxAttempts?: number | null;
     targetedPairProofTimeboxMs?: number | null;
     targetedPairProofMaxEntries?: number | null;
     targetedPairProofCandidateLimit?: number | null;
@@ -3953,6 +3955,14 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
   const shouldRefineUnseenUpper = options.refineUnseen === true;
   const shouldUseProcessedUnseenJoin = options.processedUnseenJoin === true;
   const shouldRewindBothUnseen = options.rewindBothUnseen === true;
+  const shouldUseBestPrefixSplit = options.bestPrefixSplit === true;
+  const bestPrefixSplitMaxAttempts = (
+    options.bestPrefixSplitMaxAttempts !== null
+    && options.bestPrefixSplitMaxAttempts !== undefined
+    && Number.isFinite(options.bestPrefixSplitMaxAttempts)
+  )
+    ? Math.max(1, Math.trunc(options.bestPrefixSplitMaxAttempts))
+    : 4;
   const refineTopAnchorCount = (
     options.refineTopAnchors !== null
     && options.refineTopAnchors !== undefined
@@ -4146,6 +4156,13 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
   profiling.exactCandidateJoinLastAnchorFrontierCheapUpperRewindProcessedEntryCount = null;
   profiling.exactCandidateJoinLastAnchorFrontierCheapUpperRewindElapsedMs = null;
   profiling.exactCandidateJoinLastAnchorFrontierCheapUpperRewindAbortReason = null;
+  profiling.exactCandidateJoinLastAnchorFrontierCheapUpperBestPrefixSplitAttemptCount = 0;
+  profiling.exactCandidateJoinLastAnchorFrontierCheapUpperBestPrefixSplitImprovementCount = 0;
+  profiling.exactCandidateJoinLastAnchorFrontierCheapUpperBestPrefixSplitUpperBound = null;
+  profiling.exactCandidateJoinLastAnchorFrontierCheapUpperBestPrefixSplitAnchorIndex = null;
+  profiling.exactCandidateJoinLastAnchorFrontierCheapUpperBestPrefixSplitProcessedEntryCount = null;
+  profiling.exactCandidateJoinLastAnchorFrontierCheapUpperBestPrefixSplitElapsedMs = null;
+  profiling.exactCandidateJoinLastAnchorFrontierCheapUpperBestPrefixSplitAbortReason = null;
   profiling.exactCandidateJoinLastAnchorFrontierCheapUpperMaxGeneratedPairOverlaps = null;
   profiling.exactCandidateJoinLastAnchorFrontierCheapUpperMaxGeneratedPairScoreOnly = null;
   profiling.exactCandidateJoinLastAnchorFrontierCheapUpperMaxGeneratedPairFullScore = null;
@@ -5768,6 +5785,13 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
     let rewindProcessedEntryCount: number | null = null;
     let rewindElapsedMs: number | null = null;
     let rewindAbortReason: string | null = null;
+    let bestPrefixSplitAttemptCount = 0;
+    let bestPrefixSplitImprovementCount = 0;
+    let bestPrefixSplitUpperBound: number | null = null;
+    let bestPrefixSplitAnchorIndex: number | null = null;
+    let bestPrefixSplitProcessedEntryCount: number | null = null;
+    let bestPrefixSplitElapsedMs: number | null = null;
+    let bestPrefixSplitAbortReason: string | null = null;
     if (
       shouldRewindBothUnseen
       && observedUpperBound !== null
@@ -5860,6 +5884,85 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
       }
       rewindElapsedMs = performance.now() - rewindStartedAt;
     }
+    if (
+      shouldUseBestPrefixSplit
+      && observedUpperBound !== null
+      && processedAnchorUpperEntries.length > 1
+      && performance.now() < localDeadlineAt
+    ) {
+      const bestPrefixStartedAt = performance.now();
+      const splitEntryLimits: number[] = [];
+      const addSplitEntryLimit = (entryLimit: number | null | undefined): void => {
+        if (
+          entryLimit === null
+          || entryLimit === undefined
+          || !Number.isFinite(entryLimit)
+        ) {
+          return;
+        }
+        const normalizedEntryLimit = Math.max(
+          1,
+          Math.min(processedAnchorUpperEntries.length - 1, Math.trunc(entryLimit)),
+        );
+        if (!splitEntryLimits.includes(normalizedEntryLimit)) {
+          splitEntryLimits.push(normalizedEntryLimit);
+        }
+      };
+      addSplitEntryLimit(Math.floor(processedAnchorUpperEntries.length * 0.8));
+      addSplitEntryLimit(Math.floor(processedAnchorUpperEntries.length * 0.75));
+      addSplitEntryLimit(Math.floor(processedAnchorUpperEntries.length * 0.85));
+      addSplitEntryLimit(processedUnseenJoin.maxEntryIndex);
+      if (processedUnseenJoin.maxEntryIndex !== null) {
+        addSplitEntryLimit(processedUnseenJoin.maxEntryIndex + 1);
+      }
+      addSplitEntryLimit(Math.floor(processedAnchorUpperEntries.length * 2 / 3));
+      addSplitEntryLimit(Math.floor(processedAnchorUpperEntries.length * 0.9));
+
+      for (const splitEntryLimit of splitEntryLimits.slice(0, bestPrefixSplitMaxAttempts)) {
+        if (performance.now() >= localDeadlineAt) {
+          bestPrefixSplitAbortReason = "timebox";
+          break;
+        }
+        bestPrefixSplitAttemptCount += 1;
+        let prefixProcessedUpperMax = estimateProcessedPrefixUpperMax(splitEntryLimit);
+        const prefixProcessedUnseenJoin = estimateProcessedGeneratedUnseenJoinUpper(splitEntryLimit);
+        if (prefixProcessedUnseenJoin.abortReason !== null) {
+          bestPrefixSplitAbortReason = `processed-unseen-${prefixProcessedUnseenJoin.abortReason}`;
+          break;
+        }
+        if (
+          prefixProcessedUnseenJoin.upperBound !== null
+          && Number.isFinite(prefixProcessedUnseenJoin.upperBound)
+          && (
+            !Number.isFinite(prefixProcessedUpperMax)
+            || prefixProcessedUnseenJoin.upperBound < prefixProcessedUpperMax
+          )
+        ) {
+          prefixProcessedUpperMax = prefixProcessedUnseenJoin.upperBound;
+        }
+        const splitAnchorIndex = processedAnchorUpperEntries[splitEntryLimit]?.anchorIndex ?? nextAnchorIndex;
+        const splitNextAnchorScore = splitAnchorIndex !== null
+          ? anchorCandidates[splitAnchorIndex]?.result.score ?? null
+          : nextAnchorScore;
+        const splitUpperBound = getResidualUpperBoundForProcessedMax(
+          prefixProcessedUpperMax,
+          splitNextAnchorScore,
+          null,
+        );
+        if (
+          splitUpperBound !== null
+          && Number.isFinite(splitUpperBound)
+          && splitUpperBound < observedUpperBound
+        ) {
+          observedUpperBound = splitUpperBound;
+          bestPrefixSplitImprovementCount += 1;
+          bestPrefixSplitUpperBound = splitUpperBound;
+          bestPrefixSplitAnchorIndex = splitAnchorIndex;
+          bestPrefixSplitProcessedEntryCount = splitEntryLimit;
+        }
+      }
+      bestPrefixSplitElapsedMs = performance.now() - bestPrefixStartedAt;
+    }
     const proofThreshold = Math.max(
       incumbentScore,
       targetedPairProofResult?.score ?? Number.NEGATIVE_INFINITY,
@@ -5896,12 +5999,14 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
     profiling.exactCandidateJoinLastAnchorFrontierCheapUpperMaxGeneratedPairUpper = processedUpperMaxGeneratedPairUpper;
     profiling.exactCandidateJoinLastAnchorFrontierCheapUpperMaxLeftUnseenUpper = processedUpperMaxLeftUnseenUpper;
     profiling.exactCandidateJoinLastAnchorFrontierCheapUpperMaxRightUnseenUpper = processedUpperMaxRightUnseenUpper;
-    profiling.exactCandidateJoinLastAnchorFrontierCheapUpperResidualSource = (
-      Number.isFinite(unprocessedUpper.upperBound)
-      && (!Number.isFinite(processedUpperMax) || unprocessedUpper.upperBound >= processedUpperMax)
-    )
-      ? unprocessedUpper.source
-      : processedUpperMaxSource;
+    profiling.exactCandidateJoinLastAnchorFrontierCheapUpperResidualSource = bestPrefixSplitImprovementCount > 0
+      ? "best-prefix-split"
+      : (
+        Number.isFinite(unprocessedUpper.upperBound)
+        && (!Number.isFinite(processedUpperMax) || unprocessedUpper.upperBound >= processedUpperMax)
+      )
+        ? unprocessedUpper.source
+        : processedUpperMaxSource;
     profiling.exactCandidateJoinLastAnchorFrontierCheapUpperUnprocessedAnchorScore = (
       unprocessedUpper.anchorScore
     );
@@ -6016,6 +6121,27 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
       rewindElapsedMs !== null ? Math.round(rewindElapsedMs) : null
     );
     profiling.exactCandidateJoinLastAnchorFrontierCheapUpperRewindAbortReason = rewindAbortReason;
+    profiling.exactCandidateJoinLastAnchorFrontierCheapUpperBestPrefixSplitAttemptCount = (
+      bestPrefixSplitAttemptCount
+    );
+    profiling.exactCandidateJoinLastAnchorFrontierCheapUpperBestPrefixSplitImprovementCount = (
+      bestPrefixSplitImprovementCount
+    );
+    profiling.exactCandidateJoinLastAnchorFrontierCheapUpperBestPrefixSplitUpperBound = (
+      bestPrefixSplitUpperBound !== null ? Math.ceil(bestPrefixSplitUpperBound) : null
+    );
+    profiling.exactCandidateJoinLastAnchorFrontierCheapUpperBestPrefixSplitAnchorIndex = (
+      bestPrefixSplitAnchorIndex
+    );
+    profiling.exactCandidateJoinLastAnchorFrontierCheapUpperBestPrefixSplitProcessedEntryCount = (
+      bestPrefixSplitProcessedEntryCount
+    );
+    profiling.exactCandidateJoinLastAnchorFrontierCheapUpperBestPrefixSplitElapsedMs = (
+      bestPrefixSplitElapsedMs !== null ? Math.round(bestPrefixSplitElapsedMs) : null
+    );
+    profiling.exactCandidateJoinLastAnchorFrontierCheapUpperBestPrefixSplitAbortReason = (
+      bestPrefixSplitAbortReason
+    );
     if (processedUpperMaxLeftGeneratedCandidate && processedUpperMaxRightGeneratedCandidate) {
       const generatedPairOverlaps = medleyExactCandidatesOverlap(
         processedUpperMaxLeftGeneratedCandidate,
@@ -6351,6 +6477,8 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     anchorFrontierCheapUpperUnseenRefineMaxGeneratedCandidates?: number | null;
     anchorFrontierCheapUpperProcessedUnseenJoin?: boolean;
     anchorFrontierCheapUpperRewindBothUnseen?: boolean;
+    anchorFrontierCheapUpperBestPrefixSplit?: boolean;
+    anchorFrontierCheapUpperBestPrefixSplitMaxAttempts?: number | null;
     anchorFrontierCheapUpperTargetedPairProofTimeboxMs?: number | null;
     anchorFrontierCheapUpperTargetedPairProofMaxEntries?: number | null;
     anchorFrontierCheapUpperTargetedPairProofCandidateLimit?: number | null;
@@ -6848,6 +6976,8 @@ export function searchMedleyConfigurationByExactCandidateJoin(
           unseenRefineMaxGeneratedCandidates: context.anchorFrontierCheapUpperUnseenRefineMaxGeneratedCandidates,
           processedUnseenJoin: context.anchorFrontierCheapUpperProcessedUnseenJoin,
           rewindBothUnseen: context.anchorFrontierCheapUpperRewindBothUnseen,
+          bestPrefixSplit: context.anchorFrontierCheapUpperBestPrefixSplit,
+          bestPrefixSplitMaxAttempts: context.anchorFrontierCheapUpperBestPrefixSplitMaxAttempts,
           targetedPairProofTimeboxMs: context.anchorFrontierCheapUpperTargetedPairProofTimeboxMs,
           targetedPairProofMaxEntries: context.anchorFrontierCheapUpperTargetedPairProofMaxEntries,
           targetedPairProofCandidateLimit: context.anchorFrontierCheapUpperTargetedPairProofCandidateLimit,

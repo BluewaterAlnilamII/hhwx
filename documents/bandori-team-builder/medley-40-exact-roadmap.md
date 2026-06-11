@@ -4226,3 +4226,50 @@ P07 failed follow-ups after P03 fix:
     candidate proof/join path or a reusable pair/frontier certificate that can
     rule out the high slot0 frontier without materializing every slot0
     candidate above the score-only cutoff.
+
+2026-06-11 17:00 CST best-prefix split diagnostic:
+
+- Code added, default-off:
+  - `eventRootFrontierProbeAnchorCheapUpperBestPrefixSplit`.
+  - `eventRootFrontierProbeAnchorCheapUpperBestPrefixSplitMaxAttempts`.
+  - Profiling fields:
+    `exactCandidateJoinLastAnchorFrontierCheapUpperBestPrefixSplitAttemptCount`,
+    `...ImprovementCount`, `...UpperBound`, `...AnchorIndex`,
+    `...ProcessedEntryCount`, `...ElapsedMs`, and `...AbortReason`.
+  - Benchmark runner now exports the previously missing cheap-upper detail
+    fields: residual source, suffix cover/join fields, processed-unseen max
+    fields, rewind fields, and best-prefix split fields.
+- Diagnostic run, `P06:323`, no GC, non-debug, 60s cheap-upper timebox:
+  - Raw:
+    `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-11T08-46-41-552Z.json`
+  - Result: bounded, elapsed `164963ms`, score `9488172`, upper `9773821`,
+    gap `285649`, no timeout, no memory limit, peak `4241 MiB`.
+  - Best-prefix did not run because `processedUnseenJoin` hit the local
+    timebox first. Processed-unseen elapsed `42781ms`, abort `timebox`, max
+    entry index `12720`; residual source remained `unprocessed-anchor`.
+- Diagnostic run, `P06:323`, no GC, non-debug, 120s cheap-upper timebox:
+  - Raw:
+    `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-11T08-50-40-201Z.json`
+  - Result regressed: bounded, elapsed `184035ms`, score `9488172`, upper
+    `10076137`, gap `587965`, `timedOut=true`, `memoryLimited=true`, peak
+    `4982 MiB`.
+  - `processedUnseenJoin` completed with upper `9635008`, but best-prefix split
+    only completed `2` attempts, found no improvement, then aborted with
+    `processed-unseen-timebox`. Event-root upper remained `9773821`; the global
+    result later regressed through `initial-candidate`.
+- Default-off no-op confirmation after the code change:
+  - Raw:
+    `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-11T08-54-48-416Z.json`
+  - Result: bounded, elapsed `37950ms`, score `9488172`, gap `605990`,
+    `timedOut=false`, `memoryLimited=false`, peak `2852 MiB`.
+- Decision:
+  - Best-prefix split is not a viable near-term route for P06. It confirms the
+    right conceptual issue but still recomputes expensive processed-unseen
+    joins per split, so it spends budget and memory before materially lowering
+    the frontier.
+  - Keep the code path default-off and research-only for now; do not include it
+    in acceptance options.
+  - Next useful direction should avoid repeated per-split joins. The candidate
+    proof must either cache/reuse pair-frontier material across same-coarse
+    siblings or use a full-score-aware generated candidate certificate that
+    closes the high slot0 frontier in one pass.

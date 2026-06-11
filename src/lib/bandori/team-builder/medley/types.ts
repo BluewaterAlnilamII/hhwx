@@ -140,6 +140,8 @@ export type BandoriMedleySearchOptimizationOptions = {
   eventRootFrontierProbeAnchorCheapUpperUnseenRefineMaxGeneratedCandidates?: number;
   eventRootFrontierProbeAnchorCheapUpperProcessedUnseenJoin?: boolean;
   eventRootFrontierProbeAnchorCheapUpperRewindBothUnseen?: boolean;
+  eventRootFrontierProbeAnchorCheapUpperBestPrefixSplit?: boolean;
+  eventRootFrontierProbeAnchorCheapUpperBestPrefixSplitMaxAttempts?: number;
   eventRootFrontierProbeAnchorCheapUpperTargetedPairProofTimeboxMs?: number;
   eventRootFrontierProbeAnchorCheapUpperTargetedPairProofMaxEntries?: number;
   eventRootFrontierProbeAnchorCheapUpperTargetedPairProofCandidateLimit?: number;
@@ -653,6 +655,13 @@ export type BandoriMedleyTeamSearchProfilingStats = {
   exactCandidateJoinLastAnchorFrontierCheapUpperRewindProcessedEntryCount: number | null;
   exactCandidateJoinLastAnchorFrontierCheapUpperRewindElapsedMs: number | null;
   exactCandidateJoinLastAnchorFrontierCheapUpperRewindAbortReason: string | null;
+  exactCandidateJoinLastAnchorFrontierCheapUpperBestPrefixSplitAttemptCount: number | null;
+  exactCandidateJoinLastAnchorFrontierCheapUpperBestPrefixSplitImprovementCount: number | null;
+  exactCandidateJoinLastAnchorFrontierCheapUpperBestPrefixSplitUpperBound: number | null;
+  exactCandidateJoinLastAnchorFrontierCheapUpperBestPrefixSplitAnchorIndex: number | null;
+  exactCandidateJoinLastAnchorFrontierCheapUpperBestPrefixSplitProcessedEntryCount: number | null;
+  exactCandidateJoinLastAnchorFrontierCheapUpperBestPrefixSplitElapsedMs: number | null;
+  exactCandidateJoinLastAnchorFrontierCheapUpperBestPrefixSplitAbortReason: string | null;
   exactCandidateJoinLastAnchorFrontierCheapUpperMaxGeneratedPairOverlaps: boolean | null;
   exactCandidateJoinLastAnchorFrontierCheapUpperMaxGeneratedPairScoreOnly: number | null;
   exactCandidateJoinLastAnchorFrontierCheapUpperMaxGeneratedPairFullScore: number | null;
