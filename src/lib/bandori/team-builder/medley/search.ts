@@ -422,6 +422,21 @@ function buildProofLedger(
         anchorFrontierCheapUpperBestPrefixSplitAbortReason: (
           entry.exactCandidateJoinLastAnchorFrontierCheapUpperBestPrefixSplitAbortReason ?? null
         ),
+        anchorFrontierCheapUpperPairAnchorCoverUpperBound: (
+          asFiniteNumber(entry.exactCandidateJoinLastAnchorFrontierCheapUpperPairAnchorCoverUpperBound)
+        ),
+        anchorFrontierCheapUpperPairAnchorCoverPairCount: (
+          asFiniteNumber(entry.exactCandidateJoinLastAnchorFrontierCheapUpperPairAnchorCoverPairCount)
+        ),
+        anchorFrontierCheapUpperPairAnchorCoverDistinctCardCount: (
+          asFiniteNumber(entry.exactCandidateJoinLastAnchorFrontierCheapUpperPairAnchorCoverDistinctCardCount)
+        ),
+        anchorFrontierCheapUpperPairAnchorCoverElapsedMs: (
+          asFiniteNumber(entry.exactCandidateJoinLastAnchorFrontierCheapUpperPairAnchorCoverElapsedMs)
+        ),
+        anchorFrontierCheapUpperPairAnchorCoverAbortReason: (
+          entry.exactCandidateJoinLastAnchorFrontierCheapUpperPairAnchorCoverAbortReason ?? null
+        ),
         lowMemoryInitialCandidateScoreCacheClearCount: (
           asFiniteNumber(entry.exactCandidateJoinLowMemoryInitialCandidateScoreCacheClearCountDelta)
         ),
@@ -946,6 +961,21 @@ function buildBoundedFrontierGroups(
         anchorFrontierCheapUpperBestPrefixSplitAbortReason: (
           entry.exactCandidateJoinLastAnchorFrontierCheapUpperBestPrefixSplitAbortReason ?? null
         ),
+        anchorFrontierCheapUpperPairAnchorCoverUpperBound: (
+          entry.exactCandidateJoinLastAnchorFrontierCheapUpperPairAnchorCoverUpperBound ?? null
+        ),
+        anchorFrontierCheapUpperPairAnchorCoverPairCount: (
+          entry.exactCandidateJoinLastAnchorFrontierCheapUpperPairAnchorCoverPairCount ?? null
+        ),
+        anchorFrontierCheapUpperPairAnchorCoverDistinctCardCount: (
+          entry.exactCandidateJoinLastAnchorFrontierCheapUpperPairAnchorCoverDistinctCardCount ?? null
+        ),
+        anchorFrontierCheapUpperPairAnchorCoverElapsedMs: (
+          entry.exactCandidateJoinLastAnchorFrontierCheapUpperPairAnchorCoverElapsedMs ?? null
+        ),
+        anchorFrontierCheapUpperPairAnchorCoverAbortReason: (
+          entry.exactCandidateJoinLastAnchorFrontierCheapUpperPairAnchorCoverAbortReason ?? null
+        ),
         anchorFrontierCheapUpperUnseenRefineAttemptCount: (
           entry.exactCandidateJoinLastAnchorFrontierCheapUpperUnseenRefineAttemptCount ?? null
         ),
@@ -1371,6 +1401,18 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
   )
     ? Math.max(1, parsedEventRootFrontierProbeAnchorCheapUpperBestPrefixSplitMaxAttempts)
     : null;
+  const eventRootFrontierProbeAnchorCheapUpperPairAnchorCover = (
+    optimization.eventRootFrontierProbeAnchorCheapUpperPairAnchorCover === true
+  );
+  const parsedEventRootFrontierProbeAnchorCheapUpperPairAnchorCoverMaxPairs =
+    optimization.eventRootFrontierProbeAnchorCheapUpperPairAnchorCoverMaxPairs !== undefined
+      ? Math.trunc(optimization.eventRootFrontierProbeAnchorCheapUpperPairAnchorCoverMaxPairs)
+      : Number.NaN;
+  const eventRootFrontierProbeAnchorCheapUpperPairAnchorCoverMaxPairs = Number.isFinite(
+    parsedEventRootFrontierProbeAnchorCheapUpperPairAnchorCoverMaxPairs,
+  )
+    ? Math.max(1, parsedEventRootFrontierProbeAnchorCheapUpperPairAnchorCoverMaxPairs)
+    : null;
   const parsedEventRootFrontierProbeAnchorCheapUpperTargetedPairProofTimeboxMs =
     optimization.eventRootFrontierProbeAnchorCheapUpperTargetedPairProofTimeboxMs !== undefined
       ? Math.trunc(optimization.eventRootFrontierProbeAnchorCheapUpperTargetedPairProofTimeboxMs)
@@ -1451,6 +1493,10 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
       anchorFrontierCheapUpperBestPrefixSplit: eventRootFrontierProbeAnchorCheapUpperBestPrefixSplit,
       anchorFrontierCheapUpperBestPrefixSplitMaxAttempts: (
         eventRootFrontierProbeAnchorCheapUpperBestPrefixSplitMaxAttempts
+      ),
+      anchorFrontierCheapUpperPairAnchorCover: eventRootFrontierProbeAnchorCheapUpperPairAnchorCover,
+      anchorFrontierCheapUpperPairAnchorCoverMaxPairs: (
+        eventRootFrontierProbeAnchorCheapUpperPairAnchorCoverMaxPairs
       ),
       anchorFrontierCheapUpperTargetedPairProofTimeboxMs: (
         eventRootFrontierProbeAnchorCheapUpperTargetedPairProofTimeboxMs
@@ -3815,6 +3861,21 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
           exactCandidateJoinLastAnchorFrontierCheapUpperBestPrefixSplitAbortReason: (
             profiling.exactCandidateJoinLastAnchorFrontierCheapUpperBestPrefixSplitAbortReason
           ),
+          exactCandidateJoinLastAnchorFrontierCheapUpperPairAnchorCoverUpperBound: (
+            profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairAnchorCoverUpperBound
+          ),
+          exactCandidateJoinLastAnchorFrontierCheapUpperPairAnchorCoverPairCount: (
+            profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairAnchorCoverPairCount
+          ),
+          exactCandidateJoinLastAnchorFrontierCheapUpperPairAnchorCoverDistinctCardCount: (
+            profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairAnchorCoverDistinctCardCount
+          ),
+          exactCandidateJoinLastAnchorFrontierCheapUpperPairAnchorCoverElapsedMs: (
+            profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairAnchorCoverElapsedMs
+          ),
+          exactCandidateJoinLastAnchorFrontierCheapUpperPairAnchorCoverAbortReason: (
+            profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairAnchorCoverAbortReason
+          ),
           exactCandidateJoinLastAnchorFrontierCheapUpperMaxGeneratedPairOverlaps: (
             profiling.exactCandidateJoinLastAnchorFrontierCheapUpperMaxGeneratedPairOverlaps
           ),
@@ -5454,6 +5515,12 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
         traceEntry.eventRootFrontierProbeAnchorCheapUpperBestPrefixSplitMaxAttempts = (
           eventRootFrontierProbeAnchorCheapUpperBestPrefixSplitMaxAttempts
         );
+        traceEntry.eventRootFrontierProbeAnchorCheapUpperPairAnchorCover = (
+          eventRootFrontierProbeAnchorCheapUpperPairAnchorCover
+        );
+        traceEntry.eventRootFrontierProbeAnchorCheapUpperPairAnchorCoverMaxPairs = (
+          eventRootFrontierProbeAnchorCheapUpperPairAnchorCoverMaxPairs
+        );
         traceEntry.eventRootFrontierProbeAnchorCheapUpperTargetedPairProofTimeboxMs = (
           eventRootFrontierProbeAnchorCheapUpperTargetedPairProofTimeboxMs
         );
@@ -5561,6 +5628,10 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
           anchorFrontierCheapUpperBestPrefixSplit: eventRootFrontierProbeAnchorCheapUpperBestPrefixSplit,
           anchorFrontierCheapUpperBestPrefixSplitMaxAttempts: (
             eventRootFrontierProbeAnchorCheapUpperBestPrefixSplitMaxAttempts
+          ),
+          anchorFrontierCheapUpperPairAnchorCover: eventRootFrontierProbeAnchorCheapUpperPairAnchorCover,
+          anchorFrontierCheapUpperPairAnchorCoverMaxPairs: (
+            eventRootFrontierProbeAnchorCheapUpperPairAnchorCoverMaxPairs
           ),
           anchorFrontierCheapUpperTargetedPairProofTimeboxMs: (
             eventRootFrontierProbeAnchorCheapUpperTargetedPairProofTimeboxMs

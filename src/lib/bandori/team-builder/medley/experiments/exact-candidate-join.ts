@@ -3904,6 +3904,8 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
     rewindBothUnseen?: boolean;
     bestPrefixSplit?: boolean;
     bestPrefixSplitMaxAttempts?: number | null;
+    pairAnchorCover?: boolean;
+    pairAnchorCoverMaxPairs?: number | null;
     targetedPairProofTimeboxMs?: number | null;
     targetedPairProofMaxEntries?: number | null;
     targetedPairProofCandidateLimit?: number | null;
@@ -3963,6 +3965,14 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
   )
     ? Math.max(1, Math.trunc(options.bestPrefixSplitMaxAttempts))
     : 4;
+  const shouldUsePairAnchorCover = options.pairAnchorCover === true;
+  const pairAnchorCoverMaxPairs = (
+    options.pairAnchorCoverMaxPairs !== null
+    && options.pairAnchorCoverMaxPairs !== undefined
+    && Number.isFinite(options.pairAnchorCoverMaxPairs)
+  )
+    ? Math.max(1, Math.trunc(options.pairAnchorCoverMaxPairs))
+    : 2_500_000;
   const refineTopAnchorCount = (
     options.refineTopAnchors !== null
     && options.refineTopAnchors !== undefined
@@ -4163,6 +4173,11 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
   profiling.exactCandidateJoinLastAnchorFrontierCheapUpperBestPrefixSplitProcessedEntryCount = null;
   profiling.exactCandidateJoinLastAnchorFrontierCheapUpperBestPrefixSplitElapsedMs = null;
   profiling.exactCandidateJoinLastAnchorFrontierCheapUpperBestPrefixSplitAbortReason = null;
+  profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairAnchorCoverUpperBound = null;
+  profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairAnchorCoverPairCount = null;
+  profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairAnchorCoverDistinctCardCount = null;
+  profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairAnchorCoverElapsedMs = null;
+  profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairAnchorCoverAbortReason = null;
   profiling.exactCandidateJoinLastAnchorFrontierCheapUpperMaxGeneratedPairOverlaps = null;
   profiling.exactCandidateJoinLastAnchorFrontierCheapUpperMaxGeneratedPairScoreOnly = null;
   profiling.exactCandidateJoinLastAnchorFrontierCheapUpperMaxGeneratedPairFullScore = null;
@@ -4635,6 +4650,122 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
     const upper = estimateSlotUpperExcludingCardIds(slotIndex, [[cardId]]);
     singleCardSlotUpperByKey.set(key, upper);
     return upper;
+  };
+  const estimatePairAnchorCoverUpper = (
+    startAnchorIndex: number | null,
+  ): {
+    upperBound: number | null;
+    pairCount: number;
+    distinctCardCount: number;
+    elapsedMs: number;
+    abortReason: string | null;
+  } => {
+    if (
+      !shouldUsePairAnchorCover
+      || startAnchorIndex === null
+      || startAnchorIndex >= anchorCandidates.length
+    ) {
+      return {
+        upperBound: null,
+        pairCount: 0,
+        distinctCardCount: 0,
+        elapsedMs: 0,
+        abortReason: null,
+      };
+    }
+    const coverStartedAt = performance.now();
+    const baseAnchorUpper = Math.max(
+      anchorCandidates[startAnchorIndex]?.result.score ?? Number.NEGATIVE_INFINITY,
+      finiteScore(anchorPeekUpperBound),
+    );
+    const bestRightScore = rightCandidates[0]?.result.score ?? Number.NEGATIVE_INFINITY;
+    if (!Number.isFinite(baseAnchorUpper) || !Number.isFinite(bestRightScore)) {
+      return {
+        upperBound: null,
+        pairCount: 0,
+        distinctCardCount: 0,
+        elapsedMs: performance.now() - coverStartedAt,
+        abortReason: null,
+      };
+    }
+    const frontierHeap: MedleyExactCandidatePairFrontierHeapNode[] = [];
+    let upperBound = incumbentScore;
+    for (let leftIndex = 0; leftIndex < leftCandidates.length; leftIndex += 1) {
+      const score = leftCandidates[leftIndex].result.score + bestRightScore;
+      if (score + baseAnchorUpper <= upperBound) {
+        break;
+      }
+      pushMedleyExactCandidatePairFrontierHeapNode(frontierHeap, {
+        score,
+        leftIndex,
+        rightIndex: 0,
+      });
+    }
+    let pairCount = 0;
+    const coveredCardIds = new Set<number>();
+    while (frontierHeap.length > 0) {
+      if (performance.now() >= localDeadlineAt) {
+        frontierHeap.length = 0;
+        return {
+          upperBound: null,
+          pairCount,
+          distinctCardCount: coveredCardIds.size,
+          elapsedMs: performance.now() - coverStartedAt,
+          abortReason: "timebox",
+        };
+      }
+      if (pairCount >= pairAnchorCoverMaxPairs) {
+        frontierHeap.length = 0;
+        return {
+          upperBound: null,
+          pairCount,
+          distinctCardCount: coveredCardIds.size,
+          elapsedMs: performance.now() - coverStartedAt,
+          abortReason: "pair-limit",
+        };
+      }
+      const node = popMedleyExactCandidatePairFrontierHeapNode(frontierHeap);
+      if (!node || node.score + baseAnchorUpper <= upperBound) {
+        break;
+      }
+      const leftCandidate = leftCandidates[node.leftIndex];
+      const rightCandidate = rightCandidates[node.rightIndex];
+      if (leftCandidate && rightCandidate) {
+        if (!medleyExactCandidatesOverlap(leftCandidate, rightCandidate)) {
+          pairCount += 1;
+          let anchorUpper = baseAnchorUpper;
+          for (const cardId of leftCandidate.cardIds) {
+            coveredCardIds.add(cardId);
+            anchorUpper = Math.min(anchorUpper, estimateSlotUpperExcludingSingleCardId(anchorSlotIndex, cardId));
+          }
+          for (const cardId of rightCandidate.cardIds) {
+            coveredCardIds.add(cardId);
+            anchorUpper = Math.min(anchorUpper, estimateSlotUpperExcludingSingleCardId(anchorSlotIndex, cardId));
+          }
+          upperBound = Math.max(upperBound, node.score + anchorUpper);
+        }
+        const nextRightIndex = node.rightIndex + 1;
+        const nextRightCandidate = rightCandidates[nextRightIndex];
+        if (nextRightCandidate) {
+          const nextScore = leftCandidate.result.score + nextRightCandidate.result.score;
+          if (nextScore + baseAnchorUpper > upperBound) {
+            pushMedleyExactCandidatePairFrontierHeapNode(frontierHeap, {
+              score: nextScore,
+              leftIndex: node.leftIndex,
+              rightIndex: nextRightIndex,
+            });
+          }
+        }
+      }
+    }
+    frontierHeap.length = 0;
+    return {
+      upperBound,
+      pairCount,
+      distinctCardCount: coveredCardIds.size,
+      elapsedMs: performance.now() - coverStartedAt,
+      abortReason: null,
+    };
   };
   const estimateSingleCardLimitedUnseenUpper = (
     unseenSlotIndex: number,
@@ -5746,9 +5877,12 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
         suffixRightUnseenSingleCardJoin.upperBound,
       )
       : null;
+    const pairAnchorCover = estimatePairAnchorCoverUpper(nextAnchorIndex);
+    const pairAnchorCoverTimedOut = pairAnchorCover.abortReason !== null;
     const suffixUpperBounds = [
       suffixCoverUpperBound,
       suffixJoinUpperBound,
+      pairAnchorCover.abortReason === null ? pairAnchorCover.upperBound : null,
     ].filter((upperBound): upperBound is number => (
       upperBound !== null && Number.isFinite(upperBound)
     ));
@@ -5973,6 +6107,7 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
       || suffixCoverTimedOut
       || suffixGeneratedPairJoinTimedOut
       || suffixUnseenSingleCardJoinTimedOut
+      || pairAnchorCoverTimedOut
       || processedUnseenJoinTimedOut
     ) {
       profiling.exactCandidateJoinAnchorFrontierCheapUpperTimeboxCount += 1;
@@ -6142,6 +6277,21 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
     profiling.exactCandidateJoinLastAnchorFrontierCheapUpperBestPrefixSplitAbortReason = (
       bestPrefixSplitAbortReason
     );
+    profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairAnchorCoverUpperBound = (
+      pairAnchorCover.upperBound !== null ? Math.ceil(pairAnchorCover.upperBound) : null
+    );
+    profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairAnchorCoverPairCount = (
+      pairAnchorCover.pairCount
+    );
+    profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairAnchorCoverDistinctCardCount = (
+      pairAnchorCover.distinctCardCount
+    );
+    profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairAnchorCoverElapsedMs = Math.round(
+      pairAnchorCover.elapsedMs,
+    );
+    profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairAnchorCoverAbortReason = (
+      pairAnchorCover.abortReason
+    );
     if (processedUpperMaxLeftGeneratedCandidate && processedUpperMaxRightGeneratedCandidate) {
       const generatedPairOverlaps = medleyExactCandidatesOverlap(
         processedUpperMaxLeftGeneratedCandidate,
@@ -6190,6 +6340,7 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
         || suffixCoverTimedOut
         || suffixGeneratedPairJoinTimedOut
         || suffixUnseenSingleCardJoinTimedOut
+        || pairAnchorCoverTimedOut
         || processedUnseenJoinTimedOut
       ),
       result: targetedPairProofResult,
@@ -6479,6 +6630,8 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     anchorFrontierCheapUpperRewindBothUnseen?: boolean;
     anchorFrontierCheapUpperBestPrefixSplit?: boolean;
     anchorFrontierCheapUpperBestPrefixSplitMaxAttempts?: number | null;
+    anchorFrontierCheapUpperPairAnchorCover?: boolean;
+    anchorFrontierCheapUpperPairAnchorCoverMaxPairs?: number | null;
     anchorFrontierCheapUpperTargetedPairProofTimeboxMs?: number | null;
     anchorFrontierCheapUpperTargetedPairProofMaxEntries?: number | null;
     anchorFrontierCheapUpperTargetedPairProofCandidateLimit?: number | null;
@@ -6978,6 +7131,8 @@ export function searchMedleyConfigurationByExactCandidateJoin(
           rewindBothUnseen: context.anchorFrontierCheapUpperRewindBothUnseen,
           bestPrefixSplit: context.anchorFrontierCheapUpperBestPrefixSplit,
           bestPrefixSplitMaxAttempts: context.anchorFrontierCheapUpperBestPrefixSplitMaxAttempts,
+          pairAnchorCover: context.anchorFrontierCheapUpperPairAnchorCover,
+          pairAnchorCoverMaxPairs: context.anchorFrontierCheapUpperPairAnchorCoverMaxPairs,
           targetedPairProofTimeboxMs: context.anchorFrontierCheapUpperTargetedPairProofTimeboxMs,
           targetedPairProofMaxEntries: context.anchorFrontierCheapUpperTargetedPairProofMaxEntries,
           targetedPairProofCandidateLimit: context.anchorFrontierCheapUpperTargetedPairProofCandidateLimit,

@@ -4273,3 +4273,38 @@ P07 failed follow-ups after P03 fix:
     proof must either cache/reuse pair-frontier material across same-coarse
     siblings or use a full-score-aware generated candidate certificate that
     closes the high slot0 frontier in one pass.
+
+2026-06-11 17:12 CST pair-anchor cover diagnostic:
+
+- Code added, default-off:
+  - `eventRootFrontierProbeAnchorCheapUpperPairAnchorCover`.
+  - `eventRootFrontierProbeAnchorCheapUpperPairAnchorCoverMaxPairs`.
+  - Profiling fields:
+    `exactCandidateJoinLastAnchorFrontierCheapUpperPairAnchorCoverUpperBound`,
+    `...PairCount`, `...DistinctCardCount`, `...ElapsedMs`, and
+    `...AbortReason`.
+- Purpose:
+  - Test a more general one-pass frontier certificate: enumerate high
+    slot1/slot2 pairs and bound the unprocessed slot0 anchor suffix after
+    banning the pair cards.
+  - This avoids increasing slot0 candidate K and avoids recomputing
+    processed-unseen joins for multiple split points.
+- Diagnostic run, `P06:323`, no GC, non-debug, pair-anchor cover only:
+  - Raw:
+    `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-11T09-07-27-415Z.json`
+  - Result: bounded, elapsed `111981ms`, score `9488172`, upper `9773821`,
+    gap `285649`, `timedOut=false`, `memoryLimited=false`, peak `4153 MiB`.
+  - Pair-anchor cover completed quickly: upper `9773821`, pair count `1`,
+    distinct card count `10`, elapsed `667ms`, abort `null`.
+  - Residual source became `unprocessed-anchor-suffix-cover`, but the bound was
+    identical to the old unprocessed-anchor upper.
+- Decision:
+  - Pair-card conflict cover is not the dominant blocker. The highest pair does
+    not reduce slot0's anchor upper, so the remaining gap is not primarily a
+    cross-slot duplicate-card proof issue.
+  - Do not promote pair-anchor cover as an acceptance option.
+  - The next useful implementation should be full-score-aware: the current
+    upper is still driven by slot0 score-only anchor upper (`2805208`) plus the
+    pair upper (`6968613`). Closing P06 needs a certificate that accounts for
+    hydration/full-score slack or otherwise bounds the generated candidate
+    frontier by final medley result score, not just score-only candidate order.
