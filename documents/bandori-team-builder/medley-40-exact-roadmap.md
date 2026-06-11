@@ -5649,3 +5649,42 @@ P07 failed follow-ups after P03 fix:
     to be enough; the promising direction is a reusable/cached certificate for
     the same event-root anchor frontier or a tighter upper for the unprocessed
     generator peek.
+
+2026-06-12 05:32 CST rejected unprocessed pair dual-reuse cap:
+
+- Experiment:
+  - Temporarily changed the unprocessed generator tail from
+    `anchorPeekUpperBound + capPairUpper(pairUpperBound, [])` to also try the
+    already learned shared-power dual parameter reuse for the no-banned-card
+    pair upper.
+  - Rationale: the tail is a superset of every actual pair compatible with an
+    unmaterialized anchor, so a valid no-banned-card pair upper would be safe
+    for proof and would avoid generating more anchors.
+- Code path:
+  - Added in commit `a7611fd Tighten unprocessed medley pair upper with dual reuse`.
+  - Reverted in commit `28940e3 Revert "Tighten unprocessed medley pair upper with dual reuse"`.
+- Diagnostic:
+  - Raw:
+    `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-11T21-22-36-602Z.json`.
+  - Same `P06:323` no-GC debug setup as the `maxCalls=4` run; dominated-root
+    frontier pass was not enabled.
+  - Result: bounded, score `9488172`, maxScore `9567356`, upper `9935586`,
+    gap `447414`, elapsed `216698ms`, peak `4031 MiB`, no timeout and no
+    memory limit.
+- Finding:
+  - The unprocessed pair upper did not move. `PastelPalettes/cool` performance
+    remained at unprocessed anchor `2616168` plus unprocessed pair `6968613`,
+    residual upper `9584781`, gap `97820`.
+  - Technique remained at unprocessed anchor `2615213` plus pair `6964010`,
+    residual upper `9579223`, gap `91051`.
+  - Visual again failed to reach an effective cheap-upper result in this run,
+    so the global upper reverted to the old high visual bound `10076136`.
+- Decision:
+  - Rejected and reverted. The already learned dual parameters are useful for
+    many processed anchor bans, but they do not tighten the no-banned-card pair
+    upper that drives `unprocessed-generator-peek`.
+  - Next direction should not be another no-bans pair cap. It should either
+    tighten the anchor generator tail itself, reduce the need to leave a large
+    unmaterialized anchor tail, or amortize suffix/frontier proof across the
+    three `PastelPalettes/cool` parameters so the third parameter reliably
+    reaches the cheap-upper stage.
