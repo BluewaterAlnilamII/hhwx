@@ -3509,3 +3509,31 @@ P07 failed follow-ups after P03 fix:
   - Do not spend more work on generated-pair join itself until unseen proof can
     consume its result; the generated-pair join is useful evidence but not yet a
     standalone exactness improvement.
+
+2026-06-11 10:25 CST P06 processed-unseen refine check:
+
+- Existing option checked:
+  `eventRootFrontierProbeAnchorCheapUpperRefineUnseen=true` with
+  `eventRootFrontierProbeAnchorCheapUpperUnseenRefineMaxGeneratedCandidates=512`
+  and generated-pair suffix join also enabled.
+- Raw:
+  `temp/bandori-team-builder/real-profile-medley-scope-matrix-2026-06-11T02-03-38-543Z.json`
+- Result: bounded, `215579ms`, score `9488172`, upper `9773821`,
+  gap `285649`, peak `4086 MiB`.
+- Processed-entry unseen refine did work:
+  - attempts: `1082`
+  - generated candidates scanned: `26082`
+  - improvements: `870`
+  - abort: `null`
+  - processed max source stayed `right-unseen`, but dropped to
+    `3054218 + 6547626 = 9601844`.
+- Tradeoff:
+  - generated-pair suffix join timed out in this run (`22183ms`, abort
+    `timebox`) because processed-unseen refine consumed the cheap-upper budget.
+  - The upper still remained dominated by the unprocessed suffix.
+- Decision:
+  - Per-entry unseen refine is directionally useful but too local and too
+    expensive to combine naively with suffix proof.
+  - The next algorithm patch should amortize unseen proof globally across the
+    suffix, not simply raise `unseenRefineMaxGeneratedCandidates` or apply the
+    current per-anchor refine loop to `185681` suffix anchors.
