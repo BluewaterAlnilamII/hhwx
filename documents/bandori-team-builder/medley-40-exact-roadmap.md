@@ -1,6 +1,6 @@
 # Medley 40/40 Exact Roadmap
 
-Last updated: 2026-06-12 07:00 CST
+Last updated: 2026-06-12 07:45 CST
 
 This file is the persistent working note for the current medley optimizer goal.
 Keep it current before and after benchmark runs or proof-path changes, so future
@@ -59,6 +59,60 @@ No-GC acceptance contract:
   analysis if any row is bounded.
 
 2026-06-12 06:20 CST P06 frontier experiments after max4 dual reuse:
+
+- Late shared-power dual repair extra-call diagnostic:
+  - Code change: added default-off
+    `eventRootFrontierProbeAnchorCheapUpperPairCapacitySharedPowerDualLateMaxRepairExtraCalls`
+    and a profiling counter for extra direct dual calls used by late repair.
+    The default value is `0`, so normal proof behavior is unchanged.
+  - Raw extra `3`:
+    `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-11T23-06-42-178Z.json`.
+    Result: bounded, score `9488172`, maxScore `9567356`, upper `9631451`,
+    gap `143279`, elapsed `252399ms`, peak `3671 MiB`, no timeout and no
+    memory limit. The final local cheap upper for `PastelPalettes/cool/visual`
+    was `9570748`, local residual gap `82576`, source
+    `unprocessed-generator-peek`. Late repair made `3` improvements and spent
+    about `1857ms`, but the global result was still dominated by
+    `Morfonica/cool` root skips.
+  - Raw extra `10`:
+    `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-11T23-26-10-897Z.json`.
+    Result: bounded, score `9488172`, upper `9631451`, gap `143279`, elapsed
+    `269190ms`, peak `3688 MiB`. It made `10` late-repair improvements and
+    spent about `5796ms`, but the last local residual still stayed
+    `9570748` from `unprocessed-generator-peek`; the generated suffix join
+    upper was already lower at about `9558372`.
+  - Decision: keep the extra-call knob as diagnostic-only. Increasing late
+    repair calls attacks processed pair-capacity slack, but the current P06
+    blocker has moved to the anchor/generator tail upper. More repair calls
+    add time without moving the accepted upper.
+
+- Rejected larger anchor-processing probe:
+  - Raw:
+    `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-11T23-32-43-247Z.json`.
+  - Options: same no-GC P06 setup as the accepted max4 dual reuse run, but
+    `eventRootFrontierProbeAnchorCheapUpperMaxAnchors=26000`.
+  - Result: bounded, score `9488172`, upper `10036137`, gap `587965`,
+    elapsed `220518ms`, peak `4512 MiB`, `timedOut=true`,
+    `memoryLimited=true`.
+  - Decision: do not pursue "just process more anchors" as the primary route.
+    It can push against the generator-tail problem, but it is not stable under
+    the current memory gate and can starve later same-coarse proof work.
+
+- Dominated-root pass interaction finding:
+  - Debug raw:
+    `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-11T23-17-37-493Z.json`.
+  - With late repair extra `3` and dominated-root pass enabled, the top
+    unclosed rows were `Morfonica/cool/performance` gap about `143278`,
+    `Morfonica/cool/technique` gap about `123866`, and
+    `Morfonica/cool/visual` gap about `118676`, all with
+    `dominatedRootFrontierPass=false`. The same report still had
+    `PastelPalettes/cool` local gaps of about `97820`, `91051`, and `82576`.
+  - Interpretation: closing later root skips alone cannot make P06 exact while
+    `PastelPalettes/cool` still has a residual gap, and the current dominated
+    pass is also sensitive to earlier same-coarse residual thresholds. Any
+    dominated-root scheduling change should be paired with a lower-memory
+    closure of the `PastelPalettes/cool` frontier; otherwise it only moves the
+    top unclosed row.
 
 - Low-memory streaming anchor-tail diagnostic:
   - Code change: added default-off

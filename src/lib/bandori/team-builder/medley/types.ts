@@ -166,6 +166,7 @@ export type BandoriMedleySearchOptimizationOptions = {
   eventRootFrontierProbeAnchorCheapUpperPairCapacitySharedPowerDualCap?: boolean;
   eventRootFrontierProbeAnchorCheapUpperPairCapacitySharedPowerDualCapMaxCalls?: number;
   eventRootFrontierProbeAnchorCheapUpperPairCapacitySharedPowerDualLateMaxRepair?: boolean;
+  eventRootFrontierProbeAnchorCheapUpperPairCapacitySharedPowerDualLateMaxRepairExtraCalls?: number;
   eventRootFrontierProbeAnchorCheapUpperPairCapacitySharedPowerBreakdown?: boolean;
   eventRootFrontierProbeAnchorCheapUpperPairCapacitySharedPowerStateBudget?: number;
   eventRootFrontierProbeAnchorCheapUpperTargetedPairProofTimeboxMs?: number;
@@ -739,6 +740,7 @@ export type BandoriMedleyTeamSearchProfilingStats = {
   exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacitySharedPowerDualLateRepairAttemptCount: number | null;
   exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacitySharedPowerDualLateRepairImprovementCount: number | null;
   exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacitySharedPowerDualLateRepairBestImprovement: number | null;
+  exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacitySharedPowerDualLateRepairExtraCallCount: number | null;
   exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacitySharedPowerDualLateRepairElapsedMs: number | null;
   exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacityBreakdownTargetPairUpper: number | null;
   exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacityBreakdownSelectedUpper: number | null;
