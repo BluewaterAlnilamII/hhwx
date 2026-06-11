@@ -150,6 +150,13 @@ function asFiniteNumberArray(value: unknown): number[] | null {
   return numbers.every((number) => number !== null) ? numbers as number[] : null;
 }
 
+function asNullableFiniteNumberArray(value: unknown): Array<number | null> | null {
+  if (!Array.isArray(value)) {
+    return null;
+  }
+  return value.map(asFiniteNumber);
+}
+
 function asStringArray(value: unknown): string[] | null {
   if (!Array.isArray(value) || !value.every((entry) => typeof entry === "string")) {
     return null;
@@ -252,9 +259,12 @@ function buildProofLedger(
       exactJoinAbortSlotIndex: entry.exactCandidateJoinAbortSlotIndex ?? null,
       exactJoinAbortRemainingMs: entry.exactCandidateJoinAbortRemainingMs ?? null,
       candidateCountsBySlot: asFiniteNumberArray(entry.exactCandidateJoinLastCandidateCountsBySlot),
-      candidateCutoffsBySlot: asFiniteNumberArray(entry.exactCandidateJoinCandidateCutoffsBySlot),
-      pairUpperByExcludedSlot: asFiniteNumberArray(entry.exactCandidateJoinPairUpperByExcludedSlot),
-      pairUnseenUpperByExcludedSlot: asFiniteNumberArray(entry.exactCandidateJoinPairUnseenUpperByExcludedSlot),
+      candidateCutoffsBySlot: asNullableFiniteNumberArray(entry.exactCandidateJoinCandidateCutoffsBySlot),
+      otherUpperBySlot: asNullableFiniteNumberArray(entry.exactCandidateJoinOtherUpperBySlot),
+      relaxedOtherUpperBySlot: asNullableFiniteNumberArray(entry.exactCandidateJoinRelaxedOtherUpperBySlot),
+      remainingOtherUpperBySlot: asNullableFiniteNumberArray(entry.exactCandidateJoinRemainingOtherUpperBySlot),
+      pairUpperByExcludedSlot: asNullableFiniteNumberArray(entry.exactCandidateJoinPairUpperByExcludedSlot),
+      pairUnseenUpperByExcludedSlot: asNullableFiniteNumberArray(entry.exactCandidateJoinPairUnseenUpperByExcludedSlot),
       pairRootUpperBound: asFiniteNumber(entry.exactCandidateJoinPairRootUpperBound),
       phaseElapsedMs: {
         initialCandidate: asFiniteNumber(entry.exactCandidateJoinInitialCandidateElapsedMsDelta),
@@ -740,6 +750,13 @@ function buildBoundedFrontierGroups(
       abortSlotIndex: entry.exactCandidateJoinAbortSlotIndex ?? null,
       abortCandidateSoftLimit: entry.exactCandidateJoinAbortCandidateSoftLimit ?? null,
       candidateCountsBySlot: entry.exactCandidateJoinLastCandidateCountsBySlot ?? null,
+      candidateCutoffsBySlot: asNullableFiniteNumberArray(entry.exactCandidateJoinCandidateCutoffsBySlot),
+      otherUpperBySlot: asNullableFiniteNumberArray(entry.exactCandidateJoinOtherUpperBySlot),
+      relaxedOtherUpperBySlot: asNullableFiniteNumberArray(entry.exactCandidateJoinRelaxedOtherUpperBySlot),
+      remainingOtherUpperBySlot: asNullableFiniteNumberArray(entry.exactCandidateJoinRemainingOtherUpperBySlot),
+      pairUpperByExcludedSlot: asNullableFiniteNumberArray(entry.exactCandidateJoinPairUpperByExcludedSlot),
+      pairUnseenUpperByExcludedSlot: asNullableFiniteNumberArray(entry.exactCandidateJoinPairUnseenUpperByExcludedSlot),
+      pairRootUpperBound: asFiniteNumber(entry.exactCandidateJoinPairRootUpperBound),
       anchorFrontierProofSkipReason: entry.exactCandidateJoinLastAnchorFrontierProofSkipReason ?? null,
       anchorFrontierProofHighPairRecordUpperCount: (
         entry.exactCandidateJoinLastAnchorFrontierProofHighPairRecordUpperCount ?? null
