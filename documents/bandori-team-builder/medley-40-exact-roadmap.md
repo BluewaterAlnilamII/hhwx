@@ -3581,3 +3581,38 @@ P07 failed follow-ups after P03 fix:
     need either their own reduced proof pass or a safe parameter-aware reuse of
     the suffix frontier diagnostics. Without that, time shifts from the first
     parameter to same-coarse skipped siblings.
+
+2026-06-11 10:55 CST P06 450s same-coarse confirmation:
+
+- Raw:
+  `temp/bandori-team-builder/real-profile-medley-scope-matrix-2026-06-11T02-32-08-251Z.json`
+- Options:
+  - same suffix generated-pair + full-card unseen join path as the 300s
+    combined run.
+  - `HHWX_REAL_PROFILE_DURATION_MS=450000`.
+- Result:
+  - bounded, score `9488172`, global upper `9636601`, gap `148429`.
+  - elapsed about `262397ms`; this was not a simple full-duration timeout.
+  - completed configurations stayed `0`; root-pruned configurations reached
+    `99`.
+- Top unclosed configurations:
+  - `PastelPalettes/cool/performance`: status
+    `large-gap-event-skip-seeding`, upper `9636601`, gap `149640`.
+  - `PastelPalettes/cool/technique`: status `exact-unproved-skip-dfs`,
+    abort `solve-dominated-same-coarse-frontier`, upper `9636601`, gap
+    `148429`, `frontierRetryCandidate=true`.
+  - `PastelPalettes/cool/visual`: status `exact-unproved-skip-dfs`,
+    abort `solve-dominated-same-coarse-frontier`, upper `9636601`, gap
+    `148429`, `frontierRetryCandidate=true`.
+  - Next blockers are `Morfonica/cool/*` dominated-root entries around
+    `9631450`, `9612038`, and `9606848`.
+- Interpretation:
+  - The 450s run rules out the narrow explanation that the 300s run failed only
+    because same-coarse siblings did not have enough remaining wall time.
+  - Suffix proof now closes the original unprocessed-suffix blocker, but the
+    same-coarse sibling path retains or reuses a conservative `9636601` upper
+    without completing a proof.
+  - The next patch should first make the same-coarse dominated frontier behavior
+    explainable and optionally force a sibling proof attempt for diagnosis. A
+    cross-parameter proof reuse must be treated as unsafe unless a
+    parameter-aware bound can be demonstrated.

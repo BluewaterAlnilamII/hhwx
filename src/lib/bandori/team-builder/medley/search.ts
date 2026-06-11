@@ -939,6 +939,9 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
   const requestedEnableTrailingSameCoarseDfsOnly = optimization.enableTrailingSameCoarseDfsOnly === true;
   const disableDominatedRootSkip = optimization.disableDominatedRootSkip === true;
   const disableSameCoarseTightRootSkip = optimization.disableSameCoarseTightRootSkip === true;
+  const enableSameCoarseFrontierFullProofRetry = (
+    optimization.enableSameCoarseFrontierFullProofRetry === true
+  );
   const enableSameCoarseLowRootFirstProofOrder = optimization.enableSameCoarseLowRootFirstProofOrder === true;
   const parsedSameCoarseLowRootFirstProofMaxGroupRootGap = (
     optimization.sameCoarseLowRootFirstProofMaxGroupRootGap !== undefined
@@ -4315,9 +4318,14 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
         traceEntry.sameCoarseFrontierRetryUnresolvedGap = sameCoarseFrontierRetryUnresolvedGap;
         traceEntry.sameCoarseFrontierRetryHasRememberedSibling = hasRememberedSameCoarseFrontierSibling;
         traceEntry.sameCoarseFrontierRetryRemainingMs = Math.round(remainingBeforeSameCoarseFrontierRetryMs);
+        traceEntry.sameCoarseFrontierFullProofRetry = (
+          shouldRetrySameCoarseFrontier && enableSameCoarseFrontierFullProofRetry
+        );
       }
       if (shouldRetrySameCoarseFrontier) {
-        sameCoarseFrontierRetryTargetUpperBound = rememberedSameCoarseSiblingUpperBound;
+        sameCoarseFrontierRetryTargetUpperBound = enableSameCoarseFrontierFullProofRetry
+          ? null
+          : rememberedSameCoarseSiblingUpperBound;
         observeUpperBound(sameCoarseRootSkipUpperBound, "dfs-remaining", MEDLEY_TEAM_COUNT);
         rememberUnclosedConfigurationUpperBound(
           configurationIndex,

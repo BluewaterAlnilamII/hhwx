@@ -107,6 +107,7 @@ export type BandoriMedleySearchOptimizationOptions = {
   enableTrailingSameCoarseDfsOnly?: boolean;
   disableDominatedRootSkip?: boolean;
   disableSameCoarseTightRootSkip?: boolean;
+  enableSameCoarseFrontierFullProofRetry?: boolean;
   enableSameCoarseLowRootFirstProofOrder?: boolean;
   enableAllScopeExactJoinPreSkip?: boolean;
   disableAllScopeExactJoinPreSkip?: boolean;
