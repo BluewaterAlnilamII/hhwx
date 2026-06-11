@@ -4783,11 +4783,13 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
     type EventRootFrontierProbeTriggerStatus =
       | "full-width-event-skip-seeding"
       | "large-gap-event-skip-seeding"
+      | "same-coarse-frontier-skip-seeding"
       | "post-exact-frontier";
     type EventRootFrontierProbeOutcome = "not-run" | "continue-search" | "break-search";
     type EventRootFrontierProbeOptions = {
       allowAfterExactJoin?: boolean;
       allowExactCandidateJoinUpper?: boolean;
+      allowDfsRemainingUpper?: boolean;
     };
     const canRunPostExactEventRootFrontierProbe = (
       abortReason: MedleyExactCandidateJoinAbortReason,
@@ -4871,6 +4873,10 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
         || (
           options.allowExactCandidateJoinUpper === true
           && activeConfigurationObservedUpperBoundSource === "exact-candidate-join"
+        )
+        || (
+          options.allowDfsRemainingUpper === true
+          && activeConfigurationObservedUpperBoundSource === "dfs-remaining"
         );
       if (!isAllowedUpperSource) {
         recordEventRootFrontierProbeSkip("non-root-upper", upperBefore);
@@ -5220,6 +5226,25 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
       }
       return "not-run";
     };
+
+    if (
+      shouldUseSameCoarseFrontierEventProbeBeforeExactJoin
+      && !didAttemptExactCandidateJoin
+    ) {
+      const eventRootProbe = maybeRunEventRootFrontierProbe("same-coarse-frontier-skip-seeding", {
+        allowDfsRemainingUpper: true,
+      });
+      if (eventRootProbe === "continue-search") {
+        continue;
+      }
+      if (eventRootProbe === "break-search") {
+        break;
+      }
+      didLeaveUnclosedAreaItemConfiguration = true;
+      rememberActiveConfigurationUpperBound();
+      finishConfigurationTrace("same-coarse-frontier-skip-seeding");
+      continue;
+    }
 
     if (
       shouldSkipDfsAfterUnprovedExactCandidateJoin
