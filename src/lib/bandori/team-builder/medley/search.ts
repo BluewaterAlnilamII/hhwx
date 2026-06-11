@@ -333,6 +333,45 @@ function buildProofLedger(
         anchorFrontierCheapUpperTargetedPairProofAbortReason: (
           entry.exactCandidateJoinLastAnchorFrontierCheapUpperTargetedPairProofAbortReason ?? null
         ),
+        anchorFrontierCheapUpperSuffixGeneratedPairJoinMaxScoreUpper: (
+          asFiniteNumber(entry.exactCandidateJoinLastAnchorFrontierCheapUpperSuffixGeneratedPairJoinMaxScoreUpper)
+        ),
+        anchorFrontierCheapUpperSuffixGeneratedPairJoinMaxAnchorScore: (
+          asFiniteNumber(entry.exactCandidateJoinLastAnchorFrontierCheapUpperSuffixGeneratedPairJoinMaxAnchorScore)
+        ),
+        anchorFrontierCheapUpperSuffixGeneratedPairJoinMaxPairScoreOnly: (
+          asFiniteNumber(entry.exactCandidateJoinLastAnchorFrontierCheapUpperSuffixGeneratedPairJoinMaxPairScoreOnly)
+        ),
+        anchorFrontierCheapUpperSuffixGeneratedPairJoinMaxPairFullScore: (
+          asFiniteNumber(entry.exactCandidateJoinLastAnchorFrontierCheapUpperSuffixGeneratedPairJoinMaxPairFullScore)
+        ),
+        anchorFrontierCheapUpperSuffixGeneratedPairJoinMaxPairScoreSlack: (
+          asFiniteNumber(entry.exactCandidateJoinLastAnchorFrontierCheapUpperSuffixGeneratedPairJoinMaxPairScoreSlack)
+        ),
+        anchorFrontierCheapUpperSuffixGeneratedPairJoinMaxAnchorCardIds: (
+          asFiniteNumberArray(
+            entry.exactCandidateJoinLastAnchorFrontierCheapUpperSuffixGeneratedPairJoinMaxAnchorCardIds,
+          )
+        ),
+        anchorFrontierCheapUpperSuffixGeneratedPairJoinMaxLeftCardIds: (
+          asFiniteNumberArray(
+            entry.exactCandidateJoinLastAnchorFrontierCheapUpperSuffixGeneratedPairJoinMaxLeftCardIds,
+          )
+        ),
+        anchorFrontierCheapUpperSuffixGeneratedPairJoinMaxRightCardIds: (
+          asFiniteNumberArray(
+            entry.exactCandidateJoinLastAnchorFrontierCheapUpperSuffixGeneratedPairJoinMaxRightCardIds,
+          )
+        ),
+        anchorFrontierCheapUpperSuffixGeneratedPairJoinMaxLeftIndex: (
+          asFiniteNumber(entry.exactCandidateJoinLastAnchorFrontierCheapUpperSuffixGeneratedPairJoinMaxLeftIndex)
+        ),
+        anchorFrontierCheapUpperSuffixGeneratedPairJoinMaxRightIndex: (
+          asFiniteNumber(entry.exactCandidateJoinLastAnchorFrontierCheapUpperSuffixGeneratedPairJoinMaxRightIndex)
+        ),
+        anchorFrontierCheapUpperSuffixGeneratedPairJoinMaxPairRecordIndex: (
+          asFiniteNumber(entry.exactCandidateJoinLastAnchorFrontierCheapUpperSuffixGeneratedPairJoinMaxPairRecordIndex)
+        ),
         anchorFrontierCheapUpperProcessedUnseenJoinUpperBound: (
           asFiniteNumber(entry.exactCandidateJoinLastAnchorFrontierCheapUpperProcessedUnseenJoinUpperBound)
         ),
@@ -859,6 +898,39 @@ function buildBoundedFrontierGroups(
       ),
       anchorFrontierCheapUpperSuffixGeneratedPairJoinAbortReason: (
         entry.exactCandidateJoinLastAnchorFrontierCheapUpperSuffixGeneratedPairJoinAbortReason ?? null
+      ),
+      anchorFrontierCheapUpperSuffixGeneratedPairJoinMaxScoreUpper: (
+        entry.exactCandidateJoinLastAnchorFrontierCheapUpperSuffixGeneratedPairJoinMaxScoreUpper ?? null
+      ),
+      anchorFrontierCheapUpperSuffixGeneratedPairJoinMaxAnchorScore: (
+        entry.exactCandidateJoinLastAnchorFrontierCheapUpperSuffixGeneratedPairJoinMaxAnchorScore ?? null
+      ),
+      anchorFrontierCheapUpperSuffixGeneratedPairJoinMaxPairScoreOnly: (
+        entry.exactCandidateJoinLastAnchorFrontierCheapUpperSuffixGeneratedPairJoinMaxPairScoreOnly ?? null
+      ),
+      anchorFrontierCheapUpperSuffixGeneratedPairJoinMaxPairFullScore: (
+        entry.exactCandidateJoinLastAnchorFrontierCheapUpperSuffixGeneratedPairJoinMaxPairFullScore ?? null
+      ),
+      anchorFrontierCheapUpperSuffixGeneratedPairJoinMaxPairScoreSlack: (
+        entry.exactCandidateJoinLastAnchorFrontierCheapUpperSuffixGeneratedPairJoinMaxPairScoreSlack ?? null
+      ),
+      anchorFrontierCheapUpperSuffixGeneratedPairJoinMaxAnchorCardIds: (
+        entry.exactCandidateJoinLastAnchorFrontierCheapUpperSuffixGeneratedPairJoinMaxAnchorCardIds ?? null
+      ),
+      anchorFrontierCheapUpperSuffixGeneratedPairJoinMaxLeftCardIds: (
+        entry.exactCandidateJoinLastAnchorFrontierCheapUpperSuffixGeneratedPairJoinMaxLeftCardIds ?? null
+      ),
+      anchorFrontierCheapUpperSuffixGeneratedPairJoinMaxRightCardIds: (
+        entry.exactCandidateJoinLastAnchorFrontierCheapUpperSuffixGeneratedPairJoinMaxRightCardIds ?? null
+      ),
+      anchorFrontierCheapUpperSuffixGeneratedPairJoinMaxLeftIndex: (
+        entry.exactCandidateJoinLastAnchorFrontierCheapUpperSuffixGeneratedPairJoinMaxLeftIndex ?? null
+      ),
+      anchorFrontierCheapUpperSuffixGeneratedPairJoinMaxRightIndex: (
+        entry.exactCandidateJoinLastAnchorFrontierCheapUpperSuffixGeneratedPairJoinMaxRightIndex ?? null
+      ),
+      anchorFrontierCheapUpperSuffixGeneratedPairJoinMaxPairRecordIndex: (
+        entry.exactCandidateJoinLastAnchorFrontierCheapUpperSuffixGeneratedPairJoinMaxPairRecordIndex ?? null
       ),
       anchorFrontierCheapUpperSuffixUnseenSingleCardJoinLeftUpperBound: (
         entry.exactCandidateJoinLastAnchorFrontierCheapUpperSuffixUnseenSingleCardJoinLeftUpperBound ?? null
@@ -3911,6 +3983,39 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
           ),
           exactCandidateJoinLastAnchorFrontierCheapUpperSuffixGeneratedPairJoinAbortReason: (
             profiling.exactCandidateJoinLastAnchorFrontierCheapUpperSuffixGeneratedPairJoinAbortReason
+          ),
+          exactCandidateJoinLastAnchorFrontierCheapUpperSuffixGeneratedPairJoinMaxScoreUpper: (
+            profiling.exactCandidateJoinLastAnchorFrontierCheapUpperSuffixGeneratedPairJoinMaxScoreUpper
+          ),
+          exactCandidateJoinLastAnchorFrontierCheapUpperSuffixGeneratedPairJoinMaxAnchorScore: (
+            profiling.exactCandidateJoinLastAnchorFrontierCheapUpperSuffixGeneratedPairJoinMaxAnchorScore
+          ),
+          exactCandidateJoinLastAnchorFrontierCheapUpperSuffixGeneratedPairJoinMaxPairScoreOnly: (
+            profiling.exactCandidateJoinLastAnchorFrontierCheapUpperSuffixGeneratedPairJoinMaxPairScoreOnly
+          ),
+          exactCandidateJoinLastAnchorFrontierCheapUpperSuffixGeneratedPairJoinMaxPairFullScore: (
+            profiling.exactCandidateJoinLastAnchorFrontierCheapUpperSuffixGeneratedPairJoinMaxPairFullScore
+          ),
+          exactCandidateJoinLastAnchorFrontierCheapUpperSuffixGeneratedPairJoinMaxPairScoreSlack: (
+            profiling.exactCandidateJoinLastAnchorFrontierCheapUpperSuffixGeneratedPairJoinMaxPairScoreSlack
+          ),
+          exactCandidateJoinLastAnchorFrontierCheapUpperSuffixGeneratedPairJoinMaxAnchorCardIds: (
+            profiling.exactCandidateJoinLastAnchorFrontierCheapUpperSuffixGeneratedPairJoinMaxAnchorCardIds
+          ),
+          exactCandidateJoinLastAnchorFrontierCheapUpperSuffixGeneratedPairJoinMaxLeftCardIds: (
+            profiling.exactCandidateJoinLastAnchorFrontierCheapUpperSuffixGeneratedPairJoinMaxLeftCardIds
+          ),
+          exactCandidateJoinLastAnchorFrontierCheapUpperSuffixGeneratedPairJoinMaxRightCardIds: (
+            profiling.exactCandidateJoinLastAnchorFrontierCheapUpperSuffixGeneratedPairJoinMaxRightCardIds
+          ),
+          exactCandidateJoinLastAnchorFrontierCheapUpperSuffixGeneratedPairJoinMaxLeftIndex: (
+            profiling.exactCandidateJoinLastAnchorFrontierCheapUpperSuffixGeneratedPairJoinMaxLeftIndex
+          ),
+          exactCandidateJoinLastAnchorFrontierCheapUpperSuffixGeneratedPairJoinMaxRightIndex: (
+            profiling.exactCandidateJoinLastAnchorFrontierCheapUpperSuffixGeneratedPairJoinMaxRightIndex
+          ),
+          exactCandidateJoinLastAnchorFrontierCheapUpperSuffixGeneratedPairJoinMaxPairRecordIndex: (
+            profiling.exactCandidateJoinLastAnchorFrontierCheapUpperSuffixGeneratedPairJoinMaxPairRecordIndex
           ),
           exactCandidateJoinLastAnchorFrontierCheapUpperSuffixUnseenSingleCardJoinLeftUpperBound: (
             profiling.exactCandidateJoinLastAnchorFrontierCheapUpperSuffixUnseenSingleCardJoinLeftUpperBound

@@ -648,6 +648,17 @@ export type BandoriMedleyTeamSearchProfilingStats = {
   exactCandidateJoinLastAnchorFrontierCheapUpperSuffixGeneratedPairJoinUpperBound: number | null;
   exactCandidateJoinLastAnchorFrontierCheapUpperSuffixGeneratedPairJoinElapsedMs: number | null;
   exactCandidateJoinLastAnchorFrontierCheapUpperSuffixGeneratedPairJoinAbortReason: string | null;
+  exactCandidateJoinLastAnchorFrontierCheapUpperSuffixGeneratedPairJoinMaxScoreUpper: number | null;
+  exactCandidateJoinLastAnchorFrontierCheapUpperSuffixGeneratedPairJoinMaxAnchorScore: number | null;
+  exactCandidateJoinLastAnchorFrontierCheapUpperSuffixGeneratedPairJoinMaxPairScoreOnly: number | null;
+  exactCandidateJoinLastAnchorFrontierCheapUpperSuffixGeneratedPairJoinMaxPairFullScore: number | null;
+  exactCandidateJoinLastAnchorFrontierCheapUpperSuffixGeneratedPairJoinMaxPairScoreSlack: number | null;
+  exactCandidateJoinLastAnchorFrontierCheapUpperSuffixGeneratedPairJoinMaxAnchorCardIds: number[] | null;
+  exactCandidateJoinLastAnchorFrontierCheapUpperSuffixGeneratedPairJoinMaxLeftCardIds: number[] | null;
+  exactCandidateJoinLastAnchorFrontierCheapUpperSuffixGeneratedPairJoinMaxRightCardIds: number[] | null;
+  exactCandidateJoinLastAnchorFrontierCheapUpperSuffixGeneratedPairJoinMaxLeftIndex: number | null;
+  exactCandidateJoinLastAnchorFrontierCheapUpperSuffixGeneratedPairJoinMaxRightIndex: number | null;
+  exactCandidateJoinLastAnchorFrontierCheapUpperSuffixGeneratedPairJoinMaxPairRecordIndex: number | null;
   exactCandidateJoinLastAnchorFrontierCheapUpperSuffixUnseenSingleCardJoinLeftUpperBound: number | null;
   exactCandidateJoinLastAnchorFrontierCheapUpperSuffixUnseenSingleCardJoinRightUpperBound: number | null;
   exactCandidateJoinLastAnchorFrontierCheapUpperSuffixUnseenSingleCardJoinPairCount: number | null;

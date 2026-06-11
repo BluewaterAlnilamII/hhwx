@@ -4207,6 +4207,17 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
   profiling.exactCandidateJoinLastAnchorFrontierCheapUpperSuffixGeneratedPairJoinUpperBound = null;
   profiling.exactCandidateJoinLastAnchorFrontierCheapUpperSuffixGeneratedPairJoinElapsedMs = null;
   profiling.exactCandidateJoinLastAnchorFrontierCheapUpperSuffixGeneratedPairJoinAbortReason = null;
+  profiling.exactCandidateJoinLastAnchorFrontierCheapUpperSuffixGeneratedPairJoinMaxScoreUpper = null;
+  profiling.exactCandidateJoinLastAnchorFrontierCheapUpperSuffixGeneratedPairJoinMaxAnchorScore = null;
+  profiling.exactCandidateJoinLastAnchorFrontierCheapUpperSuffixGeneratedPairJoinMaxPairScoreOnly = null;
+  profiling.exactCandidateJoinLastAnchorFrontierCheapUpperSuffixGeneratedPairJoinMaxPairFullScore = null;
+  profiling.exactCandidateJoinLastAnchorFrontierCheapUpperSuffixGeneratedPairJoinMaxPairScoreSlack = null;
+  profiling.exactCandidateJoinLastAnchorFrontierCheapUpperSuffixGeneratedPairJoinMaxAnchorCardIds = null;
+  profiling.exactCandidateJoinLastAnchorFrontierCheapUpperSuffixGeneratedPairJoinMaxLeftCardIds = null;
+  profiling.exactCandidateJoinLastAnchorFrontierCheapUpperSuffixGeneratedPairJoinMaxRightCardIds = null;
+  profiling.exactCandidateJoinLastAnchorFrontierCheapUpperSuffixGeneratedPairJoinMaxLeftIndex = null;
+  profiling.exactCandidateJoinLastAnchorFrontierCheapUpperSuffixGeneratedPairJoinMaxRightIndex = null;
+  profiling.exactCandidateJoinLastAnchorFrontierCheapUpperSuffixGeneratedPairJoinMaxPairRecordIndex = null;
   profiling.exactCandidateJoinLastAnchorFrontierCheapUpperSuffixUnseenSingleCardJoinLeftUpperBound = null;
   profiling.exactCandidateJoinLastAnchorFrontierCheapUpperSuffixUnseenSingleCardJoinRightUpperBound = null;
   profiling.exactCandidateJoinLastAnchorFrontierCheapUpperSuffixUnseenSingleCardJoinPairCount = null;
@@ -4876,63 +4887,79 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
       abortReason: null,
     };
   };
-  const estimateGeneratedAnchorSuffixGeneratedPairJoinUpper = (
-    startAnchorIndex: number | null,
-    targetUpperBound = incumbentScore,
-  ): {
+  type GeneratedAnchorSuffixGeneratedPairJoinEstimate = {
     upperBound: number | null;
     anchorCount: number;
     pairRecordCount: number;
     elapsedMs: number;
     abortReason: string | null;
     result: BandoriMedleyTeamSearchResult | null;
-  } => {
+    maxScoreUpper: number | null;
+    maxAnchorScore: number | null;
+    maxPairScoreOnly: number | null;
+    maxPairFullScore: number | null;
+    maxPairScoreSlack: number | null;
+    maxAnchorCardIds: number[] | null;
+    maxLeftCardIds: number[] | null;
+    maxRightCardIds: number[] | null;
+    maxLeftIndex: number | null;
+    maxRightIndex: number | null;
+    maxPairRecordIndex: number | null;
+  };
+  const buildGeneratedAnchorSuffixGeneratedPairJoinEstimate = (
+    values: Partial<GeneratedAnchorSuffixGeneratedPairJoinEstimate>,
+  ): GeneratedAnchorSuffixGeneratedPairJoinEstimate => ({
+    upperBound: null,
+    anchorCount: 0,
+    pairRecordCount: 0,
+    elapsedMs: 0,
+    abortReason: null,
+    result: null,
+    maxScoreUpper: null,
+    maxAnchorScore: null,
+    maxPairScoreOnly: null,
+    maxPairFullScore: null,
+    maxPairScoreSlack: null,
+    maxAnchorCardIds: null,
+    maxLeftCardIds: null,
+    maxRightCardIds: null,
+    maxLeftIndex: null,
+    maxRightIndex: null,
+    maxPairRecordIndex: null,
+    ...values,
+  });
+  const estimateGeneratedAnchorSuffixGeneratedPairJoinUpper = (
+    startAnchorIndex: number | null,
+    targetUpperBound = incumbentScore,
+  ): GeneratedAnchorSuffixGeneratedPairJoinEstimate => {
     if (
       !shouldUseSuffixGeneratedPairJoin
       || startAnchorIndex === null
       || startAnchorIndex >= anchorCandidates.length
     ) {
-      return {
-        upperBound: null,
-        anchorCount: 0,
-        pairRecordCount: 0,
-        elapsedMs: 0,
-        abortReason: null,
-        result: null,
-      };
+      return buildGeneratedAnchorSuffixGeneratedPairJoinEstimate({});
     }
     const joinStartedAt = performance.now();
     if (joinStartedAt >= localDeadlineAt) {
-      return {
-        upperBound: null,
-        anchorCount: 0,
-        pairRecordCount: 0,
-        elapsedMs: 0,
+      return buildGeneratedAnchorSuffixGeneratedPairJoinEstimate({
         abortReason: "timebox",
-        result: null,
-      };
+      });
     }
     const suffixAnchorCandidates = anchorCandidates.slice(startAnchorIndex);
     if (suffixAnchorCandidates.length === 0) {
-      return {
-        upperBound: null,
+      return buildGeneratedAnchorSuffixGeneratedPairJoinEstimate({
         anchorCount: 0,
         pairRecordCount: 0,
         elapsedMs: performance.now() - joinStartedAt,
-        abortReason: null,
-        result: null,
-      };
+      });
     }
     const maxAnchorScore = suffixAnchorCandidates[0]?.result.score ?? Number.NEGATIVE_INFINITY;
     if (!Number.isFinite(maxAnchorScore)) {
-      return {
-        upperBound: null,
+      return buildGeneratedAnchorSuffixGeneratedPairJoinEstimate({
         anchorCount: suffixAnchorCandidates.length,
         pairRecordCount: 0,
         elapsedMs: performance.now() - joinStartedAt,
-        abortReason: null,
-        result: null,
-      };
+      });
     }
     const effectiveTargetUpperBound = Math.max(incumbentScore, targetUpperBound);
     const pairRecordThreshold = effectiveTargetUpperBound - maxAnchorScore;
@@ -4953,18 +4980,39 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
     let upperBound = Number.NEGATIVE_INFINITY;
     let pairRecordCount = 0;
     let bestResult: BandoriMedleyTeamSearchResult | null = null;
+    let maxScoreUpper = Number.NEGATIVE_INFINITY;
+    let maxAnchorScoreValue: number | null = null;
+    let maxPairScoreOnly: number | null = null;
+    let maxPairFullScore: number | null = null;
+    let maxPairScoreSlack: number | null = null;
+    let maxAnchorCardIds: number[] | null = null;
+    let maxLeftCardIds: number[] | null = null;
+    let maxRightCardIds: number[] | null = null;
+    let maxLeftIndex: number | null = null;
+    let maxRightIndex: number | null = null;
+    let maxPairRecordIndex: number | null = null;
     const pairCardIds: number[] = [];
     while (frontierHeap.length > 0) {
       if (performance.now() >= localDeadlineAt) {
         frontierHeap.length = 0;
-        return {
-          upperBound: null,
+        return buildGeneratedAnchorSuffixGeneratedPairJoinEstimate({
           anchorCount: suffixAnchorCandidates.length,
           pairRecordCount,
           elapsedMs: performance.now() - joinStartedAt,
           abortReason: "timebox",
           result: bestResult,
-        };
+          maxScoreUpper: Number.isFinite(maxScoreUpper) ? maxScoreUpper : null,
+          maxAnchorScore: maxAnchorScoreValue,
+          maxPairScoreOnly,
+          maxPairFullScore,
+          maxPairScoreSlack,
+          maxAnchorCardIds,
+          maxLeftCardIds,
+          maxRightCardIds,
+          maxLeftIndex,
+          maxRightIndex,
+          maxPairRecordIndex,
+        });
       }
       const node = popMedleyExactCandidatePairFrontierHeapNode(frontierHeap);
       if (!node || node.score <= pairRecordThreshold) {
@@ -4994,6 +5042,8 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
           const pairUpper = leftResultCandidate && rightResultCandidate
             ? leftResultCandidate.result.score + rightResultCandidate.result.score
             : node.score;
+          const pairScoreOnly = leftCandidate.result.score + rightCandidate.result.score;
+          const pairFullScore = leftResultCandidate && rightResultCandidate ? pairUpper : null;
           pairCardIds.length = 0;
           for (const cardId of leftCandidate.cardIds) {
             pairCardIds.push(cardId);
@@ -5007,6 +5057,19 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
           );
           if (anchorCandidate) {
             const scoreUpper = pairUpper + anchorCandidate.result.score;
+            if (scoreUpper > maxScoreUpper) {
+              maxScoreUpper = scoreUpper;
+              maxAnchorScoreValue = anchorCandidate.result.score;
+              maxPairScoreOnly = pairScoreOnly;
+              maxPairFullScore = pairFullScore;
+              maxPairScoreSlack = pairFullScore !== null ? pairScoreOnly - pairFullScore : null;
+              maxAnchorCardIds = [...anchorCandidate.cardIds];
+              maxLeftCardIds = [...leftCandidate.cardIds];
+              maxRightCardIds = [...rightCandidate.cardIds];
+              maxLeftIndex = node.leftIndex;
+              maxRightIndex = node.rightIndex;
+              maxPairRecordIndex = pairRecordCount;
+            }
             upperBound = Math.max(upperBound, scoreUpper);
             if (scoreUpper > Math.max(incumbentScore, bestResult?.score ?? Number.NEGATIVE_INFINITY)) {
               const result = buildResultFromAnchorAndPairCandidates(
@@ -5036,7 +5099,7 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
       }
     }
     frontierHeap.length = 0;
-    return {
+    return buildGeneratedAnchorSuffixGeneratedPairJoinEstimate({
       upperBound: Math.max(
         Number.isFinite(upperBound) ? upperBound : Number.NEGATIVE_INFINITY,
         effectiveTargetUpperBound,
@@ -5046,7 +5109,18 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
       elapsedMs: performance.now() - joinStartedAt,
       abortReason: null,
       result: bestResult,
-    };
+      maxScoreUpper: Number.isFinite(maxScoreUpper) ? maxScoreUpper : null,
+      maxAnchorScore: maxAnchorScoreValue,
+      maxPairScoreOnly,
+      maxPairFullScore,
+      maxPairScoreSlack,
+      maxAnchorCardIds,
+      maxLeftCardIds,
+      maxRightCardIds,
+      maxLeftIndex,
+      maxRightIndex,
+      maxPairRecordIndex,
+    });
   };
   const getResidualUpperBoundForProcessedMax = (
     processedMax: number,
@@ -7054,6 +7128,39 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
     );
     profiling.exactCandidateJoinLastAnchorFrontierCheapUpperSuffixGeneratedPairJoinAbortReason = (
       suffixGeneratedPairJoin.abortReason
+    );
+    profiling.exactCandidateJoinLastAnchorFrontierCheapUpperSuffixGeneratedPairJoinMaxScoreUpper = (
+      suffixGeneratedPairJoin.maxScoreUpper !== null ? Math.ceil(suffixGeneratedPairJoin.maxScoreUpper) : null
+    );
+    profiling.exactCandidateJoinLastAnchorFrontierCheapUpperSuffixGeneratedPairJoinMaxAnchorScore = (
+      suffixGeneratedPairJoin.maxAnchorScore
+    );
+    profiling.exactCandidateJoinLastAnchorFrontierCheapUpperSuffixGeneratedPairJoinMaxPairScoreOnly = (
+      suffixGeneratedPairJoin.maxPairScoreOnly
+    );
+    profiling.exactCandidateJoinLastAnchorFrontierCheapUpperSuffixGeneratedPairJoinMaxPairFullScore = (
+      suffixGeneratedPairJoin.maxPairFullScore
+    );
+    profiling.exactCandidateJoinLastAnchorFrontierCheapUpperSuffixGeneratedPairJoinMaxPairScoreSlack = (
+      suffixGeneratedPairJoin.maxPairScoreSlack
+    );
+    profiling.exactCandidateJoinLastAnchorFrontierCheapUpperSuffixGeneratedPairJoinMaxAnchorCardIds = (
+      suffixGeneratedPairJoin.maxAnchorCardIds
+    );
+    profiling.exactCandidateJoinLastAnchorFrontierCheapUpperSuffixGeneratedPairJoinMaxLeftCardIds = (
+      suffixGeneratedPairJoin.maxLeftCardIds
+    );
+    profiling.exactCandidateJoinLastAnchorFrontierCheapUpperSuffixGeneratedPairJoinMaxRightCardIds = (
+      suffixGeneratedPairJoin.maxRightCardIds
+    );
+    profiling.exactCandidateJoinLastAnchorFrontierCheapUpperSuffixGeneratedPairJoinMaxLeftIndex = (
+      suffixGeneratedPairJoin.maxLeftIndex
+    );
+    profiling.exactCandidateJoinLastAnchorFrontierCheapUpperSuffixGeneratedPairJoinMaxRightIndex = (
+      suffixGeneratedPairJoin.maxRightIndex
+    );
+    profiling.exactCandidateJoinLastAnchorFrontierCheapUpperSuffixGeneratedPairJoinMaxPairRecordIndex = (
+      suffixGeneratedPairJoin.maxPairRecordIndex
     );
     profiling.exactCandidateJoinLastAnchorFrontierCheapUpperSuffixUnseenSingleCardJoinLeftUpperBound = (
       suffixLeftUnseenSingleCardJoin.upperBound !== null
