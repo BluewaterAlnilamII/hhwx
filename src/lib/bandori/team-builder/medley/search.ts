@@ -1467,6 +1467,18 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
   const eventRootFrontierProbeAnchorCheapUpperPairCapacityBreakdown = (
     optimization.eventRootFrontierProbeAnchorCheapUpperPairCapacityBreakdown === true
   );
+  const eventRootFrontierProbeAnchorCheapUpperPairCapacitySharedPowerBreakdown = (
+    optimization.eventRootFrontierProbeAnchorCheapUpperPairCapacitySharedPowerBreakdown === true
+  );
+  const parsedEventRootFrontierProbeAnchorCheapUpperPairCapacitySharedPowerStateBudget =
+    optimization.eventRootFrontierProbeAnchorCheapUpperPairCapacitySharedPowerStateBudget !== undefined
+      ? Math.trunc(optimization.eventRootFrontierProbeAnchorCheapUpperPairCapacitySharedPowerStateBudget)
+      : Number.NaN;
+  const eventRootFrontierProbeAnchorCheapUpperPairCapacitySharedPowerStateBudget = Number.isFinite(
+    parsedEventRootFrontierProbeAnchorCheapUpperPairCapacitySharedPowerStateBudget,
+  )
+    ? Math.max(1, parsedEventRootFrontierProbeAnchorCheapUpperPairCapacitySharedPowerStateBudget)
+    : null;
   const parsedEventRootFrontierProbeAnchorCheapUpperTargetedPairProofTimeboxMs =
     optimization.eventRootFrontierProbeAnchorCheapUpperTargetedPairProofTimeboxMs !== undefined
       ? Math.trunc(optimization.eventRootFrontierProbeAnchorCheapUpperTargetedPairProofTimeboxMs)
@@ -1574,6 +1586,12 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
       ),
       anchorFrontierCheapUpperPairCapacityBreakdown: (
         eventRootFrontierProbeAnchorCheapUpperPairCapacityBreakdown
+      ),
+      anchorFrontierCheapUpperPairCapacitySharedPowerBreakdown: (
+        eventRootFrontierProbeAnchorCheapUpperPairCapacitySharedPowerBreakdown
+      ),
+      anchorFrontierCheapUpperPairCapacitySharedPowerStateBudget: (
+        eventRootFrontierProbeAnchorCheapUpperPairCapacitySharedPowerStateBudget
       ),
       anchorFrontierCheapUpperTargetedPairProofTimeboxMs: (
         eventRootFrontierProbeAnchorCheapUpperTargetedPairProofTimeboxMs
@@ -5666,6 +5684,12 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
         traceEntry.eventRootFrontierProbeAnchorCheapUpperPairCapacityBreakdown = (
           eventRootFrontierProbeAnchorCheapUpperPairCapacityBreakdown
         );
+        traceEntry.eventRootFrontierProbeAnchorCheapUpperPairCapacitySharedPowerBreakdown = (
+          eventRootFrontierProbeAnchorCheapUpperPairCapacitySharedPowerBreakdown
+        );
+        traceEntry.eventRootFrontierProbeAnchorCheapUpperPairCapacitySharedPowerStateBudget = (
+          eventRootFrontierProbeAnchorCheapUpperPairCapacitySharedPowerStateBudget
+        );
         traceEntry.eventRootFrontierProbeAnchorCheapUpperTargetedPairProofTimeboxMs = (
           eventRootFrontierProbeAnchorCheapUpperTargetedPairProofTimeboxMs
         );
@@ -5801,6 +5825,12 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
           ),
           anchorFrontierCheapUpperPairCapacityBreakdown: (
             eventRootFrontierProbeAnchorCheapUpperPairCapacityBreakdown
+          ),
+          anchorFrontierCheapUpperPairCapacitySharedPowerBreakdown: (
+            eventRootFrontierProbeAnchorCheapUpperPairCapacitySharedPowerBreakdown
+          ),
+          anchorFrontierCheapUpperPairCapacitySharedPowerStateBudget: (
+            eventRootFrontierProbeAnchorCheapUpperPairCapacitySharedPowerStateBudget
           ),
           anchorFrontierCheapUpperTargetedPairProofTimeboxMs: (
             eventRootFrontierProbeAnchorCheapUpperTargetedPairProofTimeboxMs

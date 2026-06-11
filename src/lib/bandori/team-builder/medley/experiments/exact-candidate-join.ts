@@ -79,7 +79,9 @@ import {
   type MedleyExactSlotUpperHeapNode,
 } from "./exact-candidate-join-heap";
 import {
+  buildMedleyCapacityCardsByCharacter,
   estimateMedleyCapacityAssignmentScoreUpperBound,
+  estimateMedleyCapacityCardBoundSharedPowerSkillScoreUpperBound,
   estimateMedleyRemainingScoreUpperBound,
 } from "../upper/capacity";
 import {
@@ -3925,6 +3927,8 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
     pairCapacityCapPareto?: boolean;
     pairCapacityCapBucketed?: boolean;
     pairCapacityBreakdown?: boolean;
+    pairCapacitySharedPowerBreakdown?: boolean;
+    pairCapacitySharedPowerStateBudget?: number | null;
     targetedPairProofTimeboxMs?: number | null;
     targetedPairProofMaxEntries?: number | null;
     targetedPairProofCandidateLimit?: number | null;
@@ -4064,6 +4068,14 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
   const shouldUsePairCapacityCapPareto = options.pairCapacityCapPareto === true;
   const shouldUsePairCapacityCapBucketed = options.pairCapacityCapBucketed === true;
   const shouldCapturePairCapacityBreakdown = options.pairCapacityBreakdown === true;
+  const shouldCapturePairCapacitySharedPowerBreakdown = options.pairCapacitySharedPowerBreakdown === true;
+  const pairCapacitySharedPowerStateBudget = (
+    options.pairCapacitySharedPowerStateBudget !== null
+    && options.pairCapacitySharedPowerStateBudget !== undefined
+    && Number.isFinite(options.pairCapacitySharedPowerStateBudget)
+  )
+    ? Math.max(1, Math.trunc(options.pairCapacitySharedPowerStateBudget))
+    : 1_000_000;
   let leftPeekUpperBound = generators[leftSlotIndex].peekUpperBound();
   let rightPeekUpperBound = generators[rightSlotIndex].peekUpperBound();
   const anchorPeekUpperBound = generators[anchorSlotIndex].peekUpperBound();
@@ -4242,6 +4254,10 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
   profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacityBreakdownBasicMode = null;
   profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacityBreakdownBasicCoefficientUpper = null;
   profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacityBreakdownBasicSkillAwareUpper = null;
+  profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacityBreakdownSharedPowerUpper = null;
+  profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacityBreakdownSharedPowerGap = null;
+  profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacityBreakdownSharedPowerStateBudget = null;
+  profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacityBreakdownSharedPowerElapsedMs = null;
   profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacityBreakdownElapsedMs = null;
   profiling.exactCandidateJoinLastAnchorFrontierCheapUpperMaxGeneratedPairOverlaps = null;
   profiling.exactCandidateJoinLastAnchorFrontierCheapUpperMaxGeneratedPairScoreOnly = null;
@@ -5011,6 +5027,29 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
       ? Number.NEGATIVE_INFINITY
       : selectedUpper;
     const targetPairUpper = incumbentScore - processedUpperMaxAnchorCandidate.result.score;
+    let sharedPowerUpper: number | null = null;
+    let sharedPowerElapsedMs: number | null = null;
+    if (shouldCapturePairCapacitySharedPowerBreakdown) {
+      const sharedPowerStartedAt = performance.now();
+      const cardsByCharacter = buildMedleyCapacityCardsByCharacter(
+        slots,
+        pairSlotIndices,
+        bannedCardIds,
+      );
+      sharedPowerUpper = estimateMedleyCapacityCardBoundSharedPowerSkillScoreUpperBound(
+        slots,
+        pairSlotIndices,
+        cardsByCharacter,
+        bannedCardIds,
+        profiling,
+        {
+          allowTwoSlot: true,
+          allowBannedCards: true,
+          stateBudget: pairCapacitySharedPowerStateBudget,
+        },
+      );
+      sharedPowerElapsedMs = performance.now() - sharedPowerStartedAt;
+    }
 
     profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacityBreakdownTargetPairUpper = (
       finiteDiagnostic(targetPairUpper)
@@ -5049,6 +5088,20 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
     );
     profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacityBreakdownBasicSkillAwareUpper = (
       finiteDiagnostic(basicCapacityUpper.skillAwareUpperBound)
+    );
+    profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacityBreakdownSharedPowerUpper = (
+      finiteDiagnostic(sharedPowerUpper)
+    );
+    profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacityBreakdownSharedPowerGap = (
+      sharedPowerUpper !== null && Number.isFinite(sharedPowerUpper) && Number.isFinite(targetPairUpper)
+        ? sharedPowerUpper - targetPairUpper
+        : null
+    );
+    profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacityBreakdownSharedPowerStateBudget = (
+      shouldCapturePairCapacitySharedPowerBreakdown ? pairCapacitySharedPowerStateBudget : null
+    );
+    profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacityBreakdownSharedPowerElapsedMs = (
+      sharedPowerElapsedMs !== null ? Math.round(sharedPowerElapsedMs) : null
     );
     profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacityBreakdownElapsedMs = Math.round(
       performance.now() - breakdownStartedAt,
@@ -7147,6 +7200,8 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     anchorFrontierCheapUpperPairCapacityCapPareto?: boolean;
     anchorFrontierCheapUpperPairCapacityCapBucketed?: boolean;
     anchorFrontierCheapUpperPairCapacityBreakdown?: boolean;
+    anchorFrontierCheapUpperPairCapacitySharedPowerBreakdown?: boolean;
+    anchorFrontierCheapUpperPairCapacitySharedPowerStateBudget?: number | null;
     anchorFrontierCheapUpperTargetedPairProofTimeboxMs?: number | null;
     anchorFrontierCheapUpperTargetedPairProofMaxEntries?: number | null;
     anchorFrontierCheapUpperTargetedPairProofCandidateLimit?: number | null;
@@ -7677,6 +7732,8 @@ export function searchMedleyConfigurationByExactCandidateJoin(
           pairCapacityCapPareto: context.anchorFrontierCheapUpperPairCapacityCapPareto,
           pairCapacityCapBucketed: context.anchorFrontierCheapUpperPairCapacityCapBucketed,
           pairCapacityBreakdown: context.anchorFrontierCheapUpperPairCapacityBreakdown,
+          pairCapacitySharedPowerBreakdown: context.anchorFrontierCheapUpperPairCapacitySharedPowerBreakdown,
+          pairCapacitySharedPowerStateBudget: context.anchorFrontierCheapUpperPairCapacitySharedPowerStateBudget,
           targetedPairProofTimeboxMs: context.anchorFrontierCheapUpperTargetedPairProofTimeboxMs,
           targetedPairProofMaxEntries: context.anchorFrontierCheapUpperTargetedPairProofMaxEntries,
           targetedPairProofCandidateLimit: context.anchorFrontierCheapUpperTargetedPairProofCandidateLimit,

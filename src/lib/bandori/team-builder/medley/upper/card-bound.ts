@@ -451,15 +451,32 @@ export function estimateMedleyCapacityCardBoundSharedPowerSkillScoreUpperBound(
   cardsByCharacter: MedleyCapacityCardsByCharacter,
   bannedCardIds: Set<number>,
   profiling?: BandoriMedleyTeamSearchProfilingStats,
+  options: {
+    allowTwoSlot?: boolean;
+    allowBannedCards?: boolean;
+    stateBudget?: number | null;
+  } = {},
 ): number | null {
   const slotCount = remainingSlotIndices.length;
   if (profiling) {
     profiling.capacityCardBoundSharedPowerUpperCallCount += 1;
     profiling.capacityCardBoundSharedPowerUpperBucketSize = MEDLEY_CARD_BOUND_SHARED_POWER_SKILL_BUCKET_SIZE;
   }
-  if (slotCount !== MEDLEY_TEAM_COUNT || bannedCardIds.size > 0) {
+  const minSlotCount = options.allowTwoSlot === true ? 2 : MEDLEY_TEAM_COUNT;
+  if (
+    slotCount < minSlotCount
+    || slotCount > MEDLEY_TEAM_COUNT
+    || (options.allowBannedCards !== true && bannedCardIds.size > 0)
+  ) {
     return null;
   }
+  const stateBudget = (
+    options.stateBudget !== null
+    && options.stateBudget !== undefined
+    && Number.isFinite(options.stateBudget)
+  )
+    ? Math.max(1, Math.trunc(options.stateBudget))
+    : MEDLEY_CARD_BOUND_SHARED_POWER_SKILL_STATE_BUDGET;
 
   const bucketSize = MEDLEY_CARD_BOUND_SHARED_POWER_SKILL_BUCKET_SIZE;
   const maxPowerUpperBound = Math.max(
@@ -554,7 +571,7 @@ export function estimateMedleyCapacityCardBoundSharedPowerSkillScoreUpperBound(
                 false,
               ),
             );
-            if (nextCharacterOptionCount > MEDLEY_CARD_BOUND_SHARED_POWER_SKILL_STATE_BUDGET) {
+            if (nextCharacterOptionCount > stateBudget) {
               return abortWithStateCount(nextCharacterOptionCount);
             }
 
@@ -580,7 +597,7 @@ export function estimateMedleyCapacityCardBoundSharedPowerSkillScoreUpperBound(
                   true,
                 ),
               );
-              if (nextCharacterOptionCount > MEDLEY_CARD_BOUND_SHARED_POWER_SKILL_STATE_BUDGET) {
+              if (nextCharacterOptionCount > stateBudget) {
                 return abortWithStateCount(nextCharacterOptionCount);
               }
             }
@@ -590,7 +607,7 @@ export function estimateMedleyCapacityCardBoundSharedPowerSkillScoreUpperBound(
 
       characterOptionsByKey = nextCharacterOptionsByKey;
       characterOptionCount = nextCharacterOptionCount;
-      if (characterOptionCount > MEDLEY_CARD_BOUND_SHARED_POWER_SKILL_STATE_BUDGET) {
+      if (characterOptionCount > stateBudget) {
         return abortWithStateCount(characterOptionCount);
       }
     }
@@ -662,7 +679,7 @@ export function estimateMedleyCapacityCardBoundSharedPowerSkillScoreUpperBound(
                 leaderRate2: state.leaderRate2 + optionState.leaderRate2,
               },
             );
-            if (nextStateCount > MEDLEY_CARD_BOUND_SHARED_POWER_SKILL_STATE_BUDGET) {
+            if (nextStateCount > stateBudget) {
               return abortWithStateCount(nextStateCount);
             }
           }
@@ -672,7 +689,7 @@ export function estimateMedleyCapacityCardBoundSharedPowerSkillScoreUpperBound(
 
     statesByKey = nextStatesByKey;
     stateCount = nextStateCount;
-    if (stateCount > MEDLEY_CARD_BOUND_SHARED_POWER_SKILL_STATE_BUDGET) {
+    if (stateCount > stateBudget) {
       return abortWithStateCount(stateCount);
     }
   }
