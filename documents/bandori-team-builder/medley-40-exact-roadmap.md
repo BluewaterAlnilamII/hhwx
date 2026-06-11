@@ -3687,3 +3687,125 @@ P07 failed follow-ups after P03 fix:
   - Keep same-coarse event-first and full-proof retry as diagnostic-only unless
     the processed-unseen join makes each sibling cheap enough to prove within
     the 300s matrix.
+
+2026-06-11 12:05 CST P06 processed-unseen join and targeted-pair diagnostics:
+
+- Processed-unseen join after refined-entry fix:
+  - Raw:
+    `temp/bandori-team-builder/real-profile-medley-scope-matrix-2026-06-11T03-54-04-983Z.json`
+  - Options:
+    suffix generated-pair join, suffix full-card unseen join, and
+    `eventRootFrontierProbeAnchorCheapUpperProcessedUnseenJoin=true`.
+  - Result: bounded but not timed out; elapsed `212442ms`; score `9486961`;
+    global upper `9942430`; gap `455469`; root-pruned `99`; peak heap
+    `1832 MiB`.
+  - The processed-unseen join was active for the focused
+    `PastelPalettes/cool/performance` configuration:
+    - processed-unseen upper `9635008`.
+    - pair count `3`.
+    - elapsed `45551ms`.
+    - abort reason `null`.
+    - residual focused gap `148047`.
+  - Interpretation:
+    - The implementation now uses refined processed entries and is no longer
+      blocked by the stale pre-refine upper.
+    - The improvement over the prior `9636601` frontier is only `1593` score.
+      The remaining gap is therefore not mainly from generated-plus-unseen
+      pairs already reached by this join.
+    - Same-coarse siblings still dominate the global bounded result when the
+      proof pass leaves less than the current `90s` same-coarse retry budget.
+- Targeted pair proof diagnostic:
+  - Raw:
+    `temp/bandori-team-builder/real-profile-medley-scope-matrix-2026-06-11T03-58-39-172Z.json`
+  - Options additionally enabled:
+    `eventRootFrontierProbeAnchorCheapUpperTargetedPairProofTimeboxMs=60000`,
+    `eventRootFrontierProbeAnchorCheapUpperTargetedPairProofMaxEntries=16`,
+    and
+    `eventRootFrontierProbeAnchorCheapUpperTargetedPairProofCandidateLimit=200000`.
+  - Result: bounded timeout; elapsed `300002ms`; score `9486961`; global upper
+    `10082483`; gap `595522`; root-pruned `0`; peak heap `4745 MiB`.
+  - Dominant unclosed configuration:
+    - `PastelPalettes/cool/technique`, status `exact-after-seeding-timeout`.
+    - effective upper `10576782.5`, abort `high-budget-pair-upper`.
+    - `anchorFrontierCheapUpper` consumed `250207ms`.
+  - The previous focused performance configuration still ended at upper
+    `9636601`, but had only about `5s` remaining.
+  - Interpretation:
+    - The targeted pair proof route is too expensive in its current shape and
+      can erase root pruning progress.
+    - Do not widen targeted-pair timebox, max entries, or candidate limit as a
+      path to 40/40 exact.
+- Current P06 conclusion:
+  - The following routes are now ruled out as first-class default paths:
+    full same-coarse exact retry, post-exact event-root probe, per-parameter
+    same-coarse event-root before exact join, wider processed-top-N refine,
+    processed-unseen join alone, and brute targeted pair proof.
+  - The remaining frontier appears to be an anchor-specific two-slot pair upper
+    problem plus proof scheduling across same-coarse siblings, not a seed
+    quality problem.
+  - Next low-risk direction should be a cheaper certificate for the few
+    high-risk anchor-specific pair uppers that remain after suffix and
+    processed-unseen joins, or a batched same-coarse event-root proof that
+    reuses candidate material without reusing unsafe cross-parameter proof
+    conclusions.
+
+2026-06-11 12:35 CST P06 same-coarse scheduling diagnostics:
+
+- Code added:
+  - `sameCoarseFrontierRetryMinRemainingMs` as an internal optimization option.
+  - Default behavior remains unchanged: if the option is omitted, the existing
+    `90000ms` retry gate is used.
+  - Trace now records `sameCoarseFrontierRetryMinRemainingMs`.
+- Low-root-first widened group diagnostic:
+  - Raw:
+    `temp/bandori-team-builder/real-profile-medley-scope-matrix-2026-06-11T04-12-04-465Z.json`
+  - Options changed:
+    `sameCoarseLowRootFirstProofMaxGroupRootGap=700000`, no
+    processed-unseen join.
+  - Result: bounded timeout; elapsed `300966ms`; score `9486961`; global upper
+    `10094162`; gap `607201`; root-pruned `0`; peak `4739 MiB`.
+  - `PastelPalettes/cool/visual` ran first and spent about `80s` in candidate
+    fill plus `166s` in solve, then aborted `solve-timeout`.
+  - Decision: widening low-root-first group order is not a good default path.
+    It can move the hard sibling to the front but does not make the proof
+    cheaper.
+- Same-coarse retry gate at `80000ms`:
+  - Raw:
+    `temp/bandori-team-builder/real-profile-medley-scope-matrix-2026-06-11T04-20-35-213Z.json`
+  - Result: bounded, not timed out; elapsed `229162ms`; score `9486961`;
+    global upper `9942430`; gap `455469`; root-pruned `99`; peak `1939 MiB`.
+  - The first hard configuration still consumed enough time that
+    `PastelPalettes/cool/technique` had only about `71s` remaining, so retry
+    did not trigger.
+  - Decision: `80000ms` is still too conservative for this case, and the main
+    bottleneck remains the first proof pass duration.
+- Same-coarse retry gate at `60000ms`:
+  - Raw:
+    `temp/bandori-team-builder/real-profile-medley-scope-matrix-2026-06-11T04-25-41-255Z.json`
+  - Result: bounded, not timed out; elapsed `296905ms`; score `9488172`;
+    global upper `9935586`; gap `447414`; root-pruned `99`; peak `3790 MiB`.
+  - `PastelPalettes/cool/technique` did trigger retry:
+    - status `exact-unproved-skip-dfs`;
+    - retry target `9635008`;
+    - effective upper `9635008`;
+    - `candidateFill` about `10.6s`;
+    - `solve` about `25.7s`.
+  - Only about `3s` remained afterwards, so `PastelPalettes/cool/visual`
+    fell to `bounded-near-deadline-root-skip` with upper `9935585`.
+  - Decision: lowering the same-coarse retry gate is useful as a diagnostic and
+    can recover the incumbent score, but it is still insufficient for exact.
+    It trades almost all remaining time for one sibling proof and leaves
+    visual, the original performance residual, and dominated-root groups
+    unclosed.
+- Current conclusion:
+  - Same-coarse scheduling is a secondary bottleneck, not the root solution.
+  - To reach 40/40 exact, P06 needs a more general frontier reduction:
+    either the first `PastelPalettes/cool/performance` proof must become much
+    cheaper while also lowering its `9635008` residual below the incumbent, or
+    later skipped configurations need a cheap tight-root/proof path.
+  - Dominated-root skips are now a promising next inspection target. They occur
+    before slot construction and preserve loose observed roots such as
+    `Morfonica/cool/performance` around `9631450`, which is still above the
+    incumbent. Any next patch should be opt-in and should avoid forcing full
+    exact joins for all skipped configurations unless a cheap tight-root probe
+    has already failed.

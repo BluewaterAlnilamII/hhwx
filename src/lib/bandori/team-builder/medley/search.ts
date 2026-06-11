@@ -946,6 +946,16 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
     optimization.enableSameCoarseFrontierEventProbeBeforeExactJoin === true
   );
   const enableSameCoarseLowRootFirstProofOrder = optimization.enableSameCoarseLowRootFirstProofOrder === true;
+  const parsedSameCoarseFrontierRetryMinRemainingMs = (
+    optimization.sameCoarseFrontierRetryMinRemainingMs !== undefined
+      ? Number(optimization.sameCoarseFrontierRetryMinRemainingMs)
+      : Number.NaN
+  );
+  const sameCoarseFrontierRetryMinRemainingMs = Number.isFinite(
+    parsedSameCoarseFrontierRetryMinRemainingMs,
+  )
+    ? Math.max(0, parsedSameCoarseFrontierRetryMinRemainingMs)
+    : MEDLEY_SAME_COARSE_FRONTIER_RETRY_MIN_REMAINING_MS;
   const parsedSameCoarseLowRootFirstProofMaxGroupRootGap = (
     optimization.sameCoarseLowRootFirstProofMaxGroupRootGap !== undefined
       ? Number(optimization.sameCoarseLowRootFirstProofMaxGroupRootGap)
@@ -4320,7 +4330,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
         && sameCoarseRootSkipUpperBound >= threshold
         && hasRememberedSameCoarseFrontierSibling
         && calculatedCards.length <= MEDLEY_SAME_COARSE_FRONTIER_RETRY_MAX_CARD_COUNT
-        && remainingBeforeSameCoarseFrontierRetryMs >= MEDLEY_SAME_COARSE_FRONTIER_RETRY_MIN_REMAINING_MS
+        && remainingBeforeSameCoarseFrontierRetryMs >= sameCoarseFrontierRetryMinRemainingMs
         && (
           sameCoarseFrontierRetryRootDelta >= MEDLEY_SAME_COARSE_FRONTIER_RETRY_MIN_ROOT_DELTA
           || sameCoarseFrontierRetryUnresolvedGap >= MEDLEY_SAME_COARSE_FRONTIER_RETRY_MIN_UNRESOLVED_GAP
@@ -4335,6 +4345,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
         traceEntry.sameCoarseFrontierRetryUnresolvedGap = sameCoarseFrontierRetryUnresolvedGap;
         traceEntry.sameCoarseFrontierRetryHasRememberedSibling = hasRememberedSameCoarseFrontierSibling;
         traceEntry.sameCoarseFrontierRetryRemainingMs = Math.round(remainingBeforeSameCoarseFrontierRetryMs);
+        traceEntry.sameCoarseFrontierRetryMinRemainingMs = Math.round(sameCoarseFrontierRetryMinRemainingMs);
         traceEntry.sameCoarseFrontierFullProofRetry = (
           shouldRetrySameCoarseFrontier && enableSameCoarseFrontierFullProofRetry
         );
