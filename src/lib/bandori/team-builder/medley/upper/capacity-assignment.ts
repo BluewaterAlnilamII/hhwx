@@ -130,39 +130,16 @@ const MEDLEY_TWO_SLOT_SHARED_POWER_DUAL_LEADER_SHARES = [
 ] as const;
 const MEDLEY_TWO_SLOT_SHARED_POWER_DUAL_LAMBDA_FRACTIONS = [
   0,
-  0.03125,
-  0.0625,
-  0.09375,
   0.125,
-  0.15625,
-  0.1875,
-  0.21875,
   0.25,
-  0.28125,
-  0.3125,
-  0.34375,
   0.375,
-  0.40625,
-  0.4375,
-  0.46875,
   0.5,
-  0.53125,
-  0.5625,
-  0.59375,
   0.625,
-  0.65625,
-  0.6875,
-  0.71875,
   0.75,
-  0.78125,
-  0.8125,
-  0.84375,
   0.875,
-  0.90625,
-  0.9375,
-  0.96875,
   1,
 ] as const;
+const MEDLEY_TWO_SLOT_SHARED_POWER_DUAL_REFINE_STEPS = 16;
 
 const medleyTwoSlotCapacityGroupCache = new WeakMap<
   MedleySlotSearch,
@@ -788,6 +765,37 @@ function buildMedleyTwoSlotSharedPowerDualLambdaCandidates(
   )))].sort((left, right) => left - right);
 }
 
+function buildMedleyTwoSlotSharedPowerDualRefinedLambdaCandidates(
+  coarseCandidates: number[],
+  targetLambda: number,
+): number[] {
+  if (coarseCandidates.length <= 1 || !Number.isFinite(targetLambda)) {
+    return coarseCandidates;
+  }
+  let nearestIndex = 0;
+  let nearestDistance = Number.POSITIVE_INFINITY;
+  for (let index = 0; index < coarseCandidates.length; index += 1) {
+    const distance = Math.abs(coarseCandidates[index] - targetLambda);
+    if (distance < nearestDistance) {
+      nearestDistance = distance;
+      nearestIndex = index;
+    }
+  }
+  const leftIndex = Math.max(0, nearestIndex - 1);
+  const rightIndex = Math.min(coarseCandidates.length - 1, nearestIndex + 1);
+  const left = coarseCandidates[leftIndex];
+  const right = coarseCandidates[rightIndex];
+  if (!Number.isFinite(left) || !Number.isFinite(right) || right <= left) {
+    return [targetLambda];
+  }
+  const refined: number[] = [];
+  for (let step = 0; step <= MEDLEY_TWO_SLOT_SHARED_POWER_DUAL_REFINE_STEPS; step += 1) {
+    refined.push(left + ((right - left) * step) / MEDLEY_TWO_SLOT_SHARED_POWER_DUAL_REFINE_STEPS);
+  }
+  refined.push(targetLambda);
+  return [...new Set(refined)].sort((leftValue, rightValue) => leftValue - rightValue);
+}
+
 function addMedleyTwoSlotSharedPowerDualOption(
   characterOptions: Float64Array,
   nextCharacterOptions: Float64Array,
@@ -983,6 +991,31 @@ export function estimateMedleyFastTwoSlotSharedPowerDualScoreUpperBound(
   const groups = getMedleyTwoSlotCapacityCharacterGroups(remainingSlots[0], remainingSlots[1]);
   let bestEstimate: MedleyTwoSlotSharedPowerDualUpperEstimate | null = null;
 
+  const evaluate = (
+    leaderPowerShare: number,
+    averagePowerShare: number,
+    lambdaBySlot: [number, number],
+  ): void => {
+    const upperBound = estimateMedleyFastTwoSlotSharedPowerDualForParameters(
+      groups,
+      slotContexts,
+      bannedCardIds,
+      lambdaBySlot,
+      averagePowerShare,
+      leaderPowerShare,
+    );
+    if (
+      Number.isFinite(upperBound)
+      && (!bestEstimate || upperBound < bestEstimate.upperBound)
+    ) {
+      bestEstimate = {
+        upperBound,
+        leaderPowerShare,
+        lambdaBySlot,
+      };
+    }
+  };
+
   for (const leaderPowerShare of MEDLEY_TWO_SLOT_SHARED_POWER_DUAL_LEADER_SHARES) {
     const averagePowerShare = (1 - leaderPowerShare) / MEDLEY_TEAM_SIZE;
     if (averagePowerShare <= 0) {
@@ -998,24 +1031,47 @@ export function estimateMedleyFastTwoSlotSharedPowerDualScoreUpperBound(
     )) as [number[], number[]];
     for (const lambda0 of lambdaCandidatesBySlot[0]) {
       for (const lambda1 of lambdaCandidatesBySlot[1]) {
-        const lambdaBySlot: [number, number] = [lambda0, lambda1];
-        const upperBound = estimateMedleyFastTwoSlotSharedPowerDualForParameters(
-          groups,
-          slotContexts,
+        evaluate(leaderPowerShare, averagePowerShare, [lambda0, lambda1]);
+      }
+    }
+  }
+
+  const coarseBestEstimate = bestEstimate as MedleyTwoSlotSharedPowerDualUpperEstimate | null;
+  if (coarseBestEstimate) {
+    const bestLeaderShareIndex = MEDLEY_TWO_SLOT_SHARED_POWER_DUAL_LEADER_SHARES.findIndex(
+      (share) => share === coarseBestEstimate.leaderPowerShare,
+    );
+    const leaderSharesToRefine = [
+      MEDLEY_TWO_SLOT_SHARED_POWER_DUAL_LEADER_SHARES[Math.max(0, bestLeaderShareIndex - 1)],
+      coarseBestEstimate.leaderPowerShare,
+      MEDLEY_TWO_SLOT_SHARED_POWER_DUAL_LEADER_SHARES[
+        Math.min(MEDLEY_TWO_SLOT_SHARED_POWER_DUAL_LEADER_SHARES.length - 1, bestLeaderShareIndex + 1)
+      ],
+    ].filter((share, index, shares): share is number => (
+      share !== undefined && shares.indexOf(share) === index
+    ));
+    for (const leaderPowerShare of leaderSharesToRefine) {
+      const averagePowerShare = (1 - leaderPowerShare) / MEDLEY_TEAM_SIZE;
+      if (averagePowerShare <= 0) {
+        continue;
+      }
+      const coarseCandidatesBySlot = remainingSlots.map((slot) => (
+        buildMedleyTwoSlotSharedPowerDualLambdaCandidates(
+          slot,
           bannedCardIds,
-          lambdaBySlot,
           averagePowerShare,
           leaderPowerShare,
-        );
-        if (
-          Number.isFinite(upperBound)
-          && (!bestEstimate || upperBound < bestEstimate.upperBound)
-        ) {
-          bestEstimate = {
-            upperBound,
-            leaderPowerShare,
-            lambdaBySlot,
-          };
+        )
+      )) as [number[], number[]];
+      const refinedCandidatesBySlot = coarseCandidatesBySlot.map((coarseCandidates, slotPosition) => (
+        buildMedleyTwoSlotSharedPowerDualRefinedLambdaCandidates(
+          coarseCandidates,
+          coarseBestEstimate.lambdaBySlot[slotPosition],
+        )
+      )) as [number[], number[]];
+      for (const lambda0 of refinedCandidatesBySlot[0]) {
+        for (const lambda1 of refinedCandidatesBySlot[1]) {
+          evaluate(leaderPowerShare, averagePowerShare, [lambda0, lambda1]);
         }
       }
     }
