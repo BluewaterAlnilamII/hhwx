@@ -4810,8 +4810,10 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
   };
   const estimateProcessedGeneratedUnseenJoinSideUpper = (
     generatedCandidates: MedleyTeamCandidate[],
+    generatedSlotIndex: number,
     unseenSlotIndex: number,
     baseGeneratedUnseenUpper: number,
+    getAnchorLimitedSlotUpper: (entryIndex: number, slotIndex: number) => number,
   ): {
     upperBound: number | null;
     pairCount: number;
@@ -4836,18 +4838,20 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
     let upperBound = Number.NEGATIVE_INFINITY;
     let pairCount = 0;
     const heap: MedleyExactCandidatePairFrontierHeapNode[] = [];
-    const bothUnseenPairUpper = combineScores(finiteScore(leftPeekUpperBound), finiteScore(rightPeekUpperBound));
     const bestGeneratedScore = generatedCandidates[0]?.result.score ?? Number.NEGATIVE_INFINITY;
     for (let entryIndex = 0; entryIndex < processedAnchorUpperEntries.length; entryIndex += 1) {
       const entry = processedAnchorUpperEntries[entryIndex];
+      const anchorLimitedGeneratedUpper = getAnchorLimitedSlotUpper(entryIndex, generatedSlotIndex);
+      const anchorLimitedUnseenUpper = getAnchorLimitedSlotUpper(entryIndex, unseenSlotIndex);
+      const bothUnseenPairUpper = combineScores(anchorLimitedGeneratedUpper, anchorLimitedUnseenUpper);
       upperBound = Math.max(
         upperBound,
         combineScores(entry.anchorScore, entry.generatedPairUpper),
         combineScores(entry.anchorScore, bothUnseenPairUpper),
       );
-      if (Number.isFinite(bestGeneratedScore)) {
+      if (Number.isFinite(bestGeneratedScore) && Number.isFinite(anchorLimitedUnseenUpper)) {
         pushMedleyExactCandidatePairFrontierHeapNode(heap, {
-          score: entry.anchorScore + bestGeneratedScore + baseGeneratedUnseenUpper,
+          score: entry.anchorScore + bestGeneratedScore + anchorLimitedUnseenUpper,
           leftIndex: entryIndex,
           rightIndex: 0,
         });
@@ -4873,10 +4877,11 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
       }
       const entry = processedAnchorUpperEntries[node.leftIndex];
       const generatedCandidate = generatedCandidates[node.rightIndex];
+      const anchorLimitedUnseenUpper = getAnchorLimitedSlotUpper(node.leftIndex, unseenSlotIndex);
       if (entry && generatedCandidate && !hasAnyCardId(generatedCandidate, entry.anchorCandidate.cardIds)) {
         pairCount += 1;
         const unseenUpper = Math.min(
-          baseGeneratedUnseenUpper,
+          anchorLimitedUnseenUpper,
           estimateSlotUpperExcludingCardIds(
             unseenSlotIndex,
             [entry.anchorCandidate.cardIds, generatedCandidate.cardIds],
@@ -4890,7 +4895,7 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
       const nextGeneratedIndex = node.rightIndex + 1;
       const nextGeneratedCandidate = generatedCandidates[nextGeneratedIndex];
       if (entry && nextGeneratedCandidate) {
-        const nextScore = entry.anchorScore + nextGeneratedCandidate.result.score + baseGeneratedUnseenUpper;
+        const nextScore = entry.anchorScore + nextGeneratedCandidate.result.score + anchorLimitedUnseenUpper;
         if (!Number.isFinite(upperBound) || nextScore > upperBound) {
           pushMedleyExactCandidatePairFrontierHeapNode(heap, {
             score: nextScore,
@@ -4924,10 +4929,35 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
       };
     }
     const joinStartedAt = performance.now();
+    const anchorLimitedLeftUpperByEntry: number[] = [];
+    const anchorLimitedRightUpperByEntry: number[] = [];
+    const getAnchorLimitedSlotUpper = (entryIndex: number, slotIndex: number): number => {
+      const cache = slotIndex === leftSlotIndex
+        ? anchorLimitedLeftUpperByEntry
+        : anchorLimitedRightUpperByEntry;
+      const cached = cache[entryIndex];
+      if (cached !== undefined) {
+        return cached;
+      }
+      const entry = processedAnchorUpperEntries[entryIndex];
+      const baseUpper = slotIndex === leftSlotIndex
+        ? finiteScore(leftPeekUpperBound)
+        : finiteScore(rightPeekUpperBound);
+      const upperBound = entry
+        ? Math.min(
+          baseUpper,
+          estimateSlotUpperExcludingCardIds(slotIndex, [entry.anchorCandidate.cardIds]),
+        )
+        : Number.NEGATIVE_INFINITY;
+      cache[entryIndex] = upperBound;
+      return upperBound;
+    };
     const leftUnseenJoin = estimateProcessedGeneratedUnseenJoinSideUpper(
       rightCandidates,
+      rightSlotIndex,
       leftSlotIndex,
       finiteScore(leftPeekUpperBound),
+      getAnchorLimitedSlotUpper,
     );
     if (leftUnseenJoin.abortReason !== null) {
       return {
@@ -4939,8 +4969,10 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
     }
     const rightUnseenJoin = estimateProcessedGeneratedUnseenJoinSideUpper(
       leftCandidates,
+      leftSlotIndex,
       rightSlotIndex,
       finiteScore(rightPeekUpperBound),
+      getAnchorLimitedSlotUpper,
     );
     const pairCount = leftUnseenJoin.pairCount + rightUnseenJoin.pairCount;
     const elapsedMs = performance.now() - joinStartedAt;
