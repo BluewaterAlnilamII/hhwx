@@ -4620,6 +4620,44 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
   }
   const leftAvailabilityQuery = buildMedleyExactCandidateSlotAvailabilityQuery(leftCandidates);
   const rightAvailabilityQuery = buildMedleyExactCandidateSlotAvailabilityQuery(rightCandidates);
+  const buildResultFromAnchorAndPairCandidates = (
+    anchorCandidate: MedleyTeamCandidate,
+    leftCandidate: MedleyTeamCandidate,
+    rightCandidate: MedleyTeamCandidate,
+  ): BandoriMedleyTeamSearchResult | null => {
+    const anchorResultCandidate = hydrateMedleyExactCandidateForResult(
+      slots[anchorSlotIndex],
+      anchorCandidate,
+      server,
+      perfectRate,
+      stats,
+      profiling,
+    );
+    const leftResultCandidate = hydrateMedleyExactCandidateForResult(
+      slots[leftSlotIndex],
+      leftCandidate,
+      server,
+      perfectRate,
+      stats,
+      profiling,
+    );
+    const rightResultCandidate = hydrateMedleyExactCandidateForResult(
+      slots[rightSlotIndex],
+      rightCandidate,
+      server,
+      perfectRate,
+      stats,
+      profiling,
+    );
+    if (!anchorResultCandidate || !leftResultCandidate || !rightResultCandidate) {
+      return null;
+    }
+    const selectedBySong: Array<MedleyTeamCandidate | undefined> = [];
+    selectedBySong[slots[anchorSlotIndex].songIndex] = anchorResultCandidate;
+    selectedBySong[slots[leftSlotIndex].songIndex] = leftResultCandidate;
+    selectedBySong[slots[rightSlotIndex].songIndex] = rightResultCandidate;
+    return buildMedleyResult(slots, selectedBySong, configuration);
+  };
   const estimatePairUpperForAnchor = (anchorCandidate: MedleyTeamCandidate): {
     upperBound: number;
     source: string;
@@ -4847,6 +4885,7 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
     pairRecordCount: number;
     elapsedMs: number;
     abortReason: string | null;
+    result: BandoriMedleyTeamSearchResult | null;
   } => {
     if (
       !shouldUseSuffixGeneratedPairJoin
@@ -4859,6 +4898,7 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
         pairRecordCount: 0,
         elapsedMs: 0,
         abortReason: null,
+        result: null,
       };
     }
     const joinStartedAt = performance.now();
@@ -4869,6 +4909,7 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
         pairRecordCount: 0,
         elapsedMs: 0,
         abortReason: "timebox",
+        result: null,
       };
     }
     const suffixAnchorCandidates = anchorCandidates.slice(startAnchorIndex);
@@ -4879,6 +4920,7 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
         pairRecordCount: 0,
         elapsedMs: performance.now() - joinStartedAt,
         abortReason: null,
+        result: null,
       };
     }
     const maxAnchorScore = suffixAnchorCandidates[0]?.result.score ?? Number.NEGATIVE_INFINITY;
@@ -4889,6 +4931,7 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
         pairRecordCount: 0,
         elapsedMs: performance.now() - joinStartedAt,
         abortReason: null,
+        result: null,
       };
     }
     const effectiveTargetUpperBound = Math.max(incumbentScore, targetUpperBound);
@@ -4909,6 +4952,7 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
     }
     let upperBound = Number.NEGATIVE_INFINITY;
     let pairRecordCount = 0;
+    let bestResult: BandoriMedleyTeamSearchResult | null = null;
     const pairCardIds: number[] = [];
     while (frontierHeap.length > 0) {
       if (performance.now() >= localDeadlineAt) {
@@ -4919,6 +4963,7 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
           pairRecordCount,
           elapsedMs: performance.now() - joinStartedAt,
           abortReason: "timebox",
+          result: bestResult,
         };
       }
       const node = popMedleyExactCandidatePairFrontierHeapNode(frontierHeap);
@@ -4942,7 +4987,19 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
             pairCardIds,
           );
           if (anchorCandidate) {
-            upperBound = Math.max(upperBound, node.score + anchorCandidate.result.score);
+            const scoreUpper = node.score + anchorCandidate.result.score;
+            upperBound = Math.max(upperBound, scoreUpper);
+            if (scoreUpper > Math.max(incumbentScore, bestResult?.score ?? Number.NEGATIVE_INFINITY)) {
+              const result = buildResultFromAnchorAndPairCandidates(
+                anchorCandidate,
+                leftCandidate,
+                rightCandidate,
+              );
+              if (result) {
+                observeEvaluatedResult?.(result);
+                bestResult = compareMedleyResultLike(bestResult, result);
+              }
+            }
           }
         }
         const nextRightIndex = node.rightIndex + 1;
@@ -4969,6 +5026,7 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
       pairRecordCount,
       elapsedMs: performance.now() - joinStartedAt,
       abortReason: null,
+      result: bestResult,
     };
   };
   const getResidualUpperBoundForProcessedMax = (
@@ -6616,6 +6674,7 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
       nextAnchorIndex,
       suffixProofTargetUpperBound,
     );
+    targetedPairProofResult = compareMedleyResultLike(targetedPairProofResult, suffixGeneratedPairJoin.result);
     const suffixGeneratedPairJoinTimedOut = suffixGeneratedPairJoin.abortReason !== null;
     const suffixLeftUnseenSingleCardJoin = estimateSuffixGeneratedUnseenSingleCardJoinUpper(
       nextAnchorIndex,
@@ -6742,6 +6801,10 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
           const rewindSuffixGeneratedPairJoin = estimateGeneratedAnchorSuffixGeneratedPairJoinUpper(
             rewindSplitAnchorIndex,
             rewindSuffixProofTargetUpperBound,
+          );
+          targetedPairProofResult = compareMedleyResultLike(
+            targetedPairProofResult,
+            rewindSuffixGeneratedPairJoin.result,
           );
           const rewindSuffixLeftUnseenSingleCardJoin = estimateSuffixGeneratedUnseenSingleCardJoinUpper(
             rewindSplitAnchorIndex,
@@ -7990,6 +8053,12 @@ export function searchMedleyConfigurationByExactCandidateJoin(
         observeEvaluatedResult,
       );
       if (candidateCheapUpperResult.proved) {
+        return candidateCheapUpperResult;
+      }
+      if (
+        candidateCheapUpperResult.result
+        && candidateCheapUpperResult.result.score > incumbentScore
+      ) {
         return candidateCheapUpperResult;
       }
       const currentObservedUpperBound = getObservedExactCandidateJoinUpperBound();
