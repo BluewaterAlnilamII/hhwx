@@ -3931,6 +3931,8 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
     pairCapacityCapPareto?: boolean;
     pairCapacityCapBucketed?: boolean;
     pairCapacityBreakdown?: boolean;
+    pairCapacitySharedPowerDualCap?: boolean;
+    pairCapacitySharedPowerDualCapMaxCalls?: number | null;
     pairCapacitySharedPowerBreakdown?: boolean;
     pairCapacitySharedPowerStateBudget?: number | null;
     targetedPairProofTimeboxMs?: number | null;
@@ -4072,6 +4074,14 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
   const shouldUsePairCapacityCapPareto = options.pairCapacityCapPareto === true;
   const shouldUsePairCapacityCapBucketed = options.pairCapacityCapBucketed === true;
   const shouldCapturePairCapacityBreakdown = options.pairCapacityBreakdown === true;
+  const shouldUsePairCapacitySharedPowerDualCap = options.pairCapacitySharedPowerDualCap === true;
+  const pairCapacitySharedPowerDualCapMaxCalls = (
+    options.pairCapacitySharedPowerDualCapMaxCalls !== null
+    && options.pairCapacitySharedPowerDualCapMaxCalls !== undefined
+    && Number.isFinite(options.pairCapacitySharedPowerDualCapMaxCalls)
+  )
+    ? Math.max(1, Math.trunc(options.pairCapacitySharedPowerDualCapMaxCalls))
+    : 8;
   const shouldCapturePairCapacitySharedPowerBreakdown = options.pairCapacitySharedPowerBreakdown === true;
   const pairCapacitySharedPowerStateBudget = (
     options.pairCapacitySharedPowerStateBudget !== null
@@ -4111,13 +4121,14 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
     leftGeneratedCandidate: MedleyTeamCandidate | null;
     rightGeneratedCandidate: MedleyTeamCandidate | null;
   }> = [];
-  const refinedAnchorPairUpperByCandidate = new WeakMap<MedleyTeamCandidate, {
+  type RefinedAnchorPairUpper = {
     pairUpper: number;
     source: string;
     generatedPairUpper: number;
     leftUnseenUpper: number;
     rightUnseenUpper: number;
-  }>();
+  };
+  const refinedAnchorPairUpperByCandidate = new WeakMap<MedleyTeamCandidate, RefinedAnchorPairUpper>();
   let splitAttemptCount = 0;
   let splitStateCount = 0;
   let splitAbortReason: string | null = null;
@@ -4246,6 +4257,10 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
   profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacityCapImprovementCount = 0;
   profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacityCapBestImprovement = 0;
   profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacityCapElapsedMs = 0;
+  profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacitySharedPowerDualCapCallCount = 0;
+  profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacitySharedPowerDualCapImprovementCount = 0;
+  profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacitySharedPowerDualCapBestImprovement = 0;
+  profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacitySharedPowerDualCapElapsedMs = 0;
   profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacityBreakdownTargetPairUpper = null;
   profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacityBreakdownSelectedUpper = null;
   profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacityBreakdownSelectedGap = null;
@@ -4258,6 +4273,15 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
   profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacityBreakdownBasicMode = null;
   profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacityBreakdownBasicCoefficientUpper = null;
   profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacityBreakdownBasicSkillAwareUpper = null;
+  profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacityBreakdownLagrangianUpper = null;
+  profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacityBreakdownLagrangianGap = null;
+  profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacityBreakdownLagrangianWeight = null;
+  profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacityBreakdownLagrangianElapsedMs = null;
+  profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacityBreakdownSharedPowerDualUpper = null;
+  profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacityBreakdownSharedPowerDualGap = null;
+  profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacityBreakdownSharedPowerDualLeaderShare = null;
+  profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacityBreakdownSharedPowerDualLambdaBySlot = null;
+  profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacityBreakdownSharedPowerDualElapsedMs = null;
   profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacityBreakdownSharedPowerUpper = null;
   profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacityBreakdownSharedPowerGap = null;
   profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacityBreakdownSharedPowerStateBudget = null;
@@ -4367,6 +4391,113 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
     return {
       pairUpper,
       source,
+    };
+  };
+  const pairCapacitySharedPowerDualCapByAnchorKey = new Map<string, number>();
+  const estimatePairCapacitySharedPowerDualCap = (anchorCardIds: readonly number[]): number => {
+    if (!shouldUsePairCapacitySharedPowerDualCap) {
+      return Number.POSITIVE_INFINITY;
+    }
+    const key = [...anchorCardIds].sort((left, right) => left - right).join(",");
+    const cached = pairCapacitySharedPowerDualCapByAnchorKey.get(key);
+    if (cached !== undefined) {
+      return cached;
+    }
+    const callCount = (
+      profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacitySharedPowerDualCapCallCount ?? 0
+    );
+    if (callCount >= pairCapacitySharedPowerDualCapMaxCalls) {
+      return Number.POSITIVE_INFINITY;
+    }
+    // The dual estimator is synchronous; keep a small reserve so it cannot consume the outer timebox tail.
+    if (performance.now() + 1_000 >= localDeadlineAt) {
+      return Number.POSITIVE_INFINITY;
+    }
+    const startedAt = performance.now();
+    const estimate = estimateMedleyFastTwoSlotSharedPowerDualScoreUpperBound(
+      slots,
+      pairSlotIndices,
+      new Set<number>(anchorCardIds),
+    );
+    const normalizedUpperBound = (
+      estimate && Number.isFinite(estimate.upperBound)
+        ? estimate.upperBound
+        : Number.POSITIVE_INFINITY
+    );
+    pairCapacitySharedPowerDualCapByAnchorKey.set(key, normalizedUpperBound);
+    profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacitySharedPowerDualCapCallCount = callCount + 1;
+    profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacitySharedPowerDualCapElapsedMs = Math.round(
+      (profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacitySharedPowerDualCapElapsedMs ?? 0)
+      + performance.now() - startedAt,
+    );
+    return normalizedUpperBound;
+  };
+  const applyPairCapacitySharedPowerDualCap = (
+    pairUpper: number,
+    source: string,
+    anchorCardIds: readonly number[],
+  ): {
+    pairUpper: number;
+    source: string;
+  } => {
+    if (!Number.isFinite(pairUpper)) {
+      return {
+        pairUpper,
+        source,
+      };
+    }
+    const capacityUpper = estimatePairCapacitySharedPowerDualCap(anchorCardIds);
+    if (!Number.isFinite(capacityUpper) || capacityUpper >= pairUpper) {
+      return {
+        pairUpper,
+        source,
+      };
+    }
+    const improvement = pairUpper - capacityUpper;
+    profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacitySharedPowerDualCapImprovementCount = (
+      (profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacitySharedPowerDualCapImprovementCount ?? 0) + 1
+    );
+    profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacitySharedPowerDualCapBestImprovement = Math.max(
+      profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacitySharedPowerDualCapBestImprovement ?? 0,
+      improvement,
+    );
+    return {
+      pairUpper: capacityUpper,
+      source: "pair-capacity-shared-power-dual",
+    };
+  };
+  const shouldApplyPairCapacitySharedPowerDualCap = (
+    entry: (typeof processedAnchorUpperEntries)[number],
+    refined: RefinedAnchorPairUpper,
+  ): boolean => {
+    if (!shouldUsePairCapacitySharedPowerDualCap) {
+      return false;
+    }
+    if (entry.source !== "pair-capacity" && refined.source !== "pair-capacity") {
+      return false;
+    }
+    const targetPairUpper = incumbentScore - entry.anchorScore;
+    return !Number.isFinite(targetPairUpper) || refined.pairUpper > targetPairUpper;
+  };
+  const applyPairCapacitySharedPowerDualCapForEntry = (
+    entry: (typeof processedAnchorUpperEntries)[number],
+    refined: RefinedAnchorPairUpper,
+  ): RefinedAnchorPairUpper => {
+    if (!shouldApplyPairCapacitySharedPowerDualCap(entry, refined)) {
+      return refined;
+    }
+    const capped = applyPairCapacitySharedPowerDualCap(
+      refined.pairUpper,
+      refined.source,
+      entry.anchorCandidate.cardIds,
+    );
+    if (capped.pairUpper >= refined.pairUpper) {
+      return refined;
+    }
+    return {
+      ...refined,
+      pairUpper: capped.pairUpper,
+      source: capped.source,
     };
   };
   const getLocalCandidateKey = (candidate: MedleyTeamCandidate): string => (
@@ -6247,7 +6378,17 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
           )
         )
       );
-      const canRefineEntry = canRefineGeneratedPair || canRefineUnseenPair;
+      const canRefinePairCapacitySharedPowerDual = (
+        shouldUsePairCapacitySharedPowerDualCap
+        && entry.source === "pair-capacity"
+        && Number.isFinite(entry.pairUpper)
+        && (!Number.isFinite(targetPairUpper) || entry.pairUpper > targetPairUpper)
+      );
+      const canRefineEntry = (
+        canRefineGeneratedPair
+        || canRefineUnseenPair
+        || canRefinePairCapacitySharedPowerDual
+      );
       if (
         !refined
         && !canRefineEntry
@@ -6362,6 +6503,7 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
           leftUnseenUpper: refinedUnseen.leftUnseenUpper,
           rightUnseenUpper: refinedUnseen.rightUnseenUpper,
         };
+        refined = applyPairCapacitySharedPowerDualCapForEntry(entry, refined);
         const targetedPairProof = maybeRefineEntryWithTargetedPairProof(entry, refined);
         refined = targetedPairProof.refined;
         refinedAnchorPairUpperByCandidate.set(entry.anchorCandidate, refined);
@@ -6395,6 +6537,11 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
         }
       }
       if (refined) {
+        const cappedRefined = applyPairCapacitySharedPowerDualCapForEntry(entry, refined);
+        if (cappedRefined !== refined) {
+          refined = cappedRefined;
+          refinedAnchorPairUpperByCandidate.set(entry.anchorCandidate, refined);
+        }
         recordProcessedUpperMax(
           entry.anchorScore,
           refined.pairUpper,
@@ -7287,6 +7434,8 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     anchorFrontierCheapUpperPairCapacityCapPareto?: boolean;
     anchorFrontierCheapUpperPairCapacityCapBucketed?: boolean;
     anchorFrontierCheapUpperPairCapacityBreakdown?: boolean;
+    anchorFrontierCheapUpperPairCapacitySharedPowerDualCap?: boolean;
+    anchorFrontierCheapUpperPairCapacitySharedPowerDualCapMaxCalls?: number | null;
     anchorFrontierCheapUpperPairCapacitySharedPowerBreakdown?: boolean;
     anchorFrontierCheapUpperPairCapacitySharedPowerStateBudget?: number | null;
     anchorFrontierCheapUpperTargetedPairProofTimeboxMs?: number | null;
@@ -7819,6 +7968,12 @@ export function searchMedleyConfigurationByExactCandidateJoin(
           pairCapacityCapPareto: context.anchorFrontierCheapUpperPairCapacityCapPareto,
           pairCapacityCapBucketed: context.anchorFrontierCheapUpperPairCapacityCapBucketed,
           pairCapacityBreakdown: context.anchorFrontierCheapUpperPairCapacityBreakdown,
+          pairCapacitySharedPowerDualCap: (
+            context.anchorFrontierCheapUpperPairCapacitySharedPowerDualCap
+          ),
+          pairCapacitySharedPowerDualCapMaxCalls: (
+            context.anchorFrontierCheapUpperPairCapacitySharedPowerDualCapMaxCalls
+          ),
           pairCapacitySharedPowerBreakdown: context.anchorFrontierCheapUpperPairCapacitySharedPowerBreakdown,
           pairCapacitySharedPowerStateBudget: context.anchorFrontierCheapUpperPairCapacitySharedPowerStateBudget,
           targetedPairProofTimeboxMs: context.anchorFrontierCheapUpperTargetedPairProofTimeboxMs,
