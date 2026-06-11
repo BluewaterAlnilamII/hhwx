@@ -5408,3 +5408,60 @@ P07 failed follow-ups after P03 fix:
   - Next diagnostic should use `debugConfigurationTrace=true` / proof ledger
     on P06:323 to identify the exact configuration-level upper that produces
     the global `9650685` bound, then target that ledger entry directly.
+
+2026-06-12 04:18 CST suffix witness and late repair follow-up:
+
+- Code added and pushed:
+  - `0c7e69d Add medley suffix join witness profiling`.
+  - `d4e051e Add targeted shared-power dual repair`.
+  - New suffix witness profiling records the best concrete suffix join result
+    seen while estimating the generated-pair suffix upper.
+  - New late repair option:
+    `eventRootFrontierProbeAnchorCheapUpperPairCapacitySharedPowerDualLateMaxRepair`.
+    It is opt-in only and repairs the current processed `pair-capacity` max
+    after normal processed-entry refinement.
+- Suffix witness diagnostic:
+  - Raw:
+    `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-11T19-51-25-197Z.json`.
+  - Result: bounded, score `9488172`, upper `9650685`, gap `162513`,
+    elapsed `252419ms`, peak `3498 MiB`, `timedOut=false`,
+    `memoryLimited=false`.
+  - Best concrete suffix generated-pair scores were below the incumbent:
+    `9464793` for PastelPalettes/cool performance, `9455510` for technique,
+    and `9449440` for visual.
+  - Interpretation: the suffix upper is not a concrete witness. It is the
+    conservative proof target returned when the suffix join cannot scan enough
+    to prove no unseen pair remains above the target. Lowering it to the
+    observed concrete suffix max would be unsafe.
+- Late repair diagnostics:
+  - `maxCalls=16` raw:
+    `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-11T20-04-23-301Z.json`.
+    Result: bounded, upper `9645663`, gap `157491`, elapsed `241112ms`,
+    peak `3427 MiB`.
+  - `maxCalls=32` raw:
+    `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-11T20-09-43-269Z.json`.
+    Result: bounded, upper `9640980`, gap `152808`, elapsed `259738ms`,
+    peak `3515 MiB`.
+  - The best single-entry late-repair improvements were large
+    (`~190k`), but the global gap only fell from `162513` to `157491`
+    at 16 calls and to `152808` at 32 calls.
+  - Interpretation: the repair is hitting real overestimates, but there are
+    many similar `pair-capacity` witnesses. Raising call counts gives linear,
+    diminishing returns and consumes the same 300s proof budget needed by
+    later frontier work.
+- Current blocker:
+  - The remaining P06:323 frontier is no longer explained by incumbent quality,
+    suffix concrete result loss, or a single bad processed anchor.
+  - The dominant unresolved upper is bulk slack in the processed-anchor
+    two-slot `pair-capacity` relaxation for PastelPalettes/cool, with nearby
+    Morfonica/cool roots also left high enough to matter.
+  - Do not continue by increasing seed, suffix, `maxAnchors`, or late-repair
+    call budgets.
+- Next diagnostic:
+  - Evaluate the existing targeted pair proof path on P06:323 with a small,
+    bounded timebox to determine whether exact two-slot pair proof can close
+    the current max witnesses more cheaply than per-anchor shared-power dual
+    repair.
+  - If targeted pair proof also times out or improves too few entries, the next
+    design direction should be a bulk/cached pair-capacity certificate rather
+    than another per-entry repair loop.
