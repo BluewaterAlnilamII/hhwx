@@ -5232,12 +5232,35 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
       maxPairRecordIndex,
     });
   };
+  let unprocessedPairUpperEstimate: {
+    pairUpper: number;
+    source: string;
+  } | null = null;
+  const estimateUnprocessedPairUpperBound = (): {
+    pairUpper: number;
+    source: string;
+  } => {
+    if (unprocessedPairUpperEstimate) {
+      return unprocessedPairUpperEstimate;
+    }
+    const capacityPairUpper = capPairUpper(pairUpperBound, []);
+    const cappedPairUpper = applyPairCapacitySharedPowerDualCap(
+      capacityPairUpper,
+      "pair-capacity",
+      [],
+    );
+    unprocessedPairUpperEstimate = {
+      pairUpper: cappedPairUpper.pairUpper,
+      source: cappedPairUpper.source,
+    };
+    return unprocessedPairUpperEstimate;
+  };
   const getResidualUpperBoundForProcessedMax = (
     processedMax: number,
     nextAnchorScore: number | null,
     generatedSuffixCoveredUpperBound: number | null = null,
   ): number | null => {
-    const unprocessedPairUpperBound = capPairUpper(pairUpperBound, []);
+    const unprocessedPairUpperBound = estimateUnprocessedPairUpperBound().pairUpper;
     const unprocessedGeneratedUpperBound = generatedSuffixCoveredUpperBound !== null
       ? generatedSuffixCoveredUpperBound
       : Number.isFinite(nextAnchorScore ?? Number.NEGATIVE_INFINITY) && Number.isFinite(unprocessedPairUpperBound)
@@ -5268,7 +5291,8 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
     pairUpper: number | null;
     source: string | null;
   } => {
-    const unprocessedPairUpperBound = capPairUpper(pairUpperBound, []);
+    const unprocessedPairUpper = estimateUnprocessedPairUpperBound();
+    const unprocessedPairUpperBound = unprocessedPairUpper.pairUpper;
     const generatedFallbackUpperBound = Number.isFinite(nextAnchorScore ?? Number.NEGATIVE_INFINITY)
       && Number.isFinite(unprocessedPairUpperBound)
       ? (nextAnchorScore ?? Number.NEGATIVE_INFINITY) + unprocessedPairUpperBound
@@ -5291,8 +5315,10 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
     return {
       upperBound: peekUpperBound,
       anchorScore: Number.isFinite(peekAnchorUpperBound) ? peekAnchorUpperBound : null,
-      pairUpper: pairUpperBound,
-      source: "unprocessed-generator-peek",
+      pairUpper: unprocessedPairUpperBound,
+      source: unprocessedPairUpper.source === "pair-capacity"
+        ? "unprocessed-generator-peek"
+        : `unprocessed-generator-peek-${unprocessedPairUpper.source}`,
     };
   };
   const recordProcessedUpperMax = (
