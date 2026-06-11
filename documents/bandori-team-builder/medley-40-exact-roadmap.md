@@ -99,6 +99,32 @@ No-GC acceptance contract:
   cheaper proof of the processed `pair-capacity` residual or a fused
   processed/suffix frontier certificate, not another independent upper pass.
 
+2026-06-11 23:07 CST rejected generated-pair exact refinement:
+
+- Experiment: temporarily added a default-off
+  `eventRootFrontierProbeAnchorCheapUpperGeneratedPairExact` path that reused
+  the existing generated-pair bitset query when the top left/right generated
+  candidates overlapped. The target was to replace the overlapping
+  `generated-pair` component with a true disjoint generated-pair upper while
+  keeping the existing unseen and capacity-cap terms.
+- Raw:
+  `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-11T15-07-27-598Z.json`.
+- Result: rejected and local code reverted. `P06:323` regressed to bounded
+  timeout, score `9488172`, upper `10076137`, gap `587965`, elapsed
+  `300509ms`, peak `1942 MiB`, `timedOut=true`, `memoryLimited=false`.
+- Profiling signal: cheap upper ran only `2` times and both hit local timebox.
+  Pair-complement query count was `7863`, scan count was about `7.61B`, and
+  high-pair record build count was `123`. The max residual moved from
+  `pair-capacity` to `right-unseen`: anchor `[1976,625,1721,1785,1850]`,
+  left/right generated cards both `[1999,1975,1952,1736,1719]`,
+  generated-pair upper `6541307`, right-unseen upper `6669938`.
+- Decision: generated/generated conflict is a real source of slack, but it is
+  not the closing blocker by itself. Once that component is tightened, the
+  one-sided unseen term dominates, and the exact-pair query cost starves the
+  anchor sweep. Do not promote this opt-in. The next viable proof direction
+  must amortize one-sided unseen proof across the same coarse frontier instead
+  of running per-anchor generated-pair scans.
+
 2026-06-10 13:00 CST correctness gate reset:
 
 - The first two no-GC full 40-case runs both reported `40/40` exact, but their
