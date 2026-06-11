@@ -1,6 +1,6 @@
 # Medley 40/40 Exact Roadmap
 
-Last updated: 2026-06-12 01:21 CST
+Last updated: 2026-06-12 01:32 CST
 
 This file is the persistent working note for the current medley optimizer goal.
 Keep it current before and after benchmark runs or proof-path changes, so future
@@ -160,6 +160,17 @@ No-GC acceptance contract:
     the main all-scope `40/40` proof-quality gap. A future low-risk UX patch is
     to let explicit locked event configurations opt into the same event-root
     probe before ordinary exact join when the configuration is high-risk.
+- Follow-up rejected during local probing: a temporary
+  `enableLockedEventRootFrontierProbeBeforeExactJoin` option was tested, but it
+  still produced `eventRootFrontierProbeCallCount=0`. Raw:
+  `temp/bandori-team-builder/real-profile-medley-benchmark-2026-06-11T17-24-49-657Z.json`.
+  The row stayed bounded with score `9483314`, upper `9942430`, gap `459116`,
+  elapsed `126530ms`, peak `4489 MiB`, `timedOut=true`, and
+  `memoryLimited=true`. Decision: do not keep this fake knob. In locked scope,
+  there is no incumbent before exact-before-seeding, so simply widening the
+  event-root scope guard cannot trigger the proof path. A real locked-scope UX
+  fix needs seed-first scheduling, then event-root/exact proof, not only a scope
+  guard change.
 
 2026-06-11 22:35 CST rejected two-slot shared-power experiment:
 
