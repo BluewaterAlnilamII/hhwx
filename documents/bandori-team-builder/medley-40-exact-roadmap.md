@@ -125,6 +125,40 @@ No-GC acceptance contract:
   must amortize one-sided unseen proof across the same coarse frontier instead
   of running per-anchor generated-pair scans.
 
+2026-06-11 23:45 CST rejected two-slot card-specific pair-cap probe:
+
+- Experiment: temporarily added a default-off
+  `eventRootFrontierProbeAnchorCheapUpperPairCapacityCapCardSpecific` path that
+  made the event-root cheap-upper pair-cap call compute the existing fast
+  two-slot card-bound upper and, only when opted in, also compute the
+  two-slot card-specific coefficient upper, then use the tighter safe value.
+  The intent was to test a reusable upper-model tightening, not another
+  generated-pair or unseen scan.
+- First run exposed a wiring mistake: the new boolean was initially passed into
+  the existing `useBasicSkillAwareOnly` parameter. Raw:
+  `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-11T15-32-51-443Z.json`.
+  This reproduced the already-rejected basic two-slot route: `P06:323` stayed
+  bounded with score `9488172`, upper `9694898`, gap `206726`, elapsed
+  `200480ms`, peak `3205 MiB`, no timeout and no memory limit.
+- Corrected rerun raw:
+  `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-11T15-37-29-507Z.json`.
+  Result: `P06:323` still bounded at score `9488172`, upper `9650685`, gap
+  `162513`, elapsed `289509ms`, peak `3476 MiB`, no timeout and no memory
+  limit.
+- Profiling signal after the corrected rerun:
+  - The final cheap upper was unchanged: residual upper `9636799`, residual gap
+    `148627`, source `unprocessed-anchor-suffix-cover`.
+  - The dominating local max stayed `pair-capacity`, anchor score `2865962`,
+    pair upper `6770836.939337965`.
+  - Cheap-upper elapsed rose from the accepted `44378ms` baseline to `69269ms`,
+    and event-root probe elapsed rose from `186572ms` to `274954ms`.
+- Decision: rejected and local code reverted. Two-slot card-specific
+  coefficient cap does not tighten the relevant P06 pair-capacity certificate
+  and adds substantial high-frequency pair-cap overhead. Do not retry this as a
+  default or acceptance candidate. The next viable experiment still needs
+  reusable proof material for the same-coarse frontier or a genuinely stronger
+  low-memory two-slot capacity certificate.
+
 Next implementation constraint:
 
 - Do not add more per-anchor generated-pair scans, unseen-refine scans, or
