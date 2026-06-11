@@ -634,6 +634,15 @@ export type BandoriMedleyTeamSearchProfilingStats = {
   exactCandidateJoinLastAnchorFrontierCheapUpperProcessedUnseenJoinPairCount: number | null;
   exactCandidateJoinLastAnchorFrontierCheapUpperProcessedUnseenJoinElapsedMs: number | null;
   exactCandidateJoinLastAnchorFrontierCheapUpperProcessedUnseenJoinAbortReason: string | null;
+  exactCandidateJoinLastAnchorFrontierCheapUpperProcessedUnseenJoinMaxSource: string | null;
+  exactCandidateJoinLastAnchorFrontierCheapUpperProcessedUnseenJoinMaxAnchorScore: number | null;
+  exactCandidateJoinLastAnchorFrontierCheapUpperProcessedUnseenJoinMaxGeneratedPairUpper: number | null;
+  exactCandidateJoinLastAnchorFrontierCheapUpperProcessedUnseenJoinMaxBothUnseenFallbackPairUpper: number | null;
+  exactCandidateJoinLastAnchorFrontierCheapUpperProcessedUnseenJoinMaxGeneratedCandidateScore: number | null;
+  exactCandidateJoinLastAnchorFrontierCheapUpperProcessedUnseenJoinMaxGeneratedUnseenUpper: number | null;
+  exactCandidateJoinLastAnchorFrontierCheapUpperProcessedUnseenJoinMaxEntryIndex: number | null;
+  exactCandidateJoinLastAnchorFrontierCheapUpperProcessedUnseenJoinMaxGeneratedIndex: number | null;
+  exactCandidateJoinLastAnchorFrontierCheapUpperProcessedUnseenJoinMaxUnseenSlotIndex: number | null;
   exactCandidateJoinLastAnchorFrontierCheapUpperMaxGeneratedPairOverlaps: boolean | null;
   exactCandidateJoinLastAnchorFrontierCheapUpperMaxGeneratedPairScoreOnly: number | null;
   exactCandidateJoinLastAnchorFrontierCheapUpperMaxGeneratedPairFullScore: number | null;

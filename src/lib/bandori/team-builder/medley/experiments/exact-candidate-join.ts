@@ -4049,6 +4049,15 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
   profiling.exactCandidateJoinLastAnchorFrontierCheapUpperProcessedUnseenJoinPairCount = null;
   profiling.exactCandidateJoinLastAnchorFrontierCheapUpperProcessedUnseenJoinElapsedMs = null;
   profiling.exactCandidateJoinLastAnchorFrontierCheapUpperProcessedUnseenJoinAbortReason = null;
+  profiling.exactCandidateJoinLastAnchorFrontierCheapUpperProcessedUnseenJoinMaxSource = null;
+  profiling.exactCandidateJoinLastAnchorFrontierCheapUpperProcessedUnseenJoinMaxAnchorScore = null;
+  profiling.exactCandidateJoinLastAnchorFrontierCheapUpperProcessedUnseenJoinMaxGeneratedPairUpper = null;
+  profiling.exactCandidateJoinLastAnchorFrontierCheapUpperProcessedUnseenJoinMaxBothUnseenFallbackPairUpper = null;
+  profiling.exactCandidateJoinLastAnchorFrontierCheapUpperProcessedUnseenJoinMaxGeneratedCandidateScore = null;
+  profiling.exactCandidateJoinLastAnchorFrontierCheapUpperProcessedUnseenJoinMaxGeneratedUnseenUpper = null;
+  profiling.exactCandidateJoinLastAnchorFrontierCheapUpperProcessedUnseenJoinMaxEntryIndex = null;
+  profiling.exactCandidateJoinLastAnchorFrontierCheapUpperProcessedUnseenJoinMaxGeneratedIndex = null;
+  profiling.exactCandidateJoinLastAnchorFrontierCheapUpperProcessedUnseenJoinMaxUnseenSlotIndex = null;
   profiling.exactCandidateJoinLastAnchorFrontierCheapUpperMaxGeneratedPairOverlaps = null;
   profiling.exactCandidateJoinLastAnchorFrontierCheapUpperMaxGeneratedPairScoreOnly = null;
   profiling.exactCandidateJoinLastAnchorFrontierCheapUpperMaxGeneratedPairFullScore = null;
@@ -4818,8 +4827,87 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
     pairCount: number;
     elapsedMs: number;
     abortReason: string | null;
+    maxSource: string | null;
+    maxAnchorScore: number | null;
+    maxGeneratedPairUpper: number | null;
+    maxBothUnseenFallbackPairUpper: number | null;
+    maxGeneratedCandidateScore: number | null;
+    maxGeneratedUnseenUpper: number | null;
+    maxEntryIndex: number | null;
+    maxGeneratedIndex: number | null;
+    maxUnseenSlotIndex: number | null;
   } => {
     const joinStartedAt = performance.now();
+    let upperBound = Number.NEGATIVE_INFINITY;
+    let pairCount = 0;
+    let maxSource: string | null = null;
+    let maxAnchorScore: number | null = null;
+    let maxGeneratedPairUpper: number | null = null;
+    let maxBothUnseenFallbackPairUpper: number | null = null;
+    let maxGeneratedCandidateScore: number | null = null;
+    let maxGeneratedUnseenUpper: number | null = null;
+    let maxEntryIndex: number | null = null;
+    let maxGeneratedIndex: number | null = null;
+    let maxUnseenSlotIndex: number | null = null;
+    const recordUpper = (
+      upper: number,
+      source: string,
+      entryIndex: number,
+      values: {
+        anchorScore: number;
+        generatedPairUpper?: number | null;
+        bothUnseenFallbackPairUpper?: number | null;
+        generatedCandidateScore?: number | null;
+        generatedUnseenUpper?: number | null;
+        generatedIndex?: number | null;
+        unseenSlot?: number | null;
+      },
+    ): void => {
+      if (!Number.isFinite(upper)) {
+        return;
+      }
+      if (upper > upperBound) {
+        upperBound = upper;
+        maxSource = source;
+        maxAnchorScore = values.anchorScore;
+        maxGeneratedPairUpper = values.generatedPairUpper ?? null;
+        maxBothUnseenFallbackPairUpper = values.bothUnseenFallbackPairUpper ?? null;
+        maxGeneratedCandidateScore = values.generatedCandidateScore ?? null;
+        maxGeneratedUnseenUpper = values.generatedUnseenUpper ?? null;
+        maxEntryIndex = entryIndex;
+        maxGeneratedIndex = values.generatedIndex ?? null;
+        maxUnseenSlotIndex = values.unseenSlot ?? null;
+      }
+    };
+    const buildResult = (abortReason: string | null): {
+      upperBound: number | null;
+      pairCount: number;
+      elapsedMs: number;
+      abortReason: string | null;
+      maxSource: string | null;
+      maxAnchorScore: number | null;
+      maxGeneratedPairUpper: number | null;
+      maxBothUnseenFallbackPairUpper: number | null;
+      maxGeneratedCandidateScore: number | null;
+      maxGeneratedUnseenUpper: number | null;
+      maxEntryIndex: number | null;
+      maxGeneratedIndex: number | null;
+      maxUnseenSlotIndex: number | null;
+    } => ({
+      upperBound: Number.isFinite(upperBound) ? upperBound : null,
+      pairCount,
+      elapsedMs: performance.now() - joinStartedAt,
+      abortReason,
+      maxSource,
+      maxAnchorScore,
+      maxGeneratedPairUpper,
+      maxBothUnseenFallbackPairUpper,
+      maxGeneratedCandidateScore,
+      maxGeneratedUnseenUpper,
+      maxEntryIndex,
+      maxGeneratedIndex,
+      maxUnseenSlotIndex,
+    });
     if (
       !shouldUseProcessedUnseenJoin
       || processedAnchorUpperEntries.length === 0
@@ -4831,11 +4919,18 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
         pairCount: 0,
         elapsedMs: performance.now() - joinStartedAt,
         abortReason: null,
+        maxSource: null,
+        maxAnchorScore: null,
+        maxGeneratedPairUpper: null,
+        maxBothUnseenFallbackPairUpper: null,
+        maxGeneratedCandidateScore: null,
+        maxGeneratedUnseenUpper: null,
+        maxEntryIndex: null,
+        maxGeneratedIndex: null,
+        maxUnseenSlotIndex: null,
       };
     }
 
-    let upperBound = Number.NEGATIVE_INFINITY;
-    let pairCount = 0;
     const heap: MedleyExactCandidatePairFrontierHeapNode[] = [];
     const bestGeneratedScore = generatedCandidates[0]?.result.score ?? Number.NEGATIVE_INFINITY;
     for (let entryIndex = 0; entryIndex < processedAnchorUpperEntries.length; entryIndex += 1) {
@@ -4846,10 +4941,23 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
       const rightUnseenUpper = refined?.rightUnseenUpper ?? entry.rightUnseenUpper;
       const anchorLimitedUnseenUpper = getAnchorLimitedSlotUpper(entryIndex, unseenSlotIndex);
       const bothUnseenFallbackPairUpper = Math.min(leftUnseenUpper, rightUnseenUpper);
-      upperBound = Math.max(
-        upperBound,
+      recordUpper(
         combineScores(entry.anchorScore, generatedPairUpper),
+        "generated-pair",
+        entryIndex,
+        {
+          anchorScore: entry.anchorScore,
+          generatedPairUpper,
+        },
+      );
+      recordUpper(
         combineScores(entry.anchorScore, bothUnseenFallbackPairUpper),
+        "both-unseen-fallback",
+        entryIndex,
+        {
+          anchorScore: entry.anchorScore,
+          bothUnseenFallbackPairUpper,
+        },
       );
       if (Number.isFinite(bestGeneratedScore) && Number.isFinite(anchorLimitedUnseenUpper)) {
         pushMedleyExactCandidatePairFrontierHeapNode(heap, {
@@ -4863,12 +4971,7 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
     while (heap.length > 0) {
       if (performance.now() >= localDeadlineAt) {
         heap.length = 0;
-        return {
-          upperBound: null,
-          pairCount,
-          elapsedMs: performance.now() - joinStartedAt,
-          abortReason: "timebox",
-        };
+        return buildResult("timebox");
       }
       const node = popMedleyExactCandidatePairFrontierHeapNode(heap);
       if (!node) {
@@ -4889,9 +4992,19 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
             [entry.anchorCandidate.cardIds, generatedCandidate.cardIds],
           ),
         );
-        upperBound = Math.max(
-          upperBound,
+        recordUpper(
           entry.anchorScore + generatedCandidate.result.score + unseenUpper,
+          unseenSlotIndex === leftSlotIndex
+            ? "right-generated-left-unseen"
+            : "left-generated-right-unseen",
+          node.leftIndex,
+          {
+            anchorScore: entry.anchorScore,
+            generatedCandidateScore: generatedCandidate.result.score,
+            generatedUnseenUpper: unseenUpper,
+            generatedIndex: node.rightIndex,
+            unseenSlot: unseenSlotIndex,
+          },
         );
       }
       const nextGeneratedIndex = node.rightIndex + 1;
@@ -4909,18 +5022,22 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
     }
 
     heap.length = 0;
-    return {
-      upperBound: Number.isFinite(upperBound) ? upperBound : null,
-      pairCount,
-      elapsedMs: performance.now() - joinStartedAt,
-      abortReason: null,
-    };
+    return buildResult(null);
   };
   const estimateProcessedGeneratedUnseenJoinUpper = (): {
     upperBound: number | null;
     pairCount: number;
     elapsedMs: number;
     abortReason: string | null;
+    maxSource: string | null;
+    maxAnchorScore: number | null;
+    maxGeneratedPairUpper: number | null;
+    maxBothUnseenFallbackPairUpper: number | null;
+    maxGeneratedCandidateScore: number | null;
+    maxGeneratedUnseenUpper: number | null;
+    maxEntryIndex: number | null;
+    maxGeneratedIndex: number | null;
+    maxUnseenSlotIndex: number | null;
   } => {
     if (!shouldUseProcessedUnseenJoin || processedAnchorUpperEntries.length === 0) {
       return {
@@ -4928,6 +5045,15 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
         pairCount: 0,
         elapsedMs: 0,
         abortReason: null,
+        maxSource: null,
+        maxAnchorScore: null,
+        maxGeneratedPairUpper: null,
+        maxBothUnseenFallbackPairUpper: null,
+        maxGeneratedCandidateScore: null,
+        maxGeneratedUnseenUpper: null,
+        maxEntryIndex: null,
+        maxGeneratedIndex: null,
+        maxUnseenSlotIndex: null,
       };
     }
     const joinStartedAt = performance.now();
@@ -4966,6 +5092,15 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
         pairCount: leftUnseenJoin.pairCount,
         elapsedMs: performance.now() - joinStartedAt,
         abortReason: leftUnseenJoin.abortReason,
+        maxSource: leftUnseenJoin.maxSource,
+        maxAnchorScore: leftUnseenJoin.maxAnchorScore,
+        maxGeneratedPairUpper: leftUnseenJoin.maxGeneratedPairUpper,
+        maxBothUnseenFallbackPairUpper: leftUnseenJoin.maxBothUnseenFallbackPairUpper,
+        maxGeneratedCandidateScore: leftUnseenJoin.maxGeneratedCandidateScore,
+        maxGeneratedUnseenUpper: leftUnseenJoin.maxGeneratedUnseenUpper,
+        maxEntryIndex: leftUnseenJoin.maxEntryIndex,
+        maxGeneratedIndex: leftUnseenJoin.maxGeneratedIndex,
+        maxUnseenSlotIndex: leftUnseenJoin.maxUnseenSlotIndex,
       };
     }
     const rightUnseenJoin = estimateProcessedGeneratedUnseenJoinSideUpper(
@@ -4977,22 +5112,56 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
     const pairCount = leftUnseenJoin.pairCount + rightUnseenJoin.pairCount;
     const elapsedMs = performance.now() - joinStartedAt;
     if (rightUnseenJoin.abortReason !== null) {
+      const maxJoin = (
+        leftUnseenJoin.upperBound !== null
+        && (
+          rightUnseenJoin.upperBound === null
+          || leftUnseenJoin.upperBound >= rightUnseenJoin.upperBound
+        )
+      )
+        ? leftUnseenJoin
+        : rightUnseenJoin;
       return {
         upperBound: null,
         pairCount,
         elapsedMs,
         abortReason: rightUnseenJoin.abortReason,
+        maxSource: maxJoin.maxSource,
+        maxAnchorScore: maxJoin.maxAnchorScore,
+        maxGeneratedPairUpper: maxJoin.maxGeneratedPairUpper,
+        maxBothUnseenFallbackPairUpper: maxJoin.maxBothUnseenFallbackPairUpper,
+        maxGeneratedCandidateScore: maxJoin.maxGeneratedCandidateScore,
+        maxGeneratedUnseenUpper: maxJoin.maxGeneratedUnseenUpper,
+        maxEntryIndex: maxJoin.maxEntryIndex,
+        maxGeneratedIndex: maxJoin.maxGeneratedIndex,
+        maxUnseenSlotIndex: maxJoin.maxUnseenSlotIndex,
       };
     }
-    const upperBounds = [
-      leftUnseenJoin.upperBound,
-      rightUnseenJoin.upperBound,
-    ].filter((upperBound): upperBound is number => upperBound !== null && Number.isFinite(upperBound));
+    const maxJoin = (
+      leftUnseenJoin.upperBound !== null
+      && (
+        rightUnseenJoin.upperBound === null
+        || leftUnseenJoin.upperBound >= rightUnseenJoin.upperBound
+      )
+    )
+      ? leftUnseenJoin
+      : rightUnseenJoin;
     return {
-      upperBound: upperBounds.length > 0 ? Math.max(...upperBounds) : null,
+      upperBound: maxJoin.upperBound !== null && Number.isFinite(maxJoin.upperBound)
+        ? maxJoin.upperBound
+        : null,
       pairCount,
       elapsedMs,
       abortReason: null,
+      maxSource: maxJoin.maxSource,
+      maxAnchorScore: maxJoin.maxAnchorScore,
+      maxGeneratedPairUpper: maxJoin.maxGeneratedPairUpper,
+      maxBothUnseenFallbackPairUpper: maxJoin.maxBothUnseenFallbackPairUpper,
+      maxGeneratedCandidateScore: maxJoin.maxGeneratedCandidateScore,
+      maxGeneratedUnseenUpper: maxJoin.maxGeneratedUnseenUpper,
+      maxEntryIndex: maxJoin.maxEntryIndex,
+      maxGeneratedIndex: maxJoin.maxGeneratedIndex,
+      maxUnseenSlotIndex: maxJoin.maxUnseenSlotIndex,
     };
   };
   let targetedGeneratedPairQuery: MedleyExactCandidatePairUpperQuery | null = null;
@@ -5586,6 +5755,33 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
     );
     profiling.exactCandidateJoinLastAnchorFrontierCheapUpperProcessedUnseenJoinAbortReason = (
       processedUnseenJoin.abortReason
+    );
+    profiling.exactCandidateJoinLastAnchorFrontierCheapUpperProcessedUnseenJoinMaxSource = (
+      processedUnseenJoin.maxSource
+    );
+    profiling.exactCandidateJoinLastAnchorFrontierCheapUpperProcessedUnseenJoinMaxAnchorScore = (
+      processedUnseenJoin.maxAnchorScore
+    );
+    profiling.exactCandidateJoinLastAnchorFrontierCheapUpperProcessedUnseenJoinMaxGeneratedPairUpper = (
+      processedUnseenJoin.maxGeneratedPairUpper
+    );
+    profiling.exactCandidateJoinLastAnchorFrontierCheapUpperProcessedUnseenJoinMaxBothUnseenFallbackPairUpper = (
+      processedUnseenJoin.maxBothUnseenFallbackPairUpper
+    );
+    profiling.exactCandidateJoinLastAnchorFrontierCheapUpperProcessedUnseenJoinMaxGeneratedCandidateScore = (
+      processedUnseenJoin.maxGeneratedCandidateScore
+    );
+    profiling.exactCandidateJoinLastAnchorFrontierCheapUpperProcessedUnseenJoinMaxGeneratedUnseenUpper = (
+      processedUnseenJoin.maxGeneratedUnseenUpper
+    );
+    profiling.exactCandidateJoinLastAnchorFrontierCheapUpperProcessedUnseenJoinMaxEntryIndex = (
+      processedUnseenJoin.maxEntryIndex
+    );
+    profiling.exactCandidateJoinLastAnchorFrontierCheapUpperProcessedUnseenJoinMaxGeneratedIndex = (
+      processedUnseenJoin.maxGeneratedIndex
+    );
+    profiling.exactCandidateJoinLastAnchorFrontierCheapUpperProcessedUnseenJoinMaxUnseenSlotIndex = (
+      processedUnseenJoin.maxUnseenSlotIndex
     );
     if (processedUpperMaxLeftGeneratedCandidate && processedUpperMaxRightGeneratedCandidate) {
       const generatedPairOverlaps = medleyExactCandidatesOverlap(
