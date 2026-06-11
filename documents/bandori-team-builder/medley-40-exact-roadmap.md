@@ -5371,3 +5371,40 @@ P07 failed follow-ups after P03 fix:
     no new bounded regressions, no baseline exact case becoming bounded, peak
     heap within the established no-GC budget, and P06:323 exact under
     non-debug no-GC conditions.
+
+2026-06-12 04:05 CST suffix incumbent / hydrated-pair attempts:
+
+- Code added and pushed:
+  - `359fb8a Return suffix join incumbent candidates`.
+  - `180ae62 Tighten suffix join with hydrated pair scores`.
+  - These changes affect only the opt-in suffix generated-pair join path used
+    by the current hard-case experiment. Default maximize search remains
+    unchanged unless that suffix join option is enabled.
+- Suffix incumbent conversion run:
+  - Raw:
+    `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-11T19-27-01-999Z.json`.
+  - Result: bounded, score `9488172`, upper `9650685`, gap `162513`,
+    elapsed `230030ms`, peak `3478 MiB`.
+  - The suffix join did not find a full result above incumbent. The residual
+    stayed `unprocessed-anchor-suffix-cover`, upper `9636799`, residual gap
+    `148627`, suffix anchors `187000`, suffix pair records `4055`.
+  - Interpretation: the suffix upper is not merely hiding a better concrete
+    incumbent that was not returned.
+- Hydrated-pair suffix upper run:
+  - Raw:
+    `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-11T19-33-49-937Z.json`.
+  - Result: bounded, score `9488172`, upper `9650685`, gap `162513`,
+    elapsed `226148ms`, peak `3222 MiB`.
+  - The suffix upper remained `9636799` despite using hydrated pair scores for
+    the enumerated suffix pair records.
+  - Interpretation: the remaining suffix gap is not primarily caused by
+    pair score-only/full-score slack. The proof frontier still needs a
+    stronger certificate for the unprocessed anchor suffix or a different
+    configuration-level frontier strategy.
+- Decision:
+  - Keep both changes as harmless incumbent/proof-tightening improvements for
+    opt-in suffix probes, but do not treat them as progress toward 40/40 exact.
+  - Stop parameter-only experiments on `maxCalls` and `maxAnchors` for P06.
+  - Next diagnostic should use `debugConfigurationTrace=true` / proof ledger
+    on P06:323 to identify the exact configuration-level upper that produces
+    the global `9650685` bound, then target that ledger entry directly.
