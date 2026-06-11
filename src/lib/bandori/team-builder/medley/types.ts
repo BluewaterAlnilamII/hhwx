@@ -153,6 +153,7 @@ export type BandoriMedleySearchOptimizationOptions = {
   eventRootFrontierProbeAnchorCheapUpperPairCapacityCap?: boolean;
   eventRootFrontierProbeAnchorCheapUpperPairCapacityCapPareto?: boolean;
   eventRootFrontierProbeAnchorCheapUpperPairCapacityCapBucketed?: boolean;
+  eventRootFrontierProbeAnchorCheapUpperPairCapacityBreakdown?: boolean;
   eventRootFrontierProbeAnchorCheapUpperTargetedPairProofTimeboxMs?: number;
   eventRootFrontierProbeAnchorCheapUpperTargetedPairProofMaxEntries?: number;
   eventRootFrontierProbeAnchorCheapUpperTargetedPairProofCandidateLimit?: number;
@@ -693,6 +694,19 @@ export type BandoriMedleyTeamSearchProfilingStats = {
   exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacityCapImprovementCount: number | null;
   exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacityCapBestImprovement: number | null;
   exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacityCapElapsedMs: number | null;
+  exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacityBreakdownTargetPairUpper: number | null;
+  exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacityBreakdownSelectedUpper: number | null;
+  exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacityBreakdownSelectedGap: number | null;
+  exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacityBreakdownCorrelatedUpper: number | null;
+  exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacityBreakdownCorrelatedLeftUpper: number | null;
+  exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacityBreakdownCorrelatedRightUpper: number | null;
+  exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacityBreakdownFastUpper: number | null;
+  exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacityBreakdownFastMode: MedleyCapacityUpperMode | null;
+  exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacityBreakdownBasicUpper: number | null;
+  exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacityBreakdownBasicMode: MedleyCapacityUpperMode | null;
+  exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacityBreakdownBasicCoefficientUpper: number | null;
+  exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacityBreakdownBasicSkillAwareUpper: number | null;
+  exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacityBreakdownElapsedMs: number | null;
   exactCandidateJoinLastAnchorFrontierCheapUpperMaxGeneratedPairOverlaps: boolean | null;
   exactCandidateJoinLastAnchorFrontierCheapUpperMaxGeneratedPairScoreOnly: number | null;
   exactCandidateJoinLastAnchorFrontierCheapUpperMaxGeneratedPairFullScore: number | null;

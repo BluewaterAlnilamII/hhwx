@@ -1464,6 +1464,9 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
   const eventRootFrontierProbeAnchorCheapUpperPairCapacityCapBucketed = (
     optimization.eventRootFrontierProbeAnchorCheapUpperPairCapacityCapBucketed === true
   );
+  const eventRootFrontierProbeAnchorCheapUpperPairCapacityBreakdown = (
+    optimization.eventRootFrontierProbeAnchorCheapUpperPairCapacityBreakdown === true
+  );
   const parsedEventRootFrontierProbeAnchorCheapUpperTargetedPairProofTimeboxMs =
     optimization.eventRootFrontierProbeAnchorCheapUpperTargetedPairProofTimeboxMs !== undefined
       ? Math.trunc(optimization.eventRootFrontierProbeAnchorCheapUpperTargetedPairProofTimeboxMs)
@@ -1568,6 +1571,9 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
       ),
       anchorFrontierCheapUpperPairCapacityCapBucketed: (
         eventRootFrontierProbeAnchorCheapUpperPairCapacityCapBucketed
+      ),
+      anchorFrontierCheapUpperPairCapacityBreakdown: (
+        eventRootFrontierProbeAnchorCheapUpperPairCapacityBreakdown
       ),
       anchorFrontierCheapUpperTargetedPairProofTimeboxMs: (
         eventRootFrontierProbeAnchorCheapUpperTargetedPairProofTimeboxMs
@@ -5657,6 +5663,9 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
         traceEntry.eventRootFrontierProbeAnchorCheapUpperPairCapacityCapBucketed = (
           eventRootFrontierProbeAnchorCheapUpperPairCapacityCapBucketed
         );
+        traceEntry.eventRootFrontierProbeAnchorCheapUpperPairCapacityBreakdown = (
+          eventRootFrontierProbeAnchorCheapUpperPairCapacityBreakdown
+        );
         traceEntry.eventRootFrontierProbeAnchorCheapUpperTargetedPairProofTimeboxMs = (
           eventRootFrontierProbeAnchorCheapUpperTargetedPairProofTimeboxMs
         );
@@ -5789,6 +5798,9 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
           ),
           anchorFrontierCheapUpperPairCapacityCapBucketed: (
             eventRootFrontierProbeAnchorCheapUpperPairCapacityCapBucketed
+          ),
+          anchorFrontierCheapUpperPairCapacityBreakdown: (
+            eventRootFrontierProbeAnchorCheapUpperPairCapacityBreakdown
           ),
           anchorFrontierCheapUpperTargetedPairProofTimeboxMs: (
             eventRootFrontierProbeAnchorCheapUpperTargetedPairProofTimeboxMs
