@@ -130,6 +130,8 @@ export type BandoriMedleySearchOptimizationOptions = {
   eventRootFrontierProbeAnchorCheapUpperTargetedPairProofTimeboxMs?: number;
   eventRootFrontierProbeAnchorCheapUpperTargetedPairProofMaxEntries?: number;
   eventRootFrontierProbeAnchorCheapUpperTargetedPairProofCandidateLimit?: number;
+  eventRootFrontierProbeAnchorCheapUpperTargetedPairBnbNodeLimit?: number;
+  eventRootFrontierProbeAnchorCheapUpperTargetedPairBnbSlotSolveNodeLimit?: number;
 };
 
 export type BandoriMedleyTeamSearchInput = Omit<
@@ -592,6 +594,9 @@ export type BandoriMedleyTeamSearchProfilingStats = {
   exactCandidateJoinLastAnchorFrontierCheapUpperMaxGeneratedPairUpper: number | null;
   exactCandidateJoinLastAnchorFrontierCheapUpperMaxLeftUnseenUpper: number | null;
   exactCandidateJoinLastAnchorFrontierCheapUpperMaxRightUnseenUpper: number | null;
+  exactCandidateJoinLastAnchorFrontierCheapUpperResidualSource: string | null;
+  exactCandidateJoinLastAnchorFrontierCheapUpperUnprocessedAnchorScore: number | null;
+  exactCandidateJoinLastAnchorFrontierCheapUpperUnprocessedPairUpper: number | null;
   exactCandidateJoinLastAnchorFrontierCheapUpperMaxGeneratedPairOverlaps: boolean | null;
   exactCandidateJoinLastAnchorFrontierCheapUpperMaxGeneratedPairScoreOnly: number | null;
   exactCandidateJoinLastAnchorFrontierCheapUpperMaxGeneratedPairFullScore: number | null;

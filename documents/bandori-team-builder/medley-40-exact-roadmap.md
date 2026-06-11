@@ -1,6 +1,6 @@
 # Medley 40/40 Exact Roadmap
 
-Last updated: 2026-06-11 08:07 CST
+Last updated: 2026-06-11 08:30 CST
 
 This file is the persistent working note for the current medley optimizer goal.
 Keep it current before and after benchmark runs or proof-path changes, so future
@@ -3309,3 +3309,61 @@ P07 failed follow-ups after P03 fix:
   should focus on a different upper-bound decomposition for unseen pair
   frontiers, likely slot-level/card-conflict aware, rather than generating
   larger pair prefixes.
+
+2026-06-11 08:30 CST P06 residual-source and targeted BNB rejection:
+
+- Added cheap-upper residual-source diagnostics:
+  `exactCandidateJoinLastAnchorFrontierCheapUpperResidualSource`,
+  `exactCandidateJoinLastAnchorFrontierCheapUpperUnprocessedAnchorScore`, and
+  `exactCandidateJoinLastAnchorFrontierCheapUpperUnprocessedPairUpper`.
+- Guarded baseline with residual-source fields:
+  - Raw:
+    `temp/bandori-team-builder/real-profile-medley-scope-matrix-2026-06-11T00-21-43-357Z.json`
+  - Result: bounded, `112203ms`, score `9488172`, upper `9773821`,
+    gap `285649`, peak `4129 MiB`.
+  - Open configuration `PastelPalettes/cool/performance`:
+    cheap upper `9773821`, cheap gap `286860`, processed anchors `14319`,
+    residual source `unprocessed-anchor`,
+    `unprocessedAnchor=2805208`, `unprocessedPair=6968613`.
+  - The processed max was only `9636601`
+    (`right-unseen`, `2804735 + 6831866`), so the remaining blocker is not the
+    processed entry that targeted pair proof tried to refine. It is the
+    unprocessed anchor suffix plus global pair upper.
+- Full-score targeted pair BNB diagnostic:
+  - Raw A:
+    `temp/bandori-team-builder/real-profile-medley-scope-matrix-2026-06-11T00-11-21-733Z.json`
+  - `maxEntries=4`, BNB limits `8192/500000`, all `4` calls completed and all
+    `4` improved their processed-entry pair upper, but P06 stayed bounded with
+    the same `9773821` upper and `285649` gap.
+  - Raw B:
+    `temp/bandori-team-builder/real-profile-medley-scope-matrix-2026-06-11T00-14-26-547Z.json`
+  - `maxEntries=16` also completed and improved all processed entries, but
+    still left the same gap while raising elapsed time to `182220ms` and peak
+    working set to `5715 MiB`.
+  - Decision: per-anchor BNB is useful as a diagnostic, but not as the next
+    quality route. It only improves already processed entries and does not
+    touch the suffix-dominant upper.
+- Control-flow diagnostic:
+  - Raw:
+    `temp/bandori-team-builder/real-profile-medley-scope-matrix-2026-06-11T00-25-43-018Z.json`
+  - A patch that repeats processed-entry refine before stopping and continues
+    if the stop condition becomes invalid did not change P06: bounded,
+    score `9488172`, upper `9773821`, gap `285649`, processed anchors `14319`,
+    residual source still `unprocessed-anchor`.
+  - Decision: the stop condition was not the active bug. Do not continue by
+    adding more refine passes.
+- Current P06 proof math:
+  - With the suffix still using global pair upper `6968613`, the unprocessed
+    anchor upper must fall to about `2519559` to prove against incumbent
+    `9488172`.
+  - The current cheap upper stops at `2805208`, so the remaining required drop
+    is roughly `285649`. That is too large for small parameter tweaks or
+    pointwise processed-entry repairs.
+- Next accepted direction:
+  - Build a reusable, conservative certificate for the unprocessed anchor
+    suffix: either lower the suffix pair upper under safe shared conditions, or
+    switch to a full-score-aware generated-join proof that can close the same
+    frontier without widening candidate limits.
+  - Keep targeted pair proof, targeted BNB, wider K, larger high-pair guards,
+    and scan fallback as diagnostic-only unless new ledger evidence shows a
+    different case where they close the dominant residual.

@@ -362,13 +362,15 @@ export function proveMedleyScoreOnlyPairUpperByConflictBnb(
   deadlineAt: number,
   nodeLimit: number,
   slotSolveNodeLimit: number,
+  initialBannedCardIds: readonly number[] = [],
+  scoreOnly = true,
 ): MedleyConflictPairUpperBnbResult {
   const startedAt = performance.now();
   profiling.conflictPairUpperBnbCallCount += 1;
   const slotBestCache = new Map<string, MedleyBestSlotTeamCacheEntry>();
   const openNodes: MedleyConflictExactNode[] = [{
     forcedCardIdsBySlot: slots.map(() => new Set<number>()),
-    bannedCardIdsBySlot: slots.map(() => new Set<number>()),
+    bannedCardIdsBySlot: slots.map(() => new Set(initialBannedCardIds)),
     depth: 0,
   }];
   let bestPairScore = Number.NEGATIVE_INFINITY;
@@ -427,7 +429,7 @@ export function proveMedleyScoreOnlyPairUpperByConflictBnb(
           isPastDeadline,
           deadlineAt,
           slotSolveNodeLimit,
-          true,
+          scoreOnly,
         );
         if (solveResult.aborted) {
           aborted = true;
