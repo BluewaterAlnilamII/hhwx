@@ -4073,3 +4073,39 @@ P07 failed follow-ups after P03 fix:
        both-unseen fallback and can stop earlier;
     3. a dominated-root tight-upper/proof path strong enough to close
        Morfonica/cool after PastelPalettes is lowered.
+
+2026-06-11 14:43 CST P06 rewind split diagnostic:
+
+- Code added:
+  - `eventRootFrontierProbeAnchorCheapUpperRewindBothUnseen` as a default-off
+    diagnostic option.
+  - When processed-unseen max source is `both-unseen-fallback`, the diagnostic
+    tries a single alternative split before that max entry:
+    processed prefix upper + existing suffix cover/join for the remaining
+    anchor suffix.
+  - Trace fields include:
+    `anchorFrontierCheapUpperRewindAttemptCount`,
+    `anchorFrontierCheapUpperRewindImprovementCount`,
+    `anchorFrontierCheapUpperRewindUpperBound`,
+    `anchorFrontierCheapUpperRewindSplitAnchorIndex`,
+    `anchorFrontierCheapUpperRewindProcessedEntryCount`,
+    `anchorFrontierCheapUpperRewindElapsedMs`, and
+    `anchorFrontierCheapUpperRewindAbortReason`.
+- Diagnostic run:
+  - Raw:
+    `temp/bandori-team-builder/real-profile-medley-scope-matrix-2026-06-11T06-40-35-526Z.json`
+  - Options:
+    baseline P06 diagnostic options plus
+    `eventRootFrontierProbeAnchorCheapUpperRewindBothUnseen=true`.
+  - Result: bounded timeout; elapsed `302668ms`; score `9488172`; upper
+    `10082483`; gap `594311`; root-pruned `0`; peak `2975 MiB`.
+  - Rewind attempted once on performance:
+    split anchor index `14420`, processed entry count `12720`, elapsed
+    `56268ms`, abort `timebox`, no improvement.
+- Decision:
+  - The soundness direction is valid, but this implementation is too expensive
+    because it recomputes suffix cover/join after the main cheap-upper pass.
+  - Keep it default-off and research-only.
+  - A useful best-prefix optimization would need incremental/checkpointed
+    suffix information or early-stop logic, not an extra full suffix pass at
+    the end.
