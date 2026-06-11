@@ -3933,6 +3933,7 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
     pairCapacityBreakdown?: boolean;
     pairCapacitySharedPowerDualCap?: boolean;
     pairCapacitySharedPowerDualCapMaxCalls?: number | null;
+    pairCapacitySharedPowerDualLateMaxRepair?: boolean;
     pairCapacitySharedPowerBreakdown?: boolean;
     pairCapacitySharedPowerStateBudget?: number | null;
     targetedPairProofTimeboxMs?: number | null;
@@ -4075,6 +4076,9 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
   const shouldUsePairCapacityCapBucketed = options.pairCapacityCapBucketed === true;
   const shouldCapturePairCapacityBreakdown = options.pairCapacityBreakdown === true;
   const shouldUsePairCapacitySharedPowerDualCap = options.pairCapacitySharedPowerDualCap === true;
+  const shouldUsePairCapacitySharedPowerDualLateMaxRepair = (
+    options.pairCapacitySharedPowerDualLateMaxRepair === true
+  );
   const pairCapacitySharedPowerDualCapMaxCalls = (
     options.pairCapacitySharedPowerDualCapMaxCalls !== null
     && options.pairCapacitySharedPowerDualCapMaxCalls !== undefined
@@ -4272,6 +4276,10 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
   profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacitySharedPowerDualCapImprovementCount = 0;
   profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacitySharedPowerDualCapBestImprovement = 0;
   profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacitySharedPowerDualCapElapsedMs = 0;
+  profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacitySharedPowerDualLateRepairAttemptCount = 0;
+  profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacitySharedPowerDualLateRepairImprovementCount = 0;
+  profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacitySharedPowerDualLateRepairBestImprovement = 0;
+  profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacitySharedPowerDualLateRepairElapsedMs = 0;
   profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacityBreakdownTargetPairUpper = null;
   profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacityBreakdownSelectedUpper = null;
   profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacityBreakdownSelectedGap = null;
@@ -4406,7 +4414,7 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
   };
   const pairCapacitySharedPowerDualCapByAnchorKey = new Map<string, number>();
   const estimatePairCapacitySharedPowerDualCap = (anchorCardIds: readonly number[]): number => {
-    if (!shouldUsePairCapacitySharedPowerDualCap) {
+    if (!shouldUsePairCapacitySharedPowerDualCap && !shouldUsePairCapacitySharedPowerDualLateMaxRepair) {
       return Number.POSITIVE_INFINITY;
     }
     const key = [...anchorCardIds].sort((left, right) => left - right).join(",");
@@ -5209,6 +5217,125 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
       processedUpperMaxLeftGeneratedCandidate = leftGeneratedCandidate;
       processedUpperMaxRightGeneratedCandidate = rightGeneratedCandidate;
     }
+  };
+  const resetProcessedUpperMax = (): void => {
+    processedUpperMax = Number.NEGATIVE_INFINITY;
+    processedUpperMaxSource = null;
+    processedUpperMaxAnchorScore = null;
+    processedUpperMaxPairUpper = null;
+    processedUpperMaxGeneratedPairUpper = null;
+    processedUpperMaxLeftUnseenUpper = null;
+    processedUpperMaxRightUnseenUpper = null;
+    processedUpperMaxAnchorCandidate = null;
+    processedUpperMaxLeftGeneratedCandidate = null;
+    processedUpperMaxRightGeneratedCandidate = null;
+  };
+  const recordProcessedEntryUpperMax = (
+    entry: (typeof processedAnchorUpperEntries)[number],
+  ): void => {
+    const refined = refinedAnchorPairUpperByCandidate.get(entry.anchorCandidate);
+    if (refined) {
+      recordProcessedUpperMax(
+        entry.anchorScore,
+        refined.pairUpper,
+        refined.source,
+        refined.generatedPairUpper,
+        refined.leftUnseenUpper,
+        refined.rightUnseenUpper,
+        null,
+        null,
+        entry.anchorCandidate,
+      );
+      return;
+    }
+    recordProcessedUpperMax(
+      entry.anchorScore,
+      entry.pairUpper,
+      entry.source,
+      entry.generatedPairUpper,
+      entry.leftUnseenUpper,
+      entry.rightUnseenUpper,
+      entry.leftGeneratedCandidate,
+      entry.rightGeneratedCandidate,
+      entry.anchorCandidate,
+    );
+  };
+  const rebuildProcessedUpperMaxFromEntries = (): void => {
+    resetProcessedUpperMax();
+    for (const entry of processedAnchorUpperEntries) {
+      recordProcessedEntryUpperMax(entry);
+    }
+  };
+  const repairProcessedPairCapacityMaxWithSharedPowerDual = (): void => {
+    if (!shouldUsePairCapacitySharedPowerDualLateMaxRepair || processedAnchorUpperEntries.length === 0) {
+      return;
+    }
+    const repairStartedAt = performance.now();
+    while (
+      processedUpperMaxSource === "pair-capacity"
+      && processedUpperMaxAnchorCandidate !== null
+      && Number.isFinite(processedUpperMaxPairUpper ?? Number.NEGATIVE_INFINITY)
+      && performance.now() + 1000 < localDeadlineAt
+    ) {
+      const entry = processedAnchorUpperEntries.find(
+        (candidateEntry) => candidateEntry.anchorCandidate === processedUpperMaxAnchorCandidate,
+      );
+      if (!entry) {
+        break;
+      }
+      const refined = refinedAnchorPairUpperByCandidate.get(entry.anchorCandidate) ?? {
+        pairUpper: entry.pairUpper,
+        source: entry.source,
+        generatedPairUpper: entry.generatedPairUpper,
+        leftUnseenUpper: entry.leftUnseenUpper,
+        rightUnseenUpper: entry.rightUnseenUpper,
+      };
+      if (refined.source !== "pair-capacity" || !Number.isFinite(refined.pairUpper)) {
+        break;
+      }
+      const targetPairUpper = incumbentScore - entry.anchorScore;
+      if (Number.isFinite(targetPairUpper) && refined.pairUpper <= targetPairUpper) {
+        break;
+      }
+      profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacitySharedPowerDualLateRepairAttemptCount = (
+        (profiling
+          .exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacitySharedPowerDualLateRepairAttemptCount ?? 0) + 1
+      );
+      const capped = applyPairCapacitySharedPowerDualCap(
+        refined.pairUpper,
+        refined.source,
+        entry.anchorCandidate.cardIds,
+      );
+      if (!Number.isFinite(capped.pairUpper) || capped.pairUpper >= refined.pairUpper) {
+        break;
+      }
+      const improvement = refined.pairUpper - capped.pairUpper;
+      profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacitySharedPowerDualLateRepairImprovementCount = (
+        (profiling
+          .exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacitySharedPowerDualLateRepairImprovementCount ?? 0) + 1
+      );
+      profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacitySharedPowerDualLateRepairBestImprovement =
+        Math.max(
+          profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacitySharedPowerDualLateRepairBestImprovement
+            ?? 0,
+          improvement,
+        );
+      refinedAnchorPairUpperByCandidate.set(entry.anchorCandidate, {
+        ...refined,
+        pairUpper: capped.pairUpper,
+        source: capped.source,
+      });
+      const upperBefore = processedUpperMax;
+      rebuildProcessedUpperMaxFromEntries();
+      if (processedUpperMax >= upperBefore) {
+        break;
+      }
+    }
+    profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacitySharedPowerDualLateRepairElapsedMs = Math.round(
+      (profiling
+        .exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacitySharedPowerDualLateRepairElapsedMs ?? 0)
+      + performance.now() - repairStartedAt,
+    );
   };
   const hasAnyCardId = (
     candidate: MedleyTeamCandidate,
@@ -6757,6 +6884,9 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
     const refineTimedOut = skipRefine ? false : refineProcessedAnchorUpperEntries();
     recordUnseenRefineProfiling();
     recordTargetedPairProofProfiling();
+    if (!refineTimedOut) {
+      repairProcessedPairCapacityMaxWithSharedPowerDual();
+    }
     const suffixProofTargetUpperBound = Number.isFinite(processedUpperMax)
       ? Math.max(incumbentScore, processedUpperMax)
       : incumbentScore;
@@ -7625,6 +7755,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     anchorFrontierCheapUpperPairCapacityBreakdown?: boolean;
     anchorFrontierCheapUpperPairCapacitySharedPowerDualCap?: boolean;
     anchorFrontierCheapUpperPairCapacitySharedPowerDualCapMaxCalls?: number | null;
+    anchorFrontierCheapUpperPairCapacitySharedPowerDualLateMaxRepair?: boolean;
     anchorFrontierCheapUpperPairCapacitySharedPowerBreakdown?: boolean;
     anchorFrontierCheapUpperPairCapacitySharedPowerStateBudget?: number | null;
     anchorFrontierCheapUpperTargetedPairProofTimeboxMs?: number | null;
@@ -8162,6 +8293,9 @@ export function searchMedleyConfigurationByExactCandidateJoin(
           ),
           pairCapacitySharedPowerDualCapMaxCalls: (
             context.anchorFrontierCheapUpperPairCapacitySharedPowerDualCapMaxCalls
+          ),
+          pairCapacitySharedPowerDualLateMaxRepair: (
+            context.anchorFrontierCheapUpperPairCapacitySharedPowerDualLateMaxRepair
           ),
           pairCapacitySharedPowerBreakdown: context.anchorFrontierCheapUpperPairCapacitySharedPowerBreakdown,
           pairCapacitySharedPowerStateBudget: context.anchorFrontierCheapUpperPairCapacitySharedPowerStateBudget,
