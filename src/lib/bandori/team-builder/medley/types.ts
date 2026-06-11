@@ -133,6 +133,7 @@ export type BandoriMedleySearchOptimizationOptions = {
   eventRootFrontierProbeAnchorCheapUpperRefineUnseen?: boolean;
   eventRootFrontierProbeAnchorCheapUpperRefineTopAnchors?: number;
   eventRootFrontierProbeAnchorCheapUpperUnseenRefineMaxGeneratedCandidates?: number;
+  eventRootFrontierProbeAnchorCheapUpperProcessedUnseenJoin?: boolean;
   eventRootFrontierProbeAnchorCheapUpperTargetedPairProofTimeboxMs?: number;
   eventRootFrontierProbeAnchorCheapUpperTargetedPairProofMaxEntries?: number;
   eventRootFrontierProbeAnchorCheapUpperTargetedPairProofCandidateLimit?: number;
@@ -626,6 +627,10 @@ export type BandoriMedleyTeamSearchProfilingStats = {
   exactCandidateJoinLastAnchorFrontierCheapUpperSuffixUnseenSingleCardJoinElapsedMs: number | null;
   exactCandidateJoinLastAnchorFrontierCheapUpperSuffixUnseenSingleCardJoinAbortReason: string | null;
   exactCandidateJoinLastAnchorFrontierCheapUpperSuffixUnseenJoinMode: string | null;
+  exactCandidateJoinLastAnchorFrontierCheapUpperProcessedUnseenJoinUpperBound: number | null;
+  exactCandidateJoinLastAnchorFrontierCheapUpperProcessedUnseenJoinPairCount: number | null;
+  exactCandidateJoinLastAnchorFrontierCheapUpperProcessedUnseenJoinElapsedMs: number | null;
+  exactCandidateJoinLastAnchorFrontierCheapUpperProcessedUnseenJoinAbortReason: string | null;
   exactCandidateJoinLastAnchorFrontierCheapUpperMaxGeneratedPairOverlaps: boolean | null;
   exactCandidateJoinLastAnchorFrontierCheapUpperMaxGeneratedPairScoreOnly: number | null;
   exactCandidateJoinLastAnchorFrontierCheapUpperMaxGeneratedPairFullScore: number | null;

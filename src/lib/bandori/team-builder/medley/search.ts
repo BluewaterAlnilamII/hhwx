@@ -1095,6 +1095,9 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
   )
     ? Math.max(1, parsedEventRootFrontierProbeAnchorCheapUpperUnseenRefineMaxGeneratedCandidates)
     : null;
+  const eventRootFrontierProbeAnchorCheapUpperProcessedUnseenJoin = (
+    optimization.eventRootFrontierProbeAnchorCheapUpperProcessedUnseenJoin === true
+  );
   const parsedEventRootFrontierProbeAnchorCheapUpperTargetedPairProofTimeboxMs =
     optimization.eventRootFrontierProbeAnchorCheapUpperTargetedPairProofTimeboxMs !== undefined
       ? Math.trunc(optimization.eventRootFrontierProbeAnchorCheapUpperTargetedPairProofTimeboxMs)
@@ -1170,6 +1173,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
       anchorFrontierCheapUpperUnseenRefineMaxGeneratedCandidates: (
         eventRootFrontierProbeAnchorCheapUpperUnseenRefineMaxGeneratedCandidates
       ),
+      anchorFrontierCheapUpperProcessedUnseenJoin: eventRootFrontierProbeAnchorCheapUpperProcessedUnseenJoin,
       anchorFrontierCheapUpperTargetedPairProofTimeboxMs: (
         eventRootFrontierProbeAnchorCheapUpperTargetedPairProofTimeboxMs
       ),
@@ -4985,6 +4989,9 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
         traceEntry.eventRootFrontierProbeAnchorCheapUpperUnseenRefineMaxGeneratedCandidates = (
           eventRootFrontierProbeAnchorCheapUpperUnseenRefineMaxGeneratedCandidates
         );
+        traceEntry.eventRootFrontierProbeAnchorCheapUpperProcessedUnseenJoin = (
+          eventRootFrontierProbeAnchorCheapUpperProcessedUnseenJoin
+        );
         traceEntry.eventRootFrontierProbeAnchorCheapUpperTargetedPairProofTimeboxMs = (
           eventRootFrontierProbeAnchorCheapUpperTargetedPairProofTimeboxMs
         );
@@ -5087,6 +5094,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
           anchorFrontierCheapUpperUnseenRefineMaxGeneratedCandidates: (
             eventRootFrontierProbeAnchorCheapUpperUnseenRefineMaxGeneratedCandidates
           ),
+          anchorFrontierCheapUpperProcessedUnseenJoin: eventRootFrontierProbeAnchorCheapUpperProcessedUnseenJoin,
           anchorFrontierCheapUpperTargetedPairProofTimeboxMs: (
             eventRootFrontierProbeAnchorCheapUpperTargetedPairProofTimeboxMs
           ),
