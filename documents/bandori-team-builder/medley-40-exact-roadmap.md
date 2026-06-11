@@ -4543,3 +4543,48 @@ P07 failed follow-ups after P03 fix:
     proof, or a stronger two-slot capacity upper model. Do not promote
     pair-cap/refine, suffix cover, or targeted pair proof into acceptance
     options yet.
+
+2026-06-11 19:10 CST pair-cap suffix budget follow-up:
+
+- Diagnostic run, pair capacity cap plus suffix generated-pair join and
+  full-card unseen join, `maxAnchors=40000`, cheap-upper timebox `240000ms`:
+  - Raw:
+    `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-11T10-50-12-691Z.json`
+  - Result regressed: bounded timeout, elapsed `311400ms`, score `9486961`,
+    global upper `10076137`, gap `589176`, peak `3341 MiB`.
+  - The local event-root proof did improve: suffix generated-pair and both
+    suffix unseen joins completed, each at upper `9486961`, and the event-root
+    upper after probe was `9652070`.
+  - The run then timed out in a later configuration at `initial-candidate`, so
+    simply giving suffix proof more time is not viable under the 300s case
+    budget.
+- Diagnostic run, pair capacity cap plus suffix generated-pair join and
+  full-card unseen join, `maxAnchors=13000`, cheap-upper timebox `120000ms`:
+  - Raw:
+    `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-11T10-56-14-762Z.json`
+  - Result regressed: bounded timeout, elapsed `300001ms`, score `9486961`,
+    global upper `10076137`, gap `589176`, peak `4053 MiB`.
+  - Local event-root upper was `9651238`; residual source was processed
+    `pair-capacity` at anchor score `2867043` plus capped pair upper
+    `6784194.327945923`.
+  - This confirms the suffix certificates can close the unprocessed suffix, but
+    the processed pair-capacity frontier remains about `163k` above the
+    accepted incumbent.
+- Diagnostic run, same `13000/120s` suffix path plus targeted pair proof
+  (`3000ms`, `16` entries):
+  - Raw:
+    `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-11T11-02-00-879Z.json`
+  - Result: bounded, elapsed `191328ms`, score `9488172`, upper `9780501`,
+    gap `292329`, no timeout, no memory limit, peak `4204 MiB`.
+  - Targeted pair proof preserved the accepted incumbent score, but it starved
+    the right-side suffix unseen join, which timed out; residual returned to
+    `unprocessed-anchor`.
+- Decision:
+  - The best local proof shape observed so far is suffix generated-pair plus
+    full-card unseen join closing the unprocessed suffix, then leaving a
+    processed `pair-capacity` residual around `9651k`.
+  - The next implementation should not just reallocate more time among these
+    probes. The remaining general blocker is a stronger two-slot pair upper or
+    a reusable same-coarse proof artifact that can lower the processed
+    pair-capacity residual below the accepted incumbent without starving later
+    configurations.
