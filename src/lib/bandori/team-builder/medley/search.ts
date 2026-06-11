@@ -3801,6 +3801,9 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
           exactCandidateJoinLastAnchorFrontierCheapUpperMaxSource: (
             profiling.exactCandidateJoinLastAnchorFrontierCheapUpperMaxSource
           ),
+          exactCandidateJoinLastAnchorFrontierCheapUpperMaxAnchorCardIds: (
+            profiling.exactCandidateJoinLastAnchorFrontierCheapUpperMaxAnchorCardIds
+          ),
           exactCandidateJoinLastAnchorFrontierCheapUpperMaxAnchorScore: (
             profiling.exactCandidateJoinLastAnchorFrontierCheapUpperMaxAnchorScore
           ),
@@ -3815,6 +3818,12 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
           ),
           exactCandidateJoinLastAnchorFrontierCheapUpperMaxRightUnseenUpper: (
             profiling.exactCandidateJoinLastAnchorFrontierCheapUpperMaxRightUnseenUpper
+          ),
+          exactCandidateJoinLastAnchorFrontierCheapUpperMaxLeftGeneratedCardIds: (
+            profiling.exactCandidateJoinLastAnchorFrontierCheapUpperMaxLeftGeneratedCardIds
+          ),
+          exactCandidateJoinLastAnchorFrontierCheapUpperMaxRightGeneratedCardIds: (
+            profiling.exactCandidateJoinLastAnchorFrontierCheapUpperMaxRightGeneratedCardIds
           ),
           exactCandidateJoinLastAnchorFrontierCheapUpperResidualSource: (
             profiling.exactCandidateJoinLastAnchorFrontierCheapUpperResidualSource

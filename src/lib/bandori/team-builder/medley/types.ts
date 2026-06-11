@@ -620,11 +620,14 @@ export type BandoriMedleyTeamSearchProfilingStats = {
   exactCandidateJoinLastAnchorFrontierCheapUpperOtherSlotCandidateCounts: number[];
   exactCandidateJoinLastAnchorFrontierCheapUpperPeakHeapMiB: number | null;
   exactCandidateJoinLastAnchorFrontierCheapUpperMaxSource: string | null;
+  exactCandidateJoinLastAnchorFrontierCheapUpperMaxAnchorCardIds: number[] | null;
   exactCandidateJoinLastAnchorFrontierCheapUpperMaxAnchorScore: number | null;
   exactCandidateJoinLastAnchorFrontierCheapUpperMaxPairUpper: number | null;
   exactCandidateJoinLastAnchorFrontierCheapUpperMaxGeneratedPairUpper: number | null;
   exactCandidateJoinLastAnchorFrontierCheapUpperMaxLeftUnseenUpper: number | null;
   exactCandidateJoinLastAnchorFrontierCheapUpperMaxRightUnseenUpper: number | null;
+  exactCandidateJoinLastAnchorFrontierCheapUpperMaxLeftGeneratedCardIds: number[] | null;
+  exactCandidateJoinLastAnchorFrontierCheapUpperMaxRightGeneratedCardIds: number[] | null;
   exactCandidateJoinLastAnchorFrontierCheapUpperResidualSource: string | null;
   exactCandidateJoinLastAnchorFrontierCheapUpperUnprocessedAnchorScore: number | null;
   exactCandidateJoinLastAnchorFrontierCheapUpperUnprocessedPairUpper: number | null;

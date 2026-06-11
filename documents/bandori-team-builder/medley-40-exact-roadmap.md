@@ -4963,3 +4963,44 @@ P07 failed follow-ups after P03 fix:
   - Next work should target the shared `PastelPalettes/cool` pair-capacity
     residual itself, or produce a reusable same-coarse proof artifact, instead
     of only making the third cheap-upper more likely to run.
+
+2026-06-11 23:18 CST P06 cheap-upper witness:
+
+- Code added:
+  - Cheap-upper profiling now records the maximum processed residual witness:
+    `exactCandidateJoinLastAnchorFrontierCheapUpperMaxAnchorCardIds`,
+    `...MaxLeftGeneratedCardIds`, and `...MaxRightGeneratedCardIds`.
+  - This is diagnostic-only and does not change pruning or proof semantics.
+  - Cheap-only runs now reserve `5000ms` before the exact-join deadline when
+    `eventRootFrontierProbeAnchorCheapUpperMinRemainingMs` allows cheap upper
+    below the full anchor-proof budget. This is to avoid converting a local
+    diagnostic into a global `timedOut=true` result.
+- Witness run before adding the `5000ms` reserve:
+  - Raw:
+    `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-11T14-17-42-151Z.json`.
+  - Result: bounded, score `9488172`, global upper `9765696`, gap `277524`,
+    elapsed `300005ms`, `timedOut=true`, `memoryLimited=false`, peak
+    `3343 MiB`.
+  - This is rejected for acceptance and for proof-quality comparison because
+    the cheap-only path consumed the global deadline.
+- Useful witness extracted from that rejected run:
+  - Max anchor cardIds: `[1975,1952,1720,415,1753]`.
+  - Max anchor score: `2865962`.
+  - Max pair-capacity upper: `6770836.939337965`.
+  - Generated pair upper: `7101057`.
+  - Left/right generated cardIds were both `[1999,1976,625,1721,1850]`, so
+    the best generated pair overlaps exactly; this explains why generated-pair
+    evidence alone cannot close the two-slot upper.
+  - Left/right unseen uppers were `6629399` and `6641199`, already closer to
+    the needed pair threshold, while pair-capacity stayed at `6770836.94`.
+- Interpretation:
+  - The remaining gap is not caused by a missing high-scoring concrete pair.
+    The concrete generated pair overlaps, and the unseen alternatives are lower
+    than the pair-capacity certificate.
+  - The blocker is the two-slot capacity certificate for the banned anchor
+    `[1975,1952,1720,415,1753]`: it still permits a relaxed pair score roughly
+    `148k` above what is needed to close the frontier.
+  - Next proof patch should target a low-memory two-slot capacity certificate
+    for this banned-anchor case, or a reusable same-coarse certificate that
+    proves the relaxed capacity witness cannot be realized as two disjoint
+    full teams. Do not continue generated-pair-only joins for this residual.

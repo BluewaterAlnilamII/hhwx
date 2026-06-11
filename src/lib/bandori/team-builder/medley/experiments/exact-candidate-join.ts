@@ -4077,6 +4077,7 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
   let processedUpperMaxGeneratedPairUpper: number | null = null;
   let processedUpperMaxLeftUnseenUpper: number | null = null;
   let processedUpperMaxRightUnseenUpper: number | null = null;
+  let processedUpperMaxAnchorCandidate: MedleyTeamCandidate | null = null;
   let processedUpperMaxLeftGeneratedCandidate: MedleyTeamCandidate | null = null;
   let processedUpperMaxRightGeneratedCandidate: MedleyTeamCandidate | null = null;
   const processedAnchorUpperEntries: Array<{
@@ -4154,11 +4155,14 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
   );
   profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPeakHeapMiB = stats.peakUsedHeapMiB;
   profiling.exactCandidateJoinLastAnchorFrontierCheapUpperMaxSource = null;
+  profiling.exactCandidateJoinLastAnchorFrontierCheapUpperMaxAnchorCardIds = null;
   profiling.exactCandidateJoinLastAnchorFrontierCheapUpperMaxAnchorScore = null;
   profiling.exactCandidateJoinLastAnchorFrontierCheapUpperMaxPairUpper = null;
   profiling.exactCandidateJoinLastAnchorFrontierCheapUpperMaxGeneratedPairUpper = null;
   profiling.exactCandidateJoinLastAnchorFrontierCheapUpperMaxLeftUnseenUpper = null;
   profiling.exactCandidateJoinLastAnchorFrontierCheapUpperMaxRightUnseenUpper = null;
+  profiling.exactCandidateJoinLastAnchorFrontierCheapUpperMaxLeftGeneratedCardIds = null;
+  profiling.exactCandidateJoinLastAnchorFrontierCheapUpperMaxRightGeneratedCardIds = null;
   profiling.exactCandidateJoinLastAnchorFrontierCheapUpperResidualSource = null;
   profiling.exactCandidateJoinLastAnchorFrontierCheapUpperUnprocessedAnchorScore = null;
   profiling.exactCandidateJoinLastAnchorFrontierCheapUpperUnprocessedPairUpper = null;
@@ -4873,6 +4877,7 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
     rightUnseenUpper: number,
     leftGeneratedCandidate: MedleyTeamCandidate | null,
     rightGeneratedCandidate: MedleyTeamCandidate | null,
+    anchorCandidate: MedleyTeamCandidate | null = null,
   ): void => {
     const totalUpper = anchorScore + pairUpper;
     if (totalUpper > processedUpperMax) {
@@ -4883,6 +4888,7 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
       processedUpperMaxGeneratedPairUpper = Number.isFinite(generatedPairUpper) ? generatedPairUpper : null;
       processedUpperMaxLeftUnseenUpper = Number.isFinite(leftUnseenUpper) ? leftUnseenUpper : null;
       processedUpperMaxRightUnseenUpper = Number.isFinite(rightUnseenUpper) ? rightUnseenUpper : null;
+      processedUpperMaxAnchorCandidate = anchorCandidate;
       processedUpperMaxLeftGeneratedCandidate = leftGeneratedCandidate;
       processedUpperMaxRightGeneratedCandidate = rightGeneratedCandidate;
     }
@@ -5950,6 +5956,7 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
     processedUpperMaxGeneratedPairUpper = null;
     processedUpperMaxLeftUnseenUpper = null;
     processedUpperMaxRightUnseenUpper = null;
+    processedUpperMaxAnchorCandidate = null;
     processedUpperMaxLeftGeneratedCandidate = null;
     processedUpperMaxRightGeneratedCandidate = null;
 
@@ -5990,6 +5997,7 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
           entry.rightUnseenUpper,
           entry.leftGeneratedCandidate,
           entry.rightGeneratedCandidate,
+          entry.anchorCandidate,
         );
         continue;
       }
@@ -6006,6 +6014,7 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
               remainingEntry.rightUnseenUpper,
               remainingEntry.leftGeneratedCandidate,
               remainingEntry.rightGeneratedCandidate,
+              remainingEntry.anchorCandidate,
             );
           }
           return true;
@@ -6042,6 +6051,7 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
                 remainingEntry.rightUnseenUpper,
                 remainingEntry.leftGeneratedCandidate,
                 remainingEntry.rightGeneratedCandidate,
+                remainingEntry.anchorCandidate,
               );
             }
             return true;
@@ -6101,6 +6111,7 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
             refined.rightUnseenUpper,
             null,
             null,
+            entry.anchorCandidate,
           );
           for (let remainingIndex = index + 1; remainingIndex < sortedEntries.length; remainingIndex += 1) {
             const remainingEntry = sortedEntries[remainingIndex];
@@ -6113,6 +6124,7 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
               remainingEntry.rightUnseenUpper,
               remainingEntry.leftGeneratedCandidate,
               remainingEntry.rightGeneratedCandidate,
+              remainingEntry.anchorCandidate,
             );
           }
           return true;
@@ -6128,6 +6140,7 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
           refined.rightUnseenUpper,
           null,
           null,
+          entry.anchorCandidate,
         );
       } else {
         for (let remainingIndex = index; remainingIndex < sortedEntries.length; remainingIndex += 1) {
@@ -6141,6 +6154,7 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
             remainingEntry.rightUnseenUpper,
             remainingEntry.leftGeneratedCandidate,
             remainingEntry.rightGeneratedCandidate,
+            remainingEntry.anchorCandidate,
           );
         }
         return true;
@@ -6255,6 +6269,7 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
       processedUpperMaxGeneratedPairUpper = null;
       processedUpperMaxLeftUnseenUpper = null;
       processedUpperMaxRightUnseenUpper = null;
+      processedUpperMaxAnchorCandidate = null;
       processedUpperMaxLeftGeneratedCandidate = null;
       processedUpperMaxRightGeneratedCandidate = null;
     }
@@ -6484,11 +6499,20 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
     profiling.exactCandidateJoinLastAnchorFrontierCheapUpperElapsedMs = Math.round(elapsedMs);
     profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPeakHeapMiB = stats.peakUsedHeapMiB;
     profiling.exactCandidateJoinLastAnchorFrontierCheapUpperMaxSource = processedUpperMaxSource;
+    profiling.exactCandidateJoinLastAnchorFrontierCheapUpperMaxAnchorCardIds = (
+      processedUpperMaxAnchorCandidate ? [...processedUpperMaxAnchorCandidate.cardIds] : null
+    );
     profiling.exactCandidateJoinLastAnchorFrontierCheapUpperMaxAnchorScore = processedUpperMaxAnchorScore;
     profiling.exactCandidateJoinLastAnchorFrontierCheapUpperMaxPairUpper = processedUpperMaxPairUpper;
     profiling.exactCandidateJoinLastAnchorFrontierCheapUpperMaxGeneratedPairUpper = processedUpperMaxGeneratedPairUpper;
     profiling.exactCandidateJoinLastAnchorFrontierCheapUpperMaxLeftUnseenUpper = processedUpperMaxLeftUnseenUpper;
     profiling.exactCandidateJoinLastAnchorFrontierCheapUpperMaxRightUnseenUpper = processedUpperMaxRightUnseenUpper;
+    profiling.exactCandidateJoinLastAnchorFrontierCheapUpperMaxLeftGeneratedCardIds = (
+      processedUpperMaxLeftGeneratedCandidate ? [...processedUpperMaxLeftGeneratedCandidate.cardIds] : null
+    );
+    profiling.exactCandidateJoinLastAnchorFrontierCheapUpperMaxRightGeneratedCardIds = (
+      processedUpperMaxRightGeneratedCandidate ? [...processedUpperMaxRightGeneratedCandidate.cardIds] : null
+    );
     profiling.exactCandidateJoinLastAnchorFrontierCheapUpperResidualSource = bestPrefixSplitImprovementCount > 0
       ? "best-prefix-split"
       : (
@@ -6769,6 +6793,7 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
         pairUpperForAnchor.rightUnseenUpper,
         pairUpperForAnchor.leftGeneratedCandidate,
         pairUpperForAnchor.rightGeneratedCandidate,
+        anchorCandidate,
       );
     }
   }
@@ -7481,6 +7506,12 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     let cheapUpperResult: MedleyExactCandidateAnchorFrontierProofResult | null = null;
     if (!didAnchorFrontierCheapUpper && canRunCheapUpper) {
       didAnchorFrontierCheapUpper = true;
+      const cheapUpperDeadlineAt = (
+        !canRunFullAnchorFrontierProof
+        && Number.isFinite(deadlineAt)
+      )
+        ? Math.max(performance.now(), deadlineAt - 5_000)
+        : deadlineAt;
       const candidateCheapUpperResult = estimateMedleyExactCandidateAnchorFrontierCheapUpper(
         slots,
         candidatesBySlot,
@@ -7493,7 +7524,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
         perfectRate,
         profiling,
         stats,
-        deadlineAt,
+        cheapUpperDeadlineAt,
         {
           timeboxMs: context.anchorFrontierCheapUpperTimeboxMs,
           maxAnchors: context.anchorFrontierCheapUpperMaxAnchors,
