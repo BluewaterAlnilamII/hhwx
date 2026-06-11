@@ -127,6 +127,9 @@ export type BandoriMedleySearchOptimizationOptions = {
   eventRootFrontierProbeAnchorCheapUpperMaxAnchors?: number;
   eventRootFrontierProbeAnchorCheapUpperRefineUnseen?: boolean;
   eventRootFrontierProbeAnchorCheapUpperUnseenRefineMaxGeneratedCandidates?: number;
+  eventRootFrontierProbeAnchorCheapUpperTargetedPairProofTimeboxMs?: number;
+  eventRootFrontierProbeAnchorCheapUpperTargetedPairProofMaxEntries?: number;
+  eventRootFrontierProbeAnchorCheapUpperTargetedPairProofCandidateLimit?: number;
 };
 
 export type BandoriMedleyTeamSearchInput = Omit<
@@ -600,6 +603,12 @@ export type BandoriMedleyTeamSearchProfilingStats = {
   exactCandidateJoinLastAnchorFrontierCheapUpperUnseenRefineCandidateCount: number | null;
   exactCandidateJoinLastAnchorFrontierCheapUpperUnseenRefineImprovementCount: number | null;
   exactCandidateJoinLastAnchorFrontierCheapUpperUnseenRefineAbortReason: string | null;
+  exactCandidateJoinLastAnchorFrontierCheapUpperTargetedPairProofAttemptCount: number | null;
+  exactCandidateJoinLastAnchorFrontierCheapUpperTargetedPairProofProcessedEntryCount: number | null;
+  exactCandidateJoinLastAnchorFrontierCheapUpperTargetedPairProofImprovementCount: number | null;
+  exactCandidateJoinLastAnchorFrontierCheapUpperTargetedPairProofTimeboxCount: number | null;
+  exactCandidateJoinLastAnchorFrontierCheapUpperTargetedPairProofElapsedMs: number | null;
+  exactCandidateJoinLastAnchorFrontierCheapUpperTargetedPairProofAbortReason: string | null;
   exactCandidateJoinScoreCacheClearCount: number;
   exactCandidateJoinLastScoreCacheClearInterval: number | null;
   exactCandidateJoinLowMemoryInitialCandidateScoreCacheClearCount: number;

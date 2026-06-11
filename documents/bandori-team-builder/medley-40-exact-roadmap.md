@@ -1,6 +1,6 @@
 # Medley 40/40 Exact Roadmap
 
-Last updated: 2026-06-11 07:50 CST
+Last updated: 2026-06-11 08:07 CST
 
 This file is the persistent working note for the current medley optimizer goal.
 Keep it current before and after benchmark runs or proof-path changes, so future
@@ -3275,3 +3275,37 @@ P07 failed follow-ups after P03 fix:
   viable direction is a cheaper certificate for the `right-unseen` pair upper
   or a different event-root frontier decomposition that avoids spending a full
   anchor proof on the first unresolved anchor.
+
+2026-06-11 08:07 CST P06 targeted pair-proof rejection:
+
+- Added an opt-in cheap-upper targeted pair proof diagnostic:
+  `eventRootFrontierProbeAnchorCheapUpperTargetedPairProofTimeboxMs`,
+  `eventRootFrontierProbeAnchorCheapUpperTargetedPairProofMaxEntries`, and
+  `eventRootFrontierProbeAnchorCheapUpperTargetedPairProofCandidateLimit`.
+  It tries to refine only the currently top residual-upper anchor entries
+  instead of proving the whole anchor frontier from the first anchor. Default is
+  off.
+- Diagnostic A, `maxEntries=16`, `candidateLimit=120000`, per-entry timebox
+  `30000ms`, cheap-upper timebox `90000ms`:
+  - Raw:
+    `temp/bandori-team-builder/real-profile-medley-scope-matrix-2026-06-10T23-57-23-376Z.json`
+  - Result: bounded, `139420ms`, score `9488172`, gap `285649`,
+    peak `3630 MiB`.
+  - Targeted proof attempted and processed `16` entries, no timeout, no upper
+    improvement, abort reason `candidate-limit`. Pair slots grew to
+    `[120000, 76811]`.
+- Diagnostic B, `maxEntries=4`, `candidateLimit=200000`, per-entry timebox
+  `45000ms`, cheap-upper timebox `120000ms`:
+  - Raw:
+    `temp/bandori-team-builder/real-profile-medley-scope-matrix-2026-06-11T00-00-38-377Z.json`
+  - Result: bounded, `169103ms`, score `9488172`, gap `285649`,
+    peak `3888 MiB`.
+  - Targeted proof attempted and processed `4` entries, no timeout, no upper
+    improvement, abort reason `candidate-limit`. Pair slots grew to
+    `[200000, 122898]`.
+- Decision: do not continue P06 by raising targeted pair-proof candidate
+  limits. This route is cheaper than full anchor proof, but still fails to
+  convert the `right-unseen` upper into a certificate. The next direction
+  should focus on a different upper-bound decomposition for unseen pair
+  frontiers, likely slot-level/card-conflict aware, rather than generating
+  larger pair prefixes.

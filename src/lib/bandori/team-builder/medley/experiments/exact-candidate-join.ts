@@ -3803,7 +3803,11 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
     maxAnchors?: number | null;
     refineUnseen?: boolean;
     unseenRefineMaxGeneratedCandidates?: number | null;
+    targetedPairProofTimeboxMs?: number | null;
+    targetedPairProofMaxEntries?: number | null;
+    targetedPairProofCandidateLimit?: number | null;
   } = {},
+  observeEvaluatedResult?: MedleyEvaluatedResultObserver,
 ): MedleyExactCandidateAnchorFrontierProofResult {
   const startedAt = performance.now();
   const timeboxMs = (
@@ -3848,6 +3852,27 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
   )
     ? Math.max(1, Math.trunc(options.unseenRefineMaxGeneratedCandidates))
     : MEDLEY_EXACT_CANDIDATE_JOIN_ANCHOR_FRONTIER_CHEAP_UPPER_UNSEEN_REFINE_MAX_GENERATED;
+  const targetedPairProofTimeboxMs = (
+    options.targetedPairProofTimeboxMs !== null
+    && options.targetedPairProofTimeboxMs !== undefined
+    && Number.isFinite(options.targetedPairProofTimeboxMs)
+  )
+    ? Math.max(0, Math.trunc(options.targetedPairProofTimeboxMs))
+    : 0;
+  const targetedPairProofMaxEntries = (
+    options.targetedPairProofMaxEntries !== null
+    && options.targetedPairProofMaxEntries !== undefined
+    && Number.isFinite(options.targetedPairProofMaxEntries)
+  )
+    ? Math.max(1, Math.trunc(options.targetedPairProofMaxEntries))
+    : 0;
+  const targetedPairProofCandidateLimit = (
+    options.targetedPairProofCandidateLimit !== null
+    && options.targetedPairProofCandidateLimit !== undefined
+    && Number.isFinite(options.targetedPairProofCandidateLimit)
+  )
+    ? Math.max(1, Math.trunc(options.targetedPairProofCandidateLimit))
+    : Math.max(candidatesBySlot[leftSlotIndex].length, candidatesBySlot[rightSlotIndex].length);
   const leftPeekUpperBound = generators[leftSlotIndex].peekUpperBound();
   const rightPeekUpperBound = generators[rightSlotIndex].peekUpperBound();
   const anchorPeekUpperBound = generators[anchorSlotIndex].peekUpperBound();
@@ -3891,6 +3916,13 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
   let unseenRefineCandidateCount = 0;
   let unseenRefineImprovementCount = 0;
   let unseenRefineAbortReason: string | null = null;
+  let targetedPairProofAttemptCount = 0;
+  let targetedPairProofProcessedEntryCount = 0;
+  let targetedPairProofImprovementCount = 0;
+  let targetedPairProofTimeboxCount = 0;
+  let targetedPairProofElapsedMs = 0;
+  let targetedPairProofAbortReason: string | null = null;
+  let targetedPairProofResult: BandoriMedleyTeamSearchResult | null = null;
   const recordUnseenRefineProfiling = (): void => {
     profiling.exactCandidateJoinLastAnchorFrontierCheapUpperUnseenRefineAttemptCount = unseenRefineAttemptCount;
     profiling.exactCandidateJoinLastAnchorFrontierCheapUpperUnseenRefineCandidateCount = unseenRefineCandidateCount;
@@ -3898,6 +3930,26 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
       unseenRefineImprovementCount
     );
     profiling.exactCandidateJoinLastAnchorFrontierCheapUpperUnseenRefineAbortReason = unseenRefineAbortReason;
+  };
+  const recordTargetedPairProofProfiling = (): void => {
+    profiling.exactCandidateJoinLastAnchorFrontierCheapUpperTargetedPairProofAttemptCount = (
+      targetedPairProofAttemptCount
+    );
+    profiling.exactCandidateJoinLastAnchorFrontierCheapUpperTargetedPairProofProcessedEntryCount = (
+      targetedPairProofProcessedEntryCount
+    );
+    profiling.exactCandidateJoinLastAnchorFrontierCheapUpperTargetedPairProofImprovementCount = (
+      targetedPairProofImprovementCount
+    );
+    profiling.exactCandidateJoinLastAnchorFrontierCheapUpperTargetedPairProofTimeboxCount = (
+      targetedPairProofTimeboxCount
+    );
+    profiling.exactCandidateJoinLastAnchorFrontierCheapUpperTargetedPairProofElapsedMs = Math.round(
+      targetedPairProofElapsedMs,
+    );
+    profiling.exactCandidateJoinLastAnchorFrontierCheapUpperTargetedPairProofAbortReason = (
+      targetedPairProofAbortReason
+    );
   };
 
   profiling.exactCandidateJoinAnchorFrontierCheapUpperCount += 1;
@@ -3928,6 +3980,12 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
   profiling.exactCandidateJoinLastAnchorFrontierCheapUpperUnseenRefineCandidateCount = 0;
   profiling.exactCandidateJoinLastAnchorFrontierCheapUpperUnseenRefineImprovementCount = 0;
   profiling.exactCandidateJoinLastAnchorFrontierCheapUpperUnseenRefineAbortReason = null;
+  profiling.exactCandidateJoinLastAnchorFrontierCheapUpperTargetedPairProofAttemptCount = 0;
+  profiling.exactCandidateJoinLastAnchorFrontierCheapUpperTargetedPairProofProcessedEntryCount = 0;
+  profiling.exactCandidateJoinLastAnchorFrontierCheapUpperTargetedPairProofImprovementCount = 0;
+  profiling.exactCandidateJoinLastAnchorFrontierCheapUpperTargetedPairProofTimeboxCount = 0;
+  profiling.exactCandidateJoinLastAnchorFrontierCheapUpperTargetedPairProofElapsedMs = 0;
+  profiling.exactCandidateJoinLastAnchorFrontierCheapUpperTargetedPairProofAbortReason = null;
 
   const finiteScore = (score: number): number => (
     Number.isFinite(score) ? score : Number.NEGATIVE_INFINITY
@@ -4208,6 +4266,148 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
       timedOut,
     };
   };
+  let targetedGeneratedPairQuery: MedleyExactCandidatePairUpperQuery | null = null;
+  let targetedGeneratedPairQueryKey = "";
+  const findTargetedGeneratedPairForAnchor = (
+    anchorCandidate: MedleyTeamCandidate,
+    minimumRelevantScore: number,
+  ): {
+    score: number;
+    leftCandidate: MedleyTeamCandidate | null;
+    rightCandidate: MedleyTeamCandidate | null;
+  } => {
+    const leftSlotCandidates = candidatesBySlot[leftSlotIndex];
+    const rightSlotCandidates = candidatesBySlot[rightSlotIndex];
+    sortMedleyCandidates(leftSlotCandidates);
+    sortMedleyCandidates(rightSlotCandidates);
+    const key = `${leftSlotCandidates.length}:${rightSlotCandidates.length}`;
+    if (!targetedGeneratedPairQuery || targetedGeneratedPairQueryKey !== key) {
+      targetedGeneratedPairQuery = buildMedleyExactCandidatePairUpperQuery(
+        leftSlotCandidates,
+        rightSlotCandidates,
+      );
+      targetedGeneratedPairQueryKey = key;
+    }
+    return findBestGeneratedMedleyExactCandidatePairForAnchorByBits(
+      targetedGeneratedPairQuery,
+      anchorCandidate,
+      minimumRelevantScore,
+      profiling,
+    );
+  };
+  const maybeRefineEntryWithTargetedPairProof = (
+    entry: (typeof processedAnchorUpperEntries)[number],
+    refined: {
+      pairUpper: number;
+      source: string;
+      generatedPairUpper: number;
+      leftUnseenUpper: number;
+      rightUnseenUpper: number;
+    },
+  ): {
+    refined: typeof refined;
+    timedOut: boolean;
+  } => {
+    if (
+      targetedPairProofTimeboxMs <= 0
+      || targetedPairProofMaxEntries <= 0
+      || targetedPairProofAttemptCount >= targetedPairProofMaxEntries
+    ) {
+      return { refined, timedOut: false };
+    }
+    const targetPairUpper = incumbentScore - entry.anchorScore;
+    if (
+      !Number.isFinite(targetPairUpper)
+      || !Number.isFinite(refined.pairUpper)
+      || refined.pairUpper <= targetPairUpper
+    ) {
+      return { refined, timedOut: false };
+    }
+    const localPairProofDeadlineAt = Math.min(
+      deadlineAt,
+      localDeadlineAt,
+      performance.now() + targetedPairProofTimeboxMs,
+    );
+    if (performance.now() >= localPairProofDeadlineAt) {
+      targetedPairProofTimeboxCount += 1;
+      targetedPairProofAbortReason = "timebox";
+      return { refined, timedOut: true };
+    }
+    targetedPairProofAttemptCount += 1;
+    const proofStartedAt = performance.now();
+    const pairSearchResult = findBestMedleyExactCandidatePairForAnchor(
+      pairSlotIndices,
+      candidatesBySlot,
+      generators,
+      entry.anchorCandidate,
+      targetPairUpper,
+      targetedPairProofCandidateLimit,
+      profiling,
+      stats,
+      () => performance.now() >= localPairProofDeadlineAt,
+      deadlineAt,
+      localPairProofDeadlineAt,
+      findTargetedGeneratedPairForAnchor,
+    );
+    targetedPairProofElapsedMs += performance.now() - proofStartedAt;
+    if (pairSearchResult.timedOut || pairSearchResult.localTimedOut) {
+      targetedPairProofTimeboxCount += 1;
+      targetedPairProofAbortReason = pairSearchResult.timedOut ? "global-timeout" : "timebox";
+      return { refined, timedOut: true };
+    }
+    targetedPairProofProcessedEntryCount += 1;
+    if (pairSearchResult.leftCandidate && pairSearchResult.rightCandidate) {
+      const anchorResultCandidate = hydrateMedleyExactCandidateForResult(
+        slots[anchorSlotIndex],
+        entry.anchorCandidate,
+        server,
+        perfectRate,
+        stats,
+        profiling,
+      );
+      const leftResultCandidate = hydrateMedleyExactCandidateForResult(
+        slots[leftSlotIndex],
+        pairSearchResult.leftCandidate,
+        server,
+        perfectRate,
+        stats,
+        profiling,
+      );
+      const rightResultCandidate = hydrateMedleyExactCandidateForResult(
+        slots[rightSlotIndex],
+        pairSearchResult.rightCandidate,
+        server,
+        perfectRate,
+        stats,
+        profiling,
+      );
+      if (anchorResultCandidate && leftResultCandidate && rightResultCandidate) {
+        const selectedBySong: Array<MedleyTeamCandidate | undefined> = [];
+        selectedBySong[slots[anchorSlotIndex].songIndex] = anchorResultCandidate;
+        selectedBySong[slots[leftSlotIndex].songIndex] = leftResultCandidate;
+        selectedBySong[slots[rightSlotIndex].songIndex] = rightResultCandidate;
+        const result = buildMedleyResult(slots, selectedBySong, configuration);
+        if (result) {
+          observeEvaluatedResult?.(result);
+          targetedPairProofResult = compareMedleyResultLike(targetedPairProofResult, result);
+        }
+      }
+      return { refined, timedOut: false };
+    }
+    if (!pairSearchResult.proved) {
+      targetedPairProofAbortReason = "candidate-limit";
+      return { refined, timedOut: false };
+    }
+    targetedPairProofImprovementCount += 1;
+    return {
+      refined: {
+        ...refined,
+        pairUpper: Math.min(refined.pairUpper, targetPairUpper),
+        source: "targeted-pair-proof",
+      },
+      timedOut: false,
+    };
+  };
   const refineProcessedAnchorUpperEntries = (): boolean => {
     if (processedAnchorUpperEntries.length === 0) {
       return false;
@@ -4357,8 +4557,10 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
           leftUnseenUpper: refinedUnseen.leftUnseenUpper,
           rightUnseenUpper: refinedUnseen.rightUnseenUpper,
         };
+        const targetedPairProof = maybeRefineEntryWithTargetedPairProof(entry, refined);
+        refined = targetedPairProof.refined;
         refinedAnchorPairUpperByCandidate.set(entry.anchorCandidate, refined);
-        if (refinedUnseen.timedOut) {
+        if (refinedUnseen.timedOut || targetedPairProof.timedOut) {
           recordProcessedUpperMax(
             entry.anchorScore,
             refined.pairUpper,
@@ -4417,6 +4619,7 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
     profiling.exactCandidateJoinLastAnchorFrontierCheapUpperSplitStateCount = splitStateCount;
     profiling.exactCandidateJoinLastAnchorFrontierCheapUpperSplitAbortReason = splitAbortReason;
     recordUnseenRefineProfiling();
+    recordTargetedPairProofProfiling();
     return false;
   };
   const finish = (
@@ -4425,8 +4628,13 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
   ): MedleyExactCandidateAnchorFrontierProofResult => {
     const refineTimedOut = refineProcessedAnchorUpperEntries();
     recordUnseenRefineProfiling();
+    recordTargetedPairProofProfiling();
     const elapsedMs = performance.now() - startedAt;
     const observedUpperBound = getResidualUpperBound(nextAnchorScore);
+    const proofThreshold = Math.max(
+      incumbentScore,
+      targetedPairProofResult?.score ?? Number.NEGATIVE_INFINITY,
+    );
     if (localTimedOut || refineTimedOut) {
       profiling.exactCandidateJoinAnchorFrontierCheapUpperTimeboxCount += 1;
     }
@@ -4493,9 +4701,9 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
       }
     }
     return {
-      proved: observedUpperBound !== null && observedUpperBound <= incumbentScore,
+      proved: observedUpperBound !== null && observedUpperBound <= proofThreshold,
       localTimedOut: localTimedOut || refineTimedOut,
-      result: null,
+      result: targetedPairProofResult,
       observedUpperBound,
       processedAnchorCount,
       residualUpperBound: observedUpperBound,
@@ -4755,6 +4963,9 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     anchorFrontierCheapUpperMaxAnchors?: number | null;
     anchorFrontierCheapUpperRefineUnseen?: boolean;
     anchorFrontierCheapUpperUnseenRefineMaxGeneratedCandidates?: number | null;
+    anchorFrontierCheapUpperTargetedPairProofTimeboxMs?: number | null;
+    anchorFrontierCheapUpperTargetedPairProofMaxEntries?: number | null;
+    anchorFrontierCheapUpperTargetedPairProofCandidateLimit?: number | null;
   } = {},
   observeEvaluatedResult?: MedleyEvaluatedResultObserver,
 ): MedleyExactCandidateJoinResult {
@@ -5239,7 +5450,11 @@ export function searchMedleyConfigurationByExactCandidateJoin(
           maxAnchors: context.anchorFrontierCheapUpperMaxAnchors,
           refineUnseen: context.anchorFrontierCheapUpperRefineUnseen,
           unseenRefineMaxGeneratedCandidates: context.anchorFrontierCheapUpperUnseenRefineMaxGeneratedCandidates,
+          targetedPairProofTimeboxMs: context.anchorFrontierCheapUpperTargetedPairProofTimeboxMs,
+          targetedPairProofMaxEntries: context.anchorFrontierCheapUpperTargetedPairProofMaxEntries,
+          targetedPairProofCandidateLimit: context.anchorFrontierCheapUpperTargetedPairProofCandidateLimit,
         },
+        observeEvaluatedResult,
       );
       if (candidateCheapUpperResult.proved) {
         return candidateCheapUpperResult;
