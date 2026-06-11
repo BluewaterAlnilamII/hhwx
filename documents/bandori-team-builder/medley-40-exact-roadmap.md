@@ -1,6 +1,6 @@
 # Medley 40/40 Exact Roadmap
 
-Last updated: 2026-06-12 00:51 CST
+Last updated: 2026-06-12 01:11 CST
 
 This file is the persistent working note for the current medley optimizer goal.
 Keep it current before and after benchmark runs or proof-path changes, so future
@@ -115,6 +115,28 @@ No-GC acceptance contract:
     separately rebuilding the large slot0 candidate frontier for
     performance/technique/visual.
 
+2026-06-12 01:11 CST rejected two-slot card-bound-dual pair-cap probe:
+
+- Experiment: temporarily added a default-off
+  `eventRootFrontierProbeAnchorCheapUpperPairCapacityCapCardBoundDual` path
+  that reused the existing card-bound dual-objective capacity upper inside the
+  event-root cheap-upper pair-cap call after anchor card ids were banned.
+- Raw:
+  `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-11T17-01-00-596Z.json`.
+- Result: rejected and local code reverted. `P06:323` stayed bounded with
+  score `9488172`, upper `9788105`, gap `299933`, elapsed `295017ms`, peak
+  `3686 MiB`, `timedOut=false`, `memoryLimited=false`.
+- Profiling signal: card-bound dual was attempted `35216` times but completed
+  only `5` times, aborted `35211` times, exhausted the global
+  `4000001` state budget, and recorded `bestCapacityCardBoundDualUpperImprovement=0`.
+  The added cost reduced the final cheap-upper sweep to `9213` anchors and
+  moved the residual source back to `unprocessed-anchor`.
+- Decision: do not continue this capacity-certificate line by increasing the
+  card-bound dual state budget or adding more high-frequency pair-cap variants.
+  A useful next step needs to amortize proof material across the same
+  `PastelPalettes/cool` frontier instead of invoking an expensive capacity
+  model per anchor card set.
+
 2026-06-11 22:35 CST rejected two-slot shared-power experiment:
 
 - Hypothesis: the remaining `P06:323` event-root residual gap is dominated by
@@ -222,6 +244,10 @@ Next implementation constraint:
   higher local timeboxes for `P06:323`. Those routes have repeatedly improved
   one local term while starving the anchor sweep or exposing a different
   one-sided unseen residual.
+- Do not add more high-frequency two-slot capacity models under the pair-cap
+  hook unless they have a strict one-time or coarse-group amortization design.
+  Shared-power, card-specific, Pareto, Bucketed, and card-bound dual variants
+  have all failed to improve the P06 residual enough to justify their cost.
 - The next code experiment should build reusable proof material once per
   processed frontier, then answer many anchor/generated/unseen upper queries
   from that material. Acceptable shapes include compact generated-candidate
