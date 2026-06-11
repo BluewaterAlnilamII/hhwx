@@ -1,6 +1,6 @@
 # Medley 40/40 Exact Roadmap
 
-Last updated: 2026-06-11 21:17 CST
+Last updated: 2026-06-12 00:51 CST
 
 This file is the persistent working note for the current medley optimizer goal.
 Keep it current before and after benchmark runs or proof-path changes, so future
@@ -57,6 +57,63 @@ No-GC acceptance contract:
 - Every full 40-case run must generate a timestamped report and update this
   roadmap with raw path, replay parameters, accept/reject reason, and failure
   analysis if any row is bounded.
+
+2026-06-12 00:51 CST P06 same-coarse frontier confirmation:
+
+- Proof-ledger diagnostic raw:
+  `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-11T16-29-17-444Z.json`.
+  Scope: `P06:323`, no GC, `debugConfigurationTrace=true`, same event-root
+  and same-coarse options as the current accepted diagnostic setup plus
+  `eventRootFrontierProbeAnchorCheapUpperMinRemainingMs=30000`.
+- Result: bounded, score `9488172`, global upper `9650685`, gap `162513`,
+  elapsed `198825ms`, peak `3198 MiB`, no timeout and no memory limit.
+- Ledger finding: the global upper is the max of the same
+  `PastelPalettes/cool` frontier, not a later unrelated configuration:
+  - `performance`, configuration `39`: status `large-gap-event-skip-seeding`,
+    active tight upper `9650684.461824788`, gap `163723.46182478778`, abort
+    `candidate-fill-soft-limit`, counts `[200000,80879,50858]`, slot0 cutoff
+    `2518348`, pair upper by excluded slot `[6968613,7011517,6804525]`.
+  - `technique`, configuration `40`: status `same-coarse-frontier-skip-seeding`,
+    active tight upper `9641833.691749828`, gap `153661.69174982794`, counts
+    `[200000,79609,50185]`, slot0 cutoff `2524162`.
+  - `visual`, configuration `41`: status `same-coarse-frontier-skip-seeding`,
+    active tight upper `9636798.939337965`, gap `148626.9393379651`, counts
+    `[200000,81424,51220]`, slot0 cutoff `2530540`.
+- Rejected existing two-slot capacity variants:
+  - Pareto-only raw:
+    `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-11T16-18-06-511Z.json`.
+    Result: bounded, score `9488172`, upper `9935586`, gap `447414`,
+    elapsed `244124ms`, peak `2848 MiB`. Pareto made `52004` capacity calls
+    and `1200001` states, but local residual stayed `9641834` and the third
+    event-root probe skipped on low remaining budget.
+  - Bucketed-only raw:
+    `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-11T16-22-55-454Z.json`.
+    Result: bounded, score `9488172`, upper `9775277`, gap `287105`,
+    elapsed `295016ms`, peak `3927 MiB`. Bucketed completed `0` calls,
+    aborted `10`, reached `3000002` states, and left residual source as
+    `unprocessed-anchor`.
+- Rejected suffix-aware best-prefix experiment and reverted local code:
+  - Raw with temporary code:
+    `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-11T16-39-18-927Z.json`.
+    Result: bounded, score `9488172`, upper `9650685`, gap `162513`,
+    elapsed `265980ms`, peak `3756 MiB`. Best-prefix made `4` attempts,
+    spent `21682ms`, and recorded `0` improvements.
+  - No-op check with the same temporary suffix-query rewrite but
+    `bestPrefixSplit=false`:
+    `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-11T16-44-28-124Z.json`.
+    Result: same gap `162513`, but elapsed rose to `213983ms` and peak rose to
+    `3901 MiB`. The full-anchor availability query rewrite is therefore not
+    low-risk even when the split path is disabled.
+- Decision:
+  - No code from this experiment is retained.
+  - Do not continue with Pareto/Bucketed pair-cap variants, suffix-aware
+    best-prefix split, or full-anchor suffix availability rewrites.
+  - The remaining credible route must reduce the shared
+    `PastelPalettes/cool` frontier itself: either a lower-memory two-slot
+    capacity certificate that beats the fast `pair-capacity` residual across
+    all three parameters, or a same-coarse reusable proof artifact that avoids
+    separately rebuilding the large slot0 candidate frontier for
+    performance/technique/visual.
 
 2026-06-11 22:35 CST rejected two-slot shared-power experiment:
 
