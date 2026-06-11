@@ -3951,3 +3951,83 @@ P07 failed follow-ups after P03 fix:
     upper, choose the next sibling by global gap/proof impact instead of raw
     configuration order, and avoid letting a lower-impact retry starve the
     highest-gap sibling.
+
+2026-06-11 14:10 CST P06 same-coarse scheduling and prefix diagnostics:
+
+- Code added:
+  - `enableSameCoarseFrontierRetryTrailingReserve` and
+    `sameCoarseFrontierRetryTrailingReserveMs` as default-off internal
+    optimization options.
+  - When enabled, a same-coarse retry is skipped if it would leave less than a
+    configured reserve window for later unresolved siblings in the same coarse
+    group.
+  - Trace/proof-ledger fields were added:
+    `sameCoarseFrontierRetryTrailingReserve`,
+    `sameCoarseFrontierRetryTrailingReserveMs`,
+    `sameCoarseFrontierRetryTrailingSiblingCount`,
+    `sameCoarseFrontierRetryMaxTrailingSiblingRootGap`, and
+    `sameCoarseFrontierRetryWouldStarveTrailingSibling`.
+- Trailing reserve diagnostic:
+  - Raw:
+    `temp/bandori-team-builder/real-profile-medley-scope-matrix-2026-06-11T05-29-04-745Z.json`
+  - Options:
+    baseline diagnostic options plus
+    `enableSameCoarseFrontierRetryTrailingReserve=true` and
+    `sameCoarseFrontierRetryTrailingReserveMs=60000`.
+  - Result: bounded, not timed out; elapsed `282014ms`; score regressed to
+    `9486961`; upper `9942430`; gap `455469`; root-pruned `102`; peak
+    `3559 MiB`.
+  - Technique was correctly skipped by the guard:
+    `sameCoarseFrontierRetryWouldStarveTrailingSibling=true`.
+  - Visual received a retry window and spent `44419ms`, but did not improve
+    the incumbent or close proof. It retried against target `9942429`, which
+    was higher than visual's own root upper `9935585`; this retry had little
+    proof value.
+  - Decision: reserve guard works as a diagnostic, but it is not enough for
+    P06 and should not be defaulted.
+- Cheap-upper time allocation diagnostics:
+  - `eventRootFrontierProbeAnchorCheapUpperTimeboxMs=150000`:
+    raw
+    `temp/bandori-team-builder/real-profile-medley-scope-matrix-2026-06-11T05-35-16-932Z.json`.
+    Result: bounded timeout at `300003ms`; upper `10076137`; gap `587965`.
+    Lowering timebox directly caused visual to time out with a much looser
+    upper.
+  - `enableExactJoinWideAnchorFrontierProbe=false`:
+    raw
+    `temp/bandori-team-builder/real-profile-medley-scope-matrix-2026-06-11T05-42-26-568Z.json`.
+    Result: bounded timeout at `300002ms`; upper `10076137`; gap `587965`.
+    The same cheap-upper path still ran through event-root frontier proof, so
+    this flag does not disable the dominant work.
+  - `eventRootFrontierProbeAnchorCheapUpperMaxAnchors=13000`:
+    raw
+    `temp/bandori-team-builder/real-profile-medley-scope-matrix-2026-06-11T05-48-39-310Z.json`.
+    Result: bounded, not timed out; elapsed `288317ms`; score `9488172`;
+    upper `9935586`; gap `447414`; root-pruned `102`; peak `4052 MiB`.
+    Performance residual improved from `9635008` to `9629060`; max
+    processed-unseen source remained `both-unseen-fallback`, now at entry
+    `5005`.
+  - `eventRootFrontierProbeAnchorCheapUpperMaxAnchors=6000`:
+    raw
+    `temp/bandori-team-builder/real-profile-medley-scope-matrix-2026-06-11T05-54-19-936Z.json`.
+    Result: bounded timeout at `307507ms`; upper `10082483`; gap `594311`.
+    The processed-unseen join did not produce a usable upper and performance
+    residual rose to `9835740`.
+  - `maxAnchors=13000` plus
+    `enableSameCoarseFrontierFullProofRetry=true`:
+    raw
+    `temp/bandori-team-builder/real-profile-medley-scope-matrix-2026-06-11T06-02-22-923Z.json`.
+    Result: bounded timeout at `319751ms`; technique alone consumed the
+    remaining budget and visual did not start.
+- Current conclusion:
+  - Fixed timebox reduction and full same-coarse proof retry are not viable.
+  - `maxAnchors=13000` is a useful diagnostic improvement, but it still leaves
+    visual unproved and does not move P06 to exact.
+  - The non-monotonic `maxAnchors` behavior suggests a real algorithmic issue:
+    processing more anchor prefix can expose a looser processed
+    `both-unseen-fallback` than leaving that tail under suffix cover. A future
+    patch should evaluate/retain the best processed-prefix residual instead of
+    assuming deeper processed prefix is always tighter.
+  - Even with that improvement, P06 likely still needs a more general
+    same-coarse proof material reuse or a new decomposition that avoids
+    redoing large candidate-fill/proof work separately for performance,
+    technique, and visual.
