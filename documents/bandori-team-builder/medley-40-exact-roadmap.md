@@ -3537,3 +3537,47 @@ P07 failed follow-ups after P03 fix:
   - The next algorithm patch should amortize unseen proof globally across the
     suffix, not simply raise `unseenRefineMaxGeneratedCandidates` or apply the
     current per-anchor refine loop to `185681` suffix anchors.
+
+2026-06-11 10:40 CST P06 suffix unseen join breakthrough and new blocker:
+
+- Added opt-in suffix unseen joins:
+  - `eventRootFrontierProbeAnchorCheapUpperSuffixUnseenSingleCardJoin`
+  - `eventRootFrontierProbeAnchorCheapUpperSuffixUnseenFullJoin`
+- Single-card join diagnostic:
+  - Raw:
+    `temp/bandori-team-builder/real-profile-medley-scope-matrix-2026-06-11T02-12-56-922Z.json`
+  - Result: bounded, `125647ms`, score `9488172`, upper `9773821`,
+    peak `3982 MiB`.
+  - The high-risk suffix generated+unseen frontier was only `6802` pairs and
+    completed in `3529ms`.
+  - Upper improved conceptually to about `9652070`, but this was still above
+    incumbent and was not yet applied to proof.
+- Full-card join diagnostic:
+  - Raw:
+    `temp/bandori-team-builder/real-profile-medley-scope-matrix-2026-06-11T02-18-42-870Z.json`
+  - Result: bounded, `163527ms`, peak `4122 MiB`.
+  - The same `6802` high-risk pairs completed in `28219ms`.
+  - Left/right suffix unseen upper both fell to `9486961`, below incumbent
+    `9488172`.
+- Combined suffix generated-pair + full-card unseen join:
+  - Raw:
+    `temp/bandori-team-builder/real-profile-medley-scope-matrix-2026-06-11T02-23-21-874Z.json`
+  - Result: bounded, `260835ms`, score `9488172`, global upper `9935586`,
+    peak `3818 MiB`.
+  - For `PastelPalettes/cool/performance`, the active tight upper fell from
+    `9773821` to `9636601`; residual source became processed `right-unseen`.
+  - The suffix generated-pair upper was `9486961` in `80420ms`; suffix
+    full-card unseen upper was also `9486961` in `32116ms`.
+- New blocker:
+  - The original single-configuration suffix blocker is no longer dominant.
+  - Global bounded status is now dominated by same-coarse siblings, especially
+    `PastelPalettes/cool/visual`, which kept a `dfs-remaining` remembered upper
+    of `9935585` after same-coarse skip.
+  - `PastelPalettes/cool/technique` also remains around `9636601`.
+- Decision:
+  - The suffix join route is promising and should not be discarded.
+  - The next patch should address same-coarse scheduling/reuse: once one
+    `PastelPalettes/cool/*` parameter gets a tight event-root proof, siblings
+    need either their own reduced proof pass or a safe parameter-aware reuse of
+    the suffix frontier diagnostics. Without that, time shifts from the first
+    parameter to same-coarse skipped siblings.

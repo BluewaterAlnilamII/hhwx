@@ -713,6 +713,24 @@ function buildBoundedFrontierGroups(
       anchorFrontierCheapUpperSuffixGeneratedPairJoinAbortReason: (
         entry.exactCandidateJoinLastAnchorFrontierCheapUpperSuffixGeneratedPairJoinAbortReason ?? null
       ),
+      anchorFrontierCheapUpperSuffixUnseenSingleCardJoinLeftUpperBound: (
+        entry.exactCandidateJoinLastAnchorFrontierCheapUpperSuffixUnseenSingleCardJoinLeftUpperBound ?? null
+      ),
+      anchorFrontierCheapUpperSuffixUnseenSingleCardJoinRightUpperBound: (
+        entry.exactCandidateJoinLastAnchorFrontierCheapUpperSuffixUnseenSingleCardJoinRightUpperBound ?? null
+      ),
+      anchorFrontierCheapUpperSuffixUnseenSingleCardJoinPairCount: (
+        entry.exactCandidateJoinLastAnchorFrontierCheapUpperSuffixUnseenSingleCardJoinPairCount ?? null
+      ),
+      anchorFrontierCheapUpperSuffixUnseenSingleCardJoinElapsedMs: (
+        entry.exactCandidateJoinLastAnchorFrontierCheapUpperSuffixUnseenSingleCardJoinElapsedMs ?? null
+      ),
+      anchorFrontierCheapUpperSuffixUnseenSingleCardJoinAbortReason: (
+        entry.exactCandidateJoinLastAnchorFrontierCheapUpperSuffixUnseenSingleCardJoinAbortReason ?? null
+      ),
+      anchorFrontierCheapUpperSuffixUnseenJoinMode: (
+        entry.exactCandidateJoinLastAnchorFrontierCheapUpperSuffixUnseenJoinMode ?? null
+      ),
       anchorFrontierCheapUpperUnseenRefineAttemptCount: (
         entry.exactCandidateJoinLastAnchorFrontierCheapUpperUnseenRefineAttemptCount ?? null
       ),
@@ -1116,6 +1134,12 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
   const eventRootFrontierProbeAnchorCheapUpperSuffixGeneratedPairJoin = (
     optimization.eventRootFrontierProbeAnchorCheapUpperSuffixGeneratedPairJoin === true
   );
+  const eventRootFrontierProbeAnchorCheapUpperSuffixUnseenSingleCardJoin = (
+    optimization.eventRootFrontierProbeAnchorCheapUpperSuffixUnseenSingleCardJoin === true
+  );
+  const eventRootFrontierProbeAnchorCheapUpperSuffixUnseenFullJoin = (
+    optimization.eventRootFrontierProbeAnchorCheapUpperSuffixUnseenFullJoin === true
+  );
   const exactJoinWideAnchorFrontierContext = enableExactJoinWideAnchorFrontierProbe
     ? {
       anchorFrontierProofMaxFrontierGap: eventRootFrontierProbeAnchorProofMaxFrontierGap,
@@ -1149,6 +1173,12 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
       anchorFrontierCheapUpperMultiCardSuffixCover: eventRootFrontierProbeAnchorCheapUpperMultiCardSuffixCover,
       anchorFrontierCheapUpperSuffixGeneratedPairJoin: (
         eventRootFrontierProbeAnchorCheapUpperSuffixGeneratedPairJoin
+      ),
+      anchorFrontierCheapUpperSuffixUnseenSingleCardJoin: (
+        eventRootFrontierProbeAnchorCheapUpperSuffixUnseenSingleCardJoin
+      ),
+      anchorFrontierCheapUpperSuffixUnseenFullJoin: (
+        eventRootFrontierProbeAnchorCheapUpperSuffixUnseenFullJoin
       ),
     }
     : {};
@@ -3329,6 +3359,24 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
           exactCandidateJoinLastAnchorFrontierCheapUpperSuffixGeneratedPairJoinAbortReason: (
             profiling.exactCandidateJoinLastAnchorFrontierCheapUpperSuffixGeneratedPairJoinAbortReason
           ),
+          exactCandidateJoinLastAnchorFrontierCheapUpperSuffixUnseenSingleCardJoinLeftUpperBound: (
+            profiling.exactCandidateJoinLastAnchorFrontierCheapUpperSuffixUnseenSingleCardJoinLeftUpperBound
+          ),
+          exactCandidateJoinLastAnchorFrontierCheapUpperSuffixUnseenSingleCardJoinRightUpperBound: (
+            profiling.exactCandidateJoinLastAnchorFrontierCheapUpperSuffixUnseenSingleCardJoinRightUpperBound
+          ),
+          exactCandidateJoinLastAnchorFrontierCheapUpperSuffixUnseenSingleCardJoinPairCount: (
+            profiling.exactCandidateJoinLastAnchorFrontierCheapUpperSuffixUnseenSingleCardJoinPairCount
+          ),
+          exactCandidateJoinLastAnchorFrontierCheapUpperSuffixUnseenSingleCardJoinElapsedMs: (
+            profiling.exactCandidateJoinLastAnchorFrontierCheapUpperSuffixUnseenSingleCardJoinElapsedMs
+          ),
+          exactCandidateJoinLastAnchorFrontierCheapUpperSuffixUnseenSingleCardJoinAbortReason: (
+            profiling.exactCandidateJoinLastAnchorFrontierCheapUpperSuffixUnseenSingleCardJoinAbortReason
+          ),
+          exactCandidateJoinLastAnchorFrontierCheapUpperSuffixUnseenJoinMode: (
+            profiling.exactCandidateJoinLastAnchorFrontierCheapUpperSuffixUnseenJoinMode
+          ),
           exactCandidateJoinLastAnchorFrontierCheapUpperMaxGeneratedPairOverlaps: (
             profiling.exactCandidateJoinLastAnchorFrontierCheapUpperMaxGeneratedPairOverlaps
           ),
@@ -4919,6 +4967,12 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
         traceEntry.eventRootFrontierProbeAnchorCheapUpperSuffixGeneratedPairJoin = (
           eventRootFrontierProbeAnchorCheapUpperSuffixGeneratedPairJoin
         );
+        traceEntry.eventRootFrontierProbeAnchorCheapUpperSuffixUnseenSingleCardJoin = (
+          eventRootFrontierProbeAnchorCheapUpperSuffixUnseenSingleCardJoin
+        );
+        traceEntry.eventRootFrontierProbeAnchorCheapUpperSuffixUnseenFullJoin = (
+          eventRootFrontierProbeAnchorCheapUpperSuffixUnseenFullJoin
+        );
       }
       const enableEventRootFrontierProbeStagedExtension = (
         eventRootFrontierProbeCandidateSoftLimit
@@ -5009,6 +5063,12 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
           anchorFrontierCheapUpperMultiCardSuffixCover: eventRootFrontierProbeAnchorCheapUpperMultiCardSuffixCover,
           anchorFrontierCheapUpperSuffixGeneratedPairJoin: (
             eventRootFrontierProbeAnchorCheapUpperSuffixGeneratedPairJoin
+          ),
+          anchorFrontierCheapUpperSuffixUnseenSingleCardJoin: (
+            eventRootFrontierProbeAnchorCheapUpperSuffixUnseenSingleCardJoin
+          ),
+          anchorFrontierCheapUpperSuffixUnseenFullJoin: (
+            eventRootFrontierProbeAnchorCheapUpperSuffixUnseenFullJoin
           ),
         },
         observeEvaluatedMedleyResult,
