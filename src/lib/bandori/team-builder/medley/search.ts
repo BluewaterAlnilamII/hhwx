@@ -942,6 +942,9 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
   const enableSameCoarseFrontierFullProofRetry = (
     optimization.enableSameCoarseFrontierFullProofRetry === true
   );
+  const enableSameCoarseFrontierEventProbeBeforeExactJoin = (
+    optimization.enableSameCoarseFrontierEventProbeBeforeExactJoin === true
+  );
   const enableSameCoarseLowRootFirstProofOrder = optimization.enableSameCoarseLowRootFirstProofOrder === true;
   const parsedSameCoarseLowRootFirstProofMaxGroupRootGap = (
     optimization.sameCoarseLowRootFirstProofMaxGroupRootGap !== undefined
@@ -4527,9 +4530,21 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
         traceEntry.skippedInclusionPrune = "wide-root-gap";
       }
     }
+    const shouldUseSameCoarseFrontierEventProbeBeforeExactJoin = (
+      enableSameCoarseFrontierEventProbeBeforeExactJoin
+      && sameCoarseFrontierRetryTargetUpperBound !== null
+      && enableEventRootFrontierProbe
+      && hasEventBonus
+    );
+    if (traceEntry) {
+      traceEntry.sameCoarseFrontierEventProbeBeforeExactJoin = (
+        shouldUseSameCoarseFrontierEventProbeBeforeExactJoin
+      );
+    }
     const shouldPreferExactCandidateJoinBeforeSeeding = (
       shouldRunExactCandidateJoinForConfiguration
       && canTryExactCandidateJoinBeforeSeeding
+      && !shouldUseSameCoarseFrontierEventProbeBeforeExactJoin
     );
     let didAttemptExactCandidateJoin = false;
     let didUnprovedExactCandidateJoin = false;

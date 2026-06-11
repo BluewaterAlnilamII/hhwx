@@ -108,6 +108,7 @@ export type BandoriMedleySearchOptimizationOptions = {
   disableDominatedRootSkip?: boolean;
   disableSameCoarseTightRootSkip?: boolean;
   enableSameCoarseFrontierFullProofRetry?: boolean;
+  enableSameCoarseFrontierEventProbeBeforeExactJoin?: boolean;
   enableSameCoarseLowRootFirstProofOrder?: boolean;
   enableAllScopeExactJoinPreSkip?: boolean;
   disableAllScopeExactJoinPreSkip?: boolean;
