@@ -125,6 +125,24 @@ No-GC acceptance contract:
   must amortize one-sided unseen proof across the same coarse frontier instead
   of running per-anchor generated-pair scans.
 
+Next implementation constraint:
+
+- Do not add more per-anchor generated-pair scans, unseen-refine scans, or
+  higher local timeboxes for `P06:323`. Those routes have repeatedly improved
+  one local term while starving the anchor sweep or exposing a different
+  one-sided unseen residual.
+- The next code experiment should build reusable proof material once per
+  processed frontier, then answer many anchor/generated/unseen upper queries
+  from that material. Acceptable shapes include compact generated-candidate
+  card-set certificates, chunked high-risk pair records with a safe fallback
+  upper, or a same-coarse frontier certificate that reuses structural candidate
+  material without reusing unsafe cross-parameter proof conclusions.
+- Acceptance for that next experiment starts with `P06:323` only:
+  same accepted no-GC non-debug options, score must remain `9488172`, local
+  residual upper must improve below the current `9636799`/`9650685` band,
+  `timedOut=false`, `memoryLimited=false`, and peak heap must not exceed the
+  accepted baseline by more than `2%`. Only then rerun hard cases.
+
 2026-06-10 13:00 CST correctness gate reset:
 
 - The first two no-GC full 40-case runs both reported `40/40` exact, but their
