@@ -1,6 +1,6 @@
 # Medley 40/40 Exact Roadmap
 
-Last updated: 2026-06-12 06:20 CST
+Last updated: 2026-06-12 06:39 CST
 
 This file is the persistent working note for the current medley optimizer goal.
 Keep it current before and after benchmark runs or proof-path changes, so future
@@ -59,6 +59,36 @@ No-GC acceptance contract:
   analysis if any row is bounded.
 
 2026-06-12 06:20 CST P06 frontier experiments after max4 dual reuse:
+
+- Low-memory streaming anchor-tail diagnostic:
+  - Code change: added default-off
+    `eventRootFrontierProbeAnchorCheapUpperStreamAnchorTail` plus max-candidate
+    and timebox knobs, and profiling fields for streamed tail candidate count,
+    peek before/after, streamed upper, elapsed time, and abort reason.
+  - Raw:
+    `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-11T22-32-39-362Z.json`.
+  - Options: `P06:323`, no `--expose-gc`, `debugConfigurationTrace=false`,
+    same accepted event-root setup as the `pairCapacitySharedPowerDualCapMaxCalls=4`
+    run, plus stream-tail max candidates `20000` and stream-tail timebox
+    `15000ms`.
+  - Result: bounded, score `9488172`, maxScore `9567356`, upper `9631451`,
+    gap `143279`, elapsed `272302ms`, peak `3982 MiB`, `timedOut=false`,
+    `memoryLimited=false`.
+  - Stream signal from the last event-root cheap-upper call:
+    candidate count `0`, peek before `2613116`, peek after `2613116`,
+    streamed upper `null`, elapsed `0ms`, abort reason `closed`. The residual
+    source stayed `pair-capacity` with residual gap `82576`.
+  - Interpretation: the current best maxCalls=4 shape is not blocked by the
+    final cheap-upper's unmaterialized anchor tail. The stream-tail probe
+    correctly no-ops there because the tail is already below the processed
+    pair-capacity residual. Therefore this does not improve proof quality or
+    move `P06:323` toward exact; it should remain diagnostic-only and should
+    not be combined with dominated-root frontier pass as a tuning line.
+  - Next direction: stop pursuing more candidate-tail consumption for this
+    shape. The remaining useful work is a lower-cost certificate for the
+    processed pair-capacity residual, or a scheduling/proof-flow change that
+    closes `PastelPalettes/cool` and then revisits cheap dominated roots without
+    starving the third same-coarse parameter.
 
 - Baseline reference for this subsection:
   `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-11T20-56-17-305Z.json`.

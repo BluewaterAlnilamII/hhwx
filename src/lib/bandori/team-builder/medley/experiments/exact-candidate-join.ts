@@ -3930,6 +3930,9 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
   options: {
     timeboxMs?: number | null;
     maxAnchors?: number | null;
+    streamAnchorTail?: boolean;
+    streamAnchorTailMaxCandidates?: number | null;
+    streamAnchorTailTimeboxMs?: number | null;
     refineUnseen?: boolean;
     refineTopAnchors?: number | null;
     unseenRefineMaxGeneratedCandidates?: number | null;
@@ -3999,6 +4002,21 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
       ? Math.max(1, Math.trunc(options.maxAnchors))
       : MEDLEY_EXACT_CANDIDATE_JOIN_ANCHOR_FRONTIER_CHEAP_UPPER_MAX_ANCHORS,
   );
+  const shouldStreamAnchorTail = options.streamAnchorTail === true;
+  const streamAnchorTailMaxCandidates = (
+    options.streamAnchorTailMaxCandidates !== null
+    && options.streamAnchorTailMaxCandidates !== undefined
+    && Number.isFinite(options.streamAnchorTailMaxCandidates)
+  )
+    ? Math.max(1, Math.trunc(options.streamAnchorTailMaxCandidates))
+    : 20_000;
+  const streamAnchorTailTimeboxMs = (
+    options.streamAnchorTailTimeboxMs !== null
+    && options.streamAnchorTailTimeboxMs !== undefined
+    && Number.isFinite(options.streamAnchorTailTimeboxMs)
+  )
+    ? Math.max(0, Math.trunc(options.streamAnchorTailTimeboxMs))
+    : 15_000;
   const shouldRefineUnseenUpper = options.refineUnseen === true;
   const shouldUseProcessedUnseenJoin = options.processedUnseenJoin === true;
   const shouldRewindBothUnseen = options.rewindBothUnseen === true;
@@ -4121,7 +4139,7 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
   let leftPeekUpperBound = generators[leftSlotIndex].peekUpperBound();
   let rightPeekUpperBound = generators[rightSlotIndex].peekUpperBound();
   const rawAnchorPeekUpperBound = generators[anchorSlotIndex].peekUpperBound();
-  const anchorPeekUpperBound = (
+  let anchorPeekUpperBound = (
     globalTailUpperBound !== null
     && Number.isFinite(pairUpperBound)
   )
@@ -4319,6 +4337,12 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
   profiling.exactCandidateJoinLastAnchorFrontierCheapUpperLocalPairExtensionPeekAfter = null;
   profiling.exactCandidateJoinLastAnchorFrontierCheapUpperLocalPairExtensionElapsedMs = null;
   profiling.exactCandidateJoinLastAnchorFrontierCheapUpperLocalPairExtensionAbortReason = null;
+  profiling.exactCandidateJoinLastAnchorFrontierCheapUpperStreamAnchorTailCandidateCount = null;
+  profiling.exactCandidateJoinLastAnchorFrontierCheapUpperStreamAnchorTailPeekBefore = null;
+  profiling.exactCandidateJoinLastAnchorFrontierCheapUpperStreamAnchorTailPeekAfter = null;
+  profiling.exactCandidateJoinLastAnchorFrontierCheapUpperStreamAnchorTailUpperBound = null;
+  profiling.exactCandidateJoinLastAnchorFrontierCheapUpperStreamAnchorTailElapsedMs = null;
+  profiling.exactCandidateJoinLastAnchorFrontierCheapUpperStreamAnchorTailAbortReason = null;
   profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacityCapUpperBound = null;
   profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacityCapCallCount = 0;
   profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairCapacityCapImprovementCount = 0;
@@ -5417,6 +5441,89 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
     for (const entry of processedAnchorUpperEntries) {
       recordProcessedEntryUpperMax(entry);
     }
+  };
+  let streamAnchorTailCandidateCount = 0;
+  let streamAnchorTailPeekBefore: number | null = null;
+  let streamAnchorTailPeekAfter: number | null = null;
+  let streamAnchorTailUpperBound = Number.NEGATIVE_INFINITY;
+  let streamAnchorTailElapsedMs = 0;
+  let streamAnchorTailAbortReason: string | null = null;
+  const streamAnchorTailCandidates = (): void => {
+    if (
+      !shouldStreamAnchorTail
+      || streamAnchorTailMaxCandidates <= 0
+      || streamAnchorTailTimeboxMs <= 0
+      || !Number.isFinite(pairUpperBound)
+      || stats.memoryLimited
+    ) {
+      return;
+    }
+    const streamGenerator = generators[anchorSlotIndex];
+    const streamStartedAt = performance.now();
+    const streamDeadlineAt = Math.min(localDeadlineAt, streamStartedAt + streamAnchorTailTimeboxMs);
+    streamAnchorTailPeekBefore = finiteScore(streamGenerator.peekUpperBound());
+    while (streamAnchorTailCandidateCount < streamAnchorTailMaxCandidates) {
+      if (performance.now() >= streamDeadlineAt) {
+        streamAnchorTailAbortReason = "timebox";
+        break;
+      }
+      if (stats.timedOut || stats.memoryLimited) {
+        streamAnchorTailAbortReason = stats.memoryLimited ? "memory-limited" : "global-timeout";
+        break;
+      }
+      const peekUpperBound = finiteScore(streamGenerator.peekUpperBound());
+      if (!Number.isFinite(peekUpperBound)) {
+        streamAnchorTailAbortReason = "exhausted";
+        break;
+      }
+      const currentTargetUpperBound = Math.max(
+        incumbentScore,
+        Number.isFinite(processedUpperMax) ? processedUpperMax : Number.NEGATIVE_INFINITY,
+      );
+      if (peekUpperBound + pairUpperBound <= currentTargetUpperBound) {
+        streamAnchorTailAbortReason = "closed";
+        break;
+      }
+      const streamCutoff = Math.max(
+        Number.NEGATIVE_INFINITY,
+        currentTargetUpperBound - pairUpperBound,
+      );
+      const candidate = streamGenerator.next(streamCutoff);
+      if (stats.timedOut || stats.memoryLimited) {
+        streamAnchorTailAbortReason = stats.memoryLimited ? "memory-limited" : "global-timeout";
+        break;
+      }
+      if (!candidate) {
+        streamAnchorTailAbortReason = streamGenerator.hasAborted() ? "generator-aborted" : "exhausted";
+        break;
+      }
+      const pairUpperForAnchor = estimatePairUpperForAnchor(candidate);
+      streamAnchorTailCandidateCount += 1;
+      if (Number.isFinite(pairUpperForAnchor.upperBound)) {
+        const anchorUpper = candidate.result.score + pairUpperForAnchor.upperBound;
+        streamAnchorTailUpperBound = Math.max(streamAnchorTailUpperBound, anchorUpper);
+        recordProcessedUpperMax(
+          candidate.result.score,
+          pairUpperForAnchor.upperBound,
+          pairUpperForAnchor.source,
+          pairUpperForAnchor.generatedPairUpper,
+          pairUpperForAnchor.leftUnseenUpper,
+          pairUpperForAnchor.rightUnseenUpper,
+          pairUpperForAnchor.leftGeneratedCandidate,
+          pairUpperForAnchor.rightGeneratedCandidate,
+          candidate,
+        );
+      }
+    }
+    if (
+      streamAnchorTailAbortReason === null
+      && streamAnchorTailCandidateCount >= streamAnchorTailMaxCandidates
+    ) {
+      streamAnchorTailAbortReason = "candidate-limit";
+    }
+    streamAnchorTailPeekAfter = finiteScore(streamGenerator.peekUpperBound());
+    anchorPeekUpperBound = streamAnchorTailPeekAfter ?? Number.NEGATIVE_INFINITY;
+    streamAnchorTailElapsedMs += performance.now() - streamStartedAt;
   };
   const repairProcessedPairCapacityMaxWithSharedPowerDual = (): void => {
     if (!shouldUsePairCapacitySharedPowerDualLateMaxRepair || processedAnchorUpperEntries.length === 0) {
@@ -7051,6 +7158,24 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
     if (!refineTimedOut) {
       repairProcessedPairCapacityMaxWithSharedPowerDual();
     }
+    if (
+      Number.isFinite(streamAnchorTailUpperBound)
+      && (
+        !Number.isFinite(processedUpperMax)
+        || streamAnchorTailUpperBound > processedUpperMax
+      )
+    ) {
+      processedUpperMax = streamAnchorTailUpperBound;
+      processedUpperMaxSource = "stream-anchor-tail";
+      processedUpperMaxAnchorScore = null;
+      processedUpperMaxPairUpper = null;
+      processedUpperMaxGeneratedPairUpper = null;
+      processedUpperMaxLeftUnseenUpper = null;
+      processedUpperMaxRightUnseenUpper = null;
+      processedUpperMaxAnchorCandidate = null;
+      processedUpperMaxLeftGeneratedCandidate = null;
+      processedUpperMaxRightGeneratedCandidate = null;
+    }
     const suffixProofTargetUpperBound = Number.isFinite(processedUpperMax)
       ? Math.max(incumbentScore, processedUpperMax)
       : incumbentScore;
@@ -7122,6 +7247,24 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
     ) {
       processedUpperMax = processedUnseenJoin.upperBound;
       processedUpperMaxSource = "processed-unseen-join";
+      processedUpperMaxPairUpper = null;
+      processedUpperMaxGeneratedPairUpper = null;
+      processedUpperMaxLeftUnseenUpper = null;
+      processedUpperMaxRightUnseenUpper = null;
+      processedUpperMaxAnchorCandidate = null;
+      processedUpperMaxLeftGeneratedCandidate = null;
+      processedUpperMaxRightGeneratedCandidate = null;
+    }
+    if (
+      Number.isFinite(streamAnchorTailUpperBound)
+      && (
+        !Number.isFinite(processedUpperMax)
+        || streamAnchorTailUpperBound > processedUpperMax
+      )
+    ) {
+      processedUpperMax = streamAnchorTailUpperBound;
+      processedUpperMaxSource = "stream-anchor-tail";
+      processedUpperMaxAnchorScore = null;
       processedUpperMaxPairUpper = null;
       processedUpperMaxGeneratedPairUpper = null;
       processedUpperMaxLeftUnseenUpper = null;
@@ -7566,6 +7709,28 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
     profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairAnchorCoverAbortReason = (
       pairAnchorCover.abortReason
     );
+    profiling.exactCandidateJoinLastAnchorFrontierCheapUpperStreamAnchorTailCandidateCount = (
+      streamAnchorTailCandidateCount
+    );
+    profiling.exactCandidateJoinLastAnchorFrontierCheapUpperStreamAnchorTailPeekBefore = (
+      streamAnchorTailPeekBefore !== null && Number.isFinite(streamAnchorTailPeekBefore)
+        ? Math.ceil(streamAnchorTailPeekBefore)
+        : null
+    );
+    profiling.exactCandidateJoinLastAnchorFrontierCheapUpperStreamAnchorTailPeekAfter = (
+      streamAnchorTailPeekAfter !== null && Number.isFinite(streamAnchorTailPeekAfter)
+        ? Math.ceil(streamAnchorTailPeekAfter)
+        : null
+    );
+    profiling.exactCandidateJoinLastAnchorFrontierCheapUpperStreamAnchorTailUpperBound = (
+      Number.isFinite(streamAnchorTailUpperBound) ? Math.ceil(streamAnchorTailUpperBound) : null
+    );
+    profiling.exactCandidateJoinLastAnchorFrontierCheapUpperStreamAnchorTailElapsedMs = Math.round(
+      streamAnchorTailElapsedMs,
+    );
+    profiling.exactCandidateJoinLastAnchorFrontierCheapUpperStreamAnchorTailAbortReason = (
+      streamAnchorTailAbortReason
+    );
     if (processedUpperMaxLeftGeneratedCandidate && processedUpperMaxRightGeneratedCandidate) {
       const generatedPairOverlaps = medleyExactCandidatesOverlap(
         processedUpperMaxLeftGeneratedCandidate,
@@ -7693,7 +7858,12 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
     }
   }
 
-  return finish(false, anchorCandidates[processedAnchorCount]?.result.score ?? null, processedAnchorCount);
+  streamAnchorTailCandidates();
+  return finish(
+    streamAnchorTailAbortReason === "timebox",
+    anchorCandidates[processedAnchorCount]?.result.score ?? null,
+    processedAnchorCount,
+  );
 }
 
 function solveMedleyExactCandidateJoinByAnchor(
@@ -7901,6 +8071,9 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     anchorFrontierCheapUpperTimeboxMs?: number | null;
     anchorFrontierCheapUpperMinRemainingMs?: number | null;
     anchorFrontierCheapUpperMaxAnchors?: number | null;
+    anchorFrontierCheapUpperStreamAnchorTail?: boolean;
+    anchorFrontierCheapUpperStreamAnchorTailMaxCandidates?: number | null;
+    anchorFrontierCheapUpperStreamAnchorTailTimeboxMs?: number | null;
     anchorFrontierCheapUpperRefineUnseen?: boolean;
     anchorFrontierCheapUpperRefineTopAnchors?: number | null;
     anchorFrontierCheapUpperUnseenRefineMaxGeneratedCandidates?: number | null;
@@ -8438,6 +8611,9 @@ export function searchMedleyConfigurationByExactCandidateJoin(
         {
           timeboxMs: context.anchorFrontierCheapUpperTimeboxMs,
           maxAnchors: context.anchorFrontierCheapUpperMaxAnchors,
+          streamAnchorTail: context.anchorFrontierCheapUpperStreamAnchorTail,
+          streamAnchorTailMaxCandidates: context.anchorFrontierCheapUpperStreamAnchorTailMaxCandidates,
+          streamAnchorTailTimeboxMs: context.anchorFrontierCheapUpperStreamAnchorTailTimeboxMs,
           refineUnseen: context.anchorFrontierCheapUpperRefineUnseen,
           refineTopAnchors: context.anchorFrontierCheapUpperRefineTopAnchors,
           unseenRefineMaxGeneratedCandidates: context.anchorFrontierCheapUpperUnseenRefineMaxGeneratedCandidates,

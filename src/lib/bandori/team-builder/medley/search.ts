@@ -1540,6 +1540,27 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
   )
     ? Math.max(1, parsedEventRootFrontierProbeAnchorCheapUpperMaxAnchors)
     : null;
+  const eventRootFrontierProbeAnchorCheapUpperStreamAnchorTail = (
+    optimization.eventRootFrontierProbeAnchorCheapUpperStreamAnchorTail === true
+  );
+  const parsedEventRootFrontierProbeAnchorCheapUpperStreamAnchorTailMaxCandidates =
+    optimization.eventRootFrontierProbeAnchorCheapUpperStreamAnchorTailMaxCandidates !== undefined
+      ? Math.trunc(optimization.eventRootFrontierProbeAnchorCheapUpperStreamAnchorTailMaxCandidates)
+      : Number.NaN;
+  const eventRootFrontierProbeAnchorCheapUpperStreamAnchorTailMaxCandidates = Number.isFinite(
+    parsedEventRootFrontierProbeAnchorCheapUpperStreamAnchorTailMaxCandidates,
+  )
+    ? Math.max(1, parsedEventRootFrontierProbeAnchorCheapUpperStreamAnchorTailMaxCandidates)
+    : null;
+  const parsedEventRootFrontierProbeAnchorCheapUpperStreamAnchorTailTimeboxMs =
+    optimization.eventRootFrontierProbeAnchorCheapUpperStreamAnchorTailTimeboxMs !== undefined
+      ? Math.trunc(optimization.eventRootFrontierProbeAnchorCheapUpperStreamAnchorTailTimeboxMs)
+      : Number.NaN;
+  const eventRootFrontierProbeAnchorCheapUpperStreamAnchorTailTimeboxMs = Number.isFinite(
+    parsedEventRootFrontierProbeAnchorCheapUpperStreamAnchorTailTimeboxMs,
+  )
+    ? Math.max(0, parsedEventRootFrontierProbeAnchorCheapUpperStreamAnchorTailTimeboxMs)
+    : null;
   const eventRootFrontierProbeAnchorCheapUpperRefineUnseen =
     optimization.eventRootFrontierProbeAnchorCheapUpperRefineUnseen === true;
   const parsedEventRootFrontierProbeAnchorCheapUpperRefineTopAnchors =
@@ -1730,6 +1751,13 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
       anchorFrontierCheapUpperTimeboxMs: eventRootFrontierProbeAnchorCheapUpperTimeboxMs,
       anchorFrontierCheapUpperMinRemainingMs: eventRootFrontierProbeAnchorCheapUpperMinRemainingMs,
       anchorFrontierCheapUpperMaxAnchors: eventRootFrontierProbeAnchorCheapUpperMaxAnchors,
+      anchorFrontierCheapUpperStreamAnchorTail: eventRootFrontierProbeAnchorCheapUpperStreamAnchorTail,
+      anchorFrontierCheapUpperStreamAnchorTailMaxCandidates: (
+        eventRootFrontierProbeAnchorCheapUpperStreamAnchorTailMaxCandidates
+      ),
+      anchorFrontierCheapUpperStreamAnchorTailTimeboxMs: (
+        eventRootFrontierProbeAnchorCheapUpperStreamAnchorTailTimeboxMs
+      ),
       anchorFrontierCheapUpperRefineUnseen: eventRootFrontierProbeAnchorCheapUpperRefineUnseen,
       anchorFrontierCheapUpperRefineTopAnchors: eventRootFrontierProbeAnchorCheapUpperRefineTopAnchors,
       anchorFrontierCheapUpperUnseenRefineMaxGeneratedCandidates: (
@@ -5952,6 +5980,15 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
         traceEntry.eventRootFrontierProbeAnchorCheapUpperMaxAnchors = (
           eventRootFrontierProbeAnchorCheapUpperMaxAnchors
         );
+        traceEntry.eventRootFrontierProbeAnchorCheapUpperStreamAnchorTail = (
+          eventRootFrontierProbeAnchorCheapUpperStreamAnchorTail
+        );
+        traceEntry.eventRootFrontierProbeAnchorCheapUpperStreamAnchorTailMaxCandidates = (
+          eventRootFrontierProbeAnchorCheapUpperStreamAnchorTailMaxCandidates
+        );
+        traceEntry.eventRootFrontierProbeAnchorCheapUpperStreamAnchorTailTimeboxMs = (
+          eventRootFrontierProbeAnchorCheapUpperStreamAnchorTailTimeboxMs
+        );
         traceEntry.eventRootFrontierProbeAnchorCheapUpperRefineUnseen = (
           eventRootFrontierProbeAnchorCheapUpperRefineUnseen
         );
@@ -6118,6 +6155,13 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
           anchorFrontierCheapUpperTimeboxMs: eventRootFrontierProbeAnchorCheapUpperTimeboxMs,
           anchorFrontierCheapUpperMinRemainingMs: eventRootFrontierProbeAnchorCheapUpperMinRemainingMs,
           anchorFrontierCheapUpperMaxAnchors: eventRootFrontierProbeAnchorCheapUpperMaxAnchors,
+          anchorFrontierCheapUpperStreamAnchorTail: eventRootFrontierProbeAnchorCheapUpperStreamAnchorTail,
+          anchorFrontierCheapUpperStreamAnchorTailMaxCandidates: (
+            eventRootFrontierProbeAnchorCheapUpperStreamAnchorTailMaxCandidates
+          ),
+          anchorFrontierCheapUpperStreamAnchorTailTimeboxMs: (
+            eventRootFrontierProbeAnchorCheapUpperStreamAnchorTailTimeboxMs
+          ),
           anchorFrontierCheapUpperRefineUnseen: eventRootFrontierProbeAnchorCheapUpperRefineUnseen,
           anchorFrontierCheapUpperRefineTopAnchors: eventRootFrontierProbeAnchorCheapUpperRefineTopAnchors,
           anchorFrontierCheapUpperUnseenRefineMaxGeneratedCandidates: (
