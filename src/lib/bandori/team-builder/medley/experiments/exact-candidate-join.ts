@@ -2126,7 +2126,13 @@ export function solveMedleyExactCandidateJoin(
   if (slots.length !== MEDLEY_TEAM_COUNT || candidatesBySlot.some((candidates) => candidates.length === 0)) {
     return { timedOut: false, result: null };
   }
-  type ThirdCandidateShortlist = { candidateIndices: Uint32Array; count: number; exhaustive: boolean };
+  type ThirdCandidateShortlist = {
+    candidateIndices: Uint32Array;
+    count: number;
+    exhaustive: boolean;
+    candidateBits?: Uint32Array;
+    lastCandidateIndex?: number;
+  };
 
   const candidateCountSlotOrder = slots
     .map((_, index) => index)
@@ -2555,6 +2561,47 @@ export function solveMedleyExactCandidateJoin(
     }
     return { candidateIndices, count: candidateIndexCount, exhaustive };
   };
+  const buildBitsetThirdShortlistForCandidate = (
+    candidate: MedleyTeamCandidate,
+    shortlistSize: number,
+  ): ThirdCandidateShortlist => {
+    const candidateBits = new Uint32Array(thirdCandidateBitsetWordCount);
+    let candidateIndexCount = 0;
+    let exhaustive = true;
+    let lastCandidateIndex = -1;
+    const forbiddenThirdCandidateContainingBits = getContainingThirdBitsForCandidate(candidate);
+    for (let wordIndex = 0; wordIndex < thirdCandidateBitsetWordCount; wordIndex += 1) {
+      let availableThirdBits = (~readCombinedContainingBitsWord(
+        forbiddenThirdCandidateContainingBits,
+        wordIndex,
+      )) >>> 0;
+      if (wordIndex === thirdCandidateLastWordIndex) {
+        availableThirdBits &= thirdCandidateLastWordMask;
+      }
+      while (availableThirdBits !== 0) {
+        const lowestAvailableBit = availableThirdBits & -availableThirdBits;
+        availableThirdBits ^= lowestAvailableBit;
+        candidateBits[wordIndex] |= lowestAvailableBit;
+        candidateIndexCount += 1;
+        lastCandidateIndex = (wordIndex * 32) + (31 - Math.clz32(lowestAvailableBit));
+        if (candidateIndexCount >= shortlistSize) {
+          exhaustive = false;
+          break;
+        }
+      }
+      if (!exhaustive) {
+        break;
+      }
+    }
+    return {
+      candidateIndices: new Uint32Array(0),
+      count: candidateIndexCount,
+      exhaustive,
+      candidateBits,
+      lastCandidateIndex,
+    };
+  };
+  const shouldUseBitsetExtendedThirdShortlist = thirdCandidateBitsetWordCount <= extendedThirdShortlistSize;
   const thirdShortlistCache = new WeakMap<MedleyTeamCandidate, ThirdCandidateShortlist>();
   let thirdShortlistCacheEntryCount = 0;
   const getThirdShortlistForCandidate = (
@@ -2580,15 +2627,52 @@ export function solveMedleyExactCandidateJoin(
     if (cached) {
       return cached;
     }
-    const shortlist = buildThirdShortlistForCandidate(
-      candidate,
-      extendedThirdShortlistSize,
-    );
+    const shortlist = shouldUseBitsetExtendedThirdShortlist
+      ? buildBitsetThirdShortlistForCandidate(candidate, extendedThirdShortlistSize)
+      : buildThirdShortlistForCandidate(candidate, extendedThirdShortlistSize);
     if (extendedThirdShortlistCacheEntryCount < extendedThirdShortlistCacheEntryLimit) {
       extendedThirdShortlistCache.set(candidate, shortlist);
       extendedThirdShortlistCacheEntryCount += 1;
     }
     return shortlist;
+  };
+  const findBestThirdCandidateInShortlist = (
+    shortlist: ThirdCandidateShortlist,
+    primaryForbiddenBits: Uint32Array,
+  ): MedleyTeamCandidate | null => {
+    if (shortlist.candidateBits) {
+      const lastWordIndex = shortlist.lastCandidateIndex !== undefined && shortlist.lastCandidateIndex >= 0
+        ? shortlist.lastCandidateIndex >> 5
+        : -1;
+      for (let wordIndex = 0; wordIndex <= lastWordIndex; wordIndex += 1) {
+        const availableBits = (shortlist.candidateBits[wordIndex] & ~primaryForbiddenBits[wordIndex]) >>> 0;
+        if (availableBits !== 0) {
+          const lowestAvailableBit = availableBits & -availableBits;
+          const bitIndex = 31 - Math.clz32(lowestAvailableBit);
+          return thirdCandidates[(wordIndex * 32) + bitIndex] ?? null;
+        }
+      }
+      return null;
+    }
+    for (let shortlistIndex = 0; shortlistIndex < shortlist.count; shortlistIndex += 1) {
+      const currentThirdCandidateIndex = shortlist.candidateIndices[shortlistIndex];
+      if (
+        (primaryForbiddenBits[currentThirdCandidateIndex >> 5]
+          & (1 << (currentThirdCandidateIndex & 31))) === 0
+      ) {
+        return thirdCandidates[currentThirdCandidateIndex] ?? null;
+      }
+    }
+    return null;
+  };
+  const getShortlistFallbackStartCandidateIndex = (shortlist: ThirdCandidateShortlist): number => {
+    if (shortlist.count <= 0) {
+      return 0;
+    }
+    if (shortlist.lastCandidateIndex !== undefined) {
+      return shortlist.lastCandidateIndex + 1;
+    }
+    return shortlist.candidateIndices[shortlist.count - 1] + 1;
   };
   const bestThirdByCardIdsCache = new WeakMap<MedleyTeamCandidate, MedleyTeamCandidate | null>();
   let bestThirdByCardIdsCacheEntryCount = 0;
@@ -2778,21 +2862,15 @@ export function solveMedleyExactCandidateJoin(
             if (shouldUseExtendedThirdShortlist) {
               const extendedThirdShortlist = getExtendedThirdShortlistForCandidate(secondCandidate);
               localExtendedThirdShortlistQueryCount += 1;
-              for (let shortlistIndex = 0; shortlistIndex < extendedThirdShortlist.count; shortlistIndex += 1) {
-                const currentThirdCandidateIndex = extendedThirdShortlist.candidateIndices[shortlistIndex];
-                if (
-                  (firstForbiddenThirdCandidateBits[currentThirdCandidateIndex >> 5]
-                    & (1 << (currentThirdCandidateIndex & 31))) === 0
-                ) {
-                  thirdCandidate = thirdCandidates[currentThirdCandidateIndex] ?? null;
-                  localExtendedThirdShortlistHitCount += 1;
-                  break;
-                }
+              thirdCandidate = findBestThirdCandidateInShortlist(
+                extendedThirdShortlist,
+                firstForbiddenThirdCandidateBits,
+              );
+              if (thirdCandidate) {
+                localExtendedThirdShortlistHitCount += 1;
               }
               if (extendedThirdShortlist.count > 0) {
-                fallbackStartCandidateIndex = extendedThirdShortlist.candidateIndices[
-                  extendedThirdShortlist.count - 1
-                ] + 1;
+                fallbackStartCandidateIndex = getShortlistFallbackStartCandidateIndex(extendedThirdShortlist);
               }
               if (!thirdCandidate && extendedThirdShortlist.exhaustive) {
                 localExtendedThirdShortlistExhaustiveMissCount += 1;

@@ -1,6 +1,6 @@
 # Medley 40/40 Exact Roadmap
 
-Last updated: 2026-06-11 15:18 CST
+Last updated: 2026-06-11 16:02 CST
 
 This file is the persistent working note for the current medley optimizer goal.
 Keep it current before and after benchmark runs or proof-path changes, so future
@@ -182,6 +182,69 @@ No-GC acceptance contract:
   known-card presence diagnostics, smallest-third join ordering, and the
   score-only slack pruning patch. The acceptance gate remains unchanged:
   no-GC, non-debug, stable `40/40` exact with stable final scores.
+
+2026-06-11 16:02 CST P06 third-candidate solve diagnostics:
+
+- Current accepted base path still excludes `--expose-gc`, keeps
+  `debugConfigurationTrace=false`, and uses ordinary Node with
+  `--max-old-space-size=8192`.
+- Current `P06:323` 200k event-root raw:
+  `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-11T07-02-13-407Z.json`.
+  Result: bounded, elapsed `37929ms`, score `9488172`, gap `605990`,
+  `timedOut=false`, `memoryLimited=false`, peak `1970 MiB`. The blocker is
+  candidate fill on `PastelPalettes/cool/performance`; slot0 reaches soft limit
+  `200000`, cutoff `2518348`, peek `2616168`, counts `[200000,80879,50858]`.
+- Current `P03:260` confirmation raw:
+  `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-11T07-03-11-779Z.json`.
+  Result: exact, elapsed `157761ms`, gap `0`, peak `3690 MiB`.
+- Debug ledger after the proof-ledger array fix:
+  `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-11T07-12-56-341Z.json`.
+  The ledger confirms the same `P06:323` bounded row and shows pair upper
+  `[6968613,7011517,6804525]`; the 200k path never enters exact-join solve.
+- Current branch 800k staged event-root, default solve order:
+  `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-11T07-23-05-034Z.json`.
+  Result: bounded, elapsed `300001ms`, `timedOut=true`, peak `3021 MiB`,
+  score `9486961`, gap `595522`. It moves to solve timeout, with candidate fill
+  `70754ms`, solve `202965ms`, pair count `3125248`, third fallback word scan
+  `549391399`, extended-third queries `200000`, extended hits `0`.
+- Forced `largest-middle-smallest` solve order:
+  `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-11T07-29-57-675Z.json`.
+  Result still bounded at `300001ms`, but third fallback word scan drops to
+  `140557548`; pair count rises to `4390912`. This suggests solve order changes
+  can reduce scan depth but do not close proof alone.
+- Larger extended third shortlist, array-backed, `size=8192`,
+  `queryLimit=1000000`, `cacheEntryLimit=4096`:
+  `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-11T07-36-00-150Z.json`.
+  Result still bounded, peak `3062 MiB`. Pair count drops to `303104` and
+  fallback word scan to `1899837`, but solve time remains about `203s`,
+  indicating uncached shortlist construction/checking becomes the new cost.
+- Same array-backed shortlist with `cacheEntryLimit=20000`:
+  `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-11T07-42-00-635Z.json`.
+  Result still bounded, peak rises to `3542 MiB`; solve time does not improve.
+- Patch in progress: extended third shortlist can now use a bitset-backed
+  representation when `thirdCandidateBitsetWordCount <= extendedThirdShortlistSize`.
+  This keeps exact semantics and only changes how the same shortlist is stored
+  and queried.
+- Bitset-backed `size=8192`, `queryLimit=1000000`, `cacheEntryLimit=20000`:
+  `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-11T07-50-11-165Z.json`.
+  Result still bounded, peak `3125 MiB`; compared with the array-backed 20k
+  cache run, peak drops by about `417 MiB`, pair count rises from `479232` to
+  `2813952`, but the `1000000` extended query limit is exhausted.
+- Bitset-backed `size=8192`, `queryLimit=10000000`, `cacheEntryLimit=50000`:
+  `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-11T07-56-04-041Z.json`.
+  Result still bounded, elapsed `301427ms`, peak `3326 MiB`, third fallback
+  word scan `1918296`, extended queries `1846595`, extended hits `159242`,
+  exhaustive misses `1196626`. It no longer exhausts the extended query limit,
+  but still hits the event-root probe timebox.
+- Interpretation: bitset-backed extended shortlist is a real storage/query
+  improvement and is safer on memory than large arrays, but it is not sufficient
+  to close `P06:323` within the current `300s` gate. The remaining issue is
+  broader proof conversion inside the large imbalanced candidate join, not seed
+  quality and not just third-candidate fallback word scanning.
+- Next decision point: run a longer single-case diagnostic only to determine
+  whether this path eventually proves exact, then either derive a bounded
+  scheduling/proof patch from the finished solve profile or stop the 800k
+  solve route and return to tighter event-root upper closure.
 
 2026-06-10 11:33 CST first no-GC validation:
 
