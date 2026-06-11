@@ -5465,3 +5465,51 @@ P07 failed follow-ups after P03 fix:
   - If targeted pair proof also times out or improves too few entries, the next
     design direction should be a bulk/cached pair-capacity certificate rather
     than another per-entry repair loop.
+
+2026-06-12 04:37 CST targeted pair proof no-op guard:
+
+- Diagnostic before the fix:
+  - Raw:
+    `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-11T20-20-01-407Z.json`.
+  - Options: P06:323 only, non-GC, `debugConfigurationTrace=true`,
+    targeted pair proof timebox `5000ms`, max entries `8`, candidate limit
+    `90000`, shared-power dual cap disabled, late repair disabled.
+  - Result: bounded, score `9488172`, upper `9713264`, gap `225092`,
+    elapsed `225736ms`, peak `2863 MiB`, `timedOut=false`,
+    `memoryLimited=false`.
+  - The probe attempted one targeted pair proof per PastelPalettes/cool
+    parameter, hit the local 5s window, reported `global-timeout`, and skipped
+    the later suffix proof (`suffixMax=null`).
+  - Interpretation: the targeted pair proof local deadline was incorrectly
+    wired as the helper's global deadline callback. A local experimental probe
+    timeout could therefore suppress normal proof work and widen the bounded
+    gap.
+- Fix:
+  - Local targeted pair proof timeout now records `timebox`, disables further
+    targeted attempts for that cheap-upper pass, and returns control to the
+    normal cheap-upper/suffix proof flow.
+  - The pair helper still receives the real global deadline, but the local
+    timebox is only passed through `localDeadlineAt`; it no longer sets
+    `stats.timedOut` by itself.
+- Diagnostic after the fix:
+  - Raw:
+    `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-11T20-26-37-305Z.json`.
+  - Result: bounded, score `9488172`, upper `9650685`, gap `162513`,
+    elapsed `234976ms`, peak `4131 MiB`, `timedOut=false`,
+    `memoryLimited=false`.
+  - Suffix proof fields returned to the previous shape: best concrete suffix
+    generated-pair scores `9464793`, `9455510`, and `9449440`.
+  - Targeted pair proof counters:
+    - PastelPalettes/cool performance: attempts `8`, processed `8`,
+      improvements `0`, abort `candidate-limit`, elapsed `10282ms`.
+    - PastelPalettes/cool technique: attempts `1`, processed `0`,
+      improvements `0`, abort `timebox`, elapsed `5003ms`.
+    - PastelPalettes/cool visual: attempts `8`, processed `8`,
+      improvements `0`, abort `candidate-limit`, elapsed `9548ms`.
+- Decision:
+  - The no-op safety bug should be kept.
+  - The tested targeted pair proof settings do not improve proof quality.
+  - Next diagnostic may try a very small number of higher candidate-limit
+    targeted pair attempts to determine whether `candidate-limit` hides a real
+    certificate, but this remains diagnostic only. Do not default-enable this
+    path unless it improves P06 without regressing no-op behavior.

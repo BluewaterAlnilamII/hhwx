@@ -4147,6 +4147,7 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
   let targetedPairProofElapsedMs = 0;
   let targetedPairProofAbortReason: string | null = null;
   let targetedPairProofResult: BandoriMedleyTeamSearchResult | null = null;
+  let targetedPairProofDisabled = false;
   const recordUnseenRefineProfiling = (): void => {
     profiling.exactCandidateJoinLastAnchorFrontierCheapUpperUnseenRefineAttemptCount = unseenRefineAttemptCount;
     profiling.exactCandidateJoinLastAnchorFrontierCheapUpperUnseenRefineCandidateCount = unseenRefineCandidateCount;
@@ -6478,6 +6479,7 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
     if (
       targetedPairProofTimeboxMs <= 0
       || targetedPairProofMaxEntries <= 0
+      || targetedPairProofDisabled
       || targetedPairProofAttemptCount >= targetedPairProofMaxEntries
     ) {
       return { refined, timedOut: false };
@@ -6498,7 +6500,8 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
     if (performance.now() >= localPairProofDeadlineAt) {
       targetedPairProofTimeboxCount += 1;
       targetedPairProofAbortReason = "timebox";
-      return { refined, timedOut: true };
+      targetedPairProofDisabled = true;
+      return { refined, timedOut: false };
     }
     targetedPairProofAttemptCount += 1;
     if (targetedPairBnbNodeLimit !== null && targetedPairBnbSlotSolveNodeLimit !== null) {
@@ -6520,7 +6523,11 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
       if (bnbResult.timedOut || stats.timedOut) {
         targetedPairProofTimeboxCount += 1;
         targetedPairProofAbortReason = "bnb-timeout";
-        return { refined, timedOut: true };
+        if (stats.timedOut || performance.now() >= deadlineAt) {
+          return { refined, timedOut: true };
+        }
+        targetedPairProofDisabled = true;
+        return { refined, timedOut: false };
       }
       targetedPairProofProcessedEntryCount += 1;
       if (bnbResult.proved && bnbResult.upperBound !== null && Number.isFinite(bnbResult.upperBound)) {
@@ -6551,16 +6558,22 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
       targetedPairProofCandidateLimit,
       profiling,
       stats,
-      () => performance.now() >= localPairProofDeadlineAt,
+      () => false,
       deadlineAt,
       localPairProofDeadlineAt,
       findTargetedGeneratedPairForAnchor,
     );
     targetedPairProofElapsedMs += performance.now() - proofStartedAt;
-    if (pairSearchResult.timedOut || pairSearchResult.localTimedOut) {
+    if (pairSearchResult.timedOut) {
       targetedPairProofTimeboxCount += 1;
-      targetedPairProofAbortReason = pairSearchResult.timedOut ? "global-timeout" : "timebox";
+      targetedPairProofAbortReason = "global-timeout";
       return { refined, timedOut: true };
+    }
+    if (pairSearchResult.localTimedOut) {
+      targetedPairProofTimeboxCount += 1;
+      targetedPairProofAbortReason = "timebox";
+      targetedPairProofDisabled = true;
+      return { refined, timedOut: false };
     }
     targetedPairProofProcessedEntryCount += 1;
     if (pairSearchResult.leftCandidate && pairSearchResult.rightCandidate) {
