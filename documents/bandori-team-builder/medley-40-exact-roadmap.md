@@ -1,6 +1,6 @@
 # Medley 40/40 Exact Roadmap
 
-Last updated: 2026-06-11 08:30 CST
+Last updated: 2026-06-11 15:18 CST
 
 This file is the persistent working note for the current medley optimizer goal.
 Keep it current before and after benchmark runs or proof-path changes, so future
@@ -4049,8 +4049,11 @@ P07 failed follow-ups after P03 fix:
   - The run ended with about `234s` remaining, so P06 is not merely failing
     because the global 300s deadline is too short. The current proof policy
     intentionally stops at a same-coarse dominated frontier.
-  - Top remaining gap became `Morfonica/cool/performance` at
-    `9631450`, slightly above the PastelPalettes `9629060` frontier.
+  - Later inspection found this "top remaining gap" was a proof-ledger
+    reporting bug: `bounded-dominated-root-skip` entries were using the raw
+    root upper instead of `dominatedRootSkipUpperBound` as their effective
+    frontier upper. The global observed upper for this run remained the
+    PastelPalettes frontier `9629060`.
 - `maxAnchors=13000` plus
   `disableSkipDfsAfterUnprovedExactCandidateJoin=true`:
   - Raw:
@@ -4062,8 +4065,9 @@ P07 failed follow-ups after P03 fix:
     path.
 - Current conclusion:
   - P06 needs a proof artifact that can close or reduce the shared
-    same-coarse frontier around `9.629M`, plus a way to close the
-    Morfonica/cool dominated root around `9.631M`.
+    same-coarse PastelPalettes/cool frontier. Morfonica/cool was a diagnostic
+    ordering artifact in the ledger summary, not the global upper blocker for
+    this run.
   - Increasing runtime alone, forcing DFS, or full same-coarse retry does not
     produce exact.
   - The next useful implementation should target one of:
@@ -4109,3 +4113,53 @@ P07 failed follow-ups after P03 fix:
   - A useful best-prefix optimization would need incremental/checkpointed
     suffix information or early-stop logic, not an extra full suffix pass at
     the end.
+
+2026-06-11 15:18 CST current no-GC P06/P03 baseline and ledger correction:
+
+- Code committed and pushed:
+  - `d800909` fixes proof-ledger effective upper calculation for
+    `bounded-dominated-root-skip` by including `dominatedRootSkipUpperBound`.
+  - `ea4ca11` preserves partial proof-ledger numeric arrays, so a cutoff array
+    like `[2518348, -Infinity, -Infinity]` is reported as
+    `[2518348, null, null]` instead of being dropped.
+- Current no-GC, non-debug single-case checks with low-memory initial sync left
+  default-off:
+  - `P06:323` raw:
+    `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-11T07-02-13-407Z.json`.
+    Result: bounded, elapsed `37929ms`, score `9488172`, gap `605990`,
+    `timedOut=false`, `memoryLimited=false`, peak `1970 MiB`.
+  - `P03:260` raw:
+    `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-11T07-03-11-779Z.json`.
+    Result: exact, elapsed `157761ms`, gap `0`, `timedOut=false`,
+    `memoryLimited=false`, peak `3690 MiB`.
+- P06 debug-ledger raw after the ledger fixes:
+  `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-11T07-12-56-341Z.json`.
+  It is diagnostic-only because `debugConfigurationTrace=true`, but it matches
+  the non-debug proof status: bounded, gap `605990`, no timeout, no memory
+  limit.
+- P06 current blocker details:
+  - First unclosed configuration:
+    `PastelPalettes/cool/performance`, status `large-gap-event-skip-seeding`.
+  - Event-root probe status: `unproved`; upper before/after both
+    `10094161.91213159`.
+  - Exact join abort: `candidate-fill-soft-limit` on slot `0`.
+  - Candidate counts: `[200000, 80879, 50858]`.
+  - Slot0 cutoff: `2518348`; slot0 peek at abort: `2616168`.
+  - Other upper for slot0: `6968613`, sourced from the pair upper excluding
+    slot0; relaxed other upper was `7758278`.
+  - Pair upper by excluded slot: `[6968613, 7011517, 6804525]`.
+  - Phase time: initial candidate `696ms`, pair upper `5767ms`, candidate fill
+    `18169ms`, solve `0ms`, global heap rekey `1844ms`.
+- Interpretation:
+  - The current primary blocker is P06 only in the checked pair; P03 is exact
+    under the same no-GC acceptance-style options.
+  - P06 already finds the `9488172` incumbent, so the failure is proof
+    conversion. The 200k event-root prefix is far from closing slot0:
+    `peek - cutoff = 97820`.
+  - Raising candidate K/timebox has already been shown to move the failure from
+    candidate fill to solve timeout. The next implementation should not simply
+    increase K.
+  - The most promising general direction remains a full-score-aware generated
+    candidate proof/join path or a reusable pair/frontier certificate that can
+    rule out the high slot0 frontier without materializing every slot0
+    candidate above the score-only cutoff.
