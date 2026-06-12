@@ -655,6 +655,31 @@ export function createMedleyExactSlotCandidateGenerator(
       return true;
     }
     if (budget.exhausted) {
+      return false;
+    }
+    if (budget.maxCalls !== null && budget.callCount >= budget.maxCalls) {
+      budget.exhausted = true;
+      return false;
+    }
+    if (budget.timeboxMs !== null && performance.now() - budget.startedAt >= budget.timeboxMs) {
+      budget.exhausted = true;
+      budget.timeboxCount += 1;
+      profiling.exactCandidateJoinGlobalCapacityTailUpperTimeboxCount += 1;
+      return false;
+    }
+    budget.callCount += 1;
+    profiling.exactCandidateJoinGlobalCapacityTailUpperCallCount += 1;
+    return true;
+  };
+
+  const hasCapacityComplementUpperBudget = (
+    globalPruning: MedleyExactSlotCandidateGlobalPruning,
+  ): boolean => {
+    const budget = globalPruning.capacityComplementBudget;
+    if (!budget) {
+      return true;
+    }
+    if (budget.exhausted) {
       budget.skipCount += 1;
       profiling.exactCandidateJoinGlobalCapacityTailUpperSkipCount += 1;
       return false;
@@ -673,8 +698,6 @@ export function createMedleyExactSlotCandidateGenerator(
       profiling.exactCandidateJoinGlobalCapacityTailUpperSkipCount += 1;
       return false;
     }
-    budget.callCount += 1;
-    profiling.exactCandidateJoinGlobalCapacityTailUpperCallCount += 1;
     return true;
   };
 
@@ -701,6 +724,7 @@ export function createMedleyExactSlotCandidateGenerator(
     const canUseCapacityComplement = (
       globalPruning.useCapacityComplementUpper !== false
       && selectedCardIds.length >= capacityComplementMinSelectedCardCount
+      && hasCapacityComplementUpperBudget(globalPruning)
     );
     if (!canUseCapacityComplement && finitePairUnseenUpperBound >= minimumRelevantScore) {
       return finitePairUnseenUpperBound;
