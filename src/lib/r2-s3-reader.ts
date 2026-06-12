@@ -1,4 +1,5 @@
 import { createHash, createHmac } from "node:crypto";
+import { request as httpsRequest } from "node:https";
 
 export type R2S3ReaderConfig = {
   endpoint: string;
@@ -11,6 +12,15 @@ export type R2S3ReaderConfig = {
 const S3_SERVICE = "s3";
 const AWS4_REQUEST = "aws4_request";
 const EMPTY_PAYLOAD_SHA256 = createHash("sha256").update("").digest("hex");
+
+export type R2ObjectResponse = {
+  ok: boolean;
+  status: number;
+  headers: Headers;
+  arrayBuffer: () => Promise<ArrayBuffer>;
+  json: <T = unknown>() => Promise<T>;
+  text: () => Promise<string>;
+};
 
 function hashSha256(value: string): string {
   return createHash("sha256").update(value, "utf8").digest("hex");
@@ -98,11 +108,52 @@ function buildR2ObjectRequest(config: R2S3ReaderConfig, objectKey: string, now =
 export async function fetchR2Object(
   config: R2S3ReaderConfig,
   objectKey: string,
-  revalidateSeconds?: number,
-): Promise<Response> {
-  const request = buildR2ObjectRequest(config, objectKey);
-  return fetch(request.url, {
-    headers: request.headers,
-    next: typeof revalidateSeconds === "number" ? { revalidate: revalidateSeconds } : undefined,
+  _revalidateSeconds?: number,
+): Promise<R2ObjectResponse> {
+  const signedRequest = buildR2ObjectRequest(config, objectKey);
+  const result = await new Promise<{ body: Buffer; headers: Headers; status: number }>((resolve, reject) => {
+    const chunks: Buffer[] = [];
+    const nextRequest = httpsRequest(signedRequest.url, {
+      method: "GET",
+      headers: signedRequest.headers,
+    }, (response) => {
+      const headers = new Headers();
+      for (const [key, value] of Object.entries(response.headers)) {
+        if (Array.isArray(value)) {
+          for (const item of value) {
+            headers.append(key, item);
+          }
+        } else if (value !== undefined) {
+          headers.set(key, value);
+        }
+      }
+
+      response.on("data", (chunk: Buffer | string) => {
+        chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+      });
+      response.on("end", () => {
+        resolve({
+          body: Buffer.concat(chunks),
+          headers,
+          status: response.statusCode ?? 0,
+        });
+      });
+    });
+
+    nextRequest.on("error", reject);
+    nextRequest.end();
   });
+  const arrayBuffer = result.body.buffer.slice(
+    result.body.byteOffset,
+    result.body.byteOffset + result.body.byteLength,
+  ) as ArrayBuffer;
+
+  return {
+    ok: result.status >= 200 && result.status < 300,
+    status: result.status,
+    headers: result.headers,
+    arrayBuffer: async () => arrayBuffer,
+    json: async <T = unknown>() => JSON.parse(result.body.toString("utf8")) as T,
+    text: async () => result.body.toString("utf8"),
+  };
 }
