@@ -85,6 +85,8 @@ export type BandoriMedleySearchOptimizationOptions = {
   exactCandidateJoinExtendedThirdShortlistQueryLimit?: number;
   exactCandidateJoinZeroScoreTargetSlack?: boolean;
   enableExactCandidateJoinGlobalTailUpper?: boolean;
+  enableExactCandidateJoinGlobalCapacityTailUpper?: boolean;
+  exactCandidateJoinGlobalCapacityTailMinSelectedCards?: number;
   debugConfigurationTrace?: boolean;
   exactCandidateJoinDebugAnchorSlotIndex?: number;
   exactCandidateJoinDebugKnownCardIdsBySlot?: number[][];
@@ -1026,6 +1028,7 @@ export type MedleyExactSlotCandidateGlobalPruning = {
   pairUnseenUpperBound?: number;
   useCapacityComplementUpper?: boolean;
   capacityComplementMargin?: number;
+  capacityComplementMinSelectedCardCount?: number;
   packCandidateCardKey?: (cardIds: readonly number[]) => string;
   packCandidateCardsKey?: (cards: readonly SearchCard[]) => string;
   excludedCandidateKeys?: Set<string>;

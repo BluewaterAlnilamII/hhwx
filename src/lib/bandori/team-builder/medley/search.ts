@@ -1335,6 +1335,19 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
   const enableExactCandidateJoinGlobalTailUpper = (
     optimization.enableExactCandidateJoinGlobalTailUpper === true
   );
+  const enableExactCandidateJoinGlobalCapacityTailUpper = (
+    optimization.enableExactCandidateJoinGlobalCapacityTailUpper === true
+  );
+  const parsedExactCandidateJoinGlobalCapacityTailMinSelectedCards = (
+    optimization.exactCandidateJoinGlobalCapacityTailMinSelectedCards !== undefined
+      ? Math.trunc(optimization.exactCandidateJoinGlobalCapacityTailMinSelectedCards)
+      : Number.NaN
+  );
+  const exactCandidateJoinGlobalCapacityTailMinSelectedCards = Number.isFinite(
+    parsedExactCandidateJoinGlobalCapacityTailMinSelectedCards,
+  )
+    ? Math.max(0, parsedExactCandidateJoinGlobalCapacityTailMinSelectedCards)
+    : null;
   const debugExactCandidateJoinMemoryAttribution = (
     optimization.debugExactCandidateJoinMemoryAttribution === true
   );
@@ -5031,6 +5044,12 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
       );
       traceEntry.exactCandidateJoinZeroScoreTargetSlack = exactCandidateJoinZeroScoreTargetSlack;
       traceEntry.enableExactCandidateJoinGlobalTailUpper = enableExactCandidateJoinGlobalTailUpper;
+      traceEntry.enableExactCandidateJoinGlobalCapacityTailUpper = (
+        enableExactCandidateJoinGlobalCapacityTailUpper
+      );
+      traceEntry.exactCandidateJoinGlobalCapacityTailMinSelectedCards = (
+        exactCandidateJoinGlobalCapacityTailMinSelectedCards
+      );
       traceEntry.lowMemoryInitialCandidateSyncDirectCandidate = lowMemoryInitialCandidateSyncDirectCandidate;
       traceEntry.lowMemoryInitialCandidateSyncObservedMaxSlotCardCount = (
         maxLowMemoryInitialCandidateSyncSlotCardCount
@@ -5743,6 +5762,8 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
           exactCandidateJoinExtendedThirdShortlistQueryLimit,
           exactCandidateJoinZeroScoreTargetSlack,
           enableExactCandidateJoinGlobalTailUpper,
+          enableExactCandidateJoinGlobalCapacityTailUpper,
+          exactCandidateJoinGlobalCapacityTailMinSelectedCards,
           enableLowMemoryInitialCandidateSync: shouldUseLowMemoryInitialCandidateSync,
           lowMemoryInitialCandidateSyncLocalAbortOnly,
           lowMemoryInitialCandidateSyncLightUpper,
@@ -6172,6 +6193,8 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
           exactCandidateJoinExtendedThirdShortlistQueryLimit,
           exactCandidateJoinZeroScoreTargetSlack,
           enableExactCandidateJoinGlobalTailUpper,
+          enableExactCandidateJoinGlobalCapacityTailUpper,
+          exactCandidateJoinGlobalCapacityTailMinSelectedCards,
           enableLowMemoryInitialCandidateSync: shouldUseLowMemoryInitialCandidateSync,
           lowMemoryInitialCandidateSyncLocalAbortOnly,
           lowMemoryInitialCandidateSyncLightUpper,
@@ -6840,6 +6863,8 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
           exactCandidateJoinExtendedThirdShortlistQueryLimit,
           exactCandidateJoinZeroScoreTargetSlack,
           enableExactCandidateJoinGlobalTailUpper,
+          enableExactCandidateJoinGlobalCapacityTailUpper,
+          exactCandidateJoinGlobalCapacityTailMinSelectedCards,
           enableLowMemoryInitialCandidateSync: shouldUseLowMemoryInitialCandidateSync,
           lowMemoryInitialCandidateSyncLocalAbortOnly,
           lowMemoryInitialCandidateSyncLightUpper,

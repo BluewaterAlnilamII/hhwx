@@ -660,10 +660,17 @@ export function createMedleyExactSlotCandidateGenerator(
       return null;
     }
     const finitePairUnseenUpperBound = pairUnseenUpperBound;
-    if (
-      globalPruning.useCapacityComplementUpper === false
-      && finitePairUnseenUpperBound >= minimumRelevantScore
-    ) {
+    const capacityComplementMinSelectedCardCount = (
+      globalPruning.capacityComplementMinSelectedCardCount !== undefined
+      && Number.isFinite(globalPruning.capacityComplementMinSelectedCardCount)
+    )
+      ? Math.max(0, Math.trunc(globalPruning.capacityComplementMinSelectedCardCount))
+      : MEDLEY_TEAM_SIZE;
+    const canUseCapacityComplement = (
+      globalPruning.useCapacityComplementUpper !== false
+      && selectedCardIds.length >= capacityComplementMinSelectedCardCount
+    );
+    if (!canUseCapacityComplement && finitePairUnseenUpperBound >= minimumRelevantScore) {
       return finitePairUnseenUpperBound;
     }
     const [leftSlotIndex, rightSlotIndex] = globalPruning.remainingSlotIndices;
@@ -676,6 +683,9 @@ export function createMedleyExactSlotCandidateGenerator(
       rightCandidates.length,
       finitePairUnseenUpperBound,
       minimumRelevantScore,
+      canUseCapacityComplement ? "capacity" : "pair",
+      canUseCapacityComplement ? globalPruning.capacityComplementMargin ?? "" : "",
+      canUseCapacityComplement ? capacityComplementMinSelectedCardCount : "",
       selectedCardIds.join(","),
     ].join(":");
     const cached = globalPairComplementUpperCache.get(key);
@@ -708,8 +718,48 @@ export function createMedleyExactSlotCandidateGenerator(
       generatedPairUpperBound,
       finitePairUnseenUpperBound,
     );
-    globalPairComplementUpperCache.set(key, complementUpperBound);
-    return complementUpperBound;
+    let effectiveComplementUpperBound = complementUpperBound;
+    if (
+      canUseCapacityComplement
+      && (
+        !Number.isFinite(effectiveComplementUpperBound)
+        || effectiveComplementUpperBound - minimumRelevantScore
+          <= (globalPruning.capacityComplementMargin ?? Number.POSITIVE_INFINITY)
+      )
+    ) {
+      const bannedSelectedCardIds = new Set<number>(selectedCardIds);
+      const basicCapacityUpperBound = estimateMedleyCapacityAssignmentScoreUpperBound(
+        globalPruning.slots,
+        globalPruning.remainingSlotIndices,
+        bannedSelectedCardIds,
+        profiling,
+        true,
+        false,
+        false,
+        false,
+        true,
+      ).upperBound;
+      effectiveComplementUpperBound = Math.min(effectiveComplementUpperBound, basicCapacityUpperBound);
+      if (
+        Number.isFinite(effectiveComplementUpperBound)
+        && effectiveComplementUpperBound >= minimumRelevantScore
+      ) {
+        const tightCapacityUpperBound = estimateMedleyRemainingScoreUpperBound(
+          globalPruning.slots,
+          globalPruning.remainingSlotIndices,
+          bannedSelectedCardIds,
+          profiling,
+          false,
+          true,
+          false,
+          false,
+          false,
+        );
+        effectiveComplementUpperBound = Math.min(effectiveComplementUpperBound, tightCapacityUpperBound);
+      }
+    }
+    globalPairComplementUpperCache.set(key, effectiveComplementUpperBound);
+    return effectiveComplementUpperBound;
   };
 
   const estimateGlobalPrunedUpperBound = (
@@ -734,6 +784,9 @@ export function createMedleyExactSlotCandidateGenerator(
       rightSlotIndex,
       rightCandidateCount,
       globalPruning.pairUnseenUpperBound ?? "",
+      globalPruning.useCapacityComplementUpper === false ? "pair" : "capacity",
+      globalPruning.capacityComplementMargin ?? "",
+      globalPruning.capacityComplementMinSelectedCardCount ?? "",
       selectedCardIds.join(","),
     ].join(":");
     let complementUpperBound = globalComplementUpperCache.get(key);
@@ -8128,6 +8181,8 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     exactCandidateJoinExtendedThirdShortlistQueryLimit?: number | null;
     exactCandidateJoinZeroScoreTargetSlack?: boolean;
     enableExactCandidateJoinGlobalTailUpper?: boolean;
+    enableExactCandidateJoinGlobalCapacityTailUpper?: boolean;
+    exactCandidateJoinGlobalCapacityTailMinSelectedCards?: number | null;
     stagedCandidateExtensionMinRemainingMs?: number | null;
     enableLowMemoryInitialCandidateSync?: boolean;
     lowMemoryInitialCandidateSyncLocalAbortOnly?: boolean;
@@ -9684,8 +9739,15 @@ export function searchMedleyConfigurationByExactCandidateJoin(
       scoreCutoff: exactJoinProofCutoffScore,
       candidatesBySlot,
       pairUnseenUpperBound: exactPairUnseenUpperByExcludedSlot[slotIndex] ?? undefined,
-      useCapacityComplementUpper: false,
+      useCapacityComplementUpper: context.enableExactCandidateJoinGlobalCapacityTailUpper === true,
       capacityComplementMargin: MEDLEY_EXACT_CANDIDATE_JOIN_CAPACITY_COMPLEMENT_MARGIN,
+      capacityComplementMinSelectedCardCount: (
+        context.exactCandidateJoinGlobalCapacityTailMinSelectedCards !== null
+        && context.exactCandidateJoinGlobalCapacityTailMinSelectedCards !== undefined
+        && Number.isFinite(context.exactCandidateJoinGlobalCapacityTailMinSelectedCards)
+      )
+        ? Math.max(0, Math.trunc(context.exactCandidateJoinGlobalCapacityTailMinSelectedCards))
+        : MEDLEY_TEAM_SIZE,
       packCandidateCardKey,
       packCandidateCardsKey,
       excludedCandidateKeys: getCandidateKeysForSlot(slotIndex),
