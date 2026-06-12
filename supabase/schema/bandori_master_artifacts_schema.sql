@@ -51,6 +51,9 @@ CREATE TABLE IF NOT EXISTS public.bandori_master_api_index (
 CREATE INDEX IF NOT EXISTS idx_master_artifact_versions_master_version
 ON public.master_artifact_versions (server, master_version);
 
+CREATE INDEX IF NOT EXISTS idx_master_active_versions_server_version
+ON public.master_active_versions (server, version);
+
 CREATE INDEX IF NOT EXISTS idx_bandori_master_api_index_bundle
 ON public.bandori_master_api_index (server, bundle_name);
 
