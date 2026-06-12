@@ -1,6 +1,6 @@
 # Medley 40/40 Exact Roadmap
 
-Last updated: 2026-06-12 08:18 CST
+Last updated: 2026-06-12 08:34 CST
 
 This file is the persistent working note for the current medley optimizer goal.
 Keep it current before and after benchmark runs or proof-path changes, so future
@@ -57,6 +57,47 @@ No-GC acceptance contract:
 - Every full 40-case run must generate a timestamped report and update this
   roadmap with raw path, replay parameters, accept/reject reason, and failure
   analysis if any row is bounded.
+
+2026-06-12 08:34 CST rejected global capacity tail upper:
+
+- Code added and pushed:
+  - `319d589 Add opt-in global capacity tail upper`.
+  - New options:
+    `enableExactCandidateJoinGlobalCapacityTailUpper` and
+    `exactCandidateJoinGlobalCapacityTailMinSelectedCards`.
+  - The option is default-off. It attempted to tighten the exact-join global
+    generator tail upper by applying the existing capacity/complement upper to
+    the remaining two-slot pair surface instead of relying on the wider
+    generated-pair fallback alone.
+- Diagnostic:
+  - Raw:
+    `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-12T00-25-38-867Z.json`.
+  - Scope: `P06:323`, no GC, `debugConfigurationTrace=false`, current
+    best no-GC event-root setup, plus
+    `enableExactCandidateJoinGlobalTailUpper=true`,
+    `enableExactCandidateJoinGlobalCapacityTailUpper=true`, and
+    `exactCandidateJoinGlobalCapacityTailMinSelectedCards=5`.
+  - Result: rejected. The isolated worker did not produce an optimizer result
+    before the outer process timeout; the runner killed it after
+    `390138ms` with `spawnSync ... ETIMEDOUT` / `SIGTERM`.
+- Finding:
+  - `MEDLEY_TEAM_SIZE` is `5`, so `minSelectedCards=5` already restricts the
+    capacity complement to complete single-slot team nodes. Even at that
+    conservative threshold, putting the capacity complement into the
+    `generator.next(..., globalPruning)` hot path is too expensive because it
+    can run for many leaf candidates during candidate fill.
+  - This does not invalidate the upper itself, but it rejects this placement as
+    a 40/40 exactness route. The useful version would need to keep expensive
+    capacity/complement work out of normal candidate generation and run it only
+    inside a tightly bounded diagnostic/proof probe.
+- Decision:
+  - Keep the option default-off as a diagnostic handle for now, but do not use
+    it in acceptance runs.
+  - Do not lower the selected-card threshold or combine it with larger
+    candidate/time budgets.
+  - Next work should either add a hard local call/time guard before any
+    capacity-tail probe can enter the hot path, or shift to a different
+    certificate that avoids per-leaf capacity evaluation.
 
 2026-06-12 06:20 CST P06 frontier experiments after max4 dual reuse:
 
