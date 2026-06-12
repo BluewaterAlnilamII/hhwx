@@ -1384,6 +1384,9 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
   const enableSameCoarseFrontierEventProbeBeforeExactJoin = (
     optimization.enableSameCoarseFrontierEventProbeBeforeExactJoin === true
   );
+  const sameCoarseFrontierEventProbeCheapUpperOnly = (
+    optimization.sameCoarseFrontierEventProbeCheapUpperOnly === true
+  );
   const enableSameCoarseLowRootFirstProofOrder = optimization.enableSameCoarseLowRootFirstProofOrder === true;
   const parsedSameCoarseFrontierRetryMinRemainingMs = (
     optimization.sameCoarseFrontierRetryMinRemainingMs !== undefined
@@ -5831,6 +5834,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
       allowAfterExactJoin?: boolean;
       allowExactCandidateJoinUpper?: boolean;
       allowDfsRemainingUpper?: boolean;
+      cheapUpperOnly?: boolean;
     };
     const canRunPostExactEventRootFrontierProbe = (
       abortReason: MedleyExactCandidateJoinAbortReason,
@@ -5861,6 +5865,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
       profiling.eventRootFrontierProbeLastStatus = "skipped";
       profiling.eventRootFrontierProbeLastUpperBefore = upperBefore;
       profiling.eventRootFrontierProbeLastUpperAfter = upperBefore;
+      profiling.eventRootFrontierProbeLastCheapUpperOnly = null;
       profiling.eventRootFrontierProbeLastResidualGap = (
         upperBefore !== null && Number.isFinite(incumbentScore)
           ? upperBefore - incumbentScore
@@ -5974,9 +5979,15 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
       profiling.eventRootFrontierProbeLastUpperAfter = upperBefore;
       profiling.eventRootFrontierProbeLastResidualGap = upperBefore - incumbentScore;
       profiling.eventRootFrontierProbeLastPeakHeapMiB = stats.peakUsedHeapMiB;
+      const probeCheapUpperOnly = options.cheapUpperOnly === true;
+      if (probeCheapUpperOnly) {
+        profiling.eventRootFrontierProbeCheapUpperOnlyCount += 1;
+      }
+      profiling.eventRootFrontierProbeLastCheapUpperOnly = probeCheapUpperOnly;
       if (traceEntry) {
         traceEntry.eventRootFrontierProbe = true;
         traceEntry.eventRootFrontierProbeTriggerStatus = triggerStatus;
+        traceEntry.eventRootFrontierProbeCheapUpperOnly = probeCheapUpperOnly;
         traceEntry.eventRootFrontierProbeUpperBefore = upperBefore;
         traceEntry.eventRootFrontierProbeTimeboxMs = eventRootFrontierProbeTimeboxMs;
         traceEntry.eventRootFrontierProbeCandidateSoftLimit = probeCandidateSoftLimit;
@@ -6188,6 +6199,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
             eventRootFrontierProbeAnchorProofMaxHighPairRecords
           ),
           anchorFrontierProofTimeboxMs: eventRootFrontierProbeAnchorProofTimeboxMs,
+          anchorFrontierCheapUpperOnly: probeCheapUpperOnly,
           anchorFrontierCheapUpperTimeboxMs: eventRootFrontierProbeAnchorCheapUpperTimeboxMs,
           anchorFrontierCheapUpperMinRemainingMs: eventRootFrontierProbeAnchorCheapUpperMinRemainingMs,
           anchorFrontierCheapUpperMaxAnchors: eventRootFrontierProbeAnchorCheapUpperMaxAnchors,
@@ -6440,6 +6452,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
       );
       const eventRootProbe = maybeRunEventRootFrontierProbe("same-coarse-frontier-skip-seeding", {
         allowDfsRemainingUpper: true,
+        cheapUpperOnly: sameCoarseFrontierEventProbeCheapUpperOnly,
       });
       if (eventRootProbe === "continue-search") {
         continue;

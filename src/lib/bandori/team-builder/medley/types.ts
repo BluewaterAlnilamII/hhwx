@@ -117,6 +117,7 @@ export type BandoriMedleySearchOptimizationOptions = {
   disableSameCoarseTightRootSkip?: boolean;
   enableSameCoarseFrontierFullProofRetry?: boolean;
   enableSameCoarseFrontierEventProbeBeforeExactJoin?: boolean;
+  sameCoarseFrontierEventProbeCheapUpperOnly?: boolean;
   enableSameCoarseLowRootFirstProofOrder?: boolean;
   enableAllScopeExactJoinPreSkip?: boolean;
   disableAllScopeExactJoinPreSkip?: boolean;
@@ -571,6 +572,7 @@ export type BandoriMedleyTeamSearchProfilingStats = {
   eventRootFrontierProbeProvedCount: number;
   eventRootFrontierProbePrunedCount: number;
   eventRootFrontierProbeUpperImprovementCount: number;
+  eventRootFrontierProbeCheapUpperOnlyCount: number;
   eventRootFrontierProbeTimeboxCount: number;
   eventRootFrontierProbeSkipCount: number;
   eventRootFrontierProbeElapsedMs: number;
@@ -580,6 +582,7 @@ export type BandoriMedleyTeamSearchProfilingStats = {
   eventRootFrontierProbeLastUpperAfter: number | null;
   eventRootFrontierProbeLastResidualGap: number | null;
   eventRootFrontierProbeLastPeakHeapMiB: number | null;
+  eventRootFrontierProbeLastCheapUpperOnly: boolean | null;
   // Witnesses explain proof gaps for benchmark review and must not feed pruning decisions.
   upperWitnessCaptureCount: number;
   upperWitnessUpperBound: number | null;

@@ -8150,6 +8150,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     anchorFrontierProofMaxOtherSlotCandidateTotal?: number | null;
     anchorFrontierProofMaxHighPairRecords?: number | null;
     anchorFrontierProofTimeboxMs?: number | null;
+    anchorFrontierCheapUpperOnly?: boolean;
     anchorFrontierCheapUpperTimeboxMs?: number | null;
     anchorFrontierCheapUpperMinRemainingMs?: number | null;
     anchorFrontierCheapUpperMaxAnchors?: number | null;
@@ -8773,6 +8774,13 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     }
     if (!canRunFullAnchorFrontierProof) {
       return cheapUpperResult ?? recordAnchorFrontierProofSkip("low-remaining-budget");
+    }
+    if (context.anchorFrontierCheapUpperOnly === true) {
+      if (cheapUpperResult) {
+        profiling.exactCandidateJoinLastAnchorFrontierProofSkipReason = "cheap-upper-only";
+        return cheapUpperResult;
+      }
+      return recordAnchorFrontierProofSkip("cheap-upper-only");
     }
     const anchorMaxScore = candidatesBySlot[slotIndex].reduce((maxScore, candidate) => (
       Math.max(maxScore, candidate.result.score)
