@@ -90,6 +90,10 @@ export async function fetchBestdoriMasterDataset(dataset: BestdoriMasterDatasetK
   return fetchBestdoriJson(buildBestdoriApiUrl(BESTDORI_MASTER_DATASETS[dataset]));
 }
 
+export async function fetchBestdoriEventDetail(eventId: string): Promise<unknown> {
+  return fetchBestdoriJson(buildBestdoriApiUrl(`events/${eventId}.json`));
+}
+
 export async function fetchBestdoriChart(songId: number, difficulty: BestdoriChartDifficulty): Promise<unknown> {
   return fetchBestdoriJson(buildBestdoriApiUrl(`charts/${songId}/${difficulty}.json`));
 }

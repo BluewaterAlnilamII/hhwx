@@ -36,7 +36,9 @@ export type BandoriMasterArtifactManifest = {
   manifestPath: string;
   datasets?: Array<{
     dataset: string;
+    event_id?: number | string;
     file: string;
+    record_count?: number;
     sources?: string[];
     sha256?: string;
   }>;
@@ -54,6 +56,14 @@ export type BandoriMasterArtifactDataset = {
   server: BandoriMasterArtifactServer;
   dataset: BestdoriMasterDatasetKey;
   artifactDataset: string;
+  manifest: BandoriMasterArtifactManifest;
+  payload: unknown;
+};
+
+export type BandoriMasterArtifactEventDetail = {
+  source: "artifacts";
+  server: BandoriMasterArtifactServer;
+  eventId: string;
   manifest: BandoriMasterArtifactManifest;
   payload: unknown;
 };
@@ -129,6 +139,22 @@ async function fetchGzipJson<T>(url: string): Promise<T> {
   return JSON.parse(gunzipSync(compressed).toString("utf8")) as T;
 }
 
+async function fetchOptionalGzipJson<T>(url: string): Promise<T | null> {
+  const response = await fetch(url, {
+    next: { revalidate: REFERENCE_METADATA_CACHE_PROFILE.nextRevalidateSeconds },
+  });
+
+  if (response.status === 404) {
+    return null;
+  }
+  if (!response.ok) {
+    throw new Error(`Bandori master artifact fetch failed: HTTP ${response.status} ${url}`);
+  }
+
+  const compressed = Buffer.from(await response.arrayBuffer());
+  return JSON.parse(gunzipSync(compressed).toString("utf8")) as T;
+}
+
 async function readActiveManifestFromSupabase(
   server: BandoriMasterArtifactServer,
 ): Promise<BandoriMasterArtifactManifest | null> {
@@ -194,5 +220,41 @@ export async function fetchBandoriMasterArtifactDataset(
     artifactDataset,
     manifest,
     payload: await fetchGzipJson<unknown>(joinUrl(publicOrigin, `${manifest.artifactPrefix}/${datasetFile}`)),
+  };
+}
+
+export async function fetchBandoriMasterArtifactEventDetail(
+  eventId: string,
+  server: BandoriMasterArtifactServer = getDefaultBandoriMasterArtifactServer(),
+): Promise<BandoriMasterArtifactEventDetail | null> {
+  const manifest = await readActiveManifestFromSupabase(server)
+    ?? await readActiveManifestFromObjectStorage(server);
+  if (!manifest) {
+    return null;
+  }
+
+  const publicOrigin = getArtifactPublicOrigin();
+  if (!publicOrigin) {
+    throw new Error("BANDORI_MASTER_ARTIFACT_PUBLIC_ORIGIN or BANDORI_MASTER_ARTIFACT_BASE_URL is required");
+  }
+
+  const datasetEntry = manifest.datasets?.find((item) => (
+    item.dataset === "event_detail" && String(item.event_id) === eventId
+  ));
+  const datasetFile = datasetEntry?.file ?? `normalized/event_details/${eventId}.json.gz`;
+  const payload = await fetchOptionalGzipJson<unknown>(
+    joinUrl(publicOrigin, `${manifest.artifactPrefix}/${datasetFile}`),
+  );
+
+  if (!payload) {
+    return null;
+  }
+
+  return {
+    source: "artifacts",
+    server,
+    eventId,
+    manifest,
+    payload,
   };
 }
