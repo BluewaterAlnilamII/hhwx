@@ -196,6 +196,8 @@ return a better incumbent to the caller. It does not generate extra candidates,
 does not widen candidate limits, and does not contribute to exact proof status.
 Score-oriented pre-proof warmup experiments remain diagnostic only and should
 not be default-enabled unless benchmark gates show a proof-conversion benefit.
+The low-memory initial candidate sync path is also diagnostic-only: it must be
+enabled explicitly and does not participate in the default exact proof path.
 For benchmark diagnosis, `debugConfigurationTrace` also derives a proof ledger
 from the existing per-configuration trace. The ledger is not a search mode and
 does not affect proof status; it groups unresolved frontiers, exact-join abort

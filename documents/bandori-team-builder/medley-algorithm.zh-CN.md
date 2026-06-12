@@ -139,7 +139,7 @@ noteScore = floor(inner * skill)
 7. 回退到带 safe remaining-slot upper bounds 的跨 slot DFS。
 8. 返回 exact 结果，或返回带 observed upper bound gap 的 bounded 结果。
 
-Seeding 只用于提升 incumbent，本身绝不能作为证明。内部实验选项 `enableExactJoinPrefixSeed` 也遵守同一规则：它只会在 exact candidate join 已完成候选 fill 并排序后运行，复用现有 candidate prefix，在很短的局部 timebox 内尝试找更好的 incumbent。它不会额外生成候选、不会扩大 candidate limit，也不会参与 exact proof 状态判定。面向分数的 pre-proof warmup 实验继续只作为诊断路径；除非 benchmark gate 证明它能转化为 proof 收益，否则不应默认启用。Benchmark 诊断可通过 `debugConfigurationTrace` 从现有 per-configuration trace 派生 proof ledger；ledger 不是搜索模式，不改变 proof 状态，只用于汇总未闭合 frontier、exact-join abort reason、阶段耗时/内存和 optional-probe guard skip。Benchmark-only no-op variants 可以接收 prefix-seed flag，但完全绕过 seed 路径或只运行 guard 读数；它们只用于验证没有 seed solve 时结果状态和 proof progress 是否仍等价，允许差异仅限耗时、内存采样和 guard counter。
+Seeding 只用于提升 incumbent，本身绝不能作为证明。内部实验选项 `enableExactJoinPrefixSeed` 也遵守同一规则：它只会在 exact candidate join 已完成候选 fill 并排序后运行，复用现有 candidate prefix，在很短的局部 timebox 内尝试找更好的 incumbent。它不会额外生成候选、不会扩大 candidate limit，也不会参与 exact proof 状态判定。面向分数的 pre-proof warmup 实验继续只作为诊断路径；除非 benchmark gate 证明它能转化为 proof 收益，否则不应默认启用。低内存 initial candidate sync 路径同样只作为诊断路径：必须显式启用，并且不参与默认 exact proof 路径。Benchmark 诊断可通过 `debugConfigurationTrace` 从现有 per-configuration trace 派生 proof ledger；ledger 不是搜索模式，不改变 proof 状态，只用于汇总未闭合 frontier、exact-join abort reason、阶段耗时/内存和 optional-probe guard skip。Benchmark-only no-op variants 可以接收 prefix-seed flag，但完全绕过 seed 路径或只运行 guard 读数；它们只用于验证没有 seed solve 时结果状态和 proof progress 是否仍等价，允许差异仅限耗时、内存采样和 guard counter。
 
 ### 速度来源
 

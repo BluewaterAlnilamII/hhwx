@@ -81,6 +81,7 @@ export type BandoriMedleySearchOptimizationOptions = {
   lowMemoryHighPairScanMinRecordCount?: number;
   enableLowMemoryHighPairPrefixUpper?: boolean;
   lowMemoryHighPairPrefixRecordLimit?: number;
+  enableLowMemoryInitialCandidateSync?: boolean;
   disableLowMemoryInitialCandidateSync?: boolean;
   lowMemoryInitialCandidateSyncLocalAbortOnly?: boolean;
   lowMemoryInitialCandidateSyncLightUpper?: boolean;
