@@ -646,6 +646,38 @@ export function createMedleyExactSlotCandidateGenerator(
     profiling.exactCandidateJoinScoreCacheClearCount += 1;
   };
 
+  const tryBeginCapacityComplementUpper = (
+    globalPruning: MedleyExactSlotCandidateGlobalPruning,
+  ): boolean => {
+    const budget = globalPruning.capacityComplementBudget;
+    if (!budget) {
+      profiling.exactCandidateJoinGlobalCapacityTailUpperCallCount += 1;
+      return true;
+    }
+    if (budget.exhausted) {
+      budget.skipCount += 1;
+      profiling.exactCandidateJoinGlobalCapacityTailUpperSkipCount += 1;
+      return false;
+    }
+    if (budget.maxCalls !== null && budget.callCount >= budget.maxCalls) {
+      budget.exhausted = true;
+      budget.skipCount += 1;
+      profiling.exactCandidateJoinGlobalCapacityTailUpperSkipCount += 1;
+      return false;
+    }
+    if (budget.timeboxMs !== null && performance.now() - budget.startedAt >= budget.timeboxMs) {
+      budget.exhausted = true;
+      budget.timeboxCount += 1;
+      budget.skipCount += 1;
+      profiling.exactCandidateJoinGlobalCapacityTailUpperTimeboxCount += 1;
+      profiling.exactCandidateJoinGlobalCapacityTailUpperSkipCount += 1;
+      return false;
+    }
+    budget.callCount += 1;
+    profiling.exactCandidateJoinGlobalCapacityTailUpperCallCount += 1;
+    return true;
+  };
+
   const estimateGeneratedPairComplementUpperBound = (
     selectedCardIds: number[],
     globalPruning?: MedleyExactSlotCandidateGlobalPruning,
@@ -726,7 +758,9 @@ export function createMedleyExactSlotCandidateGenerator(
         || effectiveComplementUpperBound - minimumRelevantScore
           <= (globalPruning.capacityComplementMargin ?? Number.POSITIVE_INFINITY)
       )
+      && tryBeginCapacityComplementUpper(globalPruning)
     ) {
+      const capacityComplementStartedAt = performance.now();
       const bannedSelectedCardIds = new Set<number>(selectedCardIds);
       const basicCapacityUpperBound = estimateMedleyCapacityAssignmentScoreUpperBound(
         globalPruning.slots,
@@ -757,6 +791,9 @@ export function createMedleyExactSlotCandidateGenerator(
         );
         effectiveComplementUpperBound = Math.min(effectiveComplementUpperBound, tightCapacityUpperBound);
       }
+      profiling.exactCandidateJoinGlobalCapacityTailUpperElapsedMs += (
+        performance.now() - capacityComplementStartedAt
+      );
     }
     globalPairComplementUpperCache.set(key, effectiveComplementUpperBound);
     return effectiveComplementUpperBound;
@@ -796,56 +833,6 @@ export function createMedleyExactSlotCandidateGenerator(
         globalPruning,
         globalPruning.scoreCutoff - slotUpperBound,
       ) ?? undefined;
-      const shouldUseCapacityComplement = (
-        globalPruning.useCapacityComplementUpper !== false
-        && (
-          complementUpperBound === undefined
-          || slotUpperBound + complementUpperBound - globalPruning.scoreCutoff
-            <= (globalPruning.capacityComplementMargin ?? Number.POSITIVE_INFINITY)
-        )
-      );
-      if (
-        shouldUseCapacityComplement
-        && (
-          complementUpperBound === undefined
-          || slotUpperBound + complementUpperBound >= globalPruning.scoreCutoff
-        )
-      ) {
-        const bannedSelectedCardIds = new Set<number>(selectedCardIds);
-        const basicCapacityUpperBound = estimateMedleyCapacityAssignmentScoreUpperBound(
-          globalPruning.slots,
-          globalPruning.remainingSlotIndices,
-          bannedSelectedCardIds,
-          profiling,
-          true,
-          false,
-          false,
-          false,
-          true,
-        ).upperBound;
-        complementUpperBound = complementUpperBound === undefined
-          ? basicCapacityUpperBound
-          : Math.min(complementUpperBound, basicCapacityUpperBound);
-      }
-      if (
-        shouldUseCapacityComplement
-        && Number.isFinite(complementUpperBound)
-        && slotUpperBound + (complementUpperBound ?? Number.NEGATIVE_INFINITY) >= globalPruning.scoreCutoff
-      ) {
-        const bannedSelectedCardIds = new Set<number>(selectedCardIds);
-        const tightCapacityUpperBound = estimateMedleyRemainingScoreUpperBound(
-          globalPruning.slots,
-          globalPruning.remainingSlotIndices,
-          bannedSelectedCardIds,
-          profiling,
-          false,
-          true,
-          false,
-          false,
-          false,
-        );
-        complementUpperBound = Math.min(complementUpperBound ?? Number.POSITIVE_INFINITY, tightCapacityUpperBound);
-      }
       complementUpperBound = complementUpperBound ?? Number.POSITIVE_INFINITY;
       globalComplementUpperCache.set(key, complementUpperBound);
     }
@@ -8183,6 +8170,8 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     enableExactCandidateJoinGlobalTailUpper?: boolean;
     enableExactCandidateJoinGlobalCapacityTailUpper?: boolean;
     exactCandidateJoinGlobalCapacityTailMinSelectedCards?: number | null;
+    exactCandidateJoinGlobalCapacityTailMaxCalls?: number | null;
+    exactCandidateJoinGlobalCapacityTailTimeboxMs?: number | null;
     stagedCandidateExtensionMinRemainingMs?: number | null;
     enableLowMemoryInitialCandidateSync?: boolean;
     lowMemoryInitialCandidateSyncLocalAbortOnly?: boolean;
@@ -8940,6 +8929,30 @@ export function searchMedleyConfigurationByExactCandidateJoin(
   };
 
   const initialCandidateStartedAt = performance.now();
+  const globalCapacityTailBudget = context.enableExactCandidateJoinGlobalCapacityTailUpper === true
+    ? {
+      startedAt: performance.now(),
+      maxCalls: (
+        context.exactCandidateJoinGlobalCapacityTailMaxCalls !== null
+        && context.exactCandidateJoinGlobalCapacityTailMaxCalls !== undefined
+        && Number.isFinite(context.exactCandidateJoinGlobalCapacityTailMaxCalls)
+      )
+        ? Math.max(0, Math.trunc(context.exactCandidateJoinGlobalCapacityTailMaxCalls))
+        : 1024,
+      timeboxMs: (
+        context.exactCandidateJoinGlobalCapacityTailTimeboxMs !== null
+        && context.exactCandidateJoinGlobalCapacityTailTimeboxMs !== undefined
+        && Number.isFinite(context.exactCandidateJoinGlobalCapacityTailTimeboxMs)
+      )
+        ? Math.max(0, context.exactCandidateJoinGlobalCapacityTailTimeboxMs)
+        : 3000,
+      callCount: 0,
+      skipCount: 0,
+      timeboxCount: 0,
+      exhausted: false,
+    }
+    : undefined;
+
   for (let slotIndex = 0; slotIndex < slots.length; slotIndex += 1) {
     const slotInitialCandidateStartedAt = performance.now();
     let topCandidate: MedleyTeamCandidate | null = null;
@@ -9748,6 +9761,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
       )
         ? Math.max(0, Math.trunc(context.exactCandidateJoinGlobalCapacityTailMinSelectedCards))
         : MEDLEY_TEAM_SIZE,
+      capacityComplementBudget: globalCapacityTailBudget,
       packCandidateCardKey,
       packCandidateCardsKey,
       excludedCandidateKeys: getCandidateKeysForSlot(slotIndex),

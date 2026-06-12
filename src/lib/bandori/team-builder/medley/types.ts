@@ -87,6 +87,8 @@ export type BandoriMedleySearchOptimizationOptions = {
   enableExactCandidateJoinGlobalTailUpper?: boolean;
   enableExactCandidateJoinGlobalCapacityTailUpper?: boolean;
   exactCandidateJoinGlobalCapacityTailMinSelectedCards?: number;
+  exactCandidateJoinGlobalCapacityTailMaxCalls?: number;
+  exactCandidateJoinGlobalCapacityTailTimeboxMs?: number;
   debugConfigurationTrace?: boolean;
   exactCandidateJoinDebugAnchorSlotIndex?: number;
   exactCandidateJoinDebugKnownCardIdsBySlot?: number[][];
@@ -869,6 +871,10 @@ export type BandoriMedleyTeamSearchProfilingStats = {
   exactCandidateJoinLastGlobalTailUpperBound: number | null;
   exactCandidateJoinLastGlobalTailRawUpperBound: number | null;
   exactCandidateJoinLastGlobalTailImprovement: number | null;
+  exactCandidateJoinGlobalCapacityTailUpperCallCount: number;
+  exactCandidateJoinGlobalCapacityTailUpperSkipCount: number;
+  exactCandidateJoinGlobalCapacityTailUpperTimeboxCount: number;
+  exactCandidateJoinGlobalCapacityTailUpperElapsedMs: number;
   exactCandidateJoinPairComplementQueryCount: number;
   exactCandidateJoinPairComplementScanCount: number;
   exactCandidateJoinPairComplementHighPairBuildCount: number;
@@ -1029,6 +1035,15 @@ export type MedleyExactSlotCandidateGlobalPruning = {
   useCapacityComplementUpper?: boolean;
   capacityComplementMargin?: number;
   capacityComplementMinSelectedCardCount?: number;
+  capacityComplementBudget?: {
+    startedAt: number;
+    maxCalls: number | null;
+    timeboxMs: number | null;
+    callCount: number;
+    skipCount: number;
+    timeboxCount: number;
+    exhausted: boolean;
+  };
   packCandidateCardKey?: (cardIds: readonly number[]) => string;
   packCandidateCardsKey?: (cards: readonly SearchCard[]) => string;
   excludedCandidateKeys?: Set<string>;
