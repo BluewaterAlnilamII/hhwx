@@ -50,7 +50,7 @@ const readArtifactMasterDataset = unstable_cache(
       payload: artifact.payload,
     };
   },
-  ["bandori-master-artifact-dataset-route:v1"],
+  ["bandori-master-artifact-dataset-route:v3"],
   { revalidate: 86400 },
 );
 

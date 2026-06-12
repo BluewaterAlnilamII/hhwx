@@ -87,6 +87,15 @@ function joinUrl(baseUrl: string, path: string): string {
   return `${baseUrl.replace(/\/+$/g, "")}/${trimSlashes(path)}`;
 }
 
+function withArtifactChecksum(url: string, sha256: string | null | undefined): string {
+  if (!sha256) {
+    return url;
+  }
+
+  const separator = url.includes("?") ? "&" : "?";
+  return `${url}${separator}sha=${encodeURIComponent(sha256)}`;
+}
+
 function buildManifestUrl(server: BandoriMasterArtifactServer): string | null {
   const explicitManifestUrl = process.env.BANDORI_MASTER_ARTIFACT_MANIFEST_URL;
   if (explicitManifestUrl) {
@@ -219,7 +228,12 @@ export async function fetchBandoriMasterArtifactDataset(
     dataset,
     artifactDataset,
     manifest,
-    payload: await fetchGzipJson<unknown>(joinUrl(publicOrigin, `${manifest.artifactPrefix}/${datasetFile}`)),
+    payload: await fetchGzipJson<unknown>(
+      withArtifactChecksum(
+        joinUrl(publicOrigin, `${manifest.artifactPrefix}/${datasetFile}`),
+        datasetEntry?.sha256,
+      ),
+    ),
   };
 }
 
@@ -243,7 +257,10 @@ export async function fetchBandoriMasterArtifactEventDetail(
   ));
   const datasetFile = datasetEntry?.file ?? `normalized/event_details/${eventId}.json.gz`;
   const payload = await fetchOptionalGzipJson<unknown>(
-    joinUrl(publicOrigin, `${manifest.artifactPrefix}/${datasetFile}`),
+    withArtifactChecksum(
+      joinUrl(publicOrigin, `${manifest.artifactPrefix}/${datasetFile}`),
+      datasetEntry?.sha256,
+    ),
   );
 
   if (!payload) {
