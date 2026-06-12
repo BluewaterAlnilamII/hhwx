@@ -4178,6 +4178,7 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
     pairCapacityBreakdown?: boolean;
     pairCapacitySharedPowerDualCap?: boolean;
     pairCapacitySharedPowerDualCapMaxCalls?: number | null;
+    pairCapacitySharedPowerDualReuseMaxCalls?: number | null;
     pairCapacitySharedPowerDualLateMaxRepair?: boolean;
     pairCapacitySharedPowerDualLateMaxRepairExtraCalls?: number | null;
     pairCapacitySharedPowerBreakdown?: boolean;
@@ -4746,7 +4747,13 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
     2,
     pairCapacitySharedPowerDualCapMaxCalls,
   );
-  const pairCapacitySharedPowerDualReuseMaxCalls = pairCapacitySharedPowerDualCapMaxCalls * 256;
+  const pairCapacitySharedPowerDualReuseMaxCalls = (
+    options.pairCapacitySharedPowerDualReuseMaxCalls !== null
+    && options.pairCapacitySharedPowerDualReuseMaxCalls !== undefined
+    && Number.isFinite(options.pairCapacitySharedPowerDualReuseMaxCalls)
+  )
+    ? Math.max(0, Math.trunc(options.pairCapacitySharedPowerDualReuseMaxCalls))
+    : pairCapacitySharedPowerDualCapMaxCalls * 256;
   const rememberPairCapacitySharedPowerDualParameterSeed = (estimate: {
     leaderPowerShare: number;
     lambdaBySlot: [number, number];
@@ -8408,6 +8415,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     anchorFrontierCheapUpperPairCapacityBreakdown?: boolean;
     anchorFrontierCheapUpperPairCapacitySharedPowerDualCap?: boolean;
     anchorFrontierCheapUpperPairCapacitySharedPowerDualCapMaxCalls?: number | null;
+    anchorFrontierCheapUpperPairCapacitySharedPowerDualReuseMaxCalls?: number | null;
     anchorFrontierCheapUpperPairCapacitySharedPowerDualLateMaxRepair?: boolean;
     anchorFrontierCheapUpperPairCapacitySharedPowerDualLateMaxRepairExtraCalls?: number | null;
     anchorFrontierCheapUpperPairCapacitySharedPowerBreakdown?: boolean;
@@ -8961,6 +8969,9 @@ export function searchMedleyConfigurationByExactCandidateJoin(
           ),
           pairCapacitySharedPowerDualCapMaxCalls: (
             context.anchorFrontierCheapUpperPairCapacitySharedPowerDualCapMaxCalls
+          ),
+          pairCapacitySharedPowerDualReuseMaxCalls: (
+            context.anchorFrontierCheapUpperPairCapacitySharedPowerDualReuseMaxCalls
           ),
           pairCapacitySharedPowerDualLateMaxRepair: (
             context.anchorFrontierCheapUpperPairCapacitySharedPowerDualLateMaxRepair

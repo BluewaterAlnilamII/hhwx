@@ -1725,6 +1725,17 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
   )
     ? Math.max(1, parsedEventRootFrontierProbeAnchorCheapUpperPairCapacitySharedPowerDualCapMaxCalls)
     : null;
+  const parsedEventRootFrontierProbeAnchorCheapUpperPairCapacitySharedPowerDualReuseMaxCalls =
+    optimization.eventRootFrontierProbeAnchorCheapUpperPairCapacitySharedPowerDualReuseMaxCalls !== undefined
+      ? Math.trunc(
+        optimization.eventRootFrontierProbeAnchorCheapUpperPairCapacitySharedPowerDualReuseMaxCalls,
+      )
+      : Number.NaN;
+  const eventRootFrontierProbeAnchorCheapUpperPairCapacitySharedPowerDualReuseMaxCalls = Number.isFinite(
+    parsedEventRootFrontierProbeAnchorCheapUpperPairCapacitySharedPowerDualReuseMaxCalls,
+  )
+    ? Math.max(0, parsedEventRootFrontierProbeAnchorCheapUpperPairCapacitySharedPowerDualReuseMaxCalls)
+    : null;
   const parsedEventRootFrontierProbeAnchorCheapUpperPairCapacitySharedPowerDualLateMaxRepairExtraCalls =
     optimization.eventRootFrontierProbeAnchorCheapUpperPairCapacitySharedPowerDualLateMaxRepairExtraCalls !== undefined
       ? Math.trunc(
@@ -1875,6 +1886,9 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
       ),
       anchorFrontierCheapUpperPairCapacitySharedPowerDualCapMaxCalls: (
         eventRootFrontierProbeAnchorCheapUpperPairCapacitySharedPowerDualCapMaxCalls
+      ),
+      anchorFrontierCheapUpperPairCapacitySharedPowerDualReuseMaxCalls: (
+        eventRootFrontierProbeAnchorCheapUpperPairCapacitySharedPowerDualReuseMaxCalls
       ),
       anchorFrontierCheapUpperPairCapacitySharedPowerDualLateMaxRepair: (
         eventRootFrontierProbeAnchorCheapUpperPairCapacitySharedPowerDualLateMaxRepair
@@ -6160,6 +6174,9 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
         traceEntry.eventRootFrontierProbeAnchorCheapUpperPairCapacitySharedPowerDualCapMaxCalls = (
           eventRootFrontierProbeAnchorCheapUpperPairCapacitySharedPowerDualCapMaxCalls
         );
+        traceEntry.eventRootFrontierProbeAnchorCheapUpperPairCapacitySharedPowerDualReuseMaxCalls = (
+          eventRootFrontierProbeAnchorCheapUpperPairCapacitySharedPowerDualReuseMaxCalls
+        );
         traceEntry.eventRootFrontierProbeAnchorCheapUpperPairCapacitySharedPowerDualLateMaxRepair = (
           eventRootFrontierProbeAnchorCheapUpperPairCapacitySharedPowerDualLateMaxRepair
         );
@@ -6334,6 +6351,9 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
           ),
           anchorFrontierCheapUpperPairCapacitySharedPowerDualCapMaxCalls: (
             eventRootFrontierProbeAnchorCheapUpperPairCapacitySharedPowerDualCapMaxCalls
+          ),
+          anchorFrontierCheapUpperPairCapacitySharedPowerDualReuseMaxCalls: (
+            eventRootFrontierProbeAnchorCheapUpperPairCapacitySharedPowerDualReuseMaxCalls
           ),
           anchorFrontierCheapUpperPairCapacitySharedPowerDualLateMaxRepair: (
             eventRootFrontierProbeAnchorCheapUpperPairCapacitySharedPowerDualLateMaxRepair

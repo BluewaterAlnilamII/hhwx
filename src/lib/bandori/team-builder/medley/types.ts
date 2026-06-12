@@ -173,6 +173,7 @@ export type BandoriMedleySearchOptimizationOptions = {
   eventRootFrontierProbeAnchorCheapUpperPairCapacityBreakdown?: boolean;
   eventRootFrontierProbeAnchorCheapUpperPairCapacitySharedPowerDualCap?: boolean;
   eventRootFrontierProbeAnchorCheapUpperPairCapacitySharedPowerDualCapMaxCalls?: number;
+  eventRootFrontierProbeAnchorCheapUpperPairCapacitySharedPowerDualReuseMaxCalls?: number;
   eventRootFrontierProbeAnchorCheapUpperPairCapacitySharedPowerDualLateMaxRepair?: boolean;
   eventRootFrontierProbeAnchorCheapUpperPairCapacitySharedPowerDualLateMaxRepairExtraCalls?: number;
   eventRootFrontierProbeAnchorCheapUpperPairCapacitySharedPowerBreakdown?: boolean;
