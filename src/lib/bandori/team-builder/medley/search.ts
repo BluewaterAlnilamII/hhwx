@@ -522,6 +522,18 @@ function buildProofLedger(
         anchorFrontierCheapUpperBestPrefixSplitAbortReason: (
           entry.exactCandidateJoinLastAnchorFrontierCheapUpperBestPrefixSplitAbortReason ?? null
         ),
+        anchorFrontierCheapUpperBestPrefixResidualUpperBound: (
+          asFiniteNumber(entry.exactCandidateJoinLastAnchorFrontierCheapUpperBestPrefixResidualUpperBound)
+        ),
+        anchorFrontierCheapUpperBestPrefixResidualImprovement: (
+          asFiniteNumber(entry.exactCandidateJoinLastAnchorFrontierCheapUpperBestPrefixResidualImprovement)
+        ),
+        anchorFrontierCheapUpperBestPrefixResidualAnchorIndex: (
+          asFiniteNumber(entry.exactCandidateJoinLastAnchorFrontierCheapUpperBestPrefixResidualAnchorIndex)
+        ),
+        anchorFrontierCheapUpperBestPrefixResidualProcessedEntryCount: (
+          asFiniteNumber(entry.exactCandidateJoinLastAnchorFrontierCheapUpperBestPrefixResidualProcessedEntryCount)
+        ),
         anchorFrontierCheapUpperPairAnchorCoverUpperBound: (
           asFiniteNumber(entry.exactCandidateJoinLastAnchorFrontierCheapUpperPairAnchorCoverUpperBound)
         ),
@@ -1097,6 +1109,18 @@ function buildBoundedFrontierGroups(
         ),
         anchorFrontierCheapUpperBestPrefixSplitProcessedEntryCount: (
           entry.exactCandidateJoinLastAnchorFrontierCheapUpperBestPrefixSplitProcessedEntryCount ?? null
+        ),
+        anchorFrontierCheapUpperBestPrefixResidualUpperBound: (
+          entry.exactCandidateJoinLastAnchorFrontierCheapUpperBestPrefixResidualUpperBound ?? null
+        ),
+        anchorFrontierCheapUpperBestPrefixResidualImprovement: (
+          entry.exactCandidateJoinLastAnchorFrontierCheapUpperBestPrefixResidualImprovement ?? null
+        ),
+        anchorFrontierCheapUpperBestPrefixResidualAnchorIndex: (
+          entry.exactCandidateJoinLastAnchorFrontierCheapUpperBestPrefixResidualAnchorIndex ?? null
+        ),
+        anchorFrontierCheapUpperBestPrefixResidualProcessedEntryCount: (
+          entry.exactCandidateJoinLastAnchorFrontierCheapUpperBestPrefixResidualProcessedEntryCount ?? null
         ),
         anchorFrontierCheapUpperBestPrefixSplitElapsedMs: (
           entry.exactCandidateJoinLastAnchorFrontierCheapUpperBestPrefixSplitElapsedMs ?? null
@@ -4442,6 +4466,18 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
           ),
           exactCandidateJoinLastAnchorFrontierCheapUpperBestPrefixSplitAbortReason: (
             profiling.exactCandidateJoinLastAnchorFrontierCheapUpperBestPrefixSplitAbortReason
+          ),
+          exactCandidateJoinLastAnchorFrontierCheapUpperBestPrefixResidualUpperBound: (
+            profiling.exactCandidateJoinLastAnchorFrontierCheapUpperBestPrefixResidualUpperBound
+          ),
+          exactCandidateJoinLastAnchorFrontierCheapUpperBestPrefixResidualImprovement: (
+            profiling.exactCandidateJoinLastAnchorFrontierCheapUpperBestPrefixResidualImprovement
+          ),
+          exactCandidateJoinLastAnchorFrontierCheapUpperBestPrefixResidualAnchorIndex: (
+            profiling.exactCandidateJoinLastAnchorFrontierCheapUpperBestPrefixResidualAnchorIndex
+          ),
+          exactCandidateJoinLastAnchorFrontierCheapUpperBestPrefixResidualProcessedEntryCount: (
+            profiling.exactCandidateJoinLastAnchorFrontierCheapUpperBestPrefixResidualProcessedEntryCount
           ),
           exactCandidateJoinLastAnchorFrontierCheapUpperPairAnchorCoverUpperBound: (
             profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairAnchorCoverUpperBound
