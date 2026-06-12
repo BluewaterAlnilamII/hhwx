@@ -124,22 +124,17 @@ export function evaluateMedleySlotCandidateWithCache(
   profiling: BandoriMedleyTeamSearchProfilingStats,
   pruningThresholdResult?: BandoriTeamSearchResult,
   scoreOnly = false,
-  includeCardInstanceKeys = true,
-  useScoreOnlyCache = true,
 ): MedleyTeamCandidate | null {
   stats.enumeratedTeamCount += 1;
-  const shouldUseCache = !scoreOnly || useScoreOnlyCache;
-  const cacheKey = shouldUseCache ? getMedleyTeamEvaluationCacheKey(selectedCards) : "";
-  const cache = shouldUseCache
-    ? scoreOnly
-      ? (scoreOnlyTeamEvaluationCacheBySlot.get(slot) ?? new Map<string, BandoriTeamSearchResult | null>())
-      : slot.teamEvaluationCache
-    : null;
-  if (scoreOnly && shouldUseCache && cache && !scoreOnlyTeamEvaluationCacheBySlot.has(slot)) {
+  const cacheKey = getMedleyTeamEvaluationCacheKey(selectedCards);
+  const cache = scoreOnly
+    ? (scoreOnlyTeamEvaluationCacheBySlot.get(slot) ?? new Map<string, BandoriTeamSearchResult | null>())
+    : slot.teamEvaluationCache;
+  if (scoreOnly && !scoreOnlyTeamEvaluationCacheBySlot.has(slot)) {
     scoreOnlyTeamEvaluationCacheBySlot.set(slot, cache);
   }
-  let result = cache?.get(cacheKey);
-  if (!cache || !cache.has(cacheKey)) {
+  let result = cache.get(cacheKey);
+  if (!cache.has(cacheKey)) {
     profiling.teamEvaluationCacheMissCount += 1;
     result = scoreOnly
       ? evaluateMedleyScoreOnlyTeam({
@@ -165,7 +160,7 @@ export function evaluateMedleySlotCandidateWithCache(
         pruningThresholdResult,
         scoreOnly,
       });
-    if (cache && (scoreOnly || !pruningThresholdResult || result)) {
+    if (scoreOnly || !pruningThresholdResult || result) {
       cache.set(cacheKey, result);
     }
     stats.evaluatedTeamCount += 1;
@@ -173,16 +168,12 @@ export function evaluateMedleySlotCandidateWithCache(
     profiling.teamEvaluationCacheHitCount += 1;
   }
 
-  if (!result) {
-    return null;
-  }
-  const candidate: MedleyTeamCandidate = {
-    result,
-    cards: selectedCards,
-    cardIds: getMedleyCandidateCardIds(selectedCards),
-  };
-  if (includeCardInstanceKeys) {
-    candidate.cardInstanceKeys = getCardInstanceKeys(selectedCards);
-  }
-  return candidate;
+  return result
+    ? {
+      result,
+      cards: selectedCards,
+      cardIds: getMedleyCandidateCardIds(selectedCards),
+      cardInstanceKeys: getCardInstanceKeys(selectedCards),
+    }
+    : null;
 }

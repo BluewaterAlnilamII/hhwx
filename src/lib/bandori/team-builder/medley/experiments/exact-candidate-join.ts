@@ -128,17 +128,6 @@ function createMedleyExactCandidateSlotThresholdResult(scoreCutoff: number): Ban
   } as BandoriTeamSearchResult;
 }
 
-function canOmitDefaultMedleyCandidateInstanceKeys(cards: readonly SearchCard[]): boolean {
-  const seenCardIds = new Set<number>();
-  for (const card of cards) {
-    if (card.cardInstanceKey !== undefined || seenCardIds.has(card.cardId)) {
-      return false;
-    }
-    seenCardIds.add(card.cardId);
-  }
-  return true;
-}
-
 function findBestMedleyExactSlotCandidateLowMemory(
   slot: MedleySlotSearch,
   server: number,
@@ -351,7 +340,6 @@ export function createMedleyExactSlotCandidateGenerator(
   const globalComplementUpperCache = new Map<string, number>();
   const globalPairComplementUpperCache = new Map<string, number>();
   const pairUpperQueryCache = new Map<string, MedleyExactCandidatePairUpperQuery>();
-  const includeCardInstanceKeys = !canOmitDefaultMedleyCandidateInstanceKeys(slot.searchCards);
   let aborted = false;
   let poppedNodes = 0;
   let heapKeyMode: "slot" | "global" = "slot";
@@ -758,8 +746,6 @@ export function createMedleyExactSlotCandidateGenerator(
           profiling,
           createMedleyExactCandidateSlotThresholdResult(scoreCutoff),
           true,
-          includeCardInstanceKeys,
-          false,
         );
         if (candidate && candidate.result.score >= scoreCutoff) {
           pushSearchNode(createSearchNode({
@@ -4824,16 +4810,9 @@ export function searchMedleyConfigurationByExactCandidateJoin(
   const getCandidateFillProfilingGenerators = (): MedleyExactSlotCandidateGenerator[] => (
     [...new Set([...generators, ...candidateFillGenerators, ...activeGeneratorsBySlot])]
   );
-  const candidateKeysBySlot: Array<Set<string> | null> = Array.from({ length: slots.length }, () => null);
-  const getCandidateKeysForSlot = (slotIndex: number): Set<string> => {
-    let keys = candidateKeysBySlot[slotIndex];
-    if (keys) {
-      return keys;
-    }
-    keys = new Set(candidatesBySlot[slotIndex].map(getMedleyExactCandidateCardKey));
-    candidateKeysBySlot[slotIndex] = keys;
-    return keys;
-  };
+  const candidateKeysBySlot = candidatesBySlot.map((candidates) => (
+    new Set(candidates.map(getMedleyExactCandidateCardKey))
+  ));
   const rebuildCandidateKeys = (...slotIndices: number[]): void => {
     for (const slotIndex of slotIndices) {
       candidateKeysBySlot[slotIndex] = new Set(candidatesBySlot[slotIndex].map(getMedleyExactCandidateCardKey));
@@ -4852,7 +4831,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
       ...(generator.memoryProfile ? generator.memoryProfile() : {}),
     }));
     const candidateCountsBySlot = candidatesBySlot.map((candidates) => candidates.length);
-    const candidateKeyCountsBySlot = candidateKeysBySlot.map((keys) => keys?.size ?? 0);
+    const candidateKeyCountsBySlot = candidateKeysBySlot.map((keys) => keys.size);
     profiling.exactCandidateJoinMemorySnapshots.push({
       phase,
       elapsedMs: Math.round(performance.now() - exactJoinStartedAt),
@@ -4885,10 +4864,10 @@ export function searchMedleyConfigurationByExactCandidateJoin(
       deadlineAt,
     );
     profiling.exactCandidateJoinPairUpperElapsedMs += performance.now() - refineStartedAt;
+    rebuildCandidateKeys(...pairSlotIndices);
     if (stats.timedOut || activeGeneratorsBySlot.some((generator) => generator.hasAborted())) {
       return false;
     }
-    rebuildCandidateKeys(...pairSlotIndices);
     if (pairUpperResult.proved) {
       exactPairUpperByExcludedSlot[excludedSlotIndex] = pairUpperResult.upperBound;
       exactPairUnseenUpperByExcludedSlot[excludedSlotIndex] = pairUpperResult.unseenUpperBound;
@@ -5126,7 +5105,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
       pairUnseenUpperBound: exactPairUnseenUpperByExcludedSlot[slotIndex] ?? undefined,
       useCapacityComplementUpper: false,
       capacityComplementMargin: MEDLEY_EXACT_CANDIDATE_JOIN_CAPACITY_COMPLEMENT_MARGIN,
-      excludedCandidateKeys: getCandidateKeysForSlot(slotIndex),
+      excludedCandidateKeys: candidateKeysBySlot[slotIndex],
     };
     candidateCutoffsBySlot[slotIndex] = cutoff;
     candidateOtherUpperBySlot[slotIndex] = otherUpper;
@@ -5277,11 +5256,10 @@ export function searchMedleyConfigurationByExactCandidateJoin(
         break;
       }
       const candidateKey = getMedleyExactCandidateCardKey(candidate);
-      const candidateKeys = getCandidateKeysForSlot(slotIndex);
-      if (candidateKeys.has(candidateKey)) {
+      if (candidateKeysBySlot[slotIndex].has(candidateKey)) {
         continue;
       }
-      candidateKeys.add(candidateKey);
+      candidateKeysBySlot[slotIndex].add(candidateKey);
       if (candidate.result.score >= cutoff) {
         candidatesBySlot[slotIndex].push(candidate);
       }
@@ -5290,7 +5268,6 @@ export function searchMedleyConfigurationByExactCandidateJoin(
       performance.now() - slotFillStartedAt
     );
   }
-  candidateKeysBySlot.fill(null);
   profiling.exactCandidateJoinCandidateFillElapsedMs += performance.now() - candidateFillStartedAt;
 
   candidatesBySlot.forEach(sortMedleyCandidates);
