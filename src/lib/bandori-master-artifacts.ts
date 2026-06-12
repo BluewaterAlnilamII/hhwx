@@ -3,6 +3,7 @@ import {
   BANDORI_MASTER_DATA_CACHE_PROFILE,
   REFERENCE_METADATA_CACHE_PROFILE,
 } from "@/lib/api-cache";
+import { fetchR2Object, type R2S3ReaderConfig } from "@/lib/r2-s3-reader";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
 import { MASTER_ACTIVE_VERSIONS_TABLE } from "@/lib/supabase-table-names";
 import type { BestdoriMasterDatasetKey } from "@/lib/bestdori-master-data";
@@ -94,6 +95,10 @@ function trimSlashes(value: string): string {
   return value.replace(/^\/+|\/+$/g, "");
 }
 
+function normalizeObjectKey(value: string): string {
+  return trimSlashes(value).replace(/\/{2,}/g, "/");
+}
+
 function joinUrl(baseUrl: string, path: string): string {
   return `${baseUrl.replace(/\/+$/g, "")}/${trimSlashes(path)}`;
 }
@@ -134,6 +139,73 @@ function getArtifactPublicOrigin(): string | null {
   return baseUrl.replace(/\/bandori\/master\/?$/u, "");
 }
 
+function shouldReadArtifactsFromR2(): boolean {
+  return process.env.BANDORI_MASTER_ARTIFACT_READ_MODE === "r2"
+    || process.env.BANDORI_MASTER_ACTIVE_SOURCE === "r2";
+}
+
+function getArtifactObjectKeyPrefix(): string {
+  const configuredPrefix = process.env.BANDORI_MASTER_ARTIFACT_PREFIX;
+  if (configuredPrefix?.trim()) {
+    return normalizeObjectKey(configuredPrefix);
+  }
+
+  const baseUrl = process.env.BANDORI_MASTER_ARTIFACT_BASE_URL;
+  if (baseUrl) {
+    try {
+      const url = new URL(baseUrl);
+      const pathname = normalizeObjectKey(url.pathname);
+      if (pathname) {
+        return pathname;
+      }
+    } catch {
+      // Fall through to the tracker default object prefix.
+    }
+  }
+
+  return "bandori/master";
+}
+
+function readOptionalR2Env(primaryName: string, fallbackName?: string): string | null {
+  const primaryValue = process.env[primaryName]?.trim();
+  if (primaryValue) {
+    return primaryValue;
+  }
+
+  const fallbackValue = fallbackName ? process.env[fallbackName]?.trim() : "";
+  return fallbackValue || null;
+}
+
+function readRequiredR2Env(primaryName: string, fallbackName?: string): string {
+  const value = readOptionalR2Env(primaryName, fallbackName);
+  if (!value) {
+    const expectedNames = fallbackName ? `${primaryName} or ${fallbackName}` : primaryName;
+    throw new Error(`Bandori master R2 artifact read mode is missing ${expectedNames}`);
+  }
+  return value;
+}
+
+function getBandoriMasterR2Config(): R2S3ReaderConfig {
+  const accountId = readOptionalR2Env("BANDORI_MASTER_R2_ACCOUNT_ID", "BANDORI_R2_ACCOUNT_ID");
+  const endpoint = readOptionalR2Env("BANDORI_MASTER_R2_ENDPOINT", "BANDORI_R2_ENDPOINT")
+    ?? (accountId ? `https://${accountId}.r2.cloudflarestorage.com` : "");
+
+  if (!endpoint) {
+    throw new Error(
+      "Bandori master R2 artifact read mode is missing BANDORI_MASTER_R2_ENDPOINT, "
+      + "BANDORI_R2_ENDPOINT, BANDORI_MASTER_R2_ACCOUNT_ID, or BANDORI_R2_ACCOUNT_ID",
+    );
+  }
+
+  return {
+    endpoint,
+    bucket: readRequiredR2Env("BANDORI_MASTER_R2_BUCKET", "BANDORI_R2_BUCKET"),
+    accessKeyId: readRequiredR2Env("BANDORI_MASTER_R2_ACCESS_KEY_ID", "BANDORI_R2_ACCESS_KEY_ID"),
+    secretAccessKey: readRequiredR2Env("BANDORI_MASTER_R2_SECRET_ACCESS_KEY", "BANDORI_R2_SECRET_ACCESS_KEY"),
+    region: readOptionalR2Env("BANDORI_MASTER_R2_REGION", "BANDORI_R2_REGION") || "auto",
+  };
+}
+
 async function fetchJson<T>(
   url: string,
   revalidateSeconds = REFERENCE_METADATA_CACHE_PROFILE.nextRevalidateSeconds,
@@ -144,6 +216,23 @@ async function fetchJson<T>(
 
   if (!response.ok) {
     throw new Error(`Bandori master artifact fetch failed: HTTP ${response.status} ${url}`);
+  }
+
+  return response.json() as Promise<T>;
+}
+
+async function fetchR2Json<T>(
+  objectKey: string,
+  revalidateSeconds = REFERENCE_METADATA_CACHE_PROFILE.nextRevalidateSeconds,
+): Promise<T> {
+  const response = await fetchR2Object(
+    getBandoriMasterR2Config(),
+    normalizeObjectKey(objectKey),
+    revalidateSeconds,
+  );
+
+  if (!response.ok) {
+    throw new Error(`Bandori master R2 artifact fetch failed: HTTP ${response.status} ${normalizeObjectKey(objectKey)}`);
   }
 
   return response.json() as Promise<T>;
@@ -162,6 +251,21 @@ async function fetchGzipJson<T>(url: string): Promise<T> {
   return JSON.parse(gunzipSync(compressed).toString("utf8")) as T;
 }
 
+async function fetchR2GzipJson<T>(objectKey: string): Promise<T> {
+  const response = await fetchR2Object(
+    getBandoriMasterR2Config(),
+    normalizeObjectKey(objectKey),
+    REFERENCE_METADATA_CACHE_PROFILE.nextRevalidateSeconds,
+  );
+
+  if (!response.ok) {
+    throw new Error(`Bandori master R2 artifact fetch failed: HTTP ${response.status} ${normalizeObjectKey(objectKey)}`);
+  }
+
+  const compressed = Buffer.from(await response.arrayBuffer());
+  return JSON.parse(gunzipSync(compressed).toString("utf8")) as T;
+}
+
 async function fetchOptionalGzipJson<T>(url: string): Promise<T | null> {
   const response = await fetch(url, {
     next: { revalidate: REFERENCE_METADATA_CACHE_PROFILE.nextRevalidateSeconds },
@@ -172,6 +276,25 @@ async function fetchOptionalGzipJson<T>(url: string): Promise<T | null> {
   }
   if (!response.ok) {
     throw new Error(`Bandori master artifact fetch failed: HTTP ${response.status} ${url}`);
+  }
+
+  const compressed = Buffer.from(await response.arrayBuffer());
+  return JSON.parse(gunzipSync(compressed).toString("utf8")) as T;
+}
+
+async function fetchOptionalR2GzipJson<T>(objectKey: string): Promise<T | null> {
+  const normalizedObjectKey = normalizeObjectKey(objectKey);
+  const response = await fetchR2Object(
+    getBandoriMasterR2Config(),
+    normalizedObjectKey,
+    REFERENCE_METADATA_CACHE_PROFILE.nextRevalidateSeconds,
+  );
+
+  if (response.status === 404) {
+    return null;
+  }
+  if (!response.ok) {
+    throw new Error(`Bandori master R2 artifact fetch failed: HTTP ${response.status} ${normalizedObjectKey}`);
   }
 
   const compressed = Buffer.from(await response.arrayBuffer());
@@ -199,6 +322,13 @@ async function readActiveManifestFromSupabase(
     return null;
   }
 
+  if (shouldReadArtifactsFromR2()) {
+    return fetchR2Json<BandoriMasterArtifactManifest>(
+      data.manifest_path,
+      BANDORI_MASTER_DATA_CACHE_PROFILE.nextRevalidateSeconds,
+    );
+  }
+
   const publicOrigin = getArtifactPublicOrigin();
   if (!publicOrigin) {
     throw new Error("BANDORI_MASTER_ARTIFACT_PUBLIC_ORIGIN is required when active source is Supabase");
@@ -213,6 +343,13 @@ async function readActiveManifestFromSupabase(
 async function readActiveManifestFromObjectStorage(
   server: BandoriMasterArtifactServer,
 ): Promise<BandoriMasterArtifactManifest | null> {
+  if (shouldReadArtifactsFromR2()) {
+    return fetchR2Json<BandoriMasterArtifactManifest>(
+      `${getArtifactObjectKeyPrefix()}/${server}/active/manifest.json`,
+      BANDORI_MASTER_DATA_CACHE_PROFILE.nextRevalidateSeconds,
+    );
+  }
+
   const manifestUrl = buildManifestUrl(server);
   if (!manifestUrl) {
     return null;
@@ -256,6 +393,18 @@ export async function fetchBandoriMasterArtifactNamedDataset(
   }
 
   const datasetFile = datasetEntry.file;
+  const objectKey = `${manifest.artifactPrefix}/${datasetFile}`;
+
+  if (shouldReadArtifactsFromR2()) {
+    return {
+      source: "artifacts",
+      server,
+      artifactDataset,
+      manifest,
+      payload: await fetchR2GzipJson<unknown>(objectKey),
+    };
+  }
+
   const publicOrigin = getArtifactPublicOrigin();
   if (!publicOrigin) {
     throw new Error("BANDORI_MASTER_ARTIFACT_PUBLIC_ORIGIN or BANDORI_MASTER_ARTIFACT_BASE_URL is required");
@@ -268,7 +417,7 @@ export async function fetchBandoriMasterArtifactNamedDataset(
     manifest,
     payload: await fetchGzipJson<unknown>(
       withArtifactChecksum(
-        joinUrl(publicOrigin, `${manifest.artifactPrefix}/${datasetFile}`),
+        joinUrl(publicOrigin, objectKey),
         datasetEntry?.sha256,
       ),
     ),
@@ -294,9 +443,26 @@ export async function fetchBandoriMasterArtifactEventDetail(
     item.dataset === "event_detail" && String(item.event_id) === eventId
   ));
   const datasetFile = datasetEntry?.file ?? `normalized/event_details/${eventId}.json.gz`;
+  const objectKey = `${manifest.artifactPrefix}/${datasetFile}`;
+
+  if (shouldReadArtifactsFromR2()) {
+    const payload = await fetchOptionalR2GzipJson<unknown>(objectKey);
+    if (!payload) {
+      return null;
+    }
+
+    return {
+      source: "artifacts",
+      server,
+      eventId,
+      manifest,
+      payload,
+    };
+  }
+
   const payload = await fetchOptionalGzipJson<unknown>(
     withArtifactChecksum(
-      joinUrl(publicOrigin, `${manifest.artifactPrefix}/${datasetFile}`),
+      joinUrl(publicOrigin, objectKey),
       datasetEntry?.sha256,
     ),
   );
