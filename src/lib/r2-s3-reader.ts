@@ -94,8 +94,7 @@ function buildR2ObjectRequest(config: R2S3ReaderConfig, objectKey: string, now =
     url: `${endpoint.origin}${canonicalUri}`,
     headers: {
       Authorization: [
-        "AWS4-HMAC-SHA256",
-        `Credential=${config.accessKeyId}/${credentialScope}`,
+        `AWS4-HMAC-SHA256 Credential=${config.accessKeyId}/${credentialScope}`,
         `SignedHeaders=${signedHeaders}`,
         `Signature=${signature}`,
       ].join(", "),
