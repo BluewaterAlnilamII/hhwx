@@ -1,6 +1,6 @@
 # Medley 40/40 Exact Roadmap
 
-Last updated: 2026-06-12 08:34 CST
+Last updated: 2026-06-12 09:00 CST
 
 This file is the persistent working note for the current medley optimizer goal.
 Keep it current before and after benchmark runs or proof-path changes, so future
@@ -98,6 +98,52 @@ No-GC acceptance contract:
   - Next work should either add a hard local call/time guard before any
     capacity-tail probe can enter the hot path, or shift to a different
     certificate that avoids per-leaf capacity evaluation.
+
+2026-06-12 09:00 CST guarded global capacity tail follow-up:
+
+- Code added and pushed:
+  - `85a9b1e Guard medley global capacity tail upper`.
+  - `0942c06 Restore capacity tail budget fast path`.
+  - The capacity-tail experiment now has explicit budget knobs:
+    `exactCandidateJoinGlobalCapacityTailMaxCalls` and
+    `exactCandidateJoinGlobalCapacityTailTimeboxMs`.
+  - When the budget is exhausted, the generator fully restores the old
+    pair-only fast path. This avoids the previous failure mode where capacity
+    was no longer computed but the fast `pairUnseenUpperBound` return was
+    still disabled, forcing expensive pair-query work for many leaf nodes.
+- Failed guard attempt before the fast-path fix:
+  - Raw:
+    `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-12T00-41-15-904Z.json`.
+  - Options: same as the 08:34 run plus
+    `exactCandidateJoinGlobalCapacityTailMaxCalls=1024` and
+    `exactCandidateJoinGlobalCapacityTailTimeboxMs=3000`.
+  - Result: still failed at the outer runner timeout after `390167ms`.
+    Root cause: budget exhaustion skipped capacity work but did not make
+    `canUseCapacityComplement=false`, so the generator still bypassed the old
+    cheap pair-unseen fast path.
+- Guarded diagnostic after the fast-path fix:
+  - Raw:
+    `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-12T00-49-56-174Z.json`.
+  - Result: bounded, score `9488172`, maxScore `9567356`, upper `9631451`,
+    gap `143279`, elapsed `274500ms`, peak `3502 MiB`, no timeout and no
+    memory limit.
+  - Signal: safety is restored, but proof quality is unchanged. The exact join
+    still aborts on `candidate-fill-soft-limit`, anchor proof skips on
+    `high-pair-record-upper`, and the final local cheap upper remains
+    `9570747` with residual source `unprocessed-generator-peek`. Generated
+    suffix join upper is lower (`9558822`), so the unresolved proof frontier is
+    still the conservative generator-tail / high-pair certificate, not
+    incumbent quality.
+- Decision:
+  - Keep the guard because it prevents this diagnostic option from breaking
+    outer-run stability.
+  - Reject guarded capacity-tail as a direct 40/40 exactness improvement: it
+    adds elapsed time and does not reduce the accepted global gap.
+  - Do not tune call counts/timeboxes further unless a later proof ledger shows
+    capacity-tail counters are the direct bottleneck.
+  - Next direction should move away from per-leaf capacity evaluation and
+    toward a lower-memory proof artifact for the high-pair frontier or a
+    same-coarse reusable certificate.
 
 2026-06-12 06:20 CST P06 frontier experiments after max4 dual reuse:
 
