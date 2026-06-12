@@ -1999,6 +1999,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
       ? Math.max(1, parsedLowMemoryHighPairPrefixRecordLimit)
       : MEDLEY_EXACT_CANDIDATE_JOIN_LOW_MEMORY_HIGH_PAIR_PREFIX_RECORD_LIMIT
     : null;
+  const enableLowMemoryHighPairRecordScan = optimization.enableLowMemoryHighPairRecordScan === true;
   const enableLowMemoryInitialCandidateSync = optimization.enableLowMemoryInitialCandidateSync === true;
   const disableLowMemoryInitialCandidateSync = (
     optimization.disableLowMemoryInitialCandidateSync === true
@@ -5821,6 +5822,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
           shouldAbortLowMemoryInitialCandidateSync,
           lowMemoryHighPairScanMinRecordCount,
           lowMemoryHighPairPrefixRecordLimit,
+          lowMemoryHighPairRecordScan: enableLowMemoryHighPairRecordScan,
           debugExactCandidateJoinMemoryAttribution,
           enableConflictPairUpperBnb,
           conflictPairUpperBnbNodeLimit,
@@ -6254,6 +6256,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
           shouldAbortLowMemoryInitialCandidateSync,
           lowMemoryHighPairScanMinRecordCount,
           lowMemoryHighPairPrefixRecordLimit,
+          lowMemoryHighPairRecordScan: enableLowMemoryHighPairRecordScan,
           debugExactCandidateJoinMemoryAttribution,
           enableConflictPairUpperBnb,
           conflictPairUpperBnbNodeLimit,
@@ -6930,6 +6933,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
           shouldAbortLowMemoryInitialCandidateSync,
           lowMemoryHighPairScanMinRecordCount,
           lowMemoryHighPairPrefixRecordLimit,
+          lowMemoryHighPairRecordScan: enableLowMemoryHighPairRecordScan,
           debugExactCandidateJoinMemoryAttribution,
           enableConflictPairUpperBnb,
           conflictPairUpperBnbNodeLimit,

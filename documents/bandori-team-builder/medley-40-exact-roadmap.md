@@ -1,6 +1,6 @@
 # Medley 40/40 Exact Roadmap
 
-Last updated: 2026-06-12 09:14 CST
+Last updated: 2026-06-12 09:34 CST
 
 This file is the persistent working note for the current medley optimizer goal.
 Keep it current before and after benchmark runs or proof-path changes, so future
@@ -194,6 +194,45 @@ No-GC acceptance contract:
     frontier. A useful next patch must tighten the bulk tail certificate or
     reduce the high-pair proof artifact memory cost; not just add another
     per-anchor/prefix proof attempt.
+
+2026-06-12 09:34 CST high-pair record-scan diagnostic:
+
+- Code added:
+  - New default-off internal option:
+    `enableLowMemoryHighPairRecordScan`.
+  - The option keeps score-ordered high-pair record prefixes with left/right
+    candidate indices and answers exclusion queries by scanning records and
+    checking banned card ids directly. It avoids building the cardId-to-record
+    bitset map for that diagnostic path, but still reuses the same existing
+    candidate material and does not change exact/bounded semantics.
+- Diagnostic:
+  - Raw:
+    `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-12T01-26-06-013Z.json`.
+  - Scope: `P06:323`, no GC, `debugConfigurationTrace=false`, current best
+    event-root setup, plus `enableLowMemoryHighPairScan=true` and
+    `enableLowMemoryHighPairRecordScan=true`.
+  - Result: rejected as a 40/40 exactness route. The row timed out at
+    `300004ms`, peak `4213 MiB`, score `9488172`, maxScore `9567356`,
+    observed upper `10076137`, bounded gap `587965`, `timedOut=true`,
+    `memoryLimited=false`.
+  - Exact-join signal remained unchanged:
+    `exactCandidateJoinCallCount=2`,
+    `exactCandidateJoinAbortReason=candidate-fill-deadline`,
+    `exactCandidateJoinAbortCandidateCount=200000`,
+    `exactCandidateJoinCandidateFillElapsedMs=274473`, and
+    `exactCandidateJoinPairUpperElapsedMs=8878`.
+  - Event-root cheap-upper signal still pointed at the same frontier:
+    cheap upper `9579223`, local residual gap about `91051`, residual source
+    `unprocessed-generator-peek`, and suffix generated-pair join upper
+    `9566357`.
+- Finding:
+  - Record-scan reduces one bitset construction surface, but it does not close
+    the P06 proof frontier and increases peak working set relative to the
+    preceding failed low-memory scan run.
+  - Keep the option default-off as a diagnostic handle only. Do not promote it
+    to acceptance settings, do not combine it with larger prefix/time budgets,
+    and do not continue the high-pair scan/prefix-proof line unless a later
+    proof ledger shows a new amortized certificate shape.
 
 2026-06-12 06:20 CST P06 frontier experiments after max4 dual reuse:
 
