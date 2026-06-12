@@ -716,10 +716,6 @@ export type BandoriMedleyTeamSearchProfilingStats = {
   exactCandidateJoinLastAnchorFrontierCheapUpperBestPrefixSplitProcessedEntryCount: number | null;
   exactCandidateJoinLastAnchorFrontierCheapUpperBestPrefixSplitElapsedMs: number | null;
   exactCandidateJoinLastAnchorFrontierCheapUpperBestPrefixSplitAbortReason: string | null;
-  exactCandidateJoinLastAnchorFrontierCheapUpperBestPrefixResidualUpperBound: number | null;
-  exactCandidateJoinLastAnchorFrontierCheapUpperBestPrefixResidualImprovement: number | null;
-  exactCandidateJoinLastAnchorFrontierCheapUpperBestPrefixResidualAnchorIndex: number | null;
-  exactCandidateJoinLastAnchorFrontierCheapUpperBestPrefixResidualProcessedEntryCount: number | null;
   exactCandidateJoinLastAnchorFrontierCheapUpperPairAnchorCoverUpperBound: number | null;
   exactCandidateJoinLastAnchorFrontierCheapUpperPairAnchorCoverPairCount: number | null;
   exactCandidateJoinLastAnchorFrontierCheapUpperPairAnchorCoverDistinctCardCount: number | null;

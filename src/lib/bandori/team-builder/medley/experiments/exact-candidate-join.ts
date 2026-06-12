@@ -4566,10 +4566,6 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
   profiling.exactCandidateJoinLastAnchorFrontierCheapUpperBestPrefixSplitProcessedEntryCount = null;
   profiling.exactCandidateJoinLastAnchorFrontierCheapUpperBestPrefixSplitElapsedMs = null;
   profiling.exactCandidateJoinLastAnchorFrontierCheapUpperBestPrefixSplitAbortReason = null;
-  profiling.exactCandidateJoinLastAnchorFrontierCheapUpperBestPrefixResidualUpperBound = null;
-  profiling.exactCandidateJoinLastAnchorFrontierCheapUpperBestPrefixResidualImprovement = null;
-  profiling.exactCandidateJoinLastAnchorFrontierCheapUpperBestPrefixResidualAnchorIndex = null;
-  profiling.exactCandidateJoinLastAnchorFrontierCheapUpperBestPrefixResidualProcessedEntryCount = null;
   profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairAnchorCoverUpperBound = null;
   profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairAnchorCoverPairCount = null;
   profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairAnchorCoverDistinctCardCount = null;
@@ -7453,62 +7449,6 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
     }
     return prefixUpperMax;
   };
-  const estimateBestPrefixResidualUpper = (
-    finalNextAnchorScore: number | null,
-    finalNextAnchorIndex: number | null,
-  ): {
-    upperBound: number | null;
-    anchorIndex: number | null;
-    processedEntryCount: number | null;
-  } => {
-    if (processedAnchorUpperEntries.length === 0) {
-      return {
-        upperBound: null,
-        anchorIndex: null,
-        processedEntryCount: null,
-      };
-    }
-    let bestUpperBound: number | null = null;
-    let bestAnchorIndex: number | null = null;
-    let bestProcessedEntryCount: number | null = null;
-    let prefixUpperMax = Number.NEGATIVE_INFINITY;
-    const considerSplit = (processedEntryCount: number, processedMax: number): void => {
-      const splitAnchorIndex = processedAnchorUpperEntries[processedEntryCount]?.anchorIndex
-        ?? finalNextAnchorIndex;
-      const splitNextAnchorScore = splitAnchorIndex !== null
-        ? anchorCandidates[splitAnchorIndex]?.result.score ?? null
-        : finalNextAnchorScore;
-      const splitUpperBound = getResidualUpperBoundForProcessedMax(
-        processedMax,
-        splitNextAnchorScore,
-        null,
-      );
-      if (
-        splitUpperBound !== null
-        && Number.isFinite(splitUpperBound)
-        && (bestUpperBound === null || splitUpperBound < bestUpperBound)
-      ) {
-        bestUpperBound = splitUpperBound;
-        bestAnchorIndex = splitAnchorIndex;
-        bestProcessedEntryCount = processedEntryCount;
-      }
-    };
-    considerSplit(0, prefixUpperMax);
-    for (let index = 0; index < processedAnchorUpperEntries.length; index += 1) {
-      const entry = processedAnchorUpperEntries[index];
-      const refined = refinedAnchorPairUpperByCandidate.get(entry.anchorCandidate);
-      const pairUpper = refined?.pairUpper ?? entry.pairUpper;
-      if (Number.isFinite(pairUpper)) {
-        prefixUpperMax = Math.max(prefixUpperMax, entry.anchorScore + pairUpper);
-      }
-      considerSplit(index + 1, prefixUpperMax);
-    }
-    return {
-      upperBound: bestUpperBound,
-      anchorIndex: bestAnchorIndex,
-      processedEntryCount: bestProcessedEntryCount,
-    };
-  };
   const finish = (
     localTimedOut: boolean,
     nextAnchorScore: number | null,
@@ -7640,19 +7580,6 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
     const elapsedMs = performance.now() - startedAt;
     const unprocessedUpper = getUnprocessedUpperBound(nextAnchorScore, suffixCoveredUpperBound);
     let observedUpperBound = getResidualUpperBound(nextAnchorScore, suffixCoveredUpperBound);
-    let residualSourceOverride: string | null = null;
-    const bestPrefixResidual = estimateBestPrefixResidualUpper(nextAnchorScore, nextAnchorIndex);
-    let bestPrefixResidualImprovement = 0;
-    if (
-      observedUpperBound !== null
-      && bestPrefixResidual.upperBound !== null
-      && Number.isFinite(bestPrefixResidual.upperBound)
-      && bestPrefixResidual.upperBound < observedUpperBound
-    ) {
-      bestPrefixResidualImprovement = observedUpperBound - bestPrefixResidual.upperBound;
-      observedUpperBound = bestPrefixResidual.upperBound;
-      residualSourceOverride = "best-prefix-residual";
-    }
     let rewindAttemptCount = 0;
     let rewindImprovementCount = 0;
     let rewindUpperBound: number | null = null;
@@ -7762,7 +7689,6 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
             );
             if (rewindUpperBound !== null && rewindUpperBound < observedUpperBound) {
               observedUpperBound = rewindUpperBound;
-              residualSourceOverride = "rewind";
               rewindImprovementCount = 1;
             }
           }
@@ -7841,7 +7767,6 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
           && splitUpperBound < observedUpperBound
         ) {
           observedUpperBound = splitUpperBound;
-          residualSourceOverride = "best-prefix-split";
           bestPrefixSplitImprovementCount += 1;
           bestPrefixSplitUpperBound = splitUpperBound;
           bestPrefixSplitAnchorIndex = splitAnchorIndex;
@@ -7896,12 +7821,14 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
     profiling.exactCandidateJoinLastAnchorFrontierCheapUpperMaxRightGeneratedCardIds = (
       processedUpperMaxRightGeneratedCandidate ? [...processedUpperMaxRightGeneratedCandidate.cardIds] : null
     );
-    profiling.exactCandidateJoinLastAnchorFrontierCheapUpperResidualSource = residualSourceOverride ?? ((
+    profiling.exactCandidateJoinLastAnchorFrontierCheapUpperResidualSource = bestPrefixSplitImprovementCount > 0
+      ? "best-prefix-split"
+      : (
         Number.isFinite(unprocessedUpper.upperBound)
         && (!Number.isFinite(processedUpperMax) || unprocessedUpper.upperBound >= processedUpperMax)
       )
         ? unprocessedUpper.source
-        : processedUpperMaxSource);
+        : processedUpperMaxSource;
     profiling.exactCandidateJoinLastAnchorFrontierCheapUpperUnprocessedAnchorScore = (
       unprocessedUpper.anchorScore
     );
@@ -8069,18 +7996,6 @@ function estimateMedleyExactCandidateAnchorFrontierCheapUpper(
     );
     profiling.exactCandidateJoinLastAnchorFrontierCheapUpperBestPrefixSplitAbortReason = (
       bestPrefixSplitAbortReason
-    );
-    profiling.exactCandidateJoinLastAnchorFrontierCheapUpperBestPrefixResidualUpperBound = (
-      bestPrefixResidual.upperBound !== null ? Math.ceil(bestPrefixResidual.upperBound) : null
-    );
-    profiling.exactCandidateJoinLastAnchorFrontierCheapUpperBestPrefixResidualImprovement = (
-      bestPrefixResidualImprovement > 0 ? Math.ceil(bestPrefixResidualImprovement) : 0
-    );
-    profiling.exactCandidateJoinLastAnchorFrontierCheapUpperBestPrefixResidualAnchorIndex = (
-      bestPrefixResidual.anchorIndex
-    );
-    profiling.exactCandidateJoinLastAnchorFrontierCheapUpperBestPrefixResidualProcessedEntryCount = (
-      bestPrefixResidual.processedEntryCount
     );
     profiling.exactCandidateJoinLastAnchorFrontierCheapUpperPairAnchorCoverUpperBound = (
       pairAnchorCover.upperBound !== null ? Math.ceil(pairAnchorCover.upperBound) : null
