@@ -6,6 +6,11 @@ import {
 } from "@/lib/api-cache";
 import { jsonError, jsonRouteError, jsonSuccess } from "@/lib/api-response";
 import {
+  fetchBandoriMasterArtifactDataset,
+  getDefaultBandoriMasterArtifactServer,
+  type BandoriMasterArtifactServer,
+} from "@/lib/bandori-master-artifacts";
+import {
   BESTDORI_MASTER_DATASET_ALIASES,
   BESTDORI_MASTER_DATASETS,
   fetchBestdoriMasterDataset,
@@ -14,15 +19,38 @@ import {
 } from "@/lib/bestdori-master-data";
 
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 
 const readBestdoriMasterDataset = unstable_cache(
   async (dataset: BestdoriMasterDatasetKey) => ({
     dataset,
+    source: "bestdori" as const,
     payload: dataset === "songs"
       ? filterBestdoriSongsForJpOrCn(await fetchBestdoriMasterDataset(dataset))
       : await fetchBestdoriMasterDataset(dataset),
   }),
   ["bandori-master-dataset-route:v2"],
+  { revalidate: 86400 },
+);
+
+const readArtifactMasterDataset = unstable_cache(
+  async (dataset: BestdoriMasterDatasetKey, server: BandoriMasterArtifactServer) => {
+    const artifact = await fetchBandoriMasterArtifactDataset(dataset, server);
+    if (!artifact) {
+      return null;
+    }
+
+    return {
+      dataset,
+      source: artifact.source,
+      server: artifact.server,
+      masterVersion: artifact.manifest.masterVersion,
+      artifactVersion: artifact.manifest.version,
+      artifactDataset: artifact.artifactDataset,
+      payload: artifact.payload,
+    };
+  },
+  ["bandori-master-artifact-dataset-route:v1"],
   { revalidate: 86400 },
 );
 
@@ -44,9 +72,25 @@ function normalizeDatasetKey(value: string): BestdoriMasterDatasetKey | null {
   return BESTDORI_MASTER_DATASET_ALIASES[value as keyof typeof BESTDORI_MASTER_DATASET_ALIASES] ?? null;
 }
 
-export async function GET(_request: Request, context: RouteContext) {
+function isArtifactServer(value: string | null): value is BandoriMasterArtifactServer {
+  return value === "jp" || value === "cn" || value === "en" || value === "tw";
+}
+
+function shouldUseArtifacts(searchParams: URLSearchParams): boolean {
+  const requestedSource = searchParams.get("source");
+  if (requestedSource === "artifacts" || requestedSource === "hhwx") {
+    return true;
+  }
+  if (requestedSource === "bestdori") {
+    return false;
+  }
+  return process.env.BANDORI_MASTER_SOURCE === "artifacts";
+}
+
+export async function GET(request: Request, context: RouteContext) {
   const { dataset: rawDataset } = await context.params;
   const dataset = normalizeDatasetKey(rawDataset);
+  const searchParams = new URL(request.url).searchParams;
 
   if (!dataset) {
     return jsonError(404, "BANDORI_MASTER_DATASET_NOT_FOUND", "Unknown Bandori master dataset", {
@@ -55,6 +99,25 @@ export async function GET(_request: Request, context: RouteContext) {
   }
 
   try {
+    if (shouldUseArtifacts(searchParams)) {
+      const requestedServer = searchParams.get("server");
+      const server = isArtifactServer(requestedServer)
+        ? requestedServer
+        : getDefaultBandoriMasterArtifactServer();
+      const artifactResult = await readArtifactMasterDataset(dataset, server);
+      if (artifactResult) {
+        return jsonSuccess(artifactResult, {
+          headers: withCacheControl(PUBLIC_METADATA_API_CACHE_CONTROL),
+        });
+      }
+
+      if (searchParams.get("source") === "artifacts" || searchParams.get("source") === "hhwx") {
+        return jsonError(503, "BANDORI_MASTER_ARTIFACT_NOT_CONFIGURED", "Bandori master artifacts are not configured", {
+          headers: withCacheControl(LIVE_API_CACHE_CONTROL),
+        });
+      }
+    }
+
     return jsonSuccess(await readBestdoriMasterDataset(dataset), {
       headers: withCacheControl(PUBLIC_METADATA_API_CACHE_CONTROL),
     });
