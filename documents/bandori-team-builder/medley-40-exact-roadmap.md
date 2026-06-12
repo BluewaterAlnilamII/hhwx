@@ -1,6 +1,6 @@
 # Medley 40/40 Exact Roadmap
 
-Last updated: 2026-06-12 07:45 CST
+Last updated: 2026-06-12 08:18 CST
 
 This file is the persistent working note for the current medley optimizer goal.
 Keep it current before and after benchmark runs or proof-path changes, so future
@@ -59,6 +59,32 @@ No-GC acceptance contract:
   analysis if any row is bounded.
 
 2026-06-12 06:20 CST P06 frontier experiments after max4 dual reuse:
+
+- Rejected same-coarse cheap-upper-only scheduling probe:
+  - Code commit: `a99302f Add same-coarse cheap upper frontier probe`. The
+    new `sameCoarseFrontierEventProbeCheapUpperOnly` option is default-off and
+    only affects the same-coarse pre-exact event-root probe. It returns the
+    cheap-upper observed upper as an unproved bound and never marks the
+    configuration proved.
+  - Raw:
+    `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-12T00-08-14-056Z.json`.
+  - Options: current no-GC `P06:323` max4 dual-reuse diagnostic setup with
+    `debugConfigurationTrace=false`, plus
+    `sameCoarseFrontierEventProbeCheapUpperOnly=true` and late repair extra
+    calls `3`.
+  - Result: bounded, score `9488172`, maxScore `9567356`, observed upper
+    `9935586`, gap `447414`, elapsed `233088ms`, peak `3656 MiB`,
+    `timedOut=false`, `memoryLimited=false`.
+  - Signal: the run completed only two anchor cheap-upper calls and left the
+    last same-coarse sibling at the wider root/same-coarse upper. The last
+    cheap upper had residual `9579223`, local gap `91051`, source
+    `unprocessed-generator-peek`; the generated suffix pair join was lower at
+    `9566357`. Full anchor proof did not trigger, so the regression was not
+    caused by expensive full-proof starvation in this run.
+  - Decision: do not pursue cheap-upper-only same-coarse scheduling as a
+    40/40 route. It is useful as a diagnostic toggle but worsens the current
+    P06 proof frontier. The remaining blocker is the generator-tail / pair
+    upper certificate, not just proof-stage ordering.
 
 - Late shared-power dual repair extra-call diagnostic:
   - Code change: added default-off
