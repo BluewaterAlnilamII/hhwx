@@ -1,6 +1,6 @@
 # Medley 40/40 Exact Roadmap
 
-Last updated: 2026-06-12 09:34 CST
+Last updated: 2026-06-12 11:35 CST
 
 This file is the persistent working note for the current medley optimizer goal.
 Keep it current before and after benchmark runs or proof-path changes, so future
@@ -17,13 +17,54 @@ Primary target:
 - Current pinned checkpoint: the earlier `40/40` count is no longer accepted
   for the active no-GC stability goal because repeat runs found score
   instability while still reporting `searchMode=exact`.
-- Current known no-GC all-scope blocker: `P06:323`. `P03:260` is no longer the
-  active blocker in current no-GC diagnostics; `P06:323` still leaves a
-  same-coarse event frontier bounded under non-debug acceptance settings.
+- Current known no-GC all-scope blockers from the latest consolidation run:
+  `P06:323`, `P07:260`, `P08:260`, `P08:323`, `P09:323`, and `P10:260`.
+  `P03:260` remains exact in the current no-GC non-debug run; the active risk
+  has shifted to event hard cases and one memory-headroom case.
 - Final working target: stable no-GC, non-debug `40/40` exact for the retained
   `P01`-`P10` 40-case matrix, with identical accepted final scores across
   repeated full runs.
 - Final success condition: not yet re-achieved after the false-exact finding.
+
+2026-06-12 11:35 CST consolidation run:
+
+- Report:
+  `documents/bandori-team-builder/medley-40-exact-report-2026-06-12-101533-consolidation.md`.
+- Raw:
+  `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-12T02-15-33-738Z.json`.
+- Scope and runtime: retained `P01`-`P10`, events `none/244/260/323`,
+  process-per-case isolated, `300000ms` per case, no `--expose-gc`, no
+  `global.gc`, `debugConfigurationTrace=false`, `NODE_OPTIONS=--max-old-space-size=8192`.
+- Optimization parameters: current conservative event-root setup with
+  `memorySoftLimitMiB=4488`, `exactNodeSoftLimit=5000000`,
+  `skipConfigurationSeedingWhenMemoryHeadroomBelowMiB=1600`,
+  `enableEventRootFrontierProbe=true`,
+  `enableSameCoarseFrontierEventProbeBeforeExactJoin=true`,
+  `eventRootFrontierProbeTimeboxMs=240000`,
+  `eventRootFrontierProbeCandidateSoftLimit=200000`,
+  anchor proof caps `90000/140000/120000/90000ms`,
+  cheap-upper caps `120000ms/13000 anchors`, shared-power dual cap max calls
+  `4`, suffix generated-pair join and suffix unseen full join enabled, late
+  max repair disabled.
+- Result: rejected for the `37/40` and `40/40` gates. Final summary was
+  `34/40` exact, `6` bounded, `0` failed subprocesses, `5` timed-out rows,
+  `1` memory-limited row, bounded-gap total `2247931`, median `68250ms`, p95
+  `300082ms`, max `300304ms`, peak working set `4490 MiB`.
+- Bounded rows:
+  - `P06:323`: gap `447414`, `candidate-fill-soft-limit`, no timeout and no
+    memory limit; event-root frontier remains unclosed.
+  - `P07:260`: gap `62929`, `candidate-fill-pair-refine`, `memoryLimited=true`
+    at `4490 MiB`; this is the active memory-headroom row.
+  - `P08:260`: gap `431537`, `solve-timeout`, no memory limit.
+  - `P08:323`: gap `422929`, `solve-timeout`, no memory limit.
+  - `P09:323`: gap `538219`, `solve-timeout`, no memory limit.
+  - `P10:260`: gap `344903`, `solve-timeout`, no memory limit.
+- Consolidation conclusion: current code and parameters are useful as a
+  reproducible conservative baseline, but they are not the most effective
+  40/40 candidate and should not be called an accepted stability checkpoint.
+  The lower historical `P06:323` gap around `143279` came from rejected
+  diagnostic late-repair / guarded capacity-tail settings and must not be mixed
+  into this baseline.
 
 2026-06-10 no-GC stability update:
 
