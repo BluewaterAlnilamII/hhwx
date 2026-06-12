@@ -1,30 +1,21 @@
-import { unstable_cache } from "next/cache";
 import {
+  BANDORI_MASTER_DATA_API_CACHE_CONTROL,
   LIVE_API_CACHE_CONTROL,
-  PUBLIC_METADATA_API_CACHE_CONTROL,
   withCacheControl,
 } from "@/lib/api-cache";
 import { jsonError, jsonRouteError, jsonSuccess } from "@/lib/api-response";
 import {
+  readBandoriMasterDataset,
+  redirectBandoriMasterSearch,
+} from "@/lib/bandori-master-api";
+import {
   BESTDORI_MASTER_DATASET_ALIASES,
   BESTDORI_MASTER_DATASETS,
-  fetchBestdoriMasterDataset,
-  filterBestdoriSongsForJpOrCn,
   type BestdoriMasterDatasetKey,
 } from "@/lib/bestdori-master-data";
 
 export const dynamic = "force-dynamic";
-
-const readBestdoriMasterDataset = unstable_cache(
-  async (dataset: BestdoriMasterDatasetKey) => ({
-    dataset,
-    payload: dataset === "songs"
-      ? filterBestdoriSongsForJpOrCn(await fetchBestdoriMasterDataset(dataset))
-      : await fetchBestdoriMasterDataset(dataset),
-  }),
-  ["bandori-master-dataset-route:v2"],
-  { revalidate: 86400 },
-);
+export const runtime = "nodejs";
 
 type RouteContext = {
   params: Promise<{
@@ -44,7 +35,12 @@ function normalizeDatasetKey(value: string): BestdoriMasterDatasetKey | null {
   return BESTDORI_MASTER_DATASET_ALIASES[value as keyof typeof BESTDORI_MASTER_DATASET_ALIASES] ?? null;
 }
 
-export async function GET(_request: Request, context: RouteContext) {
+export async function GET(request: Request, context: RouteContext) {
+  const redirect = redirectBandoriMasterSearch(request);
+  if (redirect) {
+    return redirect;
+  }
+
   const { dataset: rawDataset } = await context.params;
   const dataset = normalizeDatasetKey(rawDataset);
 
@@ -55,8 +51,15 @@ export async function GET(_request: Request, context: RouteContext) {
   }
 
   try {
-    return jsonSuccess(await readBestdoriMasterDataset(dataset), {
-      headers: withCacheControl(PUBLIC_METADATA_API_CACHE_CONTROL),
+    const result = await readBandoriMasterDataset(dataset);
+    if (!result) {
+      return jsonError(503, "BANDORI_MASTER_ARTIFACT_NOT_CONFIGURED", "Bandori master artifacts are not configured", {
+        headers: withCacheControl(LIVE_API_CACHE_CONTROL),
+      });
+    }
+
+    return jsonSuccess(result, {
+      headers: withCacheControl(BANDORI_MASTER_DATA_API_CACHE_CONTROL),
     });
   } catch (error) {
     console.error("Bandori master data API error:", error);

@@ -70,7 +70,7 @@ export function filterBestdoriSongsForJpOrCn(payload: unknown): unknown {
 }
 
 function buildBestdoriApiUrl(path: string): string {
-  return `${BESTDORI_API_ORIGIN}/${path}`;
+  return `${BESTDORI_API_ORIGIN}/${path.replace(/^\/+/u, "")}`;
 }
 
 async function fetchBestdoriJson(url: string): Promise<unknown> {
@@ -88,6 +88,14 @@ async function fetchBestdoriJson(url: string): Promise<unknown> {
 
 export async function fetchBestdoriMasterDataset(dataset: BestdoriMasterDatasetKey): Promise<unknown> {
   return fetchBestdoriJson(buildBestdoriApiUrl(BESTDORI_MASTER_DATASETS[dataset]));
+}
+
+export async function fetchBestdoriApiPath(path: string): Promise<unknown> {
+  return fetchBestdoriJson(buildBestdoriApiUrl(path));
+}
+
+export async function fetchBestdoriEventDetail(eventId: string): Promise<unknown> {
+  return fetchBestdoriJson(buildBestdoriApiUrl(`events/${eventId}.json`));
 }
 
 export async function fetchBestdoriChart(songId: number, difficulty: BestdoriChartDifficulty): Promise<unknown> {
