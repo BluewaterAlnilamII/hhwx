@@ -482,6 +482,10 @@ export type BandoriMedleyTeamSearchProfilingStats = {
   bestCapacityAnchorSlotUpperImprovement: number;
   capacityAnchorSlotUpperElapsedMs: number;
   sameCoarseMemoryRootSkipCount: number;
+  sameCoarseSiblingReevaluationCount: number;
+  sameCoarseSiblingReevaluationHitCount: number;
+  sameCoarseSiblingReevaluationElapsedMs: number;
+  sameCoarseSiblingReevaluationBestImprovement: number;
   // Witnesses explain proof gaps for benchmark review and must not feed pruning decisions.
   upperWitnessCaptureCount: number;
   upperWitnessUpperBound: number | null;
