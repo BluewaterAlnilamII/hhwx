@@ -5922,3 +5922,34 @@ P07 failed follow-ups after P03 fix:
     3. amortize the same `PastelPalettes/cool` suffix/frontier proof across
        performance/technique/visual so all three get a complete cheap-upper
        pass consistently before any cross-coarse cleanup.
+
+2026-06-12 07:58 CST rejected high-pair prefix guard bypass:
+
+- Experiment:
+  - Temporarily allowed `enableLowMemoryHighPairPrefixUpper=true` to bypass
+    the `high-pair-record-upper` precheck for full anchor frontier proof, then
+    reverted the code.
+  - Rationale: bounded-prefix high-pair cache is safe because records beyond
+    the retained prefix have score no higher than the prefix fallback score.
+    If it were cheap enough, it could let full proof proceed without building
+    the entire high-pair bitset.
+- Raw:
+  `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-11T23-53-36-904Z.json`.
+- Options: current best no-GC `P06:323` setup, plus
+  `enableLowMemoryHighPairPrefixUpper=true` and
+  `lowMemoryHighPairPrefixRecordLimit=500000`.
+- Result: rejected. Bounded timeout, score `9488172`, upper `10076137`, gap
+  `587965`, elapsed `300002ms`, peak `4131 MiB`, `memoryLimited=false`.
+- Signal:
+  - Full anchor proof triggered `2` times, skipped `0` times, but completed
+    `0` anchors; last proof residual was `10342882`, gap `854710`, elapsed
+    about `47771ms`.
+  - Because proof time was consumed before the third `PastelPalettes/cool`
+    parameter reached its cheap-upper pass, the final global upper regressed
+    to the old visual frontier.
+- Decision:
+  - Do not let prefix fallback bypass the high-pair guard as-is.
+  - The next useful version would need an early-abort rule that stops full
+    anchor proof when the prefix fallback residual is already worse than the
+    cheap-upper residual, or a different proof representation that can make
+    progress before consuming tens of seconds.
