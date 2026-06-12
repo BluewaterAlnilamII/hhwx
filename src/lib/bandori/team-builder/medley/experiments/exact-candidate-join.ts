@@ -4442,7 +4442,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
   for (let slotIndex = 0; slotIndex < slots.length; slotIndex += 1) {
     const slotInitialCandidateStartedAt = performance.now();
     let topCandidate: MedleyTeamCandidate | null = null;
-    if (context.enableLowMemoryInitialCandidateSync === false) {
+    if (context.enableLowMemoryInitialCandidateSync !== true) {
       topCandidate = generators[slotIndex].next();
     } else {
       const lowMemoryInitialCandidateSyncTimeboxMs = context.lowMemoryInitialCandidateSyncTimeboxMs !== undefined
