@@ -72,25 +72,19 @@ function normalizeDatasetKey(value: string): BestdoriMasterDatasetKey | null {
   return BESTDORI_MASTER_DATASET_ALIASES[value as keyof typeof BESTDORI_MASTER_DATASET_ALIASES] ?? null;
 }
 
-function isArtifactServer(value: string | null): value is BandoriMasterArtifactServer {
-  return value === "jp" || value === "cn" || value === "en" || value === "tw";
-}
-
-function shouldUseArtifacts(searchParams: URLSearchParams): boolean {
-  const requestedSource = searchParams.get("source");
-  if (requestedSource === "artifacts" || requestedSource === "hhwx") {
-    return true;
-  }
-  if (requestedSource === "bestdori") {
-    return false;
-  }
+function shouldUseArtifacts(): boolean {
   return process.env.BANDORI_MASTER_SOURCE === "artifacts";
 }
 
 export async function GET(request: Request, context: RouteContext) {
+  const requestUrl = new URL(request.url);
+  if (requestUrl.search) {
+    requestUrl.search = "";
+    return Response.redirect(requestUrl, 308);
+  }
+
   const { dataset: rawDataset } = await context.params;
   const dataset = normalizeDatasetKey(rawDataset);
-  const searchParams = new URL(request.url).searchParams;
 
   if (!dataset) {
     return jsonError(404, "BANDORI_MASTER_DATASET_NOT_FOUND", "Unknown Bandori master dataset", {
@@ -99,11 +93,8 @@ export async function GET(request: Request, context: RouteContext) {
   }
 
   try {
-    if (shouldUseArtifacts(searchParams)) {
-      const requestedServer = searchParams.get("server");
-      const server = isArtifactServer(requestedServer)
-        ? requestedServer
-        : getDefaultBandoriMasterArtifactServer();
+    if (shouldUseArtifacts()) {
+      const server = getDefaultBandoriMasterArtifactServer();
       const artifactResult = await readArtifactMasterDataset(dataset, server);
       if (artifactResult) {
         return jsonSuccess(artifactResult, {
@@ -111,11 +102,9 @@ export async function GET(request: Request, context: RouteContext) {
         });
       }
 
-      if (searchParams.get("source") === "artifacts" || searchParams.get("source") === "hhwx") {
-        return jsonError(503, "BANDORI_MASTER_ARTIFACT_NOT_CONFIGURED", "Bandori master artifacts are not configured", {
-          headers: withCacheControl(LIVE_API_CACHE_CONTROL),
-        });
-      }
+      return jsonError(503, "BANDORI_MASTER_ARTIFACT_NOT_CONFIGURED", "Bandori master artifacts are not configured", {
+        headers: withCacheControl(LIVE_API_CACHE_CONTROL),
+      });
     }
 
     return jsonSuccess(await readBestdoriMasterDataset(dataset), {
