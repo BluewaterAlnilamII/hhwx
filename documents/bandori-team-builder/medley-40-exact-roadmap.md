@@ -6206,3 +6206,39 @@ P07 failed follow-ups after P03 fix:
     `PastelPalettes/cool` frontier, especially the `unprocessed-generator-peek`
     upper and the inability to give all three parameters complete proof work
     within the local budget.
+
+2026-06-12 10:15 CST rejected cheap-upper best-prefix residual:
+
+- Code added and pushed:
+  - `c5c7b41 Tighten medley cheap upper with prefix residual`.
+  - The patch attempted a low-cost proof-only tightening: after the normal
+    cheap-upper pass, scan already processed anchor prefixes and choose the
+    best safe split between processed-prefix upper and unprocessed anchor tail.
+  - It did not generate more candidates, enlarge K, or change incumbent search.
+- Experiment:
+  - Raw:
+    `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-12T02-07-50-811Z.json`.
+  - Scope: `P06:323`, no GC, `debugConfigurationTrace=true`, same accepted
+    event-root setup as `2026-06-11T20-56-17-305Z`; no `reuseMaxCalls=8192`.
+  - Result: rejected. Bounded, score `9488172`, upper `9935585`, gap
+    `447414`, elapsed `235921ms`, peak used heap `4069 MiB`,
+    `timedOut=false`, `memoryLimited=false`.
+- Signal:
+  - The new best-prefix residual path did not tighten the proof frontier:
+    `bestPrefixResidualImprovement=0`.
+  - The local cheap-upper residual still came from
+    `unprocessed-generator-peek`, with final local residual `9579223` and
+    local gap `91051`; suffix generated-pair join was lower at `9566590`.
+  - The global result regressed to the wider `PastelPalettes/cool/visual`
+    same-coarse skip shape: visual remained at about `447413` gap, while the
+    accepted debug run had already moved the top unclosed row to
+    `Morfonica/cool` at about `143278` gap.
+- Decision:
+  - Revert this proof-only tightening from the consolidated algorithm version.
+  - The non-monotonic-prefix hypothesis is still useful as an analysis note,
+    but this zero-extra-material implementation does not reduce P06. A useful
+    future version would need a real reusable suffix/frontier certificate, not
+    only a scan over the already available prefix splits.
+  - Current consolidation should freeze on the best observed no-GC event-root
+    setup before this patch and run full 40-case confirmation instead of adding
+    more exploratory proof probes.
