@@ -1,5 +1,8 @@
 import { gunzipSync } from "node:zlib";
-import { REFERENCE_METADATA_CACHE_PROFILE } from "@/lib/api-cache";
+import {
+  BANDORI_MASTER_DATA_CACHE_PROFILE,
+  REFERENCE_METADATA_CACHE_PROFILE,
+} from "@/lib/api-cache";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
 import { MASTER_ACTIVE_VERSIONS_TABLE } from "@/lib/supabase-table-names";
 import type { BestdoriMasterDatasetKey } from "@/lib/bestdori-master-data";
@@ -55,6 +58,14 @@ export type BandoriMasterArtifactDataset = {
   source: "artifacts";
   server: BandoriMasterArtifactServer;
   dataset: BestdoriMasterDatasetKey;
+  artifactDataset: string;
+  manifest: BandoriMasterArtifactManifest;
+  payload: unknown;
+};
+
+export type BandoriMasterArtifactNamedDataset = {
+  source: "artifacts";
+  server: BandoriMasterArtifactServer;
   artifactDataset: string;
   manifest: BandoriMasterArtifactManifest;
   payload: unknown;
@@ -123,9 +134,12 @@ function getArtifactPublicOrigin(): string | null {
   return baseUrl.replace(/\/bandori\/master\/?$/u, "");
 }
 
-async function fetchJson<T>(url: string): Promise<T> {
+async function fetchJson<T>(
+  url: string,
+  revalidateSeconds = REFERENCE_METADATA_CACHE_PROFILE.nextRevalidateSeconds,
+): Promise<T> {
   const response = await fetch(url, {
-    next: { revalidate: REFERENCE_METADATA_CACHE_PROFILE.nextRevalidateSeconds },
+    next: { revalidate: revalidateSeconds },
   });
 
   if (!response.ok) {
@@ -190,7 +204,10 @@ async function readActiveManifestFromSupabase(
     throw new Error("BANDORI_MASTER_ARTIFACT_PUBLIC_ORIGIN is required when active source is Supabase");
   }
 
-  return fetchJson<BandoriMasterArtifactManifest>(joinUrl(publicOrigin, data.manifest_path));
+  return fetchJson<BandoriMasterArtifactManifest>(
+    joinUrl(publicOrigin, data.manifest_path),
+    BANDORI_MASTER_DATA_CACHE_PROFILE.nextRevalidateSeconds,
+  );
 }
 
 async function readActiveManifestFromObjectStorage(
@@ -201,7 +218,10 @@ async function readActiveManifestFromObjectStorage(
     return null;
   }
 
-  return fetchJson<BandoriMasterArtifactManifest>(manifestUrl);
+  return fetchJson<BandoriMasterArtifactManifest>(
+    manifestUrl,
+    BANDORI_MASTER_DATA_CACHE_PROFILE.nextRevalidateSeconds,
+  );
 }
 
 export async function fetchBandoriMasterArtifactDataset(
@@ -209,6 +229,21 @@ export async function fetchBandoriMasterArtifactDataset(
   server: BandoriMasterArtifactServer = getDefaultBandoriMasterArtifactServer(),
 ): Promise<BandoriMasterArtifactDataset | null> {
   const artifactDataset = BANDORI_MASTER_ARTIFACT_DATASETS[dataset];
+  const artifact = await fetchBandoriMasterArtifactNamedDataset(artifactDataset, server);
+  if (!artifact) {
+    return null;
+  }
+
+  return {
+    ...artifact,
+    dataset,
+  };
+}
+
+export async function fetchBandoriMasterArtifactNamedDataset(
+  artifactDataset: string,
+  server: BandoriMasterArtifactServer = getDefaultBandoriMasterArtifactServer(),
+): Promise<BandoriMasterArtifactNamedDataset | null> {
   const manifest = await readActiveManifestFromSupabase(server)
     ?? await readActiveManifestFromObjectStorage(server);
   if (!manifest) {
@@ -216,7 +251,11 @@ export async function fetchBandoriMasterArtifactDataset(
   }
 
   const datasetEntry = manifest.datasets?.find((item) => item.dataset === artifactDataset);
-  const datasetFile = datasetEntry?.file ?? `normalized/${artifactDataset}.json.gz`;
+  if (!datasetEntry) {
+    return null;
+  }
+
+  const datasetFile = datasetEntry.file;
   const publicOrigin = getArtifactPublicOrigin();
   if (!publicOrigin) {
     throw new Error("BANDORI_MASTER_ARTIFACT_PUBLIC_ORIGIN or BANDORI_MASTER_ARTIFACT_BASE_URL is required");
@@ -225,7 +264,6 @@ export async function fetchBandoriMasterArtifactDataset(
   return {
     source: "artifacts",
     server,
-    dataset,
     artifactDataset,
     manifest,
     payload: await fetchGzipJson<unknown>(

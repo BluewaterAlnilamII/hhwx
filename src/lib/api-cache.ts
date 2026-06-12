@@ -38,6 +38,15 @@ export const REFERENCE_METADATA_CACHE_PROFILE: CacheProfile = {
   },
 };
 
+export const BANDORI_MASTER_DATA_CACHE_PROFILE: CacheProfile = {
+  cacheControl: "public, max-age=300, s-maxage=1800, stale-while-revalidate=86400",
+  nextRevalidateSeconds: 1800,
+  client: {
+    staleTimeMs: 5 * 60 * 1000,
+    refreshOnVisible: false,
+  },
+};
+
 export const EXTERNAL_REFERENCE_CACHE_PROFILE: CacheProfile = {
   cacheControl: "public, max-age=3600, s-maxage=43200, stale-while-revalidate=86400",
   nextRevalidateSeconds: 43200,
@@ -73,6 +82,7 @@ export const FAVICON_SITE_ASSET_CACHE_CONTROL = "public, max-age=604800, s-maxag
 export const LIVE_API_CACHE_CONTROL = REALTIME_HOT_CACHE_PROFILE.cacheControl;
 export const PUBLIC_SHORT_API_CACHE_CONTROL = MUTABLE_DIRECTORY_CACHE_PROFILE.cacheControl;
 export const PUBLIC_METADATA_API_CACHE_CONTROL = REFERENCE_METADATA_CACHE_PROFILE.cacheControl;
+export const BANDORI_MASTER_DATA_API_CACHE_CONTROL = BANDORI_MASTER_DATA_CACHE_PROFILE.cacheControl;
 export const HOLIDAY_API_CACHE_CONTROL = EXTERNAL_REFERENCE_CACHE_PROFILE.cacheControl;
 export const HOLIDAY_FALLBACK_API_CACHE_CONTROL = EXTERNAL_REFERENCE_FALLBACK_CACHE_PROFILE.cacheControl;
 export const SUBSCRIPTION_API_CACHE_CONTROL = SUBSCRIPTION_FEED_CACHE_PROFILE.cacheControl;
