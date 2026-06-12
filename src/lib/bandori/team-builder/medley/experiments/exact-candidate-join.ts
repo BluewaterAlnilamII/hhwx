@@ -3598,6 +3598,8 @@ function proveMedleyExactCandidateAnchorFrontier(
   options: {
     lowMemoryHighPairScanMinRecordCount?: number | null;
     lowMemoryHighPairPrefixRecordLimit?: number | null;
+    stopAtObservedUpperBound?: number | null;
+    stopAtObservedUpperMinProcessedAnchors?: number | null;
   } = {},
   observeEvaluatedResult?: MedleyEvaluatedResultObserver,
 ): MedleyExactCandidateAnchorFrontierProofResult {
@@ -3616,6 +3618,20 @@ function proveMedleyExactCandidateAnchorFrontier(
     .filter((index) => index !== anchorSlotIndex) as [number, number];
   const anchorCandidates = [...candidatesBySlot[anchorSlotIndex]];
   sortMedleyCandidates(anchorCandidates);
+  const stopAtObservedUpperBound = (
+    options.stopAtObservedUpperBound !== null
+    && options.stopAtObservedUpperBound !== undefined
+    && Number.isFinite(options.stopAtObservedUpperBound)
+  )
+    ? options.stopAtObservedUpperBound
+    : null;
+  const stopAtObservedUpperMinProcessedAnchors = (
+    options.stopAtObservedUpperMinProcessedAnchors !== null
+    && options.stopAtObservedUpperMinProcessedAnchors !== undefined
+    && Number.isFinite(options.stopAtObservedUpperMinProcessedAnchors)
+  )
+    ? Math.max(0, Math.trunc(options.stopAtObservedUpperMinProcessedAnchors))
+    : 1;
 
   profiling.exactCandidateJoinAnchorFrontierProofTriggerCount += 1;
   profiling.exactCandidateJoinLastAnchorFrontierProofSlotIndex = anchorSlotIndex;
@@ -3624,6 +3640,7 @@ function proveMedleyExactCandidateAnchorFrontier(
   profiling.exactCandidateJoinLastAnchorFrontierProofResidualGap = null;
   profiling.exactCandidateJoinLastAnchorFrontierProofElapsedMs = null;
   profiling.exactCandidateJoinLastAnchorFrontierProofTimeboxMs = effectiveProofTimeboxMs;
+  profiling.exactCandidateJoinLastAnchorFrontierProofCheapUpperStopBound = null;
   profiling.exactCandidateJoinLastAnchorFrontierProofOtherSlotCandidateCounts = pairSlotIndices.map(
     (slotIndex) => candidatesBySlot[slotIndex].length,
   );
@@ -3686,6 +3703,33 @@ function proveMedleyExactCandidateAnchorFrontier(
       : null;
   };
 
+  const maybeStopAtObservedUpperBound = (
+    nextAnchorScore: number | null,
+    currentProcessedAnchorCount: number,
+  ): MedleyExactCandidateAnchorFrontierProofResult | null => {
+    if (
+      stopAtObservedUpperBound === null
+      || currentProcessedAnchorCount < stopAtObservedUpperMinProcessedAnchors
+    ) {
+      return null;
+    }
+    const residualUpperBound = getResidualUpperBound(nextAnchorScore);
+    if (residualUpperBound === null || residualUpperBound < stopAtObservedUpperBound) {
+      return null;
+    }
+    profiling.exactCandidateJoinAnchorFrontierProofCheapUpperStopCount += 1;
+    profiling.exactCandidateJoinLastAnchorFrontierProofCheapUpperStopBound = Math.ceil(
+      stopAtObservedUpperBound,
+    );
+    return finish(
+      false,
+      false,
+      null,
+      currentProcessedAnchorCount,
+      residualUpperBound,
+    );
+  };
+
   let generatedPairQuery: MedleyExactCandidatePairUpperQuery | null = null;
   let generatedPairQueryKey = "";
   const findGeneratedPairForAnchor = (
@@ -3723,6 +3767,10 @@ function proveMedleyExactCandidateAnchorFrontier(
   let processedAnchorCount = 0;
   for (let anchorIndex = 0; anchorIndex < anchorCandidates.length; anchorIndex += 1) {
     const anchorCandidate = anchorCandidates[anchorIndex];
+    const stopResult = maybeStopAtObservedUpperBound(anchorCandidate.result.score, processedAnchorCount);
+    if (stopResult) {
+      return stopResult;
+    }
     if (stats.timedOut || performance.now() >= deadlineAt || isPastDeadline()) {
       stats.isExhaustive = false;
       stats.timedOut = true;
@@ -3843,6 +3891,13 @@ function proveMedleyExactCandidateAnchorFrontier(
         processedAnchorCount,
         getResidualUpperBound(anchorCandidates[anchorIndex + 1]?.result.score ?? null),
       );
+    }
+    const stopAfterProcessedResult = maybeStopAtObservedUpperBound(
+      anchorCandidates[anchorIndex + 1]?.result.score ?? null,
+      processedAnchorCount,
+    );
+    if (stopAfterProcessedResult) {
+      return stopAfterProcessedResult;
     }
   }
 
@@ -8218,6 +8273,8 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     anchorFrontierProofMaxOtherSlotCandidateTotal?: number | null;
     anchorFrontierProofMaxHighPairRecords?: number | null;
     anchorFrontierProofTimeboxMs?: number | null;
+    anchorFrontierProofStopAtCheapUpper?: boolean;
+    anchorFrontierProofStopAtCheapUpperMinProcessedAnchors?: number | null;
     anchorFrontierCheapUpperOnly?: boolean;
     anchorFrontierCheapUpperTimeboxMs?: number | null;
     anchorFrontierCheapUpperMinRemainingMs?: number | null;
@@ -8930,6 +8987,17 @@ export function searchMedleyConfigurationByExactCandidateJoin(
       {
         lowMemoryHighPairScanMinRecordCount: context.lowMemoryHighPairScanMinRecordCount ?? null,
         lowMemoryHighPairPrefixRecordLimit: context.lowMemoryHighPairPrefixRecordLimit ?? null,
+        stopAtObservedUpperBound: (
+          context.anchorFrontierProofStopAtCheapUpper === true
+          && cheapUpperResult?.observedUpperBound !== null
+          && cheapUpperResult?.observedUpperBound !== undefined
+          && Number.isFinite(cheapUpperResult.observedUpperBound)
+        )
+          ? cheapUpperResult.observedUpperBound
+          : null,
+        stopAtObservedUpperMinProcessedAnchors: (
+          context.anchorFrontierProofStopAtCheapUpperMinProcessedAnchors ?? null
+        ),
       },
     );
     if (

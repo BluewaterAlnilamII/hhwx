@@ -1,6 +1,6 @@
 # Medley 40/40 Exact Roadmap
 
-Last updated: 2026-06-12 09:00 CST
+Last updated: 2026-06-12 09:14 CST
 
 This file is the persistent working note for the current medley optimizer goal.
 Keep it current before and after benchmark runs or proof-path changes, so future
@@ -17,8 +17,9 @@ Primary target:
 - Current pinned checkpoint: the earlier `40/40` count is no longer accepted
   for the active no-GC stability goal because repeat runs found score
   instability while still reporting `searchMode=exact`.
-- Current bounded rows: none in the latest full runs, but exact correctness is
-  under investigation.
+- Current known no-GC all-scope blocker: `P06:323`. `P03:260` is no longer the
+  active blocker in current no-GC diagnostics; `P06:323` still leaves a
+  same-coarse event frontier bounded under non-debug acceptance settings.
 - Final working target: stable no-GC, non-debug `40/40` exact for the retained
   `P01`-`P10` 40-case matrix, with identical accepted final scores across
   repeated full runs.
@@ -141,9 +142,58 @@ No-GC acceptance contract:
     adds elapsed time and does not reduce the accepted global gap.
   - Do not tune call counts/timeboxes further unless a later proof ledger shows
     capacity-tail counters are the direct bottleneck.
-  - Next direction should move away from per-leaf capacity evaluation and
+ - Next direction should move away from per-leaf capacity evaluation and
     toward a lower-memory proof artifact for the high-pair frontier or a
     same-coarse reusable certificate.
+
+2026-06-12 09:14 CST prefix proof stop-at-cheap-upper diagnostic:
+
+- Code added:
+  - New default-off internal options:
+    `eventRootFrontierProbeAnchorProofStopAtCheapUpper` and
+    `eventRootFrontierProbeAnchorProofStopAtCheapUpperMinProcessedAnchors`.
+  - New profiling counters:
+    `exactCandidateJoinAnchorFrontierProofCheapUpperStopCount` and
+    `exactCandidateJoinLastAnchorFrontierProofCheapUpperStopBound`.
+  - The guard only applies to the experimental full anchor-frontier proof after
+    a cheap-upper result exists. It returns an unproved result and does not
+    change exact/bounded semantics.
+- Diagnostic:
+  - Raw:
+    `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-12T01-05-17-545Z.json`.
+  - Scope: `P06:323`, no GC, `debugConfigurationTrace=false`, current best
+    event-root setup, plus `enableLowMemoryHighPairScan=true`,
+    `enableLowMemoryHighPairPrefixUpper=true`,
+    `lowMemoryHighPairPrefixRecordLimit=500000`,
+    `eventRootFrontierProbeAnchorProofStopAtCheapUpper=true`, and
+    `eventRootFrontierProbeAnchorProofStopAtCheapUpperMinProcessedAnchors=1`.
+  - Result: rejected as a proof-quality route. The row timed out at `300006ms`,
+    peak `3902 MiB`, score `9488172`, maxScore `9567356`, observed upper
+    `10076137`, bounded gap `587965`, `timedOut=true`, `memoryLimited=false`.
+  - Exact-join signal: `exactCandidateJoinCallCount=2`,
+    `exactCandidateJoinAbortReason=candidate-fill-deadline`,
+    `exactCandidateJoinAbortCandidateCount=200000`,
+    `exactCandidateJoinCandidateFillElapsedMs=276601`,
+    `exactCandidateJoinAnchorFrontierProofTriggerCount=2`,
+    `exactCandidateJoinLastAnchorFrontierProofProcessedAnchorCount=0`,
+    and full proof last elapsed `24666ms`.
+  - Cheap-upper signal remained useful but insufficient:
+    `exactCandidateJoinLastAnchorFrontierCheapUpperProcessedAnchorCount=13000`,
+    cheap upper `9579223`, local residual gap `91051`, residual source
+    `unprocessed-generator-peek`, suffix generated-pair join upper `9566357`.
+- Finding:
+  - The new guard with min processed anchor `1` never gets a chance to help,
+    because low-memory prefix/full proof can spend the budget before proving
+    even the first anchor. Setting min processed anchor to `0` would effectively
+    skip full proof when cheap upper is already available; that may avoid a
+    regression but cannot improve exactness.
+  - Therefore prefix/high-pair-scan full proof remains diagnostic-only. Do not
+    tune prefix limit, high-pair scan threshold, or full proof timebox as a
+    40/40 exactness path.
+  - The remaining blocker is still the P06 `unprocessed-generator-peek`
+    frontier. A useful next patch must tighten the bulk tail certificate or
+    reduce the high-pair proof artifact memory cost; not just add another
+    per-anchor/prefix proof attempt.
 
 2026-06-12 06:20 CST P06 frontier experiments after max4 dual reuse:
 

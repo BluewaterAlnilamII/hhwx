@@ -144,6 +144,8 @@ export type BandoriMedleySearchOptimizationOptions = {
   eventRootFrontierProbeAnchorProofMaxOtherSlotCandidateTotal?: number;
   eventRootFrontierProbeAnchorProofMaxHighPairRecords?: number;
   eventRootFrontierProbeAnchorProofTimeboxMs?: number;
+  eventRootFrontierProbeAnchorProofStopAtCheapUpper?: boolean;
+  eventRootFrontierProbeAnchorProofStopAtCheapUpperMinProcessedAnchors?: number;
   eventRootFrontierProbeAnchorCheapUpperTimeboxMs?: number;
   eventRootFrontierProbeAnchorCheapUpperMinRemainingMs?: number;
   eventRootFrontierProbeAnchorCheapUpperMaxAnchors?: number;
@@ -629,8 +631,10 @@ export type BandoriMedleyTeamSearchProfilingStats = {
   exactCandidateJoinAnchorFrontierProofCompletedCount: number;
   exactCandidateJoinAnchorFrontierProofTimeboxCount: number;
   exactCandidateJoinAnchorFrontierProofSkipCount: number;
+  exactCandidateJoinAnchorFrontierProofCheapUpperStopCount: number;
   exactCandidateJoinLastAnchorFrontierProofSkipReason: string | null;
   exactCandidateJoinLastAnchorFrontierProofHighPairRecordUpperCount: number | null;
+  exactCandidateJoinLastAnchorFrontierProofCheapUpperStopBound: number | null;
   exactCandidateJoinAnchorFrontierCheapUpperCount: number;
   exactCandidateJoinAnchorFrontierCheapUpperImprovementCount: number;
   exactCandidateJoinAnchorFrontierCheapUpperTimeboxCount: number;

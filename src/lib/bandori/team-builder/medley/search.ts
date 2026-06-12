@@ -1555,6 +1555,18 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
   )
     ? Math.max(0, parsedEventRootFrontierProbeAnchorProofTimeboxMs)
     : null;
+  const eventRootFrontierProbeAnchorProofStopAtCheapUpper = (
+    optimization.eventRootFrontierProbeAnchorProofStopAtCheapUpper === true
+  );
+  const parsedEventRootFrontierProbeAnchorProofStopAtCheapUpperMinProcessedAnchors =
+    optimization.eventRootFrontierProbeAnchorProofStopAtCheapUpperMinProcessedAnchors !== undefined
+      ? Math.trunc(optimization.eventRootFrontierProbeAnchorProofStopAtCheapUpperMinProcessedAnchors)
+      : Number.NaN;
+  const eventRootFrontierProbeAnchorProofStopAtCheapUpperMinProcessedAnchors = Number.isFinite(
+    parsedEventRootFrontierProbeAnchorProofStopAtCheapUpperMinProcessedAnchors,
+  )
+    ? Math.max(0, parsedEventRootFrontierProbeAnchorProofStopAtCheapUpperMinProcessedAnchors)
+    : 1;
   const parsedEventRootFrontierProbeAnchorCheapUpperTimeboxMs =
     optimization.eventRootFrontierProbeAnchorCheapUpperTimeboxMs !== undefined
       ? Math.trunc(optimization.eventRootFrontierProbeAnchorCheapUpperTimeboxMs)
@@ -1804,6 +1816,10 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
       anchorFrontierProofMaxOtherSlotCandidateTotal: eventRootFrontierProbeAnchorProofMaxOtherSlotCandidateTotal,
       anchorFrontierProofMaxHighPairRecords: eventRootFrontierProbeAnchorProofMaxHighPairRecords,
       anchorFrontierProofTimeboxMs: eventRootFrontierProbeAnchorProofTimeboxMs,
+      anchorFrontierProofStopAtCheapUpper: eventRootFrontierProbeAnchorProofStopAtCheapUpper,
+      anchorFrontierProofStopAtCheapUpperMinProcessedAnchors: (
+        eventRootFrontierProbeAnchorProofStopAtCheapUpperMinProcessedAnchors
+      ),
       anchorFrontierCheapUpperTimeboxMs: eventRootFrontierProbeAnchorCheapUpperTimeboxMs,
       anchorFrontierCheapUpperMinRemainingMs: eventRootFrontierProbeAnchorCheapUpperMinRemainingMs,
       anchorFrontierCheapUpperMaxAnchors: eventRootFrontierProbeAnchorCheapUpperMaxAnchors,
@@ -3632,6 +3648,9 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
       exactCandidateJoinAnchorFrontierProofSkipCount: (
         profiling.exactCandidateJoinAnchorFrontierProofSkipCount
       ),
+      exactCandidateJoinAnchorFrontierProofCheapUpperStopCount: (
+        profiling.exactCandidateJoinAnchorFrontierProofCheapUpperStopCount
+      ),
       exactCandidateJoinAnchorFrontierCheapUpperCount: (
         profiling.exactCandidateJoinAnchorFrontierCheapUpperCount
       ),
@@ -3928,6 +3947,10 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
       exactCandidateJoinAnchorFrontierProofSkipCountDelta: (
         profiling.exactCandidateJoinAnchorFrontierProofSkipCount
         - traceStartCounters.exactCandidateJoinAnchorFrontierProofSkipCount
+      ),
+      exactCandidateJoinAnchorFrontierProofCheapUpperStopCountDelta: (
+        profiling.exactCandidateJoinAnchorFrontierProofCheapUpperStopCount
+        - traceStartCounters.exactCandidateJoinAnchorFrontierProofCheapUpperStopCount
       ),
       exactCandidateJoinAnchorFrontierCheapUpperCountDelta: (
         profiling.exactCandidateJoinAnchorFrontierCheapUpperCount
@@ -6248,6 +6271,10 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
             eventRootFrontierProbeAnchorProofMaxHighPairRecords
           ),
           anchorFrontierProofTimeboxMs: eventRootFrontierProbeAnchorProofTimeboxMs,
+          anchorFrontierProofStopAtCheapUpper: eventRootFrontierProbeAnchorProofStopAtCheapUpper,
+          anchorFrontierProofStopAtCheapUpperMinProcessedAnchors: (
+            eventRootFrontierProbeAnchorProofStopAtCheapUpperMinProcessedAnchors
+          ),
           anchorFrontierCheapUpperOnly: probeCheapUpperOnly,
           anchorFrontierCheapUpperTimeboxMs: eventRootFrontierProbeAnchorCheapUpperTimeboxMs,
           anchorFrontierCheapUpperMinRemainingMs: eventRootFrontierProbeAnchorCheapUpperMinRemainingMs,
