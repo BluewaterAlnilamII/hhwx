@@ -6155,3 +6155,54 @@ P07 failed follow-ups after P03 fix:
     anchor proof when the prefix fallback residual is already worse than the
     cheap-upper residual, or a different proof representation that can make
     progress before consuming tens of seconds.
+
+2026-06-12 10:02 CST rejected shared-power dual reuse budget increase:
+
+- Code added and pushed:
+  - `e630f20 Add medley dual reuse budget diagnostic`.
+  - New default-off diagnostic option:
+    `eventRootFrontierProbeAnchorCheapUpperPairCapacitySharedPowerDualReuseMaxCalls`.
+  - Default behavior is unchanged. When the option is unset, cheap-upper
+    shared-power dual reuse keeps the previous derived limit of
+    `pairCapacitySharedPowerDualCapMaxCalls * 256`.
+- Experiment:
+  - Raw:
+    `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-12T01-51-36-121Z.json`.
+  - Scope: `P06:323`, no GC, `debugConfigurationTrace=true`, same accepted
+    event-root setup as the `2026-06-11T20-56-17-305Z` run, plus
+    `eventRootFrontierProbeAnchorCheapUpperPairCapacitySharedPowerDualReuseMaxCalls=8192`.
+  - Result: rejected. Bounded, score `9488172`, upper `9935585`, gap
+    `447414`, elapsed `241333ms`, peak used heap `3794 MiB`,
+    `timedOut=false`, `memoryLimited=false`.
+- Comparison with the accepted debug diagnostic:
+  - Accepted debug raw:
+    `temp/bandori-team-builder/medley-40-exact-isolated-2026-06-11T20-56-17-305Z.json`.
+  - Accepted debug result: bounded, upper `9631451`, gap `143279`, elapsed
+    `248584ms`, peak used heap `3851 MiB`.
+  - The accepted run still left `PastelPalettes/cool` local gaps of roughly
+    `97820`, `91051`, and `82576`, but all three parameters reached the
+    cheap-upper stage. The global top unclosed row then moved to
+    `Morfonica/cool` dominated-root skips.
+  - The `8192` reuse run left `PastelPalettes/cool/visual` as
+    `same-coarse-frontier-skip-seeding` with `low-remaining-budget`, keeping a
+    much wider remembered upper and a `447413` local gap.
+- Signal:
+  - The increased budget was not the limiting factor: the final cheap-upper
+    calls used only about `3390`-`3766` reuse calls, below `8192`.
+  - Reuse did produce many processed-anchor improvements
+    (`3265`-`3597`) and spent only about `3.7s`-`4.0s` per call, but the final
+    residual still came from `unprocessed-generator-peek`, not from the
+    processed pair-capacity term.
+  - The extra reuse work is enough to disturb tight same-coarse scheduling:
+    the third `PastelPalettes/cool` parameter reached the retry point with
+    only `58669ms` remaining and skipped the event-root probe.
+- Decision:
+  - Keep the option default-off as a diagnostic handle only.
+  - Do not increase the reuse budget in acceptance settings and do not test
+    larger values such as `20000`; the probe already shows the cap is no
+    longer the bottleneck.
+  - Stop pursuing processed shared-power dual reuse as the direct 40/40 route.
+    The remaining blocker is a lower-cost certificate for the same-coarse
+    `PastelPalettes/cool` frontier, especially the `unprocessed-generator-peek`
+    upper and the inability to give all three parameters complete proof work
+    within the local budget.
