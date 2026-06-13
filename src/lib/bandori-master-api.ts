@@ -88,6 +88,74 @@ function readPayloadRecord(payload: unknown, recordId: string): unknown | null {
   return payload[recordId] ?? null;
 }
 
+function toPositiveInteger(value: unknown): number | null {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric) || numeric <= 0) {
+    return null;
+  }
+  return Math.trunc(numeric);
+}
+
+function buildNormalBandIdByCharacterId(bandsPayload: unknown): Map<number, number> {
+  const bandIdByCharacterId = new Map<number, number>();
+  if (!isRecord(bandsPayload)) {
+    return bandIdByCharacterId;
+  }
+
+  for (const [rawBandId, rawBand] of Object.entries(bandsPayload)) {
+    if (!isRecord(rawBand) || rawBand.bandType !== "normal" || !Array.isArray(rawBand.members)) {
+      continue;
+    }
+
+    const bandId = toPositiveInteger(rawBandId);
+    if (bandId === null) {
+      continue;
+    }
+
+    for (const rawCharacterId of rawBand.members) {
+      const characterId = toPositiveInteger(rawCharacterId);
+      if (characterId !== null && !bandIdByCharacterId.has(characterId)) {
+        bandIdByCharacterId.set(characterId, bandId);
+      }
+    }
+  }
+
+  return bandIdByCharacterId;
+}
+
+function normalizeArtifactCharacterPayload(
+  charactersPayload: unknown,
+  bandsPayload: unknown,
+  options: { mainOnly: boolean },
+): unknown {
+  if (!isRecord(charactersPayload)) {
+    return charactersPayload;
+  }
+
+  const bandIdByCharacterId = buildNormalBandIdByCharacterId(bandsPayload);
+  const payload: Record<string, unknown> = {};
+  for (const [recordId, record] of Object.entries(charactersPayload)) {
+    if (!isRecord(record)) {
+      if (!options.mainOnly) {
+        payload[recordId] = record;
+      }
+      continue;
+    }
+    if (options.mainOnly && record.characterType !== "unique") {
+      continue;
+    }
+
+    const characterId = toPositiveInteger(recordId);
+    const normalBandId = characterId !== null ? bandIdByCharacterId.get(characterId) : undefined;
+    payload[recordId] = normalBandId === undefined ? record : {
+      ...record,
+      bandId: normalBandId,
+    };
+  }
+
+  return payload;
+}
+
 function projectRecordPayload(payload: unknown, keys: readonly string[]): unknown {
   if (!isRecord(payload)) {
     return payload;
@@ -272,6 +340,13 @@ async function readArtifactDataset(
   if (!artifact) {
     return null;
   }
+  const payload = dataset === "characters"
+    ? normalizeArtifactCharacterPayload(
+      artifact.payload,
+      (await fetchBandoriMasterArtifactDataset("bands", server))?.payload,
+      { mainOnly: true },
+    )
+    : artifact.payload;
 
   return {
     dataset,
@@ -280,7 +355,7 @@ async function readArtifactDataset(
     masterVersion: artifact.manifest.masterVersion,
     artifactVersion: artifact.manifest.version,
     artifactDataset: artifact.artifactDataset,
-    payload: artifact.payload,
+    payload,
   };
 }
 
@@ -293,6 +368,13 @@ async function readArtifactNamedDataset(
   if (!artifact) {
     return null;
   }
+  const payload = artifactDataset === "characters"
+    ? normalizeArtifactCharacterPayload(
+      artifact.payload,
+      (await fetchBandoriMasterArtifactDataset("bands", server))?.payload,
+      { mainOnly: dataset === "characters" || dataset === "characters_main" },
+    )
+    : artifact.payload;
 
   return {
     dataset,
@@ -301,7 +383,7 @@ async function readArtifactNamedDataset(
     masterVersion: artifact.manifest.masterVersion,
     artifactVersion: artifact.manifest.version,
     artifactDataset: artifact.artifactDataset,
-    payload: artifact.payload,
+    payload,
   };
 }
 

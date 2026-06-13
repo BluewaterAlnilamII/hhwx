@@ -586,7 +586,7 @@ function buildLegacyGreedyMedleyInput({
 async function preloadSearchData(request: TeamSearchWorkerPreloadRequest): Promise<void> {
   const preloadRequests: Array<Promise<unknown>> = [
     requestJson<MasterResponse<Record<string, BestdoriCardMaster | undefined>>>("/api/bandori/master/cards"),
-    requestJson<MasterResponse<Record<string, { bandId?: number | null } | undefined>>>("/api/bandori/master/characters"),
+    requestJson<MasterResponse<Record<string, { bandId?: number | null } | undefined>>>("/api/bandori/master/characters/main"),
     requestJson<MasterResponse<Record<string, BestdoriSkillMaster | undefined>>>("/api/bandori/master/skills"),
     requestJson<MasterResponse<Record<string, BestdoriAreaItemMaster | undefined>>>("/api/bandori/master/areaItems"),
     requestJson<MasterResponse<Record<string, BestdoriSongMaster | undefined>>>("/api/bandori/master/songs"),
@@ -629,7 +629,7 @@ async function runSearch(
     ];
   const [cardsPayload, charactersPayload, skillsPayload, areaItemsPayload, songsPayload, chartPayloads, eventBonuses] = await Promise.all([
     requireCachedJson<MasterResponse<Record<string, BestdoriCardMaster | undefined>>>("/api/bandori/master/cards", "卡牌数据"),
-    requireCachedJson<MasterResponse<Record<string, { bandId?: number | null } | undefined>>>("/api/bandori/master/characters", "角色数据"),
+    requireCachedJson<MasterResponse<Record<string, { bandId?: number | null } | undefined>>>("/api/bandori/master/characters/main", "角色数据"),
     requireCachedJson<MasterResponse<Record<string, BestdoriSkillMaster | undefined>>>("/api/bandori/master/skills", "技能数据"),
     requireCachedJson<MasterResponse<Record<string, BestdoriAreaItemMaster | undefined>>>("/api/bandori/master/areaItems", "区域道具数据"),
     requireCachedJson<MasterResponse<Record<string, BestdoriSongMaster | undefined>>>("/api/bandori/master/songs", "歌曲数据"),
