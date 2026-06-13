@@ -156,6 +156,96 @@ function normalizeArtifactCharacterPayload(
   return payload;
 }
 
+function normalizeArtifactCardSkillIds(cardsPayload: unknown, bestdoriCardsPayload: unknown): unknown {
+  if (!isRecord(cardsPayload) || !isRecord(bestdoriCardsPayload)) {
+    return cardsPayload;
+  }
+
+  const payload: Record<string, unknown> = {};
+  for (const [recordId, record] of Object.entries(cardsPayload)) {
+    if (!isRecord(record)) {
+      payload[recordId] = record;
+      continue;
+    }
+
+    const bestdoriRecord = bestdoriCardsPayload[recordId];
+    const bestdoriSkillId = isRecord(bestdoriRecord) ? toPositiveInteger(bestdoriRecord.skillId) : null;
+    payload[recordId] = bestdoriSkillId === null ? record : {
+      ...record,
+      skillId: bestdoriSkillId,
+    };
+  }
+
+  return payload;
+}
+
+async function normalizeArtifactCardsResult(
+  result: BandoriMasterApiReadResult | null,
+): Promise<BandoriMasterApiReadResult | null> {
+  if (!result) {
+    return null;
+  }
+
+  const bestdoriCardsPayload = (await readBestdoriDataset("cards")).payload;
+  return {
+    ...result,
+    payload: normalizeArtifactCardSkillIds(result.payload, bestdoriCardsPayload),
+    coverage: {
+      status: "partial",
+      reason: "cards.skillId is temporarily normalized from Bestdori-compatible IDs until card artifacts emit matching skill references.",
+    },
+  };
+}
+
+function normalizeArtifactAreaItemPayload(areaItemsPayload: unknown): unknown {
+  if (!isRecord(areaItemsPayload)) {
+    return areaItemsPayload;
+  }
+
+  const payload: Record<string, unknown> = {};
+  for (const [recordId, record] of Object.entries(areaItemsPayload)) {
+    if (!isRecord(record)) {
+      payload[recordId] = record;
+      continue;
+    }
+
+    const targetAttributes = typeof record.targetAttributes === "string"
+      ? [record.targetAttributes]
+      : record.targetAttributes;
+    const targetBandId = toPositiveInteger(record.targetBandIds);
+    const targetBandIds = Array.isArray(record.targetBandIds) || targetBandId === null
+      ? record.targetBandIds
+      : [targetBandId];
+
+    payload[recordId] = targetAttributes === record.targetAttributes && targetBandIds === record.targetBandIds
+      ? record
+      : {
+        ...record,
+        targetAttributes,
+        targetBandIds,
+      };
+  }
+
+  return payload;
+}
+
+function normalizeArtifactAreaItemsResult(
+  result: BandoriMasterApiReadResult | null,
+): BandoriMasterApiReadResult | null {
+  if (!result) {
+    return null;
+  }
+
+  return {
+    ...result,
+    payload: normalizeArtifactAreaItemPayload(result.payload),
+    coverage: {
+      status: "partial",
+      reason: "areaItems target filters are normalized to the Bestdori-compatible array shape until artifacts emit matching fields.",
+    },
+  };
+}
+
 function projectRecordPayload(payload: unknown, keys: readonly string[]): unknown {
   if (!isRecord(payload)) {
     return payload;
@@ -415,7 +505,14 @@ export async function readBandoriMasterDataset(
     const results = await Promise.all(
       getBandoriMasterArtifactServers(server).map((artifactServer) => readArtifactDataset(dataset, artifactServer)),
     );
-    return mergeArtifactResults(dataset, results);
+    const result = mergeArtifactResults(dataset, results);
+    if (dataset === "cards") {
+      return normalizeArtifactCardsResult(result);
+    }
+    if (dataset === "areaItems") {
+      return normalizeArtifactAreaItemsResult(result);
+    }
+    return result;
   }
 
   return readBestdoriDataset(dataset);
@@ -438,6 +535,12 @@ export async function readBandoriMasterPath(
     );
     const result = mergeArtifactResults(dataset, results, artifactDataset);
     if (result || !options?.emptyWhenArtifactMissing) {
+      if (artifactDataset === "cards") {
+        return normalizeArtifactCardsResult(result);
+      }
+      if (artifactDataset === "areaItems") {
+        return normalizeArtifactAreaItemsResult(result);
+      }
       return result;
     }
 
