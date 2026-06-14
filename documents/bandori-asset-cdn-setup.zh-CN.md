@@ -15,9 +15,17 @@ Web 应用从以下环境变量读取 Bandori 资源 URL：
 ```dotenv
 NEXT_PUBLIC_BANDORI_ASSET_CDN_BASE_URL=https://your-bandori-asset-cdn.example.com
 BANDORI_ASSET_CDN_BASE_URL=https://your-bandori-asset-cdn.example.com
+BANDORI_CHART_SOURCE=bestdori
+# BANDORI_CHART_SOURCE=assets
+# BANDORI_MUSIC_CDN_BASE_URL=https://your-bandori-asset-cdn.example.com
+# BANDORI_CHART_BESTDORI_FALLBACK=0
 ```
 
 `NEXT_PUBLIC_BANDORI_ASSET_CDN_BASE_URL` 会暴露给浏览器。`BANDORI_ASSET_CDN_BASE_URL` 可供服务端代码使用。大多数部署中两者应指向同一个资源主机。
+
+`BANDORI_CHART_SOURCE=bestdori` 保留默认的 web-only 行为。只有在私有资源构建器已经发布下方 music chart 对象后，才应切换到 `BANDORI_CHART_SOURCE=assets`。`BANDORI_MUSIC_CDN_BASE_URL` 可以让谱面读取使用单独主机；省略时使用 `BANDORI_ASSET_CDN_BASE_URL`。`BANDORI_CHART_BESTDORI_FALLBACK=1` 允许自建谱面对象缺失时临时回退 Bestdori。
+
+启用 Bandori master artifact 模式时，HHWX 仍会从 Bestdori 读取 `events` 和 `songs.notes`。这些字段会继续依赖上游，直到 HHWX 自有活动历史和从谱面派生的 note 数完全替代它们。
 
 自托管部署不要指向 `cdn.hhwx.org`，除非你明确希望依赖 HHWX 生产资源托管。该域名只是部署细节，不授予任何第三方游戏素材权利。
 
@@ -63,6 +71,24 @@ bandori/res/icon/{iconName}
 bandori/res/image/card-{rarity}.png
 ```
 
+音乐资源和谱面 JSON：
+
+```text
+{CDN_BASE}/bandori/music/{musicId}/jacket.png
+{CDN_BASE}/bandori/music/{musicId}/thumb.png
+{CDN_BASE}/bandori/music/{musicId}/audio.mp3
+{CDN_BASE}/bandori/music/{musicId}/charts/{difficulty}.json
+{CDN_BASE}/bandori/music/{musicId}/manifest.json
+{CDN_BASE}/bandori/music/index.json
+
+bandori/music/{musicId}/jacket.png
+bandori/music/{musicId}/thumb.png
+bandori/music/{musicId}/audio.mp3
+bandori/music/{musicId}/charts/{difficulty}.json
+bandori/music/{musicId}/manifest.json
+bandori/music/index.json
+```
+
 ## 自托管预期
 
 开源 Web 仓库可以渲染依赖公开元数据和已配置资源 URL 的页面。它不包含：
@@ -85,6 +111,7 @@ https://your-bandori-asset-cdn.example.com/bandori/assets/cn/event/banner_event1
 https://your-bandori-asset-cdn.example.com/bandori/assets/cn/thumb/chara/card00000_rip/res001001_normal.png
 https://your-bandori-asset-cdn.example.com/bandori/res/icon/chara_icon_1.png
 https://your-bandori-asset-cdn.example.com/bandori/res/image/card-5.png
+https://your-bandori-asset-cdn.example.com/bandori/music/1/charts/expert.json
 ```
 
 然后打开相关 HHWX 页面，确认图片请求直接访问配置的 CDN base URL，而不是经过 Next.js image optimization route。

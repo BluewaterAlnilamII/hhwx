@@ -1,7 +1,6 @@
 import { unstable_cache } from "next/cache";
 import {
   fetchBandoriMasterArtifactDataset,
-  fetchBandoriMasterArtifactEventDetail,
   fetchBandoriMasterArtifactNamedDataset,
   getDefaultBandoriMasterArtifactServer,
   type BandoriMasterArtifactServer,
@@ -156,47 +155,6 @@ function normalizeArtifactCharacterPayload(
   return payload;
 }
 
-function normalizeArtifactCardSkillIds(cardsPayload: unknown, bestdoriCardsPayload: unknown): unknown {
-  if (!isRecord(cardsPayload) || !isRecord(bestdoriCardsPayload)) {
-    return cardsPayload;
-  }
-
-  const payload: Record<string, unknown> = {};
-  for (const [recordId, record] of Object.entries(cardsPayload)) {
-    if (!isRecord(record)) {
-      payload[recordId] = record;
-      continue;
-    }
-
-    const bestdoriRecord = bestdoriCardsPayload[recordId];
-    const bestdoriSkillId = isRecord(bestdoriRecord) ? toPositiveInteger(bestdoriRecord.skillId) : null;
-    payload[recordId] = bestdoriSkillId === null ? record : {
-      ...record,
-      skillId: bestdoriSkillId,
-    };
-  }
-
-  return payload;
-}
-
-async function normalizeArtifactCardsResult(
-  result: BandoriMasterApiReadResult | null,
-): Promise<BandoriMasterApiReadResult | null> {
-  if (!result) {
-    return null;
-  }
-
-  const bestdoriCardsPayload = (await readBestdoriDataset("cards")).payload;
-  return {
-    ...result,
-    payload: normalizeArtifactCardSkillIds(result.payload, bestdoriCardsPayload),
-    coverage: {
-      status: "partial",
-      reason: "cards.skillId is temporarily normalized from Bestdori-compatible IDs until card artifacts emit matching skill references.",
-    },
-  };
-}
-
 function normalizeArtifactAreaItemPayload(areaItemsPayload: unknown): unknown {
   if (!isRecord(areaItemsPayload)) {
     return areaItemsPayload;
@@ -239,10 +197,6 @@ function normalizeArtifactAreaItemsResult(
   return {
     ...result,
     payload: normalizeArtifactAreaItemPayload(result.payload),
-    coverage: {
-      status: "partial",
-      reason: "areaItems target filters are normalized to the Bestdori-compatible array shape until artifacts emit matching fields.",
-    },
   };
 }
 
@@ -274,14 +228,17 @@ function isMissingValue(value: unknown): boolean {
 }
 
 function isRegionalArray(value: unknown): value is unknown[] {
-  return Array.isArray(value) && value.length === 5;
+  return Array.isArray(value) && value.length === 4 && value.some(isMissingValue);
 }
 
-function mergeMasterValue(base: unknown, next: unknown): unknown {
+function mergeMasterValue(base: unknown, next: unknown, currentKey?: string): unknown {
   if (isMissingValue(base)) {
     return next;
   }
   if (isMissingValue(next)) {
+    return base;
+  }
+  if (currentKey === "seasonCostumeListMap") {
     return base;
   }
 
@@ -296,7 +253,7 @@ function mergeMasterValue(base: unknown, next: unknown): unknown {
   if (isRecord(base) && isRecord(next)) {
     const merged: Record<string, unknown> = { ...base };
     for (const [key, value] of Object.entries(next)) {
-      merged[key] = mergeMasterValue(merged[key], value);
+      merged[key] = mergeMasterValue(merged[key], value, key);
     }
     return merged;
   }
@@ -351,6 +308,51 @@ function mergeArtifactResults(
   };
 }
 
+function overlayBestdoriSongNotes(songsPayload: unknown, bestdoriSongsPayload: unknown): unknown {
+  if (!isRecord(songsPayload) || !isRecord(bestdoriSongsPayload)) {
+    return songsPayload;
+  }
+
+  const payload: Record<string, unknown> = {};
+  for (const [recordId, record] of Object.entries(songsPayload)) {
+    if (!isRecord(record)) {
+      payload[recordId] = record;
+      continue;
+    }
+
+    const bestdoriRecord = bestdoriSongsPayload[recordId];
+    if (!isRecord(bestdoriRecord) || !("notes" in bestdoriRecord)) {
+      payload[recordId] = record;
+      continue;
+    }
+
+    payload[recordId] = {
+      ...record,
+      notes: bestdoriRecord.notes,
+    };
+  }
+
+  return payload;
+}
+
+async function normalizeArtifactSongsResult(
+  result: BandoriMasterApiReadResult | null,
+): Promise<BandoriMasterApiReadResult | null> {
+  if (!result) {
+    return null;
+  }
+
+  const bestdoriSongsPayload = (await readBestdoriRawDataset("songs")).payload;
+  return {
+    ...result,
+    payload: overlayBestdoriSongNotes(result.payload, bestdoriSongsPayload),
+    coverage: {
+      status: "partial",
+      reason: "songs.notes is sourced from Bestdori until HHWX chart-derived note counts replace this field.",
+    },
+  };
+}
+
 export function refineBandoriMasterRecordPayload(
   result: BandoriMasterApiReadResult,
   options: {
@@ -399,6 +401,16 @@ const readBestdoriDataset = unstable_cache(
       : await fetchBestdoriMasterDataset(dataset),
   }),
   ["bandori-master-api-bestdori-dataset:v1"],
+  { revalidate: 86400 },
+);
+
+const readBestdoriRawDataset = unstable_cache(
+  async (dataset: BestdoriMasterDatasetKey): Promise<BandoriMasterApiReadResult> => ({
+    dataset,
+    source: "bestdori",
+    payload: await fetchBestdoriMasterDataset(dataset),
+  }),
+  ["bandori-master-api-bestdori-raw-dataset:v1"],
   { revalidate: 86400 },
 );
 
@@ -477,37 +489,21 @@ async function readArtifactNamedDataset(
   };
 }
 
-async function readArtifactEventDetail(
-  eventId: string,
-  server: BandoriMasterArtifactServer,
-): Promise<BandoriMasterApiReadResult | null> {
-  const artifact = await fetchBandoriMasterArtifactEventDetail(eventId, server);
-  if (!artifact) {
-    return null;
-  }
-
-  return {
-    dataset: "event_detail",
-    source: artifact.source,
-    server: artifact.server,
-    masterVersion: artifact.manifest.masterVersion,
-    artifactVersion: artifact.manifest.version,
-    artifactDataset: "event_detail",
-    payload: artifact.payload,
-  };
-}
-
 export async function readBandoriMasterDataset(
   dataset: BestdoriMasterDatasetKey,
   server?: BandoriMasterArtifactServer,
 ): Promise<BandoriMasterApiReadResult | null> {
   if (shouldUseArtifacts()) {
+    if (dataset === "events") {
+      return readBestdoriDataset("events");
+    }
+
     const results = await Promise.all(
       getBandoriMasterArtifactServers(server).map((artifactServer) => readArtifactDataset(dataset, artifactServer)),
     );
     const result = mergeArtifactResults(dataset, results);
-    if (dataset === "cards") {
-      return normalizeArtifactCardsResult(result);
+    if (dataset === "songs") {
+      return normalizeArtifactSongsResult(result);
     }
     if (dataset === "areaItems") {
       return normalizeArtifactAreaItemsResult(result);
@@ -535,9 +531,6 @@ export async function readBandoriMasterPath(
     );
     const result = mergeArtifactResults(dataset, results, artifactDataset);
     if (result || !options?.emptyWhenArtifactMissing) {
-      if (artifactDataset === "cards") {
-        return normalizeArtifactCardsResult(result);
-      }
       if (artifactDataset === "areaItems") {
         return normalizeArtifactAreaItemsResult(result);
       }
@@ -562,15 +555,9 @@ export async function readBandoriMasterPath(
 
 export async function readBandoriMasterEventDetail(
   eventId: string,
-  server?: BandoriMasterArtifactServer,
 ): Promise<BandoriMasterApiReadResult | null> {
   if (shouldUseArtifacts()) {
-    const results = await Promise.all(
-      getBandoriMasterArtifactServers(server).map((artifactServer) => (
-        readArtifactEventDetail(eventId, artifactServer)
-      )),
-    );
-    return mergeArtifactResults("event_detail", results, "event_detail");
+    return readBestdoriEventDetail(eventId);
   }
 
   return readBestdoriEventDetail(eventId);
