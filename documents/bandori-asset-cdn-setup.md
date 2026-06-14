@@ -15,9 +15,17 @@ The web app reads Bandori asset URLs from these environment variables:
 ```dotenv
 NEXT_PUBLIC_BANDORI_ASSET_CDN_BASE_URL=https://your-bandori-asset-cdn.example.com
 BANDORI_ASSET_CDN_BASE_URL=https://your-bandori-asset-cdn.example.com
+BANDORI_CHART_SOURCE=bestdori
+# BANDORI_CHART_SOURCE=assets
+# BANDORI_MUSIC_CDN_BASE_URL=https://your-bandori-asset-cdn.example.com
+# BANDORI_CHART_BESTDORI_FALLBACK=0
 ```
 
 `NEXT_PUBLIC_BANDORI_ASSET_CDN_BASE_URL` is exposed to browsers. `BANDORI_ASSET_CDN_BASE_URL` is available to server-side code. In most deployments they should point to the same asset host.
+
+`BANDORI_CHART_SOURCE=bestdori` keeps the default web-only behavior. Set `BANDORI_CHART_SOURCE=assets` only after a private asset builder has populated the music chart objects documented below. `BANDORI_MUSIC_CDN_BASE_URL` can point charts at a separate host; when omitted, chart reads use `BANDORI_ASSET_CDN_BASE_URL`. `BANDORI_CHART_BESTDORI_FALLBACK=1` permits a temporary Bestdori fallback when a self-hosted chart object is missing.
+
+When Bandori master artifact mode is enabled, HHWX still reads Bestdori for `events` and for `songs.notes`. Those fields remain upstream-backed until HHWX-owned event history and chart-derived note counts fully replace them.
 
 Do not point self-hosted deployments at `cdn.hhwx.org` unless you intentionally depend on HHWX production asset hosting. That domain is a deployment detail and does not grant rights to third-party game assets.
 
@@ -63,6 +71,24 @@ bandori/res/icon/{iconName}
 bandori/res/image/card-{rarity}.png
 ```
 
+Music assets and chart JSON:
+
+```text
+{CDN_BASE}/bandori/music/{musicId}/jacket.png
+{CDN_BASE}/bandori/music/{musicId}/thumb.png
+{CDN_BASE}/bandori/music/{musicId}/audio.mp3
+{CDN_BASE}/bandori/music/{musicId}/charts/{difficulty}.json
+{CDN_BASE}/bandori/music/{musicId}/manifest.json
+{CDN_BASE}/bandori/music/index.json
+
+bandori/music/{musicId}/jacket.png
+bandori/music/{musicId}/thumb.png
+bandori/music/{musicId}/audio.mp3
+bandori/music/{musicId}/charts/{difficulty}.json
+bandori/music/{musicId}/manifest.json
+bandori/music/index.json
+```
+
 ## Self-Hosted Expectations
 
 The open-source web repository can render pages that use public metadata and configured asset URLs. It does not ship:
@@ -85,6 +111,7 @@ https://your-bandori-asset-cdn.example.com/bandori/assets/cn/event/banner_event1
 https://your-bandori-asset-cdn.example.com/bandori/assets/cn/thumb/chara/card00000_rip/res001001_normal.png
 https://your-bandori-asset-cdn.example.com/bandori/res/icon/chara_icon_1.png
 https://your-bandori-asset-cdn.example.com/bandori/res/image/card-5.png
+https://your-bandori-asset-cdn.example.com/bandori/music/1/charts/expert.json
 ```
 
 Then open the relevant HHWX pages and confirm image requests go directly to the configured CDN base URL instead of through Next.js image optimization routes.
