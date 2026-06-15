@@ -50,6 +50,10 @@ const TESTS: Array<{ name: string; run: () => void }> = [
     run: testAIStateEntryBuffAppliesOnceToEnemy,
   },
   {
+    name: "continuous-change buffs disable enemy movement",
+    run: testContinuousChangeBuffDisablesEnemyMovement,
+  },
+  {
     name: "AI state entry common-state changes apply to active enemies",
     run: testAIStateEntryCommonStateAppliesToEnemy,
   },
@@ -795,6 +799,90 @@ function testAIStateEntryBuffAppliesOnceToEnemy() {
   assert.equal(repeatedState.enemies[0]?.activeBuffs.length, 1);
   assert.equal(repeatedBuff.stackCount, 1);
   assertClose(repeatedBuff.remainingSeconds, 3 - (1 / 30), "AI state entry buff duration");
+}
+
+function testContinuousChangeBuffDisablesEnemyMovement() {
+  const runtimeData = createRuntimeFixture();
+  runtimeData.buffs.push(
+    createBuffFixture({
+      id: 131,
+      name: "Fixture Continuous Change",
+      type: 8,
+      duplicateType: 2,
+      levels: [
+        {
+          level: 1,
+          durationFrames: 90,
+          value: 1,
+          maxStackCount: 1,
+          fireBullets: [],
+          attributes: [
+            {
+              attributeType: 14,
+              value: 1,
+            },
+          ],
+        },
+      ],
+    }),
+  );
+  runtimeData.ais.push({
+    id: 994,
+    name: "Fixture Continuous Change AI",
+    firstStateId: 1,
+    states: [
+      {
+        id: 1,
+        name: "Fixture Continuous Change Movement",
+        stateType: 1,
+        lastFrame: 0,
+        buffId: 131,
+        buffLevel: 1,
+        isFireBullet: false,
+        bulletFireCooldownFrames: 0,
+        fireBullets: [],
+        bulletShooterId: 0,
+        nextStates: [],
+        timelineEvents: [],
+      },
+    ],
+  });
+
+  const baseState = createStateWithEnemy(runtimeData, 100, {
+    aiTypeId: 994,
+    aiStateId: 1,
+    aiStateElapsedFrames: 0,
+    speed: 120,
+    x: 120,
+    y: 0,
+  });
+  const buffedState = updateNfoSimulation(
+    {
+      ...baseState,
+      player: {
+        ...baseState.player,
+        fireCooldownSeconds: 999,
+      },
+    },
+    runtimeData,
+    NO_INPUT,
+    1 / 30,
+  );
+  const pausedState = updateNfoSimulation(buffedState, runtimeData, NO_INPUT, 1);
+
+  assert.ok(
+    buffedState.enemies[0]?.activeBuffs.some((buff) => buff.id === 131 && buff.type === 8),
+    "expected continuous-change buff to apply to the enemy",
+  );
+  assert.ok(
+    (buffedState.enemies[0]?.x ?? Number.NaN) < 120,
+    "expected first frame movement before the state-entry buff takes effect",
+  );
+  assertClose(
+    pausedState.enemies[0]?.x ?? Number.NaN,
+    buffedState.enemies[0]?.x ?? Number.NaN,
+    "continuous-change enemy x",
+  );
 }
 
 function testAIStateEntryCommonStateAppliesToEnemy() {

@@ -261,7 +261,9 @@ It also locks AI `80` `TriggerLevelEventID` samples and the first-pass level
 AIState entry-buff parity now locks every CN snapshot state that carries
 `buffID`: AI `38` state `5` and state `6` apply boss weak debuff `101`, and AI
 `41` state `1` applies continuous-change buff `102`. The first-pass runtime
-applies these as ordinary entity active buffs on the AIState entry frame.
+applies these as ordinary entity active buffs on the AIState entry frame and
+treats buff `102`'s `attributeType = 14` / value `1` as movement-disabled while
+the buff is active.
 AIState common-state parity now locks CN AI `32` state `1` changing the entity
 common state to `1` and state `2` changing it back to `0`; the runtime stores
 that value on the serializable enemy/minion entity so renderer/debug layers can
@@ -448,6 +450,7 @@ Current playable prototype:
   applies `AIStateData.buffID/buffLevel` once on the AIState entry frame through
   the existing entity active-buff system, including CN AI `38` state `5`/`6`
   boss weak debuff `101` and AI `41` state `1` continuous-change buff `102`,
+  with buff `102`'s `attributeType = 14` acting as first-pass movement disable,
   records `AIStateData.IsChangeEntityCommonState` / `EntityCommonStateChangeTo`
   on serializable entities, including CN AI `32` state `1` -> common state `1`
   and state `2` -> common state `0`,
@@ -745,7 +748,8 @@ AI `38` state `5` and state `6` map to boss weak debuff `101`
 (`attributeType = 3`, value `-500`, duration `120` frames), while AI `41`
 state `1` maps to buff `102` (`attributeType = 14`, value `1`, duration
 `6000` frames). The parity simulation verifies those buffs are applied once to
-the enemy active-buff list on the state entry frame.
+the enemy active-buff list on the state entry frame, and buff `102` also locks
+first-pass movement disable while active.
 The AIState common-state fixture set now locks CN AI `32` state `1`
 (`IsChangeEntityCommonState = 1`, `EntityCommonStateChangeTo = 1`) and state
 `2` (`EntityCommonStateChangeTo = 0`); the parity simulation verifies the
@@ -1292,8 +1296,9 @@ Weapon behavior staging:
 - Buff types beyond the implemented hit-buff, contact-buff, invincible,
   heal-percent, first-pass revive, first-pass stealth attributes/buff bullet, and
   first-pass taunt-source movement subsets remain intentionally conservative:
-  native stealth targeting/visibility behavior, boss-continuous-change, and
-  deeper taunt threat/retargeting effects are mapped but not simulated yet.
+  native stealth targeting/visibility behavior, deeper boss-continuous-change
+  semantics beyond first-pass movement disable, and deeper taunt
+  threat/retargeting effects are mapped but not simulated yet.
 - Current active skill handling maps CN `activeSkillData`, level charge frames,
   timeline frames, `TimeLineEvents`, `AddBuffDatas`, `BulletShooterID`,
   `SpawnMinionData`, `spawnPosSelector`, full-screen effect names, and the

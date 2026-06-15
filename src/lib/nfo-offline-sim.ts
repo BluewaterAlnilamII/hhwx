@@ -66,6 +66,7 @@ const NFO_ATTRIBUTE_TYPE = {
   expGain: 11,
   criticalRate: 12,
   criticalDamage: 13,
+  movementDisabled: 14,
   coinGain: 15,
 } as const;
 const NFO_BULLET_DAMAGE_JUDGE_TYPE = {
@@ -150,6 +151,7 @@ const NFO_BUFF_TYPE = {
   shield: 5,
   counter: 6,
   stealth: 7,
+  continuousChange: 8,
   invincible: 9,
   healPercent: 11,
   revive: 12,
@@ -4242,8 +4244,27 @@ function canActiveBuffApplyAttributes(buff: NfoSimActiveBuff): boolean {
 
 function isActiveBuffMovementDisabled(activeBuffs: NfoSimActiveBuff[]): boolean {
   return activeBuffs.some((buff) => (
-    buff.type === NFO_BUFF_TYPE.stun || buff.type === NFO_BUFF_TYPE.freeze
+    buff.remainingSeconds > 0
+    && (
+      buff.type === NFO_BUFF_TYPE.stun
+      || buff.type === NFO_BUFF_TYPE.freeze
+      || (
+        buff.type === NFO_BUFF_TYPE.continuousChange
+        && getActiveBuffOwnAttributeValue(buff, NFO_ATTRIBUTE_TYPE.movementDisabled) > 0
+      )
+    )
   ));
+}
+
+function getActiveBuffOwnAttributeValue(
+  buff: NfoSimActiveBuff,
+  attributeType: number,
+): number {
+  return buff.attributes.reduce((total, attribute) => (
+    attribute.attributeType === attributeType
+      ? total + attribute.value
+      : total
+  ), 0) * buff.stackCount;
 }
 
 function doesBulletOverlapEnemy(

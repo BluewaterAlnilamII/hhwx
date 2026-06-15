@@ -28,6 +28,7 @@ const FIRST_PASS_GUARDIAN_SONG_ORBIT_RADIUS = 120;
 const CN_NFO_ATTRIBUTE_TYPE = {
   attack: 2,
   bulletSize: 7,
+  movementDisabled: 14,
 } as const;
 let fixture: ReturnType<typeof buildNfoCnParityFixture>;
 
@@ -7790,6 +7791,82 @@ function assertCnAIStateEntryBuffApplies(
     buff.id === buffCase.buffId
   )) ?? [];
   assert.equal(repeatedBuffs.length, 1);
+
+  if (
+    buffCase.buffType === 8
+    && buffCase.buffAttributes.some((attribute) => (
+      attribute.attributeType === CN_NFO_ATTRIBUTE_TYPE.movementDisabled
+      && attribute.value > 0
+    ))
+  ) {
+    testCnContinuousChangeBuffDisablesEnemyMovement(testRuntimeData, baseState, activeBuff);
+  }
+}
+
+function testCnContinuousChangeBuffDisablesEnemyMovement(
+  runtimeData: NfoOfflineRuntimeData,
+  baseState: NfoSimulationState,
+  activeBuff: NonNullable<NfoSimulationState["enemies"][number]["activeBuffs"][number]>,
+) {
+  const aiTypeId = 990041;
+  runtimeData.ais.push({
+    id: aiTypeId,
+    name: "CN parity continuous-change movement fixture",
+    firstStateId: 1,
+    states: [
+      {
+        id: 1,
+        name: "CN parity move-to-player",
+        stateType: 1,
+        lastFrame: 0,
+        buffId: 0,
+        buffLevel: 0,
+        isFireBullet: false,
+        bulletFireCooldownFrames: 0,
+        fireBullets: [],
+        bulletShooterId: 0,
+        nextStates: [],
+        timelineEvents: [],
+      },
+    ],
+  });
+
+  const createMovementState = (activeBuffs: typeof activeBuff[] = []): NfoSimulationState => ({
+    ...baseState,
+    player: {
+      ...baseState.player,
+      fireCooldownSeconds: 999,
+    },
+    enemies: [
+      createEnemyFixture(
+        baseState,
+        baseState.player.x + 120,
+        baseState.player.y,
+        {
+          aiTypeId,
+          aiStateId: 1,
+          aiStateElapsedFrames: 0,
+          activeBuffs,
+          speed: 120,
+        },
+      ),
+    ],
+  });
+
+  const movingState = createMovementState();
+  const movedState = updateNfoSimulation(movingState, runtimeData, NO_INPUT, 1);
+  const continuousChangeState = createMovementState([structuredClone(activeBuff)]);
+  const pausedState = updateNfoSimulation(continuousChangeState, runtimeData, NO_INPUT, 1);
+
+  assert.ok(
+    (movedState.enemies[0]?.x ?? Number.NaN) < (movingState.enemies[0]?.x ?? Number.NaN),
+    "expected unbuffed CN parity movement fixture to move toward the player",
+  );
+  assertClose(
+    pausedState.enemies[0]?.x ?? Number.NaN,
+    continuousChangeState.enemies[0]?.x ?? Number.NaN,
+    "CN continuous-change movement disabled x",
+  );
 }
 
 function testCnAIStateCommonStateChangesApplyToEnemy(
