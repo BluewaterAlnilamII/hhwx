@@ -222,6 +222,10 @@ const TESTS: Array<{ name: string; run: () => void }> = [
     run: testActiveSkillPlayerSideBuffTargetsExistingMinions,
   },
   {
+    name: "active skill player-side buffs modify minion weapon fire",
+    run: testActiveSkillPlayerSideBuffModifiesMinionWeaponFire,
+  },
+  {
     name: "active skill heal-percent buffs restore player HP immediately",
     run: testActiveSkillHealPercentBuffRestoresPlayerHp,
   },
@@ -2295,6 +2299,78 @@ function testActiveSkillPlayerSideBuffTargetsExistingMinions() {
 
   assert.ok(selfOnlyBuffState.player.activeBuffs.some((buff) => buff.id === 7));
   assert.equal(selfOnlyBuffState.minions[0]?.activeBuffs.some((buff) => buff.id === 7), false);
+}
+
+function testActiveSkillPlayerSideBuffModifiesMinionWeaponFire() {
+  const runtimeData = createRuntimeFixture();
+  addPlayerAttributeBuffFixture(runtimeData);
+  setActiveSkillToBuffsOnly(runtimeData, [{ buffId: 121, level: 1, targetType: 1 }]);
+  const state = addContactEnemyToState(createNfoSimulation(runtimeData), {
+    x: 1000,
+    y: 0,
+    speed: 0,
+  });
+  const playerSideState = updateNfoSimulation(
+    {
+      ...chargeActiveSkill(state),
+      player: {
+        ...state.player,
+        fireCooldownSeconds: 999,
+      },
+      minions: [
+        createSimMinionFixture({
+          weaponId: 2100,
+          weaponLevel: 1,
+          canFireOwnWeapon: true,
+          speed: 0,
+          x: 0,
+          y: 0,
+        }),
+      ],
+    },
+    runtimeData,
+    { ...NO_INPUT, useActiveSkill: true },
+    1 / 30,
+  );
+  const buffedBullets = playerSideState.bullets.filter((bullet) => bullet.bulletTypeId === 21);
+  assert.equal(buffedBullets.length, 3);
+  assert.ok(buffedBullets.every((bullet) => Math.hypot(bullet.vx, bullet.vy) === 150));
+  assert.ok(buffedBullets.every((bullet) => bullet.colliderWidth === 100));
+
+  const selfOnlyRuntimeData = createRuntimeFixture();
+  addPlayerAttributeBuffFixture(selfOnlyRuntimeData);
+  setActiveSkillToBuffsOnly(selfOnlyRuntimeData, [{ buffId: 121, level: 1, targetType: 0 }]);
+  const selfOnlyBaseState = addContactEnemyToState(createNfoSimulation(selfOnlyRuntimeData), {
+    x: 1000,
+    y: 0,
+    speed: 0,
+  });
+  const selfOnlyState = updateNfoSimulation(
+    {
+      ...chargeActiveSkill(selfOnlyBaseState),
+      player: {
+        ...selfOnlyBaseState.player,
+        fireCooldownSeconds: 999,
+      },
+      minions: [
+        createSimMinionFixture({
+          weaponId: 2100,
+          weaponLevel: 1,
+          canFireOwnWeapon: true,
+          speed: 0,
+          x: 0,
+          y: 0,
+        }),
+      ],
+    },
+    selfOnlyRuntimeData,
+    { ...NO_INPUT, useActiveSkill: true },
+    1 / 30,
+  );
+  const selfOnlyBullets = selfOnlyState.bullets.filter((bullet) => bullet.bulletTypeId === 21);
+  assert.equal(selfOnlyBullets.length, 1);
+  assert.equal(Math.hypot(selfOnlyBullets[0]?.vx ?? 0, selfOnlyBullets[0]?.vy ?? 0), 100);
+  assert.equal(selfOnlyBullets[0]?.colliderWidth, 90);
 }
 
 function testActiveSkillHealPercentBuffRestoresPlayerHp() {

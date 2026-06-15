@@ -233,15 +233,31 @@ type FireBulletDataSetOptions = {
   allowTargetlessEnemyFire?: boolean;
   attackerAttack?: number;
   bulletAngleOverride?: (context: BulletAngleOverrideContext) => number | null;
+  bulletCountModifier?: number;
+  bulletLifeTimeModifier?: number;
   bulletMotionOverride?: (context: BulletMotionOverrideContext) => BulletMotionConfig | null;
   bulletRotateTypeOverride?: number;
+  bulletSizeModifier?: number;
+  bulletSpeedModifier?: number;
   bulletSpreadMode?: BulletSpreadMode;
   canDamagePlayer?: boolean;
+  criticalDamage?: number;
+  criticalRate?: number;
   fireBulletsByEventId?: Record<number, NfoFireBullet[]>;
   hitTargetTypeOverride?: number;
   spreadFireBulletEntries?: boolean;
   targetlessEnemyFireAngle?: (origin: NfoVector) => number;
 };
+type FireSourceModifierOptions = Pick<
+  FireBulletDataSetOptions,
+  | "attackerAttack"
+  | "bulletCountModifier"
+  | "bulletLifeTimeModifier"
+  | "bulletSizeModifier"
+  | "bulletSpeedModifier"
+  | "criticalDamage"
+  | "criticalRate"
+>;
 
 type AdvancedAIState = {
   state: NfoAIStateData;
@@ -436,6 +452,12 @@ export type NfoSimActiveShooter = NfoVector & {
   ownerOffsetY: number;
   sourceTeam: NfoCombatTeam;
   attack: number;
+  bulletCountModifier?: number;
+  bulletLifeTimeModifier?: number;
+  bulletSizeModifier?: number;
+  bulletSpeedModifier?: number;
+  criticalDamage?: number;
+  criticalRate?: number;
 };
 
 export type NfoSimPickup = NfoVector & {
@@ -1252,7 +1274,7 @@ function updateEnemyAI(
     return;
   }
 
-  const attackerAttack = getEnemyEffectiveAttack(enemy);
+  const fireSourceModifiers = getEnemyFireSourceModifiers(enemy);
   let didFire = false;
   if (canAIStateFireDirectBullets(aiState)) {
     fireEnemyAIStateDirectBullets(
@@ -1260,7 +1282,7 @@ function updateEnemyAI(
       runtimeData,
       enemy,
       advancedAIState,
-      attackerAttack,
+      fireSourceModifiers,
     );
     didFire = true;
   }
@@ -1272,7 +1294,7 @@ function updateEnemyAI(
       aiState.bulletShooterId,
       enemy,
       {
-        attack: attackerAttack,
+        ...fireSourceModifiers,
         ownerType: "enemy",
         sourceTeam: "enemy",
       },
@@ -1290,7 +1312,7 @@ function fireEnemyAIStateDirectBullets(
   runtimeData: NfoOfflineRuntimeData,
   enemy: NfoSimEnemy,
   advancedAIState: AdvancedAIState,
-  attackerAttack: number,
+  fireSourceModifiers: FireSourceModifierOptions,
 ) {
   const aiState = advancedAIState.state;
   const catBossAttack = aiState.stateType === NFO_AI_STATE_TYPE.catBossAttack
@@ -1304,7 +1326,7 @@ function fireEnemyAIStateDirectBullets(
     catBossAttack?.target ?? state.player,
     state.player,
     {
-      attackerAttack,
+      ...fireSourceModifiers,
       canDamagePlayer: true,
       hitTargetTypeOverride: NFO_BULLET_HIT_TARGET_TYPE.friendly,
     },
@@ -1765,7 +1787,7 @@ function updateMinionAIAction(
     return;
   }
 
-  const attackerAttack = getPlayerEffectiveAttack(state);
+  const fireSourceModifiers = getPlayerSideFireSourceModifiers(state, minion.activeBuffs);
   let didFire = false;
   if (canAIStateFireDirectBullets(aiState)) {
     fireBulletDataSet(
@@ -1776,7 +1798,7 @@ function updateMinionAIAction(
       targetEnemy,
       state.player,
       {
-        attackerAttack,
+        ...fireSourceModifiers,
         canDamagePlayer: false,
         hitTargetTypeOverride: NFO_BULLET_HIT_TARGET_TYPE.enemy,
       },
@@ -1791,7 +1813,7 @@ function updateMinionAIAction(
       aiState.bulletShooterId,
       minion,
       {
-        attack: attackerAttack,
+        ...fireSourceModifiers,
         ownerType: "minion",
         sourceTeam: "player",
       },
@@ -1944,7 +1966,7 @@ function spawnBulletShooter(
   runtimeData: NfoOfflineRuntimeData,
   bulletShooterId: number,
   origin: NfoVector,
-  options: Partial<{
+  options: Partial<FireSourceModifierOptions & {
     attack: number;
     ownerType: NfoBulletShooterOwnerType;
     sourceTeam: NfoCombatTeam;
@@ -1973,7 +1995,13 @@ function spawnBulletShooter(
     ownerOffsetX: position.x - origin.x,
     ownerOffsetY: position.y - origin.y,
     sourceTeam: options.sourceTeam ?? "player",
-    attack: options.attack ?? getPlayerEffectiveAttack(state),
+    attack: options.attack ?? options.attackerAttack ?? getPlayerEffectiveAttack(state),
+    bulletCountModifier: options.bulletCountModifier,
+    bulletLifeTimeModifier: options.bulletLifeTimeModifier,
+    bulletSizeModifier: options.bulletSizeModifier,
+    bulletSpeedModifier: options.bulletSpeedModifier,
+    criticalDamage: options.criticalDamage,
+    criticalRate: options.criticalRate,
   });
   state.nextEntityId += 1;
 }
@@ -2116,9 +2144,15 @@ function fireBulletShooterTimelineEvent(
     state.player,
     {
       attackerAttack: shooter.attack,
+      bulletCountModifier: shooter.bulletCountModifier,
+      bulletLifeTimeModifier: shooter.bulletLifeTimeModifier,
+      bulletSizeModifier: shooter.bulletSizeModifier,
+      bulletSpeedModifier: shooter.bulletSpeedModifier,
       bulletRotateTypeOverride,
       bulletSpreadMode: getBulletShooterEventSpreadMode(event),
       canDamagePlayer: shooter.sourceTeam === "enemy",
+      criticalDamage: shooter.criticalDamage,
+      criticalRate: shooter.criticalRate,
       fireBulletsByEventId: indexFireBulletsByEventId(event.eventFireBullets),
     },
   );
@@ -2280,6 +2314,10 @@ function getOriginEntityId(origin: NfoVector): number | undefined {
   return typeof entityOrigin.id === "number" ? entityOrigin.id : undefined;
 }
 
+function isSimMinion(origin: NfoVector): origin is NfoSimMinion {
+  return "minionId" in origin && "activeBuffs" in origin;
+}
+
 function degreesToRadians(degrees: number): number {
   return (degrees * Math.PI) / 180;
 }
@@ -2356,6 +2394,10 @@ function updateWeaponFire(
 
   if (!shouldDeferMinionWeaponFire) {
     for (const firingOrigin of firingOrigins) {
+      const firingSourceModifiers = getPlayerSideFireSourceModifiers(
+        state,
+        isSimMinion(firingOrigin) ? firingOrigin.activeBuffs : state.player.activeBuffs,
+      );
       fireBulletDataSet(
         state,
         runtimeData,
@@ -2363,10 +2405,14 @@ function updateWeaponFire(
         firingOrigin,
         findNearestEnemy(state, firingOrigin),
         state.player,
-        fireBulletOptions,
+        {
+          ...fireBulletOptions,
+          ...firingSourceModifiers,
+        },
       );
       if (hasBulletShooter) {
         spawnBulletShooter(state, runtimeData, bulletShooterId, firingOrigin, {
+          ...firingSourceModifiers,
           ownerType: weaponMinions.length > 0 ? "minion" : "player",
         });
       }
@@ -2602,6 +2648,7 @@ function updateMinionOwnWeaponFire(
     return;
   }
 
+  const fireSourceModifiers = getPlayerSideFireSourceModifiers(state, minion.activeBuffs);
   fireBulletDataSet(
     state,
     runtimeData,
@@ -2609,10 +2656,14 @@ function updateMinionOwnWeaponFire(
     minion,
     targetEnemy,
     state.player,
-    getWeaponFireBulletOptions(weapon),
+    {
+      ...getWeaponFireBulletOptions(weapon),
+      ...fireSourceModifiers,
+    },
   );
   if (hasBulletShooter) {
     spawnBulletShooter(state, runtimeData, bulletShooterId, minion, {
+      ...fireSourceModifiers,
       ownerType: "minion",
     });
   }
@@ -2631,7 +2682,7 @@ function updateMinionOwnWeaponFire(
       weaponLevel.fireGroupCooldownFrames,
       1,
       deltaSeconds,
-      getPlayerEffectiveCoolDownReduce(state),
+      getPlayerSideEffectiveCoolDownReduce(state, minion.activeBuffs),
     );
     return;
   }
@@ -2640,7 +2691,7 @@ function updateMinionOwnWeaponFire(
     weaponLevel.fireCooldownFrames,
     DEFAULT_FIRE_COOLDOWN_FRAMES,
     deltaSeconds,
-    getPlayerEffectiveCoolDownReduce(state),
+    getPlayerSideEffectiveCoolDownReduce(state, minion.activeBuffs),
   );
 }
 
@@ -2750,7 +2801,7 @@ function fireBulletDataSet(
 
     const bulletCount = getModifiedBulletCount(
       currentFireBullet.bulletCount,
-      getPlayerEffectiveBulletCount(state),
+      options.bulletCountModifier ?? getPlayerEffectiveBulletCount(state),
     );
     for (let bulletIndex = 0; bulletIndex < bulletCount; bulletIndex += 1) {
       state.bullets.push(createBullet(
@@ -2882,7 +2933,10 @@ function createBullet(
     options.bulletSpreadMode ?? "fan",
     options.spreadFireBulletEntries !== false,
   );
-  const speed = getModifiedBulletSpeed(fireBullet.bulletSpeed, getPlayerEffectiveBulletSpeed(state));
+  const speed = getModifiedBulletSpeed(
+    fireBullet.bulletSpeed,
+    options.bulletSpeedModifier ?? getPlayerEffectiveBulletSpeed(state),
+  );
   const motionConfig = options.bulletMotionOverride?.({
     fireBullet,
     origin,
@@ -2892,11 +2946,14 @@ function createBullet(
   }) ?? { type: "linear" };
   const motionType = motionConfig.type;
   const colliderType = getSupportedBulletColliderType(fireBullet.bulletColliderType);
-  const colliderWidth = getModifiedBulletSize(fireBullet.bulletSize, getPlayerEffectiveBulletSize(state));
+  const colliderWidth = getModifiedBulletSize(
+    fireBullet.bulletSize,
+    options.bulletSizeModifier ?? getPlayerEffectiveBulletSize(state),
+  );
   const colliderLength = getModifiedBulletSecondarySize(
     fireBullet.bulletSize2,
     colliderWidth,
-    getPlayerEffectiveBulletSize(state),
+    options.bulletSizeModifier ?? getPlayerEffectiveBulletSize(state),
   );
   const judgeCooldownFrames = fireBullet.bulletDamageJudgeCooldownFrames > 0
     ? fireBullet.bulletDamageJudgeCooldownFrames
@@ -2904,7 +2961,7 @@ function createBullet(
   const baseDamage = fireBullet.bulletAttack + (
     options.attackerAttack ?? getPlayerEffectiveAttack(state)
   );
-  const isCritical = rollCriticalHit(getPlayerEffectiveCriticalRate(state));
+  const isCritical = rollCriticalHit(options.criticalRate ?? getPlayerEffectiveCriticalRate(state));
   const velocity = {
     x: Math.cos(angle) * speed,
     y: Math.sin(angle) * speed,
@@ -2955,7 +3012,11 @@ function createBullet(
     orbitAngle,
     orbitAngularSpeed,
     orbitRadius,
-    damage: getModifiedBulletDamage(baseDamage, isCritical, getPlayerEffectiveCriticalDamage(state)),
+    damage: getModifiedBulletDamage(
+      baseDamage,
+      isCritical,
+      options.criticalDamage ?? getPlayerEffectiveCriticalDamage(state),
+    ),
     attackerAttack: options.attackerAttack ?? getPlayerEffectiveAttack(state),
     isCritical,
     canDamagePlayer: options.canDamagePlayer ?? false,
@@ -2980,7 +3041,7 @@ function createBullet(
     remainingSeconds:
       getModifiedBulletLifetimeFrames(
         fireBullet.bulletLifeTime,
-        getPlayerEffectiveBulletLifeTime(state),
+        options.bulletLifeTimeModifier ?? getPlayerEffectiveBulletLifeTime(state),
       ) / FRAME_RATE,
     remainingHits: Math.max(fireBullet.bulletHitTimes, 1),
     hasHitPlayer: false,
@@ -3892,13 +3953,7 @@ function applyDotBuffTick(
 }
 
 function getPlayerEffectiveAttack(state: NfoSimulationState): number {
-  return Math.max(
-    0,
-    state.player.attack + getActiveBuffAttributeValue(
-      state.player.activeBuffs,
-      NFO_ATTRIBUTE_TYPE.attack,
-    ),
-  );
+  return getPlayerSideEffectiveAttack(state, state.player.activeBuffs);
 }
 
 function getPlayerEffectiveDefense(state: NfoSimulationState): number {
@@ -3933,38 +3988,23 @@ function getPlayerEffectiveItemMagnetRange(state: NfoSimulationState): number {
 }
 
 function getPlayerEffectiveBulletSpeed(state: NfoSimulationState): number {
-  return state.player.bulletSpeed + getActiveBuffAttributeValue(
-    state.player.activeBuffs,
-    NFO_ATTRIBUTE_TYPE.bulletSpeed,
-  );
+  return getPlayerSideEffectiveBulletSpeed(state, state.player.activeBuffs);
 }
 
 function getPlayerEffectiveBulletSize(state: NfoSimulationState): number {
-  return state.player.bulletSize + getActiveBuffAttributeValue(
-    state.player.activeBuffs,
-    NFO_ATTRIBUTE_TYPE.bulletSize,
-  );
+  return getPlayerSideEffectiveBulletSize(state, state.player.activeBuffs);
 }
 
 function getPlayerEffectiveBulletLifeTime(state: NfoSimulationState): number {
-  return state.player.bulletLifeTime + getActiveBuffAttributeValue(
-    state.player.activeBuffs,
-    NFO_ATTRIBUTE_TYPE.bulletLifeTime,
-  );
+  return getPlayerSideEffectiveBulletLifeTime(state, state.player.activeBuffs);
 }
 
 function getPlayerEffectiveBulletCount(state: NfoSimulationState): number {
-  return state.player.bulletCount + getActiveBuffAttributeValue(
-    state.player.activeBuffs,
-    NFO_ATTRIBUTE_TYPE.bulletCount,
-  );
+  return getPlayerSideEffectiveBulletCount(state, state.player.activeBuffs);
 }
 
 function getPlayerEffectiveCoolDownReduce(state: NfoSimulationState): number {
-  return state.player.coolDownReduce + getActiveBuffAttributeValue(
-    state.player.activeBuffs,
-    NFO_ATTRIBUTE_TYPE.coolDownReduce,
-  );
+  return getPlayerSideEffectiveCoolDownReduce(state, state.player.activeBuffs);
 }
 
 function getPlayerEffectiveExpGain(state: NfoSimulationState): number {
@@ -3982,17 +4022,104 @@ function getPlayerEffectiveCoinGain(state: NfoSimulationState): number {
 }
 
 function getPlayerEffectiveCriticalRate(state: NfoSimulationState): number {
-  return state.player.criticalRate + getActiveBuffAttributeValue(
-    state.player.activeBuffs,
-    NFO_ATTRIBUTE_TYPE.criticalRate,
-  );
+  return getPlayerSideEffectiveCriticalRate(state, state.player.activeBuffs);
 }
 
 function getPlayerEffectiveCriticalDamage(state: NfoSimulationState): number {
-  return state.player.criticalDamage + getActiveBuffAttributeValue(
-    state.player.activeBuffs,
-    NFO_ATTRIBUTE_TYPE.criticalDamage,
+  return getPlayerSideEffectiveCriticalDamage(state, state.player.activeBuffs);
+}
+
+function getPlayerSideFireSourceModifiers(
+  state: NfoSimulationState,
+  activeBuffs: NfoSimActiveBuff[],
+): FireSourceModifierOptions {
+  return {
+    attackerAttack: getPlayerSideEffectiveAttack(state, activeBuffs),
+    bulletCountModifier: getPlayerSideEffectiveBulletCount(state, activeBuffs),
+    bulletLifeTimeModifier: getPlayerSideEffectiveBulletLifeTime(state, activeBuffs),
+    bulletSizeModifier: getPlayerSideEffectiveBulletSize(state, activeBuffs),
+    bulletSpeedModifier: getPlayerSideEffectiveBulletSpeed(state, activeBuffs),
+    criticalDamage: getPlayerSideEffectiveCriticalDamage(state, activeBuffs),
+    criticalRate: getPlayerSideEffectiveCriticalRate(state, activeBuffs),
+  };
+}
+
+function getEnemyFireSourceModifiers(enemy: NfoSimEnemy): FireSourceModifierOptions {
+  return {
+    attackerAttack: getEnemyEffectiveAttack(enemy),
+    bulletCountModifier: 0,
+    bulletLifeTimeModifier: 0,
+    bulletSizeModifier: 0,
+    bulletSpeedModifier: 0,
+    criticalDamage: 0,
+    criticalRate: 0,
+  };
+}
+
+function getPlayerSideEffectiveAttack(
+  state: NfoSimulationState,
+  activeBuffs: NfoSimActiveBuff[],
+): number {
+  return Math.max(
+    0,
+    state.player.attack + getActiveBuffAttributeValue(activeBuffs, NFO_ATTRIBUTE_TYPE.attack),
   );
+}
+
+function getPlayerSideEffectiveBulletSpeed(
+  state: NfoSimulationState,
+  activeBuffs: NfoSimActiveBuff[],
+): number {
+  return state.player.bulletSpeed
+    + getActiveBuffAttributeValue(activeBuffs, NFO_ATTRIBUTE_TYPE.bulletSpeed);
+}
+
+function getPlayerSideEffectiveBulletSize(
+  state: NfoSimulationState,
+  activeBuffs: NfoSimActiveBuff[],
+): number {
+  return state.player.bulletSize
+    + getActiveBuffAttributeValue(activeBuffs, NFO_ATTRIBUTE_TYPE.bulletSize);
+}
+
+function getPlayerSideEffectiveBulletLifeTime(
+  state: NfoSimulationState,
+  activeBuffs: NfoSimActiveBuff[],
+): number {
+  return state.player.bulletLifeTime
+    + getActiveBuffAttributeValue(activeBuffs, NFO_ATTRIBUTE_TYPE.bulletLifeTime);
+}
+
+function getPlayerSideEffectiveBulletCount(
+  state: NfoSimulationState,
+  activeBuffs: NfoSimActiveBuff[],
+): number {
+  return state.player.bulletCount
+    + getActiveBuffAttributeValue(activeBuffs, NFO_ATTRIBUTE_TYPE.bulletCount);
+}
+
+function getPlayerSideEffectiveCoolDownReduce(
+  state: NfoSimulationState,
+  activeBuffs: NfoSimActiveBuff[],
+): number {
+  return state.player.coolDownReduce
+    + getActiveBuffAttributeValue(activeBuffs, NFO_ATTRIBUTE_TYPE.coolDownReduce);
+}
+
+function getPlayerSideEffectiveCriticalRate(
+  state: NfoSimulationState,
+  activeBuffs: NfoSimActiveBuff[],
+): number {
+  return state.player.criticalRate
+    + getActiveBuffAttributeValue(activeBuffs, NFO_ATTRIBUTE_TYPE.criticalRate);
+}
+
+function getPlayerSideEffectiveCriticalDamage(
+  state: NfoSimulationState,
+  activeBuffs: NfoSimActiveBuff[],
+): number {
+  return state.player.criticalDamage
+    + getActiveBuffAttributeValue(activeBuffs, NFO_ATTRIBUTE_TYPE.criticalDamage);
 }
 
 function getEnemyEffectiveAttack(enemy: NfoSimEnemy): number {

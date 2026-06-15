@@ -25,6 +25,10 @@ import { buildNfoCnParityFixture } from "./nfo-cn-parity-fixtures";
 const NO_INPUT: NfoInputState = { moveX: 0, moveY: 0 };
 const CN_LEVEL_UNIT_SIZE = 96;
 const FIRST_PASS_GUARDIAN_SONG_ORBIT_RADIUS = 120;
+const CN_NFO_ATTRIBUTE_TYPE = {
+  attack: 2,
+  bulletSize: 7,
+} as const;
 let fixture: ReturnType<typeof buildNfoCnParityFixture>;
 
 async function main() {
@@ -1312,6 +1316,12 @@ async function main() {
   assert.deepEqual(fairyGuardCase.buffs.map((buff) => buff.buffId), [11, 13]);
   assert.deepEqual(fairyGuardCase.buffs.map((buff) => buff.buffType), [1, 9]);
   assert.ok(fairyGuardCase.buffs.every((buff) => buff.targetType === 1));
+  assert.equal(
+    fairyGuardCase.buffs.find((buff) => buff.buffId === 11)
+      ?.attributes.find((attribute) => attribute.attributeType === CN_NFO_ATTRIBUTE_TYPE.bulletSize)
+      ?.value,
+    50,
+  );
 
   const kingOfBeastsSummonCase = getActiveSkillSummonCase(
     "active-skill-king-of-beasts-formation-2-roar-minions-lv2",
@@ -2012,7 +2022,7 @@ async function main() {
   console.log("ok - CN AIState TriggerLevelEventID gates triggered level enemy spawns");
   console.log("ok - CN AIState animation metadata updates serializable enemy state");
   console.log("ok - CN active skill Holy Mend heals, applies invincibility, and revives");
-  console.log("ok - CN active skill Fairy Guard buffs existing player-side minions");
+  console.log("ok - CN active skill Fairy Guard buffs existing player-side minions and their fire");
   console.log("ok - CN active skill 111 minion AI transitions into roar shooter");
   console.log("ok - CN active skill All-Out Fire drives shooter 7000 frame 1/3/7 timeline and minion AI");
   console.log("ok - CN active skill All-Out Fire level 3 loops zero-offset minion shooters");
@@ -8041,6 +8051,24 @@ function testCnActiveSkillFairyGuardTargetsPlayerSideMinions(
     sourceRuntimeData,
     fairyGuardCase.activeSkillId,
   );
+  const minionWeapon = testRuntimeData.weapons.find((weapon) => weapon.id === 16);
+  const minionWeaponLevel = minionWeapon?.levels.find((level) => level.level === 1);
+  const minionFireBullet = minionWeaponLevel?.fireBullets.find((bullet) => (
+    bullet.bulletTypeId === 22
+  ));
+  assert.ok(minionWeapon);
+  assert.ok(minionWeaponLevel);
+  assert.ok(minionFireBullet);
+
+  const fairyGuardStatBuff = fairyGuardCase.buffs.find((buff) => buff.buffId === 11);
+  assert.ok(fairyGuardStatBuff);
+  const bulletSizeModifier = fairyGuardStatBuff.attributes.find((attribute) => (
+    attribute.attributeType === CN_NFO_ATTRIBUTE_TYPE.bulletSize
+  ))?.value ?? 0;
+  const attackModifier = fairyGuardStatBuff.attributes.find((attribute) => (
+    attribute.attributeType === CN_NFO_ATTRIBUTE_TYPE.attack
+  ))?.value ?? 0;
+
   const baseState = createStateWithoutEnemies(testRuntimeData);
   const enemyProbe = createEnemyFixture(
     baseState,
@@ -8053,8 +8081,22 @@ function testCnActiveSkillFairyGuardTargetsPlayerSideMinions(
   const activeState = updateNfoSimulation(
     {
       ...chargeActiveSkill(baseState),
+      player: {
+        ...baseState.player,
+        fireCooldownSeconds: 999,
+      },
       enemies: [enemyProbe],
-      minions: [createFriendlyMinionProbe()],
+      minions: [
+        createFriendlyMinionProbe({
+          minionId: 2,
+          weaponId: minionWeapon.id,
+          weaponLevel: minionWeaponLevel.level,
+          canFireOwnWeapon: true,
+          speed: 0,
+          x: baseState.player.x,
+          y: baseState.player.y,
+        }),
+      ],
     },
     testRuntimeData,
     { ...NO_INPUT, useActiveSkill: true },
@@ -8080,6 +8122,15 @@ function testCnActiveSkillFairyGuardTargetsPlayerSideMinions(
       buff.id === 11 || buff.id === 13
     )),
     false,
+  );
+  const minionBullet = activeState.bullets.find((bullet) => (
+    bullet.bulletTypeId === minionFireBullet.bulletTypeId
+  ));
+  assert.ok(minionBullet);
+  assert.equal(minionBullet.colliderWidth, minionFireBullet.bulletSize + bulletSizeModifier);
+  assert.equal(
+    minionBullet.damage,
+    minionFireBullet.bulletAttack + baseState.player.attack + attackModifier,
   );
 }
 

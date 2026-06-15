@@ -897,6 +897,7 @@ export type NfoCnParityActiveSkillBuff = {
   buffType: number;
   buffValue: number;
   buffDurationFrames: number;
+  attributes: NfoAttributeData[];
 };
 
 export type NfoCnParityActiveSkillBuffCase = {
@@ -4707,6 +4708,7 @@ function buildActiveSkillBuffCase(
         buffType: buff.type,
         buffValue: buffLevel.value,
         buffDurationFrames: buffLevel.durationFrames,
+        attributes: buffLevel.attributes.map((attribute) => ({ ...attribute })),
       };
     }),
   };
