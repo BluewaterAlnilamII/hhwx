@@ -127,6 +127,8 @@ type ActiveSkillShooterSpawnCaseSpec = {
   expectedShooterId: number;
   expectedSpawnPos: number;
   expectedBulletTypeId: number;
+  expectedBulletAttack?: number;
+  expectedBulletSize?: number;
   expectedShooterBehaviorType?: number;
   expectedShooterFollowsOwnerDirection?: boolean;
   expectedIsLoopEvent?: boolean;
@@ -636,6 +638,7 @@ export type NfoCnParityActiveSkillShooterSpawnCase = {
   bulletCount: number;
   bulletSpeed: number;
   bulletAttack: number;
+  bulletSize: number;
   bulletNoDamage: boolean;
   bulletLifeTimeFrames: number;
   bulletHitTargetType: number;
@@ -1772,6 +1775,30 @@ const ACTIVE_SKILL_SHOOTER_SPAWN_CASE_SPECS: ActiveSkillShooterSpawnCaseSpec[] =
     expectedShooterId: 8000,
     expectedSpawnPos: 3,
     expectedBulletTypeId: 58,
+    expectedBulletAttack: 30,
+    expectedBulletSize: 200,
+  },
+  {
+    id: "active-skill-chainsaw-god-spawn-pos-3-nearest-enemy-lv2",
+    activeSkillId: 99,
+    activeSkillLevel: 2,
+    expectedEventFrame: 1,
+    expectedShooterId: 8001,
+    expectedSpawnPos: 3,
+    expectedBulletTypeId: 58,
+    expectedBulletAttack: 45,
+    expectedBulletSize: 300,
+  },
+  {
+    id: "active-skill-chainsaw-god-spawn-pos-3-nearest-enemy-lv3",
+    activeSkillId: 99,
+    activeSkillLevel: 3,
+    expectedEventFrame: 1,
+    expectedShooterId: 8002,
+    expectedSpawnPos: 3,
+    expectedBulletTypeId: 58,
+    expectedBulletAttack: 60,
+    expectedBulletSize: 400,
   },
   {
     id: "active-skill-elemental-burst-fan-fireballs-lv1",
@@ -3695,6 +3722,24 @@ function buildActiveSkillShooterSpawnCase(
     throw new Error(`Shooter spawn case ${spec.id} is missing its selected fire bullet.`);
   }
   if (
+    spec.expectedBulletAttack !== undefined
+    && fireBullet.bulletAttack !== spec.expectedBulletAttack
+  ) {
+    throw new Error(
+      `Active skill shooter spawn case ${spec.id} expected bullet attack `
+      + `${spec.expectedBulletAttack}, got ${fireBullet.bulletAttack}.`,
+    );
+  }
+  if (
+    spec.expectedBulletSize !== undefined
+    && fireBullet.bulletSize !== spec.expectedBulletSize
+  ) {
+    throw new Error(
+      `Active skill shooter spawn case ${spec.id} expected bullet size `
+      + `${spec.expectedBulletSize}, got ${fireBullet.bulletSize}.`,
+    );
+  }
+  if (
     spec.expectedIsLoopEvent !== undefined
     && shooterEvent.isLoopEvent !== spec.expectedIsLoopEvent
   ) {
@@ -3738,6 +3783,7 @@ function buildActiveSkillShooterSpawnCase(
     bulletCount: fireBullet.bulletCount,
     bulletSpeed: fireBullet.bulletSpeed,
     bulletAttack: fireBullet.bulletAttack,
+    bulletSize: fireBullet.bulletSize,
     bulletNoDamage: fireBullet.noDamage,
     bulletLifeTimeFrames: fireBullet.bulletLifeTime,
     bulletHitTargetType: fireBullet.bulletHitTargetType,

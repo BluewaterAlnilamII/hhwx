@@ -47,7 +47,7 @@ async function main() {
   assert.equal(fixture.activeSkillShooterCount, 24);
   assert.equal(fixture.activeSkillShooterEventCount, 54);
   assert.equal(fixture.weaponLevelShooterCount, 32);
-  assert.equal(fixture.selectedActiveSkillShooterSpawnCases.length, 9);
+  assert.equal(fixture.selectedActiveSkillShooterSpawnCases.length, 11);
   assert.equal(fixture.selectedAIActionCases.length, 3);
   assert.equal(fixture.selectedWeaponShooterCases.length, 8);
   assert.equal(fixture.selectedWeaponDirectFireCases.length, 30);
@@ -759,6 +759,32 @@ async function main() {
   assert.equal(activeSkillShooterSpawnCase.bulletDamageJudgeType, 1);
   assert.equal(activeSkillShooterSpawnCase.bulletForceType, 2);
   assert.equal(activeSkillShooterSpawnCase.bulletForce, 5);
+  assert.equal(activeSkillShooterSpawnCase.bulletAttack, 30);
+  assert.equal(activeSkillShooterSpawnCase.bulletSize, 200);
+
+  const activeSkillLevelTwoShooterCase = getActiveSkillShooterSpawnCase(
+    "active-skill-chainsaw-god-spawn-pos-3-nearest-enemy-lv2",
+  );
+  assert.equal(activeSkillLevelTwoShooterCase.activeSkillId, 99);
+  assert.equal(activeSkillLevelTwoShooterCase.activeSkillLevel, 2);
+  assert.equal(activeSkillLevelTwoShooterCase.eventFrame, 1);
+  assert.equal(activeSkillLevelTwoShooterCase.shooterId, 8001);
+  assert.equal(activeSkillLevelTwoShooterCase.shooterSpawnPos, 3);
+  assert.equal(activeSkillLevelTwoShooterCase.bulletTypeId, 58);
+  assert.equal(activeSkillLevelTwoShooterCase.bulletAttack, 45);
+  assert.equal(activeSkillLevelTwoShooterCase.bulletSize, 300);
+
+  const activeSkillLevelThreeShooterCase = getActiveSkillShooterSpawnCase(
+    "active-skill-chainsaw-god-spawn-pos-3-nearest-enemy-lv3",
+  );
+  assert.equal(activeSkillLevelThreeShooterCase.activeSkillId, 99);
+  assert.equal(activeSkillLevelThreeShooterCase.activeSkillLevel, 3);
+  assert.equal(activeSkillLevelThreeShooterCase.eventFrame, 1);
+  assert.equal(activeSkillLevelThreeShooterCase.shooterId, 8002);
+  assert.equal(activeSkillLevelThreeShooterCase.shooterSpawnPos, 3);
+  assert.equal(activeSkillLevelThreeShooterCase.bulletTypeId, 58);
+  assert.equal(activeSkillLevelThreeShooterCase.bulletAttack, 60);
+  assert.equal(activeSkillLevelThreeShooterCase.bulletSize, 400);
 
   const elementalBurstShooterCase = getActiveSkillShooterSpawnCase(
     "active-skill-elemental-burst-fan-fireballs-lv1",
@@ -1930,6 +1956,7 @@ async function main() {
   testCnShooterDirectionTwoFriendlyTargetAndRotation(runtimeData);
   testCnShooterOnDestroyEventBullet(runtimeData);
   testCnActiveSkillShooterSpawnPosThreeNearestEnemy(runtimeData);
+  testCnActiveSkillChainsawGodLevelShooterScaling(runtimeData);
   testCnActiveSkillElementalBurstFanShooter(runtimeData);
   testCnActiveSkillFullScreenEffectEvent(runtimeData);
   testCnActiveSkillApocalypseSongDelayedDamageShooter(runtimeData);
@@ -2024,6 +2051,7 @@ async function main() {
   console.log("ok - CN shooter direction 2 targets the player side with event rotation");
   console.log("ok - CN shooter on-destroy event bullets fire follow-up bullets");
   console.log("ok - CN active skill Chainsaw God repeats damage and pulls from nearest-enemy field");
+  console.log("ok - CN active skill Chainsaw God level 2/3 switches shooter data");
   console.log("ok - CN active skill Elemental Burst shooter loops fireballs without repeating snow field");
   console.log("ok - CN active skill full-screen effect events are recorded");
   console.log("ok - CN active skill Apocalypse Song stuns, stops movement, and triggers frame-90 damage");
@@ -6469,6 +6497,74 @@ function testCnActiveSkillShooterSpawnPosThreeNearestEnemy(
     spawnCase.bulletDamageJudgeCooldownFrames / 30,
     "CN chainsaw repeated multi-hit cooldown",
   );
+}
+
+function testCnActiveSkillChainsawGodLevelShooterScaling(
+  sourceRuntimeData: NfoOfflineRuntimeData,
+) {
+  for (const spawnCaseId of [
+    "active-skill-chainsaw-god-spawn-pos-3-nearest-enemy-lv2",
+    "active-skill-chainsaw-god-spawn-pos-3-nearest-enemy-lv3",
+  ]) {
+    const spawnCase = getActiveSkillShooterSpawnCase(spawnCaseId);
+    const testRuntimeData = configureRuntimeForActiveSkill(
+      sourceRuntimeData,
+      spawnCase.activeSkillId,
+    );
+    const baseState = createNfoSimulation(testRuntimeData);
+    const targetEnemy = createEnemyFixture(
+      baseState,
+      baseState.player.x + 120,
+      baseState.player.y,
+      {
+        hp: 999999,
+        speed: 0,
+        radius: 5,
+      },
+    );
+    const state = {
+      ...baseState,
+      activeSkill: {
+        ...baseState.activeSkill,
+        level: spawnCase.activeSkillLevel,
+      },
+      player: {
+        ...baseState.player,
+        fireCooldownSeconds: 999,
+      },
+      enemies: [targetEnemy],
+    };
+
+    const nextState = updateNfoSimulation(
+      chargeActiveSkill(state),
+      testRuntimeData,
+      { ...NO_INPUT, useActiveSkill: true },
+      1 / 30,
+    );
+    const shooter = nextState.activeShooters.find((candidate) => (
+      candidate.shooterId === spawnCase.shooterId
+    ));
+    const bullet = nextState.bullets.find((candidate) => (
+      candidate.bulletTypeId === spawnCase.bulletTypeId
+    ));
+
+    assert.equal(nextState.activeSkill.level, spawnCase.activeSkillLevel);
+    assert.ok(shooter, `expected CN active skill 99 level ${spawnCase.activeSkillLevel} shooter`);
+    assert.ok(bullet, `expected CN active skill 99 level ${spawnCase.activeSkillLevel} bullet`);
+    assert.equal(shooter.sourceTeam, "player");
+    assert.equal(shooter.shooterId, spawnCase.shooterId);
+    assert.equal(shooter.lifeTimeFrames, spawnCase.shooterLifeTimeFrames);
+    assert.equal(shooter.behaviorType, spawnCase.shooterBehaviorType);
+    assert.equal(shooter.followsOwnerDirection, spawnCase.shooterFollowsOwnerDirection);
+    assertClose(shooter.x, targetEnemy.x, "CN chainsaw level shooter x");
+    assertClose(shooter.y, targetEnemy.y, "CN chainsaw level shooter y");
+    assert.equal(bullet.hitTargetType, spawnCase.bulletHitTargetType);
+    assert.equal(bullet.damageJudgeType, spawnCase.bulletDamageJudgeType);
+    assert.equal(bullet.forceType, spawnCase.bulletForceType);
+    assert.equal(bullet.force, spawnCase.bulletForce);
+    assert.equal(bullet.damageJudgeCooldownSeconds, spawnCase.bulletDamageJudgeCooldownFrames / 30);
+    assert.equal(bullet.colliderWidth, spawnCase.bulletSize + (bullet.bulletSizeModifier ?? 0));
+  }
 }
 
 function testCnActiveSkillElementalBurstFanShooter(

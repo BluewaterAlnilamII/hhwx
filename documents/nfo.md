@@ -684,7 +684,11 @@ skill `99` /
 bullet `58`. The parity test now verifies that bullet `58` damages overlapping
 enemies, records its `BulletDamageJudgeCD = 10` multi-hit cooldown, damages
 again when that cooldown elapses, and applies `BulletForceType = 2` / inward
-force with `BulletForce = 5`.
+force with `BulletForce = 5`. The same CN fixture now locks the level switch for
+this active skill: level `2` uses shooter `8001` with `BulletAttack = 45` and
+`BulletSize = 300`, while level `3` uses shooter `8002` with
+`BulletAttack = 60` and `BulletSize = 400`; both keep `SpawnPos = 3`, bullet
+`58`, `BulletDamageJudgeCD = 10`, and inward `BulletForce = 5`.
 It also locks active skill `13` / `Elemental Burst` level `1`: frame `1`
 creates shooter `13000`, whose `SpawnPos = 3` places the shooter on the
 nearest enemy, emits zero-speed snow-field bullet `21`, and emits four
