@@ -47,7 +47,7 @@ async function main() {
   assert.equal(fixture.activeSkillShooterCount, 24);
   assert.equal(fixture.activeSkillShooterEventCount, 54);
   assert.equal(fixture.weaponLevelShooterCount, 32);
-  assert.equal(fixture.selectedActiveSkillShooterSpawnCases.length, 19);
+  assert.equal(fixture.selectedActiveSkillShooterSpawnCases.length, 21);
   assert.equal(fixture.selectedAIActionCases.length, 3);
   assert.equal(fixture.selectedWeaponShooterCases.length, 8);
   assert.equal(fixture.selectedWeaponDirectFireCases.length, 30);
@@ -1016,6 +1016,7 @@ async function main() {
   assert.equal(zesshoCase.bulletTypeId, 99);
   assert.equal(zesshoCase.bulletCount, 1);
   assert.equal(zesshoCase.bulletAttack, 333);
+  assert.equal(zesshoCase.bulletSize, 3000);
   assert.equal(zesshoCase.bulletSpeed, 0);
   assert.equal(zesshoCase.bulletNoDamage, false);
   assert.equal(zesshoCase.bulletLifeTimeFrames, 15);
@@ -1023,6 +1024,30 @@ async function main() {
   assert.equal(zesshoCase.bulletDamageJudgeType, 1);
   assert.equal(zesshoCase.bulletColliderType, 0);
   assert.equal(zesshoCase.bulletHitTimes, 99999);
+
+  const zesshoLevelTwoCase = getActiveSkillShooterSpawnCase(
+    "active-skill-zessho-static-field-lv2",
+  );
+  assert.equal(zesshoLevelTwoCase.activeSkillId, 114);
+  assert.equal(zesshoLevelTwoCase.activeSkillLevel, 2);
+  assert.equal(zesshoLevelTwoCase.shooterId, 1002);
+  assert.equal(zesshoLevelTwoCase.shooterBehaviorType, 0);
+  assert.equal(zesshoLevelTwoCase.shooterFollowsOwnerDirection, false);
+  assert.equal(zesshoLevelTwoCase.bulletTypeId, 99);
+  assert.equal(zesshoLevelTwoCase.bulletAttack, 666);
+  assert.equal(zesshoLevelTwoCase.bulletSize, 3000);
+
+  const zesshoLevelThreeCase = getActiveSkillShooterSpawnCase(
+    "active-skill-zessho-static-field-lv3",
+  );
+  assert.equal(zesshoLevelThreeCase.activeSkillId, 114);
+  assert.equal(zesshoLevelThreeCase.activeSkillLevel, 3);
+  assert.equal(zesshoLevelThreeCase.shooterId, 1003);
+  assert.equal(zesshoLevelThreeCase.shooterBehaviorType, 0);
+  assert.equal(zesshoLevelThreeCase.shooterFollowsOwnerDirection, false);
+  assert.equal(zesshoLevelThreeCase.bulletTypeId, 99);
+  assert.equal(zesshoLevelThreeCase.bulletAttack, 999);
+  assert.equal(zesshoLevelThreeCase.bulletSize, 3000);
 
   const absoluteGuardShooterCase = getActiveSkillShooterHitBuffCase(
     "active-skill-absolute-guard-shooter-friendly-invincible-buff",
@@ -2028,6 +2053,7 @@ async function main() {
   testCnActiveSkillApocalypseSongDelayedDamageShooter(runtimeData);
   testCnActiveSkillApocalypseSongLevelDamageShooterSwitch(runtimeData);
   testCnActiveSkillZesshoStaticFieldShooter(runtimeData);
+  testCnActiveSkillZesshoLevelStaticFieldSwitch(runtimeData);
   testCnActiveSkillUltimateHeartLightShooterAndEffect(runtimeData);
   testCnActiveSkillUltimateHeartLightLevelShooterSwitch(runtimeData);
   testCnActiveSkillEndlessStarMapOwnerForwardField(runtimeData);
@@ -2126,6 +2152,7 @@ async function main() {
   console.log("ok - CN active skill Apocalypse Song stuns, stops movement, and triggers frame-90 damage");
   console.log("ok - CN active skill Apocalypse Song level 2/3 switches frame-90 damage shooters");
   console.log("ok - CN active skill Zessho creates non-following static damage field shooter");
+  console.log("ok - CN active skill Zessho level 2/3 switches static damage shooters");
   console.log("ok - CN active skill Ultimate Heart Light records starlight effect and loops shooter 6000");
   console.log("ok - CN active skill Ultimate Heart Light level 2/3 switches starlight shooters");
   console.log("ok - CN active skill Endless Star Map shooter creates owner-forward field and EXP/coin gains");
@@ -7199,6 +7226,88 @@ function testCnActiveSkillZesshoStaticFieldShooter(
   assertClose(staticShooter.x, shooter.x, "CN Zessho non-following shooter x");
   assertClose(staticShooter.y, shooter.y, "CN Zessho non-following shooter y");
   assertClose(staticShooter.ownerFacingAngle, shooter.ownerFacingAngle, "CN Zessho shooter facing");
+}
+
+function testCnActiveSkillZesshoLevelStaticFieldSwitch(
+  sourceRuntimeData: NfoOfflineRuntimeData,
+) {
+  for (const zesshoCaseId of [
+    "active-skill-zessho-static-field-lv2",
+    "active-skill-zessho-static-field-lv3",
+  ]) {
+    const zesshoCase = getActiveSkillShooterSpawnCase(zesshoCaseId);
+    const testRuntimeData = configureRuntimeForActiveSkill(
+      sourceRuntimeData,
+      zesshoCase.activeSkillId,
+    );
+    const baseState = createStateWithEnemy(testRuntimeData, { x: 100, y: 0 });
+    const firstFrameState = withMockedRandom(
+      [0.99],
+      () => updateNfoSimulation(
+        chargeActiveSkill({
+          ...baseState,
+          activeSkill: {
+            ...baseState.activeSkill,
+            level: zesshoCase.activeSkillLevel,
+          },
+        }),
+        testRuntimeData,
+        { ...NO_INPUT, useActiveSkill: true },
+        1 / 30,
+      ),
+    );
+    const shooter = firstFrameState.activeShooters.find((candidate) => (
+      candidate.shooterId === zesshoCase.shooterId
+    ));
+    const fieldBullet = firstFrameState.bullets.find((candidate) => (
+      candidate.bulletTypeId === zesshoCase.bulletTypeId
+    ));
+    const fullScreenEffect = firstFrameState.fullScreenEffects.find((candidate) => (
+      candidate.name === "UIefx_flash"
+    ));
+
+    assert.equal(firstFrameState.activeSkill.level, zesshoCase.activeSkillLevel);
+    assert.ok(shooter, `expected CN active skill 114 level ${zesshoCase.activeSkillLevel} shooter`);
+    assert.ok(fieldBullet, `expected CN active skill 114 level ${zesshoCase.activeSkillLevel} field`);
+    assert.ok(fullScreenEffect, `expected CN active skill 114 level ${zesshoCase.activeSkillLevel} effect`);
+    assert.equal(fullScreenEffect.activeSkillId, zesshoCase.activeSkillId);
+    assert.equal(fullScreenEffect.activeSkillLevel, zesshoCase.activeSkillLevel);
+    assert.equal(fullScreenEffect.eventFrame, zesshoCase.eventFrame);
+    assert.equal(shooter.behaviorType, zesshoCase.shooterBehaviorType);
+    assert.equal(shooter.followsOwnerDirection, zesshoCase.shooterFollowsOwnerDirection);
+    assert.equal(shooter.lifeTimeFrames, zesshoCase.shooterLifeTimeFrames);
+    assertClose(shooter.x, baseState.player.x, "CN Zessho level shooter x");
+    assertClose(shooter.y, baseState.player.y, "CN Zessho level shooter y");
+    assert.equal(fieldBullet.damage, zesshoCase.bulletAttack + firstFrameState.player.attack);
+    assert.equal(fieldBullet.colliderWidth, zesshoCase.bulletSize + (fieldBullet.bulletSizeModifier ?? 0));
+    assert.equal(fieldBullet.damageJudgeType, zesshoCase.bulletDamageJudgeType);
+    assert.equal(fieldBullet.hitTargetType, zesshoCase.bulletHitTargetType);
+
+    const movedOwnerState = updateNfoSimulation(
+      {
+        ...firstFrameState,
+        player: {
+          ...firstFrameState.player,
+          x: firstFrameState.player.x + 120,
+          y: firstFrameState.player.y + 80,
+          facingAngle: Math.PI / 2,
+        },
+        bullets: [],
+        enemies: [],
+      },
+      testRuntimeData,
+      NO_INPUT,
+      1 / 30,
+    );
+    const staticShooter = movedOwnerState.activeShooters.find((candidate) => (
+      candidate.shooterId === zesshoCase.shooterId
+    ));
+
+    assert.ok(staticShooter, "expected CN Zessho level shooter to remain active after owner moves");
+    assertClose(staticShooter.x, shooter.x, "CN Zessho level non-following shooter x");
+    assertClose(staticShooter.y, shooter.y, "CN Zessho level non-following shooter y");
+    assertClose(staticShooter.ownerFacingAngle, shooter.ownerFacingAngle, "CN Zessho level shooter facing");
+  }
 }
 
 function testCnActiveSkillUltimateHeartLightShooterAndEffect(

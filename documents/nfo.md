@@ -264,6 +264,10 @@ It also locks CN skill `13` / `Elemental Burst` as a mixed event level-switch
 case: level `1`/`2`/`3` use shooters `13000`/`13001`/`13002`, with looping
 fireball bullet `11` attack `30`/`60`/`80` and non-looping snow-field bullet
 `21` attack `20`/`40`/`60` plus size `240`/`280`/`320`.
+It also locks CN skill `114` / `Zessho` as a static shooter level-switch case:
+level `1`/`2`/`3` use shooters `1001`/`1002`/`1003`, all keeping
+`BehaviorType = 0`, `IsFollowOwnerDirection = 0`, `UIefx_flash`, and bullet
+`99` size `3000` while scaling bullet attack `333`/`666`/`999`.
 
 Enemy-AI parity now also locks first-pass offset movement for CN
 `AIStateType = 31`/`32`/`33`, using `State_MoveOffsetX/Y` and
@@ -729,11 +733,13 @@ creates shooter `9000`, whose zero-speed field bullet `59` starts at the
 player, keeps `BulletDamageJudgeDelay = 21`, and only after that delay damages
 an overlapping enemy, applies stun buff `18` for 150 frames, and stops that
 enemy from moving while stunned.
-Active skill `114` / `Zessho` level `1` now locks shooter `1001` as the first
-active-skill field sample with `BehaviorType = 0` and
-`IsFollowOwnerDirection = 0`: frame `1` creates a static shooter at the player
-origin, emits zero-speed damage field bullet `99`, and the parity test verifies
-that moving the owner afterward does not move or rotate the shooter.
+Active skill `114` / `Zessho` now locks the level switch for static field
+shooters `1001`/`1002`/`1003`. Frame `1` records `UIefx_flash`, creates a
+static shooter at the player origin with `BehaviorType = 0` and
+`IsFollowOwnerDirection = 0`, and emits zero-speed damage field bullet `99`.
+The CN fixture locks level `1`/`2`/`3` `BulletAttack = 333`/`666`/`999` with
+`BulletSize = 3000`, and the parity test verifies that moving the owner
+afterward does not move or rotate the shooter.
 Active skill `116` / `未尽之星图` level `1` is now locked as a long-lived
 owner-forward field sample: frame `1` creates shooter `10000`, whose
 `LifeTime = 300` and direction-`3` zero-speed bullet `64` stays on the player
@@ -1412,7 +1418,7 @@ Weapon behavior staging:
   current owner facing. The first locked CN case is weapon `33` / shooter `321`,
   whose enemy slow bullet follows the moved player position and updated facing,
   while its friendly buff bullet follows the same position. CN active skill
-  `114` / shooter `1001` now locks the opposite static case:
+  `114` / shooters `1001`/`1002`/`1003` now lock the opposite static case:
   `BehaviorType = 0` and `IsFollowOwnerDirection = 0` keep the shooter position
   and facing stable after the owner moves. Active/weapon
   shooter direction `1` aims at the
