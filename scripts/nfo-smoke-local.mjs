@@ -18,6 +18,8 @@ const LIVE_NFO_ENDPOINT_MARKERS = [
   "/api/user/",
   "/assetbundle/nfo/",
 ];
+const LOCAL_ONLY_HOST_RESOLVER_RULES =
+  "MAP * 0.0.0.0, EXCLUDE localhost, EXCLUDE 127.0.0.1, EXCLUDE ::1";
 const execFileAsync = promisify(execFile);
 
 function parseArgs(argv) {
@@ -219,6 +221,7 @@ async function smokeBrowserInteraction(baseUrl, args) {
         "--disable-gpu",
         "--disable-background-networking",
         "--disable-dev-shm-usage",
+        `--host-resolver-rules=${LOCAL_ONLY_HOST_RESOLVER_RULES}`,
         "--no-first-run",
         "--no-default-browser-check",
         `--user-data-dir=${userDataDir}`,

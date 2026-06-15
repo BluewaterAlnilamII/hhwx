@@ -339,10 +339,11 @@ Current playable prototype:
   ```
 
   The full smoke opens the page in headless Chrome/Edge with `?nfoSmoke=1`,
-  waits for the client runtime to render the Phaser canvas, runs the same local
-  `Unlock all` and `Quick clear` paths, and verifies the hidden smoke marker
-  reaches `complete`. Use `NFO_SMOKE_BROWSER_BIN=/path/to/chrome` when the
-  browser binary is not auto-detected.
+  maps non-local hostnames to `0.0.0.0` while allowing localhost, waits for the
+  client runtime to render the Phaser canvas, runs the same local `Unlock all`
+  and `Quick clear` paths, and verifies the hidden smoke marker reaches
+  `complete`. Use `NFO_SMOKE_BROWSER_BIN=/path/to/chrome` when the browser
+  binary is not auto-detected.
 
 - uses the CN snapshot only;
 - exposes character and level selection, with locked characters disabled until
@@ -615,9 +616,10 @@ npm run smoke:nfo:http
 This HTTP smoke covers both `/bandori/nfo` and `/zh-CN/bandori/nfo`, the
 local-runtime API, static frozen runtime artifact, and no-live-NFO-endpoint
 guards for both the page-consumed API DTO and static runtime's offline gameplay
-surface without launching Chrome/Edge. For
-release-candidate or final stage-gate checks, run the full browser interaction
-smoke:
+surface without launching Chrome/Edge. For release-candidate or final
+stage-gate checks, run the full browser interaction smoke; it also blocks
+non-local hostname resolution in Chrome/Edge so the smoke path cannot depend on
+live NFO hosts:
 
 ```bash
 npm run smoke:nfo
