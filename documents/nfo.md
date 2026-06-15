@@ -682,8 +682,9 @@ skill `99` /
 `电锯之神·召唤` level `1`: frame `1` creates shooter `8000`, whose
 `SpawnPos = 3` places the shooter on the nearest enemy before emitting chainsaw
 bullet `58`. The parity test now verifies that bullet `58` damages overlapping
-enemies, records its `BulletDamageJudgeCD = 10` multi-hit cooldown, and applies
-`BulletForceType = 2` / inward force with `BulletForce = 5`.
+enemies, records its `BulletDamageJudgeCD = 10` multi-hit cooldown, damages
+again when that cooldown elapses, and applies `BulletForceType = 2` / inward
+force with `BulletForce = 5`.
 It also locks active skill `13` / `Elemental Burst` level `1`: frame `1`
 creates shooter `13000`, whose `SpawnPos = 3` places the shooter on the
 nearest enemy, emits zero-speed snow-field bullet `21`, and emits four

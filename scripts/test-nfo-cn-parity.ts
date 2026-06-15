@@ -2023,7 +2023,7 @@ async function main() {
   console.log("ok - CN weapon level-up switches spawnMinionData AI shooters");
   console.log("ok - CN shooter direction 2 targets the player side with event rotation");
   console.log("ok - CN shooter on-destroy event bullets fire follow-up bullets");
-  console.log("ok - CN active skill Chainsaw God damages and pulls from nearest-enemy field");
+  console.log("ok - CN active skill Chainsaw God repeats damage and pulls from nearest-enemy field");
   console.log("ok - CN active skill Elemental Burst shooter loops fireballs without repeating snow field");
   console.log("ok - CN active skill full-screen effect events are recorded");
   console.log("ok - CN active skill Apocalypse Song stuns, stops movement, and triggers frame-90 damage");
@@ -6438,6 +6438,37 @@ function testCnActiveSkillShooterSpawnPosThreeNearestEnemy(
     "CN chainsaw inward force x",
   );
   assertClose(pulledEnemyAfter.y, pulledEnemy.y, "CN chainsaw inward force y");
+
+  const repeatedHitState = updateNfoSimulation(
+    {
+      ...nextState,
+      player: {
+        ...nextState.player,
+        fireCooldownSeconds: 999,
+      },
+    },
+    testRuntimeData,
+    NO_INPUT,
+    spawnCase.bulletDamageJudgeCooldownFrames / 30,
+  );
+  const pulledEnemyAfterRepeat = repeatedHitState.enemies.find((enemy) => (
+    enemy.id === pulledEnemy.id
+  ));
+  const repeatedHitBullet = repeatedHitState.bullets.find((candidate) => (
+    candidate.bulletTypeId === spawnCase.bulletTypeId
+  ));
+
+  assert.ok(pulledEnemyAfterRepeat, "expected CN chainsaw repeated-hit target to remain alive");
+  assert.ok(repeatedHitBullet, "expected CN chainsaw bullet to remain active after cooldown");
+  assert.ok(
+    pulledEnemyAfterRepeat.hp < pulledEnemyAfter.hp,
+    "expected CN chainsaw field to damage again after cooldown",
+  );
+  assertClose(
+    repeatedHitBullet.hitCooldownSecondsByEnemyId[pulledEnemy.id] ?? Number.NaN,
+    spawnCase.bulletDamageJudgeCooldownFrames / 30,
+    "CN chainsaw repeated multi-hit cooldown",
+  );
 }
 
 function testCnActiveSkillElementalBurstFanShooter(
