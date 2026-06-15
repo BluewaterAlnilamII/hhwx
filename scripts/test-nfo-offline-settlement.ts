@@ -306,6 +306,10 @@ const TESTS: Array<{ name: string; run: () => void }> = [
     run: testBulletShooterOnDestroyEventBullet,
   },
   {
+    name: "on-destroy event bullets inherit parent source modifiers",
+    run: testOnDestroyEventBulletsInheritParentSourceModifiers,
+  },
+  {
     name: "shield buffs absorb contact damage and consume charges",
     run: testShieldBuffAbsorbsContactDamage,
   },
@@ -3049,6 +3053,62 @@ function testBulletShooterOnDestroyEventBullet() {
   assert.equal(childBullet.remainingHits, 9999);
   assertClose(childBullet.x, parentBullet.x, "on-destroy child bullet x");
   assertClose(childBullet.y, parentBullet.y, "on-destroy child bullet y");
+}
+
+function testOnDestroyEventBulletsInheritParentSourceModifiers() {
+  const runtimeData = createRuntimeFixture();
+  const baseState = createNfoSimulation(runtimeData);
+  const parentBullet = createSimBulletFixture({
+    bulletTypeId: 9901,
+    attackerAttack: 50,
+    bulletCountModifier: 2,
+    bulletLifeTimeModifier: 15,
+    bulletSizeModifier: 10,
+    bulletSpeedModifier: 25,
+    criticalDamage: 250,
+    criticalRate: 100,
+    onDestroyFireBullets: [
+      createFireBulletFixture({
+        bulletTypeId: 9902,
+        bulletAttack: 3,
+        bulletCount: 1,
+        bulletLifeTime: 30,
+        bulletSize: 20,
+        bulletSpeed: 100,
+        bulletHitTimes: 5,
+      }),
+    ],
+    remainingSeconds: 0,
+  });
+  const state: NfoSimulationState = {
+    ...baseState,
+    nextEntityId: 990100,
+    player: {
+      ...baseState.player,
+      fireCooldownSeconds: 999,
+    },
+    activeShooters: [],
+    bullets: [parentBullet],
+    enemies: [],
+    minions: [],
+  };
+
+  const followUpState = updateNfoSimulation(state, runtimeData, NO_INPUT, 0);
+  const childBullets = followUpState.bullets.filter((candidate) => (
+    candidate.bulletTypeId === 9902
+  ));
+
+  assert.equal(followUpState.bullets.some((candidate) => candidate.bulletTypeId === 9901), false);
+  assert.equal(childBullets.length, 3);
+  for (const childBullet of childBullets) {
+    assert.equal(childBullet.attackerAttack, 50);
+    assert.equal(childBullet.isCritical, true);
+    assert.equal(childBullet.damage, 132);
+    assert.equal(childBullet.colliderWidth, 30);
+    assertClose(Math.hypot(childBullet.vx, childBullet.vy), 125, "on-destroy child speed");
+    assertClose(childBullet.remainingSeconds, 1.5, "on-destroy child lifetime");
+    assert.equal(childBullet.remainingHits, 5);
+  }
 }
 
 function testShieldBuffAbsorbsContactDamage() {

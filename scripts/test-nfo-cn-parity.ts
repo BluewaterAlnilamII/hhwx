@@ -5965,6 +5965,58 @@ function testCnShooterOnDestroyEventBullet(sourceRuntimeData: NfoOfflineRuntimeD
   assertClose(childBullet.x, parentBullet.x, "CN on-destroy child bullet x");
   assertClose(childBullet.y, parentBullet.y, "CN on-destroy child bullet y");
 
+  const sourceModifiedParentBullet: NfoSimBullet = {
+    ...parentBullet,
+    attackerAttack: 17,
+    bulletCountModifier: 1,
+    bulletLifeTimeModifier: 3,
+    bulletSizeModifier: 5,
+    bulletSpeedModifier: 7,
+    criticalDamage: 0,
+    criticalRate: 0,
+  };
+  const sourceModifiedFollowUpState = updateNfoSimulation(
+    {
+      ...firedState,
+      activeShooters: [],
+      bullets: [sourceModifiedParentBullet],
+    },
+    testRuntimeData,
+    NO_INPUT,
+    onDestroyCase.parentBulletLifeTimeFrames / 30,
+  );
+  const sourceModifiedChildBullets = sourceModifiedFollowUpState.bullets.filter((candidate) => (
+    candidate.bulletTypeId === onDestroyCase.childBulletTypeId
+  ));
+  const sourceModifiedChildBullet = sourceModifiedChildBullets[0];
+
+  assert.equal(sourceModifiedChildBullets.length, onDestroyCase.childBulletCount + 1);
+  assert.ok(
+    sourceModifiedChildBullet,
+    "expected source-modified CN black-hole trigger to emit event bullet 31",
+  );
+  assert.equal(
+    sourceModifiedChildBullet.damage,
+    onDestroyCase.childBulletAttack + sourceModifiedParentBullet.attackerAttack,
+  );
+  assert.equal(
+    sourceModifiedChildBullet.colliderWidth,
+    onDestroyCase.childBulletSize + (sourceModifiedParentBullet.bulletSizeModifier ?? 0),
+  );
+  assertClose(
+    Math.hypot(sourceModifiedChildBullet.vx, sourceModifiedChildBullet.vy),
+    onDestroyCase.childBulletSpeed + (sourceModifiedParentBullet.bulletSpeedModifier ?? 0),
+    "CN source-modified on-destroy child speed",
+  );
+  assertClose(
+    sourceModifiedChildBullet.remainingSeconds,
+    (
+      onDestroyCase.childBulletLifeTimeFrames
+      + (sourceModifiedParentBullet.bulletLifeTimeModifier ?? 0)
+    ) / 30,
+    "CN source-modified on-destroy child lifetime",
+  );
+
   const hostileOnDestroyCase = getShooterOnDestroyCase(
     "shooter-michelle-fist-hostile-on-destroy-event-bullet",
   );

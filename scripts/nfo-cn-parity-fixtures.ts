@@ -598,7 +598,10 @@ export type NfoCnParityShooterOnDestroyCase = {
   childBulletTypeId: number;
   childEventBulletId: number;
   childBulletNoDamage: boolean;
+  childBulletCount: number;
   childBulletAttack: number;
+  childBulletSpeed: number;
+  childBulletSize: number;
   childBulletHitTargetType: number;
   childBulletLifeTimeFrames: number;
   childBulletForceType: number;
@@ -3568,7 +3571,10 @@ function buildShooterOnDestroyCase(
     childBulletTypeId: childBullet.bulletTypeId,
     childEventBulletId: childBullet.eventBulletId,
     childBulletNoDamage: childBullet.noDamage,
+    childBulletCount: childBullet.bulletCount,
     childBulletAttack: childBullet.bulletAttack,
+    childBulletSpeed: childBullet.bulletSpeed,
+    childBulletSize: childBullet.bulletSize,
     childBulletHitTargetType: childBullet.bulletHitTargetType,
     childBulletLifeTimeFrames: childBullet.bulletLifeTime,
     childBulletForceType: childBullet.bulletForceType,

@@ -383,6 +383,12 @@ export type NfoSimBullet = NfoVector & {
   orbitRadius?: number;
   damage: number;
   attackerAttack: number;
+  bulletCountModifier?: number;
+  bulletLifeTimeModifier?: number;
+  bulletSizeModifier?: number;
+  bulletSpeedModifier?: number;
+  criticalDamage?: number;
+  criticalRate?: number;
   isCritical: boolean;
   canDamagePlayer: boolean;
   hitTargetType: number;
@@ -2923,6 +2929,14 @@ function createBullet(
   onDestroyFireBullets: NfoFireBullet[] = [],
   options: FireBulletDataSetOptions = {},
 ): NfoSimBullet {
+  const attackerAttack = options.attackerAttack ?? getPlayerEffectiveAttack(state);
+  const bulletCountModifier = options.bulletCountModifier ?? getPlayerEffectiveBulletCount(state);
+  const bulletLifeTimeModifier =
+    options.bulletLifeTimeModifier ?? getPlayerEffectiveBulletLifeTime(state);
+  const bulletSizeModifier = options.bulletSizeModifier ?? getPlayerEffectiveBulletSize(state);
+  const bulletSpeedModifier = options.bulletSpeedModifier ?? getPlayerEffectiveBulletSpeed(state);
+  const criticalDamage = options.criticalDamage ?? getPlayerEffectiveCriticalDamage(state);
+  const criticalRate = options.criticalRate ?? getPlayerEffectiveCriticalRate(state);
   const baseAngle = Math.atan2(target.y - origin.y, target.x - origin.x);
   const angle = options.bulletAngleOverride?.({ fireBullet, origin }) ?? getBulletFireAngle(
     baseAngle,
@@ -2935,7 +2949,7 @@ function createBullet(
   );
   const speed = getModifiedBulletSpeed(
     fireBullet.bulletSpeed,
-    options.bulletSpeedModifier ?? getPlayerEffectiveBulletSpeed(state),
+    bulletSpeedModifier,
   );
   const motionConfig = options.bulletMotionOverride?.({
     fireBullet,
@@ -2948,20 +2962,18 @@ function createBullet(
   const colliderType = getSupportedBulletColliderType(fireBullet.bulletColliderType);
   const colliderWidth = getModifiedBulletSize(
     fireBullet.bulletSize,
-    options.bulletSizeModifier ?? getPlayerEffectiveBulletSize(state),
+    bulletSizeModifier,
   );
   const colliderLength = getModifiedBulletSecondarySize(
     fireBullet.bulletSize2,
     colliderWidth,
-    options.bulletSizeModifier ?? getPlayerEffectiveBulletSize(state),
+    bulletSizeModifier,
   );
   const judgeCooldownFrames = fireBullet.bulletDamageJudgeCooldownFrames > 0
     ? fireBullet.bulletDamageJudgeCooldownFrames
     : DEFAULT_BULLET_DAMAGE_JUDGE_COOLDOWN_FRAMES;
-  const baseDamage = fireBullet.bulletAttack + (
-    options.attackerAttack ?? getPlayerEffectiveAttack(state)
-  );
-  const isCritical = rollCriticalHit(options.criticalRate ?? getPlayerEffectiveCriticalRate(state));
+  const baseDamage = fireBullet.bulletAttack + attackerAttack;
+  const isCritical = rollCriticalHit(criticalRate);
   const velocity = {
     x: Math.cos(angle) * speed,
     y: Math.sin(angle) * speed,
@@ -3015,9 +3027,15 @@ function createBullet(
     damage: getModifiedBulletDamage(
       baseDamage,
       isCritical,
-      options.criticalDamage ?? getPlayerEffectiveCriticalDamage(state),
+      criticalDamage,
     ),
-    attackerAttack: options.attackerAttack ?? getPlayerEffectiveAttack(state),
+    attackerAttack,
+    bulletCountModifier,
+    bulletLifeTimeModifier,
+    bulletSizeModifier,
+    bulletSpeedModifier,
+    criticalDamage,
+    criticalRate,
     isCritical,
     canDamagePlayer: options.canDamagePlayer ?? false,
     hitTargetType: getSupportedBulletHitTargetType(
@@ -3041,7 +3059,7 @@ function createBullet(
     remainingSeconds:
       getModifiedBulletLifetimeFrames(
         fireBullet.bulletLifeTime,
-        options.bulletLifeTimeModifier ?? getPlayerEffectiveBulletLifeTime(state),
+        bulletLifeTimeModifier,
       ) / FRAME_RATE,
     remainingHits: Math.max(fireBullet.bulletHitTimes, 1),
     hasHitPlayer: false,
@@ -3340,7 +3358,13 @@ function fireBulletOnDestroyEvents(
     state.player,
     {
       attackerAttack: bullet.attackerAttack,
+      bulletCountModifier: bullet.bulletCountModifier,
+      bulletLifeTimeModifier: bullet.bulletLifeTimeModifier,
+      bulletSizeModifier: bullet.bulletSizeModifier,
+      bulletSpeedModifier: bullet.bulletSpeedModifier,
       canDamagePlayer: bullet.canDamagePlayer,
+      criticalDamage: bullet.criticalDamage,
+      criticalRate: bullet.criticalRate,
       hitTargetTypeOverride: bullet.canDamagePlayer
         ? NFO_BULLET_HIT_TARGET_TYPE.friendly
         : undefined,
