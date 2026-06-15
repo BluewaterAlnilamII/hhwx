@@ -47,7 +47,7 @@ async function main() {
   assert.equal(fixture.activeSkillShooterCount, 24);
   assert.equal(fixture.activeSkillShooterEventCount, 54);
   assert.equal(fixture.weaponLevelShooterCount, 32);
-  assert.equal(fixture.selectedActiveSkillShooterSpawnCases.length, 8);
+  assert.equal(fixture.selectedActiveSkillShooterSpawnCases.length, 9);
   assert.equal(fixture.selectedAIActionCases.length, 3);
   assert.equal(fixture.selectedWeaponShooterCases.length, 8);
   assert.equal(fixture.selectedWeaponDirectFireCases.length, 30);
@@ -1934,6 +1934,7 @@ async function main() {
   testCnActiveSkillFullScreenEffectEvent(runtimeData);
   testCnActiveSkillApocalypseSongDelayedDamageShooter(runtimeData);
   testCnActiveSkillZesshoStaticFieldShooter(runtimeData);
+  testCnActiveSkillUltimateHeartLightShooterAndEffect(runtimeData);
   testCnActiveSkillEndlessStarMapOwnerForwardField(runtimeData);
   testCnActiveSkillAbsoluteGuardShooterFriendlyInvincibleBuff(runtimeData);
   testCnActiveSkillKiraKiraDokiDokiDelayedStunField(runtimeData);
@@ -2027,6 +2028,7 @@ async function main() {
   console.log("ok - CN active skill full-screen effect events are recorded");
   console.log("ok - CN active skill Apocalypse Song stuns, stops movement, and triggers frame-90 damage");
   console.log("ok - CN active skill Zessho creates non-following static damage field shooter");
+  console.log("ok - CN active skill Ultimate Heart Light records starlight effect and loops shooter 6000");
   console.log("ok - CN active skill Endless Star Map shooter creates owner-forward field and EXP/coin gains");
   console.log("ok - CN active skill Absolute Guard shooter applies friendly invincible buff");
   console.log("ok - CN active skill KiraKiraDokiDoki delayed field stuns and stops movement");
@@ -6792,6 +6794,107 @@ function testCnActiveSkillZesshoStaticFieldShooter(
   assertClose(staticShooter.x, shooter.x, "CN Zessho non-following shooter x");
   assertClose(staticShooter.y, shooter.y, "CN Zessho non-following shooter y");
   assertClose(staticShooter.ownerFacingAngle, shooter.ownerFacingAngle, "CN Zessho shooter facing");
+}
+
+function testCnActiveSkillUltimateHeartLightShooterAndEffect(
+  sourceRuntimeData: NfoOfflineRuntimeData,
+) {
+  const starlightCase = getActiveSkillShooterSpawnCase(
+    "active-skill-ultimate-heart-light-looping-starlight-lv1",
+  );
+  const activeSkill = sourceRuntimeData.activeSkills.find((candidate) => (
+    candidate.id === starlightCase.activeSkillId
+  ));
+  const activeSkillLevel = activeSkill?.levels.find((candidate) => (
+    candidate.level === starlightCase.activeSkillLevel
+  ));
+  const effectEvent = activeSkillLevel?.events.find((event) => (
+    event.frame === starlightCase.eventFrame
+    && event.bulletShooterId === starlightCase.shooterId
+  ));
+
+  assert.ok(effectEvent, "expected CN active skill 110 to define shooter 6000");
+  assert.equal(effectEvent.fullScreenEffectName, "UIefx_flash_starlight");
+  assert.equal(starlightCase.shooterBehaviorType, 1);
+  assert.equal(starlightCase.shooterFollowsOwnerDirection, true);
+  assert.equal(starlightCase.isLoopEvent, true);
+  assert.equal(starlightCase.loopFrameInterval, 10);
+  assert.equal(starlightCase.bulletCount, 6);
+  assert.equal(starlightCase.directionType, 1);
+
+  const testRuntimeData = configureRuntimeForActiveSkill(
+    sourceRuntimeData,
+    starlightCase.activeSkillId,
+  );
+  const baseState = createStateWithEnemy(testRuntimeData, { x: 360, y: 0 });
+  const firstFrameState = updateNfoSimulation(
+    chargeActiveSkill(baseState),
+    testRuntimeData,
+    { ...NO_INPUT, useActiveSkill: true },
+    1 / 30,
+  );
+  const shooter = firstFrameState.activeShooters.find((candidate) => (
+    candidate.shooterId === starlightCase.shooterId
+  ));
+  const firstLoopBullets = firstFrameState.bullets.filter((bullet) => (
+    bullet.bulletTypeId === starlightCase.bulletTypeId
+  ));
+  const effect = firstFrameState.fullScreenEffects.find((candidate) => (
+    candidate.name === effectEvent.fullScreenEffectName
+  ));
+
+  assert.ok(shooter, "expected CN active skill 110 to create shooter 6000");
+  assert.ok(effect, "expected CN active skill 110 to record UIefx_flash_starlight");
+  assert.equal(effect.activeSkillId, starlightCase.activeSkillId);
+  assert.equal(effect.activeSkillLevel, starlightCase.activeSkillLevel);
+  assert.equal(effect.eventFrame, starlightCase.eventFrame);
+  assert.equal(effect.remainingSeconds, 0.5);
+  assert.equal(shooter.lifeTimeFrames, starlightCase.shooterLifeTimeFrames);
+  assert.equal(shooter.behaviorType, starlightCase.shooterBehaviorType);
+  assert.equal(shooter.followsOwnerDirection, starlightCase.shooterFollowsOwnerDirection);
+  assertClose(shooter.ageFrames, starlightCase.shooterEventFrame, "CN starlight shooter age");
+  assertClose(shooter.x, firstFrameState.player.x, "CN starlight shooter x");
+  assertClose(shooter.y, firstFrameState.player.y, "CN starlight shooter y");
+  assert.equal(firstLoopBullets.length, starlightCase.bulletCount);
+  for (const bullet of firstLoopBullets) {
+    assert.equal(bullet.hitTargetType, starlightCase.bulletHitTargetType);
+    assert.equal(bullet.damageJudgeType, starlightCase.bulletDamageJudgeType);
+    assertClose(
+      Math.hypot(bullet.vx, bullet.vy),
+      starlightCase.bulletSpeed,
+      "CN starlight bullet speed",
+    );
+  }
+  assertClose(
+    firstLoopBullets.reduce((sum, bullet) => sum + bullet.vx, 0),
+    0,
+    "CN starlight radial horizontal symmetry",
+  );
+  assertClose(
+    firstLoopBullets.reduce((sum, bullet) => sum + bullet.vy, 0),
+    0,
+    "CN starlight radial vertical symmetry",
+  );
+
+  const secondLoopState = updateNfoSimulation(
+    {
+      ...firstFrameState,
+      bullets: [],
+    },
+    testRuntimeData,
+    NO_INPUT,
+    starlightCase.loopFrameInterval / 30,
+  );
+  const secondLoopBullets = secondLoopState.bullets.filter((bullet) => (
+    bullet.bulletTypeId === starlightCase.bulletTypeId
+  ));
+
+  assert.equal(secondLoopBullets.length, starlightCase.bulletCount);
+  assertClose(
+    secondLoopState.activeShooters[0]?.ageFrames ?? Number.NaN,
+    starlightCase.shooterEventFrame + starlightCase.loopFrameInterval,
+    "CN starlight shooter second loop age",
+  );
 }
 
 function testCnActiveSkillEndlessStarMapOwnerForwardField(
