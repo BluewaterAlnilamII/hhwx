@@ -1,0 +1,8 @@
+{
+  "confirmation": "验证你的 HHWX 邮箱 / Verify your HHWX email",
+  "magic_link": "继续使用 HHWX / Continue to HHWX",
+  "recovery": "重置你的 HHWX 密码 / Reset your HHWX password",
+  "email_change": "确认新的 HHWX 邮箱 / Confirm your new HHWX email",
+  "invite": "你已受邀加入 HHWX / You are invited to HHWX",
+  "reauthentication": "{{ .Token }} 是你的 HHWX 验证码 / HHWX verification code"
+}

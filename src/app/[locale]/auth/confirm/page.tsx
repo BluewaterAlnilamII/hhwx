@@ -30,6 +30,13 @@ import { useGameStore } from "@/store/useGameStore";
 type CallbackStatus = "verifying" | "success" | "error" | "recovery";
 type TranslationFn = (key: string, values?: Record<string, string | number>) => string;
 
+type PasswordRecoveryBrowserState = {
+  type: "recovery";
+  nextPath: string;
+  expiresAt: number;
+  userId?: string;
+};
+
 const EMAIL_OTP_TYPES = new Set<EmailOtpType>([
   "signup",
   "invite",
@@ -38,6 +45,69 @@ const EMAIL_OTP_TYPES = new Set<EmailOtpType>([
   "email_change",
   "email",
 ]);
+const PASSWORD_RECOVERY_STATE_KEY = "hhwx:auth-confirm:password-recovery";
+const PASSWORD_RECOVERY_STATE_TTL_MS = 30 * 60 * 1000;
+
+function clearPasswordRecoveryState(): void {
+  try {
+    window.sessionStorage.removeItem(PASSWORD_RECOVERY_STATE_KEY);
+  } catch {
+    // Storage can be unavailable in strict browser privacy modes.
+  }
+}
+
+function rememberPasswordRecoveryState(nextPath: string, userId?: string): void {
+  try {
+    const state: PasswordRecoveryBrowserState = {
+      type: "recovery",
+      nextPath: normalizeInternalPath(nextPath, "/account"),
+      expiresAt: Date.now() + PASSWORD_RECOVERY_STATE_TTL_MS,
+      userId,
+    };
+    window.sessionStorage.setItem(PASSWORD_RECOVERY_STATE_KEY, JSON.stringify(state));
+  } catch {
+    // Losing this state only disables cross-locale recovery-page persistence.
+  }
+}
+
+function readPasswordRecoveryState(nextPath: string, userId?: string): PasswordRecoveryBrowserState | null {
+  let parsed: Partial<PasswordRecoveryBrowserState>;
+  try {
+    const rawState = window.sessionStorage.getItem(PASSWORD_RECOVERY_STATE_KEY);
+    if (!rawState) {
+      return null;
+    }
+
+    parsed = JSON.parse(rawState) as Partial<PasswordRecoveryBrowserState>;
+  } catch {
+    clearPasswordRecoveryState();
+    return null;
+  }
+
+  const expiresAt = Number(parsed.expiresAt);
+  if (parsed.type !== "recovery" || !Number.isFinite(expiresAt) || expiresAt <= Date.now()) {
+    clearPasswordRecoveryState();
+    return null;
+  }
+
+  const storedNextPath = normalizeInternalPath(parsed.nextPath, "/account");
+  const expectedNextPath = normalizeInternalPath(nextPath, "/account");
+  if (storedNextPath !== expectedNextPath) {
+    return null;
+  }
+
+  if (parsed.userId && userId && parsed.userId !== userId) {
+    clearPasswordRecoveryState();
+    return null;
+  }
+
+  return {
+    type: "recovery",
+    nextPath: storedNextPath,
+    expiresAt,
+    userId: parsed.userId,
+  };
+}
 
 function getErrorMessage(error: unknown, fallbackMessage: string): string {
   if (error instanceof Error && error.message) {
@@ -148,8 +218,9 @@ function AuthConfirmPageContent() {
   useEffect(() => {
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((event) => {
+    } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === "PASSWORD_RECOVERY") {
+        rememberPasswordRecoveryState(nextPath, session?.user.id);
         setStatus("recovery");
         setMessage(t("passwordReady"));
         return;
@@ -166,7 +237,7 @@ function AuthConfirmPageContent() {
     });
 
     return () => subscription.unsubscribe();
-  }, [initialMessage, t]);
+  }, [initialMessage, nextPath, t]);
 
   useEffect(() => {
     if (hasHandledRef.current) {
@@ -226,6 +297,8 @@ function AuthConfirmPageContent() {
 
     const handleSuccess = async (type: string | null) => {
       if (type === "recovery") {
+        const session = await getSafeSession();
+        rememberPasswordRecoveryState(nextPath, session?.user.id);
         if (active) {
           setStatus("recovery");
           setMessage(t("passwordReady"));
@@ -297,6 +370,11 @@ function AuthConfirmPageContent() {
 
         const session = await getSafeSession();
         if (session) {
+          if (!type && readPasswordRecoveryState(nextPath, session.user.id)) {
+            await handleSuccess("recovery");
+            return;
+          }
+
           await handleSuccess(type);
           return;
         }
@@ -304,6 +382,7 @@ function AuthConfirmPageContent() {
         throw new Error(t("expiredLink"));
       } catch (error) {
         console.error("Auth confirm page error:", error);
+        clearPasswordRecoveryState();
         logout();
 
         if (active) {
@@ -318,7 +397,7 @@ function AuthConfirmPageContent() {
     return () => {
       active = false;
     };
-  }, [authErrorMessages, errorT, logout, searchParams, setAuth, status, t]);
+  }, [authErrorMessages, errorT, logout, nextPath, searchParams, setAuth, status, t]);
 
   const handlePasswordReset = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -344,6 +423,7 @@ function AuthConfirmPageContent() {
       }
 
       await readAuthProfileSummary().catch(() => null);
+      clearPasswordRecoveryState();
       setStatus("success");
       setMessage(t("passwordSaved"));
       setPasswordMessage("");

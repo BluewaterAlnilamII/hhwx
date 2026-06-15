@@ -41,7 +41,7 @@ export default function BandoriCardThumbnailTile({
   trainType,
   selected = false,
   region,
-  skillEffectLabel = "未知技能",
+  skillEffectLabel = "Unknown skill",
   onSelect,
   className,
 }: {

@@ -81,10 +81,54 @@ type EventBonusResponse = {
   bonuses: BandoriEventBonus[];
 };
 
+export type TeamSearchWorkerMessages = {
+  notReady: string;
+  requestFailed: string;
+  invalidResponse: string;
+  chartData: string;
+  cardData: string;
+  characterData: string;
+  skillData: string;
+  areaItemData: string;
+  songData: string;
+  eventBonus: string;
+  songDataMissing: string;
+  chartDataInvalid: string;
+  selectMedleySongs: string;
+  medleySongDataMissing: string;
+  medleyChartDataInvalid: string;
+  preloadFailed: string;
+  calculateFailed: string;
+};
+
+const DEFAULT_WORKER_MESSAGES: TeamSearchWorkerMessages = {
+  notReady: "{label} is not ready yet",
+  requestFailed: "Request failed (HTTP {status})",
+  invalidResponse: "API response format is invalid",
+  chartData: "Chart data",
+  cardData: "Card data",
+  characterData: "Character data",
+  skillData: "Skill data",
+  areaItemData: "Area item data",
+  songData: "Song data",
+  eventBonus: "Event bonus",
+  songDataMissing: "Song data does not exist",
+  chartDataInvalid: "Chart data format is invalid",
+  selectMedleySongs: "Medley live requires selecting 3 songs",
+  medleySongDataMissing: "Song {index} data does not exist",
+  medleyChartDataInvalid: "Song {index} chart data format is invalid",
+  preloadFailed: "Failed to prepare data",
+  calculateFailed: "Calculation failed",
+};
+
 const MEDLEY_FRONTEND_MEMORY_SOFT_LIMIT_MIB = 2800;
 type MedleyCalculationMode = "maximize" | "legacy-greedy-single";
 
-type TeamSearchWorkerSearchRequest = {
+type TeamSearchWorkerMessageEnvelope = {
+  messages?: TeamSearchWorkerMessages;
+};
+
+type TeamSearchWorkerSearchRequest = TeamSearchWorkerMessageEnvelope & {
   type: "search";
   requestId: string;
   profilePayload: UserGameProfilePayload;
@@ -127,7 +171,7 @@ type TeamSearchWorkerSearchRequest = {
   };
 };
 
-export type TeamSearchWorkerPreloadRequest = {
+export type TeamSearchWorkerPreloadRequest = TeamSearchWorkerMessageEnvelope & {
   type: "preload";
   requestId: string;
   song?: {
@@ -179,13 +223,24 @@ type TeamSearchWorkerRunOptions = {
 
 const requestJsonCache = new Map<string, Promise<unknown>>();
 
-async function requestJson<T>(path: string): Promise<T> {
+function formatWorkerMessage(template: string, values: Record<string, string | number> = {}): string {
+  return Object.entries(values).reduce(
+    (message, [key, value]) => message.replaceAll(`{${key}}`, String(value)),
+    template,
+  );
+}
+
+function getWorkerMessages(messages?: TeamSearchWorkerMessages): TeamSearchWorkerMessages {
+  return messages ?? DEFAULT_WORKER_MESSAGES;
+}
+
+async function requestJson<T>(path: string, messages: TeamSearchWorkerMessages = DEFAULT_WORKER_MESSAGES): Promise<T> {
   const cached = requestJsonCache.get(path);
   if (cached) {
     return cached as Promise<T>;
   }
 
-  const promise = requestJsonUncached<T>(path).catch((error) => {
+  const promise = requestJsonUncached<T>(path, messages).catch((error) => {
     requestJsonCache.delete(path);
     throw error;
   });
@@ -193,26 +248,26 @@ async function requestJson<T>(path: string): Promise<T> {
   return promise;
 }
 
-async function requireCachedJson<T>(path: string, label: string): Promise<T> {
+async function requireCachedJson<T>(path: string, label: string, messages: TeamSearchWorkerMessages): Promise<T> {
   const cached = requestJsonCache.get(path);
   if (!cached) {
-    throw new Error(`${label}尚未准备完成`);
+    throw new Error(formatWorkerMessage(messages.notReady, { label }));
   }
   return cached as Promise<T>;
 }
 
-async function requestJsonUncached<T>(path: string): Promise<T> {
+async function requestJsonUncached<T>(path: string, messages: TeamSearchWorkerMessages): Promise<T> {
   const response = await fetch(path, {
     headers: { "Content-Type": "application/json" },
   });
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
-    throw new Error(getApiErrorMessage(payload) || `请求失败（HTTP ${response.status}）`);
+    throw new Error(getApiErrorMessage(payload) || formatWorkerMessage(messages.requestFailed, { status: response.status }));
   }
 
   const data = parseApiSuccessData<T>(payload);
   if (data === null) {
-    throw new Error("接口返回格式无效");
+    throw new Error(messages.invalidResponse);
   }
   return data;
 }
@@ -584,25 +639,26 @@ function buildLegacyGreedyMedleyInput({
 }
 
 async function preloadSearchData(request: TeamSearchWorkerPreloadRequest): Promise<void> {
+  const messages = getWorkerMessages(request.messages);
   const preloadRequests: Array<Promise<unknown>> = [
-    requestJson<MasterResponse<Record<string, BestdoriCardMaster | undefined>>>("/api/bandori/master/cards"),
-    requestJson<MasterResponse<Record<string, { bandId?: number | null } | undefined>>>("/api/bandori/master/characters/main"),
-    requestJson<MasterResponse<Record<string, BestdoriSkillMaster | undefined>>>("/api/bandori/master/skills"),
-    requestJson<MasterResponse<Record<string, BestdoriAreaItemMaster | undefined>>>("/api/bandori/master/areaItems"),
-    requestJson<MasterResponse<Record<string, BestdoriSongMaster | undefined>>>("/api/bandori/master/songs"),
+    requestJson<MasterResponse<Record<string, BestdoriCardMaster | undefined>>>("/api/bandori/master/cards", messages),
+    requestJson<MasterResponse<Record<string, { bandId?: number | null } | undefined>>>("/api/bandori/master/characters/main", messages),
+    requestJson<MasterResponse<Record<string, BestdoriSkillMaster | undefined>>>("/api/bandori/master/skills", messages),
+    requestJson<MasterResponse<Record<string, BestdoriAreaItemMaster | undefined>>>("/api/bandori/master/areaItems", messages),
+    requestJson<MasterResponse<Record<string, BestdoriSongMaster | undefined>>>("/api/bandori/master/songs", messages),
   ];
 
   if (request.song) {
     const songId = Math.trunc(request.song.songId);
-    preloadRequests.push(requestJson<{ chart: BestdoriChartEntity[] }>(`/api/bandori/charts/${songId}/${request.song.difficulty}`));
+    preloadRequests.push(requestJson<{ chart: BestdoriChartEntity[] }>(`/api/bandori/charts/${songId}/${request.song.difficulty}`, messages));
   }
   for (const song of request.songs ?? []) {
     const songId = Math.trunc(song.songId);
-    preloadRequests.push(requestJson<{ chart: BestdoriChartEntity[] }>(`/api/bandori/charts/${songId}/${song.difficulty}`));
+    preloadRequests.push(requestJson<{ chart: BestdoriChartEntity[] }>(`/api/bandori/charts/${songId}/${song.difficulty}`, messages));
   }
 
   if (request.event?.eventId) {
-    preloadRequests.push(requestJson<EventBonusResponse>(`/api/bandori/events/bonuses?event=${request.event.eventId}`));
+    preloadRequests.push(requestJson<EventBonusResponse>(`/api/bandori/events/bonuses?event=${request.event.eventId}`, messages));
   }
 
   await Promise.all(preloadRequests);
@@ -612,40 +668,43 @@ async function runSearch(
   request: TeamSearchWorkerSearchRequest,
   options: TeamSearchWorkerRunOptions = {},
 ): Promise<BandoriTeamSearchResponse | BandoriMedleyTeamSearchResponse> {
+  const messages = getWorkerMessages(request.messages);
   const songId = Math.trunc(request.song.songId);
   const medleySongs = request.event.eventType === "medley" ? request.songs?.slice(0, 3) ?? [] : [];
   const chartRequests = medleySongs.length > 0
     ? medleySongs.map((song) => (
       requireCachedJson<{ chart: BestdoriChartEntity[] }>(
         `/api/bandori/charts/${Math.trunc(song.songId)}/${song.difficulty}`,
-        "谱面数据",
+        messages.chartData,
+        messages,
       )
     ))
     : [
       requireCachedJson<{ chart: BestdoriChartEntity[] }>(
         `/api/bandori/charts/${songId}/${request.song.difficulty}`,
-        "谱面数据",
+        messages.chartData,
+        messages,
       ),
     ];
   const [cardsPayload, charactersPayload, skillsPayload, areaItemsPayload, songsPayload, chartPayloads, eventBonuses] = await Promise.all([
-    requireCachedJson<MasterResponse<Record<string, BestdoriCardMaster | undefined>>>("/api/bandori/master/cards", "卡牌数据"),
-    requireCachedJson<MasterResponse<Record<string, { bandId?: number | null } | undefined>>>("/api/bandori/master/characters/main", "角色数据"),
-    requireCachedJson<MasterResponse<Record<string, BestdoriSkillMaster | undefined>>>("/api/bandori/master/skills", "技能数据"),
-    requireCachedJson<MasterResponse<Record<string, BestdoriAreaItemMaster | undefined>>>("/api/bandori/master/areaItems", "区域道具数据"),
-    requireCachedJson<MasterResponse<Record<string, BestdoriSongMaster | undefined>>>("/api/bandori/master/songs", "歌曲数据"),
+    requireCachedJson<MasterResponse<Record<string, BestdoriCardMaster | undefined>>>("/api/bandori/master/cards", messages.cardData, messages),
+    requireCachedJson<MasterResponse<Record<string, { bandId?: number | null } | undefined>>>("/api/bandori/master/characters/main", messages.characterData, messages),
+    requireCachedJson<MasterResponse<Record<string, BestdoriSkillMaster | undefined>>>("/api/bandori/master/skills", messages.skillData, messages),
+    requireCachedJson<MasterResponse<Record<string, BestdoriAreaItemMaster | undefined>>>("/api/bandori/master/areaItems", messages.areaItemData, messages),
+    requireCachedJson<MasterResponse<Record<string, BestdoriSongMaster | undefined>>>("/api/bandori/master/songs", messages.songData, messages),
     Promise.all(chartRequests),
     request.event.eventId
-      ? requireCachedJson<EventBonusResponse>(`/api/bandori/events/bonuses?event=${request.event.eventId}`, "活动加成").then((response) => response.bonuses)
+      ? requireCachedJson<EventBonusResponse>(`/api/bandori/events/bonuses?event=${request.event.eventId}`, messages.eventBonus, messages).then((response) => response.bonuses)
       : Promise.resolve([]),
   ]);
 
   const song = songsPayload.payload[String(songId)];
   if (!song) {
-    throw new Error("歌曲数据不存在");
+    throw new Error(messages.songDataMissing);
   }
   const chartPayload = chartPayloads[0];
   if (!chartPayload || !Array.isArray(chartPayload.chart)) {
-    throw new Error("谱面数据格式无效");
+    throw new Error(messages.chartDataInvalid);
   }
 
   const excludedCardIds = new Set(request.cards.excludedCardIds);
@@ -677,17 +736,17 @@ async function runSearch(
 
   if (request.event.eventType === "medley") {
     if (medleySongs.length !== 3) {
-      throw new Error("巡回演出需要选择 3 首歌曲");
+      throw new Error(messages.selectMedleySongs);
     }
     const medleySongInputs = medleySongs.map((medleySong, index) => {
       const medleySongId = Math.trunc(medleySong.songId);
       const medleySongMaster = songsPayload.payload[String(medleySongId)];
       const medleyChartPayload = chartPayloads[index];
       if (!medleySongMaster) {
-        throw new Error(`第 ${index + 1} 首歌曲数据不存在`);
+        throw new Error(formatWorkerMessage(messages.medleySongDataMissing, { index: index + 1 }));
       }
       if (!medleyChartPayload || !Array.isArray(medleyChartPayload.chart)) {
-        throw new Error(`第 ${index + 1} 首谱面数据格式无效`);
+        throw new Error(formatWorkerMessage(messages.medleyChartDataInvalid, { index: index + 1 }));
       }
       return {
         chart: medleyChartPayload.chart,
@@ -799,6 +858,7 @@ async function runSearch(
 }
 
 self.onmessage = (event: MessageEvent<TeamSearchWorkerMessage>) => {
+  const messages = getWorkerMessages(event.data.messages);
   if (event.data.type === "preload") {
     void preloadSearchData(event.data)
       .then(() => {
@@ -809,7 +869,7 @@ self.onmessage = (event: MessageEvent<TeamSearchWorkerMessage>) => {
           requestId: event.data.requestId,
           type: "preload",
           ok: false,
-          error: error instanceof Error ? error.message : "准备数据失败",
+          error: error instanceof Error ? error.message : messages.preloadFailed,
         } satisfies TeamSearchWorkerResponse);
       });
     return;
@@ -839,7 +899,7 @@ self.onmessage = (event: MessageEvent<TeamSearchWorkerMessage>) => {
         requestId: event.data.requestId,
         type: "search",
         ok: false,
-        error: error instanceof Error ? error.message : "计算失败",
+        error: error instanceof Error ? error.message : messages.calculateFailed,
       } satisfies TeamSearchWorkerResponse);
     });
 };

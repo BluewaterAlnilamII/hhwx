@@ -2,8 +2,8 @@
 
 import { Link } from "@/i18n/navigation";
 import dynamic from "next/dynamic";
-import { format } from "date-fns";
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useLocale, useMessages, useTranslations } from "next-intl";
 import {
   Calculator,
   CheckCircle2,
@@ -19,7 +19,7 @@ import BandoriAccountShell from "@/app/[locale]/bandori/BandoriAccountShell";
 import BandoriCardThumbnail from "@/components/bandori/BandoriCardThumbnail";
 import BandoriEventSwitcher, { type BandoriEventSwitcherEvent } from "@/app/[locale]/bandori/BandoriEventSwitcher";
 import { AccountErrorState, AccountLoadingState, AccountSignInState } from "@/app/[locale]/account/AccountShell";
-import { getAccessToken, useAccountProfile } from "@/app/[locale]/account/useAccountProfile";
+import { getAccessToken, useLocalizedAccountProfile } from "@/app/[locale]/account/useAccountProfile";
 import { BandoriCardHoverTooltipPortal } from "@/components/bandori/BandoriCardHoverTooltip";
 import { getApiErrorMessage, parseApiSuccessData } from "@/lib/api-contracts";
 import {
@@ -73,7 +73,10 @@ import {
   type UserGameProfilePayload,
 } from "@/lib/user-game-profile-payload";
 import { type BandoriCardPickerValue } from "@/components/bandori/card-picker/types";
-import { createMaxGameProfileCard } from "@/lib/bandori-game-profile-card";
+import { type AppLocale } from "@/i18n/routing";
+import { createMaxGameProfileCard, pickGameProfileCardName } from "@/lib/bandori-game-profile-card";
+import { pickBestdoriLocalizedName } from "@/lib/bestdori-regional-names";
+import { formatLocalizedDate, formatLocalizedDateTime, formatLocalizedInteger } from "@/lib/localized-format";
 import TeamBuilderCardPreferencesPanel from "./CardPreferencesPanel";
 import { type TemporaryCardEditorDialogProps, type TemporaryCardPickerDialogProps } from "./TemporaryCardDialogs";
 import {
@@ -86,7 +89,12 @@ import {
   type TeamBuilderCardPreferences,
   type TemporaryGameProfileCard,
 } from "./card-preferences";
-import type { TeamSearchWorkerMessage, TeamSearchWorkerRequest, TeamSearchWorkerResponse } from "./team-search-worker";
+import type {
+  TeamSearchWorkerMessage,
+  TeamSearchWorkerMessages,
+  TeamSearchWorkerRequest,
+  TeamSearchWorkerResponse,
+} from "./team-search-worker";
 
 type StepId = "event" | "live" | "song" | "profile" | "calculate";
 type LiveType = "free" | "multi" | "challenge" | "versus";
@@ -133,18 +141,32 @@ type BrowserMemoryPerformance = Performance & {
   }>;
 };
 
+function DynamicTemporaryCardDialogLoading({ message }: { message: string }) {
+  return (
+    <div className="fixed inset-0 z-[1000] flex h-dvh items-center justify-center overflow-hidden overscroll-contain bg-slate-950/55 p-3 sm:p-6" role="dialog" aria-modal="true">
+      <div className="inline-flex items-center gap-2 rounded-2xl bg-white px-4 py-3 text-sm font-bold text-slate-600 shadow-2xl">
+        <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+        {message}
+      </div>
+    </div>
+  );
+}
+
+function TemporaryCardPickerLoading() {
+  const t = useTranslations("bandori.teamBuilder.dynamicLoading");
+  return <DynamicTemporaryCardDialogLoading message={t("cardPicker")} />;
+}
+
+function TemporaryCardEditorLoading() {
+  const t = useTranslations("bandori.teamBuilder.dynamicLoading");
+  return <DynamicTemporaryCardDialogLoading message={t("cardEditor")} />;
+}
+
 const DynamicTemporaryCardPickerDialog = dynamic<TemporaryCardPickerDialogProps>(
   () => import("./TemporaryCardDialogs").then((module) => module.TemporaryCardPickerDialog),
   {
     ssr: false,
-    loading: () => (
-      <div className="fixed inset-0 z-[1000] flex h-dvh items-center justify-center overflow-hidden overscroll-contain bg-slate-950/55 p-3 sm:p-6" role="dialog" aria-modal="true">
-        <div className="inline-flex items-center gap-2 rounded-2xl bg-white px-4 py-3 text-sm font-bold text-slate-600 shadow-2xl">
-          <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-          正在载入临时卡牌选择器
-        </div>
-      </div>
-    ),
+    loading: TemporaryCardPickerLoading,
   },
 );
 
@@ -152,14 +174,7 @@ const DynamicTemporaryCardEditorDialog = dynamic<TemporaryCardEditorDialogProps>
   () => import("./TemporaryCardDialogs").then((module) => module.TemporaryCardEditorDialog),
   {
     ssr: false,
-    loading: () => (
-      <div className="fixed inset-0 z-[1100] flex h-dvh items-center justify-center overflow-hidden overscroll-contain bg-slate-950/55 p-3 sm:p-6" role="dialog" aria-modal="true">
-        <div className="inline-flex items-center gap-2 rounded-2xl bg-white px-4 py-3 text-sm font-bold text-slate-600 shadow-2xl">
-          <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-          正在载入临时卡牌编辑器
-        </div>
-      </div>
-    ),
+    loading: TemporaryCardEditorLoading,
   },
 );
 
@@ -264,12 +279,12 @@ type LivePreferenceState = {
   otherPlayers?: OtherPlayerDraft[];
 };
 
-const STEPS: Array<{ id: StepId; label: string; icon: React.ComponentType<{ className?: string }> }> = [
-  { id: "event", label: "活动", icon: Clock3 },
-  { id: "live", label: "演出", icon: Users },
-  { id: "song", label: "歌曲", icon: Music2 },
-  { id: "profile", label: "卡牌", icon: FileJson },
-  { id: "calculate", label: "计算", icon: Calculator },
+const STEPS: Array<{ id: StepId; icon: React.ComponentType<{ className?: string }> }> = [
+  { id: "event", icon: Clock3 },
+  { id: "live", icon: Users },
+  { id: "song", icon: Music2 },
+  { id: "profile", icon: FileJson },
+  { id: "calculate", icon: Calculator },
 ];
 
 const SUPPORTED_EVENT_TYPES = new Set(["story", "challenge", "versus", "live_try", "mission_live", "festival", "medley"]);
@@ -316,28 +331,11 @@ const LIVE_BOOST_OPTIONS: LiveBoostCountOption[] = ["0", "1", "2", "3"];
 const CHALLENGE_CP_OPTIONS: ChallengeCpCostOption[] = ["200", "400", "800", "1600"];
 const RESULT_PLACEMENT_OPTIONS: ResultPlacementOption[] = ["1", "2", "3", "4", "5"];
 const FESTIVAL_RESULT_OPTIONS: FestivalResultOption[] = ["win", "lose"];
-const EVENT_TYPE_LABELS: Record<string, string> = {
-  none: "无活动",
-  story: "普通活动",
-  challenge: "挑战活动",
-  versus: "竞演活动",
-  live_try: "试炼活动",
-  mission_live: "任务活动",
-  festival: "团队FES活动",
-  medley: "巡回活动",
-};
-const TARGET_LABELS: Record<BandoriTeamSearchTarget, string> = {
-  score: "分数",
-  eventPoint: "活动Pt",
-};
-const MEDLEY_CALCULATION_MODE_LABELS: Record<MedleyCalculationMode, string> = {
-  maximize: "最大化",
-};
 const LIVE_LABELS: Record<LiveType, string> = {
-  free: "自由演出",
-  multi: "协力演出",
-  challenge: "挑战演出",
-  versus: "巡回演出",
+  free: "Free Live",
+  multi: "Multi Live",
+  challenge: "Challenge Live",
+  versus: "Medley Live",
 };
 
 const EVENT_FORMULA_LABELS: Record<EventFormulaOption, string> = {
@@ -364,17 +362,6 @@ const RESULT_PLACEMENT_LABELS: Record<ResultPlacementOption, string> = {
   "4": "#4",
   "5": "#5",
 };
-const FESTIVAL_RESULT_LABELS: Record<FestivalResultOption, string> = {
-  win: "胜利",
-  lose: "失败",
-};
-const ENCORE_SKILL_SOURCE_LABELS: Record<EncoreSkillSource, string> = {
-  self: "你的队长",
-  other1: "队长 1",
-  other2: "队长 2",
-  other3: "队长 3",
-  other4: "队长 4",
-};
 const ENCORE_SKILL_SOURCE_OPTIONS: EncoreSkillSource[] = ["self", "other1", "other2", "other3", "other4"];
 const OTHER_PLAYER_SKILL_LEVEL_OPTIONS = ["1", "2", "3", "4", "5"];
 const DEFAULT_OTHER_PLAYERS: OtherPlayerDraft[] = [
@@ -396,22 +383,84 @@ const ATTRIBUTE_SWATCH_CLASSES: Record<BandoriCardAttribute, string> = {
   pure: "bg-emerald-500",
 };
 const AREA_ITEM_PARAMETER_LABELS: Record<"performance" | "technique" | "visual", string> = {
-  performance: "演出",
-  technique: "技巧",
-  visual: "形象",
+  performance: "Performance",
+  technique: "Technique",
+  visual: "Visual",
 };
 type EventBonusResponse = {
   bonuses: BandoriEventBonus[];
 };
 
-async function requestJson<T>(path: string, init?: RequestInit, withAuth = false): Promise<T> {
+type RequestJsonMessages = {
+  notSignedIn: string;
+  requestFailed: (status: number) => string;
+  invalidResponse: string;
+};
+
+const DEFAULT_REQUEST_JSON_MESSAGES: RequestJsonMessages = {
+  notSignedIn: "Please log in first",
+  requestFailed: (status) => `Request failed (HTTP ${status})`,
+  invalidResponse: "API response format is invalid",
+};
+
+const DEFAULT_TEAM_SEARCH_WORKER_MESSAGES: TeamSearchWorkerMessages = {
+  notReady: "{label} is not ready yet",
+  requestFailed: "Request failed (HTTP {status})",
+  invalidResponse: "API response format is invalid",
+  chartData: "Chart data",
+  cardData: "Card data",
+  characterData: "Character data",
+  skillData: "Skill data",
+  areaItemData: "Area item data",
+  songData: "Song data",
+  eventBonus: "Event bonus",
+  songDataMissing: "Song data does not exist",
+  chartDataInvalid: "Chart data format is invalid",
+  selectMedleySongs: "Medley live requires selecting 3 songs",
+  medleySongDataMissing: "Song {index} data does not exist",
+  medleyChartDataInvalid: "Song {index} chart data format is invalid",
+  preloadFailed: "Failed to prepare data",
+  calculateFailed: "Calculation failed",
+};
+
+const TEAM_SEARCH_WORKER_MESSAGE_KEYS = Object.keys(DEFAULT_TEAM_SEARCH_WORKER_MESSAGES) as Array<keyof TeamSearchWorkerMessages>;
+
+type BandoriMessageTree = {
+  bandori?: {
+    teamBuilder?: {
+      worker?: Partial<Record<keyof TeamSearchWorkerMessages, unknown>>;
+    };
+  };
+};
+
+function getTeamSearchWorkerMessages(messages: unknown): TeamSearchWorkerMessages {
+  const workerMessages = (messages as BandoriMessageTree).bandori?.teamBuilder?.worker;
+  const resolved = { ...DEFAULT_TEAM_SEARCH_WORKER_MESSAGES };
+  if (!workerMessages) {
+    return resolved;
+  }
+  for (const key of TEAM_SEARCH_WORKER_MESSAGE_KEYS) {
+    const value = workerMessages[key];
+    if (typeof value === "string") {
+      resolved[key] = value;
+    }
+  }
+  return resolved;
+}
+
+async function requestJson<T>(
+  path: string,
+  init?: RequestInit,
+  withAuth = false,
+  messages: RequestJsonMessages = DEFAULT_REQUEST_JSON_MESSAGES,
+): Promise<T> {
   const headers = new Headers(init?.headers);
   headers.set("Content-Type", "application/json");
 
   if (withAuth) {
     const accessToken = await getAccessToken();
     if (!accessToken) {
-      throw new Error("请先登录");
+      throw new Error(messages.notSignedIn);
     }
     headers.set("Authorization", `Bearer ${accessToken}`);
   }
@@ -420,56 +469,46 @@ async function requestJson<T>(path: string, init?: RequestInit, withAuth = false
   const payload = await response.json().catch(() => ({}));
 
   if (!response.ok) {
-    throw new Error(getApiErrorMessage(payload) || `请求失败（HTTP ${response.status}）`);
+    throw new Error(getApiErrorMessage(payload) || messages.requestFailed(response.status));
   }
 
   const data = parseApiSuccessData<T>(payload);
   if (data === null) {
-    throw new Error("接口返回格式无效");
+    throw new Error(messages.invalidResponse);
   }
 
   return data;
 }
 
-function pickLocalizedName(value: string[] | string | undefined, fallback = ""): string {
+function pickLocalizedName(value: string[] | string | undefined, locale: AppLocale, fallback = ""): string {
   if (typeof value === "string") {
     return value.trim() || fallback;
   }
   if (!Array.isArray(value)) {
     return fallback;
   }
-  return value[3]?.trim() || value[0]?.trim() || fallback;
+  return pickBestdoriLocalizedName(value, locale) ?? fallback;
 }
 
-function pickCharacterDisplayName(character: CharacterMaster | undefined, fallback = ""): string {
-  return pickLocalizedName(character?.nickname)
-    || pickLocalizedName(character?.characterName)
-    || pickLocalizedName(character?.firstName)
+function pickCharacterDisplayName(character: CharacterMaster | undefined, locale: AppLocale, fallback = ""): string {
+  return pickLocalizedName(character?.nickname, locale)
+    || pickLocalizedName(character?.characterName, locale)
+    || pickLocalizedName(character?.firstName, locale)
     || fallback;
 }
 
-function formatDate(value: number | null): string {
+function formatDate(value: number | null, locale: AppLocale, fallback: string): string {
   if (!value) {
-    return "未定";
+    return fallback;
   }
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return "未定";
-  }
-  return format(date, "yyyy年M月d日 HH:mm");
+  return formatLocalizedDateTime(value, locale, fallback);
 }
 
-function formatProfileSyncDate(value: string | null | undefined): string {
+function formatProfileSyncDate(value: string | null | undefined, locale: AppLocale, fallback: string): string {
   if (!value) {
-    return "无";
+    return fallback;
   }
-
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return "无";
-  }
-
-  return format(date, "yyyy年M月d日");
+  return formatLocalizedDate(value, locale, fallback);
 }
 
 function getEventStartAt(event: BandoriEventSummary): number | null {
@@ -478,6 +517,12 @@ function getEventStartAt(event: BandoriEventSummary): number | null {
 
 function getEventEndAt(event: BandoriEventSummary): number | null {
   return resolveBandoriCnScheduleWindow(event).endAt;
+}
+
+function pickEventDisplayName(event: BandoriEventSummary, locale: AppLocale): string {
+  return locale === "en"
+    ? event.name.jp || event.name.cn || `Event ${event.eventId}`
+    : event.name.cn ?? event.name.jp ?? `Event ${event.eventId}`;
 }
 
 function getEventStatus(event: BandoriEventSummary, now: number): "ongoing" | "upcoming" | "ended" | "unknown" {
@@ -495,17 +540,17 @@ function getEventStatus(event: BandoriEventSummary, now: number): "ongoing" | "u
   return "ended";
 }
 
-function getEventStatusLabel(status: ReturnType<typeof getEventStatus>): string {
+function getEventStatusLabel(status: ReturnType<typeof getEventStatus>, labels: Record<ReturnType<typeof getEventStatus>, string>): string {
   if (status === "ongoing") {
-    return "进行中";
+    return labels.ongoing;
   }
   if (status === "upcoming") {
-    return "即将开始";
+    return labels.upcoming;
   }
   if (status === "ended") {
-    return "已结束";
+    return labels.ended;
   }
-  return "时间未定";
+  return labels.unknown;
 }
 
 function findRecommendedEvent(events: BandoriEventSummary[], now: number): BandoriEventSummary | null {
@@ -529,11 +574,11 @@ function findRecommendedEvent(events: BandoriEventSummary[], now: number): Bando
   return withStart.sort((left, right) => right.startAt - left.startAt)[0]?.event ?? null;
 }
 
-function formatNumber(value: number | null | undefined): string {
+function formatNumber(value: number | null | undefined, locale: AppLocale = "zh-CN"): string {
   if (value === null || value === undefined || !Number.isFinite(value)) {
     return "-";
   }
-  return Math.round(value).toLocaleString("zh-CN");
+  return formatLocalizedInteger(value, locale);
 }
 
 function formatDurationLabel(totalSeconds: number): string {
@@ -599,8 +644,11 @@ function formatAreaItemAttribute(attribute: BandoriCardAttribute | null): string
   return attribute ? attribute.toUpperCase() : "-";
 }
 
-function formatAreaItemParameter(parameter: "performance" | "technique" | "visual" | null): string {
-  return parameter ? AREA_ITEM_PARAMETER_LABELS[parameter] : "-";
+function formatAreaItemParameter(
+  parameter: "performance" | "technique" | "visual" | null,
+  labels: Record<"performance" | "technique" | "visual", string> = AREA_ITEM_PARAMETER_LABELS,
+): string {
+  return parameter ? labels[parameter] : "-";
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -668,6 +716,7 @@ function readAttributeBonusItems(eventBonus: BandoriEventBonus | null): Array<{ 
 function readCharacterBonusItems(
   eventBonus: BandoriEventBonus | null,
   characters: Record<string, CharacterMaster | undefined>,
+  locale: AppLocale,
 ): Array<{ characterId: number; label: string; color: string | null; percent: number }> {
   return (eventBonus?.characters ?? []).flatMap((item) => {
     if (!isRecord(item)) {
@@ -681,7 +730,7 @@ function readCharacterBonusItems(
     const character = characters[String(characterId)];
     return [{
       characterId,
-      label: pickCharacterDisplayName(character),
+      label: pickCharacterDisplayName(character, locale),
       color: character?.colorCode ?? null,
       percent,
     }];
@@ -799,8 +848,8 @@ function isKnownAttribute(value: string | undefined): value is BandoriCardAttrib
   return value === "powerful" || value === "cool" || value === "happy" || value === "pure";
 }
 
-function pickCardDisplayName(cardId: number, metadata: CardMetadata | undefined): string {
-  return metadata?.displayName?.trim() || `Card ${cardId}`;
+function pickCardDisplayName(cardId: number, metadata: CardMetadata | undefined, locale: AppLocale): string {
+  return pickGameProfileCardName(cardId, metadata, locale);
 }
 
 function getCardBandId(metadata: CardMetadata | undefined, characters: Record<string, CharacterMaster | undefined>): number | null {
@@ -878,14 +927,18 @@ function isEncoreSkillSource(value: unknown): value is EncoreSkillSource {
   return typeof value === "string" && (ENCORE_SKILL_SOURCE_OPTIONS as string[]).includes(value);
 }
 
-function getLiveLabel(liveType: LiveType, eventType: BandoriTeamSearchEventType): string {
+function getLiveLabel(
+  liveType: LiveType,
+  eventType: BandoriTeamSearchEventType,
+  labels: Record<LiveType | "team", string> = { ...LIVE_LABELS, team: "Team Live" },
+): string {
   if (eventType === "medley") {
-    return "巡回演出";
+    return labels.versus;
   }
   if (liveType === "versus" && (eventType === "versus" || eventType === "festival")) {
-    return "团队演出";
+    return labels.team;
   }
-  return LIVE_LABELS[liveType];
+  return labels[liveType];
 }
 
 function shouldUseCoopLiveSettings(eventType: BandoriTeamSearchEventType, liveType: LiveType): boolean {
@@ -1018,11 +1071,14 @@ function shouldShowParameterBonus(eventType: BandoriTeamSearchEventType): boolea
   return eventType === "challenge" || eventType === "versus" || eventType === "festival" || eventType === "medley";
 }
 
-function readEventParameterBonusItems(eventBonus: BandoriEventBonus | null): Array<{ label: string; percent: number }> {
+function readEventParameterBonusItems(
+  eventBonus: BandoriEventBonus | null,
+  labels: Record<"performance" | "technique" | "visual", string>,
+): Array<{ label: string; percent: number }> {
   return [
-    { label: "演出", percent: eventBonus?.performancePercent },
-    { label: "技巧", percent: eventBonus?.techniquePercent },
-    { label: "形象", percent: eventBonus?.visualPercent },
+    { label: labels.performance, percent: eventBonus?.performancePercent },
+    { label: labels.technique, percent: eventBonus?.techniquePercent },
+    { label: labels.visual, percent: eventBonus?.visualPercent },
   ].flatMap((item) => {
     const percent = toFiniteNumber(item.percent);
     return percent !== null && percent !== 0 ? [{ label: item.label, percent }] : [];
@@ -1087,12 +1143,42 @@ function isMedleySearchStats(stats: TeamBuilderSearchResponse["stats"]): stats i
   return "profiling" in stats;
 }
 
-function getSearchTimeLimitLabel(maxSearchDurationSeconds?: string): string | null {
+type TeamBuilderTranslator = (key: string, values?: Record<string, string | number>) => string;
+
+const EXACT_ABORT_REASON_MESSAGE_KEYS: Record<string, string> = {
+  "candidate-fill-deadline": "abortReasons.candidateFillDeadline",
+  "candidate-fill-soft-limit": "abortReasons.candidateFillSoftLimit",
+  "candidate-fill-generator-aborted": "abortReasons.candidateFillGeneratorAborted",
+  "memory-soft-limit": "abortReasons.memorySoftLimit",
+  "solve-workload-limit": "abortReasons.solveWorkloadLimit",
+  "solve-timeout": "abortReasons.solveTimeout",
+  "anchored-join-timeout": "abortReasons.anchoredJoinTimeout",
+  "candidate-fill-pair-refine": "abortReasons.candidateFillPairRefine",
+  "initial-candidate": "abortReasons.initialCandidate",
+  "pair-upper": "abortReasons.pairUpper",
+  "deep-pair-upper": "abortReasons.deepPairUpper",
+  "high-budget-pair-upper": "abortReasons.highBudgetPairUpper",
+  "invalid-input": "abortReasons.invalidInput",
+};
+
+const CONFIGURATION_TRACE_STATUS_MESSAGE_KEYS: Record<string, string> = {
+  "bounded-dominated-root-skip": "abortReasons.boundedDominatedRootSkip",
+  "bounded-near-deadline-root-skip": "abortReasons.boundedNearDeadlineRootSkip",
+  "exact-unproved-skip-dfs": "abortReasons.exactUnprovedSkipDfs",
+  "exact-before-seeding-timeout": "abortReasons.exactBeforeSeedingTimeout",
+  "slot-candidate-seeding-timeout": "abortReasons.slotCandidateSeedingTimeout",
+  "greedy-seeding-timeout": "abortReasons.greedySeedingTimeout",
+  "conflict-bnb-timeout": "abortReasons.conflictBnbTimeout",
+  "exact-after-seeding-timeout": "abortReasons.exactAfterSeedingTimeout",
+  "dfs-timeout": "abortReasons.dfsTimeout",
+};
+
+function getSearchTimeLimitLabel(maxSearchDurationSeconds: string | undefined, secondsLabel: string): string | null {
   if (!maxSearchDurationSeconds) {
     return null;
   }
   const seconds = Number(maxSearchDurationSeconds);
-  return Number.isFinite(seconds) && seconds > 0 ? `${seconds} 秒` : null;
+  return Number.isFinite(seconds) && seconds > 0 ? `${seconds} ${secondsLabel}` : null;
 }
 
 function parsePositiveConstraintInput(value: string): number | undefined {
@@ -1103,35 +1189,38 @@ function parsePositiveConstraintInput(value: string): number | undefined {
 function getExactCandidateJoinAbortReasonLabel(
   reason: string | null | undefined,
   stats: BandoriMedleyTeamSearchResponse["stats"],
+  proofT: TeamBuilderTranslator,
+  locale: AppLocale,
+  secondsLabel: string,
   maxSearchDurationSeconds?: string,
 ): string | null {
   if (!reason) {
     return null;
   }
   const profiling = stats.profiling;
-  const timeLimitLabel = getSearchTimeLimitLabel(maxSearchDurationSeconds);
+  const timeLimitLabel = getSearchTimeLimitLabel(maxSearchDurationSeconds, secondsLabel);
   const candidateSoftLimit = profiling.exactCandidateJoinLastAbortCandidateSoftLimit;
   const candidateCount = profiling.exactCandidateJoinLastAbortCandidateCount;
   const nodeSoftLimit = profiling.exactCandidateJoinLastAbortNodeSoftLimit;
-  const labels: Record<string, string> = {
-    "candidate-fill-deadline": `候选补全达到时间限制${timeLimitLabel ? `（限制 ${timeLimitLabel}）` : ""}`,
-    "candidate-fill-soft-limit": `候选数量达到软上限${candidateSoftLimit !== null ? `（上限 ${formatNumber(candidateSoftLimit)}${candidateCount !== null ? `，已生成 ${formatNumber(candidateCount)}` : ""}）` : ""}`,
-    "candidate-fill-generator-aborted": "候选生成提前中止",
-    "memory-soft-limit": "达到内存保护上限",
-    "solve-workload-limit": "精确子问题工作量达到上限",
-    "solve-timeout": `子问题达到时间限制${timeLimitLabel ? `（限制 ${timeLimitLabel}）` : ""}`,
-    "anchored-join-timeout": `锚定候选拼接达到时间限制${timeLimitLabel ? `（限制 ${timeLimitLabel}）` : ""}`,
-    "candidate-fill-pair-refine": "候选补全阶段仍需继续细化",
-    "initial-candidate": "初始候选生成未完成",
-    "pair-upper": "双队伍上界证明未闭合",
-    "deep-pair-upper": "深层双队伍上界证明未闭合",
-    "high-budget-pair-upper": "高预算双队伍上界证明未闭合",
-    "invalid-input": "精确子问题输入无效",
-  };
   if (reason === "solve-workload-limit" && nodeSoftLimit !== null) {
-    return `精确子问题工作量达到上限（上限 ${formatNumber(nodeSoftLimit)} 节点）`;
+    return proofT("abortReasons.nodeLimit", { limit: formatNumber(nodeSoftLimit, locale) });
   }
-  return labels[reason] ?? reason;
+  const messageKey = EXACT_ABORT_REASON_MESSAGE_KEYS[reason];
+  if (!messageKey) {
+    return reason;
+  }
+  const generatedLabel = candidateCount !== null
+    ? proofT("generatedLabel", { count: formatNumber(candidateCount, locale) })
+    : "";
+  const candidateSoftLimitLabel = candidateSoftLimit !== null
+    ? proofT("candidateSoftLimitLabel", {
+      limit: formatNumber(candidateSoftLimit, locale),
+      generatedLabel,
+    })
+    : "";
+  return proofT(messageKey, {
+    limitLabel: timeLimitLabel ? proofT("limitLabel", { limit: timeLimitLabel }) : candidateSoftLimitLabel,
+  });
 }
 
 function getConfigurationTraceStringValue(entry: Record<string, unknown>, key: string): string | null {
@@ -1143,33 +1232,31 @@ function isClosedConfigurationTraceStatus(status: string | null): boolean {
   return Boolean(status && (status.endsWith("-proved") || status.endsWith("-pruned")));
 }
 
-function getConfigurationTraceStatusLabel(status: string | null): string {
-  const labels: Record<string, string> = {
-    "bounded-dominated-root-skip": "因已有未闭合配置而跳过",
-    "bounded-near-deadline-root-skip": "接近时间限制，跳过证明",
-    "exact-unproved-skip-dfs": "候选拼接未能完成证明，跳过 DFS",
-    "exact-before-seeding-timeout": "种子生成前达到时间限制",
-    "slot-candidate-seeding-timeout": "slot 候选种子阶段达到时间限制",
-    "greedy-seeding-timeout": "贪心种子阶段达到时间限制",
-    "conflict-bnb-timeout": "冲突分支定界达到时间限制",
-    "exact-after-seeding-timeout": "种子生成后候选拼接达到时间限制",
-    "dfs-timeout": "DFS 证明达到时间限制",
-  };
-  return status ? labels[status] ?? status : "未记录完成状态";
+function getConfigurationTraceStatusLabel(status: string | null, proofT: TeamBuilderTranslator): string {
+  if (!status) {
+    return proofT("unknownCompletion");
+  }
+  const messageKey = CONFIGURATION_TRACE_STATUS_MESSAGE_KEYS[status];
+  return messageKey ? proofT(messageKey) : status;
 }
 
-function formatConfigurationTraceEntry(entry: Record<string, unknown>): string {
+function formatConfigurationTraceEntry(
+  entry: Record<string, unknown>,
+  proofT: TeamBuilderTranslator,
+  attributeLabels: Record<BandoriCardAttribute, string>,
+  areaItemParameterLabels: Record<"performance" | "technique" | "visual", string>,
+): string {
   const bandKey = getConfigurationTraceStringValue(entry, "bandKey") ?? "-";
   const attribute = getConfigurationTraceStringValue(entry, "attribute");
   const parameter = getConfigurationTraceStringValue(entry, "parameter");
-  const attributeLabel = attribute && attribute in ATTRIBUTE_LABELS
-    ? ATTRIBUTE_LABELS[attribute as BandoriCardAttribute]
+  const attributeLabel = attribute && attribute in attributeLabels
+    ? attributeLabels[attribute as BandoriCardAttribute]
     : "-";
   const parameterLabel = parameter === "performance" || parameter === "technique" || parameter === "visual"
-    ? formatAreaItemParameter(parameter)
+    ? formatAreaItemParameter(parameter, areaItemParameterLabels)
     : "-";
   const status = getConfigurationTraceStringValue(entry, "status");
-  return `${bandKey} / ${attributeLabel} / ${parameterLabel}（${getConfigurationTraceStatusLabel(status)}）`;
+  return `${bandKey} / ${attributeLabel} / ${parameterLabel} (${getConfigurationTraceStatusLabel(status, proofT)})`;
 }
 
 function getFirstUnclosedConfigurationTrace(stats: BandoriMedleyTeamSearchResponse["stats"]): Record<string, unknown> | null {
@@ -1178,7 +1265,12 @@ function getFirstUnclosedConfigurationTrace(stats: BandoriMedleyTeamSearchRespon
   )) ?? null;
 }
 
-function buildConfigurationProgressReason(stats: BandoriMedleyTeamSearchResponse["stats"]): string | null {
+function buildConfigurationProgressReason(
+  stats: BandoriMedleyTeamSearchResponse["stats"],
+  proofT: TeamBuilderTranslator,
+  attributeLabels: Record<BandoriCardAttribute, string>,
+  areaItemParameterLabels: Record<"performance" | "technique" | "visual", string>,
+): string | null {
   const totalCount = stats.areaItemConfigurationCount;
   if (totalCount <= 0) {
     return null;
@@ -1193,41 +1285,70 @@ function buildConfigurationProgressReason(stats: BandoriMedleyTeamSearchResponse
   }
 
   const firstUnclosedTrace = getFirstUnclosedConfigurationTrace(stats);
-  const traceLabel = firstUnclosedTrace ? `；第一个未完成配置：${formatConfigurationTraceEntry(firstUnclosedTrace)}` : "";
-  return `配置证明进度 ${closedCount}/${totalCount}，已开始 ${startedCount}/${totalCount}${traceLabel}`;
+  const traceLabel = firstUnclosedTrace
+    ? proofT("firstUnclosedTrace", {
+      trace: formatConfigurationTraceEntry(firstUnclosedTrace, proofT, attributeLabels, areaItemParameterLabels),
+    })
+    : "";
+  return proofT("configurationProgress", {
+    closed: closedCount,
+    total: totalCount,
+    started: startedCount,
+    traceLabel,
+  });
 }
 
-function buildBoundedEarlyStopReason(stats: TeamBuilderSearchResponse["stats"], maxSearchDurationSeconds?: string): string {
+function buildBoundedEarlyStopReason(
+  stats: TeamBuilderSearchResponse["stats"],
+  proofT: TeamBuilderTranslator,
+  locale: AppLocale,
+  secondsLabel: string,
+  attributeLabels: Record<BandoriCardAttribute, string>,
+  areaItemParameterLabels: Record<"performance" | "technique" | "visual", string>,
+  maxSearchDurationSeconds?: string,
+): string {
   const reasons: string[] = [];
 
   if ("memoryLimited" in stats && stats.memoryLimited) {
-    const limitLabel = stats.memorySoftLimitMiB !== null ? `（上限 ${stats.memorySoftLimitMiB} MiB）` : "";
-    reasons.push(`达到内存保护上限${limitLabel}`);
+    const limitLabel = stats.memorySoftLimitMiB !== null
+      ? proofT("upperLimitLabel", { limit: `${stats.memorySoftLimitMiB} MiB` })
+      : "";
+    reasons.push(proofT("reasonParts.memoryLimit", { limitLabel }));
   }
   if (stats.timedOut) {
-    const timeLimitLabel = getSearchTimeLimitLabel(maxSearchDurationSeconds);
-    reasons.push(`达到时间限制${timeLimitLabel ? `（限制 ${timeLimitLabel}）` : ""}`);
+    const timeLimitLabel = getSearchTimeLimitLabel(maxSearchDurationSeconds, secondsLabel);
+    reasons.push(proofT("reasonParts.timeLimit", {
+      limitLabel: timeLimitLabel ? proofT("limitLabel", { limit: timeLimitLabel }) : "",
+    }));
   }
 
   if (isMedleySearchStats(stats)) {
     const abortReason = getExactCandidateJoinAbortReasonLabel(
       stats.profiling.exactCandidateJoinLastAbortReason,
       stats,
+      proofT,
+      locale,
+      secondsLabel,
       maxSearchDurationSeconds,
     );
     if (abortReason && !reasons.includes(abortReason)) {
-      reasons.push(`候选拼接未完成：${abortReason}`);
+      reasons.push(proofT("reasonParts.candidateJoinIncomplete", { reason: abortReason }));
     }
-    const configurationProgressReason = buildConfigurationProgressReason(stats);
+    const configurationProgressReason = buildConfigurationProgressReason(
+      stats,
+      proofT,
+      attributeLabels,
+      areaItemParameterLabels,
+    );
     if (configurationProgressReason) {
       reasons.push(configurationProgressReason);
     }
   }
 
   if (reasons.length === 0) {
-    reasons.push("搜索空间尚未完全证明，已按当前最佳结果返回");
+    reasons.push(proofT("fallbackBounded"));
   }
-  return reasons.join("；");
+  return reasons.join("; ");
 }
 
 function formatSearchElapsedMs(elapsedMs: number | null | undefined): string | null {
@@ -1239,19 +1360,37 @@ function formatSearchElapsedMs(elapsedMs: number | null | undefined): string | n
     : `${Math.max(0, Math.round(elapsedMs))}ms`;
 }
 
-function buildSearchCompletionSummary(result: TeamBuilderSearchResponse, maxSearchDurationSeconds?: string): string {
+function buildSearchCompletionSummary(
+  result: TeamBuilderSearchResponse,
+  proofT: TeamBuilderTranslator,
+  locale: AppLocale,
+  secondsLabel: string,
+  attributeLabels: Record<BandoriCardAttribute, string>,
+  areaItemParameterLabels: Record<"performance" | "technique" | "visual", string>,
+  maxSearchDurationSeconds?: string,
+): string {
   const { stats } = result;
   const isMedleyResult = isMedleySearchResponse(result);
   const elapsedLabel = isMedleyResult
     ? `${(stats.elapsedMs / 1000).toFixed(1)}s`
     : `${stats.elapsedMs}ms`;
-  const parts = [`完成：用时 ${elapsedLabel}`];
+  const parts = [proofT("completedElapsed", { elapsed: elapsedLabel })];
   if (stats.searchMode === "exact" && isMedleyResult) {
-    parts.push("已完成精确的全局最优证明");
+    parts.push(proofT("exact"));
   } else if (stats.searchMode === "bounded") {
-    parts.push(`无法完成精确的全局最优证明，提前结束：${buildBoundedEarlyStopReason(stats, maxSearchDurationSeconds)}`);
+    parts.push(proofT("boundedStop", {
+      reason: buildBoundedEarlyStopReason(
+        stats,
+        proofT,
+        locale,
+        secondsLabel,
+        attributeLabels,
+        areaItemParameterLabels,
+        maxSearchDurationSeconds,
+      ),
+    }));
     if (stats.observedScoreUpperBoundGap !== null) {
-      parts.push(`gap ${formatNumber(stats.observedScoreUpperBoundGap)}`);
+      parts.push(`gap ${formatNumber(stats.observedScoreUpperBoundGap, locale)}`);
     }
   }
   if (isMedleySearchResponse(result)) {
@@ -1259,41 +1398,41 @@ function buildSearchCompletionSummary(result: TeamBuilderSearchResponse, maxSear
     const timeToBestScoreMs = medleyStats.profiling.timeToBestScoreMs;
     const timeToBestLabel = formatSearchElapsedMs(timeToBestScoreMs);
     if (timeToBestLabel && timeToBestScoreMs !== null) {
-      parts.push(`找到当前最佳队伍用时 ${timeToBestLabel}`);
+      parts.push(proofT("timeToBest", { elapsed: timeToBestLabel }));
       const proofElapsedLabel = formatSearchElapsedMs(medleyStats.elapsedMs - timeToBestScoreMs);
       if (proofElapsedLabel) {
-        parts.push(`证明/收敛额外用时 ${proofElapsedLabel}`);
+        parts.push(proofT("proofElapsed", { elapsed: proofElapsedLabel }));
       }
     }
   }
   if (isMedleyResult && result.maxScoreCandidate) {
-    parts.push("在最高平均分结果之外，有另外的最高最高分结果");
+    parts.push(proofT("hasMaxScoreCandidate"));
   }
   return parts.join("\n");
 }
 
-function buildSearchProgressSummary(result: TeamBuilderSearchResponse): string {
-  const parts = ["计算中"];
+function buildSearchProgressSummary(result: TeamBuilderSearchResponse, proofT: TeamBuilderTranslator): string {
+  const parts = [proofT("running")];
   if (isMedleySearchResponse(result)) {
     const medleyStats = result.stats;
     const timeToBestLabel = formatSearchElapsedMs(medleyStats.profiling.timeToBestScoreMs);
     if (timeToBestLabel) {
-      parts.push(`找到当前最佳队伍用时 ${timeToBestLabel}`);
+      parts.push(proofT("timeToBest", { elapsed: timeToBestLabel }));
     }
-    parts.push("仍在证明是否存在更高分队伍");
+    parts.push(proofT("stillProving"));
   }
   return parts.join("\n");
 }
 
-function getSearchProofStatusLabel(result: TeamBuilderSearchResponse): string | null {
+function getSearchProofStatusLabel(result: TeamBuilderSearchResponse, proofT: TeamBuilderTranslator): string | null {
   if (!isMedleySearchResponse(result)) {
     return null;
   }
   if (result.stats.searchMode === "exact") {
-    return "已完成精确的全局最优证明";
+    return proofT("exact");
   }
   if (result.stats.searchMode === "bounded") {
-    return "未完成精确的全局最优证明";
+    return proofT("notExact");
   }
   return null;
 }
@@ -1361,6 +1500,7 @@ function buildMedleyDebugPayload({
   perfectRate,
   maxSearchDurationSeconds,
   medleyCalculationMode,
+  locale,
 }: {
   result: BandoriMedleyTeamSearchResponse;
   selectedEvent: BandoriEventSummary | null;
@@ -1372,6 +1512,7 @@ function buildMedleyDebugPayload({
   perfectRate: string;
   maxSearchDurationSeconds: string;
   medleyCalculationMode: MedleyCalculationMode;
+  locale: AppLocale;
 }) {
   return {
     version: 1,
@@ -1389,7 +1530,7 @@ function buildMedleyDebugPayload({
       songs: medleySongIds.map((songId, index) => ({
         slot: index + 1,
         songId: Number(songId),
-        title: pickLocalizedName(songs[songId]?.musicTitle, `#${songId}`),
+        title: pickLocalizedName(songs[songId]?.musicTitle, locale, `#${songId}`),
         difficulty: medleyDifficulties[index],
       })),
       profileLabel,
@@ -1416,28 +1557,29 @@ function buildMedleyDebugPayload({
   };
 }
 
-function getSkillOrderActorLabel(actor: BandoriTeamSearchSkillOrderActor): string {
+function getSkillOrderActorLabel(actor: BandoriTeamSearchSkillOrderActor, actorT: TeamBuilderTranslator): string {
   if (actor === "self") {
-    return "你";
+    return actorT("self");
   }
-  return `队友 ${actor.replace("other", "")}`;
+  return actorT("other", { index: actor.replace("other", "") });
 }
 
 function buildSkillOrderDisplay(
   skillOrderCardIds: number[],
   displayedCards: BandoriTeamSearchResultCard[],
+  actorT: TeamBuilderTranslator,
   skillOrderActors?: BandoriTeamSearchSkillOrderActor[],
   skillOrderCardInstanceKeys?: string[],
 ): string {
   if (skillOrderActors && skillOrderActors.length > 0) {
-    return skillOrderActors.map(getSkillOrderActorLabel).join(" → ");
+    return skillOrderActors.map((actor) => getSkillOrderActorLabel(actor, actorT)).join(" -> ");
   }
   if (skillOrderCardInstanceKeys && skillOrderCardInstanceKeys.length > 0) {
     const positionByCardKey = new Map(displayedCards.map((card, index) => [getDisplayCardKey(card), index + 1]));
-    return skillOrderCardInstanceKeys.map((cardKey) => positionByCardKey.get(cardKey) ?? "?").join(" → ");
+    return skillOrderCardInstanceKeys.map((cardKey) => positionByCardKey.get(cardKey) ?? "?").join(" -> ");
   }
   const positionByCardId = new Map(displayedCards.map((card, index) => [card.cardId, index + 1]));
-  return skillOrderCardIds.map((cardId) => positionByCardId.get(cardId) ?? "?").join(" → ");
+  return skillOrderCardIds.map((cardId) => positionByCardId.get(cardId) ?? "?").join(" -> ");
 }
 
 function StepButton({
@@ -1449,6 +1591,7 @@ function StepButton({
   active: boolean;
   onClick: () => void;
 }) {
+  const t = useTranslations("bandori.teamBuilder.steps");
   const Icon = step.icon;
   return (
     <button
@@ -1461,7 +1604,7 @@ function StepButton({
       }`}
     >
       <Icon className="h-4 w-4" />
-      {step.label}
+      {t(step.id)}
     </button>
   );
 }
@@ -1546,8 +1689,9 @@ function SongDifficultyPicker({
   song: SongMaster | null | undefined;
   onChange: (value: BandoriTeamSearchDifficulty) => void;
 }) {
+  const t = useTranslations("bandori.teamBuilder.labels");
   return (
-    <div className="flex max-w-full flex-wrap items-center gap-2" role="radiogroup" aria-label="歌曲难度">
+    <div className="flex max-w-full flex-wrap items-center gap-2" role="radiogroup" aria-label={t("songDifficulty")}>
       {options.map((option) => {
         const selected = option === value;
 
@@ -1608,6 +1752,7 @@ function SongOptionList({
   selectedSongId: string;
   onSelect: (songId: string) => void;
 }) {
+  const t = useTranslations("bandori.teamBuilder.labels");
   const containerRef = useRef<HTMLDivElement | null>(null);
   const selectedOptionRef = useRef<HTMLButtonElement | null>(null);
 
@@ -1628,7 +1773,7 @@ function SongOptionList({
   if (options.length === 0) {
     return (
       <div className="rounded-2xl border border-dashed border-slate-200 bg-white/70 px-4 py-6 text-sm font-semibold text-slate-500">
-        没有找到匹配的歌曲
+        {t("noMatchingSongs")}
       </div>
     );
   }
@@ -1755,12 +1900,13 @@ function BonusChip({
 }
 
 function AttributeIcon({ attribute }: { attribute: BandoriCardAttribute }) {
+  const t = useTranslations("bandori.teamBuilder.excludedFilter.attributes");
   const iconUrl = buildBandoriAttributeIconUrl(attribute);
 
   return (
     <span
       className={`inline-flex h-6 w-6 shrink-0 items-center justify-center overflow-hidden rounded-full ${ATTRIBUTE_SWATCH_CLASSES[attribute]}`}
-      title={ATTRIBUTE_LABELS[attribute]}
+      title={t(attribute)}
     >
       {iconUrl ? (
         // eslint-disable-next-line @next/next/no-img-element
@@ -1793,8 +1939,9 @@ function CharacterIcon({ characterId, label }: { characterId: number; label: str
 }
 
 function CharacterBonusChip({ items }: { items: Array<{ characterId: number; label: string; percent: number }> }) {
+  const statesT = useTranslations("bandori.teamBuilder.states");
   if (items.length === 0) {
-    return <BonusChip tone="muted">无</BonusChip>;
+    return <BonusChip tone="muted">{statesT("none")}</BonusChip>;
   }
 
   const firstPercent = items[0]?.percent ?? 0;
@@ -1822,11 +1969,13 @@ function CharacterBonusChip({ items }: { items: Array<{ characterId: number; lab
 }
 
 function RarityIcon({ rarity }: { rarity: number }) {
+  const t = useTranslations("bandori.cardPicker");
+  const alt = t("rarityAlt", { rarity });
   return (
     // eslint-disable-next-line @next/next/no-img-element
     <img
       src={buildBandoriRarityIconUrl(rarity)}
-      alt={`${rarity}星`}
+      alt={alt}
       className="h-5 w-5 shrink-0 object-contain"
       loading="lazy"
       decoding="async"
@@ -1902,8 +2051,10 @@ function TeamBuilderCardTile({
   assetRegion?: BandoriAssetRegion;
   showPower?: boolean;
 }) {
+  const locale = useLocale() as AppLocale;
   const cardId = card.cardId;
-  const cardName = pickCardDisplayName(cardId, metadata);
+  const labelsT = useTranslations("bandori.teamBuilder.labels");
+  const cardName = pickCardDisplayName(cardId, metadata, locale);
   const tileRef = useRef<HTMLElement | null>(null);
   const [hoverOpen, setHoverOpen] = useState(false);
   const rarity = Math.min(5, Math.max(1, Math.trunc(Number(metadata?.rarity ?? card.rarity) || 1)));
@@ -1939,7 +2090,7 @@ function TeamBuilderCardTile({
       ) : null}
       {leader ? (
         <span className="absolute -left-1.5 -top-1.5 z-30 rounded-full border border-sky-200 bg-sky-50 px-1.5 py-0.5 text-[10px] font-black leading-none text-sky-600 shadow-sm">
-          队长
+          {labelsT("leader")}
         </span>
       ) : null}
       {hoverOpen ? (
@@ -1947,7 +2098,7 @@ function TeamBuilderCardTile({
           anchorRef={tileRef}
           open={hoverOpen}
           cardName={cardName}
-          characterName={characters ? getCardCharacterLabel(metadata, characters) : `Card #${cardId}`}
+          characterName={characters ? getCardCharacterLabel(metadata, characters, locale) : `Card #${cardId}`}
         >
           <span className="block w-full whitespace-normal break-words rounded-xl bg-slate-50 px-2 py-1 text-slate-700">
             {skillEffectLabel}
@@ -1988,8 +2139,17 @@ function EventBonusPanel({
   assetRegion: BandoriAssetRegion;
   eventFormula: EventFormulaOption;
 }) {
+  const locale = useLocale() as AppLocale;
+  const labelsT = useTranslations("bandori.teamBuilder.labels");
+  const eventTypesT = useTranslations("bandori.teamBuilder.eventTypes");
+  const statesT = useTranslations("bandori.teamBuilder.states");
+  const parameterLabels = useMemo(() => ({
+    performance: labelsT("performance"),
+    technique: labelsT("technique"),
+    visual: labelsT("visual"),
+  }), [labelsT]);
   const attributeItems = readAttributeBonusItems(eventBonus);
-  const characterItems = readCharacterBonusItems(eventBonus, characters);
+  const characterItems = readCharacterBonusItems(eventBonus, characters, locale);
   const memberItems = readMemberBonusItems(eventBonus, cardMetadata);
   const masterRankGroups = readMasterRankBonusGroups(eventBonus);
   const hasBonus = eventBonus !== null;
@@ -1997,64 +2157,64 @@ function EventBonusPanel({
   const parameterPercent = eventBonus?.parameterPercent ?? null;
   const matchBonusPercent = parameterPercent !== null && parameterPercent !== 0 ? parameterPercent : pointPercent;
   const showParameterBonus = shouldShowParameterBonus(eventType);
-  const parameterBonusItems = readEventParameterBonusItems(eventBonus);
+  const parameterBonusItems = readEventParameterBonusItems(eventBonus, parameterLabels);
 
   return (
     <section className="rounded-3xl border border-slate-200 bg-[#fffef4] p-4 shadow-[0_16px_44px_rgba(15,23,42,0.06)] sm:p-5">
       <div className="flex flex-col gap-2 border-b border-slate-100 pb-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 className="text-base font-bold text-slate-900">活动加成</h2>
+          <h2 className="text-base font-bold text-slate-900">{labelsT("eventBonus")}</h2>
         </div>
         {eventBonusLoading ? (
           <span className="inline-flex items-center gap-2 text-sm font-semibold text-slate-500">
             <Loader2 className="h-4 w-4 animate-spin" />
-            读取加成
+            {labelsT("loadBonus")}
           </span>
         ) : null}
       </div>
 
       <div className="mt-4 space-y-4">
-        <EventBonusInfoRow label="种类">
-          <BonusChip tone="accent">{EVENT_TYPE_LABELS[eventType]}</BonusChip>
-          {!hasBonus && !eventBonusLoading ? <BonusChip tone="muted">无活动加成数据</BonusChip> : null}
+        <EventBonusInfoRow label={labelsT("type")}>
+          <BonusChip tone="accent">{eventTypesT(eventType)}</BonusChip>
+          {!hasBonus && !eventBonusLoading ? <BonusChip tone="muted">{statesT("noEventBonusData")}</BonusChip> : null}
           {eventBonusError ? <span className="text-sm font-semibold text-rose-600">{eventBonusError}</span> : null}
         </EventBonusInfoRow>
 
-        <EventBonusInfoRow label="属性">
+        <EventBonusInfoRow label={labelsT("attribute")}>
           {attributeItems.length > 0 ? attributeItems.map((item) => (
             <BonusChip key={item.attribute} compact>
               <AttributeIcon attribute={item.attribute} />
               {formatPercent(item.percent)}
             </BonusChip>
-          )) : <BonusChip tone="muted">无</BonusChip>}
+          )) : <BonusChip tone="muted">{statesT("none")}</BonusChip>}
         </EventBonusInfoRow>
 
-        <EventBonusInfoRow label="角色">
+        <EventBonusInfoRow label={labelsT("character")}>
           <CharacterBonusChip items={characterItems} />
         </EventBonusInfoRow>
 
-        <EventBonusInfoRow label="匹配">
+        <EventBonusInfoRow label={labelsT("match")}>
           <BonusChip compact>{formatPercent(matchBonusPercent)}</BonusChip>
         </EventBonusInfoRow>
 
         {showParameterBonus && parameterBonusItems.length > 0 ? (
-          <EventBonusInfoRow label="参数">
+          <EventBonusInfoRow label={labelsT("parameter")}>
             {parameterBonusItems.map((item) => (
               <BonusChip key={item.label} compact>{item.label} {formatPercent(item.percent)}</BonusChip>
             ))}
           </EventBonusInfoRow>
         ) : null}
 
-        <EventBonusInfoRow label="星光等级">
+        <EventBonusInfoRow label={labelsT("masterRank")}>
           {masterRankGroups.length > 0 ? masterRankGroups.map((group) => (
             <BonusChip key={group.rarity}>
               <RarityIcon rarity={group.rarity} />
               +{formatPercentSequence(group.values)}%
             </BonusChip>
-          )) : <BonusChip tone="muted">无</BonusChip>}
+          )) : <BonusChip tone="muted">{statesT("none")}</BonusChip>}
         </EventBonusInfoRow>
 
-        <EventBonusInfoRow label="卡牌">
+        <EventBonusInfoRow label={labelsT("cards")}>
           {memberItems.length > 0 ? memberItems.map((item) => (
             <BonusCardThumbnail
               key={item.cardId}
@@ -2066,10 +2226,10 @@ function EventBonusPanel({
               assetRegion={assetRegion}
               bandId={getCardBandId(item.metadata, characters)}
             />
-          )) : <BonusChip tone="muted">无</BonusChip>}
+          )) : <BonusChip tone="muted">{statesT("none")}</BonusChip>}
         </EventBonusInfoRow>
 
-        <EventBonusInfoRow label="分数公式">
+        <EventBonusInfoRow label={labelsT("scoreFormula")}>
           <BonusChip compact>{EVENT_FORMULA_LABELS[eventFormula]}</BonusChip>
         </EventBonusInfoRow>
       </div>
@@ -2094,6 +2254,8 @@ function MultiLiveSettingsPanel({
   onOtherPlayersChange: (value: OtherPlayerDraft[]) => void;
   skills: Record<string, SkillMaster | undefined>;
 }) {
+  const labelsT = useTranslations("bandori.teamBuilder.labels");
+  const encoreT = useTranslations("bandori.teamBuilder.encoreSkillSources");
   const updatePlayer = (index: number, patch: Partial<OtherPlayerDraft>) => {
     onOtherPlayersChange(otherPlayers.map((player, playerIndex) => (
       playerIndex === index ? { ...player, ...patch } : player
@@ -2102,7 +2264,7 @@ function MultiLiveSettingsPanel({
 
   return (
     <div className="space-y-4 rounded-3xl border border-slate-200 bg-white/90 p-4 shadow-sm">
-      <FieldRow label="平均综合力">
+      <FieldRow label={labelsT("averagePower")}>
         <TextInput
           value={averagePower}
           onChange={(event) => onAveragePowerChange(event.target.value)}
@@ -2110,10 +2272,10 @@ function MultiLiveSettingsPanel({
         />
       </FieldRow>
 
-      <FieldRow label="技能6">
+      <FieldRow label={labelsT("skill6")}>
         <SelectInput value={encoreSkillSource} onChange={(event) => onEncoreSkillSourceChange(event.target.value as EncoreSkillSource)}>
           {ENCORE_SKILL_SOURCE_OPTIONS.map((option) => (
-            <option key={option} value={option}>{ENCORE_SKILL_SOURCE_LABELS[option]}</option>
+            <option key={option} value={option}>{encoreT(option)}</option>
           ))}
         </SelectInput>
       </FieldRow>
@@ -2121,7 +2283,7 @@ function MultiLiveSettingsPanel({
       <div className="space-y-3">
         {otherPlayers.map((player, index) => (
           <div key={index} className="grid gap-2 rounded-2xl bg-slate-50 p-3 lg:grid-cols-[5rem_1fr_auto] lg:items-center">
-            <div className="text-sm font-semibold text-slate-600">队长 {index + 1}</div>
+            <div className="text-sm font-semibold text-slate-600">{labelsT("leaderWithIndex", { index: index + 1 })}</div>
             <SelectInput
               value={player.skillId}
               onChange={(event) => updatePlayer(index, { skillId: event.target.value })}
@@ -2163,6 +2325,24 @@ function ResultCard({
   displayPlacement: ResultPlacementOption;
   displayFestivalResult: FestivalResultOption;
 }) {
+  const locale = useLocale() as AppLocale;
+  const labelsT = useTranslations("bandori.teamBuilder.labels");
+  const eventTypesT = useTranslations("bandori.teamBuilder.eventTypes");
+  const targetsT = useTranslations("bandori.teamBuilder.targetLabels");
+  const liveLabelsT = useTranslations("bandori.teamBuilder.liveLabels");
+  const actorT = useTranslations("bandori.teamBuilder.actors");
+  const liveLabels = useMemo<Record<LiveType | "team", string>>(() => ({
+    free: liveLabelsT("free"),
+    multi: liveLabelsT("multi"),
+    challenge: liveLabelsT("challenge"),
+    versus: liveLabelsT("versus"),
+    team: liveLabelsT("team"),
+  }), [liveLabelsT]);
+  const areaItemParameterLabels = useMemo(() => ({
+    performance: labelsT("performance"),
+    technique: labelsT("technique"),
+    visual: labelsT("visual"),
+  }), [labelsT]);
   const displayedEventPointOption = getDisplayedEventPointOption(result, {
     liveBoostCount: displayLiveBoostCount,
     challengeCpCost: displayChallengeCpCost,
@@ -2174,10 +2354,10 @@ function ResultCard({
     ? displayedEventPoint
     : result.targetValue;
   const displayedCards = orderResultCardsWithLeaderCenter(result.cards, result.leaderCardId, result.leaderCardInstanceKey);
-  const skillOrderDisplay = buildSkillOrderDisplay(result.skillOrderCardIds, displayedCards, result.skillOrderActors, result.skillOrderCardInstanceKeys);
+  const skillOrderDisplay = buildSkillOrderDisplay(result.skillOrderCardIds, displayedCards, actorT, result.skillOrderActors, result.skillOrderCardInstanceKeys);
   const targetLabel = isScoreLinkedEventPointTarget(result.eventType, result.liveType) && result.target === "eventPoint"
-    ? "分数/活动Pt"
-    : TARGET_LABELS[result.target];
+    ? targetsT("scoreAndEventPoint")
+    : targetsT(result.target);
 
   return (
     <article className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
@@ -2185,31 +2365,31 @@ function ResultCard({
         <div className="flex items-center gap-4">
           <div className="w-12 text-right text-lg font-bold text-slate-700">#{result.rank}</div>
           <div>
-            <div className="text-xl font-bold text-slate-900">{formatNumber(displayedTargetValue)}</div>
+            <div className="text-xl font-bold text-slate-900">{formatNumber(displayedTargetValue, locale)}</div>
             <div className="mt-1 text-xs font-semibold text-slate-500">
-              {targetLabel} · {EVENT_TYPE_LABELS[result.eventType]} · {getLiveLabel(result.liveType, result.eventType)}
+              {targetLabel} / {eventTypesT(result.eventType)} / {getLiveLabel(result.liveType, result.eventType, liveLabels)}
             </div>
           </div>
         </div>
         <div className="grid grid-cols-3 gap-2 text-center text-xs sm:grid-cols-5">
           <div className="rounded-xl bg-slate-50 px-3 py-2">
-            <div className="font-semibold text-slate-500">平均分</div>
-            <div className="mt-1 font-bold text-slate-900">{formatNumber(result.averageScore)}</div>
+            <div className="font-semibold text-slate-500">{labelsT("averageScore")}</div>
+            <div className="mt-1 font-bold text-slate-900">{formatNumber(result.averageScore, locale)}</div>
           </div>
           <div className="rounded-xl bg-slate-50 px-3 py-2">
-            <div className="font-semibold text-slate-500">活动Pt</div>
-            <div className="mt-1 font-bold text-slate-900">{formatNumber(displayedEventPoint)}</div>
+            <div className="font-semibold text-slate-500">{labelsT("eventPoint")}</div>
+            <div className="mt-1 font-bold text-slate-900">{formatNumber(displayedEventPoint, locale)}</div>
           </div>
           <div className="rounded-xl bg-slate-50 px-3 py-2">
-            <div className="font-semibold text-slate-500">综合力</div>
-            <div className="mt-1 font-bold text-slate-900">{formatNumber(result.totalPower)}</div>
+            <div className="font-semibold text-slate-500">{labelsT("totalPower")}</div>
+            <div className="mt-1 font-bold text-slate-900">{formatNumber(result.totalPower, locale)}</div>
           </div>
           <div className="rounded-xl bg-slate-50 px-3 py-2">
-            <div className="font-semibold text-slate-500">房间分</div>
-            <div className="mt-1 font-bold text-slate-900">{formatNumber(result.roomScore)}</div>
+            <div className="font-semibold text-slate-500">{labelsT("roomScore")}</div>
+            <div className="mt-1 font-bold text-slate-900">{formatNumber(result.roomScore, locale)}</div>
           </div>
           <div className="rounded-xl bg-slate-50 px-3 py-2">
-            <div className="font-semibold text-slate-500">加成</div>
+            <div className="font-semibold text-slate-500">{labelsT("bonus")}</div>
             <div className="mt-1 font-bold text-slate-900">{formatPercent(result.pointBonusRate * 100)}</div>
           </div>
         </div>
@@ -2231,33 +2411,33 @@ function ResultCard({
 
       <div className="mt-4 grid gap-3 text-sm text-slate-600 lg:grid-cols-2">
         <div className="rounded-xl bg-slate-50 p-3">
-          <div className="font-semibold text-slate-800">分数区间</div>
+          <div className="font-semibold text-slate-800">{labelsT("scoreRange")}</div>
           <div className="mt-1">
-            {formatNumber(result.minScore)} / {formatNumber(result.averageScore)} / {formatNumber(result.maxScore)}
+            {formatNumber(result.minScore, locale)} / {formatNumber(result.averageScore, locale)} / {formatNumber(result.maxScore, locale)}
           </div>
         </div>
         <div className="rounded-xl bg-slate-50 p-3">
-          <div className="font-semibold text-slate-800">区域道具配置</div>
+          <div className="font-semibold text-slate-800">{labelsT("areaItemConfiguration")}</div>
           <div className="mt-1">
-            {result.areaItemConfiguration.bandKey ?? "-"} · {formatAreaItemAttribute(result.areaItemConfiguration.attribute)} ·{" "}
-            {formatAreaItemParameter(result.areaItemConfiguration.parameter)}
+            {result.areaItemConfiguration.bandKey ?? "-"} / {formatAreaItemAttribute(result.areaItemConfiguration.attribute)} /{" "}
+            {formatAreaItemParameter(result.areaItemConfiguration.parameter, areaItemParameterLabels)}
           </div>
         </div>
         <div className="rounded-xl bg-slate-50 p-3">
-          <div className="font-semibold text-slate-800">最佳技能顺序</div>
+          <div className="font-semibold text-slate-800">{labelsT("bestSkillOrder")}</div>
           <div className="mt-1 break-all">{skillOrderDisplay}</div>
         </div>
         <div className="rounded-xl bg-slate-50 p-3">
-          <div className="font-semibold text-slate-800">最佳顺序概率</div>
+          <div className="font-semibold text-slate-800">{labelsT("bestOrderProbability")}</div>
           <div className="mt-1">
             {result.maxScoreOrderCount}/{result.maxScoreOrderTotal}
           </div>
         </div>
         {result.supportBandPower !== null ? (
           <div className="rounded-xl bg-slate-50 p-3">
-            <div className="font-semibold text-slate-800">支援队伍</div>
+            <div className="font-semibold text-slate-800">{labelsT("supportTeam")}</div>
             <div className="mt-1">
-              {formatNumber(result.supportBandPower)} · {result.supportCards.map((card) => card.cardId).join(", ")}
+              {formatNumber(result.supportBandPower, locale)} / {result.supportCards.map((card) => card.cardId).join(", ")}
             </div>
           </div>
         ) : null}
@@ -2289,6 +2469,16 @@ function MedleyResultCard({
   description?: string;
   variant?: "default" | "candidate" | "max-score-candidate";
 }) {
+  const locale = useLocale() as AppLocale;
+  const labelsT = useTranslations("bandori.teamBuilder.labels");
+  const eventTypesT = useTranslations("bandori.teamBuilder.eventTypes");
+  const liveLabelsT = useTranslations("bandori.teamBuilder.liveLabels");
+  const actorT = useTranslations("bandori.teamBuilder.actors");
+  const areaItemParameterLabels = useMemo(() => ({
+    performance: labelsT("performance"),
+    technique: labelsT("technique"),
+    visual: labelsT("visual"),
+  }), [labelsT]);
   const articleClassName = variant === "max-score-candidate"
     ? "rounded-2xl border border-emerald-200 bg-emerald-50 p-4 shadow-sm"
     : variant === "candidate"
@@ -2305,7 +2495,7 @@ function MedleyResultCard({
         <div className="flex items-center gap-4">
           <div className="min-w-12 shrink-0 text-right text-lg font-bold text-slate-700">{rankLabel ?? `#${result.rank}`}</div>
           <div>
-            <div className="text-xl font-bold text-slate-900">{formatNumber(result.score)}</div>
+            <div className="text-xl font-bold text-slate-900">{formatNumber(result.score, locale)}</div>
             {badgeLabel || description ? (
               <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
                 {badgeLabel ? (
@@ -2319,39 +2509,39 @@ function MedleyResultCard({
               </div>
             ) : null}
             <div className="mt-1 text-xs font-semibold text-slate-500">
-              分数/活动Pt · 巡回活动 · 巡回演出
+              {labelsT("scoreAndEventPoint")} / {eventTypesT("medley")} / {liveLabelsT("versus")}
             </div>
           </div>
         </div>
         <div className="grid grid-cols-3 gap-2 text-center text-xs">
           <div className="rounded-xl bg-slate-50 px-3 py-2">
-            <div className="font-semibold text-slate-500">平均分</div>
-            <div className="mt-1 font-bold text-slate-900">{formatNumber(result.averageScore)}</div>
+            <div className="font-semibold text-slate-500">{labelsT("averageScore")}</div>
+            <div className="mt-1 font-bold text-slate-900">{formatNumber(result.averageScore, locale)}</div>
           </div>
           <div className="rounded-xl bg-slate-50 px-3 py-2">
-            <div className="font-semibold text-slate-500">活动Pt</div>
+            <div className="font-semibold text-slate-500">{labelsT("eventPoint")}</div>
             <div className="mt-1 font-bold text-slate-900">-</div>
           </div>
           <div className="rounded-xl bg-slate-50 px-3 py-2">
-            <div className="font-semibold text-slate-500">综合力</div>
-            <div className="mt-1 font-bold text-slate-900">{formatNumber(totalPower)}</div>
+            <div className="font-semibold text-slate-500">{labelsT("totalPower")}</div>
+            <div className="mt-1 font-bold text-slate-900">{formatNumber(totalPower, locale)}</div>
           </div>
         </div>
       </div>
 
       <div className="mt-4 grid gap-3 text-sm text-slate-600 lg:grid-cols-2">
         <div className="rounded-xl bg-slate-50 p-3">
-          <div className="font-semibold text-slate-800">分数区间</div>
+          <div className="font-semibold text-slate-800">{labelsT("scoreRange")}</div>
           <div className="mt-1">
-            {formatNumber(result.minScore)} / {formatNumber(result.averageScore)} / {formatNumber(result.maxScore)}
+            {formatNumber(result.minScore, locale)} / {formatNumber(result.averageScore, locale)} / {formatNumber(result.maxScore, locale)}
           </div>
         </div>
         {sharedAreaItemConfiguration ? (
           <div className="rounded-xl bg-slate-50 p-3">
-            <div className="font-semibold text-slate-800">区域道具配置</div>
+            <div className="font-semibold text-slate-800">{labelsT("areaItemConfiguration")}</div>
             <div className="mt-1">
-              {sharedAreaItemConfiguration.bandKey ?? "-"} · {formatAreaItemAttribute(sharedAreaItemConfiguration.attribute)} ·{" "}
-              {formatAreaItemParameter(sharedAreaItemConfiguration.parameter)}
+              {sharedAreaItemConfiguration.bandKey ?? "-"} / {formatAreaItemAttribute(sharedAreaItemConfiguration.attribute)} /{" "}
+              {formatAreaItemParameter(sharedAreaItemConfiguration.parameter, areaItemParameterLabels)}
             </div>
           </div>
         ) : null}
@@ -2360,26 +2550,30 @@ function MedleyResultCard({
       <div className="mt-4 space-y-4">
         {result.songResults.map((songResult) => {
           const displayedCards = orderResultCardsWithLeaderCenter(songResult.cards, songResult.leaderCardId, songResult.leaderCardInstanceKey);
-          const songTitle = pickLocalizedName(songs[songResult.songIndex]?.musicTitle, `第 ${songResult.songIndex + 1} 首`);
-          const skillOrderDisplay = buildSkillOrderDisplay(songResult.skillOrderCardIds, displayedCards, songResult.skillOrderActors, songResult.skillOrderCardInstanceKeys);
+          const songTitle = pickLocalizedName(
+            songs[songResult.songIndex]?.musicTitle,
+            locale,
+            labelsT("firstSong", { index: songResult.songIndex + 1 }),
+          );
+          const skillOrderDisplay = buildSkillOrderDisplay(songResult.skillOrderCardIds, displayedCards, actorT, songResult.skillOrderActors, songResult.skillOrderCardInstanceKeys);
           return (
             <section key={songResult.songIndex} className="rounded-2xl border border-slate-100 bg-slate-50/70 p-3">
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                  <div className="text-sm font-bold text-slate-900">第 {songResult.songIndex + 1} 首 · {songTitle}</div>
+                  <div className="text-sm font-bold text-slate-900">{labelsT("firstSong", { index: songResult.songIndex + 1 })} / {songTitle}</div>
                   <div className="mt-1 text-xs font-semibold text-slate-500">
-                    起始 Combo {songResult.startCombo} · 分数区间{" "}
-                    {formatNumber(songResult.minScore)} / {formatNumber(songResult.averageScore)} / {formatNumber(songResult.maxScore)}
+                    {labelsT("startCombo", { combo: songResult.startCombo })} / {labelsT("scoreRange")}{" "}
+                    {formatNumber(songResult.minScore, locale)} / {formatNumber(songResult.averageScore, locale)} / {formatNumber(songResult.maxScore, locale)}
                   </div>
                 </div>
                 <div className="grid w-full grid-cols-2 gap-2 text-center text-xs sm:w-auto sm:min-w-56">
                   <div className="rounded-xl bg-slate-50 px-3 py-2">
-                    <div className="font-semibold text-slate-500">平均分</div>
-                    <div className="mt-1 font-bold text-slate-900">{formatNumber(songResult.averageScore)}</div>
+                    <div className="font-semibold text-slate-500">{labelsT("averageScore")}</div>
+                    <div className="mt-1 font-bold text-slate-900">{formatNumber(songResult.averageScore, locale)}</div>
                   </div>
                   <div className="rounded-xl bg-slate-50 px-3 py-2">
-                    <div className="font-semibold text-slate-500">综合力</div>
-                    <div className="mt-1 font-bold text-slate-900">{formatNumber(songResult.totalPower)}</div>
+                    <div className="font-semibold text-slate-500">{labelsT("totalPower")}</div>
+                    <div className="mt-1 font-bold text-slate-900">{formatNumber(songResult.totalPower, locale)}</div>
                   </div>
                 </div>
               </div>
@@ -2398,11 +2592,11 @@ function MedleyResultCard({
               </div>
               <div className="mt-3 grid gap-3 text-sm text-slate-600 lg:grid-cols-2">
                 <div className="rounded-xl bg-white p-3">
-                  <div className="font-semibold text-slate-800">最佳技能顺序</div>
+                  <div className="font-semibold text-slate-800">{labelsT("bestSkillOrder")}</div>
                   <div className="mt-1 break-all">{skillOrderDisplay}</div>
                 </div>
                 <div className="rounded-xl bg-white p-3">
-                  <div className="font-semibold text-slate-800">最佳顺序概率</div>
+                  <div className="font-semibold text-slate-800">{labelsT("bestOrderProbability")}</div>
                   <div className="mt-1">
                     {songResult.maxScoreOrderCount}/{songResult.maxScoreOrderTotal}
                   </div>
@@ -2425,22 +2619,23 @@ function MedleyDebugInfoPanel({
   copied: boolean;
   onCopy: () => void;
 }) {
+  const labelsT = useTranslations("bandori.teamBuilder.labels");
   return (
     <details className="rounded-2xl border border-red-200 bg-white p-4 text-sm shadow-sm">
       <summary className="cursor-pointer select-none rounded-xl bg-red-50 px-3 py-2 font-bold text-red-700 transition hover:bg-red-100">
-        组曲调试信息
+        {labelsT("medleyDebug")}
       </summary>
       <div className="mt-4 space-y-3">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-sm leading-6 text-slate-500">
-            反馈问题时可以复制这一段 JSON，里面包含输入摘要、证明状态、内存/耗时和算法统计。
+            {labelsT("medleyDebugDescription")}
           </p>
           <button
             type="button"
             onClick={onCopy}
             className="shrink-0 rounded-full border border-red-200 bg-red-50 px-4 py-2 text-sm font-bold text-red-700 transition hover:border-red-300 hover:bg-red-100"
           >
-            {copied ? "已复制" : "复制调试信息"}
+            {copied ? labelsT("copied") : labelsT("copyDebug")}
           </button>
         </div>
         <textarea
@@ -2453,16 +2648,71 @@ function MedleyDebugInfoPanel({
   );
 }
 
-function getCardCharacterLabel(metadata: CardMetadata | undefined, characters: Record<string, CharacterMaster | undefined>): string {
+function getCardCharacterLabel(metadata: CardMetadata | undefined, characters: Record<string, CharacterMaster | undefined>, locale: AppLocale): string {
   const characterId = Number(metadata?.characterId);
   if (!Number.isFinite(characterId)) {
     return "";
   }
   const character = characters[String(Math.trunc(characterId))];
-  return pickCharacterDisplayName(character);
+  return pickCharacterDisplayName(character, locale);
 }
 
 function TeamBuilderPanel() {
+  const locale = useLocale() as AppLocale;
+  const messages = useMessages();
+  const teamT = useTranslations("bandori.teamBuilder");
+  const stepsT = useTranslations("bandori.teamBuilder.steps");
+  const labelsT = useTranslations("bandori.teamBuilder.labels");
+  const statesT = useTranslations("bandori.teamBuilder.states");
+  const actionsT = useTranslations("bandori.teamBuilder.actions");
+  const errorsT = useTranslations("bandori.teamBuilder.errors");
+  const messagesT = useTranslations("bandori.teamBuilder.messages");
+  const eventTypesT = useTranslations("bandori.teamBuilder.eventTypes");
+  const attributeT = useTranslations("bandori.teamBuilder.excludedFilter.attributes");
+  const eventStatusT = useTranslations("bandori.teamBuilder.eventStatus");
+  const targetLabelsT = useTranslations("bandori.teamBuilder.targetLabels");
+  const calculationModesT = useTranslations("bandori.teamBuilder.calculationModes");
+  const liveLabelsT = useTranslations("bandori.teamBuilder.liveLabels");
+  const festivalResultsT = useTranslations("bandori.teamBuilder.festivalResults");
+  const proofT = useTranslations("bandori.teamBuilder.proof");
+  const termsT = useTranslations("bandori.terms");
+  const requestMessages = useMemo<RequestJsonMessages>(() => ({
+    notSignedIn: errorsT("notSignedIn"),
+    requestFailed: (status) => errorsT("requestFailed", { status }),
+    invalidResponse: errorsT("invalidResponse"),
+  }), [errorsT]);
+  const workerMessages = useMemo<TeamSearchWorkerMessages>(() => getTeamSearchWorkerMessages(messages), [messages]);
+  const eventStatusLabels = useMemo<Record<ReturnType<typeof getEventStatus>, string>>(() => ({
+    ongoing: eventStatusT("ongoing"),
+    upcoming: eventStatusT("upcoming"),
+    ended: eventStatusT("ended"),
+    unknown: eventStatusT("unknown"),
+  }), [eventStatusT]);
+  const liveLabelMap = useMemo<Record<LiveType | "team", string>>(() => ({
+    free: liveLabelsT("free"),
+    multi: liveLabelsT("multi"),
+    challenge: liveLabelsT("challenge"),
+    versus: liveLabelsT("versus"),
+    team: liveLabelsT("team"),
+  }), [liveLabelsT]);
+  const attributeLabelMap = useMemo<Record<BandoriCardAttribute, string>>(() => ({
+    powerful: attributeT("powerful"),
+    cool: attributeT("cool"),
+    happy: attributeT("happy"),
+    pure: attributeT("pure"),
+  }), [attributeT]);
+  const areaItemParameterLabels = useMemo(() => ({
+    performance: labelsT("performance"),
+    technique: labelsT("technique"),
+    visual: labelsT("visual"),
+  }), [labelsT]);
+  const medleyCalculationModeLabels = useMemo<Record<MedleyCalculationMode, string>>(() => ({
+    maximize: calculationModesT("maximize"),
+  }), [calculationModesT]);
+  const festivalResultLabels = useMemo<Record<FestivalResultOption, string>>(() => ({
+    win: festivalResultsT("win"),
+    lose: festivalResultsT("lose"),
+  }), [festivalResultsT]);
   const [data, setData] = useState<TeamBuilderData>({
     cloudProfiles: [],
     localProfiles: [],
@@ -2570,11 +2820,11 @@ function TeamBuilderPanel() {
   const selectedEventSwitcherId = selectedEventId ?? (recommendedEvent ? String(recommendedEvent.eventId) : "none");
   const availableLiveTypes = useMemo(() => allowedLiveTypes(selectedEventType), [selectedEventType]);
   const liveTypeLabels = useMemo<Record<LiveType, string>>(() => ({
-    ...LIVE_LABELS,
-    free: getLiveLabel("free", selectedEventType),
-    multi: getLiveLabel("multi", selectedEventType),
-    versus: getLiveLabel("versus", selectedEventType),
-  }), [selectedEventType]);
+    free: getLiveLabel("free", selectedEventType, liveLabelMap),
+    multi: getLiveLabel("multi", selectedEventType, liveLabelMap),
+    challenge: getLiveLabel("challenge", selectedEventType, liveLabelMap),
+    versus: getLiveLabel("versus", selectedEventType, liveLabelMap),
+  }), [liveLabelMap, selectedEventType]);
   const updateLiveType = useCallback((value: LiveType) => {
     setLiveType(value);
     writeLivePreferences({ liveType: value });
@@ -2730,11 +2980,16 @@ function TeamBuilderPanel() {
       return Object.fromEntries(normalizedCardIds.map((cardId) => [String(cardId), cardMetadata[String(cardId)]]));
     }
 
-    const payload = await requestJson<{ cards: Record<string, CardMetadata | undefined> }>(`/api/bandori/cards?ids=${missingCardIds.join(",")}`);
+    const payload = await requestJson<{ cards: Record<string, CardMetadata | undefined> }>(
+      `/api/bandori/cards?ids=${missingCardIds.join(",")}`,
+      undefined,
+      false,
+      requestMessages,
+    );
     const mergedMetadata = { ...cardMetadata, ...payload.cards };
     setCardMetadata((current) => ({ ...current, ...payload.cards }));
     return Object.fromEntries(normalizedCardIds.map((cardId) => [String(cardId), mergedMetadata[String(cardId)]]));
-  }, [cardMetadata]);
+  }, [cardMetadata, requestMessages]);
   const ensureCardMetadata = useCallback(async (cardId: number): Promise<CardMetadata | undefined> => {
     const cards = await ensureCardsMetadata([cardId]);
     return cards[String(Math.trunc(cardId))];
@@ -2758,25 +3013,25 @@ function TeamBuilderPanel() {
     isMedleyEvent ? ["score"] : scoreLinkedEventPointTarget ? ["eventPoint"] : ["score", "eventPoint"]
   ), [isMedleyEvent, scoreLinkedEventPointTarget]);
   const targetLabels = useMemo<Record<BandoriTeamSearchTarget, string>>(() => ({
-    ...TARGET_LABELS,
-    eventPoint: scoreLinkedEventPointTarget ? "分数/活动Pt" : TARGET_LABELS.eventPoint,
-  }), [scoreLinkedEventPointTarget]);
+    score: targetLabelsT("score"),
+    eventPoint: scoreLinkedEventPointTarget ? targetLabelsT("scoreAndEventPoint") : targetLabelsT("eventPoint"),
+  }), [scoreLinkedEventPointTarget, targetLabelsT]);
   const eventSwitcherEvents = useMemo<BandoriEventSwitcherEvent[]>(() => (
     data.events.map((event) => {
       const status = getEventStatus(event, referenceNow);
       return {
         id: event.eventId,
-        name: event.name.cn ?? event.name.jp,
+        name: pickEventDisplayName(event, locale),
         startAt: getEventStartAt(event),
         endAt: getEventEndAt(event),
         hasCn: hasBandoriOfficialCnEventContent(event),
         hasJp: Boolean(event.name.jp),
-        typeLabel: EVENT_TYPE_LABELS[event.eventType] ?? event.eventType,
-        statusLabel: getEventStatusLabel(status),
+        typeLabel: eventTypesT(event.eventType),
+        statusLabel: getEventStatusLabel(status, eventStatusLabels),
         statusTone: status === "ongoing" ? "emerald" : status === "upcoming" ? "blue" : "muted",
       };
     })
-  ), [data.events, referenceNow]);
+  ), [data.events, eventStatusLabels, eventTypesT, locale, referenceNow]);
   const selectedEventBannerUrl = useMemo(() => {
     if (!selectedEvent) {
       return NO_EVENT_BANNER_URL;
@@ -2800,12 +3055,12 @@ function TeamBuilderPanel() {
       }
       return [{
         id,
-        title: `活动曲目 ${source}`,
+        title: labelsT("eventSongSource", { source }),
         sourceLabel: source,
         songIds: songIds.map(String) as MedleySongIdTuple,
       }];
     });
-  }, [selectedEvent]);
+  }, [labelsT, selectedEvent]);
   const useEventMedleySongs = useCallback((source: MedleySongSource) => {
     const option = medleyEventSongOptions.find((item) => item.id === source);
     if (!option) {
@@ -2836,11 +3091,11 @@ function TeamBuilderPanel() {
 
       return [{
         id: String(eventSongId),
-        title: pickLocalizedName(song.musicTitle, `#${eventSongId}`),
+        title: pickLocalizedName(song.musicTitle, locale, `#${eventSongId}`),
         sourceLabels,
       }];
     });
-  }, [data.songs, isMedleyEvent, liveType, selectedEvent, selectedEventType]);
+  }, [data.songs, isMedleyEvent, liveType, locale, selectedEvent, selectedEventType]);
   const songOptions = useMemo(() => {
     const normalizedSearch = songSearch.trim().toLowerCase();
     const eventSongIdSet = shouldLimitSongsToEventSongs
@@ -2854,7 +3109,7 @@ function TeamBuilderPanel() {
         if (eventSongIdSet && !eventSongIdSet.has(id)) {
           return [];
         }
-        const title = pickLocalizedName(song.musicTitle, `#${id}`);
+        const title = pickLocalizedName(song.musicTitle, locale, `#${id}`);
         if (normalizedSearch && !(`${id} ${title}`.toLowerCase().includes(normalizedSearch))) {
           return [];
         }
@@ -2862,7 +3117,7 @@ function TeamBuilderPanel() {
       })
       .sort((left, right) => Number(right.id) - Number(left.id));
     return entries;
-  }, [data.songs, eventSongOptions, shouldLimitSongsToEventSongs, songSearch]);
+  }, [data.songs, eventSongOptions, locale, shouldLimitSongsToEventSongs, songSearch]);
   const selectedSong = songId ? data.songs[songId] ?? null : null;
   const selectedMedleySongs = useMemo(() => (
     medleySongIds.map((id) => data.songs[id] ?? null)
@@ -2894,8 +3149,8 @@ function TeamBuilderPanel() {
     })),
   ], [data.cloudProfiles, data.localProfiles]);
   const selectedProfileLabel = profileChoice
-    ? allProfiles.find((profile) => profile.type === profileChoice.source && profile.id === profileChoice.id)?.name ?? "已选择档案"
-    : "未选择档案";
+    ? allProfiles.find((profile) => profile.type === profileChoice.source && profile.id === profileChoice.id)?.name ?? labelsT("selectedProfile")
+    : labelsT("unselectedProfile");
   const selectedProfilePayload = selectedProfileCacheKey
     ? profilePayloadCacheRef.current.get(selectedProfileCacheKey) ?? null
     : null;
@@ -2936,7 +3191,7 @@ function TeamBuilderPanel() {
           candidateTemporaryCards,
         );
         if (skippedDuplicateCount > 0) {
-          setTemporaryCardActionNotice(`${skippedDuplicateCount}张重复卡牌已跳过添加`);
+          setTemporaryCardActionNotice(messagesT("duplicateCardsSkipped", { count: skippedDuplicateCount }));
         }
         if (cardsToAdd.length > 0) {
           updateCardPreferences((current) => ({
@@ -2946,7 +3201,9 @@ function TeamBuilderPanel() {
         }
       })
       .catch((error) => {
-        setTemporaryCardActionError(error instanceof Error ? `添加当期卡牌失败：${error.message}` : "添加当期卡牌失败");
+        setTemporaryCardActionError(error instanceof Error
+          ? `${messagesT("addCurrentCardsFailed")}: ${error.message}`
+          : messagesT("addCurrentCardsFailed"));
       })
       .finally(() => setAddingCurrentEventCards(false));
   }, [
@@ -2954,6 +3211,7 @@ function TeamBuilderPanel() {
     cardPreferences,
     currentEventBonusCardIds,
     ensureCardsMetadata,
+    messagesT,
     selectedProfileCards,
     updateCardPreferences,
   ]);
@@ -2978,7 +3236,7 @@ function TeamBuilderPanel() {
       callback.resolve(event.data);
     };
     worker.onerror = (event) => {
-      const error = new Error(event.message || "计算线程启动失败");
+      const error = new Error(event.message || messagesT("workerStartFailed"));
       workerCallbacksRef.current.forEach((callback) => {
         callback.cleanup?.();
         callback.reject(error);
@@ -2991,7 +3249,7 @@ function TeamBuilderPanel() {
     };
     workerRef.current = worker;
     return worker;
-  }, []);
+  }, [messagesT]);
 
   const postTeamSearchWorkerMessage = useCallback((
     message: TeamSearchWorkerMessage,
@@ -3034,7 +3292,12 @@ function TeamBuilderPanel() {
                 return;
               }
               rejectAllAndResetWorker(new Error(
-                `已触发浏览器内存保护，计算已停止（当前约 ${heap.usedMiB} MiB，保护上限 ${heap.effectiveLimitMiB} MiB${heap.limitMiB !== null ? `，浏览器 heap 上限 ${heap.limitMiB} MiB` : ""}，来源 ${heap.source === "agent" ? "浏览器进程级统计" : "JS heap 统计"}）。`,
+                messagesT("memoryWatchdog", {
+                  usedMiB: heap.usedMiB,
+                  effectiveLimitMiB: heap.effectiveLimitMiB,
+                  heapLimitLabel: heap.limitMiB !== null ? messagesT("heapLimit", { limitMiB: heap.limitMiB }) : "",
+                  source: heap.source === "agent" ? messagesT("sourceAgent") : messagesT("sourceHeap"),
+                }),
               ));
             })
             .finally(() => {
@@ -3051,7 +3314,7 @@ function TeamBuilderPanel() {
       });
       worker.postMessage(message);
     })
-  ), [getTeamSearchWorker]);
+  ), [getTeamSearchWorker, messagesT]);
 
   useEffect(() => () => {
     workerRef.current?.terminate();
@@ -3076,12 +3339,12 @@ function TeamBuilderPanel() {
     setError("");
     try {
       const [cloudProfiles, localProfiles, eventsResponse, songsResponse, charactersResponse, skillsResponse] = await Promise.all([
-        requestJson<CloudGameProfileSummary[]>("/api/account/game-profiles", undefined, true),
+        requestJson<CloudGameProfileSummary[]>("/api/account/game-profiles", undefined, true, requestMessages),
         listLocalGameProfiles(),
-        requestJson<{ events: BandoriEventSummary[] }>("/api/bandori/events"),
-        requestJson<{ payload: Record<string, SongMaster | undefined> }>("/api/bandori/master/songs"),
-        requestJson<{ payload: Record<string, CharacterMaster | undefined> }>("/api/bandori/master/characters"),
-        requestJson<{ payload: Record<string, SkillMaster | undefined> }>("/api/bandori/master/skills"),
+        requestJson<{ events: BandoriEventSummary[] }>("/api/bandori/events", undefined, false, requestMessages),
+        requestJson<{ payload: Record<string, SongMaster | undefined> }>("/api/bandori/master/songs", undefined, false, requestMessages),
+        requestJson<{ payload: Record<string, CharacterMaster | undefined> }>("/api/bandori/master/characters", undefined, false, requestMessages),
+        requestJson<{ payload: Record<string, SkillMaster | undefined> }>("/api/bandori/master/skills", undefined, false, requestMessages),
       ]);
       const supportedEvents = eventsResponse.events.filter((event) => SUPPORTED_EVENT_TYPES.has(event.eventType));
       setData({
@@ -3097,11 +3360,11 @@ function TeamBuilderPanel() {
         setProfileChoice(firstProfile.id.startsWith("local_") ? { source: "local", id: firstProfile.id } : { source: "cloud", id: firstProfile.id });
       }
     } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : "读取组队计算器数据失败");
+      setError(loadError instanceof Error ? loadError.message : errorsT("loadFailed"));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [errorsT, requestMessages]);
 
   useEffect(() => {
     void loadData();
@@ -3127,6 +3390,7 @@ function TeamBuilderPanel() {
     void postTeamSearchWorkerMessage({
       type: "preload",
       requestId,
+      messages: workerMessages,
       song: !isMedleyEvent && songId ? { songId: Number(songId), difficulty } : undefined,
       songs: preloadSongs,
       event: selectedEvent ? { eventId: selectedEvent.eventId } : undefined,
@@ -3162,14 +3426,14 @@ function TeamBuilderPanel() {
           master: current.master === "ready" ? "ready" : "error",
           chart: canPreloadCharts ? "error" : "idle",
           eventBonus: selectedEvent ? "error" : "ready",
-          message: preloadError instanceof Error ? preloadError.message : "准备数据失败",
+          message: preloadError instanceof Error ? preloadError.message : errorsT("preloadFailed"),
         }));
       });
 
     return () => {
       active = false;
     };
-  }, [difficulty, isMedleyEvent, medleyDifficulties, medleySongIds, postTeamSearchWorkerMessage, selectedEvent, songId]);
+  }, [difficulty, errorsT, isMedleyEvent, medleyDifficulties, medleySongIds, postTeamSearchWorkerMessage, selectedEvent, songId, workerMessages]);
 
   useEffect(() => {
     if (!profileChoice) {
@@ -3190,6 +3454,7 @@ function TeamBuilderPanel() {
         `/api/account/game-profiles/${profileChoice.id}/payload`,
         undefined,
         true,
+        requestMessages,
       ).then((response) => decodeCompressedGameProfilePayload(response.compressed))
       : readLocalGameProfilePayload(profileChoice.id);
 
@@ -3205,7 +3470,7 @@ function TeamBuilderPanel() {
           setPreloadState((current) => ({
             ...current,
             profile: "error",
-            message: profileError instanceof Error ? profileError.message : "读取档案失败",
+            message: profileError instanceof Error ? profileError.message : errorsT("profileLoadFailed"),
           }));
         }
       });
@@ -3213,7 +3478,7 @@ function TeamBuilderPanel() {
     return () => {
       active = false;
     };
-  }, [profileChoice]);
+  }, [errorsT, profileChoice, requestMessages]);
 
   useEffect(() => {
     setCardPreferences(readCardPreferences(selectedProfileCacheKey));
@@ -3280,9 +3545,12 @@ function TeamBuilderPanel() {
     const controller = new AbortController();
     setEventBonusLoading(true);
     setEventBonusError("");
-    void requestJson<EventBonusResponse>(`/api/bandori/events/bonuses?event=${selectedEvent.eventId}`, {
-      signal: controller.signal,
-    })
+    void requestJson<EventBonusResponse>(
+      `/api/bandori/events/bonuses?event=${selectedEvent.eventId}`,
+      { signal: controller.signal },
+      false,
+      requestMessages,
+    )
       .then((payload) => {
         if (!controller.signal.aborted) {
           setEventBonus(payload.bonuses[0] ?? null);
@@ -3291,7 +3559,7 @@ function TeamBuilderPanel() {
       .catch((bonusError) => {
         if (!controller.signal.aborted) {
           setEventBonus(null);
-          setEventBonusError(bonusError instanceof Error ? bonusError.message : "读取活动加成失败");
+          setEventBonusError(bonusError instanceof Error ? bonusError.message : errorsT("eventBonusLoadFailed"));
         }
       })
       .finally(() => {
@@ -3301,7 +3569,7 @@ function TeamBuilderPanel() {
       });
 
     return () => controller.abort();
-  }, [selectedEvent]);
+  }, [errorsT, requestMessages, selectedEvent]);
 
   useEffect(() => {
     if (selectedSongDifficulties.length > 0 && !selectedSongDifficulties.includes(difficulty)) {
@@ -3348,10 +3616,15 @@ function TeamBuilderPanel() {
     if (uniqueCardIds.length === 0) {
       return;
     }
-    void requestJson<{ cards: Record<string, CardMetadata | undefined> }>(`/api/bandori/cards?ids=${uniqueCardIds.join(",")}`)
+    void requestJson<{ cards: Record<string, CardMetadata | undefined> }>(
+      `/api/bandori/cards?ids=${uniqueCardIds.join(",")}`,
+      undefined,
+      false,
+      requestMessages,
+    )
       .then((payload) => setCardMetadata((current) => ({ ...current, ...payload.cards })))
       .catch(() => undefined);
-  }, [cardMetadata, cardPreferences.temporaryCards, currentEventBonusCardIds, result, selectedProfileCards]);
+  }, [cardMetadata, cardPreferences.temporaryCards, currentEventBonusCardIds, requestMessages, result, selectedProfileCards]);
 
   const resultEventPointMode = useMemo(() => {
     const singleResult = result?.results.find((item): item is BandoriTeamSearchResult => (
@@ -3368,7 +3641,7 @@ function TeamBuilderPanel() {
     || preloadState.eventBonus === "loading"
     || preloadState.profile === "loading";
   const preloadStatusMessage = preloadState.message || (
-    isPreloadLoading ? "正在准备计算数据" : ""
+    isPreloadLoading ? statesT("preparingData") : ""
   );
   const calculationElapsedSeconds = submitting && calculationStartedAt !== null && calculationNow !== null
     ? Math.max(0, Math.floor((calculationNow - calculationStartedAt) / 1000))
@@ -3388,6 +3661,7 @@ function TeamBuilderPanel() {
   const displayedMaxSearchDurationSeconds = displayedResultIsMedley && medleyResultInputSnapshot
     ? medleyResultInputSnapshot.maxSearchDurationSeconds
     : maxSearchDurationSeconds;
+  const resultProofStatusLabel = result ? getSearchProofStatusLabel(result, proofT) : null;
   const displayedSearchResults = useMemo(() => {
     if (!result) {
       return [];
@@ -3409,9 +3683,11 @@ function TeamBuilderPanel() {
       perfectRate: medleyResultInputSnapshot.perfectRate,
       maxSearchDurationSeconds: medleyResultInputSnapshot.maxSearchDurationSeconds,
       medleyCalculationMode: medleyResultInputSnapshot.medleyCalculationMode,
+      locale,
     }), null, 2);
   }, [
     data.songs,
+    locale,
     medleyResultInputSnapshot,
     result,
   ]);
@@ -3431,28 +3707,28 @@ function TeamBuilderPanel() {
 
   async function handleCalculate() {
     if (!profileChoice) {
-      setResultError("请选择一个卡牌档案");
+      setResultError(errorsT("selectProfile"));
       setActiveStep("profile");
       return;
     }
     if (isMedleyEvent && !medleySongIds.every((id) => id && Number.isFinite(Number(id)))) {
-      setResultError("巡回演出需要选择 3 首歌曲");
+      setResultError(errorsT("selectMedleySongs"));
       setActiveStep("song");
       return;
     }
     if (!isMedleyEvent && !songId) {
-      setResultError("请选择歌曲");
+      setResultError(errorsT("selectSong"));
       setActiveStep("song");
       return;
     }
 
     if (!isPreloadReady) {
-      setResultError(preloadStatusMessage || "计算数据尚未准备完成");
+      setResultError(preloadStatusMessage || errorsT("dataNotReady"));
       return;
     }
     const profilePayload = profilePayloadCacheRef.current.get(selectedProfileCacheKey);
     if (!profilePayload) {
-      setResultError("档案尚未准备完成");
+      setResultError(errorsT("profileNotReady"));
       return;
     }
 
@@ -3497,6 +3773,7 @@ function TeamBuilderPanel() {
       const response = await postTeamSearchWorkerMessage({
         type: "search",
         requestId: crypto.randomUUID(),
+        messages: workerMessages,
         profilePayload,
         event: {
           eventId: selectedEvent ? selectedEvent.eventId : undefined,
@@ -3561,7 +3838,7 @@ function TeamBuilderPanel() {
         throw new Error(response.error);
       }
       if (response.type !== "search") {
-        throw new Error("计算线程返回格式无效");
+        throw new Error(errorsT("invalidWorkerResponse"));
       }
       setResultLiveBoostCount(liveBoostCount);
       setResultChallengeCpCost(challengeCpCost);
@@ -3574,7 +3851,7 @@ function TeamBuilderPanel() {
     } catch (calculateError) {
       setResult(null);
       setResultIsPartial(false);
-      setResultError(calculateError instanceof Error ? calculateError.message : "计算失败");
+      setResultError(calculateError instanceof Error ? calculateError.message : errorsT("calculateFailed"));
     } finally {
       setSubmitting(false);
       setCalculationStartedAt(null);
@@ -3583,7 +3860,7 @@ function TeamBuilderPanel() {
   }
 
   if (loading) {
-    return <AccountLoadingState message="正在读取组队计算器数据..." />;
+    return <AccountLoadingState message={teamT("loadingPage")} />;
   }
   if (error) {
     return <AccountErrorState message={error} />;
@@ -3606,17 +3883,17 @@ function TeamBuilderPanel() {
       {activeStep === "event" ? (
         <section className="space-y-5">
           <BandoriEventSwitcher
-            title={selectedEvent ? selectedEvent.name.cn ?? selectedEvent.name.jp : "无活动"}
+            title={selectedEvent ? pickEventDisplayName(selectedEvent, locale) : statesT("noEvent")}
             events={eventSwitcherEvents}
             selectedEventId={selectedEventSwitcherId}
             onSelectedEventIdChange={setSelectedEventId}
             bannerUrl={selectedEventBannerUrl}
-            startText={selectedEvent ? `${formatDate(getEventStartAt(selectedEvent))} (CN)` : null}
-            endText={selectedEvent ? `${formatDate(getEventEndAt(selectedEvent))} (CN)` : null}
+            startText={selectedEvent ? `${formatDate(getEventStartAt(selectedEvent), locale, termsT("notSet"))} (CN)` : null}
+            endText={selectedEvent ? `${formatDate(getEventEndAt(selectedEvent), locale, termsT("notSet"))} (CN)` : null}
             recommendedEventId={recommendedEvent ? String(recommendedEvent.eventId) : null}
-            recommendedLabel={recommendedEvent ? getEventStatusLabel(recommendedEventStatus) : "推荐活动"}
+            recommendedLabel={recommendedEvent ? getEventStatusLabel(recommendedEventStatus, eventStatusLabels) : eventStatusT("recommended")}
             allowNoEvent
-            noEventLabel="无活动"
+            noEventLabel={statesT("noEvent")}
           />
           <EventBonusPanel
             eventType={selectedEventType}
@@ -3634,9 +3911,9 @@ function TeamBuilderPanel() {
 
       {activeStep === "live" ? (
         <section className="space-y-5">
-          <FieldRow label="种类">
+          <FieldRow label={labelsT("type")}>
             {isMedleyEvent ? (
-              <Segment value="medley" options={["medley"]} onChange={() => undefined} labels={{ medley: "巡回演出" }} />
+              <Segment value="medley" options={["medley"]} onChange={() => undefined} labels={{ medley: liveLabelsT("versus") }} />
             ) : (
               <Segment value={liveType} options={availableLiveTypes} onChange={updateLiveType} labels={liveTypeLabels} />
             )}
@@ -3676,12 +3953,12 @@ function TeamBuilderPanel() {
                         }`}
                       >
                         <div className="flex items-center justify-between gap-3">
-                          <div className="text-xs font-bold text-slate-500">第 {index + 1} 首</div>
+                          <div className="text-xs font-bold text-slate-500">{labelsT("firstSong", { index: index + 1 })}</div>
                           <SongDifficultyLevelBadge difficulty={medleyDifficulties[index]} song={slotSong} className="h-6 w-6 text-xs" />
                         </div>
                         <div className="mt-2 flex min-w-0 items-start gap-2">
                           <div className="line-clamp-2 min-w-0 text-base font-bold text-slate-900">
-                            {slotSong ? pickLocalizedName(slotSong.musicTitle, `#${slotSongId}`) : "未选择歌曲"}
+                            {slotSong ? pickLocalizedName(slotSong.musicTitle, locale, `#${slotSongId}`) : labelsT("unselectedSong")}
                           </div>
                         </div>
                         <div className="mt-2 text-xs font-semibold text-slate-400">#{slotSongId}</div>
@@ -3691,7 +3968,7 @@ function TeamBuilderPanel() {
                 </div>
                 <div className="mt-4 grid gap-4 lg:grid-cols-[1fr_16rem] lg:items-end">
                   <div className="space-y-2">
-                    <div className="text-xs font-semibold text-slate-500">难度</div>
+                    <div className="text-xs font-semibold text-slate-500">{labelsT("difficulty")}</div>
                     <SongDifficultyPicker
                       value={activeMedleyDifficulty}
                       options={activeMedleySongDifficulties.length ? activeMedleySongDifficulties : DIFFICULTIES}
@@ -3700,16 +3977,16 @@ function TeamBuilderPanel() {
                     />
                   </div>
                   <label className="space-y-2">
-                    <span className="block text-xs font-semibold text-slate-500">Perfect率</span>
+                    <span className="block text-xs font-semibold text-slate-500">{labelsT("perfectRate")}</span>
                     <TextInput value={perfectRate} onChange={(event) => updatePerfectRate(event.target.value)} inputMode="decimal" />
                   </label>
                 </div>
               </div>
-              <FieldRow label={`第 ${activeMedleySongSlot + 1} 首搜索`}>
-                <TextInput value={songSearch} onChange={(event) => setSongSearch(event.target.value)} placeholder="输入歌曲名或 ID" />
+              <FieldRow label={labelsT("songSearchFor", { index: activeMedleySongSlot + 1 })}>
+                <TextInput value={songSearch} onChange={(event) => setSongSearch(event.target.value)} placeholder={labelsT("songSearchPlaceholder")} />
               </FieldRow>
               {medleyEventSongOptions.length > 0 ? (
-                <FieldRow label="活动曲目">
+                <FieldRow label={labelsT("eventSongs")}>
                   <MedleyEventSongQuickPicker
                     options={medleyEventSongOptions}
                     selectedSource={medleySongSource}
@@ -3718,7 +3995,7 @@ function TeamBuilderPanel() {
                 </FieldRow>
               ) : null}
               <div className="grid gap-2 text-sm sm:grid-cols-[9rem_1fr] sm:items-start">
-                <span className="font-semibold text-slate-600">歌曲</span>
+                <span className="font-semibold text-slate-600">{labelsT("song")}</span>
                 <SongOptionList
                   options={songOptions}
                   selectedSongId={medleySongIds[activeMedleySongSlot]}
@@ -3729,13 +4006,13 @@ function TeamBuilderPanel() {
           ) : (
             <>
               <div className="rounded-2xl border border-sky-100 bg-white p-4 shadow-sm">
-                <div className="text-lg font-bold text-slate-900">{selectedSong ? pickLocalizedName(selectedSong.musicTitle, `#${songId}`) : "未选择歌曲"}</div>
-                {selectedSong && pickLocalizedName(selectedSong.bandName) ? (
-                  <div className="mt-1 text-sm text-slate-500">{pickLocalizedName(selectedSong.bandName)}</div>
+                <div className="text-lg font-bold text-slate-900">{selectedSong ? pickLocalizedName(selectedSong.musicTitle, locale, `#${songId}`) : labelsT("unselectedSong")}</div>
+                {selectedSong && pickLocalizedName(selectedSong.bandName, locale) ? (
+                  <div className="mt-1 text-sm text-slate-500">{pickLocalizedName(selectedSong.bandName, locale)}</div>
                 ) : null}
                 <div className="mt-4 grid gap-4 lg:grid-cols-[1fr_16rem] lg:items-end">
                   <div className="space-y-2">
-                    <div className="text-xs font-semibold text-slate-500">难度</div>
+                    <div className="text-xs font-semibold text-slate-500">{labelsT("difficulty")}</div>
                     <SongDifficultyPicker
                       value={difficulty}
                       options={selectedSongDifficulties.length ? selectedSongDifficulties : DIFFICULTIES}
@@ -3744,21 +4021,21 @@ function TeamBuilderPanel() {
                     />
                   </div>
                   <label className="space-y-2">
-                    <span className="block text-xs font-semibold text-slate-500">Perfect率</span>
+                    <span className="block text-xs font-semibold text-slate-500">{labelsT("perfectRate")}</span>
                     <TextInput value={perfectRate} onChange={(event) => updatePerfectRate(event.target.value)} inputMode="decimal" />
                   </label>
                 </div>
               </div>
-              <FieldRow label="歌曲搜索">
-                <TextInput value={songSearch} onChange={(event) => setSongSearch(event.target.value)} placeholder="输入歌曲名或 ID" />
+              <FieldRow label={labelsT("songSearch")}>
+                <TextInput value={songSearch} onChange={(event) => setSongSearch(event.target.value)} placeholder={labelsT("songSearchPlaceholder")} />
               </FieldRow>
               {eventSongOptions.length > 0 ? (
-                <FieldRow label="活动曲目">
+                <FieldRow label={labelsT("eventSongs")}>
                   <EventSongQuickPicker songs={eventSongOptions} selectedSongId={songId} onSelect={updateSongId} />
                 </FieldRow>
               ) : null}
               <div className="grid gap-2 text-sm sm:grid-cols-[9rem_1fr] sm:items-start">
-                <span className="font-semibold text-slate-600">歌曲</span>
+                <span className="font-semibold text-slate-600">{labelsT("song")}</span>
                 <SongOptionList options={songOptions} selectedSongId={songId} onSelect={updateSongId} />
               </div>
             </>
@@ -3783,12 +4060,12 @@ function TeamBuilderPanel() {
                   <div className="flex items-center justify-between gap-3">
                     <div className="font-bold text-slate-900">{profile.name}</div>
                     <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
-                      {profile.type === "cloud" ? "云端" : "本地"}
+                      {profile.type === "cloud" ? labelsT("cloud") : labelsT("local")}
                     </span>
                   </div>
                   <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-sm text-slate-500">
-                    <span>卡牌 {profile.cardCount}</span>
-                    <span>最后同步：{formatProfileSyncDate(profile.syncedAt ?? profile.updatedAt)}</span>
+                    <span>{labelsT("cardCount", { count: profile.cardCount })}</span>
+                    <span>{labelsT("lastSynced", { date: formatProfileSyncDate(profile.syncedAt ?? profile.updatedAt, locale, statesT("none")) })}</span>
                   </div>
                 </button>
               );
@@ -3829,18 +4106,18 @@ function TeamBuilderPanel() {
         <section className="space-y-5">
           <div className="grid gap-3 lg:grid-cols-3">
             <div className="rounded-2xl border border-slate-200 bg-white p-4">
-              <div className="text-xs font-semibold text-slate-500">活动</div>
-              <div className="mt-1 font-bold text-slate-900">{selectedEvent ? selectedEvent.name.cn ?? selectedEvent.name.jp : "无活动"}</div>
+              <div className="text-xs font-semibold text-slate-500">{labelsT("event")}</div>
+              <div className="mt-1 font-bold text-slate-900">{selectedEvent ? pickEventDisplayName(selectedEvent, locale) : statesT("noEvent")}</div>
             </div>
             <div className="rounded-2xl border border-slate-200 bg-white p-4">
-              <div className="text-xs font-semibold text-slate-500">{isMedleyEvent ? "巡回演出" : "歌曲"}</div>
+              <div className="text-xs font-semibold text-slate-500">{isMedleyEvent ? liveLabelsT("versus") : labelsT("song")}</div>
               {isMedleyEvent ? (
                 <div className="mt-2 space-y-1">
                   {medleySongIds.map((slotSongId, index) => (
                     <div key={index} className="flex min-w-0 items-center gap-2 text-sm">
                       <span className="shrink-0 font-bold text-slate-400">{index + 1}</span>
                       <span className="min-w-0 truncate font-bold text-slate-900">
-                        {pickLocalizedName(data.songs[slotSongId]?.musicTitle, `#${slotSongId}`)}
+                        {pickLocalizedName(data.songs[slotSongId]?.musicTitle, locale, `#${slotSongId}`)}
                       </span>
                       <SongDifficultyLevelBadge
                         difficulty={medleyDifficulties[index]}
@@ -3852,7 +4129,7 @@ function TeamBuilderPanel() {
                 </div>
               ) : (
                 <div className="mt-1 flex min-w-0 items-center gap-2">
-                  <div className="min-w-0 truncate font-bold text-slate-900">{selectedSong ? pickLocalizedName(selectedSong.musicTitle, `#${songId}`) : "未选择"}</div>
+                  <div className="min-w-0 truncate font-bold text-slate-900">{selectedSong ? pickLocalizedName(selectedSong.musicTitle, locale, `#${songId}`) : labelsT("unselected")}</div>
                   {selectedSong ? (
                     <SongDifficultyLevelBadge difficulty={difficulty} song={selectedSong} className="h-6 w-6" />
                   ) : null}
@@ -3860,34 +4137,34 @@ function TeamBuilderPanel() {
               )}
             </div>
             <div className="rounded-2xl border border-slate-200 bg-white p-4">
-              <div className="text-xs font-semibold text-slate-500">档案</div>
+              <div className="text-xs font-semibold text-slate-500">{labelsT("profile")}</div>
               <div className="mt-1 font-bold text-slate-900">{selectedProfileLabel}</div>
             </div>
           </div>
           <div className="grid gap-4 rounded-2xl border border-slate-200 bg-white p-4">
-            <FieldRow label="模式">
+            <FieldRow label={labelsT("mode")}>
               {isMedleyEvent ? (
                 <Segment
                   value={medleyCalculationMode}
                   options={["maximize"]}
                   onChange={() => undefined}
-                  labels={MEDLEY_CALCULATION_MODE_LABELS}
+                  labels={medleyCalculationModeLabels}
                 />
               ) : (
-                <Segment value="maximize" options={["maximize"]} onChange={() => undefined} labels={{ maximize: "最大化" }} />
+                <Segment value="maximize" options={["maximize"]} onChange={() => undefined} labels={medleyCalculationModeLabels} />
               )}
             </FieldRow>
-            <FieldRow label="目标">
+            <FieldRow label={labelsT("target")}>
               <Segment value={target} options={targetOptions} onChange={setTarget} labels={targetLabels} />
             </FieldRow>
-            <FieldRow label="组队结果">
+            <FieldRow label={labelsT("resultLimit")}>
               {isMedleyEvent ? (
                 <Segment value="1" options={["1"]} onChange={() => undefined} />
               ) : (
                 <Segment value={resultLimit} options={["10", "20", "50"]} onChange={setResultLimit} />
               )}
             </FieldRow>
-            <FieldRow label="时间限制">
+            <FieldRow label={labelsT("timeLimit")}>
               <div className="flex items-center gap-2">
                 <TextInput
                   value={maxSearchDurationSeconds}
@@ -3895,30 +4172,30 @@ function TeamBuilderPanel() {
                   inputMode="numeric"
                   max={isMedleyEvent ? MEDLEY_PREVIEW_SEARCH_DURATION_SECONDS : undefined}
                 />
-                <span className="shrink-0 text-sm font-semibold text-slate-500">秒</span>
+                <span className="shrink-0 text-sm font-semibold text-slate-500">{termsT("seconds")}</span>
               </div>
             </FieldRow>
             {!isMedleyEvent ? (
               <>
-                <FieldRow label="最低队长技能倍率">
+                <FieldRow label={labelsT("minLeaderScoreUp")}>
                   <div className="flex items-center gap-2">
                     <TextInput
                       value={minLeaderScoreUpPercent}
                       onChange={(event) => updateMinLeaderScoreUpPercent(event.target.value)}
                       inputMode="decimal"
-                      placeholder="不限制"
-                      aria-label="最低队长技能倍率"
+                      placeholder={labelsT("unlimited")}
+                      aria-label={labelsT("minLeaderScoreUp")}
                     />
                     <span className="shrink-0 text-sm font-semibold text-slate-500">%</span>
                   </div>
                 </FieldRow>
-                <FieldRow label="最低综合力">
+                <FieldRow label={labelsT("minTotalPower")}>
                   <TextInput
                     value={minTotalPower}
                     onChange={(event) => updateMinTotalPower(event.target.value)}
                     inputMode="numeric"
-                    placeholder="不限制"
-                    aria-label="最低综合力"
+                    placeholder={labelsT("unlimited")}
+                    aria-label={labelsT("minTotalPower")}
                   />
                 </FieldRow>
               </>
@@ -3926,7 +4203,7 @@ function TeamBuilderPanel() {
             {isMedleyEvent ? (
               <div className="space-y-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-center text-sm font-semibold leading-6 text-amber-800">
                 <p>
-                  精确证明引擎将占用大量运行内存空间，请使用电脑进行计算以避免网页因内存不足而崩溃
+                  {labelsT("exactEngineWarning")}
                 </p>
               </div>
             ) : null}
@@ -3938,12 +4215,12 @@ function TeamBuilderPanel() {
                 className="inline-flex items-center gap-2 rounded-full bg-sky-500 px-6 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-sky-600 disabled:cursor-not-allowed disabled:bg-slate-300"
               >
                 {submitting || isPreloadLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Calculator className="h-4 w-4" />}
-                {isPreloadReady ? "计算" : "准备数据中"}
+                {isPreloadReady ? actionsT("calculate") : actionsT("preparing")}
               </button>
             </div>
             {submitting ? (
               <div className="rounded-xl bg-slate-50 p-3 text-center text-sm font-semibold text-slate-600">
-                计算中 {calculationElapsedLabel}
+                {actionsT("calculating", { elapsed: calculationElapsedLabel })}
                 {isMedleyEvent ? ` / ${medleyPreviewSearchDurationLabel}` : ""}
               </div>
             ) : null}
@@ -3963,15 +4240,23 @@ function TeamBuilderPanel() {
                   ? <Loader2 className="mr-1 inline h-4 w-4 animate-spin" />
                   : <CheckCircle2 className="mr-1 inline h-4 w-4" />}
                 {resultIsPartial
-                  ? buildSearchProgressSummary(result)
-                  : buildSearchCompletionSummary(result, displayedMaxSearchDurationSeconds)}
+                  ? buildSearchProgressSummary(result, proofT)
+                  : buildSearchCompletionSummary(
+                    result,
+                    proofT,
+                    locale,
+                    termsT("seconds"),
+                    attributeLabelMap,
+                    areaItemParameterLabels,
+                    displayedMaxSearchDurationSeconds,
+                  )}
               </div>
             ) : null}
           </div>
           {result ? (
             <div className="space-y-4">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <h2 className="text-xl font-bold text-slate-900">结果</h2>
+                <h2 className="text-xl font-bold text-slate-900">{labelsT("results")}</h2>
               </div>
               {resultEventPointMode !== "none" ? (
                 <div className="flex flex-wrap items-start gap-3 rounded-2xl border border-slate-200 bg-white p-4 text-sm sm:items-center">
@@ -3986,13 +4271,13 @@ function TeamBuilderPanel() {
                     </ResultOptionControl>
                   ) : null}
                   {resultEventPointMode === "versus" || resultEventPointMode === "festival" ? (
-                    <ResultOptionControl label="团队演出排名">
+                    <ResultOptionControl label={labelsT("teamLiveRank")}>
                       <Segment value={resultPlacement} options={RESULT_PLACEMENT_OPTIONS} onChange={setResultPlacement} labels={RESULT_PLACEMENT_LABELS} />
                     </ResultOptionControl>
                   ) : null}
                   {resultEventPointMode === "festival" ? (
-                    <ResultOptionControl label="结果">
-                      <Segment value={resultFestivalResult} options={FESTIVAL_RESULT_OPTIONS} onChange={setResultFestivalResult} labels={FESTIVAL_RESULT_LABELS} />
+                    <ResultOptionControl label={labelsT("result")}>
+                      <Segment value={resultFestivalResult} options={FESTIVAL_RESULT_OPTIONS} onChange={setResultFestivalResult} labels={festivalResultLabels} />
                     </ResultOptionControl>
                   ) : null}
                 </div>
@@ -4001,9 +4286,9 @@ function TeamBuilderPanel() {
                 {!resultIsPartial && isMedleySearchResponse(result) && (result.maxScoreCandidate || result.evaluatedAverageTopCandidates.length > 0) ? (
                   <div className="order-2 space-y-3">
                     <div>
-                      <div className="text-sm font-bold text-slate-900">已评估候选</div>
+                      <div className="text-sm font-bold text-slate-900">{labelsT("evaluatedCandidates")}</div>
                       <div className="mt-1 text-xs font-semibold text-slate-500">
-                        来自搜索过程中已经完整评估出的候选，不代表全局完整排名证明。
+                        {labelsT("evaluatedCandidatesDescription")}
                       </div>
                     </div>
                     {result.maxScoreCandidate ? (
@@ -4015,9 +4300,9 @@ function TeamBuilderPanel() {
                         skills={data.skills}
                         assetRegion={displayedMedleyAssetRegion}
                         songs={displayedMedleySongs}
-                        rankLabel="候选"
-                        badgeLabel="最高最高分"
-                        description="来自已评估候选"
+                        rankLabel={labelsT("candidate")}
+                        badgeLabel={labelsT("maxScoreBadge")}
+                        description={labelsT("evaluatedCandidateDescription")}
                         variant="max-score-candidate"
                       />
                     ) : null}
@@ -4030,9 +4315,9 @@ function TeamBuilderPanel() {
                         skills={data.skills}
                         assetRegion={displayedMedleyAssetRegion}
                         songs={displayedMedleySongs}
-                        rankLabel={`候选${index + 1}`}
-                        badgeLabel="已评估平均分候选"
-                        description="来自已评估候选"
+                        rankLabel={labelsT("candidateWithIndex", { index: index + 1 })}
+                        badgeLabel={labelsT("evaluatedAverageBadge")}
+                        description={labelsT("evaluatedCandidateDescription")}
                         variant="candidate"
                       />
                     ))}
@@ -4067,13 +4352,13 @@ function TeamBuilderPanel() {
               </div>
               <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
                 <ListFilter className="mr-2 inline h-4 w-4" />
-                候选卡牌 {result.stats.candidateCardCount} · 区域道具配置 {result.stats.areaItemConfigurationCount}
-                {getSearchProofStatusLabel(result) ? ` · ${getSearchProofStatusLabel(result)}` : ""}
+                {labelsT("candidateCards", { count: result.stats.candidateCardCount })} / {labelsT("areaItemConfigurationCount", { count: result.stats.areaItemConfigurationCount })}
+                {resultProofStatusLabel ? ` / ${resultProofStatusLabel}` : ""}
                 {"peakUsedHeapMiB" in result.stats && result.stats.peakUsedHeapMiB !== null
-                  ? ` · 峰值内存 ${result.stats.peakUsedHeapMiB} MiB`
+                  ? ` / ${labelsT("peakMemory", { count: result.stats.peakUsedHeapMiB })}`
                   : ""}
                 {"supportBandEnabled" in result.stats && result.stats.supportBandEnabled
-                  ? ` · 支援候选 ${result.stats.supportCandidateCount} · 支援评估 ${result.stats.supportEvaluationCount}`
+                  ? ` / ${labelsT("supportStats", { candidateCount: result.stats.supportCandidateCount, evaluationCount: result.stats.supportEvaluationCount })}`
                   : ""}
               </div>
               {medleyDebugText ? (
@@ -4108,7 +4393,7 @@ function TeamBuilderPanel() {
           card={editingTemporaryCard}
           baselineCard={editingTemporaryCardExists ? cardPreferences.temporaryCards.find((card) => card.instanceId === editingTemporaryCard.instanceId) ?? null : null}
           metadata={cardMetadata[String(editingTemporaryCard.cardId)]}
-          characterName={getCardCharacterLabel(cardMetadata[String(editingTemporaryCard.cardId)], data.characters)}
+          characterName={getCardCharacterLabel(cardMetadata[String(editingTemporaryCard.cardId)], data.characters, locale)}
           bandId={getCardBandId(cardMetadata[String(editingTemporaryCard.cardId)], data.characters)}
           characterBonusesById={selectedProfileCharacterBonusesById}
           region={selectedProfileAssetRegion}
@@ -4129,7 +4414,7 @@ function TeamBuilderPanel() {
                 onClick={() => setActiveStep(STEPS[index + 1].id)}
                 className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:text-sky-600"
               >
-                下一步：{STEPS[index + 1].label}
+                {labelsT("nextStep", { step: stepsT(STEPS[index + 1].id) })}
               </button>
             ) : null
           ))}
@@ -4140,17 +4425,19 @@ function TeamBuilderPanel() {
 }
 
 export default function BandoriTeamBuilderPage() {
-  const { userId, authReady, profile, loadingProfile, profileError } = useAccountProfile();
+  const t = useTranslations("bandori.teamBuilder");
+  const statesT = useTranslations("bandori.teamBuilder.states");
+  const { userId, authReady, profile, loadingProfile, profileError } = useLocalizedAccountProfile();
 
   return (
     <BandoriAccountShell
-      title="组队计算器"
+      title={t("title")}
       description={null}
       backHref={null}
       hideEyebrow
     >
       {!authReady || loadingProfile ? (
-        <AccountLoadingState message="正在读取账号信息..." />
+        <AccountLoadingState message={statesT("loadingAccount")} />
       ) : !userId ? (
         <AccountSignInState nextPath="/bandori/teambuilder" />
       ) : profileError ? (
@@ -4159,11 +4446,11 @@ export default function BandoriTeamBuilderPage() {
         <TeamBuilderPanel />
       ) : (
         <section className="rounded-2xl border border-amber-200 bg-amber-50 p-6 shadow-sm">
-          <h2 className="text-xl font-semibold text-amber-900">邮箱验证后解锁组队计算器</h2>
-          <p className="mt-2 text-sm leading-6 text-amber-700">组队计算会读取你的云端或本地游戏档案，因此需要先完成邮箱验证。</p>
+          <h2 className="text-xl font-semibold text-amber-900">{t("verifyTitle")}</h2>
+          <p className="mt-2 text-sm leading-6 text-amber-700">{t("verifyDescription")}</p>
           <div className="mt-5">
             <Link href="/account/email" className="hhwx-accent-button">
-              前往验证邮箱
+              {t("verifyAction")}
             </Link>
           </div>
         </section>

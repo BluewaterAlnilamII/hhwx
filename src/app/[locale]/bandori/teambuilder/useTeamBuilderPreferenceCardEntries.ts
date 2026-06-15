@@ -12,7 +12,9 @@ import {
   normalizeBandoriSkillLabel,
   type BandoriSkillLabelMaster,
 } from "@/lib/bandori-skill-label";
+import { type AppLocale } from "@/i18n/routing";
 import { pickGameProfileCardName } from "@/lib/bandori-game-profile-card";
+import { pickBestdoriLocalizedName } from "@/lib/bestdori-regional-names";
 import { type UserGameProfileCardRecord } from "@/lib/user-game-profile-payload";
 
 const PROFILE_CARD_ENTRY_BUILD_CHUNK_SIZE = 80;
@@ -58,33 +60,34 @@ export type TeamBuilderPreferenceCardEntry = {
   searchText: string;
 };
 
-function pickLocalizedName(value: string[] | string | undefined, fallback = ""): string {
+function pickLocalizedName(value: string[] | string | undefined, locale: AppLocale, fallback = ""): string {
   if (typeof value === "string") {
     return value.trim() || fallback;
   }
   if (!Array.isArray(value)) {
     return fallback;
   }
-  return value[3]?.trim() || value[0]?.trim() || fallback;
+  return pickBestdoriLocalizedName(value, locale) ?? fallback;
 }
 
-function pickCharacterDisplayName(character: TeamBuilderPreferenceCharacterMaster | undefined, fallback = ""): string {
-  return pickLocalizedName(character?.nickname)
-    || pickLocalizedName(character?.characterName)
-    || pickLocalizedName(character?.firstName)
+function pickCharacterDisplayName(character: TeamBuilderPreferenceCharacterMaster | undefined, locale: AppLocale, fallback = ""): string {
+  return pickLocalizedName(character?.nickname, locale)
+    || pickLocalizedName(character?.characterName, locale)
+    || pickLocalizedName(character?.firstName, locale)
     || fallback;
 }
 
 function getCardCharacterLabel(
   metadata: TeamBuilderPreferenceCardMetadata | undefined,
   characters: Record<string, TeamBuilderPreferenceCharacterMaster | undefined>,
+  locale: AppLocale,
 ): string {
   const characterId = Number(metadata?.characterId);
   if (!Number.isFinite(characterId)) {
     return "";
   }
   const character = characters[String(Math.trunc(characterId))];
-  return pickCharacterDisplayName(character);
+  return pickCharacterDisplayName(character, locale);
 }
 
 function isKnownAttribute(value: string | undefined): value is BandoriCardAttribute {
@@ -145,6 +148,7 @@ export function buildPreferenceCardEntry(
   characters: Record<string, TeamBuilderPreferenceCharacterMaster | undefined>,
   skills: Record<string, TeamBuilderPreferenceSkillMaster | undefined>,
   characterBonusesById: Record<string, BandoriCharacterBonusState | undefined>,
+  locale: AppLocale = "zh-CN",
 ): TeamBuilderPreferenceCardEntry {
   const metadata = cardMetadata[String(card.cardId)];
   const characterId = Number(metadata?.characterId);
@@ -153,8 +157,8 @@ export function buildPreferenceCardEntry(
   const attribute = isKnownAttribute(metadata?.attribute) ? metadata.attribute : null;
   const rarity = Number(metadata?.rarity);
   const normalizedRarity = Number.isFinite(rarity) && rarity > 0 ? Math.trunc(rarity) : null;
-  const cardName = pickGameProfileCardName(card.cardId, metadata);
-  const characterName = getCardCharacterLabel(metadata, characters);
+  const cardName = pickGameProfileCardName(card.cardId, metadata, locale);
+  const characterName = getCardCharacterLabel(metadata, characters, locale);
   const skillEffectLabel = getCardSkillEffectLabel(card, metadata, skills);
   const totalPower = calculateProfileCardTotalPower(card, metadata, characters, characterBonusesById);
   return {
@@ -257,6 +261,7 @@ function buildPreferenceCardBonusCachePart(
 
 function buildPreferenceCardEntryCacheKey(
   cacheScopeKey: string,
+  locale: AppLocale,
   card: UserGameProfileCardRecord,
   metadata: TeamBuilderPreferenceCardMetadata | undefined,
   characters: Record<string, TeamBuilderPreferenceCharacterMaster | undefined>,
@@ -265,6 +270,7 @@ function buildPreferenceCardEntryCacheKey(
 ): string {
   return [
     cacheScopeKey,
+    locale,
     card.cardId,
     card.level,
     card.masterRank,
@@ -282,6 +288,7 @@ function buildPreferenceCardEntryCacheKey(
 
 export function useTeamBuilderPreferenceCardEntries({
   cacheScopeKey,
+  locale,
   profileCards,
   cardMetadata,
   characters,
@@ -289,6 +296,7 @@ export function useTeamBuilderPreferenceCardEntries({
   characterBonusesById,
 }: {
   cacheScopeKey: string;
+  locale: AppLocale;
   profileCards: UserGameProfileCardRecord[];
   cardMetadata: Record<string, TeamBuilderPreferenceCardMetadata | undefined>;
   characters: Record<string, TeamBuilderPreferenceCharacterMaster | undefined>;
@@ -334,6 +342,7 @@ export function useTeamBuilderPreferenceCardEntries({
         const metadata = cardMetadata[String(card.cardId)];
         const entryCacheKey = buildPreferenceCardEntryCacheKey(
           cacheScopeKey,
+          locale,
           card,
           metadata,
           characters,
@@ -347,7 +356,7 @@ export function useTeamBuilderPreferenceCardEntries({
           continue;
         }
 
-        const entry = buildPreferenceCardEntry(card, cardMetadata, characters, skills, characterBonusesById);
+        const entry = buildPreferenceCardEntry(card, cardMetadata, characters, skills, characterBonusesById, locale);
         nextEntryCache.set(entryCacheKey, entry);
         nextEntries.push(entry);
       }
@@ -373,7 +382,7 @@ export function useTeamBuilderPreferenceCardEntries({
         window.clearTimeout(timer);
       }
     };
-  }, [cacheScopeKey, cardMetadata, characterBonusesById, characters, profileCards, skills]);
+  }, [cacheScopeKey, cardMetadata, characterBonusesById, characters, locale, profileCards, skills]);
 
   return state;
 }

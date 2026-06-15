@@ -2,6 +2,7 @@
 
 import { type ReactNode } from "react";
 import { ArrowDownWideNarrow, ArrowUpNarrowWide, Filter, Search, X } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { type BandoriCardPickerSortBy } from "@/components/bandori/card-picker";
 import { buildBandoriResIconPublicUrl } from "@/lib/bandori-asset-proxy";
 import { type BandoriCardAttribute } from "@/lib/bandori-team-calculator";
@@ -40,13 +41,6 @@ type ExcludedCardFilterControlsProps = {
   onClearFilter: () => void;
 };
 
-const ATTRIBUTE_LABELS: Record<BandoriCardAttribute, string> = {
-  powerful: "Powerful",
-  cool: "Cool",
-  happy: "Happy",
-  pure: "Pure",
-};
-
 const ATTRIBUTE_SWATCH_CLASSES: Record<BandoriCardAttribute, string> = {
   powerful: "bg-rose-500",
   cool: "bg-sky-500",
@@ -54,21 +48,21 @@ const ATTRIBUTE_SWATCH_CLASSES: Record<BandoriCardAttribute, string> = {
   pure: "bg-emerald-500",
 };
 
-const CARD_FILTER_ATTRIBUTE_OPTIONS: Array<{ value: BandoriCardAttribute; label: string }> = [
-  { value: "powerful", label: ATTRIBUTE_LABELS.powerful },
-  { value: "cool", label: ATTRIBUTE_LABELS.cool },
-  { value: "happy", label: ATTRIBUTE_LABELS.happy },
-  { value: "pure", label: ATTRIBUTE_LABELS.pure },
+const CARD_FILTER_ATTRIBUTE_OPTIONS: Array<{ value: BandoriCardAttribute }> = [
+  { value: "powerful" },
+  { value: "cool" },
+  { value: "happy" },
+  { value: "pure" },
 ];
 
 export const CARD_FILTER_ATTRIBUTE_VALUES = CARD_FILTER_ATTRIBUTE_OPTIONS.map((option) => option.value);
 export const CARD_FILTER_RARITY_OPTIONS = [1, 2, 3, 4, 5];
 
-const CARD_FILTER_SORT_OPTIONS: Array<{ value: TeamBuilderExcludedCardSortBy; label: string }> = [
-  { value: "power", label: "综合力" },
-  { value: "release_jp", label: "发布日期（JP）" },
-  { value: "release_cn", label: "发布日期（CN）" },
-  { value: "id", label: "卡牌 ID" },
+const CARD_FILTER_SORT_OPTIONS: Array<{ value: TeamBuilderExcludedCardSortBy }> = [
+  { value: "power" },
+  { value: "release_jp" },
+  { value: "release_cn" },
+  { value: "id" },
 ];
 
 function buildBandoriCharacterIconUrl(characterId: number): string {
@@ -83,13 +77,13 @@ function buildBandoriAttributeIconUrl(attribute: BandoriCardAttribute): string {
   return buildBandoriResIconPublicUrl(`${attribute}.svg`);
 }
 
-function AttributeIcon({ attribute }: { attribute: BandoriCardAttribute }) {
+function AttributeIcon({ attribute, label }: { attribute: BandoriCardAttribute; label: string }) {
   const iconUrl = buildBandoriAttributeIconUrl(attribute);
 
   return (
     <span
       className={`inline-flex h-6 w-6 shrink-0 items-center justify-center overflow-hidden rounded-full ${ATTRIBUTE_SWATCH_CLASSES[attribute]}`}
-      title={ATTRIBUTE_LABELS[attribute]}
+      title={label}
     >
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
@@ -119,12 +113,12 @@ function CharacterIcon({ characterId, label }: { characterId: number; label: str
   );
 }
 
-function RarityIcon({ rarity }: { rarity: number }) {
+function RarityIcon({ rarity, alt }: { rarity: number; alt: string }) {
   return (
     // eslint-disable-next-line @next/next/no-img-element
     <img
       src={buildBandoriRarityIconUrl(rarity)}
-      alt={`${rarity}星`}
+      alt={alt}
       className="h-5 w-5 shrink-0 object-contain"
       loading="lazy"
       decoding="async"
@@ -202,19 +196,25 @@ function CardFilterSelectionButton({
 
 function CardFilterToggleAllButton({
   selected,
+  allLabel,
+  selectAllTitle,
+  clearAllTitle,
   onClick,
 }: {
   selected: boolean;
+  allLabel: string;
+  selectAllTitle: string;
+  clearAllTitle: string;
   onClick: () => void;
 }) {
   return (
     <CardFilterSelectionButton
       selected={selected}
-      title={selected ? "取消全部" : "选择全部"}
+      title={selected ? clearAllTitle : selectAllTitle}
       onClick={onClick}
       className="min-w-[3.25rem] rounded-full px-3 text-xs"
     >
-      全部
+      {allLabel}
     </CardFilterSelectionButton>
   );
 }
@@ -238,6 +238,11 @@ export default function ExcludedCardFilterControls({
   onFilterChange,
   onClearFilter,
 }: ExcludedCardFilterControlsProps) {
+  const t = useTranslations("bandori.teamBuilder.excludedFilter");
+  const allLabel = t("actions.all");
+  const selectAllTitle = t("actions.selectAll");
+  const clearAllTitle = t("actions.clearAll");
+
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
@@ -247,7 +252,7 @@ export default function ExcludedCardFilterControls({
             type="search"
             value={filter.query}
             onChange={(event) => onFilterChange({ query: event.target.value })}
-            placeholder="搜索卡牌名称、角色名或卡牌 ID"
+            placeholder={t("searchPlaceholder")}
             className="h-10 w-full rounded-xl border border-slate-200 bg-white pl-9 pr-3 text-sm text-slate-900 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
           />
         </div>
@@ -262,13 +267,13 @@ export default function ExcludedCardFilterControls({
             className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 transition hover:border-blue-300 hover:text-blue-600"
           >
             <X className="h-4 w-4" aria-hidden="true" />
-            清空
+            {t("actions.clear")}
           </button>
         </div>
       </div>
 
       <div className="mt-4 space-y-3">
-        <CardFilterRow label="乐队">
+        <CardFilterRow label={t("rows.band")}>
           {bandOptions.map((option) => (
             <CardFilterSelectionButton
               key={option.bandId}
@@ -290,27 +295,33 @@ export default function ExcludedCardFilterControls({
           ))}
           <CardFilterToggleAllButton
             selected={areAllCardFilterOptionsSelected(filter.bandIds, bandIds)}
+            allLabel={allLabel}
+            selectAllTitle={selectAllTitle}
+            clearAllTitle={clearAllTitle}
             onClick={() => onFilterChange({
               bandIds: areAllCardFilterOptionsSelected(filter.bandIds, bandIds) ? [] : bandIds,
             })}
           />
         </CardFilterRow>
 
-        <CardFilterRow label="属性">
+        <CardFilterRow label={t("rows.attribute")}>
           {CARD_FILTER_ATTRIBUTE_OPTIONS.map((option) => (
             <CardFilterSelectionButton
               key={option.value}
-              title={option.label}
+              title={t(`attributes.${option.value}`)}
               selected={filter.attributes.includes(option.value)}
               onClick={() => onFilterChange({
                 attributes: toggleCardFilterSelection(filter.attributes, option.value),
               })}
             >
-              <AttributeIcon attribute={option.value} />
+              <AttributeIcon attribute={option.value} label={t(`attributes.${option.value}`)} />
             </CardFilterSelectionButton>
           ))}
           <CardFilterToggleAllButton
             selected={areAllCardFilterOptionsSelected(filter.attributes, CARD_FILTER_ATTRIBUTE_VALUES)}
+            allLabel={allLabel}
+            selectAllTitle={selectAllTitle}
+            clearAllTitle={clearAllTitle}
             onClick={() => onFilterChange({
               attributes: areAllCardFilterOptionsSelected(filter.attributes, CARD_FILTER_ATTRIBUTE_VALUES)
                 ? []
@@ -319,21 +330,24 @@ export default function ExcludedCardFilterControls({
           />
         </CardFilterRow>
 
-        <CardFilterRow label="稀有度">
+        <CardFilterRow label={t("rows.rarity")}>
           {CARD_FILTER_RARITY_OPTIONS.map((rarity) => (
             <CardFilterSelectionButton
               key={rarity}
-              title={`${rarity} 星`}
+              title={t("rarityAlt", { rarity })}
               selected={filter.rarities.includes(rarity)}
               onClick={() => onFilterChange({
                 rarities: toggleCardFilterSelection(filter.rarities, rarity),
               })}
             >
-              <RarityIcon rarity={rarity} />
+              <RarityIcon rarity={rarity} alt={t("rarityAlt", { rarity })} />
             </CardFilterSelectionButton>
           ))}
           <CardFilterToggleAllButton
             selected={areAllCardFilterOptionsSelected(filter.rarities, CARD_FILTER_RARITY_OPTIONS)}
+            allLabel={allLabel}
+            selectAllTitle={selectAllTitle}
+            clearAllTitle={clearAllTitle}
             onClick={() => onFilterChange({
               rarities: areAllCardFilterOptionsSelected(filter.rarities, CARD_FILTER_RARITY_OPTIONS)
                 ? []
@@ -342,7 +356,7 @@ export default function ExcludedCardFilterControls({
           />
         </CardFilterRow>
 
-        <CardFilterRow label="角色">
+        <CardFilterRow label={t("rows.character")}>
           {characterOptions.map((option) => (
             <CardFilterSelectionButton
               key={option.characterId}
@@ -357,13 +371,16 @@ export default function ExcludedCardFilterControls({
           ))}
           <CardFilterToggleAllButton
             selected={areAllCardFilterOptionsSelected(filter.characterIds, characterIds)}
+            allLabel={allLabel}
+            selectAllTitle={selectAllTitle}
+            clearAllTitle={clearAllTitle}
             onClick={() => onFilterChange({
               characterIds: areAllCardFilterOptionsSelected(filter.characterIds, characterIds) ? [] : characterIds,
             })}
           />
         </CardFilterRow>
 
-        <CardFilterRow label="排序">
+        <CardFilterRow label={t("rows.sort")}>
           <div className="flex min-w-0 flex-wrap items-center gap-2">
             <select
               value={filter.sortBy}
@@ -371,7 +388,7 @@ export default function ExcludedCardFilterControls({
               className="h-10 min-w-64 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
             >
               {CARD_FILTER_SORT_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>{option.label}</option>
+                <option key={option.value} value={option.value}>{t(`sort.${option.value}`)}</option>
               ))}
             </select>
             <button
@@ -380,11 +397,11 @@ export default function ExcludedCardFilterControls({
                 sortDirection: filter.sortDirection === "desc" ? "asc" : "desc",
               })}
               className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 transition hover:border-blue-300 hover:text-blue-600"
-              title={filter.sortDirection === "desc" ? "当前为倒序，点击切换为正序" : "当前为正序，点击切换为倒序"}
-              aria-label={filter.sortDirection === "desc" ? "排序方向：倒序" : "排序方向：正序"}
+              title={filter.sortDirection === "desc" ? t("sortDirection.descTitle") : t("sortDirection.ascTitle")}
+              aria-label={filter.sortDirection === "desc" ? t("sortDirection.descAria") : t("sortDirection.ascAria")}
             >
               {filter.sortDirection === "desc" ? <ArrowDownWideNarrow className="h-4 w-4" aria-hidden="true" /> : <ArrowUpNarrowWide className="h-4 w-4" aria-hidden="true" />}
-              {filter.sortDirection === "desc" ? "倒序" : "正序"}
+              {filter.sortDirection === "desc" ? t("sortDirection.desc") : t("sortDirection.asc")}
             </button>
           </div>
         </CardFilterRow>

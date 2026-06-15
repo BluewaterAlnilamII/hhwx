@@ -1054,7 +1054,6 @@ export default function EventTrackerPage() {
           startText={startDate ? `${formatBandoriCnDateTime(startDate)} (CN)` : null}
           endText={endDate ? `${formatBandoriCnDateTime(endDate)} (CN)` : null}
           recommendedEventId={recommendedEventId !== null ? String(recommendedEventId) : null}
-          recommendedLabel="最新活动"
         />
 
         <BandoriCnExclusiveNotice
