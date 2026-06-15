@@ -1949,6 +1949,7 @@ async function main() {
   testCnActiveSkillAnonPhantomRingSummon(runtimeData);
   testCnDropDataEnemyKillSpawnsAndCollectsExp(runtimeData);
   testCnDropDataCommonBombMagnetHeal(runtimeData);
+  testCnLevelCommonDropFallback(runtimeData);
   testCnLevelEnemySpawnWave(runtimeData);
   testCnLevelEnemySpawnCenterOffset(runtimeData);
   testCnLevelEnemySpawnTypeRing(runtimeData);
@@ -2036,6 +2037,7 @@ async function main() {
   console.log("ok - CN active skill Anon Phantom summon uses formation 2 ring");
   console.log("ok - CN DropData spawns item pickups and ItemData EXP pickup is collectable");
   console.log("ok - CN common DropData bomb, magnet, and heal pickups apply effects");
+  console.log("ok - CN LevelData commonDropId is used when an enemy has no explicit drop");
   console.log("ok - CN LevelData enemy spawn event creates a timed enemy wave");
   console.log("ok - CN LevelData spawn center type 1 uses level-origin offsets");
   console.log("ok - CN LevelData spawn type 2 creates a first-pass enemy ring");
@@ -9321,6 +9323,62 @@ function testCnDropDataCommonBombMagnetHeal(
   assert.equal(collectedState.score, droppedState.score + 10);
   assert.equal(collectedState.enemies.length, 1);
   assert.equal(collectedState.enemies[0]?.id, bossTarget.id);
+}
+
+function testCnLevelCommonDropFallback(
+  sourceRuntimeData: NfoOfflineRuntimeData,
+) {
+  const dropCase = getDropCase("drop-common-bomb-magnet-heal");
+  const bombItemCase = getItemCase("item-bomb");
+  const testRuntimeData = structuredClone(sourceRuntimeData);
+  const level = testRuntimeData.levels.find((candidate) => (
+    candidate.commonDropId === dropCase.dropId
+  ));
+
+  assert.ok(level, `missing CN level with commonDropId ${dropCase.dropId}`);
+
+  testRuntimeData.selected.levelId = level.id;
+  level.events = [];
+  level.totalFrames = 999999;
+
+  const baseState = createNfoSimulation(testRuntimeData, { levelId: level.id });
+  const dropEnemy = createEnemyFixture(
+    baseState,
+    baseState.player.x + 600,
+    baseState.player.y,
+    {
+      hp: 1,
+      maxHp: 1,
+      radius: 12,
+      speed: 0,
+      dropId: 0,
+    },
+  );
+  const stateWithDropEnemy: NfoSimulationState = {
+    ...baseState,
+    player: {
+      ...baseState.player,
+      fireCooldownSeconds: 999,
+    },
+    enemies: [dropEnemy],
+    bullets: [createEnemyKillingBullet(baseState, dropEnemy)],
+    pickups: [],
+  };
+  const droppedState = withMockedRandom([0, 0, 0, 0.999, 0.999], () => (
+    updateNfoSimulation(stateWithDropEnemy, testRuntimeData, NO_INPUT, 0)
+  ));
+  const spawnedPickup = droppedState.pickups[0];
+
+  assert.equal(level.commonDropId, 20);
+  assert.equal(level.commonDropId, dropCase.dropId);
+  assert.equal(dropEnemy.dropId, 0);
+  assert.equal(droppedState.defeatedEnemies, 1);
+  assert.equal(droppedState.pickups.length, 1);
+  assert.ok(spawnedPickup, "expected level common drop fallback to spawn a pickup");
+  assert.equal(spawnedPickup.itemId, bombItemCase.itemId);
+  assert.equal(spawnedPickup.name, bombItemCase.itemName);
+  assert.equal(spawnedPickup.itemType, bombItemCase.itemType);
+  assert.equal(spawnedPickup.canBeMagneted, bombItemCase.canBeMagneted);
 }
 
 function testCnLevelEnemySpawnWave(sourceRuntimeData: NfoOfflineRuntimeData) {

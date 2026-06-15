@@ -282,6 +282,8 @@ Drop/item parity now has CN snapshot fixture coverage for representative
 plus low-rate coin) and drop `20` (`关卡共通默认掉落`, bomb/magnet/heal). The
 parity test also runs a deterministic kill-to-drop-to-EXP-pickup simulation for
 drop `102`, so the DTO mapping and runtime pickup effect are covered together.
+It also locks `LevelData.commonDropId` as the local fallback for enemies without
+an explicit drop ID, using CN level `1` and common drop `20`.
 
 Level enemy-spawn parity now locks the first real CN level event for level `1`
 (`Plain` / level ID `1`, event index `1`): frame `5` spawns five level-1 slime
@@ -503,8 +505,9 @@ Current playable prototype:
   immediately defeat active non-boss enemies, spawn their drops, and update
   local score/defeat counters. CN `DropData` row `102` is now covered by a
   parity kill/drop/pickup test, and CN `DropData` row `20` now has a runtime
-  bomb/magnet/heal pickup-effect test; boss damage, native animation timing, and
-  multiplayer-sharing details remain pending.
+  bomb/magnet/heal pickup-effect test. `LevelData.commonDropId` is also covered
+  as the fallback drop source when an enemy has no explicit drop ID; boss damage,
+  native animation timing, and multiplayer-sharing details remain pending.
 
 Focused local verification:
 
@@ -1486,7 +1489,9 @@ Weapon behavior staging:
   fixture coverage now locks one CN item row for each supported item type plus
   `DropData` rows `102` and `20`; the runtime parity tests verify drop `102`
   through an actual enemy kill, spawned EXP pickup, and collected EXP effect,
-  plus drop `20` through bomb, magnet, and heal pickup effects.
+  plus drop `20` through bomb, magnet, and heal pickup effects. The runtime
+  parity tests also verify that `LevelData.commonDropId` supplies the drop when
+  an enemy has no explicit drop ID.
   Native item movement, pickup animation, boss-specific bomb handling, and
   multiplayer value sharing remain pending.
 - Current level enemy-spawn handling maps CN `LevelData.levelEventDatas`
