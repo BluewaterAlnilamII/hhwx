@@ -47,7 +47,7 @@ async function main() {
   assert.equal(fixture.activeSkillShooterCount, 24);
   assert.equal(fixture.activeSkillShooterEventCount, 54);
   assert.equal(fixture.weaponLevelShooterCount, 32);
-  assert.equal(fixture.selectedActiveSkillShooterSpawnCases.length, 21);
+  assert.equal(fixture.selectedActiveSkillShooterSpawnCases.length, 23);
   assert.equal(fixture.selectedAIActionCases.length, 3);
   assert.equal(fixture.selectedWeaponShooterCases.length, 8);
   assert.equal(fixture.selectedWeaponDirectFireCases.length, 30);
@@ -881,10 +881,31 @@ async function main() {
   assert.equal(endlessStarMapShooterCase.bulletNoDamage, false);
   assert.equal(endlessStarMapShooterCase.bulletLifeTimeFrames, 300);
   assert.equal(endlessStarMapShooterCase.bulletAttack, 50);
+  assert.equal(endlessStarMapShooterCase.bulletSize, 1100);
   assert.equal(endlessStarMapShooterCase.bulletHitTargetType, 0);
   assert.equal(endlessStarMapShooterCase.bulletDamageJudgeType, 0);
   assert.equal(endlessStarMapShooterCase.bulletColliderType, 0);
   assert.equal(endlessStarMapShooterCase.bulletHitTimes, 999);
+
+  const endlessStarMapLevelTwoShooterCase = getActiveSkillShooterSpawnCase(
+    "active-skill-endless-star-map-owner-forward-field-lv2",
+  );
+  assert.equal(endlessStarMapLevelTwoShooterCase.activeSkillId, 116);
+  assert.equal(endlessStarMapLevelTwoShooterCase.activeSkillLevel, 2);
+  assert.equal(endlessStarMapLevelTwoShooterCase.shooterId, 10001);
+  assert.equal(endlessStarMapLevelTwoShooterCase.bulletTypeId, 64);
+  assert.equal(endlessStarMapLevelTwoShooterCase.bulletAttack, 100);
+  assert.equal(endlessStarMapLevelTwoShooterCase.bulletSize, 1100);
+
+  const endlessStarMapLevelThreeShooterCase = getActiveSkillShooterSpawnCase(
+    "active-skill-endless-star-map-owner-forward-field-lv3",
+  );
+  assert.equal(endlessStarMapLevelThreeShooterCase.activeSkillId, 116);
+  assert.equal(endlessStarMapLevelThreeShooterCase.activeSkillLevel, 3);
+  assert.equal(endlessStarMapLevelThreeShooterCase.shooterId, 10002);
+  assert.equal(endlessStarMapLevelThreeShooterCase.bulletTypeId, 64);
+  assert.equal(endlessStarMapLevelThreeShooterCase.bulletAttack, 150);
+  assert.equal(endlessStarMapLevelThreeShooterCase.bulletSize, 1100);
 
   const apocalypseSongDamageCase = getActiveSkillShooterSpawnCase(
     "active-skill-apocalypse-song-delayed-damage-lv1",
@@ -2080,6 +2101,7 @@ async function main() {
   testCnActiveSkillUltimateHeartLightShooterAndEffect(runtimeData);
   testCnActiveSkillUltimateHeartLightLevelShooterSwitch(runtimeData);
   testCnActiveSkillEndlessStarMapOwnerForwardField(runtimeData);
+  testCnActiveSkillEndlessStarMapLevelFieldSwitch(runtimeData);
   testCnActiveSkillAbsoluteGuardShooterFriendlyInvincibleBuff(runtimeData);
   testCnActiveSkillKiraKiraDokiDokiDelayedStunField(runtimeData);
   testCnActiveSkillKiraKiraDokiDokiLevelStunFieldSwitch(runtimeData);
@@ -2180,6 +2202,7 @@ async function main() {
   console.log("ok - CN active skill Ultimate Heart Light records starlight effect and loops shooter 6000");
   console.log("ok - CN active skill Ultimate Heart Light level 2/3 switches starlight shooters");
   console.log("ok - CN active skill Endless Star Map shooter creates owner-forward field and EXP/coin gains");
+  console.log("ok - CN active skill Endless Star Map level 2/3 switches owner-forward fields");
   console.log("ok - CN active skill Absolute Guard shooter applies friendly invincible buff");
   console.log("ok - CN active skill KiraKiraDokiDoki delayed field stuns and stops movement");
   console.log("ok - CN active skill KiraKiraDokiDoki level 2/3 switches delayed stun fields");
@@ -7619,6 +7642,96 @@ function testCnActiveSkillEndlessStarMapOwnerForwardField(
   assert.equal(nextState.collectedCoin, expectedGainedCoin);
   assert.equal(nextState.pickups.some((pickup) => pickup.id === 990116), false);
   assert.equal(nextState.pickups.some((pickup) => pickup.id === 990117), false);
+}
+
+function testCnActiveSkillEndlessStarMapLevelFieldSwitch(
+  sourceRuntimeData: NfoOfflineRuntimeData,
+) {
+  for (const fieldCaseId of [
+    "active-skill-endless-star-map-owner-forward-field-lv2",
+    "active-skill-endless-star-map-owner-forward-field-lv3",
+  ]) {
+    const fieldCase = getActiveSkillShooterSpawnCase(fieldCaseId);
+    const testRuntimeData = configureRuntimeForActiveSkill(
+      sourceRuntimeData,
+      fieldCase.activeSkillId,
+    );
+    const baseState = createStateWithEnemy(testRuntimeData, { x: 100, y: 0 });
+    const firstFrameState = withMockedRandom(
+      [0.99],
+      () => updateNfoSimulation(
+        chargeActiveSkill({
+          ...baseState,
+          player: {
+            ...baseState.player,
+            facingAngle: Math.PI / 2,
+          },
+          activeSkill: {
+            ...baseState.activeSkill,
+            level: fieldCase.activeSkillLevel,
+          },
+        }),
+        testRuntimeData,
+        { ...NO_INPUT, useActiveSkill: true },
+        1 / 30,
+      ),
+    );
+    const shooter = firstFrameState.activeShooters.find((candidate) => (
+      candidate.shooterId === fieldCase.shooterId
+    ));
+    const fieldBullet = firstFrameState.bullets.find((candidate) => (
+      candidate.bulletTypeId === fieldCase.bulletTypeId
+    ));
+    const targetAfter = firstFrameState.enemies.find((enemy) => (
+      enemy.id === baseState.enemies[0]?.id
+    ));
+    const activeBuff = firstFrameState.player.activeBuffs.find((buff) => buff.id === 107);
+
+    assert.equal(firstFrameState.activeSkill.level, fieldCase.activeSkillLevel);
+    assert.ok(shooter, `expected CN active skill 116 level ${fieldCase.activeSkillLevel} shooter`);
+    assert.ok(fieldBullet, `expected CN active skill 116 level ${fieldCase.activeSkillLevel} field`);
+    assert.ok(targetAfter, `expected CN Endless Star Map level ${fieldCase.activeSkillLevel} target`);
+    assert.ok(activeBuff, `expected CN Endless Star Map level ${fieldCase.activeSkillLevel} buff 107`);
+    assert.equal(shooter.sourceTeam, "player");
+    assert.equal(shooter.behaviorType, fieldCase.shooterBehaviorType);
+    assert.equal(shooter.followsOwnerDirection, fieldCase.shooterFollowsOwnerDirection);
+    assert.equal(shooter.lifeTimeFrames, fieldCase.shooterLifeTimeFrames);
+    assertClose(shooter.ageFrames, fieldCase.shooterEventFrame, "CN Endless Star Map level shooter age");
+    assertClose(shooter.x, firstFrameState.player.x, "CN Endless Star Map level shooter x");
+    assertClose(shooter.y, firstFrameState.player.y, "CN Endless Star Map level shooter y");
+    assert.equal(fieldBullet.damage, fieldCase.bulletAttack + firstFrameState.player.attack);
+    assert.equal(fieldBullet.colliderWidth, fieldCase.bulletSize + (fieldBullet.bulletSizeModifier ?? 0));
+    assert.equal(fieldBullet.hitTargetType, fieldCase.bulletHitTargetType);
+    assert.equal(fieldBullet.damageJudgeType, fieldCase.bulletDamageJudgeType);
+    assert.equal(fieldBullet.remainingHits, fieldCase.bulletHitTimes - 1);
+    assertClose(fieldBullet.angle, Math.PI / 2, "CN Endless Star Map level owner-forward angle");
+    assert.ok(targetAfter.hp < (baseState.enemies[0]?.hp ?? 0));
+
+    const movedState = updateNfoSimulation(
+      {
+        ...firstFrameState,
+        player: {
+          ...firstFrameState.player,
+          x: firstFrameState.player.x + 140,
+          y: firstFrameState.player.y + 70,
+          facingAngle: 0,
+        },
+        bullets: [],
+        enemies: [],
+      },
+      testRuntimeData,
+      NO_INPUT,
+      1 / 30,
+    );
+    const followedShooter = movedState.activeShooters.find((candidate) => (
+      candidate.shooterId === fieldCase.shooterId
+    ));
+
+    assert.ok(followedShooter, "expected CN Endless Star Map level shooter to remain active");
+    assertClose(followedShooter.x, movedState.player.x, "CN Endless Star Map level following shooter x");
+    assertClose(followedShooter.y, movedState.player.y, "CN Endless Star Map level following shooter y");
+    assertClose(followedShooter.ownerFacingAngle, movedState.player.facingAngle, "CN Endless Star Map level shooter facing");
+  }
 }
 
 function testCnActiveSkillAbsoluteGuardShooterFriendlyInvincibleBuff(

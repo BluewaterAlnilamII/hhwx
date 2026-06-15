@@ -742,11 +742,13 @@ static shooter at the player origin with `BehaviorType = 0` and
 The CN fixture locks level `1`/`2`/`3` `BulletAttack = 333`/`666`/`999` with
 `BulletSize = 3000`, and the parity test verifies that moving the owner
 afterward does not move or rotate the shooter.
-Active skill `116` / `未尽之星图` level `1` is now locked as a long-lived
-owner-forward field sample: frame `1` creates shooter `10000`, whose
-`LifeTime = 300` and direction-`3` zero-speed bullet `64` stays on the player
-side, hits overlapping enemies immediately, and keeps the 300-frame bullet
-lifetime from CN data.
+Active skill `116` / `Endless Star Map` is now locked as a long-lived
+owner-forward field level-switch sample: level `1`/`2`/`3` create shooters
+`10000`/`10001`/`10002`. Each shooter keeps `LifeTime = 300`,
+`BehaviorType = 1`, `IsFollowOwnerDirection = 1`, and a direction-`3`
+zero-speed bullet `64` on the player side. The CN fixture locks
+`BulletAttack = 50`/`100`/`150`, `BulletSize = 1100`, immediate overlap
+damage, 300-frame bullet lifetime, and follow-owner position/facing behavior.
 The same simulation path now also verifies its timeline buff `107`: the CN
 snapshot exposes EXP gain `+100` and item magnet range `+1000`, and the parity
 test checks that a distant EXP pickup is collected and uses the temporary EXP
@@ -1385,7 +1387,7 @@ Weapon behavior staging:
   CN skill `11` / `Demon God Descends` locks the self-targeting level-1 buff
   `10` path for attack, defense, bullet size, critical rate, and critical
   damage source modifiers.
-  CN skill `116` / `未尽之星图` is the current locked coin-gain case: its
+  CN skill `116` / `Endless Star Map` is the current locked coin-gain case: its
   description says EXP and coin gains increase, and buff `107` is the only
   frozen CN buff that combines EXP gain attribute `11`, magnet range attribute
   `5`, and attribute `15`; the offline simulation therefore treats attribute
@@ -1446,8 +1448,8 @@ Weapon behavior staging:
   that facing angle. Direct owner-forward weapon bullets use the same
   `player.facingAngle` source, which currently covers CN weapons `12`, `13`,
   and `14`. CN active skill `116` now locks this
-  active-skill owner-forward path with shooter `10000` and zero-speed bullet
-  `64`. Weapon shooter direction `4` is
+  active-skill owner-forward path with shooters `10000`/`10001`/`10002` and
+  zero-speed bullet `64`. Weapon shooter direction `4` is
   also treated as owner/self direction for the first-pass `审判之枪` path, whose
   CN data uses `bulletFormationType = 3`, `bulletFormationOffsetX = 100`,
   `bulletFormationOffsetY = 0`, `bulletFormationParam1 = 50`, and
