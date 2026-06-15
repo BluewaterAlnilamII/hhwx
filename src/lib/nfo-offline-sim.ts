@@ -48,6 +48,7 @@ const PLAYER_DAMAGE_COOLDOWN_SECONDS = 0.8;
 const MAX_ACTIVE_ENEMIES = 180;
 const PICKUP_COLLECT_RADIUS = 72;
 const DEFAULT_PICKUP_LIFETIME_FRAMES = 600;
+const DEFAULT_FULL_SCREEN_EFFECT_SECONDS = 0.5;
 const TERRAIN_COLLISION_SAMPLE_RATIO = 0.7;
 const DEFAULT_MINION_RADIUS = 28;
 const MINION_FOLLOW_DISTANCE = 84;
@@ -479,6 +480,15 @@ export type NfoSimPickup = NfoVector & {
   remainingSeconds: number;
 };
 
+export type NfoSimFullScreenEffect = {
+  id: number;
+  name: string;
+  activeSkillId: number;
+  activeSkillLevel: number;
+  eventFrame: number;
+  remainingSeconds: number;
+};
+
 export type NfoSimActiveSkill = {
   id: number;
   level: number;
@@ -548,6 +558,7 @@ export type NfoSimulationState = {
   activeShooters: NfoSimActiveShooter[];
   bullets: NfoSimBullet[];
   pickups: NfoSimPickup[];
+  fullScreenEffects: NfoSimFullScreenEffect[];
   activeSkill: NfoSimActiveSkill;
   spawnCursorByEvent: Record<number, number>;
   spawnedEnemyEventCountsById: Record<number, number>;
@@ -652,6 +663,7 @@ export function createNfoSimulation(
     activeShooters: [],
     bullets: [],
     pickups: [],
+    fullScreenEffects: [],
     activeSkill,
     spawnCursorByEvent: {},
     spawnedEnemyEventCountsById: {},
@@ -712,6 +724,7 @@ export function updateNfoSimulation(
       hitCooldownSecondsByEnemyId: { ...bullet.hitCooldownSecondsByEnemyId },
     })),
     pickups: state.pickups.map((pickup) => ({ ...pickup })),
+    fullScreenEffects: state.fullScreenEffects.map((effect) => ({ ...effect })),
     activeSkill: {
       ...state.activeSkill,
       triggeredEventIndexes: [...state.activeSkill.triggeredEventIndexes],
@@ -727,6 +740,7 @@ export function updateNfoSimulation(
   };
 
   updatePlayerBuffs(next, deltaSeconds);
+  updateFullScreenEffects(next, deltaSeconds);
   updateActiveSkill(next, runtimeData, input, deltaSeconds);
   updateActiveShooters(next, runtimeData, deltaSeconds);
   movePlayer(next, input, deltaSeconds);
@@ -1918,6 +1932,9 @@ function updateActiveSkillTimeline(
       state.activeSkill.triggeredEventIndexes.push(eventIndex);
     }
     for (const { event } of frameEvents) {
+      recordActiveSkillFullScreenEffect(state, event.fullScreenEffectName, event.frame);
+    }
+    for (const { event } of frameEvents) {
       if (event.spawnMinion) {
         spawnActiveSkillMinions(state, runtimeData, event.spawnMinion);
       }
@@ -1964,6 +1981,26 @@ function getDueActiveSkillTimelineEvents(
       left.event.frame - right.event.frame
       || left.eventIndex - right.eventIndex
     ));
+}
+
+function recordActiveSkillFullScreenEffect(
+  state: NfoSimulationState,
+  effectName: string,
+  eventFrame: number,
+) {
+  const name = effectName.trim();
+  if (!name) {
+    return;
+  }
+
+  state.fullScreenEffects.push({
+    id: state.nextEntityId++,
+    name,
+    activeSkillId: state.activeSkill.id,
+    activeSkillLevel: state.activeSkill.level,
+    eventFrame,
+    remainingSeconds: DEFAULT_FULL_SCREEN_EFFECT_SECONDS,
+  });
 }
 
 function applyActiveSkillBuffEvent(
@@ -3952,6 +3989,23 @@ function updatePlayerBuffs(
   }
 
   filterPlayerActiveBuffs(state);
+}
+
+function updateFullScreenEffects(
+  state: NfoSimulationState,
+  deltaSeconds: number,
+) {
+  if (deltaSeconds <= 0) {
+    return;
+  }
+
+  for (const effect of state.fullScreenEffects) {
+    effect.remainingSeconds -= deltaSeconds;
+  }
+
+  state.fullScreenEffects = state.fullScreenEffects.filter((effect) => (
+    effect.remainingSeconds > 0
+  ));
 }
 
 function updateEnemyBuffs(

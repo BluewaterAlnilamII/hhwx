@@ -262,6 +262,10 @@ const TESTS: Array<{ name: string; run: () => void }> = [
     run: testActiveSkillBulletShooterFiresTimelineBullets,
   },
   {
+    name: "active skill records full-screen effect events",
+    run: testActiveSkillRecordsFullScreenEffectEvents,
+  },
+  {
     name: "active skill same-frame buffs snapshot shooter source modifiers",
     run: testActiveSkillSameFrameBuffSnapshotsShooterSourceModifiers,
   },
@@ -2805,6 +2809,36 @@ function testActiveSkillBulletShooterFiresTimelineBullets() {
   assert.equal(nextState.bullets[0]?.x, state.player.x);
   assert.equal(nextState.bullets[0]?.y, state.player.y);
   assert.equal(nextState.enemies[0]?.hp, 88);
+}
+
+function testActiveSkillRecordsFullScreenEffectEvents() {
+  const runtimeData = createRuntimeFixture();
+  const event = runtimeData.activeSkills[0]?.levels[0]?.events[0];
+  assert.ok(event);
+  event.fullScreenEffectName = "Fixture Flash";
+
+  const nextState = updateNfoSimulation(
+    chargeActiveSkill(createNfoSimulation(runtimeData)),
+    runtimeData,
+    { ...NO_INPUT, useActiveSkill: true },
+    1 / 30,
+  );
+
+  assert.equal(nextState.fullScreenEffects.length, 1);
+  assert.equal(nextState.fullScreenEffects[0]?.name, "Fixture Flash");
+  assert.equal(nextState.fullScreenEffects[0]?.activeSkillId, 3000);
+  assert.equal(nextState.fullScreenEffects[0]?.activeSkillLevel, 1);
+  assert.equal(nextState.fullScreenEffects[0]?.eventFrame, 1);
+  assert.equal(nextState.fullScreenEffects[0]?.remainingSeconds, 0.5);
+
+  const expiredState = updateNfoSimulation(
+    nextState,
+    runtimeData,
+    NO_INPUT,
+    0.5,
+  );
+
+  assert.equal(expiredState.fullScreenEffects.length, 0);
 }
 
 function testActiveSkillSameFrameBuffSnapshotsShooterSourceModifiers() {

@@ -1916,6 +1916,7 @@ async function main() {
   testCnShooterOnDestroyEventBullet(runtimeData);
   testCnActiveSkillShooterSpawnPosThreeNearestEnemy(runtimeData);
   testCnActiveSkillElementalBurstFanShooter(runtimeData);
+  testCnActiveSkillFullScreenEffectEvent(runtimeData);
   testCnActiveSkillApocalypseSongDelayedDamageShooter(runtimeData);
   testCnActiveSkillZesshoStaticFieldShooter(runtimeData);
   testCnActiveSkillEndlessStarMapOwnerForwardField(runtimeData);
@@ -2002,6 +2003,7 @@ async function main() {
   console.log("ok - CN shooter on-destroy event bullets fire follow-up bullets");
   console.log("ok - CN active skill shooter SpawnPos 3 uses the nearest enemy position");
   console.log("ok - CN active skill Elemental Burst shooter loops fireballs without repeating snow field");
+  console.log("ok - CN active skill full-screen effect events are recorded");
   console.log("ok - CN active skill Apocalypse Song triggers delayed damage shooter at frame 90");
   console.log("ok - CN active skill Zessho creates non-following static damage field shooter");
   console.log("ok - CN active skill Endless Star Map shooter creates owner-forward field and EXP/coin gains");
@@ -6480,6 +6482,40 @@ function testCnActiveSkillApocalypseSongDelayedDamageShooter(
   assert.equal(damageBullet.colliderType, damageCase.bulletColliderType);
   assert.equal(damageBullet.remainingHits, damageCase.bulletHitTimes - 1);
   assert.ok(targetAfterDamage.hp < (targetAfterStun?.hp ?? 0));
+}
+
+function testCnActiveSkillFullScreenEffectEvent(
+  sourceRuntimeData: NfoOfflineRuntimeData,
+) {
+  const activeSkill = sourceRuntimeData.activeSkills.find((candidate) => (
+    candidate.id === 14
+  ));
+  const activeSkillLevel = activeSkill?.levels.find((candidate) => (
+    candidate.level === 1
+  ));
+  const effectEvent = activeSkillLevel?.events.find((event) => (
+    event.fullScreenEffectName === "UIefx_flash_song"
+  ));
+
+  assert.ok(effectEvent, "expected CN active skill 14 to define UIefx_flash_song");
+  assert.equal(effectEvent.frame, 90);
+
+  const testRuntimeData = configureRuntimeForActiveSkill(sourceRuntimeData, 14);
+  const nextState = updateNfoSimulation(
+    chargeActiveSkill(createStateWithoutEnemies(testRuntimeData)),
+    testRuntimeData,
+    { ...NO_INPUT, useActiveSkill: true },
+    effectEvent.frame / 30,
+  );
+  const effect = nextState.fullScreenEffects.find((candidate) => (
+    candidate.name === effectEvent.fullScreenEffectName
+  ));
+
+  assert.ok(effect, "expected CN active skill 14 to record UIefx_flash_song");
+  assert.equal(effect.activeSkillId, 14);
+  assert.equal(effect.activeSkillLevel, 1);
+  assert.equal(effect.eventFrame, effectEvent.frame);
+  assert.equal(effect.remainingSeconds, 0.5);
 }
 
 function testCnActiveSkillZesshoStaticFieldShooter(
