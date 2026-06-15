@@ -10,10 +10,17 @@
   },
   "scripts": {
     "dev": "next dev",
+    "dev:nfo": "next dev -p 3117",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
     "i18n:check": "node scripts/check-i18n-messages.mjs",
+    "nfo:runtime-data": "python scripts/nfo-export-runtime-data.py",
+    "nfo:parity-fixtures": "tsx scripts/nfo-generate-cn-parity-fixtures.ts",
+    "smoke:nfo:http": "node scripts/nfo-smoke-local.mjs --skip-browser",
+    "smoke:nfo": "node scripts/nfo-smoke-local.mjs",
+    "test:nfo": "tsx scripts/test-nfo-offline-settlement.ts",
+    "test:nfo:parity": "tsx scripts/test-nfo-cn-parity.ts",
     "typecheck": "tsc --noEmit --pretty false"
   },
   "dependencies": {
@@ -33,6 +40,7 @@
     "lucide-react": "^0.577.0",
     "next": "^16.2.7",
     "next-intl": "^4.13.0",
+    "phaser": "^4.1.0",
     "react": "19.2.7",
     "react-dom": "19.2.7",
     "recharts": "^2.15.4",
@@ -50,6 +58,7 @@
     "postcss": "8.5.15",
     "supabase": "^2.105.0",
     "tailwindcss": "^3.4.0",
+    "tsx": "^4.22.4",
     "typescript": "^5"
   },
   "overrides": {
