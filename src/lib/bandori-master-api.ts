@@ -12,6 +12,13 @@ import {
   filterBestdoriSongsForJpOrCn,
   type BestdoriMasterDatasetKey,
 } from "@/lib/bestdori-master-data";
+import { ApiRouteError } from "@/lib/api-contracts";
+import {
+  BANDORI_MUSIC_METADATA_REVALIDATE_SECONDS,
+  fetchBandoriMusicIndex,
+  getBandoriMusicCdnBaseUrl,
+  type BandoriMusicIndex,
+} from "@/lib/bandori-music-assets";
 
 export const BANDORI_MASTER_ID_PATTERN = /^[1-9]\d*$/u;
 
@@ -308,31 +315,98 @@ function mergeArtifactResults(
   };
 }
 
-function overlayBestdoriSongNotes(songsPayload: unknown, bestdoriSongsPayload: unknown): unknown {
-  if (!isRecord(songsPayload) || !isRecord(bestdoriSongsPayload)) {
-    return songsPayload;
+type SongNotesById = Record<string, Record<string, number>>;
+
+function getBandoriSongNotesSource(): "assets" | "bestdori" {
+  return process.env.BANDORI_SONG_NOTES_SOURCE === "assets" ? "assets" : "bestdori";
+}
+
+function allowBestdoriSongNotesFallback(): boolean {
+  return process.env.BANDORI_SONG_NOTES_BESTDORI_FALLBACK === "1";
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function normalizeSongNotes(value: unknown): Record<string, number> | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  const notes: Record<string, number> = {};
+  for (const [difficultyIndex, rawCount] of Object.entries(value)) {
+    const numericCount = Number(rawCount);
+    if (!/^[0-4]$/u.test(difficultyIndex) || !Number.isFinite(numericCount) || numericCount < 0) {
+      continue;
+    }
+    notes[difficultyIndex] = Math.trunc(numericCount);
+  }
+
+  return Object.keys(notes).length > 0 ? notes : null;
+}
+
+function readBestdoriSongNotesById(bestdoriSongsPayload: unknown): SongNotesById {
+  if (!isRecord(bestdoriSongsPayload)) {
+    return {};
+  }
+
+  const notesById: SongNotesById = {};
+  for (const [recordId, record] of Object.entries(bestdoriSongsPayload)) {
+    const notes = isRecord(record) ? normalizeSongNotes(record.notes) : null;
+    if (notes) {
+      notesById[recordId] = notes;
+    }
+  }
+  return notesById;
+}
+
+function readAssetSongNotesById(index: BandoriMusicIndex): SongNotesById {
+  const notesById: SongNotesById = {};
+  for (const song of index.songs ?? []) {
+    const musicId = toPositiveInteger(song.musicId);
+    const notes = normalizeSongNotes(song.notes);
+    if (musicId !== null && notes) {
+      notesById[String(musicId)] = notes;
+    }
+  }
+  return notesById;
+}
+
+function overlaySongNotes(
+  songsPayload: unknown,
+  notesById: SongNotesById,
+): { payload: unknown; appliedCount: number; missingCount: number } {
+  if (!isRecord(songsPayload)) {
+    return { payload: songsPayload, appliedCount: 0, missingCount: 0 };
   }
 
   const payload: Record<string, unknown> = {};
+  let appliedCount = 0;
+  let missingCount = 0;
   for (const [recordId, record] of Object.entries(songsPayload)) {
     if (!isRecord(record)) {
       payload[recordId] = record;
       continue;
     }
 
-    const bestdoriRecord = bestdoriSongsPayload[recordId];
-    if (!isRecord(bestdoriRecord) || !("notes" in bestdoriRecord)) {
-      payload[recordId] = record;
+    const nextRecord = { ...record };
+    delete nextRecord.notes;
+    const notes = notesById[recordId];
+    if (!notes) {
+      payload[recordId] = nextRecord;
+      missingCount += 1;
       continue;
     }
 
     payload[recordId] = {
-      ...record,
-      notes: bestdoriRecord.notes,
+      ...nextRecord,
+      notes,
     };
+    appliedCount += 1;
   }
 
-  return payload;
+  return { payload, appliedCount, missingCount };
 }
 
 async function normalizeArtifactSongsResult(
@@ -342,10 +416,79 @@ async function normalizeArtifactSongsResult(
     return null;
   }
 
-  const bestdoriSongsPayload = (await readBestdoriRawDataset("songs")).payload;
+  const notesSource = getBandoriSongNotesSource();
+  if (notesSource === "assets") {
+    let assetNotesById: SongNotesById;
+    try {
+      assetNotesById = readAssetSongNotesById(await readBandoriMusicIndex(getBandoriMusicCdnBaseUrl()));
+    } catch (error) {
+      if (!allowBestdoriSongNotesFallback()) {
+        throw new ApiRouteError(
+          503,
+          "BANDORI_SONG_NOTES_ASSET_UNAVAILABLE",
+          "Bandori music asset note counts are unavailable",
+          { cause: errorMessage(error) },
+        );
+      }
+      console.warn("Bandori music asset notes read failed; falling back to Bestdori:", error);
+
+      const bestdoriNotesById = readBestdoriSongNotesById((await readBestdoriRawDataset("songs")).payload);
+      const overlay = overlaySongNotes(result.payload, bestdoriNotesById);
+      return {
+        ...result,
+        payload: overlay.payload,
+        coverage: {
+          status: "partial",
+          reason: overlay.missingCount === 0
+            ? "HHWX music asset note counts could not be read; songs.notes fell back to Bestdori."
+            : `HHWX music asset note counts could not be read; songs.notes fell back to Bestdori and ${overlay.missingCount} song records still have no notes.`,
+        },
+      };
+    }
+
+    const assetOverlay = overlaySongNotes(result.payload, assetNotesById);
+    if (assetOverlay.missingCount === 0) {
+      return {
+        ...result,
+        payload: assetOverlay.payload,
+        coverage: {
+          status: "complete",
+          reason: "songs.notes is sourced from HHWX music asset chart note counts.",
+        },
+      };
+    }
+
+    if (!allowBestdoriSongNotesFallback()) {
+      throw new ApiRouteError(
+        503,
+        "BANDORI_SONG_NOTES_ASSET_INCOMPLETE",
+        "Bandori music asset note counts are incomplete",
+        { missingCount: assetOverlay.missingCount },
+      );
+    }
+
+    const bestdoriNotesById = readBestdoriSongNotesById((await readBestdoriRawDataset("songs")).payload);
+    const overlay = overlaySongNotes(result.payload, {
+      ...bestdoriNotesById,
+      ...assetNotesById,
+    });
+    return {
+      ...result,
+      payload: overlay.payload,
+      coverage: {
+        status: "partial",
+        reason: overlay.missingCount === 0
+          ? `songs.notes is sourced from HHWX music asset chart note counts with Bestdori fallback for ${assetOverlay.missingCount} song records.`
+          : `songs.notes is sourced from HHWX music asset chart note counts with Bestdori fallback; ${overlay.missingCount} song records still have no notes.`,
+      },
+    };
+  }
+
+  const bestdoriNotesById = readBestdoriSongNotesById((await readBestdoriRawDataset("songs")).payload);
+  const overlay = overlaySongNotes(result.payload, bestdoriNotesById);
   return {
     ...result,
-    payload: overlayBestdoriSongNotes(result.payload, bestdoriSongsPayload),
+    payload: overlay.payload,
     coverage: {
       status: "partial",
       reason: "songs.notes is sourced from Bestdori until HHWX chart-derived note counts replace this field.",
@@ -412,6 +555,12 @@ const readBestdoriRawDataset = unstable_cache(
   }),
   ["bandori-master-api-bestdori-raw-dataset:v1"],
   { revalidate: 86400 },
+);
+
+const readBandoriMusicIndex = unstable_cache(
+  async (baseUrl: string | null) => fetchBandoriMusicIndex(baseUrl),
+  ["bandori-master-api-music-index:v1"],
+  { revalidate: BANDORI_MUSIC_METADATA_REVALIDATE_SECONDS },
 );
 
 const readBestdoriPath = unstable_cache(

@@ -10,6 +10,11 @@ import {
   isBestdoriChartDifficulty,
   type BestdoriChartDifficulty,
 } from "@/lib/bestdori-master-data";
+import {
+  BANDORI_MUSIC_METADATA_REVALIDATE_SECONDS,
+  buildBandoriMusicAssetUrl,
+  getBandoriMusicCdnBaseUrl,
+} from "@/lib/bandori-music-assets";
 
 export const dynamic = "force-dynamic";
 
@@ -40,32 +45,26 @@ function allowBestdoriChartFallback(): boolean {
   return process.env.BANDORI_CHART_BESTDORI_FALLBACK === "1";
 }
 
-function normalizeCdnBaseUrl(value: string | null | undefined): string | null {
-  const trimmedValue = value?.trim();
-  return trimmedValue ? trimmedValue.replace(/\/+$/u, "") : null;
-}
-
-function getBandoriMusicCdnBaseUrl(): string | null {
-  return normalizeCdnBaseUrl(
-    process.env.BANDORI_MUSIC_CDN_BASE_URL
-      ?? process.env.BANDORI_ASSET_CDN_BASE_URL
-      ?? process.env.NEXT_PUBLIC_BANDORI_ASSET_CDN_BASE_URL,
-  );
-}
-
-function buildBandoriMusicChartUrl(songId: number, difficulty: BestdoriChartDifficulty): string {
-  const baseUrl = getBandoriMusicCdnBaseUrl();
-  if (!baseUrl) {
+function buildBandoriMusicChartUrl(
+  baseUrl: string | null,
+  songId: number,
+  difficulty: BestdoriChartDifficulty,
+): string {
+  try {
+    return buildBandoriMusicAssetUrl(`${songId}/charts/${encodeURIComponent(difficulty)}.json`, baseUrl);
+  } catch {
     throw new BandoriChartAssetError("Bandori music CDN base URL is not configured", 503);
   }
-
-  return `${baseUrl}/bandori/music/${songId}/charts/${encodeURIComponent(difficulty)}.json`;
 }
 
-async function fetchBandoriAssetChart(songId: number, difficulty: BestdoriChartDifficulty): Promise<unknown> {
-  const url = buildBandoriMusicChartUrl(songId, difficulty);
+async function fetchBandoriAssetChart(
+  baseUrl: string | null,
+  songId: number,
+  difficulty: BestdoriChartDifficulty,
+): Promise<unknown> {
+  const url = buildBandoriMusicChartUrl(baseUrl, songId, difficulty);
   const response = await fetch(url, {
-    next: { revalidate: 86400 },
+    next: { revalidate: BANDORI_MUSIC_METADATA_REVALIDATE_SECONDS },
   });
 
   if (response.status === 404) {
@@ -79,13 +78,13 @@ async function fetchBandoriAssetChart(songId: number, difficulty: BestdoriChartD
 }
 
 const readAssetChart = unstable_cache(
-  async (songId: number, difficulty: BestdoriChartDifficulty) => ({
+  async (baseUrl: string | null, songId: number, difficulty: BestdoriChartDifficulty) => ({
     songId,
     difficulty,
-    chart: await fetchBandoriAssetChart(songId, difficulty),
+    chart: await fetchBandoriAssetChart(baseUrl, songId, difficulty),
   }),
   ["bandori-chart-route-assets:v1"],
-  { revalidate: 86400 },
+  { revalidate: BANDORI_MUSIC_METADATA_REVALIDATE_SECONDS },
 );
 
 async function readConfiguredChart(songId: number, difficulty: BestdoriChartDifficulty) {
@@ -94,7 +93,7 @@ async function readConfiguredChart(songId: number, difficulty: BestdoriChartDiff
   }
 
   try {
-    return await readAssetChart(songId, difficulty);
+    return await readAssetChart(getBandoriMusicCdnBaseUrl(), songId, difficulty);
   } catch (error) {
     if (!allowBestdoriChartFallback()) {
       throw error;

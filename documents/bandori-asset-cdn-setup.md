@@ -19,13 +19,18 @@ BANDORI_CHART_SOURCE=bestdori
 # BANDORI_CHART_SOURCE=assets
 # BANDORI_MUSIC_CDN_BASE_URL=https://your-bandori-asset-cdn.example.com
 # BANDORI_CHART_BESTDORI_FALLBACK=0
+BANDORI_SONG_NOTES_SOURCE=bestdori
+# BANDORI_SONG_NOTES_SOURCE=assets
+# BANDORI_SONG_NOTES_BESTDORI_FALLBACK=0
 ```
 
 `NEXT_PUBLIC_BANDORI_ASSET_CDN_BASE_URL` is exposed to browsers. `BANDORI_ASSET_CDN_BASE_URL` is available to server-side code. In most deployments they should point to the same asset host.
 
 `BANDORI_CHART_SOURCE=bestdori` keeps the default web-only behavior. Set `BANDORI_CHART_SOURCE=assets` only after a private asset builder has populated the music chart objects documented below. `BANDORI_MUSIC_CDN_BASE_URL` can point charts at a separate host; when omitted, chart reads use `BANDORI_ASSET_CDN_BASE_URL`. `BANDORI_CHART_BESTDORI_FALLBACK=1` permits a temporary Bestdori fallback when a self-hosted chart object is missing.
 
-When Bandori master artifact mode is enabled, HHWX still reads Bestdori for `events` and for `songs.notes`. Those fields remain upstream-backed until HHWX-owned event history and chart-derived note counts fully replace them.
+`BANDORI_SONG_NOTES_SOURCE=bestdori` keeps `songs.notes` aligned with Bestdori while the music asset pipeline is incomplete. After `bandori/music/index.json` contains chart-derived `notes` for every published song, set `BANDORI_SONG_NOTES_SOURCE=assets` to source `/api/bandori/master/songs` note counts from the HHWX music index. `BANDORI_SONG_NOTES_BESTDORI_FALLBACK=1` fills missing asset note counts from Bestdori during a temporary rollout. With fallback disabled, assets mode fails closed with `503` when the music index is unreadable or does not cover every song record.
+
+When Bandori master artifact mode is enabled, HHWX still reads Bestdori for `events`. `songs.notes` defaults to Bestdori but can switch to HHWX music asset chart counts as described above.
 
 Do not point self-hosted deployments at `cdn.hhwx.org` unless you intentionally depend on HHWX production asset hosting. That domain is a deployment detail and does not grant rights to third-party game assets.
 
@@ -88,6 +93,8 @@ bandori/music/{musicId}/charts/{difficulty}.json
 bandori/music/{musicId}/manifest.json
 bandori/music/index.json
 ```
+
+`bandori/music/index.json` should include `songs[].notes` in the Bestdori-compatible shape, with difficulty indexes `"0"` through `"4"` mapping to chart-derived note counts.
 
 ## Self-Hosted Expectations
 
