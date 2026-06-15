@@ -267,6 +267,12 @@ common state to `1` and state `2` changing it back to `0`; the runtime stores
 that value on the serializable enemy/minion entity so renderer/debug layers can
 observe it. Native VFX semantics and any deeper gameplay effect beyond
 serializing the state value remain a separate pending layer.
+AIState target-direction parity now applies `syncDirectionFromTarget` as a
+first-pass `facingAngle` sync on enemies and minions. This feeds
+`IsFollowOwnerDirection` / owner-forward bullet shooters, with local coverage
+for a moving owner-forward projectile and CN coverage for weapon `32` minion AI
+`110` / shooter `15000` owner-facing state. Exact native animation-facing
+timing remains pending.
 
 Drop/item parity now has CN snapshot fixture coverage for representative
 `ItemData.ItemType` rows (`EXP`, `Bomb`, `Magnet`, `Upgrade`, `Heal`, and
@@ -459,7 +465,7 @@ Current playable prototype:
   native random-position, roll, flash, teleport radius/arrival semantics, and
   exact CatBoss bullet-rain constants, remaining `normal` visual event
   semantics, exact native offset-movement class names/constants,
-  `syncDirectionFromTarget` visual-facing effects, exact native level-trigger
+  exact native facing animation timing, exact native level-trigger
   timing/dependencies, `IsChangeEntityCommonState` visual/common-state effects,
   and animation timing remain pending;
 - exposes a local `Coin +500` prototype command so the upgrade loop can be
@@ -1405,7 +1411,7 @@ Weapon behavior staging:
   exact native random-position, roll, flash, teleport radius/arrival semantics,
   exact CatBoss bullet-rain constants, remaining `normal` visual event
   semantics, exact native offset-movement class names/constants,
-  `syncDirectionFromTarget` visual-facing effects, exact native level-trigger
+  exact native facing animation timing, exact native level-trigger
   timing/dependencies, `IsChangeEntityCommonState` visual/common-state effects,
   and animation timing remain pending native behavior.
 - Current level bullet boundary handling expires bullets outside the centered

@@ -5676,6 +5676,11 @@ function testCnWeaponLevelSpawnMinionData(sourceRuntimeData: NfoOfflineRuntimeDa
   assert.equal(shooter.sourceTeam, "player");
   assertClose(shooter.x, minion.x, "CN weapon 32 shooter x");
   assertClose(shooter.y, minion.y, "CN weapon 32 shooter y");
+  assertClose(
+    shooter.ownerFacingAngle,
+    Math.atan2(shooterState.player.y - minion.y, shooterState.player.x - minion.x),
+    "CN weapon 32 syncDirectionFromTarget owner-facing angle",
+  );
 
   const firedState = updateNfoSimulation(shooterState, testRuntimeData, NO_INPUT, 1 / 30);
   const bullet = firedState.bullets.find((candidate) => candidate.bulletTypeId === 99);

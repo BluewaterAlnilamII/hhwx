@@ -254,6 +254,7 @@ type NfoAIStatefulEntity = {
   aiOrbitStateId?: number;
   aiOrbitAngle?: number;
   aiOrbitRadius?: number;
+  facingAngle?: number;
   noColliding?: boolean;
   activeBuffs?: NfoSimActiveBuff[];
   entityCommonState?: number;
@@ -309,6 +310,7 @@ export type NfoSimEnemy = NfoVector & {
   aiOrbitStateId?: number;
   aiOrbitAngle?: number;
   aiOrbitRadius?: number;
+  facingAngle?: number;
   aiFireCooldownSeconds?: number;
   noColliding?: boolean;
   entityCommonState?: number;
@@ -393,6 +395,7 @@ export type NfoSimMinion = NfoVector & {
   aiOrbitStateId?: number;
   aiOrbitAngle?: number;
   aiOrbitRadius?: number;
+  facingAngle?: number;
   aiFireCooldownSeconds?: number;
   noColliding?: boolean;
   entityCommonState?: number;
@@ -1224,6 +1227,11 @@ function updateEnemyAI(
   }
   applyAIStateTimelineEvents(state, runtimeData, enemy, advancedAIState);
   const aiState = advancedAIState.state;
+  syncAIStateFacingFromTarget(
+    enemy,
+    aiState,
+    getEnemyMovementTarget(state, enemy, aiState),
+  );
   if ((enemy.aiFireCooldownSeconds ?? 0) > 0) {
     return;
   }
@@ -1621,6 +1629,8 @@ function updateMinions(
         true,
       );
     }
+
+    syncAIStateFacingFromTarget(minion, currentAIState, target);
 
     if (advancedAIState) {
       updateMinionAIAction(state, runtimeData, minion, advancedAIState, targetEnemy);
@@ -2146,6 +2156,21 @@ function targetFromNearestEnemyOrForward(
     ? Math.atan2(nearestEnemy.y - origin.y, nearestEnemy.x - origin.x)
     : 0;
   return targetFromAngle(origin, baseAngle + degreesToRadians(offsetDegrees));
+}
+
+function syncAIStateFacingFromTarget(
+  entity: NfoAIStatefulEntity & NfoVector,
+  aiState: NfoAIStateData | null,
+  target: NfoVector | null,
+) {
+  if (!aiState?.syncDirectionFromTarget || !target) {
+    return;
+  }
+
+  const targetAngle = getVectorAngle(target.x - entity.x, target.y - entity.y);
+  if (targetAngle !== null) {
+    entity.facingAngle = targetAngle;
+  }
 }
 
 function getVectorAngle(x: number, y: number): number | null {

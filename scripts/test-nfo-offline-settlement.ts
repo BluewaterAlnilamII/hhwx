@@ -53,6 +53,10 @@ const TESTS: Array<{ name: string; run: () => void }> = [
     run: testAIStateEntryCommonStateAppliesToEnemy,
   },
   {
+    name: "AI syncDirectionFromTarget aims owner-forward shooters at the target",
+    run: testAIStateSyncDirectionAimsOwnerForwardShooter,
+  },
+  {
     name: "endless or event-driven clear types do not auto settle by timer",
     run: testEndlessOrEventDrivenClearTypeDoesNotAutoSettleByTimer,
   },
@@ -805,6 +809,84 @@ function testAIStateEntryCommonStateAppliesToEnemy() {
   const changedState = updateNfoSimulation(baseState, runtimeData, NO_INPUT, 1 / 30);
 
   assert.equal(changedState.enemies[0]?.entityCommonState, 7);
+}
+
+function testAIStateSyncDirectionAimsOwnerForwardShooter() {
+  const runtimeData = createRuntimeFixture();
+  runtimeData.bulletShooters.push(createBulletShooterFixture({
+    id: 9960,
+    name: "Fixture Synced Owner-Forward Shooter",
+    followsOwnerDirection: true,
+    events: [
+      createBulletShooterEventFixture({
+        bulletFireDirectionType: 3,
+        fireBullets: [
+          createFireBulletFixture({
+            bulletTypeId: 9961,
+            bulletSpeed: 300,
+            bulletLifeTime: 30,
+          }),
+        ],
+      }),
+    ],
+  }));
+  runtimeData.ais.push({
+    id: 994,
+    name: "Fixture Sync Direction AI",
+    firstStateId: 1,
+    states: [
+      {
+        id: 1,
+        name: "Fixture Sync Direction",
+        stateType: 0,
+        lastFrame: 0,
+        syncDirectionFromTarget: true,
+        isFireBullet: false,
+        bulletFireCooldownFrames: 0,
+        fireBullets: [],
+        bulletShooterId: 9960,
+        nextStates: [],
+        timelineEvents: [],
+      },
+    ],
+  });
+
+  const baseState = createStateWithEnemy(
+    runtimeData,
+    100,
+    {
+      aiTypeId: 994,
+      aiStateId: 1,
+      aiStateElapsedFrames: 0,
+      x: 0,
+      y: -300,
+      speed: 0,
+      radius: 5,
+    },
+  );
+  const state = {
+    ...baseState,
+    player: {
+      ...baseState.player,
+      fireCooldownSeconds: 999,
+    },
+  };
+
+  const shooterState = updateNfoSimulation(state, runtimeData, NO_INPUT, 0);
+  const shooter = shooterState.activeShooters.find((candidate) => candidate.shooterId === 9960);
+  assert.ok(shooter, "expected synced AI to create owner-forward shooter");
+  assertClose(
+    shooterState.enemies[0]?.facingAngle ?? Number.NaN,
+    Math.PI / 2,
+    "synced enemy facing angle",
+  );
+  assertClose(shooter.ownerFacingAngle, Math.PI / 2, "synced shooter owner-facing angle");
+
+  const firedState = updateNfoSimulation(shooterState, runtimeData, NO_INPUT, 1 / 30);
+  const bullet = firedState.bullets.find((candidate) => candidate.bulletTypeId === 9961);
+  assert.ok(bullet, "expected synced owner-forward shooter to fire");
+  assertClose(bullet.vx, 0, "synced owner-forward bullet vx");
+  assert.ok(bullet.vy > 0, `expected synced owner-forward bullet to travel upward, got ${bullet.vy}`);
 }
 
 function testEndlessOrEventDrivenClearTypeDoesNotAutoSettleByTimer() {
