@@ -1948,6 +1948,7 @@ async function main() {
   testCnActiveSkillGalaxyStarRingSummon(runtimeData);
   testCnActiveSkillAnonPhantomRingSummon(runtimeData);
   testCnDropDataEnemyKillSpawnsAndCollectsExp(runtimeData);
+  testCnDropDataMinorEnemyCoinPickup(runtimeData);
   testCnDropDataCommonBombMagnetHeal(runtimeData);
   testCnLevelCommonDropFallback(runtimeData);
   testCnLevelEnemySpawnWave(runtimeData);
@@ -2036,6 +2037,7 @@ async function main() {
   console.log("ok - CN active skill Galaxy Star summon uses first-pass minion orbit");
   console.log("ok - CN active skill Anon Phantom summon uses formation 2 ring");
   console.log("ok - CN DropData spawns item pickups and ItemData EXP pickup is collectable");
+  console.log("ok - CN minor enemy DropData coin branch is collectable");
   console.log("ok - CN common DropData bomb, magnet, and heal pickups apply effects");
   console.log("ok - CN LevelData commonDropId is used when an enemy has no explicit drop");
   console.log("ok - CN LevelData enemy spawn event creates a timed enemy wave");
@@ -9187,6 +9189,93 @@ function testCnDropDataEnemyKillSpawnsAndCollectsExp(
   assert.equal(collectedState.collectedItems[expItemCase.itemId], 1);
   assert.equal(collectedState.collectedExp, expectedExp);
   assert.equal(collectedState.pickups.length, 0);
+}
+
+function testCnDropDataMinorEnemyCoinPickup(
+  sourceRuntimeData: NfoOfflineRuntimeData,
+) {
+  const dropCase = getDropCase("drop-minor-enemy-exp-small-coin");
+  const expItemCase = getItemCase("item-exp-small");
+  const coinItemCase = getItemCase("item-coin-one");
+  const testRuntimeData = configureRuntimeForWeapon(sourceRuntimeData);
+  const baseState = createNfoSimulation(testRuntimeData);
+  const dropEnemy = createEnemyFixture(
+    baseState,
+    baseState.player.x + 600,
+    baseState.player.y,
+    {
+      hp: 1,
+      maxHp: 1,
+      radius: 12,
+      speed: 0,
+      dropId: dropCase.dropId,
+    },
+  );
+  const stateWithDropEnemy: NfoSimulationState = {
+    ...baseState,
+    player: {
+      ...baseState.player,
+      fireCooldownSeconds: 999,
+    },
+    enemies: [dropEnemy],
+    bullets: [createEnemyKillingBullet(baseState, dropEnemy)],
+    pickups: [],
+  };
+  const droppedState = withMockedRandom([0, 0, 0, 0, 0, 0], () => (
+    updateNfoSimulation(stateWithDropEnemy, testRuntimeData, NO_INPUT, 0)
+  ));
+  const expPickup = droppedState.pickups.find((pickup) => (
+    pickup.itemId === expItemCase.itemId
+  ));
+  const coinPickup = droppedState.pickups.find((pickup) => (
+    pickup.itemId === coinItemCase.itemId
+  ));
+
+  assert.equal(dropCase.dropId, 102);
+  assert.equal(dropCase.items.length, 2);
+  assert.equal(droppedState.defeatedEnemies, 1);
+  assert.equal(droppedState.pickups.length, 2);
+  assert.ok(expPickup, "expected CN minor enemy drop to spawn EXP pickup");
+  assert.ok(coinPickup, "expected CN minor enemy drop to spawn coin pickup");
+  assert.equal(coinPickup.itemType, coinItemCase.itemType);
+  assert.equal(coinPickup.value, coinItemCase.value);
+  assert.equal(coinPickup.canBeMagneted, coinItemCase.canBeMagneted);
+  assertClose(
+    coinPickup.remainingSeconds,
+    coinItemCase.lifetimeFrames / 30,
+    "CN drop coin pickup lifetime",
+  );
+
+  const collectedState = updateNfoSimulation(
+    {
+      ...droppedState,
+      bullets: [],
+      player: {
+        ...droppedState.player,
+        fireCooldownSeconds: 999,
+      },
+      pickups: [
+        {
+          ...expPickup,
+          x: droppedState.player.x + 1000,
+          y: droppedState.player.y,
+        },
+        {
+          ...coinPickup,
+          x: droppedState.player.x,
+          y: droppedState.player.y,
+        },
+      ],
+    },
+    testRuntimeData,
+    NO_INPUT,
+    0,
+  );
+
+  assert.equal(collectedState.collectedItems[coinItemCase.itemId], 1);
+  assert.equal(collectedState.collectedCoin, coinItemCase.value);
+  assert.equal(collectedState.pickups.length, 1);
+  assert.equal(collectedState.pickups[0]?.itemId, expItemCase.itemId);
 }
 
 function testCnDropDataCommonBombMagnetHeal(
