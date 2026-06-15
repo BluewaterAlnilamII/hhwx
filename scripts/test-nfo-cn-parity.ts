@@ -47,7 +47,7 @@ async function main() {
   assert.equal(fixture.activeSkillShooterCount, 24);
   assert.equal(fixture.activeSkillShooterEventCount, 54);
   assert.equal(fixture.weaponLevelShooterCount, 32);
-  assert.equal(fixture.selectedActiveSkillShooterSpawnCases.length, 11);
+  assert.equal(fixture.selectedActiveSkillShooterSpawnCases.length, 13);
   assert.equal(fixture.selectedAIActionCases.length, 3);
   assert.equal(fixture.selectedWeaponShooterCases.length, 8);
   assert.equal(fixture.selectedWeaponDirectFireCases.length, 30);
@@ -1962,6 +1962,7 @@ async function main() {
   testCnActiveSkillApocalypseSongDelayedDamageShooter(runtimeData);
   testCnActiveSkillZesshoStaticFieldShooter(runtimeData);
   testCnActiveSkillUltimateHeartLightShooterAndEffect(runtimeData);
+  testCnActiveSkillUltimateHeartLightLevelShooterSwitch(runtimeData);
   testCnActiveSkillEndlessStarMapOwnerForwardField(runtimeData);
   testCnActiveSkillAbsoluteGuardShooterFriendlyInvincibleBuff(runtimeData);
   testCnActiveSkillKiraKiraDokiDokiDelayedStunField(runtimeData);
@@ -2057,6 +2058,7 @@ async function main() {
   console.log("ok - CN active skill Apocalypse Song stuns, stops movement, and triggers frame-90 damage");
   console.log("ok - CN active skill Zessho creates non-following static damage field shooter");
   console.log("ok - CN active skill Ultimate Heart Light records starlight effect and loops shooter 6000");
+  console.log("ok - CN active skill Ultimate Heart Light level 2/3 switches starlight shooters");
   console.log("ok - CN active skill Endless Star Map shooter creates owner-forward field and EXP/coin gains");
   console.log("ok - CN active skill Absolute Guard shooter applies friendly invincible buff");
   console.log("ok - CN active skill KiraKiraDokiDoki delayed field stuns and stops movement");
@@ -7051,6 +7053,81 @@ function testCnActiveSkillUltimateHeartLightShooterAndEffect(
     starlightCase.shooterEventFrame + starlightCase.loopFrameInterval,
     "CN starlight shooter second loop age",
   );
+}
+
+function testCnActiveSkillUltimateHeartLightLevelShooterSwitch(
+  sourceRuntimeData: NfoOfflineRuntimeData,
+) {
+  for (const starlightCaseId of [
+    "active-skill-ultimate-heart-light-looping-starlight-lv2",
+    "active-skill-ultimate-heart-light-looping-starlight-lv3",
+  ]) {
+    const starlightCase = getActiveSkillShooterSpawnCase(starlightCaseId);
+    const activeSkill = sourceRuntimeData.activeSkills.find((candidate) => (
+      candidate.id === starlightCase.activeSkillId
+    ));
+    const activeSkillLevel = activeSkill?.levels.find((candidate) => (
+      candidate.level === starlightCase.activeSkillLevel
+    ));
+    const effectEvent = activeSkillLevel?.events.find((event) => (
+      event.frame === starlightCase.eventFrame
+      && event.bulletShooterId === starlightCase.shooterId
+    ));
+
+    assert.ok(effectEvent, `expected CN active skill 110 level ${starlightCase.activeSkillLevel} shooter`);
+    assert.equal(effectEvent.fullScreenEffectName, "UIefx_flash_starlight");
+
+    const testRuntimeData = configureRuntimeForActiveSkill(
+      sourceRuntimeData,
+      starlightCase.activeSkillId,
+    );
+    const baseState = createStateWithEnemy(testRuntimeData, { x: 360, y: 0 });
+    const nextState = withMockedRandom(
+      [0.99],
+      () => updateNfoSimulation(
+        chargeActiveSkill({
+          ...baseState,
+          activeSkill: {
+            ...baseState.activeSkill,
+            level: starlightCase.activeSkillLevel,
+          },
+        }),
+        testRuntimeData,
+        { ...NO_INPUT, useActiveSkill: true },
+        1 / 30,
+      ),
+    );
+    const shooter = nextState.activeShooters.find((candidate) => (
+      candidate.shooterId === starlightCase.shooterId
+    ));
+    const bullets = nextState.bullets.filter((bullet) => (
+      bullet.bulletTypeId === starlightCase.bulletTypeId
+    ));
+    const effect = nextState.fullScreenEffects.find((candidate) => (
+      candidate.name === "UIefx_flash_starlight"
+    ));
+
+    assert.equal(nextState.activeSkill.level, starlightCase.activeSkillLevel);
+    assert.ok(shooter, `expected CN active skill 110 level ${starlightCase.activeSkillLevel} shooter`);
+    assert.ok(effect, `expected CN active skill 110 level ${starlightCase.activeSkillLevel} effect`);
+    assert.equal(effect.activeSkillId, starlightCase.activeSkillId);
+    assert.equal(effect.activeSkillLevel, starlightCase.activeSkillLevel);
+    assert.equal(effect.eventFrame, starlightCase.eventFrame);
+    assert.equal(shooter.lifeTimeFrames, starlightCase.shooterLifeTimeFrames);
+    assert.equal(shooter.behaviorType, starlightCase.shooterBehaviorType);
+    assert.equal(shooter.followsOwnerDirection, starlightCase.shooterFollowsOwnerDirection);
+    assert.equal(shooter.sourceTeam, "player");
+    assert.equal(bullets.length, starlightCase.bulletCount);
+    for (const bullet of bullets) {
+      assert.equal(bullet.damage, starlightCase.bulletAttack + nextState.player.attack);
+      assert.equal(bullet.colliderWidth, starlightCase.bulletSize + (bullet.bulletSizeModifier ?? 0));
+      assertClose(
+        Math.hypot(bullet.vx, bullet.vy),
+        starlightCase.bulletSpeed,
+        `CN starlight level ${starlightCase.activeSkillLevel} bullet speed`,
+      );
+    }
+  }
 }
 
 function testCnActiveSkillEndlessStarMapOwnerForwardField(
