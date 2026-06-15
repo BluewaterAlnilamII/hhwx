@@ -52,7 +52,7 @@ async function main() {
   assert.equal(fixture.selectedAIActionCases.length, 3);
   assert.equal(fixture.selectedWeaponShooterCases.length, 8);
   assert.equal(fixture.selectedWeaponDirectFireCases.length, 30);
-  assert.equal(fixture.selectedActiveSkillShooterHitBuffCases.length, 5);
+  assert.equal(fixture.selectedActiveSkillShooterHitBuffCases.length, 7);
   assert.equal(fixture.selectedShooterOnDestroyCases.length, 2);
   assert.equal(fixture.selectedWeaponMinionCases.length, 6);
   assert.equal(fixture.selectedWeaponSelfBuffCases.length, 3);
@@ -1071,22 +1071,29 @@ async function main() {
   assert.equal(zesshoLevelThreeCase.bulletAttack, 999);
   assert.equal(zesshoLevelThreeCase.bulletSize, 3000);
 
-  const absoluteGuardShooterCase = getActiveSkillShooterHitBuffCase(
+  const absoluteGuardShooterCaseIds = [
     "active-skill-absolute-guard-shooter-friendly-invincible-buff",
-  );
-  assert.equal(absoluteGuardShooterCase.activeSkillId, 117);
-  assert.equal(absoluteGuardShooterCase.activeSkillLevel, 1);
-  assert.equal(absoluteGuardShooterCase.eventFrame, 1);
-  assert.equal(absoluteGuardShooterCase.shooterId, 11000);
-  assert.equal(absoluteGuardShooterCase.bulletTypeId, 65);
-  assert.equal(absoluteGuardShooterCase.bulletNoDamage, true);
-  assert.equal(absoluteGuardShooterCase.bulletHitTargetType, 1);
-  assert.equal(absoluteGuardShooterCase.bulletDamageJudgeType, 1);
-  assert.equal(absoluteGuardShooterCase.bulletColliderType, 1);
-  assert.equal(absoluteGuardShooterCase.hitBuffId, 108);
-  assert.equal(absoluteGuardShooterCase.hitBuffLevel, 1);
-  assert.equal(absoluteGuardShooterCase.buffType, 9);
-  assert.equal(absoluteGuardShooterCase.buffDurationFrames, 30);
+    "active-skill-absolute-guard-shooter-friendly-invincible-buff-lv2",
+    "active-skill-absolute-guard-shooter-friendly-invincible-buff-lv3",
+  ];
+  absoluteGuardShooterCaseIds.forEach((absoluteGuardShooterCaseId, index) => {
+    const absoluteGuardShooterCase = getActiveSkillShooterHitBuffCase(
+      absoluteGuardShooterCaseId,
+    );
+    assert.equal(absoluteGuardShooterCase.activeSkillId, 117);
+    assert.equal(absoluteGuardShooterCase.activeSkillLevel, index + 1);
+    assert.equal(absoluteGuardShooterCase.eventFrame, 1);
+    assert.equal(absoluteGuardShooterCase.shooterId, 11000);
+    assert.equal(absoluteGuardShooterCase.bulletTypeId, 65);
+    assert.equal(absoluteGuardShooterCase.bulletNoDamage, true);
+    assert.equal(absoluteGuardShooterCase.bulletHitTargetType, 1);
+    assert.equal(absoluteGuardShooterCase.bulletDamageJudgeType, 1);
+    assert.equal(absoluteGuardShooterCase.bulletColliderType, 1);
+    assert.equal(absoluteGuardShooterCase.hitBuffId, 108);
+    assert.equal(absoluteGuardShooterCase.hitBuffLevel, 1);
+    assert.equal(absoluteGuardShooterCase.buffType, 9);
+    assert.equal(absoluteGuardShooterCase.buffDurationFrames, 30);
+  });
 
   const dokiDokiShooterCase = getActiveSkillShooterHitBuffCase(
     "active-skill-kirakira-dokidoki-delayed-stun-field",
@@ -2267,7 +2274,7 @@ async function main() {
   console.log("ok - CN active skill Ultimate Heart Light level 2/3 switches starlight shooters");
   console.log("ok - CN active skill Endless Star Map shooter creates owner-forward field and EXP/coin gains");
   console.log("ok - CN active skill Endless Star Map level 2/3 switches owner-forward fields");
-  console.log("ok - CN active skill Absolute Guard shooter applies friendly invincible buff");
+  console.log("ok - CN active skill Absolute Guard level 1/2/3 applies friendly invincible hit buff");
   console.log("ok - CN active skill KiraKiraDokiDoki delayed field stuns and stops movement");
   console.log("ok - CN active skill KiraKiraDokiDoki level 2/3 switches delayed stun fields");
   console.log("ok - CN AIData creates hostile boss bullet shooters");
@@ -7801,8 +7808,24 @@ function testCnActiveSkillEndlessStarMapLevelFieldSwitch(
 function testCnActiveSkillAbsoluteGuardShooterFriendlyInvincibleBuff(
   sourceRuntimeData: NfoOfflineRuntimeData,
 ) {
-  const hitBuffCase = getActiveSkillShooterHitBuffCase(
+  for (const hitBuffCaseId of [
     "active-skill-absolute-guard-shooter-friendly-invincible-buff",
+    "active-skill-absolute-guard-shooter-friendly-invincible-buff-lv2",
+    "active-skill-absolute-guard-shooter-friendly-invincible-buff-lv3",
+  ]) {
+    assertCnActiveSkillAbsoluteGuardShooterFriendlyInvincibleBuffCase(
+      sourceRuntimeData,
+      hitBuffCaseId,
+    );
+  }
+}
+
+function assertCnActiveSkillAbsoluteGuardShooterFriendlyInvincibleBuffCase(
+  sourceRuntimeData: NfoOfflineRuntimeData,
+  hitBuffCaseId: string,
+) {
+  const hitBuffCase = getActiveSkillShooterHitBuffCase(
+    hitBuffCaseId,
   );
   const testRuntimeData = configureRuntimeForActiveSkill(
     sourceRuntimeData,
@@ -7810,7 +7833,13 @@ function testCnActiveSkillAbsoluteGuardShooterFriendlyInvincibleBuff(
   );
   const state = createStateWithoutEnemies(testRuntimeData);
   const nextState = updateNfoSimulation(
-    chargeActiveSkill(state),
+    chargeActiveSkill({
+      ...state,
+      activeSkill: {
+        ...state.activeSkill,
+        level: hitBuffCase.activeSkillLevel,
+      },
+    }),
     testRuntimeData,
     { ...NO_INPUT, useActiveSkill: true },
     1 / 30,
@@ -7825,9 +7854,11 @@ function testCnActiveSkillAbsoluteGuardShooterFriendlyInvincibleBuff(
     buff.id === hitBuffCase.hitBuffId
   ));
 
-  assert.ok(shooter, "expected CN active skill 117 to create shooter 11000");
-  assert.ok(bullet, "expected CN shooter 11000 to emit friendly invincible bullet 65");
-  assert.ok(activeBuff, "expected CN Absolute Guard bullet to apply buff 108 to the player");
+  assert.equal(hitBuffCase.activeSkillId, 117);
+  assert.equal(nextState.activeSkill.level, hitBuffCase.activeSkillLevel);
+  assert.ok(shooter, `expected CN active skill 117 case ${hitBuffCase.id} to create shooter 11000`);
+  assert.ok(bullet, `expected CN shooter 11000 case ${hitBuffCase.id} to emit friendly invincible bullet 65`);
+  assert.ok(activeBuff, `expected CN Absolute Guard case ${hitBuffCase.id} bullet to apply buff 108 to the player`);
   assert.equal(shooter.sourceTeam, "player");
   assert.equal(shooter.shooterId, hitBuffCase.shooterId);
   assert.equal(bullet.canDamagePlayer, false);
