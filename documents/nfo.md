@@ -502,7 +502,8 @@ Current playable prototype:
   `ItemData.canBeMagneted` pickup in the current simulation state. Bomb pickups
   immediately defeat active non-boss enemies, spawn their drops, and update
   local score/defeat counters. CN `DropData` row `102` is now covered by a
-  parity kill/drop/pickup test; boss damage, native animation timing, and
+  parity kill/drop/pickup test, and CN `DropData` row `20` now has a runtime
+  bomb/magnet/heal pickup-effect test; boss damage, native animation timing, and
   multiplayer-sharing details remain pending.
 
 Focused local verification:
@@ -1483,8 +1484,9 @@ Weapon behavior staging:
   player/run counters, Magnet collects all remaining pickups marked
   `canBeMagneted`, and Bomb defeats active non-boss enemies immediately. Native
   fixture coverage now locks one CN item row for each supported item type plus
-  `DropData` rows `102` and `20`; the runtime parity test verifies drop `102`
-  through an actual enemy kill, spawned EXP pickup, and collected EXP effect.
+  `DropData` rows `102` and `20`; the runtime parity tests verify drop `102`
+  through an actual enemy kill, spawned EXP pickup, and collected EXP effect,
+  plus drop `20` through bomb, magnet, and heal pickup effects.
   Native item movement, pickup animation, boss-specific bomb handling, and
   multiplayer value sharing remain pending.
 - Current level enemy-spawn handling maps CN `LevelData.levelEventDatas`

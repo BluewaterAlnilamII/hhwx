@@ -1948,6 +1948,7 @@ async function main() {
   testCnActiveSkillGalaxyStarRingSummon(runtimeData);
   testCnActiveSkillAnonPhantomRingSummon(runtimeData);
   testCnDropDataEnemyKillSpawnsAndCollectsExp(runtimeData);
+  testCnDropDataCommonBombMagnetHeal(runtimeData);
   testCnLevelEnemySpawnWave(runtimeData);
   testCnLevelEnemySpawnCenterOffset(runtimeData);
   testCnLevelEnemySpawnTypeRing(runtimeData);
@@ -2034,6 +2035,7 @@ async function main() {
   console.log("ok - CN active skill Galaxy Star summon uses first-pass minion orbit");
   console.log("ok - CN active skill Anon Phantom summon uses formation 2 ring");
   console.log("ok - CN DropData spawns item pickups and ItemData EXP pickup is collectable");
+  console.log("ok - CN common DropData bomb, magnet, and heal pickups apply effects");
   console.log("ok - CN LevelData enemy spawn event creates a timed enemy wave");
   console.log("ok - CN LevelData spawn center type 1 uses level-origin offsets");
   console.log("ok - CN LevelData spawn type 2 creates a first-pass enemy ring");
@@ -9183,6 +9185,142 @@ function testCnDropDataEnemyKillSpawnsAndCollectsExp(
   assert.equal(collectedState.collectedItems[expItemCase.itemId], 1);
   assert.equal(collectedState.collectedExp, expectedExp);
   assert.equal(collectedState.pickups.length, 0);
+}
+
+function testCnDropDataCommonBombMagnetHeal(
+  sourceRuntimeData: NfoOfflineRuntimeData,
+) {
+  const dropCase = getDropCase("drop-common-bomb-magnet-heal");
+  const bombItemCase = getItemCase("item-bomb");
+  const magnetItemCase = getItemCase("item-magnet");
+  const healItemCase = getItemCase("item-heal-small");
+  const testRuntimeData = configureRuntimeForWeapon(sourceRuntimeData);
+  const baseState = createNfoSimulation(testRuntimeData);
+  const dropEnemy = createEnemyFixture(
+    baseState,
+    baseState.player.x + 600,
+    baseState.player.y,
+    {
+      hp: 1,
+      maxHp: 1,
+      radius: 12,
+      speed: 0,
+      dropId: dropCase.dropId,
+    },
+  );
+  const stateWithDropEnemy: NfoSimulationState = {
+    ...baseState,
+    player: {
+      ...baseState.player,
+      fireCooldownSeconds: 999,
+    },
+    enemies: [dropEnemy],
+    bullets: [createEnemyKillingBullet(baseState, dropEnemy)],
+    pickups: [],
+  };
+  const droppedState = withMockedRandom([
+    0, 0, 0,
+    0, 0, 0,
+    0, 0, 0,
+  ], () => (
+    updateNfoSimulation(stateWithDropEnemy, testRuntimeData, NO_INPUT, 0)
+  ));
+  const bombPickup = droppedState.pickups.find((pickup) => (
+    pickup.itemId === bombItemCase.itemId
+  ));
+  const magnetPickup = droppedState.pickups.find((pickup) => (
+    pickup.itemId === magnetItemCase.itemId
+  ));
+  const healPickup = droppedState.pickups.find((pickup) => (
+    pickup.itemId === healItemCase.itemId
+  ));
+
+  assert.equal(dropCase.dropId, 20);
+  assert.equal(dropCase.items.length, 3);
+  assert.equal(droppedState.defeatedEnemies, 1);
+  assert.equal(droppedState.pickups.length, 3);
+  assert.ok(bombPickup, "expected CN common drop to spawn bomb pickup");
+  assert.ok(magnetPickup, "expected CN common drop to spawn magnet pickup");
+  assert.ok(healPickup, "expected CN common drop to spawn heal pickup");
+  assert.equal(bombPickup.itemType, bombItemCase.itemType);
+  assert.equal(bombPickup.canBeMagneted, bombItemCase.canBeMagneted);
+  assert.equal(magnetPickup.itemType, magnetItemCase.itemType);
+  assert.equal(magnetPickup.canBeMagneted, magnetItemCase.canBeMagneted);
+  assert.equal(healPickup.itemType, healItemCase.itemType);
+  assert.equal(healPickup.canBeMagneted, healItemCase.canBeMagneted);
+
+  const bombTarget = createEnemyFixture(
+    droppedState,
+    droppedState.player.x + 700,
+    droppedState.player.y,
+    {
+      hp: 50,
+      maxHp: 50,
+      radius: 12,
+      speed: 0,
+      dropId: -1,
+      isBoss: false,
+    },
+  );
+  const bossTarget: NfoSimEnemy = {
+    ...createEnemyFixture(
+      droppedState,
+      droppedState.player.x + 760,
+      droppedState.player.y,
+      {
+        hp: 50,
+        maxHp: 50,
+        radius: 12,
+        speed: 0,
+        dropId: -1,
+        isBoss: true,
+      },
+    ),
+    id: 900002,
+  };
+  const collectedState = updateNfoSimulation(
+    {
+      ...droppedState,
+      player: {
+        ...droppedState.player,
+        hp: droppedState.player.maxHp - 4,
+        fireCooldownSeconds: 999,
+      },
+      enemies: [bombTarget, bossTarget],
+      bullets: [],
+      activeShooters: [],
+      pickups: [
+        {
+          ...bombPickup,
+          x: droppedState.player.x,
+          y: droppedState.player.y,
+        },
+        {
+          ...magnetPickup,
+          x: droppedState.player.x,
+          y: droppedState.player.y,
+        },
+        {
+          ...healPickup,
+          x: droppedState.player.x + 1000,
+          y: droppedState.player.y,
+        },
+      ],
+    },
+    testRuntimeData,
+    NO_INPUT,
+    0,
+  );
+
+  assert.equal(collectedState.collectedItems[bombItemCase.itemId], 1);
+  assert.equal(collectedState.collectedItems[magnetItemCase.itemId], 1);
+  assert.equal(collectedState.collectedItems[healItemCase.itemId], 1);
+  assert.equal(collectedState.pickups.length, 0);
+  assert.equal(collectedState.player.hp, droppedState.player.maxHp);
+  assert.equal(collectedState.defeatedEnemies, droppedState.defeatedEnemies + 1);
+  assert.equal(collectedState.score, droppedState.score + 10);
+  assert.equal(collectedState.enemies.length, 1);
+  assert.equal(collectedState.enemies[0]?.id, bossTarget.id);
 }
 
 function testCnLevelEnemySpawnWave(sourceRuntimeData: NfoOfflineRuntimeData) {
