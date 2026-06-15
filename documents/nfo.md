@@ -321,9 +321,10 @@ Current playable prototype:
   `/api/bandori/nfo/local-runtime`, and the deployable frozen runtime JSON at
   `/res/bandori/nfo/cn/Android-2.1.1/runtime-data/master-data.json`. Use
   `NFO_SMOKE_BASE_URL=http://host:port npm run smoke:nfo:http` for a production
-  server on another port. The API DTO check also fails if the page-consumed
-  runtime data exposes live NFO HTTP endpoints; raw static JSON may still keep
-  frozen source evidence such as original URL fields.
+  server on another port. The API DTO check fails if page-consumed runtime data
+  exposes live NFO HTTP endpoint markers. The static runtime check applies the
+  same guard to the offline gameplay surface while preserving raw source-table
+  fields such as `datasets.multiplayConfigData.URL`.
 
 - run the full browser interaction smoke only for stage-gate checks:
 
@@ -601,8 +602,9 @@ npm run smoke:nfo:http
 ```
 
 This HTTP smoke covers both `/bandori/nfo` and `/zh-CN/bandori/nfo`, the
-local-runtime API, static frozen runtime artifact, and the page-consumed API
-DTO's no-live-NFO-endpoint boundary without launching Chrome/Edge. For
+local-runtime API, static frozen runtime artifact, and no-live-NFO-endpoint
+guards for both the page-consumed API DTO and static runtime's offline gameplay
+surface without launching Chrome/Edge. For
 release-candidate or final stage-gate checks, run the full browser interaction
 smoke:
 

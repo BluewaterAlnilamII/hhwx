@@ -95,6 +95,21 @@ function assertNoLiveNfoEndpoints(value, label) {
   );
 }
 
+function getStaticRuntimeEndpointCheckSurface(runtime) {
+  const checkSurface = structuredClone(runtime);
+  const multiplayConfigs = checkSurface.datasets?.multiplayConfigData;
+
+  if (Array.isArray(multiplayConfigs)) {
+    for (const multiplayConfig of multiplayConfigs) {
+      if (multiplayConfig && typeof multiplayConfig === "object") {
+        delete multiplayConfig.URL;
+      }
+    }
+  }
+
+  return checkSurface;
+}
+
 async function fetchWithTimeout(url, options, timeoutMs) {
   const response = await fetch(url, {
     ...options,
@@ -175,6 +190,10 @@ async function smokeStaticRuntime(baseUrl, apiRuntimeData, timeoutMs) {
     "bulletShooterData count mismatch",
   );
   assertSmoke(Array.isArray(runtime.mapPrefabs) && runtime.mapPrefabs.length > 0, "static runtime missing map prefabs");
+  assertNoLiveNfoEndpoints(
+    getStaticRuntimeEndpointCheckSurface(runtime),
+    "static runtime JSON offline gameplay surface",
+  );
 
   console.log(
     `ok - static runtime JSON ${STATIC_RUNTIME_URL_PATH} returned `
