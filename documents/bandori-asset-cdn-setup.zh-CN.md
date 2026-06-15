@@ -19,13 +19,18 @@ BANDORI_CHART_SOURCE=bestdori
 # BANDORI_CHART_SOURCE=assets
 # BANDORI_MUSIC_CDN_BASE_URL=https://your-bandori-asset-cdn.example.com
 # BANDORI_CHART_BESTDORI_FALLBACK=0
+BANDORI_SONG_NOTES_SOURCE=bestdori
+# BANDORI_SONG_NOTES_SOURCE=assets
+# BANDORI_SONG_NOTES_BESTDORI_FALLBACK=0
 ```
 
 `NEXT_PUBLIC_BANDORI_ASSET_CDN_BASE_URL` 会暴露给浏览器。`BANDORI_ASSET_CDN_BASE_URL` 可供服务端代码使用。大多数部署中两者应指向同一个资源主机。
 
 `BANDORI_CHART_SOURCE=bestdori` 保留默认的 web-only 行为。只有在私有资源构建器已经发布下方 music chart 对象后，才应切换到 `BANDORI_CHART_SOURCE=assets`。`BANDORI_MUSIC_CDN_BASE_URL` 可以让谱面读取使用单独主机；省略时使用 `BANDORI_ASSET_CDN_BASE_URL`。`BANDORI_CHART_BESTDORI_FALLBACK=1` 允许自建谱面对象缺失时临时回退 Bestdori。
 
-启用 Bandori master artifact 模式时，HHWX 仍会从 Bestdori 读取 `events` 和 `songs.notes`。这些字段会继续依赖上游，直到 HHWX 自有活动历史和从谱面派生的 note 数完全替代它们。
+`BANDORI_SONG_NOTES_SOURCE=bestdori` 会在音乐资源管线尚未完整时保持 `songs.notes` 与 Bestdori 对齐。当 `bandori/music/index.json` 已包含所有已发布歌曲的谱面派生 `notes` 后，可以切换到 `BANDORI_SONG_NOTES_SOURCE=assets`，让 `/api/bandori/master/songs` 从 HHWX music index 读取 note 数。`BANDORI_SONG_NOTES_BESTDORI_FALLBACK=1` 允许临时发布期间用 Bestdori 补齐缺失的 asset note count。关闭 fallback 后，assets 模式会在 music index 不可读或未覆盖全部歌曲时以 `503` fail closed。
+
+启用 Bandori master artifact 模式时，HHWX 仍会从 Bestdori 读取 `events`。`songs.notes` 默认继续使用 Bestdori，但可以按上面的配置切换到 HHWX music asset chart counts。
 
 自托管部署不要指向 `cdn.hhwx.org`，除非你明确希望依赖 HHWX 生产资源托管。该域名只是部署细节，不授予任何第三方游戏素材权利。
 
@@ -88,6 +93,8 @@ bandori/music/{musicId}/charts/{difficulty}.json
 bandori/music/{musicId}/manifest.json
 bandori/music/index.json
 ```
+
+`bandori/music/index.json` 应包含 Bestdori 兼容形态的 `songs[].notes`，用难度 index `"0"` 到 `"4"` 映射从谱面派生出的 note 数。
 
 ## 自托管预期
 
