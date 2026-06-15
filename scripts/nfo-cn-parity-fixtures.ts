@@ -213,6 +213,8 @@ type AIStateMovementCaseSpec = {
   stateId: number;
   expectedStateType: number;
   expectedNextStateId: number;
+  expectedFallbackNextStateId?: number;
+  expectedFallbackNextStateProbability?: number;
   expectedStateMoveSpeed?: number;
   expectedIsFireBullet?: boolean;
   expectedFireBulletCount?: number;
@@ -843,6 +845,8 @@ export type NfoCnParityAIStateMovementCase = {
   isFireBullet: boolean;
   nextStateId: number;
   nextStateProbability: number;
+  fallbackNextStateId: number;
+  fallbackNextStateProbability: number;
   fireBulletCount: number;
   bulletTypeId: number;
   bulletHitTargetType: number;
@@ -1974,6 +1978,17 @@ const AI_STATE_TELEPORT_CASE_SPECS: AIStateTeleportCaseSpec[] = [
 ];
 
 const AI_STATE_MOVEMENT_CASE_SPECS: AIStateMovementCaseSpec[] = [
+  {
+    id: "ai-special-random-transition-state",
+    aiTypeId: 4,
+    stateId: 1,
+    expectedStateType: 1,
+    expectedNextStateId: 2,
+    expectedFallbackNextStateId: 1,
+    expectedFallbackNextStateProbability: 100,
+    expectedIsFireBullet: false,
+    expectedFireBulletCount: 0,
+  },
   {
     id: "ai-random-move-around-player-state",
     aiTypeId: 5,
@@ -4351,7 +4366,6 @@ function buildAIStateTeleportCase(
       `AI ${ai.id} state ${state.id} is missing next state ${spec.expectedNextStateId}.`,
     );
   }
-
   const fireBullet = state.fireBullets.find((candidate) => (
     candidate.bulletTypeId === spec.expectedBulletTypeId
   ));
@@ -4407,6 +4421,26 @@ function buildAIStateMovementCase(
   if (!nextState) {
     throw new Error(
       `AI ${ai.id} state ${state.id} is missing next state ${spec.expectedNextStateId}.`,
+    );
+  }
+  const fallbackNextState = spec.expectedFallbackNextStateId === undefined
+    ? null
+    : state.nextStates.find((candidate) => (
+      candidate.stateId === spec.expectedFallbackNextStateId
+    ));
+  if (spec.expectedFallbackNextStateId !== undefined && !fallbackNextState) {
+    throw new Error(
+      `AI ${ai.id} state ${state.id} is missing fallback next state `
+      + `${spec.expectedFallbackNextStateId}.`,
+    );
+  }
+  if (
+    spec.expectedFallbackNextStateProbability !== undefined
+    && fallbackNextState?.probability !== spec.expectedFallbackNextStateProbability
+  ) {
+    throw new Error(
+      `AI ${ai.id} state ${state.id} expected fallback probability `
+      + `${spec.expectedFallbackNextStateProbability}, got ${fallbackNextState?.probability}.`,
     );
   }
 
@@ -4474,6 +4508,8 @@ function buildAIStateMovementCase(
     isFireBullet: state.isFireBullet,
     nextStateId: nextState.stateId,
     nextStateProbability: nextState.probability,
+    fallbackNextStateId: fallbackNextState?.stateId ?? 0,
+    fallbackNextStateProbability: fallbackNextState?.probability ?? 0,
     fireBulletCount: state.fireBullets.length,
     bulletTypeId: fireBullet?.bulletTypeId ?? 0,
     bulletHitTargetType: fireBullet?.bulletHitTargetType ?? 0,

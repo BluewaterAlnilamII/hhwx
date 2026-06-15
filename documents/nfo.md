@@ -434,8 +434,8 @@ Current playable prototype:
   entries through the normal bullet simulation path;
 - maps `AIData` into the runtime DTO and attaches `EnemyAITypeID` from level
   enemy spawns to simulation enemies. The first-pass AI runtime starts from
-  `FirstStateID`, advances by `LastFrame`, follows the first listed
-  `NextStateDatas` transition deterministically, gates ordinary direct bullets
+  `FirstStateID`, advances by `LastFrame`, selects `NextStateDatas` entries by
+  their ordered `Probability` thresholds, gates ordinary direct bullets
   on `IsFireBullet`, still lets `TimeLineEvents.FireBulletNow` trigger explicit
   timeline fire, fires hostile `FireBulletDatas` toward the player side,
   maps `AIStateType = 2` (`MoveToRandomPosition`) to a deterministic first-pass
@@ -479,9 +479,10 @@ Current playable prototype:
   The same
   first-pass AI timeline runner also drives minion `FireAllWeaponNow` events,
   including CN AI `103` causing weapon `26` / `圣兽Leo` to emit bullet `34` only
-  after state `2` crosses frame `20`, while random probability tables, exact
-  native random-position, roll, flash, teleport radius/arrival semantics, and
-  exact CatBoss bullet-rain constants, remaining `normal` visual event
+  after state `2` crosses frame `20`, and CN AI `4` state `1` now locks the
+  50/100 `NextStateDatas.Probability` branch/fallback behavior. Exact native
+  random-position, roll, flash, teleport radius/arrival semantics, exact
+  CatBoss bullet-rain constants, remaining `normal` visual event
   semantics, exact native offset-movement class names/constants,
   exact native facing/animation playback timing and resources, exact native
   level-trigger timing/dependencies, and `IsChangeEntityCommonState`
@@ -1422,8 +1423,8 @@ Weapon behavior staging:
   `AIStateDatas`, `NextStateDatas`, `TimeLineEvents`, `IsFireBullet`,
   `BulletFireCD`, `FireBulletDatas`, and `CreateBulletShooterTypeID`. The
   first-pass simulation starts enemies in `FirstStateID`, advances a state after
-  `LastFrame`, follows the first listed `NextStateDatas` entry as a
-  deterministic approximation, gates ordinary direct bullets on `IsFireBullet`,
+  `LastFrame`, selects `NextStateDatas` entries by their ordered `Probability`
+  thresholds, gates ordinary direct bullets on `IsFireBullet`,
   still lets `TimeLineEvents.FireBulletNow` trigger explicit timeline-gated
   fire, applies `TimeLineEvents.NoColliding` to suppress enemy contact damage
   and player bullet hits, maps `AIStateType = 0` (`Idle`) to no chase movement
@@ -1465,9 +1466,11 @@ Weapon behavior staging:
   and frame-46 bullet `51` into the offline
   loop. The same first-pass AI timeline runner drives minion
   `FireAllWeaponNow` gates, including CN AI `103` triggering weapon `26` /
-  `圣兽Leo` bullet `34` at state `2` frame `20`. Random probability rolls,
-  exact native random-position, roll, flash, teleport radius/arrival semantics,
-  exact CatBoss bullet-rain constants, remaining `normal` visual event
+  `圣兽Leo` bullet `34` at state `2` frame `20`. CN AI `4` state `1`
+  now locks a 50% transition to state `2` plus the 100% fallback to state `1`.
+  Exact native random-position, roll,
+  flash, teleport radius/arrival semantics, exact CatBoss bullet-rain
+  constants, remaining `normal` visual event
   semantics, exact native offset-movement class names/constants,
   exact native facing/animation playback timing and resources, exact native
   level-trigger timing/dependencies, and `IsChangeEntityCommonState`

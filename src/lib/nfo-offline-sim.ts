@@ -1400,7 +1400,7 @@ function advanceAIState(
   }
 
   if (aiState.lastFrame > 0 && (entity.aiStateElapsedFrames ?? 0) >= aiState.lastFrame) {
-    const nextStateId = getDeterministicNextAIStateId(aiState);
+    const nextStateId = pickNextAIStateId(aiState);
     const nextAIState = nextStateId > 0
       ? getAIStateById(ai.states, nextStateId)
       : null;
@@ -1488,8 +1488,16 @@ function isAIStateOffsetMovement(aiState: NfoAIStateData | null): aiState is Nfo
     || aiState?.stateType === NFO_AI_STATE_TYPE.cnOffsetLaserMove;
 }
 
-function getDeterministicNextAIStateId(aiState: NfoAIStateData): number {
-  return aiState.nextStates.find((nextState) => nextState.stateId > 0)?.stateId ?? 0;
+function pickNextAIStateId(aiState: NfoAIStateData): number {
+  if (aiState.nextStates.length === 0) {
+    return 0;
+  }
+
+  const roll = Math.random() * 100;
+  return aiState.nextStates.find((nextState) => (
+    nextState.stateId > 0
+    && roll < clamp(nextState.probability, 0, 100)
+  ))?.stateId ?? 0;
 }
 
 function isActionableAIState(aiState: NfoAIStateData): boolean {

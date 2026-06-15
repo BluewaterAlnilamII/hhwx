@@ -54,7 +54,7 @@ async function main() {
   assert.equal(fixture.selectedWeaponSelfBuffCases.length, 3);
   assert.equal(fixture.selectedActiveSkillSummonCases.length, 6);
   assert.equal(fixture.selectedAIStateTeleportCases.length, 1);
-  assert.equal(fixture.selectedAIStateMovementCases.length, 10);
+  assert.equal(fixture.selectedAIStateMovementCases.length, 11);
   assert.equal(fixture.selectedAIStateBuffCases.length, 3);
   assert.equal(fixture.selectedAIStateCommonStateCases.length, 2);
   assert.equal(fixture.selectedAIStateAnimationCases.length, 2);
@@ -1114,6 +1114,17 @@ async function main() {
   assert.equal(aiRandomMovementCase.fireBulletCount, 1);
   assert.equal(aiRandomMovementCase.bulletTypeId, 51);
 
+  const aiSpecialRandomTransitionCase = getAIStateMovementCase(
+    "ai-special-random-transition-state",
+  );
+  assert.equal(aiSpecialRandomTransitionCase.aiTypeId, 4);
+  assert.equal(aiSpecialRandomTransitionCase.stateId, 1);
+  assert.equal(aiSpecialRandomTransitionCase.stateType, 1);
+  assert.equal(aiSpecialRandomTransitionCase.nextStateId, 2);
+  assert.equal(aiSpecialRandomTransitionCase.nextStateProbability, 50);
+  assert.equal(aiSpecialRandomTransitionCase.fallbackNextStateId, 1);
+  assert.equal(aiSpecialRandomTransitionCase.fallbackNextStateProbability, 100);
+
   const aiRollAttackCase = getAIStateMovementCase("ai-golem-roll-attack-state-speed");
   assert.equal(aiRollAttackCase.aiTypeId, 6);
   assert.equal(aiRollAttackCase.stateId, 2);
@@ -1930,6 +1941,7 @@ async function main() {
   testCnAIStateFireAllWeaponNow(runtimeData);
   testCnAIStateShooterSpawnPosOne(runtimeData);
   testCnAIStateNoColliding(runtimeData);
+  testCnAIStateProbabilityTransition(runtimeData);
   testCnAIStateBlackCatTeleportTimeline(runtimeData);
   testCnAIStateMoveToRandomPositionAroundPlayer(runtimeData);
   testCnAIStateGolemRollAttackUsesStateMoveSpeed(runtimeData);
@@ -2021,6 +2033,7 @@ async function main() {
   console.log("ok - CN AIState FireAllWeaponNow gates minion weapon fire");
   console.log("ok - CN AIState shooter SpawnPos 1 uses the player position");
   console.log("ok - CN AIState timeline NoColliding suppresses contact");
+  console.log("ok - CN AIState NextStateDatas Probability selects branch and fallback");
   console.log("ok - CN AIState BlackCat teleport moves on the teleport event and then fires");
   console.log("ok - CN AIState MoveToRandomPosition targets around-player movement");
   console.log("ok - CN AIState Golem_RollAttack uses State_MoveSpeed");
@@ -7458,6 +7471,55 @@ function testCnAIStateNoColliding(sourceRuntimeData: NfoOfflineRuntimeData) {
 
   assert.equal(noCollidingState.enemies[0]?.noColliding, true);
   assert.equal(noCollidingState.player.hp, baseState.player.hp);
+}
+
+function testCnAIStateProbabilityTransition(sourceRuntimeData: NfoOfflineRuntimeData) {
+  const testRuntimeData = configureRuntimeForAI(sourceRuntimeData);
+  const probabilityCase = getAIStateMovementCase("ai-special-random-transition-state");
+  const createProbabilityState = (): NfoSimulationState => {
+    const baseState = createStateWithoutEnemies(testRuntimeData);
+    return {
+      ...baseState,
+      enemies: [
+        createEnemyFixture(
+          baseState,
+          baseState.player.x + 160,
+          baseState.player.y,
+          {
+            aiTypeId: probabilityCase.aiTypeId,
+            aiStateId: probabilityCase.stateId,
+            aiStateElapsedFrames: 0,
+            attack: 2,
+            speed: 0,
+            radius: 5,
+          },
+        ),
+      ],
+    };
+  };
+  const branchState = withMockedRandom([0.49], () => (
+    updateNfoSimulation(
+      createProbabilityState(),
+      testRuntimeData,
+      NO_INPUT,
+      probabilityCase.stateLastFrame / 30,
+    )
+  ));
+  const fallbackState = withMockedRandom([0.75], () => (
+    updateNfoSimulation(
+      createProbabilityState(),
+      testRuntimeData,
+      NO_INPUT,
+      probabilityCase.stateLastFrame / 30,
+    )
+  ));
+
+  assert.equal(probabilityCase.nextStateId, 2);
+  assert.equal(probabilityCase.nextStateProbability, 50);
+  assert.equal(probabilityCase.fallbackNextStateId, 1);
+  assert.equal(probabilityCase.fallbackNextStateProbability, 100);
+  assert.equal(branchState.enemies[0]?.aiStateId, probabilityCase.nextStateId);
+  assert.equal(fallbackState.enemies[0]?.aiStateId, probabilityCase.fallbackNextStateId);
 }
 
 function testCnAIStateBlackCatTeleportTimeline(sourceRuntimeData: NfoOfflineRuntimeData) {
