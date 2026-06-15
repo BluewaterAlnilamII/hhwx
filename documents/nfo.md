@@ -788,8 +788,11 @@ respecting the bullet's 15-frame lifetime. The same parity path now also locks
 the later frame-30 all-direction event on the same shooter: it emits eight
 bullet `24` projectiles at `BulletSpeed = 600` with no formation offset, and
 the first-pass simulation treats that large zero-offset event as a radial ring
-whose horizontal and vertical velocity sums cancel out. The same parity path
-also locks
+whose horizontal and vertical velocity sums cancel out. It now also locks
+the same shooter as a `BehaviorType = 1` / `IsFollowOwnerDirection = 0`
+position-only owner follower: after the player moves and turns, shooter `2`
+fires from the moved player position while keeping the original owner-facing
+angle. The same parity path also locks
 weapon `28`'s direct fire in the same shot: level `1` emits ten bullet `5`
 projectiles with DOT buff `4`, stacks that buff to the CN level-1 cap of `2`,
 and still creates shooter `2` for the later timeline bullets. The song-style

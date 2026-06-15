@@ -302,6 +302,10 @@ const TESTS: Array<{ name: string; run: () => void }> = [
     run: testBulletShooterBehaviorTypeOneFollowsOwnerPositionAndDirection,
   },
   {
+    name: "bullet shooter behavior type 1 can follow owner position without direction",
+    run: testBulletShooterBehaviorTypeOneCanFollowOwnerPositionWithoutDirection,
+  },
+  {
     name: "weapon level bullet shooters spawn timeline bullets",
     run: testWeaponLevelBulletShooterSpawnsTimelineBullets,
   },
@@ -3155,6 +3159,53 @@ function testBulletShooterBehaviorTypeOneFollowsOwnerPositionAndDirection() {
   assertClose(bullet?.angle ?? Number.NaN, Math.PI / 2, "follow bullet angle");
 }
 
+function testBulletShooterBehaviorTypeOneCanFollowOwnerPositionWithoutDirection() {
+  const runtimeData = createRuntimeFixture();
+  setActiveSkillToShooterOnly(runtimeData, 4351);
+  const state = createNfoSimulation(runtimeData);
+  const spawnedShooterState = updateNfoSimulation(
+    chargeActiveSkill({
+      ...state,
+      player: {
+        ...state.player,
+        facingAngle: 0,
+        fireCooldownSeconds: 999,
+      },
+    }),
+    runtimeData,
+    { ...NO_INPUT, useActiveSkill: true },
+    1 / 30,
+  );
+  const movedOwnerState = {
+    ...spawnedShooterState,
+    player: {
+      ...spawnedShooterState.player,
+      x: spawnedShooterState.player.x + 120,
+      y: spawnedShooterState.player.y + 96,
+      facingAngle: Math.PI / 2,
+    },
+  };
+  const firedShooterState = updateNfoSimulation(
+    movedOwnerState,
+    runtimeData,
+    NO_INPUT,
+    9 / 30,
+  );
+  const shooter = firedShooterState.activeShooters[0];
+  const bullet = firedShooterState.bullets[0];
+
+  assert.equal(spawnedShooterState.bullets.length, 0);
+  assert.equal(spawnedShooterState.activeShooters[0]?.shooterId, 4351);
+  assertClose(shooter?.x ?? Number.NaN, movedOwnerState.player.x + 30, "position-only shooter x");
+  assertClose(shooter?.y ?? Number.NaN, movedOwnerState.player.y + 4, "position-only shooter y");
+  assertClose(shooter?.ownerFacingAngle ?? Number.NaN, 0, "position-only shooter owner direction");
+  assert.equal(firedShooterState.bullets.length, 1);
+  assert.equal(bullet?.bulletTypeId, 36);
+  assertClose(bullet?.x ?? Number.NaN, movedOwnerState.player.x + 30, "position-only bullet x");
+  assertClose(bullet?.y ?? Number.NaN, movedOwnerState.player.y + 4, "position-only bullet y");
+  assertClose(bullet?.angle ?? Number.NaN, 0, "position-only bullet angle");
+}
+
 function testWeaponLevelBulletShooterSpawnsTimelineBullets() {
   const runtimeData = createRuntimeFixture();
   const state = createStateWithEnemy(runtimeData, 4400, { x: 70, hp: 100 });
@@ -4547,6 +4598,32 @@ function createRuntimeFixture(): NfoOfflineRuntimeData {
         fireBullets: [
           createFireBulletFixture({
             bulletTypeId: 35,
+            bulletAttack: 1,
+            bulletSpeed: 0,
+            bulletDamageJudgeType: 1,
+            bulletSize: 20,
+            bulletLifeTime: 90,
+          }),
+        ],
+      }),
+    ],
+  });
+  const followOwnerPositionOnlyShooterFixture = createBulletShooterFixture({
+    id: 4351,
+    name: "Fixture Follow Owner Position Only Shooter",
+    lifeTimeFrames: 30,
+    spawnPosOffsetX: 30,
+    spawnPosOffsetY: 4,
+    behaviorType: 1,
+    followsOwnerDirection: false,
+    events: [
+      createBulletShooterEventFixture({
+        name: "Fixture Delayed Owner-Position Shot",
+        frame: 10,
+        bulletFireDirectionType: 3,
+        fireBullets: [
+          createFireBulletFixture({
+            bulletTypeId: 36,
             bulletAttack: 1,
             bulletSpeed: 0,
             bulletDamageJudgeType: 1,
@@ -6378,6 +6455,7 @@ function createRuntimeFixture(): NfoOfflineRuntimeData {
       radialShooterFixture,
       directionThreeShooterFixture,
       followOwnerShooterFixture,
+      followOwnerPositionOnlyShooterFixture,
       directionFourShooterFixture,
       rotationOverrideShooterFixture,
       directionTwoShooterFixture,

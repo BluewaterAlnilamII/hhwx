@@ -1876,6 +1876,7 @@ async function main() {
   testCnWeaponLevelUpSwitchesShooter(runtimeData);
   testCnWeaponShooterFormationTypeThreeRotatesWithOwnerDirection(runtimeData);
   testCnWeaponShooterDirectionOffsetAngle(runtimeData);
+  testCnWeaponShooterFollowsOwnerPositionWithoutDirection(runtimeData);
   testCnWeaponShooterAllDirectionRadial(runtimeData);
   testCnWeaponLevelFriendlyHitBuff(runtimeData);
   testCnWeaponShooterPrayerRainBuffs(runtimeData);
@@ -1963,6 +1964,7 @@ async function main() {
   console.log("ok - CN weapon level-up switches BulletShooterID before firing");
   console.log("ok - CN weapon shooter formation type 3 rotates with owner direction");
   console.log("ok - CN weapon shooter direction offset angle rotates nearest-enemy fire");
+  console.log("ok - CN weapon shooter can follow owner position without direction");
   console.log("ok - CN weapon Night Blade shooter frame-30 event spreads all-direction bullets");
   console.log("ok - CN weapon Eternal Song shooter applies friendly hit buff");
   console.log("ok - CN weapon Prayer Rain shooter slows enemy movement and applies friendly buffs");
@@ -2602,6 +2604,114 @@ function testCnWeaponShooterDirectionOffsetAngle(sourceRuntimeData: NfoOfflineRu
   assert.ok(offsetBullets.every((bullet) => Math.abs(bullet.vy) > Math.abs(bullet.vx) * 5));
   assert.ok(offsetBullets.some((bullet) => bullet.vx > 0));
   assert.ok(offsetBullets.some((bullet) => bullet.vx < 0));
+}
+
+function testCnWeaponShooterFollowsOwnerPositionWithoutDirection(
+  sourceRuntimeData: NfoOfflineRuntimeData,
+) {
+  const nightBladeOffsetCase = getWeaponShooterCase(
+    "weapon-shooter-night-blade-offset-angle-lv1",
+  );
+  const testRuntimeData = configureRuntimeForWeapon(sourceRuntimeData);
+  const weapon = testRuntimeData.weapons.find((candidate) => (
+    candidate.id === nightBladeOffsetCase.weaponId
+  ));
+  const weaponLevel = weapon?.levels.find((candidate) => (
+    candidate.level === nightBladeOffsetCase.weaponLevel
+  ));
+
+  assert.ok(weapon);
+  assert.ok(weaponLevel);
+  weaponLevel.fireBullets = [];
+
+  const baseState = createStateWithEnemy(
+    testRuntimeData,
+    { x: 600, y: 0 },
+    nightBladeOffsetCase.weaponId,
+  );
+  const spawnedShooterState = updateNfoSimulation(
+    {
+      ...baseState,
+      player: {
+        ...baseState.player,
+        fireCooldownSeconds: 0,
+        facingAngle: 0,
+      },
+    },
+    testRuntimeData,
+    NO_INPUT,
+    0,
+  );
+  const firstEventState = updateNfoSimulation(
+    spawnedShooterState,
+    testRuntimeData,
+    NO_INPUT,
+    1 / 30,
+  );
+  const movedPlayer = {
+    ...firstEventState.player,
+    x: firstEventState.player.x + 180,
+    y: firstEventState.player.y + 70,
+    facingAngle: Math.PI / 2,
+    fireCooldownSeconds: 999,
+  };
+  const movedTarget = firstEventState.enemies[0];
+  assert.ok(movedTarget);
+  const movedOwnerState: NfoSimulationState = {
+    ...firstEventState,
+    player: movedPlayer,
+    bullets: [],
+    enemies: [
+      {
+        ...movedTarget,
+        x: movedPlayer.x + 600,
+        y: movedPlayer.y,
+      },
+    ],
+  };
+  const beforeOffsetState = updateNfoSimulation(
+    movedOwnerState,
+    testRuntimeData,
+    NO_INPUT,
+    (nightBladeOffsetCase.eventFrame - 2) / 30,
+  );
+  const offsetEventState = updateNfoSimulation(
+    beforeOffsetState,
+    testRuntimeData,
+    NO_INPUT,
+    1 / 30,
+  );
+  const shooter = offsetEventState.activeShooters[0];
+  const offsetBullets = offsetEventState.bullets.filter((candidate) => (
+    candidate.bulletTypeId === nightBladeOffsetCase.bulletTypeId
+  ));
+
+  assert.equal(nightBladeOffsetCase.shooterBehaviorType, 1);
+  assert.equal(nightBladeOffsetCase.shooterFollowsOwnerDirection, false);
+  assert.equal(nightBladeOffsetCase.eventFrame, 15);
+  assert.equal(spawnedShooterState.activeShooters[0]?.shooterId, nightBladeOffsetCase.shooterId);
+  assert.equal(firstEventState.bullets.length, nightBladeOffsetCase.bulletCount);
+  assertClose(shooter?.x ?? Number.NaN, movedPlayer.x, "CN Night Blade position-only shooter x");
+  assertClose(shooter?.y ?? Number.NaN, movedPlayer.y, "CN Night Blade position-only shooter y");
+  assertClose(
+    shooter?.ownerFacingAngle ?? Number.NaN,
+    0,
+    "CN Night Blade position-only owner direction",
+  );
+  assert.equal(offsetBullets.length, nightBladeOffsetCase.bulletCount);
+  for (const bullet of offsetBullets) {
+    assertClose(
+      bullet.x - bullet.vx / 30,
+      movedPlayer.x,
+      "CN Night Blade position-only bullet origin x",
+    );
+    assertClose(
+      bullet.y - bullet.vy / 30,
+      movedPlayer.y,
+      "CN Night Blade position-only bullet origin y",
+    );
+  }
+  assert.ok(offsetBullets.every((bullet) => bullet.vy > 0));
 }
 
 function testCnWeaponShooterAllDirectionRadial(sourceRuntimeData: NfoOfflineRuntimeData) {
