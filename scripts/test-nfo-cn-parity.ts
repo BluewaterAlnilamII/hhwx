@@ -62,7 +62,7 @@ async function main() {
   assert.equal(fixture.selectedAIStateBuffCases.length, 3);
   assert.equal(fixture.selectedAIStateCommonStateCases.length, 2);
   assert.equal(fixture.selectedAIStateAnimationCases.length, 2);
-  assert.equal(fixture.selectedActiveSkillBuffCases.length, 5);
+  assert.equal(fixture.selectedActiveSkillBuffCases.length, 7);
   assert.equal(fixture.selectedItemCases.length, 6);
   assert.equal(fixture.selectedDropCases.length, 2);
   assert.equal(fixture.selectedLevelEnemySpawnCases.length, 3);
@@ -1531,6 +1531,30 @@ async function main() {
     50,
   );
 
+  const fairyGuardLevelTwoCase = getActiveSkillBuffCase(
+    "active-skill-fairy-guard-targets-player-side-lv2",
+  );
+  const fairyGuardLevelTwoStatBuff = fairyGuardLevelTwoCase.buffs.find((buff) => buff.buffId === 16);
+  assert.equal(fairyGuardLevelTwoCase.activeSkillId, 15);
+  assert.equal(fairyGuardLevelTwoCase.activeSkillLevel, 2);
+  assert.equal(fairyGuardLevelTwoCase.eventFrame, 1);
+  assert.deepEqual(fairyGuardLevelTwoCase.buffs.map((buff) => buff.buffId), [16, 13]);
+  assert.ok(fairyGuardLevelTwoCase.buffs.every((buff) => buff.targetType === 1));
+  assert.equal(getAttributeValue(fairyGuardLevelTwoStatBuff?.attributes ?? [], CN_NFO_ATTRIBUTE_TYPE.attack), 30);
+  assert.equal(getAttributeValue(fairyGuardLevelTwoStatBuff?.attributes ?? [], CN_NFO_ATTRIBUTE_TYPE.bulletSize), 100);
+
+  const fairyGuardLevelThreeCase = getActiveSkillBuffCase(
+    "active-skill-fairy-guard-targets-player-side-lv3",
+  );
+  const fairyGuardLevelThreeStatBuff = fairyGuardLevelThreeCase.buffs.find((buff) => buff.buffId === 17);
+  assert.equal(fairyGuardLevelThreeCase.activeSkillId, 15);
+  assert.equal(fairyGuardLevelThreeCase.activeSkillLevel, 3);
+  assert.equal(fairyGuardLevelThreeCase.eventFrame, 1);
+  assert.deepEqual(fairyGuardLevelThreeCase.buffs.map((buff) => buff.buffId), [17, 13]);
+  assert.ok(fairyGuardLevelThreeCase.buffs.every((buff) => buff.targetType === 1));
+  assert.equal(getAttributeValue(fairyGuardLevelThreeStatBuff?.attributes ?? [], CN_NFO_ATTRIBUTE_TYPE.attack), 30);
+  assert.equal(getAttributeValue(fairyGuardLevelThreeStatBuff?.attributes ?? [], CN_NFO_ATTRIBUTE_TYPE.bulletSize), 150);
+
   const kingOfBeastsSummonCase = getActiveSkillSummonCase(
     "active-skill-king-of-beasts-formation-2-roar-minions-lv2",
   );
@@ -2257,7 +2281,7 @@ async function main() {
   console.log("ok - CN AIState animation metadata updates serializable enemy state");
   console.log("ok - CN active skill Demon God level 1/2/3 self buffs modify player fire attributes");
   console.log("ok - CN active skill Holy Mend heals, applies invincibility, and revives");
-  console.log("ok - CN active skill Fairy Guard buffs existing player-side minions and their fire");
+  console.log("ok - CN active skill Fairy Guard level 1/2/3 buffs existing player-side minions and their fire");
   console.log("ok - CN active skill 111 minion AI transitions into roar shooter");
   console.log("ok - CN active skill All-Out Fire drives shooter 7000 frame 1/3/7 timeline and minion AI");
   console.log("ok - CN active skill All-Out Fire level 3 loops zero-offset minion shooters");
@@ -9506,7 +9530,23 @@ function testCnActiveSkillHolyMendHealInvincibleAndRevive(
 function testCnActiveSkillFairyGuardTargetsPlayerSideMinions(
   sourceRuntimeData: NfoOfflineRuntimeData,
 ) {
-  const fairyGuardCase = getActiveSkillBuffCase("active-skill-fairy-guard-targets-player-side");
+  for (const fairyGuardCaseId of [
+    "active-skill-fairy-guard-targets-player-side",
+    "active-skill-fairy-guard-targets-player-side-lv2",
+    "active-skill-fairy-guard-targets-player-side-lv3",
+  ]) {
+    assertCnActiveSkillFairyGuardTargetsPlayerSideMinionsCase(
+      sourceRuntimeData,
+      fairyGuardCaseId,
+    );
+  }
+}
+
+function assertCnActiveSkillFairyGuardTargetsPlayerSideMinionsCase(
+  sourceRuntimeData: NfoOfflineRuntimeData,
+  fairyGuardCaseId: string,
+) {
+  const fairyGuardCase = getActiveSkillBuffCase(fairyGuardCaseId);
   const testRuntimeData = configureRuntimeForActiveSkill(
     sourceRuntimeData,
     fairyGuardCase.activeSkillId,
@@ -9520,7 +9560,7 @@ function testCnActiveSkillFairyGuardTargetsPlayerSideMinions(
   assert.ok(minionWeaponLevel);
   assert.ok(minionFireBullet);
 
-  const fairyGuardStatBuff = fairyGuardCase.buffs.find((buff) => buff.buffId === 11);
+  const fairyGuardStatBuff = fairyGuardCase.buffs.find((buff) => buff.buffType === 1);
   assert.ok(fairyGuardStatBuff);
   const bulletSizeModifier = fairyGuardStatBuff.attributes.find((attribute) => (
     attribute.attributeType === CN_NFO_ATTRIBUTE_TYPE.bulletSize
@@ -9528,6 +9568,23 @@ function testCnActiveSkillFairyGuardTargetsPlayerSideMinions(
   const attackModifier = fairyGuardStatBuff.attributes.find((attribute) => (
     attribute.attributeType === CN_NFO_ATTRIBUTE_TYPE.attack
   ))?.value ?? 0;
+  const expectedStatBuffId = fairyGuardCase.activeSkillLevel === 1
+    ? 11
+    : fairyGuardCase.activeSkillLevel === 2
+      ? 16
+      : 17;
+
+  assert.equal(fairyGuardCase.activeSkillId, 15);
+  assert.equal(fairyGuardStatBuff.buffId, expectedStatBuffId);
+  assert.equal(attackModifier, 30);
+  assert.equal(
+    bulletSizeModifier,
+    fairyGuardCase.activeSkillLevel === 1
+      ? 50
+      : fairyGuardCase.activeSkillLevel === 2
+        ? 100
+        : 150,
+  );
 
   const baseState = createStateWithoutEnemies(testRuntimeData);
   const enemyProbe = createEnemyFixture(
@@ -9538,31 +9595,41 @@ function testCnActiveSkillFairyGuardTargetsPlayerSideMinions(
       speed: 0,
     },
   );
-  const activeState = updateNfoSimulation(
-    {
-      ...chargeActiveSkill(baseState),
-      player: {
-        ...baseState.player,
-        fireCooldownSeconds: 999,
-      },
-      enemies: [enemyProbe],
-      minions: [
-        createFriendlyMinionProbe({
-          minionId: 2,
-          weaponId: minionWeapon.id,
-          weaponLevel: minionWeaponLevel.level,
-          canFireOwnWeapon: true,
-          speed: 0,
-          x: baseState.player.x,
-          y: baseState.player.y,
+  const activeState = withMockedRandom(
+    [0.99],
+    () => updateNfoSimulation(
+      {
+        ...chargeActiveSkill({
+          ...baseState,
+          activeSkill: {
+            ...baseState.activeSkill,
+            level: fairyGuardCase.activeSkillLevel,
+          },
         }),
-      ],
-    },
-    testRuntimeData,
-    { ...NO_INPUT, useActiveSkill: true },
-    1 / 30,
+        player: {
+          ...baseState.player,
+          fireCooldownSeconds: 999,
+        },
+        enemies: [enemyProbe],
+        minions: [
+          createFriendlyMinionProbe({
+            minionId: 2,
+            weaponId: minionWeapon.id,
+            weaponLevel: minionWeaponLevel.level,
+            canFireOwnWeapon: true,
+            speed: 0,
+            x: baseState.player.x,
+            y: baseState.player.y,
+          }),
+        ],
+      },
+      testRuntimeData,
+      { ...NO_INPUT, useActiveSkill: true },
+      1 / 30,
+    ),
   );
 
+  assert.equal(activeState.activeSkill.level, fairyGuardCase.activeSkillLevel);
   for (const buffCase of fairyGuardCase.buffs) {
     assert.ok(
       activeState.player.activeBuffs.some((buff) => (
@@ -9579,7 +9646,7 @@ function testCnActiveSkillFairyGuardTargetsPlayerSideMinions(
   }
   assert.equal(
     activeState.enemies[0]?.activeBuffs.some((buff) => (
-      buff.id === 11 || buff.id === 13
+      fairyGuardCase.buffs.some((buffCase) => buff.id === buffCase.buffId)
     )),
     false,
   );
