@@ -2021,11 +2021,11 @@ async function main() {
   console.log("ok - CN active skill shooter SpawnPos 3 uses the nearest enemy position");
   console.log("ok - CN active skill Elemental Burst shooter loops fireballs without repeating snow field");
   console.log("ok - CN active skill full-screen effect events are recorded");
-  console.log("ok - CN active skill Apocalypse Song triggers delayed damage shooter at frame 90");
+  console.log("ok - CN active skill Apocalypse Song stuns, stops movement, and triggers frame-90 damage");
   console.log("ok - CN active skill Zessho creates non-following static damage field shooter");
   console.log("ok - CN active skill Endless Star Map shooter creates owner-forward field and EXP/coin gains");
   console.log("ok - CN active skill Absolute Guard shooter applies friendly invincible buff");
-  console.log("ok - CN active skill KiraKiraDokiDoki delayed field applies stun hit buff");
+  console.log("ok - CN active skill KiraKiraDokiDoki delayed field stuns and stops movement");
   console.log("ok - CN AIData creates hostile boss bullet shooters");
   console.log("ok - CN AIData creates Hydra friendly-target fireball shooters");
   console.log("ok - CN AIData creates long Hydra shooter timelines");
@@ -6597,6 +6597,22 @@ function testCnActiveSkillApocalypseSongDelayedDamageShooter(
     "CN Apocalypse Song stun duration",
   );
 
+  const stunnedMoveState = updateNfoSimulation(firstFrameState, testRuntimeData, NO_INPUT, 0.25);
+  const stunnedTarget = stunnedMoveState.enemies.find((enemy) => (
+    enemy.id === baseState.enemies[0]?.id
+  ));
+  assert.ok(stunnedTarget, "expected CN Apocalypse Song stunned target to remain alive");
+  assertClose(
+    stunnedTarget.x,
+    targetAfterStun.x,
+    "CN Apocalypse Song stun disables enemy movement x",
+  );
+  assertClose(
+    stunnedTarget.y,
+    targetAfterStun.y,
+    "CN Apocalypse Song stun disables enemy movement y",
+  );
+
   const beforeDelayedDamageState = updateNfoSimulation(
     {
       ...firstFrameState,
@@ -6700,7 +6716,14 @@ function testCnActiveSkillZesshoStaticFieldShooter(
     sourceRuntimeData,
     zesshoCase.activeSkillId,
   );
-  const baseState = createStateWithEnemy(testRuntimeData, { x: 100, y: 0 });
+  const initialState = createStateWithEnemy(testRuntimeData, { x: 100, y: 0 });
+  const baseState = {
+    ...initialState,
+    enemies: initialState.enemies.map((enemy) => ({
+      ...enemy,
+      speed: 120,
+    })),
+  };
   const firstFrameState = updateNfoSimulation(
     chargeActiveSkill(baseState),
     testRuntimeData,
@@ -6998,6 +7021,14 @@ function testCnActiveSkillKiraKiraDokiDokiDelayedStunField(
     hitBuffCase.buffDurationFrames / 30,
     "CN DokiDoki stun duration",
   );
+
+  const stunnedMoveState = updateNfoSimulation(afterDelayState, testRuntimeData, NO_INPUT, 0.25);
+  const stunnedTarget = stunnedMoveState.enemies.find((enemy) => (
+    enemy.id === baseState.enemies[0]?.id
+  ));
+  assert.ok(stunnedTarget, "expected CN DokiDoki stunned target to remain alive");
+  assertClose(stunnedTarget.x, targetAfterDelay.x, "CN DokiDoki stun disables enemy movement x");
+  assertClose(stunnedTarget.y, targetAfterDelay.y, "CN DokiDoki stun disables enemy movement y");
 }
 
 function testCnAIDataCreatesBossShooter(sourceRuntimeData: NfoOfflineRuntimeData) {

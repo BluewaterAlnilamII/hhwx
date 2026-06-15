@@ -681,16 +681,17 @@ direction-`1` fireballs (`BulletTypeID = 11`, `BulletCount = 4`,
 It also locks active skill `14` / `Apocalypse Song` level `1` as the first
 delayed active-skill shooter timeline case: frame `1` creates shooter `3000`
 and no-damage stun field bullet `56`, applying stun buff `3` to overlapping
-enemies, while frame `90` creates shooter `3001` and damaging field bullet
-`99`; the parity test verifies that the damage shooter does not exist before
-frame `90`.
+enemies and stopping their movement, while frame `90` creates shooter `3001`
+and damaging field bullet `99`; the parity test verifies that the damage
+shooter does not exist before frame `90`.
 The fixture also locks active skill `117` level `1`: frame `1` creates
 shooter `11000`, whose no-damage friendly bullet `65` applies invincible buff
 `108` to the player side for 30 frames.
 It also locks active skill `16` / `KiraKiraDokiDoki` level `1`: frame `1`
 creates shooter `9000`, whose zero-speed field bullet `59` starts at the
 player, keeps `BulletDamageJudgeDelay = 21`, and only after that delay damages
-an overlapping enemy and applies stun buff `18` for 150 frames.
+an overlapping enemy, applies stun buff `18` for 150 frames, and stops that
+enemy from moving while stunned.
 Active skill `114` / `Zessho` level `1` now locks shooter `1001` as the first
 active-skill field sample with `BehaviorType = 0` and
 `IsFollowOwnerDirection = 0`: frame `1` creates a static shooter at the player
@@ -1339,8 +1340,10 @@ Weapon behavior staging:
   Active
   skill shooter bullets can also apply friendly and enemy hit buffs; CN skill
   `117` verifies shooter `11000` applying invincible buff `108` through bullet
-  `65`, while CN skill `16` verifies shooter `9000` applying delayed stun buff
-  `18` through field bullet `59`.
+  `65`, while CN skill `14` verifies shooter `3000` applying stun buff `3`
+  and movement disable through field bullet `56`, and CN skill `16` verifies
+  shooter `9000` applying delayed stun buff `18` plus movement disable through
+  field bullet `59`.
   Shooter instances use `LifeTime`, `SpawnPos`, `SpawnPosOffsetX/Y`,
   `TimeLineEvents`, direct `fireBulletData`, `eventFireBulletDatas`,
   `IsLoopEvent`, and `LoopFrameInterval` at a first-pass level. CN shooter
