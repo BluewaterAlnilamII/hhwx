@@ -640,6 +640,7 @@ export type NfoCnParityActiveSkillShooterSpawnCase = {
   bulletLifeTimeFrames: number;
   bulletHitTargetType: number;
   bulletDamageJudgeType: number;
+  bulletDamageJudgeCooldownFrames: number;
   bulletColliderType: number;
   bulletHitTimes: number;
   bulletForceType: number;
@@ -3741,6 +3742,7 @@ function buildActiveSkillShooterSpawnCase(
     bulletLifeTimeFrames: fireBullet.bulletLifeTime,
     bulletHitTargetType: fireBullet.bulletHitTargetType,
     bulletDamageJudgeType: fireBullet.bulletDamageJudgeType,
+    bulletDamageJudgeCooldownFrames: fireBullet.bulletDamageJudgeCooldownFrames,
     bulletColliderType: fireBullet.bulletColliderType,
     bulletHitTimes: fireBullet.bulletHitTimes,
     bulletForceType: fireBullet.bulletForceType,

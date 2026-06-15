@@ -559,6 +559,7 @@ active skill heal-percent, invincible, and revive buff effects, active
 skill ring summon formation, active skill minion assigned-weapon firing, plus ray segment
 length checks, active skill bullet shooter firing, and bullet shooter loop
 intervals, active skill shooter `SpawnPos = 3` nearest-enemy placement,
+active skill `99` / shooter `8000` chainsaw field damage and inward pull,
 active skill `13` / shooter `13000` four-fireball fan spread and zero-speed
 snow-field bullet,
 active skill `110` / shooter `6000` starlight full-screen effect and looping
@@ -680,7 +681,9 @@ friendly-target explosion with `BulletHitTimes = 99999`. It also locks active
 skill `99` /
 `电锯之神·召唤` level `1`: frame `1` creates shooter `8000`, whose
 `SpawnPos = 3` places the shooter on the nearest enemy before emitting chainsaw
-bullet `58`.
+bullet `58`. The parity test now verifies that bullet `58` damages overlapping
+enemies, records its `BulletDamageJudgeCD = 10` multi-hit cooldown, and applies
+`BulletForceType = 2` / inward force with `BulletForce = 5`.
 It also locks active skill `13` / `Elemental Burst` level `1`: frame `1`
 creates shooter `13000`, whose `SpawnPos = 3` places the shooter on the
 nearest enemy, emits zero-speed snow-field bullet `21`, and emits four

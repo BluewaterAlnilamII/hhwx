@@ -2023,7 +2023,7 @@ async function main() {
   console.log("ok - CN weapon level-up switches spawnMinionData AI shooters");
   console.log("ok - CN shooter direction 2 targets the player side with event rotation");
   console.log("ok - CN shooter on-destroy event bullets fire follow-up bullets");
-  console.log("ok - CN active skill shooter SpawnPos 3 uses the nearest enemy position");
+  console.log("ok - CN active skill Chainsaw God damages and pulls from nearest-enemy field");
   console.log("ok - CN active skill Elemental Burst shooter loops fireballs without repeating snow field");
   console.log("ok - CN active skill full-screen effect events are recorded");
   console.log("ok - CN active skill Apocalypse Song stuns, stops movement, and triggers frame-90 damage");
@@ -6377,13 +6377,26 @@ function testCnActiveSkillShooterSpawnPosThreeNearestEnemy(
     ),
     id: 900002,
   };
+  const pulledEnemy = {
+    ...createEnemyFixture(
+      baseState,
+      nearEnemy.x + 80,
+      nearEnemy.y,
+      {
+        hp: 999999,
+        speed: 0,
+        radius: 5,
+      },
+    ),
+    id: 900003,
+  };
   const state = {
     ...baseState,
     player: {
       ...baseState.player,
       fireCooldownSeconds: 999,
     },
-    enemies: [farEnemy, nearEnemy],
+    enemies: [farEnemy, nearEnemy, pulledEnemy],
   };
 
   const nextState = updateNfoSimulation(
@@ -6398,17 +6411,33 @@ function testCnActiveSkillShooterSpawnPosThreeNearestEnemy(
   const bullet = nextState.bullets.find((candidate) => (
     candidate.bulletTypeId === spawnCase.bulletTypeId
   ));
+  const pulledEnemyAfter = nextState.enemies.find((enemy) => enemy.id === pulledEnemy.id);
+  const expectedInwardDistance = spawnCase.bulletForce * CN_LEVEL_UNIT_SIZE / 30;
 
   assert.ok(shooter, "expected CN active skill 99 to create shooter 8000");
   assertClose(shooter.x, nearEnemy.x, "CN SpawnPos 3 shooter x");
   assertClose(shooter.y, nearEnemy.y, "CN SpawnPos 3 shooter y");
   assert.ok(bullet, "expected CN SpawnPos 3 shooter to emit bullet 58");
+  assert.ok(pulledEnemyAfter, "expected CN chainsaw force target to remain alive");
   assert.equal(bullet.hitTargetType, spawnCase.bulletHitTargetType);
   assert.equal(bullet.damageJudgeType, spawnCase.bulletDamageJudgeType);
   assert.equal(bullet.forceType, spawnCase.bulletForceType);
   assert.equal(bullet.force, spawnCase.bulletForce);
+  assert.equal(spawnCase.bulletDamageJudgeCooldownFrames, 10);
   assertClose(bullet.x, nearEnemy.x, "CN SpawnPos 3 bullet x");
   assertClose(bullet.y, nearEnemy.y, "CN SpawnPos 3 bullet y");
+  assert.ok(pulledEnemyAfter.hp < pulledEnemy.hp, "expected CN chainsaw field to damage overlap");
+  assertClose(
+    bullet.hitCooldownSecondsByEnemyId[pulledEnemy.id] ?? Number.NaN,
+    spawnCase.bulletDamageJudgeCooldownFrames / 30,
+    "CN chainsaw multi-hit cooldown",
+  );
+  assertClose(
+    pulledEnemyAfter.x,
+    pulledEnemy.x - expectedInwardDistance,
+    "CN chainsaw inward force x",
+  );
+  assertClose(pulledEnemyAfter.y, pulledEnemy.y, "CN chainsaw inward force y");
 }
 
 function testCnActiveSkillElementalBurstFanShooter(
