@@ -142,6 +142,8 @@ type ActiveSkillShooterHitBuffCaseSpec = {
   expectedEventFrame: number;
   expectedShooterId: number;
   expectedBulletTypeId: number;
+  expectedBulletAttack?: number;
+  expectedBulletSize?: number;
   expectedHitBuffId: number;
   expectedBuffType: number;
   expectedDamageJudgeDelayFrames?: number;
@@ -665,6 +667,7 @@ export type NfoCnParityActiveSkillShooterHitBuffCase = {
   shooterEventFrame: number;
   directionType: number;
   bulletTypeId: number;
+  bulletAttack: number;
   bulletNoDamage: boolean;
   bulletHitTargetType: number;
   bulletDamageJudgeType: number;
@@ -2070,6 +2073,38 @@ const ACTIVE_SKILL_SHOOTER_HIT_BUFF_CASE_SPECS: ActiveSkillShooterHitBuffCaseSpe
     expectedEventFrame: 1,
     expectedShooterId: 9000,
     expectedBulletTypeId: 59,
+    expectedBulletAttack: 200,
+    expectedBulletSize: 1000,
+    expectedHitBuffId: 18,
+    expectedBuffType: 2,
+    expectedDamageJudgeDelayFrames: 21,
+    expectedHitTargetType: 0,
+    expectedNoDamage: false,
+  },
+  {
+    id: "active-skill-kirakira-dokidoki-delayed-stun-field-lv2",
+    activeSkillId: 16,
+    activeSkillLevel: 2,
+    expectedEventFrame: 1,
+    expectedShooterId: 9001,
+    expectedBulletTypeId: 59,
+    expectedBulletAttack: 400,
+    expectedBulletSize: 1500,
+    expectedHitBuffId: 18,
+    expectedBuffType: 2,
+    expectedDamageJudgeDelayFrames: 21,
+    expectedHitTargetType: 0,
+    expectedNoDamage: false,
+  },
+  {
+    id: "active-skill-kirakira-dokidoki-delayed-stun-field-lv3",
+    activeSkillId: 16,
+    activeSkillLevel: 3,
+    expectedEventFrame: 1,
+    expectedShooterId: 9002,
+    expectedBulletTypeId: 59,
+    expectedBulletAttack: 600,
+    expectedBulletSize: 2000,
     expectedHitBuffId: 18,
     expectedBuffType: 2,
     expectedDamageJudgeDelayFrames: 21,
@@ -4040,6 +4075,24 @@ function buildActiveSkillShooterHitBuffCase(
       + `${spec.expectedNoDamage}, got ${fireBullet.noDamage}.`,
     );
   }
+  if (
+    spec.expectedBulletAttack !== undefined
+    && fireBullet.bulletAttack !== spec.expectedBulletAttack
+  ) {
+    throw new Error(
+      `Active skill shooter hit-buff case ${spec.id} expected bullet attack `
+      + `${spec.expectedBulletAttack}, got ${fireBullet.bulletAttack}.`,
+    );
+  }
+  if (
+    spec.expectedBulletSize !== undefined
+    && fireBullet.bulletSize !== spec.expectedBulletSize
+  ) {
+    throw new Error(
+      `Active skill shooter hit-buff case ${spec.id} expected bullet size `
+      + `${spec.expectedBulletSize}, got ${fireBullet.bulletSize}.`,
+    );
+  }
 
   const buffLevel = buff.levels.find((candidate) => (
     candidate.level === Math.max(fireBullet.hitBuffLevel, 1)
@@ -4063,6 +4116,7 @@ function buildActiveSkillShooterHitBuffCase(
     shooterEventFrame: shooterEvent.frame,
     directionType: shooterEvent.bulletFireDirectionType,
     bulletTypeId: fireBullet.bulletTypeId,
+    bulletAttack: fireBullet.bulletAttack,
     bulletNoDamage: fireBullet.noDamage,
     bulletHitTargetType: fireBullet.bulletHitTargetType,
     bulletDamageJudgeType: fireBullet.bulletDamageJudgeType,

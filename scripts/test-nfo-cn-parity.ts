@@ -51,7 +51,7 @@ async function main() {
   assert.equal(fixture.selectedAIActionCases.length, 3);
   assert.equal(fixture.selectedWeaponShooterCases.length, 8);
   assert.equal(fixture.selectedWeaponDirectFireCases.length, 30);
-  assert.equal(fixture.selectedActiveSkillShooterHitBuffCases.length, 3);
+  assert.equal(fixture.selectedActiveSkillShooterHitBuffCases.length, 5);
   assert.equal(fixture.selectedShooterOnDestroyCases.length, 2);
   assert.equal(fixture.selectedWeaponMinionCases.length, 6);
   assert.equal(fixture.selectedWeaponSelfBuffCases.length, 3);
@@ -1081,9 +1081,32 @@ async function main() {
   assert.equal(dokiDokiShooterCase.bulletDamageJudgeType, 0);
   assert.equal(dokiDokiShooterCase.bulletDamageJudgeDelayFrames, 21);
   assert.equal(dokiDokiShooterCase.bulletColliderType, 0);
+  assert.equal(dokiDokiShooterCase.bulletAttack, 200);
   assert.equal(dokiDokiShooterCase.bulletSize, 1000);
   assert.equal(dokiDokiShooterCase.hitBuffId, 18);
   assert.equal(dokiDokiShooterCase.hitBuffLevel, 1);
+
+  const dokiDokiLevelTwoShooterCase = getActiveSkillShooterHitBuffCase(
+    "active-skill-kirakira-dokidoki-delayed-stun-field-lv2",
+  );
+  assert.equal(dokiDokiLevelTwoShooterCase.activeSkillId, 16);
+  assert.equal(dokiDokiLevelTwoShooterCase.activeSkillLevel, 2);
+  assert.equal(dokiDokiLevelTwoShooterCase.shooterId, 9001);
+  assert.equal(dokiDokiLevelTwoShooterCase.bulletTypeId, 59);
+  assert.equal(dokiDokiLevelTwoShooterCase.bulletAttack, 400);
+  assert.equal(dokiDokiLevelTwoShooterCase.bulletSize, 1500);
+  assert.equal(dokiDokiLevelTwoShooterCase.hitBuffId, 18);
+
+  const dokiDokiLevelThreeShooterCase = getActiveSkillShooterHitBuffCase(
+    "active-skill-kirakira-dokidoki-delayed-stun-field-lv3",
+  );
+  assert.equal(dokiDokiLevelThreeShooterCase.activeSkillId, 16);
+  assert.equal(dokiDokiLevelThreeShooterCase.activeSkillLevel, 3);
+  assert.equal(dokiDokiLevelThreeShooterCase.shooterId, 9002);
+  assert.equal(dokiDokiLevelThreeShooterCase.bulletTypeId, 59);
+  assert.equal(dokiDokiLevelThreeShooterCase.bulletAttack, 600);
+  assert.equal(dokiDokiLevelThreeShooterCase.bulletSize, 2000);
+  assert.equal(dokiDokiLevelThreeShooterCase.hitBuffId, 18);
   assert.equal(dokiDokiShooterCase.buffType, 2);
   assert.equal(dokiDokiShooterCase.buffDurationFrames, 150);
 
@@ -2059,6 +2082,7 @@ async function main() {
   testCnActiveSkillEndlessStarMapOwnerForwardField(runtimeData);
   testCnActiveSkillAbsoluteGuardShooterFriendlyInvincibleBuff(runtimeData);
   testCnActiveSkillKiraKiraDokiDokiDelayedStunField(runtimeData);
+  testCnActiveSkillKiraKiraDokiDokiLevelStunFieldSwitch(runtimeData);
   testCnAIDataCreatesBossShooter(runtimeData);
   testCnAIDataCreatesHydraFriendlyTargetFireballShooter(runtimeData);
   testCnAIDataCreatesLongHydraTimelineShooter(runtimeData);
@@ -2158,6 +2182,7 @@ async function main() {
   console.log("ok - CN active skill Endless Star Map shooter creates owner-forward field and EXP/coin gains");
   console.log("ok - CN active skill Absolute Guard shooter applies friendly invincible buff");
   console.log("ok - CN active skill KiraKiraDokiDoki delayed field stuns and stops movement");
+  console.log("ok - CN active skill KiraKiraDokiDoki level 2/3 switches delayed stun fields");
   console.log("ok - CN AIData creates hostile boss bullet shooters");
   console.log("ok - CN AIData creates Hydra friendly-target fireball shooters");
   console.log("ok - CN AIData creates long Hydra shooter timelines");
@@ -7648,16 +7673,44 @@ function testCnActiveSkillAbsoluteGuardShooterFriendlyInvincibleBuff(
 function testCnActiveSkillKiraKiraDokiDokiDelayedStunField(
   sourceRuntimeData: NfoOfflineRuntimeData,
 ) {
-  const hitBuffCase = getActiveSkillShooterHitBuffCase(
+  assertCnActiveSkillKiraKiraDokiDokiDelayedStunFieldCase(
+    sourceRuntimeData,
     "active-skill-kirakira-dokidoki-delayed-stun-field",
   );
+}
+
+function testCnActiveSkillKiraKiraDokiDokiLevelStunFieldSwitch(
+  sourceRuntimeData: NfoOfflineRuntimeData,
+) {
+  for (const hitBuffCaseId of [
+    "active-skill-kirakira-dokidoki-delayed-stun-field-lv2",
+    "active-skill-kirakira-dokidoki-delayed-stun-field-lv3",
+  ]) {
+    assertCnActiveSkillKiraKiraDokiDokiDelayedStunFieldCase(
+      sourceRuntimeData,
+      hitBuffCaseId,
+    );
+  }
+}
+
+function assertCnActiveSkillKiraKiraDokiDokiDelayedStunFieldCase(
+  sourceRuntimeData: NfoOfflineRuntimeData,
+  hitBuffCaseId: string,
+) {
+  const hitBuffCase = getActiveSkillShooterHitBuffCase(hitBuffCaseId);
   const testRuntimeData = configureRuntimeForActiveSkill(
     sourceRuntimeData,
     hitBuffCase.activeSkillId,
   );
   const baseState = createStateWithEnemy(testRuntimeData, { x: 100, y: 0 });
   const firstFrameState = updateNfoSimulation(
-    chargeActiveSkill(baseState),
+    chargeActiveSkill({
+      ...baseState,
+      activeSkill: {
+        ...baseState.activeSkill,
+        level: hitBuffCase.activeSkillLevel,
+      },
+    }),
     testRuntimeData,
     { ...NO_INPUT, useActiveSkill: true },
     1 / 30,
@@ -7672,9 +7725,19 @@ function testCnActiveSkillKiraKiraDokiDokiDelayedStunField(
     enemy.id === baseState.enemies[0]?.id
   ));
 
-  assert.ok(shooter, "expected CN active skill 16 to create shooter 9000");
-  assert.ok(fieldBullet, "expected CN shooter 9000 to emit DokiDoki field bullet 59");
-  assert.ok(targetBeforeDelay, "expected CN DokiDoki target to remain before delay");
+  assert.equal(firstFrameState.activeSkill.level, hitBuffCase.activeSkillLevel);
+  assert.ok(
+    shooter,
+    `expected CN active skill 16 level ${hitBuffCase.activeSkillLevel} to create shooter ${hitBuffCase.shooterId}`,
+  );
+  assert.ok(
+    fieldBullet,
+    `expected CN shooter ${hitBuffCase.shooterId} to emit DokiDoki field bullet 59`,
+  );
+  assert.ok(
+    targetBeforeDelay,
+    `expected CN DokiDoki level ${hitBuffCase.activeSkillLevel} target to remain before delay`,
+  );
   assert.equal(shooter.sourceTeam, "player");
   assertClose(shooter.x, baseState.player.x, "CN DokiDoki shooter x");
   assertClose(shooter.y, baseState.player.y, "CN DokiDoki shooter y");
@@ -7684,6 +7747,8 @@ function testCnActiveSkillKiraKiraDokiDokiDelayedStunField(
   assert.equal(fieldBullet.hitBuffId, hitBuffCase.hitBuffId);
   assert.equal(fieldBullet.hitBuffLevel, hitBuffCase.hitBuffLevel);
   assert.equal(fieldBullet.dealsDamage, !hitBuffCase.bulletNoDamage);
+  assert.equal(fieldBullet.damage, hitBuffCase.bulletAttack + firstFrameState.player.attack);
+  assert.equal(fieldBullet.colliderWidth, hitBuffCase.bulletSize + (fieldBullet.bulletSizeModifier ?? 0));
   assertClose(fieldBullet.x, baseState.player.x, "CN DokiDoki field x");
   assertClose(fieldBullet.y, baseState.player.y, "CN DokiDoki field y");
   assertClose(Math.hypot(fieldBullet.vx, fieldBullet.vy), 0, "CN DokiDoki field speed");
@@ -7708,7 +7773,10 @@ function testCnActiveSkillKiraKiraDokiDokiDelayedStunField(
     buff.id === hitBuffCase.hitBuffId
   ));
 
-  assert.ok(targetAfterDelay, "expected CN DokiDoki target to survive the delayed field");
+  assert.ok(
+    targetAfterDelay,
+    `expected CN DokiDoki level ${hitBuffCase.activeSkillLevel} target to survive the delayed field`,
+  );
   assert.ok(targetAfterDelay.hp < (baseState.enemies[0]?.hp ?? 0));
   assert.ok(stunBuff, "expected CN DokiDoki field to apply stun buff 18");
   assert.equal(stunBuff.type, hitBuffCase.buffType);
