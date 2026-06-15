@@ -258,6 +258,10 @@ const TESTS: Array<{ name: string; run: () => void }> = [
     run: testActiveSkillBulletShooterFiresTimelineBullets,
   },
   {
+    name: "active skill same-frame buffs snapshot shooter source modifiers",
+    run: testActiveSkillSameFrameBuffSnapshotsShooterSourceModifiers,
+  },
+  {
     name: "active skill bullet shooter spawn position 3 uses nearest enemy",
     run: testActiveSkillBulletShooterSpawnPosThreeUsesNearestEnemy,
   },
@@ -2713,6 +2717,74 @@ function testActiveSkillBulletShooterFiresTimelineBullets() {
   assert.equal(nextState.bullets[0]?.x, state.player.x);
   assert.equal(nextState.bullets[0]?.y, state.player.y);
   assert.equal(nextState.enemies[0]?.hp, 88);
+}
+
+function testActiveSkillSameFrameBuffSnapshotsShooterSourceModifiers() {
+  const runtimeData = createRuntimeFixture();
+  addPlayerAttributeBuffFixture(runtimeData);
+  const shortBuffLevel = runtimeData.buffs.find((buff) => buff.id === 121)?.levels[0];
+  assert.ok(shortBuffLevel);
+  shortBuffLevel.durationFrames = 1;
+  const activeSkillLevel = runtimeData.activeSkills[0]?.levels[0];
+  assert.ok(activeSkillLevel);
+  activeSkillLevel.events = [
+    {
+      name: "Fixture Same-Frame Shooter Before Buff",
+      frame: 1,
+      bulletShooterId: 4000,
+      fullScreenEffectName: "",
+      buffs: [],
+      spawnMinion: null,
+    },
+    {
+      name: "Fixture Same-Frame Buff",
+      frame: 1,
+      bulletShooterId: 0,
+      fullScreenEffectName: "",
+      buffs: [{ targetType: 0, buffId: 121, level: 1 }],
+      spawnMinion: null,
+    },
+  ];
+  const state = createNfoSimulation(runtimeData);
+  const firstFireState = updateNfoSimulation(
+    chargeActiveSkill({
+      ...state,
+      player: {
+        ...state.player,
+        fireCooldownSeconds: 999,
+      },
+    }),
+    runtimeData,
+    { ...NO_INPUT, useActiveSkill: true },
+    1 / 30,
+  );
+  const shooter = firstFireState.activeShooters[0];
+
+  assert.ok(shooter);
+  assert.equal(shooter.bulletCountModifier, 2);
+  assert.equal(shooter.bulletLifeTimeModifier, 15);
+  assert.equal(shooter.bulletSizeModifier, 10);
+  assert.equal(shooter.bulletSpeedModifier, 50);
+  assert.equal(firstFireState.bullets.filter((bullet) => bullet.bulletTypeId === 23).length, 3);
+
+  const secondLoopState = updateNfoSimulation(
+    {
+      ...firstFireState,
+      bullets: [],
+    },
+    runtimeData,
+    NO_INPUT,
+    10 / 30,
+  );
+  const secondLoopBullets = secondLoopState.bullets.filter((bullet) => bullet.bulletTypeId === 23);
+
+  assert.equal(
+    secondLoopState.player.activeBuffs.some((buff) => buff.id === 121),
+    false,
+  );
+  assert.equal(secondLoopBullets.length, 3);
+  assert.ok(secondLoopBullets.every((bullet) => bullet.colliderWidth === 130));
+  assert.ok(secondLoopBullets.every((bullet) => bullet.attackerAttack === shooter.attack));
 }
 
 function testActiveSkillBulletShooterSpawnPosThreeUsesNearestEnemy() {

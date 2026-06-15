@@ -1924,8 +1924,12 @@ function updateActiveSkillTimeline(
       for (const buffEvent of event.buffs) {
         applyActiveSkillBuffEvent(runtimeData, buffEvent, state);
       }
+    }
+    const fireSourceModifiers = getPlayerSideFireSourceModifiers(state, state.player.activeBuffs);
+    for (const { event } of frameEvents) {
       if (event.bulletShooterId > 0) {
         spawnBulletShooter(state, runtimeData, event.bulletShooterId, state.player, {
+          ...fireSourceModifiers,
           ownerType: "player",
         });
       }
