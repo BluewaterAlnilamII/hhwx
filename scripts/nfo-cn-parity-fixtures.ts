@@ -2162,6 +2162,13 @@ const AI_STATE_ANIMATION_CASE_SPECS: AIStateAnimationCaseSpec[] = [
 
 const ACTIVE_SKILL_BUFF_CASE_SPECS: ActiveSkillBuffCaseSpec[] = [
   {
+    id: "active-skill-demon-god-self-attribute-buff-lv1",
+    activeSkillId: 11,
+    activeSkillLevel: 1,
+    expectedEventFrame: 1,
+    expectedBuffIds: [10],
+  },
+  {
     id: "active-skill-holy-mend-heal-invincible-revive",
     activeSkillId: 12,
     activeSkillLevel: 1,

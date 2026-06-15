@@ -27,7 +27,10 @@ const CN_LEVEL_UNIT_SIZE = 96;
 const FIRST_PASS_GUARDIAN_SONG_ORBIT_RADIUS = 120;
 const CN_NFO_ATTRIBUTE_TYPE = {
   attack: 2,
+  defense: 3,
   bulletSize: 7,
+  criticalRate: 12,
+  criticalDamage: 13,
   movementDisabled: 14,
 } as const;
 let fixture: ReturnType<typeof buildNfoCnParityFixture>;
@@ -58,7 +61,7 @@ async function main() {
   assert.equal(fixture.selectedAIStateBuffCases.length, 3);
   assert.equal(fixture.selectedAIStateCommonStateCases.length, 2);
   assert.equal(fixture.selectedAIStateAnimationCases.length, 2);
-  assert.equal(fixture.selectedActiveSkillBuffCases.length, 2);
+  assert.equal(fixture.selectedActiveSkillBuffCases.length, 3);
   assert.equal(fixture.selectedItemCases.length, 6);
   assert.equal(fixture.selectedDropCases.length, 2);
   assert.equal(fixture.selectedLevelEnemySpawnCases.length, 3);
@@ -1952,6 +1955,7 @@ async function main() {
   testCnAIStateCommonStateChangesApplyToEnemy(runtimeData);
   testCnAIStateAnimationMetadataAppliesToEnemy(runtimeData);
   testCnAIStateTriggerLevelEventSpawnsTriggeredLevelEvent(runtimeData);
+  testCnActiveSkillDemonGodSelfAttributeBuff(runtimeData);
   testCnActiveSkillHolyMendHealInvincibleAndRevive(runtimeData);
   testCnActiveSkillFairyGuardTargetsPlayerSideMinions(runtimeData);
   testCnActiveSkillKingOfBeastsMinionAITransitionShooter(runtimeData);
@@ -2042,6 +2046,7 @@ async function main() {
   console.log("ok - CN AIState offset movement uses State_MoveOffset and State_MoveSpeed");
   console.log("ok - CN AIState TriggerLevelEventID gates triggered level enemy spawns");
   console.log("ok - CN AIState animation metadata updates serializable enemy state");
+  console.log("ok - CN active skill Demon God self buff modifies player fire attributes");
   console.log("ok - CN active skill Holy Mend heals, applies invincibility, and revives");
   console.log("ok - CN active skill Fairy Guard buffs existing player-side minions and their fire");
   console.log("ok - CN active skill 111 minion AI transitions into roar shooter");
@@ -8395,6 +8400,99 @@ function testCnAIStateTriggerLevelEventSpawnsTriggeredLevelEvent(
       && enemy.typeId === triggeredSpawnEvent.enemySpawn.enemyTypeId
     )),
     false,
+  );
+}
+
+function testCnActiveSkillDemonGodSelfAttributeBuff(
+  sourceRuntimeData: NfoOfflineRuntimeData,
+) {
+  const demonGodCase = getActiveSkillBuffCase(
+    "active-skill-demon-god-self-attribute-buff-lv1",
+  );
+  const testRuntimeData = configureRuntimeForActiveSkill(
+    sourceRuntimeData,
+    demonGodCase.activeSkillId,
+  );
+  const weapon = testRuntimeData.weapons.find((candidate) => candidate.id === 1);
+  const weaponLevel = weapon?.levels.find((candidate) => candidate.level === 1);
+  const fireBullet = weaponLevel?.fireBullets.find((candidate) => candidate.bulletTypeId === 11);
+  const demonGodBuff = demonGodCase.buffs.find((buff) => buff.buffId === 10);
+
+  assert.ok(weapon);
+  assert.ok(weaponLevel);
+  assert.ok(fireBullet);
+  assert.ok(demonGodBuff);
+  assert.equal(demonGodCase.activeSkillLevel, 1);
+  assert.equal(demonGodCase.eventFrame, 1);
+  assert.equal(demonGodBuff.targetType, 0);
+  assert.equal(demonGodBuff.buffType, 1);
+  assert.equal(demonGodBuff.buffDurationFrames, 240);
+  assert.equal(getAttributeValue(demonGodBuff.attributes, CN_NFO_ATTRIBUTE_TYPE.attack), 15);
+  assert.equal(getAttributeValue(demonGodBuff.attributes, CN_NFO_ATTRIBUTE_TYPE.defense), 2);
+  assert.equal(getAttributeValue(demonGodBuff.attributes, CN_NFO_ATTRIBUTE_TYPE.bulletSize), 30);
+  assert.equal(getAttributeValue(demonGodBuff.attributes, CN_NFO_ATTRIBUTE_TYPE.criticalRate), 15);
+  assert.equal(getAttributeValue(demonGodBuff.attributes, CN_NFO_ATTRIBUTE_TYPE.criticalDamage), 15);
+
+  const baseState = createStateWithEnemy(testRuntimeData, { x: 300, y: 0 }, weapon.id);
+  const activeState = updateNfoSimulation(
+    chargeActiveSkill(baseState),
+    testRuntimeData,
+    { ...NO_INPUT, useActiveSkill: true },
+    1 / 30,
+  );
+  const activeBuff = activeState.player.activeBuffs.find((buff) => (
+    buff.id === demonGodBuff.buffId
+  ));
+
+  assert.ok(activeBuff);
+  assert.equal(activeBuff.type, demonGodBuff.buffType);
+  assertClose(
+    activeBuff.remainingSeconds,
+    demonGodBuff.buffDurationFrames / 30,
+    "CN Demon God self-buff duration",
+  );
+  assert.equal(activeState.enemies[0]?.activeBuffs.length, 0);
+
+  const attackModifier = getAttributeValue(
+    demonGodBuff.attributes,
+    CN_NFO_ATTRIBUTE_TYPE.attack,
+  );
+  const bulletSizeModifier = getAttributeValue(
+    demonGodBuff.attributes,
+    CN_NFO_ATTRIBUTE_TYPE.bulletSize,
+  );
+  const criticalRateModifier = getAttributeValue(
+    demonGodBuff.attributes,
+    CN_NFO_ATTRIBUTE_TYPE.criticalRate,
+  );
+  const criticalDamageModifier = getAttributeValue(
+    demonGodBuff.attributes,
+    CN_NFO_ATTRIBUTE_TYPE.criticalDamage,
+  );
+  const firedState = updateNfoSimulation(
+    {
+      ...activeState,
+      bullets: [],
+      player: {
+        ...activeState.player,
+        fireCooldownSeconds: 0,
+      },
+    },
+    testRuntimeData,
+    NO_INPUT,
+    1 / 30,
+  );
+  const buffedBullet = firedState.bullets.find((bullet) => (
+    bullet.bulletTypeId === fireBullet.bulletTypeId
+  ));
+
+  assert.ok(buffedBullet);
+  assert.equal(buffedBullet.attackerAttack, baseState.player.attack + attackModifier);
+  assert.equal(buffedBullet.colliderWidth, fireBullet.bulletSize + bulletSizeModifier);
+  assert.equal(buffedBullet.criticalRate, baseState.player.criticalRate + criticalRateModifier);
+  assert.equal(
+    buffedBullet.criticalDamage,
+    baseState.player.criticalDamage + criticalDamageModifier,
   );
 }
 
