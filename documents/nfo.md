@@ -1031,11 +1031,15 @@ selection, verifies that no bullet `34` is emitted at minion spawn, then
 advances AI `103` to the `FireAllWeaponNow` gate before accepting bullet `34`.
 
 The active-skill buff parity case now locks skill `11` / `Demon God Descends`
-level `1`: its frame-1 timeline event applies self buff `10`, an `AttrChange`
-buff lasting 240 frames with attack `+15`, defense `+2`, bullet size `+30`,
-critical rate `+15`, and critical damage `+15`. The parity test verifies the
-buff remains player-only and that subsequent CN weapon `1` / bullet `11` fire
-inherits the attack, bullet-size, and critical source modifiers.
+levels `1`/`2`/`3`: each frame-1 timeline event applies a player-only
+`AttrChange` self buff lasting 240 frames. Level `1` uses buff `10` with attack
+`+15`, defense `+2`, bullet size `+30`, critical rate `+15`, and critical
+damage `+15`; level `2` uses buff `14` with attack `+30`, bullet size `+45`,
+critical rate/damage `+30`, and bullet count `+1`; level `3` uses buff `15`
+with attack `+50`, bullet size `+60`, critical rate/damage `+50`, and bullet
+count `+2`. The parity test verifies the buffs remain player-only and that
+subsequent CN weapon `1` / bullet `11` fire inherits the attack, bullet-size,
+bullet-count, and critical source modifiers.
 It also locks skill `12` / `Holy Mend`: its frame-1
 timeline event applies revive buff `106`, invincible buff `104`, and heal-percent
 buff `105`; the current simulation verifies the heal-percent, invincible, and
@@ -1384,9 +1388,9 @@ Weapon behavior staging:
   serializable active shooter instances from timeline `BulletShooterID`.
   Player-side `AttrChange` buffs from those timeline events now affect
   supported pickup and weapon-fire derived attributes until the buff expires.
-  CN skill `11` / `Demon God Descends` locks the self-targeting level-1 buff
-  `10` path for attack, defense, bullet size, critical rate, and critical
-  damage source modifiers.
+  CN skill `11` / `Demon God Descends` locks self-targeting buffs `10`/`14`/`15`
+  for level `1`/`2`/`3`, including attack, defense, bullet size, bullet count,
+  critical rate, and critical damage source modifiers.
   CN skill `116` / `Endless Star Map` is the current locked coin-gain case: its
   description says EXP and coin gains increase, and buff `107` is the only
   frozen CN buff that combines EXP gain attribute `11`, magnet range attribute

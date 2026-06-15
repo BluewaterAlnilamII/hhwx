@@ -2429,6 +2429,20 @@ const ACTIVE_SKILL_BUFF_CASE_SPECS: ActiveSkillBuffCaseSpec[] = [
     expectedBuffIds: [10],
   },
   {
+    id: "active-skill-demon-god-self-attribute-buff-lv2",
+    activeSkillId: 11,
+    activeSkillLevel: 2,
+    expectedEventFrame: 1,
+    expectedBuffIds: [14],
+  },
+  {
+    id: "active-skill-demon-god-self-attribute-buff-lv3",
+    activeSkillId: 11,
+    activeSkillLevel: 3,
+    expectedEventFrame: 1,
+    expectedBuffIds: [15],
+  },
+  {
     id: "active-skill-holy-mend-heal-invincible-revive",
     activeSkillId: 12,
     activeSkillLevel: 1,
