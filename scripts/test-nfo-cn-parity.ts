@@ -1999,8 +1999,8 @@ async function main() {
   console.log("ok - CN weapon Knight Feather rect stays owner-forward");
   console.log("ok - CN weapon direct fire DamageJudgeType None still applies force");
   console.log("ok - CN weapon Courage Song ray fires targetless and stays owner-forward");
-  console.log("ok - CN weapon Blizzard field fires targetless and applies freeze");
-  console.log("ok - CN weapon Judgement field fires targetless and applies stun");
+  console.log("ok - CN weapon Blizzard field fires targetless, applies freeze, and stops movement");
+  console.log("ok - CN weapon Judgement field fires targetless, applies stun, and stops movement");
   console.log("ok - CN weapon Six Star direct fire applies DOT hit buff");
   console.log("ok - CN weapon Galaxy Light uses GroupCount and FireGroupCD timing");
   console.log("ok - CN weapon Black Hole direct field applies inward force");
@@ -4636,11 +4636,11 @@ function testCnWeaponDirectFireFreezeField(sourceRuntimeData: NfoOfflineRuntimeD
 
   const target = createEnemyFixture(
     noTargetState,
-    noTargetState.player.x,
+    noTargetState.player.x + 100,
     noTargetState.player.y,
     {
       hp: 999999,
-      speed: 0,
+      speed: 120,
       radius: 10,
     },
   );
@@ -4667,6 +4667,12 @@ function testCnWeaponDirectFireFreezeField(sourceRuntimeData: NfoOfflineRuntimeD
   assert.ok(freezeBuff, "expected CN Blizzard field to apply freeze buff 2");
   assert.equal(freezeBuff.type, 3);
   assertClose(freezeBuff.remainingSeconds, 1, "CN Blizzard freeze duration seconds");
+
+  const frozenMoveState = updateNfoSimulation(hitState, testRuntimeData, NO_INPUT, 0.25);
+  const frozenTarget = frozenMoveState.enemies.find((enemy) => enemy.id === target.id);
+  assert.ok(frozenTarget, "expected CN frozen target to remain alive");
+  assertClose(frozenTarget.x, targetAfter.x, "CN Blizzard freeze disables enemy movement x");
+  assertClose(frozenTarget.y, targetAfter.y, "CN Blizzard freeze disables enemy movement y");
 }
 
 function testCnWeaponLevelMinionCount(sourceRuntimeData: NfoOfflineRuntimeData) {
@@ -5017,11 +5023,11 @@ function testCnWeaponDirectFireStunField(sourceRuntimeData: NfoOfflineRuntimeDat
 
   const target = createEnemyFixture(
     noTargetState,
-    noTargetState.player.x,
+    noTargetState.player.x + 100,
     noTargetState.player.y,
     {
       hp: 999999,
-      speed: 0,
+      speed: 120,
       radius: 10,
     },
   );
@@ -5064,6 +5070,12 @@ function testCnWeaponDirectFireStunField(sourceRuntimeData: NfoOfflineRuntimeDat
   assert.ok(stunBuff, "expected CN Judgement field to apply stun buff 3");
   assert.equal(stunBuff.type, 2);
   assertClose(stunBuff.remainingSeconds, 1, "CN Judgement stun duration seconds");
+
+  const stunnedMoveState = updateNfoSimulation(hitState, testRuntimeData, NO_INPUT, 0.25);
+  const stunnedTarget = stunnedMoveState.enemies.find((enemy) => enemy.id === target.id);
+  assert.ok(stunnedTarget, "expected CN stunned target to remain alive");
+  assertClose(stunnedTarget.x, targetAfter.x, "CN Judgement stun disables enemy movement x");
+  assertClose(stunnedTarget.y, targetAfter.y, "CN Judgement stun disables enemy movement y");
 }
 
 function testCnWeaponDirectFireDotHitBuff(sourceRuntimeData: NfoOfflineRuntimeData) {

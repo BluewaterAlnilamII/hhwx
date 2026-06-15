@@ -923,15 +923,17 @@ matching velocity. Exact native spawn offsets and animation timing remain
 pending. It also locks the first
 freeze-field direct weapon case: weapon `15` level `1` fires zero-speed circular
 bullet `21` (`BulletColliderType = 0`, `BulletSize = 200`) without an enemy
-target and applies freeze buff `2` (`BuffType = 3`, `Duration = 30`) to an
-overlapping enemy. The available `Weapon_15` signature takes only `ExPlayer`;
-native visual timing and deeper freeze animation semantics remain pending. It
-also locks the first stun-field direct weapon case: weapon `17` level `1` fires
-zero-speed circular bullet `23` (`BulletColliderType = 0`, `BulletSize = 300`)
-without an enemy target and applies stun buff `3` (`BuffType = 2`,
-`Duration = 30`) to an overlapping enemy. The available `Weapon_17` signature
-takes only `ExPlayer`; native visual timing and deeper stun animation semantics
-remain pending. The first hostile AI ray case is also locked: AI `44`
+target, applies freeze buff `2` (`BuffType = 3`, `Duration = 30`) to an
+overlapping enemy, and stops that enemy from moving while the buff remains
+active. The available `Weapon_15` signature takes only `ExPlayer`; native visual
+timing and deeper freeze animation semantics remain pending. It also locks the
+first stun-field direct weapon case: weapon `17` level `1` fires zero-speed
+circular bullet `23` (`BulletColliderType = 0`, `BulletSize = 300`) without an
+enemy target, applies stun buff `3` (`BuffType = 2`, `Duration = 30`) to an
+overlapping enemy, and stops that enemy from moving while the buff remains
+active. The available `Weapon_17` signature takes only `ExPlayer`; native visual
+timing and deeper stun animation semantics remain pending. The first hostile AI
+ray case is also locked: AI `44`
 state `3` fires bullet `99` at frame `15`, with `BulletDamageJudgeType = 1`,
 `BulletHitTargetType = 1`, `BulletColliderType = 2`, `BulletSize = 50`, and
 `BulletSize2 = 900`; the simulation verifies player HP loss inside the segment
@@ -1286,7 +1288,10 @@ Weapon behavior staging:
   `FireBulletDatas`. CN weapon `23` and weapon `25` are now locked by parity
   tests for shield absorption, counter absorption, charge consumption, and
   counter bullet `27` creation. This preserves the observed CN data shape
-  without claiming native timing, animation, or fixed-point parity. Type `9` invincible buffs now
+  without claiming native timing, animation, or fixed-point parity. Type `2`
+  stun and type `3` freeze buffs now disable affected enemy movement while
+  active, with CN weapon `17` and weapon `15` locked as direct-field parity
+  cases. Type `9` invincible buffs now
   suppress player contact and hostile bullet damage while active. Type `11`
   heal-percent buffs now apply immediate player healing using `Value / 1000` of
   max HP, matching CN `Holy Mend` value `1000` as a full-heal first pass. Type
