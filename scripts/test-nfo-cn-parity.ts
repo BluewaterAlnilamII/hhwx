@@ -53,6 +53,7 @@ async function main() {
   assert.equal(fixture.selectedAIStateBuffCases.length, 3);
   assert.equal(fixture.selectedAIStateCommonStateCases.length, 2);
   assert.equal(fixture.selectedAIStateAnimationCases.length, 2);
+  assert.equal(fixture.selectedActiveSkillBuffCases.length, 2);
   assert.equal(fixture.selectedItemCases.length, 6);
   assert.equal(fixture.selectedDropCases.length, 2);
   assert.equal(fixture.selectedLevelEnemySpawnCases.length, 3);
@@ -1302,6 +1303,15 @@ async function main() {
   assert.deepEqual(holyMendCase.buffs.map((buff) => buff.buffType), [12, 9, 11]);
   assert.equal(holyMendCase.buffs.find((buff) => buff.buffId === 104)?.buffDurationFrames, 60);
   assert.equal(holyMendCase.buffs.find((buff) => buff.buffId === 105)?.buffValue, 1000);
+  assert.ok(holyMendCase.buffs.every((buff) => buff.targetType === 1));
+
+  const fairyGuardCase = getActiveSkillBuffCase("active-skill-fairy-guard-targets-player-side");
+  assert.equal(fairyGuardCase.activeSkillId, 15);
+  assert.equal(fairyGuardCase.activeSkillLevel, 1);
+  assert.equal(fairyGuardCase.eventFrame, 1);
+  assert.deepEqual(fairyGuardCase.buffs.map((buff) => buff.buffId), [11, 13]);
+  assert.deepEqual(fairyGuardCase.buffs.map((buff) => buff.buffType), [1, 9]);
+  assert.ok(fairyGuardCase.buffs.every((buff) => buff.targetType === 1));
 
   const kingOfBeastsSummonCase = getActiveSkillSummonCase(
     "active-skill-king-of-beasts-formation-2-roar-minions-lv2",
@@ -1918,6 +1928,7 @@ async function main() {
   testCnAIStateAnimationMetadataAppliesToEnemy(runtimeData);
   testCnAIStateTriggerLevelEventSpawnsTriggeredLevelEvent(runtimeData);
   testCnActiveSkillHolyMendHealInvincibleAndRevive(runtimeData);
+  testCnActiveSkillFairyGuardTargetsPlayerSideMinions(runtimeData);
   testCnActiveSkillKingOfBeastsMinionAITransitionShooter(runtimeData);
   testCnActiveSkillAllOutFireShooterAndMinion(runtimeData);
   testCnActiveSkillAllOutFireLevelThreeMultiSummon(runtimeData);
@@ -2001,6 +2012,7 @@ async function main() {
   console.log("ok - CN AIState TriggerLevelEventID gates triggered level enemy spawns");
   console.log("ok - CN AIState animation metadata updates serializable enemy state");
   console.log("ok - CN active skill Holy Mend heals, applies invincibility, and revives");
+  console.log("ok - CN active skill Fairy Guard buffs existing player-side minions");
   console.log("ok - CN active skill 111 minion AI transitions into roar shooter");
   console.log("ok - CN active skill All-Out Fire drives shooter 7000 frame 1/3/7 timeline and minion AI");
   console.log("ok - CN active skill All-Out Fire level 3 loops zero-offset minion shooters");
@@ -8021,6 +8033,56 @@ function testCnActiveSkillHolyMendHealInvincibleAndRevive(
   assert.equal(revivedState.player.activeBuffs.some((buff) => buff.id === 106), false);
 }
 
+function testCnActiveSkillFairyGuardTargetsPlayerSideMinions(
+  sourceRuntimeData: NfoOfflineRuntimeData,
+) {
+  const fairyGuardCase = getActiveSkillBuffCase("active-skill-fairy-guard-targets-player-side");
+  const testRuntimeData = configureRuntimeForActiveSkill(
+    sourceRuntimeData,
+    fairyGuardCase.activeSkillId,
+  );
+  const baseState = createStateWithoutEnemies(testRuntimeData);
+  const enemyProbe = createEnemyFixture(
+    baseState,
+    baseState.player.x + 500,
+    baseState.player.y,
+    {
+      speed: 0,
+    },
+  );
+  const activeState = updateNfoSimulation(
+    {
+      ...chargeActiveSkill(baseState),
+      enemies: [enemyProbe],
+      minions: [createFriendlyMinionProbe()],
+    },
+    testRuntimeData,
+    { ...NO_INPUT, useActiveSkill: true },
+    1 / 30,
+  );
+
+  for (const buffCase of fairyGuardCase.buffs) {
+    assert.ok(
+      activeState.player.activeBuffs.some((buff) => (
+        buff.id === buffCase.buffId && buff.type === buffCase.buffType
+      )),
+      `expected Fairy Guard buff ${buffCase.buffId} on player`,
+    );
+    assert.ok(
+      activeState.minions[0]?.activeBuffs.some((buff) => (
+        buff.id === buffCase.buffId && buff.type === buffCase.buffType
+      )),
+      `expected Fairy Guard buff ${buffCase.buffId} on player-side minion`,
+    );
+  }
+  assert.equal(
+    activeState.enemies[0]?.activeBuffs.some((buff) => (
+      buff.id === 11 || buff.id === 13
+    )),
+    false,
+  );
+}
+
 function testCnActiveSkillKingOfBeastsMinionAITransitionShooter(
   sourceRuntimeData: NfoOfflineRuntimeData,
 ) {
@@ -9829,6 +9891,30 @@ function chargeActiveSkill(state: NfoSimulationState): NfoSimulationState {
       ...state.activeSkill,
       chargeFrames: state.activeSkill.chargeMaxFrames,
     },
+  };
+}
+
+function createFriendlyMinionProbe(
+  overrides: Partial<NfoSimMinion> = {},
+): NfoSimMinion {
+  return {
+    id: 930001,
+    minionId: 50,
+    aiTypeId: 0,
+    weaponId: 0,
+    weaponLevel: 1,
+    name: "CN player-side buff minion probe",
+    speed: 300,
+    radius: 28,
+    x: 96,
+    y: 0,
+    remainingSeconds: 10,
+    aiFireCooldownSeconds: 0,
+    fireCooldownSeconds: 0,
+    pendingFireGroups: 0,
+    canFireOwnWeapon: false,
+    activeBuffs: [],
+    ...overrides,
   };
 }
 

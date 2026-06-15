@@ -2149,6 +2149,13 @@ const ACTIVE_SKILL_BUFF_CASE_SPECS: ActiveSkillBuffCaseSpec[] = [
     expectedEventFrame: 1,
     expectedBuffIds: [106, 104, 105],
   },
+  {
+    id: "active-skill-fairy-guard-targets-player-side",
+    activeSkillId: 15,
+    activeSkillLevel: 1,
+    expectedEventFrame: 1,
+    expectedBuffIds: [11, 13],
+  },
 ];
 
 const ACTIVE_SKILL_SUMMON_CASE_SPECS: ActiveSkillSummonCaseSpec[] = [

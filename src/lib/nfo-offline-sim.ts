@@ -155,6 +155,10 @@ const NFO_BUFF_TYPE = {
   revive: 12,
   taunt: 13,
 } as const;
+const NFO_ACTIVE_SKILL_BUFF_TARGET_TYPE = {
+  self: 0,
+  playerSide: 1,
+} as const;
 const NFO_AI_STATE_TYPE = {
   idle: 0,
   moveToPlayer: 1,
@@ -1883,12 +1887,7 @@ function updateActiveSkillTimeline(
 
     state.activeSkill.triggeredEventIndexes.push(eventIndex);
     for (const buffEvent of event.buffs) {
-      applyBuffToPlayer(
-        runtimeData,
-        buffEvent.buffId,
-        buffEvent.level,
-        state,
-      );
+      applyActiveSkillBuffEvent(runtimeData, buffEvent, state);
     }
     if (event.spawnMinion) {
       spawnActiveSkillMinions(state, runtimeData, event.spawnMinion);
@@ -1907,6 +1906,36 @@ function updateActiveSkillTimeline(
     state.activeSkill.timelineFrame = 0;
     state.activeSkill.timelineTotalFrames = activeSkillLevel.timelineFrames;
     state.activeSkill.triggeredEventIndexes = [];
+  }
+}
+
+function applyActiveSkillBuffEvent(
+  runtimeData: NfoOfflineRuntimeData,
+  buffEvent: {
+    targetType: number;
+    buffId: number;
+    level: number;
+  },
+  state: NfoSimulationState,
+) {
+  applyBuffToPlayer(
+    runtimeData,
+    buffEvent.buffId,
+    buffEvent.level,
+    state,
+  );
+
+  if (buffEvent.targetType !== NFO_ACTIVE_SKILL_BUFF_TARGET_TYPE.playerSide) {
+    return;
+  }
+
+  for (const minion of state.minions) {
+    applyBuffToMinion(
+      runtimeData,
+      buffEvent.buffId,
+      buffEvent.level,
+      minion,
+    );
   }
 }
 
@@ -3615,6 +3644,29 @@ function applyBuffToPlayer(
   if (wasApplied && buff.type !== NFO_BUFF_TYPE.counter && buffLevel.fireBullets.length > 0) {
     firePlayerBuffApplicationBullets(state, runtimeData, buffLevel.fireBullets);
   }
+}
+
+function applyBuffToMinion(
+  runtimeData: NfoOfflineRuntimeData,
+  buffId: number,
+  buffLevelNumber: number,
+  minion: NfoSimMinion,
+) {
+  const buff = getRuntimeBuff(runtimeData, buffId);
+  if (!buff || minion.remainingSeconds <= 0) {
+    return;
+  }
+
+  if (buff.type === NFO_BUFF_TYPE.healPercent) {
+    return;
+  }
+
+  applyBuffToActiveBuffs(
+    runtimeData,
+    buffId,
+    buffLevelNumber,
+    minion.activeBuffs,
+  );
 }
 
 function applyBuffToActiveBuffs(

@@ -12,6 +12,7 @@ import {
   updateNfoSimulation,
   type NfoInputState,
   type NfoSimBullet,
+  type NfoSimMinion,
   type NfoSimulationState,
 } from "../src/lib/nfo-offline-sim";
 import type {
@@ -215,6 +216,10 @@ const TESTS: Array<{ name: string; run: () => void }> = [
   {
     name: "active skill timeline buffs apply to the player",
     run: testActiveSkillTimelineBuffAppliesToPlayer,
+  },
+  {
+    name: "active skill player-side buffs target existing minions",
+    run: testActiveSkillPlayerSideBuffTargetsExistingMinions,
   },
   {
     name: "active skill heal-percent buffs restore player HP immediately",
@@ -2254,6 +2259,44 @@ function testActiveSkillTimelineBuffAppliesToPlayer() {
   assert.equal(activeBuff?.remainingSeconds, 2);
 }
 
+function testActiveSkillPlayerSideBuffTargetsExistingMinions() {
+  const runtimeData = createRuntimeFixture();
+  setActiveSkillToBuffsOnly(runtimeData, [{ buffId: 7, level: 1, targetType: 1 }]);
+  const state = createNfoSimulation(runtimeData);
+  const playerSideState = updateNfoSimulation(
+    {
+      ...chargeActiveSkill(state),
+      minions: [createSimMinionFixture()],
+    },
+    runtimeData,
+    { ...NO_INPUT, useActiveSkill: true },
+    1 / 30,
+  );
+
+  assert.ok(playerSideState.player.activeBuffs.some((buff) => buff.id === 7));
+  assert.equal(playerSideState.minions[0]?.activeBuffs.find((buff) => buff.id === 7)?.level, 1);
+  assert.equal(
+    playerSideState.enemies.some((enemy) => enemy.activeBuffs.some((buff) => buff.id === 7)),
+    false,
+  );
+
+  const selfOnlyRuntimeData = createRuntimeFixture();
+  setActiveSkillToBuffsOnly(selfOnlyRuntimeData, [{ buffId: 7, level: 1, targetType: 0 }]);
+  const selfOnlyState = createNfoSimulation(selfOnlyRuntimeData);
+  const selfOnlyBuffState = updateNfoSimulation(
+    {
+      ...chargeActiveSkill(selfOnlyState),
+      minions: [createSimMinionFixture()],
+    },
+    selfOnlyRuntimeData,
+    { ...NO_INPUT, useActiveSkill: true },
+    1 / 30,
+  );
+
+  assert.ok(selfOnlyBuffState.player.activeBuffs.some((buff) => buff.id === 7));
+  assert.equal(selfOnlyBuffState.minions[0]?.activeBuffs.some((buff) => buff.id === 7), false);
+}
+
 function testActiveSkillHealPercentBuffRestoresPlayerHp() {
   const runtimeData = createRuntimeFixture();
   setActiveSkillToBuffsOnly(runtimeData, [{ buffId: 105, level: 1 }]);
@@ -3825,6 +3868,30 @@ function createSimBulletFixture(
     playerHitCooldownSeconds: 0,
     hitEnemyIds: [],
     hitCooldownSecondsByEnemyId: {},
+    ...overrides,
+  };
+}
+
+function createSimMinionFixture(
+  overrides: Partial<NfoSimMinion> = {},
+): NfoSimMinion {
+  return {
+    id: 900101,
+    minionId: 50,
+    aiTypeId: 0,
+    weaponId: 0,
+    weaponLevel: 1,
+    name: "Fixture Allied Minion",
+    speed: 300,
+    radius: 28,
+    x: 100,
+    y: 0,
+    remainingSeconds: 10,
+    aiFireCooldownSeconds: 0,
+    fireCooldownSeconds: 0,
+    pendingFireGroups: 0,
+    canFireOwnWeapon: false,
+    activeBuffs: [],
     ...overrides,
   };
 }
