@@ -47,7 +47,7 @@ async function main() {
   assert.equal(fixture.activeSkillShooterCount, 24);
   assert.equal(fixture.activeSkillShooterEventCount, 54);
   assert.equal(fixture.weaponLevelShooterCount, 32);
-  assert.equal(fixture.selectedActiveSkillShooterSpawnCases.length, 13);
+  assert.equal(fixture.selectedActiveSkillShooterSpawnCases.length, 15);
   assert.equal(fixture.selectedAIActionCases.length, 3);
   assert.equal(fixture.selectedWeaponShooterCases.length, 8);
   assert.equal(fixture.selectedWeaponDirectFireCases.length, 30);
@@ -860,6 +860,7 @@ async function main() {
   assert.equal(apocalypseSongDamageCase.bulletTypeId, 99);
   assert.equal(apocalypseSongDamageCase.bulletCount, 1);
   assert.equal(apocalypseSongDamageCase.bulletAttack, 200);
+  assert.equal(apocalypseSongDamageCase.bulletSize, 3000);
   assert.equal(apocalypseSongDamageCase.bulletSpeed, 0);
   assert.equal(apocalypseSongDamageCase.bulletNoDamage, false);
   assert.equal(apocalypseSongDamageCase.bulletLifeTimeFrames, 90);
@@ -867,6 +868,28 @@ async function main() {
   assert.equal(apocalypseSongDamageCase.bulletDamageJudgeType, 0);
   assert.equal(apocalypseSongDamageCase.bulletColliderType, 0);
   assert.equal(apocalypseSongDamageCase.bulletHitTimes, 999);
+
+  const apocalypseSongLevelTwoDamageCase = getActiveSkillShooterSpawnCase(
+    "active-skill-apocalypse-song-delayed-damage-lv2",
+  );
+  assert.equal(apocalypseSongLevelTwoDamageCase.activeSkillId, 14);
+  assert.equal(apocalypseSongLevelTwoDamageCase.activeSkillLevel, 2);
+  assert.equal(apocalypseSongLevelTwoDamageCase.eventFrame, 90);
+  assert.equal(apocalypseSongLevelTwoDamageCase.shooterId, 3002);
+  assert.equal(apocalypseSongLevelTwoDamageCase.bulletTypeId, 99);
+  assert.equal(apocalypseSongLevelTwoDamageCase.bulletAttack, 400);
+  assert.equal(apocalypseSongLevelTwoDamageCase.bulletSize, 3000);
+
+  const apocalypseSongLevelThreeDamageCase = getActiveSkillShooterSpawnCase(
+    "active-skill-apocalypse-song-delayed-damage-lv3",
+  );
+  assert.equal(apocalypseSongLevelThreeDamageCase.activeSkillId, 14);
+  assert.equal(apocalypseSongLevelThreeDamageCase.activeSkillLevel, 3);
+  assert.equal(apocalypseSongLevelThreeDamageCase.eventFrame, 90);
+  assert.equal(apocalypseSongLevelThreeDamageCase.shooterId, 3003);
+  assert.equal(apocalypseSongLevelThreeDamageCase.bulletTypeId, 99);
+  assert.equal(apocalypseSongLevelThreeDamageCase.bulletAttack, 600);
+  assert.equal(apocalypseSongLevelThreeDamageCase.bulletSize, 3000);
 
   const apocalypseSongStunCase = getActiveSkillShooterHitBuffCase(
     "active-skill-apocalypse-song-stun-field-lv1",
@@ -1960,6 +1983,7 @@ async function main() {
   testCnActiveSkillElementalBurstFanShooter(runtimeData);
   testCnActiveSkillFullScreenEffectEvent(runtimeData);
   testCnActiveSkillApocalypseSongDelayedDamageShooter(runtimeData);
+  testCnActiveSkillApocalypseSongLevelDamageShooterSwitch(runtimeData);
   testCnActiveSkillZesshoStaticFieldShooter(runtimeData);
   testCnActiveSkillUltimateHeartLightShooterAndEffect(runtimeData);
   testCnActiveSkillUltimateHeartLightLevelShooterSwitch(runtimeData);
@@ -2056,6 +2080,7 @@ async function main() {
   console.log("ok - CN active skill Elemental Burst shooter loops fireballs without repeating snow field");
   console.log("ok - CN active skill full-screen effect events are recorded");
   console.log("ok - CN active skill Apocalypse Song stuns, stops movement, and triggers frame-90 damage");
+  console.log("ok - CN active skill Apocalypse Song level 2/3 switches frame-90 damage shooters");
   console.log("ok - CN active skill Zessho creates non-following static damage field shooter");
   console.log("ok - CN active skill Ultimate Heart Light records starlight effect and loops shooter 6000");
   console.log("ok - CN active skill Ultimate Heart Light level 2/3 switches starlight shooters");
@@ -6835,6 +6860,89 @@ function testCnActiveSkillApocalypseSongDelayedDamageShooter(
   assert.equal(damageBullet.colliderType, damageCase.bulletColliderType);
   assert.equal(damageBullet.remainingHits, damageCase.bulletHitTimes - 1);
   assert.ok(targetAfterDamage.hp < (targetAfterStun?.hp ?? 0));
+}
+
+function testCnActiveSkillApocalypseSongLevelDamageShooterSwitch(
+  sourceRuntimeData: NfoOfflineRuntimeData,
+) {
+  for (const damageCaseId of [
+    "active-skill-apocalypse-song-delayed-damage-lv2",
+    "active-skill-apocalypse-song-delayed-damage-lv3",
+  ]) {
+    const damageCase = getActiveSkillShooterSpawnCase(damageCaseId);
+    const testRuntimeData = configureRuntimeForActiveSkill(
+      sourceRuntimeData,
+      damageCase.activeSkillId,
+    );
+    const baseState = createStateWithEnemy(testRuntimeData, { x: 100, y: 0 });
+    const delayedDamageState = withMockedRandom(
+      [0.99],
+      () => {
+        const firstFrameState = updateNfoSimulation(
+          chargeActiveSkill({
+            ...baseState,
+            activeSkill: {
+              ...baseState.activeSkill,
+              level: damageCase.activeSkillLevel,
+            },
+          }),
+          testRuntimeData,
+          { ...NO_INPUT, useActiveSkill: true },
+          1 / 30,
+        );
+        const beforeDelayedDamageState = updateNfoSimulation(
+          {
+            ...firstFrameState,
+            bullets: [],
+          },
+          testRuntimeData,
+          NO_INPUT,
+          (damageCase.eventFrame - 2) / 30,
+        );
+
+        assert.equal(
+          beforeDelayedDamageState.activeShooters.some((candidate) => (
+            candidate.shooterId === damageCase.shooterId
+          )),
+          false,
+        );
+
+        return updateNfoSimulation(
+          {
+            ...beforeDelayedDamageState,
+            bullets: [],
+          },
+          testRuntimeData,
+          NO_INPUT,
+          1 / 30,
+        );
+      },
+    );
+    const damageShooter = delayedDamageState.activeShooters.find((candidate) => (
+      candidate.shooterId === damageCase.shooterId
+    ));
+    const damageBullet = delayedDamageState.bullets.find((candidate) => (
+      candidate.bulletTypeId === damageCase.bulletTypeId
+    ));
+    const fullScreenEffect = delayedDamageState.fullScreenEffects.find((candidate) => (
+      candidate.name === "UIefx_flash_song"
+    ));
+
+    assert.equal(delayedDamageState.activeSkill.level, damageCase.activeSkillLevel);
+    assert.ok(damageShooter, `expected CN active skill 14 level ${damageCase.activeSkillLevel} shooter`);
+    assert.ok(damageBullet, `expected CN active skill 14 level ${damageCase.activeSkillLevel} bullet`);
+    assert.ok(fullScreenEffect, `expected CN active skill 14 level ${damageCase.activeSkillLevel} effect`);
+    assert.equal(fullScreenEffect.activeSkillId, damageCase.activeSkillId);
+    assert.equal(fullScreenEffect.activeSkillLevel, damageCase.activeSkillLevel);
+    assert.equal(fullScreenEffect.eventFrame, damageCase.eventFrame);
+    assert.equal(damageShooter.lifeTimeFrames, damageCase.shooterLifeTimeFrames);
+    assert.equal(damageShooter.behaviorType, damageCase.shooterBehaviorType);
+    assert.equal(damageShooter.followsOwnerDirection, damageCase.shooterFollowsOwnerDirection);
+    assert.equal(damageBullet.damage, damageCase.bulletAttack + delayedDamageState.player.attack);
+    assert.equal(damageBullet.colliderWidth, damageCase.bulletSize + (damageBullet.bulletSizeModifier ?? 0));
+    assert.equal(damageBullet.damageJudgeType, damageCase.bulletDamageJudgeType);
+    assert.equal(damageBullet.hitTargetType, damageCase.bulletHitTargetType);
+  }
 }
 
 function testCnActiveSkillFullScreenEffectEvent(

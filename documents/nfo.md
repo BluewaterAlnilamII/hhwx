@@ -256,6 +256,10 @@ The active-skill parity harness now also locks CN skill `110` / `Ultimate Heart
 Light` as active-skill entry cases for level `1`/`2`/`3` shooters
 `6000`/`6001`/`6002`, including `UIefx_flash_starlight`, owner-following
 shooter creation, six-bullet radial fire, and `LoopFrameInterval = 10`.
+It also locks CN skill `14` / `Apocalypse Song` as a level-switch delayed
+timeline case: level `1`/`2`/`3` use frame-`90` shooters
+`3001`/`3002`/`3003` with bullet `99` attack `200`/`400`/`600` and the same
+`UIefx_flash_song` event.
 
 Enemy-AI parity now also locks first-pass offset movement for CN
 `AIStateType = 31`/`32`/`33`, using `State_MoveOffsetX/Y` and
@@ -700,12 +704,16 @@ creates shooter `6001`, and level `3` creates shooter `6002`. Each level's
 frame-`1` event records `UIefx_flash_starlight`, creates an owner-following
 shooter with `LifeTime = 55`, and emits six radial bullet `28` projectiles that
 loop every 10 frames.
-It also locks active skill `14` / `Apocalypse Song` level `1` as the first
-delayed active-skill shooter timeline case: frame `1` creates shooter `3000`
-and no-damage stun field bullet `56`, applying stun buff `3` to overlapping
-enemies and stopping their movement, while frame `90` creates shooter `3001`
-and damaging field bullet `99`; the parity test verifies that the damage
-shooter does not exist before frame `90`.
+It also locks active skill `14` / `Apocalypse Song` as the first delayed
+active-skill shooter timeline case: frame `1` creates shooter `3000` and
+no-damage stun field bullet `56`, applying stun buff `3` to overlapping enemies
+and stopping their movement. Frame `90` records `UIefx_flash_song` and switches
+the delayed damage shooter by level: level `1` uses shooter `3001`
+(`BulletAttack = 200`), level `2` uses shooter `3002`
+(`BulletAttack = 400`), and level `3` uses shooter `3003`
+(`BulletAttack = 600`). Each emits damaging field bullet `99` with
+`BulletSize = 3000`; the parity test verifies that the damage shooter does not
+exist before frame `90`.
 The fixture also locks active skill `117` level `1`: frame `1` creates
 shooter `11000`, whose no-damage friendly bullet `65` applies invincible buff
 `108` to the player side for 30 frames.
