@@ -47,7 +47,7 @@ async function main() {
   assert.equal(fixture.activeSkillShooterCount, 24);
   assert.equal(fixture.activeSkillShooterEventCount, 54);
   assert.equal(fixture.weaponLevelShooterCount, 32);
-  assert.equal(fixture.selectedActiveSkillShooterSpawnCases.length, 15);
+  assert.equal(fixture.selectedActiveSkillShooterSpawnCases.length, 19);
   assert.equal(fixture.selectedAIActionCases.length, 3);
   assert.equal(fixture.selectedWeaponShooterCases.length, 8);
   assert.equal(fixture.selectedWeaponDirectFireCases.length, 30);
@@ -805,6 +805,8 @@ async function main() {
   assert.equal(elementalBurstShooterCase.formationType, 0);
   assert.equal(elementalBurstShooterCase.bulletTypeId, 11);
   assert.equal(elementalBurstShooterCase.bulletCount, 4);
+  assert.equal(elementalBurstShooterCase.bulletAttack, 30);
+  assert.equal(elementalBurstShooterCase.bulletSize, 30);
   assert.equal(elementalBurstShooterCase.bulletSpeed, 600);
   assert.equal(elementalBurstShooterCase.bulletHitTargetType, 0);
   assert.equal(elementalBurstSnowCase.activeSkillId, 13);
@@ -817,9 +819,49 @@ async function main() {
   assert.equal(elementalBurstSnowCase.directionType, 0);
   assert.equal(elementalBurstSnowCase.bulletTypeId, 21);
   assert.equal(elementalBurstSnowCase.bulletCount, 1);
+  assert.equal(elementalBurstSnowCase.bulletAttack, 20);
+  assert.equal(elementalBurstSnowCase.bulletSize, 240);
   assert.equal(elementalBurstSnowCase.bulletSpeed, 0);
   assert.equal(elementalBurstSnowCase.bulletHitTargetType, 0);
   assert.equal(elementalBurstSnowCase.bulletDamageJudgeType, 1);
+
+  const elementalBurstLevelTwoShooterCase = getActiveSkillShooterSpawnCase(
+    "active-skill-elemental-burst-fan-fireballs-lv2",
+  );
+  const elementalBurstLevelTwoSnowCase = getActiveSkillShooterSpawnCase(
+    "active-skill-elemental-burst-snow-field-lv2",
+  );
+  assert.equal(elementalBurstLevelTwoShooterCase.activeSkillId, 13);
+  assert.equal(elementalBurstLevelTwoShooterCase.activeSkillLevel, 2);
+  assert.equal(elementalBurstLevelTwoShooterCase.shooterId, 13001);
+  assert.equal(elementalBurstLevelTwoShooterCase.bulletTypeId, 11);
+  assert.equal(elementalBurstLevelTwoShooterCase.bulletAttack, 60);
+  assert.equal(elementalBurstLevelTwoShooterCase.bulletSize, 30);
+  assert.equal(elementalBurstLevelTwoSnowCase.activeSkillId, 13);
+  assert.equal(elementalBurstLevelTwoSnowCase.activeSkillLevel, 2);
+  assert.equal(elementalBurstLevelTwoSnowCase.shooterId, 13001);
+  assert.equal(elementalBurstLevelTwoSnowCase.bulletTypeId, 21);
+  assert.equal(elementalBurstLevelTwoSnowCase.bulletAttack, 40);
+  assert.equal(elementalBurstLevelTwoSnowCase.bulletSize, 280);
+
+  const elementalBurstLevelThreeShooterCase = getActiveSkillShooterSpawnCase(
+    "active-skill-elemental-burst-fan-fireballs-lv3",
+  );
+  const elementalBurstLevelThreeSnowCase = getActiveSkillShooterSpawnCase(
+    "active-skill-elemental-burst-snow-field-lv3",
+  );
+  assert.equal(elementalBurstLevelThreeShooterCase.activeSkillId, 13);
+  assert.equal(elementalBurstLevelThreeShooterCase.activeSkillLevel, 3);
+  assert.equal(elementalBurstLevelThreeShooterCase.shooterId, 13002);
+  assert.equal(elementalBurstLevelThreeShooterCase.bulletTypeId, 11);
+  assert.equal(elementalBurstLevelThreeShooterCase.bulletAttack, 80);
+  assert.equal(elementalBurstLevelThreeShooterCase.bulletSize, 30);
+  assert.equal(elementalBurstLevelThreeSnowCase.activeSkillId, 13);
+  assert.equal(elementalBurstLevelThreeSnowCase.activeSkillLevel, 3);
+  assert.equal(elementalBurstLevelThreeSnowCase.shooterId, 13002);
+  assert.equal(elementalBurstLevelThreeSnowCase.bulletTypeId, 21);
+  assert.equal(elementalBurstLevelThreeSnowCase.bulletAttack, 60);
+  assert.equal(elementalBurstLevelThreeSnowCase.bulletSize, 320);
 
   const endlessStarMapShooterCase = getActiveSkillShooterSpawnCase(
     "active-skill-endless-star-map-owner-forward-field-lv1",
@@ -1981,6 +2023,7 @@ async function main() {
   testCnActiveSkillShooterSpawnPosThreeNearestEnemy(runtimeData);
   testCnActiveSkillChainsawGodLevelShooterScaling(runtimeData);
   testCnActiveSkillElementalBurstFanShooter(runtimeData);
+  testCnActiveSkillElementalBurstLevelShooterSwitch(runtimeData);
   testCnActiveSkillFullScreenEffectEvent(runtimeData);
   testCnActiveSkillApocalypseSongDelayedDamageShooter(runtimeData);
   testCnActiveSkillApocalypseSongLevelDamageShooterSwitch(runtimeData);
@@ -2078,6 +2121,7 @@ async function main() {
   console.log("ok - CN active skill Chainsaw God repeats damage and pulls from nearest-enemy field");
   console.log("ok - CN active skill Chainsaw God level 2/3 switches shooter data");
   console.log("ok - CN active skill Elemental Burst shooter loops fireballs without repeating snow field");
+  console.log("ok - CN active skill Elemental Burst level 2/3 switches mixed shooter events");
   console.log("ok - CN active skill full-screen effect events are recorded");
   console.log("ok - CN active skill Apocalypse Song stuns, stops movement, and triggers frame-90 damage");
   console.log("ok - CN active skill Apocalypse Song level 2/3 switches frame-90 damage shooters");
@@ -6737,6 +6781,101 @@ function testCnActiveSkillElementalBurstFanShooter(
       JSON.stringify(remainingElementalBurstShooters)
     }`,
   );
+}
+
+function testCnActiveSkillElementalBurstLevelShooterSwitch(
+  sourceRuntimeData: NfoOfflineRuntimeData,
+) {
+  for (const [fanCaseId, snowCaseId] of [
+    [
+      "active-skill-elemental-burst-fan-fireballs-lv2",
+      "active-skill-elemental-burst-snow-field-lv2",
+    ],
+    [
+      "active-skill-elemental-burst-fan-fireballs-lv3",
+      "active-skill-elemental-burst-snow-field-lv3",
+    ],
+  ] as const) {
+    const fanCase = getActiveSkillShooterSpawnCase(fanCaseId);
+    const snowCase = getActiveSkillShooterSpawnCase(snowCaseId);
+    const testRuntimeData = configureRuntimeForActiveSkill(
+      sourceRuntimeData,
+      fanCase.activeSkillId,
+    );
+    const baseState = createNfoSimulation(testRuntimeData);
+    const targetEnemy = createEnemyFixture(
+      baseState,
+      baseState.player.x + 200,
+      baseState.player.y,
+      {
+        hp: 999999,
+        speed: 0,
+        radius: 5,
+      },
+    );
+    const state = {
+      ...baseState,
+      activeSkill: {
+        ...baseState.activeSkill,
+        level: fanCase.activeSkillLevel,
+      },
+      player: {
+        ...baseState.player,
+        fireCooldownSeconds: 999,
+      },
+      enemies: [targetEnemy],
+    };
+
+    assert.equal(fanCase.activeSkillId, snowCase.activeSkillId);
+    assert.equal(fanCase.activeSkillLevel, snowCase.activeSkillLevel);
+    assert.equal(fanCase.shooterId, snowCase.shooterId);
+    assert.equal(fanCase.isLoopEvent, true);
+    assert.equal(snowCase.isLoopEvent, false);
+
+    const nextState = withMockedRandom(
+      [0.99],
+      () => updateNfoSimulation(
+        chargeActiveSkill(state),
+        testRuntimeData,
+        { ...NO_INPUT, useActiveSkill: true },
+        1 / 30,
+      ),
+    );
+    const shooter = nextState.activeShooters.find((candidate) => (
+      candidate.shooterId === fanCase.shooterId
+    ));
+    const fireballs = nextState.bullets.filter((candidate) => (
+      candidate.bulletTypeId === fanCase.bulletTypeId
+    ));
+    const snowField = nextState.bullets.find((candidate) => (
+      candidate.bulletTypeId === snowCase.bulletTypeId
+    ));
+
+    assert.equal(nextState.activeSkill.level, fanCase.activeSkillLevel);
+    assert.ok(shooter, `expected CN active skill 13 level ${fanCase.activeSkillLevel} shooter`);
+    assert.ok(snowField, `expected CN active skill 13 level ${fanCase.activeSkillLevel} snow field`);
+    assert.equal(shooter.shooterId, fanCase.shooterId);
+    assert.equal(shooter.lifeTimeFrames, fanCase.shooterLifeTimeFrames);
+    assert.equal(shooter.behaviorType, fanCase.shooterBehaviorType);
+    assert.equal(shooter.followsOwnerDirection, fanCase.shooterFollowsOwnerDirection);
+    assertClose(shooter.x, targetEnemy.x, "CN Elemental Burst level shooter x");
+    assertClose(shooter.y, targetEnemy.y, "CN Elemental Burst level shooter y");
+    assert.equal(snowField.damage, snowCase.bulletAttack + nextState.player.attack);
+    assert.equal(snowField.colliderWidth, snowCase.bulletSize + (snowField.bulletSizeModifier ?? 0));
+    assert.equal(snowField.hitTargetType, snowCase.bulletHitTargetType);
+    assert.equal(snowField.damageJudgeType, snowCase.bulletDamageJudgeType);
+    assert.equal(fireballs.length, fanCase.bulletCount);
+    for (const fireball of fireballs) {
+      assert.equal(fireball.damage, fanCase.bulletAttack + nextState.player.attack);
+      assert.equal(fireball.colliderWidth, fanCase.bulletSize + (fireball.bulletSizeModifier ?? 0));
+      assert.equal(fireball.hitTargetType, fanCase.bulletHitTargetType);
+      assertClose(
+        Math.hypot(fireball.vx, fireball.vy),
+        fanCase.bulletSpeed,
+        `CN Elemental Burst level ${fanCase.activeSkillLevel} fireball speed`,
+      );
+    }
+  }
 }
 
 function testCnActiveSkillApocalypseSongDelayedDamageShooter(

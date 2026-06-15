@@ -260,6 +260,10 @@ It also locks CN skill `14` / `Apocalypse Song` as a level-switch delayed
 timeline case: level `1`/`2`/`3` use frame-`90` shooters
 `3001`/`3002`/`3003` with bullet `99` attack `200`/`400`/`600` and the same
 `UIefx_flash_song` event.
+It also locks CN skill `13` / `Elemental Burst` as a mixed event level-switch
+case: level `1`/`2`/`3` use shooters `13000`/`13001`/`13002`, with looping
+fireball bullet `11` attack `30`/`60`/`80` and non-looping snow-field bullet
+`21` attack `20`/`40`/`60` plus size `240`/`280`/`320`.
 
 Enemy-AI parity now also locks first-pass offset movement for CN
 `AIStateType = 31`/`32`/`33`, using `State_MoveOffsetX/Y` and
@@ -564,8 +568,8 @@ skill ring summon formation, active skill minion assigned-weapon firing, plus ra
 length checks, active skill bullet shooter firing, and bullet shooter loop
 intervals, active skill shooter `SpawnPos = 3` nearest-enemy placement,
 active skill `99` / shooter `8000` chainsaw field damage and inward pull,
-active skill `13` / shooter `13000` four-fireball fan spread and zero-speed
-snow-field bullet,
+active skill `13` / shooters `13000`/`13001`/`13002` four-fireball fan spread
+and zero-speed snow-field bullet,
 active skill `110` / shooters `6000`/`6001`/`6002` starlight full-screen
 effect and looping radial bullets,
 active skill `117` / shooter `11000` friendly invincible hit buff `108`,
@@ -693,11 +697,14 @@ this active skill: level `2` uses shooter `8001` with `BulletAttack = 45` and
 `BulletSize = 300`, while level `3` uses shooter `8002` with
 `BulletAttack = 60` and `BulletSize = 400`; both keep `SpawnPos = 3`, bullet
 `58`, `BulletDamageJudgeCD = 10`, and inward `BulletForce = 5`.
-It also locks active skill `13` / `Elemental Burst` level `1`: frame `1`
-creates shooter `13000`, whose `SpawnPos = 3` places the shooter on the
-nearest enemy, emits zero-speed snow-field bullet `21`, and emits four
+It also locks active skill `13` / `Elemental Burst` as a mixed shooter-event
+level-switch case. Frame `1` creates shooter `13000`/`13001`/`13002` for level
+`1`/`2`/`3`; `SpawnPos = 3` places the shooter on the nearest enemy. Each
+shooter emits non-looping zero-speed snow-field bullet `21` and looping
 direction-`1` fireballs (`BulletTypeID = 11`, `BulletCount = 4`,
-`BulletSpeed = 600`) as a first-pass fan spread.
+`BulletSpeed = 600`). The CN fixture locks level-scaled snow-field
+`BulletAttack = 20`/`40`/`60` and `BulletSize = 240`/`280`/`320`, plus
+fireball `BulletAttack = 30`/`60`/`80` with `BulletSize = 30`.
 Active skill `110` / `Ultimate Heart Light` now locks the active-skill level
 switch for its starlight shooters: level `1` creates shooter `6000`, level `2`
 creates shooter `6001`, and level `3` creates shooter `6002`. Each level's
@@ -1390,11 +1397,12 @@ Weapon behavior staging:
   the first snapshot-derived loop/lifetime level-switch case: frame-1
   six-bullet radial fire repeats at frame `11`, the shooter expires when age
   reaches `LifeTime = 55`, and the skill records `UIefx_flash_starlight` as a
-  serializable full-screen effect event. CN active skill `13` / shooter `13000`
-  now locks the mixed event case: frame `1` emits non-looping snow-field bullet
-  `21` and looping four-fireball bullet `11`; the fireball event repeats after
-  `LoopFrameInterval = 15`, the snow-field event does not repeat on that loop,
-  and the shooter expires after `LifeTime = 60`. `SpawnPos = 0`
+  serializable full-screen effect event. CN active skill `13` / shooters
+  `13000`/`13001`/`13002` now lock the mixed event level-switch case: frame `1`
+  emits non-looping snow-field bullet `21` and looping four-fireball bullet
+  `11`; the fireball event repeats after `LoopFrameInterval = 15`, the
+  snow-field event does not repeat on that loop, and each shooter expires after
+  `LifeTime = 60`. `SpawnPos = 0`
   starts from the shooter owner/origin, `SpawnPos = 1` starts from the
   player/friendly target, and `SpawnPos = 3` starts from the nearest enemy when
   one exists. Shooter instances now retain an owner reference when spawned from
@@ -1409,8 +1417,9 @@ Weapon behavior staging:
   and facing stable after the owner moves. Active/weapon
   shooter direction `1` aims at the
   nearest enemy from the event origin for ordinary single/fan events and applies
-  `bulletFireDirectionOffsetAngle`; CN skill `13` / shooter `13000` locks a
-  four-bullet fan-spread sample, and CN weapon `28` / shooter `2` locks the
+  `bulletFireDirectionOffsetAngle`; CN skill `13` / shooters
+  `13000`/`13001`/`13002` lock a four-bullet fan-spread sample, and CN weapon
+  `28` / shooter `2` locks the
   first `90`-degree offset sample plus a frame-30 all-direction radial sample. For
   `bulletFormationType = 0` shooter timeline events with no formation offset
   and large multi-bullet entries (`BulletCount >= 6`), the first pass spreads
