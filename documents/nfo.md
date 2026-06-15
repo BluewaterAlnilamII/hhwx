@@ -802,7 +802,8 @@ fires from the moved player position while keeping the original owner-facing
 angle. The same parity path also locks
 weapon `28`'s direct fire in the same shot: level `1` emits ten bullet `5`
 projectiles with DOT buff `4`, stacks that buff to the CN level-1 cap of `2`,
-and still creates shooter `2` for the later timeline bullets. The song-style
+ticks two HP after one active second, and still creates shooter `2` for the
+later timeline bullets. The song-style
 weapon path now separates the selected-weapon field from the shooter timeline:
 weapon `30` and weapon `33` both require an enemy target before their direct
 bullet `60` fires, keep that zero-speed circle field at the player position,
@@ -1264,7 +1265,8 @@ Weapon behavior staging:
   (`Duration = 150`, `Value = 1`, `MaxStackCount = 2`) and the first-pass
   simulation ticks one HP after one active second. CN weapon `28` extends the
   same buff into a combined weapon path: ten direct bullet `5` hits stack buff
-  `4` to `2` while `BulletShooterID = 2` still runs its timeline.
+  `4` to `2`, then ticks two HP after one active second while
+  `BulletShooterID = 2` still runs its timeline.
 - Player-side attribute-bearing buffs now use the same effective-stat reader
   as selected equips and weapon-level attributes for the supported first-pass
   player modifiers: attack, defense, speed, item magnet range, bullet speed,

@@ -5332,6 +5332,37 @@ function testCnWeaponDirectFireAndShooterCombined(sourceRuntimeData: NfoOfflineR
   assert.equal(dotBuff.stackCount, 2);
   assert.equal(dotBuff.maxStackCount, 2);
 
+  const stackedDotTickState = updateNfoSimulation(
+    {
+      ...firedState,
+      player: {
+        ...firedState.player,
+        fireCooldownSeconds: 999,
+      },
+      bullets: [],
+      activeShooters: [],
+    },
+    testRuntimeData,
+    NO_INPUT,
+    1,
+  );
+  const targetAfterStackedTick = stackedDotTickState.enemies.find((enemy) => (
+    enemy.id === target.id
+  ));
+  const stackedDotBuffAfterTick = targetAfterStackedTick?.activeBuffs.find((buff) => (
+    buff.id === directFireCase.hitBuffId
+  ));
+
+  assert.ok(targetAfterStackedTick, "expected CN Night Blade DOT target to remain after tick");
+  assert.equal(targetAfterStackedTick.hp, targetAfterDirect.hp - 2);
+  assert.ok(stackedDotBuffAfterTick, "expected CN Night Blade DOT buff to remain after tick");
+  assert.equal(stackedDotBuffAfterTick.stackCount, 2);
+  assertClose(
+    stackedDotBuffAfterTick.remainingSeconds,
+    4,
+    "CN Night Blade stacked DOT remaining seconds",
+  );
+
   const shooterFireState = updateNfoSimulation(
     {
       ...firedState,
