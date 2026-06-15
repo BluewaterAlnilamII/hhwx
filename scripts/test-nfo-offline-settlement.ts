@@ -222,6 +222,10 @@ const TESTS: Array<{ name: string; run: () => void }> = [
     run: testActiveSkillPlayerSideBuffTargetsExistingMinions,
   },
   {
+    name: "active skill player-side buffs target same-frame spawned minions",
+    run: testActiveSkillPlayerSideBuffTargetsSameFrameSpawnedMinions,
+  },
+  {
     name: "active skill player-side buffs modify minion weapon fire",
     run: testActiveSkillPlayerSideBuffModifiesMinionWeaponFire,
   },
@@ -2303,6 +2307,42 @@ function testActiveSkillPlayerSideBuffTargetsExistingMinions() {
 
   assert.ok(selfOnlyBuffState.player.activeBuffs.some((buff) => buff.id === 7));
   assert.equal(selfOnlyBuffState.minions[0]?.activeBuffs.some((buff) => buff.id === 7), false);
+}
+
+function testActiveSkillPlayerSideBuffTargetsSameFrameSpawnedMinions() {
+  const runtimeData = createRuntimeFixture();
+  const activeSkillEvent = runtimeData.activeSkills[0]?.levels[0]?.events[0];
+  assert.ok(activeSkillEvent?.spawnMinion);
+  activeSkillEvent.buffs = [{ targetType: 1, buffId: 7, level: 1 }];
+  const playerSideState = updateNfoSimulation(
+    chargeActiveSkill(createNfoSimulation(runtimeData)),
+    runtimeData,
+    { ...NO_INPUT, useActiveSkill: true },
+    1 / 30,
+  );
+
+  assert.equal(playerSideState.minions.length, 2);
+  assert.ok(playerSideState.player.activeBuffs.some((buff) => buff.id === 7));
+  assert.ok(playerSideState.minions.every((minion) => (
+    minion.activeBuffs.some((buff) => buff.id === 7 && buff.level === 1)
+  )));
+
+  const selfOnlyRuntimeData = createRuntimeFixture();
+  const selfOnlyActiveSkillEvent = selfOnlyRuntimeData.activeSkills[0]?.levels[0]?.events[0];
+  assert.ok(selfOnlyActiveSkillEvent?.spawnMinion);
+  selfOnlyActiveSkillEvent.buffs = [{ targetType: 0, buffId: 7, level: 1 }];
+  const selfOnlyState = updateNfoSimulation(
+    chargeActiveSkill(createNfoSimulation(selfOnlyRuntimeData)),
+    selfOnlyRuntimeData,
+    { ...NO_INPUT, useActiveSkill: true },
+    1 / 30,
+  );
+
+  assert.equal(selfOnlyState.minions.length, 2);
+  assert.ok(selfOnlyState.player.activeBuffs.some((buff) => buff.id === 7));
+  assert.ok(selfOnlyState.minions.every((minion) => (
+    !minion.activeBuffs.some((buff) => buff.id === 7)
+  )));
 }
 
 function testActiveSkillPlayerSideBuffModifiesMinionWeaponFire() {

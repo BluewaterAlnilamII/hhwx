@@ -1904,28 +1904,33 @@ function updateActiveSkillTimeline(
   const previousTimelineFrame = state.activeSkill.timelineFrame;
   state.activeSkill.timelineFrame += deltaSeconds * FRAME_RATE;
 
-  activeSkillLevel.events.forEach((event, eventIndex) => {
-    if (
-      state.activeSkill.triggeredEventIndexes.includes(eventIndex)
-      || event.frame > state.activeSkill.timelineFrame
-      || event.frame <= previousTimelineFrame
-    ) {
-      return;
+  const dueTimelineEvents = getDueActiveSkillTimelineEvents(
+    state,
+    activeSkillLevel,
+    previousTimelineFrame,
+  );
+  const dueFrames = [...new Set(dueTimelineEvents.map((entry) => entry.event.frame))];
+  for (const frame of dueFrames) {
+    const frameEvents = dueTimelineEvents.filter((entry) => entry.event.frame === frame);
+    for (const { eventIndex } of frameEvents) {
+      state.activeSkill.triggeredEventIndexes.push(eventIndex);
     }
-
-    state.activeSkill.triggeredEventIndexes.push(eventIndex);
-    for (const buffEvent of event.buffs) {
-      applyActiveSkillBuffEvent(runtimeData, buffEvent, state);
+    for (const { event } of frameEvents) {
+      if (event.spawnMinion) {
+        spawnActiveSkillMinions(state, runtimeData, event.spawnMinion);
+      }
     }
-    if (event.spawnMinion) {
-      spawnActiveSkillMinions(state, runtimeData, event.spawnMinion);
+    for (const { event } of frameEvents) {
+      for (const buffEvent of event.buffs) {
+        applyActiveSkillBuffEvent(runtimeData, buffEvent, state);
+      }
+      if (event.bulletShooterId > 0) {
+        spawnBulletShooter(state, runtimeData, event.bulletShooterId, state.player, {
+          ownerType: "player",
+        });
+      }
     }
-    if (event.bulletShooterId > 0) {
-      spawnBulletShooter(state, runtimeData, event.bulletShooterId, state.player, {
-        ownerType: "player",
-      });
-    }
-  });
+  }
 
   const timelineTotalFrames = state.activeSkill.timelineTotalFrames
     || activeSkillLevel.timelineFrames;
@@ -1935,6 +1940,24 @@ function updateActiveSkillTimeline(
     state.activeSkill.timelineTotalFrames = activeSkillLevel.timelineFrames;
     state.activeSkill.triggeredEventIndexes = [];
   }
+}
+
+function getDueActiveSkillTimelineEvents(
+  state: NfoSimulationState,
+  activeSkillLevel: NfoActiveSkillLevel,
+  previousTimelineFrame: number,
+) {
+  return activeSkillLevel.events
+    .map((event, eventIndex) => ({ event, eventIndex }))
+    .filter(({ event, eventIndex }) => (
+      !state.activeSkill.triggeredEventIndexes.includes(eventIndex)
+      && event.frame <= state.activeSkill.timelineFrame
+      && event.frame > previousTimelineFrame
+    ))
+    .sort((left, right) => (
+      left.event.frame - right.event.frame
+      || left.eventIndex - right.eventIndex
+    ));
 }
 
 function applyActiveSkillBuffEvent(
