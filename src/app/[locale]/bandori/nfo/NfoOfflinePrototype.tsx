@@ -74,6 +74,8 @@ type HudSnapshot = {
   activeSkillChargeFrames: number;
   activeSkillChargeMaxFrames: number;
   activeSkillActive: boolean;
+  fullScreenEffectCount: number;
+  fullScreenEffectName: string;
 };
 
 type NfoSceneActions = {
@@ -94,6 +96,7 @@ const API_URL = "/api/bandori/nfo/local-runtime";
 const CANVAS_WIDTH = 960;
 const CANVAS_HEIGHT = 540;
 const TILE_SIZE = 96;
+const FULL_SCREEN_EFFECT_RENDER_SECONDS = 0.5;
 const EMPTY_NUMBER_ARRAY: number[] = [];
 type PhaserModule = typeof import("phaser");
 
@@ -514,6 +517,8 @@ export default function NfoOfflinePrototype() {
         data-nfo-runtime-status={runtimeState.status}
         data-nfo-save-ready={saveState ? "1" : "0"}
         data-nfo-hud-status={hud?.status ?? "none"}
+        data-nfo-full-screen-effect-count={hud?.fullScreenEffectCount ?? 0}
+        data-nfo-full-screen-effect-name={hud?.fullScreenEffectName ?? ""}
         data-nfo-all-unlocked={smokeAllUnlocked ? "1" : "0"}
         data-nfo-character-count={runtimeData?.characters.length ?? 0}
         data-nfo-weapon-count={runtimeData?.weapons.length ?? 0}
@@ -1080,6 +1085,8 @@ function drawScene(
     );
   }
 
+  drawFullScreenEffects(graphics, state);
+
   if (state.status !== "playing") {
     graphics.fillStyle(0x020617, 0.55);
     graphics.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
@@ -1088,7 +1095,44 @@ function drawScene(
   }
 }
 
+function drawFullScreenEffects(
+  graphics: import("phaser").GameObjects.Graphics,
+  state: NfoSimulationState,
+) {
+  const latestEffect = state.fullScreenEffects.at(-1);
+  if (!latestEffect) {
+    return;
+  }
+
+  const renderProgress = Math.max(
+    0,
+    Math.min(1, latestEffect.remainingSeconds / FULL_SCREEN_EFFECT_RENDER_SECONDS),
+  );
+  const { fill, stroke } = getFullScreenEffectRenderColors(latestEffect.name);
+  const alpha = 0.08 + renderProgress * 0.32;
+
+  graphics.fillStyle(fill, alpha);
+  graphics.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+  graphics.lineStyle(3, stroke, Math.min(0.9, alpha + 0.25));
+  graphics.strokeCircle(CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2, 120 + (1 - renderProgress) * 260);
+  graphics.lineStyle(1, 0xffffff, Math.min(0.65, alpha + 0.15));
+  graphics.strokeCircle(CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2, 220 + (1 - renderProgress) * 220);
+}
+
+function getFullScreenEffectRenderColors(effectName: string) {
+  if (effectName.includes("starlight")) {
+    return { fill: 0x2563eb, stroke: 0xa78bfa };
+  }
+  if (effectName.includes("song")) {
+    return { fill: 0xfacc15, stroke: 0x22d3ee };
+  }
+
+  return { fill: 0xf8fafc, stroke: 0xfb7185 };
+}
+
 function toHudSnapshot(state: NfoSimulationState): HudSnapshot {
+  const latestFullScreenEffect = state.fullScreenEffects.at(-1);
+
   return {
     status: state.status,
     hp: Math.ceil(state.player.hp),
@@ -1122,6 +1166,8 @@ function toHudSnapshot(state: NfoSimulationState): HudSnapshot {
     activeSkillChargeFrames: Math.floor(state.activeSkill.chargeFrames),
     activeSkillChargeMaxFrames: Math.max(0, Math.floor(state.activeSkill.chargeMaxFrames)),
     activeSkillActive: state.activeSkill.isActive,
+    fullScreenEffectCount: state.fullScreenEffects.length,
+    fullScreenEffectName: latestFullScreenEffect?.name ?? "",
   };
 }
 
