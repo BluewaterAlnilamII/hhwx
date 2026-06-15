@@ -2,9 +2,11 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { CheckCircle2, Copy, Download, FileJson, Plus, RefreshCw, Trash2, Upload } from "lucide-react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
+import { type AppLocale } from "@/i18n/routing";
 import { getApiErrorMessage, parseApiSuccessData } from "@/lib/api-contracts";
+import { formatLocalizedDateTime } from "@/lib/localized-format";
 import BandoriCnExclusiveNotice from "@/app/[locale]/bandori/BandoriCnExclusiveNotice";
 import type { GameAccountBinding, GameBindChallenge } from "@/lib/game-account-binding";
 import {
@@ -71,14 +73,20 @@ type ExportedProfilePayload = {
   json: string;
 };
 
+type RequestJsonMessages = {
+  notSignedIn: string;
+  requestFailed: (status: number) => string;
+  invalidResponse: string;
+};
+
 const USER_GAME_BINDING_LIMIT = 5;
 const USER_GAME_AUTO_PROFILE_LIMIT = 5;
 const USER_GAME_MANUAL_PROFILE_LIMIT = 10;
 
-async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
+async function requestJson<T>(path: string, init: RequestInit | undefined, messages: RequestJsonMessages): Promise<T> {
   const accessToken = await getAccessToken();
   if (!accessToken) {
-    throw new Error("请先登录");
+    throw new Error(messages.notSignedIn);
   }
 
   const response = await fetch(path, {
@@ -92,34 +100,15 @@ async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
   const payload = await response.json().catch(() => ({}));
 
   if (!response.ok) {
-    throw new Error(getApiErrorMessage(payload) || `请求失败（HTTP ${response.status}）`);
+    throw new Error(getApiErrorMessage(payload) || messages.requestFailed(response.status));
   }
 
   const data = parseApiSuccessData<T>(payload);
   if (data === null) {
-    throw new Error("接口返回格式无效");
+    throw new Error(messages.invalidResponse);
   }
 
   return data;
-}
-
-function formatDate(value: string | null): string {
-  if (!value) {
-    return "无";
-  }
-
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return value;
-  }
-
-  return date.toLocaleString("zh-CN", {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
 }
 
 function profileSortTime(profile: ManagedProfileSummary): string {
@@ -136,6 +125,9 @@ function compareGameUid(left: string | null, right: string | null): number {
 }
 
 export default function GameProfilesPanel() {
+  const locale = useLocale() as AppLocale;
+  const t = useTranslations("bandori.gameProfiles.panel");
+  const termsT = useTranslations("bandori.terms");
   const cnExclusiveT = useTranslations("bandori.notices.cnExclusive");
   const [cloudProfiles, setCloudProfiles] = useState<CloudGameProfileSummary[]>([]);
   const [localProfiles, setLocalProfiles] = useState<LocalGameProfileSummary[]>([]);
@@ -154,6 +146,16 @@ export default function GameProfilesPanel() {
   const busy = busyAction !== null;
   const writeBusy = busy || syncingUid !== null;
   const normalizedUid = useMemo(() => gameUid.trim(), [gameUid]);
+  const requestMessages = useMemo<RequestJsonMessages>(() => ({
+    notSignedIn: t("errors.notSignedIn"),
+    requestFailed: (status) => t("errors.requestFailed", { status }),
+    invalidResponse: t("errors.invalidResponse"),
+  }), [t]);
+  const requestGameJson = useCallback(<T,>(path: string, init?: RequestInit) => requestJson<T>(path, init, requestMessages), [requestMessages]);
+  const formatDate = useCallback(
+    (value: string | null) => formatLocalizedDateTime(value, locale, termsT("none")),
+    [locale, termsT],
+  );
 
   const profiles = useMemo<ManagedProfileSummary[]>(() => {
     const autoProfiles = cloudProfiles
@@ -162,7 +164,7 @@ export default function GameProfilesPanel() {
         id: `cloud:${profile.id}`,
         name: profile.name,
         kind: profile.kind,
-        label: "自动同步",
+        label: t("profileKinds.auto"),
         sourceGameUid: profile.sourceGameUid,
         cardCount: profile.cardCount,
         syncAt: profile.syncedAt,
@@ -181,7 +183,7 @@ export default function GameProfilesPanel() {
         id: `cloud:${profile.id}`,
         name: profile.name,
         kind: profile.kind,
-        label: "云端手动",
+        label: t("profileKinds.cloudManual"),
         sourceGameUid: profile.sourceGameUid,
         cardCount: profile.cardCount,
         syncAt: profile.updatedAt,
@@ -199,7 +201,7 @@ export default function GameProfilesPanel() {
         id: `local:${profile.id}`,
         name: profile.name,
         kind: profile.kind,
-        label: cloudProfile ? "本地副本" : "本地待迁移",
+        label: cloudProfile ? t("profileKinds.localCopy") : t("profileKinds.localPendingMigration"),
         sourceGameUid: null,
         cardCount: profile.cardCount,
         syncAt: cloudProfile?.updatedAt ?? null,
@@ -214,7 +216,7 @@ export default function GameProfilesPanel() {
       ...cloudManualProfiles,
       ...localMigrationProfiles,
     ];
-  }, [cloudProfiles, localProfiles]);
+  }, [cloudProfiles, localProfiles, t]);
 
   const profilesByUid = useMemo(() => {
     const mapped = new Map<string, CloudGameProfileSummary>();
@@ -238,19 +240,19 @@ export default function GameProfilesPanel() {
     setError("");
     try {
       const [nextProfiles, nextBindings, nextLocalProfiles] = await Promise.all([
-        requestJson<CloudGameProfileSummary[]>("/api/account/game-profiles"),
-        requestJson<GameAccountBinding[]>("/api/account/game-bind/bindings"),
+        requestGameJson<CloudGameProfileSummary[]>("/api/account/game-profiles"),
+        requestGameJson<GameAccountBinding[]>("/api/account/game-bind/bindings"),
         listLocalGameProfiles(),
       ]);
       setCloudProfiles(nextProfiles);
       setBindings(nextBindings);
       setLocalProfiles(nextLocalProfiles);
     } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : "读取游戏档案失败");
+      setError(loadError instanceof Error ? loadError.message : t("errors.loadFailed"));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [requestGameJson, t]);
 
   useEffect(() => {
     void loadData();
@@ -262,19 +264,19 @@ export default function GameProfilesPanel() {
     setMessage("");
     setExportedPayload(null);
     try {
-      const nextChallenge = await requestJson<GameBindChallenge>("/api/account/game-bind/challenge", {
+      const nextChallenge = await requestGameJson<GameBindChallenge>("/api/account/game-bind/challenge", {
         method: "POST",
         body: JSON.stringify({ gameUid: normalizedUid }),
       });
       setChallenge(nextChallenge);
       setCopiedChallenge(false);
-      setMessage("验证码已生成，请填入游戏内个性签名。");
+      setMessage(t("messages.challengeCreated"));
     } catch (createError) {
-      setError(createError instanceof Error ? createError.message : "创建验证码失败");
+      setError(createError instanceof Error ? createError.message : t("errors.createChallengeFailed"));
     } finally {
       setBusyAction(null);
     }
-  }, [normalizedUid]);
+  }, [normalizedUid, requestGameJson, t]);
 
   const verifyChallenge = useCallback(async () => {
     if (!challenge) {
@@ -286,21 +288,21 @@ export default function GameProfilesPanel() {
     setMessage("");
     setExportedPayload(null);
     try {
-      const result = await requestJson<VerifyResult>("/api/account/game-bind/verify", {
+      const result = await requestGameJson<VerifyResult>("/api/account/game-bind/verify", {
         method: "POST",
         body: JSON.stringify({ challengeId: challenge.id }),
       });
-      setMessage(result.transferred ? "绑定成功，该 UID 已从旧账号转移到当前账号。" : "绑定成功。");
+      setMessage(result.transferred ? t("messages.transferred") : t("messages.bound"));
       setChallenge(null);
       setCopiedChallenge(false);
       setGameUid("");
       await loadData();
     } catch (verifyError) {
-      setError(verifyError instanceof Error ? verifyError.message : "验证失败");
+      setError(verifyError instanceof Error ? verifyError.message : t("errors.verifyFailed"));
     } finally {
       setBusyAction(null);
     }
-  }, [challenge, loadData]);
+  }, [challenge, loadData, requestGameJson, t]);
 
   const copyChallenge = useCallback(() => {
     if (!challenge) {
@@ -316,7 +318,10 @@ export default function GameProfilesPanel() {
   const unbindGameUid = useCallback(async (targetUid: string) => {
     const profile = profilesByUid.get(targetUid);
     const confirmed = window.confirm(
-      `确认解绑游戏 UID ${targetUid}？解绑会删除该 UID 与当前网页账号的绑定关系，并同时删除对应的自动同步档案${profile ? `「${profile.name}」` : ""}。`,
+      t("confirm.unbind", {
+        uid: targetUid,
+        profileName: profile ? t("confirm.profileNameSuffix", { profileName: profile.name }) : "",
+      }),
     );
     if (!confirmed) {
       return;
@@ -327,21 +332,21 @@ export default function GameProfilesPanel() {
     setMessage("");
     setExportedPayload(null);
     try {
-      await requestJson<{ gameUid: string }>(`/api/account/game-bind/bindings/${encodeURIComponent(targetUid)}`, {
+      await requestGameJson<{ gameUid: string }>(`/api/account/game-bind/bindings/${encodeURIComponent(targetUid)}`, {
         method: "DELETE",
       });
-      setMessage(`UID ${targetUid} 已解绑，对应自动同步档案已删除。`);
+      setMessage(t("messages.unbound", { uid: targetUid }));
       await loadData();
     } catch (unbindError) {
-      setError(unbindError instanceof Error ? unbindError.message : "解绑失败");
+      setError(unbindError instanceof Error ? unbindError.message : t("errors.unbindFailed"));
     } finally {
       setBusyAction(null);
     }
-  }, [loadData, profilesByUid]);
+  }, [loadData, profilesByUid, requestGameJson, t]);
 
   const syncAutoProfile = useCallback(async (targetUid: string) => {
     const confirmed = window.confirm(
-      "本次同步会读取该游戏 UID 的卡牌、区域道具、角色潜能和角色任务加成数据。\n\n由于游戏接口机制，同步过程中可能会导致该 UID 当前登录中的游戏客户端掉线一次。确认继续同步？",
+      t("confirm.sync"),
     );
     if (!confirmed) {
       return;
@@ -352,18 +357,18 @@ export default function GameProfilesPanel() {
     setMessage("");
     setExportedPayload(null);
     try {
-      await requestJson<CloudGameProfileSummary>("/api/account/game-profiles/sync", {
+      await requestGameJson<CloudGameProfileSummary>("/api/account/game-profiles/sync", {
         method: "POST",
         body: JSON.stringify({ gameUid: targetUid }),
       });
-      setMessage(`UID ${targetUid} 已同步。`);
+      setMessage(t("messages.synced", { uid: targetUid }));
       await loadData();
     } catch (syncError) {
-      setError(syncError instanceof Error ? syncError.message : "同步游戏数据失败");
+      setError(syncError instanceof Error ? syncError.message : t("errors.syncFailed"));
     } finally {
       setSyncingUid(null);
     }
-  }, [loadData]);
+  }, [loadData, requestGameJson, t]);
 
   const createManualProfile = useCallback(async () => {
     setBusyAction({ type: "create" });
@@ -371,20 +376,20 @@ export default function GameProfilesPanel() {
     setMessage("");
     setExportedPayload(null);
     try {
-      const name = profileName.trim() || "手动档案";
-      await requestJson<CloudGameProfileSummary>("/api/account/game-profiles", {
+      const name = profileName.trim() || t("manual.defaultName");
+      await requestGameJson<CloudGameProfileSummary>("/api/account/game-profiles", {
         method: "POST",
         body: JSON.stringify({ name }),
       });
       setProfileName("");
-      setMessage("云端手动档案已创建。");
+      setMessage(t("messages.manualCreated"));
       await loadData();
     } catch (createError) {
-      setError(createError instanceof Error ? createError.message : "创建云端手动档案失败");
+      setError(createError instanceof Error ? createError.message : t("errors.createFailed"));
     } finally {
       setBusyAction(null);
     }
-  }, [loadData, profileName]);
+  }, [loadData, profileName, requestGameJson, t]);
 
   const importProfile = useCallback(async () => {
     setBusyAction({ type: "import" });
@@ -392,19 +397,19 @@ export default function GameProfilesPanel() {
     setMessage("");
     setExportedPayload(null);
     try {
-      await requestJson<CloudGameProfileSummary>("/api/account/game-profiles/import", {
+      await requestGameJson<CloudGameProfileSummary>("/api/account/game-profiles/import", {
         method: "POST",
         body: JSON.stringify({ profile: JSON.parse(importText) }),
       });
       setImportText("");
-      setMessage("Bestdori 档案已导入到云端。");
+      setMessage(t("messages.imported"));
       await loadData();
     } catch (importError) {
-      setError(importError instanceof Error ? importError.message : "导入 Bestdori 档案失败");
+      setError(importError instanceof Error ? importError.message : t("errors.importFailed"));
     } finally {
       setBusyAction(null);
     }
-  }, [importText, loadData]);
+  }, [importText, loadData, requestGameJson, t]);
 
   const copyProfile = useCallback(async (profile: ManagedProfileSummary) => {
     setBusyAction({ type: "copy", profileId: profile.id });
@@ -414,20 +419,20 @@ export default function GameProfilesPanel() {
     try {
       const name = `${profile.name} Copy`;
       if (!profile.cloudProfile) {
-        throw new Error("档案不存在");
+        throw new Error(t("errors.profileNotFound"));
       }
-      await requestJson<CloudGameProfileSummary>(`/api/account/game-profiles/${profile.cloudProfile.id}/copy`, {
+      await requestGameJson<CloudGameProfileSummary>(`/api/account/game-profiles/${profile.cloudProfile.id}/copy`, {
         method: "POST",
         body: JSON.stringify({ name }),
       });
-      setMessage("档案已拷贝为云端手动档案。");
+      setMessage(t("messages.copiedToCloud"));
       await loadData();
     } catch (copyError) {
-      setError(copyError instanceof Error ? copyError.message : "拷贝档案失败");
+      setError(copyError instanceof Error ? copyError.message : t("errors.copyFailed"));
     } finally {
       setBusyAction(null);
     }
-  }, [loadData]);
+  }, [loadData, requestGameJson, t]);
 
   const migrateLocalProfile = useCallback(async (profile: LocalGameProfileSummary) => {
     setBusyAction({ type: "upload", profileId: profile.id });
@@ -436,7 +441,7 @@ export default function GameProfilesPanel() {
     setExportedPayload(null);
     try {
       const compressed = await readLocalCompressedGameProfile(profile.id);
-      const uploadedProfile = await requestJson<CloudGameProfileSummary>("/api/account/game-profiles/upload", {
+      const uploadedProfile = await requestGameJson<CloudGameProfileSummary>("/api/account/game-profiles/upload", {
         method: "POST",
         body: JSON.stringify({
           name: profile.name,
@@ -447,14 +452,14 @@ export default function GameProfilesPanel() {
       });
       const payload = await decodeCompressedGameProfilePayload(compressed);
       await updateLocalGameProfilePayload(profile.id, payload, { cloudProfileId: uploadedProfile.id });
-      setMessage("本地档案已迁移到云端。");
+      setMessage(t("messages.migrated"));
       await loadData();
     } catch (uploadError) {
-      setError(uploadError instanceof Error ? uploadError.message : "迁移档案失败");
+      setError(uploadError instanceof Error ? uploadError.message : t("errors.migrateFailed"));
     } finally {
       setBusyAction(null);
     }
-  }, [loadData]);
+  }, [loadData, requestGameJson, t]);
 
   const exportProfile = useCallback(async (profile: ManagedProfileSummary) => {
     setBusyAction({ type: "export", profileId: profile.id });
@@ -468,11 +473,11 @@ export default function GameProfilesPanel() {
         exportPayload = exportBestdoriGameProfilePayload(payload);
       } else {
         if (!profile.cloudProfile) {
-          throw new Error("档案不存在");
+          throw new Error(t("errors.profileNotFound"));
         }
         const accessToken = await getAccessToken();
         if (!accessToken) {
-          throw new Error("请先登录");
+          throw new Error(t("errors.notSignedIn"));
         }
 
         const response = await fetch(`/api/account/game-profiles/${profile.cloudProfile.id}/export`, {
@@ -482,7 +487,7 @@ export default function GameProfilesPanel() {
         });
         const payload = await response.json();
         if (!response.ok) {
-          throw new Error(getApiErrorMessage(payload) || `请求失败（HTTP ${response.status}）`);
+          throw new Error(getApiErrorMessage(payload) || t("errors.requestFailed", { status: response.status }));
         }
         exportPayload = payload;
       }
@@ -490,18 +495,18 @@ export default function GameProfilesPanel() {
       await navigator.clipboard.writeText(json);
       setExportedPayload({
         profileId: profile.id,
-        label: "档案导出",
+        label: t("list.exportLabel"),
         json,
       });
     } catch (exportError) {
-      setError(exportError instanceof Error ? exportError.message : "导出档案失败");
+      setError(exportError instanceof Error ? exportError.message : t("errors.exportFailed"));
     } finally {
       setBusyAction(null);
     }
-  }, []);
+  }, [t]);
 
   const deleteProfile = useCallback(async (profile: ManagedProfileSummary) => {
-    if (!window.confirm(`确认删除档案「${profile.name}」？`)) {
+    if (!window.confirm(t("confirm.delete", { profileName: profile.name }))) {
       return;
     }
 
@@ -513,35 +518,42 @@ export default function GameProfilesPanel() {
       if (profile.localProfile) {
         await deleteLocalGameProfile(profile.localProfile.id);
       } else if (profile.cloudProfile) {
-        await requestJson<{ profileId: string }>(`/api/account/game-profiles/${profile.cloudProfile.id}`, {
+        await requestGameJson<{ profileId: string }>(`/api/account/game-profiles/${profile.cloudProfile.id}`, {
           method: "DELETE",
         });
       }
-      setMessage("档案已删除。");
+      setMessage(t("messages.deleted"));
       await loadData();
     } catch (deleteError) {
-      setError(deleteError instanceof Error ? deleteError.message : "删除档案失败");
+      setError(deleteError instanceof Error ? deleteError.message : t("errors.deleteFailed"));
     } finally {
       setBusyAction(null);
     }
-  }, [loadData]);
+  }, [loadData, requestGameJson, t]);
 
   return (
     <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:rounded-3xl sm:p-6">
       <div className="flex flex-wrap items-start justify-between gap-3 sm:gap-4">
         <div className="min-w-0">
-          <h2 className="text-lg font-semibold text-slate-900 sm:text-xl">游戏档案管理</h2>
+          <h2 className="text-lg font-semibold text-slate-900 sm:text-xl">{t("title")}</h2>
           <p className="mt-2 text-sm leading-6 text-slate-600">
-            绑定 UID 后可同步游戏数据，生成完整的游戏卡牌和道具加成等档案。
+            {t("description")}
           </p>
         </div>
         <div className="text-sm text-slate-500">
-          已绑定 {bindings.length}/{USER_GAME_BINDING_LIMIT} · 自动 {autoProfileCount}/{USER_GAME_AUTO_PROFILE_LIMIT} · 手动 {manualProfileCount}/{USER_GAME_MANUAL_PROFILE_LIMIT}
+          {t("quotaSummary", {
+            bindings: bindings.length,
+            bindingLimit: USER_GAME_BINDING_LIMIT,
+            autoProfiles: autoProfileCount,
+            autoLimit: USER_GAME_AUTO_PROFILE_LIMIT,
+            manualProfiles: manualProfileCount,
+            manualLimit: USER_GAME_MANUAL_PROFILE_LIMIT,
+          })}
         </div>
       </div>
 
       <div className="mt-6 border-t border-slate-100 pt-5">
-        <h3 className="text-base font-semibold text-slate-900">绑定新 UID</h3>
+        <h3 className="text-base font-semibold text-slate-900">{t("bind.title")}</h3>
         <BandoriCnExclusiveNotice
           label={cnExclusiveT("label")}
           description={cnExclusiveT("gameProfileBindingDescription")}
@@ -551,7 +563,7 @@ export default function GameProfilesPanel() {
           <input
             value={gameUid}
             onChange={(event) => setGameUid(event.target.value.replace(/\D/g, ""))}
-            placeholder="游戏 UID"
+            placeholder={t("bind.uidPlaceholder")}
             inputMode="numeric"
             className="h-11 rounded-2xl border border-slate-200 px-4 text-sm outline-none transition focus:border-sky-300 focus:ring-4 focus:ring-sky-100"
           />
@@ -562,16 +574,16 @@ export default function GameProfilesPanel() {
             className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-2xl bg-sky-600 px-5 text-sm font-semibold text-white transition hover:bg-sky-500 disabled:cursor-not-allowed disabled:bg-slate-300 sm:w-auto"
           >
             {busyAction?.type === "challenge" ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-            {challenge ? "刷新验证码" : "生成验证码"}
+            {challenge ? t("bind.refreshChallenge") : t("bind.createChallenge")}
           </button>
         </div>
         {bindings.length >= USER_GAME_BINDING_LIMIT && (
-          <p className="mt-2 text-sm text-amber-700">已达到绑定 UID 上限，解绑后可继续绑定。</p>
+          <p className="mt-2 text-sm text-amber-700">{t("bind.limitReached")}</p>
         )}
 
         {challenge && (
           <div className="mt-4 rounded-2xl border border-sky-100 bg-sky-50 p-3 sm:p-4">
-            <div className="text-xs font-semibold uppercase tracking-wide text-sky-700">验证码</div>
+            <div className="text-xs font-semibold uppercase tracking-wide text-sky-700">{t("bind.challengeLabel")}</div>
             <div className="mt-2 flex flex-wrap items-center gap-3">
               <code className="min-w-0 break-all rounded-xl bg-white px-3 py-2 text-base font-bold text-slate-900 shadow-sm sm:text-lg">{challenge.challenge}</code>
               <button
@@ -579,10 +591,10 @@ export default function GameProfilesPanel() {
                 onClick={copyChallenge}
                 className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-sky-200 hover:text-sky-600"
               >
-                {copiedChallenge ? "已复制" : "复制"}
+                {copiedChallenge ? t("bind.copied") : t("bind.copy")}
               </button>
             </div>
-            <div className="mt-3 text-sm text-slate-600">有效期至 {formatDate(challenge.expiresAt)}</div>
+            <div className="mt-3 text-sm text-slate-600">{t("bind.expiresAt", { date: formatDate(challenge.expiresAt) })}</div>
             <button
               type="button"
               onClick={verifyChallenge}
@@ -590,7 +602,7 @@ export default function GameProfilesPanel() {
               className="mt-4 inline-flex h-10 items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-5 text-sm font-semibold text-white transition hover:bg-emerald-500 disabled:cursor-not-allowed disabled:bg-slate-300"
             >
               {busyAction?.type === "verify" ? <RefreshCw className="h-4 w-4 animate-spin" /> : null}
-              {busyAction?.type === "verify" ? "验证中" : "我已填写，开始验证"}
+              {busyAction?.type === "verify" ? t("bind.verifying") : t("bind.verify")}
             </button>
           </div>
         )}
@@ -599,17 +611,17 @@ export default function GameProfilesPanel() {
       <div className="mt-6 border-t border-slate-100 pt-5">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h3 className="text-base font-semibold text-slate-900">UID 管理</h3>
+            <h3 className="text-base font-semibold text-slate-900">{t("uidManagement.title")}</h3>
           </div>
-          <div className="text-sm text-slate-500">自动档案 {autoProfileCount}/{USER_GAME_AUTO_PROFILE_LIMIT}</div>
+          <div className="text-sm text-slate-500">{t("uidManagement.quota", { count: autoProfileCount, limit: USER_GAME_AUTO_PROFILE_LIMIT })}</div>
         </div>
         <div className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-800">
-          同步会请求游戏接口，可能让该 UID 当前登录中的游戏客户端掉线一次。
+          {t("uidManagement.syncWarning")}
         </div>
         {loading ? (
-          <p className="mt-3 text-sm text-slate-500">正在读取...</p>
+          <p className="mt-3 text-sm text-slate-500">{t("uidManagement.loading")}</p>
         ) : bindings.length === 0 ? (
-          <p className="mt-3 rounded-2xl border border-slate-100 bg-slate-50 px-4 py-4 text-sm text-slate-500">暂无已绑定 UID。绑定游戏 UID 后可以创建自动同步档案。</p>
+          <p className="mt-3 rounded-2xl border border-slate-100 bg-slate-50 px-4 py-4 text-sm text-slate-500">{t("uidManagement.empty")}</p>
         ) : (
           <div className="mt-3 grid gap-3">
             {sortedBindings.map((binding) => {
@@ -623,19 +635,21 @@ export default function GameProfilesPanel() {
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="break-all font-semibold text-slate-900">
-                          UID {binding.gameUid}{profile ? ` · ${profile.name}` : ""}
+                          UID {binding.gameUid}{profile ? ` / ${profile.name}` : ""}
                         </span>
                         <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${profile ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-600"}`}>
-                          {profile ? "已生成自动档案" : "未同步"}
+                          {profile ? t("uidManagement.generated") : t("uidManagement.notSynced")}
                         </span>
                       </div>
                       <div className="mt-2 text-sm leading-6 text-slate-500">
-                        绑定时间：{formatDate(binding.boundAt)}
+                        {t("uidManagement.boundAt", { date: formatDate(binding.boundAt) })}
                         <br />
-                        {profile ? `卡牌 ${profile.cardCount} · 最后同步：${formatDate(profile.syncedAt)}` : "自动档案：未同步"}
+                        {profile
+                          ? t("uidManagement.profileStatus", { cardCount: profile.cardCount, date: formatDate(profile.syncedAt) })
+                          : t("uidManagement.missingProfile")}
                       </div>
                       {syncLimitReached && (
-                        <p className="mt-2 text-sm text-amber-700">自动档案已达到上限，删除旧自动档案后可继续同步生成。</p>
+                        <p className="mt-2 text-sm text-amber-700">{t("uidManagement.syncLimitReached")}</p>
                       )}
                     </div>
                     <div className="grid w-full grid-cols-2 gap-2 sm:w-auto sm:grid-cols-none sm:flex sm:flex-wrap">
@@ -646,7 +660,7 @@ export default function GameProfilesPanel() {
                         className="inline-flex h-10 items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-4 text-sm font-semibold text-white transition hover:bg-emerald-500 disabled:cursor-not-allowed disabled:bg-slate-300"
                       >
                         <RefreshCw className={`h-4 w-4 ${isSyncing ? "animate-spin" : ""}`} />
-                        {isSyncing ? "同步中" : profile ? "重新同步" : "同步生成"}
+                        {isSyncing ? t("uidManagement.syncing") : profile ? t("uidManagement.resync") : t("uidManagement.sync")}
                       </button>
                       <button
                         type="button"
@@ -655,7 +669,7 @@ export default function GameProfilesPanel() {
                         className="inline-flex h-10 items-center justify-center gap-2 rounded-2xl border border-rose-200 bg-white px-4 text-sm font-semibold text-rose-600 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
                       >
                         {isUnbinding ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
-                        {isUnbinding ? "解绑中" : "解绑"}
+                        {isUnbinding ? t("uidManagement.unbinding") : t("uidManagement.unbind")}
                       </button>
                     </div>
                   </div>
@@ -675,17 +689,17 @@ export default function GameProfilesPanel() {
       <div className="mt-6 border-t border-slate-100 pt-5">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h3 className="text-base font-semibold text-slate-900">手动档案</h3>
-            <p className="mt-1 text-sm text-slate-500">新建云端档案，或粘贴 Bestdori JSON 导入到云端。</p>
+            <h3 className="text-base font-semibold text-slate-900">{t("manual.title")}</h3>
+            <p className="mt-1 text-sm text-slate-500">{t("manual.description")}</p>
           </div>
-          <div className="text-sm text-slate-500">手动 {manualProfileCount}/{USER_GAME_MANUAL_PROFILE_LIMIT}</div>
+          <div className="text-sm text-slate-500">{t("manual.quota", { count: manualProfileCount, limit: USER_GAME_MANUAL_PROFILE_LIMIT })}</div>
         </div>
 
         <div className="mt-3 grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
           <input
             value={profileName}
             onChange={(event) => setProfileName(event.target.value)}
-            placeholder="新建云端手动档案名称"
+            placeholder={t("manual.namePlaceholder")}
             className="h-11 rounded-2xl border border-slate-200 px-4 text-sm outline-none transition focus:border-sky-300 focus:ring-4 focus:ring-sky-100"
           />
           <button
@@ -695,7 +709,7 @@ export default function GameProfilesPanel() {
             className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-2xl bg-sky-600 px-5 text-sm font-semibold text-white transition hover:bg-sky-500 disabled:cursor-not-allowed disabled:bg-slate-300 sm:w-auto"
           >
             {busyAction?.type === "create" ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-            {busyAction?.type === "create" ? "新建中" : "新建"}
+            {busyAction?.type === "create" ? t("manual.creating") : t("manual.create")}
           </button>
         </div>
 
@@ -703,7 +717,7 @@ export default function GameProfilesPanel() {
           <textarea
             value={importText}
             onChange={(event) => setImportText(event.target.value)}
-            placeholder="粘贴 Bestdori 档案 JSON"
+            placeholder={t("manual.jsonPlaceholder")}
             className="min-h-28 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-sky-300 focus:ring-4 focus:ring-sky-100"
           />
           <button
@@ -713,20 +727,20 @@ export default function GameProfilesPanel() {
             className="mt-3 inline-flex h-10 w-full items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:border-sky-200 hover:text-sky-600 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400 sm:w-auto"
           >
             {busyAction?.type === "import" ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
-            {busyAction?.type === "import" ? "导入中" : "导入到云端"}
+            {busyAction?.type === "import" ? t("manual.importing") : t("manual.import")}
           </button>
         </div>
       </div>
 
       <div className="mt-6 border-t border-slate-100 pt-5">
-        <h3 className="text-base font-semibold text-slate-900">档案列表</h3>
+        <h3 className="text-base font-semibold text-slate-900">{t("list.title")}</h3>
         <div className="mt-2 rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3 text-sm leading-6 text-slate-600">
-          自动同步档案由 UID 同步生成，作为服务器侧只读数据使用；手动档案直接在云端创建和管理。本地旧档案仅作为迁移副本保留，可迁移到云端或删除本地副本。导出会复制 Bestdori 兼容 JSON，拷贝会生成新的云端手动档案。
+          {t("list.description")}
         </div>
         {loading ? (
-          <p className="mt-3 text-sm text-slate-500">正在读取...</p>
+          <p className="mt-3 text-sm text-slate-500">{t("list.loading")}</p>
         ) : profiles.length === 0 ? (
-          <p className="mt-3 text-sm text-slate-500">暂无档案。</p>
+          <p className="mt-3 text-sm text-slate-500">{t("list.empty")}</p>
         ) : (
           <div className="mt-3 grid gap-3">
             {profiles.map((profile) => {
@@ -748,8 +762,8 @@ export default function GameProfilesPanel() {
                         </span>
                       </div>
                       <div className="mt-2 text-sm leading-6 text-slate-500">
-                        {profile.sourceGameUid ? `UID ${profile.sourceGameUid} · ` : ""}
-                        卡牌 {profile.cardCount}
+                        {profile.sourceGameUid ? `UID ${profile.sourceGameUid} / ` : ""}
+                        {t("list.cardCount", { count: profile.cardCount })}
                       </div>
                     </div>
                     <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-wrap">
@@ -757,13 +771,13 @@ export default function GameProfilesPanel() {
                         href={`/bandori/game-profiles/${encodeURIComponent(profile.viewProfileId)}/cards`}
                         className="inline-flex h-9 items-center justify-center rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 transition hover:border-sky-200 hover:text-sky-600"
                       >
-                        卡牌
+                        {t("list.cards")}
                       </Link>
                       <Link
                         href={`/bandori/game-profiles/${encodeURIComponent(profile.viewProfileId)}/items`}
                         className="inline-flex h-9 items-center justify-center rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 transition hover:border-sky-200 hover:text-sky-600"
                       >
-                        道具
+                        {t("list.items")}
                       </Link>
                       <button
                         type="button"
@@ -772,7 +786,7 @@ export default function GameProfilesPanel() {
                         className={`inline-flex h-9 items-center justify-center gap-2 rounded-xl border px-3 text-sm font-semibold transition disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400 ${profileExported ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-slate-200 bg-white text-slate-700 hover:border-sky-200 hover:text-sky-600"}`}
                       >
                         {isExportingProfile ? <RefreshCw className="h-4 w-4 animate-spin" /> : profileExported ? <CheckCircle2 className="h-4 w-4" /> : <Download className="h-4 w-4" />}
-                        {isExportingProfile ? "导出中" : profileExported ? "导出成功" : "导出"}
+                        {isExportingProfile ? t("list.exporting") : profileExported ? t("list.exported") : t("list.export")}
                       </button>
                       {profile.localProfile ? (
                         <button
@@ -782,7 +796,7 @@ export default function GameProfilesPanel() {
                           className="inline-flex h-9 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 transition hover:border-sky-200 hover:text-sky-600 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
                         >
                           {isUploading ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
-                          {isUploading ? "迁移中" : profile.cloudProfile ? "更新云端" : "迁移到云端"}
+                          {isUploading ? t("list.migrating") : profile.cloudProfile ? t("list.updateCloud") : t("list.migrate")}
                         </button>
                       ) : null}
                       {profile.cloudProfile ? (
@@ -793,7 +807,7 @@ export default function GameProfilesPanel() {
                           className="inline-flex h-9 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 transition hover:border-sky-200 hover:text-sky-600 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
                         >
                           {isCopying ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Copy className="h-4 w-4" />}
-                          {isCopying ? "拷贝中" : "拷贝"}
+                          {isCopying ? t("list.copying") : t("list.copy")}
                         </button>
                       ) : null}
                       <button
@@ -803,21 +817,21 @@ export default function GameProfilesPanel() {
                         className="inline-flex h-9 items-center justify-center gap-2 rounded-xl border border-rose-200 bg-white px-3 text-sm font-semibold text-rose-600 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
                       >
                         {isDeleting ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
-                        {isDeleting ? "删除中" : "删除"}
+                        {isDeleting ? t("list.deleting") : t("list.delete")}
                       </button>
                     </div>
                   </div>
                   {profile.kind === "manual" && (
                     <div className="mt-3 inline-flex items-center gap-2 text-xs font-semibold text-slate-500">
                       <FileJson className="h-3.5 w-3.5" />
-                      上次同步：{formatDate(profile.syncAt)}
+                      {t("list.lastSynced", { date: formatDate(profile.syncAt) })}
                     </div>
                   )}
                   {exportedPayload?.profileId === profile.id && (
                     <div className="mt-4 rounded-2xl border border-emerald-100 bg-emerald-50/60 p-3">
                       <div className="mb-2 flex flex-wrap items-center justify-between gap-2 text-sm font-semibold text-emerald-700">
                         <span>{exportedPayload.label} payload</span>
-                        <span>导出成功，已复制到剪贴板</span>
+                        <span>{t("list.exportCopied")}</span>
                       </div>
                       <textarea
                         readOnly

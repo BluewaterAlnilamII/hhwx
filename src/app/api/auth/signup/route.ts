@@ -3,6 +3,7 @@ import { ensureAccountStatus } from "@/lib/account-status-server";
 import { sendAccountEmailVerificationEmail } from "@/lib/account-email-verification-server";
 import { jsonRouteError, jsonSuccess } from "@/lib/api-response";
 import { findAuthUserByEmail, normalizeEmailAddress } from "@/lib/auth-user-server";
+import { readAuthEmailRedirectTo } from "@/lib/auth-redirect-server";
 import { validatePasswordValue } from "@/lib/password-policy";
 import { createServerAuthSupabaseClient } from "@/lib/supabase-auth-server";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
@@ -76,7 +77,7 @@ export async function POST(request: Request) {
     const username = normalizeUsername(body.username);
     const email = normalizeEmailAddress(readRequiredString(body.email, "请输入邮箱"));
     const password = readPassword(body.password);
-    const redirectTo = typeof body.redirectTo === "string" ? body.redirectTo.trim() : "";
+    const redirectTo = readAuthEmailRedirectTo(body.redirectTo, request);
     const captchaToken = typeof body.captchaToken === "string" ? body.captchaToken.trim() : "";
 
     await verifyTurnstileToken(captchaToken, request);

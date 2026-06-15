@@ -1,4 +1,5 @@
-import { pickBestdoriCnThenJpName, pickBestdoriCnThenJpRegionalName } from "@/lib/bestdori-regional-names";
+import { type AppLocale } from "@/i18n/routing";
+import { pickBestdoriLocalizedName, pickBestdoriRegionalName } from "@/lib/bestdori-regional-names";
 import { parseApiSuccessData } from "@/lib/api-contracts";
 import type { BandoriSkillLabelMaster } from "@/lib/bandori-skill-label";
 import type { BandoriCardAttribute, BandoriCardCatalogEntry, BandoriCardPickerFilter } from "./types";
@@ -87,6 +88,7 @@ export const bandoriCardCatalogTransforms = {
 export function buildBandoriCardCatalog(
   cards: Record<string, BestdoriCardMetadata | null | undefined>,
   characters: Record<string, BestdoriCharacterMetadata | null | undefined>,
+  locale: AppLocale = "zh-CN",
 ): BandoriCardCatalogEntry[] {
   return Object.entries(cards).flatMap(([rawCardId, card]) => {
     const cardId = toPositiveInteger(rawCardId);
@@ -100,12 +102,12 @@ export function buildBandoriCardCatalog(
 
     const character = characters[String(characterId)];
     const bandId = toPositiveInteger(character?.bandId);
-    const displayNameResult = pickBestdoriCnThenJpRegionalName(card?.prefix);
+    const displayNameResult = pickBestdoriRegionalName(card?.prefix, locale);
     const displayName = displayNameResult?.name ?? `Card ${cardId}`;
     const assetRegion = displayNameResult?.assetRegion ?? (hasCnRelease(card?.releasedAt) ? "cn" : "jp");
-    const characterName = pickBestdoriCnThenJpName(character?.nickname)
-      ?? pickBestdoriCnThenJpName(character?.characterName)
-      ?? pickBestdoriCnThenJpName(character?.firstName)
+    const characterName = pickBestdoriLocalizedName(character?.nickname, locale)
+      ?? pickBestdoriLocalizedName(character?.characterName, locale)
+      ?? pickBestdoriLocalizedName(character?.firstName, locale)
       ?? `Character ${characterId}`;
     const attribute = isKnownAttribute(card?.attribute) ? card.attribute : null;
     const levelLimit = toPositiveInteger(card?.levelLimit) ?? 1;

@@ -1,10 +1,657 @@
 {
   "notices": {
     "cnExclusive": {
-      "label": "CN exclusive",
+      "label": "国服限定",
       "calendarDescription": "此日历仅覆盖国服活动，不支持日服、国际服、台服。",
-      "eventtrackerDescription": "此分数追踪器仅支持国服榜线与预测数据，不支持日服、国际服、台服。",
+      "eventtrackerDescription": "此分数追踪器仅支持国服档线与预测数据，不支持日服、国际服、台服。",
       "gameProfileBindingDescription": "UID 绑定与自动同步档案仅支持国服，不支持日服、国际服、台服。"
+    }
+  },
+  "terms": {
+    "card": "卡牌",
+    "cards": "卡牌",
+    "item": "道具",
+    "items": "道具",
+    "profile": "档案",
+    "gameUid": "游戏 UID",
+    "unknown": "未知",
+    "none": "无",
+    "notSet": "未定",
+    "seconds": "秒",
+    "attributes": {
+      "powerful": "Powerful",
+      "pure": "Pure",
+      "cool": "Cool",
+      "happy": "Happy"
+    },
+    "parameters": {
+      "performance": "演出",
+      "technique": "技巧",
+      "visual": "形象"
+    }
+  },
+  "cardEditor": {
+    "title": "编辑卡牌资料",
+    "thumbnailAlt": "{cardName} 缩略图",
+    "fields": {
+      "level": "等级",
+      "masterRank": "星光等级",
+      "skillLevel": "技能等级",
+      "episodes": "故事",
+      "trained": "特训",
+      "afterTrainingArt": "特训后图"
+    },
+    "states": {
+      "yes": "是",
+      "no": "否"
+    },
+    "actions": {
+      "close": "关闭编辑器",
+      "cancel": "取消",
+      "save": "保存",
+      "saving": "保存中...",
+      "delete": "删除",
+      "add": "添加"
+    }
+  },
+  "eventSwitcher": {
+    "bannerAlt": "活动横幅",
+    "recommendedLabel": "最新活动",
+    "noEvent": "无活动",
+    "switchPastEvents": "切换往期活动...",
+    "eventOption": "{eventId}期 : {eventName}",
+    "searchAction": "搜索活动",
+    "pickerTitle": "选择活动",
+    "searchPlaceholder": "搜索活动名或 ID",
+    "clearSearch": "清空搜索",
+    "closePicker": "关闭活动选择器",
+    "startLabel": "开始:",
+    "endLabel": "结束:"
+  },
+  "cardPicker": {
+    "searchPlaceholder": "搜索卡牌名称、角色名或卡牌 ID",
+    "resultCount": "{count} 张",
+    "currentSelection": "当前选择：",
+    "rarityAlt": "{rarity} 星",
+    "attributes": {
+      "powerful": "强力",
+      "cool": "酷",
+      "happy": "快乐",
+      "pure": "纯粹"
+    },
+    "sort": {
+      "release_jp": "发布日期（JP）",
+      "release_cn": "发布日期（CN）",
+      "id": "卡牌 ID"
+    },
+    "sortDirection": {
+      "desc": "倒序",
+      "asc": "正序",
+      "descTitle": "当前为倒序，点击切换为正序",
+      "ascTitle": "当前为正序，点击切换为倒序",
+      "descAria": "排序方向：倒序",
+      "ascAria": "排序方向：正序"
+    },
+    "art": {
+      "normal": "特训前",
+      "afterTraining": "特训后"
+    },
+    "filters": {
+      "band": "乐队",
+      "attribute": "属性",
+      "rarity": "稀有度",
+      "character": "角色",
+      "sort": "排序"
+    },
+    "actions": {
+      "all": "全部",
+      "selectAll": "选择全部",
+      "clearAll": "取消全部",
+      "clear": "清空",
+      "showMore": "显示更多 {count} 张",
+      "showAll": "显示全部"
+    },
+    "states": {
+      "loadingCards": "正在读取卡牌",
+      "empty": "没有符合条件的卡牌"
+    }
+  },
+  "gameProfiles": {
+    "panel": {
+      "title": "游戏档案管理",
+      "description": "绑定 UID 后可同步游戏数据，生成完整的游戏卡牌和道具加成等档案。",
+      "quotaSummary": "已绑定 {bindings}/{bindingLimit} · 自动 {autoProfiles}/{autoLimit} · 手动 {manualProfiles}/{manualLimit}",
+      "profileKinds": {
+        "auto": "自动同步",
+        "cloudManual": "云端手动",
+        "localCopy": "本地副本",
+        "localPendingMigration": "本地待迁移"
+      },
+      "bind": {
+        "title": "绑定新 UID",
+        "uidPlaceholder": "游戏 UID",
+        "limitReached": "已达到绑定 UID 上限，解绑后可继续绑定。",
+        "challengeLabel": "验证码",
+        "expiresAt": "有效期至 {date}",
+        "createChallenge": "生成验证码",
+        "refreshChallenge": "刷新验证码",
+        "verify": "我已填写，开始验证",
+        "verifying": "验证中",
+        "copy": "复制",
+        "copied": "已复制"
+      },
+      "uidManagement": {
+        "title": "UID 管理",
+        "quota": "自动档案 {count}/{limit}",
+        "syncWarning": "同步会请求游戏接口，可能让该 UID 当前登录中的游戏客户端掉线一次。",
+        "loading": "正在读取...",
+        "empty": "暂无已绑定 UID。绑定游戏 UID 后可以创建自动同步档案。",
+        "generated": "已生成自动档案",
+        "notSynced": "未同步",
+        "boundAt": "绑定时间：{date}",
+        "profileStatus": "卡牌 {cardCount} · 最后同步：{date}",
+        "missingProfile": "自动档案：未同步",
+        "syncLimitReached": "自动档案已达到上限，删除旧自动档案后可继续同步生成。",
+        "sync": "同步生成",
+        "resync": "重新同步",
+        "syncing": "同步中",
+        "unbind": "解绑",
+        "unbinding": "解绑中"
+      },
+      "manual": {
+        "title": "手动档案",
+        "description": "新建云端档案，或粘贴 Bestdori JSON 导入到云端。",
+        "quota": "手动 {count}/{limit}",
+        "namePlaceholder": "新建云端手动档案名称",
+        "jsonPlaceholder": "粘贴 Bestdori 档案 JSON",
+        "create": "新建",
+        "creating": "新建中",
+        "import": "导入到云端",
+        "importing": "导入中",
+        "defaultName": "手动档案"
+      },
+      "list": {
+        "title": "档案列表",
+        "description": "自动同步档案由 UID 同步生成，作为服务器侧只读数据使用；手动档案直接在云端创建和管理。本地旧档案仅作为迁移副本保留，可迁移到云端或删除本地副本。导出会复制 Bestdori 兼容 JSON，拷贝会生成新的云端手动档案。",
+        "loading": "正在读取...",
+        "empty": "暂无档案。",
+        "cardCount": "卡牌 {count}",
+        "cards": "卡牌",
+        "items": "道具",
+        "export": "导出",
+        "exporting": "导出中",
+        "exported": "导出成功",
+        "migrate": "迁移到云端",
+        "migrating": "迁移中",
+        "updateCloud": "更新云端",
+        "copy": "拷贝",
+        "copying": "拷贝中",
+        "delete": "删除",
+        "deleting": "删除中",
+        "lastSynced": "上次同步：{date}",
+        "exportLabel": "档案导出",
+        "exportCopied": "导出成功，已复制到剪贴板"
+      },
+      "messages": {
+        "challengeCreated": "验证码已生成，请填入游戏内个性签名。",
+        "bound": "绑定成功。",
+        "transferred": "绑定成功，该 UID 已从旧账号转移到当前账号。",
+        "unbound": "UID {uid} 已解绑，对应自动同步档案已删除。",
+        "synced": "UID {uid} 已同步。",
+        "manualCreated": "云端手动档案已创建。",
+        "imported": "Bestdori 档案已导入到云端。",
+        "copiedToCloud": "档案已拷贝为云端手动档案。",
+        "migrated": "本地档案已迁移到云端。",
+        "deleted": "档案已删除。"
+      },
+      "confirm": {
+        "unbind": "确认解绑游戏 UID {uid}？解绑会删除该 UID 与当前网页账号的绑定关系，并同时删除对应的自动同步档案{profileName}。",
+        "profileNameSuffix": "「{profileName}」",
+        "sync": "本次同步会读取该游戏 UID 的卡牌、区域道具、角色潜能和角色任务加成数据。\n\n由于游戏接口机制，同步过程中可能会导致该 UID 当前登录中的游戏客户端掉线一次。确认继续同步？",
+        "delete": "确认删除档案「{profileName}」？"
+      },
+      "errors": {
+        "notSignedIn": "请先登录",
+        "requestFailed": "请求失败（HTTP {status}）",
+        "invalidResponse": "接口返回格式无效",
+        "loadFailed": "读取游戏档案失败",
+        "createChallengeFailed": "创建验证码失败",
+        "verifyFailed": "验证失败",
+        "unbindFailed": "解绑失败",
+        "syncFailed": "同步游戏数据失败",
+        "createFailed": "创建云端手动档案失败",
+        "importFailed": "导入 Bestdori 档案失败",
+        "profileNotFound": "档案不存在",
+        "copyFailed": "拷贝档案失败",
+        "migrateFailed": "迁移档案失败",
+        "exportFailed": "导出档案失败",
+        "deleteFailed": "删除档案失败"
+      }
+    },
+    "cards": {
+      "title": "档案卡牌",
+      "description": "查看、筛选并编辑当前档案的卡牌资料。",
+      "back": "返回游戏档案",
+      "loadingCards": "正在读取卡牌...",
+      "workbenchTitle": "卡牌资料工作台",
+      "summary": "共 {total} 张卡牌 · 匹配 {matched} 张 · 已加载 {loaded} 张 · 资源区服 {region}",
+      "manageProfiles": "档案管理",
+      "searchPlaceholder": "搜索卡牌 ID、名称、角色",
+      "filters": {
+        "allAttributes": "全部属性",
+        "allRarities": "全部星级",
+        "allTraining": "全部训练",
+        "trained": "已特训",
+        "untrained": "未特训"
+      },
+      "actions": {
+        "reset": "重置",
+        "showMore": "显示更多 {count} 张",
+        "showAll": "显示全部"
+      },
+      "states": {
+        "empty": "没有符合条件的卡牌"
+      },
+      "labels": {
+        "unknownCharacter": "未知角色",
+        "characterFallback": "角色 {characterId}",
+        "cardFallback": "卡牌 {cardId}",
+        "editCard": "编辑 {cardName}"
+      },
+      "messages": {
+        "saved": "卡牌资料已保存",
+        "removed": "卡牌已移除"
+      },
+      "errors": {
+        "notSignedIn": "请先登录",
+        "requestFailed": "请求失败（HTTP {status}）",
+        "emptyPayload": "档案数据为空",
+        "missingVersion": "档案版本缺失，请重新载入后再保存",
+        "saveFailed": "保存失败（HTTP {status}）",
+        "invalidSaveResponse": "保存结果格式无效",
+        "loadCardsFailed": "读取卡牌资料失败（HTTP {status}）",
+        "loadCharactersFailed": "读取角色资料失败（HTTP {status}）",
+        "loadSkillsFailed": "读取技能资料失败（HTTP {status}）",
+        "loadFailed": "读取卡牌失败",
+        "saveCardsFailed": "保存卡牌失败"
+      }
+    },
+    "items": {
+      "title": "档案道具",
+      "description": "查看和编辑当前档案的区域道具、潜能解放和角色任务加成。",
+      "back": "返回游戏档案",
+      "loadingItems": "正在读取道具...",
+      "heading": "道具",
+      "summary": "区域道具按类型归档，角色加成按乐团聚合。",
+      "manageProfiles": "档案管理",
+      "tabs": {
+        "area": "区域道具",
+        "characters": "角色加成"
+      },
+      "actions": {
+        "edit": "编辑",
+        "cancel": "取消",
+        "save": "保存",
+        "saving": "保存中..."
+      },
+      "labels": {
+        "characterFallback": "角色 {characterId}",
+        "areaItemFallback": "区域道具 {areaItemId}",
+        "areaItemGeneric": "区域道具",
+        "level": "等级",
+        "levelFor": "{name} 等级",
+        "unknownItems": "未识别/兼容道具",
+        "itemLevel": "{name} · 等级 {level}",
+        "performanceShort": "演",
+        "techniqueShort": "技",
+        "visualShort": "形",
+        "potential": "潜能解放",
+        "training": "培养加成",
+        "collection": "收集加成",
+        "hiddenUngroupedCharacters": "存在未纳入当前乐团分组的角色，已按当前需求隐藏。"
+      },
+      "messages": {
+        "saved": "已保存"
+      },
+      "errors": {
+        "notSignedIn": "请先登录",
+        "requestFailed": "请求失败（HTTP {status}）",
+        "emptyPayload": "档案数据为空",
+        "loadFailed": "读取道具失败",
+        "missingVersion": "档案版本缺失，请重新载入后再保存",
+        "saveFailed": "保存失败（HTTP {status}）",
+        "invalidSaveResponse": "保存结果格式无效",
+        "saveItemsFailed": "保存道具失败"
+      }
+    }
+  },
+  "teamBuilder": {
+    "title": "组队计算器",
+    "loadingPage": "正在读取组队计算器数据...",
+    "verifyTitle": "邮箱验证后解锁组队计算器",
+    "verifyDescription": "组队计算会读取你的云端或本地游戏档案，因此需要先完成邮箱验证。",
+    "verifyAction": "前往验证邮箱",
+    "dynamicLoading": {
+      "cardPicker": "正在载入临时卡牌选择器",
+      "cardEditor": "正在载入临时卡牌编辑器"
+    },
+    "steps": {
+      "event": "活动",
+      "live": "演出",
+      "song": "歌曲",
+      "profile": "卡牌",
+      "calculate": "计算"
+    },
+    "eventTypes": {
+      "none": "无活动",
+      "story": "普通活动",
+      "challenge": "挑战活动",
+      "versus": "竞演活动",
+      "live_try": "试炼活动",
+      "mission_live": "任务活动",
+      "festival": "团队FES活动",
+      "medley": "巡回活动"
+    },
+    "targetLabels": {
+      "score": "分数",
+      "eventPoint": "活动Pt",
+      "scoreAndEventPoint": "分数/活动Pt"
+    },
+    "calculationModes": {
+      "maximize": "最大化"
+    },
+    "liveLabels": {
+      "free": "自由演出",
+      "multi": "协力演出",
+      "challenge": "挑战演出",
+      "versus": "巡回演出",
+      "team": "团队演出"
+    },
+    "festivalResults": {
+      "win": "胜利",
+      "lose": "失败"
+    },
+    "encoreSkillSources": {
+      "self": "你的队长",
+      "other1": "队长 1",
+      "other2": "队长 2",
+      "other3": "队长 3",
+      "other4": "队长 4"
+    },
+    "eventStatus": {
+      "ongoing": "进行中",
+      "upcoming": "即将开始",
+      "ended": "已结束",
+      "unknown": "时间未定",
+      "recommended": "推荐活动"
+    },
+    "labels": {
+      "eventBonus": "活动加成",
+      "loadBonus": "读取加成",
+      "performance": "演出",
+      "technique": "技巧",
+      "visual": "形象",
+      "type": "种类",
+      "attribute": "属性",
+      "character": "角色",
+      "match": "匹配",
+      "parameter": "参数",
+      "masterRank": "星光等级",
+      "cards": "卡牌",
+      "scoreFormula": "分数公式",
+      "averagePower": "平均综合力",
+      "skill6": "技能6",
+      "leader": "队长",
+      "leaderWithIndex": "队长 {index}",
+      "songDifficulty": "歌曲难度",
+      "noMatchingSongs": "没有找到匹配的歌曲",
+      "averageScore": "平均分",
+      "eventPoint": "活动Pt",
+      "totalPower": "综合力",
+      "roomScore": "房间分",
+      "bonus": "加成",
+      "scoreRange": "分数区间",
+      "areaItemConfiguration": "区域道具配置",
+      "bestSkillOrder": "最佳技能顺序",
+      "bestOrderProbability": "最佳顺序概率",
+      "supportTeam": "支援队伍",
+      "firstSong": "第 {index} 首",
+      "startCombo": "起始 Combo {combo}",
+      "scoreAndEventPoint": "分数/活动Pt",
+      "medleyDebug": "组曲调试信息",
+      "medleyDebugDescription": "反馈问题时可以复制这一段 JSON，里面包含输入摘要、证明状态、内存/耗时和算法统计。",
+      "eventSongSource": "活动曲目 {source}",
+      "selectedProfile": "已选择档案",
+      "unselectedProfile": "未选择档案",
+      "kind": "种类",
+      "difficulty": "难度",
+      "perfectRate": "Perfect率",
+      "songSearchFor": "第 {index} 首搜索",
+      "songSearch": "歌曲搜索",
+      "songSearchPlaceholder": "输入歌曲名或 ID",
+      "eventSongs": "活动曲目",
+      "song": "歌曲",
+      "unselectedSong": "未选择歌曲",
+      "unselected": "未选择",
+      "cloud": "云端",
+      "local": "本地",
+      "cardCount": "卡牌 {count}",
+      "lastSynced": "最后同步：{date}",
+      "event": "活动",
+      "profile": "档案",
+      "mode": "模式",
+      "target": "目标",
+      "resultLimit": "组队结果",
+      "timeLimit": "时间限制",
+      "minLeaderScoreUp": "最低队长技能倍率",
+      "minTotalPower": "最低综合力",
+      "unlimited": "不限制",
+      "exactEngineWarning": "精确证明引擎将占用大量运行内存空间，请使用电脑进行计算以避免网页因内存不足而崩溃",
+      "results": "结果",
+      "teamLiveRank": "团队演出排名",
+      "result": "结果",
+      "evaluatedCandidates": "已评估候选",
+      "evaluatedCandidatesDescription": "来自搜索过程中已经完整评估出的候选，不代表全局完整排名证明。",
+      "candidate": "候选",
+      "candidateWithIndex": "候选{index}",
+      "maxScoreBadge": "最高最高分",
+      "evaluatedAverageBadge": "已评估平均分候选",
+      "evaluatedCandidateDescription": "来自已评估候选",
+      "candidateCards": "候选卡牌 {count}",
+      "areaItemConfigurationCount": "区域道具配置 {count}",
+      "peakMemory": "峰值内存 {count} MiB",
+      "supportStats": "支援候选 {candidateCount} · 支援评估 {evaluationCount}",
+      "nextStep": "下一步：{step}",
+      "copyDebug": "复制调试信息",
+      "copied": "已复制"
+    },
+    "actions": {
+      "calculate": "计算",
+      "preparing": "准备数据中",
+      "calculating": "计算中 {elapsed}"
+    },
+    "states": {
+      "none": "无",
+      "noEvent": "无活动",
+      "noEventBonusData": "无活动加成数据",
+      "loadingAccount": "正在读取账号信息...",
+      "preparingData": "正在准备计算数据"
+    },
+    "proof": {
+      "exact": "已完成精确的全局最优证明",
+      "notExact": "未完成精确的全局最优证明",
+      "running": "计算中",
+      "stillProving": "仍在证明是否存在更高分队伍",
+      "completedElapsed": "完成：用时 {elapsed}",
+      "boundedStop": "无法完成精确的全局最优证明，提前结束：{reason}",
+      "timeToBest": "找到当前最佳队伍用时 {elapsed}",
+      "proofElapsed": "证明/收敛额外用时 {elapsed}",
+      "hasMaxScoreCandidate": "在最高平均分结果之外，有另外的最高最高分结果",
+      "fallbackBounded": "搜索空间尚未完全证明，已按当前最佳结果返回",
+      "configurationProgress": "配置证明进度 {closed}/{total}，已开始 {started}/{total}{traceLabel}",
+      "firstUnclosedTrace": "；第一个未完成配置：{trace}",
+      "unknownCompletion": "未记录完成状态",
+      "abortReasons": {
+        "candidateFillDeadline": "候选补全达到时间限制{limitLabel}",
+        "candidateFillSoftLimit": "候选数量达到软上限{limitLabel}",
+        "candidateFillGeneratorAborted": "候选生成提前中止",
+        "memorySoftLimit": "达到内存保护上限",
+        "solveWorkloadLimit": "精确子问题工作量达到上限",
+        "solveTimeout": "子问题达到时间限制{limitLabel}",
+        "anchoredJoinTimeout": "锚定候选拼接达到时间限制{limitLabel}",
+        "candidateFillPairRefine": "候选补全阶段仍需继续细化",
+        "initialCandidate": "初始候选生成未完成",
+        "pairUpper": "双队伍上界证明未闭合",
+        "deepPairUpper": "深层双队伍上界证明未闭合",
+        "highBudgetPairUpper": "高预算双队伍上界证明未闭合",
+        "invalidInput": "精确子问题输入无效",
+        "nodeLimit": "精确子问题工作量达到上限（上限 {limit} 节点）",
+        "boundedDominatedRootSkip": "因已有未闭合配置而跳过",
+        "boundedNearDeadlineRootSkip": "接近时间限制，跳过证明",
+        "exactUnprovedSkipDfs": "候选拼接未能完成证明，跳过 DFS",
+        "exactBeforeSeedingTimeout": "种子生成前达到时间限制",
+        "slotCandidateSeedingTimeout": "slot 候选种子阶段达到时间限制",
+        "greedySeedingTimeout": "贪心种子阶段达到时间限制",
+        "conflictBnbTimeout": "冲突分支定界达到时间限制",
+        "exactAfterSeedingTimeout": "种子生成后候选拼接达到时间限制",
+        "dfsTimeout": "DFS 证明达到时间限制"
+      },
+      "reasonParts": {
+        "memoryLimit": "达到内存保护上限{limitLabel}",
+        "timeLimit": "达到时间限制{limitLabel}",
+        "candidateJoinIncomplete": "候选拼接未完成：{reason}"
+      },
+      "limitLabel": "（限制 {limit}）",
+      "upperLimitLabel": "（上限 {limit}）",
+      "candidateSoftLimitLabel": "（上限 {limit}{generatedLabel}）",
+      "generatedLabel": "，已生成 {count}"
+    },
+    "actors": {
+      "self": "你",
+      "other": "队友 {index}"
+    },
+    "messages": {
+      "duplicateCardsSkipped": "{count} 张重复卡牌已跳过添加",
+      "addCurrentCardsFailed": "添加当期卡牌失败",
+      "workerStartFailed": "计算线程启动失败",
+      "memoryWatchdog": "已触发浏览器内存保护，计算已停止（当前约 {usedMiB} MiB，保护上限 {effectiveLimitMiB} MiB{heapLimitLabel}，来源 {source}）。",
+      "heapLimit": "，浏览器 heap 上限 {limitMiB} MiB",
+      "sourceAgent": "浏览器进程级统计",
+      "sourceHeap": "JS heap 统计"
+    },
+    "worker": {
+      "notReady": "{label}尚未准备完成",
+      "requestFailed": "请求失败（HTTP {status}）",
+      "invalidResponse": "接口返回格式无效",
+      "chartData": "谱面数据",
+      "cardData": "卡牌数据",
+      "characterData": "角色数据",
+      "skillData": "技能数据",
+      "areaItemData": "区域道具数据",
+      "songData": "歌曲数据",
+      "eventBonus": "活动加成",
+      "songDataMissing": "歌曲数据不存在",
+      "chartDataInvalid": "谱面数据格式无效",
+      "selectMedleySongs": "巡回演出需要选择 3 首歌曲",
+      "medleySongDataMissing": "第 {index} 首歌曲数据不存在",
+      "medleyChartDataInvalid": "第 {index} 首谱面数据格式无效",
+      "preloadFailed": "准备数据失败",
+      "calculateFailed": "计算失败"
+    },
+    "errors": {
+      "notSignedIn": "请先登录",
+      "requestFailed": "请求失败（HTTP {status}）",
+      "invalidResponse": "接口返回格式无效",
+      "loadFailed": "读取组队计算器数据失败",
+      "preloadFailed": "准备数据失败",
+      "profileLoadFailed": "读取档案失败",
+      "eventBonusLoadFailed": "读取活动加成失败",
+      "selectProfile": "请选择一个卡牌档案",
+      "selectMedleySongs": "巡回演出需要选择 3 首歌曲",
+      "selectSong": "请选择歌曲",
+      "dataNotReady": "计算数据尚未准备完成",
+      "profileNotReady": "档案尚未准备完成",
+      "invalidWorkerResponse": "计算线程返回格式无效",
+      "calculateFailed": "计算失败"
+    },
+    "preferences": {
+      "title": "计算卡牌偏好",
+      "summary": "临时卡牌 {temporaryCount} 张 · 排除卡牌 {excludedCount} 张",
+      "ownedNormalization": "档案卡牌参数标准化",
+      "ownedNormalizationDescription": "只影响当前档案拥有的卡牌参与计算时的参数，不影响临时卡牌",
+      "maxOwnedCards": "将所有卡牌设置为满等级/满故事/满特训状态",
+      "maxMasterRank": "将指定稀有度及以下的卡牌设置为满星光等级状态",
+      "maxSkillLevel": "将指定稀有度及以下的卡牌设置为满技能等级状态",
+      "rarityAndBelow": "{rarity} 星及以下",
+      "temporaryCards": "临时卡牌",
+      "addTemporary": "添加临时卡牌",
+      "addCurrentEventCards": "添加当期卡牌",
+      "adding": "添加中",
+      "clearTemporary": "清除所有临时卡牌",
+      "editTemporaryCard": "编辑临时卡牌",
+      "emptyTemporary": "当前档案没有临时卡牌",
+      "excludedCards": "排除卡牌",
+      "keepAll": "保留全部",
+      "excludeAll": "排除全部",
+      "openFilters": "展开筛选",
+      "closeFilters": "收起筛选",
+      "count": "{count} 张",
+      "countUpdating": "{count} 张（更新中）",
+      "preparing": "准备中",
+      "preparingCards": "正在准备卡牌列表",
+      "updatingCards": "正在更新卡牌列表",
+      "restoreCard": "恢复参与计算",
+      "excludeCard": "排除卡牌",
+      "showMore": "显示更多 {count} 张",
+      "showAll": "显示全部",
+      "emptyFiltered": "没有符合筛选条件的卡牌",
+      "profileCardsNotLoaded": "档案卡牌尚未加载"
+    },
+    "excludedFilter": {
+      "searchPlaceholder": "搜索卡牌名称、角色名或卡牌 ID",
+      "rarityAlt": "{rarity} 星",
+      "attributes": {
+        "powerful": "强力",
+        "cool": "酷",
+        "happy": "快乐",
+        "pure": "纯粹"
+      },
+      "rows": {
+        "band": "乐队",
+        "attribute": "属性",
+        "rarity": "稀有度",
+        "character": "角色",
+        "sort": "排序"
+      },
+      "sort": {
+        "power": "综合力",
+        "release_jp": "发布日期（JP）",
+        "release_cn": "发布日期（CN）",
+        "id": "卡牌 ID"
+      },
+      "sortDirection": {
+        "desc": "倒序",
+        "asc": "正序",
+        "descTitle": "当前为倒序，点击切换为正序",
+        "ascTitle": "当前为正序，点击切换为倒序",
+        "descAria": "排序方向：倒序",
+        "ascAria": "排序方向：正序"
+      },
+      "actions": {
+        "all": "全部",
+        "selectAll": "选择全部",
+        "clearAll": "取消全部",
+        "clear": "清空"
+      }
+    },
+    "temporaryCards": {
+      "pickerTitle": "添加临时卡牌",
+      "close": "关闭",
+      "preparing": "正在准备卡牌参数",
+      "editorTitle": "编辑临时卡牌",
+      "save": "保存",
+      "add": "添加",
+      "delete": "删除"
     }
   }
 }

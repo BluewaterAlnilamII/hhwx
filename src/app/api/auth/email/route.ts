@@ -10,6 +10,7 @@ import {
   sendAccountEmailVerificationEmail,
 } from "@/lib/account-email-verification-server";
 import { requireAuthenticatedUser } from "@/lib/auth-server";
+import { readAuthEmailRedirectTo } from "@/lib/auth-redirect-server";
 import { jsonRouteError, jsonSuccess } from "@/lib/api-response";
 import { findAuthUserByEmail, normalizeEmailAddress } from "@/lib/auth-user-server";
 import { createServerAuthSupabaseClient } from "@/lib/supabase-auth-server";
@@ -63,7 +64,7 @@ export async function POST(request: Request) {
     }
 
     const captchaToken = typeof body.captchaToken === "string" ? body.captchaToken.trim() : "";
-    const redirectTo = typeof body.redirectTo === "string" ? body.redirectTo.trim() : "";
+    const redirectTo = readAuthEmailRedirectTo(body.redirectTo, request);
     await verifyTurnstileToken(captchaToken, request);
 
     if (action === "resend-verification") {

@@ -2,7 +2,9 @@
 
 import { useDeferredValue, useMemo, useState } from "react";
 import { ChevronDown, ListFilter, Plus, Sparkles, Trash2 } from "lucide-react";
+import { useLocale, useTranslations } from "next-intl";
 import VirtualizedBandoriCardGrid from "@/components/bandori/VirtualizedBandoriCardGrid";
+import { type AppLocale } from "@/i18n/routing";
 import { type BandoriAssetRegion } from "@/lib/bandori-asset-proxy";
 import { BANDORI_CHARACTER_GROUPS, compareBandoriCharacterIds } from "@/lib/bandori-character-groups";
 import { type BandoriCharacterBonusState } from "@/lib/bandori-team-calculator";
@@ -77,6 +79,8 @@ export default function TeamBuilderCardPreferencesPanel({
   onToggleExcludedCard,
   onBulkSetExcludedCards,
 }: TeamBuilderCardPreferencesPanelProps) {
+  const locale = useLocale() as AppLocale;
+  const t = useTranslations("bandori.teamBuilder.preferences");
   const excludedCardIdSet = useMemo(
     () => new Set(preferences.excludedCardIds),
     [preferences.excludedCardIds],
@@ -93,6 +97,7 @@ export default function TeamBuilderCardPreferencesPanel({
     ready: profileCardEntriesReady,
   } = useTeamBuilderPreferenceCardEntries({
     cacheScopeKey,
+    locale,
     profileCards,
     cardMetadata,
     characters,
@@ -107,9 +112,10 @@ export default function TeamBuilderCardPreferencesPanel({
       characters,
       skills,
       characterBonusesById,
+      locale,
     ),
     card,
-  } satisfies TeamBuilderPreferenceCardEntry & { card: TemporaryGameProfileCard })), [cardMetadata, characterBonusesById, characters, preferences.temporaryCards, skills]);
+  } satisfies TeamBuilderPreferenceCardEntry & { card: TemporaryGameProfileCard })), [cardMetadata, characterBonusesById, characters, locale, preferences.temporaryCards, skills]);
 
   const bandOptions = useMemo(() => {
     const knownLabels = new Map(BANDORI_CHARACTER_GROUPS.map((group) => [group.bandId, group.label]));
@@ -275,17 +281,20 @@ export default function TeamBuilderCardPreferencesPanel({
     <div className="space-y-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
       <div>
         <div>
-          <h3 className="text-lg font-bold text-slate-900">计算卡牌偏好</h3>
+          <h3 className="text-lg font-bold text-slate-900">{t("title")}</h3>
           <p className="mt-1 text-sm font-semibold text-slate-500">
-            临时卡牌 {preferences.temporaryCards.length} 张 · 排除卡牌 {preferences.excludedCardIds.length} 张
+            {t("summary", {
+              temporaryCount: preferences.temporaryCards.length,
+              excludedCount: preferences.excludedCardIds.length,
+            })}
           </p>
         </div>
       </div>
 
       <div className="space-y-2 rounded-2xl border border-slate-200 bg-slate-50/70 p-3">
         <div>
-          <div className="text-sm font-bold text-slate-700">档案卡牌参数标准化</div>
-          <div className="mt-1 text-xs font-semibold text-slate-500">只影响当前档案拥有的卡牌参与计算时的参数，不影响临时卡牌</div>
+          <div className="text-sm font-bold text-slate-700">{t("ownedNormalization")}</div>
+          <div className="mt-1 text-xs font-semibold text-slate-500">{t("ownedNormalizationDescription")}</div>
         </div>
         <label className="grid min-h-11 grid-cols-[auto_minmax(0,1fr)] items-start gap-x-2 rounded-xl bg-white p-2 text-sm font-semibold text-slate-700 shadow-sm">
           <input
@@ -295,7 +304,7 @@ export default function TeamBuilderCardPreferencesPanel({
             className="mt-0.5 h-4 w-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500"
           />
           <span className="min-w-0 leading-5">
-            将所有卡牌设置为满等级/满故事/满特训状态
+            {t("maxOwnedCards")}
           </span>
         </label>
         <label className="grid min-h-11 grid-cols-[auto_minmax(0,1fr)] items-start gap-x-2 rounded-xl bg-white p-2 text-sm font-semibold text-slate-700 shadow-sm">
@@ -306,7 +315,7 @@ export default function TeamBuilderCardPreferencesPanel({
             className="mt-0.5 h-4 w-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500"
           />
           <span className="flex min-w-0 flex-wrap items-center gap-2 leading-5">
-            <span>将指定稀有度及以下的卡牌设置为满星光等级状态</span>
+            <span>{t("maxMasterRank")}</span>
             <select
               value={preferences.ownedCardParameters.maxMasterRankRarityThreshold}
               onChange={(event) => onUpdateOwnedCardParameters({
@@ -316,7 +325,7 @@ export default function TeamBuilderCardPreferencesPanel({
               className="h-7 rounded-md border border-slate-200 bg-white px-2 text-sm font-bold text-slate-700 outline-none transition focus:border-sky-300 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {CARD_PARAMETER_RARITY_THRESHOLD_OPTIONS.map((rarity) => (
-                <option key={rarity} value={rarity}>{rarity} 星及以下</option>
+                <option key={rarity} value={rarity}>{t("rarityAndBelow", { rarity })}</option>
               ))}
             </select>
           </span>
@@ -329,7 +338,7 @@ export default function TeamBuilderCardPreferencesPanel({
             className="mt-0.5 h-4 w-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500"
           />
           <span className="flex min-w-0 flex-wrap items-center gap-2 leading-5">
-            <span>将指定稀有度及以下的卡牌设置为满技能等级状态</span>
+            <span>{t("maxSkillLevel")}</span>
             <select
               value={preferences.ownedCardParameters.maxSkillLevelRarityThreshold}
               onChange={(event) => onUpdateOwnedCardParameters({
@@ -342,7 +351,7 @@ export default function TeamBuilderCardPreferencesPanel({
               className="h-7 rounded-md border border-slate-200 bg-white px-2 text-sm font-bold text-slate-700 outline-none transition focus:border-sky-300 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {CARD_PARAMETER_RARITY_THRESHOLD_OPTIONS.map((rarity) => (
-                <option key={rarity} value={rarity}>{rarity} 星及以下</option>
+                <option key={rarity} value={rarity}>{t("rarityAndBelow", { rarity })}</option>
               ))}
             </select>
           </span>
@@ -351,11 +360,11 @@ export default function TeamBuilderCardPreferencesPanel({
 
       <div className="space-y-3">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <h3 className="shrink-0 whitespace-nowrap text-lg font-bold text-slate-900">临时卡牌</h3>
+          <h3 className="shrink-0 whitespace-nowrap text-lg font-bold text-slate-900">{t("temporaryCards")}</h3>
           <div className="flex min-w-0 flex-1 flex-wrap gap-2 sm:justify-end">
             <button type="button" onClick={onAddTemporary} className="inline-flex h-10 items-center gap-2 rounded-2xl bg-sky-600 px-4 text-sm font-bold text-white transition hover:bg-sky-500">
               <Plus className="h-4 w-4" aria-hidden="true" />
-              添加临时卡牌
+              {t("addTemporary")}
             </button>
             <button
               type="button"
@@ -364,11 +373,11 @@ export default function TeamBuilderCardPreferencesPanel({
               className="inline-flex h-10 items-center gap-2 rounded-2xl border border-amber-200 bg-white px-4 text-sm font-bold text-amber-700 transition hover:bg-amber-50 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <Sparkles className="h-4 w-4" aria-hidden="true" />
-              {addingCurrentEventCards ? "添加中" : "添加当期卡牌"}
+              {addingCurrentEventCards ? t("adding") : t("addCurrentEventCards")}
             </button>
             <button type="button" onClick={onClearTemporaryCards} disabled={preferences.temporaryCards.length === 0} className="inline-flex h-10 items-center gap-2 rounded-2xl border border-rose-200 bg-white px-4 text-sm font-bold text-rose-600 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50">
               <Trash2 className="h-4 w-4" aria-hidden="true" />
-              清除所有临时卡牌
+              {t("clearTemporary")}
             </button>
           </div>
         </div>
@@ -385,21 +394,21 @@ export default function TeamBuilderCardPreferencesPanel({
                 key={entry.card.instanceId}
                 entry={entry}
                 assetRegion={assetRegion}
-                title="编辑临时卡牌"
+                title={t("editTemporaryCard")}
                 compact
                 onClick={() => onEditTemporary(entry.card.instanceId)}
               />
             ))}
           </div>
         ) : (
-          <div className="rounded-xl bg-slate-50 p-3 text-sm font-semibold text-slate-500">当前档案没有临时卡牌</div>
+          <div className="rounded-xl bg-slate-50 p-3 text-sm font-semibold text-slate-500">{t("emptyTemporary")}</div>
         )}
       </div>
 
       <div className="space-y-3">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h3 className="text-lg font-bold text-slate-900">排除卡牌</h3>
+            <h3 className="text-lg font-bold text-slate-900">{t("excludedCards")}</h3>
           </div>
           <div className="flex flex-wrap gap-2">
             <button
@@ -408,7 +417,7 @@ export default function TeamBuilderCardPreferencesPanel({
               disabled={filteredProfileCardIds.length === 0}
               className="inline-flex h-10 items-center justify-center rounded-xl border border-emerald-200 bg-white px-3 text-sm font-bold text-emerald-700 transition hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              保留全部
+              {t("keepAll")}
             </button>
             <button
               type="button"
@@ -416,7 +425,7 @@ export default function TeamBuilderCardPreferencesPanel({
               disabled={filteredProfileCardIds.length === 0}
               className="inline-flex h-10 items-center justify-center rounded-xl border border-rose-200 bg-white px-3 text-sm font-bold text-rose-600 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              排除全部
+              {t("excludeAll")}
             </button>
             <button
               type="button"
@@ -425,7 +434,7 @@ export default function TeamBuilderCardPreferencesPanel({
               className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-700 transition hover:border-blue-300 hover:text-blue-600"
             >
               <ListFilter className="h-4 w-4" aria-hidden="true" />
-              {excludedFiltersOpen ? "收起筛选" : "展开筛选"}
+              {excludedFiltersOpen ? t("closeFilters") : t("openFilters")}
               <ChevronDown className={`h-4 w-4 transition ${excludedFiltersOpen ? "rotate-180" : ""}`} aria-hidden="true" />
             </button>
           </div>
@@ -435,10 +444,10 @@ export default function TeamBuilderCardPreferencesPanel({
             filter={effectiveExcludedCardFilter}
             resultCountLabel={
               profileCardEntriesReady
-                ? `${filteredProfileCardEntries.length} 张`
+                ? t("count", { count: filteredProfileCardEntries.length })
                 : profileCardEntriesRefreshing
-                  ? `${filteredProfileCardEntries.length} 张（更新中）`
-                  : "准备中"
+                  ? t("countUpdating", { count: filteredProfileCardEntries.length })
+                  : t("preparing")
             }
             bandOptions={bandOptions}
             characterOptions={characterOptions}
@@ -458,12 +467,12 @@ export default function TeamBuilderCardPreferencesPanel({
         ) : null}
         {profileCards.length > 0 ? (
           profileCardEntriesInitialLoading ? (
-            <div className="rounded-xl bg-slate-50 p-3 text-sm font-semibold text-slate-500">正在准备卡牌列表</div>
+            <div className="rounded-xl bg-slate-50 p-3 text-sm font-semibold text-slate-500">{t("preparingCards")}</div>
           ) : (
           <>
             {profileCardEntriesRefreshing ? (
               <div role="status" aria-live="polite" className="rounded-xl bg-slate-50 p-3 text-sm font-semibold text-slate-500">
-                正在更新卡牌列表
+                {t("updatingCards")}
               </div>
             ) : null}
             <VirtualizedBandoriCardGrid
@@ -477,7 +486,7 @@ export default function TeamBuilderCardPreferencesPanel({
                   <TeamBuilderPreferenceCardTile
                     entry={entry}
                     assetRegion={assetRegion}
-                    title={excluded ? "恢复参与计算" : "排除卡牌"}
+                    title={excluded ? t("restoreCard") : t("excludeCard")}
                     compact
                     muted={excluded}
                     onClick={() => onToggleExcludedCard(entry.card.cardId)}
@@ -499,7 +508,7 @@ export default function TeamBuilderCardPreferencesPanel({
                   }))}
                   className="inline-flex h-10 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 shadow-sm transition hover:border-blue-300 hover:text-blue-600"
                 >
-                  显示更多 {Math.min(EXCLUDED_PROFILE_CARD_VISIBLE_INCREMENT, hiddenExcludedProfileCardCount)} 张
+                  {t("showMore", { count: Math.min(EXCLUDED_PROFILE_CARD_VISIBLE_INCREMENT, hiddenExcludedProfileCardCount) })}
                 </button>
                 <button
                   type="button"
@@ -509,19 +518,19 @@ export default function TeamBuilderCardPreferencesPanel({
                   })}
                   className="inline-flex h-10 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 shadow-sm transition hover:border-blue-300 hover:text-blue-600"
                 >
-                  显示全部
+                  {t("showAll")}
                 </button>
               </div>
             ) : null}
             {filteredProfileCardEntries.length === 0 ? (
               <div className="rounded-xl bg-white/80 p-3 text-center text-sm font-semibold text-slate-500">
-                没有符合筛选条件的卡牌
+                {t("emptyFiltered")}
               </div>
             ) : null}
           </>
           )
         ) : (
-          <div className="rounded-xl bg-slate-50 p-3 text-sm font-semibold text-slate-500">档案卡牌尚未加载</div>
+          <div className="rounded-xl bg-slate-50 p-3 text-sm font-semibold text-slate-500">{t("profileCardsNotLoaded")}</div>
         )}
       </div>
     </div>

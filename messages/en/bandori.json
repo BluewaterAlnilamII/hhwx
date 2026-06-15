@@ -6,5 +6,652 @@
       "eventtrackerDescription": "This event tracker only supports CN server rankings and prediction data. JP, EN, and TW servers are not supported here.",
       "gameProfileBindingDescription": "UID binding and automatic profile sync only support the CN server. JP, EN, and TW servers are not supported here."
     }
+  },
+  "terms": {
+    "card": "Card",
+    "cards": "Cards",
+    "item": "Item",
+    "items": "Items",
+    "profile": "Profile",
+    "gameUid": "Game UID",
+    "unknown": "Unknown",
+    "none": "None",
+    "notSet": "Not set",
+    "seconds": "seconds",
+    "attributes": {
+      "powerful": "Powerful",
+      "pure": "Pure",
+      "cool": "Cool",
+      "happy": "Happy"
+    },
+    "parameters": {
+      "performance": "Performance",
+      "technique": "Technique",
+      "visual": "Visual"
+    }
+  },
+  "cardEditor": {
+    "title": "Edit card details",
+    "thumbnailAlt": "{cardName} thumbnail",
+    "fields": {
+      "level": "Level",
+      "masterRank": "Master rank",
+      "skillLevel": "Skill level",
+      "episodes": "Stories",
+      "trained": "Trained",
+      "afterTrainingArt": "After-training art"
+    },
+    "states": {
+      "yes": "Yes",
+      "no": "No"
+    },
+    "actions": {
+      "close": "Close editor",
+      "cancel": "Cancel",
+      "save": "Save",
+      "saving": "Saving...",
+      "delete": "Delete",
+      "add": "Add"
+    }
+  },
+  "eventSwitcher": {
+    "bannerAlt": "Event banner",
+    "recommendedLabel": "Latest event",
+    "noEvent": "No event",
+    "switchPastEvents": "Switch past event...",
+    "eventOption": "{eventId}: {eventName}",
+    "searchAction": "Search events",
+    "pickerTitle": "Select event",
+    "searchPlaceholder": "Search event name or ID",
+    "clearSearch": "Clear search",
+    "closePicker": "Close picker",
+    "startLabel": "Start:",
+    "endLabel": "End:"
+  },
+  "cardPicker": {
+    "searchPlaceholder": "Search card name, character name, or card ID",
+    "resultCount": "{count} cards",
+    "currentSelection": "Current selection:",
+    "rarityAlt": "{rarity} star",
+    "attributes": {
+      "powerful": "Powerful",
+      "cool": "Cool",
+      "happy": "Happy",
+      "pure": "Pure"
+    },
+    "sort": {
+      "release_jp": "Release date (JP)",
+      "release_cn": "Release date (CN)",
+      "id": "Card ID"
+    },
+    "sortDirection": {
+      "desc": "Desc",
+      "asc": "Asc",
+      "descTitle": "Currently descending. Click to switch to ascending.",
+      "ascTitle": "Currently ascending. Click to switch to descending.",
+      "descAria": "Sort direction: descending",
+      "ascAria": "Sort direction: ascending"
+    },
+    "art": {
+      "normal": "Before training",
+      "afterTraining": "After training"
+    },
+    "filters": {
+      "band": "Band",
+      "attribute": "Attribute",
+      "rarity": "Rarity",
+      "character": "Character",
+      "sort": "Sort"
+    },
+    "actions": {
+      "all": "All",
+      "selectAll": "Select all",
+      "clearAll": "Clear all",
+      "clear": "Clear",
+      "showMore": "Show {count} more",
+      "showAll": "Show all"
+    },
+    "states": {
+      "loadingCards": "Loading cards",
+      "empty": "No cards match the current filters"
+    }
+  },
+  "gameProfiles": {
+    "panel": {
+      "title": "Game Profile Management",
+      "description": "Bind a UID to sync game data and build complete card, item, and bonus profiles.",
+      "quotaSummary": "Bound {bindings}/{bindingLimit} · Auto {autoProfiles}/{autoLimit} · Manual {manualProfiles}/{manualLimit}",
+      "profileKinds": {
+        "auto": "Auto sync",
+        "cloudManual": "Cloud manual",
+        "localCopy": "Local copy",
+        "localPendingMigration": "Local pending migration"
+      },
+      "bind": {
+        "title": "Bind new UID",
+        "uidPlaceholder": "Game UID",
+        "limitReached": "UID binding limit reached. Unbind one before binding another UID.",
+        "challengeLabel": "Verification code",
+        "expiresAt": "Expires at {date}",
+        "createChallenge": "Generate code",
+        "refreshChallenge": "Refresh code",
+        "verify": "I entered it, verify now",
+        "verifying": "Verifying",
+        "copy": "Copy",
+        "copied": "Copied"
+      },
+      "uidManagement": {
+        "title": "UID Management",
+        "quota": "Auto profiles {count}/{limit}",
+        "syncWarning": "Syncing calls the game API and may disconnect the currently logged-in game client for this UID once.",
+        "loading": "Loading...",
+        "empty": "No bound UIDs yet. Bind a game UID to create an auto-sync profile.",
+        "generated": "Auto profile generated",
+        "notSynced": "Not synced",
+        "boundAt": "Bound at: {date}",
+        "profileStatus": "Cards {cardCount} · Last synced: {date}",
+        "missingProfile": "Auto profile: not synced",
+        "syncLimitReached": "Auto profile limit reached. Delete an older auto profile before syncing another one.",
+        "sync": "Sync and create",
+        "resync": "Sync again",
+        "syncing": "Syncing",
+        "unbind": "Unbind",
+        "unbinding": "Unbinding"
+      },
+      "manual": {
+        "title": "Manual Profiles",
+        "description": "Create a cloud profile or paste Bestdori JSON to import it to the cloud.",
+        "quota": "Manual {count}/{limit}",
+        "namePlaceholder": "New cloud manual profile name",
+        "jsonPlaceholder": "Paste Bestdori profile JSON",
+        "create": "Create",
+        "creating": "Creating",
+        "import": "Import to cloud",
+        "importing": "Importing",
+        "defaultName": "Manual profile"
+      },
+      "list": {
+        "title": "Profile List",
+        "description": "Auto-sync profiles are generated from UID syncs and used as read-only server-side data. Manual profiles are created and managed directly in the cloud. Older local profiles remain as migration copies and can be migrated to the cloud or deleted locally. Export copies Bestdori-compatible JSON, and copy creates a new cloud manual profile.",
+        "loading": "Loading...",
+        "empty": "No profiles yet.",
+        "cardCount": "Cards {count}",
+        "cards": "Cards",
+        "items": "Items",
+        "export": "Export",
+        "exporting": "Exporting",
+        "exported": "Exported",
+        "migrate": "Migrate to cloud",
+        "migrating": "Migrating",
+        "updateCloud": "Update cloud",
+        "copy": "Copy",
+        "copying": "Copying",
+        "delete": "Delete",
+        "deleting": "Deleting",
+        "lastSynced": "Last synced: {date}",
+        "exportLabel": "Profile export",
+        "exportCopied": "Exported and copied to clipboard"
+      },
+      "messages": {
+        "challengeCreated": "Verification code generated. Enter it in your in-game profile message.",
+        "bound": "Binding succeeded.",
+        "transferred": "Binding succeeded. This UID was transferred from the old account to the current account.",
+        "unbound": "UID {uid} was unbound and the corresponding auto-sync profile was deleted.",
+        "synced": "UID {uid} synced.",
+        "manualCreated": "Cloud manual profile created.",
+        "imported": "Bestdori profile imported to the cloud.",
+        "copiedToCloud": "Profile copied as a cloud manual profile.",
+        "migrated": "Local profile migrated to the cloud.",
+        "deleted": "Profile deleted."
+      },
+      "confirm": {
+        "unbind": "Unbind game UID {uid}? This removes the UID binding from the current web account and also deletes the corresponding auto-sync profile{profileName}.",
+        "profileNameSuffix": " \"{profileName}\"",
+        "sync": "This sync will read cards, area items, character potentials, and character mission bonuses for this game UID.\n\nBecause of the game API behavior, the currently logged-in game client for this UID may be disconnected once during sync. Continue?",
+        "delete": "Delete profile \"{profileName}\"?"
+      },
+      "errors": {
+        "notSignedIn": "Please log in first",
+        "requestFailed": "Request failed (HTTP {status})",
+        "invalidResponse": "API response format is invalid",
+        "loadFailed": "Failed to load game profiles",
+        "createChallengeFailed": "Failed to create verification code",
+        "verifyFailed": "Verification failed",
+        "unbindFailed": "Failed to unbind",
+        "syncFailed": "Failed to sync game data",
+        "createFailed": "Failed to create cloud manual profile",
+        "importFailed": "Failed to import Bestdori profile",
+        "profileNotFound": "Profile not found",
+        "copyFailed": "Failed to copy profile",
+        "migrateFailed": "Failed to migrate profile",
+        "exportFailed": "Failed to export profile",
+        "deleteFailed": "Failed to delete profile"
+      }
+    },
+    "cards": {
+      "title": "Profile Cards",
+      "description": "View, filter, and edit the cards in the current profile.",
+      "back": "Back to game profiles",
+      "loadingCards": "Loading cards...",
+      "workbenchTitle": "Card Data Workbench",
+      "summary": "{total} cards · {matched} matched · {loaded} loaded · Asset server {region}",
+      "manageProfiles": "Profile management",
+      "searchPlaceholder": "Search card ID, name, or character",
+      "filters": {
+        "allAttributes": "All attributes",
+        "allRarities": "All rarities",
+        "allTraining": "All training states",
+        "trained": "Trained",
+        "untrained": "Untrained"
+      },
+      "actions": {
+        "reset": "Reset",
+        "showMore": "Show {count} more",
+        "showAll": "Show all"
+      },
+      "states": {
+        "empty": "No cards match the current filters"
+      },
+      "labels": {
+        "unknownCharacter": "Unknown character",
+        "characterFallback": "Character {characterId}",
+        "cardFallback": "Card {cardId}",
+        "editCard": "Edit {cardName}"
+      },
+      "messages": {
+        "saved": "Card details saved",
+        "removed": "Card removed"
+      },
+      "errors": {
+        "notSignedIn": "Please log in first",
+        "requestFailed": "Request failed (HTTP {status})",
+        "emptyPayload": "Profile data is empty",
+        "missingVersion": "Profile version is missing. Reload before saving again.",
+        "saveFailed": "Save failed (HTTP {status})",
+        "invalidSaveResponse": "Save response format is invalid",
+        "loadCardsFailed": "Failed to load card details (HTTP {status})",
+        "loadCharactersFailed": "Failed to load character data (HTTP {status})",
+        "loadSkillsFailed": "Failed to load skill data (HTTP {status})",
+        "loadFailed": "Failed to load cards",
+        "saveCardsFailed": "Failed to save cards"
+      }
+    },
+    "items": {
+      "title": "Profile Items",
+      "description": "View and edit area items, potential unlocks, and character mission bonuses in the current profile.",
+      "back": "Back to game profiles",
+      "loadingItems": "Loading items...",
+      "heading": "Items",
+      "summary": "Area items are grouped by type, and character bonuses are grouped by band.",
+      "manageProfiles": "Profile management",
+      "tabs": {
+        "area": "Area items",
+        "characters": "Character bonuses"
+      },
+      "actions": {
+        "edit": "Edit",
+        "cancel": "Cancel",
+        "save": "Save",
+        "saving": "Saving..."
+      },
+      "labels": {
+        "characterFallback": "Character {characterId}",
+        "areaItemFallback": "Area item {areaItemId}",
+        "areaItemGeneric": "Area item",
+        "level": "Level",
+        "levelFor": "{name} level",
+        "unknownItems": "Unknown / compatibility items",
+        "itemLevel": "{name} · Level {level}",
+        "performanceShort": "Perf",
+        "techniqueShort": "Tech",
+        "visualShort": "Vis",
+        "potential": "Potential unlock",
+        "training": "Training bonus",
+        "collection": "Collection bonus",
+        "hiddenUngroupedCharacters": "Some characters are not included in the current band grouping and are hidden for now."
+      },
+      "messages": {
+        "saved": "Saved"
+      },
+      "errors": {
+        "notSignedIn": "Please log in first",
+        "requestFailed": "Request failed (HTTP {status})",
+        "emptyPayload": "Profile data is empty",
+        "loadFailed": "Failed to load items",
+        "missingVersion": "Profile version is missing. Reload before saving again.",
+        "saveFailed": "Save failed (HTTP {status})",
+        "invalidSaveResponse": "Save response format is invalid",
+        "saveItemsFailed": "Failed to save items"
+      }
+    }
+  },
+  "teamBuilder": {
+    "title": "Team Builder",
+    "loadingPage": "Loading team builder data...",
+    "verifyTitle": "Verify email to unlock Team Builder",
+    "verifyDescription": "Team building reads your cloud or local game profiles, so email verification is required first.",
+    "verifyAction": "Verify email",
+    "dynamicLoading": {
+      "cardPicker": "Loading temporary card picker",
+      "cardEditor": "Loading temporary card editor"
+    },
+    "steps": {
+      "event": "Event",
+      "live": "Live",
+      "song": "Song",
+      "profile": "Cards",
+      "calculate": "Calculate"
+    },
+    "eventTypes": {
+      "none": "No event",
+      "story": "Story event",
+      "challenge": "Challenge event",
+      "versus": "VS Live event",
+      "live_try": "Live Try event",
+      "mission_live": "Mission Live event",
+      "festival": "Team FES event",
+      "medley": "Medley event"
+    },
+    "targetLabels": {
+      "score": "Score",
+      "eventPoint": "Event Pt",
+      "scoreAndEventPoint": "Score / Event Pt"
+    },
+    "calculationModes": {
+      "maximize": "Maximize"
+    },
+    "liveLabels": {
+      "free": "Free Live",
+      "multi": "Multi Live",
+      "challenge": "Challenge Live",
+      "versus": "Medley Live",
+      "team": "Team Live"
+    },
+    "festivalResults": {
+      "win": "Win",
+      "lose": "Loss"
+    },
+    "encoreSkillSources": {
+      "self": "Your leader",
+      "other1": "Leader 1",
+      "other2": "Leader 2",
+      "other3": "Leader 3",
+      "other4": "Leader 4"
+    },
+    "eventStatus": {
+      "ongoing": "Ongoing",
+      "upcoming": "Upcoming",
+      "ended": "Ended",
+      "unknown": "Time unknown",
+      "recommended": "Recommended event"
+    },
+    "labels": {
+      "eventBonus": "Event Bonus",
+      "loadBonus": "Load bonus",
+      "performance": "Performance",
+      "technique": "Technique",
+      "visual": "Visual",
+      "type": "Type",
+      "attribute": "Attribute",
+      "character": "Character",
+      "match": "Match",
+      "parameter": "Parameter",
+      "masterRank": "Master rank",
+      "cards": "Cards",
+      "scoreFormula": "Score formula",
+      "averagePower": "Average power",
+      "skill6": "Skill 6",
+      "leader": "Leader",
+      "leaderWithIndex": "Leader {index}",
+      "songDifficulty": "Song difficulty",
+      "noMatchingSongs": "No matching songs",
+      "averageScore": "Average score",
+      "eventPoint": "Event Pt",
+      "totalPower": "Total power",
+      "roomScore": "Room score",
+      "bonus": "Bonus",
+      "scoreRange": "Score range",
+      "areaItemConfiguration": "Area item setup",
+      "bestSkillOrder": "Best skill order",
+      "bestOrderProbability": "Best order probability",
+      "supportTeam": "Support team",
+      "firstSong": "Song {index}",
+      "startCombo": "Start combo {combo}",
+      "scoreAndEventPoint": "Score / Event Pt",
+      "medleyDebug": "Medley debug info",
+      "medleyDebugDescription": "Copy this JSON when reporting issues. It includes the input summary, proof state, memory/time usage, and algorithm stats.",
+      "eventSongSource": "Event songs {source}",
+      "selectedProfile": "Selected profile",
+      "unselectedProfile": "No profile selected",
+      "kind": "Type",
+      "difficulty": "Difficulty",
+      "perfectRate": "Perfect rate",
+      "songSearchFor": "Song {index} search",
+      "songSearch": "Song search",
+      "songSearchPlaceholder": "Enter song name or ID",
+      "eventSongs": "Event songs",
+      "song": "Song",
+      "unselectedSong": "No song selected",
+      "unselected": "Not selected",
+      "cloud": "Cloud",
+      "local": "Local",
+      "cardCount": "Cards {count}",
+      "lastSynced": "Last synced: {date}",
+      "event": "Event",
+      "profile": "Profile",
+      "mode": "Mode",
+      "target": "Target",
+      "resultLimit": "Team results",
+      "timeLimit": "Time limit",
+      "minLeaderScoreUp": "Minimum leader score-up",
+      "minTotalPower": "Minimum total power",
+      "unlimited": "Unlimited",
+      "exactEngineWarning": "The exact proof engine uses a large amount of runtime memory. Use a desktop browser to avoid page crashes from memory pressure.",
+      "results": "Results",
+      "teamLiveRank": "Team Live rank",
+      "result": "Result",
+      "evaluatedCandidates": "Evaluated candidates",
+      "evaluatedCandidatesDescription": "These candidates were fully evaluated during search and do not represent a proven global ranking.",
+      "candidate": "Candidate",
+      "candidateWithIndex": "Candidate {index}",
+      "maxScoreBadge": "Highest max score",
+      "evaluatedAverageBadge": "Evaluated average-score candidate",
+      "evaluatedCandidateDescription": "From evaluated candidates",
+      "candidateCards": "Candidate cards {count}",
+      "areaItemConfigurationCount": "Area item setups {count}",
+      "peakMemory": "Peak memory {count} MiB",
+      "supportStats": "Support candidates {candidateCount} · Support evaluations {evaluationCount}",
+      "nextStep": "Next: {step}",
+      "copyDebug": "Copy debug info",
+      "copied": "Copied"
+    },
+    "actions": {
+      "calculate": "Calculate",
+      "preparing": "Preparing data",
+      "calculating": "Calculating {elapsed}"
+    },
+    "states": {
+      "none": "None",
+      "noEvent": "No event",
+      "noEventBonusData": "No event bonus data",
+      "loadingAccount": "Loading account information...",
+      "preparingData": "Preparing calculation data"
+    },
+    "proof": {
+      "exact": "Exact global optimum proof completed",
+      "notExact": "Exact global optimum proof not completed",
+      "running": "Calculating",
+      "stillProving": "Still proving whether a higher-scoring team exists",
+      "completedElapsed": "Completed: {elapsed}",
+      "boundedStop": "Exact global optimum proof did not complete; stopped early: {reason}",
+      "timeToBest": "Found current best team in {elapsed}",
+      "proofElapsed": "Extra proof/convergence time {elapsed}",
+      "hasMaxScoreCandidate": "A separate highest max-score result exists outside the highest average-score result",
+      "fallbackBounded": "The search space is not fully proven; returning the current best result",
+      "configurationProgress": "Configuration proof progress {closed}/{total}; started {started}/{total}{traceLabel}",
+      "firstUnclosedTrace": "; first unfinished configuration: {trace}",
+      "unknownCompletion": "Completion status not recorded",
+      "abortReasons": {
+        "candidateFillDeadline": "Candidate fill reached the time limit{limitLabel}",
+        "candidateFillSoftLimit": "Candidate count reached the soft limit{limitLabel}",
+        "candidateFillGeneratorAborted": "Candidate generation stopped early",
+        "memorySoftLimit": "Memory guard limit reached",
+        "solveWorkloadLimit": "Exact subproblem workload limit reached",
+        "solveTimeout": "Subproblem reached the time limit{limitLabel}",
+        "anchoredJoinTimeout": "Anchored candidate join reached the time limit{limitLabel}",
+        "candidateFillPairRefine": "Candidate fill still needs pair refinement",
+        "initialCandidate": "Initial candidate generation did not complete",
+        "pairUpper": "Two-team upper-bound proof did not close",
+        "deepPairUpper": "Deep two-team upper-bound proof did not close",
+        "highBudgetPairUpper": "High-budget two-team upper-bound proof did not close",
+        "invalidInput": "Exact subproblem input is invalid",
+        "nodeLimit": "Exact subproblem workload limit reached (limit {limit} nodes)",
+        "boundedDominatedRootSkip": "Skipped because another configuration remains unclosed",
+        "boundedNearDeadlineRootSkip": "Skipped proof near the time limit",
+        "exactUnprovedSkipDfs": "Candidate join could not prove completion; skipped DFS",
+        "exactBeforeSeedingTimeout": "Time limit reached before seed generation",
+        "slotCandidateSeedingTimeout": "Slot candidate seed phase reached the time limit",
+        "greedySeedingTimeout": "Greedy seed phase reached the time limit",
+        "conflictBnbTimeout": "Conflict branch-and-bound reached the time limit",
+        "exactAfterSeedingTimeout": "Candidate join reached the time limit after seed generation",
+        "dfsTimeout": "DFS proof reached the time limit"
+      },
+      "reasonParts": {
+        "memoryLimit": "Memory guard limit reached{limitLabel}",
+        "timeLimit": "Time limit reached{limitLabel}",
+        "candidateJoinIncomplete": "Candidate join incomplete: {reason}"
+      },
+      "limitLabel": " (limit {limit})",
+      "upperLimitLabel": " (limit {limit})",
+      "candidateSoftLimitLabel": " (limit {limit}{generatedLabel})",
+      "generatedLabel": ", generated {count}"
+    },
+    "actors": {
+      "self": "You",
+      "other": "Teammate {index}"
+    },
+    "messages": {
+      "duplicateCardsSkipped": "{count} duplicate cards were skipped",
+      "addCurrentCardsFailed": "Failed to add current event cards",
+      "workerStartFailed": "Failed to start calculation worker",
+      "memoryWatchdog": "Browser memory guard stopped the calculation (currently about {usedMiB} MiB, guard limit {effectiveLimitMiB} MiB{heapLimitLabel}, source {source}).",
+      "heapLimit": ", browser heap limit {limitMiB} MiB",
+      "sourceAgent": "browser process memory",
+      "sourceHeap": "JS heap"
+    },
+    "worker": {
+      "notReady": "{label} is not ready yet",
+      "requestFailed": "Request failed (HTTP {status})",
+      "invalidResponse": "API response format is invalid",
+      "chartData": "Chart data",
+      "cardData": "Card data",
+      "characterData": "Character data",
+      "skillData": "Skill data",
+      "areaItemData": "Area item data",
+      "songData": "Song data",
+      "eventBonus": "Event bonus",
+      "songDataMissing": "Song data does not exist",
+      "chartDataInvalid": "Chart data format is invalid",
+      "selectMedleySongs": "Medley live requires selecting 3 songs",
+      "medleySongDataMissing": "Song {index} data does not exist",
+      "medleyChartDataInvalid": "Song {index} chart data format is invalid",
+      "preloadFailed": "Failed to prepare data",
+      "calculateFailed": "Calculation failed"
+    },
+    "errors": {
+      "notSignedIn": "Please log in first",
+      "requestFailed": "Request failed (HTTP {status})",
+      "invalidResponse": "API response format is invalid",
+      "loadFailed": "Failed to load team builder data",
+      "preloadFailed": "Failed to prepare data",
+      "profileLoadFailed": "Failed to load profile",
+      "eventBonusLoadFailed": "Failed to load event bonuses",
+      "selectProfile": "Select a card profile",
+      "selectMedleySongs": "Medley live requires selecting 3 songs",
+      "selectSong": "Select a song",
+      "dataNotReady": "Calculation data is not ready yet",
+      "profileNotReady": "Profile is not ready yet",
+      "invalidWorkerResponse": "Calculation worker response format is invalid",
+      "calculateFailed": "Calculation failed"
+    },
+    "preferences": {
+      "title": "Calculation Card Preferences",
+      "summary": "Temporary cards {temporaryCount} · Excluded cards {excludedCount}",
+      "ownedNormalization": "Owned card parameter normalization",
+      "ownedNormalizationDescription": "Only affects parameters used for owned profile cards during calculation. Temporary cards are not changed.",
+      "maxOwnedCards": "Set all cards to max level / max stories / trained",
+      "maxMasterRank": "Set cards at or below the selected rarity to max master rank",
+      "maxSkillLevel": "Set cards at or below the selected rarity to max skill level",
+      "rarityAndBelow": "{rarity} star and below",
+      "temporaryCards": "Temporary Cards",
+      "addTemporary": "Add temporary card",
+      "addCurrentEventCards": "Add current event cards",
+      "adding": "Adding",
+      "clearTemporary": "Clear all temporary cards",
+      "editTemporaryCard": "Edit temporary card",
+      "emptyTemporary": "No temporary cards in the current profile",
+      "excludedCards": "Excluded Cards",
+      "keepAll": "Keep all",
+      "excludeAll": "Exclude all",
+      "openFilters": "Open filters",
+      "closeFilters": "Collapse filters",
+      "count": "{count} cards",
+      "countUpdating": "{count} cards (updating)",
+      "preparing": "Preparing",
+      "preparingCards": "Preparing card list",
+      "updatingCards": "Updating card list",
+      "restoreCard": "Restore for calculation",
+      "excludeCard": "Exclude card",
+      "showMore": "Show {count} more",
+      "showAll": "Show all",
+      "emptyFiltered": "No cards match the filters",
+      "profileCardsNotLoaded": "Profile cards have not loaded yet"
+    },
+    "excludedFilter": {
+      "searchPlaceholder": "Search card name, character name, or card ID",
+      "rarityAlt": "{rarity} star",
+      "attributes": {
+        "powerful": "Powerful",
+        "cool": "Cool",
+        "happy": "Happy",
+        "pure": "Pure"
+      },
+      "rows": {
+        "band": "Band",
+        "attribute": "Attribute",
+        "rarity": "Rarity",
+        "character": "Character",
+        "sort": "Sort"
+      },
+      "sort": {
+        "power": "Total power",
+        "release_jp": "Release date (JP)",
+        "release_cn": "Release date (CN)",
+        "id": "Card ID"
+      },
+      "sortDirection": {
+        "desc": "Descending",
+        "asc": "Ascending",
+        "descTitle": "Currently descending. Click to switch to ascending.",
+        "ascTitle": "Currently ascending. Click to switch to descending.",
+        "descAria": "Sort direction: descending",
+        "ascAria": "Sort direction: ascending"
+      },
+      "actions": {
+        "all": "All",
+        "selectAll": "Select all",
+        "clearAll": "Clear all",
+        "clear": "Clear"
+      }
+    },
+    "temporaryCards": {
+      "pickerTitle": "Add temporary card",
+      "close": "Close",
+      "preparing": "Preparing card parameters",
+      "editorTitle": "Edit temporary card",
+      "save": "Save",
+      "add": "Add",
+      "delete": "Delete"
+    }
   }
 }

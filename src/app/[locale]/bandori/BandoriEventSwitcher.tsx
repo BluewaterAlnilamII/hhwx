@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 import { useMemo, useState } from "react";
+import { useTranslations } from "next-intl";
 import * as Dialog from "@radix-ui/react-dialog";
 import { History, Search, X } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -40,17 +41,22 @@ export default function BandoriEventSwitcher({
   selectedEventId,
   onSelectedEventIdChange,
   bannerUrl,
-  bannerAlt = "活动横幅",
+  bannerAlt,
   startText,
   endText,
   recommendedEventId,
-  recommendedLabel = "最新活动",
+  recommendedLabel,
   allowNoEvent = false,
-  noEventLabel = "无活动",
+  noEventLabel,
   loading = false,
 }: BandoriEventSwitcherProps) {
+  const t = useTranslations("bandori.eventSwitcher");
   const [isPickerOpen, setIsPickerOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+
+  const effectiveBannerAlt = bannerAlt ?? t("bannerAlt");
+  const effectiveRecommendedLabel = recommendedLabel ?? t("recommendedLabel");
+  const effectiveNoEventLabel = noEventLabel ?? t("noEvent");
 
   const filteredEvents = useMemo(() => {
     const keyword = searchQuery.trim().toLowerCase();
@@ -83,10 +89,10 @@ export default function BandoriEventSwitcher({
                 value={selectedEventId}
                 onChange={(event) => onSelectedEventIdChange(event.target.value)}
               >
-                {allowNoEvent ? <option value="none">{noEventLabel}</option> : <option disabled value="">切换往期活动...</option>}
+                {allowNoEvent ? <option value="none">{effectiveNoEventLabel}</option> : <option disabled value="">{t("switchPastEvents")}</option>}
                 {events.map((event) => (
                   <option key={event.id} value={event.id}>
-                    {event.id}期 : {event.name}
+                    {t("eventOption", { eventId: event.id, eventName: event.name })}
                   </option>
                 ))}
               </select>
@@ -96,8 +102,8 @@ export default function BandoriEventSwitcher({
                 onClick={() => recommendedEventId && onSelectedEventIdChange(recommendedEventId)}
                 disabled={!recommendedEventId}
                 className="flex h-11 w-11 items-center justify-center rounded-xl border border-blue-200/50 bg-blue-50 text-blue-600 shadow-sm transition-all hover:bg-blue-100 disabled:cursor-not-allowed disabled:border-gray-200 disabled:bg-gray-50 disabled:text-gray-300 dark:border-blue-800/50 dark:bg-blue-900/20 dark:text-blue-400 dark:hover:bg-blue-900/40"
-                title={recommendedLabel}
-                aria-label={recommendedLabel}
+                title={effectiveRecommendedLabel}
+                aria-label={effectiveRecommendedLabel}
               >
                 <History size={22} className="transition-transform duration-500 hover:rotate-[-45deg]" />
               </button>
@@ -107,8 +113,8 @@ export default function BandoriEventSwitcher({
                   <button
                     type="button"
                     className="flex h-11 w-11 items-center justify-center rounded-xl border border-gray-200 bg-gray-50 text-gray-500 shadow-sm transition-all hover:border-blue-300 hover:text-blue-500 dark:border-gray-800 dark:bg-gray-900/50"
-                    title="搜索活动"
-                    aria-label="搜索活动"
+                    title={t("searchAction")}
+                    aria-label={t("searchAction")}
                   >
                     <Search size={22} />
                   </button>
@@ -118,9 +124,10 @@ export default function BandoriEventSwitcher({
                   <Dialog.Overlay className="fixed inset-0 z-[100] bg-black/50 animate-in fade-in duration-200" />
                   <Dialog.Content className="fixed left-1/2 top-1/2 z-[101] flex max-h-[82vh] w-[min(32rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl bg-white shadow-2xl animate-in fade-in zoom-in-95 duration-200 dark:bg-[#131A2B]">
                     <div className="flex items-center justify-between border-b border-gray-100 p-5 dark:border-gray-800">
-                      <Dialog.Title className="text-xl font-bold text-gray-800 dark:text-white">选择活动</Dialog.Title>
+                      <Dialog.Title className="text-xl font-bold text-gray-800 dark:text-white">{t("pickerTitle")}</Dialog.Title>
+                      <Dialog.Description className="sr-only">{t("searchPlaceholder")}</Dialog.Description>
                       <Dialog.Close asChild>
-                        <button type="button" className="rounded-full p-1 text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800">
+                        <button type="button" aria-label={t("closePicker")} className="rounded-full p-1 text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800">
                           <X size={22} />
                         </button>
                       </Dialog.Close>
@@ -132,7 +139,7 @@ export default function BandoriEventSwitcher({
                         <input
                           autoFocus
                           type="text"
-                          placeholder="搜索活动名或 ID"
+                          placeholder={t("searchPlaceholder")}
                           className="w-full rounded border border-blue-400 bg-white px-10 py-1.5 text-sm font-medium text-gray-700 shadow-[0_0_8px_rgba(59,130,246,0.3)] outline-none dark:border-blue-500 dark:bg-[#0C111C] dark:text-gray-200"
                           value={searchQuery}
                           onChange={(event) => setSearchQuery(event.target.value)}
@@ -141,6 +148,7 @@ export default function BandoriEventSwitcher({
                           <button
                             type="button"
                             onClick={() => setSearchQuery("")}
+                            aria-label={t("clearSearch")}
                             className="absolute right-3 top-1/2 -translate-y-1/2 rounded-md bg-gray-200 p-0.5 text-gray-500 dark:bg-gray-800"
                           >
                             <X size={14} />
@@ -148,7 +156,7 @@ export default function BandoriEventSwitcher({
                         ) : null}
                       </div>
                       <Dialog.Close asChild>
-                        <button type="button" className="rounded-lg border border-gray-200 px-4 py-2 font-bold text-gray-600 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-800">
+                        <button type="button" aria-label={t("closePicker")} className="rounded-lg border border-gray-200 px-4 py-2 font-bold text-gray-600 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-800">
                           <X size={18} />
                         </button>
                       </Dialog.Close>
@@ -161,7 +169,7 @@ export default function BandoriEventSwitcher({
                           onClick={() => handleSelect("none")}
                           className="flex w-full items-center justify-between px-6 py-3.5 text-left text-sm font-bold text-gray-600 transition-colors hover:bg-blue-50/50 dark:text-gray-300 dark:hover:bg-blue-500/5"
                         >
-                          {noEventLabel}
+                          {effectiveNoEventLabel}
                         </button>
                       ) : null}
                       {filteredEvents.map((event) => (
@@ -172,7 +180,7 @@ export default function BandoriEventSwitcher({
                           className="group flex w-full items-center justify-between gap-3 px-6 py-3.5 text-left transition-colors hover:bg-blue-50/50 dark:hover:bg-blue-500/5"
                         >
                           <span className={cn("min-w-0 truncate text-sm font-bold", String(event.id) === selectedEventId ? "text-blue-500" : "text-gray-600 dark:text-gray-300")}>
-                            {event.id}期 : {event.name}
+                            {t("eventOption", { eventId: event.id, eventName: event.name })}
                           </span>
                           <span className="flex shrink-0 items-center gap-2">
                             {event.typeLabel ? <span className="rounded border border-gray-200 px-1.5 py-0.5 text-[10px] font-bold text-gray-400 dark:border-gray-700">{event.typeLabel}</span> : null}
@@ -210,8 +218,8 @@ export default function BandoriEventSwitcher({
         <div className="min-h-[3rem] text-sm font-medium text-gray-500 dark:text-gray-400">
           {startText || endText ? (
             <>
-              {startText ? <p>开始: {startText}</p> : null}
-              {endText ? <p>结束: {endText}</p> : null}
+              {startText ? <p>{t("startLabel")} {startText}</p> : null}
+              {endText ? <p>{t("endLabel")} {endText}</p> : null}
             </>
           ) : showSkeleton ? (
             <div className="flex flex-col gap-2 py-0.5" aria-hidden="true">
@@ -220,8 +228,8 @@ export default function BandoriEventSwitcher({
             </div>
           ) : (
             <>
-              <p>开始: -</p>
-              <p>结束: -</p>
+              <p>{t("startLabel")} -</p>
+              <p>{t("endLabel")} -</p>
             </>
           )}
         </div>
@@ -233,7 +241,7 @@ export default function BandoriEventSwitcher({
             // eslint-disable-next-line @next/next/no-img-element
             <img
               src={bannerUrl}
-              alt={bannerAlt}
+              alt={effectiveBannerAlt}
               loading="eager"
               fetchPriority="high"
               decoding="async"

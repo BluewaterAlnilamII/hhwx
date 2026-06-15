@@ -2,6 +2,7 @@
 
 import { Link } from "@/i18n/navigation";
 import { memo, use, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import { useLocale, useTranslations } from "next-intl";
 import {
   Check,
   Filter,
@@ -9,6 +10,7 @@ import {
   Search,
 } from "lucide-react";
 import { getApiErrorMessage, parseApiSuccessData } from "@/lib/api-contracts";
+import { type AppLocale } from "@/i18n/routing";
 import { type BandoriAssetRegion } from "@/lib/bandori-asset-proxy";
 import {
   normalizeBandoriSkillLabel,
@@ -23,7 +25,7 @@ import {
   buildBandoriCharacterBonuses,
   toBandoriCharacterBonusMap,
 } from "@/lib/bandori-character-bonuses";
-import { pickBestdoriCnThenJpName } from "@/lib/bestdori-regional-names";
+import { pickBestdoriLocalizedName } from "@/lib/bestdori-regional-names";
 import { decodeBestdoriProfile, encodeBestdoriProfile } from "@/lib/bestdori-profile-codec";
 import {
   decodeCompressedGameProfilePayload,
@@ -40,7 +42,7 @@ import {
   updateLocalGameProfilePayload,
 } from "@/lib/user-game-profile-local-store";
 import AccountShell, { AccountErrorState, AccountLoadingState, AccountSignInState } from "@/app/[locale]/account/AccountShell";
-import { getAccessToken, useAccountProfile } from "@/app/[locale]/account/useAccountProfile";
+import { getAccessToken, useLocalizedAccountProfile } from "@/app/[locale]/account/useAccountProfile";
 import SharedBandoriCardThumbnail from "@/components/bandori/BandoriCardThumbnail";
 import { BandoriCardHoverTooltipPortal } from "@/components/bandori/BandoriCardHoverTooltip";
 import VirtualizedBandoriCardGrid from "@/components/bandori/VirtualizedBandoriCardGrid";
@@ -114,6 +116,18 @@ type LoadedProfilePayload = {
   cardsHash: string | null;
 };
 
+type CardPageMessages = {
+  notSignedIn: string;
+  requestFailed: (status: number) => string;
+  emptyPayload: string;
+  missingVersion: string;
+  saveFailed: (status: number) => string;
+  invalidSaveResponse: string;
+  loadCardsFailed: (status: number) => string;
+  loadCharactersFailed: (status: number) => string;
+  loadSkillsFailed: (status: number) => string;
+};
+
 type CardFilterState = {
   query: string;
   attribute: "all" | CardAttribute;
@@ -148,38 +162,56 @@ function pickNonEmptyText(...values: Array<string | null | undefined>): string |
   return null;
 }
 
-function pickCharacterName(character: CharacterRecord | undefined, characterId: number | undefined): string {
-  return pickNonEmptyText(
-    character?.nicknameCn,
-    character?.nicknameTw,
-    character?.nicknameJp,
-    character?.nicknameEn,
-    character?.characterNameCn,
-    character?.characterNameTw,
-    character?.characterNameJp,
-    character?.characterNameEn,
-  )
-    ?? (characterId ? `角色 ${characterId}` : "未知角色");
+function pickCharacterName(
+  character: CharacterRecord | undefined,
+  characterId: number | undefined,
+  locale: AppLocale,
+  fallback: { unknownCharacter: string; character: (characterId: number) => string },
+): string {
+  const localizedName = locale === "en"
+    ? pickNonEmptyText(
+      character?.nicknameEn,
+      character?.characterNameEn,
+      character?.nicknameJp,
+      character?.characterNameJp,
+      character?.nicknameCn,
+      character?.nicknameTw,
+      character?.characterNameCn,
+      character?.characterNameTw,
+    )
+    : pickNonEmptyText(
+      character?.nicknameCn,
+      character?.nicknameTw,
+      character?.nicknameJp,
+      character?.nicknameEn,
+      character?.characterNameCn,
+      character?.characterNameTw,
+      character?.characterNameJp,
+      character?.characterNameEn,
+    );
+
+  return localizedName ?? (characterId ? fallback.character(characterId) : fallback.unknownCharacter);
 }
 
-function pickFullCharacterName(character: CharacterRecord | undefined, characterId: number | undefined): string {
-  return pickNonEmptyText(
-    character?.nicknameCn,
-    character?.nicknameTw,
-    character?.nicknameJp,
-    character?.nicknameEn,
-    character?.characterNameCn,
-    character?.characterNameTw,
-    character?.characterNameJp,
-    character?.characterNameEn,
-  )
-    ?? pickCharacterName(character, characterId);
+function pickFullCharacterName(
+  character: CharacterRecord | undefined,
+  characterId: number | undefined,
+  locale: AppLocale,
+  fallback: { unknownCharacter: string; character: (characterId: number) => string },
+): string {
+  return pickCharacterName(character, characterId, locale, fallback);
 }
 
-function pickCardName(cardId: number, metadata?: BestdoriCardMetadata): string {
-  return metadata?.displayName
-    ?? pickBestdoriCnThenJpName(metadata?.prefix)
-    ?? `卡牌 ${cardId}`;
+function pickCardName(
+  cardId: number,
+  metadata: BestdoriCardMetadata | undefined,
+  locale: AppLocale,
+  fallback: (cardId: number) => string,
+): string {
+  const localizedName = pickBestdoriLocalizedName(metadata?.prefix, locale);
+  return locale === "en"
+    ? localizedName ?? metadata?.displayName ?? fallback(cardId)
+    : metadata?.displayName ?? localizedName ?? fallback(cardId);
 }
 
 function isKnownAttribute(value: string | undefined): value is CardAttribute {
@@ -219,7 +251,7 @@ function getProfileApiErrorMessage(payload: unknown, fallback: string): string {
   return getApiErrorMessage(payload) || fallback;
 }
 
-async function requestProfilePayload(profileId: string): Promise<LoadedProfilePayload> {
+async function requestProfilePayload(profileId: string, messages: CardPageMessages): Promise<LoadedProfilePayload> {
   if (isLocalGameProfileId(profileId)) {
     return {
       payload: await readLocalGameProfilePayload(profileId),
@@ -230,7 +262,7 @@ async function requestProfilePayload(profileId: string): Promise<LoadedProfilePa
 
   const accessToken = await getAccessToken();
   if (!accessToken) {
-    throw new Error("请先登录");
+    throw new Error(messages.notSignedIn);
   }
 
   const response = await fetch(`/api/account/game-profiles/${profileId}/payload`, {
@@ -238,12 +270,12 @@ async function requestProfilePayload(profileId: string): Promise<LoadedProfilePa
   });
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
-    throw new Error(getApiErrorMessage(payload) || `请求失败（HTTP ${response.status}）`);
+    throw new Error(getApiErrorMessage(payload) || messages.requestFailed(response.status));
   }
 
   const data = parseApiSuccessData<GameProfilePayloadResponse>(payload);
   if (!data) {
-    throw new Error("档案数据为空");
+    throw new Error(messages.emptyPayload);
   }
 
   return {
@@ -253,7 +285,13 @@ async function requestProfilePayload(profileId: string): Promise<LoadedProfilePa
   };
 }
 
-async function saveProfileCards(profileId: string, cards: UserGameProfileCardRecord[], payload: UserGameProfilePayload, baseCardsHash: string | null): Promise<string | null> {
+async function saveProfileCards(
+  profileId: string,
+  cards: UserGameProfileCardRecord[],
+  payload: UserGameProfilePayload,
+  baseCardsHash: string | null,
+  messages: CardPageMessages,
+): Promise<string | null> {
   if (isLocalGameProfileId(profileId)) {
     await updateLocalGameProfilePayload(profileId, payload);
     return null;
@@ -261,11 +299,11 @@ async function saveProfileCards(profileId: string, cards: UserGameProfileCardRec
 
   const accessToken = await getAccessToken();
   if (!accessToken) {
-    throw new Error("请先登录");
+    throw new Error(messages.notSignedIn);
   }
 
   if (!baseCardsHash) {
-    throw new Error("档案版本缺失，请重新载入后再保存");
+    throw new Error(messages.missingVersion);
   }
 
   const response = await fetch(`/api/account/game-profiles/${profileId}/cards`, {
@@ -278,16 +316,16 @@ async function saveProfileCards(profileId: string, cards: UserGameProfileCardRec
   });
   const responsePayload = await response.json().catch(() => ({}));
   if (!response.ok) {
-    throw new Error(getProfileApiErrorMessage(responsePayload, `保存失败（HTTP ${response.status}）`));
+    throw new Error(getProfileApiErrorMessage(responsePayload, messages.saveFailed(response.status)));
   }
   const data = parseApiSuccessData<GameProfileSectionUpdateResult>(responsePayload);
   if (!data) {
-    throw new Error("保存结果格式无效");
+    throw new Error(messages.invalidSaveResponse);
   }
   return data.sectionVersions.cardsHash;
 }
 
-async function requestCardMetadata(cardIds: number[]): Promise<Record<string, BestdoriCardMetadata>> {
+async function requestCardMetadata(cardIds: number[], messages: CardPageMessages): Promise<Record<string, BestdoriCardMetadata>> {
   const chunks: number[][] = [];
   for (let index = 0; index < cardIds.length; index += CARD_METADATA_CHUNK_SIZE) {
     chunks.push(cardIds.slice(index, index + CARD_METADATA_CHUNK_SIZE));
@@ -298,7 +336,7 @@ async function requestCardMetadata(cardIds: number[]): Promise<Record<string, Be
       const response = await fetch(`/api/bandori/cards?ids=${chunk.join(",")}`);
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) {
-        throw new Error(getApiErrorMessage(payload) || `读取卡牌资料失败（HTTP ${response.status}）`);
+        throw new Error(getApiErrorMessage(payload) || messages.loadCardsFailed(response.status));
       }
       return parseApiSuccessData<{ cards?: Record<string, BestdoriCardMetadata> }>(payload)?.cards ?? {};
     }),
@@ -307,9 +345,9 @@ async function requestCardMetadata(cardIds: number[]): Promise<Record<string, Be
   return Object.assign({}, ...responses);
 }
 
-async function requestMetadata(cardIds: number[]): Promise<MetadataPayload> {
+async function requestMetadata(cardIds: number[], messages: CardPageMessages): Promise<MetadataPayload> {
   const [cards, charactersResponse, skillsResponse] = await Promise.all([
-    requestCardMetadata(cardIds),
+    requestCardMetadata(cardIds, messages),
     fetch("/api/bandori/characters"),
     fetch("/api/bandori/master/skills"),
   ]);
@@ -319,10 +357,10 @@ async function requestMetadata(cardIds: number[]): Promise<MetadataPayload> {
   const skillData = parseApiSuccessData<{ payload?: Record<string, BandoriSkillLabelMaster | undefined> }>(skillsPayload);
 
   if (!charactersResponse.ok) {
-    throw new Error(getApiErrorMessage(charactersPayload) || `读取角色资料失败（HTTP ${charactersResponse.status}）`);
+    throw new Error(getApiErrorMessage(charactersPayload) || messages.loadCharactersFailed(charactersResponse.status));
   }
   if (!skillsResponse.ok) {
-    throw new Error(getApiErrorMessage(skillsPayload) || `读取技能资料失败（HTTP ${skillsResponse.status}）`);
+    throw new Error(getApiErrorMessage(skillsPayload) || messages.loadSkillsFailed(skillsResponse.status));
   }
 
   return {
@@ -378,6 +416,8 @@ function CardThumbnail({
 const CardTile = memo(function CardTile({
   card,
   metadata,
+  locale,
+  labels,
   characterName,
   skillEffectLabel,
   bandId,
@@ -388,6 +428,11 @@ const CardTile = memo(function CardTile({
 }: {
   card: UserGameProfileCardRecord;
   metadata?: BestdoriCardMetadata;
+  locale: AppLocale;
+  labels: {
+    cardFallback: (cardId: number) => string;
+    editCard: (cardName: string) => string;
+  };
   characterName: string;
   skillEffectLabel: string;
   bandId: number | null;
@@ -396,7 +441,7 @@ const CardTile = memo(function CardTile({
   canEdit: boolean;
   onEdit: () => void;
 }) {
-  const cardName = pickCardName(card.cardId, metadata);
+  const cardName = pickCardName(card.cardId, metadata, locale, labels.cardFallback);
   const tileRef = useRef<HTMLElement | null>(null);
   const [hoverOpen, setHoverOpen] = useState(false);
 
@@ -415,7 +460,7 @@ const CardTile = memo(function CardTile({
           "relative block h-full w-full overflow-visible rounded-[5px] bg-white text-left shadow-[0_2px_7px_rgba(15,23,42,0.22)]",
           !canEdit && "cursor-default",
         )}
-        aria-label={canEdit ? `编辑 ${cardName}` : cardName}
+        aria-label={canEdit ? labels.editCard(cardName) : cardName}
       >
         <CardThumbnail card={card} metadata={metadata} bandId={bandId} characterBonusesById={characterBonusesById} region={region} alt={cardName} />
       </button>
@@ -438,7 +483,10 @@ const CardTile = memo(function CardTile({
 
 export default function GameProfileCardsPage({ params }: { params: Promise<{ profileId: string }> }) {
   const { profileId } = use(params);
-  const { userId, authReady, loadingProfile, profileError } = useAccountProfile();
+  const locale = useLocale() as AppLocale;
+  const t = useTranslations("bandori.gameProfiles.cards");
+  const commonT = useTranslations("common");
+  const { userId, authReady, loadingProfile, profileError } = useLocalizedAccountProfile();
   const [profilePayload, setProfilePayload] = useState<UserGameProfilePayload | null>(null);
   const [cards, setCards] = useState<UserGameProfileCardRecord[]>([]);
   const [baselineCards, setBaselineCards] = useState<UserGameProfileCardRecord[]>([]);
@@ -453,6 +501,23 @@ export default function GameProfileCardsPage({ params }: { params: Promise<{ pro
   const [error, setError] = useState("");
   const [saveMessage, setSaveMessage] = useState("");
   const deferredQuery = useDeferredValue(filters.query);
+  const messages = useMemo<CardPageMessages>(() => ({
+    notSignedIn: t("errors.notSignedIn"),
+    requestFailed: (status) => t("errors.requestFailed", { status }),
+    emptyPayload: t("errors.emptyPayload"),
+    missingVersion: t("errors.missingVersion"),
+    saveFailed: (status) => t("errors.saveFailed", { status }),
+    invalidSaveResponse: t("errors.invalidSaveResponse"),
+    loadCardsFailed: (status) => t("errors.loadCardsFailed", { status }),
+    loadCharactersFailed: (status) => t("errors.loadCharactersFailed", { status }),
+    loadSkillsFailed: (status) => t("errors.loadSkillsFailed", { status }),
+  }), [t]);
+  const fallbackLabels = useMemo(() => ({
+    unknownCharacter: t("labels.unknownCharacter"),
+    character: (characterId: number) => t("labels.characterFallback", { characterId }),
+    card: (cardId: number) => t("labels.cardFallback", { cardId }),
+    editCard: (cardName: string) => t("labels.editCard", { cardName }),
+  }), [t]);
   const characterBonusesById = useMemo(
     () => profilePayload
       ? toBandoriCharacterBonusMap(buildBandoriCharacterBonuses(
@@ -472,10 +537,10 @@ export default function GameProfileCardsPage({ params }: { params: Promise<{ pro
     async function loadCards() {
       setLoadingCards(true);
       try {
-        const nextProfile = await requestProfilePayload(profileId);
+        const nextProfile = await requestProfilePayload(profileId, messages);
         const nextPayload = nextProfile.payload;
         const nextCards = getGameProfileCards(nextPayload);
-        const nextMetadata = await requestMetadata(uniqueNumbers(nextCards.map((card) => card.cardId)));
+        const nextMetadata = await requestMetadata(uniqueNumbers(nextCards.map((card) => card.cardId)), messages);
         if (!canceled) {
           setProfilePayload(nextPayload);
           setCanEditProfile(nextProfile.isEditable);
@@ -490,7 +555,7 @@ export default function GameProfileCardsPage({ params }: { params: Promise<{ pro
         }
       } catch (loadError) {
         if (!canceled) {
-          setError(loadError instanceof Error ? loadError.message : "读取卡牌失败");
+          setError(loadError instanceof Error ? loadError.message : t("errors.loadFailed"));
         }
       } finally {
         if (!canceled) {
@@ -503,7 +568,7 @@ export default function GameProfileCardsPage({ params }: { params: Promise<{ pro
     return () => {
       canceled = true;
     };
-  }, [profileId, userId]);
+  }, [messages, profileId, t, userId]);
 
   const region = useMemo(() => getRegionFromProfileServer(profilePayload?.bestdoriProfile.server), [profilePayload]);
   const charactersById = useMemo(() => new Map(metadata.characters.map((character) => [character.characterId, character])), [metadata.characters]);
@@ -513,8 +578,8 @@ export default function GameProfileCardsPage({ params }: { params: Promise<{ pro
     const normalizedQuery = deferredQuery.trim().toLowerCase();
     return cards.filter((card) => {
       const cardMetadata = metadata.cards[String(card.cardId)];
-      const characterName = pickCharacterName(charactersById.get(cardMetadata?.characterId ?? 0), cardMetadata?.characterId).toLowerCase();
-      const cardName = pickCardName(card.cardId, cardMetadata).toLowerCase();
+      const characterName = pickCharacterName(charactersById.get(cardMetadata?.characterId ?? 0), cardMetadata?.characterId, locale, fallbackLabels).toLowerCase();
+      const cardName = pickCardName(card.cardId, cardMetadata, locale, fallbackLabels.card).toLowerCase();
       const attribute = isKnownAttribute(cardMetadata?.attribute) ? cardMetadata.attribute : null;
 
       if (normalizedQuery && !String(card.cardId).includes(normalizedQuery) && !cardName.includes(normalizedQuery) && !characterName.includes(normalizedQuery)) {
@@ -534,7 +599,7 @@ export default function GameProfileCardsPage({ params }: { params: Promise<{ pro
       }
       return true;
     });
-  }, [cards, charactersById, deferredQuery, filters.attribute, filters.rarity, filters.training, metadata.cards]);
+  }, [cards, charactersById, deferredQuery, fallbackLabels, filters.attribute, filters.rarity, filters.training, locale, metadata.cards]);
   const visibleCardCount = Math.min(visibleCount, filteredCards.length);
   const remainingCards = Math.max(0, filteredCards.length - visibleCardCount);
 
@@ -551,7 +616,7 @@ export default function GameProfileCardsPage({ params }: { params: Promise<{ pro
     setSaveMessage("");
     try {
       const nextPayload = buildPayloadWithCards(profilePayload, nextCards);
-      const nextCardsHash = await saveProfileCards(profileId, nextCards, nextPayload, baseCardsHash);
+      const nextCardsHash = await saveProfileCards(profileId, nextCards, nextPayload, baseCardsHash, messages);
       const savedCards = getGameProfileCards(nextPayload);
       setProfilePayload(nextPayload);
       setBaseCardsHash(nextCardsHash);
@@ -561,7 +626,7 @@ export default function GameProfileCardsPage({ params }: { params: Promise<{ pro
       setError("");
       setSaveMessage(successMessage);
     } catch (saveError) {
-      setError(saveError instanceof Error ? saveError.message : "保存卡牌失败");
+      setError(saveError instanceof Error ? saveError.message : t("errors.saveCardsFailed"));
     } finally {
       setSaving(false);
     }
@@ -573,7 +638,7 @@ export default function GameProfileCardsPage({ params }: { params: Promise<{ pro
     }
 
     const nextCards = cards.map((card) => (card.cardId === nextCard.cardId ? nextCard : card));
-    void persistCards(nextCards, "卡牌资料已保存");
+    void persistCards(nextCards, t("messages.saved"));
   }
 
   function deleteCard(cardId: number) {
@@ -582,28 +647,33 @@ export default function GameProfileCardsPage({ params }: { params: Promise<{ pro
     }
 
     const nextCards = cards.filter((card) => card.cardId !== cardId);
-    void persistCards(nextCards, "卡牌已移除");
+    void persistCards(nextCards, t("messages.removed"));
   }
 
   return (
-    <AccountShell title="档案卡牌" description="查看、筛选并编辑当前档案的卡牌资料。" backHref="/bandori/game-profiles" backLabel="返回游戏档案">
+    <AccountShell title={t("title")} description={t("description")} backHref="/bandori/game-profiles" backLabel={t("back")}>
       {!authReady || loadingProfile ? (
-        <AccountLoadingState message="正在读取账号信息..." />
+        <AccountLoadingState message={commonT("states.loadingAccount")} />
       ) : !userId ? (
         <AccountSignInState nextPath={`/bandori/game-profiles/${profileId}/cards`} />
       ) : profileError || error ? (
         <AccountErrorState message={profileError || error} />
       ) : loadingCards ? (
-        <AccountLoadingState message="正在读取卡牌..." />
+        <AccountLoadingState message={t("loadingCards")} />
       ) : (
         <section className="mx-auto w-full max-w-[960px] overflow-visible">
           <div className="flex w-full flex-col gap-4">
             <div className="overflow-hidden rounded-[28px] border border-white/65 bg-[#fffef4] shadow-[0_22px_70px_rgba(128,91,0,0.16)]">
               <div className="flex flex-col gap-4 border-b border-amber-200/80 bg-[#fff6b8]/70 px-4 py-4 lg:flex-row lg:items-center lg:justify-between">
                 <div>
-                  <h2 className="text-2xl font-black text-slate-900">卡牌资料工作台</h2>
+                  <h2 className="text-2xl font-black text-slate-900">{t("workbenchTitle")}</h2>
                   <p className="mt-1 text-sm font-semibold text-slate-600">
-                    共 {cards.length} 张卡牌 · 匹配 {filteredCards.length} 张 · 已加载 {visibleCardCount} 张 · 资源区服 {region.toUpperCase()}
+                    {t("summary", {
+                      total: cards.length,
+                      matched: filteredCards.length,
+                      loaded: visibleCardCount,
+                      region: region.toUpperCase(),
+                    })}
                   </p>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
@@ -614,7 +684,7 @@ export default function GameProfileCardsPage({ params }: { params: Promise<{ pro
                     </span>
                   ) : null}
                   <Link href="/bandori/game-profiles" className="inline-flex h-10 items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 transition hover:border-sky-200 hover:text-sky-600">
-                    档案管理
+                    {t("manageProfiles")}
                   </Link>
                 </div>
               </div>
@@ -628,28 +698,28 @@ export default function GameProfileCardsPage({ params }: { params: Promise<{ pro
                         value={filters.query}
                         onChange={(event) => setFilters((current) => ({ ...current, query: event.target.value }))}
                         className="h-11 w-full rounded-2xl border border-slate-200 bg-white pl-10 pr-4 text-sm font-semibold text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-sky-300 focus:ring-4 focus:ring-sky-100"
-                        placeholder="搜索卡牌 ID、名称、角色"
+                        placeholder={t("searchPlaceholder")}
                       />
                     </label>
                     <select value={filters.attribute} onChange={(event) => setFilters((current) => ({ ...current, attribute: event.target.value as CardFilterState["attribute"] }))} className="h-11 rounded-2xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-700 outline-none focus:border-sky-300">
-                      <option value="all">全部属性</option>
+                      <option value="all">{t("filters.allAttributes")}</option>
                       <option value="powerful">Powerful</option>
                       <option value="pure">Pure</option>
                       <option value="cool">Cool</option>
                       <option value="happy">Happy</option>
                     </select>
                     <select value={filters.rarity} onChange={(event) => setFilters((current) => ({ ...current, rarity: event.target.value }))} className="h-11 rounded-2xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-700 outline-none focus:border-sky-300">
-                      <option value="all">全部星级</option>
+                      <option value="all">{t("filters.allRarities")}</option>
                       {[1, 2, 3, 4, 5].map((rarity) => <option key={rarity} value={rarity}>★{rarity}</option>)}
                     </select>
                     <select value={filters.training} onChange={(event) => setFilters((current) => ({ ...current, training: event.target.value as CardFilterState["training"] }))} className="h-11 rounded-2xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-700 outline-none focus:border-sky-300">
-                      <option value="all">全部训练</option>
-                      <option value="trained">已特训</option>
-                      <option value="untrained">未特训</option>
+                      <option value="all">{t("filters.allTraining")}</option>
+                      <option value="trained">{t("filters.trained")}</option>
+                      <option value="untrained">{t("filters.untrained")}</option>
                     </select>
                     <button type="button" onClick={() => setFilters(DEFAULT_FILTERS)} className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 transition hover:border-sky-200 hover:text-sky-600">
                       <RotateCcw className="h-4 w-4" aria-hidden="true" />
-                      重置
+                      {t("actions.reset")}
                     </button>
                   </div>
                 </div>
@@ -658,7 +728,7 @@ export default function GameProfileCardsPage({ params }: { params: Promise<{ pro
                   {filteredCards.length === 0 ? (
                     <div className="flex min-h-[360px] flex-col items-center justify-center gap-3 text-center text-slate-500">
                       <Filter className="h-9 w-9" aria-hidden="true" />
-                      <div className="text-sm font-bold">没有符合条件的卡牌</div>
+                      <div className="text-sm font-bold">{t("states.empty")}</div>
                     </div>
                   ) : (
                     <>
@@ -668,13 +738,18 @@ export default function GameProfileCardsPage({ params }: { params: Promise<{ pro
                         getKey={(card) => card.cardId}
                         renderItem={(card) => {
                           const cardMetadata = metadata.cards[String(card.cardId)];
-                          const characterName = pickFullCharacterName(charactersById.get(cardMetadata?.characterId ?? 0), cardMetadata?.characterId);
+                          const characterName = pickFullCharacterName(charactersById.get(cardMetadata?.characterId ?? 0), cardMetadata?.characterId, locale, fallbackLabels);
                           const skillEffectLabel = getCardSkillEffectLabel(card, cardMetadata, metadata.skills);
                           return (
                             <CardTile
                               key={card.cardId}
                               card={card}
                               metadata={cardMetadata}
+                              locale={locale}
+                              labels={{
+                                cardFallback: fallbackLabels.card,
+                                editCard: fallbackLabels.editCard,
+                              }}
                               characterName={characterName}
                               skillEffectLabel={skillEffectLabel}
                               bandId={charactersById.get(cardMetadata?.characterId ?? 0)?.bandId ?? null}
@@ -691,11 +766,11 @@ export default function GameProfileCardsPage({ params }: { params: Promise<{ pro
                         <div className="mt-4 grid gap-2 sm:mx-auto sm:max-w-xl">
                           <button type="button" onClick={() => setVisibleCount((current) => Math.min(filteredCards.length, current + CARD_PAGE_SIZE))} className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white text-sm font-bold text-slate-700 transition hover:border-sky-200 hover:text-sky-600">
                             <span className="text-xl leading-none">+</span>
-                            显示更多 {Math.min(CARD_PAGE_SIZE, remainingCards)} 张
+                            {t("actions.showMore", { count: Math.min(CARD_PAGE_SIZE, remainingCards) })}
                           </button>
                           <button type="button" onClick={() => setVisibleCount(filteredCards.length)} className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white text-sm font-bold text-slate-700 transition hover:border-sky-200 hover:text-sky-600">
                             <span className="text-xl leading-none">+</span>
-                            显示全部
+                            {t("actions.showAll")}
                           </button>
                         </div>
                       ) : null}
@@ -711,7 +786,12 @@ export default function GameProfileCardsPage({ params }: { params: Promise<{ pro
               card={editingCard}
               baselineCard={baselineCards.find((card) => card.cardId === editingCard.cardId) ?? null}
               metadata={metadata.cards[String(editingCard.cardId)]}
-              characterName={pickFullCharacterName(charactersById.get(metadata.cards[String(editingCard.cardId)]?.characterId ?? 0), metadata.cards[String(editingCard.cardId)]?.characterId)}
+              characterName={pickFullCharacterName(
+                charactersById.get(metadata.cards[String(editingCard.cardId)]?.characterId ?? 0),
+                metadata.cards[String(editingCard.cardId)]?.characterId,
+                locale,
+                fallbackLabels,
+              )}
               bandId={charactersById.get(metadata.cards[String(editingCard.cardId)]?.characterId ?? 0)?.bandId ?? null}
               characterBonusesById={characterBonusesById}
               region={region}

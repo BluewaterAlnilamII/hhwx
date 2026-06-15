@@ -2,6 +2,8 @@
 
 import { useDeferredValue, useEffect, useMemo, useState, type RefObject } from "react";
 import { ArrowDownWideNarrow, ArrowUpNarrowWide, Filter, Loader2, RotateCcw, Search, X } from "lucide-react";
+import { useLocale, useTranslations } from "next-intl";
+import { type AppLocale } from "@/i18n/routing";
 import { useCachedFetch } from "@/hooks/useCachedFetch";
 import {
   buildBandoriResIconPublicUrl,
@@ -30,20 +32,9 @@ import type {
   BandoriCardPickerValue,
 } from "./types";
 
-const ATTRIBUTE_OPTIONS: Array<{ value: BandoriCardAttribute; label: string }> = [
-  { value: "powerful", label: "强力" },
-  { value: "cool", label: "酷" },
-  { value: "happy", label: "快乐" },
-  { value: "pure", label: "纯粹" },
-];
-
-const ATTRIBUTE_VALUES = ATTRIBUTE_OPTIONS.map((option) => option.value);
+const ATTRIBUTE_VALUES: BandoriCardAttribute[] = ["powerful", "cool", "happy", "pure"];
 const RARITY_OPTIONS = [1, 2, 3, 4, 5];
-const SORT_OPTIONS: Array<{ value: BandoriCardPickerSortBy; label: string }> = [
-  { value: "release_jp", label: "发布日期（JP）" },
-  { value: "release_cn", label: "发布日期（CN）" },
-  { value: "id", label: "卡牌 ID" },
-];
+const SORT_OPTION_VALUES: BandoriCardPickerSortBy[] = ["release_jp", "release_cn", "id"];
 const INITIAL_VISIBLE_COUNT = 60;
 const PAGE_SIZE = 60;
 const PREFERENCES_STORAGE_KEY = "hhwx-bandori-card-picker-preferences-v1";
@@ -184,19 +175,25 @@ function SelectionButton({
 
 function ToggleAllButton({
   selected,
+  selectAllLabel,
+  clearAllLabel,
+  allLabel,
   onClick,
 }: {
   selected: boolean;
+  selectAllLabel: string;
+  clearAllLabel: string;
+  allLabel: string;
   onClick: () => void;
 }) {
   return (
     <SelectionButton
       selected={selected}
-      title={selected ? "取消全部" : "选择全部"}
+      title={selected ? clearAllLabel : selectAllLabel}
       onClick={onClick}
       className="min-w-[3.25rem] rounded-full px-3 text-xs"
     >
-      全部
+      {allLabel}
     </SelectionButton>
   );
 }
@@ -210,12 +207,12 @@ function FilterRow({ label, children }: { label: string; children: React.ReactNo
   );
 }
 
-function RarityIcon({ rarity }: { rarity: number }) {
+function RarityIcon({ rarity, alt }: { rarity: number; alt: string }) {
   return (
     // eslint-disable-next-line @next/next/no-img-element
     <img
       src={buildBandoriResIconPublicUrl(`star_${rarity}.png`)}
-      alt={`${rarity} 星`}
+      alt={alt}
       loading="eager"
       decoding="async"
       className="h-6 w-6 object-contain"
@@ -264,9 +261,13 @@ function BandIcon({ bandId, label }: { bandId: number; label: string }) {
 
 function ArtToggle({
   trainType,
+  normalLabel,
+  afterTrainingLabel,
   onChange,
 }: {
   trainType: BandoriCardArtVariant;
+  normalLabel: string;
+  afterTrainingLabel: string;
   onChange: (nextTrainType: BandoriCardArtVariant) => void;
 }) {
   return (
@@ -280,7 +281,7 @@ function ArtToggle({
         )}
       >
         <RotateCcw className="h-4 w-4" aria-hidden="true" />
-        特训前
+        {normalLabel}
       </button>
       <button
         type="button"
@@ -291,7 +292,7 @@ function ArtToggle({
         )}
       >
         <RotateCcw className="h-4 w-4" aria-hidden="true" />
-        特训后
+        {afterTrainingLabel}
       </button>
     </div>
   );
@@ -348,6 +349,8 @@ export default function BandoriCardPicker({
   showArtToggle = true,
   scrollElementRef,
 }: BandoriCardPickerProps) {
+  const locale = useLocale() as AppLocale;
+  const t = useTranslations("bandori.cardPicker");
   const { data: cardMetadata, loading: cardsLoading } = useCachedFetch(
     "bandori-card-picker-cards-v3",
     "/api/bandori/master/cards",
@@ -372,10 +375,18 @@ export default function BandoriCardPicker({
   const deferredQuery = useDeferredValue(filter.query);
   const [visibleState, setVisibleState] = useState({ key: "", count: INITIAL_VISIBLE_COUNT });
   const loading = cardsLoading || charactersLoading || skillsLoading;
+  const attributeOptions = useMemo(
+    () => ATTRIBUTE_VALUES.map((value) => ({ value, label: t(`attributes.${value}`) })),
+    [t],
+  );
+  const sortOptions = useMemo(
+    () => SORT_OPTION_VALUES.map((value) => ({ value, label: t(`sort.${value}`) })),
+    [t],
+  );
 
   const catalog = useMemo(
-    () => buildBandoriCardCatalog(cardMetadata ?? {}, characterMetadata ?? {}),
-    [cardMetadata, characterMetadata],
+    () => buildBandoriCardCatalog(cardMetadata ?? {}, characterMetadata ?? {}, locale),
+    [cardMetadata, characterMetadata, locale],
   );
 
   const characterNameById = useMemo(() => {
@@ -520,14 +531,14 @@ export default function BandoriCardPicker({
               type="search"
               value={filter.query}
               onChange={(event) => updateFilter({ query: event.target.value })}
-              placeholder="搜索卡牌名称、角色名或卡牌 ID"
+              placeholder={t("searchPlaceholder")}
               className="h-10 w-full rounded-xl border border-slate-200 bg-white pl-9 pr-3 text-sm text-slate-900 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
             />
           </div>
           <div className="flex items-center gap-2">
             <span className="inline-flex h-10 items-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-3 text-sm font-semibold text-blue-700">
               <Filter className="h-4 w-4" aria-hidden="true" />
-              {filteredCards.length} 张
+              {t("resultCount", { count: filteredCards.length })}
             </span>
             <button
               type="button"
@@ -535,13 +546,13 @@ export default function BandoriCardPicker({
               className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 transition hover:border-blue-300 hover:text-blue-600"
             >
               <X className="h-4 w-4" aria-hidden="true" />
-              清空
+              {t("actions.clear")}
             </button>
           </div>
         </div>
 
         <div className="mt-4 space-y-3">
-          <FilterRow label="乐队">
+          <FilterRow label={t("filters.band")}>
             {bandOptions.map((group) => (
               <SelectionButton
                 key={group.bandId}
@@ -554,12 +565,15 @@ export default function BandoriCardPicker({
             ))}
             <ToggleAllButton
               selected={areAllSelected(filter.bandIds, bandIds)}
+              selectAllLabel={t("actions.selectAll")}
+              clearAllLabel={t("actions.clearAll")}
+              allLabel={t("actions.all")}
               onClick={() => updateFilter({ bandIds: areAllSelected(filter.bandIds, bandIds) ? [] : bandIds })}
             />
           </FilterRow>
 
-          <FilterRow label="属性">
-            {ATTRIBUTE_OPTIONS.map((option) => (
+          <FilterRow label={t("filters.attribute")}>
+            {attributeOptions.map((option) => (
               <SelectionButton
                 key={option.value}
                 title={option.label}
@@ -571,30 +585,36 @@ export default function BandoriCardPicker({
             ))}
             <ToggleAllButton
               selected={areAllSelected(filter.attributes, ATTRIBUTE_VALUES)}
+              selectAllLabel={t("actions.selectAll")}
+              clearAllLabel={t("actions.clearAll")}
+              allLabel={t("actions.all")}
               onClick={() => {
                 updateFilter({ attributes: areAllSelected(filter.attributes, ATTRIBUTE_VALUES) ? [] : ATTRIBUTE_VALUES });
               }}
             />
           </FilterRow>
 
-          <FilterRow label="稀有度">
+          <FilterRow label={t("filters.rarity")}>
             {RARITY_OPTIONS.map((rarity) => (
               <SelectionButton
                 key={rarity}
-                title={`${rarity} 星`}
+                title={t("rarityAlt", { rarity })}
                 selected={filter.rarities.includes(rarity)}
                 onClick={() => updateFilter({ rarities: toggleSelected(filter.rarities, rarity) })}
               >
-                <RarityIcon rarity={rarity} />
+                <RarityIcon rarity={rarity} alt={t("rarityAlt", { rarity })} />
               </SelectionButton>
             ))}
             <ToggleAllButton
               selected={areAllSelected(filter.rarities, RARITY_OPTIONS)}
+              selectAllLabel={t("actions.selectAll")}
+              clearAllLabel={t("actions.clearAll")}
+              allLabel={t("actions.all")}
               onClick={() => updateFilter({ rarities: areAllSelected(filter.rarities, RARITY_OPTIONS) ? [] : RARITY_OPTIONS })}
             />
           </FilterRow>
 
-          <FilterRow label="角色">
+          <FilterRow label={t("filters.character")}>
             {characterOptions.map(({ characterId, label }) => (
               <SelectionButton
                 key={characterId}
@@ -607,18 +627,21 @@ export default function BandoriCardPicker({
             ))}
             <ToggleAllButton
               selected={areAllSelected(filter.characterIds, characterIds)}
+              selectAllLabel={t("actions.selectAll")}
+              clearAllLabel={t("actions.clearAll")}
+              allLabel={t("actions.all")}
               onClick={() => updateFilter({ characterIds: areAllSelected(filter.characterIds, characterIds) ? [] : characterIds })}
             />
           </FilterRow>
 
-          <FilterRow label="排序">
+          <FilterRow label={t("filters.sort")}>
             <div className="flex min-w-0 flex-wrap items-center gap-2">
               <select
                 value={filter.sortBy}
                 onChange={(event) => updateFilter({ sortBy: event.target.value as BandoriCardPickerSortBy })}
                 className="h-10 min-w-64 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
               >
-                {SORT_OPTIONS.map((option) => (
+                {sortOptions.map((option) => (
                   <option key={option.value} value={option.value}>{option.label}</option>
                 ))}
               </select>
@@ -626,11 +649,11 @@ export default function BandoriCardPicker({
                 type="button"
                 onClick={() => updateFilter({ sortDirection: filter.sortDirection === "desc" ? "asc" : "desc" })}
                 className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 transition hover:border-blue-300 hover:text-blue-600"
-                title={filter.sortDirection === "desc" ? "当前为倒序，点击切换为正序" : "当前为正序，点击切换为倒序"}
-                aria-label={filter.sortDirection === "desc" ? "排序方向：倒序" : "排序方向：正序"}
+                title={filter.sortDirection === "desc" ? t("sortDirection.descTitle") : t("sortDirection.ascTitle")}
+                aria-label={filter.sortDirection === "desc" ? t("sortDirection.descAria") : t("sortDirection.ascAria")}
               >
                 {filter.sortDirection === "desc" ? <ArrowDownWideNarrow className="h-4 w-4" aria-hidden="true" /> : <ArrowUpNarrowWide className="h-4 w-4" aria-hidden="true" />}
-                {filter.sortDirection === "desc" ? "倒序" : "正序"}
+                {filter.sortDirection === "desc" ? t("sortDirection.desc") : t("sortDirection.asc")}
               </button>
             </div>
           </FilterRow>
@@ -641,13 +664,15 @@ export default function BandoriCardPicker({
         <div className="sticky top-[-0.75rem] z-[80] -mx-3 bg-slate-50/95 px-3 pb-2 pt-3 backdrop-blur sm:top-[-1.25rem] sm:-mx-5 sm:px-5 sm:pt-5">
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white/95 p-3 shadow-sm">
             <div className="min-w-0 text-sm text-slate-600">
-            当前选择：
+            {t("currentSelection")}
             <span className="font-semibold text-slate-900">
               {selectedCard ? `${selectedCard.displayName} / #${selectedCard.cardId}` : `Card #${value.cardId}`}
             </span>
           </div>
             <ArtToggle
               trainType={previewTrainType}
+              normalLabel={t("art.normal")}
+              afterTrainingLabel={t("art.afterTraining")}
               onChange={handlePreviewTrainTypeChange}
             />
           </div>
@@ -658,7 +683,7 @@ export default function BandoriCardPicker({
         {loading && catalog.length === 0 ? (
           <div className="flex min-h-56 items-center justify-center gap-2 text-sm font-semibold text-slate-500">
             <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" />
-            正在读取卡牌
+            {t("states.loadingCards")}
           </div>
         ) : filteredCards.length > 0 ? (
           <>
@@ -694,21 +719,21 @@ export default function BandoriCardPicker({
                   })}
                   className="inline-flex h-10 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 shadow-sm transition hover:border-blue-300 hover:text-blue-600"
                 >
-                  显示更多 {Math.min(PAGE_SIZE, hiddenCardCount)} 张
+                  {t("actions.showMore", { count: Math.min(PAGE_SIZE, hiddenCardCount) })}
                 </button>
                 <button
                   type="button"
                   onClick={() => setVisibleState({ key: filterKey, count: filteredCards.length })}
                   className="inline-flex h-10 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 shadow-sm transition hover:border-blue-300 hover:text-blue-600"
                 >
-                  显示全部
+                  {t("actions.showAll")}
                 </button>
               </div>
             ) : null}
           </>
         ) : (
           <div className="flex min-h-56 items-center justify-center text-sm font-semibold text-slate-500">
-            没有符合条件的卡牌
+            {t("states.empty")}
           </div>
         )}
       </div>

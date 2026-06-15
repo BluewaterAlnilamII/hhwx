@@ -1,5 +1,6 @@
 import { ApiRouteError } from "@/lib/api-contracts";
 import { requireAuthenticatedUser } from "@/lib/auth-server";
+import { readAuthEmailRedirectTo } from "@/lib/auth-redirect-server";
 import { jsonRouteError, jsonSuccess } from "@/lib/api-response";
 import { createServerAuthSupabaseClient } from "@/lib/supabase-auth-server";
 import { verifyTurnstileToken } from "@/lib/turnstile-server";
@@ -29,7 +30,7 @@ export async function POST(request: Request) {
     }
 
     const captchaToken = typeof body.captchaToken === "string" ? body.captchaToken.trim() : "";
-    const redirectTo = typeof body.redirectTo === "string" ? body.redirectTo.trim() : "";
+    const redirectTo = readAuthEmailRedirectTo(body.redirectTo, request);
     await verifyTurnstileToken(captchaToken, request);
 
     let targetEmail = readOptionalEmail(body.email);

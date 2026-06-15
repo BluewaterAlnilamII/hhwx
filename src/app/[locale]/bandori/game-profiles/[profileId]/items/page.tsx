@@ -2,7 +2,9 @@
 
 import { Link } from "@/i18n/navigation";
 import { use, useEffect, useMemo, useState } from "react";
+import { useLocale, useTranslations } from "next-intl";
 import { getApiErrorMessage, parseApiSuccessData } from "@/lib/api-contracts";
+import { type AppLocale } from "@/i18n/routing";
 import {
   decodeCompressedGameProfilePayload,
   compactMissionBonusRecords,
@@ -22,7 +24,7 @@ import {
   updateLocalGameProfilePayload,
 } from "@/lib/user-game-profile-local-store";
 import AccountShell, { AccountErrorState, AccountLoadingState, AccountSignInState } from "@/app/[locale]/account/AccountShell";
-import { getAccessToken, useAccountProfile } from "@/app/[locale]/account/useAccountProfile";
+import { getAccessToken, useLocalizedAccountProfile } from "@/app/[locale]/account/useAccountProfile";
 
 type ItemRecord = {
   itemKey: string;
@@ -98,6 +100,15 @@ type LoadedProfilePayload = {
   itemsHash: string | null;
 };
 
+type ItemPageMessages = {
+  notSignedIn: string;
+  requestFailed: (status: number) => string;
+  emptyPayload: string;
+  missingVersion: string;
+  saveFailed: (status: number) => string;
+  invalidSaveResponse: string;
+};
+
 type MetadataPayload = {
   characters: CharacterRecord[];
   areaItems: Record<string, AreaItemMetadata>;
@@ -125,6 +136,20 @@ const CHARACTER_GROUPS: CharacterGroup[] = [
 const AREA_ITEM_IDS = BANDORI_AREA_ITEM_IDS;
 const CHARACTER_GROUP_BAND_IDS = new Set(CHARACTER_GROUPS.map((group) => group.bandId));
 const MAX_CHARACTER_ID = 50;
+const EN_AREA_ITEM_GROUP_LABELS: Record<string, string> = {
+  PoppinParty: "Poppin'Party items",
+  Afterglow: "Afterglow items",
+  HelloHappyWorld: "Hello, Happy World! items",
+  PastelPalettes: "Pastel Palettes items",
+  Roselia: "Roselia items",
+  Morfonica: "Morfonica items",
+  RaiseASuilen: "RAISE A SUILEN items",
+  MyGO: "MyGO!!!!! items",
+  Everyone: "Everyone items",
+  Magazine: "Magazine items",
+  Plaza: "Plaza items",
+  Menu: "Menu items",
+};
 
 function emptyItems(): ItemsPayload {
   return {
@@ -153,7 +178,7 @@ function getProfileApiErrorMessage(payload: unknown, fallback: string): string {
   return getApiErrorMessage(payload) || fallback;
 }
 
-async function requestProfilePayload(profileId: string): Promise<LoadedProfilePayload> {
+async function requestProfilePayload(profileId: string, messages: ItemPageMessages): Promise<LoadedProfilePayload> {
   if (isLocalGameProfileId(profileId)) {
     return {
       payload: await readLocalGameProfilePayload(profileId),
@@ -164,7 +189,7 @@ async function requestProfilePayload(profileId: string): Promise<LoadedProfilePa
 
   const accessToken = await getAccessToken();
   if (!accessToken) {
-    throw new Error("请先登录");
+    throw new Error(messages.notSignedIn);
   }
 
   const response = await fetch(`/api/account/game-profiles/${profileId}/payload`, {
@@ -172,12 +197,12 @@ async function requestProfilePayload(profileId: string): Promise<LoadedProfilePa
   });
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
-    throw new Error(getApiErrorMessage(payload) || `请求失败（HTTP ${response.status}）`);
+    throw new Error(getApiErrorMessage(payload) || messages.requestFailed(response.status));
   }
 
   const data = parseApiSuccessData<GameProfilePayloadResponse>(payload);
   if (!data) {
-    throw new Error("档案数据为空");
+    throw new Error(messages.emptyPayload);
   }
 
   return {
@@ -209,29 +234,58 @@ async function requestMetadata(): Promise<MetadataPayload> {
   };
 }
 
-function pickCharacterName(character: CharacterRecord | undefined, characterId: number): string {
-  return character?.nicknameCn
-    ?? character?.nicknameTw
-    ?? character?.nicknameJp
-    ?? character?.nicknameEn
-    ?? character?.characterNameCn
-    ?? character?.characterNameTw
-    ?? character?.characterNameJp
-    ?? character?.characterNameEn
-    ?? `角色 ${characterId}`;
+function pickNonEmptyText(...values: Array<string | null | undefined>): string | null {
+  for (const value of values) {
+    const trimmed = value?.trim();
+    if (trimmed) {
+      return trimmed;
+    }
+  }
+  return null;
 }
 
-function pickAreaItemName(areaItem: AreaItemMetadata | undefined, areaItemId: number | null): string {
-  const name = areaItem?.areaItemName?.[3]
-    ?? areaItem?.areaItemName?.[2]
-    ?? areaItem?.areaItemName?.[1]
-    ?? areaItem?.areaItemName?.[0];
+function pickCharacterName(
+  character: CharacterRecord | undefined,
+  characterId: number,
+  locale: AppLocale,
+  fallback: (characterId: number) => string,
+): string {
+  const name = locale === "en"
+    ? pickNonEmptyText(
+      character?.nicknameEn,
+      character?.characterNameEn,
+      character?.nicknameJp,
+      character?.characterNameJp,
+      character?.nicknameCn,
+      character?.nicknameTw,
+      character?.characterNameCn,
+      character?.characterNameTw,
+    )
+    : pickNonEmptyText(
+      character?.nicknameCn,
+      character?.nicknameTw,
+      character?.nicknameJp,
+      character?.nicknameEn,
+      character?.characterNameCn,
+      character?.characterNameTw,
+      character?.characterNameJp,
+      character?.characterNameEn,
+    );
 
-  if (name?.trim()) {
-    return name.trim();
-  }
+  return name ?? fallback(characterId);
+}
 
-  return areaItemId ? `区域道具 ${areaItemId}` : "区域道具";
+function pickAreaItemName(
+  areaItem: AreaItemMetadata | undefined,
+  areaItemId: number | null,
+  locale: AppLocale,
+  fallback: { areaItem: (areaItemId: number) => string; genericAreaItem: string },
+): string {
+  const name = locale === "en"
+    ? pickNonEmptyText(areaItem?.areaItemName?.[1], areaItem?.areaItemName?.[0], areaItem?.areaItemName?.[3], areaItem?.areaItemName?.[2])
+    : pickNonEmptyText(areaItem?.areaItemName?.[3], areaItem?.areaItemName?.[2], areaItem?.areaItemName?.[1], areaItem?.areaItemName?.[0]);
+
+  return name ?? (areaItemId ? fallback.areaItem(areaItemId) : fallback.genericAreaItem);
 }
 
 function resolveAreaItemId(areaItemId: number | null, metadata: MetadataPayload): number | null {
@@ -284,6 +338,10 @@ function createMissionBonus(characterId: number, bonusType: "TRAINING" | "COLLEC
 
 function normalizeMissionBonusType(value: string): "TRAINING" | "COLLECTION" {
   return value.toUpperCase() === "TRAINING" ? "TRAINING" : "COLLECTION";
+}
+
+function getAreaItemGroupLabel(group: { key: string; label: string }, locale: AppLocale): string {
+  return locale === "en" ? EN_AREA_ITEM_GROUP_LABELS[group.key] ?? group.label : group.label;
 }
 
 function isSameItemsPayload(left: ItemsPayload, right: ItemsPayload): boolean {
@@ -410,6 +468,7 @@ function BonusFields({
   baseline,
   disabled,
   max,
+  labels,
   onChange,
 }: {
   title: string;
@@ -417,15 +476,16 @@ function BonusFields({
   baseline: { performance: number; technique: number; visual: number };
   disabled: boolean;
   max?: number;
+  labels: { performance: string; technique: string; visual: string };
   onChange: (field: "performance" | "technique" | "visual", value: number) => void;
 }) {
   return (
     <div className="min-w-0 text-center">
       <div className="mb-2 text-xs font-semibold text-slate-500">{title}</div>
       <div className="flex flex-wrap justify-center gap-2">
-        <NumberStepper label="演" value={values.performance} disabled={disabled} max={max} changed={values.performance !== baseline.performance} onChange={(value) => onChange("performance", value)} />
-        <NumberStepper label="技" value={values.technique} disabled={disabled} max={max} changed={values.technique !== baseline.technique} onChange={(value) => onChange("technique", value)} />
-        <NumberStepper label="形" value={values.visual} disabled={disabled} max={max} changed={values.visual !== baseline.visual} onChange={(value) => onChange("visual", value)} />
+        <NumberStepper label={labels.performance} value={values.performance} disabled={disabled} max={max} changed={values.performance !== baseline.performance} onChange={(value) => onChange("performance", value)} />
+        <NumberStepper label={labels.technique} value={values.technique} disabled={disabled} max={max} changed={values.technique !== baseline.technique} onChange={(value) => onChange("technique", value)} />
+        <NumberStepper label={labels.visual} value={values.visual} disabled={disabled} max={max} changed={values.visual !== baseline.visual} onChange={(value) => onChange("visual", value)} />
       </div>
     </div>
   );
@@ -433,7 +493,10 @@ function BonusFields({
 
 export default function GameProfileItemsPage({ params }: { params: Promise<{ profileId: string }> }) {
   const { profileId } = use(params);
-  const { userId, authReady, loadingProfile, profileError } = useAccountProfile();
+  const locale = useLocale() as AppLocale;
+  const t = useTranslations("bandori.gameProfiles.items");
+  const commonT = useTranslations("common");
+  const { userId, authReady, loadingProfile, profileError } = useLocalizedAccountProfile();
   const [profilePayload, setProfilePayload] = useState<UserGameProfilePayload | null>(null);
   const [items, setItems] = useState<ItemsPayload>(emptyItems);
   const [baselineItems, setBaselineItems] = useState<ItemsPayload>(emptyItems);
@@ -449,6 +512,24 @@ export default function GameProfileItemsPage({ params }: { params: Promise<{ pro
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [saveMessage, setSaveMessage] = useState("");
+  const messages = useMemo<ItemPageMessages>(() => ({
+    notSignedIn: t("errors.notSignedIn"),
+    requestFailed: (status) => t("errors.requestFailed", { status }),
+    emptyPayload: t("errors.emptyPayload"),
+    missingVersion: t("errors.missingVersion"),
+    saveFailed: (status) => t("errors.saveFailed", { status }),
+    invalidSaveResponse: t("errors.invalidSaveResponse"),
+  }), [t]);
+  const labels = useMemo(() => ({
+    character: (characterId: number) => t("labels.characterFallback", { characterId }),
+    areaItem: (areaItemId: number) => t("labels.areaItemFallback", { areaItemId }),
+    genericAreaItem: t("labels.areaItemGeneric"),
+    bonusFields: {
+      performance: t("labels.performanceShort"),
+      technique: t("labels.techniqueShort"),
+      visual: t("labels.visualShort"),
+    },
+  }), [t]);
 
   useEffect(() => {
     if (!profileId || !userId) {
@@ -460,7 +541,7 @@ export default function GameProfileItemsPage({ params }: { params: Promise<{ pro
       setLoadingItems(true);
       try {
         const [nextProfile, nextMetadata] = await Promise.all([
-          requestProfilePayload(profileId),
+          requestProfilePayload(profileId, messages),
           requestMetadata(),
         ]);
         const nextPayload = nextProfile.payload;
@@ -478,7 +559,7 @@ export default function GameProfileItemsPage({ params }: { params: Promise<{ pro
         }
       } catch (loadError) {
         if (!canceled) {
-          setError(loadError instanceof Error ? loadError.message : "读取道具失败");
+          setError(loadError instanceof Error ? loadError.message : t("errors.loadFailed"));
         }
       } finally {
         if (!canceled) {
@@ -491,7 +572,7 @@ export default function GameProfileItemsPage({ params }: { params: Promise<{ pro
     return () => {
       canceled = true;
     };
-  }, [profileId, userId]);
+  }, [messages, profileId, t, userId]);
 
   const areaItemsById = useMemo(() => {
     const result = new Map<number, ItemRecord>();
@@ -525,7 +606,7 @@ export default function GameProfileItemsPage({ params }: { params: Promise<{ pro
         .sort((left, right) => compareBandoriCharacterIds(left.characterId, right.characterId))
         .map((character): CharacterBonusRow => ({
           characterId: character.characterId,
-          characterName: pickCharacterName(character, character.characterId),
+          characterName: pickCharacterName(character, character.characterId, locale, labels.character),
           potential: potentialByCharacter.get(character.characterId) ?? createPotential(character.characterId),
           training: missionByCharacterAndType.get(`${character.characterId}:TRAINING`) ?? createMissionBonus(character.characterId, "TRAINING"),
           collection: missionByCharacterAndType.get(`${character.characterId}:COLLECTION`) ?? createMissionBonus(character.characterId, "COLLECTION"),
@@ -533,7 +614,7 @@ export default function GameProfileItemsPage({ params }: { params: Promise<{ pro
 
       return { ...group, rows };
     }).filter((group) => group.rows.length > 0);
-  }, [items.characterMissionBonuses, items.characterPotentials, metadata.characters]);
+  }, [items.characterMissionBonuses, items.characterPotentials, labels, locale, metadata.characters]);
 
   const baselineCharacterRows = useMemo(() => {
     const potentialByCharacter = new Map(baselineItems.characterPotentials.map((record) => [record.characterId, record]));
@@ -615,10 +696,10 @@ export default function GameProfileItemsPage({ params }: { params: Promise<{ pro
       } else {
         const accessToken = await getAccessToken();
         if (!accessToken) {
-          throw new Error("请先登录");
+          throw new Error(messages.notSignedIn);
         }
         if (!baseItemsHash) {
-          throw new Error("档案版本缺失，请重新载入后再保存");
+          throw new Error(messages.missingVersion);
         }
         const response = await fetch(`/api/account/game-profiles/${profileId}/items`, {
           method: "PATCH",
@@ -635,11 +716,11 @@ export default function GameProfileItemsPage({ params }: { params: Promise<{ pro
         });
         const responsePayload = await response.json().catch(() => ({}));
         if (!response.ok) {
-          throw new Error(getProfileApiErrorMessage(responsePayload, `保存失败（HTTP ${response.status}）`));
+          throw new Error(getProfileApiErrorMessage(responsePayload, messages.saveFailed(response.status)));
         }
         const data = parseApiSuccessData<GameProfileSectionUpdateResult>(responsePayload);
         if (!data) {
-          throw new Error("保存结果格式无效");
+          throw new Error(messages.invalidSaveResponse);
         }
         setBaseItemsHash(data.sectionVersions.itemsHash);
       }
@@ -649,9 +730,9 @@ export default function GameProfileItemsPage({ params }: { params: Promise<{ pro
       setItems(savedItems);
       setBaselineItems(savedItems);
       setEditing(false);
-      setSaveMessage("已保存");
+      setSaveMessage(t("messages.saved"));
     } catch (saveError) {
-      setError(saveError instanceof Error ? saveError.message : "保存道具失败");
+      setError(saveError instanceof Error ? saveError.message : t("errors.saveItemsFailed"));
     } finally {
       setSaving(false);
     }
@@ -664,45 +745,45 @@ export default function GameProfileItemsPage({ params }: { params: Promise<{ pro
   }
 
   return (
-    <AccountShell title="档案道具" description="查看和编辑当前档案的区域道具、潜能解放和角色任务加成。" backHref="/bandori/game-profiles" backLabel="返回游戏档案">
+    <AccountShell title={t("title")} description={t("description")} backHref="/bandori/game-profiles" backLabel={t("back")}>
       {!authReady || loadingProfile ? (
-        <AccountLoadingState message="正在读取账号信息..." />
+        <AccountLoadingState message={commonT("states.loadingAccount")} />
       ) : !userId ? (
         <AccountSignInState nextPath={`/bandori/game-profiles/${profileId}/items`} />
       ) : profileError || error ? (
         <AccountErrorState message={profileError || error} />
       ) : loadingItems ? (
-        <AccountLoadingState message="正在读取道具..." />
+        <AccountLoadingState message={t("loadingItems")} />
       ) : (
         <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <h2 className="text-xl font-semibold text-slate-900">道具</h2>
-              <p className="mt-1 text-sm text-slate-500">区域道具按类型归档，角色加成按乐团聚合。</p>
+              <h2 className="text-xl font-semibold text-slate-900">{t("heading")}</h2>
+              <p className="mt-1 text-sm text-slate-500">{t("summary")}</p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
               {saveMessage ? <span className="text-sm font-semibold text-emerald-600">{saveMessage}</span> : null}
               {editing ? (
                 <>
                   <button type="button" onClick={cancelEditing} disabled={saving} className="inline-flex h-10 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:border-sky-200 hover:text-sky-600 disabled:cursor-not-allowed disabled:text-slate-400">
-                    取消
+                    {t("actions.cancel")}
                   </button>
                   <button type="button" onClick={saveItems} disabled={!hasChanges || saving} className="inline-flex h-10 items-center justify-center rounded-xl bg-sky-600 px-4 text-sm font-semibold text-white transition hover:bg-sky-500 disabled:cursor-not-allowed disabled:bg-slate-300">
-                    {saving ? "保存中..." : "保存"}
+                    {saving ? t("actions.saving") : t("actions.save")}
                   </button>
                 </>
               ) : isEditableProfile ? (
                 <>
                   <button type="button" onClick={() => setEditing(true)} className="inline-flex h-10 items-center justify-center rounded-xl bg-sky-600 px-4 text-sm font-semibold text-white transition hover:bg-sky-500">
-                    编辑
+                    {t("actions.edit")}
                   </button>
                   <Link href="/bandori/game-profiles" className="inline-flex h-10 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:border-sky-200 hover:text-sky-600">
-                    档案管理
+                    {t("manageProfiles")}
                   </Link>
                 </>
               ) : (
                 <Link href="/bandori/game-profiles" className="inline-flex h-10 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:border-sky-200 hover:text-sky-600">
-                  档案管理
+                  {t("manageProfiles")}
                 </Link>
               )}
             </div>
@@ -710,10 +791,10 @@ export default function GameProfileItemsPage({ params }: { params: Promise<{ pro
 
           <div className="mt-5 flex border-b border-slate-200">
             <button type="button" onClick={() => setActiveTab("area")} className={`h-11 px-4 text-sm font-semibold transition ${activeTab === "area" ? "border-b-2 border-sky-600 text-sky-600" : "text-slate-500 hover:text-slate-900"}`}>
-              区域道具
+              {t("tabs.area")}
             </button>
             <button type="button" onClick={() => setActiveTab("characters")} className={`h-11 px-4 text-sm font-semibold transition ${activeTab === "characters" ? "border-b-2 border-sky-600 text-sky-600" : "text-slate-500 hover:text-slate-900"}`}>
-              角色加成
+              {t("tabs.characters")}
             </button>
           </div>
 
@@ -728,20 +809,21 @@ export default function GameProfileItemsPage({ params }: { params: Promise<{ pro
                 return (
                   <section key={group.key}>
                     <div className="mb-3 flex items-center justify-between gap-3 border-b border-slate-100 pb-2">
-                      <h3 className="text-base font-semibold text-slate-900">{group.label}</h3>
+                      <h3 className="text-base font-semibold text-slate-900">{getAreaItemGroupLabel(group, locale)}</h3>
                     </div>
                     <div className="space-y-2">
                       {groupItems.map((item) => {
                         const areaItem = item.areaItemId ? metadata.areaItems[String(item.areaItemId)] : undefined;
                         const baseline = item.areaItemId ? baselineAreaItemsById.get(item.areaItemId) : undefined;
                         const maxLevel = getAreaItemMaxLevel(areaItem, item.level);
+                        const areaItemName = pickAreaItemName(areaItem, item.areaItemId, locale, labels);
                         return (
                           <div key={item.itemKey} className="grid gap-2 rounded-lg border border-slate-100 px-2.5 py-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:px-3">
                             <div className="min-w-0">
-                              <div className="truncate text-sm font-semibold text-slate-900">{pickAreaItemName(areaItem, item.areaItemId)}</div>
+                              <div className="truncate text-sm font-semibold text-slate-900">{areaItemName}</div>
                             </div>
                             <LevelSelector
-                              label={`${pickAreaItemName(areaItem, item.areaItemId)} 等级`}
+                              label={t("labels.levelFor", { name: areaItemName })}
                               value={item.level}
                               maxLevel={maxLevel}
                               disabled={!editing || saving}
@@ -759,14 +841,22 @@ export default function GameProfileItemsPage({ params }: { params: Promise<{ pro
               {unknownAreaItems.length > 0 ? (
                 <section>
                   <div className="mb-3 flex items-center justify-between gap-3 border-b border-slate-100 pb-2">
-                    <h3 className="text-base font-semibold text-slate-900">未识别/兼容道具</h3>
+                    <h3 className="text-base font-semibold text-slate-900">{t("labels.unknownItems")}</h3>
                   </div>
                   <div className="space-y-2">
-                    {unknownAreaItems.map((item) => (
-                      <div key={item.itemKey} className="rounded-lg border border-slate-100 px-3 py-3 text-sm text-slate-700">
-                        {pickAreaItemName(item.areaItemId ? metadata.areaItems[String(item.areaItemId)] : undefined, item.areaItemId)} · 等级 {item.level}
-                      </div>
-                    ))}
+                    {unknownAreaItems.map((item) => {
+                      const itemName = pickAreaItemName(
+                        item.areaItemId ? metadata.areaItems[String(item.areaItemId)] : undefined,
+                        item.areaItemId,
+                        locale,
+                        labels,
+                      );
+                      return (
+                        <div key={item.itemKey} className="rounded-lg border border-slate-100 px-3 py-3 text-sm text-slate-700">
+                          {t("labels.itemLevel", { name: itemName, level: item.level })}
+                        </div>
+                      );
+                    })}
                   </div>
                 </section>
               ) : null}
@@ -802,27 +892,30 @@ export default function GameProfileItemsPage({ params }: { params: Promise<{ pro
                             <div className="truncate text-sm font-semibold text-slate-900">{row.characterName}</div>
                           </div>
                           <BonusFields
-                            title="潜能解放"
+                            title={t("labels.potential")}
                             values={potentialValues}
                             baseline={baselinePotentialValues}
                             disabled={!editing || saving}
                             max={50}
+                            labels={labels.bonusFields}
                             onChange={(field, value) => updatePotential(row.characterId, `${field}Level` as "performanceLevel" | "techniqueLevel" | "visualLevel", value)}
                           />
                           <BonusFields
-                            title="培养加成"
+                            title={t("labels.training")}
                             values={row.training}
                             baseline={baseline.training}
                             disabled={!editing || saving}
                             max={20}
+                            labels={labels.bonusFields}
                             onChange={(field, value) => updateMissionBonus(row.characterId, "TRAINING", field, value)}
                           />
                           <BonusFields
-                            title="收集加成"
+                            title={t("labels.collection")}
                             values={row.collection}
                             baseline={baseline.collection}
                             disabled={!editing || saving}
                             max={40}
+                            labels={labels.bonusFields}
                             onChange={(field, value) => updateMissionBonus(row.characterId, "COLLECTION", field, value)}
                           />
                         </div>
@@ -833,7 +926,7 @@ export default function GameProfileItemsPage({ params }: { params: Promise<{ pro
               ))}
 
               {metadata.characters.some((character) => character.characterId <= MAX_CHARACTER_ID && !CHARACTER_GROUP_BAND_IDS.has(character.bandId)) ? (
-                <p className="text-sm text-slate-500">存在未纳入当前乐团分组的角色，已按当前需求隐藏。</p>
+                <p className="text-sm text-slate-500">{t("labels.hiddenUngroupedCharacters")}</p>
               ) : null}
             </div>
           )}
