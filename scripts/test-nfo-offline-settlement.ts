@@ -57,6 +57,10 @@ const TESTS: Array<{ name: string; run: () => void }> = [
     run: testAIStateSyncDirectionAimsOwnerForwardShooter,
   },
   {
+    name: "AI state animation metadata updates active enemies",
+    run: testAIStateAnimationMetadataAppliesToEnemy,
+  },
+  {
     name: "endless or event-driven clear types do not auto settle by timer",
     run: testEndlessOrEventDrivenClearTypeDoesNotAutoSettleByTimer,
   },
@@ -887,6 +891,63 @@ function testAIStateSyncDirectionAimsOwnerForwardShooter() {
   assert.ok(bullet, "expected synced owner-forward shooter to fire");
   assertClose(bullet.vx, 0, "synced owner-forward bullet vx");
   assert.ok(bullet.vy > 0, `expected synced owner-forward bullet to travel upward, got ${bullet.vy}`);
+}
+
+function testAIStateAnimationMetadataAppliesToEnemy() {
+  const runtimeData = createRuntimeFixture();
+  runtimeData.ais.push({
+    id: 995,
+    name: "Fixture AI State Animation AI",
+    firstStateId: 1,
+    states: [
+      {
+        id: 1,
+        name: "Fixture Animated State",
+        stateType: 0,
+        lastFrame: 0,
+        playAnimeName: "Windup",
+        restartsAnimation: true,
+        isFireBullet: false,
+        bulletFireCooldownFrames: 0,
+        fireBullets: [],
+        bulletShooterId: 0,
+        nextStates: [],
+        timelineEvents: [
+          {
+            frame: 2,
+            name: "Fixture Release Animation",
+            playAnimeName: "Release",
+            noColliding: false,
+            fireBulletNow: false,
+            fireAllWeaponNow: false,
+          },
+        ],
+      },
+    ],
+  });
+
+  const baseState = createStateWithEnemy(
+    runtimeData,
+    100,
+    {
+      aiTypeId: 995,
+      aiStateId: 1,
+      aiStateElapsedFrames: 0,
+      speed: 0,
+    },
+  );
+
+  const entryState = updateNfoSimulation(baseState, runtimeData, NO_INPUT, 1 / 30);
+  assert.equal(entryState.enemies[0]?.animationName, "Windup");
+  assert.equal(entryState.enemies[0]?.animationRevision, 1);
+
+  const timelineState = updateNfoSimulation(entryState, runtimeData, NO_INPUT, 1 / 30);
+  assert.equal(timelineState.enemies[0]?.animationName, "Release");
+  assert.equal(timelineState.enemies[0]?.animationRevision, 2);
+
+  const stableState = updateNfoSimulation(timelineState, runtimeData, NO_INPUT, 1 / 30);
+  assert.equal(stableState.enemies[0]?.animationName, "Release");
+  assert.equal(stableState.enemies[0]?.animationRevision, 2);
 }
 
 function testEndlessOrEventDrivenClearTypeDoesNotAutoSettleByTimer() {

@@ -443,6 +443,9 @@ Current playable prototype:
   records `AIStateData.IsChangeEntityCommonState` / `EntityCommonStateChangeTo`
   on serializable entities, including CN AI `32` state `1` -> common state `1`
   and state `2` -> common state `0`,
+  records `AIStateData.playAnimeName` / `isRestartPlayAnime` and timeline
+  `TimeLineEvents.PlayAnimeName` as serializable `animationName` /
+  `animationRevision` entity state,
   and lets AI-created `BulletShooterData` instances produce
   hostile shooter timeline bullets. This connects boss-style shooter paths such
   as AI `66` waiting in state `1` before transitioning to state `2` and creating
@@ -465,9 +468,9 @@ Current playable prototype:
   native random-position, roll, flash, teleport radius/arrival semantics, and
   exact CatBoss bullet-rain constants, remaining `normal` visual event
   semantics, exact native offset-movement class names/constants,
-  exact native facing animation timing, exact native level-trigger
-  timing/dependencies, `IsChangeEntityCommonState` visual/common-state effects,
-  and animation timing remain pending;
+  exact native facing/animation playback timing and resources, exact native
+  level-trigger timing/dependencies, and `IsChangeEntityCommonState`
+  visual/common-state effects remain pending;
 - exposes a local `Coin +500` prototype command so the upgrade loop can be
   tested before reward and mission parity are complete;
 - exposes a local `Quick clear` prototype command so clear rewards and level
@@ -736,6 +739,12 @@ The AIState common-state fixture set now locks CN AI `32` state `1`
 (`IsChangeEntityCommonState = 1`, `EntityCommonStateChangeTo = 1`) and state
 `2` (`EntityCommonStateChangeTo = 0`); the parity simulation verifies the
 serializable enemy `entityCommonState` value changes on state entry.
+The AIState animation fixture set now locks CN AI `38` state `5`
+(`playAnimeName = Skill1-2`, `isRestartPlayAnime = 1`) and CN AI `26` state
+`2` timeline frame `1` (`PlayAnimeName = skill-miss`). The parity simulation
+verifies serializable enemy `animationName` / `animationRevision` updates on
+state entry and timeline events without claiming native animation playback
+timing or resources yet.
 The same LevelData fixture set now locks first-pass `levelEventType = 4`
 coverage for CN levels `15` and `27`. These events read
 `enemyAIStateChangeData.EnemyEventID` and `AIStateID`; the runtime applies the
@@ -1387,6 +1396,9 @@ Weapon behavior staging:
   applies `AIStateData.buffID/buffLevel` to the enemy active-buff list once on
   state entry, records `AIStateData.IsChangeEntityCommonState` /
   `EntityCommonStateChangeTo` as a serializable entity common-state value,
+  records `AIStateData.playAnimeName` / `isRestartPlayAnime` and timeline
+  `TimeLineEvents.PlayAnimeName` as serializable `animationName` /
+  `animationRevision` entity state,
   handles CN AI `26` BlackCat teleport event `teleport` with a deterministic
   around-player position change, uses `BulletFireCD`/`LastFrame` as the repeat
   cooldown, and treats those bullets or shooters as hostile to the player. This brings
@@ -1411,9 +1423,9 @@ Weapon behavior staging:
   exact native random-position, roll, flash, teleport radius/arrival semantics,
   exact CatBoss bullet-rain constants, remaining `normal` visual event
   semantics, exact native offset-movement class names/constants,
-  exact native facing animation timing, exact native level-trigger
-  timing/dependencies, `IsChangeEntityCommonState` visual/common-state effects,
-  and animation timing remain pending native behavior.
+  exact native facing/animation playback timing and resources, exact native
+  level-trigger timing/dependencies, and `IsChangeEntityCommonState`
+  visual/common-state effects remain pending native behavior.
 - Current level bullet boundary handling expires bullets outside the centered
   `levelBulletBondaryX/Y` area, expanded to at least the map-derived world
   bounds. This is a conservative approximation of `CheckOutOfWorld`.

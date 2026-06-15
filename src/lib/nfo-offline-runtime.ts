@@ -91,6 +91,8 @@ export type NfoAIStateData = {
   stateMoveOffsetX?: number;
   stateMoveOffsetY?: number;
   syncDirectionFromTarget?: boolean;
+  playAnimeName?: string;
+  restartsAnimation?: boolean;
   triggerLevelEventId?: number;
   buffId?: number;
   buffLevel?: number;

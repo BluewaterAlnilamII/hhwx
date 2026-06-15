@@ -255,6 +255,8 @@ type NfoAIStatefulEntity = {
   aiOrbitAngle?: number;
   aiOrbitRadius?: number;
   facingAngle?: number;
+  animationName?: string;
+  animationRevision?: number;
   noColliding?: boolean;
   activeBuffs?: NfoSimActiveBuff[];
   entityCommonState?: number;
@@ -311,6 +313,8 @@ export type NfoSimEnemy = NfoVector & {
   aiOrbitAngle?: number;
   aiOrbitRadius?: number;
   facingAngle?: number;
+  animationName?: string;
+  animationRevision?: number;
   aiFireCooldownSeconds?: number;
   noColliding?: boolean;
   entityCommonState?: number;
@@ -396,6 +400,8 @@ export type NfoSimMinion = NfoVector & {
   aiOrbitAngle?: number;
   aiOrbitRadius?: number;
   facingAngle?: number;
+  animationName?: string;
+  animationRevision?: number;
   aiFireCooldownSeconds?: number;
   noColliding?: boolean;
   entityCommonState?: number;
@@ -1472,6 +1478,7 @@ function applyAIStateTimelineEvents(
   advancedAIState: AdvancedAIState,
 ) {
   if (isAIStateEntryFrame(advancedAIState)) {
+    applyAIStateAnimation(entity, advancedAIState.state);
     applyAIStateEntryEffects(runtimeData, entity, advancedAIState);
   }
 
@@ -1494,6 +1501,7 @@ function applyAIStateTimelineEvents(
   }
 
   for (const event of getDueAIStateTimelineEvents(advancedAIState)) {
+    applyAIStateTimelineAnimation(entity, event);
     entity.noColliding = event.noColliding;
     if (
       advancedAIState.state.stateType === NFO_AI_STATE_TYPE.blackCatTeleport
@@ -1508,6 +1516,43 @@ function applyAIStateTimelineEvents(
       entity.y = target.y;
     }
   }
+}
+
+function applyAIStateAnimation(
+  entity: NfoAIStatefulEntity,
+  aiState: NfoAIStateData,
+) {
+  const animationName = aiState.playAnimeName?.trim() ?? "";
+  if (animationName.length === 0) {
+    return;
+  }
+
+  applyAIEntityAnimationName(entity, animationName, aiState.restartsAnimation ?? false);
+}
+
+function applyAIStateTimelineAnimation(
+  entity: NfoAIStatefulEntity,
+  event: NfoAIStateData["timelineEvents"][number],
+) {
+  const animationName = event.playAnimeName.trim();
+  if (animationName.length === 0) {
+    return;
+  }
+
+  applyAIEntityAnimationName(entity, animationName, false);
+}
+
+function applyAIEntityAnimationName(
+  entity: NfoAIStatefulEntity,
+  animationName: string,
+  forceRestart: boolean,
+) {
+  if (!forceRestart && entity.animationName === animationName) {
+    return;
+  }
+
+  entity.animationName = animationName;
+  entity.animationRevision = (entity.animationRevision ?? 0) + 1;
 }
 
 function applyAIStateEntryEffects(

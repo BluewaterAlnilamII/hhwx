@@ -245,6 +245,8 @@ function mapAIState(record: RawRecord): NfoAIData["states"][number] {
     stateMoveOffsetX: readNumber(record, "State_MoveOffsetX"),
     stateMoveOffsetY: readNumber(record, "State_MoveOffsetY"),
     syncDirectionFromTarget: readBooleanNumber(record, "syncDirectionFromTarget"),
+    playAnimeName: readString(record, "playAnimeName"),
+    restartsAnimation: readBooleanNumber(record, "isRestartPlayAnime"),
     triggerLevelEventId: readNumber(record, "TriggerLevelEventID"),
     buffId: readNumber(record, "buffID"),
     buffLevel: readNumber(record, "buffLevel"),

@@ -240,6 +240,16 @@ type AIStateCommonStateCaseSpec = {
   expectedEntityCommonStateChangeTo: number;
 };
 
+type AIStateAnimationCaseSpec = {
+  id: string;
+  aiTypeId: number;
+  stateId: number;
+  expectedPlayAnimeName: string;
+  expectedRestartsAnimation: boolean;
+  expectedTimelineEventFrame?: number;
+  expectedTimelinePlayAnimeName?: string;
+};
+
 type LevelAIStateChangeCaseSpec = {
   id: string;
   levelId: number;
@@ -865,6 +875,20 @@ export type NfoCnParityAIStateCommonStateCase = {
   entityCommonStateChangeTo: number;
 };
 
+export type NfoCnParityAIStateAnimationCase = {
+  id: string;
+  aiTypeId: number;
+  aiName: string;
+  stateId: number;
+  stateName: string;
+  stateType: number;
+  stateLastFrame: number;
+  playAnimeName: string;
+  restartsAnimation: boolean;
+  timelineEventFrame: number;
+  timelinePlayAnimeName: string;
+};
+
 export type NfoCnParityActiveSkillBuff = {
   targetType: number;
   buffId: number;
@@ -1122,6 +1146,7 @@ export type NfoCnParityFixture = {
   selectedAIStateMovementCases: NfoCnParityAIStateMovementCase[];
   selectedAIStateBuffCases: NfoCnParityAIStateBuffCase[];
   selectedAIStateCommonStateCases: NfoCnParityAIStateCommonStateCase[];
+  selectedAIStateAnimationCases: NfoCnParityAIStateAnimationCase[];
   selectedActiveSkillBuffCases: NfoCnParityActiveSkillBuffCase[];
   selectedActiveSkillSummonCases: NfoCnParityActiveSkillSummonCase[];
   selectedItemCases: NfoCnParityItemCase[];
@@ -2097,6 +2122,25 @@ const AI_STATE_COMMON_STATE_CASE_SPECS: AIStateCommonStateCaseSpec[] = [
   },
 ];
 
+const AI_STATE_ANIMATION_CASE_SPECS: AIStateAnimationCaseSpec[] = [
+  {
+    id: "ai-ancient-golem-landing-restart-animation",
+    aiTypeId: 38,
+    stateId: 5,
+    expectedPlayAnimeName: "Skill1-2",
+    expectedRestartsAnimation: true,
+  },
+  {
+    id: "ai-black-cat-teleport-timeline-animation",
+    aiTypeId: 26,
+    stateId: 2,
+    expectedPlayAnimeName: "walk",
+    expectedRestartsAnimation: false,
+    expectedTimelineEventFrame: 1,
+    expectedTimelinePlayAnimeName: "skill-miss",
+  },
+];
+
 const ACTIVE_SKILL_BUFF_CASE_SPECS: ActiveSkillBuffCaseSpec[] = [
   {
     id: "active-skill-holy-mend-heal-invincible-revive",
@@ -2657,6 +2701,9 @@ export function buildNfoCnParityFixture(
     )),
     selectedAIStateCommonStateCases: AI_STATE_COMMON_STATE_CASE_SPECS.map((spec) => (
       buildAIStateCommonStateCase(runtimeData, spec)
+    )),
+    selectedAIStateAnimationCases: AI_STATE_ANIMATION_CASE_SPECS.map((spec) => (
+      buildAIStateAnimationCase(runtimeData, spec)
     )),
     selectedActiveSkillBuffCases: ACTIVE_SKILL_BUFF_CASE_SPECS.map((spec) => (
       buildActiveSkillBuffCase(runtimeData, spec)
@@ -4533,6 +4580,61 @@ function buildAIStateCommonStateCase(
     stateLastFrame: state.lastFrame,
     changesEntityCommonState: state.changesEntityCommonState ?? false,
     entityCommonStateChangeTo: state.entityCommonStateChangeTo ?? 0,
+  };
+}
+
+function buildAIStateAnimationCase(
+  runtimeData: NfoOfflineRuntimeData,
+  spec: AIStateAnimationCaseSpec,
+): NfoCnParityAIStateAnimationCase {
+  const ai = runtimeData.ais.find((candidate) => candidate.id === spec.aiTypeId);
+  if (!ai) {
+    throw new Error(`AI ${spec.aiTypeId} is missing from AIData.`);
+  }
+
+  const state = ai.states.find((candidate) => candidate.id === spec.stateId);
+  if (!state) {
+    throw new Error(`AI ${spec.aiTypeId} is missing state ${spec.stateId}.`);
+  }
+  if ((state.playAnimeName ?? "") !== spec.expectedPlayAnimeName) {
+    throw new Error(
+      `AI ${ai.id} state ${state.id} expected playAnimeName `
+      + `${spec.expectedPlayAnimeName}, got ${state.playAnimeName ?? ""}.`,
+    );
+  }
+  if ((state.restartsAnimation ?? false) !== spec.expectedRestartsAnimation) {
+    throw new Error(
+      `AI ${ai.id} state ${state.id} expected isRestartPlayAnime `
+      + `${spec.expectedRestartsAnimation}, got ${state.restartsAnimation ?? false}.`,
+    );
+  }
+
+  const timelineEvent = spec.expectedTimelineEventFrame !== undefined
+    ? state.timelineEvents.find((event) => (
+      event.frame === spec.expectedTimelineEventFrame
+      && event.playAnimeName === spec.expectedTimelinePlayAnimeName
+    )) ?? null
+    : null;
+  if (spec.expectedTimelineEventFrame !== undefined && !timelineEvent) {
+    throw new Error(
+      `AI ${ai.id} state ${state.id} is missing timeline PlayAnimeName `
+      + `${spec.expectedTimelinePlayAnimeName ?? ""} at frame `
+      + `${spec.expectedTimelineEventFrame}.`,
+    );
+  }
+
+  return {
+    id: spec.id,
+    aiTypeId: ai.id,
+    aiName: ai.name,
+    stateId: state.id,
+    stateName: state.name,
+    stateType: state.stateType,
+    stateLastFrame: state.lastFrame,
+    playAnimeName: state.playAnimeName ?? "",
+    restartsAnimation: state.restartsAnimation ?? false,
+    timelineEventFrame: timelineEvent?.frame ?? 0,
+    timelinePlayAnimeName: timelineEvent?.playAnimeName ?? "",
   };
 }
 

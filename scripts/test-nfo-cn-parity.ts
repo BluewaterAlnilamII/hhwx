@@ -52,6 +52,7 @@ async function main() {
   assert.equal(fixture.selectedAIStateMovementCases.length, 10);
   assert.equal(fixture.selectedAIStateBuffCases.length, 3);
   assert.equal(fixture.selectedAIStateCommonStateCases.length, 2);
+  assert.equal(fixture.selectedAIStateAnimationCases.length, 2);
   assert.equal(fixture.selectedItemCases.length, 6);
   assert.equal(fixture.selectedDropCases.length, 2);
   assert.equal(fixture.selectedLevelEnemySpawnCases.length, 3);
@@ -1218,6 +1219,24 @@ async function main() {
   assert.equal(aiArchangelStartupCommonStateCase.changesEntityCommonState, true);
   assert.equal(aiArchangelStartupCommonStateCase.entityCommonStateChangeTo, 0);
 
+  const aiAncientGolemLandingAnimationCase = getAIStateAnimationCase(
+    "ai-ancient-golem-landing-restart-animation",
+  );
+  assert.equal(aiAncientGolemLandingAnimationCase.aiTypeId, 38);
+  assert.equal(aiAncientGolemLandingAnimationCase.stateId, 5);
+  assert.equal(aiAncientGolemLandingAnimationCase.playAnimeName, "Skill1-2");
+  assert.equal(aiAncientGolemLandingAnimationCase.restartsAnimation, true);
+
+  const aiBlackCatTimelineAnimationCase = getAIStateAnimationCase(
+    "ai-black-cat-teleport-timeline-animation",
+  );
+  assert.equal(aiBlackCatTimelineAnimationCase.aiTypeId, 26);
+  assert.equal(aiBlackCatTimelineAnimationCase.stateId, 2);
+  assert.equal(aiBlackCatTimelineAnimationCase.playAnimeName, "walk");
+  assert.equal(aiBlackCatTimelineAnimationCase.restartsAnimation, false);
+  assert.equal(aiBlackCatTimelineAnimationCase.timelineEventFrame, 1);
+  assert.equal(aiBlackCatTimelineAnimationCase.timelinePlayAnimeName, "skill-miss");
+
   const aiMichelleOffsetMoveCase = getAIStateMovementCase(
     "ai-michelle-laser-offset-move-state",
   );
@@ -1896,6 +1915,7 @@ async function main() {
   testCnAIStateOffsetMovementUsesStateMoveOffset(runtimeData);
   testCnAIStateEntryBuffsApplyToEnemy(runtimeData);
   testCnAIStateCommonStateChangesApplyToEnemy(runtimeData);
+  testCnAIStateAnimationMetadataAppliesToEnemy(runtimeData);
   testCnAIStateTriggerLevelEventSpawnsTriggeredLevelEvent(runtimeData);
   testCnActiveSkillHolyMendHealInvincibleAndRevive(runtimeData);
   testCnActiveSkillKingOfBeastsMinionAITransitionShooter(runtimeData);
@@ -1979,6 +1999,7 @@ async function main() {
   console.log("ok - CN AIState CatBoss_Attack creates first-pass bullet rain");
   console.log("ok - CN AIState offset movement uses State_MoveOffset and State_MoveSpeed");
   console.log("ok - CN AIState TriggerLevelEventID gates triggered level enemy spawns");
+  console.log("ok - CN AIState animation metadata updates serializable enemy state");
   console.log("ok - CN active skill Holy Mend heals, applies invincibility, and revives");
   console.log("ok - CN active skill 111 minion AI transitions into roar shooter");
   console.log("ok - CN active skill All-Out Fire drives shooter 7000 frame 1/3/7 timeline and minion AI");
@@ -2147,6 +2168,14 @@ function getAIStateCommonStateCase(id: string) {
     candidate.id === id
   ));
   assert.ok(selectedCase, `missing parity AI state common-state case ${id}`);
+  return selectedCase;
+}
+
+function getAIStateAnimationCase(id: string) {
+  const selectedCase = fixture.selectedAIStateAnimationCases.find((candidate) => (
+    candidate.id === id
+  ));
+  assert.ok(selectedCase, `missing parity AI state animation case ${id}`);
   return selectedCase;
 }
 
@@ -7739,6 +7768,84 @@ function assertCnAIStateCommonStateChangeApplies(
     changedState.enemies[0]?.entityCommonState,
     commonStateCase.entityCommonStateChangeTo,
   );
+}
+
+function testCnAIStateAnimationMetadataAppliesToEnemy(
+  sourceRuntimeData: NfoOfflineRuntimeData,
+) {
+  const landingCase = getAIStateAnimationCase("ai-ancient-golem-landing-restart-animation");
+  const timelineCase = getAIStateAnimationCase("ai-black-cat-teleport-timeline-animation");
+  const testRuntimeData = configureRuntimeForAI(sourceRuntimeData);
+  const baseState = createNfoSimulation(testRuntimeData);
+
+  const landingState: NfoSimulationState = {
+    ...baseState,
+    player: {
+      ...baseState.player,
+      fireCooldownSeconds: 999,
+    },
+    enemies: [
+      createEnemyFixture(
+        baseState,
+        baseState.player.x + 300,
+        baseState.player.y,
+        {
+          aiTypeId: landingCase.aiTypeId,
+          aiStateId: landingCase.stateId,
+          aiStateElapsedFrames: 0,
+          isBoss: true,
+          speed: 0,
+        },
+      ),
+    ],
+  };
+  const animatedLandingState = updateNfoSimulation(
+    landingState,
+    testRuntimeData,
+    NO_INPUT,
+    1 / 30,
+  );
+  assert.equal(animatedLandingState.enemies[0]?.animationName, landingCase.playAnimeName);
+  assert.equal(animatedLandingState.enemies[0]?.animationRevision, 1);
+
+  const stableLandingState = updateNfoSimulation(
+    animatedLandingState,
+    testRuntimeData,
+    NO_INPUT,
+    1 / 30,
+  );
+  assert.equal(stableLandingState.enemies[0]?.animationName, landingCase.playAnimeName);
+  assert.equal(stableLandingState.enemies[0]?.animationRevision, 1);
+
+  const timelineState: NfoSimulationState = {
+    ...baseState,
+    player: {
+      ...baseState.player,
+      fireCooldownSeconds: 999,
+    },
+    enemies: [
+      createEnemyFixture(
+        baseState,
+        baseState.player.x + 300,
+        baseState.player.y,
+        {
+          aiTypeId: timelineCase.aiTypeId,
+          aiStateId: timelineCase.stateId,
+          aiStateElapsedFrames: 0,
+          isBoss: true,
+          speed: 0,
+        },
+      ),
+    ],
+  };
+  const animatedTimelineState = updateNfoSimulation(
+    timelineState,
+    testRuntimeData,
+    NO_INPUT,
+    timelineCase.timelineEventFrame / 30,
+  );
+  assert.equal(animatedTimelineState.enemies[0]?.animationName, timelineCase.timelinePlayAnimeName);
+  assert.equal(animatedTimelineState.enemies[0]?.animationRevision, 2);
 }
 
 function testCnAIStateTriggerLevelEventSpawnsTriggeredLevelEvent(
