@@ -2450,6 +2450,20 @@ const ACTIVE_SKILL_BUFF_CASE_SPECS: ActiveSkillBuffCaseSpec[] = [
     expectedBuffIds: [106, 104, 105],
   },
   {
+    id: "active-skill-holy-mend-heal-invincible-revive-lv2",
+    activeSkillId: 12,
+    activeSkillLevel: 2,
+    expectedEventFrame: 1,
+    expectedBuffIds: [106, 104, 105],
+  },
+  {
+    id: "active-skill-holy-mend-heal-invincible-revive-lv3",
+    activeSkillId: 12,
+    activeSkillLevel: 3,
+    expectedEventFrame: 1,
+    expectedBuffIds: [106, 104, 105],
+  },
+  {
     id: "active-skill-fairy-guard-targets-player-side",
     activeSkillId: 15,
     activeSkillLevel: 1,

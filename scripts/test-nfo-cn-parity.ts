@@ -62,7 +62,7 @@ async function main() {
   assert.equal(fixture.selectedAIStateBuffCases.length, 3);
   assert.equal(fixture.selectedAIStateCommonStateCases.length, 2);
   assert.equal(fixture.selectedAIStateAnimationCases.length, 2);
-  assert.equal(fixture.selectedActiveSkillBuffCases.length, 7);
+  assert.equal(fixture.selectedActiveSkillBuffCases.length, 9);
   assert.equal(fixture.selectedItemCases.length, 6);
   assert.equal(fixture.selectedDropCases.length, 2);
   assert.equal(fixture.selectedLevelEnemySpawnCases.length, 3);
@@ -1507,15 +1507,22 @@ async function main() {
   assert.equal(getAttributeValue(demonGodLevelThreeBuff.attributes, CN_NFO_ATTRIBUTE_TYPE.criticalRate), 50);
   assert.equal(getAttributeValue(demonGodLevelThreeBuff.attributes, CN_NFO_ATTRIBUTE_TYPE.criticalDamage), 50);
 
-  const holyMendCase = getActiveSkillBuffCase("active-skill-holy-mend-heal-invincible-revive");
-  assert.equal(holyMendCase.activeSkillId, 12);
-  assert.equal(holyMendCase.activeSkillLevel, 1);
-  assert.equal(holyMendCase.eventFrame, 1);
-  assert.deepEqual(holyMendCase.buffs.map((buff) => buff.buffId), [106, 104, 105]);
-  assert.deepEqual(holyMendCase.buffs.map((buff) => buff.buffType), [12, 9, 11]);
-  assert.equal(holyMendCase.buffs.find((buff) => buff.buffId === 104)?.buffDurationFrames, 60);
-  assert.equal(holyMendCase.buffs.find((buff) => buff.buffId === 105)?.buffValue, 1000);
-  assert.ok(holyMendCase.buffs.every((buff) => buff.targetType === 1));
+  const holyMendCaseIds = [
+    "active-skill-holy-mend-heal-invincible-revive",
+    "active-skill-holy-mend-heal-invincible-revive-lv2",
+    "active-skill-holy-mend-heal-invincible-revive-lv3",
+  ];
+  holyMendCaseIds.forEach((holyMendCaseId, index) => {
+    const holyMendCase = getActiveSkillBuffCase(holyMendCaseId);
+    assert.equal(holyMendCase.activeSkillId, 12);
+    assert.equal(holyMendCase.activeSkillLevel, index + 1);
+    assert.equal(holyMendCase.eventFrame, 1);
+    assert.deepEqual(holyMendCase.buffs.map((buff) => buff.buffId), [106, 104, 105]);
+    assert.deepEqual(holyMendCase.buffs.map((buff) => buff.buffType), [12, 9, 11]);
+    assert.equal(holyMendCase.buffs.find((buff) => buff.buffId === 104)?.buffDurationFrames, 60);
+    assert.equal(holyMendCase.buffs.find((buff) => buff.buffId === 105)?.buffValue, 1000);
+    assert.ok(holyMendCase.buffs.every((buff) => buff.targetType === 1));
+  });
 
   const fairyGuardCase = getActiveSkillBuffCase("active-skill-fairy-guard-targets-player-side");
   assert.equal(fairyGuardCase.activeSkillId, 15);
@@ -2280,7 +2287,7 @@ async function main() {
   console.log("ok - CN AIState TriggerLevelEventID gates triggered level enemy spawns");
   console.log("ok - CN AIState animation metadata updates serializable enemy state");
   console.log("ok - CN active skill Demon God level 1/2/3 self buffs modify player fire attributes");
-  console.log("ok - CN active skill Holy Mend heals, applies invincibility, and revives");
+  console.log("ok - CN active skill Holy Mend level 1/2/3 heals, applies invincibility, and revives");
   console.log("ok - CN active skill Fairy Guard level 1/2/3 buffs existing player-side minions and their fire");
   console.log("ok - CN active skill 111 minion AI transitions into roar shooter");
   console.log("ok - CN active skill All-Out Fire drives shooter 7000 frame 1/3/7 timeline and minion AI");
@@ -9468,7 +9475,27 @@ function assertCnActiveSkillDemonGodSelfAttributeBuffCase(
 function testCnActiveSkillHolyMendHealInvincibleAndRevive(
   sourceRuntimeData: NfoOfflineRuntimeData,
 ) {
-  const testRuntimeData = configureRuntimeForActiveSkill(sourceRuntimeData, 12);
+  for (const holyMendCaseId of [
+    "active-skill-holy-mend-heal-invincible-revive",
+    "active-skill-holy-mend-heal-invincible-revive-lv2",
+    "active-skill-holy-mend-heal-invincible-revive-lv3",
+  ]) {
+    assertCnActiveSkillHolyMendHealInvincibleAndReviveCase(
+      sourceRuntimeData,
+      holyMendCaseId,
+    );
+  }
+}
+
+function assertCnActiveSkillHolyMendHealInvincibleAndReviveCase(
+  sourceRuntimeData: NfoOfflineRuntimeData,
+  holyMendCaseId: string,
+) {
+  const holyMendCase = getActiveSkillBuffCase(holyMendCaseId);
+  const testRuntimeData = configureRuntimeForActiveSkill(
+    sourceRuntimeData,
+    holyMendCase.activeSkillId,
+  );
   const baseState = createStateWithoutEnemies(testRuntimeData);
   const damagedState = {
     ...baseState,
@@ -9478,12 +9505,23 @@ function testCnActiveSkillHolyMendHealInvincibleAndRevive(
     },
   };
   const activeState = updateNfoSimulation(
-    chargeActiveSkill(damagedState),
+    chargeActiveSkill({
+      ...damagedState,
+      activeSkill: {
+        ...damagedState.activeSkill,
+        level: holyMendCase.activeSkillLevel,
+      },
+    }),
     testRuntimeData,
     { ...NO_INPUT, useActiveSkill: true },
     1 / 30,
   );
 
+  assert.equal(holyMendCase.activeSkillId, 12);
+  assert.equal(holyMendCase.eventFrame, 1);
+  assert.deepEqual(holyMendCase.buffs.map((buff) => buff.buffId), [106, 104, 105]);
+  assert.ok(holyMendCase.buffs.every((buff) => buff.targetType === 1));
+  assert.equal(activeState.activeSkill.level, holyMendCase.activeSkillLevel);
   assert.equal(activeState.player.hp, baseState.player.maxHp);
   assert.ok(activeState.player.activeBuffs.some((buff) => buff.id === 104 && buff.type === 9));
   assert.ok(activeState.player.activeBuffs.some((buff) => buff.id === 106 && buff.type === 12));
