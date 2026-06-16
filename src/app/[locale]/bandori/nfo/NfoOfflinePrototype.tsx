@@ -86,6 +86,7 @@ type NfoSceneActions = {
   activateActiveSkill: () => void;
   readyActiveSkill: () => void;
   startSmokeMove: () => void;
+  advanceSmokeFrames: (frameCount: number) => void;
 };
 
 type SmokeInteractionState =
@@ -95,6 +96,7 @@ type SmokeInteractionState =
   | "coin-requested"
   | "upgrade-requested"
   | "movement-requested"
+  | "enemy-spawn-requested"
   | "active-skill-ready-requested"
   | "active-skill-requested"
   | "waiting-scene"
@@ -124,6 +126,7 @@ export default function NfoOfflinePrototype() {
   const [smokeActiveSkillObserved, setSmokeActiveSkillObserved] = useState(false);
   const [smokeMovementObserved, setSmokeMovementObserved] = useState(false);
   const [smokeCombatObserved, setSmokeCombatObserved] = useState(false);
+  const [smokeEnemyObserved, setSmokeEnemyObserved] = useState(false);
   const smokeMovementStartRef = useRef<{ x: number; y: number } | null>(null);
   const runtimeData = runtimeState.status === "ready" ? runtimeState.data : null;
   const paidGlobalUpgradeIds = saveState?.paidGlobalUpgradeIds ?? EMPTY_NUMBER_ARRAY;
@@ -138,6 +141,7 @@ export default function NfoOfflinePrototype() {
     setSmokeActiveSkillObserved(false);
     setSmokeMovementObserved(false);
     setSmokeCombatObserved(false);
+    setSmokeEnemyObserved(false);
     smokeMovementStartRef.current = null;
   }, []);
 
@@ -175,6 +179,16 @@ export default function NfoOfflinePrototype() {
       setSmokeCombatObserved(true);
     }
   }, [hud, smokeCombatObserved, smokeMode]);
+
+  useEffect(() => {
+    if (!smokeMode || smokeEnemyObserved || !hud || hud.status !== "playing") {
+      return;
+    }
+
+    if (hud.enemies > 0 || hud.defeatedEnemies > 0) {
+      setSmokeEnemyObserved(true);
+    }
+  }, [hud, smokeEnemyObserved, smokeMode]);
 
   useEffect(() => {
     let cancelled = false;
@@ -540,6 +554,12 @@ export default function NfoOfflinePrototype() {
         return;
       }
 
+      if (!smokeEnemyObserved) {
+        setSmokeInteractionState("enemy-spawn-requested");
+        sceneActionsRef.current.advanceSmokeFrames(12);
+        return;
+      }
+
       if (!smokeCombatObserved) {
         return;
       }
@@ -566,6 +586,20 @@ export default function NfoOfflinePrototype() {
       && smokeMovementObserved
     ) {
       setSmokeInteractionState("waiting-scene");
+      return;
+    }
+
+    if (
+      smokeInteractionState === "enemy-spawn-requested"
+      && sceneActionsRef.current
+      && hud?.status === "playing"
+    ) {
+      if (smokeEnemyObserved) {
+        setSmokeInteractionState("waiting-scene");
+        return;
+      }
+
+      sceneActionsRef.current.advanceSmokeFrames(12);
       return;
     }
 
@@ -619,6 +653,7 @@ export default function NfoOfflinePrototype() {
     smokeActiveSkillObserved,
     smokeAllUnlocked,
     smokeCombatObserved,
+    smokeEnemyObserved,
     smokeInteractionState,
     smokeMovementObserved,
     smokeMode,
@@ -684,6 +719,7 @@ export default function NfoOfflinePrototype() {
         data-nfo-player-y={hud?.playerY ?? 0}
         data-nfo-player-moved={smokeMovementObserved ? "1" : "0"}
         data-nfo-combat-observed={smokeCombatObserved ? "1" : "0"}
+        data-nfo-enemy-observed={smokeEnemyObserved ? "1" : "0"}
         data-nfo-enemy-count={hud?.enemies ?? 0}
         data-nfo-projectile-count={hud?.projectiles ?? 0}
         data-nfo-defeated-enemy-count={hud?.defeatedEnemies ?? 0}
@@ -986,8 +1022,6 @@ function createNfoPrototypeSceneClass({
   });
   let lastHudUpdate = 0;
   let runResultReported = false;
-  let smokeMoveFrames = 0;
-
   return class NfoPrototypeScene extends Phaser.Scene {
     private graphics?: import("phaser").GameObjects.Graphics;
 
@@ -997,6 +1031,25 @@ function createNfoPrototypeSceneClass({
 
     create() {
       this.graphics = this.add.graphics();
+      const advanceSimulationFrames = (
+        frameCount: number,
+        inputOverride?: Partial<NfoInputState>,
+      ) => {
+        const steps = Math.max(1, Math.min(120, Math.floor(frameCount)));
+        for (let index = 0; index < steps && simState.status === "playing"; index += 1) {
+          simState = updateNfoSimulation(
+            simState,
+            runtimeData,
+            { ...inputState, ...inputOverride },
+            1 / 30,
+          );
+        }
+        if (this.graphics) {
+          drawScene(this.graphics, simState);
+        }
+        reportHud(toHudSnapshot(simState));
+      };
+
       registerSceneActions({
         forceClear: () => {
           if (simState.status !== "playing") {
@@ -1042,7 +1095,10 @@ function createNfoPrototypeSceneClass({
           reportHud(toHudSnapshot(simState));
         },
         startSmokeMove: () => {
-          smokeMoveFrames = Math.max(smokeMoveFrames, 24);
+          advanceSimulationFrames(24, { moveX: 1, moveY: 0, useActiveSkill: false });
+        },
+        advanceSmokeFrames: (frameCount) => {
+          advanceSimulationFrames(frameCount, { useActiveSkill: false });
         },
       });
       this.input.keyboard?.on("keydown", (event: KeyboardEvent) => {
@@ -1060,12 +1116,6 @@ function createNfoPrototypeSceneClass({
         || keys.has("Space")
         || keys.has("KeyE");
       updateInputState(keys, inputState);
-      const requestedSmokeMove = smokeMoveFrames > 0;
-      if (requestedSmokeMove) {
-        inputState.moveX = 1;
-        inputState.moveY = 0;
-        smokeMoveFrames -= 1;
-      }
       simState = updateNfoSimulation(
         simState,
         runtimeData,
@@ -1077,7 +1127,6 @@ function createNfoPrototypeSceneClass({
 
       if (
         requestedActiveSkill
-        || requestedSmokeMove
         || simState.activeSkill.isActive
         || time - lastHudUpdate > 120
         || simState.status !== "playing"

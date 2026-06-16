@@ -284,6 +284,10 @@ async function smokeBrowserInteraction(baseUrl, args) {
       "browser smoke did not expose combat counters",
     );
     assertSmoke(
+      readHtmlAttribute(smokeTag, "data-nfo-enemy-observed") === "1",
+      "browser smoke did not observe enemy spawning",
+    );
+    assertSmoke(
       readHtmlAttribute(smokeTag, "data-nfo-combat-observed") === "1",
       "browser smoke did not observe combat activity",
     );
