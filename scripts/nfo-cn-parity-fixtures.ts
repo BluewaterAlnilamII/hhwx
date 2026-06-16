@@ -402,6 +402,12 @@ type MapCaseSpec = {
   expectedTerrainLayerTileCount: number;
 };
 
+type EnemyImmuneBuffCaseSpec = {
+  id: string;
+  enemyId: number;
+  expectedImmuneBuffIds: number[];
+};
+
 export type NfoCnParityShooterCase = {
   id: string;
   shooterId: number;
@@ -1146,6 +1152,14 @@ export type NfoCnParityLevelAIStateChangeCase = {
   targetAIName: string;
 };
 
+export type NfoCnParityEnemyImmuneBuffCase = {
+  id: string;
+  enemyId: number;
+  enemyName: string;
+  isBoss: boolean;
+  immuneBuffIds: number[];
+};
+
 export type NfoCnParityFixture = {
   schemaVersion: 1;
   purpose: "cn-nfo-offline-parity-fixtures";
@@ -1180,6 +1194,7 @@ export type NfoCnParityFixture = {
   selectedLevelClearCases: NfoCnParityLevelClearCase[];
   selectedLevelEventTriggerCases: NfoCnParityLevelEventTriggerCase[];
   selectedLevelAIStateChangeCases: NfoCnParityLevelAIStateChangeCase[];
+  selectedEnemyImmuneBuffCases: NfoCnParityEnemyImmuneBuffCase[];
   selectedMapCases: NfoCnParityMapCase[];
 };
 
@@ -3120,6 +3135,19 @@ const MAP_CASE_SPECS: MapCaseSpec[] = [
   },
 ];
 
+const ENEMY_IMMUNE_BUFF_CASE_SPECS: EnemyImmuneBuffCaseSpec[] = [
+  {
+    id: "enemy-super-golem-immune-slow-freeze-stun",
+    enemyId: 12,
+    expectedImmuneBuffIds: [1, 2, 3],
+  },
+  {
+    id: "enemy-claw-machine-boss-immune-dokidoki-stun",
+    enemyId: 80,
+    expectedImmuneBuffIds: [1, 2, 3, 18],
+  },
+];
+
 export function buildNfoCnParityFixture(
   runtimeData: NfoOfflineRuntimeData,
 ): NfoCnParityFixture {
@@ -3214,6 +3242,9 @@ export function buildNfoCnParityFixture(
     )),
     selectedLevelAIStateChangeCases: LEVEL_AI_STATE_CHANGE_CASE_SPECS.map((spec) => (
       buildLevelAIStateChangeCase(runtimeData, spec)
+    )),
+    selectedEnemyImmuneBuffCases: ENEMY_IMMUNE_BUFF_CASE_SPECS.map((spec) => (
+      buildEnemyImmuneBuffCase(runtimeData, spec)
     )),
     selectedMapCases: MAP_CASE_SPECS.map((spec) => (
       buildMapCase(runtimeData, spec)
@@ -6312,6 +6343,32 @@ function buildMapCase(
   };
 }
 
+function buildEnemyImmuneBuffCase(
+  runtimeData: NfoOfflineRuntimeData,
+  spec: EnemyImmuneBuffCaseSpec,
+): NfoCnParityEnemyImmuneBuffCase {
+  const enemy = runtimeData.enemies.find((candidate) => (
+    candidate.id === spec.enemyId
+  ));
+  if (!enemy) {
+    throw new Error(`Enemy ${spec.enemyId} is missing from EnemyData.`);
+  }
+
+  assertNumberArrayEqual(
+    enemy.immuneBuffIds,
+    spec.expectedImmuneBuffIds,
+    `Enemy immune buff case ${spec.id}`,
+  );
+
+  return {
+    id: spec.id,
+    enemyId: enemy.id,
+    enemyName: enemy.name,
+    isBoss: enemy.isBoss,
+    immuneBuffIds: [...enemy.immuneBuffIds],
+  };
+}
+
 function createShooterCase(
   spec: ShooterCaseSpec,
   shooter: NfoBulletShooterData,
@@ -6348,4 +6405,14 @@ function createShooterCase(
     noDamage: fireBullet.noDamage,
     expectedDirectionMode: spec.expectedDirectionMode,
   };
+}
+
+function assertNumberArrayEqual(actual: number[], expected: number[], label: string) {
+  const matches = actual.length === expected.length
+    && actual.every((value, index) => value === expected[index]);
+  if (!matches) {
+    throw new Error(
+      `${label} expected [${expected.join(",")}], got [${actual.join(",")}].`,
+    );
+  }
 }

@@ -424,6 +424,10 @@ const TESTS: Array<{ name: string; run: () => void }> = [
     run: testHitBuffSpeedAttribute,
   },
   {
+    name: "enemy immune buff ids suppress matching hit buffs",
+    run: testEnemyImmuneBuffIdsSuppressHitBuffs,
+  },
+  {
     name: "hit buffs apply DOT damage ticks",
     run: testHitBuffDotDamage,
   },
@@ -479,6 +483,7 @@ function testClearEnemyEventSettlementWaitsForTaggedEnemyDefeat() {
     isBoss: true,
     canFly: false,
     canWalkThroughWall: false,
+    immuneBuffIds: [],
     levels: [
       {
         level: 1,
@@ -635,6 +640,7 @@ function testAIStateTriggerLevelEventGatesEnemySpawn() {
     isBoss: false,
     canFly: false,
     canWalkThroughWall: false,
+    immuneBuffIds: [],
     levels: [
       {
         level: 1,
@@ -4184,6 +4190,27 @@ function testHitBuffSpeedAttribute() {
   );
 }
 
+function testEnemyImmuneBuffIdsSuppressHitBuffs() {
+  const runtimeData = createRuntimeFixture();
+  const stateWithEnemy = createStateWithEnemy(runtimeData, 1000, {
+    x: 40,
+    y: 0,
+    hp: 100,
+    speed: 500,
+    radius: 5,
+    immuneBuffIds: [1],
+  });
+
+  const hitState = updateNfoSimulation(stateWithEnemy, runtimeData, NO_INPUT, 0.1);
+  assert.equal(hitState.enemies[0]?.hp, 99);
+  assert.equal(hitState.enemies[0]?.activeBuffs.length, 0);
+  const xAfterHit = hitState.enemies[0]?.x ?? 0;
+
+  const movedState = updateNfoSimulation(hitState, runtimeData, NO_INPUT, 0.2);
+  assert.equal(movedState.enemies[0]?.activeBuffs.length, 0);
+  assert.notEqual(movedState.enemies[0]?.x, xAfterHit);
+}
+
 function testHitBuffDotDamage() {
   const runtimeData = createRuntimeFixture();
   const stateWithEnemy = createStateWithEnemy(runtimeData, 1100, {
@@ -4287,6 +4314,7 @@ type EnemyFixtureOverrides = Partial<{
   defense: number;
   speed: number;
   radius: number;
+  immuneBuffIds: number[];
 }>;
 
 type StateFixtureOptions = Partial<{
@@ -4329,6 +4357,7 @@ function createStateWithEnemy(
         canFly: false,
         canWalkThroughWall: false,
         dropId: 0,
+        immuneBuffIds: enemyOverrides.immuneBuffIds ?? [],
         activeBuffs: [],
       },
     ],

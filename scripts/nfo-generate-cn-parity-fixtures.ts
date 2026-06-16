@@ -42,6 +42,7 @@ async function main() {
   console.log(`Level clear cases: ${fixture.selectedLevelClearCases.length}`);
   console.log(`Level event trigger cases: ${fixture.selectedLevelEventTriggerCases.length}`);
   console.log(`Level AI state-change cases: ${fixture.selectedLevelAIStateChangeCases.length}`);
+  console.log(`Enemy immune buff cases: ${fixture.selectedEnemyImmuneBuffCases.length}`);
   console.log(`Map cases: ${fixture.selectedMapCases.length}`);
 }
 

@@ -241,7 +241,7 @@ Runtime boundaries:
 | --- | --- | --- | --- |
 | CN local freeze | done | 20-file `Android-2.1.1` snapshot under ignored `temp/` | No scheduled refresh and no object-storage upload |
 | Bundle inventory | done | `objects.json` and typetrees for the frozen UnityFS bundles | Raw bundles remain local-only |
-| Runtime master data | done | `master-data.json` with characters, enemies, enemy AI, weapons, equips, buffs, active skills, bullet shooters, bullets, levels, maps, drops, items, `GameDefaultData.globalDifficutyControlData`, map prefab bounds, level clear major/minor enemy event IDs, level clear unlock rewards, and related tables; deployable copy lives under `public/res/bandori/nfo/cn/Android-2.1.1/runtime-data/` | Preserve CN Unity field names in exported JSON where the source is a master-data table; raw UnityFS bundles remain local-only |
+| Runtime master data | done | `master-data.json` with characters, enemies, enemy immune buff lists, enemy AI, weapons, equips, buffs, active skills, bullet shooters, bullets, levels, maps, drops, items, `GameDefaultData.globalDifficutyControlData`, map prefab bounds, level clear major/minor enemy event IDs, level clear unlock rewards, and related tables; deployable copy lives under `public/res/bandori/nfo/cn/Android-2.1.1/runtime-data/` | Preserve CN Unity field names in exported JSON where the source is a master-data table; raw UnityFS bundles remain local-only |
 | Browser DTO API | in progress | `/api/bandori/nfo/local-runtime` reads the deployable frozen runtime artifact and returns typed DTOs | Server route fails fast if the deployable `public/res` artifact is missing, exposes `source.runtimeDataPath = public/res/.../master-data.json` and `source.manifestPath = snapshot-manifest.json`, and no longer falls back to ignored `temp/` runtime data; smoke and parity tests assert this boundary |
 | Minimal play loop | in progress | Phaser playfield with movement, camera, enemy spawning, first-pass enemy AI fire, selected-weapon auto fire, bullets, collision, drops, EXP/upgrade/heal/coin/bomb/magnet pickup handling, timer, and clear/fail state | Simulation state stays outside Phaser |
 | Offline save | in progress | Local `NFOSaveData`-like state in `localStorage`: character/level/weapon selection, cleared levels, unlocked characters/levels/weapons/equips, run count, defeated enemies, upgrade coin, paid global upgrades, and default unlock lists | Save only serializable game state, not renderer objects |
@@ -255,6 +255,11 @@ Runtime boundaries:
 The parity harness also combines CN weapon `23`/`25` self-buff fixtures with CN
 AI `44` hostile bullet `99` to lock shield/counter protection against hostile
 bullet damage, not only contact damage.
+
+The CN parity fixture set now also locks `EnemyData.immuneBuffs` for enemy `12`
+(`1`, `2`, `3`) and boss enemy `80` (`1`, `2`, `3`, `18`). The runtime uses
+that list only to suppress matching hit-buff application; bullet collision and
+damage still resolve normally.
 
 The active-skill parity harness now also locks CN skill `110` / `Ultimate Heart
 Light` as active-skill entry cases for level `1`/`2`/`3` shooters
@@ -1408,7 +1413,12 @@ Weapon behavior staging:
   and refresh duplicate modes are represented for active enemy buffs. Type `13`
   taunt hit buffs now store the hit bullet source and use it as the affected
   enemy's movement target and hostile-fire friendly target while active. CN
-  weapon `18` now locks the first
+  `EnemyData.immuneBuffs` is mapped into runtime enemy DTOs and copied onto
+  spawned enemies; when an enemy lists the hit buff ID, the simulation skips only
+  that buff application while leaving collision damage, hit counts, and force
+  handling intact. Enemy `12` locks `[1, 2, 3]`, and boss enemy `80` locks
+  `[1, 2, 3, 18]`.
+  CN weapon `18` now locks the first
   direct DOT hit-buff case: level `1` bullet `28` applies buff `4`
   (`Duration = 150`, `Value = 1`, `MaxStackCount = 2`) and the first-pass
   simulation ticks one HP after one active second. CN weapon `28` extends the

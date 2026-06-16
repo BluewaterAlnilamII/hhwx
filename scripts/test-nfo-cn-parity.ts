@@ -70,6 +70,7 @@ async function main() {
   assert.equal(fixture.selectedLevelClearCases.length, 5);
   assert.equal(fixture.selectedLevelEventTriggerCases.length, 1);
   assert.equal(fixture.selectedLevelAIStateChangeCases.length, 2);
+  assert.equal(fixture.selectedEnemyImmuneBuffCases.length, 2);
 
   const directionZeroCase = getCase("active-shooter-direction-0-offset");
   assert.equal(directionZeroCase.shooterId, 7000);
@@ -2278,6 +2279,7 @@ async function main() {
   testCnWeaponDirectFireDamageJudgeNoneForce(runtimeData);
   testCnWeaponDirectFireRayHitBuff(runtimeData);
   testCnWeaponDirectFireFreezeField(runtimeData);
+  testCnEnemyImmuneBuffsBlockHitBuffApplication(runtimeData);
   testCnWeaponDirectFireStunField(runtimeData);
   testCnWeaponDirectFireDotHitBuff(runtimeData);
   testCnWeaponDirectFireGroupTiming(runtimeData);
@@ -2380,6 +2382,7 @@ async function main() {
   console.log("ok - CN weapon direct fire DamageJudgeType None still applies force");
   console.log("ok - CN weapon Courage Song ray fires targetless and stays owner-forward");
   console.log("ok - CN weapon Blizzard field fires targetless, applies freeze, and stops movement");
+  console.log("ok - CN EnemyData immuneBuffs block matching hit buffs");
   console.log("ok - CN weapon Judgement field fires targetless, applies stun, and stops movement");
   console.log("ok - CN weapon Six Star direct fire applies DOT hit buff");
   console.log("ok - CN weapon Galaxy Light uses GroupCount and FireGroupCD timing");
@@ -2676,6 +2679,14 @@ function getLevelAIStateChangeCase(id: string) {
     candidate.id === id
   ));
   assert.ok(selectedCase, `missing parity level AI state-change case ${id}`);
+  return selectedCase;
+}
+
+function getEnemyImmuneBuffCase(id: string) {
+  const selectedCase = fixture.selectedEnemyImmuneBuffCases.find((candidate) => (
+    candidate.id === id
+  ));
+  assert.ok(selectedCase, `missing parity enemy immune-buff case ${id}`);
   return selectedCase;
 }
 
@@ -5063,6 +5074,105 @@ function testCnWeaponDirectFireFreezeField(sourceRuntimeData: NfoOfflineRuntimeD
   assert.ok(frozenTarget, "expected CN frozen target to remain alive");
   assertClose(frozenTarget.x, targetAfter.x, "CN Blizzard freeze disables enemy movement x");
   assertClose(frozenTarget.y, targetAfter.y, "CN Blizzard freeze disables enemy movement y");
+}
+
+function testCnEnemyImmuneBuffsBlockHitBuffApplication(
+  sourceRuntimeData: NfoOfflineRuntimeData,
+) {
+  const directFireCase = getWeaponDirectFireCase(
+    "weapon-direct-blizzard-freeze-field-lv1",
+  );
+  const immuneCase = getEnemyImmuneBuffCase(
+    "enemy-super-golem-immune-slow-freeze-stun",
+  );
+  const dokidokiImmuneCase = getEnemyImmuneBuffCase(
+    "enemy-claw-machine-boss-immune-dokidoki-stun",
+  );
+  const testRuntimeData = configureRuntimeForWeapon(sourceRuntimeData);
+  const weapon = testRuntimeData.weapons.find((candidate) => (
+    candidate.id === directFireCase.weaponId
+  ));
+  const weaponLevel = weapon?.levels.find((candidate) => (
+    candidate.level === directFireCase.weaponLevel
+  ));
+  const fireBullet = weaponLevel?.fireBullets.find((candidate) => (
+    candidate.bulletTypeId === directFireCase.bulletTypeId
+  ));
+
+  assert.ok(weapon);
+  assert.ok(weaponLevel);
+  assert.ok(fireBullet);
+  assert.equal(directFireCase.hitBuffId, 2);
+  assert.deepEqual(immuneCase.immuneBuffIds, [1, 2, 3]);
+  assert.ok(immuneCase.immuneBuffIds.includes(directFireCase.hitBuffId));
+  assert.equal(dokidokiImmuneCase.enemyId, 80);
+  assert.equal(dokidokiImmuneCase.isBoss, true);
+  assert.ok(dokidokiImmuneCase.immuneBuffIds.includes(18));
+  weaponLevel.fireBullets = [{ ...fireBullet }];
+
+  const baseState = createNfoSimulation(testRuntimeData, { weaponId: directFireCase.weaponId });
+  const noTargetState = updateNfoSimulation(
+    {
+      ...baseState,
+      player: {
+        ...baseState.player,
+        fireCooldownSeconds: 0,
+      },
+      enemies: [],
+    },
+    testRuntimeData,
+    NO_INPUT,
+    0,
+  );
+  const fieldBullet = noTargetState.bullets.find((candidate) => (
+    candidate.bulletTypeId === directFireCase.bulletTypeId
+  ));
+
+  assert.ok(fieldBullet, "expected CN Blizzard field bullet before immune target hit");
+  assert.equal(fieldBullet.hitBuffId, directFireCase.hitBuffId);
+
+  const target = createEnemyFixture(
+    noTargetState,
+    noTargetState.player.x + 100,
+    noTargetState.player.y,
+    {
+      typeId: immuneCase.enemyId,
+      name: immuneCase.enemyName,
+      hp: 999999,
+      speed: 120,
+      radius: 10,
+      immuneBuffIds: immuneCase.immuneBuffIds,
+    },
+  );
+  const hitState = updateNfoSimulation(
+    {
+      ...noTargetState,
+      player: {
+        ...noTargetState.player,
+        fireCooldownSeconds: 999,
+      },
+      enemies: [target],
+    },
+    testRuntimeData,
+    NO_INPUT,
+    0,
+  );
+  const targetAfter = hitState.enemies.find((enemy) => enemy.id === target.id);
+
+  assert.ok(targetAfter, "expected CN immune target to remain alive");
+  assert.ok(targetAfter.hp < target.hp);
+  assert.equal(
+    targetAfter.activeBuffs.some((buff) => buff.id === directFireCase.hitBuffId),
+    false,
+  );
+
+  const movedState = updateNfoSimulation(hitState, testRuntimeData, NO_INPUT, 0.25);
+  const movedTarget = movedState.enemies.find((enemy) => enemy.id === target.id);
+  assert.ok(movedTarget, "expected CN immune target to remain active");
+  assert.ok(
+    movedTarget.x !== targetAfter.x || movedTarget.y !== targetAfter.y,
+    "expected immune enemy to keep moving because freeze buff was not applied",
+  );
 }
 
 function testCnWeaponLevelMinionCount(sourceRuntimeData: NfoOfflineRuntimeData) {
@@ -12358,13 +12468,13 @@ function createEnemyFixture(
 ): NfoSimEnemy {
   return {
     id: 900001,
-    typeId: 900001,
+    typeId: overrides.typeId ?? 900001,
     spawnEventId: overrides.spawnEventId ?? 0,
     aiTypeId: overrides.aiTypeId,
     aiStateId: overrides.aiStateId,
     aiStateElapsedFrames: overrides.aiStateElapsedFrames,
     aiFireCooldownSeconds: overrides.aiFireCooldownSeconds,
-    name: "CN parity target",
+    name: overrides.name ?? "CN parity target",
     x,
     y,
     hp: overrides.hp ?? 999999,
@@ -12377,6 +12487,7 @@ function createEnemyFixture(
     canFly: overrides.canFly ?? false,
     canWalkThroughWall: overrides.canWalkThroughWall ?? false,
     dropId: overrides.dropId ?? 0,
+    immuneBuffIds: overrides.immuneBuffIds ?? [],
     activeBuffs: overrides.activeBuffs ?? [],
   };
 }

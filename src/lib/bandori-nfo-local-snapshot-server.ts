@@ -141,6 +141,7 @@ function mapEnemy(record: RawRecord): NfoEnemyData {
     isBoss: readBooleanNumber(record, "isBoss"),
     canFly: readBooleanNumber(record, "canFly"),
     canWalkThroughWall: readBooleanNumber(record, "canWalkThroughWall"),
+    immuneBuffIds: readNumberArray(record, "immuneBuffs"),
     levels: readRecordArray(record, "levelDatas").map(mapStats),
   };
 }

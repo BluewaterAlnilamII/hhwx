@@ -356,6 +356,7 @@ export type NfoSimEnemy = NfoVector & {
   canFly: boolean;
   canWalkThroughWall: boolean;
   dropId: number;
+  immuneBuffIds?: number[];
   activeBuffs: NfoSimActiveBuff[];
 };
 
@@ -708,6 +709,7 @@ export function updateNfoSimulation(
     },
     enemies: state.enemies.map((enemy) => ({
       ...enemy,
+      immuneBuffIds: [...(enemy.immuneBuffIds ?? [])],
       activeBuffs: enemy.activeBuffs.map((buff) => ({
         ...buff,
         attributes: buff.attributes.map((attribute) => ({ ...attribute })),
@@ -1083,6 +1085,7 @@ function createEnemy(
     canFly: enemy.canFly,
     canWalkThroughWall: enemy.canWalkThroughWall,
     dropId,
+    immuneBuffIds: [...(enemy.immuneBuffIds ?? [])],
     activeBuffs: [],
   };
 }
@@ -3716,6 +3719,9 @@ function applyHitBuffToEnemy(
   enemy: NfoSimEnemy,
 ) {
   if (bullet.hitBuffId <= 0 || enemy.hp <= 0) {
+    return;
+  }
+  if ((enemy.immuneBuffIds ?? []).includes(bullet.hitBuffId)) {
     return;
   }
 

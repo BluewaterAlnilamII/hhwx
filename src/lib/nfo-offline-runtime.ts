@@ -288,6 +288,7 @@ export type NfoEnemyData = {
   isBoss: boolean;
   canFly: boolean;
   canWalkThroughWall: boolean;
+  immuneBuffIds: number[];
   levels: NfoEntityStats[];
 };
 
