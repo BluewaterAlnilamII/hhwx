@@ -50,8 +50,8 @@ async function main() {
   assert.equal(fixture.weaponLevelShooterCount, 32);
   assert.equal(fixture.selectedActiveSkillShooterSpawnCases.length, 23);
   assert.equal(fixture.selectedAIActionCases.length, 3);
-  assert.equal(fixture.selectedWeaponShooterCases.length, 8);
-  assert.equal(fixture.selectedWeaponDirectFireCases.length, 30);
+  assert.equal(fixture.selectedWeaponShooterCases.length, 9);
+  assert.equal(fixture.selectedWeaponDirectFireCases.length, 31);
   assert.equal(fixture.selectedActiveSkillShooterHitBuffCases.length, 7);
   assert.equal(fixture.selectedShooterOnDestroyCases.length, 2);
   assert.equal(fixture.selectedWeaponMinionCases.length, 6);
@@ -150,6 +150,22 @@ async function main() {
   assert.equal(nightBladeRadialCase.bulletCount, 8);
   assert.equal(nightBladeRadialCase.bulletSpeed, 600);
   assert.equal(nightBladeRadialCase.expectedDirectionMode, "radial-ring");
+
+  const nightBladeLevelEightShooterCase = getWeaponShooterCase(
+    "weapon-shooter-night-blade-initial-cross-lv8",
+  );
+  assert.equal(nightBladeLevelEightShooterCase.weaponId, 28);
+  assert.equal(nightBladeLevelEightShooterCase.weaponLevel, 8);
+  assert.equal(nightBladeLevelEightShooterCase.shooterId, 9);
+  assert.equal(nightBladeLevelEightShooterCase.bulletTypeId, 24);
+  assert.equal(nightBladeLevelEightShooterCase.eventFrame, 1);
+  assert.equal(nightBladeLevelEightShooterCase.directionType, 1);
+  assert.equal(nightBladeLevelEightShooterCase.directionOffsetAngle, 0);
+  assert.equal(nightBladeLevelEightShooterCase.bulletCount, 2);
+  assert.equal(nightBladeLevelEightShooterCase.bulletAttack, 120);
+  assert.equal(nightBladeLevelEightShooterCase.bulletSpeed, 1300);
+  assert.equal(nightBladeLevelEightShooterCase.bulletLifeTimeFrames, 15);
+  assert.equal(nightBladeLevelEightShooterCase.expectedDirectionMode, "nearest-enemy");
 
   const eternalSongMainCase = getWeaponShooterCase(
     "weapon-shooter-eternal-song-main-field-lv1",
@@ -468,6 +484,23 @@ async function main() {
   assert.equal(nightBladeDirectCase.bulletHitTimes, 99999);
   assert.equal(nightBladeDirectCase.hitBuffId, 4);
   assert.equal(nightBladeDirectCase.hitBuffLevel, 1);
+
+  const nightBladeLevelEightDirectCase = getWeaponDirectFireCase(
+    "weapon-direct-night-blade-dot-and-shooter-lv8",
+  );
+  assert.equal(nightBladeLevelEightDirectCase.weaponId, 28);
+  assert.equal(nightBladeLevelEightDirectCase.weaponLevel, 8);
+  assert.equal(nightBladeLevelEightDirectCase.weaponDirectFireBulletCount, 1);
+  assert.equal(nightBladeLevelEightDirectCase.bulletTypeId, 5);
+  assert.equal(nightBladeLevelEightDirectCase.bulletCount, 10);
+  assert.equal(nightBladeLevelEightDirectCase.bulletAttack, 1);
+  assert.equal(nightBladeLevelEightDirectCase.bulletSpeed, 700);
+  assert.equal(nightBladeLevelEightDirectCase.bulletDamageJudgeType, 0);
+  assert.equal(nightBladeLevelEightDirectCase.bulletColliderType, 0);
+  assert.equal(nightBladeLevelEightDirectCase.bulletSize, 50);
+  assert.equal(nightBladeLevelEightDirectCase.bulletHitTimes, 99999);
+  assert.equal(nightBladeLevelEightDirectCase.hitBuffId, 4);
+  assert.equal(nightBladeLevelEightDirectCase.hitBuffLevel, 1);
 
   const eternalSongDirectCase = getWeaponDirectFireCase(
     "weapon-direct-eternal-song-targeted-field-lv1",
@@ -2379,7 +2412,7 @@ async function main() {
   console.log("ok - CN active skill All-Out Fire drives shooter 7000 frame 1/3/7 timeline and minion AI");
   console.log("ok - CN active skill All-Out Fire level 2/3 loops zero-offset minion shooters");
   console.log("ok - CN active skill Galaxy Star level 1/2/3 summon uses first-pass minion orbit");
-  console.log("ok - CN active skill Anon Phantom level 1/2/3 summon uses formation 2 ring");
+  console.log("ok - CN active skill Anon Phantom level 1/2/3 summon uses formation 2 ring and level-8 assigned weapon fire");
   console.log("ok - CN DropData spawns item pickups and ItemData EXP pickup is collectable");
   console.log("ok - CN minor enemy DropData coin branch is collectable");
   console.log("ok - CN common DropData bomb, magnet, and heal pickups apply effects");
@@ -10748,6 +10781,97 @@ function assertCnActiveSkillAnonPhantomRingSummonCase(
     );
     assert.ok((nextState.minions[2]?.y ?? 0) < baseState.player.y);
   }
+
+  if (summonCase.activeSkillLevel !== 1) {
+    return;
+  }
+
+  const directFireCase = getWeaponDirectFireCase(
+    "weapon-direct-night-blade-dot-and-shooter-lv8",
+  );
+  const weaponShooterCase = getWeaponShooterCase(
+    "weapon-shooter-night-blade-initial-cross-lv8",
+  );
+  assert.equal(summonCase.weaponId, directFireCase.weaponId);
+  assert.equal(summonCase.weaponLevel, directFireCase.weaponLevel);
+  assert.equal(weaponShooterCase.weaponId, directFireCase.weaponId);
+  assert.equal(weaponShooterCase.weaponLevel, directFireCase.weaponLevel);
+
+  const firstSummonedMinion = nextState.minions[0];
+  assert.ok(firstSummonedMinion);
+  const target = createEnemyFixture(
+    nextState,
+    firstSummonedMinion.x + 20,
+    firstSummonedMinion.y,
+    {
+      hp: 999999,
+      speed: 0,
+      radius: 10,
+    },
+  );
+  const minionFireState = updateNfoSimulation(
+    {
+      ...nextState,
+      player: {
+        ...nextState.player,
+        fireCooldownSeconds: 999,
+      },
+      enemies: [target],
+    },
+    testRuntimeData,
+    NO_INPUT,
+    0,
+  );
+  const directBullets = minionFireState.bullets.filter((candidate) => (
+    candidate.bulletTypeId === directFireCase.bulletTypeId
+  ));
+  const targetAfterDirect = minionFireState.enemies.find((enemy) => enemy.id === target.id);
+  const dotBuff = targetAfterDirect?.activeBuffs.find((buff) => (
+    buff.id === directFireCase.hitBuffId
+  ));
+  const nightBladeShooter = minionFireState.activeShooters.find((candidate) => (
+    candidate.shooterId === weaponShooterCase.shooterId
+  ));
+
+  assert.equal(directBullets.length, directFireCase.bulletCount);
+  assert.ok(directBullets.every((bullet) => bullet.hitBuffId === directFireCase.hitBuffId));
+  assert.ok(directBullets.every((bullet) => bullet.damageJudgeType === directFireCase.bulletDamageJudgeType));
+  assert.ok(targetAfterDirect, "expected CN Anon Phantom assigned weapon target to remain alive");
+  assert.ok(targetAfterDirect.hp < target.hp);
+  assert.ok(dotBuff, "expected CN Anon Phantom assigned weapon to apply DOT buff 4");
+  assert.equal(dotBuff.type, 4);
+  assert.equal(dotBuff.stackCount, 2);
+  assert.equal(dotBuff.maxStackCount, 2);
+  assert.ok(nightBladeShooter, "expected CN Anon Phantom assigned weapon to create shooter 9");
+  assert.equal(nightBladeShooter.sourceTeam, "player");
+  assertClose(nightBladeShooter.x, firstSummonedMinion.x, "CN Anon Phantom shooter 9 x");
+  assertClose(nightBladeShooter.y, firstSummonedMinion.y, "CN Anon Phantom shooter 9 y");
+
+  const minionShooterFireState = updateNfoSimulation(
+    minionFireState,
+    testRuntimeData,
+    NO_INPUT,
+    1 / 30,
+  );
+  const shooterBullets = minionShooterFireState.bullets.filter((candidate) => (
+    candidate.bulletTypeId === weaponShooterCase.bulletTypeId
+  ));
+
+  assert.equal(shooterBullets.length, weaponShooterCase.bulletCount);
+  assertClose(
+    minionShooterFireState.activeShooters.find((candidate) => (
+      candidate.shooterId === weaponShooterCase.shooterId
+    ))?.ageFrames ?? Number.NaN,
+    weaponShooterCase.eventFrame,
+    "CN Anon Phantom shooter 9 first event age",
+  );
+  assert.ok(shooterBullets.every((bullet) => bullet.hitTargetType === weaponShooterCase.bulletHitTargetType));
+  assert.ok(shooterBullets.every((bullet) => (
+    Math.abs(Math.hypot(bullet.vx, bullet.vy) - weaponShooterCase.bulletSpeed) < 0.000001
+  )));
+  assert.ok(shooterBullets.some((bullet) => bullet.vx > 0));
+  assert.ok(shooterBullets.some((bullet) => bullet.vy > 0));
+  assert.ok(shooterBullets.some((bullet) => bullet.vy < 0));
 }
 
 function testCnDropDataEnemyKillSpawnsAndCollectsExp(
