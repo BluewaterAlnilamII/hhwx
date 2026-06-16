@@ -36,6 +36,7 @@ import type {
 type RawRuntimeData = {
   region: string;
   resourceVersion: string;
+  sourceManifest?: string;
   datasetCounts?: Record<string, number>;
   mapPrefabs?: unknown;
   datasets?: Record<string, unknown>;
@@ -43,8 +44,6 @@ type RawRuntimeData = {
 
 type RawRecord = Record<string, unknown>;
 
-const LOCAL_SNAPSHOT_DIR = "temp/nfo-offline/cn/Android-2.1.1";
-const LOCAL_RUNTIME_DATA_PATH = `${LOCAL_SNAPSHOT_DIR}/runtime-data/master-data.json`;
 const DEPLOYABLE_RUNTIME_DATA_PATH =
   "public/res/bandori/nfo/cn/Android-2.1.1/runtime-data/master-data.json";
 const DEPLOYABLE_RUNTIME_DATA_FILE_PATH = path.join(
@@ -53,15 +52,6 @@ const DEPLOYABLE_RUNTIME_DATA_FILE_PATH = path.join(
   "res",
   "bandori",
   "nfo",
-  "cn",
-  "Android-2.1.1",
-  "runtime-data",
-  "master-data.json",
-);
-const LOCAL_RUNTIME_DATA_FILE_PATH = path.join(
-  process.cwd(),
-  "temp",
-  "nfo-offline",
   "cn",
   "Android-2.1.1",
   "runtime-data",
@@ -686,25 +676,8 @@ async function readRuntimeDataFile(): Promise<{
       throw error;
     }
 
-    if (process.env.NODE_ENV === "production") {
-      throw new Error(
-        `NFO deployable runtime data not found. Run npm run nfo:runtime-data. Checked: ${DEPLOYABLE_RUNTIME_DATA_PATH}`,
-      );
-    }
-  }
-
-  try {
-    return {
-      raw: JSON.parse(await readFile(LOCAL_RUNTIME_DATA_FILE_PATH, "utf8")) as RawRuntimeData,
-      runtimeDataPath: LOCAL_RUNTIME_DATA_PATH,
-    };
-  } catch (error) {
-    if (!isNodeFileNotFoundError(error)) {
-      throw error;
-    }
-
     throw new Error(
-      `NFO runtime data not found. Run npm run nfo:runtime-data. Checked: ${DEPLOYABLE_RUNTIME_DATA_PATH}, ${LOCAL_RUNTIME_DATA_PATH}`,
+      `NFO deployable runtime data not found. Run npm run nfo:runtime-data. Checked: ${DEPLOYABLE_RUNTIME_DATA_PATH}`,
     );
   }
 }
@@ -733,7 +706,7 @@ export async function readLocalNfoRuntimeData(): Promise<NfoOfflineRuntimeData> 
     resourceVersion: raw.resourceVersion,
     createdAt: new Date().toISOString(),
     source: {
-      manifestPath: `${LOCAL_SNAPSHOT_DIR}/snapshot-manifest.json`,
+      manifestPath: raw.sourceManifest ?? "snapshot-manifest.json",
       runtimeDataPath,
     },
     counts: raw.datasetCounts ?? {},

@@ -44,6 +44,7 @@ async function main() {
     runtimeData.source.runtimeDataPath,
     "public/res/bandori/nfo/cn/Android-2.1.1/runtime-data/master-data.json",
   );
+  assert.equal(runtimeData.source.manifestPath, "snapshot-manifest.json");
   assert.equal(fixture.schemaVersion, 1);
   assert.equal(fixture.activeSkillShooterCount, 24);
   assert.equal(fixture.activeSkillShooterEventCount, 54);

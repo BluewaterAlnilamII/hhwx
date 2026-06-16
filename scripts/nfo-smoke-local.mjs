@@ -9,6 +9,7 @@ import { inflateSync } from "node:zlib";
 const DEFAULT_BASE_URL = "http://localhost:3117";
 const EXPECTED_RUNTIME_PATH =
   "public/res/bandori/nfo/cn/Android-2.1.1/runtime-data/master-data.json";
+const EXPECTED_SOURCE_MANIFEST_PATH = "snapshot-manifest.json";
 const STATIC_RUNTIME_URL_PATH =
   "/res/bandori/nfo/cn/Android-2.1.1/runtime-data/master-data.json";
 const EXPECTED_SMOKE_ACTIVE_SKILL_CHARACTER_ID = 110;
@@ -177,6 +178,11 @@ async function smokeApiRuntime(baseUrl, timeoutMs) {
   assertSmoke(
     data.source?.runtimeDataPath === EXPECTED_RUNTIME_PATH,
     `local-runtime API used ${data?.source?.runtimeDataPath}, expected ${EXPECTED_RUNTIME_PATH}`,
+  );
+  assertSmoke(
+    data.source?.manifestPath === EXPECTED_SOURCE_MANIFEST_PATH,
+    `local-runtime API exposed manifest path ${data?.source?.manifestPath}, expected `
+      + EXPECTED_SOURCE_MANIFEST_PATH,
   );
   assertSmoke(Array.isArray(data.characters) && data.characters.length > 0, "missing characters");
   assertSmoke(Array.isArray(data.weapons) && data.weapons.length > 0, "missing weapons");
