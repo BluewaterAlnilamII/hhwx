@@ -56,7 +56,7 @@ async function main() {
   assert.equal(fixture.selectedShooterOnDestroyCases.length, 2);
   assert.equal(fixture.selectedWeaponMinionCases.length, 6);
   assert.equal(fixture.selectedWeaponSelfBuffCases.length, 3);
-  assert.equal(fixture.selectedActiveSkillSummonCases.length, 8);
+  assert.equal(fixture.selectedActiveSkillSummonCases.length, 10);
   assert.equal(fixture.selectedAIStateTeleportCases.length, 1);
   assert.equal(fixture.selectedAIStateMovementCases.length, 11);
   assert.equal(fixture.selectedAIStateBuffCases.length, 3);
@@ -1696,23 +1696,29 @@ async function main() {
   assert.equal(allOutFireOffsetSummonCase.spawnRadiusMax, 1);
   assert.equal(allOutFireOffsetSummonCase.expectedFirstPassRadius, 1);
 
-  const galaxySummonCase = getActiveSkillSummonCase(
+  const galaxySummonCaseIds = [
     "active-skill-galaxy-star-ring-summon-lv1",
-  );
-  assert.equal(galaxySummonCase.activeSkillId, 113);
-  assert.equal(galaxySummonCase.activeSkillLevel, 1);
-  assert.equal(galaxySummonCase.eventFrame, 1);
-  assert.equal(galaxySummonCase.minionId, 7);
-  assert.equal(galaxySummonCase.minionAITypeId, 201);
-  assert.equal(galaxySummonCase.minionAIStateId, 0);
-  assert.equal(galaxySummonCase.minionAIStateType, 22);
-  assert.equal(galaxySummonCase.minionAIStateShooterId, 4000);
-  assert.equal(galaxySummonCase.minionAIStateShooterBulletTypeId, 99);
-  assert.equal(galaxySummonCase.spawnFormation, 1);
-  assert.equal(galaxySummonCase.spawnCount, 3);
-  assert.equal(galaxySummonCase.spawnRadiusMin, 400);
-  assert.equal(galaxySummonCase.spawnRadiusMax, 600);
-  assert.equal(galaxySummonCase.expectedFirstPassRadius, 500);
+    "active-skill-galaxy-star-ring-summon-lv2",
+    "active-skill-galaxy-star-ring-summon-lv3",
+  ];
+  const galaxyExpectedSpawnCounts = [3, 4, 6];
+  galaxySummonCaseIds.forEach((galaxySummonCaseId, index) => {
+    const galaxySummonCase = getActiveSkillSummonCase(galaxySummonCaseId);
+    assert.equal(galaxySummonCase.activeSkillId, 113);
+    assert.equal(galaxySummonCase.activeSkillLevel, index + 1);
+    assert.equal(galaxySummonCase.eventFrame, 1);
+    assert.equal(galaxySummonCase.minionId, 7);
+    assert.equal(galaxySummonCase.minionAITypeId, 201);
+    assert.equal(galaxySummonCase.minionAIStateId, 0);
+    assert.equal(galaxySummonCase.minionAIStateType, 22);
+    assert.equal(galaxySummonCase.minionAIStateShooterId, 4000);
+    assert.equal(galaxySummonCase.minionAIStateShooterBulletTypeId, 99);
+    assert.equal(galaxySummonCase.spawnFormation, 1);
+    assert.equal(galaxySummonCase.spawnCount, galaxyExpectedSpawnCounts[index]);
+    assert.equal(galaxySummonCase.spawnRadiusMin, 400);
+    assert.equal(galaxySummonCase.spawnRadiusMax, 600);
+    assert.equal(galaxySummonCase.expectedFirstPassRadius, 500);
+  });
 
   const anonPhantomSummonCaseIds = [
     "active-skill-anon-phantom-ring-summon-lv1",
@@ -2306,7 +2312,7 @@ async function main() {
   console.log("ok - CN active skill 111 minion AI transitions into roar shooter");
   console.log("ok - CN active skill All-Out Fire drives shooter 7000 frame 1/3/7 timeline and minion AI");
   console.log("ok - CN active skill All-Out Fire level 3 loops zero-offset minion shooters");
-  console.log("ok - CN active skill Galaxy Star summon uses first-pass minion orbit");
+  console.log("ok - CN active skill Galaxy Star level 1/2/3 summon uses first-pass minion orbit");
   console.log("ok - CN active skill Anon Phantom level 1/2/3 summon uses formation 2 ring");
   console.log("ok - CN DropData spawns item pickups and ItemData EXP pickup is collectable");
   console.log("ok - CN minor enemy DropData coin branch is collectable");
@@ -10327,11 +10333,38 @@ function testCnActiveSkillAllOutFireLevelThreeMultiSummon(
 function testCnActiveSkillGalaxyStarRingSummon(
   sourceRuntimeData: NfoOfflineRuntimeData,
 ) {
-  const testRuntimeData = configureRuntimeForActiveSkill(sourceRuntimeData, 113);
+  for (const summonCaseId of [
+    "active-skill-galaxy-star-ring-summon-lv1",
+    "active-skill-galaxy-star-ring-summon-lv2",
+    "active-skill-galaxy-star-ring-summon-lv3",
+  ]) {
+    assertCnActiveSkillGalaxyStarRingSummonCase(
+      sourceRuntimeData,
+      summonCaseId,
+    );
+  }
+}
+
+function assertCnActiveSkillGalaxyStarRingSummonCase(
+  sourceRuntimeData: NfoOfflineRuntimeData,
+  summonCaseId: string,
+) {
+  const summonCase = getActiveSkillSummonCase(summonCaseId);
+  const testRuntimeData = configureRuntimeForActiveSkill(
+    sourceRuntimeData,
+    summonCase.activeSkillId,
+  );
   const minion = testRuntimeData.minions.find((candidate) => candidate.id === 7);
   assert.ok(minion);
   minion.speed = 0;
-  const baseState = createStateWithoutEnemies(testRuntimeData);
+  const initialState = createStateWithoutEnemies(testRuntimeData);
+  const baseState = {
+    ...initialState,
+    activeSkill: {
+      ...initialState.activeSkill,
+      level: summonCase.activeSkillLevel,
+    },
+  };
   const nextState = updateNfoSimulation(
     chargeActiveSkill(baseState),
     testRuntimeData,
@@ -10339,13 +10372,24 @@ function testCnActiveSkillGalaxyStarRingSummon(
     1 / 30,
   );
 
-  assert.equal(nextState.minions.length, 3);
-  assert.ok(nextState.minions.every((candidate) => candidate.minionId === 7));
+  assert.equal(summonCase.activeSkillId, 113);
+  assert.equal(nextState.activeSkill.level, summonCase.activeSkillLevel);
+  assert.equal(nextState.minions.length, summonCase.spawnCount);
+  assert.ok(nextState.minions.every((candidate) => candidate.minionId === summonCase.minionId));
+  assert.ok(nextState.minions.every((candidate) => candidate.aiTypeId === summonCase.minionAITypeId));
+  assert.ok(nextState.minions.every((candidate) => candidate.aiStateId === summonCase.minionAIStateId));
   const distances = nextState.minions.map((candidate) => (
     Math.round(Math.hypot(candidate.x - baseState.player.x, candidate.y - baseState.player.y))
   ));
-  assert.deepEqual(distances, [500, 500, 500]);
-  assertClose(nextState.minions[0]?.x ?? Number.NaN, baseState.player.x + 500, "Galaxy minion 0 x");
+  assert.deepEqual(
+    distances,
+    Array.from({ length: summonCase.spawnCount }, () => summonCase.expectedFirstPassRadius),
+  );
+  assertClose(
+    nextState.minions[0]?.x ?? Number.NaN,
+    baseState.player.x + summonCase.expectedFirstPassRadius,
+    "Galaxy minion 0 x",
+  );
   assertClose(nextState.minions[0]?.y ?? Number.NaN, baseState.player.y, "Galaxy minion 0 y");
 
   const movedPlayerState = {
@@ -10370,17 +10414,17 @@ function testCnActiveSkillGalaxyStarRingSummon(
       movedMinion.x - movedPlayerState.player.x,
       movedMinion.y - movedPlayerState.player.y,
     ),
-    500,
+    summonCase.expectedFirstPassRadius,
     "Galaxy minion orbit radius after player movement",
   );
   assertClose(
     movedMinion.x,
-    movedPlayerState.player.x + Math.cos(orbitAngle) * 500,
+    movedPlayerState.player.x + Math.cos(orbitAngle) * summonCase.expectedFirstPassRadius,
     "Galaxy minion orbit x after one second",
   );
   assertClose(
     movedMinion.y,
-    movedPlayerState.player.y + Math.sin(orbitAngle) * 500,
+    movedPlayerState.player.y + Math.sin(orbitAngle) * summonCase.expectedFirstPassRadius,
     "Galaxy minion orbit y after one second",
   );
 }

@@ -1080,13 +1080,12 @@ which emits bullet `70` on the next frame. The `7004` and `7005` fixtures now
 also lock `LifeTime = 160`, `IsLoopEvent = true`, `LoopFrameInterval = 7`,
 direction `0`, and zero formation offset; the parity test verifies their first
 +X shots and second loop emissions at frame `8` while keeping exact native
-target fallback semantics pending. Skill `113` / `Galaxy Star`
-level `1` spawns minion
-`7` three times at frame `1` with `spawnFormation = 1`,
-`SpawnRadiusMin = 400`, and `SpawnRadiusMax = 600`; the current simulation uses
-a deterministic ring at the radius midpoint (`500`) for this formation, which
-keeps the summon pattern ring-like instead of turning the radius interval into a
-per-index spiral. The summoned minion uses CN AI `201` state `0`
+target fallback semantics pending. Skill `113` / `Galaxy Star` levels
+`1`/`2`/`3` spawn minion `7` three/four/six times at frame `1` with
+`spawnFormation = 1`, `SpawnRadiusMin = 400`, and `SpawnRadiusMax = 600`; the
+current simulation uses a deterministic ring at the radius midpoint (`500`) for
+this formation, which keeps the summon pattern ring-like instead of turning the
+radius interval into a per-index spiral. The summoned minion uses CN AI `201` state `0`
 (`AIStateType = 22` / `环绕`) and now keeps that radius around the player at a
 first-pass angular rate derived from `State_MoveSpeed = 40` degrees/second;
 the active skill `112` floating cannon AI states `205`, `206`, and `207` are
@@ -1495,8 +1494,8 @@ Weapon behavior staging:
   over the requested spawn center; if CN data provides a radius interval, the
   first pass uses its midpoint rather than varying radius by minion index. This
   covers the first-pass CN path used by `Anon Phantom` level `1`/`2`/`3`
-  `WeaponID = 28` formation-2 summons, `Galaxy Star`'s formation-1 ring summon plus first-pass
-  AI `201` state-22 orbit, `全弹发射`'s
+  `WeaponID = 28` formation-2 summons, `Galaxy Star` level `1`/`2`/`3`
+  formation-1 ring summons plus first-pass AI `201` state-22 orbit, `全弹发射`'s
   same-event shooter/summon chain and level-3 offset summon, `圣兽之王`'s
   delayed minion AI shooter chain,
   and the 54 observed active-skill
