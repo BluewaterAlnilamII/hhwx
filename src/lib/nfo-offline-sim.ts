@@ -382,6 +382,7 @@ export type NfoSimBullet = NfoVector & {
   bulletTypeId: number;
   dealsDamage: boolean;
   rotateType: number;
+  sortingOrder?: number;
   motionType: BulletMotionType;
   angle: number;
   facingAngle: number;
@@ -3158,8 +3159,8 @@ function createBullet(
       y: Math.cos(orbitAngle ?? angle) * (orbitAngularSpeed ?? 0) * (orbitRadius ?? 0),
     }
     : velocity;
-  const runtimeBulletRotateType = getRuntimeBullet(runtimeData, fireBullet.bulletTypeId)
-    ?.rotateType;
+  const runtimeBullet = getRuntimeBullet(runtimeData, fireBullet.bulletTypeId);
+  const runtimeBulletRotateType = runtimeBullet?.rotateType;
   const rotateType = getSupportedBulletRotateType(
     options.bulletRotateTypeOverride
       ?? runtimeBulletRotateType
@@ -3173,6 +3174,7 @@ function createBullet(
     bulletTypeId: fireBullet.bulletTypeId,
     dealsDamage: !fireBullet.noDamage,
     rotateType,
+    sortingOrder: runtimeBullet?.sortingOrder ?? 0,
     motionType,
     angle,
     facingAngle: getInitialBulletFacingAngle(rotateType, angle, initialVelocity.x, initialVelocity.y),

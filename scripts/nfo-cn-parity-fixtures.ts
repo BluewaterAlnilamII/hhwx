@@ -118,6 +118,7 @@ type ShooterOnDestroyCaseSpec = {
   parentBulletTypeId: number;
   expectedOnDestroyEventBulletId: number;
   expectedChildBulletTypeId: number;
+  expectedChildBulletDataSortingOrder?: number;
 };
 
 type ActiveSkillShooterSpawnCaseSpec = {
@@ -613,6 +614,7 @@ export type NfoCnParityShooterOnDestroyCase = {
   parentBulletAttack: number;
   parentBulletHitTargetType: number;
   parentBulletLifeTimeFrames: number;
+  parentBulletDataSortingOrder: number;
   parentOnDestroyEventBulletId: number;
   childBulletTypeId: number;
   childEventBulletId: number;
@@ -623,6 +625,7 @@ export type NfoCnParityShooterOnDestroyCase = {
   childBulletSize: number;
   childBulletHitTargetType: number;
   childBulletLifeTimeFrames: number;
+  childBulletDataSortingOrder: number;
   childBulletForceType: number;
   childBulletForce: number;
   childBulletHitTimes: number;
@@ -1815,6 +1818,7 @@ const SHOOTER_ON_DESTROY_CASE_SPECS: ShooterOnDestroyCaseSpec[] = [
     parentBulletTypeId: 99,
     expectedOnDestroyEventBulletId: 1,
     expectedChildBulletTypeId: 31,
+    expectedChildBulletDataSortingOrder: -2,
   },
   {
     id: "shooter-michelle-fist-hostile-on-destroy-event-bullet",
@@ -4092,6 +4096,22 @@ function buildShooterOnDestroyCase(
     );
   }
 
+  const parentBulletData = runtimeData.bullets.find((candidate) => (
+    candidate.id === parentBullet.bulletTypeId
+  ));
+  const childBulletData = runtimeData.bullets.find((candidate) => (
+    candidate.id === childBullet.bulletTypeId
+  ));
+  if (
+    spec.expectedChildBulletDataSortingOrder !== undefined
+    && (childBulletData?.sortingOrder ?? 0) !== spec.expectedChildBulletDataSortingOrder
+  ) {
+    throw new Error(
+      `Bullet ${childBullet.bulletTypeId} expected sortingOrder `
+      + `${spec.expectedChildBulletDataSortingOrder}, got ${childBulletData?.sortingOrder ?? 0}.`,
+    );
+  }
+
   return {
     id: spec.id,
     shooterId: shooter.id,
@@ -4108,6 +4128,7 @@ function buildShooterOnDestroyCase(
     parentBulletAttack: parentBullet.bulletAttack,
     parentBulletHitTargetType: parentBullet.bulletHitTargetType,
     parentBulletLifeTimeFrames: parentBullet.bulletLifeTime,
+    parentBulletDataSortingOrder: parentBulletData?.sortingOrder ?? 0,
     parentOnDestroyEventBulletId: parentBullet.onDestroyFireEventBulletId,
     childBulletTypeId: childBullet.bulletTypeId,
     childEventBulletId: childBullet.eventBulletId,
@@ -4118,6 +4139,7 @@ function buildShooterOnDestroyCase(
     childBulletSize: childBullet.bulletSize,
     childBulletHitTargetType: childBullet.bulletHitTargetType,
     childBulletLifeTimeFrames: childBullet.bulletLifeTime,
+    childBulletDataSortingOrder: childBulletData?.sortingOrder ?? 0,
     childBulletForceType: childBullet.bulletForceType,
     childBulletForce: childBullet.bulletForce,
     childBulletHitTimes: childBullet.bulletHitTimes,

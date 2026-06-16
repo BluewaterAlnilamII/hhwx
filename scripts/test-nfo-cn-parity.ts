@@ -761,6 +761,7 @@ async function main() {
   assert.equal(onDestroyCase.childBulletHitTargetType, 0);
   assert.equal(onDestroyCase.childBulletForceType, 2);
   assert.equal(onDestroyCase.childBulletForce, 5);
+  assert.equal(onDestroyCase.childBulletDataSortingOrder, -2);
 
   const hostileOnDestroyCase = getShooterOnDestroyCase(
     "shooter-michelle-fist-hostile-on-destroy-event-bullet",
@@ -6788,6 +6789,7 @@ function testCnShooterOnDestroyEventBullet(sourceRuntimeData: NfoOfflineRuntimeD
   assert.equal(childBullet.hitTargetType, onDestroyCase.childBulletHitTargetType);
   assert.equal(childBullet.forceType, onDestroyCase.childBulletForceType);
   assert.equal(childBullet.force, onDestroyCase.childBulletForce);
+  assert.equal(childBullet.sortingOrder, onDestroyCase.childBulletDataSortingOrder);
   assert.equal(childBullet.remainingHits, onDestroyCase.childBulletHitTimes);
   assertClose(childBullet.x, parentBullet.x, "CN on-destroy child bullet x");
   assertClose(childBullet.y, parentBullet.y, "CN on-destroy child bullet y");
@@ -6826,6 +6828,7 @@ function testCnShooterOnDestroyEventBullet(sourceRuntimeData: NfoOfflineRuntimeD
     sourceModifiedChildBullet.damage,
     onDestroyCase.childBulletAttack + sourceModifiedParentBullet.attackerAttack,
   );
+  assert.equal(sourceModifiedChildBullet.sortingOrder, onDestroyCase.childBulletDataSortingOrder);
   assert.equal(
     sourceModifiedChildBullet.colliderWidth,
     onDestroyCase.childBulletSize + (sourceModifiedParentBullet.bulletSizeModifier ?? 0),

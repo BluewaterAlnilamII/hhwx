@@ -1511,7 +1511,7 @@ function drawScene(
   }
 
   graphics.fillStyle(0xfbbf24, 1);
-  for (const bullet of state.bullets) {
+  for (const bullet of getBulletsInRenderOrder(state)) {
     graphics.fillCircle(
       bullet.x - cameraX,
       bullet.y - cameraY,
@@ -1541,6 +1541,12 @@ function drawScene(
     graphics.fillStyle(state.status === "cleared" ? 0x86efac : 0xfca5a5, 1);
     graphics.fillRoundedRect(CANVAS_WIDTH / 2 - 120, CANVAS_HEIGHT / 2 - 28, 240, 56, 6);
   }
+}
+
+function getBulletsInRenderOrder(state: NfoSimulationState) {
+  return [...state.bullets].sort((left, right) => (
+    (left.sortingOrder ?? 0) - (right.sortingOrder ?? 0) || left.id - right.id
+  ));
 }
 
 function drawFullScreenEffects(

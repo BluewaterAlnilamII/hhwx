@@ -468,6 +468,7 @@ function mapBullet(record: RawRecord): NfoBulletData {
     name: readString(record, "Name"),
     prefab: readString(record, "PrefabRes"),
     rotateType: readNumber(record, "bulletCompRotateType"),
+    sortingOrder: readNumber(record, "sortingOrder"),
   };
 }
 

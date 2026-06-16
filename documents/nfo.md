@@ -1372,6 +1372,12 @@ Weapon behavior staging:
   override precedence. This remains separate from the
   weapon-specific homing and player-orbit fixtures for weapon `5` and weapon
   `6`.
+- Current bullet visual metadata maps CN `BulletData.sortingOrder` into runtime
+  bullet state. The Phaser prototype draws bullets by `sortingOrder` and then
+  entity id, and the on-destroy black-hole follow-up bullet `31` now locks
+  `sortingOrder = -2` in the CN parity fixture. This is first-pass render-order
+  metadata only; exact Unity sorting layers, sprite atlas conversion, and
+  prefab VFX remain pending.
 - Current hit-target handling maps CN `BulletHitTargetType`. Type `0` remains
   the normal enemy target. Type `1` is currently treated as friendly player-side
   target. CN samples include defensive no-damage buff bullets such as weapon

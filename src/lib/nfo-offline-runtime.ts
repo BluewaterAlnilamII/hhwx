@@ -298,6 +298,7 @@ export type NfoBulletData = {
   name: string;
   prefab: string;
   rotateType: number;
+  sortingOrder?: number;
 };
 
 export type NfoMinionData = {
