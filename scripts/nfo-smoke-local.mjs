@@ -273,6 +273,20 @@ async function smokeBrowserInteraction(baseUrl, args) {
       readHtmlAttribute(smokeTag, "data-nfo-player-moved") === "1",
       "browser smoke did not move the player",
     );
+    const enemyCount = Number(readHtmlAttribute(smokeTag, "data-nfo-enemy-count"));
+    const projectileCount = Number(readHtmlAttribute(smokeTag, "data-nfo-projectile-count"));
+    const defeatedEnemyCount = Number(
+      readHtmlAttribute(smokeTag, "data-nfo-defeated-enemy-count"),
+    );
+    const pickupCount = Number(readHtmlAttribute(smokeTag, "data-nfo-pickup-count"));
+    assertSmoke(
+      [enemyCount, projectileCount, defeatedEnemyCount, pickupCount].every(Number.isFinite),
+      "browser smoke did not expose combat counters",
+    );
+    assertSmoke(
+      readHtmlAttribute(smokeTag, "data-nfo-combat-observed") === "1",
+      "browser smoke did not observe combat activity",
+    );
     const paidUpgradeCount = Number(readHtmlAttribute(smokeTag, "data-nfo-paid-upgrade-count"));
     const upgradeTotalCount = Number(readHtmlAttribute(smokeTag, "data-nfo-upgrade-total-count"));
     assertSmoke(

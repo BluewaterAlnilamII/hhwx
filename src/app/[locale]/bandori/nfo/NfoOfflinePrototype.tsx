@@ -48,6 +48,7 @@ type HudSnapshot = {
   elapsedSeconds: number;
   enemies: number;
   minions: number;
+  projectiles: number;
   defeatedEnemies: number;
   pickups: number;
   collectedExp: number;
@@ -122,6 +123,7 @@ export default function NfoOfflinePrototype() {
     useState<SmokeInteractionState>("off");
   const [smokeActiveSkillObserved, setSmokeActiveSkillObserved] = useState(false);
   const [smokeMovementObserved, setSmokeMovementObserved] = useState(false);
+  const [smokeCombatObserved, setSmokeCombatObserved] = useState(false);
   const smokeMovementStartRef = useRef<{ x: number; y: number } | null>(null);
   const runtimeData = runtimeState.status === "ready" ? runtimeState.data : null;
   const paidGlobalUpgradeIds = saveState?.paidGlobalUpgradeIds ?? EMPTY_NUMBER_ARRAY;
@@ -135,6 +137,7 @@ export default function NfoOfflinePrototype() {
     setSmokeInteractionState(enabled ? "waiting-runtime" : "off");
     setSmokeActiveSkillObserved(false);
     setSmokeMovementObserved(false);
+    setSmokeCombatObserved(false);
     smokeMovementStartRef.current = null;
   }, []);
 
@@ -157,6 +160,21 @@ export default function NfoOfflinePrototype() {
       setSmokeMovementObserved(true);
     }
   }, [hud, smokeMode, smokeMovementObserved]);
+
+  useEffect(() => {
+    if (!smokeMode || smokeCombatObserved || !hud || hud.status !== "playing") {
+      return;
+    }
+
+    if (
+      hud.enemies > 0
+      || hud.projectiles > 0
+      || hud.defeatedEnemies > 0
+      || hud.pickups > 0
+    ) {
+      setSmokeCombatObserved(true);
+    }
+  }, [hud, smokeCombatObserved, smokeMode]);
 
   useEffect(() => {
     let cancelled = false;
@@ -522,6 +540,10 @@ export default function NfoOfflinePrototype() {
         return;
       }
 
+      if (!smokeCombatObserved) {
+        return;
+      }
+
       if (!smokeActiveSkillObserved && hud.activeSkillId > 0) {
         if (hud.activeSkillChargeFrames < hud.activeSkillChargeMaxFrames) {
           setSmokeInteractionState("active-skill-ready-requested");
@@ -596,6 +618,7 @@ export default function NfoOfflinePrototype() {
     selection,
     smokeActiveSkillObserved,
     smokeAllUnlocked,
+    smokeCombatObserved,
     smokeInteractionState,
     smokeMovementObserved,
     smokeMode,
@@ -660,6 +683,11 @@ export default function NfoOfflinePrototype() {
         data-nfo-player-x={hud?.playerX ?? 0}
         data-nfo-player-y={hud?.playerY ?? 0}
         data-nfo-player-moved={smokeMovementObserved ? "1" : "0"}
+        data-nfo-combat-observed={smokeCombatObserved ? "1" : "0"}
+        data-nfo-enemy-count={hud?.enemies ?? 0}
+        data-nfo-projectile-count={hud?.projectiles ?? 0}
+        data-nfo-defeated-enemy-count={hud?.defeatedEnemies ?? 0}
+        data-nfo-pickup-count={hud?.pickups ?? 0}
         data-nfo-full-screen-effect-count={hud?.fullScreenEffectCount ?? 0}
         data-nfo-full-screen-effect-name={hud?.fullScreenEffectName ?? ""}
         data-nfo-active-skill-id={hud?.activeSkillId ?? 0}
@@ -1338,6 +1366,7 @@ function toHudSnapshot(state: NfoSimulationState): HudSnapshot {
     elapsedSeconds: state.elapsedSeconds,
     enemies: state.enemies.length,
     minions: state.minions.length,
+    projectiles: state.bullets.length,
     defeatedEnemies: state.defeatedEnemies,
     pickups: state.pickups.length,
     collectedExp: state.collectedExp,

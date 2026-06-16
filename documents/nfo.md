@@ -362,9 +362,11 @@ Current playable prototype:
   maps non-local hostnames to `0.0.0.0` while allowing localhost, waits for the
   client runtime to render the Phaser canvas, runs the same local `Unlock all`,
   `Coin +500`, global-upgrade purchase, smoke-only movement input, active-skill
-  input, and `Quick clear` paths, verifies the hidden smoke marker reaches
-  `complete` after reporting player movement, and writes a
-  screenshot to `temp/nfo-smoke-browser.png` with a nonblank PNG check. Use
+  input, and `Quick clear` paths, waits for the live run to report combat
+  activity through at least one enemy, projectile, defeat, or pickup counter,
+  verifies the hidden smoke marker reaches `complete` after reporting player
+  movement, and writes a screenshot to `temp/nfo-smoke-browser.png` with a
+  nonblank PNG check. Use
   `NFO_SMOKE_BROWSER_BIN=/path/to/chrome` when the browser binary is not
   auto-detected, or `NFO_SMOKE_SCREENSHOT_PATH=...` to write the visual evidence
   somewhere else.
