@@ -1511,6 +1511,15 @@ function getAIStateMovementSpeed(
   return baseSpeed;
 }
 
+function getAIStateEffectiveMoveSpeed(aiState: NfoAIStateData): number {
+  const baseSpeed = aiState.stateMoveSpeed ?? 0;
+  if (!aiState.isRandomSpeed) {
+    return baseSpeed;
+  }
+
+  return baseSpeed + Math.max(aiState.stateMoveSpeedRandomMax ?? 0, 0) * 0.5;
+}
+
 function isAIStateOffsetMovement(aiState: NfoAIStateData | null): aiState is NfoAIStateData {
   return aiState?.stateType === NFO_AI_STATE_TYPE.cnOffsetMove
     || aiState?.stateType === NFO_AI_STATE_TYPE.cnOffsetLanding
@@ -1839,7 +1848,7 @@ function updateMinionOrbit(
   }
 
   const orbitRadius = Math.max(minion.aiOrbitRadius ?? 0, 1);
-  const orbitAngularSpeed = toRadians(aiState.stateMoveSpeed ?? 0);
+  const orbitAngularSpeed = toRadians(getAIStateEffectiveMoveSpeed(aiState));
   const orbitAngle = didInitializeOrbit
     ? minion.aiOrbitAngle ?? 0
     : (minion.aiOrbitAngle ?? 0) + orbitAngularSpeed * Math.max(deltaSeconds, 0);

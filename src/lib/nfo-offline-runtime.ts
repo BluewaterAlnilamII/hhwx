@@ -88,6 +88,7 @@ export type NfoAIStateData = {
   lastFrame: number;
   stateMoveSpeed?: number;
   stateMoveSpeedRandomMax?: number;
+  isRandomSpeed?: boolean;
   stateMoveOffsetX?: number;
   stateMoveOffsetY?: number;
   syncDirectionFromTarget?: boolean;

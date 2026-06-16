@@ -59,7 +59,7 @@ async function main() {
   assert.equal(fixture.selectedWeaponSelfBuffCases.length, 3);
   assert.equal(fixture.selectedActiveSkillSummonCases.length, 13);
   assert.equal(fixture.selectedAIStateTeleportCases.length, 1);
-  assert.equal(fixture.selectedAIStateMovementCases.length, 11);
+  assert.equal(fixture.selectedAIStateMovementCases.length, 12);
   assert.equal(fixture.selectedAIStateBuffCases.length, 3);
   assert.equal(fixture.selectedAIStateCommonStateCases.length, 2);
   assert.equal(fixture.selectedAIStateAnimationCases.length, 2);
@@ -1326,6 +1326,21 @@ async function main() {
   assert.equal(aiRandomMovementCase.isFireBullet, true);
   assert.equal(aiRandomMovementCase.fireBulletCount, 1);
   assert.equal(aiRandomMovementCase.bulletTypeId, 51);
+
+  const aiGalaxyStarOrbitCase = getAIStateMovementCase(
+    "ai-galaxy-star-orbit-random-speed-state",
+  );
+  assert.equal(aiGalaxyStarOrbitCase.aiTypeId, 201);
+  assert.equal(aiGalaxyStarOrbitCase.stateId, 0);
+  assert.equal(aiGalaxyStarOrbitCase.stateType, 22);
+  assert.equal(aiGalaxyStarOrbitCase.nextStateId, 0);
+  assert.equal(aiGalaxyStarOrbitCase.nextStateProbability, 0);
+  assert.equal(aiGalaxyStarOrbitCase.stateMoveSpeed, 40);
+  assert.equal(aiGalaxyStarOrbitCase.stateMoveSpeedRandomMax, 100);
+  assert.equal(aiGalaxyStarOrbitCase.isRandomSpeed, true);
+  assert.equal(aiGalaxyStarOrbitCase.isFireBullet, false);
+  assert.equal(aiGalaxyStarOrbitCase.fireBulletCount, 0);
+  assert.equal(aiGalaxyStarOrbitCase.bulletTypeId, 0);
 
   const aiSpecialRandomTransitionCase = getAIStateMovementCase(
     "ai-special-random-transition-state",
@@ -10996,7 +11011,12 @@ function assertCnActiveSkillGalaxyStarRingSummonCase(
   );
   const movedMinion = orbitedState.minions[0];
   assert.ok(movedMinion);
-  const orbitAngle = degreesToRadians(40);
+  const randomSpeedCase = getAIStateMovementCase(
+    "ai-galaxy-star-orbit-random-speed-state",
+  );
+  const orbitAngle = degreesToRadians(
+    randomSpeedCase.stateMoveSpeed + randomSpeedCase.stateMoveSpeedRandomMax * 0.5,
+  );
   assertClose(
     Math.hypot(
       movedMinion.x - movedPlayerState.player.x,

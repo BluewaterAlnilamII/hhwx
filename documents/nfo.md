@@ -1165,12 +1165,14 @@ current simulation uses a deterministic ring at the radius midpoint (`500`) for
 this formation, which keeps the summon pattern ring-like instead of turning the
 radius interval into a per-index spiral. The summoned minion uses CN AI `201` state `0`
 (`AIStateType = 22` / `环绕`) and now keeps that radius around the player at a
-first-pass angular rate derived from `State_MoveSpeed = 40` degrees/second;
+first-pass deterministic angular rate derived from `State_MoveSpeed = 40`,
+`IsRandomSpeed = 1`, and `State_MoveSpeed_RandomMax = 100`, currently using the
+midpoint value (`90` degrees/second) until the native RNG path is recovered;
 the active skill `112` floating cannon AI states `205`, `206`, and `207` are
 also locked as state-22 orbit states, with their zero `State_MoveSpeed`
 preserving the spawned relative ring position while their shooters run. Exact
-native state-22 class naming, fixed-point orbit math, and any hidden native
-radius/phase constants remain pending. Skill `115` / `Anon Phantom` levels
+native state-22 class naming, fixed-point orbit math, random-speed sampling,
+and any hidden native radius/phase constants remain pending. Skill `115` / `Anon Phantom` levels
 `1`/`2`/`3` spawn one/two/three minion `5` copies at frame `1` with
 `spawnFormation = 2`, radius `400`, AI type `102`, and assigned weapon `28`
 level `8`; the simulation verifies that each level uses the same first-pass

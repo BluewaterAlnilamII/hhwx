@@ -218,10 +218,12 @@ type AIStateMovementCaseSpec = {
   aiTypeId: number;
   stateId: number;
   expectedStateType: number;
-  expectedNextStateId: number;
+  expectedNextStateId?: number;
   expectedFallbackNextStateId?: number;
   expectedFallbackNextStateProbability?: number;
   expectedStateMoveSpeed?: number;
+  expectedStateMoveSpeedRandomMax?: number;
+  expectedIsRandomSpeed?: boolean;
   expectedIsFireBullet?: boolean;
   expectedFireBulletCount?: number;
   expectedBulletTypeId?: number;
@@ -864,6 +866,7 @@ export type NfoCnParityAIStateMovementCase = {
   stateLastFrame: number;
   stateMoveSpeed: number;
   stateMoveSpeedRandomMax: number;
+  isRandomSpeed: boolean;
   stateMoveOffsetX: number;
   stateMoveOffsetY: number;
   syncDirectionFromTarget: boolean;
@@ -2329,6 +2332,17 @@ const AI_STATE_MOVEMENT_CASE_SPECS: AIStateMovementCaseSpec[] = [
     expectedNextStateId: 1,
     expectedIsFireBullet: true,
     expectedBulletTypeId: 51,
+  },
+  {
+    id: "ai-galaxy-star-orbit-random-speed-state",
+    aiTypeId: 201,
+    stateId: 0,
+    expectedStateType: 22,
+    expectedStateMoveSpeed: 40,
+    expectedStateMoveSpeedRandomMax: 100,
+    expectedIsRandomSpeed: true,
+    expectedIsFireBullet: false,
+    expectedFireBulletCount: 0,
   },
   {
     id: "ai-golem-roll-attack-state-speed",
@@ -4988,10 +5002,12 @@ function buildAIStateMovementCase(
     );
   }
 
-  const nextState = state.nextStates.find((candidate) => (
-    candidate.stateId === spec.expectedNextStateId
-  ));
-  if (!nextState) {
+  const nextState = spec.expectedNextStateId === undefined
+    ? null
+    : state.nextStates.find((candidate) => (
+      candidate.stateId === spec.expectedNextStateId
+    ));
+  if (spec.expectedNextStateId !== undefined && !nextState) {
     throw new Error(
       `AI ${ai.id} state ${state.id} is missing next state ${spec.expectedNextStateId}.`,
     );
@@ -5024,6 +5040,24 @@ function buildAIStateMovementCase(
     throw new Error(
       `AI ${ai.id} state ${state.id} expected State_MoveSpeed `
       + `${spec.expectedStateMoveSpeed}, got ${state.stateMoveSpeed ?? 0}.`,
+    );
+  }
+  if (
+    spec.expectedStateMoveSpeedRandomMax !== undefined
+    && (state.stateMoveSpeedRandomMax ?? 0) !== spec.expectedStateMoveSpeedRandomMax
+  ) {
+    throw new Error(
+      `AI ${ai.id} state ${state.id} expected State_MoveSpeed_RandomMax `
+      + `${spec.expectedStateMoveSpeedRandomMax}, got ${state.stateMoveSpeedRandomMax ?? 0}.`,
+    );
+  }
+  if (
+    spec.expectedIsRandomSpeed !== undefined
+    && (state.isRandomSpeed ?? false) !== spec.expectedIsRandomSpeed
+  ) {
+    throw new Error(
+      `AI ${ai.id} state ${state.id} expected IsRandomSpeed `
+      + `${spec.expectedIsRandomSpeed}, got ${state.isRandomSpeed ?? false}.`,
     );
   }
   if (
@@ -5074,13 +5108,14 @@ function buildAIStateMovementCase(
     stateLastFrame: state.lastFrame,
     stateMoveSpeed: state.stateMoveSpeed ?? 0,
     stateMoveSpeedRandomMax: state.stateMoveSpeedRandomMax ?? 0,
+    isRandomSpeed: state.isRandomSpeed ?? false,
     stateMoveOffsetX: state.stateMoveOffsetX ?? 0,
     stateMoveOffsetY: state.stateMoveOffsetY ?? 0,
     syncDirectionFromTarget: state.syncDirectionFromTarget ?? false,
     triggerLevelEventId: state.triggerLevelEventId ?? 0,
     isFireBullet: state.isFireBullet,
-    nextStateId: nextState.stateId,
-    nextStateProbability: nextState.probability,
+    nextStateId: nextState?.stateId ?? 0,
+    nextStateProbability: nextState?.probability ?? 0,
     fallbackNextStateId: fallbackNextState?.stateId ?? 0,
     fallbackNextStateProbability: fallbackNextState?.probability ?? 0,
     fireBulletCount: state.fireBullets.length,

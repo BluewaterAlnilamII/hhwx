@@ -233,6 +233,7 @@ function mapAIState(record: RawRecord): NfoAIData["states"][number] {
     lastFrame: readNumber(record, "LastFrame"),
     stateMoveSpeed: readNumber(record, "State_MoveSpeed"),
     stateMoveSpeedRandomMax: readNumber(record, "State_MoveSpeed_RandomMax"),
+    isRandomSpeed: readBooleanNumber(record, "IsRandomSpeed"),
     stateMoveOffsetX: readNumber(record, "State_MoveOffsetX"),
     stateMoveOffsetY: readNumber(record, "State_MoveOffsetY"),
     syncDirectionFromTarget: readBooleanNumber(record, "syncDirectionFromTarget"),
