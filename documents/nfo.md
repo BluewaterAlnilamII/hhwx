@@ -593,7 +593,7 @@ rotate types, friendly player-target and allied-minion hit buffs, weapon self bu
 force fields, hit buffs, shield hostile-hit absorption, counter `FireBulletDatas`,
 CN weapon `23` shield charge consumption and weapon `25` counter bullet trigger,
 CN weapon `24` / `居合` instant and delayed targetless field timing,
-first-pass taunt hit-buff source targeting,
+first-pass taunt hit-buff source targeting for movement and hostile fire,
 shooter `OnDestoryFireEventBulletID` follow-up bullets,
 first-pass minion weapon creation/firing, including CN weapon `16` / minion
 `2` / bullet `22`, CN weapon `19` / minion `6` / bullet `29`, and CN weapon
@@ -1284,9 +1284,10 @@ Weapon behavior staging:
   spawn radius, and run the minion AI state shooter as a player-team shooter.
   The CN level-1 guard path is locked by shooter `15000` and no-damage taunt
   bullet `99`, which applies buff `120` and redirects affected enemy movement
-  to the bullet source in the first-pass simulation. Deeper native taunt
-  threat/targeting semantics, minion collision rules, and per-`Weapon_XX`
-  subclass details remain pending.
+  plus hostile direct-fire and shooter friendly-target aim to the bullet source
+  in the first-pass simulation. Deeper native taunt threat priority, retarget
+  selection, minion collision rules, and per-`Weapon_XX` subclass details
+  remain pending.
 - `EventBulletID`, `OnDestoryFireEventBulletID`, and `NoDamage` are now mapped
   on the shared `FireBulletData` DTO. The selected-weapon `fireBullets` subset
   in the frozen CN runtime still mostly uses zero values, but
@@ -1398,7 +1399,8 @@ Weapon behavior staging:
   movement stops, `DOT` as one-second damage ticks, and `None` as inert. Stack
   and refresh duplicate modes are represented for active enemy buffs. Type `13`
   taunt hit buffs now store the hit bullet source and use it as the affected
-  enemy's movement target while active. CN weapon `18` now locks the first
+  enemy's movement target and hostile-fire friendly target while active. CN
+  weapon `18` now locks the first
   direct DOT hit-buff case: level `1` bullet `28` applies buff `4`
   (`Duration = 150`, `Value = 1`, `MaxStackCount = 2`) and the first-pass
   simulation ticks one HP after one active second. CN weapon `28` extends the

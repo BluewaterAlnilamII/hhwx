@@ -11,6 +11,7 @@ import {
   createNfoSimulation,
   updateNfoSimulation,
   type NfoInputState,
+  type NfoSimActiveBuff,
   type NfoSimBullet,
   type NfoSimMinion,
   type NfoSimulationState,
@@ -158,6 +159,10 @@ const TESTS: Array<{ name: string; run: () => void }> = [
     run: testPlayerDamageCooldownGatesHostileBulletDamage,
   },
   {
+    name: "taunt buffs redirect enemy direct fire toward the source",
+    run: testTauntBuffRedirectsEnemyDirectFire,
+  },
+  {
     name: "enemy AI idle state does not chase while firing",
     run: testEnemyAIIdleStateDoesNotChaseWhileFiring,
   },
@@ -180,6 +185,10 @@ const TESTS: Array<{ name: string; run: () => void }> = [
   {
     name: "enemy AI can create hostile bullet shooters",
     run: testEnemyAICreatesHostileBulletShooter,
+  },
+  {
+    name: "taunt buffs redirect enemy shooter fire toward the source",
+    run: testTauntBuffRedirectsEnemyShooterFire,
   },
   {
     name: "enemy AI bullet shooter spawn position 1 uses the player position",
@@ -1745,6 +1754,51 @@ function testPlayerDamageCooldownGatesHostileBulletDamage() {
   assertCooldown(cooledState.player.damageCooldownSeconds, 0.8);
 }
 
+function testTauntBuffRedirectsEnemyDirectFire() {
+  const runtimeData = createRuntimeFixture();
+  const baseState = createNfoSimulation(runtimeData);
+  const tauntSource = {
+    x: baseState.player.x + 100,
+    y: baseState.player.y + 200,
+  };
+  const state = addAIEnemyToState(
+    {
+      ...baseState,
+      player: {
+        ...baseState.player,
+        fireCooldownSeconds: 999,
+      },
+    },
+    {
+      aiTypeId: 900,
+      attack: 3,
+      speed: 0,
+      x: tauntSource.x,
+      y: baseState.player.y,
+    },
+  );
+  const tauntedState: NfoSimulationState = {
+    ...state,
+    enemies: [
+      {
+        ...state.enemies[0]!,
+        activeBuffs: [createActiveTauntBuff(tauntSource.x, tauntSource.y)],
+      },
+    ],
+  };
+
+  const firedState = updateNfoSimulation(tauntedState, runtimeData, NO_INPUT, 0);
+  const bullet = firedState.bullets.find((candidate) => candidate.bulletTypeId === 30);
+
+  assert.ok(bullet);
+  assert.equal(bullet.canDamagePlayer, true);
+  assertClose(bullet.vx, 0, "taunted direct-fire bullet vx");
+  assert.ok(
+    bullet.vy > 0,
+    `expected taunted direct-fire bullet to travel toward source, got vy ${bullet.vy}`,
+  );
+}
+
 function testEnemyAIIdleStateDoesNotChaseWhileFiring() {
   const runtimeData = createRuntimeFixture();
   const baseState = createNfoSimulation(runtimeData);
@@ -1978,6 +2032,61 @@ function testEnemyAICreatesHostileBulletShooter() {
   assert.equal(bullet?.canDamagePlayer, true);
   assert.ok((bullet?.vx ?? 0) < 0);
   assert.equal(hitState.player.hp, baseState.player.hp - 7);
+}
+
+function testTauntBuffRedirectsEnemyShooterFire() {
+  const runtimeData = createRuntimeFixture();
+  const level = runtimeData.levels[0];
+  assert.ok(level);
+  level.totalFrames = 999999;
+  const baseState = createNfoSimulation(runtimeData);
+  const tauntSource = {
+    x: baseState.player.x + 200,
+    y: baseState.player.y + 200,
+  };
+  const state = addAIEnemyToState(
+    {
+      ...baseState,
+      player: {
+        ...baseState.player,
+        fireCooldownSeconds: 999,
+      },
+    },
+    {
+      aiTypeId: 901,
+      attack: 2,
+      speed: 0,
+      x: tauntSource.x,
+      y: baseState.player.y,
+    },
+  );
+  const tauntedState: NfoSimulationState = {
+    ...state,
+    enemies: [
+      {
+        ...state.enemies[0]!,
+        activeBuffs: [createActiveTauntBuff(tauntSource.x, tauntSource.y)],
+      },
+    ],
+  };
+
+  const idleState = updateNfoSimulation(tauntedState, runtimeData, NO_INPUT, 0);
+  const spawnedShooterState = updateNfoSimulation(idleState, runtimeData, NO_INPUT, 1);
+  const firedShooterState = updateNfoSimulation(
+    spawnedShooterState,
+    runtimeData,
+    NO_INPUT,
+    2 / 30,
+  );
+  const bullet = firedShooterState.bullets.find((candidate) => candidate.bulletTypeId === 31);
+
+  assert.ok(bullet);
+  assert.equal(bullet.canDamagePlayer, true);
+  assertClose(bullet.vx, 0, "taunted shooter bullet vx");
+  assert.ok(
+    bullet.vy > 0,
+    `expected taunted shooter bullet to travel toward source, got vy ${bullet.vy}`,
+  );
 }
 
 function testEnemyAIShooterSpawnPosOneUsesPlayerPosition() {
@@ -4345,6 +4454,24 @@ function assertClose(actual: number, expected: number, label: string) {
     Math.abs(actual - expected) < 0.000001,
     `expected ${label} ${actual} to be close to ${expected}`,
   );
+}
+
+function createActiveTauntBuff(sourceX: number, sourceY: number): NfoSimActiveBuff {
+  return {
+    id: 120,
+    name: "Fixture Taunt",
+    type: 13,
+    duplicateType: 2,
+    level: 1,
+    value: 1,
+    stackCount: 1,
+    maxStackCount: 1,
+    remainingSeconds: 10,
+    dotTickSeconds: 0,
+    attributes: [],
+    sourceX,
+    sourceY,
+  };
 }
 
 function createSimBulletFixture(

@@ -1182,18 +1182,9 @@ function getEnemyMovementTarget(
   enemy: NfoSimEnemy,
   aiState: NfoAIStateData | null,
 ): NfoVector {
-  const tauntBuff = enemy.activeBuffs.find((buff) => (
-    buff.type === NFO_BUFF_TYPE.taunt
-    && buff.remainingSeconds > 0
-    && Number.isFinite(buff.sourceX)
-    && Number.isFinite(buff.sourceY)
-  ));
-
-  if (tauntBuff) {
-    return {
-      x: tauntBuff.sourceX ?? state.player.x,
-      y: tauntBuff.sourceY ?? state.player.y,
-    };
+  const tauntTarget = getTauntSourceTarget(enemy.activeBuffs, state.player);
+  if (tauntTarget) {
+    return tauntTarget;
   }
 
   if (aiState?.stateType === NFO_AI_STATE_TYPE.moveToRandomPosition) {
@@ -1205,6 +1196,34 @@ function getEnemyMovementTarget(
   }
 
   return state.player;
+}
+
+function getEnemyThreatTarget(
+  state: NfoSimulationState,
+  enemy: NfoSimEnemy,
+): NfoVector {
+  return getTauntSourceTarget(enemy.activeBuffs, state.player) ?? state.player;
+}
+
+function getTauntSourceTarget(
+  activeBuffs: NfoSimActiveBuff[],
+  fallback: NfoVector,
+): NfoVector | null {
+  const tauntBuff = activeBuffs.find((buff) => (
+    buff.type === NFO_BUFF_TYPE.taunt
+    && buff.remainingSeconds > 0
+    && Number.isFinite(buff.sourceX)
+    && Number.isFinite(buff.sourceY)
+  ));
+
+  if (tauntBuff) {
+    return {
+      x: tauntBuff.sourceX ?? fallback.x,
+      y: tauntBuff.sourceY ?? fallback.y,
+    };
+  }
+
+  return null;
 }
 
 function getAIStateOffsetMovementTarget(
@@ -1341,16 +1360,17 @@ function fireEnemyAIStateDirectBullets(
   fireSourceModifiers: FireSourceModifierOptions,
 ) {
   const aiState = advancedAIState.state;
+  const fireTarget = getEnemyThreatTarget(state, enemy);
   const catBossAttack = aiState.stateType === NFO_AI_STATE_TYPE.catBossAttack
-    ? createCatBossAttackShot(state, enemy, advancedAIState)
+    ? createCatBossAttackShot(state, enemy, advancedAIState, fireTarget)
     : null;
   fireBulletDataSet(
     state,
     runtimeData,
     aiState.fireBullets,
     catBossAttack?.origin ?? enemy,
-    catBossAttack?.target ?? state.player,
-    state.player,
+    catBossAttack?.target ?? fireTarget,
+    fireTarget,
     {
       ...fireSourceModifiers,
       canDamagePlayer: true,
@@ -1363,6 +1383,7 @@ function createCatBossAttackShot(
   state: NfoSimulationState,
   enemy: NfoSimEnemy,
   advancedAIState: AdvancedAIState,
+  fireTarget: NfoVector,
 ): { origin: NfoVector; target: NfoVector } {
   const offsetSeed = positiveModulo(
     enemy.id * 97 + advancedAIState.currentFrame * 13,
@@ -1373,10 +1394,10 @@ function createCatBossAttackShot(
     NFO_CAT_BOSS_ATTACK_RANDOM_ANGLE_DEGREES * 2,
   );
   const origin = {
-    x: state.player.x + offsetSeed - NFO_CAT_BOSS_ATTACK_RANDOM_POS_RADIUS,
-    y: state.player.y + NFO_CAT_BOSS_ATTACK_BULLET_POS_Y,
+    x: fireTarget.x + offsetSeed - NFO_CAT_BOSS_ATTACK_RANDOM_POS_RADIUS,
+    y: fireTarget.y + NFO_CAT_BOSS_ATTACK_BULLET_POS_Y,
   };
-  const baseAngle = Math.atan2(state.player.y - origin.y, state.player.x - origin.x);
+  const baseAngle = Math.atan2(fireTarget.y - origin.y, fireTarget.x - origin.x);
   const angle = baseAngle + toRadians(angleSeed - NFO_CAT_BOSS_ATTACK_RANDOM_ANGLE_DEGREES);
 
   return {
@@ -2215,7 +2236,14 @@ function fireBulletShooterTimelineEvent(
   }
 
   const origin = getBulletShooterEventOrigin(shooter, event);
-  const enemyTarget = getBulletShooterEventEnemyTarget(state, shooter, event, origin);
+  const friendlyTarget = getBulletShooterEventFriendlyTarget(state, shooter);
+  const enemyTarget = getBulletShooterEventEnemyTarget(
+    state,
+    shooter,
+    event,
+    origin,
+    friendlyTarget,
+  );
   const bulletRotateTypeOverride = event.bulletRotationType > 0
     ? event.bulletRotationType
     : undefined;
@@ -2225,7 +2253,7 @@ function fireBulletShooterTimelineEvent(
     event.fireBullets,
     origin,
     enemyTarget,
-    state.player,
+    friendlyTarget,
     {
       attackerAttack: shooter.attack,
       bulletCountModifier: shooter.bulletCountModifier,
@@ -2293,6 +2321,7 @@ function getBulletShooterEventEnemyTarget(
   shooter: NfoSimActiveShooter,
   event: NfoBulletShooterTimelineEvent,
   origin: NfoVector,
+  friendlyTarget: NfoVector,
 ): NfoVector {
   if (event.bulletFireDirectionType === NFO_BULLET_FIRE_DIRECTION_TYPE.formationOffset) {
     const offsetAngle = getVectorAngle(
@@ -2321,12 +2350,24 @@ function getBulletShooterEventEnemyTarget(
   if (event.bulletFireDirectionType === NFO_BULLET_FIRE_DIRECTION_TYPE.friendlyTarget) {
     return targetFromPointWithOffset(
       origin,
-      state.player,
+      friendlyTarget,
       event.bulletFireDirectionOffsetAngle,
     );
   }
 
   return targetFromNearestEnemyOrForward(state, origin, event.bulletFireDirectionOffsetAngle);
+}
+
+function getBulletShooterEventFriendlyTarget(
+  state: NfoSimulationState,
+  shooter: NfoSimActiveShooter,
+): NfoVector {
+  if (shooter.sourceTeam !== "enemy" || shooter.ownerType !== "enemy") {
+    return state.player;
+  }
+
+  const owner = state.enemies.find((enemy) => enemy.id === shooter.ownerId);
+  return owner ? getEnemyThreatTarget(state, owner) : state.player;
 }
 
 function targetFromPointWithOffset(
