@@ -15,6 +15,7 @@ const STATIC_RUNTIME_URL_PATH =
 const EXPECTED_SMOKE_ACTIVE_SKILL_CHARACTER_ID = 110;
 const EXPECTED_SMOKE_ACTIVE_SKILL_ID = 110;
 const EXPECTED_SMOKE_ACTIVE_SKILL_EFFECT_NAME = "UIefx_flash_starlight";
+const EXPECTED_SMOKE_ACTIVE_SKILL_SOUND_NAME = "active_110";
 export const LIVE_NFO_ENDPOINT_MARKERS = [
   "http://",
   "https://",
@@ -364,6 +365,18 @@ async function smokeBrowserInteraction(baseUrl, args) {
       readHtmlAttribute(smokeTag, "data-nfo-full-screen-effect-name")
         === EXPECTED_SMOKE_ACTIVE_SKILL_EFFECT_NAME,
       "browser smoke did not expose the expected active-skill full-screen effect",
+    );
+    const soundEventCount = Number(
+      readHtmlAttribute(smokeTag, "data-nfo-sound-event-count"),
+    );
+    assertSmoke(
+      Number.isFinite(soundEventCount) && soundEventCount > 0,
+      "browser smoke did not expose active sound events",
+    );
+    assertSmoke(
+      readHtmlAttribute(smokeTag, "data-nfo-active-skill-sound-event-name")
+        === EXPECTED_SMOKE_ACTIVE_SKILL_SOUND_NAME,
+      "browser smoke did not expose the expected active-skill sound event",
     );
     assertSmoke(
       readHtmlAttribute(smokeTag, "data-nfo-active-skill-effect-observed") === "1",

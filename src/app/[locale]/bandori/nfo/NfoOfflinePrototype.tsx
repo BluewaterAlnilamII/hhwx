@@ -80,6 +80,10 @@ type HudSnapshot = {
   activeSkillActive: boolean;
   fullScreenEffectCount: number;
   fullScreenEffectName: string;
+  soundEventCount: number;
+  latestSoundEventName: string;
+  latestSoundEventSourceType: string;
+  activeSkillSoundEventName: string;
 };
 
 type NfoSceneActions = {
@@ -866,6 +870,10 @@ export default function NfoOfflinePrototype() {
         data-nfo-score={hud?.score ?? 0}
         data-nfo-full-screen-effect-count={hud?.fullScreenEffectCount ?? 0}
         data-nfo-full-screen-effect-name={hud?.fullScreenEffectName ?? ""}
+        data-nfo-sound-event-count={hud?.soundEventCount ?? 0}
+        data-nfo-latest-sound-event-name={hud?.latestSoundEventName ?? ""}
+        data-nfo-latest-sound-event-source-type={hud?.latestSoundEventSourceType ?? ""}
+        data-nfo-active-skill-sound-event-name={hud?.activeSkillSoundEventName ?? ""}
         data-nfo-active-skill-id={hud?.activeSkillId ?? 0}
         data-nfo-active-skill-charge-frames={hud?.activeSkillChargeFrames ?? 0}
         data-nfo-active-skill-charge-max-frames={hud?.activeSkillChargeMaxFrames ?? 0}
@@ -1100,6 +1108,7 @@ export default function NfoOfflinePrototype() {
             />
             <Metric label="Weapon Lv" value={hud ? String(hud.weaponLevel) : "..."} />
             <Metric label="Skill Gauge" value={formatActiveSkillGauge(hud)} />
+            <Metric label="Sound" value={formatSoundEvent(hud)} />
             <Metric
               label="Lv EXP"
               value={hud ? `${hud.expIntoLevel}/${hud.expToNextLevel || "Max"}` : "..."}
@@ -1586,6 +1595,8 @@ function getFullScreenEffectRenderColors(effectName: string) {
 
 function toHudSnapshot(state: NfoSimulationState): HudSnapshot {
   const latestFullScreenEffect = state.fullScreenEffects.at(-1);
+  const latestSoundEvent = state.soundEvents.at(-1);
+  const latestActiveSkillSoundEvent = getLatestSoundEventBySourceType(state, "activeSkill");
 
   return {
     status: state.status,
@@ -1625,7 +1636,25 @@ function toHudSnapshot(state: NfoSimulationState): HudSnapshot {
     activeSkillActive: state.activeSkill.isActive,
     fullScreenEffectCount: state.fullScreenEffects.length,
     fullScreenEffectName: latestFullScreenEffect?.name ?? "",
+    soundEventCount: state.soundEvents.length,
+    latestSoundEventName: latestSoundEvent?.name ?? "",
+    latestSoundEventSourceType: latestSoundEvent?.sourceType ?? "",
+    activeSkillSoundEventName: latestActiveSkillSoundEvent?.name ?? "",
   };
+}
+
+function getLatestSoundEventBySourceType(
+  state: NfoSimulationState,
+  sourceType: NfoSimulationState["soundEvents"][number]["sourceType"],
+) {
+  for (let index = state.soundEvents.length - 1; index >= 0; index -= 1) {
+    const soundEvent = state.soundEvents[index];
+    if (soundEvent?.sourceType === sourceType) {
+      return soundEvent;
+    }
+  }
+
+  return undefined;
 }
 
 function formatActiveSkillGauge(hud: HudSnapshot | null): string {
@@ -1647,4 +1676,12 @@ function formatActiveSkillGauge(hud: HudSnapshot | null): string {
   }
 
   return `${Math.min(hud.activeSkillChargeFrames, maxCharge)}/${maxCharge}`;
+}
+
+function formatSoundEvent(hud: HudSnapshot | null): string {
+  if (!hud || hud.soundEventCount <= 0 || !hud.latestSoundEventName) {
+    return "...";
+  }
+
+  return `${hud.latestSoundEventSourceType || "event"}:${hud.latestSoundEventName}`;
 }
