@@ -290,6 +290,7 @@ type ActiveSkillSummonCaseSpec = {
   expectedShooterId?: number;
   expectedShooterBulletTypeId?: number;
   expectedMinionId: number;
+  expectedMinionLifetimeFrames?: number;
   expectedMinionAITypeId?: number;
   expectedSpawnFormation: number;
   expectedSpawnCount: number;
@@ -976,6 +977,7 @@ export type NfoCnParityActiveSkillSummonCase = {
   shooterBulletHitTargetType: number;
   minionId: number;
   minionLevel: number;
+  minionLifetimeFrames: number;
   minionAITypeId: number;
   minionAIStateId: number;
   minionAIStateName: string;
@@ -2699,6 +2701,7 @@ const ACTIVE_SKILL_SUMMON_CASE_SPECS: ActiveSkillSummonCaseSpec[] = [
     activeSkillLevel: 1,
     expectedEventFrame: 1,
     expectedMinionId: 7,
+    expectedMinionLifetimeFrames: 150,
     expectedSpawnFormation: 1,
     expectedSpawnCount: 3,
     expectedMinionAITypeId: 201,
@@ -2712,6 +2715,7 @@ const ACTIVE_SKILL_SUMMON_CASE_SPECS: ActiveSkillSummonCaseSpec[] = [
     activeSkillLevel: 2,
     expectedEventFrame: 1,
     expectedMinionId: 7,
+    expectedMinionLifetimeFrames: 150,
     expectedSpawnFormation: 1,
     expectedSpawnCount: 4,
     expectedMinionAITypeId: 201,
@@ -2725,6 +2729,7 @@ const ACTIVE_SKILL_SUMMON_CASE_SPECS: ActiveSkillSummonCaseSpec[] = [
     activeSkillLevel: 3,
     expectedEventFrame: 1,
     expectedMinionId: 7,
+    expectedMinionLifetimeFrames: 150,
     expectedSpawnFormation: 1,
     expectedSpawnCount: 6,
     expectedMinionAITypeId: 201,
@@ -5486,6 +5491,15 @@ function buildActiveSkillSummonCase(
   if (!minion) {
     throw new Error(`Minion ${spawnMinion.minionId} is missing from MinionData.`);
   }
+  if (
+    spec.expectedMinionLifetimeFrames !== undefined
+    && minion.lifetimeFrames !== spec.expectedMinionLifetimeFrames
+  ) {
+    throw new Error(
+      `Active skill summon case ${spec.id} expected MinionData LifeTimeFrame `
+      + `${spec.expectedMinionLifetimeFrames}, got ${minion.lifetimeFrames}.`,
+    );
+  }
   const minionAITypeId = spawnMinion.minionAiTypeId || minion.aiTypeId;
   const minionAI = runtimeData.ais.find((candidate) => candidate.id === minionAITypeId);
   const minionAIState = minionAI
@@ -5627,6 +5641,7 @@ function buildActiveSkillSummonCase(
     shooterBulletCount: shooterFireBullet?.bulletCount ?? 0,
     shooterBulletSpeed: shooterFireBullet?.bulletSpeed ?? 0,
     shooterBulletHitTargetType: shooterFireBullet?.bulletHitTargetType ?? 0,
+    minionLifetimeFrames: minion.lifetimeFrames,
     minionAIStateId: minionAIState?.id ?? 0,
     minionAIStateName: minionAIState?.name ?? "",
     minionAIStateType: minionAIState?.stateType ?? 0,
@@ -5686,6 +5701,7 @@ function createActiveSkillSummonPayload(
   | "shooterBulletCount"
   | "shooterBulletSpeed"
   | "shooterBulletHitTargetType"
+  | "minionLifetimeFrames"
   | "minionAIStateId"
   | "minionAIStateName"
   | "minionAIStateType"

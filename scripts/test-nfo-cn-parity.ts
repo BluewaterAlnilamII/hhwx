@@ -1847,6 +1847,7 @@ async function main() {
     assert.equal(galaxySummonCase.activeSkillLevel, index + 1);
     assert.equal(galaxySummonCase.eventFrame, 1);
     assert.equal(galaxySummonCase.minionId, 7);
+    assert.equal(galaxySummonCase.minionLifetimeFrames, 150);
     assert.equal(galaxySummonCase.minionAITypeId, 201);
     assert.equal(galaxySummonCase.minionAIStateId, 0);
     assert.equal(galaxySummonCase.minionAIStateType, 22);
@@ -2455,7 +2456,7 @@ async function main() {
   console.log("ok - CN active skill 111 level 1/2/3 minion AI transitions into roar shooter");
   console.log("ok - CN active skill All-Out Fire drives shooter 7000 frame 1/3/7 timeline and minion AI");
   console.log("ok - CN active skill All-Out Fire level 2/3 loops zero-offset minion shooters");
-  console.log("ok - CN active skill Galaxy Star level 1/2/3 summon uses first-pass minion orbit");
+  console.log("ok - CN active skill Galaxy Star level 1/2/3 summon uses first-pass minion orbit and lifetime");
   console.log("ok - CN active skill Anon Phantom level 1/2/3 summon uses formation 2 ring and level-8 assigned weapon fire");
   console.log("ok - CN DropData spawns item pickups and ItemData EXP pickup is collectable");
   console.log("ok - CN minor enemy DropData coin branch is collectable");
@@ -10981,6 +10982,14 @@ function assertCnActiveSkillGalaxyStarRingSummonCase(
   assert.ok(nextState.minions.every((candidate) => candidate.minionId === summonCase.minionId));
   assert.ok(nextState.minions.every((candidate) => candidate.aiTypeId === summonCase.minionAITypeId));
   assert.ok(nextState.minions.every((candidate) => candidate.aiStateId === summonCase.minionAIStateId));
+  const expectedRemainingLifetimeSeconds = (summonCase.minionLifetimeFrames - 1) / 30;
+  for (const spawnedMinion of nextState.minions) {
+    assertClose(
+      spawnedMinion.remainingSeconds,
+      expectedRemainingLifetimeSeconds,
+      "Galaxy minion lifetime after spawn frame",
+    );
+  }
   const distances = nextState.minions.map((candidate) => (
     Math.round(Math.hypot(candidate.x - baseState.player.x, candidate.y - baseState.player.y))
   ));
@@ -11035,6 +11044,14 @@ function assertCnActiveSkillGalaxyStarRingSummonCase(
     movedPlayerState.player.y + Math.sin(orbitAngle) * summonCase.expectedFirstPassRadius,
     "Galaxy minion orbit y after one second",
   );
+
+  const expiredState = updateNfoSimulation(
+    nextState,
+    testRuntimeData,
+    NO_INPUT,
+    expectedRemainingLifetimeSeconds,
+  );
+  assert.equal(expiredState.minions.length, 0);
 }
 
 function testCnActiveSkillAnonPhantomRingSummon(

@@ -1168,6 +1168,8 @@ radius interval into a per-index spiral. The summoned minion uses CN AI `201` st
 first-pass deterministic angular rate derived from `State_MoveSpeed = 40`,
 `IsRandomSpeed = 1`, and `State_MoveSpeed_RandomMax = 100`, currently using the
 midpoint value (`90` degrees/second) until the native RNG path is recovered;
+the same fixture now locks minion `7`'s CN `LifeTimeFrame = 150`, and the
+simulation removes the asteroid minions after that first-pass lifetime expires;
 the active skill `112` floating cannon AI states `205`, `206`, and `207` are
 also locked as state-22 orbit states, with their zero `State_MoveSpeed`
 preserving the spawned relative ring position while their shooters run. Exact
