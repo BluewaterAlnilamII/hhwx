@@ -1286,6 +1286,13 @@ async function main() {
   assert.equal(aiShooterSpawnCase.bulletTypeId, 52);
   assert.equal(aiShooterSpawnCase.bulletHitTargetType, 1);
   assert.equal(aiShooterSpawnCase.bulletDamageJudgeDelayFrames, 15);
+  assert.equal(aiShooterSpawnCase.followupEventFrame, 30);
+  assert.equal(aiShooterSpawnCase.followupDirectionType, 1);
+  assert.equal(aiShooterSpawnCase.followupBulletTypeId, 51);
+  assert.equal(aiShooterSpawnCase.followupBulletCount, 10);
+  assert.equal(aiShooterSpawnCase.followupBulletSpeed, 300);
+  assert.equal(aiShooterSpawnCase.followupBulletHitTargetType, 1);
+  assert.equal(aiShooterSpawnCase.followupBulletDamageJudgeDelayFrames, 10);
 
   const aiNoCollidingCase = getAIStateNoCollidingCase(
     "ai-moon-cat-teleport-no-colliding-frame-1",
@@ -2410,7 +2417,7 @@ async function main() {
   console.log("ok - CN AIData creates long Hydra shooter timelines");
   console.log("ok - CN AIState timeline FireBulletNow gates hostile ray damage and idle movement");
   console.log("ok - CN AIState FireAllWeaponNow gates minion weapon fire");
-  console.log("ok - CN AIState shooter SpawnPos 1 uses the player position");
+  console.log("ok - CN AIState shooter SpawnPos 1 uses the player position and frame-30 ring");
   console.log("ok - CN AIState timeline NoColliding suppresses contact");
   console.log("ok - CN AIState NextStateDatas Probability selects branch and fallback");
   console.log("ok - CN AIState BlackCat teleport moves on the teleport event and then fires");
@@ -8614,6 +8621,37 @@ function testCnAIStateShooterSpawnPosOne(sourceRuntimeData: NfoOfflineRuntimeDat
   assert.equal(bullet.hitTargetType, 1);
   assertClose(bullet.x, baseState.player.x, "CN AI shooter spawnPos 1 bullet x");
   assertClose(bullet.y, baseState.player.y, "CN AI shooter spawnPos 1 bullet y");
+
+  const beforeRingState = updateNfoSimulation(
+    firedShooterState,
+    testRuntimeData,
+    NO_INPUT,
+    (aiShooterSpawnCase.followupEventFrame - aiShooterSpawnCase.eventFrame - 1) / 30,
+  );
+  assert.equal(
+    beforeRingState.bullets.filter((candidate) => (
+      candidate.bulletTypeId === aiShooterSpawnCase.followupBulletTypeId
+    )).length,
+    0,
+  );
+
+  const ringState = updateNfoSimulation(beforeRingState, testRuntimeData, NO_INPUT, 1 / 30);
+  const ringBullets = ringState.bullets.filter((candidate) => (
+    candidate.bulletTypeId === aiShooterSpawnCase.followupBulletTypeId
+  ));
+  assert.equal(ringBullets.length, aiShooterSpawnCase.followupBulletCount);
+  assert.ok(ringBullets.every((candidate) => candidate.canDamagePlayer));
+  assert.ok(ringBullets.every((candidate) => (
+    candidate.hitTargetType === aiShooterSpawnCase.followupBulletHitTargetType
+  )));
+  assert.ok(ringBullets.some((candidate) => candidate.vx > 0));
+  assert.ok(ringBullets.some((candidate) => candidate.vx < 0));
+  assert.ok(ringBullets.some((candidate) => candidate.vy > 0));
+  assert.ok(ringBullets.some((candidate) => candidate.vy < 0));
+  assert.ok(ringBullets.every((candidate) => (
+    Math.abs(Math.hypot(candidate.vx, candidate.vy) - aiShooterSpawnCase.followupBulletSpeed)
+    < 0.000001
+  )));
 }
 
 function testCnAIStateNoColliding(sourceRuntimeData: NfoOfflineRuntimeData) {

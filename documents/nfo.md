@@ -565,7 +565,8 @@ AIState entry buff application without per-frame restacking, AIState entry commo
 weapon-level `MinionCount` multi-minion firing, weapon-level `spawnMinionData`
 AI/placement handling, bomb/magnet pickup handling,
 first-pass enemy AI direct fire, enemy AI-created hostile bullet shooters,
-enemy AI shooter `SpawnPos = 1` player-side placement, and
+enemy AI shooter `SpawnPos = 1` player-side placement plus shooter `1`
+frame-`30` ring bullets, and
 active skill timeline buff application including CN skill `11` self attribute
 buff source modifiers, active skill minion spawning, bullet boundary expiry,
 active skill heal-percent, invincible, and revive buff effects, active
@@ -1026,6 +1027,9 @@ this hostile shooter path emits player-damaging bullet `101`. The AI shooter
 spawn case locks AI `32` / Archangel state `4`: it creates shooter `1` with
 `SpawnPos = 1`, and the simulation verifies that this hostile shooter is placed
 on the player side before emitting bullet `52` with `BulletHitTargetType = 1`.
+The same fixture now advances shooter `1` to frame `30` and locks its second
+timeline event: ten hostile ring bullets `51` at speed `300`, still sourced
+from the player-side `SpawnPos = 1` origin.
 It also locks the
 first CN `FireAllWeaponNow` minion case: AI `103` / `103_召唤物_LEOAI` starts
 from `FirstStateID = 3`, reaches state `2`, crosses timeline frame `20`, and
@@ -1548,7 +1552,9 @@ Weapon behavior staging:
   around-player position change, uses `BulletFireCD`/`LastFrame` as the repeat
   cooldown, and treats those bullets or shooters as hostile to the player. This brings
   ordinary firing AI, boss shooter links such as AI `66`
-  state `1` -> state `2` -> shooter `2100`, AI `28` state `1` -> state `2`
+  state `1` -> state `2` -> shooter `2100`, AI `32` state `4` -> shooter
+  `1` with frame-`1` bullet `52` and frame-`30` ten-bullet ring `51`,
+  AI `28` state `1` -> state `2`
   -> shooter `2001` with direction-`2` Hydra fireballs, AI `29` state `5`
   -> shooter `2000` with an 11-event Hydra fireball timeline, CN AI `44` state `3` frame-15
   hostile ray bullet `99` with inside/outside segment damage checks plus idle

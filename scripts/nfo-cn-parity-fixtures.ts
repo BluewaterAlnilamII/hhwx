@@ -190,6 +190,7 @@ type AIStateShooterSpawnCaseSpec = {
   expectedShooterId: number;
   expectedSpawnPos: number;
   expectedBulletTypeId: number;
+  expectedFollowupBulletTypeId?: number;
 };
 
 type AIStateNoCollidingCaseSpec = {
@@ -800,6 +801,15 @@ export type NfoCnParityAIStateShooterSpawnCase = {
   bulletTypeId: number;
   bulletHitTargetType: number;
   bulletDamageJudgeDelayFrames: number;
+  followupEventIndex: number;
+  followupEventName: string;
+  followupEventFrame: number;
+  followupDirectionType: number;
+  followupBulletTypeId: number;
+  followupBulletCount: number;
+  followupBulletSpeed: number;
+  followupBulletHitTargetType: number;
+  followupBulletDamageJudgeDelayFrames: number;
 };
 
 export type NfoCnParityAIStateNoCollidingCase = {
@@ -2252,6 +2262,7 @@ const AI_STATE_SHOOTER_SPAWN_CASE_SPECS: AIStateShooterSpawnCaseSpec[] = [
     expectedShooterId: 1,
     expectedSpawnPos: 1,
     expectedBulletTypeId: 52,
+    expectedFollowupBulletTypeId: 51,
   },
 ];
 
@@ -4737,6 +4748,24 @@ function buildAIStateShooterSpawnCase(
     throw new Error(`Shooter spawn case ${spec.id} is missing its selected fire bullet.`);
   }
 
+  const followupEventIndex = spec.expectedFollowupBulletTypeId
+    ? shooter.events.findIndex((candidate) => (
+      candidate.fireBullets.some((fireBulletCandidate) => (
+        fireBulletCandidate.bulletTypeId === spec.expectedFollowupBulletTypeId
+      ))
+    ))
+    : -1;
+  const followupEvent = followupEventIndex >= 0 ? shooter.events[followupEventIndex] : null;
+  const followupFireBullet = followupEvent?.fireBullets.find((candidate) => (
+    candidate.bulletTypeId === spec.expectedFollowupBulletTypeId
+  )) ?? null;
+  if (spec.expectedFollowupBulletTypeId && (!followupEvent || !followupFireBullet)) {
+    throw new Error(
+      `Shooter ${shooter.id} is missing follow-up bullet `
+      + `${spec.expectedFollowupBulletTypeId}.`,
+    );
+  }
+
   return {
     id: spec.id,
     aiTypeId: ai.id,
@@ -4756,6 +4785,15 @@ function buildAIStateShooterSpawnCase(
     bulletTypeId: fireBullet.bulletTypeId,
     bulletHitTargetType: fireBullet.bulletHitTargetType,
     bulletDamageJudgeDelayFrames: fireBullet.bulletDamageJudgeDelayFrames,
+    followupEventIndex,
+    followupEventName: followupEvent?.name ?? "",
+    followupEventFrame: followupEvent?.frame ?? 0,
+    followupDirectionType: followupEvent?.bulletFireDirectionType ?? 0,
+    followupBulletTypeId: followupFireBullet?.bulletTypeId ?? 0,
+    followupBulletCount: followupFireBullet?.bulletCount ?? 0,
+    followupBulletSpeed: followupFireBullet?.bulletSpeed ?? 0,
+    followupBulletHitTargetType: followupFireBullet?.bulletHitTargetType ?? 0,
+    followupBulletDamageJudgeDelayFrames: followupFireBullet?.bulletDamageJudgeDelayFrames ?? 0,
   };
 }
 
