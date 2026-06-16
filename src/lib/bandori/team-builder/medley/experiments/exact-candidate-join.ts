@@ -518,6 +518,20 @@ function stripMedleyExactCandidateCardRetention(
   return candidate;
 }
 
+function stripMedleyExactCandidateResultRetention(candidate: MedleyTeamCandidate): MedleyTeamCandidate {
+  const result = candidate.result;
+  candidate.result = {
+    score: result.score,
+    targetValue: result.targetValue,
+    averageScore: result.averageScore,
+    maxScore: result.maxScore,
+    minScore: result.minScore,
+    leaderCardId: result.leaderCardId,
+  } as BandoriTeamSearchResult;
+  candidate.cardInstanceKeys = undefined;
+  return candidate;
+}
+
 function formatMedleyExactSignatureHash(hash: number): string {
   return (hash >>> 0).toString(16).padStart(8, "0");
 }
@@ -2111,6 +2125,7 @@ export function createMedleyExactSlotCandidateGenerator(
   enableCompactScoreOnlyCache = false,
   disableGlobalComplementUpperCache = false,
   enableCompactGlobalComplementUpperCache = false,
+  enableThinCandidateResultRetention = false,
 ): MedleyExactSlotCandidateGenerator {
   // The generator is ordered by optimistic slot upper bound. Exhaustion proves that no unseen
   // slot candidate remains above the active cutoff; budget/deadline aborts are reported to the
@@ -2575,9 +2590,13 @@ export function createMedleyExactSlotCandidateGenerator(
           },
         );
         if (candidate && candidate.result.score >= scoreCutoff) {
-          const retainedCandidate = disableCandidateCardsRetention
-            ? stripMedleyExactCandidateCardRetention(candidate, nextSelectedCardIndices)
-            : candidate;
+          let retainedCandidate = candidate;
+          if (disableCandidateCardsRetention) {
+            retainedCandidate = stripMedleyExactCandidateCardRetention(retainedCandidate, nextSelectedCardIndices);
+          }
+          if (enableThinCandidateResultRetention) {
+            retainedCandidate = stripMedleyExactCandidateResultRetention(retainedCandidate);
+          }
           pushSearchNode(createSearchNode({
             key: retainedCandidate.result.score,
             slotUpperBound: retainedCandidate.result.score,
@@ -5822,6 +5841,9 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     exactCandidateScoreOnlyCachePressureSlotCardCount?: number | null;
     disableExactCandidateCardsRetention?: boolean;
     enableExactCandidateCompactScoreOnlyCache?: boolean;
+    disableExactCandidateGlobalComplementCache?: boolean;
+    enableExactCandidateCompactGlobalComplementCache?: boolean;
+    enableExactCandidateThinResultRetention?: boolean;
     disableExactCandidateSkillWindowContributionCache?: boolean;
     disableExactCandidateScoreCalculationCache?: boolean;
     disableExactCandidateScoreOnlyCache?: boolean;
@@ -5981,6 +6003,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     context.enableExactCandidateCompactScoreOnlyCache === true,
     context.disableExactCandidateGlobalComplementCache === true,
     context.enableExactCandidateCompactGlobalComplementCache === true,
+    context.enableExactCandidateThinResultRetention === true,
   ));
   const candidatesBySlot: MedleyTeamCandidate[][] = Array.from({ length: slots.length }, () => []);
   const rawCandidateMirror = context.debugExactCandidateRawMirror === true
@@ -6698,6 +6721,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     context.enableExactCandidateCompactScoreOnlyCache === true,
     context.disableExactCandidateGlobalComplementCache === true,
     context.enableExactCandidateCompactGlobalComplementCache === true,
+    context.enableExactCandidateThinResultRetention === true,
   ));
   const getCandidateFillGenerator = (slotIndex: number, scoreCutoff: number): MedleyExactSlotCandidateGenerator => (
     generators[slotIndex].canReuseForScoreCutoff(scoreCutoff)
@@ -6786,6 +6810,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
       rawSolverInputCensus: rawSolverInputCensusProfile,
       scoreCache: scoreCacheProfile,
       candidateCardsRetention: context.disableExactCandidateCardsRetention === true ? "disabled" : "enabled",
+      candidateResultRetention: context.enableExactCandidateThinResultRetention === true ? "thin" : "full",
       scoreOnlyCacheRepresentation: context.enableExactCandidateCompactScoreOnlyCache === true ? "compact" : "result",
       scoreCalculationCache: scoreCalculationCacheMode,
       scoreCalculationCacheEntryLimit: context.exactCandidateScoreCalculationCacheEntryLimit ?? null,

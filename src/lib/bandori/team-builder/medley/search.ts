@@ -691,6 +691,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
   const enableExactCandidateCompactGlobalComplementCache = (
     optimization.enableExactCandidateCompactGlobalComplementCache === true
   );
+  const enableExactCandidateThinResultRetention = optimization.enableExactCandidateThinResultRetention === true;
   const disableExactCandidateScoreCalculationCache = optimization.disableExactCandidateScoreCalculationCache === true;
   const disableExactCandidateScoreOnlyCache = optimization.disableExactCandidateScoreOnlyCache === true;
   const enableExperimentalStagedCandidateExtension = (
@@ -3673,6 +3674,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
           enableExactCandidateCompactScoreOnlyCache,
           disableExactCandidateGlobalComplementCache,
           enableExactCandidateCompactGlobalComplementCache,
+          enableExactCandidateThinResultRetention,
           disableExactCandidateSkillWindowContributionCache,
           disableExactCandidateScoreCalculationCache,
           disableExactCandidateScoreOnlyCache,
@@ -4083,6 +4085,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
           enableExactCandidateCompactScoreOnlyCache,
           disableExactCandidateGlobalComplementCache,
           enableExactCandidateCompactGlobalComplementCache,
+          enableExactCandidateThinResultRetention,
           disableExactCandidateSkillWindowContributionCache,
           disableExactCandidateScoreCalculationCache,
           disableExactCandidateScoreOnlyCache,
