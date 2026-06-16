@@ -337,6 +337,18 @@ async function smokeBrowserInteraction(baseUrl, args) {
       "browser smoke did not expose a concrete enemy defeat, drop, EXP, or score signal",
     );
     assertSmoke(
+      readHtmlAttribute(smokeTag, "data-nfo-weapon-sound-observed") === "1",
+      "browser smoke did not observe a weapon sound event",
+    );
+    const weaponSoundEventName = readHtmlAttribute(
+      smokeTag,
+      "data-nfo-weapon-sound-event-name",
+    );
+    assertSmoke(
+      weaponSoundEventName.length > 0,
+      "browser smoke observed a weapon sound event without a sound name",
+    );
+    assertSmoke(
       readHtmlAttribute(smokeTag, "data-nfo-pickup-collected") === "1",
       "browser smoke did not collect a dropped pickup through movement",
     );

@@ -84,6 +84,7 @@ type HudSnapshot = {
   latestSoundEventName: string;
   latestSoundEventSourceType: string;
   activeSkillSoundEventName: string;
+  latestWeaponSoundEventName: string;
   latestPickupSoundEventName: string;
 };
 
@@ -93,6 +94,7 @@ type NfoSceneActions = {
   readyActiveSkill: () => void;
   startSmokeMove: () => void;
   advanceSmokeFrames: (frameCount: number) => void;
+  advanceUntilWeaponSound: () => void;
   collectNearestPickup: () => void;
 };
 
@@ -105,6 +107,7 @@ type SmokeInteractionState =
   | "upgrade-requested"
   | "movement-requested"
   | "enemy-spawn-requested"
+  | "weapon-sound-requested"
   | "reward-observation-requested"
   | "pickup-collection-requested"
   | "active-skill-ready-requested"
@@ -144,6 +147,8 @@ export default function NfoOfflinePrototype() {
   const [smokeEnemyObserved, setSmokeEnemyObserved] = useState(false);
   const [smokeRewardObserved, setSmokeRewardObserved] = useState(false);
   const [smokePickupCollectionObserved, setSmokePickupCollectionObserved] = useState(false);
+  const [smokeWeaponSoundObserved, setSmokeWeaponSoundObserved] = useState(false);
+  const [smokeWeaponSoundEventName, setSmokeWeaponSoundEventName] = useState("");
   const [smokePickupSoundObserved, setSmokePickupSoundObserved] = useState(false);
   const [smokePickupSoundEventName, setSmokePickupSoundEventName] = useState("");
   const [smokeActiveSkillEffectObserved, setSmokeActiveSkillEffectObserved] = useState(false);
@@ -169,6 +174,8 @@ export default function NfoOfflinePrototype() {
     setSmokeEnemyObserved(false);
     setSmokeRewardObserved(false);
     setSmokePickupCollectionObserved(false);
+    setSmokeWeaponSoundObserved(false);
+    setSmokeWeaponSoundEventName("");
     setSmokePickupSoundObserved(false);
     setSmokePickupSoundEventName("");
     setSmokeActiveSkillEffectObserved(false);
@@ -258,6 +265,17 @@ export default function NfoOfflinePrototype() {
       setSmokePickupCollectionObserved(true);
     }
   }, [hud, smokeMode, smokePickupCollectionObserved]);
+
+  useEffect(() => {
+    if (!smokeMode || smokeWeaponSoundObserved || !hud) {
+      return;
+    }
+
+    if (hud.latestWeaponSoundEventName) {
+      setSmokeWeaponSoundObserved(true);
+      setSmokeWeaponSoundEventName(hud.latestWeaponSoundEventName);
+    }
+  }, [hud, smokeMode, smokeWeaponSoundObserved]);
 
   useEffect(() => {
     if (!smokeMode || smokePickupSoundObserved || !hud) {
@@ -679,6 +697,12 @@ export default function NfoOfflinePrototype() {
         return;
       }
 
+      if (!smokeWeaponSoundObserved) {
+        setSmokeInteractionState("weapon-sound-requested");
+        sceneActionsRef.current.advanceUntilWeaponSound();
+        return;
+      }
+
       if (!smokeRewardObserved) {
         setSmokeInteractionState("reward-observation-requested");
         sceneActionsRef.current.advanceSmokeFrames(60);
@@ -738,6 +762,20 @@ export default function NfoOfflinePrototype() {
       }
 
       sceneActionsRef.current.advanceSmokeFrames(12);
+      return;
+    }
+
+    if (
+      smokeInteractionState === "weapon-sound-requested"
+      && sceneActionsRef.current
+      && hud?.status === "playing"
+    ) {
+      if (smokeWeaponSoundObserved) {
+        setSmokeInteractionState("waiting-scene");
+        return;
+      }
+
+      sceneActionsRef.current.advanceUntilWeaponSound();
       return;
     }
 
@@ -847,6 +885,7 @@ export default function NfoOfflinePrototype() {
     smokePickupCollectionObserved,
     smokePickupSoundObserved,
     smokeRewardObserved,
+    smokeWeaponSoundObserved,
     unlockAll,
     upgradeCoin,
     upgradeView?.nextUpgrade,
@@ -920,6 +959,8 @@ export default function NfoOfflinePrototype() {
         data-nfo-pickup-count={hud?.pickups ?? 0}
         data-nfo-collected-exp={hud?.collectedExp ?? 0}
         data-nfo-collected-coin={hud?.collectedCoin ?? 0}
+        data-nfo-weapon-sound-observed={smokeWeaponSoundObserved ? "1" : "0"}
+        data-nfo-weapon-sound-event-name={smokeWeaponSoundEventName}
         data-nfo-pickup-collected={smokePickupCollectionObserved ? "1" : "0"}
         data-nfo-pickup-sound-observed={smokePickupSoundObserved ? "1" : "0"}
         data-nfo-pickup-sound-event-name={smokePickupSoundEventName}
@@ -931,6 +972,7 @@ export default function NfoOfflinePrototype() {
         data-nfo-latest-sound-event-name={hud?.latestSoundEventName ?? ""}
         data-nfo-latest-sound-event-source-type={hud?.latestSoundEventSourceType ?? ""}
         data-nfo-active-skill-sound-event-name={hud?.activeSkillSoundEventName ?? ""}
+        data-nfo-latest-weapon-sound-event-name={hud?.latestWeaponSoundEventName ?? ""}
         data-nfo-latest-pickup-sound-event-name={hud?.latestPickupSoundEventName ?? ""}
         data-nfo-active-skill-id={hud?.activeSkillId ?? 0}
         data-nfo-active-skill-charge-frames={hud?.activeSkillChargeFrames ?? 0}
@@ -1325,6 +1367,22 @@ function createNfoPrototypeSceneClass({
         advanceSmokeFrames: (frameCount) => {
           advanceSimulationFrames(frameCount, { useActiveSkill: false });
         },
+        advanceUntilWeaponSound: () => {
+          if (simState.status !== "playing") {
+            return;
+          }
+
+          simState = advanceUntilSoundEventSource(
+            simState,
+            runtimeData,
+            inputState,
+            "weapon",
+          );
+          if (this.graphics) {
+            drawScene(this.graphics, simState);
+          }
+          reportHud(toHudSnapshot(simState));
+        },
         collectNearestPickup: () => {
           if (simState.status !== "playing") {
             return;
@@ -1670,6 +1728,7 @@ function toHudSnapshot(state: NfoSimulationState): HudSnapshot {
   const latestFullScreenEffect = state.fullScreenEffects.at(-1);
   const latestSoundEvent = state.soundEvents.at(-1);
   const latestActiveSkillSoundEvent = getLatestSoundEventBySourceType(state, "activeSkill");
+  const latestWeaponSoundEvent = getLatestSoundEventBySourceType(state, "weapon");
   const latestPickupSoundEvent = getLatestSoundEventBySourceType(state, "pickup");
 
   return {
@@ -1714,8 +1773,41 @@ function toHudSnapshot(state: NfoSimulationState): HudSnapshot {
     latestSoundEventName: latestSoundEvent?.name ?? "",
     latestSoundEventSourceType: latestSoundEvent?.sourceType ?? "",
     activeSkillSoundEventName: latestActiveSkillSoundEvent?.name ?? "",
+    latestWeaponSoundEventName: latestWeaponSoundEvent?.name ?? "",
     latestPickupSoundEventName: latestPickupSoundEvent?.name ?? "",
   };
+}
+
+function advanceUntilSoundEventSource(
+  state: NfoSimulationState,
+  runtimeData: NfoOfflineRuntimeData,
+  inputState: NfoInputState,
+  sourceType: NfoSimulationState["soundEvents"][number]["sourceType"],
+  maxFrames = 90,
+): NfoSimulationState {
+  let nextState = state;
+
+  for (
+    let frameIndex = 0;
+    frameIndex < maxFrames && nextState.status === "playing";
+    frameIndex += 1
+  ) {
+    nextState = updateNfoSimulation(
+      nextState,
+      runtimeData,
+      {
+        ...inputState,
+        useActiveSkill: false,
+      },
+      1 / 30,
+    );
+
+    if (getLatestSoundEventBySourceType(nextState, sourceType)) {
+      break;
+    }
+  }
+
+  return nextState;
 }
 
 function collectNearestPickupThroughSimulation(

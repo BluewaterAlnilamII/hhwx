@@ -377,11 +377,12 @@ Current playable prototype:
   smoke-only selection switch to CN character `110` / active skill `110`, `Coin
   +500`, global-upgrade purchase, smoke-only movement input, active-skill input,
   and `Quick clear` paths, uses the same simulation update path to step the live
-  run until enemy spawning is observed, waits for combat activity, then
-  continues stepping until a concrete reward signal appears through enemy
-  defeat, dropped pickup, EXP gain, or score. It then uses a smoke-only scene
-  action that advances the normal simulation with movement input toward the
-  nearest pickup until collection occurs, and asserts the pickup sound event
+  run until enemy spawning is observed, waits for combat activity, advances the
+  same simulation until the selected weapon produces a `weaponFireSE` sound
+  event, then continues stepping until a concrete reward signal appears through
+  enemy defeat, dropped pickup, EXP gain, or score. It then uses a smoke-only
+  scene action that advances the normal simulation with movement input toward
+  the nearest pickup until collection occurs, and asserts the pickup sound event
   `se_coin` through the hidden smoke marker before clearing. Before clearing, it
   advances the active-skill timeline far enough to observe the skill `110`
   shooter/VFX path and asserts `UIefx_flash_starlight` and `active_110` through
@@ -788,10 +789,11 @@ The serializable sound metadata path now also records CN
 `WeaponData.weaponFireSE` when a selected or minion-owned weapon actually fires,
 and `ItemData.itemGetSE` when a pickup is collected. The current implementation
 preserves these sound names as short-lived simulation events and exposes them to
-the NFO page HUD/smoke state. The browser smoke now locks active skill `110`'s
-CN `PlaySoundName = active_110` and a collected pickup's `itemGetSE = se_coin`
-through the rendered page; browser audio playback, mixer behavior, and audio
-bundle conversion remain pending.
+the NFO page HUD/smoke state. The browser smoke now verifies that the selected
+weapon's fire path produces a non-empty weapon sound event, and locks active
+skill `110`'s CN `PlaySoundName = active_110` plus a collected pickup's
+`itemGetSE = se_coin` through the rendered page; browser audio playback, mixer
+behavior, and audio bundle conversion remain pending.
 Active skill `110` / `Ultimate Heart Light` now locks the active-skill level
 switch for its starlight shooters: level `1` creates shooter `6000`, level `2`
 creates shooter `6001`, and level `3` creates shooter `6002`. Each level's
