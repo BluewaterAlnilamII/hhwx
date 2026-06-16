@@ -3561,6 +3561,14 @@ function canBulletHitPlayer(
   state: NfoSimulationState,
 ): boolean {
   if (
+    bullet.canDamagePlayer
+    && bullet.dealsDamage
+    && state.player.damageCooldownSeconds > 0
+  ) {
+    return false;
+  }
+
+  if (
     bullet.damageJudgeType === NFO_BULLET_DAMAGE_JUDGE_TYPE.oncePerEnemy
     && bullet.hasHitPlayer
   ) {
@@ -4513,7 +4521,7 @@ function resolveCollisions(
             bullet.damage,
             {
               counterTarget: findNearestEnemy(state, state.player),
-              applyDamageCooldown: false,
+              applyDamageCooldown: true,
             },
           );
         }

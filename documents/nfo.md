@@ -1421,7 +1421,10 @@ Weapon behavior staging:
   with counter bullets sourced from buff `FireBulletDatas`. CN weapon `23`,
   weapon `25`, and CN AI `44` bullet `99` are now locked by parity tests for
   shield absorption, counter absorption, charge consumption, and counter bullet
-  `27` creation. This preserves the observed CN data shape
+  `27` creation. Hostile player-damaging bullets now also trigger and respect
+  the same normal player damage cooldown as enemy contact, so overlapping
+  hostile bullets cannot drain multiple HP chunks during one cooldown window.
+  This preserves the observed CN data shape
   without claiming native timing, animation, or fixed-point parity. Type `2`
   stun and type `3` freeze buffs now disable affected enemy movement while
   active, with CN weapon `17` and weapon `15` locked as direct-field parity

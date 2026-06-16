@@ -154,6 +154,10 @@ const TESTS: Array<{ name: string; run: () => void }> = [
     run: testEnemyAIFireBulletsDamagePlayer,
   },
   {
+    name: "player damage cooldown gates hostile bullet damage",
+    run: testPlayerDamageCooldownGatesHostileBulletDamage,
+  },
+  {
     name: "enemy AI idle state does not chase while firing",
     run: testEnemyAIIdleStateDoesNotChaseWhileFiring,
   },
@@ -1666,6 +1670,79 @@ function testEnemyAIFireBulletsDamagePlayer() {
   assert.equal(nextState.bullets[0]?.canDamagePlayer, true);
   assert.equal(nextState.player.hp, baseState.player.hp - 7);
   assertCooldown(nextState.enemies[0]?.aiFireCooldownSeconds ?? 0, 1);
+}
+
+function testPlayerDamageCooldownGatesHostileBulletDamage() {
+  const runtimeData = createRuntimeFixture();
+  const baseState = createNfoSimulation(runtimeData);
+  const hostileBullet = (id: number) => createSimBulletFixture({
+    id,
+    x: baseState.player.x,
+    y: baseState.player.y,
+    damage: 5,
+    canDamagePlayer: true,
+    hitTargetType: 1,
+    radius: baseState.player.radius + 5,
+    colliderWidth: (baseState.player.radius + 5) * 2,
+    colliderLength: (baseState.player.radius + 5) * 2,
+    remainingSeconds: 2,
+    remainingHits: 1,
+  });
+  const armedState = {
+    ...baseState,
+    player: {
+      ...baseState.player,
+      hp: 20,
+      maxHp: 20,
+      defense: 0,
+      damageCooldownSeconds: 0,
+      fireCooldownSeconds: 999,
+      activeBuffs: [],
+    },
+    enemies: [],
+    bullets: [
+      hostileBullet(910001),
+      hostileBullet(910002),
+    ],
+  };
+
+  const firstHitState = updateNfoSimulation(
+    armedState,
+    runtimeData,
+    NO_INPUT,
+    0,
+  );
+
+  assert.equal(firstHitState.player.hp, 15);
+  assertCooldown(firstHitState.player.damageCooldownSeconds, 0.8);
+  assert.equal(
+    firstHitState.bullets.find((bullet) => bullet.id === 910002)?.remainingHits,
+    1,
+  );
+
+  const gatedState = updateNfoSimulation(
+    firstHitState,
+    runtimeData,
+    NO_INPUT,
+    0.4,
+  );
+
+  assert.equal(gatedState.player.hp, 15);
+  assertClose(gatedState.player.damageCooldownSeconds, 0.4, "damage cooldown");
+  assert.equal(
+    gatedState.bullets.find((bullet) => bullet.id === 910002)?.remainingHits,
+    1,
+  );
+
+  const cooledState = updateNfoSimulation(
+    gatedState,
+    runtimeData,
+    NO_INPUT,
+    0.4,
+  );
+
+  assert.equal(cooledState.player.hp, 10);
+  assertCooldown(cooledState.player.damageCooldownSeconds, 0.8);
 }
 
 function testEnemyAIIdleStateDoesNotChaseWhileFiring() {
