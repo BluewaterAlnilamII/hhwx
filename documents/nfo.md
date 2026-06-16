@@ -362,9 +362,11 @@ Current playable prototype:
   maps non-local hostnames to `0.0.0.0` while allowing localhost, waits for the
   client runtime to render the Phaser canvas, runs the same local `Unlock all`,
   `Coin +500`, global-upgrade purchase, active-skill input, and `Quick clear`
-  paths, and verifies the hidden smoke marker reaches `complete`. Use
+  paths, verifies the hidden smoke marker reaches `complete`, and writes a
+  screenshot to `temp/nfo-smoke-browser.png` with a nonblank PNG check. Use
   `NFO_SMOKE_BROWSER_BIN=/path/to/chrome` when the browser binary is not
-  auto-detected.
+  auto-detected, or `NFO_SMOKE_SCREENSHOT_PATH=...` to write the visual evidence
+  somewhere else.
 
 - run a production-server smoke after `npm run build` when validating an
   independently deployable artifact:
@@ -677,7 +679,8 @@ npm run smoke:nfo:prod
 ```
 
 This command starts `next start` on port `3118` by default, reuses the same
-full browser smoke against that production server, and then stops the server.
+full browser smoke and screenshot/nonblank check against that production server,
+and then stops the server.
 
 The full browser smoke uses a temporary browser profile, so it does not alter
 the user's normal browser save data. It also executes the local unlock, coin,

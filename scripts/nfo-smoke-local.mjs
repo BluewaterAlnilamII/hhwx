@@ -1,9 +1,10 @@
 import { execFile } from "node:child_process";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
+import { inflateSync } from "node:zlib";
 
 const DEFAULT_BASE_URL = "http://localhost:3117";
 const EXPECTED_RUNTIME_PATH =
@@ -29,6 +30,7 @@ function parseArgs(argv) {
     timeoutMs: Number(process.env.NFO_SMOKE_TIMEOUT_MS || 15000),
     browserBin: process.env.NFO_SMOKE_BROWSER_BIN || "",
     browserVirtualTimeMs: Number(process.env.NFO_SMOKE_BROWSER_VIRTUAL_TIME_MS || 12000),
+    screenshotPath: process.env.NFO_SMOKE_SCREENSHOT_PATH || "temp/nfo-smoke-browser.png",
     skipBrowser: process.env.NFO_SMOKE_SKIP_BROWSER === "1",
   };
 
@@ -42,6 +44,8 @@ function parseArgs(argv) {
       args.browserBin = argv[++index];
     } else if (arg === "--browser-virtual-time-ms") {
       args.browserVirtualTimeMs = Number(argv[++index]);
+    } else if (arg === "--screenshot-path") {
+      args.screenshotPath = argv[++index];
     } else if (arg === "--skip-browser") {
       args.skipBrowser = true;
     } else if (arg === "--help") {
@@ -62,6 +66,7 @@ function parseArgs(argv) {
   return {
     ...args,
     baseUrl: new URL(args.baseUrl).toString(),
+    screenshotPath: path.resolve(args.screenshotPath),
   };
 }
 
@@ -71,6 +76,7 @@ function printUsage() {
   npm run smoke:nfo:http
   npm run smoke:nfo -- --base-url http://localhost:3117
   npm run smoke:nfo -- --skip-browser
+  npm run smoke:nfo -- --screenshot-path temp/nfo-smoke-browser.png
   npm run smoke:nfo -- --browser-bin "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe"
 
 Checks the NFO page, local-runtime API, and deployable frozen runtime JSON
@@ -287,13 +293,197 @@ async function smokeBrowserInteraction(baseUrl, args) {
     assertSmoke(stdout.includes("Active skill"), "browser smoke did not render the active skill control");
     assertSmoke(!stdout.includes("Application error"), "browser smoke rendered an application error");
 
+    const screenshotStats = await captureAndInspectBrowserScreenshot(
+      browserBin,
+      userDataDir,
+      url,
+      args,
+    );
+
     if (stderr.trim()) {
       console.log(`note - browser stderr: ${stderr.trim().split("\n").slice(0, 3).join(" | ")}`);
     }
+    console.log(
+      `ok - browser screenshot ${path.relative(process.cwd(), args.screenshotPath)} `
+        + `${screenshotStats.width}x${screenshotStats.height} `
+        + `colors=${screenshotStats.distinctColorCount}`,
+    );
     console.log(`ok - browser interaction smoke completed via ${path.basename(browserBin)}`);
   } finally {
     await rm(userDataDir, { recursive: true, force: true });
   }
+}
+
+async function captureAndInspectBrowserScreenshot(browserBin, userDataDir, url, args) {
+  await mkdir(path.dirname(args.screenshotPath), { recursive: true });
+  await execFileAsync(
+    browserBin,
+    [
+      "--headless=new",
+      "--disable-gpu",
+      "--disable-background-networking",
+      "--disable-dev-shm-usage",
+      `--host-resolver-rules=${LOCAL_ONLY_HOST_RESOLVER_RULES}`,
+      "--no-first-run",
+      "--no-default-browser-check",
+      `--user-data-dir=${userDataDir}`,
+      "--window-size=1280,900",
+      `--virtual-time-budget=${args.browserVirtualTimeMs}`,
+      `--screenshot=${args.screenshotPath}`,
+      url,
+    ],
+    {
+      timeout: args.timeoutMs + args.browserVirtualTimeMs + 5000,
+      maxBuffer: 10 * 1024 * 1024,
+    },
+  );
+
+  const stats = inspectPngScreenshot(await readFile(args.screenshotPath));
+  assertSmoke(
+    stats.width >= 960 && stats.height >= 540,
+    `browser screenshot was unexpectedly small: ${stats.width}x${stats.height}`,
+  );
+  assertSmoke(
+    stats.distinctColorCount >= 16 && stats.luminanceRange >= 24,
+    `browser screenshot looked blank: ${stats.distinctColorCount} colors, `
+      + `luminance range ${stats.luminanceRange}`,
+  );
+  return stats;
+}
+
+function inspectPngScreenshot(buffer) {
+  assertSmoke(buffer.length > 0, "browser screenshot file was empty");
+  assertSmoke(buffer.subarray(0, 8).equals(Buffer.from([
+    0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
+  ])), "browser screenshot was not a PNG");
+
+  let offset = 8;
+  let width = 0;
+  let height = 0;
+  let bitDepth = 0;
+  let colorType = 0;
+  const idatChunks = [];
+
+  while (offset + 12 <= buffer.length) {
+    const length = buffer.readUInt32BE(offset);
+    const type = buffer.toString("ascii", offset + 4, offset + 8);
+    const dataStart = offset + 8;
+    const dataEnd = dataStart + length;
+    assertSmoke(dataEnd + 4 <= buffer.length, `truncated PNG chunk ${type}`);
+
+    if (type === "IHDR") {
+      width = buffer.readUInt32BE(dataStart);
+      height = buffer.readUInt32BE(dataStart + 4);
+      bitDepth = buffer.readUInt8(dataStart + 8);
+      colorType = buffer.readUInt8(dataStart + 9);
+    } else if (type === "IDAT") {
+      idatChunks.push(buffer.subarray(dataStart, dataEnd));
+    } else if (type === "IEND") {
+      break;
+    }
+
+    offset = dataEnd + 4;
+  }
+
+  assertSmoke(width > 0 && height > 0, "PNG screenshot was missing IHDR dimensions");
+  assertSmoke(bitDepth === 8, `unsupported PNG bit depth ${bitDepth}`);
+  const bytesPerPixel = getPngBytesPerPixel(colorType);
+  const channelRows = inflateSync(Buffer.concat(idatChunks));
+  const stride = width * bytesPerPixel;
+  assertSmoke(
+    channelRows.length >= (stride + 1) * height,
+    "PNG screenshot pixel data was shorter than expected",
+  );
+
+  const previous = Buffer.alloc(stride);
+  const current = Buffer.alloc(stride);
+  const distinctColors = new Set();
+  let minLuminance = 255;
+  let maxLuminance = 0;
+
+  for (let y = 0; y < height; y += 1) {
+    const rowStart = y * (stride + 1);
+    const filterType = channelRows.readUInt8(rowStart);
+    const source = channelRows.subarray(rowStart + 1, rowStart + 1 + stride);
+    unfilterPngRow(filterType, source, current, previous, bytesPerPixel);
+
+    const sampleModulo = y % 8 === 0 ? 8 : 32;
+    for (let x = 0; x < width; x += sampleModulo) {
+      const offsetInRow = x * bytesPerPixel;
+      const [red, green, blue] = readPngRgb(current, offsetInRow, colorType);
+      const luminance = Math.round((red * 0.2126) + (green * 0.7152) + (blue * 0.0722));
+      minLuminance = Math.min(minLuminance, luminance);
+      maxLuminance = Math.max(maxLuminance, luminance);
+      distinctColors.add(`${red >> 4}:${green >> 4}:${blue >> 4}`);
+    }
+
+    previous.set(current);
+  }
+
+  return {
+    width,
+    height,
+    distinctColorCount: distinctColors.size,
+    luminanceRange: maxLuminance - minLuminance,
+  };
+}
+
+function getPngBytesPerPixel(colorType) {
+  if (colorType === 0) {
+    return 1;
+  }
+  if (colorType === 2) {
+    return 3;
+  }
+  if (colorType === 6) {
+    return 4;
+  }
+  throw new Error(`unsupported PNG color type ${colorType}`);
+}
+
+function unfilterPngRow(filterType, source, current, previous, bytesPerPixel) {
+  for (let index = 0; index < source.length; index += 1) {
+    const raw = source[index];
+    const left = index >= bytesPerPixel ? current[index - bytesPerPixel] : 0;
+    const up = previous[index] ?? 0;
+    const upLeft = index >= bytesPerPixel ? previous[index - bytesPerPixel] : 0;
+
+    if (filterType === 0) {
+      current[index] = raw;
+    } else if (filterType === 1) {
+      current[index] = (raw + left) & 0xff;
+    } else if (filterType === 2) {
+      current[index] = (raw + up) & 0xff;
+    } else if (filterType === 3) {
+      current[index] = (raw + Math.floor((left + up) / 2)) & 0xff;
+    } else if (filterType === 4) {
+      current[index] = (raw + paethPredictor(left, up, upLeft)) & 0xff;
+    } else {
+      throw new Error(`unsupported PNG filter type ${filterType}`);
+    }
+  }
+}
+
+function paethPredictor(left, up, upLeft) {
+  const prediction = left + up - upLeft;
+  const leftDistance = Math.abs(prediction - left);
+  const upDistance = Math.abs(prediction - up);
+  const upLeftDistance = Math.abs(prediction - upLeft);
+  if (leftDistance <= upDistance && leftDistance <= upLeftDistance) {
+    return left;
+  }
+  if (upDistance <= upLeftDistance) {
+    return up;
+  }
+  return upLeft;
+}
+
+function readPngRgb(row, offset, colorType) {
+  if (colorType === 0) {
+    const value = row[offset];
+    return [value, value, value];
+  }
+  return [row[offset], row[offset + 1], row[offset + 2]];
 }
 
 async function resolveBrowserBin(explicitPath) {
