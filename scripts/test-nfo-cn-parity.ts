@@ -55,7 +55,7 @@ async function main() {
   assert.equal(fixture.selectedWeaponDirectFireCases.length, 31);
   assert.equal(fixture.selectedActiveSkillShooterHitBuffCases.length, 7);
   assert.equal(fixture.selectedShooterOnDestroyCases.length, 2);
-  assert.equal(fixture.selectedWeaponMinionCases.length, 6);
+  assert.equal(fixture.selectedWeaponMinionCases.length, 12);
   assert.equal(fixture.selectedWeaponSelfBuffCases.length, 3);
   assert.equal(fixture.selectedActiveSkillSummonCases.length, 13);
   assert.equal(fixture.selectedAIStateTeleportCases.length, 1);
@@ -725,19 +725,75 @@ async function main() {
   assert.equal(royalGuardMinionCase.aiShooterBulletHitBuffId, 120);
   assert.equal(royalGuardMinionCase.aiShooterBulletHitBuffLevel, 1);
 
-  const royalGuardLevelUpMinionCase = getWeaponMinionCase(
-    "weapon-minion-royal-guard-spawn-level-up-lv2",
-  );
-  assert.equal(royalGuardLevelUpMinionCase.weaponId, 32);
-  assert.equal(royalGuardLevelUpMinionCase.weaponLevel, 2);
-  assert.equal(royalGuardLevelUpMinionCase.weaponType, 1);
-  assert.equal(royalGuardLevelUpMinionCase.spawnMinionId, 10);
-  assert.equal(royalGuardLevelUpMinionCase.spawnMinionAITypeId, 111);
-  assert.equal(royalGuardLevelUpMinionCase.aiStateShooterId, 15001);
-  assert.equal(royalGuardLevelUpMinionCase.aiShooterBulletTypeId, 99);
-  assert.equal(royalGuardLevelUpMinionCase.aiShooterBulletSize, 550);
-  assert.equal(royalGuardLevelUpMinionCase.aiShooterBulletNoDamage, true);
-  assert.equal(royalGuardLevelUpMinionCase.aiShooterBulletHitBuffId, 120);
+  const royalGuardLevelCases = [
+    {
+      id: "weapon-minion-royal-guard-spawn-level-up-lv2",
+      level: 2,
+      aiTypeId: 111,
+      shooterId: 15001,
+      bulletSize: 550,
+    },
+    {
+      id: "weapon-minion-royal-guard-spawn-lv3",
+      level: 3,
+      aiTypeId: 112,
+      shooterId: 15002,
+      bulletSize: 600,
+    },
+    {
+      id: "weapon-minion-royal-guard-spawn-lv4",
+      level: 4,
+      aiTypeId: 113,
+      shooterId: 15003,
+      bulletSize: 650,
+    },
+    {
+      id: "weapon-minion-royal-guard-spawn-lv5",
+      level: 5,
+      aiTypeId: 114,
+      shooterId: 15004,
+      bulletSize: 700,
+    },
+    {
+      id: "weapon-minion-royal-guard-spawn-lv6",
+      level: 6,
+      aiTypeId: 115,
+      shooterId: 15005,
+      bulletSize: 750,
+    },
+    {
+      id: "weapon-minion-royal-guard-spawn-lv7",
+      level: 7,
+      aiTypeId: 116,
+      shooterId: 15006,
+      bulletSize: 800,
+    },
+    {
+      id: "weapon-minion-royal-guard-spawn-lv8",
+      level: 8,
+      aiTypeId: 117,
+      shooterId: 15007,
+      bulletSize: 850,
+    },
+  ] as const;
+  for (const levelCase of royalGuardLevelCases) {
+    const royalGuardLevelCase = getWeaponMinionCase(levelCase.id);
+    assert.equal(royalGuardLevelCase.weaponId, 32);
+    assert.equal(royalGuardLevelCase.weaponLevel, levelCase.level);
+    assert.equal(royalGuardLevelCase.weaponType, 1);
+    assert.equal(royalGuardLevelCase.spawnMinionId, 10);
+    assert.equal(royalGuardLevelCase.spawnMinionAITypeId, levelCase.aiTypeId);
+    assert.equal(royalGuardLevelCase.spawnMinionCount, 1);
+    assert.equal(royalGuardLevelCase.spawnMinionFormation, 1);
+    assert.equal(royalGuardLevelCase.spawnRadiusMin, 4);
+    assert.equal(royalGuardLevelCase.spawnRadiusMax, 5);
+    assert.equal(royalGuardLevelCase.aiStateShooterId, levelCase.shooterId);
+    assert.equal(royalGuardLevelCase.aiShooterBulletTypeId, 99);
+    assert.equal(royalGuardLevelCase.aiShooterBulletSize, levelCase.bulletSize);
+    assert.equal(royalGuardLevelCase.aiShooterBulletNoDamage, true);
+    assert.equal(royalGuardLevelCase.aiShooterBulletHitBuffId, 120);
+    assert.equal(royalGuardLevelCase.aiShooterBulletHitBuffLevel, 1);
+  }
 
   const rotationCase = getShooterRotationCase("boss-shooter-rotation-type-2");
   assert.equal(rotationCase.shooterId, 2100);
@@ -2370,6 +2426,7 @@ async function main() {
   testCnWeaponLevelMinionCount(runtimeData);
   testCnWeaponLevelSpawnMinionData(runtimeData);
   testCnWeaponSpawnMinionLevelUpSwitchesAI(runtimeData);
+  testCnWeaponRoyalGuardMaxLevelSpawnMinionAI(runtimeData);
   testCnShooterDirectionTwoFriendlyTargetAndRotation(runtimeData);
   testCnShooterOnDestroyEventBullet(runtimeData);
   testCnActiveSkillShooterSpawnPosThreeNearestEnemy(runtimeData);
@@ -6878,6 +6935,69 @@ function testCnWeaponSpawnMinionLevelUpSwitchesAI(sourceRuntimeData: NfoOfflineR
   assert.equal(bullet.colliderWidth, levelTwoCase.aiShooterBulletSize);
   assert.equal(bullet.hitBuffId, levelTwoCase.aiShooterBulletHitBuffId);
   assert.equal(bullet.hitBuffLevel, levelTwoCase.aiShooterBulletHitBuffLevel);
+}
+
+function testCnWeaponRoyalGuardMaxLevelSpawnMinionAI(sourceRuntimeData: NfoOfflineRuntimeData) {
+  const levelEightCase = getWeaponMinionCase("weapon-minion-royal-guard-spawn-lv8");
+  const testRuntimeData = configureRuntimeForWeapon(sourceRuntimeData);
+  const minionData = testRuntimeData.minions.find((candidate) => (
+    candidate.id === levelEightCase.minionId
+  ));
+  assert.ok(minionData);
+  minionData.speed = 0;
+
+  const baseState = createNfoSimulation(testRuntimeData, { weaponId: levelEightCase.weaponId });
+  const spawnState = updateNfoSimulation(
+    {
+      ...baseState,
+      player: {
+        ...baseState.player,
+        expIntoLevel: 0,
+        expToNextLevel: 0,
+        fireCooldownSeconds: 0,
+        weaponLevel: levelEightCase.weaponLevel,
+      },
+    },
+    testRuntimeData,
+    NO_INPUT,
+    0,
+  );
+  const minion = spawnState.minions.find((candidate) => (
+    candidate.minionId === levelEightCase.minionId
+  ));
+  assert.ok(minion, "expected CN weapon 32 level 8 to spawn minion 10");
+  assert.equal(spawnState.minions.length, levelEightCase.minionCount);
+  assert.equal(minion.aiTypeId, levelEightCase.spawnMinionAITypeId);
+  assert.equal(minion.weaponId, levelEightCase.weaponId);
+  assert.equal(minion.weaponLevel, levelEightCase.weaponLevel);
+  assert.equal(minion.canFireOwnWeapon, false);
+  assert.equal(spawnState.bullets.length, 0);
+  assert.equal(spawnState.activeShooters.length, 0);
+  assertClose(
+    Math.hypot(minion.x - baseState.player.x, minion.y - baseState.player.y),
+    (levelEightCase.spawnRadiusMin + levelEightCase.spawnRadiusMax) / 2,
+    "CN weapon 32 level 8 spawn radius",
+  );
+
+  const shooterState = updateNfoSimulation(spawnState, testRuntimeData, NO_INPUT, 0);
+  const shooter = shooterState.activeShooters.find((candidate) => (
+    candidate.shooterId === levelEightCase.aiStateShooterId
+  ));
+  assert.ok(shooter, "expected CN weapon 32 level 8 minion AI to create shooter 15007");
+  assert.equal(shooter.sourceTeam, "player");
+  assertClose(shooter.x, minion.x, "CN weapon 32 level 8 shooter x");
+  assertClose(shooter.y, minion.y, "CN weapon 32 level 8 shooter y");
+
+  const firedState = updateNfoSimulation(shooterState, testRuntimeData, NO_INPUT, 1 / 30);
+  const bullet = firedState.bullets.find((candidate) => (
+    candidate.bulletTypeId === levelEightCase.aiShooterBulletTypeId
+  ));
+  assert.ok(bullet, "expected CN shooter 15007 to emit taunt bullet 99");
+  assert.equal(bullet.canDamagePlayer, false);
+  assert.equal(bullet.dealsDamage, false);
+  assert.equal(bullet.colliderWidth, levelEightCase.aiShooterBulletSize);
+  assert.equal(bullet.hitBuffId, levelEightCase.aiShooterBulletHitBuffId);
+  assert.equal(bullet.hitBuffLevel, levelEightCase.aiShooterBulletHitBuffLevel);
 }
 
 function testCnShooterDirectionTwoFriendlyTargetAndRotation(
