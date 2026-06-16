@@ -53,6 +53,8 @@ type HudSnapshot = {
   collectedExp: number;
   collectedCoin: number;
   score: number;
+  playerX: number;
+  playerY: number;
   attack: number;
   defense: number;
   speed: number;
@@ -82,6 +84,7 @@ type NfoSceneActions = {
   forceClear: () => void;
   activateActiveSkill: () => void;
   readyActiveSkill: () => void;
+  startSmokeMove: () => void;
 };
 
 type SmokeInteractionState =
@@ -90,6 +93,7 @@ type SmokeInteractionState =
   | "unlock-requested"
   | "coin-requested"
   | "upgrade-requested"
+  | "movement-requested"
   | "active-skill-ready-requested"
   | "active-skill-requested"
   | "waiting-scene"
@@ -117,6 +121,8 @@ export default function NfoOfflinePrototype() {
   const [smokeInteractionState, setSmokeInteractionState] =
     useState<SmokeInteractionState>("off");
   const [smokeActiveSkillObserved, setSmokeActiveSkillObserved] = useState(false);
+  const [smokeMovementObserved, setSmokeMovementObserved] = useState(false);
+  const smokeMovementStartRef = useRef<{ x: number; y: number } | null>(null);
   const runtimeData = runtimeState.status === "ready" ? runtimeState.data : null;
   const paidGlobalUpgradeIds = saveState?.paidGlobalUpgradeIds ?? EMPTY_NUMBER_ARRAY;
   const paidGlobalUpgradeCount = paidGlobalUpgradeIds.length;
@@ -128,6 +134,8 @@ export default function NfoOfflinePrototype() {
     setSmokeMode(enabled);
     setSmokeInteractionState(enabled ? "waiting-runtime" : "off");
     setSmokeActiveSkillObserved(false);
+    setSmokeMovementObserved(false);
+    smokeMovementStartRef.current = null;
   }, []);
 
   useEffect(() => {
@@ -135,6 +143,20 @@ export default function NfoOfflinePrototype() {
       setSmokeActiveSkillObserved(true);
     }
   }, [hud?.activeSkillActive, smokeMode]);
+
+  useEffect(() => {
+    if (!smokeMode || smokeMovementObserved || !smokeMovementStartRef.current || !hud) {
+      return;
+    }
+
+    const distance = Math.hypot(
+      hud.playerX - smokeMovementStartRef.current.x,
+      hud.playerY - smokeMovementStartRef.current.y,
+    );
+    if (distance >= 8) {
+      setSmokeMovementObserved(true);
+    }
+  }, [hud, smokeMode, smokeMovementObserved]);
 
   useEffect(() => {
     let cancelled = false;
@@ -490,6 +512,16 @@ export default function NfoOfflinePrototype() {
       && sceneActionsRef.current
       && hud?.status === "playing"
     ) {
+      if (!smokeMovementObserved) {
+        smokeMovementStartRef.current = {
+          x: hud.playerX,
+          y: hud.playerY,
+        };
+        setSmokeInteractionState("movement-requested");
+        sceneActionsRef.current.startSmokeMove();
+        return;
+      }
+
       if (!smokeActiveSkillObserved && hud.activeSkillId > 0) {
         if (hud.activeSkillChargeFrames < hud.activeSkillChargeMaxFrames) {
           setSmokeInteractionState("active-skill-ready-requested");
@@ -504,6 +536,14 @@ export default function NfoOfflinePrototype() {
 
       setSmokeInteractionState("quick-clear-requested");
       quickClear();
+      return;
+    }
+
+    if (
+      smokeInteractionState === "movement-requested"
+      && smokeMovementObserved
+    ) {
+      setSmokeInteractionState("waiting-scene");
       return;
     }
 
@@ -545,6 +585,8 @@ export default function NfoOfflinePrototype() {
     hud?.activeSkillChargeFrames,
     hud?.activeSkillChargeMaxFrames,
     hud?.activeSkillId,
+    hud?.playerX,
+    hud?.playerY,
     hud?.status,
     paidGlobalUpgradeCount,
     quickClear,
@@ -555,6 +597,7 @@ export default function NfoOfflinePrototype() {
     smokeActiveSkillObserved,
     smokeAllUnlocked,
     smokeInteractionState,
+    smokeMovementObserved,
     smokeMode,
     unlockAll,
     upgradeCoin,
@@ -614,6 +657,9 @@ export default function NfoOfflinePrototype() {
         data-nfo-runtime-status={runtimeState.status}
         data-nfo-save-ready={saveState ? "1" : "0"}
         data-nfo-hud-status={hud?.status ?? "none"}
+        data-nfo-player-x={hud?.playerX ?? 0}
+        data-nfo-player-y={hud?.playerY ?? 0}
+        data-nfo-player-moved={smokeMovementObserved ? "1" : "0"}
         data-nfo-full-screen-effect-count={hud?.fullScreenEffectCount ?? 0}
         data-nfo-full-screen-effect-name={hud?.fullScreenEffectName ?? ""}
         data-nfo-active-skill-id={hud?.activeSkillId ?? 0}
@@ -912,6 +958,7 @@ function createNfoPrototypeSceneClass({
   });
   let lastHudUpdate = 0;
   let runResultReported = false;
+  let smokeMoveFrames = 0;
 
   return class NfoPrototypeScene extends Phaser.Scene {
     private graphics?: import("phaser").GameObjects.Graphics;
@@ -936,7 +983,21 @@ function createNfoPrototypeSceneClass({
           }
         },
         activateActiveSkill: () => {
-          inputState.useActiveSkill = true;
+          if (simState.status !== "playing" || simState.activeSkill.id <= 0) {
+            return;
+          }
+
+          simState = updateNfoSimulation(
+            simState,
+            runtimeData,
+            { ...inputState, useActiveSkill: true },
+            0,
+          );
+          inputState.useActiveSkill = false;
+          if (this.graphics) {
+            drawScene(this.graphics, simState);
+          }
+          reportHud(toHudSnapshot(simState));
         },
         readyActiveSkill: () => {
           if (simState.status !== "playing" || simState.activeSkill.id <= 0) {
@@ -951,6 +1012,9 @@ function createNfoPrototypeSceneClass({
             },
           };
           reportHud(toHudSnapshot(simState));
+        },
+        startSmokeMove: () => {
+          smokeMoveFrames = Math.max(smokeMoveFrames, 24);
         },
       });
       this.input.keyboard?.on("keydown", (event: KeyboardEvent) => {
@@ -968,6 +1032,12 @@ function createNfoPrototypeSceneClass({
         || keys.has("Space")
         || keys.has("KeyE");
       updateInputState(keys, inputState);
+      const requestedSmokeMove = smokeMoveFrames > 0;
+      if (requestedSmokeMove) {
+        inputState.moveX = 1;
+        inputState.moveY = 0;
+        smokeMoveFrames -= 1;
+      }
       simState = updateNfoSimulation(
         simState,
         runtimeData,
@@ -979,6 +1049,7 @@ function createNfoPrototypeSceneClass({
 
       if (
         requestedActiveSkill
+        || requestedSmokeMove
         || simState.activeSkill.isActive
         || time - lastHudUpdate > 120
         || simState.status !== "playing"
@@ -1272,6 +1343,8 @@ function toHudSnapshot(state: NfoSimulationState): HudSnapshot {
     collectedExp: state.collectedExp,
     collectedCoin: state.collectedCoin,
     score: state.score,
+    playerX: state.player.x,
+    playerY: state.player.y,
     attack: state.player.attack,
     defense: state.player.defense,
     speed: state.player.speed,

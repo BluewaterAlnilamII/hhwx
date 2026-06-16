@@ -94,6 +94,10 @@ const TESTS: Array<{ name: string; run: () => void }> = [
     run: testDebugUnlockAllContent,
   },
   {
+    name: "movement input moves the player and updates facing",
+    run: testMovementInputMovesPlayerAndUpdatesFacing,
+  },
+  {
     name: "selected equip attributes apply to player stats",
     run: testSelectedEquipAttributes,
   },
@@ -1254,6 +1258,22 @@ function testSelectedEquipAttributes() {
   assert.equal(equippedState.player.attack, baseState.player.attack + 5);
   assert.equal(equippedState.player.speed, baseState.player.speed + 50);
   assert.equal(equippedState.player.defense, baseState.player.defense);
+}
+
+function testMovementInputMovesPlayerAndUpdatesFacing() {
+  const runtimeData = createRuntimeFixture();
+  const baseState = createNfoSimulation(runtimeData, { equipIds: [] });
+  const movedState = updateNfoSimulation(
+    baseState,
+    runtimeData,
+    { ...NO_INPUT, moveX: 1 },
+    0.25,
+  );
+
+  assert.equal(movedState.status, "playing");
+  assert.ok(movedState.player.x > baseState.player.x, "player should move right");
+  assertClose(movedState.player.y, baseState.player.y, "player y");
+  assertClose(movedState.player.facingAngle, 0, "player facing angle");
 }
 
 function testSelectedEquipWeaponModifiers() {

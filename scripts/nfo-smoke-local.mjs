@@ -22,6 +22,7 @@ export const LIVE_NFO_ENDPOINT_MARKERS = [
 ];
 const LOCAL_ONLY_HOST_RESOLVER_RULES =
   "MAP * 0.0.0.0, EXCLUDE localhost, EXCLUDE 127.0.0.1, EXCLUDE ::1";
+const DEFAULT_BROWSER_VIRTUAL_TIME_MS = 30000;
 const execFileAsync = promisify(execFile);
 
 function parseArgs(argv) {
@@ -29,7 +30,9 @@ function parseArgs(argv) {
     baseUrl: process.env.NFO_SMOKE_BASE_URL || DEFAULT_BASE_URL,
     timeoutMs: Number(process.env.NFO_SMOKE_TIMEOUT_MS || 15000),
     browserBin: process.env.NFO_SMOKE_BROWSER_BIN || "",
-    browserVirtualTimeMs: Number(process.env.NFO_SMOKE_BROWSER_VIRTUAL_TIME_MS || 12000),
+    browserVirtualTimeMs: Number(
+      process.env.NFO_SMOKE_BROWSER_VIRTUAL_TIME_MS || DEFAULT_BROWSER_VIRTUAL_TIME_MS,
+    ),
     screenshotPath: process.env.NFO_SMOKE_SCREENSHOT_PATH || "temp/nfo-smoke-browser.png",
     skipBrowser: process.env.NFO_SMOKE_SKIP_BROWSER === "1",
   };
@@ -259,6 +262,16 @@ async function smokeBrowserInteraction(baseUrl, args) {
     assertSmoke(
       readHtmlAttribute(smokeTag, "data-nfo-all-unlocked") === "1",
       "browser smoke did not unlock all local content",
+    );
+    const playerX = Number(readHtmlAttribute(smokeTag, "data-nfo-player-x"));
+    const playerY = Number(readHtmlAttribute(smokeTag, "data-nfo-player-y"));
+    assertSmoke(
+      Number.isFinite(playerX) && Number.isFinite(playerY),
+      "browser smoke did not expose the player position",
+    );
+    assertSmoke(
+      readHtmlAttribute(smokeTag, "data-nfo-player-moved") === "1",
+      "browser smoke did not move the player",
     );
     const paidUpgradeCount = Number(readHtmlAttribute(smokeTag, "data-nfo-paid-upgrade-count"));
     const upgradeTotalCount = Number(readHtmlAttribute(smokeTag, "data-nfo-upgrade-total-count"));
