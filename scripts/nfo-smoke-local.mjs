@@ -14,6 +14,9 @@ const STATIC_RUNTIME_URL_PATH =
   "/res/bandori/nfo/cn/Android-2.1.1/runtime-data/master-data.json";
 const EXPECTED_SMOKE_ACTIVE_SKILL_CHARACTER_ID = 110;
 const EXPECTED_SMOKE_ACTIVE_SKILL_ID = 110;
+const EXPECTED_SMOKE_TERRAIN_LEVEL_ID = 14;
+const EXPECTED_SMOKE_TERRAIN_MAP_PREFAB_NAME = "Map_09";
+const EXPECTED_SMOKE_TERRAIN_PIT_COUNT = 246;
 const EXPECTED_SMOKE_DARK_ORB_WEAPON_ID = 5;
 const EXPECTED_SMOKE_GUARDIAN_SONG_WEAPON_ID = 6;
 const EXPECTED_SMOKE_ACTIVE_SKILL_EFFECT_NAME = "UIefx_flash_starlight";
@@ -300,6 +303,42 @@ async function smokeBrowserInteraction(baseUrl, args) {
       selectedWeaponId === EXPECTED_SMOKE_GUARDIAN_SONG_WEAPON_ID,
       `browser smoke selected weapon ${selectedWeaponId}, expected `
         + `${EXPECTED_SMOKE_GUARDIAN_SONG_WEAPON_ID}`,
+    );
+    const selectedLevelId = Number(
+      readHtmlAttribute(smokeTag, "data-nfo-selected-level-id"),
+    );
+    assertSmoke(
+      selectedLevelId === EXPECTED_SMOKE_TERRAIN_LEVEL_ID,
+      `browser smoke selected level ${selectedLevelId}, expected `
+        + `${EXPECTED_SMOKE_TERRAIN_LEVEL_ID}`,
+    );
+    assertSmoke(
+      readHtmlAttribute(smokeTag, "data-nfo-selected-map-prefab-name")
+        === EXPECTED_SMOKE_TERRAIN_MAP_PREFAB_NAME,
+      "browser smoke did not select the expected terrain map prefab",
+    );
+    const runtimeMapPitCount = Number(
+      readHtmlAttribute(smokeTag, "data-nfo-runtime-map-pit-count"),
+    );
+    const terrainPitCount = Number(
+      readHtmlAttribute(smokeTag, "data-nfo-terrain-pit-count"),
+    );
+    const worldWidth = Number(readHtmlAttribute(smokeTag, "data-nfo-world-width"));
+    const worldHeight = Number(readHtmlAttribute(smokeTag, "data-nfo-world-height"));
+    assertSmoke(
+      runtimeMapPitCount === EXPECTED_SMOKE_TERRAIN_PIT_COUNT,
+      `browser smoke runtime pit count ${runtimeMapPitCount}, expected `
+        + `${EXPECTED_SMOKE_TERRAIN_PIT_COUNT}`,
+    );
+    assertSmoke(
+      terrainPitCount === EXPECTED_SMOKE_TERRAIN_PIT_COUNT,
+      `browser smoke terrain pit count ${terrainPitCount}, expected `
+        + `${EXPECTED_SMOKE_TERRAIN_PIT_COUNT}`,
+    );
+    assertSmoke(
+      Number.isFinite(worldWidth) && worldWidth > 0
+        && Number.isFinite(worldHeight) && worldHeight > 0,
+      "browser smoke did not expose positive terrain world bounds",
     );
     const playerX = Number(readHtmlAttribute(smokeTag, "data-nfo-player-x"));
     const playerY = Number(readHtmlAttribute(smokeTag, "data-nfo-player-y"));

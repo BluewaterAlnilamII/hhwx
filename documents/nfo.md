@@ -374,18 +374,21 @@ Current playable prototype:
   The full smoke opens the page in headless Chrome/Edge with `?nfoSmoke=1`,
   maps non-local hostnames to `0.0.0.0` while allowing localhost, waits for the
   client runtime to render the Phaser canvas, runs the same local `Unlock all`,
-  smoke-only selection switch to CN character `110` / active skill `110` with
-  CN weapon `5` / `Dark Orb`, `Coin +500`, global-upgrade purchase, smoke-only
-  movement input, active-skill input, and `Quick clear` paths, uses the same
-  simulation update path to step the live run until enemy spawning is observed,
-  waits for combat activity, verifies that the rendered page observes Dark Orb
-  `homingEnemy` projectiles, then switches the same smoke flow to CN weapon `6`
-  / `Guardian Song` and verifies page-observed `playerOrbit` projectiles. It
-  advances the selected weapon until it produces a `weaponFireSE` sound event,
-  then continues stepping until a concrete reward signal appears through enemy
-  defeat, dropped pickup, EXP gain, or score. It then uses a smoke-only scene
-  action that advances the normal simulation with movement input toward the
-  nearest pickup until collection occurs, and asserts the pickup sound event
+  smoke-only selection switch to CN character `110` / active skill `110`, CN
+  level `14` / `Map_09`, and CN weapon `5` / `Dark Orb`, asserts the page and
+  simulation expose the expected `Map_09` terrain-pit count `246` and positive
+  map-derived world bounds, then runs `Coin +500`, global-upgrade purchase,
+  smoke-only movement input, active-skill input, and `Quick clear` paths. It
+  uses the same simulation update path to step the live run until enemy spawning
+  is observed, waits for combat activity, verifies that the rendered page
+  observes Dark Orb `homingEnemy` projectiles, then switches the same smoke flow
+  to CN weapon `6` / `Guardian Song` and verifies page-observed `playerOrbit`
+  projectiles. It advances the selected weapon until it produces a
+  `weaponFireSE` sound event, then continues stepping until a concrete reward
+  signal appears through enemy defeat, dropped pickup, EXP gain, or score. It
+  then uses a smoke-only scene action that advances the normal simulation with
+  movement input toward the nearest pickup until collection occurs, and asserts
+  the pickup sound event
   `se_coin` through the hidden smoke marker before clearing. Before clearing, it
   advances the active-skill timeline far enough to observe the skill `110`
   shooter/VFX path and asserts `UIefx_flash_starlight` and `active_110` through
@@ -1714,9 +1717,11 @@ Weapon behavior staging:
 - Current entity boundary handling clamps player, enemy, and minion movement to
   the map-derived world bounds. The CN `Map_09` through `Map_15` parity cases
   now verify enemy and minion max-X clamps in addition to player/enemy
-  non-flying pit blocking and flying bypass. Native wall tiles beyond
-  `MapData.terrainPits` remain intentionally unsupported until a stronger
-  source is identified.
+  non-flying pit blocking and flying bypass. The browser smoke now selects
+  level `14` / `Map_09`, verifies the runtime and simulation both expose the
+  locked pit count `246`, and checks positive map-derived world bounds before
+  running the combat interaction. Native wall tiles beyond `MapData.terrainPits`
+  remain intentionally unsupported until a stronger source is identified.
 - Current equip handling maps CN `EquipData` and applies selected level-1
   `buffData` entries for HP, attack, defense, speed, item magnet range, bullet
   speed, bullet size, bullet lifetime, bullet count, cooldown reduction, EXP
@@ -1797,6 +1802,9 @@ Current terrain evidence:
   player/enemy flying bypass. The locked pit counts are: `Map_09 = 246`, `Map_10 = 1316`,
   `Map_11 = 7739`, `Map_12 = 1783`, `Map_13 = 6941`, `Map_14 = 948`, and
   `Map_15 = 2146`.
+- The full browser smoke selects level `14` / `Map_09` and asserts that both
+  the page runtime marker and the live simulation HUD marker report the locked
+  `Map_09` pit count `246`.
 - `TestMap` remains raw terrain evidence only because its disabled test level
   is filtered out of the local runtime DTO and is not a playable runtime parity
   case.

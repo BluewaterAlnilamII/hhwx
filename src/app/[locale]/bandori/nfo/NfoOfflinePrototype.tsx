@@ -50,6 +50,9 @@ type HudSnapshot = {
   enemies: number;
   minions: number;
   projectiles: number;
+  terrainPitCount: number;
+  worldWidth: number;
+  worldHeight: number;
   homingProjectiles: number;
   orbitProjectiles: number;
   defeatedEnemies: number;
@@ -130,6 +133,8 @@ const FULL_SCREEN_EFFECT_RENDER_SECONDS = 0.5;
 const EMPTY_NUMBER_ARRAY: number[] = [];
 const SMOKE_ACTIVE_SKILL_CHARACTER_ID = 110;
 const SMOKE_ACTIVE_SKILL_ID = 110;
+const SMOKE_TERRAIN_LEVEL_ID = 14;
+const SMOKE_TERRAIN_MAP_PREFAB_NAME = "Map_09";
 const SMOKE_DARK_ORB_WEAPON_ID = 5;
 const SMOKE_GUARDIAN_SONG_WEAPON_ID = 6;
 const SMOKE_ACTIVE_SKILL_EFFECT_NAME = "UIefx_flash_starlight";
@@ -509,6 +514,13 @@ export default function NfoOfflinePrototype() {
       setSmokeInteractionState("error");
       return;
     }
+    if (!runtimeData.levels.some((level) => (
+      level.id === SMOKE_TERRAIN_LEVEL_ID
+      && level.mapPrefabName === SMOKE_TERRAIN_MAP_PREFAB_NAME
+    ))) {
+      setSmokeInteractionState("error");
+      return;
+    }
     if (!runtimeData.weapons.some((weapon) => weapon.id === weaponId)) {
       setSmokeInteractionState("error");
       return;
@@ -517,6 +529,7 @@ export default function NfoOfflinePrototype() {
     const nextSelection = {
       ...selection,
       characterId: SMOKE_ACTIVE_SKILL_CHARACTER_ID,
+      levelId: SMOKE_TERRAIN_LEVEL_ID,
       weaponId,
     };
     setSelection(nextSelection);
@@ -674,6 +687,7 @@ export default function NfoOfflinePrototype() {
         : SMOKE_DARK_ORB_WEAPON_ID;
       if (
         selection.characterId !== SMOKE_ACTIVE_SKILL_CHARACTER_ID
+        || selection.levelId !== SMOKE_TERRAIN_LEVEL_ID
         || selection.weaponId !== targetSmokeWeaponId
       ) {
         setSmokeInteractionState("selection-requested");
@@ -1054,6 +1068,11 @@ export default function NfoOfflinePrototype() {
         data-nfo-selected-character-id={selection?.characterId ?? 0}
         data-nfo-selected-level-id={selection?.levelId ?? 0}
         data-nfo-selected-weapon-id={selection?.weaponId ?? 0}
+        data-nfo-selected-map-prefab-name={runtimeSummary?.mapPrefabName ?? ""}
+        data-nfo-runtime-map-pit-count={runtimeSummary?.mapPitCount ?? 0}
+        data-nfo-terrain-pit-count={hud?.terrainPitCount ?? 0}
+        data-nfo-world-width={hud?.worldWidth ?? 0}
+        data-nfo-world-height={hud?.worldHeight ?? 0}
         data-nfo-player-moved={smokeMovementObserved ? "1" : "0"}
         data-nfo-combat-observed={smokeCombatObserved ? "1" : "0"}
         data-nfo-enemy-observed={smokeEnemyObserved ? "1" : "0"}
@@ -1473,7 +1492,11 @@ function createNfoPrototypeSceneClass({
           reportHud(toHudSnapshot(simState));
         },
         startSmokeMove: () => {
-          advanceSimulationFrames(24, { moveX: 1, moveY: 0, useActiveSkill: false });
+          simState = advanceUntilPlayerMovement(simState, runtimeData, inputState);
+          if (this.graphics) {
+            drawScene(this.graphics, simState);
+          }
+          reportHud(toHudSnapshot(simState));
         },
         advanceSmokeFrames: (frameCount) => {
           advanceSimulationFrames(frameCount, { useActiveSkill: false });
@@ -1850,6 +1873,9 @@ function toHudSnapshot(state: NfoSimulationState): HudSnapshot {
     enemies: state.enemies.length,
     minions: state.minions.length,
     projectiles: state.bullets.length,
+    terrainPitCount: state.terrain.pitTiles.length,
+    worldWidth: state.worldBounds.maxX - state.worldBounds.minX,
+    worldHeight: state.worldBounds.maxY - state.worldBounds.minY,
     homingProjectiles: state.bullets.filter((bullet) => (
       bullet.motionType === "homingEnemy"
     )).length,
@@ -1921,6 +1947,53 @@ function advanceUntilSoundEventSource(
 
     if (getLatestSoundEventBySourceType(nextState, sourceType)) {
       break;
+    }
+  }
+
+  return nextState;
+}
+
+function advanceUntilPlayerMovement(
+  state: NfoSimulationState,
+  runtimeData: NfoOfflineRuntimeData,
+  inputState: NfoInputState,
+  minDistance = 8,
+  maxFramesPerDirection = 36,
+): NfoSimulationState {
+  const startX = state.player.x;
+  const startY = state.player.y;
+  let nextState = state;
+  const directions: Array<Pick<NfoInputState, "moveX" | "moveY">> = [
+    { moveX: 1, moveY: 0 },
+    { moveX: -1, moveY: 0 },
+    { moveX: 0, moveY: 1 },
+    { moveX: 0, moveY: -1 },
+    { moveX: Math.SQRT1_2, moveY: Math.SQRT1_2 },
+    { moveX: -Math.SQRT1_2, moveY: Math.SQRT1_2 },
+    { moveX: Math.SQRT1_2, moveY: -Math.SQRT1_2 },
+    { moveX: -Math.SQRT1_2, moveY: -Math.SQRT1_2 },
+  ];
+
+  for (const direction of directions) {
+    for (
+      let frameIndex = 0;
+      frameIndex < maxFramesPerDirection && nextState.status === "playing";
+      frameIndex += 1
+    ) {
+      nextState = updateNfoSimulation(
+        nextState,
+        runtimeData,
+        {
+          ...inputState,
+          ...direction,
+          useActiveSkill: false,
+        },
+        1 / 30,
+      );
+
+      if (Math.hypot(nextState.player.x - startX, nextState.player.y - startY) >= minDistance) {
+        return nextState;
+      }
     }
   }
 
