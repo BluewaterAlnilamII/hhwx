@@ -8378,6 +8378,11 @@ function assertCnActiveSkillAbsoluteGuardShooterFriendlyInvincibleBuffCase(
     hitBuffCase.activeSkillId,
   );
   const state = createStateWithoutEnemies(testRuntimeData);
+  const minionProbe = createFriendlyMinionProbe({
+    x: state.player.x,
+    y: state.player.y,
+    speed: 0,
+  });
   const nextState = updateNfoSimulation(
     chargeActiveSkill({
       ...state,
@@ -8385,6 +8390,7 @@ function assertCnActiveSkillAbsoluteGuardShooterFriendlyInvincibleBuffCase(
         ...state.activeSkill,
         level: hitBuffCase.activeSkillLevel,
       },
+      minions: [minionProbe],
     }),
     testRuntimeData,
     { ...NO_INPUT, useActiveSkill: true },
@@ -8399,12 +8405,19 @@ function assertCnActiveSkillAbsoluteGuardShooterFriendlyInvincibleBuffCase(
   const activeBuff = nextState.player.activeBuffs.find((buff) => (
     buff.id === hitBuffCase.hitBuffId
   ));
+  const minionBuff = nextState.minions[0]?.activeBuffs.find((buff) => (
+    buff.id === hitBuffCase.hitBuffId
+  ));
 
   assert.equal(hitBuffCase.activeSkillId, 117);
   assert.equal(nextState.activeSkill.level, hitBuffCase.activeSkillLevel);
   assert.ok(shooter, `expected CN active skill 117 case ${hitBuffCase.id} to create shooter 11000`);
   assert.ok(bullet, `expected CN shooter 11000 case ${hitBuffCase.id} to emit friendly invincible bullet 65`);
   assert.ok(activeBuff, `expected CN Absolute Guard case ${hitBuffCase.id} bullet to apply buff 108 to the player`);
+  assert.ok(
+    minionBuff,
+    `expected CN Absolute Guard case ${hitBuffCase.id} bullet to apply buff 108 to an overlapping minion`,
+  );
   assert.equal(shooter.sourceTeam, "player");
   assert.equal(shooter.shooterId, hitBuffCase.shooterId);
   assert.equal(bullet.canDamagePlayer, false);
@@ -8414,13 +8427,20 @@ function assertCnActiveSkillAbsoluteGuardShooterFriendlyInvincibleBuffCase(
   assert.equal(bullet.colliderType, hitBuffCase.bulletColliderType);
   assert.equal(bullet.hitBuffId, hitBuffCase.hitBuffId);
   assert.equal(bullet.hitBuffLevel, hitBuffCase.hitBuffLevel);
-  assert.equal(bullet.remainingHits, hitBuffCase.bulletHitTimes - 1);
+  assert.equal(bullet.remainingHits, hitBuffCase.bulletHitTimes - 2);
   assert.equal(activeBuff.type, hitBuffCase.buffType);
   assert.equal(activeBuff.value, hitBuffCase.buffValue);
+  assert.equal(minionBuff.type, hitBuffCase.buffType);
+  assert.equal(minionBuff.value, hitBuffCase.buffValue);
   assertClose(
     activeBuff.remainingSeconds,
     hitBuffCase.buffDurationFrames / 30,
     "CN Absolute Guard buff duration",
+  );
+  assertClose(
+    minionBuff.remainingSeconds,
+    hitBuffCase.buffDurationFrames / 30,
+    "CN Absolute Guard minion buff duration",
   );
 }
 
