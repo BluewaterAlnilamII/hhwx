@@ -659,6 +659,68 @@ Combined trace interpretation:
   structures are populated, or move the generator/frontier/complement state
   itself to a compact raw-index representation.
 
+Configuration seeding headroom checkpoint:
+
+Implementation:
+
+- `HHWX_LOW_MEMORY_SKIP_SEEDING_HEADROOM_MIB` now exposes the existing
+  `skipConfigurationSeedingWhenMemoryHeadroomBelowMiB` optimization option in
+  the local low-memory benchmark harness.
+- This is proof-neutral: configuration seeding is only an incumbent-improvement
+  pass. Skipping it cannot make an unproved search exact; it only preserves the
+  incumbent from earlier seed passes and lets the proof path spend memory on
+  exact candidate join instead.
+- A separate diagnostic switch,
+  `HHWX_LOW_MEMORY_INITIAL_SCORE_CALC_CACHE_PRESSURE_FALLBACK=1`, disables the
+  low-memory initial-candidate score calculation cache under slot-card pressure.
+  It is kept as an attribution knob, but it was not the `P01:244` bottleneck
+  because that case was using the normal initial-candidate generator path.
+
+Key finding:
+
+- `P01:244` had only about `1084 MiB` used before configuration seeding, but
+  seeding raised the process peak to about `6771 MiB` while leaving the best
+  score unchanged. The later exact candidate join then aborted immediately at
+  `initial-candidate`.
+- Raising the seeding-skip headroom threshold to `4000 MiB` skipped that
+  no-gain seeding pass, allowed exact candidate join to complete, and improved
+  the result.
+
+Focused artifacts:
+
+| Artifact | Cases | Seeding Headroom | Status | Average / Max | Gap | Peak | Notes |
+| --- | --- | ---: | --- | ---: | ---: | ---: | --- |
+| `low-memory-polish-hhwx-2026-06-16T21-12-29-398Z.json` | `P01:244` | `1600 MiB` | bounded, memory-limited | `8850142 / 8904740` | `468574` | `6771 MiB` | trace showed `lowMemoryInitialCandidateSync=false`, seeding consumed the memory |
+| `low-memory-polish-hhwx-2026-06-16T21-15-10-434Z.json` | `P01:244` | `4000 MiB` | exact | `8858388 / 8913195` | `0` | `1478 MiB` | seeding skipped; exact candidate join completed |
+| `low-memory-polish-hhwx-2026-06-16T21-16-49-783Z.json` | `P01:244`, `P01:323`, `P04:244`, `P04:260` | `4000 MiB` | `4/4` exact | all preserved or improved | `0` | `3397 MiB` | all prior memory-limited 40-case rows became exact |
+| `low-memory-polish-hhwx-2026-06-16T21-26-20-253Z.json` | `P02:260`, `P08:260`, `P08:323`, `P10:244`, `P10:260` | `4000 MiB` | `3/5` exact | all average/max fields present | `582812` | `3628 MiB` | `P02:260` and `P10:244` remained bounded as expected; no memory-limited rows |
+
+Matrix checkpoint:
+
+| Artifact | Scope | Exact | Bounded | Failed | Timed Out | Memory Limited | Gap Total | Peak | Notes |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| `low-memory-polish-hhwx-2026-06-16T20-08-10-567Z.json` | prior recommended 40-case run | `34` | `6` | `0` | `4` | `4` | `1594898` | `6790 MiB` | before seeding-skip headroom change |
+| `medley-40-exact-isolated-2026-06-16T21-39-20-861Z-partial.json` | first `38/40` rows, `4000 MiB` seeding headroom | `36` | `2` | `0` | `0` | `0` | `582812` | `3626 MiB` | external shell timed out after 50 minutes, not a case timeout |
+| `low-memory-polish-hhwx-2026-06-16T22-30-39-667Z.json` | final two rows, `P10:260/P10:323` | `2` | `0` | `0` | `0` | `0` | `0` | `2452 MiB` | supplemental run for rows not reached before shell timeout |
+
+Combined interpretation:
+
+- The split matrix evidence is effectively `38/40` exact, `2/40` bounded,
+  `0` failed, `0` timed out, `0` memory-limited, bounded gap total `582812`,
+  and peak `3626 MiB`.
+- This exceeds the near-term target of `35/40+` exact and cuts the observed
+  peak from `6790 MiB` to `3626 MiB` versus the prior 40-case run on this
+  branch.
+- The full single-artifact 40-case gate should be rerun with an outer command
+  timeout above 60 minutes before merge readiness is claimed. Per-case
+  `300000ms` budgets were not exceeded in the completed rows.
+- The next automation step should make this less blunt than a global
+  `4000 MiB` threshold: skip or timebox configuration seeding when the current
+  configuration already has a finite upper bound, an incumbent from the seed
+  pass, and enough slot width/event pressure that seeding is likely to spend
+  memory before proof. Any automatic policy must keep the exactness contract
+  unchanged and record the skip reason in `configurationTrace`.
+
 ### Stage 4: Raw-Index Final Join
 
 Purpose:

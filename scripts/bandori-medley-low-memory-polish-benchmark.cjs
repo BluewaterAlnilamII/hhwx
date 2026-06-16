@@ -50,8 +50,11 @@ function printUsage() {
     "  HHWX_LOW_MEMORY_THIN_CANDIDATE_RESULT=1 retain only score fields on exact candidates",
     "  HHWX_LOW_MEMORY_COMPACT_CANDIDATE_KEY_SET=1 use compact exact-join candidate key sets",
     "  HHWX_LOW_MEMORY_SCORE_CALC_CACHE_LIMIT=... bound exact-join score calculation cache entries",
+    "  HHWX_LOW_MEMORY_SKIP_SEEDING_HEADROOM_MIB=1600 skip config seeding below this memory headroom",
     "  HHWX_LOW_MEMORY_SCORE_CALC_CACHE_PRESSURE_FALLBACK=1 disable score calc cache for high-slot-card exact joins",
     "  HHWX_LOW_MEMORY_SCORE_CALC_CACHE_PRESSURE_SLOT_CARDS=260 fallback threshold for high-slot-card exact joins",
+    "  HHWX_LOW_MEMORY_INITIAL_SCORE_CALC_CACHE_PRESSURE_FALLBACK=1 disable initial-candidate score calc cache under pressure",
+    "  HHWX_LOW_MEMORY_INITIAL_SCORE_CALC_CACHE_PRESSURE_SLOT_CARDS=200 fallback threshold for initial-candidate sync",
     "  HHWX_LOW_MEMORY_SCORE_ONLY_CACHE_PRESSURE_FALLBACK=1 disable score-only result cache for high-slot-card exact joins",
     "  HHWX_LOW_MEMORY_SCORE_ONLY_CACHE_PRESSURE_SLOT_CARDS=260 fallback threshold for score-only result cache",
     "  HHWX_LOW_MEMORY_COMPACT_SCORE_ONLY_CACHE=1 store compact score-only cache entries",
@@ -153,6 +156,12 @@ function hhwxOptimizationJson() {
       optimization.exactCandidateScoreCalculationCacheEntryLimit = Math.trunc(parsed);
     }
   }
+  if (process.env.HHWX_LOW_MEMORY_SKIP_SEEDING_HEADROOM_MIB) {
+    const parsed = Number(process.env.HHWX_LOW_MEMORY_SKIP_SEEDING_HEADROOM_MIB);
+    if (Number.isFinite(parsed) && parsed >= 0) {
+      optimization.skipConfigurationSeedingWhenMemoryHeadroomBelowMiB = Math.trunc(parsed);
+    }
+  }
   if (process.env.HHWX_LOW_MEMORY_SCORE_CALC_CACHE_PRESSURE_FALLBACK === "1") {
     optimization.enableExactCandidateScoreCalculationCachePressureFallback = true;
   }
@@ -160,6 +169,15 @@ function hhwxOptimizationJson() {
     const parsed = Number(process.env.HHWX_LOW_MEMORY_SCORE_CALC_CACHE_PRESSURE_SLOT_CARDS);
     if (Number.isFinite(parsed) && parsed > 0) {
       optimization.exactCandidateScoreCalculationCachePressureSlotCardCount = Math.trunc(parsed);
+    }
+  }
+  if (process.env.HHWX_LOW_MEMORY_INITIAL_SCORE_CALC_CACHE_PRESSURE_FALLBACK === "1") {
+    optimization.enableLowMemoryInitialCandidateScoreCalculationCachePressureFallback = true;
+  }
+  if (process.env.HHWX_LOW_MEMORY_INITIAL_SCORE_CALC_CACHE_PRESSURE_SLOT_CARDS) {
+    const parsed = Number(process.env.HHWX_LOW_MEMORY_INITIAL_SCORE_CALC_CACHE_PRESSURE_SLOT_CARDS);
+    if (Number.isFinite(parsed) && parsed > 0) {
+      optimization.lowMemoryInitialCandidateScoreCalculationCachePressureSlotCardCount = Math.trunc(parsed);
     }
   }
   if (process.env.HHWX_LOW_MEMORY_SCORE_ONLY_CACHE_PRESSURE_FALLBACK === "1") {

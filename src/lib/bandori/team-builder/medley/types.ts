@@ -90,6 +90,8 @@ export type BandoriMedleySearchOptimizationOptions = {
   lowMemoryInitialCandidateSyncMinMemoryHeadroomMiB?: number;
   lowMemoryInitialCandidateSyncMaxSlotCardCount?: number;
   enableLowMemoryInitialCandidateSyncGcProbe?: boolean;
+  enableLowMemoryInitialCandidateScoreCalculationCachePressureFallback?: boolean;
+  lowMemoryInitialCandidateScoreCalculationCachePressureSlotCardCount?: number;
   debugExactCandidateJoinMemoryAttribution?: boolean;
   debugExactCandidateRawMirror?: boolean;
   debugExactCandidateRawJoinParity?: boolean;

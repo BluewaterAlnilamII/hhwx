@@ -120,6 +120,7 @@ const MEDLEY_EXACT_JOIN_PREFIX_SEED_MIN_PROOF_BUDGET_MS = 30_000;
 const MEDLEY_EXACT_JOIN_PREFIX_SEED_MIN_MEMORY_HEADROOM_MIB = 256;
 const MEDLEY_EXACT_JOIN_PREFIX_SEED_MAX_OBSERVED_GAP = 100_000;
 const MEDLEY_EXACT_CANDIDATE_SCORE_CALC_CACHE_PRESSURE_SLOT_CARD_COUNT = 260;
+const MEDLEY_EXACT_INITIAL_CANDIDATE_SCORE_CALC_CACHE_PRESSURE_SLOT_CARD_COUNT = 200;
 const BYTES_PER_MIB = 1024 * 1024;
 const MEDLEY_EXACT_CARD_KEY_BITS = BigInt(14);
 const MEDLEY_EXACT_CARD_KEY_LIMIT = 1 << 14;
@@ -2046,6 +2047,7 @@ function findBestMedleyExactSlotCandidateLowMemory(
   localDeadlineAt: number | null = null,
   shouldAbortLocalSearch: (() => boolean) | null = null,
   useSkillContextUpper = true,
+  disableScoreCalculationCache = false,
 ): { aborted: boolean; score: number | null } {
   const groupedSearchCards = groupSearchCardsByCharacter(slot.searchCards);
   const searchSlot = groupedSearchCards.every((card, index) => card === slot.searchCards[index])
@@ -2136,7 +2138,7 @@ function findBestMedleyExactSlotCandidateLowMemory(
         configuration: searchSlot.configuration,
         server,
         perfectRate,
-        scoreCache: searchSlot.scoreCache,
+        scoreCache: disableScoreCalculationCache ? undefined : searchSlot.scoreCache,
         comboOptions: searchSlot.comboOptions,
         pruningThresholdResult: createMedleyExactCandidateSlotThresholdResult(scoreCutoff),
       });
@@ -5944,6 +5946,8 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     lowMemoryInitialCandidateSyncLightUpper?: boolean;
     lowMemoryInitialCandidateSyncTimeboxMs?: number;
     shouldAbortLowMemoryInitialCandidateSync?: () => boolean;
+    enableLowMemoryInitialCandidateScoreCalculationCachePressureFallback?: boolean;
+    lowMemoryInitialCandidateScoreCalculationCachePressureSlotCardCount?: number | null;
     lowMemoryHighPairScanMinRecordCount?: number | null;
     lowMemoryHighPairPrefixRecordLimit?: number | null;
     debugExactCandidateJoinMemoryAttribution?: boolean;
@@ -6072,6 +6076,18 @@ export function searchMedleyConfigurationByExactCandidateJoin(
   const disableScoreCalculationCacheByPressure = (
     context.enableExactCandidateScoreCalculationCachePressureFallback === true
     && maxSlotSearchCardCount >= scoreCalculationCachePressureSlotCardCount
+  );
+  const initialCandidateScoreCalculationCachePressureSlotCardCount = (
+    context.lowMemoryInitialCandidateScoreCalculationCachePressureSlotCardCount !== null
+    && context.lowMemoryInitialCandidateScoreCalculationCachePressureSlotCardCount !== undefined
+    && Number.isFinite(context.lowMemoryInitialCandidateScoreCalculationCachePressureSlotCardCount)
+    && context.lowMemoryInitialCandidateScoreCalculationCachePressureSlotCardCount > 0
+      ? Math.trunc(context.lowMemoryInitialCandidateScoreCalculationCachePressureSlotCardCount)
+      : MEDLEY_EXACT_INITIAL_CANDIDATE_SCORE_CALC_CACHE_PRESSURE_SLOT_CARD_COUNT
+  );
+  const disableInitialCandidateScoreCalculationCacheByPressure = (
+    context.enableLowMemoryInitialCandidateScoreCalculationCachePressureFallback === true
+    && maxSlotSearchCardCount >= initialCandidateScoreCalculationCachePressureSlotCardCount
   );
   const disableExactCandidateScoreCalculationCacheEffective = (
     context.disableExactCandidateScoreCalculationCache === true
@@ -6497,6 +6513,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
         lowMemoryInitialCandidateSyncDeadlineAt,
         context.shouldAbortLowMemoryInitialCandidateSync ?? null,
         context.lowMemoryInitialCandidateSyncLightUpper !== true,
+        disableInitialCandidateScoreCalculationCacheByPressure,
       );
       if (lowMemoryTopCandidate.aborted) {
         if (context.lowMemoryInitialCandidateSyncLocalAbortOnly === true) {
@@ -6955,6 +6972,16 @@ export function searchMedleyConfigurationByExactCandidateJoin(
       scoreCalculationCachePressureFallbackTriggered: disableScoreCalculationCacheByPressure,
       scoreCalculationCachePressureSlotCardCount: scoreCalculationCachePressureSlotCardCount,
       scoreCalculationCachePressureMaxSlotCardCount: maxSlotSearchCardCount,
+      initialCandidateScoreCalculationCachePressureFallback: (
+        context.enableLowMemoryInitialCandidateScoreCalculationCachePressureFallback === true
+      ),
+      initialCandidateScoreCalculationCachePressureFallbackTriggered: (
+        disableInitialCandidateScoreCalculationCacheByPressure
+      ),
+      initialCandidateScoreCalculationCachePressureSlotCardCount: (
+        initialCandidateScoreCalculationCachePressureSlotCardCount
+      ),
+      initialCandidateScoreCalculationCachePressureMaxSlotCardCount: maxSlotSearchCardCount,
       scoreOnlyEvaluationCache: context.disableExactCandidateScoreOnlyCache === true
         ? "disabled"
         : disableScoreOnlyCacheByPressure

@@ -813,6 +813,19 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
   )
     ? Math.max(0, parsedLowMemoryInitialCandidateSyncMaxSlotCardCount)
     : MEDLEY_LOW_MEMORY_INITIAL_CANDIDATE_SYNC_MAX_SLOT_CARD_COUNT;
+  const enableLowMemoryInitialCandidateScoreCalculationCachePressureFallback = (
+    optimization.enableLowMemoryInitialCandidateScoreCalculationCachePressureFallback === true
+  );
+  const parsedLowMemoryInitialCandidateScoreCalculationCachePressureSlotCardCount = (
+    optimization.lowMemoryInitialCandidateScoreCalculationCachePressureSlotCardCount !== undefined
+      ? Math.trunc(optimization.lowMemoryInitialCandidateScoreCalculationCachePressureSlotCardCount)
+      : Number.NaN
+  );
+  const lowMemoryInitialCandidateScoreCalculationCachePressureSlotCardCount = Number.isFinite(
+    parsedLowMemoryInitialCandidateScoreCalculationCachePressureSlotCardCount,
+  )
+    ? Math.max(1, parsedLowMemoryInitialCandidateScoreCalculationCachePressureSlotCardCount)
+    : null;
   const enableLowMemoryInitialCandidateSyncGcProbe = (
     optimization.enableLowMemoryInitialCandidateSyncGcProbe === true
   );
@@ -3657,6 +3670,8 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
           lowMemoryInitialCandidateSyncLightUpper,
           lowMemoryInitialCandidateSyncTimeboxMs,
           shouldAbortLowMemoryInitialCandidateSync,
+          enableLowMemoryInitialCandidateScoreCalculationCachePressureFallback,
+          lowMemoryInitialCandidateScoreCalculationCachePressureSlotCardCount,
           lowMemoryHighPairScanMinRecordCount,
           lowMemoryHighPairPrefixRecordLimit,
           debugExactCandidateJoinMemoryAttribution,
@@ -4069,6 +4084,8 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
           lowMemoryInitialCandidateSyncLightUpper,
           lowMemoryInitialCandidateSyncTimeboxMs,
           shouldAbortLowMemoryInitialCandidateSync,
+          enableLowMemoryInitialCandidateScoreCalculationCachePressureFallback,
+          lowMemoryInitialCandidateScoreCalculationCachePressureSlotCardCount,
           lowMemoryHighPairScanMinRecordCount,
           lowMemoryHighPairPrefixRecordLimit,
           debugExactCandidateJoinMemoryAttribution,
