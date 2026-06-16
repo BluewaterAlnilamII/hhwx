@@ -62,7 +62,7 @@ async function main() {
   assert.equal(fixture.selectedAIStateBuffCases.length, 3);
   assert.equal(fixture.selectedAIStateCommonStateCases.length, 2);
   assert.equal(fixture.selectedAIStateAnimationCases.length, 2);
-  assert.equal(fixture.selectedActiveSkillBuffCases.length, 9);
+  assert.equal(fixture.selectedActiveSkillBuffCases.length, 10);
   assert.equal(fixture.selectedItemCases.length, 6);
   assert.equal(fixture.selectedDropCases.length, 2);
   assert.equal(fixture.selectedLevelEnemySpawnCases.length, 3);
@@ -1547,6 +1547,22 @@ async function main() {
   assert.equal(getAttributeValue(demonGodLevelThreeBuff.attributes, CN_NFO_ATTRIBUTE_TYPE.criticalRate), 50);
   assert.equal(getAttributeValue(demonGodLevelThreeBuff.attributes, CN_NFO_ATTRIBUTE_TYPE.criticalDamage), 50);
 
+  const apocalypseSongBuffCase = getActiveSkillBuffCase(
+    "active-skill-apocalypse-song-player-side-critical-buff",
+  );
+  const apocalypseSongCriticalBuff = apocalypseSongBuffCase.buffs.find((buff) => buff.buffId === 9);
+  assert.equal(apocalypseSongBuffCase.activeSkillId, 14);
+  assert.equal(apocalypseSongBuffCase.activeSkillLevel, 1);
+  assert.equal(apocalypseSongBuffCase.eventFrame, 1);
+  assert.ok(apocalypseSongCriticalBuff);
+  assert.equal(apocalypseSongCriticalBuff.targetType, 1);
+  assert.equal(apocalypseSongCriticalBuff.buffType, 1);
+  assert.equal(apocalypseSongCriticalBuff.buffDurationFrames, 80);
+  assert.equal(
+    getAttributeValue(apocalypseSongCriticalBuff.attributes, CN_NFO_ATTRIBUTE_TYPE.criticalRate),
+    30,
+  );
+
   const holyMendCaseIds = [
     "active-skill-holy-mend-heal-invincible-revive",
     "active-skill-holy-mend-heal-invincible-revive-lv2",
@@ -2378,7 +2394,7 @@ async function main() {
   console.log("ok - CN active skill Elemental Burst shooter loops fireballs without repeating snow field");
   console.log("ok - CN active skill Elemental Burst level 2/3 switches mixed shooter events");
   console.log("ok - CN active skill full-screen effect events are recorded");
-  console.log("ok - CN active skill Apocalypse Song stuns, stops movement, and triggers frame-90 damage");
+  console.log("ok - CN active skill Apocalypse Song applies same-frame buff, stun, and frame-90 damage");
   console.log("ok - CN active skill Apocalypse Song level 2/3 switches frame-90 damage shooters");
   console.log("ok - CN active skill Zessho creates non-following static damage field shooter");
   console.log("ok - CN active skill Zessho level 2/3 switches static damage shooters");
@@ -7139,6 +7155,10 @@ function testCnActiveSkillElementalBurstLevelShooterSwitch(
 function testCnActiveSkillApocalypseSongDelayedDamageShooter(
   sourceRuntimeData: NfoOfflineRuntimeData,
 ) {
+  const playerSideBuffCase = getActiveSkillBuffCase(
+    "active-skill-apocalypse-song-player-side-critical-buff",
+  );
+  const criticalBuffCase = playerSideBuffCase.buffs.find((buff) => buff.buffId === 9);
   const stunCase = getActiveSkillShooterHitBuffCase(
     "active-skill-apocalypse-song-stun-field-lv1",
   );
@@ -7168,12 +7188,31 @@ function testCnActiveSkillApocalypseSongDelayedDamageShooter(
   const stunBuff = targetAfterStun?.activeBuffs.find((buff) => (
     buff.id === stunCase.hitBuffId
   ));
+  const playerSideCriticalBuff = firstFrameState.player.activeBuffs.find((buff) => (
+    buff.id === criticalBuffCase?.buffId
+  ));
+  const expectedCriticalRateModifier = getAttributeValue(
+    criticalBuffCase?.attributes ?? [],
+    CN_NFO_ATTRIBUTE_TYPE.criticalRate,
+  );
 
   assert.equal(stunCase.activeSkillId, damageCase.activeSkillId);
+  assert.equal(playerSideBuffCase.activeSkillId, stunCase.activeSkillId);
+  assert.equal(playerSideBuffCase.eventFrame, stunCase.eventFrame);
+  assert.ok(criticalBuffCase, "expected CN Apocalypse Song to define buff 9");
   assert.ok(stunShooter, "expected CN active skill 14 to create stun shooter 3000");
   assert.ok(stunBullet, "expected CN active skill 14 stun shooter to emit bullet 56");
   assert.ok(targetAfterStun, "expected CN Apocalypse Song target to survive stun field");
   assert.ok(stunBuff, "expected CN Apocalypse Song stun field to apply buff 3");
+  assert.ok(playerSideCriticalBuff, "expected CN Apocalypse Song to apply buff 9 to the player");
+  assert.equal(playerSideCriticalBuff.type, criticalBuffCase.buffType);
+  assertClose(
+    playerSideCriticalBuff.remainingSeconds,
+    criticalBuffCase.buffDurationFrames / 30,
+    "CN Apocalypse Song player-side critical buff duration",
+  );
+  assert.equal(stunShooter.criticalRate, baseState.player.criticalRate + expectedCriticalRateModifier);
+  assert.equal(stunBullet.criticalRate, baseState.player.criticalRate + expectedCriticalRateModifier);
   assert.equal(stunBullet.dealsDamage, !stunCase.bulletNoDamage);
   assert.equal(stunBullet.hitTargetType, stunCase.bulletHitTargetType);
   assert.equal(stunBullet.hitBuffId, stunCase.hitBuffId);

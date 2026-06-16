@@ -2484,6 +2484,13 @@ const ACTIVE_SKILL_BUFF_CASE_SPECS: ActiveSkillBuffCaseSpec[] = [
     expectedBuffIds: [15],
   },
   {
+    id: "active-skill-apocalypse-song-player-side-critical-buff",
+    activeSkillId: 14,
+    activeSkillLevel: 1,
+    expectedEventFrame: 1,
+    expectedBuffIds: [9],
+  },
+  {
     id: "active-skill-holy-mend-heal-invincible-revive",
     activeSkillId: 12,
     activeSkillLevel: 1,
