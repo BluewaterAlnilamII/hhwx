@@ -132,6 +132,11 @@ export default function NfoOfflinePrototype() {
   const paidGlobalUpgradeIds = saveState?.paidGlobalUpgradeIds ?? EMPTY_NUMBER_ARRAY;
   const paidGlobalUpgradeCount = paidGlobalUpgradeIds.length;
   const upgradeCoin = saveState?.upgradeCoin ?? 0;
+  const selectedLevelCleared = Boolean(
+    saveState
+    && selection
+    && saveState.clearedLevelIds.includes(selection.levelId),
+  );
   const isSaveReady = saveState !== null;
 
   useEffect(() => {
@@ -631,6 +636,10 @@ export default function NfoOfflinePrototype() {
       smokeInteractionState === "quick-clear-requested"
       && hud?.status === "cleared"
     ) {
+      if (!saveState || saveState.totalRuns <= 0 || !selectedLevelCleared) {
+        return;
+      }
+
       setSmokeInteractionState("complete");
     }
   }, [
@@ -650,6 +659,7 @@ export default function NfoOfflinePrototype() {
     runtimeState.status,
     saveState,
     selection,
+    selectedLevelCleared,
     smokeActiveSkillObserved,
     smokeAllUnlocked,
     smokeCombatObserved,
@@ -732,6 +742,10 @@ export default function NfoOfflinePrototype() {
         data-nfo-active-skill-observed={smokeActiveSkillObserved ? "1" : "0"}
         data-nfo-all-unlocked={smokeAllUnlocked ? "1" : "0"}
         data-nfo-upgrade-coin={upgradeCoin}
+        data-nfo-total-runs={saveState?.totalRuns ?? 0}
+        data-nfo-cleared-level-count={saveState?.clearedLevelIds.length ?? 0}
+        data-nfo-selected-level-cleared={selectedLevelCleared ? "1" : "0"}
+        data-nfo-total-defeated-enemies={saveState?.totalDefeatedEnemies ?? 0}
         data-nfo-paid-upgrade-count={paidGlobalUpgradeCount}
         data-nfo-upgrade-total-count={upgradeView?.totalCount ?? 0}
         data-nfo-next-upgrade-id={upgradeView?.nextUpgrade?.id ?? 0}

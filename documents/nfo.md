@@ -365,9 +365,10 @@ Current playable prototype:
   input, and `Quick clear` paths, uses the same simulation update path to step
   the live run until enemy spawning is observed, waits for combat activity
   through at least one enemy, projectile, defeat, or pickup counter, verifies
-  the hidden smoke marker reaches `complete` after reporting player movement,
-  and writes a screenshot to `temp/nfo-smoke-browser.png` with a nonblank PNG
-  check. Use
+  the selected level is persisted as cleared with clear coin and run count in
+  local save, verifies the hidden smoke marker reaches `complete` after
+  reporting player movement, and writes a screenshot to
+  `temp/nfo-smoke-browser.png` with a nonblank PNG check. Use
   `NFO_SMOKE_BROWSER_BIN=/path/to/chrome` when the browser binary is not
   auto-detected, or `NFO_SMOKE_SCREENSHOT_PATH=...` to write the visual evidence
   somewhere else.

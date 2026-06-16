@@ -314,6 +314,20 @@ async function smokeBrowserInteraction(baseUrl, args) {
       readHtmlAttribute(smokeTag, "data-nfo-hud-status") === "cleared",
       "browser smoke did not quick-clear the active run",
     );
+    const bankCoin = Number(readHtmlAttribute(smokeTag, "data-nfo-upgrade-coin"));
+    const totalRuns = Number(readHtmlAttribute(smokeTag, "data-nfo-total-runs"));
+    const clearedLevelCount = Number(readHtmlAttribute(smokeTag, "data-nfo-cleared-level-count"));
+    assertSmoke(
+      [bankCoin, totalRuns, clearedLevelCount].every(Number.isFinite),
+      "browser smoke did not expose save settlement counters",
+    );
+    assertSmoke(totalRuns > 0, "browser smoke did not persist a completed run");
+    assertSmoke(bankCoin > 0, "browser smoke did not persist clear coin");
+    assertSmoke(clearedLevelCount > 0, "browser smoke did not persist a cleared level");
+    assertSmoke(
+      readHtmlAttribute(smokeTag, "data-nfo-selected-level-cleared") === "1",
+      "browser smoke did not mark the selected level cleared",
+    );
     assertSmoke(
       readHtmlAttribute(smokeTag, "data-nfo-smoke-state") === "complete",
       "browser smoke interaction state did not complete",
