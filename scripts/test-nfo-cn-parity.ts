@@ -56,7 +56,7 @@ async function main() {
   assert.equal(fixture.selectedShooterOnDestroyCases.length, 2);
   assert.equal(fixture.selectedWeaponMinionCases.length, 6);
   assert.equal(fixture.selectedWeaponSelfBuffCases.length, 3);
-  assert.equal(fixture.selectedActiveSkillSummonCases.length, 12);
+  assert.equal(fixture.selectedActiveSkillSummonCases.length, 13);
   assert.equal(fixture.selectedAIStateTeleportCases.length, 1);
   assert.equal(fixture.selectedAIStateMovementCases.length, 11);
   assert.equal(fixture.selectedAIStateBuffCases.length, 3);
@@ -1666,6 +1666,38 @@ async function main() {
   assert.equal(allOutFireSummonCase.spawnRadiusMax, 250);
   assert.equal(allOutFireSummonCase.expectedFirstPassRadius, 250);
 
+  const allOutFireMiddleLevelTwoSummonCase = getActiveSkillSummonCase(
+    "active-skill-all-out-fire-middle-minion-lv2",
+  );
+  assert.equal(allOutFireMiddleLevelTwoSummonCase.activeSkillId, 112);
+  assert.equal(allOutFireMiddleLevelTwoSummonCase.activeSkillLevel, 2);
+  assert.equal(allOutFireMiddleLevelTwoSummonCase.eventIndex, 1);
+  assert.equal(allOutFireMiddleLevelTwoSummonCase.eventFrame, 1);
+  assert.equal(allOutFireMiddleLevelTwoSummonCase.sameFrameSpawnMinionEventCount, 2);
+  assert.equal(allOutFireMiddleLevelTwoSummonCase.shooterId, 0);
+  assert.equal(allOutFireMiddleLevelTwoSummonCase.minionId, 8);
+  assert.equal(allOutFireMiddleLevelTwoSummonCase.minionAITypeId, 206);
+  assert.equal(allOutFireMiddleLevelTwoSummonCase.minionAIStateId, 0);
+  assert.equal(allOutFireMiddleLevelTwoSummonCase.minionAIStateType, 22);
+  assert.equal(allOutFireMiddleLevelTwoSummonCase.minionAIStateShooterId, 7004);
+  assert.equal(allOutFireMiddleLevelTwoSummonCase.minionAIStateShooterLifeTimeFrames, 160);
+  assert.equal(allOutFireMiddleLevelTwoSummonCase.minionAIStateShooterEventFrame, 1);
+  assert.equal(allOutFireMiddleLevelTwoSummonCase.minionAIStateShooterIsLoopEvent, true);
+  assert.equal(allOutFireMiddleLevelTwoSummonCase.minionAIStateShooterLoopFrameInterval, 7);
+  assert.equal(allOutFireMiddleLevelTwoSummonCase.minionAIStateShooterDirectionType, 0);
+  assert.equal(allOutFireMiddleLevelTwoSummonCase.minionAIStateShooterFormationType, 0);
+  assert.equal(allOutFireMiddleLevelTwoSummonCase.minionAIStateShooterFormationOffsetX, 0);
+  assert.equal(allOutFireMiddleLevelTwoSummonCase.minionAIStateShooterFormationOffsetY, 0);
+  assert.equal(allOutFireMiddleLevelTwoSummonCase.minionAIStateShooterBulletTypeId, 69);
+  assert.equal(allOutFireMiddleLevelTwoSummonCase.minionAIStateShooterBulletSpeed, 700);
+  assert.equal(allOutFireMiddleLevelTwoSummonCase.spawnFormation, 1);
+  assert.equal(allOutFireMiddleLevelTwoSummonCase.spawnCount, 1);
+  assert.equal(allOutFireMiddleLevelTwoSummonCase.spawnCenterOffsetX, 0);
+  assert.equal(allOutFireMiddleLevelTwoSummonCase.spawnCenterOffsetY, 0);
+  assert.equal(allOutFireMiddleLevelTwoSummonCase.spawnRadiusMin, 250);
+  assert.equal(allOutFireMiddleLevelTwoSummonCase.spawnRadiusMax, 250);
+  assert.equal(allOutFireMiddleLevelTwoSummonCase.expectedFirstPassRadius, 250);
+
   const allOutFireMiddleSummonCase = getActiveSkillSummonCase(
     "active-skill-all-out-fire-middle-minion-lv3",
   );
@@ -2246,7 +2278,7 @@ async function main() {
   testCnActiveSkillFairyGuardTargetsPlayerSideMinions(runtimeData);
   testCnActiveSkillKingOfBeastsMinionAITransitionShooter(runtimeData);
   testCnActiveSkillAllOutFireShooterAndMinion(runtimeData);
-  testCnActiveSkillAllOutFireLevelThreeMultiSummon(runtimeData);
+  testCnActiveSkillAllOutFireLevelTwoAndThreeMultiSummon(runtimeData);
   testCnActiveSkillGalaxyStarRingSummon(runtimeData);
   testCnActiveSkillAnonPhantomRingSummon(runtimeData);
   testCnDropDataEnemyKillSpawnsAndCollectsExp(runtimeData);
@@ -2345,7 +2377,7 @@ async function main() {
   console.log("ok - CN active skill Fairy Guard level 1/2/3 buffs existing player-side minions and their fire");
   console.log("ok - CN active skill 111 level 1/2/3 minion AI transitions into roar shooter");
   console.log("ok - CN active skill All-Out Fire drives shooter 7000 frame 1/3/7 timeline and minion AI");
-  console.log("ok - CN active skill All-Out Fire level 3 loops zero-offset minion shooters");
+  console.log("ok - CN active skill All-Out Fire level 2/3 loops zero-offset minion shooters");
   console.log("ok - CN active skill Galaxy Star level 1/2/3 summon uses first-pass minion orbit");
   console.log("ok - CN active skill Anon Phantom level 1/2/3 summon uses formation 2 ring");
   console.log("ok - CN DropData spawns item pickups and ItemData EXP pickup is collectable");
@@ -10185,9 +10217,12 @@ function testCnActiveSkillAllOutFireShooterAndMinion(
   assertClose(minionBullet.vy, 0, "CN All-Out Fire zero-offset shooter vy");
 }
 
-function testCnActiveSkillAllOutFireLevelThreeMultiSummon(
+function testCnActiveSkillAllOutFireLevelTwoAndThreeMultiSummon(
   sourceRuntimeData: NfoOfflineRuntimeData,
 ) {
+  const middleLevelTwoSummonCase = getActiveSkillSummonCase(
+    "active-skill-all-out-fire-middle-minion-lv2",
+  );
   const middleSummonCase = getActiveSkillSummonCase(
     "active-skill-all-out-fire-middle-minion-lv3",
   );
@@ -10203,6 +10238,128 @@ function testCnActiveSkillAllOutFireLevelThreeMultiSummon(
   ));
   assert.ok(minionData);
   minionData.speed = 0;
+
+  const levelTwoInitialState = createStateWithoutEnemies(testRuntimeData);
+  const levelTwoBaseState = {
+    ...levelTwoInitialState,
+    activeSkill: {
+      ...levelTwoInitialState.activeSkill,
+      level: middleLevelTwoSummonCase.activeSkillLevel,
+    },
+    worldBounds: {
+      minX: -2000,
+      minY: -2000,
+      maxX: 2000,
+      maxY: 2000,
+    },
+  };
+  const levelTwoSummonedState = updateNfoSimulation(
+    chargeActiveSkill(levelTwoBaseState),
+    testRuntimeData,
+    { ...NO_INPUT, useActiveSkill: true },
+    1 / 30,
+  );
+
+  assert.equal(levelTwoSummonedState.minions.length, middleLevelTwoSummonCase.sameFrameSpawnMinionEventCount);
+  assert.deepEqual(levelTwoSummonedState.minions.map((candidate) => candidate.aiTypeId), [205, 206]);
+  const middleLevelTwoMinion = levelTwoSummonedState.minions.find((candidate) => (
+    candidate.aiTypeId === middleLevelTwoSummonCase.minionAITypeId
+  ));
+  assert.ok(middleLevelTwoMinion, "expected CN skill 112 level 2 to summon AI 206 minion");
+  assertClose(
+    middleLevelTwoMinion.x,
+    levelTwoBaseState.player.x
+      + middleLevelTwoSummonCase.spawnCenterOffsetX
+      + middleLevelTwoSummonCase.expectedFirstPassRadius,
+    "CN All-Out Fire level 2 middle minion x",
+  );
+  assertClose(
+    middleLevelTwoMinion.y,
+    levelTwoBaseState.player.y + middleLevelTwoSummonCase.spawnCenterOffsetY,
+    "CN All-Out Fire level 2 middle minion y",
+  );
+  const levelTwoShooterIds = new Set(levelTwoSummonedState.activeShooters.map((candidate) => (
+    candidate.shooterId
+  )));
+  assert.ok(levelTwoShooterIds.has(7000));
+  assert.ok(levelTwoShooterIds.has(7003));
+  assert.ok(levelTwoShooterIds.has(middleLevelTwoSummonCase.minionAIStateShooterId));
+  assert.equal(
+    levelTwoSummonedState.bullets.some((candidate) => (
+      candidate.bulletTypeId === middleLevelTwoSummonCase.minionAIStateShooterBulletTypeId
+    )),
+    false,
+  );
+
+  const levelTwoMinionShooterFireState = updateNfoSimulation(
+    levelTwoSummonedState,
+    testRuntimeData,
+    NO_INPUT,
+    1 / 30,
+  );
+  const levelTwoMinionShooterBullets = levelTwoMinionShooterFireState.bullets
+    .filter((candidate) => [68, 69].includes(candidate.bulletTypeId))
+    .map((candidate) => candidate.bulletTypeId)
+    .sort((left, right) => left - right);
+  assert.deepEqual(levelTwoMinionShooterBullets, [68, 69]);
+  const middleLevelTwoBullet = levelTwoMinionShooterFireState.bullets.find((candidate) => (
+    candidate.bulletTypeId === middleLevelTwoSummonCase.minionAIStateShooterBulletTypeId
+  ));
+  assert.ok(middleLevelTwoBullet, "expected CN shooter 7004 to emit bullet 69 at level 2");
+  assert.equal(middleLevelTwoBullet.canDamagePlayer, false);
+  assert.equal(middleLevelTwoSummonCase.minionAIStateShooterDirectionType, 0);
+  assert.equal(middleLevelTwoSummonCase.minionAIStateShooterFormationType, 0);
+  assert.equal(middleLevelTwoSummonCase.minionAIStateShooterFormationOffsetX, 0);
+  assert.equal(middleLevelTwoSummonCase.minionAIStateShooterFormationOffsetY, 0);
+  const middleLevelTwoBulletFrameTravel = middleLevelTwoSummonCase.minionAIStateShooterBulletSpeed / 30;
+  assertClose(
+    middleLevelTwoBullet.x,
+    middleLevelTwoMinion.x + middleLevelTwoBulletFrameTravel,
+    "CN All-Out Fire level 2 bullet 69 x",
+  );
+  assertClose(middleLevelTwoBullet.y, middleLevelTwoMinion.y, "CN All-Out Fire level 2 bullet 69 y");
+  assertClose(
+    middleLevelTwoBullet.vx,
+    middleLevelTwoSummonCase.minionAIStateShooterBulletSpeed,
+    "CN All-Out Fire level 2 middle zero-offset shooter vx",
+  );
+  assertClose(middleLevelTwoBullet.vy, 0, "CN All-Out Fire level 2 middle zero-offset shooter vy");
+
+  const levelTwoBeforeLoopState = updateNfoSimulation(
+    levelTwoMinionShooterFireState,
+    testRuntimeData,
+    NO_INPUT,
+    (middleLevelTwoSummonCase.minionAIStateShooterLoopFrameInterval - 1) / 30,
+  );
+  assert.equal(
+    levelTwoBeforeLoopState.bullets.filter((candidate) => (
+      candidate.bulletTypeId === middleLevelTwoSummonCase.minionAIStateShooterBulletTypeId
+    )).length,
+    1,
+  );
+
+  const levelTwoSecondLoopState = updateNfoSimulation(
+    levelTwoBeforeLoopState,
+    testRuntimeData,
+    NO_INPUT,
+    1 / 30,
+  );
+  assert.equal(
+    levelTwoSecondLoopState.bullets.filter((candidate) => (
+      candidate.bulletTypeId === middleLevelTwoSummonCase.minionAIStateShooterBulletTypeId
+    )).length,
+    2,
+  );
+  const levelTwoMiddleShooterAfterLoop = levelTwoSecondLoopState.activeShooters.find((candidate) => (
+    candidate.shooterId === middleLevelTwoSummonCase.minionAIStateShooterId
+  ));
+  assert.ok(levelTwoMiddleShooterAfterLoop, "expected CN level 2 shooter 7004 to remain active");
+  assertClose(
+    levelTwoMiddleShooterAfterLoop.ageFrames,
+    middleLevelTwoSummonCase.minionAIStateShooterEventFrame
+      + middleLevelTwoSummonCase.minionAIStateShooterLoopFrameInterval,
+    "CN All-Out Fire level 2 shooter 7004 second loop age",
+  );
 
   const initialState = createStateWithoutEnemies(testRuntimeData);
   const baseState = {
