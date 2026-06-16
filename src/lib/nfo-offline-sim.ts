@@ -214,6 +214,7 @@ const NFO_BULLET_SHOOTER_BEHAVIOR_TYPE = {
 
 type NfoCombatTeam = "player" | "enemy";
 type NfoBulletShooterOwnerType = "player" | "enemy" | "minion";
+type NfoSoundEventSourceType = "activeSkill" | "weapon" | "pickup";
 type BulletSpreadMode = "fan" | "radial";
 
 type BulletAngleOverrideContext = {
@@ -502,9 +503,14 @@ export type NfoSimFullScreenEffect = {
 export type NfoSimSoundEvent = {
   id: number;
   name: string;
-  activeSkillId: number;
-  activeSkillLevel: number;
-  eventFrame: number;
+  sourceType: NfoSoundEventSourceType;
+  activeSkillId?: number;
+  activeSkillLevel?: number;
+  eventFrame?: number;
+  weaponId?: number;
+  weaponLevel?: number;
+  itemId?: number;
+  itemType?: number;
   remainingSeconds: number;
 };
 
@@ -2137,6 +2143,44 @@ function recordActiveSkillSoundEvent(
   soundName: string | undefined,
   eventFrame: number,
 ) {
+  recordSoundEvent(state, soundName, {
+    sourceType: "activeSkill",
+    activeSkillId: state.activeSkill.id,
+    activeSkillLevel: state.activeSkill.level,
+    eventFrame,
+  });
+}
+
+function recordWeaponSoundEvent(
+  state: NfoSimulationState,
+  weapon: NfoWeaponData,
+  weaponLevel: NfoWeaponLevel,
+) {
+  recordSoundEvent(state, weapon.fireSound, {
+    sourceType: "weapon",
+    weaponId: weapon.id,
+    weaponLevel: weaponLevel.level,
+  });
+}
+
+function recordPickupSoundEvent(
+  state: NfoSimulationState,
+  runtimeData: NfoOfflineRuntimeData,
+  pickup: NfoSimPickup,
+) {
+  const item = getRuntimeItem(runtimeData, pickup.itemId);
+  recordSoundEvent(state, item?.getSound, {
+    sourceType: "pickup",
+    itemId: pickup.itemId,
+    itemType: pickup.itemType,
+  });
+}
+
+function recordSoundEvent(
+  state: NfoSimulationState,
+  soundName: string | undefined,
+  metadata: Omit<NfoSimSoundEvent, "id" | "name" | "remainingSeconds">,
+) {
   const name = soundName?.trim() ?? "";
   if (!name) {
     return;
@@ -2145,9 +2189,7 @@ function recordActiveSkillSoundEvent(
   state.soundEvents.push({
     id: state.nextEntityId++,
     name,
-    activeSkillId: state.activeSkill.id,
-    activeSkillLevel: state.activeSkill.level,
-    eventFrame,
+    ...metadata,
     remainingSeconds: DEFAULT_SOUND_EVENT_SECONDS,
   });
 }
@@ -2660,6 +2702,7 @@ function updateWeaponFire(
     }
 
     applyWeaponSelfBuff(runtimeData, weaponLevel, state);
+    recordWeaponSoundEvent(state, context.weapon, weaponLevel);
   }
 
   const fireGroupsBeforeShot = state.player.pendingFireGroups > 0
@@ -2908,6 +2951,7 @@ function updateMinionOwnWeaponFire(
       ownerType: "minion",
     });
   }
+  recordWeaponSoundEvent(state, weapon, weaponLevel);
 
   const fireGroupsBeforeShot = minion.pendingFireGroups > 0
     ? minion.pendingFireGroups
@@ -4882,6 +4926,7 @@ function collectPickupEffect(
   pickup: NfoSimPickup,
 ): boolean {
   state.collectedItems[pickup.itemId] = (state.collectedItems[pickup.itemId] ?? 0) + 1;
+  recordPickupSoundEvent(state, runtimeData, pickup);
   if (pickup.itemType === NFO_ITEM_TYPE.exp) {
     const gainedExp = getModifiedExpValue(
       pickup.value,

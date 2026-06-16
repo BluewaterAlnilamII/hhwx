@@ -292,6 +292,10 @@ const TESTS: Array<{ name: string; run: () => void }> = [
     run: testActiveSkillRecordsSoundEvents,
   },
   {
+    name: "weapon fire and pickup collection record sound events",
+    run: testWeaponFireAndPickupCollectionRecordSoundEvents,
+  },
+  {
     name: "active skill same-frame buffs snapshot shooter source modifiers",
     run: testActiveSkillSameFrameBuffSnapshotsShooterSourceModifiers,
   },
@@ -3128,6 +3132,7 @@ function testActiveSkillRecordsSoundEvents() {
 
   assert.equal(nextState.soundEvents.length, 1);
   assert.equal(nextState.soundEvents[0]?.name, "active_fixture");
+  assert.equal(nextState.soundEvents[0]?.sourceType, "activeSkill");
   assert.equal(nextState.soundEvents[0]?.activeSkillId, 3000);
   assert.equal(nextState.soundEvents[0]?.activeSkillLevel, 1);
   assert.equal(nextState.soundEvents[0]?.eventFrame, 1);
@@ -3141,6 +3146,80 @@ function testActiveSkillRecordsSoundEvents() {
   );
 
   assert.equal(expiredState.soundEvents.length, 0);
+}
+
+function testWeaponFireAndPickupCollectionRecordSoundEvents() {
+  const runtimeData = createRuntimeFixture();
+  const weapon = runtimeData.weapons.find((candidate) => candidate.id === 100);
+  assert.ok(weapon);
+  weapon.fireSound = "weapon_fixture";
+  runtimeData.items.push({
+    id: 900,
+    name: "Fixture EXP",
+    description: "",
+    prefab: "",
+    iconSpriteName: "",
+    itemType: 0,
+    value: 10,
+    lifetimeFrames: 600,
+    getSound: "pickup_fixture",
+    canBeMagneted: true,
+  });
+
+  const firedState = updateNfoSimulation(
+    createStateWithEnemy(runtimeData, 100),
+    runtimeData,
+    NO_INPUT,
+    0,
+  );
+  const weaponSound = firedState.soundEvents.find((candidate) => (
+    candidate.name === "weapon_fixture"
+  ));
+  assert.ok(weaponSound, "expected weapon fire to record a sound event");
+  assert.equal(weaponSound.sourceType, "weapon");
+  assert.equal(weaponSound.weaponId, 100);
+  assert.equal(weaponSound.weaponLevel, 1);
+  assert.equal(weaponSound.remainingSeconds, 0.5);
+
+  const pickupState: NfoSimulationState = {
+    ...firedState,
+    player: {
+      ...firedState.player,
+      fireCooldownSeconds: 999,
+    },
+    enemies: [],
+    bullets: [],
+    activeShooters: [],
+    soundEvents: [],
+    pickups: [
+      {
+        id: 9000,
+        itemId: 900,
+        name: "Fixture EXP",
+        itemType: 0,
+        value: 10,
+        canBeMagneted: true,
+        radius: 5,
+        remainingSeconds: 10,
+        x: firedState.player.x,
+        y: firedState.player.y,
+      },
+    ],
+  };
+  const collectedState = updateNfoSimulation(
+    pickupState,
+    runtimeData,
+    NO_INPUT,
+    0,
+  );
+  const pickupSound = collectedState.soundEvents.find((candidate) => (
+    candidate.name === "pickup_fixture"
+  ));
+  assert.ok(pickupSound, "expected pickup collection to record a sound event");
+  assert.equal(pickupSound.sourceType, "pickup");
+  assert.equal(pickupSound.itemId, 900);
+  assert.equal(pickupSound.itemType, 0);
+  assert.equal(pickupSound.remainingSeconds, 0.5);
 }
 
 function testActiveSkillSameFrameBuffSnapshotsShooterSourceModifiers() {

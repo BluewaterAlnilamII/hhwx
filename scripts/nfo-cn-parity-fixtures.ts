@@ -59,6 +59,7 @@ type WeaponDirectFireCaseSpec = {
   expectedForce?: number;
   expectedMotionMode?: ProjectileMotionMode;
   expectedWeaponDescriptionIncludes?: string;
+  expectedWeaponFireSound?: string;
 };
 
 type WeaponMinionCaseSpec = {
@@ -316,6 +317,7 @@ type ItemCaseSpec = {
   expectedValue: number;
   expectedLifetimeFrames: number;
   expectedCanBeMagneted: boolean;
+  expectedGetSound?: string;
 };
 
 type DropCaseSpec = {
@@ -486,6 +488,7 @@ export type NfoCnParityWeaponDirectFireCase = {
   weaponId: number;
   weaponName: string;
   weaponDescription: string;
+  weaponFireSound: string;
   weaponLevel: number;
   fireBulletIndex: number;
   requiresEnemyTarget: boolean;
@@ -1057,6 +1060,7 @@ export type NfoCnParityItemCase = {
   value: number;
   lifetimeFrames: number;
   canBeMagneted: boolean;
+  getSound: string;
   prefab: string;
   iconSpriteName: string;
 };
@@ -1410,6 +1414,7 @@ const WEAPON_DIRECT_FIRE_CASE_SPECS: WeaponDirectFireCaseSpec[] = [
     expectedBulletSpeed: 800,
     expectedDamageJudgeType: 0,
     expectedColliderType: 0,
+    expectedWeaponFireSound: "se_heal",
   },
   {
     id: "weapon-direct-dark-summon-targeted-projectile-lv1",
@@ -2781,6 +2786,7 @@ const ITEM_CASE_SPECS: ItemCaseSpec[] = [
     expectedValue: 10,
     expectedLifetimeFrames: 600,
     expectedCanBeMagneted: true,
+    expectedGetSound: "se_coin",
   },
   {
     id: "item-bomb",
@@ -2813,6 +2819,7 @@ const ITEM_CASE_SPECS: ItemCaseSpec[] = [
     expectedValue: 5,
     expectedLifetimeFrames: 999999,
     expectedCanBeMagneted: true,
+    expectedGetSound: "se_heal",
   },
   {
     id: "item-coin-one",
@@ -2821,6 +2828,7 @@ const ITEM_CASE_SPECS: ItemCaseSpec[] = [
     expectedValue: 1,
     expectedLifetimeFrames: 600,
     expectedCanBeMagneted: true,
+    expectedGetSound: "se_coin",
   },
 ];
 
@@ -3633,12 +3641,22 @@ function buildWeaponDirectFireCase(
       + `${spec.expectedWeaponDescriptionIncludes}.`,
     );
   }
+  if (
+    spec.expectedWeaponFireSound !== undefined
+    && weapon.fireSound !== spec.expectedWeaponFireSound
+  ) {
+    throw new Error(
+      `Weapon direct fire case ${spec.id} expected fire sound `
+      + `${spec.expectedWeaponFireSound}, got ${weapon.fireSound}.`,
+    );
+  }
 
   return {
     id: spec.id,
     weaponId: weapon.id,
     weaponName: weapon.name,
     weaponDescription: weapon.description ?? "",
+    weaponFireSound: weapon.fireSound,
     weaponLevel: weaponLevel.level,
     fireBulletIndex,
     requiresEnemyTarget: spec.expectedRequiresEnemyTarget ?? false,
@@ -5811,6 +5829,12 @@ function buildItemCase(
       + `got ${item.canBeMagneted}.`,
     );
   }
+  if (spec.expectedGetSound !== undefined && item.getSound !== spec.expectedGetSound) {
+    throw new Error(
+      `Item case ${spec.id} expected get sound ${spec.expectedGetSound}, `
+      + `got ${item.getSound}.`,
+    );
+  }
 
   return {
     id: spec.id,
@@ -5820,6 +5844,7 @@ function buildItemCase(
     value: item.value,
     lifetimeFrames: item.lifetimeFrames,
     canBeMagneted: item.canBeMagneted,
+    getSound: item.getSound,
     prefab: item.prefab,
     iconSpriteName: item.iconSpriteName,
   };

@@ -781,6 +781,11 @@ direction-`1` fireballs (`BulletTypeID = 11`, `BulletCount = 4`,
 `BulletSpeed = 600`). The CN fixture locks level-scaled snow-field
 `BulletAttack = 20`/`40`/`60` and `BulletSize = 240`/`280`/`320`, plus
 fireball `BulletAttack = 30`/`60`/`80` with `BulletSize = 30`.
+The serializable sound metadata path now also records CN
+`WeaponData.weaponFireSE` when a selected or minion-owned weapon actually fires,
+and `ItemData.itemGetSE` when a pickup is collected. The current implementation
+only preserves these sound names as short-lived simulation events; browser audio
+playback, mixer behavior, and audio bundle conversion remain pending.
 Active skill `110` / `Ultimate Heart Light` now locks the active-skill level
 switch for its starlight shooters: level `1` creates shooter `6000`, level `2`
 creates shooter `6001`, and level `3` creates shooter `6002`. Each level's
@@ -1505,7 +1510,9 @@ Weapon behavior staging:
   `SpawnMinionData`, `spawnPosSelector`, full-screen effect names as short-lived
   serializable `fullScreenEffects` events consumed by a first-pass Phaser flash,
   `PlaySoundName` as short-lived serializable `soundEvents`, and the separate
-  CN `BulletShooterData` table. The simulation currently charges the
+  CN `BulletShooterData` table. The same `soundEvents` stream now also preserves
+  selected/minion weapon `weaponFireSE` and collected item `itemGetSE` names for
+  the future audio layer. The simulation currently charges the
   selected character's skill, accepts an active skill input, applies timeline
   `AddBuffDatas` to player-side active buff state, creates placeholder minions
   from timeline `SpawnMinionData` when their event frame is crossed, and spawns

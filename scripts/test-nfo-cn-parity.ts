@@ -373,6 +373,7 @@ async function main() {
   assert.equal(kirakiraCase.bulletSize, 30);
   assert.equal(kirakiraCase.bulletDamageJudgeDelayFrames, 0);
   assert.equal(kirakiraCase.bulletDamageJudgeCooldownFrames, 5);
+  assert.equal(kirakiraCase.weaponFireSound, "se_heal");
 
   const darkSummonCase = getWeaponDirectFireCase(
     "weapon-direct-dark-summon-targeted-projectile-lv1",
@@ -1886,12 +1887,12 @@ async function main() {
   });
 
   const itemCases = [
-    ["item-exp-small", 1, 0, 10, 600, true],
-    ["item-bomb", 4, 1, 0, 600, false],
-    ["item-magnet", 5, 2, 0, 600, false],
-    ["item-level-up", 6, 3, 0, 600, false],
-    ["item-heal-small", 7, 4, 5, 999999, true],
-    ["item-coin-one", 10, 5, 1, 600, true],
+    ["item-exp-small", 1, 0, 10, 600, true, "se_coin"],
+    ["item-bomb", 4, 1, 0, 600, false, ""],
+    ["item-magnet", 5, 2, 0, 600, false, ""],
+    ["item-level-up", 6, 3, 0, 600, false, ""],
+    ["item-heal-small", 7, 4, 5, 999999, true, "se_heal"],
+    ["item-coin-one", 10, 5, 1, 600, true, "se_coin"],
   ] as const;
   for (const [
     id,
@@ -1900,6 +1901,7 @@ async function main() {
     value,
     lifetimeFrames,
     canBeMagneted,
+    getSound,
   ] of itemCases) {
     const itemCase = getItemCase(id);
     assert.equal(itemCase.itemId, itemId);
@@ -1907,6 +1909,7 @@ async function main() {
     assert.equal(itemCase.value, value);
     assert.equal(itemCase.lifetimeFrames, lifetimeFrames);
     assert.equal(itemCase.canBeMagneted, canBeMagneted);
+    assert.equal(itemCase.getSound, getSound);
   }
 
   const minorEnemyDropCase = getDropCase("drop-minor-enemy-exp-small-coin");
@@ -3785,6 +3788,15 @@ function testCnWeaponDirectFireTargetlessMultiBullet(
     }), { x: 0, y: 0 });
 
     assert.equal(bullets.length, directFireCase.bulletCount);
+    if (directFireCase.weaponFireSound) {
+      const soundEvent = firedState.soundEvents.find((candidate) => (
+        candidate.name === directFireCase.weaponFireSound
+      ));
+      assert.ok(soundEvent, `expected ${directFireCase.id} to record a weapon fire sound`);
+      assert.equal(soundEvent.sourceType, "weapon");
+      assert.equal(soundEvent.weaponId, directFireCase.weaponId);
+      assert.equal(soundEvent.weaponLevel, directFireCase.weaponLevel);
+    }
     assertClose(firedState.player.facingAngle, Math.PI / 2, `${directFireCase.id} player facing`);
     assert.ok(bullets.every((bullet) => bullet.colliderType === directFireCase.bulletColliderType));
     assert.ok(bullets.every((bullet) => bullet.colliderWidth === directFireCase.bulletSize));
@@ -11337,6 +11349,13 @@ function testCnDropDataEnemyKillSpawnsAndCollectsExp(
   assert.equal(collectedState.collectedItems[expItemCase.itemId], 1);
   assert.equal(collectedState.collectedExp, expectedExp);
   assert.equal(collectedState.pickups.length, 0);
+  const expSoundEvent = collectedState.soundEvents.find((candidate) => (
+    candidate.name === expItemCase.getSound
+      && candidate.itemId === expItemCase.itemId
+  ));
+  assert.ok(expSoundEvent, "expected CN EXP pickup collection to record itemGetSE");
+  assert.equal(expSoundEvent.sourceType, "pickup");
+  assert.equal(expSoundEvent.itemType, expItemCase.itemType);
 }
 
 function testCnDropDataMinorEnemyCoinPickup(
@@ -11424,6 +11443,13 @@ function testCnDropDataMinorEnemyCoinPickup(
   assert.equal(collectedState.collectedCoin, coinItemCase.value);
   assert.equal(collectedState.pickups.length, 1);
   assert.equal(collectedState.pickups[0]?.itemId, expItemCase.itemId);
+  const coinSoundEvent = collectedState.soundEvents.find((candidate) => (
+    candidate.name === coinItemCase.getSound
+      && candidate.itemId === coinItemCase.itemId
+  ));
+  assert.ok(coinSoundEvent, "expected CN coin pickup collection to record itemGetSE");
+  assert.equal(coinSoundEvent.sourceType, "pickup");
+  assert.equal(coinSoundEvent.itemType, coinItemCase.itemType);
 }
 
 function testCnDropDataCommonBombMagnetHeal(
