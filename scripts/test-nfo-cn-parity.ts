@@ -6201,6 +6201,24 @@ function testCnWeaponDirectFireFriendlyBuff(sourceRuntimeData: NfoOfflineRuntime
       radius: 10,
     },
   );
+  const overlappingMinion = {
+    id: 880002,
+    minionId: 50,
+    aiTypeId: 0,
+    weaponId: 0,
+    weaponLevel: 1,
+    name: "CN direct friendly buff ally probe",
+    speed: 0,
+    radius: 28,
+    x: baseState.player.x,
+    y: baseState.player.y,
+    remainingSeconds: 10,
+    aiFireCooldownSeconds: 0,
+    fireCooldownSeconds: 0,
+    pendingFireGroups: 0,
+    canFireOwnWeapon: false,
+    activeBuffs: [],
+  };
   const firedState = updateNfoSimulation(
     {
       ...baseState,
@@ -6209,6 +6227,7 @@ function testCnWeaponDirectFireFriendlyBuff(sourceRuntimeData: NfoOfflineRuntime
         fireCooldownSeconds: 0,
       },
       enemies: [overlappingEnemy],
+      minions: [overlappingMinion],
     },
     testRuntimeData,
     NO_INPUT,
@@ -6218,6 +6237,9 @@ function testCnWeaponDirectFireFriendlyBuff(sourceRuntimeData: NfoOfflineRuntime
     candidate.bulletTypeId === directFireCase.bulletTypeId
   ));
   const playerBuff = firedState.player.activeBuffs.find((buff) => (
+    buff.id === directFireCase.hitBuffId
+  ));
+  const minionBuff = firedState.minions[0]?.activeBuffs.find((buff) => (
     buff.id === directFireCase.hitBuffId
   ));
   const enemyAfter = firedState.enemies.find((enemy) => enemy.id === overlappingEnemy.id);
@@ -6237,6 +6259,18 @@ function testCnWeaponDirectFireFriendlyBuff(sourceRuntimeData: NfoOfflineRuntime
   assert.equal(playerBuff.attributes[0]?.value, 1);
   assert.equal(playerBuff.attributes[1]?.attributeType, 4);
   assert.equal(playerBuff.attributes[1]?.value, 50);
+  assert.ok(
+    minionBuff,
+    "expected CN weapon 27 direct bullet 32 to apply buff 7 to an allied minion",
+  );
+  assert.equal(minionBuff.type, 1);
+  assert.equal(minionBuff.value, 1);
+  assertClose(minionBuff.remainingSeconds, 2, "CN Domination minion buff duration seconds");
+  assert.equal(minionBuff.attributes.length, 2);
+  assert.equal(minionBuff.attributes[0]?.attributeType, 3);
+  assert.equal(minionBuff.attributes[0]?.value, 1);
+  assert.equal(minionBuff.attributes[1]?.attributeType, 4);
+  assert.equal(minionBuff.attributes[1]?.value, 50);
   assert.ok(enemyAfter, "expected CN weapon 27 overlapping enemy to remain alive");
   assert.equal(enemyAfter.hp, overlappingEnemy.hp);
   assert.equal(enemyAfter.activeBuffs.length, 0);
