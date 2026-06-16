@@ -667,7 +667,8 @@ first-pass fallback where that bullet travels along +X when no enemy target is
 present. It also locks
 one boss-style direction `2` sample: shooter `2100` uses
 `BulletHitTargetType = 1`, fires toward the player side from its event origin,
-and applies event `bulletRotationType = 2`. The fixture also locks shooter
+applies event `bulletRotationType = 2`, and keeps bullet `101`'s
+`facingAngle` on the rotate-by-core firing angle. The fixture also locks shooter
 `2001` from CN AI `28`: the AI advances from state `1` to state `2`, creates
 the Hydra fireball shooter, and the shooter fires bullet `53` with
 direction `2`, event `bulletRotationType = 0`, BulletData rotate type `1`,
@@ -1289,7 +1290,10 @@ Weapon behavior staging:
   now acts as an event-level rotate override when it is greater than zero,
   falling back to `BulletData.bulletCompRotateType` otherwise. The frozen CN
   snapshot has one non-zero shooter event for shooter `2100` / bullet `101`,
-  which is locked in the CN parity fixture. This remains separate from the
+  which is locked in the CN parity fixture together with first-pass
+  `facingAngle = angle` rotate-by-core behavior. Because the event rotation
+  and `BulletData` rotation are both `2`, this fixture does not disambiguate
+  override precedence. This remains separate from the
   weapon-specific homing and player-orbit fixtures for weapon `5` and weapon
   `6`.
 - Current hit-target handling maps CN `BulletHitTargetType`. Type `0` remains

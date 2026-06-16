@@ -2394,7 +2394,7 @@ async function main() {
   console.log("ok - CN weapon level MinionCount creates multiple firing minions");
   console.log("ok - CN weapon level spawnMinionData drives minion AI shooters");
   console.log("ok - CN weapon level-up switches spawnMinionData AI shooters");
-  console.log("ok - CN shooter direction 2 targets the player side with event rotation");
+  console.log("ok - CN shooter direction 2 targets the player side with rotate-by-core facing");
   console.log("ok - CN shooter on-destroy event bullets fire follow-up bullets");
   console.log("ok - CN active skill Chainsaw God repeats damage and pulls from nearest-enemy field");
   console.log("ok - CN active skill Chainsaw God level 2/3 switches shooter data");
@@ -6471,6 +6471,8 @@ function testCnShooterDirectionTwoFriendlyTargetAndRotation(
   assert.equal(bullet.hitTargetType, 1);
   assert.ok(bullet.vx < 0);
   assertClose(bullet.vy, 0, "CN direction 2 vy");
+  assertClose(bullet.angle, Math.PI, "CN direction 2 core angle");
+  assertClose(bullet.facingAngle, bullet.angle, "CN rotate-by-core facing angle");
 }
 
 function testCnShooterOnDestroyEventBullet(sourceRuntimeData: NfoOfflineRuntimeData) {
