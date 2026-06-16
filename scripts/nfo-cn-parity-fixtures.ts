@@ -747,8 +747,10 @@ export type NfoCnParityAIActionCase = {
   shooterDirectionOffsetAngle: number;
   shooterBulletTypeId: number;
   shooterBulletDataRotationType: number;
+  shooterBulletAttack: number;
   shooterBulletCount: number;
   shooterBulletSpeed: number;
+  shooterBulletSize: number;
   shooterBulletHitTargetType: number;
   shooterEvents: NfoCnParityAIActionShooterEvent[];
 };
@@ -2244,6 +2246,38 @@ const AI_ACTION_CASE_SPECS: AIActionCaseSpec[] = [
     expectedShooterBulletTypeId: 101,
     expectedShooterDirectionType: 2,
     expectedShooterRotationType: 2,
+  },
+  {
+    id: "ai-boss-cat-creates-shooter-2101",
+    aiTypeId: 67,
+    expectedShooterId: 2101,
+    expectedShooterBulletTypeId: 102,
+    expectedShooterDirectionType: 2,
+    expectedShooterRotationType: 0,
+  },
+  {
+    id: "ai-boss-cat-creates-shooter-2102",
+    aiTypeId: 68,
+    expectedShooterId: 2102,
+    expectedShooterBulletTypeId: 103,
+    expectedShooterDirectionType: 2,
+    expectedShooterRotationType: 0,
+  },
+  {
+    id: "ai-boss-cat-creates-shooter-2103",
+    aiTypeId: 69,
+    expectedShooterId: 2103,
+    expectedShooterBulletTypeId: 104,
+    expectedShooterDirectionType: 2,
+    expectedShooterRotationType: 0,
+  },
+  {
+    id: "ai-boss-cat-creates-shooter-2104",
+    aiTypeId: 70,
+    expectedShooterId: 2104,
+    expectedShooterBulletTypeId: 105,
+    expectedShooterDirectionType: 2,
+    expectedShooterRotationType: 0,
   },
   {
     id: "ai-hydra-creates-friendly-target-fireball-shooter-2001",
@@ -4638,8 +4672,10 @@ function buildAIActionCase(
     shooterDirectionOffsetAngle: shooterEvent.bulletFireDirectionOffsetAngle,
     shooterBulletTypeId: shooterBullet.bulletTypeId,
     shooterBulletDataRotationType: shooterBulletData?.rotateType ?? 0,
+    shooterBulletAttack: shooterBullet.bulletAttack,
     shooterBulletCount: shooterBullet.bulletCount,
     shooterBulletSpeed: shooterBullet.bulletSpeed,
+    shooterBulletSize: shooterBullet.bulletSize,
     shooterBulletHitTargetType: shooterBullet.bulletHitTargetType,
     shooterEvents,
   };

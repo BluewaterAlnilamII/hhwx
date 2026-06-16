@@ -50,7 +50,7 @@ async function main() {
   assert.equal(fixture.activeSkillShooterEventCount, 54);
   assert.equal(fixture.weaponLevelShooterCount, 32);
   assert.equal(fixture.selectedActiveSkillShooterSpawnCases.length, 23);
-  assert.equal(fixture.selectedAIActionCases.length, 3);
+  assert.equal(fixture.selectedAIActionCases.length, 7);
   assert.equal(fixture.selectedWeaponShooterCases.length, 9);
   assert.equal(fixture.selectedWeaponDirectFireCases.length, 31);
   assert.equal(fixture.selectedActiveSkillShooterHitBuffCases.length, 7);
@@ -1176,24 +1176,76 @@ async function main() {
   assert.equal(dokiDokiShooterCase.buffType, 2);
   assert.equal(dokiDokiShooterCase.buffDurationFrames, 150);
 
-  const aiActionCase = getAIActionCase("ai-boss-cat-creates-shooter-2100");
-  assert.equal(aiActionCase.aiTypeId, 66);
-  assert.equal(aiActionCase.firstStateId, 1);
-  assert.equal(aiActionCase.firstStateLastFrame, 30);
-  assert.equal(aiActionCase.firstStateNextStateId, 2);
-  assert.equal(aiActionCase.firstStateNextProbability, 100);
-  assert.equal(aiActionCase.stateId, 2);
-  assert.equal(aiActionCase.bulletFireCooldownFrames, 30);
-  assert.equal(aiActionCase.fireBulletCount, 0);
-  assert.equal(aiActionCase.shooterId, 2100);
-  assert.equal(aiActionCase.shooterEventFrame, 7);
-  assert.equal(aiActionCase.shooterDirectionType, 2);
-  assert.equal(aiActionCase.shooterRotationType, 2);
-  assert.equal(aiActionCase.shooterFormationOffsetX, 20);
-  assert.equal(aiActionCase.shooterFormationOffsetY, 0);
-  assert.equal(aiActionCase.shooterBulletTypeId, 101);
-  assert.equal(aiActionCase.shooterBulletDataRotationType, 2);
-  assert.equal(aiActionCase.shooterBulletHitTargetType, 1);
+  const bossShooterCases = [
+    {
+      id: "ai-boss-cat-creates-shooter-2100",
+      aiTypeId: 66,
+      shooterId: 2100,
+      bulletTypeId: 101,
+      shooterRotationType: 2,
+      bulletRotateType: 2,
+      bulletSize: 50,
+    },
+    {
+      id: "ai-boss-cat-creates-shooter-2101",
+      aiTypeId: 67,
+      shooterId: 2101,
+      bulletTypeId: 102,
+      shooterRotationType: 0,
+      bulletRotateType: 1,
+      bulletSize: 50,
+    },
+    {
+      id: "ai-boss-cat-creates-shooter-2102",
+      aiTypeId: 68,
+      shooterId: 2102,
+      bulletTypeId: 103,
+      shooterRotationType: 0,
+      bulletRotateType: 0,
+      bulletSize: 100,
+    },
+    {
+      id: "ai-boss-cat-creates-shooter-2103",
+      aiTypeId: 69,
+      shooterId: 2103,
+      bulletTypeId: 104,
+      shooterRotationType: 0,
+      bulletRotateType: 0,
+      bulletSize: 50,
+    },
+    {
+      id: "ai-boss-cat-creates-shooter-2104",
+      aiTypeId: 70,
+      shooterId: 2104,
+      bulletTypeId: 105,
+      shooterRotationType: 0,
+      bulletRotateType: 0,
+      bulletSize: 50,
+    },
+  ];
+  for (const bossShooterCase of bossShooterCases) {
+    const aiActionCase = getAIActionCase(bossShooterCase.id);
+    assert.equal(aiActionCase.aiTypeId, bossShooterCase.aiTypeId);
+    assert.equal(aiActionCase.firstStateId, 1);
+    assert.equal(aiActionCase.firstStateLastFrame, 30);
+    assert.equal(aiActionCase.firstStateNextStateId, 2);
+    assert.equal(aiActionCase.firstStateNextProbability, 100);
+    assert.equal(aiActionCase.stateId, 2);
+    assert.equal(aiActionCase.bulletFireCooldownFrames, 30);
+    assert.equal(aiActionCase.fireBulletCount, 0);
+    assert.equal(aiActionCase.shooterId, bossShooterCase.shooterId);
+    assert.equal(aiActionCase.shooterEventFrame, 7);
+    assert.equal(aiActionCase.shooterDirectionType, 2);
+    assert.equal(aiActionCase.shooterRotationType, bossShooterCase.shooterRotationType);
+    assert.equal(aiActionCase.shooterFormationOffsetX, 20);
+    assert.equal(aiActionCase.shooterFormationOffsetY, 0);
+    assert.equal(aiActionCase.shooterBulletTypeId, bossShooterCase.bulletTypeId);
+    assert.equal(aiActionCase.shooterBulletAttack, 1);
+    assert.equal(aiActionCase.shooterBulletSpeed, 600);
+    assert.equal(aiActionCase.shooterBulletSize, bossShooterCase.bulletSize);
+    assert.equal(aiActionCase.shooterBulletDataRotationType, bossShooterCase.bulletRotateType);
+    assert.equal(aiActionCase.shooterBulletHitTargetType, 1);
+  }
 
   const hydraActionCase = getAIActionCase(
     "ai-hydra-creates-friendly-target-fireball-shooter-2001",
@@ -8574,50 +8626,98 @@ function assertCnActiveSkillKiraKiraDokiDokiDelayedStunFieldCase(
 }
 
 function testCnAIDataCreatesBossShooter(sourceRuntimeData: NfoOfflineRuntimeData) {
-  const testRuntimeData = configureRuntimeForShooter(sourceRuntimeData, 2100);
-  const baseState = createStateWithoutEnemies(testRuntimeData);
-  const state = {
-    ...baseState,
-    enemies: [
-      createEnemyFixture(
-        baseState,
-        baseState.player.x + 100,
-        baseState.player.y,
-        {
-          aiTypeId: 66,
-          attack: 2,
-          speed: 0,
-          radius: 5,
-        },
-      ),
-    ],
-  };
-  const idleState = updateNfoSimulation(state, testRuntimeData, NO_INPUT, 0);
-  assert.equal(idleState.activeShooters.length, 0);
-  assert.equal(idleState.enemies[0]?.aiStateId, 1);
+  for (const caseId of [
+    "ai-boss-cat-creates-shooter-2100",
+    "ai-boss-cat-creates-shooter-2101",
+    "ai-boss-cat-creates-shooter-2102",
+    "ai-boss-cat-creates-shooter-2103",
+    "ai-boss-cat-creates-shooter-2104",
+  ]) {
+    const aiActionCase = getAIActionCase(caseId);
+    const testRuntimeData = configureRuntimeForAI(sourceRuntimeData);
+    const baseState = createStateWithoutEnemies(testRuntimeData);
+    const bossEnemy = createEnemyFixture(
+      baseState,
+      baseState.player.x + 100,
+      baseState.player.y,
+      {
+        aiTypeId: aiActionCase.aiTypeId,
+        attack: 2,
+        speed: 0,
+        radius: 5,
+      },
+    );
+    const state = {
+      ...baseState,
+      enemies: [bossEnemy],
+    };
+    const idleState = updateNfoSimulation(state, testRuntimeData, NO_INPUT, 0);
+    assert.equal(idleState.activeShooters.length, 0);
+    assert.equal(idleState.enemies[0]?.aiStateId, aiActionCase.firstStateId);
 
-  const aiActionCase = getAIActionCase("ai-boss-cat-creates-shooter-2100");
-  const spawnedShooterState = updateNfoSimulation(
-    idleState,
-    testRuntimeData,
-    NO_INPUT,
-    aiActionCase.firstStateLastFrame / 30,
-  );
-  const firedShooterState = updateNfoSimulation(
-    spawnedShooterState,
-    testRuntimeData,
-    NO_INPUT,
-    7 / 30,
-  );
-  const bullet = firedShooterState.bullets.find((candidate) => candidate.bulletTypeId === 101);
-
-  assert.equal(spawnedShooterState.activeShooters[0]?.shooterId, 2100);
-  assert.equal(spawnedShooterState.activeShooters[0]?.sourceTeam, "enemy");
-  assert.equal(spawnedShooterState.enemies[0]?.aiStateId, aiActionCase.stateId);
-  assert.ok(bullet, "expected CN AI 66 shooter 2100 to fire bullet 101");
-  assert.equal(bullet.canDamagePlayer, true);
-  assert.equal(bullet.rotateType, 2);
-  assert.equal(bullet.hitTargetType, 1);
+    const spawnedShooterState = updateNfoSimulation(
+      idleState,
+      testRuntimeData,
+      NO_INPUT,
+      aiActionCase.firstStateLastFrame / 30,
+    );
+    const shooter = spawnedShooterState.activeShooters.find((candidate) => (
+      candidate.shooterId === aiActionCase.shooterId
+    ));
+    const waitingShooterState = updateNfoSimulation(
+      spawnedShooterState,
+      testRuntimeData,
+      NO_INPUT,
+      (aiActionCase.shooterEventFrame - 1) / 30,
+    );
+    assert.equal(
+      waitingShooterState.bullets.some((candidate) => (
+        candidate.bulletTypeId === aiActionCase.shooterBulletTypeId
+      )),
+      false,
+    );
+    const firedShooterState = updateNfoSimulation(
+      waitingShooterState,
+      testRuntimeData,
+      NO_INPUT,
+      1 / 30,
+    );
+    const bullet = firedShooterState.bullets.find((candidate) => (
+      candidate.bulletTypeId === aiActionCase.shooterBulletTypeId
+    ));
+    assert.ok(shooter, `expected CN AI ${aiActionCase.aiTypeId} to create shooter ${aiActionCase.shooterId}`);
+    assert.equal(shooter.sourceTeam, "enemy");
+    assert.equal(spawnedShooterState.enemies[0]?.aiStateId, aiActionCase.stateId);
+    assert.ok(
+      bullet,
+      `expected CN AI ${aiActionCase.aiTypeId} shooter ${aiActionCase.shooterId} `
+        + `to fire bullet ${aiActionCase.shooterBulletTypeId}`,
+    );
+    assert.equal(bullet.canDamagePlayer, true);
+    assert.equal(bullet.rotateType, aiActionCase.shooterBulletDataRotationType);
+    assert.equal(bullet.hitTargetType, aiActionCase.shooterBulletHitTargetType);
+    assert.equal(bullet.damage, aiActionCase.shooterBulletAttack + bossEnemy.attack);
+    assert.equal(bullet.colliderWidth, aiActionCase.shooterBulletSize);
+    const expectedOriginX = shooter.x + aiActionCase.shooterFormationOffsetX;
+    const expectedOriginY = shooter.y + aiActionCase.shooterFormationOffsetY;
+    const expectedDirectionX = spawnedShooterState.player.x - expectedOriginX;
+    const expectedDirectionY = spawnedShooterState.player.y - expectedOriginY;
+    const expectedDirectionLength = Math.hypot(expectedDirectionX, expectedDirectionY);
+    const inferredOriginX = bullet.x - bullet.vx / 30;
+    const inferredOriginY = bullet.y - bullet.vy / 30;
+    assertClose(inferredOriginX, expectedOriginX, `CN boss shooter ${aiActionCase.shooterId} bullet origin x`);
+    assertClose(inferredOriginY, expectedOriginY, `CN boss shooter ${aiActionCase.shooterId} bullet origin y`);
+    assertClose(
+      bullet.vx,
+      (expectedDirectionX / expectedDirectionLength) * aiActionCase.shooterBulletSpeed,
+      `CN boss shooter ${aiActionCase.shooterId} bullet vx`,
+    );
+    assertClose(
+      bullet.vy,
+      (expectedDirectionY / expectedDirectionLength) * aiActionCase.shooterBulletSpeed,
+      `CN boss shooter ${aiActionCase.shooterId} bullet vy`,
+    );
+  }
 }
 
 function testCnAIDataCreatesHydraFriendlyTargetFireballShooter(
