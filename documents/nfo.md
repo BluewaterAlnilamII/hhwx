@@ -678,8 +678,9 @@ with slow hit buff `1` while following the same player-facing angle path, CN
 weapon `15` zero-speed circular bullet `21`
 firing without an enemy target and applying freeze buff `2`, CN weapon `17`
 zero-speed circular bullet `23` firing without an enemy target and applying
-stun buff `3`, CN weapon `18` direct bullet `28` applying DOT buff `4` and
-ticking once after one second, CN weapon `27` direct friendly-target bullet
+stun buff `3`, CN weapon `18` direct bullet `28` applying DOT buff `4`, ticking
+once after one second, and consuming `BulletHitTimes` across two distinct
+overlapping enemies, CN weapon `27` direct friendly-target bullet
 `32` applying buff `7` to the player side without damaging overlapping enemies,
 and CN AI `44` state `3`
 firing hostile ray bullet `99` only after frame-15 `FireBulletNow`, damaging the
@@ -1441,6 +1442,10 @@ Weapon behavior staging:
   consumption, while overlap-only effects such as bullet force still run; CN
   weapon `11` / bullet `6` locks this first-pass behavior. A zero
   `BulletDamageJudgeCD` uses the CN dump tooltip default of 15 frames.
+  `BulletHitTimes` is consumed per accepted target hit; CN weapon `18` / bullet
+  `28` now locks that a high-hit-count once-per-enemy DOT bullet can pierce two
+  distinct overlapping enemies while still recording both enemy IDs and applying
+  buff `4` to each target.
 - Current force handling covers `None`, `Outward`, `Inward`, `Left`, `Right`,
   `Up`, `Down`, and the raw CN-only `BulletForceType = 7` observed on
   Judgement Spear shooter bullet `61`. Because the available `dump.cs`
@@ -1465,7 +1470,8 @@ Weapon behavior staging:
   `[1, 2, 3, 18]`.
   CN weapon `18` now locks the first
   direct DOT hit-buff case: level `1` bullet `28` applies buff `4`
-  (`Duration = 150`, `Value = 1`, `MaxStackCount = 2`) and the first-pass
+  (`Duration = 150`, `Value = 1`, `MaxStackCount = 2`), pierces two distinct
+  overlapping enemies through `BulletHitTimes = 99999`, and the first-pass
   simulation ticks one HP after one active second. CN weapon `28` extends the
   same buff into a combined weapon path: ten direct bullet `5` hits stack buff
   `4` to `2`, then ticks two HP after one active second while

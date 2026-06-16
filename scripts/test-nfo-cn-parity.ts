@@ -2405,7 +2405,7 @@ async function main() {
   console.log("ok - CN weapon Blizzard field fires targetless, applies freeze, and stops movement");
   console.log("ok - CN EnemyData immuneBuffs block matching hit buffs");
   console.log("ok - CN weapon Judgement field fires targetless, applies stun, and stops movement");
-  console.log("ok - CN weapon Six Star direct fire applies DOT hit buff");
+  console.log("ok - CN weapon Six Star direct fire applies DOT hit buff and pierces multiple enemies");
   console.log("ok - CN weapon Galaxy Light uses GroupCount and FireGroupCD timing");
   console.log("ok - CN weapon Black Hole direct field applies inward force");
   console.log("ok - CN weapon Night Blade combines direct DOT bullets and shooter timeline");
@@ -5734,6 +5734,70 @@ function testCnWeaponDirectFireDotHitBuff(sourceRuntimeData: NfoOfflineRuntimeDa
   assert.equal(targetAfterTick.hp, (targetAfterHit?.hp ?? Number.NaN) - 1);
   assert.ok(dotBuffAfterTick, "expected CN Six Star DOT buff to remain after one tick");
   assertClose(dotBuffAfterTick.remainingSeconds, 4, "CN Six Star DOT remaining seconds");
+
+  const multiTargetBaseState = createNfoSimulation(testRuntimeData, {
+    weaponId: directFireCase.weaponId,
+  });
+  const firstTarget = createEnemyFixture(
+    multiTargetBaseState,
+    multiTargetBaseState.player.x + 20,
+    multiTargetBaseState.player.y,
+    {
+      id: 900101,
+      hp: 999999,
+      speed: 0,
+      radius: 10,
+    },
+  );
+  const secondTarget = createEnemyFixture(
+    multiTargetBaseState,
+    multiTargetBaseState.player.x + 28,
+    multiTargetBaseState.player.y,
+    {
+      id: 900102,
+      hp: 999999,
+      speed: 0,
+      radius: 10,
+    },
+  );
+  const multiHitState = updateNfoSimulation(
+    {
+      ...multiTargetBaseState,
+      player: {
+        ...multiTargetBaseState.player,
+        fireCooldownSeconds: 0,
+      },
+      enemies: [firstTarget, secondTarget],
+    },
+    testRuntimeData,
+    NO_INPUT,
+    0,
+  );
+  const multiHitBullet = multiHitState.bullets.find((candidate) => (
+    candidate.bulletTypeId === directFireCase.bulletTypeId
+  ));
+  const firstTargetAfterMultiHit = multiHitState.enemies.find((enemy) => (
+    enemy.id === firstTarget.id
+  ));
+  const secondTargetAfterMultiHit = multiHitState.enemies.find((enemy) => (
+    enemy.id === secondTarget.id
+  ));
+
+  assert.ok(multiHitBullet, "expected CN Six Star bullet to remain after piercing enemies");
+  assert.equal(multiHitBullet.remainingHits, directFireCase.bulletHitTimes - 2);
+  assert.deepEqual(multiHitBullet.hitEnemyIds, [firstTarget.id, secondTarget.id]);
+  assert.ok(firstTargetAfterMultiHit, "expected first CN Six Star pierced target to remain alive");
+  assert.ok(secondTargetAfterMultiHit, "expected second CN Six Star pierced target to remain alive");
+  assert.ok(firstTargetAfterMultiHit.hp < firstTarget.hp);
+  assert.ok(secondTargetAfterMultiHit.hp < secondTarget.hp);
+  assert.ok(
+    firstTargetAfterMultiHit.activeBuffs.some((buff) => buff.id === directFireCase.hitBuffId),
+    "expected first pierced target to receive Six Star DOT buff",
+  );
+  assert.ok(
+    secondTargetAfterMultiHit.activeBuffs.some((buff) => buff.id === directFireCase.hitBuffId),
+    "expected second pierced target to receive Six Star DOT buff",
+  );
 }
 
 function testCnWeaponDirectFireGroupTiming(sourceRuntimeData: NfoOfflineRuntimeData) {
@@ -12586,7 +12650,7 @@ function createEnemyFixture(
   overrides: Partial<NfoSimEnemy> = {},
 ): NfoSimEnemy {
   return {
-    id: 900001,
+    id: overrides.id ?? 900001,
     typeId: overrides.typeId ?? 900001,
     spawnEventId: overrides.spawnEventId ?? 0,
     aiTypeId: overrides.aiTypeId,
