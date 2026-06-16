@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import {
   LIVE_NFO_ENDPOINT_MARKERS,
   assertNoLiveNfoEndpoints,
+  assertNoLiveNfoNetworkRequests,
+  collectNetworkUrls,
   getStaticRuntimeEndpointCheckSurface,
 } from "./nfo-smoke-local.mjs";
 
@@ -69,6 +71,44 @@ assert.throws(
     "static runtime unexpected endpoint fixture",
   ),
   /live NFO endpoint marker https:\/\//,
+);
+
+const netLogFixture = {
+  events: [
+    {
+      params: {
+        url: "http://localhost:3117/zh-CN/bandori/nfo?nfoSmoke=1",
+      },
+    },
+    {
+      params: {
+        url: "http://127.0.0.1:3117/res/bandori/nfo/cn/Android-2.1.1/runtime-data/master-data.json",
+      },
+    },
+  ],
+};
+
+assert.deepEqual(collectNetworkUrls(netLogFixture), [
+  "http://127.0.0.1:3117/res/bandori/nfo/cn/Android-2.1.1/runtime-data/master-data.json",
+  "http://localhost:3117/zh-CN/bandori/nfo?nfoSmoke=1",
+]);
+assert.doesNotThrow(() => {
+  assertNoLiveNfoNetworkRequests(netLogFixture, "browser netlog fixture");
+});
+assert.throws(
+  () => assertNoLiveNfoNetworkRequests(
+    {
+      events: [
+        {
+          params: {
+            url: "https://l4-prod-patch-bd.bilibiligame.net/assetbundle/nfo/Android/foo",
+          },
+        },
+      ],
+    },
+    "browser live netlog fixture",
+  ),
+  /requested live NFO endpoint marker/,
 );
 
 console.log("ok - NFO smoke no-live-endpoint guards are covered");

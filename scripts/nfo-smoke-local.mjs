@@ -24,6 +24,9 @@ export const LIVE_NFO_ENDPOINT_MARKERS = [
   "/api/user/",
   "/assetbundle/nfo/",
 ];
+const LIVE_NFO_NETWORK_ENDPOINT_MARKERS = LIVE_NFO_ENDPOINT_MARKERS.filter(
+  (marker) => marker !== "http://" && marker !== "https://",
+);
 const LOCAL_ONLY_HOST_RESOLVER_RULES =
   "MAP * 0.0.0.0, EXCLUDE localhost, EXCLUDE 127.0.0.1, EXCLUDE ::1";
 const DEFAULT_BROWSER_VIRTUAL_TIME_MS = 30000;
@@ -232,6 +235,9 @@ async function smokeBrowserInteraction(baseUrl, args) {
   const userDataDir = await mkdtemp(path.join(os.tmpdir(), "hhwx-nfo-smoke-"));
   const url = resolveUrl(baseUrl, "/zh-CN/bandori/nfo?nfoSmoke=1");
   const persistedSaveUrl = resolveUrl(baseUrl, "/zh-CN/bandori/nfo");
+  const interactionNetLogPath = path.join(userDataDir, "interaction-netlog.json");
+  const persistedSaveNetLogPath = path.join(userDataDir, "persisted-save-netlog.json");
+  const screenshotNetLogPath = path.join(userDataDir, "screenshot-netlog.json");
 
   try {
     const { stdout, stderr } = await dumpBrowserDom(
@@ -239,6 +245,12 @@ async function smokeBrowserInteraction(baseUrl, args) {
       userDataDir,
       url,
       args,
+      interactionNetLogPath,
+    );
+    const interactionNetLogUrls = await assertBrowserNetLogIsOfflineNfo(
+      interactionNetLogPath,
+      "browser interaction netlog",
+      url,
     );
 
     const smokeTag = extractSmokeTag(stdout);
@@ -390,6 +402,12 @@ async function smokeBrowserInteraction(baseUrl, args) {
       userDataDir,
       persistedSaveUrl,
       args,
+      persistedSaveNetLogPath,
+    );
+    const persistedSaveNetLogUrls = await assertBrowserNetLogIsOfflineNfo(
+      persistedSaveNetLogPath,
+      "browser persisted-save netlog",
+      persistedSaveUrl,
     );
     const persistedSmokeTag = extractSmokeTag(persistedStdout);
     assertSmoke(
@@ -444,6 +462,12 @@ async function smokeBrowserInteraction(baseUrl, args) {
       userDataDir,
       url,
       args,
+      screenshotNetLogPath,
+    );
+    const screenshotNetLogUrls = await assertBrowserNetLogIsOfflineNfo(
+      screenshotNetLogPath,
+      "browser screenshot netlog",
+      url,
     );
 
     if (stderr.trim()) {
@@ -454,13 +478,21 @@ async function smokeBrowserInteraction(baseUrl, args) {
         + `${screenshotStats.width}x${screenshotStats.height} `
         + `colors=${screenshotStats.distinctColorCount}`,
     );
+    const netLogUrlCount = new Set([
+      ...interactionNetLogUrls,
+      ...persistedSaveNetLogUrls,
+      ...screenshotNetLogUrls,
+    ]).size;
+    console.log(
+      `ok - browser netlog checks saw ${netLogUrlCount} URLs with no live NFO endpoint requests`,
+    );
     console.log(`ok - browser interaction smoke completed via ${path.basename(browserBin)}`);
   } finally {
     await rm(userDataDir, { recursive: true, force: true });
   }
 }
 
-async function dumpBrowserDom(browserBin, userDataDir, url, args) {
+async function dumpBrowserDom(browserBin, userDataDir, url, args, netLogPath) {
   return execFileAsync(
     browserBin,
     [
@@ -472,6 +504,8 @@ async function dumpBrowserDom(browserBin, userDataDir, url, args) {
       "--no-first-run",
       "--no-default-browser-check",
       `--user-data-dir=${userDataDir}`,
+      `--log-net-log=${netLogPath}`,
+      "--net-log-capture-mode=IncludeSensitive",
       `--virtual-time-budget=${args.browserVirtualTimeMs}`,
       "--dump-dom",
       url,
@@ -483,7 +517,7 @@ async function dumpBrowserDom(browserBin, userDataDir, url, args) {
   );
 }
 
-async function captureAndInspectBrowserScreenshot(browserBin, userDataDir, url, args) {
+async function captureAndInspectBrowserScreenshot(browserBin, userDataDir, url, args, netLogPath) {
   await mkdir(path.dirname(args.screenshotPath), { recursive: true });
   await execFileAsync(
     browserBin,
@@ -496,6 +530,8 @@ async function captureAndInspectBrowserScreenshot(browserBin, userDataDir, url, 
       "--no-first-run",
       "--no-default-browser-check",
       `--user-data-dir=${userDataDir}`,
+      `--log-net-log=${netLogPath}`,
+      "--net-log-capture-mode=IncludeSensitive",
       "--window-size=1280,900",
       `--virtual-time-budget=${args.browserVirtualTimeMs}`,
       `--screenshot=${args.screenshotPath}`,
@@ -518,6 +554,96 @@ async function captureAndInspectBrowserScreenshot(browserBin, userDataDir, url, 
       + `luminance range ${stats.luminanceRange}`,
   );
   return stats;
+}
+
+async function assertBrowserNetLogIsOfflineNfo(netLogPath, label, expectedUrl) {
+  let netLog;
+
+  try {
+    netLog = JSON.parse(await readFile(netLogPath, "utf8"));
+  } catch (error) {
+    throw new Error(`${label} could not read Chrome netlog ${netLogPath}: ${error.message}`);
+  }
+
+  assertNoLiveNfoNetworkRequests(netLog, label);
+  const urls = collectNetworkUrls(netLog);
+  const expected = new URL(expectedUrl);
+  const expectedPath = `${expected.pathname}${expected.search}`;
+  const sawExpectedUrl = urls.some((candidate) => {
+    try {
+      const parsed = new URL(candidate);
+      return isLocalNetworkUrl(parsed)
+        && parsed.pathname === expected.pathname
+        && parsed.search === expected.search;
+    } catch {
+      return candidate.includes(expectedPath);
+    }
+  });
+
+  assertSmoke(
+    sawExpectedUrl,
+    `${label} did not record expected local page request ${expectedPath}`,
+  );
+
+  return urls;
+}
+
+export function assertNoLiveNfoNetworkRequests(value, label) {
+  const urls = collectNetworkUrls(value);
+  const marker = LIVE_NFO_NETWORK_ENDPOINT_MARKERS.find((candidate) => (
+    urls.some((url) => url.includes(candidate))
+  ));
+
+  assertSmoke(
+    !marker,
+    `${label} requested live NFO endpoint marker ${marker}`,
+  );
+}
+
+export function collectNetworkUrls(value) {
+  const urls = new Set();
+  collectNetworkUrlsInto(value, urls);
+  return [...urls].sort();
+}
+
+function collectNetworkUrlsInto(value, urls) {
+  const stack = [value];
+
+  while (stack.length > 0) {
+    const current = stack.pop();
+
+    if (!current || typeof current !== "object") {
+      continue;
+    }
+
+    if (Array.isArray(current)) {
+      for (const item of current) {
+        if (item && typeof item === "object") {
+          stack.push(item);
+        }
+      }
+      continue;
+    }
+
+    for (const [key, candidate] of Object.entries(current)) {
+      if (typeof candidate === "string" && key.toLowerCase().includes("url")) {
+        try {
+          urls.add(new URL(candidate).toString());
+        } catch {
+          if (candidate.startsWith("/")) {
+            urls.add(candidate);
+          }
+        }
+      } else if (candidate && typeof candidate === "object") {
+        stack.push(candidate);
+      }
+    }
+  }
+}
+
+function isLocalNetworkUrl(url) {
+  return (url.protocol === "http:" || url.protocol === "https:")
+    && ["localhost", "127.0.0.1", "::1", "[::1]"].includes(url.hostname);
 }
 
 function inspectPngScreenshot(buffer) {

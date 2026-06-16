@@ -372,9 +372,11 @@ Current playable prototype:
   marker. It verifies the selected level is persisted as cleared with clear coin
   and run count in local save, reloads the ordinary page with the same temporary
   browser profile to verify that localStorage save is read back, verifies the
-  hidden smoke marker reaches `complete` after reporting player movement, and
-  writes a screenshot to `temp/nfo-smoke-browser.png` with a nonblank PNG check.
-  Use
+  hidden smoke marker reaches `complete` after reporting player movement, writes
+  a screenshot to `temp/nfo-smoke-browser.png` with a nonblank PNG check, and
+  records Chrome netlogs for the interaction, reload, and screenshot passes. The
+  netlog checks fail if any browser pass requests live NFO endpoint markers such
+  as Bilibili NFO CDN hosts, `/assetbundle/nfo/`, or `/api/user/`. Use
   `NFO_SMOKE_BROWSER_BIN=/path/to/chrome` when the browser binary is not
   auto-detected, or `NFO_SMOKE_SCREENSHOT_PATH=...` to write the visual evidence
   somewhere else.
@@ -674,10 +676,10 @@ local-runtime API, static frozen runtime artifact, and no-live-NFO-endpoint
 guards for both the page-consumed API DTO and static runtime's offline gameplay
 surface without launching Chrome/Edge. `npm run test:nfo` also exercises the
 pure no-live guard, including the static-runtime exception for raw
-`datasets.multiplayConfigData.URL`. For release-candidate or final
-stage-gate checks, run the full browser interaction smoke; it also blocks
-non-local hostname resolution in Chrome/Edge so the smoke path cannot depend on
-live NFO hosts:
+`datasets.multiplayConfigData.URL`. For release-candidate or final stage-gate
+checks, run the full browser interaction smoke; it blocks non-local hostname
+resolution in Chrome/Edge and parses Chrome netlogs for live NFO endpoint markers
+so the smoke path cannot depend on live NFO hosts:
 
 ```bash
 npm run smoke:nfo
