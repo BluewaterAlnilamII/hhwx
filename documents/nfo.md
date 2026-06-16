@@ -361,8 +361,8 @@ Current playable prototype:
   The full smoke opens the page in headless Chrome/Edge with `?nfoSmoke=1`,
   maps non-local hostnames to `0.0.0.0` while allowing localhost, waits for the
   client runtime to render the Phaser canvas, runs the same local `Unlock all`,
-  `Coin +500`, global-upgrade purchase, and `Quick clear` paths, and verifies
-  the hidden smoke marker reaches `complete`. Use
+  `Coin +500`, global-upgrade purchase, active-skill input, and `Quick clear`
+  paths, and verifies the hidden smoke marker reaches `complete`. Use
   `NFO_SMOKE_BROWSER_BIN=/path/to/chrome` when the browser binary is not
   auto-detected.
 
@@ -434,7 +434,9 @@ Current playable prototype:
   than weapon replacement;
 - maps `activeSkillData`, exposes the selected character's active skill in the
   HUD, charges it during play, and lets the player trigger the current
-  first-pass active skill timeline. Timeline `AddBuffDatas` apply
+  first-pass active skill timeline. The full browser smoke primes the charge
+  through a smoke-only scene action and then exercises the same active-skill
+  input before accepting the page. Timeline `AddBuffDatas` apply
   `TargetType = 0` to the player and `TargetType = 1` to the player plus
   active minions. Due events at the same timeline frame spawn minions before
   applying buffs, so same-frame newly spawned minions also receive player-side
@@ -657,7 +659,8 @@ npm run smoke:nfo
 
 The full browser smoke uses a temporary browser profile, so it does not alter
 the user's normal browser save data. It also executes the local unlock, coin,
-global-upgrade purchase, and quick-clear controls before accepting the page.
+global-upgrade purchase, active-skill input, and quick-clear controls before
+accepting the page.
 
 `nfo:parity-fixtures` writes a small ignored fixture file under
 `temp/nfo-offline/cn/Android-2.1.1/runtime-data/cn-parity-fixtures.json`.

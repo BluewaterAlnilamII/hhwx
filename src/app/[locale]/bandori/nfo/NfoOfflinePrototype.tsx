@@ -81,6 +81,7 @@ type HudSnapshot = {
 type NfoSceneActions = {
   forceClear: () => void;
   activateActiveSkill: () => void;
+  readyActiveSkill: () => void;
 };
 
 type SmokeInteractionState =
@@ -89,6 +90,8 @@ type SmokeInteractionState =
   | "unlock-requested"
   | "coin-requested"
   | "upgrade-requested"
+  | "active-skill-ready-requested"
+  | "active-skill-requested"
   | "waiting-scene"
   | "quick-clear-requested"
   | "complete"
@@ -113,6 +116,7 @@ export default function NfoOfflinePrototype() {
   const [smokeMode, setSmokeMode] = useState(false);
   const [smokeInteractionState, setSmokeInteractionState] =
     useState<SmokeInteractionState>("off");
+  const [smokeActiveSkillObserved, setSmokeActiveSkillObserved] = useState(false);
   const runtimeData = runtimeState.status === "ready" ? runtimeState.data : null;
   const paidGlobalUpgradeIds = saveState?.paidGlobalUpgradeIds ?? EMPTY_NUMBER_ARRAY;
   const paidGlobalUpgradeCount = paidGlobalUpgradeIds.length;
@@ -123,7 +127,14 @@ export default function NfoOfflinePrototype() {
     const enabled = new URLSearchParams(window.location.search).get("nfoSmoke") === "1";
     setSmokeMode(enabled);
     setSmokeInteractionState(enabled ? "waiting-runtime" : "off");
+    setSmokeActiveSkillObserved(false);
   }, []);
+
+  useEffect(() => {
+    if (smokeMode && hud?.activeSkillActive) {
+      setSmokeActiveSkillObserved(true);
+    }
+  }, [hud?.activeSkillActive, smokeMode]);
 
   useEffect(() => {
     let cancelled = false;
@@ -479,8 +490,44 @@ export default function NfoOfflinePrototype() {
       && sceneActionsRef.current
       && hud?.status === "playing"
     ) {
+      if (!smokeActiveSkillObserved && hud.activeSkillId > 0) {
+        if (hud.activeSkillChargeFrames < hud.activeSkillChargeMaxFrames) {
+          setSmokeInteractionState("active-skill-ready-requested");
+          sceneActionsRef.current.readyActiveSkill();
+          return;
+        }
+
+        setSmokeInteractionState("active-skill-requested");
+        activateActiveSkill();
+        return;
+      }
+
       setSmokeInteractionState("quick-clear-requested");
       quickClear();
+      return;
+    }
+
+    if (
+      smokeInteractionState === "active-skill-ready-requested"
+      && sceneActionsRef.current
+      && hud?.status === "playing"
+    ) {
+      if (
+        hud.activeSkillChargeMaxFrames <= 0
+        || hud.activeSkillChargeFrames >= hud.activeSkillChargeMaxFrames
+      ) {
+        setSmokeInteractionState("active-skill-requested");
+        activateActiveSkill();
+      }
+      return;
+    }
+
+    if (
+      smokeInteractionState === "active-skill-requested"
+      && (smokeActiveSkillObserved || hud?.activeSkillActive)
+    ) {
+      setSmokeActiveSkillObserved(true);
+      setSmokeInteractionState("waiting-scene");
       return;
     }
 
@@ -491,8 +538,13 @@ export default function NfoOfflinePrototype() {
       setSmokeInteractionState("complete");
     }
   }, [
+    activateActiveSkill,
     buyUpgrade,
     grantCoin,
+    hud?.activeSkillActive,
+    hud?.activeSkillChargeFrames,
+    hud?.activeSkillChargeMaxFrames,
+    hud?.activeSkillId,
     hud?.status,
     paidGlobalUpgradeCount,
     quickClear,
@@ -500,6 +552,7 @@ export default function NfoOfflinePrototype() {
     runtimeState.status,
     saveState,
     selection,
+    smokeActiveSkillObserved,
     smokeAllUnlocked,
     smokeInteractionState,
     smokeMode,
@@ -563,6 +616,10 @@ export default function NfoOfflinePrototype() {
         data-nfo-hud-status={hud?.status ?? "none"}
         data-nfo-full-screen-effect-count={hud?.fullScreenEffectCount ?? 0}
         data-nfo-full-screen-effect-name={hud?.fullScreenEffectName ?? ""}
+        data-nfo-active-skill-id={hud?.activeSkillId ?? 0}
+        data-nfo-active-skill-charge-frames={hud?.activeSkillChargeFrames ?? 0}
+        data-nfo-active-skill-charge-max-frames={hud?.activeSkillChargeMaxFrames ?? 0}
+        data-nfo-active-skill-observed={smokeActiveSkillObserved ? "1" : "0"}
         data-nfo-all-unlocked={smokeAllUnlocked ? "1" : "0"}
         data-nfo-upgrade-coin={upgradeCoin}
         data-nfo-paid-upgrade-count={paidGlobalUpgradeCount}
@@ -881,6 +938,20 @@ function createNfoPrototypeSceneClass({
         activateActiveSkill: () => {
           inputState.useActiveSkill = true;
         },
+        readyActiveSkill: () => {
+          if (simState.status !== "playing" || simState.activeSkill.id <= 0) {
+            return;
+          }
+
+          simState = {
+            ...simState,
+            activeSkill: {
+              ...simState.activeSkill,
+              chargeFrames: simState.activeSkill.chargeMaxFrames,
+            },
+          };
+          reportHud(toHudSnapshot(simState));
+        },
       });
       this.input.keyboard?.on("keydown", (event: KeyboardEvent) => {
         keys.add(event.code);
@@ -893,6 +964,9 @@ function createNfoPrototypeSceneClass({
     }
 
     update(time: number, delta: number) {
+      const requestedActiveSkill = inputState.useActiveSkill
+        || keys.has("Space")
+        || keys.has("KeyE");
       updateInputState(keys, inputState);
       simState = updateNfoSimulation(
         simState,
@@ -903,7 +977,12 @@ function createNfoPrototypeSceneClass({
       inputState.useActiveSkill = false;
       drawScene(this.graphics, simState);
 
-      if (time - lastHudUpdate > 120 || simState.status !== "playing") {
+      if (
+        requestedActiveSkill
+        || simState.activeSkill.isActive
+        || time - lastHudUpdate > 120
+        || simState.status !== "playing"
+      ) {
         lastHudUpdate = time;
         reportHud(toHudSnapshot(simState));
       }

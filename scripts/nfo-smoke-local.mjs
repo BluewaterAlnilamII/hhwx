@@ -264,6 +264,15 @@ async function smokeBrowserInteraction(baseUrl, args) {
       Number.isFinite(paidUpgradeCount) && paidUpgradeCount > 0,
       "browser smoke did not buy a global upgrade",
     );
+    const activeSkillId = Number(readHtmlAttribute(smokeTag, "data-nfo-active-skill-id"));
+    assertSmoke(
+      Number.isFinite(activeSkillId) && activeSkillId > 0,
+      "browser smoke did not expose an active skill",
+    );
+    assertSmoke(
+      readHtmlAttribute(smokeTag, "data-nfo-active-skill-observed") === "1",
+      "browser smoke did not activate the active skill",
+    );
     assertSmoke(
       readHtmlAttribute(smokeTag, "data-nfo-hud-status") === "cleared",
       "browser smoke did not quick-clear the active run",
@@ -275,6 +284,7 @@ async function smokeBrowserInteraction(baseUrl, args) {
     assertSmoke(stdout.includes("<canvas"), "browser smoke did not render a Phaser canvas");
     assertSmoke(stdout.includes("Unlock all"), "browser smoke did not render the Unlock all control");
     assertSmoke(stdout.includes("Coin +500"), "browser smoke did not render the upgrade coin control");
+    assertSmoke(stdout.includes("Active skill"), "browser smoke did not render the active skill control");
     assertSmoke(!stdout.includes("Application error"), "browser smoke rendered an application error");
 
     if (stderr.trim()) {
