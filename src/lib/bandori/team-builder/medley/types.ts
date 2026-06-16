@@ -107,6 +107,7 @@ export type BandoriMedleySearchOptimizationOptions = {
   disableExactCandidateGlobalComplementCache?: boolean;
   enableExactCandidateCompactGlobalComplementCache?: boolean;
   enableExactCandidateThinResultRetention?: boolean;
+  enableExactCandidateCompactCandidateKeySet?: boolean;
   disableExactCandidateSkillWindowContributionCache?: boolean;
   disableExactCandidateScoreCalculationCache?: boolean;
   disableExactCandidateScoreOnlyCache?: boolean;
@@ -761,10 +762,16 @@ export type MedleyExactSlotCandidateGlobalPruning = {
   pairUnseenUpperBound?: number;
   useCapacityComplementUpper?: boolean;
   capacityComplementMargin?: number;
-  excludedCandidateKeys?: Set<MedleyExactCandidateCardKey>;
+  excludedCandidateKeys?: MedleyExactCandidateCardKeySet;
 };
 
 export type MedleyExactCandidateCardKey = bigint | string;
+
+export type MedleyExactCandidateCardKeySet = {
+  readonly size: number;
+  has: (cardKey: MedleyExactCandidateCardKey) => boolean;
+  add: (cardKey: MedleyExactCandidateCardKey) => unknown;
+};
 
 export type MedleyExactSlotCandidateGenerator = {
   next: (

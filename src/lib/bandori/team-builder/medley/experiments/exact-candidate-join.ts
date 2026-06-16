@@ -98,6 +98,7 @@ import type {
   BandoriMedleyTeamSearchStats,
   MedleyEvaluatedResultObserver,
   MedleyExactCandidateCardKey,
+  MedleyExactCandidateCardKeySet,
   MedleyExactCandidateJoinAbortReason,
   MedleyExactCandidateJoinResult,
   MedleyExactCandidateJoinSolveResult,
@@ -442,6 +443,124 @@ function estimateMedleyExactCompactNestedNumberCacheBytes(cache: MedleyExactComp
   return bytes;
 }
 
+class MedleyExactCompactCandidateCardKeySet implements MedleyExactCandidateCardKeySet {
+  private numericSize = 0;
+  private occupied: Uint8Array;
+  private keyLow: Uint32Array;
+  private keyHigh: Float64Array;
+  private overflow: Set<MedleyExactCandidateCardKey> | null = null;
+
+  constructor(capacity = 16) {
+    const normalizedCapacity = 1 << Math.ceil(Math.log2(Math.max(16, capacity)));
+    this.occupied = new Uint8Array(normalizedCapacity);
+    this.keyLow = new Uint32Array(normalizedCapacity);
+    this.keyHigh = new Float64Array(normalizedCapacity);
+  }
+
+  get size(): number {
+    return this.numericSize + (this.overflow?.size ?? 0);
+  }
+
+  has(cardKey: MedleyExactCandidateCardKey): boolean {
+    const key = splitMedleyExactCompactNumberCacheKey(cardKey);
+    if (!key) {
+      return this.overflow?.has(cardKey) === true;
+    }
+    return this.findSlot(key).found;
+  }
+
+  add(cardKey: MedleyExactCandidateCardKey): this {
+    const key = splitMedleyExactCompactNumberCacheKey(cardKey);
+    if (!key) {
+      if (!this.overflow) {
+        this.overflow = new Set<MedleyExactCandidateCardKey>();
+      }
+      this.overflow.add(cardKey);
+      return this;
+    }
+    if ((this.numericSize + 1) / this.occupied.length > 0.7) {
+      this.grow();
+    }
+    const slot = this.findSlot(key);
+    if (!slot.found) {
+      this.occupied[slot.index] = 1;
+      this.keyLow[slot.index] = key.low;
+      this.keyHigh[slot.index] = key.high;
+      this.numericSize += 1;
+    }
+    return this;
+  }
+
+  estimateBytes(): number {
+    return this.occupied.byteLength + this.keyLow.byteLength + this.keyHigh.byteLength;
+  }
+
+  private findSlot(key: MedleyExactCompactNumberCacheKey): { index: number; found: boolean } {
+    const mask = this.occupied.length - 1;
+    let index = hashMedleyExactCompactNumberCacheKey(key) & mask;
+    while (this.occupied[index] !== 0) {
+      if (this.keyLow[index] === key.low && this.keyHigh[index] === key.high) {
+        return { index, found: true };
+      }
+      index = (index + 1) & mask;
+    }
+    return { index, found: false };
+  }
+
+  private grow(): void {
+    const previousOccupied = this.occupied;
+    const previousKeyLow = this.keyLow;
+    const previousKeyHigh = this.keyHigh;
+    this.occupied = new Uint8Array(previousOccupied.length * 2);
+    this.keyLow = new Uint32Array(previousKeyLow.length * 2);
+    this.keyHigh = new Float64Array(previousKeyHigh.length * 2);
+    this.numericSize = 0;
+    for (let index = 0; index < previousOccupied.length; index += 1) {
+      if (previousOccupied[index] === 0) {
+        continue;
+      }
+      this.addSplitKey({
+        low: previousKeyLow[index],
+        high: previousKeyHigh[index],
+      });
+    }
+  }
+
+  private addSplitKey(key: MedleyExactCompactNumberCacheKey): void {
+    const slot = this.findSlot(key);
+    if (!slot.found) {
+      this.occupied[slot.index] = 1;
+      this.keyLow[slot.index] = key.low;
+      this.keyHigh[slot.index] = key.high;
+      this.numericSize += 1;
+    }
+  }
+}
+
+function createMedleyExactCandidateCardKeySet(
+  candidates: MedleyTeamCandidate[],
+  compact: boolean,
+): MedleyExactCandidateCardKeySet {
+  const keySet: MedleyExactCandidateCardKeySet = compact
+    ? new MedleyExactCompactCandidateCardKeySet(Math.max(16, candidates.length * 2))
+    : new Set<MedleyExactCandidateCardKey>();
+  for (const candidate of candidates) {
+    keySet.add(getMedleyExactCandidateCardKey(candidate));
+  }
+  return keySet;
+}
+
+function getMedleyExactCandidateCardKeySetRepresentation(keySet: MedleyExactCandidateCardKeySet): string {
+  return keySet instanceof MedleyExactCompactCandidateCardKeySet
+    ? "compact-packed-card-id"
+    : "packed-card-id";
+}
+
+function estimateMedleyExactCandidateCardKeySetBytes(keySet: MedleyExactCandidateCardKeySet): number | null {
+  return keySet instanceof MedleyExactCompactCandidateCardKeySet
+    ? keySet.estimateBytes()
+    : null;
+}
 const medleyExactSignatureCardContextHashCache = new WeakMap<SearchCard, number>();
 
 function updateMedleyExactSignatureHashInt(hash: number, value: number): number {
@@ -5844,6 +5963,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     disableExactCandidateGlobalComplementCache?: boolean;
     enableExactCandidateCompactGlobalComplementCache?: boolean;
     enableExactCandidateThinResultRetention?: boolean;
+    enableExactCandidateCompactCandidateKeySet?: boolean;
     disableExactCandidateSkillWindowContributionCache?: boolean;
     disableExactCandidateScoreCalculationCache?: boolean;
     disableExactCandidateScoreOnlyCache?: boolean;
@@ -6732,12 +6852,16 @@ export function searchMedleyConfigurationByExactCandidateJoin(
   const getCandidateFillProfilingGenerators = (): MedleyExactSlotCandidateGenerator[] => (
     [...new Set([...generators, ...candidateFillGenerators, ...activeGeneratorsBySlot])]
   );
+  const shouldUseCompactCandidateKeySet = context.enableExactCandidateCompactCandidateKeySet === true;
   const candidateKeysBySlot = candidatesBySlot.map((candidates) => (
-    new Set(candidates.map(getMedleyExactCandidateCardKey))
+    createMedleyExactCandidateCardKeySet(candidates, shouldUseCompactCandidateKeySet)
   ));
   const rebuildCandidateKeys = (...slotIndices: number[]): void => {
     for (const slotIndex of slotIndices) {
-      candidateKeysBySlot[slotIndex] = new Set(candidatesBySlot[slotIndex].map(getMedleyExactCandidateCardKey));
+      candidateKeysBySlot[slotIndex] = createMedleyExactCandidateCardKeySet(
+        candidatesBySlot[slotIndex],
+        shouldUseCompactCandidateKeySet,
+      );
     }
   };
   const recordExactJoinMemorySnapshot = (
@@ -6754,6 +6878,13 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     }));
     const candidateCountsBySlot = candidatesBySlot.map((candidates) => candidates.length);
     const candidateKeyCountsBySlot = candidateKeysBySlot.map((keys) => keys.size);
+    const candidateKeySetBytesBySlot = candidateKeysBySlot.map(estimateMedleyExactCandidateCardKeySetBytes);
+    const candidateKeySetMiBBySlot = candidateKeySetBytesBySlot.map((bytes) => (
+      bytes === null ? null : roundMiB(bytes)
+    ));
+    const candidateKeySetMiBTotal = candidateKeySetBytesBySlot.some((bytes) => bytes !== null)
+      ? roundMiB(candidateKeySetBytesBySlot.reduce((sum, bytes) => sum + (bytes ?? 0), 0))
+      : null;
     const rawCandidateMirrorProfile = rawCandidateMirror
       ? (() => {
         rebuildMedleyExactRawCandidateMirror(rawCandidateMirror, candidatesBySlot);
@@ -6797,7 +6928,11 @@ export function searchMedleyConfigurationByExactCandidateJoin(
       candidateCountTotal: candidateCountsBySlot.reduce((sum, count) => sum + count, 0),
       candidateKeyCountsBySlot,
       candidateKeyCountTotal: candidateKeyCountsBySlot.reduce((sum, count) => sum + count, 0),
-      candidateKeyRepresentation: "packed-card-id",
+      candidateKeyRepresentation: candidateKeysBySlot[0]
+        ? getMedleyExactCandidateCardKeySetRepresentation(candidateKeysBySlot[0])
+        : shouldUseCompactCandidateKeySet ? "compact-packed-card-id" : "packed-card-id",
+      candidateKeySetMiBBySlot,
+      candidateKeySetMiBTotal,
       exactCandidateJoinPairCount: profiling.exactCandidateJoinPairCount,
       exactCandidateJoinPairComplementQueryCount: profiling.exactCandidateJoinPairComplementQueryCount,
       exactCandidateJoinPairComplementHighPairRecordCount: (

@@ -48,6 +48,7 @@ function printUsage() {
     "  HHWX_LOW_MEMORY_DISABLE_GLOBAL_COMPLEMENT_CACHE=1 disable exact-join global complement upper cache",
     "  HHWX_LOW_MEMORY_COMPACT_GLOBAL_COMPLEMENT_CACHE=1 use compact exact-join global complement upper cache",
     "  HHWX_LOW_MEMORY_THIN_CANDIDATE_RESULT=1 retain only score fields on exact candidates",
+    "  HHWX_LOW_MEMORY_COMPACT_CANDIDATE_KEY_SET=1 use compact exact-join candidate key sets",
     "  HHWX_LOW_MEMORY_SCORE_CALC_CACHE_LIMIT=... bound exact-join score calculation cache entries",
     "  HHWX_LOW_MEMORY_SCORE_CALC_CACHE_PRESSURE_FALLBACK=1 disable score calc cache for high-slot-card exact joins",
     "  HHWX_LOW_MEMORY_SCORE_CALC_CACHE_PRESSURE_SLOT_CARDS=260 fallback threshold for high-slot-card exact joins",
@@ -181,6 +182,9 @@ function hhwxOptimizationJson() {
   }
   if (process.env.HHWX_LOW_MEMORY_THIN_CANDIDATE_RESULT === "1") {
     optimization.enableExactCandidateThinResultRetention = true;
+  }
+  if (process.env.HHWX_LOW_MEMORY_COMPACT_CANDIDATE_KEY_SET === "1") {
+    optimization.enableExactCandidateCompactCandidateKeySet = true;
   }
   if (process.env.HHWX_LOW_MEMORY_COMPACT_CANDIDATE_CARDS === "1") {
     optimization.disableExactCandidateCardsRetention = true;
