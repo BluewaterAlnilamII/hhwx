@@ -16,6 +16,7 @@ const EXPECTED_SMOKE_ACTIVE_SKILL_CHARACTER_ID = 110;
 const EXPECTED_SMOKE_ACTIVE_SKILL_ID = 110;
 const EXPECTED_SMOKE_ACTIVE_SKILL_EFFECT_NAME = "UIefx_flash_starlight";
 const EXPECTED_SMOKE_ACTIVE_SKILL_SOUND_NAME = "active_110";
+const EXPECTED_SMOKE_PICKUP_SOUND_NAME = "se_coin";
 export const LIVE_NFO_ENDPOINT_MARKERS = [
   "http://",
   "https://",
@@ -334,6 +335,19 @@ async function smokeBrowserInteraction(baseUrl, args) {
     assertSmoke(
       defeatedEnemyCount > 0 || pickupCount > 0 || collectedExp > 0 || score > 0,
       "browser smoke did not expose a concrete enemy defeat, drop, EXP, or score signal",
+    );
+    assertSmoke(
+      readHtmlAttribute(smokeTag, "data-nfo-pickup-collected") === "1",
+      "browser smoke did not collect a dropped pickup through movement",
+    );
+    assertSmoke(
+      readHtmlAttribute(smokeTag, "data-nfo-pickup-sound-observed") === "1",
+      "browser smoke did not observe a pickup sound event",
+    );
+    assertSmoke(
+      readHtmlAttribute(smokeTag, "data-nfo-pickup-sound-event-name")
+        === EXPECTED_SMOKE_PICKUP_SOUND_NAME,
+      "browser smoke did not expose the expected pickup sound event",
     );
     const paidUpgradeCount = Number(readHtmlAttribute(smokeTag, "data-nfo-paid-upgrade-count"));
     const upgradeTotalCount = Number(readHtmlAttribute(smokeTag, "data-nfo-upgrade-total-count"));

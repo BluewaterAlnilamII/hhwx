@@ -379,10 +379,13 @@ Current playable prototype:
   and `Quick clear` paths, uses the same simulation update path to step the live
   run until enemy spawning is observed, waits for combat activity, then
   continues stepping until a concrete reward signal appears through enemy
-  defeat, dropped pickup, EXP gain, or score before clearing. Before clearing,
-  it advances the active-skill timeline far enough to observe the skill `110`
-  shooter/VFX path and asserts `UIefx_flash_starlight` through the hidden smoke
-  marker. It verifies the selected level is persisted as cleared with clear coin
+  defeat, dropped pickup, EXP gain, or score. It then uses a smoke-only scene
+  action that advances the normal simulation with movement input toward the
+  nearest pickup until collection occurs, and asserts the pickup sound event
+  `se_coin` through the hidden smoke marker before clearing. Before clearing, it
+  advances the active-skill timeline far enough to observe the skill `110`
+  shooter/VFX path and asserts `UIefx_flash_starlight` and `active_110` through
+  the hidden smoke marker. It verifies the selected level is persisted as cleared with clear coin
   and run count in local save, reloads the ordinary page with the same temporary
   browser profile to verify that localStorage save is read back, verifies the
   hidden smoke marker reaches `complete` after reporting player movement, writes
@@ -786,8 +789,9 @@ The serializable sound metadata path now also records CN
 and `ItemData.itemGetSE` when a pickup is collected. The current implementation
 preserves these sound names as short-lived simulation events and exposes them to
 the NFO page HUD/smoke state. The browser smoke now locks active skill `110`'s
-CN `PlaySoundName = active_110` through the rendered page; browser audio
-playback, mixer behavior, and audio bundle conversion remain pending.
+CN `PlaySoundName = active_110` and a collected pickup's `itemGetSE = se_coin`
+through the rendered page; browser audio playback, mixer behavior, and audio
+bundle conversion remain pending.
 Active skill `110` / `Ultimate Heart Light` now locks the active-skill level
 switch for its starlight shooters: level `1` creates shooter `6000`, level `2`
 creates shooter `6001`, and level `3` creates shooter `6002`. Each level's
@@ -1721,7 +1725,9 @@ Weapon behavior staging:
   its low-rate coin pickup branch through normal coin collection, plus drop
   `20` through bomb, magnet, and heal pickup effects. The runtime parity tests
   also verify that `LevelData.commonDropId` supplies the drop when an enemy has
-  no explicit drop ID.
+  no explicit drop ID. The browser smoke now also advances movement toward a
+  dropped pickup and requires a rendered-page pickup collection plus the CN
+  `se_coin` pickup sound marker before quick-clear settlement.
   Native item movement, pickup animation, boss-specific bomb handling, and
   multiplayer value sharing remain pending.
 - Current level enemy-spawn handling maps CN `LevelData.levelEventDatas`
