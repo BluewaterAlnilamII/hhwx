@@ -14,6 +14,7 @@ const STATIC_RUNTIME_URL_PATH =
   "/res/bandori/nfo/cn/Android-2.1.1/runtime-data/master-data.json";
 const EXPECTED_SMOKE_ACTIVE_SKILL_CHARACTER_ID = 110;
 const EXPECTED_SMOKE_ACTIVE_SKILL_ID = 110;
+const EXPECTED_SMOKE_DARK_ORB_WEAPON_ID = 5;
 const EXPECTED_SMOKE_ACTIVE_SKILL_EFFECT_NAME = "UIefx_flash_starlight";
 const EXPECTED_SMOKE_ACTIVE_SKILL_SOUND_NAME = "active_110";
 const EXPECTED_SMOKE_PICKUP_SOUND_NAME = "se_coin";
@@ -291,6 +292,14 @@ async function smokeBrowserInteraction(baseUrl, args) {
       `browser smoke selected character ${selectedCharacterId}, expected `
         + `${EXPECTED_SMOKE_ACTIVE_SKILL_CHARACTER_ID}`,
     );
+    const selectedWeaponId = Number(
+      readHtmlAttribute(smokeTag, "data-nfo-selected-weapon-id"),
+    );
+    assertSmoke(
+      selectedWeaponId === EXPECTED_SMOKE_DARK_ORB_WEAPON_ID,
+      `browser smoke selected weapon ${selectedWeaponId}, expected `
+        + `${EXPECTED_SMOKE_DARK_ORB_WEAPON_ID}`,
+    );
     const playerX = Number(readHtmlAttribute(smokeTag, "data-nfo-player-x"));
     const playerY = Number(readHtmlAttribute(smokeTag, "data-nfo-player-y"));
     assertSmoke(
@@ -303,6 +312,12 @@ async function smokeBrowserInteraction(baseUrl, args) {
     );
     const enemyCount = Number(readHtmlAttribute(smokeTag, "data-nfo-enemy-count"));
     const projectileCount = Number(readHtmlAttribute(smokeTag, "data-nfo-projectile-count"));
+    const homingProjectileCount = Number(
+      readHtmlAttribute(smokeTag, "data-nfo-homing-projectile-count"),
+    );
+    const observedHomingProjectileCount = Number(
+      readHtmlAttribute(smokeTag, "data-nfo-homing-projectile-observed-count"),
+    );
     const defeatedEnemyCount = Number(
       readHtmlAttribute(smokeTag, "data-nfo-defeated-enemy-count"),
     );
@@ -313,6 +328,8 @@ async function smokeBrowserInteraction(baseUrl, args) {
       [
         enemyCount,
         projectileCount,
+        homingProjectileCount,
+        observedHomingProjectileCount,
         defeatedEnemyCount,
         pickupCount,
         collectedExp,
@@ -327,6 +344,14 @@ async function smokeBrowserInteraction(baseUrl, args) {
     assertSmoke(
       readHtmlAttribute(smokeTag, "data-nfo-combat-observed") === "1",
       "browser smoke did not observe combat activity",
+    );
+    assertSmoke(
+      readHtmlAttribute(smokeTag, "data-nfo-homing-projectile-observed") === "1",
+      "browser smoke did not observe Dark Orb homing projectiles",
+    );
+    assertSmoke(
+      observedHomingProjectileCount > 0,
+      "browser smoke did not expose a concrete Dark Orb homing projectile count",
     );
     assertSmoke(
       readHtmlAttribute(smokeTag, "data-nfo-reward-observed") === "1",

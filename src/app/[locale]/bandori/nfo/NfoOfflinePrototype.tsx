@@ -50,6 +50,8 @@ type HudSnapshot = {
   enemies: number;
   minions: number;
   projectiles: number;
+  homingProjectiles: number;
+  orbitProjectiles: number;
   defeatedEnemies: number;
   pickups: number;
   collectedExp: number;
@@ -107,6 +109,7 @@ type SmokeInteractionState =
   | "upgrade-requested"
   | "movement-requested"
   | "enemy-spawn-requested"
+  | "homing-projectile-requested"
   | "weapon-sound-requested"
   | "reward-observation-requested"
   | "pickup-collection-requested"
@@ -126,6 +129,7 @@ const FULL_SCREEN_EFFECT_RENDER_SECONDS = 0.5;
 const EMPTY_NUMBER_ARRAY: number[] = [];
 const SMOKE_ACTIVE_SKILL_CHARACTER_ID = 110;
 const SMOKE_ACTIVE_SKILL_ID = 110;
+const SMOKE_DARK_ORB_WEAPON_ID = 5;
 const SMOKE_ACTIVE_SKILL_EFFECT_NAME = "UIefx_flash_starlight";
 const SMOKE_PICKUP_SOUND_NAME = "se_coin";
 type PhaserModule = typeof import("phaser");
@@ -145,6 +149,8 @@ export default function NfoOfflinePrototype() {
   const [smokeMovementObserved, setSmokeMovementObserved] = useState(false);
   const [smokeCombatObserved, setSmokeCombatObserved] = useState(false);
   const [smokeEnemyObserved, setSmokeEnemyObserved] = useState(false);
+  const [smokeHomingProjectileObserved, setSmokeHomingProjectileObserved] = useState(false);
+  const [smokeHomingProjectileCount, setSmokeHomingProjectileCount] = useState(0);
   const [smokeRewardObserved, setSmokeRewardObserved] = useState(false);
   const [smokePickupCollectionObserved, setSmokePickupCollectionObserved] = useState(false);
   const [smokeWeaponSoundObserved, setSmokeWeaponSoundObserved] = useState(false);
@@ -172,6 +178,8 @@ export default function NfoOfflinePrototype() {
     setSmokeMovementObserved(false);
     setSmokeCombatObserved(false);
     setSmokeEnemyObserved(false);
+    setSmokeHomingProjectileObserved(false);
+    setSmokeHomingProjectileCount(0);
     setSmokeRewardObserved(false);
     setSmokePickupCollectionObserved(false);
     setSmokeWeaponSoundObserved(false);
@@ -239,6 +247,17 @@ export default function NfoOfflinePrototype() {
       setSmokeEnemyObserved(true);
     }
   }, [hud, smokeEnemyObserved, smokeMode]);
+
+  useEffect(() => {
+    if (!smokeMode || smokeHomingProjectileObserved || !hud || hud.status !== "playing") {
+      return;
+    }
+
+    if (hud.homingProjectiles > 0) {
+      setSmokeHomingProjectileObserved(true);
+      setSmokeHomingProjectileCount(hud.homingProjectiles);
+    }
+  }, [hud, smokeHomingProjectileObserved, smokeMode]);
 
   useEffect(() => {
     if (!smokeMode || smokeRewardObserved || !hud || hud.status !== "playing") {
@@ -473,10 +492,15 @@ export default function NfoOfflinePrototype() {
       setSmokeInteractionState("error");
       return;
     }
+    if (!runtimeData.weapons.some((weapon) => weapon.id === SMOKE_DARK_ORB_WEAPON_ID)) {
+      setSmokeInteractionState("error");
+      return;
+    }
 
     const nextSelection = {
       ...selection,
       characterId: SMOKE_ACTIVE_SKILL_CHARACTER_ID,
+      weaponId: SMOKE_DARK_ORB_WEAPON_ID,
     };
     setSelection(nextSelection);
     setHud(null);
@@ -628,7 +652,10 @@ export default function NfoOfflinePrototype() {
       )
       && smokeAllUnlocked
     ) {
-      if (selection.characterId !== SMOKE_ACTIVE_SKILL_CHARACTER_ID) {
+      if (
+        selection.characterId !== SMOKE_ACTIVE_SKILL_CHARACTER_ID
+        || selection.weaponId !== SMOKE_DARK_ORB_WEAPON_ID
+      ) {
         setSmokeInteractionState("selection-requested");
         prepareSmokeSelection();
         return;
@@ -697,6 +724,12 @@ export default function NfoOfflinePrototype() {
         return;
       }
 
+      if (!smokeHomingProjectileObserved) {
+        setSmokeInteractionState("homing-projectile-requested");
+        sceneActionsRef.current.advanceSmokeFrames(12);
+        return;
+      }
+
       if (!smokeWeaponSoundObserved) {
         setSmokeInteractionState("weapon-sound-requested");
         sceneActionsRef.current.advanceUntilWeaponSound();
@@ -757,6 +790,20 @@ export default function NfoOfflinePrototype() {
       && hud?.status === "playing"
     ) {
       if (smokeEnemyObserved) {
+        setSmokeInteractionState("waiting-scene");
+        return;
+      }
+
+      sceneActionsRef.current.advanceSmokeFrames(12);
+      return;
+    }
+
+    if (
+      smokeInteractionState === "homing-projectile-requested"
+      && sceneActionsRef.current
+      && hud?.status === "playing"
+    ) {
+      if (smokeHomingProjectileObserved) {
         setSmokeInteractionState("waiting-scene");
         return;
       }
@@ -879,6 +926,7 @@ export default function NfoOfflinePrototype() {
     smokeAllUnlocked,
     smokeCombatObserved,
     smokeEnemyObserved,
+    smokeHomingProjectileObserved,
     smokeInteractionState,
     smokeMovementObserved,
     smokeMode,
@@ -952,9 +1000,13 @@ export default function NfoOfflinePrototype() {
         data-nfo-player-moved={smokeMovementObserved ? "1" : "0"}
         data-nfo-combat-observed={smokeCombatObserved ? "1" : "0"}
         data-nfo-enemy-observed={smokeEnemyObserved ? "1" : "0"}
+        data-nfo-homing-projectile-observed={smokeHomingProjectileObserved ? "1" : "0"}
+        data-nfo-homing-projectile-observed-count={smokeHomingProjectileCount}
         data-nfo-reward-observed={smokeRewardObserved ? "1" : "0"}
         data-nfo-enemy-count={hud?.enemies ?? 0}
         data-nfo-projectile-count={hud?.projectiles ?? 0}
+        data-nfo-homing-projectile-count={hud?.homingProjectiles ?? 0}
+        data-nfo-orbit-projectile-count={hud?.orbitProjectiles ?? 0}
         data-nfo-defeated-enemy-count={hud?.defeatedEnemies ?? 0}
         data-nfo-pickup-count={hud?.pickups ?? 0}
         data-nfo-collected-exp={hud?.collectedExp ?? 0}
@@ -1739,6 +1791,12 @@ function toHudSnapshot(state: NfoSimulationState): HudSnapshot {
     enemies: state.enemies.length,
     minions: state.minions.length,
     projectiles: state.bullets.length,
+    homingProjectiles: state.bullets.filter((bullet) => (
+      bullet.motionType === "homingEnemy"
+    )).length,
+    orbitProjectiles: state.bullets.filter((bullet) => (
+      bullet.motionType === "playerOrbit"
+    )).length,
     defeatedEnemies: state.defeatedEnemies,
     pickups: state.pickups.length,
     collectedExp: state.collectedExp,
