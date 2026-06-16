@@ -892,10 +892,11 @@ The AIState common-state fixture set now locks CN AI `32` state `1`
 serializable enemy `entityCommonState` value changes on state entry.
 The AIState animation fixture set now locks CN AI `38` state `5`
 (`playAnimeName = Skill1-2`, `isRestartPlayAnime = 1`) and CN AI `26` state
-`2` timeline frame `1` (`PlayAnimeName = skill-miss`). The parity simulation
-verifies serializable enemy `animationName` / `animationRevision` updates on
-state entry and timeline events without claiming native animation playback
-timing or resources yet.
+`2` timeline frame `1` (`PlayAnimeName = skill-miss`) plus that same state's
+frame-`60` `normal` event (`PlayAnimeName = Walk`) at the `LastFrame` transition
+boundary. The parity simulation verifies serializable enemy `animationName` /
+`animationRevision` updates on state entry and timeline events without claiming
+native animation playback timing or resources yet.
 The same LevelData fixture set now locks first-pass `levelEventType = 4`
 coverage for CN levels `15` and `27`. These events read
 `enemyAIStateChangeData.EnemyEventID` and `AIStateID`; the runtime applies the
@@ -1672,15 +1673,15 @@ Weapon behavior staging:
   first-pass player-near origin, CN AI `38` states `4`/`5`, CN AI `44` state
   `2`, and CN AI `80` state `10` moving toward their `State_MoveOffsetX/Y`
   targets, and CN AI `26` state `2` frame-1 no-colliding, frame-30 teleport,
-  and frame-46 bullet `51` into the offline
-  loop. The same first-pass AI timeline runner drives minion
+  frame-46 bullet `51`, and frame-60 `normal` / `Walk` exit-boundary metadata
+  into the offline loop. The same first-pass AI timeline runner drives minion
   `FireAllWeaponNow` gates, including CN AI `103` triggering weapon `26` /
   `圣兽Leo` bullet `34` at state `2` frame `20`. CN AI `4` state `1`
   now locks a 50% transition to state `2` plus the 100% fallback to state `1`.
   Exact native random-position, roll,
   flash, teleport radius/arrival semantics, exact CatBoss bullet-rain
-  constants, remaining `normal` visual event
-  semantics, exact native offset-movement class names/constants,
+  constants, deeper native visual event semantics,
+  exact native offset-movement class names/constants,
   exact native facing/animation playback timing and resources, exact native
   level-trigger timing/dependencies, and `IsChangeEntityCommonState`
   visual/common-state effects remain pending native behavior.

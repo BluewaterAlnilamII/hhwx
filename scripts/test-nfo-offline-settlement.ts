@@ -1968,6 +1968,8 @@ function testEnemyAITeleportTimelineDoesNotChaseBeforeTeleportingAndFiring() {
   assert.equal(firedState.bullets[0]?.canDamagePlayer, true);
   assert.equal(normalState.enemies[0]?.aiStateId, 2);
   assert.equal(normalState.enemies[0]?.noColliding, false);
+  assert.equal(normalState.enemies[0]?.animationName, "Walk");
+  assert.equal((normalState.enemies[0]?.animationRevision ?? 0) > 0, true);
 }
 
 function testEnemyAITimelineFireBulletNow() {

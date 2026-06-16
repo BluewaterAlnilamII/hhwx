@@ -1315,6 +1315,7 @@ async function main() {
   assert.equal(aiTeleportCase.fireEventFrame, 46);
   assert.equal(aiTeleportCase.normalEventFrame, 60);
   assert.equal(aiTeleportCase.normalEventName, "normal");
+  assert.equal(aiTeleportCase.normalPlayAnimeName, "Walk");
   assert.equal(aiTeleportCase.nextStateId, 1);
   assert.equal(aiTeleportCase.bulletTypeId, 51);
   assert.equal(aiTeleportCase.bulletCount, 6);
@@ -9073,8 +9074,12 @@ function testCnAIStateBlackCatTeleportTimeline(sourceRuntimeData: NfoOfflineRunt
     NO_INPUT,
     (teleportCase.normalEventFrame - teleportCase.fireEventFrame) / 30,
   );
-  assert.equal(normalState.enemies[0]?.aiStateId, teleportCase.nextStateId);
-  assert.equal(normalState.enemies[0]?.noColliding, false);
+  const normalEnemy = normalState.enemies[0];
+  assert.ok(normalEnemy);
+  assert.equal(normalEnemy.aiStateId, teleportCase.nextStateId);
+  assert.equal(normalEnemy.noColliding, false);
+  assert.equal(normalEnemy.animationName, teleportCase.normalPlayAnimeName);
+  assert.equal((normalEnemy.animationRevision ?? 0) > 0, true);
 }
 
 function testCnAIStateMoveToRandomPositionAroundPlayer(sourceRuntimeData: NfoOfflineRuntimeData) {

@@ -210,6 +210,7 @@ type AIStateTeleportCaseSpec = {
   expectedTeleportFrame: number;
   expectedFireFrame: number;
   expectedNormalFrame: number;
+  expectedNormalPlayAnimeName: string;
   expectedNextStateId: number;
   expectedBulletTypeId: number;
 };
@@ -854,6 +855,7 @@ export type NfoCnParityAIStateTeleportCase = {
   fireBulletNow: boolean;
   normalEventFrame: number;
   normalEventName: string;
+  normalPlayAnimeName: string;
   nextStateId: number;
   bulletTypeId: number;
   bulletHitTargetType: number;
@@ -2313,6 +2315,7 @@ const AI_STATE_TELEPORT_CASE_SPECS: AIStateTeleportCaseSpec[] = [
     expectedTeleportFrame: 30,
     expectedFireFrame: 46,
     expectedNormalFrame: 60,
+    expectedNormalPlayAnimeName: "Walk",
     expectedNextStateId: 1,
     expectedBulletTypeId: 51,
   },
@@ -4971,6 +4974,11 @@ function buildAIStateTeleportCase(
       `AI ${ai.id} state ${state.id} is missing normal event frame ${spec.expectedNormalFrame}.`,
     );
   }
+  if (normalEvent.playAnimeName !== spec.expectedNormalPlayAnimeName) {
+    throw new Error(
+      `AI ${ai.id} state ${state.id} expected normal PlayAnimeName ${spec.expectedNormalPlayAnimeName}, got ${normalEvent.playAnimeName}.`,
+    );
+  }
 
   const nextState = state.nextStates.find((candidate) => (
     candidate.stateId === spec.expectedNextStateId
@@ -5003,6 +5011,7 @@ function buildAIStateTeleportCase(
     fireBulletNow: fireEvent.fireBulletNow,
     normalEventFrame: normalEvent.frame,
     normalEventName: normalEvent.name,
+    normalPlayAnimeName: normalEvent.playAnimeName,
     nextStateId: nextState.stateId,
     bulletTypeId: fireBullet.bulletTypeId,
     bulletHitTargetType: fireBullet.bulletHitTargetType,

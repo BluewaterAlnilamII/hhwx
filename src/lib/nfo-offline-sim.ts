@@ -268,6 +268,8 @@ type AdvancedAIState = {
   state: NfoAIStateData;
   previousFrame: number;
   currentFrame: number;
+  exitState?: NfoAIStateData;
+  exitTimelineEvents?: NfoAIStateData["timelineEvents"];
 };
 
 type NfoAIStatefulEntity = {
@@ -1449,6 +1451,12 @@ function advanceAIState(
       ? getAIStateById(ai.states, nextStateId)
       : null;
     if (nextAIState) {
+      const exitState = aiState;
+      const exitTimelineEvents = getAIStateTimelineEventsDueBetween(
+        exitState,
+        previousFrame,
+        exitState.lastFrame,
+      );
       entity.aiStateId = nextAIState.id;
       entity.aiStateElapsedFrames = 0;
       delete entity.aiMoveTargetStateId;
@@ -1463,6 +1471,8 @@ function advanceAIState(
         state: aiState,
         previousFrame: 0,
         currentFrame: 0,
+        exitState,
+        exitTimelineEvents,
       };
     }
   }
@@ -1586,6 +1596,15 @@ function applyAIStateTimelineEvents(
   entity: NfoAIStatefulEntity & NfoVector & { id: number },
   advancedAIState: AdvancedAIState,
 ) {
+  for (const event of advancedAIState.exitTimelineEvents ?? []) {
+    applyAIStateTimelineEvent(
+      state,
+      entity,
+      advancedAIState.exitState ?? advancedAIState.state,
+      event,
+    );
+  }
+
   if (isAIStateEntryFrame(advancedAIState)) {
     applyAIStateAnimation(entity, advancedAIState.state);
     applyAIStateEntryEffects(runtimeData, entity, advancedAIState);
@@ -1610,20 +1629,29 @@ function applyAIStateTimelineEvents(
   }
 
   for (const event of getDueAIStateTimelineEvents(advancedAIState)) {
-    applyAIStateTimelineAnimation(entity, event);
-    entity.noColliding = event.noColliding;
-    if (
-      advancedAIState.state.stateType === NFO_AI_STATE_TYPE.blackCatTeleport
-      && event.name.toLowerCase() === "teleport"
-    ) {
-      const target = createDeterministicRandomTargetAroundPlayer(
-        state,
-        entity,
-        advancedAIState.state,
-      );
-      entity.x = target.x;
-      entity.y = target.y;
-    }
+    applyAIStateTimelineEvent(state, entity, advancedAIState.state, event);
+  }
+}
+
+function applyAIStateTimelineEvent(
+  state: NfoSimulationState,
+  entity: NfoAIStatefulEntity & NfoVector & { id: number },
+  aiState: NfoAIStateData,
+  event: NfoAIStateData["timelineEvents"][number],
+) {
+  applyAIStateTimelineAnimation(entity, event);
+  entity.noColliding = event.noColliding;
+  if (
+    aiState.stateType === NFO_AI_STATE_TYPE.blackCatTeleport
+    && event.name.toLowerCase() === "teleport"
+  ) {
+    const target = createDeterministicRandomTargetAroundPlayer(
+      state,
+      entity,
+      aiState,
+    );
+    entity.x = target.x;
+    entity.y = target.y;
   }
 }
 
@@ -1708,8 +1736,20 @@ function shouldTriggerAIStateAction(advancedAIState: AdvancedAIState): boolean {
 }
 
 function getDueAIStateTimelineEvents(advancedAIState: AdvancedAIState) {
-  return advancedAIState.state.timelineEvents.filter((event) => (
-    isTimelineFrameDue(event.frame, advancedAIState.previousFrame, advancedAIState.currentFrame)
+  return getAIStateTimelineEventsDueBetween(
+    advancedAIState.state,
+    advancedAIState.previousFrame,
+    advancedAIState.currentFrame,
+  );
+}
+
+function getAIStateTimelineEventsDueBetween(
+  aiState: NfoAIStateData,
+  previousFrame: number,
+  currentFrame: number,
+) {
+  return aiState.timelineEvents.filter((event) => (
+    isTimelineFrameDue(event.frame, previousFrame, currentFrame)
   ));
 }
 
