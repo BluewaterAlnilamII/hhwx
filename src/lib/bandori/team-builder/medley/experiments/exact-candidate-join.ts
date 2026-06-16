@@ -166,6 +166,22 @@ function buildMedleyExactSelectedCardKey(cards: readonly SearchCard[]): MedleyEx
 
 type MedleyExactNestedNumberCache = Map<string, Map<MedleyExactCandidateCardKey, number>>;
 
+type MedleyExactCompactNumberCacheKey = {
+  low: number;
+  high: number;
+};
+
+type MedleyExactCompactNumberCacheBucket = {
+  size: number;
+  occupied: Uint8Array;
+  keyLow: Uint32Array;
+  keyHigh: Float64Array;
+  values: Float64Array;
+  overflow: Map<MedleyExactCandidateCardKey, number> | null;
+};
+
+type MedleyExactCompactNestedNumberCache = Map<string, MedleyExactCompactNumberCacheBucket>;
+
 type MedleyExactRawCandidateMirrorSlot = {
   score: Int32Array;
   averageScore: Int32Array;
@@ -286,6 +302,144 @@ function countMedleyExactNestedNumberCacheEntries(cache: MedleyExactNestedNumber
     count += bucket.size;
   }
   return count;
+}
+
+const MEDLEY_EXACT_COMPACT_CACHE_UINT32_MASK = BigInt(0xffffffff);
+
+function splitMedleyExactCompactNumberCacheKey(
+  cardKey: MedleyExactCandidateCardKey,
+): MedleyExactCompactNumberCacheKey | null {
+  if (typeof cardKey !== "bigint") {
+    return null;
+  }
+  return {
+    low: Number(cardKey & MEDLEY_EXACT_COMPACT_CACHE_UINT32_MASK) >>> 0,
+    high: Number(cardKey >> BigInt(32)),
+  };
+}
+
+function hashMedleyExactCompactNumberCacheKey(key: MedleyExactCompactNumberCacheKey): number {
+  const highLow = key.high >>> 0;
+  const highHigh = Math.floor(key.high / 0x100000000) >>> 0;
+  let hash = Math.imul(key.low ^ highLow, 0x9e3779b1);
+  hash ^= Math.imul(highHigh ^ (hash >>> 16), 0x85ebca6b);
+  return hash >>> 0;
+}
+
+function createMedleyExactCompactNumberCacheBucket(capacity = 16): MedleyExactCompactNumberCacheBucket {
+  const normalizedCapacity = 1 << Math.ceil(Math.log2(Math.max(16, capacity)));
+  return {
+    size: 0,
+    occupied: new Uint8Array(normalizedCapacity),
+    keyLow: new Uint32Array(normalizedCapacity),
+    keyHigh: new Float64Array(normalizedCapacity),
+    values: new Float64Array(normalizedCapacity),
+    overflow: null,
+  };
+}
+
+function findMedleyExactCompactNumberCacheSlot(
+  bucket: MedleyExactCompactNumberCacheBucket,
+  key: MedleyExactCompactNumberCacheKey,
+): { index: number; found: boolean } {
+  const mask = bucket.occupied.length - 1;
+  let index = hashMedleyExactCompactNumberCacheKey(key) & mask;
+  while (bucket.occupied[index] !== 0) {
+    if (bucket.keyLow[index] === key.low && bucket.keyHigh[index] === key.high) {
+      return { index, found: true };
+    }
+    index = (index + 1) & mask;
+  }
+  return { index, found: false };
+}
+
+function growMedleyExactCompactNumberCacheBucket(
+  bucket: MedleyExactCompactNumberCacheBucket,
+): MedleyExactCompactNumberCacheBucket {
+  const nextBucket = createMedleyExactCompactNumberCacheBucket(bucket.occupied.length * 2);
+  for (let index = 0; index < bucket.occupied.length; index += 1) {
+    if (bucket.occupied[index] === 0) {
+      continue;
+    }
+    const key = { low: bucket.keyLow[index], high: bucket.keyHigh[index] };
+    const slot = findMedleyExactCompactNumberCacheSlot(nextBucket, key);
+    nextBucket.occupied[slot.index] = 1;
+    nextBucket.keyLow[slot.index] = key.low;
+    nextBucket.keyHigh[slot.index] = key.high;
+    nextBucket.values[slot.index] = bucket.values[index];
+    nextBucket.size += 1;
+  }
+  nextBucket.overflow = bucket.overflow;
+  return nextBucket;
+}
+
+function getMedleyExactCompactNestedNumberCache(
+  cache: MedleyExactCompactNestedNumberCache,
+  prefixKey: string,
+  cardKey: MedleyExactCandidateCardKey,
+): number | undefined {
+  const bucket = cache.get(prefixKey);
+  if (!bucket) {
+    return undefined;
+  }
+  const key = splitMedleyExactCompactNumberCacheKey(cardKey);
+  if (!key) {
+    return bucket.overflow?.get(cardKey);
+  }
+  const slot = findMedleyExactCompactNumberCacheSlot(bucket, key);
+  return slot.found ? bucket.values[slot.index] : undefined;
+}
+
+function setMedleyExactCompactNestedNumberCache(
+  cache: MedleyExactCompactNestedNumberCache,
+  prefixKey: string,
+  cardKey: MedleyExactCandidateCardKey,
+  value: number,
+): void {
+  const key = splitMedleyExactCompactNumberCacheKey(cardKey);
+  let bucket = cache.get(prefixKey);
+  if (!bucket) {
+    bucket = createMedleyExactCompactNumberCacheBucket();
+    cache.set(prefixKey, bucket);
+  }
+  if (!key) {
+    if (!bucket.overflow) {
+      bucket.overflow = new Map<MedleyExactCandidateCardKey, number>();
+    }
+    bucket.overflow.set(cardKey, value);
+    return;
+  }
+  if ((bucket.size + 1) / bucket.occupied.length > 0.7) {
+    bucket = growMedleyExactCompactNumberCacheBucket(bucket);
+    cache.set(prefixKey, bucket);
+  }
+  const slot = findMedleyExactCompactNumberCacheSlot(bucket, key);
+  if (!slot.found) {
+    bucket.occupied[slot.index] = 1;
+    bucket.keyLow[slot.index] = key.low;
+    bucket.keyHigh[slot.index] = key.high;
+    bucket.size += 1;
+  }
+  bucket.values[slot.index] = value;
+}
+
+function countMedleyExactCompactNestedNumberCacheEntries(cache: MedleyExactCompactNestedNumberCache): number {
+  let count = 0;
+  for (const bucket of cache.values()) {
+    count += bucket.size + (bucket.overflow?.size ?? 0);
+  }
+  return count;
+}
+
+function estimateMedleyExactCompactNestedNumberCacheBytes(cache: MedleyExactCompactNestedNumberCache): number {
+  let bytes = 0;
+  for (const bucket of cache.values()) {
+    bytes += bucket.occupied.byteLength;
+    bytes += bucket.keyLow.byteLength;
+    bytes += bucket.keyHigh.byteLength;
+    bytes += bucket.values.byteLength;
+  }
+  return bytes;
 }
 
 const medleyExactSignatureCardContextHashCache = new WeakMap<SearchCard, number>();
@@ -1955,6 +2109,8 @@ export function createMedleyExactSlotCandidateGenerator(
   disableScoreOnlyCache = false,
   disableCandidateCardsRetention = false,
   enableCompactScoreOnlyCache = false,
+  disableGlobalComplementUpperCache = false,
+  enableCompactGlobalComplementUpperCache = false,
 ): MedleyExactSlotCandidateGenerator {
   // The generator is ordered by optimistic slot upper bound. Exhaustion proves that no unseen
   // slot candidate remains above the active cutoff; budget/deadline aborts are reported to the
@@ -1963,6 +2119,9 @@ export function createMedleyExactSlotCandidateGenerator(
   const slotUpperHeap: MedleyExactSlotCandidateSearchNode[] = [];
   const bannedCardIds = new Set<number>();
   const globalComplementUpperCache: MedleyExactNestedNumberCache = new Map();
+  const compactGlobalComplementUpperCache: MedleyExactCompactNestedNumberCache | null = (
+    enableCompactGlobalComplementUpperCache ? new Map() : null
+  );
   const globalPairComplementUpperCache: MedleyExactNestedNumberCache = new Map();
   const pairUpperQueryCache = new Map<string, MedleyExactCandidatePairUpperQuery>();
   const scoreOnlyCalculationCache = (
@@ -2160,7 +2319,11 @@ export function createMedleyExactSlotCandidateGenerator(
       rightCandidateCount,
       globalPruning.pairUnseenUpperBound ?? "",
     ].join(":");
-    let complementUpperBound = getMedleyExactNestedNumberCache(globalComplementUpperCache, cachePrefixKey, cardKey);
+    let complementUpperBound = disableGlobalComplementUpperCache
+      ? undefined
+      : compactGlobalComplementUpperCache
+        ? getMedleyExactCompactNestedNumberCache(compactGlobalComplementUpperCache, cachePrefixKey, cardKey)
+        : getMedleyExactNestedNumberCache(globalComplementUpperCache, cachePrefixKey, cardKey);
     if (complementUpperBound === undefined) {
       complementUpperBound = estimateGeneratedPairComplementUpperBound(
         selectedCardIds,
@@ -2218,7 +2381,18 @@ export function createMedleyExactSlotCandidateGenerator(
         complementUpperBound = Math.min(complementUpperBound ?? Number.POSITIVE_INFINITY, tightCapacityUpperBound);
       }
       complementUpperBound = complementUpperBound ?? Number.POSITIVE_INFINITY;
-      setMedleyExactNestedNumberCache(globalComplementUpperCache, cachePrefixKey, cardKey, complementUpperBound);
+      if (!disableGlobalComplementUpperCache) {
+        if (compactGlobalComplementUpperCache) {
+          setMedleyExactCompactNestedNumberCache(
+            compactGlobalComplementUpperCache,
+            cachePrefixKey,
+            cardKey,
+            complementUpperBound,
+          );
+        } else {
+          setMedleyExactNestedNumberCache(globalComplementUpperCache, cachePrefixKey, cardKey, complementUpperBound);
+        }
+      }
     }
     return complementUpperBound === Number.POSITIVE_INFINITY
       ? Number.POSITIVE_INFINITY
@@ -2503,6 +2677,7 @@ export function createMedleyExactSlotCandidateGenerator(
     heap.length = 0;
     slotUpperHeap.length = 0;
     globalComplementUpperCache.clear();
+    compactGlobalComplementUpperCache?.clear();
     globalPairComplementUpperCache.clear();
     pairUpperQueryCache.clear();
   };
@@ -2546,8 +2721,15 @@ export function createMedleyExactSlotCandidateGenerator(
         heapNodeCount: heap.length,
         slotUpperHeapNodeCount: slotUpperHeap.length,
         activeHeapNodeCount: heapKeyMode === "global" ? heap.length : 0,
-        globalComplementUpperCacheSize: countMedleyExactNestedNumberCacheEntries(globalComplementUpperCache),
-        globalComplementUpperCacheBucketCount: globalComplementUpperCache.size,
+        globalComplementUpperCacheSize: compactGlobalComplementUpperCache
+          ? countMedleyExactCompactNestedNumberCacheEntries(compactGlobalComplementUpperCache)
+          : countMedleyExactNestedNumberCacheEntries(globalComplementUpperCache),
+        globalComplementUpperCacheBucketCount: compactGlobalComplementUpperCache
+          ? compactGlobalComplementUpperCache.size
+          : globalComplementUpperCache.size,
+        globalComplementUpperCacheCompactMiB: compactGlobalComplementUpperCache
+          ? roundMiB(estimateMedleyExactCompactNestedNumberCacheBytes(compactGlobalComplementUpperCache))
+          : null,
         globalPairComplementUpperCacheSize: countMedleyExactNestedNumberCacheEntries(globalPairComplementUpperCache),
         globalPairComplementUpperCacheBucketCount: globalPairComplementUpperCache.size,
         pairUpperQueryCacheSize: pairUpperQueryCache.size,
@@ -5797,6 +5979,8 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     disableExactCandidateScoreOnlyCacheEffective,
     context.disableExactCandidateCardsRetention === true,
     context.enableExactCandidateCompactScoreOnlyCache === true,
+    context.disableExactCandidateGlobalComplementCache === true,
+    context.enableExactCandidateCompactGlobalComplementCache === true,
   ));
   const candidatesBySlot: MedleyTeamCandidate[][] = Array.from({ length: slots.length }, () => []);
   const rawCandidateMirror = context.debugExactCandidateRawMirror === true
@@ -6512,6 +6696,8 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     disableExactCandidateScoreOnlyCacheEffective,
     context.disableExactCandidateCardsRetention === true,
     context.enableExactCandidateCompactScoreOnlyCache === true,
+    context.disableExactCandidateGlobalComplementCache === true,
+    context.enableExactCandidateCompactGlobalComplementCache === true,
   ));
   const getCandidateFillGenerator = (slotIndex: number, scoreCutoff: number): MedleyExactSlotCandidateGenerator => (
     generators[slotIndex].canReuseForScoreCutoff(scoreCutoff)

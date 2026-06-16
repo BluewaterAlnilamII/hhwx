@@ -104,6 +104,8 @@ export type BandoriMedleySearchOptimizationOptions = {
   exactCandidateScoreOnlyCachePressureSlotCardCount?: number;
   disableExactCandidateCardsRetention?: boolean;
   enableExactCandidateCompactScoreOnlyCache?: boolean;
+  disableExactCandidateGlobalComplementCache?: boolean;
+  enableExactCandidateCompactGlobalComplementCache?: boolean;
   disableExactCandidateSkillWindowContributionCache?: boolean;
   disableExactCandidateScoreCalculationCache?: boolean;
   disableExactCandidateScoreOnlyCache?: boolean;
