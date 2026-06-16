@@ -1726,22 +1726,23 @@ function updateMinions(
       ? getDueAIStateTimelineEvents(advancedAIState).some((event) => event.fireAllWeaponNow)
       : false;
 
-    const targetEnemy = findNearestEnemy(state, minion);
-    const target = targetEnemy ?? state.player;
-    const stopDistance = targetEnemy
-      ? Math.max(minion.radius + targetEnemy.radius, 64)
-      : MINION_FOLLOW_DISTANCE;
-    const dx = target.x - minion.x;
-    const dy = target.y - minion.y;
-    const distance = Math.hypot(dx, dy);
-
     const currentAIState = advancedAIState?.state ?? null;
+    const targetEnemy = findNearestEnemy(state, minion);
+    const movementTarget = getMinionMovementTarget(
+      state,
+      minion,
+      currentAIState,
+      targetEnemy,
+    );
+    const dx = movementTarget.target.x - minion.x;
+    const dy = movementTarget.target.y - minion.y;
+    const distance = Math.hypot(dx, dy);
     const minionSpeed = getMinionEffectiveSpeed(minion);
     if (currentAIState?.stateType === NFO_AI_STATE_TYPE.minionOrbit) {
       updateMinionOrbit(state, minion, currentAIState, deltaSeconds);
     } else if (
       deltaSeconds > 0
-      && distance > stopDistance
+      && distance > movementTarget.stopDistance
       && canAIStateMove(currentAIState)
       && minionSpeed > 0
     ) {
@@ -1756,7 +1757,7 @@ function updateMinions(
       );
     }
 
-    syncAIStateFacingFromTarget(minion, currentAIState, target);
+    syncAIStateFacingFromTarget(minion, currentAIState, movementTarget.target);
 
     if (advancedAIState) {
       updateMinionAIAction(state, runtimeData, minion, advancedAIState, targetEnemy);
@@ -1782,6 +1783,32 @@ function updateMinions(
   }
 
   state.minions = state.minions.filter((minion) => minion.remainingSeconds > 0);
+}
+
+function getMinionMovementTarget(
+  state: NfoSimulationState,
+  minion: NfoSimMinion,
+  aiState: NfoAIStateData | null,
+  targetEnemy: NfoSimEnemy | null,
+): { target: NfoVector; stopDistance: number } {
+  if (aiState?.stateType === NFO_AI_STATE_TYPE.minionFollow) {
+    return {
+      target: state.player,
+      stopDistance: MINION_FOLLOW_DISTANCE,
+    };
+  }
+
+  if (targetEnemy) {
+    return {
+      target: targetEnemy,
+      stopDistance: Math.max(minion.radius + targetEnemy.radius, 64),
+    };
+  }
+
+  return {
+    target: state.player,
+    stopDistance: MINION_FOLLOW_DISTANCE,
+  };
 }
 
 function updateMinionOrbit(

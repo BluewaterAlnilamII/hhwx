@@ -599,7 +599,8 @@ first-pass minion weapon creation/firing, including CN weapon `16` / minion
 `2` / bullet `22`, CN weapon `19` / minion `6` / bullet `29`, and CN weapon
 `22` / minion `3` / zero-speed ray bullet `33`, and CN weapon `26` / minion
 `4` / bullet `34`, minion AI-created player-team bullet shooters,
-AI timeline `FireAllWeaponNow`-gated minion weapon firing,
+AI timeline `FireAllWeaponNow`-gated minion weapon firing, first-pass minion
+AIState type `20` follow-player and type `21` move-to-enemy target splitting,
 AIState entry buff application without per-frame restacking, AIState entry common-state recording,
 weapon-level `MinionCount` multi-minion firing, weapon-level `spawnMinionData`
 AI/placement handling, bomb/magnet pickup handling,
@@ -1267,9 +1268,11 @@ Weapon behavior staging:
   `MinionData`, `WeaponLevelData.MinionCount`, and usable weapon-level
   `spawnMinionData`. For `weaponType = Minion`, the simulation creates or
   reuses the current weapon level's minion count, moves those placeholder
-  minions toward the nearest enemy or back toward the player, and fires the
-  selected weapon level's `fireBullets` from every non-AI-gated minion position
-  during the selected-weapon fire cycle. This covers weapon `22` level `1`,
+  minions from first-pass AI target selection, and fires the selected weapon
+  level's `fireBullets` from every non-AI-gated minion position during the
+  selected-weapon fire cycle. AIState type `20` now follows the player even
+  when enemies are present, while type `21` keeps the nearest-enemy movement
+  target and falls back to the player when no enemy exists. This covers weapon `22` level `1`,
   whose frozen CN data sets `MinionCount = 2` and
   direct zero-speed ray bullet `33` with ray collider, 20-frame lifetime,
   99999 hit count, and 10-frame damage-judge cooldown. If the minion's `AIData` contains a
@@ -1286,8 +1289,8 @@ Weapon behavior staging:
   bullet `99`, which applies buff `120` and redirects affected enemy movement
   plus hostile direct-fire and shooter friendly-target aim to the bullet source
   in the first-pass simulation. Deeper native taunt threat priority, retarget
-  selection, minion collision rules, and per-`Weapon_XX` subclass details
-  remain pending.
+  selection, exact native minion follow spacing/priority, minion collision
+  rules, and per-`Weapon_XX` subclass details remain pending.
 - `EventBulletID`, `OnDestoryFireEventBulletID`, and `NoDamage` are now mapped
   on the shared `FireBulletData` DTO. The selected-weapon `fireBullets` subset
   in the frozen CN runtime still mostly uses zero values, but

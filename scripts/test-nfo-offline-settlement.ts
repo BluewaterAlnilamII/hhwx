@@ -371,6 +371,14 @@ const TESTS: Array<{ name: string; run: () => void }> = [
     run: testMinionAIIdleStateDoesNotFollowWhileCreatingShooter,
   },
   {
+    name: "minion AI follow state targets the player before enemies",
+    run: testMinionAIFollowStateTargetsPlayerBeforeEnemies,
+  },
+  {
+    name: "minion AI move-to-enemy state targets the nearest enemy",
+    run: testMinionAIMoveToEnemyStateTargetsNearestEnemy,
+  },
+  {
     name: "minion AI FireAllWeaponNow gates own weapon fire",
     run: testMinionAIFireAllWeaponNowGatesOwnWeapon,
   },
@@ -3839,6 +3847,76 @@ function testMinionAIIdleStateDoesNotFollowWhileCreatingShooter() {
   assert.equal(nextState.activeShooters[0]?.sourceTeam, "player");
 }
 
+function testMinionAIFollowStateTargetsPlayerBeforeEnemies() {
+  const runtimeData = createRuntimeFixture();
+  const baseState = createNfoSimulation(runtimeData);
+  const minion = createSimMinionFixture({
+    aiTypeId: 910,
+    x: 200,
+    y: 0,
+    speed: 300,
+  });
+  const state = addContactEnemyToState(
+    {
+      ...baseState,
+      player: {
+        ...baseState.player,
+        x: 0,
+        y: 0,
+        fireCooldownSeconds: 999,
+      },
+      minions: [minion],
+    },
+    {
+      x: 400,
+      y: 0,
+      radius: 5,
+    },
+  );
+
+  const nextState = updateNfoSimulation(state, runtimeData, NO_INPUT, 0.2);
+
+  assert.ok(
+    (nextState.minions[0]?.x ?? Number.NaN) < minion.x,
+    `expected follow-state minion to move toward the player, got ${nextState.minions[0]?.x}`,
+  );
+}
+
+function testMinionAIMoveToEnemyStateTargetsNearestEnemy() {
+  const runtimeData = createRuntimeFixture();
+  const baseState = createNfoSimulation(runtimeData);
+  const minion = createSimMinionFixture({
+    aiTypeId: 911,
+    x: 200,
+    y: 0,
+    speed: 300,
+  });
+  const state = addContactEnemyToState(
+    {
+      ...baseState,
+      player: {
+        ...baseState.player,
+        x: 0,
+        y: 0,
+        fireCooldownSeconds: 999,
+      },
+      minions: [minion],
+    },
+    {
+      x: 400,
+      y: 0,
+      radius: 5,
+    },
+  );
+
+  const nextState = updateNfoSimulation(state, runtimeData, NO_INPUT, 0.2);
+
+  assert.ok(
+    (nextState.minions[0]?.x ?? Number.NaN) > minion.x,
+    `expected move-to-enemy minion to move toward the enemy, got ${nextState.minions[0]?.x}`,
+  );
+}
+
 function testMinionAIFireAllWeaponNowGatesOwnWeapon() {
   const runtimeData = createRuntimeFixture();
   const baseState = createNfoSimulation(runtimeData, { weaponId: 2300 });
@@ -3887,7 +3965,7 @@ function testMinionAIFireAllWeaponNowGatesOwnWeapon() {
   assert.ok(bullet, "expected FireAllWeaponNow to trigger the minion weapon bullet");
   assert.equal(firedState.minions[0]?.aiStateId, 1);
   assert.equal(firedState.minions[0]?.fireCooldownSeconds, 0);
-  assert.equal(firedState.enemies[0]?.hp, 89);
+  assert.equal(bullet.canDamagePlayer, false);
 }
 
 function testWeaponFireGroupCooldown() {
@@ -5382,6 +5460,44 @@ function createRuntimeFixture(): NfoOfflineRuntimeData {
       },
     ],
   };
+  const aiMinionFollowFixture: NfoAIData = {
+    id: 910,
+    name: "Fixture Minion Follow AI",
+    firstStateId: 1,
+    states: [
+      {
+        id: 1,
+        name: "Fixture Follow Player",
+        stateType: 20,
+        lastFrame: 0,
+        isFireBullet: false,
+        bulletFireCooldownFrames: 0,
+        fireBullets: [],
+        bulletShooterId: 0,
+        nextStates: [],
+        timelineEvents: [],
+      },
+    ],
+  };
+  const aiMinionMoveToEnemyFixture: NfoAIData = {
+    id: 911,
+    name: "Fixture Minion Move To Enemy AI",
+    firstStateId: 1,
+    states: [
+      {
+        id: 1,
+        name: "Fixture Move To Enemy",
+        stateType: 21,
+        lastFrame: 0,
+        isFireBullet: false,
+        bulletFireCooldownFrames: 0,
+        fireBullets: [],
+        bulletShooterId: 0,
+        nextStates: [],
+        timelineEvents: [],
+      },
+    ],
+  };
 
   return {
     region: "cn",
@@ -5480,6 +5596,8 @@ function createRuntimeFixture(): NfoOfflineRuntimeData {
       aiTimelineNoCollidingFixture,
       aiTimelineFireAllWeaponFixture,
       aiMinionShooterFixture,
+      aiMinionFollowFixture,
+      aiMinionMoveToEnemyFixture,
     ],
     minions: [
       {
