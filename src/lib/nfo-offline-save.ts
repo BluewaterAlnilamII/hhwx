@@ -2,6 +2,7 @@ import {
   getRuntimeCharacter,
   getRuntimeEquip,
   getRuntimeGlobalUpgrade,
+  getRuntimeLevel,
   getRuntimeWeapon,
   type NfoGlobalUpgradeData,
   type NfoOfflineRuntimeData,
@@ -33,6 +34,8 @@ export type NfoGlobalUpgradePurchaseState = {
   canAfford: boolean;
   canBuy: boolean;
 };
+
+export type NfoUnlockableKind = "character" | "level" | "weapon" | "equip";
 
 export function createInitialNfoOfflineSave(
   runtimeData: NfoOfflineRuntimeData,
@@ -170,6 +173,32 @@ export function getNfoGlobalUpgradePurchaseState(
     canAfford,
     canBuy: !isPaid && hasParent && canAfford,
   };
+}
+
+export function getNfoOfflineLockReason(
+  runtimeData: NfoOfflineRuntimeData,
+  save: NfoOfflineSaveState,
+  kind: NfoUnlockableKind,
+  id: number,
+): string | null {
+  if (isNfoOfflineContentUnlocked(save, kind, id)) {
+    return null;
+  }
+
+  const reasons: string[] = [];
+  const clearSource = getClearUnlockSource(runtimeData, kind, id);
+  if (clearSource) {
+    reasons.push(`clear ${clearSource.name}`);
+  }
+
+  const upgradeSource = getGlobalUpgradeUnlockSource(runtimeData, kind, id);
+  if (upgradeSource) {
+    reasons.push(describeGlobalUpgradeUnlock(save, upgradeSource));
+  }
+
+  return reasons.length > 0
+    ? reasons.join(" or ")
+    : "use Unlock all for testing";
 }
 
 export function buyNfoGlobalUpgrade(
@@ -424,6 +453,70 @@ function normalizeUnlockedSelection(
 function defaultOrAll(defaultIds: number[], allowedIds: number[]): number[] {
   const filtered = filterIds(defaultIds, allowedIds);
   return filtered.length > 0 ? filtered : allowedIds;
+}
+
+function isNfoOfflineContentUnlocked(
+  save: NfoOfflineSaveState,
+  kind: NfoUnlockableKind,
+  id: number,
+): boolean {
+  if (kind === "character") {
+    return save.unlockedCharacterIds.includes(id);
+  }
+  if (kind === "level") {
+    return save.unlockedLevelIds.includes(id);
+  }
+  if (kind === "weapon") {
+    return save.unlockedWeaponIds.includes(id);
+  }
+  return save.unlockedEquipIds.includes(id);
+}
+
+function getClearUnlockSource(
+  runtimeData: NfoOfflineRuntimeData,
+  kind: NfoUnlockableKind,
+  id: number,
+) {
+  for (const level of runtimeData.levels) {
+    if (
+      (kind === "character" && level.clearUnlockCharacterIds.includes(id))
+      || (kind === "level" && level.clearUnlockLevelIds.includes(id))
+      || (kind === "weapon" && level.clearUnlockWeaponIds.includes(id))
+      || (kind === "equip" && level.clearUnlockEquipIds.includes(id))
+    ) {
+      return getRuntimeLevel(runtimeData, level.id) ?? level;
+    }
+  }
+  return null;
+}
+
+function getGlobalUpgradeUnlockSource(
+  runtimeData: NfoOfflineRuntimeData,
+  kind: NfoUnlockableKind,
+  id: number,
+): NfoGlobalUpgradeData | null {
+  if (kind !== "weapon" && kind !== "equip") {
+    return null;
+  }
+
+  return runtimeData.globalUpgrades.find((upgrade) => (
+    (kind === "weapon" && upgrade.unlockWeaponId === id)
+    || (kind === "equip" && upgrade.unlockEquipId === id)
+  )) ?? null;
+}
+
+function describeGlobalUpgradeUnlock(
+  save: NfoOfflineSaveState,
+  upgrade: NfoGlobalUpgradeData,
+): string {
+  const purchaseState = getNfoGlobalUpgradePurchaseState(save, upgrade);
+  if (!purchaseState.hasParent) {
+    return `buy prerequisite for ${upgrade.name}`;
+  }
+  if (!purchaseState.canAfford) {
+    return `${upgrade.name} costs ${upgrade.cost} coin`;
+  }
+  return `buy ${upgrade.name}`;
 }
 
 function mergeDefaultIds(

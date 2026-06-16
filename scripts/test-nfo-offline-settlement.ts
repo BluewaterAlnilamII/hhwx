@@ -3,6 +3,7 @@ import {
   applyNfoRunResultToSave,
   buyNfoGlobalUpgrade,
   createInitialNfoOfflineSave,
+  getNfoOfflineLockReason,
   unlockAllNfoOfflineContent,
   updateNfoOfflineSaveSelection,
 } from "../src/lib/nfo-offline-save";
@@ -93,6 +94,10 @@ const TESTS: Array<{ name: string; run: () => void }> = [
   {
     name: "debug unlock all exposes every local level weapon and equip",
     run: testDebugUnlockAllContent,
+  },
+  {
+    name: "lock reasons explain clear rewards upgrades and debug fallback",
+    run: testLockReasonsExplainUnlockSources,
   },
   {
     name: "movement input moves the player and updates facing",
@@ -1265,6 +1270,43 @@ function testDebugUnlockAllContent() {
   assert.equal(selectedSave.lastSelection.levelId, 2);
   assert.equal(selectedSave.lastSelection.weaponId, 200);
   assert.deepEqual(selectedSave.lastSelection.equipIds, [2, 1]);
+}
+
+function testLockReasonsExplainUnlockSources() {
+  const runtimeData = createRuntimeFixture();
+  const initialSave = createInitialNfoOfflineSave(runtimeData);
+
+  assert.equal(
+    getNfoOfflineLockReason(runtimeData, initialSave, "character", 20),
+    "clear Fixture Plain",
+  );
+  assert.equal(
+    getNfoOfflineLockReason(runtimeData, initialSave, "level", 2),
+    "clear Fixture Plain",
+  );
+  assert.equal(
+    getNfoOfflineLockReason(runtimeData, initialSave, "weapon", 200),
+    "clear Fixture Plain or buy Unlock Fixture Bow",
+  );
+  assert.equal(
+    getNfoOfflineLockReason(runtimeData, initialSave, "equip", 2),
+    "clear Fixture Plain or buy Unlock Fixture Speed Boots",
+  );
+
+  const upgradedSave = buyNfoGlobalUpgrade(runtimeData, initialSave, 900);
+  assert.equal(getNfoOfflineLockReason(runtimeData, upgradedSave, "weapon", 200), null);
+
+  const hiddenWeapon = runtimeData.weapons[0];
+  assert.ok(hiddenWeapon);
+  runtimeData.weapons.push({
+    ...hiddenWeapon,
+    id: 300,
+    name: "Fixture Hidden Wand",
+  });
+  assert.equal(
+    getNfoOfflineLockReason(runtimeData, initialSave, "weapon", 300),
+    "use Unlock all for testing",
+  );
 }
 
 function testSelectedEquipAttributes() {

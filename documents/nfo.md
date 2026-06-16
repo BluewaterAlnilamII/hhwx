@@ -554,6 +554,11 @@ Current playable prototype:
   every local runtime character, level, weapon, and equip ID into the
   browser-local unlock lists and then normalizes the selected loadout; this is a
   debug shortcut only, not a long-term mirror or native progression rule;
+- labels locked character, level, weapon, and equip options with the local
+  unlock reason. The current reasons are derived from default unlock lists,
+  `LevelData` clear rewards, global-upgrade weapon/equip unlocks, or the
+  prototype-only `Unlock all` fallback when the frozen data has no mapped local
+  source;
 - tracks local run results in browser storage;
 - starts from the CN `GameDefaultData` default unlock lists, then unlocks the
   cleared level and the cleared `LevelData` row's

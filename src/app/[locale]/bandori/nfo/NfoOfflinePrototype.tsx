@@ -7,6 +7,7 @@ import {
   applyNfoRunResultToSave,
   buyNfoGlobalUpgrade,
   getNfoGlobalUpgradePurchaseState,
+  getNfoOfflineLockReason,
   grantNfoUpgradeCoin,
   loadNfoOfflineSave,
   resetNfoOfflineSave,
@@ -896,11 +897,13 @@ export default function NfoOfflinePrototype() {
                 label="Character"
                 value={String(selection.characterId)}
                 options={runtimeData.characters.map((character) => {
-                  const isUnlocked = saveState?.unlockedCharacterIds.includes(character.id) ?? true;
+                  const lockReason = saveState
+                    ? getNfoOfflineLockReason(runtimeData, saveState, "character", character.id)
+                    : null;
                   return {
                     value: String(character.id),
-                    label: isUnlocked ? character.name : `${character.name} (Locked)`,
-                    disabled: !isUnlocked,
+                    label: formatUnlockableOptionLabel(character.name, lockReason),
+                    disabled: Boolean(lockReason),
                   };
                 })}
                 onChange={(event) => handleSelectionChange("characterId", event)}
@@ -909,11 +912,13 @@ export default function NfoOfflinePrototype() {
                 label="Level"
                 value={String(selection.levelId)}
                 options={runtimeData.levels.map((level) => {
-                  const isUnlocked = saveState?.unlockedLevelIds.includes(level.id) ?? true;
+                  const lockReason = saveState
+                    ? getNfoOfflineLockReason(runtimeData, saveState, "level", level.id)
+                    : null;
                   return {
                     value: String(level.id),
-                    label: isUnlocked ? level.name : `${level.name} (Locked)`,
-                    disabled: !isUnlocked,
+                    label: formatUnlockableOptionLabel(level.name, lockReason),
+                    disabled: Boolean(lockReason),
                   };
                 })}
                 onChange={(event) => handleSelectionChange("levelId", event)}
@@ -922,11 +927,13 @@ export default function NfoOfflinePrototype() {
                 label="Weapon"
                 value={String(selection.weaponId)}
                 options={runtimeData.weapons.map((weapon) => {
-                  const isUnlocked = saveState?.unlockedWeaponIds.includes(weapon.id) ?? true;
+                  const lockReason = saveState
+                    ? getNfoOfflineLockReason(runtimeData, saveState, "weapon", weapon.id)
+                    : null;
                   return {
                     value: String(weapon.id),
-                    label: isUnlocked ? weapon.name : `${weapon.name} (Locked)`,
-                    disabled: !isUnlocked,
+                    label: formatUnlockableOptionLabel(weapon.name, lockReason),
+                    disabled: Boolean(lockReason),
                   };
                 })}
                 onChange={(event) => handleSelectionChange("weaponId", event)}
@@ -943,12 +950,18 @@ export default function NfoOfflinePrototype() {
                     options={[
                       { value: "0", label: "None" },
                       ...runtimeData.equips.map((equip) => {
-                        const isUnlocked = saveState?.unlockedEquipIds.includes(equip.id) ?? true;
+                        const lockReason = saveState
+                          ? getNfoOfflineLockReason(runtimeData, saveState, "equip", equip.id)
+                          : null;
                         const isSelectedElsewhere = selectedOtherEquipIds.has(equip.id);
                         return {
                           value: String(equip.id),
-                          label: isUnlocked ? equip.name : `${equip.name} (Locked)`,
-                          disabled: !isUnlocked || isSelectedElsewhere,
+                          label: formatEquipOptionLabel(
+                            equip.name,
+                            lockReason,
+                            isSelectedElsewhere,
+                          ),
+                          disabled: Boolean(lockReason) || isSelectedElsewhere,
                         };
                       }),
                     ]}
@@ -1315,6 +1328,21 @@ function SelectControl({
       </select>
     </label>
   );
+}
+
+function formatUnlockableOptionLabel(name: string, lockReason: string | null): string {
+  return lockReason ? `${name} (Locked: ${lockReason})` : name;
+}
+
+function formatEquipOptionLabel(
+  name: string,
+  lockReason: string | null,
+  isSelectedElsewhere: boolean,
+): string {
+  if (lockReason) {
+    return formatUnlockableOptionLabel(name, lockReason);
+  }
+  return isSelectedElsewhere ? `${name} (Selected)` : name;
 }
 
 function Metric({
