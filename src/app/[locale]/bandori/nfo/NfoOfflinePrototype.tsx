@@ -97,6 +97,7 @@ type SmokeInteractionState =
   | "upgrade-requested"
   | "movement-requested"
   | "enemy-spawn-requested"
+  | "reward-observation-requested"
   | "active-skill-ready-requested"
   | "active-skill-requested"
   | "waiting-scene"
@@ -127,6 +128,7 @@ export default function NfoOfflinePrototype() {
   const [smokeMovementObserved, setSmokeMovementObserved] = useState(false);
   const [smokeCombatObserved, setSmokeCombatObserved] = useState(false);
   const [smokeEnemyObserved, setSmokeEnemyObserved] = useState(false);
+  const [smokeRewardObserved, setSmokeRewardObserved] = useState(false);
   const smokeMovementStartRef = useRef<{ x: number; y: number } | null>(null);
   const runtimeData = runtimeState.status === "ready" ? runtimeState.data : null;
   const paidGlobalUpgradeIds = saveState?.paidGlobalUpgradeIds ?? EMPTY_NUMBER_ARRAY;
@@ -147,6 +149,7 @@ export default function NfoOfflinePrototype() {
     setSmokeMovementObserved(false);
     setSmokeCombatObserved(false);
     setSmokeEnemyObserved(false);
+    setSmokeRewardObserved(false);
     smokeMovementStartRef.current = null;
   }, []);
 
@@ -194,6 +197,22 @@ export default function NfoOfflinePrototype() {
       setSmokeEnemyObserved(true);
     }
   }, [hud, smokeEnemyObserved, smokeMode]);
+
+  useEffect(() => {
+    if (!smokeMode || smokeRewardObserved || !hud || hud.status !== "playing") {
+      return;
+    }
+
+    if (
+      hud.defeatedEnemies > 0
+      || hud.pickups > 0
+      || hud.collectedExp > 0
+      || hud.collectedCoin > 0
+      || hud.score > 0
+    ) {
+      setSmokeRewardObserved(true);
+    }
+  }, [hud, smokeMode, smokeRewardObserved]);
 
   useEffect(() => {
     let cancelled = false;
@@ -569,6 +588,12 @@ export default function NfoOfflinePrototype() {
         return;
       }
 
+      if (!smokeRewardObserved) {
+        setSmokeInteractionState("reward-observation-requested");
+        sceneActionsRef.current.advanceSmokeFrames(60);
+        return;
+      }
+
       if (!smokeActiveSkillObserved && hud.activeSkillId > 0) {
         if (hud.activeSkillChargeFrames < hud.activeSkillChargeMaxFrames) {
           setSmokeInteractionState("active-skill-ready-requested");
@@ -605,6 +630,20 @@ export default function NfoOfflinePrototype() {
       }
 
       sceneActionsRef.current.advanceSmokeFrames(12);
+      return;
+    }
+
+    if (
+      smokeInteractionState === "reward-observation-requested"
+      && sceneActionsRef.current
+      && hud?.status === "playing"
+    ) {
+      if (smokeRewardObserved) {
+        setSmokeInteractionState("waiting-scene");
+        return;
+      }
+
+      sceneActionsRef.current.advanceSmokeFrames(60);
       return;
     }
 
@@ -667,6 +706,7 @@ export default function NfoOfflinePrototype() {
     smokeInteractionState,
     smokeMovementObserved,
     smokeMode,
+    smokeRewardObserved,
     unlockAll,
     upgradeCoin,
     upgradeView?.nextUpgrade,
@@ -730,10 +770,14 @@ export default function NfoOfflinePrototype() {
         data-nfo-player-moved={smokeMovementObserved ? "1" : "0"}
         data-nfo-combat-observed={smokeCombatObserved ? "1" : "0"}
         data-nfo-enemy-observed={smokeEnemyObserved ? "1" : "0"}
+        data-nfo-reward-observed={smokeRewardObserved ? "1" : "0"}
         data-nfo-enemy-count={hud?.enemies ?? 0}
         data-nfo-projectile-count={hud?.projectiles ?? 0}
         data-nfo-defeated-enemy-count={hud?.defeatedEnemies ?? 0}
         data-nfo-pickup-count={hud?.pickups ?? 0}
+        data-nfo-collected-exp={hud?.collectedExp ?? 0}
+        data-nfo-collected-coin={hud?.collectedCoin ?? 0}
+        data-nfo-score={hud?.score ?? 0}
         data-nfo-full-screen-effect-count={hud?.fullScreenEffectCount ?? 0}
         data-nfo-full-screen-effect-name={hud?.fullScreenEffectName ?? ""}
         data-nfo-active-skill-id={hud?.activeSkillId ?? 0}

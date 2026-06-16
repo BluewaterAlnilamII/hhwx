@@ -266,8 +266,17 @@ async function smokeBrowserInteraction(baseUrl, args) {
       readHtmlAttribute(smokeTag, "data-nfo-defeated-enemy-count"),
     );
     const pickupCount = Number(readHtmlAttribute(smokeTag, "data-nfo-pickup-count"));
+    const collectedExp = Number(readHtmlAttribute(smokeTag, "data-nfo-collected-exp"));
+    const score = Number(readHtmlAttribute(smokeTag, "data-nfo-score"));
     assertSmoke(
-      [enemyCount, projectileCount, defeatedEnemyCount, pickupCount].every(Number.isFinite),
+      [
+        enemyCount,
+        projectileCount,
+        defeatedEnemyCount,
+        pickupCount,
+        collectedExp,
+        score,
+      ].every(Number.isFinite),
       "browser smoke did not expose combat counters",
     );
     assertSmoke(
@@ -277,6 +286,14 @@ async function smokeBrowserInteraction(baseUrl, args) {
     assertSmoke(
       readHtmlAttribute(smokeTag, "data-nfo-combat-observed") === "1",
       "browser smoke did not observe combat activity",
+    );
+    assertSmoke(
+      readHtmlAttribute(smokeTag, "data-nfo-reward-observed") === "1",
+      "browser smoke did not observe enemy defeat, drops, or EXP before clearing",
+    );
+    assertSmoke(
+      defeatedEnemyCount > 0 || pickupCount > 0 || collectedExp > 0 || score > 0,
+      "browser smoke did not expose a concrete enemy defeat, drop, EXP, or score signal",
     );
     const paidUpgradeCount = Number(readHtmlAttribute(smokeTag, "data-nfo-paid-upgrade-count"));
     const upgradeTotalCount = Number(readHtmlAttribute(smokeTag, "data-nfo-upgrade-total-count"));
