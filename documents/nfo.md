@@ -366,6 +366,19 @@ Current playable prototype:
   `NFO_SMOKE_BROWSER_BIN=/path/to/chrome` when the browser binary is not
   auto-detected.
 
+- run a production-server smoke after `npm run build` when validating an
+  independently deployable artifact:
+
+  ```bash
+  npm run smoke:nfo:prod
+  ```
+
+  This starts `next start` on port `3118` by default, waits for
+  `/api/bandori/nfo/local-runtime`, then runs the same full smoke against the
+  production server and stops it. Use `NFO_SMOKE_PROD_PORT=3120` or
+  `npm run smoke:nfo:prod -- --port 3120` when that port is occupied. Keep
+  `npm run dev:nfo` on port `3117` for in-progress inspection.
+
 - uses the CN snapshot only;
 - exposes character and level selection, with locked characters disabled until
   local progression unlocks them;
@@ -656,6 +669,15 @@ live NFO hosts:
 ```bash
 npm run smoke:nfo
 ```
+
+For a self-contained local production check, run:
+
+```bash
+npm run smoke:nfo:prod
+```
+
+This command starts `next start` on port `3118` by default, reuses the same
+full browser smoke against that production server, and then stops the server.
 
 The full browser smoke uses a temporary browser profile, so it does not alter
 the user's normal browser save data. It also executes the local unlock, coin,
