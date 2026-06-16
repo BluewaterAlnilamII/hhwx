@@ -92,6 +92,7 @@ const NFO_BULLET_FORCE_TYPE = {
   right: 4,
   up: 5,
   down: 6,
+  forward: 7,
 } as const;
 const NFO_BULLET_COMP_ROTATE_TYPE = {
   none: 0,
@@ -3364,6 +3365,7 @@ function getSupportedBulletForceType(forceType: number): number {
     || forceType === NFO_BULLET_FORCE_TYPE.right
     || forceType === NFO_BULLET_FORCE_TYPE.up
     || forceType === NFO_BULLET_FORCE_TYPE.down
+    || forceType === NFO_BULLET_FORCE_TYPE.forward
   ) {
     return forceType;
   }
@@ -4553,6 +4555,9 @@ function getBulletForceDirection(
   if (bullet.forceType === NFO_BULLET_FORCE_TYPE.down) {
     return { x: 0, y: 1 };
   }
+  if (bullet.forceType === NFO_BULLET_FORCE_TYPE.forward) {
+    return getNormalizedBulletForward(bullet);
+  }
 
   const colliderCenter = getBulletColliderCenter(bullet);
   const baseX = enemy.x - colliderCenter.x;
@@ -4571,6 +4576,21 @@ function getBulletForceDirection(
   }
 
   return outward;
+}
+
+function getNormalizedBulletForward(bullet: NfoSimBullet): NfoVector {
+  const speed = Math.hypot(bullet.vx, bullet.vy);
+  if (speed > 0) {
+    return {
+      x: bullet.vx / speed,
+      y: bullet.vy / speed,
+    };
+  }
+
+  return {
+    x: Math.cos(bullet.angle),
+    y: Math.sin(bullet.angle),
+  };
 }
 
 function resolveCollisions(

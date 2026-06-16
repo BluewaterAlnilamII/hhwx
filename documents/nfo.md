@@ -261,6 +261,10 @@ The CN parity fixture set now also locks `EnemyData.immuneBuffs` for enemy `12`
 that list only to suppress matching hit-buff application; bullet collision and
 damage still resolve normally.
 
+The same weapon-shooter fixture path now keeps the raw CN `BulletForceType = 7`
+on CN weapon `31` / shooter `311` and verifies that the simulation applies it as
+a first-pass forward push instead of silently downgrading it to no force.
+
 The active-skill parity harness now also locks CN skill `110` / `Ultimate Heart
 Light` as active-skill entry cases for level `1`/`2`/`3` shooters
 `6000`/`6001`/`6002`, including `UIefx_flash_starlight`, owner-following
@@ -1402,11 +1406,16 @@ Weapon behavior staging:
   weapon `11` / bullet `6` locks this first-pass behavior. A zero
   `BulletDamageJudgeCD` uses the CN dump tooltip default of 15 frames.
 - Current force handling covers `None`, `Outward`, `Inward`, `Left`, `Right`,
-  `Up`, and `Down` as overlap-based enemy displacement. The first-pass scale is
-  `BulletForce * LEVEL_UNIT_SIZE` per second, so it preserves direction and
-  relative strength without claiming native fixed-point parity. CN weapon `21`
-  / bullet `31` now locks the direct black-hole `Inward` path separately from
-  shooter/on-destroy black-hole follow-up bullets.
+  `Up`, `Down`, and the raw CN-only `BulletForceType = 7` observed on
+  Judgement Spear shooter bullet `61`. Because the available `dump.cs`
+  `BulletForceType` enum only names values `0` through `6`, value `7` is kept
+  as a first-pass forward force that pushes along the bullet's current
+  velocity/facing direction. The first-pass scale is `BulletForce *
+  LEVEL_UNIT_SIZE` per second, so it preserves direction and relative strength
+  without claiming native fixed-point parity. CN weapon `21` / bullet `31` now
+  locks the direct black-hole `Inward` path separately from shooter/on-destroy
+  black-hole follow-up bullets, and CN weapon `31` / shooter `311` now locks
+  raw force type `7` with forward displacement.
 - Current hit-buff handling maps `BuffData` and applies hit buffs to enemies.
   It supports `AttrChange` for attack, defense, and speed, `Stun`/`Freeze` as
   movement stops, `DOT` as one-second damage ticks, and `None` as inert. Stack

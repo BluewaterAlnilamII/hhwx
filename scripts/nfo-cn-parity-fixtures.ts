@@ -38,6 +38,7 @@ type WeaponShooterCaseSpec = {
   expectedHitTargetType?: number;
   expectedNoDamage?: boolean;
   expectedHitBuffId?: number;
+  expectedBulletForceType?: number;
 };
 
 type WeaponDirectFireCaseSpec = {
@@ -468,6 +469,8 @@ export type NfoCnParityWeaponShooterCase = {
   bulletDamageJudgeCooldownFrames: number;
   bulletHitTargetType: number;
   bulletColliderType: number;
+  bulletForceType: number;
+  bulletForce: number;
   hitBuffId: number;
   hitBuffLevel: number;
   expectedDirectionMode: DirectionMode;
@@ -1227,6 +1230,7 @@ const WEAPON_SHOOTER_CASE_SPECS: WeaponShooterCaseSpec[] = [
     shooterId: 311,
     bulletTypeId: 61,
     expectedDirectionMode: "owner-forward",
+    expectedBulletForceType: 7,
   },
   {
     id: "weapon-shooter-judgement-spear-level-up-lv2",
@@ -1235,6 +1239,7 @@ const WEAPON_SHOOTER_CASE_SPECS: WeaponShooterCaseSpec[] = [
     shooterId: 312,
     bulletTypeId: 61,
     expectedDirectionMode: "owner-forward",
+    expectedBulletForceType: 7,
   },
   {
     id: "weapon-shooter-night-blade-offset-angle-lv1",
@@ -3428,6 +3433,15 @@ function buildWeaponShooterCase(
       + `${spec.expectedHitBuffId}, got ${fireBullet.hitBuffId}.`,
     );
   }
+  if (
+    spec.expectedBulletForceType !== undefined
+    && fireBullet.bulletForceType !== spec.expectedBulletForceType
+  ) {
+    throw new Error(
+      `Weapon shooter case ${spec.id} expected bullet force type `
+      + `${spec.expectedBulletForceType}, got ${fireBullet.bulletForceType}.`,
+    );
+  }
 
   return {
     id: spec.id,
@@ -3465,6 +3479,8 @@ function buildWeaponShooterCase(
     bulletDamageJudgeCooldownFrames: fireBullet.bulletDamageJudgeCooldownFrames,
     bulletHitTargetType: fireBullet.bulletHitTargetType,
     bulletColliderType: fireBullet.bulletColliderType,
+    bulletForceType: fireBullet.bulletForceType,
+    bulletForce: fireBullet.bulletForce,
     hitBuffId: fireBullet.hitBuffId,
     hitBuffLevel: fireBullet.hitBuffLevel,
     expectedDirectionMode: spec.expectedDirectionMode,

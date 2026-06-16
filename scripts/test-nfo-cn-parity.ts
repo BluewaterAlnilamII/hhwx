@@ -2949,10 +2949,49 @@ function testCnWeaponShooterFormationTypeThreeRotatesWithOwnerDirection(
     "CN shooter owner facing angle",
   );
   assert.ok(bullet, "expected CN weapon 31 shooter 311 to emit bullet 61");
+  assert.equal(weaponShooterCase.bulletForceType, 7);
+  assert.equal(weaponShooterCase.bulletForce, 4);
+  assert.equal(bullet.forceType, weaponShooterCase.bulletForceType);
+  assert.equal(bullet.force, weaponShooterCase.bulletForce);
   assertClose(bullet.x, state.player.x, "CN formation type 3 bullet x");
   assert.ok(bullet.y > state.player.y + weaponShooterCase.formationOffsetX);
   assertClose(bullet.vx, 0, "CN formation type 3 bullet vx");
   assert.ok(bullet.vy > 0);
+
+  const forceTarget = createEnemyFixture(
+    firedShooterState,
+    bullet.x + bullet.vx / 30,
+    bullet.y + bullet.vy / 30,
+    {
+      hp: 999999,
+      speed: 0,
+      radius: 40,
+    },
+  );
+  const forceHitState = updateNfoSimulation(
+    {
+      ...firedShooterState,
+      player: {
+        ...firedShooterState.player,
+        fireCooldownSeconds: 999,
+      },
+      enemies: [forceTarget],
+    },
+    testRuntimeData,
+    NO_INPUT,
+    1 / 30,
+  );
+  const forceTargetAfter = forceHitState.enemies.find((enemy) => (
+    enemy.id === forceTarget.id
+  ));
+
+  assert.ok(forceTargetAfter, "expected CN weapon 31 force target to remain alive");
+  assert.ok(forceTargetAfter.hp < forceTarget.hp);
+  assertClose(forceTargetAfter.x, forceTarget.x, "CN force type 7 keeps target x");
+  assert.ok(
+    forceTargetAfter.y > forceTarget.y,
+    `expected CN force type 7 to push forward, got ${forceTargetAfter.y}`,
+  );
 }
 
 function testCnWeaponShooterDirectionOffsetAngle(sourceRuntimeData: NfoOfflineRuntimeData) {
