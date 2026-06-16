@@ -11,6 +11,9 @@ const EXPECTED_RUNTIME_PATH =
   "public/res/bandori/nfo/cn/Android-2.1.1/runtime-data/master-data.json";
 const STATIC_RUNTIME_URL_PATH =
   "/res/bandori/nfo/cn/Android-2.1.1/runtime-data/master-data.json";
+const EXPECTED_SMOKE_ACTIVE_SKILL_CHARACTER_ID = 110;
+const EXPECTED_SMOKE_ACTIVE_SKILL_ID = 110;
+const EXPECTED_SMOKE_ACTIVE_SKILL_EFFECT_NAME = "UIefx_flash_starlight";
 export const LIVE_NFO_ENDPOINT_MARKERS = [
   "http://",
   "https://",
@@ -250,6 +253,24 @@ async function smokeBrowserInteraction(baseUrl, args) {
       readHtmlAttribute(smokeTag, "data-nfo-all-unlocked") === "1",
       "browser smoke did not unlock all local content",
     );
+    const unlockedCharacterCount = Number(
+      readHtmlAttribute(smokeTag, "data-nfo-unlocked-character-count"),
+    );
+    const characterCount = Number(readHtmlAttribute(smokeTag, "data-nfo-character-count"));
+    assertSmoke(
+      Number.isFinite(unlockedCharacterCount)
+        && Number.isFinite(characterCount)
+        && unlockedCharacterCount === characterCount,
+      "browser smoke did not unlock all local characters",
+    );
+    const selectedCharacterId = Number(
+      readHtmlAttribute(smokeTag, "data-nfo-selected-character-id"),
+    );
+    assertSmoke(
+      selectedCharacterId === EXPECTED_SMOKE_ACTIVE_SKILL_CHARACTER_ID,
+      `browser smoke selected character ${selectedCharacterId}, expected `
+        + `${EXPECTED_SMOKE_ACTIVE_SKILL_CHARACTER_ID}`,
+    );
     const playerX = Number(readHtmlAttribute(smokeTag, "data-nfo-player-x"));
     const playerY = Number(readHtmlAttribute(smokeTag, "data-nfo-player-y"));
     assertSmoke(
@@ -307,12 +328,28 @@ async function smokeBrowserInteraction(baseUrl, args) {
     );
     const activeSkillId = Number(readHtmlAttribute(smokeTag, "data-nfo-active-skill-id"));
     assertSmoke(
-      Number.isFinite(activeSkillId) && activeSkillId > 0,
-      "browser smoke did not expose an active skill",
+      activeSkillId === EXPECTED_SMOKE_ACTIVE_SKILL_ID,
+      `browser smoke active skill ${activeSkillId}, expected ${EXPECTED_SMOKE_ACTIVE_SKILL_ID}`,
     );
     assertSmoke(
       readHtmlAttribute(smokeTag, "data-nfo-active-skill-observed") === "1",
       "browser smoke did not activate the active skill",
+    );
+    const fullScreenEffectCount = Number(
+      readHtmlAttribute(smokeTag, "data-nfo-full-screen-effect-count"),
+    );
+    assertSmoke(
+      Number.isFinite(fullScreenEffectCount) && fullScreenEffectCount > 0,
+      "browser smoke did not expose an active-skill full-screen effect",
+    );
+    assertSmoke(
+      readHtmlAttribute(smokeTag, "data-nfo-full-screen-effect-name")
+        === EXPECTED_SMOKE_ACTIVE_SKILL_EFFECT_NAME,
+      "browser smoke did not expose the expected active-skill full-screen effect",
+    );
+    assertSmoke(
+      readHtmlAttribute(smokeTag, "data-nfo-active-skill-effect-observed") === "1",
+      "browser smoke did not observe the active-skill shooter/VFX timeline",
     );
     assertSmoke(
       readHtmlAttribute(smokeTag, "data-nfo-hud-status") === "cleared",

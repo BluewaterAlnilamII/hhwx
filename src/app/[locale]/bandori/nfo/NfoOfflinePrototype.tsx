@@ -93,6 +93,7 @@ type SmokeInteractionState =
   | "off"
   | "waiting-runtime"
   | "unlock-requested"
+  | "selection-requested"
   | "coin-requested"
   | "upgrade-requested"
   | "movement-requested"
@@ -100,6 +101,7 @@ type SmokeInteractionState =
   | "reward-observation-requested"
   | "active-skill-ready-requested"
   | "active-skill-requested"
+  | "active-skill-effect-requested"
   | "waiting-scene"
   | "quick-clear-requested"
   | "complete"
@@ -111,6 +113,9 @@ const CANVAS_HEIGHT = 540;
 const TILE_SIZE = 96;
 const FULL_SCREEN_EFFECT_RENDER_SECONDS = 0.5;
 const EMPTY_NUMBER_ARRAY: number[] = [];
+const SMOKE_ACTIVE_SKILL_CHARACTER_ID = 110;
+const SMOKE_ACTIVE_SKILL_ID = 110;
+const SMOKE_ACTIVE_SKILL_EFFECT_NAME = "UIefx_flash_starlight";
 type PhaserModule = typeof import("phaser");
 
 export default function NfoOfflinePrototype() {
@@ -129,6 +134,7 @@ export default function NfoOfflinePrototype() {
   const [smokeCombatObserved, setSmokeCombatObserved] = useState(false);
   const [smokeEnemyObserved, setSmokeEnemyObserved] = useState(false);
   const [smokeRewardObserved, setSmokeRewardObserved] = useState(false);
+  const [smokeActiveSkillEffectObserved, setSmokeActiveSkillEffectObserved] = useState(false);
   const smokeMovementStartRef = useRef<{ x: number; y: number } | null>(null);
   const runtimeData = runtimeState.status === "ready" ? runtimeState.data : null;
   const paidGlobalUpgradeIds = saveState?.paidGlobalUpgradeIds ?? EMPTY_NUMBER_ARRAY;
@@ -150,6 +156,7 @@ export default function NfoOfflinePrototype() {
     setSmokeCombatObserved(false);
     setSmokeEnemyObserved(false);
     setSmokeRewardObserved(false);
+    setSmokeActiveSkillEffectObserved(false);
     smokeMovementStartRef.current = null;
   }, []);
 
@@ -158,6 +165,19 @@ export default function NfoOfflinePrototype() {
       setSmokeActiveSkillObserved(true);
     }
   }, [hud?.activeSkillActive, smokeMode]);
+
+  useEffect(() => {
+    if (!smokeMode || smokeActiveSkillEffectObserved || !hud || hud.status !== "playing") {
+      return;
+    }
+
+    if (
+      hud.activeSkillId === SMOKE_ACTIVE_SKILL_ID
+      && hud.fullScreenEffectName === SMOKE_ACTIVE_SKILL_EFFECT_NAME
+    ) {
+      setSmokeActiveSkillEffectObserved(true);
+    }
+  }, [hud, smokeActiveSkillEffectObserved, smokeMode]);
 
   useEffect(() => {
     if (!smokeMode || smokeMovementObserved || !smokeMovementStartRef.current || !hud) {
@@ -388,6 +408,32 @@ export default function NfoOfflinePrototype() {
     ));
   }, [runtimeData, selection]);
 
+  const prepareSmokeSelection = useCallback(() => {
+    if (!runtimeData || !selection) {
+      return;
+    }
+
+    if (!runtimeData.characters.some((character) => (
+      character.id === SMOKE_ACTIVE_SKILL_CHARACTER_ID
+    ))) {
+      setSmokeInteractionState("error");
+      return;
+    }
+
+    const nextSelection = {
+      ...selection,
+      characterId: SMOKE_ACTIVE_SKILL_CHARACTER_ID,
+    };
+    setSelection(nextSelection);
+    setHud(null);
+    setRunKey((current) => current + 1);
+    setSaveState((currentSave) => updateNfoOfflineSaveSelection(
+      runtimeData,
+      currentSave ?? loadNfoOfflineSave(runtimeData),
+      nextSelection,
+    ));
+  }, [runtimeData, selection]);
+
   const resetSave = useCallback(() => {
     if (!runtimeData) {
       return;
@@ -440,6 +486,8 @@ export default function NfoOfflinePrototype() {
     }
 
     return (
+      saveState.unlockedCharacterIds.length === runtimeData.characters.length
+      &&
       saveState.unlockedLevelIds.length === runtimeData.levels.length
       && saveState.unlockedWeaponIds.length === runtimeData.weapons.length
       && saveState.unlockedEquipIds.length === runtimeData.equips.length
@@ -522,9 +570,16 @@ export default function NfoOfflinePrototype() {
       (
         smokeInteractionState === "waiting-runtime"
         || smokeInteractionState === "unlock-requested"
+        || smokeInteractionState === "selection-requested"
       )
       && smokeAllUnlocked
     ) {
+      if (selection.characterId !== SMOKE_ACTIVE_SKILL_CHARACTER_ID) {
+        setSmokeInteractionState("selection-requested");
+        prepareSmokeSelection();
+        return;
+      }
+
       if (paidGlobalUpgradeCount > 0) {
         setSmokeInteractionState("waiting-scene");
         return;
@@ -606,6 +661,17 @@ export default function NfoOfflinePrototype() {
         return;
       }
 
+      if (!smokeActiveSkillEffectObserved) {
+        if (hud.activeSkillId !== SMOKE_ACTIVE_SKILL_ID) {
+          setSmokeInteractionState("error");
+          return;
+        }
+
+        setSmokeInteractionState("active-skill-effect-requested");
+        sceneActionsRef.current.advanceSmokeFrames(3);
+        return;
+      }
+
       setSmokeInteractionState("quick-clear-requested");
       quickClear();
       return;
@@ -672,6 +738,20 @@ export default function NfoOfflinePrototype() {
     }
 
     if (
+      smokeInteractionState === "active-skill-effect-requested"
+      && sceneActionsRef.current
+      && hud?.status === "playing"
+    ) {
+      if (smokeActiveSkillEffectObserved) {
+        setSmokeInteractionState("waiting-scene");
+        return;
+      }
+
+      sceneActionsRef.current.advanceSmokeFrames(3);
+      return;
+    }
+
+    if (
       smokeInteractionState === "quick-clear-requested"
       && hud?.status === "cleared"
     ) {
@@ -693,6 +773,7 @@ export default function NfoOfflinePrototype() {
     hud?.playerY,
     hud?.status,
     paidGlobalUpgradeCount,
+    prepareSmokeSelection,
     quickClear,
     runtimeData,
     runtimeState.status,
@@ -700,6 +781,7 @@ export default function NfoOfflinePrototype() {
     selection,
     selectedLevelCleared,
     smokeActiveSkillObserved,
+    smokeActiveSkillEffectObserved,
     smokeAllUnlocked,
     smokeCombatObserved,
     smokeEnemyObserved,
@@ -767,6 +849,9 @@ export default function NfoOfflinePrototype() {
         data-nfo-hud-status={hud?.status ?? "none"}
         data-nfo-player-x={hud?.playerX ?? 0}
         data-nfo-player-y={hud?.playerY ?? 0}
+        data-nfo-selected-character-id={selection?.characterId ?? 0}
+        data-nfo-selected-level-id={selection?.levelId ?? 0}
+        data-nfo-selected-weapon-id={selection?.weaponId ?? 0}
         data-nfo-player-moved={smokeMovementObserved ? "1" : "0"}
         data-nfo-combat-observed={smokeCombatObserved ? "1" : "0"}
         data-nfo-enemy-observed={smokeEnemyObserved ? "1" : "0"}
@@ -784,7 +869,9 @@ export default function NfoOfflinePrototype() {
         data-nfo-active-skill-charge-frames={hud?.activeSkillChargeFrames ?? 0}
         data-nfo-active-skill-charge-max-frames={hud?.activeSkillChargeMaxFrames ?? 0}
         data-nfo-active-skill-observed={smokeActiveSkillObserved ? "1" : "0"}
+        data-nfo-active-skill-effect-observed={smokeActiveSkillEffectObserved ? "1" : "0"}
         data-nfo-all-unlocked={smokeAllUnlocked ? "1" : "0"}
+        data-nfo-unlocked-character-count={saveState?.unlockedCharacterIds.length ?? 0}
         data-nfo-upgrade-coin={upgradeCoin}
         data-nfo-total-runs={saveState?.totalRuns ?? 0}
         data-nfo-cleared-level-count={saveState?.clearedLevelIds.length ?? 0}

@@ -361,16 +361,20 @@ Current playable prototype:
   The full smoke opens the page in headless Chrome/Edge with `?nfoSmoke=1`,
   maps non-local hostnames to `0.0.0.0` while allowing localhost, waits for the
   client runtime to render the Phaser canvas, runs the same local `Unlock all`,
-  `Coin +500`, global-upgrade purchase, smoke-only movement input, active-skill
-  input, and `Quick clear` paths, uses the same simulation update path to step
-  the live run until enemy spawning is observed, waits for combat activity, then
+  smoke-only selection switch to CN character `110` / active skill `110`, `Coin
+  +500`, global-upgrade purchase, smoke-only movement input, active-skill input,
+  and `Quick clear` paths, uses the same simulation update path to step the live
+  run until enemy spawning is observed, waits for combat activity, then
   continues stepping until a concrete reward signal appears through enemy
-  defeat, dropped pickup, EXP gain, or score before clearing. It verifies the
-  selected level is persisted as cleared with clear coin and run count in local
-  save, reloads the ordinary page with the same temporary browser profile to
-  verify that localStorage save is read back, verifies the hidden smoke marker
-  reaches `complete` after reporting player movement, and writes a screenshot to
-  `temp/nfo-smoke-browser.png` with a nonblank PNG check. Use
+  defeat, dropped pickup, EXP gain, or score before clearing. Before clearing,
+  it advances the active-skill timeline far enough to observe the skill `110`
+  shooter/VFX path and asserts `UIefx_flash_starlight` through the hidden smoke
+  marker. It verifies the selected level is persisted as cleared with clear coin
+  and run count in local save, reloads the ordinary page with the same temporary
+  browser profile to verify that localStorage save is read back, verifies the
+  hidden smoke marker reaches `complete` after reporting player movement, and
+  writes a screenshot to `temp/nfo-smoke-browser.png` with a nonblank PNG check.
+  Use
   `NFO_SMOKE_BROWSER_BIN=/path/to/chrome` when the browser binary is not
   auto-detected, or `NFO_SMOKE_SCREENSHOT_PATH=...` to write the visual evidence
   somewhere else.
