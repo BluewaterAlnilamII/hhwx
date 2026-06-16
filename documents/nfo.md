@@ -379,12 +379,13 @@ Current playable prototype:
   movement input, active-skill input, and `Quick clear` paths, uses the same
   simulation update path to step the live run until enemy spawning is observed,
   waits for combat activity, verifies that the rendered page observes Dark Orb
-  `homingEnemy` projectiles, advances the same simulation until the selected
-  weapon produces a `weaponFireSE` sound event, then continues stepping until a
-  concrete reward signal appears through enemy defeat, dropped pickup, EXP gain,
-  or score. It then uses a smoke-only scene action that advances the normal
-  simulation with movement input toward the nearest pickup until collection
-  occurs, and asserts the pickup sound event
+  `homingEnemy` projectiles, then switches the same smoke flow to CN weapon `6`
+  / `Guardian Song` and verifies page-observed `playerOrbit` projectiles. It
+  advances the selected weapon until it produces a `weaponFireSE` sound event,
+  then continues stepping until a concrete reward signal appears through enemy
+  defeat, dropped pickup, EXP gain, or score. It then uses a smoke-only scene
+  action that advances the normal simulation with movement input toward the
+  nearest pickup until collection occurs, and asserts the pickup sound event
   `se_coin` through the hidden smoke marker before clearing. Before clearing, it
   advances the active-skill timeline far enough to observe the skill `110`
   shooter/VFX path and asserts `UIefx_flash_starlight` and `active_110` through
@@ -1300,7 +1301,8 @@ Weapon behavior staging:
   `暗夜法球` now has first-pass homing that retargets moving orbs toward the
   nearest enemy each frame, and weapon `6` / `守护之歌` now has first-pass
   player-orbit bullets. The browser smoke now selects weapon `5` and verifies a
-  concrete `homingEnemy` projectile through the rendered page. Exact native
+  concrete `homingEnemy` projectile, then switches to weapon `6` and verifies a
+  concrete `playerOrbit` projectile through the rendered page. Exact native
   homing turn rate, orbit radius/angle speed, spawn offsets, and exact spread
   formation remain pending.
 - Current minion handling maps CN `WeaponData.weaponType`, `minionID`,

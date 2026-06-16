@@ -15,6 +15,7 @@ const STATIC_RUNTIME_URL_PATH =
 const EXPECTED_SMOKE_ACTIVE_SKILL_CHARACTER_ID = 110;
 const EXPECTED_SMOKE_ACTIVE_SKILL_ID = 110;
 const EXPECTED_SMOKE_DARK_ORB_WEAPON_ID = 5;
+const EXPECTED_SMOKE_GUARDIAN_SONG_WEAPON_ID = 6;
 const EXPECTED_SMOKE_ACTIVE_SKILL_EFFECT_NAME = "UIefx_flash_starlight";
 const EXPECTED_SMOKE_ACTIVE_SKILL_SOUND_NAME = "active_110";
 const EXPECTED_SMOKE_PICKUP_SOUND_NAME = "se_coin";
@@ -296,9 +297,9 @@ async function smokeBrowserInteraction(baseUrl, args) {
       readHtmlAttribute(smokeTag, "data-nfo-selected-weapon-id"),
     );
     assertSmoke(
-      selectedWeaponId === EXPECTED_SMOKE_DARK_ORB_WEAPON_ID,
+      selectedWeaponId === EXPECTED_SMOKE_GUARDIAN_SONG_WEAPON_ID,
       `browser smoke selected weapon ${selectedWeaponId}, expected `
-        + `${EXPECTED_SMOKE_DARK_ORB_WEAPON_ID}`,
+        + `${EXPECTED_SMOKE_GUARDIAN_SONG_WEAPON_ID}`,
     );
     const playerX = Number(readHtmlAttribute(smokeTag, "data-nfo-player-x"));
     const playerY = Number(readHtmlAttribute(smokeTag, "data-nfo-player-y"));
@@ -318,6 +319,12 @@ async function smokeBrowserInteraction(baseUrl, args) {
     const observedHomingProjectileCount = Number(
       readHtmlAttribute(smokeTag, "data-nfo-homing-projectile-observed-count"),
     );
+    const orbitProjectileCount = Number(
+      readHtmlAttribute(smokeTag, "data-nfo-orbit-projectile-count"),
+    );
+    const observedOrbitProjectileCount = Number(
+      readHtmlAttribute(smokeTag, "data-nfo-orbit-projectile-observed-count"),
+    );
     const defeatedEnemyCount = Number(
       readHtmlAttribute(smokeTag, "data-nfo-defeated-enemy-count"),
     );
@@ -330,6 +337,8 @@ async function smokeBrowserInteraction(baseUrl, args) {
         projectileCount,
         homingProjectileCount,
         observedHomingProjectileCount,
+        orbitProjectileCount,
+        observedOrbitProjectileCount,
         defeatedEnemyCount,
         pickupCount,
         collectedExp,
@@ -347,11 +356,20 @@ async function smokeBrowserInteraction(baseUrl, args) {
     );
     assertSmoke(
       readHtmlAttribute(smokeTag, "data-nfo-homing-projectile-observed") === "1",
-      "browser smoke did not observe Dark Orb homing projectiles",
+      `browser smoke did not observe Dark Orb weapon ${EXPECTED_SMOKE_DARK_ORB_WEAPON_ID} `
+        + "homing projectiles",
     );
     assertSmoke(
       observedHomingProjectileCount > 0,
       "browser smoke did not expose a concrete Dark Orb homing projectile count",
+    );
+    assertSmoke(
+      readHtmlAttribute(smokeTag, "data-nfo-orbit-projectile-observed") === "1",
+      "browser smoke did not observe Guardian Song orbit projectiles",
+    );
+    assertSmoke(
+      observedOrbitProjectileCount > 0,
+      "browser smoke did not expose a concrete Guardian Song orbit projectile count",
     );
     assertSmoke(
       readHtmlAttribute(smokeTag, "data-nfo-reward-observed") === "1",

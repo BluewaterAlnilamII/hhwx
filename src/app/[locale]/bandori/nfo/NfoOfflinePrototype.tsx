@@ -110,6 +110,7 @@ type SmokeInteractionState =
   | "movement-requested"
   | "enemy-spawn-requested"
   | "homing-projectile-requested"
+  | "orbit-projectile-requested"
   | "weapon-sound-requested"
   | "reward-observation-requested"
   | "pickup-collection-requested"
@@ -130,6 +131,7 @@ const EMPTY_NUMBER_ARRAY: number[] = [];
 const SMOKE_ACTIVE_SKILL_CHARACTER_ID = 110;
 const SMOKE_ACTIVE_SKILL_ID = 110;
 const SMOKE_DARK_ORB_WEAPON_ID = 5;
+const SMOKE_GUARDIAN_SONG_WEAPON_ID = 6;
 const SMOKE_ACTIVE_SKILL_EFFECT_NAME = "UIefx_flash_starlight";
 const SMOKE_PICKUP_SOUND_NAME = "se_coin";
 type PhaserModule = typeof import("phaser");
@@ -151,6 +153,8 @@ export default function NfoOfflinePrototype() {
   const [smokeEnemyObserved, setSmokeEnemyObserved] = useState(false);
   const [smokeHomingProjectileObserved, setSmokeHomingProjectileObserved] = useState(false);
   const [smokeHomingProjectileCount, setSmokeHomingProjectileCount] = useState(0);
+  const [smokeOrbitProjectileObserved, setSmokeOrbitProjectileObserved] = useState(false);
+  const [smokeOrbitProjectileCount, setSmokeOrbitProjectileCount] = useState(0);
   const [smokeRewardObserved, setSmokeRewardObserved] = useState(false);
   const [smokePickupCollectionObserved, setSmokePickupCollectionObserved] = useState(false);
   const [smokeWeaponSoundObserved, setSmokeWeaponSoundObserved] = useState(false);
@@ -180,6 +184,8 @@ export default function NfoOfflinePrototype() {
     setSmokeEnemyObserved(false);
     setSmokeHomingProjectileObserved(false);
     setSmokeHomingProjectileCount(0);
+    setSmokeOrbitProjectileObserved(false);
+    setSmokeOrbitProjectileCount(0);
     setSmokeRewardObserved(false);
     setSmokePickupCollectionObserved(false);
     setSmokeWeaponSoundObserved(false);
@@ -258,6 +264,17 @@ export default function NfoOfflinePrototype() {
       setSmokeHomingProjectileCount(hud.homingProjectiles);
     }
   }, [hud, smokeHomingProjectileObserved, smokeMode]);
+
+  useEffect(() => {
+    if (!smokeMode || smokeOrbitProjectileObserved || !hud || hud.status !== "playing") {
+      return;
+    }
+
+    if (hud.orbitProjectiles > 0) {
+      setSmokeOrbitProjectileObserved(true);
+      setSmokeOrbitProjectileCount(hud.orbitProjectiles);
+    }
+  }, [hud, smokeMode, smokeOrbitProjectileObserved]);
 
   useEffect(() => {
     if (!smokeMode || smokeRewardObserved || !hud || hud.status !== "playing") {
@@ -481,7 +498,7 @@ export default function NfoOfflinePrototype() {
     ));
   }, [runtimeData, selection]);
 
-  const prepareSmokeSelection = useCallback(() => {
+  const prepareSmokeSelection = useCallback((weaponId: number) => {
     if (!runtimeData || !selection) {
       return;
     }
@@ -492,7 +509,7 @@ export default function NfoOfflinePrototype() {
       setSmokeInteractionState("error");
       return;
     }
-    if (!runtimeData.weapons.some((weapon) => weapon.id === SMOKE_DARK_ORB_WEAPON_ID)) {
+    if (!runtimeData.weapons.some((weapon) => weapon.id === weaponId)) {
       setSmokeInteractionState("error");
       return;
     }
@@ -500,7 +517,7 @@ export default function NfoOfflinePrototype() {
     const nextSelection = {
       ...selection,
       characterId: SMOKE_ACTIVE_SKILL_CHARACTER_ID,
-      weaponId: SMOKE_DARK_ORB_WEAPON_ID,
+      weaponId,
     };
     setSelection(nextSelection);
     setHud(null);
@@ -652,12 +669,15 @@ export default function NfoOfflinePrototype() {
       )
       && smokeAllUnlocked
     ) {
+      const targetSmokeWeaponId = smokeHomingProjectileObserved
+        ? SMOKE_GUARDIAN_SONG_WEAPON_ID
+        : SMOKE_DARK_ORB_WEAPON_ID;
       if (
         selection.characterId !== SMOKE_ACTIVE_SKILL_CHARACTER_ID
-        || selection.weaponId !== SMOKE_DARK_ORB_WEAPON_ID
+        || selection.weaponId !== targetSmokeWeaponId
       ) {
         setSmokeInteractionState("selection-requested");
-        prepareSmokeSelection();
+        prepareSmokeSelection(targetSmokeWeaponId);
         return;
       }
 
@@ -701,6 +721,17 @@ export default function NfoOfflinePrototype() {
 
     if (
       smokeInteractionState === "waiting-scene"
+      && smokeHomingProjectileObserved
+      && !smokeOrbitProjectileObserved
+      && selection.weaponId !== SMOKE_GUARDIAN_SONG_WEAPON_ID
+    ) {
+      setSmokeInteractionState("selection-requested");
+      prepareSmokeSelection(SMOKE_GUARDIAN_SONG_WEAPON_ID);
+      return;
+    }
+
+    if (
+      smokeInteractionState === "waiting-scene"
       && sceneActionsRef.current
       && hud?.status === "playing"
     ) {
@@ -726,6 +757,17 @@ export default function NfoOfflinePrototype() {
 
       if (!smokeHomingProjectileObserved) {
         setSmokeInteractionState("homing-projectile-requested");
+        sceneActionsRef.current.advanceSmokeFrames(12);
+        return;
+      }
+
+      if (!smokeOrbitProjectileObserved) {
+        if (selection.weaponId !== SMOKE_GUARDIAN_SONG_WEAPON_ID) {
+          setSmokeInteractionState("error");
+          return;
+        }
+
+        setSmokeInteractionState("orbit-projectile-requested");
         sceneActionsRef.current.advanceSmokeFrames(12);
         return;
       }
@@ -804,6 +846,20 @@ export default function NfoOfflinePrototype() {
       && hud?.status === "playing"
     ) {
       if (smokeHomingProjectileObserved) {
+        setSmokeInteractionState("waiting-scene");
+        return;
+      }
+
+      sceneActionsRef.current.advanceSmokeFrames(12);
+      return;
+    }
+
+    if (
+      smokeInteractionState === "orbit-projectile-requested"
+      && sceneActionsRef.current
+      && hud?.status === "playing"
+    ) {
+      if (smokeOrbitProjectileObserved) {
         setSmokeInteractionState("waiting-scene");
         return;
       }
@@ -930,6 +986,7 @@ export default function NfoOfflinePrototype() {
     smokeInteractionState,
     smokeMovementObserved,
     smokeMode,
+    smokeOrbitProjectileObserved,
     smokePickupCollectionObserved,
     smokePickupSoundObserved,
     smokeRewardObserved,
@@ -1002,6 +1059,8 @@ export default function NfoOfflinePrototype() {
         data-nfo-enemy-observed={smokeEnemyObserved ? "1" : "0"}
         data-nfo-homing-projectile-observed={smokeHomingProjectileObserved ? "1" : "0"}
         data-nfo-homing-projectile-observed-count={smokeHomingProjectileCount}
+        data-nfo-orbit-projectile-observed={smokeOrbitProjectileObserved ? "1" : "0"}
+        data-nfo-orbit-projectile-observed-count={smokeOrbitProjectileCount}
         data-nfo-reward-observed={smokeRewardObserved ? "1" : "0"}
         data-nfo-enemy-count={hud?.enemies ?? 0}
         data-nfo-projectile-count={hud?.projectiles ?? 0}
