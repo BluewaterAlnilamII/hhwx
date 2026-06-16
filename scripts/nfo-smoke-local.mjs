@@ -254,6 +254,16 @@ async function smokeBrowserInteraction(baseUrl, args) {
       readHtmlAttribute(smokeTag, "data-nfo-all-unlocked") === "1",
       "browser smoke did not unlock all local content",
     );
+    const paidUpgradeCount = Number(readHtmlAttribute(smokeTag, "data-nfo-paid-upgrade-count"));
+    const upgradeTotalCount = Number(readHtmlAttribute(smokeTag, "data-nfo-upgrade-total-count"));
+    assertSmoke(
+      Number.isFinite(upgradeTotalCount) && upgradeTotalCount > 0,
+      "browser smoke did not expose a global upgrade tree",
+    );
+    assertSmoke(
+      Number.isFinite(paidUpgradeCount) && paidUpgradeCount > 0,
+      "browser smoke did not buy a global upgrade",
+    );
     assertSmoke(
       readHtmlAttribute(smokeTag, "data-nfo-hud-status") === "cleared",
       "browser smoke did not quick-clear the active run",
@@ -264,6 +274,7 @@ async function smokeBrowserInteraction(baseUrl, args) {
     );
     assertSmoke(stdout.includes("<canvas"), "browser smoke did not render a Phaser canvas");
     assertSmoke(stdout.includes("Unlock all"), "browser smoke did not render the Unlock all control");
+    assertSmoke(stdout.includes("Coin +500"), "browser smoke did not render the upgrade coin control");
     assertSmoke(!stdout.includes("Application error"), "browser smoke rendered an application error");
 
     if (stderr.trim()) {

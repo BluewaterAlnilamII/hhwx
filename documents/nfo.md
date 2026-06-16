@@ -360,10 +360,11 @@ Current playable prototype:
 
   The full smoke opens the page in headless Chrome/Edge with `?nfoSmoke=1`,
   maps non-local hostnames to `0.0.0.0` while allowing localhost, waits for the
-  client runtime to render the Phaser canvas, runs the same local `Unlock all`
-  and `Quick clear` paths, and verifies the hidden smoke marker reaches
-  `complete`. Use `NFO_SMOKE_BROWSER_BIN=/path/to/chrome` when the browser
-  binary is not auto-detected.
+  client runtime to render the Phaser canvas, runs the same local `Unlock all`,
+  `Coin +500`, global-upgrade purchase, and `Quick clear` paths, and verifies
+  the hidden smoke marker reaches `complete`. Use
+  `NFO_SMOKE_BROWSER_BIN=/path/to/chrome` when the browser binary is not
+  auto-detected.
 
 - uses the CN snapshot only;
 - exposes character and level selection, with locked characters disabled until
@@ -509,7 +510,8 @@ Current playable prototype:
   level-trigger timing/dependencies, and `IsChangeEntityCommonState`
   visual/common-state effects remain pending;
 - exposes a local `Coin +500` prototype command so the upgrade loop can be
-  tested before reward and mission parity are complete;
+  tested before reward and mission parity are complete; the full browser smoke
+  now uses this command and verifies that at least one global upgrade is bought;
 - exposes a local `Quick clear` prototype command so clear rewards and level
   unlocks can be tested quickly; natural timer clears and this debug command
   share the same local clear reward settlement path;
@@ -654,7 +656,8 @@ npm run smoke:nfo
 ```
 
 The full browser smoke uses a temporary browser profile, so it does not alter
-the user's normal browser save data.
+the user's normal browser save data. It also executes the local unlock, coin,
+global-upgrade purchase, and quick-clear controls before accepting the page.
 
 `nfo:parity-fixtures` writes a small ignored fixture file under
 `temp/nfo-offline/cn/Android-2.1.1/runtime-data/cn-parity-fixtures.json`.

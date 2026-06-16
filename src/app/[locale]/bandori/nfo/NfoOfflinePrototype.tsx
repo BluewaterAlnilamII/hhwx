@@ -87,6 +87,8 @@ type SmokeInteractionState =
   | "off"
   | "waiting-runtime"
   | "unlock-requested"
+  | "coin-requested"
+  | "upgrade-requested"
   | "waiting-scene"
   | "quick-clear-requested"
   | "complete"
@@ -113,6 +115,8 @@ export default function NfoOfflinePrototype() {
     useState<SmokeInteractionState>("off");
   const runtimeData = runtimeState.status === "ready" ? runtimeState.data : null;
   const paidGlobalUpgradeIds = saveState?.paidGlobalUpgradeIds ?? EMPTY_NUMBER_ARRAY;
+  const paidGlobalUpgradeCount = paidGlobalUpgradeIds.length;
+  const upgradeCoin = saveState?.upgradeCoin ?? 0;
   const isSaveReady = saveState !== null;
 
   useEffect(() => {
@@ -353,70 +357,6 @@ export default function NfoOfflinePrototype() {
     );
   }, [runtimeData, saveState]);
 
-  useEffect(() => {
-    if (!smokeMode) {
-      return;
-    }
-
-    if (runtimeState.status === "error") {
-      setSmokeInteractionState("error");
-      return;
-    }
-
-    if (!runtimeData || !saveState || !selection) {
-      setSmokeInteractionState("waiting-runtime");
-      return;
-    }
-
-    if (
-      smokeInteractionState === "waiting-runtime"
-      && !smokeAllUnlocked
-    ) {
-      setSmokeInteractionState("unlock-requested");
-      unlockAll();
-      return;
-    }
-
-    if (
-      (
-        smokeInteractionState === "waiting-runtime"
-        || smokeInteractionState === "unlock-requested"
-      )
-      && smokeAllUnlocked
-    ) {
-      setSmokeInteractionState("waiting-scene");
-      return;
-    }
-
-    if (
-      smokeInteractionState === "waiting-scene"
-      && sceneActionsRef.current
-      && hud?.status === "playing"
-    ) {
-      setSmokeInteractionState("quick-clear-requested");
-      quickClear();
-      return;
-    }
-
-    if (
-      smokeInteractionState === "quick-clear-requested"
-      && hud?.status === "cleared"
-    ) {
-      setSmokeInteractionState("complete");
-    }
-  }, [
-    hud?.status,
-    quickClear,
-    runtimeData,
-    runtimeState.status,
-    saveState,
-    selection,
-    smokeAllUnlocked,
-    smokeInteractionState,
-    smokeMode,
-    unlockAll,
-  ]);
-
   const upgradeView = useMemo(() => {
     if (!runtimeData || !selection || !saveState) {
       return null;
@@ -464,6 +404,110 @@ export default function NfoOfflinePrototype() {
     setHud(null);
     setRunKey((current) => current + 1);
   }, [nextUpgradeId, runtimeData, saveState]);
+
+  useEffect(() => {
+    if (!smokeMode) {
+      return;
+    }
+
+    if (runtimeState.status === "error") {
+      setSmokeInteractionState("error");
+      return;
+    }
+
+    if (!runtimeData || !saveState || !selection) {
+      setSmokeInteractionState("waiting-runtime");
+      return;
+    }
+
+    if (
+      smokeInteractionState === "waiting-runtime"
+      && !smokeAllUnlocked
+    ) {
+      setSmokeInteractionState("unlock-requested");
+      unlockAll();
+      return;
+    }
+
+    if (
+      (
+        smokeInteractionState === "waiting-runtime"
+        || smokeInteractionState === "unlock-requested"
+      )
+      && smokeAllUnlocked
+    ) {
+      if (paidGlobalUpgradeCount > 0) {
+        setSmokeInteractionState("waiting-scene");
+        return;
+      }
+
+      setSmokeInteractionState("coin-requested");
+      grantCoin();
+      return;
+    }
+
+    if (smokeInteractionState === "coin-requested") {
+      if (paidGlobalUpgradeCount > 0) {
+        setSmokeInteractionState("waiting-scene");
+        return;
+      }
+
+      if (upgradeCoin <= 0) {
+        return;
+      }
+
+      if (!upgradeView?.nextUpgrade || !upgradeView.purchaseState?.canBuy) {
+        setSmokeInteractionState("error");
+        return;
+      }
+
+      setSmokeInteractionState("upgrade-requested");
+      buyUpgrade();
+      return;
+    }
+
+    if (
+      smokeInteractionState === "upgrade-requested"
+      && paidGlobalUpgradeCount > 0
+    ) {
+      setSmokeInteractionState("waiting-scene");
+      return;
+    }
+
+    if (
+      smokeInteractionState === "waiting-scene"
+      && sceneActionsRef.current
+      && hud?.status === "playing"
+    ) {
+      setSmokeInteractionState("quick-clear-requested");
+      quickClear();
+      return;
+    }
+
+    if (
+      smokeInteractionState === "quick-clear-requested"
+      && hud?.status === "cleared"
+    ) {
+      setSmokeInteractionState("complete");
+    }
+  }, [
+    buyUpgrade,
+    grantCoin,
+    hud?.status,
+    paidGlobalUpgradeCount,
+    quickClear,
+    runtimeData,
+    runtimeState.status,
+    saveState,
+    selection,
+    smokeAllUnlocked,
+    smokeInteractionState,
+    smokeMode,
+    unlockAll,
+    upgradeCoin,
+    upgradeView?.nextUpgrade,
+    upgradeView?.purchaseState?.canBuy,
+  ]);
 
   const runtimeSummary = useMemo(() => {
     if (!runtimeData || !selection) {
@@ -520,6 +564,10 @@ export default function NfoOfflinePrototype() {
         data-nfo-full-screen-effect-count={hud?.fullScreenEffectCount ?? 0}
         data-nfo-full-screen-effect-name={hud?.fullScreenEffectName ?? ""}
         data-nfo-all-unlocked={smokeAllUnlocked ? "1" : "0"}
+        data-nfo-upgrade-coin={upgradeCoin}
+        data-nfo-paid-upgrade-count={paidGlobalUpgradeCount}
+        data-nfo-upgrade-total-count={upgradeView?.totalCount ?? 0}
+        data-nfo-next-upgrade-id={upgradeView?.nextUpgrade?.id ?? 0}
         data-nfo-character-count={runtimeData?.characters.length ?? 0}
         data-nfo-weapon-count={runtimeData?.weapons.length ?? 0}
         data-nfo-level-count={runtimeData?.levels.length ?? 0}
