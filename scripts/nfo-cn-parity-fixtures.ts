@@ -2586,6 +2586,15 @@ const ACTIVE_SKILL_SUMMON_CASE_SPECS: ActiveSkillSummonCaseSpec[] = [
     expectedMinionAIStateShooterBulletTypeId: 99,
   },
   {
+    id: "active-skill-anon-phantom-ring-summon-lv1",
+    activeSkillId: 115,
+    activeSkillLevel: 1,
+    expectedEventFrame: 1,
+    expectedMinionId: 5,
+    expectedSpawnFormation: 2,
+    expectedSpawnCount: 1,
+  },
+  {
     id: "active-skill-anon-phantom-ring-summon-lv2",
     activeSkillId: 115,
     activeSkillLevel: 2,
@@ -2593,6 +2602,15 @@ const ACTIVE_SKILL_SUMMON_CASE_SPECS: ActiveSkillSummonCaseSpec[] = [
     expectedMinionId: 5,
     expectedSpawnFormation: 2,
     expectedSpawnCount: 2,
+  },
+  {
+    id: "active-skill-anon-phantom-ring-summon-lv3",
+    activeSkillId: 115,
+    activeSkillLevel: 3,
+    expectedEventFrame: 1,
+    expectedMinionId: 5,
+    expectedSpawnFormation: 2,
+    expectedSpawnCount: 3,
   },
 ];
 

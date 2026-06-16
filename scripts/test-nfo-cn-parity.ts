@@ -56,7 +56,7 @@ async function main() {
   assert.equal(fixture.selectedShooterOnDestroyCases.length, 2);
   assert.equal(fixture.selectedWeaponMinionCases.length, 6);
   assert.equal(fixture.selectedWeaponSelfBuffCases.length, 3);
-  assert.equal(fixture.selectedActiveSkillSummonCases.length, 6);
+  assert.equal(fixture.selectedActiveSkillSummonCases.length, 8);
   assert.equal(fixture.selectedAIStateTeleportCases.length, 1);
   assert.equal(fixture.selectedAIStateMovementCases.length, 11);
   assert.equal(fixture.selectedAIStateBuffCases.length, 3);
@@ -1714,21 +1714,28 @@ async function main() {
   assert.equal(galaxySummonCase.spawnRadiusMax, 600);
   assert.equal(galaxySummonCase.expectedFirstPassRadius, 500);
 
-  const anonPhantomSummonCase = getActiveSkillSummonCase(
+  const anonPhantomSummonCaseIds = [
+    "active-skill-anon-phantom-ring-summon-lv1",
     "active-skill-anon-phantom-ring-summon-lv2",
-  );
-  assert.equal(anonPhantomSummonCase.activeSkillId, 115);
-  assert.equal(anonPhantomSummonCase.activeSkillLevel, 2);
-  assert.equal(anonPhantomSummonCase.eventFrame, 1);
-  assert.equal(anonPhantomSummonCase.minionId, 5);
-  assert.equal(anonPhantomSummonCase.minionAITypeId, 102);
-  assert.equal(anonPhantomSummonCase.weaponId, 28);
-  assert.equal(anonPhantomSummonCase.weaponLevel, 8);
-  assert.equal(anonPhantomSummonCase.spawnFormation, 2);
-  assert.equal(anonPhantomSummonCase.spawnCount, 2);
-  assert.equal(anonPhantomSummonCase.spawnRadiusMin, 400);
-  assert.equal(anonPhantomSummonCase.spawnRadiusMax, 400);
-  assert.equal(anonPhantomSummonCase.expectedFirstPassRadius, 400);
+    "active-skill-anon-phantom-ring-summon-lv3",
+  ];
+  anonPhantomSummonCaseIds.forEach((anonPhantomSummonCaseId, index) => {
+    const anonPhantomSummonCase = getActiveSkillSummonCase(
+      anonPhantomSummonCaseId,
+    );
+    assert.equal(anonPhantomSummonCase.activeSkillId, 115);
+    assert.equal(anonPhantomSummonCase.activeSkillLevel, index + 1);
+    assert.equal(anonPhantomSummonCase.eventFrame, 1);
+    assert.equal(anonPhantomSummonCase.minionId, 5);
+    assert.equal(anonPhantomSummonCase.minionAITypeId, 102);
+    assert.equal(anonPhantomSummonCase.weaponId, 28);
+    assert.equal(anonPhantomSummonCase.weaponLevel, 8);
+    assert.equal(anonPhantomSummonCase.spawnFormation, 2);
+    assert.equal(anonPhantomSummonCase.spawnCount, index + 1);
+    assert.equal(anonPhantomSummonCase.spawnRadiusMin, 400);
+    assert.equal(anonPhantomSummonCase.spawnRadiusMax, 400);
+    assert.equal(anonPhantomSummonCase.expectedFirstPassRadius, 400);
+  });
 
   const itemCases = [
     ["item-exp-small", 1, 0, 10, 600, true],
@@ -2300,7 +2307,7 @@ async function main() {
   console.log("ok - CN active skill All-Out Fire drives shooter 7000 frame 1/3/7 timeline and minion AI");
   console.log("ok - CN active skill All-Out Fire level 3 loops zero-offset minion shooters");
   console.log("ok - CN active skill Galaxy Star summon uses first-pass minion orbit");
-  console.log("ok - CN active skill Anon Phantom summon uses formation 2 ring");
+  console.log("ok - CN active skill Anon Phantom level 1/2/3 summon uses formation 2 ring");
   console.log("ok - CN DropData spawns item pickups and ItemData EXP pickup is collectable");
   console.log("ok - CN minor enemy DropData coin branch is collectable");
   console.log("ok - CN common DropData bomb, magnet, and heal pickups apply effects");
@@ -10381,7 +10388,27 @@ function testCnActiveSkillGalaxyStarRingSummon(
 function testCnActiveSkillAnonPhantomRingSummon(
   sourceRuntimeData: NfoOfflineRuntimeData,
 ) {
-  const testRuntimeData = configureRuntimeForActiveSkill(sourceRuntimeData, 115);
+  for (const summonCaseId of [
+    "active-skill-anon-phantom-ring-summon-lv1",
+    "active-skill-anon-phantom-ring-summon-lv2",
+    "active-skill-anon-phantom-ring-summon-lv3",
+  ]) {
+    assertCnActiveSkillAnonPhantomRingSummonCase(
+      sourceRuntimeData,
+      summonCaseId,
+    );
+  }
+}
+
+function assertCnActiveSkillAnonPhantomRingSummonCase(
+  sourceRuntimeData: NfoOfflineRuntimeData,
+  summonCaseId: string,
+) {
+  const summonCase = getActiveSkillSummonCase(summonCaseId);
+  const testRuntimeData = configureRuntimeForActiveSkill(
+    sourceRuntimeData,
+    summonCase.activeSkillId,
+  );
   const minion = testRuntimeData.minions.find((candidate) => candidate.id === 5);
   assert.ok(minion);
   minion.speed = 0;
@@ -10390,7 +10417,7 @@ function testCnActiveSkillAnonPhantomRingSummon(
     ...initialState,
     activeSkill: {
       ...initialState.activeSkill,
-      level: 2,
+      level: summonCase.activeSkillLevel,
     },
     worldBounds: {
       minX: -2000,
@@ -10406,19 +10433,48 @@ function testCnActiveSkillAnonPhantomRingSummon(
     1 / 30,
   );
 
-  assert.equal(nextState.minions.length, 2);
-  assert.ok(nextState.minions.every((candidate) => candidate.minionId === 5));
-  assert.ok(nextState.minions.every((candidate) => candidate.aiTypeId === 102));
-  assert.ok(nextState.minions.every((candidate) => candidate.weaponId === 28));
-  assert.ok(nextState.minions.every((candidate) => candidate.weaponLevel === 8));
+  assert.equal(summonCase.activeSkillId, 115);
+  assert.equal(nextState.activeSkill.level, summonCase.activeSkillLevel);
+  assert.equal(nextState.minions.length, summonCase.spawnCount);
+  assert.ok(nextState.minions.every((candidate) => candidate.minionId === summonCase.minionId));
+  assert.ok(nextState.minions.every((candidate) => candidate.aiTypeId === summonCase.minionAITypeId));
+  assert.ok(nextState.minions.every((candidate) => candidate.weaponId === summonCase.weaponId));
+  assert.ok(nextState.minions.every((candidate) => candidate.weaponLevel === summonCase.weaponLevel));
   const distances = nextState.minions.map((candidate) => (
     Math.round(Math.hypot(candidate.x - baseState.player.x, candidate.y - baseState.player.y))
   ));
-  assert.deepEqual(distances, [400, 400]);
-  assertClose(nextState.minions[0]?.x ?? Number.NaN, baseState.player.x + 400, "Anon minion 0 x");
+  assert.deepEqual(
+    distances,
+    Array.from({ length: summonCase.spawnCount }, () => summonCase.expectedFirstPassRadius),
+  );
+  assertClose(
+    nextState.minions[0]?.x ?? Number.NaN,
+    baseState.player.x + summonCase.expectedFirstPassRadius,
+    "Anon minion 0 x",
+  );
   assertClose(nextState.minions[0]?.y ?? Number.NaN, baseState.player.y, "Anon minion 0 y");
-  assertClose(nextState.minions[1]?.x ?? Number.NaN, baseState.player.x - 400, "Anon minion 1 x");
-  assertClose(nextState.minions[1]?.y ?? Number.NaN, baseState.player.y, "Anon minion 1 y");
+  if (summonCase.spawnCount === 2) {
+    assertClose(
+      nextState.minions[1]?.x ?? Number.NaN,
+      baseState.player.x - summonCase.expectedFirstPassRadius,
+      "Anon minion 1 x",
+    );
+    assertClose(nextState.minions[1]?.y ?? Number.NaN, baseState.player.y, "Anon minion 1 y");
+  }
+  if (summonCase.spawnCount === 3) {
+    assertClose(
+      nextState.minions[1]?.x ?? Number.NaN,
+      baseState.player.x - summonCase.expectedFirstPassRadius / 2,
+      "Anon minion 1 x",
+    );
+    assert.ok((nextState.minions[1]?.y ?? 0) > baseState.player.y);
+    assertClose(
+      nextState.minions[2]?.x ?? Number.NaN,
+      baseState.player.x - summonCase.expectedFirstPassRadius / 2,
+      "Anon minion 2 x",
+    );
+    assert.ok((nextState.minions[2]?.y ?? 0) < baseState.player.y);
+  }
 }
 
 function testCnDropDataEnemyKillSpawnsAndCollectsExp(

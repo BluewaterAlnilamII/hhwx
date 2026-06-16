@@ -1055,7 +1055,8 @@ verifies CN weapon `16` / bullet `22` uses the level-specific minion-side attack
 `+30` and bullet-size `+50`/`+100`/`+150` attributes when that existing minion
 fires its own weapon.
 
-The active-skill summon parity cases now lock five CN paths. Skill `111` /
+The active-skill summon parity cases now lock CN paths across skills `111`,
+`112`, `113`, and `115`. Skill `111` /
 `圣兽之王` level `2` crosses frame `1`, summons three minion `9` copies with
 AI type `209` and `spawnFormation = 2` at radius `400`, advances those minions
 from AI state `0` to state `1` after 15 frames, creates shooter `14001`, and
@@ -1092,10 +1093,11 @@ the active skill `112` floating cannon AI states `205`, `206`, and `207` are
 also locked as state-22 orbit states, with their zero `State_MoveSpeed`
 preserving the spawned relative ring position while their shooters run. Exact
 native state-22 class naming, fixed-point orbit math, and any hidden native
-radius/phase constants remain pending. Skill `115` / `Anon Phantom` level `2` spawns two minion `5`
-copies at frame `1` with `spawnFormation = 2`, radius `400`, AI type `102`, and
-assigned weapon `28` level `8`; the simulation verifies that both summons use
-the same first-pass ring placement and retain the assigned weapon metadata.
+radius/phase constants remain pending. Skill `115` / `Anon Phantom` levels
+`1`/`2`/`3` spawn one/two/three minion `5` copies at frame `1` with
+`spawnFormation = 2`, radius `400`, AI type `102`, and assigned weapon `28`
+level `8`; the simulation verifies that each level uses the same first-pass
+ring placement and retains the assigned weapon metadata.
 
 Weapon behavior staging:
 
@@ -1492,8 +1494,8 @@ Weapon behavior staging:
   skill summon placement, `spawnFormation = 1` and `2` use a deterministic ring
   over the requested spawn center; if CN data provides a radius interval, the
   first pass uses its midpoint rather than varying radius by minion index. This
-  covers the first-pass CN path used by `Anon Phantom`'s `WeaponID = 28`
-  formation-2 summons, `Galaxy Star`'s formation-1 ring summon plus first-pass
+  covers the first-pass CN path used by `Anon Phantom` level `1`/`2`/`3`
+  `WeaponID = 28` formation-2 summons, `Galaxy Star`'s formation-1 ring summon plus first-pass
   AI `201` state-22 orbit, `全弹发射`'s
   same-event shooter/summon chain and level-3 offset summon, `圣兽之王`'s
   delayed minion AI shooter chain,
