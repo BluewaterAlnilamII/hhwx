@@ -91,6 +91,22 @@ export type BandoriMedleySearchOptimizationOptions = {
   lowMemoryInitialCandidateSyncMaxSlotCardCount?: number;
   enableLowMemoryInitialCandidateSyncGcProbe?: boolean;
   debugExactCandidateJoinMemoryAttribution?: boolean;
+  debugExactCandidateRawMirror?: boolean;
+  debugExactCandidateRawJoinParity?: boolean;
+  debugExactCandidateSignatureCensus?: boolean;
+  debugExactCandidateUpperReplay?: boolean;
+  debugExactCandidateDominanceReplay?: boolean;
+  debugExactCandidateRawSolverInputCensus?: boolean;
+  exactCandidateScoreCalculationCacheEntryLimit?: number;
+  enableExactCandidateScoreCalculationCachePressureFallback?: boolean;
+  exactCandidateScoreCalculationCachePressureSlotCardCount?: number;
+  enableExactCandidateScoreOnlyCachePressureFallback?: boolean;
+  exactCandidateScoreOnlyCachePressureSlotCardCount?: number;
+  disableExactCandidateCardsRetention?: boolean;
+  enableExactCandidateCompactScoreOnlyCache?: boolean;
+  disableExactCandidateSkillWindowContributionCache?: boolean;
+  disableExactCandidateScoreCalculationCache?: boolean;
+  disableExactCandidateScoreOnlyCache?: boolean;
   enableTrailingSameCoarseDfsOnly?: boolean;
   disableDominatedRootSkip?: boolean;
   disableSameCoarseTightRootSkip?: boolean;
@@ -714,18 +730,19 @@ export type MedleyTeamCandidate = {
   cards: SearchCard[];
   cardIds: number[];
   cardInstanceKeys?: string[];
+  cardSearchIndices?: number[];
 };
 
 export type MedleyExactSlotCandidateSearchNode = {
   key: number;
   slotUpperBound: number;
-  activeInSlotUpperHeap?: boolean;
+  activeInSlotUpperHeap: boolean;
   selectedCardCount: number;
-  selectedCard0?: SearchCard;
-  selectedCard1?: SearchCard;
-  selectedCard2?: SearchCard;
-  selectedCard3?: SearchCard;
-  selectedCard4?: SearchCard;
+  selectedCardIndex0: number;
+  selectedCardIndex1: number;
+  selectedCardIndex2: number;
+  selectedCardIndex3: number;
+  selectedCardIndex4: number;
   startIndex: number;
   usedCharacterMaskLow: number;
   usedCharacterMaskHigh: number;
@@ -741,8 +758,10 @@ export type MedleyExactSlotCandidateGlobalPruning = {
   pairUnseenUpperBound?: number;
   useCapacityComplementUpper?: boolean;
   capacityComplementMargin?: number;
-  excludedCandidateKeys?: Set<string>;
+  excludedCandidateKeys?: Set<MedleyExactCandidateCardKey>;
 };
+
+export type MedleyExactCandidateCardKey = bigint | string;
 
 export type MedleyExactSlotCandidateGenerator = {
   next: (

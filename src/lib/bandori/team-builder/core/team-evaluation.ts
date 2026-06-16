@@ -13,8 +13,31 @@ import { isSearchUpperBoundBelowResultThreshold } from "./character-bounds";
 import { getCardInstanceKey } from "./card-identity";
 import { normalizeTeamSearchConstraints } from "./constraints";
 import type { CalculatedBandoriCard } from "@/lib/bandori-team-calculator";
-import type { BandoriAreaItemConfiguration, BandoriTeamSearchResult, BandoriTeamSearchInput, PreparedChart, ScoreCalculationCache, ScoreComboOptions, SearchCard, SupportBandCandidate, SupportBandContext, BandoriTeamSearchResultCard, BandoriTeamSearchSupportCard } from "./types";
+import type {
+  BandoriAreaItemConfiguration,
+  BandoriTeamSearchEventPointOptions,
+  BandoriTeamSearchInput,
+  BandoriTeamSearchResult,
+  BandoriTeamSearchResultCard,
+  BandoriTeamSearchSupportCard,
+  PreparedChart,
+  ScoreCalculationCache,
+  ScoreComboOptions,
+  SearchCard,
+  SupportBandCandidate,
+  SupportBandContext,
+} from "./types";
 import { clamp } from "./utils";
+
+const SCORE_ONLY_EVENT_POINT_OPTIONS: BandoriTeamSearchEventPointOptions = {
+  mode: "none",
+  defaultKey: null,
+  options: [],
+};
+const SCORE_ONLY_SUPPORT_CARDS: BandoriTeamSearchSupportCard[] = [];
+const SCORE_ONLY_RESULT_CARDS: BandoriTeamSearchResultCard[] = [];
+const SCORE_ONLY_SKILLS: BandoriTeamSearchResult["skills"] = [];
+const SCORE_ONLY_SKILL_ORDER_CARD_IDS: number[] = [];
 
 function toCoreResultCards(cards: CalculatedBandoriCard[]): BandoriTeamSearchResultCard[] {
   return cards.map((card) => ({
@@ -136,21 +159,21 @@ export function evaluateMedleyScoreOnlyTeam(options: EvaluateMedleyScoreOnlyTeam
     eventPointBase: null,
     eventPointMultiplier: 1,
     eventPoint: null,
-    eventPointOptions: { mode: "none", defaultKey: null, options: [] },
+    eventPointOptions: SCORE_ONLY_EVENT_POINT_OPTIONS,
     eventMode: "parameterPower",
     roomScore: null,
     supportBandPower: null,
-    supportCards: [],
+    supportCards: SCORE_ONLY_SUPPORT_CARDS,
     liveType: "free",
     eventType: "medley",
     target: "score",
     leaderCardId: cards[best.leaderIndex]?.cardId ?? cards[0]?.cardId ?? 0,
     leaderCardInstanceKey: cards[best.leaderIndex] ? getCardInstanceKey(cards[best.leaderIndex]) : cards[0] ? getCardInstanceKey(cards[0]) : undefined,
-    skillOrderCardIds: [],
+    skillOrderCardIds: SCORE_ONLY_SKILL_ORDER_CARD_IDS,
     areaItemConfiguration: configuration,
     context,
-    cards: [],
-    skills: [],
+    cards: SCORE_ONLY_RESULT_CARDS,
+    skills: SCORE_ONLY_SKILLS,
   };
 }
 
@@ -357,21 +380,21 @@ export function evaluateTeam(options: EvaluateTeamOptions): BandoriTeamSearchRes
       eventPointBase: null,
       eventPointMultiplier: 1,
       eventPoint: null,
-      eventPointOptions: { mode: "none", defaultKey: null, options: [] },
+      eventPointOptions: SCORE_ONLY_EVENT_POINT_OPTIONS,
       eventMode,
       roomScore: null,
       supportBandPower: null,
-      supportCards: [],
+      supportCards: SCORE_ONLY_SUPPORT_CARDS,
       liveType,
       eventType,
       target,
       leaderCardId: cards[best.leaderIndex]?.cardId ?? cards[0]?.cardId ?? 0,
       leaderCardInstanceKey: cards[best.leaderIndex] ? getCardInstanceKey(cards[best.leaderIndex]) : cards[0] ? getCardInstanceKey(cards[0]) : undefined,
-      skillOrderCardIds: [],
+      skillOrderCardIds: SCORE_ONLY_SKILL_ORDER_CARD_IDS,
       areaItemConfiguration: configuration,
       context,
-      cards: [],
-      skills: [],
+      cards: SCORE_ONLY_RESULT_CARDS,
+      skills: SCORE_ONLY_SKILLS,
     };
   }
 

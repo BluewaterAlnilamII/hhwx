@@ -635,6 +635,58 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
   const debugExactCandidateJoinMemoryAttribution = (
     optimization.debugExactCandidateJoinMemoryAttribution === true
   );
+  const debugExactCandidateRawMirror = optimization.debugExactCandidateRawMirror === true;
+  const debugExactCandidateRawJoinParity = optimization.debugExactCandidateRawJoinParity === true;
+  const debugExactCandidateSignatureCensus = optimization.debugExactCandidateSignatureCensus === true;
+  const debugExactCandidateUpperReplay = optimization.debugExactCandidateUpperReplay === true;
+  const debugExactCandidateDominanceReplay = optimization.debugExactCandidateDominanceReplay === true;
+  const debugExactCandidateRawSolverInputCensus = optimization.debugExactCandidateRawSolverInputCensus === true;
+  const parsedExactCandidateScoreCalculationCacheEntryLimit = (
+    optimization.exactCandidateScoreCalculationCacheEntryLimit !== undefined
+      ? Math.trunc(optimization.exactCandidateScoreCalculationCacheEntryLimit)
+      : Number.NaN
+  );
+  const exactCandidateScoreCalculationCacheEntryLimit = (
+    Number.isFinite(parsedExactCandidateScoreCalculationCacheEntryLimit)
+    && parsedExactCandidateScoreCalculationCacheEntryLimit > 0
+      ? parsedExactCandidateScoreCalculationCacheEntryLimit
+      : null
+  );
+  const enableExactCandidateScoreCalculationCachePressureFallback = (
+    optimization.enableExactCandidateScoreCalculationCachePressureFallback === true
+  );
+  const parsedExactCandidateScoreCalculationCachePressureSlotCardCount = (
+    optimization.exactCandidateScoreCalculationCachePressureSlotCardCount !== undefined
+      ? Math.trunc(optimization.exactCandidateScoreCalculationCachePressureSlotCardCount)
+      : Number.NaN
+  );
+  const exactCandidateScoreCalculationCachePressureSlotCardCount = (
+    Number.isFinite(parsedExactCandidateScoreCalculationCachePressureSlotCardCount)
+    && parsedExactCandidateScoreCalculationCachePressureSlotCardCount > 0
+      ? parsedExactCandidateScoreCalculationCachePressureSlotCardCount
+      : null
+  );
+  const enableExactCandidateScoreOnlyCachePressureFallback = (
+    optimization.enableExactCandidateScoreOnlyCachePressureFallback === true
+  );
+  const parsedExactCandidateScoreOnlyCachePressureSlotCardCount = (
+    optimization.exactCandidateScoreOnlyCachePressureSlotCardCount !== undefined
+      ? Math.trunc(optimization.exactCandidateScoreOnlyCachePressureSlotCardCount)
+      : Number.NaN
+  );
+  const exactCandidateScoreOnlyCachePressureSlotCardCount = (
+    Number.isFinite(parsedExactCandidateScoreOnlyCachePressureSlotCardCount)
+    && parsedExactCandidateScoreOnlyCachePressureSlotCardCount > 0
+      ? parsedExactCandidateScoreOnlyCachePressureSlotCardCount
+      : null
+  );
+  const disableExactCandidateSkillWindowContributionCache = (
+    optimization.disableExactCandidateSkillWindowContributionCache === true
+  );
+  const disableExactCandidateCardsRetention = optimization.disableExactCandidateCardsRetention === true;
+  const enableExactCandidateCompactScoreOnlyCache = optimization.enableExactCandidateCompactScoreOnlyCache === true;
+  const disableExactCandidateScoreCalculationCache = optimization.disableExactCandidateScoreCalculationCache === true;
+  const disableExactCandidateScoreOnlyCache = optimization.disableExactCandidateScoreOnlyCache === true;
   const enableExperimentalStagedCandidateExtension = (
     optimization.enableExperimentalStagedCandidateExtension === true
   );
@@ -3600,6 +3652,22 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
           lowMemoryHighPairScanMinRecordCount,
           lowMemoryHighPairPrefixRecordLimit,
           debugExactCandidateJoinMemoryAttribution,
+          debugExactCandidateRawMirror,
+          debugExactCandidateRawJoinParity,
+          debugExactCandidateSignatureCensus,
+          debugExactCandidateUpperReplay,
+          debugExactCandidateDominanceReplay,
+          debugExactCandidateRawSolverInputCensus,
+          exactCandidateScoreCalculationCacheEntryLimit,
+          enableExactCandidateScoreCalculationCachePressureFallback,
+          exactCandidateScoreCalculationCachePressureSlotCardCount,
+          enableExactCandidateScoreOnlyCachePressureFallback,
+          exactCandidateScoreOnlyCachePressureSlotCardCount,
+          disableExactCandidateCardsRetention,
+          enableExactCandidateCompactScoreOnlyCache,
+          disableExactCandidateSkillWindowContributionCache,
+          disableExactCandidateScoreCalculationCache,
+          disableExactCandidateScoreOnlyCache,
         },
         observeEvaluatedMedleyResult,
       );
@@ -3992,6 +4060,22 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
           lowMemoryHighPairScanMinRecordCount,
           lowMemoryHighPairPrefixRecordLimit,
           debugExactCandidateJoinMemoryAttribution,
+          debugExactCandidateRawMirror,
+          debugExactCandidateRawJoinParity,
+          debugExactCandidateSignatureCensus,
+          debugExactCandidateUpperReplay,
+          debugExactCandidateDominanceReplay,
+          debugExactCandidateRawSolverInputCensus,
+          exactCandidateScoreCalculationCacheEntryLimit,
+          enableExactCandidateScoreCalculationCachePressureFallback,
+          exactCandidateScoreCalculationCachePressureSlotCardCount,
+          enableExactCandidateScoreOnlyCachePressureFallback,
+          exactCandidateScoreOnlyCachePressureSlotCardCount,
+          disableExactCandidateCardsRetention,
+          enableExactCandidateCompactScoreOnlyCache,
+          disableExactCandidateSkillWindowContributionCache,
+          disableExactCandidateScoreCalculationCache,
+          disableExactCandidateScoreOnlyCache,
         },
         observeEvaluatedMedleyResult,
       );

@@ -14,13 +14,55 @@ import type {
   MedleySlotSearch,
   MedleyTeamCandidate,
 } from "./types";
-import type { BandoriTeamSearchResult, SearchCard } from "@/lib/bandori/team-builder/core";
+import type {
+  BandoriCardAttribute,
+  BandoriTeamSearchResult,
+  ScoreCalculationCache,
+  SearchCard,
+} from "@/lib/bandori/team-builder/core";
 
-const scoreOnlyTeamEvaluationCacheBySlot = new WeakMap<MedleySlotSearch, Map<string, BandoriTeamSearchResult | null>>();
+type MedleyScoreOnlyTeamEvaluationCacheEntry = {
+  score: number;
+  averageScore: number;
+  maxScore: number;
+  minScore: number;
+  maxScoreOrderCount: number;
+  maxScoreOrderTotal: number;
+  totalPower: number;
+  leaderCardId: number;
+  leaderCardInstanceKey?: string;
+  sameBandId: number | null;
+  sameAttribute: BandoriCardAttribute | null;
+};
+
+type MedleyScoreOnlyTeamEvaluationCacheValue = (
+  BandoriTeamSearchResult
+  | MedleyScoreOnlyTeamEvaluationCacheEntry
+  | null
+);
+
+const scoreOnlyTeamEvaluationCacheBySlot = new WeakMap<
+  MedleySlotSearch,
+  Map<string, MedleyScoreOnlyTeamEvaluationCacheValue>
+>();
+
+const MEDLEY_SCORE_ONLY_EVENT_POINT_OPTIONS: BandoriTeamSearchResult["eventPointOptions"] = {
+  mode: "none",
+  defaultKey: null,
+  options: [],
+};
+const MEDLEY_SCORE_ONLY_SUPPORT_CARDS: BandoriTeamSearchResult["supportCards"] = [];
+const MEDLEY_SCORE_ONLY_RESULT_CARDS: BandoriTeamSearchResult["cards"] = [];
+const MEDLEY_SCORE_ONLY_SKILLS: BandoriTeamSearchResult["skills"] = [];
+const MEDLEY_SCORE_ONLY_SKILL_ORDER_CARD_IDS: number[] = [];
 
 export function releaseMedleyScoreOnlyTeamEvaluationCache(slot: MedleySlotSearch): void {
   scoreOnlyTeamEvaluationCacheBySlot.get(slot)?.clear();
   scoreOnlyTeamEvaluationCacheBySlot.delete(slot);
+}
+
+export function getMedleyScoreOnlyTeamEvaluationCacheSize(slot: MedleySlotSearch): number {
+  return scoreOnlyTeamEvaluationCacheBySlot.get(slot)?.size ?? 0;
 }
 
 export function getMedleyTeamEvaluationCacheKey(cards: SearchCard[]): string {
@@ -60,6 +102,73 @@ function getMedleyCandidateCardIds(cards: SearchCard[]): number[] {
     default:
       return cards.map((card) => card.cardId);
   }
+}
+
+function isCompactMedleyScoreOnlyTeamEvaluationCacheEntry(
+  value: MedleyScoreOnlyTeamEvaluationCacheValue,
+): value is MedleyScoreOnlyTeamEvaluationCacheEntry {
+  return !!value && !("targetValue" in value);
+}
+
+function compactMedleyScoreOnlyTeamEvaluationResult(
+  result: BandoriTeamSearchResult,
+): MedleyScoreOnlyTeamEvaluationCacheEntry {
+  return {
+    score: result.score,
+    averageScore: result.averageScore,
+    maxScore: result.maxScore,
+    minScore: result.minScore,
+    maxScoreOrderCount: result.maxScoreOrderCount,
+    maxScoreOrderTotal: result.maxScoreOrderTotal,
+    totalPower: result.totalPower,
+    leaderCardId: result.leaderCardId,
+    leaderCardInstanceKey: result.leaderCardInstanceKey,
+    sameBandId: result.context.sameBandId,
+    sameAttribute: result.context.sameAttribute,
+  };
+}
+
+function hydrateCompactMedleyScoreOnlyTeamEvaluationResult(
+  entry: MedleyScoreOnlyTeamEvaluationCacheEntry,
+  slot: MedleySlotSearch,
+): BandoriTeamSearchResult {
+  return {
+    rank: 0,
+    score: entry.score,
+    targetValue: entry.averageScore,
+    averageScore: entry.averageScore,
+    maxScore: entry.maxScore,
+    minScore: entry.minScore,
+    maxScoreOrderCount: entry.maxScoreOrderCount,
+    maxScoreOrderTotal: entry.maxScoreOrderTotal,
+    totalPower: entry.totalPower,
+    rawCardPower: 0,
+    areaItemPower: 0,
+    eventPower: 0,
+    eventPowerWithRoom: 0,
+    pointBonusRate: 0,
+    eventPointBase: null,
+    eventPointMultiplier: 1,
+    eventPoint: null,
+    eventPointOptions: MEDLEY_SCORE_ONLY_EVENT_POINT_OPTIONS,
+    eventMode: "parameterPower",
+    roomScore: null,
+    supportBandPower: null,
+    supportCards: MEDLEY_SCORE_ONLY_SUPPORT_CARDS,
+    liveType: "free",
+    eventType: "medley",
+    target: "score",
+    leaderCardId: entry.leaderCardId,
+    leaderCardInstanceKey: entry.leaderCardInstanceKey,
+    skillOrderCardIds: MEDLEY_SCORE_ONLY_SKILL_ORDER_CARD_IDS,
+    areaItemConfiguration: slot.configuration,
+    context: {
+      sameBandId: entry.sameBandId,
+      sameAttribute: entry.sameAttribute,
+    },
+    cards: MEDLEY_SCORE_ONLY_RESULT_CARDS,
+    skills: MEDLEY_SCORE_ONLY_SKILLS,
+  };
 }
 
 function compareMedleyCandidateCardIds(left: MedleyTeamCandidate, right: MedleyTeamCandidate): number {
@@ -124,17 +233,37 @@ export function evaluateMedleySlotCandidateWithCache(
   profiling: BandoriMedleyTeamSearchProfilingStats,
   pruningThresholdResult?: BandoriTeamSearchResult,
   scoreOnly = false,
+  options: {
+    disableScoreOnlyCalculationCache?: boolean;
+    scoreOnlyCalculationCache?: ScoreCalculationCache;
+    disableScoreOnlyCache?: boolean;
+    compactScoreOnlyCache?: boolean;
+  } = {},
 ): MedleyTeamCandidate | null {
   stats.enumeratedTeamCount += 1;
-  const cacheKey = getMedleyTeamEvaluationCacheKey(selectedCards);
-  const cache = scoreOnly
-    ? (scoreOnlyTeamEvaluationCacheBySlot.get(slot) ?? new Map<string, BandoriTeamSearchResult | null>())
-    : slot.teamEvaluationCache;
-  if (scoreOnly && !scoreOnlyTeamEvaluationCacheBySlot.has(slot)) {
-    scoreOnlyTeamEvaluationCacheBySlot.set(slot, cache);
+  const shouldUseCache = !scoreOnly || options.disableScoreOnlyCache !== true;
+  const cacheKey = shouldUseCache ? getMedleyTeamEvaluationCacheKey(selectedCards) : "";
+  const scoreOnlyCache = scoreOnly && shouldUseCache
+    ? (
+      scoreOnlyTeamEvaluationCacheBySlot.get(slot)
+      ?? new Map<string, MedleyScoreOnlyTeamEvaluationCacheValue>()
+    )
+    : null;
+  if (scoreOnly && shouldUseCache && scoreOnlyCache && !scoreOnlyTeamEvaluationCacheBySlot.has(slot)) {
+    scoreOnlyTeamEvaluationCacheBySlot.set(slot, scoreOnlyCache);
   }
-  let result = cache.get(cacheKey);
-  if (!cache.has(cacheKey)) {
+  const cachedResult = scoreOnly
+    ? scoreOnlyCache?.get(cacheKey)
+    : shouldUseCache
+    ? slot.teamEvaluationCache.get(cacheKey)
+    : undefined;
+  const hasCachedResult = scoreOnly
+    ? scoreOnlyCache?.has(cacheKey) === true
+    : shouldUseCache && slot.teamEvaluationCache.has(cacheKey);
+  let result = isCompactMedleyScoreOnlyTeamEvaluationCacheEntry(cachedResult)
+    ? hydrateCompactMedleyScoreOnlyTeamEvaluationResult(cachedResult, slot)
+    : cachedResult;
+  if (!hasCachedResult) {
     profiling.teamEvaluationCacheMissCount += 1;
     result = scoreOnly
       ? evaluateMedleyScoreOnlyTeam({
@@ -144,7 +273,8 @@ export function evaluateMedleySlotCandidateWithCache(
         configuration: slot.configuration,
         server,
         perfectRate,
-        scoreCache: slot.scoreCache,
+        scoreCache: options.scoreOnlyCalculationCache
+          ?? (options.disableScoreOnlyCalculationCache === true ? undefined : slot.scoreCache),
         comboOptions: slot.comboOptions,
         pruningThresholdResult,
       })
@@ -160,8 +290,15 @@ export function evaluateMedleySlotCandidateWithCache(
         pruningThresholdResult,
         scoreOnly,
       });
-    if (scoreOnly || !pruningThresholdResult || result) {
-      cache.set(cacheKey, result);
+    if (scoreOnly && scoreOnlyCache) {
+      scoreOnlyCache.set(
+        cacheKey,
+        options.compactScoreOnlyCache === true && result
+          ? compactMedleyScoreOnlyTeamEvaluationResult(result)
+          : result,
+      );
+    } else if (!scoreOnly && shouldUseCache && (!pruningThresholdResult || result)) {
+      slot.teamEvaluationCache.set(cacheKey, result);
     }
     stats.evaluatedTeamCount += 1;
   } else {
