@@ -289,6 +289,10 @@ type BuffApplicationOptions = Partial<{
   sourceX: number;
   sourceY: number;
 }>;
+type PlayerDamageOptions = Partial<{
+  counterTarget: NfoVector | null;
+  applyDamageCooldown: boolean;
+}>;
 
 export type NfoInputState = {
   moveX: number;
@@ -3677,8 +3681,32 @@ function applyEnemyContactToPlayer(
   runtimeData: NfoOfflineRuntimeData,
   enemy: NfoSimEnemy,
 ) {
+  applyDamageToPlayer(
+    state,
+    runtimeData,
+    getEnemyEffectiveAttack(enemy),
+    {
+      counterTarget: enemy,
+      applyDamageCooldown: true,
+    },
+  );
+}
+
+function applyDamageToPlayer(
+  state: NfoSimulationState,
+  runtimeData: NfoOfflineRuntimeData,
+  rawDamage: number,
+  options: PlayerDamageOptions = {},
+) {
+  const applyDamageCooldown = options.applyDamageCooldown === true;
+  const markDamageCooldown = () => {
+    if (applyDamageCooldown) {
+      state.player.damageCooldownSeconds = PLAYER_DAMAGE_COOLDOWN_SECONDS;
+    }
+  };
+
   if (isPlayerInvincible(state)) {
-    state.player.damageCooldownSeconds = PLAYER_DAMAGE_COOLDOWN_SECONDS;
+    markDamageCooldown();
     return;
   }
 
@@ -3687,9 +3715,14 @@ function applyEnemyContactToPlayer(
     NFO_BUFF_TYPE.counter,
   );
   if (counterBuff) {
-    fireCounterBuffBullets(state, runtimeData, counterBuff, enemy);
+    fireCounterBuffBullets(
+      state,
+      runtimeData,
+      counterBuff,
+      options.counterTarget ?? findNearestEnemy(state, state.player),
+    );
     consumeActiveBuffCharge(counterBuff);
-    state.player.damageCooldownSeconds = PLAYER_DAMAGE_COOLDOWN_SECONDS;
+    markDamageCooldown();
     filterPlayerActiveBuffs(state);
     return;
   }
@@ -3700,27 +3733,27 @@ function applyEnemyContactToPlayer(
   );
   if (shieldBuff) {
     consumeActiveBuffCharge(shieldBuff);
-    state.player.damageCooldownSeconds = PLAYER_DAMAGE_COOLDOWN_SECONDS;
+    markDamageCooldown();
     filterPlayerActiveBuffs(state);
     return;
   }
 
   state.player.hp -= Math.max(
     1,
-    getEnemyEffectiveAttack(enemy) - getPlayerEffectiveDefense(state),
+    rawDamage - getPlayerEffectiveDefense(state),
   );
-  state.player.damageCooldownSeconds = PLAYER_DAMAGE_COOLDOWN_SECONDS;
+  markDamageCooldown();
 }
 
 function fireCounterBuffBullets(
   state: NfoSimulationState,
   runtimeData: NfoOfflineRuntimeData,
   activeBuff: NfoSimActiveBuff,
-  enemy: NfoSimEnemy,
+  target: NfoVector | null,
 ) {
   const buff = getRuntimeBuff(runtimeData, activeBuff.id);
   const buffLevel = buff ? pickLevelStats(buff.levels, activeBuff.level) : null;
-  if (!buffLevel || buffLevel.fireBullets.length === 0) {
+  if (!buffLevel || buffLevel.fireBullets.length === 0 || !target) {
     return;
   }
 
@@ -3729,7 +3762,7 @@ function fireCounterBuffBullets(
     runtimeData,
     buffLevel.fireBullets,
     state.player,
-    enemy,
+    target,
     state.player,
   );
 }
@@ -4474,12 +4507,15 @@ function resolveCollisions(
         && canBulletHitPlayer(bullet, state)
       ) {
         if (bullet.canDamagePlayer && bullet.dealsDamage) {
-          if (!isPlayerInvincible(state)) {
-            state.player.hp -= Math.max(
-              1,
-              bullet.damage - getPlayerEffectiveDefense(state),
-            );
-          }
+          applyDamageToPlayer(
+            state,
+            runtimeData,
+            bullet.damage,
+            {
+              counterTarget: findNearestEnemy(state, state.player),
+              applyDamageCooldown: false,
+            },
+          );
         }
         bullet.remainingHits -= 1;
         recordBulletHitPlayer(bullet);

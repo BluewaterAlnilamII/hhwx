@@ -2287,6 +2287,7 @@ async function main() {
   testCnWeaponDirectFireFriendlyBuff(runtimeData);
   testCnWeaponSelfBuffFloatingShieldContactCharges(runtimeData);
   testCnWeaponSelfBuffCounterContactBullet(runtimeData);
+  testCnHostileBulletsUsePlayerProtectionBuffs(runtimeData);
   testCnWeaponSelfBuffStealthAttributes(runtimeData);
   testCnWeaponBasicSummonMinionFiresFromMinion(runtimeData);
   testCnWeaponFairyMinionFiresFromMinion(runtimeData);
@@ -2388,6 +2389,7 @@ async function main() {
   console.log("ok - CN weapon Domination direct fire applies friendly buff");
   console.log("ok - CN weapon Floating Shield self-buff absorbs contact charges");
   console.log("ok - CN weapon Counter self-buff absorbs contact and fires bullet 27");
+  console.log("ok - CN hostile bullets consume shield and counter protection buffs");
   console.log("ok - CN weapon Stealth self-buff applies attributes and fires BuffData bullet");
   console.log("ok - CN weapon Summon creates a minion that fires from its own position");
   console.log("ok - CN weapon Fairy minion fires bullet 29 from its own position");
@@ -6166,6 +6168,101 @@ function testCnWeaponSelfBuffCounterContactBullet(sourceRuntimeData: NfoOfflineR
     selfBuffCase.buffFireBulletDamageJudgeCooldownFrames / 30,
     "CN counter bullet damage cooldown",
   );
+}
+
+function testCnHostileBulletsUsePlayerProtectionBuffs(sourceRuntimeData: NfoOfflineRuntimeData) {
+  const shieldCase = getWeaponSelfBuffCase("weapon-self-buff-floating-shield-lv1");
+  const counterCase = getWeaponSelfBuffCase("weapon-self-buff-counter-lv1");
+  const shieldRuntimeData = configureRuntimeForWeapon(sourceRuntimeData);
+  const shieldBaseState = createNfoSimulation(shieldRuntimeData, { weaponId: shieldCase.weaponId });
+  const shieldBuffedState = updateNfoSimulation(
+    {
+      ...shieldBaseState,
+      player: {
+        ...shieldBaseState.player,
+        fireCooldownSeconds: 0,
+      },
+    },
+    shieldRuntimeData,
+    NO_INPUT,
+    0,
+  );
+  const shieldBulletState = updateNfoSimulation(
+    {
+      ...shieldBuffedState,
+      player: {
+        ...shieldBuffedState.player,
+        damageCooldownSeconds: 0,
+      },
+      enemies: [],
+      bullets: [createCnHostilePlayerRayBullet(sourceRuntimeData, shieldBuffedState)],
+    },
+    shieldRuntimeData,
+    NO_INPUT,
+    0,
+  );
+  const shieldAfterBullet = shieldBulletState.player.activeBuffs.find((buff) => (
+    buff.id === shieldCase.selfBuffId
+  ));
+
+  assert.equal(shieldCase.selfBuffId, 5);
+  assert.equal(shieldCase.buffType, 5);
+  assert.equal(shieldBulletState.player.hp, shieldBuffedState.player.hp);
+  assert.ok(shieldAfterBullet, "expected CN shield to retain one charge after hostile bullet");
+  assert.equal(shieldAfterBullet.value, shieldCase.buffValue - 1);
+
+  const counterRuntimeData = configureRuntimeForWeapon(sourceRuntimeData);
+  const counterBaseState = createNfoSimulation(counterRuntimeData, { weaponId: counterCase.weaponId });
+  const counterBuffedState = updateNfoSimulation(
+    {
+      ...counterBaseState,
+      player: {
+        ...counterBaseState.player,
+        criticalRate: 0,
+        fireCooldownSeconds: 0,
+      },
+    },
+    counterRuntimeData,
+    NO_INPUT,
+    0,
+  );
+  const counterTarget = createEnemyFixture(
+    counterBuffedState,
+    counterBuffedState.player.x + 120,
+    counterBuffedState.player.y,
+    {
+      hp: 999999,
+      radius: 10,
+      speed: 0,
+    },
+  );
+  const counterBulletState = updateNfoSimulation(
+    {
+      ...counterBuffedState,
+      player: {
+        ...counterBuffedState.player,
+        damageCooldownSeconds: 0,
+      },
+      enemies: [counterTarget],
+      bullets: [createCnHostilePlayerRayBullet(sourceRuntimeData, counterBuffedState)],
+    },
+    counterRuntimeData,
+    NO_INPUT,
+    0,
+  );
+  const counterBullet = counterBulletState.bullets.find((bullet) => (
+    bullet.bulletTypeId === counterCase.buffFireBulletTypeId
+  ));
+
+  assert.equal(counterCase.selfBuffId, 6);
+  assert.equal(counterCase.buffType, 6);
+  assert.equal(counterBulletState.player.hp, counterBuffedState.player.hp);
+  assert.equal(
+    counterBulletState.player.activeBuffs.some((buff) => buff.id === counterCase.selfBuffId),
+    false,
+  );
+  assert.ok(counterBullet, "expected CN counter buff 6 to fire bullet 27 on hostile bullet");
+  assert.equal(counterBullet.damage, counterBuffedState.player.attack + counterCase.buffFireBulletAttack);
 }
 
 function testCnWeaponSelfBuffStealthAttributes(sourceRuntimeData: NfoOfflineRuntimeData) {
@@ -12324,6 +12421,60 @@ function createEnemyKillingBullet(
     hitCooldownSecondsByEnemyId: {},
     x: enemy.x,
     y: enemy.y,
+  };
+}
+
+function createCnHostilePlayerRayBullet(
+  sourceRuntimeData: NfoOfflineRuntimeData,
+  targetState: NfoSimulationState,
+): NfoSimBullet {
+  const aiTimelineCase = getAIStateTimelineCase("ai-michelle-laser-fire-bullet-now-frame-15");
+  const aiRuntimeData = configureRuntimeForAI(sourceRuntimeData);
+  const aiBaseState = createStateWithoutEnemies(aiRuntimeData);
+  const aiState = createStateWithAI44Enemy(
+    aiBaseState,
+    aiTimelineCase.bulletSize2 - 300,
+    aiTimelineCase,
+    240,
+  );
+  const firedState = updateNfoSimulation(
+    updateNfoSimulation(
+      aiState,
+      aiRuntimeData,
+      NO_INPUT,
+      (aiTimelineCase.fireEventFrame - 1) / 30,
+    ),
+    aiRuntimeData,
+    NO_INPUT,
+    2 / 30,
+  );
+  const bullet = firedState.bullets.find((candidate) => (
+    candidate.bulletTypeId === aiTimelineCase.bulletTypeId
+  ));
+
+  assert.equal(aiTimelineCase.bulletTypeId, 99);
+  assert.ok(bullet, "expected CN AI 44 to provide hostile bullet 99");
+  assert.equal(bullet.canDamagePlayer, true);
+  assert.equal(bullet.hitTargetType, aiTimelineCase.bulletHitTargetType);
+  assert.equal(bullet.damageJudgeType, aiTimelineCase.bulletDamageJudgeType);
+
+  return {
+    ...bullet,
+    id: 990199,
+    x: targetState.player.x,
+    y: targetState.player.y,
+    vx: 0,
+    vy: 0,
+    angle: 0,
+    facingAngle: 0,
+    damage: targetState.player.hp + targetState.player.defense + 100,
+    remainingSeconds: 1,
+    remainingHits: 1,
+    hasHitPlayer: false,
+    playerHitCooldownSeconds: 0,
+    hitEnemyIds: [],
+    hitCooldownSecondsByEnemyId: {},
+    damageJudgeDelaySeconds: 0,
   };
 }
 
