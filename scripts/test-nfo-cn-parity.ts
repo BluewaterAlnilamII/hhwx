@@ -56,7 +56,7 @@ async function main() {
   assert.equal(fixture.selectedShooterOnDestroyCases.length, 2);
   assert.equal(fixture.selectedWeaponMinionCases.length, 6);
   assert.equal(fixture.selectedWeaponSelfBuffCases.length, 3);
-  assert.equal(fixture.selectedActiveSkillSummonCases.length, 10);
+  assert.equal(fixture.selectedActiveSkillSummonCases.length, 12);
   assert.equal(fixture.selectedAIStateTeleportCases.length, 1);
   assert.equal(fixture.selectedAIStateMovementCases.length, 11);
   assert.equal(fixture.selectedAIStateBuffCases.length, 3);
@@ -1569,32 +1569,66 @@ async function main() {
   assert.equal(getAttributeValue(fairyGuardLevelThreeStatBuff?.attributes ?? [], CN_NFO_ATTRIBUTE_TYPE.attack), 30);
   assert.equal(getAttributeValue(fairyGuardLevelThreeStatBuff?.attributes ?? [], CN_NFO_ATTRIBUTE_TYPE.bulletSize), 150);
 
-  const kingOfBeastsSummonCase = getActiveSkillSummonCase(
-    "active-skill-king-of-beasts-formation-2-roar-minions-lv2",
-  );
-  assert.equal(kingOfBeastsSummonCase.activeSkillId, 111);
-  assert.equal(kingOfBeastsSummonCase.activeSkillLevel, 2);
-  assert.equal(kingOfBeastsSummonCase.eventFrame, 1);
-  assert.equal(kingOfBeastsSummonCase.shooterId, 0);
-  assert.equal(kingOfBeastsSummonCase.minionId, 9);
-  assert.equal(kingOfBeastsSummonCase.minionAITypeId, 209);
-  assert.equal(kingOfBeastsSummonCase.minionAIStateId, 0);
-  assert.equal(kingOfBeastsSummonCase.minionAIStateType, 21);
-  assert.equal(kingOfBeastsSummonCase.minionAIStateLastFrame, 15);
-  assert.equal(kingOfBeastsSummonCase.minionAINextStateId, 1);
-  assert.equal(kingOfBeastsSummonCase.minionAINextStateType, 0);
-  assert.equal(kingOfBeastsSummonCase.minionAINextStateShooterId, 14001);
-  assert.equal(kingOfBeastsSummonCase.minionAINextStateShooterEventFrame, 1);
-  assert.equal(kingOfBeastsSummonCase.minionAINextStateShooterBulletTypeId, 34);
-  assert.equal(kingOfBeastsSummonCase.minionAINextStateShooterBulletAttack, 150);
-  assert.equal(kingOfBeastsSummonCase.minionAINextStateShooterBulletSpeed, 0);
-  assert.equal(kingOfBeastsSummonCase.minionAINextStateShooterBulletSize, 1100);
-  assert.equal(kingOfBeastsSummonCase.minionAINextStateShooterBulletHitBuffId, 3);
-  assert.equal(kingOfBeastsSummonCase.spawnFormation, 2);
-  assert.equal(kingOfBeastsSummonCase.spawnCount, 3);
-  assert.equal(kingOfBeastsSummonCase.spawnRadiusMin, 400);
-  assert.equal(kingOfBeastsSummonCase.spawnRadiusMax, 400);
-  assert.equal(kingOfBeastsSummonCase.expectedFirstPassRadius, 400);
+  for (const expected of [
+    {
+      id: "active-skill-king-of-beasts-formation-2-roar-minions-lv1",
+      level: 1,
+      spawnCount: 2,
+      minionAITypeId: 203,
+      shooterId: 14000,
+      bulletAttack: 100,
+      bulletSize: 900,
+    },
+    {
+      id: "active-skill-king-of-beasts-formation-2-roar-minions-lv2",
+      level: 2,
+      spawnCount: 3,
+      minionAITypeId: 209,
+      shooterId: 14001,
+      bulletAttack: 150,
+      bulletSize: 1100,
+    },
+    {
+      id: "active-skill-king-of-beasts-formation-2-roar-minions-lv3",
+      level: 3,
+      spawnCount: 4,
+      minionAITypeId: 203,
+      shooterId: 14000,
+      bulletAttack: 100,
+      bulletSize: 900,
+    },
+  ]) {
+    const kingOfBeastsSummonCase = getActiveSkillSummonCase(expected.id);
+    assert.equal(kingOfBeastsSummonCase.activeSkillId, 111);
+    assert.equal(kingOfBeastsSummonCase.activeSkillLevel, expected.level);
+    assert.equal(kingOfBeastsSummonCase.eventFrame, 1);
+    assert.equal(kingOfBeastsSummonCase.shooterId, 0);
+    assert.equal(kingOfBeastsSummonCase.minionId, 9);
+    assert.equal(kingOfBeastsSummonCase.minionAITypeId, expected.minionAITypeId);
+    assert.equal(kingOfBeastsSummonCase.minionAIStateId, 0);
+    assert.equal(kingOfBeastsSummonCase.minionAIStateType, 21);
+    assert.equal(kingOfBeastsSummonCase.minionAIStateLastFrame, 15);
+    assert.equal(kingOfBeastsSummonCase.minionAINextStateId, 1);
+    assert.equal(kingOfBeastsSummonCase.minionAINextStateType, 0);
+    assert.equal(kingOfBeastsSummonCase.minionAINextStateShooterId, expected.shooterId);
+    assert.equal(kingOfBeastsSummonCase.minionAINextStateShooterEventFrame, 1);
+    assert.equal(kingOfBeastsSummonCase.minionAINextStateShooterBulletTypeId, 34);
+    assert.equal(
+      kingOfBeastsSummonCase.minionAINextStateShooterBulletAttack,
+      expected.bulletAttack,
+    );
+    assert.equal(kingOfBeastsSummonCase.minionAINextStateShooterBulletSpeed, 0);
+    assert.equal(
+      kingOfBeastsSummonCase.minionAINextStateShooterBulletSize,
+      expected.bulletSize,
+    );
+    assert.equal(kingOfBeastsSummonCase.minionAINextStateShooterBulletHitBuffId, 3);
+    assert.equal(kingOfBeastsSummonCase.spawnFormation, 2);
+    assert.equal(kingOfBeastsSummonCase.spawnCount, expected.spawnCount);
+    assert.equal(kingOfBeastsSummonCase.spawnRadiusMin, 400);
+    assert.equal(kingOfBeastsSummonCase.spawnRadiusMax, 400);
+    assert.equal(kingOfBeastsSummonCase.expectedFirstPassRadius, 400);
+  }
 
   const allOutFireSummonCase = getActiveSkillSummonCase(
     "active-skill-all-out-fire-shooter-and-minion-lv1",
@@ -2309,7 +2343,7 @@ async function main() {
   console.log("ok - CN active skill Demon God level 1/2/3 self buffs modify player fire attributes");
   console.log("ok - CN active skill Holy Mend level 1/2/3 heals, applies invincibility, and revives");
   console.log("ok - CN active skill Fairy Guard level 1/2/3 buffs existing player-side minions and their fire");
-  console.log("ok - CN active skill 111 minion AI transitions into roar shooter");
+  console.log("ok - CN active skill 111 level 1/2/3 minion AI transitions into roar shooter");
   console.log("ok - CN active skill All-Out Fire drives shooter 7000 frame 1/3/7 timeline and minion AI");
   console.log("ok - CN active skill All-Out Fire level 3 loops zero-offset minion shooters");
   console.log("ok - CN active skill Galaxy Star level 1/2/3 summon uses first-pass minion orbit");
@@ -9746,119 +9780,157 @@ function assertCnActiveSkillFairyGuardTargetsPlayerSideMinionsCase(
 function testCnActiveSkillKingOfBeastsMinionAITransitionShooter(
   sourceRuntimeData: NfoOfflineRuntimeData,
 ) {
-  const summonCase = getActiveSkillSummonCase(
+  for (const summonCaseId of [
+    "active-skill-king-of-beasts-formation-2-roar-minions-lv1",
     "active-skill-king-of-beasts-formation-2-roar-minions-lv2",
-  );
-  const testRuntimeData = configureRuntimeForActiveSkill(
-    sourceRuntimeData,
-    summonCase.activeSkillId,
-  );
-  const minionData = testRuntimeData.minions.find((candidate) => (
-    candidate.id === summonCase.minionId
-  ));
-  assert.ok(minionData);
-  minionData.speed = 0;
+    "active-skill-king-of-beasts-formation-2-roar-minions-lv3",
+  ]) {
+    const summonCase = getActiveSkillSummonCase(summonCaseId);
+    const label = `CN skill 111 level ${summonCase.activeSkillLevel}`;
+    const testRuntimeData = configureRuntimeForActiveSkill(
+      sourceRuntimeData,
+      summonCase.activeSkillId,
+    );
+    const minionData = testRuntimeData.minions.find((candidate) => (
+      candidate.id === summonCase.minionId
+    ));
+    assert.ok(minionData);
+    minionData.speed = 0;
 
-  const initialState = createStateWithoutEnemies(testRuntimeData);
-  const baseState = {
-    ...initialState,
-    activeSkill: {
-      ...initialState.activeSkill,
-      level: summonCase.activeSkillLevel,
-    },
-    worldBounds: {
-      minX: -2000,
-      minY: -2000,
-      maxX: 2000,
-      maxY: 2000,
-    },
-  };
-  const summonedState = updateNfoSimulation(
-    chargeActiveSkill(baseState),
-    testRuntimeData,
-    { ...NO_INPUT, useActiveSkill: true },
-    1 / 30,
-  );
+    const initialState = createStateWithoutEnemies(testRuntimeData);
+    const baseState = {
+      ...initialState,
+      activeSkill: {
+        ...initialState.activeSkill,
+        level: summonCase.activeSkillLevel,
+      },
+      worldBounds: {
+        minX: -2000,
+        minY: -2000,
+        maxX: 2000,
+        maxY: 2000,
+      },
+    };
+    const summonedState = updateNfoSimulation(
+      chargeActiveSkill(baseState),
+      testRuntimeData,
+      { ...NO_INPUT, useActiveSkill: true },
+      1 / 30,
+    );
+    const spawnedMinions = summonedState.minions;
 
-  assert.equal(summonedState.minions.length, summonCase.spawnCount);
-  assert.ok(summonedState.minions.every((candidate) => candidate.minionId === summonCase.minionId));
-  assert.ok(
-    summonedState.minions.every((candidate) => candidate.aiTypeId === summonCase.minionAITypeId),
-  );
-  assert.ok(
-    summonedState.minions.every((candidate) => candidate.aiStateId === summonCase.minionAIStateId),
-  );
-  assert.ok(
-    summonedState.minions.every((candidate) => (
-      Math.round(Math.hypot(candidate.x - baseState.player.x, candidate.y - baseState.player.y))
-        === summonCase.expectedFirstPassRadius
-    )),
-  );
-  assertClose(
-    summonedState.minions[0]?.x ?? Number.NaN,
-    baseState.player.x + summonCase.expectedFirstPassRadius,
-    "CN skill 111 minion 0 x",
-  );
-  assertClose(summonedState.minions[0]?.y ?? Number.NaN, baseState.player.y, "CN skill 111 minion 0 y");
-  assertClose(
-    summonedState.minions[1]?.x ?? Number.NaN,
-    baseState.player.x - summonCase.expectedFirstPassRadius / 2,
-    "CN skill 111 minion 1 x",
-  );
-  assert.ok((summonedState.minions[1]?.y ?? 0) > baseState.player.y);
-  assertClose(
-    summonedState.minions[2]?.x ?? Number.NaN,
-    baseState.player.x - summonCase.expectedFirstPassRadius / 2,
-    "CN skill 111 minion 2 x",
-  );
-  assert.ok((summonedState.minions[2]?.y ?? 0) < baseState.player.y);
-  assert.equal(
-    summonedState.activeShooters.some((candidate) => (
+    assert.equal(spawnedMinions.length, summonCase.spawnCount);
+    assert.ok(spawnedMinions.every((candidate) => candidate.minionId === summonCase.minionId));
+    assert.ok(spawnedMinions.every((candidate) => candidate.aiTypeId === summonCase.minionAITypeId));
+    assert.ok(spawnedMinions.every((candidate) => candidate.aiStateId === summonCase.minionAIStateId));
+    assert.ok(
+      spawnedMinions.every((candidate) => (
+        Math.round(Math.hypot(candidate.x - baseState.player.x, candidate.y - baseState.player.y))
+          === summonCase.expectedFirstPassRadius
+      )),
+    );
+    assertClose(
+      spawnedMinions[0]?.x ?? Number.NaN,
+      baseState.player.x + summonCase.expectedFirstPassRadius,
+      `${label} minion 0 x`,
+    );
+    assertClose(spawnedMinions[0]?.y ?? Number.NaN, baseState.player.y, `${label} minion 0 y`);
+
+    if (summonCase.spawnCount === 2) {
+      assertClose(
+        spawnedMinions[1]?.x ?? Number.NaN,
+        baseState.player.x - summonCase.expectedFirstPassRadius,
+        `${label} minion 1 x`,
+      );
+      assertClose(spawnedMinions[1]?.y ?? Number.NaN, baseState.player.y, `${label} minion 1 y`);
+    } else if (summonCase.spawnCount === 3) {
+      assertClose(
+        spawnedMinions[1]?.x ?? Number.NaN,
+        baseState.player.x - summonCase.expectedFirstPassRadius / 2,
+        `${label} minion 1 x`,
+      );
+      assert.ok((spawnedMinions[1]?.y ?? Number.NEGATIVE_INFINITY) > baseState.player.y);
+      assertClose(
+        spawnedMinions[2]?.x ?? Number.NaN,
+        baseState.player.x - summonCase.expectedFirstPassRadius / 2,
+        `${label} minion 2 x`,
+      );
+      assert.ok((spawnedMinions[2]?.y ?? Number.POSITIVE_INFINITY) < baseState.player.y);
+    } else if (summonCase.spawnCount === 4) {
+      assertClose(spawnedMinions[1]?.x ?? Number.NaN, baseState.player.x, `${label} minion 1 x`);
+      assert.ok((spawnedMinions[1]?.y ?? Number.NEGATIVE_INFINITY) > baseState.player.y);
+      assertClose(
+        spawnedMinions[2]?.x ?? Number.NaN,
+        baseState.player.x - summonCase.expectedFirstPassRadius,
+        `${label} minion 2 x`,
+      );
+      assertClose(spawnedMinions[2]?.y ?? Number.NaN, baseState.player.y, `${label} minion 2 y`);
+      assertClose(spawnedMinions[3]?.x ?? Number.NaN, baseState.player.x, `${label} minion 3 x`);
+      assert.ok((spawnedMinions[3]?.y ?? Number.POSITIVE_INFINITY) < baseState.player.y);
+    } else {
+      assert.fail(`unexpected ${label} spawn count ${summonCase.spawnCount}`);
+    }
+
+    assert.equal(
+      summonedState.activeShooters.some((candidate) => (
+        candidate.shooterId === summonCase.minionAINextStateShooterId
+      )),
+      false,
+    );
+
+    const transitionState = updateNfoSimulation(
+      summonedState,
+      testRuntimeData,
+      NO_INPUT,
+      (summonCase.minionAIStateLastFrame - 1) / 30,
+    );
+    assert.ok(
+      transitionState.minions.every((candidate) => candidate.aiStateId === summonCase.minionAINextStateId),
+    );
+    const transitionedMinion = transitionState.minions[0];
+    assert.ok(transitionedMinion);
+    const roarShooter = transitionState.activeShooters.find((candidate) => (
       candidate.shooterId === summonCase.minionAINextStateShooterId
-    )),
-    false,
-  );
+    ));
+    assert.ok(
+      roarShooter,
+      `expected ${label} minion AI to create shooter ${summonCase.minionAINextStateShooterId}`,
+    );
+    assert.equal(roarShooter.sourceTeam, "player");
+    assertClose(roarShooter.x, transitionedMinion.x, `${label} roar shooter x`);
+    assertClose(roarShooter.y, transitionedMinion.y, `${label} roar shooter y`);
+    assert.equal(
+      transitionState.bullets.some((candidate) => (
+        candidate.bulletTypeId === summonCase.minionAINextStateShooterBulletTypeId
+      )),
+      false,
+    );
 
-  const transitionState = updateNfoSimulation(
-    summonedState,
-    testRuntimeData,
-    NO_INPUT,
-    (summonCase.minionAIStateLastFrame - 1) / 30,
-  );
-  const transitionedMinion = transitionState.minions[0];
-  assert.ok(transitionedMinion);
-  assert.equal(transitionedMinion.aiStateId, summonCase.minionAINextStateId);
-  const roarShooter = transitionState.activeShooters.find((candidate) => (
-    candidate.shooterId === summonCase.minionAINextStateShooterId
-  ));
-  assert.ok(roarShooter, "expected CN skill 111 minion AI to create shooter 14001");
-  assert.equal(roarShooter.sourceTeam, "player");
-  assertClose(roarShooter.x, transitionedMinion.x, "CN skill 111 roar shooter x");
-  assertClose(roarShooter.y, transitionedMinion.y, "CN skill 111 roar shooter y");
-  assert.equal(
-    transitionState.bullets.some((candidate) => (
+    const roarBulletState = updateNfoSimulation(
+      transitionState,
+      testRuntimeData,
+      NO_INPUT,
+      1 / 30,
+    );
+    const roarBullet = roarBulletState.bullets.find((candidate) => (
       candidate.bulletTypeId === summonCase.minionAINextStateShooterBulletTypeId
-    )),
-    false,
-  );
-
-  const roarBulletState = updateNfoSimulation(
-    transitionState,
-    testRuntimeData,
-    NO_INPUT,
-    1 / 30,
-  );
-  const roarBullet = roarBulletState.bullets.find((candidate) => (
-    candidate.bulletTypeId === summonCase.minionAINextStateShooterBulletTypeId
-  ));
-  assert.ok(roarBullet, "expected CN shooter 14001 to emit roar bullet 34");
-  assert.equal(roarBullet.canDamagePlayer, false);
-  assert.equal(roarBullet.hitTargetType, 0);
-  assert.equal(roarBullet.hitBuffId, summonCase.minionAINextStateShooterBulletHitBuffId);
-  assert.equal(roarBullet.colliderWidth, summonCase.minionAINextStateShooterBulletSize);
-  assertClose(Math.hypot(roarBullet.vx, roarBullet.vy), 0, "CN skill 111 roar bullet speed");
-  assertClose(roarBullet.x, roarShooter.x, "CN skill 111 roar bullet x");
-  assertClose(roarBullet.y, roarShooter.y, "CN skill 111 roar bullet y");
+    ));
+    assert.ok(
+      roarBullet,
+      `expected ${label} shooter ${summonCase.minionAINextStateShooterId} to emit roar bullet 34`,
+    );
+    assert.equal(roarBullet.canDamagePlayer, false);
+    assert.equal(roarBullet.hitTargetType, 0);
+    assert.equal(roarBullet.hitBuffId, summonCase.minionAINextStateShooterBulletHitBuffId);
+    assert.equal(roarBullet.colliderWidth, summonCase.minionAINextStateShooterBulletSize);
+    assertClose(
+      Math.hypot(roarBullet.vx, roarBullet.vy),
+      summonCase.minionAINextStateShooterBulletSpeed,
+      `${label} roar bullet speed`,
+    );
+    assertClose(roarBullet.x, roarShooter.x, `${label} roar bullet x`);
+    assertClose(roarBullet.y, roarShooter.y, `${label} roar bullet y`);
+  }
 }
 
 function testCnActiveSkillAllOutFireShooterAndMinion(

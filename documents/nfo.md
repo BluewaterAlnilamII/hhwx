@@ -578,8 +578,8 @@ active skill `110` / shooters `6000`/`6001`/`6002` starlight full-screen
 effect and looping radial bullets,
 active skill `117` level `1`/`2`/`3` / shooter `11000` friendly invincible hit
 buff `108`,
-active skill `111` / `圣兽之王` formation-2 minion summon and delayed minion
-AI shooter `14001`,
+active skill `111` / `圣兽之王` level `1`/`2`/`3` formation-2 minion summon
+and delayed minion AI shooters `14000`/`14001`,
 active skill `112` / `全弹发射` same-event shooter `7000` plus minion `8`
 summon and first-pass minion AI shooter `7003`, plus level-3 same-frame minion
 AI `205`/`206`/`207` summons with minion AI shooters `7004`/`7005`,
@@ -1057,10 +1057,11 @@ fires its own weapon.
 
 The active-skill summon parity cases now lock CN paths across skills `111`,
 `112`, `113`, and `115`. Skill `111` /
-`圣兽之王` level `2` crosses frame `1`, summons three minion `9` copies with
-AI type `209` and `spawnFormation = 2` at radius `400`, advances those minions
-from AI state `0` to state `1` after 15 frames, creates shooter `14001`, and
-emits zero-speed roar bullet `34` with hit buff `3`. Skill `112` /
+`圣兽之王` level `1`/`2`/`3` crosses frame `1`, summons two/three/four minion
+`9` copies with AI type `203`/`209`/`203` and `spawnFormation = 2` at radius
+`400`, advances those minions from AI state `0` to state `1` after 15 frames,
+creates shooter `14000`/`14001`/`14000`, and emits zero-speed roar bullet `34`
+with attack `100`/`150`/`100`, size `900`/`1100`/`900`, and hit buff `3`. Skill `112` /
 `全弹发射` level `1` crosses frame `1`, creates active shooter `7000`,
 emits bullet `66`, summons minion `8` with AI type `205` at radius `250`, and
 then keeps shooter `7000`'s own timeline active: frame `3` emits bullet `67`
@@ -1487,9 +1488,10 @@ Weapon behavior staging:
   bullet `69`, plus the offset AI `207` minion at `(250, 250) + radius 1` with
   shooter `7005` / bullet `70`; the same fixture now locks both shooters'
   `LoopFrameInterval = 7`, `LifeTime = 160`, and zero-offset +X first-pass
-  bullet paths. Active skill `111` / `圣兽之王` locks the delayed AI transition variant:
-  formation-2 minion `9` copies start in AI state `0`, transition after 15
-  frames, then create shooter `14001` and zero-speed roar bullet `34`. For active
+  bullet paths. Active skill `111` / `圣兽之王` locks the delayed AI transition variant
+  across level `1`/`2`/`3`: formation-2 minion `9` copies start in AI state `0`,
+  transition after 15 frames, then create shooter `14000`/`14001`/`14000` and
+  zero-speed roar bullet `34`. For active
   skill summon placement, `spawnFormation = 1` and `2` use a deterministic ring
   over the requested spawn center; if CN data provides a radius interval, the
   first pass uses its midpoint rather than varying radius by minion index. This
