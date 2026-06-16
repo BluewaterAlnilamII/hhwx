@@ -222,27 +222,14 @@ async function smokeBrowserInteraction(baseUrl, args) {
   const browserBin = await resolveBrowserBin(args.browserBin);
   const userDataDir = await mkdtemp(path.join(os.tmpdir(), "hhwx-nfo-smoke-"));
   const url = resolveUrl(baseUrl, "/zh-CN/bandori/nfo?nfoSmoke=1");
+  const persistedSaveUrl = resolveUrl(baseUrl, "/zh-CN/bandori/nfo");
 
   try {
-    const { stdout, stderr } = await execFileAsync(
+    const { stdout, stderr } = await dumpBrowserDom(
       browserBin,
-      [
-        "--headless=new",
-        "--disable-gpu",
-        "--disable-background-networking",
-        "--disable-dev-shm-usage",
-        `--host-resolver-rules=${LOCAL_ONLY_HOST_RESOLVER_RULES}`,
-        "--no-first-run",
-        "--no-default-browser-check",
-        `--user-data-dir=${userDataDir}`,
-        `--virtual-time-budget=${args.browserVirtualTimeMs}`,
-        "--dump-dom",
-        url,
-      ],
-      {
-        timeout: args.timeoutMs + args.browserVirtualTimeMs + 5000,
-        maxBuffer: 50 * 1024 * 1024,
-      },
+      userDataDir,
+      url,
+      args,
     );
 
     const smokeTag = extractSmokeTag(stdout);
@@ -338,6 +325,60 @@ async function smokeBrowserInteraction(baseUrl, args) {
     assertSmoke(stdout.includes("Active skill"), "browser smoke did not render the active skill control");
     assertSmoke(!stdout.includes("Application error"), "browser smoke rendered an application error");
 
+    const { stdout: persistedStdout } = await dumpBrowserDom(
+      browserBin,
+      userDataDir,
+      persistedSaveUrl,
+      args,
+    );
+    const persistedSmokeTag = extractSmokeTag(persistedStdout);
+    assertSmoke(
+      persistedSmokeTag,
+      `browser smoke persisted save marker was not rendered for ${persistedSaveUrl}`,
+    );
+    assertSmoke(
+      readHtmlAttribute(persistedSmokeTag, "data-nfo-smoke-mode") === "0",
+      "browser smoke persisted save check unexpectedly re-entered smoke mode",
+    );
+    assertSmoke(
+      readHtmlAttribute(persistedSmokeTag, "data-nfo-runtime-status") === "ready",
+      "browser smoke persisted save check did not reach ready runtime",
+    );
+    assertSmoke(
+      readHtmlAttribute(persistedSmokeTag, "data-nfo-save-ready") === "1",
+      "browser smoke persisted save check did not load save state",
+    );
+    const persistedBankCoin = Number(
+      readHtmlAttribute(persistedSmokeTag, "data-nfo-upgrade-coin"),
+    );
+    const persistedTotalRuns = Number(
+      readHtmlAttribute(persistedSmokeTag, "data-nfo-total-runs"),
+    );
+    const persistedClearedLevelCount = Number(
+      readHtmlAttribute(persistedSmokeTag, "data-nfo-cleared-level-count"),
+    );
+    assertSmoke(
+      [persistedBankCoin, persistedTotalRuns, persistedClearedLevelCount].every(Number.isFinite),
+      "browser smoke persisted save check did not expose save counters",
+    );
+    assertSmoke(
+      persistedTotalRuns >= totalRuns,
+      "browser smoke did not reload the completed run from persisted save",
+    );
+    assertSmoke(
+      persistedBankCoin >= bankCoin,
+      "browser smoke did not reload clear coin from persisted save",
+    );
+    assertSmoke(
+      persistedClearedLevelCount >= clearedLevelCount,
+      "browser smoke did not reload cleared levels from persisted save",
+    );
+    assertSmoke(
+      readHtmlAttribute(persistedSmokeTag, "data-nfo-selected-level-cleared") === "1",
+      "browser smoke did not reload the selected level as cleared",
+    );
+    assertSmoke(!persistedStdout.includes("Application error"), "browser smoke reload rendered an application error");
+
     const screenshotStats = await captureAndInspectBrowserScreenshot(
       browserBin,
       userDataDir,
@@ -357,6 +398,29 @@ async function smokeBrowserInteraction(baseUrl, args) {
   } finally {
     await rm(userDataDir, { recursive: true, force: true });
   }
+}
+
+async function dumpBrowserDom(browserBin, userDataDir, url, args) {
+  return execFileAsync(
+    browserBin,
+    [
+      "--headless=new",
+      "--disable-gpu",
+      "--disable-background-networking",
+      "--disable-dev-shm-usage",
+      `--host-resolver-rules=${LOCAL_ONLY_HOST_RESOLVER_RULES}`,
+      "--no-first-run",
+      "--no-default-browser-check",
+      `--user-data-dir=${userDataDir}`,
+      `--virtual-time-budget=${args.browserVirtualTimeMs}`,
+      "--dump-dom",
+      url,
+    ],
+    {
+      timeout: args.timeoutMs + args.browserVirtualTimeMs + 5000,
+      maxBuffer: 50 * 1024 * 1024,
+    },
+  );
 }
 
 async function captureAndInspectBrowserScreenshot(browserBin, userDataDir, url, args) {
