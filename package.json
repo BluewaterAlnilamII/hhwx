@@ -19,7 +19,7 @@
     "nfo:parity-fixtures": "tsx scripts/nfo-generate-cn-parity-fixtures.ts",
     "smoke:nfo:http": "node scripts/nfo-smoke-local.mjs --skip-browser",
     "smoke:nfo": "node scripts/nfo-smoke-local.mjs",
-    "test:nfo": "tsx scripts/test-nfo-offline-settlement.ts",
+    "test:nfo": "tsx scripts/test-nfo-offline-settlement.ts && node scripts/test-nfo-smoke-guards.mjs",
     "test:nfo:parity": "tsx scripts/test-nfo-cn-parity.ts",
     "typecheck": "tsc --noEmit --pretty false"
   },

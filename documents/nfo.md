@@ -242,7 +242,7 @@ Runtime boundaries:
 | CN local freeze | done | 20-file `Android-2.1.1` snapshot under ignored `temp/` | No scheduled refresh and no object-storage upload |
 | Bundle inventory | done | `objects.json` and typetrees for the frozen UnityFS bundles | Raw bundles remain local-only |
 | Runtime master data | done | `master-data.json` with characters, enemies, enemy AI, weapons, equips, buffs, active skills, bullet shooters, bullets, levels, maps, drops, items, `GameDefaultData.globalDifficutyControlData`, map prefab bounds, level clear major/minor enemy event IDs, level clear unlock rewards, and related tables; deployable copy lives under `public/res/bandori/nfo/cn/Android-2.1.1/runtime-data/` | Preserve CN Unity field names in exported JSON where the source is a master-data table; raw UnityFS bundles remain local-only |
-| Browser DTO API | in progress | `/api/bandori/nfo/local-runtime` reads the deployable frozen runtime artifact and returns typed DTOs | Server route has a `temp/` fallback for local regeneration, but deploy/smoke should use the `public/res` artifact |
+| Browser DTO API | in progress | `/api/bandori/nfo/local-runtime` reads the deployable frozen runtime artifact and returns typed DTOs | Server route has a `temp/` fallback for local regeneration, but deploy/smoke should use the `public/res` artifact; `test:nfo` now unit-tests the no-live-NFO endpoint guard used by smoke |
 | Minimal play loop | in progress | Phaser playfield with movement, camera, enemy spawning, first-pass enemy AI fire, selected-weapon auto fire, bullets, collision, drops, EXP/upgrade/heal/coin/bomb/magnet pickup handling, timer, and clear/fail state | Simulation state stays outside Phaser |
 | Offline save | in progress | Local `NFOSaveData`-like state in `localStorage`: character/level/weapon selection, cleared levels, unlocked characters/levels/weapons/equips, run count, defeated enemies, upgrade coin, paid global upgrades, and default unlock lists | Save only serializable game state, not renderer objects |
 | Progression parity | in progress | Recreate global upgrades, unlocks, equips, weapons, and mission rewards from CN data/dump | Current slice supports global upgrade purchase, character/weapon/equip unlock gates, selected-weapon/equip runs, level-1 equip modifiers, natural clear coin rewards, `clearEnemyEventID` final-boss plus `levelClearMinorEnemyEventIDs` clear rewards, and `LevelData` clear unlock reward arrays; server reward APIs become local events |
@@ -348,7 +348,9 @@ Current playable prototype:
   server on another port. The API DTO check fails if page-consumed runtime data
   exposes live NFO HTTP endpoint markers. The static runtime check applies the
   same guard to the offline gameplay surface while preserving raw source-table
-  fields such as `datasets.multiplayConfigData.URL`.
+  fields such as `datasets.multiplayConfigData.URL`. The same guard core is
+  covered by `npm run test:nfo`, so endpoint regressions can fail before a
+  browser or server smoke run.
 
 - run the full browser interaction smoke only for stage-gate checks:
 
@@ -640,7 +642,9 @@ npm run smoke:nfo:http
 This HTTP smoke covers both `/bandori/nfo` and `/zh-CN/bandori/nfo`, the
 local-runtime API, static frozen runtime artifact, and no-live-NFO-endpoint
 guards for both the page-consumed API DTO and static runtime's offline gameplay
-surface without launching Chrome/Edge. For release-candidate or final
+surface without launching Chrome/Edge. `npm run test:nfo` also exercises the
+pure no-live guard, including the static-runtime exception for raw
+`datasets.multiplayConfigData.URL`. For release-candidate or final
 stage-gate checks, run the full browser interaction smoke; it also blocks
 non-local hostname resolution in Chrome/Edge so the smoke path cannot depend on
 live NFO hosts:

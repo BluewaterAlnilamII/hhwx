@@ -2,6 +2,7 @@ import { execFile } from "node:child_process";
 import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 
 const DEFAULT_BASE_URL = "http://localhost:3117";
@@ -9,7 +10,7 @@ const EXPECTED_RUNTIME_PATH =
   "public/res/bandori/nfo/cn/Android-2.1.1/runtime-data/master-data.json";
 const STATIC_RUNTIME_URL_PATH =
   "/res/bandori/nfo/cn/Android-2.1.1/runtime-data/master-data.json";
-const LIVE_NFO_ENDPOINT_MARKERS = [
+export const LIVE_NFO_ENDPOINT_MARKERS = [
   "http://",
   "https://",
   "l3-prod-all-bd.bilibiligame.net",
@@ -87,7 +88,7 @@ function assertSmoke(condition, message) {
   }
 }
 
-function assertNoLiveNfoEndpoints(value, label) {
+export function assertNoLiveNfoEndpoints(value, label) {
   const serialized = JSON.stringify(value);
   const marker = LIVE_NFO_ENDPOINT_MARKERS.find((candidate) => serialized.includes(candidate));
 
@@ -97,7 +98,7 @@ function assertNoLiveNfoEndpoints(value, label) {
   );
 }
 
-function getStaticRuntimeEndpointCheckSurface(runtime) {
+export function getStaticRuntimeEndpointCheckSurface(runtime) {
   const checkSurface = structuredClone(runtime);
   const multiplayConfigs = checkSurface.datasets?.multiplayConfigData;
 
@@ -328,7 +329,9 @@ async function main() {
   console.log(`ok - NFO smoke passed for ${args.baseUrl}`);
 }
 
-main().catch((error) => {
-  console.error(error);
-  process.exit(1);
-});
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  main().catch((error) => {
+    console.error(error);
+    process.exit(1);
+  });
+}
