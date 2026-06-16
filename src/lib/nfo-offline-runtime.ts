@@ -210,6 +210,7 @@ export type NfoActiveSkillTimelineEvent = {
   frame: number;
   bulletShooterId: number;
   fullScreenEffectName: string;
+  playSoundName?: string;
   buffs: NfoActiveSkillBuffEvent[];
   spawnMinion: NfoActiveSkillSpawnMinionEvent | null;
 };

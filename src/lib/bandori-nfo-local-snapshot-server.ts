@@ -399,6 +399,7 @@ function mapActiveSkillTimelineEvent(record: RawRecord): NfoActiveSkillTimelineE
     frame: readNumber(record, "Frame"),
     bulletShooterId: readNumber(record, "BulletShooterID"),
     fullScreenEffectName: readString(record, "FullScreenEffectName"),
+    playSoundName: readString(record, "PlaySoundName"),
     buffs: readRecordArray(record, "AddBuffDatas").map(mapActiveSkillBuffEvent),
     spawnMinion: mapActiveSkillSpawnMinion(record.SpawnMinionData),
   };

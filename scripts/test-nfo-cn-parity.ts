@@ -7874,6 +7874,7 @@ function testCnActiveSkillUltimateHeartLightShooterAndEffect(
 
   assert.ok(effectEvent, "expected CN active skill 110 to define shooter 6000");
   assert.equal(effectEvent.fullScreenEffectName, "UIefx_flash_starlight");
+  assert.equal(effectEvent.playSoundName, "active_110");
   assert.equal(starlightCase.shooterBehaviorType, 1);
   assert.equal(starlightCase.shooterFollowsOwnerDirection, true);
   assert.equal(starlightCase.isLoopEvent, true);
@@ -7901,13 +7902,21 @@ function testCnActiveSkillUltimateHeartLightShooterAndEffect(
   const effect = firstFrameState.fullScreenEffects.find((candidate) => (
     candidate.name === effectEvent.fullScreenEffectName
   ));
+  const soundEvent = firstFrameState.soundEvents.find((candidate) => (
+    candidate.name === effectEvent.playSoundName
+  ));
 
   assert.ok(shooter, "expected CN active skill 110 to create shooter 6000");
   assert.ok(effect, "expected CN active skill 110 to record UIefx_flash_starlight");
+  assert.ok(soundEvent, "expected CN active skill 110 to record active_110 sound");
   assert.equal(effect.activeSkillId, starlightCase.activeSkillId);
   assert.equal(effect.activeSkillLevel, starlightCase.activeSkillLevel);
   assert.equal(effect.eventFrame, starlightCase.eventFrame);
   assert.equal(effect.remainingSeconds, 0.5);
+  assert.equal(soundEvent.activeSkillId, starlightCase.activeSkillId);
+  assert.equal(soundEvent.activeSkillLevel, starlightCase.activeSkillLevel);
+  assert.equal(soundEvent.eventFrame, starlightCase.eventFrame);
+  assert.equal(soundEvent.remainingSeconds, 0.5);
   assert.equal(shooter.lifeTimeFrames, starlightCase.shooterLifeTimeFrames);
   assert.equal(shooter.behaviorType, starlightCase.shooterBehaviorType);
   assert.equal(shooter.followsOwnerDirection, starlightCase.shooterFollowsOwnerDirection);

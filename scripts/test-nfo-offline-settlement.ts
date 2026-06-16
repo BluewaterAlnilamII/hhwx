@@ -288,6 +288,10 @@ const TESTS: Array<{ name: string; run: () => void }> = [
     run: testActiveSkillRecordsFullScreenEffectEvents,
   },
   {
+    name: "active skill records sound events",
+    run: testActiveSkillRecordsSoundEvents,
+  },
+  {
     name: "active skill same-frame buffs snapshot shooter source modifiers",
     run: testActiveSkillSameFrameBuffSnapshotsShooterSourceModifiers,
   },
@@ -3105,6 +3109,36 @@ function testActiveSkillRecordsFullScreenEffectEvents() {
   );
 
   assert.equal(expiredState.fullScreenEffects.length, 0);
+}
+
+function testActiveSkillRecordsSoundEvents() {
+  const runtimeData = createRuntimeFixture();
+  const event = runtimeData.activeSkills[0]?.levels[0]?.events[0];
+  assert.ok(event);
+  event.playSoundName = "active_fixture";
+
+  const nextState = updateNfoSimulation(
+    chargeActiveSkill(createNfoSimulation(runtimeData)),
+    runtimeData,
+    { ...NO_INPUT, useActiveSkill: true },
+    1 / 30,
+  );
+
+  assert.equal(nextState.soundEvents.length, 1);
+  assert.equal(nextState.soundEvents[0]?.name, "active_fixture");
+  assert.equal(nextState.soundEvents[0]?.activeSkillId, 3000);
+  assert.equal(nextState.soundEvents[0]?.activeSkillLevel, 1);
+  assert.equal(nextState.soundEvents[0]?.eventFrame, 1);
+  assert.equal(nextState.soundEvents[0]?.remainingSeconds, 0.5);
+
+  const expiredState = updateNfoSimulation(
+    nextState,
+    runtimeData,
+    NO_INPUT,
+    0.5,
+  );
+
+  assert.equal(expiredState.soundEvents.length, 0);
 }
 
 function testActiveSkillSameFrameBuffSnapshotsShooterSourceModifiers() {

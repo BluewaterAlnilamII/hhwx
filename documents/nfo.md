@@ -786,7 +786,10 @@ switch for its starlight shooters: level `1` creates shooter `6000`, level `2`
 creates shooter `6001`, and level `3` creates shooter `6002`. Each level's
 frame-`1` event records `UIefx_flash_starlight`, creates an owner-following
 shooter with `LifeTime = 55`, and emits six radial bullet `28` projectiles that
-loop every 10 frames.
+loop every 10 frames. The same level-`1` event also records CN
+`PlaySoundName` value `active_110` as a first-pass `soundEvents` entry; the
+current frozen CN level `2`/`3` events do not carry that sound name. Actual
+browser audio playback and audio bundle conversion remain pending.
 It also locks active skill `14` / `Apocalypse Song` as the first delayed
 active-skill shooter timeline case: frame `1` creates shooter `3000` and
 no-damage stun field bullet `56`, applying stun buff `3` to overlapping enemies
@@ -1499,8 +1502,9 @@ Weapon behavior staging:
 - Current active skill handling maps CN `activeSkillData`, level charge frames,
   timeline frames, `TimeLineEvents`, `AddBuffDatas`, `BulletShooterID`,
   `SpawnMinionData`, `spawnPosSelector`, full-screen effect names as short-lived
-  serializable `fullScreenEffects` events consumed by a first-pass Phaser flash, and the
-  separate CN `BulletShooterData` table. The simulation currently charges the
+  serializable `fullScreenEffects` events consumed by a first-pass Phaser flash,
+  `PlaySoundName` as short-lived serializable `soundEvents`, and the separate
+  CN `BulletShooterData` table. The simulation currently charges the
   selected character's skill, accepts an active skill input, applies timeline
   `AddBuffDatas` to player-side active buff state, creates placeholder minions
   from timeline `SpawnMinionData` when their event frame is crossed, and spawns
