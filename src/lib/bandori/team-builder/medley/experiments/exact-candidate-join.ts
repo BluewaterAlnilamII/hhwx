@@ -135,6 +135,9 @@ const MEDLEY_EXACT_RAW_JOIN_PARITY_MAX_CANDIDATE_TOTAL = 50_000;
 const MEDLEY_EXACT_RAW_JOIN_PARITY_MIN_REMAINING_MS = 2_000;
 const MEDLEY_EXACT_RAW_ANCHOR_CHEAP_UPPER_REPLAY_MAX_CANDIDATE_TOTAL = 60_000;
 const MEDLEY_EXACT_RAW_ANCHOR_CHEAP_UPPER_REPLAY_SAMPLE_LIMIT = 16;
+const MEDLEY_EXACT_RAW_ANCHOR_FRONTIER_PROBE_MAX_CANDIDATE_TOTAL = 1_000_000;
+const MEDLEY_EXACT_RAW_ANCHOR_FRONTIER_PROBE_MAX_ANCHORS = 50_000;
+const MEDLEY_EXACT_RAW_ANCHOR_FRONTIER_PROBE_TIMEBOX_MS = 8_000;
 const MEDLEY_EXACT_RAW_PAIR_COMPLEMENT_PARITY_MAX_CANDIDATE_TOTAL = 60_000;
 const MEDLEY_EXACT_RAW_PAIR_COMPLEMENT_PARITY_BANNED_SAMPLE_LIMIT = 4;
 const MEDLEY_EXACT_RAW_PAIR_UPPER_SCAN_PARITY_MAX_CANDIDATE_TOTAL = 60_000;
@@ -2896,6 +2899,281 @@ function buildMedleyExactRawAnchorCheapUpperReplayProfile(
   };
 }
 
+function buildMedleyExactRawAnchorFrontierProbeProfile(
+  candidatesBySlot: readonly MedleyTeamCandidate[][],
+  rawCandidatePoolProvider: () => MedleyExactRawCandidatePool,
+  generators: readonly MedleyExactSlotCandidateGenerator[],
+  anchorSlotIndex: number,
+  pairUpperBound: number,
+  incumbentScore: number,
+  deadlineAt: number,
+): Record<string, unknown> {
+  const startedAt = performance.now();
+  const candidateCountsBySlot = candidatesBySlot.map((candidates) => candidates.length);
+  const candidateCountTotal = candidateCountsBySlot.reduce((sum, count) => sum + count, 0);
+  const finishSkipped = (
+    skipReason: string,
+    extra: Record<string, unknown> = {},
+  ): Record<string, unknown> => ({
+    algorithm: "hhwx-raw-anchor-frontier-probe-v1",
+    enabled: true,
+    skipped: true,
+    skipReason,
+    candidateCountTotal,
+    candidateCountsBySlot,
+    anchorSlotIndex,
+    pairUpperBound: Number.isFinite(pairUpperBound) ? pairUpperBound : null,
+    incumbentScore: Number.isFinite(incumbentScore) ? incumbentScore : null,
+    elapsedMs: Math.round(performance.now() - startedAt),
+    ...extra,
+  });
+  if (
+    anchorSlotIndex < 0
+    || anchorSlotIndex >= candidatesBySlot.length
+  ) {
+    return finishSkipped("anchor-slot-index");
+  }
+  if (candidateCountTotal > MEDLEY_EXACT_RAW_ANCHOR_FRONTIER_PROBE_MAX_CANDIDATE_TOTAL) {
+    return finishSkipped("candidate-total-limit", {
+      limit: MEDLEY_EXACT_RAW_ANCHOR_FRONTIER_PROBE_MAX_CANDIDATE_TOTAL,
+      rawPoolBuilt: false,
+    });
+  }
+  if (!Number.isFinite(pairUpperBound)) {
+    return finishSkipped("pair-upper");
+  }
+
+  const pairSlotIndices = candidatesBySlot
+    .map((_, slotIndex) => slotIndex)
+    .filter((slotIndex) => slotIndex !== anchorSlotIndex) as [number, number];
+  if (pairSlotIndices.length !== 2) {
+    return finishSkipped("pair-slot-indices");
+  }
+  if (candidateCountsBySlot[anchorSlotIndex] <= 0) {
+    return finishSkipped("empty-anchor-slot");
+  }
+  if (candidateCountsBySlot[pairSlotIndices[0]] <= 0 || candidateCountsBySlot[pairSlotIndices[1]] <= 0) {
+    return finishSkipped("empty-pair-slot");
+  }
+
+  const rawPool = rawCandidatePoolProvider();
+  const scoreOrderViolationCountTotal = rawPool.slots.reduce(
+    (sum, slot) => sum + slot.scoreOrderViolationCount,
+    0,
+  );
+  const mismatchCountTotal = rawPool.slots.reduce((sum, slot) => sum + slot.mismatchCount, 0);
+  if (scoreOrderViolationCountTotal > 0 || mismatchCountTotal > 0) {
+    return finishSkipped("raw-pool-consistency", {
+      rawPoolBuilt: true,
+      scoreOrderViolationCountTotal,
+      mismatchCountTotal,
+      rawPoolBuildElapsedMs: rawPool.buildElapsedMs,
+    });
+  }
+
+  const buildBitsStartedAt = performance.now();
+  const anchorSlot = rawPool.slots[anchorSlotIndex];
+  const leftSlotIndex = pairSlotIndices[0];
+  const rightSlotIndex = pairSlotIndices[1];
+  const leftSlot = rawPool.slots[leftSlotIndex];
+  const rightSlot = rawPool.slots[rightSlotIndex];
+  const leftWordCount = Math.ceil(leftSlot.length / 32);
+  const rightWordCount = Math.ceil(rightSlot.length / 32);
+  const containingLeftBitsByCardId = buildMedleyExactRawJoinContainingBitsByCardId(leftSlot, leftWordCount);
+  const containingRightBitsByCardId = buildMedleyExactRawJoinContainingBitsByCardId(rightSlot, rightWordCount);
+  const buildBitsElapsedMs = performance.now() - buildBitsStartedAt;
+  const localDeadlineAt = Math.min(
+    deadlineAt,
+    startedAt + MEDLEY_EXACT_RAW_ANCHOR_FRONTIER_PROBE_TIMEBOX_MS,
+  );
+  const maxAnchorCount = Math.min(
+    anchorSlot.length,
+    MEDLEY_EXACT_RAW_ANCHOR_FRONTIER_PROBE_MAX_ANCHORS,
+  );
+  const leftPeekUpperBound = generators[leftSlotIndex]?.peekUpperBound() ?? Number.NEGATIVE_INFINITY;
+  const rightPeekUpperBound = generators[rightSlotIndex]?.peekUpperBound() ?? Number.NEGATIVE_INFINITY;
+  const anchorPeekUpperBound = generators[anchorSlotIndex]?.peekUpperBound() ?? Number.NEGATIVE_INFINITY;
+  const finiteScore = (score: number): number => (
+    Number.isFinite(score) ? score : Number.NEGATIVE_INFINITY
+  );
+  const combineScores = (leftScore: number, rightScore: number): number => (
+    Number.isFinite(leftScore) && Number.isFinite(rightScore)
+      ? leftScore + rightScore
+      : Number.NEGATIVE_INFINITY
+  );
+  const sourceForUpper = (
+    upperBound: number,
+    generatedPairUpper: number,
+    leftUnseenUpper: number,
+  ): string => (
+    upperBound === generatedPairUpper
+      ? "generated-pair"
+      : upperBound === leftUnseenUpper
+        ? "left-unseen"
+        : "right-unseen"
+  );
+
+  let processedAnchorCount = 0;
+  let timeboxed = false;
+  let processedUpperMax = Number.NEGATIVE_INFINITY;
+  let processedUpperMaxSource: string | null = null;
+  let processedUpperMaxAnchorIndex: number | null = null;
+  let processedUpperMaxAnchorScore: number | null = null;
+  let processedUpperMaxPairUpper: number | null = null;
+  let processedUpperMaxGeneratedPairUpper: number | null = null;
+  let processedUpperMaxLeftUnseenUpper: number | null = null;
+  let processedUpperMaxRightUnseenUpper: number | null = null;
+  let scannedLeftWordCount = 0;
+  let scannedRightWordCount = 0;
+  let finishedByDominatedTail = false;
+  let nextAnchorScore: number | null = null;
+
+  const recordProcessedUpperMax = (
+    anchorIndex: number,
+    anchorScore: number,
+    pairUpper: number,
+    source: string,
+    generatedPairUpper: number,
+    leftUnseenUpper: number,
+    rightUnseenUpper: number,
+  ): void => {
+    const totalUpper = anchorScore + pairUpper;
+    if (totalUpper > processedUpperMax) {
+      processedUpperMax = totalUpper;
+      processedUpperMaxSource = source;
+      processedUpperMaxAnchorIndex = anchorIndex;
+      processedUpperMaxAnchorScore = anchorScore;
+      processedUpperMaxPairUpper = pairUpper;
+      processedUpperMaxGeneratedPairUpper = Number.isFinite(generatedPairUpper) ? generatedPairUpper : null;
+      processedUpperMaxLeftUnseenUpper = Number.isFinite(leftUnseenUpper) ? leftUnseenUpper : null;
+      processedUpperMaxRightUnseenUpper = Number.isFinite(rightUnseenUpper) ? rightUnseenUpper : null;
+    }
+  };
+
+  for (let anchorIndex = 0; anchorIndex < maxAnchorCount; anchorIndex += 1) {
+    const anchorScore = anchorSlot.scores[anchorIndex];
+    if (performance.now() >= localDeadlineAt) {
+      timeboxed = true;
+      nextAnchorScore = anchorScore;
+      break;
+    }
+    if (
+      Number.isFinite(processedUpperMax)
+      && anchorScore + pairUpperBound <= processedUpperMax
+    ) {
+      finishedByDominatedTail = true;
+      nextAnchorScore = anchorScore;
+      break;
+    }
+    const anchorCardIds = getMedleyExactRawCandidateCardIds(anchorSlot, anchorIndex);
+    const leftGeneratedCandidate = findBestAvailableMedleyExactRawRightCandidateByForbiddenCardIds(
+      leftSlot,
+      containingLeftBitsByCardId,
+      leftWordCount,
+      [],
+      anchorCardIds,
+    );
+    const rightGeneratedCandidate = findBestAvailableMedleyExactRawRightCandidateByForbiddenCardIds(
+      rightSlot,
+      containingRightBitsByCardId,
+      rightWordCount,
+      [],
+      anchorCardIds,
+    );
+    scannedLeftWordCount += leftGeneratedCandidate.scannedWordCount;
+    scannedRightWordCount += rightGeneratedCandidate.scannedWordCount;
+    processedAnchorCount += 1;
+
+    const leftGeneratedScore = finiteScore(
+      leftGeneratedCandidate.candidateIndex >= 0
+        ? leftSlot.scores[leftGeneratedCandidate.candidateIndex]
+        : Number.NEGATIVE_INFINITY,
+    );
+    const rightGeneratedScore = finiteScore(
+      rightGeneratedCandidate.candidateIndex >= 0
+        ? rightSlot.scores[rightGeneratedCandidate.candidateIndex]
+        : Number.NEGATIVE_INFINITY,
+    );
+    const leftBestPossible = Math.max(leftGeneratedScore, finiteScore(leftPeekUpperBound));
+    const rightBestPossible = Math.max(rightGeneratedScore, finiteScore(rightPeekUpperBound));
+    const generatedPairUpper = combineScores(leftGeneratedScore, rightGeneratedScore);
+    const leftUnseenUpper = combineScores(finiteScore(leftPeekUpperBound), rightBestPossible);
+    const rightUnseenUpper = combineScores(finiteScore(rightPeekUpperBound), leftBestPossible);
+    const pairUpper = Math.max(generatedPairUpper, leftUnseenUpper, rightUnseenUpper);
+    if (Number.isFinite(pairUpper)) {
+      recordProcessedUpperMax(
+        anchorIndex,
+        anchorScore,
+        pairUpper,
+        sourceForUpper(pairUpper, generatedPairUpper, leftUnseenUpper),
+        generatedPairUpper,
+        leftUnseenUpper,
+        rightUnseenUpper,
+      );
+    }
+  }
+
+  if (nextAnchorScore === null && processedAnchorCount < anchorSlot.length) {
+    nextAnchorScore = anchorSlot.scores[processedAnchorCount];
+  }
+  const unprocessedAnchorUpperBound = Math.max(
+    nextAnchorScore ?? Number.NEGATIVE_INFINITY,
+    finiteScore(anchorPeekUpperBound),
+  );
+  const unprocessedUpperBound = (
+    Number.isFinite(unprocessedAnchorUpperBound) && Number.isFinite(pairUpperBound)
+      ? unprocessedAnchorUpperBound + pairUpperBound
+      : Number.NEGATIVE_INFINITY
+  );
+  const residualUpperBound = Math.max(processedUpperMax, unprocessedUpperBound);
+  const containingBitsBytes = sumMedleyExactArrayViewBytes(containingLeftBitsByCardId.values())
+    + sumMedleyExactArrayViewBytes(containingRightBitsByCardId.values());
+  const rawRetainedBytes = rawPool.slots.reduce(
+    (sum, slot) => sum + getMedleyExactRawCandidatePoolSlotBytes(slot),
+    0,
+  );
+  return {
+    algorithm: "hhwx-raw-anchor-frontier-probe-v1",
+    enabled: true,
+    skipped: false,
+    source: "shared-current-pool",
+    candidateCountTotal,
+    candidateCountsBySlot,
+    anchorSlotIndex,
+    pairSlotIndices,
+    pairUpperBound,
+    incumbentScore,
+    leftPeekUpperBound: Number.isFinite(leftPeekUpperBound) ? leftPeekUpperBound : null,
+    rightPeekUpperBound: Number.isFinite(rightPeekUpperBound) ? rightPeekUpperBound : null,
+    anchorPeekUpperBound: Number.isFinite(anchorPeekUpperBound) ? anchorPeekUpperBound : null,
+    maxAnchorCount,
+    processedAnchorCount,
+    timeboxed,
+    finishedByDominatedTail,
+    residualUpperBound: Number.isFinite(residualUpperBound) ? Math.ceil(residualUpperBound) : null,
+    residualGap: Number.isFinite(residualUpperBound) ? Math.max(0, Math.ceil(residualUpperBound) - incumbentScore) : null,
+    wouldClose: Number.isFinite(residualUpperBound) && residualUpperBound <= incumbentScore,
+    processedUpperMax: Number.isFinite(processedUpperMax) ? Math.ceil(processedUpperMax) : null,
+    processedUpperMaxSource,
+    processedUpperMaxAnchorIndex,
+    processedUpperMaxAnchorScore,
+    processedUpperMaxPairUpper,
+    processedUpperMaxGeneratedPairUpper,
+    processedUpperMaxLeftUnseenUpper,
+    processedUpperMaxRightUnseenUpper,
+    scannedLeftWordCount,
+    scannedRightWordCount,
+    rawPoolBuildElapsedMs: rawPool.buildElapsedMs,
+    buildBitsElapsedMs: Math.round(buildBitsElapsedMs),
+    elapsedMs: Math.round(performance.now() - startedAt),
+    timeboxMs: MEDLEY_EXACT_RAW_ANCHOR_FRONTIER_PROBE_TIMEBOX_MS,
+    rawRetainedMiB: roundMiB(rawRetainedBytes),
+    containingBitsMiB: roundMiB(containingBitsBytes),
+    scoreOrderViolationCountTotal,
+    mismatchCountTotal,
+  };
+}
+
 function buildMedleyExactRawPairUpperScanParityProfile(
   candidatesBySlot: readonly MedleyTeamCandidate[][],
   rawPool: MedleyExactRawCandidatePool,
@@ -3085,6 +3363,14 @@ function buildSkippedMedleyExactRawPairUpperScanParityProfile(
 }
 
 function sumMedleyExactFloat64ArrayBytes(values: Iterable<Float64Array>): number {
+  let bytes = 0;
+  for (const value of values) {
+    bytes += value.byteLength;
+  }
+  return bytes;
+}
+
+function sumMedleyExactArrayViewBytes(values: Iterable<{ byteLength: number }>): number {
   let bytes = 0;
   for (const value of values) {
     bytes += value.byteLength;
@@ -8976,6 +9262,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     enableExactCandidateCapacityLevel3LookaheadPruning?: boolean;
     debugExactCandidateDominanceReplay?: boolean;
     debugExactCandidateRawAnchorCheapUpperReplay?: boolean;
+    debugExactCandidateRawAnchorFrontierProbe?: boolean;
     debugExactCandidateRawCandidatePoolProfile?: boolean;
     debugExactCandidateRawPairComplementParity?: boolean;
     debugExactCandidateRawPairUpperScanParity?: boolean;
@@ -9016,6 +9303,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     profiling.exactCandidateJoinLastAbortObservedUpperBound = null;
     profiling.exactCandidateJoinLastAbortRemainingMs = null;
     profiling.exactCandidateJoinRawAnchorCheapUpperReplay = null;
+    profiling.exactCandidateJoinRawAnchorFrontierProbe = null;
     profiling.exactCandidateJoinRawCandidatePoolProfile = null;
     profiling.exactCandidateJoinRawPairComplementParity = null;
     profiling.exactCandidateJoinRawPairUpperScanParity = null;
@@ -9380,6 +9668,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
   let didGuardedCandidateExtension = false;
   let didAnchorFrontierProof = false;
   let didAnchorFrontierCheapUpper = false;
+  let didRawAnchorFrontierProbe = false;
   let stagedCandidateExtensionSlotIndex: number | null = null;
   const calculatedCardCount = context.calculatedCardCount ?? Number.POSITIVE_INFINITY;
   const enableExperimentalStagedCandidateExtension = context.enableExperimentalStagedCandidateExtension === true;
@@ -9607,6 +9896,31 @@ export function searchMedleyConfigurationByExactCandidateJoin(
       MEDLEY_EXACT_CANDIDATE_JOIN_ANCHOR_FRONTIER_PROOF_MIN_REMAINING_MS
     );
     if (skipReasons.length > 0) {
+      if (
+        context.debugExactCandidateRawAnchorFrontierProbe === true
+        && !didRawAnchorFrontierProbe
+        && !stats.memoryLimited
+        && anchorCandidateCount > 0
+        && otherSlotCandidateCounts.length === slots.length - 1
+        && Number.isFinite(peekUpperBound)
+        && Number.isFinite(otherUpper)
+        && Number.isFinite(frontierGap)
+        && frontierGap >= 0
+        && frontierGap <= MEDLEY_EXACT_CANDIDATE_JOIN_ANCHOR_FRONTIER_PROOF_MAX_FRONTIER_GAP
+        && remainingMs >= MEDLEY_EXACT_CANDIDATE_JOIN_ANCHOR_FRONTIER_PROOF_MIN_REMAINING_MS
+      ) {
+        didRawAnchorFrontierProbe = true;
+        profiling.exactCandidateJoinRawAnchorFrontierProbe = buildMedleyExactRawAnchorFrontierProbeProfile(
+          candidatesBySlot,
+          getRawCandidatePool,
+          activeGeneratorsBySlot,
+          slotIndex,
+          otherUpper,
+          incumbentScore,
+          deadlineAt,
+        );
+        invalidateRawCandidatePool();
+      }
       if (
         context.debugExactCandidateAnchorFrontierCheapUpperProbe === true
         && !didAnchorFrontierCheapUpper
@@ -10686,6 +11000,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     || context.debugExactCandidateSignatureCensus === true
     || context.debugExactCandidateUpperReplay === true
     || context.debugExactCandidateDominanceReplay === true
+    || context.debugExactCandidateRawAnchorFrontierProbe === true
     || context.debugExactCandidateRawCandidatePoolProfile === true
     || context.debugExactCandidateRawSolverInputCensus === true
   ) {
