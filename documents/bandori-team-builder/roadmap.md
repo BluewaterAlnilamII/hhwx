@@ -78,6 +78,7 @@ Baseline and gate artifacts retained:
 | `low-memory-polish-hhwx-2026-06-17T16-32-01-295Z.json` | `P02:260` narrow capacity-source leaf pruning, budget `32768` | bounded gap `382812`, peak `3045 MiB`; pruned `16217`, materialized `958142`, `0` replay violations |
 | `low-memory-polish-hhwx-2026-06-17T16-35-26-587Z.json` | `P02:260` narrow capacity-source leaf pruning, budget `131072` | bounded gap `382812`, peak `3014 MiB`; pruned `43894`, materialized `935844`, `0` replay violations, elapsed `282848ms` |
 | `low-memory-polish-hhwx-2026-06-17T16-56-28-800Z.json` | `P02:260` level-4 capacity batch replay, budget `2048`, margin `500000` | bounded gap `382812`, score `9376984`, max `9412868`, peak `3078 MiB`; `15449` level-4 checks, `2048` eligible, `286` would-skip prefixes representing `58464` leaf completions, `0` replay violations |
+| `low-memory-polish-hhwx-2026-06-17T17-03-25-049Z.json` | `P02:260` full level-4 capacity batch replay, budget `20000`, margin `500000` | bounded gap `382812`, score `9376984`, max `9412868`, peak `3067 MiB`; all `15449` level-4 prefixes eligible, `613` would-skip prefixes representing `128698` leaf completions (`13.2%` of materialized candidate count), `0` replay violations |
 
 Use the pressure validation environment for early-pruning gates:
 
@@ -135,13 +136,15 @@ P02 other-slot upper source replay:
 
 P02 level-4 capacity batch replay:
 
-- artifact: `low-memory-polish-hhwx-2026-06-17T16-56-28-800Z.json`;
+- artifacts: `low-memory-polish-hhwx-2026-06-17T16-56-28-800Z.json`, `low-memory-polish-hhwx-2026-06-17T17-00-25-212Z.json`, and full replay `low-memory-polish-hhwx-2026-06-17T17-03-25-049Z.json`;
 - replay is opt-in via `HHWX_LOW_MEMORY_PREFIX_CAPACITY_BATCH_REPLAY=1` and remains no-op;
 - result stayed bounded with gap `382812`, score `9376984`, max score `9412868`, candidate counts `[400000, 212825, 134977]`, and `972467` materialized candidates;
 - with budget `2048` and margin `500000`, replay checked `15449` level-4 prefixes, sampled `2048`, improved the other-slot upper on `1291`, and found `286` would-skip prefixes representing `58464` relaxed leaf completions;
+- with budget `8192`, replay found `510` would-skip prefixes representing `106392` relaxed leaf completions, still with `0` violations;
+- with budget `20000`, replay covered all `15449` level-4 prefixes and found `613` would-skip prefixes representing `128698` relaxed leaf completions, about `13.2%` of the current `972467` materialized candidate count;
 - replay violation count was `0`, so the proof shape is plausible;
 - a wider budget/margin probe (`32768` / `500000`) OOMed at the Node heap limit after about `240s`; do not broaden this replay naively;
-- current conclusion: level-4 capacity proof has stronger leverage than leaf-by-leaf pruning, but must be made reusable/batched by prefix or signature bucket before any real pruning gate.
+- current conclusion: level-4 capacity proof has stronger leverage than leaf-by-leaf pruning, but alone does not meet the `25%` P02 target; next work should either move the proof to level-3, improve the slot/prefix upper source, or combine level-4 proof with raw storage before any real pruning gate.
 
 The JSON files above contain `isolated.*Path` fields for detailed per-row diagnostics. Those referenced files are part of the retained baseline set.
 
@@ -251,9 +254,10 @@ Early-pruning success targets:
    - compute one capacity upper per reusable prefix/signature bucket where possible;
    - preserve the same proof fields: incumbent, prefix upper, other upper, total upper, margin, slot/level, implied completion count;
    - avoid one-off per-leaf capacity calls as the main path.
-3. Turn the current level-4 replay into a reusable/bucketed diagnostic:
+3. Extend replay earlier than level 4 or tighten the prefix proof:
    - avoid generated-pair-only comparison on level-4 replay unless explicitly requested;
-   - cache or bucket capacity upper results by reusable banned-card/signature state;
+   - test whether level-3 prefix proof has enough implied-completion leverage;
+   - investigate tighter slot prefix upper sources so more level-4 prefixes fall below the proof cutoff;
    - keep the hot path replay-only until violation count is `0` on focused gates.
 4. Run `P02:260` pressure smoke and compare implied leaf-completion reduction against the `25%` target before enabling real branch skips.
 5. Run the six-row focused gate before considering broader testing or default promotion.
