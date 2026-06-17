@@ -1778,6 +1778,12 @@ Bounded rows in the PR-candidate gate:
 | `P02:260` | `9376984` | `9412868` | `382812` | `2974 MiB` | `candidate-fill-soft-limit` |
 | `P10:244` | `8729634` | `8819861` | `200000` | `2320 MiB` | `solve-dominated-same-coarse-frontier` |
 
+Targeted exact-safety A/B:
+
+| Artifact | Scope | Exact | Bounded | Failed | Timed Out | Memory Limited | Gap | Peak | Notes |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| `low-memory-polish-hhwx-2026-06-17T10-36-12-622Z.json` | `P01:244`, `P01:323`, `P02:260`, `P08:323`, `P10:244`, `P10:260`; same pressure/compact config but no prefix hard-upper pruning and no low-memory initial-candidate sync | `4` | `2` | `0` | `0` | `0` | `582812` | `3027 MiB` | Exact/bounded, `isExhaustive`, average score, max score, bounded gap, and abort reasons all match the PR-candidate full gate for these six rows. Risk flags absent from the artifact: `enableLowMemoryInitialCandidateSync`, `lowMemoryInitialCandidateSync`, `enableExactCandidatePrefixHardUpperPruning`, `debugExactCandidatePrefixHardUpperReplay`, raw final-join solve/release, and raw mirror result return. |
+
 Boundary decision:
 
 - The current storage/pressure slice is a valid consolidation candidate only
