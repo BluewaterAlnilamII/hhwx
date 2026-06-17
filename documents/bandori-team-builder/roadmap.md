@@ -1752,3 +1752,43 @@ Conclusion:
   compaction as the next implementation target.
 - 2026-06-16: Created roadmap for exact-preserving low-memory work, separating
   calc research from HHWX proof-safe implementation.
+
+## 2026-06-17 Current Gate Boundary
+
+This entry freezes the current practical merge boundary before the next phase
+switches to proof-backed early pruning.
+
+Current naked-default check:
+
+| Artifact | Scope | Exact | Bounded | Failed | Timed Out | Memory Limited | Gap | Peak | Notes |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| `medley-40-exact-isolated-2026-06-17T09-24-37-132Z-partial.json` | stopped after first 4 rows | `2` | `2` | `0` | `2` | `2` | `685987` | `6777 MiB` | Not PR-ready as a naked default: `P01:244` and `P01:323` both bounded at `initial-candidate` with timeout and memory-limit flags. |
+
+Current PR-candidate full gate:
+
+| Artifact | Scope | Exact | Bounded | Failed | Timed Out | Memory Limited | Gap | Peak | Median | P95 | Max | Notes |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| `low-memory-polish-hhwx-2026-06-17T09-29-27-703Z.json` | full 40-case, 8GB heap, 300000ms per row | `38` | `2` | `0` | `0` | `0` | `582812` | `3587 MiB` | `65342 ms` | `204613 ms` | `274599 ms` | Uses compact score-only cache, thin result retention, compact candidate key set, prefix hard-upper pruning, low-memory seeding pressure skip, and both pressure cache fallbacks. All rows preserve average and max score fields. |
+| `medley-40-exact-isolated-2026-06-17T09-29-27-759Z.json` | isolated per-row backing artifact for the same run | `38` | `2` | `0` | `0` | `0` | `582812` | `3587 MiB` | `65342 ms` | `204613 ms` | `274599 ms` | Same summary as the wrapper report. |
+
+Bounded rows in the PR-candidate gate:
+
+| Case | Average | Max | Gap | Peak | Abort reason |
+| --- | ---: | ---: | ---: | ---: | --- |
+| `P02:260` | `9376984` | `9412868` | `382812` | `2974 MiB` | `candidate-fill-soft-limit` |
+| `P10:244` | `8729634` | `8819861` | `200000` | `2320 MiB` | `solve-dominated-same-coarse-frontier` |
+
+Boundary decision:
+
+- The current storage/pressure slice is a valid consolidation candidate only
+  with its explicit low-memory configuration. It should not be described as a
+  clean naked-default improvement.
+- The latest prefix replay summary research is intentionally kept outside this
+  boundary in stash `wip-prefix-replay-summary-research`.
+- Raw final-join release remains an opt-in boundary probe, not a mainline
+  memory win, until raw solver takeover is complete.
+- The next phase should stop spending primary effort on additional
+  threshold-triggered behavior. The main implementation target should be
+  proof-backed pre-materialization pruning, with lightweight streaming prefix
+  and signature counters first, because `P02:260` is still bounded at candidate
+  birth rather than final join.
