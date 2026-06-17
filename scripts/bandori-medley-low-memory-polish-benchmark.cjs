@@ -54,6 +54,7 @@ function printUsage() {
     "  HHWX_LOW_MEMORY_PREFIX_CAPACITY_BATCH_REPLAY=1 include opt-in level-4 capacity replay diagnostics",
     "  HHWX_LOW_MEMORY_PREFIX_CAPACITY_LEVEL3_REPLAY=1 include opt-in level-3 capacity replay diagnostics",
     "  HHWX_LOW_MEMORY_PREFIX_CAPACITY_LEVEL3_LOOKAHEAD_REPLAY=1 include opt-in level-3 lookahead capacity replay diagnostics",
+    "  HHWX_LOW_MEMORY_CAPACITY_LEVEL3_LOOKAHEAD_PRUNING=1 enable opt-in level-3 lookahead branch pruning",
     "  HHWX_LOW_MEMORY_PREFIX_OTHER_UPPER_SOURCE_MAX_CHECKS=2048 cap expensive source diagnostic checks per generator",
     "  HHWX_LOW_MEMORY_PREFIX_OTHER_UPPER_SOURCE_MAX_MARGIN=10000 cap source diagnostic to near-cutoff leaves",
     "  HHWX_LOW_MEMORY_CAPACITY_SOURCE_LEAF_PRUNING=1 enable narrow capacity-source leaf pruning",
@@ -185,6 +186,11 @@ function hhwxOptimizationJson() {
     optimization.debugExactCandidatePrefixUpperReplay = true;
     optimization.debugExactCandidatePrefixCapacityLevel3LookaheadReplay = true;
   }
+  if (process.env.HHWX_LOW_MEMORY_CAPACITY_LEVEL3_LOOKAHEAD_PRUNING === "1") {
+    optimization.debugExactCandidatePrefixUpperReplay = true;
+    optimization.debugExactCandidatePrefixCapacityLevel3LookaheadReplay = true;
+    optimization.enableExactCandidateCapacityLevel3LookaheadPruning = true;
+  }
   if (process.env.HHWX_LOW_MEMORY_CAPACITY_SOURCE_LEAF_PRUNING === "1") {
     optimization.debugExactCandidatePrefixUpperReplay = true;
     optimization.debugExactCandidatePrefixOtherUpperSourceReplay = true;
@@ -195,6 +201,7 @@ function hhwxOptimizationJson() {
     || process.env.HHWX_LOW_MEMORY_PREFIX_CAPACITY_BATCH_REPLAY === "1"
     || process.env.HHWX_LOW_MEMORY_PREFIX_CAPACITY_LEVEL3_REPLAY === "1"
     || process.env.HHWX_LOW_MEMORY_PREFIX_CAPACITY_LEVEL3_LOOKAHEAD_REPLAY === "1"
+    || process.env.HHWX_LOW_MEMORY_CAPACITY_LEVEL3_LOOKAHEAD_PRUNING === "1"
     || process.env.HHWX_LOW_MEMORY_CAPACITY_SOURCE_LEAF_PRUNING === "1"
   ) {
     const parsedMaxChecks = Number(process.env.HHWX_LOW_MEMORY_PREFIX_OTHER_UPPER_SOURCE_MAX_CHECKS);

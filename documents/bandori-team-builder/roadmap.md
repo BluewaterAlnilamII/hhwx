@@ -88,6 +88,8 @@ Baseline and gate artifacts retained:
 | `low-memory-polish-hhwx-2026-06-17T18-38-51-150Z.json` | `P02:260` basic level-3 lookahead replay with capped proof samples, child budget `8192`, margin `500000` | bounded gap `382812`, score `9376984`, max `9412868`, peak `2980 MiB`; `8` would-skip prefixes representing `196970` relaxed completions, `8` capped proof samples |
 | `low-memory-polish-hhwx-2026-06-17T18-44-11-394Z.json` | `P02:260` basic level-3 lookahead replay with child-decision violation accounting, child budget `8192`, margin `500000` | bounded gap `382812`, score `9376984`, max `9412868`, peak `2960 MiB`; `1662` child decisions, `0` replay violations |
 | `low-memory-polish-hhwx-2026-06-17T18-46-51-730Z.json` | `P02:260` basic level-3 lookahead replay with child-decision violation accounting, child budget `16384`, margin `500000` | bounded gap `382812`, score `9376984`, max `9412868`, peak `3005 MiB`; `54` would-skip prefixes, `9997` child decisions, `0` replay violations |
+| `low-memory-polish-hhwx-2026-06-17T18-52-28-541Z.json` | `P02:260` opt-in level-3 lookahead branch pruning, child budget `8192`, margin `500000` | bounded gap `382812`, score `9376984`, max `9412868`, peak `2933 MiB`; pruned `8` prefixes, but candidate counts and materialized count stayed unchanged |
+| `low-memory-polish-hhwx-2026-06-17T18-55-16-495Z.json` | `P02:260` opt-in level-3 lookahead branch pruning, child budget `16384`, margin `500000` | bounded gap `382812`, score `9376984`, max `9412868`, peak `2924 MiB`; pruned `54` prefixes, but generated/materialized/popped counts stayed unchanged |
 
 Use the pressure validation environment for early-pruning gates:
 
@@ -176,7 +178,8 @@ P02 basic level-3 lookahead replay:
 - this crosses the near-term `25%` implied-completion target as a diagnostic signal, but it is not yet real candidate reduction because overlap and branch-local accounting are still relaxed;
 - capped proof samples are now recorded in `level3LookaheadSamples`; the `2026-06-17T18-38-51` smoke kept result fields unchanged and recorded `8` samples containing level-3 card ids, max-child card ids, `pairUnseenUpper`, `maxChildBasicCapacityUpper`, `maxChildOtherUpperSource`, `maxChildTotalUpper`, `incumbent`, and `margin`;
 - branch-decision replay/violation accounting is now in place: the `8192` child-budget smoke registered `1662` child decisions with `0` violations, and the `16384` child-budget smoke registered `9997` child decisions with `0` violations;
-- next retained direction: implement an opt-in real branch skip and require actual materialized candidate reduction, unchanged result fields, and `0` lookahead replay violations before broader gates.
+- opt-in real branch pruning is proof-safe in the retained P02 smokes, but not impactful enough: the `16384` run pruned `54` level-3 prefixes representing `1035490` relaxed completions, yet `candidateCounts`, `generated`, `materialized`, and `popped` counts stayed unchanged because the fill still reaches the same candidate cap from other branches;
+- current conclusion: this exact-safe lookahead is a useful proof building block, but it does not meet the `25%` materialized candidate target. Do not spend the next slice merely increasing its budget; the next breakthrough needs to affect candidate admission/frontier closure or pair with raw-index storage.
 
 The JSON files above contain `isolated.*Path` fields for detailed per-row diagnostics. Those referenced files are part of the retained baseline set.
 
@@ -290,14 +293,18 @@ Early-pruning success targets:
    - branch-decision replay/violation accounting is available and has `0` violations on the retained `8192` and `16384` P02 smokes;
    - skip a level-3 branch only when the replayed max child total upper is finite and below the current cutoff;
    - report pruned prefix count, implied completions, and replay violations separately from existing leaf pruning;
-   - compare actual `P02:260` materialized candidate reduction against the `25%` target.
-4. Tighten the prefix proof before broader pruning:
+   - retained P02 smokes show `0` actual materialized reduction, so this is not a default candidate.
+4. Move the next algorithmic slice to candidate admission/frontier closure:
+   - use the level-3 lookahead proof as a component, not as a standalone budget-scaling path;
+   - investigate whether a proof-backed candidate cap can reject low-ranked materialization rather than simply backfilling from other branches;
+   - keep raw-index storage in scope because early pruning that still fills the same cap cannot by itself lower resident candidate memory.
+5. Tighten the prefix proof before broader pruning:
    - avoid generated-pair-only comparison on level-4 replay unless explicitly requested;
    - level-3 replay currently has no P02 skip signal with the existing slot upper;
    - level-3 lookahead has the first strong diagnostic signal, but it must remain replay-only until ledger coverage is complete;
    - keep the hot path replay-only until violation count is `0` on focused gates.
-5. Run `P02:260` pressure smoke and compare real materialized candidate reduction against the `25%` target before enabling broader gates.
-6. Run the six-row focused gate before considering broader testing or default promotion.
+6. Run `P02:260` pressure smoke and compare real materialized candidate reduction against the `25%` target before enabling broader gates.
+7. Run the six-row focused gate before considering broader testing or default promotion.
 
 ## Maintenance Rules
 
