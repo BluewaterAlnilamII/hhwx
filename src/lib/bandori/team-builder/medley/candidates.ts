@@ -425,9 +425,11 @@ export function evaluateMedleySlotCandidateWithCache(
   const hasCachedResult = scoreOnly
     ? scoreOnlyCache?.has(cacheKey) === true
     : shouldUseCache && slot.teamEvaluationCache.has(cacheKey);
-  let result = isCompactMedleyScoreOnlyTeamEvaluationCacheEntry(cachedResult)
-    ? hydrateCompactMedleyScoreOnlyTeamEvaluationResult(cachedResult, slot)
-    : cachedResult;
+  let result = (
+    cachedResult !== undefined && isCompactMedleyScoreOnlyTeamEvaluationCacheEntry(cachedResult)
+      ? hydrateCompactMedleyScoreOnlyTeamEvaluationResult(cachedResult, slot)
+      : cachedResult
+  );
   if (!hasCachedResult) {
     profiling.teamEvaluationCacheMissCount += 1;
     result = scoreOnly

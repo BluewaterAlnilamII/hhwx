@@ -6953,8 +6953,11 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     const candidateKeySetMiBBySlot = candidateKeySetBytesBySlot.map((bytes) => (
       bytes === null ? null : roundMiB(bytes)
     ));
+    const candidateKeySetBytesTotal = candidateKeySetBytesBySlot.reduce<number>((sum, bytes) => (
+      sum + (bytes ?? 0)
+    ), 0);
     const candidateKeySetMiBTotal = candidateKeySetBytesBySlot.some((bytes) => bytes !== null)
-      ? roundMiB(candidateKeySetBytesBySlot.reduce((sum, bytes) => sum + (bytes ?? 0), 0))
+      ? roundMiB(candidateKeySetBytesTotal)
       : null;
     const rawCandidateMirrorProfile = rawCandidateMirror
       ? (() => {
