@@ -685,7 +685,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
   const disableExactCandidateSkillWindowContributionCache = (
     optimization.disableExactCandidateSkillWindowContributionCache === true
   );
-  const disableExactCandidateCardsRetention = optimization.disableExactCandidateCardsRetention === true;
+  const disableExactCandidateCardsRetention = optimization.disableExactCandidateCardsRetention !== false;
   const enableExactCandidateCompactScoreOnlyCache = optimization.enableExactCandidateCompactScoreOnlyCache === true;
   const disableExactCandidateGlobalComplementCache = (
     optimization.disableExactCandidateGlobalComplementCache === true

@@ -62,7 +62,8 @@ function printUsage() {
     "  HHWX_LOW_MEMORY_SCORE_ONLY_CACHE_PRESSURE_FALLBACK=1 disable score-only result cache for high-slot-card exact joins",
     "  HHWX_LOW_MEMORY_SCORE_ONLY_CACHE_PRESSURE_SLOT_CARDS=260 fallback threshold for score-only result cache",
     "  HHWX_LOW_MEMORY_COMPACT_SCORE_ONLY_CACHE=1 store compact score-only cache entries",
-    "  HHWX_LOW_MEMORY_COMPACT_CANDIDATE_CARDS=1 strip exact-join candidate SearchCard[] retention",
+    "  HHWX_LOW_MEMORY_COMPACT_CANDIDATE_CARDS=1 strip exact-join candidate SearchCard[] retention (default)",
+    "  HHWX_LOW_MEMORY_RETAIN_CANDIDATE_CARDS=1 keep legacy exact-join candidate SearchCard[] retention",
     "  HHWX_LOW_MEMORY_DISABLE_SKILL_WINDOW_CACHE=1 disable exact-join skill-window contribution cache",
     "  HHWX_LOW_MEMORY_DISABLE_SCORE_CALC_CACHE=1 disable exact-join score calculation cache",
     "  HHWX_LOW_MEMORY_DISABLE_SCORE_ONLY_CACHE=1 disable exact-join score-only result cache",
@@ -228,6 +229,9 @@ function hhwxOptimizationJson() {
   }
   if (process.env.HHWX_LOW_MEMORY_COMPACT_CANDIDATE_CARDS === "1") {
     optimization.disableExactCandidateCardsRetention = true;
+  }
+  if (process.env.HHWX_LOW_MEMORY_RETAIN_CANDIDATE_CARDS === "1") {
+    optimization.disableExactCandidateCardsRetention = false;
   }
   if (process.env.HHWX_LOW_MEMORY_DISABLE_SKILL_WINDOW_CACHE === "1") {
     optimization.disableExactCandidateSkillWindowContributionCache = true;

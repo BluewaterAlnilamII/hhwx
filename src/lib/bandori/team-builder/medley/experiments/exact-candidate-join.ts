@@ -2242,7 +2242,7 @@ export function createMedleyExactSlotCandidateGenerator(
   disableSkillWindowContributionCache = false,
   disableScoreOnlyCalculationCache = false,
   disableScoreOnlyCache = false,
-  disableCandidateCardsRetention = false,
+  disableCandidateCardsRetention = true,
   enableCompactScoreOnlyCache = false,
   disableGlobalComplementUpperCache = false,
   enableCompactGlobalComplementUpperCache = true,
