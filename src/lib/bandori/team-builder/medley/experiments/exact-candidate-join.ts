@@ -1103,6 +1103,11 @@ type MedleyExactRawCandidatePoolSlot = {
   scoreOrderViolationCount: number;
 };
 
+type MedleyExactRawCandidatePool = {
+  slots: MedleyExactRawCandidatePoolSlot[];
+  buildElapsedMs: number;
+};
+
 type MedleyExactRawJoinParitySlot = {
   scores: Int32Array;
   cardIds: Int32Array;
@@ -2457,16 +2462,25 @@ function getMedleyExactRawCandidatePoolSlotProfile(
   };
 }
 
-function buildMedleyExactRawCandidatePoolProfile(
-  slots: readonly MedleySlotSearch[],
+function buildMedleyExactRawCandidatePool(
   candidatesBySlot: readonly MedleyTeamCandidate[][],
-): Record<string, unknown> {
+): MedleyExactRawCandidatePool {
   const startedAt = performance.now();
-  const rawSlots = candidatesBySlot.map(buildMedleyExactRawCandidatePoolSlot);
-  const slotProfiles = rawSlots.map((slot, slotIndex) => (
+  return {
+    slots: candidatesBySlot.map(buildMedleyExactRawCandidatePoolSlot),
+    buildElapsedMs: Math.round(performance.now() - startedAt),
+  };
+}
+
+function getMedleyExactRawCandidatePoolProfile(
+  slots: readonly MedleySlotSearch[],
+  rawPool: MedleyExactRawCandidatePool,
+  source: string,
+): Record<string, unknown> {
+  const slotProfiles = rawPool.slots.map((slot, slotIndex) => (
     getMedleyExactRawCandidatePoolSlotProfile(slot, slotIndex, slots[slotIndex]?.songIndex ?? slotIndex)
   ));
-  const retainedBytesTotal = rawSlots.reduce(
+  const retainedBytesTotal = rawPool.slots.reduce(
     (sum, slot) => sum + getMedleyExactRawCandidatePoolSlotBytes(slot),
     0,
   );
@@ -2476,16 +2490,29 @@ function buildMedleyExactRawCandidatePoolProfile(
     behaviorChange: false,
     candidateRemoval: false,
     materializedOnly: true,
+    source,
     representation: "typed-array-struct-of-arrays-plus-source-index",
     fields: ["score", "averageScore", "maxScore", "minScore", "sourceIndex", "cardId0..4"],
-    candidateCountTotal: rawSlots.reduce((sum, slot) => sum + slot.length, 0),
+    candidateCountTotal: rawPool.slots.reduce((sum, slot) => sum + slot.length, 0),
     retainedBytesTotal,
     retainedMiBTotal: roundMiB(retainedBytesTotal),
-    mismatchCountTotal: rawSlots.reduce((sum, slot) => sum + slot.mismatchCount, 0),
-    scoreOrderViolationCountTotal: rawSlots.reduce((sum, slot) => sum + slot.scoreOrderViolationCount, 0),
-    buildElapsedMs: Math.round(performance.now() - startedAt),
+    mismatchCountTotal: rawPool.slots.reduce((sum, slot) => sum + slot.mismatchCount, 0),
+    scoreOrderViolationCountTotal: rawPool.slots.reduce((sum, slot) => sum + slot.scoreOrderViolationCount, 0),
+    buildElapsedMs: rawPool.buildElapsedMs,
     slots: slotProfiles,
   };
+}
+
+function buildMedleyExactRawCandidatePoolProfile(
+  slots: readonly MedleySlotSearch[],
+  candidatesBySlot: readonly MedleyTeamCandidate[][],
+  source = "profile-local-build",
+): Record<string, unknown> {
+  return getMedleyExactRawCandidatePoolProfile(
+    slots,
+    buildMedleyExactRawCandidatePool(candidatesBySlot),
+    source,
+  );
 }
 
 function sumMedleyExactFloat64ArrayBytes(values: Iterable<Float64Array>): number {
@@ -2863,6 +2890,7 @@ function runMedleyExactRawIndexFinalJoinParity(
   incumbentScore: number,
   deadlineAt: number,
   isPastDeadline: () => boolean,
+  rawCandidatePoolProvider?: () => MedleyExactRawCandidatePool,
 ): Record<string, unknown> {
   const startedAt = performance.now();
   const candidateCountsBySlot = candidatesBySlot.map((candidates) => candidates.length);
@@ -2888,7 +2916,11 @@ function runMedleyExactRawIndexFinalJoinParity(
     };
   }
 
-  const rawSlots = candidatesBySlot.map(buildMedleyExactRawJoinParitySlot);
+  const rawCandidatePool = rawCandidatePoolProvider ? rawCandidatePoolProvider() : null;
+  const rawSlots: MedleyExactRawJoinParitySlot[] = rawCandidatePool
+    ? rawCandidatePool.slots
+    : candidatesBySlot.map(buildMedleyExactRawJoinParitySlot);
+  const rawInputSource = rawCandidatePool ? "shared-raw-candidate-pool" : "parity-local-build";
   const firstSlot = rawSlots[slotOrder[0]];
   const secondSlot = rawSlots[slotOrder[1]];
   const thirdSlot = rawSlots[slotOrder[2]];
@@ -3048,6 +3080,7 @@ function runMedleyExactRawIndexFinalJoinParity(
     candidateCountTotal,
     candidateCountsBySlot,
     slotOrder: [...slotOrder],
+    rawInputSource,
     rawBestScore: normalizedRawBestScore,
     objectBestScore,
     matched: normalizedRawBestScore === objectBestScore,
@@ -3058,6 +3091,11 @@ function runMedleyExactRawIndexFinalJoinParity(
     retainedMiB: roundMiB(
       rawSlots.reduce((sum, slot) => sum + slot.scores.byteLength + slot.cardIds.byteLength, 0),
     ),
+    rawPoolRetainedMiB: rawCandidatePool
+      ? roundMiB(rawCandidatePool.slots.reduce((sum, slot) => (
+        sum + getMedleyExactRawCandidatePoolSlotBytes(slot)
+      ), 0))
+      : null,
   };
 }
 
@@ -8586,6 +8624,16 @@ export function searchMedleyConfigurationByExactCandidateJoin(
   const rawCandidateMirror = context.debugExactCandidateRawMirror === true
     ? createMedleyExactRawCandidateMirror(slots.length)
     : null;
+  let rawCandidatePool: MedleyExactRawCandidatePool | null = null;
+  const invalidateRawCandidatePool = (): void => {
+    rawCandidatePool = null;
+  };
+  const getRawCandidatePool = (): MedleyExactRawCandidatePool => {
+    if (!rawCandidatePool) {
+      rawCandidatePool = buildMedleyExactRawCandidatePool(candidatesBySlot);
+    }
+    return rawCandidatePool;
+  };
   const bestSlotScores: number[] = [];
   const exactPairUpperByExcludedSlot: Array<number | null> = Array.from({ length: slots.length }, () => null);
   const exactPairUnseenUpperByExcludedSlot: Array<number | null> = Array.from({ length: slots.length }, () => null);
@@ -8606,6 +8654,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
   };
   let didReleaseExactJoinWorkingSet = false;
   const releaseExactJoinWorkingSet = (): void => {
+    invalidateRawCandidatePool();
     releaseCandidateArrays();
     if (didReleaseExactJoinWorkingSet) {
       return;
@@ -8672,10 +8721,12 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     if (context.debugExactCandidateRawCandidatePoolProfile !== true) {
       return;
     }
-    profiling.exactCandidateJoinRawCandidatePoolProfile = buildMedleyExactRawCandidatePoolProfile(
+    profiling.exactCandidateJoinRawCandidatePoolProfile = getMedleyExactRawCandidatePoolProfile(
       slots,
-      candidatesBySlot,
+      getRawCandidatePool(),
+      "shared-current-pool",
     );
+    invalidateRawCandidatePool();
   };
   const buildUnprovedExactCandidateJoinResult = (
     result: BandoriMedleyTeamSearchResult | null = null,
@@ -10022,6 +10073,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     recordExactJoinMemorySnapshot("after-candidate-fill");
   }
   candidatesBySlot.forEach(sortMedleyCandidates);
+  invalidateRawCandidatePool();
   maybeSeedFromExactJoinPrefix();
   if (stats.timedOut) {
     recordExactJoinMemorySnapshot("after-prefix-seed-timeout");
@@ -10147,6 +10199,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
       exactJoinProofCutoffScore,
       deadlineAt,
       isPastDeadline,
+      getRawCandidatePool,
     );
     recordExactJoinMemorySnapshot("raw-index-final-join-parity", {
       solveCandidateCounts,
