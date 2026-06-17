@@ -643,6 +643,15 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
   const debugExactCandidateUpperReplay = optimization.debugExactCandidateUpperReplay === true;
   const debugExactCandidatePrefixUpperReplay = optimization.debugExactCandidatePrefixUpperReplay === true;
   const debugExactCandidatePrefixHardUpperReplay = optimization.debugExactCandidatePrefixHardUpperReplay === true;
+  const debugExactCandidatePrefixOtherUpperSourceReplay = (
+    optimization.debugExactCandidatePrefixOtherUpperSourceReplay === true
+  );
+  const debugExactCandidatePrefixOtherUpperSourceReplayMaxChecks = (
+    optimization.debugExactCandidatePrefixOtherUpperSourceReplayMaxChecks
+  );
+  const debugExactCandidatePrefixOtherUpperSourceReplayMaxMargin = (
+    optimization.debugExactCandidatePrefixOtherUpperSourceReplayMaxMargin
+  );
   const debugExactCandidateDominanceReplay = optimization.debugExactCandidateDominanceReplay === true;
   const debugExactCandidateRawSolverInputCensus = optimization.debugExactCandidateRawSolverInputCensus === true;
   const parsedExactCandidateScoreCalculationCacheEntryLimit = (
@@ -3714,6 +3723,9 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
           debugExactCandidateUpperReplay,
           debugExactCandidatePrefixUpperReplay,
           debugExactCandidatePrefixHardUpperReplay,
+          debugExactCandidatePrefixOtherUpperSourceReplay,
+          debugExactCandidatePrefixOtherUpperSourceReplayMaxChecks,
+          debugExactCandidatePrefixOtherUpperSourceReplayMaxMargin,
           debugExactCandidateDominanceReplay,
           debugExactCandidateRawSolverInputCensus,
           exactCandidateScoreCalculationCacheEntryLimit,
@@ -4178,6 +4190,9 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
           debugExactCandidateUpperReplay,
           debugExactCandidatePrefixUpperReplay,
           debugExactCandidatePrefixHardUpperReplay,
+          debugExactCandidatePrefixOtherUpperSourceReplay,
+          debugExactCandidatePrefixOtherUpperSourceReplayMaxChecks,
+          debugExactCandidatePrefixOtherUpperSourceReplayMaxMargin,
           debugExactCandidateDominanceReplay,
           debugExactCandidateRawSolverInputCensus,
           exactCandidateScoreCalculationCacheEntryLimit,

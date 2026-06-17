@@ -139,6 +139,9 @@ const MEDLEY_EXACT_DOMINANCE_REPLAY_MAX_CANDIDATE_TOTAL = 60_000;
 const MEDLEY_EXACT_DOMINANCE_REPLAY_MAX_GROUP_SIZE = 128;
 const MEDLEY_EXACT_PREFIX_UPPER_REPLAY_LEVEL_COUNT = MEDLEY_TEAM_SIZE + 1;
 const MEDLEY_EXACT_PREFIX_PROOF_LEDGER_SAMPLE_LIMIT = 8;
+const MEDLEY_EXACT_PREFIX_OTHER_UPPER_SOURCE_REPLAY_SAMPLE_LIMIT = 8;
+const MEDLEY_EXACT_PREFIX_OTHER_UPPER_SOURCE_REPLAY_DEFAULT_MAX_CHECKS = 2048;
+const MEDLEY_EXACT_PREFIX_OTHER_UPPER_SOURCE_REPLAY_DEFAULT_MAX_MARGIN = 10_000;
 const MEDLEY_EXACT_PREFIX_UPPER_MARGIN_BUCKET_UPPER_BOUNDS = [
   -500_000,
   -100_000,
@@ -163,6 +166,61 @@ type MedleyExactPrefixProofLedgerSample = {
   otherSlotUpper: number | null;
   totalUpper: number;
   margin: number;
+};
+
+type MedleyExactPrefixOtherUpperSourceReplaySample = {
+  songIndex: number;
+  level: number;
+  incumbent: number;
+  prefixUpper: number;
+  currentOtherUpper: number;
+  currentTotalUpper: number;
+  currentMargin: number;
+  pairUnseenUpper: number | null;
+  generatedPairUpper: number | null;
+  basicCapacityUpper: number | null;
+  tightCapacityUpper: number | null;
+  bestSafeOtherUpper: number;
+  bestSafeTotalUpper: number;
+  bestSafeMargin: number;
+  generatedPairOnlyMargin: number | null;
+};
+
+type MedleyExactPrefixOtherUpperSourceReplayDecision = {
+  wouldSkip: boolean;
+  prefixUpper: number;
+  bestSafeOtherUpper: number;
+  proofCutoffScore: number;
+};
+
+type MedleyExactPrefixOtherUpperSourceReplayProfile = {
+  enabled: boolean;
+  maxChecks: number;
+  maxMargin: number;
+  checkedCount: number;
+  eligibleCount: number;
+  overMarginSkippedCount: number;
+  budgetSkippedCount: number;
+  currentPairUnseenSourceCount: number;
+  generatedPairFiniteCount: number;
+  generatedPairImprovedCount: number;
+  generatedPairOnlyWouldSkipCount: number;
+  basicCapacityFiniteCount: number;
+  basicCapacityImprovedCount: number;
+  basicCapacityWouldSkipCount: number;
+  tightCapacityFiniteCount: number;
+  tightCapacityImprovedCount: number;
+  tightCapacityWouldSkipCount: number;
+  bestSafeImprovedCount: number;
+  bestSafeWouldSkipCount: number;
+  bestSafeReplayViolationCount: number;
+  currentMarginMin: number | null;
+  currentMarginMax: number | null;
+  bestSafeMarginMin: number | null;
+  bestSafeMarginMax: number | null;
+  currentMarginBuckets: number[];
+  bestSafeMarginBuckets: number[];
+  samples: MedleyExactPrefixOtherUpperSourceReplaySample[];
 };
 
 type MedleyExactPrefixUpperReplayLevelProfile = {
@@ -205,6 +263,7 @@ type MedleyExactPrefixUpperReplayProfile = {
   algorithm: "hhwx-prefix-upper-replay-v1";
   songIndex: number;
   hardUpperReplayEnabled: boolean;
+  otherUpperSourceReplay: MedleyExactPrefixOtherUpperSourceReplayProfile | null;
   levels: MedleyExactPrefixUpperReplayLevelProfile[];
 };
 
@@ -233,6 +292,7 @@ type MedleyExactPrefixUpperReplaySummary = {
   leafProofLedgerRetainedCountTotal: number;
   leafProofLedgerUnknownCountTotal: number;
   marginBucketUpperBounds: number[];
+  otherUpperSourceReplay: MedleyExactPrefixOtherUpperSourceReplayProfile | null;
   levels: MedleyExactPrefixUpperReplayLevelProfile[];
   latestGenerators: Array<Record<string, unknown>>;
 };
@@ -294,6 +354,24 @@ function addMedleyExactPrefixProofLedgerSamples(
   }
 }
 
+function addMedleyExactPrefixOtherUpperSourceReplaySamples(
+  target: MedleyExactPrefixOtherUpperSourceReplaySample[],
+  source: MedleyExactPrefixOtherUpperSourceReplaySample[] | undefined,
+): void {
+  if (
+    !Array.isArray(source)
+    || target.length >= MEDLEY_EXACT_PREFIX_OTHER_UPPER_SOURCE_REPLAY_SAMPLE_LIMIT
+  ) {
+    return;
+  }
+  for (const sample of source) {
+    if (target.length >= MEDLEY_EXACT_PREFIX_OTHER_UPPER_SOURCE_REPLAY_SAMPLE_LIMIT) {
+      return;
+    }
+    target.push(sample);
+  }
+}
+
 function recordMedleyExactPrefixMargin(
   prefixBuckets: number[],
   impliedCompletionBuckets: number[],
@@ -309,6 +387,17 @@ function recordMedleyExactPrefixMargin(
     impliedCompletionBuckets[bucketIndex] ?? 0,
     impliedCompletionCount,
   );
+}
+
+function recordMedleyExactPrefixMarginCount(
+  prefixBuckets: number[],
+  margin: number,
+): void {
+  if (!Number.isFinite(margin)) {
+    return;
+  }
+  const bucketIndex = getMedleyExactPrefixMarginBucketIndex(margin);
+  prefixBuckets[bucketIndex] = addCappedCount(prefixBuckets[bucketIndex] ?? 0, 1);
 }
 
 function minNullableNumber(left: number | null | undefined, right: number | null | undefined): number | null {
@@ -329,6 +418,162 @@ function maxNullableNumber(left: number | null | undefined, right: number | null
     return left;
   }
   return Math.max(left, right);
+}
+
+function createMedleyExactPrefixOtherUpperSourceReplayProfile(
+  maxChecks: number,
+  maxMargin: number,
+): MedleyExactPrefixOtherUpperSourceReplayProfile {
+  return {
+    enabled: true,
+    maxChecks,
+    maxMargin,
+    checkedCount: 0,
+    eligibleCount: 0,
+    overMarginSkippedCount: 0,
+    budgetSkippedCount: 0,
+    currentPairUnseenSourceCount: 0,
+    generatedPairFiniteCount: 0,
+    generatedPairImprovedCount: 0,
+    generatedPairOnlyWouldSkipCount: 0,
+    basicCapacityFiniteCount: 0,
+    basicCapacityImprovedCount: 0,
+    basicCapacityWouldSkipCount: 0,
+    tightCapacityFiniteCount: 0,
+    tightCapacityImprovedCount: 0,
+    tightCapacityWouldSkipCount: 0,
+    bestSafeImprovedCount: 0,
+    bestSafeWouldSkipCount: 0,
+    bestSafeReplayViolationCount: 0,
+    currentMarginMin: null,
+    currentMarginMax: null,
+    bestSafeMarginMin: null,
+    bestSafeMarginMax: null,
+    currentMarginBuckets: createMedleyExactPrefixMarginBuckets(),
+    bestSafeMarginBuckets: createMedleyExactPrefixMarginBuckets(),
+    samples: [],
+  };
+}
+
+function addMedleyExactPrefixOtherUpperSourceReplayProfile(
+  target: MedleyExactPrefixOtherUpperSourceReplayProfile,
+  source: MedleyExactPrefixOtherUpperSourceReplayProfile | null | undefined,
+): void {
+  if (!source) {
+    return;
+  }
+  target.maxChecks = Math.max(target.maxChecks, source.maxChecks);
+  target.maxMargin = Math.max(target.maxMargin, source.maxMargin);
+  target.checkedCount = addCappedCount(target.checkedCount, source.checkedCount);
+  target.eligibleCount = addCappedCount(target.eligibleCount, source.eligibleCount);
+  target.overMarginSkippedCount = addCappedCount(target.overMarginSkippedCount, source.overMarginSkippedCount);
+  target.budgetSkippedCount = addCappedCount(target.budgetSkippedCount, source.budgetSkippedCount);
+  target.currentPairUnseenSourceCount = addCappedCount(
+    target.currentPairUnseenSourceCount,
+    source.currentPairUnseenSourceCount,
+  );
+  target.generatedPairFiniteCount = addCappedCount(
+    target.generatedPairFiniteCount,
+    source.generatedPairFiniteCount,
+  );
+  target.generatedPairImprovedCount = addCappedCount(
+    target.generatedPairImprovedCount,
+    source.generatedPairImprovedCount,
+  );
+  target.generatedPairOnlyWouldSkipCount = addCappedCount(
+    target.generatedPairOnlyWouldSkipCount,
+    source.generatedPairOnlyWouldSkipCount,
+  );
+  target.basicCapacityFiniteCount = addCappedCount(target.basicCapacityFiniteCount, source.basicCapacityFiniteCount);
+  target.basicCapacityImprovedCount = addCappedCount(
+    target.basicCapacityImprovedCount,
+    source.basicCapacityImprovedCount,
+  );
+  target.basicCapacityWouldSkipCount = addCappedCount(
+    target.basicCapacityWouldSkipCount,
+    source.basicCapacityWouldSkipCount,
+  );
+  target.tightCapacityFiniteCount = addCappedCount(target.tightCapacityFiniteCount, source.tightCapacityFiniteCount);
+  target.tightCapacityImprovedCount = addCappedCount(
+    target.tightCapacityImprovedCount,
+    source.tightCapacityImprovedCount,
+  );
+  target.tightCapacityWouldSkipCount = addCappedCount(
+    target.tightCapacityWouldSkipCount,
+    source.tightCapacityWouldSkipCount,
+  );
+  target.bestSafeImprovedCount = addCappedCount(target.bestSafeImprovedCount, source.bestSafeImprovedCount);
+  target.bestSafeWouldSkipCount = addCappedCount(target.bestSafeWouldSkipCount, source.bestSafeWouldSkipCount);
+  target.bestSafeReplayViolationCount = addCappedCount(
+    target.bestSafeReplayViolationCount,
+    source.bestSafeReplayViolationCount,
+  );
+  target.currentMarginMin = minNullableNumber(target.currentMarginMin, source.currentMarginMin);
+  target.currentMarginMax = maxNullableNumber(target.currentMarginMax, source.currentMarginMax);
+  target.bestSafeMarginMin = minNullableNumber(target.bestSafeMarginMin, source.bestSafeMarginMin);
+  target.bestSafeMarginMax = maxNullableNumber(target.bestSafeMarginMax, source.bestSafeMarginMax);
+  addMedleyExactPrefixMarginBucketCounts(target.currentMarginBuckets, source.currentMarginBuckets);
+  addMedleyExactPrefixMarginBucketCounts(target.bestSafeMarginBuckets, source.bestSafeMarginBuckets);
+  addMedleyExactPrefixOtherUpperSourceReplaySamples(target.samples, source.samples);
+}
+
+function summarizeMedleyExactPrefixOtherUpperSourceReplayProfiles(
+  profiles: MedleyExactPrefixUpperReplayProfile[],
+): MedleyExactPrefixOtherUpperSourceReplayProfile | null {
+  const sourceProfiles = profiles
+    .map((profile) => profile.otherUpperSourceReplay)
+    .filter((profile): profile is MedleyExactPrefixOtherUpperSourceReplayProfile => profile !== null);
+  if (sourceProfiles.length === 0) {
+    return null;
+  }
+  const summary = createMedleyExactPrefixOtherUpperSourceReplayProfile(0, 0);
+  for (const sourceProfile of sourceProfiles) {
+    addMedleyExactPrefixOtherUpperSourceReplayProfile(summary, sourceProfile);
+  }
+  return summary;
+}
+
+function serializeMedleyExactPrefixOtherUpperSourceReplayProfile(
+  profile: MedleyExactPrefixOtherUpperSourceReplayProfile | null | undefined,
+  options: { includeBuckets: boolean; includeSamples: boolean },
+): Record<string, unknown> | null {
+  if (!profile) {
+    return null;
+  }
+  const result: Record<string, unknown> = {
+    enabled: profile.enabled,
+    maxChecks: profile.maxChecks,
+    maxMargin: profile.maxMargin,
+    checkedCount: profile.checkedCount,
+    eligibleCount: profile.eligibleCount,
+    overMarginSkippedCount: profile.overMarginSkippedCount,
+    budgetSkippedCount: profile.budgetSkippedCount,
+    currentPairUnseenSourceCount: profile.currentPairUnseenSourceCount,
+    generatedPairFiniteCount: profile.generatedPairFiniteCount,
+    generatedPairImprovedCount: profile.generatedPairImprovedCount,
+    generatedPairOnlyWouldSkipCount: profile.generatedPairOnlyWouldSkipCount,
+    basicCapacityFiniteCount: profile.basicCapacityFiniteCount,
+    basicCapacityImprovedCount: profile.basicCapacityImprovedCount,
+    basicCapacityWouldSkipCount: profile.basicCapacityWouldSkipCount,
+    tightCapacityFiniteCount: profile.tightCapacityFiniteCount,
+    tightCapacityImprovedCount: profile.tightCapacityImprovedCount,
+    tightCapacityWouldSkipCount: profile.tightCapacityWouldSkipCount,
+    bestSafeImprovedCount: profile.bestSafeImprovedCount,
+    bestSafeWouldSkipCount: profile.bestSafeWouldSkipCount,
+    bestSafeReplayViolationCount: profile.bestSafeReplayViolationCount,
+    currentMarginMin: profile.currentMarginMin,
+    currentMarginMax: profile.currentMarginMax,
+    bestSafeMarginMin: profile.bestSafeMarginMin,
+    bestSafeMarginMax: profile.bestSafeMarginMax,
+  };
+  if (options.includeBuckets) {
+    result.currentMarginBuckets = profile.currentMarginBuckets.slice();
+    result.bestSafeMarginBuckets = profile.bestSafeMarginBuckets.slice();
+  }
+  if (options.includeSamples) {
+    result.samples = profile.samples.slice();
+  }
+  return result;
 }
 
 function estimateRelaxedCombinationCount(itemCount: number, chooseCount: number): number {
@@ -392,11 +637,20 @@ function createMedleyExactPrefixUpperReplayLevelProfile(
 function createMedleyExactPrefixUpperReplayProfile(
   slot: MedleySlotSearch,
   hardUpperReplayEnabled: boolean,
+  otherUpperSourceReplayEnabled: boolean,
+  otherUpperSourceReplayMaxChecks: number,
+  otherUpperSourceReplayMaxMargin: number,
 ): MedleyExactPrefixUpperReplayProfile {
   return {
     algorithm: "hhwx-prefix-upper-replay-v1",
     songIndex: slot.songIndex,
     hardUpperReplayEnabled,
+    otherUpperSourceReplay: otherUpperSourceReplayEnabled
+      ? createMedleyExactPrefixOtherUpperSourceReplayProfile(
+        otherUpperSourceReplayMaxChecks,
+        otherUpperSourceReplayMaxMargin,
+      )
+      : null,
     levels: Array.from(
       { length: MEDLEY_EXACT_PREFIX_UPPER_REPLAY_LEVEL_COUNT },
       (_, level) => createMedleyExactPrefixUpperReplayLevelProfile(level),
@@ -2675,6 +2929,9 @@ export function createMedleyExactSlotCandidateGenerator(
   enableThinCandidateResultRetention = false,
   enablePrefixUpperReplay = false,
   enablePrefixHardUpperReplay = false,
+  enablePrefixOtherUpperSourceReplay = false,
+  prefixOtherUpperSourceReplayMaxChecks = MEDLEY_EXACT_PREFIX_OTHER_UPPER_SOURCE_REPLAY_DEFAULT_MAX_CHECKS,
+  prefixOtherUpperSourceReplayMaxMargin = MEDLEY_EXACT_PREFIX_OTHER_UPPER_SOURCE_REPLAY_DEFAULT_MAX_MARGIN,
 ): MedleyExactSlotCandidateGenerator {
   // The generator is ordered by optimistic slot upper bound. Exhaustion proves that no unseen
   // slot candidate remains above the active cutoff; budget/deadline aborts are reported to the
@@ -2704,8 +2961,30 @@ export function createMedleyExactSlotCandidateGenerator(
   let heapKeyMode: "slot" | "global" = "slot";
   let heapGlobalKeySignature: string | null = null;
   let maxPruningScoreCutoff = Number.NEGATIVE_INFINITY;
-  const prefixUpperReplayProfile = enablePrefixUpperReplay || enablePrefixHardUpperReplay
-    ? createMedleyExactPrefixUpperReplayProfile(slot, enablePrefixHardUpperReplay)
+  const finitePrefixOtherUpperSourceReplayMaxChecks = (
+    Number.isFinite(prefixOtherUpperSourceReplayMaxChecks)
+    && prefixOtherUpperSourceReplayMaxChecks > 0
+      ? Math.trunc(prefixOtherUpperSourceReplayMaxChecks)
+      : MEDLEY_EXACT_PREFIX_OTHER_UPPER_SOURCE_REPLAY_DEFAULT_MAX_CHECKS
+  );
+  const finitePrefixOtherUpperSourceReplayMaxMargin = (
+    Number.isFinite(prefixOtherUpperSourceReplayMaxMargin)
+    && prefixOtherUpperSourceReplayMaxMargin >= 0
+      ? prefixOtherUpperSourceReplayMaxMargin
+      : MEDLEY_EXACT_PREFIX_OTHER_UPPER_SOURCE_REPLAY_DEFAULT_MAX_MARGIN
+  );
+  const prefixUpperReplayProfile = (
+    enablePrefixUpperReplay
+    || enablePrefixHardUpperReplay
+    || enablePrefixOtherUpperSourceReplay
+  )
+    ? createMedleyExactPrefixUpperReplayProfile(
+      slot,
+      enablePrefixHardUpperReplay,
+      enablePrefixOtherUpperSourceReplay,
+      finitePrefixOtherUpperSourceReplayMaxChecks,
+      finitePrefixOtherUpperSourceReplayMaxMargin,
+    )
     : null;
   type CreateSearchNodeInput = {
     key: number;
@@ -3018,6 +3297,41 @@ export function createMedleyExactSlotCandidateGenerator(
     setMedleyExactNestedNumberCache(globalPairComplementUpperCache, cachePrefixKey, cardKey, complementUpperBound);
     return complementUpperBound;
   };
+  const estimateGeneratedPairOnlyComplementUpperBound = (
+    selectedCardIds: number[],
+    globalPruning: MedleyExactSlotCandidateGlobalPruning,
+    minimumRelevantScore: number,
+  ): number => {
+    if (!globalPruning.candidatesBySlot) {
+      return Number.NEGATIVE_INFINITY;
+    }
+    const [leftSlotIndex, rightSlotIndex] = globalPruning.remainingSlotIndices;
+    const leftCandidates = globalPruning.candidatesBySlot[leftSlotIndex] ?? [];
+    const rightCandidates = globalPruning.candidatesBySlot[rightSlotIndex] ?? [];
+    const pairUpperQueryKey = [
+      "generated-only",
+      leftSlotIndex,
+      leftCandidates.length,
+      rightSlotIndex,
+      rightCandidates.length,
+    ].join(":");
+    let pairUpperQuery = pairUpperQueryCache.get(pairUpperQueryKey);
+    if (!pairUpperQuery) {
+      pairUpperQuery = buildMedleyExactCandidatePairUpperQuery(
+        leftCandidates,
+        rightCandidates,
+        lowMemoryHighPairScanMinRecordCount,
+        lowMemoryHighPairPrefixRecordLimit,
+      );
+      pairUpperQueryCache.set(pairUpperQueryKey, pairUpperQuery);
+    }
+    return estimateGeneratedMedleyExactCandidatePairUpperExcludingCardIds(
+      pairUpperQuery,
+      selectedCardIds,
+      minimumRelevantScore,
+      profiling,
+    );
+  };
 
   const estimateGlobalPrunedUpperBound = (
     slotUpperBound: number,
@@ -3121,6 +3435,178 @@ export function createMedleyExactSlotCandidateGenerator(
     return complementUpperBound === Number.POSITIVE_INFINITY
       ? Number.POSITIVE_INFINITY
       : slotUpperBound + complementUpperBound;
+  };
+  const recordPrefixOtherUpperSourceReplay = (
+    selectedCards: SearchCard[],
+    prefixUpperBound: number,
+    totalUpperBound: number,
+    globalPruning: MedleyExactSlotCandidateGlobalPruning,
+  ): MedleyExactPrefixOtherUpperSourceReplayDecision | null => {
+    const sourceProfile = prefixUpperReplayProfile?.otherUpperSourceReplay;
+    if (!sourceProfile || selectedCards.length !== MEDLEY_TEAM_SIZE) {
+      return null;
+    }
+    sourceProfile.checkedCount += 1;
+    if (
+      !Number.isFinite(prefixUpperBound)
+      || !Number.isFinite(totalUpperBound)
+      || !Number.isFinite(globalPruning.scoreCutoff)
+    ) {
+      return null;
+    }
+    const currentMargin = totalUpperBound - globalPruning.scoreCutoff;
+    if (currentMargin < 0) {
+      return null;
+    }
+    if (currentMargin > sourceProfile.maxMargin) {
+      sourceProfile.overMarginSkippedCount += 1;
+      return null;
+    }
+    if (sourceProfile.eligibleCount >= sourceProfile.maxChecks) {
+      sourceProfile.budgetSkippedCount += 1;
+      return null;
+    }
+    sourceProfile.eligibleCount += 1;
+    sourceProfile.currentMarginMin = minNullableNumber(sourceProfile.currentMarginMin, currentMargin);
+    sourceProfile.currentMarginMax = maxNullableNumber(sourceProfile.currentMarginMax, currentMargin);
+    recordMedleyExactPrefixMarginCount(sourceProfile.currentMarginBuckets, currentMargin);
+    const selectedCardIds = selectedCards.map((card) => card.cardId).sort((left, right) => left - right);
+    const currentOtherUpper = totalUpperBound - prefixUpperBound;
+    const pairUnseenUpper = globalPruning.pairUnseenUpperBound;
+    if (
+      pairUnseenUpper !== undefined
+      && Number.isFinite(pairUnseenUpper)
+      && Math.abs(currentOtherUpper - pairUnseenUpper) < 1e-6
+    ) {
+      sourceProfile.currentPairUnseenSourceCount += 1;
+    }
+    const minimumRelevantOtherScore = globalPruning.scoreCutoff - prefixUpperBound;
+    const generatedPairUpper = estimateGeneratedPairOnlyComplementUpperBound(
+      selectedCardIds,
+      globalPruning,
+      minimumRelevantOtherScore,
+    );
+    const generatedPairUpperOrNull = Number.isFinite(generatedPairUpper) ? generatedPairUpper : null;
+    const generatedPairOnlyMargin = generatedPairUpperOrNull !== null
+      ? prefixUpperBound + generatedPairUpperOrNull - globalPruning.scoreCutoff
+      : Number.NEGATIVE_INFINITY;
+    if (generatedPairUpperOrNull !== null) {
+      sourceProfile.generatedPairFiniteCount += 1;
+      if (generatedPairUpperOrNull < currentOtherUpper) {
+        sourceProfile.generatedPairImprovedCount += 1;
+      }
+    }
+    if (generatedPairOnlyMargin < 0) {
+      sourceProfile.generatedPairOnlyWouldSkipCount += 1;
+    }
+    const bannedSelectedCardIds = new Set<number>(selectedCardIds);
+    const basicCapacityUpper = estimateMedleyCapacityAssignmentScoreUpperBound(
+      globalPruning.slots,
+      globalPruning.remainingSlotIndices,
+      bannedSelectedCardIds,
+      profiling,
+      true,
+      false,
+      false,
+      false,
+      true,
+    ).upperBound;
+    const basicCapacityUpperOrNull = Number.isFinite(basicCapacityUpper) ? basicCapacityUpper : null;
+    if (basicCapacityUpperOrNull !== null) {
+      sourceProfile.basicCapacityFiniteCount += 1;
+      if (basicCapacityUpperOrNull < currentOtherUpper) {
+        sourceProfile.basicCapacityImprovedCount += 1;
+      }
+      if (prefixUpperBound + basicCapacityUpperOrNull < globalPruning.scoreCutoff) {
+        sourceProfile.basicCapacityWouldSkipCount += 1;
+      }
+    }
+    const tightCapacityUpper = estimateMedleyRemainingScoreUpperBound(
+      globalPruning.slots,
+      globalPruning.remainingSlotIndices,
+      bannedSelectedCardIds,
+      profiling,
+      false,
+      true,
+      false,
+      false,
+      false,
+    );
+    const tightCapacityUpperOrNull = Number.isFinite(tightCapacityUpper) ? tightCapacityUpper : null;
+    if (tightCapacityUpperOrNull !== null) {
+      sourceProfile.tightCapacityFiniteCount += 1;
+      if (tightCapacityUpperOrNull < currentOtherUpper) {
+        sourceProfile.tightCapacityImprovedCount += 1;
+      }
+      if (prefixUpperBound + tightCapacityUpperOrNull < globalPruning.scoreCutoff) {
+        sourceProfile.tightCapacityWouldSkipCount += 1;
+      }
+    }
+    const safeOtherUppers = [
+      currentOtherUpper,
+      basicCapacityUpperOrNull ?? Number.POSITIVE_INFINITY,
+      tightCapacityUpperOrNull ?? Number.POSITIVE_INFINITY,
+    ];
+    const bestSafeOtherUpper = Math.min(...safeOtherUppers);
+    const bestSafeTotalUpper = prefixUpperBound + bestSafeOtherUpper;
+    const bestSafeMargin = bestSafeTotalUpper - globalPruning.scoreCutoff;
+    sourceProfile.bestSafeMarginMin = minNullableNumber(sourceProfile.bestSafeMarginMin, bestSafeMargin);
+    sourceProfile.bestSafeMarginMax = maxNullableNumber(sourceProfile.bestSafeMarginMax, bestSafeMargin);
+    recordMedleyExactPrefixMarginCount(sourceProfile.bestSafeMarginBuckets, bestSafeMargin);
+    const bestSafeImproved = bestSafeOtherUpper < currentOtherUpper;
+    const bestSafeWouldSkip = bestSafeMargin < 0;
+    if (bestSafeImproved) {
+      sourceProfile.bestSafeImprovedCount += 1;
+    }
+    if (bestSafeWouldSkip) {
+      sourceProfile.bestSafeWouldSkipCount += 1;
+    }
+    if (
+      sourceProfile.samples.length < MEDLEY_EXACT_PREFIX_OTHER_UPPER_SOURCE_REPLAY_SAMPLE_LIMIT
+      && (bestSafeImproved || bestSafeWouldSkip || generatedPairOnlyMargin < 0)
+    ) {
+      sourceProfile.samples.push({
+        songIndex: slot.songIndex,
+        level: MEDLEY_TEAM_SIZE,
+        incumbent: globalPruning.scoreCutoff,
+        prefixUpper: prefixUpperBound,
+        currentOtherUpper,
+        currentTotalUpper: totalUpperBound,
+        currentMargin,
+        pairUnseenUpper: pairUnseenUpper !== undefined && Number.isFinite(pairUnseenUpper)
+          ? pairUnseenUpper
+          : null,
+        generatedPairUpper: generatedPairUpperOrNull,
+        basicCapacityUpper: basicCapacityUpperOrNull,
+        tightCapacityUpper: tightCapacityUpperOrNull,
+        bestSafeOtherUpper,
+        bestSafeTotalUpper,
+        bestSafeMargin,
+        generatedPairOnlyMargin: Number.isFinite(generatedPairOnlyMargin) ? generatedPairOnlyMargin : null,
+      });
+    }
+    return {
+      wouldSkip: bestSafeWouldSkip,
+      prefixUpper: prefixUpperBound,
+      bestSafeOtherUpper,
+      proofCutoffScore: globalPruning.scoreCutoff,
+    };
+  };
+  const recordPrefixOtherUpperSourceReplayViolation = (
+    decision: MedleyExactPrefixOtherUpperSourceReplayDecision,
+    candidate: MedleyTeamCandidate,
+  ): void => {
+    const sourceProfile = prefixUpperReplayProfile?.otherUpperSourceReplay;
+    const violatesLocalUpper = candidate.result.score > decision.prefixUpper + 1e-6;
+    const violatesGlobalUpper = candidate.result.score + decision.bestSafeOtherUpper >= decision.proofCutoffScore;
+    if (
+      !sourceProfile
+      || !decision.wouldSkip
+      || (!violatesLocalUpper && !violatesGlobalUpper)
+    ) {
+      return;
+    }
+    sourceProfile.bestSafeReplayViolationCount += 1;
   };
 
   const estimateGlobalSearchKey = (
@@ -3441,6 +3927,7 @@ export function createMedleyExactSlotCandidateGenerator(
           nextSelectedCards,
           globalPruning,
         );
+        let prefixOtherUpperSourceDecision: MedleyExactPrefixOtherUpperSourceReplayDecision | null = null;
         if (prefixUpperReplayProfile && globalPruning) {
           recordPrefixLeafProofLedger(
             nextSelectedCards.length,
@@ -3448,6 +3935,12 @@ export function createMedleyExactSlotCandidateGenerator(
             leafUpperBound,
             globalLeafUpperBound,
             globalPruning.scoreCutoff,
+          );
+          prefixOtherUpperSourceDecision = recordPrefixOtherUpperSourceReplay(
+            nextSelectedCards,
+            leafUpperBound,
+            globalLeafUpperBound,
+            globalPruning,
           );
         }
         if (prefixUpperReplayProfile && globalPruning) {
@@ -3486,6 +3979,9 @@ export function createMedleyExactSlotCandidateGenerator(
             compactScoreOnlyCache: enableCompactScoreOnlyCache,
           },
         );
+        if (prefixOtherUpperSourceDecision && candidate) {
+          recordPrefixOtherUpperSourceReplayViolation(prefixOtherUpperSourceDecision, candidate);
+        }
         if (candidate && candidate.result.score >= scoreCutoff) {
           if (prefixUpperReplayProfile) {
             recordPrefixMaterializedCandidate();
@@ -3750,6 +4246,10 @@ function serializeMedleyExactPrefixUpperReplayProfile(
     algorithm: profile.algorithm,
     songIndex: profile.songIndex,
     hardUpperReplayEnabled: profile.hardUpperReplayEnabled,
+    otherUpperSourceReplay: serializeMedleyExactPrefixOtherUpperSourceReplayProfile(
+      profile.otherUpperSourceReplay,
+      { includeBuckets: false, includeSamples: false },
+    ),
     checkedPrefixCountTotal: profile.levels.reduce((sum, level) => sum + level.checkedPrefixCount, 0),
     relaxedImpliedCompletionCountTotal: profile.levels.reduce((
       sum,
@@ -3806,6 +4306,7 @@ function summarizeMedleyExactPrefixUpperReplayProfiles(
     generatorCount: profiles.length,
     hardUpperReplayEnabled: profiles.some((profile) => profile.hardUpperReplayEnabled),
     marginBucketUpperBounds: [...MEDLEY_EXACT_PREFIX_UPPER_MARGIN_BUCKET_UPPER_BOUNDS],
+    otherUpperSourceReplay: summarizeMedleyExactPrefixOtherUpperSourceReplayProfiles(profiles),
     checkedPrefixCountTotal: sumLevelField("checkedPrefixCount"),
     relaxedImpliedCompletionCountTotal: sumLevelField("relaxedImpliedCompletionCount"),
     finiteSlotUpperCountTotal: sumLevelField("finiteSlotUpperCount"),
@@ -3875,6 +4376,15 @@ function mergeMedleyExactPrefixUpperReplaySummaries(
     generatorCount: existing.generatorCount + next.generatorCount,
     hardUpperReplayEnabled: existing.hardUpperReplayEnabled || next.hardUpperReplayEnabled,
     marginBucketUpperBounds: [...MEDLEY_EXACT_PREFIX_UPPER_MARGIN_BUCKET_UPPER_BOUNDS],
+    otherUpperSourceReplay: (() => {
+      const sourceSummary = createMedleyExactPrefixOtherUpperSourceReplayProfile(0, 0);
+      addMedleyExactPrefixOtherUpperSourceReplayProfile(
+        sourceSummary,
+        existing.otherUpperSourceReplay,
+      );
+      addMedleyExactPrefixOtherUpperSourceReplayProfile(sourceSummary, next.otherUpperSourceReplay);
+      return sourceSummary.checkedCount > 0 || sourceSummary.eligibleCount > 0 ? sourceSummary : null;
+    })(),
     checkedPrefixCountTotal: sumLevelField("checkedPrefixCount"),
     relaxedImpliedCompletionCountTotal: sumLevelField("relaxedImpliedCompletionCount"),
     finiteSlotUpperCountTotal: sumLevelField("finiteSlotUpperCount"),
@@ -6973,6 +7483,9 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     debugExactCandidateUpperReplay?: boolean;
     debugExactCandidatePrefixUpperReplay?: boolean;
     debugExactCandidatePrefixHardUpperReplay?: boolean;
+    debugExactCandidatePrefixOtherUpperSourceReplay?: boolean;
+    debugExactCandidatePrefixOtherUpperSourceReplayMaxChecks?: number;
+    debugExactCandidatePrefixOtherUpperSourceReplayMaxMargin?: number;
     debugExactCandidateDominanceReplay?: boolean;
     debugExactCandidateRawSolverInputCensus?: boolean;
     exactCandidateScoreCalculationCacheEntryLimit?: number | null;
@@ -7160,6 +7673,9 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     context.enableExactCandidateThinResultRetention === true,
     context.debugExactCandidatePrefixUpperReplay === true,
     context.debugExactCandidatePrefixHardUpperReplay === true,
+    context.debugExactCandidatePrefixOtherUpperSourceReplay === true,
+    context.debugExactCandidatePrefixOtherUpperSourceReplayMaxChecks,
+    context.debugExactCandidatePrefixOtherUpperSourceReplayMaxMargin,
   ));
   const candidatesBySlot: MedleyTeamCandidate[][] = Array.from({ length: slots.length }, () => []);
   const rawCandidateMirror = context.debugExactCandidateRawMirror === true
@@ -7198,6 +7714,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     if (
       context.debugExactCandidatePrefixUpperReplay !== true
       && context.debugExactCandidatePrefixHardUpperReplay !== true
+      && context.debugExactCandidatePrefixOtherUpperSourceReplay !== true
     ) {
       return;
     }
@@ -7897,6 +8414,9 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     context.enableExactCandidateThinResultRetention === true,
     context.debugExactCandidatePrefixUpperReplay === true,
     context.debugExactCandidatePrefixHardUpperReplay === true,
+    context.debugExactCandidatePrefixOtherUpperSourceReplay === true,
+    context.debugExactCandidatePrefixOtherUpperSourceReplayMaxChecks,
+    context.debugExactCandidatePrefixOtherUpperSourceReplayMaxMargin,
   ));
   const getCandidateFillGenerator = (slotIndex: number, scoreCutoff: number): MedleyExactSlotCandidateGenerator => (
     generators[slotIndex].canReuseForScoreCutoff(scoreCutoff)
