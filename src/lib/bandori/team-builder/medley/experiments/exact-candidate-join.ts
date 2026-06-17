@@ -138,6 +138,7 @@ const MEDLEY_EXACT_SIGNATURE_CENSUS_TOP_BUCKETS = 8;
 const MEDLEY_EXACT_DOMINANCE_REPLAY_MAX_CANDIDATE_TOTAL = 60_000;
 const MEDLEY_EXACT_DOMINANCE_REPLAY_MAX_GROUP_SIZE = 128;
 const MEDLEY_EXACT_PREFIX_UPPER_REPLAY_LEVEL_COUNT = MEDLEY_TEAM_SIZE + 1;
+const MEDLEY_EXACT_PREFIX_PROOF_LEDGER_SAMPLE_LIMIT = 8;
 const MEDLEY_EXACT_PREFIX_UPPER_MARGIN_BUCKET_UPPER_BOUNDS = [
   -500_000,
   -100_000,
@@ -152,6 +153,17 @@ const MEDLEY_EXACT_PREFIX_UPPER_MARGIN_BUCKET_UPPER_BOUNDS = [
   500_000,
 ] as const;
 const EMPTY_MEDLEY_EXACT_CANDIDATE_CARD_IDS: number[] = [];
+
+type MedleyExactPrefixProofLedgerSample = {
+  songIndex: number;
+  level: number;
+  impliedCompletionCount: number;
+  incumbent: number;
+  prefixUpper: number;
+  otherSlotUpper: number | null;
+  totalUpper: number;
+  margin: number;
+};
 
 type MedleyExactPrefixUpperReplayLevelProfile = {
   level: number;
@@ -176,6 +188,17 @@ type MedleyExactPrefixUpperReplayLevelProfile = {
   hardUpperMarginMax: number | null;
   hardUpperMarginPrefixBuckets: number[];
   hardUpperMarginImpliedCompletionBuckets: number[];
+  leafProofLedgerCheckedCount: number;
+  leafProofLedgerFiniteCount: number;
+  leafProofLedgerSkipCount: number;
+  leafProofLedgerSkipImpliedCompletionCount: number;
+  leafProofLedgerRetainedCount: number;
+  leafProofLedgerUnknownCount: number;
+  leafProofLedgerMarginMin: number | null;
+  leafProofLedgerMarginMax: number | null;
+  leafProofLedgerMarginPrefixBuckets: number[];
+  leafProofLedgerMarginImpliedCompletionBuckets: number[];
+  leafProofLedgerSkipSamples: MedleyExactPrefixProofLedgerSample[];
 };
 
 type MedleyExactPrefixUpperReplayProfile = {
@@ -203,6 +226,12 @@ type MedleyExactPrefixUpperReplaySummary = {
   hardUpperUnknownCountTotal: number;
   candidateEvaluationCountTotal: number;
   materializedCandidateCountTotal: number;
+  leafProofLedgerCheckedCountTotal: number;
+  leafProofLedgerFiniteCountTotal: number;
+  leafProofLedgerSkipCountTotal: number;
+  leafProofLedgerSkipImpliedCompletionCountTotal: number;
+  leafProofLedgerRetainedCountTotal: number;
+  leafProofLedgerUnknownCountTotal: number;
   marginBucketUpperBounds: number[];
   levels: MedleyExactPrefixUpperReplayLevelProfile[];
   latestGenerators: Array<Record<string, unknown>>;
@@ -247,6 +276,21 @@ function addMedleyExactPrefixMarginBucketCounts(
   const bucketCount = Math.min(target.length, source.length);
   for (let index = 0; index < bucketCount; index += 1) {
     target[index] = addCappedCount(target[index] ?? 0, source[index] ?? 0);
+  }
+}
+
+function addMedleyExactPrefixProofLedgerSamples(
+  target: MedleyExactPrefixProofLedgerSample[],
+  source: MedleyExactPrefixProofLedgerSample[] | undefined,
+): void {
+  if (!Array.isArray(source) || target.length >= MEDLEY_EXACT_PREFIX_PROOF_LEDGER_SAMPLE_LIMIT) {
+    return;
+  }
+  for (const sample of source) {
+    if (target.length >= MEDLEY_EXACT_PREFIX_PROOF_LEDGER_SAMPLE_LIMIT) {
+      return;
+    }
+    target.push(sample);
   }
 }
 
@@ -331,6 +375,17 @@ function createMedleyExactPrefixUpperReplayLevelProfile(
     hardUpperMarginMax: null,
     hardUpperMarginPrefixBuckets: createMedleyExactPrefixMarginBuckets(),
     hardUpperMarginImpliedCompletionBuckets: createMedleyExactPrefixMarginBuckets(),
+    leafProofLedgerCheckedCount: 0,
+    leafProofLedgerFiniteCount: 0,
+    leafProofLedgerSkipCount: 0,
+    leafProofLedgerSkipImpliedCompletionCount: 0,
+    leafProofLedgerRetainedCount: 0,
+    leafProofLedgerUnknownCount: 0,
+    leafProofLedgerMarginMin: null,
+    leafProofLedgerMarginMax: null,
+    leafProofLedgerMarginPrefixBuckets: createMedleyExactPrefixMarginBuckets(),
+    leafProofLedgerMarginImpliedCompletionBuckets: createMedleyExactPrefixMarginBuckets(),
+    leafProofLedgerSkipSamples: [],
   };
 }
 
@@ -410,6 +465,50 @@ function addMedleyExactPrefixUpperReplayLevel(
   addMedleyExactPrefixMarginBucketCounts(
     target.hardUpperMarginImpliedCompletionBuckets,
     source.hardUpperMarginImpliedCompletionBuckets,
+  );
+  target.leafProofLedgerCheckedCount = addCappedCount(
+    target.leafProofLedgerCheckedCount,
+    source.leafProofLedgerCheckedCount ?? 0,
+  );
+  target.leafProofLedgerFiniteCount = addCappedCount(
+    target.leafProofLedgerFiniteCount,
+    source.leafProofLedgerFiniteCount ?? 0,
+  );
+  target.leafProofLedgerSkipCount = addCappedCount(
+    target.leafProofLedgerSkipCount,
+    source.leafProofLedgerSkipCount ?? 0,
+  );
+  target.leafProofLedgerSkipImpliedCompletionCount = addCappedCount(
+    target.leafProofLedgerSkipImpliedCompletionCount,
+    source.leafProofLedgerSkipImpliedCompletionCount ?? 0,
+  );
+  target.leafProofLedgerRetainedCount = addCappedCount(
+    target.leafProofLedgerRetainedCount,
+    source.leafProofLedgerRetainedCount ?? 0,
+  );
+  target.leafProofLedgerUnknownCount = addCappedCount(
+    target.leafProofLedgerUnknownCount,
+    source.leafProofLedgerUnknownCount ?? 0,
+  );
+  target.leafProofLedgerMarginMin = minNullableNumber(
+    target.leafProofLedgerMarginMin,
+    source.leafProofLedgerMarginMin,
+  );
+  target.leafProofLedgerMarginMax = maxNullableNumber(
+    target.leafProofLedgerMarginMax,
+    source.leafProofLedgerMarginMax,
+  );
+  addMedleyExactPrefixMarginBucketCounts(
+    target.leafProofLedgerMarginPrefixBuckets,
+    source.leafProofLedgerMarginPrefixBuckets,
+  );
+  addMedleyExactPrefixMarginBucketCounts(
+    target.leafProofLedgerMarginImpliedCompletionBuckets,
+    source.leafProofLedgerMarginImpliedCompletionBuckets,
+  );
+  addMedleyExactPrefixProofLedgerSamples(
+    target.leafProofLedgerSkipSamples,
+    source.leafProofLedgerSkipSamples,
   );
 }
 
@@ -2743,6 +2842,62 @@ export function createMedleyExactSlotCandidateGenerator(
       levelProfile.hardUpperRetainedPrefixCount += 1;
     }
   };
+  const recordPrefixLeafProofLedger = (
+    selectedCardCount: number,
+    nextStartIndex: number,
+    prefixUpperBound: number,
+    totalUpperBound: number,
+    proofCutoffScore: number,
+  ): void => {
+    if (!prefixUpperReplayProfile || selectedCardCount !== MEDLEY_TEAM_SIZE) {
+      return;
+    }
+    const levelProfile = getMedleyExactPrefixReplayLevel(prefixUpperReplayProfile, selectedCardCount);
+    if (!levelProfile) {
+      return;
+    }
+    levelProfile.leafProofLedgerCheckedCount += 1;
+    const impliedCompletionCount = getRelaxedImpliedCompletionCount(selectedCardCount, nextStartIndex);
+    if (
+      !Number.isFinite(prefixUpperBound)
+      || !Number.isFinite(totalUpperBound)
+      || !Number.isFinite(proofCutoffScore)
+    ) {
+      levelProfile.leafProofLedgerUnknownCount += 1;
+      return;
+    }
+    levelProfile.leafProofLedgerFiniteCount += 1;
+    const margin = totalUpperBound - proofCutoffScore;
+    levelProfile.leafProofLedgerMarginMin = minNullableNumber(levelProfile.leafProofLedgerMarginMin, margin);
+    levelProfile.leafProofLedgerMarginMax = maxNullableNumber(levelProfile.leafProofLedgerMarginMax, margin);
+    recordMedleyExactPrefixMargin(
+      levelProfile.leafProofLedgerMarginPrefixBuckets,
+      levelProfile.leafProofLedgerMarginImpliedCompletionBuckets,
+      margin,
+      impliedCompletionCount,
+    );
+    if (totalUpperBound < proofCutoffScore) {
+      levelProfile.leafProofLedgerSkipCount += 1;
+      levelProfile.leafProofLedgerSkipImpliedCompletionCount = addCappedCount(
+        levelProfile.leafProofLedgerSkipImpliedCompletionCount,
+        impliedCompletionCount,
+      );
+      if (levelProfile.leafProofLedgerSkipSamples.length < MEDLEY_EXACT_PREFIX_PROOF_LEDGER_SAMPLE_LIMIT) {
+        levelProfile.leafProofLedgerSkipSamples.push({
+          songIndex: slot.songIndex,
+          level: selectedCardCount,
+          impliedCompletionCount,
+          incumbent: proofCutoffScore,
+          prefixUpper: prefixUpperBound,
+          otherSlotUpper: totalUpperBound - prefixUpperBound,
+          totalUpper: totalUpperBound,
+          margin,
+        });
+      }
+    } else {
+      levelProfile.leafProofLedgerRetainedCount += 1;
+    }
+  };
   const recordPrefixCandidateEvaluation = (): void => {
     if (!prefixUpperReplayProfile) {
       return;
@@ -3287,6 +3442,15 @@ export function createMedleyExactSlotCandidateGenerator(
           globalPruning,
         );
         if (prefixUpperReplayProfile && globalPruning) {
+          recordPrefixLeafProofLedger(
+            nextSelectedCards.length,
+            nextStartIndex,
+            leafUpperBound,
+            globalLeafUpperBound,
+            globalPruning.scoreCutoff,
+          );
+        }
+        if (prefixUpperReplayProfile && globalPruning) {
           recordPrefixHardUpperReplay(
             nextSelectedCards.length,
             nextStartIndex,
@@ -3524,7 +3688,10 @@ export function createMedleyExactSlotCandidateGenerator(
 
 function sumMedleyExactPrefixUpperReplayLevel(
   level: MedleyExactPrefixUpperReplayLevelProfile,
-  options: { includeMarginBuckets: boolean } = { includeMarginBuckets: true },
+  options: { includeMarginBuckets: boolean; includeProofSamples: boolean } = {
+    includeMarginBuckets: true,
+    includeProofSamples: true,
+  },
 ): Record<string, unknown> {
   const result: Record<string, unknown> = {
     level: level.level,
@@ -3545,12 +3712,27 @@ function sumMedleyExactPrefixUpperReplayLevel(
     slotUpperMarginMax: level.slotUpperMarginMax,
     hardUpperMarginMin: level.hardUpperMarginMin,
     hardUpperMarginMax: level.hardUpperMarginMax,
+    leafProofLedgerCheckedCount: level.leafProofLedgerCheckedCount,
+    leafProofLedgerFiniteCount: level.leafProofLedgerFiniteCount,
+    leafProofLedgerSkipCount: level.leafProofLedgerSkipCount,
+    leafProofLedgerSkipImpliedCompletionCount: level.leafProofLedgerSkipImpliedCompletionCount,
+    leafProofLedgerRetainedCount: level.leafProofLedgerRetainedCount,
+    leafProofLedgerUnknownCount: level.leafProofLedgerUnknownCount,
+    leafProofLedgerMarginMin: level.leafProofLedgerMarginMin,
+    leafProofLedgerMarginMax: level.leafProofLedgerMarginMax,
   };
   if (options.includeMarginBuckets) {
     result.slotUpperMarginPrefixBuckets = level.slotUpperMarginPrefixBuckets.slice();
     result.slotUpperMarginImpliedCompletionBuckets = level.slotUpperMarginImpliedCompletionBuckets.slice();
     result.hardUpperMarginPrefixBuckets = level.hardUpperMarginPrefixBuckets.slice();
     result.hardUpperMarginImpliedCompletionBuckets = level.hardUpperMarginImpliedCompletionBuckets.slice();
+    result.leafProofLedgerMarginPrefixBuckets = level.leafProofLedgerMarginPrefixBuckets.slice();
+    result.leafProofLedgerMarginImpliedCompletionBuckets = (
+      level.leafProofLedgerMarginImpliedCompletionBuckets.slice()
+    );
+  }
+  if (options.includeProofSamples) {
+    result.leafProofLedgerSkipSamples = level.leafProofLedgerSkipSamples.slice();
   }
   return result;
 }
@@ -3559,7 +3741,10 @@ function serializeMedleyExactPrefixUpperReplayProfile(
   profile: MedleyExactPrefixUpperReplayProfile,
 ): Record<string, unknown> {
   const levels = profile.levels.map((level) => (
-    sumMedleyExactPrefixUpperReplayLevel(level, { includeMarginBuckets: false })
+    sumMedleyExactPrefixUpperReplayLevel(level, {
+      includeMarginBuckets: false,
+      includeProofSamples: false,
+    })
   ));
   return {
     algorithm: profile.algorithm,
@@ -3578,6 +3763,15 @@ function serializeMedleyExactPrefixUpperReplayProfile(
       sum,
       level,
     ) => addCappedCount(sum, level.hardUpperSkipableImpliedCompletionCount), 0),
+    leafProofLedgerCheckedCountTotal: profile.levels.reduce((sum, level) => (
+      addCappedCount(sum, level.leafProofLedgerCheckedCount)
+    ), 0),
+    leafProofLedgerSkipCountTotal: profile.levels.reduce((sum, level) => (
+      addCappedCount(sum, level.leafProofLedgerSkipCount)
+    ), 0),
+    leafProofLedgerSkipImpliedCompletionCountTotal: profile.levels.reduce((sum, level) => (
+      addCappedCount(sum, level.leafProofLedgerSkipImpliedCompletionCount)
+    ), 0),
     materializedCandidateCountTotal: profile.levels.reduce((sum, level) => (
       sum + level.materializedCandidateCount
     ), 0),
@@ -3625,6 +3819,12 @@ function summarizeMedleyExactPrefixUpperReplayProfiles(
     hardUpperUnknownCountTotal: sumLevelField("hardUpperUnknownCount"),
     candidateEvaluationCountTotal: sumLevelField("candidateEvaluationCount"),
     materializedCandidateCountTotal: sumLevelField("materializedCandidateCount"),
+    leafProofLedgerCheckedCountTotal: sumLevelField("leafProofLedgerCheckedCount"),
+    leafProofLedgerFiniteCountTotal: sumLevelField("leafProofLedgerFiniteCount"),
+    leafProofLedgerSkipCountTotal: sumLevelField("leafProofLedgerSkipCount"),
+    leafProofLedgerSkipImpliedCompletionCountTotal: sumLevelField("leafProofLedgerSkipImpliedCompletionCount"),
+    leafProofLedgerRetainedCountTotal: sumLevelField("leafProofLedgerRetainedCount"),
+    leafProofLedgerUnknownCountTotal: sumLevelField("leafProofLedgerUnknownCount"),
     levels,
     latestGenerators: profiles.map(serializeMedleyExactPrefixUpperReplayProfile),
   };
@@ -3688,6 +3888,12 @@ function mergeMedleyExactPrefixUpperReplaySummaries(
     hardUpperUnknownCountTotal: sumLevelField("hardUpperUnknownCount"),
     candidateEvaluationCountTotal: sumLevelField("candidateEvaluationCount"),
     materializedCandidateCountTotal: sumLevelField("materializedCandidateCount"),
+    leafProofLedgerCheckedCountTotal: sumLevelField("leafProofLedgerCheckedCount"),
+    leafProofLedgerFiniteCountTotal: sumLevelField("leafProofLedgerFiniteCount"),
+    leafProofLedgerSkipCountTotal: sumLevelField("leafProofLedgerSkipCount"),
+    leafProofLedgerSkipImpliedCompletionCountTotal: sumLevelField("leafProofLedgerSkipImpliedCompletionCount"),
+    leafProofLedgerRetainedCountTotal: sumLevelField("leafProofLedgerRetainedCount"),
+    leafProofLedgerUnknownCountTotal: sumLevelField("leafProofLedgerUnknownCount"),
     levels,
     latestGenerators: next.latestGenerators,
   };

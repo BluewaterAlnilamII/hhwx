@@ -71,6 +71,7 @@ Baseline and gate artifacts retained:
 | `low-memory-polish-hhwx-2026-06-17T12-23-45-243Z.json` | two-row pressure + prefix replay smoke | `P01:244 exact`, `P02:260 bounded`, gap `382812`, peak `2979 MiB`; prefix summaries present |
 | `low-memory-polish-hhwx-2026-06-17T12-30-37-247Z.json` | six-row pressure + prefix replay gate | `4 exact / 2 bounded`, gap `582812`, peak `3308 MiB`; scores, max scores, candidate counts, and proof states match the clean PR #43 gate |
 | `low-memory-polish-hhwx-2026-06-17T15-03-45-774Z.json` | two-row pressure + prefix margin replay smoke | `P01:244 exact`, `P02:260 bounded`, gap `382812`, peak `3024 MiB`; average/max scores and candidate counts match `2026-06-17T12-23-45` |
+| `low-memory-polish-hhwx-2026-06-17T15-15-51-889Z.json` | six-row pressure + leaf proof ledger gate | `4 exact / 2 bounded`, gap `582812`, peak `3023 MiB`; scores, max scores, candidate counts, abort reasons, and proof states match `2026-06-17T12-30-37` |
 
 Use the pressure validation environment for early-pruning gates:
 
@@ -102,6 +103,15 @@ Two-row prefix margin replay sample:
 - `P02:260` remained bounded at `candidate-fill-soft-limit`, with candidate counts `[400000, 212825, 134977]` and `972467` materialized candidates;
 - local slot margin buckets show surviving `P02:260` level-4 and leaf prefixes are still above the local cutoff; local cutoff alone cannot produce proof-backed candidate-birth pruning;
 - implementation rule: keep margin bucket arrays only in aggregate summary levels. Serializing them inside every `latestGenerators` entry can turn a constant-size diagnostic into a large per-generator report and OOM hard rows.
+
+Six-row leaf proof ledger sample:
+
+- artifact: `low-memory-polish-hhwx-2026-06-17T15-15-51-889Z.json`;
+- the ledger records existing cross-slot leaf skips without changing behavior: `prefixUpper`, `otherSlotUpper`, `totalUpper`, `incumbent`, `margin`, `slot/level`, and `impliedCompletionCount` are present in capped skip samples;
+- focused proof state stayed stable: `4 exact / 2 bounded`, gap `582812`, `0 failed / 0 timedOut / 0 memoryLimited`;
+- across the six focused rows, the ledger checked `5,164,007` finite leaf proofs and observed `1,098,070` existing proof-backed leaf skips (`21.3%` of checked leaves);
+- `P02:260` is the important exception: `566,635` leaf proofs checked, only `11` skips, all with tiny negative margins (`min -0.85`), so current leaf proof cannot deliver the `25%` P02 candidate-birth target;
+- next algorithmic work should diagnose and tighten the `otherSlotUpper` source for `P02:260` instead of simply promoting the existing leaf skip to an opt-in pruning feature.
 
 The JSON files above contain `isolated.*Path` fields for detailed per-row diagnostics. Those referenced files are part of the retained baseline set.
 
@@ -206,11 +216,14 @@ Early-pruning success targets:
 
 ## Immediate Next Actions
 
-1. Add no-op prefix margin/cutoff buckets to the existing prefix replay summary.
-2. Run a pressure smoke on `P01:244` and `P02:260` with prefix replay enabled.
-3. Use the margin distribution to decide whether leaf-birth pruning is viable with current upper bounds.
-4. Add hypothetical proof-ledger fields before enabling any real skip.
-5. Only after no-op diagnostics are stable, test opt-in proof-backed pruning on focused rows.
+1. Add a no-op `P02:260` other-slot upper source diagnostic:
+   - compare current `pairUnseenUpperBound` against generated-pair upper and capacity upper where affordable;
+   - record source, margin, and whether a tighter source would have made the leaf skipable;
+   - keep it opt-in because this may be expensive.
+2. Run `P02:260` pressure smoke with the source diagnostic.
+3. If the source diagnostic shows meaningful skip potential, design a proof-backed tighter complement upper gate.
+4. If it does not, move the early-pruning target from leaf birth to level-4 signature/dominance or raw-index storage.
+5. Do not enable new pruning until a replay ledger proves zero violations on focused rows.
 
 ## Maintenance Rules
 
