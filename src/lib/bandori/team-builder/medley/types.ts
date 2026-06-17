@@ -740,6 +740,11 @@ export type MedleyTeamCandidate = {
   cardIds: number[];
   cardInstanceKeys?: string[];
   cardSearchIndices?: number[];
+  cardSearchIndex0?: number;
+  cardSearchIndex1?: number;
+  cardSearchIndex2?: number;
+  cardSearchIndex3?: number;
+  cardSearchIndex4?: number;
 };
 
 export type MedleyExactSlotCandidateSearchNode = {

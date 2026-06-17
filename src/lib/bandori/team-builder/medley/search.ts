@@ -694,7 +694,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
     optimization.enableExactCandidateCompactGlobalComplementCache !== false
   );
   const enableExactCandidateThinResultRetention = optimization.enableExactCandidateThinResultRetention === true;
-  const enableExactCandidateCompactCandidateKeySet = optimization.enableExactCandidateCompactCandidateKeySet === true;
+  const enableExactCandidateCompactCandidateKeySet = optimization.enableExactCandidateCompactCandidateKeySet !== false;
   const disableExactCandidateScoreCalculationCache = optimization.disableExactCandidateScoreCalculationCache === true;
   const disableExactCandidateScoreOnlyCache = optimization.disableExactCandidateScoreOnlyCache === true;
   const enableExperimentalStagedCandidateExtension = (

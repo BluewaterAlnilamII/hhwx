@@ -600,6 +600,26 @@ function getMedleyExactCandidateCards(slot: MedleySlotSearch, candidate: MedleyT
   if (candidate.cards.length === MEDLEY_TEAM_SIZE) {
     return candidate.cards;
   }
+  if (
+    candidate.cardSearchIndex0 !== undefined
+    && candidate.cardSearchIndex1 !== undefined
+    && candidate.cardSearchIndex2 !== undefined
+    && candidate.cardSearchIndex3 !== undefined
+    && candidate.cardSearchIndex4 !== undefined
+    && candidate.cardSearchIndex0 >= 0
+    && candidate.cardSearchIndex1 >= 0
+    && candidate.cardSearchIndex2 >= 0
+    && candidate.cardSearchIndex3 >= 0
+    && candidate.cardSearchIndex4 >= 0
+  ) {
+    return [
+      slot.searchCards[candidate.cardSearchIndex0]!,
+      slot.searchCards[candidate.cardSearchIndex1]!,
+      slot.searchCards[candidate.cardSearchIndex2]!,
+      slot.searchCards[candidate.cardSearchIndex3]!,
+      slot.searchCards[candidate.cardSearchIndex4]!,
+    ];
+  }
   if (candidate.cardSearchIndices?.length === MEDLEY_TEAM_SIZE) {
     return candidate.cardSearchIndices.map((cardIndex) => slot.searchCards[cardIndex]!);
   }
@@ -633,7 +653,12 @@ function stripMedleyExactCandidateCardRetention(
   candidate: MedleyTeamCandidate,
   cardSearchIndices: number[],
 ): MedleyTeamCandidate {
-  candidate.cardSearchIndices = [...cardSearchIndices];
+  candidate.cardSearchIndices = undefined;
+  candidate.cardSearchIndex0 = cardSearchIndices[0] ?? -1;
+  candidate.cardSearchIndex1 = cardSearchIndices[1] ?? -1;
+  candidate.cardSearchIndex2 = cardSearchIndices[2] ?? -1;
+  candidate.cardSearchIndex3 = cardSearchIndices[3] ?? -1;
+  candidate.cardSearchIndex4 = cardSearchIndices[4] ?? -1;
   candidate.cards = [];
   return candidate;
 }

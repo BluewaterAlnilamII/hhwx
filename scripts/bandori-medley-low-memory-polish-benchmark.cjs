@@ -49,7 +49,8 @@ function printUsage() {
     "  HHWX_LOW_MEMORY_COMPACT_GLOBAL_COMPLEMENT_CACHE=1 use compact exact-join global complement upper cache (default)",
     "  HHWX_LOW_MEMORY_LEGACY_GLOBAL_COMPLEMENT_CACHE=1 use legacy Map exact-join global complement cache",
     "  HHWX_LOW_MEMORY_THIN_CANDIDATE_RESULT=1 retain only score fields on exact candidates",
-    "  HHWX_LOW_MEMORY_COMPACT_CANDIDATE_KEY_SET=1 use compact exact-join candidate key sets",
+    "  HHWX_LOW_MEMORY_COMPACT_CANDIDATE_KEY_SET=1 use compact exact-join candidate key sets (default)",
+    "  HHWX_LOW_MEMORY_LEGACY_CANDIDATE_KEY_SET=1 use legacy Set exact-join candidate key sets",
     "  HHWX_LOW_MEMORY_SCORE_CALC_CACHE_LIMIT=... bound exact-join score calculation cache entries",
     "  HHWX_LOW_MEMORY_SKIP_SEEDING_HEADROOM_MIB=1600 skip config seeding below this memory headroom",
     "  HHWX_LOW_MEMORY_AUTO_SEEDING_PRESSURE_SKIP=1 skip config seeding under proof-safe memory pressure",
@@ -226,6 +227,9 @@ function hhwxOptimizationJson() {
   }
   if (process.env.HHWX_LOW_MEMORY_COMPACT_CANDIDATE_KEY_SET === "1") {
     optimization.enableExactCandidateCompactCandidateKeySet = true;
+  }
+  if (process.env.HHWX_LOW_MEMORY_LEGACY_CANDIDATE_KEY_SET === "1") {
+    optimization.enableExactCandidateCompactCandidateKeySet = false;
   }
   if (process.env.HHWX_LOW_MEMORY_COMPACT_CANDIDATE_CARDS === "1") {
     optimization.disableExactCandidateCardsRetention = true;
