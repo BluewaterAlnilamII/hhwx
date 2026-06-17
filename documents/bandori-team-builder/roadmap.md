@@ -205,6 +205,11 @@ P02 raw storage census:
 - lightweight P02 census completed with unchanged result fields: bounded gap `382812`, score `9376984`, max score `9412868`;
 - current rich candidate resident path holds `747802` candidates across slots `[400000, 212825, 134977]`;
 - estimated typed-array footprint is much smaller than the observed multi-GiB process peak: raw rows `28.53 MiB`, final join input `48.01 MiB`, all-slot conflict index `52.27 MiB`;
+- the first actual raw candidate pool profile is retained in `low-memory-polish-hhwx-2026-06-17T19-40-22-557Z.json`;
+- with `HHWX_LOW_MEMORY_RAW_CANDIDATE_POOL_PROFILE=1`, P02 completed with unchanged result fields: bounded gap `382812`, score `9376984`, average score `9376984`, max score `9412868`;
+- the profile materialized exact-sized typed arrays for the same `747802` candidates in `28.53 MiB` total, `40` bytes per candidate, with slot footprints `[15.26, 8.12, 5.15] MiB`;
+- raw pool consistency checks passed: `mismatchCountTotal = 0`, `scoreOrderViolationCountTotal = 0`; build time was about `1980ms`;
+- because this profile still duplicates the current rich object pool, its smoke peak was higher (`3768 MiB`) than the lightweight census; that is expected for an opt-in probe and is not a default memory win yet;
 - current conclusion: raw-index/typed-array resident storage is now the highest-confidence route to material memory reduction. Early pruning remains valuable for proof closure, but the P02 memory class cannot be solved by prefix skip counts alone while candidate fill still reaches the same caps.
 
 The JSON files above contain `isolated.*Path` fields for detailed per-row diagnostics. Those referenced files are part of the retained baseline set.
@@ -328,15 +333,21 @@ Early-pruning success targets:
    - current numeric blocker measurement is retained in `2026-06-17T19-11-42`;
    - no-op cheap-upper probe is retained in `2026-06-17T19-16-21` and shows the current proof timeboxes without closing P02;
    - lightweight raw census is retained in `2026-06-17T19-29-52` and shows a `48-52 MiB` raw final-join/input footprint for the current P02 candidate pool;
+   - actual raw candidate pool profile is retained in `2026-06-17T19-40-22` and proves the current P02 candidate rows can be copied into `28.53 MiB` exact-sized typed arrays with `0` mismatch and `0` score-order violations;
    - next prototype should be raw-index candidate resident storage or a fundamentally cheaper frontier proof over raw-index candidates, not raising existing proof guards;
    - do not raise guard constants as a default change without memory evidence.
-6. Tighten the prefix proof before broader pruning:
+6. Promote raw candidate pool from profile to opt-in resident infrastructure:
+   - keep the first slice no-op with respect to search result and proof state;
+   - retain `sourceIndex` so winners and debug output can be late-hydrated from the original rich candidate only when needed;
+   - first target is final-join/frontier helper read paths over raw scores and card ids, not default release of rich candidates;
+   - acceptance for this slice is `0` raw mismatch, unchanged score/average/max/gap/status, and no P02 OOM.
+7. Tighten the prefix proof before broader pruning:
    - avoid generated-pair-only comparison on level-4 replay unless explicitly requested;
    - level-3 replay currently has no P02 skip signal with the existing slot upper;
    - level-3 lookahead has the first strong diagnostic signal, but it must remain replay-only until ledger coverage is complete;
    - keep the hot path replay-only until violation count is `0` on focused gates.
-7. Run `P02:260` pressure smoke and compare real materialized candidate reduction against the `25%` target before enabling broader gates.
-8. Run the six-row focused gate before considering broader testing or default promotion.
+8. Run `P02:260` pressure smoke after each resident-storage slice and compare against the current raw-profile artifact before enabling broader gates.
+9. Run the six-row focused gate before considering broader testing or default promotion.
 
 ## Maintenance Rules
 

@@ -59,6 +59,8 @@ function printUsage() {
     "  HHWX_LOW_MEMORY_PREFIX_OTHER_UPPER_SOURCE_MAX_CHECKS=2048 cap expensive source diagnostic checks per generator",
     "  HHWX_LOW_MEMORY_PREFIX_OTHER_UPPER_SOURCE_MAX_MARGIN=10000 cap source diagnostic to near-cutoff leaves",
     "  HHWX_LOW_MEMORY_CAPACITY_SOURCE_LEAF_PRUNING=1 enable narrow capacity-source leaf pruning",
+    "  HHWX_LOW_MEMORY_RAW_CANDIDATE_POOL_PROFILE=1 build opt-in raw typed-array candidate pool profile",
+    "  HHWX_LOW_MEMORY_RAW_SOLVER_INPUT_CENSUS=1 estimate compact raw solver input footprint without memory attribution",
     "  HHWX_LOW_MEMORY_DISABLE_GLOBAL_COMPLEMENT_CACHE=1 disable exact-join global complement upper cache",
     "  HHWX_LOW_MEMORY_COMPACT_GLOBAL_COMPLEMENT_CACHE=1 use compact exact-join global complement upper cache (default)",
     "  HHWX_LOW_MEMORY_LEGACY_GLOBAL_COMPLEMENT_CACHE=1 use legacy Map exact-join global complement cache",
@@ -220,6 +222,9 @@ function hhwxOptimizationJson() {
   if (process.env.HHWX_LOW_MEMORY_DOMINANCE_REPLAY === "1") {
     optimization.debugExactCandidateJoinMemoryAttribution = true;
     optimization.debugExactCandidateDominanceReplay = true;
+  }
+  if (process.env.HHWX_LOW_MEMORY_RAW_CANDIDATE_POOL_PROFILE === "1") {
+    optimization.debugExactCandidateRawCandidatePoolProfile = true;
   }
   if (process.env.HHWX_LOW_MEMORY_RAW_SOLVER_INPUT_CENSUS === "1") {
     optimization.debugExactCandidateRawSolverInputCensus = true;
@@ -477,6 +482,13 @@ function patchHhwxBenchmarkScoreMetrics() {
         + "    exactCandidateJoinRawSolverInputCensus: profiling.exactCandidateJoinRawSolverInputCensus ?? null,\n",
     );
   }
+  if (!patched.includes("exactCandidateJoinRawCandidatePoolProfile: profiling.exactCandidateJoinRawCandidatePoolProfile ?? null")) {
+    patched = patched.replace(
+      /(exactCandidateJoinMemorySnapshots: profiling\.exactCandidateJoinMemorySnapshots \?\? null,\r?\n)/,
+      "$1"
+        + "    exactCandidateJoinRawCandidatePoolProfile: profiling.exactCandidateJoinRawCandidatePoolProfile ?? null,\n",
+    );
+  }
   if (!patched.includes("exactCandidateJoinLastAnchorFrontierPrecheckSlotIndex: profiling.exactCandidateJoinLastAnchorFrontierPrecheckSlotIndex ?? null")) {
     patched = patched.replace(
       /(exactCandidateJoinLastAnchorFrontierProofHighPairRecordUpperCount: \(\r?\n\s+profiling\.exactCandidateJoinLastAnchorFrontierProofHighPairRecordUpperCount \?\? null\r?\n\s+\),\r?\n)/,
@@ -510,6 +522,7 @@ function patchHhwxBenchmarkScoreMetrics() {
     || !patched.includes("maxScoreCandidate: searchResult.maxScoreCandidate &&")
     || !patched.includes("exactCandidateJoinMemorySnapshots: profiling.exactCandidateJoinMemorySnapshots ?? null")
     || !patched.includes("exactCandidateJoinPrefixUpperReplaySummary: profiling.exactCandidateJoinPrefixUpperReplaySummary ?? null")
+    || !patched.includes("exactCandidateJoinRawCandidatePoolProfile: profiling.exactCandidateJoinRawCandidatePoolProfile ?? null")
     || !patched.includes("exactCandidateJoinRawSolverInputCensus: profiling.exactCandidateJoinRawSolverInputCensus ?? null")
     || !patched.includes("exactCandidateJoinLastAnchorFrontierPrecheckSlotIndex: profiling.exactCandidateJoinLastAnchorFrontierPrecheckSlotIndex ?? null")
   ) {
