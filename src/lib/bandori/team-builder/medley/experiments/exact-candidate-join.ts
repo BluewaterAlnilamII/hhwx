@@ -133,6 +133,7 @@ const MEDLEY_EXACT_CARD_KEY_BITS = BigInt(14);
 const MEDLEY_EXACT_CARD_KEY_LIMIT = 1 << 14;
 const MEDLEY_EXACT_RAW_JOIN_PARITY_MAX_CANDIDATE_TOTAL = 50_000;
 const MEDLEY_EXACT_RAW_JOIN_PARITY_MIN_REMAINING_MS = 2_000;
+const MEDLEY_EXACT_RAW_PAIR_UPPER_SCAN_PARITY_MAX_CANDIDATE_TOTAL = 60_000;
 const MEDLEY_EXACT_SIGNATURE_CENSUS_BUCKET_LIMIT = 20_000;
 const MEDLEY_EXACT_SIGNATURE_CENSUS_TOP_BUCKETS = 8;
 const MEDLEY_EXACT_DOMINANCE_REPLAY_MAX_CANDIDATE_TOTAL = 60_000;
@@ -2513,6 +2514,134 @@ function buildMedleyExactRawCandidatePoolProfile(
     buildMedleyExactRawCandidatePool(candidatesBySlot),
     source,
   );
+}
+
+function medleyExactRawCandidatesOverlap(
+  leftSlot: MedleyExactRawCandidatePoolSlot,
+  leftIndex: number,
+  rightSlot: MedleyExactRawCandidatePoolSlot,
+  rightIndex: number,
+): boolean {
+  const leftBaseCardIndex = leftIndex * MEDLEY_TEAM_SIZE;
+  const rightBaseCardIndex = rightIndex * MEDLEY_TEAM_SIZE;
+  for (let leftCardIndex = 0; leftCardIndex < MEDLEY_TEAM_SIZE; leftCardIndex += 1) {
+    const leftCardId = leftSlot.cardIds[leftBaseCardIndex + leftCardIndex];
+    if (leftCardId < 0) {
+      continue;
+    }
+    for (let rightCardIndex = 0; rightCardIndex < MEDLEY_TEAM_SIZE; rightCardIndex += 1) {
+      if (leftCardId === rightSlot.cardIds[rightBaseCardIndex + rightCardIndex]) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+function estimateGeneratedMedleyExactRawCandidatePairUpper(
+  leftSlot: MedleyExactRawCandidatePoolSlot,
+  rightSlot: MedleyExactRawCandidatePoolSlot,
+): {
+  upperBound: number;
+  scannedLeftCandidateCount: number;
+  scannedRightCandidateCount: number;
+} {
+  let bestScore = Number.NEGATIVE_INFINITY;
+  let scannedLeftCandidateCount = 0;
+  let scannedRightCandidateCount = 0;
+  for (let leftIndex = 0; leftIndex < leftSlot.length; leftIndex += 1) {
+    scannedLeftCandidateCount += 1;
+    const leftScore = leftSlot.scores[leftIndex];
+    for (let rightIndex = 0; rightIndex < rightSlot.length; rightIndex += 1) {
+      scannedRightCandidateCount += 1;
+      const score = leftScore + rightSlot.scores[rightIndex];
+      if (score < bestScore) {
+        break;
+      }
+      if (medleyExactRawCandidatesOverlap(leftSlot, leftIndex, rightSlot, rightIndex)) {
+        continue;
+      }
+      bestScore = Math.max(bestScore, score);
+      break;
+    }
+  }
+  return { upperBound: bestScore, scannedLeftCandidateCount, scannedRightCandidateCount };
+}
+
+function buildMedleyExactRawPairUpperScanParityProfile(
+  candidatesBySlot: readonly MedleyTeamCandidate[][],
+  rawPool: MedleyExactRawCandidatePool,
+): Record<string, unknown> {
+  const startedAt = performance.now();
+  const candidateCountsBySlot = candidatesBySlot.map((candidates) => candidates.length);
+  const candidateCountTotal = candidateCountsBySlot.reduce((sum, count) => sum + count, 0);
+  if (candidateCountTotal > MEDLEY_EXACT_RAW_PAIR_UPPER_SCAN_PARITY_MAX_CANDIDATE_TOTAL) {
+    return {
+      algorithm: "hhwx-raw-pair-upper-scan-parity-v1",
+      enabled: true,
+      skipped: true,
+      skipReason: "candidate-total-limit",
+      candidateCountTotal,
+      candidateCountsBySlot,
+      limit: MEDLEY_EXACT_RAW_PAIR_UPPER_SCAN_PARITY_MAX_CANDIDATE_TOTAL,
+      elapsedMs: Math.round(performance.now() - startedAt),
+    };
+  }
+
+  const pairs = candidatesBySlot.map((_, excludedSlotIndex) => {
+    const pairSlotIndices = candidatesBySlot
+      .map((__, slotIndex) => slotIndex)
+      .filter((slotIndex) => slotIndex !== excludedSlotIndex) as [number, number];
+    const objectUpperBound = estimateGeneratedMedleyExactCandidatePairUpper(
+      candidatesBySlot[pairSlotIndices[0]],
+      candidatesBySlot[pairSlotIndices[1]],
+    );
+    const rawResult = estimateGeneratedMedleyExactRawCandidatePairUpper(
+      rawPool.slots[pairSlotIndices[0]],
+      rawPool.slots[pairSlotIndices[1]],
+    );
+    return {
+      excludedSlotIndex,
+      pairSlotIndices,
+      objectUpperBound: Number.isFinite(objectUpperBound) ? objectUpperBound : null,
+      rawUpperBound: Number.isFinite(rawResult.upperBound) ? rawResult.upperBound : null,
+      matched: objectUpperBound === rawResult.upperBound,
+      scannedLeftCandidateCount: rawResult.scannedLeftCandidateCount,
+      scannedRightCandidateCount: rawResult.scannedRightCandidateCount,
+    };
+  });
+  return {
+    algorithm: "hhwx-raw-pair-upper-scan-parity-v1",
+    enabled: true,
+    skipped: false,
+    source: "shared-current-pool",
+    candidateCountTotal,
+    candidateCountsBySlot,
+    matched: pairs.every((pair) => pair.matched),
+    mismatchCount: pairs.filter((pair) => !pair.matched).length,
+    elapsedMs: Math.round(performance.now() - startedAt),
+    pairs,
+  };
+}
+
+function buildSkippedMedleyExactRawPairUpperScanParityProfile(
+  candidatesBySlot: readonly MedleyTeamCandidate[][],
+): Record<string, unknown> | null {
+  const candidateCountsBySlot = candidatesBySlot.map((candidates) => candidates.length);
+  const candidateCountTotal = candidateCountsBySlot.reduce((sum, count) => sum + count, 0);
+  if (candidateCountTotal <= MEDLEY_EXACT_RAW_PAIR_UPPER_SCAN_PARITY_MAX_CANDIDATE_TOTAL) {
+    return null;
+  }
+  return {
+    algorithm: "hhwx-raw-pair-upper-scan-parity-v1",
+    enabled: true,
+    skipped: true,
+    skipReason: "candidate-total-limit",
+    candidateCountTotal,
+    candidateCountsBySlot,
+    limit: MEDLEY_EXACT_RAW_PAIR_UPPER_SCAN_PARITY_MAX_CANDIDATE_TOTAL,
+    rawPoolBuilt: false,
+  };
 }
 
 function sumMedleyExactFloat64ArrayBytes(values: Iterable<Float64Array>): number {
@@ -8407,6 +8536,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     enableExactCandidateCapacityLevel3LookaheadPruning?: boolean;
     debugExactCandidateDominanceReplay?: boolean;
     debugExactCandidateRawCandidatePoolProfile?: boolean;
+    debugExactCandidateRawPairUpperScanParity?: boolean;
     debugExactCandidateRawSolverInputCensus?: boolean;
     exactCandidateScoreCalculationCacheEntryLimit?: number | null;
     enableExactCandidateScoreCalculationCachePressureFallback?: boolean;
@@ -8444,6 +8574,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     profiling.exactCandidateJoinLastAbortObservedUpperBound = null;
     profiling.exactCandidateJoinLastAbortRemainingMs = null;
     profiling.exactCandidateJoinRawCandidatePoolProfile = null;
+    profiling.exactCandidateJoinRawPairUpperScanParity = null;
     profiling.exactCandidateJoinRawSolverInputCensus = null;
     profiling.exactCandidateJoinLastGuardedExtensionSlotIndex = null;
     profiling.exactCandidateJoinLastGuardedExtensionLimit = null;
@@ -8717,6 +8848,20 @@ export function searchMedleyConfigurationByExactCandidateJoin(
       candidatesBySlot,
     );
   };
+  const recordRawPairUpperScanParity = (): void => {
+    if (context.debugExactCandidateRawPairUpperScanParity !== true) {
+      return;
+    }
+    const skippedProfile = buildSkippedMedleyExactRawPairUpperScanParityProfile(candidatesBySlot);
+    if (skippedProfile) {
+      profiling.exactCandidateJoinRawPairUpperScanParity = skippedProfile;
+      return;
+    }
+    profiling.exactCandidateJoinRawPairUpperScanParity = buildMedleyExactRawPairUpperScanParityProfile(
+      candidatesBySlot,
+      getRawCandidatePool(),
+    );
+  };
   const recordRawCandidatePoolProfile = (): void => {
     if (context.debugExactCandidateRawCandidatePoolProfile !== true) {
       return;
@@ -8733,6 +8878,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     observedUpperBound: number | null = getObservedExactCandidateJoinUpperBound(),
   ): MedleyExactCandidateJoinResult => {
     recordRawSolverInputCensus();
+    recordRawPairUpperScanParity();
     recordRawCandidatePoolProfile();
     recordPrefixUpperReplaySummary();
     releaseExactJoinWorkingSet();
@@ -8752,6 +8898,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     result: BandoriMedleyTeamSearchResult | null = null,
   ): MedleyExactCandidateJoinResult => {
     recordRawSolverInputCensus();
+    recordRawPairUpperScanParity();
     recordRawCandidatePoolProfile();
     recordPrefixUpperReplaySummary();
     releaseExactJoinWorkingSet();
