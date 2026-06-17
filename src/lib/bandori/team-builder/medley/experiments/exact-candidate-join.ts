@@ -2245,7 +2245,7 @@ export function createMedleyExactSlotCandidateGenerator(
   disableCandidateCardsRetention = false,
   enableCompactScoreOnlyCache = false,
   disableGlobalComplementUpperCache = false,
-  enableCompactGlobalComplementUpperCache = false,
+  enableCompactGlobalComplementUpperCache = true,
   enableThinCandidateResultRetention = false,
 ): MedleyExactSlotCandidateGenerator {
   // The generator is ordered by optimistic slot upper bound. Exhaustion proves that no unseen

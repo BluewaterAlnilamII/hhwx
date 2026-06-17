@@ -46,7 +46,8 @@ function printUsage() {
     "  HHWX_LOW_MEMORY_FIXTURE_PATH=...           profile fixture path",
     "  HHWX_LOW_MEMORY_TRACE=1                    enable HHWX memory attribution trace fields",
     "  HHWX_LOW_MEMORY_DISABLE_GLOBAL_COMPLEMENT_CACHE=1 disable exact-join global complement upper cache",
-    "  HHWX_LOW_MEMORY_COMPACT_GLOBAL_COMPLEMENT_CACHE=1 use compact exact-join global complement upper cache",
+    "  HHWX_LOW_MEMORY_COMPACT_GLOBAL_COMPLEMENT_CACHE=1 use compact exact-join global complement upper cache (default)",
+    "  HHWX_LOW_MEMORY_LEGACY_GLOBAL_COMPLEMENT_CACHE=1 use legacy Map exact-join global complement cache",
     "  HHWX_LOW_MEMORY_THIN_CANDIDATE_RESULT=1 retain only score fields on exact candidates",
     "  HHWX_LOW_MEMORY_COMPACT_CANDIDATE_KEY_SET=1 use compact exact-join candidate key sets",
     "  HHWX_LOW_MEMORY_SCORE_CALC_CACHE_LIMIT=... bound exact-join score calculation cache entries",
@@ -215,6 +216,9 @@ function hhwxOptimizationJson() {
   }
   if (process.env.HHWX_LOW_MEMORY_COMPACT_GLOBAL_COMPLEMENT_CACHE === "1") {
     optimization.enableExactCandidateCompactGlobalComplementCache = true;
+  }
+  if (process.env.HHWX_LOW_MEMORY_LEGACY_GLOBAL_COMPLEMENT_CACHE === "1") {
+    optimization.enableExactCandidateCompactGlobalComplementCache = false;
   }
   if (process.env.HHWX_LOW_MEMORY_THIN_CANDIDATE_RESULT === "1") {
     optimization.enableExactCandidateThinResultRetention = true;

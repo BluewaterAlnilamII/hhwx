@@ -691,7 +691,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
     optimization.disableExactCandidateGlobalComplementCache === true
   );
   const enableExactCandidateCompactGlobalComplementCache = (
-    optimization.enableExactCandidateCompactGlobalComplementCache === true
+    optimization.enableExactCandidateCompactGlobalComplementCache !== false
   );
   const enableExactCandidateThinResultRetention = optimization.enableExactCandidateThinResultRetention === true;
   const enableExactCandidateCompactCandidateKeySet = optimization.enableExactCandidateCompactCandidateKeySet === true;
