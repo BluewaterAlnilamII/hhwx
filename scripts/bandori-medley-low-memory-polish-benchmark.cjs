@@ -60,7 +60,7 @@ function printUsage() {
     "  HHWX_LOW_MEMORY_PREFIX_OTHER_UPPER_SOURCE_MAX_MARGIN=10000 cap source diagnostic to near-cutoff leaves",
     "  HHWX_LOW_MEMORY_CAPACITY_SOURCE_LEAF_PRUNING=1 enable narrow capacity-source leaf pruning",
     "  HHWX_LOW_MEMORY_RAW_ANCHOR_CHEAP_UPPER_REPLAY=1 compare anchor cheap-upper replay over local raw candidate pools",
-    "  HHWX_LOW_MEMORY_RAW_ANCHOR_FRONTIER_PROBE=1 run no-op raw-index anchor/frontier upper probe on hard rows",
+    "  HHWX_LOW_MEMORY_RAW_ANCHOR_FRONTIER_PROBE=1 run guarded no-op raw-index anchor/frontier probe; hard rows skip raw pool build",
     "  HHWX_LOW_MEMORY_RAW_CANDIDATE_POOL_PROFILE=1 build opt-in raw typed-array candidate pool profile",
     "  HHWX_LOW_MEMORY_RAW_PAIR_COMPLEMENT_PARITY=1 compare banned-card pair complement over shared raw candidate pool",
     "  HHWX_LOW_MEMORY_RAW_PAIR_UPPER_SCAN_PARITY=1 compare generated pair upper scan over shared raw candidate pool",

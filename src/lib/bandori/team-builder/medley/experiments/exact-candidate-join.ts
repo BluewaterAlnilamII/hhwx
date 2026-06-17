@@ -135,7 +135,7 @@ const MEDLEY_EXACT_RAW_JOIN_PARITY_MAX_CANDIDATE_TOTAL = 50_000;
 const MEDLEY_EXACT_RAW_JOIN_PARITY_MIN_REMAINING_MS = 2_000;
 const MEDLEY_EXACT_RAW_ANCHOR_CHEAP_UPPER_REPLAY_MAX_CANDIDATE_TOTAL = 60_000;
 const MEDLEY_EXACT_RAW_ANCHOR_CHEAP_UPPER_REPLAY_SAMPLE_LIMIT = 16;
-const MEDLEY_EXACT_RAW_ANCHOR_FRONTIER_PROBE_MAX_CANDIDATE_TOTAL = 1_000_000;
+const MEDLEY_EXACT_RAW_ANCHOR_FRONTIER_PROBE_MAX_CANDIDATE_TOTAL = 0;
 const MEDLEY_EXACT_RAW_ANCHOR_FRONTIER_PROBE_MAX_ANCHORS = 50_000;
 const MEDLEY_EXACT_RAW_ANCHOR_FRONTIER_PROBE_TIMEBOX_MS = 8_000;
 const MEDLEY_EXACT_RAW_PAIR_COMPLEMENT_PARITY_MAX_CANDIDATE_TOTAL = 60_000;
@@ -11000,7 +11000,6 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     || context.debugExactCandidateSignatureCensus === true
     || context.debugExactCandidateUpperReplay === true
     || context.debugExactCandidateDominanceReplay === true
-    || context.debugExactCandidateRawAnchorFrontierProbe === true
     || context.debugExactCandidateRawCandidatePoolProfile === true
     || context.debugExactCandidateRawSolverInputCensus === true
   ) {
