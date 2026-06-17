@@ -739,6 +739,45 @@ Combined interpretation:
   The remaining pressure is therefore in rich candidate/frontier/complement
   residency, not candidate-key storage.
 
+Candidate instance-key retention checkpoint:
+
+Implementation:
+
+- `evaluateMedleySlotCandidateWithCache()` now omits per-candidate
+  `cardInstanceKeys` arrays when the slot search pool has no duplicate
+  `cardId`.
+- Duplicate-card pools still retain instance keys, so profile-copy identity
+  behavior is preserved where numeric `cardId` is not sufficient.
+- This is an object-residency reduction only. Candidate scores, upper bounds,
+  conflict checks, exact/bounded proof state, and final result hydration are
+  unchanged.
+
+Focused artifacts:
+
+| Artifact | Scope | Status | Gap | Peak | Notes |
+| --- | --- | --- | ---: | ---: | --- |
+| `low-memory-polish-hhwx-2026-06-17T00-03-05-366Z.json` | `P02:260` before instance-key change | bounded | `382812` | `3278 MiB` | same auto pressure skip and pressure cache fallback flags |
+| `low-memory-polish-hhwx-2026-06-17T00-13-01-067Z.json` | `P02:260` after instance-key change | bounded | `382812` | `3079 MiB` | average `9376984`, max `9412868`, generated `747802` |
+| `low-memory-polish-hhwx-2026-06-17T00-15-36-221Z.json` | `P02:260`, `P08:260`, `P08:323`, `P10:260`, `P10:none` | `4/5` exact | `382812` | `3935 MiB` | focused exact rows preserved; only `P02:260` bounded |
+
+Matrix checkpoint:
+
+| Artifact | Scope | Exact | Bounded | Failed | Timed Out | Memory Limited | Gap Total | Peak | Notes |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| `low-memory-polish-hhwx-2026-06-17T00-30-30-967Z.json` | full 40-case, auto pressure skip, no duplicate-free candidate instance keys | `38` | `2` | `0` | `0` | `0` | `582812` | `3929 MiB` | all 40 rows include average/max score |
+
+Interpretation:
+
+- `P02:260` improved from `3674 MiB` in the previous full gate to `3144 MiB`
+  in the full gate after this change, with the same bounded gap, same average
+  and max score, and the same candidate counts `[400000, 212825, 134977]`.
+- This satisfies the current Stage 3 P02 target of `P02:260 < 3596 MiB` in a
+  full 40-case run.
+- The full-run peak is now `3929 MiB`, coming from `P10:none`; that row is
+  exact and has much smaller candidate/key counts, so the remaining overall
+  peak appears to include runtime/GC and non-P02 residency effects. The
+  long-term hard-case target remains below `1 GiB`, so Stage 3/4 are not done.
+
 ### Stage 4: Raw-Index Final Join
 
 Purpose:

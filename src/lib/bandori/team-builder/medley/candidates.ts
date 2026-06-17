@@ -45,6 +45,7 @@ const scoreOnlyTeamEvaluationCacheBySlot = new WeakMap<
   MedleySlotSearch,
   Map<string, MedleyScoreOnlyTeamEvaluationCacheValue>
 >();
+const hasDuplicateCardIdsBySlot = new WeakMap<MedleySlotSearch, boolean>();
 
 const MEDLEY_SCORE_ONLY_EVENT_POINT_OPTIONS: BandoriTeamSearchResult["eventPointOptions"] = {
   mode: "none",
@@ -102,6 +103,30 @@ function getMedleyCandidateCardIds(cards: SearchCard[]): number[] {
     default:
       return cards.map((card) => card.cardId);
   }
+}
+
+function medleySlotHasDuplicateCardIds(slot: MedleySlotSearch): boolean {
+  const cached = hasDuplicateCardIdsBySlot.get(slot);
+  if (cached !== undefined) {
+    return cached;
+  }
+  const seen = new Set<number>();
+  for (const card of slot.searchCards) {
+    if (seen.has(card.cardId)) {
+      hasDuplicateCardIdsBySlot.set(slot, true);
+      return true;
+    }
+    seen.add(card.cardId);
+  }
+  hasDuplicateCardIdsBySlot.set(slot, false);
+  return false;
+}
+
+function getMedleyCandidateCardInstanceKeysIfNeeded(
+  slot: MedleySlotSearch,
+  cards: SearchCard[],
+): string[] | undefined {
+  return medleySlotHasDuplicateCardIds(slot) ? getCardInstanceKeys(cards) : undefined;
 }
 
 function isCompactMedleyScoreOnlyTeamEvaluationCacheEntry(
@@ -305,12 +330,20 @@ export function evaluateMedleySlotCandidateWithCache(
     profiling.teamEvaluationCacheHitCount += 1;
   }
 
-  return result
+  if (!result) {
+    return null;
+  }
+  const cardInstanceKeys = getMedleyCandidateCardInstanceKeysIfNeeded(slot, selectedCards);
+  return cardInstanceKeys
     ? {
       result,
       cards: selectedCards,
       cardIds: getMedleyCandidateCardIds(selectedCards),
-      cardInstanceKeys: getCardInstanceKeys(selectedCards),
+      cardInstanceKeys,
     }
-    : null;
+    : {
+      result,
+      cards: selectedCards,
+      cardIds: getMedleyCandidateCardIds(selectedCards),
+    };
 }
