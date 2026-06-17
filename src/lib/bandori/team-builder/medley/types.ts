@@ -782,6 +782,10 @@ export type MedleyExactSlotCandidateSearchNode = {
   prefixCapacityBatchReplayPrefixUpper?: number;
   prefixCapacityBatchReplayBestSafeOtherUpper?: number;
   prefixCapacityBatchReplayProofCutoffScore?: number;
+  prefixLevel3LookaheadReplayWouldSkip?: boolean;
+  prefixLevel3LookaheadReplayPrefixUpper?: number;
+  prefixLevel3LookaheadReplayBestSafeOtherUpper?: number;
+  prefixLevel3LookaheadReplayProofCutoffScore?: number;
 };
 
 export type MedleyExactSlotCandidateGlobalPruning = {

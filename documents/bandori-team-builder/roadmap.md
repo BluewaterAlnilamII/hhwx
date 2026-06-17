@@ -86,6 +86,8 @@ Baseline and gate artifacts retained:
 | `low-memory-polish-hhwx-2026-06-17T18-29-14-907Z.json` | `P02:260` basic level-3 lookahead replay, child budget `8192`, margin `500000` | bounded gap `382812`, score `9376984`, max `9412868`, peak `2960 MiB`; `8` would-skip prefixes representing `196970` relaxed completions |
 | `low-memory-polish-hhwx-2026-06-17T18-31-41-943Z.json` | `P02:260` basic level-3 lookahead replay, child budget `16384`, margin `500000` | bounded gap `382812`, score `9376984`, max `9412868`, peak `2985 MiB`; `54` would-skip prefixes representing `1035490` relaxed completions |
 | `low-memory-polish-hhwx-2026-06-17T18-38-51-150Z.json` | `P02:260` basic level-3 lookahead replay with capped proof samples, child budget `8192`, margin `500000` | bounded gap `382812`, score `9376984`, max `9412868`, peak `2980 MiB`; `8` would-skip prefixes representing `196970` relaxed completions, `8` capped proof samples |
+| `low-memory-polish-hhwx-2026-06-17T18-44-11-394Z.json` | `P02:260` basic level-3 lookahead replay with child-decision violation accounting, child budget `8192`, margin `500000` | bounded gap `382812`, score `9376984`, max `9412868`, peak `2960 MiB`; `1662` child decisions, `0` replay violations |
+| `low-memory-polish-hhwx-2026-06-17T18-46-51-730Z.json` | `P02:260` basic level-3 lookahead replay with child-decision violation accounting, child budget `16384`, margin `500000` | bounded gap `382812`, score `9376984`, max `9412868`, peak `3005 MiB`; `54` would-skip prefixes, `9997` child decisions, `0` replay violations |
 
 Use the pressure validation environment for early-pruning gates:
 
@@ -173,7 +175,8 @@ P02 basic level-3 lookahead replay:
 - with child budget `16384`, replay found `54` would-skip level-3 prefixes representing `1035490` relaxed completions and a best margin of `-214757.669`;
 - this crosses the near-term `25%` implied-completion target as a diagnostic signal, but it is not yet real candidate reduction because overlap and branch-local accounting are still relaxed;
 - capped proof samples are now recorded in `level3LookaheadSamples`; the `2026-06-17T18-38-51` smoke kept result fields unchanged and recorded `8` samples containing level-3 card ids, max-child card ids, `pairUnseenUpper`, `maxChildBasicCapacityUpper`, `maxChildOtherUpperSource`, `maxChildTotalUpper`, `incumbent`, and `margin`;
-- next retained direction: add branch-decision replay/violation accounting, then implement an opt-in real branch skip only if each would-skip prefix can be rechecked against materialized descendants without changing exact/bounded semantics.
+- branch-decision replay/violation accounting is now in place: the `8192` child-budget smoke registered `1662` child decisions with `0` violations, and the `16384` child-budget smoke registered `9997` child decisions with `0` violations;
+- next retained direction: implement an opt-in real branch skip and require actual materialized candidate reduction, unchanged result fields, and `0` lookahead replay violations before broader gates.
 
 The JSON files above contain `isolated.*Path` fields for detailed per-row diagnostics. Those referenced files are part of the retained baseline set.
 
@@ -284,7 +287,7 @@ Early-pruning success targets:
    - use a global child-prefix budget before constructing child proof work;
    - record the selected level-3 card ids, child count, finite child count, max child total upper, incumbent, margin, slot, and implied completion count in capped samples.
 3. Implement opt-in level-3 lookahead branch pruning only after the ledger is stable:
-   - first add branch-decision replay/violation accounting so would-skip level-3 prefixes are checked against later materialized descendants;
+   - branch-decision replay/violation accounting is available and has `0` violations on the retained `8192` and `16384` P02 smokes;
    - skip a level-3 branch only when the replayed max child total upper is finite and below the current cutoff;
    - report pruned prefix count, implied completions, and replay violations separately from existing leaf pruning;
    - compare actual `P02:260` materialized candidate reduction against the `25%` target.
