@@ -26,6 +26,8 @@ const defaultOptimizationJson = JSON.stringify({
   exactNodeSoftLimit: 5000000,
   skipConfigurationSeedingWhenMemoryHeadroomBelowMiB: 1600,
   debugConfigurationTrace: false,
+  enableExactCandidateCompactScoreOnlyCache: true,
+  enableExactCandidateThinResultRetention: true,
 });
 
 const profileLabels = ["P01", "P02", "P03", "P04", "P05", "P06", "P07", "P08", "P09", "P10"];
@@ -48,7 +50,8 @@ function printUsage() {
     "  HHWX_LOW_MEMORY_DISABLE_GLOBAL_COMPLEMENT_CACHE=1 disable exact-join global complement upper cache",
     "  HHWX_LOW_MEMORY_COMPACT_GLOBAL_COMPLEMENT_CACHE=1 use compact exact-join global complement upper cache (default)",
     "  HHWX_LOW_MEMORY_LEGACY_GLOBAL_COMPLEMENT_CACHE=1 use legacy Map exact-join global complement cache",
-    "  HHWX_LOW_MEMORY_THIN_CANDIDATE_RESULT=1 retain only score fields on exact candidates",
+    "  HHWX_LOW_MEMORY_THIN_CANDIDATE_RESULT=1 retain only score fields on exact candidates (default with compact score-only cache)",
+    "  HHWX_LOW_MEMORY_FULL_CANDIDATE_RESULT=1 keep legacy full candidate result retention",
     "  HHWX_LOW_MEMORY_COMPACT_CANDIDATE_KEY_SET=1 use compact exact-join candidate key sets (default)",
     "  HHWX_LOW_MEMORY_LEGACY_CANDIDATE_KEY_SET=1 use legacy Set exact-join candidate key sets",
     "  HHWX_LOW_MEMORY_SCORE_CALC_CACHE_LIMIT=... bound exact-join score calculation cache entries",
@@ -62,7 +65,8 @@ function printUsage() {
     "  HHWX_LOW_MEMORY_INITIAL_SCORE_CALC_CACHE_PRESSURE_SLOT_CARDS=200 fallback threshold for initial-candidate sync",
     "  HHWX_LOW_MEMORY_SCORE_ONLY_CACHE_PRESSURE_FALLBACK=1 disable score-only result cache for high-slot-card exact joins",
     "  HHWX_LOW_MEMORY_SCORE_ONLY_CACHE_PRESSURE_SLOT_CARDS=260 fallback threshold for score-only result cache",
-    "  HHWX_LOW_MEMORY_COMPACT_SCORE_ONLY_CACHE=1 store compact score-only cache entries",
+    "  HHWX_LOW_MEMORY_COMPACT_SCORE_ONLY_CACHE=1 store compact score-only cache entries (default)",
+    "  HHWX_LOW_MEMORY_LEGACY_SCORE_ONLY_CACHE=1 store legacy full score-only cache entries",
     "  HHWX_LOW_MEMORY_COMPACT_CANDIDATE_CARDS=1 strip exact-join candidate SearchCard[] retention (default)",
     "  HHWX_LOW_MEMORY_RETAIN_CANDIDATE_CARDS=1 keep legacy exact-join candidate SearchCard[] retention",
     "  HHWX_LOW_MEMORY_DISABLE_SKILL_WINDOW_CACHE=1 disable exact-join skill-window contribution cache",
@@ -213,6 +217,9 @@ function hhwxOptimizationJson() {
   if (process.env.HHWX_LOW_MEMORY_COMPACT_SCORE_ONLY_CACHE === "1") {
     optimization.enableExactCandidateCompactScoreOnlyCache = true;
   }
+  if (process.env.HHWX_LOW_MEMORY_LEGACY_SCORE_ONLY_CACHE === "1") {
+    optimization.enableExactCandidateCompactScoreOnlyCache = false;
+  }
   if (process.env.HHWX_LOW_MEMORY_DISABLE_GLOBAL_COMPLEMENT_CACHE === "1") {
     optimization.disableExactCandidateGlobalComplementCache = true;
   }
@@ -224,6 +231,9 @@ function hhwxOptimizationJson() {
   }
   if (process.env.HHWX_LOW_MEMORY_THIN_CANDIDATE_RESULT === "1") {
     optimization.enableExactCandidateThinResultRetention = true;
+  }
+  if (process.env.HHWX_LOW_MEMORY_FULL_CANDIDATE_RESULT === "1") {
+    optimization.enableExactCandidateThinResultRetention = false;
   }
   if (process.env.HHWX_LOW_MEMORY_COMPACT_CANDIDATE_KEY_SET === "1") {
     optimization.enableExactCandidateCompactCandidateKeySet = true;

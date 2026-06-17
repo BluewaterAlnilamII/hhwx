@@ -686,14 +686,20 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
     optimization.disableExactCandidateSkillWindowContributionCache === true
   );
   const disableExactCandidateCardsRetention = optimization.disableExactCandidateCardsRetention !== false;
-  const enableExactCandidateCompactScoreOnlyCache = optimization.enableExactCandidateCompactScoreOnlyCache === true;
+  const enableExactCandidateCompactScoreOnlyCache = optimization.enableExactCandidateCompactScoreOnlyCache !== false;
   const disableExactCandidateGlobalComplementCache = (
     optimization.disableExactCandidateGlobalComplementCache === true
   );
   const enableExactCandidateCompactGlobalComplementCache = (
     optimization.enableExactCandidateCompactGlobalComplementCache !== false
   );
-  const enableExactCandidateThinResultRetention = optimization.enableExactCandidateThinResultRetention === true;
+  const enableExactCandidateThinResultRetention = (
+    enableExactCandidateCompactScoreOnlyCache
+    && optimization.enableExactCandidateThinResultRetention !== false
+  );
+  // Keep paired low-memory defaults explicit for downstream exact-join contexts and diagnostics.
+  optimization.enableExactCandidateCompactScoreOnlyCache = enableExactCandidateCompactScoreOnlyCache;
+  optimization.enableExactCandidateThinResultRetention = enableExactCandidateThinResultRetention;
   const enableExactCandidateCompactCandidateKeySet = optimization.enableExactCandidateCompactCandidateKeySet !== false;
   const disableExactCandidateScoreCalculationCache = optimization.disableExactCandidateScoreCalculationCache === true;
   const disableExactCandidateScoreOnlyCache = optimization.disableExactCandidateScoreOnlyCache === true;
