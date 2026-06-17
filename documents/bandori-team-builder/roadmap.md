@@ -1,6 +1,6 @@
 # HHWX Medley Low-Memory Roadmap
 
-Last updated: 2026-06-17
+Last updated: 2026-06-18
 
 This roadmap tracks the medley team-builder low-memory work after PR #43. It is intentionally compact: detailed run artifacts stay under ignored `temp/`, while this file records the current decision state, retained evidence, and next acceptance gates.
 
@@ -77,6 +77,7 @@ Baseline and gate artifacts retained:
 | `low-memory-polish-hhwx-2026-06-17T16-25-37-898Z.json` | `P02:260` narrow capacity-source leaf pruning, default budget `2048` | bounded gap `382812`, peak `2989 MiB`; pruned `1994`, materialized `970635` (`1832` fewer than source baseline), `0` replay violations |
 | `low-memory-polish-hhwx-2026-06-17T16-32-01-295Z.json` | `P02:260` narrow capacity-source leaf pruning, budget `32768` | bounded gap `382812`, peak `3045 MiB`; pruned `16217`, materialized `958142`, `0` replay violations |
 | `low-memory-polish-hhwx-2026-06-17T16-35-26-587Z.json` | `P02:260` narrow capacity-source leaf pruning, budget `131072` | bounded gap `382812`, peak `3014 MiB`; pruned `43894`, materialized `935844`, `0` replay violations, elapsed `282848ms` |
+| `low-memory-polish-hhwx-2026-06-17T16-56-28-800Z.json` | `P02:260` level-4 capacity batch replay, budget `2048`, margin `500000` | bounded gap `382812`, score `9376984`, max `9412868`, peak `3078 MiB`; `15449` level-4 checks, `2048` eligible, `286` would-skip prefixes representing `58464` leaf completions, `0` replay violations |
 
 Use the pressure validation environment for early-pruning gates:
 
@@ -131,6 +132,16 @@ P02 other-slot upper source replay:
 - a narrow opt-in gate using only the stable source replay decision is retained as `HHWX_LOW_MEMORY_CAPACITY_SOURCE_LEAF_PRUNING=1`;
 - the narrow gate is proof-safe in the sampled runs (`0` replay violations, score and gap unchanged), but leaf-by-leaf budget scaling is not enough for the `25%` target: `131072` checks reduce materialized candidates by only `36623` (`3.77%`) and already take `282848ms`;
 - next breakthrough target should be level-4 or batched capacity proof, not further increasing per-leaf budget.
+
+P02 level-4 capacity batch replay:
+
+- artifact: `low-memory-polish-hhwx-2026-06-17T16-56-28-800Z.json`;
+- replay is opt-in via `HHWX_LOW_MEMORY_PREFIX_CAPACITY_BATCH_REPLAY=1` and remains no-op;
+- result stayed bounded with gap `382812`, score `9376984`, max score `9412868`, candidate counts `[400000, 212825, 134977]`, and `972467` materialized candidates;
+- with budget `2048` and margin `500000`, replay checked `15449` level-4 prefixes, sampled `2048`, improved the other-slot upper on `1291`, and found `286` would-skip prefixes representing `58464` relaxed leaf completions;
+- replay violation count was `0`, so the proof shape is plausible;
+- a wider budget/margin probe (`32768` / `500000`) OOMed at the Node heap limit after about `240s`; do not broaden this replay naively;
+- current conclusion: level-4 capacity proof has stronger leverage than leaf-by-leaf pruning, but must be made reusable/batched by prefix or signature bucket before any real pruning gate.
 
 The JSON files above contain `isolated.*Path` fields for detailed per-row diagnostics. Those referenced files are part of the retained baseline set.
 
@@ -240,8 +251,11 @@ Early-pruning success targets:
    - compute one capacity upper per reusable prefix/signature bucket where possible;
    - preserve the same proof fields: incumbent, prefix upper, other upper, total upper, margin, slot/level, implied completion count;
    - avoid one-off per-leaf capacity calls as the main path.
-3. Add replay-only diagnostics for the level-4/batched proof before any real branch skip.
-4. Run `P02:260` pressure smoke and compare materialized candidate reduction against the `25%` target.
+3. Turn the current level-4 replay into a reusable/bucketed diagnostic:
+   - avoid generated-pair-only comparison on level-4 replay unless explicitly requested;
+   - cache or bucket capacity upper results by reusable banned-card/signature state;
+   - keep the hot path replay-only until violation count is `0` on focused gates.
+4. Run `P02:260` pressure smoke and compare implied leaf-completion reduction against the `25%` target before enabling real branch skips.
 5. Run the six-row focused gate before considering broader testing or default promotion.
 
 ## Maintenance Rules

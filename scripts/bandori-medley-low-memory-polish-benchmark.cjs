@@ -170,6 +170,10 @@ function hhwxOptimizationJson() {
     optimization.debugExactCandidatePrefixUpperReplay = true;
     optimization.debugExactCandidatePrefixOtherUpperSourceReplay = true;
   }
+  if (process.env.HHWX_LOW_MEMORY_PREFIX_CAPACITY_BATCH_REPLAY === "1") {
+    optimization.debugExactCandidatePrefixUpperReplay = true;
+    optimization.debugExactCandidatePrefixCapacityBatchReplay = true;
+  }
   if (process.env.HHWX_LOW_MEMORY_CAPACITY_SOURCE_LEAF_PRUNING === "1") {
     optimization.debugExactCandidatePrefixUpperReplay = true;
     optimization.debugExactCandidatePrefixOtherUpperSourceReplay = true;
@@ -177,6 +181,7 @@ function hhwxOptimizationJson() {
   }
   if (
     process.env.HHWX_LOW_MEMORY_PREFIX_OTHER_UPPER_SOURCE_REPLAY === "1"
+    || process.env.HHWX_LOW_MEMORY_PREFIX_CAPACITY_BATCH_REPLAY === "1"
     || process.env.HHWX_LOW_MEMORY_CAPACITY_SOURCE_LEAF_PRUNING === "1"
   ) {
     const parsedMaxChecks = Number(process.env.HHWX_LOW_MEMORY_PREFIX_OTHER_UPPER_SOURCE_MAX_CHECKS);
