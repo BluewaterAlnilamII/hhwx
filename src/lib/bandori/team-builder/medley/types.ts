@@ -100,6 +100,7 @@ export type BandoriMedleySearchOptimizationOptions = {
   debugExactCandidateRawJoinParity?: boolean;
   debugExactCandidateSignatureCensus?: boolean;
   debugExactCandidateUpperReplay?: boolean;
+  debugExactCandidateAnchorFrontierCheapUpperProbe?: boolean;
   debugExactCandidatePrefixUpperReplay?: boolean;
   debugExactCandidatePrefixHardUpperReplay?: boolean;
   debugExactCandidatePrefixOtherUpperSourceReplay?: boolean;

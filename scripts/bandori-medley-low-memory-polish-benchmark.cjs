@@ -48,6 +48,7 @@ function printUsage() {
     "  HHWX_LOW_MEMORY_DURATION_MS=300000         per-case budget",
     "  HHWX_LOW_MEMORY_FIXTURE_PATH=...           profile fixture path",
     "  HHWX_LOW_MEMORY_TRACE=1                    enable HHWX memory attribution trace fields",
+    "  HHWX_LOW_MEMORY_ANCHOR_FRONTIER_CHEAP_UPPER_PROBE=1 run opt-in no-op anchor cheap-upper probe even when frontier precheck guards fail",
     "  HHWX_LOW_MEMORY_PREFIX_UPPER_REPLAY=1      include lightweight prefix upper replay summary",
     "  HHWX_LOW_MEMORY_PREFIX_HARD_UPPER_REPLAY=1 include lightweight cross-slot prefix hard-upper replay summary",
     "  HHWX_LOW_MEMORY_PREFIX_OTHER_UPPER_SOURCE_REPLAY=1 include opt-in other-slot upper source diagnostics",
@@ -162,6 +163,9 @@ function hhwxOptimizationJson() {
   if (process.env.HHWX_LOW_MEMORY_UPPER_REPLAY === "1") {
     optimization.debugExactCandidateJoinMemoryAttribution = true;
     optimization.debugExactCandidateUpperReplay = true;
+  }
+  if (process.env.HHWX_LOW_MEMORY_ANCHOR_FRONTIER_CHEAP_UPPER_PROBE === "1") {
+    optimization.debugExactCandidateAnchorFrontierCheapUpperProbe = true;
   }
   if (process.env.HHWX_LOW_MEMORY_PREFIX_UPPER_REPLAY === "1") {
     optimization.debugExactCandidatePrefixUpperReplay = true;

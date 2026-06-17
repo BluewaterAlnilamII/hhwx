@@ -641,6 +641,9 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
   const debugExactCandidateRawJoinParity = optimization.debugExactCandidateRawJoinParity === true;
   const debugExactCandidateSignatureCensus = optimization.debugExactCandidateSignatureCensus === true;
   const debugExactCandidateUpperReplay = optimization.debugExactCandidateUpperReplay === true;
+  const debugExactCandidateAnchorFrontierCheapUpperProbe = (
+    optimization.debugExactCandidateAnchorFrontierCheapUpperProbe === true
+  );
   const debugExactCandidatePrefixUpperReplay = optimization.debugExactCandidatePrefixUpperReplay === true;
   const debugExactCandidatePrefixHardUpperReplay = optimization.debugExactCandidatePrefixHardUpperReplay === true;
   const debugExactCandidatePrefixOtherUpperSourceReplay = (
@@ -3784,6 +3787,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
           debugExactCandidateRawJoinParity,
           debugExactCandidateSignatureCensus,
           debugExactCandidateUpperReplay,
+          debugExactCandidateAnchorFrontierCheapUpperProbe,
           debugExactCandidatePrefixUpperReplay,
           debugExactCandidatePrefixHardUpperReplay,
           debugExactCandidatePrefixOtherUpperSourceReplay,
@@ -4256,6 +4260,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
           debugExactCandidateRawJoinParity,
           debugExactCandidateSignatureCensus,
           debugExactCandidateUpperReplay,
+          debugExactCandidateAnchorFrontierCheapUpperProbe,
           debugExactCandidatePrefixUpperReplay,
           debugExactCandidatePrefixHardUpperReplay,
           debugExactCandidatePrefixOtherUpperSourceReplay,

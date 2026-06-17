@@ -8213,6 +8213,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     debugExactCandidateRawJoinParity?: boolean;
     debugExactCandidateSignatureCensus?: boolean;
     debugExactCandidateUpperReplay?: boolean;
+    debugExactCandidateAnchorFrontierCheapUpperProbe?: boolean;
     debugExactCandidatePrefixUpperReplay?: boolean;
     debugExactCandidatePrefixHardUpperReplay?: boolean;
     debugExactCandidatePrefixOtherUpperSourceReplay?: boolean;
@@ -8768,6 +8769,35 @@ export function searchMedleyConfigurationByExactCandidateJoin(
       MEDLEY_EXACT_CANDIDATE_JOIN_ANCHOR_FRONTIER_PROOF_MIN_REMAINING_MS
     );
     if (skipReasons.length > 0) {
+      if (
+        context.debugExactCandidateAnchorFrontierCheapUpperProbe === true
+        && !didAnchorFrontierCheapUpper
+        && !stats.memoryLimited
+        && anchorCandidateCount > 0
+        && otherSlotCandidateCounts.length === slots.length - 1
+        && Number.isFinite(peekUpperBound)
+        && Number.isFinite(otherUpper)
+        && Number.isFinite(frontierGap)
+        && frontierGap >= 0
+        && frontierGap <= MEDLEY_EXACT_CANDIDATE_JOIN_ANCHOR_FRONTIER_PROOF_MAX_FRONTIER_GAP
+        && remainingMs >= MEDLEY_EXACT_CANDIDATE_JOIN_ANCHOR_FRONTIER_PROOF_MIN_REMAINING_MS
+      ) {
+        didAnchorFrontierCheapUpper = true;
+        estimateMedleyExactCandidateAnchorFrontierCheapUpper(
+          slots,
+          candidatesBySlot,
+          activeGeneratorsBySlot,
+          slotIndex,
+          otherUpper,
+          configuration,
+          incumbentScore,
+          server,
+          perfectRate,
+          profiling,
+          stats,
+          deadlineAt,
+        );
+      }
       return skipAnchorFrontierProof(skipReasons.join("+"));
     }
     let cheapUpperResult: MedleyExactCandidateAnchorFrontierProofResult | null = null;

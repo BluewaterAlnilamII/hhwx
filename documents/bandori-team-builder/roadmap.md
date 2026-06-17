@@ -93,6 +93,7 @@ Baseline and gate artifacts retained:
 | `low-memory-polish-hhwx-2026-06-17T18-59-48-207Z.json` | `P02:260` anchor-frontier precheck skip-reason smoke | bounded gap `382812`, score `9376984`, max `9412868`, peak `2922 MiB`; first blocker was `card-count` |
 | `low-memory-polish-hhwx-2026-06-17T19-03-07-417Z.json` | `P02:260` combined anchor-frontier precheck skip-reason smoke | bounded gap `382812`, score `9376984`, max `9412868`, peak `2912 MiB`; combined blocker `card-count+other-slot-count+other-slot-total` with abort frontier gap only `17139` |
 | `low-memory-polish-hhwx-2026-06-17T19-11-42-977Z.json` | `P02:260` anchor-frontier precheck numeric diagnostic smoke | bounded gap `382812`, score `9376984`, max `9412868`, peak `2913 MiB`; precheck records card count `1747/1600`, other-slot counts `[212825, 134977]` vs per-slot guard `80000`, total `347802/120000`, frontier gap `17139/25000`, remaining `159676/90000ms` |
+| `low-memory-polish-hhwx-2026-06-17T19-16-21-494Z.json` | `P02:260` opt-in no-op anchor cheap-upper probe despite precheck blockers | bounded gap `382812`, score `9376984`, max `9412868`, peak `2953 MiB`; cheap upper ran over other-slot pools `[212825, 134977]`, processed `2906` anchors, timeboxed at `8003ms`, residual gap `205488` |
 
 Use the pressure validation environment for early-pruning gates:
 
@@ -192,7 +193,8 @@ P02 candidate-fill frontier closure:
 - the actual abort frontier gap is small: `peekUpperBound 2712797 + otherUpper 6681326 - incumbent 9376984 = 17139`, which is below the existing `25000` frontier-gap threshold;
 - numeric precheck fields now confirm the guard sizes directly in retained artifacts: card count `1747/1600`, anchor candidates `400000/600000`, other-slot counts `[212825, 134977]` vs per-slot guard `80000`, other-slot total `347802/120000`, frontier gap `17139/25000`, remaining time `159676/90000ms`;
 - therefore the main blocker is not the frontier gap itself. It is that P02 exceeds the anchor proof card-count guard slightly and the other two slot candidate pools exceed the current proof implementation much more substantially;
-- next retained direction: either reduce/compact the other-slot candidate resident set before anchor proof, or design an anchor/frontier proof variant that works over raw-index candidates and large other-slot pools. Prefix lookahead alone cannot solve this because it does not reduce the filled candidate caps.
+- an opt-in no-op cheap-upper probe confirms that simply bypassing the precheck is not enough: it can run without OOM, but over `[212825, 134977]` other-slot pools it processed only `2906` anchors before the `8000ms` timebox and left residual gap `205488`;
+- next retained direction: either reduce/compact the other-slot candidate resident set before anchor proof, or design a different anchor/frontier proof variant that works over raw-index candidates and large other-slot pools. Prefix lookahead alone cannot solve this because it does not reduce the filled candidate caps, and current cheap-upper scaling is too weak.
 
 The JSON files above contain `isolated.*Path` fields for detailed per-row diagnostics. Those referenced files are part of the retained baseline set.
 
@@ -313,7 +315,8 @@ Early-pruning success targets:
    - keep raw-index storage in scope because early pruning that still fills the same cap cannot by itself lower resident candidate memory.
 5. Add a frontier proof / storage diagnostic for P02:
    - current numeric blocker measurement is retained in `2026-06-17T19-11-42`;
-   - prototype a no-op raw-index or count-capped anchor proof precheck before changing limits;
+   - no-op cheap-upper probe is retained in `2026-06-17T19-16-21` and shows the current proof timeboxes without closing P02;
+   - next prototype should be raw-index/count-capped candidate storage or a fundamentally cheaper frontier proof, not raising existing proof guards;
    - do not raise guard constants as a default change without memory evidence.
 6. Tighten the prefix proof before broader pruning:
    - avoid generated-pair-only comparison on level-4 replay unless explicitly requested;
