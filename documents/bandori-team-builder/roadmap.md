@@ -220,6 +220,10 @@ P02 raw storage census:
 - retained hard-row smoke `low-memory-polish-hhwx-2026-06-17T20-08-47-601Z.json` completed P02 with unchanged result fields and raw complement parity skipped before raw pool construction: `candidateCountTotal = 747802`, limit `60000`, `rawPoolBuilt = false`;
 - raw anchor cheap-upper replay is now available behind `HHWX_LOW_MEMORY_RAW_ANCHOR_CHEAP_UPPER_REPLAY=1`; retained smoke `low-memory-polish-hhwx-2026-06-17T20-14-15-636Z.json` completed `P01:none` exact with `matched = true`, `mismatchCount = 0` across `16` sampled anchor cheap-upper estimates, using a `0.06 MiB` local sorted raw pool;
 - retained hard-row smoke `low-memory-polish-hhwx-2026-06-17T20-15-25-709Z.json` completed P02 with unchanged result fields and raw anchor replay skipped before raw pool construction: `candidateCountTotal = 747802`, limit `60000`, `rawPoolBuilt = false`;
+- non-pressure six-row raw-helper run `low-memory-polish-hhwx-2026-06-17T20-18-13-901Z.json` is retained only as a configuration warning: it reproduced the known bare-default memory-limited path (`2 exact / 4 bounded`, `2 timedOut`, `2 memoryLimited`, peak `6782 MiB`) and must not be compared with PR #43 pressure gates;
+- retained pressure six-row raw-helper gate `low-memory-polish-hhwx-2026-06-17T20-34-23-145Z.json` ran the four pressure flags plus raw anchor cheap-upper replay, raw pair-complement parity, raw pair-upper scan parity, and raw solver input census; it preserved the clean PR #43 proof shape: `4 exact / 2 bounded`, bounded gap `582812`, `0 failed / 0 timedOut / 0 memoryLimited`, peak `2949 MiB`, and all six rows kept both `averageScore` and `maxScore`;
+- in that pressure gate, `P01:244` and `P01:323` were under the raw-helper guard and all three raw helper checks matched object behavior with `mismatchCount = 0`; larger rows skipped helper replay before raw pool construction via `candidate-total-limit` (`P02:260 = 747802`, `P08:323 = 557165`, `P10:244 = 94840`, `P10:260 = 94855`);
+- the same pressure gate reinforces the raw-storage opportunity: P02's `747802` candidates estimate to `28.53 MiB` raw rows, `48.01 MiB` final-join input, and `52.27 MiB` all-slot conflict index while the process peak is `2949 MiB`; P08 is `21.25 / 33.47 / 37.76 MiB`, and each P10 row is about `3.62 / 5.43-5.60 / 6.11 MiB`;
 - current conclusion: raw-index/typed-array resident storage is now the highest-confidence route to material memory reduction. Early pruning remains valuable for proof closure, but the P02 memory class cannot be solved by prefix skip counts alone while candidate fill still reaches the same caps.
 
 The JSON files above contain `isolated.*Path` fields for detailed per-row diagnostics. Those referenced files are part of the retained baseline set.
@@ -358,6 +362,7 @@ Early-pruning success targets:
    - keep the hot path replay-only until violation count is `0` on focused gates.
 8. Run `P02:260` pressure smoke after each resident-storage slice and compare against the current raw-profile artifact before enabling broader gates.
 9. Run the six-row focused gate before considering broader testing or default promotion.
+   - The current raw-helper diagnostic gate is retained in `2026-06-17T20-34-23`; future resident-storage changes must rerun the same pressure focused gate and preserve its proof/score fields.
 
 ## Maintenance Rules
 
