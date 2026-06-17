@@ -111,6 +111,8 @@ const MEDLEY_LOW_MEMORY_INITIAL_CANDIDATE_SYNC_MIN_MEMORY_HEADROOM_MIB = 800;
 const MEDLEY_LOW_MEMORY_INITIAL_CANDIDATE_SYNC_MAX_SLOT_CARD_COUNT = 249;
 const MEDLEY_LOW_MEMORY_INITIAL_CANDIDATE_SYNC_EVENT_ROOT_RISK_SLOT_CARD_COUNT = 250;
 const MEDLEY_LOW_MEMORY_INITIAL_CANDIDATE_SYNC_SAME_COARSE_GUARD_MAX_SLOT_CARD_COUNT = 249;
+const MEDLEY_LOW_MEMORY_CONFIGURATION_SEEDING_PRESSURE_HEADROOM_MIB = 4_000;
+const MEDLEY_LOW_MEMORY_CONFIGURATION_SEEDING_PRESSURE_MIN_SLOT_CARD_COUNT = 200;
 const MEDLEY_FULL_WIDTH_EVENT_EXACT_JOIN_MEMORY_SOFT_LIMIT_MIB = 3_200;
 const MEDLEY_LARGE_GAP_EVENT_SKIP_PROOF_MIN_GAP = 600_000;
 const MEDLEY_POST_EXACT_JOIN_TIGHT_ROOT_MAX_CARD_COUNT = 1_300;
@@ -635,6 +637,72 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
   const debugExactCandidateJoinMemoryAttribution = (
     optimization.debugExactCandidateJoinMemoryAttribution === true
   );
+  const debugExactCandidateRawMirror = optimization.debugExactCandidateRawMirror === true;
+  const debugExactCandidateRawJoinParity = optimization.debugExactCandidateRawJoinParity === true;
+  const debugExactCandidateSignatureCensus = optimization.debugExactCandidateSignatureCensus === true;
+  const debugExactCandidateUpperReplay = optimization.debugExactCandidateUpperReplay === true;
+  const debugExactCandidateDominanceReplay = optimization.debugExactCandidateDominanceReplay === true;
+  const debugExactCandidateRawSolverInputCensus = optimization.debugExactCandidateRawSolverInputCensus === true;
+  const parsedExactCandidateScoreCalculationCacheEntryLimit = (
+    optimization.exactCandidateScoreCalculationCacheEntryLimit !== undefined
+      ? Math.trunc(optimization.exactCandidateScoreCalculationCacheEntryLimit)
+      : Number.NaN
+  );
+  const exactCandidateScoreCalculationCacheEntryLimit = (
+    Number.isFinite(parsedExactCandidateScoreCalculationCacheEntryLimit)
+    && parsedExactCandidateScoreCalculationCacheEntryLimit > 0
+      ? parsedExactCandidateScoreCalculationCacheEntryLimit
+      : null
+  );
+  const enableExactCandidateScoreCalculationCachePressureFallback = (
+    optimization.enableExactCandidateScoreCalculationCachePressureFallback === true
+  );
+  const parsedExactCandidateScoreCalculationCachePressureSlotCardCount = (
+    optimization.exactCandidateScoreCalculationCachePressureSlotCardCount !== undefined
+      ? Math.trunc(optimization.exactCandidateScoreCalculationCachePressureSlotCardCount)
+      : Number.NaN
+  );
+  const exactCandidateScoreCalculationCachePressureSlotCardCount = (
+    Number.isFinite(parsedExactCandidateScoreCalculationCachePressureSlotCardCount)
+    && parsedExactCandidateScoreCalculationCachePressureSlotCardCount > 0
+      ? parsedExactCandidateScoreCalculationCachePressureSlotCardCount
+      : null
+  );
+  const enableExactCandidateScoreOnlyCachePressureFallback = (
+    optimization.enableExactCandidateScoreOnlyCachePressureFallback === true
+  );
+  const parsedExactCandidateScoreOnlyCachePressureSlotCardCount = (
+    optimization.exactCandidateScoreOnlyCachePressureSlotCardCount !== undefined
+      ? Math.trunc(optimization.exactCandidateScoreOnlyCachePressureSlotCardCount)
+      : Number.NaN
+  );
+  const exactCandidateScoreOnlyCachePressureSlotCardCount = (
+    Number.isFinite(parsedExactCandidateScoreOnlyCachePressureSlotCardCount)
+    && parsedExactCandidateScoreOnlyCachePressureSlotCardCount > 0
+      ? parsedExactCandidateScoreOnlyCachePressureSlotCardCount
+      : null
+  );
+  const disableExactCandidateSkillWindowContributionCache = (
+    optimization.disableExactCandidateSkillWindowContributionCache === true
+  );
+  const disableExactCandidateCardsRetention = optimization.disableExactCandidateCardsRetention !== false;
+  const enableExactCandidateCompactScoreOnlyCache = optimization.enableExactCandidateCompactScoreOnlyCache !== false;
+  const disableExactCandidateGlobalComplementCache = (
+    optimization.disableExactCandidateGlobalComplementCache === true
+  );
+  const enableExactCandidateCompactGlobalComplementCache = (
+    optimization.enableExactCandidateCompactGlobalComplementCache !== false
+  );
+  const enableExactCandidateThinResultRetention = (
+    enableExactCandidateCompactScoreOnlyCache
+    && optimization.enableExactCandidateThinResultRetention !== false
+  );
+  // Keep paired low-memory defaults explicit for downstream exact-join contexts and diagnostics.
+  optimization.enableExactCandidateCompactScoreOnlyCache = enableExactCandidateCompactScoreOnlyCache;
+  optimization.enableExactCandidateThinResultRetention = enableExactCandidateThinResultRetention;
+  const enableExactCandidateCompactCandidateKeySet = optimization.enableExactCandidateCompactCandidateKeySet !== false;
+  const disableExactCandidateScoreCalculationCache = optimization.disableExactCandidateScoreCalculationCache === true;
+  const disableExactCandidateScoreOnlyCache = optimization.disableExactCandidateScoreOnlyCache === true;
   const enableExperimentalStagedCandidateExtension = (
     optimization.enableExperimentalStagedCandidateExtension === true
   );
@@ -753,6 +821,19 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
   )
     ? Math.max(0, parsedLowMemoryInitialCandidateSyncMaxSlotCardCount)
     : MEDLEY_LOW_MEMORY_INITIAL_CANDIDATE_SYNC_MAX_SLOT_CARD_COUNT;
+  const enableLowMemoryInitialCandidateScoreCalculationCachePressureFallback = (
+    optimization.enableLowMemoryInitialCandidateScoreCalculationCachePressureFallback === true
+  );
+  const parsedLowMemoryInitialCandidateScoreCalculationCachePressureSlotCardCount = (
+    optimization.lowMemoryInitialCandidateScoreCalculationCachePressureSlotCardCount !== undefined
+      ? Math.trunc(optimization.lowMemoryInitialCandidateScoreCalculationCachePressureSlotCardCount)
+      : Number.NaN
+  );
+  const lowMemoryInitialCandidateScoreCalculationCachePressureSlotCardCount = Number.isFinite(
+    parsedLowMemoryInitialCandidateScoreCalculationCachePressureSlotCardCount,
+  )
+    ? Math.max(1, parsedLowMemoryInitialCandidateScoreCalculationCachePressureSlotCardCount)
+    : null;
   const enableLowMemoryInitialCandidateSyncGcProbe = (
     optimization.enableLowMemoryInitialCandidateSyncGcProbe === true
   );
@@ -802,6 +883,29 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
   )
     ? Math.max(0, parsedSkipConfigurationSeedingWhenMemoryHeadroomBelowMiB)
     : null;
+  const enableLowMemoryConfigurationSeedingPressureSkip = (
+    optimization.enableLowMemoryConfigurationSeedingPressureSkip === true
+  );
+  const parsedLowMemoryConfigurationSeedingPressureHeadroomMiB = (
+    optimization.lowMemoryConfigurationSeedingPressureHeadroomMiB !== undefined
+      ? Math.trunc(optimization.lowMemoryConfigurationSeedingPressureHeadroomMiB)
+      : Number.NaN
+  );
+  const lowMemoryConfigurationSeedingPressureHeadroomMiB = Number.isFinite(
+    parsedLowMemoryConfigurationSeedingPressureHeadroomMiB,
+  )
+    ? Math.max(0, parsedLowMemoryConfigurationSeedingPressureHeadroomMiB)
+    : MEDLEY_LOW_MEMORY_CONFIGURATION_SEEDING_PRESSURE_HEADROOM_MIB;
+  const parsedLowMemoryConfigurationSeedingPressureMinSlotCardCount = (
+    optimization.lowMemoryConfigurationSeedingPressureMinSlotCardCount !== undefined
+      ? Math.trunc(optimization.lowMemoryConfigurationSeedingPressureMinSlotCardCount)
+      : Number.NaN
+  );
+  const lowMemoryConfigurationSeedingPressureMinSlotCardCount = Number.isFinite(
+    parsedLowMemoryConfigurationSeedingPressureMinSlotCardCount,
+  )
+    ? Math.max(1, parsedLowMemoryConfigurationSeedingPressureMinSlotCardCount)
+    : MEDLEY_LOW_MEMORY_CONFIGURATION_SEEDING_PRESSURE_MIN_SLOT_CARD_COUNT;
   const parsedMemorySoftLimitMiB = optimization.memorySoftLimitMiB !== undefined
     ? Math.trunc(optimization.memorySoftLimitMiB)
     : Number.NaN;
@@ -3597,9 +3701,31 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
           lowMemoryInitialCandidateSyncLightUpper,
           lowMemoryInitialCandidateSyncTimeboxMs,
           shouldAbortLowMemoryInitialCandidateSync,
+          enableLowMemoryInitialCandidateScoreCalculationCachePressureFallback,
+          lowMemoryInitialCandidateScoreCalculationCachePressureSlotCardCount,
           lowMemoryHighPairScanMinRecordCount,
           lowMemoryHighPairPrefixRecordLimit,
           debugExactCandidateJoinMemoryAttribution,
+          debugExactCandidateRawMirror,
+          debugExactCandidateRawJoinParity,
+          debugExactCandidateSignatureCensus,
+          debugExactCandidateUpperReplay,
+          debugExactCandidateDominanceReplay,
+          debugExactCandidateRawSolverInputCensus,
+          exactCandidateScoreCalculationCacheEntryLimit,
+          enableExactCandidateScoreCalculationCachePressureFallback,
+          exactCandidateScoreCalculationCachePressureSlotCardCount,
+          enableExactCandidateScoreOnlyCachePressureFallback,
+          exactCandidateScoreOnlyCachePressureSlotCardCount,
+          disableExactCandidateCardsRetention,
+          enableExactCandidateCompactScoreOnlyCache,
+          disableExactCandidateGlobalComplementCache,
+          enableExactCandidateCompactGlobalComplementCache,
+          enableExactCandidateThinResultRetention,
+          enableExactCandidateCompactCandidateKeySet,
+          disableExactCandidateSkillWindowContributionCache,
+          disableExactCandidateScoreCalculationCache,
+          disableExactCandidateScoreOnlyCache,
         },
         observeEvaluatedMedleyResult,
       );
@@ -3728,6 +3854,30 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
       && configurationSeedingMemoryHeadroomMiB !== null
       && configurationSeedingMemoryHeadroomMiB < skipConfigurationSeedingWhenMemoryHeadroomBelowMiB
     );
+    const hasLowMemoryConfigurationSeedingPressureIncumbent = (
+      results.length >= resultLimit
+      && Number.isFinite(bestScoreBeforeSeeding)
+    );
+    const hasLowMemoryConfigurationSeedingPressureUpperBound = (
+      hasFiniteActiveConfigurationUpperBoundBeforeSeeding
+    );
+    const hasLowMemoryConfigurationSeedingPressureSlotWidth = (
+      hasEventBonus
+      && maxLowMemoryInitialCandidateSyncSlotCardCount
+        >= lowMemoryConfigurationSeedingPressureMinSlotCardCount
+    );
+    const shouldSkipConfigurationSeedingForPressure = (
+      enableLowMemoryConfigurationSeedingPressureSkip
+      && configurationSeedingMemoryHeadroomMiB !== null
+      && configurationSeedingMemoryHeadroomMiB < lowMemoryConfigurationSeedingPressureHeadroomMiB
+      && hasLowMemoryConfigurationSeedingPressureIncumbent
+      && hasLowMemoryConfigurationSeedingPressureUpperBound
+      && hasLowMemoryConfigurationSeedingPressureSlotWidth
+    );
+    const shouldSkipConfigurationSeeding = (
+      shouldSkipConfigurationSeedingForMemory
+      || shouldSkipConfigurationSeedingForPressure
+    );
     if (traceEntry) {
       traceEntry.configurationSeedingUsedMiB = configurationSeedingUsedMiB;
       traceEntry.configurationSeedingSoftLimitMiB = configurationSeedingSoftLimitMiB;
@@ -3736,8 +3886,32 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
         skipConfigurationSeedingWhenMemoryHeadroomBelowMiB
       );
       traceEntry.skipConfigurationSeedingForMemory = shouldSkipConfigurationSeedingForMemory;
+      traceEntry.lowMemoryConfigurationSeedingPressureSkip = enableLowMemoryConfigurationSeedingPressureSkip;
+      traceEntry.lowMemoryConfigurationSeedingPressureSkipTriggered = (
+        shouldSkipConfigurationSeedingForPressure
+      );
+      traceEntry.lowMemoryConfigurationSeedingPressureHeadroomMiB = (
+        lowMemoryConfigurationSeedingPressureHeadroomMiB
+      );
+      traceEntry.lowMemoryConfigurationSeedingPressureMinSlotCardCount = (
+        lowMemoryConfigurationSeedingPressureMinSlotCardCount
+      );
+      traceEntry.lowMemoryConfigurationSeedingPressureHasIncumbent = (
+        hasLowMemoryConfigurationSeedingPressureIncumbent
+      );
+      traceEntry.lowMemoryConfigurationSeedingPressureHasUpperBound = (
+        hasLowMemoryConfigurationSeedingPressureUpperBound
+      );
+      traceEntry.lowMemoryConfigurationSeedingPressureHasSlotWidth = (
+        hasLowMemoryConfigurationSeedingPressureSlotWidth
+      );
+      traceEntry.skipConfigurationSeedingReason = shouldSkipConfigurationSeedingForMemory
+        ? "memory-headroom"
+        : shouldSkipConfigurationSeedingForPressure
+          ? "low-memory-pressure"
+          : null;
     }
-    if (!shouldSkipConfigurationSeedingForMemory) {
+    if (!shouldSkipConfigurationSeeding) {
       // Incumbent seeding happens before DFS so that upper-bound pruning has a real threshold.
       // These passes may improve runtime, but they are never treated as proof by themselves.
       slotCandidateLimits = getMedleySlotCandidateLimits(slots, calculatedCards.length);
@@ -3989,9 +4163,31 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
           lowMemoryInitialCandidateSyncLightUpper,
           lowMemoryInitialCandidateSyncTimeboxMs,
           shouldAbortLowMemoryInitialCandidateSync,
+          enableLowMemoryInitialCandidateScoreCalculationCachePressureFallback,
+          lowMemoryInitialCandidateScoreCalculationCachePressureSlotCardCount,
           lowMemoryHighPairScanMinRecordCount,
           lowMemoryHighPairPrefixRecordLimit,
           debugExactCandidateJoinMemoryAttribution,
+          debugExactCandidateRawMirror,
+          debugExactCandidateRawJoinParity,
+          debugExactCandidateSignatureCensus,
+          debugExactCandidateUpperReplay,
+          debugExactCandidateDominanceReplay,
+          debugExactCandidateRawSolverInputCensus,
+          exactCandidateScoreCalculationCacheEntryLimit,
+          enableExactCandidateScoreCalculationCachePressureFallback,
+          exactCandidateScoreCalculationCachePressureSlotCardCount,
+          enableExactCandidateScoreOnlyCachePressureFallback,
+          exactCandidateScoreOnlyCachePressureSlotCardCount,
+          disableExactCandidateCardsRetention,
+          enableExactCandidateCompactScoreOnlyCache,
+          disableExactCandidateGlobalComplementCache,
+          enableExactCandidateCompactGlobalComplementCache,
+          enableExactCandidateThinResultRetention,
+          enableExactCandidateCompactCandidateKeySet,
+          disableExactCandidateSkillWindowContributionCache,
+          disableExactCandidateScoreCalculationCache,
+          disableExactCandidateScoreOnlyCache,
         },
         observeEvaluatedMedleyResult,
       );

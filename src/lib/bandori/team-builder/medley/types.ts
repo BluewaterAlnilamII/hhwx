@@ -68,6 +68,9 @@ export type BandoriMedleySearchOptimizationOptions = {
   conflictSlotSolveNodeLimit?: number;
   configurationSeedPassDurationMs?: number;
   skipConfigurationSeedingWhenMemoryHeadroomBelowMiB?: number;
+  enableLowMemoryConfigurationSeedingPressureSkip?: boolean;
+  lowMemoryConfigurationSeedingPressureHeadroomMiB?: number;
+  lowMemoryConfigurationSeedingPressureMinSlotCardCount?: number;
   enableExactJoinPrefixSeed?: boolean;
   exactJoinPrefixSeedForceNoop?: boolean;
   exactJoinPrefixSeedGuardOnly?: boolean;
@@ -90,7 +93,29 @@ export type BandoriMedleySearchOptimizationOptions = {
   lowMemoryInitialCandidateSyncMinMemoryHeadroomMiB?: number;
   lowMemoryInitialCandidateSyncMaxSlotCardCount?: number;
   enableLowMemoryInitialCandidateSyncGcProbe?: boolean;
+  enableLowMemoryInitialCandidateScoreCalculationCachePressureFallback?: boolean;
+  lowMemoryInitialCandidateScoreCalculationCachePressureSlotCardCount?: number;
   debugExactCandidateJoinMemoryAttribution?: boolean;
+  debugExactCandidateRawMirror?: boolean;
+  debugExactCandidateRawJoinParity?: boolean;
+  debugExactCandidateSignatureCensus?: boolean;
+  debugExactCandidateUpperReplay?: boolean;
+  debugExactCandidateDominanceReplay?: boolean;
+  debugExactCandidateRawSolverInputCensus?: boolean;
+  exactCandidateScoreCalculationCacheEntryLimit?: number;
+  enableExactCandidateScoreCalculationCachePressureFallback?: boolean;
+  exactCandidateScoreCalculationCachePressureSlotCardCount?: number;
+  enableExactCandidateScoreOnlyCachePressureFallback?: boolean;
+  exactCandidateScoreOnlyCachePressureSlotCardCount?: number;
+  disableExactCandidateCardsRetention?: boolean;
+  enableExactCandidateCompactScoreOnlyCache?: boolean;
+  disableExactCandidateGlobalComplementCache?: boolean;
+  enableExactCandidateCompactGlobalComplementCache?: boolean;
+  enableExactCandidateThinResultRetention?: boolean;
+  enableExactCandidateCompactCandidateKeySet?: boolean;
+  disableExactCandidateSkillWindowContributionCache?: boolean;
+  disableExactCandidateScoreCalculationCache?: boolean;
+  disableExactCandidateScoreOnlyCache?: boolean;
   enableTrailingSameCoarseDfsOnly?: boolean;
   disableDominatedRootSkip?: boolean;
   disableSameCoarseTightRootSkip?: boolean;
@@ -714,18 +739,29 @@ export type MedleyTeamCandidate = {
   cards: SearchCard[];
   cardIds: number[];
   cardInstanceKeys?: string[];
+  cardSearchIndices?: number[];
+  cardId0?: number;
+  cardId1?: number;
+  cardId2?: number;
+  cardId3?: number;
+  cardId4?: number;
+  cardSearchIndex0?: number;
+  cardSearchIndex1?: number;
+  cardSearchIndex2?: number;
+  cardSearchIndex3?: number;
+  cardSearchIndex4?: number;
 };
 
 export type MedleyExactSlotCandidateSearchNode = {
   key: number;
   slotUpperBound: number;
-  activeInSlotUpperHeap?: boolean;
+  activeInSlotUpperHeap: boolean;
   selectedCardCount: number;
-  selectedCard0?: SearchCard;
-  selectedCard1?: SearchCard;
-  selectedCard2?: SearchCard;
-  selectedCard3?: SearchCard;
-  selectedCard4?: SearchCard;
+  selectedCardIndex0: number;
+  selectedCardIndex1: number;
+  selectedCardIndex2: number;
+  selectedCardIndex3: number;
+  selectedCardIndex4: number;
   startIndex: number;
   usedCharacterMaskLow: number;
   usedCharacterMaskHigh: number;
@@ -741,7 +777,15 @@ export type MedleyExactSlotCandidateGlobalPruning = {
   pairUnseenUpperBound?: number;
   useCapacityComplementUpper?: boolean;
   capacityComplementMargin?: number;
-  excludedCandidateKeys?: Set<string>;
+  excludedCandidateKeys?: MedleyExactCandidateCardKeySet;
+};
+
+export type MedleyExactCandidateCardKey = bigint | string;
+
+export type MedleyExactCandidateCardKeySet = {
+  readonly size: number;
+  has: (cardKey: MedleyExactCandidateCardKey) => boolean;
+  add: (cardKey: MedleyExactCandidateCardKey) => unknown;
 };
 
 export type MedleyExactSlotCandidateGenerator = {
