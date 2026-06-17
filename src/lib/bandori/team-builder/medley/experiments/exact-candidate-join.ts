@@ -187,6 +187,26 @@ type MedleyExactPrefixOtherUpperSourceReplaySample = {
   generatedPairOnlyMargin: number | null;
 };
 
+type MedleyExactPrefixLevel3LookaheadReplaySample = {
+  songIndex: number;
+  level: number;
+  selectedCardIds: number[];
+  impliedCompletionCount: number;
+  incumbent: number;
+  prefixUpper: number;
+  pairUnseenUpper: number | null;
+  roughOtherUpper: number | null;
+  childPrefixCount: number;
+  finiteChildPrefixCount: number;
+  maxChildCardIds: number[];
+  maxChildSlotUpper: number;
+  maxChildOtherUpper: number;
+  maxChildBasicCapacityUpper: number | null;
+  maxChildOtherUpperSource: "pair-unseen" | "basic-capacity" | "tie";
+  maxChildTotalUpper: number;
+  margin: number;
+};
+
 type MedleyExactPrefixOtherUpperSourceReplayDecision = {
   wouldSkip: boolean;
   level: number;
@@ -233,6 +253,7 @@ type MedleyExactPrefixOtherUpperSourceReplayProfile = {
   level3LookaheadWouldSkipImpliedCompletionCount: number;
   level3LookaheadMarginMin: number | null;
   level3LookaheadMarginMax: number | null;
+  level3LookaheadSamples: MedleyExactPrefixLevel3LookaheadReplaySample[];
   level4CheckedCount: number;
   level4EligibleCount: number;
   level4OverMarginSkippedCount: number;
@@ -400,6 +421,24 @@ function addMedleyExactPrefixOtherUpperSourceReplaySamples(
   }
 }
 
+function addMedleyExactPrefixLevel3LookaheadReplaySamples(
+  target: MedleyExactPrefixLevel3LookaheadReplaySample[],
+  source: MedleyExactPrefixLevel3LookaheadReplaySample[] | undefined,
+): void {
+  if (
+    !Array.isArray(source)
+    || target.length >= MEDLEY_EXACT_PREFIX_OTHER_UPPER_SOURCE_REPLAY_SAMPLE_LIMIT
+  ) {
+    return;
+  }
+  for (const sample of source) {
+    if (target.length >= MEDLEY_EXACT_PREFIX_OTHER_UPPER_SOURCE_REPLAY_SAMPLE_LIMIT) {
+      return;
+    }
+    target.push(sample);
+  }
+}
+
 function recordMedleyExactPrefixMargin(
   prefixBuckets: number[],
   impliedCompletionBuckets: number[],
@@ -490,6 +529,7 @@ function createMedleyExactPrefixOtherUpperSourceReplayProfile(
     level3LookaheadWouldSkipImpliedCompletionCount: 0,
     level3LookaheadMarginMin: null,
     level3LookaheadMarginMax: null,
+    level3LookaheadSamples: [],
     level4CheckedCount: 0,
     level4EligibleCount: 0,
     level4OverMarginSkippedCount: 0,
@@ -624,6 +664,10 @@ function addMedleyExactPrefixOtherUpperSourceReplayProfile(
     target.level3LookaheadMarginMax,
     source.level3LookaheadMarginMax,
   );
+  addMedleyExactPrefixLevel3LookaheadReplaySamples(
+    target.level3LookaheadSamples,
+    source.level3LookaheadSamples,
+  );
   target.level4CheckedCount = addCappedCount(target.level4CheckedCount, source.level4CheckedCount ?? 0);
   target.level4EligibleCount = addCappedCount(target.level4EligibleCount, source.level4EligibleCount ?? 0);
   target.level4OverMarginSkippedCount = addCappedCount(
@@ -741,6 +785,7 @@ function serializeMedleyExactPrefixOtherUpperSourceReplayProfile(
   }
   if (options.includeSamples) {
     result.samples = profile.samples.slice();
+    result.level3LookaheadSamples = profile.level3LookaheadSamples.slice();
   }
   return result;
 }
@@ -3920,6 +3965,13 @@ export function createMedleyExactSlotCandidateGenerator(
     let childPrefixCount = 0;
     let finiteChildPrefixCount = 0;
     let maxTotalUpper = Number.NEGATIVE_INFINITY;
+    let maxChildCardIds: number[] = [];
+    let maxChildSlotUpper = Number.NEGATIVE_INFINITY;
+    let maxChildOtherUpper = Number.NEGATIVE_INFINITY;
+    let maxChildBasicCapacityUpper: number | null = null;
+    let maxChildOtherUpperSource: MedleyExactPrefixLevel3LookaheadReplaySample["maxChildOtherUpperSource"] = (
+      "basic-capacity"
+    );
     let exhaustedChildBudget = false;
     const remainingAfterChild = MEDLEY_TEAM_SIZE - (node.selectedCardCount + 1);
     const remainingChildBudget = Math.max(0, sourceProfile.maxChecks - sourceProfile.level3LookaheadChildPrefixCount);
@@ -3979,15 +4031,34 @@ export function createMedleyExactSlotCandidateGenerator(
         false,
         true,
       ).upperBound;
+      const basicCapacityUpperOrNull = Number.isFinite(basicCapacityUpper) ? basicCapacityUpper : null;
       const bestSafeOtherUpper = Math.min(
         roughOtherUpper,
-        Number.isFinite(basicCapacityUpper) ? basicCapacityUpper : Number.POSITIVE_INFINITY,
+        basicCapacityUpperOrNull ?? Number.POSITIVE_INFINITY,
       );
       if (!Number.isFinite(bestSafeOtherUpper)) {
         continue;
       }
       finiteChildPrefixCount += 1;
-      maxTotalUpper = Math.max(maxTotalUpper, childSlotUpper + bestSafeOtherUpper);
+      const childTotalUpper = childSlotUpper + bestSafeOtherUpper;
+      if (childTotalUpper > maxTotalUpper) {
+        maxTotalUpper = childTotalUpper;
+        maxChildCardIds = childSelectedCardIds;
+        maxChildSlotUpper = childSlotUpper;
+        maxChildOtherUpper = bestSafeOtherUpper;
+        maxChildBasicCapacityUpper = basicCapacityUpperOrNull;
+        if (
+          basicCapacityUpperOrNull !== null
+          && Number.isFinite(roughOtherUpper)
+          && Math.abs(basicCapacityUpperOrNull - roughOtherUpper) < 1e-6
+        ) {
+          maxChildOtherUpperSource = "tie";
+        } else if (basicCapacityUpperOrNull !== null && basicCapacityUpperOrNull < roughOtherUpper) {
+          maxChildOtherUpperSource = "basic-capacity";
+        } else {
+          maxChildOtherUpperSource = "pair-unseen";
+        }
+      }
     }
 
     sourceProfile.level3LookaheadChildPrefixCount = addCappedCount(
@@ -4011,11 +4082,39 @@ export function createMedleyExactSlotCandidateGenerator(
     sourceProfile.level3LookaheadMarginMin = minNullableNumber(sourceProfile.level3LookaheadMarginMin, margin);
     sourceProfile.level3LookaheadMarginMax = maxNullableNumber(sourceProfile.level3LookaheadMarginMax, margin);
     if (margin < 0) {
+      const impliedCompletionCount = getRelaxedImpliedCompletionCount(node.selectedCardCount, node.startIndex);
       sourceProfile.level3LookaheadWouldSkipCount += 1;
       sourceProfile.level3LookaheadWouldSkipImpliedCompletionCount = addCappedCount(
         sourceProfile.level3LookaheadWouldSkipImpliedCompletionCount,
-        getRelaxedImpliedCompletionCount(node.selectedCardCount, node.startIndex),
+        impliedCompletionCount,
       );
+      if (
+        sourceProfile.level3LookaheadSamples.length < MEDLEY_EXACT_PREFIX_OTHER_UPPER_SOURCE_REPLAY_SAMPLE_LIMIT
+      ) {
+        sourceProfile.level3LookaheadSamples.push({
+          songIndex: slot.songIndex,
+          level: node.selectedCardCount,
+          selectedCardIds: selectedCards
+            .map((selectedCard) => selectedCard.cardId)
+            .sort((left, right) => left - right),
+          impliedCompletionCount,
+          incumbent: globalPruning.scoreCutoff,
+          prefixUpper: node.slotUpperBound,
+          pairUnseenUpper: pairUnseenUpperBound !== undefined && Number.isFinite(pairUnseenUpperBound)
+            ? pairUnseenUpperBound
+            : null,
+          roughOtherUpper: Number.isFinite(roughOtherUpper) ? roughOtherUpper : null,
+          childPrefixCount,
+          finiteChildPrefixCount,
+          maxChildCardIds,
+          maxChildSlotUpper,
+          maxChildOtherUpper,
+          maxChildBasicCapacityUpper,
+          maxChildOtherUpperSource,
+          maxChildTotalUpper: maxTotalUpper,
+          margin,
+        });
+      }
     }
   };
 

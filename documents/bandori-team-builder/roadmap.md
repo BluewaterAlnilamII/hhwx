@@ -85,6 +85,7 @@ Baseline and gate artifacts retained:
 | `low-memory-polish-hhwx-2026-06-17T18-26-44-147Z.json` | `P02:260` basic level-3 lookahead replay, child budget `2048`, margin `500000` | bounded gap `382812`, score `9376984`, max `9412868`, peak `2609 MiB`; `0` would-skip prefixes |
 | `low-memory-polish-hhwx-2026-06-17T18-29-14-907Z.json` | `P02:260` basic level-3 lookahead replay, child budget `8192`, margin `500000` | bounded gap `382812`, score `9376984`, max `9412868`, peak `2960 MiB`; `8` would-skip prefixes representing `196970` relaxed completions |
 | `low-memory-polish-hhwx-2026-06-17T18-31-41-943Z.json` | `P02:260` basic level-3 lookahead replay, child budget `16384`, margin `500000` | bounded gap `382812`, score `9376984`, max `9412868`, peak `2985 MiB`; `54` would-skip prefixes representing `1035490` relaxed completions |
+| `low-memory-polish-hhwx-2026-06-17T18-38-51-150Z.json` | `P02:260` basic level-3 lookahead replay with capped proof samples, child budget `8192`, margin `500000` | bounded gap `382812`, score `9376984`, max `9412868`, peak `2980 MiB`; `8` would-skip prefixes representing `196970` relaxed completions, `8` capped proof samples |
 
 Use the pressure validation environment for early-pruning gates:
 
@@ -171,7 +172,8 @@ P02 basic level-3 lookahead replay:
 - with child budget `8192`, replay found `8` would-skip level-3 prefixes representing `196970` relaxed completions;
 - with child budget `16384`, replay found `54` would-skip level-3 prefixes representing `1035490` relaxed completions and a best margin of `-214757.669`;
 - this crosses the near-term `25%` implied-completion target as a diagnostic signal, but it is not yet real candidate reduction because overlap and branch-local accounting are still relaxed;
-- next retained direction: add a capped proof ledger for level-3 lookahead samples, then implement an opt-in real branch skip only if the ledger can record `incumbent`, `level-3 prefix upper`, `max child total upper`, `other upper source`, `margin`, `slot`, and implied completion count without changing exact/bounded semantics.
+- capped proof samples are now recorded in `level3LookaheadSamples`; the `2026-06-17T18-38-51` smoke kept result fields unchanged and recorded `8` samples containing level-3 card ids, max-child card ids, `pairUnseenUpper`, `maxChildBasicCapacityUpper`, `maxChildOtherUpperSource`, `maxChildTotalUpper`, `incumbent`, and `margin`;
+- next retained direction: add branch-decision replay/violation accounting, then implement an opt-in real branch skip only if each would-skip prefix can be rechecked against materialized descendants without changing exact/bounded semantics.
 
 The JSON files above contain `isolated.*Path` fields for detailed per-row diagnostics. Those referenced files are part of the retained baseline set.
 
@@ -282,6 +284,7 @@ Early-pruning success targets:
    - use a global child-prefix budget before constructing child proof work;
    - record the selected level-3 card ids, child count, finite child count, max child total upper, incumbent, margin, slot, and implied completion count in capped samples.
 3. Implement opt-in level-3 lookahead branch pruning only after the ledger is stable:
+   - first add branch-decision replay/violation accounting so would-skip level-3 prefixes are checked against later materialized descendants;
    - skip a level-3 branch only when the replayed max child total upper is finite and below the current cutoff;
    - report pruned prefix count, implied completions, and replay violations separately from existing leaf pruning;
    - compare actual `P02:260` materialized candidate reduction against the `25%` target.
