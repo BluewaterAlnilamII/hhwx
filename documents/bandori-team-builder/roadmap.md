@@ -69,6 +69,7 @@ Baseline and gate artifacts retained:
 | `low-memory-polish-hhwx-2026-06-17T10-36-12-622Z.json` | six-row A/B without prefix hard-upper pruning | `4 exact / 2 bounded`, gap `582812`, peak `3027 MiB` |
 | `low-memory-polish-hhwx-2026-06-17T11-02-24-155Z.json` | clean PR #43 branch validation | `4 exact / 2 bounded`, gap `582812`, peak `2943 MiB` |
 | `low-memory-polish-hhwx-2026-06-17T12-23-45-243Z.json` | two-row pressure + prefix replay smoke | `P01:244 exact`, `P02:260 bounded`, gap `382812`, peak `2979 MiB`; prefix summaries present |
+| `low-memory-polish-hhwx-2026-06-17T12-30-37-247Z.json` | six-row pressure + prefix replay gate | `4 exact / 2 bounded`, gap `582812`, peak `3308 MiB`; scores, max scores, candidate counts, and proof states match the clean PR #43 gate |
 
 Use the pressure validation environment for early-pruning gates:
 
@@ -78,6 +79,20 @@ Use the pressure validation environment for early-pruning gates:
 - `HHWX_LOW_MEMORY_SCORE_ONLY_CACHE_PRESSURE_FALLBACK=1`
 
 Bare default one-off runs are not comparable to the retained PR #43 gates; they can enter a memory-limited path on `P01:244` and OOM on `P02:260`.
+
+Six-row prefix replay aggregate from `2026-06-17T12-30-37`:
+
+- level 4 checked `5,038,851` prefixes and represented `526,159,658` relaxed completions;
+- leaf level checked `41,455,905` prefixes and materialized `5,649,468` candidates;
+- slot-local upper replay alone preserves proof state but raises diagnostic peak memory, especially `P08:323` (`1921 -> 3308 MiB`);
+- next pruning work should target proof-backed level-4 or leaf-birth skips, not broad threshold fallbacks.
+
+P02 pressure + hard replay sample:
+
+- artifact: `low-memory-polish-hhwx-2026-06-17T12-44-57-512Z.json`;
+- result stayed bounded with gap `382812`, peak `3024 MiB`;
+- current hard replay checked `582,084` prefixes but found only `11` skipable leaf prefixes and `0` skipable level-4 prefixes;
+- conclusion: simply converting the existing pair/global hard replay into pruning is not a breakthrough path for `P02:260`.
 
 The JSON files above contain `isolated.*Path` fields for detailed per-row diagnostics. Those referenced files are part of the retained baseline set.
 
