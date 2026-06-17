@@ -112,6 +112,7 @@ export type BandoriMedleySearchOptimizationOptions = {
   enableExactCandidateCapacitySourceLeafPruning?: boolean;
   enableExactCandidateCapacityLevel3LookaheadPruning?: boolean;
   debugExactCandidateDominanceReplay?: boolean;
+  debugExactCandidateRawAnchorCheapUpperReplay?: boolean;
   debugExactCandidateRawCandidatePoolProfile?: boolean;
   debugExactCandidateRawPairComplementParity?: boolean;
   debugExactCandidateRawPairUpperScanParity?: boolean;
@@ -654,6 +655,7 @@ export type BandoriMedleyTeamSearchProfilingStats = {
   exactCandidateJoinPairComplementHighPairBuildElapsedMs: number;
   exactCandidateJoinPairComplementHighPairRecordCount: number;
   exactCandidateJoinMemorySnapshots: Array<Record<string, unknown>>;
+  exactCandidateJoinRawAnchorCheapUpperReplay: Record<string, unknown> | null;
   exactCandidateJoinRawCandidatePoolProfile: Record<string, unknown> | null;
   exactCandidateJoinRawPairComplementParity: Record<string, unknown> | null;
   exactCandidateJoinRawPairUpperScanParity: Record<string, unknown> | null;

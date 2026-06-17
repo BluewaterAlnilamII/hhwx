@@ -133,6 +133,8 @@ const MEDLEY_EXACT_CARD_KEY_BITS = BigInt(14);
 const MEDLEY_EXACT_CARD_KEY_LIMIT = 1 << 14;
 const MEDLEY_EXACT_RAW_JOIN_PARITY_MAX_CANDIDATE_TOTAL = 50_000;
 const MEDLEY_EXACT_RAW_JOIN_PARITY_MIN_REMAINING_MS = 2_000;
+const MEDLEY_EXACT_RAW_ANCHOR_CHEAP_UPPER_REPLAY_MAX_CANDIDATE_TOTAL = 60_000;
+const MEDLEY_EXACT_RAW_ANCHOR_CHEAP_UPPER_REPLAY_SAMPLE_LIMIT = 16;
 const MEDLEY_EXACT_RAW_PAIR_COMPLEMENT_PARITY_MAX_CANDIDATE_TOTAL = 60_000;
 const MEDLEY_EXACT_RAW_PAIR_COMPLEMENT_PARITY_BANNED_SAMPLE_LIMIT = 4;
 const MEDLEY_EXACT_RAW_PAIR_UPPER_SCAN_PARITY_MAX_CANDIDATE_TOTAL = 60_000;
@@ -2696,6 +2698,202 @@ function estimateGeneratedMedleyExactRawCandidatePairUpperExcludingCardIdsByScan
     }
   }
   return { upperBound: bestScore, scannedLeftCandidateCount, scannedRightWordCount };
+}
+
+function buildMedleyExactRawAnchorCheapUpperReplayProfile(
+  candidatesBySlot: readonly MedleyTeamCandidate[][],
+  generators: readonly MedleyExactSlotCandidateGenerator[],
+  exactPairUpperByExcludedSlot: ReadonlyArray<number | null>,
+): Record<string, unknown> {
+  const startedAt = performance.now();
+  const candidateCountsBySlot = candidatesBySlot.map((candidates) => candidates.length);
+  const candidateCountTotal = candidateCountsBySlot.reduce((sum, count) => sum + count, 0);
+  if (candidateCountTotal > MEDLEY_EXACT_RAW_ANCHOR_CHEAP_UPPER_REPLAY_MAX_CANDIDATE_TOTAL) {
+    return {
+      algorithm: "hhwx-raw-anchor-cheap-upper-replay-v1",
+      enabled: true,
+      skipped: true,
+      skipReason: "candidate-total-limit",
+      candidateCountTotal,
+      candidateCountsBySlot,
+      limit: MEDLEY_EXACT_RAW_ANCHOR_CHEAP_UPPER_REPLAY_MAX_CANDIDATE_TOTAL,
+      rawPoolBuilt: false,
+    };
+  }
+  const anchorSlotIndex = exactPairUpperByExcludedSlot
+    .map((pairUpperBound, slotIndex) => ({ slotIndex, pairUpperBound }))
+    .filter((entry): entry is { slotIndex: number; pairUpperBound: number } => (
+      entry.pairUpperBound !== null && Number.isFinite(entry.pairUpperBound)
+    ))
+    .sort((left, right) => right.pairUpperBound - left.pairUpperBound)[0]?.slotIndex;
+  if (anchorSlotIndex === undefined) {
+    return {
+      algorithm: "hhwx-raw-anchor-cheap-upper-replay-v1",
+      enabled: true,
+      skipped: true,
+      skipReason: "no-finite-pair-upper",
+      candidateCountTotal,
+      candidateCountsBySlot,
+      rawPoolBuilt: false,
+    };
+  }
+
+  const pairSlotIndices = candidatesBySlot
+    .map((_, slotIndex) => slotIndex)
+    .filter((slotIndex) => slotIndex !== anchorSlotIndex) as [number, number];
+  const leftSlotIndex = pairSlotIndices[0];
+  const rightSlotIndex = pairSlotIndices[1];
+  const anchorCandidates = [...candidatesBySlot[anchorSlotIndex]];
+  const leftCandidates = [...candidatesBySlot[leftSlotIndex]];
+  const rightCandidates = [...candidatesBySlot[rightSlotIndex]];
+  sortMedleyCandidates(anchorCandidates);
+  sortMedleyCandidates(leftCandidates);
+  sortMedleyCandidates(rightCandidates);
+
+  const leftAvailabilityQuery = buildMedleyExactCandidateSlotAvailabilityQuery(leftCandidates);
+  const rightAvailabilityQuery = buildMedleyExactCandidateSlotAvailabilityQuery(rightCandidates);
+  const rawAnchorSlot = buildMedleyExactRawCandidatePoolSlot(anchorCandidates);
+  const rawLeftSlot = buildMedleyExactRawCandidatePoolSlot(leftCandidates);
+  const rawRightSlot = buildMedleyExactRawCandidatePoolSlot(rightCandidates);
+  const rawLeftWordCount = Math.ceil(rawLeftSlot.length / 32);
+  const rawRightWordCount = Math.ceil(rawRightSlot.length / 32);
+  const containingRawLeftBitsByCardId = buildMedleyExactRawJoinContainingBitsByCardId(
+    rawLeftSlot,
+    rawLeftWordCount,
+  );
+  const containingRawRightBitsByCardId = buildMedleyExactRawJoinContainingBitsByCardId(
+    rawRightSlot,
+    rawRightWordCount,
+  );
+  const leftPeekUpperBound = generators[leftSlotIndex]?.peekUpperBound() ?? Number.NEGATIVE_INFINITY;
+  const rightPeekUpperBound = generators[rightSlotIndex]?.peekUpperBound() ?? Number.NEGATIVE_INFINITY;
+  const finiteScore = (score: number): number => (
+    Number.isFinite(score) ? score : Number.NEGATIVE_INFINITY
+  );
+  const combineScores = (leftScore: number, rightScore: number): number => (
+    Number.isFinite(leftScore) && Number.isFinite(rightScore)
+      ? leftScore + rightScore
+      : Number.NEGATIVE_INFINITY
+  );
+  const sourceForUpper = (
+    upperBound: number,
+    generatedPairUpper: number,
+    leftUnseenUpper: number,
+  ): string => (
+    upperBound === generatedPairUpper
+      ? "generated-pair"
+      : upperBound === leftUnseenUpper
+        ? "left-unseen"
+        : "right-unseen"
+  );
+
+  const sampleCount = Math.min(
+    anchorCandidates.length,
+    MEDLEY_EXACT_RAW_ANCHOR_CHEAP_UPPER_REPLAY_SAMPLE_LIMIT,
+  );
+  const samples = Array.from({ length: sampleCount }, (_, anchorIndex) => {
+    const anchorCandidate = anchorCandidates[anchorIndex];
+    const anchorCardIds = getMedleyTeamCandidateCardIds(anchorCandidate);
+    const leftGeneratedCandidate = findBestAvailableMedleyExactCandidateExcludingCardIds(
+      leftAvailabilityQuery,
+      anchorCardIds,
+    );
+    const rightGeneratedCandidate = findBestAvailableMedleyExactCandidateExcludingCardIds(
+      rightAvailabilityQuery,
+      anchorCardIds,
+    );
+    const leftGeneratedScore = finiteScore(leftGeneratedCandidate?.result.score ?? Number.NEGATIVE_INFINITY);
+    const rightGeneratedScore = finiteScore(rightGeneratedCandidate?.result.score ?? Number.NEGATIVE_INFINITY);
+    const objectLeftBestPossible = Math.max(leftGeneratedScore, finiteScore(leftPeekUpperBound));
+    const objectRightBestPossible = Math.max(rightGeneratedScore, finiteScore(rightPeekUpperBound));
+    const objectGeneratedPairUpper = combineScores(leftGeneratedScore, rightGeneratedScore);
+    const objectLeftUnseenUpper = combineScores(finiteScore(leftPeekUpperBound), objectRightBestPossible);
+    const objectRightUnseenUpper = combineScores(finiteScore(rightPeekUpperBound), objectLeftBestPossible);
+    const objectUpperBound = Math.max(
+      objectGeneratedPairUpper,
+      objectLeftUnseenUpper,
+      objectRightUnseenUpper,
+    );
+
+    const rawAnchorCardIds = getMedleyExactRawCandidateCardIds(rawAnchorSlot, anchorIndex);
+    const rawLeftResult = findBestAvailableMedleyExactRawRightCandidateByForbiddenCardIds(
+      rawLeftSlot,
+      containingRawLeftBitsByCardId,
+      rawLeftWordCount,
+      [],
+      rawAnchorCardIds,
+    );
+    const rawRightResult = findBestAvailableMedleyExactRawRightCandidateByForbiddenCardIds(
+      rawRightSlot,
+      containingRawRightBitsByCardId,
+      rawRightWordCount,
+      [],
+      rawAnchorCardIds,
+    );
+    const rawLeftGeneratedScore = finiteScore(
+      rawLeftResult.candidateIndex >= 0
+        ? rawLeftSlot.scores[rawLeftResult.candidateIndex]
+        : Number.NEGATIVE_INFINITY,
+    );
+    const rawRightGeneratedScore = finiteScore(
+      rawRightResult.candidateIndex >= 0
+        ? rawRightSlot.scores[rawRightResult.candidateIndex]
+        : Number.NEGATIVE_INFINITY,
+    );
+    const rawLeftBestPossible = Math.max(rawLeftGeneratedScore, finiteScore(leftPeekUpperBound));
+    const rawRightBestPossible = Math.max(rawRightGeneratedScore, finiteScore(rightPeekUpperBound));
+    const rawGeneratedPairUpper = combineScores(rawLeftGeneratedScore, rawRightGeneratedScore);
+    const rawLeftUnseenUpper = combineScores(finiteScore(leftPeekUpperBound), rawRightBestPossible);
+    const rawRightUnseenUpper = combineScores(finiteScore(rightPeekUpperBound), rawLeftBestPossible);
+    const rawUpperBound = Math.max(rawGeneratedPairUpper, rawLeftUnseenUpper, rawRightUnseenUpper);
+    return {
+      anchorIndex,
+      anchorScore: anchorCandidate.result.score,
+      objectUpperBound: Number.isFinite(objectUpperBound) ? objectUpperBound : null,
+      rawUpperBound: Number.isFinite(rawUpperBound) ? rawUpperBound : null,
+      objectSource: sourceForUpper(objectUpperBound, objectGeneratedPairUpper, objectLeftUnseenUpper),
+      rawSource: sourceForUpper(rawUpperBound, rawGeneratedPairUpper, rawLeftUnseenUpper),
+      objectGeneratedPairUpper: Number.isFinite(objectGeneratedPairUpper) ? objectGeneratedPairUpper : null,
+      rawGeneratedPairUpper: Number.isFinite(rawGeneratedPairUpper) ? rawGeneratedPairUpper : null,
+      objectLeftUnseenUpper: Number.isFinite(objectLeftUnseenUpper) ? objectLeftUnseenUpper : null,
+      rawLeftUnseenUpper: Number.isFinite(rawLeftUnseenUpper) ? rawLeftUnseenUpper : null,
+      objectRightUnseenUpper: Number.isFinite(objectRightUnseenUpper) ? objectRightUnseenUpper : null,
+      rawRightUnseenUpper: Number.isFinite(rawRightUnseenUpper) ? rawRightUnseenUpper : null,
+      matched: (
+        objectUpperBound === rawUpperBound
+        && objectGeneratedPairUpper === rawGeneratedPairUpper
+        && objectLeftUnseenUpper === rawLeftUnseenUpper
+        && objectRightUnseenUpper === rawRightUnseenUpper
+      ),
+      rawLeftScannedWordCount: rawLeftResult.scannedWordCount,
+      rawRightScannedWordCount: rawRightResult.scannedWordCount,
+    };
+  });
+
+  return {
+    algorithm: "hhwx-raw-anchor-cheap-upper-replay-v1",
+    enabled: true,
+    skipped: false,
+    source: "local-sorted-raw-candidate-pool",
+    candidateCountTotal,
+    candidateCountsBySlot,
+    anchorSlotIndex,
+    pairSlotIndices,
+    pairUpperBound: exactPairUpperByExcludedSlot[anchorSlotIndex],
+    leftPeekUpperBound: Number.isFinite(leftPeekUpperBound) ? leftPeekUpperBound : null,
+    rightPeekUpperBound: Number.isFinite(rightPeekUpperBound) ? rightPeekUpperBound : null,
+    sampleLimit: MEDLEY_EXACT_RAW_ANCHOR_CHEAP_UPPER_REPLAY_SAMPLE_LIMIT,
+    sampleCount,
+    matched: samples.every((sample) => sample.matched),
+    mismatchCount: samples.filter((sample) => !sample.matched).length,
+    elapsedMs: Math.round(performance.now() - startedAt),
+    rawRetainedMiB: roundMiB(
+      getMedleyExactRawCandidatePoolSlotBytes(rawAnchorSlot)
+      + getMedleyExactRawCandidatePoolSlotBytes(rawLeftSlot)
+      + getMedleyExactRawCandidatePoolSlotBytes(rawRightSlot),
+    ),
+    samples,
+  };
 }
 
 function buildMedleyExactRawPairUpperScanParityProfile(
@@ -8777,6 +8975,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     enableExactCandidateCapacitySourceLeafPruning?: boolean;
     enableExactCandidateCapacityLevel3LookaheadPruning?: boolean;
     debugExactCandidateDominanceReplay?: boolean;
+    debugExactCandidateRawAnchorCheapUpperReplay?: boolean;
     debugExactCandidateRawCandidatePoolProfile?: boolean;
     debugExactCandidateRawPairComplementParity?: boolean;
     debugExactCandidateRawPairUpperScanParity?: boolean;
@@ -8816,6 +9015,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     profiling.exactCandidateJoinLastAbortOtherUpper = null;
     profiling.exactCandidateJoinLastAbortObservedUpperBound = null;
     profiling.exactCandidateJoinLastAbortRemainingMs = null;
+    profiling.exactCandidateJoinRawAnchorCheapUpperReplay = null;
     profiling.exactCandidateJoinRawCandidatePoolProfile = null;
     profiling.exactCandidateJoinRawPairComplementParity = null;
     profiling.exactCandidateJoinRawPairUpperScanParity = null;
@@ -9092,6 +9292,16 @@ export function searchMedleyConfigurationByExactCandidateJoin(
       candidatesBySlot,
     );
   };
+  const recordRawAnchorCheapUpperReplay = (): void => {
+    if (context.debugExactCandidateRawAnchorCheapUpperReplay !== true) {
+      return;
+    }
+    profiling.exactCandidateJoinRawAnchorCheapUpperReplay = buildMedleyExactRawAnchorCheapUpperReplayProfile(
+      candidatesBySlot,
+      generators,
+      exactPairUpperByExcludedSlot,
+    );
+  };
   const recordRawPairUpperScanParity = (): void => {
     if (context.debugExactCandidateRawPairUpperScanParity !== true) {
       return;
@@ -9136,6 +9346,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     observedUpperBound: number | null = getObservedExactCandidateJoinUpperBound(),
   ): MedleyExactCandidateJoinResult => {
     recordRawSolverInputCensus();
+    recordRawAnchorCheapUpperReplay();
     recordRawPairComplementParity();
     recordRawPairUpperScanParity();
     recordRawCandidatePoolProfile();
@@ -9157,6 +9368,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     result: BandoriMedleyTeamSearchResult | null = null,
   ): MedleyExactCandidateJoinResult => {
     recordRawSolverInputCensus();
+    recordRawAnchorCheapUpperReplay();
     recordRawPairComplementParity();
     recordRawPairUpperScanParity();
     recordRawCandidatePoolProfile();
