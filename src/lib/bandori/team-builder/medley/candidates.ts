@@ -14,6 +14,7 @@ import type {
   MedleySlotSearch,
   MedleyTeamCandidate,
 } from "./types";
+import { MEDLEY_TEAM_SIZE } from "./constants";
 import type {
   BandoriCardAttribute,
   BandoriTeamSearchResult,
@@ -103,6 +104,140 @@ function getMedleyCandidateCardIds(cards: SearchCard[]): number[] {
     default:
       return cards.map((card) => card.cardId);
   }
+}
+
+function hasFixedMedleyTeamCandidateCardIds(candidate: MedleyTeamCandidate): boolean {
+  return (
+    candidate.cardId0 !== undefined
+    && candidate.cardId1 !== undefined
+    && candidate.cardId2 !== undefined
+    && candidate.cardId3 !== undefined
+    && candidate.cardId4 !== undefined
+  );
+}
+
+export function getMedleyTeamCandidateCardIdAt(
+  candidate: MedleyTeamCandidate,
+  index: number,
+): number | undefined {
+  if (!hasFixedMedleyTeamCandidateCardIds(candidate)) {
+    return candidate.cardIds[index];
+  }
+  switch (index) {
+    case 0:
+      return candidate.cardId0;
+    case 1:
+      return candidate.cardId1;
+    case 2:
+      return candidate.cardId2;
+    case 3:
+      return candidate.cardId3;
+    case 4:
+      return candidate.cardId4;
+    default:
+      return undefined;
+  }
+}
+
+export function getMedleyTeamCandidateCardIdCount(candidate: MedleyTeamCandidate): number {
+  return hasFixedMedleyTeamCandidateCardIds(candidate)
+    ? MEDLEY_TEAM_SIZE
+    : candidate.cardIds.length;
+}
+
+export function getMedleyTeamCandidateCardIds(candidate: MedleyTeamCandidate): number[] {
+  return hasFixedMedleyTeamCandidateCardIds(candidate)
+    ? [candidate.cardId0!, candidate.cardId1!, candidate.cardId2!, candidate.cardId3!, candidate.cardId4!]
+    : candidate.cardIds;
+}
+
+export function copyMedleyTeamCandidateCardIds(candidate: MedleyTeamCandidate): number[] {
+  return hasFixedMedleyTeamCandidateCardIds(candidate)
+    ? [candidate.cardId0!, candidate.cardId1!, candidate.cardId2!, candidate.cardId3!, candidate.cardId4!]
+    : [...candidate.cardIds];
+}
+
+export function forEachMedleyTeamCandidateCardId(
+  candidate: MedleyTeamCandidate,
+  visit: (cardId: number) => void,
+): void {
+  if (!hasFixedMedleyTeamCandidateCardIds(candidate)) {
+    for (const cardId of candidate.cardIds) {
+      visit(cardId);
+    }
+    return;
+  }
+  visit(candidate.cardId0!);
+  visit(candidate.cardId1!);
+  visit(candidate.cardId2!);
+  visit(candidate.cardId3!);
+  visit(candidate.cardId4!);
+}
+
+export function medleyTeamCandidateHasCardIdInSet(
+  candidate: MedleyTeamCandidate,
+  cardIds: ReadonlySet<number>,
+): boolean {
+  if (!hasFixedMedleyTeamCandidateCardIds(candidate)) {
+    return candidate.cardIds.some((cardId) => cardIds.has(cardId));
+  }
+  return (
+    cardIds.has(candidate.cardId0!)
+    || cardIds.has(candidate.cardId1!)
+    || cardIds.has(candidate.cardId2!)
+    || cardIds.has(candidate.cardId3!)
+    || cardIds.has(candidate.cardId4!)
+  );
+}
+
+export function medleyTeamCandidateOverlapsCardIds(
+  candidate: MedleyTeamCandidate,
+  cardIds: readonly number[],
+): boolean {
+  const candidateCount = getMedleyTeamCandidateCardIdCount(candidate);
+  for (let candidateIndex = 0; candidateIndex < candidateCount; candidateIndex += 1) {
+    const candidateCardId = getMedleyTeamCandidateCardIdAt(candidate, candidateIndex);
+    for (let cardIndex = 0; cardIndex < cardIds.length; cardIndex += 1) {
+      if (candidateCardId === cardIds[cardIndex]) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+export function medleyTeamCandidatesHaveOverlappingCardIds(
+  left: MedleyTeamCandidate,
+  right: MedleyTeamCandidate,
+): boolean {
+  const leftCount = getMedleyTeamCandidateCardIdCount(left);
+  const rightCount = getMedleyTeamCandidateCardIdCount(right);
+  for (let leftIndex = 0; leftIndex < leftCount; leftIndex += 1) {
+    const leftCardId = getMedleyTeamCandidateCardIdAt(left, leftIndex);
+    for (let rightIndex = 0; rightIndex < rightCount; rightIndex += 1) {
+      if (leftCardId === getMedleyTeamCandidateCardIdAt(right, rightIndex)) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+export function getFirstMedleyTeamCandidateOverlapCardId(
+  left: MedleyTeamCandidate,
+  right: MedleyTeamCandidate,
+): number | null {
+  const leftCount = getMedleyTeamCandidateCardIdCount(left);
+  const rightCount = getMedleyTeamCandidateCardIdCount(right);
+  for (let leftIndex = 0; leftIndex < leftCount; leftIndex += 1) {
+    const leftCardId = getMedleyTeamCandidateCardIdAt(left, leftIndex);
+    for (let rightIndex = 0; rightIndex < rightCount; rightIndex += 1) {
+      if (leftCardId === getMedleyTeamCandidateCardIdAt(right, rightIndex)) {
+        return leftCardId ?? null;
+      }
+    }
+  }
+  return null;
 }
 
 function medleySlotHasDuplicateCardIds(slot: MedleySlotSearch): boolean {
@@ -202,14 +337,19 @@ function compareMedleyCandidateCardIds(left: MedleyTeamCandidate, right: MedleyT
   if (leftKeys.length > 0 || rightKeys.length > 0) {
     return leftKeys.join(",").localeCompare(rightKeys.join(","));
   }
-  const length = Math.min(left.cardIds.length, right.cardIds.length);
+  const leftCardIdCount = getMedleyTeamCandidateCardIdCount(left);
+  const rightCardIdCount = getMedleyTeamCandidateCardIdCount(right);
+  const length = Math.min(leftCardIdCount, rightCardIdCount);
   for (let index = 0; index < length; index += 1) {
-    const delta = left.cardIds[index] - right.cardIds[index];
+    const delta = (
+      (getMedleyTeamCandidateCardIdAt(left, index) ?? -1)
+      - (getMedleyTeamCandidateCardIdAt(right, index) ?? -1)
+    );
     if (delta !== 0) {
       return delta;
     }
   }
-  return left.cardIds.length - right.cardIds.length;
+  return leftCardIdCount - rightCardIdCount;
 }
 
 export function sortMedleyCandidates(candidates: MedleyTeamCandidate[]): void {
