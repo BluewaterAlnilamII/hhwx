@@ -379,6 +379,7 @@ export function createInitialMedleyProfilingStats(
     exactCandidateJoinPairComplementHighPairRecordCount: 0,
     exactCandidateJoinMemorySnapshots: [],
     exactCandidateJoinRawCandidatePoolProfile: null,
+    exactCandidateJoinRawPairComplementParity: null,
     exactCandidateJoinRawPairUpperScanParity: null,
     exactCandidateJoinRawSolverInputCensus: null,
     exactCandidateJoinPrefixUpperReplaySummary: null,

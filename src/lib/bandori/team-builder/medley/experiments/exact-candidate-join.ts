@@ -133,6 +133,8 @@ const MEDLEY_EXACT_CARD_KEY_BITS = BigInt(14);
 const MEDLEY_EXACT_CARD_KEY_LIMIT = 1 << 14;
 const MEDLEY_EXACT_RAW_JOIN_PARITY_MAX_CANDIDATE_TOTAL = 50_000;
 const MEDLEY_EXACT_RAW_JOIN_PARITY_MIN_REMAINING_MS = 2_000;
+const MEDLEY_EXACT_RAW_PAIR_COMPLEMENT_PARITY_MAX_CANDIDATE_TOTAL = 60_000;
+const MEDLEY_EXACT_RAW_PAIR_COMPLEMENT_PARITY_BANNED_SAMPLE_LIMIT = 4;
 const MEDLEY_EXACT_RAW_PAIR_UPPER_SCAN_PARITY_MAX_CANDIDATE_TOTAL = 60_000;
 const MEDLEY_EXACT_SIGNATURE_CENSUS_BUCKET_LIMIT = 20_000;
 const MEDLEY_EXACT_SIGNATURE_CENSUS_TOP_BUCKETS = 8;
@@ -2568,6 +2570,134 @@ function estimateGeneratedMedleyExactRawCandidatePairUpper(
   return { upperBound: bestScore, scannedLeftCandidateCount, scannedRightCandidateCount };
 }
 
+function getMedleyExactRawCandidateCardIds(
+  slot: MedleyExactRawCandidatePoolSlot,
+  candidateIndex: number,
+): number[] {
+  const baseCardIndex = candidateIndex * MEDLEY_TEAM_SIZE;
+  const cardIds: number[] = [];
+  for (let cardIndex = 0; cardIndex < MEDLEY_TEAM_SIZE; cardIndex += 1) {
+    const cardId = slot.cardIds[baseCardIndex + cardIndex];
+    if (cardId >= 0) {
+      cardIds.push(cardId);
+    }
+  }
+  return cardIds;
+}
+
+function medleyExactRawCandidateHasCardIdInSet(
+  slot: MedleyExactRawCandidatePoolSlot,
+  candidateIndex: number,
+  cardIds: Set<number>,
+): boolean {
+  const baseCardIndex = candidateIndex * MEDLEY_TEAM_SIZE;
+  for (let cardIndex = 0; cardIndex < MEDLEY_TEAM_SIZE; cardIndex += 1) {
+    const cardId = slot.cardIds[baseCardIndex + cardIndex];
+    if (cardId >= 0 && cardIds.has(cardId)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function findBestAvailableMedleyExactRawRightCandidateByForbiddenCardIds(
+  rightSlot: MedleyExactRawCandidatePoolSlot,
+  containingRightCandidateBitsByCardId: Map<number, Uint32Array>,
+  wordCount: number,
+  primaryForbiddenCardIds: readonly number[],
+  secondaryForbiddenCardIds: readonly number[],
+): { candidateIndex: number; scannedWordCount: number } {
+  if (rightSlot.length === 0) {
+    return { candidateIndex: -1, scannedWordCount: 0 };
+  }
+  const containingBits: Uint32Array[] = [];
+  const appendContainingBits = (cardIds: readonly number[]): void => {
+    for (const cardId of cardIds) {
+      const bits = containingRightCandidateBitsByCardId.get(cardId);
+      if (bits) {
+        containingBits.push(bits);
+      }
+    }
+  };
+  appendContainingBits(primaryForbiddenCardIds);
+  appendContainingBits(secondaryForbiddenCardIds);
+  const lastWordIndex = wordCount - 1;
+  const lastWordRemainder = rightSlot.length & 31;
+  const lastWordMask = lastWordRemainder === 0
+    ? 0xffffffff
+    : 0xffffffff >>> (32 - lastWordRemainder);
+  const finishAvailableWord = (availableBits: number, wordIndex: number, scannedWordCount: number) => {
+    const lowestAvailableBit = availableBits & -availableBits;
+    const bitIndex = 31 - Math.clz32(lowestAvailableBit);
+    return { candidateIndex: wordIndex * 32 + bitIndex, scannedWordCount };
+  };
+  if (containingBits.length === 0) {
+    return { candidateIndex: 0, scannedWordCount: 1 };
+  }
+  let scannedWordCount = 0;
+  for (let wordIndex = 0; wordIndex < wordCount; wordIndex += 1) {
+    scannedWordCount += 1;
+    let forbiddenBits = 0;
+    for (const bits of containingBits) {
+      forbiddenBits |= bits[wordIndex];
+    }
+    let availableBits = (~forbiddenBits) >>> 0;
+    if (wordIndex === lastWordIndex) {
+      availableBits &= lastWordMask;
+    }
+    if (availableBits !== 0) {
+      return finishAvailableWord(availableBits, wordIndex, scannedWordCount);
+    }
+  }
+  return { candidateIndex: -1, scannedWordCount };
+}
+
+function estimateGeneratedMedleyExactRawCandidatePairUpperExcludingCardIdsByScan(
+  leftSlot: MedleyExactRawCandidatePoolSlot,
+  rightSlot: MedleyExactRawCandidatePoolSlot,
+  containingRightCandidateBitsByCardId: Map<number, Uint32Array>,
+  bannedCardIds: Iterable<number>,
+  minimumRelevantScore = Number.NEGATIVE_INFINITY,
+): {
+  upperBound: number;
+  scannedLeftCandidateCount: number;
+  scannedRightWordCount: number;
+} {
+  let bestScore = Number.NEGATIVE_INFINITY;
+  const bannedCardIdSet = bannedCardIds instanceof Set ? bannedCardIds : new Set<number>(bannedCardIds);
+  const bannedCardIdList = [...bannedCardIdSet];
+  const bestRightScore = rightSlot.scores[0] ?? Number.NEGATIVE_INFINITY;
+  const rightWordCount = Math.ceil(rightSlot.length / 32);
+  let scannedLeftCandidateCount = 0;
+  let scannedRightWordCount = 0;
+  for (let leftIndex = 0; leftIndex < leftSlot.length; leftIndex += 1) {
+    scannedLeftCandidateCount += 1;
+    if (medleyExactRawCandidateHasCardIdInSet(leftSlot, leftIndex, bannedCardIdSet)) {
+      continue;
+    }
+    const cutoff = Math.max(bestScore, minimumRelevantScore);
+    if (leftSlot.scores[leftIndex] + bestRightScore <= cutoff) {
+      break;
+    }
+    const rightQueryResult = findBestAvailableMedleyExactRawRightCandidateByForbiddenCardIds(
+      rightSlot,
+      containingRightCandidateBitsByCardId,
+      rightWordCount,
+      bannedCardIdList,
+      getMedleyExactRawCandidateCardIds(leftSlot, leftIndex),
+    );
+    scannedRightWordCount += rightQueryResult.scannedWordCount;
+    if (rightQueryResult.candidateIndex < 0) {
+      continue;
+    }
+    const score = leftSlot.scores[leftIndex] + rightSlot.scores[rightQueryResult.candidateIndex];
+    if (score > minimumRelevantScore) {
+      bestScore = Math.max(bestScore, score);
+    }
+  }
+  return { upperBound: bestScore, scannedLeftCandidateCount, scannedRightWordCount };
+}
+
 function buildMedleyExactRawPairUpperScanParityProfile(
   candidatesBySlot: readonly MedleyTeamCandidate[][],
   rawPool: MedleyExactRawCandidatePool,
@@ -2621,6 +2751,118 @@ function buildMedleyExactRawPairUpperScanParityProfile(
     mismatchCount: pairs.filter((pair) => !pair.matched).length,
     elapsedMs: Math.round(performance.now() - startedAt),
     pairs,
+  };
+}
+
+function buildMedleyExactRawPairComplementParityProfile(
+  candidatesBySlot: readonly MedleyTeamCandidate[][],
+  rawPool: MedleyExactRawCandidatePool,
+): Record<string, unknown> {
+  const startedAt = performance.now();
+  const candidateCountsBySlot = candidatesBySlot.map((candidates) => candidates.length);
+  const candidateCountTotal = candidateCountsBySlot.reduce((sum, count) => sum + count, 0);
+  if (candidateCountTotal > MEDLEY_EXACT_RAW_PAIR_COMPLEMENT_PARITY_MAX_CANDIDATE_TOTAL) {
+    return {
+      algorithm: "hhwx-raw-pair-complement-parity-v1",
+      enabled: true,
+      skipped: true,
+      skipReason: "candidate-total-limit",
+      candidateCountTotal,
+      candidateCountsBySlot,
+      limit: MEDLEY_EXACT_RAW_PAIR_COMPLEMENT_PARITY_MAX_CANDIDATE_TOTAL,
+      rawPoolBuilt: true,
+      elapsedMs: Math.round(performance.now() - startedAt),
+    };
+  }
+
+  const pairs = candidatesBySlot.map((_, excludedSlotIndex) => {
+    const pairSlotIndices = candidatesBySlot
+      .map((__, slotIndex) => slotIndex)
+      .filter((slotIndex) => slotIndex !== excludedSlotIndex) as [number, number];
+    const objectQuery = buildMedleyExactCandidatePairUpperQuery(
+      candidatesBySlot[pairSlotIndices[0]],
+      candidatesBySlot[pairSlotIndices[1]],
+    );
+    const rawLeftSlot = rawPool.slots[pairSlotIndices[0]];
+    const rawRightSlot = rawPool.slots[pairSlotIndices[1]];
+    const rawRightWordCount = Math.ceil(rawRightSlot.length / 32);
+    const containingRawRightBitsByCardId = buildMedleyExactRawJoinContainingBitsByCardId(
+      rawRightSlot,
+      rawRightWordCount,
+    );
+    const bannedSamples: number[][] = [[]];
+    const excludedCandidates = candidatesBySlot[excludedSlotIndex] ?? [];
+    for (
+      let candidateIndex = 0;
+      candidateIndex < excludedCandidates.length
+        && bannedSamples.length < MEDLEY_EXACT_RAW_PAIR_COMPLEMENT_PARITY_BANNED_SAMPLE_LIMIT;
+      candidateIndex += 1
+    ) {
+      bannedSamples.push(copyMedleyTeamCandidateCardIds(excludedCandidates[candidateIndex]));
+    }
+    const samples = bannedSamples.map((bannedCardIds, sampleIndex) => {
+      const objectUpperBound = estimateGeneratedMedleyExactCandidatePairUpperExcludingCardIdsByScan(
+        objectQuery,
+        bannedCardIds,
+      );
+      const rawResult = estimateGeneratedMedleyExactRawCandidatePairUpperExcludingCardIdsByScan(
+        rawLeftSlot,
+        rawRightSlot,
+        containingRawRightBitsByCardId,
+        bannedCardIds,
+      );
+      return {
+        sampleIndex,
+        bannedCardIds,
+        objectUpperBound: Number.isFinite(objectUpperBound) ? objectUpperBound : null,
+        rawUpperBound: Number.isFinite(rawResult.upperBound) ? rawResult.upperBound : null,
+        matched: objectUpperBound === rawResult.upperBound,
+        scannedLeftCandidateCount: rawResult.scannedLeftCandidateCount,
+        scannedRightWordCount: rawResult.scannedRightWordCount,
+      };
+    });
+    return {
+      excludedSlotIndex,
+      pairSlotIndices,
+      sampleCount: samples.length,
+      matched: samples.every((sample) => sample.matched),
+      mismatchCount: samples.filter((sample) => !sample.matched).length,
+      samples,
+    };
+  });
+
+  return {
+    algorithm: "hhwx-raw-pair-complement-parity-v1",
+    enabled: true,
+    skipped: false,
+    source: "shared-current-pool",
+    candidateCountTotal,
+    candidateCountsBySlot,
+    sampleLimit: MEDLEY_EXACT_RAW_PAIR_COMPLEMENT_PARITY_BANNED_SAMPLE_LIMIT,
+    matched: pairs.every((pair) => pair.matched),
+    mismatchCount: pairs.reduce((sum, pair) => sum + pair.mismatchCount, 0),
+    elapsedMs: Math.round(performance.now() - startedAt),
+    pairs,
+  };
+}
+
+function buildSkippedMedleyExactRawPairComplementParityProfile(
+  candidatesBySlot: readonly MedleyTeamCandidate[][],
+): Record<string, unknown> | null {
+  const candidateCountsBySlot = candidatesBySlot.map((candidates) => candidates.length);
+  const candidateCountTotal = candidateCountsBySlot.reduce((sum, count) => sum + count, 0);
+  if (candidateCountTotal <= MEDLEY_EXACT_RAW_PAIR_COMPLEMENT_PARITY_MAX_CANDIDATE_TOTAL) {
+    return null;
+  }
+  return {
+    algorithm: "hhwx-raw-pair-complement-parity-v1",
+    enabled: true,
+    skipped: true,
+    skipReason: "candidate-total-limit",
+    candidateCountTotal,
+    candidateCountsBySlot,
+    limit: MEDLEY_EXACT_RAW_PAIR_COMPLEMENT_PARITY_MAX_CANDIDATE_TOTAL,
+    rawPoolBuilt: false,
   };
 }
 
@@ -8536,6 +8778,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     enableExactCandidateCapacityLevel3LookaheadPruning?: boolean;
     debugExactCandidateDominanceReplay?: boolean;
     debugExactCandidateRawCandidatePoolProfile?: boolean;
+    debugExactCandidateRawPairComplementParity?: boolean;
     debugExactCandidateRawPairUpperScanParity?: boolean;
     debugExactCandidateRawSolverInputCensus?: boolean;
     exactCandidateScoreCalculationCacheEntryLimit?: number | null;
@@ -8574,6 +8817,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     profiling.exactCandidateJoinLastAbortObservedUpperBound = null;
     profiling.exactCandidateJoinLastAbortRemainingMs = null;
     profiling.exactCandidateJoinRawCandidatePoolProfile = null;
+    profiling.exactCandidateJoinRawPairComplementParity = null;
     profiling.exactCandidateJoinRawPairUpperScanParity = null;
     profiling.exactCandidateJoinRawSolverInputCensus = null;
     profiling.exactCandidateJoinLastGuardedExtensionSlotIndex = null;
@@ -8862,6 +9106,20 @@ export function searchMedleyConfigurationByExactCandidateJoin(
       getRawCandidatePool(),
     );
   };
+  const recordRawPairComplementParity = (): void => {
+    if (context.debugExactCandidateRawPairComplementParity !== true) {
+      return;
+    }
+    const skippedProfile = buildSkippedMedleyExactRawPairComplementParityProfile(candidatesBySlot);
+    if (skippedProfile) {
+      profiling.exactCandidateJoinRawPairComplementParity = skippedProfile;
+      return;
+    }
+    profiling.exactCandidateJoinRawPairComplementParity = buildMedleyExactRawPairComplementParityProfile(
+      candidatesBySlot,
+      getRawCandidatePool(),
+    );
+  };
   const recordRawCandidatePoolProfile = (): void => {
     if (context.debugExactCandidateRawCandidatePoolProfile !== true) {
       return;
@@ -8878,6 +9136,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     observedUpperBound: number | null = getObservedExactCandidateJoinUpperBound(),
   ): MedleyExactCandidateJoinResult => {
     recordRawSolverInputCensus();
+    recordRawPairComplementParity();
     recordRawPairUpperScanParity();
     recordRawCandidatePoolProfile();
     recordPrefixUpperReplaySummary();
@@ -8898,6 +9157,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     result: BandoriMedleyTeamSearchResult | null = null,
   ): MedleyExactCandidateJoinResult => {
     recordRawSolverInputCensus();
+    recordRawPairComplementParity();
     recordRawPairUpperScanParity();
     recordRawCandidatePoolProfile();
     recordPrefixUpperReplaySummary();

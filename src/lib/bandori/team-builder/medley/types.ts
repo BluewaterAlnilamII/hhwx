@@ -113,6 +113,7 @@ export type BandoriMedleySearchOptimizationOptions = {
   enableExactCandidateCapacityLevel3LookaheadPruning?: boolean;
   debugExactCandidateDominanceReplay?: boolean;
   debugExactCandidateRawCandidatePoolProfile?: boolean;
+  debugExactCandidateRawPairComplementParity?: boolean;
   debugExactCandidateRawPairUpperScanParity?: boolean;
   debugExactCandidateRawSolverInputCensus?: boolean;
   exactCandidateScoreCalculationCacheEntryLimit?: number;
@@ -654,6 +655,7 @@ export type BandoriMedleyTeamSearchProfilingStats = {
   exactCandidateJoinPairComplementHighPairRecordCount: number;
   exactCandidateJoinMemorySnapshots: Array<Record<string, unknown>>;
   exactCandidateJoinRawCandidatePoolProfile: Record<string, unknown> | null;
+  exactCandidateJoinRawPairComplementParity: Record<string, unknown> | null;
   exactCandidateJoinRawPairUpperScanParity: Record<string, unknown> | null;
   exactCandidateJoinRawSolverInputCensus: Record<string, unknown> | null;
   exactCandidateJoinPrefixUpperReplaySummary: Record<string, unknown> | null;
