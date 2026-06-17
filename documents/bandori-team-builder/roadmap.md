@@ -90,6 +90,8 @@ Baseline and gate artifacts retained:
 | `low-memory-polish-hhwx-2026-06-17T18-46-51-730Z.json` | `P02:260` basic level-3 lookahead replay with child-decision violation accounting, child budget `16384`, margin `500000` | bounded gap `382812`, score `9376984`, max `9412868`, peak `3005 MiB`; `54` would-skip prefixes, `9997` child decisions, `0` replay violations |
 | `low-memory-polish-hhwx-2026-06-17T18-52-28-541Z.json` | `P02:260` opt-in level-3 lookahead branch pruning, child budget `8192`, margin `500000` | bounded gap `382812`, score `9376984`, max `9412868`, peak `2933 MiB`; pruned `8` prefixes, but candidate counts and materialized count stayed unchanged |
 | `low-memory-polish-hhwx-2026-06-17T18-55-16-495Z.json` | `P02:260` opt-in level-3 lookahead branch pruning, child budget `16384`, margin `500000` | bounded gap `382812`, score `9376984`, max `9412868`, peak `2924 MiB`; pruned `54` prefixes, but generated/materialized/popped counts stayed unchanged |
+| `low-memory-polish-hhwx-2026-06-17T18-59-48-207Z.json` | `P02:260` anchor-frontier precheck skip-reason smoke | bounded gap `382812`, score `9376984`, max `9412868`, peak `2922 MiB`; first blocker was `card-count` |
+| `low-memory-polish-hhwx-2026-06-17T19-03-07-417Z.json` | `P02:260` combined anchor-frontier precheck skip-reason smoke | bounded gap `382812`, score `9376984`, max `9412868`, peak `2912 MiB`; combined blocker `card-count+other-slot-count+other-slot-total` with abort frontier gap only `17139` |
 
 Use the pressure validation environment for early-pruning gates:
 
@@ -180,6 +182,15 @@ P02 basic level-3 lookahead replay:
 - branch-decision replay/violation accounting is now in place: the `8192` child-budget smoke registered `1662` child decisions with `0` violations, and the `16384` child-budget smoke registered `9997` child decisions with `0` violations;
 - opt-in real branch pruning is proof-safe in the retained P02 smokes, but not impactful enough: the `16384` run pruned `54` level-3 prefixes representing `1035490` relaxed completions, yet `candidateCounts`, `generated`, `materialized`, and `popped` counts stayed unchanged because the fill still reaches the same candidate cap from other branches;
 - current conclusion: this exact-safe lookahead is a useful proof building block, but it does not meet the `25%` materialized candidate target. Do not spend the next slice merely increasing its budget; the next breakthrough needs to affect candidate admission/frontier closure or pair with raw-index storage.
+
+P02 candidate-fill frontier closure:
+
+- artifacts: `low-memory-polish-hhwx-2026-06-17T18-59-48-207Z.json` and `low-memory-polish-hhwx-2026-06-17T19-03-07-417Z.json`;
+- anchor-frontier proof did not trigger before the `candidate-fill-soft-limit` abort;
+- after combined precheck diagnostics, the blocker is `card-count+other-slot-count+other-slot-total`;
+- the actual abort frontier gap is small: `peekUpperBound 2712797 + otherUpper 6681326 - incumbent 9376984 = 17139`, which is below the existing `25000` frontier-gap threshold;
+- therefore the main blocker is not the frontier gap itself. It is that P02 exceeds the anchor proof card-count guard (`1747` cards vs `1600`) and the other two slot candidate pools are too large (`212825` and `134977`, total `347802`) for the current anchor proof implementation;
+- next retained direction: either reduce/compact the other-slot candidate resident set before anchor proof, or design an anchor/frontier proof variant that works over raw-index candidates and large other-slot pools. Prefix lookahead alone cannot solve this because it does not reduce the filled candidate caps.
 
 The JSON files above contain `isolated.*Path` fields for detailed per-row diagnostics. Those referenced files are part of the retained baseline set.
 
@@ -298,13 +309,17 @@ Early-pruning success targets:
    - use the level-3 lookahead proof as a component, not as a standalone budget-scaling path;
    - investigate whether a proof-backed candidate cap can reject low-ranked materialization rather than simply backfilling from other branches;
    - keep raw-index storage in scope because early pruning that still fills the same cap cannot by itself lower resident candidate memory.
-5. Tighten the prefix proof before broader pruning:
+5. Add a frontier proof / storage diagnostic for P02:
+   - measure whether the current anchor proof would be blocked by card count, other-slot per-slot count, or other-slot total count;
+   - prototype a no-op raw-index or count-capped anchor proof precheck before changing limits;
+   - do not raise guard constants as a default change without memory evidence.
+6. Tighten the prefix proof before broader pruning:
    - avoid generated-pair-only comparison on level-4 replay unless explicitly requested;
    - level-3 replay currently has no P02 skip signal with the existing slot upper;
    - level-3 lookahead has the first strong diagnostic signal, but it must remain replay-only until ledger coverage is complete;
    - keep the hot path replay-only until violation count is `0` on focused gates.
-6. Run `P02:260` pressure smoke and compare real materialized candidate reduction against the `25%` target before enabling broader gates.
-7. Run the six-row focused gate before considering broader testing or default promotion.
+7. Run `P02:260` pressure smoke and compare real materialized candidate reduction against the `25%` target before enabling broader gates.
+8. Run the six-row focused gate before considering broader testing or default promotion.
 
 ## Maintenance Rules
 

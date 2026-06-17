@@ -8647,44 +8647,69 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     peekUpperBound: number,
     otherUpper: number,
   ): MedleyExactCandidateAnchorFrontierProofResult | null => {
-    if (didAnchorFrontierProof || stats.memoryLimited || calculatedCardCount > (
-      MEDLEY_EXACT_CANDIDATE_JOIN_ANCHOR_FRONTIER_PROOF_MAX_CARD_COUNT
-    )) {
+    const skipAnchorFrontierProof = (reason: string): null => {
+      profiling.exactCandidateJoinAnchorFrontierProofSkipCount += 1;
+      profiling.exactCandidateJoinLastAnchorFrontierProofSkipReason = reason;
       return null;
+    };
+    const skipReasons: string[] = [];
+    if (didAnchorFrontierProof) {
+      skipReasons.push("already-proved");
+    }
+    if (stats.memoryLimited) {
+      skipReasons.push("memory-limited");
+    }
+    if (calculatedCardCount > MEDLEY_EXACT_CANDIDATE_JOIN_ANCHOR_FRONTIER_PROOF_MAX_CARD_COUNT) {
+      skipReasons.push("card-count");
     }
     const anchorCandidateCount = candidatesBySlot[slotIndex]?.length ?? 0;
-    if (
-      anchorCandidateCount <= 0
-      || anchorCandidateCount > MEDLEY_EXACT_CANDIDATE_JOIN_ANCHOR_FRONTIER_PROOF_MAX_ANCHOR_CANDIDATES
-      || !Number.isFinite(peekUpperBound)
-      || !Number.isFinite(otherUpper)
-    ) {
-      return null;
+    if (anchorCandidateCount <= 0) {
+      skipReasons.push("empty-anchor");
+    }
+    if (anchorCandidateCount > MEDLEY_EXACT_CANDIDATE_JOIN_ANCHOR_FRONTIER_PROOF_MAX_ANCHOR_CANDIDATES) {
+      skipReasons.push("anchor-count");
+    }
+    if (!Number.isFinite(peekUpperBound)) {
+      skipReasons.push("peek-upper");
+    }
+    if (!Number.isFinite(otherUpper)) {
+      skipReasons.push("other-upper");
     }
     const otherSlotCandidateCounts = candidatesBySlot
       .map((candidates, index) => (index === slotIndex ? 0 : candidates.length))
       .filter((count) => count > 0);
     if (
       otherSlotCandidateCounts.length !== slots.length - 1
-      || otherSlotCandidateCounts.some(
-        (count) => count > MEDLEY_EXACT_CANDIDATE_JOIN_ANCHOR_FRONTIER_PROOF_MAX_OTHER_SLOT_CANDIDATES,
-      )
-      || otherSlotCandidateCounts.reduce((sum, count) => sum + count, 0)
+    ) {
+      skipReasons.push("other-slot-missing");
+    }
+    if (otherSlotCandidateCounts.some(
+      (count) => count > MEDLEY_EXACT_CANDIDATE_JOIN_ANCHOR_FRONTIER_PROOF_MAX_OTHER_SLOT_CANDIDATES,
+    )) {
+      skipReasons.push("other-slot-count");
+    }
+    if (
+      otherSlotCandidateCounts.reduce((sum, count) => sum + count, 0)
         > MEDLEY_EXACT_CANDIDATE_JOIN_ANCHOR_FRONTIER_PROOF_MAX_OTHER_SLOT_CANDIDATE_TOTAL
     ) {
-      return null;
+      skipReasons.push("other-slot-total");
     }
     const frontierGap = peekUpperBound + otherUpper - incumbentScore;
     if (
       !Number.isFinite(frontierGap)
-      || frontierGap < 0
-      || frontierGap > MEDLEY_EXACT_CANDIDATE_JOIN_ANCHOR_FRONTIER_PROOF_MAX_FRONTIER_GAP
     ) {
-      return null;
+      skipReasons.push("frontier-gap");
+    } else if (frontierGap < 0) {
+      skipReasons.push("frontier-closed");
+    } else if (frontierGap > MEDLEY_EXACT_CANDIDATE_JOIN_ANCHOR_FRONTIER_PROOF_MAX_FRONTIER_GAP) {
+      skipReasons.push("frontier-gap-over");
     }
     const remainingMs = getGuardedExtensionRemainingMs();
     if (remainingMs < MEDLEY_EXACT_CANDIDATE_JOIN_ANCHOR_FRONTIER_PROOF_MIN_REMAINING_MS) {
-      return null;
+      skipReasons.push("remaining-ms");
+    }
+    if (skipReasons.length > 0) {
+      return skipAnchorFrontierProof(skipReasons.join("+"));
     }
     let cheapUpperResult: MedleyExactCandidateAnchorFrontierProofResult | null = null;
     if (!didAnchorFrontierCheapUpper) {
