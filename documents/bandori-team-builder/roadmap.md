@@ -73,6 +73,7 @@ Baseline and gate artifacts retained:
 | `low-memory-polish-hhwx-2026-06-17T15-03-45-774Z.json` | two-row pressure + prefix margin replay smoke | `P01:244 exact`, `P02:260 bounded`, gap `382812`, peak `3024 MiB`; average/max scores and candidate counts match `2026-06-17T12-23-45` |
 | `low-memory-polish-hhwx-2026-06-17T15-15-51-889Z.json` | six-row pressure + leaf proof ledger gate | `4 exact / 2 bounded`, gap `582812`, peak `3023 MiB`; scores, max scores, candidate counts, abort reasons, and proof states match `2026-06-17T12-30-37` |
 | `low-memory-polish-hhwx-2026-06-17T15-43-27-095Z.json` | `P02:260` other-slot upper source replay | bounded gap `382812`, peak `3024 MiB`; source replay shows capacity upper can tighten the pair-unseen bound on near-cutoff leaves with `0` replay violations |
+| `low-memory-polish-hhwx-2026-06-17T16-19-09-536Z.json` | stable `P02:260` other-slot upper source replay after discarding direct pruning attempt | bounded gap `382812`, peak `2991 MiB`; source replay unchanged and no OOM |
 
 Use the pressure validation environment for early-pruning gates:
 
@@ -116,14 +117,15 @@ Six-row leaf proof ledger sample:
 
 P02 other-slot upper source replay:
 
-- artifact: `low-memory-polish-hhwx-2026-06-17T15-43-27-095Z.json`;
+- artifacts: `low-memory-polish-hhwx-2026-06-17T15-43-27-095Z.json` and stable rerun `low-memory-polish-hhwx-2026-06-17T16-19-09-536Z.json`;
 - source replay is opt-in via `HHWX_LOW_MEMORY_PREFIX_OTHER_UPPER_SOURCE_REPLAY=1` and remains no-op;
 - `P02:260` result stayed bounded with gap `382812`, score `9376984`, max score `9412868`, candidate counts `[400000, 212825, 134977]`, and materialized candidates `972467`;
 - near-cutoff replay checked `566,635` leaves, sampled `2048` eligible leaves within margin `10000`, and all `2048` used current `pairUnseenUpper` as the effective other-slot upper;
 - generated-pair-only would skip all `2048`, but that is not a safe proof while unseen pair frontier remains;
 - HHWX capacity upper improved `2029 / 2048` eligible samples and would make `1994 / 2048` safely skipable;
 - replay violation count was `0`, so capacity-based leaf pruning is now a plausible opt-in next slice;
-- next step: add an opt-in leaf pruning flag that uses this capacity upper only when the ledger records the same proof fields and focused rows stay stable.
+- a direct opt-in attempt that simply enabled capacity complement in the leaf hot path was not retained: `P02:260` OOMed even with very small per-fill budgets, because enabling the capacity path changed generated-pair/cache behavior too broadly;
+- next step: design a narrower capacity proof gate with a true search-level budget or cached/batched capacity upper, not a broad `useCapacityComplementUpper` switch inside every leaf.
 
 The JSON files above contain `isolated.*Path` fields for detailed per-row diagnostics. Those referenced files are part of the retained baseline set.
 
@@ -228,11 +230,14 @@ Early-pruning success targets:
 
 ## Immediate Next Actions
 
-1. Add an opt-in capacity-backed leaf pruning flag.
-2. Require each real capacity skip to record incumbent, prefix upper, capacity other upper, total upper, margin, slot/level, and implied completion count.
-3. Run `P02:260` pressure smoke and compare materialized candidate reduction against the `25%` target.
-4. Run the six-row focused gate before considering broader testing.
-5. Do not promote anything to default until full 40-case proof state and gap targets hold.
+1. Design a narrow capacity proof gate:
+   - use a search-level budget, not a per-config/per-fill budget;
+   - avoid disabling pair-unseen early return when capacity budget is exhausted;
+   - prefer cached or batched capacity upper over one-off per-leaf calls.
+2. Keep the first implementation no-op and replay-only until it reports zero violations.
+3. Only then add opt-in real pruning with full proof ledger fields.
+4. Run `P02:260` pressure smoke and compare materialized candidate reduction against the `25%` target.
+5. Run the six-row focused gate before considering broader testing or default promotion.
 
 ## Maintenance Rules
 
