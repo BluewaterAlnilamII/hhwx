@@ -467,6 +467,28 @@ function patchHhwxBenchmarkScoreMetrics() {
         + "    exactCandidateJoinPrefixUpperReplaySummary: profiling.exactCandidateJoinPrefixUpperReplaySummary ?? null,\n",
     );
   }
+  if (!patched.includes("exactCandidateJoinLastAnchorFrontierPrecheckSlotIndex: profiling.exactCandidateJoinLastAnchorFrontierPrecheckSlotIndex ?? null")) {
+    patched = patched.replace(
+      /(exactCandidateJoinLastAnchorFrontierProofHighPairRecordUpperCount: \(\r?\n\s+profiling\.exactCandidateJoinLastAnchorFrontierProofHighPairRecordUpperCount \?\? null\r?\n\s+\),\r?\n)/,
+      "$1"
+        + "    exactCandidateJoinLastAnchorFrontierPrecheckSlotIndex: profiling.exactCandidateJoinLastAnchorFrontierPrecheckSlotIndex ?? null,\n"
+        + "    exactCandidateJoinLastAnchorFrontierPrecheckCalculatedCardCount: profiling.exactCandidateJoinLastAnchorFrontierPrecheckCalculatedCardCount ?? null,\n"
+        + "    exactCandidateJoinLastAnchorFrontierPrecheckMaxCardCount: profiling.exactCandidateJoinLastAnchorFrontierPrecheckMaxCardCount ?? null,\n"
+        + "    exactCandidateJoinLastAnchorFrontierPrecheckAnchorCandidateCount: profiling.exactCandidateJoinLastAnchorFrontierPrecheckAnchorCandidateCount ?? null,\n"
+        + "    exactCandidateJoinLastAnchorFrontierPrecheckMaxAnchorCandidateCount: profiling.exactCandidateJoinLastAnchorFrontierPrecheckMaxAnchorCandidateCount ?? null,\n"
+        + "    exactCandidateJoinLastAnchorFrontierPrecheckOtherSlotCandidateCounts: profiling.exactCandidateJoinLastAnchorFrontierPrecheckOtherSlotCandidateCounts ?? null,\n"
+        + "    exactCandidateJoinLastAnchorFrontierPrecheckOtherSlotCandidateTotal: profiling.exactCandidateJoinLastAnchorFrontierPrecheckOtherSlotCandidateTotal ?? null,\n"
+        + "    exactCandidateJoinLastAnchorFrontierPrecheckMaxOtherSlotCandidateCount: profiling.exactCandidateJoinLastAnchorFrontierPrecheckMaxOtherSlotCandidateCount ?? null,\n"
+        + "    exactCandidateJoinLastAnchorFrontierPrecheckMaxOtherSlotCandidateTotal: profiling.exactCandidateJoinLastAnchorFrontierPrecheckMaxOtherSlotCandidateTotal ?? null,\n"
+        + "    exactCandidateJoinLastAnchorFrontierPrecheckFrontierGap: profiling.exactCandidateJoinLastAnchorFrontierPrecheckFrontierGap ?? null,\n"
+        + "    exactCandidateJoinLastAnchorFrontierPrecheckMaxFrontierGap: profiling.exactCandidateJoinLastAnchorFrontierPrecheckMaxFrontierGap ?? null,\n"
+        + "    exactCandidateJoinLastAnchorFrontierPrecheckPeekUpperBound: profiling.exactCandidateJoinLastAnchorFrontierPrecheckPeekUpperBound ?? null,\n"
+        + "    exactCandidateJoinLastAnchorFrontierPrecheckOtherUpper: profiling.exactCandidateJoinLastAnchorFrontierPrecheckOtherUpper ?? null,\n"
+        + "    exactCandidateJoinLastAnchorFrontierPrecheckIncumbentScore: profiling.exactCandidateJoinLastAnchorFrontierPrecheckIncumbentScore ?? null,\n"
+        + "    exactCandidateJoinLastAnchorFrontierPrecheckRemainingMs: profiling.exactCandidateJoinLastAnchorFrontierPrecheckRemainingMs ?? null,\n"
+        + "    exactCandidateJoinLastAnchorFrontierPrecheckMinRemainingMs: profiling.exactCandidateJoinLastAnchorFrontierPrecheckMinRemainingMs ?? null,\n",
+    );
+  }
   if (patched === source) {
     return false;
   }
@@ -478,6 +500,7 @@ function patchHhwxBenchmarkScoreMetrics() {
     || !patched.includes("maxScoreCandidate: searchResult.maxScoreCandidate &&")
     || !patched.includes("exactCandidateJoinMemorySnapshots: profiling.exactCandidateJoinMemorySnapshots ?? null")
     || !patched.includes("exactCandidateJoinPrefixUpperReplaySummary: profiling.exactCandidateJoinPrefixUpperReplaySummary ?? null")
+    || !patched.includes("exactCandidateJoinLastAnchorFrontierPrecheckSlotIndex: profiling.exactCandidateJoinLastAnchorFrontierPrecheckSlotIndex ?? null")
   ) {
     throw new Error(`Could not patch score metrics into ${hhwxBenchmarkPath}`);
   }

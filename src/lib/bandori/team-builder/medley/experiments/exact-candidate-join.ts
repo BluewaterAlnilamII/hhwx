@@ -8267,6 +8267,22 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     profiling.exactCandidateJoinLastGuardedExtensionObservedUpperBound = null;
     profiling.exactCandidateJoinLastAnchorFrontierProofSkipReason = null;
     profiling.exactCandidateJoinLastAnchorFrontierProofHighPairRecordUpperCount = null;
+    profiling.exactCandidateJoinLastAnchorFrontierPrecheckSlotIndex = null;
+    profiling.exactCandidateJoinLastAnchorFrontierPrecheckCalculatedCardCount = null;
+    profiling.exactCandidateJoinLastAnchorFrontierPrecheckMaxCardCount = null;
+    profiling.exactCandidateJoinLastAnchorFrontierPrecheckAnchorCandidateCount = null;
+    profiling.exactCandidateJoinLastAnchorFrontierPrecheckMaxAnchorCandidateCount = null;
+    profiling.exactCandidateJoinLastAnchorFrontierPrecheckOtherSlotCandidateCounts = [];
+    profiling.exactCandidateJoinLastAnchorFrontierPrecheckOtherSlotCandidateTotal = null;
+    profiling.exactCandidateJoinLastAnchorFrontierPrecheckMaxOtherSlotCandidateCount = null;
+    profiling.exactCandidateJoinLastAnchorFrontierPrecheckMaxOtherSlotCandidateTotal = null;
+    profiling.exactCandidateJoinLastAnchorFrontierPrecheckFrontierGap = null;
+    profiling.exactCandidateJoinLastAnchorFrontierPrecheckMaxFrontierGap = null;
+    profiling.exactCandidateJoinLastAnchorFrontierPrecheckPeekUpperBound = null;
+    profiling.exactCandidateJoinLastAnchorFrontierPrecheckOtherUpper = null;
+    profiling.exactCandidateJoinLastAnchorFrontierPrecheckIncumbentScore = null;
+    profiling.exactCandidateJoinLastAnchorFrontierPrecheckRemainingMs = null;
+    profiling.exactCandidateJoinLastAnchorFrontierPrecheckMinRemainingMs = null;
     profiling.exactCandidateJoinLastAnchorFrontierImprovementProbeProcessedAnchorCount = null;
     profiling.exactCandidateJoinLastAnchorFrontierImprovementProbeElapsedMs = null;
     profiling.exactCandidateJoinLastAnchorFrontierImprovementProbeScore = null;
@@ -8708,6 +8724,49 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     if (remainingMs < MEDLEY_EXACT_CANDIDATE_JOIN_ANCHOR_FRONTIER_PROOF_MIN_REMAINING_MS) {
       skipReasons.push("remaining-ms");
     }
+    const otherSlotCandidateTotal = otherSlotCandidateCounts.reduce((sum, count) => sum + count, 0);
+    profiling.exactCandidateJoinLastAnchorFrontierPrecheckSlotIndex = slotIndex;
+    profiling.exactCandidateJoinLastAnchorFrontierPrecheckCalculatedCardCount = Number.isFinite(calculatedCardCount)
+      ? calculatedCardCount
+      : null;
+    profiling.exactCandidateJoinLastAnchorFrontierPrecheckMaxCardCount = (
+      MEDLEY_EXACT_CANDIDATE_JOIN_ANCHOR_FRONTIER_PROOF_MAX_CARD_COUNT
+    );
+    profiling.exactCandidateJoinLastAnchorFrontierPrecheckAnchorCandidateCount = anchorCandidateCount;
+    profiling.exactCandidateJoinLastAnchorFrontierPrecheckMaxAnchorCandidateCount = (
+      MEDLEY_EXACT_CANDIDATE_JOIN_ANCHOR_FRONTIER_PROOF_MAX_ANCHOR_CANDIDATES
+    );
+    profiling.exactCandidateJoinLastAnchorFrontierPrecheckOtherSlotCandidateCounts = [
+      ...otherSlotCandidateCounts,
+    ];
+    profiling.exactCandidateJoinLastAnchorFrontierPrecheckOtherSlotCandidateTotal = otherSlotCandidateTotal;
+    profiling.exactCandidateJoinLastAnchorFrontierPrecheckMaxOtherSlotCandidateCount = (
+      MEDLEY_EXACT_CANDIDATE_JOIN_ANCHOR_FRONTIER_PROOF_MAX_OTHER_SLOT_CANDIDATES
+    );
+    profiling.exactCandidateJoinLastAnchorFrontierPrecheckMaxOtherSlotCandidateTotal = (
+      MEDLEY_EXACT_CANDIDATE_JOIN_ANCHOR_FRONTIER_PROOF_MAX_OTHER_SLOT_CANDIDATE_TOTAL
+    );
+    profiling.exactCandidateJoinLastAnchorFrontierPrecheckFrontierGap = Number.isFinite(frontierGap)
+      ? frontierGap
+      : null;
+    profiling.exactCandidateJoinLastAnchorFrontierPrecheckMaxFrontierGap = (
+      MEDLEY_EXACT_CANDIDATE_JOIN_ANCHOR_FRONTIER_PROOF_MAX_FRONTIER_GAP
+    );
+    profiling.exactCandidateJoinLastAnchorFrontierPrecheckPeekUpperBound = Number.isFinite(peekUpperBound)
+      ? peekUpperBound
+      : null;
+    profiling.exactCandidateJoinLastAnchorFrontierPrecheckOtherUpper = Number.isFinite(otherUpper)
+      ? otherUpper
+      : null;
+    profiling.exactCandidateJoinLastAnchorFrontierPrecheckIncumbentScore = Number.isFinite(incumbentScore)
+      ? incumbentScore
+      : null;
+    profiling.exactCandidateJoinLastAnchorFrontierPrecheckRemainingMs = Number.isFinite(remainingMs)
+      ? Math.max(0, Math.round(remainingMs))
+      : null;
+    profiling.exactCandidateJoinLastAnchorFrontierPrecheckMinRemainingMs = (
+      MEDLEY_EXACT_CANDIDATE_JOIN_ANCHOR_FRONTIER_PROOF_MIN_REMAINING_MS
+    );
     if (skipReasons.length > 0) {
       return skipAnchorFrontierProof(skipReasons.join("+"));
     }

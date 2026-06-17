@@ -2539,6 +2539,54 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
           exactCandidateJoinLastAnchorFrontierProofHighPairRecordUpperCount: (
             profiling.exactCandidateJoinLastAnchorFrontierProofHighPairRecordUpperCount
           ),
+          exactCandidateJoinLastAnchorFrontierPrecheckSlotIndex: (
+            profiling.exactCandidateJoinLastAnchorFrontierPrecheckSlotIndex
+          ),
+          exactCandidateJoinLastAnchorFrontierPrecheckCalculatedCardCount: (
+            profiling.exactCandidateJoinLastAnchorFrontierPrecheckCalculatedCardCount
+          ),
+          exactCandidateJoinLastAnchorFrontierPrecheckMaxCardCount: (
+            profiling.exactCandidateJoinLastAnchorFrontierPrecheckMaxCardCount
+          ),
+          exactCandidateJoinLastAnchorFrontierPrecheckAnchorCandidateCount: (
+            profiling.exactCandidateJoinLastAnchorFrontierPrecheckAnchorCandidateCount
+          ),
+          exactCandidateJoinLastAnchorFrontierPrecheckMaxAnchorCandidateCount: (
+            profiling.exactCandidateJoinLastAnchorFrontierPrecheckMaxAnchorCandidateCount
+          ),
+          exactCandidateJoinLastAnchorFrontierPrecheckOtherSlotCandidateCounts: [
+            ...profiling.exactCandidateJoinLastAnchorFrontierPrecheckOtherSlotCandidateCounts,
+          ],
+          exactCandidateJoinLastAnchorFrontierPrecheckOtherSlotCandidateTotal: (
+            profiling.exactCandidateJoinLastAnchorFrontierPrecheckOtherSlotCandidateTotal
+          ),
+          exactCandidateJoinLastAnchorFrontierPrecheckMaxOtherSlotCandidateCount: (
+            profiling.exactCandidateJoinLastAnchorFrontierPrecheckMaxOtherSlotCandidateCount
+          ),
+          exactCandidateJoinLastAnchorFrontierPrecheckMaxOtherSlotCandidateTotal: (
+            profiling.exactCandidateJoinLastAnchorFrontierPrecheckMaxOtherSlotCandidateTotal
+          ),
+          exactCandidateJoinLastAnchorFrontierPrecheckFrontierGap: (
+            profiling.exactCandidateJoinLastAnchorFrontierPrecheckFrontierGap
+          ),
+          exactCandidateJoinLastAnchorFrontierPrecheckMaxFrontierGap: (
+            profiling.exactCandidateJoinLastAnchorFrontierPrecheckMaxFrontierGap
+          ),
+          exactCandidateJoinLastAnchorFrontierPrecheckPeekUpperBound: (
+            profiling.exactCandidateJoinLastAnchorFrontierPrecheckPeekUpperBound
+          ),
+          exactCandidateJoinLastAnchorFrontierPrecheckOtherUpper: (
+            profiling.exactCandidateJoinLastAnchorFrontierPrecheckOtherUpper
+          ),
+          exactCandidateJoinLastAnchorFrontierPrecheckIncumbentScore: (
+            profiling.exactCandidateJoinLastAnchorFrontierPrecheckIncumbentScore
+          ),
+          exactCandidateJoinLastAnchorFrontierPrecheckRemainingMs: (
+            profiling.exactCandidateJoinLastAnchorFrontierPrecheckRemainingMs
+          ),
+          exactCandidateJoinLastAnchorFrontierPrecheckMinRemainingMs: (
+            profiling.exactCandidateJoinLastAnchorFrontierPrecheckMinRemainingMs
+          ),
           exactCandidateJoinLastAnchorFrontierCheapUpperSlotIndex: (
             profiling.exactCandidateJoinLastAnchorFrontierCheapUpperSlotIndex
           ),
