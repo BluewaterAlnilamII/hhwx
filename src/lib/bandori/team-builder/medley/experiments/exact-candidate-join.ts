@@ -171,6 +171,7 @@ type MedleyExactPrefixProofLedgerSample = {
 type MedleyExactPrefixOtherUpperSourceReplaySample = {
   songIndex: number;
   level: number;
+  impliedCompletionCount: number;
   incumbent: number;
   prefixUpper: number;
   currentOtherUpper: number;
@@ -214,6 +215,8 @@ type MedleyExactPrefixOtherUpperSourceReplayProfile = {
   bestSafeImprovedCount: number;
   bestSafeWouldSkipCount: number;
   bestSafeReplayViolationCount: number;
+  prunedCount: number;
+  prunedImpliedCompletionCount: number;
   currentMarginMin: number | null;
   currentMarginMax: number | null;
   bestSafeMarginMin: number | null;
@@ -445,6 +448,8 @@ function createMedleyExactPrefixOtherUpperSourceReplayProfile(
     bestSafeImprovedCount: 0,
     bestSafeWouldSkipCount: 0,
     bestSafeReplayViolationCount: 0,
+    prunedCount: 0,
+    prunedImpliedCompletionCount: 0,
     currentMarginMin: null,
     currentMarginMax: null,
     bestSafeMarginMin: null,
@@ -508,6 +513,11 @@ function addMedleyExactPrefixOtherUpperSourceReplayProfile(
     target.bestSafeReplayViolationCount,
     source.bestSafeReplayViolationCount,
   );
+  target.prunedCount = addCappedCount(target.prunedCount, source.prunedCount);
+  target.prunedImpliedCompletionCount = addCappedCount(
+    target.prunedImpliedCompletionCount,
+    source.prunedImpliedCompletionCount,
+  );
   target.currentMarginMin = minNullableNumber(target.currentMarginMin, source.currentMarginMin);
   target.currentMarginMax = maxNullableNumber(target.currentMarginMax, source.currentMarginMax);
   target.bestSafeMarginMin = minNullableNumber(target.bestSafeMarginMin, source.bestSafeMarginMin);
@@ -561,6 +571,8 @@ function serializeMedleyExactPrefixOtherUpperSourceReplayProfile(
     bestSafeImprovedCount: profile.bestSafeImprovedCount,
     bestSafeWouldSkipCount: profile.bestSafeWouldSkipCount,
     bestSafeReplayViolationCount: profile.bestSafeReplayViolationCount,
+    prunedCount: profile.prunedCount,
+    prunedImpliedCompletionCount: profile.prunedImpliedCompletionCount,
     currentMarginMin: profile.currentMarginMin,
     currentMarginMax: profile.currentMarginMax,
     bestSafeMarginMin: profile.bestSafeMarginMin,
@@ -2930,6 +2942,7 @@ export function createMedleyExactSlotCandidateGenerator(
   enablePrefixUpperReplay = false,
   enablePrefixHardUpperReplay = false,
   enablePrefixOtherUpperSourceReplay = false,
+  enableCapacitySourceLeafPruning = false,
   prefixOtherUpperSourceReplayMaxChecks = MEDLEY_EXACT_PREFIX_OTHER_UPPER_SOURCE_REPLAY_DEFAULT_MAX_CHECKS,
   prefixOtherUpperSourceReplayMaxMargin = MEDLEY_EXACT_PREFIX_OTHER_UPPER_SOURCE_REPLAY_DEFAULT_MAX_MARGIN,
 ): MedleyExactSlotCandidateGenerator {
@@ -2977,11 +2990,12 @@ export function createMedleyExactSlotCandidateGenerator(
     enablePrefixUpperReplay
     || enablePrefixHardUpperReplay
     || enablePrefixOtherUpperSourceReplay
+    || enableCapacitySourceLeafPruning
   )
     ? createMedleyExactPrefixUpperReplayProfile(
       slot,
       enablePrefixHardUpperReplay,
-      enablePrefixOtherUpperSourceReplay,
+      enablePrefixOtherUpperSourceReplay || enableCapacitySourceLeafPruning,
       finitePrefixOtherUpperSourceReplayMaxChecks,
       finitePrefixOtherUpperSourceReplayMaxMargin,
     )
@@ -3438,9 +3452,11 @@ export function createMedleyExactSlotCandidateGenerator(
   };
   const recordPrefixOtherUpperSourceReplay = (
     selectedCards: SearchCard[],
+    nextStartIndex: number,
     prefixUpperBound: number,
     totalUpperBound: number,
     globalPruning: MedleyExactSlotCandidateGlobalPruning,
+    enablePruning: boolean,
   ): MedleyExactPrefixOtherUpperSourceReplayDecision | null => {
     const sourceProfile = prefixUpperReplayProfile?.otherUpperSourceReplay;
     if (!sourceProfile || selectedCards.length !== MEDLEY_TEAM_SIZE) {
@@ -3455,6 +3471,7 @@ export function createMedleyExactSlotCandidateGenerator(
       return null;
     }
     const currentMargin = totalUpperBound - globalPruning.scoreCutoff;
+    const impliedCompletionCount = getRelaxedImpliedCompletionCount(MEDLEY_TEAM_SIZE, nextStartIndex);
     if (currentMargin < 0) {
       return null;
     }
@@ -3568,6 +3585,7 @@ export function createMedleyExactSlotCandidateGenerator(
       sourceProfile.samples.push({
         songIndex: slot.songIndex,
         level: MEDLEY_TEAM_SIZE,
+        impliedCompletionCount,
         incumbent: globalPruning.scoreCutoff,
         prefixUpper: prefixUpperBound,
         currentOtherUpper,
@@ -3584,6 +3602,13 @@ export function createMedleyExactSlotCandidateGenerator(
         bestSafeMargin,
         generatedPairOnlyMargin: Number.isFinite(generatedPairOnlyMargin) ? generatedPairOnlyMargin : null,
       });
+    }
+    if (enablePruning && bestSafeWouldSkip) {
+      sourceProfile.prunedCount += 1;
+      sourceProfile.prunedImpliedCompletionCount = addCappedCount(
+        sourceProfile.prunedImpliedCompletionCount,
+        impliedCompletionCount,
+      );
     }
     return {
       wouldSkip: bestSafeWouldSkip,
@@ -3938,9 +3963,11 @@ export function createMedleyExactSlotCandidateGenerator(
           );
           prefixOtherUpperSourceDecision = recordPrefixOtherUpperSourceReplay(
             nextSelectedCards,
+            nextStartIndex,
             leafUpperBound,
             globalLeafUpperBound,
             globalPruning,
+            enableCapacitySourceLeafPruning,
           );
         }
         if (prefixUpperReplayProfile && globalPruning) {
@@ -3952,6 +3979,9 @@ export function createMedleyExactSlotCandidateGenerator(
           );
         }
         if (globalLeafUpperBound < (globalPruning?.scoreCutoff ?? Number.NEGATIVE_INFINITY)) {
+          continue;
+        }
+        if (enableCapacitySourceLeafPruning && prefixOtherUpperSourceDecision?.wouldSkip === true) {
           continue;
         }
         const candidateKey = globalPruning?.excludedCandidateKeys
@@ -7486,6 +7516,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     debugExactCandidatePrefixOtherUpperSourceReplay?: boolean;
     debugExactCandidatePrefixOtherUpperSourceReplayMaxChecks?: number;
     debugExactCandidatePrefixOtherUpperSourceReplayMaxMargin?: number;
+    enableExactCandidateCapacitySourceLeafPruning?: boolean;
     debugExactCandidateDominanceReplay?: boolean;
     debugExactCandidateRawSolverInputCensus?: boolean;
     exactCandidateScoreCalculationCacheEntryLimit?: number | null;
@@ -7674,6 +7705,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     context.debugExactCandidatePrefixUpperReplay === true,
     context.debugExactCandidatePrefixHardUpperReplay === true,
     context.debugExactCandidatePrefixOtherUpperSourceReplay === true,
+    context.enableExactCandidateCapacitySourceLeafPruning === true,
     context.debugExactCandidatePrefixOtherUpperSourceReplayMaxChecks,
     context.debugExactCandidatePrefixOtherUpperSourceReplayMaxMargin,
   ));
@@ -8415,6 +8447,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     context.debugExactCandidatePrefixUpperReplay === true,
     context.debugExactCandidatePrefixHardUpperReplay === true,
     context.debugExactCandidatePrefixOtherUpperSourceReplay === true,
+    context.enableExactCandidateCapacitySourceLeafPruning === true,
     context.debugExactCandidatePrefixOtherUpperSourceReplayMaxChecks,
     context.debugExactCandidatePrefixOtherUpperSourceReplayMaxMargin,
   ));

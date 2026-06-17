@@ -53,6 +53,7 @@ function printUsage() {
     "  HHWX_LOW_MEMORY_PREFIX_OTHER_UPPER_SOURCE_REPLAY=1 include opt-in other-slot upper source diagnostics",
     "  HHWX_LOW_MEMORY_PREFIX_OTHER_UPPER_SOURCE_MAX_CHECKS=2048 cap expensive source diagnostic checks per generator",
     "  HHWX_LOW_MEMORY_PREFIX_OTHER_UPPER_SOURCE_MAX_MARGIN=10000 cap source diagnostic to near-cutoff leaves",
+    "  HHWX_LOW_MEMORY_CAPACITY_SOURCE_LEAF_PRUNING=1 enable narrow capacity-source leaf pruning",
     "  HHWX_LOW_MEMORY_DISABLE_GLOBAL_COMPLEMENT_CACHE=1 disable exact-join global complement upper cache",
     "  HHWX_LOW_MEMORY_COMPACT_GLOBAL_COMPLEMENT_CACHE=1 use compact exact-join global complement upper cache (default)",
     "  HHWX_LOW_MEMORY_LEGACY_GLOBAL_COMPLEMENT_CACHE=1 use legacy Map exact-join global complement cache",
@@ -168,6 +169,16 @@ function hhwxOptimizationJson() {
   if (process.env.HHWX_LOW_MEMORY_PREFIX_OTHER_UPPER_SOURCE_REPLAY === "1") {
     optimization.debugExactCandidatePrefixUpperReplay = true;
     optimization.debugExactCandidatePrefixOtherUpperSourceReplay = true;
+  }
+  if (process.env.HHWX_LOW_MEMORY_CAPACITY_SOURCE_LEAF_PRUNING === "1") {
+    optimization.debugExactCandidatePrefixUpperReplay = true;
+    optimization.debugExactCandidatePrefixOtherUpperSourceReplay = true;
+    optimization.enableExactCandidateCapacitySourceLeafPruning = true;
+  }
+  if (
+    process.env.HHWX_LOW_MEMORY_PREFIX_OTHER_UPPER_SOURCE_REPLAY === "1"
+    || process.env.HHWX_LOW_MEMORY_CAPACITY_SOURCE_LEAF_PRUNING === "1"
+  ) {
     const parsedMaxChecks = Number(process.env.HHWX_LOW_MEMORY_PREFIX_OTHER_UPPER_SOURCE_MAX_CHECKS);
     if (Number.isFinite(parsedMaxChecks) && parsedMaxChecks > 0) {
       optimization.debugExactCandidatePrefixOtherUpperSourceReplayMaxChecks = Math.trunc(parsedMaxChecks);

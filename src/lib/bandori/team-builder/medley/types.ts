@@ -105,6 +105,7 @@ export type BandoriMedleySearchOptimizationOptions = {
   debugExactCandidatePrefixOtherUpperSourceReplay?: boolean;
   debugExactCandidatePrefixOtherUpperSourceReplayMaxChecks?: number;
   debugExactCandidatePrefixOtherUpperSourceReplayMaxMargin?: number;
+  enableExactCandidateCapacitySourceLeafPruning?: boolean;
   debugExactCandidateDominanceReplay?: boolean;
   debugExactCandidateRawSolverInputCensus?: boolean;
   exactCandidateScoreCalculationCacheEntryLimit?: number;

@@ -74,6 +74,9 @@ Baseline and gate artifacts retained:
 | `low-memory-polish-hhwx-2026-06-17T15-15-51-889Z.json` | six-row pressure + leaf proof ledger gate | `4 exact / 2 bounded`, gap `582812`, peak `3023 MiB`; scores, max scores, candidate counts, abort reasons, and proof states match `2026-06-17T12-30-37` |
 | `low-memory-polish-hhwx-2026-06-17T15-43-27-095Z.json` | `P02:260` other-slot upper source replay | bounded gap `382812`, peak `3024 MiB`; source replay shows capacity upper can tighten the pair-unseen bound on near-cutoff leaves with `0` replay violations |
 | `low-memory-polish-hhwx-2026-06-17T16-19-09-536Z.json` | stable `P02:260` other-slot upper source replay after discarding direct pruning attempt | bounded gap `382812`, peak `2991 MiB`; source replay unchanged and no OOM |
+| `low-memory-polish-hhwx-2026-06-17T16-25-37-898Z.json` | `P02:260` narrow capacity-source leaf pruning, default budget `2048` | bounded gap `382812`, peak `2989 MiB`; pruned `1994`, materialized `970635` (`1832` fewer than source baseline), `0` replay violations |
+| `low-memory-polish-hhwx-2026-06-17T16-32-01-295Z.json` | `P02:260` narrow capacity-source leaf pruning, budget `32768` | bounded gap `382812`, peak `3045 MiB`; pruned `16217`, materialized `958142`, `0` replay violations |
+| `low-memory-polish-hhwx-2026-06-17T16-35-26-587Z.json` | `P02:260` narrow capacity-source leaf pruning, budget `131072` | bounded gap `382812`, peak `3014 MiB`; pruned `43894`, materialized `935844`, `0` replay violations, elapsed `282848ms` |
 
 Use the pressure validation environment for early-pruning gates:
 
@@ -125,7 +128,9 @@ P02 other-slot upper source replay:
 - HHWX capacity upper improved `2029 / 2048` eligible samples and would make `1994 / 2048` safely skipable;
 - replay violation count was `0`, so capacity-based leaf pruning is now a plausible opt-in next slice;
 - a direct opt-in attempt that simply enabled capacity complement in the leaf hot path was not retained: `P02:260` OOMed even with very small per-fill budgets, because enabling the capacity path changed generated-pair/cache behavior too broadly;
-- next step: design a narrower capacity proof gate with a true search-level budget or cached/batched capacity upper, not a broad `useCapacityComplementUpper` switch inside every leaf.
+- a narrow opt-in gate using only the stable source replay decision is retained as `HHWX_LOW_MEMORY_CAPACITY_SOURCE_LEAF_PRUNING=1`;
+- the narrow gate is proof-safe in the sampled runs (`0` replay violations, score and gap unchanged), but leaf-by-leaf budget scaling is not enough for the `25%` target: `131072` checks reduce materialized candidates by only `36623` (`3.77%`) and already take `282848ms`;
+- next breakthrough target should be level-4 or batched capacity proof, not further increasing per-leaf budget.
 
 The JSON files above contain `isolated.*Path` fields for detailed per-row diagnostics. Those referenced files are part of the retained baseline set.
 
@@ -230,12 +235,12 @@ Early-pruning success targets:
 
 ## Immediate Next Actions
 
-1. Design a narrow capacity proof gate:
-   - use a search-level budget, not a per-config/per-fill budget;
-   - avoid disabling pair-unseen early return when capacity budget is exhausted;
-   - prefer cached or batched capacity upper over one-off per-leaf calls.
-2. Keep the first implementation no-op and replay-only until it reports zero violations.
-3. Only then add opt-in real pruning with full proof ledger fields.
+1. Keep `HHWX_LOW_MEMORY_CAPACITY_SOURCE_LEAF_PRUNING=1` as an opt-in experiment only; it is safe so far, but not high impact enough for default.
+2. Design a level-4 or batched capacity proof:
+   - compute one capacity upper per reusable prefix/signature bucket where possible;
+   - preserve the same proof fields: incumbent, prefix upper, other upper, total upper, margin, slot/level, implied completion count;
+   - avoid one-off per-leaf capacity calls as the main path.
+3. Add replay-only diagnostics for the level-4/batched proof before any real branch skip.
 4. Run `P02:260` pressure smoke and compare materialized candidate reduction against the `25%` target.
 5. Run the six-row focused gate before considering broader testing or default promotion.
 

@@ -652,6 +652,9 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
   const debugExactCandidatePrefixOtherUpperSourceReplayMaxMargin = (
     optimization.debugExactCandidatePrefixOtherUpperSourceReplayMaxMargin
   );
+  const enableExactCandidateCapacitySourceLeafPruning = (
+    optimization.enableExactCandidateCapacitySourceLeafPruning === true
+  );
   const debugExactCandidateDominanceReplay = optimization.debugExactCandidateDominanceReplay === true;
   const debugExactCandidateRawSolverInputCensus = optimization.debugExactCandidateRawSolverInputCensus === true;
   const parsedExactCandidateScoreCalculationCacheEntryLimit = (
@@ -3726,6 +3729,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
           debugExactCandidatePrefixOtherUpperSourceReplay,
           debugExactCandidatePrefixOtherUpperSourceReplayMaxChecks,
           debugExactCandidatePrefixOtherUpperSourceReplayMaxMargin,
+          enableExactCandidateCapacitySourceLeafPruning,
           debugExactCandidateDominanceReplay,
           debugExactCandidateRawSolverInputCensus,
           exactCandidateScoreCalculationCacheEntryLimit,
@@ -4193,6 +4197,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
           debugExactCandidatePrefixOtherUpperSourceReplay,
           debugExactCandidatePrefixOtherUpperSourceReplayMaxChecks,
           debugExactCandidatePrefixOtherUpperSourceReplayMaxMargin,
+          enableExactCandidateCapacitySourceLeafPruning,
           debugExactCandidateDominanceReplay,
           debugExactCandidateRawSolverInputCensus,
           exactCandidateScoreCalculationCacheEntryLimit,
