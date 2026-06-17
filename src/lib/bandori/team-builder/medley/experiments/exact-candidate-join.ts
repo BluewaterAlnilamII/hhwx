@@ -138,6 +138,19 @@ const MEDLEY_EXACT_SIGNATURE_CENSUS_TOP_BUCKETS = 8;
 const MEDLEY_EXACT_DOMINANCE_REPLAY_MAX_CANDIDATE_TOTAL = 60_000;
 const MEDLEY_EXACT_DOMINANCE_REPLAY_MAX_GROUP_SIZE = 128;
 const MEDLEY_EXACT_PREFIX_UPPER_REPLAY_LEVEL_COUNT = MEDLEY_TEAM_SIZE + 1;
+const MEDLEY_EXACT_PREFIX_UPPER_MARGIN_BUCKET_UPPER_BOUNDS = [
+  -500_000,
+  -100_000,
+  -50_000,
+  -10_000,
+  -1,
+  0,
+  1_000,
+  10_000,
+  50_000,
+  100_000,
+  500_000,
+] as const;
 const EMPTY_MEDLEY_EXACT_CANDIDATE_CARD_IDS: number[] = [];
 
 type MedleyExactPrefixUpperReplayLevelProfile = {
@@ -155,6 +168,14 @@ type MedleyExactPrefixUpperReplayLevelProfile = {
   hardUpperUnknownCount: number;
   candidateEvaluationCount: number;
   materializedCandidateCount: number;
+  slotUpperMarginMin: number | null;
+  slotUpperMarginMax: number | null;
+  slotUpperMarginPrefixBuckets: number[];
+  slotUpperMarginImpliedCompletionBuckets: number[];
+  hardUpperMarginMin: number | null;
+  hardUpperMarginMax: number | null;
+  hardUpperMarginPrefixBuckets: number[];
+  hardUpperMarginImpliedCompletionBuckets: number[];
 };
 
 type MedleyExactPrefixUpperReplayProfile = {
@@ -182,6 +203,7 @@ type MedleyExactPrefixUpperReplaySummary = {
   hardUpperUnknownCountTotal: number;
   candidateEvaluationCountTotal: number;
   materializedCandidateCountTotal: number;
+  marginBucketUpperBounds: number[];
   levels: MedleyExactPrefixUpperReplayLevelProfile[];
   latestGenerators: Array<Record<string, unknown>>;
 };
@@ -193,6 +215,76 @@ function roundMiB(bytes: number): number {
 function addCappedCount(left: number, right: number): number {
   const sum = left + right;
   return Number.isSafeInteger(sum) ? sum : Number.MAX_SAFE_INTEGER;
+}
+
+function createMedleyExactPrefixMarginBuckets(): number[] {
+  return Array.from(
+    { length: MEDLEY_EXACT_PREFIX_UPPER_MARGIN_BUCKET_UPPER_BOUNDS.length + 1 },
+    () => 0,
+  );
+}
+
+function getMedleyExactPrefixMarginBucketIndex(margin: number): number {
+  for (
+    let index = 0;
+    index < MEDLEY_EXACT_PREFIX_UPPER_MARGIN_BUCKET_UPPER_BOUNDS.length;
+    index += 1
+  ) {
+    if (margin <= MEDLEY_EXACT_PREFIX_UPPER_MARGIN_BUCKET_UPPER_BOUNDS[index]!) {
+      return index;
+    }
+  }
+  return MEDLEY_EXACT_PREFIX_UPPER_MARGIN_BUCKET_UPPER_BOUNDS.length;
+}
+
+function addMedleyExactPrefixMarginBucketCounts(
+  target: number[],
+  source: number[] | undefined,
+): void {
+  if (!Array.isArray(source)) {
+    return;
+  }
+  const bucketCount = Math.min(target.length, source.length);
+  for (let index = 0; index < bucketCount; index += 1) {
+    target[index] = addCappedCount(target[index] ?? 0, source[index] ?? 0);
+  }
+}
+
+function recordMedleyExactPrefixMargin(
+  prefixBuckets: number[],
+  impliedCompletionBuckets: number[],
+  margin: number,
+  impliedCompletionCount: number,
+): void {
+  if (!Number.isFinite(margin)) {
+    return;
+  }
+  const bucketIndex = getMedleyExactPrefixMarginBucketIndex(margin);
+  prefixBuckets[bucketIndex] = addCappedCount(prefixBuckets[bucketIndex] ?? 0, 1);
+  impliedCompletionBuckets[bucketIndex] = addCappedCount(
+    impliedCompletionBuckets[bucketIndex] ?? 0,
+    impliedCompletionCount,
+  );
+}
+
+function minNullableNumber(left: number | null | undefined, right: number | null | undefined): number | null {
+  if (left === null || left === undefined || !Number.isFinite(left)) {
+    return right === null || right === undefined || !Number.isFinite(right) ? null : right;
+  }
+  if (right === null || right === undefined || !Number.isFinite(right)) {
+    return left;
+  }
+  return Math.min(left, right);
+}
+
+function maxNullableNumber(left: number | null | undefined, right: number | null | undefined): number | null {
+  if (left === null || left === undefined || !Number.isFinite(left)) {
+    return right === null || right === undefined || !Number.isFinite(right) ? null : right;
+  }
+  if (right === null || right === undefined || !Number.isFinite(right)) {
+    return left;
+  }
+  return Math.max(left, right);
 }
 
 function estimateRelaxedCombinationCount(itemCount: number, chooseCount: number): number {
@@ -231,6 +323,14 @@ function createMedleyExactPrefixUpperReplayLevelProfile(
     hardUpperUnknownCount: 0,
     candidateEvaluationCount: 0,
     materializedCandidateCount: 0,
+    slotUpperMarginMin: null,
+    slotUpperMarginMax: null,
+    slotUpperMarginPrefixBuckets: createMedleyExactPrefixMarginBuckets(),
+    slotUpperMarginImpliedCompletionBuckets: createMedleyExactPrefixMarginBuckets(),
+    hardUpperMarginMin: null,
+    hardUpperMarginMax: null,
+    hardUpperMarginPrefixBuckets: createMedleyExactPrefixMarginBuckets(),
+    hardUpperMarginImpliedCompletionBuckets: createMedleyExactPrefixMarginBuckets(),
   };
 }
 
@@ -290,6 +390,26 @@ function addMedleyExactPrefixUpperReplayLevel(
   target.materializedCandidateCount = addCappedCount(
     target.materializedCandidateCount,
     source.materializedCandidateCount,
+  );
+  target.slotUpperMarginMin = minNullableNumber(target.slotUpperMarginMin, source.slotUpperMarginMin);
+  target.slotUpperMarginMax = maxNullableNumber(target.slotUpperMarginMax, source.slotUpperMarginMax);
+  addMedleyExactPrefixMarginBucketCounts(
+    target.slotUpperMarginPrefixBuckets,
+    source.slotUpperMarginPrefixBuckets,
+  );
+  addMedleyExactPrefixMarginBucketCounts(
+    target.slotUpperMarginImpliedCompletionBuckets,
+    source.slotUpperMarginImpliedCompletionBuckets,
+  );
+  target.hardUpperMarginMin = minNullableNumber(target.hardUpperMarginMin, source.hardUpperMarginMin);
+  target.hardUpperMarginMax = maxNullableNumber(target.hardUpperMarginMax, source.hardUpperMarginMax);
+  addMedleyExactPrefixMarginBucketCounts(
+    target.hardUpperMarginPrefixBuckets,
+    source.hardUpperMarginPrefixBuckets,
+  );
+  addMedleyExactPrefixMarginBucketCounts(
+    target.hardUpperMarginImpliedCompletionBuckets,
+    source.hardUpperMarginImpliedCompletionBuckets,
   );
 }
 
@@ -2568,6 +2688,15 @@ export function createMedleyExactSlotCandidateGenerator(
     );
     if (Number.isFinite(slotUpperBound)) {
       levelProfile.finiteSlotUpperCount += 1;
+      const margin = slotUpperBound - scoreCutoff;
+      levelProfile.slotUpperMarginMin = minNullableNumber(levelProfile.slotUpperMarginMin, margin);
+      levelProfile.slotUpperMarginMax = maxNullableNumber(levelProfile.slotUpperMarginMax, margin);
+      recordMedleyExactPrefixMargin(
+        levelProfile.slotUpperMarginPrefixBuckets,
+        levelProfile.slotUpperMarginImpliedCompletionBuckets,
+        margin,
+        impliedCompletionCount,
+      );
     }
     if (Number.isFinite(slotUpperBound) && slotUpperBound >= scoreCutoff) {
       levelProfile.slotUpperPassCount += 1;
@@ -2595,6 +2724,15 @@ export function createMedleyExactSlotCandidateGenerator(
       return;
     }
     levelProfile.hardUpperFiniteCount += 1;
+    const margin = hardUpperBound - proofCutoffScore;
+    levelProfile.hardUpperMarginMin = minNullableNumber(levelProfile.hardUpperMarginMin, margin);
+    levelProfile.hardUpperMarginMax = maxNullableNumber(levelProfile.hardUpperMarginMax, margin);
+    recordMedleyExactPrefixMargin(
+      levelProfile.hardUpperMarginPrefixBuckets,
+      levelProfile.hardUpperMarginImpliedCompletionBuckets,
+      margin,
+      impliedCompletionCount,
+    );
     if (hardUpperBound < proofCutoffScore) {
       levelProfile.hardUpperSkipablePrefixCount += 1;
       levelProfile.hardUpperSkipableImpliedCompletionCount = addCappedCount(
@@ -3386,8 +3524,9 @@ export function createMedleyExactSlotCandidateGenerator(
 
 function sumMedleyExactPrefixUpperReplayLevel(
   level: MedleyExactPrefixUpperReplayLevelProfile,
+  options: { includeMarginBuckets: boolean } = { includeMarginBuckets: true },
 ): Record<string, unknown> {
-  return {
+  const result: Record<string, unknown> = {
     level: level.level,
     checkedPrefixCount: level.checkedPrefixCount,
     relaxedImpliedCompletionCount: level.relaxedImpliedCompletionCount,
@@ -3402,13 +3541,26 @@ function sumMedleyExactPrefixUpperReplayLevel(
     hardUpperUnknownCount: level.hardUpperUnknownCount,
     candidateEvaluationCount: level.candidateEvaluationCount,
     materializedCandidateCount: level.materializedCandidateCount,
+    slotUpperMarginMin: level.slotUpperMarginMin,
+    slotUpperMarginMax: level.slotUpperMarginMax,
+    hardUpperMarginMin: level.hardUpperMarginMin,
+    hardUpperMarginMax: level.hardUpperMarginMax,
   };
+  if (options.includeMarginBuckets) {
+    result.slotUpperMarginPrefixBuckets = level.slotUpperMarginPrefixBuckets.slice();
+    result.slotUpperMarginImpliedCompletionBuckets = level.slotUpperMarginImpliedCompletionBuckets.slice();
+    result.hardUpperMarginPrefixBuckets = level.hardUpperMarginPrefixBuckets.slice();
+    result.hardUpperMarginImpliedCompletionBuckets = level.hardUpperMarginImpliedCompletionBuckets.slice();
+  }
+  return result;
 }
 
 function serializeMedleyExactPrefixUpperReplayProfile(
   profile: MedleyExactPrefixUpperReplayProfile,
 ): Record<string, unknown> {
-  const levels = profile.levels.map(sumMedleyExactPrefixUpperReplayLevel);
+  const levels = profile.levels.map((level) => (
+    sumMedleyExactPrefixUpperReplayLevel(level, { includeMarginBuckets: false })
+  ));
   return {
     algorithm: profile.algorithm,
     songIndex: profile.songIndex,
@@ -3459,6 +3611,7 @@ function summarizeMedleyExactPrefixUpperReplayProfiles(
     configurationSummaryCount: 1,
     generatorCount: profiles.length,
     hardUpperReplayEnabled: profiles.some((profile) => profile.hardUpperReplayEnabled),
+    marginBucketUpperBounds: [...MEDLEY_EXACT_PREFIX_UPPER_MARGIN_BUCKET_UPPER_BOUNDS],
     checkedPrefixCountTotal: sumLevelField("checkedPrefixCount"),
     relaxedImpliedCompletionCountTotal: sumLevelField("relaxedImpliedCompletionCount"),
     finiteSlotUpperCountTotal: sumLevelField("finiteSlotUpperCount"),
@@ -3521,6 +3674,7 @@ function mergeMedleyExactPrefixUpperReplaySummaries(
     configurationSummaryCount: existing.configurationSummaryCount + next.configurationSummaryCount,
     generatorCount: existing.generatorCount + next.generatorCount,
     hardUpperReplayEnabled: existing.hardUpperReplayEnabled || next.hardUpperReplayEnabled,
+    marginBucketUpperBounds: [...MEDLEY_EXACT_PREFIX_UPPER_MARGIN_BUCKET_UPPER_BOUNDS],
     checkedPrefixCountTotal: sumLevelField("checkedPrefixCount"),
     relaxedImpliedCompletionCountTotal: sumLevelField("relaxedImpliedCompletionCount"),
     finiteSlotUpperCountTotal: sumLevelField("finiteSlotUpperCount"),

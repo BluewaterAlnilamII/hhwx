@@ -70,6 +70,7 @@ Baseline and gate artifacts retained:
 | `low-memory-polish-hhwx-2026-06-17T11-02-24-155Z.json` | clean PR #43 branch validation | `4 exact / 2 bounded`, gap `582812`, peak `2943 MiB` |
 | `low-memory-polish-hhwx-2026-06-17T12-23-45-243Z.json` | two-row pressure + prefix replay smoke | `P01:244 exact`, `P02:260 bounded`, gap `382812`, peak `2979 MiB`; prefix summaries present |
 | `low-memory-polish-hhwx-2026-06-17T12-30-37-247Z.json` | six-row pressure + prefix replay gate | `4 exact / 2 bounded`, gap `582812`, peak `3308 MiB`; scores, max scores, candidate counts, and proof states match the clean PR #43 gate |
+| `low-memory-polish-hhwx-2026-06-17T15-03-45-774Z.json` | two-row pressure + prefix margin replay smoke | `P01:244 exact`, `P02:260 bounded`, gap `382812`, peak `3024 MiB`; average/max scores and candidate counts match `2026-06-17T12-23-45` |
 
 Use the pressure validation environment for early-pruning gates:
 
@@ -93,6 +94,14 @@ P02 pressure + hard replay sample:
 - result stayed bounded with gap `382812`, peak `3024 MiB`;
 - current hard replay checked `582,084` prefixes but found only `11` skipable leaf prefixes and `0` skipable level-4 prefixes;
 - conclusion: simply converting the existing pair/global hard replay into pruning is not a breakthrough path for `P02:260`.
+
+Two-row prefix margin replay sample:
+
+- artifact: `low-memory-polish-hhwx-2026-06-17T15-03-45-774Z.json`;
+- compared with `low-memory-polish-hhwx-2026-06-17T12-23-45-243Z.json`, `P01:244` and `P02:260` kept exact/bounded state, gap, average score, max score, candidate counts, and materialized candidate counts;
+- `P02:260` remained bounded at `candidate-fill-soft-limit`, with candidate counts `[400000, 212825, 134977]` and `972467` materialized candidates;
+- local slot margin buckets show surviving `P02:260` level-4 and leaf prefixes are still above the local cutoff; local cutoff alone cannot produce proof-backed candidate-birth pruning;
+- implementation rule: keep margin bucket arrays only in aggregate summary levels. Serializing them inside every `latestGenerators` entry can turn a constant-size diagnostic into a large per-generator report and OOM hard rows.
 
 The JSON files above contain `isolated.*Path` fields for detailed per-row diagnostics. Those referenced files are part of the retained baseline set.
 
@@ -119,19 +128,26 @@ Start a proof-backed early-pruning line on `dev/low-memory-early-pruning`.
 
 Target: reduce candidate birth before final join, especially for hard rows like `P02:260`, without relying on unstable threshold-triggered behavior.
 
-The intended order is:
+The five-stage path is:
 
-1. Port only the lightweight parts of the prefix replay stash into the clean branch.
-2. Add no-op signature/prefix census diagnostics:
-   - checked prefix count;
-   - finite upper count;
-   - implied completion count;
-   - candidate birth count by slot/signature;
-   - skipped count if pruning were enabled.
-3. Add upper replay with a proof ledger, still no deletion:
-   - each hypothetical skip must record incumbent, prefix upper, other-slot upper, and gap.
-4. Enable pruning only behind an opt-in flag after replay reports zero violations on focused hard cases.
-5. Promote to default only after a full 40-case gate has no exact regression, no gap regression, and no false exact risk.
+1. No-op prefix margin diagnostics.
+   - Keep pruning disabled.
+   - Record how far each prefix/leaf is from a safe skip line:
+     `prefixUpper + otherSlotsUpper - incumbent`.
+   - Bucket margins by slot and prefix level so the next pruning target is evidence-led, not threshold-led.
+2. Hypothetical proof ledger.
+   - Still do not delete candidates.
+   - For every hypothetical skip, record `slot`, `level`, `impliedCompletions`, `incumbent`, `prefixUpper`, `otherSlotsUpper`, `totalUpper`, and `margin`.
+   - Report replay violations explicitly if any skipped branch later contains a materialized candidate that could beat the recorded bound.
+3. Opt-in leaf-birth pruning.
+   - Enable only behind an experiment flag.
+   - Skip rich candidate materialization only when the replay ledger proves `totalUpper < incumbent`.
+   - This is the first real pruning cut because a complete 5-card leaf has the smallest proof surface.
+4. Opt-in level-4 branch pruning.
+   - Move the same proof rule one level earlier only after leaf pruning is stable.
+   - The fifth-card completion upper must be a true optimistic HHWX upper, not an empirical cap.
+5. Full gate and possible promotion.
+   - Promote nothing to default until a full 40-case gate has no exact regression, no gap regression, no false-exact evidence, and material memory/candidate-birth improvement.
 
 ## Acceptance Gates
 
@@ -151,6 +167,8 @@ Focused acceptance:
 - bounded gap total must not exceed `582812`;
 - average score and max score must be present for every non-failed row;
 - no `failed`, process OOM, or false-exact evidence.
+- every real skip, when pruning is enabled, must have a replayable proof ledger entry;
+- no threshold-triggered fallback may decide exactness or skip candidates.
 
 Full 40-case acceptance:
 
@@ -171,6 +189,13 @@ Long-term memory targets:
 - safety target: 700-800 MiB hard-case ceiling;
 - stretch: calc-like hundreds-of-MiB behavior while preserving HHWX proof semantics.
 
+Early-pruning success targets:
+
+- diagnostic stage: explain whether current prefix upper bounds are tight enough to prune `P02:260`;
+- first pruning stage: reduce `P02:260` materialized candidate birth by at least `25%`, or produce clear evidence that the current upper source is too loose;
+- proof stage: any reduced candidate birth must preserve average score, max score, proof state, and bounded gap fields against the clean pressure baseline;
+- memory stage: hard focused rows should move below the current 3 GiB class before any PR is considered meaningful.
+
 ## Non-Goals
 
 - Do not replace HHWX exactness with calc output.
@@ -181,10 +206,10 @@ Long-term memory targets:
 
 ## Immediate Next Actions
 
-1. Run the full six-row focused gate with pressure + prefix replay and compare against `low-memory-polish-hhwx-2026-06-17T11-02-24-155Z.json`.
-2. Keep heavy attribution disabled by default; prior P02 diagnostics could OOM.
-3. Use prefix replay totals to choose the first proof-backed pruning target level, likely level 4 or leaf birth.
-4. Add proof-ledger fields for any hypothetical skip before enabling real pruning.
+1. Add no-op prefix margin/cutoff buckets to the existing prefix replay summary.
+2. Run a pressure smoke on `P01:244` and `P02:260` with prefix replay enabled.
+3. Use the margin distribution to decide whether leaf-birth pruning is viable with current upper bounds.
+4. Add hypothetical proof-ledger fields before enabling any real skip.
 5. Only after no-op diagnostics are stable, test opt-in proof-backed pruning on focused rows.
 
 ## Maintenance Rules
