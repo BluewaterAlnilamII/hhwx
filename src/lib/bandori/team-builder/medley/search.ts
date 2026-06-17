@@ -111,6 +111,8 @@ const MEDLEY_LOW_MEMORY_INITIAL_CANDIDATE_SYNC_MIN_MEMORY_HEADROOM_MIB = 800;
 const MEDLEY_LOW_MEMORY_INITIAL_CANDIDATE_SYNC_MAX_SLOT_CARD_COUNT = 249;
 const MEDLEY_LOW_MEMORY_INITIAL_CANDIDATE_SYNC_EVENT_ROOT_RISK_SLOT_CARD_COUNT = 250;
 const MEDLEY_LOW_MEMORY_INITIAL_CANDIDATE_SYNC_SAME_COARSE_GUARD_MAX_SLOT_CARD_COUNT = 249;
+const MEDLEY_LOW_MEMORY_CONFIGURATION_SEEDING_PRESSURE_HEADROOM_MIB = 4_000;
+const MEDLEY_LOW_MEMORY_CONFIGURATION_SEEDING_PRESSURE_MIN_SLOT_CARD_COUNT = 200;
 const MEDLEY_FULL_WIDTH_EVENT_EXACT_JOIN_MEMORY_SOFT_LIMIT_MIB = 3_200;
 const MEDLEY_LARGE_GAP_EVENT_SKIP_PROOF_MIN_GAP = 600_000;
 const MEDLEY_POST_EXACT_JOIN_TIGHT_ROOT_MAX_CARD_COUNT = 1_300;
@@ -875,6 +877,29 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
   )
     ? Math.max(0, parsedSkipConfigurationSeedingWhenMemoryHeadroomBelowMiB)
     : null;
+  const enableLowMemoryConfigurationSeedingPressureSkip = (
+    optimization.enableLowMemoryConfigurationSeedingPressureSkip === true
+  );
+  const parsedLowMemoryConfigurationSeedingPressureHeadroomMiB = (
+    optimization.lowMemoryConfigurationSeedingPressureHeadroomMiB !== undefined
+      ? Math.trunc(optimization.lowMemoryConfigurationSeedingPressureHeadroomMiB)
+      : Number.NaN
+  );
+  const lowMemoryConfigurationSeedingPressureHeadroomMiB = Number.isFinite(
+    parsedLowMemoryConfigurationSeedingPressureHeadroomMiB,
+  )
+    ? Math.max(0, parsedLowMemoryConfigurationSeedingPressureHeadroomMiB)
+    : MEDLEY_LOW_MEMORY_CONFIGURATION_SEEDING_PRESSURE_HEADROOM_MIB;
+  const parsedLowMemoryConfigurationSeedingPressureMinSlotCardCount = (
+    optimization.lowMemoryConfigurationSeedingPressureMinSlotCardCount !== undefined
+      ? Math.trunc(optimization.lowMemoryConfigurationSeedingPressureMinSlotCardCount)
+      : Number.NaN
+  );
+  const lowMemoryConfigurationSeedingPressureMinSlotCardCount = Number.isFinite(
+    parsedLowMemoryConfigurationSeedingPressureMinSlotCardCount,
+  )
+    ? Math.max(1, parsedLowMemoryConfigurationSeedingPressureMinSlotCardCount)
+    : MEDLEY_LOW_MEMORY_CONFIGURATION_SEEDING_PRESSURE_MIN_SLOT_CARD_COUNT;
   const parsedMemorySoftLimitMiB = optimization.memorySoftLimitMiB !== undefined
     ? Math.trunc(optimization.memorySoftLimitMiB)
     : Number.NaN;
@@ -3823,6 +3848,30 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
       && configurationSeedingMemoryHeadroomMiB !== null
       && configurationSeedingMemoryHeadroomMiB < skipConfigurationSeedingWhenMemoryHeadroomBelowMiB
     );
+    const hasLowMemoryConfigurationSeedingPressureIncumbent = (
+      results.length >= resultLimit
+      && Number.isFinite(bestScoreBeforeSeeding)
+    );
+    const hasLowMemoryConfigurationSeedingPressureUpperBound = (
+      hasFiniteActiveConfigurationUpperBoundBeforeSeeding
+    );
+    const hasLowMemoryConfigurationSeedingPressureSlotWidth = (
+      hasEventBonus
+      && maxLowMemoryInitialCandidateSyncSlotCardCount
+        >= lowMemoryConfigurationSeedingPressureMinSlotCardCount
+    );
+    const shouldSkipConfigurationSeedingForPressure = (
+      enableLowMemoryConfigurationSeedingPressureSkip
+      && configurationSeedingMemoryHeadroomMiB !== null
+      && configurationSeedingMemoryHeadroomMiB < lowMemoryConfigurationSeedingPressureHeadroomMiB
+      && hasLowMemoryConfigurationSeedingPressureIncumbent
+      && hasLowMemoryConfigurationSeedingPressureUpperBound
+      && hasLowMemoryConfigurationSeedingPressureSlotWidth
+    );
+    const shouldSkipConfigurationSeeding = (
+      shouldSkipConfigurationSeedingForMemory
+      || shouldSkipConfigurationSeedingForPressure
+    );
     if (traceEntry) {
       traceEntry.configurationSeedingUsedMiB = configurationSeedingUsedMiB;
       traceEntry.configurationSeedingSoftLimitMiB = configurationSeedingSoftLimitMiB;
@@ -3831,8 +3880,32 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
         skipConfigurationSeedingWhenMemoryHeadroomBelowMiB
       );
       traceEntry.skipConfigurationSeedingForMemory = shouldSkipConfigurationSeedingForMemory;
+      traceEntry.lowMemoryConfigurationSeedingPressureSkip = enableLowMemoryConfigurationSeedingPressureSkip;
+      traceEntry.lowMemoryConfigurationSeedingPressureSkipTriggered = (
+        shouldSkipConfigurationSeedingForPressure
+      );
+      traceEntry.lowMemoryConfigurationSeedingPressureHeadroomMiB = (
+        lowMemoryConfigurationSeedingPressureHeadroomMiB
+      );
+      traceEntry.lowMemoryConfigurationSeedingPressureMinSlotCardCount = (
+        lowMemoryConfigurationSeedingPressureMinSlotCardCount
+      );
+      traceEntry.lowMemoryConfigurationSeedingPressureHasIncumbent = (
+        hasLowMemoryConfigurationSeedingPressureIncumbent
+      );
+      traceEntry.lowMemoryConfigurationSeedingPressureHasUpperBound = (
+        hasLowMemoryConfigurationSeedingPressureUpperBound
+      );
+      traceEntry.lowMemoryConfigurationSeedingPressureHasSlotWidth = (
+        hasLowMemoryConfigurationSeedingPressureSlotWidth
+      );
+      traceEntry.skipConfigurationSeedingReason = shouldSkipConfigurationSeedingForMemory
+        ? "memory-headroom"
+        : shouldSkipConfigurationSeedingForPressure
+          ? "low-memory-pressure"
+          : null;
     }
-    if (!shouldSkipConfigurationSeedingForMemory) {
+    if (!shouldSkipConfigurationSeeding) {
       // Incumbent seeding happens before DFS so that upper-bound pruning has a real threshold.
       // These passes may improve runtime, but they are never treated as proof by themselves.
       slotCandidateLimits = getMedleySlotCandidateLimits(slots, calculatedCards.length);

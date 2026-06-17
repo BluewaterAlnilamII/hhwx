@@ -51,6 +51,9 @@ function printUsage() {
     "  HHWX_LOW_MEMORY_COMPACT_CANDIDATE_KEY_SET=1 use compact exact-join candidate key sets",
     "  HHWX_LOW_MEMORY_SCORE_CALC_CACHE_LIMIT=... bound exact-join score calculation cache entries",
     "  HHWX_LOW_MEMORY_SKIP_SEEDING_HEADROOM_MIB=1600 skip config seeding below this memory headroom",
+    "  HHWX_LOW_MEMORY_AUTO_SEEDING_PRESSURE_SKIP=1 skip config seeding under proof-safe memory pressure",
+    "  HHWX_LOW_MEMORY_AUTO_SEEDING_PRESSURE_HEADROOM_MIB=4000 auto seeding pressure threshold",
+    "  HHWX_LOW_MEMORY_AUTO_SEEDING_PRESSURE_SLOT_CARDS=200 auto seeding pressure slot-width threshold",
     "  HHWX_LOW_MEMORY_SCORE_CALC_CACHE_PRESSURE_FALLBACK=1 disable score calc cache for high-slot-card exact joins",
     "  HHWX_LOW_MEMORY_SCORE_CALC_CACHE_PRESSURE_SLOT_CARDS=260 fallback threshold for high-slot-card exact joins",
     "  HHWX_LOW_MEMORY_INITIAL_SCORE_CALC_CACHE_PRESSURE_FALLBACK=1 disable initial-candidate score calc cache under pressure",
@@ -160,6 +163,21 @@ function hhwxOptimizationJson() {
     const parsed = Number(process.env.HHWX_LOW_MEMORY_SKIP_SEEDING_HEADROOM_MIB);
     if (Number.isFinite(parsed) && parsed >= 0) {
       optimization.skipConfigurationSeedingWhenMemoryHeadroomBelowMiB = Math.trunc(parsed);
+    }
+  }
+  if (process.env.HHWX_LOW_MEMORY_AUTO_SEEDING_PRESSURE_SKIP === "1") {
+    optimization.enableLowMemoryConfigurationSeedingPressureSkip = true;
+  }
+  if (process.env.HHWX_LOW_MEMORY_AUTO_SEEDING_PRESSURE_HEADROOM_MIB) {
+    const parsed = Number(process.env.HHWX_LOW_MEMORY_AUTO_SEEDING_PRESSURE_HEADROOM_MIB);
+    if (Number.isFinite(parsed) && parsed >= 0) {
+      optimization.lowMemoryConfigurationSeedingPressureHeadroomMiB = Math.trunc(parsed);
+    }
+  }
+  if (process.env.HHWX_LOW_MEMORY_AUTO_SEEDING_PRESSURE_SLOT_CARDS) {
+    const parsed = Number(process.env.HHWX_LOW_MEMORY_AUTO_SEEDING_PRESSURE_SLOT_CARDS);
+    if (Number.isFinite(parsed) && parsed > 0) {
+      optimization.lowMemoryConfigurationSeedingPressureMinSlotCardCount = Math.trunc(parsed);
     }
   }
   if (process.env.HHWX_LOW_MEMORY_SCORE_CALC_CACHE_PRESSURE_FALLBACK === "1") {

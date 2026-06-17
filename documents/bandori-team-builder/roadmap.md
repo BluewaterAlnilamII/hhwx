@@ -675,6 +675,18 @@ Implementation:
   low-memory initial-candidate score calculation cache under slot-card pressure.
   It is kept as an attribution knob, but it was not the `P01:244` bottleneck
   because that case was using the normal initial-candidate generator path.
+- `HHWX_LOW_MEMORY_AUTO_SEEDING_PRESSURE_SKIP=1` now enables a narrower
+  automatic policy. It skips configuration seeding only when all of these are
+  true:
+  - a current incumbent already exists
+  - the active configuration has a finite observed or tight upper bound
+  - the case has event-bonus pressure and the max slot card count is at least
+    the configured threshold, default `200`
+  - current memory headroom is below the configured pressure threshold,
+    default `4000 MiB`
+- The automatic policy records its proof-neutral reason in
+  `configurationTrace` as `skipConfigurationSeedingReason:
+  "low-memory-pressure"` and does not alter exact candidate join proof logic.
 
 Key finding:
 
@@ -694,6 +706,8 @@ Focused artifacts:
 | `low-memory-polish-hhwx-2026-06-16T21-15-10-434Z.json` | `P01:244` | `4000 MiB` | exact | `8858388 / 8913195` | `0` | `1478 MiB` | seeding skipped; exact candidate join completed |
 | `low-memory-polish-hhwx-2026-06-16T21-16-49-783Z.json` | `P01:244`, `P01:323`, `P04:244`, `P04:260` | `4000 MiB` | `4/4` exact | all preserved or improved | `0` | `3397 MiB` | all prior memory-limited 40-case rows became exact |
 | `low-memory-polish-hhwx-2026-06-16T21-26-20-253Z.json` | `P02:260`, `P08:260`, `P08:323`, `P10:244`, `P10:260` | `4000 MiB` | `3/5` exact | all average/max fields present | `582812` | `3628 MiB` | `P02:260` and `P10:244` remained bounded as expected; no memory-limited rows |
+| `low-memory-polish-hhwx-2026-06-16T22-40-04-069Z.json` | `P01:244` | auto pressure skip | exact | `8858388 / 8913195` | `0` | `1460 MiB` | trace proved old `1600 MiB` memory skip was false and auto `low-memory-pressure` triggered |
+| `low-memory-polish-hhwx-2026-06-16T22-41-49-935Z.json` | 9 focused pressure rows | auto pressure skip | `7/9` exact | all average/max fields present | `582812` | `3399 MiB` | only `P02:260` and `P10:244` bounded; no memory-limited rows |
 
 Matrix checkpoint:
 
@@ -702,6 +716,7 @@ Matrix checkpoint:
 | `low-memory-polish-hhwx-2026-06-16T20-08-10-567Z.json` | prior recommended 40-case run | `34` | `6` | `0` | `4` | `4` | `1594898` | `6790 MiB` | before seeding-skip headroom change |
 | `medley-40-exact-isolated-2026-06-16T21-39-20-861Z-partial.json` | first `38/40` rows, `4000 MiB` seeding headroom | `36` | `2` | `0` | `0` | `0` | `582812` | `3626 MiB` | external shell timed out after 50 minutes, not a case timeout |
 | `low-memory-polish-hhwx-2026-06-16T22-30-39-667Z.json` | final two rows, `P10:260/P10:323` | `2` | `0` | `0` | `0` | `0` | `0` | `2452 MiB` | supplemental run for rows not reached before shell timeout |
+| `low-memory-polish-hhwx-2026-06-16T23-04-55-868Z.json` | full 40-case, auto pressure skip | `38` | `2` | `0` | `0` | `0` | `582812` | `4015 MiB` | single artifact gate; all 40 rows include average/max score |
 
 Combined interpretation:
 
@@ -711,15 +726,18 @@ Combined interpretation:
 - This exceeds the near-term target of `35/40+` exact and cuts the observed
   peak from `6790 MiB` to `3626 MiB` versus the prior 40-case run on this
   branch.
-- The full single-artifact 40-case gate should be rerun with an outer command
-  timeout above 60 minutes before merge readiness is claimed. Per-case
-  `300000ms` budgets were not exceeded in the completed rows.
-- The next automation step should make this less blunt than a global
-  `4000 MiB` threshold: skip or timebox configuration seeding when the current
-  configuration already has a finite upper bound, an incumbent from the seed
-  pass, and enough slot width/event pressure that seeding is likely to spend
-  memory before proof. Any automatic policy must keep the exactness contract
-  unchanged and record the skip reason in `configurationTrace`.
+- The full single-artifact auto-pressure gate is stronger proof of integration:
+  `38/40` exact, `2/40` bounded, `0` failed, `0` timed out, `0`
+  memory-limited, bounded gap total `582812`, and peak `4015 MiB`.
+- The full-run peak is higher than the split run. `P02:260` was `3334 MiB` in
+  the 9-case auto slice but `3674 MiB` in the full run with identical candidate
+  counts `[400000, 212825, 134977]`, so the Stage 3 target of stable
+  `P02:260 < 3596 MiB` should remain open.
+- The next memory step should reduce the remaining candidate-fill resident set:
+  `P02:260` still aborts at `candidate-fill-soft-limit` with `747802`
+  generated candidates and compact candidate keys taking only about `26 MiB`.
+  The remaining pressure is therefore in rich candidate/frontier/complement
+  residency, not candidate-key storage.
 
 ### Stage 4: Raw-Index Final Join
 

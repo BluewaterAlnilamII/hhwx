@@ -68,6 +68,9 @@ export type BandoriMedleySearchOptimizationOptions = {
   conflictSlotSolveNodeLimit?: number;
   configurationSeedPassDurationMs?: number;
   skipConfigurationSeedingWhenMemoryHeadroomBelowMiB?: number;
+  enableLowMemoryConfigurationSeedingPressureSkip?: boolean;
+  lowMemoryConfigurationSeedingPressureHeadroomMiB?: number;
+  lowMemoryConfigurationSeedingPressureMinSlotCardCount?: number;
   enableExactJoinPrefixSeed?: boolean;
   exactJoinPrefixSeedForceNoop?: boolean;
   exactJoinPrefixSeedGuardOnly?: boolean;
