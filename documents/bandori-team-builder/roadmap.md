@@ -80,6 +80,11 @@ Baseline and gate artifacts retained:
 | `low-memory-polish-hhwx-2026-06-17T16-56-28-800Z.json` | `P02:260` level-4 capacity batch replay, budget `2048`, margin `500000` | bounded gap `382812`, score `9376984`, max `9412868`, peak `3078 MiB`; `15449` level-4 checks, `2048` eligible, `286` would-skip prefixes representing `58464` leaf completions, `0` replay violations |
 | `low-memory-polish-hhwx-2026-06-17T17-03-25-049Z.json` | `P02:260` full level-4 capacity batch replay, budget `20000`, margin `500000` | bounded gap `382812`, score `9376984`, max `9412868`, peak `3067 MiB`; all `15449` level-4 prefixes eligible, `613` would-skip prefixes representing `128698` leaf completions (`13.2%` of materialized candidate count), `0` replay violations |
 | `low-memory-polish-hhwx-2026-06-17T18-07-57-270Z.json` | `P02:260` level-3 capacity replay, budget `2048`, margin `500000` | bounded gap `382812`, score `9376984`, max `9412868`, peak `2593 MiB`; all `1047` level-3 prefixes eligible, `0` would-skip prefixes, `0` replay violations |
+| `low-memory-polish-hhwx-2026-06-17T18-16-52-533Z.json` | `P02:260` tight level-3 lookahead replay attempt | failed with exit `134` / JS heap OOM after `175591ms`; do not run tight child capacity proof inside level-3 lookahead |
+| `low-memory-polish-hhwx-2026-06-17T18-23-39-797Z.json` | `P02:260` tight level-3 lookahead replay after moving hook to prefix birth | failed with exit `134` / JS heap OOM after `152200ms`; confirms the lookahead must be basic-capacity-only and globally child-budgeted |
+| `low-memory-polish-hhwx-2026-06-17T18-26-44-147Z.json` | `P02:260` basic level-3 lookahead replay, child budget `2048`, margin `500000` | bounded gap `382812`, score `9376984`, max `9412868`, peak `2609 MiB`; `0` would-skip prefixes |
+| `low-memory-polish-hhwx-2026-06-17T18-29-14-907Z.json` | `P02:260` basic level-3 lookahead replay, child budget `8192`, margin `500000` | bounded gap `382812`, score `9376984`, max `9412868`, peak `2960 MiB`; `8` would-skip prefixes representing `196970` relaxed completions |
+| `low-memory-polish-hhwx-2026-06-17T18-31-41-943Z.json` | `P02:260` basic level-3 lookahead replay, child budget `16384`, margin `500000` | bounded gap `382812`, score `9376984`, max `9412868`, peak `2985 MiB`; `54` would-skip prefixes representing `1035490` relaxed completions |
 
 Use the pressure validation environment for early-pruning gates:
 
@@ -155,6 +160,18 @@ P02 level-3 capacity replay:
 - replay checked all `1047` eligible level-3 prefixes under margin `500000`, improved the other-slot upper on only `2`, and found `0` would-skip prefixes;
 - best safe margin stayed positive (`min 510.668`), so current HHWX slot prefix upper is too loose at level 3 to prove any branch skip;
 - current conclusion: moving the same capacity proof from level 4 to level 3 does not create a breakthrough. The next pruning line should tighten slot/prefix upper sources or combine the existing level-4 proof with storage changes, not keep moving the same loose proof earlier.
+
+P02 basic level-3 lookahead replay:
+
+- artifacts: failed tight attempts `low-memory-polish-hhwx-2026-06-17T18-16-52-533Z.json` and `low-memory-polish-hhwx-2026-06-17T18-23-39-797Z.json`; stable basic-only runs `low-memory-polish-hhwx-2026-06-17T18-26-44-147Z.json`, `low-memory-polish-hhwx-2026-06-17T18-29-14-907Z.json`, and `low-memory-polish-hhwx-2026-06-17T18-31-41-943Z.json`;
+- replay is opt-in via `HHWX_LOW_MEMORY_PREFIX_CAPACITY_LEVEL3_LOOKAHEAD_REPLAY=1` and remains no-op;
+- the tight child proof that calls the heavier capacity upper inside the level-3 child loop OOMed twice at the 8 GiB heap limit, so it is not a viable hot-path design;
+- the retained diagnostic uses only the basic capacity assignment upper for each 4-card child prefix and spends `HHWX_LOW_MEMORY_PREFIX_OTHER_UPPER_SOURCE_MAX_CHECKS` as a global child-prefix budget;
+- result fields stayed stable on every basic replay run: `P02:260` remained bounded with gap `382812`, score `9376984`, max score `9412868`, candidate counts `[400000, 212825, 134977]`, and `972467` materialized candidates;
+- with child budget `8192`, replay found `8` would-skip level-3 prefixes representing `196970` relaxed completions;
+- with child budget `16384`, replay found `54` would-skip level-3 prefixes representing `1035490` relaxed completions and a best margin of `-214757.669`;
+- this crosses the near-term `25%` implied-completion target as a diagnostic signal, but it is not yet real candidate reduction because overlap and branch-local accounting are still relaxed;
+- next retained direction: add a capped proof ledger for level-3 lookahead samples, then implement an opt-in real branch skip only if the ledger can record `incumbent`, `level-3 prefix upper`, `max child total upper`, `other upper source`, `margin`, `slot`, and implied completion count without changing exact/bounded semantics.
 
 The JSON files above contain `isolated.*Path` fields for detailed per-row diagnostics. Those referenced files are part of the retained baseline set.
 
@@ -260,17 +277,21 @@ Early-pruning success targets:
 ## Immediate Next Actions
 
 1. Keep `HHWX_LOW_MEMORY_CAPACITY_SOURCE_LEAF_PRUNING=1` as an opt-in experiment only; it is safe so far, but not high impact enough for default.
-2. Design a level-4 or batched capacity proof:
-   - compute one capacity upper per reusable prefix/signature bucket where possible;
-   - preserve the same proof fields: incumbent, prefix upper, other upper, total upper, margin, slot/level, implied completion count;
-   - avoid one-off per-leaf capacity calls as the main path.
-3. Tighten the prefix proof before enabling real pruning:
+2. Promote the basic level-3 lookahead replay into a proof-ledger experiment before any real skip:
+   - keep the child lookahead basic-capacity-only;
+   - use a global child-prefix budget before constructing child proof work;
+   - record the selected level-3 card ids, child count, finite child count, max child total upper, incumbent, margin, slot, and implied completion count in capped samples.
+3. Implement opt-in level-3 lookahead branch pruning only after the ledger is stable:
+   - skip a level-3 branch only when the replayed max child total upper is finite and below the current cutoff;
+   - report pruned prefix count, implied completions, and replay violations separately from existing leaf pruning;
+   - compare actual `P02:260` materialized candidate reduction against the `25%` target.
+4. Tighten the prefix proof before broader pruning:
    - avoid generated-pair-only comparison on level-4 replay unless explicitly requested;
    - level-3 replay currently has no P02 skip signal with the existing slot upper;
-   - investigate tighter slot prefix upper sources so more level-4 or level-3 prefixes fall below the proof cutoff;
+   - level-3 lookahead has the first strong diagnostic signal, but it must remain replay-only until ledger coverage is complete;
    - keep the hot path replay-only until violation count is `0` on focused gates.
-4. Run `P02:260` pressure smoke and compare implied leaf-completion reduction against the `25%` target before enabling real branch skips.
-5. Run the six-row focused gate before considering broader testing or default promotion.
+5. Run `P02:260` pressure smoke and compare real materialized candidate reduction against the `25%` target before enabling broader gates.
+6. Run the six-row focused gate before considering broader testing or default promotion.
 
 ## Maintenance Rules
 
