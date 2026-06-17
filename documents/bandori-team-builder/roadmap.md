@@ -38,6 +38,13 @@ Current working branch:
 - old research branch kept: `dev/low-memory-polish`
 - WIP stash kept unapplied: `stash@{0}: On dev/low-memory-polish: wip-prefix-replay-summary-research`
 
+Early-pruning diagnostic slice started on `dev/low-memory-early-pruning`:
+
+- added an opt-in slot-prefix upper replay summary;
+- default hot path is kept on a separate non-instrumented `expandNode` function;
+- prefix diagnostics are no-op: they do not skip candidates, change cutoffs, or alter proof status;
+- `HHWX_LOW_MEMORY_PREFIX_HARD_UPPER_REPLAY` remains research-only and is not part of the accepted smoke gate.
+
 ## Retained Artifacts
 
 Temp cleanup status is documented in:
@@ -61,6 +68,16 @@ Baseline and gate artifacts retained:
 | `low-memory-polish-hhwx-2026-06-17T09-29-27-703Z.json` | research PR-candidate full gate with prefix hard-upper pruning enabled | `38 exact / 2 bounded`, gap `582812`, peak `3587 MiB`; research evidence only |
 | `low-memory-polish-hhwx-2026-06-17T10-36-12-622Z.json` | six-row A/B without prefix hard-upper pruning | `4 exact / 2 bounded`, gap `582812`, peak `3027 MiB` |
 | `low-memory-polish-hhwx-2026-06-17T11-02-24-155Z.json` | clean PR #43 branch validation | `4 exact / 2 bounded`, gap `582812`, peak `2943 MiB` |
+| `low-memory-polish-hhwx-2026-06-17T12-23-45-243Z.json` | two-row pressure + prefix replay smoke | `P01:244 exact`, `P02:260 bounded`, gap `382812`, peak `2979 MiB`; prefix summaries present |
+
+Use the pressure validation environment for early-pruning gates:
+
+- `HHWX_LOW_MEMORY_AUTO_SEEDING_PRESSURE_SKIP=1`
+- `HHWX_LOW_MEMORY_SCORE_CALC_CACHE_PRESSURE_FALLBACK=1`
+- `HHWX_LOW_MEMORY_INITIAL_SCORE_CALC_CACHE_PRESSURE_FALLBACK=1`
+- `HHWX_LOW_MEMORY_SCORE_ONLY_CACHE_PRESSURE_FALLBACK=1`
+
+Bare default one-off runs are not comparable to the retained PR #43 gates; they can enter a memory-limited path on `P01:244` and OOM on `P02:260`.
 
 The JSON files above contain `isolated.*Path` fields for detailed per-row diagnostics. Those referenced files are part of the retained baseline set.
 
@@ -149,10 +166,10 @@ Long-term memory targets:
 
 ## Immediate Next Actions
 
-1. Inspect `stash@{0}` and cherry-pick only the lightweight prefix replay summary pieces.
+1. Run the full six-row focused gate with pressure + prefix replay and compare against `low-memory-polish-hhwx-2026-06-17T11-02-24-155Z.json`.
 2. Keep heavy attribution disabled by default; prior P02 diagnostics could OOM.
-3. Add a small no-op prefix/signature census artifact to the benchmark harness.
-4. Run the six-row focused gate with pruning disabled and compare against `low-memory-polish-hhwx-2026-06-17T11-02-24-155Z.json`.
+3. Use prefix replay totals to choose the first proof-backed pruning target level, likely level 4 or leaf birth.
+4. Add proof-ledger fields for any hypothetical skip before enabling real pruning.
 5. Only after no-op diagnostics are stable, test opt-in proof-backed pruning on focused rows.
 
 ## Maintenance Rules

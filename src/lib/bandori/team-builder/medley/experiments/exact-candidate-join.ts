@@ -137,10 +137,160 @@ const MEDLEY_EXACT_SIGNATURE_CENSUS_BUCKET_LIMIT = 20_000;
 const MEDLEY_EXACT_SIGNATURE_CENSUS_TOP_BUCKETS = 8;
 const MEDLEY_EXACT_DOMINANCE_REPLAY_MAX_CANDIDATE_TOTAL = 60_000;
 const MEDLEY_EXACT_DOMINANCE_REPLAY_MAX_GROUP_SIZE = 128;
+const MEDLEY_EXACT_PREFIX_UPPER_REPLAY_LEVEL_COUNT = MEDLEY_TEAM_SIZE + 1;
 const EMPTY_MEDLEY_EXACT_CANDIDATE_CARD_IDS: number[] = [];
+
+type MedleyExactPrefixUpperReplayLevelProfile = {
+  level: number;
+  checkedPrefixCount: number;
+  relaxedImpliedCompletionCount: number;
+  finiteSlotUpperCount: number;
+  slotUpperPassCount: number;
+  slotUpperRejectedCount: number;
+  hardUpperCheckedCount: number;
+  hardUpperFiniteCount: number;
+  hardUpperSkipablePrefixCount: number;
+  hardUpperSkipableImpliedCompletionCount: number;
+  hardUpperRetainedPrefixCount: number;
+  hardUpperUnknownCount: number;
+  candidateEvaluationCount: number;
+  materializedCandidateCount: number;
+};
+
+type MedleyExactPrefixUpperReplayProfile = {
+  algorithm: "hhwx-prefix-upper-replay-v1";
+  songIndex: number;
+  hardUpperReplayEnabled: boolean;
+  levels: MedleyExactPrefixUpperReplayLevelProfile[];
+};
+
+type MedleyExactPrefixUpperReplaySummary = {
+  algorithm: "hhwx-prefix-upper-replay-v1";
+  configurationSummaryCount: number;
+  generatorCount: number;
+  hardUpperReplayEnabled: boolean;
+  checkedPrefixCountTotal: number;
+  relaxedImpliedCompletionCountTotal: number;
+  finiteSlotUpperCountTotal: number;
+  slotUpperPassCountTotal: number;
+  slotUpperRejectedCountTotal: number;
+  hardUpperCheckedCountTotal: number;
+  hardUpperFiniteCountTotal: number;
+  hardUpperSkipablePrefixCountTotal: number;
+  hardUpperSkipableImpliedCompletionCountTotal: number;
+  hardUpperRetainedPrefixCountTotal: number;
+  hardUpperUnknownCountTotal: number;
+  candidateEvaluationCountTotal: number;
+  materializedCandidateCountTotal: number;
+  levels: MedleyExactPrefixUpperReplayLevelProfile[];
+  latestGenerators: Array<Record<string, unknown>>;
+};
 
 function roundMiB(bytes: number): number {
   return Math.round((bytes / BYTES_PER_MIB) * 100) / 100;
+}
+
+function addCappedCount(left: number, right: number): number {
+  const sum = left + right;
+  return Number.isSafeInteger(sum) ? sum : Number.MAX_SAFE_INTEGER;
+}
+
+function estimateRelaxedCombinationCount(itemCount: number, chooseCount: number): number {
+  if (chooseCount < 0 || itemCount < chooseCount) {
+    return 0;
+  }
+  if (chooseCount === 0) {
+    return 1;
+  }
+  const effectiveChoose = Math.min(chooseCount, itemCount - chooseCount);
+  let result = 1;
+  for (let index = 1; index <= effectiveChoose; index += 1) {
+    result = (result * (itemCount - effectiveChoose + index)) / index;
+    if (!Number.isSafeInteger(Math.floor(result))) {
+      return Number.MAX_SAFE_INTEGER;
+    }
+  }
+  return Math.floor(result);
+}
+
+function createMedleyExactPrefixUpperReplayLevelProfile(
+  level: number,
+): MedleyExactPrefixUpperReplayLevelProfile {
+  return {
+    level,
+    checkedPrefixCount: 0,
+    relaxedImpliedCompletionCount: 0,
+    finiteSlotUpperCount: 0,
+    slotUpperPassCount: 0,
+    slotUpperRejectedCount: 0,
+    hardUpperCheckedCount: 0,
+    hardUpperFiniteCount: 0,
+    hardUpperSkipablePrefixCount: 0,
+    hardUpperSkipableImpliedCompletionCount: 0,
+    hardUpperRetainedPrefixCount: 0,
+    hardUpperUnknownCount: 0,
+    candidateEvaluationCount: 0,
+    materializedCandidateCount: 0,
+  };
+}
+
+function createMedleyExactPrefixUpperReplayProfile(
+  slot: MedleySlotSearch,
+  hardUpperReplayEnabled: boolean,
+): MedleyExactPrefixUpperReplayProfile {
+  return {
+    algorithm: "hhwx-prefix-upper-replay-v1",
+    songIndex: slot.songIndex,
+    hardUpperReplayEnabled,
+    levels: Array.from(
+      { length: MEDLEY_EXACT_PREFIX_UPPER_REPLAY_LEVEL_COUNT },
+      (_, level) => createMedleyExactPrefixUpperReplayLevelProfile(level),
+    ),
+  };
+}
+
+function getMedleyExactPrefixReplayLevel(
+  profile: MedleyExactPrefixUpperReplayProfile,
+  level: number,
+): MedleyExactPrefixUpperReplayLevelProfile | null {
+  return profile.levels[level] ?? null;
+}
+
+function addMedleyExactPrefixUpperReplayLevel(
+  target: MedleyExactPrefixUpperReplayLevelProfile,
+  source: MedleyExactPrefixUpperReplayLevelProfile,
+): void {
+  target.checkedPrefixCount = addCappedCount(target.checkedPrefixCount, source.checkedPrefixCount);
+  target.relaxedImpliedCompletionCount = addCappedCount(
+    target.relaxedImpliedCompletionCount,
+    source.relaxedImpliedCompletionCount,
+  );
+  target.finiteSlotUpperCount = addCappedCount(target.finiteSlotUpperCount, source.finiteSlotUpperCount);
+  target.slotUpperPassCount = addCappedCount(target.slotUpperPassCount, source.slotUpperPassCount);
+  target.slotUpperRejectedCount = addCappedCount(target.slotUpperRejectedCount, source.slotUpperRejectedCount);
+  target.hardUpperCheckedCount = addCappedCount(target.hardUpperCheckedCount, source.hardUpperCheckedCount);
+  target.hardUpperFiniteCount = addCappedCount(target.hardUpperFiniteCount, source.hardUpperFiniteCount);
+  target.hardUpperSkipablePrefixCount = addCappedCount(
+    target.hardUpperSkipablePrefixCount,
+    source.hardUpperSkipablePrefixCount,
+  );
+  target.hardUpperSkipableImpliedCompletionCount = addCappedCount(
+    target.hardUpperSkipableImpliedCompletionCount,
+    source.hardUpperSkipableImpliedCompletionCount,
+  );
+  target.hardUpperRetainedPrefixCount = addCappedCount(
+    target.hardUpperRetainedPrefixCount,
+    source.hardUpperRetainedPrefixCount,
+  );
+  target.hardUpperUnknownCount = addCappedCount(target.hardUpperUnknownCount, source.hardUpperUnknownCount);
+  target.candidateEvaluationCount = addCappedCount(
+    target.candidateEvaluationCount,
+    source.candidateEvaluationCount,
+  );
+  target.materializedCandidateCount = addCappedCount(
+    target.materializedCandidateCount,
+    source.materializedCandidateCount,
+  );
 }
 
 function buildMedleyExactCardIdKey(cardIds: readonly number[]): MedleyExactCandidateCardKey {
@@ -2304,6 +2454,8 @@ export function createMedleyExactSlotCandidateGenerator(
   disableGlobalComplementUpperCache = false,
   enableCompactGlobalComplementUpperCache = true,
   enableThinCandidateResultRetention = false,
+  enablePrefixUpperReplay = false,
+  enablePrefixHardUpperReplay = false,
 ): MedleyExactSlotCandidateGenerator {
   // The generator is ordered by optimistic slot upper bound. Exhaustion proves that no unseen
   // slot candidate remains above the active cutoff; budget/deadline aborts are reported to the
@@ -2333,6 +2485,9 @@ export function createMedleyExactSlotCandidateGenerator(
   let heapKeyMode: "slot" | "global" = "slot";
   let heapGlobalKeySignature: string | null = null;
   let maxPruningScoreCutoff = Number.NEGATIVE_INFINITY;
+  const prefixUpperReplayProfile = enablePrefixUpperReplay || enablePrefixHardUpperReplay
+    ? createMedleyExactPrefixUpperReplayProfile(slot, enablePrefixHardUpperReplay)
+    : null;
   type CreateSearchNodeInput = {
     key: number;
     slotUpperBound: number;
@@ -2384,6 +2539,89 @@ export function createMedleyExactSlotCandidateGenerator(
   const getSelectedCardsForNode = (node: MedleyExactSlotCandidateSearchNode): SearchCard[] => {
     const selectedCardIndices = getSelectedCardIndicesForNode(node);
     return selectedCardIndices.map((cardIndex) => slot.searchCards[cardIndex]!);
+  };
+  const getRelaxedImpliedCompletionCount = (
+    selectedCardCount: number,
+    nextStartIndex: number,
+  ): number => estimateRelaxedCombinationCount(
+    slot.searchCards.length - nextStartIndex,
+    MEDLEY_TEAM_SIZE - selectedCardCount,
+  );
+  const recordPrefixSlotUpperReplay = (
+    selectedCardCount: number,
+    nextStartIndex: number,
+    slotUpperBound: number,
+    scoreCutoff: number,
+  ): void => {
+    if (!prefixUpperReplayProfile) {
+      return;
+    }
+    const levelProfile = getMedleyExactPrefixReplayLevel(prefixUpperReplayProfile, selectedCardCount);
+    if (!levelProfile) {
+      return;
+    }
+    const impliedCompletionCount = getRelaxedImpliedCompletionCount(selectedCardCount, nextStartIndex);
+    levelProfile.checkedPrefixCount += 1;
+    levelProfile.relaxedImpliedCompletionCount = addCappedCount(
+      levelProfile.relaxedImpliedCompletionCount,
+      impliedCompletionCount,
+    );
+    if (Number.isFinite(slotUpperBound)) {
+      levelProfile.finiteSlotUpperCount += 1;
+    }
+    if (Number.isFinite(slotUpperBound) && slotUpperBound >= scoreCutoff) {
+      levelProfile.slotUpperPassCount += 1;
+    } else {
+      levelProfile.slotUpperRejectedCount += 1;
+    }
+  };
+  const recordPrefixHardUpperReplay = (
+    selectedCardCount: number,
+    nextStartIndex: number,
+    hardUpperBound: number | null,
+    proofCutoffScore: number,
+  ): void => {
+    if (!prefixUpperReplayProfile || !enablePrefixHardUpperReplay) {
+      return;
+    }
+    const levelProfile = getMedleyExactPrefixReplayLevel(prefixUpperReplayProfile, selectedCardCount);
+    if (!levelProfile) {
+      return;
+    }
+    levelProfile.hardUpperCheckedCount += 1;
+    const impliedCompletionCount = getRelaxedImpliedCompletionCount(selectedCardCount, nextStartIndex);
+    if (hardUpperBound === null || !Number.isFinite(hardUpperBound) || !Number.isFinite(proofCutoffScore)) {
+      levelProfile.hardUpperUnknownCount += 1;
+      return;
+    }
+    levelProfile.hardUpperFiniteCount += 1;
+    if (hardUpperBound < proofCutoffScore) {
+      levelProfile.hardUpperSkipablePrefixCount += 1;
+      levelProfile.hardUpperSkipableImpliedCompletionCount = addCappedCount(
+        levelProfile.hardUpperSkipableImpliedCompletionCount,
+        impliedCompletionCount,
+      );
+    } else {
+      levelProfile.hardUpperRetainedPrefixCount += 1;
+    }
+  };
+  const recordPrefixCandidateEvaluation = (): void => {
+    if (!prefixUpperReplayProfile) {
+      return;
+    }
+    const levelProfile = getMedleyExactPrefixReplayLevel(prefixUpperReplayProfile, MEDLEY_TEAM_SIZE);
+    if (levelProfile) {
+      levelProfile.candidateEvaluationCount += 1;
+    }
+  };
+  const recordPrefixMaterializedCandidate = (): void => {
+    if (!prefixUpperReplayProfile) {
+      return;
+    }
+    const levelProfile = getMedleyExactPrefixReplayLevel(prefixUpperReplayProfile, MEDLEY_TEAM_SIZE);
+    if (levelProfile) {
+      levelProfile.materializedCandidateCount += 1;
+    }
   };
   const pushHeapNode = (node: MedleyExactSlotCandidateSearchNode): void => {
     pushMedleyExactSlotNode(heap, node);
@@ -2676,7 +2914,7 @@ export function createMedleyExactSlotCandidateGenerator(
     }
   };
 
-  const expandNode = (
+  const expandNodeWithoutPrefixReplay = (
     node: MedleyExactSlotCandidateSearchNode,
     scoreCutoff: number,
     globalPruning?: MedleyExactSlotCandidateGlobalPruning,
@@ -2836,6 +3074,205 @@ export function createMedleyExactSlotCandidateGenerator(
     }
   };
 
+  const expandNodeWithPrefixReplay = (
+    node: MedleyExactSlotCandidateSearchNode,
+    scoreCutoff: number,
+    globalPruning?: MedleyExactSlotCandidateGlobalPruning,
+  ): void => {
+    if (Number.isFinite(scoreCutoff)) {
+      maxPruningScoreCutoff = Math.max(maxPruningScoreCutoff, scoreCutoff);
+    }
+    const nodeSelectedCards = getSelectedCardsForNode(node);
+    const nodeSelectedCardIndices = getSelectedCardIndicesForNode(node);
+    const remaining = MEDLEY_TEAM_SIZE - node.selectedCardCount;
+    if (slot.searchCards.length - node.startIndex < remaining) {
+      return;
+    }
+
+    for (let index = node.startIndex; index <= slot.searchCards.length - remaining; index += 1) {
+      if ((index & 31) === 0 && (performance.now() >= deadlineAt || isPastDeadline())) {
+        stats.isExhaustive = false;
+        stats.timedOut = true;
+        stats.searchMode = "bounded";
+        return;
+      }
+      const card = slot.searchCards[index];
+      const characterIndex = slot.upperBoundIndex.characterIndexById.get(card.characterId);
+      if (
+        characterIndex === undefined
+        || hasCharacterIndexInMask(node.usedCharacterMaskLow, node.usedCharacterMaskHigh, characterIndex)
+      ) {
+        continue;
+      }
+
+      const isLowCharacterMask = characterIndex < CHARACTER_MASK_SEGMENT_BITS;
+      const characterBit = isLowCharacterMask
+        ? 1 << characterIndex
+        : 1 << (characterIndex - CHARACTER_MASK_SEGMENT_BITS);
+      const nextUsedCharacterMaskLow = isLowCharacterMask
+        ? node.usedCharacterMaskLow | characterBit
+        : node.usedCharacterMaskLow;
+      const nextUsedCharacterMaskHigh = isLowCharacterMask
+        ? node.usedCharacterMaskHigh
+        : node.usedCharacterMaskHigh | characterBit;
+      const nextSelectedCards = [...nodeSelectedCards, card];
+      const nextSelectedCardIndices = [...nodeSelectedCardIndices, index];
+      const nextSelectedPower = node.selectedPower + card.effectivePower;
+      const nextStartIndex = index + 1;
+
+      if (nextSelectedCards.length === MEDLEY_TEAM_SIZE) {
+        const leafUpperBound = estimateMedleyExactSlotNodeUpperBound(
+          slot,
+          nextSelectedCards,
+          nextStartIndex,
+          bannedCardIds,
+          nextUsedCharacterMaskLow,
+          nextUsedCharacterMaskHigh,
+          nextSelectedPower,
+          profiling,
+          scoreCutoff,
+        );
+        if (prefixUpperReplayProfile) {
+          recordPrefixSlotUpperReplay(
+            nextSelectedCards.length,
+            nextStartIndex,
+            leafUpperBound,
+            scoreCutoff,
+          );
+        }
+        if (!Number.isFinite(leafUpperBound) || leafUpperBound < scoreCutoff) {
+          continue;
+        }
+        const globalLeafUpperBound = estimateGlobalPrunedUpperBound(
+          leafUpperBound,
+          nextSelectedCards,
+          globalPruning,
+        );
+        if (prefixUpperReplayProfile && globalPruning) {
+          recordPrefixHardUpperReplay(
+            nextSelectedCards.length,
+            nextStartIndex,
+            Number.isFinite(globalLeafUpperBound) ? globalLeafUpperBound : null,
+            globalPruning.scoreCutoff,
+          );
+        }
+        if (globalLeafUpperBound < (globalPruning?.scoreCutoff ?? Number.NEGATIVE_INFINITY)) {
+          continue;
+        }
+        const candidateKey = globalPruning?.excludedCandidateKeys
+          ? buildMedleyExactSelectedCardKey(nextSelectedCards)
+          : null;
+        if (candidateKey && globalPruning?.excludedCandidateKeys?.has(candidateKey)) {
+          continue;
+        }
+        if (prefixUpperReplayProfile) {
+          recordPrefixCandidateEvaluation();
+        }
+        const candidate = evaluateMedleySlotCandidateWithCache(
+          slot,
+          nextSelectedCards,
+          server,
+          perfectRate,
+          stats,
+          profiling,
+          createMedleyExactCandidateSlotThresholdResult(scoreCutoff),
+          true,
+          {
+            disableScoreOnlyCache,
+            disableScoreOnlyCalculationCache,
+            scoreOnlyCalculationCache,
+            compactScoreOnlyCache: enableCompactScoreOnlyCache,
+          },
+        );
+        if (candidate && candidate.result.score >= scoreCutoff) {
+          if (prefixUpperReplayProfile) {
+            recordPrefixMaterializedCandidate();
+          }
+          let retainedCandidate = candidate;
+          if (disableCandidateCardsRetention) {
+            retainedCandidate = stripMedleyExactCandidateCardRetention(retainedCandidate, nextSelectedCardIndices);
+          }
+          if (enableThinCandidateResultRetention) {
+            retainedCandidate = stripMedleyExactCandidateResultRetention(retainedCandidate);
+          }
+          pushSearchNode(createSearchNode({
+            key: retainedCandidate.result.score,
+            slotUpperBound: retainedCandidate.result.score,
+            selectedCardIndices: nextSelectedCardIndices,
+            startIndex: nextStartIndex,
+            usedCharacterMaskLow: nextUsedCharacterMaskLow,
+            usedCharacterMaskHigh: nextUsedCharacterMaskHigh,
+            selectedPower: nextSelectedPower,
+            candidate: retainedCandidate,
+          }), scoreCutoff, globalPruning);
+        }
+        continue;
+      }
+
+      const upperBound = estimateMedleyExactSlotNodeUpperBound(
+        slot,
+        nextSelectedCards,
+        nextStartIndex,
+        bannedCardIds,
+        nextUsedCharacterMaskLow,
+        nextUsedCharacterMaskHigh,
+        nextSelectedPower,
+        profiling,
+        scoreCutoff,
+      );
+      if (prefixUpperReplayProfile) {
+        recordPrefixSlotUpperReplay(
+          nextSelectedCards.length,
+          nextStartIndex,
+          upperBound,
+          scoreCutoff,
+        );
+      }
+      let passesPairGlobalPruning = true;
+      if (
+        Number.isFinite(upperBound)
+        && upperBound >= scoreCutoff
+        && nextSelectedCards.length >= MEDLEY_TEAM_SIZE - 1
+      ) {
+        const selectedCardIds = nextSelectedCards
+          .map((selectedCard) => selectedCard.cardId)
+          .sort((left, right) => left - right);
+        const pairGlobalUpperBound = estimateGeneratedPairComplementUpperBound(
+          selectedCardIds,
+          globalPruning,
+          (globalPruning?.scoreCutoff ?? Number.NEGATIVE_INFINITY) - upperBound,
+        );
+        if (prefixUpperReplayProfile && globalPruning) {
+          recordPrefixHardUpperReplay(
+            nextSelectedCards.length,
+            nextStartIndex,
+            pairGlobalUpperBound === null ? null : upperBound + pairGlobalUpperBound,
+            globalPruning.scoreCutoff,
+          );
+        }
+        passesPairGlobalPruning = pairGlobalUpperBound === null
+          || upperBound + pairGlobalUpperBound >= (globalPruning?.scoreCutoff ?? Number.NEGATIVE_INFINITY);
+      }
+      if (
+        Number.isFinite(upperBound)
+        && upperBound >= scoreCutoff
+        && passesPairGlobalPruning
+      ) {
+        pushSearchNode(createSearchNode({
+          key: upperBound,
+          slotUpperBound: upperBound,
+          selectedCardIndices: nextSelectedCardIndices,
+          startIndex: nextStartIndex,
+          usedCharacterMaskLow: nextUsedCharacterMaskLow,
+          usedCharacterMaskHigh: nextUsedCharacterMaskHigh,
+          selectedPower: nextSelectedPower,
+          candidate: null,
+        }), scoreCutoff, globalPruning);
+      }
+    }
+  };
+  const expandNode = prefixUpperReplayProfile ? expandNodeWithPrefixReplay : expandNodeWithoutPrefixReplay;
+
   const next = (
     scoreCutoff = Number.NEGATIVE_INFINITY,
     globalPruning?: MedleyExactSlotCandidateGlobalPruning,
@@ -2892,6 +3329,7 @@ export function createMedleyExactSlotCandidateGenerator(
     hasAborted: () => aborted,
     poppedNodeCount: () => poppedNodes,
     release,
+    prefixUpperReplayProfile: () => prefixUpperReplayProfile,
     memoryProfile: () => {
       let highPairRecordCount = 0;
       let highPairRecordBitsetBytes = 0;
@@ -2944,6 +3382,170 @@ export function createMedleyExactSlotCandidateGenerator(
       };
     },
   };
+}
+
+function sumMedleyExactPrefixUpperReplayLevel(
+  level: MedleyExactPrefixUpperReplayLevelProfile,
+): Record<string, unknown> {
+  return {
+    level: level.level,
+    checkedPrefixCount: level.checkedPrefixCount,
+    relaxedImpliedCompletionCount: level.relaxedImpliedCompletionCount,
+    finiteSlotUpperCount: level.finiteSlotUpperCount,
+    slotUpperPassCount: level.slotUpperPassCount,
+    slotUpperRejectedCount: level.slotUpperRejectedCount,
+    hardUpperCheckedCount: level.hardUpperCheckedCount,
+    hardUpperFiniteCount: level.hardUpperFiniteCount,
+    hardUpperSkipablePrefixCount: level.hardUpperSkipablePrefixCount,
+    hardUpperSkipableImpliedCompletionCount: level.hardUpperSkipableImpliedCompletionCount,
+    hardUpperRetainedPrefixCount: level.hardUpperRetainedPrefixCount,
+    hardUpperUnknownCount: level.hardUpperUnknownCount,
+    candidateEvaluationCount: level.candidateEvaluationCount,
+    materializedCandidateCount: level.materializedCandidateCount,
+  };
+}
+
+function serializeMedleyExactPrefixUpperReplayProfile(
+  profile: MedleyExactPrefixUpperReplayProfile,
+): Record<string, unknown> {
+  const levels = profile.levels.map(sumMedleyExactPrefixUpperReplayLevel);
+  return {
+    algorithm: profile.algorithm,
+    songIndex: profile.songIndex,
+    hardUpperReplayEnabled: profile.hardUpperReplayEnabled,
+    checkedPrefixCountTotal: profile.levels.reduce((sum, level) => sum + level.checkedPrefixCount, 0),
+    relaxedImpliedCompletionCountTotal: profile.levels.reduce((
+      sum,
+      level,
+    ) => addCappedCount(sum, level.relaxedImpliedCompletionCount), 0),
+    hardUpperSkipablePrefixCountTotal: profile.levels.reduce((
+      sum,
+      level,
+    ) => sum + level.hardUpperSkipablePrefixCount, 0),
+    hardUpperSkipableImpliedCompletionCountTotal: profile.levels.reduce((
+      sum,
+      level,
+    ) => addCappedCount(sum, level.hardUpperSkipableImpliedCompletionCount), 0),
+    materializedCandidateCountTotal: profile.levels.reduce((sum, level) => (
+      sum + level.materializedCandidateCount
+    ), 0),
+    levels,
+  };
+}
+
+function summarizeMedleyExactPrefixUpperReplayProfiles(
+  profiles: MedleyExactPrefixUpperReplayProfile[],
+): MedleyExactPrefixUpperReplaySummary | null {
+  if (profiles.length === 0) {
+    return null;
+  }
+  const levels = Array.from(
+    { length: MEDLEY_EXACT_PREFIX_UPPER_REPLAY_LEVEL_COUNT },
+    (_, level) => createMedleyExactPrefixUpperReplayLevelProfile(level),
+  );
+  for (const profile of profiles) {
+    for (const level of profile.levels) {
+      const targetLevel = levels[level.level];
+      if (targetLevel) {
+        addMedleyExactPrefixUpperReplayLevel(targetLevel, level);
+      }
+    }
+  }
+  const sumLevelField = (
+    field: keyof Omit<MedleyExactPrefixUpperReplayLevelProfile, "level">,
+  ): number => levels.reduce((sum, level) => addCappedCount(sum, level[field] as number), 0);
+  return {
+    algorithm: "hhwx-prefix-upper-replay-v1",
+    configurationSummaryCount: 1,
+    generatorCount: profiles.length,
+    hardUpperReplayEnabled: profiles.some((profile) => profile.hardUpperReplayEnabled),
+    checkedPrefixCountTotal: sumLevelField("checkedPrefixCount"),
+    relaxedImpliedCompletionCountTotal: sumLevelField("relaxedImpliedCompletionCount"),
+    finiteSlotUpperCountTotal: sumLevelField("finiteSlotUpperCount"),
+    slotUpperPassCountTotal: sumLevelField("slotUpperPassCount"),
+    slotUpperRejectedCountTotal: sumLevelField("slotUpperRejectedCount"),
+    hardUpperCheckedCountTotal: sumLevelField("hardUpperCheckedCount"),
+    hardUpperFiniteCountTotal: sumLevelField("hardUpperFiniteCount"),
+    hardUpperSkipablePrefixCountTotal: sumLevelField("hardUpperSkipablePrefixCount"),
+    hardUpperSkipableImpliedCompletionCountTotal: sumLevelField("hardUpperSkipableImpliedCompletionCount"),
+    hardUpperRetainedPrefixCountTotal: sumLevelField("hardUpperRetainedPrefixCount"),
+    hardUpperUnknownCountTotal: sumLevelField("hardUpperUnknownCount"),
+    candidateEvaluationCountTotal: sumLevelField("candidateEvaluationCount"),
+    materializedCandidateCountTotal: sumLevelField("materializedCandidateCount"),
+    levels,
+    latestGenerators: profiles.map(serializeMedleyExactPrefixUpperReplayProfile),
+  };
+}
+
+function asMedleyExactPrefixUpperReplaySummary(
+  value: Record<string, unknown> | null | undefined,
+): MedleyExactPrefixUpperReplaySummary | null {
+  if (
+    !value
+    || value.algorithm !== "hhwx-prefix-upper-replay-v1"
+    || !Array.isArray(value.levels)
+  ) {
+    return null;
+  }
+  return value as MedleyExactPrefixUpperReplaySummary;
+}
+
+function mergeMedleyExactPrefixUpperReplaySummaries(
+  previous: Record<string, unknown> | null | undefined,
+  next: MedleyExactPrefixUpperReplaySummary | null,
+): MedleyExactPrefixUpperReplaySummary | null {
+  if (!next) {
+    return asMedleyExactPrefixUpperReplaySummary(previous);
+  }
+  const existing = asMedleyExactPrefixUpperReplaySummary(previous);
+  if (!existing) {
+    return next;
+  }
+  const levels = Array.from(
+    { length: MEDLEY_EXACT_PREFIX_UPPER_REPLAY_LEVEL_COUNT },
+    (_, level) => createMedleyExactPrefixUpperReplayLevelProfile(level),
+  );
+  for (const source of [existing, next]) {
+    for (const level of source.levels) {
+      const targetLevel = levels[level.level];
+      if (targetLevel) {
+        addMedleyExactPrefixUpperReplayLevel(targetLevel, level);
+      }
+    }
+  }
+  const sumLevelField = (
+    field: keyof Omit<MedleyExactPrefixUpperReplayLevelProfile, "level">,
+  ): number => levels.reduce((sum, level) => addCappedCount(sum, level[field] as number), 0);
+  return {
+    algorithm: "hhwx-prefix-upper-replay-v1",
+    configurationSummaryCount: existing.configurationSummaryCount + next.configurationSummaryCount,
+    generatorCount: existing.generatorCount + next.generatorCount,
+    hardUpperReplayEnabled: existing.hardUpperReplayEnabled || next.hardUpperReplayEnabled,
+    checkedPrefixCountTotal: sumLevelField("checkedPrefixCount"),
+    relaxedImpliedCompletionCountTotal: sumLevelField("relaxedImpliedCompletionCount"),
+    finiteSlotUpperCountTotal: sumLevelField("finiteSlotUpperCount"),
+    slotUpperPassCountTotal: sumLevelField("slotUpperPassCount"),
+    slotUpperRejectedCountTotal: sumLevelField("slotUpperRejectedCount"),
+    hardUpperCheckedCountTotal: sumLevelField("hardUpperCheckedCount"),
+    hardUpperFiniteCountTotal: sumLevelField("hardUpperFiniteCount"),
+    hardUpperSkipablePrefixCountTotal: sumLevelField("hardUpperSkipablePrefixCount"),
+    hardUpperSkipableImpliedCompletionCountTotal: sumLevelField("hardUpperSkipableImpliedCompletionCount"),
+    hardUpperRetainedPrefixCountTotal: sumLevelField("hardUpperRetainedPrefixCount"),
+    hardUpperUnknownCountTotal: sumLevelField("hardUpperUnknownCount"),
+    candidateEvaluationCountTotal: sumLevelField("candidateEvaluationCount"),
+    materializedCandidateCountTotal: sumLevelField("materializedCandidateCount"),
+    levels,
+    latestGenerators: next.latestGenerators,
+  };
+}
+
+function summarizeMedleyExactPrefixUpperReplayGenerators(
+  generators: MedleyExactSlotCandidateGenerator[],
+): MedleyExactPrefixUpperReplaySummary | null {
+  const profiles = generators
+    .map((generator) => generator.prefixUpperReplayProfile?.() ?? null)
+    .filter((profile): profile is MedleyExactPrefixUpperReplayProfile => profile !== null);
+  return summarizeMedleyExactPrefixUpperReplayProfiles(profiles);
 }
 
 type MedleyExactCandidatePairUpperResult = {
@@ -6009,6 +6611,8 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     debugExactCandidateRawJoinParity?: boolean;
     debugExactCandidateSignatureCensus?: boolean;
     debugExactCandidateUpperReplay?: boolean;
+    debugExactCandidatePrefixUpperReplay?: boolean;
+    debugExactCandidatePrefixHardUpperReplay?: boolean;
     debugExactCandidateDominanceReplay?: boolean;
     debugExactCandidateRawSolverInputCensus?: boolean;
     exactCandidateScoreCalculationCacheEntryLimit?: number | null;
@@ -6194,6 +6798,8 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     context.disableExactCandidateGlobalComplementCache === true,
     context.enableExactCandidateCompactGlobalComplementCache === true,
     context.enableExactCandidateThinResultRetention === true,
+    context.debugExactCandidatePrefixUpperReplay === true,
+    context.debugExactCandidatePrefixHardUpperReplay === true,
   ));
   const candidatesBySlot: MedleyTeamCandidate[][] = Array.from({ length: slots.length }, () => []);
   const rawCandidateMirror = context.debugExactCandidateRawMirror === true
@@ -6228,6 +6834,20 @@ export function searchMedleyConfigurationByExactCandidateJoin(
       generator.release();
     }
   };
+  const recordPrefixUpperReplaySummary = (): void => {
+    if (
+      context.debugExactCandidatePrefixUpperReplay !== true
+      && context.debugExactCandidatePrefixHardUpperReplay !== true
+    ) {
+      return;
+    }
+    const uniqueGenerators = [...new Set([...generators, ...candidateFillGenerators])];
+    const summary = summarizeMedleyExactPrefixUpperReplayGenerators(uniqueGenerators);
+    profiling.exactCandidateJoinPrefixUpperReplaySummary = mergeMedleyExactPrefixUpperReplaySummaries(
+      profiling.exactCandidateJoinPrefixUpperReplaySummary,
+      summary,
+    );
+  };
   const getObservedExactCandidateJoinUpperBound = (): number | null => {
     // An aborted exact join may still have pair-level proof information. Return
     // the tightest safe triple upper we observed so the caller can report a
@@ -6261,6 +6881,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     result: BandoriMedleyTeamSearchResult | null = null,
     observedUpperBound: number | null = getObservedExactCandidateJoinUpperBound(),
   ): MedleyExactCandidateJoinResult => {
+    recordPrefixUpperReplaySummary();
     releaseExactJoinWorkingSet();
     const resultWithPrefixSeed = applyPrefixSeedResult(result);
     const observedUpperBoundWithPrefixSeed = (
@@ -6277,6 +6898,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
   const buildProvedExactCandidateJoinResult = (
     result: BandoriMedleyTeamSearchResult | null = null,
   ): MedleyExactCandidateJoinResult => {
+    recordPrefixUpperReplaySummary();
     releaseExactJoinWorkingSet();
     return { proved: true, result: applyPrefixSeedResult(result) };
   };
@@ -6913,6 +7535,8 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     context.disableExactCandidateGlobalComplementCache === true,
     context.enableExactCandidateCompactGlobalComplementCache === true,
     context.enableExactCandidateThinResultRetention === true,
+    context.debugExactCandidatePrefixUpperReplay === true,
+    context.debugExactCandidatePrefixHardUpperReplay === true,
   ));
   const getCandidateFillGenerator = (slotIndex: number, scoreCutoff: number): MedleyExactSlotCandidateGenerator => (
     generators[slotIndex].canReuseForScoreCutoff(scoreCutoff)
