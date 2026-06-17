@@ -8261,6 +8261,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     profiling.exactCandidateJoinLastAbortOtherUpper = null;
     profiling.exactCandidateJoinLastAbortObservedUpperBound = null;
     profiling.exactCandidateJoinLastAbortRemainingMs = null;
+    profiling.exactCandidateJoinRawSolverInputCensus = null;
     profiling.exactCandidateJoinLastGuardedExtensionSlotIndex = null;
     profiling.exactCandidateJoinLastGuardedExtensionLimit = null;
     profiling.exactCandidateJoinLastGuardedExtensionRemainingMs = null;
@@ -8513,10 +8514,20 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     }
     return Number.isFinite(observedUpperBound) ? observedUpperBound : null;
   };
+  const recordRawSolverInputCensus = (): void => {
+    if (context.debugExactCandidateRawSolverInputCensus !== true) {
+      return;
+    }
+    profiling.exactCandidateJoinRawSolverInputCensus = buildMedleyExactRawSolverInputCensusProfile(
+      slots,
+      candidatesBySlot,
+    );
+  };
   const buildUnprovedExactCandidateJoinResult = (
     result: BandoriMedleyTeamSearchResult | null = null,
     observedUpperBound: number | null = getObservedExactCandidateJoinUpperBound(),
   ): MedleyExactCandidateJoinResult => {
+    recordRawSolverInputCensus();
     recordPrefixUpperReplaySummary();
     releaseExactJoinWorkingSet();
     const resultWithPrefixSeed = applyPrefixSeedResult(result);
@@ -8534,6 +8545,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
   const buildProvedExactCandidateJoinResult = (
     result: BandoriMedleyTeamSearchResult | null = null,
   ): MedleyExactCandidateJoinResult => {
+    recordRawSolverInputCensus();
     recordPrefixUpperReplaySummary();
     releaseExactJoinWorkingSet();
     return { proved: true, result: applyPrefixSeedResult(result) };

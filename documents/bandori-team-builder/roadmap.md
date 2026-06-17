@@ -94,6 +94,8 @@ Baseline and gate artifacts retained:
 | `low-memory-polish-hhwx-2026-06-17T19-03-07-417Z.json` | `P02:260` combined anchor-frontier precheck skip-reason smoke | bounded gap `382812`, score `9376984`, max `9412868`, peak `2912 MiB`; combined blocker `card-count+other-slot-count+other-slot-total` with abort frontier gap only `17139` |
 | `low-memory-polish-hhwx-2026-06-17T19-11-42-977Z.json` | `P02:260` anchor-frontier precheck numeric diagnostic smoke | bounded gap `382812`, score `9376984`, max `9412868`, peak `2913 MiB`; precheck records card count `1747/1600`, other-slot counts `[212825, 134977]` vs per-slot guard `80000`, total `347802/120000`, frontier gap `17139/25000`, remaining `159676/90000ms` |
 | `low-memory-polish-hhwx-2026-06-17T19-16-21-494Z.json` | `P02:260` opt-in no-op anchor cheap-upper probe despite precheck blockers | bounded gap `382812`, score `9376984`, max `9412868`, peak `2953 MiB`; cheap upper ran over other-slot pools `[212825, 134977]`, processed `2906` anchors, timeboxed at `8003ms`, residual gap `205488` |
+| `low-memory-polish-hhwx-2026-06-17T19-21-11-794Z.json` | `P02:260` raw solver input census with heavy memory attribution still enabled | failed with exit `134` / JS heap OOM after `181616ms`; raw census must stay decoupled from memory attribution |
+| `low-memory-polish-hhwx-2026-06-17T19-29-52-358Z.json` | `P02:260` lightweight raw solver input census | bounded gap `382812`, score `9376984`, max `9412868`, peak `2962 MiB`; `747802` candidates estimate to `28.53 MiB` raw rows, `48.01 MiB` final join input, `52.27 MiB` all-slot conflict index |
 
 Use the pressure validation environment for early-pruning gates:
 
@@ -195,6 +197,15 @@ P02 candidate-fill frontier closure:
 - therefore the main blocker is not the frontier gap itself. It is that P02 exceeds the anchor proof card-count guard slightly and the other two slot candidate pools exceed the current proof implementation much more substantially;
 - an opt-in no-op cheap-upper probe confirms that simply bypassing the precheck is not enough: it can run without OOM, but over `[212825, 134977]` other-slot pools it processed only `2906` anchors before the `8000ms` timebox and left residual gap `205488`;
 - next retained direction: either reduce/compact the other-slot candidate resident set before anchor proof, or design a different anchor/frontier proof variant that works over raw-index candidates and large other-slot pools. Prefix lookahead alone cannot solve this because it does not reduce the filled candidate caps, and current cheap-upper scaling is too weak.
+
+P02 raw storage census:
+
+- artifacts: failed heavy run `low-memory-polish-hhwx-2026-06-17T19-21-11-794Z.json` and retained lightweight run `low-memory-polish-hhwx-2026-06-17T19-29-52-358Z.json`;
+- the original raw solver census flag was coupled to heavy memory attribution and OOMed on P02; the benchmark wrapper now leaves raw census lightweight by default, and `HHWX_LOW_MEMORY_TRACE=1` can still be layered on explicitly when wanted;
+- lightweight P02 census completed with unchanged result fields: bounded gap `382812`, score `9376984`, max score `9412868`;
+- current rich candidate resident path holds `747802` candidates across slots `[400000, 212825, 134977]`;
+- estimated typed-array footprint is much smaller than the observed multi-GiB process peak: raw rows `28.53 MiB`, final join input `48.01 MiB`, all-slot conflict index `52.27 MiB`;
+- current conclusion: raw-index/typed-array resident storage is now the highest-confidence route to material memory reduction. Early pruning remains valuable for proof closure, but the P02 memory class cannot be solved by prefix skip counts alone while candidate fill still reaches the same caps.
 
 The JSON files above contain `isolated.*Path` fields for detailed per-row diagnostics. Those referenced files are part of the retained baseline set.
 
@@ -316,7 +327,8 @@ Early-pruning success targets:
 5. Add a frontier proof / storage diagnostic for P02:
    - current numeric blocker measurement is retained in `2026-06-17T19-11-42`;
    - no-op cheap-upper probe is retained in `2026-06-17T19-16-21` and shows the current proof timeboxes without closing P02;
-   - next prototype should be raw-index/count-capped candidate storage or a fundamentally cheaper frontier proof, not raising existing proof guards;
+   - lightweight raw census is retained in `2026-06-17T19-29-52` and shows a `48-52 MiB` raw final-join/input footprint for the current P02 candidate pool;
+   - next prototype should be raw-index candidate resident storage or a fundamentally cheaper frontier proof over raw-index candidates, not raising existing proof guards;
    - do not raise guard constants as a default change without memory evidence.
 6. Tighten the prefix proof before broader pruning:
    - avoid generated-pair-only comparison on level-4 replay unless explicitly requested;

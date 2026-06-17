@@ -222,7 +222,6 @@ function hhwxOptimizationJson() {
     optimization.debugExactCandidateDominanceReplay = true;
   }
   if (process.env.HHWX_LOW_MEMORY_RAW_SOLVER_INPUT_CENSUS === "1") {
-    optimization.debugExactCandidateJoinMemoryAttribution = true;
     optimization.debugExactCandidateRawSolverInputCensus = true;
   }
   if (process.env.HHWX_LOW_MEMORY_SCORE_CALC_CACHE_LIMIT) {
@@ -471,6 +470,13 @@ function patchHhwxBenchmarkScoreMetrics() {
         + "    exactCandidateJoinPrefixUpperReplaySummary: profiling.exactCandidateJoinPrefixUpperReplaySummary ?? null,\n",
     );
   }
+  if (!patched.includes("exactCandidateJoinRawSolverInputCensus: profiling.exactCandidateJoinRawSolverInputCensus ?? null")) {
+    patched = patched.replace(
+      /(exactCandidateJoinMemorySnapshots: profiling\.exactCandidateJoinMemorySnapshots \?\? null,\r?\n)/,
+      "$1"
+        + "    exactCandidateJoinRawSolverInputCensus: profiling.exactCandidateJoinRawSolverInputCensus ?? null,\n",
+    );
+  }
   if (!patched.includes("exactCandidateJoinLastAnchorFrontierPrecheckSlotIndex: profiling.exactCandidateJoinLastAnchorFrontierPrecheckSlotIndex ?? null")) {
     patched = patched.replace(
       /(exactCandidateJoinLastAnchorFrontierProofHighPairRecordUpperCount: \(\r?\n\s+profiling\.exactCandidateJoinLastAnchorFrontierProofHighPairRecordUpperCount \?\? null\r?\n\s+\),\r?\n)/,
@@ -504,6 +510,7 @@ function patchHhwxBenchmarkScoreMetrics() {
     || !patched.includes("maxScoreCandidate: searchResult.maxScoreCandidate &&")
     || !patched.includes("exactCandidateJoinMemorySnapshots: profiling.exactCandidateJoinMemorySnapshots ?? null")
     || !patched.includes("exactCandidateJoinPrefixUpperReplaySummary: profiling.exactCandidateJoinPrefixUpperReplaySummary ?? null")
+    || !patched.includes("exactCandidateJoinRawSolverInputCensus: profiling.exactCandidateJoinRawSolverInputCensus ?? null")
     || !patched.includes("exactCandidateJoinLastAnchorFrontierPrecheckSlotIndex: profiling.exactCandidateJoinLastAnchorFrontierPrecheckSlotIndex ?? null")
   ) {
     throw new Error(`Could not patch score metrics into ${hhwxBenchmarkPath}`);
