@@ -51,6 +51,8 @@ function printUsage() {
     "  HHWX_LOW_MEMORY_PREFIX_UPPER_REPLAY=1      include lightweight prefix upper replay summary",
     "  HHWX_LOW_MEMORY_PREFIX_HARD_UPPER_REPLAY=1 include lightweight cross-slot prefix hard-upper replay summary",
     "  HHWX_LOW_MEMORY_PREFIX_OTHER_UPPER_SOURCE_REPLAY=1 include opt-in other-slot upper source diagnostics",
+    "  HHWX_LOW_MEMORY_PREFIX_CAPACITY_BATCH_REPLAY=1 include opt-in level-4 capacity replay diagnostics",
+    "  HHWX_LOW_MEMORY_PREFIX_CAPACITY_LEVEL3_REPLAY=1 include opt-in level-3 capacity replay diagnostics",
     "  HHWX_LOW_MEMORY_PREFIX_OTHER_UPPER_SOURCE_MAX_CHECKS=2048 cap expensive source diagnostic checks per generator",
     "  HHWX_LOW_MEMORY_PREFIX_OTHER_UPPER_SOURCE_MAX_MARGIN=10000 cap source diagnostic to near-cutoff leaves",
     "  HHWX_LOW_MEMORY_CAPACITY_SOURCE_LEAF_PRUNING=1 enable narrow capacity-source leaf pruning",
@@ -174,6 +176,10 @@ function hhwxOptimizationJson() {
     optimization.debugExactCandidatePrefixUpperReplay = true;
     optimization.debugExactCandidatePrefixCapacityBatchReplay = true;
   }
+  if (process.env.HHWX_LOW_MEMORY_PREFIX_CAPACITY_LEVEL3_REPLAY === "1") {
+    optimization.debugExactCandidatePrefixUpperReplay = true;
+    optimization.debugExactCandidatePrefixCapacityLevel3Replay = true;
+  }
   if (process.env.HHWX_LOW_MEMORY_CAPACITY_SOURCE_LEAF_PRUNING === "1") {
     optimization.debugExactCandidatePrefixUpperReplay = true;
     optimization.debugExactCandidatePrefixOtherUpperSourceReplay = true;
@@ -182,6 +188,7 @@ function hhwxOptimizationJson() {
   if (
     process.env.HHWX_LOW_MEMORY_PREFIX_OTHER_UPPER_SOURCE_REPLAY === "1"
     || process.env.HHWX_LOW_MEMORY_PREFIX_CAPACITY_BATCH_REPLAY === "1"
+    || process.env.HHWX_LOW_MEMORY_PREFIX_CAPACITY_LEVEL3_REPLAY === "1"
     || process.env.HHWX_LOW_MEMORY_CAPACITY_SOURCE_LEAF_PRUNING === "1"
   ) {
     const parsedMaxChecks = Number(process.env.HHWX_LOW_MEMORY_PREFIX_OTHER_UPPER_SOURCE_MAX_CHECKS);

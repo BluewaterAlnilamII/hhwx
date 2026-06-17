@@ -106,6 +106,7 @@ export type BandoriMedleySearchOptimizationOptions = {
   debugExactCandidatePrefixOtherUpperSourceReplayMaxChecks?: number;
   debugExactCandidatePrefixOtherUpperSourceReplayMaxMargin?: number;
   debugExactCandidatePrefixCapacityBatchReplay?: boolean;
+  debugExactCandidatePrefixCapacityLevel3Replay?: boolean;
   enableExactCandidateCapacitySourceLeafPruning?: boolean;
   debugExactCandidateDominanceReplay?: boolean;
   debugExactCandidateRawSolverInputCensus?: boolean;
@@ -776,6 +777,7 @@ export type MedleyExactSlotCandidateSearchNode = {
   selectedPower: number;
   candidate: MedleyTeamCandidate | null;
   prefixCapacityBatchReplayWouldSkip?: boolean;
+  prefixCapacityBatchReplayLevel?: number;
   prefixCapacityBatchReplayPrefixUpper?: number;
   prefixCapacityBatchReplayBestSafeOtherUpper?: number;
   prefixCapacityBatchReplayProofCutoffScore?: number;

@@ -216,6 +216,13 @@ type MedleyExactPrefixOtherUpperSourceReplayProfile = {
   bestSafeImprovedCount: number;
   bestSafeWouldSkipCount: number;
   bestSafeReplayViolationCount: number;
+  level3CheckedCount: number;
+  level3EligibleCount: number;
+  level3OverMarginSkippedCount: number;
+  level3BudgetSkippedCount: number;
+  level3BestSafeWouldSkipCount: number;
+  level3BestSafeWouldSkipImpliedCompletionCount: number;
+  level3BestSafeReplayViolationCount: number;
   level4CheckedCount: number;
   level4EligibleCount: number;
   level4OverMarginSkippedCount: number;
@@ -456,6 +463,13 @@ function createMedleyExactPrefixOtherUpperSourceReplayProfile(
     bestSafeImprovedCount: 0,
     bestSafeWouldSkipCount: 0,
     bestSafeReplayViolationCount: 0,
+    level3CheckedCount: 0,
+    level3EligibleCount: 0,
+    level3OverMarginSkippedCount: 0,
+    level3BudgetSkippedCount: 0,
+    level3BestSafeWouldSkipCount: 0,
+    level3BestSafeWouldSkipImpliedCompletionCount: 0,
+    level3BestSafeReplayViolationCount: 0,
     level4CheckedCount: 0,
     level4EligibleCount: 0,
     level4OverMarginSkippedCount: 0,
@@ -527,6 +541,28 @@ function addMedleyExactPrefixOtherUpperSourceReplayProfile(
   target.bestSafeReplayViolationCount = addCappedCount(
     target.bestSafeReplayViolationCount,
     source.bestSafeReplayViolationCount,
+  );
+  target.level3CheckedCount = addCappedCount(target.level3CheckedCount, source.level3CheckedCount ?? 0);
+  target.level3EligibleCount = addCappedCount(target.level3EligibleCount, source.level3EligibleCount ?? 0);
+  target.level3OverMarginSkippedCount = addCappedCount(
+    target.level3OverMarginSkippedCount,
+    source.level3OverMarginSkippedCount ?? 0,
+  );
+  target.level3BudgetSkippedCount = addCappedCount(
+    target.level3BudgetSkippedCount,
+    source.level3BudgetSkippedCount ?? 0,
+  );
+  target.level3BestSafeWouldSkipCount = addCappedCount(
+    target.level3BestSafeWouldSkipCount,
+    source.level3BestSafeWouldSkipCount ?? 0,
+  );
+  target.level3BestSafeWouldSkipImpliedCompletionCount = addCappedCount(
+    target.level3BestSafeWouldSkipImpliedCompletionCount,
+    source.level3BestSafeWouldSkipImpliedCompletionCount ?? 0,
+  );
+  target.level3BestSafeReplayViolationCount = addCappedCount(
+    target.level3BestSafeReplayViolationCount,
+    source.level3BestSafeReplayViolationCount ?? 0,
   );
   target.level4CheckedCount = addCappedCount(target.level4CheckedCount, source.level4CheckedCount ?? 0);
   target.level4EligibleCount = addCappedCount(target.level4EligibleCount, source.level4EligibleCount ?? 0);
@@ -608,6 +644,13 @@ function serializeMedleyExactPrefixOtherUpperSourceReplayProfile(
     bestSafeImprovedCount: profile.bestSafeImprovedCount,
     bestSafeWouldSkipCount: profile.bestSafeWouldSkipCount,
     bestSafeReplayViolationCount: profile.bestSafeReplayViolationCount,
+    level3CheckedCount: profile.level3CheckedCount,
+    level3EligibleCount: profile.level3EligibleCount,
+    level3OverMarginSkippedCount: profile.level3OverMarginSkippedCount,
+    level3BudgetSkippedCount: profile.level3BudgetSkippedCount,
+    level3BestSafeWouldSkipCount: profile.level3BestSafeWouldSkipCount,
+    level3BestSafeWouldSkipImpliedCompletionCount: profile.level3BestSafeWouldSkipImpliedCompletionCount,
+    level3BestSafeReplayViolationCount: profile.level3BestSafeReplayViolationCount,
     level4CheckedCount: profile.level4CheckedCount,
     level4EligibleCount: profile.level4EligibleCount,
     level4OverMarginSkippedCount: profile.level4OverMarginSkippedCount,
@@ -2987,6 +3030,7 @@ export function createMedleyExactSlotCandidateGenerator(
   enablePrefixHardUpperReplay = false,
   enablePrefixOtherUpperSourceReplay = false,
   enablePrefixCapacityBatchReplay = false,
+  enablePrefixCapacityLevel3Replay = false,
   enableCapacitySourceLeafPruning = false,
   prefixOtherUpperSourceReplayMaxChecks = MEDLEY_EXACT_PREFIX_OTHER_UPPER_SOURCE_REPLAY_DEFAULT_MAX_CHECKS,
   prefixOtherUpperSourceReplayMaxMargin = MEDLEY_EXACT_PREFIX_OTHER_UPPER_SOURCE_REPLAY_DEFAULT_MAX_MARGIN,
@@ -3036,12 +3080,18 @@ export function createMedleyExactSlotCandidateGenerator(
     || enablePrefixHardUpperReplay
     || enablePrefixOtherUpperSourceReplay
     || enablePrefixCapacityBatchReplay
+    || enablePrefixCapacityLevel3Replay
     || enableCapacitySourceLeafPruning
   )
     ? createMedleyExactPrefixUpperReplayProfile(
       slot,
       enablePrefixHardUpperReplay,
-      enablePrefixOtherUpperSourceReplay || enablePrefixCapacityBatchReplay || enableCapacitySourceLeafPruning,
+      (
+        enablePrefixOtherUpperSourceReplay
+        || enablePrefixCapacityBatchReplay
+        || enablePrefixCapacityLevel3Replay
+        || enableCapacitySourceLeafPruning
+      ),
       finitePrefixOtherUpperSourceReplayMaxChecks,
       finitePrefixOtherUpperSourceReplayMaxMargin,
     )
@@ -3076,6 +3126,7 @@ export function createMedleyExactSlotCandidateGenerator(
     };
     if (input.prefixCapacityBatchReplayDecision?.wouldSkip === true) {
       node.prefixCapacityBatchReplayWouldSkip = true;
+      node.prefixCapacityBatchReplayLevel = input.prefixCapacityBatchReplayDecision.level;
       node.prefixCapacityBatchReplayPrefixUpper = input.prefixCapacityBatchReplayDecision.prefixUpper;
       node.prefixCapacityBatchReplayBestSafeOtherUpper = (
         input.prefixCapacityBatchReplayDecision.bestSafeOtherUpper
@@ -3123,7 +3174,7 @@ export function createMedleyExactSlotCandidateGenerator(
     }
     return {
       wouldSkip: true,
-      level: MEDLEY_TEAM_SIZE - 1,
+      level: node.prefixCapacityBatchReplayLevel ?? MEDLEY_TEAM_SIZE - 1,
       prefixUpper: node.prefixCapacityBatchReplayPrefixUpper,
       bestSafeOtherUpper: node.prefixCapacityBatchReplayBestSafeOtherUpper,
       proofCutoffScore: node.prefixCapacityBatchReplayProofCutoffScore,
@@ -3537,11 +3588,15 @@ export function createMedleyExactSlotCandidateGenerator(
   ): MedleyExactPrefixOtherUpperSourceReplayDecision | null => {
     const sourceProfile = prefixUpperReplayProfile?.otherUpperSourceReplay;
     const selectedCardCount = selectedCards.length;
+    const isLevel3Replay = selectedCardCount === MEDLEY_TEAM_SIZE - 2;
     const isLevel4Replay = selectedCardCount === MEDLEY_TEAM_SIZE - 1;
-    if (!sourceProfile || (selectedCardCount !== MEDLEY_TEAM_SIZE && !isLevel4Replay)) {
+    if (!sourceProfile || (selectedCardCount !== MEDLEY_TEAM_SIZE && !isLevel3Replay && !isLevel4Replay)) {
       return null;
     }
     sourceProfile.checkedCount += 1;
+    if (isLevel3Replay) {
+      sourceProfile.level3CheckedCount += 1;
+    }
     if (isLevel4Replay) {
       sourceProfile.level4CheckedCount += 1;
     }
@@ -3559,6 +3614,9 @@ export function createMedleyExactSlotCandidateGenerator(
     }
     if (currentMargin > sourceProfile.maxMargin) {
       sourceProfile.overMarginSkippedCount += 1;
+      if (isLevel3Replay) {
+        sourceProfile.level3OverMarginSkippedCount += 1;
+      }
       if (isLevel4Replay) {
         sourceProfile.level4OverMarginSkippedCount += 1;
       }
@@ -3566,12 +3624,18 @@ export function createMedleyExactSlotCandidateGenerator(
     }
     if (sourceProfile.eligibleCount >= sourceProfile.maxChecks) {
       sourceProfile.budgetSkippedCount += 1;
+      if (isLevel3Replay) {
+        sourceProfile.level3BudgetSkippedCount += 1;
+      }
       if (isLevel4Replay) {
         sourceProfile.level4BudgetSkippedCount += 1;
       }
       return null;
     }
     sourceProfile.eligibleCount += 1;
+    if (isLevel3Replay) {
+      sourceProfile.level3EligibleCount += 1;
+    }
     if (isLevel4Replay) {
       sourceProfile.level4EligibleCount += 1;
     }
@@ -3589,7 +3653,7 @@ export function createMedleyExactSlotCandidateGenerator(
       sourceProfile.currentPairUnseenSourceCount += 1;
     }
     const minimumRelevantOtherScore = globalPruning.scoreCutoff - prefixUpperBound;
-    const generatedPairUpper = isLevel4Replay
+    const generatedPairUpper = isLevel3Replay || isLevel4Replay
       ? Number.NEGATIVE_INFINITY
       : estimateGeneratedPairOnlyComplementUpperBound(
         selectedCardIds,
@@ -3670,6 +3734,13 @@ export function createMedleyExactSlotCandidateGenerator(
     }
     if (bestSafeWouldSkip) {
       sourceProfile.bestSafeWouldSkipCount += 1;
+      if (isLevel3Replay) {
+        sourceProfile.level3BestSafeWouldSkipCount += 1;
+        sourceProfile.level3BestSafeWouldSkipImpliedCompletionCount = addCappedCount(
+          sourceProfile.level3BestSafeWouldSkipImpliedCompletionCount,
+          impliedCompletionCount,
+        );
+      }
       if (isLevel4Replay) {
         sourceProfile.level4BestSafeWouldSkipCount += 1;
         sourceProfile.level4BestSafeWouldSkipImpliedCompletionCount = addCappedCount(
@@ -3733,6 +3804,9 @@ export function createMedleyExactSlotCandidateGenerator(
       return;
     }
     sourceProfile.bestSafeReplayViolationCount += 1;
+    if (decision.level === MEDLEY_TEAM_SIZE - 2) {
+      sourceProfile.level3BestSafeReplayViolationCount += 1;
+    }
     if (decision.level === MEDLEY_TEAM_SIZE - 1) {
       sourceProfile.level4BestSafeReplayViolationCount += 1;
     }
@@ -4171,7 +4245,30 @@ export function createMedleyExactSlotCandidateGenerator(
         );
       }
       let passesPairGlobalPruning = true;
-      let prefixCapacityBatchReplayDecision: MedleyExactPrefixOtherUpperSourceReplayDecision | null = null;
+      let prefixCapacityBatchReplayDecision = getPrefixCapacityBatchReplayDecisionForNode(node);
+      const pairUnseenUpperBound = globalPruning?.pairUnseenUpperBound;
+      if (
+        enablePrefixCapacityLevel3Replay
+        && prefixUpperReplayProfile
+        && globalPruning
+        && Number.isFinite(upperBound)
+        && upperBound >= scoreCutoff
+        && nextSelectedCards.length === MEDLEY_TEAM_SIZE - 2
+        && pairUnseenUpperBound !== undefined
+        && Number.isFinite(pairUnseenUpperBound)
+      ) {
+        const nextDecision = recordPrefixOtherUpperSourceReplay(
+          nextSelectedCards,
+          nextStartIndex,
+          upperBound,
+          upperBound + pairUnseenUpperBound,
+          globalPruning,
+          false,
+        );
+        if (nextDecision?.wouldSkip === true) {
+          prefixCapacityBatchReplayDecision = nextDecision;
+        }
+      }
       if (
         Number.isFinite(upperBound)
         && upperBound >= scoreCutoff
@@ -4200,7 +4297,7 @@ export function createMedleyExactSlotCandidateGenerator(
           && pairGlobalUpperBound !== null
           && Number.isFinite(pairGlobalUpperBound)
         ) {
-          prefixCapacityBatchReplayDecision = recordPrefixOtherUpperSourceReplay(
+          const nextDecision = recordPrefixOtherUpperSourceReplay(
             nextSelectedCards,
             nextStartIndex,
             upperBound,
@@ -4208,6 +4305,9 @@ export function createMedleyExactSlotCandidateGenerator(
             globalPruning,
             false,
           );
+          if (nextDecision?.wouldSkip === true) {
+            prefixCapacityBatchReplayDecision = nextDecision;
+          }
         }
         passesPairGlobalPruning = pairGlobalUpperBound === null
           || upperBound + pairGlobalUpperBound >= (globalPruning?.scoreCutoff ?? Number.NEGATIVE_INFINITY);
@@ -7649,6 +7749,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     debugExactCandidatePrefixOtherUpperSourceReplayMaxChecks?: number;
     debugExactCandidatePrefixOtherUpperSourceReplayMaxMargin?: number;
     debugExactCandidatePrefixCapacityBatchReplay?: boolean;
+    debugExactCandidatePrefixCapacityLevel3Replay?: boolean;
     enableExactCandidateCapacitySourceLeafPruning?: boolean;
     debugExactCandidateDominanceReplay?: boolean;
     debugExactCandidateRawSolverInputCensus?: boolean;
@@ -7839,6 +7940,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     context.debugExactCandidatePrefixHardUpperReplay === true,
     context.debugExactCandidatePrefixOtherUpperSourceReplay === true,
     context.debugExactCandidatePrefixCapacityBatchReplay === true,
+    context.debugExactCandidatePrefixCapacityLevel3Replay === true,
     context.enableExactCandidateCapacitySourceLeafPruning === true,
     context.debugExactCandidatePrefixOtherUpperSourceReplayMaxChecks,
     context.debugExactCandidatePrefixOtherUpperSourceReplayMaxMargin,
@@ -8582,6 +8684,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     context.debugExactCandidatePrefixHardUpperReplay === true,
     context.debugExactCandidatePrefixOtherUpperSourceReplay === true,
     context.debugExactCandidatePrefixCapacityBatchReplay === true,
+    context.debugExactCandidatePrefixCapacityLevel3Replay === true,
     context.enableExactCandidateCapacitySourceLeafPruning === true,
     context.debugExactCandidatePrefixOtherUpperSourceReplayMaxChecks,
     context.debugExactCandidatePrefixOtherUpperSourceReplayMaxMargin,
