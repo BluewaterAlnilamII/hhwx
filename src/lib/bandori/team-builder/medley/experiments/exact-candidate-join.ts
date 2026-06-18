@@ -144,6 +144,9 @@ const MEDLEY_EXACT_RAW_PAIR_FRONTIER_CENSUS_SAMPLE_SCAN_LIMIT = 100_000;
 const MEDLEY_EXACT_RAW_PAIR_FRONTIER_CENSUS_DEEP_SCAN_LIMIT = 5_000_000;
 const MEDLEY_EXACT_RAW_PAIR_FRONTIER_CENSUS_MAX_THRESHOLDS = 12;
 const MEDLEY_EXACT_RAW_TRIPLE_CONFLICT_SPLIT_TIMEBOX_MS = 8_000;
+const MEDLEY_EXACT_RAW_PAIR_WITNESS_COVER_TIMEBOX_MS = 3_000;
+const MEDLEY_EXACT_RAW_PAIR_WITNESS_COVER_PAIR_SPLIT_STATE_BUDGET = 2_048;
+const MEDLEY_EXACT_RAW_PAIR_WITNESS_COVER_MASK_SPLIT_LIMIT = 32;
 const MEDLEY_EXACT_RAW_PAIR_COMPLEMENT_PARITY_MAX_CANDIDATE_TOTAL = 60_000;
 const MEDLEY_EXACT_RAW_PAIR_COMPLEMENT_PARITY_BANNED_SAMPLE_LIMIT = 4;
 const MEDLEY_EXACT_RAW_PAIR_UPPER_SCAN_PARITY_MAX_CANDIDATE_TOTAL = 60_000;
@@ -3023,6 +3026,318 @@ function buildMedleyExactRawAnchorPairCompatibilityProfile(
   };
 }
 
+function buildMedleyExactRawPairWitnessAnchorCoverProfile(
+  anchorSlot: MedleyExactRawCandidatePoolSlot,
+  leftSlot: MedleyExactRawCandidatePoolSlot,
+  rightSlot: MedleyExactRawCandidatePoolSlot,
+  containingLeftBitsByCardId: Map<number, Uint32Array>,
+  containingRightBitsByCardId: Map<number, Uint32Array>,
+  pairCardIds: readonly number[],
+  pairScore: number,
+  incumbentScore: number,
+  deadlineAt: number,
+): Record<string, unknown> {
+  const startedAt = performance.now();
+  const localDeadlineAt = Math.min(
+    deadlineAt,
+    startedAt + MEDLEY_EXACT_RAW_PAIR_WITNESS_COVER_TIMEBOX_MS,
+  );
+  const pairCardIndexById = new Map(pairCardIds.map((cardId, index) => [cardId, index]));
+  const groupCounts = new Int32Array(pairCardIds.length);
+  const groupMaxAnchorScores = new Int32Array(pairCardIds.length);
+  const groupFirstAnchorIndices = new Int32Array(pairCardIds.length);
+  groupMaxAnchorScores.fill(Number.MIN_SAFE_INTEGER);
+  groupFirstAnchorIndices.fill(-1);
+  const maskGroupsByMask = new Map<number, {
+    mask: number;
+    anchorCount: number;
+    maxAnchorScore: number;
+    firstAnchorIndex: number;
+  }>();
+  let relevantAnchorCount = 0;
+
+  for (let anchorIndex = 0; anchorIndex < anchorSlot.length; anchorIndex += 1) {
+    const anchorScore = anchorSlot.scores[anchorIndex];
+    if (anchorScore + pairScore <= incumbentScore) {
+      break;
+    }
+    relevantAnchorCount += 1;
+    const anchorCardIds = getMedleyExactRawCandidateCardIds(anchorSlot, anchorIndex);
+    let mask = 0;
+    for (const cardId of anchorCardIds) {
+      const groupIndex = pairCardIndexById.get(cardId);
+      if (groupIndex === undefined) {
+        continue;
+      }
+      mask |= 1 << groupIndex;
+      groupCounts[groupIndex] += 1;
+      if (anchorScore > groupMaxAnchorScores[groupIndex]) {
+        groupMaxAnchorScores[groupIndex] = anchorScore;
+        groupFirstAnchorIndices[groupIndex] = anchorIndex;
+      }
+    }
+    if (mask !== 0) {
+      const maskGroup = maskGroupsByMask.get(mask);
+      if (!maskGroup) {
+        maskGroupsByMask.set(mask, {
+          mask,
+          anchorCount: 1,
+          maxAnchorScore: anchorScore,
+          firstAnchorIndex: anchorIndex,
+        });
+      } else {
+        maskGroup.anchorCount += 1;
+        if (anchorScore > maskGroup.maxAnchorScore) {
+          maskGroup.maxAnchorScore = anchorScore;
+          maskGroup.firstAnchorIndex = anchorIndex;
+        }
+      }
+    }
+  }
+
+  const safeCardIds = new Set<number>();
+  let pairSplitStateCountTotal = 0;
+  let pairSplitCompletedCount = 0;
+  let pairSplitTimedOutCount = 0;
+  let timedOut = false;
+  let stoppedByBudget = false;
+  const groups = pairCardIds.map((cardId, groupIndex) => {
+    if (groupCounts[groupIndex] <= 0) {
+      return {
+        cardId,
+        anchorCount: 0,
+        maxAnchorScore: null,
+        firstAnchorIndex: null,
+        pairUpperExcludingCard: null,
+        pairSplitTimedOut: null,
+        pairSplitAbortReason: null,
+        pairSplitStateCount: null,
+        totalUpper: null,
+        gap: null,
+        safe: true,
+      };
+    }
+    if (timedOut || stoppedByBudget || performance.now() >= localDeadlineAt) {
+      timedOut = true;
+      return {
+        cardId,
+        anchorCount: groupCounts[groupIndex],
+        maxAnchorScore: groupMaxAnchorScores[groupIndex],
+        firstAnchorIndex: groupFirstAnchorIndices[groupIndex],
+        pairUpperExcludingCard: null,
+        pairSplitTimedOut: true,
+        pairSplitAbortReason: stoppedByBudget ? "previous-budget-stop" : "timebox",
+        pairSplitStateCount: null,
+        totalUpper: null,
+        gap: null,
+        safe: false,
+      };
+    }
+    const pairSplit = estimateGeneratedMedleyExactRawCandidatePairConflictSplitUpper(
+      leftSlot,
+      rightSlot,
+      containingLeftBitsByCardId,
+      containingRightBitsByCardId,
+      [cardId],
+      localDeadlineAt,
+      MEDLEY_EXACT_RAW_PAIR_WITNESS_COVER_PAIR_SPLIT_STATE_BUDGET,
+    );
+    pairSplitStateCountTotal = addCappedCount(pairSplitStateCountTotal, pairSplit.stateCount);
+    if (pairSplit.timedOut) {
+      pairSplitTimedOutCount += 1;
+      timedOut = true;
+      if (pairSplit.abortReason === "state-budget") {
+        stoppedByBudget = true;
+      }
+    } else {
+      pairSplitCompletedCount += 1;
+    }
+    const pairUpperExcludingCard = !pairSplit.timedOut
+      && (Number.isFinite(pairSplit.upperBound) || pairSplit.upperBound === Number.NEGATIVE_INFINITY)
+      ? pairSplit.upperBound
+      : null;
+    const totalUpper = pairUpperExcludingCard !== null
+      ? groupMaxAnchorScores[groupIndex] + pairUpperExcludingCard
+      : null;
+    const safe = totalUpper !== null && totalUpper <= incumbentScore;
+    if (safe) {
+      safeCardIds.add(cardId);
+    }
+    return {
+      cardId,
+      anchorCount: groupCounts[groupIndex],
+      maxAnchorScore: groupMaxAnchorScores[groupIndex],
+      firstAnchorIndex: groupFirstAnchorIndices[groupIndex],
+      pairUpperExcludingCard,
+      pairSplitTimedOut: pairSplit.timedOut,
+      pairSplitAbortReason: pairSplit.abortReason,
+      pairSplitStateCount: pairSplit.stateCount,
+      totalUpper,
+      gap: totalUpper !== null ? Math.max(0, totalUpper - incumbentScore) : null,
+      safe,
+    };
+  });
+
+  const safeMasks = new Set<number>();
+  let maskPairSplitCompletedCount = 0;
+  let maskPairSplitTimedOutCount = 0;
+  let maskPairSplitStateCountTotal = 0;
+  let maskStoppedByBudget = false;
+  const maskGroups = [...maskGroupsByMask.values()]
+    .sort((left, right) => (
+      right.maxAnchorScore - left.maxAnchorScore
+      || right.anchorCount - left.anchorCount
+      || left.mask - right.mask
+    ))
+    .slice(0, MEDLEY_EXACT_RAW_PAIR_WITNESS_COVER_MASK_SPLIT_LIMIT)
+    .map((maskGroup) => {
+      const excludedCardIds = pairCardIds.filter((_, groupIndex) => (maskGroup.mask & (1 << groupIndex)) !== 0);
+      if (timedOut || stoppedByBudget || maskStoppedByBudget || performance.now() >= localDeadlineAt) {
+        timedOut = true;
+        return {
+          ...maskGroup,
+          excludedCardIds,
+          pairUpperExcludingMask: null,
+          pairSplitTimedOut: true,
+          pairSplitAbortReason: maskStoppedByBudget ? "previous-budget-stop" : "timebox",
+          pairSplitStateCount: null,
+          totalUpper: null,
+          gap: null,
+          safe: false,
+        };
+      }
+      const pairSplit = estimateGeneratedMedleyExactRawCandidatePairConflictSplitUpper(
+        leftSlot,
+        rightSlot,
+        containingLeftBitsByCardId,
+        containingRightBitsByCardId,
+        excludedCardIds,
+        localDeadlineAt,
+        MEDLEY_EXACT_RAW_PAIR_WITNESS_COVER_PAIR_SPLIT_STATE_BUDGET,
+      );
+      maskPairSplitStateCountTotal = addCappedCount(maskPairSplitStateCountTotal, pairSplit.stateCount);
+      if (pairSplit.timedOut) {
+        maskPairSplitTimedOutCount += 1;
+        timedOut = true;
+        if (pairSplit.abortReason === "state-budget") {
+          maskStoppedByBudget = true;
+        }
+      } else {
+        maskPairSplitCompletedCount += 1;
+      }
+      const pairUpperExcludingMask = !pairSplit.timedOut
+        && (Number.isFinite(pairSplit.upperBound) || pairSplit.upperBound === Number.NEGATIVE_INFINITY)
+        ? pairSplit.upperBound
+        : null;
+      const totalUpper = pairUpperExcludingMask !== null
+        ? maskGroup.maxAnchorScore + pairUpperExcludingMask
+        : null;
+      const safe = totalUpper !== null && totalUpper <= incumbentScore;
+      if (safe) {
+        safeMasks.add(maskGroup.mask);
+      }
+      return {
+        ...maskGroup,
+        excludedCardIds,
+        pairUpperExcludingMask,
+        pairSplitTimedOut: pairSplit.timedOut,
+        pairSplitAbortReason: pairSplit.abortReason,
+        pairSplitStateCount: pairSplit.stateCount,
+        totalUpper,
+        gap: totalUpper !== null ? Math.max(0, totalUpper - incumbentScore) : null,
+        safe,
+      };
+    });
+
+  let coveredAnchorCount = 0;
+  let uncoveredAnchorCount = 0;
+  let firstUncoveredAnchorIndex: number | null = null;
+  let firstUncoveredAnchorScore: number | null = null;
+  let firstUncoveredAnchorCardIds: number[] | null = null;
+  let maskCoveredAnchorCount = 0;
+  let maskUncoveredAnchorCount = 0;
+  let firstMaskUncoveredAnchorIndex: number | null = null;
+  let firstMaskUncoveredAnchorScore: number | null = null;
+  let firstMaskUncoveredAnchorCardIds: number[] | null = null;
+  let firstMaskUncoveredMask: number | null = null;
+  for (let anchorIndex = 0; anchorIndex < anchorSlot.length; anchorIndex += 1) {
+    const anchorScore = anchorSlot.scores[anchorIndex];
+    if (anchorScore + pairScore <= incumbentScore) {
+      break;
+    }
+    const anchorCardIds = getMedleyExactRawCandidateCardIds(anchorSlot, anchorIndex);
+    let mask = 0;
+    for (const cardId of anchorCardIds) {
+      const groupIndex = pairCardIndexById.get(cardId);
+      if (groupIndex !== undefined) {
+        mask |= 1 << groupIndex;
+      }
+    }
+    const covered = anchorCardIds.some((cardId) => safeCardIds.has(cardId));
+    if (covered) {
+      coveredAnchorCount += 1;
+    } else {
+      uncoveredAnchorCount += 1;
+      if (firstUncoveredAnchorIndex === null) {
+        firstUncoveredAnchorIndex = anchorIndex;
+        firstUncoveredAnchorScore = anchorScore;
+        firstUncoveredAnchorCardIds = anchorCardIds;
+      }
+    }
+    if (safeMasks.has(mask)) {
+      maskCoveredAnchorCount += 1;
+    } else {
+      maskUncoveredAnchorCount += 1;
+      if (firstMaskUncoveredAnchorIndex === null) {
+        firstMaskUncoveredAnchorIndex = anchorIndex;
+        firstMaskUncoveredAnchorScore = anchorScore;
+        firstMaskUncoveredAnchorCardIds = anchorCardIds;
+        firstMaskUncoveredMask = mask;
+      }
+    }
+  }
+
+  return {
+    algorithm: "hhwx-raw-pair-witness-anchor-cover-v1",
+    behaviorChange: false,
+    timeboxMs: MEDLEY_EXACT_RAW_PAIR_WITNESS_COVER_TIMEBOX_MS,
+    pairScore,
+    pairCardIds: [...pairCardIds],
+    relevantAnchorCount,
+    safeCardIds: [...safeCardIds],
+    safeGroupCount: groups.filter((group) => group.safe).length,
+    coveredAnchorCount,
+    uncoveredAnchorCount,
+    firstUncoveredAnchorIndex,
+    firstUncoveredAnchorScore,
+    firstUncoveredAnchorCardIds,
+    allRelevantAnchorsCovered: relevantAnchorCount > 0 && uncoveredAnchorCount === 0,
+    pairSplitCompletedCount,
+    pairSplitTimedOutCount,
+    pairSplitStateCountTotal,
+    pairSplitStateBudget: MEDLEY_EXACT_RAW_PAIR_WITNESS_COVER_PAIR_SPLIT_STATE_BUDGET,
+    stoppedByBudget,
+    maskGroupCount: maskGroupsByMask.size,
+    maskSplitLimit: MEDLEY_EXACT_RAW_PAIR_WITNESS_COVER_MASK_SPLIT_LIMIT,
+    safeMaskCount: safeMasks.size,
+    maskCoveredAnchorCount,
+    maskUncoveredAnchorCount,
+    firstMaskUncoveredAnchorIndex,
+    firstMaskUncoveredAnchorScore,
+    firstMaskUncoveredAnchorCardIds,
+    firstMaskUncoveredMask,
+    allRelevantAnchorsMaskCovered: relevantAnchorCount > 0 && maskUncoveredAnchorCount === 0,
+    maskPairSplitCompletedCount,
+    maskPairSplitTimedOutCount,
+    maskPairSplitStateCountTotal,
+    maskStoppedByBudget,
+    maskGroups,
+    timedOut,
+    elapsedMs: Math.round(performance.now() - startedAt),
+    groups,
+  };
+}
+
 function medleyExactRawCandidateHasCardIdInSet(
   slot: MedleyExactRawCandidatePoolSlot,
   candidateIndex: number,
@@ -3165,6 +3480,7 @@ function estimateGeneratedMedleyExactRawCandidatePairConflictSplitUpper(
   containingRightBitsByCardId: Map<number, Uint32Array>,
   anchorCardIds: readonly number[],
   localDeadlineAt: number,
+  stateBudget = MEDLEY_EXACT_CANDIDATE_JOIN_ANCHOR_FRONTIER_CHEAP_UPPER_SPLIT_STATE_BUDGET,
 ): {
   upperBound: number;
   timedOut: boolean;
@@ -3195,7 +3511,7 @@ function estimateGeneratedMedleyExactRawCandidatePairConflictSplitUpper(
     if (timedOut) {
       return finishResult(Number.POSITIVE_INFINITY);
     }
-    if (stateCount >= MEDLEY_EXACT_CANDIDATE_JOIN_ANCHOR_FRONTIER_CHEAP_UPPER_SPLIT_STATE_BUDGET) {
+    if (stateCount >= stateBudget) {
       timedOut = true;
       abortReason = "state-budget";
       return finishResult(Number.POSITIVE_INFINITY);
@@ -3780,6 +4096,24 @@ function buildMedleyExactRawAnchorFrontierProbeProfile(
         incumbentScore - globalPairConflictSplitGeneratedUpper.upperBound,
         globalPairConflictSplitGeneratedUpper.upperBound,
         incumbentScore,
+      )
+      : null
+  );
+  const globalPairWitnessCover = (
+    globalPairConflictSplitGeneratedUpper !== null
+    && !globalPairConflictSplitGeneratedUpper.timedOut
+    && Number.isFinite(globalPairConflictSplitGeneratedUpper.upperBound)
+    && globalPairConflictSplitCardIds.length > 0
+      ? buildMedleyExactRawPairWitnessAnchorCoverProfile(
+        anchorSlot,
+        leftSlot,
+        rightSlot,
+        containingLeftBitsByCardId,
+        containingRightBitsByCardId,
+        globalPairConflictSplitCardIds,
+        globalPairConflictSplitGeneratedUpper.upperBound,
+        incumbentScore,
+        deadlineAt,
       )
       : null
   );
@@ -4432,6 +4766,7 @@ function buildMedleyExactRawAnchorFrontierProbeProfile(
         && Number.isFinite(anchorPeekUpperBound)
         && anchorPeekUpperBound + globalPairConflictSplitPairUpper <= incumbentScore,
       anchorCompatibility: globalPairConflictSplitAnchorCompatibility,
+      witnessCover: globalPairWitnessCover,
     },
     globalTripleConflictSplit: {
       algorithm: "hhwx-raw-generated-triple-conflict-split-v1",
