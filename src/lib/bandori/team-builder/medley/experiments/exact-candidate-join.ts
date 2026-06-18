@@ -144,7 +144,7 @@ const MEDLEY_EXACT_RAW_PAIR_FRONTIER_CENSUS_EXACT_SCAN_LIMIT = 1_000_000;
 const MEDLEY_EXACT_RAW_PAIR_FRONTIER_CENSUS_SAMPLE_SCAN_LIMIT = 100_000;
 const MEDLEY_EXACT_RAW_PAIR_FRONTIER_CENSUS_DEEP_SCAN_LIMIT = 5_000_000;
 const MEDLEY_EXACT_RAW_PAIR_FRONTIER_CENSUS_MAX_THRESHOLDS = 12;
-const MEDLEY_EXACT_RAW_PAIR_PRICING_FRONTIER_POP_LIMIT = 250_000;
+const MEDLEY_EXACT_RAW_PAIR_PRICING_FRONTIER_POP_LIMIT = 5_000_000;
 const MEDLEY_EXACT_RAW_PAIR_PRICING_FRONTIER_TIMEBOX_MS = 2_000;
 const MEDLEY_EXACT_RAW_TRIPLE_CONFLICT_SPLIT_TIMEBOX_MS = 8_000;
 const MEDLEY_EXACT_RAW_PAIR_WITNESS_COVER_TIMEBOX_MS = 3_000;
@@ -2811,59 +2811,6 @@ function scanHighMedleyExactRawCandidatePairFrontier(
   return finish(false, false);
 }
 
-type MedleyExactRawPairPricingFrontierNode = {
-  score: number;
-  leftIndex: number;
-  rightIndex: number;
-};
-
-function pushMedleyExactRawPairPricingFrontierNode(
-  heap: MedleyExactRawPairPricingFrontierNode[],
-  node: MedleyExactRawPairPricingFrontierNode,
-): void {
-  heap.push(node);
-  let index = heap.length - 1;
-  while (index > 0) {
-    const parentIndex = Math.floor((index - 1) / 2);
-    if (heap[parentIndex].score >= node.score) {
-      break;
-    }
-    heap[index] = heap[parentIndex];
-    index = parentIndex;
-  }
-  heap[index] = node;
-}
-
-function popMedleyExactRawPairPricingFrontierNode(
-  heap: MedleyExactRawPairPricingFrontierNode[],
-): MedleyExactRawPairPricingFrontierNode | null {
-  const root = heap[0];
-  if (!root) {
-    return null;
-  }
-  const tail = heap.pop();
-  if (tail && heap.length > 0) {
-    let index = 0;
-    while (true) {
-      const leftIndex = index * 2 + 1;
-      const rightIndex = leftIndex + 1;
-      if (leftIndex >= heap.length) {
-        break;
-      }
-      const childIndex = rightIndex < heap.length && heap[rightIndex].score > heap[leftIndex].score
-        ? rightIndex
-        : leftIndex;
-      if (heap[childIndex].score <= tail.score) {
-        break;
-      }
-      heap[index] = heap[childIndex];
-      index = childIndex;
-    }
-    heap[index] = tail;
-  }
-  return root;
-}
-
 function buildMedleyExactRawPairPricingFrontierProfile(
   leftSlot: MedleyExactRawCandidatePoolSlot,
   rightSlot: MedleyExactRawCandidatePoolSlot,
@@ -2875,29 +2822,63 @@ function buildMedleyExactRawPairPricingFrontierProfile(
     deadlineAt,
     startedAt + MEDLEY_EXACT_RAW_PAIR_PRICING_FRONTIER_TIMEBOX_MS,
   );
-  const heap: MedleyExactRawPairPricingFrontierNode[] = [];
-  const seenPairKeys = new Set<number>();
-  const rightLength = rightSlot.length;
-  const pushPair = (leftIndex: number, rightIndex: number): void => {
-    if (
-      leftIndex < 0
-      || rightIndex < 0
-      || leftIndex >= leftSlot.length
-      || rightIndex >= rightSlot.length
-    ) {
-      return;
+  const rightIndexByLeft = new Int32Array(leftSlot.length);
+  const heapLeftIndices = new Int32Array(leftSlot.length);
+  let heapSize = 0;
+  const pairScoreForLeft = (leftIndex: number): number => (
+    leftSlot.scores[leftIndex] + rightSlot.scores[rightIndexByLeft[leftIndex]]
+  );
+  const isHigherScoreLeft = (leftIndex: number, rightLeftIndex: number): boolean => (
+    pairScoreForLeft(leftIndex) > pairScoreForLeft(rightLeftIndex)
+  );
+  const pushLeft = (leftIndex: number): void => {
+    let index = heapSize;
+    heapSize += 1;
+    while (index > 0) {
+      const parentIndex = Math.floor((index - 1) / 2);
+      const parentLeftIndex = heapLeftIndices[parentIndex];
+      if (!isHigherScoreLeft(leftIndex, parentLeftIndex)) {
+        break;
+      }
+      heapLeftIndices[index] = parentLeftIndex;
+      index = parentIndex;
     }
-    const pairKey = leftIndex * rightLength + rightIndex;
-    if (seenPairKeys.has(pairKey)) {
-      return;
-    }
-    seenPairKeys.add(pairKey);
-    pushMedleyExactRawPairPricingFrontierNode(heap, {
-      score: leftSlot.scores[leftIndex] + rightSlot.scores[rightIndex],
-      leftIndex,
-      rightIndex,
-    });
+    heapLeftIndices[index] = leftIndex;
   };
+  const popLeft = (): number | null => {
+    if (heapSize <= 0) {
+      return null;
+    }
+    const rootLeftIndex = heapLeftIndices[0];
+    heapSize -= 1;
+    if (heapSize > 0) {
+      const tailLeftIndex = heapLeftIndices[heapSize];
+      let index = 0;
+      while (true) {
+        const leftChildIndex = index * 2 + 1;
+        const rightChildIndex = leftChildIndex + 1;
+        if (leftChildIndex >= heapSize) {
+          break;
+        }
+        const childIndex = rightChildIndex < heapSize
+          && isHigherScoreLeft(heapLeftIndices[rightChildIndex], heapLeftIndices[leftChildIndex])
+          ? rightChildIndex
+          : leftChildIndex;
+        if (!isHigherScoreLeft(heapLeftIndices[childIndex], tailLeftIndex)) {
+          break;
+        }
+        heapLeftIndices[index] = heapLeftIndices[childIndex];
+        index = childIndex;
+      }
+      heapLeftIndices[index] = tailLeftIndex;
+    }
+    return rootLeftIndex;
+  };
+  if (rightSlot.length > 0) {
+    for (let leftIndex = 0; leftIndex < leftSlot.length; leftIndex += 1) {
+      pushLeft(leftIndex);
+    }
+  }
   let poppedPairCount = 0;
   let overlapPairCount = 0;
   let disjointPairCount = 0;
@@ -2910,10 +2891,8 @@ function buildMedleyExactRawPairPricingFrontierProfile(
   let provedGeneratedUpper = false;
   let timedOut = false;
   let capped = false;
-  if (leftSlot.length > 0 && rightSlot.length > 0) {
-    pushPair(0, 0);
-  }
-  while (heap.length > 0) {
+  let stoppedByTargetUpper = false;
+  while (heapSize > 0) {
     if (poppedPairCount >= MEDLEY_EXACT_RAW_PAIR_PRICING_FRONTIER_POP_LIMIT) {
       capped = true;
       break;
@@ -2922,35 +2901,50 @@ function buildMedleyExactRawPairPricingFrontierProfile(
       timedOut = true;
       break;
     }
-    const node = popMedleyExactRawPairPricingFrontierNode(heap);
-    if (!node) {
+    const leftIndex = popLeft();
+    if (leftIndex === null) {
       break;
     }
+    const rightIndex = rightIndexByLeft[leftIndex];
+    const score = leftSlot.scores[leftIndex] + rightSlot.scores[rightIndex];
     poppedPairCount += 1;
-    maxPoppedPairScore = Math.max(maxPoppedPairScore, node.score);
-    if (medleyExactRawCandidatesOverlap(leftSlot, node.leftIndex, rightSlot, node.rightIndex)) {
+    maxPoppedPairScore = Math.max(maxPoppedPairScore, score);
+    if (medleyExactRawCandidatesOverlap(leftSlot, leftIndex, rightSlot, rightIndex)) {
       overlapPairCount += 1;
     } else {
       disjointPairCount += 1;
-      if (node.score > maxDisjointPairScore) {
-        maxDisjointPairScore = node.score;
+      if (score > maxDisjointPairScore) {
+        maxDisjointPairScore = score;
       }
       if (firstDisjointPairRank === null) {
         firstDisjointPairRank = poppedPairCount;
-        firstDisjointPairScore = node.score;
-        firstDisjointLeftIndex = node.leftIndex;
-        firstDisjointRightIndex = node.rightIndex;
+        firstDisjointPairScore = score;
+        firstDisjointLeftIndex = leftIndex;
+        firstDisjointRightIndex = rightIndex;
       }
     }
-    pushPair(node.leftIndex + 1, node.rightIndex);
-    pushPair(node.leftIndex, node.rightIndex + 1);
-    const frontierTopScore = heap[0]?.score ?? Number.NEGATIVE_INFINITY;
+    const nextRightIndex = rightIndex + 1;
+    if (nextRightIndex < rightSlot.length) {
+      rightIndexByLeft[leftIndex] = nextRightIndex;
+      pushLeft(leftIndex);
+    }
+    const frontierTopScore = heapSize > 0 ? pairScoreForLeft(heapLeftIndices[0]) : Number.NEGATIVE_INFINITY;
     if (Number.isFinite(maxDisjointPairScore) && maxDisjointPairScore >= frontierTopScore) {
       provedGeneratedUpper = true;
       break;
     }
+    const bestDisjointScore = Number.isFinite(maxDisjointPairScore)
+      ? maxDisjointPairScore
+      : Number.NEGATIVE_INFINITY;
+    if (
+      Number.isFinite(targetUpperBound)
+      && Math.max(bestDisjointScore, frontierTopScore) <= targetUpperBound
+    ) {
+      stoppedByTargetUpper = true;
+      break;
+    }
   }
-  const frontierTopScore = heap[0]?.score ?? Number.NEGATIVE_INFINITY;
+  const frontierTopScore = heapSize > 0 ? pairScoreForLeft(heapLeftIndices[0]) : Number.NEGATIVE_INFINITY;
   const bestDisjointScore = Number.isFinite(maxDisjointPairScore)
     ? maxDisjointPairScore
     : Number.NEGATIVE_INFINITY;
@@ -2961,8 +2955,9 @@ function buildMedleyExactRawPairPricingFrontierProfile(
     && generatedUpperBound <= targetUpperBound
   );
   return {
-    algorithm: "hhwx-raw-pair-pricing-frontier-v1",
+    algorithm: "hhwx-raw-pair-pricing-row-frontier-v1",
     behaviorChange: false,
+    storage: "typed-row-frontier",
     popLimit: MEDLEY_EXACT_RAW_PAIR_PRICING_FRONTIER_POP_LIMIT,
     timeboxMs: MEDLEY_EXACT_RAW_PAIR_PRICING_FRONTIER_TIMEBOX_MS,
     targetUpperBound: Number.isFinite(targetUpperBound) ? targetUpperBound : null,
@@ -2971,14 +2966,16 @@ function buildMedleyExactRawPairPricingFrontierProfile(
     poppedPairCount,
     overlapPairCount,
     disjointPairCount,
-    seenPairCount: seenPairKeys.size,
-    heapSize: heap.length,
+    emittedPairCount: poppedPairCount,
+    heapSize,
+    rowStateMiB: roundMiB((rightIndexByLeft.byteLength + heapLeftIndices.byteLength)),
     maxPoppedPairScore: Number.isFinite(maxPoppedPairScore) ? maxPoppedPairScore : null,
     maxDisjointPairScore: Number.isFinite(maxDisjointPairScore) ? maxDisjointPairScore : null,
     frontierTopScore: Number.isFinite(frontierTopScore) ? frontierTopScore : null,
     generatedUpperBound: Number.isFinite(generatedUpperBound) ? generatedUpperBound : null,
     provedGeneratedUpper,
     provedTargetUpper,
+    stoppedByTargetUpper,
     remainingTargetGap: Number.isFinite(targetUpperBound) && Number.isFinite(generatedUpperBound)
       ? Math.max(0, generatedUpperBound - targetUpperBound)
       : null,
