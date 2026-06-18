@@ -2706,6 +2706,28 @@ function medleyExactRawCandidateHasCardIdInSet(
   return false;
 }
 
+function getFirstMedleyExactRawCandidateOverlapCardId(
+  leftSlot: MedleyExactRawCandidatePoolSlot,
+  leftIndex: number,
+  rightSlot: MedleyExactRawCandidatePoolSlot,
+  rightIndex: number,
+): number | null {
+  const leftBaseCardIndex = leftIndex * MEDLEY_TEAM_SIZE;
+  const rightBaseCardIndex = rightIndex * MEDLEY_TEAM_SIZE;
+  for (let leftCardIndex = 0; leftCardIndex < MEDLEY_TEAM_SIZE; leftCardIndex += 1) {
+    const leftCardId = leftSlot.cardIds[leftBaseCardIndex + leftCardIndex];
+    if (leftCardId < 0) {
+      continue;
+    }
+    for (let rightCardIndex = 0; rightCardIndex < MEDLEY_TEAM_SIZE; rightCardIndex += 1) {
+      if (leftCardId === rightSlot.cardIds[rightBaseCardIndex + rightCardIndex]) {
+        return leftCardId;
+      }
+    }
+  }
+  return null;
+}
+
 function findBestAvailableMedleyExactRawRightCandidateByForbiddenCardIds(
   rightSlot: MedleyExactRawCandidatePoolSlot,
   containingRightCandidateBitsByCardId: Map<number, Uint32Array>,
@@ -2802,6 +2824,96 @@ function estimateGeneratedMedleyExactRawCandidatePairUpperExcludingCardIdsByScan
     }
   }
   return { upperBound: bestScore, scannedLeftCandidateCount, scannedRightWordCount };
+}
+
+function estimateGeneratedMedleyExactRawCandidatePairConflictSplitUpper(
+  leftSlot: MedleyExactRawCandidatePoolSlot,
+  rightSlot: MedleyExactRawCandidatePoolSlot,
+  containingLeftBitsByCardId: Map<number, Uint32Array>,
+  containingRightBitsByCardId: Map<number, Uint32Array>,
+  anchorCardIds: readonly number[],
+  localDeadlineAt: number,
+): {
+  upperBound: number;
+  timedOut: boolean;
+  abortReason: string | null;
+  stateCount: number;
+} {
+  const initialBannedCardIds = [...anchorCardIds].sort((left, right) => left - right);
+  const leftWordCount = Math.ceil(leftSlot.length / 32);
+  const rightWordCount = Math.ceil(rightSlot.length / 32);
+  const cache = new Map<string, number>();
+  let stateCount = 0;
+  let timedOut = false;
+  let abortReason: string | null = null;
+
+  const visit = (leftBannedCardIds: readonly number[], rightBannedCardIds: readonly number[]): number => {
+    if (timedOut) {
+      return Number.POSITIVE_INFINITY;
+    }
+    if (stateCount >= MEDLEY_EXACT_CANDIDATE_JOIN_ANCHOR_FRONTIER_CHEAP_UPPER_SPLIT_STATE_BUDGET) {
+      timedOut = true;
+      abortReason = "state-budget";
+      return Number.POSITIVE_INFINITY;
+    }
+    if (performance.now() >= localDeadlineAt) {
+      timedOut = true;
+      abortReason = "timebox";
+      return Number.POSITIVE_INFINITY;
+    }
+    const key = `${leftBannedCardIds.join(",")}|${rightBannedCardIds.join(",")}`;
+    const cached = cache.get(key);
+    if (cached !== undefined) {
+      return cached;
+    }
+    stateCount += 1;
+    const leftCandidate = findBestAvailableMedleyExactRawRightCandidateByForbiddenCardIds(
+      leftSlot,
+      containingLeftBitsByCardId,
+      leftWordCount,
+      [],
+      leftBannedCardIds,
+    );
+    const rightCandidate = findBestAvailableMedleyExactRawRightCandidateByForbiddenCardIds(
+      rightSlot,
+      containingRightBitsByCardId,
+      rightWordCount,
+      [],
+      rightBannedCardIds,
+    );
+    if (leftCandidate.candidateIndex < 0 || rightCandidate.candidateIndex < 0) {
+      cache.set(key, Number.NEGATIVE_INFINITY);
+      return Number.NEGATIVE_INFINITY;
+    }
+    const overlapCardId = getFirstMedleyExactRawCandidateOverlapCardId(
+      leftSlot,
+      leftCandidate.candidateIndex,
+      rightSlot,
+      rightCandidate.candidateIndex,
+    );
+    if (overlapCardId === null) {
+      const upperBound = (
+        leftSlot.scores[leftCandidate.candidateIndex]
+        + rightSlot.scores[rightCandidate.candidateIndex]
+      );
+      cache.set(key, upperBound);
+      return upperBound;
+    }
+    const upperBound = Math.max(
+      visit(addSortedUniqueCardId(leftBannedCardIds, overlapCardId), rightBannedCardIds),
+      visit(leftBannedCardIds, addSortedUniqueCardId(rightBannedCardIds, overlapCardId)),
+    );
+    cache.set(key, upperBound);
+    return upperBound;
+  };
+
+  const upperBound = visit(initialBannedCardIds, initialBannedCardIds);
+  return {
+    upperBound,
+    timedOut,
+    abortReason,
+    stateCount,
+  };
 }
 
 function buildMedleyExactRawAnchorCheapUpperReplayProfile(
@@ -3008,10 +3120,18 @@ function buildMedleyExactRawAnchorFrontierProbeProfile(
   pairUpperBound: number,
   incumbentScore: number,
   deadlineAt: number,
+  maxCandidateTotal: number | null = null,
 ): Record<string, unknown> {
   const startedAt = performance.now();
   const candidateCountsBySlot = candidatesBySlot.map((candidates) => candidates.length);
   const candidateCountTotal = candidateCountsBySlot.reduce((sum, count) => sum + count, 0);
+  const effectiveMaxCandidateTotal = (
+    maxCandidateTotal !== null
+    && Number.isFinite(maxCandidateTotal)
+    && maxCandidateTotal >= 0
+      ? Math.trunc(maxCandidateTotal)
+      : MEDLEY_EXACT_RAW_ANCHOR_FRONTIER_PROBE_MAX_CANDIDATE_TOTAL
+  );
   const finishSkipped = (
     skipReason: string,
     extra: Record<string, unknown> = {},
@@ -3034,9 +3154,9 @@ function buildMedleyExactRawAnchorFrontierProbeProfile(
   ) {
     return finishSkipped("anchor-slot-index");
   }
-  if (candidateCountTotal > MEDLEY_EXACT_RAW_ANCHOR_FRONTIER_PROBE_MAX_CANDIDATE_TOTAL) {
+  if (candidateCountTotal > effectiveMaxCandidateTotal) {
     return finishSkipped("candidate-total-limit", {
-      limit: MEDLEY_EXACT_RAW_ANCHOR_FRONTIER_PROBE_MAX_CANDIDATE_TOTAL,
+      limit: effectiveMaxCandidateTotal,
       rawPoolBuilt: false,
     });
   }
@@ -3227,6 +3347,39 @@ function buildMedleyExactRawAnchorFrontierProbeProfile(
       : Number.NEGATIVE_INFINITY
   );
   const residualUpperBound = Math.max(processedUpperMax, unprocessedUpperBound);
+  const processedUpperMaxAnchorCardIds = processedUpperMaxAnchorIndex !== null
+    ? getMedleyExactRawCandidateCardIds(anchorSlot, processedUpperMaxAnchorIndex)
+    : [];
+  const splitStartedAt = performance.now();
+  const processedUpperMaxGeneratedPairSplit = (
+    processedUpperMaxAnchorIndex !== null
+    && processedUpperMaxSource === "generated-pair"
+    && processedUpperMaxAnchorCardIds.length > 0
+    && performance.now() < localDeadlineAt
+      ? estimateGeneratedMedleyExactRawCandidatePairConflictSplitUpper(
+        leftSlot,
+        rightSlot,
+        containingLeftBitsByCardId,
+        containingRightBitsByCardId,
+        processedUpperMaxAnchorCardIds,
+        localDeadlineAt,
+      )
+      : null
+  );
+  const processedUpperMaxSplitPairUpper = processedUpperMaxGeneratedPairSplit
+    ? Math.max(
+      processedUpperMaxGeneratedPairSplit.upperBound,
+      processedUpperMaxLeftUnseenUpper ?? Number.NEGATIVE_INFINITY,
+      processedUpperMaxRightUnseenUpper ?? Number.NEGATIVE_INFINITY,
+    )
+    : null;
+  const processedUpperMaxSplitTotalUpper = (
+    processedUpperMaxSplitPairUpper !== null
+    && processedUpperMaxAnchorScore !== null
+    && Number.isFinite(processedUpperMaxSplitPairUpper)
+      ? processedUpperMaxAnchorScore + processedUpperMaxSplitPairUpper
+      : null
+  );
   const containingBitsBytes = sumMedleyExactArrayViewBytes(containingLeftBitsByCardId.values())
     + sumMedleyExactArrayViewBytes(containingRightBitsByCardId.values());
   const rawRetainedBytes = rawPool.slots.reduce(
@@ -3258,10 +3411,33 @@ function buildMedleyExactRawAnchorFrontierProbeProfile(
     processedUpperMaxSource,
     processedUpperMaxAnchorIndex,
     processedUpperMaxAnchorScore,
+    processedUpperMaxAnchorCardIds,
     processedUpperMaxPairUpper,
     processedUpperMaxGeneratedPairUpper,
     processedUpperMaxLeftUnseenUpper,
     processedUpperMaxRightUnseenUpper,
+    processedUpperMaxGeneratedPairSplitUpper: processedUpperMaxGeneratedPairSplit
+      && Number.isFinite(processedUpperMaxGeneratedPairSplit.upperBound)
+      ? processedUpperMaxGeneratedPairSplit.upperBound
+      : null,
+    processedUpperMaxGeneratedPairSplitTimedOut: processedUpperMaxGeneratedPairSplit?.timedOut ?? null,
+    processedUpperMaxGeneratedPairSplitAbortReason: processedUpperMaxGeneratedPairSplit?.abortReason ?? null,
+    processedUpperMaxGeneratedPairSplitStateCount: processedUpperMaxGeneratedPairSplit?.stateCount ?? null,
+    processedUpperMaxGeneratedPairSplitElapsedMs: processedUpperMaxGeneratedPairSplit
+      ? Math.round(performance.now() - splitStartedAt)
+      : null,
+    processedUpperMaxSplitPairUpper: processedUpperMaxSplitPairUpper !== null
+      && Number.isFinite(processedUpperMaxSplitPairUpper)
+      ? processedUpperMaxSplitPairUpper
+      : null,
+    processedUpperMaxSplitTotalUpper: processedUpperMaxSplitTotalUpper !== null
+      && Number.isFinite(processedUpperMaxSplitTotalUpper)
+      ? Math.ceil(processedUpperMaxSplitTotalUpper)
+      : null,
+    processedUpperMaxSplitGap: processedUpperMaxSplitTotalUpper !== null
+      && Number.isFinite(processedUpperMaxSplitTotalUpper)
+      ? Math.max(0, Math.ceil(processedUpperMaxSplitTotalUpper) - incumbentScore)
+      : null,
     scannedLeftWordCount,
     scannedRightWordCount,
     rawPoolBuildElapsedMs: rawPool.buildElapsedMs,
@@ -9457,6 +9633,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     debugExactCandidateDominanceReplay?: boolean;
     debugExactCandidateRawAnchorCheapUpperReplay?: boolean;
     debugExactCandidateRawAnchorFrontierProbe?: boolean;
+    debugExactCandidateRawAnchorFrontierProbeMaxCandidateTotal?: number | null;
     debugExactCandidateRawCandidatePoolProfile?: boolean;
     debugExactCandidateRawPairComplementParity?: boolean;
     debugExactCandidateRawPairUpperScanParity?: boolean;
@@ -10164,6 +10341,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
           otherUpper,
           incumbentScore,
           deadlineAt,
+          context.debugExactCandidateRawAnchorFrontierProbeMaxCandidateTotal ?? null,
         );
         invalidateRawCandidatePool();
       }

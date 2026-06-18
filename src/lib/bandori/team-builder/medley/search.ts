@@ -691,6 +691,17 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
   const debugExactCandidateRawAnchorFrontierProbe = (
     optimization.debugExactCandidateRawAnchorFrontierProbe === true
   );
+  const parsedDebugExactCandidateRawAnchorFrontierProbeMaxCandidateTotal = (
+    optimization.debugExactCandidateRawAnchorFrontierProbeMaxCandidateTotal !== undefined
+      ? Math.trunc(optimization.debugExactCandidateRawAnchorFrontierProbeMaxCandidateTotal)
+      : Number.NaN
+  );
+  const debugExactCandidateRawAnchorFrontierProbeMaxCandidateTotal = (
+    Number.isFinite(parsedDebugExactCandidateRawAnchorFrontierProbeMaxCandidateTotal)
+    && parsedDebugExactCandidateRawAnchorFrontierProbeMaxCandidateTotal >= 0
+      ? parsedDebugExactCandidateRawAnchorFrontierProbeMaxCandidateTotal
+      : null
+  );
   const debugExactCandidateRawCandidatePoolProfile = (
     optimization.debugExactCandidateRawCandidatePoolProfile === true
   );
@@ -3832,6 +3843,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
           debugExactCandidateDominanceReplay,
           debugExactCandidateRawAnchorCheapUpperReplay,
           debugExactCandidateRawAnchorFrontierProbe,
+          debugExactCandidateRawAnchorFrontierProbeMaxCandidateTotal,
           debugExactCandidateRawCandidatePoolProfile,
           debugExactCandidateRawPairComplementParity,
           debugExactCandidateRawPairUpperScanParity,
@@ -4312,6 +4324,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
           debugExactCandidateDominanceReplay,
           debugExactCandidateRawAnchorCheapUpperReplay,
           debugExactCandidateRawAnchorFrontierProbe,
+          debugExactCandidateRawAnchorFrontierProbeMaxCandidateTotal,
           debugExactCandidateRawCandidatePoolProfile,
           debugExactCandidateRawPairComplementParity,
           debugExactCandidateRawPairUpperScanParity,

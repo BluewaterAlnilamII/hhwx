@@ -116,6 +116,7 @@ export type BandoriMedleySearchOptimizationOptions = {
   debugExactCandidateDominanceReplay?: boolean;
   debugExactCandidateRawAnchorCheapUpperReplay?: boolean;
   debugExactCandidateRawAnchorFrontierProbe?: boolean;
+  debugExactCandidateRawAnchorFrontierProbeMaxCandidateTotal?: number;
   debugExactCandidateRawCandidatePoolProfile?: boolean;
   debugExactCandidateRawPairComplementParity?: boolean;
   debugExactCandidateRawPairUpperScanParity?: boolean;
