@@ -171,6 +171,8 @@ Baseline and gate artifacts retained:
 | `low-memory-polish-hhwx-2026-06-18T08-27-56-662Z.json` | `P01:none` raw solver self slot-order smoke | exact, gap `0`, average `7927236`, max `7982835`, peak `1235 MiB`; raw final-join parity now computes slot order from raw lengths/scores, `rawSlotOrderMatchesObject = true`, source `shadow-raw-candidate-builder` |
 | `low-memory-polish-hhwx-2026-06-18T08-37-59-267Z.json` | `P01:none` raw solver handoff readiness smoke | exact, gap `0`, average `7927236`, max `7982835`, peak `1496 MiB`; opt-in handoff profile reports `canReadAsResidentRawSource = true`, `canHydrateWinnerFromSourceIndex = true`, and `canHydrateWinnerFromCardIds = true` |
 | `low-memory-polish-hhwx-2026-06-18T08-39-18-405Z.json` | `P02:260` full hard-row raw solver handoff readiness smoke | bounded gap `382812`, average `9376984`, max `9412868`, `0 failed / 0 timedOut / 0 memoryLimited`, peak `2912 MiB`; full `747802` raw rows from `shadow-raw-candidate-builder`, retained `40 MiB`, handoff readiness all true with `0` score/source/card violations |
+| `low-memory-polish-hhwx-2026-06-18T08-47-54-107Z.json` | `P01:none` raw winner late-hydration replay smoke | exact, gap `0`, average `7927236`, max `7982835`, peak `1232 MiB`; raw solver replay over `1550` resident rows found `rawBestScore = 7710622`, hydrated a full medley result from `sourceIndex`, and `scoreMatchesRaw = true` |
+| `low-memory-polish-hhwx-2026-06-18T08-49-14-925Z.json` | `P02:260` raw winner late-hydration hard-row guard smoke | bounded gap `382812`, average `9376984`, max `9412868`, `0 failed / 0 timedOut / 0 memoryLimited`, peak `2898 MiB`; handoff readiness still true for `747802` raw rows, hydration replay safely skips at `candidate-total-limit = 50000` |
 
 Use the pressure validation environment for early-pruning gates:
 
@@ -246,7 +248,10 @@ Full hard-row raw mirror:
 - raw final-join is now split into a raw solver core and a parity wrapper, so future handoff can call the raw solver without depending on object slot-order selection;
 - opt-in `HHWX_LOW_MEMORY_RAW_SOLVER_HANDOFF=1` records whether a raw source is ready for solver handoff and late hydration;
 - P02 artifact `low-memory-polish-hhwx-2026-06-18T08-39-18-405Z.json` proves full hard-row raw handoff readiness: `canReadAsResidentRawSource = true`, `canHydrateWinnerFromSourceIndex = true`, `canHydrateWinnerFromCardIds = true`, `scoreOrderViolationCount = 0`, `sourceIndexRangeViolationCount = 0`, `missingCardIdRowCount = 0`, and `duplicateCardIdRowCount = 0`;
-- conclusion: the raw-row representation is not the memory bottleneck, sorted raw rows can be made order-compatible with the object solver, and hard-row rows already carry enough handles for late hydration. The bottleneck is retaining equivalent rich candidate bodies and proof helper structures. The next architecture slice should wire raw solver winner indices to late hydration, then let a guarded hard-row fill/read path keep raw rows resident without retaining all rich candidate bodies.
+- `P01:none` artifact `low-memory-polish-hhwx-2026-06-18T08-47-54-107Z.json` proves raw winner indices can be late-hydrated through `sourceIndex`: raw solver replay over `1550` resident rows found `rawBestScore = 7710622`, and the hydrated medley result has `scoreMatchesRaw = true`;
+- the initial hydration attempt exposed the exact boundary this architecture must solve: thin candidate results do not retain `result.cards`. The fix now rehydrates cards from retained `cardSearchIndex0..4` / card ids without mutating the stored candidate;
+- `P02:260` artifact `low-memory-polish-hhwx-2026-06-18T08-49-14-925Z.json` keeps the hard-row guard: full `747802` rows remain handoff-ready, but raw solver hydration replay skips at the `50000` candidate cap instead of attempting a huge diagnostic solve;
+- conclusion: the raw-row representation is not the memory bottleneck, sorted raw rows can be made order-compatible with the object solver, and raw winner indices can already be late-hydrated into a full medley result on small rows. The bottleneck is retaining equivalent rich candidate bodies and proof helper structures. The next architecture slice should promote the hydration helper into an opt-in raw-solver result parity path, then let a guarded hard-row fill/read path keep raw rows resident without retaining all rich candidate bodies.
 
 Two-row prefix margin replay sample:
 
@@ -509,7 +514,8 @@ Early-pruning success targets:
    - raw join parity now uses the complete shadow raw builder as its resident read source when possible, falling back to the post-hoc raw pool only when the mirror is incomplete.
    - configurable mirror caps now prove a full P02 hard row can retain all `747802` raw rows in about `40 MiB` with no parity mismatches.
    - raw solver handoff readiness now proves those rows are ordered and hydration-ready via `sourceIndex` and explicit card ids.
-   - next extension: wire raw solver winner indices to late hydration, then create a guarded hard-row resident fill mode that appends raw rows without retaining all rich candidate bodies.
+   - raw solver winner indices now late-hydrate successfully on small rows, including thin-result candidates whose cards are reconstructed from retained card search indices.
+   - next extension: promote raw-solver result parity for small rows, then create a guarded hard-row resident fill mode that appends raw rows without retaining all rich candidate bodies.
 4. Prototype pre-evaluation upper pruning:
    - start with HHWX's existing `estimateMedleyExactSlotNodeUpperBound` and calc-like incumbent comparison;
    - record a proof ledger before any real skip;
