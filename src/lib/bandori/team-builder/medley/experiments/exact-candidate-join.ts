@@ -138,6 +138,11 @@ const MEDLEY_EXACT_RAW_ANCHOR_CHEAP_UPPER_REPLAY_SAMPLE_LIMIT = 16;
 const MEDLEY_EXACT_RAW_ANCHOR_FRONTIER_PROBE_MAX_CANDIDATE_TOTAL = 0;
 const MEDLEY_EXACT_RAW_ANCHOR_FRONTIER_PROBE_MAX_ANCHORS = 50_000;
 const MEDLEY_EXACT_RAW_ANCHOR_FRONTIER_PROBE_TIMEBOX_MS = 8_000;
+const MEDLEY_EXACT_RAW_PAIR_FRONTIER_CENSUS_COUNT_STOP_AFTER = 5_000_000;
+const MEDLEY_EXACT_RAW_PAIR_FRONTIER_CENSUS_EXACT_SCAN_LIMIT = 1_000_000;
+const MEDLEY_EXACT_RAW_PAIR_FRONTIER_CENSUS_SAMPLE_SCAN_LIMIT = 100_000;
+const MEDLEY_EXACT_RAW_PAIR_FRONTIER_CENSUS_DEEP_SCAN_LIMIT = 5_000_000;
+const MEDLEY_EXACT_RAW_PAIR_FRONTIER_CENSUS_MAX_THRESHOLDS = 12;
 const MEDLEY_EXACT_RAW_PAIR_COMPLEMENT_PARITY_MAX_CANDIDATE_TOTAL = 60_000;
 const MEDLEY_EXACT_RAW_PAIR_COMPLEMENT_PARITY_BANNED_SAMPLE_LIMIT = 4;
 const MEDLEY_EXACT_RAW_PAIR_UPPER_SCAN_PARITY_MAX_CANDIDATE_TOTAL = 60_000;
@@ -1215,6 +1220,14 @@ type MedleyExactRawCandidatePoolSlot = {
 type MedleyExactRawCandidatePool = {
   slots: MedleyExactRawCandidatePoolSlot[];
   buildElapsedMs: number;
+};
+
+type MedleyExactRawPairFrontierThreshold = {
+  name: string;
+  threshold: number;
+  reductionFromPairUpper: number | null;
+  anchorIndex: number | null;
+  anchorScore: number | null;
 };
 
 type MedleyExactRawJoinParitySlot = {
@@ -2676,6 +2689,270 @@ function estimateGeneratedMedleyExactRawCandidatePairUpper(
   return { upperBound: bestScore, scannedLeftCandidateCount, scannedRightCandidateCount };
 }
 
+function estimateHighMedleyExactRawCandidatePairScoreUpperCount(
+  leftSlot: MedleyExactRawCandidatePoolSlot,
+  rightSlot: MedleyExactRawCandidatePoolSlot,
+  threshold: number,
+  stopAfter: number,
+): {
+  count: number;
+  capped: boolean;
+  scannedLeftCandidateCount: number;
+} {
+  if (!Number.isFinite(threshold) || leftSlot.length === 0 || rightSlot.length === 0) {
+    return { count: 0, capped: false, scannedLeftCandidateCount: 0 };
+  }
+  let count = 0;
+  let rightCount = rightSlot.length;
+  let scannedLeftCandidateCount = 0;
+  for (let leftIndex = 0; leftIndex < leftSlot.length; leftIndex += 1) {
+    scannedLeftCandidateCount += 1;
+    const leftScore = leftSlot.scores[leftIndex];
+    while (
+      rightCount > 0
+      && leftScore + rightSlot.scores[rightCount - 1] <= threshold
+    ) {
+      rightCount -= 1;
+    }
+    if (rightCount <= 0) {
+      break;
+    }
+    count += rightCount;
+    if (count > stopAfter) {
+      return { count, capped: true, scannedLeftCandidateCount };
+    }
+  }
+  return { count, capped: false, scannedLeftCandidateCount };
+}
+
+function scanHighMedleyExactRawCandidatePairFrontier(
+  leftSlot: MedleyExactRawCandidatePoolSlot,
+  rightSlot: MedleyExactRawCandidatePoolSlot,
+  threshold: number,
+  scanLimit: number,
+  deadlineAt: number,
+): {
+  scannedPairCount: number;
+  disjointPairCount: number;
+  overlapPairCount: number;
+  maxScorePairScore: number | null;
+  maxDisjointPairScore: number | null;
+  firstDisjointPairRank: number | null;
+  firstDisjointPairScore: number | null;
+  firstDisjointLeftIndex: number | null;
+  firstDisjointRightIndex: number | null;
+  capped: boolean;
+  timedOut: boolean;
+} {
+  let scannedPairCount = 0;
+  let disjointPairCount = 0;
+  let overlapPairCount = 0;
+  let maxScorePairScore = Number.NEGATIVE_INFINITY;
+  let maxDisjointPairScore = Number.NEGATIVE_INFINITY;
+  let firstDisjointPairRank: number | null = null;
+  let firstDisjointPairScore: number | null = null;
+  let firstDisjointLeftIndex: number | null = null;
+  let firstDisjointRightIndex: number | null = null;
+  const finish = (capped: boolean, timedOut: boolean) => ({
+    scannedPairCount,
+    disjointPairCount,
+    overlapPairCount,
+    maxScorePairScore: Number.isFinite(maxScorePairScore) ? maxScorePairScore : null,
+    maxDisjointPairScore: Number.isFinite(maxDisjointPairScore) ? maxDisjointPairScore : null,
+    firstDisjointPairRank,
+    firstDisjointPairScore,
+    firstDisjointLeftIndex,
+    firstDisjointRightIndex,
+    capped,
+    timedOut,
+  });
+  for (let leftIndex = 0; leftIndex < leftSlot.length; leftIndex += 1) {
+    const leftScore = leftSlot.scores[leftIndex];
+    if (leftScore + (rightSlot.scores[0] ?? Number.NEGATIVE_INFINITY) <= threshold) {
+      break;
+    }
+    for (let rightIndex = 0; rightIndex < rightSlot.length; rightIndex += 1) {
+      if (performance.now() >= deadlineAt) {
+        return finish(false, true);
+      }
+      const score = leftScore + rightSlot.scores[rightIndex];
+      if (score <= threshold) {
+        break;
+      }
+      scannedPairCount += 1;
+      maxScorePairScore = Math.max(maxScorePairScore, score);
+      if (medleyExactRawCandidatesOverlap(leftSlot, leftIndex, rightSlot, rightIndex)) {
+        overlapPairCount += 1;
+      } else {
+        disjointPairCount += 1;
+        maxDisjointPairScore = Math.max(maxDisjointPairScore, score);
+        if (firstDisjointPairRank === null) {
+          firstDisjointPairRank = scannedPairCount;
+          firstDisjointPairScore = score;
+          firstDisjointLeftIndex = leftIndex;
+          firstDisjointRightIndex = rightIndex;
+        }
+      }
+      if (scannedPairCount >= scanLimit) {
+        return finish(true, false);
+      }
+    }
+  }
+  return finish(false, false);
+}
+
+function buildMedleyExactRawPairFrontierCensusProfile(
+  leftSlot: MedleyExactRawCandidatePoolSlot,
+  rightSlot: MedleyExactRawCandidatePoolSlot,
+  thresholds: MedleyExactRawPairFrontierThreshold[],
+  deadlineAt: number,
+): Record<string, unknown> {
+  const startedAt = performance.now();
+  const seenThresholdKeys = new Set<string>();
+  const results: Array<Record<string, unknown>> = [];
+  for (const thresholdEntry of thresholds) {
+    if (results.length >= MEDLEY_EXACT_RAW_PAIR_FRONTIER_CENSUS_MAX_THRESHOLDS) {
+      break;
+    }
+    const threshold = thresholdEntry.threshold;
+    if (typeof threshold !== "number" || !Number.isFinite(threshold)) {
+      continue;
+    }
+    const thresholdName = typeof thresholdEntry.name === "string" ? thresholdEntry.name : "";
+    const thresholdKey = `${Math.round(threshold * 1000)}`;
+    if (seenThresholdKeys.has(thresholdKey)) {
+      continue;
+    }
+    seenThresholdKeys.add(thresholdKey);
+    if (performance.now() >= deadlineAt) {
+      results.push({
+        ...thresholdEntry,
+        skipped: true,
+        skipReason: "timebox",
+      });
+      break;
+    }
+    const countStartedAt = performance.now();
+    const scorePairUpperCount = estimateHighMedleyExactRawCandidatePairScoreUpperCount(
+      leftSlot,
+      rightSlot,
+      threshold,
+      MEDLEY_EXACT_RAW_PAIR_FRONTIER_CENSUS_COUNT_STOP_AFTER,
+    );
+    const shouldRunDeepScan = (
+      thresholdName === "current-pair-upper" || thresholdName === "generator-tail-close"
+    );
+    const fullScorePairUpperCount = shouldRunDeepScan
+      ? estimateHighMedleyExactRawCandidatePairScoreUpperCount(
+        leftSlot,
+        rightSlot,
+        threshold,
+        Number.MAX_SAFE_INTEGER,
+      )
+      : null;
+    const shouldScanExact = (
+      !scorePairUpperCount.capped
+      && scorePairUpperCount.count <= MEDLEY_EXACT_RAW_PAIR_FRONTIER_CENSUS_EXACT_SCAN_LIMIT
+    );
+    const exactScan = shouldScanExact
+      ? scanHighMedleyExactRawCandidatePairFrontier(
+        leftSlot,
+        rightSlot,
+        threshold,
+        MEDLEY_EXACT_RAW_PAIR_FRONTIER_CENSUS_EXACT_SCAN_LIMIT,
+        deadlineAt,
+      )
+      : null;
+    const sampleScan = exactScan === null
+      ? scanHighMedleyExactRawCandidatePairFrontier(
+        leftSlot,
+        rightSlot,
+        threshold,
+        MEDLEY_EXACT_RAW_PAIR_FRONTIER_CENSUS_SAMPLE_SCAN_LIMIT,
+        deadlineAt,
+      )
+      : null;
+    const shouldRunDeepSample = (
+      sampleScan !== null
+      && sampleScan.firstDisjointPairRank === null
+      && shouldRunDeepScan
+      && performance.now() < deadlineAt
+    );
+    const deepScan = shouldRunDeepSample
+      ? scanHighMedleyExactRawCandidatePairFrontier(
+        leftSlot,
+        rightSlot,
+        threshold,
+        MEDLEY_EXACT_RAW_PAIR_FRONTIER_CENSUS_DEEP_SCAN_LIMIT,
+        deadlineAt,
+      )
+      : null;
+    results.push({
+      ...thresholdEntry,
+      threshold: Math.floor(threshold),
+      scorePairUpperCount: scorePairUpperCount.count,
+      scorePairUpperCountCapped: scorePairUpperCount.capped,
+      scorePairUpperScannedLeftCandidateCount: scorePairUpperCount.scannedLeftCandidateCount,
+      fullScorePairUpperCount: fullScorePairUpperCount?.count ?? null,
+      fullScorePairUpperScannedLeftCandidateCount: fullScorePairUpperCount?.scannedLeftCandidateCount ?? null,
+      exactScanSkipped: exactScan === null,
+      exactScanSkipReason: exactScan === null
+        ? scorePairUpperCount.capped ? "score-pair-upper-count-capped" : "score-pair-upper-count-limit"
+        : null,
+      exactScannedPairCount: exactScan?.scannedPairCount ?? null,
+      exactDisjointPairCount: exactScan?.disjointPairCount ?? null,
+      exactOverlapPairCount: exactScan?.overlapPairCount ?? null,
+      exactMaxScorePairScore: exactScan?.maxScorePairScore ?? null,
+      exactMaxDisjointPairScore: exactScan?.maxDisjointPairScore ?? null,
+      exactFirstDisjointPairRank: exactScan?.firstDisjointPairRank ?? null,
+      exactFirstDisjointPairScore: exactScan?.firstDisjointPairScore ?? null,
+      exactFirstDisjointLeftIndex: exactScan?.firstDisjointLeftIndex ?? null,
+      exactFirstDisjointRightIndex: exactScan?.firstDisjointRightIndex ?? null,
+      exactScanCapped: exactScan?.capped ?? null,
+      exactScanTimedOut: exactScan?.timedOut ?? null,
+      sampleScanLimit: sampleScan === null ? null : MEDLEY_EXACT_RAW_PAIR_FRONTIER_CENSUS_SAMPLE_SCAN_LIMIT,
+      sampleScannedPairCount: sampleScan?.scannedPairCount ?? null,
+      sampleDisjointPairCount: sampleScan?.disjointPairCount ?? null,
+      sampleOverlapPairCount: sampleScan?.overlapPairCount ?? null,
+      sampleMaxScorePairScore: sampleScan?.maxScorePairScore ?? null,
+      sampleMaxDisjointPairScore: sampleScan?.maxDisjointPairScore ?? null,
+      sampleFirstDisjointPairRank: sampleScan?.firstDisjointPairRank ?? null,
+      sampleFirstDisjointPairScore: sampleScan?.firstDisjointPairScore ?? null,
+      sampleFirstDisjointLeftIndex: sampleScan?.firstDisjointLeftIndex ?? null,
+      sampleFirstDisjointRightIndex: sampleScan?.firstDisjointRightIndex ?? null,
+      sampleScanCapped: sampleScan?.capped ?? null,
+      sampleScanTimedOut: sampleScan?.timedOut ?? null,
+      deepScanLimit: deepScan === null ? null : MEDLEY_EXACT_RAW_PAIR_FRONTIER_CENSUS_DEEP_SCAN_LIMIT,
+      deepScannedPairCount: deepScan?.scannedPairCount ?? null,
+      deepDisjointPairCount: deepScan?.disjointPairCount ?? null,
+      deepOverlapPairCount: deepScan?.overlapPairCount ?? null,
+      deepMaxScorePairScore: deepScan?.maxScorePairScore ?? null,
+      deepMaxDisjointPairScore: deepScan?.maxDisjointPairScore ?? null,
+      deepFirstDisjointPairRank: deepScan?.firstDisjointPairRank ?? null,
+      deepFirstDisjointPairScore: deepScan?.firstDisjointPairScore ?? null,
+      deepFirstDisjointLeftIndex: deepScan?.firstDisjointLeftIndex ?? null,
+      deepFirstDisjointRightIndex: deepScan?.firstDisjointRightIndex ?? null,
+      deepScanCapped: deepScan?.capped ?? null,
+      deepScanTimedOut: deepScan?.timedOut ?? null,
+      elapsedMs: Math.round(performance.now() - countStartedAt),
+    });
+    if (exactScan?.timedOut || sampleScan?.timedOut || deepScan?.timedOut) {
+      break;
+    }
+  }
+  return {
+    algorithm: "hhwx-raw-pair-frontier-census-v1",
+    behaviorChange: false,
+    countStopAfter: MEDLEY_EXACT_RAW_PAIR_FRONTIER_CENSUS_COUNT_STOP_AFTER,
+    exactScanLimit: MEDLEY_EXACT_RAW_PAIR_FRONTIER_CENSUS_EXACT_SCAN_LIMIT,
+    sampleScanLimit: MEDLEY_EXACT_RAW_PAIR_FRONTIER_CENSUS_SAMPLE_SCAN_LIMIT,
+    deepScanLimit: MEDLEY_EXACT_RAW_PAIR_FRONTIER_CENSUS_DEEP_SCAN_LIMIT,
+    thresholdCount: results.length,
+    elapsedMs: Math.round(performance.now() - startedAt),
+    thresholds: results,
+  };
+}
+
 function getMedleyExactRawCandidateCardIds(
   slot: MedleyExactRawCandidatePoolSlot,
   candidateIndex: number,
@@ -3442,6 +3719,65 @@ function buildMedleyExactRawAnchorFrontierProbeProfile(
       ? processedUpperMaxPairUpperToClose - processedUpperMaxRightBestPossible
       : null
   );
+  const pairFrontierThresholds: MedleyExactRawPairFrontierThreshold[] = [];
+  const addPairFrontierThreshold = (
+    name: string,
+    threshold: number,
+    anchorIndex: number | null = null,
+    anchorScore: number | null = null,
+  ): void => {
+    if (!Number.isFinite(threshold)) {
+      return;
+    }
+    pairFrontierThresholds.push({
+      name,
+      threshold,
+      reductionFromPairUpper: Number.isFinite(pairUpperBound) ? pairUpperBound - threshold : null,
+      anchorIndex,
+      anchorScore,
+    });
+  };
+  addPairFrontierThreshold("current-pair-upper", pairUpperBound);
+  addPairFrontierThreshold(
+    "generator-tail-close",
+    Number.isFinite(anchorPeekUpperBound) ? incumbentScore - anchorPeekUpperBound : Number.NEGATIVE_INFINITY,
+  );
+  if (processedUpperMaxAnchorScore !== null) {
+    addPairFrontierThreshold(
+      "processed-max-anchor-close",
+      incumbentScore - processedUpperMaxAnchorScore,
+      processedUpperMaxAnchorIndex,
+      processedUpperMaxAnchorScore,
+    );
+  }
+  const sampleAnchorIndices = [
+    0,
+    1,
+    8,
+    64,
+    512,
+    4096,
+    32768,
+    anchorSlot.length - 1,
+  ];
+  for (const sampleAnchorIndex of sampleAnchorIndices) {
+    if (sampleAnchorIndex < 0 || sampleAnchorIndex >= anchorSlot.length) {
+      continue;
+    }
+    const anchorScore = anchorSlot.scores[sampleAnchorIndex];
+    addPairFrontierThreshold(
+      `anchor-${sampleAnchorIndex}-close`,
+      incumbentScore - anchorScore,
+      sampleAnchorIndex,
+      anchorScore,
+    );
+  }
+  const pairFrontierCensus = buildMedleyExactRawPairFrontierCensusProfile(
+    leftSlot,
+    rightSlot,
+    pairFrontierThresholds,
+    localDeadlineAt,
+  );
 
   const refinementStartedAt = performance.now();
   let refinedProcessedAnchorCount = 0;
@@ -3734,6 +4070,7 @@ function buildMedleyExactRawAnchorFrontierProbeProfile(
       && Number.isFinite(leftPeekUpperBound)
       ? Math.max(0, leftPeekUpperBound - processedUpperMaxLeftPeekUpperToClose)
       : null,
+    pairFrontierCensus,
     refinedProcessedAnchorCount,
     refinedTimeboxed,
     refinedFinishedByDominatedTail,
