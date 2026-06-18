@@ -736,6 +736,9 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
   const enableExactCandidateRawResidentWinnerOracle = (
     optimization.enableExactCandidateRawResidentWinnerOracle === true
   );
+  const enableExactCandidateRawPairComplementUpper = (
+    optimization.enableExactCandidateRawPairComplementUpper === true
+  );
   const debugExactCandidatePreMaterializationCensus = (
     optimization.debugExactCandidatePreMaterializationCensus === true
   );
@@ -3885,6 +3888,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
           debugExactCandidateRawResidentFill,
           enableExactCandidateRawResidentResult,
           enableExactCandidateRawResidentWinnerOracle,
+          enableExactCandidateRawPairComplementUpper,
           debugExactCandidatePreMaterializationCensus,
           exactCandidateScoreCalculationCacheEntryLimit,
           enableExactCandidateScoreCalculationCachePressureFallback,
@@ -4375,6 +4379,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
           debugExactCandidateRawResidentFill,
           enableExactCandidateRawResidentResult,
           enableExactCandidateRawResidentWinnerOracle,
+          enableExactCandidateRawPairComplementUpper,
           debugExactCandidatePreMaterializationCensus,
           exactCandidateScoreCalculationCacheEntryLimit,
           enableExactCandidateScoreCalculationCachePressureFallback,

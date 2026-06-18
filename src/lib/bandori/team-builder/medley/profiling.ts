@@ -383,6 +383,7 @@ export function createInitialMedleyProfilingStats(
     exactCandidateJoinRawAnchorFrontierProbe: null,
     exactCandidateJoinRawCandidatePoolProfile: null,
     exactCandidateJoinRawPairComplementParity: null,
+    exactCandidateJoinRawPairComplementUpper: null,
     exactCandidateJoinRawPairUpperScanParity: null,
     exactCandidateJoinRawSolverInputCensus: null,
     exactCandidateJoinRawSolverHandoff: null,

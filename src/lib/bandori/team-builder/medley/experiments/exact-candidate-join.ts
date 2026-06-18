@@ -126,6 +126,7 @@ import type {
   MedleyExactCandidateJoinAbortReason,
   MedleyExactCandidateJoinResult,
   MedleyExactCandidateJoinSolveResult,
+  MedleyExactRawCandidateSlotLike,
   MedleyExactConstrainedSlotPeekUpperResult,
   MedleyExactSlotCandidateGlobalPruning,
   MedleyExactSlotCandidateGenerator,
@@ -3338,7 +3339,7 @@ function buildMedleyExactRawPairFrontierCensusProfile(
 }
 
 function getMedleyExactRawCandidateCardIds(
-  slot: MedleyExactRawCandidatePoolSlot,
+  slot: MedleyExactRawCandidateSlotLike,
   candidateIndex: number,
 ): number[] {
   const baseCardIndex = candidateIndex * MEDLEY_TEAM_SIZE;
@@ -4048,7 +4049,7 @@ function buildMedleyExactRawPairWitnessAnchorCoverProfile(
 }
 
 function medleyExactRawCandidateHasCardIdInSet(
-  slot: MedleyExactRawCandidatePoolSlot,
+  slot: MedleyExactRawCandidateSlotLike,
   candidateIndex: number,
   cardIds: Set<number>,
 ): boolean {
@@ -4063,9 +4064,9 @@ function medleyExactRawCandidateHasCardIdInSet(
 }
 
 function getFirstMedleyExactRawCandidateOverlapCardId(
-  leftSlot: MedleyExactRawCandidatePoolSlot,
+  leftSlot: MedleyExactRawCandidateSlotLike,
   leftIndex: number,
-  rightSlot: MedleyExactRawCandidatePoolSlot,
+  rightSlot: MedleyExactRawCandidateSlotLike,
   rightIndex: number,
 ): number | null {
   const leftBaseCardIndex = leftIndex * MEDLEY_TEAM_SIZE;
@@ -4085,7 +4086,7 @@ function getFirstMedleyExactRawCandidateOverlapCardId(
 }
 
 function findBestAvailableMedleyExactRawRightCandidateByForbiddenCardIds(
-  rightSlot: MedleyExactRawCandidatePoolSlot,
+  rightSlot: MedleyExactRawCandidateSlotLike,
   containingRightCandidateBitsByCardId: Map<number, Uint32Array>,
   wordCount: number,
   primaryForbiddenCardIds: readonly number[],
@@ -4137,8 +4138,8 @@ function findBestAvailableMedleyExactRawRightCandidateByForbiddenCardIds(
 }
 
 function estimateGeneratedMedleyExactRawCandidatePairUpperExcludingCardIdsByScan(
-  leftSlot: MedleyExactRawCandidatePoolSlot,
-  rightSlot: MedleyExactRawCandidatePoolSlot,
+  leftSlot: MedleyExactRawCandidateSlotLike,
+  rightSlot: MedleyExactRawCandidateSlotLike,
   containingRightCandidateBitsByCardId: Map<number, Uint32Array>,
   bannedCardIds: Iterable<number>,
   minimumRelevantScore = Number.NEGATIVE_INFINITY,
@@ -4183,8 +4184,8 @@ function estimateGeneratedMedleyExactRawCandidatePairUpperExcludingCardIdsByScan
 }
 
 function estimateGeneratedMedleyExactRawCandidatePairConflictSplitUpper(
-  leftSlot: MedleyExactRawCandidatePoolSlot,
-  rightSlot: MedleyExactRawCandidatePoolSlot,
+  leftSlot: MedleyExactRawCandidateSlotLike,
+  rightSlot: MedleyExactRawCandidateSlotLike,
   containingLeftBitsByCardId: Map<number, Uint32Array>,
   containingRightBitsByCardId: Map<number, Uint32Array>,
   anchorCardIds: readonly number[],
@@ -8174,6 +8175,12 @@ export function createMedleyExactSlotCandidateGenerator(
   );
   const globalPairComplementUpperCache: MedleyExactNestedNumberCache = new Map();
   const pairUpperQueryCache = new Map<string, MedleyExactCandidatePairUpperQuery>();
+  const rawPairUpperQueryCache = new Map<string, MedleyExactRawCandidatePairUpperQuery>();
+  let rawPairComplementUpperQueryCount = 0;
+  let rawPairComplementUpperFallbackCount = 0;
+  let rawPairComplementUpperBuildCount = 0;
+  let rawPairComplementUpperScannedLeftCandidateCount = 0;
+  let rawPairComplementUpperScannedRightWordCount = 0;
   const scoreOnlyCalculationCache = (
     disableScoreOnlyCalculationCache
       ? undefined
@@ -8792,6 +8799,39 @@ export function createMedleyExactSlotCandidateGenerator(
       rightSlotIndex,
       rightCandidates.length,
     ].join(":");
+    if (globalPruning.useRawPairComplementUpper === true && globalPruning.rawCandidatesBySlot) {
+      const rawLeftSlot = globalPruning.rawCandidatesBySlot[leftSlotIndex];
+      const rawRightSlot = globalPruning.rawCandidatesBySlot[rightSlotIndex];
+      if (
+        rawLeftSlot
+        && rawRightSlot
+        && rawLeftSlot.length === leftCandidates.length
+        && rawRightSlot.length === rightCandidates.length
+      ) {
+        let rawPairUpperQuery = rawPairUpperQueryCache.get(pairUpperQueryKey);
+        if (!rawPairUpperQuery) {
+          rawPairUpperQuery = buildMedleyExactRawCandidatePairUpperQuery(rawLeftSlot, rawRightSlot);
+          rawPairUpperQueryCache.set(pairUpperQueryKey, rawPairUpperQuery);
+          rawPairComplementUpperBuildCount += 1;
+        }
+        const rawResult = estimateGeneratedMedleyExactRawCandidatePairUpperExcludingCardIds(
+          rawPairUpperQuery,
+          selectedCardIds,
+          minimumRelevantScore,
+          profiling,
+        );
+        rawPairComplementUpperQueryCount += 1;
+        rawPairComplementUpperScannedLeftCandidateCount += rawResult.scannedLeftCandidateCount;
+        rawPairComplementUpperScannedRightWordCount += rawResult.scannedRightWordCount;
+        const complementUpperBound = Math.max(
+          rawResult.upperBound,
+          finitePairUnseenUpperBound,
+        );
+        setMedleyExactNestedNumberCache(globalPairComplementUpperCache, cachePrefixKey, cardKey, complementUpperBound);
+        return complementUpperBound;
+      }
+      rawPairComplementUpperFallbackCount += 1;
+    }
     let pairUpperQuery = pairUpperQueryCache.get(pairUpperQueryKey);
     if (!pairUpperQuery) {
       pairUpperQuery = buildMedleyExactCandidatePairUpperQuery(
@@ -10152,6 +10192,7 @@ export function createMedleyExactSlotCandidateGenerator(
     compactGlobalComplementUpperCache?.clear();
     globalPairComplementUpperCache.clear();
     pairUpperQueryCache.clear();
+    rawPairUpperQueryCache.clear();
   };
   const peekFrontierNodeProfile = (): Record<string, unknown> | null => {
     const node = heapKeyMode === "slot"
@@ -10215,6 +10256,14 @@ export function createMedleyExactSlotCandidateGenerator(
           * Uint32Array.BYTES_PER_ELEMENT
         );
       }
+      let rawRightCandidateBitsetBytes = 0;
+      for (const query of rawPairUpperQueryCache.values()) {
+        rawRightCandidateBitsetBytes += (
+          query.rightCandidateBitsetWordCount
+          * query.containingRightCandidateBitsByCardId.size
+          * Uint32Array.BYTES_PER_ELEMENT
+        );
+      }
       return {
         heapNodeCount: heap.length,
         slotUpperHeapNodeCount: slotUpperHeap.length,
@@ -10231,9 +10280,16 @@ export function createMedleyExactSlotCandidateGenerator(
         globalPairComplementUpperCacheSize: countMedleyExactNestedNumberCacheEntries(globalPairComplementUpperCache),
         globalPairComplementUpperCacheBucketCount: globalPairComplementUpperCache.size,
         pairUpperQueryCacheSize: pairUpperQueryCache.size,
+        rawPairUpperQueryCacheSize: rawPairUpperQueryCache.size,
+        rawPairComplementUpperQueryCount,
+        rawPairComplementUpperFallbackCount,
+        rawPairComplementUpperBuildCount,
+        rawPairComplementUpperScannedLeftCandidateCount,
+        rawPairComplementUpperScannedRightWordCount,
         highPairRecordCount,
         highPairRecordBitsetMiB: roundMiB(highPairRecordBitsetBytes),
         rightCandidateBitsetMiB: roundMiB(rightCandidateBitsetBytes),
+        rawRightCandidateBitsetMiB: roundMiB(rawRightCandidateBitsetBytes),
         scoreOnlyCalculationCache: scoreOnlyCalculationCache
           ? buildMedleyExactScoreCalculationCacheProfile(
             slot,
@@ -10674,6 +10730,13 @@ type MedleyExactCandidatePairUpperQuery = {
   lowMemoryHighPairPrefixRecordLimit?: number;
 };
 
+type MedleyExactRawCandidatePairUpperQuery = {
+  leftSlot: MedleyExactRawCandidateSlotLike;
+  rightSlot: MedleyExactRawCandidateSlotLike;
+  rightCandidateBitsetWordCount: number;
+  containingRightCandidateBitsByCardId: Map<number, Uint32Array>;
+};
+
 type MedleyExactCandidateSlotAvailabilityQuery = {
   candidates: MedleyTeamCandidate[];
   wordCount: number;
@@ -10761,6 +10824,75 @@ function buildMedleyExactCandidatePairUpperQuery(
     );
   }
   return query;
+}
+
+function buildMedleyExactRawContainingCandidateBitsByCardId(
+  slot: MedleyExactRawCandidateSlotLike,
+  wordCount: number,
+): Map<number, Uint32Array> {
+  const containingBitsByCardId = new Map<number, Uint32Array>();
+  for (let candidateIndex = 0; candidateIndex < slot.length; candidateIndex += 1) {
+    const wordIndex = candidateIndex >> 5;
+    const bit = 1 << (candidateIndex & 31);
+    const baseCardIndex = candidateIndex * MEDLEY_TEAM_SIZE;
+    for (let cardIndex = 0; cardIndex < MEDLEY_TEAM_SIZE; cardIndex += 1) {
+      const cardId = slot.cardIds[baseCardIndex + cardIndex];
+      if (cardId < 0) {
+        continue;
+      }
+      let containingBits = containingBitsByCardId.get(cardId);
+      if (!containingBits) {
+        containingBits = new Uint32Array(wordCount);
+        containingBitsByCardId.set(cardId, containingBits);
+      }
+      containingBits[wordIndex] |= bit;
+    }
+  }
+  return containingBitsByCardId;
+}
+
+function buildMedleyExactRawCandidatePairUpperQuery(
+  leftSlot: MedleyExactRawCandidateSlotLike,
+  rightSlot: MedleyExactRawCandidateSlotLike,
+): MedleyExactRawCandidatePairUpperQuery {
+  const rightCandidateBitsetWordCount = Math.ceil(rightSlot.length / 32);
+  return {
+    leftSlot,
+    rightSlot,
+    rightCandidateBitsetWordCount,
+    containingRightCandidateBitsByCardId: buildMedleyExactRawContainingCandidateBitsByCardId(
+      rightSlot,
+      rightCandidateBitsetWordCount,
+    ),
+  };
+}
+
+function estimateGeneratedMedleyExactRawCandidatePairUpperExcludingCardIds(
+  query: MedleyExactRawCandidatePairUpperQuery,
+  bannedCardIds: Iterable<number>,
+  minimumRelevantScore = Number.NEGATIVE_INFINITY,
+  profiling?: BandoriMedleyTeamSearchProfilingStats,
+): {
+  upperBound: number;
+  scannedLeftCandidateCount: number;
+  scannedRightWordCount: number;
+} {
+  if (profiling) {
+    profiling.exactCandidateJoinPairComplementQueryCount += 1;
+  }
+  const result = estimateGeneratedMedleyExactRawCandidatePairUpperExcludingCardIdsByScan(
+    query.leftSlot,
+    query.rightSlot,
+    query.containingRightCandidateBitsByCardId,
+    bannedCardIds,
+    minimumRelevantScore,
+  );
+  if (profiling) {
+    profiling.exactCandidateJoinPairComplementScanCount += (
+      result.scannedLeftCandidateCount + result.scannedRightWordCount
+    );
+  }
+  return result;
 }
 
 function buildMedleyExactCandidateSlotAvailabilityQuery(
@@ -13715,6 +13847,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     debugExactCandidateRawResidentFill?: boolean;
     enableExactCandidateRawResidentResult?: boolean;
     enableExactCandidateRawResidentWinnerOracle?: boolean;
+    enableExactCandidateRawPairComplementUpper?: boolean;
     debugExactCandidateSignatureCensus?: boolean;
     debugExactCandidateUpperReplay?: boolean;
     debugExactCandidateAnchorFrontierCheapUpperProbe?: boolean;
@@ -13781,6 +13914,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     profiling.exactCandidateJoinRawAnchorFrontierProbe = null;
     profiling.exactCandidateJoinRawCandidatePoolProfile = null;
     profiling.exactCandidateJoinRawPairComplementParity = null;
+    profiling.exactCandidateJoinRawPairComplementUpper = null;
     profiling.exactCandidateJoinRawPairUpperScanParity = null;
     profiling.exactCandidateJoinRawSolverInputCensus = null;
     profiling.exactCandidateJoinRawSolverHandoff = null;
@@ -13938,8 +14072,12 @@ export function searchMedleyConfigurationByExactCandidateJoin(
       ? Math.trunc(context.debugExactCandidateRawMirrorMaxCandidateTotal)
       : MEDLEY_EXACT_RAW_CANDIDATE_MIRROR_MAX_CANDIDATE_TOTAL
   );
-  const shouldSkipRawCandidateMirrorByCardCount = (
+  const shouldUseRawCandidateMirror = (
     context.debugExactCandidateRawMirror === true
+    || context.enableExactCandidateRawPairComplementUpper === true
+  );
+  const shouldSkipRawCandidateMirrorByCardCount = (
+    shouldUseRawCandidateMirror
     && (
       rawCandidateMirrorMaxCardCount === null
       || rawCandidateMirrorCardCount > rawCandidateMirrorMaxCardCount
@@ -13990,7 +14128,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     context.debugExactCandidatePrefixOtherUpperSourceReplayMaxMargin,
   ));
   const candidatesBySlot: MedleyTeamCandidate[][] = Array.from({ length: slots.length }, () => []);
-  const rawCandidateMirror = context.debugExactCandidateRawMirror === true
+  const rawCandidateMirror = shouldUseRawCandidateMirror
     && !shouldSkipRawCandidateMirrorByCardCount
     ? createMedleyExactRawCandidateMirror(slots.length, rawCandidateMirrorMaxCandidateTotal)
     : null;
@@ -14056,6 +14194,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     };
   };
   const recordRawSolverHandoffProfile = (): void => {
+    recordRawPairComplementUpperProfile();
     if (context.debugExactCandidateRawSolverHandoff !== true) {
       return;
     }
@@ -15628,6 +15767,36 @@ export function searchMedleyConfigurationByExactCandidateJoin(
   const getCandidateFillProfilingGenerators = (): MedleyExactSlotCandidateGenerator[] => (
     [...new Set([...generators, ...candidateFillGenerators, ...activeGeneratorsBySlot])]
   );
+  const recordRawPairComplementUpperProfile = (): void => {
+    if (context.enableExactCandidateRawPairComplementUpper !== true) {
+      return;
+    }
+    const generatorProfiles = getCandidateFillProfilingGenerators().map((generator) => (
+      generator.memoryProfile ? generator.memoryProfile() : {}
+    ));
+    const sumProfileNumber = (key: string): number => generatorProfiles.reduce((sum, profile) => {
+      const value = profile[key];
+      return sum + (typeof value === "number" && Number.isFinite(value) ? value : 0);
+    }, 0);
+    profiling.exactCandidateJoinRawPairComplementUpper = {
+      enabled: true,
+      behaviorChange: true,
+      representation: "raw-slot-scan-upper-v1",
+      rawMirrorEnabled: rawCandidateMirror !== null,
+      rawMirrorDisabled: rawCandidateMirror?.disabledReason !== null,
+      rawMirrorDisabledReason: rawCandidateMirror?.disabledReason ?? null,
+      generatorCount: generatorProfiles.length,
+      queryCount: sumProfileNumber("rawPairComplementUpperQueryCount"),
+      fallbackCount: sumProfileNumber("rawPairComplementUpperFallbackCount"),
+      buildCount: sumProfileNumber("rawPairComplementUpperBuildCount"),
+      cacheSize: sumProfileNumber("rawPairUpperQueryCacheSize"),
+      scannedLeftCandidateCount: sumProfileNumber("rawPairComplementUpperScannedLeftCandidateCount"),
+      scannedRightWordCount: sumProfileNumber("rawPairComplementUpperScannedRightWordCount"),
+      rawRightCandidateBitsetMiB: roundMiB(
+        sumProfileNumber("rawRightCandidateBitsetMiB") * BYTES_PER_MIB,
+      ),
+    };
+  };
   const shouldUseCompactCandidateKeySet = context.enableExactCandidateCompactCandidateKeySet === true;
   const candidateKeysBySlot = candidatesBySlot.map((candidates) => (
     createMedleyExactCandidateCardKeySet(candidates, shouldUseCompactCandidateKeySet)
@@ -16016,6 +16185,12 @@ export function searchMedleyConfigurationByExactCandidateJoin(
       remainingSlotIndices,
       scoreCutoff: exactJoinProofCutoffScore,
       candidatesBySlot,
+      rawCandidatesBySlot: context.enableExactCandidateRawPairComplementUpper === true
+        && rawCandidateMirror
+        && rawCandidateMirror.disabledReason === null
+        ? rawCandidateMirror.slots
+        : undefined,
+      useRawPairComplementUpper: context.enableExactCandidateRawPairComplementUpper === true,
       pairUnseenUpperBound: exactPairUnseenUpperByExcludedSlot[slotIndex] ?? undefined,
       useCapacityComplementUpper: false,
       capacityComplementMargin: MEDLEY_EXACT_CANDIDATE_JOIN_CAPACITY_COMPLEMENT_MARGIN,

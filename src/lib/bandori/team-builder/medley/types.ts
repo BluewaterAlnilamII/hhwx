@@ -104,6 +104,7 @@ export type BandoriMedleySearchOptimizationOptions = {
   debugExactCandidateRawResidentFill?: boolean;
   enableExactCandidateRawResidentResult?: boolean;
   enableExactCandidateRawResidentWinnerOracle?: boolean;
+  enableExactCandidateRawPairComplementUpper?: boolean;
   debugExactCandidateSignatureCensus?: boolean;
   debugExactCandidateUpperReplay?: boolean;
   debugExactCandidateAnchorFrontierCheapUpperProbe?: boolean;
@@ -673,6 +674,7 @@ export type BandoriMedleyTeamSearchProfilingStats = {
   exactCandidateJoinRawAnchorFrontierProbe: Record<string, unknown> | null;
   exactCandidateJoinRawCandidatePoolProfile: Record<string, unknown> | null;
   exactCandidateJoinRawPairComplementParity: Record<string, unknown> | null;
+  exactCandidateJoinRawPairComplementUpper: Record<string, unknown> | null;
   exactCandidateJoinRawPairUpperScanParity: Record<string, unknown> | null;
   exactCandidateJoinRawSolverInputCensus: Record<string, unknown> | null;
   exactCandidateJoinRawSolverHandoff: Record<string, unknown> | null;
@@ -838,10 +840,18 @@ export type MedleyExactSlotCandidateGlobalPruning = {
   remainingSlotIndices: number[];
   scoreCutoff: number;
   candidatesBySlot?: MedleyTeamCandidate[][];
+  rawCandidatesBySlot?: MedleyExactRawCandidateSlotLike[];
+  useRawPairComplementUpper?: boolean;
   pairUnseenUpperBound?: number;
   useCapacityComplementUpper?: boolean;
   capacityComplementMargin?: number;
   excludedCandidateKeys?: MedleyExactCandidateCardKeySet;
+};
+
+export type MedleyExactRawCandidateSlotLike = {
+  scores: Int32Array;
+  cardIds: Int32Array;
+  length: number;
 };
 
 export type MedleyExactCandidateCardKey = bigint | string;

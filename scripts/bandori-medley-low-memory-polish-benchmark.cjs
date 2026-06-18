@@ -75,6 +75,7 @@ function printUsage() {
     "  HHWX_LOW_MEMORY_RAW_RESIDENT_FILL=1 build small-row raw-resident winner result diagnostics",
     "  HHWX_LOW_MEMORY_RAW_RESIDENT_RESULT=1 return raw-row hydrated exact results when they match the object oracle",
     "  HHWX_LOW_MEMORY_RAW_RESIDENT_WINNER_ORACLE=1 use raw-row winner hydration instead of a full rich object oracle",
+    "  HHWX_LOW_MEMORY_RAW_PAIR_COMPLEMENT_UPPER=1 experimental scan probe for raw pair-complement upper queries",
     "  HHWX_LOW_MEMORY_PRE_MATERIALIZATION_CENSUS=1 record no-op candidate-birth census before rich candidate materialization",
     "  HHWX_LOW_MEMORY_DISABLE_GLOBAL_COMPLEMENT_CACHE=1 disable exact-join global complement upper cache",
     "  HHWX_LOW_MEMORY_COMPACT_GLOBAL_COMPLEMENT_CACHE=1 use compact exact-join global complement upper cache (default)",
@@ -167,6 +168,11 @@ function hhwxOptimizationJson() {
   }
   if (process.env.HHWX_LOW_MEMORY_RAW_MIRROR === "1") {
     optimization.debugExactCandidateRawMirror = true;
+  }
+  if (
+    process.env.HHWX_LOW_MEMORY_RAW_MIRROR === "1"
+    || process.env.HHWX_LOW_MEMORY_RAW_PAIR_COMPLEMENT_UPPER === "1"
+  ) {
     const rawMirrorMaxCardCount = Number(process.env.HHWX_LOW_MEMORY_RAW_MIRROR_MAX_CARD_COUNT);
     if (Number.isFinite(rawMirrorMaxCardCount) && rawMirrorMaxCardCount > 0) {
       optimization.debugExactCandidateRawMirrorMaxCardCount = Math.trunc(rawMirrorMaxCardCount);
@@ -197,6 +203,10 @@ function hhwxOptimizationJson() {
     optimization.debugExactCandidateRawResidentFill = true;
     optimization.enableExactCandidateRawResidentResult = true;
     optimization.enableExactCandidateRawResidentWinnerOracle = true;
+  }
+  if (process.env.HHWX_LOW_MEMORY_RAW_PAIR_COMPLEMENT_UPPER === "1") {
+    optimization.debugExactCandidateRawMirror = true;
+    optimization.enableExactCandidateRawPairComplementUpper = true;
   }
   if (process.env.HHWX_LOW_MEMORY_SIGNATURE_CENSUS === "1") {
     optimization.debugExactCandidateJoinMemoryAttribution = true;
@@ -624,6 +634,13 @@ function patchHhwxBenchmarkScoreMetrics() {
         + "    exactCandidateJoinRawPairComplementParity: profiling.exactCandidateJoinRawPairComplementParity ?? null,\n",
     );
   }
+  if (!patched.includes("exactCandidateJoinRawPairComplementUpper: profiling.exactCandidateJoinRawPairComplementUpper ?? null")) {
+    patched = patched.replace(
+      /(exactCandidateJoinMemorySnapshots: profiling\.exactCandidateJoinMemorySnapshots \?\? null,\r?\n)/,
+      "$1"
+        + "    exactCandidateJoinRawPairComplementUpper: profiling.exactCandidateJoinRawPairComplementUpper ?? null,\n",
+    );
+  }
   if (!patched.includes("exactCandidateJoinLastAnchorFrontierPrecheckSlotIndex: profiling.exactCandidateJoinLastAnchorFrontierPrecheckSlotIndex ?? null")) {
     patched = patched.replace(
       /(exactCandidateJoinLastAnchorFrontierProofHighPairRecordUpperCount: \(\r?\n\s+profiling\.exactCandidateJoinLastAnchorFrontierProofHighPairRecordUpperCount \?\? null\r?\n\s+\),\r?\n)/,
@@ -664,6 +681,7 @@ function patchHhwxBenchmarkScoreMetrics() {
     || !patched.includes("exactCandidateJoinRawAnchorFrontierProbe: profiling.exactCandidateJoinRawAnchorFrontierProbe ?? null")
     || !patched.includes("exactCandidateJoinRawCandidatePoolProfile: profiling.exactCandidateJoinRawCandidatePoolProfile ?? null")
     || !patched.includes("exactCandidateJoinRawPairComplementParity: profiling.exactCandidateJoinRawPairComplementParity ?? null")
+    || !patched.includes("exactCandidateJoinRawPairComplementUpper: profiling.exactCandidateJoinRawPairComplementUpper ?? null")
     || !patched.includes("exactCandidateJoinRawPairUpperScanParity: profiling.exactCandidateJoinRawPairUpperScanParity ?? null")
     || !patched.includes("exactCandidateJoinRawSolverInputCensus: profiling.exactCandidateJoinRawSolverInputCensus ?? null")
     || !patched.includes("exactCandidateJoinRawSolverHandoff: profiling.exactCandidateJoinRawSolverHandoff ?? null")
