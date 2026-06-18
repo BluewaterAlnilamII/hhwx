@@ -63,6 +63,7 @@ function printUsage() {
     "  HHWX_LOW_MEMORY_RAW_ANCHOR_CHEAP_UPPER_REPLAY=1 compare anchor cheap-upper replay over local raw candidate pools",
     "  HHWX_LOW_MEMORY_RAW_ANCHOR_FRONTIER_PROBE=1 run guarded no-op raw-index anchor/frontier probe; hard rows skip raw pool build",
     "  HHWX_LOW_MEMORY_RAW_ANCHOR_FRONTIER_CONSTRAINED_PEEK=1 add heavy constrained-peek samples to the raw anchor/frontier probe",
+    "  HHWX_LOW_MEMORY_RAW_PAIR_PRICING_FRONTIER=1 add conflict-aware raw pair pricing frontier samples",
     "  HHWX_LOW_MEMORY_RAW_ANCHOR_FRONTIER_PROBE_MAX_CANDIDATES=N allow the raw anchor/frontier probe to build raw pools up to N candidates",
     "  HHWX_LOW_MEMORY_RAW_CANDIDATE_POOL_PROFILE=1 build opt-in raw typed-array candidate pool profile",
     "  HHWX_LOW_MEMORY_RAW_PAIR_COMPLEMENT_PARITY=1 compare banned-card pair complement over shared raw candidate pool",
@@ -248,6 +249,10 @@ function hhwxOptimizationJson() {
   if (process.env.HHWX_LOW_MEMORY_RAW_ANCHOR_FRONTIER_CONSTRAINED_PEEK === "1") {
     optimization.debugExactCandidateRawAnchorFrontierProbe = true;
     optimization.debugExactCandidateRawAnchorFrontierConstrainedPeekProbe = true;
+  }
+  if (process.env.HHWX_LOW_MEMORY_RAW_PAIR_PRICING_FRONTIER === "1") {
+    optimization.debugExactCandidateRawAnchorFrontierProbe = true;
+    optimization.debugExactCandidateRawPairPricingFrontierProbe = true;
   }
   if (process.env.HHWX_LOW_MEMORY_RAW_ANCHOR_FRONTIER_PROBE_MAX_CANDIDATES) {
     const parsed = Number(process.env.HHWX_LOW_MEMORY_RAW_ANCHOR_FRONTIER_PROBE_MAX_CANDIDATES);

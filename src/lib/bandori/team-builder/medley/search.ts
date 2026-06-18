@@ -694,6 +694,9 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
   const debugExactCandidateRawAnchorFrontierConstrainedPeekProbe = (
     optimization.debugExactCandidateRawAnchorFrontierConstrainedPeekProbe === true
   );
+  const debugExactCandidateRawPairPricingFrontierProbe = (
+    optimization.debugExactCandidateRawPairPricingFrontierProbe === true
+  );
   const parsedDebugExactCandidateRawAnchorFrontierProbeMaxCandidateTotal = (
     optimization.debugExactCandidateRawAnchorFrontierProbeMaxCandidateTotal !== undefined
       ? Math.trunc(optimization.debugExactCandidateRawAnchorFrontierProbeMaxCandidateTotal)
@@ -3847,6 +3850,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
           debugExactCandidateRawAnchorCheapUpperReplay,
           debugExactCandidateRawAnchorFrontierProbe,
           debugExactCandidateRawAnchorFrontierConstrainedPeekProbe,
+          debugExactCandidateRawPairPricingFrontierProbe,
           debugExactCandidateRawAnchorFrontierProbeMaxCandidateTotal,
           debugExactCandidateRawCandidatePoolProfile,
           debugExactCandidateRawPairComplementParity,
@@ -4329,6 +4333,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
           debugExactCandidateRawAnchorCheapUpperReplay,
           debugExactCandidateRawAnchorFrontierProbe,
           debugExactCandidateRawAnchorFrontierConstrainedPeekProbe,
+          debugExactCandidateRawPairPricingFrontierProbe,
           debugExactCandidateRawAnchorFrontierProbeMaxCandidateTotal,
           debugExactCandidateRawCandidatePoolProfile,
           debugExactCandidateRawPairComplementParity,
