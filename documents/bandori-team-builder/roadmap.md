@@ -175,6 +175,9 @@ Baseline and gate artifacts retained:
 | `low-memory-polish-hhwx-2026-06-18T08-49-14-925Z.json` | `P02:260` raw winner late-hydration hard-row guard smoke | bounded gap `382812`, average `9376984`, max `9412868`, `0 failed / 0 timedOut / 0 memoryLimited`, peak `2898 MiB`; handoff readiness still true for `747802` raw rows, hydration replay safely skips at `candidate-total-limit = 50000` |
 | `low-memory-polish-hhwx-2026-06-18T09-01-25-508Z.json` | `P01:none` raw-vs-object result parity blocker smoke | exact, gap `0`, average `7927236`, max `7982835`, peak `1214 MiB`; raw/object replay both find score `7710622` and identical flat card ids, but object max/min are `7762007 / 7661173` while raw max/min remain `7710622 / 7710622` |
 | `low-memory-polish-hhwx-2026-06-18T09-03-15-040Z.json` | `P02:260` raw-vs-object result parity hard-row guard smoke | bounded gap `382812`, average `9376984`, max `9412868`, `0 failed / 0 timedOut / 0 memoryLimited`, peak `2916 MiB`; handoff readiness remains true for `747802` rows, raw hydration replay skips at `50000`, result parity skips at `20000` |
+| `low-memory-polish-hhwx-2026-06-18T09-21-16-192Z.json` | `P01:none` raw winner exact-result hydration parity smoke | exact, gap `0`, average `7927236`, max `7982835`, peak `1019 MiB`; raw stored max/min stay thin (`7710622 / 7710622`), but late exact hydration matches object max/min (`7762007 / 7661173`) and card ids |
+| `low-memory-polish-hhwx-2026-06-18T09-26-29-908Z.json` | `P02:260` no-handoff control after exact-result hydration WIP | bounded gap `382812`, average `9376984`, max `9412868`, `0 failed / 0 timedOut / 0 memoryLimited`, peak `2962 MiB`; confirms the OOM seen with unguarded heavy handoff hydration was diagnostic-only, not a default path regression |
+| `low-memory-polish-hhwx-2026-06-18T09-31-28-943Z.json` | `P02:260` guarded raw handoff after exact-result hydration cap | bounded gap `382812`, average `9376984`, max `9412868`, `0 failed / 0 timedOut / 0 memoryLimited`, peak `2927 MiB`; full `747802` rows remain handoff-ready from `shadow-raw-candidate-builder`, raw storage `40 MiB`, exact winner hydration skips above the `20000` result-parity cap |
 
 Use the pressure validation environment for early-pruning gates:
 
@@ -254,9 +257,11 @@ Full hard-row raw mirror:
 - the initial hydration attempt exposed the exact boundary this architecture must solve: thin candidate results do not retain `result.cards`. The fix now rehydrates cards from retained `cardSearchIndex0..4` / card ids without mutating the stored candidate;
 - `P02:260` artifact `low-memory-polish-hhwx-2026-06-18T08-49-14-925Z.json` keeps the hard-row guard: full `747802` rows remain handoff-ready, but raw solver hydration replay skips at the `50000` candidate cap instead of attempting a huge diagnostic solve;
 - capped raw-vs-object result parity now runs on small rows. `P01:none` artifact `low-memory-polish-hhwx-2026-06-18T09-01-25-508Z.json` proves the parity harness works and exposes the next semantic blocker: raw and object agree on primary score `7710622`, average score `7710622`, and flat card ids, but object max/min are `7762007 / 7661173` while raw max/min remain `7710622 / 7710622`;
-- the raw solver now keeps raw average/max/min fields and performs a same-third-score max refinement, but that is not sufficient. Before raw result handoff can become authoritative, we need per-slot/source diagnostics for same-card/same-score duplicate candidates and a raw tie-break rule that matches HHWX object result ordering across `score -> maxScore -> card identity`;
+- per-slot/source diagnostics prove the raw/object max-min mismatch is not caused by different cards, different card instances, or a different leader. The same ordered card ids and instance keys are selected; the mismatch comes from thin score-only candidate residency;
+- exact-result late hydration now fixes the output-field side of that problem. `P01:none` artifact `low-memory-polish-hhwx-2026-06-18T09-21-16-192Z.json` shows raw stored max/min stay thin (`7710622 / 7710622`), while `hydratedMaxScoreMatchesObject = true` and `hydratedMinScoreMatchesObject = true` after re-evaluating only the three raw winner teams;
 - `P02:260` artifact `low-memory-polish-hhwx-2026-06-18T09-03-15-040Z.json` keeps the hard-row guard: full `747802` rows remain handoff-ready, raw hydration replay skips at `50000`, and result parity skips at `20000`;
-- conclusion: the raw-row representation is not the memory bottleneck, sorted raw rows can be made order-compatible with the object solver, and raw winner indices can be late-hydrated into a full medley result on small rows. However, raw solver handoff is not yet semantically equivalent because max/min tie behavior is not closed. The next architecture slice must diagnose and fix raw max/min tie semantics before guarded raw-resident fill can replace rich candidate residency.
+- an unguarded exact-result hydration attempt on the hard P02 handoff path OOMed, so exact hydration is now capped to the small result-parity regime. Control artifact `low-memory-polish-hhwx-2026-06-18T09-26-29-908Z.json` proves the default/no-handoff path is unaffected, while guarded artifact `low-memory-polish-hhwx-2026-06-18T09-31-28-943Z.json` keeps P02 stable and records `exactWinnerHydrationEnabled = false` for `747802` rows;
+- conclusion: the raw-row representation is not the memory bottleneck, sorted raw rows can be made order-compatible with the object solver, and raw winner indices can be late-hydrated into full HHWX result fields. The remaining raw-solver handoff risk is narrower: equal-average ties must still be resolved in a way that matches HHWX object ordering or explicitly late-hydrates tie frontiers. That is the next raw-resident fill acceptance gate, not another cache/object-shape tuning target.
 
 Two-row prefix margin replay sample:
 
@@ -520,8 +525,8 @@ Early-pruning success targets:
    - configurable mirror caps now prove a full P02 hard row can retain all `747802` raw rows in about `40 MiB` with no parity mismatches.
    - raw solver handoff readiness now proves those rows are ordered and hydration-ready via `sourceIndex` and explicit card ids.
    - raw solver winner indices now late-hydrate successfully on small rows, including thin-result candidates whose cards are reconstructed from retained card search indices.
-   - capped raw-vs-object result parity now runs on small rows and has exposed a max/min tie-semantics blocker.
-   - next extension: add per-slot raw/object winner source diagnostics and close raw max/min tie semantics, then create a guarded hard-row resident fill mode that appends raw rows without retaining all rich candidate bodies.
+   - capped raw-vs-object result parity now runs on small rows and proves late exact hydration can recover full max/min output fields from thin raw winners.
+   - next extension: close equal-average tie semantics with a bounded late-hydrated tie frontier, then create a guarded hard-row resident fill mode that appends raw rows without retaining all rich candidate bodies.
 4. Prototype pre-evaluation upper pruning:
    - start with HHWX's existing `estimateMedleyExactSlotNodeUpperBound` and calc-like incumbent comparison;
    - record a proof ledger before any real skip;
@@ -545,7 +550,7 @@ Early-pruning success targets:
    - keep the first slice no-op with respect to search result and proof state;
    - retain `sourceIndex` so winners and debug output can be late-hydrated from the original rich candidate only when needed;
    - first target is final-join/frontier helper read paths over raw scores and card ids, not default release of rich candidates;
-   - acceptance for this slice is `0` raw mismatch, unchanged score/average/max/gap/status, and no P02 OOM.
+   - acceptance for this slice is `0` raw mismatch, unchanged score/average/max/gap/status, matching equal-average tie handling, and no P02 OOM.
    - the raw anchor/frontier rerun audit shows large transient raw-pool probes are not stable inside the current exact-join lifecycle; prioritize offline single-configuration raw pricing or raw-resident storage before revisiting conflict-aware raw pair-upper tightening.
    - do not use raw mirror as the hard-row storage prototype; it is now a small-sample field-consistency diagnostic only.
 9. Tighten the prefix proof before broader pruning:

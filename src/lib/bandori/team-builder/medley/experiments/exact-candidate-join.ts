@@ -112,6 +112,7 @@ import {
   estimateSearchScopeScoreUpperBound,
   hasCharacterIndexInMask,
 } from "@/lib/bandori/team-builder/core";
+import { getCardInstanceKeys } from "@/lib/bandori/team-builder/core/card-identity";
 import { groupSearchCardsByCharacter } from "@/lib/bandori/team-builder/core/cards";
 import type {
   BandoriMedleyTeamSearchProfilingStats,
@@ -6352,6 +6353,12 @@ function hydrateMedleyExactRawIndexFinalJoinProfile(
   candidatesBySlot: readonly MedleyTeamCandidate[][],
   configuration: BandoriAreaItemConfiguration,
   solveProfile: MedleyExactRawIndexFinalJoinSolveProfile,
+  exactHydration?: {
+    server: number;
+    perfectRate: number;
+    stats: BandoriMedleyTeamSearchStats;
+    profiling: BandoriMedleyTeamSearchProfilingStats;
+  },
 ): Record<string, unknown> {
   if (solveProfile.skipped) {
     return {
@@ -6391,6 +6398,32 @@ function hydrateMedleyExactRawIndexFinalJoinProfile(
         failedSourceIndex: sourceIndex,
       };
     }
+    if (exactHydration) {
+      const resultCandidate = hydrateMedleyExactCandidateForResult(
+        slot,
+        candidate,
+        exactHydration.server,
+        exactHydration.perfectRate,
+        exactHydration.stats,
+        exactHydration.profiling,
+      );
+      if (!resultCandidate) {
+        return {
+          attempted: true,
+          hydrated: false,
+          failureReason: "unable-to-hydrate-result-candidate",
+          rawBestScore,
+          slotOrder,
+          bestSourceIndices,
+          failedOrderIndex: orderIndex,
+          failedSlotIndex: slotIndex,
+          failedSourceIndex: sourceIndex,
+        };
+      }
+      selectedBySong[slot.songIndex] = resultCandidate;
+      continue;
+    }
+
     const retainedResultCards = (candidate.result as BandoriTeamSearchResult & { cards?: SearchCard[] }).cards;
     const resultCards = Array.isArray(retainedResultCards) && retainedResultCards.length === MEDLEY_TEAM_SIZE
       ? retainedResultCards
@@ -6435,6 +6468,7 @@ function hydrateMedleyExactRawIndexFinalJoinProfile(
   return {
     attempted: true,
     hydrated: true,
+    hydrationMode: exactHydration ? "exact-result" : "candidate-cards",
     score: result.score,
     averageScore: result.averageScore,
     maxScore: result.maxScore,
@@ -6458,6 +6492,158 @@ function hydrateMedleyExactRawIndexFinalJoinProfile(
     bestSourceIndices,
     bestCardIdsBySlot: solveProfile.bestCardIdsBySlot ?? [],
   };
+}
+
+function getMedleyExactOrderedCardIdsForCandidate(
+  slot: MedleySlotSearch,
+  candidate: MedleyTeamCandidate,
+): number[] {
+  return getMedleyExactCandidateCards(slot, candidate).map((card) => card.cardId);
+}
+
+function getMedleyExactOrderedCardInstanceKeysForCandidate(
+  slot: MedleySlotSearch,
+  candidate: MedleyTeamCandidate,
+): string[] {
+  return getCardInstanceKeys(getMedleyExactCandidateCards(slot, candidate));
+}
+
+function getMedleyExactSortedCardIds(cardIds: readonly number[]): number[] {
+  return [...cardIds].sort((left, right) => left - right);
+}
+
+function areMedleyExactCardIdListsEqual(
+  left: readonly number[],
+  right: readonly number[],
+): boolean {
+  return left.length === right.length && left.every((cardId, index) => cardId === right[index]);
+}
+
+function buildMedleyExactCandidateSourceSummary(
+  slot: MedleySlotSearch,
+  candidate: MedleyTeamCandidate,
+  sourceIndex: number,
+): Record<string, unknown> {
+  const orderedCardIds = getMedleyExactOrderedCardIdsForCandidate(slot, candidate);
+  const orderedCardInstanceKeys = getMedleyExactOrderedCardInstanceKeysForCandidate(slot, candidate);
+  const retainedResultCards = (candidate.result as BandoriTeamSearchResult & { cards?: SearchCard[] }).cards;
+  const retainedResultCardIds = Array.isArray(retainedResultCards)
+    ? retainedResultCards.map((card) => card.cardId)
+    : [];
+  return {
+    sourceIndex,
+    score: candidate.result.score,
+    averageScore: candidate.result.averageScore,
+    maxScore: candidate.result.maxScore,
+    minScore: candidate.result.minScore,
+    leaderCardId: candidate.result.leaderCardId,
+    orderedCardIds,
+    sortedCardIds: getMedleyExactSortedCardIds(orderedCardIds),
+    orderedCardInstanceKeys,
+    sortedCardInstanceKeys: [...orderedCardInstanceKeys].sort(),
+    retainedCandidateCardsLength: candidate.cards.length,
+    retainedResultCardsLength: Array.isArray(retainedResultCards) ? retainedResultCards.length : null,
+    retainedResultCardIds,
+    retainedResultCardInstanceKeys: Array.isArray(retainedResultCards)
+      ? getCardInstanceKeys(retainedResultCards)
+      : [],
+    cardSearchIndices: [
+      candidate.cardSearchIndex0,
+      candidate.cardSearchIndex1,
+      candidate.cardSearchIndex2,
+      candidate.cardSearchIndex3,
+      candidate.cardSearchIndex4,
+    ].filter((index): index is number => typeof index === "number" && index >= 0),
+  };
+}
+
+function buildMedleyExactRawObjectWinnerSourceDiagnostics(
+  slots: readonly MedleySlotSearch[],
+  rawSlots: readonly MedleyExactRawJoinParitySlot[],
+  candidatesBySlot: readonly MedleyTeamCandidate[][],
+  objectResult: BandoriMedleyTeamSearchResult | null,
+  solveProfile: MedleyExactRawIndexFinalJoinSolveProfile,
+): Array<Record<string, unknown>> {
+  const slotOrder = solveProfile.slotOrder ?? [];
+  const bestIndices = solveProfile.bestIndices ?? [];
+  const bestSourceIndices = solveProfile.bestSourceIndices ?? [];
+  return slotOrder.map((slotIndex, orderIndex) => {
+    const slot = slots[slotIndex];
+    const rawSlot = rawSlots[slotIndex];
+    const rawIndex = bestIndices[orderIndex] ?? -1;
+    const sourceIndex = bestSourceIndices[orderIndex] ?? -1;
+    const rawCandidate = sourceIndex >= 0 ? candidatesBySlot[slotIndex]?.[sourceIndex] ?? null : null;
+    const objectSongResult = objectResult?.songResults.find((songResult) => (
+      songResult.songIndex === slot?.songIndex
+    )) ?? null;
+    const objectOrderedCardIds = objectSongResult?.cards.map((card) => card.cardId) ?? [];
+    const objectOrderedCardInstanceKeys = objectSongResult ? getCardInstanceKeys(objectSongResult.cards) : [];
+    const objectSortedCardIds = getMedleyExactSortedCardIds(objectOrderedCardIds);
+    const objectSortedCardInstanceKeys = [...objectOrderedCardInstanceKeys].sort();
+    const sameOrderedObjectCandidates: Array<Record<string, unknown>> = [];
+    const sameSortedObjectCandidates: Array<Record<string, unknown>> = [];
+
+    if (slot) {
+      for (let candidateIndex = 0; candidateIndex < (candidatesBySlot[slotIndex]?.length ?? 0); candidateIndex += 1) {
+        const candidate = candidatesBySlot[slotIndex]?.[candidateIndex];
+        if (!candidate) {
+          continue;
+        }
+        const orderedCardIds = getMedleyExactOrderedCardIdsForCandidate(slot, candidate);
+        if (
+          sameOrderedObjectCandidates.length < 6
+          && areMedleyExactCardIdListsEqual(orderedCardIds, objectOrderedCardIds)
+        ) {
+          sameOrderedObjectCandidates.push(buildMedleyExactCandidateSourceSummary(slot, candidate, candidateIndex));
+        }
+        if (
+          sameSortedObjectCandidates.length < 6
+          && areMedleyExactCardIdListsEqual(getMedleyExactSortedCardIds(orderedCardIds), objectSortedCardIds)
+        ) {
+          sameSortedObjectCandidates.push(buildMedleyExactCandidateSourceSummary(slot, candidate, candidateIndex));
+        }
+        if (sameOrderedObjectCandidates.length >= 6 && sameSortedObjectCandidates.length >= 6) {
+          break;
+        }
+      }
+    }
+
+    return {
+      slotIndex,
+      orderIndex,
+      songIndex: slot?.songIndex ?? null,
+      rawIndex,
+      sourceIndex,
+      rawRow: rawSlot && rawIndex >= 0
+        ? {
+          score: rawSlot.scores[rawIndex] ?? null,
+          averageScore: rawSlot.averageScores[rawIndex] ?? null,
+          maxScore: rawSlot.maxScores[rawIndex] ?? null,
+          minScore: rawSlot.minScores[rawIndex] ?? null,
+          sourceIndex: rawSlot.sourceIndices[rawIndex] ?? null,
+          orderedCardIds: copyMedleyExactRawCandidateCardIds(rawSlot, rawIndex),
+        }
+        : null,
+      rawSourceCandidate: slot && rawCandidate
+        ? buildMedleyExactCandidateSourceSummary(slot, rawCandidate, sourceIndex)
+        : null,
+      objectSongResult: objectSongResult
+        ? {
+          score: objectSongResult.score,
+          averageScore: objectSongResult.averageScore,
+          maxScore: objectSongResult.maxScore,
+          minScore: objectSongResult.minScore,
+          leaderCardId: objectSongResult.leaderCardId,
+          orderedCardIds: objectOrderedCardIds,
+          sortedCardIds: objectSortedCardIds,
+          orderedCardInstanceKeys: objectOrderedCardInstanceKeys,
+          sortedCardInstanceKeys: objectSortedCardInstanceKeys,
+        }
+        : null,
+      sameOrderedObjectCandidates,
+      sameSortedObjectCandidates,
+    };
+  });
 }
 
 function buildMedleyExactRawSolverHandoffProfile(
@@ -6531,6 +6717,9 @@ function buildMedleyExactRawSolverHandoffProfile(
     canReadAsResidentRawSource
     && sourceIndexRangeViolationCount === 0
   );
+  const canRunExactWinnerHydration = (
+    candidateCountTotal <= MEDLEY_EXACT_RAW_RESULT_PARITY_MAX_CANDIDATE_TOTAL
+  );
   const hydrationReplaySolveProfile = solveMedleyExactRawIndexFinalJoin(
     rawSlots,
     rawCandidateSlotReadSource.source,
@@ -6551,10 +6740,17 @@ function buildMedleyExactRawSolverHandoffProfile(
       candidatesBySlot,
       configuration,
       hydrationReplaySolveProfile,
+      canRunExactWinnerHydration ? {
+        server,
+        perfectRate,
+        stats,
+        profiling,
+      } : undefined,
     ),
   };
   const resultParity = buildMedleyExactRawResultParityProfile(
     slots,
+    rawSlots,
     candidatesBySlot,
     configuration,
     server,
@@ -6584,6 +6780,8 @@ function buildMedleyExactRawSolverHandoffProfile(
     canReadAsResidentRawSource,
     canHydrateWinnerFromSourceIndex,
     canHydrateWinnerFromCardIds: canReadAsResidentRawSource,
+    exactWinnerHydrationEnabled: canRunExactWinnerHydration,
+    exactWinnerHydrationCandidateTotalLimit: MEDLEY_EXACT_RAW_RESULT_PARITY_MAX_CANDIDATE_TOTAL,
     hydrationReplay,
     resultParity,
     nextRequiredStep: canReadAsResidentRawSource
@@ -6594,6 +6792,7 @@ function buildMedleyExactRawSolverHandoffProfile(
 
 function buildMedleyExactRawResultParityProfile(
   slots: readonly MedleySlotSearch[],
+  rawSlots: readonly MedleyExactRawJoinParitySlot[],
   candidatesBySlot: readonly MedleyTeamCandidate[][],
   configuration: BandoriAreaItemConfiguration,
   server: number,
@@ -6672,6 +6871,13 @@ function buildMedleyExactRawResultParityProfile(
   const hydratedMinScore = typeof rawHydratedProfile.minScore === "number" ? rawHydratedProfile.minScore : null;
   const rawCardIds = Array.isArray(rawHydratedProfile.cardIds) ? rawHydratedProfile.cardIds : [];
   const objectCardIds = objectResult?.cardIds ?? [];
+  const winnerSourceDiagnostics = buildMedleyExactRawObjectWinnerSourceDiagnostics(
+    slots,
+    rawSlots,
+    candidatesBySlot,
+    objectResult,
+    rawSolveProfile,
+  );
   return {
     enabled: true,
     skipped: false,
@@ -6700,9 +6906,15 @@ function buildMedleyExactRawResultParityProfile(
     hydratedAverageScoreMatchesRaw: hydratedAverageScore !== null && hydratedAverageScore === rawAverageScore,
     hydratedMaxScoreMatchesRaw: hydratedMaxScore !== null && hydratedMaxScore === rawMaxScore,
     hydratedMinScoreMatchesRaw: hydratedMinScore !== null && hydratedMinScore === rawMinScore,
+    hydratedScoreMatchesObject: hydratedScore !== null && hydratedScore === (objectResult?.score ?? null),
+    hydratedAverageScoreMatchesObject: hydratedAverageScore !== null
+      && hydratedAverageScore === (objectResult?.averageScore ?? null),
+    hydratedMaxScoreMatchesObject: hydratedMaxScore !== null && hydratedMaxScore === (objectResult?.maxScore ?? null),
+    hydratedMinScoreMatchesObject: hydratedMinScore !== null && hydratedMinScore === (objectResult?.minScore ?? null),
     cardIdsMatch: rawCardIds.join(",") === objectCardIds.join(","),
     rawCardIds,
     objectCardIds,
+    winnerSourceDiagnostics,
   };
 }
 
