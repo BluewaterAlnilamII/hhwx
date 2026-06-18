@@ -154,6 +154,9 @@ const MEDLEY_EXACT_RAW_JOIN_PARITY_MIN_REMAINING_MS = 2_000;
 const MEDLEY_EXACT_RAW_RESULT_PARITY_MAX_CANDIDATE_TOTAL = 20_000;
 const MEDLEY_EXACT_RAW_RESULT_PARITY_MIN_REMAINING_MS = 5_000;
 const MEDLEY_EXACT_RAW_RESULT_PARITY_TIMEBOX_MS = 8_000;
+const MEDLEY_EXACT_RAW_DIRECT_RESULT_HARNESS_MAX_CANDIDATE_TOTAL = 8_000;
+const MEDLEY_EXACT_RAW_DIRECT_RESULT_HARNESS_MIN_REMAINING_MS = 10_000;
+const MEDLEY_EXACT_RAW_DIRECT_RESULT_HARNESS_TIMEBOX_MS = 8_000;
 const MEDLEY_EXACT_RAW_TIE_FRONTIER_TIMEBOX_MS = 3_000;
 const MEDLEY_EXACT_RAW_TIE_FRONTIER_HYDRATE_LIMIT = 32;
 const MEDLEY_EXACT_RAW_TIE_FRONTIER_SAMPLE_LIMIT = 8;
@@ -7183,6 +7186,156 @@ function buildMedleyExactRawResidentResultRelease(
       },
       matchesObject,
     },
+  };
+}
+
+function buildMedleyExactRawResidentDirectResultHarness(
+  slots: MedleySlotSearch[],
+  candidatesBySlot: MedleyTeamCandidate[][],
+  rawCandidateSlotReadSource: MedleyExactRawCandidateSlotReadSource,
+  configuration: BandoriAreaItemConfiguration,
+  exactHydration: {
+    server: number;
+    perfectRate: number;
+    stats: BandoriMedleyTeamSearchStats;
+    profiling: BandoriMedleyTeamSearchProfilingStats;
+  },
+  deadlineAt: number,
+  isPastDeadline: () => boolean,
+): Record<string, unknown> {
+  const rawSlots = rawCandidateSlotReadSource.slots;
+  const candidateCountsBySlot = rawSlots.map((slot) => slot.length);
+  const candidateCountTotal = candidateCountsBySlot.reduce((sum, count) => sum + count, 0);
+  const baseProfile = {
+    enabled: true,
+    behaviorChange: false,
+    candidateRemoval: false,
+    rawInputSource: rawCandidateSlotReadSource.source,
+    candidateCountTotal,
+    candidateCountsBySlot,
+    returnedRawResult: false,
+  };
+  if (rawCandidateSlotReadSource.source !== "shadow-raw-candidate-builder") {
+    return {
+      ...baseProfile,
+      skipped: true,
+      skipReason: "not-resident-raw-source",
+    };
+  }
+  if (
+    rawCandidateSlotReadSource.lengthMismatchCount !== 0
+    || rawCandidateSlotReadSource.mismatchCountTotal !== 0
+  ) {
+    return {
+      ...baseProfile,
+      skipped: true,
+      skipReason: "raw-source-mismatch",
+      rawSourceLengthMismatchCount: rawCandidateSlotReadSource.lengthMismatchCount,
+      rawSourceMismatchCountTotal: rawCandidateSlotReadSource.mismatchCountTotal,
+    };
+  }
+  if (candidateCountsBySlot.some((count) => count <= 0)) {
+    return {
+      ...baseProfile,
+      skipped: true,
+      skipReason: "empty-slot",
+    };
+  }
+  if (candidateCountTotal > MEDLEY_EXACT_RAW_DIRECT_RESULT_HARNESS_MAX_CANDIDATE_TOTAL) {
+    return {
+      ...baseProfile,
+      skipped: true,
+      skipReason: "candidate-total-limit",
+      limit: MEDLEY_EXACT_RAW_DIRECT_RESULT_HARNESS_MAX_CANDIDATE_TOTAL,
+    };
+  }
+  if (
+    Number.isFinite(deadlineAt)
+    && deadlineAt - performance.now() < MEDLEY_EXACT_RAW_DIRECT_RESULT_HARNESS_MIN_REMAINING_MS
+  ) {
+    return {
+      ...baseProfile,
+      skipped: true,
+      skipReason: "remaining-time",
+      minRemainingMs: MEDLEY_EXACT_RAW_DIRECT_RESULT_HARNESS_MIN_REMAINING_MS,
+    };
+  }
+
+  const startedAt = performance.now();
+  const localDeadlineAt = Math.min(deadlineAt, startedAt + MEDLEY_EXACT_RAW_DIRECT_RESULT_HARNESS_TIMEBOX_MS);
+  const rawSolveProfile = solveMedleyExactRawIndexFinalJoin(
+    rawSlots,
+    rawCandidateSlotReadSource.source,
+    Number.NEGATIVE_INFINITY,
+    localDeadlineAt,
+    isPastDeadline,
+    {
+      retainedMiB: rawCandidateSlotReadSource.retainedMiB,
+      rawPoolRetainedMiB: rawCandidateSlotReadSource.rawPoolRetainedMiB,
+      lengthMismatchCount: rawCandidateSlotReadSource.lengthMismatchCount,
+      mismatchCountTotal: rawCandidateSlotReadSource.mismatchCountTotal,
+    },
+  );
+  let rawResult: BandoriMedleyTeamSearchResult | null = null;
+  const rawRowHydration = hydrateMedleyExactRawIndexFinalJoinProfileFromRawRows(
+    slots,
+    rawSlots,
+    configuration,
+    rawSolveProfile,
+    exactHydration,
+    (result) => {
+      rawResult = result;
+    },
+  );
+  if (rawSolveProfile.skipped || rawRowHydration.hydrated !== true || !rawResult) {
+    return {
+      ...baseProfile,
+      skipped: false,
+      returnedRawResult: false,
+      resultAuthoritative: false,
+      elapsedMs: Math.round(performance.now() - startedAt),
+      rawSolve: rawSolveProfile,
+      rawRowHydration,
+      matchesObjectOracle: false,
+    };
+  }
+
+  const objectOracle = solveMedleyExactCandidateJoin(
+    slots,
+    candidatesBySlot,
+    configuration,
+    Number.NEGATIVE_INFINITY,
+    exactHydration.server,
+    exactHydration.perfectRate,
+    exactHydration.profiling,
+    exactHydration.stats,
+    isPastDeadline,
+    deadlineAt,
+    localDeadlineAt,
+    null,
+    undefined,
+    false,
+  );
+  const matchesObjectOracle = !objectOracle.timedOut && medleyResultOutputFieldsMatch(rawResult, objectOracle.result);
+  return {
+    ...baseProfile,
+    skipped: false,
+    returnedRawResult: matchesObjectOracle,
+    resultAuthoritative: matchesObjectOracle,
+    elapsedMs: Math.round(performance.now() - startedAt),
+    timeboxMs: MEDLEY_EXACT_RAW_DIRECT_RESULT_HARNESS_TIMEBOX_MS,
+    rawSolve: rawSolveProfile,
+    rawRowHydration,
+    objectOracle: {
+      timedOut: objectOracle.timedOut,
+      localTimedOut: objectOracle.localTimedOut ?? false,
+      score: objectOracle.result?.score ?? null,
+      averageScore: objectOracle.result?.averageScore ?? null,
+      maxScore: objectOracle.result?.maxScore ?? null,
+      minScore: objectOracle.result?.minScore ?? null,
+      cardIds: objectOracle.result?.cardIds ?? [],
+    },
+    matchesObjectOracle,
   };
 }
 
@@ -14443,20 +14596,56 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     );
     invalidateRawCandidatePool();
   };
-  const recordRawResidentResultReleaseProfile = (profile: Record<string, unknown>): void => {
+  const recordRawSolverHandoffSubProfile = (key: string, profile: Record<string, unknown>): void => {
     const currentProfile = profiling.exactCandidateJoinRawSolverHandoff;
     if (currentProfile && typeof currentProfile === "object" && !Array.isArray(currentProfile)) {
       profiling.exactCandidateJoinRawSolverHandoff = {
         ...currentProfile,
-        rawResidentResultRelease: profile,
+        [key]: profile,
       };
       return;
     }
     profiling.exactCandidateJoinRawSolverHandoff = {
       enabled: true,
-      kind: "raw-resident-result-release",
-      rawResidentResultRelease: profile,
+      kind: key,
+      [key]: profile,
     };
+  };
+  const recordRawResidentResultReleaseProfile = (profile: Record<string, unknown>): void => {
+    recordRawSolverHandoffSubProfile("rawResidentResultRelease", profile);
+  };
+  const recordRawResidentDirectResultHarnessProfile = (): void => {
+    if (context.enableExactCandidateRawResidentResult !== true) {
+      return;
+    }
+    if (!didFinalizeCandidateStorageForRead) {
+      recordRawSolverHandoffSubProfile("rawResidentDirectResultHarness", {
+        enabled: true,
+        skipped: true,
+        skipReason: "candidate-storage-not-finalized",
+        returnedRawResult: false,
+        behaviorChange: false,
+        candidateRemoval: false,
+      });
+      return;
+    }
+    recordRawSolverHandoffSubProfile(
+      "rawResidentDirectResultHarness",
+      buildMedleyExactRawResidentDirectResultHarness(
+        slots,
+        candidatesBySlot,
+        getRawCandidateSlotReadSource(),
+        configuration,
+        {
+          server,
+          perfectRate,
+          stats,
+          profiling,
+        },
+        deadlineAt,
+        isPastDeadline,
+      ),
+    );
   };
   const maybeUseRawResidentResult = (
     objectResult: BandoriMedleyTeamSearchResult | null,
@@ -15938,6 +16127,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
   }
   finalizeCandidateStorageForRead();
   recordRawSolverHandoffProfile();
+  recordRawResidentDirectResultHarnessProfile();
   maybeSeedFromExactJoinPrefix();
   if (stats.timedOut) {
     recordExactJoinMemorySnapshot("after-prefix-seed-timeout");
