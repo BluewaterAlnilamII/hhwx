@@ -669,6 +669,7 @@ export type BandoriMedleyTeamSearchProfilingStats = {
   exactCandidateJoinRawPairUpperScanParity: Record<string, unknown> | null;
   exactCandidateJoinRawSolverInputCensus: Record<string, unknown> | null;
   exactCandidateJoinPrefixUpperReplaySummary: Record<string, unknown> | null;
+  exactCandidateJoinCandidateAdmissionFrontier: Record<string, unknown> | null;
   exactCandidateJoinLastBestSlotScores: number[];
   exactCandidateJoinLastPairUpperByExcludedSlot: Array<number | null>;
   exactCandidateJoinLastPairUnseenUpperByExcludedSlot: Array<number | null>;

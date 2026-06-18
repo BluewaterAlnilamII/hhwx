@@ -519,6 +519,13 @@ function patchHhwxBenchmarkScoreMetrics() {
         + "    exactCandidateJoinPrefixUpperReplaySummary: profiling.exactCandidateJoinPrefixUpperReplaySummary ?? null,\n",
     );
   }
+  if (!patched.includes("exactCandidateJoinCandidateAdmissionFrontier: profiling.exactCandidateJoinCandidateAdmissionFrontier ?? null")) {
+    patched = patched.replace(
+      /(exactCandidateJoinMemorySnapshots: profiling\.exactCandidateJoinMemorySnapshots \?\? null,\r?\n)/,
+      "$1"
+        + "    exactCandidateJoinCandidateAdmissionFrontier: profiling.exactCandidateJoinCandidateAdmissionFrontier ?? null,\n",
+    );
+  }
   if (!patched.includes("exactCandidateJoinRawSolverInputCensus: profiling.exactCandidateJoinRawSolverInputCensus ?? null")) {
     patched = patched.replace(
       /(exactCandidateJoinMemorySnapshots: profiling\.exactCandidateJoinMemorySnapshots \?\? null,\r?\n)/,
@@ -602,6 +609,7 @@ function patchHhwxBenchmarkScoreMetrics() {
     || !patched.includes("exactCandidateJoinMemorySnapshots: profiling.exactCandidateJoinMemorySnapshots ?? null")
     || !patched.includes("exactCandidateJoinRawMirrorProfile: profiling.exactCandidateJoinRawMirrorProfile ?? null")
     || !patched.includes("exactCandidateJoinPrefixUpperReplaySummary: profiling.exactCandidateJoinPrefixUpperReplaySummary ?? null")
+    || !patched.includes("exactCandidateJoinCandidateAdmissionFrontier: profiling.exactCandidateJoinCandidateAdmissionFrontier ?? null")
     || !patched.includes("exactCandidateJoinRawAnchorCheapUpperReplay: profiling.exactCandidateJoinRawAnchorCheapUpperReplay ?? null")
     || !patched.includes("exactCandidateJoinRawAnchorFrontierProbe: profiling.exactCandidateJoinRawAnchorFrontierProbe ?? null")
     || !patched.includes("exactCandidateJoinRawCandidatePoolProfile: profiling.exactCandidateJoinRawCandidatePoolProfile ?? null")

@@ -2569,6 +2569,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
           exactCandidateJoinAbortOtherUpper: profiling.exactCandidateJoinLastAbortOtherUpper,
           exactCandidateJoinAbortObservedUpperBound: profiling.exactCandidateJoinLastAbortObservedUpperBound,
           exactCandidateJoinAbortRemainingMs: profiling.exactCandidateJoinLastAbortRemainingMs,
+          exactCandidateJoinCandidateAdmissionFrontier: profiling.exactCandidateJoinCandidateAdmissionFrontier,
           exactCandidateJoinLastGuardedExtensionSlotIndex: (
             profiling.exactCandidateJoinLastGuardedExtensionSlotIndex
           ),

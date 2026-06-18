@@ -103,6 +103,8 @@ Baseline and gate artifacts retained:
 | `low-memory-polish-hhwx-2026-06-18T05-07-51-429Z.json` | `P02:260` raw pair pricing frontier over-budget probe, `1M` pops | failed with exit `134` / JS heap OOM after `178515ms`; do not raise pricing-frontier budgets inside the current exact-join lifecycle |
 | `low-memory-polish-hhwx-2026-06-18T05-16-04-783Z.json` | `P02:260` compressed row-frontier pricing probe, `250k` pops | bounded gap `382812`, average `9376984`, max `9412868`; row state `1.62 MiB`, elapsed `81ms`, all high pairs overlap, target gap `163864` |
 | `low-memory-polish-hhwx-2026-06-18T05-20-42-662Z.json` | `P02:260` compressed row-frontier pricing probe, `5M` pops | bounded gap `382812`, average `9376984`, max `9412868`, peak `3758 MiB`; row state `1.62 MiB`, elapsed `1629ms`, all `5M` high pairs overlap, target gap `72345` |
+| `low-memory-polish-hhwx-2026-06-18T05-34-03-079Z.json` | current-HEAD `P02:260` narrow capacity-source leaf pruning recheck | bounded gap `382812`, average `9376984`, max `9412868`, `0 failed / 0 timedOut / 0 memoryLimited`, peak `3523 MiB`; pruned `1994` leaves, materialized `970635`, final candidate caps still `[400000, 212825, 134977]` |
+| `low-memory-polish-hhwx-2026-06-18T05-44-26-848Z.json` | `P02:260` pressure candidate-admission/frontier ledger smoke | bounded gap `382812`, average `9376984`, max `9412868`, `0 failed / 0 timedOut / 0 memoryLimited`, peak `2940 MiB`; no-op ledger reports blocker `current-slot-tail`, slot `0`, cap `[400000, 212825, 134977]`, `currentSlotTailGap = 17139`, `otherUpperSource = pair-upper` |
 
 Use the pressure validation environment for early-pruning gates:
 
@@ -222,6 +224,8 @@ P02 candidate-fill frontier closure:
 - constrained generator heap rescan is now available only behind `HHWX_LOW_MEMORY_RAW_ANCHOR_FRONTIER_CONSTRAINED_PEEK=1`; default strict mask-cover witness does not run it. Default P02 smoke `low-memory-polish-hhwx-2026-06-18T04-54-33-164Z.json` keeps `constrainedPeekProbeCount = 0`, evaluates all `128` count masks, and preserves the strict blocker (`right-unseen`, gap range `1869..34376`). Opt-in constrained sample `low-memory-polish-hhwx-2026-06-18T04-56-28-067Z.json` proves the heap-rescan idea is not a breakthrough: the largest mask (`52240` anchors) needs a complete scan of `31068` left heap nodes and `25045` right heap nodes (`422ms + 370ms`), but only reduces the left/right peek by `18.99` / `5`, leaving `rightUnseenGapToClose = 6853`. Do not promote per-mask heap rescans; the next pricing/upper work needs a different structure that reasons before candidate birth or over raw-resident frontier indexes.
 - conflict-aware raw pair pricing frontier is available behind `HHWX_LOW_MEMORY_RAW_PAIR_PRICING_FRONTIER=1`. The first safe P02 probe `low-memory-polish-hhwx-2026-06-18T05-04-44-286Z.json` uses a bounded max-heap over raw pair scores instead of row-scanning score-only pairs; it preserves result fields and pops `250000` pairs in the pricing profile, but every popped pair overlaps. It still provides a useful unscanned-pair upper (`frontierTopScore = 6828051`) and shows the remaining target gap is `163864` against the generator-tail close threshold `6664187`. Raising the pop limit to `1M` in `low-memory-polish-hhwx-2026-06-18T05-07-51-429Z.json` OOMed the process, so this is a structural diagnostic only: future pricing work must avoid large JS `Set`/heap residency in the current exact-join lifecycle, likely by moving to offline/raw-resident arrays or a compressed frontier representation.
 - compressed row-frontier pricing replaced the JS `Set`/object pair frontier for the opt-in probe. It stores one current right pointer per left candidate plus a typed heap of left indices, so there is no visited-pair set and no duplicate pair generation. P02 `250k` smoke `low-memory-polish-hhwx-2026-06-18T05-16-04-783Z.json` keeps result fields stable and reports `rowStateMiB = 1.62` with `81ms` probe time. P02 `5M` smoke `low-memory-polish-hhwx-2026-06-18T05-20-42-662Z.json` also stays stable (`bounded`, gap `382812`, average `9376984`, max `9412868`, peak `3758 MiB`) and processes `5,000,000` highest raw pair frontier entries in `1629ms`; all still overlap, but the unscanned upper falls to `6736532`, leaving `72345` against the generator-tail target. This is now a viable raw-resident pricing building block; the next question is how to combine it with anchor/witness masks or extend it without spending the whole anchor-frontier timebox.
+- audit response after the current P02 recheck: early pruning remains the right main line, but leaf-by-leaf capacity pruning is not the breakthrough path. Current HEAD can run `HHWX_LOW_MEMORY_CAPACITY_SOURCE_LEAF_PRUNING=1` without OOM, but it prunes only `1994` leaves and the candidate fill still backfills to the same slot caps. Short-term work should stop increasing leaf/batch budgets or adding hot-path attribution probes; the next proof target is candidate-admission/frontier closure, where the solver either proves that the remaining generator tail cannot improve the incumbent or records the exact upper source blocking that proof.
+- candidate-admission/frontier ledger is now available by default as a no-op profiling field, `exactCandidateJoinCandidateAdmissionFrontier`. The first pressure P02 smoke `low-memory-polish-hhwx-2026-06-18T05-44-26-848Z.json` confirms it does not change score/proof fields and identifies the immediate blocker as slot-0 tail closure: the generator peek is `17139` above the slot cutoff while the active other upper comes from pair upper. This narrows the next real pruning/proof work to either lowering the slot-0 tail upper or tightening the pair/unseen upper; further leaf-capacity budget increases are not expected to solve P02.
 
 P02 raw storage census:
 
@@ -360,45 +364,43 @@ Early-pruning success targets:
 
 ## Immediate Next Actions
 
-1. Keep `HHWX_LOW_MEMORY_CAPACITY_SOURCE_LEAF_PRUNING=1` as an opt-in experiment only; it is safe so far, but not high impact enough for default.
-2. Promote the basic level-3 lookahead replay into a proof-ledger experiment before any real skip:
-   - keep the child lookahead basic-capacity-only;
-   - use a global child-prefix budget before constructing child proof work;
-   - record the selected level-3 card ids, child count, finite child count, max child total upper, incumbent, margin, slot, and implied completion count in capped samples.
-3. Implement opt-in level-3 lookahead branch pruning only after the ledger is stable:
-   - branch-decision replay/violation accounting is available and has `0` violations on the retained `8192` and `16384` P02 smokes;
-   - skip a level-3 branch only when the replayed max child total upper is finite and below the current cutoff;
-   - report pruned prefix count, implied completions, and replay violations separately from existing leaf pruning;
-   - retained P02 smokes show `0` actual materialized reduction, so this is not a default candidate.
-4. Keep `HHWX_LOW_MEMORY_PREFIX_CAPACITY_BATCH_PRUNING=1` as a narrow level-4 experiment:
-   - it has a passing `P01:none` small smoke and real pruned-prefix counts;
-   - it has not passed `P02:260` and must not be promoted or used in focused gates until the hard-row OOM is resolved;
-   - next useful work is reducing the cost of the proof or combining it with raw-resident storage, not raising budgets.
-5. Move the next algorithmic slice to candidate admission/frontier closure:
-   - use the level-3 lookahead proof as a component, not as a standalone budget-scaling path;
-   - investigate whether a proof-backed candidate cap can reject low-ranked materialization rather than simply backfilling from other branches;
-   - keep raw-index storage in scope because early pruning that still fills the same cap cannot by itself lower resident candidate memory.
-6. Add a frontier proof / storage diagnostic for P02:
+1. Freeze current capacity pruning experiments as opt-in diagnostics:
+   - keep `HHWX_LOW_MEMORY_CAPACITY_SOURCE_LEAF_PRUNING=1` safe but non-default;
+   - do not raise leaf, batch, or level-3 budgets as the main path;
+   - do not add hot-path attribution probes unless they are bounded before candidate generation and have a clean P02 smoke.
+2. Build a candidate-admission/frontier closure ledger before adding new real skips:
+   - when candidate fill reaches a soft cap, record `slotIndex`, current cap, candidate counts, generator peek, proof cutoff, other-slot upper, observed upper, and residual gap;
+   - distinguish blockers: current slot tail, other-slot unseen upper, pair conflict upper, card-count guard, deadline, and memory pressure;
+   - first version is no-op and only explains why P02 still backfills to `[400000, 212825, 134977]`.
+3. Use the closure ledger to choose the next exact-safe cut:
+   - if the blocker is the current slot tail, improve slot/prefix upper or candidate admission order;
+   - if the blocker is other-slot unseen upper, continue raw pair pricing / mask witness work over compact row-frontier structures;
+   - if the blocker is resident object pressure, move to raw-index candidate storage before adding more proof work.
+4. Keep level-4 and level-3 capacity proof as supporting components only:
+   - level-4 pruning has zero-violation evidence but does not reduce P02 candidate caps enough;
+   - level-3 lookahead has replay signal but no materialized reduction in retained P02 smokes;
+   - neither should be promoted until it changes candidate admission or frontier closure, not merely local prefix counts.
+5. Add a frontier proof / storage diagnostic for P02:
    - current numeric blocker measurement is retained in `2026-06-17T19-11-42`;
    - no-op cheap-upper probe is retained in `2026-06-17T19-16-21` and shows the current proof timeboxes without closing P02;
    - lightweight raw census is retained in `2026-06-17T19-29-52` and shows a `48-52 MiB` raw final-join/input footprint for the current P02 candidate pool;
    - actual raw candidate pool profile is retained in `2026-06-17T19-40-22` and proves the current P02 candidate rows can be copied into `28.53 MiB` exact-sized typed arrays with `0` mismatch and `0` score-order violations;
    - next prototype should be raw-index candidate resident storage or a fundamentally cheaper frontier proof over raw-index candidates, not raising existing proof guards;
    - do not raise guard constants as a default change without memory evidence.
-7. Promote raw candidate pool from profile to opt-in resident infrastructure:
+6. Promote raw candidate pool from profile to opt-in resident infrastructure:
    - keep the first slice no-op with respect to search result and proof state;
    - retain `sourceIndex` so winners and debug output can be late-hydrated from the original rich candidate only when needed;
    - first target is final-join/frontier helper read paths over raw scores and card ids, not default release of rich candidates;
    - acceptance for this slice is `0` raw mismatch, unchanged score/average/max/gap/status, and no P02 OOM.
    - the raw anchor/frontier rerun audit shows large transient raw-pool probes are not stable inside the current exact-join lifecycle; prioritize offline single-configuration raw pricing or raw-resident storage before revisiting conflict-aware raw pair-upper tightening.
    - do not use raw mirror as the hard-row storage prototype; it is now a small-sample field-consistency diagnostic only.
-8. Tighten the prefix proof before broader pruning:
+7. Tighten the prefix proof before broader pruning:
    - avoid generated-pair-only comparison on level-4 replay unless explicitly requested;
    - level-3 replay currently has no P02 skip signal with the existing slot upper;
    - level-3 lookahead has the first strong diagnostic signal, but it must remain replay-only until ledger coverage is complete;
    - keep the hot path replay-only until violation count is `0` on focused gates.
-9. Run `P02:260` pressure smoke after each resident-storage slice and compare against the current raw-profile artifact before enabling broader gates.
-10. Run the six-row focused gate before considering broader testing or default promotion.
+8. Run `P02:260` pressure smoke after each closure-ledger or resident-storage slice and compare against the current raw-profile artifact before enabling broader gates.
+9. Run the six-row focused gate before considering broader testing or default promotion.
    - The current raw-helper diagnostic gate is retained in `2026-06-17T20-34-23`; future resident-storage changes must rerun the same pressure focused gate and preserve its proof/score fields.
 
 ## Maintenance Rules

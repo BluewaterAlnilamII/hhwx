@@ -11691,6 +11691,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     profiling.exactCandidateJoinRawPairComplementParity = null;
     profiling.exactCandidateJoinRawPairUpperScanParity = null;
     profiling.exactCandidateJoinRawSolverInputCensus = null;
+    profiling.exactCandidateJoinCandidateAdmissionFrontier = null;
     profiling.exactCandidateJoinLastGuardedExtensionSlotIndex = null;
     profiling.exactCandidateJoinLastGuardedExtensionLimit = null;
     profiling.exactCandidateJoinLastGuardedExtensionRemainingMs = null;
@@ -11993,6 +11994,106 @@ export function searchMedleyConfigurationByExactCandidateJoin(
       );
     }
     return Number.isFinite(observedUpperBound) ? observedUpperBound : null;
+  };
+  const classifyCandidateFillOtherUpperSource = (
+    slotIndex: number | null,
+    otherUpper: number | null,
+  ): string | null => {
+    if (slotIndex === null || otherUpper === null || !Number.isFinite(otherUpper)) {
+      return null;
+    }
+    const closeTo = (value: number | null | undefined): boolean => (
+      value !== null
+      && value !== undefined
+      && Number.isFinite(value)
+      && Math.abs(value - otherUpper) < 1e-6
+    );
+    const sources: string[] = [];
+    if (closeTo(candidateRelaxedOtherUpperBySlot[slotIndex])) {
+      sources.push("relaxed");
+    }
+    if (closeTo(candidateRemainingOtherUpperBySlot[slotIndex])) {
+      sources.push("remaining");
+    }
+    if (closeTo(exactPairUpperByExcludedSlot[slotIndex])) {
+      sources.push("pair-upper");
+    }
+    return sources.length > 0 ? sources.join("+") : "min-mixed";
+  };
+  const recordCandidateAdmissionFrontier = (
+    reason: Exclude<MedleyExactCandidateJoinAbortReason, null>,
+    diagnostics: {
+      slotIndex?: number | null;
+      candidateCount?: number | null;
+      cutoff?: number | null;
+      peekUpperBound?: number | null;
+      otherUpper?: number | null;
+      observedUpperBound?: number | null;
+      candidateSoftLimit?: number | null;
+    },
+  ): void => {
+    const slotIndex = diagnostics.slotIndex ?? null;
+    const cutoff = normalizeDiagnosticNumber(diagnostics.cutoff);
+    const peekUpperBound = normalizeDiagnosticNumber(diagnostics.peekUpperBound);
+    const otherUpper = normalizeDiagnosticNumber(diagnostics.otherUpper);
+    const observedUpperBound = normalizeDiagnosticNumber(diagnostics.observedUpperBound);
+    const proofCutoffScore = Number.isFinite(exactJoinProofCutoffScore) ? exactJoinProofCutoffScore : null;
+    const candidateCountsBySlot = candidatesBySlot.map((candidates) => candidates.length);
+    const currentSlotTailGap = peekUpperBound !== null && cutoff !== null
+      ? peekUpperBound - cutoff
+      : null;
+    const currentSlotTailTotalUpper = peekUpperBound !== null && otherUpper !== null
+      ? peekUpperBound + otherUpper
+      : null;
+    const currentSlotTailTotalGap = currentSlotTailTotalUpper !== null && proofCutoffScore !== null
+      ? currentSlotTailTotalUpper - proofCutoffScore
+      : null;
+    const observedGap = observedUpperBound !== null && proofCutoffScore !== null
+      ? observedUpperBound - proofCutoffScore
+      : null;
+    const pairUnseenUpper = slotIndex !== null
+      ? normalizeDiagnosticNumber(exactPairUnseenUpperByExcludedSlot[slotIndex])
+      : null;
+    const pairUpper = slotIndex !== null
+      ? normalizeDiagnosticNumber(exactPairUpperByExcludedSlot[slotIndex])
+      : null;
+    const frontierBlocker = observedGap === null
+      ? "unknown-observed-upper"
+      : observedGap <= 0
+        ? "closed"
+        : currentSlotTailGap !== null && currentSlotTailGap > 0
+          ? "current-slot-tail"
+          : pairUnseenUpper !== null
+            ? "other-slot-unseen"
+            : "other-slot-upper";
+    profiling.exactCandidateJoinCandidateAdmissionFrontier = {
+      behaviorChange: false,
+      reason,
+      frontierBlocker,
+      slotIndex,
+      candidateCount: diagnostics.candidateCount ?? null,
+      candidateSoftLimit: diagnostics.candidateSoftLimit ?? candidateSoftLimit,
+      candidateCountsBySlot,
+      proofCutoffScore,
+      cutoff,
+      peekUpperBound,
+      currentSlotTailGap,
+      otherUpper,
+      otherUpperSource: classifyCandidateFillOtherUpperSource(slotIndex, otherUpper),
+      relaxedOtherUpper: slotIndex !== null
+        ? normalizeDiagnosticNumber(candidateRelaxedOtherUpperBySlot[slotIndex])
+        : null,
+      remainingOtherUpper: slotIndex !== null
+        ? normalizeDiagnosticNumber(candidateRemainingOtherUpperBySlot[slotIndex])
+        : null,
+      pairUpper,
+      pairUnseenUpper,
+      currentSlotTailTotalUpper,
+      currentSlotTailTotalGap,
+      observedUpperBound,
+      observedGap,
+      remainingMs: Number.isFinite(deadlineAt) ? Math.max(0, Math.round(deadlineAt - performance.now())) : null,
+    };
   };
   const recordRawSolverInputCensus = (): void => {
     if (context.debugExactCandidateRawSolverInputCensus !== true) {
@@ -13302,6 +13403,15 @@ export function searchMedleyConfigurationByExactCandidateJoin(
           observedUpperBound: getObservedExactCandidateJoinUpperBound(),
           candidateSoftLimit: effectiveCandidateSoftLimit,
         });
+        recordCandidateAdmissionFrontier(stats.memoryLimited ? "memory-soft-limit" : "candidate-fill-deadline", {
+          slotIndex,
+          candidateCount: candidatesBySlot[slotIndex].length,
+          cutoff,
+          peekUpperBound: generator.peekUpperBound(),
+          otherUpper,
+          observedUpperBound: getObservedExactCandidateJoinUpperBound(),
+          candidateSoftLimit: effectiveCandidateSoftLimit,
+        });
         profiling.exactCandidateJoinGeneratedCandidateCount += candidatesBySlot.reduce((sum, candidates) => (
           sum + candidates.length
         ), 0);
@@ -13369,6 +13479,17 @@ export function searchMedleyConfigurationByExactCandidateJoin(
           observedUpperBound: anchorFrontierObservedUpperBound ?? getObservedExactCandidateJoinUpperBound(),
           candidateSoftLimit: effectiveCandidateSoftLimit,
         });
+        recordCandidateAdmissionFrontier(stats.timedOut
+          ? stats.memoryLimited ? "memory-soft-limit" : "candidate-fill-deadline"
+          : "candidate-fill-soft-limit", {
+          slotIndex,
+          candidateCount: candidatesBySlot[slotIndex].length,
+          cutoff,
+          peekUpperBound: generator.peekUpperBound(),
+          otherUpper,
+          observedUpperBound: anchorFrontierObservedUpperBound ?? getObservedExactCandidateJoinUpperBound(),
+          candidateSoftLimit: effectiveCandidateSoftLimit,
+        });
         profiling.exactCandidateJoinGeneratedCandidateCount += candidatesBySlot.reduce((sum, candidates) => (
           sum + candidates.length
         ), 0);
@@ -13395,6 +13516,15 @@ export function searchMedleyConfigurationByExactCandidateJoin(
         );
         profiling.exactCandidateJoinAbortCount += 1;
         recordAbortDiagnostics("candidate-fill-generator-aborted", {
+          slotIndex,
+          candidateCount: candidatesBySlot[slotIndex].length,
+          cutoff,
+          peekUpperBound: generator.peekUpperBound(),
+          otherUpper,
+          observedUpperBound: getObservedExactCandidateJoinUpperBound(),
+          candidateSoftLimit: effectiveCandidateSoftLimit,
+        });
+        recordCandidateAdmissionFrontier("candidate-fill-generator-aborted", {
           slotIndex,
           candidateCount: candidatesBySlot[slotIndex].length,
           cutoff,
