@@ -60,6 +60,7 @@ function printUsage() {
     "  HHWX_LOW_MEMORY_PREFIX_OTHER_UPPER_SOURCE_MAX_CHECKS=2048 cap expensive source diagnostic checks per generator",
     "  HHWX_LOW_MEMORY_PREFIX_OTHER_UPPER_SOURCE_MAX_MARGIN=10000 cap source diagnostic to near-cutoff leaves",
     "  HHWX_LOW_MEMORY_CAPACITY_SOURCE_LEAF_PRUNING=1 enable narrow capacity-source leaf pruning",
+    "  HHWX_LOW_MEMORY_CANDIDATE_ADMISSION_PAIR_PROBE=1 add opt-in cap-boundary pair upper diagnostics",
     "  HHWX_LOW_MEMORY_RAW_ANCHOR_CHEAP_UPPER_REPLAY=1 compare anchor cheap-upper replay over local raw candidate pools",
     "  HHWX_LOW_MEMORY_RAW_ANCHOR_FRONTIER_PROBE=1 run guarded no-op raw-index anchor/frontier probe; hard rows skip raw pool build",
     "  HHWX_LOW_MEMORY_RAW_ANCHOR_FRONTIER_CONSTRAINED_PEEK=1 add heavy constrained-peek samples to the raw anchor/frontier probe",
@@ -217,6 +218,9 @@ function hhwxOptimizationJson() {
     optimization.debugExactCandidatePrefixUpperReplay = true;
     optimization.debugExactCandidatePrefixOtherUpperSourceReplay = true;
     optimization.enableExactCandidateCapacitySourceLeafPruning = true;
+  }
+  if (process.env.HHWX_LOW_MEMORY_CANDIDATE_ADMISSION_PAIR_PROBE === "1") {
+    optimization.debugExactCandidateAdmissionPairProbe = true;
   }
   if (
     process.env.HHWX_LOW_MEMORY_PREFIX_OTHER_UPPER_SOURCE_REPLAY === "1"

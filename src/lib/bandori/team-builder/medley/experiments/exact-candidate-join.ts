@@ -146,6 +146,8 @@ const MEDLEY_EXACT_RAW_PAIR_FRONTIER_CENSUS_DEEP_SCAN_LIMIT = 5_000_000;
 const MEDLEY_EXACT_RAW_PAIR_FRONTIER_CENSUS_MAX_THRESHOLDS = 12;
 const MEDLEY_EXACT_RAW_PAIR_PRICING_FRONTIER_POP_LIMIT = 5_000_000;
 const MEDLEY_EXACT_RAW_PAIR_PRICING_FRONTIER_TIMEBOX_MS = 2_000;
+const MEDLEY_EXACT_CANDIDATE_ADMISSION_PAIR_PROBE_POP_LIMIT = 2_000_000;
+const MEDLEY_EXACT_CANDIDATE_ADMISSION_PAIR_PROBE_TIMEBOX_MS = 1_500;
 const MEDLEY_EXACT_RAW_TRIPLE_CONFLICT_SPLIT_TIMEBOX_MS = 8_000;
 const MEDLEY_EXACT_RAW_PAIR_WITNESS_COVER_TIMEBOX_MS = 3_000;
 const MEDLEY_EXACT_RAW_PAIR_WITNESS_COVER_PAIR_SPLIT_STATE_BUDGET = 2_048;
@@ -11668,6 +11670,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     debugExactCandidatePrefixCapacityLevel3LookaheadReplay?: boolean;
     enableExactCandidateCapacitySourceLeafPruning?: boolean;
     enableExactCandidateCapacityLevel3LookaheadPruning?: boolean;
+    debugExactCandidateAdmissionPairProbe?: boolean;
     debugExactCandidateDominanceReplay?: boolean;
     debugExactCandidateRawAnchorCheapUpperReplay?: boolean;
     debugExactCandidateRawAnchorFrontierProbe?: boolean;
@@ -12049,6 +12052,296 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     }
     return sources.length > 0 ? sources.join("+") : "min-mixed";
   };
+  const getFrontierNodeNumberArray = (
+    frontierNodeProfile: Record<string, unknown> | null | undefined,
+    key: string,
+  ): number[] | null => {
+    const value = frontierNodeProfile?.[key];
+    return Array.isArray(value) && value.every((entry) => typeof entry === "number" && Number.isFinite(entry))
+      ? value
+      : null;
+  };
+  const getCandidateAdmissionPairScore = (
+    rowCandidates: MedleyTeamCandidate[],
+    columnCandidates: MedleyTeamCandidate[],
+    rightIndexByLeft: Int32Array,
+    leftIndex: number,
+  ): number => {
+    const rightIndex = rightIndexByLeft[leftIndex];
+    return rowCandidates[leftIndex].result.score + columnCandidates[rightIndex].result.score;
+  };
+  const pushCandidateAdmissionPairHeap = (
+    rowCandidates: MedleyTeamCandidate[],
+    columnCandidates: MedleyTeamCandidate[],
+    rightIndexByLeft: Int32Array,
+    heapLeftIndices: Int32Array,
+    heapSize: number,
+    leftIndex: number,
+  ): number => {
+    let nextHeapSize = heapSize;
+    heapLeftIndices[nextHeapSize] = leftIndex;
+    nextHeapSize += 1;
+    let child = nextHeapSize - 1;
+    while (child > 0) {
+      const parent = (child - 1) >> 1;
+      if (
+        getCandidateAdmissionPairScore(rowCandidates, columnCandidates, rightIndexByLeft, heapLeftIndices[parent])
+        >= getCandidateAdmissionPairScore(rowCandidates, columnCandidates, rightIndexByLeft, heapLeftIndices[child])
+      ) {
+        break;
+      }
+      const swap = heapLeftIndices[parent];
+      heapLeftIndices[parent] = heapLeftIndices[child];
+      heapLeftIndices[child] = swap;
+      child = parent;
+    }
+    return nextHeapSize;
+  };
+  const popCandidateAdmissionPairHeap = (
+    rowCandidates: MedleyTeamCandidate[],
+    columnCandidates: MedleyTeamCandidate[],
+    rightIndexByLeft: Int32Array,
+    heapLeftIndices: Int32Array,
+    heapSize: number,
+  ): { leftIndex: number; heapSize: number } | null => {
+    if (heapSize <= 0) {
+      return null;
+    }
+    const leftIndex = heapLeftIndices[0];
+    let nextHeapSize = heapSize - 1;
+    if (nextHeapSize > 0) {
+      heapLeftIndices[0] = heapLeftIndices[nextHeapSize];
+      let parent = 0;
+      while (true) {
+        const leftChild = parent * 2 + 1;
+        const rightChild = leftChild + 1;
+        if (leftChild >= nextHeapSize) {
+          break;
+        }
+        let bestChild = leftChild;
+        if (
+          rightChild < nextHeapSize
+          && getCandidateAdmissionPairScore(
+            rowCandidates,
+            columnCandidates,
+            rightIndexByLeft,
+            heapLeftIndices[rightChild],
+          ) > getCandidateAdmissionPairScore(
+            rowCandidates,
+            columnCandidates,
+            rightIndexByLeft,
+            heapLeftIndices[leftChild],
+          )
+        ) {
+          bestChild = rightChild;
+        }
+        if (
+          getCandidateAdmissionPairScore(rowCandidates, columnCandidates, rightIndexByLeft, heapLeftIndices[parent])
+          >= getCandidateAdmissionPairScore(rowCandidates, columnCandidates, rightIndexByLeft, heapLeftIndices[bestChild])
+        ) {
+          break;
+        }
+        const swap = heapLeftIndices[parent];
+        heapLeftIndices[parent] = heapLeftIndices[bestChild];
+        heapLeftIndices[bestChild] = swap;
+        parent = bestChild;
+      }
+    }
+    return { leftIndex, heapSize: nextHeapSize };
+  };
+  const buildCandidateAdmissionFrontierPairBoundaryProfile = (
+    slotIndex: number | null,
+    proofCutoffScore: number | null,
+    frontierNodeProfile: Record<string, unknown> | null | undefined,
+  ): Record<string, unknown> | null => {
+    if (context.debugExactCandidateAdmissionPairProbe !== true) {
+      return null;
+    }
+    const startedAt = performance.now();
+    const skip = (reason: string): Record<string, unknown> => ({
+      enabled: true,
+      completed: false,
+      skipReason: reason,
+      elapsedMs: Math.round(performance.now() - startedAt),
+    });
+    if (slotIndex === null || slotIndex < 0 || slotIndex >= slots.length) {
+      return skip("invalid-slot");
+    }
+    if (proofCutoffScore === null || !Number.isFinite(proofCutoffScore)) {
+      return skip("invalid-proof-cutoff");
+    }
+    const frontierSelectedCardCount = frontierNodeProfile?.selectedCardCount;
+    if (frontierSelectedCardCount !== MEDLEY_TEAM_SIZE) {
+      return skip("frontier-not-leaf");
+    }
+    const selectedCardIds = getFrontierNodeNumberArray(frontierNodeProfile, "selectedCardIds");
+    if (!selectedCardIds || selectedCardIds.length === 0) {
+      return skip("missing-frontier-card-ids");
+    }
+    const frontierSlotScore = normalizeDiagnosticNumber(
+      typeof frontierNodeProfile?.slotUpperBound === "number" ? frontierNodeProfile.slotUpperBound : null,
+    );
+    if (frontierSlotScore === null) {
+      return skip("missing-frontier-score");
+    }
+    const remainingSlotIndices = slots.map((_, index) => index).filter((index) => index !== slotIndex);
+    if (remainingSlotIndices.length !== 2) {
+      return skip("invalid-remaining-slots");
+    }
+    const [leftSlotIndex, rightSlotIndex] = remainingSlotIndices;
+    const leftCandidates = candidatesBySlot[leftSlotIndex] ?? [];
+    const rightCandidates = candidatesBySlot[rightSlotIndex] ?? [];
+    if (leftCandidates.length === 0 || rightCandidates.length === 0) {
+      return skip("empty-pair-pool");
+    }
+    const sortedSelectedCardIds = [...selectedCardIds].sort((left, right) => left - right);
+    const bannedSelectedCardIds = new Set(sortedSelectedCardIds);
+    const minimumRelevantPairScore = proofCutoffScore - frontierSlotScore;
+    const rowSlotIndex = leftCandidates.length <= rightCandidates.length ? leftSlotIndex : rightSlotIndex;
+    const columnSlotIndex = rowSlotIndex === leftSlotIndex ? rightSlotIndex : leftSlotIndex;
+    const rowCandidates = rowSlotIndex === leftSlotIndex ? leftCandidates : rightCandidates;
+    const columnCandidates = rowSlotIndex === leftSlotIndex ? rightCandidates : leftCandidates;
+    const rightIndexByLeft = new Int32Array(rowCandidates.length);
+    const heapLeftIndices = new Int32Array(rowCandidates.length);
+    let heapSize = 0;
+    let skippedBannedRowCandidateCount = 0;
+    for (let leftIndex = 0; leftIndex < rowCandidates.length; leftIndex += 1) {
+      if (medleyTeamCandidateHasCardIdInSet(rowCandidates[leftIndex], bannedSelectedCardIds)) {
+        skippedBannedRowCandidateCount += 1;
+        continue;
+      }
+      heapSize = pushCandidateAdmissionPairHeap(
+        rowCandidates,
+        columnCandidates,
+        rightIndexByLeft,
+        heapLeftIndices,
+        heapSize,
+        leftIndex,
+      );
+    }
+    const probeDeadlineAt = performance.now() + MEDLEY_EXACT_CANDIDATE_ADMISSION_PAIR_PROBE_TIMEBOX_MS;
+    let poppedPairCount = 0;
+    let bannedPairCount = 0;
+    let overlapPairCount = 0;
+    let bestGeneratedPairScore: number | null = null;
+    let bestGeneratedPairRank: number | null = null;
+    while (
+      heapSize > 0
+      && poppedPairCount < MEDLEY_EXACT_CANDIDATE_ADMISSION_PAIR_PROBE_POP_LIMIT
+      && performance.now() < probeDeadlineAt
+    ) {
+      const popped = popCandidateAdmissionPairHeap(
+        rowCandidates,
+        columnCandidates,
+        rightIndexByLeft,
+        heapLeftIndices,
+        heapSize,
+      );
+      if (!popped) {
+        break;
+      }
+      const leftIndex = popped.leftIndex;
+      heapSize = popped.heapSize;
+      const rightIndex = rightIndexByLeft[leftIndex];
+      const rowCandidate = rowCandidates[leftIndex];
+      const columnCandidate = columnCandidates[rightIndex];
+      poppedPairCount += 1;
+      if (medleyTeamCandidateHasCardIdInSet(columnCandidate, bannedSelectedCardIds)) {
+        bannedPairCount += 1;
+      } else if (medleyExactCandidatesOverlap(rowCandidate, columnCandidate)) {
+        overlapPairCount += 1;
+      } else {
+        bestGeneratedPairScore = rowCandidate.result.score + columnCandidate.result.score;
+        bestGeneratedPairRank = poppedPairCount;
+        break;
+      }
+      const nextRightIndex = rightIndex + 1;
+      if (nextRightIndex < columnCandidates.length) {
+        rightIndexByLeft[leftIndex] = nextRightIndex;
+        heapSize = pushCandidateAdmissionPairHeap(
+          rowCandidates,
+          columnCandidates,
+          rightIndexByLeft,
+          heapLeftIndices,
+          heapSize,
+          leftIndex,
+        );
+      }
+    }
+    const timedOut = heapSize > 0 && performance.now() >= probeDeadlineAt && bestGeneratedPairScore === null;
+    const popLimited = (
+      heapSize > 0
+      && poppedPairCount >= MEDLEY_EXACT_CANDIDATE_ADMISSION_PAIR_PROBE_POP_LIMIT
+      && bestGeneratedPairScore === null
+    );
+    const frontierPairUpper = heapSize > 0
+      ? getCandidateAdmissionPairScore(rowCandidates, columnCandidates, rightIndexByLeft, heapLeftIndices[0])
+      : Number.NEGATIVE_INFINITY;
+    const generatedPairUpperOrNull = bestGeneratedPairScore !== null
+      ? bestGeneratedPairScore
+      : normalizeDiagnosticNumber(frontierPairUpper);
+    const pairUnseenUpper = normalizeDiagnosticNumber(exactPairUnseenUpperByExcludedSlot[slotIndex]);
+    const unconditionedPairUpper = normalizeDiagnosticNumber(exactPairUpperByExcludedSlot[slotIndex]);
+    const conditionedPairUpper = Math.max(
+      generatedPairUpperOrNull ?? Number.NEGATIVE_INFINITY,
+      pairUnseenUpper ?? Number.NEGATIVE_INFINITY,
+    );
+    const conditionedPairUpperOrNull = Number.isFinite(conditionedPairUpper) ? conditionedPairUpper : null;
+    const generatedTotalUpper = generatedPairUpperOrNull !== null
+      ? frontierSlotScore + generatedPairUpperOrNull
+      : null;
+    const pairUnseenTotalUpper = pairUnseenUpper !== null
+      ? frontierSlotScore + pairUnseenUpper
+      : null;
+    const conditionedTotalUpper = conditionedPairUpperOrNull !== null
+      ? frontierSlotScore + conditionedPairUpperOrNull
+      : null;
+    const generatedGap = generatedTotalUpper !== null ? generatedTotalUpper - proofCutoffScore : null;
+    const pairUnseenGap = pairUnseenTotalUpper !== null ? pairUnseenTotalUpper - proofCutoffScore : null;
+    const conditionedGap = conditionedTotalUpper !== null ? conditionedTotalUpper - proofCutoffScore : null;
+    const conditionedBlocker = conditionedGap === null
+      ? "unknown"
+      : conditionedGap <= 0
+        ? "closed"
+        : generatedGap !== null && generatedGap > 0
+          ? "generated-pair"
+          : pairUnseenGap !== null && pairUnseenGap > 0
+            ? "pair-unseen"
+            : "other";
+    return {
+      enabled: true,
+      completed: true,
+      behaviorChange: false,
+      remainingSlotIndices,
+      rowSlotIndex,
+      columnSlotIndex,
+      pairCandidateCounts: [leftCandidates.length, rightCandidates.length],
+      frontierSlotScore,
+      frontierSelectedCardIds: sortedSelectedCardIds,
+      minimumRelevantPairScore,
+      rowStateMiB: roundMiB(rightIndexByLeft.byteLength + heapLeftIndices.byteLength),
+      popLimit: MEDLEY_EXACT_CANDIDATE_ADMISSION_PAIR_PROBE_POP_LIMIT,
+      timeboxMs: MEDLEY_EXACT_CANDIDATE_ADMISSION_PAIR_PROBE_TIMEBOX_MS,
+      timedOut,
+      popLimited,
+      poppedPairCount,
+      skippedBannedRowCandidateCount,
+      bannedPairCount,
+      overlapPairCount,
+      bestGeneratedPairRank,
+      frontierPairUpper: normalizeDiagnosticNumber(frontierPairUpper),
+      generatedPairUpper: generatedPairUpperOrNull,
+      generatedPairUpperSource: bestGeneratedPairScore !== null ? "disjoint-pair" : "frontier-upper",
+      generatedGap,
+      pairUnseenUpper,
+      pairUnseenGap,
+      unconditionedPairUpper,
+      conditionedPairUpper: conditionedPairUpperOrNull,
+      conditionedGap,
+      conditionedBlocker,
+      elapsedMs: Math.round(performance.now() - startedAt),
+    };
+  };
   const recordCandidateAdmissionFrontier = (
     reason: Exclude<MedleyExactCandidateJoinAbortReason, null>,
     diagnostics: {
@@ -12087,6 +12380,11 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     const pairUpper = slotIndex !== null
       ? normalizeDiagnosticNumber(exactPairUpperByExcludedSlot[slotIndex])
       : null;
+    const frontierPairBoundary = buildCandidateAdmissionFrontierPairBoundaryProfile(
+      slotIndex,
+      proofCutoffScore,
+      diagnostics.frontierNodeProfile,
+    );
     const frontierBlocker = observedGap === null
       ? "unknown-observed-upper"
       : observedGap <= 0
@@ -12124,6 +12422,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
       observedGap,
       remainingMs: Number.isFinite(deadlineAt) ? Math.max(0, Math.round(deadlineAt - performance.now())) : null,
       frontierNode: diagnostics.frontierNodeProfile ?? null,
+      frontierPairBoundary,
     };
   };
   const recordRawSolverInputCensus = (): void => {

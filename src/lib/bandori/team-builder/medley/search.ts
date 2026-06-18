@@ -684,6 +684,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
   const enableExactCandidateCapacityLevel3LookaheadPruning = (
     optimization.enableExactCandidateCapacityLevel3LookaheadPruning === true
   );
+  const debugExactCandidateAdmissionPairProbe = optimization.debugExactCandidateAdmissionPairProbe === true;
   const debugExactCandidateDominanceReplay = optimization.debugExactCandidateDominanceReplay === true;
   const debugExactCandidateRawAnchorCheapUpperReplay = (
     optimization.debugExactCandidateRawAnchorCheapUpperReplay === true
@@ -3847,6 +3848,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
           debugExactCandidatePrefixCapacityLevel3LookaheadReplay,
           enableExactCandidateCapacitySourceLeafPruning,
           enableExactCandidateCapacityLevel3LookaheadPruning,
+          debugExactCandidateAdmissionPairProbe,
           debugExactCandidateDominanceReplay,
           debugExactCandidateRawAnchorCheapUpperReplay,
           debugExactCandidateRawAnchorFrontierProbe,
@@ -4330,6 +4332,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
           debugExactCandidatePrefixCapacityLevel3LookaheadReplay,
           enableExactCandidateCapacitySourceLeafPruning,
           enableExactCandidateCapacityLevel3LookaheadPruning,
+          debugExactCandidateAdmissionPairProbe,
           debugExactCandidateDominanceReplay,
           debugExactCandidateRawAnchorCheapUpperReplay,
           debugExactCandidateRawAnchorFrontierProbe,
