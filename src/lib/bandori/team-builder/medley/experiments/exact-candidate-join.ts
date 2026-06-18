@@ -3385,6 +3385,43 @@ function buildMedleyExactRawPairWitnessAnchorCoverProfile(
     }
   }
 
+  const proofLedgerByMask = new Map<number, Record<string, unknown>>();
+  const appendMaskProofLedger = (
+    strategy: string,
+    maskGroup: (typeof maskGroups)[number],
+  ): void => {
+    if (!maskGroup.safe || maskGroup.pairUpperExcludingMask === null || maskGroup.totalUpper === null) {
+      return;
+    }
+    const existing = proofLedgerByMask.get(maskGroup.mask);
+    const entry = {
+      strategy: existing ? `${existing.strategy}+${strategy}` : strategy,
+      mask: maskGroup.mask,
+      excludedCardIds: maskGroup.excludedCardIds,
+      anchorCount: maskGroup.anchorCount,
+      firstAnchorIndex: maskGroup.firstAnchorIndex,
+      maxAnchorScore: maskGroup.maxAnchorScore,
+      pairUpper: maskGroup.pairUpperExcludingMask,
+      totalUpper: maskGroup.totalUpper,
+      incumbentScore,
+      margin: incumbentScore - maskGroup.totalUpper,
+      pairSplitStateCount: maskGroup.pairSplitStateCount,
+      pairSplitAbortReason: maskGroup.pairSplitAbortReason,
+    };
+    proofLedgerByMask.set(maskGroup.mask, entry);
+  };
+  for (const maskGroup of maskGroups) {
+    appendMaskProofLedger("max-score", maskGroup);
+  }
+  for (const maskGroup of countMaskGroups) {
+    appendMaskProofLedger("count", maskGroup);
+  }
+  const maskProofLedger = [...proofLedgerByMask.values()].sort((left, right) => (
+    Number(right.anchorCount ?? 0) - Number(left.anchorCount ?? 0)
+    || Number(right.margin ?? 0) - Number(left.margin ?? 0)
+    || Number(left.mask ?? 0) - Number(right.mask ?? 0)
+  ));
+
   return {
     algorithm: "hhwx-raw-pair-witness-anchor-cover-v1",
     behaviorChange: false,
@@ -3445,6 +3482,10 @@ function buildMedleyExactRawPairWitnessAnchorCoverProfile(
       firstUncoveredMask: firstUnionMaskUncoveredMask,
       allRelevantAnchorsCovered: relevantAnchorCount > 0 && unionMaskUncoveredAnchorCount === 0,
     },
+    maskProofLedgerCount: maskProofLedger.length,
+    maskProofLedgerImpliedAnchorCount: unionMaskCoveredAnchorCount,
+    maskProofLedgerDroppedAnchorCount: unionMaskUncoveredAnchorCount,
+    maskProofLedger,
     maskGroups,
     timedOut,
     elapsedMs: Math.round(performance.now() - startedAt),
