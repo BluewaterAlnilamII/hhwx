@@ -147,6 +147,7 @@ const MEDLEY_EXACT_RAW_TRIPLE_CONFLICT_SPLIT_TIMEBOX_MS = 8_000;
 const MEDLEY_EXACT_RAW_PAIR_WITNESS_COVER_TIMEBOX_MS = 3_000;
 const MEDLEY_EXACT_RAW_PAIR_WITNESS_COVER_PAIR_SPLIT_STATE_BUDGET = 2_048;
 const MEDLEY_EXACT_RAW_PAIR_WITNESS_COVER_MASK_SPLIT_LIMIT = 32;
+const MEDLEY_EXACT_RAW_PAIR_WITNESS_COVER_COUNT_MASK_SPLIT_LIMIT = 128;
 const MEDLEY_EXACT_RAW_PAIR_COMPLEMENT_PARITY_MAX_CANDIDATE_TOTAL = 60_000;
 const MEDLEY_EXACT_RAW_PAIR_COMPLEMENT_PARITY_BANNED_SAMPLE_LIMIT = 4;
 const MEDLEY_EXACT_RAW_PAIR_UPPER_SCAN_PARITY_MAX_CANDIDATE_TOTAL = 60_000;
@@ -3183,6 +3184,67 @@ function buildMedleyExactRawPairWitnessAnchorCoverProfile(
   let maskPairSplitTimedOutCount = 0;
   let maskPairSplitStateCountTotal = 0;
   let maskStoppedByBudget = false;
+  const evaluateWitnessMaskGroup = (
+    maskGroup: {
+      mask: number;
+      anchorCount: number;
+      maxAnchorScore: number;
+      firstAnchorIndex: number;
+    },
+    stopState: { stoppedByBudget: boolean; timedOut: boolean },
+  ) => {
+    const excludedCardIds = pairCardIds.filter((_, groupIndex) => (maskGroup.mask & (1 << groupIndex)) !== 0);
+    if (timedOut || stoppedByBudget || stopState.stoppedByBudget || performance.now() >= localDeadlineAt) {
+      timedOut = true;
+      stopState.timedOut = true;
+      return {
+        ...maskGroup,
+        excludedCardIds,
+        pairUpperExcludingMask: null,
+        pairSplitTimedOut: true,
+        pairSplitAbortReason: stopState.stoppedByBudget ? "previous-budget-stop" : "timebox",
+        pairSplitStateCount: null,
+        totalUpper: null,
+        gap: null,
+        safe: false,
+      };
+    }
+    const pairSplit = estimateGeneratedMedleyExactRawCandidatePairConflictSplitUpper(
+      leftSlot,
+      rightSlot,
+      containingLeftBitsByCardId,
+      containingRightBitsByCardId,
+      excludedCardIds,
+      localDeadlineAt,
+      MEDLEY_EXACT_RAW_PAIR_WITNESS_COVER_PAIR_SPLIT_STATE_BUDGET,
+    );
+    if (pairSplit.timedOut) {
+      stopState.timedOut = true;
+      timedOut = true;
+      if (pairSplit.abortReason === "state-budget") {
+        stopState.stoppedByBudget = true;
+      }
+    }
+    const pairUpperExcludingMask = !pairSplit.timedOut
+      && (Number.isFinite(pairSplit.upperBound) || pairSplit.upperBound === Number.NEGATIVE_INFINITY)
+      ? pairSplit.upperBound
+      : null;
+    const totalUpper = pairUpperExcludingMask !== null
+      ? maskGroup.maxAnchorScore + pairUpperExcludingMask
+      : null;
+    const safe = totalUpper !== null && totalUpper <= incumbentScore;
+    return {
+      ...maskGroup,
+      excludedCardIds,
+      pairUpperExcludingMask,
+      pairSplitTimedOut: pairSplit.timedOut,
+      pairSplitAbortReason: pairSplit.abortReason,
+      pairSplitStateCount: pairSplit.stateCount,
+      totalUpper,
+      gap: totalUpper !== null ? Math.max(0, totalUpper - incumbentScore) : null,
+      safe,
+    };
+  };
   const maskGroups = [...maskGroupsByMask.values()]
     .sort((left, right) => (
       right.maxAnchorScore - left.maxAnchorScore
@@ -3191,62 +3253,54 @@ function buildMedleyExactRawPairWitnessAnchorCoverProfile(
     ))
     .slice(0, MEDLEY_EXACT_RAW_PAIR_WITNESS_COVER_MASK_SPLIT_LIMIT)
     .map((maskGroup) => {
-      const excludedCardIds = pairCardIds.filter((_, groupIndex) => (maskGroup.mask & (1 << groupIndex)) !== 0);
-      if (timedOut || stoppedByBudget || maskStoppedByBudget || performance.now() >= localDeadlineAt) {
-        timedOut = true;
-        return {
-          ...maskGroup,
-          excludedCardIds,
-          pairUpperExcludingMask: null,
-          pairSplitTimedOut: true,
-          pairSplitAbortReason: maskStoppedByBudget ? "previous-budget-stop" : "timebox",
-          pairSplitStateCount: null,
-          totalUpper: null,
-          gap: null,
-          safe: false,
-        };
+      const maskState = { stoppedByBudget: maskStoppedByBudget, timedOut: false };
+      const result = evaluateWitnessMaskGroup(maskGroup, maskState);
+      maskStoppedByBudget = maskState.stoppedByBudget;
+      if (result.pairSplitStateCount !== null) {
+        maskPairSplitStateCountTotal = addCappedCount(maskPairSplitStateCountTotal, result.pairSplitStateCount);
       }
-      const pairSplit = estimateGeneratedMedleyExactRawCandidatePairConflictSplitUpper(
-        leftSlot,
-        rightSlot,
-        containingLeftBitsByCardId,
-        containingRightBitsByCardId,
-        excludedCardIds,
-        localDeadlineAt,
-        MEDLEY_EXACT_RAW_PAIR_WITNESS_COVER_PAIR_SPLIT_STATE_BUDGET,
-      );
-      maskPairSplitStateCountTotal = addCappedCount(maskPairSplitStateCountTotal, pairSplit.stateCount);
-      if (pairSplit.timedOut) {
+      if (result.pairSplitTimedOut) {
         maskPairSplitTimedOutCount += 1;
-        timedOut = true;
-        if (pairSplit.abortReason === "state-budget") {
-          maskStoppedByBudget = true;
-        }
       } else {
         maskPairSplitCompletedCount += 1;
       }
-      const pairUpperExcludingMask = !pairSplit.timedOut
-        && (Number.isFinite(pairSplit.upperBound) || pairSplit.upperBound === Number.NEGATIVE_INFINITY)
-        ? pairSplit.upperBound
-        : null;
-      const totalUpper = pairUpperExcludingMask !== null
-        ? maskGroup.maxAnchorScore + pairUpperExcludingMask
-        : null;
-      const safe = totalUpper !== null && totalUpper <= incumbentScore;
-      if (safe) {
+      if (result.safe) {
         safeMasks.add(maskGroup.mask);
       }
-      return {
-        ...maskGroup,
-        excludedCardIds,
-        pairUpperExcludingMask,
-        pairSplitTimedOut: pairSplit.timedOut,
-        pairSplitAbortReason: pairSplit.abortReason,
-        pairSplitStateCount: pairSplit.stateCount,
-        totalUpper,
-        gap: totalUpper !== null ? Math.max(0, totalUpper - incumbentScore) : null,
-        safe,
-      };
+      return result;
+    });
+
+  const safeCountMasks = new Set<number>();
+  let countMaskPairSplitCompletedCount = 0;
+  let countMaskPairSplitTimedOutCount = 0;
+  let countMaskPairSplitStateCountTotal = 0;
+  let countMaskStoppedByBudget = false;
+  const countMaskGroups = [...maskGroupsByMask.values()]
+    .sort((left, right) => (
+      right.anchorCount - left.anchorCount
+      || right.maxAnchorScore - left.maxAnchorScore
+      || left.mask - right.mask
+    ))
+    .slice(0, MEDLEY_EXACT_RAW_PAIR_WITNESS_COVER_COUNT_MASK_SPLIT_LIMIT)
+    .map((maskGroup) => {
+      const maskState = { stoppedByBudget: countMaskStoppedByBudget, timedOut: false };
+      const result = evaluateWitnessMaskGroup(maskGroup, maskState);
+      countMaskStoppedByBudget = maskState.stoppedByBudget;
+      if (result.pairSplitStateCount !== null) {
+        countMaskPairSplitStateCountTotal = addCappedCount(
+          countMaskPairSplitStateCountTotal,
+          result.pairSplitStateCount,
+        );
+      }
+      if (result.pairSplitTimedOut) {
+        countMaskPairSplitTimedOutCount += 1;
+      } else {
+        countMaskPairSplitCompletedCount += 1;
+      }
+      if (result.safe) {
+        safeCountMasks.add(maskGroup.mask);
+      }
+      return result;
     });
 
   let coveredAnchorCount = 0;
@@ -3260,6 +3314,18 @@ function buildMedleyExactRawPairWitnessAnchorCoverProfile(
   let firstMaskUncoveredAnchorScore: number | null = null;
   let firstMaskUncoveredAnchorCardIds: number[] | null = null;
   let firstMaskUncoveredMask: number | null = null;
+  let countMaskCoveredAnchorCount = 0;
+  let countMaskUncoveredAnchorCount = 0;
+  let firstCountMaskUncoveredAnchorIndex: number | null = null;
+  let firstCountMaskUncoveredAnchorScore: number | null = null;
+  let firstCountMaskUncoveredAnchorCardIds: number[] | null = null;
+  let firstCountMaskUncoveredMask: number | null = null;
+  let unionMaskCoveredAnchorCount = 0;
+  let unionMaskUncoveredAnchorCount = 0;
+  let firstUnionMaskUncoveredAnchorIndex: number | null = null;
+  let firstUnionMaskUncoveredAnchorScore: number | null = null;
+  let firstUnionMaskUncoveredAnchorCardIds: number[] | null = null;
+  let firstUnionMaskUncoveredMask: number | null = null;
   for (let anchorIndex = 0; anchorIndex < anchorSlot.length; anchorIndex += 1) {
     const anchorScore = anchorSlot.scores[anchorIndex];
     if (anchorScore + pairScore <= incumbentScore) {
@@ -3293,6 +3359,28 @@ function buildMedleyExactRawPairWitnessAnchorCoverProfile(
         firstMaskUncoveredAnchorScore = anchorScore;
         firstMaskUncoveredAnchorCardIds = anchorCardIds;
         firstMaskUncoveredMask = mask;
+      }
+    }
+    if (safeCountMasks.has(mask)) {
+      countMaskCoveredAnchorCount += 1;
+    } else {
+      countMaskUncoveredAnchorCount += 1;
+      if (firstCountMaskUncoveredAnchorIndex === null) {
+        firstCountMaskUncoveredAnchorIndex = anchorIndex;
+        firstCountMaskUncoveredAnchorScore = anchorScore;
+        firstCountMaskUncoveredAnchorCardIds = anchorCardIds;
+        firstCountMaskUncoveredMask = mask;
+      }
+    }
+    if (safeMasks.has(mask) || safeCountMasks.has(mask)) {
+      unionMaskCoveredAnchorCount += 1;
+    } else {
+      unionMaskUncoveredAnchorCount += 1;
+      if (firstUnionMaskUncoveredAnchorIndex === null) {
+        firstUnionMaskUncoveredAnchorIndex = anchorIndex;
+        firstUnionMaskUncoveredAnchorScore = anchorScore;
+        firstUnionMaskUncoveredAnchorCardIds = anchorCardIds;
+        firstUnionMaskUncoveredMask = mask;
       }
     }
   }
@@ -3331,6 +3419,32 @@ function buildMedleyExactRawPairWitnessAnchorCoverProfile(
     maskPairSplitTimedOutCount,
     maskPairSplitStateCountTotal,
     maskStoppedByBudget,
+    countMaskStrategy: {
+      maskSplitLimit: MEDLEY_EXACT_RAW_PAIR_WITNESS_COVER_COUNT_MASK_SPLIT_LIMIT,
+      safeMaskCount: safeCountMasks.size,
+      coveredAnchorCount: countMaskCoveredAnchorCount,
+      uncoveredAnchorCount: countMaskUncoveredAnchorCount,
+      firstUncoveredAnchorIndex: firstCountMaskUncoveredAnchorIndex,
+      firstUncoveredAnchorScore: firstCountMaskUncoveredAnchorScore,
+      firstUncoveredAnchorCardIds: firstCountMaskUncoveredAnchorCardIds,
+      firstUncoveredMask: firstCountMaskUncoveredMask,
+      allRelevantAnchorsCovered: relevantAnchorCount > 0 && countMaskUncoveredAnchorCount === 0,
+      pairSplitCompletedCount: countMaskPairSplitCompletedCount,
+      pairSplitTimedOutCount: countMaskPairSplitTimedOutCount,
+      pairSplitStateCountTotal: countMaskPairSplitStateCountTotal,
+      stoppedByBudget: countMaskStoppedByBudget,
+      maskGroups: countMaskGroups,
+    },
+    unionMaskStrategy: {
+      safeMaskCount: new Set([...safeMasks, ...safeCountMasks]).size,
+      coveredAnchorCount: unionMaskCoveredAnchorCount,
+      uncoveredAnchorCount: unionMaskUncoveredAnchorCount,
+      firstUncoveredAnchorIndex: firstUnionMaskUncoveredAnchorIndex,
+      firstUncoveredAnchorScore: firstUnionMaskUncoveredAnchorScore,
+      firstUncoveredAnchorCardIds: firstUnionMaskUncoveredAnchorCardIds,
+      firstUncoveredMask: firstUnionMaskUncoveredMask,
+      allRelevantAnchorsCovered: relevantAnchorCount > 0 && unionMaskUncoveredAnchorCount === 0,
+    },
     maskGroups,
     timedOut,
     elapsedMs: Math.round(performance.now() - startedAt),
