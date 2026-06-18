@@ -4243,6 +4243,7 @@ export function createMedleyExactSlotCandidateGenerator(
   enablePrefixHardUpperReplay = false,
   enablePrefixOtherUpperSourceReplay = false,
   enablePrefixCapacityBatchReplay = false,
+  enableCapacityBatchPruning = false,
   enablePrefixCapacityLevel3Replay = false,
   enablePrefixCapacityLevel3LookaheadReplay = false,
   enableCapacitySourceLeafPruning = false,
@@ -4295,6 +4296,7 @@ export function createMedleyExactSlotCandidateGenerator(
     || enablePrefixHardUpperReplay
     || enablePrefixOtherUpperSourceReplay
     || enablePrefixCapacityBatchReplay
+    || enableCapacityBatchPruning
     || enablePrefixCapacityLevel3Replay
     || enablePrefixCapacityLevel3LookaheadReplay
     || enableCapacitySourceLeafPruning
@@ -4306,6 +4308,7 @@ export function createMedleyExactSlotCandidateGenerator(
       (
         enablePrefixOtherUpperSourceReplay
         || enablePrefixCapacityBatchReplay
+        || enableCapacityBatchPruning
         || enablePrefixCapacityLevel3Replay
         || enablePrefixCapacityLevel3LookaheadReplay
         || enableCapacitySourceLeafPruning
@@ -5823,9 +5826,10 @@ export function createMedleyExactSlotCandidateGenerator(
           );
         }
         if (
-          enablePrefixCapacityBatchReplay
+          (enablePrefixCapacityBatchReplay || enableCapacityBatchPruning)
           && prefixUpperReplayProfile
           && globalPruning
+          && nextSelectedCards.length === MEDLEY_TEAM_SIZE - 1
           && pairGlobalUpperBound !== null
           && Number.isFinite(pairGlobalUpperBound)
         ) {
@@ -5835,10 +5839,13 @@ export function createMedleyExactSlotCandidateGenerator(
             upperBound,
             upperBound + pairGlobalUpperBound,
             globalPruning,
-            false,
+            enableCapacityBatchPruning,
           );
           if (nextDecision?.wouldSkip === true) {
             prefixCapacityBatchReplayDecision = nextDecision;
+            if (enableCapacityBatchPruning) {
+              continue;
+            }
           }
         }
         passesPairGlobalPruning = pairGlobalUpperBound === null
@@ -9296,6 +9303,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     debugExactCandidatePrefixOtherUpperSourceReplayMaxChecks?: number;
     debugExactCandidatePrefixOtherUpperSourceReplayMaxMargin?: number;
     debugExactCandidatePrefixCapacityBatchReplay?: boolean;
+    enableExactCandidateCapacityBatchPruning?: boolean;
     debugExactCandidatePrefixCapacityLevel3Replay?: boolean;
     debugExactCandidatePrefixCapacityLevel3LookaheadReplay?: boolean;
     enableExactCandidateCapacitySourceLeafPruning?: boolean;
@@ -9536,6 +9544,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     context.debugExactCandidatePrefixHardUpperReplay === true,
     context.debugExactCandidatePrefixOtherUpperSourceReplay === true,
     context.debugExactCandidatePrefixCapacityBatchReplay === true,
+    context.enableExactCandidateCapacityBatchPruning === true,
     context.debugExactCandidatePrefixCapacityLevel3Replay === true,
     context.debugExactCandidatePrefixCapacityLevel3LookaheadReplay === true,
     context.enableExactCandidateCapacitySourceLeafPruning === true,
@@ -10520,6 +10529,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     context.debugExactCandidatePrefixHardUpperReplay === true,
     context.debugExactCandidatePrefixOtherUpperSourceReplay === true,
     context.debugExactCandidatePrefixCapacityBatchReplay === true,
+    context.enableExactCandidateCapacityBatchPruning === true,
     context.debugExactCandidatePrefixCapacityLevel3Replay === true,
     context.debugExactCandidatePrefixCapacityLevel3LookaheadReplay === true,
     context.enableExactCandidateCapacitySourceLeafPruning === true,

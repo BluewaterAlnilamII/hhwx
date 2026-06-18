@@ -191,6 +191,11 @@ function hhwxOptimizationJson() {
     optimization.debugExactCandidatePrefixUpperReplay = true;
     optimization.debugExactCandidatePrefixCapacityBatchReplay = true;
   }
+  if (process.env.HHWX_LOW_MEMORY_PREFIX_CAPACITY_BATCH_PRUNING === "1") {
+    optimization.debugExactCandidatePrefixUpperReplay = true;
+    optimization.debugExactCandidatePrefixCapacityBatchReplay = true;
+    optimization.enableExactCandidateCapacityBatchPruning = true;
+  }
   if (process.env.HHWX_LOW_MEMORY_PREFIX_CAPACITY_LEVEL3_REPLAY === "1") {
     optimization.debugExactCandidatePrefixUpperReplay = true;
     optimization.debugExactCandidatePrefixCapacityLevel3Replay = true;

@@ -108,6 +108,7 @@ export type BandoriMedleySearchOptimizationOptions = {
   debugExactCandidatePrefixOtherUpperSourceReplayMaxChecks?: number;
   debugExactCandidatePrefixOtherUpperSourceReplayMaxMargin?: number;
   debugExactCandidatePrefixCapacityBatchReplay?: boolean;
+  enableExactCandidateCapacityBatchPruning?: boolean;
   debugExactCandidatePrefixCapacityLevel3Replay?: boolean;
   debugExactCandidatePrefixCapacityLevel3LookaheadReplay?: boolean;
   enableExactCandidateCapacitySourceLeafPruning?: boolean;
