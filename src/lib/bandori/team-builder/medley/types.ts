@@ -863,6 +863,7 @@ export type MedleyExactSlotCandidateGenerator = {
     globalPruning?: MedleyExactSlotCandidateGlobalPruning,
   ) => MedleyTeamCandidate | null;
   peekUpperBound: () => number;
+  peekFrontierNodeProfile: () => Record<string, unknown> | null;
   peekUpperBoundExcludingCardIds?: (
     excludedCardIds: readonly number[],
     deadlineAt?: number,

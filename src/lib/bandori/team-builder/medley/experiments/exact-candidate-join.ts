@@ -6886,6 +6886,12 @@ export function createMedleyExactSlotCandidateGenerator(
     }
     return slotUpperHeap[0]?.slotUpperBound ?? Number.NEGATIVE_INFINITY;
   };
+  const peekMaxHeapSlotUpperNode = (): MedleyExactSlotCandidateSearchNode | null => {
+    while (slotUpperHeap.length > 0 && slotUpperHeap[0].activeInSlotUpperHeap !== true) {
+      popMedleyExactSlotUpperSearchNode(slotUpperHeap);
+    }
+    return slotUpperHeap[0] ?? null;
+  };
   const rootUpperBound = estimateMedleyExactSlotNodeUpperBound(
     slot,
     [],
@@ -8248,6 +8254,28 @@ export function createMedleyExactSlotCandidateGenerator(
     globalPairComplementUpperCache.clear();
     pairUpperQueryCache.clear();
   };
+  const peekFrontierNodeProfile = (): Record<string, unknown> | null => {
+    const node = heapKeyMode === "slot"
+      ? heap[0] ?? null
+      : peekMaxHeapSlotUpperNode();
+    if (!node) {
+      return null;
+    }
+    const selectedCardIndices = getSelectedCardIndicesForNode(node);
+    const selectedCards = getSelectedCardsForNode(node);
+    return {
+      key: Number.isFinite(node.key) ? node.key : null,
+      slotUpperBound: Number.isFinite(node.slotUpperBound) ? node.slotUpperBound : null,
+      selectedCardCount: node.selectedCardCount,
+      selectedCardIds: selectedCards.map((card) => card.cardId),
+      selectedCardIndices,
+      startIndex: node.startIndex,
+      selectedPower: node.selectedPower,
+      isCandidateNode: node.candidate !== null,
+      impliedCompletionCount: getRelaxedImpliedCompletionCount(node.selectedCardCount, node.startIndex),
+      heapKeyMode,
+    };
+  };
 
   return {
     next,
@@ -8256,6 +8284,7 @@ export function createMedleyExactSlotCandidateGenerator(
         ? heap[0]?.key ?? Number.NEGATIVE_INFINITY
         : peekMaxHeapSlotUpperBound()
     ),
+    peekFrontierNodeProfile,
     peekUpperBoundExcludingCardIds,
     canReuseForScoreCutoff: (scoreCutoff: number) => (
       !Number.isFinite(scoreCutoff) || scoreCutoff >= maxPruningScoreCutoff
@@ -12030,6 +12059,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
       otherUpper?: number | null;
       observedUpperBound?: number | null;
       candidateSoftLimit?: number | null;
+      frontierNodeProfile?: Record<string, unknown> | null;
     },
   ): void => {
     const slotIndex = diagnostics.slotIndex ?? null;
@@ -12093,6 +12123,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
       observedUpperBound,
       observedGap,
       remainingMs: Number.isFinite(deadlineAt) ? Math.max(0, Math.round(deadlineAt - performance.now())) : null,
+      frontierNode: diagnostics.frontierNodeProfile ?? null,
     };
   };
   const recordRawSolverInputCensus = (): void => {
@@ -13411,6 +13442,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
           otherUpper,
           observedUpperBound: getObservedExactCandidateJoinUpperBound(),
           candidateSoftLimit: effectiveCandidateSoftLimit,
+          frontierNodeProfile: generator.peekFrontierNodeProfile(),
         });
         profiling.exactCandidateJoinGeneratedCandidateCount += candidatesBySlot.reduce((sum, candidates) => (
           sum + candidates.length
@@ -13489,6 +13521,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
           otherUpper,
           observedUpperBound: anchorFrontierObservedUpperBound ?? getObservedExactCandidateJoinUpperBound(),
           candidateSoftLimit: effectiveCandidateSoftLimit,
+          frontierNodeProfile: generator.peekFrontierNodeProfile(),
         });
         profiling.exactCandidateJoinGeneratedCandidateCount += candidatesBySlot.reduce((sum, candidates) => (
           sum + candidates.length
@@ -13532,6 +13565,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
           otherUpper,
           observedUpperBound: getObservedExactCandidateJoinUpperBound(),
           candidateSoftLimit: effectiveCandidateSoftLimit,
+          frontierNodeProfile: generator.peekFrontierNodeProfile(),
         });
         profiling.exactCandidateJoinGeneratedCandidateCount += candidatesBySlot.reduce((sum, candidates) => (
           sum + candidates.length
