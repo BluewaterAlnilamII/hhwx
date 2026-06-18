@@ -173,6 +173,8 @@ Baseline and gate artifacts retained:
 | `low-memory-polish-hhwx-2026-06-18T08-39-18-405Z.json` | `P02:260` full hard-row raw solver handoff readiness smoke | bounded gap `382812`, average `9376984`, max `9412868`, `0 failed / 0 timedOut / 0 memoryLimited`, peak `2912 MiB`; full `747802` raw rows from `shadow-raw-candidate-builder`, retained `40 MiB`, handoff readiness all true with `0` score/source/card violations |
 | `low-memory-polish-hhwx-2026-06-18T08-47-54-107Z.json` | `P01:none` raw winner late-hydration replay smoke | exact, gap `0`, average `7927236`, max `7982835`, peak `1232 MiB`; raw solver replay over `1550` resident rows found `rawBestScore = 7710622`, hydrated a full medley result from `sourceIndex`, and `scoreMatchesRaw = true` |
 | `low-memory-polish-hhwx-2026-06-18T08-49-14-925Z.json` | `P02:260` raw winner late-hydration hard-row guard smoke | bounded gap `382812`, average `9376984`, max `9412868`, `0 failed / 0 timedOut / 0 memoryLimited`, peak `2898 MiB`; handoff readiness still true for `747802` raw rows, hydration replay safely skips at `candidate-total-limit = 50000` |
+| `low-memory-polish-hhwx-2026-06-18T09-01-25-508Z.json` | `P01:none` raw-vs-object result parity blocker smoke | exact, gap `0`, average `7927236`, max `7982835`, peak `1214 MiB`; raw/object replay both find score `7710622` and identical flat card ids, but object max/min are `7762007 / 7661173` while raw max/min remain `7710622 / 7710622` |
+| `low-memory-polish-hhwx-2026-06-18T09-03-15-040Z.json` | `P02:260` raw-vs-object result parity hard-row guard smoke | bounded gap `382812`, average `9376984`, max `9412868`, `0 failed / 0 timedOut / 0 memoryLimited`, peak `2916 MiB`; handoff readiness remains true for `747802` rows, raw hydration replay skips at `50000`, result parity skips at `20000` |
 
 Use the pressure validation environment for early-pruning gates:
 
@@ -251,7 +253,10 @@ Full hard-row raw mirror:
 - `P01:none` artifact `low-memory-polish-hhwx-2026-06-18T08-47-54-107Z.json` proves raw winner indices can be late-hydrated through `sourceIndex`: raw solver replay over `1550` resident rows found `rawBestScore = 7710622`, and the hydrated medley result has `scoreMatchesRaw = true`;
 - the initial hydration attempt exposed the exact boundary this architecture must solve: thin candidate results do not retain `result.cards`. The fix now rehydrates cards from retained `cardSearchIndex0..4` / card ids without mutating the stored candidate;
 - `P02:260` artifact `low-memory-polish-hhwx-2026-06-18T08-49-14-925Z.json` keeps the hard-row guard: full `747802` rows remain handoff-ready, but raw solver hydration replay skips at the `50000` candidate cap instead of attempting a huge diagnostic solve;
-- conclusion: the raw-row representation is not the memory bottleneck, sorted raw rows can be made order-compatible with the object solver, and raw winner indices can already be late-hydrated into a full medley result on small rows. The bottleneck is retaining equivalent rich candidate bodies and proof helper structures. The next architecture slice should promote the hydration helper into an opt-in raw-solver result parity path, then let a guarded hard-row fill/read path keep raw rows resident without retaining all rich candidate bodies.
+- capped raw-vs-object result parity now runs on small rows. `P01:none` artifact `low-memory-polish-hhwx-2026-06-18T09-01-25-508Z.json` proves the parity harness works and exposes the next semantic blocker: raw and object agree on primary score `7710622`, average score `7710622`, and flat card ids, but object max/min are `7762007 / 7661173` while raw max/min remain `7710622 / 7710622`;
+- the raw solver now keeps raw average/max/min fields and performs a same-third-score max refinement, but that is not sufficient. Before raw result handoff can become authoritative, we need per-slot/source diagnostics for same-card/same-score duplicate candidates and a raw tie-break rule that matches HHWX object result ordering across `score -> maxScore -> card identity`;
+- `P02:260` artifact `low-memory-polish-hhwx-2026-06-18T09-03-15-040Z.json` keeps the hard-row guard: full `747802` rows remain handoff-ready, raw hydration replay skips at `50000`, and result parity skips at `20000`;
+- conclusion: the raw-row representation is not the memory bottleneck, sorted raw rows can be made order-compatible with the object solver, and raw winner indices can be late-hydrated into a full medley result on small rows. However, raw solver handoff is not yet semantically equivalent because max/min tie behavior is not closed. The next architecture slice must diagnose and fix raw max/min tie semantics before guarded raw-resident fill can replace rich candidate residency.
 
 Two-row prefix margin replay sample:
 
@@ -515,7 +520,8 @@ Early-pruning success targets:
    - configurable mirror caps now prove a full P02 hard row can retain all `747802` raw rows in about `40 MiB` with no parity mismatches.
    - raw solver handoff readiness now proves those rows are ordered and hydration-ready via `sourceIndex` and explicit card ids.
    - raw solver winner indices now late-hydrate successfully on small rows, including thin-result candidates whose cards are reconstructed from retained card search indices.
-   - next extension: promote raw-solver result parity for small rows, then create a guarded hard-row resident fill mode that appends raw rows without retaining all rich candidate bodies.
+   - capped raw-vs-object result parity now runs on small rows and has exposed a max/min tie-semantics blocker.
+   - next extension: add per-slot raw/object winner source diagnostics and close raw max/min tie semantics, then create a guarded hard-row resident fill mode that appends raw rows without retaining all rich candidate bodies.
 4. Prototype pre-evaluation upper pruning:
    - start with HHWX's existing `estimateMedleyExactSlotNodeUpperBound` and calc-like incumbent comparison;
    - record a proof ledger before any real skip;
