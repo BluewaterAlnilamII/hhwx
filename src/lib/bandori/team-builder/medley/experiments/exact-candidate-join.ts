@@ -81,8 +81,14 @@ import {
   MEDLEY_EXACT_RAW_CANDIDATE_MIRROR_MAX_SLOT_CARD_COUNT,
   appendMedleyExactRawCandidateMirror,
   createMedleyExactRawCandidateMirror,
+  copyMedleyExactRawCandidateCardIds,
+  getMedleyExactRawCandidateCardIdAt,
   getMedleyExactRawCandidateMirrorProfile,
+  getMedleyExactRawCandidateScore,
+  getMedleyExactRawCandidateSlotBytes,
+  getMedleyExactRawCandidateSourceIndex,
 } from "./exact-candidate-raw-builder";
+import type { MedleyExactRawCandidateSlotView } from "./exact-candidate-raw-builder";
 import {
   popMedleyExactSlotNode,
   popMedleyExactSlotUpperSearchNode,
@@ -1344,14 +1350,7 @@ type MedleyExactCompactNumberCacheBucket = {
 
 type MedleyExactCompactNestedNumberCache = Map<string, MedleyExactCompactNumberCacheBucket>;
 
-type MedleyExactRawCandidatePoolSlot = {
-  scores: Int32Array;
-  averageScores: Int32Array;
-  maxScores: Int32Array;
-  minScores: Int32Array;
-  sourceIndices: Int32Array;
-  cardIds: Int32Array;
-  length: number;
+type MedleyExactRawCandidatePoolSlot = MedleyExactRawCandidateSlotView & {
   mismatchCount: number;
   scoreOrderViolationCount: number;
 };
@@ -1369,11 +1368,7 @@ type MedleyExactRawPairFrontierThreshold = {
   anchorScore: number | null;
 };
 
-type MedleyExactRawJoinParitySlot = {
-  scores: Int32Array;
-  cardIds: Int32Array;
-  length: number;
-};
+type MedleyExactRawJoinParitySlot = MedleyExactRawCandidateSlotView;
 
 type MedleyExactCandidateJoinSlotOrder = {
   slotOrder: number[];
@@ -2686,14 +2681,7 @@ function buildMedleyExactRawCandidatePoolSlot(
 }
 
 function getMedleyExactRawCandidatePoolSlotBytes(slot: MedleyExactRawCandidatePoolSlot): number {
-  return (
-    slot.scores.byteLength
-    + slot.averageScores.byteLength
-    + slot.maxScores.byteLength
-    + slot.minScores.byteLength
-    + slot.sourceIndices.byteLength
-    + slot.cardIds.byteLength
-  );
+  return getMedleyExactRawCandidateSlotBytes(slot);
 }
 
 function getMedleyExactRawCandidatePoolSlotProfile(
@@ -5840,16 +5828,7 @@ function buildMedleyExactScoreCacheProfile(
 function buildMedleyExactRawJoinParitySlot(
   candidates: readonly MedleyTeamCandidate[],
 ): MedleyExactRawJoinParitySlot {
-  const scores = new Int32Array(candidates.length);
-  const cardIds = new Int32Array(candidates.length * MEDLEY_TEAM_SIZE);
-  candidates.forEach((candidate, candidateIndex) => {
-    scores[candidateIndex] = candidate.result.score;
-    const baseCardIndex = candidateIndex * MEDLEY_TEAM_SIZE;
-    for (let cardIndex = 0; cardIndex < MEDLEY_TEAM_SIZE; cardIndex += 1) {
-      cardIds[baseCardIndex + cardIndex] = getMedleyTeamCandidateCardIdAt(candidate, cardIndex) ?? -1;
-    }
-  });
-  return { scores, cardIds, length: candidates.length };
+  return buildMedleyExactRawCandidatePoolSlot(candidates);
 }
 
 function buildMedleyExactRawJoinContainingBitsByCardId(
@@ -5860,9 +5839,8 @@ function buildMedleyExactRawJoinContainingBitsByCardId(
   for (let candidateIndex = 0; candidateIndex < slot.length; candidateIndex += 1) {
     const wordIndex = candidateIndex >> 5;
     const bit = 1 << (candidateIndex & 31);
-    const baseCardIndex = candidateIndex * MEDLEY_TEAM_SIZE;
     for (let cardIndex = 0; cardIndex < MEDLEY_TEAM_SIZE; cardIndex += 1) {
-      const cardId = slot.cardIds[baseCardIndex + cardIndex];
+      const cardId = getMedleyExactRawCandidateCardIdAt(slot, candidateIndex, cardIndex);
       if (cardId < 0) {
         continue;
       }
@@ -5885,9 +5863,8 @@ function writeMedleyExactRawJoinForbiddenBits(
   forbiddenBits: Uint32Array,
 ): Uint32Array {
   forbiddenBits.fill(0);
-  const baseCardIndex = candidateIndex * MEDLEY_TEAM_SIZE;
   for (let cardIndex = 0; cardIndex < MEDLEY_TEAM_SIZE; cardIndex += 1) {
-    const cardId = slot.cardIds[baseCardIndex + cardIndex];
+    const cardId = getMedleyExactRawCandidateCardIdAt(slot, candidateIndex, cardIndex);
     if (cardId < 0) {
       continue;
     }
@@ -5990,8 +5967,8 @@ function runMedleyExactRawIndexFinalJoinParity(
   const firstForbiddenSecondBits = new Uint32Array(secondWordCount);
   const firstForbiddenThirdBits = new Uint32Array(thirdWordCount);
   const secondForbiddenThirdBits = new Uint32Array(thirdWordCount);
-  const bestSecondScore = secondSlot.scores[0] ?? Number.NEGATIVE_INFINITY;
-  const bestThirdScore = thirdSlot.scores[0] ?? Number.NEGATIVE_INFINITY;
+  const bestSecondScore = getMedleyExactRawCandidateScore(secondSlot, 0);
+  const bestThirdScore = getMedleyExactRawCandidateScore(thirdSlot, 0);
   let rawBestScore = Number.NEGATIVE_INFINITY;
   let currentScoreCutoff = incumbentScore + 1;
   let pairCount = 0;
@@ -6005,7 +5982,7 @@ function runMedleyExactRawIndexFinalJoinParity(
     : 0xffffffff >>> (32 - secondLastWordRemainder);
 
   for (let firstIndex = 0; firstIndex < firstSlot.length; firstIndex += 1) {
-    const firstScore = firstSlot.scores[firstIndex];
+    const firstScore = getMedleyExactRawCandidateScore(firstSlot, firstIndex);
     if (firstScore + bestSecondScore + bestThirdScore < currentScoreCutoff) {
       break;
     }
@@ -6039,8 +6016,13 @@ function runMedleyExactRawIndexFinalJoinParity(
     if (bestThirdForFirstIndex < 0) {
       continue;
     }
-    const bestThirdForFirstScore = thirdSlot.scores[bestThirdForFirstIndex];
-    if (firstScore + secondSlot.scores[bestSecondForFirstIndex] + bestThirdForFirstScore < currentScoreCutoff) {
+    const bestThirdForFirstScore = getMedleyExactRawCandidateScore(thirdSlot, bestThirdForFirstIndex);
+    if (
+      firstScore
+      + getMedleyExactRawCandidateScore(secondSlot, bestSecondForFirstIndex)
+      + bestThirdForFirstScore
+      < currentScoreCutoff
+    ) {
       continue;
     }
     if (firstScore + bestSecondScore + bestThirdForFirstScore < currentScoreCutoff) {
@@ -6049,7 +6031,7 @@ function runMedleyExactRawIndexFinalJoinParity(
 
     let shouldStopSecondLoop = false;
     for (let wordIndex = 0; wordIndex < secondWordCount; wordIndex += 1) {
-      const wordTopSecondScore = secondSlot.scores[wordIndex * 32] ?? Number.NEGATIVE_INFINITY;
+      const wordTopSecondScore = getMedleyExactRawCandidateScore(secondSlot, wordIndex * 32);
       if (firstScore + wordTopSecondScore + bestThirdForFirstScore < currentScoreCutoff) {
         break;
       }
@@ -6061,7 +6043,7 @@ function runMedleyExactRawIndexFinalJoinParity(
         const lowestAvailableBit = availableSecondBits & -availableSecondBits;
         availableSecondBits ^= lowestAvailableBit;
         const secondIndex = wordIndex * 32 + (31 - Math.clz32(lowestAvailableBit));
-        const secondScore = secondSlot.scores[secondIndex];
+        const secondScore = getMedleyExactRawCandidateScore(secondSlot, secondIndex);
         const firstSecondScore = firstScore + secondScore;
         pairCount += 1;
         if (pairCount >= nextDeadlineCheckPairCount) {
@@ -6105,7 +6087,7 @@ function runMedleyExactRawIndexFinalJoinParity(
         if (thirdIndex < 0) {
           continue;
         }
-        const score = firstSecondScore + thirdSlot.scores[thirdIndex];
+        const score = firstSecondScore + getMedleyExactRawCandidateScore(thirdSlot, thirdIndex);
         if (score < currentScoreCutoff) {
           continue;
         }
@@ -6133,11 +6115,23 @@ function runMedleyExactRawIndexFinalJoinParity(
     objectBestScore,
     matched: normalizedRawBestScore === objectBestScore,
     bestIndices,
+    bestSourceIndices: bestIndices.map((candidateIndex, orderIndex) => {
+      const slot = rawSlots[slotOrder[orderIndex]];
+      return slot && candidateIndex >= 0
+        ? getMedleyExactRawCandidateSourceIndex(slot, candidateIndex)
+        : -1;
+    }),
+    bestCardIdsBySlot: bestIndices.map((candidateIndex, orderIndex) => {
+      const slot = rawSlots[slotOrder[orderIndex]];
+      return slot && candidateIndex >= 0
+        ? copyMedleyExactRawCandidateCardIds(slot, candidateIndex)
+        : [];
+    }),
     pairCount,
     thirdQueryCount,
     elapsedMs: Math.round(performance.now() - startedAt),
     retainedMiB: roundMiB(
-      rawSlots.reduce((sum, slot) => sum + slot.scores.byteLength + slot.cardIds.byteLength, 0),
+      rawSlots.reduce((sum, slot) => sum + getMedleyExactRawCandidateSlotBytes(slot), 0),
     ),
     rawPoolRetainedMiB: rawCandidatePool
       ? roundMiB(rawCandidatePool.slots.reduce((sum, slot) => (

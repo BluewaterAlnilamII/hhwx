@@ -160,6 +160,8 @@ Baseline and gate artifacts retained:
 | `low-memory-polish-hhwx-2026-06-18T06-58-23-696Z.json` / `low-memory-polish-hhwx-2026-06-18T07-01-06-581Z.json` | restored row-frontier baseline after reverting compatible-row advancement | no-probe and opt-in probe both returned bounded gap `382812`, average `9376984`, max `9412868`, `0 failed / 0 timedOut / 0 memoryLimited`; peaks `2943 MiB` and `2963 MiB`; retained probe uses `2,000,000` pop cap and behaviorChange `false` |
 | `low-memory-polish-hhwx-2026-06-18T07-31-51-625Z.json` | `P02:260` pre-materialization census smoke | bounded gap `382812`, average `9376984`, max `9412868`, `0 failed / 0 timedOut / 0 memoryLimited`, peak `2993 MiB`; no-op census reports `6,583,685` slot-upper checks, `5,504,561` slot-upper rejects, `1,027,727` candidate evaluations, and `972,467` materialized candidates |
 | `low-memory-polish-hhwx-2026-06-18T07-43-00-191Z.json` | `P01:none` extracted shadow raw-builder smoke | exact, gap `0`, average `7927236`, max `7982835`, peak `1270 MiB`; extracted append-only raw builder mirrors all `1550` rich candidates with `lengthMismatchCount = 0`, `mismatchCountTotal = 0`, and `sourceIndex` retained for late hydration |
+| `low-memory-polish-hhwx-2026-06-18T07-49-16-613Z.json` | `P01:none` raw slot read API + raw join parity smoke | exact, gap `0`, average `7927236`, max `7982835`; raw join parity reads through shared raw slot view, `matched = true`, source `shared-raw-candidate-pool`, `candidateCountTotal = 30821`, retained raw input `1.18 MiB` |
+| `low-memory-polish-hhwx-2026-06-18T07-50-41-897Z.json` | `P02:260` raw slot read API hard-row guard smoke | bounded gap `382812`, average `9376984`, max `9412868`, `0 failed / 0 timedOut / 0 memoryLimited`, peak `2927 MiB`; raw mirror guard stops at `60000` appended rows, skips `687802`, `mismatchCountTotal = 0`, retained `3.91 MiB` |
 
 Use the pressure validation environment for early-pruning gates:
 
@@ -201,6 +203,16 @@ Shadow raw-builder extraction:
 - `sourceIndex` is the stable pointer needed for later winner/debug hydration from the authoritative rich candidate arrays;
 - the P01 smoke mirrors all slot candidate admissions: lengths `[585,565,400]` match candidate counts `[585,565,400]`, `appendCount = 1550`, `lengthMismatchCount = 0`, `mismatchCountTotal = 0`;
 - conclusion: the first shadow-builder boundary is usable. Next raw work should expand this from diagnostic mirror to opt-in resident storage/read APIs, while keeping rich candidates authoritative until parity gates pass.
+
+Raw slot read API:
+
+- artifacts: `low-memory-polish-hhwx-2026-06-18T07-49-16-613Z.json` and `low-memory-polish-hhwx-2026-06-18T07-50-41-897Z.json`;
+- `exact-candidate-raw-builder.ts` now exports a shared raw slot view plus accessors for score, source index, card ids, card-id copy, overlap, and retained bytes;
+- the raw pool slot and shadow mirror now use the same score/card/source-index contract;
+- raw final-join parity now reads through the shared raw slot view and records `bestSourceIndices` / `bestCardIdsBySlot`, which are the first late-hydration handles;
+- P01 parity stays exact-safe: raw join parity `matched = true` against the object path over `30821` candidates, using the shared raw candidate pool as input;
+- P02 hard-row guard stays safe: score fields and bounded gap are unchanged, no OOM, and the guarded raw mirror records `0` mismatches before disabling at `60000` rows;
+- conclusion: the raw resident read boundary is now real enough for the next slice. The next useful implementation is to move one frontier/helper read path from `MedleyTeamCandidate` objects to the shared raw slot view, not to add more late probes.
 
 Two-row prefix margin replay sample:
 
@@ -459,7 +471,8 @@ Early-pruning success targets:
    - write a new opt-in module rather than expanding `exact-candidate-join.ts` further;
    - append rows when the rich generator materializes a candidate;
    - verify score/card parity against rich candidates on small rows first, then focused pressure rows.
-   - next extension: add raw slot read APIs for score/card/source-index access so final-join/frontier helpers can stop depending on rich object fields one path at a time.
+   - raw slot read APIs for score/card/source-index access now exist and raw join parity reads through them.
+   - next extension: move one final-join/frontier helper from rich object fields to the shared raw slot view, keeping rich candidates as the authority for result hydration.
 4. Prototype pre-evaluation upper pruning:
    - start with HHWX's existing `estimateMedleyExactSlotNodeUpperBound` and calc-like incumbent comparison;
    - record a proof ledger before any real skip;

@@ -15,14 +15,17 @@ const BYTES_PER_MIB = 1024 * 1024;
 export const MEDLEY_EXACT_RAW_CANDIDATE_MIRROR_MAX_CANDIDATE_TOTAL = 60_000;
 export const MEDLEY_EXACT_RAW_CANDIDATE_MIRROR_MAX_SLOT_CARD_COUNT = 1_200;
 
-export type MedleyExactRawCandidateMirrorSlot = {
-  score: Int32Array;
-  averageScore: Int32Array;
-  maxScore: Int32Array;
-  minScore: Int32Array;
-  sourceIndex: Int32Array;
+export type MedleyExactRawCandidateSlotView = {
+  scores: Int32Array;
+  averageScores: Int32Array;
+  maxScores: Int32Array;
+  minScores: Int32Array;
+  sourceIndices: Int32Array;
   cardIds: Int32Array;
   length: number;
+};
+
+export type MedleyExactRawCandidateMirrorSlot = MedleyExactRawCandidateSlotView & {
   mismatchCount: number;
   capacity: number;
 };
@@ -42,11 +45,11 @@ function roundMiB(bytes: number): number {
 
 function createMedleyExactRawCandidateMirrorSlot(capacity = 16): MedleyExactRawCandidateMirrorSlot {
   return {
-    score: new Int32Array(capacity),
-    averageScore: new Int32Array(capacity),
-    maxScore: new Int32Array(capacity),
-    minScore: new Int32Array(capacity),
-    sourceIndex: new Int32Array(capacity),
+    scores: new Int32Array(capacity),
+    averageScores: new Int32Array(capacity),
+    maxScores: new Int32Array(capacity),
+    minScores: new Int32Array(capacity),
+    sourceIndices: new Int32Array(capacity),
     cardIds: new Int32Array(capacity * MEDLEY_TEAM_SIZE),
     length: 0,
     mismatchCount: 0,
@@ -81,24 +84,24 @@ function ensureMedleyExactRawCandidateMirrorSlotCapacity(
   }
 
   const nextScore = new Int32Array(nextCapacity);
-  nextScore.set(slot.score.subarray(0, slot.length));
-  slot.score = nextScore;
+  nextScore.set(slot.scores.subarray(0, slot.length));
+  slot.scores = nextScore;
 
   const nextAverageScore = new Int32Array(nextCapacity);
-  nextAverageScore.set(slot.averageScore.subarray(0, slot.length));
-  slot.averageScore = nextAverageScore;
+  nextAverageScore.set(slot.averageScores.subarray(0, slot.length));
+  slot.averageScores = nextAverageScore;
 
   const nextMaxScore = new Int32Array(nextCapacity);
-  nextMaxScore.set(slot.maxScore.subarray(0, slot.length));
-  slot.maxScore = nextMaxScore;
+  nextMaxScore.set(slot.maxScores.subarray(0, slot.length));
+  slot.maxScores = nextMaxScore;
 
   const nextMinScore = new Int32Array(nextCapacity);
-  nextMinScore.set(slot.minScore.subarray(0, slot.length));
-  slot.minScore = nextMinScore;
+  nextMinScore.set(slot.minScores.subarray(0, slot.length));
+  slot.minScores = nextMinScore;
 
   const nextSourceIndex = new Int32Array(nextCapacity);
-  nextSourceIndex.set(slot.sourceIndex.subarray(0, slot.length));
-  slot.sourceIndex = nextSourceIndex;
+  nextSourceIndex.set(slot.sourceIndices.subarray(0, slot.length));
+  slot.sourceIndices = nextSourceIndex;
 
   const nextCardIds = new Int32Array(nextCapacity * MEDLEY_TEAM_SIZE);
   nextCardIds.set(slot.cardIds.subarray(0, slot.length * MEDLEY_TEAM_SIZE));
@@ -114,11 +117,11 @@ function appendMedleyExactRawCandidateMirrorSlot(
 ): void {
   const index = slot.length;
   ensureMedleyExactRawCandidateMirrorSlotCapacity(slot, index + 1);
-  slot.score[index] = candidate.result.score;
-  slot.averageScore[index] = candidate.result.averageScore;
-  slot.maxScore[index] = candidate.result.maxScore;
-  slot.minScore[index] = candidate.result.minScore;
-  slot.sourceIndex[index] = sourceIndex;
+  slot.scores[index] = candidate.result.score;
+  slot.averageScores[index] = candidate.result.averageScore;
+  slot.maxScores[index] = candidate.result.maxScore;
+  slot.minScores[index] = candidate.result.minScore;
+  slot.sourceIndices[index] = sourceIndex;
 
   const baseCardIndex = index * MEDLEY_TEAM_SIZE;
   for (let cardIndex = 0; cardIndex < MEDLEY_TEAM_SIZE; cardIndex += 1) {
@@ -126,11 +129,11 @@ function appendMedleyExactRawCandidateMirrorSlot(
   }
 
   if (
-    slot.score[index] !== candidate.result.score
-    || slot.averageScore[index] !== candidate.result.averageScore
-    || slot.maxScore[index] !== candidate.result.maxScore
-    || slot.minScore[index] !== candidate.result.minScore
-    || slot.sourceIndex[index] !== sourceIndex
+    slot.scores[index] !== candidate.result.score
+    || slot.averageScores[index] !== candidate.result.averageScore
+    || slot.maxScores[index] !== candidate.result.maxScore
+    || slot.minScores[index] !== candidate.result.minScore
+    || slot.sourceIndices[index] !== sourceIndex
   ) {
     slot.mismatchCount += 1;
   }
@@ -170,6 +173,75 @@ export function appendMedleyExactRawCandidateMirror(
   mirror.appendCount += 1;
 }
 
+export function getMedleyExactRawCandidateSlotBytes(
+  slot: MedleyExactRawCandidateSlotView,
+): number {
+  return (
+    slot.scores.byteLength
+    + slot.averageScores.byteLength
+    + slot.maxScores.byteLength
+    + slot.minScores.byteLength
+    + slot.sourceIndices.byteLength
+    + slot.cardIds.byteLength
+  );
+}
+
+export function getMedleyExactRawCandidateScore(
+  slot: MedleyExactRawCandidateSlotView,
+  candidateIndex: number,
+): number {
+  return slot.scores[candidateIndex] ?? Number.NEGATIVE_INFINITY;
+}
+
+export function getMedleyExactRawCandidateSourceIndex(
+  slot: MedleyExactRawCandidateSlotView,
+  candidateIndex: number,
+): number {
+  return slot.sourceIndices[candidateIndex] ?? -1;
+}
+
+export function getMedleyExactRawCandidateCardIdAt(
+  slot: MedleyExactRawCandidateSlotView,
+  candidateIndex: number,
+  cardIndex: number,
+): number {
+  return slot.cardIds[candidateIndex * MEDLEY_TEAM_SIZE + cardIndex] ?? -1;
+}
+
+export function copyMedleyExactRawCandidateCardIds(
+  slot: MedleyExactRawCandidateSlotView,
+  candidateIndex: number,
+): number[] {
+  const cardIds: number[] = [];
+  for (let cardIndex = 0; cardIndex < MEDLEY_TEAM_SIZE; cardIndex += 1) {
+    const cardId = getMedleyExactRawCandidateCardIdAt(slot, candidateIndex, cardIndex);
+    if (cardId >= 0) {
+      cardIds.push(cardId);
+    }
+  }
+  return cardIds;
+}
+
+export function medleyExactRawCandidatesOverlap(
+  leftSlot: MedleyExactRawCandidateSlotView,
+  leftIndex: number,
+  rightSlot: MedleyExactRawCandidateSlotView,
+  rightIndex: number,
+): boolean {
+  for (let leftCardIndex = 0; leftCardIndex < MEDLEY_TEAM_SIZE; leftCardIndex += 1) {
+    const leftCardId = getMedleyExactRawCandidateCardIdAt(leftSlot, leftIndex, leftCardIndex);
+    if (leftCardId < 0) {
+      continue;
+    }
+    for (let rightCardIndex = 0; rightCardIndex < MEDLEY_TEAM_SIZE; rightCardIndex += 1) {
+      if (leftCardId === getMedleyExactRawCandidateCardIdAt(rightSlot, rightIndex, rightCardIndex)) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
 export function getMedleyExactRawCandidateMirrorProfile(
   mirror: MedleyExactRawCandidateMirror,
   candidatesBySlot?: readonly MedleyTeamCandidate[][],
@@ -182,13 +254,7 @@ export function getMedleyExactRawCandidateMirrorProfile(
     ? lengths.filter((length, index) => length !== candidateCountsBySlot[index]).length
     : null;
   const retainedBytes = mirror.slots.reduce((sum, slot) => (
-    sum
-    + slot.score.byteLength
-    + slot.averageScore.byteLength
-    + slot.maxScore.byteLength
-    + slot.minScore.byteLength
-    + slot.sourceIndex.byteLength
-    + slot.cardIds.byteLength
+    sum + getMedleyExactRawCandidateSlotBytes(slot)
   ), 0);
   return {
     enabled: true,
