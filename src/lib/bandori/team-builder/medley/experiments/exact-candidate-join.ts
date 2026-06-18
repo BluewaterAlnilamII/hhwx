@@ -146,7 +146,7 @@ const MEDLEY_EXACT_RAW_PAIR_FRONTIER_CENSUS_DEEP_SCAN_LIMIT = 5_000_000;
 const MEDLEY_EXACT_RAW_PAIR_FRONTIER_CENSUS_MAX_THRESHOLDS = 12;
 const MEDLEY_EXACT_RAW_PAIR_PRICING_FRONTIER_POP_LIMIT = 5_000_000;
 const MEDLEY_EXACT_RAW_PAIR_PRICING_FRONTIER_TIMEBOX_MS = 2_000;
-const MEDLEY_EXACT_CANDIDATE_ADMISSION_PAIR_PROBE_POP_LIMIT = 20_000_000;
+const MEDLEY_EXACT_CANDIDATE_ADMISSION_PAIR_PROBE_POP_LIMIT = 2_000_000;
 const MEDLEY_EXACT_CANDIDATE_ADMISSION_PAIR_PROBE_TIMEBOX_MS = 1_500;
 const MEDLEY_EXACT_RAW_TRIPLE_CONFLICT_SPLIT_TIMEBOX_MS = 8_000;
 const MEDLEY_EXACT_RAW_PAIR_WITNESS_COVER_TIMEBOX_MS = 3_000;
@@ -12149,59 +12149,6 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     }
     return { leftIndex, heapSize: nextHeapSize };
   };
-  const advanceCandidateAdmissionPairRightIndex = (
-    rowCandidate: MedleyTeamCandidate,
-    columnCandidates: MedleyTeamCandidate[],
-    startRightIndex: number,
-    bannedSelectedCardIds: Set<number>,
-    deadlineAtForAdvance: number,
-  ): {
-    rightIndex: number;
-    completed: boolean;
-    skippedBannedPairCount: number;
-    skippedOverlapPairCount: number;
-    foundCompatible: boolean;
-  } => {
-    let rightIndex = startRightIndex;
-    let skippedBannedPairCount = 0;
-    let skippedOverlapPairCount = 0;
-    while (rightIndex < columnCandidates.length) {
-      if ((rightIndex & 63) === 0 && performance.now() >= deadlineAtForAdvance) {
-        return {
-          rightIndex,
-          completed: false,
-          skippedBannedPairCount,
-          skippedOverlapPairCount,
-          foundCompatible: false,
-        };
-      }
-      const columnCandidate = columnCandidates[rightIndex];
-      if (medleyTeamCandidateHasCardIdInSet(columnCandidate, bannedSelectedCardIds)) {
-        skippedBannedPairCount += 1;
-        rightIndex += 1;
-        continue;
-      }
-      if (medleyExactCandidatesOverlap(rowCandidate, columnCandidate)) {
-        skippedOverlapPairCount += 1;
-        rightIndex += 1;
-        continue;
-      }
-      return {
-        rightIndex,
-        completed: true,
-        skippedBannedPairCount,
-        skippedOverlapPairCount,
-        foundCompatible: true,
-      };
-    }
-    return {
-      rightIndex,
-      completed: true,
-      skippedBannedPairCount,
-      skippedOverlapPairCount,
-      foundCompatible: false,
-    };
-  };
   const buildCandidateAdmissionFrontierPairBoundaryProfile = (
     slotIndex: number | null,
     proofCutoffScore: number | null,
@@ -12274,15 +12221,10 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     }
     const probeDeadlineAt = performance.now() + MEDLEY_EXACT_CANDIDATE_ADMISSION_PAIR_PROBE_TIMEBOX_MS;
     let poppedPairCount = 0;
-    let poppedRowCount = 0;
-    let rowAdvanceCount = 0;
     let bannedPairCount = 0;
     let overlapPairCount = 0;
-    let exhaustedRowCount = 0;
     let bestGeneratedPairScore: number | null = null;
     let bestGeneratedPairRank: number | null = null;
-    let firstCompatiblePopCount: number | null = null;
-    let scanCompleted = true;
     while (
       heapSize > 0
       && poppedPairCount < MEDLEY_EXACT_CANDIDATE_ADMISSION_PAIR_PROBE_POP_LIMIT
@@ -12304,7 +12246,6 @@ export function searchMedleyConfigurationByExactCandidateJoin(
       const rowCandidate = rowCandidates[leftIndex];
       const columnCandidate = columnCandidates[rightIndex];
       poppedPairCount += 1;
-      poppedRowCount += 1;
       if (medleyTeamCandidateHasCardIdInSet(columnCandidate, bannedSelectedCardIds)) {
         bannedPairCount += 1;
       } else if (medleyExactCandidatesOverlap(rowCandidate, columnCandidate)) {
@@ -12312,26 +12253,11 @@ export function searchMedleyConfigurationByExactCandidateJoin(
       } else {
         bestGeneratedPairScore = rowCandidate.result.score + columnCandidate.result.score;
         bestGeneratedPairRank = poppedPairCount;
-        firstCompatiblePopCount = poppedRowCount;
         break;
       }
-      const advanceResult = advanceCandidateAdmissionPairRightIndex(
-        rowCandidate,
-        columnCandidates,
-        rightIndex + 1,
-        bannedSelectedCardIds,
-        probeDeadlineAt,
-      );
-      rowAdvanceCount += 1;
-      poppedPairCount += advanceResult.skippedBannedPairCount + advanceResult.skippedOverlapPairCount;
-      bannedPairCount += advanceResult.skippedBannedPairCount;
-      overlapPairCount += advanceResult.skippedOverlapPairCount;
-      if (!advanceResult.completed) {
-        scanCompleted = false;
-        break;
-      }
-      if (advanceResult.foundCompatible) {
-        rightIndexByLeft[leftIndex] = advanceResult.rightIndex;
+      const nextRightIndex = rightIndex + 1;
+      if (nextRightIndex < columnCandidates.length) {
+        rightIndexByLeft[leftIndex] = nextRightIndex;
         heapSize = pushCandidateAdmissionPairHeap(
           rowCandidates,
           columnCandidates,
@@ -12340,14 +12266,9 @@ export function searchMedleyConfigurationByExactCandidateJoin(
           heapSize,
           leftIndex,
         );
-      } else {
-        exhaustedRowCount += 1;
       }
     }
-    const timedOut = (
-      bestGeneratedPairScore === null
-      && (!scanCompleted || (heapSize > 0 && performance.now() >= probeDeadlineAt))
-    );
+    const timedOut = heapSize > 0 && performance.now() >= probeDeadlineAt && bestGeneratedPairScore === null;
     const popLimited = (
       heapSize > 0
       && poppedPairCount >= MEDLEY_EXACT_CANDIDATE_ADMISSION_PAIR_PROBE_POP_LIMIT
@@ -12356,24 +12277,16 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     const frontierPairUpper = heapSize > 0
       ? getCandidateAdmissionPairScore(rowCandidates, columnCandidates, rightIndexByLeft, heapLeftIndices[0])
       : Number.NEGATIVE_INFINITY;
-    const frontierPairUpperOrNull = normalizeDiagnosticNumber(frontierPairUpper);
     const generatedPairUpperOrNull = bestGeneratedPairScore !== null
       ? bestGeneratedPairScore
-      : scanCompleted
-        ? frontierPairUpperOrNull
-        : null;
+      : normalizeDiagnosticNumber(frontierPairUpper);
     const pairUnseenUpper = normalizeDiagnosticNumber(exactPairUnseenUpperByExcludedSlot[slotIndex]);
     const unconditionedPairUpper = normalizeDiagnosticNumber(exactPairUpperByExcludedSlot[slotIndex]);
-    const generatedFrontierIncomplete = generatedPairUpperOrNull === null && !scanCompleted;
-    const conditionedPairUpper = generatedFrontierIncomplete
-      ? Number.NEGATIVE_INFINITY
-      : Math.max(
-        generatedPairUpperOrNull ?? Number.NEGATIVE_INFINITY,
-        pairUnseenUpper ?? Number.NEGATIVE_INFINITY,
-      );
-    const conditionedPairUpperOrNull = (
-      !generatedFrontierIncomplete && Number.isFinite(conditionedPairUpper) ? conditionedPairUpper : null
+    const conditionedPairUpper = Math.max(
+      generatedPairUpperOrNull ?? Number.NEGATIVE_INFINITY,
+      pairUnseenUpper ?? Number.NEGATIVE_INFINITY,
     );
+    const conditionedPairUpperOrNull = Number.isFinite(conditionedPairUpper) ? conditionedPairUpper : null;
     const generatedTotalUpper = generatedPairUpperOrNull !== null
       ? frontierSlotScore + generatedPairUpperOrNull
       : null;
@@ -12386,9 +12299,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     const generatedGap = generatedTotalUpper !== null ? generatedTotalUpper - proofCutoffScore : null;
     const pairUnseenGap = pairUnseenTotalUpper !== null ? pairUnseenTotalUpper - proofCutoffScore : null;
     const conditionedGap = conditionedTotalUpper !== null ? conditionedTotalUpper - proofCutoffScore : null;
-    const conditionedBlocker = generatedFrontierIncomplete
-      ? "generated-frontier-incomplete"
-      : conditionedGap === null
+    const conditionedBlocker = conditionedGap === null
       ? "unknown"
       : conditionedGap <= 0
         ? "closed"
@@ -12414,21 +12325,13 @@ export function searchMedleyConfigurationByExactCandidateJoin(
       timedOut,
       popLimited,
       poppedPairCount,
-      poppedRowCount,
-      rowAdvanceCount,
       skippedBannedRowCandidateCount,
       bannedPairCount,
       overlapPairCount,
-      exhaustedRowCount,
       bestGeneratedPairRank,
-      firstCompatiblePopCount,
-      frontierPairUpper: frontierPairUpperOrNull,
-      frontierPairUpperSafe: scanCompleted,
+      frontierPairUpper: normalizeDiagnosticNumber(frontierPairUpper),
       generatedPairUpper: generatedPairUpperOrNull,
-      generatedPairUpperSource: bestGeneratedPairScore !== null
-        ? "disjoint-pair"
-        : scanCompleted ? "frontier-upper" : "incomplete-frontier",
-      generatedFrontierIncomplete,
+      generatedPairUpperSource: bestGeneratedPairScore !== null ? "disjoint-pair" : "frontier-upper",
       generatedGap,
       pairUnseenUpper,
       pairUnseenGap,
