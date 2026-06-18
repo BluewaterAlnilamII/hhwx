@@ -3035,6 +3035,8 @@ function buildMedleyExactRawPairWitnessAnchorCoverProfile(
   containingRightBitsByCardId: Map<number, Uint32Array>,
   pairCardIds: readonly number[],
   pairScore: number,
+  leftPeekUpperBound: number,
+  rightPeekUpperBound: number,
   incumbentScore: number,
   deadlineAt: number,
 ): Record<string, unknown> {
@@ -3042,6 +3044,16 @@ function buildMedleyExactRawPairWitnessAnchorCoverProfile(
   const localDeadlineAt = Math.min(
     deadlineAt,
     startedAt + MEDLEY_EXACT_RAW_PAIR_WITNESS_COVER_TIMEBOX_MS,
+  );
+  const leftWordCount = Math.ceil(leftSlot.length / 32);
+  const rightWordCount = Math.ceil(rightSlot.length / 32);
+  const finiteScore = (score: number): number => (
+    Number.isFinite(score) ? score : Number.NEGATIVE_INFINITY
+  );
+  const combineScores = (leftScore: number, rightScore: number): number => (
+    Number.isFinite(leftScore) && Number.isFinite(rightScore)
+      ? leftScore + rightScore
+      : Number.NEGATIVE_INFINITY
   );
   const pairCardIndexById = new Map(pairCardIds.map((cardId, index) => [cardId, index]));
   const groupCounts = new Int32Array(pairCardIds.length);
@@ -3229,14 +3241,76 @@ function buildMedleyExactRawPairWitnessAnchorCoverProfile(
       && (Number.isFinite(pairSplit.upperBound) || pairSplit.upperBound === Number.NEGATIVE_INFINITY)
       ? pairSplit.upperBound
       : null;
-    const totalUpper = pairUpperExcludingMask !== null
-      ? maskGroup.maxAnchorScore + pairUpperExcludingMask
+    const leftGeneratedCandidate = findBestAvailableMedleyExactRawRightCandidateByForbiddenCardIds(
+      leftSlot,
+      containingLeftBitsByCardId,
+      leftWordCount,
+      [],
+      excludedCardIds,
+    );
+    const rightGeneratedCandidate = findBestAvailableMedleyExactRawRightCandidateByForbiddenCardIds(
+      rightSlot,
+      containingRightBitsByCardId,
+      rightWordCount,
+      [],
+      excludedCardIds,
+    );
+    const leftGeneratedScore = finiteScore(
+      leftGeneratedCandidate.candidateIndex >= 0
+        ? leftSlot.scores[leftGeneratedCandidate.candidateIndex]
+        : Number.NEGATIVE_INFINITY,
+    );
+    const rightGeneratedScore = finiteScore(
+      rightGeneratedCandidate.candidateIndex >= 0
+        ? rightSlot.scores[rightGeneratedCandidate.candidateIndex]
+        : Number.NEGATIVE_INFINITY,
+    );
+    const leftBestPossible = Math.max(leftGeneratedScore, finiteScore(leftPeekUpperBound));
+    const rightBestPossible = Math.max(rightGeneratedScore, finiteScore(rightPeekUpperBound));
+    const leftUnseenUpper = combineScores(finiteScore(leftPeekUpperBound), rightBestPossible);
+    const rightUnseenUpper = combineScores(finiteScore(rightPeekUpperBound), leftBestPossible);
+    const strictPairUpper = pairUpperExcludingMask !== null
+      ? Math.max(pairUpperExcludingMask, leftUnseenUpper, rightUnseenUpper)
+      : null;
+    const strictPairUpperSource = strictPairUpper === null
+      ? null
+      : strictPairUpper === pairUpperExcludingMask
+        ? "generated-pair"
+        : strictPairUpper === leftUnseenUpper
+          ? "left-unseen"
+          : "right-unseen";
+    const pairUpperToClose = incumbentScore - maskGroup.maxAnchorScore;
+    const generatedPairGapToClose = pairUpperExcludingMask !== null
+      ? Math.max(0, pairUpperExcludingMask - pairUpperToClose)
+      : null;
+    const leftUnseenGapToClose = Number.isFinite(leftUnseenUpper)
+      ? Math.max(0, leftUnseenUpper - pairUpperToClose)
+      : null;
+    const rightUnseenGapToClose = Number.isFinite(rightUnseenUpper)
+      ? Math.max(0, rightUnseenUpper - pairUpperToClose)
+      : null;
+    const strictPairGapToClose = strictPairUpper !== null
+      ? Math.max(0, strictPairUpper - pairUpperToClose)
+      : null;
+    const totalUpper = strictPairUpper !== null
+      ? maskGroup.maxAnchorScore + strictPairUpper
       : null;
     const safe = totalUpper !== null && totalUpper <= incumbentScore;
     return {
       ...maskGroup,
       excludedCardIds,
       pairUpperExcludingMask,
+      strictPairUpper,
+      strictPairUpperSource,
+      leftGeneratedScore: Number.isFinite(leftGeneratedScore) ? leftGeneratedScore : null,
+      rightGeneratedScore: Number.isFinite(rightGeneratedScore) ? rightGeneratedScore : null,
+      leftUnseenUpper: Number.isFinite(leftUnseenUpper) ? leftUnseenUpper : null,
+      rightUnseenUpper: Number.isFinite(rightUnseenUpper) ? rightUnseenUpper : null,
+      pairUpperToClose,
+      generatedPairGapToClose,
+      leftUnseenGapToClose,
+      rightUnseenGapToClose,
+      strictPairGapToClose,
       pairSplitTimedOut: pairSplit.timedOut,
       pairSplitAbortReason: pairSplit.abortReason,
       pairSplitStateCount: pairSplit.stateCount,
@@ -3401,7 +3475,11 @@ function buildMedleyExactRawPairWitnessAnchorCoverProfile(
       anchorCount: maskGroup.anchorCount,
       firstAnchorIndex: maskGroup.firstAnchorIndex,
       maxAnchorScore: maskGroup.maxAnchorScore,
-      pairUpper: maskGroup.pairUpperExcludingMask,
+      generatedPairUpper: maskGroup.pairUpperExcludingMask,
+      strictPairUpper: maskGroup.strictPairUpper,
+      strictPairUpperSource: maskGroup.strictPairUpperSource,
+      leftUnseenUpper: maskGroup.leftUnseenUpper,
+      rightUnseenUpper: maskGroup.rightUnseenUpper,
       totalUpper: maskGroup.totalUpper,
       incumbentScore,
       margin: incumbentScore - maskGroup.totalUpper,
@@ -4267,6 +4345,8 @@ function buildMedleyExactRawAnchorFrontierProbeProfile(
         containingRightBitsByCardId,
         globalPairConflictSplitCardIds,
         globalPairConflictSplitGeneratedUpper.upperBound,
+        leftPeekUpperBound,
+        rightPeekUpperBound,
         incumbentScore,
         deadlineAt,
       )
