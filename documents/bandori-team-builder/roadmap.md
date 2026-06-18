@@ -159,6 +159,7 @@ Baseline and gate artifacts retained:
 | `low-memory-polish-hhwx-2026-06-18T06-39-20-470Z.json` / `low-memory-polish-hhwx-2026-06-18T06-43-39-696Z.json` | unstable compatible-row probe commit check | current HEAD after `71af95f9` failed with exit `134` / JS heap OOM both with pair probe enabled and disabled; parent `68eff154` no-probe control `low-memory-polish-hhwx-2026-06-18T06-48-36-319Z.json` succeeded with gap `382812` and peak `2556 MiB` |
 | `low-memory-polish-hhwx-2026-06-18T06-58-23-696Z.json` / `low-memory-polish-hhwx-2026-06-18T07-01-06-581Z.json` | restored row-frontier baseline after reverting compatible-row advancement | no-probe and opt-in probe both returned bounded gap `382812`, average `9376984`, max `9412868`, `0 failed / 0 timedOut / 0 memoryLimited`; peaks `2943 MiB` and `2963 MiB`; retained probe uses `2,000,000` pop cap and behaviorChange `false` |
 | `low-memory-polish-hhwx-2026-06-18T07-31-51-625Z.json` | `P02:260` pre-materialization census smoke | bounded gap `382812`, average `9376984`, max `9412868`, `0 failed / 0 timedOut / 0 memoryLimited`, peak `2993 MiB`; no-op census reports `6,583,685` slot-upper checks, `5,504,561` slot-upper rejects, `1,027,727` candidate evaluations, and `972,467` materialized candidates |
+| `low-memory-polish-hhwx-2026-06-18T07-43-00-191Z.json` | `P01:none` extracted shadow raw-builder smoke | exact, gap `0`, average `7927236`, max `7982835`, peak `1270 MiB`; extracted append-only raw builder mirrors all `1550` rich candidates with `lengthMismatchCount = 0`, `mismatchCountTotal = 0`, and `sourceIndex` retained for late hydration |
 
 Use the pressure validation environment for early-pruning gates:
 
@@ -191,6 +192,15 @@ P02 pre-materialization census smoke:
 - the first census covered `6` slot generators and recorded `7,230,262` branch visits, `646,577` duplicate-character rejects, `6,583,685` slot-upper checks, and `5,504,561` slot-upper rejects;
 - rejected pre-materialization branches represented `2,198,729,426` relaxed implied completions, mostly at level 2 and level 3, while leaf evaluation still reached `1,027,727` candidates and materialized `972,467` rich candidates;
 - conclusion: the architecture pivot is justified. HHWX already has strong local pre-materialization rejection, but it is not yet organized as a raw resident builder with cross-slot proof ledger. The next useful step is a shadow raw builder and signature/dominance replay before rich candidate retention, not more threshold-triggered late probes.
+
+Shadow raw-builder extraction:
+
+- artifact: `low-memory-polish-hhwx-2026-06-18T07-43-00-191Z.json`;
+- `exact-candidate-raw-builder.ts` now owns the append-only typed-array mirror instead of keeping it embedded in the late exact-join file;
+- the raw rows include `score`, `averageScore`, `maxScore`, `minScore`, `sourceIndex`, and `cardId0..4`;
+- `sourceIndex` is the stable pointer needed for later winner/debug hydration from the authoritative rich candidate arrays;
+- the P01 smoke mirrors all slot candidate admissions: lengths `[585,565,400]` match candidate counts `[585,565,400]`, `appendCount = 1550`, `lengthMismatchCount = 0`, `mismatchCountTotal = 0`;
+- conclusion: the first shadow-builder boundary is usable. Next raw work should expand this from diagnostic mirror to opt-in resident storage/read APIs, while keeping rich candidates authoritative until parity gates pass.
 
 Two-row prefix margin replay sample:
 
@@ -445,9 +455,11 @@ Early-pruning success targets:
    - add placeholder counters for same-character dominance and contribution dominance replay, even before pruning is implemented.
    - next extension: split census by signature/area-item/card-group rather than only by selected-card depth, so dominance and raw-builder work can target the high-leverage groups.
 3. Add a shadow raw candidate builder:
+   - first slice is extracted into `exact-candidate-raw-builder.ts` and mirrors full P01 candidate admission with `0` length/score/card mismatch;
    - write a new opt-in module rather than expanding `exact-candidate-join.ts` further;
    - append rows when the rich generator materializes a candidate;
    - verify score/card parity against rich candidates on small rows first, then focused pressure rows.
+   - next extension: add raw slot read APIs for score/card/source-index access so final-join/frontier helpers can stop depending on rich object fields one path at a time.
 4. Prototype pre-evaluation upper pruning:
    - start with HHWX's existing `estimateMedleyExactSlotNodeUpperBound` and calc-like incumbent comparison;
    - record a proof ledger before any real skip;
