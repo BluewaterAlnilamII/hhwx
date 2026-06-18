@@ -53,6 +53,7 @@ function printUsage() {
     "  HHWX_LOW_MEMORY_PREFIX_HARD_UPPER_REPLAY=1 include lightweight cross-slot prefix hard-upper replay summary",
     "  HHWX_LOW_MEMORY_PREFIX_OTHER_UPPER_SOURCE_REPLAY=1 include opt-in other-slot upper source diagnostics",
     "  HHWX_LOW_MEMORY_PREFIX_CAPACITY_BATCH_REPLAY=1 include opt-in level-4 capacity replay diagnostics",
+    "  HHWX_LOW_MEMORY_PREFIX_CAPACITY_BATCH_PRUNING=1 enable opt-in level-4 capacity branch pruning",
     "  HHWX_LOW_MEMORY_PREFIX_CAPACITY_LEVEL3_REPLAY=1 include opt-in level-3 capacity replay diagnostics",
     "  HHWX_LOW_MEMORY_PREFIX_CAPACITY_LEVEL3_LOOKAHEAD_REPLAY=1 include opt-in level-3 lookahead capacity replay diagnostics",
     "  HHWX_LOW_MEMORY_CAPACITY_LEVEL3_LOOKAHEAD_PRUNING=1 enable opt-in level-3 lookahead branch pruning",
@@ -217,6 +218,7 @@ function hhwxOptimizationJson() {
   if (
     process.env.HHWX_LOW_MEMORY_PREFIX_OTHER_UPPER_SOURCE_REPLAY === "1"
     || process.env.HHWX_LOW_MEMORY_PREFIX_CAPACITY_BATCH_REPLAY === "1"
+    || process.env.HHWX_LOW_MEMORY_PREFIX_CAPACITY_BATCH_PRUNING === "1"
     || process.env.HHWX_LOW_MEMORY_PREFIX_CAPACITY_LEVEL3_REPLAY === "1"
     || process.env.HHWX_LOW_MEMORY_PREFIX_CAPACITY_LEVEL3_LOOKAHEAD_REPLAY === "1"
     || process.env.HHWX_LOW_MEMORY_CAPACITY_LEVEL3_LOOKAHEAD_PRUNING === "1"

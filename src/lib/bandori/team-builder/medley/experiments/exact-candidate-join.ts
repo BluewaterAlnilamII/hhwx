@@ -5047,17 +5047,22 @@ export function createMedleyExactSlotCandidateGenerator(
         sourceProfile.basicCapacityWouldSkipCount += 1;
       }
     }
-    const tightCapacityUpper = estimateMedleyRemainingScoreUpperBound(
-      globalPruning.slots,
-      globalPruning.remainingSlotIndices,
-      bannedSelectedCardIds,
-      profiling,
-      false,
-      true,
-      false,
-      false,
-      false,
-    );
+    // Real pruning runs inside the candidate-birth hot path. The tighter capacity
+    // proof is useful for replay, but P02 hard rows need the cheaper optimistic
+    // basic capacity bound to avoid turning proof work into the memory bottleneck.
+    const tightCapacityUpper = enablePruning
+      ? Number.POSITIVE_INFINITY
+      : estimateMedleyRemainingScoreUpperBound(
+        globalPruning.slots,
+        globalPruning.remainingSlotIndices,
+        bannedSelectedCardIds,
+        profiling,
+        false,
+        true,
+        false,
+        false,
+        false,
+      );
     const tightCapacityUpperOrNull = Number.isFinite(tightCapacityUpper) ? tightCapacityUpper : null;
     if (tightCapacityUpperOrNull !== null) {
       sourceProfile.tightCapacityFiniteCount += 1;
