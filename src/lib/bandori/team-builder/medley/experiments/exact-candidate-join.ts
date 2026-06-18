@@ -6595,6 +6595,7 @@ function hydrateMedleyExactRawIndexFinalJoinProfileFromRawRows(
     stats: BandoriMedleyTeamSearchStats;
     profiling: BandoriMedleyTeamSearchProfilingStats;
   },
+  observeHydratedResult?: (result: BandoriMedleyTeamSearchResult) => void,
 ): Record<string, unknown> {
   if (solveProfile.skipped) {
     return {
@@ -6693,6 +6694,7 @@ function hydrateMedleyExactRawIndexFinalJoinProfileFromRawRows(
       cardIdMismatchCount,
     };
   }
+  observeHydratedResult?.(result);
   return {
     attempted: true,
     hydrated: true,
@@ -7036,6 +7038,151 @@ function buildMedleyExactRawResidentFillProfile(
       && rawRowHydratedProfile.maxScore === sourceHydratedProfile.maxScore
       && rawRowHydratedProfile.minScore === sourceHydratedProfile.minScore
       && rawRowCardIds.join(",") === sourceCardIds.join(","),
+  };
+}
+
+function medleyResultOutputFieldsMatch(
+  left: BandoriMedleyTeamSearchResult | null,
+  right: BandoriMedleyTeamSearchResult | null,
+): boolean {
+  if (!left || !right) {
+    return false;
+  }
+  return left.score === right.score
+    && left.averageScore === right.averageScore
+    && left.maxScore === right.maxScore
+    && left.minScore === right.minScore
+    && left.cardIds.join(",") === right.cardIds.join(",");
+}
+
+function buildMedleyExactRawResidentResultRelease(
+  slots: readonly MedleySlotSearch[],
+  rawCandidateSlotReadSource: MedleyExactRawCandidateSlotReadSource,
+  configuration: BandoriAreaItemConfiguration,
+  objectResult: BandoriMedleyTeamSearchResult | null,
+  exactHydration: {
+    server: number;
+    perfectRate: number;
+    stats: BandoriMedleyTeamSearchStats;
+    profiling: BandoriMedleyTeamSearchProfilingStats;
+  },
+  deadlineAt: number,
+  isPastDeadline: () => boolean,
+): { result: BandoriMedleyTeamSearchResult | null; profile: Record<string, unknown> } {
+  const rawSlots = rawCandidateSlotReadSource.slots;
+  const candidateCountsBySlot = rawSlots.map((slot) => slot.length);
+  const candidateCountTotal = candidateCountsBySlot.reduce((sum, count) => sum + count, 0);
+  const baseProfile = {
+    enabled: true,
+    behaviorChange: false,
+    candidateRemoval: false,
+    rawInputSource: rawCandidateSlotReadSource.source,
+    candidateCountTotal,
+    candidateCountsBySlot,
+    returnedRawResult: false,
+  };
+  if (!objectResult) {
+    return {
+      result: null,
+      profile: {
+        ...baseProfile,
+        skipped: true,
+        skipReason: "no-object-result",
+      },
+    };
+  }
+  if (rawCandidateSlotReadSource.source !== "shadow-raw-candidate-builder") {
+    return {
+      result: null,
+      profile: {
+        ...baseProfile,
+        skipped: true,
+        skipReason: "not-resident-raw-source",
+      },
+    };
+  }
+  if (
+    rawCandidateSlotReadSource.lengthMismatchCount !== 0
+    || rawCandidateSlotReadSource.mismatchCountTotal !== 0
+  ) {
+    return {
+      result: null,
+      profile: {
+        ...baseProfile,
+        skipped: true,
+        skipReason: "raw-source-mismatch",
+        rawSourceLengthMismatchCount: rawCandidateSlotReadSource.lengthMismatchCount,
+        rawSourceMismatchCountTotal: rawCandidateSlotReadSource.mismatchCountTotal,
+      },
+    };
+  }
+  if (candidateCountTotal > MEDLEY_EXACT_RAW_RESULT_PARITY_MAX_CANDIDATE_TOTAL) {
+    return {
+      result: null,
+      profile: {
+        ...baseProfile,
+        skipped: true,
+        skipReason: "candidate-total-limit",
+        limit: MEDLEY_EXACT_RAW_RESULT_PARITY_MAX_CANDIDATE_TOTAL,
+      },
+    };
+  }
+  if (Number.isFinite(deadlineAt) && deadlineAt - performance.now() < MEDLEY_EXACT_RAW_RESULT_PARITY_MIN_REMAINING_MS) {
+    return {
+      result: null,
+      profile: {
+        ...baseProfile,
+        skipped: true,
+        skipReason: "remaining-time",
+        minRemainingMs: MEDLEY_EXACT_RAW_RESULT_PARITY_MIN_REMAINING_MS,
+      },
+    };
+  }
+
+  const solveProfile = solveMedleyExactRawIndexFinalJoin(
+    rawSlots,
+    rawCandidateSlotReadSource.source,
+    Number.NEGATIVE_INFINITY,
+    deadlineAt,
+    isPastDeadline,
+    {
+      retainedMiB: rawCandidateSlotReadSource.retainedMiB,
+      rawPoolRetainedMiB: rawCandidateSlotReadSource.rawPoolRetainedMiB,
+      lengthMismatchCount: rawCandidateSlotReadSource.lengthMismatchCount,
+      mismatchCountTotal: rawCandidateSlotReadSource.mismatchCountTotal,
+    },
+  );
+  let rawResult: BandoriMedleyTeamSearchResult | null = null;
+  const rawRowHydration = hydrateMedleyExactRawIndexFinalJoinProfileFromRawRows(
+    slots,
+    rawSlots,
+    configuration,
+    solveProfile,
+    exactHydration,
+    (result) => {
+      rawResult = result;
+    },
+  );
+  const matchesObject = medleyResultOutputFieldsMatch(rawResult, objectResult);
+  return {
+    result: matchesObject ? rawResult : null,
+    profile: {
+      ...baseProfile,
+      skipped: false,
+      behaviorChange: matchesObject,
+      resultAuthoritative: matchesObject,
+      returnedRawResult: matchesObject,
+      solve: solveProfile,
+      rawRowHydration,
+      objectResult: {
+        score: objectResult.score,
+        averageScore: objectResult.averageScore,
+        maxScore: objectResult.maxScore,
+        minScore: objectResult.minScore,
+        cardIds: objectResult.cardIds,
+      },
+      matchesObject,
+    },
   };
 }
 
@@ -13365,6 +13512,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     debugExactCandidateRawJoinParity?: boolean;
     debugExactCandidateRawSolverHandoff?: boolean;
     debugExactCandidateRawResidentFill?: boolean;
+    enableExactCandidateRawResidentResult?: boolean;
     debugExactCandidateSignatureCensus?: boolean;
     debugExactCandidateUpperReplay?: boolean;
     debugExactCandidateAnchorFrontierCheapUpperProbe?: boolean;
@@ -14295,6 +14443,55 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     );
     invalidateRawCandidatePool();
   };
+  const recordRawResidentResultReleaseProfile = (profile: Record<string, unknown>): void => {
+    const currentProfile = profiling.exactCandidateJoinRawSolverHandoff;
+    if (currentProfile && typeof currentProfile === "object" && !Array.isArray(currentProfile)) {
+      profiling.exactCandidateJoinRawSolverHandoff = {
+        ...currentProfile,
+        rawResidentResultRelease: profile,
+      };
+      return;
+    }
+    profiling.exactCandidateJoinRawSolverHandoff = {
+      enabled: true,
+      kind: "raw-resident-result-release",
+      rawResidentResultRelease: profile,
+    };
+  };
+  const maybeUseRawResidentResult = (
+    objectResult: BandoriMedleyTeamSearchResult | null,
+  ): BandoriMedleyTeamSearchResult | null => {
+    if (context.enableExactCandidateRawResidentResult !== true) {
+      return objectResult;
+    }
+    if (!didFinalizeCandidateStorageForRead) {
+      recordRawResidentResultReleaseProfile({
+        enabled: true,
+        skipped: true,
+        skipReason: "candidate-storage-not-finalized",
+        returnedRawResult: false,
+        behaviorChange: false,
+        candidateRemoval: false,
+      });
+      return objectResult;
+    }
+    const release = buildMedleyExactRawResidentResultRelease(
+      slots,
+      getRawCandidateSlotReadSource(),
+      configuration,
+      objectResult,
+      {
+        server,
+        perfectRate,
+        stats,
+        profiling,
+      },
+      deadlineAt,
+      isPastDeadline,
+    );
+    recordRawResidentResultReleaseProfile(release.profile);
+    return release.result ?? objectResult;
+  };
   const buildUnprovedExactCandidateJoinResult = (
     result: BandoriMedleyTeamSearchResult | null = null,
     observedUpperBound: number | null = getObservedExactCandidateJoinUpperBound(),
@@ -14323,6 +14520,8 @@ export function searchMedleyConfigurationByExactCandidateJoin(
   const buildProvedExactCandidateJoinResult = (
     result: BandoriMedleyTeamSearchResult | null = null,
   ): MedleyExactCandidateJoinResult => {
+    const resultWithPrefixSeed = applyPrefixSeedResult(result);
+    const returnedResult = maybeUseRawResidentResult(resultWithPrefixSeed);
     recordRawCandidateMirrorProfile();
     recordRawSolverInputCensus();
     recordRawAnchorCheapUpperReplay();
@@ -14332,7 +14531,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     recordPrefixUpperReplaySummary();
     recordPreMaterializationCensus();
     releaseExactJoinWorkingSet();
-    return { proved: true, result: applyPrefixSeedResult(result) };
+    return { proved: true, result: returnedResult };
   };
   let effectiveCandidateSoftLimit = candidateSoftLimit;
   let didGuardedCandidateExtension = false;
