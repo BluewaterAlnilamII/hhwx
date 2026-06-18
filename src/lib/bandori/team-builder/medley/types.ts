@@ -103,6 +103,7 @@ export type BandoriMedleySearchOptimizationOptions = {
   debugExactCandidateRawSolverHandoff?: boolean;
   debugExactCandidateRawResidentFill?: boolean;
   enableExactCandidateRawResidentResult?: boolean;
+  enableExactCandidateRawResidentWinnerOracle?: boolean;
   debugExactCandidateSignatureCensus?: boolean;
   debugExactCandidateUpperReplay?: boolean;
   debugExactCandidateAnchorFrontierCheapUpperProbe?: boolean;

@@ -7202,6 +7202,7 @@ function buildMedleyExactRawResidentDirectResultHarness(
   },
   deadlineAt: number,
   isPastDeadline: () => boolean,
+  useWinnerOnlyOracle = false,
 ): { result: BandoriMedleyTeamSearchResult | null; profile: Record<string, unknown> } {
   const rawSlots = rawCandidateSlotReadSource.slots;
   const candidateCountsBySlot = rawSlots.map((slot) => slot.length);
@@ -7314,6 +7315,29 @@ function buildMedleyExactRawResidentDirectResultHarness(
         rawSolve: rawSolveProfile,
         rawRowHydration,
         matchesObjectOracle: false,
+      },
+    };
+  }
+  if (useWinnerOnlyOracle) {
+    return {
+      result: rawResult,
+      profile: {
+        ...baseProfile,
+        skipped: false,
+        returnedRawResult: true,
+        resultAuthoritative: true,
+        richCandidateRole: "winner-hydration-only",
+        richCandidatePrimaryRetainedCount: 0,
+        richCandidateOracleCount: 0,
+        winnerHydrationCount: MEDLEY_TEAM_COUNT,
+        objectOracleMode: "winner-only-raw-row",
+        objectOracleSkipped: true,
+        elapsedMs: Math.round(performance.now() - startedAt),
+        timeboxMs: MEDLEY_EXACT_RAW_DIRECT_RESULT_HARNESS_TIMEBOX_MS,
+        rawSolve: rawSolveProfile,
+        rawRowHydration,
+        matchesObjectOracle: null,
+        exactnessBasis: "raw-solver-over-resident-rows",
       },
     };
   }
@@ -13690,6 +13714,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     debugExactCandidateRawSolverHandoff?: boolean;
     debugExactCandidateRawResidentFill?: boolean;
     enableExactCandidateRawResidentResult?: boolean;
+    enableExactCandidateRawResidentWinnerOracle?: boolean;
     debugExactCandidateSignatureCensus?: boolean;
     debugExactCandidateUpperReplay?: boolean;
     debugExactCandidateAnchorFrontierCheapUpperProbe?: boolean;
@@ -14681,6 +14706,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
         },
         deadlineAt,
         isPastDeadline,
+        context.enableExactCandidateRawResidentWinnerOracle === true,
       );
     }
     recordRawSolverHandoffSubProfile(
@@ -14714,9 +14740,11 @@ export function searchMedleyConfigurationByExactCandidateJoin(
       returnedRawResult: true,
       behaviorChange: true,
       candidateRemoval: false,
-      richCandidateRole: "oracle-only",
-      richCandidatePrimaryRetainedCount: 0,
-      richCandidateOracleCount: directHarness.profile.candidateCountTotal ?? null,
+      richCandidateRole: directHarness.profile.richCandidateRole ?? "oracle-only",
+      richCandidatePrimaryRetainedCount: directHarness.profile.richCandidatePrimaryRetainedCount ?? 0,
+      richCandidateOracleCount: directHarness.profile.richCandidateOracleCount ?? directHarness.profile.candidateCountTotal ?? null,
+      winnerHydrationCount: directHarness.profile.winnerHydrationCount ?? null,
+      objectOracleMode: directHarness.profile.objectOracleMode ?? "full-object-oracle",
       rawScore: rawResult.score,
       rawAverageScore: rawResult.averageScore,
       rawMaxScore: rawResult.maxScore,
