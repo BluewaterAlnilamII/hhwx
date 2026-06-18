@@ -11960,6 +11960,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     debugExactCandidateJoinMemoryAttribution?: boolean;
     debugExactCandidateRawMirror?: boolean;
     debugExactCandidateRawMirrorMaxCardCount?: number | null;
+    debugExactCandidateRawMirrorMaxCandidateTotal?: number | null;
     debugExactCandidateRawJoinParity?: boolean;
     debugExactCandidateSignatureCensus?: boolean;
     debugExactCandidateUpperReplay?: boolean;
@@ -12175,6 +12176,14 @@ export function searchMedleyConfigurationByExactCandidateJoin(
       ? Math.trunc(context.debugExactCandidateRawMirrorMaxCardCount)
       : null
   );
+  const rawCandidateMirrorMaxCandidateTotal = (
+    context.debugExactCandidateRawMirrorMaxCandidateTotal !== null
+    && context.debugExactCandidateRawMirrorMaxCandidateTotal !== undefined
+    && Number.isFinite(context.debugExactCandidateRawMirrorMaxCandidateTotal)
+    && context.debugExactCandidateRawMirrorMaxCandidateTotal > 0
+      ? Math.trunc(context.debugExactCandidateRawMirrorMaxCandidateTotal)
+      : MEDLEY_EXACT_RAW_CANDIDATE_MIRROR_MAX_CANDIDATE_TOTAL
+  );
   const shouldSkipRawCandidateMirrorByCardCount = (
     context.debugExactCandidateRawMirror === true
     && (
@@ -12229,7 +12238,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
   const candidatesBySlot: MedleyTeamCandidate[][] = Array.from({ length: slots.length }, () => []);
   const rawCandidateMirror = context.debugExactCandidateRawMirror === true
     && !shouldSkipRawCandidateMirrorByCardCount
-    ? createMedleyExactRawCandidateMirror(slots.length)
+    ? createMedleyExactRawCandidateMirror(slots.length, rawCandidateMirrorMaxCandidateTotal)
     : null;
   if (shouldSkipRawCandidateMirrorByCardCount) {
     profiling.exactCandidateJoinRawMirrorProfile = {
@@ -12241,7 +12250,8 @@ export function searchMedleyConfigurationByExactCandidateJoin(
       cardCountForLimit: rawCandidateMirrorCardCount,
       maxCardCountLimit: rawCandidateMirrorMaxCardCount,
       defaultMaxCardCountLimit: MEDLEY_EXACT_RAW_CANDIDATE_MIRROR_MAX_SLOT_CARD_COUNT,
-      maxCandidateTotal: MEDLEY_EXACT_RAW_CANDIDATE_MIRROR_MAX_CANDIDATE_TOTAL,
+      maxCandidateTotal: rawCandidateMirrorMaxCandidateTotal,
+      defaultMaxCandidateTotal: MEDLEY_EXACT_RAW_CANDIDATE_MIRROR_MAX_CANDIDATE_TOTAL,
     };
   }
   let rawCandidatePool: MedleyExactRawCandidatePool | null = null;

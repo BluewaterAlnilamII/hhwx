@@ -98,6 +98,7 @@ export type BandoriMedleySearchOptimizationOptions = {
   debugExactCandidateJoinMemoryAttribution?: boolean;
   debugExactCandidateRawMirror?: boolean;
   debugExactCandidateRawMirrorMaxCardCount?: number;
+  debugExactCandidateRawMirrorMaxCandidateTotal?: number;
   debugExactCandidateRawJoinParity?: boolean;
   debugExactCandidateSignatureCensus?: boolean;
   debugExactCandidateUpperReplay?: boolean;

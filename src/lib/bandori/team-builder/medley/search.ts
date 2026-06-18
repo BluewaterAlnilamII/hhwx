@@ -649,6 +649,17 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
       ? parsedDebugExactCandidateRawMirrorMaxCardCount
       : null
   );
+  const parsedDebugExactCandidateRawMirrorMaxCandidateTotal = (
+    optimization.debugExactCandidateRawMirrorMaxCandidateTotal !== undefined
+      ? Math.trunc(optimization.debugExactCandidateRawMirrorMaxCandidateTotal)
+      : Number.NaN
+  );
+  const debugExactCandidateRawMirrorMaxCandidateTotal = (
+    Number.isFinite(parsedDebugExactCandidateRawMirrorMaxCandidateTotal)
+    && parsedDebugExactCandidateRawMirrorMaxCandidateTotal > 0
+      ? parsedDebugExactCandidateRawMirrorMaxCandidateTotal
+      : null
+  );
   const debugExactCandidateRawJoinParity = optimization.debugExactCandidateRawJoinParity === true;
   const debugExactCandidateSignatureCensus = optimization.debugExactCandidateSignatureCensus === true;
   const debugExactCandidateUpperReplay = optimization.debugExactCandidateUpperReplay === true;
@@ -3837,6 +3848,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
           debugExactCandidateJoinMemoryAttribution,
           debugExactCandidateRawMirror,
           debugExactCandidateRawMirrorMaxCardCount,
+          debugExactCandidateRawMirrorMaxCandidateTotal,
           debugExactCandidateRawJoinParity,
           debugExactCandidateSignatureCensus,
           debugExactCandidateUpperReplay,
@@ -4322,6 +4334,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
           debugExactCandidateJoinMemoryAttribution,
           debugExactCandidateRawMirror,
           debugExactCandidateRawMirrorMaxCardCount,
+          debugExactCandidateRawMirrorMaxCandidateTotal,
           debugExactCandidateRawJoinParity,
           debugExactCandidateSignatureCensus,
           debugExactCandidateUpperReplay,

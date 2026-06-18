@@ -66,6 +66,7 @@ function printUsage() {
     "  HHWX_LOW_MEMORY_RAW_ANCHOR_FRONTIER_CONSTRAINED_PEEK=1 add heavy constrained-peek samples to the raw anchor/frontier probe",
     "  HHWX_LOW_MEMORY_RAW_PAIR_PRICING_FRONTIER=1 add conflict-aware raw pair pricing frontier samples",
     "  HHWX_LOW_MEMORY_RAW_ANCHOR_FRONTIER_PROBE_MAX_CANDIDATES=N allow the raw anchor/frontier probe to build raw pools up to N candidates",
+    "  HHWX_LOW_MEMORY_RAW_MIRROR_MAX_CANDIDATES=N allow shadow raw mirror to retain up to N raw candidate rows",
     "  HHWX_LOW_MEMORY_RAW_CANDIDATE_POOL_PROFILE=1 build opt-in raw typed-array candidate pool profile",
     "  HHWX_LOW_MEMORY_RAW_PAIR_COMPLEMENT_PARITY=1 compare banned-card pair complement over shared raw candidate pool",
     "  HHWX_LOW_MEMORY_RAW_PAIR_UPPER_SCAN_PARITY=1 compare generated pair upper scan over shared raw candidate pool",
@@ -165,6 +166,10 @@ function hhwxOptimizationJson() {
     const rawMirrorMaxCardCount = Number(process.env.HHWX_LOW_MEMORY_RAW_MIRROR_MAX_CARD_COUNT);
     if (Number.isFinite(rawMirrorMaxCardCount) && rawMirrorMaxCardCount > 0) {
       optimization.debugExactCandidateRawMirrorMaxCardCount = Math.trunc(rawMirrorMaxCardCount);
+    }
+    const rawMirrorMaxCandidateTotal = Number(process.env.HHWX_LOW_MEMORY_RAW_MIRROR_MAX_CANDIDATES);
+    if (Number.isFinite(rawMirrorMaxCandidateTotal) && rawMirrorMaxCandidateTotal > 0) {
+      optimization.debugExactCandidateRawMirrorMaxCandidateTotal = Math.trunc(rawMirrorMaxCandidateTotal);
     }
   }
   if (process.env.HHWX_LOW_MEMORY_RAW_JOIN_PARITY === "1") {
