@@ -109,6 +109,7 @@ import type {
   MedleyExactCandidateJoinAbortReason,
   MedleyExactCandidateJoinResult,
   MedleyExactCandidateJoinSolveResult,
+  MedleyExactConstrainedSlotPeekUpperResult,
   MedleyExactSlotCandidateGlobalPruning,
   MedleyExactSlotCandidateGenerator,
   MedleyExactSlotCandidateSearchNode,
@@ -148,6 +149,8 @@ const MEDLEY_EXACT_RAW_PAIR_WITNESS_COVER_TIMEBOX_MS = 3_000;
 const MEDLEY_EXACT_RAW_PAIR_WITNESS_COVER_PAIR_SPLIT_STATE_BUDGET = 2_048;
 const MEDLEY_EXACT_RAW_PAIR_WITNESS_COVER_MASK_SPLIT_LIMIT = 32;
 const MEDLEY_EXACT_RAW_PAIR_WITNESS_COVER_COUNT_MASK_SPLIT_LIMIT = 128;
+const MEDLEY_EXACT_RAW_PAIR_WITNESS_CONSTRAINED_PEEK_SAMPLE_LIMIT = 1;
+const MEDLEY_EXACT_RAW_PAIR_WITNESS_CONSTRAINED_PEEK_TIMEBOX_MS = 1_000;
 const MEDLEY_EXACT_RAW_PAIR_COMPLEMENT_PARITY_MAX_CANDIDATE_TOTAL = 60_000;
 const MEDLEY_EXACT_RAW_PAIR_COMPLEMENT_PARITY_BANNED_SAMPLE_LIMIT = 4;
 const MEDLEY_EXACT_RAW_PAIR_UPPER_SCAN_PARITY_MAX_CANDIDATE_TOTAL = 60_000;
@@ -3037,6 +3040,14 @@ function buildMedleyExactRawPairWitnessAnchorCoverProfile(
   pairScore: number,
   leftPeekUpperBound: number,
   rightPeekUpperBound: number,
+  leftPeekUpperBoundExcludingCardIds: ((
+    excludedCardIds: readonly number[],
+    deadlineAt?: number,
+  ) => MedleyExactConstrainedSlotPeekUpperResult) | undefined,
+  rightPeekUpperBoundExcludingCardIds: ((
+    excludedCardIds: readonly number[],
+    deadlineAt?: number,
+  ) => MedleyExactConstrainedSlotPeekUpperResult) | undefined,
   incumbentScore: number,
   deadlineAt: number,
 ): Record<string, unknown> {
@@ -3196,6 +3207,7 @@ function buildMedleyExactRawPairWitnessAnchorCoverProfile(
   let maskPairSplitTimedOutCount = 0;
   let maskPairSplitStateCountTotal = 0;
   let maskStoppedByBudget = false;
+  let constrainedPeekProbeCount = 0;
   const evaluateWitnessMaskGroup = (
     maskGroup: {
       mask: number;
@@ -3204,6 +3216,7 @@ function buildMedleyExactRawPairWitnessAnchorCoverProfile(
       firstAnchorIndex: number;
     },
     stopState: { stoppedByBudget: boolean; timedOut: boolean },
+    probeConstrainedPeek: boolean,
   ) => {
     const excludedCardIds = pairCardIds.filter((_, groupIndex) => (maskGroup.mask & (1 << groupIndex)) !== 0);
     if (timedOut || stoppedByBudget || stopState.stoppedByBudget || performance.now() >= localDeadlineAt) {
@@ -3241,6 +3254,46 @@ function buildMedleyExactRawPairWitnessAnchorCoverProfile(
       && (Number.isFinite(pairSplit.upperBound) || pairSplit.upperBound === Number.NEGATIVE_INFINITY)
       ? pairSplit.upperBound
       : null;
+    const shouldProbeConstrainedPeek = (
+      probeConstrainedPeek
+      && (
+        leftPeekUpperBoundExcludingCardIds !== undefined
+        || rightPeekUpperBoundExcludingCardIds !== undefined
+      )
+      && constrainedPeekProbeCount < MEDLEY_EXACT_RAW_PAIR_WITNESS_CONSTRAINED_PEEK_SAMPLE_LIMIT
+      && performance.now() < localDeadlineAt
+    );
+    const leftConstrainedPeek = shouldProbeConstrainedPeek
+      ? leftPeekUpperBoundExcludingCardIds?.(
+        excludedCardIds,
+        Math.min(
+          localDeadlineAt,
+          performance.now() + MEDLEY_EXACT_RAW_PAIR_WITNESS_CONSTRAINED_PEEK_TIMEBOX_MS,
+        ),
+      ) ?? null
+      : null;
+    const rightConstrainedPeek = shouldProbeConstrainedPeek
+      ? rightPeekUpperBoundExcludingCardIds?.(
+        excludedCardIds,
+        Math.min(
+          localDeadlineAt,
+          performance.now() + MEDLEY_EXACT_RAW_PAIR_WITNESS_CONSTRAINED_PEEK_TIMEBOX_MS,
+        ),
+      ) ?? null
+      : null;
+    if (shouldProbeConstrainedPeek) {
+      constrainedPeekProbeCount += 1;
+    }
+    const leftEffectivePeekUpperBound = (
+      leftConstrainedPeek?.completed
+        ? Math.min(finiteScore(leftPeekUpperBound), finiteScore(leftConstrainedPeek.upperBound))
+        : finiteScore(leftPeekUpperBound)
+    );
+    const rightEffectivePeekUpperBound = (
+      rightConstrainedPeek?.completed
+        ? Math.min(finiteScore(rightPeekUpperBound), finiteScore(rightConstrainedPeek.upperBound))
+        : finiteScore(rightPeekUpperBound)
+    );
     const leftGeneratedCandidate = findBestAvailableMedleyExactRawRightCandidateByForbiddenCardIds(
       leftSlot,
       containingLeftBitsByCardId,
@@ -3265,10 +3318,10 @@ function buildMedleyExactRawPairWitnessAnchorCoverProfile(
         ? rightSlot.scores[rightGeneratedCandidate.candidateIndex]
         : Number.NEGATIVE_INFINITY,
     );
-    const leftBestPossible = Math.max(leftGeneratedScore, finiteScore(leftPeekUpperBound));
-    const rightBestPossible = Math.max(rightGeneratedScore, finiteScore(rightPeekUpperBound));
-    const leftUnseenUpper = combineScores(finiteScore(leftPeekUpperBound), rightBestPossible);
-    const rightUnseenUpper = combineScores(finiteScore(rightPeekUpperBound), leftBestPossible);
+    const leftBestPossible = Math.max(leftGeneratedScore, leftEffectivePeekUpperBound);
+    const rightBestPossible = Math.max(rightGeneratedScore, rightEffectivePeekUpperBound);
+    const leftUnseenUpper = combineScores(leftEffectivePeekUpperBound, rightBestPossible);
+    const rightUnseenUpper = combineScores(rightEffectivePeekUpperBound, leftBestPossible);
     const strictPairUpper = pairUpperExcludingMask !== null
       ? Math.max(pairUpperExcludingMask, leftUnseenUpper, rightUnseenUpper)
       : null;
@@ -3304,6 +3357,34 @@ function buildMedleyExactRawPairWitnessAnchorCoverProfile(
       strictPairUpperSource,
       leftGeneratedScore: Number.isFinite(leftGeneratedScore) ? leftGeneratedScore : null,
       rightGeneratedScore: Number.isFinite(rightGeneratedScore) ? rightGeneratedScore : null,
+      leftEffectivePeekUpperBound: Number.isFinite(leftEffectivePeekUpperBound) ? leftEffectivePeekUpperBound : null,
+      rightEffectivePeekUpperBound: Number.isFinite(rightEffectivePeekUpperBound) ? rightEffectivePeekUpperBound : null,
+      leftConstrainedPeekUpperBound: leftConstrainedPeek && Number.isFinite(leftConstrainedPeek.upperBound)
+        ? leftConstrainedPeek.upperBound
+        : null,
+      rightConstrainedPeekUpperBound: rightConstrainedPeek && Number.isFinite(rightConstrainedPeek.upperBound)
+        ? rightConstrainedPeek.upperBound
+        : null,
+      leftConstrainedPeekCompleted: leftConstrainedPeek?.completed ?? null,
+      rightConstrainedPeekCompleted: rightConstrainedPeek?.completed ?? null,
+      leftConstrainedPeekTimedOut: leftConstrainedPeek?.timedOut ?? null,
+      rightConstrainedPeekTimedOut: rightConstrainedPeek?.timedOut ?? null,
+      leftConstrainedPeekHeapNodeCount: leftConstrainedPeek?.heapNodeCount ?? null,
+      rightConstrainedPeekHeapNodeCount: rightConstrainedPeek?.heapNodeCount ?? null,
+      leftConstrainedPeekScannedNodeCount: leftConstrainedPeek?.scannedNodeCount ?? null,
+      rightConstrainedPeekScannedNodeCount: rightConstrainedPeek?.scannedNodeCount ?? null,
+      leftConstrainedPeekElapsedMs: leftConstrainedPeek?.elapsedMs ?? null,
+      rightConstrainedPeekElapsedMs: rightConstrainedPeek?.elapsedMs ?? null,
+      leftConstrainedPeekReduction: leftConstrainedPeek?.completed
+        && Number.isFinite(leftPeekUpperBound)
+        && Number.isFinite(leftConstrainedPeek.upperBound)
+        ? Math.max(0, leftPeekUpperBound - leftConstrainedPeek.upperBound)
+        : null,
+      rightConstrainedPeekReduction: rightConstrainedPeek?.completed
+        && Number.isFinite(rightPeekUpperBound)
+        && Number.isFinite(rightConstrainedPeek.upperBound)
+        ? Math.max(0, rightPeekUpperBound - rightConstrainedPeek.upperBound)
+        : null,
       leftUnseenUpper: Number.isFinite(leftUnseenUpper) ? leftUnseenUpper : null,
       rightUnseenUpper: Number.isFinite(rightUnseenUpper) ? rightUnseenUpper : null,
       pairUpperToClose,
@@ -3328,7 +3409,7 @@ function buildMedleyExactRawPairWitnessAnchorCoverProfile(
     .slice(0, MEDLEY_EXACT_RAW_PAIR_WITNESS_COVER_MASK_SPLIT_LIMIT)
     .map((maskGroup) => {
       const maskState = { stoppedByBudget: maskStoppedByBudget, timedOut: false };
-      const result = evaluateWitnessMaskGroup(maskGroup, maskState);
+      const result = evaluateWitnessMaskGroup(maskGroup, maskState, false);
       maskStoppedByBudget = maskState.stoppedByBudget;
       if (result.pairSplitStateCount !== null) {
         maskPairSplitStateCountTotal = addCappedCount(maskPairSplitStateCountTotal, result.pairSplitStateCount);
@@ -3358,7 +3439,7 @@ function buildMedleyExactRawPairWitnessAnchorCoverProfile(
     .slice(0, MEDLEY_EXACT_RAW_PAIR_WITNESS_COVER_COUNT_MASK_SPLIT_LIMIT)
     .map((maskGroup) => {
       const maskState = { stoppedByBudget: countMaskStoppedByBudget, timedOut: false };
-      const result = evaluateWitnessMaskGroup(maskGroup, maskState);
+      const result = evaluateWitnessMaskGroup(maskGroup, maskState, true);
       countMaskStoppedByBudget = maskState.stoppedByBudget;
       if (result.pairSplitStateCount !== null) {
         countMaskPairSplitStateCountTotal = addCappedCount(
@@ -3480,6 +3561,22 @@ function buildMedleyExactRawPairWitnessAnchorCoverProfile(
       strictPairUpperSource: maskGroup.strictPairUpperSource,
       leftUnseenUpper: maskGroup.leftUnseenUpper,
       rightUnseenUpper: maskGroup.rightUnseenUpper,
+      leftEffectivePeekUpperBound: maskGroup.leftEffectivePeekUpperBound,
+      rightEffectivePeekUpperBound: maskGroup.rightEffectivePeekUpperBound,
+      leftConstrainedPeekUpperBound: maskGroup.leftConstrainedPeekUpperBound,
+      rightConstrainedPeekUpperBound: maskGroup.rightConstrainedPeekUpperBound,
+      leftConstrainedPeekCompleted: maskGroup.leftConstrainedPeekCompleted,
+      rightConstrainedPeekCompleted: maskGroup.rightConstrainedPeekCompleted,
+      leftConstrainedPeekTimedOut: maskGroup.leftConstrainedPeekTimedOut,
+      rightConstrainedPeekTimedOut: maskGroup.rightConstrainedPeekTimedOut,
+      leftConstrainedPeekHeapNodeCount: maskGroup.leftConstrainedPeekHeapNodeCount,
+      rightConstrainedPeekHeapNodeCount: maskGroup.rightConstrainedPeekHeapNodeCount,
+      leftConstrainedPeekScannedNodeCount: maskGroup.leftConstrainedPeekScannedNodeCount,
+      rightConstrainedPeekScannedNodeCount: maskGroup.rightConstrainedPeekScannedNodeCount,
+      leftConstrainedPeekElapsedMs: maskGroup.leftConstrainedPeekElapsedMs,
+      rightConstrainedPeekElapsedMs: maskGroup.rightConstrainedPeekElapsedMs,
+      leftConstrainedPeekReduction: maskGroup.leftConstrainedPeekReduction,
+      rightConstrainedPeekReduction: maskGroup.rightConstrainedPeekReduction,
       totalUpper: maskGroup.totalUpper,
       incumbentScore,
       margin: incumbentScore - maskGroup.totalUpper,
@@ -3534,6 +3631,9 @@ function buildMedleyExactRawPairWitnessAnchorCoverProfile(
     maskPairSplitTimedOutCount,
     maskPairSplitStateCountTotal,
     maskStoppedByBudget,
+    constrainedPeekSampleLimit: MEDLEY_EXACT_RAW_PAIR_WITNESS_CONSTRAINED_PEEK_SAMPLE_LIMIT,
+    constrainedPeekTimeboxMs: MEDLEY_EXACT_RAW_PAIR_WITNESS_CONSTRAINED_PEEK_TIMEBOX_MS,
+    constrainedPeekProbeCount,
     countMaskStrategy: {
       maskSplitLimit: MEDLEY_EXACT_RAW_PAIR_WITNESS_COVER_COUNT_MASK_SPLIT_LIMIT,
       safeMaskCount: safeCountMasks.size,
@@ -4136,6 +4236,7 @@ function buildMedleyExactRawAnchorFrontierProbeProfile(
   incumbentScore: number,
   deadlineAt: number,
   maxCandidateTotal: number | null = null,
+  enableConstrainedPeekProbe = false,
 ): Record<string, unknown> {
   const startedAt = performance.now();
   const candidateCountsBySlot = candidatesBySlot.map((candidates) => candidates.length);
@@ -4347,6 +4448,8 @@ function buildMedleyExactRawAnchorFrontierProbeProfile(
         globalPairConflictSplitGeneratedUpper.upperBound,
         leftPeekUpperBound,
         rightPeekUpperBound,
+        enableConstrainedPeekProbe ? generators[leftSlotIndex]?.peekUpperBoundExcludingCardIds : undefined,
+        enableConstrainedPeekProbe ? generators[rightSlotIndex]?.peekUpperBoundExcludingCardIds : undefined,
         incumbentScore,
         deadlineAt,
       )
@@ -6299,6 +6402,92 @@ export function createMedleyExactSlotCandidateGenerator(
     const selectedCardIndices = getSelectedCardIndicesForNode(node);
     return selectedCardIndices.map((cardIndex) => slot.searchCards[cardIndex]!);
   };
+  const peekUpperBoundExcludingCardIds = (
+    excludedCardIds: readonly number[],
+    diagnosticDeadlineAt = Number.POSITIVE_INFINITY,
+  ): MedleyExactConstrainedSlotPeekUpperResult => {
+    const startedAt = performance.now();
+    const fallbackUpperBound = (
+      heapKeyMode === "slot"
+        ? heap[0]?.key ?? Number.NEGATIVE_INFINITY
+        : peekMaxHeapSlotUpperBound()
+    );
+    if (excludedCardIds.length === 0 || heap.length === 0) {
+      return {
+        upperBound: fallbackUpperBound,
+        fallbackUpperBound,
+        completed: true,
+        timedOut: false,
+        heapNodeCount: heap.length,
+        scannedNodeCount: 0,
+        finiteNodeCount: Number.isFinite(fallbackUpperBound) ? 1 : 0,
+        skippedSelectedCardNodeCount: 0,
+        candidateNodeCount: 0,
+        recomputedPrefixNodeCount: 0,
+        elapsedMs: Math.round(performance.now() - startedAt),
+      };
+    }
+    const excludedCardIdSet = new Set(excludedCardIds);
+    let upperBound = Number.NEGATIVE_INFINITY;
+    let scannedNodeCount = 0;
+    let finiteNodeCount = 0;
+    let skippedSelectedCardNodeCount = 0;
+    let candidateNodeCount = 0;
+    let recomputedPrefixNodeCount = 0;
+    let timedOut = false;
+    for (const node of heap) {
+      if ((scannedNodeCount & 1023) === 0 && performance.now() >= diagnosticDeadlineAt) {
+        timedOut = true;
+        break;
+      }
+      scannedNodeCount += 1;
+      const selectedCards = getSelectedCardsForNode(node);
+      if (selectedCards.some((card) => excludedCardIdSet.has(card.cardId))) {
+        skippedSelectedCardNodeCount += 1;
+        continue;
+      }
+      const nodeUpperBound = node.candidate
+        ? node.slotUpperBound
+        : estimateMedleyExactSlotNodeUpperBound(
+          slot,
+          selectedCards,
+          node.startIndex,
+          excludedCardIdSet,
+          node.usedCharacterMaskLow,
+          node.usedCharacterMaskHigh,
+          node.selectedPower,
+          profiling,
+          Number.NEGATIVE_INFINITY,
+        );
+      if (node.candidate) {
+        candidateNodeCount += 1;
+      } else {
+        recomputedPrefixNodeCount += 1;
+      }
+      if (Number.isFinite(nodeUpperBound)) {
+        finiteNodeCount += 1;
+      }
+      if (nodeUpperBound > upperBound) {
+        upperBound = nodeUpperBound;
+      }
+    }
+    if (performance.now() >= diagnosticDeadlineAt && scannedNodeCount < heap.length) {
+      timedOut = true;
+    }
+    return {
+      upperBound: timedOut ? fallbackUpperBound : upperBound,
+      fallbackUpperBound,
+      completed: !timedOut,
+      timedOut,
+      heapNodeCount: heap.length,
+      scannedNodeCount,
+      finiteNodeCount,
+      skippedSelectedCardNodeCount,
+      candidateNodeCount,
+      recomputedPrefixNodeCount,
+      elapsedMs: Math.round(performance.now() - startedAt),
+    };
+  };
   const getPrefixCapacityBatchReplayDecisionForNode = (
     node: MedleyExactSlotCandidateSearchNode,
   ): MedleyExactPrefixOtherUpperSourceReplayDecision | null => {
@@ -7877,6 +8066,7 @@ export function createMedleyExactSlotCandidateGenerator(
         ? heap[0]?.key ?? Number.NEGATIVE_INFINITY
         : peekMaxHeapSlotUpperBound()
     ),
+    peekUpperBoundExcludingCardIds,
     canReuseForScoreCutoff: (scoreCutoff: number) => (
       !Number.isFinite(scoreCutoff) || scoreCutoff >= maxPruningScoreCutoff
     ),
@@ -11262,6 +11452,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     debugExactCandidateDominanceReplay?: boolean;
     debugExactCandidateRawAnchorCheapUpperReplay?: boolean;
     debugExactCandidateRawAnchorFrontierProbe?: boolean;
+    debugExactCandidateRawAnchorFrontierConstrainedPeekProbe?: boolean;
     debugExactCandidateRawAnchorFrontierProbeMaxCandidateTotal?: number | null;
     debugExactCandidateRawCandidatePoolProfile?: boolean;
     debugExactCandidateRawPairComplementParity?: boolean;
@@ -11971,6 +12162,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
           incumbentScore,
           deadlineAt,
           context.debugExactCandidateRawAnchorFrontierProbeMaxCandidateTotal ?? null,
+          context.debugExactCandidateRawAnchorFrontierConstrainedPeekProbe === true,
         );
         invalidateRawCandidatePool();
       }

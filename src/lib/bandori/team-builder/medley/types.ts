@@ -116,6 +116,7 @@ export type BandoriMedleySearchOptimizationOptions = {
   debugExactCandidateDominanceReplay?: boolean;
   debugExactCandidateRawAnchorCheapUpperReplay?: boolean;
   debugExactCandidateRawAnchorFrontierProbe?: boolean;
+  debugExactCandidateRawAnchorFrontierConstrainedPeekProbe?: boolean;
   debugExactCandidateRawAnchorFrontierProbeMaxCandidateTotal?: number;
   debugExactCandidateRawCandidatePoolProfile?: boolean;
   debugExactCandidateRawPairComplementParity?: boolean;
@@ -840,12 +841,30 @@ export type MedleyExactCandidateCardKeySet = {
   add: (cardKey: MedleyExactCandidateCardKey) => unknown;
 };
 
+export type MedleyExactConstrainedSlotPeekUpperResult = {
+  upperBound: number;
+  fallbackUpperBound: number;
+  completed: boolean;
+  timedOut: boolean;
+  heapNodeCount: number;
+  scannedNodeCount: number;
+  finiteNodeCount: number;
+  skippedSelectedCardNodeCount: number;
+  candidateNodeCount: number;
+  recomputedPrefixNodeCount: number;
+  elapsedMs: number;
+};
+
 export type MedleyExactSlotCandidateGenerator = {
   next: (
     scoreCutoff?: number,
     globalPruning?: MedleyExactSlotCandidateGlobalPruning,
   ) => MedleyTeamCandidate | null;
   peekUpperBound: () => number;
+  peekUpperBoundExcludingCardIds?: (
+    excludedCardIds: readonly number[],
+    deadlineAt?: number,
+  ) => MedleyExactConstrainedSlotPeekUpperResult;
   canReuseForScoreCutoff: (scoreCutoff: number) => boolean;
   hasAborted: () => boolean;
   poppedNodeCount: () => number;
