@@ -22,6 +22,7 @@ export type MedleyExactRawCandidateSlotView = {
   minScores: Int32Array;
   sourceIndices: Int32Array;
   cardIds: Int32Array;
+  cardSearchIndices: Int32Array;
   length: number;
 };
 
@@ -51,6 +52,7 @@ function createMedleyExactRawCandidateMirrorSlot(capacity = 16): MedleyExactRawC
     minScores: new Int32Array(capacity),
     sourceIndices: new Int32Array(capacity),
     cardIds: new Int32Array(capacity * MEDLEY_TEAM_SIZE),
+    cardSearchIndices: new Int32Array(capacity * MEDLEY_TEAM_SIZE),
     length: 0,
     mismatchCount: 0,
     capacity,
@@ -107,7 +109,31 @@ function ensureMedleyExactRawCandidateMirrorSlotCapacity(
   nextCardIds.set(slot.cardIds.subarray(0, slot.length * MEDLEY_TEAM_SIZE));
   slot.cardIds = nextCardIds;
 
+  const nextCardSearchIndices = new Int32Array(nextCapacity * MEDLEY_TEAM_SIZE);
+  nextCardSearchIndices.set(slot.cardSearchIndices.subarray(0, slot.length * MEDLEY_TEAM_SIZE));
+  slot.cardSearchIndices = nextCardSearchIndices;
+
   slot.capacity = nextCapacity;
+}
+
+function getMedleyExactTeamCandidateCardSearchIndexAt(
+  candidate: MedleyTeamCandidate,
+  cardIndex: number,
+): number {
+  switch (cardIndex) {
+    case 0:
+      return candidate.cardSearchIndex0 ?? candidate.cardSearchIndices?.[0] ?? -1;
+    case 1:
+      return candidate.cardSearchIndex1 ?? candidate.cardSearchIndices?.[1] ?? -1;
+    case 2:
+      return candidate.cardSearchIndex2 ?? candidate.cardSearchIndices?.[2] ?? -1;
+    case 3:
+      return candidate.cardSearchIndex3 ?? candidate.cardSearchIndices?.[3] ?? -1;
+    case 4:
+      return candidate.cardSearchIndex4 ?? candidate.cardSearchIndices?.[4] ?? -1;
+    default:
+      return candidate.cardSearchIndices?.[cardIndex] ?? -1;
+  }
 }
 
 function appendMedleyExactRawCandidateMirrorSlot(
@@ -126,6 +152,10 @@ function appendMedleyExactRawCandidateMirrorSlot(
   const baseCardIndex = index * MEDLEY_TEAM_SIZE;
   for (let cardIndex = 0; cardIndex < MEDLEY_TEAM_SIZE; cardIndex += 1) {
     slot.cardIds[baseCardIndex + cardIndex] = getMedleyTeamCandidateCardIdAt(candidate, cardIndex) ?? -1;
+    slot.cardSearchIndices[baseCardIndex + cardIndex] = getMedleyExactTeamCandidateCardSearchIndexAt(
+      candidate,
+      cardIndex,
+    );
   }
 
   if (
@@ -138,7 +168,13 @@ function appendMedleyExactRawCandidateMirrorSlot(
     slot.mismatchCount += 1;
   }
   for (let cardIndex = 0; cardIndex < MEDLEY_TEAM_SIZE; cardIndex += 1) {
-    if (slot.cardIds[baseCardIndex + cardIndex] !== (getMedleyTeamCandidateCardIdAt(candidate, cardIndex) ?? -1)) {
+    if (
+      slot.cardIds[baseCardIndex + cardIndex] !== (getMedleyTeamCandidateCardIdAt(candidate, cardIndex) ?? -1)
+      || slot.cardSearchIndices[baseCardIndex + cardIndex] !== getMedleyExactTeamCandidateCardSearchIndexAt(
+        candidate,
+        cardIndex,
+      )
+    ) {
       slot.mismatchCount += 1;
       break;
     }
@@ -211,6 +247,7 @@ export function getMedleyExactRawCandidateSlotBytes(
     + slot.minScores.byteLength
     + slot.sourceIndices.byteLength
     + slot.cardIds.byteLength
+    + slot.cardSearchIndices.byteLength
   );
 }
 
@@ -236,6 +273,14 @@ export function getMedleyExactRawCandidateCardIdAt(
   return slot.cardIds[candidateIndex * MEDLEY_TEAM_SIZE + cardIndex] ?? -1;
 }
 
+export function getMedleyExactRawCandidateCardSearchIndexAt(
+  slot: MedleyExactRawCandidateSlotView,
+  candidateIndex: number,
+  cardIndex: number,
+): number {
+  return slot.cardSearchIndices[candidateIndex * MEDLEY_TEAM_SIZE + cardIndex] ?? -1;
+}
+
 export function copyMedleyExactRawCandidateCardIds(
   slot: MedleyExactRawCandidateSlotView,
   candidateIndex: number,
@@ -248,6 +293,20 @@ export function copyMedleyExactRawCandidateCardIds(
     }
   }
   return cardIds;
+}
+
+export function copyMedleyExactRawCandidateCardSearchIndices(
+  slot: MedleyExactRawCandidateSlotView,
+  candidateIndex: number,
+): number[] {
+  const cardSearchIndices: number[] = [];
+  for (let cardIndex = 0; cardIndex < MEDLEY_TEAM_SIZE; cardIndex += 1) {
+    const cardSearchIndex = getMedleyExactRawCandidateCardSearchIndexAt(slot, candidateIndex, cardIndex);
+    if (cardSearchIndex >= 0) {
+      cardSearchIndices.push(cardSearchIndex);
+    }
+  }
+  return cardSearchIndices;
 }
 
 export function medleyExactRawCandidatesOverlap(
@@ -287,7 +346,15 @@ export function getMedleyExactRawCandidateMirrorProfile(
   return {
     enabled: true,
     representation: "typed-array-struct-of-arrays",
-    fields: ["score", "averageScore", "maxScore", "minScore", "sourceIndex", "cardId0..4"],
+    fields: [
+      "score",
+      "averageScore",
+      "maxScore",
+      "minScore",
+      "sourceIndex",
+      "cardId0..4",
+      "cardSearchIndex0..4",
+    ],
     rebuildCount: mirror.rebuildCount,
     appendCount: mirror.appendCount,
     skippedAppendCount: mirror.skippedAppendCount,

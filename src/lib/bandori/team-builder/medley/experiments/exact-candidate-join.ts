@@ -82,7 +82,9 @@ import {
   appendMedleyExactRawCandidateMirror,
   createMedleyExactRawCandidateMirror,
   copyMedleyExactRawCandidateCardIds,
+  copyMedleyExactRawCandidateCardSearchIndices,
   getMedleyExactRawCandidateCardIdAt,
+  getMedleyExactRawCandidateCardSearchIndexAt,
   getMedleyExactRawCandidateMirrorProfile,
   getMedleyExactRawCandidateScore,
   getMedleyExactRawCandidateSlotBytes,
@@ -2575,8 +2577,9 @@ function buildMedleyExactRawSolverInputCensusSlotProfile(
 
   const scoreFieldBytes = candidateCount * 4 * Int32Array.BYTES_PER_ELEMENT;
   const cardIdBytes = candidateCount * MEDLEY_TEAM_SIZE * Int32Array.BYTES_PER_ELEMENT;
+  const cardSearchIndexBytes = candidateCount * MEDLEY_TEAM_SIZE * Int32Array.BYTES_PER_ELEMENT;
   const sourceIndexBytes = candidateCount * Int32Array.BYTES_PER_ELEMENT;
-  const rawRowBytes = scoreFieldBytes + cardIdBytes + sourceIndexBytes;
+  const rawRowBytes = scoreFieldBytes + cardIdBytes + cardSearchIndexBytes + sourceIndexBytes;
   const containingBitsetBytes = uniqueCardIdCountUpper * wordCount * Uint32Array.BYTES_PER_ELEMENT;
   return {
     slotIndex,
@@ -2594,6 +2597,7 @@ function buildMedleyExactRawSolverInputCensusSlotProfile(
     rawRowMiB: roundMiB(rawRowBytes),
     scoreFieldBytes,
     cardIdBytes,
+    cardSearchIndexBytes,
     sourceIndexBytes,
     containingBitsetBytes,
     containingBitsetMiB: roundMiB(containingBitsetBytes),
@@ -2641,7 +2645,15 @@ function buildMedleyExactRawSolverInputCensusProfile(
     materializedOnly: true,
     candidateRemoval: false,
     representation: "typed-array-struct-of-arrays-plus-card-bitsets",
-    fields: ["score", "averageScore", "maxScore", "minScore", "cardId0..4", "sourceIndex"],
+    fields: [
+      "score",
+      "averageScore",
+      "maxScore",
+      "minScore",
+      "cardId0..4",
+      "cardSearchIndex0..4",
+      "sourceIndex",
+    ],
     slotOrder,
     shouldUseMiddleFirstJoinOrder,
     candidateCountTotal: slotProfiles.reduce((sum, slot) => (
@@ -2676,6 +2688,7 @@ function buildMedleyExactRawCandidatePoolSlot(
   const minScores = new Int32Array(length);
   const sourceIndices = new Int32Array(length);
   const cardIds = new Int32Array(length * MEDLEY_TEAM_SIZE);
+  const cardSearchIndices = new Int32Array(length * MEDLEY_TEAM_SIZE);
   let mismatchCount = 0;
   let scoreOrderViolationCount = 0;
   let previousScore = Number.POSITIVE_INFINITY;
@@ -2708,8 +2721,13 @@ function buildMedleyExactRawCandidatePoolSlot(
     const baseCardIndex = candidateIndex * MEDLEY_TEAM_SIZE;
     for (let cardIndex = 0; cardIndex < MEDLEY_TEAM_SIZE; cardIndex += 1) {
       const cardId = getMedleyTeamCandidateCardIdAt(candidate, cardIndex) ?? -1;
+      const cardSearchIndex = getMedleyExactCandidateCardSearchIndexAt(candidate, cardIndex);
       cardIds[baseCardIndex + cardIndex] = cardId;
-      if (cardIds[baseCardIndex + cardIndex] !== cardId) {
+      cardSearchIndices[baseCardIndex + cardIndex] = cardSearchIndex;
+      if (
+        cardIds[baseCardIndex + cardIndex] !== cardId
+        || cardSearchIndices[baseCardIndex + cardIndex] !== cardSearchIndex
+      ) {
         mismatchCount += 1;
       }
     }
@@ -2722,6 +2740,7 @@ function buildMedleyExactRawCandidatePoolSlot(
     minScores,
     sourceIndices,
     cardIds,
+    cardSearchIndices,
     length,
     mismatchCount,
     scoreOrderViolationCount,
@@ -2746,6 +2765,7 @@ function getMedleyExactRawCandidatePoolSlotProfile(
     retainedMiB: roundMiB(retainedBytes),
     scoreFieldBytes: slot.scores.byteLength,
     cardIdBytes: slot.cardIds.byteLength,
+    cardSearchIndexBytes: slot.cardSearchIndices.byteLength,
     sourceIndexBytes: slot.sourceIndices.byteLength,
     firstScore: slot.length > 0 ? slot.scores[0] : null,
     lastScore: slot.length > 0 ? slot.scores[slot.length - 1] : null,
@@ -2789,7 +2809,15 @@ function getMedleyExactRawCandidatePoolProfile(
     materializedOnly: true,
     source,
     representation: "typed-array-struct-of-arrays-plus-source-index",
-    fields: ["score", "averageScore", "maxScore", "minScore", "sourceIndex", "cardId0..4"],
+    fields: [
+      "score",
+      "averageScore",
+      "maxScore",
+      "minScore",
+      "sourceIndex",
+      "cardId0..4",
+      "cardSearchIndex0..4",
+    ],
     candidateCountTotal: rawPool.slots.reduce((sum, slot) => sum + slot.length, 0),
     retainedBytesTotal,
     retainedMiBTotal: roundMiB(retainedBytesTotal),
@@ -5879,6 +5907,26 @@ function buildMedleyExactRawJoinParitySlot(
   return buildMedleyExactRawCandidatePoolSlot(candidates);
 }
 
+function getMedleyExactCandidateCardSearchIndexAt(
+  candidate: MedleyTeamCandidate,
+  cardIndex: number,
+): number {
+  switch (cardIndex) {
+    case 0:
+      return candidate.cardSearchIndex0 ?? candidate.cardSearchIndices?.[0] ?? -1;
+    case 1:
+      return candidate.cardSearchIndex1 ?? candidate.cardSearchIndices?.[1] ?? -1;
+    case 2:
+      return candidate.cardSearchIndex2 ?? candidate.cardSearchIndices?.[2] ?? -1;
+    case 3:
+      return candidate.cardSearchIndex3 ?? candidate.cardSearchIndices?.[3] ?? -1;
+    case 4:
+      return candidate.cardSearchIndex4 ?? candidate.cardSearchIndices?.[4] ?? -1;
+    default:
+      return candidate.cardSearchIndices?.[cardIndex] ?? -1;
+  }
+}
+
 function buildMedleyExactRawJoinContainingBitsByCardId(
   slot: MedleyExactRawJoinParitySlot,
   wordCount: number,
@@ -6625,6 +6673,7 @@ function buildMedleyExactRawObjectWinnerSourceDiagnostics(
           minScore: rawSlot.minScores[rawIndex] ?? null,
           sourceIndex: rawSlot.sourceIndices[rawIndex] ?? null,
           orderedCardIds: copyMedleyExactRawCandidateCardIds(rawSlot, rawIndex),
+          cardSearchIndices: copyMedleyExactRawCandidateCardSearchIndices(rawSlot, rawIndex),
         }
         : null,
       rawSourceCandidate: slot && rawCandidate
@@ -6723,6 +6772,10 @@ function buildMedleyExactRawTieFrontierSample(
     cardIdsByOrder: indicesByOrder.map((candidateIndex, orderIndex) => {
       const slot = rawSlots[slotOrder[orderIndex]];
       return slot ? copyMedleyExactRawCandidateCardIds(slot, candidateIndex) : [];
+    }),
+    cardSearchIndicesByOrder: indicesByOrder.map((candidateIndex, orderIndex) => {
+      const slot = rawSlots[slotOrder[orderIndex]];
+      return slot ? copyMedleyExactRawCandidateCardSearchIndices(slot, candidateIndex) : [];
     }),
   };
 }
