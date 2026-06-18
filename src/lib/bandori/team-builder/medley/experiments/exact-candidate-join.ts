@@ -1389,6 +1389,30 @@ type MedleyExactRawCandidateJoinSlotOrder = {
   slotOrder: number[];
 };
 
+type MedleyExactRawIndexFinalJoinSolveProfile = {
+  enabled: true;
+  skipped: boolean;
+  skipReason?: string;
+  candidateCountTotal: number;
+  candidateCountsBySlot: number[];
+  limit?: number;
+  minRemainingMs?: number;
+  slotOrder?: number[];
+  rawInputSource?: string;
+  rawBestScore?: number | null;
+  bestIndices?: number[];
+  bestSourceIndices?: number[];
+  bestCardIdsBySlot?: number[][];
+  pairCount?: number;
+  thirdQueryCount?: number;
+  elapsedMs?: number;
+  retainedMiB?: number;
+  rawSourceRetainedMiB?: number | null;
+  rawPoolRetainedMiB?: number | null;
+  rawSourceLengthMismatchCount?: number | null;
+  rawSourceMismatchCountTotal?: number | null;
+};
+
 type MedleyExactSignatureCensusBucket = {
   signatureHash: number;
   count: number;
@@ -5922,17 +5946,21 @@ function findBestAvailableMedleyExactRawJoinIndexByBits(
   return -1;
 }
 
-function runMedleyExactRawIndexFinalJoinParity(
-  candidatesBySlot: readonly MedleyTeamCandidate[][],
-  objectSlotOrder: readonly number[],
-  objectBestScore: number | null,
+function solveMedleyExactRawIndexFinalJoin(
+  rawSlots: readonly MedleyExactRawJoinParitySlot[],
+  rawInputSource: string,
   incumbentScore: number,
   deadlineAt: number,
   isPastDeadline: () => boolean,
-  rawCandidateSlotReadSourceProvider?: () => MedleyExactRawCandidateSlotReadSource,
-): Record<string, unknown> {
+  rawSourceProfile?: {
+    retainedMiB: number | null;
+    rawPoolRetainedMiB: number | null;
+    lengthMismatchCount: number | null;
+    mismatchCountTotal: number | null;
+  },
+): MedleyExactRawIndexFinalJoinSolveProfile {
   const startedAt = performance.now();
-  const candidateCountsBySlot = candidatesBySlot.map((candidates) => candidates.length);
+  const candidateCountsBySlot = rawSlots.map((slot) => slot.length);
   const candidateCountTotal = candidateCountsBySlot.reduce((sum, count) => sum + count, 0);
   if (candidateCountTotal > MEDLEY_EXACT_RAW_JOIN_PARITY_MAX_CANDIDATE_TOTAL) {
     return {
@@ -5955,11 +5983,6 @@ function runMedleyExactRawIndexFinalJoinParity(
     };
   }
 
-  const rawCandidateSlotReadSource = rawCandidateSlotReadSourceProvider?.() ?? null;
-  const rawSlots: MedleyExactRawJoinParitySlot[] = rawCandidateSlotReadSource
-    ? rawCandidateSlotReadSource.slots
-    : candidatesBySlot.map(buildMedleyExactRawJoinParitySlot);
-  const rawInputSource = rawCandidateSlotReadSource?.source ?? "parity-local-build";
   const { slotOrder } = getMedleyExactRawCandidateJoinSlotOrder(rawSlots);
   const firstSlot = rawSlots[slotOrder[0]];
   const secondSlot = rawSlots[slotOrder[1]];
@@ -6125,15 +6148,8 @@ function runMedleyExactRawIndexFinalJoinParity(
     candidateCountTotal,
     candidateCountsBySlot,
     slotOrder: [...slotOrder],
-    objectSlotOrder: [...objectSlotOrder],
-    rawSlotOrderMatchesObject: (
-      slotOrder.length === objectSlotOrder.length
-      && slotOrder.every((slotIndex, index) => slotIndex === objectSlotOrder[index])
-    ),
     rawInputSource,
     rawBestScore: normalizedRawBestScore,
-    objectBestScore,
-    matched: normalizedRawBestScore === objectBestScore,
     bestIndices,
     bestSourceIndices: bestIndices.map((candidateIndex, orderIndex) => {
       const slot = rawSlots[slotOrder[orderIndex]];
@@ -6153,10 +6169,162 @@ function runMedleyExactRawIndexFinalJoinParity(
     retainedMiB: roundMiB(
       rawSlots.reduce((sum, slot) => sum + getMedleyExactRawCandidateSlotBytes(slot), 0),
     ),
-    rawSourceRetainedMiB: rawCandidateSlotReadSource?.retainedMiB ?? null,
-    rawPoolRetainedMiB: rawCandidateSlotReadSource?.rawPoolRetainedMiB ?? null,
-    rawSourceLengthMismatchCount: rawCandidateSlotReadSource?.lengthMismatchCount ?? null,
-    rawSourceMismatchCountTotal: rawCandidateSlotReadSource?.mismatchCountTotal ?? null,
+    rawSourceRetainedMiB: rawSourceProfile?.retainedMiB ?? null,
+    rawPoolRetainedMiB: rawSourceProfile?.rawPoolRetainedMiB ?? null,
+    rawSourceLengthMismatchCount: rawSourceProfile?.lengthMismatchCount ?? null,
+    rawSourceMismatchCountTotal: rawSourceProfile?.mismatchCountTotal ?? null,
+  };
+}
+
+function runMedleyExactRawIndexFinalJoinParity(
+  candidatesBySlot: readonly MedleyTeamCandidate[][],
+  objectSlotOrder: readonly number[],
+  objectBestScore: number | null,
+  incumbentScore: number,
+  deadlineAt: number,
+  isPastDeadline: () => boolean,
+  rawCandidateSlotReadSourceProvider?: () => MedleyExactRawCandidateSlotReadSource,
+): Record<string, unknown> {
+  const candidateCountsBySlot = candidatesBySlot.map((candidates) => candidates.length);
+  const candidateCountTotal = candidateCountsBySlot.reduce((sum, count) => sum + count, 0);
+  if (candidateCountTotal > MEDLEY_EXACT_RAW_JOIN_PARITY_MAX_CANDIDATE_TOTAL) {
+    return {
+      enabled: true,
+      skipped: true,
+      skipReason: "candidate-total-limit",
+      candidateCountTotal,
+      candidateCountsBySlot,
+      limit: MEDLEY_EXACT_RAW_JOIN_PARITY_MAX_CANDIDATE_TOTAL,
+    };
+  }
+  if (Number.isFinite(deadlineAt) && deadlineAt - performance.now() < MEDLEY_EXACT_RAW_JOIN_PARITY_MIN_REMAINING_MS) {
+    return {
+      enabled: true,
+      skipped: true,
+      skipReason: "remaining-time",
+      candidateCountTotal,
+      candidateCountsBySlot,
+      minRemainingMs: MEDLEY_EXACT_RAW_JOIN_PARITY_MIN_REMAINING_MS,
+    };
+  }
+  const rawCandidateSlotReadSource = rawCandidateSlotReadSourceProvider?.() ?? null;
+  const rawSlots: MedleyExactRawJoinParitySlot[] = rawCandidateSlotReadSource
+    ? rawCandidateSlotReadSource.slots
+    : candidatesBySlot.map(buildMedleyExactRawJoinParitySlot);
+  const rawInputSource = rawCandidateSlotReadSource?.source ?? "parity-local-build";
+  const solveProfile = solveMedleyExactRawIndexFinalJoin(
+    rawSlots,
+    rawInputSource,
+    incumbentScore,
+    deadlineAt,
+    isPastDeadline,
+    rawCandidateSlotReadSource
+      ? {
+        retainedMiB: rawCandidateSlotReadSource.retainedMiB,
+        rawPoolRetainedMiB: rawCandidateSlotReadSource.rawPoolRetainedMiB,
+        lengthMismatchCount: rawCandidateSlotReadSource.lengthMismatchCount,
+        mismatchCountTotal: rawCandidateSlotReadSource.mismatchCountTotal,
+      }
+      : undefined,
+  );
+  const slotOrder = solveProfile.slotOrder ?? [];
+  const rawBestScore = solveProfile.rawBestScore ?? null;
+  return {
+    ...solveProfile,
+    objectSlotOrder: [...objectSlotOrder],
+    rawSlotOrderMatchesObject: (
+      slotOrder.length === objectSlotOrder.length
+      && slotOrder.every((slotIndex, index) => slotIndex === objectSlotOrder[index])
+    ),
+    objectBestScore,
+    matched: rawBestScore === objectBestScore,
+  };
+}
+
+function buildMedleyExactRawSolverHandoffProfile(
+  rawCandidateSlotReadSource: MedleyExactRawCandidateSlotReadSource,
+  candidatesBySlot: readonly MedleyTeamCandidate[][],
+): Record<string, unknown> {
+  const rawSlots = rawCandidateSlotReadSource.slots;
+  const candidateCountsBySlot = rawSlots.map((slot) => slot.length);
+  const candidateCountTotal = candidateCountsBySlot.reduce((sum, count) => sum + count, 0);
+  const { slotOrder } = getMedleyExactRawCandidateJoinSlotOrder(rawSlots);
+  let sourceIndexRangeViolationCount = 0;
+  let missingCardIdRowCount = 0;
+  let duplicateCardIdRowCount = 0;
+  let scoreOrderViolationCount = 0;
+
+  for (let slotIndex = 0; slotIndex < rawSlots.length; slotIndex += 1) {
+    const rawSlot = rawSlots[slotIndex];
+    const richCandidates = candidatesBySlot[slotIndex] ?? [];
+    let previousScore = Number.POSITIVE_INFINITY;
+    for (let candidateIndex = 0; candidateIndex < rawSlot.length; candidateIndex += 1) {
+      const score = getMedleyExactRawCandidateScore(rawSlot, candidateIndex);
+      if (score > previousScore) {
+        scoreOrderViolationCount += 1;
+      }
+      previousScore = score;
+
+      const sourceIndex = getMedleyExactRawCandidateSourceIndex(rawSlot, candidateIndex);
+      if (sourceIndex < 0 || sourceIndex >= richCandidates.length) {
+        sourceIndexRangeViolationCount += 1;
+      }
+
+      const cardIds = new Set<number>();
+      let hasMissingCardId = false;
+      let hasDuplicateCardId = false;
+      for (let cardIndex = 0; cardIndex < MEDLEY_TEAM_SIZE; cardIndex += 1) {
+        const cardId = getMedleyExactRawCandidateCardIdAt(rawSlot, candidateIndex, cardIndex);
+        if (cardId < 0) {
+          hasMissingCardId = true;
+          continue;
+        }
+        if (cardIds.has(cardId)) {
+          hasDuplicateCardId = true;
+        }
+        cardIds.add(cardId);
+      }
+      if (hasMissingCardId) {
+        missingCardIdRowCount += 1;
+      }
+      if (hasDuplicateCardId) {
+        duplicateCardIdRowCount += 1;
+      }
+    }
+  }
+
+  const canReadAsResidentRawSource = (
+    rawCandidateSlotReadSource.lengthMismatchCount === 0
+    && rawCandidateSlotReadSource.mismatchCountTotal === 0
+    && scoreOrderViolationCount === 0
+    && missingCardIdRowCount === 0
+    && duplicateCardIdRowCount === 0
+  );
+  const canHydrateWinnerFromSourceIndex = (
+    canReadAsResidentRawSource
+    && sourceIndexRangeViolationCount === 0
+  );
+  return {
+    enabled: true,
+    kind: "raw-solver-handoff-readiness",
+    rawInputSource: rawCandidateSlotReadSource.source,
+    candidateCountsBySlot,
+    candidateCountTotal,
+    slotOrder,
+    retainedMiB: rawCandidateSlotReadSource.retainedMiB,
+    rawPoolRetainedMiB: rawCandidateSlotReadSource.rawPoolRetainedMiB,
+    rawSourceLengthMismatchCount: rawCandidateSlotReadSource.lengthMismatchCount,
+    rawSourceMismatchCountTotal: rawCandidateSlotReadSource.mismatchCountTotal,
+    scoreOrderViolationCount,
+    sourceIndexRangeViolationCount,
+    missingCardIdRowCount,
+    duplicateCardIdRowCount,
+    canReadAsResidentRawSource,
+    canHydrateWinnerFromSourceIndex,
+    canHydrateWinnerFromCardIds: canReadAsResidentRawSource,
+    nextRequiredStep: canReadAsResidentRawSource
+      ? "wire raw solver winner indices to late hydration"
+      : "fix raw source ordering or row completeness before handoff",
   };
 }
 
@@ -11986,6 +12154,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     debugExactCandidateRawMirrorMaxCardCount?: number | null;
     debugExactCandidateRawMirrorMaxCandidateTotal?: number | null;
     debugExactCandidateRawJoinParity?: boolean;
+    debugExactCandidateRawSolverHandoff?: boolean;
     debugExactCandidateSignatureCensus?: boolean;
     debugExactCandidateUpperReplay?: boolean;
     debugExactCandidateAnchorFrontierCheapUpperProbe?: boolean;
@@ -12054,6 +12223,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     profiling.exactCandidateJoinRawPairComplementParity = null;
     profiling.exactCandidateJoinRawPairUpperScanParity = null;
     profiling.exactCandidateJoinRawSolverInputCensus = null;
+    profiling.exactCandidateJoinRawSolverHandoff = null;
     profiling.exactCandidateJoinCandidateAdmissionFrontier = null;
     profiling.exactCandidateJoinLastGuardedExtensionSlotIndex = null;
     profiling.exactCandidateJoinLastGuardedExtensionLimit = null;
@@ -12324,6 +12494,15 @@ export function searchMedleyConfigurationByExactCandidateJoin(
       lengthMismatchCount: 0,
       mismatchCountTotal: rawPool.slots.reduce((sum, slot) => sum + slot.mismatchCount, 0),
     };
+  };
+  const recordRawSolverHandoffProfile = (): void => {
+    if (context.debugExactCandidateRawSolverHandoff !== true) {
+      return;
+    }
+    profiling.exactCandidateJoinRawSolverHandoff = buildMedleyExactRawSolverHandoffProfile(
+      getRawCandidateSlotReadSource(),
+      candidatesBySlot,
+    );
   };
   const retainCandidateForSlot = rawCandidateMirror
     ? (slotIndex: number, candidate: MedleyTeamCandidate): void => {
@@ -14082,6 +14261,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
         sum + currentGenerator.poppedNodeCount()
       ), 0);
       finalizeRawCandidateMirrorForDiagnostics();
+      recordRawSolverHandoffProfile();
       recordExactJoinMemorySnapshot("candidate-fill-pair-refine-abort", { slotIndex });
       return buildUnprovedExactCandidateJoinResult();
     }
@@ -14174,6 +14354,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
           sum + currentGenerator.poppedNodeCount()
         ), 0);
         finalizeRawCandidateMirrorForDiagnostics();
+        recordRawSolverHandoffProfile();
         recordExactJoinMemorySnapshot(stats.memoryLimited ? "candidate-fill-memory-limit" : "candidate-fill-deadline", {
           slotIndex,
         });
@@ -14254,6 +14435,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
           sum + currentGenerator.poppedNodeCount()
         ), 0);
         finalizeRawCandidateMirrorForDiagnostics();
+        recordRawSolverHandoffProfile();
         recordExactJoinMemorySnapshot("candidate-fill-soft-limit", { slotIndex });
         return buildUnprovedExactCandidateJoinResult(
           anchorFrontierResult,
@@ -14299,6 +14481,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
           sum + currentGenerator.poppedNodeCount()
         ), 0);
         finalizeRawCandidateMirrorForDiagnostics();
+        recordRawSolverHandoffProfile();
         recordExactJoinMemorySnapshot("candidate-fill-generator-aborted", { slotIndex });
         return buildUnprovedExactCandidateJoinResult();
       }
@@ -14336,6 +14519,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     recordExactJoinMemorySnapshot("after-candidate-fill");
   }
   finalizeCandidateStorageForRead();
+  recordRawSolverHandoffProfile();
   maybeSeedFromExactJoinPrefix();
   if (stats.timedOut) {
     recordExactJoinMemorySnapshot("after-prefix-seed-timeout");

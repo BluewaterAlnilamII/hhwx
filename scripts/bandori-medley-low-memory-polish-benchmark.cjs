@@ -71,6 +71,7 @@ function printUsage() {
     "  HHWX_LOW_MEMORY_RAW_PAIR_COMPLEMENT_PARITY=1 compare banned-card pair complement over shared raw candidate pool",
     "  HHWX_LOW_MEMORY_RAW_PAIR_UPPER_SCAN_PARITY=1 compare generated pair upper scan over shared raw candidate pool",
     "  HHWX_LOW_MEMORY_RAW_SOLVER_INPUT_CENSUS=1 estimate compact raw solver input footprint without memory attribution",
+    "  HHWX_LOW_MEMORY_RAW_SOLVER_HANDOFF=1 record raw solver handoff readiness diagnostics",
     "  HHWX_LOW_MEMORY_PRE_MATERIALIZATION_CENSUS=1 record no-op candidate-birth census before rich candidate materialization",
     "  HHWX_LOW_MEMORY_DISABLE_GLOBAL_COMPLEMENT_CACHE=1 disable exact-join global complement upper cache",
     "  HHWX_LOW_MEMORY_COMPACT_GLOBAL_COMPLEMENT_CACHE=1 use compact exact-join global complement upper cache (default)",
@@ -175,6 +176,9 @@ function hhwxOptimizationJson() {
   if (process.env.HHWX_LOW_MEMORY_RAW_JOIN_PARITY === "1") {
     optimization.debugExactCandidateJoinMemoryAttribution = true;
     optimization.debugExactCandidateRawJoinParity = true;
+  }
+  if (process.env.HHWX_LOW_MEMORY_RAW_SOLVER_HANDOFF === "1") {
+    optimization.debugExactCandidateRawSolverHandoff = true;
   }
   if (process.env.HHWX_LOW_MEMORY_SIGNATURE_CENSUS === "1") {
     optimization.debugExactCandidateJoinMemoryAttribution = true;
@@ -553,6 +557,13 @@ function patchHhwxBenchmarkScoreMetrics() {
         + "    exactCandidateJoinRawSolverInputCensus: profiling.exactCandidateJoinRawSolverInputCensus ?? null,\n",
     );
   }
+  if (!patched.includes("exactCandidateJoinRawSolverHandoff: profiling.exactCandidateJoinRawSolverHandoff ?? null")) {
+    patched = patched.replace(
+      /(exactCandidateJoinMemorySnapshots: profiling\.exactCandidateJoinMemorySnapshots \?\? null,\r?\n)/,
+      "$1"
+        + "    exactCandidateJoinRawSolverHandoff: profiling.exactCandidateJoinRawSolverHandoff ?? null,\n",
+    );
+  }
   if (!patched.includes("exactCandidateJoinRawMirrorProfile: profiling.exactCandidateJoinRawMirrorProfile ?? null")) {
     patched = patched.replace(
       /(exactCandidateJoinMemorySnapshots: profiling\.exactCandidateJoinMemorySnapshots \?\? null,\r?\n)/,
@@ -637,6 +648,7 @@ function patchHhwxBenchmarkScoreMetrics() {
     || !patched.includes("exactCandidateJoinRawPairComplementParity: profiling.exactCandidateJoinRawPairComplementParity ?? null")
     || !patched.includes("exactCandidateJoinRawPairUpperScanParity: profiling.exactCandidateJoinRawPairUpperScanParity ?? null")
     || !patched.includes("exactCandidateJoinRawSolverInputCensus: profiling.exactCandidateJoinRawSolverInputCensus ?? null")
+    || !patched.includes("exactCandidateJoinRawSolverHandoff: profiling.exactCandidateJoinRawSolverHandoff ?? null")
     || !patched.includes("exactCandidateJoinLastAnchorFrontierPrecheckSlotIndex: profiling.exactCandidateJoinLastAnchorFrontierPrecheckSlotIndex ?? null")
   ) {
     throw new Error(`Could not patch score metrics into ${hhwxBenchmarkPath}`);

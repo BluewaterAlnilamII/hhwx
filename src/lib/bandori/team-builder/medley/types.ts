@@ -100,6 +100,7 @@ export type BandoriMedleySearchOptimizationOptions = {
   debugExactCandidateRawMirrorMaxCardCount?: number;
   debugExactCandidateRawMirrorMaxCandidateTotal?: number;
   debugExactCandidateRawJoinParity?: boolean;
+  debugExactCandidateRawSolverHandoff?: boolean;
   debugExactCandidateSignatureCensus?: boolean;
   debugExactCandidateUpperReplay?: boolean;
   debugExactCandidateAnchorFrontierCheapUpperProbe?: boolean;
@@ -671,6 +672,7 @@ export type BandoriMedleyTeamSearchProfilingStats = {
   exactCandidateJoinRawPairComplementParity: Record<string, unknown> | null;
   exactCandidateJoinRawPairUpperScanParity: Record<string, unknown> | null;
   exactCandidateJoinRawSolverInputCensus: Record<string, unknown> | null;
+  exactCandidateJoinRawSolverHandoff: Record<string, unknown> | null;
   exactCandidateJoinPreMaterializationCensus: Record<string, unknown> | null;
   exactCandidateJoinPrefixUpperReplaySummary: Record<string, unknown> | null;
   exactCandidateJoinCandidateAdmissionFrontier: Record<string, unknown> | null;
