@@ -3346,6 +3346,21 @@ function buildMedleyExactRawAnchorFrontierProbeProfile(
       ? unprocessedAnchorUpperBound + pairUpperBound
       : Number.NEGATIVE_INFINITY
   );
+  const looseTailCloseAnchorScoreThreshold = Number.isFinite(pairUpperBound)
+    ? incumbentScore - pairUpperBound
+    : Number.NEGATIVE_INFINITY;
+  let materializedLooseTailCloseIndex: number | null = null;
+  for (let anchorIndex = 0; anchorIndex < anchorSlot.length; anchorIndex += 1) {
+    if (anchorSlot.scores[anchorIndex] + pairUpperBound <= incumbentScore) {
+      materializedLooseTailCloseIndex = anchorIndex;
+      break;
+    }
+  }
+  const generatorLooseTailUpperBound = (
+    Number.isFinite(anchorPeekUpperBound) && Number.isFinite(pairUpperBound)
+      ? anchorPeekUpperBound + pairUpperBound
+      : Number.NEGATIVE_INFINITY
+  );
   const residualUpperBound = Math.max(processedUpperMax, unprocessedUpperBound);
   const processedUpperMaxAnchorCardIds = processedUpperMaxAnchorIndex !== null
     ? getMedleyExactRawCandidateCardIds(anchorSlot, processedUpperMaxAnchorIndex)
@@ -3380,6 +3395,53 @@ function buildMedleyExactRawAnchorFrontierProbeProfile(
       ? processedUpperMaxAnchorScore + processedUpperMaxSplitPairUpper
       : null
   );
+  const processedUpperMaxSplitPairUpperSource = processedUpperMaxSplitPairUpper === null
+    ? null
+    : processedUpperMaxSplitPairUpper === processedUpperMaxGeneratedPairSplit?.upperBound
+      ? "generated-pair-split"
+      : processedUpperMaxSplitPairUpper === processedUpperMaxLeftUnseenUpper
+        ? "left-unseen"
+        : processedUpperMaxSplitPairUpper === processedUpperMaxRightUnseenUpper
+          ? "right-unseen"
+          : "unknown";
+  const splitAdjustedResidualUpperBound = Math.max(
+    processedUpperMaxSplitTotalUpper ?? processedUpperMax,
+    unprocessedUpperBound,
+  );
+  const splitAdjustedResidualSource = (
+    processedUpperMaxSplitTotalUpper !== null
+    && Number.isFinite(processedUpperMaxSplitTotalUpper)
+    && processedUpperMaxSplitTotalUpper >= unprocessedUpperBound
+      ? "processed-anchor"
+      : "unprocessed-tail"
+  );
+  const processedUpperMaxLeftBestPossible = (
+    processedUpperMaxRightUnseenUpper !== null
+    && Number.isFinite(rightPeekUpperBound)
+      ? processedUpperMaxRightUnseenUpper - rightPeekUpperBound
+      : null
+  );
+  const processedUpperMaxRightBestPossible = (
+    processedUpperMaxLeftUnseenUpper !== null
+    && Number.isFinite(leftPeekUpperBound)
+      ? processedUpperMaxLeftUnseenUpper - leftPeekUpperBound
+      : null
+  );
+  const processedUpperMaxPairUpperToClose = processedUpperMaxAnchorScore !== null
+    ? incumbentScore - processedUpperMaxAnchorScore
+    : null;
+  const processedUpperMaxRightPeekUpperToClose = (
+    processedUpperMaxPairUpperToClose !== null
+    && processedUpperMaxLeftBestPossible !== null
+      ? processedUpperMaxPairUpperToClose - processedUpperMaxLeftBestPossible
+      : null
+  );
+  const processedUpperMaxLeftPeekUpperToClose = (
+    processedUpperMaxPairUpperToClose !== null
+    && processedUpperMaxRightBestPossible !== null
+      ? processedUpperMaxPairUpperToClose - processedUpperMaxRightBestPossible
+      : null
+  );
   const containingBitsBytes = sumMedleyExactArrayViewBytes(containingLeftBitsByCardId.values())
     + sumMedleyExactArrayViewBytes(containingRightBitsByCardId.values());
   const rawRetainedBytes = rawPool.slots.reduce(
@@ -3407,6 +3469,30 @@ function buildMedleyExactRawAnchorFrontierProbeProfile(
     residualUpperBound: Number.isFinite(residualUpperBound) ? Math.ceil(residualUpperBound) : null,
     residualGap: Number.isFinite(residualUpperBound) ? Math.max(0, Math.ceil(residualUpperBound) - incumbentScore) : null,
     wouldClose: Number.isFinite(residualUpperBound) && residualUpperBound <= incumbentScore,
+    unprocessedAnchorUpperBound: Number.isFinite(unprocessedAnchorUpperBound)
+      ? unprocessedAnchorUpperBound
+      : null,
+    unprocessedUpperBound: Number.isFinite(unprocessedUpperBound) ? Math.ceil(unprocessedUpperBound) : null,
+    unprocessedGap: Number.isFinite(unprocessedUpperBound)
+      ? Math.max(0, Math.ceil(unprocessedUpperBound) - incumbentScore)
+      : null,
+    looseTailCloseAnchorScoreThreshold: Number.isFinite(looseTailCloseAnchorScoreThreshold)
+      ? looseTailCloseAnchorScoreThreshold
+      : null,
+    materializedLooseTailCloseIndex,
+    materializedLooseTailCloseScore: materializedLooseTailCloseIndex !== null
+      ? anchorSlot.scores[materializedLooseTailCloseIndex] ?? null
+      : null,
+    materializedLooseTailCloseProcessedFraction: materializedLooseTailCloseIndex !== null && anchorSlot.length > 0
+      ? materializedLooseTailCloseIndex / anchorSlot.length
+      : null,
+    materializedLooseTailCloseRequiresAllCandidates: materializedLooseTailCloseIndex === null,
+    generatorLooseTailUpperBound: Number.isFinite(generatorLooseTailUpperBound)
+      ? Math.ceil(generatorLooseTailUpperBound)
+      : null,
+    generatorLooseTailGap: Number.isFinite(generatorLooseTailUpperBound)
+      ? Math.max(0, Math.ceil(generatorLooseTailUpperBound) - incumbentScore)
+      : null,
     processedUpperMax: Number.isFinite(processedUpperMax) ? Math.ceil(processedUpperMax) : null,
     processedUpperMaxSource,
     processedUpperMaxAnchorIndex,
@@ -3430,6 +3516,7 @@ function buildMedleyExactRawAnchorFrontierProbeProfile(
       && Number.isFinite(processedUpperMaxSplitPairUpper)
       ? processedUpperMaxSplitPairUpper
       : null,
+    processedUpperMaxSplitPairUpperSource,
     processedUpperMaxSplitTotalUpper: processedUpperMaxSplitTotalUpper !== null
       && Number.isFinite(processedUpperMaxSplitTotalUpper)
       ? Math.ceil(processedUpperMaxSplitTotalUpper)
@@ -3437,6 +3524,43 @@ function buildMedleyExactRawAnchorFrontierProbeProfile(
     processedUpperMaxSplitGap: processedUpperMaxSplitTotalUpper !== null
       && Number.isFinite(processedUpperMaxSplitTotalUpper)
       ? Math.max(0, Math.ceil(processedUpperMaxSplitTotalUpper) - incumbentScore)
+      : null,
+    splitAdjustedResidualUpperBound: Number.isFinite(splitAdjustedResidualUpperBound)
+      ? Math.ceil(splitAdjustedResidualUpperBound)
+      : null,
+    splitAdjustedResidualGap: Number.isFinite(splitAdjustedResidualUpperBound)
+      ? Math.max(0, Math.ceil(splitAdjustedResidualUpperBound) - incumbentScore)
+      : null,
+    splitAdjustedResidualSource,
+    processedUpperMaxLeftBestPossible: processedUpperMaxLeftBestPossible !== null
+      && Number.isFinite(processedUpperMaxLeftBestPossible)
+      ? processedUpperMaxLeftBestPossible
+      : null,
+    processedUpperMaxRightBestPossible: processedUpperMaxRightBestPossible !== null
+      && Number.isFinite(processedUpperMaxRightBestPossible)
+      ? processedUpperMaxRightBestPossible
+      : null,
+    processedUpperMaxPairUpperToClose: processedUpperMaxPairUpperToClose !== null
+      && Number.isFinite(processedUpperMaxPairUpperToClose)
+      ? processedUpperMaxPairUpperToClose
+      : null,
+    processedUpperMaxRightPeekUpperToClose: processedUpperMaxRightPeekUpperToClose !== null
+      && Number.isFinite(processedUpperMaxRightPeekUpperToClose)
+      ? processedUpperMaxRightPeekUpperToClose
+      : null,
+    processedUpperMaxRightPeekReductionToClose: processedUpperMaxRightPeekUpperToClose !== null
+      && Number.isFinite(processedUpperMaxRightPeekUpperToClose)
+      && Number.isFinite(rightPeekUpperBound)
+      ? Math.max(0, rightPeekUpperBound - processedUpperMaxRightPeekUpperToClose)
+      : null,
+    processedUpperMaxLeftPeekUpperToClose: processedUpperMaxLeftPeekUpperToClose !== null
+      && Number.isFinite(processedUpperMaxLeftPeekUpperToClose)
+      ? processedUpperMaxLeftPeekUpperToClose
+      : null,
+    processedUpperMaxLeftPeekReductionToClose: processedUpperMaxLeftPeekUpperToClose !== null
+      && Number.isFinite(processedUpperMaxLeftPeekUpperToClose)
+      && Number.isFinite(leftPeekUpperBound)
+      ? Math.max(0, leftPeekUpperBound - processedUpperMaxLeftPeekUpperToClose)
       : null,
     scannedLeftWordCount,
     scannedRightWordCount,
