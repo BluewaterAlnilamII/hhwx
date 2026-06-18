@@ -173,6 +173,34 @@ export function appendMedleyExactRawCandidateMirror(
   mirror.appendCount += 1;
 }
 
+export function rebuildMedleyExactRawCandidateMirrorFromCandidates(
+  mirror: MedleyExactRawCandidateMirror | null,
+  candidatesBySlot: readonly MedleyTeamCandidate[][],
+): void {
+  if (!mirror || mirror.disabledReason) {
+    return;
+  }
+  const totalCandidateCount = candidatesBySlot.reduce((sum, candidates) => sum + candidates.length, 0);
+  if (totalCandidateCount > mirror.maxCandidateTotal) {
+    mirror.disabledReason = "candidate-total-limit";
+    mirror.skippedAppendCount += Math.max(0, totalCandidateCount - mirror.appendCount);
+    return;
+  }
+
+  for (let slotIndex = 0; slotIndex < mirror.slots.length; slotIndex += 1) {
+    const slot = mirror.slots[slotIndex];
+    const candidates = candidatesBySlot[slotIndex] ?? [];
+    slot.length = 0;
+    slot.mismatchCount = 0;
+    ensureMedleyExactRawCandidateMirrorSlotCapacity(slot, candidates.length);
+    for (let candidateIndex = 0; candidateIndex < candidates.length; candidateIndex += 1) {
+      appendMedleyExactRawCandidateMirrorSlot(slot, candidates[candidateIndex], candidateIndex);
+    }
+  }
+  mirror.appendCount = totalCandidateCount;
+  mirror.rebuildCount += 1;
+}
+
 export function getMedleyExactRawCandidateSlotBytes(
   slot: MedleyExactRawCandidateSlotView,
 ): number {

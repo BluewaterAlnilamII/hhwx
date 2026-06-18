@@ -87,6 +87,7 @@ import {
   getMedleyExactRawCandidateScore,
   getMedleyExactRawCandidateSlotBytes,
   getMedleyExactRawCandidateSourceIndex,
+  rebuildMedleyExactRawCandidateMirrorFromCandidates,
 } from "./exact-candidate-raw-builder";
 import type { MedleyExactRawCandidateSlotView } from "./exact-candidate-raw-builder";
 import {
@@ -12308,6 +12309,21 @@ export function searchMedleyConfigurationByExactCandidateJoin(
       appendMedleyExactRawCandidateMirror(rawCandidateMirror, slotIndex, candidate, sourceIndex);
     }
     : null;
+  let didFinalizeCandidateStorageForRead = false;
+  const finalizeCandidateStorageForRead = (): void => {
+    if (didFinalizeCandidateStorageForRead) {
+      return;
+    }
+    candidatesBySlot.forEach(sortMedleyCandidates);
+    rebuildMedleyExactRawCandidateMirrorFromCandidates(rawCandidateMirror, candidatesBySlot);
+    invalidateRawCandidatePool();
+    didFinalizeCandidateStorageForRead = true;
+  };
+  const finalizeRawCandidateMirrorForDiagnostics = (): void => {
+    if (rawCandidateMirror) {
+      finalizeCandidateStorageForRead();
+    }
+  };
   const bestSlotScores: number[] = [];
   const exactPairUpperByExcludedSlot: Array<number | null> = Array.from({ length: slots.length }, () => null);
   const exactPairUnseenUpperByExcludedSlot: Array<number | null> = Array.from({ length: slots.length }, () => null);
@@ -14042,6 +14058,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
       profiling.exactCandidateJoinPoppedNodeCount += getCandidateFillProfilingGenerators().reduce((sum, currentGenerator) => (
         sum + currentGenerator.poppedNodeCount()
       ), 0);
+      finalizeRawCandidateMirrorForDiagnostics();
       recordExactJoinMemorySnapshot("candidate-fill-pair-refine-abort", { slotIndex });
       return buildUnprovedExactCandidateJoinResult();
     }
@@ -14133,6 +14150,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
         profiling.exactCandidateJoinPoppedNodeCount += getCandidateFillProfilingGenerators().reduce((sum, currentGenerator) => (
           sum + currentGenerator.poppedNodeCount()
         ), 0);
+        finalizeRawCandidateMirrorForDiagnostics();
         recordExactJoinMemorySnapshot(stats.memoryLimited ? "candidate-fill-memory-limit" : "candidate-fill-deadline", {
           slotIndex,
         });
@@ -14212,6 +14230,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
         profiling.exactCandidateJoinPoppedNodeCount += getCandidateFillProfilingGenerators().reduce((sum, currentGenerator) => (
           sum + currentGenerator.poppedNodeCount()
         ), 0);
+        finalizeRawCandidateMirrorForDiagnostics();
         recordExactJoinMemorySnapshot("candidate-fill-soft-limit", { slotIndex });
         return buildUnprovedExactCandidateJoinResult(
           anchorFrontierResult,
@@ -14256,6 +14275,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
         profiling.exactCandidateJoinPoppedNodeCount += generators.reduce((sum, currentGenerator) => (
           sum + currentGenerator.poppedNodeCount()
         ), 0);
+        finalizeRawCandidateMirrorForDiagnostics();
         recordExactJoinMemorySnapshot("candidate-fill-generator-aborted", { slotIndex });
         return buildUnprovedExactCandidateJoinResult();
       }
@@ -14292,8 +14312,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
   ) {
     recordExactJoinMemorySnapshot("after-candidate-fill");
   }
-  candidatesBySlot.forEach(sortMedleyCandidates);
-  invalidateRawCandidatePool();
+  finalizeCandidateStorageForRead();
   maybeSeedFromExactJoinPrefix();
   if (stats.timedOut) {
     recordExactJoinMemorySnapshot("after-prefix-seed-timeout");

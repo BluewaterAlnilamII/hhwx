@@ -166,6 +166,8 @@ Baseline and gate artifacts retained:
 | `low-memory-polish-hhwx-2026-06-18T07-57-40-132Z.json` | `P02:260` shadow-builder read-source hard-row guard smoke | bounded gap `382812`, average `9376984`, max `9412868`, `0 failed / 0 timedOut / 0 memoryLimited`, peak `2929 MiB`; hard row still guard-disables mirror at `60000` rows with `0` raw mismatches |
 | `low-memory-polish-hhwx-2026-06-18T08-04-10-613Z.json` | `P01:none` configurable raw mirror cap + shadow source smoke | exact, gap `0`, average `7927236`, max `7982835`, peak `1260 MiB`; `HHWX_LOW_MEMORY_RAW_MIRROR_MAX_CANDIDATES=800000` keeps `rawInputSource = shadow-raw-candidate-builder`, parity `matched = true`, and raw-source mismatches `0` |
 | `low-memory-polish-hhwx-2026-06-18T08-05-18-617Z.json` | `P02:260` full hard-row raw mirror smoke | bounded gap `382812`, average `9376984`, max `9412868`, `0 failed / 0 timedOut / 0 memoryLimited`, peak `2926 MiB`; full `747802` raw rows retained with lengths `[400000, 212825, 134977]`, `lengthMismatchCount = 0`, `mismatchCountTotal = 0`, raw mirror retained `40 MiB` |
+| `low-memory-polish-hhwx-2026-06-18T08-22-25-152Z.json` | `P01:none` sorted raw mirror rebuild smoke | exact, gap `0`, average `7927236`, max `7982835`, peak `1229 MiB`; sorted raw mirror `rebuildCount = 1`, `mismatchCountTotal = 0`, raw parity still reads `shadow-raw-candidate-builder` |
+| `low-memory-polish-hhwx-2026-06-18T08-23-32-854Z.json` | `P02:260` sorted full hard-row raw mirror smoke | bounded gap `382812`, average `9376984`, max `9412868`, `0 failed / 0 timedOut / 0 memoryLimited`, peak `2919 MiB`; full `747802` raw rows sorted/rebuilt before bounded return, `rebuildCount = 1`, `mismatchCountTotal = 0`, retained `40 MiB` |
 
 Use the pressure validation environment for early-pruning gates:
 
@@ -235,7 +237,9 @@ Full hard-row raw mirror:
 - P01 confirms that raising the diagnostic cap does not change exactness or parity: exact gap `0`, `rawInputSource = shadow-raw-candidate-builder`, and raw parity `matched = true`;
 - P02 confirms the full hard-row raw mirror can retain all `747802` generated rows as typed arrays with `0` length/score/card mismatches, using only about `40 MiB` of raw mirror storage;
 - score fields and bounded proof state are unchanged on P02: average `9376984`, max `9412868`, bounded gap `382812`, and no failed/timedOut/memoryLimited rows;
-- conclusion: the raw-row representation is not the memory bottleneck. The bottleneck is retaining equivalent rich candidate bodies and proof helper structures. The next architecture slice should let a hard-row fill/read path keep raw rows resident and hydrate rich objects only for winners/debug, instead of further expanding leaf-level probes.
+- follow-up sorted rebuild artifacts `low-memory-polish-hhwx-2026-06-18T08-22-25-152Z.json` and `low-memory-polish-hhwx-2026-06-18T08-23-32-854Z.json` prove the raw mirror can be rebuilt after rich candidate sorting, including bounded P02 soft-limit exits;
+- P02 now reports `rebuildCount = 1`, full row lengths `[400000, 212825, 134977]`, `mismatchCountTotal = 0`, and retained raw storage `40 MiB` after the bounded return path finalizes candidate storage for diagnostics;
+- conclusion: the raw-row representation is not the memory bottleneck, and sorted raw rows can be made order-compatible with the object solver. The bottleneck is retaining equivalent rich candidate bodies and proof helper structures. The next architecture slice should let a hard-row fill/read path keep raw rows resident and hydrate rich objects only for winners/debug, instead of further expanding leaf-level probes.
 
 Two-row prefix margin replay sample:
 
