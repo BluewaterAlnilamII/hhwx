@@ -152,6 +152,9 @@ const MEDLEY_EXACT_RAW_JOIN_PARITY_MIN_REMAINING_MS = 2_000;
 const MEDLEY_EXACT_RAW_RESULT_PARITY_MAX_CANDIDATE_TOTAL = 20_000;
 const MEDLEY_EXACT_RAW_RESULT_PARITY_MIN_REMAINING_MS = 5_000;
 const MEDLEY_EXACT_RAW_RESULT_PARITY_TIMEBOX_MS = 8_000;
+const MEDLEY_EXACT_RAW_TIE_FRONTIER_TIMEBOX_MS = 3_000;
+const MEDLEY_EXACT_RAW_TIE_FRONTIER_HYDRATE_LIMIT = 32;
+const MEDLEY_EXACT_RAW_TIE_FRONTIER_SAMPLE_LIMIT = 8;
 const MEDLEY_EXACT_RAW_ANCHOR_CHEAP_UPPER_REPLAY_MAX_CANDIDATE_TOTAL = 60_000;
 const MEDLEY_EXACT_RAW_ANCHOR_CHEAP_UPPER_REPLAY_SAMPLE_LIMIT = 16;
 const MEDLEY_EXACT_RAW_ANCHOR_FRONTIER_PROBE_MAX_CANDIDATE_TOTAL = 0;
@@ -6646,6 +6649,236 @@ function buildMedleyExactRawObjectWinnerSourceDiagnostics(
   });
 }
 
+function medleyExactRawJoinCandidatesOverlap(
+  leftSlot: MedleyExactRawJoinParitySlot,
+  leftIndex: number,
+  rightSlot: MedleyExactRawJoinParitySlot,
+  rightIndex: number,
+): boolean {
+  for (let leftCardIndex = 0; leftCardIndex < MEDLEY_TEAM_SIZE; leftCardIndex += 1) {
+    const leftCardId = getMedleyExactRawCandidateCardIdAt(leftSlot, leftIndex, leftCardIndex);
+    if (leftCardId < 0) {
+      continue;
+    }
+    for (let rightCardIndex = 0; rightCardIndex < MEDLEY_TEAM_SIZE; rightCardIndex += 1) {
+      if (leftCardId === getMedleyExactRawCandidateCardIdAt(rightSlot, rightIndex, rightCardIndex)) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+function hydrateMedleyExactRawTieFrontierResult(
+  slots: readonly MedleySlotSearch[],
+  candidatesBySlot: readonly MedleyTeamCandidate[][],
+  slotOrder: readonly number[],
+  sourceIndicesByOrder: readonly number[],
+  configuration: BandoriAreaItemConfiguration,
+  server: number,
+  perfectRate: number,
+  stats: BandoriMedleyTeamSearchStats,
+  profiling: BandoriMedleyTeamSearchProfilingStats,
+): BandoriMedleyTeamSearchResult | null {
+  const selectedBySong: Array<MedleyTeamCandidate | undefined> = [];
+  for (let orderIndex = 0; orderIndex < slotOrder.length; orderIndex += 1) {
+    const slotIndex = slotOrder[orderIndex];
+    const sourceIndex = sourceIndicesByOrder[orderIndex] ?? -1;
+    const slot = slots[slotIndex];
+    const candidate = candidatesBySlot[slotIndex]?.[sourceIndex];
+    if (!slot || !candidate) {
+      return null;
+    }
+    const hydratedCandidate = hydrateMedleyExactCandidateForResult(
+      slot,
+      candidate,
+      server,
+      perfectRate,
+      stats,
+      profiling,
+    );
+    if (!hydratedCandidate) {
+      return null;
+    }
+    selectedBySong[slot.songIndex] = hydratedCandidate;
+  }
+  return buildMedleyResult([...slots], selectedBySong, configuration);
+}
+
+function buildMedleyExactRawTieFrontierSample(
+  rawSlots: readonly MedleyExactRawJoinParitySlot[],
+  slotOrder: readonly number[],
+  indicesByOrder: readonly number[],
+): Record<string, unknown> {
+  return {
+    indicesByOrder: [...indicesByOrder],
+    sourceIndicesByOrder: indicesByOrder.map((candidateIndex, orderIndex) => {
+      const slot = rawSlots[slotOrder[orderIndex]];
+      return slot ? getMedleyExactRawCandidateSourceIndex(slot, candidateIndex) : -1;
+    }),
+    scoreByOrder: indicesByOrder.map((candidateIndex, orderIndex) => {
+      const slot = rawSlots[slotOrder[orderIndex]];
+      return slot ? getMedleyExactRawCandidateScore(slot, candidateIndex) : null;
+    }),
+    cardIdsByOrder: indicesByOrder.map((candidateIndex, orderIndex) => {
+      const slot = rawSlots[slotOrder[orderIndex]];
+      return slot ? copyMedleyExactRawCandidateCardIds(slot, candidateIndex) : [];
+    }),
+  };
+}
+
+function buildMedleyExactRawBestScoreTieFrontierProfile(
+  slots: readonly MedleySlotSearch[],
+  rawSlots: readonly MedleyExactRawJoinParitySlot[],
+  candidatesBySlot: readonly MedleyTeamCandidate[][],
+  configuration: BandoriAreaItemConfiguration,
+  server: number,
+  perfectRate: number,
+  profiling: BandoriMedleyTeamSearchProfilingStats,
+  stats: BandoriMedleyTeamSearchStats,
+  deadlineAt: number,
+  solveProfile: MedleyExactRawIndexFinalJoinSolveProfile,
+  objectResult: BandoriMedleyTeamSearchResult | null,
+): Record<string, unknown> {
+  const rawBestScore = solveProfile.rawBestScore ?? null;
+  const slotOrder = solveProfile.slotOrder ?? [];
+  if (rawBestScore === null || slotOrder.length !== MEDLEY_TEAM_COUNT || solveProfile.skipped) {
+    return {
+      enabled: true,
+      skipped: true,
+      skipReason: "raw-best-unavailable",
+      rawBestScore,
+      slotOrder,
+    };
+  }
+  const firstSlot = rawSlots[slotOrder[0]];
+  const secondSlot = rawSlots[slotOrder[1]];
+  const thirdSlot = rawSlots[slotOrder[2]];
+  if (!firstSlot || !secondSlot || !thirdSlot) {
+    return {
+      enabled: true,
+      skipped: true,
+      skipReason: "invalid-slot-order",
+      rawBestScore,
+      slotOrder,
+    };
+  }
+
+  const startedAt = performance.now();
+  const localDeadlineAt = Math.min(deadlineAt, startedAt + MEDLEY_EXACT_RAW_TIE_FRONTIER_TIMEBOX_MS);
+  const bestSecondScore = getMedleyExactRawCandidateScore(secondSlot, 0);
+  const bestThirdScore = getMedleyExactRawCandidateScore(thirdSlot, 0);
+  let checkedPairCount = 0;
+  let tieCombinationCount = 0;
+  let overlapRejectedTieCount = 0;
+  let hydratedTieCount = 0;
+  let hydrationFailureCount = 0;
+  let timedOut = false;
+  let bestHydratedResult: BandoriMedleyTeamSearchResult | null = null;
+  const samples: Array<Record<string, unknown>> = [];
+
+  for (let firstIndex = 0; firstIndex < firstSlot.length; firstIndex += 1) {
+    const firstScore = getMedleyExactRawCandidateScore(firstSlot, firstIndex);
+    if (firstScore + bestSecondScore + bestThirdScore < rawBestScore) {
+      break;
+    }
+    for (let secondIndex = 0; secondIndex < secondSlot.length; secondIndex += 1) {
+      checkedPairCount += 1;
+      if ((checkedPairCount & 4095) === 0 && performance.now() >= localDeadlineAt) {
+        timedOut = true;
+        break;
+      }
+      const secondScore = getMedleyExactRawCandidateScore(secondSlot, secondIndex);
+      if (firstScore + secondScore + bestThirdScore < rawBestScore) {
+        break;
+      }
+      if (medleyExactRawJoinCandidatesOverlap(firstSlot, firstIndex, secondSlot, secondIndex)) {
+        continue;
+      }
+      const targetThirdScore = rawBestScore - firstScore - secondScore;
+      if (targetThirdScore > bestThirdScore) {
+        continue;
+      }
+      for (let thirdIndex = 0; thirdIndex < thirdSlot.length; thirdIndex += 1) {
+        const thirdScore = getMedleyExactRawCandidateScore(thirdSlot, thirdIndex);
+        if (thirdScore < targetThirdScore) {
+          break;
+        }
+        if (thirdScore !== targetThirdScore) {
+          continue;
+        }
+        if (
+          medleyExactRawJoinCandidatesOverlap(firstSlot, firstIndex, thirdSlot, thirdIndex)
+          || medleyExactRawJoinCandidatesOverlap(secondSlot, secondIndex, thirdSlot, thirdIndex)
+        ) {
+          overlapRejectedTieCount += 1;
+          continue;
+        }
+        const indicesByOrder = [firstIndex, secondIndex, thirdIndex];
+        tieCombinationCount += 1;
+        if (samples.length < MEDLEY_EXACT_RAW_TIE_FRONTIER_SAMPLE_LIMIT) {
+          samples.push(buildMedleyExactRawTieFrontierSample(rawSlots, slotOrder, indicesByOrder));
+        }
+        if (hydratedTieCount < MEDLEY_EXACT_RAW_TIE_FRONTIER_HYDRATE_LIMIT) {
+          const sourceIndicesByOrder = indicesByOrder.map((candidateIndex, orderIndex) => (
+            getMedleyExactRawCandidateSourceIndex(rawSlots[slotOrder[orderIndex]]!, candidateIndex)
+          ));
+          const hydratedResult = hydrateMedleyExactRawTieFrontierResult(
+            slots,
+            candidatesBySlot,
+            slotOrder,
+            sourceIndicesByOrder,
+            configuration,
+            server,
+            perfectRate,
+            stats,
+            profiling,
+          );
+          hydratedTieCount += 1;
+          if (hydratedResult) {
+            bestHydratedResult = compareMedleyResultLike(bestHydratedResult, hydratedResult);
+          } else {
+            hydrationFailureCount += 1;
+          }
+        }
+      }
+    }
+    if (timedOut) {
+      break;
+    }
+  }
+
+  return {
+    enabled: true,
+    skipped: false,
+    rawBestScore,
+    slotOrder,
+    elapsedMs: Math.round(performance.now() - startedAt),
+    timedOut,
+    timeboxMs: MEDLEY_EXACT_RAW_TIE_FRONTIER_TIMEBOX_MS,
+    checkedPairCount,
+    tieCombinationCount,
+    overlapRejectedTieCount,
+    hydratedTieCount,
+    hydrationLimit: MEDLEY_EXACT_RAW_TIE_FRONTIER_HYDRATE_LIMIT,
+    hydrationFailureCount,
+    sampleLimit: MEDLEY_EXACT_RAW_TIE_FRONTIER_SAMPLE_LIMIT,
+    samples,
+    bestHydratedScore: bestHydratedResult?.score ?? null,
+    bestHydratedMaxScore: bestHydratedResult?.maxScore ?? null,
+    bestHydratedMinScore: bestHydratedResult?.minScore ?? null,
+    bestHydratedCardIds: bestHydratedResult?.cardIds ?? [],
+    objectScore: objectResult?.score ?? null,
+    objectMaxScore: objectResult?.maxScore ?? null,
+    objectMinScore: objectResult?.minScore ?? null,
+    objectCardIds: objectResult?.cardIds ?? [],
+    bestHydratedMatchesObject: !!bestHydratedResult && !!objectResult
+      && bestHydratedResult.score === objectResult.score
+      && bestHydratedResult.maxScore === objectResult.maxScore
+      && bestHydratedResult.cardIds.join(",") === objectResult.cardIds.join(","),
+  };
+}
+
 function buildMedleyExactRawSolverHandoffProfile(
   slots: readonly MedleySlotSearch[],
   rawCandidateSlotReadSource: MedleyExactRawCandidateSlotReadSource,
@@ -6878,6 +7111,19 @@ function buildMedleyExactRawResultParityProfile(
     objectResult,
     rawSolveProfile,
   );
+  const tieFrontier = buildMedleyExactRawBestScoreTieFrontierProfile(
+    slots,
+    rawSlots,
+    candidatesBySlot,
+    configuration,
+    server,
+    perfectRate,
+    profiling,
+    stats,
+    deadlineAt,
+    rawSolveProfile,
+    objectResult,
+  );
   return {
     enabled: true,
     skipped: false,
@@ -6915,6 +7161,7 @@ function buildMedleyExactRawResultParityProfile(
     rawCardIds,
     objectCardIds,
     winnerSourceDiagnostics,
+    tieFrontier,
   };
 }
 
