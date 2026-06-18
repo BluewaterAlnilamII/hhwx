@@ -6961,6 +6961,84 @@ function buildMedleyExactRawTieFrontierSample(
   };
 }
 
+function buildMedleyExactRawResidentFillProfile(
+  slots: readonly MedleySlotSearch[],
+  rawSlots: readonly MedleyExactRawJoinParitySlot[],
+  configuration: BandoriAreaItemConfiguration,
+  solveProfile: MedleyExactRawIndexFinalJoinSolveProfile,
+  sourceHydratedProfile: Record<string, unknown>,
+  candidateCountTotal: number,
+  candidateCountsBySlot: readonly number[],
+  exactHydration: {
+    server: number;
+    perfectRate: number;
+    stats: BandoriMedleyTeamSearchStats;
+    profiling: BandoriMedleyTeamSearchProfilingStats;
+  },
+): Record<string, unknown> {
+  if (candidateCountTotal > MEDLEY_EXACT_RAW_RESULT_PARITY_MAX_CANDIDATE_TOTAL) {
+    return {
+      enabled: true,
+      skipped: true,
+      skipReason: "candidate-total-limit",
+      candidateCountTotal,
+      candidateCountsBySlot,
+      limit: MEDLEY_EXACT_RAW_RESULT_PARITY_MAX_CANDIDATE_TOTAL,
+      behaviorChange: false,
+      candidateRemoval: false,
+    };
+  }
+  if (solveProfile.skipped) {
+    return {
+      enabled: true,
+      skipped: true,
+      skipReason: solveProfile.skipReason ?? "raw-solver-skipped",
+      candidateCountTotal,
+      candidateCountsBySlot,
+      behaviorChange: false,
+      candidateRemoval: false,
+    };
+  }
+  const rawRowHydratedProfile = hydrateMedleyExactRawIndexFinalJoinProfileFromRawRows(
+    slots,
+    rawSlots,
+    configuration,
+    solveProfile,
+    exactHydration,
+  );
+  const rawRowHydrated = rawRowHydratedProfile.hydrated === true;
+  const rawRowCardIds = Array.isArray(rawRowHydratedProfile.cardIds) ? rawRowHydratedProfile.cardIds : [];
+  const sourceCardIds = Array.isArray(sourceHydratedProfile.cardIds) ? sourceHydratedProfile.cardIds : [];
+  return {
+    enabled: true,
+    skipped: false,
+    behaviorChange: false,
+    candidateRemoval: false,
+    resultAuthoritative: false,
+    sourceIndexRequiredForWinnerHydration: rawRowHydrated ? false : null,
+    richCandidateRequiredForWinnerHydration: rawRowHydrated ? false : null,
+    candidateCountTotal,
+    candidateCountsBySlot,
+    rawRowHydration: rawRowHydratedProfile,
+    sourceHydration: {
+      hydrated: sourceHydratedProfile.hydrated ?? false,
+      hydrationMode: sourceHydratedProfile.hydrationMode ?? null,
+      score: sourceHydratedProfile.score ?? null,
+      averageScore: sourceHydratedProfile.averageScore ?? null,
+      maxScore: sourceHydratedProfile.maxScore ?? null,
+      minScore: sourceHydratedProfile.minScore ?? null,
+      cardIds: sourceCardIds,
+    },
+    matchesSourceHydration: rawRowHydrated
+      && sourceHydratedProfile.hydrated === true
+      && rawRowHydratedProfile.score === sourceHydratedProfile.score
+      && rawRowHydratedProfile.averageScore === sourceHydratedProfile.averageScore
+      && rawRowHydratedProfile.maxScore === sourceHydratedProfile.maxScore
+      && rawRowHydratedProfile.minScore === sourceHydratedProfile.minScore
+      && rawRowCardIds.join(",") === sourceCardIds.join(","),
+  };
+}
+
 function buildMedleyExactRawBestScoreTieFrontierProfile(
   slots: readonly MedleySlotSearch[],
   rawSlots: readonly MedleyExactRawJoinParitySlot[],
@@ -7124,6 +7202,7 @@ function buildMedleyExactRawSolverHandoffProfile(
   stats: BandoriMedleyTeamSearchStats,
   deadlineAt: number,
   isPastDeadline: () => boolean,
+  enableRawResidentFill = false,
 ): Record<string, unknown> {
   const rawSlots = rawCandidateSlotReadSource.slots;
   const candidateCountsBySlot = rawSlots.map((slot) => slot.length);
@@ -7215,6 +7294,23 @@ function buildMedleyExactRawSolverHandoffProfile(
       } : undefined,
     ),
   };
+  const rawResidentFill = enableRawResidentFill
+    ? buildMedleyExactRawResidentFillProfile(
+      slots,
+      rawSlots,
+      configuration,
+      hydrationReplaySolveProfile,
+      hydrationReplay.hydratedResult,
+      candidateCountTotal,
+      candidateCountsBySlot,
+      {
+        server,
+        perfectRate,
+        stats,
+        profiling,
+      },
+    )
+    : null;
   const resultParity = buildMedleyExactRawResultParityProfile(
     slots,
     rawSlots,
@@ -7250,9 +7346,10 @@ function buildMedleyExactRawSolverHandoffProfile(
     exactWinnerHydrationEnabled: canRunExactWinnerHydration,
     exactWinnerHydrationCandidateTotalLimit: MEDLEY_EXACT_RAW_RESULT_PARITY_MAX_CANDIDATE_TOTAL,
     hydrationReplay,
+    rawResidentFill,
     resultParity,
     nextRequiredStep: canReadAsResidentRawSource
-      ? "wire raw solver winner indices to late hydration"
+      ? "prototype raw-resident fill that uses raw rows as winner storage"
       : "fix raw source ordering or row completeness before handoff",
   };
 }
@@ -13267,6 +13364,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     debugExactCandidateRawMirrorMaxCandidateTotal?: number | null;
     debugExactCandidateRawJoinParity?: boolean;
     debugExactCandidateRawSolverHandoff?: boolean;
+    debugExactCandidateRawResidentFill?: boolean;
     debugExactCandidateSignatureCensus?: boolean;
     debugExactCandidateUpperReplay?: boolean;
     debugExactCandidateAnchorFrontierCheapUpperProbe?: boolean;
@@ -13622,6 +13720,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
       stats,
       deadlineAt,
       isPastDeadline,
+      context.debugExactCandidateRawResidentFill === true,
     );
   };
   const retainCandidateForSlot = rawCandidateMirror
