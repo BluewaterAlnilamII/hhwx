@@ -3442,6 +3442,178 @@ function buildMedleyExactRawAnchorFrontierProbeProfile(
       ? processedUpperMaxPairUpperToClose - processedUpperMaxRightBestPossible
       : null
   );
+
+  const refinementStartedAt = performance.now();
+  let refinedProcessedAnchorCount = 0;
+  let refinedTimeboxed = false;
+  let refinedFinishedByDominatedTail = false;
+  let refinedNextAnchorScore: number | null = null;
+  let refinedProcessedUpperMax = Number.NEGATIVE_INFINITY;
+  let refinedProcessedUpperMaxSource: string | null = null;
+  let refinedProcessedUpperMaxAnchorIndex: number | null = null;
+  let refinedProcessedUpperMaxAnchorScore: number | null = null;
+  let refinedProcessedUpperMaxPairUpper: number | null = null;
+  let refinedProcessedUpperMaxGeneratedPairUpper: number | null = null;
+  let refinedProcessedUpperMaxGeneratedPairSplitUpper: number | null = null;
+  let refinedProcessedUpperMaxLeftUnseenUpper: number | null = null;
+  let refinedProcessedUpperMaxRightUnseenUpper: number | null = null;
+  let refinedSplitAttemptCount = 0;
+  let refinedSplitCompletedCount = 0;
+  let refinedSplitTimedOutCount = 0;
+  let refinedSplitStateCount = 0;
+  let refinedScannedLeftWordCount = 0;
+  let refinedScannedRightWordCount = 0;
+
+  const recordRefinedProcessedUpperMax = (
+    anchorIndex: number,
+    anchorScore: number,
+    pairUpper: number,
+    source: string,
+    generatedPairUpper: number,
+    generatedPairSplitUpper: number | null,
+    leftUnseenUpper: number,
+    rightUnseenUpper: number,
+  ): void => {
+    const totalUpper = anchorScore + pairUpper;
+    if (totalUpper > refinedProcessedUpperMax) {
+      refinedProcessedUpperMax = totalUpper;
+      refinedProcessedUpperMaxSource = source;
+      refinedProcessedUpperMaxAnchorIndex = anchorIndex;
+      refinedProcessedUpperMaxAnchorScore = anchorScore;
+      refinedProcessedUpperMaxPairUpper = pairUpper;
+      refinedProcessedUpperMaxGeneratedPairUpper = Number.isFinite(generatedPairUpper)
+        ? generatedPairUpper
+        : null;
+      refinedProcessedUpperMaxGeneratedPairSplitUpper = generatedPairSplitUpper !== null
+        && Number.isFinite(generatedPairSplitUpper)
+        ? generatedPairSplitUpper
+        : null;
+      refinedProcessedUpperMaxLeftUnseenUpper = Number.isFinite(leftUnseenUpper) ? leftUnseenUpper : null;
+      refinedProcessedUpperMaxRightUnseenUpper = Number.isFinite(rightUnseenUpper) ? rightUnseenUpper : null;
+    }
+  };
+
+  for (let anchorIndex = 0; anchorIndex < maxAnchorCount; anchorIndex += 1) {
+    const anchorScore = anchorSlot.scores[anchorIndex];
+    if (performance.now() >= localDeadlineAt) {
+      refinedTimeboxed = true;
+      refinedNextAnchorScore = anchorScore;
+      break;
+    }
+    if (
+      Number.isFinite(refinedProcessedUpperMax)
+      && anchorScore + pairUpperBound <= refinedProcessedUpperMax
+    ) {
+      refinedFinishedByDominatedTail = true;
+      refinedNextAnchorScore = anchorScore;
+      break;
+    }
+
+    const anchorCardIds = getMedleyExactRawCandidateCardIds(anchorSlot, anchorIndex);
+    const leftGeneratedCandidate = findBestAvailableMedleyExactRawRightCandidateByForbiddenCardIds(
+      leftSlot,
+      containingLeftBitsByCardId,
+      leftWordCount,
+      [],
+      anchorCardIds,
+    );
+    const rightGeneratedCandidate = findBestAvailableMedleyExactRawRightCandidateByForbiddenCardIds(
+      rightSlot,
+      containingRightBitsByCardId,
+      rightWordCount,
+      [],
+      anchorCardIds,
+    );
+    refinedScannedLeftWordCount += leftGeneratedCandidate.scannedWordCount;
+    refinedScannedRightWordCount += rightGeneratedCandidate.scannedWordCount;
+    refinedProcessedAnchorCount += 1;
+
+    const leftGeneratedScore = finiteScore(
+      leftGeneratedCandidate.candidateIndex >= 0
+        ? leftSlot.scores[leftGeneratedCandidate.candidateIndex]
+        : Number.NEGATIVE_INFINITY,
+    );
+    const rightGeneratedScore = finiteScore(
+      rightGeneratedCandidate.candidateIndex >= 0
+        ? rightSlot.scores[rightGeneratedCandidate.candidateIndex]
+        : Number.NEGATIVE_INFINITY,
+    );
+    const leftBestPossible = Math.max(leftGeneratedScore, finiteScore(leftPeekUpperBound));
+    const rightBestPossible = Math.max(rightGeneratedScore, finiteScore(rightPeekUpperBound));
+    const generatedPairUpper = combineScores(leftGeneratedScore, rightGeneratedScore);
+    const leftUnseenUpper = combineScores(finiteScore(leftPeekUpperBound), rightBestPossible);
+    const rightUnseenUpper = combineScores(finiteScore(rightPeekUpperBound), leftBestPossible);
+    const loosePairUpper = Math.max(generatedPairUpper, leftUnseenUpper, rightUnseenUpper);
+    const looseSource = sourceForUpper(loosePairUpper, generatedPairUpper, leftUnseenUpper);
+    let refinedGeneratedPairUpper = generatedPairUpper;
+    let generatedPairSplitUpper: number | null = null;
+    if (
+      looseSource === "generated-pair"
+      && Number.isFinite(generatedPairUpper)
+      && anchorScore + generatedPairUpper > incumbentScore
+      && performance.now() < localDeadlineAt
+    ) {
+      refinedSplitAttemptCount += 1;
+      const splitResult = estimateGeneratedMedleyExactRawCandidatePairConflictSplitUpper(
+        leftSlot,
+        rightSlot,
+        containingLeftBitsByCardId,
+        containingRightBitsByCardId,
+        anchorCardIds,
+        localDeadlineAt,
+      );
+      refinedSplitStateCount = addCappedCount(refinedSplitStateCount, splitResult.stateCount);
+      if (splitResult.timedOut) {
+        refinedSplitTimedOutCount += 1;
+      } else if (Number.isFinite(splitResult.upperBound)) {
+        refinedSplitCompletedCount += 1;
+        refinedGeneratedPairUpper = splitResult.upperBound;
+        generatedPairSplitUpper = splitResult.upperBound;
+      }
+    }
+    const refinedPairUpper = Math.max(refinedGeneratedPairUpper, leftUnseenUpper, rightUnseenUpper);
+    if (Number.isFinite(refinedPairUpper)) {
+      recordRefinedProcessedUpperMax(
+        anchorIndex,
+        anchorScore,
+        refinedPairUpper,
+        refinedPairUpper === refinedGeneratedPairUpper
+          ? generatedPairSplitUpper === null ? "generated-pair" : "generated-pair-split"
+          : refinedPairUpper === leftUnseenUpper
+            ? "left-unseen"
+            : "right-unseen",
+        generatedPairUpper,
+        generatedPairSplitUpper,
+        leftUnseenUpper,
+        rightUnseenUpper,
+      );
+    }
+    if (refinedSplitTimedOutCount > 0 && performance.now() >= localDeadlineAt) {
+      refinedTimeboxed = true;
+      refinedNextAnchorScore = anchorSlot.scores[anchorIndex + 1] ?? null;
+      break;
+    }
+  }
+
+  if (refinedNextAnchorScore === null && refinedProcessedAnchorCount < anchorSlot.length) {
+    refinedNextAnchorScore = anchorSlot.scores[refinedProcessedAnchorCount];
+  }
+  const refinedUnprocessedAnchorUpperBound = Math.max(
+    refinedNextAnchorScore ?? Number.NEGATIVE_INFINITY,
+    finiteScore(anchorPeekUpperBound),
+  );
+  const refinedUnprocessedUpperBound = (
+    Number.isFinite(refinedUnprocessedAnchorUpperBound) && Number.isFinite(pairUpperBound)
+      ? refinedUnprocessedAnchorUpperBound + pairUpperBound
+      : Number.NEGATIVE_INFINITY
+  );
+  const refinedResidualUpperBound = Math.max(refinedProcessedUpperMax, refinedUnprocessedUpperBound);
+  const refinedResidualSource = (
+    Number.isFinite(refinedProcessedUpperMax)
+    && refinedProcessedUpperMax >= refinedUnprocessedUpperBound
+      ? "processed-anchor"
+      : "unprocessed-tail"
+  );
   const containingBitsBytes = sumMedleyExactArrayViewBytes(containingLeftBitsByCardId.values())
     + sumMedleyExactArrayViewBytes(containingRightBitsByCardId.values());
   const rawRetainedBytes = rawPool.slots.reduce(
@@ -3562,6 +3734,44 @@ function buildMedleyExactRawAnchorFrontierProbeProfile(
       && Number.isFinite(leftPeekUpperBound)
       ? Math.max(0, leftPeekUpperBound - processedUpperMaxLeftPeekUpperToClose)
       : null,
+    refinedProcessedAnchorCount,
+    refinedTimeboxed,
+    refinedFinishedByDominatedTail,
+    refinedSplitAttemptCount,
+    refinedSplitCompletedCount,
+    refinedSplitTimedOutCount,
+    refinedSplitStateCount,
+    refinedUnprocessedAnchorUpperBound: Number.isFinite(refinedUnprocessedAnchorUpperBound)
+      ? refinedUnprocessedAnchorUpperBound
+      : null,
+    refinedUnprocessedUpperBound: Number.isFinite(refinedUnprocessedUpperBound)
+      ? Math.ceil(refinedUnprocessedUpperBound)
+      : null,
+    refinedUnprocessedGap: Number.isFinite(refinedUnprocessedUpperBound)
+      ? Math.max(0, Math.ceil(refinedUnprocessedUpperBound) - incumbentScore)
+      : null,
+    refinedProcessedUpperMax: Number.isFinite(refinedProcessedUpperMax)
+      ? Math.ceil(refinedProcessedUpperMax)
+      : null,
+    refinedProcessedUpperMaxSource,
+    refinedProcessedUpperMaxAnchorIndex,
+    refinedProcessedUpperMaxAnchorScore,
+    refinedProcessedUpperMaxPairUpper,
+    refinedProcessedUpperMaxGeneratedPairUpper,
+    refinedProcessedUpperMaxGeneratedPairSplitUpper,
+    refinedProcessedUpperMaxLeftUnseenUpper,
+    refinedProcessedUpperMaxRightUnseenUpper,
+    refinedResidualUpperBound: Number.isFinite(refinedResidualUpperBound)
+      ? Math.ceil(refinedResidualUpperBound)
+      : null,
+    refinedResidualGap: Number.isFinite(refinedResidualUpperBound)
+      ? Math.max(0, Math.ceil(refinedResidualUpperBound) - incumbentScore)
+      : null,
+    refinedResidualSource,
+    refinedWouldClose: Number.isFinite(refinedResidualUpperBound) && refinedResidualUpperBound <= incumbentScore,
+    refinedScannedLeftWordCount,
+    refinedScannedRightWordCount,
+    refinedElapsedMs: Math.round(performance.now() - refinementStartedAt),
     scannedLeftWordCount,
     scannedRightWordCount,
     rawPoolBuildElapsedMs: rawPool.buildElapsedMs,
