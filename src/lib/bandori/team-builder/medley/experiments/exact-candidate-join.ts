@@ -7202,7 +7202,7 @@ function buildMedleyExactRawResidentDirectResultHarness(
   },
   deadlineAt: number,
   isPastDeadline: () => boolean,
-): Record<string, unknown> {
+): { result: BandoriMedleyTeamSearchResult | null; profile: Record<string, unknown> } {
   const rawSlots = rawCandidateSlotReadSource.slots;
   const candidateCountsBySlot = rawSlots.map((slot) => slot.length);
   const candidateCountTotal = candidateCountsBySlot.reduce((sum, count) => sum + count, 0);
@@ -7217,9 +7217,12 @@ function buildMedleyExactRawResidentDirectResultHarness(
   };
   if (rawCandidateSlotReadSource.source !== "shadow-raw-candidate-builder") {
     return {
-      ...baseProfile,
-      skipped: true,
-      skipReason: "not-resident-raw-source",
+      result: null,
+      profile: {
+        ...baseProfile,
+        skipped: true,
+        skipReason: "not-resident-raw-source",
+      },
     };
   }
   if (
@@ -7227,26 +7230,35 @@ function buildMedleyExactRawResidentDirectResultHarness(
     || rawCandidateSlotReadSource.mismatchCountTotal !== 0
   ) {
     return {
-      ...baseProfile,
-      skipped: true,
-      skipReason: "raw-source-mismatch",
-      rawSourceLengthMismatchCount: rawCandidateSlotReadSource.lengthMismatchCount,
-      rawSourceMismatchCountTotal: rawCandidateSlotReadSource.mismatchCountTotal,
+      result: null,
+      profile: {
+        ...baseProfile,
+        skipped: true,
+        skipReason: "raw-source-mismatch",
+        rawSourceLengthMismatchCount: rawCandidateSlotReadSource.lengthMismatchCount,
+        rawSourceMismatchCountTotal: rawCandidateSlotReadSource.mismatchCountTotal,
+      },
     };
   }
   if (candidateCountsBySlot.some((count) => count <= 0)) {
     return {
-      ...baseProfile,
-      skipped: true,
-      skipReason: "empty-slot",
+      result: null,
+      profile: {
+        ...baseProfile,
+        skipped: true,
+        skipReason: "empty-slot",
+      },
     };
   }
   if (candidateCountTotal > MEDLEY_EXACT_RAW_DIRECT_RESULT_HARNESS_MAX_CANDIDATE_TOTAL) {
     return {
-      ...baseProfile,
-      skipped: true,
-      skipReason: "candidate-total-limit",
-      limit: MEDLEY_EXACT_RAW_DIRECT_RESULT_HARNESS_MAX_CANDIDATE_TOTAL,
+      result: null,
+      profile: {
+        ...baseProfile,
+        skipped: true,
+        skipReason: "candidate-total-limit",
+        limit: MEDLEY_EXACT_RAW_DIRECT_RESULT_HARNESS_MAX_CANDIDATE_TOTAL,
+      },
     };
   }
   if (
@@ -7254,10 +7266,13 @@ function buildMedleyExactRawResidentDirectResultHarness(
     && deadlineAt - performance.now() < MEDLEY_EXACT_RAW_DIRECT_RESULT_HARNESS_MIN_REMAINING_MS
   ) {
     return {
-      ...baseProfile,
-      skipped: true,
-      skipReason: "remaining-time",
-      minRemainingMs: MEDLEY_EXACT_RAW_DIRECT_RESULT_HARNESS_MIN_REMAINING_MS,
+      result: null,
+      profile: {
+        ...baseProfile,
+        skipped: true,
+        skipReason: "remaining-time",
+        minRemainingMs: MEDLEY_EXACT_RAW_DIRECT_RESULT_HARNESS_MIN_REMAINING_MS,
+      },
     };
   }
 
@@ -7289,14 +7304,17 @@ function buildMedleyExactRawResidentDirectResultHarness(
   );
   if (rawSolveProfile.skipped || rawRowHydration.hydrated !== true || !rawResult) {
     return {
-      ...baseProfile,
-      skipped: false,
-      returnedRawResult: false,
-      resultAuthoritative: false,
-      elapsedMs: Math.round(performance.now() - startedAt),
-      rawSolve: rawSolveProfile,
-      rawRowHydration,
-      matchesObjectOracle: false,
+      result: null,
+      profile: {
+        ...baseProfile,
+        skipped: false,
+        returnedRawResult: false,
+        resultAuthoritative: false,
+        elapsedMs: Math.round(performance.now() - startedAt),
+        rawSolve: rawSolveProfile,
+        rawRowHydration,
+        matchesObjectOracle: false,
+      },
     };
   }
 
@@ -7318,24 +7336,30 @@ function buildMedleyExactRawResidentDirectResultHarness(
   );
   const matchesObjectOracle = !objectOracle.timedOut && medleyResultOutputFieldsMatch(rawResult, objectOracle.result);
   return {
-    ...baseProfile,
-    skipped: false,
-    returnedRawResult: matchesObjectOracle,
-    resultAuthoritative: matchesObjectOracle,
-    elapsedMs: Math.round(performance.now() - startedAt),
-    timeboxMs: MEDLEY_EXACT_RAW_DIRECT_RESULT_HARNESS_TIMEBOX_MS,
-    rawSolve: rawSolveProfile,
-    rawRowHydration,
-    objectOracle: {
-      timedOut: objectOracle.timedOut,
-      localTimedOut: objectOracle.localTimedOut ?? false,
-      score: objectOracle.result?.score ?? null,
-      averageScore: objectOracle.result?.averageScore ?? null,
-      maxScore: objectOracle.result?.maxScore ?? null,
-      minScore: objectOracle.result?.minScore ?? null,
-      cardIds: objectOracle.result?.cardIds ?? [],
+    result: matchesObjectOracle ? rawResult : null,
+    profile: {
+      ...baseProfile,
+      skipped: false,
+      returnedRawResult: matchesObjectOracle,
+      resultAuthoritative: matchesObjectOracle,
+      richCandidateRole: matchesObjectOracle ? "oracle-only" : "authoritative-fallback",
+      richCandidatePrimaryRetainedCount: matchesObjectOracle ? 0 : candidateCountTotal,
+      richCandidateOracleCount: candidateCountTotal,
+      elapsedMs: Math.round(performance.now() - startedAt),
+      timeboxMs: MEDLEY_EXACT_RAW_DIRECT_RESULT_HARNESS_TIMEBOX_MS,
+      rawSolve: rawSolveProfile,
+      rawRowHydration,
+      objectOracle: {
+        timedOut: objectOracle.timedOut,
+        localTimedOut: objectOracle.localTimedOut ?? false,
+        score: objectOracle.result?.score ?? null,
+        averageScore: objectOracle.result?.averageScore ?? null,
+        maxScore: objectOracle.result?.maxScore ?? null,
+        minScore: objectOracle.result?.minScore ?? null,
+        cardIds: objectOracle.result?.cardIds ?? [],
+      },
+      matchesObjectOracle,
     },
-    matchesObjectOracle,
   };
 }
 
@@ -14614,24 +14638,37 @@ export function searchMedleyConfigurationByExactCandidateJoin(
   const recordRawResidentResultReleaseProfile = (profile: Record<string, unknown>): void => {
     recordRawSolverHandoffSubProfile("rawResidentResultRelease", profile);
   };
-  const recordRawResidentDirectResultHarnessProfile = (): void => {
+  let rawResidentDirectResultHarnessCache: {
+    result: BandoriMedleyTeamSearchResult | null;
+    profile: Record<string, unknown>;
+  } | null = null;
+  const getRawResidentDirectResultHarness = (): {
+    result: BandoriMedleyTeamSearchResult | null;
+    profile: Record<string, unknown>;
+  } | null => {
     if (context.enableExactCandidateRawResidentResult !== true) {
-      return;
+      return null;
     }
     if (!didFinalizeCandidateStorageForRead) {
-      recordRawSolverHandoffSubProfile("rawResidentDirectResultHarness", {
-        enabled: true,
-        skipped: true,
-        skipReason: "candidate-storage-not-finalized",
-        returnedRawResult: false,
-        behaviorChange: false,
-        candidateRemoval: false,
-      });
-      return;
+      rawResidentDirectResultHarnessCache = {
+        result: null,
+        profile: {
+          enabled: true,
+          skipped: true,
+          skipReason: "candidate-storage-not-finalized",
+          returnedRawResult: false,
+          behaviorChange: false,
+          candidateRemoval: false,
+        },
+      };
+      recordRawSolverHandoffSubProfile(
+        "rawResidentDirectResultHarness",
+        rawResidentDirectResultHarnessCache.profile,
+      );
+      return rawResidentDirectResultHarnessCache;
     }
-    recordRawSolverHandoffSubProfile(
-      "rawResidentDirectResultHarness",
-      buildMedleyExactRawResidentDirectResultHarness(
+    if (!rawResidentDirectResultHarnessCache) {
+      rawResidentDirectResultHarnessCache = buildMedleyExactRawResidentDirectResultHarness(
         slots,
         candidatesBySlot,
         getRawCandidateSlotReadSource(),
@@ -14644,8 +14681,49 @@ export function searchMedleyConfigurationByExactCandidateJoin(
         },
         deadlineAt,
         isPastDeadline,
-      ),
+      );
+    }
+    recordRawSolverHandoffSubProfile(
+      "rawResidentDirectResultHarness",
+      rawResidentDirectResultHarnessCache.profile,
     );
+    return rawResidentDirectResultHarnessCache;
+  };
+  const recordRawResidentDirectResultHarnessProfile = (): void => {
+    getRawResidentDirectResultHarness();
+  };
+  let didUseRawResidentPrimarySolve = false;
+  const maybeSolveWithRawResidentPrimary = (): BandoriMedleyTeamSearchResult | null => {
+    const directHarness = getRawResidentDirectResultHarness();
+    const rawResult = directHarness?.result ?? null;
+    if (!rawResult || directHarness?.profile.returnedRawResult !== true) {
+      recordRawSolverHandoffSubProfile("rawResidentPrimarySolve", {
+        enabled: context.enableExactCandidateRawResidentResult === true,
+        skipped: true,
+        skipReason: directHarness ? "direct-harness-not-authoritative" : "disabled",
+        returnedRawResult: false,
+        behaviorChange: false,
+        candidateRemoval: false,
+      });
+      return null;
+    }
+    didUseRawResidentPrimarySolve = true;
+    recordRawSolverHandoffSubProfile("rawResidentPrimarySolve", {
+      enabled: true,
+      skipped: false,
+      returnedRawResult: true,
+      behaviorChange: true,
+      candidateRemoval: false,
+      richCandidateRole: "oracle-only",
+      richCandidatePrimaryRetainedCount: 0,
+      richCandidateOracleCount: directHarness.profile.candidateCountTotal ?? null,
+      rawScore: rawResult.score,
+      rawAverageScore: rawResult.averageScore,
+      rawMaxScore: rawResult.maxScore,
+      rawMinScore: rawResult.minScore,
+      rawCardIds: rawResult.cardIds,
+    });
+    return rawResult;
   };
   const maybeUseRawResidentResult = (
     objectResult: BandoriMedleyTeamSearchResult | null,
@@ -14720,6 +14798,12 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     recordPrefixUpperReplaySummary();
     recordPreMaterializationCensus();
     releaseExactJoinWorkingSet();
+    if (didUseRawResidentPrimarySolve) {
+      recordRawSolverHandoffSubProfile("rawResidentPrimarySolveRelease", {
+        enabled: true,
+        richCandidateCountAfterRelease: candidatesBySlot.reduce((sum, candidates) => sum + candidates.length, 0),
+      });
+    }
     return { proved: true, result: returnedResult };
   };
   let effectiveCandidateSoftLimit = candidateSoftLimit;
@@ -16178,6 +16262,18 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     });
     recordExactJoinMemorySnapshot("solve-dominated-skip", { solveCandidateCounts });
     return buildUnprovedExactCandidateJoinResult(null, observedUpperBoundBeforeSolve);
+  }
+  const rawResidentPrimaryResult = maybeSolveWithRawResidentPrimary();
+  if (rawResidentPrimaryResult) {
+    if (rawResidentPrimaryResult.score > incumbentScore) {
+      profiling.exactCandidateJoinImprovementCount += 1;
+      profiling.bestExactCandidateJoinImprovement = Math.max(
+        profiling.bestExactCandidateJoinImprovement,
+        rawResidentPrimaryResult.score - incumbentScore,
+      );
+    }
+    profiling.exactCandidateJoinCompletedCount += 1;
+    return buildProvedExactCandidateJoinResult(rawResidentPrimaryResult);
   }
   const canUseSmallGapSolveRetry = (
     solveCandidateCounts[0] > MEDLEY_EXACT_CANDIDATE_JOIN_SOLVE_MAX_SMALLEST_CANDIDATES
