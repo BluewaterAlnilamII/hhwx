@@ -1360,6 +1360,15 @@ type MedleyExactRawCandidatePool = {
   buildElapsedMs: number;
 };
 
+type MedleyExactRawCandidateSlotReadSource = {
+  slots: MedleyExactRawCandidateSlotView[];
+  source: string;
+  retainedMiB: number | null;
+  rawPoolRetainedMiB: number | null;
+  lengthMismatchCount: number | null;
+  mismatchCountTotal: number | null;
+};
+
 type MedleyExactRawPairFrontierThreshold = {
   name: string;
   threshold: number;
@@ -5915,7 +5924,7 @@ function runMedleyExactRawIndexFinalJoinParity(
   incumbentScore: number,
   deadlineAt: number,
   isPastDeadline: () => boolean,
-  rawCandidatePoolProvider?: () => MedleyExactRawCandidatePool,
+  rawCandidateSlotReadSourceProvider?: () => MedleyExactRawCandidateSlotReadSource,
 ): Record<string, unknown> {
   const startedAt = performance.now();
   const candidateCountsBySlot = candidatesBySlot.map((candidates) => candidates.length);
@@ -5941,11 +5950,11 @@ function runMedleyExactRawIndexFinalJoinParity(
     };
   }
 
-  const rawCandidatePool = rawCandidatePoolProvider ? rawCandidatePoolProvider() : null;
-  const rawSlots: MedleyExactRawJoinParitySlot[] = rawCandidatePool
-    ? rawCandidatePool.slots
+  const rawCandidateSlotReadSource = rawCandidateSlotReadSourceProvider?.() ?? null;
+  const rawSlots: MedleyExactRawJoinParitySlot[] = rawCandidateSlotReadSource
+    ? rawCandidateSlotReadSource.slots
     : candidatesBySlot.map(buildMedleyExactRawJoinParitySlot);
-  const rawInputSource = rawCandidatePool ? "shared-raw-candidate-pool" : "parity-local-build";
+  const rawInputSource = rawCandidateSlotReadSource?.source ?? "parity-local-build";
   const firstSlot = rawSlots[slotOrder[0]];
   const secondSlot = rawSlots[slotOrder[1]];
   const thirdSlot = rawSlots[slotOrder[2]];
@@ -6133,11 +6142,10 @@ function runMedleyExactRawIndexFinalJoinParity(
     retainedMiB: roundMiB(
       rawSlots.reduce((sum, slot) => sum + getMedleyExactRawCandidateSlotBytes(slot), 0),
     ),
-    rawPoolRetainedMiB: rawCandidatePool
-      ? roundMiB(rawCandidatePool.slots.reduce((sum, slot) => (
-        sum + getMedleyExactRawCandidatePoolSlotBytes(slot)
-      ), 0))
-      : null,
+    rawSourceRetainedMiB: rawCandidateSlotReadSource?.retainedMiB ?? null,
+    rawPoolRetainedMiB: rawCandidateSlotReadSource?.rawPoolRetainedMiB ?? null,
+    rawSourceLengthMismatchCount: rawCandidateSlotReadSource?.lengthMismatchCount ?? null,
+    rawSourceMismatchCountTotal: rawCandidateSlotReadSource?.mismatchCountTotal ?? null,
   };
 }
 
@@ -12246,6 +12254,43 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     }
     return rawCandidatePool;
   };
+  const getRawCandidateSlotReadSource = (): MedleyExactRawCandidateSlotReadSource => {
+    if (rawCandidateMirror && rawCandidateMirror.disabledReason === null) {
+      const lengths = rawCandidateMirror.slots.map((slot) => slot.length);
+      const lengthMismatchCount = lengths.filter((length, index) => (
+        length !== (candidatesBySlot[index]?.length ?? 0)
+      )).length;
+      if (lengthMismatchCount === 0) {
+        const mismatchCountTotal = rawCandidateMirror.slots.reduce((sum, slot) => (
+          sum + slot.mismatchCount
+        ), 0);
+        return {
+          slots: rawCandidateMirror.slots,
+          source: "shadow-raw-candidate-builder",
+          retainedMiB: roundMiB(rawCandidateMirror.slots.reduce((sum, slot) => (
+            sum + getMedleyExactRawCandidateSlotBytes(slot)
+          ), 0)),
+          rawPoolRetainedMiB: null,
+          lengthMismatchCount,
+          mismatchCountTotal,
+        };
+      }
+    }
+
+    const rawPool = getRawCandidatePool();
+    return {
+      slots: rawPool.slots,
+      source: "shared-raw-candidate-pool",
+      retainedMiB: roundMiB(rawPool.slots.reduce((sum, slot) => (
+        sum + getMedleyExactRawCandidateSlotBytes(slot)
+      ), 0)),
+      rawPoolRetainedMiB: roundMiB(rawPool.slots.reduce((sum, slot) => (
+        sum + getMedleyExactRawCandidatePoolSlotBytes(slot)
+      ), 0)),
+      lengthMismatchCount: 0,
+      mismatchCountTotal: rawPool.slots.reduce((sum, slot) => sum + slot.mismatchCount, 0),
+    };
+  };
   const retainCandidateForSlot = rawCandidateMirror
     ? (slotIndex: number, candidate: MedleyTeamCandidate): void => {
       const sourceIndex = candidatesBySlot[slotIndex].length;
@@ -14364,7 +14409,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
       exactJoinProofCutoffScore,
       deadlineAt,
       isPastDeadline,
-      getRawCandidatePool,
+      getRawCandidateSlotReadSource,
     );
     recordExactJoinMemorySnapshot("raw-index-final-join-parity", {
       solveCandidateCounts,

@@ -162,6 +162,8 @@ Baseline and gate artifacts retained:
 | `low-memory-polish-hhwx-2026-06-18T07-43-00-191Z.json` | `P01:none` extracted shadow raw-builder smoke | exact, gap `0`, average `7927236`, max `7982835`, peak `1270 MiB`; extracted append-only raw builder mirrors all `1550` rich candidates with `lengthMismatchCount = 0`, `mismatchCountTotal = 0`, and `sourceIndex` retained for late hydration |
 | `low-memory-polish-hhwx-2026-06-18T07-49-16-613Z.json` | `P01:none` raw slot read API + raw join parity smoke | exact, gap `0`, average `7927236`, max `7982835`; raw join parity reads through shared raw slot view, `matched = true`, source `shared-raw-candidate-pool`, `candidateCountTotal = 30821`, retained raw input `1.18 MiB` |
 | `low-memory-polish-hhwx-2026-06-18T07-50-41-897Z.json` | `P02:260` raw slot read API hard-row guard smoke | bounded gap `382812`, average `9376984`, max `9412868`, `0 failed / 0 timedOut / 0 memoryLimited`, peak `2927 MiB`; raw mirror guard stops at `60000` appended rows, skips `687802`, `mismatchCountTotal = 0`, retained `3.91 MiB` |
+| `low-memory-polish-hhwx-2026-06-18T07-56-19-504Z.json` | `P01:none` shadow-builder resident read-source smoke | exact, gap `0`, average `7927236`, max `7982835`, peak `1260 MiB`; raw join parity now reads directly from `shadow-raw-candidate-builder`, `matched = true`, `rawSourceLengthMismatchCount = 0`, `rawSourceMismatchCountTotal = 0` |
+| `low-memory-polish-hhwx-2026-06-18T07-57-40-132Z.json` | `P02:260` shadow-builder read-source hard-row guard smoke | bounded gap `382812`, average `9376984`, max `9412868`, `0 failed / 0 timedOut / 0 memoryLimited`, peak `2929 MiB`; hard row still guard-disables mirror at `60000` rows with `0` raw mismatches |
 
 Use the pressure validation environment for early-pruning gates:
 
@@ -213,6 +215,16 @@ Raw slot read API:
 - P01 parity stays exact-safe: raw join parity `matched = true` against the object path over `30821` candidates, using the shared raw candidate pool as input;
 - P02 hard-row guard stays safe: score fields and bounded gap are unchanged, no OOM, and the guarded raw mirror records `0` mismatches before disabling at `60000` rows;
 - conclusion: the raw resident read boundary is now real enough for the next slice. The next useful implementation is to move one frontier/helper read path from `MedleyTeamCandidate` objects to the shared raw slot view, not to add more late probes.
+
+Shadow-builder read source:
+
+- artifacts: `low-memory-polish-hhwx-2026-06-18T07-56-19-504Z.json` and `low-memory-polish-hhwx-2026-06-18T07-57-40-132Z.json`;
+- raw final-join parity now asks for a generic raw slot read source;
+- if the append-only shadow raw builder is complete and has no length mismatch, parity reads it directly with `rawInputSource = shadow-raw-candidate-builder`;
+- otherwise it falls back to the existing post-hoc shared raw pool, preserving previous diagnostics;
+- P01 proves the resident source path: parity `matched = true`, `rawSourceLengthMismatchCount = 0`, `rawSourceMismatchCountTotal = 0`;
+- P02 proves the hard-row guard remains non-regressing: bounded gap and score fields unchanged, mirror disables at its candidate cap, no process OOM;
+- conclusion: this is the first step where a final-join helper actually consumes resident raw rows. The next target should be a guarded raw-resident candidate fill/read path for hard rows, not another post-hoc raw pool copy.
 
 Two-row prefix margin replay sample:
 
@@ -472,7 +484,8 @@ Early-pruning success targets:
    - append rows when the rich generator materializes a candidate;
    - verify score/card parity against rich candidates on small rows first, then focused pressure rows.
    - raw slot read APIs for score/card/source-index access now exist and raw join parity reads through them.
-   - next extension: move one final-join/frontier helper from rich object fields to the shared raw slot view, keeping rich candidates as the authority for result hydration.
+   - raw join parity now uses the complete shadow raw builder as its resident read source when possible, falling back to the post-hoc raw pool only when the mirror is incomplete.
+   - next extension: create a guarded hard-row resident fill mode that appends raw rows beyond the current mirror cap without retaining all rich candidate bodies, while still hydrating winners/debug from `sourceIndex` or explicit card ids.
 4. Prototype pre-evaluation upper pruning:
    - start with HHWX's existing `estimateMedleyExactSlotNodeUpperBound` and calc-like incumbent comparison;
    - record a proof ledger before any real skip;
