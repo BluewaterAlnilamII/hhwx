@@ -70,6 +70,7 @@ function printUsage() {
     "  HHWX_LOW_MEMORY_RAW_PAIR_COMPLEMENT_PARITY=1 compare banned-card pair complement over shared raw candidate pool",
     "  HHWX_LOW_MEMORY_RAW_PAIR_UPPER_SCAN_PARITY=1 compare generated pair upper scan over shared raw candidate pool",
     "  HHWX_LOW_MEMORY_RAW_SOLVER_INPUT_CENSUS=1 estimate compact raw solver input footprint without memory attribution",
+    "  HHWX_LOW_MEMORY_PRE_MATERIALIZATION_CENSUS=1 record no-op candidate-birth census before rich candidate materialization",
     "  HHWX_LOW_MEMORY_DISABLE_GLOBAL_COMPLEMENT_CACHE=1 disable exact-join global complement upper cache",
     "  HHWX_LOW_MEMORY_COMPACT_GLOBAL_COMPLEMENT_CACHE=1 use compact exact-join global complement upper cache (default)",
     "  HHWX_LOW_MEMORY_LEGACY_GLOBAL_COMPLEMENT_CACHE=1 use legacy Map exact-join global complement cache",
@@ -276,6 +277,9 @@ function hhwxOptimizationJson() {
   }
   if (process.env.HHWX_LOW_MEMORY_RAW_SOLVER_INPUT_CENSUS === "1") {
     optimization.debugExactCandidateRawSolverInputCensus = true;
+  }
+  if (process.env.HHWX_LOW_MEMORY_PRE_MATERIALIZATION_CENSUS === "1") {
+    optimization.debugExactCandidatePreMaterializationCensus = true;
   }
   if (process.env.HHWX_LOW_MEMORY_SCORE_CALC_CACHE_LIMIT) {
     const parsed = Number(process.env.HHWX_LOW_MEMORY_SCORE_CALC_CACHE_LIMIT);
@@ -523,6 +527,13 @@ function patchHhwxBenchmarkScoreMetrics() {
         + "    exactCandidateJoinPrefixUpperReplaySummary: profiling.exactCandidateJoinPrefixUpperReplaySummary ?? null,\n",
     );
   }
+  if (!patched.includes("exactCandidateJoinPreMaterializationCensus: profiling.exactCandidateJoinPreMaterializationCensus ?? null")) {
+    patched = patched.replace(
+      /(exactCandidateJoinMemorySnapshots: profiling\.exactCandidateJoinMemorySnapshots \?\? null,\r?\n)/,
+      "$1"
+        + "    exactCandidateJoinPreMaterializationCensus: profiling.exactCandidateJoinPreMaterializationCensus ?? null,\n",
+    );
+  }
   if (!patched.includes("exactCandidateJoinCandidateAdmissionFrontier: profiling.exactCandidateJoinCandidateAdmissionFrontier ?? null")) {
     patched = patched.replace(
       /(exactCandidateJoinMemorySnapshots: profiling\.exactCandidateJoinMemorySnapshots \?\? null,\r?\n)/,
@@ -613,6 +624,7 @@ function patchHhwxBenchmarkScoreMetrics() {
     || !patched.includes("exactCandidateJoinMemorySnapshots: profiling.exactCandidateJoinMemorySnapshots ?? null")
     || !patched.includes("exactCandidateJoinRawMirrorProfile: profiling.exactCandidateJoinRawMirrorProfile ?? null")
     || !patched.includes("exactCandidateJoinPrefixUpperReplaySummary: profiling.exactCandidateJoinPrefixUpperReplaySummary ?? null")
+    || !patched.includes("exactCandidateJoinPreMaterializationCensus: profiling.exactCandidateJoinPreMaterializationCensus ?? null")
     || !patched.includes("exactCandidateJoinCandidateAdmissionFrontier: profiling.exactCandidateJoinCandidateAdmissionFrontier ?? null")
     || !patched.includes("exactCandidateJoinRawAnchorCheapUpperReplay: profiling.exactCandidateJoinRawAnchorCheapUpperReplay ?? null")
     || !patched.includes("exactCandidateJoinRawAnchorFrontierProbe: profiling.exactCandidateJoinRawAnchorFrontierProbe ?? null")

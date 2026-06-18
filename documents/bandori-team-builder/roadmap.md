@@ -158,6 +158,7 @@ Baseline and gate artifacts retained:
 | `low-memory-polish-hhwx-2026-06-18T06-17-31-085Z.json` | discarded compatible-row cap-boundary pair probe | one WIP run bounded with gap `382812` and peak `2923 MiB`, scanning `6,367,445` incompatible pairs across `30` top rows; the committed variant was later found unstable and reverted, so use the observation only as research evidence, not as a runnable baseline |
 | `low-memory-polish-hhwx-2026-06-18T06-39-20-470Z.json` / `low-memory-polish-hhwx-2026-06-18T06-43-39-696Z.json` | unstable compatible-row probe commit check | current HEAD after `71af95f9` failed with exit `134` / JS heap OOM both with pair probe enabled and disabled; parent `68eff154` no-probe control `low-memory-polish-hhwx-2026-06-18T06-48-36-319Z.json` succeeded with gap `382812` and peak `2556 MiB` |
 | `low-memory-polish-hhwx-2026-06-18T06-58-23-696Z.json` / `low-memory-polish-hhwx-2026-06-18T07-01-06-581Z.json` | restored row-frontier baseline after reverting compatible-row advancement | no-probe and opt-in probe both returned bounded gap `382812`, average `9376984`, max `9412868`, `0 failed / 0 timedOut / 0 memoryLimited`; peaks `2943 MiB` and `2963 MiB`; retained probe uses `2,000,000` pop cap and behaviorChange `false` |
+| `low-memory-polish-hhwx-2026-06-18T07-31-51-625Z.json` | `P02:260` pre-materialization census smoke | bounded gap `382812`, average `9376984`, max `9412868`, `0 failed / 0 timedOut / 0 memoryLimited`, peak `2993 MiB`; no-op census reports `6,583,685` slot-upper checks, `5,504,561` slot-upper rejects, `1,027,727` candidate evaluations, and `972,467` materialized candidates |
 
 Use the pressure validation environment for early-pruning gates:
 
@@ -181,6 +182,15 @@ P02 pressure + hard replay sample:
 - result stayed bounded with gap `382812`, peak `3024 MiB`;
 - current hard replay checked `582,084` prefixes but found only `11` skipable leaf prefixes and `0` skipable level-4 prefixes;
 - conclusion: simply converting the existing pair/global hard replay into pruning is not a breakthrough path for `P02:260`.
+
+P02 pre-materialization census smoke:
+
+- artifact: `low-memory-polish-hhwx-2026-06-18T07-31-51-625Z.json`;
+- run config: pressure flags plus `HHWX_LOW_MEMORY_PRE_MATERIALIZATION_CENSUS=1`; behavior remained no-op;
+- result stayed bounded with gap `382812`, average score `9376984`, max score `9412868`, and `0 failed / 0 timedOut / 0 memoryLimited`;
+- the first census covered `6` slot generators and recorded `7,230,262` branch visits, `646,577` duplicate-character rejects, `6,583,685` slot-upper checks, and `5,504,561` slot-upper rejects;
+- rejected pre-materialization branches represented `2,198,729,426` relaxed implied completions, mostly at level 2 and level 3, while leaf evaluation still reached `1,027,727` candidates and materialized `972,467` rich candidates;
+- conclusion: the architecture pivot is justified. HHWX already has strong local pre-materialization rejection, but it is not yet organized as a raw resident builder with cross-slot proof ledger. The next useful step is a shadow raw builder and signature/dominance replay before rich candidate retention, not more threshold-triggered late probes.
 
 Two-row prefix margin replay sample:
 
@@ -429,9 +439,11 @@ Early-pruning success targets:
    - do not raise pair-probe timeboxes or add per-pair hot-path scans;
    - keep capacity leaf/level-3/level-4 pruning experiments non-default.
 2. Add a raw signature census before materialization:
+   - first no-op slice is implemented as `HHWX_LOW_MEMORY_PRE_MATERIALIZATION_CENSUS=1`;
    - instrument `createMedleyExactSlotCandidateGenerator` around the branch expansion and leaf evaluation boundary;
    - count duplicate-character/legality rejects, branch-upper rejects, global-upper rejects, candidate-key rejects, candidate evaluations, materialized rich candidates, and estimated raw rows;
    - add placeholder counters for same-character dominance and contribution dominance replay, even before pruning is implemented.
+   - next extension: split census by signature/area-item/card-group rather than only by selected-card depth, so dominance and raw-builder work can target the high-leverage groups.
 3. Add a shadow raw candidate builder:
    - write a new opt-in module rather than expanding `exact-candidate-join.ts` further;
    - append rows when the rich generator materializes a candidate;

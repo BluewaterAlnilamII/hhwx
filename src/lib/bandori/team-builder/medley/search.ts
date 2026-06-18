@@ -719,6 +719,9 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
     optimization.debugExactCandidateRawPairUpperScanParity === true
   );
   const debugExactCandidateRawSolverInputCensus = optimization.debugExactCandidateRawSolverInputCensus === true;
+  const debugExactCandidatePreMaterializationCensus = (
+    optimization.debugExactCandidatePreMaterializationCensus === true
+  );
   const parsedExactCandidateScoreCalculationCacheEntryLimit = (
     optimization.exactCandidateScoreCalculationCacheEntryLimit !== undefined
       ? Math.trunc(optimization.exactCandidateScoreCalculationCacheEntryLimit)
@@ -2571,6 +2574,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
           exactCandidateJoinAbortObservedUpperBound: profiling.exactCandidateJoinLastAbortObservedUpperBound,
           exactCandidateJoinAbortRemainingMs: profiling.exactCandidateJoinLastAbortRemainingMs,
           exactCandidateJoinCandidateAdmissionFrontier: profiling.exactCandidateJoinCandidateAdmissionFrontier,
+          exactCandidateJoinPreMaterializationCensus: profiling.exactCandidateJoinPreMaterializationCensus,
           exactCandidateJoinLastGuardedExtensionSlotIndex: (
             profiling.exactCandidateJoinLastGuardedExtensionSlotIndex
           ),
@@ -3859,6 +3863,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
           debugExactCandidateRawPairComplementParity,
           debugExactCandidateRawPairUpperScanParity,
           debugExactCandidateRawSolverInputCensus,
+          debugExactCandidatePreMaterializationCensus,
           exactCandidateScoreCalculationCacheEntryLimit,
           enableExactCandidateScoreCalculationCachePressureFallback,
           exactCandidateScoreCalculationCachePressureSlotCardCount,
@@ -4343,6 +4348,7 @@ export function searchBandoriBestMedleyTeams(input: BandoriMedleyTeamSearchInput
           debugExactCandidateRawPairComplementParity,
           debugExactCandidateRawPairUpperScanParity,
           debugExactCandidateRawSolverInputCensus,
+          debugExactCandidatePreMaterializationCensus,
           exactCandidateScoreCalculationCacheEntryLimit,
           enableExactCandidateScoreCalculationCachePressureFallback,
           exactCandidateScoreCalculationCachePressureSlotCardCount,

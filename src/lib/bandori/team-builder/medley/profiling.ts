@@ -385,6 +385,7 @@ export function createInitialMedleyProfilingStats(
     exactCandidateJoinRawPairComplementParity: null,
     exactCandidateJoinRawPairUpperScanParity: null,
     exactCandidateJoinRawSolverInputCensus: null,
+    exactCandidateJoinPreMaterializationCensus: null,
     exactCandidateJoinPrefixUpperReplaySummary: null,
     exactCandidateJoinCandidateAdmissionFrontier: null,
     exactCandidateJoinLastBestSlotScores: [],

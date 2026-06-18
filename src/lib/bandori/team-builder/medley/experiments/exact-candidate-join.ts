@@ -387,6 +387,65 @@ type MedleyExactPrefixUpperReplaySummary = {
   latestGenerators: Array<Record<string, unknown>>;
 };
 
+type MedleyExactPreMaterializationCensusLevelProfile = {
+  level: number;
+  branchVisitCount: number;
+  duplicateCharacterRejectCount: number;
+  leafBranchCount: number;
+  prefixBranchCount: number;
+  slotUpperCheckedCount: number;
+  slotUpperFiniteCount: number;
+  slotUpperRejectedCount: number;
+  slotUpperRejectedImpliedCompletionCount: number;
+  slotUpperPassedCount: number;
+  globalUpperRejectedCount: number;
+  candidateKeyRejectedCount: number;
+  candidateEvaluationCount: number;
+  candidateNullCount: number;
+  candidateScoreRejectedCount: number;
+  materializedCandidateCount: number;
+  pushedPrefixNodeCount: number;
+  pushedCandidateNodeCount: number;
+};
+
+type MedleyExactPreMaterializationCensusProfile = {
+  algorithm: "hhwx-pre-materialization-census-v1";
+  songIndex: number;
+  searchCardCount: number;
+  rootScoreUpperBound: number | null;
+  baseScoreRatePerPower: number | null;
+  expandedNodeCount: number;
+  insufficientRemainingNodeRejectCount: number;
+  sameCharacterDominanceReplayRejectCount: number;
+  contributionDominanceReplayRejectCount: number;
+  levels: MedleyExactPreMaterializationCensusLevelProfile[];
+};
+
+type MedleyExactPreMaterializationCensusSummary = {
+  algorithm: "hhwx-pre-materialization-census-v1";
+  configurationSummaryCount: number;
+  generatorCount: number;
+  expandedNodeCountTotal: number;
+  insufficientRemainingNodeRejectCountTotal: number;
+  sameCharacterDominanceReplayRejectCountTotal: number;
+  contributionDominanceReplayRejectCountTotal: number;
+  branchVisitCountTotal: number;
+  duplicateCharacterRejectCountTotal: number;
+  slotUpperCheckedCountTotal: number;
+  slotUpperRejectedCountTotal: number;
+  slotUpperRejectedImpliedCompletionCountTotal: number;
+  globalUpperRejectedCountTotal: number;
+  candidateKeyRejectedCountTotal: number;
+  candidateEvaluationCountTotal: number;
+  candidateNullCountTotal: number;
+  candidateScoreRejectedCountTotal: number;
+  materializedCandidateCountTotal: number;
+  pushedPrefixNodeCountTotal: number;
+  pushedCandidateNodeCountTotal: number;
+  levels: MedleyExactPreMaterializationCensusLevelProfile[];
+  latestGenerators: Array<Record<string, unknown>>;
+};
+
 function roundMiB(bytes: number): number {
   return Math.round((bytes / BYTES_PER_MIB) * 100) / 100;
 }
@@ -394,6 +453,90 @@ function roundMiB(bytes: number): number {
 function addCappedCount(left: number, right: number): number {
   const sum = left + right;
   return Number.isSafeInteger(sum) ? sum : Number.MAX_SAFE_INTEGER;
+}
+
+function createMedleyExactPreMaterializationCensusLevel(
+  level: number,
+): MedleyExactPreMaterializationCensusLevelProfile {
+  return {
+    level,
+    branchVisitCount: 0,
+    duplicateCharacterRejectCount: 0,
+    leafBranchCount: 0,
+    prefixBranchCount: 0,
+    slotUpperCheckedCount: 0,
+    slotUpperFiniteCount: 0,
+    slotUpperRejectedCount: 0,
+    slotUpperRejectedImpliedCompletionCount: 0,
+    slotUpperPassedCount: 0,
+    globalUpperRejectedCount: 0,
+    candidateKeyRejectedCount: 0,
+    candidateEvaluationCount: 0,
+    candidateNullCount: 0,
+    candidateScoreRejectedCount: 0,
+    materializedCandidateCount: 0,
+    pushedPrefixNodeCount: 0,
+    pushedCandidateNodeCount: 0,
+  };
+}
+
+function createMedleyExactPreMaterializationCensusProfile(
+  slot: MedleySlotSearch,
+): MedleyExactPreMaterializationCensusProfile {
+  return {
+    algorithm: "hhwx-pre-materialization-census-v1",
+    songIndex: slot.songIndex,
+    searchCardCount: slot.searchCards.length,
+    rootScoreUpperBound: Number.isFinite(slot.rootScoreUpperBound) ? slot.rootScoreUpperBound : null,
+    baseScoreRatePerPower: Number.isFinite(slot.baseScoreRatePerPower) ? slot.baseScoreRatePerPower : null,
+    expandedNodeCount: 0,
+    insufficientRemainingNodeRejectCount: 0,
+    sameCharacterDominanceReplayRejectCount: 0,
+    contributionDominanceReplayRejectCount: 0,
+    levels: Array.from(
+      { length: MEDLEY_TEAM_SIZE + 1 },
+      (_, level) => createMedleyExactPreMaterializationCensusLevel(level),
+    ),
+  };
+}
+
+function getMedleyExactPreMaterializationCensusLevel(
+  profile: MedleyExactPreMaterializationCensusProfile,
+  level: number,
+): MedleyExactPreMaterializationCensusLevelProfile {
+  return profile.levels[Math.max(0, Math.min(MEDLEY_TEAM_SIZE, level))]
+    ?? profile.levels[MEDLEY_TEAM_SIZE]!;
+}
+
+const MEDLEY_EXACT_PRE_MATERIALIZATION_CENSUS_LEVEL_SUM_FIELDS: Array<
+  keyof Omit<MedleyExactPreMaterializationCensusLevelProfile, "level">
+> = [
+  "branchVisitCount",
+  "duplicateCharacterRejectCount",
+  "leafBranchCount",
+  "prefixBranchCount",
+  "slotUpperCheckedCount",
+  "slotUpperFiniteCount",
+  "slotUpperRejectedCount",
+  "slotUpperRejectedImpliedCompletionCount",
+  "slotUpperPassedCount",
+  "globalUpperRejectedCount",
+  "candidateKeyRejectedCount",
+  "candidateEvaluationCount",
+  "candidateNullCount",
+  "candidateScoreRejectedCount",
+  "materializedCandidateCount",
+  "pushedPrefixNodeCount",
+  "pushedCandidateNodeCount",
+];
+
+function addMedleyExactPreMaterializationCensusLevel(
+  target: MedleyExactPreMaterializationCensusLevelProfile,
+  source: MedleyExactPreMaterializationCensusLevelProfile,
+): void {
+  for (const field of MEDLEY_EXACT_PRE_MATERIALIZATION_CENSUS_LEVEL_SUM_FIELDS) {
+    target[field] = addCappedCount(target[field], source[field]);
+  }
 }
 
 function createMedleyExactPrefixMarginBuckets(): number[] {
@@ -6442,6 +6585,7 @@ export function createMedleyExactSlotCandidateGenerator(
   enablePrefixCapacityLevel3LookaheadReplay = false,
   enableCapacitySourceLeafPruning = false,
   enableCapacityLevel3LookaheadPruning = false,
+  enablePreMaterializationCensus = false,
   prefixOtherUpperSourceReplayMaxChecks = MEDLEY_EXACT_PREFIX_OTHER_UPPER_SOURCE_REPLAY_DEFAULT_MAX_CHECKS,
   prefixOtherUpperSourceReplayMaxMargin = MEDLEY_EXACT_PREFIX_OTHER_UPPER_SOURCE_REPLAY_DEFAULT_MAX_MARGIN,
 ): MedleyExactSlotCandidateGenerator {
@@ -6511,6 +6655,9 @@ export function createMedleyExactSlotCandidateGenerator(
       finitePrefixOtherUpperSourceReplayMaxChecks,
       finitePrefixOtherUpperSourceReplayMaxMargin,
     )
+    : null;
+  const preMaterializationCensusProfile = enablePreMaterializationCensus
+    ? createMedleyExactPreMaterializationCensusProfile(slot)
     : null;
   type CreateSearchNodeInput = {
     key: number;
@@ -6725,6 +6872,118 @@ export function createMedleyExactSlotCandidateGenerator(
     slot.searchCards.length - nextStartIndex,
     MEDLEY_TEAM_SIZE - selectedCardCount,
   );
+  const getPreMaterializationCensusLevel = (
+    selectedCardCount: number,
+  ): MedleyExactPreMaterializationCensusLevelProfile | null => (
+    preMaterializationCensusProfile
+      ? getMedleyExactPreMaterializationCensusLevel(preMaterializationCensusProfile, selectedCardCount)
+      : null
+  );
+  const recordPreMaterializationExpandedNode = (): void => {
+    if (preMaterializationCensusProfile) {
+      preMaterializationCensusProfile.expandedNodeCount += 1;
+    }
+  };
+  const recordPreMaterializationInsufficientRemainingNodeReject = (): void => {
+    if (preMaterializationCensusProfile) {
+      preMaterializationCensusProfile.insufficientRemainingNodeRejectCount += 1;
+    }
+  };
+  const recordPreMaterializationBranchVisit = (selectedCardCount: number): void => {
+    const level = getPreMaterializationCensusLevel(selectedCardCount);
+    if (level) {
+      level.branchVisitCount += 1;
+    }
+  };
+  const recordPreMaterializationDuplicateCharacterReject = (selectedCardCount: number): void => {
+    const level = getPreMaterializationCensusLevel(selectedCardCount);
+    if (level) {
+      level.duplicateCharacterRejectCount += 1;
+    }
+  };
+  const recordPreMaterializationSlotUpperResult = (
+    selectedCardCount: number,
+    nextStartIndex: number,
+    upperBound: number,
+    scoreCutoff: number,
+  ): void => {
+    const level = getPreMaterializationCensusLevel(selectedCardCount);
+    if (!level) {
+      return;
+    }
+    level.slotUpperCheckedCount += 1;
+    if (Number.isFinite(upperBound)) {
+      level.slotUpperFiniteCount += 1;
+    }
+    if (!Number.isFinite(upperBound) || upperBound < scoreCutoff) {
+      level.slotUpperRejectedCount += 1;
+      level.slotUpperRejectedImpliedCompletionCount = addCappedCount(
+        level.slotUpperRejectedImpliedCompletionCount,
+        getRelaxedImpliedCompletionCount(selectedCardCount, nextStartIndex),
+      );
+    } else {
+      level.slotUpperPassedCount += 1;
+    }
+  };
+  const recordPreMaterializationGlobalUpperReject = (selectedCardCount: number): void => {
+    const level = getPreMaterializationCensusLevel(selectedCardCount);
+    if (level) {
+      level.globalUpperRejectedCount += 1;
+    }
+  };
+  const recordPreMaterializationCandidateKeyReject = (selectedCardCount: number): void => {
+    const level = getPreMaterializationCensusLevel(selectedCardCount);
+    if (level) {
+      level.candidateKeyRejectedCount += 1;
+    }
+  };
+  const recordPreMaterializationCandidateEvaluation = (selectedCardCount: number): void => {
+    const level = getPreMaterializationCensusLevel(selectedCardCount);
+    if (level) {
+      level.candidateEvaluationCount += 1;
+    }
+  };
+  const recordPreMaterializationCandidateResult = (
+    selectedCardCount: number,
+    candidate: MedleyTeamCandidate | null,
+    scoreCutoff: number,
+  ): void => {
+    const level = getPreMaterializationCensusLevel(selectedCardCount);
+    if (!level) {
+      return;
+    }
+    if (!candidate) {
+      level.candidateNullCount += 1;
+      return;
+    }
+    if (candidate.result.score < scoreCutoff) {
+      level.candidateScoreRejectedCount += 1;
+    }
+  };
+  const recordPreMaterializationMaterializedCandidate = (selectedCardCount: number): void => {
+    const level = getPreMaterializationCensusLevel(selectedCardCount);
+    if (level) {
+      level.materializedCandidateCount += 1;
+      level.pushedCandidateNodeCount += 1;
+    }
+  };
+  const recordPreMaterializationPushedPrefixNode = (selectedCardCount: number): void => {
+    const level = getPreMaterializationCensusLevel(selectedCardCount);
+    if (level) {
+      level.pushedPrefixNodeCount += 1;
+    }
+  };
+  const recordPreMaterializationBranchKind = (selectedCardCount: number): void => {
+    const level = getPreMaterializationCensusLevel(selectedCardCount);
+    if (!level) {
+      return;
+    }
+    if (selectedCardCount === MEDLEY_TEAM_SIZE) {
+      level.leafBranchCount += 1;
+    } else {
+      level.prefixBranchCount += 1;
+    }
+  };
   const recordPrefixSlotUpperReplay = (
     selectedCardCount: number,
     nextStartIndex: number,
@@ -7749,7 +8008,9 @@ export function createMedleyExactSlotCandidateGenerator(
     const nodeSelectedCards = getSelectedCardsForNode(node);
     const nodeSelectedCardIndices = getSelectedCardIndicesForNode(node);
     const remaining = MEDLEY_TEAM_SIZE - node.selectedCardCount;
+    recordPreMaterializationExpandedNode();
     if (slot.searchCards.length - node.startIndex < remaining) {
+      recordPreMaterializationInsufficientRemainingNodeReject();
       return;
     }
 
@@ -7762,10 +8023,13 @@ export function createMedleyExactSlotCandidateGenerator(
       }
       const card = slot.searchCards[index];
       const characterIndex = slot.upperBoundIndex.characterIndexById.get(card.characterId);
+      const nextSelectedCardCount = node.selectedCardCount + 1;
+      recordPreMaterializationBranchVisit(nextSelectedCardCount);
       if (
         characterIndex === undefined
         || hasCharacterIndexInMask(node.usedCharacterMaskLow, node.usedCharacterMaskHigh, characterIndex)
       ) {
+        recordPreMaterializationDuplicateCharacterReject(nextSelectedCardCount);
         continue;
       }
 
@@ -7783,6 +8047,7 @@ export function createMedleyExactSlotCandidateGenerator(
       const nextSelectedCardIndices = [...nodeSelectedCardIndices, index];
       const nextSelectedPower = node.selectedPower + card.effectivePower;
       const nextStartIndex = index + 1;
+      recordPreMaterializationBranchKind(nextSelectedCards.length);
 
       if (nextSelectedCards.length === MEDLEY_TEAM_SIZE) {
         const leafUpperBound = estimateMedleyExactSlotNodeUpperBound(
@@ -7796,6 +8061,12 @@ export function createMedleyExactSlotCandidateGenerator(
           profiling,
           scoreCutoff,
         );
+        recordPreMaterializationSlotUpperResult(
+          nextSelectedCards.length,
+          nextStartIndex,
+          leafUpperBound,
+          scoreCutoff,
+        );
         if (!Number.isFinite(leafUpperBound) || leafUpperBound < scoreCutoff) {
           continue;
         }
@@ -7805,14 +8076,17 @@ export function createMedleyExactSlotCandidateGenerator(
           globalPruning,
         );
         if (globalLeafUpperBound < (globalPruning?.scoreCutoff ?? Number.NEGATIVE_INFINITY)) {
+          recordPreMaterializationGlobalUpperReject(nextSelectedCards.length);
           continue;
         }
         const candidateKey = globalPruning?.excludedCandidateKeys
           ? buildMedleyExactSelectedCardKey(nextSelectedCards)
           : null;
         if (candidateKey && globalPruning?.excludedCandidateKeys?.has(candidateKey)) {
+          recordPreMaterializationCandidateKeyReject(nextSelectedCards.length);
           continue;
         }
+        recordPreMaterializationCandidateEvaluation(nextSelectedCards.length);
         const candidate = evaluateMedleySlotCandidateWithCache(
           slot,
           nextSelectedCards,
@@ -7829,7 +8103,9 @@ export function createMedleyExactSlotCandidateGenerator(
             compactScoreOnlyCache: enableCompactScoreOnlyCache,
           },
         );
+        recordPreMaterializationCandidateResult(nextSelectedCards.length, candidate, scoreCutoff);
         if (candidate && candidate.result.score >= scoreCutoff) {
+          recordPreMaterializationMaterializedCandidate(nextSelectedCards.length);
           let retainedCandidate = candidate;
           if (disableCandidateCardsRetention) {
             retainedCandidate = stripMedleyExactCandidateCardRetention(retainedCandidate, nextSelectedCardIndices);
@@ -7862,6 +8138,12 @@ export function createMedleyExactSlotCandidateGenerator(
         profiling,
         scoreCutoff,
       );
+      recordPreMaterializationSlotUpperResult(
+        nextSelectedCards.length,
+        nextStartIndex,
+        upperBound,
+        scoreCutoff,
+      );
       let passesPairGlobalPruning = true;
       if (
         Number.isFinite(upperBound)
@@ -7882,8 +8164,16 @@ export function createMedleyExactSlotCandidateGenerator(
       if (
         Number.isFinite(upperBound)
         && upperBound >= scoreCutoff
+        && !passesPairGlobalPruning
+      ) {
+        recordPreMaterializationGlobalUpperReject(nextSelectedCards.length);
+      }
+      if (
+        Number.isFinite(upperBound)
+        && upperBound >= scoreCutoff
         && passesPairGlobalPruning
       ) {
+        recordPreMaterializationPushedPrefixNode(nextSelectedCards.length);
         pushSearchNode(createSearchNode({
           key: upperBound,
           slotUpperBound: upperBound,
@@ -7909,7 +8199,9 @@ export function createMedleyExactSlotCandidateGenerator(
     const nodeSelectedCards = getSelectedCardsForNode(node);
     const nodeSelectedCardIndices = getSelectedCardIndicesForNode(node);
     const remaining = MEDLEY_TEAM_SIZE - node.selectedCardCount;
+    recordPreMaterializationExpandedNode();
     if (slot.searchCards.length - node.startIndex < remaining) {
+      recordPreMaterializationInsufficientRemainingNodeReject();
       return;
     }
 
@@ -7922,10 +8214,13 @@ export function createMedleyExactSlotCandidateGenerator(
       }
       const card = slot.searchCards[index];
       const characterIndex = slot.upperBoundIndex.characterIndexById.get(card.characterId);
+      const nextSelectedCardCount = node.selectedCardCount + 1;
+      recordPreMaterializationBranchVisit(nextSelectedCardCount);
       if (
         characterIndex === undefined
         || hasCharacterIndexInMask(node.usedCharacterMaskLow, node.usedCharacterMaskHigh, characterIndex)
       ) {
+        recordPreMaterializationDuplicateCharacterReject(nextSelectedCardCount);
         continue;
       }
 
@@ -7943,6 +8238,7 @@ export function createMedleyExactSlotCandidateGenerator(
       const nextSelectedCardIndices = [...nodeSelectedCardIndices, index];
       const nextSelectedPower = node.selectedPower + card.effectivePower;
       const nextStartIndex = index + 1;
+      recordPreMaterializationBranchKind(nextSelectedCards.length);
 
       if (nextSelectedCards.length === MEDLEY_TEAM_SIZE) {
         const leafUpperBound = estimateMedleyExactSlotNodeUpperBound(
@@ -7964,6 +8260,12 @@ export function createMedleyExactSlotCandidateGenerator(
             scoreCutoff,
           );
         }
+        recordPreMaterializationSlotUpperResult(
+          nextSelectedCards.length,
+          nextStartIndex,
+          leafUpperBound,
+          scoreCutoff,
+        );
         if (!Number.isFinite(leafUpperBound) || leafUpperBound < scoreCutoff) {
           continue;
         }
@@ -8005,20 +8307,24 @@ export function createMedleyExactSlotCandidateGenerator(
           );
         }
         if (globalLeafUpperBound < (globalPruning?.scoreCutoff ?? Number.NEGATIVE_INFINITY)) {
+          recordPreMaterializationGlobalUpperReject(nextSelectedCards.length);
           continue;
         }
         if (enableCapacitySourceLeafPruning && prefixOtherUpperSourceDecision?.wouldSkip === true) {
+          recordPreMaterializationGlobalUpperReject(nextSelectedCards.length);
           continue;
         }
         const candidateKey = globalPruning?.excludedCandidateKeys
           ? buildMedleyExactSelectedCardKey(nextSelectedCards)
           : null;
         if (candidateKey && globalPruning?.excludedCandidateKeys?.has(candidateKey)) {
+          recordPreMaterializationCandidateKeyReject(nextSelectedCards.length);
           continue;
         }
         if (prefixUpperReplayProfile) {
           recordPrefixCandidateEvaluation();
         }
+        recordPreMaterializationCandidateEvaluation(nextSelectedCards.length);
         const candidate = evaluateMedleySlotCandidateWithCache(
           slot,
           nextSelectedCards,
@@ -8038,6 +8344,7 @@ export function createMedleyExactSlotCandidateGenerator(
         if (prefixOtherUpperSourceDecision && candidate) {
           recordPrefixOtherUpperSourceReplayViolation(prefixOtherUpperSourceDecision, candidate);
         }
+        recordPreMaterializationCandidateResult(nextSelectedCards.length, candidate, scoreCutoff);
         const prefixCapacityBatchReplayDecision = getPrefixCapacityBatchReplayDecisionForNode(node);
         if (prefixCapacityBatchReplayDecision && candidate) {
           recordPrefixOtherUpperSourceReplayViolation(prefixCapacityBatchReplayDecision, candidate);
@@ -8050,6 +8357,7 @@ export function createMedleyExactSlotCandidateGenerator(
           if (prefixUpperReplayProfile) {
             recordPrefixMaterializedCandidate();
           }
+          recordPreMaterializationMaterializedCandidate(nextSelectedCards.length);
           let retainedCandidate = candidate;
           if (disableCandidateCardsRetention) {
             retainedCandidate = stripMedleyExactCandidateCardRetention(retainedCandidate, nextSelectedCardIndices);
@@ -8090,6 +8398,12 @@ export function createMedleyExactSlotCandidateGenerator(
           scoreCutoff,
         );
       }
+      recordPreMaterializationSlotUpperResult(
+        nextSelectedCards.length,
+        nextStartIndex,
+        upperBound,
+        scoreCutoff,
+      );
       if (
         (enablePrefixCapacityLevel3LookaheadReplay || enableCapacityLevel3LookaheadPruning)
         && prefixUpperReplayProfile
@@ -8109,6 +8423,7 @@ export function createMedleyExactSlotCandidateGenerator(
           globalPruning,
         );
         if (shouldPruneLevel3LookaheadBranch) {
+          recordPreMaterializationGlobalUpperReject(nextSelectedCards.length);
           continue;
         }
       }
@@ -8178,12 +8493,20 @@ export function createMedleyExactSlotCandidateGenerator(
           if (nextDecision?.wouldSkip === true) {
             prefixCapacityBatchReplayDecision = nextDecision;
             if (enableCapacityBatchPruning) {
+              recordPreMaterializationGlobalUpperReject(nextSelectedCards.length);
               continue;
             }
           }
         }
         passesPairGlobalPruning = pairGlobalUpperBound === null
           || upperBound + pairGlobalUpperBound >= (globalPruning?.scoreCutoff ?? Number.NEGATIVE_INFINITY);
+      }
+      if (
+        Number.isFinite(upperBound)
+        && upperBound >= scoreCutoff
+        && !passesPairGlobalPruning
+      ) {
+        recordPreMaterializationGlobalUpperReject(nextSelectedCards.length);
       }
       if (
         Number.isFinite(upperBound)
@@ -8197,6 +8520,7 @@ export function createMedleyExactSlotCandidateGenerator(
             ) ?? null
           );
         }
+        recordPreMaterializationPushedPrefixNode(nextSelectedCards.length);
         pushSearchNode(createSearchNode({
           key: upperBound,
           slotUpperBound: upperBound,
@@ -8295,6 +8619,7 @@ export function createMedleyExactSlotCandidateGenerator(
     poppedNodeCount: () => poppedNodes,
     release,
     prefixUpperReplayProfile: () => prefixUpperReplayProfile,
+    preMaterializationCensusProfile: () => preMaterializationCensusProfile,
     memoryProfile: () => {
       let highPairRecordCount = 0;
       let highPairRecordBitsetBytes = 0;
@@ -8587,6 +8912,147 @@ function summarizeMedleyExactPrefixUpperReplayGenerators(
     .map((generator) => generator.prefixUpperReplayProfile?.() ?? null)
     .filter((profile): profile is MedleyExactPrefixUpperReplayProfile => profile !== null);
   return summarizeMedleyExactPrefixUpperReplayProfiles(profiles);
+}
+
+function summarizeMedleyExactPreMaterializationCensusProfiles(
+  profiles: MedleyExactPreMaterializationCensusProfile[],
+): MedleyExactPreMaterializationCensusSummary | null {
+  if (profiles.length === 0) {
+    return null;
+  }
+  const levels = Array.from(
+    { length: MEDLEY_TEAM_SIZE + 1 },
+    (_, level) => createMedleyExactPreMaterializationCensusLevel(level),
+  );
+  for (const profile of profiles) {
+    for (const level of profile.levels) {
+      const targetLevel = levels[level.level];
+      if (targetLevel) {
+        addMedleyExactPreMaterializationCensusLevel(targetLevel, level);
+      }
+    }
+  }
+  const sumLevelField = (
+    field: keyof Omit<MedleyExactPreMaterializationCensusLevelProfile, "level">,
+  ): number => levels.reduce((sum, level) => addCappedCount(sum, level[field]), 0);
+  return {
+    algorithm: "hhwx-pre-materialization-census-v1",
+    configurationSummaryCount: 1,
+    generatorCount: profiles.length,
+    expandedNodeCountTotal: profiles.reduce((sum, profile) => (
+      addCappedCount(sum, profile.expandedNodeCount)
+    ), 0),
+    insufficientRemainingNodeRejectCountTotal: profiles.reduce((sum, profile) => (
+      addCappedCount(sum, profile.insufficientRemainingNodeRejectCount)
+    ), 0),
+    sameCharacterDominanceReplayRejectCountTotal: profiles.reduce((sum, profile) => (
+      addCappedCount(sum, profile.sameCharacterDominanceReplayRejectCount)
+    ), 0),
+    contributionDominanceReplayRejectCountTotal: profiles.reduce((sum, profile) => (
+      addCappedCount(sum, profile.contributionDominanceReplayRejectCount)
+    ), 0),
+    branchVisitCountTotal: sumLevelField("branchVisitCount"),
+    duplicateCharacterRejectCountTotal: sumLevelField("duplicateCharacterRejectCount"),
+    slotUpperCheckedCountTotal: sumLevelField("slotUpperCheckedCount"),
+    slotUpperRejectedCountTotal: sumLevelField("slotUpperRejectedCount"),
+    slotUpperRejectedImpliedCompletionCountTotal: sumLevelField("slotUpperRejectedImpliedCompletionCount"),
+    globalUpperRejectedCountTotal: sumLevelField("globalUpperRejectedCount"),
+    candidateKeyRejectedCountTotal: sumLevelField("candidateKeyRejectedCount"),
+    candidateEvaluationCountTotal: sumLevelField("candidateEvaluationCount"),
+    candidateNullCountTotal: sumLevelField("candidateNullCount"),
+    candidateScoreRejectedCountTotal: sumLevelField("candidateScoreRejectedCount"),
+    materializedCandidateCountTotal: sumLevelField("materializedCandidateCount"),
+    pushedPrefixNodeCountTotal: sumLevelField("pushedPrefixNodeCount"),
+    pushedCandidateNodeCountTotal: sumLevelField("pushedCandidateNodeCount"),
+    levels,
+    latestGenerators: profiles.map((profile) => ({
+      ...profile,
+      levels: profile.levels.map((level) => ({ ...level })),
+    })),
+  };
+}
+
+function asMedleyExactPreMaterializationCensusSummary(
+  value: Record<string, unknown> | null | undefined,
+): MedleyExactPreMaterializationCensusSummary | null {
+  if (
+    !value
+    || value.algorithm !== "hhwx-pre-materialization-census-v1"
+    || !Array.isArray(value.levels)
+  ) {
+    return null;
+  }
+  return value as MedleyExactPreMaterializationCensusSummary;
+}
+
+function mergeMedleyExactPreMaterializationCensusSummaries(
+  previous: Record<string, unknown> | null | undefined,
+  next: MedleyExactPreMaterializationCensusSummary | null,
+): MedleyExactPreMaterializationCensusSummary | null {
+  if (!next) {
+    return asMedleyExactPreMaterializationCensusSummary(previous);
+  }
+  const existing = asMedleyExactPreMaterializationCensusSummary(previous);
+  if (!existing) {
+    return next;
+  }
+  const levels = Array.from(
+    { length: MEDLEY_TEAM_SIZE + 1 },
+    (_, level) => createMedleyExactPreMaterializationCensusLevel(level),
+  );
+  for (const source of [existing, next]) {
+    for (const level of source.levels) {
+      const targetLevel = levels[level.level];
+      if (targetLevel) {
+        addMedleyExactPreMaterializationCensusLevel(targetLevel, level);
+      }
+    }
+  }
+  const sumLevelField = (
+    field: keyof Omit<MedleyExactPreMaterializationCensusLevelProfile, "level">,
+  ): number => levels.reduce((sum, level) => addCappedCount(sum, level[field]), 0);
+  return {
+    algorithm: "hhwx-pre-materialization-census-v1",
+    configurationSummaryCount: existing.configurationSummaryCount + next.configurationSummaryCount,
+    generatorCount: existing.generatorCount + next.generatorCount,
+    expandedNodeCountTotal: addCappedCount(existing.expandedNodeCountTotal, next.expandedNodeCountTotal),
+    insufficientRemainingNodeRejectCountTotal: addCappedCount(
+      existing.insufficientRemainingNodeRejectCountTotal,
+      next.insufficientRemainingNodeRejectCountTotal,
+    ),
+    sameCharacterDominanceReplayRejectCountTotal: addCappedCount(
+      existing.sameCharacterDominanceReplayRejectCountTotal,
+      next.sameCharacterDominanceReplayRejectCountTotal,
+    ),
+    contributionDominanceReplayRejectCountTotal: addCappedCount(
+      existing.contributionDominanceReplayRejectCountTotal,
+      next.contributionDominanceReplayRejectCountTotal,
+    ),
+    branchVisitCountTotal: sumLevelField("branchVisitCount"),
+    duplicateCharacterRejectCountTotal: sumLevelField("duplicateCharacterRejectCount"),
+    slotUpperCheckedCountTotal: sumLevelField("slotUpperCheckedCount"),
+    slotUpperRejectedCountTotal: sumLevelField("slotUpperRejectedCount"),
+    slotUpperRejectedImpliedCompletionCountTotal: sumLevelField("slotUpperRejectedImpliedCompletionCount"),
+    globalUpperRejectedCountTotal: sumLevelField("globalUpperRejectedCount"),
+    candidateKeyRejectedCountTotal: sumLevelField("candidateKeyRejectedCount"),
+    candidateEvaluationCountTotal: sumLevelField("candidateEvaluationCount"),
+    candidateNullCountTotal: sumLevelField("candidateNullCount"),
+    candidateScoreRejectedCountTotal: sumLevelField("candidateScoreRejectedCount"),
+    materializedCandidateCountTotal: sumLevelField("materializedCandidateCount"),
+    pushedPrefixNodeCountTotal: sumLevelField("pushedPrefixNodeCount"),
+    pushedCandidateNodeCountTotal: sumLevelField("pushedCandidateNodeCount"),
+    levels,
+    latestGenerators: next.latestGenerators,
+  };
+}
+
+function summarizeMedleyExactPreMaterializationCensusGenerators(
+  generators: MedleyExactSlotCandidateGenerator[],
+): MedleyExactPreMaterializationCensusSummary | null {
+  const profiles = generators
+    .map((generator) => generator.preMaterializationCensusProfile?.() ?? null)
+    .filter((profile): profile is MedleyExactPreMaterializationCensusProfile => profile !== null);
+  return summarizeMedleyExactPreMaterializationCensusProfiles(profiles);
 }
 
 type MedleyExactCandidatePairUpperResult = {
@@ -11681,6 +12147,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     debugExactCandidateRawPairComplementParity?: boolean;
     debugExactCandidateRawPairUpperScanParity?: boolean;
     debugExactCandidateRawSolverInputCensus?: boolean;
+    debugExactCandidatePreMaterializationCensus?: boolean;
     exactCandidateScoreCalculationCacheEntryLimit?: number | null;
     enableExactCandidateScoreCalculationCachePressureFallback?: boolean;
     exactCandidateScoreCalculationCachePressureSlotCardCount?: number | null;
@@ -11916,6 +12383,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     context.debugExactCandidatePrefixCapacityLevel3LookaheadReplay === true,
     context.enableExactCandidateCapacitySourceLeafPruning === true,
     context.enableExactCandidateCapacityLevel3LookaheadPruning === true,
+    context.debugExactCandidatePreMaterializationCensus === true,
     context.debugExactCandidatePrefixOtherUpperSourceReplayMaxChecks,
     context.debugExactCandidatePrefixOtherUpperSourceReplayMaxMargin,
   ));
@@ -11995,6 +12463,17 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     const summary = summarizeMedleyExactPrefixUpperReplayGenerators(uniqueGenerators);
     profiling.exactCandidateJoinPrefixUpperReplaySummary = mergeMedleyExactPrefixUpperReplaySummaries(
       profiling.exactCandidateJoinPrefixUpperReplaySummary,
+      summary,
+    );
+  };
+  const recordPreMaterializationCensus = (): void => {
+    if (context.debugExactCandidatePreMaterializationCensus !== true) {
+      return;
+    }
+    const uniqueGenerators = [...new Set([...generators, ...candidateFillGenerators])];
+    const summary = summarizeMedleyExactPreMaterializationCensusGenerators(uniqueGenerators);
+    profiling.exactCandidateJoinPreMaterializationCensus = mergeMedleyExactPreMaterializationCensusSummaries(
+      profiling.exactCandidateJoinPreMaterializationCensus,
       summary,
     );
   };
@@ -12503,6 +12982,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     recordRawPairUpperScanParity();
     recordRawCandidatePoolProfile();
     recordPrefixUpperReplaySummary();
+    recordPreMaterializationCensus();
     releaseExactJoinWorkingSet();
     const resultWithPrefixSeed = applyPrefixSeedResult(result);
     const observedUpperBoundWithPrefixSeed = (
@@ -12526,6 +13006,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     recordRawPairUpperScanParity();
     recordRawCandidatePoolProfile();
     recordPrefixUpperReplaySummary();
+    recordPreMaterializationCensus();
     releaseExactJoinWorkingSet();
     return { proved: true, result: applyPrefixSeedResult(result) };
   };
@@ -13302,6 +13783,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     context.debugExactCandidatePrefixCapacityLevel3LookaheadReplay === true,
     context.enableExactCandidateCapacitySourceLeafPruning === true,
     context.enableExactCandidateCapacityLevel3LookaheadPruning === true,
+    context.debugExactCandidatePreMaterializationCensus === true,
     context.debugExactCandidatePrefixOtherUpperSourceReplayMaxChecks,
     context.debugExactCandidatePrefixOtherUpperSourceReplayMaxMargin,
   ));

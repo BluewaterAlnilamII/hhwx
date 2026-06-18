@@ -124,6 +124,7 @@ export type BandoriMedleySearchOptimizationOptions = {
   debugExactCandidateRawPairComplementParity?: boolean;
   debugExactCandidateRawPairUpperScanParity?: boolean;
   debugExactCandidateRawSolverInputCensus?: boolean;
+  debugExactCandidatePreMaterializationCensus?: boolean;
   exactCandidateScoreCalculationCacheEntryLimit?: number;
   enableExactCandidateScoreCalculationCachePressureFallback?: boolean;
   exactCandidateScoreCalculationCachePressureSlotCardCount?: number;
@@ -669,6 +670,7 @@ export type BandoriMedleyTeamSearchProfilingStats = {
   exactCandidateJoinRawPairComplementParity: Record<string, unknown> | null;
   exactCandidateJoinRawPairUpperScanParity: Record<string, unknown> | null;
   exactCandidateJoinRawSolverInputCensus: Record<string, unknown> | null;
+  exactCandidateJoinPreMaterializationCensus: Record<string, unknown> | null;
   exactCandidateJoinPrefixUpperReplaySummary: Record<string, unknown> | null;
   exactCandidateJoinCandidateAdmissionFrontier: Record<string, unknown> | null;
   exactCandidateJoinLastBestSlotScores: number[];
@@ -875,6 +877,7 @@ export type MedleyExactSlotCandidateGenerator = {
   release: () => void;
   memoryProfile?: () => Record<string, unknown>;
   prefixUpperReplayProfile?: () => Record<string, unknown> | null;
+  preMaterializationCensusProfile?: () => Record<string, unknown> | null;
 };
 
 export type MedleyExactCandidateJoinResult = {
