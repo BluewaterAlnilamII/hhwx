@@ -45,6 +45,53 @@ Early-pruning diagnostic slice started on `dev/low-memory-early-pruning`:
 - prefix diagnostics are no-op: they do not skip candidates, change cutoffs, or alter proof status;
 - `HHWX_LOW_MEMORY_PREFIX_HARD_UPPER_REPLAY` remains research-only and is not part of the accepted smoke gate.
 
+## Strategic Pivot, 2026-06-18
+
+The deeper calc reverse-engineering report changes the main line. The retained conclusion is no longer
+"keep tightening late exact-join proofs first." The next meaningful memory reduction must move before
+rich `MedleyTeamCandidate` materialization.
+
+Calc-like behavior to learn from:
+
+- prune area-item/signature/card branches before full team expansion;
+- use incumbent-driven optimistic upper bounds at signature/card and recursive-team depth;
+- apply dominance cover before enumerating 5-card teams;
+- count candidate capacity without expanding every team;
+- store surviving candidates as raw score/card-id/mask rows and hydrate rich objects only for winners/debug.
+
+HHWX adaptation boundary:
+
+- HHWX still optimizes average score first and records max score second;
+- every early prune needs an HHWX-native proof reason or the row remains bounded;
+- calc's public output is not an exact oracle and cannot replace `isExhaustive` / upper-gap semantics;
+- no `randomBucket`, cap-only, or threshold-triggered behavior can participate in exact proof.
+
+Therefore the current five-stage leaf/level-4 pruning line is demoted to a supporting proof component.
+The new main line is a calc-like raw pre-materialization builder, first in shadow mode and then as an
+opt-in replacement for candidate fill.
+
+Revolutionary path:
+
+1. Raw signature census.
+   - Build a no-op per-slot census before candidate materialization: signature count, signature-card legality rejects, optimistic-upper rejects, dominance-replay rejects, capacity estimate, would-enumerate count, and materialized count.
+   - Acceptance: no score/proof/status change; P02 smoke completes; the census identifies which pre-materialization gate can plausibly reduce P02 by at least `25%`.
+2. Shadow raw candidate builder.
+   - Add a separate builder that emits typed-array rows: five card ids, five character ids or compact mask, average score, max score, min score, total power, leader id, source signature, and hydration source index when available.
+   - It must not feed the solver yet.
+   - Acceptance: for small/focused rows, raw rows match rich candidate score order and card ids; mismatch count is `0`; rich results remain authoritative.
+3. Signature/card legality and incumbent upper pruning before evaluation.
+   - Move duplicate-character/signature feasibility and optimistic bound checks ahead of `evaluateMedleySlotCandidateWithCache`.
+   - Acceptance: replay ledger proves skipped branches cannot beat incumbent; exact rows keep gap `0`; P02 materialized rich candidates drop materially or the report shows the upper is too loose.
+4. Dominance-cover prototype.
+   - Start with same-character dominance cover because it is easiest to audit; only then attempt contribution-model dominance.
+   - Acceptance: shadow replay has `0` violations on focused gates before any real deletion; all dominance predicates are source-auditable from HHWX score components.
+5. Opt-in raw candidate fill and raw bitset final solver.
+   - Feed exact join from raw rows first, hydrate winners late, and keep rich fill as an oracle fallback.
+   - Acceptance: focused gate preserves exact/bounded state, average score, max score, upper gap, and bounded reasons; rich object resident count and hard-row peak memory fall by a step-change, not a micro-optimization.
+
+This pivot intentionally avoids more hot-path pair-probe timeboxes and cache/object-shape tuning unless they
+directly support the raw pre-materialization builder.
+
 ## Retained Artifacts
 
 Temp cleanup status is documented in:
@@ -291,30 +338,33 @@ Limits:
 
 ## Next Main Goal
 
-Start a proof-backed early-pruning line on `dev/low-memory-early-pruning`.
+Build a calc-like, HHWX-native raw pre-materialization candidate pipeline on `dev/low-memory-early-pruning`.
 
-Target: reduce candidate birth before final join, especially for hard rows like `P02:260`, without relying on unstable threshold-triggered behavior.
+Target: reduce hard-row memory by changing where candidates are born. The new pipeline should avoid generating
+and retaining rich `MedleyTeamCandidate` objects for branches that can be rejected by legality, optimistic upper,
+or dominance proof before full team evaluation.
 
-The five-stage path is:
+The new five-stage path is:
 
-1. No-op prefix margin diagnostics.
-   - Keep pruning disabled.
-   - Record how far each prefix/leaf is from a safe skip line:
-     `prefixUpper + otherSlotsUpper - incumbent`.
-   - Bucket margins by slot and prefix level so the next pruning target is evidence-led, not threshold-led.
-2. Hypothetical proof ledger.
-   - Still do not delete candidates.
-   - For every hypothetical skip, record `slot`, `level`, `impliedCompletions`, `incumbent`, `prefixUpper`, `otherSlotsUpper`, `totalUpper`, and `margin`.
-   - Report replay violations explicitly if any skipped branch later contains a materialized candidate that could beat the recorded bound.
-3. Opt-in leaf-birth pruning.
-   - Enable only behind an experiment flag.
-   - Skip rich candidate materialization only when the replay ledger proves `totalUpper < incumbent`.
-   - This is the first real pruning cut because a complete 5-card leaf has the smallest proof surface.
-4. Opt-in level-4 branch pruning.
-   - Move the same proof rule one level earlier only after leaf pruning is stable.
-   - The fifth-card completion upper must be a true optimistic HHWX upper, not an empirical cap.
-5. Full gate and possible promotion.
-   - Promote nothing to default until a full 40-case gate has no exact regression, no gap regression, no false-exact evidence, and material memory/candidate-birth improvement.
+1. Pre-materialization census.
+   - Keep behavior unchanged.
+   - Record per slot/signature: candidate-card legality rejects, optimistic-upper rejects, dominance-replay rejects, recursive capacity estimate, rich materialized count, and raw-row estimate.
+   - Use this to choose which early gate is worth implementing instead of adding more late-join probes.
+2. Shadow raw candidate builder.
+   - Emit compact typed-array rows in parallel with the current rich generator.
+   - Store card ids, character ids or local masks, average score, max score, min score, total power, leader id, source slot/signature, and late-hydration source.
+   - Rich candidates remain authoritative until parity is proved.
+3. HHWX-native early proof gates.
+   - Implement signature/card legality and incumbent-driven optimistic upper before `evaluateMedleySlotCandidateWithCache`.
+   - Keep a proof ledger for every real skip: slot/signature, card or prefix, incumbent, local upper, other-slot upper, total upper, margin, and represented completion count.
+4. Dominance-cover replay then pruning.
+   - Start with same-character dominance cover in replay-only mode.
+   - Add contribution-model dominance only after the comparator is auditable from HHWX score components.
+   - Promote to real pruning only after focused replay has `0` violations.
+5. Opt-in raw candidate fill and raw bitset solver handoff.
+   - Use raw rows as the primary resident candidate storage and hydrate only winners/debug.
+   - Keep rich fill as fallback/oracle until focused and full gates prove parity.
+   - Only then evaluate whether this can replace the current rich candidate-fill path by default.
 
 ## Acceptance Gates
 
@@ -358,10 +408,11 @@ Long-term memory targets:
 
 Early-pruning success targets:
 
-- diagnostic stage: explain whether current prefix upper bounds are tight enough to prune `P02:260`;
-- first pruning stage: reduce `P02:260` materialized candidate birth by at least `25%`, or produce clear evidence that the current upper source is too loose;
+- diagnostic stage: quantify how many P02 branches can be rejected before rich candidate materialization by legality, optimistic upper, and dominance replay;
+- first pruning stage: reduce `P02:260` rich materialized candidate birth by at least `25%`, or produce clear evidence that the current pre-materialization upper/dominance gates are too loose;
 - proof stage: any reduced candidate birth must preserve average score, max score, proof state, and bounded gap fields against the clean pressure baseline;
-- memory stage: hard focused rows should move below the current 3 GiB class before any PR is considered meaningful.
+- memory stage: hard focused rows should move below the current 3 GiB class before any PR is considered meaningful;
+- breakthrough stage: raw resident storage plus early gates should move P02/P08/P10 hard rows toward the 1 GiB class, not just shave tens of MiB.
 
 ## Non-Goals
 
@@ -373,45 +424,51 @@ Early-pruning success targets:
 
 ## Immediate Next Actions
 
-1. Freeze current capacity pruning experiments as opt-in diagnostics:
-   - keep `HHWX_LOW_MEMORY_CAPACITY_SOURCE_LEAF_PRUNING=1` safe but non-default;
-   - do not raise leaf, batch, or level-3 budgets as the main path;
-   - do not add hot-path attribution probes unless they are bounded before candidate generation and have a clean P02 smoke.
-2. Build a candidate-admission/frontier closure ledger before adding new real skips:
-   - when candidate fill reaches a soft cap, record `slotIndex`, current cap, candidate counts, generator peek, proof cutoff, other-slot upper, observed upper, and residual gap;
-   - distinguish blockers: current slot tail, other-slot unseen upper, pair conflict upper, card-count guard, deadline, and memory pressure;
-   - first version is no-op and only explains why P02 still backfills to `[400000, 212825, 134977]`.
-3. Use the closure ledger to choose the next exact-safe cut:
-   - if the blocker is the current slot tail, improve slot/prefix upper or candidate admission order;
-   - if the blocker is generated-pair frontier, extend compact row-frontier pricing until it either finds the first disjoint generated pair or produces a replayable unscanned upper;
-   - if row-frontier evidence points to conflict-saturated groups, export compact raw row samples and analyze covers offline before adding hot-path scans;
-   - if the blocker is other-slot unseen upper, continue raw pair pricing / mask witness work over compact row-frontier structures;
-   - if the blocker is resident object pressure, move to raw-index candidate storage before adding more proof work.
-4. Keep level-4 and level-3 capacity proof as supporting components only:
+1. Freeze late-join/cap-boundary probes as supporting diagnostics:
+   - keep row-frontier pair probe opt-in only;
+   - do not raise pair-probe timeboxes or add per-pair hot-path scans;
+   - keep capacity leaf/level-3/level-4 pruning experiments non-default.
+2. Add a raw signature census before materialization:
+   - instrument `createMedleyExactSlotCandidateGenerator` around the branch expansion and leaf evaluation boundary;
+   - count duplicate-character/legality rejects, branch-upper rejects, global-upper rejects, candidate-key rejects, candidate evaluations, materialized rich candidates, and estimated raw rows;
+   - add placeholder counters for same-character dominance and contribution dominance replay, even before pruning is implemented.
+3. Add a shadow raw candidate builder:
+   - write a new opt-in module rather than expanding `exact-candidate-join.ts` further;
+   - append rows when the rich generator materializes a candidate;
+   - verify score/card parity against rich candidates on small rows first, then focused pressure rows.
+4. Prototype pre-evaluation upper pruning:
+   - start with HHWX's existing `estimateMedleyExactSlotNodeUpperBound` and calc-like incumbent comparison;
+   - record a proof ledger before any real skip;
+   - keep pruning disabled until replay violations are `0`.
+5. Prototype same-character dominance replay:
+   - define the dominance comparator over HHWX score components, not calc internals;
+   - run replay-only on P01/P02 focused rows;
+   - only promote if it explains a meaningful fraction of P02's `400000` slot-0 cap pressure.
+6. Keep level-4 and level-3 capacity proof as supporting components only:
    - level-4 pruning has zero-violation evidence but does not reduce P02 candidate caps enough;
    - level-3 lookahead has replay signal but no materialized reduction in retained P02 smokes;
    - neither should be promoted until it changes candidate admission or frontier closure, not merely local prefix counts.
-5. Add a frontier proof / storage diagnostic for P02:
+7. Add a frontier proof / storage diagnostic for P02:
    - current numeric blocker measurement is retained in `2026-06-17T19-11-42`;
    - no-op cheap-upper probe is retained in `2026-06-17T19-16-21` and shows the current proof timeboxes without closing P02;
    - lightweight raw census is retained in `2026-06-17T19-29-52` and shows a `48-52 MiB` raw final-join/input footprint for the current P02 candidate pool;
    - actual raw candidate pool profile is retained in `2026-06-17T19-40-22` and proves the current P02 candidate rows can be copied into `28.53 MiB` exact-sized typed arrays with `0` mismatch and `0` score-order violations;
    - next prototype should be raw-index candidate resident storage or a fundamentally cheaper frontier proof over raw-index candidates, not raising existing proof guards;
    - do not raise guard constants as a default change without memory evidence.
-6. Promote raw candidate pool from profile to opt-in resident infrastructure:
+8. Promote raw candidate pool from profile to opt-in resident infrastructure:
    - keep the first slice no-op with respect to search result and proof state;
    - retain `sourceIndex` so winners and debug output can be late-hydrated from the original rich candidate only when needed;
    - first target is final-join/frontier helper read paths over raw scores and card ids, not default release of rich candidates;
    - acceptance for this slice is `0` raw mismatch, unchanged score/average/max/gap/status, and no P02 OOM.
    - the raw anchor/frontier rerun audit shows large transient raw-pool probes are not stable inside the current exact-join lifecycle; prioritize offline single-configuration raw pricing or raw-resident storage before revisiting conflict-aware raw pair-upper tightening.
    - do not use raw mirror as the hard-row storage prototype; it is now a small-sample field-consistency diagnostic only.
-7. Tighten the prefix proof before broader pruning:
+9. Tighten the prefix proof before broader pruning:
    - avoid generated-pair-only comparison on level-4 replay unless explicitly requested;
    - level-3 replay currently has no P02 skip signal with the existing slot upper;
    - level-3 lookahead has the first strong diagnostic signal, but it must remain replay-only until ledger coverage is complete;
    - keep the hot path replay-only until violation count is `0` on focused gates.
-8. Run `P02:260` pressure smoke after each closure-ledger or resident-storage slice and compare against the current raw-profile artifact before enabling broader gates.
-9. Run the six-row focused gate before considering broader testing or default promotion.
+10. Run `P02:260` pressure smoke after each raw-builder or pre-materialization-pruning slice and compare against the current raw-profile artifact before enabling broader gates.
+11. Run the six-row focused gate before considering broader testing or default promotion.
    - The current raw-helper diagnostic gate is retained in `2026-06-17T20-34-23`; future resident-storage changes must rerun the same pressure focused gate and preserve its proof/score fields.
 
 ## Maintenance Rules
