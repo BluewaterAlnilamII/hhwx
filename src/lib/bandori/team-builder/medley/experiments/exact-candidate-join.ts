@@ -1385,6 +1385,10 @@ type MedleyExactCandidateJoinSlotOrder = {
   shouldUseMiddleFirstJoinOrder: boolean;
 };
 
+type MedleyExactRawCandidateJoinSlotOrder = {
+  slotOrder: number[];
+};
+
 type MedleyExactSignatureCensusBucket = {
   signatureHash: number;
   count: number;
@@ -5920,7 +5924,7 @@ function findBestAvailableMedleyExactRawJoinIndexByBits(
 
 function runMedleyExactRawIndexFinalJoinParity(
   candidatesBySlot: readonly MedleyTeamCandidate[][],
-  slotOrder: readonly number[],
+  objectSlotOrder: readonly number[],
   objectBestScore: number | null,
   incumbentScore: number,
   deadlineAt: number,
@@ -5956,6 +5960,7 @@ function runMedleyExactRawIndexFinalJoinParity(
     ? rawCandidateSlotReadSource.slots
     : candidatesBySlot.map(buildMedleyExactRawJoinParitySlot);
   const rawInputSource = rawCandidateSlotReadSource?.source ?? "parity-local-build";
+  const { slotOrder } = getMedleyExactRawCandidateJoinSlotOrder(rawSlots);
   const firstSlot = rawSlots[slotOrder[0]];
   const secondSlot = rawSlots[slotOrder[1]];
   const thirdSlot = rawSlots[slotOrder[2]];
@@ -6120,6 +6125,11 @@ function runMedleyExactRawIndexFinalJoinParity(
     candidateCountTotal,
     candidateCountsBySlot,
     slotOrder: [...slotOrder],
+    objectSlotOrder: [...objectSlotOrder],
+    rawSlotOrderMatchesObject: (
+      slotOrder.length === objectSlotOrder.length
+      && slotOrder.every((slotIndex, index) => slotIndex === objectSlotOrder[index])
+    ),
     rawInputSource,
     rawBestScore: normalizedRawBestScore,
     objectBestScore,
@@ -6147,6 +6157,19 @@ function runMedleyExactRawIndexFinalJoinParity(
     rawPoolRetainedMiB: rawCandidateSlotReadSource?.rawPoolRetainedMiB ?? null,
     rawSourceLengthMismatchCount: rawCandidateSlotReadSource?.lengthMismatchCount ?? null,
     rawSourceMismatchCountTotal: rawCandidateSlotReadSource?.mismatchCountTotal ?? null,
+  };
+}
+
+function getMedleyExactRawCandidateJoinSlotOrder(
+  rawSlots: readonly MedleyExactRawCandidateSlotView[],
+): MedleyExactRawCandidateJoinSlotOrder {
+  return {
+    slotOrder: rawSlots
+      .map((_, index) => index)
+      .sort((left, right) => (
+        rawSlots[left].length - rawSlots[right].length
+        || getMedleyExactRawCandidateScore(rawSlots[right], 0) - getMedleyExactRawCandidateScore(rawSlots[left], 0)
+      )),
   };
 }
 
