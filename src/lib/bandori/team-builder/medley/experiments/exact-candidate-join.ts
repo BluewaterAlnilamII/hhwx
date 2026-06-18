@@ -1097,7 +1097,14 @@ type MedleyExactRawCandidateMirrorSlot = {
 type MedleyExactRawCandidateMirror = {
   slots: MedleyExactRawCandidateMirrorSlot[];
   rebuildCount: number;
+  appendCount: number;
+  skippedAppendCount: number;
+  maxCandidateTotal: number;
+  disabledReason: string | null;
 };
+
+const MEDLEY_EXACT_RAW_CANDIDATE_MIRROR_MAX_CANDIDATE_TOTAL = 60_000;
+const MEDLEY_EXACT_RAW_CANDIDATE_MIRROR_MAX_SLOT_CARD_COUNT = 1_200;
 
 type MedleyExactRawCandidatePoolSlot = {
   scores: Int32Array;
@@ -3522,10 +3529,17 @@ function createMedleyExactRawCandidateMirrorSlot(capacity = 16): MedleyExactRawC
   };
 }
 
-function createMedleyExactRawCandidateMirror(slotCount: number): MedleyExactRawCandidateMirror {
+function createMedleyExactRawCandidateMirror(
+  slotCount: number,
+  maxCandidateTotal = MEDLEY_EXACT_RAW_CANDIDATE_MIRROR_MAX_CANDIDATE_TOTAL,
+): MedleyExactRawCandidateMirror {
   return {
     slots: Array.from({ length: slotCount }, () => createMedleyExactRawCandidateMirrorSlot()),
     rebuildCount: 0,
+    appendCount: 0,
+    skippedAppendCount: 0,
+    maxCandidateTotal,
+    disabledReason: null,
   };
 }
 
@@ -3598,29 +3612,42 @@ function appendMedleyExactRawCandidateMirrorSlot(
   slot.length = index + 1;
 }
 
-function rebuildMedleyExactRawCandidateMirror(
-  mirror: MedleyExactRawCandidateMirror,
-  candidatesBySlot: readonly MedleyTeamCandidate[][],
+function appendMedleyExactRawCandidateMirror(
+  mirror: MedleyExactRawCandidateMirror | null,
+  slotIndex: number,
+  candidate: MedleyTeamCandidate,
 ): void {
-  mirror.rebuildCount += 1;
-  candidatesBySlot.forEach((candidates, slotIndex) => {
-    const slot = mirror.slots[slotIndex];
-    if (!slot) {
-      return;
-    }
-    slot.length = 0;
-    slot.mismatchCount = 0;
-    ensureMedleyExactRawCandidateMirrorSlotCapacity(slot, candidates.length);
-    for (const candidate of candidates) {
-      appendMedleyExactRawCandidateMirrorSlot(slot, candidate);
-    }
-  });
+  if (!mirror) {
+    return;
+  }
+  if (mirror.disabledReason) {
+    mirror.skippedAppendCount += 1;
+    return;
+  }
+  if (mirror.appendCount >= mirror.maxCandidateTotal) {
+    mirror.disabledReason = "candidate-total-limit";
+    mirror.skippedAppendCount += 1;
+    return;
+  }
+  const slot = mirror.slots[slotIndex];
+  if (!slot) {
+    return;
+  }
+  appendMedleyExactRawCandidateMirrorSlot(slot, candidate);
+  mirror.appendCount += 1;
 }
 
-function getMedleyExactRawCandidateMirrorProfile(mirror: MedleyExactRawCandidateMirror): Record<string, unknown> {
+function getMedleyExactRawCandidateMirrorProfile(
+  mirror: MedleyExactRawCandidateMirror,
+  candidatesBySlot?: readonly MedleyTeamCandidate[][],
+): Record<string, unknown> {
   const lengths = mirror.slots.map((slot) => slot.length);
   const capacities = mirror.slots.map((slot) => slot.capacity);
   const mismatchCounts = mirror.slots.map((slot) => slot.mismatchCount);
+  const candidateCountsBySlot = candidatesBySlot?.map((candidates) => candidates.length) ?? null;
+  const lengthMismatchCount = candidateCountsBySlot
+    ? lengths.filter((length, index) => length !== candidateCountsBySlot[index]).length
+    : null;
   const retainedBytes = mirror.slots.reduce((sum, slot) => (
     sum
     + slot.score.byteLength
@@ -3634,7 +3661,14 @@ function getMedleyExactRawCandidateMirrorProfile(mirror: MedleyExactRawCandidate
     representation: "typed-array-struct-of-arrays",
     fields: ["score", "averageScore", "maxScore", "minScore", "cardId0..4"],
     rebuildCount: mirror.rebuildCount,
+    appendCount: mirror.appendCount,
+    skippedAppendCount: mirror.skippedAppendCount,
+    maxCandidateTotal: mirror.maxCandidateTotal,
+    disabled: mirror.disabledReason !== null,
+    disabledReason: mirror.disabledReason,
     lengths,
+    candidateCountsBySlot,
+    lengthMismatchCount,
     capacities,
     countTotal: lengths.reduce((sum, count) => sum + count, 0),
     capacityTotal: capacities.reduce((sum, count) => sum + count, 0),
@@ -9076,6 +9110,7 @@ function solveMedleyExactCandidateJoinByAnchor(
   stats: BandoriMedleyTeamSearchStats,
   isPastDeadline: () => boolean,
   deadlineAt: number,
+  retainCandidateForSlot?: (slotIndex: number, candidate: MedleyTeamCandidate) => void,
   observeEvaluatedResult?: MedleyEvaluatedResultObserver,
 ): MedleyExactCandidateAnchoredJoinResult {
   const debugAnchorSlotIndex = profiling.exactCandidateJoinDebugAnchorSlotIndex;
@@ -9136,7 +9171,11 @@ function solveMedleyExactCandidateJoinByAnchor(
       if (!anchorCandidate) {
         return { proved: true, timedOut: false, result: bestResult };
       }
-      candidatesBySlot[anchorSlotIndex].push(anchorCandidate);
+      if (retainCandidateForSlot) {
+        retainCandidateForSlot(anchorSlotIndex, anchorCandidate);
+      } else {
+        candidatesBySlot[anchorSlotIndex].push(anchorCandidate);
+      }
     }
     anchorCursor += 1;
 
@@ -9246,6 +9285,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     lowMemoryHighPairPrefixRecordLimit?: number | null;
     debugExactCandidateJoinMemoryAttribution?: boolean;
     debugExactCandidateRawMirror?: boolean;
+    debugExactCandidateRawMirrorMaxCardCount?: number | null;
     debugExactCandidateRawJoinParity?: boolean;
     debugExactCandidateSignatureCensus?: boolean;
     debugExactCandidateUpperReplay?: boolean;
@@ -9302,6 +9342,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     profiling.exactCandidateJoinLastAbortOtherUpper = null;
     profiling.exactCandidateJoinLastAbortObservedUpperBound = null;
     profiling.exactCandidateJoinLastAbortRemainingMs = null;
+    profiling.exactCandidateJoinRawMirrorProfile = null;
     profiling.exactCandidateJoinRawAnchorCheapUpperReplay = null;
     profiling.exactCandidateJoinRawAnchorFrontierProbe = null;
     profiling.exactCandidateJoinRawCandidatePoolProfile = null;
@@ -9441,6 +9482,25 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     context.disableExactCandidateScoreOnlyCache === true
     || disableScoreOnlyCacheByPressure
   );
+  const rawCandidateMirrorCardCount = Math.max(
+    maxSlotSearchCardCount,
+    context.calculatedCardCount ?? 0,
+  );
+  const rawCandidateMirrorMaxCardCount = (
+    context.debugExactCandidateRawMirrorMaxCardCount !== null
+    && context.debugExactCandidateRawMirrorMaxCardCount !== undefined
+    && Number.isFinite(context.debugExactCandidateRawMirrorMaxCardCount)
+    && context.debugExactCandidateRawMirrorMaxCardCount > 0
+      ? Math.trunc(context.debugExactCandidateRawMirrorMaxCardCount)
+      : null
+  );
+  const shouldSkipRawCandidateMirrorByCardCount = (
+    context.debugExactCandidateRawMirror === true
+    && (
+      rawCandidateMirrorMaxCardCount === null
+      || rawCandidateMirrorCardCount > rawCandidateMirrorMaxCardCount
+    )
+  );
   profiling.exactCandidateJoinLastBestSlotScores = [];
   profiling.exactCandidateJoinLastPairUpperByExcludedSlot = [];
   profiling.exactCandidateJoinLastPairUnseenUpperByExcludedSlot = [];
@@ -9485,8 +9545,22 @@ export function searchMedleyConfigurationByExactCandidateJoin(
   ));
   const candidatesBySlot: MedleyTeamCandidate[][] = Array.from({ length: slots.length }, () => []);
   const rawCandidateMirror = context.debugExactCandidateRawMirror === true
+    && !shouldSkipRawCandidateMirrorByCardCount
     ? createMedleyExactRawCandidateMirror(slots.length)
     : null;
+  if (shouldSkipRawCandidateMirrorByCardCount) {
+    profiling.exactCandidateJoinRawMirrorProfile = {
+      enabled: false,
+      disabled: true,
+      disabledReason: "slot-card-count-limit",
+      calculatedCardCount: context.calculatedCardCount ?? null,
+      maxSlotSearchCardCount,
+      cardCountForLimit: rawCandidateMirrorCardCount,
+      maxCardCountLimit: rawCandidateMirrorMaxCardCount,
+      defaultMaxCardCountLimit: MEDLEY_EXACT_RAW_CANDIDATE_MIRROR_MAX_SLOT_CARD_COUNT,
+      maxCandidateTotal: MEDLEY_EXACT_RAW_CANDIDATE_MIRROR_MAX_CANDIDATE_TOTAL,
+    };
+  }
   let rawCandidatePool: MedleyExactRawCandidatePool | null = null;
   const invalidateRawCandidatePool = (): void => {
     rawCandidatePool = null;
@@ -9497,6 +9571,12 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     }
     return rawCandidatePool;
   };
+  const retainCandidateForSlot = rawCandidateMirror
+    ? (slotIndex: number, candidate: MedleyTeamCandidate): void => {
+      candidatesBySlot[slotIndex].push(candidate);
+      appendMedleyExactRawCandidateMirror(rawCandidateMirror, slotIndex, candidate);
+    }
+    : null;
   const bestSlotScores: number[] = [];
   const exactPairUpperByExcludedSlot: Array<number | null> = Array.from({ length: slots.length }, () => null);
   const exactPairUnseenUpperByExcludedSlot: Array<number | null> = Array.from({ length: slots.length }, () => null);
@@ -9580,6 +9660,15 @@ export function searchMedleyConfigurationByExactCandidateJoin(
       candidatesBySlot,
     );
   };
+  const recordRawCandidateMirrorProfile = (): void => {
+    if (!rawCandidateMirror) {
+      return;
+    }
+    profiling.exactCandidateJoinRawMirrorProfile = getMedleyExactRawCandidateMirrorProfile(
+      rawCandidateMirror,
+      candidatesBySlot,
+    );
+  };
   const recordRawAnchorCheapUpperReplay = (): void => {
     if (context.debugExactCandidateRawAnchorCheapUpperReplay !== true) {
       return;
@@ -9633,6 +9722,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
     result: BandoriMedleyTeamSearchResult | null = null,
     observedUpperBound: number | null = getObservedExactCandidateJoinUpperBound(),
   ): MedleyExactCandidateJoinResult => {
+    recordRawCandidateMirrorProfile();
     recordRawSolverInputCensus();
     recordRawAnchorCheapUpperReplay();
     recordRawPairComplementParity();
@@ -9655,6 +9745,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
   const buildProvedExactCandidateJoinResult = (
     result: BandoriMedleyTeamSearchResult | null = null,
   ): MedleyExactCandidateJoinResult => {
+    recordRawCandidateMirrorProfile();
     recordRawSolverInputCensus();
     recordRawAnchorCheapUpperReplay();
     recordRawPairComplementParity();
@@ -10114,7 +10205,11 @@ export function searchMedleyConfigurationByExactCandidateJoin(
       ), 0);
       return buildUnprovedExactCandidateJoinResult();
     }
-    candidatesBySlot[slotIndex].push(topCandidate);
+    if (retainCandidateForSlot) {
+      retainCandidateForSlot(slotIndex, topCandidate);
+    } else {
+      candidatesBySlot[slotIndex].push(topCandidate);
+    }
     bestSlotScores[slotIndex] = topCandidate.result.score;
   }
   profiling.exactCandidateJoinLastBestSlotScores = [...bestSlotScores];
@@ -10351,6 +10446,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
       stats,
       isPastDeadline,
       deadlineAt,
+      retainCandidateForSlot ?? undefined,
     );
     profiling.exactCandidateJoinSolveElapsedMs += performance.now() - anchoredJoinStartedAt;
     if (anchoredJoinResult.timedOut) {
@@ -10477,10 +10573,7 @@ export function searchMedleyConfigurationByExactCandidateJoin(
       ? roundMiB(candidateKeySetBytesTotal)
       : null;
     const rawCandidateMirrorProfile = rawCandidateMirror
-      ? (() => {
-        rebuildMedleyExactRawCandidateMirror(rawCandidateMirror, candidatesBySlot);
-        return getMedleyExactRawCandidateMirrorProfile(rawCandidateMirror);
-      })()
+      ? getMedleyExactRawCandidateMirrorProfile(rawCandidateMirror, candidatesBySlot)
       : null;
     const signatureCensusProfile = context.debugExactCandidateSignatureCensus === true
       ? buildMedleyExactSignatureCensusProfile(slots, candidatesBySlot, candidateKeyCountsBySlot)
@@ -10985,7 +11078,11 @@ export function searchMedleyConfigurationByExactCandidateJoin(
       }
       candidateKeysBySlot[slotIndex].add(candidateKey);
       if (candidate.result.score >= cutoff) {
-        candidatesBySlot[slotIndex].push(candidate);
+        if (retainCandidateForSlot) {
+          retainCandidateForSlot(slotIndex, candidate);
+        } else {
+          candidatesBySlot[slotIndex].push(candidate);
+        }
       }
     }
     profiling.exactCandidateJoinLastCandidateFillElapsedMsBySlot[slotIndex] = (

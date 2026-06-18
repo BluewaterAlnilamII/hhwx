@@ -229,6 +229,7 @@ P02 raw storage census:
 - failed rerun artifacts include `low-memory-polish-hhwx-2026-06-17T21-20-14-786Z.json`, `2026-06-17T21-24-51-676Z.json`, `2026-06-17T21-37-22-563Z.json`, `2026-06-17T21-47-54-880Z.json`, and `2026-06-17T22-22-52-150Z.json`; a no-raw six-row control `2026-06-17T22-36-18-758Z.json` also showed current focused-gate variance, so these failed gates are diagnostic warnings, not acceptance baselines;
 - the raw anchor/frontier probe is now guard-only for non-empty candidate pools (`candidate-total-limit`, `rawPoolBuilt = false`) until it is redesigned outside the current exact-join hot path; retained P02 guard smoke `low-memory-polish-hhwx-2026-06-17T22-20-06-516Z.json` preserved bounded gap `382812`, score/average `9376984`, max score `9412868`, and `0 failed / 0 timedOut / 0 memoryLimited`;
 - conclusion from the rerun audit: conflict-aware raw split / pricing remains the right proof idea, but it should be developed as an offline single-configuration raw prototype or after raw-resident storage, not as another opt-in probe that constructs large transient raw pools inside the current exact-join lifecycle;
+- incremental raw candidate mirror diagnostics were narrowed to explicit small-sample opt-in only. `HHWX_LOW_MEMORY_RAW_MIRROR=1` now requires `HHWX_LOW_MEMORY_RAW_MIRROR_MAX_CARD_COUNT` before it enters the candidate-generation hot path; otherwise it only records a disabled profile. P01 small smoke `low-memory-polish-hhwx-2026-06-18T01-35-24-134Z.json` stayed exact with average `7927236`, max `7982835`, and `0` raw mismatches. Current P02 reruns around `2026-06-18T01-28` / `01-32` OOMed even in guard-only/no-raw controls, so they are runner-variance warnings, not accepted raw-mirror evidence;
 - current conclusion: raw-index/typed-array resident storage is now the highest-confidence route to material memory reduction. Early pruning remains valuable for proof closure, but the P02 memory class cannot be solved by prefix skip counts alone while candidate fill still reaches the same caps.
 
 The JSON files above contain `isolated.*Path` fields for detailed per-row diagnostics. Those referenced files are part of the retained baseline set.
@@ -361,6 +362,7 @@ Early-pruning success targets:
    - first target is final-join/frontier helper read paths over raw scores and card ids, not default release of rich candidates;
    - acceptance for this slice is `0` raw mismatch, unchanged score/average/max/gap/status, and no P02 OOM.
    - the raw anchor/frontier rerun audit shows large transient raw-pool probes are not stable inside the current exact-join lifecycle; prioritize offline single-configuration raw pricing or raw-resident storage before revisiting conflict-aware raw pair-upper tightening.
+   - do not use raw mirror as the hard-row storage prototype; it is now a small-sample field-consistency diagnostic only.
 7. Tighten the prefix proof before broader pruning:
    - avoid generated-pair-only comparison on level-4 replay unless explicitly requested;
    - level-3 replay currently has no P02 skip signal with the existing slot upper;

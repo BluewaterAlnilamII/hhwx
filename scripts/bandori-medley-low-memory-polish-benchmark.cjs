@@ -155,8 +155,11 @@ function hhwxOptimizationJson() {
     optimization.debugExactCandidateJoinMemoryAttribution = true;
   }
   if (process.env.HHWX_LOW_MEMORY_RAW_MIRROR === "1") {
-    optimization.debugExactCandidateJoinMemoryAttribution = true;
     optimization.debugExactCandidateRawMirror = true;
+    const rawMirrorMaxCardCount = Number(process.env.HHWX_LOW_MEMORY_RAW_MIRROR_MAX_CARD_COUNT);
+    if (Number.isFinite(rawMirrorMaxCardCount) && rawMirrorMaxCardCount > 0) {
+      optimization.debugExactCandidateRawMirrorMaxCardCount = Math.trunc(rawMirrorMaxCardCount);
+    }
   }
   if (process.env.HHWX_LOW_MEMORY_RAW_JOIN_PARITY === "1") {
     optimization.debugExactCandidateJoinMemoryAttribution = true;
@@ -498,6 +501,13 @@ function patchHhwxBenchmarkScoreMetrics() {
         + "    exactCandidateJoinRawSolverInputCensus: profiling.exactCandidateJoinRawSolverInputCensus ?? null,\n",
     );
   }
+  if (!patched.includes("exactCandidateJoinRawMirrorProfile: profiling.exactCandidateJoinRawMirrorProfile ?? null")) {
+    patched = patched.replace(
+      /(exactCandidateJoinMemorySnapshots: profiling\.exactCandidateJoinMemorySnapshots \?\? null,\r?\n)/,
+      "$1"
+        + "    exactCandidateJoinRawMirrorProfile: profiling.exactCandidateJoinRawMirrorProfile ?? null,\n",
+    );
+  }
   if (!patched.includes("exactCandidateJoinRawCandidatePoolProfile: profiling.exactCandidateJoinRawCandidatePoolProfile ?? null")) {
     patched = patched.replace(
       /(exactCandidateJoinMemorySnapshots: profiling\.exactCandidateJoinMemorySnapshots \?\? null,\r?\n)/,
@@ -565,6 +575,7 @@ function patchHhwxBenchmarkScoreMetrics() {
     || !patched.includes("maxScoreCandidate: report.maxScoreCandidate")
     || !patched.includes("maxScoreCandidate: searchResult.maxScoreCandidate &&")
     || !patched.includes("exactCandidateJoinMemorySnapshots: profiling.exactCandidateJoinMemorySnapshots ?? null")
+    || !patched.includes("exactCandidateJoinRawMirrorProfile: profiling.exactCandidateJoinRawMirrorProfile ?? null")
     || !patched.includes("exactCandidateJoinPrefixUpperReplaySummary: profiling.exactCandidateJoinPrefixUpperReplaySummary ?? null")
     || !patched.includes("exactCandidateJoinRawAnchorCheapUpperReplay: profiling.exactCandidateJoinRawAnchorCheapUpperReplay ?? null")
     || !patched.includes("exactCandidateJoinRawAnchorFrontierProbe: profiling.exactCandidateJoinRawAnchorFrontierProbe ?? null")
