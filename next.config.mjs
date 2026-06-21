@@ -11,6 +11,7 @@ const MANIFEST_SITE_ASSET_CACHE_CONTROL = "public, max-age=3600, s-maxage=86400,
 const CSP_REPORT_ENDPOINT = "/api/security/csp-report";
 const DEFAULT_SITE_ASSET_CDN_BASE_URL = "https://cdn.hhwx.org";
 const CLOUDFLARE_INSIGHTS_SCRIPT_ORIGIN = "https://static.cloudflareinsights.com";
+const BESTDORI_ASSET_ORIGIN = "https://bestdori.com";
 
 function normalizeOrigin(value) {
     if (typeof value !== "string" || !value.trim()) {
@@ -68,7 +69,8 @@ function buildContentSecurityPolicyReportOnly() {
         ["object-src", ["'none'"]],
         ["manifest-src", ["'self'"]],
         ["worker-src", ["'self'", "blob:"]],
-        ["img-src", ["'self'", "data:", "blob:", ...buildImageSources()]],
+        ["img-src", ["'self'", "data:", "blob:", BESTDORI_ASSET_ORIGIN, ...buildImageSources()]],
+        ["media-src", ["'self'", BESTDORI_ASSET_ORIGIN]],
         ["font-src", ["'self'", "data:"]],
         ["style-src", ["'self'", "'unsafe-inline'"]],
         ["script-src", ["'self'", "'unsafe-inline'", CLOUDFLARE_INSIGHTS_SCRIPT_ORIGIN]],

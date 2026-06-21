@@ -3,12 +3,22 @@
 import type { CSSProperties, MouseEvent, ReactNode } from "react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
-import { Check, ChevronFirst, ChevronLast, ChevronLeft, ChevronRight, Edit3, Heart, Link2, MessageSquare, MoreHorizontal, Reply, Smile, Trash2, X } from "lucide-react";
+import { Check, ChevronFirst, ChevronLast, ChevronLeft, ChevronRight, Edit3, Heart, Link2, MessageSquare, MoreHorizontal, Reply, Smile, Sticker, Trash2, Volume2, X } from "lucide-react";
 import AccountCardAvatar from "@/components/account/AccountCardAvatar";
 import { type AccountAvatarCardTrainType } from "@/lib/account-avatar-defaults";
 import { getApiErrorMessage, parseApiSuccessData } from "@/lib/api-contracts";
 import { type BandoriAssetRegion } from "@/lib/bandori-asset-proxy";
 import { COMMENT_EMOJI_NAMES, getCommentEmojiSrc } from "@/lib/comment-emojis";
+import {
+  COMMENT_STAMP_DEFAULT_REGION,
+  COMMENT_STAMP_REGION_LABELS,
+  COMMENT_STAMP_REGIONS,
+  getCommentStampsForRegion,
+  isCommentStampRegion,
+  resolveCommentStamp,
+  type CommentStamp,
+  type CommentStampRegion,
+} from "@/lib/comment-stamps";
 import { getSafeSession } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
 import { useGameStore } from "@/store/useGameStore";
@@ -69,7 +79,10 @@ type CommentReactionState = {
 
 const COMMENT_INPUT_MAX_LENGTH = 500;
 const COMMENT_ROOT_PAGE_SIZE = 10;
+const COMMENT_CONTENT_TOKEN_PATTERN = /:stamp-([a-z]{2})-(\d+):|:([A-Za-z0-9_+-]+):/g;
 
+let activeCommentStampAudio: HTMLAudioElement | null = null;
+const preloadedCommentStampAudio = new Map<string, HTMLAudioElement>();
 
 function getErrorMessage(payload: unknown, fallback: string): string {
   return getApiErrorMessage(payload) ?? fallback;
@@ -84,35 +97,149 @@ function formatCommentTime(value: string): string {
   });
 }
 
+function prepareCommentStampAudio(voiceUrl: string, audio: HTMLAudioElement): HTMLAudioElement {
+  audio.preload = "auto";
+  audio.onended = () => {
+    if (activeCommentStampAudio === audio) {
+      activeCommentStampAudio = null;
+    }
+  };
+  preloadedCommentStampAudio.set(voiceUrl, audio);
+  return audio;
+}
+
+function getCommentStampAudio(voiceUrl: string): HTMLAudioElement {
+  const cachedAudio = preloadedCommentStampAudio.get(voiceUrl);
+  if (cachedAudio) {
+    return cachedAudio;
+  }
+
+  const audio = prepareCommentStampAudio(voiceUrl, new Audio(voiceUrl));
+  audio.load();
+  return audio;
+}
+
+function playCommentStampVoice(voiceUrl: string): void {
+  const audio = getCommentStampAudio(voiceUrl);
+  activeCommentStampAudio?.pause();
+  if (activeCommentStampAudio) {
+    activeCommentStampAudio.currentTime = 0;
+  }
+
+  audio.currentTime = 0;
+  activeCommentStampAudio = audio;
+  void audio.play().catch(() => {
+    if (activeCommentStampAudio === audio) {
+      activeCommentStampAudio = null;
+    }
+  });
+}
+
+function CommentStampVoicePreload({ enabled, voiceUrl }: { enabled: boolean; voiceUrl: string | null }) {
+  const audioRef = useRef<HTMLAudioElement>(null);
+
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!enabled || !voiceUrl || !audio) return;
+
+    prepareCommentStampAudio(voiceUrl, audio).load();
+  }, [enabled, voiceUrl]);
+
+  if (!enabled || !voiceUrl) return null;
+
+  return (
+    <audio
+      ref={audioRef}
+      src={voiceUrl}
+      preload="auto"
+      className="hidden"
+      aria-hidden="true"
+      data-comment-stamp-voice-preload={voiceUrl}
+    />
+  );
+}
+
+function CommentStampView({ stamp, shortcode }: { stamp: CommentStamp; shortcode: string }) {
+  const voiceUrl = stamp.voiceUrl;
+  const [shouldPreloadVoice, setShouldPreloadVoice] = useState(false);
+
+  const image = (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={stamp.imageUrl}
+      alt={shortcode}
+      title={shortcode}
+      loading="lazy"
+      decoding="async"
+      referrerPolicy="strict-origin-when-cross-origin"
+      onLoad={voiceUrl ? () => setShouldPreloadVoice(true) : undefined}
+      className="h-full max-h-16 w-full max-w-24 object-contain"
+    />
+  );
+
+  const className = "relative mx-0.5 inline-flex h-16 w-24 shrink-0 items-center justify-center align-[-1.35em]";
+  if (!voiceUrl) {
+    return <span className={className}>{image}</span>;
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={() => playCommentStampVoice(voiceUrl)}
+      className={cn(className, "rounded-lg transition hover:bg-rose-50 focus:outline-none focus:ring-2 focus:ring-rose-200 dark:hover:bg-rose-500/10 dark:focus:ring-rose-500/30")}
+      aria-label={`Play ${shortcode}`}
+      title={`Play ${shortcode}`}
+    >
+      {image}
+      <CommentStampVoicePreload enabled={shouldPreloadVoice} voiceUrl={voiceUrl} />
+      <span className="absolute bottom-1 right-1 inline-flex h-5 w-5 items-center justify-center rounded-full bg-rose-500 text-white shadow-sm ring-2 ring-white dark:ring-slate-900">
+        <Volume2 size={12} aria-hidden="true" />
+      </span>
+    </button>
+  );
+}
+
 function renderCommentContent(content: string) {
   const nodes: ReactNode[] = [];
-  const emojiPattern = /:([A-Za-z0-9_+-]+):/g;
   let cursor = 0;
   let match: RegExpExecArray | null;
+  COMMENT_CONTENT_TOKEN_PATTERN.lastIndex = 0;
 
-  while ((match = emojiPattern.exec(content)) !== null) {
-    const [raw, name] = match;
-    const src = getCommentEmojiSrc(name);
-    if (!src) continue;
+  while ((match = COMMENT_CONTENT_TOKEN_PATTERN.exec(content)) !== null) {
+    const [raw, stampRegion, stampId, emojiName] = match;
+    let node: ReactNode | null = null;
+
+    if (stampRegion && stampId) {
+      if (isCommentStampRegion(stampRegion)) {
+        const id = Number.parseInt(stampId, 10);
+        const stamp = Number.isSafeInteger(id) ? resolveCommentStamp(stampRegion, id) : null;
+        node = stamp ? <CommentStampView key={`${raw}-${match.index}`} stamp={stamp} shortcode={raw} /> : null;
+      }
+    } else if (emojiName) {
+      const src = getCommentEmojiSrc(emojiName);
+      node = src ? (
+        <Image
+          key={`${emojiName}-${match.index}`}
+          src={src}
+          alt={raw}
+          title={raw}
+          width={32}
+          height={32}
+          loading="lazy"
+          unoptimized
+          style={{ width: "auto", height: "auto" }}
+          className="mx-0.5 inline-block h-auto max-h-6 w-auto max-w-9 object-contain align-[-0.25em]"
+        />
+      ) : null;
+    }
+
+    if (!node) continue;
 
     if (match.index > cursor) {
       nodes.push(content.slice(cursor, match.index));
     }
 
-    nodes.push(
-      <Image
-        key={`${name}-${match.index}`}
-        src={src}
-        alt={raw}
-        title={raw}
-        width={32}
-        height={32}
-        loading="lazy"
-        unoptimized
-        style={{ width: "auto", height: "auto" }}
-        className="mx-0.5 inline-block h-auto max-h-6 w-auto max-w-9 object-contain align-[-0.25em]"
-      />,
-    );
+    nodes.push(node);
     cursor = match.index + raw.length;
   }
 
@@ -123,13 +250,12 @@ function renderCommentContent(content: string) {
   return nodes.length > 0 ? nodes : content;
 }
 
-function insertEmojiShortcode(
+function insertCommentShortcode(
   value: string,
-  name: string,
+  shortcode: string,
   start: number,
   end: number,
 ): { nextValue: string; nextCursor: number } {
-  const shortcode = `:${name}:`;
   const prefix = start > 0 && !/\s/.test(value[start - 1] ?? "") ? " " : "";
   const suffix = !/\s/.test(value[end] ?? "") ? " " : "";
   const nextValue = `${value.slice(0, start)}${prefix}${shortcode}${suffix}${value.slice(end)}`.slice(
@@ -139,6 +265,14 @@ function insertEmojiShortcode(
   const nextCursor = Math.min(start + prefix.length + shortcode.length + suffix.length, nextValue.length);
 
   return { nextValue, nextCursor };
+}
+
+function buildEmojiShortcode(name: string): string {
+  return `:${name}:`;
+}
+
+function buildStampShortcode(stamp: CommentStamp): string {
+  return `:stamp-${stamp.region}-${stamp.id}:`;
 }
 
 type EmojiPickerButtonProps = {
@@ -235,6 +369,143 @@ function EmojiPickerButton({ open, onOpenChange, onSelect }: EmojiPickerButtonPr
                 </button>
               );
             })}
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+type StampPickerButtonProps = {
+  open: boolean;
+  selectedRegion: CommentStampRegion;
+  onOpenChange: (open: boolean) => void;
+  onRegionChange: (region: CommentStampRegion) => void;
+  onSelect: (stamp: CommentStamp) => void;
+};
+
+function StampPickerOption({ stamp, onSelect }: { stamp: CommentStamp; onSelect: (stamp: CommentStamp) => void }) {
+  const shortcode = buildStampShortcode(stamp);
+  const voiceUrl = stamp.voiceUrl;
+
+  return (
+    <button
+      type="button"
+      onClick={() => onSelect(stamp)}
+      className="relative flex h-20 w-full min-w-0 items-center justify-center rounded-lg p-1 transition hover:bg-rose-50 focus:bg-rose-50 focus:outline-none focus:ring-2 focus:ring-rose-200 dark:hover:bg-rose-500/10 dark:focus:bg-rose-500/10 dark:focus:ring-rose-500/30"
+      aria-label={shortcode}
+      title={shortcode}
+    >
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={stamp.imageUrl}
+        alt={shortcode}
+        loading="lazy"
+        decoding="async"
+        referrerPolicy="strict-origin-when-cross-origin"
+        className="h-full max-h-[4.5rem] w-full object-contain"
+      />
+      {voiceUrl ? (
+        <span className="absolute bottom-1 right-1 inline-flex h-4 w-4 items-center justify-center rounded-full bg-rose-500 text-white shadow-sm ring-2 ring-white dark:ring-slate-900">
+          <Volume2 size={10} aria-hidden="true" />
+        </span>
+      ) : null}
+    </button>
+  );
+}
+
+function StampPickerButton({ open, selectedRegion, onOpenChange, onRegionChange, onSelect }: StampPickerButtonProps) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const [popoverStyle, setPopoverStyle] = useState<CSSProperties>({});
+  const stamps = getCommentStampsForRegion(selectedRegion);
+
+  const updatePopoverPosition = useCallback(() => {
+    if (!open || !buttonRef.current || !containerRef.current) return;
+
+    const rect = buttonRef.current.getBoundingClientRect();
+    const containerRect = containerRef.current.getBoundingClientRect();
+    const viewportWidth = window.innerWidth;
+    const horizontalPadding = 16;
+    const width = Math.min(456, Math.max(0, viewportWidth - horizontalPadding * 2));
+    const viewportLeft = Math.min(
+      Math.max(horizontalPadding, rect.left + rect.width / 2 - width / 2),
+      viewportWidth - width - horizontalPadding,
+    );
+
+    setPopoverStyle({
+      width,
+      left: viewportLeft - containerRect.left,
+    });
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (containerRef.current?.contains(event.target as Node)) return;
+      onOpenChange(false);
+    };
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    return () => document.removeEventListener("pointerdown", handlePointerDown);
+  }, [onOpenChange, open]);
+
+  useLayoutEffect(() => {
+    if (!open) return;
+
+    updatePopoverPosition();
+    window.addEventListener("resize", updatePopoverPosition);
+
+    return () => {
+      window.removeEventListener("resize", updatePopoverPosition);
+    };
+  }, [open, updatePopoverPosition]);
+
+  return (
+    <div ref={containerRef} className="relative flex items-center">
+      <button
+        ref={buttonRef}
+        type="button"
+        onClick={() => onOpenChange(!open)}
+        className={cn(
+          "inline-flex h-8 w-8 items-center justify-center rounded-full border text-slate-500 transition hover:bg-rose-50 hover:text-rose-700 dark:hover:bg-rose-500/10 dark:hover:text-rose-300",
+          open
+            ? "border-rose-300 bg-rose-50 text-rose-700 dark:border-rose-500/50 dark:bg-rose-500/10 dark:text-rose-300"
+            : "border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900",
+        )}
+        aria-expanded={open}
+        aria-label="Select stamp"
+        title="Select stamp"
+      >
+        <Sticker size={15} />
+      </button>
+      {open ? (
+        <div
+          style={popoverStyle}
+          className="absolute bottom-10 z-20 overflow-hidden rounded-2xl border border-rose-100 bg-white p-2 shadow-xl dark:border-slate-700 dark:bg-slate-900"
+        >
+          <div className="mb-2 grid grid-cols-4 gap-1">
+            {COMMENT_STAMP_REGIONS.map((region) => (
+              <button
+                key={region}
+                type="button"
+                onClick={() => onRegionChange(region)}
+                className={cn(
+                  "h-7 rounded-full text-xs font-bold transition focus:outline-none focus:ring-2 focus:ring-rose-200 dark:focus:ring-rose-500/30",
+                  selectedRegion === region
+                    ? "bg-rose-500 text-white shadow-sm"
+                    : "bg-slate-100 text-slate-500 hover:bg-rose-50 hover:text-rose-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-rose-500/10 dark:hover:text-rose-200",
+                )}
+              >
+                {COMMENT_STAMP_REGION_LABELS[region]}
+              </button>
+            ))}
+          </div>
+          <div className="grid max-h-80 grid-cols-[repeat(4,minmax(0,1fr))] gap-1 overflow-x-hidden overflow-y-auto pr-1 [scrollbar-color:#fb7185_#e5e7eb] [scrollbar-width:thin] [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-rose-400 [&::-webkit-scrollbar-track]:rounded-full [&::-webkit-scrollbar-track]:bg-slate-200">
+            {stamps.map((stamp) => (
+              <StampPickerOption key={`${stamp.region}-${stamp.id}`} stamp={stamp} onSelect={onSelect} />
+            ))}
           </div>
         </div>
       ) : null}
@@ -388,6 +659,8 @@ type ComposerProps = {
 function CommentComposer({ placeholder, submitLabel, onSubmit, onCancel, autoFocus = false }: ComposerProps) {
   const [content, setContent] = useState("");
   const [emojiOpen, setEmojiOpen] = useState(false);
+  const [stampOpen, setStampOpen] = useState(false);
+  const [stampRegion, setStampRegion] = useState<CommentStampRegion>(COMMENT_STAMP_DEFAULT_REGION);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -400,6 +673,7 @@ function CommentComposer({ placeholder, submitLabel, onSubmit, onCancel, autoFoc
       await onSubmit(content.trim());
       setContent("");
       setEmojiOpen(false);
+      setStampOpen(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : "提交失败");
     } finally {
@@ -411,10 +685,24 @@ function CommentComposer({ placeholder, submitLabel, onSubmit, onCancel, autoFoc
     const textarea = textareaRef.current;
     const start = textarea?.selectionStart ?? content.length;
     const end = textarea?.selectionEnd ?? content.length;
-    const { nextValue, nextCursor } = insertEmojiShortcode(content, name, start, end);
+    const { nextValue, nextCursor } = insertCommentShortcode(content, buildEmojiShortcode(name), start, end);
 
     setContent(nextValue);
     setEmojiOpen(false);
+    window.requestAnimationFrame(() => {
+      textarea?.focus();
+      textarea?.setSelectionRange(nextCursor, nextCursor);
+    });
+  };
+
+  const insertStamp = (stamp: CommentStamp) => {
+    const textarea = textareaRef.current;
+    const start = textarea?.selectionStart ?? content.length;
+    const end = textarea?.selectionEnd ?? content.length;
+    const { nextValue, nextCursor } = insertCommentShortcode(content, buildStampShortcode(stamp), start, end);
+
+    setContent(nextValue);
+    setStampOpen(false);
     window.requestAnimationFrame(() => {
       textarea?.focus();
       textarea?.setSelectionRange(nextCursor, nextCursor);
@@ -438,7 +726,24 @@ function CommentComposer({ placeholder, submitLabel, onSubmit, onCancel, autoFoc
           <span className={cn("text-xs", content.length > 460 ? "text-amber-600" : "text-slate-400")}>
             {content.length}/500
           </span>
-          <EmojiPickerButton open={emojiOpen} onOpenChange={setEmojiOpen} onSelect={insertEmoji} />
+          <EmojiPickerButton
+            open={emojiOpen}
+            onOpenChange={(open) => {
+              setEmojiOpen(open);
+              if (open) setStampOpen(false);
+            }}
+            onSelect={insertEmoji}
+          />
+          <StampPickerButton
+            open={stampOpen}
+            selectedRegion={stampRegion}
+            onOpenChange={(open) => {
+              setStampOpen(open);
+              if (open) setEmojiOpen(false);
+            }}
+            onRegionChange={setStampRegion}
+            onSelect={insertStamp}
+          />
         </div>
         <div className="flex items-center gap-2">
           {onCancel ? (
@@ -504,6 +809,8 @@ function CommentItem({
   const [editing, setEditing] = useState(false);
   const [editValue, setEditValue] = useState(comment.content ?? "");
   const [editEmojiOpen, setEditEmojiOpen] = useState(false);
+  const [editStampOpen, setEditStampOpen] = useState(false);
+  const [editStampRegion, setEditStampRegion] = useState<CommentStampRegion>(COMMENT_STAMP_DEFAULT_REGION);
   const [liking, setLiking] = useState(false);
   const [deleteConfirming, setDeleteConfirming] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -575,6 +882,7 @@ function CommentItem({
       await onUpdate(comment.id, editValue);
       setEditing(false);
       setEditEmojiOpen(false);
+      setEditStampOpen(false);
     } catch (err) {
       setActionError(err instanceof Error ? err.message : "更新失败");
     }
@@ -624,10 +932,24 @@ function CommentItem({
     const textarea = editTextareaRef.current;
     const start = textarea?.selectionStart ?? editValue.length;
     const end = textarea?.selectionEnd ?? editValue.length;
-    const { nextValue, nextCursor } = insertEmojiShortcode(editValue, name, start, end);
+    const { nextValue, nextCursor } = insertCommentShortcode(editValue, buildEmojiShortcode(name), start, end);
 
     setEditValue(nextValue);
     setEditEmojiOpen(false);
+    window.requestAnimationFrame(() => {
+      textarea?.focus();
+      textarea?.setSelectionRange(nextCursor, nextCursor);
+    });
+  };
+
+  const insertEditStamp = (stamp: CommentStamp) => {
+    const textarea = editTextareaRef.current;
+    const start = textarea?.selectionStart ?? editValue.length;
+    const end = textarea?.selectionEnd ?? editValue.length;
+    const { nextValue, nextCursor } = insertCommentShortcode(editValue, buildStampShortcode(stamp), start, end);
+
+    setEditValue(nextValue);
+    setEditStampOpen(false);
     window.requestAnimationFrame(() => {
       textarea?.focus();
       textarea?.setSelectionRange(nextCursor, nextCursor);
@@ -699,7 +1021,24 @@ function CommentItem({
                   <span className={cn("text-xs", editValue.length > 460 ? "text-amber-600" : "text-slate-400")}>
                     {editValue.length}/500
                   </span>
-                  <EmojiPickerButton open={editEmojiOpen} onOpenChange={setEditEmojiOpen} onSelect={insertEditEmoji} />
+                  <EmojiPickerButton
+                    open={editEmojiOpen}
+                    onOpenChange={(open) => {
+                      setEditEmojiOpen(open);
+                      if (open) setEditStampOpen(false);
+                    }}
+                    onSelect={insertEditEmoji}
+                  />
+                  <StampPickerButton
+                    open={editStampOpen}
+                    selectedRegion={editStampRegion}
+                    onOpenChange={(open) => {
+                      setEditStampOpen(open);
+                      if (open) setEditEmojiOpen(false);
+                    }}
+                    onRegionChange={setEditStampRegion}
+                    onSelect={insertEditStamp}
+                  />
                 </div>
                 <div className="flex justify-end gap-2">
                   <button
@@ -707,6 +1046,7 @@ function CommentItem({
                     onClick={() => {
                       setEditing(false);
                       setEditEmojiOpen(false);
+                      setEditStampOpen(false);
                     }}
                     className="rounded-full px-3 py-1.5 text-xs font-semibold text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"
                   >
@@ -765,6 +1105,7 @@ function CommentItem({
                 onClick={() => {
                   setEditValue(comment.content ?? "");
                   setEditEmojiOpen(false);
+                  setEditStampOpen(false);
                   setDeleteConfirming(false);
                   setEditing(true);
                 }}
