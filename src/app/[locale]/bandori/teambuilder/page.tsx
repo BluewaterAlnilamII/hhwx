@@ -98,6 +98,7 @@ import type {
 
 type StepId = "event" | "live" | "song" | "profile" | "calculate";
 type LiveType = "free" | "multi" | "challenge" | "versus";
+type LiveDisplayKind = "free" | "multi" | "challenge" | "medley" | "vs" | "team";
 type EncoreSkillSource = NonNullable<TeamSearchWorkerRequest["live"]["encoreSkillSource"]>;
 type EventFormulaOption = "0" | "1" | "2";
 type LiveBoostCountOption = "0" | "1" | "2" | "3";
@@ -331,11 +332,13 @@ const LIVE_BOOST_OPTIONS: LiveBoostCountOption[] = ["0", "1", "2", "3"];
 const CHALLENGE_CP_OPTIONS: ChallengeCpCostOption[] = ["200", "400", "800", "1600"];
 const RESULT_PLACEMENT_OPTIONS: ResultPlacementOption[] = ["1", "2", "3", "4", "5"];
 const FESTIVAL_RESULT_OPTIONS: FestivalResultOption[] = ["win", "lose"];
-const LIVE_LABELS: Record<LiveType, string> = {
+const LIVE_DISPLAY_LABELS: Record<LiveDisplayKind, string> = {
   free: "Free Live",
   multi: "Multi Live",
   challenge: "Challenge Live",
-  versus: "Medley Live",
+  medley: "Medley Live",
+  vs: "VS Live",
+  team: "Team Live",
 };
 
 const EVENT_FORMULA_LABELS: Record<EventFormulaOption, string> = {
@@ -927,18 +930,28 @@ function isEncoreSkillSource(value: unknown): value is EncoreSkillSource {
   return typeof value === "string" && (ENCORE_SKILL_SOURCE_OPTIONS as string[]).includes(value);
 }
 
+function getLiveDisplayKind(
+  liveType: LiveType,
+  eventType: BandoriTeamSearchEventType,
+): LiveDisplayKind {
+  if (eventType === "medley") {
+    return "medley";
+  }
+  if (liveType !== "versus") {
+    return liveType;
+  }
+  if (eventType === "festival") {
+    return "team";
+  }
+  return "vs";
+}
+
 function getLiveLabel(
   liveType: LiveType,
   eventType: BandoriTeamSearchEventType,
-  labels: Record<LiveType | "team", string> = { ...LIVE_LABELS, team: "Team Live" },
+  labels: Record<LiveDisplayKind, string> = LIVE_DISPLAY_LABELS,
 ): string {
-  if (eventType === "medley") {
-    return labels.versus;
-  }
-  if (liveType === "versus" && (eventType === "versus" || eventType === "festival")) {
-    return labels.team;
-  }
-  return labels[liveType];
+  return labels[getLiveDisplayKind(liveType, eventType)];
 }
 
 function shouldUseCoopLiveSettings(eventType: BandoriTeamSearchEventType, liveType: LiveType): boolean {
@@ -2331,12 +2344,13 @@ function ResultCard({
   const targetsT = useTranslations("bandori.teamBuilder.targetLabels");
   const liveLabelsT = useTranslations("bandori.teamBuilder.liveLabels");
   const actorT = useTranslations("bandori.teamBuilder.actors");
-  const liveLabels = useMemo<Record<LiveType | "team", string>>(() => ({
+  const liveLabels = useMemo<Record<LiveDisplayKind, string>>(() => ({
     free: liveLabelsT("free"),
     multi: liveLabelsT("multi"),
     challenge: liveLabelsT("challenge"),
-    versus: liveLabelsT("versus"),
+    medley: liveLabelsT("medley"),
     team: liveLabelsT("team"),
+    vs: liveLabelsT("vs"),
   }), [liveLabelsT]);
   const areaItemParameterLabels = useMemo(() => ({
     performance: labelsT("performance"),
@@ -2509,7 +2523,7 @@ function MedleyResultCard({
               </div>
             ) : null}
             <div className="mt-1 text-xs font-semibold text-slate-500">
-              {labelsT("scoreAndEventPoint")} / {eventTypesT("medley")} / {liveLabelsT("versus")}
+              {labelsT("scoreAndEventPoint")} / {eventTypesT("medley")} / {liveLabelsT("medley")}
             </div>
           </div>
         </div>
@@ -2688,12 +2702,13 @@ function TeamBuilderPanel() {
     ended: eventStatusT("ended"),
     unknown: eventStatusT("unknown"),
   }), [eventStatusT]);
-  const liveLabelMap = useMemo<Record<LiveType | "team", string>>(() => ({
+  const liveLabelMap = useMemo<Record<LiveDisplayKind, string>>(() => ({
     free: liveLabelsT("free"),
     multi: liveLabelsT("multi"),
     challenge: liveLabelsT("challenge"),
-    versus: liveLabelsT("versus"),
+    medley: liveLabelsT("medley"),
     team: liveLabelsT("team"),
+    vs: liveLabelsT("vs"),
   }), [liveLabelsT]);
   const attributeLabelMap = useMemo<Record<BandoriCardAttribute, string>>(() => ({
     powerful: attributeT("powerful"),
@@ -3913,7 +3928,7 @@ function TeamBuilderPanel() {
         <section className="space-y-5">
           <FieldRow label={labelsT("type")}>
             {isMedleyEvent ? (
-              <Segment value="medley" options={["medley"]} onChange={() => undefined} labels={{ medley: liveLabelsT("versus") }} />
+              <Segment value="medley" options={["medley"]} onChange={() => undefined} labels={{ medley: liveLabelsT("medley") }} />
             ) : (
               <Segment value={liveType} options={availableLiveTypes} onChange={updateLiveType} labels={liveTypeLabels} />
             )}
@@ -4110,7 +4125,7 @@ function TeamBuilderPanel() {
               <div className="mt-1 font-bold text-slate-900">{selectedEvent ? pickEventDisplayName(selectedEvent, locale) : statesT("noEvent")}</div>
             </div>
             <div className="rounded-2xl border border-slate-200 bg-white p-4">
-              <div className="text-xs font-semibold text-slate-500">{isMedleyEvent ? liveLabelsT("versus") : labelsT("song")}</div>
+              <div className="text-xs font-semibold text-slate-500">{isMedleyEvent ? liveLabelsT("medley") : labelsT("song")}</div>
               {isMedleyEvent ? (
                 <div className="mt-2 space-y-1">
                   {medleySongIds.map((slotSongId, index) => (
