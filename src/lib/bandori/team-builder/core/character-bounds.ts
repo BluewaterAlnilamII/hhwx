@@ -870,6 +870,216 @@ export function estimateSearchScopeScoreUpperBound(
   );
 }
 
+function estimateBranchScoreRateUpperBoundForMode(
+  selectedCards: SearchCard[],
+  upperBoundIndex: CharacterUpperBoundIndex,
+  searchCards: SearchCard[],
+  startIndex: number,
+  usedCharacterMaskLow: number,
+  usedCharacterMaskHigh: number,
+  baseScoreRatePerPower: number,
+  skillContextUpperMode: SkillContextUpperMode,
+  requiredBandId?: number,
+  selectedSkillAverageRate?: number,
+  selectedSkillLeaderRate?: number,
+): number {
+  if (
+    requiredBandId !== undefined
+    && selectedCards.some((card) => card.bandId !== requiredBandId)
+  ) {
+    return Number.NEGATIVE_INFINITY;
+  }
+
+  const remaining = 5 - selectedCards.length;
+  const selectedAverageRate = selectedSkillAverageRate
+    ?? sumSelectedSkillAverageRateForUpperMode(selectedCards, skillContextUpperMode);
+  const selectedLeaderRate = selectedSkillLeaderRate
+    ?? maxSelectedSkillLeaderRateForUpperMode(selectedCards, skillContextUpperMode);
+  if (remaining === 0) {
+    return baseScoreRatePerPower + selectedAverageRate + selectedLeaderRate;
+  }
+
+  const boundedStartIndex = clamp(startIndex, 0, searchCards.length);
+  const powerByCharacter = upperBoundIndex.powerByStartIndex[boundedStartIndex];
+  const skillAverageRateByCharacter = getSkillAverageRateUpperArray(upperBoundIndex, boundedStartIndex, skillContextUpperMode);
+  const skillLeaderRateByCharacter = getSkillLeaderRateUpperArray(upperBoundIndex, boundedStartIndex, skillContextUpperMode);
+  let topSkillAverageRate1 = Number.NEGATIVE_INFINITY;
+  let topSkillAverageRate2 = Number.NEGATIVE_INFINITY;
+  let topSkillAverageRate3 = Number.NEGATIVE_INFINITY;
+  let topSkillAverageRate4 = Number.NEGATIVE_INFINITY;
+  let topSkillAverageRate5 = Number.NEGATIVE_INFINITY;
+  let skillLeaderRateUpper = selectedLeaderRate;
+  let availableCharacterCount = 0;
+
+  for (let characterIndex = 0; characterIndex < upperBoundIndex.characterIds.length; characterIndex += 1) {
+    if (hasCharacterIndexInMask(usedCharacterMaskLow, usedCharacterMaskHigh, characterIndex)) {
+      continue;
+    }
+    if (
+      requiredBandId !== undefined
+      && upperBoundIndex.characterBandIds[characterIndex] !== requiredBandId
+    ) {
+      continue;
+    }
+    if ((powerByCharacter[characterIndex] ?? 0) <= 0) {
+      continue;
+    }
+
+    availableCharacterCount += 1;
+    const skillAverageRate = skillAverageRateByCharacter[characterIndex] ?? 0;
+    if (skillAverageRate > topSkillAverageRate1) {
+      topSkillAverageRate5 = topSkillAverageRate4;
+      topSkillAverageRate4 = topSkillAverageRate3;
+      topSkillAverageRate3 = topSkillAverageRate2;
+      topSkillAverageRate2 = topSkillAverageRate1;
+      topSkillAverageRate1 = skillAverageRate;
+    } else if (skillAverageRate > topSkillAverageRate2) {
+      topSkillAverageRate5 = topSkillAverageRate4;
+      topSkillAverageRate4 = topSkillAverageRate3;
+      topSkillAverageRate3 = topSkillAverageRate2;
+      topSkillAverageRate2 = skillAverageRate;
+    } else if (skillAverageRate > topSkillAverageRate3) {
+      topSkillAverageRate5 = topSkillAverageRate4;
+      topSkillAverageRate4 = topSkillAverageRate3;
+      topSkillAverageRate3 = skillAverageRate;
+    } else if (skillAverageRate > topSkillAverageRate4) {
+      topSkillAverageRate5 = topSkillAverageRate4;
+      topSkillAverageRate4 = skillAverageRate;
+    } else if (skillAverageRate > topSkillAverageRate5) {
+      topSkillAverageRate5 = skillAverageRate;
+    }
+    skillLeaderRateUpper = Math.max(skillLeaderRateUpper, skillLeaderRateByCharacter[characterIndex] ?? 0);
+  }
+
+  if (availableCharacterCount < remaining) {
+    return Number.NEGATIVE_INFINITY;
+  }
+
+  const skillAverageRateUpper = selectedAverageRate + sumTopFiveValues(
+    remaining,
+    topSkillAverageRate1,
+    topSkillAverageRate2,
+    topSkillAverageRate3,
+    topSkillAverageRate4,
+    topSkillAverageRate5,
+  );
+  return baseScoreRatePerPower + skillAverageRateUpper + skillLeaderRateUpper;
+}
+
+function estimateBranchScoreRateUpperBound(
+  selectedCards: SearchCard[],
+  upperBoundIndex: CharacterUpperBoundIndex,
+  searchCards: SearchCard[],
+  startIndex: number,
+  usedCharacterMaskLow: number,
+  usedCharacterMaskHigh: number,
+  baseScoreRatePerPower: number,
+): number {
+  let maxRate = estimateBranchScoreRateUpperBoundForMode(
+    selectedCards,
+    upperBoundIndex,
+    searchCards,
+    startIndex,
+    usedCharacterMaskLow,
+    usedCharacterMaskHigh,
+    baseScoreRatePerPower,
+    "mixed",
+  );
+  const possibleSameBandIds = getPossibleSameBandIds(selectedCards, upperBoundIndex);
+  const canKeepSameAttribute = canKeepSameAttributeContext(selectedCards);
+
+  for (const bandId of possibleSameBandIds) {
+    maxRate = Math.max(
+      maxRate,
+      estimateBranchScoreRateUpperBoundForMode(
+        selectedCards,
+        upperBoundIndex,
+        searchCards,
+        startIndex,
+        usedCharacterMaskLow,
+        usedCharacterMaskHigh,
+        baseScoreRatePerPower,
+        "same-band",
+        bandId,
+      ),
+    );
+  }
+
+  if (canKeepSameAttribute) {
+    maxRate = Math.max(
+      maxRate,
+      estimateBranchScoreRateUpperBoundForMode(
+        selectedCards,
+        upperBoundIndex,
+        searchCards,
+        startIndex,
+        usedCharacterMaskLow,
+        usedCharacterMaskHigh,
+        baseScoreRatePerPower,
+        "same-attribute",
+      ),
+    );
+
+    for (const bandId of possibleSameBandIds) {
+      maxRate = Math.max(
+        maxRate,
+        estimateBranchScoreRateUpperBoundForMode(
+          selectedCards,
+          upperBoundIndex,
+          searchCards,
+          startIndex,
+          usedCharacterMaskLow,
+          usedCharacterMaskHigh,
+          baseScoreRatePerPower,
+          "both",
+          bandId,
+        ),
+      );
+    }
+  }
+
+  return maxRate;
+}
+
+export function estimateSearchScopeScoreRateUpperBound(
+  selectedCards: SearchCard[],
+  upperBoundIndex: CharacterUpperBoundIndex,
+  searchCards: SearchCard[],
+  startIndex: number,
+  usedCharacterMaskLow: number,
+  usedCharacterMaskHigh: number,
+  baseScoreRatePerPower: number,
+  skillContextUpperMode?: SkillContextUpperMode,
+  selectedSkillAverageRate?: number,
+  selectedSkillLeaderRate?: number,
+): number {
+  if (skillContextUpperMode) {
+    return estimateBranchScoreRateUpperBoundForMode(
+      selectedCards,
+      upperBoundIndex,
+      searchCards,
+      startIndex,
+      usedCharacterMaskLow,
+      usedCharacterMaskHigh,
+      baseScoreRatePerPower,
+      skillContextUpperMode,
+      undefined,
+      selectedSkillAverageRate,
+      selectedSkillLeaderRate,
+    );
+  }
+
+  return estimateBranchScoreRateUpperBound(
+    selectedCards,
+    upperBoundIndex,
+    searchCards,
+    startIndex,
+    usedCharacterMaskLow,
+    usedCharacterMaskHigh,
+    baseScoreRatePerPower,
+  );
+}
+
 export function estimateSearchScopeScoreUpperBoundWithLeaderConstraint(
   selectedCards: SearchCard[],
   upperBoundIndex: CharacterUpperBoundIndex,
@@ -1262,6 +1472,7 @@ export function estimateSearchScopeTargetUpperBoundFromScore(
   selectedPointBonusRate?: number,
   supportBandPointUpperBound = 0,
   objective?: SearchObjectiveAdapter,
+  scoreRateUpper?: number,
 ): number {
   // Search compares a unified target upper bound: score mode uses score directly, while PT mode converts score bound into event-point bound.
   const usesPointBonus = objective?.usesPointBonus ?? (target === "eventPoint" && eventMode === "pointBonus");
@@ -1278,7 +1489,7 @@ export function estimateSearchScopeTargetUpperBoundFromScore(
     )
     : 0;
   if (objective) {
-    return objective.estimateTargetUpperBound(scoreUpperBound, pointBonusRateUpper, input);
+    return objective.estimateTargetUpperBound(scoreUpperBound, pointBonusRateUpper, input, scoreRateUpper);
   }
   return estimateTargetUpperBoundFromScore(
     scoreUpperBound,
@@ -1287,6 +1498,7 @@ export function estimateSearchScopeTargetUpperBoundFromScore(
     target,
     eventMode,
     supportBandPointUpperBound,
+    scoreRateUpper,
   );
 }
 
@@ -1327,7 +1539,7 @@ export function shouldUseCorrelatedUpperBound(
     return false;
   }
   if (objective.usesPointBonus) {
-    return !Number.isFinite(upperBound) || upperBound <= thresholdResult.targetValue + 120;
+    return false;
   }
   if (!Number.isFinite(upperBound)) {
     return false;
@@ -1522,6 +1734,18 @@ export function pruneCardsByInclusionTargetUpperBound(
       skillContextUpperMode ? getCardSkillAverageRateForUpperMode(card, skillContextUpperMode) : undefined,
       skillContextUpperMode ? getCardSkillLeaderRateForUpperMode(card, skillContextUpperMode) : undefined,
     );
+    const scoreRateUpperBound = estimateSearchScopeScoreRateUpperBound(
+      [card],
+      upperBoundIndex,
+      cards,
+      0,
+      usedCharacterMaskLow,
+      usedCharacterMaskHigh,
+      baseScoreRatePerPower,
+      skillContextUpperMode,
+      skillContextUpperMode ? getCardSkillAverageRateForUpperMode(card, skillContextUpperMode) : undefined,
+      skillContextUpperMode ? getCardSkillLeaderRateForUpperMode(card, skillContextUpperMode) : undefined,
+    );
     const targetUpperBound = estimateSearchScopeTargetUpperBoundFromScore(
       scoreUpperBound,
       [card],
@@ -1537,6 +1761,7 @@ export function pruneCardsByInclusionTargetUpperBound(
       card.pointBonusRate,
       supportBandPointUpperBound,
       objective,
+      scoreRateUpperBound,
     );
     if (!isSearchUpperBoundBelowResultThreshold(targetUpperBound, scoreUpperBound, thresholdResult)) {
       result.push(card);

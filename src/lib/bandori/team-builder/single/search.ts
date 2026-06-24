@@ -5,7 +5,7 @@
  * top-level workflow: prepare inputs, build candidate searches, run exact DFS, and finish
  * the response. Lower-level pruning details live in search-execution.ts.
  */
-import { calculateBaseScoreRatePerPower } from "../core/scoring";
+import { calculateBaseScoreRatePerPower, calculateSkillUpperRatesPerPower } from "../core/scoring";
 import { getCachedPreparedChart } from "../core/chart";
 import {
   buildCalculatedCards,
@@ -18,13 +18,31 @@ import { normalizeTeamSearchConstraints } from "../core/constraints";
 import { createScoreCalculationCache } from "../core/team-evaluation";
 import { getCardInstanceKey } from "../core/card-identity";
 import { createInitialTeamSearchStats, finishTeamSearchResponse, sortResults } from "./results";
-import { normalizeSearchTarget, resolveBandoriTeamSearchEventMode, resolveBandoriTeamSearchUseFever } from "../core/events";
+import { normalizeSearchLiveType, normalizeSearchTarget, resolveBandoriTeamSearchEventMode, resolveBandoriTeamSearchUseFever } from "../core/events";
 import { clamp } from "../core/utils";
 import { BANDORI_TEAM_SEARCH_DIFFICULTIES } from "../core/types";
 import { createSearchObjectiveAdapter } from "./objective";
 import { buildSearchPrecomputedData, sortAreaItemConfigurationsForSearch } from "./search-prep";
 import { buildConfigurationSearches, runExactDfsSearch, type SingleSearchExecutionState } from "./search-execution";
-import type { BandoriTeamSearchDifficulty, BandoriTeamSearchInput, BandoriTeamSearchResponse, BandoriTeamSearchResult } from "../core/types";
+import type { BandoriTeamSearchDifficulty, BandoriTeamSearchInput, BandoriTeamSearchResponse, BandoriTeamSearchResult, PreparedChart } from "../core/types";
+
+function calculateExternalSkillRateUpper(input: BandoriTeamSearchInput, chart: PreparedChart, server: number): number {
+  if (normalizeSearchLiveType(input.liveType) !== "multi") {
+    return 0;
+  }
+
+  const externalSkillRates = (input.otherPlayerSkills ?? []).slice(0, 4).map((externalSkill) => {
+    const skill = input.skillsById[String(externalSkill.skillId)];
+    return calculateSkillUpperRatesPerPower(chart, skill, externalSkill.skillLevel, server);
+  });
+  const triggerRateUpper = externalSkillRates.reduce((sum, rates) => sum + rates.averageRate, 0);
+  if (!input.encoreSkillSource?.startsWith("other")) {
+    return triggerRateUpper;
+  }
+
+  const externalIndex = Number(input.encoreSkillSource.replace("other", "")) - 1;
+  return triggerRateUpper + Math.max(0, externalSkillRates[externalIndex]?.leaderRate ?? 0);
+}
 
 // Legacy compatibility exports for callers that still import helpers from bandori-team-search.ts.
 export * from "../core/types";
@@ -119,6 +137,7 @@ export function searchBandoriBestTeams(input: BandoriTeamSearchInput): BandoriTe
   }
 
   const baseScoreRatePerPower = calculateBaseScoreRatePerPower(chart);
+  const scoreRateBaseUpper = baseScoreRatePerPower + calculateExternalSkillRateUpper(input, chart, server);
   const state: SingleSearchExecutionState = {
     input,
     chart,
@@ -134,6 +153,7 @@ export function searchBandoriBestTeams(input: BandoriTeamSearchInput): BandoriTe
     evaluatedTeamKeys: new Set<string>(),
     scoreCache: createScoreCalculationCache(),
     baseScoreRatePerPower,
+    scoreRateBaseUpper,
     deadlineAt,
     observedScoreUpperBound: Number.NEGATIVE_INFINITY,
     visitedBranchCount: 0,
