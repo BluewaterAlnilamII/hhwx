@@ -254,9 +254,8 @@ export function evaluateTeam(options: EvaluateTeamOptions): BandoriTeamSearchRes
   }
 
   const eventMode = resolveBandoriTeamSearchEventMode(input.eventType, input.liveType);
-  const eventBonuses = cards.map((card) => calculateBandoriCardEventBonus(card, input.eventBonus));
   const pointBonusRate = eventMode === "pointBonus"
-    ? Math.round(eventBonuses.reduce((sum, bonus) => sum + bonus.pointBonusRate, 0) * 100) / 100
+    ? Math.round(cards.reduce((sum, card) => sum + card.pointBonusRate, 0) * 100) / 100
     : 0;
   const target = normalizeSearchTarget(input.target);
   const liveType = normalizeSearchLiveType(input.liveType);
@@ -448,6 +447,7 @@ export function evaluateTeam(options: EvaluateTeamOptions): BandoriTeamSearchRes
     configuration.selectedAreaItemIds,
     server,
   );
+  const eventBonuses = cards.map((card) => calculateBandoriCardEventBonus(card, input.eventBonus));
   const eventPower = Math.floor(eventBonuses.reduce((sum, bonus) => (
     sum + bonus.parameterBonus[0] + bonus.parameterBonus[1] + bonus.parameterBonus[2]
   ), 0));

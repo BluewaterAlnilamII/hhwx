@@ -20,6 +20,8 @@ import {
   estimateSearchScopeLeaderScoreUpPercentUpperBound,
   estimateSearchScopePowerUpperBound,
   estimateSearchScopeScoreRateUpperBound,
+  estimateSearchScopeSingleSelfSkillScoreRateUpperBound,
+  estimateSearchScopeSingleSelfSkillScoreUpperBound,
   estimateSearchScopeScoreUpperBoundWithLeaderConstraint,
   estimateSearchScopeScoreUpperBound,
   estimateSearchScopeTargetUpperBoundFromScore,
@@ -29,6 +31,8 @@ import {
   hasCharacterIndexInMask,
   isSearchUpperBoundBelowResultThreshold,
   pruneCardsByInclusionTargetUpperBound,
+  shouldEstimateSearchScopeScoreRateUpperBound,
+  shouldUseSingleSelfSkillScoreUpperBound,
   shouldUseCorrelatedUpperBound,
 } from "../core/character-bounds";
 import { evaluateTeam } from "../core/team-evaluation";
@@ -66,7 +70,7 @@ export type SingleSearchExecutionState = {
   objective: SearchObjectiveAdapter;
   stats: BandoriTeamSearchStats;
   results: BandoriTeamSearchResult[];
-  evaluatedTeamKeys: Set<string>;
+  evaluatedTeamKeys: Set<string> | null;
   scoreCache: ScoreCalculationCache;
   baseScoreRatePerPower: number;
   scoreRateBaseUpper: number;
@@ -90,11 +94,156 @@ function shouldPruneByUpperBound(
   state: SingleSearchExecutionState,
   targetUpperBound: number,
   scoreUpperBound: number,
+  totalPowerUpperBound?: number,
 ): boolean {
   return state.results.length >= state.resultLimit && isSearchUpperBoundBelowResultThreshold(
     targetUpperBound,
     scoreUpperBound,
     getPruningThresholdResult(state),
+    totalPowerUpperBound,
+  );
+}
+
+function shouldEstimateTotalPowerUpperBoundForTargetTie(
+  state: SingleSearchExecutionState,
+  targetUpperBound: number,
+): boolean {
+  const thresholdResult = getPruningThresholdResult(state);
+  return state.target === "eventPoint"
+    && thresholdResult?.target === "eventPoint"
+    && targetUpperBound === thresholdResult.targetValue;
+}
+
+function estimateTotalPowerUpperBoundForTargetTie(options: {
+  state: SingleSearchExecutionState;
+  targetUpperBound: number;
+  selectedCards: SearchCard[];
+  upperBoundIndex: SearchConfiguration["upperBoundIndex"];
+  searchCards: SearchCard[];
+  startIndex: number;
+  usedCharacterMaskLow: number;
+  usedCharacterMaskHigh: number;
+  selectedPower?: number;
+}): number | undefined {
+  if (!shouldEstimateTotalPowerUpperBoundForTargetTie(options.state, options.targetUpperBound)) {
+    return undefined;
+  }
+
+  return estimateSearchScopePowerUpperBound(
+    options.selectedCards,
+    options.upperBoundIndex,
+    options.searchCards,
+    options.startIndex,
+    options.usedCharacterMaskLow,
+    options.usedCharacterMaskHigh,
+    options.selectedPower,
+  );
+}
+
+function canUseSingleSelfSkillScoreUpperBound(state: SingleSearchExecutionState): boolean {
+  return state.constraints.minLeaderScoreUpPercent === null
+    && shouldUseSingleSelfSkillScoreUpperBound(state.input);
+}
+
+function shouldIncludeSelfLeaderRateInMultiLiveUpperBound(state: SingleSearchExecutionState): boolean {
+  return !state.input.encoreSkillSource?.startsWith("other");
+}
+
+function estimateTargetScoreUpperBound(options: {
+  state: SingleSearchExecutionState;
+  selectedCards: SearchCard[];
+  upperBoundIndex: SearchConfiguration["upperBoundIndex"];
+  searchCards: SearchCard[];
+  startIndex: number;
+  usedCharacterMaskLow: number;
+  usedCharacterMaskHigh: number;
+  skillContextUpperMode: SearchConfiguration["skillContextUpperMode"];
+  selectedPower?: number;
+  selectedSkillAverageRate?: number;
+  selectedSkillLeaderRate?: number;
+}): number {
+  if (canUseSingleSelfSkillScoreUpperBound(options.state)) {
+    const singleSelfSkillScoreUpperBound = estimateSearchScopeSingleSelfSkillScoreUpperBound(
+      options.selectedCards,
+      options.upperBoundIndex,
+      options.searchCards,
+      options.startIndex,
+      options.usedCharacterMaskLow,
+      options.usedCharacterMaskHigh,
+      options.state.scoreRateBaseUpper,
+      options.skillContextUpperMode,
+      shouldIncludeSelfLeaderRateInMultiLiveUpperBound(options.state),
+      options.selectedPower,
+    );
+    if (singleSelfSkillScoreUpperBound !== null) {
+      return singleSelfSkillScoreUpperBound;
+    }
+  }
+
+  return estimateSearchScopeScoreUpperBound(
+    options.selectedCards,
+    options.upperBoundIndex,
+    options.searchCards,
+    options.startIndex,
+    options.usedCharacterMaskLow,
+    options.usedCharacterMaskHigh,
+    options.state.scoreRateBaseUpper,
+    options.skillContextUpperMode,
+    options.selectedPower,
+    options.selectedSkillAverageRate,
+    options.selectedSkillLeaderRate,
+  );
+}
+
+function estimateTargetScoreRateUpperBound(options: {
+  state: SingleSearchExecutionState;
+  selectedCards: SearchCard[];
+  upperBoundIndex: SearchConfiguration["upperBoundIndex"];
+  searchCards: SearchCard[];
+  startIndex: number;
+  usedCharacterMaskLow: number;
+  usedCharacterMaskHigh: number;
+  skillContextUpperMode: SearchConfiguration["skillContextUpperMode"];
+  selectedSkillAverageRate?: number;
+  selectedSkillLeaderRate?: number;
+}): number | undefined {
+  if (!shouldEstimateSearchScopeScoreRateUpperBound(
+    options.state.input,
+    options.state.target,
+    options.state.eventMode,
+    options.state.objective,
+  )) {
+    return undefined;
+  }
+
+  if (canUseSingleSelfSkillScoreUpperBound(options.state)) {
+    const singleSelfSkillScoreRateUpperBound = estimateSearchScopeSingleSelfSkillScoreRateUpperBound(
+      options.selectedCards,
+      options.upperBoundIndex,
+      options.searchCards,
+      options.startIndex,
+      options.usedCharacterMaskLow,
+      options.usedCharacterMaskHigh,
+      options.state.scoreRateBaseUpper,
+      options.skillContextUpperMode,
+      shouldIncludeSelfLeaderRateInMultiLiveUpperBound(options.state),
+    );
+    if (singleSelfSkillScoreRateUpperBound !== null) {
+      return singleSelfSkillScoreRateUpperBound;
+    }
+  }
+
+  return estimateSearchScopeScoreRateUpperBound(
+    options.selectedCards,
+    options.upperBoundIndex,
+    options.searchCards,
+    options.startIndex,
+    options.usedCharacterMaskLow,
+    options.usedCharacterMaskHigh,
+    options.state.scoreRateBaseUpper,
+    options.skillContextUpperMode,
+    options.selectedSkillAverageRate,
+    options.selectedSkillLeaderRate,
   );
 }
 
@@ -157,13 +306,15 @@ function evaluateUniqueTeam(
   cards: SearchCard[],
   configuration: BandoriAreaItemConfiguration,
 ): BandoriTeamSearchResult | null {
-  // Area configuration is part of the evaluation key: same cards under different configs must be evaluated separately.
-  const key = getTeamEvaluationKey(cards, configuration);
-  if (state.evaluatedTeamKeys.has(key)) {
-    state.stats.duplicateTeamCount += 1;
-    return null;
+  if (state.evaluatedTeamKeys) {
+    // Area configuration is part of the evaluation key: same cards under different configs must be evaluated separately.
+    const key = getTeamEvaluationKey(cards, configuration);
+    if (state.evaluatedTeamKeys.has(key)) {
+      state.stats.duplicateTeamCount += 1;
+      return null;
+    }
+    state.evaluatedTeamKeys.add(key);
   }
-  state.evaluatedTeamKeys.add(key);
   state.stats.evaluatedTeamCount += 1;
   state.stats.targetOnlyEvaluationCount += 1;
   const result = evaluateTeam({
@@ -200,6 +351,7 @@ function tryCorrelatedUpperBoundPrune(options: {
   selectedPointBonusRate: number;
   looseTargetUpperBound: number;
   scoreUpperBound: number;
+  totalPowerUpperBound?: number;
 }): boolean {
   const { state } = options;
   if (!shouldUseCorrelatedUpperBound(options.looseTargetUpperBound, getPruningThresholdResult(state), state.objective)) {
@@ -230,6 +382,7 @@ function tryCorrelatedUpperBoundPrune(options: {
       tightTargetUpperBound,
       options.scoreUpperBound,
       getPruningThresholdResult(state),
+      options.totalPowerUpperBound,
     )
   ) {
     state.stats.prunedBranchCount += 1;
@@ -357,7 +510,12 @@ export function buildConfigurationSearches(options: {
       }
 
       let scopeCards = groupSearchCardsByCharacter(scope.searchCards);
-      let upperBoundIndex = buildCharacterUpperBoundIndex(scopeCards, scope.skillContextUpperMode, includeLeaderScoreUpBounds);
+      let upperBoundIndex = buildCharacterUpperBoundIndex(
+        scopeCards,
+        scope.skillContextUpperMode,
+        includeLeaderScoreUpBounds,
+        true,
+      );
       if (shouldPruneByPowerConstraint({
         state,
         selectedCards: [],
@@ -387,26 +545,27 @@ export function buildConfigurationSearches(options: {
         continue;
       }
 
-      let rootScoreUpperBound = estimateSearchScopeScoreUpperBound(
-        [],
+      let rootScoreUpperBound = estimateTargetScoreUpperBound({
+        state,
+        selectedCards: [],
         upperBoundIndex,
-        scopeCards,
-        0,
-        0,
-        0,
-        state.scoreRateBaseUpper,
-        scope.skillContextUpperMode,
-      );
-      let rootScoreRateUpperBound = estimateSearchScopeScoreRateUpperBound(
-        [],
+        searchCards: scopeCards,
+        startIndex: 0,
+        usedCharacterMaskLow: 0,
+        usedCharacterMaskHigh: 0,
+        skillContextUpperMode: scope.skillContextUpperMode,
+        selectedPower: 0,
+      });
+      let rootScoreRateUpperBound = estimateTargetScoreRateUpperBound({
+        state,
+        selectedCards: [],
         upperBoundIndex,
-        scopeCards,
-        0,
-        0,
-        0,
-        state.scoreRateBaseUpper,
-        scope.skillContextUpperMode,
-      );
+        searchCards: scopeCards,
+        startIndex: 0,
+        usedCharacterMaskLow: 0,
+        usedCharacterMaskHigh: 0,
+        skillContextUpperMode: scope.skillContextUpperMode,
+      });
       let rootTargetUpperBound = estimateSearchScopeTargetUpperBoundFromScore(
         rootScoreUpperBound,
         [],
@@ -425,7 +584,18 @@ export function buildConfigurationSearches(options: {
         rootScoreRateUpperBound,
       );
       state.observedScoreUpperBound = Math.max(state.observedScoreUpperBound, rootScoreUpperBound);
-      if (shouldPruneByUpperBound(state, rootTargetUpperBound, rootScoreUpperBound)) {
+      let rootTotalPowerUpperBound = estimateTotalPowerUpperBoundForTargetTie({
+        state,
+        targetUpperBound: rootTargetUpperBound,
+        selectedCards: [],
+        upperBoundIndex,
+        searchCards: scopeCards,
+        startIndex: 0,
+        usedCharacterMaskLow: 0,
+        usedCharacterMaskHigh: 0,
+        selectedPower: 0,
+      });
+      if (shouldPruneByUpperBound(state, rootTargetUpperBound, rootScoreUpperBound, rootTotalPowerUpperBound)) {
         state.stats.prunedBranchCount += 1;
         state.stats.rootConfigSkippedCount += 1;
         continue;
@@ -471,27 +641,33 @@ export function buildConfigurationSearches(options: {
         );
         if (prunedScopeCards.length < scopeCards.length) {
           scopeCards = prunedScopeCards;
-          upperBoundIndex = buildCharacterUpperBoundIndex(scopeCards, scope.skillContextUpperMode, includeLeaderScoreUpBounds);
-          rootScoreUpperBound = estimateSearchScopeScoreUpperBound(
-            [],
-            upperBoundIndex,
+          upperBoundIndex = buildCharacterUpperBoundIndex(
             scopeCards,
-            0,
-            0,
-            0,
-            state.scoreRateBaseUpper,
             scope.skillContextUpperMode,
+            includeLeaderScoreUpBounds,
+            true,
           );
-          rootScoreRateUpperBound = estimateSearchScopeScoreRateUpperBound(
-            [],
+          rootScoreUpperBound = estimateTargetScoreUpperBound({
+            state,
+            selectedCards: [],
             upperBoundIndex,
-            scopeCards,
-            0,
-            0,
-            0,
-            state.scoreRateBaseUpper,
-            scope.skillContextUpperMode,
-          );
+            searchCards: scopeCards,
+            startIndex: 0,
+            usedCharacterMaskLow: 0,
+            usedCharacterMaskHigh: 0,
+            skillContextUpperMode: scope.skillContextUpperMode,
+            selectedPower: 0,
+          });
+          rootScoreRateUpperBound = estimateTargetScoreRateUpperBound({
+            state,
+            selectedCards: [],
+            upperBoundIndex,
+            searchCards: scopeCards,
+            startIndex: 0,
+            usedCharacterMaskLow: 0,
+            usedCharacterMaskHigh: 0,
+            skillContextUpperMode: scope.skillContextUpperMode,
+          });
           rootTargetUpperBound = estimateSearchScopeTargetUpperBoundFromScore(
             rootScoreUpperBound,
             [],
@@ -510,6 +686,17 @@ export function buildConfigurationSearches(options: {
             rootScoreRateUpperBound,
           );
           state.observedScoreUpperBound = Math.max(state.observedScoreUpperBound, rootScoreUpperBound);
+          rootTotalPowerUpperBound = estimateTotalPowerUpperBoundForTargetTie({
+            state,
+            targetUpperBound: rootTargetUpperBound,
+            selectedCards: [],
+            upperBoundIndex,
+            searchCards: scopeCards,
+            startIndex: 0,
+            usedCharacterMaskLow: 0,
+            usedCharacterMaskHigh: 0,
+            selectedPower: 0,
+          });
         }
       }
       if (shouldPruneByPowerConstraint({
@@ -540,7 +727,7 @@ export function buildConfigurationSearches(options: {
         state.stats.rootConfigSkippedCount += 1;
         continue;
       }
-      if (shouldPruneByUpperBound(state, rootTargetUpperBound, rootScoreUpperBound)) {
+      if (shouldPruneByUpperBound(state, rootTargetUpperBound, rootScoreUpperBound, rootTotalPowerUpperBound)) {
         state.stats.prunedBranchCount += 1;
         state.stats.rootConfigSkippedCount += 1;
         continue;
@@ -605,28 +792,34 @@ export function runExactDfsSearch(
       );
       if (prunedSearchCards.length < searchCards.length) {
         searchCards = prunedSearchCards;
-        upperBoundIndex = buildCharacterUpperBoundIndex(searchCards, skillContextUpperMode, includeLeaderScoreUpBounds);
+        upperBoundIndex = buildCharacterUpperBoundIndex(
+          searchCards,
+          skillContextUpperMode,
+          includeLeaderScoreUpBounds,
+          true,
+        );
       }
-      const rootScoreUpperBound = estimateSearchScopeScoreUpperBound(
-        [],
+      const rootScoreUpperBound = estimateTargetScoreUpperBound({
+        state,
+        selectedCards: [],
         upperBoundIndex,
         searchCards,
-        0,
-        0,
-        0,
-        state.scoreRateBaseUpper,
+        startIndex: 0,
+        usedCharacterMaskLow: 0,
+        usedCharacterMaskHigh: 0,
         skillContextUpperMode,
-      );
-      const rootScoreRateUpperBound = estimateSearchScopeScoreRateUpperBound(
-        [],
+        selectedPower: 0,
+      });
+      const rootScoreRateUpperBound = estimateTargetScoreRateUpperBound({
+        state,
+        selectedCards: [],
         upperBoundIndex,
         searchCards,
-        0,
-        0,
-        0,
-        state.scoreRateBaseUpper,
+        startIndex: 0,
+        usedCharacterMaskLow: 0,
+        usedCharacterMaskHigh: 0,
         skillContextUpperMode,
-      );
+      });
       state.observedScoreUpperBound = Math.max(state.observedScoreUpperBound, rootScoreUpperBound);
       const rootTargetUpperBound = estimateSearchScopeTargetUpperBoundFromScore(
         rootScoreUpperBound,
@@ -645,7 +838,18 @@ export function runExactDfsSearch(
         state.objective,
         rootScoreRateUpperBound,
       );
-      if (shouldPruneByUpperBound(state, rootTargetUpperBound, rootScoreUpperBound)) {
+      const rootTotalPowerUpperBound = estimateTotalPowerUpperBoundForTargetTie({
+        state,
+        targetUpperBound: rootTargetUpperBound,
+        selectedCards: [],
+        upperBoundIndex,
+        searchCards,
+        startIndex: 0,
+        usedCharacterMaskLow: 0,
+        usedCharacterMaskHigh: 0,
+        selectedPower: 0,
+      });
+      if (shouldPruneByUpperBound(state, rootTargetUpperBound, rootScoreUpperBound, rootTotalPowerUpperBound)) {
         state.stats.prunedBranchCount += 1;
         state.stats.rootConfigSkippedCount += 1;
         continue;
@@ -746,31 +950,31 @@ export function runExactDfsSearch(
             skillContextUpperMode,
             selectedPower,
             selectedSkillAverageRate,
-          }) ?? estimateSearchScopeScoreUpperBound(
+          }) ?? estimateTargetScoreUpperBound({
+            state,
             selectedCards,
             upperBoundIndex,
             searchCards,
             startIndex,
             usedCharacterMaskLow,
             usedCharacterMaskHigh,
-            state.scoreRateBaseUpper,
             skillContextUpperMode,
             selectedPower,
-            skillContextUpperMode ? selectedSkillAverageRate : undefined,
-            skillContextUpperMode ? selectedLeaderSkillRateForUpperBound : undefined,
-          );
-          const completeTeamScoreRateUpperBound = estimateSearchScopeScoreRateUpperBound(
+            selectedSkillAverageRate: skillContextUpperMode ? selectedSkillAverageRate : undefined,
+            selectedSkillLeaderRate: skillContextUpperMode ? selectedLeaderSkillRateForUpperBound : undefined,
+          });
+          const completeTeamScoreRateUpperBound = estimateTargetScoreRateUpperBound({
+            state,
             selectedCards,
             upperBoundIndex,
             searchCards,
             startIndex,
             usedCharacterMaskLow,
             usedCharacterMaskHigh,
-            state.scoreRateBaseUpper,
             skillContextUpperMode,
-            skillContextUpperMode ? selectedSkillAverageRate : undefined,
-            skillContextUpperMode ? selectedLeaderSkillRateForUpperBound : undefined,
-          );
+            selectedSkillAverageRate: skillContextUpperMode ? selectedSkillAverageRate : undefined,
+            selectedSkillLeaderRate: skillContextUpperMode ? selectedLeaderSkillRateForUpperBound : undefined,
+          });
           const completeTeamTargetUpperBound = estimateSearchScopeTargetUpperBoundFromScore(
             completeTeamScoreUpperBound,
             selectedCards,
@@ -789,7 +993,23 @@ export function runExactDfsSearch(
             completeTeamScoreRateUpperBound,
           );
           state.observedScoreUpperBound = Math.max(state.observedScoreUpperBound, completeTeamScoreUpperBound);
-          if (shouldPruneByUpperBound(state, completeTeamTargetUpperBound, completeTeamScoreUpperBound)) {
+          const completeTeamTotalPowerUpperBound = estimateTotalPowerUpperBoundForTargetTie({
+            state,
+            targetUpperBound: completeTeamTargetUpperBound,
+            selectedCards,
+            upperBoundIndex,
+            searchCards,
+            startIndex,
+            usedCharacterMaskLow,
+            usedCharacterMaskHigh,
+            selectedPower,
+          });
+          if (shouldPruneByUpperBound(
+            state,
+            completeTeamTargetUpperBound,
+            completeTeamScoreUpperBound,
+            completeTeamTotalPowerUpperBound,
+          )) {
             state.stats.prunedBranchCount += 1;
             return;
           }
@@ -808,6 +1028,7 @@ export function runExactDfsSearch(
             selectedPointBonusRate,
             looseTargetUpperBound: completeTeamTargetUpperBound,
             scoreUpperBound: completeTeamScoreUpperBound,
+            totalPowerUpperBound: completeTeamTotalPowerUpperBound,
           })) {
             return;
           }
@@ -863,31 +1084,31 @@ export function runExactDfsSearch(
           skillContextUpperMode,
           selectedPower,
           selectedSkillAverageRate,
-        }) ?? estimateSearchScopeScoreUpperBound(
-            selectedCards,
-            upperBoundIndex,
-            searchCards,
-            startIndex,
-            usedCharacterMaskLow,
-            usedCharacterMaskHigh,
-            state.scoreRateBaseUpper,
-            skillContextUpperMode,
-            selectedPower,
-            skillContextUpperMode ? selectedSkillAverageRate : undefined,
-            skillContextUpperMode ? selectedSkillLeaderRate : undefined,
-          );
-        const branchScoreRateUpperBound = estimateSearchScopeScoreRateUpperBound(
+        }) ?? estimateTargetScoreUpperBound({
+          state,
           selectedCards,
           upperBoundIndex,
           searchCards,
           startIndex,
           usedCharacterMaskLow,
           usedCharacterMaskHigh,
-          state.scoreRateBaseUpper,
           skillContextUpperMode,
-          skillContextUpperMode ? selectedSkillAverageRate : undefined,
-          skillContextUpperMode ? selectedSkillLeaderRate : undefined,
-        );
+          selectedPower,
+          selectedSkillAverageRate: skillContextUpperMode ? selectedSkillAverageRate : undefined,
+          selectedSkillLeaderRate: skillContextUpperMode ? selectedSkillLeaderRate : undefined,
+        });
+        const branchScoreRateUpperBound = estimateTargetScoreRateUpperBound({
+          state,
+          selectedCards,
+          upperBoundIndex,
+          searchCards,
+          startIndex,
+          usedCharacterMaskLow,
+          usedCharacterMaskHigh,
+          skillContextUpperMode,
+          selectedSkillAverageRate: skillContextUpperMode ? selectedSkillAverageRate : undefined,
+          selectedSkillLeaderRate: skillContextUpperMode ? selectedSkillLeaderRate : undefined,
+        });
         const branchTargetUpperBound = estimateSearchScopeTargetUpperBoundFromScore(
           branchScoreUpperBound,
           selectedCards,
@@ -906,7 +1127,23 @@ export function runExactDfsSearch(
           branchScoreRateUpperBound,
         );
         state.observedScoreUpperBound = Math.max(state.observedScoreUpperBound, branchScoreUpperBound);
-        if (shouldPruneByUpperBound(state, branchTargetUpperBound, branchScoreUpperBound)) {
+        const branchTotalPowerUpperBound = estimateTotalPowerUpperBoundForTargetTie({
+          state,
+          targetUpperBound: branchTargetUpperBound,
+          selectedCards,
+          upperBoundIndex,
+          searchCards,
+          startIndex,
+          usedCharacterMaskLow,
+          usedCharacterMaskHigh,
+          selectedPower,
+        });
+        if (shouldPruneByUpperBound(
+          state,
+          branchTargetUpperBound,
+          branchScoreUpperBound,
+          branchTotalPowerUpperBound,
+        )) {
           state.stats.prunedBranchCount += 1;
           return;
         }
@@ -925,6 +1162,7 @@ export function runExactDfsSearch(
           selectedPointBonusRate,
           looseTargetUpperBound: branchTargetUpperBound,
           scoreUpperBound: branchScoreUpperBound,
+          totalPowerUpperBound: branchTotalPowerUpperBound,
         })) {
           return;
         }
