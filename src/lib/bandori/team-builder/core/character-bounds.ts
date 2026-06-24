@@ -4,7 +4,7 @@
  * The bounds are intentionally optimistic: they may overestimate what remains, but must never
  * underestimate it. That invariant is what makes branch pruning behavior-preserving.
  */
-import { estimateTargetUpperBoundFromScore } from "./events";
+import { estimateTargetUpperBoundFromScore, normalizeSearchLiveType } from "./events";
 import { clamp } from "./utils";
 import { canKeepSameAttributeContext, getPossibleSameBandIds, hasAtLeastDistinctCharacters } from "./team-context";
 import type { BandoriTeamSearchEventMode, BandoriTeamSearchInput, BandoriTeamSearchResult, BandoriTeamSearchTarget, CharacterUpperBoundIndex, SearchCard, SearchObjectiveAdapter, SkillContextUpperMode } from "./types";
@@ -12,6 +12,7 @@ export function buildCharacterUpperBoundIndex(
   cards: SearchCard[],
   skillContextUpperMode?: SkillContextUpperMode,
   includeLeaderScoreUpBounds = false,
+  coarseByCharacterGroup = false,
 ): CharacterUpperBoundIndex {
   // Build suffix upper-bound indexes in traversal order. Each startIndex answers:
   // "From here onward, what is the best power / point bonus / skill rate each character can still provide?"
@@ -96,46 +97,78 @@ export function buildCharacterUpperBoundIndex(
     leaderMixedScoreUpPercentByStartIndex[cards.length] = shouldBuildMixedSkillMode ? leaderMixedScoreUpPercent.slice() : emptySkillRates;
   }
 
+  let groupEndIndex = cards.length - 1;
+  const assignUpperBoundArrays = (index: number): void => {
+    powerByStartIndex[index] = power;
+    pointBonusRateByStartIndex[index] = pointBonusRate;
+    skillAverageRateByStartIndex[index] = shouldBuildDefaultSkillMode ? skillAverageRate : emptySkillRates;
+    skillLeaderRateByStartIndex[index] = shouldBuildDefaultSkillMode ? skillLeaderRate : emptySkillRates;
+    skillSameBandAverageRateByStartIndex[index] = shouldBuildSameBandSkillMode ? skillSameBandAverageRate : emptySkillRates;
+    skillSameBandLeaderRateByStartIndex[index] = shouldBuildSameBandSkillMode ? skillSameBandLeaderRate : emptySkillRates;
+    skillSameAttributeAverageRateByStartIndex[index] = shouldBuildSameAttributeSkillMode ? skillSameAttributeAverageRate : emptySkillRates;
+    skillSameAttributeLeaderRateByStartIndex[index] = shouldBuildSameAttributeSkillMode ? skillSameAttributeLeaderRate : emptySkillRates;
+    skillBothAverageRateByStartIndex[index] = shouldBuildBothSkillMode ? skillBothAverageRate : emptySkillRates;
+    skillBothLeaderRateByStartIndex[index] = shouldBuildBothSkillMode ? skillBothLeaderRate : emptySkillRates;
+    skillMixedAverageRateByStartIndex[index] = shouldBuildMixedSkillMode ? skillMixedAverageRate : emptySkillRates;
+    skillMixedLeaderRateByStartIndex[index] = shouldBuildMixedSkillMode ? skillMixedLeaderRate : emptySkillRates;
+    if (includeLeaderScoreUpBounds) {
+      leaderScoreUpPercentByStartIndex[index] = shouldBuildDefaultSkillMode ? leaderScoreUpPercent : emptySkillRates;
+      leaderSameBandScoreUpPercentByStartIndex[index] = shouldBuildSameBandSkillMode ? leaderSameBandScoreUpPercent : emptySkillRates;
+      leaderSameAttributeScoreUpPercentByStartIndex[index] = shouldBuildSameAttributeSkillMode ? leaderSameAttributeScoreUpPercent : emptySkillRates;
+      leaderBothScoreUpPercentByStartIndex[index] = shouldBuildBothSkillMode ? leaderBothScoreUpPercent : emptySkillRates;
+      leaderMixedScoreUpPercentByStartIndex[index] = shouldBuildMixedSkillMode ? leaderMixedScoreUpPercent : emptySkillRates;
+    }
+  };
+
+  const assignUpperBoundArraysForRange = (startIndex: number, endIndex: number): void => {
+    for (let index = startIndex; index <= endIndex; index += 1) {
+      assignUpperBoundArrays(index);
+    }
+  };
+
   for (let index = cards.length - 1; index >= 0; index -= 1) {
     const card = cards[index];
     const characterIndex = characterIndexById.get(card.characterId);
-    power = power.slice();
-    pointBonusRate = pointBonusRate.slice();
-    if (shouldBuildDefaultSkillMode) {
-      skillAverageRate = skillAverageRate.slice();
-      skillLeaderRate = skillLeaderRate.slice();
-    }
-    if (shouldBuildSameBandSkillMode) {
-      skillSameBandAverageRate = skillSameBandAverageRate.slice();
-      skillSameBandLeaderRate = skillSameBandLeaderRate.slice();
-    }
-    if (shouldBuildSameAttributeSkillMode) {
-      skillSameAttributeAverageRate = skillSameAttributeAverageRate.slice();
-      skillSameAttributeLeaderRate = skillSameAttributeLeaderRate.slice();
-    }
-    if (shouldBuildBothSkillMode) {
-      skillBothAverageRate = skillBothAverageRate.slice();
-      skillBothLeaderRate = skillBothLeaderRate.slice();
-    }
-    if (shouldBuildMixedSkillMode) {
-      skillMixedAverageRate = skillMixedAverageRate.slice();
-      skillMixedLeaderRate = skillMixedLeaderRate.slice();
-    }
-    if (includeLeaderScoreUpBounds) {
+    const isGroupEnd = index === cards.length - 1 || cards[index + 1]?.characterId !== card.characterId;
+    if (!coarseByCharacterGroup || isGroupEnd) {
+      power = power.slice();
+      pointBonusRate = pointBonusRate.slice();
       if (shouldBuildDefaultSkillMode) {
-        leaderScoreUpPercent = leaderScoreUpPercent.slice();
+        skillAverageRate = skillAverageRate.slice();
+        skillLeaderRate = skillLeaderRate.slice();
       }
       if (shouldBuildSameBandSkillMode) {
-        leaderSameBandScoreUpPercent = leaderSameBandScoreUpPercent.slice();
+        skillSameBandAverageRate = skillSameBandAverageRate.slice();
+        skillSameBandLeaderRate = skillSameBandLeaderRate.slice();
       }
       if (shouldBuildSameAttributeSkillMode) {
-        leaderSameAttributeScoreUpPercent = leaderSameAttributeScoreUpPercent.slice();
+        skillSameAttributeAverageRate = skillSameAttributeAverageRate.slice();
+        skillSameAttributeLeaderRate = skillSameAttributeLeaderRate.slice();
       }
       if (shouldBuildBothSkillMode) {
-        leaderBothScoreUpPercent = leaderBothScoreUpPercent.slice();
+        skillBothAverageRate = skillBothAverageRate.slice();
+        skillBothLeaderRate = skillBothLeaderRate.slice();
       }
       if (shouldBuildMixedSkillMode) {
-        leaderMixedScoreUpPercent = leaderMixedScoreUpPercent.slice();
+        skillMixedAverageRate = skillMixedAverageRate.slice();
+        skillMixedLeaderRate = skillMixedLeaderRate.slice();
+      }
+      if (includeLeaderScoreUpBounds) {
+        if (shouldBuildDefaultSkillMode) {
+          leaderScoreUpPercent = leaderScoreUpPercent.slice();
+        }
+        if (shouldBuildSameBandSkillMode) {
+          leaderSameBandScoreUpPercent = leaderSameBandScoreUpPercent.slice();
+        }
+        if (shouldBuildSameAttributeSkillMode) {
+          leaderSameAttributeScoreUpPercent = leaderSameAttributeScoreUpPercent.slice();
+        }
+        if (shouldBuildBothSkillMode) {
+          leaderBothScoreUpPercent = leaderBothScoreUpPercent.slice();
+        }
+        if (shouldBuildMixedSkillMode) {
+          leaderMixedScoreUpPercent = leaderMixedScoreUpPercent.slice();
+        }
       }
     }
     if (characterIndex !== undefined) {
@@ -177,24 +210,14 @@ export function buildCharacterUpperBoundIndex(
         }
       }
     }
-    powerByStartIndex[index] = power;
-    pointBonusRateByStartIndex[index] = pointBonusRate;
-    skillAverageRateByStartIndex[index] = shouldBuildDefaultSkillMode ? skillAverageRate : emptySkillRates;
-    skillLeaderRateByStartIndex[index] = shouldBuildDefaultSkillMode ? skillLeaderRate : emptySkillRates;
-    skillSameBandAverageRateByStartIndex[index] = shouldBuildSameBandSkillMode ? skillSameBandAverageRate : emptySkillRates;
-    skillSameBandLeaderRateByStartIndex[index] = shouldBuildSameBandSkillMode ? skillSameBandLeaderRate : emptySkillRates;
-    skillSameAttributeAverageRateByStartIndex[index] = shouldBuildSameAttributeSkillMode ? skillSameAttributeAverageRate : emptySkillRates;
-    skillSameAttributeLeaderRateByStartIndex[index] = shouldBuildSameAttributeSkillMode ? skillSameAttributeLeaderRate : emptySkillRates;
-    skillBothAverageRateByStartIndex[index] = shouldBuildBothSkillMode ? skillBothAverageRate : emptySkillRates;
-    skillBothLeaderRateByStartIndex[index] = shouldBuildBothSkillMode ? skillBothLeaderRate : emptySkillRates;
-    skillMixedAverageRateByStartIndex[index] = shouldBuildMixedSkillMode ? skillMixedAverageRate : emptySkillRates;
-    skillMixedLeaderRateByStartIndex[index] = shouldBuildMixedSkillMode ? skillMixedLeaderRate : emptySkillRates;
-    if (includeLeaderScoreUpBounds) {
-      leaderScoreUpPercentByStartIndex[index] = shouldBuildDefaultSkillMode ? leaderScoreUpPercent : emptySkillRates;
-      leaderSameBandScoreUpPercentByStartIndex[index] = shouldBuildSameBandSkillMode ? leaderSameBandScoreUpPercent : emptySkillRates;
-      leaderSameAttributeScoreUpPercentByStartIndex[index] = shouldBuildSameAttributeSkillMode ? leaderSameAttributeScoreUpPercent : emptySkillRates;
-      leaderBothScoreUpPercentByStartIndex[index] = shouldBuildBothSkillMode ? leaderBothScoreUpPercent : emptySkillRates;
-      leaderMixedScoreUpPercentByStartIndex[index] = shouldBuildMixedSkillMode ? leaderMixedScoreUpPercent : emptySkillRates;
+    const isGroupStart = index === 0 || cards[index - 1]?.characterId !== card.characterId;
+    if (coarseByCharacterGroup) {
+      if (isGroupStart) {
+        assignUpperBoundArraysForRange(index, groupEndIndex);
+        groupEndIndex = index - 1;
+      }
+    } else {
+      assignUpperBoundArrays(index);
     }
   }
 
@@ -578,6 +601,7 @@ export function isSearchUpperBoundBelowResultThreshold(
   targetUpperBound: number,
   scoreUpperBound: number,
   thresholdResult: BandoriTeamSearchResult | undefined,
+  totalPowerUpperBound?: number,
 ): boolean {
   if (!thresholdResult) {
     return false;
@@ -586,7 +610,10 @@ export function isSearchUpperBoundBelowResultThreshold(
     return true;
   }
   if (thresholdResult.target === "eventPoint" && targetUpperBound === thresholdResult.targetValue) {
-    return false;
+    if (totalPowerUpperBound !== undefined && totalPowerUpperBound < thresholdResult.totalPower) {
+      return true;
+    }
+    return totalPowerUpperBound === thresholdResult.totalPower && scoreUpperBound < thresholdResult.score;
   }
   return targetUpperBound === thresholdResult.targetValue && scoreUpperBound < thresholdResult.score;
 }
@@ -868,6 +895,112 @@ export function estimateSearchScopeScoreUpperBound(
     baseScoreRatePerPower,
     selectedPower,
   );
+}
+
+export function estimateSearchScopeSingleSelfSkillScoreRateUpperBound(
+  selectedCards: SearchCard[],
+  upperBoundIndex: CharacterUpperBoundIndex,
+  searchCards: SearchCard[],
+  startIndex: number,
+  usedCharacterMaskLow: number,
+  usedCharacterMaskHigh: number,
+  baseScoreRatePerPower: number,
+  skillContextUpperMode: SkillContextUpperMode | undefined,
+  includeSelfLeaderRate: boolean,
+): number | null {
+  if (!skillContextUpperMode) {
+    return null;
+  }
+
+  const remaining = 5 - selectedCards.length;
+  let selfAverageRateUpper = 0;
+  let selfLeaderRateUpper = 0;
+  for (const card of selectedCards) {
+    selfAverageRateUpper = Math.max(
+      selfAverageRateUpper,
+      getCardSkillAverageRateForUpperMode(card, skillContextUpperMode),
+    );
+    if (includeSelfLeaderRate) {
+      selfLeaderRateUpper = Math.max(
+        selfLeaderRateUpper,
+        getCardSkillLeaderRateForUpperMode(card, skillContextUpperMode),
+      );
+    }
+  }
+
+  if (remaining > 0) {
+    const boundedStartIndex = clamp(startIndex, 0, searchCards.length);
+    const powerByCharacter = upperBoundIndex.powerByStartIndex[boundedStartIndex];
+    const skillAverageRateByCharacter = getSkillAverageRateUpperArray(upperBoundIndex, boundedStartIndex, skillContextUpperMode);
+    const skillLeaderRateByCharacter = includeSelfLeaderRate
+      ? getSkillLeaderRateUpperArray(upperBoundIndex, boundedStartIndex, skillContextUpperMode)
+      : null;
+    let availableCharacterCount = 0;
+
+    for (let characterIndex = 0; characterIndex < upperBoundIndex.characterIds.length; characterIndex += 1) {
+      if (hasCharacterIndexInMask(usedCharacterMaskLow, usedCharacterMaskHigh, characterIndex)) {
+        continue;
+      }
+      if ((powerByCharacter[characterIndex] ?? 0) <= 0) {
+        continue;
+      }
+      availableCharacterCount += 1;
+      selfAverageRateUpper = Math.max(selfAverageRateUpper, skillAverageRateByCharacter[characterIndex] ?? 0);
+      if (skillLeaderRateByCharacter) {
+        selfLeaderRateUpper = Math.max(selfLeaderRateUpper, skillLeaderRateByCharacter[characterIndex] ?? 0);
+      }
+    }
+
+    if (availableCharacterCount < remaining) {
+      return Number.NEGATIVE_INFINITY;
+    }
+  }
+
+  return baseScoreRatePerPower + selfAverageRateUpper + selfLeaderRateUpper;
+}
+
+export function estimateSearchScopeSingleSelfSkillScoreUpperBound(
+  selectedCards: SearchCard[],
+  upperBoundIndex: CharacterUpperBoundIndex,
+  searchCards: SearchCard[],
+  startIndex: number,
+  usedCharacterMaskLow: number,
+  usedCharacterMaskHigh: number,
+  baseScoreRatePerPower: number,
+  skillContextUpperMode: SkillContextUpperMode | undefined,
+  includeSelfLeaderRate: boolean,
+  selectedPower?: number,
+): number | null {
+  const scoreRateUpperBound = estimateSearchScopeSingleSelfSkillScoreRateUpperBound(
+    selectedCards,
+    upperBoundIndex,
+    searchCards,
+    startIndex,
+    usedCharacterMaskLow,
+    usedCharacterMaskHigh,
+    baseScoreRatePerPower,
+    skillContextUpperMode,
+    includeSelfLeaderRate,
+  );
+  if (scoreRateUpperBound === null) {
+    return null;
+  }
+  if (!Number.isFinite(scoreRateUpperBound)) {
+    return scoreRateUpperBound;
+  }
+
+  const powerUpperBound = estimateSearchScopePowerUpperBound(
+    selectedCards,
+    upperBoundIndex,
+    searchCards,
+    startIndex,
+    usedCharacterMaskLow,
+    usedCharacterMaskHigh,
+    selectedPower,
+  );
+  return Number.isFinite(powerUpperBound)
+    ? Math.floor(powerUpperBound) * scoreRateUpperBound
+    : powerUpperBound;
 }
 
 function estimateBranchScoreRateUpperBoundForMode(
@@ -1502,6 +1635,21 @@ export function estimateSearchScopeTargetUpperBoundFromScore(
   );
 }
 
+export function shouldEstimateSearchScopeScoreRateUpperBound(
+  input: BandoriTeamSearchInput,
+  target: BandoriTeamSearchTarget,
+  eventMode: BandoriTeamSearchEventMode,
+  objective?: SearchObjectiveAdapter,
+): boolean {
+  const usesPointBonus = objective?.usesPointBonus ?? (target === "eventPoint" && eventMode === "pointBonus");
+  return usesPointBonus && normalizeSearchLiveType(input.liveType) === "multi";
+}
+
+export function shouldUseSingleSelfSkillScoreUpperBound(input: BandoriTeamSearchInput): boolean {
+  return normalizeSearchLiveType(input.liveType) === "multi"
+    && (input.otherPlayerSkills?.length ?? 0) > 0;
+}
+
 export type CorrelatedUpperState = {
   power: number;
   skillAverageRate: number;
@@ -1599,14 +1747,13 @@ export function estimateCorrelatedSearchScopeTargetUpperBound(
     if (!selectedState.hasEligibleLeader) {
       return Number.NEGATIVE_INFINITY;
     }
-    const scoreUpperBound = Math.floor(selectedState.power) * (
-      baseScoreRatePerPower + selectedState.skillAverageRate + selectedState.skillLeaderRate
-    );
+    const scoreRateUpperBound = baseScoreRatePerPower + selectedState.skillAverageRate + selectedState.skillLeaderRate;
+    const scoreUpperBound = Math.floor(selectedState.power) * scoreRateUpperBound;
     return objective.estimateTargetUpperBound(
       scoreUpperBound,
       selectedState.pointBonusRate,
       input,
-      selectedState.power > 0 ? scoreUpperBound / selectedState.power : undefined,
+      scoreRateUpperBound,
     );
   }
 
@@ -1674,16 +1821,15 @@ export function estimateCorrelatedSearchScopeTargetUpperBound(
     if (!state.hasEligibleLeader) {
       continue;
     }
-    const scoreUpperBound = Math.floor(state.power) * (
-      baseScoreRatePerPower + state.skillAverageRate + state.skillLeaderRate
-    );
+    const scoreRateUpperBound = baseScoreRatePerPower + state.skillAverageRate + state.skillLeaderRate;
+    const scoreUpperBound = Math.floor(state.power) * scoreRateUpperBound;
     targetUpperBound = Math.max(
       targetUpperBound,
       objective.estimateTargetUpperBound(
         scoreUpperBound,
         state.pointBonusRate,
         input,
-        state.power > 0 ? scoreUpperBound / state.power : undefined,
+        scoreRateUpperBound,
       ),
     );
   }
@@ -1734,18 +1880,20 @@ export function pruneCardsByInclusionTargetUpperBound(
       skillContextUpperMode ? getCardSkillAverageRateForUpperMode(card, skillContextUpperMode) : undefined,
       skillContextUpperMode ? getCardSkillLeaderRateForUpperMode(card, skillContextUpperMode) : undefined,
     );
-    const scoreRateUpperBound = estimateSearchScopeScoreRateUpperBound(
-      [card],
-      upperBoundIndex,
-      cards,
-      0,
-      usedCharacterMaskLow,
-      usedCharacterMaskHigh,
-      baseScoreRatePerPower,
-      skillContextUpperMode,
-      skillContextUpperMode ? getCardSkillAverageRateForUpperMode(card, skillContextUpperMode) : undefined,
-      skillContextUpperMode ? getCardSkillLeaderRateForUpperMode(card, skillContextUpperMode) : undefined,
-    );
+    const scoreRateUpperBound = shouldEstimateSearchScopeScoreRateUpperBound(input, target, eventMode, objective)
+      ? estimateSearchScopeScoreRateUpperBound(
+        [card],
+        upperBoundIndex,
+        cards,
+        0,
+        usedCharacterMaskLow,
+        usedCharacterMaskHigh,
+        baseScoreRatePerPower,
+        skillContextUpperMode,
+        skillContextUpperMode ? getCardSkillAverageRateForUpperMode(card, skillContextUpperMode) : undefined,
+        skillContextUpperMode ? getCardSkillLeaderRateForUpperMode(card, skillContextUpperMode) : undefined,
+      )
+      : undefined;
     const targetUpperBound = estimateSearchScopeTargetUpperBoundFromScore(
       scoreUpperBound,
       [card],

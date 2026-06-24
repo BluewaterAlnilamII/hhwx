@@ -150,7 +150,7 @@ export function searchBandoriBestTeams(input: BandoriTeamSearchInput): BandoriTe
     objective,
     stats,
     results,
-    evaluatedTeamKeys: new Set<string>(),
+    evaluatedTeamKeys: null,
     scoreCache: createScoreCalculationCache(),
     baseScoreRatePerPower,
     scoreRateBaseUpper,
