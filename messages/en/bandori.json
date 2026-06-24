@@ -364,8 +364,9 @@
       "free": "Free Live",
       "multi": "Multi Live",
       "challenge": "Challenge Live",
-      "versus": "Medley Live",
-      "team": "Team Live"
+      "medley": "Medley Live",
+      "team": "Team Live",
+      "vs": "VS Live"
     },
     "festivalResults": {
       "win": "Win",

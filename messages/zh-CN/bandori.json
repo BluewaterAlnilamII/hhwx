@@ -364,8 +364,9 @@
       "free": "自由演出",
       "multi": "协力演出",
       "challenge": "挑战演出",
-      "versus": "巡回演出",
-      "team": "团队演出"
+      "medley": "巡回演出",
+      "team": "团队演出",
+      "vs": "竞演演出"
     },
     "festivalResults": {
       "win": "胜利",
