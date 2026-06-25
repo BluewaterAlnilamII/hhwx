@@ -70,7 +70,7 @@ function buildContentSecurityPolicyReportOnly() {
         ["manifest-src", ["'self'"]],
         ["worker-src", ["'self'", "blob:"]],
         ["img-src", ["'self'", "data:", "blob:", BESTDORI_ASSET_ORIGIN, ...buildImageSources()]],
-        ["media-src", ["'self'", BESTDORI_ASSET_ORIGIN]],
+        ["media-src", ["'self'", ...buildImageSources()]],
         ["font-src", ["'self'", "data:"]],
         ["style-src", ["'self'", "'unsafe-inline'"]],
         ["script-src", ["'self'", "'unsafe-inline'", CLOUDFLARE_INSIGHTS_SCRIPT_ORIGIN]],

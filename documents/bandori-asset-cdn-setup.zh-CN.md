@@ -24,7 +24,9 @@ BANDORI_SONG_NOTES_SOURCE=bestdori
 # BANDORI_SONG_NOTES_BESTDORI_FALLBACK=0
 ```
 
-`NEXT_PUBLIC_BANDORI_ASSET_CDN_BASE_URL` 会暴露给浏览器。`BANDORI_ASSET_CDN_BASE_URL` 可供服务端代码使用。大多数部署中两者应指向同一个资源主机。
+`NEXT_PUBLIC_BANDORI_ASSET_CDN_BASE_URL` 会暴露给浏览器。`BANDORI_ASSET_CDN_BASE_URL` 可供服务端代码使用。大多数部署中两者应指向同一个资源主机。Stamp 资源使用同一个 Bandori asset CDN 下的 `/bandori/stamps` 路径；没有单独的 stamp CDN 配置。Web 应用通过同源 API 读取 stamp JSON 和 voice audio，因此动画 manifest 与 stamp voice 不要求 CDN 对浏览器开放 CORS。Stamp voice 会通过 Web Audio 作为短音效播放，而不是作为媒体元素播放，以避免 iOS media session 把它当作音乐并打断后台音乐。
+
+如果某个部署确实要让浏览器直接读取 CDN 上的 stamp voice 文件，可以把 `Access-Control-Allow-Origin` 配成需要直读的精确 Web origin，例如 `https://hhwx.org`、预览域名和本地开发 origin。完全公开且不带 credentials 的资源桶可以使用 `Access-Control-Allow-Origin: *`；不要把 `*` 和带凭据请求搭配使用。
 
 `BANDORI_CHART_SOURCE=bestdori` 保留默认的 web-only 行为。只有在私有资源构建器已经发布下方 music chart 对象后，才应切换到 `BANDORI_CHART_SOURCE=assets`。`BANDORI_MUSIC_CDN_BASE_URL` 可以让谱面读取使用单独主机；省略时使用 `BANDORI_ASSET_CDN_BASE_URL`。`BANDORI_CHART_BESTDORI_FALLBACK=1` 允许自建谱面对象缺失时临时回退 Bestdori。
 
@@ -96,6 +98,26 @@ bandori/music/index.json
 
 `bandori/music/index.json` 应包含 Bestdori 兼容形态的 `songs[].notes`，用难度 index `"0"` 到 `"4"` 映射从谱面派生出的 note 数。
 
+Stamp 目录、静态图、语音与动画资源：
+
+```text
+{CDN_BASE}/bandori/stamps/{server}/index.json
+{CDN_BASE}/bandori/stamps/{server}/{stampId}/manifest.json
+{CDN_BASE}/bandori/stamps/{server}/{stampId}/image.png
+{CDN_BASE}/bandori/stamps/{server}/{stampId}/voice/{voiceName}.mp3
+{CDN_BASE}/bandori/stamps/{server}/{stampId}/animation/manifest.json
+{CDN_BASE}/bandori/stamps/{server}/{stampId}/animation/atlas.png
+
+bandori/stamps/{server}/index.json
+bandori/stamps/{server}/{stampId}/manifest.json
+bandori/stamps/{server}/{stampId}/image.png
+bandori/stamps/{server}/{stampId}/voice/{voiceName}.mp3
+bandori/stamps/{server}/{stampId}/animation/manifest.json
+bandori/stamps/{server}/{stampId}/animation/atlas.png
+```
+
+`bandori/stamps/{server}/index.json` 应使用 `hhwx-bandori-stamp-index-v1`。单个 stamp manifest 应使用 `hhwx-bandori-stamp-asset-v1`。动画 manifest 应使用 `hhwx-bandori-stamp-animation-v1`，并包含 `atlasDimensions`、`frameRate` 和帧裁剪矩形，使 Web 应用不依赖 Unity runtime 即可渲染基于 atlas 的动画 stamp。当前 HHWX atlas PNG 以 `frames[].unityRect` 作为实际 PNG 裁剪矩形；Web API 会将它归一化为返回值中的 `frames[].cssRect`，仅在缺少 `unityRect` 时回退使用源 `frames[].cssRect`。
+
 ## 自托管预期
 
 开源 Web 仓库可以渲染依赖公开元数据和已配置资源 URL 的页面。它不包含：
@@ -119,6 +141,10 @@ https://your-bandori-asset-cdn.example.com/bandori/assets/cn/thumb/chara/card000
 https://your-bandori-asset-cdn.example.com/bandori/res/icon/chara_icon_1.png
 https://your-bandori-asset-cdn.example.com/bandori/res/image/card-5.png
 https://your-bandori-asset-cdn.example.com/bandori/music/1/charts/expert.json
+https://your-bandori-asset-cdn.example.com/bandori/stamps/cn/index.json
+https://your-bandori-asset-cdn.example.com/bandori/stamps/cn/10131/image.png
+https://your-bandori-asset-cdn.example.com/bandori/stamps/cn/10131/animation/manifest.json
+https://your-bandori-asset-cdn.example.com/bandori/stamps/cn/10131/animation/atlas.png
 ```
 
 然后打开相关 HHWX 页面，确认图片请求直接访问配置的 CDN base URL，而不是经过 Next.js image optimization route。
