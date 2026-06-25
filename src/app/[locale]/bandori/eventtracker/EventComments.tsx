@@ -1059,7 +1059,7 @@ function CommentItem({
               </div>
             </div>
           ) : (
-            <p className={cn("mt-2 whitespace-pre-wrap text-[15px] leading-[26px]", isDeleted ? "text-slate-400" : "text-slate-700 dark:text-slate-200")}>
+            <p className={cn("mt-2 whitespace-pre-wrap break-words text-[15px] leading-[26px] [overflow-wrap:anywhere]", isDeleted ? "text-slate-400" : "text-slate-700 dark:text-slate-200")}>
               {isDeleted ? "（已删除）" : renderCommentContent(comment.content ?? "")}
             </p>
           )}
