@@ -69,7 +69,8 @@ function loadCommentStampAudioBuffer(voiceUrl: string, context: AudioContext): P
 
   const bufferPromise = fetch(voiceUrl, {
     cache: "force-cache",
-    credentials: "same-origin",
+    credentials: "omit",
+    mode: "cors",
   })
     .then((response) => {
       if (!response.ok) {

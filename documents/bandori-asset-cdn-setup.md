@@ -24,9 +24,9 @@ BANDORI_SONG_NOTES_SOURCE=bestdori
 # BANDORI_SONG_NOTES_BESTDORI_FALLBACK=0
 ```
 
-`NEXT_PUBLIC_BANDORI_ASSET_CDN_BASE_URL` is exposed to browsers. `BANDORI_ASSET_CDN_BASE_URL` is available to server-side code. In most deployments they should point to the same asset host. Stamp assets are served from the same Bandori asset CDN under `/bandori/stamps`; there is no separate stamp CDN setting. The web app reads stamp JSON and voice audio through same-origin API routes so animation manifests and stamp voices do not require browser CORS access to the CDN. Stamp voices are played through Web Audio as short sound effects instead of media elements, avoiding iOS media-session behavior that can interrupt background music.
+`NEXT_PUBLIC_BANDORI_ASSET_CDN_BASE_URL` is exposed to browsers. `BANDORI_ASSET_CDN_BASE_URL` is available to server-side code. In most deployments they should point to the same asset host. Stamp assets are served from the same Bandori asset CDN under `/bandori/stamps`; there is no separate stamp CDN setting. The web app reads stamp index JSON, per-stamp manifests, animation manifests, and voice audio directly from the CDN in browsers, so the CDN must allow browser CORS reads from the HHWX web origins. Stamp voices are played through Web Audio as short sound effects instead of media elements, avoiding iOS media-session behavior that can interrupt background music.
 
-If a deployment intentionally exposes stamp voice files directly to browsers, configure `Access-Control-Allow-Origin` for the exact web origins that need direct reads, such as `https://hhwx.org`, preview origins, and local development origins. A fully public, no-credentials asset bucket may use `Access-Control-Allow-Origin: *`; do not combine `*` with credentialed requests.
+For HHWX production, configure CORS for `https://hhwx.org` on `/bandori/stamps/*` objects. If multiple exact origins are allowed, include `Vary: Origin`. The web app does not send credentials for stamp CDN reads, so do not enable credentialed CORS unless the request model changes. A fully public, no-credentials asset bucket may use `Access-Control-Allow-Origin: *`; do not combine `*` with credentialed requests.
 
 `BANDORI_CHART_SOURCE=bestdori` keeps the default web-only behavior. Set `BANDORI_CHART_SOURCE=assets` only after a private asset builder has populated the music chart objects documented below. `BANDORI_MUSIC_CDN_BASE_URL` can point charts at a separate host; when omitted, chart reads use `BANDORI_ASSET_CDN_BASE_URL`. `BANDORI_CHART_BESTDORI_FALLBACK=1` permits a temporary Bestdori fallback when a self-hosted chart object is missing.
 
@@ -116,7 +116,7 @@ bandori/stamps/{server}/{stampId}/animation/manifest.json
 bandori/stamps/{server}/{stampId}/animation/atlas.png
 ```
 
-`bandori/stamps/{server}/index.json` should use `hhwx-bandori-stamp-index-v1`. Per-stamp manifests should use `hhwx-bandori-stamp-asset-v1`. Animation manifests should use `hhwx-bandori-stamp-animation-v1` and include `atlasDimensions`, `frameRate`, and frame rectangles so the web app can render atlas-based animated stamps without Unity runtime logic. Current HHWX atlas PNGs use `frames[].unityRect` as the physical PNG crop rectangle; the web API normalizes that into its returned `frames[].cssRect`, with source `frames[].cssRect` used only as a fallback when `unityRect` is absent.
+`bandori/stamps/{server}/index.json` should use `hhwx-bandori-stamp-index-v1`. Per-stamp manifests should use `hhwx-bandori-stamp-asset-v1`. Animation manifests should use `hhwx-bandori-stamp-animation-v1` and include `atlasDimensions`, `frameRate`, and frame rectangles so the web app can render atlas-based animated stamps without Unity runtime logic. Current HHWX atlas PNGs use `frames[].unityRect` as the physical PNG crop rectangle; the web app normalizes that into its in-memory `frames[].cssRect`, with source `frames[].cssRect` used only as a fallback when `unityRect` is absent.
 
 ## Self-Hosted Expectations
 
@@ -147,4 +147,11 @@ https://your-bandori-asset-cdn.example.com/bandori/stamps/cn/10131/animation/man
 https://your-bandori-asset-cdn.example.com/bandori/stamps/cn/10131/animation/atlas.png
 ```
 
-Then open the relevant HHWX pages and confirm image requests go directly to the configured CDN base URL instead of through Next.js image optimization routes.
+For stamp CORS, verify at least one JSON object and one voice object with an `Origin` header:
+
+```bash
+curl -I -H "Origin: https://hhwx.org" https://your-bandori-asset-cdn.example.com/bandori/stamps/cn/index.json
+curl -I -H "Origin: https://hhwx.org" https://your-bandori-asset-cdn.example.com/bandori/stamps/cn/10131/voice/<voiceName>.mp3
+```
+
+Both responses should include `Access-Control-Allow-Origin: https://hhwx.org` or `Access-Control-Allow-Origin: *` for a public no-credentials bucket. Then open the relevant HHWX pages and confirm stamp JSON, animation manifests, atlas images, and voice audio requests go directly to the configured CDN base URL instead of through HHWX API routes.

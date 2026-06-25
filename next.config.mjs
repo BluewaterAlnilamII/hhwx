@@ -74,7 +74,7 @@ function buildContentSecurityPolicyReportOnly() {
         ["font-src", ["'self'", "data:"]],
         ["style-src", ["'self'", "'unsafe-inline'"]],
         ["script-src", ["'self'", "'unsafe-inline'", CLOUDFLARE_INSIGHTS_SCRIPT_ORIGIN]],
-        ["connect-src", ["'self'", ...buildSupabaseConnectSources()]],
+        ["connect-src", ["'self'", ...buildSupabaseConnectSources(), ...buildImageSources()]],
         ["report-uri", [CSP_REPORT_ENDPOINT]],
     ];
 

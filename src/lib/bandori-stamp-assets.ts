@@ -1,4 +1,4 @@
-import { MUTABLE_DIRECTORY_CACHE_PROFILE, STATIC_ASSET_PROXY_CACHE_PROFILE } from "@/lib/api-cache";
+import { MUTABLE_DIRECTORY_CACHE_PROFILE } from "@/lib/api-cache";
 
 export type BandoriStampRegion = "jp" | "en" | "tw" | "cn";
 
@@ -110,10 +110,6 @@ type RawStampAnimationManifest = {
 
 const STAMP_VOICE_FILE_NAME_PATTERN = /^[A-Za-z0-9_-]+\.mp3$/u;
 
-export const BANDORI_STAMP_METADATA_REVALIDATE_SECONDS =
-  MUTABLE_DIRECTORY_CACHE_PROFILE.nextRevalidateSeconds ?? 300;
-export const BANDORI_STAMP_STATIC_REVALIDATE_SECONDS =
-  STATIC_ASSET_PROXY_CACHE_PROFILE.nextRevalidateSeconds ?? 2592000;
 export const BANDORI_STAMP_CLIENT_STALE_TIME_MS =
   MUTABLE_DIRECTORY_CACHE_PROFILE.client?.staleTimeMs ?? 60 * 1000;
 
@@ -132,6 +128,10 @@ function encodeAssetKeyPath(assetKey: string): string {
     .filter(Boolean)
     .map((segment) => encodeURIComponent(segment))
     .join("/");
+}
+
+function buildBandoriStampRelativeUrl(assetKey: string): string {
+  return `/${encodeAssetKeyPath(assetKey.replace(/^\/+/u, ""))}`;
 }
 
 function readNumber(value: unknown): number | null {
@@ -212,18 +212,11 @@ export function normalizeBandoriStampVoiceFileName(value: string): string | null
   return STAMP_VOICE_FILE_NAME_PATTERN.test(trimmedValue) ? trimmedValue : null;
 }
 
-export function getBandoriStampCdnBaseUrl(): string | null {
-  return normalizeCdnBaseUrl(
-    process.env.BANDORI_ASSET_CDN_BASE_URL
-      ?? process.env.NEXT_PUBLIC_BANDORI_ASSET_CDN_BASE_URL,
-  );
-}
-
 export function getPublicBandoriStampCdnBaseUrl(): string | null {
   return normalizeCdnBaseUrl(process.env.NEXT_PUBLIC_BANDORI_ASSET_CDN_BASE_URL);
 }
 
-export function buildBandoriStampCdnUrl(assetKey: string, baseUrl = getBandoriStampCdnBaseUrl()): string {
+export function buildBandoriStampCdnUrl(assetKey: string, baseUrl = getPublicBandoriStampCdnBaseUrl()): string {
   if (!baseUrl) {
     throw new Error("Bandori stamp CDN base URL is not configured");
   }
@@ -231,31 +224,52 @@ export function buildBandoriStampCdnUrl(assetKey: string, baseUrl = getBandoriSt
   return `${baseUrl}/${encodeAssetKeyPath(assetKey.replace(/^\/+/u, ""))}`;
 }
 
-export function buildBandoriStampApiPath(region: BandoriStampRegion, stampId: number): string {
-  return `/api/bandori/stamps/${region}/${Math.trunc(stampId)}`;
+export function buildBandoriStampPublicUrl(assetKey: string): string {
+  const baseUrl = getPublicBandoriStampCdnBaseUrl();
+  return baseUrl ? buildBandoriStampCdnUrl(assetKey, baseUrl) : buildBandoriStampRelativeUrl(assetKey);
 }
 
-export function buildBandoriStampImageProxyPath(region: BandoriStampRegion, stampId: number): string {
-  return `/api/bandori/stamps/${region}/${Math.trunc(stampId)}/image.png`;
+export function buildBandoriStampCdnRequestUrl(assetKey: string): string | null {
+  const baseUrl = getPublicBandoriStampCdnBaseUrl();
+  return baseUrl ? buildBandoriStampCdnUrl(assetKey, baseUrl) : null;
 }
 
-export function buildBandoriStampVoiceProxyPath(
+export function buildBandoriStampIndexCdnUrl(region: BandoriStampRegion): string | null {
+  return buildBandoriStampCdnRequestUrl(`bandori/stamps/${region}/index.json`);
+}
+
+export function buildBandoriStampManifestPublicUrl(region: BandoriStampRegion, stampId: number): string {
+  return buildBandoriStampPublicUrl(buildBandoriStampPath(region, stampId, "manifest.json"));
+}
+
+export function buildBandoriStampManifestCdnUrl(region: BandoriStampRegion, stampId: number): string | null {
+  return buildBandoriStampCdnRequestUrl(buildBandoriStampPath(region, stampId, "manifest.json"));
+}
+
+export function buildBandoriStampAnimationManifestPublicUrl(region: BandoriStampRegion, stampId: number): string {
+  return buildBandoriStampPublicUrl(buildBandoriStampPath(region, stampId, "animation/manifest.json"));
+}
+
+export function buildBandoriStampAnimationManifestCdnUrl(region: BandoriStampRegion, stampId: number): string | null {
+  return buildBandoriStampCdnRequestUrl(buildBandoriStampPath(region, stampId, "animation/manifest.json"));
+}
+
+export function buildBandoriStampVoicePublicUrl(
   region: BandoriStampRegion,
   stampId: number,
   voiceFileName: string,
-): string {
+): string | null {
   const normalizedFileName = normalizeBandoriStampVoiceFileName(voiceFileName);
   if (!normalizedFileName) {
-    throw new Error("Invalid Bandori stamp voice file name");
+    return null;
   }
 
-  return `/api/bandori/stamps/${region}/${Math.trunc(stampId)}/voice/${encodeURIComponent(normalizedFileName)}`;
+  return buildBandoriStampPublicUrl(buildBandoriStampPath(region, stampId, `voice/${normalizedFileName}`));
 }
 
 export function buildBandoriStampImagePublicUrl(region: BandoriStampRegion, stampId: number, imageKey?: string | null): string {
   const assetKey = imageKey ?? buildBandoriStampPath(region, stampId, "image.png");
-  const baseUrl = getPublicBandoriStampCdnBaseUrl();
-  return baseUrl ? buildBandoriStampCdnUrl(assetKey, baseUrl) : buildBandoriStampImageProxyPath(region, stampId);
+  return buildBandoriStampPublicUrl(assetKey);
 }
 
 export function buildBandoriStampAssetKey(region: BandoriStampRegion, stampId: number, path: string): string {
@@ -277,7 +291,7 @@ export function toBandoriStampCatalogItem(
     region,
     imageName: readString(rawItem.imageName),
     imageUrl: buildBandoriStampImagePublicUrl(region, stampId, imageKey),
-    manifestUrl: buildBandoriStampApiPath(region, stampId),
+    manifestUrl: buildBandoriStampManifestPublicUrl(region, stampId),
     seq: readInteger(rawItem.seq),
     stampType: readString(rawItem.stampType),
     withVoice: rawItem.withVoice === true,
@@ -327,17 +341,17 @@ export function toBandoriStampAssetResponse(
     region,
     imageName: readString(rawManifest.imageName),
     imageUrl: buildBandoriStampImagePublicUrl(region, stampId, imageKey),
-    manifestUrl: buildBandoriStampApiPath(region, stampId),
+    manifestUrl: buildBandoriStampManifestPublicUrl(region, stampId),
     dimensions: readDimensions(rawManifest.dimensions),
-    voiceUrl: voiceFileName ? buildBandoriStampVoiceProxyPath(region, stampId, voiceFileName) : null,
+    voiceUrl: voiceFileName ? buildBandoriStampVoicePublicUrl(region, stampId, voiceFileName) : null,
     voiceName,
     withVoice: rawManifest.withVoice === true,
     hasVoiceAudio: Boolean(voiceAudioKey && voiceFileName),
     hasAnimation: Boolean(animationManifestKey),
     animation: animationManifestKey
       ? {
-        manifestUrl: `/api/bandori/stamps/${region}/${stampId}/animation`,
-        atlasUrl: atlasKey ? buildBandoriStampCdnUrl(atlasKey) : null,
+        manifestUrl: buildBandoriStampAnimationManifestPublicUrl(region, stampId),
+        atlasUrl: atlasKey ? buildBandoriStampPublicUrl(atlasKey) : null,
         frameRate: animation ? readNumber(animation.frameRate) : null,
         frameCount: animation ? readInteger(animation.frameCount) : null,
       }
@@ -375,55 +389,45 @@ export function toBandoriStampAnimationResponse(
   return {
     id: stampId,
     region,
-    manifestUrl: `/api/bandori/stamps/${region}/${stampId}/animation`,
-    atlasUrl: buildBandoriStampCdnUrl(buildBandoriStampPath(region, stampId, `animation/${atlasName}`)),
+    manifestUrl: buildBandoriStampAnimationManifestPublicUrl(region, stampId),
+    atlasUrl: buildBandoriStampPublicUrl(buildBandoriStampPath(region, stampId, `animation/${atlasName}`)),
     atlasDimensions,
     frameRate: Math.max(1, readNumber(rawManifest.frameRate) ?? 12),
     frames,
   };
 }
 
-export async function fetchBandoriStampIndex(region: BandoriStampRegion): Promise<BandoriStampIndexResponse> {
-  const url = buildBandoriStampCdnUrl(`bandori/stamps/${region}/index.json`);
-  const response = await fetch(url, {
-    next: { revalidate: BANDORI_STAMP_METADATA_REVALIDATE_SECONDS },
-  });
-
-  if (!response.ok) {
-    throw new Error(`Bandori stamp index fetch failed: HTTP ${response.status} ${url}`);
+export function parseBandoriStampIndexCdnResponse(
+  region: BandoriStampRegion,
+  raw: unknown,
+): BandoriStampIndexResponse | null {
+  if (!isRecord(raw)) {
+    return null;
   }
 
-  return toBandoriStampIndexResponse(region, await response.json() as RawStampIndex);
+  return toBandoriStampIndexResponse(region, raw);
 }
 
-export async function fetchBandoriStampManifest(
+export function parseBandoriStampManifestCdnResponse(
   region: BandoriStampRegion,
   stampId: number,
-): Promise<BandoriStampAssetResponse> {
-  const url = buildBandoriStampCdnUrl(buildBandoriStampPath(region, stampId, "manifest.json"));
-  const response = await fetch(url, {
-    next: { revalidate: BANDORI_STAMP_METADATA_REVALIDATE_SECONDS },
-  });
-
-  if (!response.ok) {
-    throw new Error(`Bandori stamp manifest fetch failed: HTTP ${response.status} ${url}`);
+  raw: unknown,
+): BandoriStampAssetResponse | null {
+  if (!isRecord(raw)) {
+    return null;
   }
 
-  return toBandoriStampAssetResponse(region, stampId, await response.json() as RawStampAssetManifest);
+  return toBandoriStampAssetResponse(region, stampId, raw);
 }
 
-export async function fetchBandoriStampAnimation(
+export function parseBandoriStampAnimationCdnResponse(
   region: BandoriStampRegion,
   stampId: number,
-): Promise<BandoriStampAnimationResponse> {
-  const url = buildBandoriStampCdnUrl(buildBandoriStampPath(region, stampId, "animation/manifest.json"));
-  const response = await fetch(url, {
-    next: { revalidate: BANDORI_STAMP_METADATA_REVALIDATE_SECONDS },
-  });
-
-  if (!response.ok) {
-    throw new Error(`Bandori stamp animation fetch failed: HTTP ${response.status} ${url}`);
+  raw: unknown,
+): BandoriStampAnimationResponse | null {
+  if (!isRecord(raw)) {
+    return null;
   }
 
-  return toBandoriStampAnimationResponse(region, stampId, await response.json() as RawStampAnimationManifest);
+  return toBandoriStampAnimationResponse(region, stampId, raw);
 }
