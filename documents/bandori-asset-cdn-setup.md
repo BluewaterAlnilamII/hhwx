@@ -24,7 +24,9 @@ BANDORI_SONG_NOTES_SOURCE=bestdori
 # BANDORI_SONG_NOTES_BESTDORI_FALLBACK=0
 ```
 
-`NEXT_PUBLIC_BANDORI_ASSET_CDN_BASE_URL` is exposed to browsers. `BANDORI_ASSET_CDN_BASE_URL` is available to server-side code. In most deployments they should point to the same asset host.
+`NEXT_PUBLIC_BANDORI_ASSET_CDN_BASE_URL` is exposed to browsers. `BANDORI_ASSET_CDN_BASE_URL` is available to server-side code. In most deployments they should point to the same asset host. Stamp assets are served from the same Bandori asset CDN under `/bandori/stamps`; there is no separate stamp CDN setting. The web app reads stamp JSON and voice audio through same-origin API routes so animation manifests and stamp voices do not require browser CORS access to the CDN. Stamp voices are played through Web Audio as short sound effects instead of media elements, avoiding iOS media-session behavior that can interrupt background music.
+
+If a deployment intentionally exposes stamp voice files directly to browsers, configure `Access-Control-Allow-Origin` for the exact web origins that need direct reads, such as `https://hhwx.org`, preview origins, and local development origins. A fully public, no-credentials asset bucket may use `Access-Control-Allow-Origin: *`; do not combine `*` with credentialed requests.
 
 `BANDORI_CHART_SOURCE=bestdori` keeps the default web-only behavior. Set `BANDORI_CHART_SOURCE=assets` only after a private asset builder has populated the music chart objects documented below. `BANDORI_MUSIC_CDN_BASE_URL` can point charts at a separate host; when omitted, chart reads use `BANDORI_ASSET_CDN_BASE_URL`. `BANDORI_CHART_BESTDORI_FALLBACK=1` permits a temporary Bestdori fallback when a self-hosted chart object is missing.
 
@@ -96,6 +98,26 @@ bandori/music/index.json
 
 `bandori/music/index.json` should include `songs[].notes` in the Bestdori-compatible shape, with difficulty indexes `"0"` through `"4"` mapping to chart-derived note counts.
 
+Stamp catalog, static images, voice audio, and animation assets:
+
+```text
+{CDN_BASE}/bandori/stamps/{server}/index.json
+{CDN_BASE}/bandori/stamps/{server}/{stampId}/manifest.json
+{CDN_BASE}/bandori/stamps/{server}/{stampId}/image.png
+{CDN_BASE}/bandori/stamps/{server}/{stampId}/voice/{voiceName}.mp3
+{CDN_BASE}/bandori/stamps/{server}/{stampId}/animation/manifest.json
+{CDN_BASE}/bandori/stamps/{server}/{stampId}/animation/atlas.png
+
+bandori/stamps/{server}/index.json
+bandori/stamps/{server}/{stampId}/manifest.json
+bandori/stamps/{server}/{stampId}/image.png
+bandori/stamps/{server}/{stampId}/voice/{voiceName}.mp3
+bandori/stamps/{server}/{stampId}/animation/manifest.json
+bandori/stamps/{server}/{stampId}/animation/atlas.png
+```
+
+`bandori/stamps/{server}/index.json` should use `hhwx-bandori-stamp-index-v1`. Per-stamp manifests should use `hhwx-bandori-stamp-asset-v1`. Animation manifests should use `hhwx-bandori-stamp-animation-v1` and include `atlasDimensions`, `frameRate`, and frame rectangles so the web app can render atlas-based animated stamps without Unity runtime logic. Current HHWX atlas PNGs use `frames[].unityRect` as the physical PNG crop rectangle; the web API normalizes that into its returned `frames[].cssRect`, with source `frames[].cssRect` used only as a fallback when `unityRect` is absent.
+
 ## Self-Hosted Expectations
 
 The open-source web repository can render pages that use public metadata and configured asset URLs. It does not ship:
@@ -119,6 +141,10 @@ https://your-bandori-asset-cdn.example.com/bandori/assets/cn/thumb/chara/card000
 https://your-bandori-asset-cdn.example.com/bandori/res/icon/chara_icon_1.png
 https://your-bandori-asset-cdn.example.com/bandori/res/image/card-5.png
 https://your-bandori-asset-cdn.example.com/bandori/music/1/charts/expert.json
+https://your-bandori-asset-cdn.example.com/bandori/stamps/cn/index.json
+https://your-bandori-asset-cdn.example.com/bandori/stamps/cn/10131/image.png
+https://your-bandori-asset-cdn.example.com/bandori/stamps/cn/10131/animation/manifest.json
+https://your-bandori-asset-cdn.example.com/bandori/stamps/cn/10131/animation/atlas.png
 ```
 
 Then open the relevant HHWX pages and confirm image requests go directly to the configured CDN base URL instead of through Next.js image optimization routes.

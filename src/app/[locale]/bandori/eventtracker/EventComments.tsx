@@ -5,15 +5,21 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import Image from "next/image";
 import { Check, ChevronFirst, ChevronLast, ChevronLeft, ChevronRight, Edit3, Heart, Link2, MessageSquare, MoreHorizontal, Reply, Smile, Sticker, Trash2, Volume2, X } from "lucide-react";
 import AccountCardAvatar from "@/components/account/AccountCardAvatar";
+import {
+  useCommentStampAnimation,
+  useCommentStampAsset,
+  useCommentStampsForRegion,
+} from "@/hooks/useCommentStamps";
 import { type AccountAvatarCardTrainType } from "@/lib/account-avatar-defaults";
 import { getApiErrorMessage, parseApiSuccessData } from "@/lib/api-contracts";
 import { type BandoriAssetRegion } from "@/lib/bandori-asset-proxy";
+import { type BandoriStampAnimationResponse } from "@/lib/bandori-stamp-assets";
+import { playCommentStampVoice } from "@/lib/comment-stamp-audio";
 import { COMMENT_EMOJI_NAMES, getCommentEmojiSrc } from "@/lib/comment-emojis";
 import {
   COMMENT_STAMP_DEFAULT_REGION,
   COMMENT_STAMP_REGION_LABELS,
   COMMENT_STAMP_REGIONS,
-  getCommentStampsForRegion,
   isCommentStampRegion,
   resolveCommentStamp,
   type CommentStamp,
@@ -81,8 +87,7 @@ const COMMENT_INPUT_MAX_LENGTH = 500;
 const COMMENT_ROOT_PAGE_SIZE = 10;
 const COMMENT_CONTENT_TOKEN_PATTERN = /:stamp-([a-z]{2})-(\d+):|:([A-Za-z0-9_+-]+):/g;
 
-let activeCommentStampAudio: HTMLAudioElement | null = null;
-const preloadedCommentStampAudio = new Map<string, HTMLAudioElement>();
+const commentStampAtlasImageCache = new Map<string, Promise<HTMLImageElement>>();
 
 function getErrorMessage(payload: unknown, fallback: string): string {
   return getApiErrorMessage(payload) ?? fallback;
@@ -97,84 +102,183 @@ function formatCommentTime(value: string): string {
   });
 }
 
-function prepareCommentStampAudio(voiceUrl: string, audio: HTMLAudioElement): HTMLAudioElement {
-  audio.preload = "auto";
-  audio.onended = () => {
-    if (activeCommentStampAudio === audio) {
-      activeCommentStampAudio = null;
-    }
-  };
-  preloadedCommentStampAudio.set(voiceUrl, audio);
-  return audio;
-}
-
-function getCommentStampAudio(voiceUrl: string): HTMLAudioElement {
-  const cachedAudio = preloadedCommentStampAudio.get(voiceUrl);
-  if (cachedAudio) {
-    return cachedAudio;
+function loadCommentStampAtlasImage(atlasUrl: string): Promise<HTMLImageElement> {
+  const cachedImage = commentStampAtlasImageCache.get(atlasUrl);
+  if (cachedImage) {
+    return cachedImage;
   }
 
-  const audio = prepareCommentStampAudio(voiceUrl, new Audio(voiceUrl));
-  audio.load();
-  return audio;
-}
-
-function playCommentStampVoice(voiceUrl: string): void {
-  const audio = getCommentStampAudio(voiceUrl);
-  activeCommentStampAudio?.pause();
-  if (activeCommentStampAudio) {
-    activeCommentStampAudio.currentTime = 0;
-  }
-
-  audio.currentTime = 0;
-  activeCommentStampAudio = audio;
-  void audio.play().catch(() => {
-    if (activeCommentStampAudio === audio) {
-      activeCommentStampAudio = null;
-    }
+  const promise = new Promise<HTMLImageElement>((resolve, reject) => {
+    const image = new window.Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error(`Failed to load stamp atlas: ${atlasUrl}`));
+    image.src = atlasUrl;
+  }).catch((error) => {
+    commentStampAtlasImageCache.delete(atlasUrl);
+    throw error;
   });
+
+  commentStampAtlasImageCache.set(atlasUrl, promise);
+  return promise;
 }
 
-function CommentStampVoicePreload({ enabled, voiceUrl }: { enabled: boolean; voiceUrl: string | null }) {
-  const audioRef = useRef<HTMLAudioElement>(null);
+function usePrefersReducedMotion(): boolean {
+  const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
 
   useEffect(() => {
-    const audio = audioRef.current;
-    if (!enabled || !voiceUrl || !audio) return;
+    const mediaQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const updatePreference = () => setPrefersReducedMotion(mediaQuery.matches);
+    updatePreference();
+    mediaQuery.addEventListener("change", updatePreference);
+    return () => mediaQuery.removeEventListener("change", updatePreference);
+  }, []);
 
-    prepareCommentStampAudio(voiceUrl, audio).load();
-  }, [enabled, voiceUrl]);
+  return prefersReducedMotion;
+}
 
-  if (!enabled || !voiceUrl) return null;
+function CommentStampAnimationCanvas({
+  animation,
+  shortcode,
+  onError,
+  active = true,
+  className = "h-full max-h-16 w-full max-w-24 object-contain",
+}: {
+  animation: BandoriStampAnimationResponse;
+  shortcode: string;
+  onError: () => void;
+  active?: boolean;
+  className?: string;
+}) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const prefersReducedMotion = usePrefersReducedMotion();
+  const [frameIndex, setFrameIndex] = useState(0);
+  const [isVisible, setIsVisible] = useState(true);
+  const frameCount = animation.frames.length;
+  const frame = animation.frames[Math.min(frameIndex, Math.max(0, frameCount - 1))];
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas || typeof IntersectionObserver === "undefined") {
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      ([entry]) => setIsVisible(entry?.isIntersecting ?? true),
+      { rootMargin: "96px" },
+    );
+    observer.observe(canvas);
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    if (!active || prefersReducedMotion || !isVisible || frameCount <= 1) {
+      return;
+    }
+
+    const intervalMs = 1000 / Math.max(1, animation.frameRate);
+    const intervalId = window.setInterval(() => {
+      setFrameIndex((currentFrameIndex) => (currentFrameIndex + 1) % frameCount);
+    }, intervalMs);
+
+    return () => window.clearInterval(intervalId);
+  }, [active, animation.frameRate, frameCount, isVisible, prefersReducedMotion]);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas || !frame) {
+      return;
+    }
+
+    let cancelled = false;
+    void loadCommentStampAtlasImage(animation.atlasUrl)
+      .then((atlasImage) => {
+        if (cancelled) {
+          return;
+        }
+
+        const context = canvas.getContext("2d");
+        if (!context) {
+          onError();
+          return;
+        }
+
+        const { x, y, width, height } = frame.cssRect;
+        canvas.width = width;
+        canvas.height = height;
+        context.clearRect(0, 0, width, height);
+        context.drawImage(atlasImage, x, y, width, height, 0, 0, width, height);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          onError();
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [animation.atlasUrl, frame, onError]);
+
+  if (!frame) {
+    return null;
+  }
 
   return (
-    <audio
-      ref={audioRef}
-      src={voiceUrl}
-      preload="auto"
-      className="hidden"
-      aria-hidden="true"
-      data-comment-stamp-voice-preload={voiceUrl}
+    <canvas
+      ref={canvasRef}
+      width={frame.cssRect.width}
+      height={frame.cssRect.height}
+      role="img"
+      aria-label={shortcode}
+      title={shortcode}
+      className={className}
     />
   );
 }
 
 function CommentStampView({ stamp, shortcode }: { stamp: CommentStamp; shortcode: string }) {
-  const voiceUrl = stamp.voiceUrl;
-  const [shouldPreloadVoice, setShouldPreloadVoice] = useState(false);
+  const [shouldLoadAsset, setShouldLoadAsset] = useState(false);
+  const [imageFailed, setImageFailed] = useState(false);
+  const [animationFailed, setAnimationFailed] = useState(false);
+  const { asset } = useCommentStampAsset(stamp.region, stamp.id, shouldLoadAsset);
+  const animationSummary = asset?.animation ?? null;
+  const { animation } = useCommentStampAnimation(
+    stamp.region,
+    stamp.id,
+    Boolean(animationSummary && !animationFailed),
+  );
+  const voiceUrl = asset?.voiceUrl ?? null;
+  const imageUrl = asset?.imageUrl ?? stamp.imageUrl;
+
+  const handleAnimationError = useCallback(() => {
+    setAnimationFailed(true);
+  }, []);
+
+  if (imageFailed) {
+    return <span>{shortcode}</span>;
+  }
 
   const image = (
-    // eslint-disable-next-line @next/next/no-img-element
-    <img
-      src={stamp.imageUrl}
-      alt={shortcode}
-      title={shortcode}
-      loading="lazy"
-      decoding="async"
-      referrerPolicy="strict-origin-when-cross-origin"
-      onLoad={voiceUrl ? () => setShouldPreloadVoice(true) : undefined}
-      className="h-full max-h-16 w-full max-w-24 object-contain"
-    />
+    animation && !animationFailed ? (
+      <CommentStampAnimationCanvas
+        animation={animation}
+        shortcode={shortcode}
+        onError={handleAnimationError}
+      />
+    ) : (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={imageUrl}
+        alt={shortcode}
+        title={shortcode}
+        loading="lazy"
+        decoding="async"
+        referrerPolicy="strict-origin-when-cross-origin"
+        onLoad={() => setShouldLoadAsset(true)}
+        onError={() => setImageFailed(true)}
+        className="h-full max-h-16 w-full max-w-24 object-contain"
+      />
+    )
   );
 
   const className = "relative mx-0.5 inline-flex h-16 w-24 shrink-0 items-center justify-center align-[-1.35em]";
@@ -185,13 +289,14 @@ function CommentStampView({ stamp, shortcode }: { stamp: CommentStamp; shortcode
   return (
     <button
       type="button"
-      onClick={() => playCommentStampVoice(voiceUrl)}
+      onClick={() => {
+        void playCommentStampVoice(voiceUrl);
+      }}
       className={cn(className, "rounded-lg transition hover:bg-rose-50 focus:outline-none focus:ring-2 focus:ring-rose-200 dark:hover:bg-rose-500/10 dark:focus:ring-rose-500/30")}
       aria-label={`Play ${shortcode}`}
       title={`Play ${shortcode}`}
     >
       {image}
-      <CommentStampVoicePreload enabled={shouldPreloadVoice} voiceUrl={voiceUrl} />
       <span className="absolute bottom-1 right-1 inline-flex h-5 w-5 items-center justify-center rounded-full bg-rose-500 text-white shadow-sm ring-2 ring-white dark:ring-slate-900">
         <Volume2 size={12} aria-hidden="true" />
       </span>
@@ -386,26 +491,50 @@ type StampPickerButtonProps = {
 
 function StampPickerOption({ stamp, onSelect }: { stamp: CommentStamp; onSelect: (stamp: CommentStamp) => void }) {
   const shortcode = buildStampShortcode(stamp);
-  const voiceUrl = stamp.voiceUrl;
+  const hasVoice = stamp.hasVoiceAudio || stamp.withVoice;
+  const [previewActive, setPreviewActive] = useState(false);
+  const [animationFailed, setAnimationFailed] = useState(false);
+  const shouldCheckAsset = previewActive && !stamp.hasAnimation && !animationFailed;
+  const { asset } = useCommentStampAsset(stamp.region, stamp.id, shouldCheckAsset);
+  const shouldLoadAnimation = previewActive && (stamp.hasAnimation || asset?.hasAnimation === true) && !animationFailed;
+  const { animation } = useCommentStampAnimation(stamp.region, stamp.id, shouldLoadAnimation);
+
+  const handleAnimationError = useCallback(() => {
+    setAnimationFailed(true);
+  }, []);
 
   return (
     <button
       type="button"
       onClick={() => onSelect(stamp)}
+      onPointerEnter={() => setPreviewActive(true)}
+      onPointerLeave={() => setPreviewActive(false)}
+      onFocus={() => setPreviewActive(true)}
+      onBlur={() => setPreviewActive(false)}
       className="relative flex h-20 w-full min-w-0 items-center justify-center rounded-lg p-1 transition hover:bg-rose-50 focus:bg-rose-50 focus:outline-none focus:ring-2 focus:ring-rose-200 dark:hover:bg-rose-500/10 dark:focus:bg-rose-500/10 dark:focus:ring-rose-500/30"
       aria-label={shortcode}
       title={shortcode}
     >
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src={stamp.imageUrl}
-        alt={shortcode}
-        loading="lazy"
-        decoding="async"
-        referrerPolicy="strict-origin-when-cross-origin"
-        className="h-full max-h-[4.5rem] w-full object-contain"
-      />
-      {voiceUrl ? (
+      {animation ? (
+        <CommentStampAnimationCanvas
+          animation={animation}
+          shortcode={shortcode}
+          active={previewActive}
+          onError={handleAnimationError}
+          className="h-full max-h-[4.5rem] w-full object-contain"
+        />
+      ) : (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={stamp.imageUrl}
+          alt={shortcode}
+          loading="lazy"
+          decoding="async"
+          referrerPolicy="strict-origin-when-cross-origin"
+          className="h-full max-h-[4.5rem] w-full object-contain"
+        />
+      )}
+      {hasVoice ? (
         <span className="absolute bottom-1 right-1 inline-flex h-4 w-4 items-center justify-center rounded-full bg-rose-500 text-white shadow-sm ring-2 ring-white dark:ring-slate-900">
           <Volume2 size={10} aria-hidden="true" />
         </span>
@@ -418,7 +547,7 @@ function StampPickerButton({ open, selectedRegion, onOpenChange, onRegionChange,
   const containerRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const [popoverStyle, setPopoverStyle] = useState<CSSProperties>({});
-  const stamps = getCommentStampsForRegion(selectedRegion);
+  const { stamps } = useCommentStampsForRegion(selectedRegion, open);
 
   const updatePopoverPosition = useCallback(() => {
     if (!open || !buttonRef.current || !containerRef.current) return;

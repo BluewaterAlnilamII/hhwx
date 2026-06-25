@@ -1,14 +1,15 @@
-// Generated from Bestdori stamps/all.2.json and sound/voice_stamp.json snapshots.
+// Generated from historical stamp metadata snapshots. Runtime assets resolve through the HHWX stamp CDN.
 // Region order inside COMMENT_STAMP_ROWS is jp, en, tw, cn.
-export type CommentStampRegion = "jp" | "en" | "tw" | "cn";
+import {
+  buildBandoriStampApiPath,
+  buildBandoriStampImagePublicUrl,
+  normalizeBandoriStampId,
+  type BandoriStampCatalogItem,
+  type BandoriStampRegion,
+} from "@/lib/bandori-stamp-assets";
 
-export type CommentStamp = {
-  id: number;
-  region: CommentStampRegion;
-  imageName: string;
-  imageUrl: string;
-  voiceUrl: string | null;
-};
+export type CommentStampRegion = BandoriStampRegion;
+export type CommentStamp = BandoriStampCatalogItem;
 
 type CommentStampRow = readonly [number, string, string, string, string, number];
 
@@ -21,7 +22,6 @@ export const COMMENT_STAMP_REGION_LABELS: Record<CommentStampRegion, string> = {
   tw: "TW",
 };
 
-const BESTDORI_ASSET_BASE_URL = "https://bestdori.com/assets";
 const COMMENT_STAMP_REGION_INDEX: Record<CommentStampRegion, 1 | 2 | 3 | 4> = {
   jp: 1,
   en: 2,
@@ -795,28 +795,28 @@ const COMMENT_STAMPS_BY_REGION = Object.fromEntries(
   ]),
 ) as Record<CommentStampRegion, CommentStamp[]>;
 
-function buildCommentStampImageUrl(region: CommentStampRegion, imageName: string): string {
-  return `${BESTDORI_ASSET_BASE_URL}/${region}/stamp/01_rip/${imageName}.png`;
-}
-
-function buildCommentStampVoiceUrl(region: CommentStampRegion, imageName: string): string {
-  return `${BESTDORI_ASSET_BASE_URL}/${region}/sound/voice_stamp_rip/${imageName}.mp3`;
-}
-
 export function resolveCommentStamp(region: CommentStampRegion, id: number): CommentStamp | null {
+  const normalizedStampId = normalizeBandoriStampId(id);
+  if (normalizedStampId === null) {
+    return null;
+  }
+
   const row = COMMENT_STAMP_ROWS_BY_ID.get(id);
-  if (!row) return null;
+  const imageName = row?.[COMMENT_STAMP_REGION_INDEX[region]] ?? null;
+  if (row && !imageName) return null;
 
-  const imageName = row[COMMENT_STAMP_REGION_INDEX[region]];
-  if (!imageName) return null;
-
-  const hasVoice = (row[5] & COMMENT_STAMP_REGION_VOICE_MASK[region]) !== 0;
+  const hasVoice = row ? (row[5] & COMMENT_STAMP_REGION_VOICE_MASK[region]) !== 0 : false;
   return {
-    id,
+    id: normalizedStampId,
     region,
     imageName,
-    imageUrl: buildCommentStampImageUrl(region, imageName),
-    voiceUrl: hasVoice ? buildCommentStampVoiceUrl(region, imageName) : null,
+    imageUrl: buildBandoriStampImagePublicUrl(region, normalizedStampId),
+    manifestUrl: buildBandoriStampApiPath(region, normalizedStampId),
+    seq: row?.[0] ?? null,
+    stampType: null,
+    withVoice: hasVoice,
+    hasVoiceAudio: hasVoice,
+    hasAnimation: false,
   };
 }
 
