@@ -1,8 +1,8 @@
 // Generated from historical stamp metadata snapshots. Runtime assets resolve through the HHWX stamp CDN.
 // Region order inside COMMENT_STAMP_ROWS is jp, en, tw, cn.
 import {
-  buildBandoriStampApiPath,
   buildBandoriStampImagePublicUrl,
+  buildBandoriStampManifestPublicUrl,
   normalizeBandoriStampId,
   type BandoriStampCatalogItem,
   type BandoriStampRegion,
@@ -811,7 +811,7 @@ export function resolveCommentStamp(region: CommentStampRegion, id: number): Com
     region,
     imageName,
     imageUrl: buildBandoriStampImagePublicUrl(region, normalizedStampId),
-    manifestUrl: buildBandoriStampApiPath(region, normalizedStampId),
+    manifestUrl: buildBandoriStampManifestPublicUrl(region, normalizedStampId),
     seq: row?.[0] ?? null,
     stampType: null,
     withVoice: hasVoice,

@@ -1,10 +1,14 @@
 "use client";
 
 import { useMemo } from "react";
-import { parseApiSuccessData } from "@/lib/api-contracts";
 import {
   BANDORI_STAMP_CLIENT_STALE_TIME_MS,
-  buildBandoriStampApiPath,
+  buildBandoriStampAnimationManifestCdnUrl,
+  buildBandoriStampIndexCdnUrl,
+  buildBandoriStampManifestCdnUrl,
+  parseBandoriStampAnimationCdnResponse,
+  parseBandoriStampIndexCdnResponse,
+  parseBandoriStampManifestCdnResponse,
   type BandoriStampAnimationResponse,
   type BandoriStampAssetResponse,
   type BandoriStampIndexResponse,
@@ -16,26 +20,19 @@ import {
 } from "@/lib/comment-stamps";
 import { useCachedFetch } from "@/hooks/useCachedFetch";
 
-function parseIndexResponse(raw: unknown): BandoriStampIndexResponse | null {
-  return parseApiSuccessData<BandoriStampIndexResponse>(raw);
-}
-
-function parseAssetResponse(raw: unknown): BandoriStampAssetResponse | null {
-  return parseApiSuccessData<BandoriStampAssetResponse>(raw);
-}
-
-function parseAnimationResponse(raw: unknown): BandoriStampAnimationResponse | null {
-  return parseApiSuccessData<BandoriStampAnimationResponse>(raw);
-}
-
 export function useCommentStampsForRegion(
   region: CommentStampRegion,
   enabled = true,
 ): { stamps: readonly CommentStamp[]; loading: boolean } {
   const fallbackStamps = useMemo(() => getCommentStampsForRegion(region), [region]);
+  const indexUrl = useMemo(() => buildBandoriStampIndexCdnUrl(region), [region]);
+  const parseIndexResponse = useMemo(
+    () => (raw: unknown): BandoriStampIndexResponse | null => parseBandoriStampIndexCdnResponse(region, raw),
+    [region],
+  );
   const { data, loading } = useCachedFetch<BandoriStampIndexResponse | null>(
     enabled ? `bandori-comment-stamps:${region}:index:v1` : null,
-    enabled ? `/api/bandori/stamps/${region}` : null,
+    enabled ? indexUrl : null,
     parseIndexResponse,
     {
       staleTimeMs: BANDORI_STAMP_CLIENT_STALE_TIME_MS,
@@ -54,10 +51,14 @@ export function useCommentStampAsset(
   stampId: number,
   enabled = true,
 ): { asset: BandoriStampAssetResponse | null; loading: boolean } {
-  const stampApiPath = buildBandoriStampApiPath(region, stampId);
+  const manifestUrl = useMemo(() => buildBandoriStampManifestCdnUrl(region, stampId), [region, stampId]);
+  const parseAssetResponse = useMemo(
+    () => (raw: unknown): BandoriStampAssetResponse | null => parseBandoriStampManifestCdnResponse(region, stampId, raw),
+    [region, stampId],
+  );
   const { data, loading } = useCachedFetch<BandoriStampAssetResponse | null>(
     enabled ? `bandori-comment-stamps:${region}:${stampId}:manifest:v2` : null,
-    enabled ? stampApiPath : null,
+    enabled ? manifestUrl : null,
     parseAssetResponse,
     {
       staleTimeMs: BANDORI_STAMP_CLIENT_STALE_TIME_MS,
@@ -73,9 +74,14 @@ export function useCommentStampAnimation(
   stampId: number,
   enabled = true,
 ): { animation: BandoriStampAnimationResponse | null; loading: boolean } {
+  const animationUrl = useMemo(() => buildBandoriStampAnimationManifestCdnUrl(region, stampId), [region, stampId]);
+  const parseAnimationResponse = useMemo(
+    () => (raw: unknown): BandoriStampAnimationResponse | null => parseBandoriStampAnimationCdnResponse(region, stampId, raw),
+    [region, stampId],
+  );
   const { data, loading } = useCachedFetch<BandoriStampAnimationResponse | null>(
     enabled ? `bandori-comment-stamps:${region}:${stampId}:animation:v1` : null,
-    enabled ? `/api/bandori/stamps/${region}/${stampId}/animation` : null,
+    enabled ? animationUrl : null,
     parseAnimationResponse,
     {
       staleTimeMs: BANDORI_STAMP_CLIENT_STALE_TIME_MS,
