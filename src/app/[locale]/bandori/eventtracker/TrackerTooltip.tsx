@@ -33,11 +33,11 @@ function ComparisonPointRows({
   return (
     <div className="mt-3 border-t border-gray-100 pt-2 dark:border-gray-700/50">
       {points.map((point) => (
-        <div key={`${point.eventId}-${point.tier}-${point.shiftedTime}`} className="mt-1.5">
+        <div key={`${point.targetType}-${point.targetId}-${point.tier}-${point.shiftedTime}`} className="mt-1.5">
           <div className="flex items-center justify-between gap-5">
             <span className="inline-flex min-w-0 items-center gap-1.5 text-xs font-bold" style={{ color: point.color }}>
               <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: point.color }} />
-              <span className="truncate">{point.eventId}期 T{point.tier}</span>
+              <span className="truncate">{point.label}</span>
             </span>
             <span className="shrink-0 text-sm font-bold" style={{ color: point.color }}>
               {new Intl.NumberFormat().format(point.ep)} {unit}

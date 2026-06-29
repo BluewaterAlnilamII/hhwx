@@ -24,25 +24,92 @@ type MonthlyRankingWindow = {
   monthId: number;
 };
 
-export function getMonthlyRankingWindow(referenceTime: Date = new Date()): MonthlyRankingWindow {
-  const monthAnchor = new Date(referenceTime.getFullYear(), referenceTime.getMonth(), 1, 13, 0, 0);
-  const effectiveMonthStart = referenceTime.getTime() < monthAnchor.getTime()
-    ? new Date(referenceTime.getFullYear(), referenceTime.getMonth() - 1, 1, 13, 0, 0)
-    : monthAnchor;
+export type MonthlyRankingOption = MonthlyRankingWindow & {
+  label: string;
+  shortLabel: string;
+};
 
+const MONTHLY_RANKING_START_YEAR = 2026;
+const MONTHLY_RANKING_START_MONTH_INDEX = 2;
+
+function getMonthlyMonthId(year: number, monthIndex: number): number {
+  return (year - 2025) * 12 + monthIndex;
+}
+
+function getMonthlyMonthStartById(monthId: number): Date | null {
+  if (!Number.isInteger(monthId) || monthId <= 0) return null;
+
+  const year = 2025 + Math.floor(monthId / 12);
+  const monthIndex = monthId % 12;
+  return new Date(year, monthIndex, 1, 13, 0, 0);
+}
+
+function buildMonthlyRankingWindow(monthStart: Date): MonthlyRankingWindow {
   return {
-    effectiveMonthStart,
-    domainStart: effectiveMonthStart.getTime(),
+    effectiveMonthStart: monthStart,
+    domainStart: monthStart.getTime(),
     cutoffEnd: new Date(
-      effectiveMonthStart.getFullYear(),
-      effectiveMonthStart.getMonth() + 1,
+      monthStart.getFullYear(),
+      monthStart.getMonth() + 1,
       1,
       0,
       0,
       0,
     ).getTime(),
-    monthId: (effectiveMonthStart.getFullYear() - 2025) * 12 + effectiveMonthStart.getMonth(),
+    monthId: getMonthlyMonthId(monthStart.getFullYear(), monthStart.getMonth()),
   };
+}
+
+function toMonthlyRankingOption(window: MonthlyRankingWindow): MonthlyRankingOption {
+  const year = window.effectiveMonthStart.getFullYear();
+  const month = window.effectiveMonthStart.getMonth() + 1;
+
+  return {
+    ...window,
+    label: `${year}年${month}月`,
+    shortLabel: `${year}-${String(month).padStart(2, "0")}`,
+  };
+}
+
+export function getCurrentMonthlyRankingWindow(referenceTime: Date = new Date()): MonthlyRankingWindow {
+  const monthAnchor = new Date(referenceTime.getFullYear(), referenceTime.getMonth(), 1, 13, 0, 0);
+  const effectiveMonthStart = referenceTime.getTime() < monthAnchor.getTime()
+    ? new Date(referenceTime.getFullYear(), referenceTime.getMonth() - 1, 1, 13, 0, 0)
+    : monthAnchor;
+
+  return buildMonthlyRankingWindow(effectiveMonthStart);
+}
+
+export function getMonthlyRankingWindow(monthId: number | null, referenceTime: Date = new Date()): MonthlyRankingWindow {
+  if (monthId !== null) {
+    const monthStart = getMonthlyMonthStartById(monthId);
+    if (monthStart !== null) {
+      return buildMonthlyRankingWindow(monthStart);
+    }
+  }
+
+  return getCurrentMonthlyRankingWindow(referenceTime);
+}
+
+export function getMonthlyRankingOptions(referenceTime: Date = new Date()): MonthlyRankingOption[] {
+  const currentWindow = getCurrentMonthlyRankingWindow(referenceTime);
+  const options: MonthlyRankingOption[] = [];
+
+  const cursor = new Date(
+    MONTHLY_RANKING_START_YEAR,
+    MONTHLY_RANKING_START_MONTH_INDEX,
+    1,
+    13,
+    0,
+    0,
+  );
+
+  while (cursor.getTime() <= currentWindow.effectiveMonthStart.getTime()) {
+    options.push(toMonthlyRankingOption(buildMonthlyRankingWindow(new Date(cursor))));
+    cursor.setMonth(cursor.getMonth() + 1);
+  }
+
+  return options.reverse();
 }
 
 /**
@@ -58,6 +125,7 @@ export function useChartDomain(
   trackingMode: TrackingMode,
   startDate: number | null,
   endDate: number | null,
+  selectedMonthlyMonthId: number | null,
 ): ChartDomain {
   return useMemo(() => {
     let domainStart: number | "auto" = "auto";
@@ -65,7 +133,7 @@ export function useChartDomain(
     let cutoffEnd: number | null = null;
 
     if (trackingMode === "monthly") {
-      const monthlyWindow = getMonthlyRankingWindow();
+      const monthlyWindow = getMonthlyRankingWindow(selectedMonthlyMonthId);
       domainStart = monthlyWindow.domainStart;
       cutoffEnd = monthlyWindow.cutoffEnd;
       domainEnd = cutoffEnd;
@@ -86,7 +154,7 @@ export function useChartDomain(
     }
 
     return { domainStart, domainEnd, cutoffEnd, midnights };
-  }, [trackingMode, startDate, endDate]);
+  }, [trackingMode, startDate, endDate, selectedMonthlyMonthId]);
 }
 
 /**

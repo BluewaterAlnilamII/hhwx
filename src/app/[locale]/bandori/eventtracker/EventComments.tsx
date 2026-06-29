@@ -28,6 +28,11 @@ import {
 import { getSafeSession } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
 import { useGameStore } from "@/store/useGameStore";
+import {
+  readEventTrackerSearchParams,
+  readPositiveIntegerSearchParam,
+  replaceEventTrackerUrlQuery,
+} from "./urlQuery";
 
 type CommentAvatar = {
   cardId: number;
@@ -762,6 +767,10 @@ function scrollToRenderedComment(commentId: string): boolean {
   return true;
 }
 
+function readCommentPageSearchParam(): number {
+  return readPositiveIntegerSearchParam(readEventTrackerSearchParams(), "page") ?? 1;
+}
+
 function bumpThreadReplyCount(nodes: CommentNode[], rootId: string, child: CommentNode): CommentNode[] {
   return nodes.map((node) => {
     if (node.id === rootId) {
@@ -908,6 +917,7 @@ type CommentItemProps = {
   replies: Record<string, CommentListResponse>;
   loadingReplies: Record<string, boolean>;
   canReact: boolean;
+  commentPage: number;
   isReply?: boolean;
   rootCommentId?: string | null;
   onCreateReply: (parentId: string, content: string) => Promise<void>;
@@ -925,6 +935,7 @@ function CommentItem({
   replies,
   loadingReplies,
   canReact,
+  commentPage,
   isReply = false,
   rootCommentId = null,
   onCreateReply,
@@ -980,21 +991,25 @@ function CommentItem({
     if (typeof window === "undefined") return "";
     const url = new URL(window.location.href);
     url.searchParams.set("event", String(eventId));
+    url.searchParams.set("page", String(commentPage));
     url.searchParams.set("comment", comment.id);
     return url.toString();
-  }, [comment.id, eventId]);
+  }, [comment.id, commentPage, eventId]);
   const replyToPermalink = useMemo(() => {
     if (typeof window === "undefined" || !comment.replyToCommentId) return "";
     const url = new URL(window.location.href);
     url.searchParams.set("event", String(eventId));
+    url.searchParams.set("page", String(commentPage));
     url.searchParams.set("comment", comment.replyToCommentId);
     return url.toString();
-  }, [comment.replyToCommentId, eventId]);
+  }, [comment.replyToCommentId, commentPage, eventId]);
 
   const handleCopyLink = async () => {
     if (!permalink) return;
     await navigator.clipboard?.writeText(permalink).catch(() => undefined);
-    window.history.replaceState(null, "", permalink);
+    if (permalink !== window.location.href) {
+      window.history.replaceState(null, "", permalink);
+    }
   };
 
   const handleReplyToClick = (event: MouseEvent<HTMLAnchorElement>) => {
@@ -1307,6 +1322,7 @@ function CommentItem({
                   replies={replies}
                   loadingReplies={loadingReplies}
                   canReact={canReact}
+                  commentPage={commentPage}
                   isReply
                   rootCommentId={comment.id}
                   onCreateReply={onCreateReply}
@@ -1351,6 +1367,8 @@ export default function EventComments({ eventId }: { eventId: number | null }) {
   const [loadingReplies, setLoadingReplies] = useState<Record<string, boolean>>({});
   const commentsRef = useRef<CommentNode[]>([]);
   const currentPageRef = useRef(1);
+  const eventGenerationRef = useRef(0);
+  const rootLoadSequenceRef = useRef(0);
   const { userId, username, emailVerified, authReady } = useGameStore();
 
   const apiBase = eventId ? `/api/bandori/events/${eventId}/comments` : null;
@@ -1363,40 +1381,68 @@ export default function EventComments({ eventId }: { eventId: number | null }) {
     currentPageRef.current = currentPage;
   }, [currentPage]);
 
-  const loadRootComments = useCallback(async (page = 1) => {
-    if (!apiBase) return;
+  const loadRootComments = useCallback(async (page = 1): Promise<CommentListResponse | null> => {
+    if (!apiBase) return null;
+    const requestId = rootLoadSequenceRef.current + 1;
+    rootLoadSequenceRef.current = requestId;
     setLoading(true);
     setError("");
     try {
       const headers = await authHeaders();
       const suffix = `?page=${encodeURIComponent(String(Math.max(1, Math.trunc(page))))}`;
       const data = await requestJson<CommentListResponse>(`${apiBase}${suffix}`, { headers });
+      if (requestId !== rootLoadSequenceRef.current) {
+        return null;
+      }
+
       setComments(data.comments);
       setCurrentPage(data.page ?? page);
       setTotalPages(data.totalPages ?? 1);
       setTotalCount(data.totalCount ?? data.comments.length);
       setTotalCommentCount(data.totalCommentCount ?? data.totalCount ?? data.comments.length);
+      return data;
     } catch (err) {
-      setError(err instanceof Error ? err.message : "评论加载失败");
+      if (requestId === rootLoadSequenceRef.current) {
+        setError(err instanceof Error ? err.message : "评论加载失败");
+      }
+      return null;
     } finally {
-      setLoading(false);
+      if (requestId === rootLoadSequenceRef.current) {
+        setLoading(false);
+      }
     }
   }, [apiBase]);
 
-  const locateLinkedComment = useCallback(async (commentId: string) => {
-    if (!apiBase) return;
+  const locateLinkedComment = useCallback(async (
+    commentId: string,
+    options: { expectedPage?: number; silent?: boolean } = {},
+  ): Promise<boolean> => {
+    if (!apiBase) return false;
+    const generation = eventGenerationRef.current;
     setFocusedCommentId(commentId);
     if (scrollToRenderedComment(commentId)) {
-      return;
+      return true;
     }
 
     try {
       const headers = await authHeaders();
       const data = await requestJson<CommentContextResponse>(`${apiBase}/${commentId}`, { headers });
+      if (generation !== eventGenerationRef.current) {
+        return false;
+      }
+
+      if (options.expectedPage !== undefined && data.rootPage !== options.expectedPage) {
+        setFocusedCommentId(null);
+        return false;
+      }
+
       const contextRoot = buildContextThread(data);
       const rootVisible = commentsRef.current.some((comment) => comment.id === contextRoot.id);
       if (data.rootPage !== currentPageRef.current || !rootVisible) {
-        await loadRootComments(data.rootPage);
+        const pageData = await loadRootComments(data.rootPage);
+        if (generation !== eventGenerationRef.current || !pageData) {
+          return false;
+        }
       }
       if (contextRoot.previewReplies.length > 0) {
         setReplies((current) => {
@@ -1414,19 +1460,36 @@ export default function EventComments({ eventId }: { eventId: number | null }) {
       window.requestAnimationFrame(() => {
         scrollToRenderedComment(commentId);
       });
+      return true;
     } catch (err) {
+      if (generation !== eventGenerationRef.current) {
+        return false;
+      }
+
+      setFocusedCommentId(null);
+      if (options.silent) {
+        return false;
+      }
       setError(err instanceof Error ? err.message : "无法定位评论");
+      return false;
     }
   }, [apiBase, loadRootComments]);
 
   const navigateToComment = useCallback(async (commentId: string) => {
-    if (typeof window !== "undefined" && eventId) {
-      const url = new URL(window.location.href);
-      url.searchParams.set("event", String(eventId));
-      url.searchParams.set("comment", commentId);
-      window.history.replaceState(null, "", url.toString());
+    const generation = eventGenerationRef.current;
+    const located = await locateLinkedComment(commentId, {
+      expectedPage: currentPageRef.current,
+      silent: true,
+    });
+    if (generation !== eventGenerationRef.current) {
+      return;
     }
-    await locateLinkedComment(commentId);
+
+    replaceEventTrackerUrlQuery({
+      eventId,
+      commentPage: currentPageRef.current,
+      commentId: located ? commentId : null,
+    });
   }, [eventId, locateLinkedComment]);
 
   useEffect(() => {
@@ -1434,6 +1497,10 @@ export default function EventComments({ eventId }: { eventId: number | null }) {
   }, [currentPage]);
 
   useEffect(() => {
+    eventGenerationRef.current += 1;
+    rootLoadSequenceRef.current += 1;
+    const generation = eventGenerationRef.current;
+
     setComments([]);
     setReplies({});
     setCurrentPage(1);
@@ -1441,17 +1508,48 @@ export default function EventComments({ eventId }: { eventId: number | null }) {
     setTotalPages(1);
     setTotalCount(0);
     setTotalCommentCount(0);
+    setLoading(false);
+    setError("");
     setFocusedCommentId(null);
     if (!eventId || !apiBase) return;
 
-    const params = new URLSearchParams(window.location.search);
+    const params = readEventTrackerSearchParams();
+    const requestedPage = readCommentPageSearchParam();
     const commentId = params.get("comment");
     void (async () => {
-      if (commentId) {
-        await locateLinkedComment(commentId);
+      const data = await loadRootComments(requestedPage);
+      if (generation !== eventGenerationRef.current || !data) {
         return;
       }
-      await loadRootComments(1);
+
+      const loadedPage = data.page ?? requestedPage;
+      if (commentId) {
+        if (findComment(data.comments, commentId)) {
+          setFocusedCommentId(commentId);
+          replaceEventTrackerUrlQuery({ eventId, commentPage: loadedPage, commentId });
+          window.requestAnimationFrame(() => {
+            scrollToRenderedComment(commentId);
+          });
+          return;
+        }
+
+        const located = await locateLinkedComment(commentId, {
+          expectedPage: loadedPage,
+          silent: true,
+        });
+        if (generation !== eventGenerationRef.current) {
+          return;
+        }
+
+        replaceEventTrackerUrlQuery({
+          eventId,
+          commentPage: loadedPage,
+          commentId: located ? commentId : null,
+        });
+        return;
+      }
+
+      replaceEventTrackerUrlQuery({ eventId, commentPage: loadedPage, commentId: null });
     })();
   }, [apiBase, eventId, loadRootComments, locateLinkedComment]);
 
@@ -1489,12 +1587,23 @@ export default function EventComments({ eventId }: { eventId: number | null }) {
         };
       });
       setFocusedCommentId(created.id);
+      replaceEventTrackerUrlQuery({
+        eventId,
+        commentPage: currentPageRef.current,
+        commentId: created.id,
+      });
       window.setTimeout(() => document.getElementById(`comment-${created.id}`)?.scrollIntoView({ block: "center", behavior: "smooth" }), 80);
       return;
     }
 
-    await loadRootComments(Math.max(1, Math.ceil((totalCount + 1) / COMMENT_ROOT_PAGE_SIZE)));
+    const createdPage = Math.max(1, Math.ceil((totalCount + 1) / COMMENT_ROOT_PAGE_SIZE));
+    await loadRootComments(createdPage);
     setFocusedCommentId(created.id);
+    replaceEventTrackerUrlQuery({
+      eventId,
+      commentPage: createdPage,
+      commentId: created.id,
+    });
     window.setTimeout(() => document.getElementById(`comment-${created.id}`)?.scrollIntoView({ block: "center", behavior: "smooth" }), 80);
   };
 
@@ -1571,6 +1680,18 @@ export default function EventComments({ eventId }: { eventId: number | null }) {
     }
   };
 
+  const goToCommentPage = useCallback((page: number) => {
+    const nextPage = Math.min(totalPages, Math.max(1, Math.trunc(page)));
+    setPageInput(String(nextPage));
+    setFocusedCommentId(null);
+    replaceEventTrackerUrlQuery({
+      eventId,
+      commentPage: nextPage,
+      commentId: null,
+    });
+    void loadRootComments(nextPage);
+  }, [eventId, loadRootComments, totalPages]);
+
   const submitPageInput = () => {
     const parsed = Number.parseInt(pageInput, 10);
     if (!Number.isFinite(parsed)) {
@@ -1580,7 +1701,7 @@ export default function EventComments({ eventId }: { eventId: number | null }) {
     const nextPage = Math.min(totalPages, Math.max(1, parsed));
     setPageInput(String(nextPage));
     if (nextPage !== currentPage) {
-      void loadRootComments(nextPage);
+      goToCommentPage(nextPage);
     }
   };
 
@@ -1624,6 +1745,7 @@ export default function EventComments({ eventId }: { eventId: number | null }) {
             replies={replies}
             loadingReplies={loadingReplies}
             canReact={Boolean(userId && emailVerified)}
+            commentPage={currentPage}
             onCreateReply={(parentId, content) => createComment(content, parentId)}
             onToggleLike={toggleCommentLike}
             onUpdate={updateCommentContent}
@@ -1645,7 +1767,7 @@ export default function EventComments({ eventId }: { eventId: number | null }) {
           <div className="inline-flex max-w-full items-center gap-1 rounded-full border border-slate-200 bg-slate-50 p-1 shadow-sm dark:border-slate-700 dark:bg-slate-900">
             <button
               type="button"
-              onClick={() => loadRootComments(1)}
+              onClick={() => goToCommentPage(1)}
               disabled={loading || currentPage <= 1}
               className="inline-flex h-8 w-8 items-center justify-center rounded-full text-slate-500 transition hover:bg-white hover:text-sky-700 disabled:cursor-not-allowed disabled:text-slate-300 disabled:hover:bg-transparent dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-sky-300 dark:disabled:text-slate-600"
               aria-label="第一页"
@@ -1655,7 +1777,7 @@ export default function EventComments({ eventId }: { eventId: number | null }) {
             </button>
             <button
               type="button"
-              onClick={() => loadRootComments(currentPage - 1)}
+              onClick={() => goToCommentPage(currentPage - 1)}
               disabled={loading || currentPage <= 1}
               className="inline-flex h-8 w-8 items-center justify-center rounded-full text-slate-500 transition hover:bg-white hover:text-sky-700 disabled:cursor-not-allowed disabled:text-slate-300 disabled:hover:bg-transparent dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-sky-300 dark:disabled:text-slate-600"
               aria-label="上一页"
@@ -1687,7 +1809,7 @@ export default function EventComments({ eventId }: { eventId: number | null }) {
             </div>
             <button
               type="button"
-              onClick={() => loadRootComments(currentPage + 1)}
+              onClick={() => goToCommentPage(currentPage + 1)}
               disabled={loading || currentPage >= totalPages}
               className="inline-flex h-8 w-8 items-center justify-center rounded-full text-slate-500 transition hover:bg-white hover:text-sky-700 disabled:cursor-not-allowed disabled:text-slate-300 disabled:hover:bg-transparent dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-sky-300 dark:disabled:text-slate-600"
               aria-label="下一页"
@@ -1697,7 +1819,7 @@ export default function EventComments({ eventId }: { eventId: number | null }) {
             </button>
             <button
               type="button"
-              onClick={() => loadRootComments(totalPages)}
+              onClick={() => goToCommentPage(totalPages)}
               disabled={loading || currentPage >= totalPages}
               className="inline-flex h-8 w-8 items-center justify-center rounded-full text-slate-500 transition hover:bg-white hover:text-sky-700 disabled:cursor-not-allowed disabled:text-slate-300 disabled:hover:bg-transparent dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-sky-300 dark:disabled:text-slate-600"
               aria-label="最后一页"

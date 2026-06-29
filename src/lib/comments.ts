@@ -537,7 +537,7 @@ export async function getCommentContext(options: {
     .eq("target_type", options.targetType)
     .eq("target_id", options.targetId)
     .eq("moderation_status", "visible")
-    .single();
+    .maybeSingle();
 
   if (error || !data) {
     throw new ApiRouteError(404, "COMMENT_NOT_FOUND", "评论不存在", error?.message);
@@ -556,7 +556,7 @@ export async function getCommentContext(options: {
       .eq("target_type", options.targetType)
       .eq("target_id", options.targetId)
       .eq("moderation_status", "visible")
-      .single();
+      .maybeSingle();
 
     if (parentResult.error || !parentResult.data) {
       break;

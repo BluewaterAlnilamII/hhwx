@@ -10,6 +10,8 @@ const DAY_PROJECTION_STORAGE_KEY = "eventtracker_projection_24h";
 const BESTDORI_PREDICTION_STORAGE_KEY = "eventtracker_bestdori_prediction";
 const COMPARISON_CONFIG_STORAGE_KEY = "eventtracker_compare_event_lines";
 const COMPARISON_ALIGNMENT_STORAGE_KEY = "eventtracker_compare_alignment";
+const MONTHLY_COMPARISON_CONFIG_STORAGE_KEY = "eventtracker_compare_monthly_lines";
+const MONTHLY_COMPARISON_ALIGNMENT_STORAGE_KEY = "eventtracker_compare_monthly_alignment";
 const MAX_COMPARISON_LINES = 5;
 const COMPARISON_LINE_COLORS = ["#10b981", "#f59e0b", "#8b5cf6", "#06b6d4", "#ec4899"] as const;
 const BESTDORI_PREDICTION_COLOR = "var(--eventtracker-bestdori-color)";
@@ -83,6 +85,8 @@ export {
   BESTDORI_PREDICTION_STORAGE_KEY,
   COMPARISON_CONFIG_STORAGE_KEY,
   COMPARISON_ALIGNMENT_STORAGE_KEY,
+  MONTHLY_COMPARISON_CONFIG_STORAGE_KEY,
+  MONTHLY_COMPARISON_ALIGNMENT_STORAGE_KEY,
   MAX_COMPARISON_LINES,
   COMPARISON_LINE_COLORS,
   BESTDORI_PREDICTION_COLOR,
