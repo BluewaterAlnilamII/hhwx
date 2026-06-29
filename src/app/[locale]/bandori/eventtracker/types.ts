@@ -46,10 +46,12 @@ export type BestdoriPredictionPointInfo = {
 };
 
 export type ComparisonAlignment = "start" | "end";
+export type ComparisonTargetType = "event" | "monthly";
 
 export type ComparisonConfig = {
   id: string;
-  eventId: number | null;
+  targetType: ComparisonTargetType;
+  targetId: number | null;
   tier: number | null;
   enabled: boolean;
   colorIndex?: number;
@@ -58,9 +60,10 @@ export type ComparisonConfig = {
 export type ComparisonStatus = "loading" | "ready" | "no-data" | "time-missing";
 
 export type ComparisonPointInfo = {
-  eventId: number;
+  targetType: ComparisonTargetType;
+  targetId: number;
   tier: number;
-  eventName: string;
+  label: string;
   originalTime: number;
   shiftedTime: number;
   ep: number;
@@ -146,6 +149,8 @@ export type EventMetadata = BandoriEventSummary;
 export type MinimalEvent = {
   /** 活动编号。 */
   id: number;
+  /** 活动类型，用于对比目标推荐和同类型高亮。 */
+  eventType: string;
   /** 优先显示的活动名称。 */
   name: string;
   /** 活动开始时间戳，缺失时表示尚未确定。 */

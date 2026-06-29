@@ -24,7 +24,7 @@ import {
   resolveBandoriEventBannerBundleName,
 } from "@/lib/bandori-asset-proxy";
 import { resolveBandoriEventAssetRegion } from "@/lib/bandori-event-region";
-import type { ComparisonConfig, ComparisonLine, ComparisonLinePoint, TrackerData, TrackerDotProps, TrackerMouseState, TrackerTooltipPayloadEntry, TrackingMode } from "./types";
+import type { ComparisonConfig, ComparisonLine, ComparisonLinePoint, ComparisonTargetType, MinimalEvent, TrackerData, TrackerDotProps, TrackerMouseState, TrackerTooltipPayloadEntry, TrackingMode } from "./types";
 import {
   COMPARISON_LINE_COLORS,
   BESTDORI_PREDICTION_COLOR,
@@ -34,6 +34,7 @@ import {
   INSTANT_PROJECTION_STORAGE_KEY,
   DAY_PROJECTION_STORAGE_KEY,
   MAX_COMPARISON_LINES,
+  MONTHLY_TIERS,
   NON_WORKING_DAY_BAND_FILL,
   NON_WORKING_DAY_BAND_STROKE,
   getTiersForMode,
@@ -47,11 +48,20 @@ import {
   generateYTicks,
   getScoreAtTime,
   getFinalScore,
+  getCurrentMonthlyRankingWindow,
+  getMonthlyRankingOptions,
 } from "./useChartData";
 import { TrackerTooltip } from "./TrackerTooltip";
 import FixedYAxis from "./FixedYAxis";
 import { useProjectionPreference } from "./useProjectionPreference";
 import { useComparisonPreferences } from "./useComparisonPreferences";
+import { getDefaultTierForMode, normalizeTierForMode, readTrackerTierPreference, writeTrackerTierPreference } from "./tracker-tier-preference";
+import {
+  parseTrackingModeSearchParam,
+  readEventTrackerSearchParams,
+  readPositiveIntegerSearchParam,
+  replaceEventTrackerUrlQuery,
+} from "./urlQuery";
 import { mergeComparisonLines, useComparisonTrackerData } from "./useComparisonTrackerData";
 import { mergeBestdoriPredictionData, useBestdoriPrediction } from "./useBestdoriPrediction";
 import BandoriPageShell from "../BandoriPageShell";
@@ -67,6 +77,12 @@ type NonWorkingDayBand = {
   key: string;
   start: number;
   end: number;
+};
+
+type ComparisonTargetOption = {
+  id: number;
+  label: string;
+  isSameEventType?: boolean;
 };
 
 const ZOOM_WIDTH_MULTIPLIERS = [1, 2, 4, 8, 16, 32] as const;
@@ -272,6 +288,74 @@ function createComparisonConfigId(): string {
   return `comparison-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
+function hasComparisonConfig(
+  configs: ComparisonConfig[],
+  targetType: ComparisonTargetType,
+  targetId: number,
+  tier: number,
+): boolean {
+  return configs.some((config) => (
+    config.targetType === targetType &&
+    config.targetId === targetId &&
+    config.tier === tier
+  ));
+}
+
+function findPreviousSameTypeEventComparisonTarget(
+  events: MinimalEvent[],
+  currentEventId: number | null,
+  currentEventType: string | null,
+  tier: number,
+  configs: ComparisonConfig[],
+): number | null {
+  if (currentEventId === null || currentEventType === null) {
+    return null;
+  }
+
+  const target = events.find((event) => (
+    event.id < currentEventId &&
+    event.eventType === currentEventType &&
+    !hasComparisonConfig(configs, "event", event.id, tier)
+  ));
+
+  return target?.id ?? null;
+}
+
+function findPreviousMonthlyComparisonTarget(
+  monthlyOptions: Array<{ monthId: number }>,
+  selectedMonthlyMonthId: number,
+  tier: number,
+  configs: ComparisonConfig[],
+): number | null {
+  const target = monthlyOptions.find((option) => (
+    option.monthId < selectedMonthlyMonthId &&
+    !hasComparisonConfig(configs, "monthly", option.monthId, tier)
+  ));
+
+  return target?.monthId ?? null;
+}
+
+type InitialTrackerQueryState = {
+  currentEventId: number | null;
+  trackingMode: TrackingMode;
+  selectedTier: number;
+};
+
+function readInitialTrackerQueryState(): InitialTrackerQueryState {
+  const params = readEventTrackerSearchParams();
+  const trackingMode = parseTrackingModeSearchParam(params.get("type")) ?? "event";
+  const queryTier = readPositiveIntegerSearchParam(params, "tier");
+  const selectedTier = queryTier !== null
+    ? normalizeTierForMode(trackingMode, queryTier) ?? readTrackerTierPreference(trackingMode)
+    : readTrackerTierPreference(trackingMode);
+
+  return {
+    currentEventId: readPositiveIntegerSearchParam(params, "event"),
+    trackingMode,
+    selectedTier,
+  };
+}
+
 function formatBandoriCnDateTime(timestamp: number) {
   return format(timestamp, "yyyy年M月d日 HH:mm");
 }
@@ -422,15 +506,11 @@ function MinutesAgo({ timestamp }: { timestamp: number }) {
 
 export default function EventTrackerPage() {
   const cnExclusiveT = useTranslations("bandori.notices.cnExclusive");
-  const [currentEventId, setCurrentEventId] = useState<number | null>(() => {
-    if (typeof window === "undefined") return null;
-    const eventParam = new URLSearchParams(window.location.search).get("event");
-    const eventId = eventParam ? Number.parseInt(eventParam, 10) : NaN;
-    return Number.isInteger(eventId) && eventId > 0 ? eventId : null;
-  });
+  const [currentEventId, setCurrentEventId] = useState<number | null>(null);
   const [trackingMode, setTrackingMode] = useState<TrackingMode>("event");
-  const [selectedTier, setSelectedTier] = useState<number>(1000);
+  const [selectedTier, setSelectedTier] = useState<number>(() => getDefaultTierForMode("event"));
   const [selectedSongId, setSelectedSongId] = useState<number>(0);
+  const [selectedMonthlyMonthId, setSelectedMonthlyMonthId] = useState<number>(() => getCurrentMonthlyRankingWindow().monthId);
   const [chartRenderRevision, setChartRenderRevision] = useState(0);
   const [modeIndicatorStyle, setModeIndicatorStyle] = useState<ModeIndicatorStyle>({
     width: 0,
@@ -458,6 +538,8 @@ export default function EventTrackerPage() {
   const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [hoverTooltip, setHoverTooltip] = useState<HoverTooltipState | null>(null);
   const [chartViewportHeight, setChartViewportHeight] = useState(400);
+  const [hasAppliedInitialUrlState, setHasAppliedInitialUrlState] = useState(false);
+  const monthlyRankingOptions = useMemo(() => getMonthlyRankingOptions(), []);
 
   // ===== 数据获取层 =====
   const {
@@ -477,35 +559,110 @@ export default function EventTrackerPage() {
     trackingMode,
     selectedTier,
     selectedSongId,
+    selectedMonthlyMonthId,
+    hasAppliedInitialUrlState,
   );
 
   // ===== 投影偏好持久化 =====
   const [showInstantProjection, setShowInstantProjection] = useProjectionPreference(INSTANT_PROJECTION_STORAGE_KEY, true);
   const [showDayProjection, setShowDayProjection] = useProjectionPreference(DAY_PROJECTION_STORAGE_KEY, true);
   const [showBestdoriPrediction, setShowBestdoriPrediction] = useProjectionPreference(BESTDORI_PREDICTION_STORAGE_KEY, false);
+  const eventComparisonPreferences = useComparisonPreferences("event");
+  const monthlyComparisonPreferences = useComparisonPreferences("monthly");
+  const comparisonTargetType: ComparisonTargetType = trackingMode === "monthly" ? "monthly" : "event";
+  const activeComparisonPreferences = comparisonTargetType === "monthly"
+    ? monthlyComparisonPreferences
+    : eventComparisonPreferences;
   const {
     comparisonConfigs,
     setComparisonConfigs,
     comparisonAlignment,
     setComparisonAlignment,
-  } = useComparisonPreferences();
+  } = activeComparisonPreferences;
+
+  const handleSelectedEventIdChange = useCallback((eventId: string) => {
+    const nextEventId = Number.parseInt(eventId, 10);
+    if (!Number.isInteger(nextEventId) || nextEventId <= 0) {
+      return;
+    }
+
+    setCurrentEventId(nextEventId);
+    setZoomIndex(0);
+    replaceEventTrackerUrlQuery({
+      eventId: nextEventId,
+      trackingMode,
+      tier: selectedTier,
+      commentPage: null,
+      commentId: null,
+    });
+  }, [selectedTier, trackingMode]);
 
   const handleTrackingModeChange = useCallback((value: string) => {
-    const nextMode = value as TrackingMode;
+    const nextMode = parseTrackingModeSearchParam(value);
+    if (nextMode === null) {
+      return;
+    }
+
+    if (nextMode === trackingMode) {
+      return;
+    }
+
+    const nextTier = readTrackerTierPreference(nextMode);
 
     setTrackingMode(nextMode);
+    setSelectedTier(nextTier);
     setZoomIndex(0);
-    const targetTiers = getTiersForMode(nextMode);
+  }, [trackingMode]);
 
-    setSelectedTier((previousTier) => {
-      if (targetTiers.includes(previousTier)) {
-        return previousTier;
+  const handleTierChange = useCallback((tier: number) => {
+    const normalizedTier = normalizeTierForMode(trackingMode, tier);
+    if (normalizedTier === null) {
+      return;
+    }
+
+    if (normalizedTier === selectedTier) {
+      return;
+    }
+
+    setSelectedTier(normalizedTier);
+    writeTrackerTierPreference(trackingMode, normalizedTier);
+  }, [selectedTier, trackingMode]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    window.queueMicrotask(() => {
+      if (cancelled) {
+        return;
       }
 
-      const validTiers = targetTiers.filter((tier) => tier <= previousTier);
-      return validTiers.length > 0 ? validTiers[validTiers.length - 1] : targetTiers[0];
+      const nextState = readInitialTrackerQueryState();
+      setCurrentEventId(nextState.currentEventId);
+      setTrackingMode(nextState.trackingMode);
+      setSelectedTier(nextState.selectedTier);
+      setHasAppliedInitialUrlState(true);
     });
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
+
+  useEffect(() => {
+    if (!hasAppliedInitialUrlState) {
+      return;
+    }
+
+    if (resolvedCurrentEventId === null) {
+      return;
+    }
+
+    replaceEventTrackerUrlQuery({
+      eventId: resolvedCurrentEventId,
+      trackingMode,
+      tier: selectedTier,
+    });
+  }, [hasAppliedInitialUrlState, resolvedCurrentEventId, selectedTier, trackingMode]);
 
   const updateModeIndicator = useCallback(() => {
     const listElement = modeTabsListRef.current;
@@ -592,38 +749,127 @@ export default function EventTrackerPage() {
     () => allEvents.filter((event) => event.startAt !== null && event.endAt !== null),
     [allEvents],
   );
+  const currentEventType = eventMeta?.eventType ?? null;
+  const comparisonTargetOptions = useMemo<ComparisonTargetOption[]>(
+    () => comparisonTargetType === "monthly"
+      ? monthlyRankingOptions.map((option) => ({ id: option.monthId, label: option.label }))
+      : comparisonEventOptions.map((event) => ({
+          id: event.id,
+          label: `${event.id}期: ${event.name}`,
+          isSameEventType: (
+            currentEventType !== null &&
+            event.id !== resolvedCurrentEventId &&
+            event.eventType === currentEventType
+          ),
+        })),
+    [comparisonEventOptions, comparisonTargetType, currentEventType, monthlyRankingOptions, resolvedCurrentEventId],
+  );
+  const comparisonTargetLabelMap = useMemo(
+    () => new Map(comparisonTargetOptions.map((option) => [option.id, option.label])),
+    [comparisonTargetOptions],
+  );
+  const comparisonTargetIdSet = useMemo(
+    () => new Set(comparisonTargetOptions.map((option) => option.id)),
+    [comparisonTargetOptions],
+  );
+  const comparisonTierOptions = comparisonTargetType === "monthly" ? MONTHLY_TIERS : EVENT_TIERS;
+  const defaultComparisonTier = comparisonTierOptions.includes(selectedTier) ? selectedTier : comparisonTierOptions[0];
+  const defaultComparisonTargetId = comparisonTargetType === "monthly"
+    ? selectedMonthlyMonthId
+    : resolvedCurrentEventId;
   const resolvedComparisonConfigs = useMemo(
     () => comparisonConfigs
-      .filter((config) => config.eventId !== null && config.tier !== null)
+      .filter((config) => (
+        config.targetType === comparisonTargetType &&
+        config.targetId !== null &&
+        config.tier !== null &&
+        comparisonTargetIdSet.has(config.targetId) &&
+        comparisonTierOptions.includes(config.tier)
+      ))
       .map((config, colorIndex) => ({ ...config, colorIndex })),
-    [comparisonConfigs],
+    [comparisonConfigs, comparisonTargetIdSet, comparisonTargetType, comparisonTierOptions],
   );
   const activeComparisonConfigs = useMemo(
     () => resolvedComparisonConfigs.filter((config) => config.enabled),
     [resolvedComparisonConfigs],
   );
-  const canAddComparisonRow = trackingMode === "event" && comparisonConfigs.length < MAX_COMPARISON_LINES;
+  const canAddComparisonRow = (
+    (trackingMode === "event" || trackingMode === "monthly") &&
+    defaultComparisonTargetId !== null &&
+    comparisonConfigs.length < MAX_COMPARISON_LINES
+  );
+
+  useEffect(() => {
+    if (comparisonTargetOptions.length === 0) {
+      return;
+    }
+
+    setComparisonConfigs((previous) => {
+      const nextConfigs = previous.filter((config) => (
+        config.targetType === comparisonTargetType &&
+        config.targetId !== null &&
+        config.tier !== null &&
+        comparisonTargetIdSet.has(config.targetId) &&
+        comparisonTierOptions.includes(config.tier)
+      ));
+
+      return nextConfigs.length === previous.length ? previous : nextConfigs;
+    });
+  }, [
+    comparisonTargetIdSet,
+    comparisonTargetOptions.length,
+    comparisonTargetType,
+    comparisonTierOptions,
+    setComparisonConfigs,
+  ]);
 
   const handleAddComparison = useCallback(() => {
     if (!canAddComparisonRow) return;
 
-    setComparisonConfigs((previous) => [
-      ...previous,
-      { id: createComparisonConfigId(), eventId: resolvedCurrentEventId, tier: selectedTier, enabled: true },
-    ]);
-  }, [canAddComparisonRow, resolvedCurrentEventId, selectedTier, setComparisonConfigs]);
+    setComparisonConfigs((previous) => {
+      const targetId = comparisonTargetType === "monthly"
+        ? findPreviousMonthlyComparisonTarget(monthlyRankingOptions, selectedMonthlyMonthId, defaultComparisonTier, previous)
+        : findPreviousSameTypeEventComparisonTarget(comparisonEventOptions, resolvedCurrentEventId, currentEventType, defaultComparisonTier, previous);
+
+      if (targetId === null) {
+        return previous;
+      }
+
+      return [
+        ...previous,
+        {
+          id: createComparisonConfigId(),
+          targetType: comparisonTargetType,
+          targetId,
+          tier: defaultComparisonTier,
+          enabled: true,
+        },
+      ];
+    });
+  }, [
+    canAddComparisonRow,
+    comparisonEventOptions,
+    comparisonTargetType,
+    currentEventType,
+    defaultComparisonTier,
+    monthlyRankingOptions,
+    resolvedCurrentEventId,
+    selectedMonthlyMonthId,
+    setComparisonConfigs,
+  ]);
 
   const handleUpdateComparison = useCallback((id: string, patch: Partial<ComparisonConfig>) => {
     setComparisonConfigs((previous) => previous.map((config) => {
       if (config.id !== id) return config;
 
       const nextConfig = { ...config, ...patch };
-      const nextKey = nextConfig.eventId !== null && nextConfig.tier !== null
-        ? `${nextConfig.eventId}:${nextConfig.tier}`
+      const nextKey = nextConfig.targetId !== null && nextConfig.tier !== null
+        ? `${nextConfig.targetType}:${nextConfig.targetId}:${nextConfig.tier}`
         : null;
       const isDuplicate = nextKey !== null && previous.some((other) => (
         other.id !== id &&
-        other.eventId === nextConfig.eventId &&
+        other.targetType === nextConfig.targetType &&
+        other.targetId === nextConfig.targetId &&
         other.tier === nextConfig.tier
       ));
 
@@ -653,7 +899,7 @@ export default function EventTrackerPage() {
     ? buildBandoriEventBannerPublicUrl(bannerPath, bannerAssetSegment)
     : "";
 
-  const { domainStart, domainEnd, cutoffEnd, midnights } = useChartDomain(trackingMode, startDate, endDate);
+  const { domainStart, domainEnd, cutoffEnd, midnights } = useChartDomain(trackingMode, startDate, endDate, selectedMonthlyMonthId);
   const hasActualTrackerData = useMemo(
     () => chartData.some((point) => isActualTrackerPoint(point, domainStart, trackingMode, chartData.length)),
     [chartData, domainStart, trackingMode],
@@ -662,14 +908,15 @@ export default function EventTrackerPage() {
   const status = useEventStatus(domainStart, domainEnd);
   const finalDisplayedData = useFinalDisplayedData(fullProcessedData, cutoffEnd, status, showInstantProjection, showDayProjection);
   const bestdoriPrediction = useBestdoriPrediction({
-    enabled: trackingMode === "event" && status === "进行中" && showBestdoriPrediction,
+    enabled: hasAppliedInitialUrlState && trackingMode === "event" && status === "进行中" && showBestdoriPrediction,
     eventId: resolvedCurrentEventId,
     tier: selectedTier,
   });
   const { comparisonLines } = useComparisonTrackerData({
-    enabled: trackingMode === "event",
+    enabled: hasAppliedInitialUrlState && (trackingMode === "event" || trackingMode === "monthly"),
     configs: activeComparisonConfigs,
     events: allEvents,
+    monthlyOptions: monthlyRankingOptions,
     alignment: comparisonAlignment,
     currentStart: typeof domainStart === "number" ? domainStart : null,
     currentEnd: typeof domainEnd === "number" ? domainEnd : null,
@@ -1006,8 +1253,8 @@ export default function EventTrackerPage() {
     () => generateYTicks(displayedChartData),
     [displayedChartData],
   );
-  const comparisonChartKey = comparisonConfigs.map((config) => `${config.eventId}:${config.tier}`).join(",");
-  const chartContainerKey = `${resolvedCurrentEventId ?? "none"}-${trackingMode}-${selectedTier}-${resolvedSelectedSongId}-${comparisonChartKey}-${comparisonAlignment}-${showBestdoriPrediction}-${bestdoriPrediction.status}-${chartRenderRevision}`;
+  const comparisonChartKey = comparisonConfigs.map((config) => `${config.targetType}:${config.targetId}:${config.tier}`).join(",");
+  const chartContainerKey = `${resolvedCurrentEventId ?? "none"}-${trackingMode}-${selectedMonthlyMonthId}-${selectedTier}-${resolvedSelectedSongId}-${comparisonChartKey}-${comparisonAlignment}-${showBestdoriPrediction}-${bestdoriPrediction.status}-${chartRenderRevision}`;
 
   // ===== 分数摘要 =====
   const scoreSummary = useMemo(() => {
@@ -1049,7 +1296,7 @@ export default function EventTrackerPage() {
           title={cnEventName}
           events={allEvents}
           selectedEventId={resolvedCurrentEventId ? String(resolvedCurrentEventId) : ""}
-          onSelectedEventIdChange={(eventId) => setCurrentEventId(parseInt(eventId, 10))}
+          onSelectedEventIdChange={handleSelectedEventIdChange}
           bannerUrl={bannerUrl}
           startText={startDate ? `${formatBandoriCnDateTime(startDate)} (CN)` : null}
           endText={endDate ? `${formatBandoriCnDateTime(endDate)} (CN)` : null}
@@ -1139,8 +1386,30 @@ export default function EventTrackerPage() {
                   </div>
                 )}
 
+                {trackingMode === "monthly" && (
+                  <div className="overflow-visible rounded-none border border-transparent bg-transparent px-2 pt-2 pb-0 shadow-none sm:px-2.5 sm:pt-2.5 sm:pb-0">
+                    <div className="mb-2 px-1 text-xs font-bold tracking-[0.1em] text-blue-500/85 dark:text-sky-200 sm:text-[13px]">
+                      选择月份
+                    </div>
+                    <select
+                      className="h-8 w-full max-w-[12rem] rounded-full border border-gray-200 bg-white px-3 text-xs font-semibold text-gray-600 outline-none transition-colors hover:border-blue-300 focus:ring-2 focus:ring-blue-500/30 dark:border-gray-700 dark:bg-[#131A2B] dark:text-gray-300 sm:h-9 sm:text-sm"
+                      value={selectedMonthlyMonthId}
+                      onChange={(event) => {
+                        setSelectedMonthlyMonthId(Number(event.target.value));
+                        setZoomIndex(0);
+                      }}
+                    >
+                      {monthlyRankingOptions.map((option) => (
+                        <option key={option.monthId} value={option.monthId}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
                 {/* 排名档位选择 */}
-                <div className="overflow-visible rounded-none border border-transparent bg-transparent p-2 sm:p-2.5 shadow-none">
+                <div className="overflow-visible rounded-none border border-transparent bg-transparent px-2 pt-1 pb-2 shadow-none sm:px-2.5 sm:pt-1 sm:pb-2.5">
                   <div className="mb-2 px-1 text-xs font-bold tracking-[0.1em] text-blue-500/85 dark:text-sky-200 sm:text-[13px]">
                     选择排名
                   </div>
@@ -1149,7 +1418,7 @@ export default function EventTrackerPage() {
                       <button
                         key={tier}
                         type="button"
-                        onClick={() => setSelectedTier(tier)}
+                        onClick={() => handleTierChange(tier)}
                         className={`h-8 min-w-[2.9rem] rounded-[12px] border px-2 text-[11px] font-semibold tracking-[0.01em] transition-all duration-300 sm:h-9 sm:min-w-[3.15rem] sm:rounded-[14px] sm:px-2.5 sm:text-[12px] ${
                           selectedTier === tier
                             ? "border-blue-500 bg-blue-600 text-white shadow-[0_8px_18px_rgba(37,99,235,0.2)] ring-2 ring-blue-500/85 ring-offset-2 ring-offset-white dark:ring-offset-[#111827]"
@@ -1186,7 +1455,7 @@ export default function EventTrackerPage() {
                         : <span className="text-base font-medium text-gray-600 dark:text-slate-200">-</span>
                       }
                     </div>
-                    {showBestdoriPrediction && (
+                    {trackingMode === "event" && showBestdoriPrediction && (
                       <div className="flex justify-between items-center p-4">
                         <span className="text-base text-gray-500 dark:text-slate-300">Bestdori预测</span>
                         <span className="text-base font-bold" style={{ color: BESTDORI_PREDICTION_COLOR }}>
@@ -1540,11 +1809,11 @@ export default function EventTrackerPage() {
                 </div>
 
                 {/* 投影与对比开关 */}
-                {trackingMode === "event" && (
+                {(trackingMode === "event" || trackingMode === "monthly") && (
                   <div className="px-1 pt-4 sm:px-2">
                     <div className="flex flex-col items-center gap-3.5">
                       <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-3">
-                        {status === "进行中" && (
+                        {trackingMode === "event" && status === "进行中" && (
                           <>
                             <button
                               type="button"
@@ -1599,7 +1868,12 @@ export default function EventTrackerPage() {
                         {resolvedComparisonConfigs.map((config) => {
                           const line = comparisonLineById.get(config.id);
                           const color = line?.color ?? COMPARISON_LINE_COLORS[(config.colorIndex ?? 0) % COMPARISON_LINE_COLORS.length];
-                          const label = `${config.eventId}期 T${config.tier}`;
+                          const targetLabel = config.targetId !== null
+                            ? config.targetType === "monthly"
+                              ? comparisonTargetLabelMap.get(config.targetId) ?? `月度 ${config.targetId}`
+                              : `${config.targetId}期`
+                            : "-";
+                          const label = line?.label ?? `${targetLabel} T${config.tier}`;
                           const statusLabel = config.enabled ? getComparisonStatusLabel(line?.status ?? "loading") : "隐藏";
 
                           return (
@@ -1664,15 +1938,20 @@ export default function EventTrackerPage() {
                           <div key={config.id} className="flex max-w-full flex-wrap items-center justify-center gap-2">
                             <select
                               className="h-8 min-w-[13rem] rounded-full border border-gray-200 bg-white px-3 text-xs font-semibold text-gray-600 outline-none transition-colors hover:border-blue-300 focus:ring-2 focus:ring-blue-500/30 dark:border-gray-700 dark:bg-[#131A2B] dark:text-gray-300 sm:h-9 sm:text-sm"
-                              value={config.eventId ?? ""}
+                              value={config.targetId ?? ""}
                               onChange={(event) => {
-                                const nextEventId = event.target.value ? Number(event.target.value) : null;
-                                handleUpdateComparison(config.id, { eventId: nextEventId });
+                                const nextTargetId = event.target.value ? Number(event.target.value) : null;
+                                handleUpdateComparison(config.id, { targetId: nextTargetId });
                               }}
                             >
-                              {comparisonEventOptions.map((event) => (
-                                <option key={event.id} value={event.id}>
-                                  {event.id}期: {event.name}
+                              {comparisonTargetOptions.map((option) => (
+                                <option
+                                  key={option.id}
+                                  value={option.id}
+                                  className={option.isSameEventType ? "font-semibold text-red-600 dark:text-red-300" : undefined}
+                                  style={option.isSameEventType ? { color: "#dc2626", fontWeight: 600 } : undefined}
+                                >
+                                  {option.label}
                                 </option>
                               ))}
                             </select>
@@ -1685,7 +1964,7 @@ export default function EventTrackerPage() {
                                 handleUpdateComparison(config.id, { tier: nextTier });
                               }}
                             >
-                              {EVENT_TIERS.map((tier) => (
+                              {comparisonTierOptions.map((tier) => (
                                 <option key={tier} value={tier}>
                                   T{tier}
                                 </option>

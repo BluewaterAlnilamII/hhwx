@@ -250,6 +250,8 @@ export function useTrackerData(
   trackingMode: TrackingMode,
   selectedTier: number,
   selectedSongId: number,
+  selectedMonthlyMonthId: number | null,
+  enabled = true,
 ) {
   const [liveCutoffsByKey, setLiveCutoffsByKey] = useState<Record<string, TrackerData[]>>({});
   const [liveSongGroupsByKey, setLiveSongGroupsByKey] = useState<Record<string, TrackerSongGroup[]>>({});
@@ -286,6 +288,7 @@ export function useTrackerData(
 
         return {
           id: event.eventId,
+          eventType: event.eventType,
           name: resolvePreferredEventName(event),
           startAt: scheduleWindow.startAt,
           endAt: scheduleWindow.endAt,
@@ -339,12 +342,12 @@ export function useTrackerData(
   );
 
   // Tracker data cache and foreground refresh.
-  // Monthly ranking uses the current month id. Other modes use the selected event id.
+  // Monthly ranking uses the selected month id. Other modes use the selected event id.
   // Challenge song mode returns every song_id group for the selected event and tier,
   // so the cache key intentionally does not include selectedSongId.
-  const monthlyWindow = getMonthlyRankingWindow();
+  const monthlyWindow = getMonthlyRankingWindow(selectedMonthlyMonthId);
   const targetEventParam = trackingMode === "monthly" ? monthlyWindow.monthId : resolvedCurrentEventId;
-  const trackerCacheKey = targetEventParam !== null
+  const trackerCacheKey = enabled && targetEventParam !== null
     ? `tracker-3-${targetEventParam}-${trackingMode}-${selectedTier}`
     : null;
 
@@ -372,7 +375,7 @@ export function useTrackerData(
 
   const { data: trackerResult, loading } = useCachedFetch<TrackerResult>(
     trackerCacheKey,
-    targetEventParam !== null
+    trackerCacheKey !== null && targetEventParam !== null
       ? `/api/bandori/tracker/data?server=3&event=${targetEventParam}&type=${trackingMode}&tier=${selectedTier}`
       : null,
     (data: unknown) => {
