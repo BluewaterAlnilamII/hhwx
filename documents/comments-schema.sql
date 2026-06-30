@@ -16,7 +16,6 @@ CREATE TABLE IF NOT EXISTS public.comments (
   content           TEXT,
   depth             INTEGER NOT NULL DEFAULT 0,
   reply_count       INTEGER NOT NULL DEFAULT 0,
-  like_count        INTEGER NOT NULL DEFAULT 0,
   created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   edited_at         TIMESTAMPTZ,
@@ -30,7 +29,6 @@ CREATE TABLE IF NOT EXISTS public.comments (
   CHECK (content IS NULL OR (char_length(btrim(content)) > 0 AND char_length(content) <= 500)),
   CHECK (depth >= 0),
   CHECK (reply_count >= 0),
-  CHECK (like_count >= 0),
   CHECK (moderation_status IN ('visible', 'removed_by_admin', 'hidden')),
   CHECK (
     (deleted_at IS NULL AND content IS NOT NULL) OR
@@ -50,16 +48,6 @@ CREATE INDEX IF NOT EXISTS idx_comments_target_root_id
   ON public.comments (target_type, target_id, root_id);
 
 CREATE INDEX IF NOT EXISTS idx_comments_user_id ON public.comments (user_id);
-
-CREATE TABLE IF NOT EXISTS public.comment_likes (
-  comment_id UUID NOT NULL REFERENCES public.comments(id) ON DELETE CASCADE,
-  user_id    UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  PRIMARY KEY (comment_id, user_id)
-);
-
-CREATE INDEX IF NOT EXISTS idx_comment_likes_user_id_created_at
-  ON public.comment_likes (user_id, created_at DESC);
 
 CREATE TABLE IF NOT EXISTS public.comment_reactions (
   comment_id UUID NOT NULL REFERENCES public.comments(id) ON DELETE CASCADE,
@@ -191,54 +179,8 @@ END;
 $$ LANGUAGE plpgsql
 SET search_path = public, pg_temp;
 
-CREATE OR REPLACE FUNCTION public.update_comment_like_count()
-RETURNS TRIGGER AS $$
-DECLARE
-  target_comment_id UUID;
-BEGIN
-  IF TG_TABLE_NAME = 'comment_reactions' THEN
-    IF TG_OP = 'INSERT' THEN
-      IF NEW.emoji_key <> 'KokoroYay' THEN
-        RETURN NEW;
-      END IF;
-      target_comment_id := NEW.comment_id;
-    ELSE
-      IF OLD.emoji_key <> 'KokoroYay' THEN
-        RETURN OLD;
-      END IF;
-      target_comment_id := OLD.comment_id;
-    END IF;
-  ELSE
-    IF TG_OP = 'INSERT' THEN
-      target_comment_id := NEW.comment_id;
-    ELSE
-      target_comment_id := OLD.comment_id;
-    END IF;
-  END IF;
-
-  UPDATE public.comments
-    SET like_count = (
-          SELECT COUNT(*)::INTEGER
-          FROM public.comment_reactions
-          WHERE comment_id = target_comment_id
-            AND emoji_key = 'KokoroYay'
-        ),
-        updated_at = NOW()
-    WHERE id = target_comment_id;
-
-  IF TG_OP = 'INSERT' THEN
-    RETURN NEW;
-  END IF;
-
-  RETURN OLD;
-END;
-$$ LANGUAGE plpgsql
-SET search_path = public, pg_temp;
-
 DROP TRIGGER IF EXISTS prepare_comment_insert ON public.comments;
 DROP TRIGGER IF EXISTS increment_comment_reply_count ON public.comments;
-DROP TRIGGER IF EXISTS update_comment_like_count ON public.comment_likes;
-DROP TRIGGER IF EXISTS update_comment_reaction_like_count ON public.comment_reactions;
 
 CREATE TRIGGER prepare_comment_insert
   BEFORE INSERT ON public.comments
@@ -250,30 +192,17 @@ CREATE TRIGGER increment_comment_reply_count
   FOR EACH ROW
   EXECUTE FUNCTION public.increment_comment_reply_count();
 
-CREATE TRIGGER update_comment_like_count
-  AFTER INSERT OR DELETE ON public.comment_likes
-  FOR EACH ROW
-  EXECUTE FUNCTION public.update_comment_like_count();
-
-CREATE TRIGGER update_comment_reaction_like_count
-  AFTER INSERT OR DELETE ON public.comment_reactions
-  FOR EACH ROW
-  EXECUTE FUNCTION public.update_comment_like_count();
-
 REVOKE ALL ON FUNCTION public.prepare_comment_insert() FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.increment_comment_reply_count() FROM PUBLIC, anon, authenticated;
-REVOKE ALL ON FUNCTION public.update_comment_like_count() FROM PUBLIC, anon, authenticated;
 
 ALTER TABLE public.guestbook_comments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.comments ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.comment_likes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.comment_reactions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.comment_notifications ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.comment_reports ENABLE ROW LEVEL SECURITY;
 
 REVOKE ALL ON TABLE public.guestbook_comments FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON TABLE public.comments FROM PUBLIC, anon, authenticated;
-REVOKE ALL ON TABLE public.comment_likes FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON TABLE public.comment_reactions FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON TABLE public.comment_notifications FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON TABLE public.comment_reports FROM PUBLIC, anon, authenticated;
@@ -283,8 +212,6 @@ GRANT ALL ON TABLE public.guestbook_comments TO service_role;
 
 GRANT SELECT ON TABLE public.comments TO anon, authenticated;
 GRANT ALL ON TABLE public.comments TO service_role;
-
-GRANT ALL ON TABLE public.comment_likes TO service_role;
 
 GRANT ALL ON TABLE public.comment_reactions TO service_role;
 
@@ -299,9 +226,6 @@ DROP POLICY IF EXISTS comments_select_public ON public.comments;
 DROP POLICY IF EXISTS comments_insert_own ON public.comments;
 DROP POLICY IF EXISTS comments_update_own ON public.comments;
 DROP POLICY IF EXISTS comments_delete_own ON public.comments;
-DROP POLICY IF EXISTS comment_likes_select_own ON public.comment_likes;
-DROP POLICY IF EXISTS comment_likes_insert_own ON public.comment_likes;
-DROP POLICY IF EXISTS comment_likes_delete_own ON public.comment_likes;
 DROP POLICY IF EXISTS comment_reactions_select_own ON public.comment_reactions;
 DROP POLICY IF EXISTS comment_reactions_insert_own ON public.comment_reactions;
 DROP POLICY IF EXISTS comment_reactions_delete_own ON public.comment_reactions;

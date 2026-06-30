@@ -68,8 +68,6 @@ type CommentNode = {
   content: string | null;
   depth: number;
   replyCount: number;
-  likeCount: number;
-  likedByViewer: boolean;
   reactions: CommentReactionSummary[];
   createdAt: string;
   updatedAt: string;
@@ -101,8 +99,6 @@ type CommentContextResponse = {
 
 type CommentReactionState = {
   commentId: string;
-  likeCount: number;
-  likedByViewer: boolean;
   reactions: CommentReactionSummary[];
 };
 
@@ -908,8 +904,6 @@ function updateCommentReaction(nodes: CommentNode[], reaction: CommentReactionSt
     if (node.id === reaction.commentId) {
       return {
         ...node,
-        likeCount: reaction.likeCount,
-        likedByViewer: reaction.likedByViewer,
         reactions: reaction.reactions,
       };
     }
