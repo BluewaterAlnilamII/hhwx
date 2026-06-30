@@ -8,19 +8,17 @@ import { type BandoriAssetRegion } from "@/lib/bandori-asset-proxy";
 import { fetchBestdoriMasterDataset } from "@/lib/bestdori-master-data";
 import { pickBestdoriCnThenJpRegionalName } from "@/lib/bestdori-regional-names";
 import {
-  createCommentLikeNotification,
   createCommentReplyNotification,
   type CommentNotificationCommentRef,
 } from "@/lib/comment-notifications-server";
 import { COMMENT_EMOJI_NAME_SET } from "@/lib/comment-emojis";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
-import { COMMENT_LIKES_TABLE, COMMENT_REACTIONS_TABLE } from "@/lib/supabase-table-names";
+import { COMMENT_REACTIONS_TABLE } from "@/lib/supabase-table-names";
 
 export const COMMENTS_TABLE = "comments";
 export const COMMENT_PAGE_SIZE = 10;
 export const COMMENT_PREVIEW_REPLY_LIMIT = 3;
 export const COMMENT_TARGET_BANDORI_EVENT = "bandori_event";
-export const COMMENT_LEGACY_LIKE_REACTION_KEY = "KokoroYay";
 export const MAX_COMMENT_LENGTH = 500;
 const COMMENT_REACTION_PARTICIPANT_LIMIT = 8;
 
@@ -63,7 +61,6 @@ export type CommentRow = {
   content: string | null;
   depth: number;
   reply_count: number;
-  like_count: number;
   created_at: string;
   updated_at: string;
   edited_at: string | null;
@@ -84,8 +81,6 @@ export type CommentNode = {
   content: string | null;
   depth: number;
   replyCount: number;
-  likeCount: number;
-  likedByViewer: boolean;
   reactions: CommentReactionSummary[];
   createdAt: string;
   updatedAt: string;
@@ -127,7 +122,6 @@ const COMMENT_SELECT = [
   "content",
   "depth",
   "reply_count",
-  "like_count",
   "created_at",
   "updated_at",
   "edited_at",
@@ -271,7 +265,6 @@ function toCommentNode(
   row: CommentRow,
   viewerUserId?: string | null,
   replyToUsernames?: Map<string, string | null>,
-  likedCommentIds: ReadonlySet<string> = new Set(),
   avatarCards: ReadonlyMap<number, CommentAvatarCardMetadata> = new Map(),
   reactionsByCommentId: ReadonlyMap<string, CommentReactionSummary[]> = new Map(),
 ): CommentNode {
@@ -279,7 +272,6 @@ function toCommentNode(
   const isDeleted = Boolean(row.deleted_at);
   const shouldShowReplyTarget = Boolean(row.parent_id && row.root_id && row.parent_id !== row.root_id);
   const reactions = reactionsByCommentId.get(row.id) ?? [];
-  const legacyLikeReaction = reactions.find((reaction) => reaction.emojiKey === COMMENT_LEGACY_LIKE_REACTION_KEY);
 
   return {
     id: row.id,
@@ -293,8 +285,6 @@ function toCommentNode(
     content: row.content,
     depth: row.depth,
     replyCount: row.reply_count,
-    likeCount: legacyLikeReaction?.count ?? row.like_count,
-    likedByViewer: legacyLikeReaction?.reactedByViewer ?? likedCommentIds.has(row.id),
     reactions,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -396,34 +386,13 @@ async function readCommentReactionsForCommentIds(
   return result;
 }
 
-async function readViewerLikedCommentIds(rows: CommentRow[], viewerUserId?: string | null): Promise<Set<string>> {
-  const commentIds = rows.map((row) => row.id);
-  if (!viewerUserId || commentIds.length === 0) {
-    return new Set();
-  }
-
-  const client = createServerSupabaseClient();
-  const { data, error } = await client
-    .from(COMMENT_LIKES_TABLE)
-    .select("comment_id")
-    .eq("user_id", viewerUserId)
-    .in("comment_id", commentIds);
-
-  if (error) {
-    throw new ApiRouteError(500, "COMMENT_LIKES_READ_FAILED", "无法读取点赞状态", error.message);
-  }
-
-  return new Set((data ?? []).map((row) => row.comment_id as string));
-}
-
 async function toCommentNodes(rows: CommentRow[], viewerUserId?: string | null): Promise<CommentNode[]> {
-  const [replyToUsernames, likedCommentIds, avatarCards, reactionsByCommentId] = await Promise.all([
+  const [replyToUsernames, avatarCards, reactionsByCommentId] = await Promise.all([
     readReplyToUsernames(rows),
-    readViewerLikedCommentIds(rows, viewerUserId),
     readCommentAvatarCards(rows),
     readCommentReactionsForCommentIds(rows.map((row) => row.id), viewerUserId),
   ]);
-  return rows.map((row) => toCommentNode(row, viewerUserId, replyToUsernames, likedCommentIds, avatarCards, reactionsByCommentId));
+  return rows.map((row) => toCommentNode(row, viewerUserId, replyToUsernames, avatarCards, reactionsByCommentId));
 }
 
 async function fetchEarliestThreadReplies(
@@ -762,22 +731,18 @@ export async function softDeleteComment(options: {
 
 export type CommentReactionState = {
   commentId: string;
-  likeCount: number;
-  likedByViewer: boolean;
   reactions: CommentReactionSummary[];
 };
 
-type LikeableCommentRow = Pick<CommentRow, "id" | "target_type" | "target_id" | "user_id" | "like_count" | "deleted_at" | "moderation_status">;
-
-async function readLikeableComment(options: {
+async function ensureReactableComment(options: {
   targetType: string;
   targetId: string;
   commentId: string;
-}): Promise<LikeableCommentRow> {
+}): Promise<void> {
   const client = createServerSupabaseClient();
   const { data, error } = await client
     .from(COMMENTS_TABLE)
-    .select("id, target_type, target_id, user_id, like_count, deleted_at, moderation_status")
+    .select("id")
     .eq("id", options.commentId)
     .eq("target_type", options.targetType)
     .eq("target_id", options.targetId)
@@ -786,10 +751,8 @@ async function readLikeableComment(options: {
     .single();
 
   if (error || !data) {
-    throw new ApiRouteError(404, "COMMENT_NOT_FOUND", "评论不存在或不可点赞", error?.message);
+    throw new ApiRouteError(404, "COMMENT_NOT_FOUND", "评论不存在或不可回应", error?.message);
   }
-
-  return data as LikeableCommentRow;
 }
 
 async function readCommentReactionState(options: {
@@ -800,7 +763,7 @@ async function readCommentReactionState(options: {
   const [commentResult, reactionsByCommentId] = await Promise.all([
     client
       .from(COMMENTS_TABLE)
-      .select("id, like_count")
+      .select("id")
       .eq("id", options.commentId)
       .single(),
     readCommentReactionsForCommentIds([options.commentId], options.userId),
@@ -811,12 +774,9 @@ async function readCommentReactionState(options: {
   }
 
   const reactions = reactionsByCommentId.get(options.commentId) ?? [];
-  const legacyLikeReaction = reactions.find((reaction) => reaction.emojiKey === COMMENT_LEGACY_LIKE_REACTION_KEY);
 
   return {
     commentId: options.commentId,
-    likeCount: (legacyLikeReaction?.count ?? Number(commentResult.data.like_count)) || 0,
-    likedByViewer: Boolean(legacyLikeReaction?.reactedByViewer),
     reactions,
   };
 }
@@ -854,7 +814,7 @@ export async function reactToComment(options: {
   emojiKey: string;
 }): Promise<CommentReactionState> {
   parseCommentReactionKey(options.emojiKey);
-  await readLikeableComment(options);
+  await ensureReactableComment(options);
   await insertCommentReaction(options);
 
   return readCommentReactionState(options);
@@ -868,7 +828,7 @@ export async function removeCommentReaction(options: {
   emojiKey: string;
 }): Promise<CommentReactionState> {
   parseCommentReactionKey(options.emojiKey);
-  await readLikeableComment(options);
+  await ensureReactableComment(options);
   const client = createServerSupabaseClient();
   const { error } = await client
     .from(COMMENT_REACTIONS_TABLE)
@@ -882,39 +842,4 @@ export async function removeCommentReaction(options: {
   }
 
   return readCommentReactionState(options);
-}
-
-export async function likeComment(options: {
-  targetType: string;
-  targetId: string;
-  commentId: string;
-  userId: string;
-}): Promise<CommentReactionState> {
-  const comment = await readLikeableComment(options);
-  const inserted = await insertCommentReaction({
-    commentId: options.commentId,
-    userId: options.userId,
-    emojiKey: COMMENT_LEGACY_LIKE_REACTION_KEY,
-  });
-
-  if (inserted) {
-    await createCommentLikeNotification({
-      actorUserId: options.userId,
-      comment,
-    });
-  }
-
-  return readCommentReactionState(options);
-}
-
-export async function unlikeComment(options: {
-  targetType: string;
-  targetId: string;
-  commentId: string;
-  userId: string;
-}): Promise<CommentReactionState> {
-  return removeCommentReaction({
-    ...options,
-    emojiKey: COMMENT_LEGACY_LIKE_REACTION_KEY,
-  });
 }

@@ -130,25 +130,6 @@ export async function createCommentReplyNotification(options: {
   });
 }
 
-export async function createCommentLikeNotification(options: {
-  actorUserId: string;
-  comment: CommentNotificationCommentRef;
-}): Promise<void> {
-  if (options.comment.user_id === options.actorUserId) {
-    return;
-  }
-
-  await insertNotification({
-    recipient_user_id: options.comment.user_id,
-    actor_user_id: options.actorUserId,
-    type: "comment_like",
-    target_type: options.comment.target_type,
-    target_id: options.comment.target_id,
-    comment_id: options.comment.id,
-    activity_comment_id: null,
-  });
-}
-
 export async function listCommentNotifications(options: {
   userId: string;
   cursor?: string | null;

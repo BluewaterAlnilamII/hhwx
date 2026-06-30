@@ -6,7 +6,6 @@ export const PROFILES_TABLE = "profiles";
 export const ACCOUNT_STATUS_TABLE = "account_status";
 export const ACCOUNT_EMAIL_VERIFICATIONS_TABLE = "account_email_verifications";
 export const COMMENTS_TABLE = "comments";
-export const COMMENT_LIKES_TABLE = "comment_likes";
 export const COMMENT_REACTIONS_TABLE = "comment_reactions";
 export const COMMENT_NOTIFICATIONS_TABLE = "comment_notifications";
 export const GUESTBOOK_COMMENTS_TABLE = "guestbook_comments";
