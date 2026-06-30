@@ -83,6 +83,22 @@ CREATE TABLE IF NOT EXISTS comment_likes (
 CREATE INDEX IF NOT EXISTS idx_comment_likes_user_id_created_at
   ON comment_likes (user_id, created_at DESC);
 
+CREATE TABLE IF NOT EXISTS comment_reactions (
+  comment_id UUID NOT NULL REFERENCES comments(id) ON DELETE CASCADE,
+  user_id    UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  emoji_key  TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (comment_id, user_id, emoji_key),
+  CHECK (char_length(emoji_key) BETWEEN 1 AND 64),
+  CHECK (emoji_key ~ '^[A-Za-z0-9_+-]+$')
+);
+
+CREATE INDEX IF NOT EXISTS idx_comment_reactions_comment_emoji_created_at
+  ON comment_reactions (comment_id, emoji_key, created_at);
+
+CREATE INDEX IF NOT EXISTS idx_comment_reactions_user_id_created_at
+  ON comment_reactions (user_id, created_at DESC);
+
 CREATE TABLE IF NOT EXISTS comment_notifications (
   id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   recipient_user_id   UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
@@ -209,24 +225,44 @@ SET search_path = public, pg_temp;
 
 CREATE OR REPLACE FUNCTION public.update_comment_like_count()
 RETURNS TRIGGER AS $$
+DECLARE
+  target_comment_id UUID;
 BEGIN
+  IF TG_TABLE_NAME = 'comment_reactions' THEN
+    IF TG_OP = 'INSERT' THEN
+      IF NEW.emoji_key <> 'KokoroYay' THEN
+        RETURN NEW;
+      END IF;
+      target_comment_id := NEW.comment_id;
+    ELSE
+      IF OLD.emoji_key <> 'KokoroYay' THEN
+        RETURN OLD;
+      END IF;
+      target_comment_id := OLD.comment_id;
+    END IF;
+  ELSE
+    IF TG_OP = 'INSERT' THEN
+      target_comment_id := NEW.comment_id;
+    ELSE
+      target_comment_id := OLD.comment_id;
+    END IF;
+  END IF;
+
+  UPDATE public.comments
+    SET like_count = (
+          SELECT COUNT(*)::INTEGER
+          FROM public.comment_reactions
+          WHERE comment_id = target_comment_id
+            AND emoji_key = 'KokoroYay'
+        ),
+        updated_at = NOW()
+    WHERE id = target_comment_id;
+
   IF TG_OP = 'INSERT' THEN
-    UPDATE public.comments
-      SET like_count = like_count + 1,
-          updated_at = NOW()
-      WHERE id = NEW.comment_id;
     RETURN NEW;
   END IF;
 
-  IF TG_OP = 'DELETE' THEN
-    UPDATE public.comments
-      SET like_count = GREATEST(like_count - 1, 0),
-          updated_at = NOW()
-      WHERE id = OLD.comment_id;
-    RETURN OLD;
-  END IF;
-
-  RETURN NULL;
+  RETURN OLD;
 END;
 $$ LANGUAGE plpgsql
 SET search_path = public, pg_temp;
@@ -261,6 +297,7 @@ DROP TRIGGER IF EXISTS set_profiles_updated_at ON profiles;
 DROP TRIGGER IF EXISTS prepare_comment_insert ON comments;
 DROP TRIGGER IF EXISTS increment_comment_reply_count ON comments;
 DROP TRIGGER IF EXISTS update_comment_like_count ON comment_likes;
+DROP TRIGGER IF EXISTS update_comment_reaction_like_count ON comment_reactions;
 DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 
 CREATE TRIGGER set_profiles_updated_at
@@ -283,6 +320,11 @@ CREATE TRIGGER update_comment_like_count
   FOR EACH ROW
   EXECUTE FUNCTION public.update_comment_like_count();
 
+CREATE TRIGGER update_comment_reaction_like_count
+  AFTER INSERT OR DELETE ON comment_reactions
+  FOR EACH ROW
+  EXECUTE FUNCTION public.update_comment_like_count();
+
 CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW
@@ -298,6 +340,7 @@ ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE guestbook_comments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE comments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE comment_likes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE comment_reactions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE comment_notifications ENABLE ROW LEVEL SECURITY;
 ALTER TABLE comment_reports ENABLE ROW LEVEL SECURITY;
 
@@ -307,28 +350,25 @@ REVOKE ALL ON TABLE public.profiles FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON TABLE public.guestbook_comments FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON TABLE public.comments FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON TABLE public.comment_likes FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON TABLE public.comment_reactions FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON TABLE public.comment_notifications FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON TABLE public.comment_reports FROM PUBLIC, anon, authenticated;
 
 GRANT SELECT ON TABLE public.profiles TO anon, authenticated;
-GRANT INSERT, UPDATE ON TABLE public.profiles TO authenticated;
 GRANT ALL ON TABLE public.profiles TO service_role;
 
 GRANT SELECT ON TABLE public.guestbook_comments TO anon, authenticated;
-GRANT INSERT, DELETE ON TABLE public.guestbook_comments TO authenticated;
 GRANT ALL ON TABLE public.guestbook_comments TO service_role;
 
 GRANT SELECT ON TABLE public.comments TO anon, authenticated;
-GRANT INSERT, UPDATE ON TABLE public.comments TO authenticated;
 GRANT ALL ON TABLE public.comments TO service_role;
 
-GRANT SELECT, INSERT, DELETE ON TABLE public.comment_likes TO authenticated;
 GRANT ALL ON TABLE public.comment_likes TO service_role;
 
-GRANT SELECT, UPDATE ON TABLE public.comment_notifications TO authenticated;
+GRANT ALL ON TABLE public.comment_reactions TO service_role;
+
 GRANT ALL ON TABLE public.comment_notifications TO service_role;
 
-GRANT INSERT ON TABLE public.comment_reports TO authenticated;
 GRANT ALL ON TABLE public.comment_reports TO service_role;
 
 DROP POLICY IF EXISTS profiles_select_public ON profiles;
@@ -344,76 +384,25 @@ DROP POLICY IF EXISTS comments_update_own ON comments;
 DROP POLICY IF EXISTS comment_likes_select_own ON comment_likes;
 DROP POLICY IF EXISTS comment_likes_insert_own ON comment_likes;
 DROP POLICY IF EXISTS comment_likes_delete_own ON comment_likes;
+DROP POLICY IF EXISTS comment_reactions_select_own ON comment_reactions;
+DROP POLICY IF EXISTS comment_reactions_insert_own ON comment_reactions;
+DROP POLICY IF EXISTS comment_reactions_delete_own ON comment_reactions;
 DROP POLICY IF EXISTS comment_notifications_select_own ON comment_notifications;
 DROP POLICY IF EXISTS comment_notifications_update_own ON comment_notifications;
 DROP POLICY IF EXISTS comment_reports_insert_own ON comment_reports;
 
--- profiles 允许公开读取，仅允许本人创建和更新自己的资料。
+-- Public read policies for profile and comment display.
 CREATE POLICY profiles_select_public
   ON profiles FOR SELECT
+  TO anon, authenticated
   USING (true);
-
-CREATE POLICY profiles_insert_own
-  ON profiles FOR INSERT
-  WITH CHECK (auth.uid() = id);
-
-CREATE POLICY profiles_update_own
-  ON profiles FOR UPDATE
-  USING (auth.uid() = id)
-  WITH CHECK (auth.uid() = id);
 
 CREATE POLICY guestbook_comments_select_public
   ON guestbook_comments FOR SELECT
+  TO anon, authenticated
   USING (true);
-
-CREATE POLICY guestbook_comments_insert_own
-  ON guestbook_comments FOR INSERT
-  WITH CHECK (auth.uid() = user_id);
-
-CREATE POLICY guestbook_comments_delete_own
-  ON guestbook_comments FOR DELETE
-  USING (auth.uid() = user_id);
 
 CREATE POLICY comments_select_public
   ON comments FOR SELECT
+  TO anon, authenticated
   USING (moderation_status = 'visible');
-
--- comments 允许公开读取，仅允许本人写入和删除自己的评论。
-CREATE POLICY comments_insert_own
-  ON comments FOR INSERT
-  WITH CHECK (auth.uid() = user_id AND moderation_status = 'visible');
-
-CREATE POLICY comments_update_own
-  ON comments FOR UPDATE
-  USING (auth.uid() = user_id AND deleted_at IS NULL AND moderation_status = 'visible')
-  WITH CHECK (auth.uid() = user_id AND moderation_status = 'visible');
-
-CREATE POLICY comment_likes_select_own
-  ON comment_likes FOR SELECT
-  TO authenticated
-  USING ((select auth.uid()) = user_id);
-
-CREATE POLICY comment_likes_insert_own
-  ON comment_likes FOR INSERT
-  TO authenticated
-  WITH CHECK ((select auth.uid()) = user_id);
-
-CREATE POLICY comment_likes_delete_own
-  ON comment_likes FOR DELETE
-  TO authenticated
-  USING ((select auth.uid()) = user_id);
-
-CREATE POLICY comment_notifications_select_own
-  ON comment_notifications FOR SELECT
-  TO authenticated
-  USING ((select auth.uid()) = recipient_user_id);
-
-CREATE POLICY comment_notifications_update_own
-  ON comment_notifications FOR UPDATE
-  TO authenticated
-  USING ((select auth.uid()) = recipient_user_id)
-  WITH CHECK ((select auth.uid()) = recipient_user_id);
-
-CREATE POLICY comment_reports_insert_own
-  ON comment_reports FOR INSERT
-  WITH CHECK (auth.uid() = reporter_user_id);
