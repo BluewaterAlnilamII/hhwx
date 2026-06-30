@@ -17,6 +17,8 @@ This document describes HHWX's Supabase schema workflow. New schema changes shou
 - `documents/account-status-backfill-auth-confirmed.sql`: optional backfill from Supabase Auth confirmation state.
 - `documents/account-auth-flow.md`: account registration, email verification, resend, and account-management behavior.
 - `documents/comment-likes-notifications-schema.sql`: incremental migration for comment likes and reply/like notifications on deployments that already have `comments`.
+- `supabase/migrations/20260630053053_comment_reactions.sql`: comment reaction migration that backfills existing likes into the legacy reaction key.
+- `supabase/migrations/20260630055412_retarget_legacy_comment_reaction_kokoro_yay.sql`: retargets migrated legacy likes to the default `KokoroYay` reaction.
 - `documents/profile-public-uid-schema.sql`: public numeric profile UID support.
 - `documents/game-profile-schema.sql`: persisted user game profiles.
 - `documents/game-account-binding-schema.sql`: game-account binding challenges and bindings.
@@ -56,13 +58,14 @@ For older manual setup, run these in the Supabase SQL editor or your migration s
 
 Then run `documents/account-status-backfill-auth-confirmed.sql` only when migrating users from an existing Supabase Auth project where confirmed users should become application-verified users.
 
-If an existing project already ran an older `auth_schema.sql`, also run `documents/comment-likes-notifications-schema.sql` to add comment likes, notification rows, and comment like counters.
+If an existing project already ran an older `auth_schema.sql`, also run `documents/comment-likes-notifications-schema.sql` to add comment likes, notification rows, and comment like counters. Then run `supabase/migrations/20260630053053_comment_reactions.sql` to add emoji reactions and backfill existing likes, followed by `supabase/migrations/20260630055412_retarget_legacy_comment_reaction_kokoro_yay.sql` to retarget migrated likes to `KokoroYay`.
 
 ## Review Notes
 
 - Keep row-level security enabled on user-owned tables.
 - Use `supabase/migrations/` for new schema changes. Treat the older standalone SQL files as compatibility references unless a migration explicitly reuses them.
 - Supabase no longer automatically exposes new public tables/functions to the Data API for new projects from May 30, 2026, and applies the same default to existing projects from October 30, 2026. Keep explicit `GRANT`/`REVOKE` statements next to RLS policies in every SQL file that creates Data API objects.
+- For comment interaction tables, keep direct Data API writes disabled unless the browser really needs them. Route profile edits, comment writes, reactions, notifications, and reports through the Next.js API so validation and side effects stay server-side.
 - Treat `security definer` functions as privileged code: verify argument checks, ownership checks, grants, and `search_path` behavior before production use.
 - Grant direct table or function access only where the application requires it.
 - Keep service-role operations server-side. Browser code must use only public Supabase keys and authenticated user sessions.

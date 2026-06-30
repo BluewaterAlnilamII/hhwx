@@ -277,13 +277,6 @@ function isMainPointActive(hoverTooltip: HoverTooltipState | null, point: Tracke
   return point.time === activePoint.time;
 }
 
-function getComparisonStatusLabel(status: string): string {
-  if (status === "loading") return "加载中";
-  if (status === "no-data") return "无数据";
-  if (status === "time-missing") return "时间缺失";
-  return "正常";
-}
-
 function createComparisonConfigId(): string {
   return `comparison-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
@@ -1874,7 +1867,6 @@ export default function EventTrackerPage() {
                               : `${config.targetId}期`
                             : "-";
                           const label = line?.label ?? `${targetLabel} T${config.tier}`;
-                          const statusLabel = config.enabled ? getComparisonStatusLabel(line?.status ?? "loading") : "隐藏";
 
                           return (
                             <button
@@ -1891,14 +1883,13 @@ export default function EventTrackerPage() {
                                 borderColor: `${color}66`,
                                 backgroundColor: `${color}14`,
                               } : undefined}
-                              title={`${label}: ${statusLabel}`}
+                              title={label}
                             >
                               <span
                                 className={`h-2.5 w-2.5 rounded-full ${config.enabled ? "" : "opacity-35"}`}
                                 style={{ backgroundColor: color }}
                               />
                               <span>{label}</span>
-                              <span className="text-[11px] text-gray-400 dark:text-gray-500">{statusLabel}</span>
                             </button>
                           );
                         })}
@@ -1933,11 +1924,13 @@ export default function EventTrackerPage() {
                         )}
                       </div>
 
-                      <div className="flex w-full flex-col items-center gap-2">
+                      <div className="flex w-full flex-col items-center gap-2 pb-3 sm:pb-4">
                         {comparisonConfigs.map((config) => (
                           <div key={config.id} className="flex max-w-full flex-wrap items-center justify-center gap-2">
                             <select
-                              className="h-8 min-w-[13rem] rounded-full border border-gray-200 bg-white px-3 text-xs font-semibold text-gray-600 outline-none transition-colors hover:border-blue-300 focus:ring-2 focus:ring-blue-500/30 dark:border-gray-700 dark:bg-[#131A2B] dark:text-gray-300 sm:h-9 sm:text-sm"
+                              className={`h-8 max-w-full rounded-full border border-gray-200 bg-white px-3 text-xs font-semibold text-gray-600 outline-none transition-colors hover:border-blue-300 focus:ring-2 focus:ring-blue-500/30 dark:border-gray-700 dark:bg-[#131A2B] dark:text-gray-300 sm:h-9 sm:text-sm ${
+                                comparisonTargetType === "monthly" ? "w-[7.5rem]" : "min-w-[13rem]"
+                              }`}
                               value={config.targetId ?? ""}
                               onChange={(event) => {
                                 const nextTargetId = event.target.value ? Number(event.target.value) : null;
