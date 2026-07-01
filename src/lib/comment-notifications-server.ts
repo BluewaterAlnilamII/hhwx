@@ -2,7 +2,7 @@ import { ApiRouteError } from "@/lib/api-contracts";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
 import { COMMENT_NOTIFICATIONS_TABLE } from "@/lib/supabase-table-names";
 
-export type CommentNotificationType = "comment_reply" | "comment_like";
+export type CommentNotificationType = "comment_reply" | "comment_reaction";
 
 export type CommentNotificationCommentRef = {
   id: string;
@@ -24,6 +24,7 @@ type CommentNotificationRow = {
   target_id: string;
   comment_id: string;
   activity_comment_id: string | null;
+  reaction_emoji_key: string | null;
   read_at: string | null;
   created_at: string;
   profiles: CommentNotificationProfile | null;
@@ -39,6 +40,7 @@ export type CommentNotification = {
   targetId: string;
   commentId: string;
   activityCommentId: string | null;
+  reactionEmojiKey: string | null;
   linkCommentId: string;
   readAt: string | null;
   createdAt: string;
@@ -54,10 +56,14 @@ const NOTIFICATION_SELECT = [
   "target_id",
   "comment_id",
   "activity_comment_id",
+  "reaction_emoji_key",
   "read_at",
   "created_at",
   "profiles:profiles!actor_user_id(username)",
 ].join(", ");
+export function parseCommentNotificationType(value: string | null | undefined): CommentNotificationType | null {
+  return value === "comment_reply" || value === "comment_reaction" ? value : null;
+}
 
 function parseCursor(cursor: string | null | undefined): { createdAt: string; id: string } | null {
   if (!cursor) return null;
@@ -85,6 +91,7 @@ function toNotification(row: CommentNotificationRow): CommentNotification {
     targetId: row.target_id,
     commentId: row.comment_id,
     activityCommentId: row.activity_comment_id,
+    reactionEmojiKey: row.reaction_emoji_key ?? null,
     linkCommentId: row.activity_comment_id ?? row.comment_id,
     readAt: row.read_at,
     createdAt: row.created_at,
@@ -99,6 +106,7 @@ async function insertNotification(row: {
   target_id: string;
   comment_id: string;
   activity_comment_id?: string | null;
+  reaction_emoji_key?: string | null;
 }): Promise<void> {
   const client = createServerSupabaseClient();
   const { error } = await client
@@ -130,8 +138,30 @@ export async function createCommentReplyNotification(options: {
   });
 }
 
+export async function createCommentReactionNotification(options: {
+  actorUserId: string;
+  comment: CommentNotificationCommentRef;
+  emojiKey: string;
+}): Promise<void> {
+  if (options.comment.user_id === options.actorUserId) {
+    return;
+  }
+
+  await insertNotification({
+    recipient_user_id: options.comment.user_id,
+    actor_user_id: options.actorUserId,
+    type: "comment_reaction",
+    target_type: options.comment.target_type,
+    target_id: options.comment.target_id,
+    comment_id: options.comment.id,
+    activity_comment_id: null,
+    reaction_emoji_key: options.emojiKey,
+  });
+}
+
 export async function listCommentNotifications(options: {
   userId: string;
+  type?: CommentNotificationType | null;
   cursor?: string | null;
 }): Promise<{
   notifications: CommentNotification[];
@@ -147,6 +177,10 @@ export async function listCommentNotifications(options: {
     .order("created_at", { ascending: false })
     .order("id", { ascending: false })
     .limit(NOTIFICATION_PAGE_SIZE + 1);
+
+  if (options.type) {
+    query = query.eq("type", options.type);
+  }
 
   if (cursor) {
     query = query.or(`created_at.lt.${cursor.createdAt},and(created_at.eq.${cursor.createdAt},id.lt.${cursor.id})`);

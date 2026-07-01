@@ -5,6 +5,7 @@ import {
   listCommentNotifications,
   markAllCommentNotificationsRead,
   markCommentNotificationRead,
+  parseCommentNotificationType,
 } from "@/lib/comment-notifications-server";
 
 type UpdateNotificationsRequest = {
@@ -20,6 +21,19 @@ function normalizeNotificationId(value: unknown): string {
   return value.trim();
 }
 
+function normalizeNotificationType(value: string | null) {
+  if (!value) {
+    return null;
+  }
+
+  const notificationType = parseCommentNotificationType(value);
+  if (!notificationType) {
+    throw new ApiRouteError(400, "INVALID_NOTIFICATION_TYPE", "提醒类型无效");
+  }
+
+  return notificationType;
+}
+
 export async function GET(request: Request) {
   try {
     const user = await requireAuthenticatedUser(request);
@@ -27,6 +41,7 @@ export async function GET(request: Request) {
 
     return jsonSuccess(await listCommentNotifications({
       userId: user.id,
+      type: normalizeNotificationType(url.searchParams.get("type")),
       cursor: url.searchParams.get("cursor"),
     }));
   } catch (error) {

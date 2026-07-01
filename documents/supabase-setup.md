@@ -16,10 +16,10 @@ This document describes HHWX's Supabase schema workflow. New schema changes shou
 - `documents/account-status-schema.sql`: application-side email verification state.
 - `documents/account-status-backfill-auth-confirmed.sql`: optional backfill from Supabase Auth confirmation state.
 - `documents/account-auth-flow.md`: account registration, email verification, resend, and account-management behavior.
-- `documents/comment-likes-notifications-schema.sql`: legacy incremental migration for the removed comment-like table and historical reply/like notifications on deployments that already have `comments`.
-- `supabase/migrations/20260630053053_comment_reactions.sql`: comment reaction migration that backfills existing likes into the legacy reaction key.
+- `supabase/migrations/20260630053053_comment_reactions.sql`: comment reaction migration that backfills historical `comment_likes` rows into a reaction key on deployments that still have that table.
 - `supabase/migrations/20260630055412_retarget_legacy_comment_reaction_kokoro_yay.sql`: retargets migrated legacy likes to the default `KokoroYay` reaction.
 - `supabase/migrations/20260630071740_remove_legacy_comment_likes.sql`: removes the legacy `comment_likes` table and `comments.like_count` compatibility counter after reaction backfill verification.
+- `supabase/migrations/20260701131822_remove_legacy_like_notifications.sql`: removes legacy `comment_like` notification rows and constrains `comment_notifications` to reply and reaction notifications.
 - `documents/profile-public-uid-schema.sql`: public numeric profile UID support.
 - `documents/game-profile-schema.sql`: persisted user game profiles.
 - `documents/game-account-binding-schema.sql`: game-account binding challenges and bindings.
@@ -59,7 +59,7 @@ For older manual setup, run these in the Supabase SQL editor or your migration s
 
 Then run `documents/account-status-backfill-auth-confirmed.sql` only when migrating users from an existing Supabase Auth project where confirmed users should become application-verified users.
 
-If an existing project already ran an older `auth_schema.sql`, also run `documents/comment-likes-notifications-schema.sql` only when it still needs the historical like/notification bridge. Then run `supabase/migrations/20260630053053_comment_reactions.sql` to add emoji reactions and backfill existing likes, followed by `supabase/migrations/20260630055412_retarget_legacy_comment_reaction_kokoro_yay.sql` to retarget migrated likes to `KokoroYay`, and `supabase/migrations/20260630071740_remove_legacy_comment_likes.sql` after verifying the backfill.
+If an existing project still has the historical `comment_likes` table, apply the CLI migrations from `supabase/migrations/20260630053053_comment_reactions.sql` through `supabase/migrations/20260701131822_remove_legacy_like_notifications.sql` in order. The final supported state is `comment_reactions` plus reply and reaction `comment_notifications`; the standalone like-notification bridge is no longer supported.
 
 ## Review Notes
 

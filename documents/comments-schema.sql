@@ -74,14 +74,21 @@ CREATE TABLE IF NOT EXISTS public.comment_notifications (
   target_id           TEXT NOT NULL,
   comment_id          UUID NOT NULL REFERENCES public.comments(id) ON DELETE CASCADE,
   activity_comment_id UUID REFERENCES public.comments(id) ON DELETE CASCADE,
+  reaction_emoji_key  TEXT,
   read_at             TIMESTAMPTZ,
   created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  CHECK (type IN ('comment_reply', 'comment_like')),
+  CHECK (type IN ('comment_reply', 'comment_reaction')),
   CHECK (target_type IN ('bandori_event')),
   CHECK (char_length(target_id) BETWEEN 1 AND 128),
   CHECK (
-    (type = 'comment_reply' AND activity_comment_id IS NOT NULL) OR
-    (type = 'comment_like' AND activity_comment_id IS NULL)
+    reaction_emoji_key IS NULL OR (
+      char_length(reaction_emoji_key) BETWEEN 1 AND 64
+      AND reaction_emoji_key ~ '^[A-Za-z0-9_+-]+$'
+    )
+  ),
+  CHECK (
+    (type = 'comment_reply' AND activity_comment_id IS NOT NULL AND reaction_emoji_key IS NULL) OR
+    (type = 'comment_reaction' AND activity_comment_id IS NULL AND reaction_emoji_key IS NOT NULL)
   )
 );
 
@@ -90,6 +97,9 @@ CREATE INDEX IF NOT EXISTS idx_comment_notifications_recipient_read_created
 
 CREATE INDEX IF NOT EXISTS idx_comment_notifications_recipient_created
   ON public.comment_notifications (recipient_user_id, created_at DESC, id DESC);
+
+CREATE INDEX IF NOT EXISTS idx_comment_notifications_recipient_type_created
+  ON public.comment_notifications (recipient_user_id, type, created_at DESC, id DESC);
 
 CREATE INDEX IF NOT EXISTS idx_comment_notifications_actor_user_id
   ON public.comment_notifications (actor_user_id)
@@ -105,10 +115,6 @@ CREATE INDEX IF NOT EXISTS idx_comment_notifications_activity_comment_id
 CREATE UNIQUE INDEX IF NOT EXISTS idx_comment_notifications_unique_reply
   ON public.comment_notifications (recipient_user_id, type, activity_comment_id)
   WHERE type = 'comment_reply' AND activity_comment_id IS NOT NULL;
-
-CREATE UNIQUE INDEX IF NOT EXISTS idx_comment_notifications_unique_like
-  ON public.comment_notifications (recipient_user_id, actor_user_id, type, comment_id)
-  WHERE type = 'comment_like';
 
 CREATE TABLE IF NOT EXISTS public.comment_reports (
   id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),

@@ -8,6 +8,7 @@ import { type BandoriAssetRegion } from "@/lib/bandori-asset-proxy";
 import { fetchBestdoriMasterDataset } from "@/lib/bestdori-master-data";
 import { pickBestdoriCnThenJpRegionalName } from "@/lib/bestdori-regional-names";
 import {
+  createCommentReactionNotification,
   createCommentReplyNotification,
   type CommentNotificationCommentRef,
 } from "@/lib/comment-notifications-server";
@@ -738,11 +739,11 @@ async function ensureReactableComment(options: {
   targetType: string;
   targetId: string;
   commentId: string;
-}): Promise<void> {
+}): Promise<CommentNotificationCommentRef> {
   const client = createServerSupabaseClient();
   const { data, error } = await client
     .from(COMMENTS_TABLE)
-    .select("id")
+    .select("id, target_type, target_id, user_id")
     .eq("id", options.commentId)
     .eq("target_type", options.targetType)
     .eq("target_id", options.targetId)
@@ -753,6 +754,8 @@ async function ensureReactableComment(options: {
   if (error || !data) {
     throw new ApiRouteError(404, "COMMENT_NOT_FOUND", "评论不存在或不可回应", error?.message);
   }
+
+  return data as CommentNotificationCommentRef;
 }
 
 async function readCommentReactionState(options: {
@@ -814,8 +817,15 @@ export async function reactToComment(options: {
   emojiKey: string;
 }): Promise<CommentReactionState> {
   parseCommentReactionKey(options.emojiKey);
-  await ensureReactableComment(options);
-  await insertCommentReaction(options);
+  const comment = await ensureReactableComment(options);
+  const inserted = await insertCommentReaction(options);
+  if (inserted) {
+    await createCommentReactionNotification({
+      actorUserId: options.userId,
+      comment,
+      emojiKey: options.emojiKey,
+    });
+  }
 
   return readCommentReactionState(options);
 }
