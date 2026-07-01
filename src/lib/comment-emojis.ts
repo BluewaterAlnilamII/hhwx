@@ -1,4 +1,5 @@
-// Generated from Bestdori emoji module 914f and mirrored under public/res/emoji.
+// Bestdori emoji names are generated from module 914f and mirrored under public/res/emoji.
+// Custom Discord emoji are inserted into the same character-grouped order.
 export const COMMENT_EMOJI_NAMES = [
   "KasumiCry",
   "KasumiYay",
@@ -32,6 +33,7 @@ export const COMMENT_EMOJI_NAMES = [
   "Tsugurific",
   "KokoroPeek",
   "KokoroSlain",
+  "KokoroJii",
   "KokoroYay",
   "KaoruBrag",
   "KaoruFiget",
@@ -39,6 +41,7 @@ export const COMMENT_EMOJI_NAMES = [
   "HagumiAngry",
   "HagumiCry",
   "HagumiXD",
+  "KanonJii",
   "KanonFuee",
   "KanonHurt",
   "KanonLove",
@@ -49,11 +52,13 @@ export const COMMENT_EMOJI_NAMES = [
   "AyaJii",
   "AyaWow",
   "HinaAAA",
+  "HinaLul",
   "HinaSmug",
   "HinaYay",
   "ChisatoJii",
   "ChisatoWorry",
   "ChisatoWTF",
+  "ChisatoBonk",
   "MayaBomb",
   "MayaShook",
   "MayaThink",
@@ -82,6 +87,7 @@ export const COMMENT_EMOJI_NAMES = [
   "ToukoJii",
   "ToukoCheer",
   "NanamiVibin",
+  "NanamiGiggle",
   "NanamiJii",
   "NanamiWink",
   "TsukushiFidget",
@@ -90,6 +96,7 @@ export const COMMENT_EMOJI_NAMES = [
   "RuiPerfect",
   "RuiFuee",
   "RuiThink",
+  "LayerBashful",
   "LayerBliss",
   "LayerShock",
   "LayerSit",
@@ -105,6 +112,7 @@ export const COMMENT_EMOJI_NAMES = [
   "Chu2Peek",
   "Chu2Ping",
   "Chu2Pog",
+  "MarinaSlain",
   "KasumiToyama",
   "TaeHanazono",
   "RimiUshigome",
@@ -153,10 +161,27 @@ export const COMMENT_EMOJI_NAMES = [
   "Pure"
 ] as const;
 
+export const CUSTOM_COMMENT_EMOJIS = [
+  { name: "KanonJii", src: "/res/emoji/KanonJii.webp" },
+  { name: "KokoroJii", src: "/res/emoji/KokoroJii.webp" },
+  { name: "HinaLul", src: "/res/emoji/HinaLul.webp" },
+  { name: "NanamiGiggle", src: "/res/emoji/NanamiGiggle.webp" },
+  { name: "MarinaSlain", src: "/res/emoji/MarinaSlain.webp" },
+  { name: "LayerBashful", src: "/res/emoji/LayerBashful.webp" },
+  { name: "ChisatoBonk", src: "/res/emoji/ChisatoBonk.webp" },
+] as const;
+
 export type CommentEmojiName = (typeof COMMENT_EMOJI_NAMES)[number];
 
 export const COMMENT_EMOJI_NAME_SET: ReadonlySet<string> = new Set(COMMENT_EMOJI_NAMES);
 
+const CUSTOM_COMMENT_EMOJI_SRC_BY_NAME: ReadonlyMap<string, string> = new Map(
+  CUSTOM_COMMENT_EMOJIS.map((emoji) => [emoji.name, emoji.src]),
+);
+
 export function getCommentEmojiSrc(name: string): string | null {
+  const customSrc = CUSTOM_COMMENT_EMOJI_SRC_BY_NAME.get(name);
+  if (customSrc) return customSrc;
+
   return COMMENT_EMOJI_NAME_SET.has(name) ? `/res/emoji/${name}.png` : null;
 }

@@ -160,6 +160,11 @@
     "src": "/res/emoji/KokoroSlain.png"
   },
   {
+    "name": "KokoroJii",
+    "shortcode": ":KokoroJii:",
+    "src": "/res/emoji/KokoroJii.webp"
+  },
+  {
     "name": "KokoroYay",
     "shortcode": ":KokoroYay:",
     "src": "/res/emoji/KokoroYay.png"
@@ -193,6 +198,11 @@
     "name": "HagumiXD",
     "shortcode": ":HagumiXD:",
     "src": "/res/emoji/HagumiXD.png"
+  },
+  {
+    "name": "KanonJii",
+    "shortcode": ":KanonJii:",
+    "src": "/res/emoji/KanonJii.webp"
   },
   {
     "name": "KanonFuee",
@@ -245,6 +255,11 @@
     "src": "/res/emoji/HinaAAA.png"
   },
   {
+    "name": "HinaLul",
+    "shortcode": ":HinaLul:",
+    "src": "/res/emoji/HinaLul.webp"
+  },
+  {
     "name": "HinaSmug",
     "shortcode": ":HinaSmug:",
     "src": "/res/emoji/HinaSmug.png"
@@ -268,6 +283,11 @@
     "name": "ChisatoWTF",
     "shortcode": ":ChisatoWTF:",
     "src": "/res/emoji/ChisatoWTF.png"
+  },
+  {
+    "name": "ChisatoBonk",
+    "shortcode": ":ChisatoBonk:",
+    "src": "/res/emoji/ChisatoBonk.webp"
   },
   {
     "name": "MayaBomb",
@@ -410,6 +430,11 @@
     "src": "/res/emoji/NanamiVibin.png"
   },
   {
+    "name": "NanamiGiggle",
+    "shortcode": ":NanamiGiggle:",
+    "src": "/res/emoji/NanamiGiggle.webp"
+  },
+  {
     "name": "NanamiJii",
     "shortcode": ":NanamiJii:",
     "src": "/res/emoji/NanamiJii.png"
@@ -448,6 +473,11 @@
     "name": "RuiThink",
     "shortcode": ":RuiThink:",
     "src": "/res/emoji/RuiThink.png"
+  },
+  {
+    "name": "LayerBashful",
+    "shortcode": ":LayerBashful:",
+    "src": "/res/emoji/LayerBashful.webp"
   },
   {
     "name": "LayerBliss",
@@ -523,6 +553,11 @@
     "name": "Chu2Pog",
     "shortcode": ":Chu2Pog:",
     "src": "/res/emoji/Chu2Pog.png"
+  },
+  {
+    "name": "MarinaSlain",
+    "shortcode": ":MarinaSlain:",
+    "src": "/res/emoji/MarinaSlain.webp"
   },
   {
     "name": "KasumiToyama",
