@@ -102,6 +102,31 @@ type CommentReactionState = {
   reactions: CommentReactionSummary[];
 };
 
+type CommentContentTextToken = {
+  type: "text";
+  value: string;
+};
+
+type CommentContentEmojiToken = {
+  type: "emoji";
+  raw: string;
+  name: string;
+  src: string;
+  index: number;
+};
+
+type CommentContentStampToken = {
+  type: "stamp";
+  raw: string;
+  stamp: CommentStamp;
+  index: number;
+};
+
+type CommentContentToken =
+  | CommentContentTextToken
+  | CommentContentEmojiToken
+  | CommentContentStampToken;
+
 const COMMENT_INPUT_MAX_LENGTH = 500;
 const COMMENT_ROOT_PAGE_SIZE = 10;
 const COMMENT_CONTENT_TOKEN_PATTERN = /:stamp-([a-z]{2})-(\d+):|:([A-Za-z0-9_+-]+):/g;
@@ -323,55 +348,154 @@ function CommentStampView({ stamp, shortcode }: { stamp: CommentStamp; shortcode
   );
 }
 
-function renderCommentContent(content: string) {
-  const nodes: ReactNode[] = [];
+function parseCommentContent(content: string): CommentContentToken[] {
+  const tokens: CommentContentToken[] = [];
   let cursor = 0;
   let match: RegExpExecArray | null;
   COMMENT_CONTENT_TOKEN_PATTERN.lastIndex = 0;
 
   while ((match = COMMENT_CONTENT_TOKEN_PATTERN.exec(content)) !== null) {
     const [raw, stampRegion, stampId, emojiName] = match;
-    let node: ReactNode | null = null;
+    let token: CommentContentToken | null = null;
 
     if (stampRegion && stampId) {
       if (isCommentStampRegion(stampRegion)) {
         const id = Number.parseInt(stampId, 10);
         const stamp = Number.isSafeInteger(id) ? resolveCommentStamp(stampRegion, id) : null;
-        node = stamp ? <CommentStampView key={`${raw}-${match.index}`} stamp={stamp} shortcode={raw} /> : null;
+        token = stamp ? { type: "stamp", raw, stamp, index: match.index } : null;
       }
     } else if (emojiName) {
       const src = getCommentEmojiSrc(emojiName);
-      node = src ? (
-        <Image
-          key={`${emojiName}-${match.index}`}
-          src={src}
-          alt={raw}
-          title={raw}
-          width={32}
-          height={32}
-          loading="lazy"
-          unoptimized
-          style={{ width: "auto", height: "auto" }}
-          className="mx-0.5 inline-block h-auto max-h-6 w-auto max-w-9 object-contain align-[-0.25em]"
-        />
-      ) : null;
+      token = src ? { type: "emoji", raw, name: emojiName, src, index: match.index } : null;
     }
 
-    if (!node) continue;
+    if (!token) continue;
 
     if (match.index > cursor) {
-      nodes.push(content.slice(cursor, match.index));
+      tokens.push({ type: "text", value: content.slice(cursor, match.index) });
     }
 
-    nodes.push(node);
+    tokens.push(token);
     cursor = match.index + raw.length;
   }
 
   if (cursor < content.length) {
-    nodes.push(content.slice(cursor));
+    tokens.push({ type: "text", value: content.slice(cursor) });
   }
 
-  return nodes.length > 0 ? nodes : content;
+  return tokens;
+}
+
+function isJumboEmojiContent(tokens: readonly CommentContentToken[]): boolean {
+  let hasEmoji = false;
+
+  for (const token of tokens) {
+    if (token.type === "emoji") {
+      hasEmoji = true;
+      continue;
+    }
+
+    if (token.type === "stamp") {
+      continue;
+    }
+
+    if (/\S/u.test(token.value)) {
+      return false;
+    }
+  }
+
+  return hasEmoji;
+}
+
+function renderCommentEmojiToken(token: CommentContentEmojiToken, variant: "inline" | "jumbo") {
+  const isJumbo = variant === "jumbo";
+
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      key={`${token.name}-${token.index}`}
+      src={token.src}
+      alt={token.raw}
+      title={token.raw}
+      width={isJumbo ? 64 : 32}
+      height={isJumbo ? 64 : 32}
+      loading="lazy"
+      decoding="async"
+      className={cn(
+        "inline-block h-auto w-auto object-contain",
+        isJumbo ? "max-h-12 max-w-12 align-middle" : "mx-0.5 max-h-6 max-w-6 align-[-0.25em]",
+      )}
+    />
+  );
+}
+
+function renderCommentStampToken(token: CommentContentStampToken) {
+  return <CommentStampView key={`${token.raw}-${token.index}`} stamp={token.stamp} shortcode={token.raw} />;
+}
+
+function renderCommentContentTokens(tokens: readonly CommentContentToken[]) {
+  return tokens.map((token) => {
+    if (token.type === "text") return token.value;
+
+    if (token.type === "stamp") {
+      return renderCommentStampToken(token);
+    }
+
+    return renderCommentEmojiToken(token, "inline");
+  });
+}
+
+function renderJumboEmojiRows(tokens: readonly CommentContentToken[]) {
+  const rows: ReactNode[][] = [[]];
+
+  for (const token of tokens) {
+    if (token.type === "emoji") {
+      rows[rows.length - 1].push(renderCommentEmojiToken(token, "jumbo"));
+    } else if (token.type === "stamp") {
+      rows[rows.length - 1].push(renderCommentStampToken(token));
+    } else if (token.type === "text") {
+      const lineBreaks = token.value.match(/\r\n|\r|\n/g)?.length ?? 0;
+      for (let index = 0; index < lineBreaks; index += 1) {
+        rows.push([]);
+      }
+    }
+  }
+
+  return rows
+    .filter((row) => row.length > 0)
+    .map((row, index) => (
+      <span key={`emoji-row-${index}`} className="flex flex-wrap items-center gap-1.5">
+        {row}
+      </span>
+    ));
+}
+
+function CommentContent({ content, isDeleted }: { content: string; isDeleted: boolean }) {
+  const contentClassName = isDeleted ? "text-slate-400" : "text-slate-700 dark:text-slate-200";
+
+  if (isDeleted) {
+    return (
+      <p className={cn("mt-2 whitespace-pre-wrap break-words text-[15px] leading-[26px] [overflow-wrap:anywhere]", contentClassName)}>
+        （已删除）
+      </p>
+    );
+  }
+
+  const tokens = parseCommentContent(content);
+
+  if (isJumboEmojiContent(tokens)) {
+    return (
+      <div className={cn("mt-2 flex flex-col items-start gap-1 [overflow-wrap:anywhere]", contentClassName)}>
+        {renderJumboEmojiRows(tokens)}
+      </div>
+    );
+  }
+
+  return (
+    <p className={cn("mt-2 whitespace-pre-wrap break-words text-[15px] leading-[26px] [overflow-wrap:anywhere]", contentClassName)}>
+      {renderCommentContentTokens(tokens)}
+    </p>
+  );
 }
 
 function insertCommentShortcode(
@@ -496,7 +620,8 @@ function EmojiPickerButton({ open, onOpenChange, onSelect, compact = false, disa
                   aria-label={`:${name}:`}
                   title={`:${name}:`}
                 >
-                  <Image src={src} alt={`:${name}:`} width={32} height={32} unoptimized style={{ width: "auto", height: "auto" }} className="h-full max-h-8 w-full max-w-8 object-contain" />
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={src} alt={`:${name}:`} width={32} height={32} loading="lazy" decoding="async" className="h-full max-h-8 w-full max-w-8 object-contain" />
                 </button>
               );
             })}
@@ -1351,9 +1476,7 @@ function CommentItem({
               </div>
             </div>
           ) : (
-            <p className={cn("mt-2 whitespace-pre-wrap break-words text-[15px] leading-[26px] [overflow-wrap:anywhere]", isDeleted ? "text-slate-400" : "text-slate-700 dark:text-slate-200")}>
-              {isDeleted ? "（已删除）" : renderCommentContent(comment.content ?? "")}
-            </p>
+            <CommentContent content={comment.content ?? ""} isDeleted={isDeleted} />
           )}
 
           <div className="mt-3 flex flex-wrap items-center gap-1.5">
