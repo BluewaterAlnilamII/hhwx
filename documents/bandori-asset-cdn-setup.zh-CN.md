@@ -24,7 +24,7 @@ BANDORI_SONG_NOTES_SOURCE=bestdori
 # BANDORI_SONG_NOTES_BESTDORI_FALLBACK=0
 ```
 
-`NEXT_PUBLIC_BANDORI_ASSET_CDN_BASE_URL` 会暴露给浏览器。`BANDORI_ASSET_CDN_BASE_URL` 可供服务端代码使用。大多数部署中两者应指向同一个资源主机。Stamp 资源使用同一个 Bandori asset CDN 下的 `/bandori/stamps` 路径；没有单独的 stamp CDN 配置。Web 应用会在浏览器中直接从 CDN 读取 stamp index JSON、单个 stamp manifest、动画 manifest 和 voice audio，因此 CDN 必须允许 HHWX Web origin 跨域读取。Stamp voice 会通过 Web Audio 作为短音效播放，而不是作为媒体元素播放，以避免 iOS media session 把它当作音乐并打断后台音乐。
+`NEXT_PUBLIC_BANDORI_ASSET_CDN_BASE_URL` 会暴露给浏览器。`BANDORI_ASSET_CDN_BASE_URL` 可供服务端代码使用。大多数部署中两者应指向同一个资源主机。Stamp 资源使用同一个 Bandori asset CDN 下的 `/bandori/stamps` 路径；没有单独的 stamp CDN 配置。Web 应用会通过 `/api/bandori/stamps` 读取统一 stamp catalog，而 stamp 图片、动画 manifest、动画 atlas 和 voice audio 会在浏览器中直接从 CDN 读取，因此 CDN 必须允许 HHWX Web origin 跨域读取。Stamp voice 会通过 Web Audio 作为短音效播放，而不是作为媒体元素播放，以避免 iOS media session 把它当作音乐并打断后台音乐。
 
 HHWX 生产环境应在 `/bandori/stamps/*` 对象上为 `https://hhwx.org` 配置 CORS。如果允许多个精确 origin，请同时返回 `Vary: Origin`。Web 应用读取 stamp CDN 时不会携带 credentials，除非请求模型发生变化，否则不要启用带凭据 CORS。完全公开且不带 credentials 的资源桶可以使用 `Access-Control-Allow-Origin: *`；不要把 `*` 和带凭据请求搭配使用。
 
@@ -101,22 +101,20 @@ bandori/music/index.json
 Stamp 目录、静态图、语音与动画资源：
 
 ```text
-{CDN_BASE}/bandori/stamps/{server}/index.json
-{CDN_BASE}/bandori/stamps/{server}/{stampId}/manifest.json
+{CDN_BASE}/bandori/stamps/index.json
 {CDN_BASE}/bandori/stamps/{server}/{stampId}/image.png
 {CDN_BASE}/bandori/stamps/{server}/{stampId}/voice/{voiceName}.mp3
 {CDN_BASE}/bandori/stamps/{server}/{stampId}/animation/manifest.json
 {CDN_BASE}/bandori/stamps/{server}/{stampId}/animation/atlas.png
 
-bandori/stamps/{server}/index.json
-bandori/stamps/{server}/{stampId}/manifest.json
+bandori/stamps/index.json
 bandori/stamps/{server}/{stampId}/image.png
 bandori/stamps/{server}/{stampId}/voice/{voiceName}.mp3
 bandori/stamps/{server}/{stampId}/animation/manifest.json
 bandori/stamps/{server}/{stampId}/animation/atlas.png
 ```
 
-`bandori/stamps/{server}/index.json` 应使用 `hhwx-bandori-stamp-index-v1`。单个 stamp manifest 应使用 `hhwx-bandori-stamp-asset-v1`。动画 manifest 应使用 `hhwx-bandori-stamp-animation-v1`，并包含 `atlasDimensions`、`frameRate` 和帧裁剪矩形，使 Web 应用不依赖 Unity runtime 即可渲染基于 atlas 的动画 stamp。当前 HHWX atlas PNG 以 `frames[].unityRect` 作为实际 PNG 裁剪矩形；Web 应用会将它归一化为内存中的 `frames[].cssRect`，仅在缺少 `unityRect` 时回退使用源 `frames[].cssRect`。
+`bandori/stamps/index.json` 是公开的 compact stamp catalog。它的 `payload` 以 stamp ID 为 key，`imageName`、`imageUrl` 和可选 `voiceUrl` 都固定使用 `[jp, en, tw, cn]` 四槽；缺失槽位使用空字符串，不使用 `null`。可选动画摘要按 server 分组，并指向动画 manifest 与 atlas。标准单个 stamp manifest 不再是公开合约的一部分。动画 manifest 应使用 `hhwx-bandori-stamp-animation-v1`，并包含 `atlasDimensions`、`frameRate` 和帧裁剪矩形，使 Web 应用不依赖 Unity runtime 即可渲染基于 atlas 的动画 stamp。当前 HHWX atlas PNG 以 `frames[].unityRect` 作为实际 PNG 裁剪矩形；Web 应用会将它归一化为内存中的 `frames[].cssRect`，仅在缺少 `unityRect` 时回退使用源 `frames[].cssRect`。
 
 ## 自托管预期
 
@@ -141,7 +139,7 @@ https://your-bandori-asset-cdn.example.com/bandori/assets/cn/thumb/chara/card000
 https://your-bandori-asset-cdn.example.com/bandori/res/icon/chara_icon_1.png
 https://your-bandori-asset-cdn.example.com/bandori/res/image/card-5.png
 https://your-bandori-asset-cdn.example.com/bandori/music/1/charts/expert.json
-https://your-bandori-asset-cdn.example.com/bandori/stamps/cn/index.json
+https://your-bandori-asset-cdn.example.com/bandori/stamps/index.json
 https://your-bandori-asset-cdn.example.com/bandori/stamps/cn/10131/image.png
 https://your-bandori-asset-cdn.example.com/bandori/stamps/cn/10131/animation/manifest.json
 https://your-bandori-asset-cdn.example.com/bandori/stamps/cn/10131/animation/atlas.png
@@ -150,8 +148,8 @@ https://your-bandori-asset-cdn.example.com/bandori/stamps/cn/10131/animation/atl
 针对 stamp CORS，至少用 `Origin` header 验证一个 JSON 对象和一个 voice 对象：
 
 ```bash
-curl -I -H "Origin: https://hhwx.org" https://your-bandori-asset-cdn.example.com/bandori/stamps/cn/index.json
+curl -I -H "Origin: https://hhwx.org" https://your-bandori-asset-cdn.example.com/bandori/stamps/index.json
 curl -I -H "Origin: https://hhwx.org" https://your-bandori-asset-cdn.example.com/bandori/stamps/cn/10131/voice/<voiceName>.mp3
 ```
 
-两者都应返回 `Access-Control-Allow-Origin: https://hhwx.org`；如果是完全公开且不带 credentials 的资源桶，也可以返回 `Access-Control-Allow-Origin: *`。然后打开相关 HHWX 页面，确认 stamp JSON、动画 manifest、atlas 图片和 voice audio 请求都直接访问配置的 CDN base URL，而不是经过 HHWX API route。
+两者都应返回 `Access-Control-Allow-Origin: https://hhwx.org`；如果是完全公开且不带 credentials 的资源桶，也可以返回 `Access-Control-Allow-Origin: *`。然后打开相关 HHWX 页面，确认 stamp catalog 通过 `/api/bandori/stamps` 读取，而动画 manifest、atlas 图片和 voice audio 请求都直接访问配置的 CDN base URL。
