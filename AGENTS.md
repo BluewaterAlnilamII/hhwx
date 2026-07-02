@@ -20,6 +20,7 @@ This file is the Codex rule entry point for the hhwx repository. Long-lived repo
 - New features and refactors must keep module boundaries clear. Avoid coupling multiple responsibilities into the same component, hook, route, or service module.
 - Page components compose UI. API routes parse parameters, enforce authorization, and format responses. Business rules should live in hooks, `src/lib`, or `src/lib/*-server.ts`.
 - Browser code must only use anonymous publishable clients. Service role keys, private environment variables, and RLS-bypass logic are only allowed in server-side modules.
+- Server-side APIs must not fetch HHWX-owned public CDN URLs such as `cdn.hhwx.org` for catalog, manifest, index, or other aggregate asset metadata. Use private object-storage reads through R2/S3 signed requests instead; public CDN reads are for browsers and external clients.
 - When script commands, deployment flow, environment variables, data contracts, or external dependency constraints change, update the related documentation in the same change.
 - Verify changes with the narrowest relevant check. For broad code, schema, route, or open-source-readiness changes, run `npm run lint` and `npm run build` when feasible.
 

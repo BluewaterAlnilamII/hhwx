@@ -17,6 +17,7 @@ This directory centralizes hhwx project rules for Claude Code. The compatible Co
 - Important public collaboration documents keep Chinese translations with `.zh-CN.md` siblings. When editing README, contributing, security, notice, setup, CDN, or layout docs, update or explicitly review the matching Chinese document in the same change.
 - New features and refactors must keep module boundaries clear. Avoid coupling multiple responsibilities into the same component, hook, route, or service module.
 - New code must follow the naming rules. If code touched by the current task clearly violates them, it may be corrected as part of the same change.
+- Server-side APIs must not fetch HHWX-owned public CDN URLs such as `cdn.hhwx.org` for catalog, manifest, index, or other aggregate asset metadata. Use private object-storage reads through R2/S3 signed requests instead; public CDN reads are for browsers and external clients.
 - When adding, deleting, or renaming top-level directories, major business directories, or shared module directories, update `documents/layout.md`. Ordinary component files, local style files, and test files do not require layout documentation updates.
 - Verify changes with the narrowest relevant check. For broad code, schema, route, or open-source-readiness changes, run `npm run lint` and `npm run build` when feasible.
 

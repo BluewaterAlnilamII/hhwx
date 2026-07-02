@@ -22,9 +22,16 @@ BANDORI_CHART_SOURCE=bestdori
 BANDORI_SONG_NOTES_SOURCE=bestdori
 # BANDORI_SONG_NOTES_SOURCE=assets
 # BANDORI_SONG_NOTES_BESTDORI_FALLBACK=0
+# BANDORI_STAMP_CATALOG_OBJECT_KEY=bandori/stamps/index.json
+# BANDORI_STAMP_R2_ACCOUNT_ID=your_cloudflare_account_id
+# BANDORI_STAMP_R2_BUCKET=your_r2_bucket
+# BANDORI_STAMP_R2_ACCESS_KEY_ID=your_r2_access_key_id
+# BANDORI_STAMP_R2_SECRET_ACCESS_KEY=your_r2_secret_access_key
 ```
 
 `NEXT_PUBLIC_BANDORI_ASSET_CDN_BASE_URL` 会暴露给浏览器。`BANDORI_ASSET_CDN_BASE_URL` 可供服务端代码使用。大多数部署中两者应指向同一个资源主机。Stamp 资源使用同一个 Bandori asset CDN 下的 `/bandori/stamps` 路径；没有单独的 stamp CDN 配置。Web 应用会通过 `/api/bandori/stamps` 读取统一 stamp catalog，而 stamp 图片、动画 manifest、动画 atlas 和 voice audio 会在浏览器中直接从 CDN 读取，因此 CDN 必须允许 HHWX Web origin 跨域读取。Stamp voice 会通过 Web Audio 作为短音效播放，而不是作为媒体元素播放，以避免 iOS media session 把它当作音乐并打断后台音乐。
+
+服务端 HHWX API 聚合已发布到 CDN 的 Bandori 资源时，必须通过 R2/S3 签名请求直接读取背后的对象存储。服务端路径不要再请求 `cdn.hhwx.org` 等 HHWX 自有公网 CDN URL，因为 Cloudflare bot mitigation 可能会对 server-to-CDN 流量返回 challenge。`/api/bandori/stamps` 会使用 `BANDORI_STAMP_R2_*`、`BANDORI_ASSET_R2_*` 或共享的 `BANDORI_R2_*` 凭据读取对象存储中的 `bandori/stamps/index.json`。只有当 `BANDORI_MASTER_R2_*` 指向同一个包含 Bandori 资源对象的 bucket 时，才可以作为兼容兜底。浏览器仍然直接从公网 CDN 读取 stamp 图片、动画 manifest、atlas 和 voice audio。
 
 HHWX 生产环境应在 `/bandori/stamps/*` 对象上为 `https://hhwx.org` 配置 CORS。如果允许多个精确 origin，请同时返回 `Vary: Origin`。Web 应用读取 stamp CDN 时不会携带 credentials，除非请求模型发生变化，否则不要启用带凭据 CORS。完全公开且不带 credentials 的资源桶可以使用 `Access-Control-Allow-Origin: *`；不要把 `*` 和带凭据请求搭配使用。
 

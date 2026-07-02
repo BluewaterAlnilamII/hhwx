@@ -22,9 +22,16 @@ BANDORI_CHART_SOURCE=bestdori
 BANDORI_SONG_NOTES_SOURCE=bestdori
 # BANDORI_SONG_NOTES_SOURCE=assets
 # BANDORI_SONG_NOTES_BESTDORI_FALLBACK=0
+# BANDORI_STAMP_CATALOG_OBJECT_KEY=bandori/stamps/index.json
+# BANDORI_STAMP_R2_ACCOUNT_ID=your_cloudflare_account_id
+# BANDORI_STAMP_R2_BUCKET=your_r2_bucket
+# BANDORI_STAMP_R2_ACCESS_KEY_ID=your_r2_access_key_id
+# BANDORI_STAMP_R2_SECRET_ACCESS_KEY=your_r2_secret_access_key
 ```
 
 `NEXT_PUBLIC_BANDORI_ASSET_CDN_BASE_URL` is exposed to browsers. `BANDORI_ASSET_CDN_BASE_URL` is available to server-side code. In most deployments they should point to the same asset host. Stamp assets are served from the same Bandori asset CDN under `/bandori/stamps`; there is no separate stamp CDN setting. The web app reads the unified stamp catalog through `/api/bandori/stamps`, while stamp images, animation manifests, animation atlases, and voice audio are read directly from the CDN in browsers, so the CDN must allow browser CORS reads from the HHWX web origins. Stamp voices are played through Web Audio as short sound effects instead of media elements, avoiding iOS media-session behavior that can interrupt background music.
+
+Server-side HHWX APIs that aggregate CDN-published Bandori assets must read the backing object storage directly through R2/S3 signed requests. They must not fetch HHWX-owned public CDN URLs such as `cdn.hhwx.org` from the server path because Cloudflare bot mitigation may challenge server-to-CDN traffic. `/api/bandori/stamps` reads `bandori/stamps/index.json` from object storage using `BANDORI_STAMP_R2_*`, `BANDORI_ASSET_R2_*`, or shared `BANDORI_R2_*` credentials. `BANDORI_MASTER_R2_*` is accepted only when it points at the same bucket that contains Bandori asset objects. Browsers still read stamp images, animation manifests, atlases, and voice audio directly from the public CDN.
 
 For HHWX production, configure CORS for `https://hhwx.org` on `/bandori/stamps/*` objects. If multiple exact origins are allowed, include `Vary: Origin`. The web app does not send credentials for stamp CDN reads, so do not enable credentialed CORS unless the request model changes. A fully public, no-credentials asset bucket may use `Access-Control-Allow-Origin: *`; do not combine `*` with credentialed requests.
 
