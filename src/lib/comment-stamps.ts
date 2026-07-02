@@ -2,7 +2,6 @@
 // Region order inside COMMENT_STAMP_ROWS is jp, en, tw, cn.
 import {
   buildBandoriStampImagePublicUrl,
-  buildBandoriStampManifestPublicUrl,
   normalizeBandoriStampId,
   type BandoriStampCatalogItem,
   type BandoriStampRegion,
@@ -27,12 +26,6 @@ const COMMENT_STAMP_REGION_INDEX: Record<CommentStampRegion, 1 | 2 | 3 | 4> = {
   en: 2,
   tw: 3,
   cn: 4,
-};
-const COMMENT_STAMP_REGION_VOICE_MASK: Record<CommentStampRegion, number> = {
-  jp: 1,
-  en: 2,
-  tw: 4,
-  cn: 8,
 };
 
 const COMMENT_STAMP_ROWS = [
@@ -802,21 +795,15 @@ export function resolveCommentStamp(region: CommentStampRegion, id: number): Com
   }
 
   const row = COMMENT_STAMP_ROWS_BY_ID.get(id);
-  const imageName = row?.[COMMENT_STAMP_REGION_INDEX[region]] ?? null;
+  const imageName = row?.[COMMENT_STAMP_REGION_INDEX[region]] ?? "";
   if (row && !imageName) return null;
 
-  const hasVoice = row ? (row[5] & COMMENT_STAMP_REGION_VOICE_MASK[region]) !== 0 : false;
   return {
     id: normalizedStampId,
     region,
     imageName,
     imageUrl: buildBandoriStampImagePublicUrl(region, normalizedStampId),
-    manifestUrl: buildBandoriStampManifestPublicUrl(region, normalizedStampId),
-    seq: row?.[0] ?? null,
-    stampType: null,
-    withVoice: hasVoice,
-    hasVoiceAudio: hasVoice,
-    hasAnimation: false,
+    voiceUrl: "",
   };
 }
 

@@ -24,7 +24,7 @@ BANDORI_SONG_NOTES_SOURCE=bestdori
 # BANDORI_SONG_NOTES_BESTDORI_FALLBACK=0
 ```
 
-`NEXT_PUBLIC_BANDORI_ASSET_CDN_BASE_URL` is exposed to browsers. `BANDORI_ASSET_CDN_BASE_URL` is available to server-side code. In most deployments they should point to the same asset host. Stamp assets are served from the same Bandori asset CDN under `/bandori/stamps`; there is no separate stamp CDN setting. The web app reads stamp index JSON, per-stamp manifests, animation manifests, and voice audio directly from the CDN in browsers, so the CDN must allow browser CORS reads from the HHWX web origins. Stamp voices are played through Web Audio as short sound effects instead of media elements, avoiding iOS media-session behavior that can interrupt background music.
+`NEXT_PUBLIC_BANDORI_ASSET_CDN_BASE_URL` is exposed to browsers. `BANDORI_ASSET_CDN_BASE_URL` is available to server-side code. In most deployments they should point to the same asset host. Stamp assets are served from the same Bandori asset CDN under `/bandori/stamps`; there is no separate stamp CDN setting. The web app reads the unified stamp catalog through `/api/bandori/stamps`, while stamp images, animation manifests, animation atlases, and voice audio are read directly from the CDN in browsers, so the CDN must allow browser CORS reads from the HHWX web origins. Stamp voices are played through Web Audio as short sound effects instead of media elements, avoiding iOS media-session behavior that can interrupt background music.
 
 For HHWX production, configure CORS for `https://hhwx.org` on `/bandori/stamps/*` objects. If multiple exact origins are allowed, include `Vary: Origin`. The web app does not send credentials for stamp CDN reads, so do not enable credentialed CORS unless the request model changes. A fully public, no-credentials asset bucket may use `Access-Control-Allow-Origin: *`; do not combine `*` with credentialed requests.
 
@@ -101,22 +101,20 @@ bandori/music/index.json
 Stamp catalog, static images, voice audio, and animation assets:
 
 ```text
-{CDN_BASE}/bandori/stamps/{server}/index.json
-{CDN_BASE}/bandori/stamps/{server}/{stampId}/manifest.json
+{CDN_BASE}/bandori/stamps/index.json
 {CDN_BASE}/bandori/stamps/{server}/{stampId}/image.png
 {CDN_BASE}/bandori/stamps/{server}/{stampId}/voice/{voiceName}.mp3
 {CDN_BASE}/bandori/stamps/{server}/{stampId}/animation/manifest.json
 {CDN_BASE}/bandori/stamps/{server}/{stampId}/animation/atlas.png
 
-bandori/stamps/{server}/index.json
-bandori/stamps/{server}/{stampId}/manifest.json
+bandori/stamps/index.json
 bandori/stamps/{server}/{stampId}/image.png
 bandori/stamps/{server}/{stampId}/voice/{voiceName}.mp3
 bandori/stamps/{server}/{stampId}/animation/manifest.json
 bandori/stamps/{server}/{stampId}/animation/atlas.png
 ```
 
-`bandori/stamps/{server}/index.json` should use `hhwx-bandori-stamp-index-v1`. Per-stamp manifests should use `hhwx-bandori-stamp-asset-v1`. Animation manifests should use `hhwx-bandori-stamp-animation-v1` and include `atlasDimensions`, `frameRate`, and frame rectangles so the web app can render atlas-based animated stamps without Unity runtime logic. Current HHWX atlas PNGs use `frames[].unityRect` as the physical PNG crop rectangle; the web app normalizes that into its in-memory `frames[].cssRect`, with source `frames[].cssRect` used only as a fallback when `unityRect` is absent.
+`bandori/stamps/index.json` is the public compact stamp catalog. Its `payload` is keyed by stamp ID and uses four fixed slots in `[jp, en, tw, cn]` order for `imageName`, `imageUrl`, and optional `voiceUrl`; missing slots are empty strings, not `null`. Optional animation summaries are keyed by server and point at the animation manifest and atlas. Standard per-stamp manifests are not part of the public contract. Animation manifests should use `hhwx-bandori-stamp-animation-v1` and include `atlasDimensions`, `frameRate`, and frame rectangles so the web app can render atlas-based animated stamps without Unity runtime logic. Current HHWX atlas PNGs use `frames[].unityRect` as the physical PNG crop rectangle; the web app normalizes that into its in-memory `frames[].cssRect`, with source `frames[].cssRect` used only as a fallback when `unityRect` is absent.
 
 ## Self-Hosted Expectations
 
@@ -141,7 +139,7 @@ https://your-bandori-asset-cdn.example.com/bandori/assets/cn/thumb/chara/card000
 https://your-bandori-asset-cdn.example.com/bandori/res/icon/chara_icon_1.png
 https://your-bandori-asset-cdn.example.com/bandori/res/image/card-5.png
 https://your-bandori-asset-cdn.example.com/bandori/music/1/charts/expert.json
-https://your-bandori-asset-cdn.example.com/bandori/stamps/cn/index.json
+https://your-bandori-asset-cdn.example.com/bandori/stamps/index.json
 https://your-bandori-asset-cdn.example.com/bandori/stamps/cn/10131/image.png
 https://your-bandori-asset-cdn.example.com/bandori/stamps/cn/10131/animation/manifest.json
 https://your-bandori-asset-cdn.example.com/bandori/stamps/cn/10131/animation/atlas.png
@@ -150,8 +148,8 @@ https://your-bandori-asset-cdn.example.com/bandori/stamps/cn/10131/animation/atl
 For stamp CORS, verify at least one JSON object and one voice object with an `Origin` header:
 
 ```bash
-curl -I -H "Origin: https://hhwx.org" https://your-bandori-asset-cdn.example.com/bandori/stamps/cn/index.json
+curl -I -H "Origin: https://hhwx.org" https://your-bandori-asset-cdn.example.com/bandori/stamps/index.json
 curl -I -H "Origin: https://hhwx.org" https://your-bandori-asset-cdn.example.com/bandori/stamps/cn/10131/voice/<voiceName>.mp3
 ```
 
-Both responses should include `Access-Control-Allow-Origin: https://hhwx.org` or `Access-Control-Allow-Origin: *` for a public no-credentials bucket. Then open the relevant HHWX pages and confirm stamp JSON, animation manifests, atlas images, and voice audio requests go directly to the configured CDN base URL instead of through HHWX API routes.
+Both responses should include `Access-Control-Allow-Origin: https://hhwx.org` or `Access-Control-Allow-Origin: *` for a public no-credentials bucket. Then open the relevant HHWX pages and confirm the stamp catalog is read through `/api/bandori/stamps`, while animation manifests, atlas images, and voice audio requests go directly to the configured CDN base URL.

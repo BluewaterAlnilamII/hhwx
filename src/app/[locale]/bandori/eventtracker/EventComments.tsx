@@ -8,13 +8,17 @@ import { Check, ChevronFirst, ChevronLast, ChevronLeft, ChevronRight, Edit3, Lin
 import AccountCardAvatar from "@/components/account/AccountCardAvatar";
 import {
   useCommentStampAnimation,
-  useCommentStampAsset,
+  useCommentStampCatalog,
   useCommentStampsForRegion,
 } from "@/hooks/useCommentStamps";
 import { type AccountAvatarCardTrainType } from "@/lib/account-avatar-defaults";
 import { getApiErrorMessage, parseApiSuccessData } from "@/lib/api-contracts";
 import { type BandoriAssetRegion } from "@/lib/bandori-asset-proxy";
-import { type BandoriStampAnimationResponse } from "@/lib/bandori-stamp-assets";
+import {
+  getBandoriStampCatalogItemsForRegion,
+  type BandoriStampAnimationResponse,
+  type BandoriStampCatalogApiResponse,
+} from "@/lib/bandori-stamp-assets";
 import { playCommentStampVoice } from "@/lib/comment-stamp-audio";
 import { COMMENT_EMOJI_NAMES, getCommentEmojiSrc } from "@/lib/comment-emojis";
 import {
@@ -281,18 +285,17 @@ function CommentStampAnimationCanvas({
 }
 
 function CommentStampView({ stamp, shortcode }: { stamp: CommentStamp; shortcode: string }) {
-  const [shouldLoadAsset, setShouldLoadAsset] = useState(false);
   const [imageFailed, setImageFailed] = useState(false);
   const [animationFailed, setAnimationFailed] = useState(false);
-  const { asset } = useCommentStampAsset(stamp.region, stamp.id, shouldLoadAsset);
-  const animationSummary = asset?.animation ?? null;
+  const animationSummary = stamp.animation;
   const { animation } = useCommentStampAnimation(
     stamp.region,
     stamp.id,
-    Boolean(animationSummary && !animationFailed),
+    animationSummary,
+    Boolean(animationSummary) && !animationFailed,
   );
-  const voiceUrl = asset?.voiceUrl ?? null;
-  const imageUrl = asset?.imageUrl ?? stamp.imageUrl;
+  const voiceUrl = stamp.voiceUrl;
+  const imageUrl = stamp.imageUrl;
 
   const handleAnimationError = useCallback(() => {
     setAnimationFailed(true);
@@ -318,7 +321,6 @@ function CommentStampView({ stamp, shortcode }: { stamp: CommentStamp; shortcode
         loading="lazy"
         decoding="async"
         referrerPolicy="strict-origin-when-cross-origin"
-        onLoad={() => setShouldLoadAsset(true)}
         onError={() => setImageFailed(true)}
         className="h-full max-h-16 w-full max-w-24 object-contain"
       />
@@ -348,7 +350,31 @@ function CommentStampView({ stamp, shortcode }: { stamp: CommentStamp; shortcode
   );
 }
 
-function parseCommentContent(content: string): CommentContentToken[] {
+type CommentStampLookup = ReadonlyMap<string, CommentStamp>;
+
+function commentStampLookupKey(region: CommentStampRegion, stampId: number): string {
+  return `${region}:${stampId}`;
+}
+
+function buildCommentStampLookup(catalog: BandoriStampCatalogApiResponse | null): CommentStampLookup {
+  const lookup = new Map<string, CommentStamp>();
+  for (const region of COMMENT_STAMP_REGIONS) {
+    for (const stamp of getBandoriStampCatalogItemsForRegion(catalog, region)) {
+      lookup.set(commentStampLookupKey(region, stamp.id), stamp);
+    }
+  }
+  return lookup;
+}
+
+function resolveCommentStampWithCatalog(
+  stampLookup: CommentStampLookup,
+  region: CommentStampRegion,
+  id: number,
+): CommentStamp | null {
+  return stampLookup.get(commentStampLookupKey(region, id)) ?? resolveCommentStamp(region, id);
+}
+
+function parseCommentContent(content: string, stampLookup: CommentStampLookup): CommentContentToken[] {
   const tokens: CommentContentToken[] = [];
   let cursor = 0;
   let match: RegExpExecArray | null;
@@ -361,7 +387,7 @@ function parseCommentContent(content: string): CommentContentToken[] {
     if (stampRegion && stampId) {
       if (isCommentStampRegion(stampRegion)) {
         const id = Number.parseInt(stampId, 10);
-        const stamp = Number.isSafeInteger(id) ? resolveCommentStamp(stampRegion, id) : null;
+        const stamp = Number.isSafeInteger(id) ? resolveCommentStampWithCatalog(stampLookup, stampRegion, id) : null;
         token = stamp ? { type: "stamp", raw, stamp, index: match.index } : null;
       }
     } else if (emojiName) {
@@ -470,7 +496,15 @@ function renderJumboEmojiRows(tokens: readonly CommentContentToken[]) {
     ));
 }
 
-function CommentContent({ content, isDeleted }: { content: string; isDeleted: boolean }) {
+function CommentContent({
+  content,
+  isDeleted,
+  stampLookup,
+}: {
+  content: string;
+  isDeleted: boolean;
+  stampLookup: CommentStampLookup;
+}) {
   const contentClassName = isDeleted ? "text-slate-400" : "text-slate-700 dark:text-slate-200";
 
   if (isDeleted) {
@@ -481,7 +515,7 @@ function CommentContent({ content, isDeleted }: { content: string; isDeleted: bo
     );
   }
 
-  const tokens = parseCommentContent(content);
+  const tokens = parseCommentContent(content, stampLookup);
 
   if (isJumboEmojiContent(tokens)) {
     return (
@@ -789,13 +823,16 @@ type StampPickerButtonProps = {
 
 function StampPickerOption({ stamp, onSelect }: { stamp: CommentStamp; onSelect: (stamp: CommentStamp) => void }) {
   const shortcode = buildStampShortcode(stamp);
-  const hasVoice = stamp.hasVoiceAudio || stamp.withVoice;
+  const hasVoice = Boolean(stamp.voiceUrl);
   const [previewActive, setPreviewActive] = useState(false);
   const [animationFailed, setAnimationFailed] = useState(false);
-  const shouldCheckAsset = previewActive && !stamp.hasAnimation && !animationFailed;
-  const { asset } = useCommentStampAsset(stamp.region, stamp.id, shouldCheckAsset);
-  const shouldLoadAnimation = previewActive && (stamp.hasAnimation || asset?.hasAnimation === true) && !animationFailed;
-  const { animation } = useCommentStampAnimation(stamp.region, stamp.id, shouldLoadAnimation);
+  const shouldLoadAnimation = previewActive && Boolean(stamp.animation) && !animationFailed;
+  const { animation } = useCommentStampAnimation(
+    stamp.region,
+    stamp.id,
+    stamp.animation,
+    shouldLoadAnimation,
+  );
 
   const handleAnimationError = useCallback(() => {
     setAnimationFailed(true);
@@ -1208,6 +1245,7 @@ type CommentItemProps = {
   highlightedId: string | null;
   replies: Record<string, CommentListResponse>;
   loadingReplies: Record<string, boolean>;
+  stampLookup: CommentStampLookup;
   canReact: boolean;
   commentPage: number;
   isReply?: boolean;
@@ -1226,6 +1264,7 @@ function CommentItem({
   highlightedId,
   replies,
   loadingReplies,
+  stampLookup,
   canReact,
   commentPage,
   isReply = false,
@@ -1476,7 +1515,7 @@ function CommentItem({
               </div>
             </div>
           ) : (
-            <CommentContent content={comment.content ?? ""} isDeleted={isDeleted} />
+            <CommentContent content={comment.content ?? ""} isDeleted={isDeleted} stampLookup={stampLookup} />
           )}
 
           <div className="mt-3 flex flex-wrap items-center gap-1.5">
@@ -1613,6 +1652,7 @@ function CommentItem({
                   highlightedId={highlightedId}
                   replies={replies}
                   loadingReplies={loadingReplies}
+                  stampLookup={stampLookup}
                   canReact={canReact}
                   commentPage={commentPage}
                   isReply
@@ -1664,6 +1704,8 @@ export default function EventComments({ eventId }: { eventId: number | null }) {
   const { userId, username, emailVerified, authReady } = useGameStore();
 
   const apiBase = eventId ? `/api/bandori/events/${eventId}/comments` : null;
+  const { catalog: stampCatalog } = useCommentStampCatalog(Boolean(eventId && comments.length > 0));
+  const stampLookup = useMemo(() => buildCommentStampLookup(stampCatalog), [stampCatalog]);
 
   useEffect(() => {
     commentsRef.current = comments;
@@ -2036,6 +2078,7 @@ export default function EventComments({ eventId }: { eventId: number | null }) {
             highlightedId={focusedCommentId}
             replies={replies}
             loadingReplies={loadingReplies}
+            stampLookup={stampLookup}
             canReact={Boolean(userId && emailVerified)}
             commentPage={currentPage}
             onCreateReply={(parentId, content) => createComment(content, parentId)}
