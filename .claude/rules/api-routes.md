@@ -6,6 +6,7 @@ paths:
 # API Route Rules
 
 - Keep API routes lightweight: parse requests, enforce authorization, call services, and format responses. Do not stack large queries or domain rules in `route.ts`.
+- API routes that aggregate HHWX-owned CDN-published resources must call server service modules that read the backing object storage directly. Do not implement these routes by fetching public CDN URLs from the server path.
 - All request parameters, query strings, and request bodies must be parsed, normalized, and range-checked at the entry point. Do not pass unvalidated values directly into database queries or service layers.
 - Prefer `Number.parseInt(value, 10)` or `Number(value)` for numeric parsing, together with `Number.isFinite()` and domain range checks.
 - Except for binary responses, file downloads, image proxies, streaming responses, SSE, ICS, 204/304 responses without bodies, and explicitly pass-through third-party protocols, JSON APIs should use the unified response shape: success `{ success: true, data, meta? }`; failure `{ success: false, error: { code, message, details? } }`.

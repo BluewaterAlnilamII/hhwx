@@ -1,3 +1,4 @@
+import { unstable_cache } from "next/cache";
 import {
   LIVE_API_CACHE_CONTROL,
   MUTABLE_DIRECTORY_CACHE_PROFILE,
@@ -6,12 +7,18 @@ import {
 } from "@/lib/api-cache";
 import { jsonError, jsonRouteError, jsonSuccess } from "@/lib/api-response";
 import {
-  buildBandoriStampCatalogCdnUrl,
-  parseBandoriStampCatalogApiResponse,
-} from "@/lib/bandori-stamp-assets";
+  BandoriStampCatalogReadError,
+  readBandoriStampCatalogFromObjectStorage,
+} from "@/lib/bandori-stamp-assets-server";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
+
+const readBandoriStampCatalogResponse = unstable_cache(
+  readBandoriStampCatalogFromObjectStorage,
+  ["bandori-stamps-catalog-r2:v1"],
+  { revalidate: MUTABLE_DIRECTORY_CACHE_PROFILE.nextRevalidateSeconds },
+);
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -21,37 +28,19 @@ export async function GET(request: Request) {
     });
   }
 
-  const catalogUrl = buildBandoriStampCatalogCdnUrl();
-  if (!catalogUrl) {
-    return jsonError(503, "BANDORI_STAMPS_CDN_UNCONFIGURED", "Bandori stamp CDN base URL is not configured", {
-      headers: withCacheControl(LIVE_API_CACHE_CONTROL),
-    });
-  }
-
   try {
-    const response = await fetch(catalogUrl, {
-      next: { revalidate: MUTABLE_DIRECTORY_CACHE_PROFILE.nextRevalidateSeconds },
-    });
-
-    if (!response.ok) {
-      return jsonError(503, "BANDORI_STAMPS_UNAVAILABLE", "Bandori stamp catalog is unavailable", {
-        headers: withCacheControl(LIVE_API_CACHE_CONTROL),
-        details: { status: response.status },
-      });
-    }
-
-    const catalog = parseBandoriStampCatalogApiResponse(await response.json());
-    if (!catalog) {
-      return jsonError(502, "BANDORI_STAMPS_INVALID_CATALOG", "Bandori stamp catalog payload is invalid", {
-        headers: withCacheControl(LIVE_API_CACHE_CONTROL),
-      });
-    }
-
-    return jsonSuccess(catalog, {
+    return jsonSuccess(await readBandoriStampCatalogResponse(), {
       headers: withCacheControl(PUBLIC_SHORT_API_CACHE_CONTROL),
     });
   } catch (error) {
     console.error("Bandori stamps API error:", error);
+    if (error instanceof BandoriStampCatalogReadError) {
+      return jsonError(error.httpStatus, error.code, error.message, {
+        headers: withCacheControl(LIVE_API_CACHE_CONTROL),
+        details: error.details,
+      });
+    }
+
     return jsonRouteError(error, {
       status: 500,
       code: "BANDORI_STAMPS_READ_FAILED",

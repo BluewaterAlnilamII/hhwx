@@ -12,6 +12,7 @@ paths:
 - Database Row types may keep `snake_case` to accurately map table fields. DTOs and shared objects returned from server modules should be converted to camelCase.
 - Server modules that depend on environment variables must fail fast with clear error messages. Do not silently degrade when required configuration is missing.
 - Modules containing service role usage, private environment variables, RLS-bypass logic, or other privileged capabilities must keep a server-only boundary. Client components, hooks, and browser-executable modules must not import `*-server.ts`.
+- Server-side readers for HHWX-owned asset catalogs, manifests, indexes, or aggregate metadata must use private object-storage access such as R2/S3 signed requests. Do not fetch `cdn.hhwx.org` or other HHWX public CDN URLs from server code for these resources; Cloudflare bot mitigation can challenge server-to-CDN traffic. Browser-facing asset URLs may still point at the public CDN.
 - All write operations must re-check authentication and authorization on the server path. RLS-bypass behavior must be limited to explicit server-side modules.
 - Use limited retries and backoff only when a call is known to be a transient failure and the operation is idempotent or safe to retry. Do not retry non-idempotent writes or calls with external side effects by default. After the retry limit is reached, return a stable, handleable error result.
 - Server modules should centralize shared queries, DTO mapping, and compatibility logic. Avoid each API route maintaining its own similar implementation.
