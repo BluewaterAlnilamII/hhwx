@@ -27,7 +27,11 @@ type TrackerRow = {
   is_final?: boolean | null;
 };
 
+const MAX_COMPARISON_DATA_CACHE_ENTRIES = 30;
+
+// Module-level LRU keeps recently toggled comparison lines responsive without letting a long session grow unbounded.
 const dataCache = new Map<string, TrackerData[]>();
+const inFlightRequests = new Map<string, Promise<TrackerData[]>>();
 
 type ResolvedComparisonConfig = ComparisonConfig & {
   targetId: number;
@@ -40,6 +44,33 @@ function isResolvedConfig(config: ComparisonConfig): config is ResolvedCompariso
 
 function cacheKey(config: ComparisonConfig): string {
   return `${config.targetType}:${config.targetId}:${config.tier}`;
+}
+
+function readComparisonDataCache(key: string): TrackerData[] | undefined {
+  const cached = dataCache.get(key);
+  if (cached === undefined) return undefined;
+
+  dataCache.delete(key);
+  dataCache.set(key, cached);
+  return cached;
+}
+
+function peekComparisonDataCache(key: string): TrackerData[] | undefined {
+  return dataCache.get(key);
+}
+
+function writeComparisonDataCache(key: string, points: TrackerData[]) {
+  if (dataCache.has(key)) {
+    dataCache.delete(key);
+  }
+
+  dataCache.set(key, points);
+
+  while (dataCache.size > MAX_COMPARISON_DATA_CACHE_ENTRIES) {
+    const oldestKey = dataCache.keys().next().value;
+    if (oldestKey === undefined) break;
+    dataCache.delete(oldestKey);
+  }
 }
 
 function parsePoint(point: unknown): TrackerData | null {
@@ -76,6 +107,32 @@ async function fetchComparison(config: ComparisonConfig): Promise<TrackerData[]>
     const parsed = parsePoint(point);
     return parsed ? [parsed] : [];
   }));
+}
+
+function fetchComparisonWithCache(config: ComparisonConfig): Promise<TrackerData[]> {
+  const key = cacheKey(config);
+  const cached = readComparisonDataCache(key);
+  if (cached !== undefined) {
+    return Promise.resolve(cached);
+  }
+
+  const inFlightRequest = inFlightRequests.get(key);
+  if (inFlightRequest) {
+    return inFlightRequest;
+  }
+
+  const request = fetchComparison(config)
+    .then((points) => {
+      writeComparisonDataCache(key, points);
+      return points;
+    })
+    .finally(() => {
+      if (inFlightRequests.get(key) === request) {
+        inFlightRequests.delete(key);
+      }
+    });
+  inFlightRequests.set(key, request);
+  return request;
 }
 
 function getLocalDayStart(timestamp: number): number {
@@ -247,9 +304,9 @@ export function useComparisonTrackerData({
 
     for (const config of uniqueConfigs) {
       const key = cacheKey(config);
-      const cached = dataCache.get(key);
+      const cached = readComparisonDataCache(key);
 
-      if (cached) {
+      if (cached !== undefined) {
         continue;
       }
 
@@ -259,16 +316,14 @@ export function useComparisonTrackerData({
         }
       }, 0);
       loadingTimeoutIds.push(loadingTimeoutId);
-      fetchComparison(config)
+      fetchComparisonWithCache(config)
         .then((points) => {
           if (cancelled) return;
-          dataCache.set(key, points);
           setDataByKey((previous) => ({ ...previous, [key]: points }));
         })
         .catch((error) => {
           console.error(`[useComparisonTrackerData] ${key}:`, error);
           if (!cancelled) {
-            dataCache.set(key, []);
             setDataByKey((previous) => ({ ...previous, [key]: [] }));
           }
         })
@@ -324,8 +379,8 @@ export function useComparisonTrackerData({
 
           const key = cacheKey(matched);
           setDataByKey((previous) => {
-            const nextPoints = normalizePoints([...(dataCache.get(key) ?? previous[key] ?? []), { time, ep }]);
-            dataCache.set(key, nextPoints);
+            const nextPoints = normalizePoints([...(readComparisonDataCache(key) ?? previous[key] ?? []), { time, ep }]);
+            writeComparisonDataCache(key, nextPoints);
             return { ...previous, [key]: nextPoints };
           });
         },
@@ -342,7 +397,7 @@ export function useComparisonTrackerData({
 
     return configs.filter(isResolvedConfig).map((config, index) => {
       const key = cacheKey(config);
-      const cached = dataCache.get(key);
+      const cached = peekComparisonDataCache(key);
       const target = buildComparisonTargetMeta(config, eventMap, monthlyOptionMap);
       return buildLine(
         config,

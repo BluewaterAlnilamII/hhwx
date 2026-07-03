@@ -3,19 +3,7 @@
 import { startTransition, useState, useEffect, useRef, useMemo, useCallback, useLayoutEffect } from "react";
 import { useTranslations } from "next-intl";
 import { format } from "date-fns";
-import {
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  ReferenceArea,
-  ReferenceLine,
-} from "recharts";
 import * as Tabs from "@radix-ui/react-tabs";
-import { Plus, X, ZoomIn, ZoomOut } from "lucide-react";
 
 import { useCachedFetch } from "@/hooks/useCachedFetch";
 import { parseApiSuccessData } from "@/lib/api-contracts";
@@ -24,20 +12,14 @@ import {
   resolveBandoriEventBannerBundleName,
 } from "@/lib/bandori-asset-proxy";
 import { resolveBandoriEventAssetRegion } from "@/lib/bandori-event-region";
-import type { ComparisonConfig, ComparisonLine, ComparisonLinePoint, ComparisonTargetType, MinimalEvent, TrackerData, TrackerDotProps, TrackerMouseState, TrackerTooltipPayloadEntry, TrackingMode } from "./types";
+import type { ComparisonConfig, ComparisonLine, ComparisonLinePoint, ComparisonTargetType, MinimalEvent, TrackerData, TrackerMouseState, TrackerTooltipPayloadEntry, TrackingMode } from "./types";
 import {
-  COMPARISON_LINE_COLORS,
-  BESTDORI_PREDICTION_COLOR,
-  BESTDORI_PREDICTION_DATA_KEY,
   BESTDORI_PREDICTION_STORAGE_KEY,
   EVENT_TIERS,
   INSTANT_PROJECTION_STORAGE_KEY,
   DAY_PROJECTION_STORAGE_KEY,
   MAX_COMPARISON_LINES,
   MONTHLY_TIERS,
-  NON_WORKING_DAY_BAND_FILL,
-  NON_WORKING_DAY_BAND_STROKE,
-  getTiersForMode,
 } from "./constants";
 import { useTrackerData } from "./useTrackerData";
 import {
@@ -51,8 +33,6 @@ import {
   getCurrentMonthlyRankingWindow,
   getMonthlyRankingOptions,
 } from "./useChartData";
-import { TrackerTooltip } from "./TrackerTooltip";
-import FixedYAxis from "./FixedYAxis";
 import { useProjectionPreference } from "./useProjectionPreference";
 import { useComparisonPreferences } from "./useComparisonPreferences";
 import { getDefaultTierForMode, normalizeTierForMode, readTrackerTierPreference, writeTrackerTierPreference } from "./tracker-tier-preference";
@@ -64,6 +44,11 @@ import {
 } from "./urlQuery";
 import { mergeComparisonLines, useComparisonTrackerData } from "./useComparisonTrackerData";
 import { mergeBestdoriPredictionData, useBestdoriPrediction } from "./useBestdoriPrediction";
+import { buildTooltipSignature, useTrackerHoverTooltip, type HoverTooltipState } from "./useTrackerHoverTooltip";
+import { ComparisonControls } from "./ComparisonControls";
+import { TrackerChartPanel } from "./TrackerChartPanel";
+import { TrackerModeTierControls } from "./TrackerModeTierControls";
+import { TrackerStatusSummary } from "./TrackerStatusSummary";
 import BandoriPageShell from "../BandoriPageShell";
 import BandoriCnExclusiveNotice from "../BandoriCnExclusiveNotice";
 import BandoriEventSwitcher from "../BandoriEventSwitcher";
@@ -86,20 +71,7 @@ type ComparisonTargetOption = {
 };
 
 const ZOOM_WIDTH_MULTIPLIERS = [1, 2, 4, 8, 16, 32] as const;
-const TOOLTIP_OFFSET = 12;
-const TOOLTIP_EDGE_PADDING = 8;
 const TOOLTIP_TIME_TOLERANCE_MS = 30_000;
-const FIXED_Y_AXIS_WIDTH = 38;
-const CHART_MARGIN = { top: 20, right: 5, left: 0, bottom: 20 } as const;
-const X_AXIS_HEIGHT = 30;
-
-type HoverTooltipState = {
-  active: boolean;
-  coordinate: { x: number; y: number };
-  label?: number;
-  payload?: TrackerTooltipPayloadEntry[];
-  signature?: string;
-};
 
 type ModeIndicatorStyle = {
   width: number;
@@ -118,10 +90,6 @@ type ComparisonTooltipPointIndexEntry = {
   dataKey: `compare_${number}_ep`;
   points: ComparisonLinePoint[];
 };
-
-function isInvalidMarkerPosition(cx?: number, cy?: number): boolean {
-  return typeof cx !== "number" || Number.isNaN(cx) || typeof cy !== "number" || Number.isNaN(cy);
-}
 
 function isActualTrackerPoint(
   point: TrackerData,
@@ -145,10 +113,6 @@ function isActualTrackerPoint(
   }
 
   return true;
-}
-
-function renderHiddenMarker(key?: string) {
-  return <circle key={key} cx={0} cy={0} r={0} stroke="none" />;
 }
 
 function getTooltipPointTime(point: TrackerData): number {
@@ -233,48 +197,6 @@ function collectNearbyComparisonPoints(index: ComparisonTooltipPointIndexEntry[]
 
 function buildComparisonPointMap(points: ComparisonLinePoint[]) {
   return Object.fromEntries(points.map((point) => [point.dataKey, point]));
-}
-
-function buildTooltipSignature(label: number | undefined, payload: TrackerTooltipPayloadEntry[]): string {
-  const payloadSignature = payload
-    .map((entry) => {
-      const dataKey = String(entry.dataKey ?? "");
-      const point = entry.payload;
-      const comparisonSignature = Object.entries(point?.comparisonPoints ?? {})
-        .sort(([leftKey], [rightKey]) => leftKey.localeCompare(rightKey))
-        .map(([key, comparisonPoint]) => `${key}:${comparisonPoint.shiftedTime}:${comparisonPoint.ep}`)
-        .join(",");
-      return `${dataKey}:${point?.time ?? ""}:${point?.projectionType ?? ""}:${comparisonSignature}`;
-    })
-    .join("|");
-
-  return `${label ?? ""}:${payloadSignature}`;
-}
-
-function isComparisonPointActive(
-  hoverTooltip: HoverTooltipState | null,
-  dataKey: `compare_${number}_ep`,
-  point: ComparisonLinePoint | undefined,
-): boolean {
-  if (!hoverTooltip?.active || !point) return false;
-
-  return hoverTooltip.payload?.some((entry) => {
-    const activePoint = entry.payload?.comparisonPoints?.[dataKey];
-    return activePoint?.shiftedTime === point.shiftedTime;
-  }) ?? false;
-}
-
-function isMainPointActive(hoverTooltip: HoverTooltipState | null, point: TrackerData | undefined): boolean {
-  if (!hoverTooltip?.active || !point) return false;
-
-  const activePoint = hoverTooltip.payload?.find((entry) => entry.dataKey === "ep" || entry.dataKey === "instantEp")?.payload;
-  if (!activePoint) return false;
-
-  if (point.isProjection || activePoint.isProjection) {
-    return Boolean(point.isProjection && activePoint.isProjection && point.time === activePoint.time);
-  }
-
-  return point.time === activePoint.time;
 }
 
 function createComparisonConfigId(): string {
@@ -473,28 +395,6 @@ function EventProgressBar({ startDate, endDate }: { startDate: number; endDate: 
   );
 }
 
-/**
- * MinutesAgo —— "N分钟前更新"实时展示组件。
- * 每秒自主更新，超过 30 分钟则高亮警告色。
- * 同样隔离在子组件内以避免父组件全量重渲染。
- */
-function MinutesAgo({ timestamp }: { timestamp: number }) {
-  const [now, setNow] = useState(() => Date.now());
-
-  useEffect(() => {
-    const interval = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(interval);
-  }, []);
-
-  const minutesAgo = Math.floor((now - timestamp) / 60000);
-
-  return (
-    <span className={`text-base font-medium ${minutesAgo > 30 ? "text-red-500" : "text-gray-600 dark:text-gray-300"}`}>
-      {minutesAgo >= 0 ? `${minutesAgo}分钟前` : "-"}
-    </span>
-  );
-}
-
 // ─────────────────────────── 页面主组件 ───────────────────────────
 
 export default function EventTrackerPage() {
@@ -523,13 +423,10 @@ export default function EventTrackerPage() {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const chartViewportRef = useRef<HTMLDivElement>(null);
   const tooltipRef = useRef<HTMLDivElement>(null);
-  const hoverTooltipRef = useRef<HoverTooltipState | null>(null);
-  const tooltipAnimationFrameRef = useRef<number | null>(null);
   const isUserScrollingRef = useRef(false);
   const modeIndicatorViewportWidthRef = useRef<number | null>(null);
   const isProgrammaticScrollRef = useRef(false);
   const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const [hoverTooltip, setHoverTooltip] = useState<HoverTooltipState | null>(null);
   const [chartViewportHeight, setChartViewportHeight] = useState(400);
   const [hasAppliedInitialUrlState, setHasAppliedInitialUrlState] = useState(false);
   const monthlyRankingOptions = useMemo(() => getMonthlyRankingOptions(), []);
@@ -620,6 +517,11 @@ export default function EventTrackerPage() {
     setSelectedTier(normalizedTier);
     writeTrackerTierPreference(trackingMode, normalizedTier);
   }, [selectedTier, trackingMode]);
+
+  const handleMonthlyMonthChange = useCallback((monthId: number) => {
+    setSelectedMonthlyMonthId(monthId);
+    setZoomIndex(0);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -926,6 +828,13 @@ export default function EventTrackerPage() {
     () => mergeComparisonLines(bestdoriDisplayedData, comparisonLines),
     [bestdoriDisplayedData, comparisonLines],
   );
+  const zoomWidthMultiplier = ZOOM_WIDTH_MULTIPLIERS[zoomIndex];
+  const handleZoomIn = useCallback(() => {
+    startTransition(() => setZoomIndex((previous) => Math.min(ZOOM_WIDTH_MULTIPLIERS.length - 1, previous + 1)));
+  }, []);
+  const handleZoomOut = useCallback(() => {
+    startTransition(() => setZoomIndex((previous) => Math.max(0, previous - 1)));
+  }, []);
   const mainTooltipPointIndex = useMemo(
     () => buildMainTooltipPointIndex(bestdoriDisplayedData),
     [bestdoriDisplayedData],
@@ -992,6 +901,19 @@ export default function EventTrackerPage() {
       signature: buildTooltipSignature(label, payload),
     };
   }, [comparisonTooltipPointIndex, mainTooltipPointIndex]);
+  const {
+    activeChartMarkers,
+    clearHoverTooltip,
+    hoverTooltip,
+    scheduleHoverTooltipUpdate,
+    scheduleTooltipPositionUpdate,
+  } = useTrackerHoverTooltip({
+    buildHoverTooltip,
+    chartViewportRef,
+    scrollContainerRef,
+    tooltipRef,
+    zoomWidthMultiplier,
+  });
   const hasRenderableChartData = hasActualTrackerData ||
     bestdoriPrediction.predictionPoints.length > 0 ||
     comparisonLines.some((line) => line.points.length > 0);
@@ -1004,7 +926,6 @@ export default function EventTrackerPage() {
     () => buildNonWorkingDayBands(domainStart, domainEnd, holidayLookup),
     [domainEnd, domainStart, holidayLookup],
   );
-  const zoomWidthMultiplier = ZOOM_WIDTH_MULTIPLIERS[zoomIndex];
   const latestActualDataTime = useMemo(() => {
     for (let index = finalDisplayedData.length - 1; index >= 0; index -= 1) {
       const point = finalDisplayedData[index];
@@ -1057,57 +978,7 @@ export default function EventTrackerPage() {
     setChartViewportHeight((prev) => (prev === nextChartViewportHeight ? prev : nextChartViewportHeight));
   }, []);
 
-  const updateTooltipPosition = useCallback(() => {
-    const currentHoverTooltip = hoverTooltipRef.current;
-    if (!currentHoverTooltip?.active || !chartViewportRef.current || !tooltipRef.current || !scrollContainerRef.current) {
-      return;
-    }
-
-    const container = chartViewportRef.current;
-    const viewport = scrollContainerRef.current;
-    const tooltip = tooltipRef.current;
-    const containerHeight = container.clientHeight;
-    const tooltipWidth = tooltip.offsetWidth;
-    const tooltipHeight = tooltip.offsetHeight;
-    const visibleLeft = viewport.scrollLeft;
-    const visibleRight = viewport.scrollLeft + viewport.clientWidth;
-
-    let left = currentHoverTooltip.coordinate.x + TOOLTIP_OFFSET;
-    if (left + tooltipWidth > visibleRight - TOOLTIP_EDGE_PADDING) {
-      left = currentHoverTooltip.coordinate.x - tooltipWidth - TOOLTIP_OFFSET;
-    }
-    left = Math.max(
-      visibleLeft + TOOLTIP_EDGE_PADDING,
-      Math.min(left, visibleRight - tooltipWidth - TOOLTIP_EDGE_PADDING),
-    );
-
-    let top = currentHoverTooltip.coordinate.y - tooltipHeight / 2;
-    top = Math.max(TOOLTIP_EDGE_PADDING, Math.min(top, containerHeight - tooltipHeight - TOOLTIP_EDGE_PADDING));
-
-    tooltip.style.transform = `translate3d(${Math.round(left)}px, ${Math.round(top)}px, 0)`;
-  }, []);
-
-  const scheduleTooltipPositionUpdate = useCallback(() => {
-    if (tooltipAnimationFrameRef.current !== null) {
-      return;
-    }
-
-    tooltipAnimationFrameRef.current = requestAnimationFrame(() => {
-      tooltipAnimationFrameRef.current = null;
-      updateTooltipPosition();
-    });
-  }, [updateTooltipPosition]);
-
-  const flushTooltipPositionUpdate = useCallback(() => {
-    if (tooltipAnimationFrameRef.current !== null) {
-      cancelAnimationFrame(tooltipAnimationFrameRef.current);
-      tooltipAnimationFrameRef.current = null;
-    }
-
-    updateTooltipPosition();
-  }, [updateTooltipPosition]);
-
-  // ===== 图表容器尺寸变化时默认将视角聚焦到最新真实数据点附近 =====
+  // Chart container resize and scroll handling.
   useEffect(() => {
     const el = scrollContainerRef.current;
     if (!el) return;
@@ -1148,10 +1019,6 @@ export default function EventTrackerPage() {
         clearTimeout(scrollTimeoutRef.current);
         scrollTimeoutRef.current = null;
       }
-      if (tooltipAnimationFrameRef.current !== null) {
-        cancelAnimationFrame(tooltipAnimationFrameRef.current);
-        tooltipAnimationFrameRef.current = null;
-      }
     };
   }, [focusViewportNearLatestDataPoint, scheduleTooltipPositionUpdate, syncScrollbarMetrics]);
 
@@ -1188,17 +1055,6 @@ export default function EventTrackerPage() {
       window.removeEventListener("pageshow", rebuildChart);
     };
   }, [focusViewportNearLatestDataPoint, scheduleTooltipPositionUpdate, syncScrollbarMetrics]);
-
-  useLayoutEffect(() => {
-    if (!hoverTooltip?.active) {
-      return;
-    }
-
-    // 悬浮内容切换为更宽的投影提示时，需要在首帧绘制前同步重算尺寸与位置，
-    // 否则绝对定位元素会先按旧宽度发生 shrink-to-fit 换行。
-    flushTooltipPositionUpdate();
-    scheduleTooltipPositionUpdate();
-  }, [flushTooltipPositionUpdate, hoverTooltip, zoomWidthMultiplier, scheduleTooltipPositionUpdate]);
 
   useLayoutEffect(() => {
     const listElement = modeTabsListRef.current;
@@ -1282,7 +1138,7 @@ export default function EventTrackerPage() {
 
   // ===== 渲染 =====
   return (
-    <BandoriPageShell>
+    <BandoriPageShell contentClassName="max-w-6xl">
 
         {/* ========== 页头：活动名称、切换器、活动横幅 ========== */}
         <BandoriEventSwitcher
@@ -1305,192 +1161,32 @@ export default function EventTrackerPage() {
         {startDate && endDate && <EventProgressBar startDate={startDate} endDate={endDate} />}
 
         {/* ========== 导航与控制区 ========== */}
-        <div className="rounded-3xl border border-[#ffe16c]/82 bg-[#fff9d7]/86 p-3 shadow-[0_24px_60px_rgba(232,176,0,0.14),0_4px_18px_rgba(88,69,0,0.07)] dark:border-slate-700/80 dark:bg-[#111827] dark:shadow-[0_24px_60px_rgba(0,0,0,0.24)] sm:p-6">
+        <div className="rounded-3xl border border-white/80 bg-[#fffef4] p-3 shadow-[0_18px_48px_rgba(65,54,0,0.10),0_3px_14px_rgba(15,23,42,0.05)] dark:border-slate-700/80 dark:bg-[#111827] dark:shadow-[0_24px_60px_rgba(0,0,0,0.24)] sm:p-5">
           <Tabs.Root
             value={trackingMode}
             onValueChange={handleTrackingModeChange}
             className="w-full flex flex-col gap-3.5 sm:gap-4"
           >
-            <div className="flex flex-col gap-3.5 items-stretch xl:flex-row xl:items-start xl:gap-4">
-              {/* 追踪模式切换 */}
-              <Tabs.List
-                ref={modeTabsListRef}
-                className="relative flex w-full flex-row justify-center gap-1 overflow-x-auto rounded-[20px] border border-white/70 bg-white/65 p-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.72)] dark:border-slate-700/80 dark:bg-slate-950/70 dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] xl:w-[7.1rem] xl:flex-none xl:flex-col xl:self-start xl:overflow-visible"
-              >
-                <span
-                  aria-hidden="true"
-                  className="pointer-events-none absolute left-0 top-0 z-0 rounded-[16px] bg-white shadow-[0_8px_18px_rgba(59,130,246,0.14)] ring-1 ring-blue-100 transition-[transform,width,height,opacity] duration-300 ease-out dark:bg-slate-800 dark:ring-sky-400/30"
-                  style={{
-                    width: `${modeIndicatorStyle.width}px`,
-                    height: `${modeIndicatorStyle.height}px`,
-                    transform: `translate(${modeIndicatorStyle.x}px, ${modeIndicatorStyle.y}px)`,
-                    opacity: modeIndicatorStyle.ready ? 1 : 0,
-                  }}
-                />
-                {([
-                  { id: "event", label: "活动排行" },
-                  { id: "song", label: "歌曲排行" },
-                  { id: "monthly", label: "月度排行" },
-                ] as const).map((mode) => (
-                  <Tabs.Trigger
-                    key={mode.id}
-                    ref={(node) => {
-                      modeTriggerRefs.current[mode.id] = node;
-                    }}
-                    value={mode.id}
-                    className="relative z-10 min-h-[2.85rem] flex-1 rounded-[16px] px-3 py-1.5 text-[14px] font-semibold tracking-[0.01em] text-center whitespace-nowrap transition-colors duration-300
-                      data-[state=active]:text-blue-600 dark:data-[state=active]:text-blue-300
-                      data-[state=inactive]:text-gray-500 hover:text-gray-700 dark:data-[state=inactive]:text-slate-300 dark:hover:text-white xl:flex-none"
-                  >
-                    {mode.label}
-                  </Tabs.Trigger>
-                ))}
-              </Tabs.List>
-
-              <div className="flex-1 min-w-0 flex flex-col gap-3 xl:max-w-[41rem] xl:mx-auto">
-                {trackingMode === "song" && availableChallengeSongIds.length > 0 && (
-                  <div className="overflow-visible rounded-none border border-transparent bg-transparent p-2 sm:p-2.5 shadow-none">
-                    <div className="mb-2 px-1 text-xs font-bold tracking-[0.1em] text-blue-500/85 dark:text-sky-200 sm:text-[13px]">
-                      挑战曲目
-                    </div>
-                    <div className={`grid w-full gap-2 sm:gap-2.5 ${challengeSongGridClassName}`}>
-                      {availableChallengeSongIds.map(songId => {
-                        const songLabel = challengeSongTitleMap?.[String(songId)] ?? `曲目 ${songId}`;
-
-                        return (
-                          <button
-                            key={songId}
-                            type="button"
-                            onClick={() => setSelectedSongId(songId)}
-                            title={`曲目 ${songId}`}
-                            className={`group relative flex min-h-[2.75rem] w-full items-center justify-center overflow-hidden rounded-[17px] border px-3 py-1.5 text-center transition-all duration-300 sm:min-h-[3.35rem] sm:px-3.5 sm:py-2 ${
-                              resolvedSelectedSongId === songId
-                                ? "border-blue-500 bg-blue-600 text-white shadow-[0_10px_20px_rgba(37,99,235,0.2)] ring-2 ring-blue-500/85 ring-offset-2 ring-offset-white dark:ring-offset-[#111827]"
-                                : "border-slate-300/90 bg-slate-50 text-slate-800 shadow-[0_6px_16px_rgba(15,23,42,0.06)] hover:border-blue-300 hover:bg-white hover:text-blue-700 hover:shadow-[0_10px_24px_rgba(59,130,246,0.14)] dark:border-slate-600/80 dark:bg-slate-800 dark:text-slate-100 dark:hover:border-sky-400/60 dark:hover:bg-slate-700 dark:hover:text-sky-100"
-                            }`}
-                          >
-                            <span className="eventtracker-song-button-label text-[13px] font-semibold tracking-[0.005em] sm:text-sm">
-                              {songLabel}
-                            </span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-
-                {trackingMode === "monthly" && (
-                  <div className="overflow-visible rounded-none border border-transparent bg-transparent px-2 pt-2 pb-0 shadow-none sm:px-2.5 sm:pt-2.5 sm:pb-0">
-                    <div className="mb-2 px-1 text-xs font-bold tracking-[0.1em] text-blue-500/85 dark:text-sky-200 sm:text-[13px]">
-                      选择月份
-                    </div>
-                    <select
-                      className="h-8 w-full max-w-[12rem] rounded-full border border-gray-200 bg-white px-3 text-xs font-semibold text-gray-600 outline-none transition-colors hover:border-blue-300 focus:ring-2 focus:ring-blue-500/30 dark:border-gray-700 dark:bg-[#131A2B] dark:text-gray-300 sm:h-9 sm:text-sm"
-                      value={selectedMonthlyMonthId}
-                      onChange={(event) => {
-                        setSelectedMonthlyMonthId(Number(event.target.value));
-                        setZoomIndex(0);
-                      }}
-                    >
-                      {monthlyRankingOptions.map((option) => (
-                        <option key={option.monthId} value={option.monthId}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-
-                {/* 排名档位选择 */}
-                <div className="overflow-visible rounded-none border border-transparent bg-transparent px-2 pt-1 pb-2 shadow-none sm:px-2.5 sm:pt-1 sm:pb-2.5">
-                  <div className="mb-2 px-1 text-xs font-bold tracking-[0.1em] text-blue-500/85 dark:text-sky-200 sm:text-[13px]">
-                    选择排名
-                  </div>
-                  <div className="flex flex-wrap gap-1.5 sm:gap-2">
-                    {getTiersForMode(trackingMode).map(tier => (
-                      <button
-                        key={tier}
-                        type="button"
-                        onClick={() => handleTierChange(tier)}
-                        className={`h-8 min-w-[2.9rem] rounded-[12px] border px-2 text-[11px] font-semibold tracking-[0.01em] transition-all duration-300 sm:h-9 sm:min-w-[3.15rem] sm:rounded-[14px] sm:px-2.5 sm:text-[12px] ${
-                          selectedTier === tier
-                            ? "border-blue-500 bg-blue-600 text-white shadow-[0_8px_18px_rgba(37,99,235,0.2)] ring-2 ring-blue-500/85 ring-offset-2 ring-offset-white dark:ring-offset-[#111827]"
-                            : "border-slate-300/90 bg-slate-50 text-slate-700 shadow-[0_4px_12px_rgba(15,23,42,0.06)] hover:border-blue-300 hover:bg-white hover:text-blue-700 hover:shadow-[0_8px_18px_rgba(59,130,246,0.14)] dark:border-slate-600/80 dark:bg-slate-800 dark:text-slate-100 dark:hover:border-sky-400/60 dark:hover:bg-slate-700 dark:hover:text-sky-100"
-                        }`}
-                      >
-                        T{tier}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              {/* 状态信息面板 */}
-              <div className="flex min-w-[280px] flex-col justify-center divide-y divide-gray-200 rounded-none border border-transparent bg-transparent px-2 py-2 shadow-none dark:divide-slate-700/70 dark:rounded-2xl dark:border-slate-700/60 dark:bg-slate-950/28 sm:px-2.5 sm:py-2.5 xl:w-[17.25rem] xl:flex-shrink-0">
-                <div className="flex justify-between items-center p-4">
-                  <span className="text-base font-bold text-gray-500 dark:text-slate-300">活动状态</span>
-                  <span className={`text-base font-bold tracking-wider ${status === "进行中" ? "text-emerald-500 dark:text-emerald-300" : status === "已结束" ? "text-gray-500 dark:text-slate-300" : "text-blue-500 dark:text-sky-300"}`}>
-                    {status}
-                  </span>
-                </div>
-                {status === "进行中" && (
-                  <>
-                    <div className="flex justify-between items-center p-4">
-                      <span className="text-base text-gray-500 dark:text-slate-300">最新分数</span>
-                      <span className="text-base font-bold text-blue-500 dark:text-sky-300">
-                        {scoreSummary.latestScore !== null ? new Intl.NumberFormat().format(scoreSummary.latestScore) : "-"}
-                      </span>
-                    </div>
-                    <div className="flex justify-between items-center p-4">
-                      <span className="text-base text-gray-500 dark:text-slate-300">更新时间</span>
-                      {scoreSummary.latestUpdateTime !== null
-                        ? <MinutesAgo timestamp={scoreSummary.latestUpdateTime} />
-                        : <span className="text-base font-medium text-gray-600 dark:text-slate-200">-</span>
-                      }
-                    </div>
-                    {trackingMode === "event" && showBestdoriPrediction && (
-                      <div className="flex justify-between items-center p-4">
-                        <span className="text-base text-gray-500 dark:text-slate-300">Bestdori预测</span>
-                        <span className="text-base font-bold" style={{ color: BESTDORI_PREDICTION_COLOR }}>
-                          {bestdoriPrediction.status === "loading"
-                            ? "加载中"
-                            : bestdoriPrediction.latestPrediction !== null
-                              ? new Intl.NumberFormat().format(bestdoriPrediction.latestPrediction)
-                              : "不可用"}
-                        </span>
-                      </div>
-                    )}
-                  </>
-                )}
-                {status === "已结束" && (
-                  <>
-                    <div className="flex justify-between items-center p-4">
-                      <span className="text-base text-gray-500 dark:text-slate-300">结束分数</span>
-                      <span className="text-base font-bold text-gray-700 dark:text-slate-200">
-                        {scoreSummary.endScore !== null ? new Intl.NumberFormat().format(scoreSummary.endScore) : "结算中"}
-                      </span>
-                    </div>
-                    <div className="flex justify-between items-center p-4">
-                      <span className="text-base text-gray-500 dark:text-slate-300">最终分数</span>
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-base font-bold text-gray-700 dark:text-slate-200">
-                          {scoreSummary.finalScore !== null ? new Intl.NumberFormat().format(scoreSummary.finalScore) : "结算中"}
-                        </span>
-                        {scoreSummary.finalScore !== null && scoreSummary.endScore !== null && scoreSummary.finalScore < scoreSummary.endScore && (
-                          <span className="text-sm font-bold text-red-500">
-                            (-{new Intl.NumberFormat().format(scoreSummary.endScore - scoreSummary.finalScore)})
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </>
-                )}
-              </div>
-            </div>
+            <TrackerModeTierControls
+              availableChallengeSongIds={availableChallengeSongIds}
+              challengeSongGridClassName={challengeSongGridClassName}
+              challengeSongTitleMap={challengeSongTitleMap}
+              modeIndicatorStyle={modeIndicatorStyle}
+              modeTabsListRef={modeTabsListRef}
+              modeTriggerRefs={modeTriggerRefs}
+              monthlyRankingOptions={monthlyRankingOptions}
+              onMonthlyMonthChange={handleMonthlyMonthChange}
+              onSongChange={setSelectedSongId}
+              onTierChange={handleTierChange}
+              resolvedSelectedSongId={resolvedSelectedSongId}
+              selectedMonthlyMonthId={selectedMonthlyMonthId}
+              selectedTier={selectedTier}
+              trackingMode={trackingMode}
+            />
 
             {/* ========== 图表区域 ========== */}
             <Tabs.Content value={trackingMode} className="outline-none focus:outline-none w-full animate-in fade-in zoom-in-95 duration-500">
-              <div className="mt-2 relative bg-[#F9FBFC] dark:bg-[#0C111C] p-1 sm:p-4 rounded-2xl border border-gray-100 dark:border-gray-800/60 shadow-inner">
+              <div className="mt-3 relative rounded-2xl border border-slate-200/80 bg-[#fffef4] p-2 shadow-[0_18px_48px_rgba(15,23,42,0.10)] dark:border-slate-800/80 dark:bg-[#0C111C] dark:shadow-[0_24px_60px_rgba(0,0,0,0.28)] sm:p-4">
 
                 {loading && (
                   <div className="absolute inset-0 bg-white/75 dark:bg-[#0C111C]/75 z-30 flex items-center justify-center rounded-2xl">
@@ -1501,495 +1197,71 @@ export default function EventTrackerPage() {
                   </div>
                 )}
 
-                <div className="h-[400px] w-full relative group">
-                  {hasRenderableChartData && displayedChartData.length > 0 ? (
-                    <div className="flex h-full w-full overflow-hidden rounded-xl">
-                      <FixedYAxis
-                        ticks={yTicks}
-                        domain={yDomainInfo}
-                        chartHeight={chartViewportHeight}
-                        axisWidth={FIXED_Y_AXIS_WIDTH}
-                        topMargin={CHART_MARGIN.top}
-                        bottomMargin={CHART_MARGIN.bottom}
-                        xAxisHeight={X_AXIS_HEIGHT}
-                      />
+                <TrackerStatusSummary
+                  bestdoriPrediction={bestdoriPrediction}
+                  scoreSummary={scoreSummary}
+                  showBestdoriPrediction={showBestdoriPrediction}
+                  status={status}
+                  trackingMode={trackingMode}
+                />
 
-                      <div
-                        ref={scrollContainerRef}
-                        className="min-w-0 flex-1 h-full overflow-x-auto overflow-y-hidden styling-scrollbar relative"
-                      >
-                        <div style={{ minWidth: `${zoomWidthMultiplier * 100}%`, height: "100%", transition: "min-width 0.3s ease-out" }}>
-                          <div ref={chartViewportRef} className="relative h-full overflow-hidden">
-                            <ResponsiveContainer key={chartContainerKey} width="100%" height="100%">
-                              <LineChart
-                                data={displayedChartData}
-                                margin={CHART_MARGIN}
-                                onMouseMove={(state: TrackerMouseState) => {
-                                  const nextHoverTooltip = buildHoverTooltip(state);
+                <TrackerChartPanel
+                  activeChartMarkers={activeChartMarkers}
+                  bestdoriPredictionPointCount={bestdoriPrediction.predictionPoints.length}
+                  chartContainerKey={chartContainerKey}
+                  chartViewportHeight={chartViewportHeight}
+                  chartViewportRef={chartViewportRef}
+                  clearHoverTooltip={clearHoverTooltip}
+                  comparisonLines={comparisonLines}
+                  displayedChartData={displayedChartData}
+                  domainEnd={domainEnd}
+                  domainStart={domainStart}
+                  hasRenderableChartData={hasRenderableChartData}
+                  hoverTooltip={hoverTooltip}
+                  isLoading={loading}
+                  midnights={midnights}
+                  nonWorkingDayBands={nonWorkingDayBands}
+                  onZoomIn={handleZoomIn}
+                  onZoomOut={handleZoomOut}
+                  scheduleHoverTooltipUpdate={scheduleHoverTooltipUpdate}
+                  scrollContainerRef={scrollContainerRef}
+                  showBestdoriPrediction={showBestdoriPrediction}
+                  showDayProjection={showDayProjection}
+                  showInstantProjection={showInstantProjection}
+                  tooltipRef={tooltipRef}
+                  trackingMode={trackingMode}
+                  yDomainInfo={yDomainInfo}
+                  yTicks={yTicks}
+                  zoomIndex={zoomIndex}
+                  zoomWidthMultiplier={zoomWidthMultiplier}
+                  maxZoomIndex={ZOOM_WIDTH_MULTIPLIERS.length - 1}
+                />
 
-                                  if (!nextHoverTooltip) {
-                                    hoverTooltipRef.current = null;
-                                    setHoverTooltip((previous) => previous === null ? previous : null);
-                                    return;
-                                  }
-
-                                  hoverTooltipRef.current = nextHoverTooltip;
-                                  scheduleTooltipPositionUpdate();
-
-                                  setHoverTooltip((previous) => {
-                                    if (
-                                      previous?.active &&
-                                      previous.signature === nextHoverTooltip.signature
-                                    ) {
-                                      return previous;
-                                    }
-
-                                    return nextHoverTooltip;
-                                  });
-                                }}
-                                onMouseLeave={() => {
-                                  hoverTooltipRef.current = null;
-                                  setHoverTooltip((previous) => previous === null ? previous : null);
-                                }}
-                              >
-                              {nonWorkingDayBands.map((band) => (
-                                <ReferenceArea
-                                  key={band.key}
-                                  x1={band.start}
-                                  x2={band.end}
-                                  fill={NON_WORKING_DAY_BAND_FILL}
-                                  stroke={NON_WORKING_DAY_BAND_STROKE}
-                                  strokeOpacity={1}
-                                  ifOverflow="extendDomain"
-                                />
-                              ))}
-
-                              <YAxis
-                                hide
-                                width={0}
-                                ticks={yTicks}
-                                type="number"
-                                domain={yDomainInfo}
-                              />
-
-                              <CartesianGrid vertical={false} stroke="#374151" opacity={0.15} />
-
-                              {midnights.map(m => (
-                                <ReferenceLine key={m} x={m} stroke="#D1D5DB" opacity={0.6} />
-                              ))}
-
-                              <XAxis
-                                dataKey="time"
-                                domain={[domainStart, domainEnd]}
-                                type="number"
-                                ticks={midnights}
-                                height={X_AXIS_HEIGHT}
-                                tickFormatter={(unixTime) => format(unixTime, "MM/dd")}
-                                stroke="#6B7280"
-                                fontSize={12}
-                                tickLine={false}
-                                axisLine={false}
-                                dy={10}
-                              />
-                              <Tooltip
-                                content={() => null}
-                                wrapperStyle={{ display: "none" }}
-                                cursor={{ stroke: "#9CA3AF", strokeWidth: 1, strokeDasharray: "4 4" }}
-                                isAnimationActive={false}
-                              />
-                              {showInstantProjection && (
-                                <Line
-                                  type="linear"
-                                  dataKey="instantEp"
-                                  stroke="#ef4444"
-                                  strokeWidth={2}
-                                  strokeDasharray="6 4"
-                                  dot={(props: TrackerDotProps) => {
-                                    const { cx, cy, payload, index } = props;
-                                    if (!payload?.isProjection || isInvalidMarkerPosition(cx, cy)) {
-                                      return renderHiddenMarker(`dot-hidden-instant-${index}`);
-                                    }
-                                    return (
-                                      <circle
-                                        key={`dot-instant-${index}`}
-                                        cx={cx}
-                                        cy={cy}
-                                        r={isMainPointActive(hoverTooltip, payload) ? 6 : 2.5}
-                                        fill="#ef4444"
-                                        stroke="none"
-                                      />
-                                    );
-                                  }}
-                                  activeDot={(props: TrackerDotProps) => {
-                                    const { cx, cy, payload } = props;
-                                    if (!payload?.isProjection || isInvalidMarkerPosition(cx, cy)) return renderHiddenMarker();
-                                    return <circle cx={cx} cy={cy} r={6} fill="#ef4444" stroke="none" />;
-                                  }}
-                                  connectNulls
-                                  isAnimationActive={false}
-                                />
-                              )}
-                              <Line
-                                type="linear"
-                                dataKey="ep"
-                                stroke="#3B82F6"
-                                strokeWidth={2}
-                                strokeOpacity={0.6}
-                                dot={(props: TrackerDotProps) => {
-                                  const { cx, cy, payload, index } = props;
-                                  if (payload?.isProjection || isInvalidMarkerPosition(cx, cy)) {
-                                    return renderHiddenMarker(`dot-hidden-main-${index}`);
-                                  }
-
-                                  return (
-                                    <circle
-                                      key={`dot-main-${index}`}
-                                      cx={cx}
-                                      cy={cy}
-                                      r={isMainPointActive(hoverTooltip, payload) ? 6 : 2.5}
-                                      fill="#3B82F6"
-                                      stroke="none"
-                                    />
-                                  );
-                                }}
-                                activeDot={(props: TrackerDotProps) => {
-                                  const { cx, cy, payload } = props;
-                                  if (payload?.isProjection || isInvalidMarkerPosition(cx, cy)) return renderHiddenMarker();
-                                  return <circle cx={cx} cy={cy} r={6} fill="#3B82F6" stroke="none" />;
-                                }}
-                                connectNulls
-                                isAnimationActive={false}
-                              />
-
-                              {showBestdoriPrediction && bestdoriPrediction.predictionPoints.length > 0 && (
-                                <Line
-                                  type="linear"
-                                  dataKey={BESTDORI_PREDICTION_DATA_KEY}
-                                  tooltipType="none"
-                                  stroke={BESTDORI_PREDICTION_COLOR}
-                                  strokeWidth={2.25}
-                                  strokeOpacity={0.96}
-                                  strokeDasharray="6 5"
-                                  dot={false}
-                                  activeDot={false}
-                                  connectNulls
-                                  isAnimationActive={false}
-                                />
-                              )}
-
-                              {comparisonLines.map((line) => (
-                                line.points.length > 0 ? (
-                                  <Line
-                                    key={line.dataKey}
-                                    type="linear"
-                                    dataKey={line.dataKey}
-                                    stroke={line.color}
-                                    strokeWidth={2}
-                                    strokeOpacity={0.82}
-                                    strokeDasharray="5 4"
-                                    dot={(props: TrackerDotProps) => {
-                                      const { cx, cy, payload, index } = props;
-                                      const point = payload?.comparisonPoints?.[line.dataKey] as ComparisonLinePoint | undefined;
-                                      if (
-                                        !isComparisonPointActive(hoverTooltip, line.dataKey, point) ||
-                                        isInvalidMarkerPosition(cx, cy)
-                                      ) {
-                                        return renderHiddenMarker(`dot-hidden-${line.dataKey}-${index}`);
-                                      }
-
-                                      return <circle key={`dot-${line.dataKey}-${index}`} cx={cx} cy={cy} r={5.5} fill={line.color} stroke="none" />;
-                                    }}
-                                    activeDot={(props: TrackerDotProps) => {
-                                      const { cx, cy, payload } = props;
-                                      if (!payload?.comparisonPoints?.[line.dataKey] || isInvalidMarkerPosition(cx, cy)) return renderHiddenMarker();
-                                      return <circle cx={cx} cy={cy} r={5.5} fill={line.color} stroke="none" />;
-                                    }}
-                                    connectNulls
-                                    isAnimationActive={false}
-                                  />
-                                ) : null
-                              ))}
-
-                              {showDayProjection && (
-                                <Line
-                                  type="linear"
-                                  dataKey="dayEp"
-                                  stroke="#3b82f6"
-                                  strokeWidth={2}
-                                  strokeDasharray="6 4"
-                                  dot={(props: TrackerDotProps) => {
-                                    const { cx, cy, payload, index } = props;
-                                    if (!payload?.isProjection || isInvalidMarkerPosition(cx, cy)) {
-                                      return renderHiddenMarker(`dot-hidden-day-${index}`);
-                                    }
-                                    return (
-                                      <circle
-                                        key={`dot-day-${index}`}
-                                        cx={cx}
-                                        cy={cy}
-                                        r={isMainPointActive(hoverTooltip, payload) ? 6 : 2.5}
-                                        fill="#3b82f6"
-                                        stroke="none"
-                                      />
-                                    );
-                                  }}
-                                  activeDot={(props: TrackerDotProps) => {
-                                    const { cx, cy, payload } = props;
-                                    if (!payload?.isProjection || isInvalidMarkerPosition(cx, cy)) return renderHiddenMarker();
-                                    return <circle cx={cx} cy={cy} r={6} fill="#3b82f6" stroke="none" />;
-                                  }}
-                                  connectNulls
-                                  isAnimationActive={false}
-                                />
-                              )}
-                              </LineChart>
-                            </ResponsiveContainer>
-                            <div
-                              ref={tooltipRef}
-                              className="pointer-events-none absolute left-0 top-0 z-20 transform-gpu transition-opacity duration-75 will-change-transform"
-                              style={{
-                                opacity: hoverTooltip?.active && hoverTooltip.payload?.length ? 1 : 0,
-                                transform: "translate3d(0, 0, 0)",
-                                visibility: hoverTooltip?.active && hoverTooltip.payload?.length ? "visible" : "hidden",
-                              }}
-                            >
-                              {hoverTooltip?.active && hoverTooltip.payload?.length ? (
-                                <TrackerTooltip
-                                  active={hoverTooltip.active}
-                                  payload={hoverTooltip.payload}
-                                  label={hoverTooltip.label}
-                                  trackingMode={trackingMode}
-                                  displayedData={displayedChartData}
-                                />
-                              ) : null}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  ) : (
-                        <div className="h-full flex flex-col items-center justify-center text-gray-400">
-                          {loading ? null : (
-                            <>
-                              <svg className="w-16 h-16 mb-4 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                              </svg>
-                              <p>暂无该排名档位的追踪数据</p>
-                            </>
-                          )}
-                        </div>
-                      )}
-
-                  {/* 缩放控制浮层 */}
-                  <div className="absolute top-[70%] right-4 -translate-y-1/2 flex flex-col gap-2 z-20 transition-opacity opacity-70 hover:opacity-100 mix-blend-difference dark:mix-blend-normal">
-                    <button
-                      onClick={() => startTransition(() => setZoomIndex(prev => Math.min(ZOOM_WIDTH_MULTIPLIERS.length - 1, prev + 1)))}
-                      className={`p-1.5 text-gray-500 dark:text-gray-400 hover:text-blue-500 dark:hover:text-blue-400 rounded-full transition-transform hover:scale-110 active:scale-95 bg-white/72 dark:bg-black/45 ${zoomIndex >= ZOOM_WIDTH_MULTIPLIERS.length - 1 ? "invisible pointer-events-none" : ""}`}
-                      disabled={zoomIndex >= ZOOM_WIDTH_MULTIPLIERS.length - 1}
-                      title="放大"
-                    >
-                      <ZoomIn size={22} strokeWidth={2.5} />
-                    </button>
-                    <button
-                      onClick={() => startTransition(() => setZoomIndex(prev => Math.max(0, prev - 1)))}
-                      className={`p-1.5 rounded-full transition-transform hover:scale-110 active:scale-95 bg-white/72 dark:bg-black/45 ${zoomIndex <= 0 ? "invisible pointer-events-none" : "text-gray-500 dark:text-gray-400 hover:text-blue-500 dark:hover:text-blue-400"}`}
-                      disabled={zoomIndex <= 0}
-                      title="缩小"
-                    >
-                      <ZoomOut size={22} strokeWidth={2.5} />
-                    </button>
-                  </div>
-                </div>
-
-                {/* 投影与对比开关 */}
-                {(trackingMode === "event" || trackingMode === "monthly") && (
-                  <div className="px-1 pt-4 sm:px-2">
-                    <div className="flex flex-col items-center gap-3.5">
-                      <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-3">
-                        {trackingMode === "event" && status === "进行中" && (
-                          <>
-                            <button
-                              type="button"
-                              aria-pressed={showInstantProjection}
-                              onClick={() => setShowInstantProjection(prev => !prev)}
-                              className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs sm:text-sm font-semibold transition-all ${
-                                showInstantProjection
-                                  ? "border-red-300 bg-red-50 text-red-600 dark:border-red-500/40 dark:bg-red-500/15 dark:text-red-300"
-                                  : "border-gray-200 bg-white text-gray-500 dark:border-gray-700 dark:bg-[#131A2B] dark:text-gray-400"
-                              }`}
-                            >
-                              <span className={`h-2.5 w-2.5 rounded-full ${showInstantProjection ? "bg-red-500" : "bg-gray-300 dark:bg-gray-600"}`} />
-                              线性投影（瞬时）
-                            </button>
-
-                            <button
-                              type="button"
-                              aria-pressed={showDayProjection}
-                              onClick={() => setShowDayProjection(prev => !prev)}
-                              className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs sm:text-sm font-semibold transition-all ${
-                                showDayProjection
-                                  ? "border-blue-300 bg-blue-50 text-blue-600 dark:border-blue-500/40 dark:bg-blue-500/15 dark:text-blue-300"
-                                  : "border-gray-200 bg-white text-gray-500 dark:border-gray-700 dark:bg-[#131A2B] dark:text-gray-400"
-                              }`}
-                            >
-                              <span className={`h-2.5 w-2.5 rounded-full ${showDayProjection ? "bg-blue-500" : "bg-gray-300 dark:bg-gray-600"}`} />
-                              线性投影（24h）
-                            </button>
-
-                            <button
-                              type="button"
-                              aria-pressed={showBestdoriPrediction}
-                              onClick={() => setShowBestdoriPrediction(prev => !prev)}
-                              className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs sm:text-sm font-semibold transition-all ${
-                                showBestdoriPrediction
-                                  ? "border-slate-400 bg-slate-100 text-slate-900 dark:border-slate-400/50 dark:bg-slate-400/15 dark:text-slate-100"
-                                  : "border-gray-200 bg-white text-gray-500 dark:border-gray-700 dark:bg-[#131A2B] dark:text-gray-400"
-                              }`}
-                              title={showBestdoriPrediction && bestdoriPrediction.status === "no-data" ? "Bestdori预测当前不可用" : "显示 Bestdori Prediction"}
-                            >
-                              <span
-                                className={`h-2.5 w-2.5 rounded-full ${showBestdoriPrediction ? "" : "bg-gray-300 dark:bg-gray-600"}`}
-                                style={showBestdoriPrediction ? { backgroundColor: BESTDORI_PREDICTION_COLOR } : undefined}
-                              />
-                              Bestdori预测
-                            </button>
-                          </>
-                        )}
-                      </div>
-
-                      <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-3">
-                        {resolvedComparisonConfigs.map((config) => {
-                          const line = comparisonLineById.get(config.id);
-                          const color = line?.color ?? COMPARISON_LINE_COLORS[(config.colorIndex ?? 0) % COMPARISON_LINE_COLORS.length];
-                          const targetLabel = config.targetId !== null
-                            ? config.targetType === "monthly"
-                              ? comparisonTargetLabelMap.get(config.targetId) ?? `月度 ${config.targetId}`
-                              : `${config.targetId}期`
-                            : "-";
-                          const label = line?.label ?? `${targetLabel} T${config.tier}`;
-
-                          return (
-                            <button
-                              key={config.id}
-                              type="button"
-                              aria-pressed={config.enabled}
-                              onClick={() => handleToggleComparison(config.id)}
-                              className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold transition-all sm:text-sm ${
-                                config.enabled
-                                  ? "text-gray-700 shadow-sm dark:text-gray-200"
-                                  : "border-gray-200 bg-white text-gray-400 dark:border-gray-700 dark:bg-[#131A2B] dark:text-gray-500"
-                              }`}
-                              style={config.enabled ? {
-                                borderColor: `${color}66`,
-                                backgroundColor: `${color}14`,
-                              } : undefined}
-                              title={label}
-                            >
-                              <span
-                                className={`h-2.5 w-2.5 rounded-full ${config.enabled ? "" : "opacity-35"}`}
-                                style={{ backgroundColor: color }}
-                              />
-                              <span>{label}</span>
-                            </button>
-                          );
-                        })}
-
-                        {resolvedComparisonConfigs.length > 0 && (
-                          <div className="inline-flex overflow-hidden rounded-full border border-gray-200 bg-white text-xs font-semibold shadow-sm dark:border-gray-700 dark:bg-[#131A2B] sm:text-sm">
-                          <button
-                            type="button"
-                            aria-pressed={comparisonAlignment === "start"}
-                            onClick={() => setComparisonAlignment("start")}
-                            className={`px-3 py-1.5 transition-colors ${
-                              comparisonAlignment === "start"
-                                ? "bg-blue-600 text-white"
-                                : "text-gray-500 hover:bg-blue-50 hover:text-blue-600 dark:text-gray-400 dark:hover:bg-blue-500/10"
-                            }`}
-                          >
-                            左对齐
-                          </button>
-                          <button
-                            type="button"
-                            aria-pressed={comparisonAlignment === "end"}
-                            onClick={() => setComparisonAlignment("end")}
-                            className={`px-3 py-1.5 transition-colors ${
-                              comparisonAlignment === "end"
-                                ? "bg-blue-600 text-white"
-                                : "text-gray-500 hover:bg-blue-50 hover:text-blue-600 dark:text-gray-400 dark:hover:bg-blue-500/10"
-                            }`}
-                          >
-                            右对齐
-                          </button>
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="flex w-full flex-col items-center gap-2 pb-3 sm:pb-4">
-                        {comparisonConfigs.map((config) => (
-                          <div key={config.id} className="flex max-w-full flex-wrap items-center justify-center gap-2">
-                            <select
-                              className={`h-8 max-w-full rounded-full border border-gray-200 bg-white px-3 text-xs font-semibold text-gray-600 outline-none transition-colors hover:border-blue-300 focus:ring-2 focus:ring-blue-500/30 dark:border-gray-700 dark:bg-[#131A2B] dark:text-gray-300 sm:h-9 sm:text-sm ${
-                                comparisonTargetType === "monthly" ? "w-[7.5rem]" : "min-w-[13rem]"
-                              }`}
-                              value={config.targetId ?? ""}
-                              onChange={(event) => {
-                                const nextTargetId = event.target.value ? Number(event.target.value) : null;
-                                handleUpdateComparison(config.id, { targetId: nextTargetId });
-                              }}
-                            >
-                              {comparisonTargetOptions.map((option) => (
-                                <option
-                                  key={option.id}
-                                  value={option.id}
-                                  className={option.isSameEventType ? "font-semibold text-red-600 dark:text-red-300" : undefined}
-                                  style={option.isSameEventType ? { color: "#dc2626", fontWeight: 600 } : undefined}
-                                >
-                                  {option.label}
-                                </option>
-                              ))}
-                            </select>
-
-                            <select
-                              className="h-8 rounded-full border border-gray-200 bg-white px-3 text-xs font-semibold text-gray-600 outline-none transition-colors hover:border-blue-300 focus:ring-2 focus:ring-blue-500/30 dark:border-gray-700 dark:bg-[#131A2B] dark:text-gray-300 sm:h-9 sm:text-sm"
-                              value={config.tier ?? ""}
-                              onChange={(event) => {
-                                const nextTier = event.target.value ? Number(event.target.value) : null;
-                                handleUpdateComparison(config.id, { tier: nextTier });
-                              }}
-                            >
-                              {comparisonTierOptions.map((tier) => (
-                                <option key={tier} value={tier}>
-                                  T{tier}
-                                </option>
-                              ))}
-                            </select>
-
-                            <button
-                              type="button"
-                              onClick={() => handleRemoveComparison(config.id)}
-                              className="inline-flex h-8 items-center gap-1.5 rounded-full border border-gray-200 bg-white px-3 text-xs font-semibold text-gray-500 transition-colors hover:border-red-200 hover:bg-red-50 hover:text-red-500 dark:border-gray-700 dark:bg-[#131A2B] dark:text-gray-400 dark:hover:border-red-500/30 dark:hover:bg-red-500/10 dark:hover:text-red-300 sm:h-9 sm:text-sm"
-                              aria-label="移除对比行"
-                            >
-                              <X size={13} />
-                              移除
-                            </button>
-                          </div>
-                        ))}
-
-                        <button
-                          type="button"
-                          onClick={handleAddComparison}
-                          disabled={!canAddComparisonRow}
-                          title={comparisonConfigs.length >= MAX_COMPARISON_LINES ? "最多添加 5 条对比线" : "添加一条空白对比线"}
-                          className="inline-flex h-8 items-center gap-1.5 rounded-full border border-emerald-300 bg-emerald-50 px-3 text-xs font-semibold text-emerald-700 transition-all hover:bg-emerald-100 disabled:cursor-not-allowed disabled:border-gray-200 disabled:bg-white disabled:text-gray-300 dark:border-emerald-500/40 dark:bg-emerald-500/15 dark:text-emerald-300 dark:disabled:border-gray-700 dark:disabled:bg-[#131A2B] dark:disabled:text-gray-500 sm:h-9 sm:text-sm"
-                        >
-                          <Plus size={15} />
-                          添加对比
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                )}
+                <ComparisonControls
+                  bestdoriPrediction={bestdoriPrediction}
+                  canAddComparisonRow={canAddComparisonRow}
+                  comparisonAlignment={comparisonAlignment}
+                  comparisonConfigs={comparisonConfigs}
+                  comparisonLineById={comparisonLineById}
+                  comparisonTargetLabelMap={comparisonTargetLabelMap}
+                  comparisonTargetOptions={comparisonTargetOptions}
+                  comparisonTargetType={comparisonTargetType}
+                  comparisonTierOptions={comparisonTierOptions}
+                  onAddComparison={handleAddComparison}
+                  onAlignmentChange={setComparisonAlignment}
+                  onRemoveComparison={handleRemoveComparison}
+                  onToggleComparison={handleToggleComparison}
+                  onUpdateComparison={handleUpdateComparison}
+                  resolvedComparisonConfigs={resolvedComparisonConfigs}
+                  setShowBestdoriPrediction={setShowBestdoriPrediction}
+                  setShowDayProjection={setShowDayProjection}
+                  setShowInstantProjection={setShowInstantProjection}
+                  showBestdoriPrediction={showBestdoriPrediction}
+                  showDayProjection={showDayProjection}
+                  showInstantProjection={showInstantProjection}
+                  status={status}
+                  trackingMode={trackingMode}
+                />
               </div>
             </Tabs.Content>
           </Tabs.Root>
