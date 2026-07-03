@@ -95,13 +95,6 @@ export type TrackerMouseState = {
   activePayload?: TrackerTooltipPayloadEntry[];
 };
 
-export type TrackerDotProps = {
-  cx?: number;
-  cy?: number;
-  payload?: TrackerData;
-  index?: number;
-};
-
 export type TrackerSongGroup = {
   /** challenge 歌曲榜对应的 musicId；0 表示历史单歌曲榜或未分组数据。 */
   songId: number;

@@ -2,7 +2,9 @@
 
 import { format } from "date-fns";
 import { BESTDORI_PREDICTION_DATA_KEY } from "./constants";
-import type { ComparisonPointInfo, TrackerData, TrackerTooltipPayloadEntry, TrackingMode } from "./types";
+import type { ComparisonPointInfo, TrackerTooltipPayloadEntry, TrackingMode } from "./types";
+
+const TRACKER_NUMBER_FORMATTER = new Intl.NumberFormat();
 
 function getComparisonPointsFromPayload(payload: TrackerTooltipPayloadEntry[]): ComparisonPointInfo[] {
   const byKey = new Map<string, ComparisonPointInfo>();
@@ -40,7 +42,7 @@ function ComparisonPointRows({
               <span className="truncate">{point.label}</span>
             </span>
             <span className="shrink-0 text-sm font-bold" style={{ color: point.color }}>
-              {new Intl.NumberFormat().format(point.ep)} {unit}
+              {TRACKER_NUMBER_FORMATTER.format(point.ep)} {unit}
             </span>
           </div>
           <p className="mt-0.5 text-[10px] font-semibold text-gray-400 dark:text-gray-500">
@@ -64,13 +66,11 @@ export function TrackerTooltip({
   payload,
   label,
   trackingMode,
-  displayedData,
 }: {
   active?: boolean;
   payload?: TrackerTooltipPayloadEntry[];
   label?: number;
   trackingMode: TrackingMode;
-  displayedData: TrackerData[];
 }) {
   if (!active || !payload || payload.length === 0) return null;
 
@@ -96,7 +96,7 @@ export function TrackerTooltip({
           <div className="mt-1 flex justify-between items-center gap-6">
             <span className="text-xs font-bold text-[#ef4444]">线性投影（瞬时）</span>
             <span className="text-sm font-bold text-[#ef4444]">
-              {new Intl.NumberFormat().format(p.instantEp)} {unit}
+              {TRACKER_NUMBER_FORMATTER.format(p.instantEp)} {unit}
             </span>
           </div>
         )}
@@ -105,7 +105,7 @@ export function TrackerTooltip({
           <div className="mt-1 flex justify-between items-center gap-6">
             <span className="text-xs font-bold text-[#3b82f6]">线性投影（24h）</span>
             <span className="text-sm font-bold text-[#3b82f6]">
-              {new Intl.NumberFormat().format(p.dayEp)} {unit}
+              {TRACKER_NUMBER_FORMATTER.format(p.dayEp)} {unit}
             </span>
           </div>
         )}
@@ -143,27 +143,25 @@ export function TrackerTooltip({
   }
 
   const currentPoint = mainEntry.payload;
-  const currentIndex = displayedData.findIndex((d: TrackerData) => d.time === currentPoint.time);
-  const pointWithSpeeds = currentIndex !== -1 ? displayedData[currentIndex] : currentPoint;
 
   let speedRender = null;
   let speed24Render = null;
 
-  if (pointWithSpeeds.speed !== undefined) {
+  if (currentPoint.speed !== undefined) {
     speedRender = (
       <div className="mt-2 pt-2 border-t border-gray-100 dark:border-gray-700/50 flex justify-between items-center">
         <span className="text-xs font-bold text-gray-400">瞬时速度</span>
         <span className="text-[#f43f5e] font-bold text-sm">
-          +{new Intl.NumberFormat().format(pointWithSpeeds.speed)} {unit}/h
+          +{TRACKER_NUMBER_FORMATTER.format(currentPoint.speed)} {unit}/h
         </span>
       </div>
     );
   }
 
-  if (pointWithSpeeds.speed24 !== undefined) {
+  if (currentPoint.speed24 !== undefined) {
     let diffRender = null;
-    if (pointWithSpeeds.refSpeed24 !== undefined && pointWithSpeeds.refSpeed24 !== 0) {
-      let diffPercent = ((pointWithSpeeds.speed24 - pointWithSpeeds.refSpeed24) / pointWithSpeeds.refSpeed24) * 100;
+    if (currentPoint.refSpeed24 !== undefined && currentPoint.refSpeed24 !== 0) {
+      let diffPercent = ((currentPoint.speed24 - currentPoint.refSpeed24) / currentPoint.refSpeed24) * 100;
       if (Math.abs(diffPercent) < 0.005) diffPercent = 0;
       const sign = diffPercent >= 0 ? "+" : "";
       const colorClass = diffPercent < 0 ? "text-red-500" : "text-blue-500";
@@ -179,7 +177,7 @@ export function TrackerTooltip({
         <div className="mt-1 flex justify-between items-center">
           <span className="text-xs font-bold text-gray-400">24h速度</span>
           <span className="text-blue-500 font-bold text-sm">
-            +{new Intl.NumberFormat().format(pointWithSpeeds.speed24)} {unit}/d
+            +{TRACKER_NUMBER_FORMATTER.format(currentPoint.speed24)} {unit}/d
           </span>
         </div>
         {diffRender}
@@ -194,7 +192,7 @@ export function TrackerTooltip({
       </p>
       <div className="flex items-end gap-2">
         <span className="text-blue-500 font-extrabold text-2xl leading-none">
-          {new Intl.NumberFormat().format(currentPoint.ep)}
+          {TRACKER_NUMBER_FORMATTER.format(currentPoint.ep)}
         </span>
         <span className="text-sm font-bold text-blue-500/70 mb-0.5">{unit}</span>
       </div>

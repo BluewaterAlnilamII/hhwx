@@ -40,15 +40,15 @@
     repeating-linear-gradient(132deg, transparent 0, transparent 118px, rgba(255, 255, 255, 0.24) 118px, rgba(255, 255, 255, 0.24) 154px, transparent 154px, transparent 252px),
     linear-gradient(90deg, #ffc33a 0%, #ffe45b 18%, #fff7bc 38%, #fffbe2 55%, #fff05a 76%, #ffd22e 100%);
   --eventtracker-bestdori-color: #475569;
-  --eventtracker-nonworking-band-fill: rgba(250, 204, 21, 0.38);
-  --eventtracker-nonworking-band-stroke: rgba(202, 138, 4, 0.36);
+  --eventtracker-nonworking-band-fill: rgba(245, 158, 11, 0.18);
+  --eventtracker-nonworking-band-stroke: rgba(217, 119, 6, 0.24);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
     --eventtracker-bestdori-color: #cbd5e1;
-    --eventtracker-nonworking-band-fill: rgba(245, 158, 11, 0.24);
-    --eventtracker-nonworking-band-stroke: rgba(251, 191, 36, 0.28);
+    --eventtracker-nonworking-band-fill: rgba(245, 158, 11, 0.18);
+    --eventtracker-nonworking-band-stroke: rgba(251, 191, 36, 0.24);
   }
 }
 
