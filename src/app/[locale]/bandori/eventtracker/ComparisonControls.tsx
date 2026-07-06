@@ -1,7 +1,7 @@
 "use client";
 
 import { memo, type Dispatch, type SetStateAction } from "react";
-import { Plus, X } from "lucide-react";
+import { Plus, Trash2, X } from "lucide-react";
 
 import {
   BESTDORI_PREDICTION_COLOR,
@@ -34,8 +34,10 @@ type ComparisonControlsProps = {
   comparisonTargetOptions: ComparisonTargetOption[];
   comparisonTargetType: ComparisonTargetType;
   comparisonTierOptions: readonly number[];
+  comparisonTierOptionsByConfigId: ReadonlyMap<string, readonly number[]>;
   onAddComparison: () => void;
   onAlignmentChange: (alignment: ComparisonAlignment) => void;
+  onRemoveAllComparisons: () => void;
   onRemoveComparison: (id: string) => void;
   onToggleComparison: (id: string) => void;
   onUpdateComparison: (id: string, patch: Partial<ComparisonConfig>) => void;
@@ -60,8 +62,10 @@ export const ComparisonControls = memo(function ComparisonControls({
   comparisonTargetOptions,
   comparisonTargetType,
   comparisonTierOptions,
+  comparisonTierOptionsByConfigId,
   onAddComparison,
   onAlignmentChange,
+  onRemoveAllComparisons,
   onRemoveComparison,
   onToggleComparison,
   onUpdateComparison,
@@ -83,7 +87,7 @@ export const ComparisonControls = memo(function ComparisonControls({
     <div className="border-t border-slate-200/75 px-1 pt-4 dark:border-slate-800/80 sm:px-2">
       <div className="flex flex-col items-center gap-3">
         {status === "进行中" && (
-          <div className="flex flex-wrap items-center justify-center gap-2 rounded-[18px] bg-slate-50/80 px-2 py-1.5 dark:bg-slate-900/55 sm:gap-3">
+          <div className="flex flex-wrap items-center justify-center gap-2 rounded-[18px] bg-[#fffef4]/85 px-2 py-1.5 dark:bg-slate-900/55 sm:gap-3">
             <button
               type="button"
               aria-pressed={showInstantProjection}
@@ -135,7 +139,7 @@ export const ComparisonControls = memo(function ComparisonControls({
         )}
 
         {resolvedComparisonConfigs.length > 0 && (
-          <div className="flex max-w-full flex-wrap items-center justify-center gap-2 rounded-[18px] bg-slate-50/70 px-2 py-1.5 dark:bg-slate-900/45 sm:gap-3">
+          <div className="flex max-w-full flex-wrap items-center justify-center gap-2 rounded-[18px] bg-[#fffef4]/85 px-2 py-1.5 dark:bg-slate-900/45 sm:gap-3">
             {resolvedComparisonConfigs.map((config) => {
               const line = comparisonLineById.get(config.id);
               const color = line?.color ?? COMPARISON_LINE_COLORS[(config.colorIndex ?? 0) % COMPARISON_LINE_COLORS.length];
@@ -155,7 +159,7 @@ export const ComparisonControls = memo(function ComparisonControls({
                   className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold transition-all sm:text-sm ${
                     config.enabled
                       ? "text-gray-700 dark:text-gray-200"
-                      : "border-gray-200 bg-white text-gray-400 dark:border-gray-700 dark:bg-[#131A2B] dark:text-gray-500"
+                      : "border-gray-200 bg-[#fffef4] text-gray-400 dark:border-gray-700 dark:bg-[#131A2B] dark:text-gray-500"
                   }`}
                   style={config.enabled ? {
                     borderColor: `${color}66`,
@@ -172,7 +176,7 @@ export const ComparisonControls = memo(function ComparisonControls({
               );
             })}
 
-            <div className="inline-flex overflow-hidden rounded-full border border-gray-200 bg-white text-xs font-semibold shadow-sm dark:border-gray-700 dark:bg-[#131A2B] sm:text-sm">
+            <div className="inline-flex overflow-hidden rounded-full border border-gray-200 bg-[#fffef4] text-xs font-semibold shadow-sm dark:border-gray-700 dark:bg-[#131A2B] sm:text-sm">
               <button
                 type="button"
                 aria-pressed={comparisonAlignment === "start"}
@@ -202,8 +206,11 @@ export const ComparisonControls = memo(function ComparisonControls({
         )}
 
         <div className="flex w-full flex-col items-center gap-2 border-t border-slate-200/70 pt-3 pb-3 dark:border-slate-800/80 sm:pb-4">
-          {comparisonConfigs.map((config) => (
-            <div key={config.id} className="flex w-full max-w-[46rem] flex-wrap items-center justify-center gap-2">
+          {comparisonConfigs.map((config) => {
+            const rowTierOptions = comparisonTierOptionsByConfigId.get(config.id) ?? comparisonTierOptions;
+
+            return (
+              <div key={config.id} className="flex w-full max-w-[46rem] flex-wrap items-center justify-center gap-2">
               <select
                 className={`h-8 max-w-full rounded-full border border-gray-200 bg-white px-3 text-xs font-semibold text-gray-600 outline-none transition-colors hover:border-blue-300 focus:ring-2 focus:ring-blue-500/30 dark:border-gray-700 dark:bg-[#131A2B] dark:text-gray-300 sm:h-9 sm:text-sm ${
                   comparisonTargetType === "monthly" ? "w-[7.5rem]" : "min-w-[13rem]"
@@ -234,7 +241,7 @@ export const ComparisonControls = memo(function ComparisonControls({
                   onUpdateComparison(config.id, { tier: nextTier });
                 }}
               >
-                {comparisonTierOptions.map((tier) => (
+                {rowTierOptions.map((tier) => (
                   <option key={tier} value={tier}>
                     T{tier}
                   </option>
@@ -250,19 +257,34 @@ export const ComparisonControls = memo(function ComparisonControls({
                 <X size={13} />
                 移除
               </button>
-            </div>
-          ))}
+              </div>
+            );
+          })}
 
-          <button
-            type="button"
-            onClick={onAddComparison}
-            disabled={!canAddComparisonRow}
-            title={comparisonConfigs.length >= MAX_COMPARISON_LINES ? "最多添加 5 条对比线" : "添加一条空白对比线"}
-            className="inline-flex h-8 items-center gap-1.5 rounded-full border border-emerald-300 bg-emerald-50 px-3 text-xs font-semibold text-emerald-700 transition-all hover:bg-emerald-100 disabled:cursor-not-allowed disabled:border-gray-200 disabled:bg-white disabled:text-gray-300 dark:border-emerald-500/40 dark:bg-emerald-500/15 dark:text-emerald-300 dark:disabled:border-gray-700 dark:disabled:bg-[#131A2B] dark:disabled:text-gray-500 sm:h-9 sm:text-sm"
-          >
-            <Plus size={15} />
-            添加对比
-          </button>
+          <div className="flex flex-wrap items-center justify-center gap-2">
+            <button
+              type="button"
+              onClick={onAddComparison}
+              disabled={!canAddComparisonRow}
+              title={comparisonConfigs.length >= MAX_COMPARISON_LINES ? "最多添加 5 条对比线" : "添加一条空白对比线"}
+              className="inline-flex h-8 items-center gap-1.5 rounded-full border border-emerald-300 bg-emerald-50 px-3 text-xs font-semibold text-emerald-700 transition-all hover:bg-emerald-100 disabled:cursor-not-allowed disabled:border-gray-200 disabled:bg-white disabled:text-gray-300 dark:border-emerald-500/40 dark:bg-emerald-500/15 dark:text-emerald-300 dark:disabled:border-gray-700 dark:disabled:bg-[#131A2B] dark:disabled:text-gray-500 sm:h-9 sm:text-sm"
+            >
+              <Plus size={15} />
+              添加对比
+            </button>
+            {comparisonConfigs.length > 0 && (
+              <button
+                type="button"
+                onClick={onRemoveAllComparisons}
+                className="inline-flex h-8 items-center gap-1.5 rounded-full border border-red-200 bg-red-50 px-3 text-xs font-semibold text-red-600 transition-colors hover:border-red-300 hover:bg-red-100 hover:text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300 dark:hover:border-red-400/50 dark:hover:bg-red-500/15 sm:h-9 sm:text-sm"
+                aria-label="移除全部对比线"
+                title="移除全部对比线"
+              >
+                <Trash2 size={14} />
+                移除全部
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </div>

@@ -16,6 +16,7 @@ import type { ComparisonConfig, ComparisonLine, ComparisonLinePoint, ComparisonT
 import {
   BESTDORI_PREDICTION_STORAGE_KEY,
   EVENT_TIERS,
+  getTiersForMode,
   INSTANT_PROJECTION_STORAGE_KEY,
   DAY_PROJECTION_STORAGE_KEY,
   MAX_COMPARISON_LINES,
@@ -70,8 +71,18 @@ type ComparisonTargetOption = {
   isSameEventType?: boolean;
 };
 
+type AutomaticComparisonTarget = {
+  targetId: number;
+  tier: number;
+};
+
 const ZOOM_WIDTH_MULTIPLIERS = [1, 2, 4, 8, 16, 32] as const;
 const TOOLTIP_TIME_TOLERANCE_MS = 30_000;
+const EVENT_TIER_1000 = 1000;
+const EVENT_TIER_1500 = 1500;
+const CN_T1500_BACKFILL_EVENT_ID = 311;
+const CN_T1500_LEGACY_EVENT_ID_LIMIT = 313;
+const EVENT_TYPES_WITHOUT_SONG_RANKING = new Set(["story", "mission_live", "live_try", "festival"]);
 
 type ModeIndicatorStyle = {
   width: number;
@@ -216,24 +227,104 @@ function hasComparisonConfig(
   ));
 }
 
+function isLegacyCnEventWithoutT1500(targetId: number): boolean {
+  return targetId <= CN_T1500_LEGACY_EVENT_ID_LIMIT && targetId !== CN_T1500_BACKFILL_EVENT_ID;
+}
+
+function resolveLegacyCnEventTier(targetId: number, tier: number): number {
+  if (
+    tier === EVENT_TIER_1500 &&
+    isLegacyCnEventWithoutT1500(targetId)
+  ) {
+    return EVENT_TIER_1000;
+  }
+
+  return tier;
+}
+
+function getComparisonTierOptions(config: ComparisonConfig, tierOptions: readonly number[]): readonly number[] {
+  if (
+    config.targetType !== "event" ||
+    config.targetId === null ||
+    !isLegacyCnEventWithoutT1500(config.targetId)
+  ) {
+    return tierOptions;
+  }
+
+  return tierOptions.filter((tier) => tier !== EVENT_TIER_1500);
+}
+
+function getMainTrackerTierOptions(trackingMode: TrackingMode, eventId: number | null): readonly number[] {
+  const tierOptions = getTiersForMode(trackingMode);
+  if (trackingMode !== "event" || eventId === null || !isLegacyCnEventWithoutT1500(eventId)) {
+    return tierOptions;
+  }
+
+  return tierOptions.filter((tier) => tier !== EVENT_TIER_1500);
+}
+
+function isSongRankingDisabledEventType(eventType: string | null | undefined): boolean {
+  return typeof eventType === "string" && EVENT_TYPES_WITHOUT_SONG_RANKING.has(eventType);
+}
+
+function resolveTrackingModeForEventType(trackingMode: TrackingMode, eventType: string | null | undefined): TrackingMode {
+  return trackingMode === "song" && isSongRankingDisabledEventType(eventType) ? "event" : trackingMode;
+}
+
+function isComparisonTierSelectable(config: ComparisonConfig, tierOptions: readonly number[]): boolean {
+  return config.tier !== null && getComparisonTierOptions(config, tierOptions).includes(config.tier);
+}
+
+function normalizeComparisonConfigTier(config: ComparisonConfig): ComparisonConfig {
+  if (config.targetType !== "event" || config.targetId === null || config.tier === null) {
+    return config;
+  }
+
+  const tier = resolveLegacyCnEventTier(config.targetId, config.tier);
+  return tier === config.tier ? config : { ...config, tier };
+}
+
+function resolveMainTrackerTier(trackingMode: TrackingMode, eventId: number | null, tier: number): number {
+  if (trackingMode !== "event" || eventId === null) {
+    return tier;
+  }
+
+  return resolveLegacyCnEventTier(eventId, tier);
+}
+
+function getComparisonConfigKey(config: ComparisonConfig): string | null {
+  return config.targetId !== null && config.tier !== null
+    ? `${config.targetType}:${config.targetId}:${config.tier}`
+    : null;
+}
+
 function findPreviousSameTypeEventComparisonTarget(
   events: MinimalEvent[],
   currentEventId: number | null,
   currentEventType: string | null,
   tier: number,
   configs: ComparisonConfig[],
-): number | null {
+): AutomaticComparisonTarget | null {
   if (currentEventId === null || currentEventType === null) {
     return null;
   }
 
-  const target = events.find((event) => (
-    event.id < currentEventId &&
-    event.eventType === currentEventType &&
-    !hasComparisonConfig(configs, "event", event.id, tier)
-  ));
+  const target = events.find((event) => {
+    const comparisonTier = resolveLegacyCnEventTier(event.id, tier);
 
-  return target?.id ?? null;
+    return (
+      event.id < currentEventId &&
+      event.eventType === currentEventType &&
+      !hasComparisonConfig(configs, "event", event.id, comparisonTier)
+    );
+  });
+
+  return target
+    ? {
+        targetId: target.id,
+        tier: resolveLegacyCnEventTier(target.id, tier),
+      }
+    : null;
 }
 
 function findPreviousMonthlyComparisonTarget(
@@ -241,13 +332,18 @@ function findPreviousMonthlyComparisonTarget(
   selectedMonthlyMonthId: number,
   tier: number,
   configs: ComparisonConfig[],
-): number | null {
+): AutomaticComparisonTarget | null {
   const target = monthlyOptions.find((option) => (
     option.monthId < selectedMonthlyMonthId &&
     !hasComparisonConfig(configs, "monthly", option.monthId, tier)
   ));
 
-  return target?.monthId ?? null;
+  return target
+    ? {
+        targetId: target.monthId,
+        tier,
+      }
+    : null;
 }
 
 type InitialTrackerQueryState = {
@@ -260,14 +356,15 @@ function readInitialTrackerQueryState(): InitialTrackerQueryState {
   const params = readEventTrackerSearchParams();
   const trackingMode = parseTrackingModeSearchParam(params.get("type")) ?? "event";
   const queryTier = readPositiveIntegerSearchParam(params, "tier");
+  const currentEventId = readPositiveIntegerSearchParam(params, "event");
   const selectedTier = queryTier !== null
     ? normalizeTierForMode(trackingMode, queryTier) ?? readTrackerTierPreference(trackingMode)
     : readTrackerTierPreference(trackingMode);
 
   return {
-    currentEventId: readPositiveIntegerSearchParam(params, "event"),
+    currentEventId,
     trackingMode,
-    selectedTier,
+    selectedTier: resolveMainTrackerTier(trackingMode, currentEventId, selectedTier),
   };
 }
 
@@ -469,6 +566,11 @@ export default function EventTrackerPage() {
     comparisonAlignment,
     setComparisonAlignment,
   } = activeComparisonPreferences;
+  const eventTypeById = useMemo(
+    () => new Map(allEvents.map((event) => [event.id, event.eventType])),
+    [allEvents],
+  );
+  const isSongModeDisabled = isSongRankingDisabledEventType(eventMeta?.eventType);
 
   const handleSelectedEventIdChange = useCallback((eventId: string) => {
     const nextEventId = Number.parseInt(eventId, 10);
@@ -476,16 +578,22 @@ export default function EventTrackerPage() {
       return;
     }
 
+    const nextTrackingMode = resolveTrackingModeForEventType(trackingMode, eventTypeById.get(nextEventId));
+    const preferredTier = normalizeTierForMode(nextTrackingMode, selectedTier) ?? readTrackerTierPreference(nextTrackingMode);
+    const nextTier = resolveMainTrackerTier(nextTrackingMode, nextEventId, preferredTier);
+
     setCurrentEventId(nextEventId);
+    setTrackingMode(nextTrackingMode);
+    setSelectedTier(nextTier);
     setZoomIndex(0);
     replaceEventTrackerUrlQuery({
       eventId: nextEventId,
-      trackingMode,
-      tier: selectedTier,
+      trackingMode: nextTrackingMode,
+      tier: nextTier,
       commentPage: null,
       commentId: null,
     });
-  }, [selectedTier, trackingMode]);
+  }, [eventTypeById, selectedTier, trackingMode]);
 
   const handleTrackingModeChange = useCallback((value: string) => {
     const nextMode = parseTrackingModeSearchParam(value);
@@ -497,12 +605,16 @@ export default function EventTrackerPage() {
       return;
     }
 
-    const nextTier = readTrackerTierPreference(nextMode);
+    if (nextMode === "song" && isSongModeDisabled) {
+      return;
+    }
+
+    const nextTier = resolveMainTrackerTier(nextMode, resolvedCurrentEventId, readTrackerTierPreference(nextMode));
 
     setTrackingMode(nextMode);
     setSelectedTier(nextTier);
     setZoomIndex(0);
-  }, [trackingMode]);
+  }, [isSongModeDisabled, resolvedCurrentEventId, trackingMode]);
 
   const handleTierChange = useCallback((tier: number) => {
     const normalizedTier = normalizeTierForMode(trackingMode, tier);
@@ -510,13 +622,15 @@ export default function EventTrackerPage() {
       return;
     }
 
-    if (normalizedTier === selectedTier) {
+    const nextTier = resolveMainTrackerTier(trackingMode, resolvedCurrentEventId, normalizedTier);
+
+    if (nextTier === selectedTier) {
       return;
     }
 
-    setSelectedTier(normalizedTier);
-    writeTrackerTierPreference(trackingMode, normalizedTier);
-  }, [selectedTier, trackingMode]);
+    setSelectedTier(nextTier);
+    writeTrackerTierPreference(trackingMode, nextTier);
+  }, [resolvedCurrentEventId, selectedTier, trackingMode]);
 
   const handleMonthlyMonthChange = useCallback((monthId: number) => {
     setSelectedMonthlyMonthId(monthId);
@@ -542,6 +656,29 @@ export default function EventTrackerPage() {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    if (!hasAppliedInitialUrlState || trackingMode !== "song" || !isSongModeDisabled) {
+      return;
+    }
+
+    let cancelled = false;
+
+    window.queueMicrotask(() => {
+      if (cancelled) {
+        return;
+      }
+
+      const nextTier = resolveMainTrackerTier("event", resolvedCurrentEventId, readTrackerTierPreference("event"));
+      setTrackingMode("event");
+      setSelectedTier(nextTier);
+      setZoomIndex(0);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [hasAppliedInitialUrlState, isSongModeDisabled, resolvedCurrentEventId, trackingMode]);
 
   useEffect(() => {
     if (!hasAppliedInitialUrlState) {
@@ -618,6 +755,10 @@ export default function EventTrackerPage() {
     () => availableChallengeSongIds.join(","),
     [availableChallengeSongIds],
   );
+  const mainTierOptions = useMemo(
+    () => getMainTrackerTierOptions(trackingMode, resolvedCurrentEventId),
+    [resolvedCurrentEventId, trackingMode],
+  );
 
   const { data: challengeSongTitleMap } = useCachedFetch<Record<string, string>>(
     availableChallengeSongIds.length > 0 ? `bandori-song-titles-${challengeSongIdsQuery}` : null,
@@ -668,6 +809,13 @@ export default function EventTrackerPage() {
     [comparisonTargetOptions],
   );
   const comparisonTierOptions = comparisonTargetType === "monthly" ? MONTHLY_TIERS : EVENT_TIERS;
+  const comparisonTierOptionsByConfigId = useMemo(
+    () => new Map(comparisonConfigs.map((config) => [
+      config.id,
+      getComparisonTierOptions(config, comparisonTierOptions),
+    ])),
+    [comparisonConfigs, comparisonTierOptions],
+  );
   const defaultComparisonTier = comparisonTierOptions.includes(selectedTier) ? selectedTier : comparisonTierOptions[0];
   const defaultComparisonTargetId = comparisonTargetType === "monthly"
     ? selectedMonthlyMonthId
@@ -679,7 +827,7 @@ export default function EventTrackerPage() {
         config.targetId !== null &&
         config.tier !== null &&
         comparisonTargetIdSet.has(config.targetId) &&
-        comparisonTierOptions.includes(config.tier)
+        isComparisonTierSelectable(config, comparisonTierOptions)
       ))
       .map((config, colorIndex) => ({ ...config, colorIndex })),
     [comparisonConfigs, comparisonTargetIdSet, comparisonTargetType, comparisonTierOptions],
@@ -700,15 +848,31 @@ export default function EventTrackerPage() {
     }
 
     setComparisonConfigs((previous) => {
-      const nextConfigs = previous.filter((config) => (
-        config.targetType === comparisonTargetType &&
-        config.targetId !== null &&
-        config.tier !== null &&
-        comparisonTargetIdSet.has(config.targetId) &&
-        comparisonTierOptions.includes(config.tier)
-      ));
+      const seenConfigKeys = new Set<string>();
+      const nextConfigs: ComparisonConfig[] = [];
 
-      return nextConfigs.length === previous.length ? previous : nextConfigs;
+      for (const config of previous) {
+        const normalizedConfig = normalizeComparisonConfigTier(config);
+        const configKey = getComparisonConfigKey(normalizedConfig);
+
+        if (
+          normalizedConfig.targetType !== comparisonTargetType ||
+          normalizedConfig.targetId === null ||
+          normalizedConfig.tier === null ||
+          !comparisonTargetIdSet.has(normalizedConfig.targetId) ||
+          !isComparisonTierSelectable(normalizedConfig, comparisonTierOptions) ||
+          configKey === null ||
+          seenConfigKeys.has(configKey)
+        ) {
+          continue;
+        }
+
+        seenConfigKeys.add(configKey);
+        nextConfigs.push(normalizedConfig);
+      }
+
+      const hasChanged = nextConfigs.length !== previous.length || nextConfigs.some((config, index) => config !== previous[index]);
+      return hasChanged ? nextConfigs : previous;
     });
   }, [
     comparisonTargetIdSet,
@@ -722,11 +886,11 @@ export default function EventTrackerPage() {
     if (!canAddComparisonRow) return;
 
     setComparisonConfigs((previous) => {
-      const targetId = comparisonTargetType === "monthly"
+      const comparisonTarget = comparisonTargetType === "monthly"
         ? findPreviousMonthlyComparisonTarget(monthlyRankingOptions, selectedMonthlyMonthId, defaultComparisonTier, previous)
         : findPreviousSameTypeEventComparisonTarget(comparisonEventOptions, resolvedCurrentEventId, currentEventType, defaultComparisonTier, previous);
 
-      if (targetId === null) {
+      if (comparisonTarget === null) {
         return previous;
       }
 
@@ -735,8 +899,8 @@ export default function EventTrackerPage() {
         {
           id: createComparisonConfigId(),
           targetType: comparisonTargetType,
-          targetId,
-          tier: defaultComparisonTier,
+          targetId: comparisonTarget.targetId,
+          tier: comparisonTarget.tier,
           enabled: true,
         },
       ];
@@ -757,10 +921,8 @@ export default function EventTrackerPage() {
     setComparisonConfigs((previous) => previous.map((config) => {
       if (config.id !== id) return config;
 
-      const nextConfig = { ...config, ...patch };
-      const nextKey = nextConfig.targetId !== null && nextConfig.tier !== null
-        ? `${nextConfig.targetType}:${nextConfig.targetId}:${nextConfig.tier}`
-        : null;
+      const nextConfig = normalizeComparisonConfigTier({ ...config, ...patch });
+      const nextKey = getComparisonConfigKey(nextConfig);
       const isDuplicate = nextKey !== null && previous.some((other) => (
         other.id !== id &&
         other.targetType === nextConfig.targetType &&
@@ -784,6 +946,10 @@ export default function EventTrackerPage() {
 
   const handleRemoveComparison = useCallback((id: string) => {
     setComparisonConfigs((previous) => previous.filter((config) => config.id !== id));
+  }, [setComparisonConfigs]);
+
+  const handleRemoveAllComparisons = useCallback(() => {
+    setComparisonConfigs([]);
   }, [setComparisonConfigs]);
 
   // ===== 数据派生层 =====
@@ -1171,6 +1337,7 @@ export default function EventTrackerPage() {
               availableChallengeSongIds={availableChallengeSongIds}
               challengeSongGridClassName={challengeSongGridClassName}
               challengeSongTitleMap={challengeSongTitleMap}
+              isSongModeDisabled={isSongModeDisabled}
               modeIndicatorStyle={modeIndicatorStyle}
               modeTabsListRef={modeTabsListRef}
               modeTriggerRefs={modeTriggerRefs}
@@ -1181,6 +1348,7 @@ export default function EventTrackerPage() {
               resolvedSelectedSongId={resolvedSelectedSongId}
               selectedMonthlyMonthId={selectedMonthlyMonthId}
               selectedTier={selectedTier}
+              tierOptions={mainTierOptions}
               trackingMode={trackingMode}
             />
 
@@ -1247,8 +1415,10 @@ export default function EventTrackerPage() {
                   comparisonTargetOptions={comparisonTargetOptions}
                   comparisonTargetType={comparisonTargetType}
                   comparisonTierOptions={comparisonTierOptions}
+                  comparisonTierOptionsByConfigId={comparisonTierOptionsByConfigId}
                   onAddComparison={handleAddComparison}
                   onAlignmentChange={setComparisonAlignment}
+                  onRemoveAllComparisons={handleRemoveAllComparisons}
                   onRemoveComparison={handleRemoveComparison}
                   onToggleComparison={handleToggleComparison}
                   onUpdateComparison={handleUpdateComparison}
