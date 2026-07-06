@@ -3,7 +3,6 @@
 import { memo, type MutableRefObject, type RefObject } from "react";
 import * as Tabs from "@radix-ui/react-tabs";
 
-import { getTiersForMode } from "./constants";
 import type { TrackingMode } from "./types";
 import type { MonthlyRankingOption } from "./useChartData";
 
@@ -19,6 +18,7 @@ type TrackerModeTierControlsProps = {
   availableChallengeSongIds: number[];
   challengeSongGridClassName: string;
   challengeSongTitleMap: Record<string, string> | null | undefined;
+  isSongModeDisabled: boolean;
   modeIndicatorStyle: ModeIndicatorStyle;
   modeTabsListRef: RefObject<HTMLDivElement | null>;
   modeTriggerRefs: MutableRefObject<Record<TrackingMode, HTMLButtonElement | null>>;
@@ -29,6 +29,7 @@ type TrackerModeTierControlsProps = {
   resolvedSelectedSongId: number;
   selectedMonthlyMonthId: number;
   selectedTier: number;
+  tierOptions: readonly number[];
   trackingMode: TrackingMode;
 };
 
@@ -42,6 +43,7 @@ export const TrackerModeTierControls = memo(function TrackerModeTierControls({
   availableChallengeSongIds,
   challengeSongGridClassName,
   challengeSongTitleMap,
+  isSongModeDisabled,
   modeIndicatorStyle,
   modeTabsListRef,
   modeTriggerRefs,
@@ -52,13 +54,14 @@ export const TrackerModeTierControls = memo(function TrackerModeTierControls({
   resolvedSelectedSongId,
   selectedMonthlyMonthId,
   selectedTier,
+  tierOptions,
   trackingMode,
 }: TrackerModeTierControlsProps) {
   return (
     <div className="flex flex-col gap-3.5 items-stretch xl:flex-row xl:items-start xl:gap-4">
       <Tabs.List
         ref={modeTabsListRef}
-        className="relative flex w-full flex-row justify-center gap-1 overflow-x-auto rounded-[20px] border border-white/70 bg-white/65 p-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.72)] dark:border-slate-700/80 dark:bg-slate-950/70 dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] xl:w-[7.1rem] xl:flex-none xl:flex-col xl:self-start xl:overflow-visible"
+        className="relative flex w-full flex-row justify-center gap-1 overflow-x-auto rounded-[20px] border border-[#f1e8bd]/80 bg-[#fffef4]/85 p-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.72)] dark:border-slate-700/80 dark:bg-slate-950/70 dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] xl:w-[7.1rem] xl:flex-none xl:flex-col xl:self-start xl:overflow-visible"
       >
         <span
           aria-hidden="true"
@@ -70,20 +73,28 @@ export const TrackerModeTierControls = memo(function TrackerModeTierControls({
             opacity: modeIndicatorStyle.ready ? 1 : 0,
           }}
         />
-        {TRACKING_MODE_OPTIONS.map((mode) => (
-          <Tabs.Trigger
-            key={mode.id}
-            ref={(node) => {
-              modeTriggerRefs.current[mode.id] = node;
-            }}
-            value={mode.id}
-            className="relative z-10 min-h-[2.85rem] flex-1 rounded-[16px] px-3 py-1.5 text-[14px] font-semibold tracking-[0.01em] text-center whitespace-nowrap transition-colors duration-300
-              data-[state=active]:text-blue-600 dark:data-[state=active]:text-blue-300
-              data-[state=inactive]:text-gray-500 hover:text-gray-700 dark:data-[state=inactive]:text-slate-300 dark:hover:text-white xl:flex-none"
-          >
-            {mode.label}
-          </Tabs.Trigger>
-        ))}
+        {TRACKING_MODE_OPTIONS.map((mode) => {
+          const disabled = mode.id === "song" && isSongModeDisabled;
+          const toneClassName = disabled
+            ? "cursor-not-allowed text-gray-300 hover:text-gray-300 dark:text-slate-600 dark:hover:text-slate-600"
+            : "data-[state=active]:text-blue-600 data-[state=inactive]:text-gray-500 hover:text-gray-700 dark:data-[state=active]:text-blue-300 dark:data-[state=inactive]:text-slate-300 dark:hover:text-white";
+
+          return (
+            <Tabs.Trigger
+              key={mode.id}
+              ref={(node) => {
+                modeTriggerRefs.current[mode.id] = node;
+              }}
+              value={mode.id}
+              disabled={disabled}
+              aria-disabled={disabled}
+              title={disabled ? "该活动类型没有歌曲排行" : undefined}
+              className={`relative z-10 min-h-[2.85rem] flex-1 rounded-[16px] px-3 py-1.5 text-[14px] font-semibold tracking-[0.01em] text-center whitespace-nowrap transition-colors duration-300 ${toneClassName} xl:flex-none`}
+            >
+              {mode.label}
+            </Tabs.Trigger>
+          );
+        })}
       </Tabs.List>
 
       <div className="flex-1 min-w-0 flex flex-col gap-3">
@@ -119,7 +130,7 @@ export const TrackerModeTierControls = memo(function TrackerModeTierControls({
         )}
 
         {trackingMode === "monthly" && (
-          <div className="overflow-visible rounded-none border border-transparent bg-transparent px-2 pt-2 pb-0 shadow-none sm:px-2.5 sm:pt-2.5 sm:pb-0">
+          <div className="overflow-visible rounded-none border border-transparent bg-transparent px-2 pt-1 pb-0 shadow-none sm:px-2.5 sm:pt-1 sm:pb-0">
             <div className="mb-2 px-1 text-xs font-bold tracking-[0.1em] text-blue-500/85 dark:text-sky-200 sm:text-[13px]">
               选择月份
             </div>
@@ -142,7 +153,7 @@ export const TrackerModeTierControls = memo(function TrackerModeTierControls({
             选择排名
           </div>
           <div className="flex flex-wrap gap-1.5 sm:gap-2">
-            {getTiersForMode(trackingMode).map((tier) => (
+            {tierOptions.map((tier) => (
               <button
                 key={tier}
                 type="button"
