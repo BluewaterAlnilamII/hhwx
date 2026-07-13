@@ -7,6 +7,15 @@ type CacheEntry<T> = {
   updatedAt: number;
 };
 
+type VisibleData<T> = {
+  key: string;
+  value: T;
+};
+
+export function selectCachedFetchData<T>(state: VisibleData<T> | null, key: string | null): T | null {
+  return state?.key === key ? state.value : null;
+}
+
 /**
  * 模块级缓存 —— 在组件卸载/重新挂载后依然保留已获取的数据。
  * 键为请求标识字符串，值为经 transform 处理后的响应及其写入时间。
@@ -62,21 +71,23 @@ export function useCachedFetch<T>(
   url: string | null,
   transform?: (raw: unknown) => T,
   options?: { refreshOnVisible?: boolean; staleTimeMs?: number; merge?: (incoming: T, existing: T) => T }
-): { data: T | null; loading: boolean; refresh: () => void } {
+): { data: T | null; loading: boolean; refreshing: boolean; refresh: () => void } {
   const refreshOnVisible = options?.refreshOnVisible ?? true;
 
   // 懒初始化：组件首次渲染即可从缓存读取上一次的数据
-  const [data, setData] = useState<T | null>(() => {
+  const [visibleData, setVisibleData] = useState<VisibleData<T> | null>(() => {
     if (key) {
       const cachedEntry = readCacheEntry<T>(key);
       if (cachedEntry) {
-        return cachedEntry.value;
+        return { key, value: cachedEntry.value };
       }
     }
 
     return null;
   });
+  const data = selectCachedFetchData(visibleData, key);
   const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   // 使用 ref 持有最新值，避免 doFetch 的 useCallback 因依赖数组为空而产生 stale closure
   const keyRef = useRef(key);
@@ -84,6 +95,7 @@ export function useCachedFetch<T>(
   const transformRef = useRef(transform);
   const mergeRef = useRef(options?.merge);
   const staleTimeRef = useRef(options?.staleTimeMs);
+  const activeSilentFetchesRef = useRef(new Map<string, number>());
 
   useEffect(() => {
     keyRef.current = key;
@@ -99,7 +111,7 @@ export function useCachedFetch<T>(
 
   /**
    * 发起一次 HTTP 请求并更新缓存。
-   * @param silent 为 true 时不触发 loading 状态（用于后台静默刷新）
+   * @param silent 为 true 时不触发阻塞式 loading，而是暴露 refreshing 状态。
    *
    * 防竞态策略：当调用方提供了 merge 函数时，HTTP 响应不直接覆盖缓存，
    * 而是与当前缓存合并后再写入。这样即使请求飞行期间 WebSocket 已追加了
@@ -111,7 +123,13 @@ export function useCachedFetch<T>(
     const currentUrl = urlRef.current;
     if (!currentKey || !currentUrl) return;
 
-    if (!silent) setLoading(true);
+    if (silent) {
+      const activeCount = (activeSilentFetchesRef.current.get(currentKey) ?? 0) + 1;
+      activeSilentFetchesRef.current.set(currentKey, activeCount);
+      setRefreshing(true);
+    } else {
+      setLoading(true);
+    }
 
     fetch(currentUrl)
       .then((res) => {
@@ -130,39 +148,54 @@ export function useCachedFetch<T>(
         if (mergeFn && existing !== undefined) {
           const merged = mergeFn(result, existing);
           writeCacheEntry(currentKey, merged);
-          setData(merged);
+          setVisibleData({ key: currentKey, value: merged });
         } else {
           writeCacheEntry(currentKey, result);
-          setData(result);
+          setVisibleData({ key: currentKey, value: result });
         }
       })
       .catch((err) => {
         console.error(`[useCachedFetch] ${currentKey}:`, err);
       })
       .finally(() => {
-        // 仅当 key 仍然匹配时才重置 loading，防止覆盖后续请求的状态
-        if (keyRef.current === currentKey) setLoading(false);
+        if (silent) {
+          const remainingCount = Math.max(
+            0,
+            (activeSilentFetchesRef.current.get(currentKey) ?? 1) - 1,
+          );
+          if (remainingCount === 0) {
+            activeSilentFetchesRef.current.delete(currentKey);
+          } else {
+            activeSilentFetchesRef.current.set(currentKey, remainingCount);
+          }
+          if (keyRef.current === currentKey) {
+            setRefreshing(remainingCount > 0);
+          }
+        } else if (keyRef.current === currentKey) {
+          setLoading(false);
+        }
       });
   }, []);
 
   // key / url 变化时：缓存命中 → 立即显示 + 后台静默刷新；未命中 → 常规 loading
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {
+      setRefreshing(false);
       if (!key || !url) {
-        setData(null);
+        setVisibleData(null);
         setLoading(false);
         return;
       }
 
       const cachedEntry = readCacheEntry<T>(key);
       if (cachedEntry !== undefined) {
-        setData(cachedEntry.value);
+        setVisibleData({ key, value: cachedEntry.value });
         setLoading(false);
         if (shouldRefresh(key)) {
           doFetch(true); // 有缓存但已过保鲜期，静默刷新
         }
       } else {
-        setData(null);
+        setVisibleData(null);
         setLoading(true);
         doFetch(false); // 无缓存，显示 loading
       }
@@ -187,7 +220,7 @@ export function useCachedFetch<T>(
 
   const refresh = useCallback(() => doFetch(true), [doFetch]);
 
-  return { data, loading, refresh };
+  return { data, loading, refreshing, refresh };
 }
 
 /**
