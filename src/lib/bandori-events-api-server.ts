@@ -103,6 +103,7 @@ function objectResponse(body: Buffer, status: number): R2ObjectResponse {
     ok: status >= 200 && status < 300,
     status,
     headers: new Headers({ "content-length": String(body.length) }),
+    buffer: async () => body,
     arrayBuffer: async () => arrayBuffer,
     json: async <T = unknown>() => JSON.parse(body.toString("utf8")) as T,
     text: async () => body.toString("utf8"),

@@ -89,15 +89,22 @@ async function createStore(options = {}) {
 }
 
 async function reservePort() {
-  const server = createServer();
-  server.listen(0, "127.0.0.1");
-  await once(server, "listening");
-  const address = server.address();
-  assert.ok(address && typeof address === "object");
-  const port = address.port;
-  server.close();
-  await once(server, "close");
-  return port;
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    const server = createServer();
+    const port = 20_000 + Math.floor(Math.random() * 20_000);
+    try {
+      await new Promise((resolvePromise, rejectPromise) => {
+        server.once("error", rejectPromise);
+        server.listen(port, "127.0.0.1", resolvePromise);
+      });
+      server.close();
+      await once(server, "close");
+      return port;
+    } catch (error) {
+      if (error?.code !== "EADDRINUSE" && error?.code !== "EACCES") throw error;
+    }
+  }
+  throw new Error("Unable to reserve a Next.js-safe test port");
 }
 
 async function stopServer(child) {
