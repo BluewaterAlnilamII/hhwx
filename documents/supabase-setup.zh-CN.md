@@ -18,6 +18,7 @@ MCP/手动流程应用过的历史记录。它们在本地有意保持 no-op，�
 - `supabase/schema/auth_legacy_patch.sql`：旧 auth/profile 部署的兼容补丁。
 - `supabase/schema/bandori_calendar_schema.sql`：Bandori 角色、活动、国服日程、活动 bonus 和日历编辑角色表。
 - `supabase/schema/bandori_tracker_data_schema.sql`：追踪器排名数据表和索引。
+- `supabase/schema/bandori_tracker_latest_schema.sql`：仅登录用户可读的 latest snapshot、service-role 合并 RPC 和 cutoff Private Broadcast 读取 policy。
 - `supabase/config.toml`：Supabase CLI 本地项目配置。
 - `supabase/migrations/*_baseline_schema.sql`：当前 HHWX 空 Supabase 项目的迁移基线。
 - `documents/account-status-schema.sql`：应用侧邮箱验证状态。
@@ -59,10 +60,11 @@ npm exec -- supabase migration new <name>
 2. 如果是升级旧部署，执行 `supabase/schema/auth_legacy_patch.sql`
 3. `supabase/schema/bandori_calendar_schema.sql`
 4. `supabase/schema/bandori_tracker_data_schema.sql`
-5. `documents/account-status-schema.sql`
-6. `documents/profile-public-uid-schema.sql`
-7. `documents/game-account-binding-schema.sql`
-8. `documents/game-profile-schema.sql`
+5. `supabase/schema/bandori_tracker_latest_schema.sql`
+6. `documents/account-status-schema.sql`
+7. `documents/profile-public-uid-schema.sql`
+8. `documents/game-account-binding-schema.sql`
+9. `documents/game-profile-schema.sql`
 
 只有在从已有 Supabase Auth 项目迁移、并且需要把已确认邮箱用户变为应用侧已验证用户时，才执行 `documents/account-status-backfill-auth-confirmed.sql`。
 
@@ -76,6 +78,9 @@ npm exec -- supabase migration new <name>
 - 将 `security definer` 函数视为特权代码：生产前复查参数检查、所有权检查、grants 和 `search_path` 行为。
 - 只在应用确实需要时授予直接 table 或 function 访问权限。
 - service-role 操作必须保持在服务端。浏览器代码只能使用公开 Supabase key 和已认证用户 session。
+- `bandori_tracker_latest` 仅允许登录用户读取，不加入 Postgres Changes publication。tracker 通过仅 service role 可执行的 `upsert_bandori_tracker_latest` RPC 写入，再向匹配的 Private Broadcast topic 发布；不要给浏览器授予 `realtime.messages` INSERT。
+- 客户端必须以 `(topic, revision)` 排序和幂等。`sampleId` 表示顶层最新观测时间；较旧 partial patch 补齐缺失榜线时，顶层 `sampleId` 可以保持不变而 `revision` 继续递增。
+- 事件追踪器先订阅，再精确查询 snapshot，并缓存查询期间的 Broadcast；snapshot 瞬时失败时使用有限退避重试。Private 分钟点只保留在当前会话内存中，live 权限未激活时不得显示。
 - Supabase Auth 的 Email provider 保持启用，但 Dashboard 的 Confirm email 保持关闭（`mailer_autoconfirm: true`）。HHWX 使用应用侧邮箱验证；Supabase 内置 signup 确认邮件不能完成 `account_status.email_verified_at`。
 - 只有 `db reset`、`db diff`、`start` 等本地 Supabase stack 命令需要 Docker。创建 migration 文件和从远程生成 types 可以只用项目本地 CLI。
 
@@ -85,6 +90,9 @@ Web 应用需要：
 
 - `NEXT_PUBLIC_SUPABASE_URL`
 - `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
+- `NEXT_PUBLIC_BANDORI_TRACKER_LIVE_SOURCE`（灰度期间为 `postgres_changes`，切换后为 `broadcast`）
+
+部署 tracker-live migration 前，必须在本地 Supabase 或隔离的 Supabase branch 执行 `npm run test:supabase`。`supabase/tests/bandori_tracker_latest.sql` 会在事务内验证 RPC 合并状态、点数组整数约束、ACL/RLS policy 是否存在，以及 latest 表未加入 Postgres Changes publication。
 - `SUPABASE_SECRET_KEY`
 
 `SUPABASE_SECRET_KEY` 只允许服务端使用，绝不能加 `NEXT_PUBLIC_` 前缀。

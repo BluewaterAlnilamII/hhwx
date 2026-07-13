@@ -1,9 +1,17 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { BANDORI_TRACKER_DATA_TABLE } from "@/lib/supabase-table-names";
+import type {
+  BandoriTrackerLiveSnapshot,
+  BandoriTrackerLiveTarget,
+} from "@/lib/bandori-tracker-live-contract";
 import { COMPARISON_LINE_COLORS } from "./constants";
+import {
+  isBandoriTrackerBroadcastEnabled,
+  useBandoriTrackerLiveListener,
+} from "./useBandoriTrackerLive";
 import type { MonthlyRankingOption } from "./useChartData";
 import type {
   ComparisonAlignment,
@@ -267,6 +275,7 @@ export function useComparisonTrackerData({
   alignment,
   currentStart,
   currentEnd,
+  liveTarget,
 }: {
   enabled: boolean;
   configs: ComparisonConfig[];
@@ -275,8 +284,10 @@ export function useComparisonTrackerData({
   alignment: ComparisonAlignment;
   currentStart: number | null;
   currentEnd: number | null;
+  liveTarget: BandoriTrackerLiveTarget | null;
 }) {
   const [dataByKey, setDataByKey] = useState<Record<string, TrackerData[]>>({});
+  const [liveDataByKey, setLiveDataByKey] = useState<Record<string, TrackerData[]>>({});
   const [loadingByKey, setLoadingByKey] = useState<Record<string, boolean>>({});
   const configsRef = useRef(configs);
 
@@ -293,6 +304,32 @@ export function useComparisonTrackerData({
     () => configs.filter(isResolvedConfig).map((config) => cacheKey(config)).join("|"),
     [configs],
   );
+  const handleLiveSnapshot = useCallback((liveSnapshot: BandoriTrackerLiveSnapshot) => {
+    const targetType: ComparisonTargetType = liveSnapshot.namespace === "monthly" ? "monthly" : "event";
+    const matchingConfigs = configsRef.current.filter((config): config is ResolvedComparisonConfig => (
+      isResolvedConfig(config)
+      && config.targetType === targetType
+      && config.targetId === liveSnapshot.targetId
+    ));
+    if (matchingConfigs.length === 0) return;
+
+    setLiveDataByKey((previous) => {
+      const next = { ...previous };
+      for (const config of matchingConfigs) {
+        const livePoint = targetType === "monthly"
+          ? liveSnapshot.monthly.find((point) => point.tier === config.tier)
+          : liveSnapshot.event.find((point) => point.tier === config.tier);
+        if (!livePoint || livePoint.isFinal) continue;
+        const key = cacheKey(config);
+        next[key] = normalizePoints([
+          ...(next[key] ?? []),
+          { time: livePoint.time, ep: livePoint.ep },
+        ]);
+      }
+      return next;
+    });
+  }, []);
+  const hasLiveAccess = useBandoriTrackerLiveListener(liveTarget, enabled, handleLiveSnapshot);
 
   useEffect(() => {
     const resolvedConfigs = configs.filter(isResolvedConfig);
@@ -344,7 +381,7 @@ export function useComparisonTrackerData({
 
   useEffect(() => {
     const resolvedConfigs = configs.filter(isResolvedConfig);
-    if (!enabled || resolvedConfigs.length === 0) return;
+    if (!enabled || resolvedConfigs.length === 0 || isBandoriTrackerBroadcastEnabled()) return;
 
     const channel = supabase
       .channel("bandori_tracker_comparison_realtime")
@@ -399,18 +436,22 @@ export function useComparisonTrackerData({
       const key = cacheKey(config);
       const cached = peekComparisonDataCache(key);
       const target = buildComparisonTargetMeta(config, eventMap, monthlyOptionMap);
+      const points = normalizePoints([
+        ...(dataByKey[key] ?? cached ?? []),
+        ...(hasLiveAccess ? liveDataByKey[key] ?? [] : []),
+      ]);
       return buildLine(
         config,
         index,
         target,
-        dataByKey[key] ?? cached,
+        points,
         Boolean(loadingByKey[key]),
         alignment,
         currentStart,
         currentEnd,
       );
     });
-  }, [alignment, configs, currentEnd, currentStart, dataByKey, enabled, eventMap, loadingByKey, monthlyOptionMap]);
+  }, [alignment, configs, currentEnd, currentStart, dataByKey, enabled, eventMap, hasLiveAccess, liveDataByKey, loadingByKey, monthlyOptionMap]);
 
   return { comparisonLines };
 }
