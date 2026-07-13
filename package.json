@@ -13,6 +13,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "test:bandori-events": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test tests/bandori-events-api-contract.test.mjs && node scripts/test-bandori-events-api-integration.mjs",
     "i18n:check": "node scripts/check-i18n-messages.mjs",
     "typecheck": "tsc --noEmit --pretty false"
   },

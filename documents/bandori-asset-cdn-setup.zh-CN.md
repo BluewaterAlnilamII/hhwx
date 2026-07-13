@@ -39,7 +39,7 @@ HHWX 生产环境应在 `/bandori/stamps/*` 对象上为 `https://hhwx.org` 配�
 
 `BANDORI_SONG_NOTES_SOURCE=bestdori` 会在音乐资源管线尚未完整时保持 `songs.notes` 与 Bestdori 对齐。当 `bandori/music/index.json` 已包含所有已发布歌曲的谱面派生 `notes` 后，可以切换到 `BANDORI_SONG_NOTES_SOURCE=assets`，让 `/api/bandori/master/songs` 从 HHWX music index 读取 note 数。`BANDORI_SONG_NOTES_BESTDORI_FALLBACK=1` 允许临时发布期间用 Bestdori 补齐缺失的 asset note count。关闭 fallback 后，assets 模式会在 music index 不可读或未覆盖全部歌曲时以 `503` fail closed。
 
-启用 Bandori master artifact 模式时，HHWX 仍会从 Bestdori 读取 `events`。`songs.notes` 默认继续使用 Bestdori，但可以按上面的配置切换到 HHWX music asset chart counts。
+Events 列表与详情 API 会通过 `BANDORI_PRIVATE_R2_BUCKET` 配置的私有桶，直接读取 `bandori/event-history-v3/api/active.json` 及其 grouped packs。服务端只接受 v3；pointer 或 pack 缺失、无权限、格式错误、损坏或超限时都会失败关闭。`BANDORI_EVENT_API_LOCAL_STORE_ROOT` 可在本地开发时指向 tracker 生成的 content store，生产环境会拒绝该设置。这项 Events-only 切换不会修改 cards、songs、music、profile、comments 或通用 master artifact reader。`songs.notes` 默认继续使用 Bestdori，但可以按上面的配置切换到 HHWX music asset chart counts。
 
 自托管部署不要指向 `cdn.hhwx.org`，除非你明确希望依赖 HHWX 生产资源托管。该域名只是部署细节，不授予任何第三方游戏素材权利。
 

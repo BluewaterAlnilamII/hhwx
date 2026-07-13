@@ -8,6 +8,7 @@ import {
   readBandoriMasterDataset,
   redirectBandoriMasterSearch,
 } from "@/lib/bandori-master-api";
+import { readBandoriEventApiDataset } from "@/lib/bandori-events-api-server";
 import {
   BESTDORI_MASTER_DATASET_ALIASES,
   BESTDORI_MASTER_DATASETS,
@@ -51,6 +52,12 @@ export async function GET(request: Request, context: RouteContext) {
   }
 
   try {
+    if (dataset === "events") {
+      return jsonSuccess(await readBandoriEventApiDataset("events"), {
+        headers: withCacheControl(BANDORI_MASTER_DATA_API_CACHE_CONTROL),
+      });
+    }
+
     const result = await readBandoriMasterDataset(dataset);
     if (!result) {
       return jsonError(503, "BANDORI_MASTER_ARTIFACT_NOT_CONFIGURED", "Bandori master artifacts are not configured", {
