@@ -541,6 +541,7 @@ export default function EventTrackerPage() {
     holidayData,
     loading,
     apiHasResult,
+    liveTarget,
   } = useTrackerData(
     currentEventId,
     trackingMode,
@@ -981,6 +982,7 @@ export default function EventTrackerPage() {
     alignment: comparisonAlignment,
     currentStart: typeof domainStart === "number" ? domainStart : null,
     currentEnd: typeof domainEnd === "number" ? domainEnd : null,
+    liveTarget,
   });
   const comparisonLineById = useMemo(
     () => new Map(comparisonLines.map((line) => [line.config.id, line])),

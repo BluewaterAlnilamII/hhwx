@@ -11,6 +11,7 @@ export const COMMENT_NOTIFICATIONS_TABLE = "comment_notifications";
 export const GUESTBOOK_COMMENTS_TABLE = "guestbook_comments";
 export const USER_ROLES_TABLE = "user_roles";
 export const BANDORI_TRACKER_DATA_TABLE = "bandori_tracker_data";
+export const BANDORI_TRACKER_LATEST_TABLE = "bandori_tracker_latest";
 export const MASTER_ARTIFACT_VERSIONS_TABLE = "master_artifact_versions";
 export const MASTER_ACTIVE_VERSIONS_TABLE = "master_active_versions";
 export const BANDORI_MASTER_API_INDEX_TABLE = "bandori_master_api_index";

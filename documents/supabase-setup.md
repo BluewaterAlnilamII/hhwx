@@ -10,6 +10,7 @@ This document describes HHWX's Supabase schema workflow. New schema changes shou
 - `supabase/schema/auth_legacy_patch.sql`: compatibility patch for older auth/profile deployments.
 - `supabase/schema/bandori_calendar_schema.sql`: Bandori character, event, CN schedule, event bonus, and calendar editor-role tables.
 - `supabase/schema/bandori_tracker_data_schema.sql`: tracker ranking data table and indexes.
+- `supabase/schema/bandori_tracker_latest_schema.sql`: authenticated latest snapshots, service-role merge RPC, and private cutoff Broadcast read policy.
 - `supabase/config.toml`: Supabase CLI local project configuration.
 - `supabase/migrations/*_baseline_schema.sql`: current migration baseline for new empty HHWX Supabase projects.
 - `supabase/migrations/20260602*_*.sql`, `supabase/migrations/202606030*_*.sql`, and `supabase/migrations/20260610030939_*.sql`: historical production migration records from the pre-baseline MCP/manual transition. These files are intentionally no-op locally because the baseline migration builds the empty-project schema.
@@ -52,10 +53,11 @@ For older manual setup, run these in the Supabase SQL editor or your migration s
 2. `supabase/schema/auth_legacy_patch.sql` if you are upgrading an older deployment
 3. `supabase/schema/bandori_calendar_schema.sql`
 4. `supabase/schema/bandori_tracker_data_schema.sql`
-5. `documents/account-status-schema.sql`
-6. `documents/profile-public-uid-schema.sql`
-7. `documents/game-account-binding-schema.sql`
-8. `documents/game-profile-schema.sql`
+5. `supabase/schema/bandori_tracker_latest_schema.sql`
+6. `documents/account-status-schema.sql`
+7. `documents/profile-public-uid-schema.sql`
+8. `documents/game-account-binding-schema.sql`
+9. `documents/game-profile-schema.sql`
 
 Then run `documents/account-status-backfill-auth-confirmed.sql` only when migrating users from an existing Supabase Auth project where confirmed users should become application-verified users.
 
@@ -70,6 +72,9 @@ If an existing project still has the historical `comment_likes` table, apply the
 - Treat `security definer` functions as privileged code: verify argument checks, ownership checks, grants, and `search_path` behavior before production use.
 - Grant direct table or function access only where the application requires it.
 - Keep service-role operations server-side. Browser code must use only public Supabase keys and authenticated user sessions.
+- `bandori_tracker_latest` is authenticated read-only and is not a Postgres Changes source. The tracker writes it through the service-role-only `upsert_bandori_tracker_latest` RPC, then publishes to a matching Private Broadcast topic. Do not grant browser `INSERT` on `realtime.messages`.
+- Clients order and deduplicate live data by `(topic, revision)`. `sampleId` identifies the newest observation time, but an older partial patch may fill a missing ranking line while preserving that top-level `sampleId` and incrementing `revision`.
+- The event tracker subscribes before the exact snapshot query, buffers Broadcast messages during that query, and retries a transient snapshot failure with bounded backoff. Private minute points stay in session memory and are hidden when live access is not active.
 - Keep Supabase Auth email provider enabled, but keep Dashboard Confirm email disabled (`mailer_autoconfirm: true`). HHWX uses application-side email verification; Supabase's built-in signup confirmation email does not complete `account_status.email_verified_at`.
 - Docker is needed only for local Supabase stack commands such as `db reset`, `db diff`, or `start`. Creating migration files and generating remote types can use the project-local CLI without Docker.
 
@@ -79,6 +84,9 @@ The web app needs:
 
 - `NEXT_PUBLIC_SUPABASE_URL`
 - `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
+- `NEXT_PUBLIC_BANDORI_TRACKER_LIVE_SOURCE` (`postgres_changes` during rollout, then `broadcast`)
+
+Before deploying the tracker-live migration, run `npm run test:supabase` against the local Supabase stack (or an isolated Supabase branch). The transactional check in `supabase/tests/bandori_tracker_latest.sql` covers RPC merge states, integer wire values, ACL/RLS policy presence, and confirms that the latest table is absent from the Postgres Changes publication.
 - `SUPABASE_SECRET_KEY`
 
 `SUPABASE_SECRET_KEY` is required only on the server and must never use a `NEXT_PUBLIC_` prefix.
