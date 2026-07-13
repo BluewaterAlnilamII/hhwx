@@ -4,9 +4,9 @@ import {
   withCacheControl,
 } from "@/lib/api-cache";
 import { jsonError, jsonRouteError, jsonSuccess } from "@/lib/api-response";
+import { readBandoriEventApiDetail } from "@/lib/bandori-events-api-server";
 import {
   BANDORI_MASTER_ID_PATTERN,
-  readBandoriMasterEventDetail,
   redirectBandoriMasterSearch,
 } from "@/lib/bandori-master-api";
 
@@ -33,14 +33,14 @@ export async function GET(request: Request, context: RouteContext) {
   }
 
   try {
-    const result = await readBandoriMasterEventDetail(eventId);
+    const result = await readBandoriEventApiDetail(eventId);
     if (!result) {
       return jsonError(404, "BANDORI_MASTER_EVENT_DETAIL_NOT_FOUND", "Bandori master event detail is not available", {
         headers: withCacheControl(LIVE_API_CACHE_CONTROL),
       });
     }
 
-    return jsonSuccess({ ...result, eventId }, {
+    return jsonSuccess(result, {
       headers: withCacheControl(BANDORI_MASTER_DATA_API_CACHE_CONTROL),
     });
   } catch (error) {
