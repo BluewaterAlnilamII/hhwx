@@ -7,6 +7,10 @@ import {
   mergeBandoriTrackerLiveSnapshots,
   parseBandoriTrackerLiveSnapshot,
 } from "../src/lib/bandori-tracker-live-contract.ts";
+import { authorizeBandoriTrackerRealtimeConnection } from "../src/lib/bandori-tracker-live-connection.ts";
+import { appendBandoriTrackerLivePoint } from "../src/lib/bandori-tracker-live-series.ts";
+import { selectCachedFetchData } from "../src/hooks/useCachedFetch.ts";
+import { formatBandoriTrackerUpdateAge } from "../src/lib/bandori-tracker-time.ts";
 
 const eventPayload = {
   schemaVersion: 1,
@@ -115,4 +119,81 @@ test("monthly target derives the source period and private topic", () => {
     buildBandoriTrackerLiveTopic({ server: "cn", namespace: "monthly", targetId: 18, period }),
     "bandori:cutoff:cn:monthly:2026-07",
   );
+});
+
+test("a tier switch never exposes or seeds the previous tier series", () => {
+  const t100Key = "tracker-3-316-event-100";
+  const t40000Key = "tracker-3-316-event-40000";
+  const t100Series = [{ time: 1780000000000, ep: 10_351_005 }];
+
+  assert.equal(
+    selectCachedFetchData({ key: t100Key, value: t100Series }, t40000Key),
+    null,
+  );
+
+  const firstLivePoint = appendBandoriTrackerLivePoint(
+    { [t100Key]: t100Series },
+    t40000Key,
+    { time: 1780000060000, ep: 211_030 },
+  );
+  assert.deepEqual(firstLivePoint[t100Key], t100Series);
+  assert.deepEqual(firstLivePoint[t40000Key], [{ time: 1780000060000, ep: 211_030 }]);
+
+  const sameEpNextMinute = appendBandoriTrackerLivePoint(
+    firstLivePoint,
+    t40000Key,
+    { time: 1780000120000, ep: 211_030 },
+  );
+  assert.deepEqual(sameEpNextMinute[t40000Key], [
+    { time: 1780000060000, ep: 211_030 },
+    { time: 1780000120000, ep: 211_030 },
+  ]);
+});
+
+test("private realtime auth completes before a connection may continue", async () => {
+  let authResolved = false;
+  let releaseAuth;
+  const auth = new Promise((resolve) => {
+    releaseAuth = () => {
+      authResolved = true;
+      resolve();
+    };
+  });
+  const pending = authorizeBandoriTrackerRealtimeConnection(
+    () => auth,
+    () => authResolved,
+  );
+
+  assert.equal(authResolved, false);
+  releaseAuth();
+  assert.equal(await pending, true);
+
+  assert.equal(
+    await authorizeBandoriTrackerRealtimeConnection(
+      async () => undefined,
+      () => false,
+    ),
+    false,
+  );
+});
+
+test("update age uses seconds for the first minute and minutes afterwards", () => {
+  const timestamp = 1_780_000_000_000;
+
+  assert.deepEqual(formatBandoriTrackerUpdateAge(timestamp, timestamp), {
+    label: "0秒前",
+    isStale: false,
+  });
+  assert.deepEqual(formatBandoriTrackerUpdateAge(timestamp, timestamp + 59_999), {
+    label: "59秒前",
+    isStale: false,
+  });
+  assert.deepEqual(formatBandoriTrackerUpdateAge(timestamp, timestamp + 60_000), {
+    label: "1分钟前",
+    isStale: false,
+  });
+  assert.deepEqual(formatBandoriTrackerUpdateAge(timestamp, timestamp + 31 * 60_000), {
+    label: "31分钟前",
+    isStale: true,
+  });
 });

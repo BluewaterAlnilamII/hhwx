@@ -17,11 +17,13 @@ import {
 import type { ChinaMainlandHolidayCalendarData } from "@/lib/bandori-china-mainland-holiday-calendar";
 import {
   bandoriTrackerMonthIdToPeriod,
+  type BandoriTrackerLiveSnapshot,
   type BandoriTrackerLiveTarget,
 } from "@/lib/bandori-tracker-live-contract";
+import { appendBandoriTrackerLivePoint } from "@/lib/bandori-tracker-live-series";
 import type { TrackerData, TrackerResult, TrackerSongGroup, EventMetadata, MinimalEvent, TrackingMode, BandoriEventSummary } from "./types";
 import { getMonthlyRankingWindow } from "./useChartData";
-import { isBandoriTrackerBroadcastEnabled, useBandoriTrackerLive } from "./useBandoriTrackerLive";
+import { isBandoriTrackerBroadcastEnabled, useBandoriTrackerLiveListener } from "./useBandoriTrackerLive";
 import { useBoundaryClock } from "./useBoundaryClock";
 
 function appendTrackerPoint(series: TrackerData[], time: number, ep: number, isFinal = false): TrackerData[] {
@@ -381,7 +383,6 @@ export function useTrackerData(
       targetId: targetEventParam,
     };
   }, [enabled, eventMeta, eventScheduleNow, monthlyWindow.cutoffEnd, monthlyWindow.domainStart, targetEventParam, trackingMode]);
-  const liveSnapshot = useBandoriTrackerLive(liveTarget, enabled);
   const trackerCacheKey = enabled && targetEventParam !== null
     ? `tracker-3-${targetEventParam}-${trackingMode}-${selectedTier}`
     : null;
@@ -408,7 +409,7 @@ export function useTrackerData(
     []
   );
 
-  const { data: trackerResult, loading } = useCachedFetch<TrackerResult>(
+  const { data: trackerResult, loading, refreshing } = useCachedFetch<TrackerResult>(
     trackerCacheKey,
     trackerCacheKey !== null && targetEventParam !== null
       ? `/api/bandori/tracker/data?server=3&event=${targetEventParam}&type=${trackingMode}&tier=${selectedTier}`
@@ -440,39 +441,6 @@ export function useTrackerData(
   useEffect(() => {
     currentViewRef.current = { targetEventId: targetEventParam, mode: trackingMode, tier: selectedTier, songId: resolvedSelectedSongId };
   }, [resolvedSelectedSongId, selectedTier, targetEventParam, trackingMode]);
-
-  const privateLiveDataVisible = !isBandoriTrackerBroadcastEnabled() || liveSnapshot !== null;
-  const liveCutoffsForView = trackerCacheKey && privateLiveDataVisible
-    ? liveCutoffsByKey[trackerCacheKey]
-    : undefined;
-  const liveSongGroupsForView = trackerCacheKey && privateLiveDataVisible
-    ? liveSongGroupsByKey[trackerCacheKey]
-    : undefined;
-  const mergedSongGroupsForView = useMemo(
-    () => mergeTrackerSongGroups(liveSongGroupsForView ?? [], trackerResult?.songGroups ?? []),
-    [liveSongGroupsForView, trackerResult?.songGroups],
-  );
-  const mergedCutoffsForView = useMemo(
-    () => mergeTrackerCutoffs(liveCutoffsForView ?? [], trackerResult?.cutoffs ?? []),
-    [liveCutoffsForView, trackerResult?.cutoffs],
-  );
-  const mergedTrackerStateRef = useRef<{
-    cacheKey: string | null;
-    cutoffs: TrackerData[];
-    songGroups: TrackerSongGroup[];
-  }>({
-    cacheKey: null,
-    cutoffs: [],
-    songGroups: [],
-  });
-
-  useEffect(() => {
-    mergedTrackerStateRef.current = {
-      cacheKey: trackerCacheKey,
-      cutoffs: mergedCutoffsForView,
-      songGroups: mergedSongGroupsForView,
-    };
-  }, [mergedCutoffsForView, mergedSongGroupsForView, trackerCacheKey]);
 
   // Supabase realtime subscription for newly inserted tracker points.
   useEffect(() => {
@@ -506,16 +474,15 @@ export function useTrackerData(
               const cacheKey = `tracker-3-${view.targetEventId}-${view.mode}-${view.tier}`;
 
               setLiveSongGroupsByKey((prev) => {
-                const baseSongGroups = mergeTrackerSongGroups(
-                  prev[cacheKey] ?? [],
-                  mergedTrackerStateRef.current.cacheKey === cacheKey
-                    ? mergedTrackerStateRef.current.songGroups
-                    : [],
-                );
-
                 return {
                   ...prev,
-                  [cacheKey]: upsertSongGroupPoint(baseSongGroups, incomingSongId, time, ep, incomingIsFinal),
+                  [cacheKey]: upsertSongGroupPoint(
+                    prev[cacheKey] ?? [],
+                    incomingSongId,
+                    time,
+                    ep,
+                    incomingIsFinal,
+                  ),
                 };
               });
               setLiveHasResultByKey((prev) => ({ ...prev, [cacheKey]: true }));
@@ -536,18 +503,11 @@ export function useTrackerData(
 
             const cacheKey = `tracker-3-${view.targetEventId}-${view.mode}-${view.tier}`;
             setLiveCutoffsByKey((prev) => {
-              const baseCutoffs = mergeTrackerCutoffs(
-                prev[cacheKey] ?? [],
-                mergedTrackerStateRef.current.cacheKey === cacheKey
-                  ? mergedTrackerStateRef.current.cutoffs
-                  : [],
-              );
-
-              return {
-                ...prev,
-                // Drop non-increasing timestamps so out-of-order inserts do not distort the line chart.
-                [cacheKey]: appendTrackerPoint(baseCutoffs, time, ep, incomingIsFinal),
-              };
+              return appendBandoriTrackerLivePoint(prev, cacheKey, {
+                time,
+                ep,
+                isFinal: incomingIsFinal || undefined,
+              });
             });
             setLiveHasResultByKey((prev) => ({ ...prev, [cacheKey]: true }));
 
@@ -572,27 +532,25 @@ export function useTrackerData(
     };
   }, []);
 
-  useEffect(() => {
-    if (!liveSnapshot || !liveTarget || !trackerCacheKey || targetEventParam === null) return;
+  const handlePrivateLiveSnapshot = useCallback((snapshot: BandoriTrackerLiveSnapshot) => {
+    const view = currentViewRef.current;
+    if (view.targetEventId === null) return;
+    const namespace = view.mode === "monthly" ? "monthly" : "events";
     if (
-      liveSnapshot.server !== liveTarget.server
-      || liveSnapshot.namespace !== liveTarget.namespace
-      || liveSnapshot.targetId !== liveTarget.targetId
+      snapshot.server !== "cn"
+      || snapshot.namespace !== namespace
+      || snapshot.targetId !== view.targetEventId
     ) return;
+    const cacheKey = `tracker-3-${view.targetEventId}-${view.mode}-${view.tier}`;
 
-    if (trackingMode === "song") {
-      const songPoints = liveSnapshot.namespace === "events"
-        ? liveSnapshot.songs.filter((point) => point.tier === selectedTier)
+    if (view.mode === "song") {
+      const songPoints = snapshot.namespace === "events"
+        ? snapshot.songs.filter((point) => point.tier === view.tier)
         : [];
       if (songPoints.length === 0) return;
 
       setLiveSongGroupsByKey((previous) => {
-        let nextGroups = mergeTrackerSongGroups(
-          previous[trackerCacheKey] ?? [],
-          mergedTrackerStateRef.current.cacheKey === trackerCacheKey
-            ? mergedTrackerStateRef.current.songGroups
-            : [],
-        );
+        let nextGroups = previous[cacheKey] ?? [];
         for (const point of songPoints) {
           nextGroups = upsertSongGroupPoint(
             nextGroups,
@@ -602,36 +560,47 @@ export function useTrackerData(
             point.isFinal === true,
           );
         }
-        return { ...previous, [trackerCacheKey]: nextGroups };
+        return { ...previous, [cacheKey]: nextGroups };
       });
-      setLiveHasResultByKey((previous) => ({ ...previous, [trackerCacheKey]: true }));
+      setLiveHasResultByKey((previous) => ({ ...previous, [cacheKey]: true }));
       return;
     }
 
-    const point = trackingMode === "monthly"
-      ? liveSnapshot.monthly.find((candidate) => candidate.tier === selectedTier)
-      : liveSnapshot.event.find((candidate) => candidate.tier === selectedTier);
+    const point = view.mode === "monthly"
+      ? snapshot.monthly.find((candidate) => candidate.tier === view.tier)
+      : snapshot.event.find((candidate) => candidate.tier === view.tier);
     if (!point) return;
 
     setLiveCutoffsByKey((previous) => {
-      const baseCutoffs = mergeTrackerCutoffs(
-        previous[trackerCacheKey] ?? [],
-        mergedTrackerStateRef.current.cacheKey === trackerCacheKey
-          ? mergedTrackerStateRef.current.cutoffs
-          : [],
-      );
-      return {
-        ...previous,
-        [trackerCacheKey]: appendTrackerPoint(
-          baseCutoffs,
-          point.time,
-          point.ep,
-          point.isFinal === true,
-        ),
-      };
+      return appendBandoriTrackerLivePoint(previous, cacheKey, {
+        time: point.time,
+        ep: point.ep,
+        isFinal: point.isFinal === true || undefined,
+      });
     });
-    setLiveHasResultByKey((previous) => ({ ...previous, [trackerCacheKey]: true }));
-  }, [liveSnapshot, liveTarget, selectedTier, targetEventParam, trackerCacheKey, trackingMode]);
+    setLiveHasResultByKey((previous) => ({ ...previous, [cacheKey]: true }));
+  }, []);
+
+  const hasPrivateLiveAccess = useBandoriTrackerLiveListener(
+    liveTarget,
+    enabled,
+    handlePrivateLiveSnapshot,
+  );
+  const privateLiveDataVisible = !isBandoriTrackerBroadcastEnabled() || hasPrivateLiveAccess;
+  const liveCutoffsForView = trackerCacheKey && privateLiveDataVisible
+    ? liveCutoffsByKey[trackerCacheKey]
+    : undefined;
+  const liveSongGroupsForView = trackerCacheKey && privateLiveDataVisible
+    ? liveSongGroupsByKey[trackerCacheKey]
+    : undefined;
+  const mergedSongGroupsForView = useMemo(
+    () => mergeTrackerSongGroups(liveSongGroupsForView ?? [], trackerResult?.songGroups ?? []),
+    [liveSongGroupsForView, trackerResult?.songGroups],
+  );
+  const mergedCutoffsForView = useMemo(
+    () => mergeTrackerCutoffs(liveCutoffsForView ?? [], trackerResult?.cutoffs ?? []),
+    [liveCutoffsForView, trackerResult?.cutoffs],
+  );
 
   const chartData = useMemo(() => {
     if (trackingMode === "song" && mergedSongGroupsForView.length > 0) {
@@ -677,6 +646,7 @@ export function useTrackerData(
     chartData,
     holidayData,
     loading,
+    refreshing,
     apiHasResult,
     liveTarget,
   };

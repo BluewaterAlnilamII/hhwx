@@ -1,7 +1,9 @@
 "use client";
 
 import { memo, useEffect, useState } from "react";
+import { Loader2 } from "lucide-react";
 
+import { formatBandoriTrackerUpdateAge } from "@/lib/bandori-tracker-time";
 import { BESTDORI_PREDICTION_COLOR } from "./constants";
 import type { TrackingMode } from "./types";
 
@@ -20,12 +22,13 @@ type TrackerStatusSummaryProps = {
     status: string;
   };
   scoreSummary: TrackerScoreSummary;
+  isRefreshing: boolean;
   showBestdoriPrediction: boolean;
   status: string;
   trackingMode: TrackingMode;
 };
 
-function MinutesAgo({ timestamp }: { timestamp: number }) {
+function TimeAgo({ timestamp }: { timestamp: number }) {
   const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
@@ -33,10 +36,9 @@ function MinutesAgo({ timestamp }: { timestamp: number }) {
     return () => clearInterval(interval);
   }, []);
 
-  const minutesAgo = Math.floor((now - timestamp) / 60000);
-  const label = minutesAgo >= 0 ? `${minutesAgo}分钟前` : "-";
+  const { isStale, label } = formatBandoriTrackerUpdateAge(timestamp, now);
 
-  return minutesAgo > 30 ? (
+  return isStale ? (
     <span className="inline-flex items-center rounded-full border border-red-200 bg-red-50 px-2 py-0.5 text-xs font-semibold tabular-nums text-red-600 dark:border-red-400/30 dark:bg-red-500/10 dark:text-red-200">
       {label}
     </span>
@@ -50,6 +52,7 @@ function MinutesAgo({ timestamp }: { timestamp: number }) {
 export const TrackerStatusSummary = memo(function TrackerStatusSummary({
   bestdoriPrediction,
   scoreSummary,
+  isRefreshing,
   showBestdoriPrediction,
   status,
   trackingMode,
@@ -74,10 +77,18 @@ export const TrackerStatusSummary = memo(function TrackerStatusSummary({
             </div>
             <div className="flex items-center gap-1.5 sm:gap-2">
               <span className="font-medium text-slate-500 dark:text-slate-400">更新时间</span>
-              {scoreSummary.latestUpdateTime !== null
-                ? <MinutesAgo timestamp={scoreSummary.latestUpdateTime} />
-                : <span className="text-[13px] font-medium text-slate-400 dark:text-slate-500">-</span>
-              }
+              <span className="inline-flex items-center gap-1.5">
+                {scoreSummary.latestUpdateTime !== null
+                  ? <TimeAgo timestamp={scoreSummary.latestUpdateTime} />
+                  : <span className="text-[13px] font-medium text-slate-400 dark:text-slate-500">-</span>
+                }
+                {isRefreshing ? (
+                  <Loader2
+                    aria-label="正在更新分数线"
+                    className="h-3.5 w-3.5 animate-spin text-blue-500 dark:text-sky-300"
+                  />
+                ) : null}
+              </span>
             </div>
             {trackingMode === "event" && showBestdoriPrediction && (
               <div className="flex items-center gap-1.5 sm:gap-2">

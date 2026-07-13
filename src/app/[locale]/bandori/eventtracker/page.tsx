@@ -540,6 +540,7 @@ export default function EventTrackerPage() {
     chartData,
     holidayData,
     loading,
+    refreshing,
     apiHasResult,
     liveTarget,
   } = useTrackerData(
@@ -1370,6 +1371,7 @@ export default function EventTrackerPage() {
                 <TrackerStatusSummary
                   bestdoriPrediction={bestdoriPrediction}
                   scoreSummary={scoreSummary}
+                  isRefreshing={refreshing}
                   showBestdoriPrediction={showBestdoriPrediction}
                   status={status}
                   trackingMode={trackingMode}

@@ -11,6 +11,7 @@ import {
   type BandoriTrackerLiveTarget,
 } from "@/lib/bandori-tracker-live-contract";
 import { BANDORI_TRACKER_LATEST_TABLE } from "@/lib/supabase-table-names";
+import { authorizeBandoriTrackerRealtimeConnection } from "@/lib/bandori-tracker-live-connection";
 import { supabase } from "@/lib/supabase";
 import { useGameStore } from "@/store/useGameStore";
 
@@ -23,6 +24,8 @@ type LiveEntry = {
   snapshot: BandoriTrackerLiveSnapshot | null;
   buffered: BandoriTrackerLiveSnapshot[];
   channel: RealtimeChannel | null;
+  connectionGeneration: number;
+  isConnecting: boolean;
   isSnapshotLoaded: boolean;
   isSnapshotLoading: boolean;
   snapshotRetryCount: number;
@@ -121,6 +124,8 @@ async function loadSnapshot(entry: LiveEntry, channel: RealtimeChannel) {
 }
 
 function disconnectEntry(entry: LiveEntry) {
+  entry.connectionGeneration += 1;
+  entry.isConnecting = false;
   const channel = entry.channel;
   entry.channel = null;
   entry.isSnapshotLoaded = false;
@@ -134,27 +139,46 @@ function disconnectEntry(entry: LiveEntry) {
   if (channel) void supabase.removeChannel(channel);
 }
 
-function connectEntry(entry: LiveEntry) {
-  if (entry.channel || entry.listeners.size === 0) return;
+async function connectEntry(entry: LiveEntry) {
+  if (entry.channel || entry.isConnecting || entry.listeners.size === 0) return;
   if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
 
-  entry.isSnapshotLoaded = false;
-  entry.buffered = [];
-  const channel = supabase
-    .channel(entry.topic, { config: { private: true } })
-    .on("broadcast", { event: BANDORI_TRACKER_LIVE_EVENT }, (message) => {
-      const rawPayload = message && typeof message === "object" && "payload" in message
-        ? message.payload
-        : message;
-      const snapshot = parseIncomingSnapshot(entry, rawPayload);
-      if (!snapshot) return;
-      if (!entry.isSnapshotLoaded) {
-        entry.buffered.push(snapshot);
-        return;
-      }
-      applySnapshot(entry, snapshot);
-    })
-    .subscribe((status, error) => {
+  const connectionGeneration = entry.connectionGeneration + 1;
+  entry.connectionGeneration = connectionGeneration;
+  entry.isConnecting = true;
+
+  try {
+    // Private Realtime authorization must use the restored user session rather
+    // than the publishable-key fallback that exists when the client is created.
+    const isCurrent = await authorizeBandoriTrackerRealtimeConnection(
+      () => supabase.realtime.setAuth(),
+      () => (
+        entry.connectionGeneration === connectionGeneration
+        && entry.listeners.size > 0
+      ),
+    );
+    if (!isCurrent || (typeof document !== "undefined" && document.visibilityState === "hidden")) {
+      return;
+    }
+
+    entry.isSnapshotLoaded = false;
+    entry.buffered = [];
+    const channel = supabase
+      .channel(entry.topic, { config: { private: true } })
+      .on("broadcast", { event: BANDORI_TRACKER_LIVE_EVENT }, (message) => {
+        const rawPayload = message && typeof message === "object" && "payload" in message
+          ? message.payload
+          : message;
+        const snapshot = parseIncomingSnapshot(entry, rawPayload);
+        if (!snapshot) return;
+        if (!entry.isSnapshotLoaded) {
+          entry.buffered.push(snapshot);
+          return;
+        }
+        applySnapshot(entry, snapshot);
+      });
+    entry.channel = channel;
+    channel.subscribe((status, error) => {
       if (entry.channel !== channel) return;
       if (status === "SUBSCRIBED") {
         void loadSnapshot(entry, channel);
@@ -162,7 +186,15 @@ function connectEntry(entry: LiveEntry) {
         console.error(`[bandoriTrackerLive] channel ${status} for ${entry.topic}:`, error);
       }
     });
-  entry.channel = channel;
+  } catch (error) {
+    if (entry.connectionGeneration === connectionGeneration) {
+      console.error(`[bandoriTrackerLive] failed to authorize ${entry.topic}:`, error);
+    }
+  } finally {
+    if (entry.connectionGeneration === connectionGeneration) {
+      entry.isConnecting = false;
+    }
+  }
 }
 
 function trimUnusedEntries() {
@@ -194,7 +226,7 @@ function installVisibilityListener() {
       window.clearTimeout(hiddenDisconnectTimer);
       hiddenDisconnectTimer = null;
     }
-    for (const entry of entries.values()) connectEntry(entry);
+    for (const entry of entries.values()) void connectEntry(entry);
   });
 }
 
@@ -210,6 +242,8 @@ function subscribeToTarget(target: BandoriTrackerLiveTarget, listener: SnapshotL
       snapshot: null,
       buffered: [],
       channel: null,
+      connectionGeneration: 0,
+      isConnecting: false,
       isSnapshotLoaded: false,
       isSnapshotLoading: false,
       snapshotRetryCount: 0,
@@ -222,7 +256,7 @@ function subscribeToTarget(target: BandoriTrackerLiveTarget, listener: SnapshotL
   entry.listeners.add(listener);
   entry.lastAccessedAt = Date.now();
   if (entry.snapshot) listener(entry.snapshot);
-  connectEntry(entry);
+  void connectEntry(entry);
 
   return () => {
     entry?.listeners.delete(listener);
