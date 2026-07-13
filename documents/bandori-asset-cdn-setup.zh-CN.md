@@ -41,6 +41,50 @@ HHWX 生产环境应在 `/bandori/stamps/*` 对象上为 `https://hhwx.org` 配�
 
 Events 列表与详情 API 会通过 `BANDORI_PRIVATE_R2_BUCKET` 配置的私有桶，直接读取 `bandori/event-history-v3/api/active.json` 及其 grouped packs。服务端只接受 v3；pointer 或 pack 缺失、无权限、格式错误、损坏或超限时都会失败关闭。`BANDORI_EVENT_API_LOCAL_STORE_ROOT` 可在本地开发时指向 tracker 生成的 content store，生产环境会拒绝该设置。这项 Events-only 切换不会修改 cards、songs、music、profile、comments 或通用 master artifact reader。`songs.notes` 默认继续使用 Bestdori，但可以按上面的配置切换到 HHWX music asset chart counts。
 
+## 榜线历史 API
+
+`GET /api/bandori/tracker/data` 可以从 `bandori/trackerdata` 下的对象直接读取 CN 榜线历史。服务端使用带签名的 R2/S3 请求，不会通过公共 CDN 绕行读取聚合数据。按下面配置数据源和明确的公共 artifact bucket；endpoint 与凭据继续使用仅限服务端的 `BANDORI_R2_*`：
+
+```dotenv
+BANDORI_TRACKER_HISTORY_SOURCE=supabase
+BANDORI_TRACKER_HISTORY_R2_BUCKET=your_public_artifact_bucket
+```
+
+可选数据源为：
+
+- `supabase`：保持旧的纯数据库行为。
+- `r2-with-supabase-fallback`：优先读取 R2；只有 R2 不可用、损坏、超限或校验失败时，才把整个请求重新交给 Supabase。
+- `r2`：读取 R2；存在已验证的内存 stale snapshot 时可以使用，否则返回 `503 TRACKER_HISTORY_UNAVAILABLE`，不做请求级数据库 fallback。
+
+manifest 不存在、manifest 没有请求的 pack 类型，或有效 pack 中没有请求档位，都属于正常空数据，继续返回现有的 `200 + { result: true, cutoffs: [] }`。manifest 已经引用但 pack 缺失或无效则属于运行故障，不能伪装为空结果。公开请求参数、5000 行上限、响应格式、API `no-store` 策略和 Supabase Realtime 订阅都保持不变。
+
+对象根路径固定为数据契约 `bandori/trackerdata`，不会通过环境变量修改。下面的限制是损坏对象和资源耗尽保护，不会预留相应内存，也不是正常对象应达到的目标：
+
+| 保护项 | 限制 | 依据 |
+| --- | ---: | --- |
+| manifest 与 pack 共享对象读取预算 | 3 秒 | 在 fallback 或稳定 `503` 前约束两次签名 S3 读取；后续 hash、解压、JSON 解析和契约校验分别由下方字节数与记录数上限约束。 |
+| manifest | 64 KiB | 足以容纳当前 descriptor 和每类最多 8 个保留 pack key，并留有大量余量。 |
+| gzip pack | 2 MiB | 约为实测 event 315 pack（61.7 KiB）的 33 倍。 |
+| 解压 JSON | 16 MiB | 约为实测 event 315 payload（255 KiB）的 64 倍，同时限制异常 gzip 膨胀。 |
+| 单 pack 记录数 | 200,000 | 约为实测 event 315 记录数（10,723）的 19 倍；每分钟实时推送不会写入这些历史 pack。 |
+| parsed cache | 16 项 / 估算 32 MiB | 覆盖主图和比较目标，同时避免浏览大量历史活动后无限保留 pack。 |
+| 失败冷却 | 每目标 15 秒 | 防止 R2 故障时每个 API 请求都再次触发失败对象读取。 |
+
+parsed cache 权重按“解压字节 + 每个点 64 字节 + 少量 Map/分组开销”保守估算。解析完成后不会保留压缩 Buffer、解压 Buffer 或 JSON 文本。对象超过保护上限时不会被截断：fallback 模式会执行完整 Supabase 查询，纯 R2 模式返回 `503`。只有新的生产盘点证明数据规模确实增长后，才应人工调整限制。
+
+为了提供切流证据，每个 Web 进程对于同一目标类型和 manifest generation 最多记录一次结构化 `Bandori tracker history R2 read succeeded` 日志，其中包含 generation、读取耗时和返回记录数，但不包含凭据或对象正文。降级读取仍按独立规则限频。
+
+生产切换到 R2-first 前，使用只读命令对照代表性目标；命令不会写入任何数据源：
+
+```bash
+npm run compare:bandori-tracker-history -- --event 315 --type event --tier 1000
+npm run compare:bandori-tracker-history -- --event 316 --type event --tier 1000
+npm run compare:bandori-tracker-history -- --event 316 --type song --tier 1000
+npm run compare:bandori-tracker-history -- --event 18 --type monthly --tier 1000
+```
+
+对照命令会固定一次 manifest generation，验证 gzip、hash 和 pack 契约，应用现有响应上限及分组语义，再逐点比较 Supabase；还应额外选择一个已知在两侧都为空的受支持档位。验证时 R2 空结果会临时查询 Supabase 核对；生产请求中的正常 R2 空结果不会访问 Supabase。回滚只需恢复 `BANDORI_TRACKER_HISTORY_SOURCE=supabase`，不要删除 tracker artifact 或数据库记录。
+
 自托管部署不要指向 `cdn.hhwx.org`，除非你明确希望依赖 HHWX 生产资源托管。该域名只是部署细节，不授予任何第三方游戏素材权利。
 
 ## 公开路径契约

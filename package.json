@@ -11,9 +11,11 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "compare:bandori-tracker-history": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/compare-bandori-tracker-history.mjs",
     "start": "next start",
     "lint": "eslint",
     "test:bandori-events": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test tests/bandori-events-api-contract.test.mjs && node scripts/test-bandori-events-api-integration.mjs",
+    "test:bandori-tracker-history": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test tests/bandori-tracker-history-contract.test.mjs tests/r2-s3-reader.test.mjs && node scripts/test-bandori-tracker-history-integration.mjs",
     "i18n:check": "node scripts/check-i18n-messages.mjs",
     "typecheck": "tsc --noEmit --pretty false"
   },
@@ -41,6 +43,7 @@
     "zustand": "^5.0.14"
   },
   "devDependencies": {
+    "@next/env": "16.2.7",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",

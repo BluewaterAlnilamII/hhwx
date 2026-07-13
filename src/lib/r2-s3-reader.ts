@@ -1,4 +1,5 @@
 import { createHash, createHmac } from "node:crypto";
+import { request as httpRequest } from "node:http";
 import { request as httpsRequest } from "node:https";
 
 export type R2S3ReaderConfig = {
@@ -17,9 +18,15 @@ export type R2ObjectResponse = {
   ok: boolean;
   status: number;
   headers: Headers;
+  buffer: () => Promise<Buffer>;
   arrayBuffer: () => Promise<ArrayBuffer>;
   json: <T = unknown>() => Promise<T>;
   text: () => Promise<string>;
+};
+
+export type R2ObjectReadOptions = {
+  maxBytes?: number;
+  timeoutMs?: number;
 };
 
 function hashSha256(value: string): string {
@@ -108,11 +115,24 @@ export async function fetchR2Object(
   config: R2S3ReaderConfig,
   objectKey: string,
   _revalidateSeconds?: number,
+  options: R2ObjectReadOptions = {},
 ): Promise<R2ObjectResponse> {
   const signedRequest = buildR2ObjectRequest(config, objectKey);
   const result = await new Promise<{ body: Buffer; headers: Headers; status: number }>((resolve, reject) => {
     const chunks: Buffer[] = [];
-    const nextRequest = httpsRequest(signedRequest.url, {
+    let receivedBytes = 0;
+    let deadlineTimer: ReturnType<typeof setTimeout> | undefined;
+    const resolveOnce = (value: { body: Buffer; headers: Headers; status: number }) => {
+      if (deadlineTimer) clearTimeout(deadlineTimer);
+      resolve(value);
+    };
+    const rejectOnce = (error: unknown) => {
+      if (deadlineTimer) clearTimeout(deadlineTimer);
+      reject(error);
+    };
+    const requestUrl = new URL(signedRequest.url);
+    const requestImplementation = requestUrl.protocol === "http:" ? httpRequest : httpsRequest;
+    const nextRequest = requestImplementation(signedRequest.url, {
       method: "GET",
       headers: signedRequest.headers,
     }, (response) => {
@@ -127,31 +147,69 @@ export async function fetchR2Object(
         }
       }
 
+      const declaredLengthValue = headers.get("content-length");
+      const declaredLength = declaredLengthValue === null ? null : Number(declaredLengthValue);
+      if (
+        options.maxBytes !== undefined
+        && declaredLength !== null
+        && (
+          !Number.isSafeInteger(declaredLength)
+          || declaredLength < 0
+          || declaredLength > options.maxBytes
+        )
+      ) {
+        const error = new Error(`R2 object exceeds the ${options.maxBytes} byte limit`);
+        response.destroy(error);
+        nextRequest.destroy(error);
+        return;
+      }
+
       response.on("data", (chunk: Buffer | string) => {
-        chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+        const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+        receivedBytes += buffer.length;
+        if (options.maxBytes !== undefined && receivedBytes > options.maxBytes) {
+          const error = new Error(`R2 object exceeds the ${options.maxBytes} byte limit`);
+          response.destroy(error);
+          nextRequest.destroy(error);
+          return;
+        }
+        chunks.push(buffer);
       });
       response.on("end", () => {
-        resolve({
+        resolveOnce({
           body: Buffer.concat(chunks),
           headers,
           status: response.statusCode ?? 0,
         });
       });
+      response.on("error", rejectOnce);
     });
 
-    nextRequest.on("error", reject);
+    nextRequest.on("error", rejectOnce);
+    if (options.timeoutMs !== undefined) {
+      nextRequest.setTimeout(options.timeoutMs, () => {
+        const error = new Error(`R2 object read timed out after ${options.timeoutMs}ms`);
+        Object.assign(error, { code: "ETIMEDOUT" });
+        nextRequest.destroy(error);
+      });
+      deadlineTimer = setTimeout(() => {
+        const error = new Error(`R2 object read timed out after ${options.timeoutMs}ms`);
+        Object.assign(error, { code: "ETIMEDOUT" });
+        nextRequest.destroy(error);
+      }, options.timeoutMs);
+    }
     nextRequest.end();
   });
-  const arrayBuffer = result.body.buffer.slice(
-    result.body.byteOffset,
-    result.body.byteOffset + result.body.byteLength,
-  ) as ArrayBuffer;
 
   return {
     ok: result.status >= 200 && result.status < 300,
     status: result.status,
     headers: result.headers,
-    arrayBuffer: async () => arrayBuffer,
+    buffer: async () => result.body,
+    arrayBuffer: async () => result.body.buffer.slice(
+      result.body.byteOffset,
+      result.body.byteOffset + result.body.byteLength,
+    ) as ArrayBuffer,
     json: async <T = unknown>() => JSON.parse(result.body.toString("utf8")) as T,
     text: async () => result.body.toString("utf8"),
   };

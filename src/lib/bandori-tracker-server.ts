@@ -1,13 +1,28 @@
 import { NextResponse } from "next/server";
 import { LIVE_API_CACHE_CONTROL, withCacheControl } from "@/lib/api-cache";
+import {
+  BANDORI_CUTOFF_HISTORY_MAX_ROWS,
+  type BandoriCutoffHistoryCutoffs,
+  type BandoriCutoffHistoryPoint,
+  type BandoriCutoffHistoryQuery,
+  type BandoriCutoffHistorySongMap,
+  type BandoriCutoffHistoryType,
+} from "@/lib/bandori-cutoff-history-contract";
+import {
+  BandoriCutoffHistoryReadError,
+  getBandoriTrackerHistorySource,
+  readBandoriCutoffHistoryFromR2,
+} from "@/lib/bandori-cutoff-history-server";
 import { jsonError } from "@/lib/api-response";
 import { isSupportedTrackerTier } from "@/lib/bandori-tracker-tiers";
 import { supabase } from "@/lib/supabase";
 import { BANDORI_TRACKER_DATA_TABLE } from "@/lib/supabase-table-names";
 
-const VALID_TRACKER_TYPES = new Set(["event", "song", "monthly"]);
-const TRACKER_PAGE_SIZE = 1000;
-const TRACKER_MAX_ROWS = 5000;
+const VALID_TRACKER_TYPES = new Set<BandoriCutoffHistoryType>(["event", "song", "monthly"]);
+const TRACKER_PAGE_SIZE = 1_000;
+const FALLBACK_LOG_INTERVAL_MS = 60_000;
+const MAX_FALLBACK_LOG_KEYS = 256;
+const MAX_R2_SUCCESS_LOG_KEYS = 256;
 
 type TrackerRow = {
   time: number | string;
@@ -16,13 +31,19 @@ type TrackerRow = {
   is_final?: boolean | null;
 };
 
-type TrackerPoint = {
-  time: number;
-  ep: number;
-  isFinal?: true;
-};
+class TrackerDatabaseError extends Error {
+  constructor(
+    public readonly query: BandoriCutoffHistoryQuery,
+    message: string,
+    options?: ErrorOptions,
+  ) {
+    super(message, options);
+    this.name = "TrackerDatabaseError";
+  }
+}
 
-type TrackerSongCutoffMap = Record<string, TrackerPoint[]>;
+const fallbackLogTimes = new Map<string, number>();
+const r2SuccessLogKeys = new Map<string, true>();
 
 function errorResponse(
   status: number,
@@ -38,61 +59,176 @@ function errorResponse(
   });
 }
 
-function toTrackerPoint(row: TrackerRow): TrackerPoint {
-  const point: TrackerPoint = {
+function isTrackerType(value: string): value is BandoriCutoffHistoryType {
+  return VALID_TRACKER_TYPES.has(value as BandoriCutoffHistoryType);
+}
+
+function toTrackerPoint(row: TrackerRow): BandoriCutoffHistoryPoint {
+  const point: BandoriCutoffHistoryPoint = {
     time: Number(row.time),
     ep: Number(row.ep),
   };
-
-  if (Boolean(row.is_final)) {
-    point.isFinal = true;
-  }
-
+  if (Boolean(row.is_final)) point.isFinal = true;
   return point;
 }
 
-function formatCutoffs(rows: TrackerRow[]) {
-  return rows.map((item) => toTrackerPoint(item));
-}
-
-function buildSongCutoffs(rows: TrackerRow[]): TrackerPoint[] | TrackerSongCutoffMap {
-  const groups = new Map<number, TrackerPoint[]>();
-
+function buildSongCutoffs(rows: TrackerRow[]): BandoriCutoffHistoryPoint[] | BandoriCutoffHistorySongMap {
+  const groups = new Map<number, BandoriCutoffHistoryPoint[]>();
   for (const row of rows) {
     const songId = Number(row.song_id ?? 0);
-    const cutoff = toTrackerPoint(row);
-
-    if (!groups.has(songId)) {
-      groups.set(songId, []);
-    }
-
-    groups.get(songId)?.push(cutoff);
+    const cutoffs = groups.get(songId) ?? [];
+    cutoffs.push(toTrackerPoint(row));
+    groups.set(songId, cutoffs);
   }
-
-  if (groups.size === 1 && groups.has(0)) {
-    return groups.get(0) ?? [];
-  }
-
+  if (groups.size === 1 && groups.has(0)) return groups.get(0) ?? [];
   return Object.fromEntries(
     Array.from(groups.entries())
-      .sort((left, right) => left[0] - right[0])
+      .sort(([left], [right]) => left - right)
       .map(([songId, cutoffs]) => [String(songId), cutoffs]),
   );
 }
 
+async function readTrackerHistoryFromSupabase(
+  query: BandoriCutoffHistoryQuery,
+): Promise<BandoriCutoffHistoryCutoffs> {
+  const rows: TrackerRow[] = [];
+  for (let offset = 0; offset < BANDORI_CUTOFF_HISTORY_MAX_ROWS; offset += TRACKER_PAGE_SIZE) {
+    const pageEnd = Math.min(
+      offset + TRACKER_PAGE_SIZE,
+      BANDORI_CUTOFF_HISTORY_MAX_ROWS,
+    ) - 1;
+    let pageRows: TrackerRow[];
+    let queryError: unknown;
+    if (query.type === "song") {
+      const { data, error } = await supabase
+        .from(BANDORI_TRACKER_DATA_TABLE)
+        .select("time, ep, song_id, is_final")
+        .eq("event_id", query.targetId)
+        .eq("type", query.type)
+        .eq("tier", query.tier)
+        .order("song_id", { ascending: true })
+        .order("time", { ascending: true })
+        .range(offset, pageEnd);
+      pageRows = (data ?? []) as TrackerRow[];
+      queryError = error;
+    } else {
+      const { data, error } = await supabase
+        .from(BANDORI_TRACKER_DATA_TABLE)
+        .select("time, ep, is_final")
+        .eq("event_id", query.targetId)
+        .eq("type", query.type)
+        .eq("tier", query.tier)
+        .eq("song_id", 0)
+        .order("time", { ascending: true })
+        .range(offset, pageEnd);
+      pageRows = (data ?? []) as TrackerRow[];
+      queryError = error;
+    }
+    if (queryError) {
+      console.error("Bandori tracker Supabase query failed", {
+        error: queryError,
+        event: query.targetId,
+        tier: query.tier,
+        type: query.type,
+      });
+      throw new TrackerDatabaseError(query, "Failed to query tracker data", { cause: queryError });
+    }
+    rows.push(...pageRows);
+    if (pageRows.length < TRACKER_PAGE_SIZE) break;
+  }
+  if (query.type === "song") return rows.length === 0 ? [] : buildSongCutoffs(rows);
+  return rows.map(toTrackerPoint);
+}
+
+function logR2Fallback(
+  query: BandoriCutoffHistoryQuery,
+  error: unknown,
+  mode: "fallback" | "stale" | "unavailable",
+): void {
+  const reason = error instanceof BandoriCutoffHistoryReadError ? error.reason : "unexpected";
+  const key = `${query.targetId}:${query.type}:${query.tier}:${mode}:${reason}`;
+  const now = Date.now();
+  if ((fallbackLogTimes.get(key) ?? 0) + FALLBACK_LOG_INTERVAL_MS > now) return;
+  fallbackLogTimes.delete(key);
+  fallbackLogTimes.set(key, now);
+  while (fallbackLogTimes.size > MAX_FALLBACK_LOG_KEYS) {
+    const oldestKey = fallbackLogTimes.keys().next().value as string | undefined;
+    if (oldestKey === undefined) break;
+    fallbackLogTimes.delete(oldestKey);
+  }
+  console.warn("Bandori tracker history R2 degraded", {
+    event: query.targetId,
+    tier: query.tier,
+    type: query.type,
+    mode,
+    reason,
+  });
+}
+
+function cutoffCount(cutoffs: BandoriCutoffHistoryCutoffs): number {
+  if (Array.isArray(cutoffs)) return cutoffs.length;
+  return Object.values(cutoffs).reduce((total, points) => total + points.length, 0);
+}
+
+function logR2Success(
+  query: BandoriCutoffHistoryQuery,
+  result: Awaited<ReturnType<typeof readBandoriCutoffHistoryFromR2>>,
+  elapsedMs: number,
+): void {
+  const key = `${query.targetId}:${query.type}:${result.generation ?? "missing"}`;
+  if (r2SuccessLogKeys.has(key)) return;
+  r2SuccessLogKeys.set(key, true);
+  while (r2SuccessLogKeys.size > MAX_R2_SUCCESS_LOG_KEYS) {
+    const oldestKey = r2SuccessLogKeys.keys().next().value as string | undefined;
+    if (oldestKey === undefined) break;
+    r2SuccessLogKeys.delete(oldestKey);
+  }
+  console.info("Bandori tracker history R2 read succeeded", {
+    event: query.targetId,
+    tier: query.tier,
+    type: query.type,
+    generation: result.generation,
+    publishedAt: result.publishedAt,
+    elapsedMs,
+    recordCount: cutoffCount(result.cutoffs),
+  });
+}
+
+async function readTrackerHistory(
+  query: BandoriCutoffHistoryQuery,
+): Promise<BandoriCutoffHistoryCutoffs> {
+  const source = getBandoriTrackerHistorySource();
+  if (source === "supabase") return readTrackerHistoryFromSupabase(query);
+
+  try {
+    const startedAt = Date.now();
+    const result = await readBandoriCutoffHistoryFromR2(query, {
+      allowStale: source === "r2",
+    });
+    if (result.isStale) {
+      logR2Fallback(query, null, "stale");
+    } else {
+      logR2Success(query, result, Date.now() - startedAt);
+    }
+    return result.cutoffs;
+  } catch (error) {
+    if (source === "r2-with-supabase-fallback") {
+      logR2Fallback(query, error, "fallback");
+      return readTrackerHistoryFromSupabase(query);
+    }
+    logR2Fallback(query, error, "unavailable");
+    throw error;
+  }
+}
+
 /**
- * 统一的 tracker data 服务端处理器。
- *
- * 为什么要抽到共享模块：
- * 1. route.ts 保持薄封装，避免把查询和协议细节堆进入口文件。
- * 2. 支持档线但暂时没有采集到数据时，继续返回 result/cutoffs 成功体和空数组。
- * 3. 当前成功响应的 result/cutoffs 结构已经被现有 tracker 页面和外部调用方依赖，
- *    因此成功体保持不变；失败体则回到项目统一错误信封，避免继续扩散旧协议。
+ * Keeps the historical result/cutoffs success shape while moving storage reads
+ * behind a server-side source policy. Empty supported datasets remain a normal
+ * 200 response; only operational R2 failures may use the Supabase fallback.
  */
 export async function handleBandoriTrackerDataRequest(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
-
     const server = searchParams.get("server");
     const eventIdParam = searchParams.get("event");
     const tierParam = searchParams.get("tier");
@@ -103,17 +239,12 @@ export async function handleBandoriTrackerDataRequest(request: Request) {
         details: { server },
       });
     }
-
     if (!eventIdParam || !tierParam) {
       return errorResponse(400, "INVALID_REQUEST", "Missing required parameters: event, tier.", {
-        details: {
-          event: eventIdParam,
-          tier: tierParam,
-        },
+        details: { event: eventIdParam, tier: tierParam },
       });
     }
-
-    if (!VALID_TRACKER_TYPES.has(typeParam)) {
+    if (!isTrackerType(typeParam)) {
       return errorResponse(400, "INVALID_REQUEST", "Unsupported tracker type.", {
         details: { type: typeParam },
       });
@@ -121,132 +252,41 @@ export async function handleBandoriTrackerDataRequest(request: Request) {
 
     const eventId = Number.parseInt(eventIdParam, 10);
     const tier = Number.parseInt(tierParam, 10);
-
     if (!Number.isFinite(eventId) || !Number.isFinite(tier) || eventId <= 0 || tier <= 0) {
       return errorResponse(400, "INVALID_REQUEST", "Numeric parameters must be positive integers.", {
-        details: {
-          event: eventIdParam,
-          tier: tierParam,
-        },
+        details: { event: eventIdParam, tier: tierParam },
       });
     }
-
     if (!isSupportedTrackerTier(typeParam, tier)) {
       return errorResponse(404, "TRACKER_TIER_NOT_SUPPORTED", "The requested tracker tier is not supported.", {
-        details: {
-          event: eventId,
-          tier,
-          type: typeParam,
-        },
+        details: { event: eventId, tier, type: typeParam },
       });
     }
 
-    if (typeParam === "song") {
-      // 为什么 song 模式要一次返回全部 song_id 分组：
-      // challenge 活动切歌只是在前端本地切换视图，如果服务端按单曲逐次查询，
-      // 会让相同档位的数据被重复请求多次，既增加带宽也更容易打乱缓存一致性。
-      const rows: TrackerRow[] = [];
-
-      for (let offset = 0; offset < TRACKER_MAX_ROWS; offset += TRACKER_PAGE_SIZE) {
-        const pageEnd = Math.min(offset + TRACKER_PAGE_SIZE, TRACKER_MAX_ROWS) - 1;
-        const { data, error } = await supabase
-          .from(BANDORI_TRACKER_DATA_TABLE)
-          .select("time, ep, song_id, is_final")
-          .eq("event_id", eventId)
-          .eq("type", "song")
-          .eq("tier", tier)
-          .order("song_id", { ascending: true })
-          .order("time", { ascending: true })
-          .range(offset, pageEnd);
-
-        if (error) {
-          console.error("Supabase query error:", error);
-          return errorResponse(500, "DATABASE_QUERY_FAILED", "Failed to query tracker data.", {
-            details: {
-              event: eventId,
-              tier,
-              type: typeParam,
-            },
-          });
-        }
-
-        const pageRows = (data ?? []) as TrackerRow[];
-        rows.push(...pageRows);
-
-        if (pageRows.length < TRACKER_PAGE_SIZE) {
-          break;
-        }
-      }
-
-      if (rows.length === 0) {
-        return NextResponse.json({
-          result: true,
-          cutoffs: [],
-        }, {
-          headers: withCacheControl(LIVE_API_CACHE_CONTROL),
-        });
-      }
-
-      return NextResponse.json({
-        result: true,
-        cutoffs: buildSongCutoffs(rows),
-      }, {
-        headers: withCacheControl(LIVE_API_CACHE_CONTROL),
-      });
-    }
-
-    const rows: TrackerRow[] = [];
-
-    for (let offset = 0; offset < TRACKER_MAX_ROWS; offset += TRACKER_PAGE_SIZE) {
-      const pageEnd = Math.min(offset + TRACKER_PAGE_SIZE, TRACKER_MAX_ROWS) - 1;
-      const { data, error } = await supabase
-        .from(BANDORI_TRACKER_DATA_TABLE)
-        .select("time, ep, is_final")
-        .eq("event_id", eventId)
-        .eq("type", typeParam)
-        .eq("tier", tier)
-        .eq("song_id", 0)
-        .order("time", { ascending: true })
-        .range(offset, pageEnd);
-
-      if (error) {
-        console.error("Supabase query error:", error);
-        return errorResponse(500, "DATABASE_QUERY_FAILED", "Failed to query tracker data.", {
-          details: {
-            event: eventId,
-            tier,
-            type: typeParam,
-          },
-        });
-      }
-
-      const pageRows = (data ?? []) as TrackerRow[];
-      rows.push(...pageRows);
-
-      if (pageRows.length < TRACKER_PAGE_SIZE) {
-        break;
-      }
-    }
-
-    const formattedData = formatCutoffs(rows);
-
-    if (formattedData.length === 0) {
-      return NextResponse.json({
-        result: true,
-        cutoffs: [],
-      }, {
-        headers: withCacheControl(LIVE_API_CACHE_CONTROL),
-      });
-    }
-
-    return NextResponse.json({
-      result: true,
-      cutoffs: formattedData,
-    }, {
+    const query: BandoriCutoffHistoryQuery = {
+      server: "cn",
+      targetId: eventId,
+      tier,
+      type: typeParam,
+    };
+    const cutoffs = await readTrackerHistory(query);
+    return NextResponse.json({ result: true, cutoffs }, {
       headers: withCacheControl(LIVE_API_CACHE_CONTROL),
     });
   } catch (error) {
-    console.error("Tracker API error:", error);
+    if (error instanceof TrackerDatabaseError) {
+      return errorResponse(500, "DATABASE_QUERY_FAILED", "Failed to query tracker data.", {
+        details: {
+          event: error.query.targetId,
+          tier: error.query.tier,
+          type: error.query.type,
+        },
+      });
+    }
+    if (error instanceof BandoriCutoffHistoryReadError) {
+      return errorResponse(503, "TRACKER_HISTORY_UNAVAILABLE", "Tracker history is temporarily unavailable.");
+    }
+    console.error("Bandori tracker API failed", error);
     return errorResponse(500, "INTERNAL_SERVER_ERROR", "Internal server error.");
   }
 }
