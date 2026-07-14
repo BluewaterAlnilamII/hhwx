@@ -73,7 +73,7 @@ export default function EventComments({ eventId }: { eventId: number | null }) {
           </div>
         ) : (
           <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-center text-sm font-semibold text-slate-500 dark:border-slate-700 dark:bg-slate-900">
-            登录后可以发表评论，并启用30秒频率的高频活动榜榜线更新。
+            登录后可以发表评论，并启用30秒频率的高频活动榜榜线更新
           </div>
         )}
       </div>

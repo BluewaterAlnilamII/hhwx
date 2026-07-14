@@ -39,7 +39,7 @@ function TimeAgo({ timestamp }: { timestamp: number }) {
   const { isStale, label } = formatBandoriTrackerUpdateAge(timestamp, now);
 
   return isStale ? (
-    <span className="inline-flex items-center rounded-full border border-red-200 bg-red-50 px-2 py-0.5 text-xs font-semibold tabular-nums text-red-600 dark:border-red-400/30 dark:bg-red-500/10 dark:text-red-200">
+    <span className="inline-flex items-center rounded-full border border-red-200 bg-red-50 px-1 py-0.5 text-xs font-semibold tabular-nums text-red-600 dark:border-red-400/30 dark:bg-red-500/10 dark:text-red-200">
       {label}
     </span>
   ) : (
@@ -78,7 +78,7 @@ export const TrackerStatusSummary = memo(function TrackerStatusSummary({
             <div className="flex items-center gap-1.5 sm:gap-2">
               <span className="font-medium text-slate-500 dark:text-slate-400">更新时间</span>
               <span
-                className="grid w-[6.25rem] shrink-0 grid-cols-[5rem_0.875rem] items-center gap-1.5"
+                className="grid w-[4.875rem] shrink-0 grid-cols-[3.75rem_0.875rem] items-center gap-1"
                 data-testid="tracker-update-status"
               >
                 {scoreSummary.latestUpdateTime !== null
