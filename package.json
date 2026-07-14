@@ -16,7 +16,7 @@
     "lint": "eslint",
     "test:bandori-events": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test tests/bandori-events-api-contract.test.mjs && node scripts/test-bandori-events-api-integration.mjs",
     "test:bandori-tracker-history": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test tests/bandori-tracker-history-contract.test.mjs tests/r2-s3-reader.test.mjs && node scripts/test-bandori-tracker-history-integration.mjs",
-    "test:bandori-tracker-live": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test tests/bandori-tracker-live-contract.test.mjs",
+    "test:bandori-tracker-live": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test tests/bandori-tracker-live-contract.test.mjs tests/bandori-tracker-projection.test.mjs",
     "test:supabase": "supabase test db",
     "i18n:check": "node scripts/check-i18n-messages.mjs",
     "typecheck": "tsc --noEmit --pretty false"

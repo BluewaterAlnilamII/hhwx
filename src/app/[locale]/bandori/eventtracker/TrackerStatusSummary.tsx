@@ -77,17 +77,23 @@ export const TrackerStatusSummary = memo(function TrackerStatusSummary({
             </div>
             <div className="flex items-center gap-1.5 sm:gap-2">
               <span className="font-medium text-slate-500 dark:text-slate-400">更新时间</span>
-              <span className="inline-flex items-center gap-1.5">
+              <span
+                className="grid w-[6.25rem] shrink-0 grid-cols-[5rem_0.875rem] items-center gap-1.5"
+                data-testid="tracker-update-status"
+              >
                 {scoreSummary.latestUpdateTime !== null
                   ? <TimeAgo timestamp={scoreSummary.latestUpdateTime} />
                   : <span className="text-[13px] font-medium text-slate-400 dark:text-slate-500">-</span>
                 }
-                {isRefreshing ? (
-                  <Loader2
-                    aria-label="正在更新分数线"
-                    className="h-3.5 w-3.5 animate-spin text-blue-500 dark:text-sky-300"
-                  />
-                ) : null}
+                <Loader2
+                  aria-hidden={!isRefreshing}
+                  aria-label={isRefreshing ? "正在更新分数线" : undefined}
+                  className={`h-3.5 w-3.5 text-blue-500 transition-opacity dark:text-sky-300 ${
+                    isRefreshing
+                      ? "animate-spin opacity-100 motion-reduce:animate-none"
+                      : "opacity-0"
+                  }`}
+                />
               </span>
             </div>
             {trackingMode === "event" && showBestdoriPrediction && (
