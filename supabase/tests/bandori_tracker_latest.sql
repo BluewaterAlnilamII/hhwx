@@ -27,6 +27,20 @@ BEGIN
     ) THEN
         RAISE EXCEPTION 'service_role must execute cutoff latest RPC';
     END IF;
+    IF has_function_privilege(
+        'authenticated',
+        'public.upsert_bandori_tracker_event_latest(text,integer,text,bigint,jsonb)',
+        'EXECUTE'
+    ) THEN
+        RAISE EXCEPTION 'authenticated must not execute event-only cutoff latest RPC';
+    END IF;
+    IF NOT has_function_privilege(
+        'service_role',
+        'public.upsert_bandori_tracker_event_latest(text,integer,text,bigint,jsonb)',
+        'EXECUTE'
+    ) THEN
+        RAISE EXCEPTION 'service_role must execute event-only cutoff latest RPC';
+    END IF;
     IF NOT EXISTS (
         SELECT 1
         FROM pg_policies
@@ -209,6 +223,82 @@ BEGIN
        OR (result.payload ->> 'publishedAt')::bigint <> 2000000000000 THEN
         RAISE EXCEPTION 'older partial fill moved snapshot identity: %', row_to_json(result);
     END IF;
+
+    -- 旧 snapshot 可以含歌曲榜；第一次新的 event-only 写入必须在同一事务内
+    -- 清除 songs，且精确 REST 重试沿用相同 revision。
+    SELECT * INTO result
+    FROM public.upsert_bandori_tracker_latest(
+        'cn',
+        'events',
+        987654330,
+        NULL,
+        'cn:events:987654330:2000000000000',
+        2000000000000,
+        jsonb_build_object(
+            'event', jsonb_build_array(jsonb_build_array(100, 2000000000000, 100000)),
+            'songs', jsonb_build_array(jsonb_build_array(123, 100, 2000000000000, 50000))
+        )
+    );
+    IF result.status <> 'written' OR NOT (result.payload ? 'songs') THEN
+        RAISE EXCEPTION 'legacy song snapshot setup failed: %', row_to_json(result);
+    END IF;
+
+    SELECT * INTO result
+    FROM public.upsert_bandori_tracker_event_latest(
+        'cn',
+        987654330,
+        'cn:events:987654330:2000000030000',
+        2000000030000,
+        jsonb_build_object(
+            'event', jsonb_build_array(jsonb_build_array(100, 2000000030000, 101000))
+        )
+    );
+    IF result.status <> 'written' OR result.revision <> 2 OR result.payload ? 'songs' THEN
+        RAISE EXCEPTION 'event-only write did not clear legacy songs: %', row_to_json(result);
+    END IF;
+    IF EXISTS (
+        SELECT 1
+        FROM public.bandori_tracker_latest
+        WHERE server = 'cn'
+          AND namespace = 'events'
+          AND target_id = 987654330
+          AND payload ? 'songs'
+    ) THEN
+        RAISE EXCEPTION 'legacy songs remained in stored event snapshot';
+    END IF;
+
+    SELECT * INTO result
+    FROM public.upsert_bandori_tracker_event_latest(
+        'cn',
+        987654330,
+        'cn:events:987654330:2000000030000',
+        2000000030000,
+        jsonb_build_object(
+            'event', jsonb_build_array(jsonb_build_array(100, 2000000030000, 101000))
+        )
+    );
+    IF result.status <> 'duplicate' OR result.revision <> 2 OR result.payload ? 'songs' THEN
+        RAISE EXCEPTION 'event-only exact retry returned unexpected result: %', row_to_json(result);
+    END IF;
+
+    BEGIN
+        PERFORM public.upsert_bandori_tracker_event_latest(
+            'cn',
+            987654331,
+            'cn:events:987654331:2000000030000',
+            2000000030000,
+            jsonb_build_object(
+                'event', jsonb_build_array(jsonb_build_array(100, 2000000030000, 101000)),
+                'songs', '[]'::jsonb
+            )
+        );
+        RAISE EXCEPTION 'event-only RPC unexpectedly accepted songs';
+    EXCEPTION
+        WHEN OTHERS THEN
+            IF SQLERRM = 'event-only RPC unexpectedly accepted songs' THEN
+                RAISE;
+            END IF;
+    END;
 
     BEGIN
         PERFORM public.upsert_bandori_tracker_latest(

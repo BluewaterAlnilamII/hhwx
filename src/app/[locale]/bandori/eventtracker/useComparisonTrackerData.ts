@@ -305,7 +305,8 @@ export function useComparisonTrackerData({
     [configs],
   );
   const handleLiveSnapshot = useCallback((liveSnapshot: BandoriTrackerLiveSnapshot) => {
-    const targetType: ComparisonTargetType = liveSnapshot.namespace === "monthly" ? "monthly" : "event";
+    if (liveSnapshot.namespace !== "events") return;
+    const targetType: ComparisonTargetType = "event";
     const matchingConfigs = configsRef.current.filter((config): config is ResolvedComparisonConfig => (
       isResolvedConfig(config)
       && config.targetType === targetType
@@ -316,9 +317,7 @@ export function useComparisonTrackerData({
     setLiveDataByKey((previous) => {
       const next = { ...previous };
       for (const config of matchingConfigs) {
-        const livePoint = targetType === "monthly"
-          ? liveSnapshot.monthly.find((point) => point.tier === config.tier)
-          : liveSnapshot.event.find((point) => point.tier === config.tier);
+        const livePoint = liveSnapshot.event.find((point) => point.tier === config.tier);
         if (!livePoint || livePoint.isFinal) continue;
         const key = cacheKey(config);
         next[key] = normalizePoints([

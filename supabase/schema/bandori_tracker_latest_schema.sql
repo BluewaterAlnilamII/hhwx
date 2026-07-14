@@ -520,6 +520,83 @@ GRANT EXECUTE ON FUNCTION public.upsert_bandori_tracker_latest(
     jsonb
 ) TO service_role;
 
+-- Tracker 的高频链路只允许活动榜。保留上面的通用 RPC 以兼容既有数据，
+-- 但新的服务端调用统一经过此包装层，并在同一事务内清除旧歌曲榜 latest。
+CREATE OR REPLACE FUNCTION public.upsert_bandori_tracker_event_latest(
+    p_server text,
+    p_target_id integer,
+    p_sample_id text,
+    p_published_at bigint,
+    p_payload_patch jsonb
+)
+RETURNS TABLE(status text, revision bigint, payload jsonb)
+LANGUAGE plpgsql
+SECURITY INVOKER
+SET search_path = ''
+AS $$
+DECLARE
+    rpc_result record;
+    event_payload jsonb;
+BEGIN
+    IF p_payload_patch IS NULL
+       OR jsonb_typeof(p_payload_patch) <> 'object'
+       OR NOT (p_payload_patch ? 'event')
+       OR EXISTS (
+            SELECT 1
+            FROM jsonb_object_keys(p_payload_patch) AS keys(key_name)
+            WHERE key_name <> 'event'
+       ) THEN
+        RAISE EXCEPTION 'event latest patch must contain only event points';
+    END IF;
+
+    SELECT * INTO rpc_result
+    FROM public.upsert_bandori_tracker_latest(
+        p_server,
+        'events',
+        p_target_id,
+        NULL,
+        p_sample_id,
+        p_published_at,
+        p_payload_patch
+    );
+
+    event_payload := rpc_result.payload;
+    IF rpc_result.status = 'written' AND event_payload ? 'songs' THEN
+        event_payload := event_payload - 'songs';
+        UPDATE public.bandori_tracker_latest AS latest
+        SET payload = event_payload
+        WHERE latest.server = p_server
+          AND latest.namespace = 'events'
+          AND latest.target_id = p_target_id
+          AND latest.revision = rpc_result.revision;
+        IF NOT FOUND THEN
+            RAISE EXCEPTION 'event latest cleanup lost the merged snapshot row';
+        END IF;
+    END IF;
+
+    RETURN QUERY SELECT
+        rpc_result.status::text,
+        rpc_result.revision::bigint,
+        event_payload;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.upsert_bandori_tracker_event_latest(
+    text,
+    integer,
+    text,
+    bigint,
+    jsonb
+) FROM PUBLIC, anon, authenticated;
+
+GRANT EXECUTE ON FUNCTION public.upsert_bandori_tracker_event_latest(
+    text,
+    integer,
+    text,
+    bigint,
+    jsonb
+) TO service_role;
+
 DROP POLICY IF EXISTS bandori_cutoff_private_broadcast_select
 ON realtime.messages;
 

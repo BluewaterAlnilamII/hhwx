@@ -8,7 +8,10 @@ import {
   parseBandoriTrackerLiveSnapshot,
 } from "../src/lib/bandori-tracker-live-contract.ts";
 import { authorizeBandoriTrackerRealtimeConnection } from "../src/lib/bandori-tracker-live-connection.ts";
-import { appendBandoriTrackerLivePoint } from "../src/lib/bandori-tracker-live-series.ts";
+import {
+  appendBandoriTrackerLivePoint,
+  buildBandoriTrackerLiveSeriesUpdates,
+} from "../src/lib/bandori-tracker-live-series.ts";
 import { selectCachedFetchData } from "../src/hooks/useCachedFetch.ts";
 import { formatBandoriTrackerUpdateAge } from "../src/lib/bandori-tracker-time.ts";
 
@@ -148,6 +151,50 @@ test("a tier switch never exposes or seeds the previous tier series", () => {
     { time: 1780000060000, ep: 211_030 },
     { time: 1780000120000, ep: 211_030 },
   ]);
+});
+
+test("one private snapshot seeds every event tier and ignores legacy song points", () => {
+  const snapshot = parseBandoriTrackerLiveSnapshot({
+    ...eventPayload,
+    songs: [
+      [123, 100, 1780000000000, 654321],
+      [456, 1000, 1780000000000, 543210],
+    ],
+  });
+
+  const updates = buildBandoriTrackerLiveSeriesUpdates(snapshot);
+
+  assert.deepEqual(
+    updates.cutoffUpdates.map((update) => update.cacheKey),
+    ["tracker-3-316-event-100", "tracker-3-316-event-1000"],
+  );
+  assert.deepEqual(updates.songUpdates, []);
+  assert.deepEqual(updates.resultKeys, [
+    "tracker-3-316-event-100",
+    "tracker-3-316-event-1000",
+  ]);
+});
+
+test("monthly snapshots are ignored by the event-only live series", () => {
+  const snapshot = parseBandoriTrackerLiveSnapshot({
+    schemaVersion: 1,
+    server: "cn",
+    namespace: "monthly",
+    targetId: 18,
+    period: "2026-07",
+    revision: 24,
+    sampleId: "cn:monthly:18:1780000000000",
+    publishedAt: 1780000000000,
+    monthly: [
+      [100, 1780000000000, 123456],
+      [1000, 1780000000000, 112233],
+    ],
+  });
+
+  const updates = buildBandoriTrackerLiveSeriesUpdates(snapshot);
+  assert.deepEqual(updates.cutoffUpdates, []);
+  assert.deepEqual(updates.songUpdates, []);
+  assert.deepEqual(updates.resultKeys, []);
 });
 
 test("private realtime auth completes before a connection may continue", async () => {

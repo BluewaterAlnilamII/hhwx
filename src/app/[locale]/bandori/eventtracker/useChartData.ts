@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
+import { calculateBandoriTrackerSpeeds } from "@/lib/bandori-tracker-projection";
 import type { TrackerData, TrackingMode } from "./types";
 import { useBoundaryClock } from "./useBoundaryClock";
 
@@ -161,67 +162,43 @@ export function useChartDomain(
  * useProcessedData —— 对原始追踪数据进行速度计算，生成含瞬时速度和 24h 速度的完整数据。
  *
  * 计算逻辑：
- * - speed（瞬时速度）：相邻两点的 EP 差 / 时间差（单位 P/h）
+ * - speed（瞬时速度）：当前点与至少 4 分 30 秒前、且时间上最近的点之间的 EP 差 / 时间差（单位 P/h）
  * - speed24（24h 速度）：当前点与约 24 小时前那个点的 EP 差 / 天数差（单位 P/d）
  *
  * 设计原因：24 小时速度使用 23 小时 55 分阈值，而不是严格的 24 小时。
  * 服务端采集间隔约为 5 分钟，若完全按 24 小时截取，容易恰好落在两个采集点之间，
  * 导致找不到足够远的参考点。放宽 5 分钟容差可以稳定命中有效样本。
  */
+function processTrackerData(
+  chartData: TrackerData[],
+  apiHasResult: boolean,
+  domainStart: number | "auto",
+  trackingMode: TrackingMode,
+): TrackerData[] {
+  let raw = [...chartData];
+
+  // 当域起点明确且存在有效数据时，在序列头部补一个原点，
+  // 让折线从活动起点开始绘制，而不是从第一个采集点突然出现。
+  // 歌曲排行没有统一的起始时刻，因此不补原点。
+  if (apiHasResult && raw.length > 0 && typeof domainStart === "number" && trackingMode !== "song") {
+    if (raw.length === 0 || raw[0].time > domainStart) {
+      raw = [{ time: domainStart, ep: 0, isBaseline: true }, ...raw];
+    }
+  }
+
+  return calculateBandoriTrackerSpeeds(raw);
+}
+
 export function useProcessedData(
   chartData: TrackerData[],
   apiHasResult: boolean,
   domainStart: number | "auto",
   trackingMode: TrackingMode,
 ): TrackerData[] {
-  return useMemo(() => {
-    let raw = [...chartData];
-
-    // 当域起点明确且存在有效数据时，在序列头部补一个原点，
-    // 让折线从活动起点开始绘制，而不是从第一个采集点突然出现。
-    // 歌曲排行没有统一的起始时刻，因此不补原点。
-    if (apiHasResult && raw.length > 0 && typeof domainStart === "number" && trackingMode !== "song") {
-      if (raw.length === 0 || raw[0].time > domainStart) {
-        raw = [{ time: domainStart, ep: 0, isBaseline: true }, ...raw];
-      }
-    }
-
-    const processed: TrackerData[] = raw.map(d => ({ ...d }));
-
-    // `l24` 表示 24 小时速度滑动窗口的左指针，采用双指针方式推进。
-    let l24 = 0;
-    // 23 小时 55 分阈值的选取原因见上方函数说明。
-    const threshold24 = (23 * 60 + 55) * 60 * 1000;
-
-    for (let r = 0; r < processed.length; r++) {
-      // 瞬时速度：与前一个点的 EP 差 / 小时差
-      if (r > 0) {
-        const prev = processed[r - 1];
-        const dtHours = (processed[r].time - prev.time) / 3600000;
-        if (dtHours > 0) {
-          processed[r].speed = Math.round((processed[r].ep - prev.ep) / dtHours);
-        }
-      }
-
-      // 24h 速度：双指针向右推进左端，使窗口宽度尽量接近 24h
-      while (l24 + 1 < r && (processed[r].time - processed[l24 + 1].time >= threshold24)) {
-        l24++;
-      }
-
-      if (processed[r].time - processed[l24].time >= threshold24) {
-        const dtDays = (processed[r].time - processed[l24].time) / 86400000;
-        if (dtDays > 0) {
-          processed[r].speed24 = Math.round((processed[r].ep - processed[l24].ep) / dtDays);
-          processed[r].refSpeed24 = processed[l24].speed24;
-        }
-      } else if (r > 0) {
-        // 不足 24h 时将累计 EP 作为近似日速度（活动早期数据）
-        processed[r].speed24 = processed[r].ep;
-        processed[r].refSpeed24 = processed[0].speed24;
-      }
-    }
-    return processed;
-  }, [chartData, apiHasResult, domainStart, trackingMode]);
+  return useMemo(
+    () => processTrackerData(chartData, apiHasResult, domainStart, trackingMode),
+    [chartData, apiHasResult, domainStart, trackingMode],
+  );
 }
 
 /**
