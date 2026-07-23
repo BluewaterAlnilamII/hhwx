@@ -158,7 +158,12 @@ export default function AccountAvatarCardControl({
             </div>
 
             <div ref={pickerScrollRef} className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-3 sm:p-5">
-              <BandoriCardPicker value={draftValue} onValueChange={setDraftValue} scrollElementRef={pickerScrollRef} />
+              <BandoriCardPicker
+                value={draftValue}
+                onValueChange={setDraftValue}
+                excludeEntityCollisions
+                scrollElementRef={pickerScrollRef}
+              />
             </div>
 
             <div className="flex shrink-0 flex-col gap-3 border-t border-slate-200 bg-white px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5">

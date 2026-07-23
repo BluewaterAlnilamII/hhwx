@@ -2,8 +2,7 @@ import { LIVE_API_CACHE_CONTROL, PUBLIC_METADATA_API_CACHE_CONTROL, withCacheCon
 import { jsonError, jsonRouteError, jsonSuccess } from "@/lib/api-response";
 import { pickBestdoriCnThenJpRegionalName } from "@/lib/bestdori-regional-names";
 import { type BandoriAssetRegion } from "@/lib/bandori-asset-proxy";
-
-const BESTDORI_CARDS_URL = "https://bestdori.com/api/cards/all.5.json";
+import { readBandoriCardsApiDataset } from "@/lib/bandori-cards-api-server";
 
 type BestdoriCardMetadata = {
   characterId?: number;
@@ -69,19 +68,7 @@ export async function GET(request: Request) {
   }
 
   try {
-    const response = await fetch(BESTDORI_CARDS_URL, {
-      headers: { "User-Agent": "hhwx-tracker/1.0" },
-      next: { revalidate: 86400 },
-    });
-
-    if (!response.ok) {
-      return jsonError(response.status, "BESTDORI_CARDS_UPSTREAM_FAILED", "Bestdori API error", {
-        headers: withCacheControl(LIVE_API_CACHE_CONTROL),
-        details: `HTTP ${response.status}`,
-      });
-    }
-
-    const payload = await response.json() as Record<string, BestdoriCardMetadata>;
+    const payload = await readBandoriCardsApiDataset() as Record<string, BestdoriCardMetadata>;
     const cards: Record<string, BestdoriCardMetadataResponse> = {};
 
     for (const cardId of cardIds) {
