@@ -39,6 +39,8 @@ export type BandoriMasterApiReadResult = {
   };
 };
 
+type LegacyBandoriMasterDatasetKey = Exclude<BestdoriMasterDatasetKey, "cards" | "events">;
+
 function shouldUseArtifacts(): boolean {
   return process.env.BANDORI_MASTER_SOURCE === "artifacts";
 }
@@ -639,14 +641,10 @@ async function readArtifactNamedDataset(
 }
 
 export async function readBandoriMasterDataset(
-  dataset: BestdoriMasterDatasetKey,
+  dataset: LegacyBandoriMasterDatasetKey,
   server?: BandoriMasterArtifactServer,
 ): Promise<BandoriMasterApiReadResult | null> {
   if (shouldUseArtifacts()) {
-    if (dataset === "events") {
-      return readBestdoriDataset("events");
-    }
-
     const results = await Promise.all(
       getBandoriMasterArtifactServers(server).map((artifactServer) => readArtifactDataset(dataset, artifactServer)),
     );
@@ -713,7 +711,7 @@ export async function readBandoriMasterEventDetail(
 }
 
 export async function readBandoriMasterRecord(
-  dataset: BestdoriMasterDatasetKey,
+  dataset: LegacyBandoriMasterDatasetKey,
   recordId: string,
   detailDataset: string,
   detailBestdoriPath: string,
@@ -741,7 +739,7 @@ export async function readBandoriMasterRecord(
 }
 
 export async function readBandoriMasterProjectedDataset(
-  dataset: BestdoriMasterDatasetKey,
+  dataset: LegacyBandoriMasterDatasetKey,
   projectedDataset: string,
   bestdoriPath: string,
   keys: readonly string[],

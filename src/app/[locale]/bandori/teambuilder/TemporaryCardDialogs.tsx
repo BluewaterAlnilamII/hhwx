@@ -6,6 +6,7 @@ import { createPortal } from "react-dom";
 import { Loader2, X } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { type BandoriAssetRegion } from "@/lib/bandori-asset-proxy";
+import { type BandoriCardServer } from "@/lib/bandori-card-server-extensions";
 import { type BandoriCharacterBonusState } from "@/lib/bandori-team-calculator";
 import { type GameProfileCardMetadata } from "@/lib/bandori-game-profile-card";
 import { type UserGameProfileCardRecord } from "@/lib/user-game-profile-payload";
@@ -57,6 +58,7 @@ export type TemporaryCardPickerDialogProps = {
   value: BandoriCardPickerValue | null;
   adding: boolean;
   region: BandoriAssetRegion;
+  server: BandoriCardServer;
   scrollElementRef: RefObject<HTMLDivElement | null>;
   onValueChange: (value: BandoriCardPickerValue | null) => void;
   onClose: () => void;
@@ -81,6 +83,7 @@ export function TemporaryCardPickerDialog({
   value,
   adding,
   region,
+  server,
   scrollElementRef,
   onValueChange,
   onClose,
@@ -111,6 +114,7 @@ export function TemporaryCardPickerDialog({
             value={value}
             onValueChange={onValueChange}
             region={region}
+            server={server}
             showArtToggle={false}
             scrollElementRef={scrollElementRef}
           />

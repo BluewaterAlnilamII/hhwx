@@ -4,7 +4,8 @@ import { jsonRouteError, jsonSuccess } from "@/lib/api-response";
 import { requireAuthenticatedUser } from "@/lib/auth-server";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
 import { PROFILES_TABLE, USER_ROLES_TABLE } from "@/lib/supabase-table-names";
-import { fetchBestdoriMasterDataset } from "@/lib/bestdori-master-data";
+import { readBandoriCardsApiDataset } from "@/lib/bandori-cards-api-server";
+import { isKnownBandoriCardEntityCollision } from "@/lib/bandori-card-server-extensions";
 import {
   DEFAULT_ACCOUNT_AVATAR_CARD_ID,
   DEFAULT_ACCOUNT_AVATAR_CARD_TRAIN_TYPE,
@@ -96,8 +97,8 @@ function normalizeRequestedAvatarTrainType(value: unknown, cardId: number): Avat
   throw new ApiRouteError(400, "INVALID_AVATAR_CARD_TRAIN_TYPE", "请选择有效的卡面版本");
 }
 
-async function readBestdoriAvatarCard(cardId: number): Promise<{ hasTrainedArt: boolean }> {
-  const payload = await fetchBestdoriMasterDataset("cards");
+async function readAvatarCard(cardId: number): Promise<{ hasTrainedArt: boolean }> {
+  const payload = await readBandoriCardsApiDataset();
   const card = isRecord(payload) ? payload[String(cardId)] : null;
   if (!isRecord(card) || typeof card.resourceSetName !== "string" || !card.resourceSetName.trim()) {
     throw new ApiRouteError(400, "AVATAR_CARD_NOT_FOUND", "所选卡牌不存在或缺少卡面资源");
@@ -262,8 +263,15 @@ export async function PATCH(request: Request) {
     }
 
     const avatarCardId = normalizeAvatarCardId(body.avatarCardId);
+    if (isKnownBandoriCardEntityCollision(avatarCardId)) {
+      throw new ApiRouteError(
+        400,
+        "ACCOUNT_AVATAR_CARD_SERVER_REQUIRED",
+        "This card ID identifies different EN and CN cards and requires an explicit server",
+      );
+    }
     const requestedAvatarCardTrainType = normalizeRequestedAvatarTrainType(body.avatarCardTrainType, avatarCardId);
-    const avatarCard = await readBestdoriAvatarCard(avatarCardId);
+    const avatarCard = await readAvatarCard(avatarCardId);
     const avatarCardTrainType = resolveAvatarTrainTypeForCard(requestedAvatarCardTrainType, avatarCard);
     await ensureProfileRow(user.id, user.metadataUsername);
 

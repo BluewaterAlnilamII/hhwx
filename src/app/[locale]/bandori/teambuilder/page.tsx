@@ -75,6 +75,7 @@ import {
 import { type BandoriCardPickerValue } from "@/components/bandori/card-picker/types";
 import { type AppLocale } from "@/i18n/routing";
 import { createMaxGameProfileCard, pickGameProfileCardName } from "@/lib/bandori-game-profile-card";
+import { BANDORI_CARD_SERVERS } from "@/lib/bandori-card-server-extensions";
 import { pickBestdoriLocalizedName } from "@/lib/bestdori-regional-names";
 import { formatLocalizedDate, formatLocalizedDateTime, formatLocalizedInteger } from "@/lib/localized-format";
 import TeamBuilderCardPreferencesPanel from "./CardPreferencesPanel";
@@ -3176,6 +3177,9 @@ function TeamBuilderPanel() {
   const selectedProfileAssetRegion = useMemo<BandoriAssetRegion>(() => (
     selectedProfilePayload?.bestdoriProfile.server === 3 ? "cn" : "jp"
   ), [selectedProfilePayload]);
+  const selectedProfileCardServer = useMemo(() => (
+    BANDORI_CARD_SERVERS[selectedProfilePayload?.bestdoriProfile.server ?? 0] ?? "jp"
+  ), [selectedProfilePayload]);
   const selectedProfileCharacterBonusesById = useMemo(
     () => selectedProfilePayload
       ? toBandoriCharacterBonusMap(buildBandoriCharacterBonuses(
@@ -4394,6 +4398,7 @@ function TeamBuilderPanel() {
           value={cardPickerValue}
           adding={addingTemporaryCard}
           region={selectedProfileAssetRegion}
+          server={selectedProfileCardServer}
           scrollElementRef={cardPickerScrollRef}
           onValueChange={selectTemporaryCard}
           onClose={() => {

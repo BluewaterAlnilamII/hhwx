@@ -8,6 +8,11 @@ import {
   readBandoriMasterDataset,
   redirectBandoriMasterSearch,
 } from "@/lib/bandori-master-api";
+import {
+  readBandoriCardsApiDataset,
+  readBandoriCardsApiDatasetForServer,
+} from "@/lib/bandori-cards-api-server";
+import { parseBandoriCardServerQuery } from "@/lib/bandori-card-server-extensions";
 import { readBandoriEventApiDataset } from "@/lib/bandori-events-api-server";
 import {
   BESTDORI_MASTER_DATASET_ALIASES,
@@ -37,11 +42,6 @@ function normalizeDatasetKey(value: string): BestdoriMasterDatasetKey | null {
 }
 
 export async function GET(request: Request, context: RouteContext) {
-  const redirect = redirectBandoriMasterSearch(request);
-  if (redirect) {
-    return redirect;
-  }
-
   const { dataset: rawDataset } = await context.params;
   const dataset = normalizeDatasetKey(rawDataset);
 
@@ -51,9 +51,36 @@ export async function GET(request: Request, context: RouteContext) {
     });
   }
 
+  const serverQuery = dataset === "cards"
+    ? parseBandoriCardServerQuery(request)
+    : { status: "unsupported" as const };
+  if (serverQuery.status === "invalid") {
+    return jsonError(
+      400,
+      "BANDORI_MASTER_CARD_SERVER_INVALID",
+      "server must be exactly one of jp, en, tw, or cn",
+      { headers: withCacheControl(LIVE_API_CACHE_CONTROL) },
+    );
+  }
+  if (serverQuery.status === "unsupported") {
+    const redirect = redirectBandoriMasterSearch(request);
+    if (redirect) {
+      return redirect;
+    }
+  }
+
   try {
     if (dataset === "events") {
       return jsonSuccess(await readBandoriEventApiDataset("events"), {
+        headers: withCacheControl(BANDORI_MASTER_DATA_API_CACHE_CONTROL),
+      });
+    }
+
+    if (dataset === "cards") {
+      const cards = serverQuery.status === "valid"
+        ? await readBandoriCardsApiDatasetForServer(serverQuery.server)
+        : await readBandoriCardsApiDataset();
+      return jsonSuccess(cards, {
         headers: withCacheControl(BANDORI_MASTER_DATA_API_CACHE_CONTROL),
       });
     }

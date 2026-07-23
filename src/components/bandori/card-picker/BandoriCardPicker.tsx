@@ -11,6 +11,10 @@ import {
 } from "@/lib/bandori-asset-proxy";
 import { BANDORI_CHARACTER_GROUPS, compareBandoriCharacterIds } from "@/lib/bandori-character-groups";
 import {
+  isKnownBandoriCardEntityCollision,
+  type BandoriCardServer,
+} from "@/lib/bandori-card-server-extensions";
+import {
   normalizeBandoriSkillLabel,
   type BandoriSkillLabelMaster,
 } from "@/lib/bandori-skill-label";
@@ -336,8 +340,10 @@ export type BandoriCardPickerProps = {
   value: BandoriCardPickerValue | null;
   onValueChange: (value: BandoriCardPickerValue | null) => void;
   region?: BandoriAssetRegion;
+  server?: BandoriCardServer;
   className?: string;
   showArtToggle?: boolean;
+  excludeEntityCollisions?: boolean;
   scrollElementRef?: RefObject<HTMLElement | null>;
 };
 
@@ -345,15 +351,17 @@ export default function BandoriCardPicker({
   value,
   onValueChange,
   region = "cn",
+  server,
   className,
   showArtToggle = true,
+  excludeEntityCollisions = false,
   scrollElementRef,
 }: BandoriCardPickerProps) {
   const locale = useLocale() as AppLocale;
   const t = useTranslations("bandori.cardPicker");
   const { data: cardMetadata, loading: cardsLoading } = useCachedFetch(
-    "bandori-card-picker-cards-v3",
-    "/api/bandori/master/cards",
+    `bandori-card-picker-cards-v5-${server ?? "canonical"}`,
+    `/api/bandori/master/cards${server ? `?server=${server}` : ""}`,
     bandoriCardCatalogTransforms.cards,
     { staleTimeMs: 86400000 },
   );
@@ -385,8 +393,13 @@ export default function BandoriCardPicker({
   );
 
   const catalog = useMemo(
-    () => buildBandoriCardCatalog(cardMetadata ?? {}, characterMetadata ?? {}, locale),
-    [cardMetadata, characterMetadata, locale],
+    () => {
+      const cards = buildBandoriCardCatalog(cardMetadata ?? {}, characterMetadata ?? {}, locale);
+      return excludeEntityCollisions
+        ? cards.filter((card) => !isKnownBandoriCardEntityCollision(card.cardId))
+        : cards;
+    },
+    [cardMetadata, characterMetadata, excludeEntityCollisions, locale],
   );
 
   const characterNameById = useMemo(() => {

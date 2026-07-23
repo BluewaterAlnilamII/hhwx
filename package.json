@@ -14,6 +14,7 @@
     "compare:bandori-tracker-history": "tsx scripts/compare-bandori-tracker-history.mjs",
     "start": "next start",
     "lint": "eslint",
+    "test:bandori-cards": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test tests/bandori-cards-api-contract.test.mjs && node --import tsx --test tests/bandori-snapshot-api-server.test.mjs tests/bandori-cards-api-consumers.test.mjs && node --import tsx scripts/test-bandori-cards-api-reader.mjs",
     "test:bandori-events": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test tests/bandori-events-api-contract.test.mjs && node scripts/test-bandori-events-api-integration.mjs",
     "test:bandori-tracker-history": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test tests/bandori-tracker-history-contract.test.mjs tests/r2-s3-reader.test.mjs && node scripts/test-bandori-tracker-history-integration.mjs",
     "test:bandori-tracker-live": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test tests/bandori-tracker-live-contract.test.mjs tests/bandori-tracker-projection.test.mjs",
@@ -36,7 +37,7 @@
     "clsx": "^2.1.0",
     "date-fns": "^3.6.0",
     "lucide-react": "^0.577.0",
-    "next": "^16.2.7",
+    "next": "^16.2.11",
     "next-intl": "^4.13.0",
     "react": "19.2.7",
     "react-dom": "19.2.7",
@@ -60,6 +61,7 @@
     "typescript": "^5"
   },
   "overrides": {
-    "postcss": "8.5.15"
+    "postcss": "8.5.15",
+    "sharp": "0.35.3"
   }
 }
