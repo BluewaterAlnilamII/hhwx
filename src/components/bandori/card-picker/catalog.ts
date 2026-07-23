@@ -68,7 +68,20 @@ function hasTrainedCardArt(card: BestdoriCardMetadata | null | undefined): boole
 }
 
 function transformCardsResponse(raw: unknown): Record<string, BestdoriCardMetadata | null | undefined> {
-  return parseApiSuccessData<BestdoriMasterResponse<BestdoriCardMetadata>>(raw)?.payload ?? {};
+  const data = parseApiSuccessData<
+    Record<string, BestdoriCardMetadata | null | undefined>
+    | BestdoriMasterResponse<BestdoriCardMetadata>
+  >(raw);
+  if (!data) {
+    return {};
+  }
+
+  // The list endpoint now returns the card map directly. Keep accepting the
+  // previous wrapper while shared HTTP caches can still serve the old shape.
+  const legacyPayload = (data as BestdoriMasterResponse<BestdoriCardMetadata>).payload;
+  return legacyPayload && typeof legacyPayload === "object"
+    ? legacyPayload
+    : data as Record<string, BestdoriCardMetadata | null | undefined>;
 }
 
 function transformCharactersResponse(raw: unknown): Record<string, BestdoriCharacterMetadata | null | undefined> {

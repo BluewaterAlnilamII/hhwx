@@ -5,7 +5,7 @@ import {
   type AccountAvatarCardTrainType,
 } from "@/lib/account-avatar-defaults";
 import { type BandoriAssetRegion } from "@/lib/bandori-asset-proxy";
-import { fetchBestdoriMasterDataset } from "@/lib/bestdori-master-data";
+import { readBandoriCardsApiDataset } from "@/lib/bandori-cards-api-server";
 import { pickBestdoriCnThenJpRegionalName } from "@/lib/bestdori-regional-names";
 import {
   createCommentReactionNotification,
@@ -205,7 +205,7 @@ async function readCommentAvatarCardsForProfiles(profiles: Array<CommentProfile 
   }
 
   try {
-    const payload = await fetchBestdoriMasterDataset("cards");
+    const payload = await readBandoriCardsApiDataset();
     if (!isRecord(payload)) {
       return new Map();
     }

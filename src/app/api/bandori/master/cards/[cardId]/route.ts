@@ -5,8 +5,12 @@ import {
 } from "@/lib/api-cache";
 import { jsonError, jsonRouteError, jsonSuccess } from "@/lib/api-response";
 import {
+  readBandoriCardApiDetail,
+  readBandoriCardApiDetailForServer,
+} from "@/lib/bandori-cards-api-server";
+import { parseBandoriCardServerQuery } from "@/lib/bandori-card-server-extensions";
+import {
   BANDORI_MASTER_ID_PATTERN,
-  readBandoriMasterRecord,
   redirectBandoriMasterSearch,
 } from "@/lib/bandori-master-api";
 
@@ -20,9 +24,20 @@ type RouteContext = {
 };
 
 export async function GET(request: Request, context: RouteContext) {
-  const redirect = redirectBandoriMasterSearch(request);
-  if (redirect) {
-    return redirect;
+  const serverQuery = parseBandoriCardServerQuery(request);
+  if (serverQuery.status === "invalid") {
+    return jsonError(
+      400,
+      "BANDORI_MASTER_CARD_SERVER_INVALID",
+      "server must be exactly one of jp, en, tw, or cn",
+      { headers: withCacheControl(LIVE_API_CACHE_CONTROL) },
+    );
+  }
+  if (serverQuery.status === "unsupported") {
+    const redirect = redirectBandoriMasterSearch(request);
+    if (redirect) {
+      return redirect;
+    }
   }
 
   const { cardId } = await context.params;
@@ -33,14 +48,16 @@ export async function GET(request: Request, context: RouteContext) {
   }
 
   try {
-    const result = await readBandoriMasterRecord("cards", cardId, "card_detail", `cards/${cardId}.json`);
+    const result = serverQuery.status === "valid"
+      ? await readBandoriCardApiDetailForServer(cardId, serverQuery.server)
+      : await readBandoriCardApiDetail(cardId);
     if (!result) {
       return jsonError(404, "BANDORI_MASTER_CARD_NOT_FOUND", "Bandori master card is not available", {
         headers: withCacheControl(LIVE_API_CACHE_CONTROL),
       });
     }
 
-    return jsonSuccess({ ...result, cardId }, {
+    return jsonSuccess(result, {
       headers: withCacheControl(BANDORI_MASTER_DATA_API_CACHE_CONTROL),
     });
   } catch (error) {

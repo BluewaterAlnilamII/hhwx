@@ -62,10 +62,14 @@ import {
   type UserGameProfileCardRecord,
   type UserGameProfilePayload,
 } from "@/lib/user-game-profile-payload";
+import { resolveBandoriCardMapForServer } from "@/lib/bandori-card-server-extensions";
 
 type MasterResponse<T> = {
   payload: T;
 };
+
+type CardsResponse = Record<string, BestdoriCardMaster | undefined>;
+type CachedCardsResponse = CardsResponse | MasterResponse<CardsResponse>;
 
 type CardPreferenceRarityThreshold = 3 | 4 | 5;
 
@@ -222,6 +226,7 @@ type TeamSearchWorkerRunOptions = {
 };
 
 const requestJsonCache = new Map<string, Promise<unknown>>();
+const resolvedCardsBySource = new WeakMap<CardsResponse, Map<number, CardsResponse>>();
 
 function formatWorkerMessage(template: string, values: Record<string, string | number> = {}): string {
   return Object.entries(values).reduce(
@@ -270,6 +275,30 @@ async function requestJsonUncached<T>(path: string, messages: TeamSearchWorkerMe
     throw new Error(messages.invalidResponse);
   }
   return data;
+}
+
+function normalizeCachedCardsResponse(response: CachedCardsResponse): CardsResponse {
+  // During rollout, a shared HTTP cache may still hold the former
+  // { data: { payload: cards } } response for this unchanged URL.
+  const legacyPayload = (response as Partial<MasterResponse<CardsResponse>>).payload;
+  return legacyPayload && typeof legacyPayload === "object"
+    ? legacyPayload
+    : response as CardsResponse;
+}
+
+function getCardsForServer(cards: CardsResponse, server: number): CardsResponse {
+  let resolvedByServer = resolvedCardsBySource.get(cards);
+  if (!resolvedByServer) {
+    resolvedByServer = new Map<number, CardsResponse>();
+    resolvedCardsBySource.set(cards, resolvedByServer);
+  }
+  const cached = resolvedByServer.get(server);
+  if (cached) {
+    return cached;
+  }
+  const resolved = resolveBandoriCardMapForServer(cards, server);
+  resolvedByServer.set(server, resolved);
+  return resolved;
 }
 
 function mergeEventBonus(base: BandoriEventBonus | null, override: Partial<BandoriEventBonus> | undefined): BandoriEventBonus | null {
@@ -641,7 +670,7 @@ function buildLegacyGreedyMedleyInput({
 async function preloadSearchData(request: TeamSearchWorkerPreloadRequest): Promise<void> {
   const messages = getWorkerMessages(request.messages);
   const preloadRequests: Array<Promise<unknown>> = [
-    requestJson<MasterResponse<Record<string, BestdoriCardMaster | undefined>>>("/api/bandori/master/cards", messages),
+    requestJson<CachedCardsResponse>("/api/bandori/master/cards", messages),
     requestJson<MasterResponse<Record<string, { bandId?: number | null } | undefined>>>("/api/bandori/master/characters/main", messages),
     requestJson<MasterResponse<Record<string, BestdoriSkillMaster | undefined>>>("/api/bandori/master/skills", messages),
     requestJson<MasterResponse<Record<string, BestdoriAreaItemMaster | undefined>>>("/api/bandori/master/areaItems", messages),
@@ -686,8 +715,8 @@ async function runSearch(
         messages,
       ),
     ];
-  const [cardsPayload, charactersPayload, skillsPayload, areaItemsPayload, songsPayload, chartPayloads, eventBonuses] = await Promise.all([
-    requireCachedJson<MasterResponse<Record<string, BestdoriCardMaster | undefined>>>("/api/bandori/master/cards", messages.cardData, messages),
+  const [cachedCards, charactersPayload, skillsPayload, areaItemsPayload, songsPayload, chartPayloads, eventBonuses] = await Promise.all([
+    requireCachedJson<CachedCardsResponse>("/api/bandori/master/cards", messages.cardData, messages),
     requireCachedJson<MasterResponse<Record<string, { bandId?: number | null } | undefined>>>("/api/bandori/master/characters/main", messages.characterData, messages),
     requireCachedJson<MasterResponse<Record<string, BestdoriSkillMaster | undefined>>>("/api/bandori/master/skills", messages.skillData, messages),
     requireCachedJson<MasterResponse<Record<string, BestdoriAreaItemMaster | undefined>>>("/api/bandori/master/areaItems", messages.areaItemData, messages),
@@ -697,6 +726,8 @@ async function runSearch(
       ? requireCachedJson<EventBonusResponse>(`/api/bandori/events/bonuses?event=${request.event.eventId}`, messages.eventBonus, messages).then((response) => response.bonuses)
       : Promise.resolve([]),
   ]);
+  const server = request.profilePayload.bestdoriProfile.server;
+  const cardsById = getCardsForServer(normalizeCachedCardsResponse(cachedCards), server);
 
   const song = songsPayload.payload[String(songId)];
   if (!song) {
@@ -711,7 +742,7 @@ async function runSearch(
   const profileCards = getGameProfileCards(request.profilePayload).map((card) => {
     const effectiveCard = applyOwnedCardParameterPreferences(
       card,
-      cardsPayload.payload[String(card.cardId)],
+      cardsById[String(card.cardId)],
       request.cards.ownedCardParameters,
     );
     return {
@@ -763,12 +794,11 @@ async function runSearch(
     if (request.calculation.medleyMode === "legacy-greedy-single") {
       const startedAt = performance.now();
       const deadlineAt = startedAt + Math.min(300000, Math.max(1000, request.calculation.maxSearchDurationMs));
-      const server = request.profilePayload.bestdoriProfile.server;
       const medleyInput = buildLegacyGreedyMedleyInput({
         userCards,
         userAreaItems,
         characterBonuses,
-        cardsById: cardsPayload.payload,
+        cardsById,
         charactersById: charactersPayload.payload,
         skillsById: skillsPayload.payload,
         areaItemsById: areaItemsPayload.payload,
@@ -793,7 +823,7 @@ async function runSearch(
       userCards,
       userAreaItems,
       characterBonuses,
-      cardsById: cardsPayload.payload,
+      cardsById,
       charactersById: charactersPayload.payload,
       skillsById: skillsPayload.payload,
       areaItemsById: areaItemsPayload.payload,
@@ -805,7 +835,7 @@ async function runSearch(
       resultLimit: request.calculation.resultLimit,
       perfectRate: request.song.perfectRate,
       useSpecialRoomBonus: false,
-      server: request.profilePayload.bestdoriProfile.server,
+      server,
       maxSearchDurationMs: Math.min(300000, Math.max(1000, request.calculation.maxSearchDurationMs)),
       coarseAreaItemFilter: { mode: "all" },
       optimization: {
@@ -829,7 +859,7 @@ async function runSearch(
       getGameProfileCharacterPotentials(request.profilePayload),
       getGameProfileCharacterMissionBonuses(request.profilePayload),
     ),
-    cardsById: cardsPayload.payload,
+    cardsById,
     charactersById: charactersPayload.payload,
     skillsById: skillsPayload.payload,
     areaItemsById: areaItemsPayload.payload,
@@ -851,7 +881,7 @@ async function runSearch(
     encoreSkillSource: request.live.encoreSkillSource,
     liveBoostCount: request.live.liveBoostCount,
     challengeCpCost: request.live.challengeCpCost,
-    server: request.profilePayload.bestdoriProfile.server,
+    server,
     maxSearchDurationMs: request.calculation.maxSearchDurationMs,
     constraints: request.calculation.constraints,
   });
