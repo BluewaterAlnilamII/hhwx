@@ -5,6 +5,7 @@ import { ArrowDownWideNarrow, ArrowUpNarrowWide, Filter, Loader2, RotateCcw, Sea
 import { useLocale, useTranslations } from "next-intl";
 import { type AppLocale } from "@/i18n/routing";
 import { useCachedFetch } from "@/hooks/useCachedFetch";
+import { useBandoriCardsAssetIndex } from "@/hooks/useBandoriPublicAssetIndex";
 import {
   buildBandoriResIconPublicUrl,
   type BandoriAssetRegion,
@@ -359,6 +360,7 @@ export default function BandoriCardPicker({
 }: BandoriCardPickerProps) {
   const locale = useLocale() as AppLocale;
   const t = useTranslations("bandori.cardPicker");
+  useBandoriCardsAssetIndex();
   const { data: cardMetadata, loading: cardsLoading } = useCachedFetch(
     `bandori-card-picker-cards-v5-${server ?? "canonical"}`,
     `/api/bandori/master/cards${server ? `?server=${server}` : ""}`,

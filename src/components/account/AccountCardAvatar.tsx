@@ -31,7 +31,6 @@ export default function AccountCardAvatar({
   cardId,
   trainType = "normal",
   resourceSetName,
-  assetRegion,
   displayName,
   size = "default",
   className,
@@ -51,7 +50,6 @@ export default function AccountCardAvatar({
           cardId={cardId}
           resourceSetName={resourceSetName}
           trainType={trainType ?? "normal"}
-          region={assetRegion ?? "cn"}
           alt={displayName ?? username ?? "avatar"}
           className="rounded-full"
         />

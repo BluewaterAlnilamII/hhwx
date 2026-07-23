@@ -21,13 +21,19 @@ import BandoriEventSwitcher, { type BandoriEventSwitcherEvent } from "@/app/[loc
 import { AccountErrorState, AccountLoadingState, AccountSignInState } from "@/app/[locale]/account/AccountShell";
 import { getAccessToken, useLocalizedAccountProfile } from "@/app/[locale]/account/useAccountProfile";
 import { BandoriCardHoverTooltipPortal } from "@/components/bandori/BandoriCardHoverTooltip";
+import {
+  useBandoriCardsAssetIndex,
+  useBandoriEventsAssetIndex,
+} from "@/hooks/useBandoriPublicAssetIndex";
 import { getApiErrorMessage, parseApiSuccessData } from "@/lib/api-contracts";
 import {
   type BandoriAssetRegion,
-  buildBandoriEventBannerPublicUrl,
   buildBandoriResIconPublicUrl,
-  resolveBandoriEventBannerBundleName,
 } from "@/lib/bandori-asset-proxy";
+import {
+  buildBandoriPublicAssetUrl,
+  lookupBandoriEventBanner,
+} from "@/lib/bandori-public-asset-index";
 import {
   hasBandoriOfficialCnEventContent,
   resolveBandoriCnScheduleWindow,
@@ -2675,6 +2681,8 @@ function getCardCharacterLabel(metadata: CardMetadata | undefined, characters: R
 function TeamBuilderPanel() {
   const locale = useLocale() as AppLocale;
   const messages = useMessages();
+  useBandoriCardsAssetIndex();
+  const { value: eventAssetIndex } = useBandoriEventsAssetIndex();
   const teamT = useTranslations("bandori.teamBuilder");
   const stepsT = useTranslations("bandori.teamBuilder.steps");
   const labelsT = useTranslations("bandori.teamBuilder.labels");
@@ -3052,12 +3060,14 @@ function TeamBuilderPanel() {
     if (!selectedEvent) {
       return NO_EVENT_BANNER_URL;
     }
-    const bundleName = resolveBandoriEventBannerBundleName(selectedEvent.asset);
-    if (!bundleName) {
-      return "";
-    }
-    return buildBandoriEventBannerPublicUrl(selectedEventAssetRegion, bundleName);
-  }, [selectedEvent, selectedEventAssetRegion]);
+    return buildBandoriPublicAssetUrl(
+      lookupBandoriEventBanner(
+        eventAssetIndex,
+        selectedEvent.eventId,
+        selectedEventAssetRegion,
+      ),
+    ) ?? "";
+  }, [eventAssetIndex, selectedEvent, selectedEventAssetRegion]);
   const shouldLimitSongsToEventSongs = selectedEventType === "challenge" && liveType === "challenge";
   const medleyEventSongOptions = useMemo(() => {
     const sources: Array<{ source: "CN" | "JP"; id: MedleySongSource }> = [
