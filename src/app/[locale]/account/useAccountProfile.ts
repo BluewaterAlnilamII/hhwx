@@ -1,26 +1,22 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo } from "react";
 import { useTranslations } from "next-intl";
-import { getApiErrorMessage, parseApiSuccessData } from "@/lib/api-contracts";
+import {
+  AccountProfileRequestError,
+  type AccountProfile,
+} from "@/lib/account-profile-store";
+import { getApiErrorMessage } from "@/lib/api-contracts";
 import { getLocalizedApiErrorMessage } from "@/lib/localized-api-errors";
-import { getSafeSession, readAuthProfileSummary } from "@/lib/supabase";
-import { type BandoriServer } from "@/lib/bandori-server";
+import {
+  getSafeSession,
+  readAuthProfileSummary,
+  writeAuthProfileSummaryCache,
+} from "@/lib/supabase";
+import { useAccountProfileStore } from "@/store/useAccountProfileStore";
 import { useGameStore } from "@/store/useGameStore";
 
-export type AccountProfile = {
-  userId: string;
-  publicUid: number;
-  email: string | null;
-  emailVerified: boolean;
-  username: string;
-  avatarCardId: number;
-  avatarCardServer: BandoriServer | null;
-  avatarCardTrainType: "normal" | "after_training";
-  createdAt: string | null;
-  updatedAt: string | null;
-  roles: string[];
-};
+export type { AccountProfile } from "@/lib/account-profile-store";
 
 export async function getAccessToken(): Promise<string | null> {
   const session = await getSafeSession();
@@ -36,11 +32,36 @@ export interface AccountProfileMessages {
 }
 
 const defaultAccountProfileMessages: AccountProfileMessages = {
-  notSignedIn: "请先登录",
-  httpLoadFailed: (status) => `读取账号资料失败（HTTP ${status}）`,
-  invalidResponse: "账号资料返回格式无效",
-  loadFailed: "读取账号资料失败",
+  notSignedIn: "Please sign in first",
+  httpLoadFailed: (status) => `Failed to load the account profile (HTTP ${status})`,
+  invalidResponse: "The account profile response is invalid",
+  loadFailed: "Failed to load the account profile",
 };
+
+function getProfileErrorMessage(
+  error: AccountProfileRequestError | null,
+  messages: AccountProfileMessages,
+): string {
+  if (!error) {
+    return "";
+  }
+  if (error.reason === "unauthenticated") {
+    return messages.notSignedIn;
+  }
+  if (error.reason === "invalid-response") {
+    return messages.invalidResponse;
+  }
+  if (error.payload !== undefined) {
+    const apiMessage = messages.apiErrorMessage?.(error.payload) || getApiErrorMessage(error.payload);
+    if (apiMessage) {
+      return apiMessage;
+    }
+  }
+  if (error.status !== null) {
+    return messages.httpLoadFailed(error.status);
+  }
+  return error.message || messages.loadFailed;
+}
 
 export function useAccountProfile(messages: AccountProfileMessages = defaultAccountProfileMessages) {
   const {
@@ -51,14 +72,31 @@ export function useAccountProfile(messages: AccountProfileMessages = defaultAcco
     setAuth,
     logout,
   } = useGameStore();
-
-  const [profile, setProfile] = useState<AccountProfile | null>(null);
-  const [loadingProfile, setLoadingProfile] = useState(true);
-  const [profileError, setProfileError] = useState("");
+  const storedUserId = useAccountProfileStore((state) => state.userId);
+  const storedProfile = useAccountProfileStore((state) => state.profile);
+  const profileStatus = useAccountProfileStore((state) => state.status);
+  const profileRequestError = useAccountProfileStore((state) => state.error);
+  const loadStoredProfile = useAccountProfileStore((state) => state.loadProfile);
+  const setStoredProfile = useAccountProfileStore((state) => state.setProfile);
+  const clearStoredProfile = useAccountProfileStore((state) => state.clearProfile);
+  const profile = storedUserId === userId ? storedProfile : null;
+  const profileError = storedUserId === userId
+    ? getProfileErrorMessage(profileRequestError, messages)
+    : "";
+  const loadingProfile = !authReady || Boolean(
+    userId
+    && (
+      storedUserId !== userId
+      || profileStatus === "idle"
+      || profileStatus === "loading"
+    )
+    && !profile
+  );
 
   const syncStoreSummary = useCallback(async () => {
-    const summary = await readAuthProfileSummary();
+    const summary = await readAuthProfileSummary(null, { forceRefresh: true });
     if (!summary) {
+      clearStoredProfile();
       logout();
       return;
     }
@@ -69,59 +107,41 @@ export function useAccountProfile(messages: AccountProfileMessages = defaultAcco
       userEmail: summary.email,
       emailVerified: summary.emailVerified,
     });
-  }, [logout, setAuth]);
+  }, [clearStoredProfile, logout, setAuth]);
 
   const loadProfile = useCallback(async () => {
+    if (!authReady || !userId) {
+      return null;
+    }
+    return loadStoredProfile(userId, { force: true });
+  }, [authReady, loadStoredProfile, userId]);
+
+  const setProfile = useCallback((nextProfile: AccountProfile) => {
+    setStoredProfile(nextProfile);
+    writeAuthProfileSummaryCache({
+      userId: nextProfile.userId,
+      username: nextProfile.username,
+      email: nextProfile.email,
+      emailVerified: nextProfile.emailVerified,
+    });
+    setAuth({
+      userId: nextProfile.userId,
+      username: nextProfile.username,
+      userEmail: nextProfile.email,
+      emailVerified: nextProfile.emailVerified,
+    });
+  }, [setAuth, setStoredProfile]);
+
+  useEffect(() => {
     if (!authReady) {
       return;
     }
-
     if (!userId) {
-      setProfile(null);
-      setLoadingProfile(false);
+      clearStoredProfile();
       return;
     }
-
-    setLoadingProfile(true);
-    setProfileError("");
-
-    try {
-      const accessToken = await getAccessToken();
-      if (!accessToken) {
-        setProfile(null);
-        setProfileError(messages.notSignedIn);
-        return;
-      }
-
-      const response = await fetch("/api/account/profile", {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-        },
-      });
-      const payload = await response.json().catch(() => ({}));
-
-      if (!response.ok) {
-        setProfileError(messages.apiErrorMessage?.(payload) || getApiErrorMessage(payload) || messages.httpLoadFailed(response.status));
-        return;
-      }
-
-      const accountProfile = parseApiSuccessData<AccountProfile>(payload);
-      if (!accountProfile) {
-        setProfileError(messages.invalidResponse);
-        return;
-      }
-
-      setProfile(accountProfile);
-    } catch (error) {
-      setProfileError(error instanceof Error ? error.message : messages.loadFailed);
-    } finally {
-      setLoadingProfile(false);
-    }
-  }, [authReady, messages, userId]);
-
-  useEffect(() => {
-    void loadProfile();
-  }, [loadProfile]);
+    void loadStoredProfile(userId).catch(() => undefined);
+  }, [authReady, clearStoredProfile, loadStoredProfile, userId]);
 
   return {
     userId,

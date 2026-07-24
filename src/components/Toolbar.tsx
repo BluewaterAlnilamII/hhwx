@@ -7,21 +7,19 @@ import { useSearchParams } from "next/navigation";
 import { Link, usePathname } from "@/i18n/navigation";
 import AccountCardAvatar from "@/components/account/AccountCardAvatar";
 import { useBandoriCardsMaster } from "@/hooks/useBandoriCardsMaster";
-import { useBandoriCardsAssetIndex } from "@/hooks/useBandoriPublicAssetIndex";
 import { buildLocalizedPathname, routing, type AppLocale } from "@/i18n/routing";
-import { type AccountAvatarCardTrainType } from "@/lib/account-avatar-defaults";
 import { getApiErrorMessage, parseApiSuccessData } from "@/lib/api-contracts";
 import { pickGameProfileCardName } from "@/lib/bandori-game-profile-card";
 import {
     BANDORI_SERVER_CODES,
     BANDORI_SERVERS,
-    type BandoriServer,
 } from "@/lib/bandori-server";
 import { buildAuthPath, clearAuthProfileSummaryCache, getSafeSession, readAuthProfileSummary, supabase } from "@/lib/supabase";
 import {
     useBandoriPreferencesStore,
     useBandoriPreferredServer,
 } from "@/store/useBandoriPreferencesStore";
+import { useAccountProfileStore } from "@/store/useAccountProfileStore";
 import { useGameStore } from "@/store/useGameStore";
 
 interface ToolbarProps {
@@ -29,14 +27,6 @@ interface ToolbarProps {
     isSidebarOpen?: boolean;
     onToggleSidebar?: () => void;
 }
-
-type ToolbarAccountProfile = {
-    userId: string;
-    username: string;
-    avatarCardId: number;
-    avatarCardServer: BandoriServer | null;
-    avatarCardTrainType: AccountAvatarCardTrainType;
-};
 
 const NOTIFICATIONS_UPDATED_EVENT = "hhwx:notifications-updated";
 const toolbarIconButtonClassName = "group relative flex h-9 w-9 items-center justify-center rounded-[15px] border border-white/45 bg-white/22 text-left text-white shadow-[0_6px_16px_rgba(122,61,0,0.16)] transition duration-200 hover:-translate-y-0.5 hover:scale-[1.03] hover:border-white/75 hover:bg-white/34 hover:shadow-[0_10px_24px_rgba(122,61,0,0.22)]";
@@ -174,19 +164,22 @@ export default function Toolbar({ showDebugButton = true, isSidebarOpen = false,
     const { userId, username, emailVerified, setAuth, logout, debugMode, toggleDebugMode } = useGameStore();
     const [showMenu, setShowMenu] = useState(false);
     const [showLanguageMenu, setShowLanguageMenu] = useState(false);
-    const [toolbarProfileState, setToolbarProfileState] = useState<{ userId: string; profile: ToolbarAccountProfile } | null>(null);
     const [notificationUnreadState, setNotificationUnreadState] = useState<{ userId: string; unreadCount: number } | null>(null);
+    const storedProfileUserId = useAccountProfileStore((state) => state.userId);
+    const storedProfile = useAccountProfileStore((state) => state.profile);
+    const loadAccountProfile = useAccountProfileStore((state) => state.loadProfile);
+    const clearAccountProfile = useAccountProfileStore((state) => state.clearProfile);
     const menuRef = useRef<HTMLDivElement | null>(null);
     const languageMenuRef = useRef<HTMLDivElement | null>(null);
+    const unreadRequestRef = useRef<{ userId: string; promise: Promise<void> } | null>(null);
     const returnPath = pathname && !pathname.startsWith("/auth") ? pathname : "/account";
     const loginHref = buildAuthPath("login", returnPath, undefined, locale);
     const currentLanguageLabel = languageT(locale);
     const shouldShowDebugButton = showDebugButton && pathname === "/";
-    const toolbarProfile = toolbarProfileState?.userId === userId ? toolbarProfileState.profile : null;
+    const toolbarProfile = storedProfileUserId === userId ? storedProfile : null;
     const toolbarUsername = toolbarProfile?.username ?? username;
     const avatarCardId = toolbarProfile?.avatarCardId ?? null;
     const avatarCardServer = toolbarProfile?.avatarCardServer ?? null;
-    useBandoriCardsAssetIndex(Boolean(userId && avatarCardId));
     const notificationUnreadCount = notificationUnreadState?.userId === userId ? notificationUnreadState.unreadCount : 0;
     const notificationBadgeLabel = notificationUnreadCount > 0 ? formatUnreadCount(notificationUnreadCount) : null;
     const { data: cardMetadata } = useBandoriCardsMaster(
@@ -231,7 +224,10 @@ export default function Toolbar({ showDebugButton = true, isSidebarOpen = false,
                 });
             } catch (error) {
                 console.error("Failed to restore auth summary:", error);
-                if (!disposed) {
+                if (
+                    !disposed
+                    && useGameStore.getState().userId !== session?.user.id
+                ) {
                     logout();
                 }
             }
@@ -242,16 +238,27 @@ export default function Toolbar({ showDebugButton = true, isSidebarOpen = false,
         } = supabase.auth.onAuthStateChange((event, session) => {
             if (event === "SIGNED_OUT") {
                 clearAuthProfileSummaryCache();
+                clearAccountProfile();
+                setNotificationUnreadState(null);
                 logout();
                 return;
             }
 
             if (!session) {
+                clearAccountProfile();
+                setNotificationUnreadState(null);
                 logout();
                 return;
             }
 
             if (event === "TOKEN_REFRESHED") {
+                return;
+            }
+
+            if (
+                event === "SIGNED_IN"
+                && useGameStore.getState().userId === session.user.id
+            ) {
                 return;
             }
 
@@ -264,7 +271,7 @@ export default function Toolbar({ showDebugButton = true, isSidebarOpen = false,
             disposed = true;
             subscription.unsubscribe();
         };
-    }, [setAuth, logout]);
+    }, [clearAccountProfile, setAuth, logout]);
 
     useEffect(() => {
         if (!showMenu) {
@@ -296,53 +303,66 @@ export default function Toolbar({ showDebugButton = true, isSidebarOpen = false,
         return () => document.removeEventListener("mousedown", handlePointerDown);
     }, [showLanguageMenu]);
 
-    const loadAccountHeaderData = useCallback(async () => {
+    const loadToolbarProfile = useCallback(async () => {
         if (!userId) {
             return;
         }
 
+        try {
+            await loadAccountProfile(userId);
+        } catch (error) {
+            console.error("Toolbar profile request failed:", error);
+        }
+    }, [loadAccountProfile, userId]);
+
+    const loadNotificationUnreadCount = useCallback((): Promise<void> => {
+        if (!userId) {
+            return Promise.resolve();
+        }
+        if (unreadRequestRef.current?.userId === userId) {
+            return unreadRequestRef.current.promise;
+        }
+
         const currentUserId = userId;
-        const session = await getSafeSession();
-        if (!session?.access_token) {
-            return;
-        }
-
-        const headers = {
-            Authorization: `Bearer ${session.access_token}`,
-        };
-
-        const [profileResponse, unreadResponse] = await Promise.all([
-            fetch("/api/account/profile", { headers }),
-            fetch("/api/account/notifications/unread-count", { headers }),
-        ]);
-
-        if (profileResponse.ok) {
-            const profilePayload = await profileResponse.json().catch(() => ({}));
-            const profile = parseApiSuccessData<ToolbarAccountProfile>(profilePayload);
-            if (profile) {
-                setToolbarProfileState({
-                    userId: currentUserId,
-                    profile,
-                });
+        const promise = (async () => {
+            const session = await getSafeSession();
+            if (!session?.access_token) {
+                return;
             }
-        } else if (profileResponse.status !== 401) {
-            const payload = await profileResponse.json().catch(() => ({}));
-            console.error("Toolbar profile request failed:", getApiErrorMessage(payload) || `HTTP ${profileResponse.status}`);
-        }
 
-        if (unreadResponse.ok) {
-            const unreadPayload = await unreadResponse.json().catch(() => ({}));
-            const unread = parseApiSuccessData<{ unreadCount: number }>(unreadPayload);
+            const response = await fetch("/api/account/notifications/unread-count", {
+                headers: {
+                    Authorization: `Bearer ${session.access_token}`,
+                },
+            });
+            const payload = await response.json().catch(() => ({}));
+            if (!response.ok) {
+                if (response.status !== 401) {
+                    console.error(
+                        "Toolbar unread count request failed:",
+                        getApiErrorMessage(payload) || `HTTP ${response.status}`,
+                    );
+                }
+                return;
+            }
+
+            const unread = parseApiSuccessData<{ unreadCount: number }>(payload);
             if (unread) {
+                if (useGameStore.getState().userId !== currentUserId) {
+                    return;
+                }
                 setNotificationUnreadState({
                     userId: currentUserId,
                     unreadCount: unread.unreadCount,
                 });
             }
-        } else if (unreadResponse.status !== 401) {
-            const payload = await unreadResponse.json().catch(() => ({}));
-            console.error("Toolbar unread count request failed:", getApiErrorMessage(payload) || `HTTP ${unreadResponse.status}`);
-        }
+        })().finally(() => {
+            if (unreadRequestRef.current?.promise === promise) {
+                unreadRequestRef.current = null;
+            }
+        });
+        unreadRequestRef.current = { userId: currentUserId, promise };
+        return promise;
     }, [userId]);
 
     useEffect(() => {
@@ -351,11 +371,12 @@ export default function Toolbar({ showDebugButton = true, isSidebarOpen = false,
         }
 
         const timeoutId = window.setTimeout(() => {
-            void loadAccountHeaderData();
+            void loadToolbarProfile();
+            void loadNotificationUnreadCount();
         }, 0);
 
         return () => window.clearTimeout(timeoutId);
-    }, [loadAccountHeaderData, pathname, userId]);
+    }, [loadNotificationUnreadCount, loadToolbarProfile, userId]);
 
     useEffect(() => {
         if (!userId || !showMenu) {
@@ -363,11 +384,11 @@ export default function Toolbar({ showDebugButton = true, isSidebarOpen = false,
         }
 
         const timeoutId = window.setTimeout(() => {
-            void loadAccountHeaderData();
+            void loadNotificationUnreadCount();
         }, 0);
 
         return () => window.clearTimeout(timeoutId);
-    }, [loadAccountHeaderData, showMenu, userId]);
+    }, [loadNotificationUnreadCount, showMenu, userId]);
 
     useEffect(() => {
         if (!userId) {
@@ -375,16 +396,18 @@ export default function Toolbar({ showDebugButton = true, isSidebarOpen = false,
         }
 
         const handleNotificationsUpdated = () => {
-            void loadAccountHeaderData();
+            void loadNotificationUnreadCount();
         };
 
         window.addEventListener(NOTIFICATIONS_UPDATED_EVENT, handleNotificationsUpdated);
         return () => window.removeEventListener(NOTIFICATIONS_UPDATED_EVENT, handleNotificationsUpdated);
-    }, [loadAccountHeaderData, userId]);
+    }, [loadNotificationUnreadCount, userId]);
 
     const handleLogout = async () => {
         await supabase.auth.signOut();
         clearAuthProfileSummaryCache();
+        clearAccountProfile();
+        setNotificationUnreadState(null);
         logout();
         setShowMenu(false);
     };

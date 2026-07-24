@@ -52,6 +52,7 @@ test("event banners use their exact index slot without bundle or proxy fallback"
     assert.match(source, /lookupBandoriEventBanner/u);
     assert.doesNotMatch(source, /buildBandoriEventBannerPublicUrl|resolveBandoriEventBannerBundleName/u);
   }
+  assert.doesNotMatch(tracker, /useBandoriCardsAssetIndex/u);
 });
 
 test("Cards and Events master routes remain data-only and do not read public indexes", async () => {

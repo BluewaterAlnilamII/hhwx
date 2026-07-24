@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { type Session } from "@supabase/supabase-js";
 import { useCachedFetch } from "@/hooks/useCachedFetch";
 import {
   EXTERNAL_REFERENCE_CACHE_PROFILE,
@@ -239,8 +240,29 @@ export function useCalendarPermission() {
   const [hasPermission, setHasPermission] = useState(false);
 
   useEffect(() => {
-    const checkPermission = async () => {
-      const session = await getSafeSession();
+    let active = true;
+    let checkedUserId: string | null | undefined;
+    let permissionRequestSequence = 0;
+
+    const checkPermission = async (
+      providedSession?: Session | null,
+      options?: { force?: boolean },
+    ) => {
+      const session = providedSession === undefined
+        ? await getSafeSession()
+        : providedSession;
+      if (!active) {
+        return;
+      }
+
+      const nextUserId = session?.user.id ?? null;
+      if (!options?.force && checkedUserId === nextUserId) {
+        return;
+      }
+      checkedUserId = nextUserId;
+      permissionRequestSequence += 1;
+      const requestSequence = permissionRequestSequence;
+
       if (!session?.user) {
         setHasPermission(false);
         return;
@@ -253,6 +275,13 @@ export function useCalendarPermission() {
         .eq("role", "calendar_editor")
         .maybeSingle();
 
+      if (
+        !active
+        || checkedUserId !== session.user.id
+        || permissionRequestSequence !== requestSequence
+      ) {
+        return;
+      }
       if (!error) {
         setHasPermission(!!data);
         return;
@@ -265,11 +294,22 @@ export function useCalendarPermission() {
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(() => {
-      void checkPermission();
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === "TOKEN_REFRESHED") {
+        return;
+      }
+      if (event === "SIGNED_IN" && checkedUserId === session?.user.id) {
+        return;
+      }
+      void checkPermission(session, {
+        force: event === "USER_UPDATED",
+      });
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      active = false;
+      subscription.unsubscribe();
+    };
   }, []);
 
   return hasPermission;
