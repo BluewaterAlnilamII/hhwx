@@ -1,3 +1,10 @@
+import {
+  BANDORI_SERVER_COUNT,
+  getBandoriServerCode,
+  normalizeBandoriServer,
+  type BandoriServer,
+} from "@/lib/bandori-server";
+
 /*
  * Resolves the four-server Cards snapshot extension without leaking regional
  * branching into calculator hot paths. The canonical record stays untouched;
@@ -5,11 +12,9 @@
  * A null override value deletes that field; a null slot means the whole card is absent.
  */
 
-export const BANDORI_CARD_SERVER_COUNT = 4;
-export const BANDORI_CARD_SERVERS = ["jp", "en", "tw", "cn"] as const;
-
-export type BandoriCardServer = typeof BANDORI_CARD_SERVERS[number];
-export type BandoriCardServerIndex = 0 | 1 | 2 | 3;
+export const BANDORI_CARD_SERVER_COUNT = BANDORI_SERVER_COUNT;
+export type BandoriCardServer = BandoriServer;
+export type BandoriCardServerIndex = BandoriServer;
 export type BandoriCardServerQuery =
   | { status: "absent" }
   | { status: "invalid" }
@@ -130,24 +135,15 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 export function normalizeBandoriCardServer(value: unknown): BandoriCardServer | null {
-  if (typeof value !== "string") {
-    return null;
-  }
-  const normalized = value.trim().toLowerCase();
-  return BANDORI_CARD_SERVERS.includes(normalized as BandoriCardServer)
-    ? normalized as BandoriCardServer
-    : null;
+  return normalizeBandoriServer(value);
 }
 
 export function getBandoriCardServerIndex(server: BandoriCardServer): BandoriCardServerIndex {
-  return BANDORI_CARD_SERVERS.indexOf(server) as BandoriCardServerIndex;
+  return server;
 }
 
-export function getBandoriCardServerName(server: number): BandoriCardServer {
-  if (!Number.isInteger(server) || server < 0 || server >= BANDORI_CARD_SERVER_COUNT) {
-    throw new Error(`Unsupported Bandori card server index: ${server}`);
-  }
-  return BANDORI_CARD_SERVERS[server as BandoriCardServerIndex];
+export function getBandoriCardServerName(server: BandoriCardServer): string {
+  return getBandoriServerCode(server);
 }
 
 export function isKnownBandoriCardEntityCollision(cardId: string | number): boolean {
@@ -168,7 +164,7 @@ export function parseBandoriCardServerQuery(request: Request): BandoriCardServer
   const server = rawServers.length === 1
     ? normalizeBandoriCardServer(rawServers[0])
     : null;
-  return server
+  return server !== null
     ? { status: "valid", server }
     : { status: "invalid" };
 }
@@ -292,19 +288,20 @@ function validateKnownEntityCollisionExtensions(
   }
 
   const expected = KNOWN_ENTITY_COLLISION_IDENTITIES[strict.recordId];
-  for (const server of ["en", "cn"] as const) {
-    const extension = extensions[getBandoriCardServerIndex(server)];
+  for (const server of [1, 3] as const) {
+    const extension = extensions[server];
     if (extension === null) {
       continue;
     }
+    const serverCode = server === 1 ? "en" : "cn";
     for (const field of identityFields) {
       const actual = Object.hasOwn(extension, field)
         ? extension[field]
         : card[field];
-      if (actual !== expected[server][field]) {
+      if (actual !== expected[serverCode][field]) {
         throw new Error(
           `${label} entity collision identity fingerprint changed: `
-          + `server=${server}, field=${field}`,
+          + `server=${serverCode}, field=${field}`,
         );
       }
     }
@@ -513,13 +510,13 @@ export function expandBandoriCardCatalog<T extends object>(
       `Bandori card catalog record ${rawCardId}`,
       { dataset: "cards", recordId: rawCardId },
     );
-    for (const server of ["en", "cn"] as const) {
-      const serverCard = materializeBandoriCardForServer(
-        card,
-        getBandoriCardServerIndex(server),
-      );
+    for (const server of [1, 3] as const) {
+      const serverCard = materializeBandoriCardForServer(card, server);
       if (!serverCard) {
-        throw new Error(`Bandori card catalog collision is missing server ${server}: ${rawCardId}`);
+        throw new Error(
+          `Bandori card catalog collision is missing server `
+          + `${getBandoriServerCode(server)}: ${rawCardId}`,
+        );
       }
       entries.push({
         cardId,

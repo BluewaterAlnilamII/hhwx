@@ -1,10 +1,12 @@
 "use client";
 
 import { BandoriCardArtImage } from "@/components/bandori/card-picker";
+import { useBandoriCardsMaster } from "@/hooks/useBandoriCardsMaster";
 import { type AccountAvatarCardTrainType } from "@/lib/account-avatar-defaults";
-import { type BandoriAssetRegion } from "@/lib/bandori-asset-proxy";
+import { pickGameProfileCardName } from "@/lib/bandori-game-profile-card";
 import { getUsernameAvatarLabel } from "@/lib/username-policy";
 import { cn } from "@/lib/utils";
+import { useBandoriPreferredServer } from "@/store/useBandoriPreferencesStore";
 
 type AccountCardAvatarSize = "toolbar" | "comment" | "default" | "large";
 
@@ -20,7 +22,6 @@ export type AccountCardAvatarProps = {
   cardId?: number | null;
   trainType?: AccountAvatarCardTrainType | null;
   resourceSetName?: string | null;
-  assetRegion?: BandoriAssetRegion | null;
   displayName?: string | null;
   size?: AccountCardAvatarSize;
   className?: string;
@@ -35,7 +36,19 @@ export default function AccountCardAvatar({
   size = "default",
   className,
 }: AccountCardAvatarProps) {
-  const hasCardAvatar = Boolean(cardId && resourceSetName);
+  const preferredServer = useBandoriPreferredServer();
+  const { data: cards } = useBandoriCardsMaster(
+    undefined,
+    Boolean(cardId && !resourceSetName),
+  );
+  const cardMetadata = cardId ? cards?.[String(cardId)] : null;
+  const resolvedResourceSetName = resourceSetName ?? cardMetadata?.resourceSetName;
+  const resolvedDisplayName = displayName ?? (
+    cardId
+      ? pickGameProfileCardName(cardId, cardMetadata ?? undefined, preferredServer)
+      : null
+  );
+  const hasCardAvatar = Boolean(cardId && resolvedResourceSetName);
 
   return (
     <div
@@ -45,12 +58,12 @@ export default function AccountCardAvatar({
         className,
       )}
     >
-      {hasCardAvatar && cardId && resourceSetName ? (
+      {hasCardAvatar && cardId && resolvedResourceSetName ? (
         <BandoriCardArtImage
           cardId={cardId}
-          resourceSetName={resourceSetName}
+          resourceSetName={resolvedResourceSetName}
           trainType={trainType ?? "normal"}
-          alt={displayName ?? username ?? "avatar"}
+          alt={resolvedDisplayName ?? username ?? "avatar"}
           className="rounded-full"
         />
       ) : (

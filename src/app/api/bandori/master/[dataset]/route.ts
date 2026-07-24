@@ -58,7 +58,7 @@ export async function GET(request: Request, context: RouteContext) {
     return jsonError(
       400,
       "BANDORI_MASTER_CARD_SERVER_INVALID",
-      "server must be exactly one of jp, en, tw, or cn",
+      "server must be exactly one of 0, 1, 2, or 3",
       { headers: withCacheControl(LIVE_API_CACHE_CONTROL) },
     );
   }

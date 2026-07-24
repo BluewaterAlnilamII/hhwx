@@ -25,6 +25,7 @@ import {
   useBandoriCardsAssetIndex,
   useBandoriEventsAssetIndex,
 } from "@/hooks/useBandoriPublicAssetIndex";
+import { useBandoriCardsMaster } from "@/hooks/useBandoriCardsMaster";
 import { getApiErrorMessage, parseApiSuccessData } from "@/lib/api-contracts";
 import {
   type BandoriAssetRegion,
@@ -81,9 +82,13 @@ import {
 import { type BandoriCardPickerValue } from "@/components/bandori/card-picker/types";
 import { type AppLocale } from "@/i18n/routing";
 import { createMaxGameProfileCard, pickGameProfileCardName } from "@/lib/bandori-game-profile-card";
-import { BANDORI_CARD_SERVERS } from "@/lib/bandori-card-server-extensions";
 import { pickBestdoriLocalizedName } from "@/lib/bestdori-regional-names";
+import {
+  normalizeBandoriServer,
+  type BandoriServer,
+} from "@/lib/bandori-server";
 import { formatLocalizedDate, formatLocalizedDateTime, formatLocalizedInteger } from "@/lib/localized-format";
+import { useBandoriPreferredServer } from "@/store/useBandoriPreferencesStore";
 import TeamBuilderCardPreferencesPanel from "./CardPreferencesPanel";
 import { type TemporaryCardEditorDialogProps, type TemporaryCardPickerDialogProps } from "./TemporaryCardDialogs";
 import {
@@ -242,12 +247,14 @@ type GameProfilePayloadResponse = {
 };
 
 type CardMetadata = {
+  [key: string]: unknown;
   characterId?: number;
   rarity?: number;
   attribute?: string;
   skillId?: number;
   levelLimit?: number;
   resourceSetName?: string;
+  prefix?: Array<string | null>;
   assetRegion?: BandoriAssetRegion;
   releasedAt?: Array<string | number | null>;
   displayName?: string | null;
@@ -267,6 +274,7 @@ type TeamBuilderData = {
   characters: Record<string, CharacterMaster | undefined>;
   skills: Record<string, SkillMaster | undefined>;
 };
+const EMPTY_CARD_METADATA: Record<string, CardMetadata | undefined> = {};
 
 type OtherPlayerDraft = {
   skillId: string;
@@ -490,20 +498,28 @@ async function requestJson<T>(
   return data;
 }
 
-function pickLocalizedName(value: string[] | string | undefined, locale: AppLocale, fallback = ""): string {
+function pickLocalizedName(
+  value: string[] | string | undefined,
+  preferredServer: BandoriServer,
+  fallback = "",
+): string {
   if (typeof value === "string") {
     return value.trim() || fallback;
   }
   if (!Array.isArray(value)) {
     return fallback;
   }
-  return pickBestdoriLocalizedName(value, locale) ?? fallback;
+  return pickBestdoriLocalizedName(value, preferredServer) ?? fallback;
 }
 
-function pickCharacterDisplayName(character: CharacterMaster | undefined, locale: AppLocale, fallback = ""): string {
-  return pickLocalizedName(character?.nickname, locale)
-    || pickLocalizedName(character?.characterName, locale)
-    || pickLocalizedName(character?.firstName, locale)
+function pickCharacterDisplayName(
+  character: CharacterMaster | undefined,
+  preferredServer: BandoriServer,
+  fallback = "",
+): string {
+  return pickLocalizedName(character?.nickname, preferredServer)
+    || pickLocalizedName(character?.characterName, preferredServer)
+    || pickLocalizedName(character?.firstName, preferredServer)
     || fallback;
 }
 
@@ -690,13 +706,18 @@ function formatPercentSequence(values: number[]): string {
   }).join("/");
 }
 
-function normalizeSkillLabel(skill: SkillMaster | undefined, skillLevel: string | number): string {
-  return normalizeBandoriSkillLabel(skill, skillLevel);
+function normalizeSkillLabel(
+  skill: SkillMaster | undefined,
+  skillLevel: string | number,
+  preferredServer: BandoriServer,
+): string {
+  return normalizeBandoriSkillLabel(skill, skillLevel, 1, preferredServer);
 }
 
 function buildSkillOptions(
   skills: Record<string, SkillMaster | undefined>,
   skillLevel: string | number,
+  preferredServer: BandoriServer,
 ): Array<{ value: string; label: string }> {
   return Object.entries(skills)
     .flatMap(([skillId, skill]) => {
@@ -704,7 +725,10 @@ function buildSkillOptions(
       if (!Number.isFinite(id) || id <= 0 || !skill) {
         return [];
       }
-      return [{ value: skillId, label: normalizeSkillLabel(skill, skillLevel) }];
+      return [{
+        value: skillId,
+        label: normalizeSkillLabel(skill, skillLevel, preferredServer),
+      }];
     })
     .sort((left, right) => Number(left.value) - Number(right.value));
 }
@@ -726,7 +750,7 @@ function readAttributeBonusItems(eventBonus: BandoriEventBonus | null): Array<{ 
 function readCharacterBonusItems(
   eventBonus: BandoriEventBonus | null,
   characters: Record<string, CharacterMaster | undefined>,
-  locale: AppLocale,
+  preferredServer: BandoriServer,
 ): Array<{ characterId: number; label: string; color: string | null; percent: number }> {
   return (eventBonus?.characters ?? []).flatMap((item) => {
     if (!isRecord(item)) {
@@ -740,7 +764,7 @@ function readCharacterBonusItems(
     const character = characters[String(characterId)];
     return [{
       characterId,
-      label: pickCharacterDisplayName(character, locale),
+      label: pickCharacterDisplayName(character, preferredServer),
       color: character?.colorCode ?? null,
       percent,
     }];
@@ -858,8 +882,13 @@ function isKnownAttribute(value: string | undefined): value is BandoriCardAttrib
   return value === "powerful" || value === "cool" || value === "happy" || value === "pure";
 }
 
-function pickCardDisplayName(cardId: number, metadata: CardMetadata | undefined, locale: AppLocale): string {
-  return pickGameProfileCardName(cardId, metadata, locale);
+function pickCardDisplayName(
+  cardId: number,
+  metadata: CardMetadata | undefined,
+  preferredServer: BandoriServer,
+  locale: AppLocale,
+): string {
+  return pickGameProfileCardName(cardId, metadata, preferredServer, locale);
 }
 
 function getCardBandId(metadata: CardMetadata | undefined, characters: Record<string, CharacterMaster | undefined>): number | null {
@@ -1125,9 +1154,15 @@ function getCardSkillEffectLabel(
   card: { skillId?: unknown; skillLevel?: unknown } | undefined,
   metadata: CardMetadata | undefined,
   skills: Record<string, SkillMaster | undefined> | undefined,
+  preferredServer: BandoriServer,
 ): string {
   const skillId = getCardSkillId(card, metadata);
-  return normalizeBandoriSkillLabel(skillId ? skills?.[String(skillId)] : undefined, card?.skillLevel, 5);
+  return normalizeBandoriSkillLabel(
+    skillId ? skills?.[String(skillId)] : undefined,
+    card?.skillLevel,
+    5,
+    preferredServer,
+  );
 }
 
 function orderResultCardsWithLeaderCenter(
@@ -1457,17 +1492,6 @@ function getSearchProofStatusLabel(result: TeamBuilderSearchResponse, proofT: Te
   return null;
 }
 
-function getSearchResultCardIds(result: TeamBuilderSearchResponse | null): number[] {
-  if (!result) {
-    return [];
-  }
-  return result.results.flatMap((item) => (
-    isMedleySearchResult(item)
-      ? item.songResults.flatMap((songResult) => songResult.cards.map((card) => card.cardId))
-      : item.cards.map((card) => card.cardId)
-  ));
-}
-
 function serializeMedleyDebugResult(item: BandoriMedleyTeamSearchResult) {
   return {
     rank: item.rank,
@@ -1520,7 +1544,7 @@ function buildMedleyDebugPayload({
   perfectRate,
   maxSearchDurationSeconds,
   medleyCalculationMode,
-  locale,
+  preferredServer,
 }: {
   result: BandoriMedleyTeamSearchResponse;
   selectedEvent: BandoriEventSummary | null;
@@ -1532,7 +1556,7 @@ function buildMedleyDebugPayload({
   perfectRate: string;
   maxSearchDurationSeconds: string;
   medleyCalculationMode: MedleyCalculationMode;
-  locale: AppLocale;
+  preferredServer: BandoriServer;
 }) {
   return {
     version: 1,
@@ -1550,7 +1574,11 @@ function buildMedleyDebugPayload({
       songs: medleySongIds.map((songId, index) => ({
         slot: index + 1,
         songId: Number(songId),
-        title: pickLocalizedName(songs[songId]?.musicTitle, locale, `#${songId}`),
+        title: pickLocalizedName(
+          songs[songId]?.musicTitle,
+          preferredServer,
+          `#${songId}`,
+        ),
         difficulty: medleyDifficulties[index],
       })),
       profileLabel,
@@ -2072,9 +2100,10 @@ function TeamBuilderCardTile({
   showPower?: boolean;
 }) {
   const locale = useLocale() as AppLocale;
+  const preferredServer = useBandoriPreferredServer();
   const cardId = card.cardId;
   const labelsT = useTranslations("bandori.teamBuilder.labels");
-  const cardName = pickCardDisplayName(cardId, metadata, locale);
+  const cardName = pickCardDisplayName(cardId, metadata, preferredServer, locale);
   const tileRef = useRef<HTMLElement | null>(null);
   const [hoverOpen, setHoverOpen] = useState(false);
   const rarity = Math.min(5, Math.max(1, Math.trunc(Number(metadata?.rarity ?? card.rarity) || 1)));
@@ -2083,6 +2112,7 @@ function TeamBuilderCardTile({
     skillEffectLevel === undefined ? card : { ...card, skillLevel: skillEffectLevel },
     metadata,
     skills,
+    preferredServer,
   );
 
   return (
@@ -2118,7 +2148,9 @@ function TeamBuilderCardTile({
           anchorRef={tileRef}
           open={hoverOpen}
           cardName={cardName}
-          characterName={characters ? getCardCharacterLabel(metadata, characters, locale) : `Card #${cardId}`}
+          characterName={characters
+            ? getCardCharacterLabel(metadata, characters, preferredServer)
+            : `Card #${cardId}`}
         >
           <span className="block w-full whitespace-normal break-words rounded-xl bg-slate-50 px-2 py-1 text-slate-700">
             {skillEffectLabel}
@@ -2159,7 +2191,7 @@ function EventBonusPanel({
   assetRegion: BandoriAssetRegion;
   eventFormula: EventFormulaOption;
 }) {
-  const locale = useLocale() as AppLocale;
+  const preferredServer = useBandoriPreferredServer();
   const labelsT = useTranslations("bandori.teamBuilder.labels");
   const eventTypesT = useTranslations("bandori.teamBuilder.eventTypes");
   const statesT = useTranslations("bandori.teamBuilder.states");
@@ -2169,7 +2201,7 @@ function EventBonusPanel({
     visual: labelsT("visual"),
   }), [labelsT]);
   const attributeItems = readAttributeBonusItems(eventBonus);
-  const characterItems = readCharacterBonusItems(eventBonus, characters, locale);
+  const characterItems = readCharacterBonusItems(eventBonus, characters, preferredServer);
   const memberItems = readMemberBonusItems(eventBonus, cardMetadata);
   const masterRankGroups = readMasterRankBonusGroups(eventBonus);
   const hasBonus = eventBonus !== null;
@@ -2274,6 +2306,7 @@ function MultiLiveSettingsPanel({
   onOtherPlayersChange: (value: OtherPlayerDraft[]) => void;
   skills: Record<string, SkillMaster | undefined>;
 }) {
+  const preferredServer = useBandoriPreferredServer();
   const labelsT = useTranslations("bandori.teamBuilder.labels");
   const encoreT = useTranslations("bandori.teamBuilder.encoreSkillSources");
   const updatePlayer = (index: number, patch: Partial<OtherPlayerDraft>) => {
@@ -2308,7 +2341,7 @@ function MultiLiveSettingsPanel({
               value={player.skillId}
               onChange={(event) => updatePlayer(index, { skillId: event.target.value })}
             >
-              {buildSkillOptions(skills, player.skillLevel).map((skill) => (
+              {buildSkillOptions(skills, player.skillLevel, preferredServer).map((skill) => (
                 <option key={skill.value} value={skill.value}>{skill.label}</option>
               ))}
             </SelectInput>
@@ -2491,6 +2524,7 @@ function MedleyResultCard({
   variant?: "default" | "candidate" | "max-score-candidate";
 }) {
   const locale = useLocale() as AppLocale;
+  const preferredServer = useBandoriPreferredServer();
   const labelsT = useTranslations("bandori.teamBuilder.labels");
   const eventTypesT = useTranslations("bandori.teamBuilder.eventTypes");
   const liveLabelsT = useTranslations("bandori.teamBuilder.liveLabels");
@@ -2573,7 +2607,7 @@ function MedleyResultCard({
           const displayedCards = orderResultCardsWithLeaderCenter(songResult.cards, songResult.leaderCardId, songResult.leaderCardInstanceKey);
           const songTitle = pickLocalizedName(
             songs[songResult.songIndex]?.musicTitle,
-            locale,
+            preferredServer,
             labelsT("firstSong", { index: songResult.songIndex + 1 }),
           );
           const skillOrderDisplay = buildSkillOrderDisplay(songResult.skillOrderCardIds, displayedCards, actorT, songResult.skillOrderActors, songResult.skillOrderCardInstanceKeys);
@@ -2669,17 +2703,22 @@ function MedleyDebugInfoPanel({
   );
 }
 
-function getCardCharacterLabel(metadata: CardMetadata | undefined, characters: Record<string, CharacterMaster | undefined>, locale: AppLocale): string {
+function getCardCharacterLabel(
+  metadata: CardMetadata | undefined,
+  characters: Record<string, CharacterMaster | undefined>,
+  preferredServer: BandoriServer,
+): string {
   const characterId = Number(metadata?.characterId);
   if (!Number.isFinite(characterId)) {
     return "";
   }
   const character = characters[String(Math.trunc(characterId))];
-  return pickCharacterDisplayName(character, locale);
+  return pickCharacterDisplayName(character, preferredServer);
 }
 
 function TeamBuilderPanel() {
   const locale = useLocale() as AppLocale;
+  const preferredServer = useBandoriPreferredServer();
   const messages = useMessages();
   useBandoriCardsAssetIndex();
   const { value: eventAssetIndex } = useBandoriEventsAssetIndex();
@@ -2794,7 +2833,6 @@ function TeamBuilderPanel() {
   const [resultChallengeCpCost, setResultChallengeCpCost] = useState<ChallengeCpCostOption>("1600");
   const [resultPlacement, setResultPlacement] = useState<ResultPlacementOption>("1");
   const [resultFestivalResult, setResultFestivalResult] = useState<FestivalResultOption>("win");
-  const [cardMetadata, setCardMetadata] = useState<Record<string, CardMetadata | undefined>>({});
   const [eventBonus, setEventBonus] = useState<BandoriEventBonus | null>(null);
   const [eventBonusLoading, setEventBonusLoading] = useState(false);
   const [eventBonusError, setEventBonusError] = useState("");
@@ -2995,42 +3033,6 @@ function TeamBuilderPanel() {
     setEditingTemporaryCard(null);
     setCardPickerValue(null);
   }, []);
-  const ensureCardsMetadata = useCallback(async (cardIds: number[]): Promise<Record<string, CardMetadata | undefined>> => {
-    const normalizedCardIds = Array.from(new Set(cardIds
-      .map((cardId) => Math.trunc(cardId))
-      .filter((cardId) => Number.isFinite(cardId) && cardId > 0)));
-    const missingCardIds = normalizedCardIds.filter((cardId) => !cardMetadata[String(cardId)]);
-    if (missingCardIds.length === 0) {
-      return Object.fromEntries(normalizedCardIds.map((cardId) => [String(cardId), cardMetadata[String(cardId)]]));
-    }
-
-    const payload = await requestJson<{ cards: Record<string, CardMetadata | undefined> }>(
-      `/api/bandori/cards?ids=${missingCardIds.join(",")}`,
-      undefined,
-      false,
-      requestMessages,
-    );
-    const mergedMetadata = { ...cardMetadata, ...payload.cards };
-    setCardMetadata((current) => ({ ...current, ...payload.cards }));
-    return Object.fromEntries(normalizedCardIds.map((cardId) => [String(cardId), mergedMetadata[String(cardId)]]));
-  }, [cardMetadata, requestMessages]);
-  const ensureCardMetadata = useCallback(async (cardId: number): Promise<CardMetadata | undefined> => {
-    const cards = await ensureCardsMetadata([cardId]);
-    return cards[String(Math.trunc(cardId))];
-  }, [ensureCardsMetadata]);
-  const selectTemporaryCard = useCallback((value: BandoriCardPickerValue | null) => {
-    setCardPickerValue(value);
-    if (!value || addingTemporaryCard) {
-      return;
-    }
-    setAddingTemporaryCard(true);
-    void ensureCardMetadata(value.cardId)
-      .then((metadata) => {
-        const card = createMaxGameProfileCard(value.cardId, metadata);
-        setEditingTemporaryCard({ ...card, instanceId: crypto.randomUUID() });
-      })
-      .finally(() => setAddingTemporaryCard(false));
-  }, [addingTemporaryCard, ensureCardMetadata]);
   const showCoopLiveSettings = shouldUseCoopLiveSettings(selectedEventType, liveType);
   const scoreLinkedEventPointTarget = isScoreLinkedEventPointTarget(selectedEventType, liveType);
   const targetOptions = useMemo<BandoriTeamSearchTarget[]>(() => (
@@ -3117,11 +3119,18 @@ function TeamBuilderPanel() {
 
       return [{
         id: String(eventSongId),
-        title: pickLocalizedName(song.musicTitle, locale, `#${eventSongId}`),
+        title: pickLocalizedName(song.musicTitle, preferredServer, `#${eventSongId}`),
         sourceLabels,
       }];
     });
-  }, [data.songs, isMedleyEvent, liveType, locale, selectedEvent, selectedEventType]);
+  }, [
+    data.songs,
+    isMedleyEvent,
+    liveType,
+    preferredServer,
+    selectedEvent,
+    selectedEventType,
+  ]);
   const songOptions = useMemo(() => {
     const normalizedSearch = songSearch.trim().toLowerCase();
     const eventSongIdSet = shouldLimitSongsToEventSongs
@@ -3135,7 +3144,7 @@ function TeamBuilderPanel() {
         if (eventSongIdSet && !eventSongIdSet.has(id)) {
           return [];
         }
-        const title = pickLocalizedName(song.musicTitle, locale, `#${id}`);
+        const title = pickLocalizedName(song.musicTitle, preferredServer, `#${id}`);
         if (normalizedSearch && !(`${id} ${title}`.toLowerCase().includes(normalizedSearch))) {
           return [];
         }
@@ -3143,7 +3152,13 @@ function TeamBuilderPanel() {
       })
       .sort((left, right) => Number(right.id) - Number(left.id));
     return entries;
-  }, [data.songs, eventSongOptions, locale, shouldLimitSongsToEventSongs, songSearch]);
+  }, [
+    data.songs,
+    eventSongOptions,
+    preferredServer,
+    shouldLimitSongsToEventSongs,
+    songSearch,
+  ]);
   const selectedSong = songId ? data.songs[songId] ?? null : null;
   const selectedMedleySongs = useMemo(() => (
     medleySongIds.map((id) => data.songs[id] ?? null)
@@ -3188,8 +3203,41 @@ function TeamBuilderPanel() {
     selectedProfilePayload?.bestdoriProfile.server === 3 ? "cn" : "jp"
   ), [selectedProfilePayload]);
   const selectedProfileCardServer = useMemo(() => (
-    BANDORI_CARD_SERVERS[selectedProfilePayload?.bestdoriProfile.server ?? 0] ?? "jp"
+    normalizeBandoriServer(selectedProfilePayload?.bestdoriProfile.server) ?? 0
   ), [selectedProfilePayload]);
+  const { data: selectedServerCards } = useBandoriCardsMaster(selectedProfileCardServer);
+  const cardMetadata = (selectedServerCards
+    ?? EMPTY_CARD_METADATA) as Record<string, CardMetadata | undefined>;
+  const ensureCardsMetadata = useCallback(async (
+    cardIds: number[],
+  ): Promise<Record<string, CardMetadata | undefined>> => {
+    const normalizedCardIds = Array.from(new Set(cardIds
+      .map((cardId) => Math.trunc(cardId))
+      .filter((cardId) => Number.isFinite(cardId) && cardId > 0)));
+    return Object.fromEntries(normalizedCardIds.map((cardId) => [
+      String(cardId),
+      cardMetadata[String(cardId)],
+    ]));
+  }, [cardMetadata]);
+  const ensureCardMetadata = useCallback(async (
+    cardId: number,
+  ): Promise<CardMetadata | undefined> => {
+    const cards = await ensureCardsMetadata([cardId]);
+    return cards[String(Math.trunc(cardId))];
+  }, [ensureCardsMetadata]);
+  const selectTemporaryCard = useCallback((value: BandoriCardPickerValue | null) => {
+    setCardPickerValue(value);
+    if (!value || addingTemporaryCard) {
+      return;
+    }
+    setAddingTemporaryCard(true);
+    void ensureCardMetadata(value.cardId)
+      .then((metadata) => {
+        const card = createMaxGameProfileCard(value.cardId, metadata);
+        setEditingTemporaryCard({ ...card, instanceId: crypto.randomUUID() });
+      })
+      .finally(() => setAddingTemporaryCard(false));
+  }, [addingTemporaryCard, ensureCardMetadata]);
   const selectedProfileCharacterBonusesById = useMemo(
     () => selectedProfilePayload
       ? toBandoriCharacterBonusMap(buildBandoriCharacterBonuses(
@@ -3634,27 +3682,6 @@ function TeamBuilderPanel() {
     }
   }, [isMedleyEvent, medleyDifficulties, selectedMedleySongs]);
 
-  useEffect(() => {
-    const resultCardIds = getSearchResultCardIds(result);
-    const preferenceCardIds = [
-      ...selectedProfileCards.map((card) => card.cardId),
-      ...cardPreferences.temporaryCards.map((card) => card.cardId),
-    ];
-    const cardIds = [...currentEventBonusCardIds, ...resultCardIds, ...preferenceCardIds];
-    const uniqueCardIds = Array.from(new Set(cardIds)).filter((cardId) => !cardMetadata[String(cardId)]);
-    if (uniqueCardIds.length === 0) {
-      return;
-    }
-    void requestJson<{ cards: Record<string, CardMetadata | undefined> }>(
-      `/api/bandori/cards?ids=${uniqueCardIds.join(",")}`,
-      undefined,
-      false,
-      requestMessages,
-    )
-      .then((payload) => setCardMetadata((current) => ({ ...current, ...payload.cards })))
-      .catch(() => undefined);
-  }, [cardMetadata, cardPreferences.temporaryCards, currentEventBonusCardIds, requestMessages, result, selectedProfileCards]);
-
   const resultEventPointMode = useMemo(() => {
     const singleResult = result?.results.find((item): item is BandoriTeamSearchResult => (
       !isMedleySearchResult(item) && item.eventPointOptions.mode !== "none"
@@ -3712,12 +3739,12 @@ function TeamBuilderPanel() {
       perfectRate: medleyResultInputSnapshot.perfectRate,
       maxSearchDurationSeconds: medleyResultInputSnapshot.maxSearchDurationSeconds,
       medleyCalculationMode: medleyResultInputSnapshot.medleyCalculationMode,
-      locale,
+      preferredServer,
     }), null, 2);
   }, [
     data.songs,
-    locale,
     medleyResultInputSnapshot,
+    preferredServer,
     result,
   ]);
   const copyMedleyDebugInfo = useCallback(() => {
@@ -3987,7 +4014,13 @@ function TeamBuilderPanel() {
                         </div>
                         <div className="mt-2 flex min-w-0 items-start gap-2">
                           <div className="line-clamp-2 min-w-0 text-base font-bold text-slate-900">
-                            {slotSong ? pickLocalizedName(slotSong.musicTitle, locale, `#${slotSongId}`) : labelsT("unselectedSong")}
+                            {slotSong
+                              ? pickLocalizedName(
+                                  slotSong.musicTitle,
+                                  preferredServer,
+                                  `#${slotSongId}`,
+                                )
+                              : labelsT("unselectedSong")}
                           </div>
                         </div>
                         <div className="mt-2 text-xs font-semibold text-slate-400">#{slotSongId}</div>
@@ -4035,9 +4068,9 @@ function TeamBuilderPanel() {
           ) : (
             <>
               <div className="rounded-2xl border border-sky-100 bg-white p-4 shadow-sm">
-                <div className="text-lg font-bold text-slate-900">{selectedSong ? pickLocalizedName(selectedSong.musicTitle, locale, `#${songId}`) : labelsT("unselectedSong")}</div>
-                {selectedSong && pickLocalizedName(selectedSong.bandName, locale) ? (
-                  <div className="mt-1 text-sm text-slate-500">{pickLocalizedName(selectedSong.bandName, locale)}</div>
+                <div className="text-lg font-bold text-slate-900">{selectedSong ? pickLocalizedName(selectedSong.musicTitle, preferredServer, `#${songId}`) : labelsT("unselectedSong")}</div>
+                {selectedSong && pickLocalizedName(selectedSong.bandName, preferredServer) ? (
+                  <div className="mt-1 text-sm text-slate-500">{pickLocalizedName(selectedSong.bandName, preferredServer)}</div>
                 ) : null}
                 <div className="mt-4 grid gap-4 lg:grid-cols-[1fr_16rem] lg:items-end">
                   <div className="space-y-2">
@@ -4146,7 +4179,11 @@ function TeamBuilderPanel() {
                     <div key={index} className="flex min-w-0 items-center gap-2 text-sm">
                       <span className="shrink-0 font-bold text-slate-400">{index + 1}</span>
                       <span className="min-w-0 truncate font-bold text-slate-900">
-                        {pickLocalizedName(data.songs[slotSongId]?.musicTitle, locale, `#${slotSongId}`)}
+                        {pickLocalizedName(
+                          data.songs[slotSongId]?.musicTitle,
+                          preferredServer,
+                          `#${slotSongId}`,
+                        )}
                       </span>
                       <SongDifficultyLevelBadge
                         difficulty={medleyDifficulties[index]}
@@ -4158,7 +4195,7 @@ function TeamBuilderPanel() {
                 </div>
               ) : (
                 <div className="mt-1 flex min-w-0 items-center gap-2">
-                  <div className="min-w-0 truncate font-bold text-slate-900">{selectedSong ? pickLocalizedName(selectedSong.musicTitle, locale, `#${songId}`) : labelsT("unselected")}</div>
+                  <div className="min-w-0 truncate font-bold text-slate-900">{selectedSong ? pickLocalizedName(selectedSong.musicTitle, preferredServer, `#${songId}`) : labelsT("unselected")}</div>
                   {selectedSong ? (
                     <SongDifficultyLevelBadge difficulty={difficulty} song={selectedSong} className="h-6 w-6" />
                   ) : null}
@@ -4423,7 +4460,11 @@ function TeamBuilderPanel() {
           card={editingTemporaryCard}
           baselineCard={editingTemporaryCardExists ? cardPreferences.temporaryCards.find((card) => card.instanceId === editingTemporaryCard.instanceId) ?? null : null}
           metadata={cardMetadata[String(editingTemporaryCard.cardId)]}
-          characterName={getCardCharacterLabel(cardMetadata[String(editingTemporaryCard.cardId)], data.characters, locale)}
+          characterName={getCardCharacterLabel(
+            cardMetadata[String(editingTemporaryCard.cardId)],
+            data.characters,
+            preferredServer,
+          )}
           bandId={getCardBandId(cardMetadata[String(editingTemporaryCard.cardId)], data.characters)}
           characterBonusesById={selectedProfileCharacterBonusesById}
           region={selectedProfileAssetRegion}

@@ -2,6 +2,10 @@ import { type BandoriAssetRegion } from "@/lib/bandori-asset-proxy";
 import { type AppLocale } from "@/i18n/routing";
 import { hasTrainedCardArt } from "@/lib/bandori-card-training";
 import { pickBestdoriLocalizedName } from "@/lib/bestdori-regional-names";
+import {
+  DEFAULT_BANDORI_PREFERRED_SERVER,
+  type BandoriServer,
+} from "@/lib/bandori-server";
 import { type UserGameProfileCardRecord } from "@/lib/user-game-profile-payload";
 
 export type GameProfileCardAttribute = "powerful" | "pure" | "cool" | "happy";
@@ -25,12 +29,15 @@ export type GameProfileCardMetadata = {
   } & Record<string, unknown>;
 };
 
-export function pickGameProfileCardName(cardId: number, metadata?: GameProfileCardMetadata, locale: AppLocale = "zh-CN"): string {
-  const localizedName = pickBestdoriLocalizedName(metadata?.prefix, locale);
+export function pickGameProfileCardName(
+  cardId: number,
+  metadata?: GameProfileCardMetadata,
+  preferredServer: BandoriServer = DEFAULT_BANDORI_PREFERRED_SERVER,
+  locale: AppLocale = "zh-CN",
+): string {
+  const localizedName = pickBestdoriLocalizedName(metadata?.prefix, preferredServer);
   const fallbackName = locale === "en" ? `Card ${cardId}` : `\u5361\u724c ${cardId}`;
-  return locale === "en"
-    ? localizedName ?? metadata?.displayName ?? fallbackName
-    : metadata?.displayName ?? localizedName ?? fallbackName;
+  return localizedName ?? metadata?.displayName ?? fallbackName;
 }
 
 export function getGameProfileCardLevelLimit(

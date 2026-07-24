@@ -14,6 +14,7 @@ import {
   type GameProfileCardAttribute,
   type GameProfileCardMetadata,
 } from "@/lib/bandori-game-profile-card";
+import { useBandoriPreferredServer } from "@/store/useBandoriPreferencesStore";
 import {
   calculateBandoriCard,
   type BandoriCharacterBonusState,
@@ -125,13 +126,19 @@ export default function GameProfileCardEditorDialog({
   onDelete,
 }: GameProfileCardEditorDialogProps) {
   const locale = useLocale() as AppLocale;
+  const preferredServer = useBandoriPreferredServer();
   const t = useTranslations("bandori.cardEditor");
   const [draft, setDraft] = useState(card);
   const effectiveTitle = title ?? t("title");
   const effectiveSaveLabel = saveLabel ?? t("actions.save");
   const effectiveDeleteLabel = deleteLabel ?? t("actions.delete");
   const levelLimit = getGameProfileCardLevelLimit(draft, metadata);
-  const cardName = pickGameProfileCardName(draft.cardId, metadata, locale);
+  const cardName = pickGameProfileCardName(
+    draft.cardId,
+    metadata,
+    preferredServer,
+    locale,
+  );
   const hasChanges = baselineCard ? hasGameProfileCardChanged(draft, baselineCard) : hasGameProfileCardChanged(draft, card);
   const totalPower = useMemo(() => {
     if (!metadata) {

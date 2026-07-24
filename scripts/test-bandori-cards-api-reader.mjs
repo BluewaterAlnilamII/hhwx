@@ -20,9 +20,6 @@ const { GET: readMasterDatasetRoute } = await import(
 const { GET: readCardDetailRoute } = await import(
   "../src/app/api/bandori/master/cards/[cardId]/route.ts"
 );
-const { GET: readSparseCardsRoute } = await import(
-  "../src/app/api/bandori/cards/route.ts"
-);
 
 async function writeObject(root, key, body) {
   const path = join(root, ...key.split("/"));
@@ -128,8 +125,8 @@ await withStore(validStore, async () => {
   const cards = await readBandoriCardsApiDataset();
   assert.equal(Object.keys(cards).length, 4);
   assert.equal(cards["10048"].type, "limited");
-  const cnCards = await readBandoriCardsApiDatasetForServer("cn");
-  assert.equal(await readBandoriCardsApiDatasetForServer("cn"), cnCards);
+  const cnCards = await readBandoriCardsApiDatasetForServer(3);
+  assert.equal(await readBandoriCardsApiDatasetForServer(3), cnCards);
   assert.equal(Object.hasOwn(cnCards, "2"), false);
   assert.equal(Object.hasOwn(cnCards["1"], "serverExtensions"), false);
   assert.equal(Object.hasOwn(cards["1"], "serverExtensions"), true);
@@ -151,7 +148,7 @@ await withStore(validStore, async () => {
     serverExtensions: [{}, {}, {}, null],
   });
   assert.equal(await readBandoriCardApiDetail("3"), null);
-  assert.equal(await readBandoriCardApiDetailForServer("2", "cn"), null);
+  assert.equal(await readBandoriCardApiDetailForServer("2", 3), null);
   assert.equal(await readBandoriCardApiDetail("5000000"), null);
   assert.equal(await readBandoriCardApiDetail("9007199254740993"), null);
   assert.equal((await readBandoriCardApiDetail("10048"))?.type, "limited");
@@ -164,7 +161,7 @@ await withStore(validStore, async () => {
   assert.deepEqual(await listResponse.json(), { success: true, data: cards });
 
   const cnListResponse = await readMasterDatasetRoute(
-    new Request("http://localhost/api/bandori/master/cards?server=cn"),
+    new Request("http://localhost/api/bandori/master/cards?server=3"),
     { params: Promise.resolve({ dataset: "cards" }) },
   );
   assert.equal(cnListResponse.status, 200);
@@ -179,7 +176,7 @@ await withStore(validStore, async () => {
     success: false,
     error: {
       code: "BANDORI_MASTER_CARD_SERVER_INVALID",
-      message: "server must be exactly one of jp, en, tw, or cn",
+      message: "server must be exactly one of 0, 1, 2, or 3",
     },
   });
 
@@ -199,7 +196,7 @@ await withStore(validStore, async () => {
   });
 
   const cnDetailResponse = await readCardDetailRoute(
-    new Request("http://localhost/api/bandori/master/cards/1?server=cn"),
+    new Request("http://localhost/api/bandori/master/cards/1?server=3"),
     { params: Promise.resolve({ cardId: "1" }) },
   );
   assert.equal(cnDetailResponse.status, 200);
@@ -213,36 +210,16 @@ await withStore(validStore, async () => {
   });
 
   const absentCnDetailResponse = await readCardDetailRoute(
-    new Request("http://localhost/api/bandori/master/cards/2?server=cn"),
+    new Request("http://localhost/api/bandori/master/cards/2?server=3"),
     { params: Promise.resolve({ cardId: "2" }) },
   );
   assert.equal(absentCnDetailResponse.status, 404);
 
   const duplicateServerDetailResponse = await readCardDetailRoute(
-    new Request("http://localhost/api/bandori/master/cards/1?server=jp&server=cn"),
+    new Request("http://localhost/api/bandori/master/cards/1?server=0&server=3"),
     { params: Promise.resolve({ cardId: "1" }) },
   );
   assert.equal(duplicateServerDetailResponse.status, 400);
-
-  const sparseResponse = await readSparseCardsRoute(
-    new Request("http://localhost/api/bandori/cards?ids=1,999"),
-  );
-  assert.equal(sparseResponse.status, 200);
-  assert.deepEqual(await sparseResponse.json(), {
-    success: true,
-    data: {
-      cards: {
-        "1": {
-          characterId: 1,
-          type: "permanent",
-          serverExtensions: [{}, {}, {}, {}],
-          displayName: null,
-          assetRegion: "jp",
-          hasTrainedArt: false,
-        },
-      },
-    },
-  });
 
   const missingResponse = await readCardDetailRoute(
     new Request("http://localhost/api/bandori/master/cards/999"),

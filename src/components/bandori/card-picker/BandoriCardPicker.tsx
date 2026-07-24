@@ -4,8 +4,10 @@ import { useDeferredValue, useEffect, useMemo, useState, type RefObject } from "
 import { ArrowDownWideNarrow, ArrowUpNarrowWide, Filter, Loader2, RotateCcw, Search, X } from "lucide-react";
 import { useLocale, useTranslations } from "next-intl";
 import { type AppLocale } from "@/i18n/routing";
+import { useBandoriCardsMaster } from "@/hooks/useBandoriCardsMaster";
 import { useCachedFetch } from "@/hooks/useCachedFetch";
 import { useBandoriCardsAssetIndex } from "@/hooks/useBandoriPublicAssetIndex";
+import { useBandoriPreferredServer } from "@/store/useBandoriPreferencesStore";
 import {
   buildBandoriResIconPublicUrl,
   type BandoriAssetRegion,
@@ -360,13 +362,9 @@ export default function BandoriCardPicker({
 }: BandoriCardPickerProps) {
   const locale = useLocale() as AppLocale;
   const t = useTranslations("bandori.cardPicker");
+  const preferredServer = useBandoriPreferredServer();
   useBandoriCardsAssetIndex();
-  const { data: cardMetadata, loading: cardsLoading } = useCachedFetch(
-    `bandori-card-picker-cards-v5-${server ?? "canonical"}`,
-    `/api/bandori/master/cards${server ? `?server=${server}` : ""}`,
-    bandoriCardCatalogTransforms.cards,
-    { staleTimeMs: 86400000 },
-  );
+  const { data: cardMetadata, loading: cardsLoading } = useBandoriCardsMaster(server);
   const { data: characterMetadata, loading: charactersLoading } = useCachedFetch(
     "bandori-card-picker-characters-v3",
     "/api/bandori/master/characters",
@@ -396,12 +394,25 @@ export default function BandoriCardPicker({
 
   const catalog = useMemo(
     () => {
-      const cards = buildBandoriCardCatalog(cardMetadata ?? {}, characterMetadata ?? {}, locale);
+      const cards = buildBandoriCardCatalog(
+        cardMetadata ?? {},
+        characterMetadata ?? {},
+        preferredServer,
+        locale,
+        server === undefined,
+      );
       return excludeEntityCollisions
         ? cards.filter((card) => !isKnownBandoriCardEntityCollision(card.cardId))
         : cards;
     },
-    [cardMetadata, characterMetadata, excludeEntityCollisions, locale],
+    [
+      cardMetadata,
+      characterMetadata,
+      excludeEntityCollisions,
+      locale,
+      preferredServer,
+      server,
+    ],
   );
 
   const characterNameById = useMemo(() => {
@@ -707,18 +718,25 @@ export default function BandoriCardPicker({
               visibleLimit={visibleCount}
               scrollElementRef={scrollElementRef}
               layoutKey={virtualGridLayoutKey}
-              getKey={(card) => card.cardId}
+              getKey={(card) => card.cardRef}
               renderItem={(card) => {
                 const selected = value?.cardId === card.cardId;
                 const activeTrainType = resolveCardTrainType(card, previewTrainType);
                 return (
                   <CardGridItem
-                    key={card.cardId}
+                    key={card.cardRef}
                     card={card}
                     selected={selected}
                     activeTrainType={activeTrainType}
                     region={region}
-                    skillEffectLabel={normalizeBandoriSkillLabel(card.skillId ? skillMetadata?.[String(card.skillId)] ?? undefined : undefined, 5, 5)}
+                    skillEffectLabel={normalizeBandoriSkillLabel(
+                      card.skillId
+                        ? skillMetadata?.[String(card.skillId)] ?? undefined
+                        : undefined,
+                      5,
+                      5,
+                      preferredServer,
+                    )}
                     onSelect={() => handleCardSelect(card)}
                   />
                 );

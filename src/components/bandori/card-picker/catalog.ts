@@ -1,8 +1,14 @@
 import { type AppLocale } from "@/i18n/routing";
-import { pickBestdoriLocalizedName, pickBestdoriRegionalName } from "@/lib/bestdori-regional-names";
+import { pickBestdoriLocalizedName } from "@/lib/bestdori-regional-names";
 import { parseApiSuccessData } from "@/lib/api-contracts";
+import { parseBandoriCardsMasterResponse } from "@/lib/bandori-cards-api-client";
 import { hasTrainedCardArt } from "@/lib/bandori-card-training";
+import { expandBandoriCardCatalog } from "@/lib/bandori-card-server-extensions";
 import type { BandoriSkillLabelMaster } from "@/lib/bandori-skill-label";
+import {
+  DEFAULT_BANDORI_PREFERRED_SERVER,
+  type BandoriServer,
+} from "@/lib/bandori-server";
 import type { BandoriCardAttribute, BandoriCardCatalogEntry, BandoriCardPickerFilter } from "./types";
 
 type BestdoriMasterResponse<T> = {
@@ -10,6 +16,7 @@ type BestdoriMasterResponse<T> = {
 };
 
 type BestdoriCardMetadata = {
+  [key: string]: unknown;
   characterId?: number;
   skillId?: unknown;
   rarity?: number;
@@ -65,20 +72,7 @@ function hasCnRelease(values: BestdoriCardMetadata["releasedAt"]): boolean {
 }
 
 function transformCardsResponse(raw: unknown): Record<string, BestdoriCardMetadata | null | undefined> {
-  const data = parseApiSuccessData<
-    Record<string, BestdoriCardMetadata | null | undefined>
-    | BestdoriMasterResponse<BestdoriCardMetadata>
-  >(raw);
-  if (!data) {
-    return {};
-  }
-
-  // The list endpoint now returns the card map directly. Keep accepting the
-  // previous wrapper while shared HTTP caches can still serve the old shape.
-  const legacyPayload = (data as BestdoriMasterResponse<BestdoriCardMetadata>).payload;
-  return legacyPayload && typeof legacyPayload === "object"
-    ? legacyPayload
-    : data as Record<string, BestdoriCardMetadata | null | undefined>;
+  return parseBandoriCardsMasterResponse(raw);
 }
 
 function transformCharactersResponse(raw: unknown): Record<string, BestdoriCharacterMetadata | null | undefined> {
@@ -98,9 +92,25 @@ export const bandoriCardCatalogTransforms = {
 export function buildBandoriCardCatalog(
   cards: Record<string, BestdoriCardMetadata | null | undefined>,
   characters: Record<string, BestdoriCharacterMetadata | null | undefined>,
+  preferredServer: BandoriServer = DEFAULT_BANDORI_PREFERRED_SERVER,
   locale: AppLocale = "zh-CN",
+  expandEntityCollisions = false,
 ): BandoriCardCatalogEntry[] {
-  return Object.entries(cards).flatMap(([rawCardId, card]) => {
+  const cardEntries = expandEntityCollisions
+    ? expandBandoriCardCatalog(cards).map(({ cardId, cardRef, server, card }) => ({
+        rawCardId: String(cardId),
+        cardRef,
+        entityServer: server,
+        card,
+      }))
+    : Object.entries(cards).map(([rawCardId, card]) => ({
+        rawCardId,
+        cardRef: rawCardId,
+        entityServer: null,
+        card,
+      }));
+
+  return cardEntries.flatMap(({ rawCardId, cardRef, entityServer, card }) => {
     const cardId = toPositiveInteger(rawCardId);
     const characterId = toPositiveInteger(card?.characterId);
     const skillId = toPositiveInteger(card?.skillId);
@@ -112,13 +122,13 @@ export function buildBandoriCardCatalog(
 
     const character = characters[String(characterId)];
     const bandId = toPositiveInteger(character?.bandId);
-    const displayNameResult = pickBestdoriRegionalName(card?.prefix, locale);
-    const displayName = displayNameResult?.name ?? `Card ${cardId}`;
-    const assetRegion = displayNameResult?.assetRegion ?? (hasCnRelease(card?.releasedAt) ? "cn" : "jp");
-    const characterName = pickBestdoriLocalizedName(character?.nickname, locale)
-      ?? pickBestdoriLocalizedName(character?.characterName, locale)
-      ?? pickBestdoriLocalizedName(character?.firstName, locale)
-      ?? `Character ${characterId}`;
+    const displayName = pickBestdoriLocalizedName(card?.prefix, preferredServer)
+      ?? (locale === "en" ? `Card ${cardId}` : `卡牌 ${cardId}`);
+    const assetRegion = hasCnRelease(card?.releasedAt) ? "cn" as const : "jp" as const;
+    const characterName = pickBestdoriLocalizedName(character?.nickname, preferredServer)
+      ?? pickBestdoriLocalizedName(character?.characterName, preferredServer)
+      ?? pickBestdoriLocalizedName(character?.firstName, preferredServer)
+      ?? (locale === "en" ? `Character ${characterId}` : `角色 ${characterId}`);
     const attribute = isKnownAttribute(card?.attribute) ? card.attribute : null;
     const levelLimit = toPositiveInteger(card?.levelLimit) ?? 1;
     const hasTrainedArt = hasTrainedCardArt(card);
@@ -139,6 +149,8 @@ export function buildBandoriCardCatalog(
 
     return [{
       cardId,
+      cardRef,
+      entityServer,
       characterId,
       skillId,
       characterName,

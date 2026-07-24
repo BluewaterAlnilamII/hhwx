@@ -1,0 +1,76 @@
+export const BANDORI_SERVER_COUNT = 4;
+export const BANDORI_SERVERS = [0, 1, 2, 3] as const;
+export const BANDORI_SERVER_CODES = ["jp", "en", "tw", "cn"] as const;
+export const DEFAULT_BANDORI_PREFERRED_SERVER = 3;
+export const BANDORI_SERVER_FALLBACK_ORDER = [0, 1, 2, 3] as const;
+
+export type BandoriServer = typeof BANDORI_SERVERS[number];
+export type BandoriServerCode = typeof BANDORI_SERVER_CODES[number];
+
+export function isBandoriServer(value: unknown): value is BandoriServer {
+  return typeof value === "number"
+    && Number.isInteger(value)
+    && value >= 0
+    && value < BANDORI_SERVER_COUNT;
+}
+
+export function normalizeBandoriServer(value: unknown): BandoriServer | null {
+  if (isBandoriServer(value)) {
+    return value;
+  }
+  if (typeof value !== "string" || !/^[0-3]$/u.test(value)) {
+    return null;
+  }
+  return Number(value) as BandoriServer;
+}
+
+export function getBandoriServerCode(server: BandoriServer): BandoriServerCode {
+  return BANDORI_SERVER_CODES[server];
+}
+
+export function getBandoriServerFromCode(value: unknown): BandoriServer | null {
+  if (typeof value !== "string") {
+    return null;
+  }
+  const normalized = value.trim().toLowerCase();
+  const index = BANDORI_SERVER_CODES.indexOf(normalized as BandoriServerCode);
+  return index >= 0 ? index as BandoriServer : null;
+}
+
+export function getBandoriRegionalPreferenceOrder(
+  preferredServer: BandoriServer,
+): readonly BandoriServer[] {
+  return [
+    preferredServer,
+    ...BANDORI_SERVER_FALLBACK_ORDER.filter((server) => server !== preferredServer),
+  ];
+}
+
+export function pickBandoriRegionalValue<T>(
+  slots: readonly T[] | null | undefined,
+  preferredServer: BandoriServer,
+  isAvailable: (value: T | undefined) => boolean = (value) => value !== null && value !== undefined,
+): T | null {
+  if (!Array.isArray(slots)) {
+    return null;
+  }
+  for (const server of getBandoriRegionalPreferenceOrder(preferredServer)) {
+    const value = slots[server];
+    if (isAvailable(value)) {
+      return value as T;
+    }
+  }
+  return null;
+}
+
+export function pickBandoriRegionalText(
+  slots: readonly unknown[] | null | undefined,
+  preferredServer: BandoriServer,
+): string | null {
+  const value = pickBandoriRegionalValue(
+    slots,
+    preferredServer,
+    (candidate) => typeof candidate === "string" && candidate.trim().length > 0,
+  );
+  return typeof value === "string" ? value.trim() : null;
+}

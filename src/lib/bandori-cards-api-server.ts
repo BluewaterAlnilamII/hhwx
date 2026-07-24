@@ -18,7 +18,6 @@ import {
   type BandoriSnapshotRecordMap,
 } from "@/lib/bandori-snapshot-api-server";
 import {
-  getBandoriCardServerIndex,
   materializeBandoriCardForServer,
   materializeBandoriCardMapForServer,
   type BandoriCardServer,
@@ -105,7 +104,7 @@ export async function readBandoriCardsApiDatasetForServer(
 
   const resolved = materializeBandoriCardMapForServer(
     cards,
-    getBandoriCardServerIndex(server),
+    server,
   );
   byServer.set(server, resolved);
   return resolved;
@@ -135,6 +134,6 @@ export async function readBandoriCardApiDetailForServer(
 ): Promise<BandoriCardApiRecord | null> {
   const detail = await readBandoriCardApiDetail(cardId);
   return detail
-    ? materializeBandoriCardForServer(detail, getBandoriCardServerIndex(server))
+    ? materializeBandoriCardForServer(detail, server)
     : null;
 }

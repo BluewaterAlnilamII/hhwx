@@ -4,10 +4,6 @@ import {
   DEFAULT_ACCOUNT_AVATAR_CARD_TRAIN_TYPE,
   type AccountAvatarCardTrainType,
 } from "@/lib/account-avatar-defaults";
-import { type BandoriAssetRegion } from "@/lib/bandori-asset-proxy";
-import { hasTrainedCardArt } from "@/lib/bandori-card-training";
-import { readBandoriCardsApiDataset } from "@/lib/bandori-cards-api-server";
-import { pickBestdoriCnThenJpRegionalName } from "@/lib/bestdori-regional-names";
 import {
   createCommentReactionNotification,
   createCommentReplyNotification,
@@ -33,9 +29,6 @@ export type CommentProfile = {
 export type CommentAvatar = {
   cardId: number;
   trainType: AccountAvatarCardTrainType;
-  resourceSetName: string | null;
-  assetRegion: BandoriAssetRegion;
-  displayName: string | null;
 };
 
 export type CommentReactionParticipant = {
@@ -132,22 +125,6 @@ const COMMENT_SELECT = [
   "profiles:profiles!user_id(username, avatar_card_id, avatar_card_train_type)",
 ].join(", ");
 
-type BestdoriCardMetadata = {
-  prefix?: Array<string | null>;
-  releasedAt?: Array<string | number | null>;
-  resourceSetName?: string;
-  stat?: {
-    training?: unknown;
-  } & Record<string, unknown>;
-};
-
-type CommentAvatarCardMetadata = {
-  resourceSetName: string;
-  assetRegion: BandoriAssetRegion;
-  displayName: string | null;
-  hasTrainedArt: boolean;
-};
-
 function parseCursor(cursor: string | null | undefined): { createdAt: string; id: string } | null {
   if (!cursor) return null;
   const [rawCreatedAt, id] = cursor.split("|");
@@ -157,19 +134,6 @@ function parseCursor(cursor: string | null | undefined): { createdAt: string; id
   }
 
   return { createdAt: date.toISOString(), id };
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}
-
-function readRegionalTimestampAt(values: BestdoriCardMetadata["releasedAt"], index: number): number {
-  if (!Array.isArray(values)) {
-    return 0;
-  }
-
-  const parsed = Number(values[index]);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
 }
 
 function normalizeCommentAvatarCardId(profile: CommentProfile | null): number {
@@ -183,59 +147,13 @@ function normalizeCommentAvatarTrainType(profile: CommentProfile | null): Accoun
 
 function buildCommentAvatar(
   profile: CommentProfile | null,
-  avatarCards: ReadonlyMap<number, CommentAvatarCardMetadata>,
 ): CommentAvatar {
   const cardId = normalizeCommentAvatarCardId(profile);
-  const card = avatarCards.get(cardId);
-  const requestedTrainType = normalizeCommentAvatarTrainType(profile);
-  const trainType = card?.hasTrainedArt ? requestedTrainType : DEFAULT_ACCOUNT_AVATAR_CARD_TRAIN_TYPE;
 
   return {
     cardId,
-    trainType,
-    resourceSetName: card?.resourceSetName ?? null,
-    assetRegion: card?.assetRegion ?? "cn",
-    displayName: card?.displayName ?? null,
+    trainType: normalizeCommentAvatarTrainType(profile),
   };
-}
-
-async function readCommentAvatarCardsForProfiles(profiles: Array<CommentProfile | null>): Promise<Map<number, CommentAvatarCardMetadata>> {
-  const cardIds = Array.from(new Set(profiles.map((profile) => normalizeCommentAvatarCardId(profile))));
-  if (cardIds.length === 0) {
-    return new Map();
-  }
-
-  try {
-    const payload = await readBandoriCardsApiDataset();
-    if (!isRecord(payload)) {
-      return new Map();
-    }
-
-    const result = new Map<number, CommentAvatarCardMetadata>();
-    for (const cardId of cardIds) {
-      const card = payload[String(cardId)] as BestdoriCardMetadata | null | undefined;
-      const resourceSetName = card?.resourceSetName?.trim();
-      if (!resourceSetName) {
-        continue;
-      }
-
-      const displayName = pickBestdoriCnThenJpRegionalName(card?.prefix);
-      result.set(cardId, {
-        resourceSetName,
-        assetRegion: displayName?.assetRegion ?? (readRegionalTimestampAt(card?.releasedAt, 3) > 0 ? "cn" : "jp"),
-        displayName: displayName?.name ?? null,
-        hasTrainedArt: hasTrainedCardArt(card),
-      });
-    }
-
-    return result;
-  } catch {
-    return new Map();
-  }
-}
-
-async function readCommentAvatarCards(rows: CommentRow[]): Promise<Map<number, CommentAvatarCardMetadata>> {
-  return readCommentAvatarCardsForProfiles(rows.map((row) => row.profiles));
 }
 
 export function parseCommentContent(value: unknown): string {
@@ -267,7 +185,6 @@ function toCommentNode(
   row: CommentRow,
   viewerUserId?: string | null,
   replyToUsernames?: Map<string, string | null>,
-  avatarCards: ReadonlyMap<number, CommentAvatarCardMetadata> = new Map(),
   reactionsByCommentId: ReadonlyMap<string, CommentReactionSummary[]> = new Map(),
 ): CommentNode {
   const isOwner = Boolean(viewerUserId && viewerUserId === row.user_id);
@@ -283,7 +200,7 @@ function toCommentNode(
     rootId: row.root_id,
     userId: row.user_id,
     username: row.profiles?.username ?? null,
-    avatar: buildCommentAvatar(row.profiles, avatarCards),
+    avatar: buildCommentAvatar(row.profiles),
     content: row.content,
     depth: row.depth,
     replyCount: row.reply_count,
@@ -350,7 +267,6 @@ async function readCommentReactionsForCommentIds(
   }
 
   const reactionRows = (data ?? []) as unknown as CommentReactionRow[];
-  const avatarCards = await readCommentAvatarCardsForProfiles(reactionRows.map((row) => row.profiles));
   const grouped = new Map<string, Map<string, CommentReactionSummary>>();
 
   for (const row of reactionRows) {
@@ -373,7 +289,7 @@ async function readCommentReactionsForCommentIds(
       summary.users.push({
         userId: row.user_id,
         username: row.profiles?.username ?? null,
-        avatar: buildCommentAvatar(row.profiles, avatarCards),
+        avatar: buildCommentAvatar(row.profiles),
         reactedAt: row.created_at,
       });
     }
@@ -389,12 +305,16 @@ async function readCommentReactionsForCommentIds(
 }
 
 async function toCommentNodes(rows: CommentRow[], viewerUserId?: string | null): Promise<CommentNode[]> {
-  const [replyToUsernames, avatarCards, reactionsByCommentId] = await Promise.all([
+  const [replyToUsernames, reactionsByCommentId] = await Promise.all([
     readReplyToUsernames(rows),
-    readCommentAvatarCards(rows),
     readCommentReactionsForCommentIds(rows.map((row) => row.id), viewerUserId),
   ]);
-  return rows.map((row) => toCommentNode(row, viewerUserId, replyToUsernames, avatarCards, reactionsByCommentId));
+  return rows.map((row) => toCommentNode(
+    row,
+    viewerUserId,
+    replyToUsernames,
+    reactionsByCommentId,
+  ));
 }
 
 async function fetchEarliestThreadReplies(

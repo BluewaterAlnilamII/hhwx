@@ -26,6 +26,7 @@ export function selectCachedFetchData<T>(state: VisibleData<T> | null, key: stri
  * - Next.js client component 的模块在页面间软导航时不会被重新加载
  */
 const globalCache = new Map<string, CacheEntry<unknown>>();
+const globalJsonRequests = new Map<string, Promise<unknown>>();
 
 function readCacheEntry<T>(key: string): CacheEntry<T> | undefined {
   return globalCache.get(key) as CacheEntry<T> | undefined;
@@ -33,6 +34,28 @@ function readCacheEntry<T>(key: string): CacheEntry<T> | undefined {
 
 function writeCacheEntry<T>(key: string, value: T): void {
   globalCache.set(key, { value, updatedAt: Date.now() });
+}
+
+function fetchJsonOnce(url: string): Promise<unknown> {
+  const activeRequest = globalJsonRequests.get(url);
+  if (activeRequest) {
+    return activeRequest;
+  }
+
+  const request = fetch(url)
+    .then((response) => {
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      return response.json() as Promise<unknown>;
+    })
+    .finally(() => {
+      if (globalJsonRequests.get(url) === request) {
+        globalJsonRequests.delete(url);
+      }
+    });
+  globalJsonRequests.set(url, request);
+  return request;
 }
 
 function isCacheStale(entry: CacheEntry<unknown> | undefined, staleTimeMs: number | undefined): boolean {
@@ -131,11 +154,7 @@ export function useCachedFetch<T>(
       setLoading(true);
     }
 
-    fetch(currentUrl)
-      .then((res) => {
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        return res.json();
-      })
+    fetchJsonOnce(currentUrl)
       .then((raw) => {
         // 如果请求期间 key 已经变了（用户切换了参数），丢弃本次结果
         if (keyRef.current !== currentKey) return;
