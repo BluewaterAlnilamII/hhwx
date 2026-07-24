@@ -1,6 +1,7 @@
 import { type AppLocale } from "@/i18n/routing";
 import { pickBestdoriLocalizedName, pickBestdoriRegionalName } from "@/lib/bestdori-regional-names";
 import { parseApiSuccessData } from "@/lib/api-contracts";
+import { hasTrainedCardArt } from "@/lib/bandori-card-training";
 import type { BandoriSkillLabelMaster } from "@/lib/bandori-skill-label";
 import type { BandoriCardAttribute, BandoriCardCatalogEntry, BandoriCardPickerFilter } from "./types";
 
@@ -61,10 +62,6 @@ function readRegionalTimestampAt(values: BestdoriCardMetadata["releasedAt"], ind
 
 function hasCnRelease(values: BestdoriCardMetadata["releasedAt"]): boolean {
   return readRegionalTimestampAt(values, 3) > 0;
-}
-
-function hasTrainedCardArt(card: BestdoriCardMetadata | null | undefined): boolean {
-  return typeof card?.stat?.training === "object" && card.stat.training !== null;
 }
 
 function transformCardsResponse(raw: unknown): Record<string, BestdoriCardMetadata | null | undefined> {

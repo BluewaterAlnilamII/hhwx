@@ -1,5 +1,6 @@
 import { type BandoriAssetRegion } from "@/lib/bandori-asset-proxy";
 import { type AppLocale } from "@/i18n/routing";
+import { hasTrainedCardArt } from "@/lib/bandori-card-training";
 import { pickBestdoriLocalizedName } from "@/lib/bestdori-regional-names";
 import { type UserGameProfileCardRecord } from "@/lib/user-game-profile-payload";
 
@@ -46,7 +47,7 @@ export function createMaxGameProfileCard(
   cardId: number,
   metadata?: GameProfileCardMetadata,
 ): UserGameProfileCardRecord {
-  const hasTraining = metadata?.hasTrainedArt === true || Boolean(metadata?.stat?.training);
+  const hasTraining = metadata?.hasTrainedArt ?? hasTrainedCardArt(metadata);
   const card: UserGameProfileCardRecord = {
     cardId,
     level: 1,

@@ -5,8 +5,7 @@ const POSITIVE_INTEGER_ID_PATTERN = /^[1-9]\d*$/u;
 export const BANDORI_PUBLIC_ASSET_SERVERS = ["jp", "en", "tw", "cn"] as const;
 export const BANDORI_CARDS_INDEX_KEY = "bandori/cards/index.json";
 export const BANDORI_EVENTS_INDEX_KEY = "bandori/events/index.json";
-export const BANDORI_PUBLIC_ASSET_INDEX_SCHEMA_VERSION = 1;
-export const BANDORI_CARD_GACHA_VOICE_PROVENANCE = "gacha-spin-v2";
+export const BANDORI_PUBLIC_ASSET_INDEX_SCHEMA_VERSION = 2;
 
 export type BandoriPublicAssetServer = (typeof BANDORI_PUBLIC_ASSET_SERVERS)[number];
 export type BandoriAssetRegion = Extract<BandoriPublicAssetServer, "jp" | "cn">;
@@ -16,31 +15,18 @@ export type BandoriCardImageRole = "thumb" | "full" | "trim";
 export type BandoriPngAssetDescriptor = {
   key: string;
   sha256: string;
-  byteSize: number;
-  contentType: "image/png";
-  width: number;
-  height: number;
 };
 
 export type BandoriAudioAssetDescriptor = {
   key: string;
   sha256: string;
-  byteSize: number;
-  contentType: "audio/mpeg";
-  durationMs: number;
 };
 
 export type BandoriCardImageSet = Record<BandoriCardImageRole, BandoriPngAssetDescriptor>;
 
-export type BandoriCardArtPlan = {
-  normalSourceVariant: BandoriCardAssetVariant;
-  hasAfterTraining: boolean;
-};
-
 export type BandoriCardAssetResource = {
-  artPlan: BandoriCardArtPlan;
   images: {
-    normal: BandoriCardImageSet;
+    normal?: BandoriCardImageSet;
     after_training?: BandoriCardImageSet;
   };
   gachaVoice?: BandoriAudioAssetDescriptor;
@@ -49,7 +35,6 @@ export type BandoriCardAssetResource = {
 export type BandoriCardsAssetIndex = {
   schemaVersion: typeof BANDORI_PUBLIC_ASSET_INDEX_SCHEMA_VERSION;
   updatedAt: string;
-  gachaVoiceProvenance: typeof BANDORI_CARD_GACHA_VOICE_PROVENANCE;
   resources: Record<string, BandoriCardAssetResource>;
 };
 
@@ -67,7 +52,6 @@ export type BandoriEventAssetEntry = {
 export type BandoriEventsAssetIndex = {
   schemaVersion: typeof BANDORI_PUBLIC_ASSET_INDEX_SCHEMA_VERSION;
   updatedAt: string;
-  servers: typeof BANDORI_PUBLIC_ASSET_SERVERS;
   events: Record<string, BandoriEventAssetEntry>;
 };
 
@@ -112,13 +96,6 @@ function parseUpdatedAt(value: unknown, label: string): string {
   return value;
 }
 
-function parsePositiveInteger(value: unknown, label: string): number {
-  if (!Number.isSafeInteger(value) || (value as number) < 1) {
-    throw new Error(`${label} must be a positive integer`);
-  }
-  return value as number;
-}
-
 function parseSha256(value: unknown, label: string): string {
   if (typeof value !== "string" || !SHA256_PATTERN.test(value)) {
     throw new Error(`${label} has an invalid SHA-256`);
@@ -126,66 +103,27 @@ function parseSha256(value: unknown, label: string): string {
   return value;
 }
 
-function parsePngDescriptor(
+function createPngDescriptor(
   value: unknown,
   expectedPrefix: string,
   label: string,
 ): BandoriPngAssetDescriptor {
-  if (!isRecord(value)) {
-    throw new Error(`${label} must be an object`);
-  }
-  assertExactKeys(
-    value,
-    ["key", "sha256", "byteSize", "contentType", "width", "height"],
-    [],
-    label,
-  );
-  const sha256 = parseSha256(value.sha256, label);
-  const expectedKey = `${expectedPrefix}/${sha256}.png`;
-  if (value.key !== expectedKey) {
-    throw new Error(`${label} has an invalid content-addressed key`);
-  }
-  if (value.contentType !== "image/png") {
-    throw new Error(`${label} has an invalid content type`);
-  }
+  const sha256 = parseSha256(value, label);
   return {
-    key: expectedKey,
+    key: `${expectedPrefix}/${sha256}.png`,
     sha256,
-    byteSize: parsePositiveInteger(value.byteSize, `${label} byteSize`),
-    contentType: "image/png",
-    width: parsePositiveInteger(value.width, `${label} width`),
-    height: parsePositiveInteger(value.height, `${label} height`),
   };
 }
 
-function parseAudioDescriptor(
+function createAudioDescriptor(
   value: unknown,
   expectedPrefix: string,
   label: string,
 ): BandoriAudioAssetDescriptor {
-  if (!isRecord(value)) {
-    throw new Error(`${label} must be an object`);
-  }
-  assertExactKeys(
-    value,
-    ["key", "sha256", "byteSize", "contentType", "durationMs"],
-    [],
-    label,
-  );
-  const sha256 = parseSha256(value.sha256, label);
-  const expectedKey = `${expectedPrefix}/${sha256}.mp3`;
-  if (value.key !== expectedKey) {
-    throw new Error(`${label} has an invalid content-addressed key`);
-  }
-  if (value.contentType !== "audio/mpeg") {
-    throw new Error(`${label} has an invalid content type`);
-  }
+  const sha256 = parseSha256(value, label);
   return {
-    key: expectedKey,
+    key: `${expectedPrefix}/${sha256}.mp3`,
     sha256,
-    byteSize: parsePositiveInteger(value.byteSize, `${label} byteSize`),
-    contentType: "audio/mpeg",
-    durationMs: parsePositiveInteger(value.durationMs, `${label} durationMs`),
   };
 }
 
@@ -199,7 +137,7 @@ function parseCardImageSet(
     throw new Error(`${label} images must be an object`);
   }
   assertExactKeys(value, ["thumb", "full", "trim"], [], `${label} images`);
-  const parseRole = (role: BandoriCardImageRole) => parsePngDescriptor(
+  const parseRole = (role: BandoriCardImageRole) => createPngDescriptor(
     value[role],
     `bandori/cards/${resourceSetName}/${variant}/${role}`,
     `${label} ${role}`,
@@ -219,37 +157,22 @@ function parseCardResource(
   if (!isRecord(value)) {
     throw new Error(`${label} must be an object`);
   }
-  assertExactKeys(value, ["artPlan", "images"], ["gachaVoice"], label);
-  if (!isRecord(value.artPlan)) {
-    throw new Error(`${label} artPlan must be an object`);
-  }
-  assertExactKeys(
-    value.artPlan,
-    ["normalSourceVariant", "hasAfterTraining"],
-    [],
-    `${label} artPlan`,
-  );
-  const normalSourceVariant = value.artPlan.normalSourceVariant;
-  if (normalSourceVariant !== "normal" && normalSourceVariant !== "after_training") {
-    throw new Error(`${label} artPlan normalSourceVariant is invalid`);
-  }
-  if (typeof value.artPlan.hasAfterTraining !== "boolean") {
-    throw new Error(`${label} artPlan hasAfterTraining must be boolean`);
-  }
+  assertExactKeys(value, ["images"], ["gachaVoice"], label);
   if (!isRecord(value.images)) {
     throw new Error(`${label} images must be an object`);
   }
-  assertExactKeys(value.images, ["normal"], ["after_training"], `${label} images`);
+  assertExactKeys(value.images, [], ["normal", "after_training"], `${label} images`);
 
   const resource: BandoriCardAssetResource = {
-    artPlan: {
-      normalSourceVariant,
-      hasAfterTraining: value.artPlan.hasAfterTraining,
-    },
-    images: {
-      normal: parseCardImageSet(value.images.normal, resourceSetName, "normal"),
-    },
+    images: {},
   };
+  if (Object.hasOwn(value.images, "normal")) {
+    resource.images.normal = parseCardImageSet(
+      value.images.normal,
+      resourceSetName,
+      "normal",
+    );
+  }
   if (Object.hasOwn(value.images, "after_training")) {
     resource.images.after_training = parseCardImageSet(
       value.images.after_training,
@@ -257,14 +180,11 @@ function parseCardResource(
       "after_training",
     );
   }
-  if (
-    resource.artPlan.hasAfterTraining
-    !== Object.hasOwn(resource.images, "after_training")
-  ) {
-    throw new Error(`${label} artPlan does not match image variants`);
+  if (!resource.images.normal && !resource.images.after_training) {
+    throw new Error(`${label} must have at least one complete image variant`);
   }
   if (Object.hasOwn(value, "gachaVoice")) {
-    resource.gachaVoice = parseAudioDescriptor(
+    resource.gachaVoice = createAudioDescriptor(
       value.gachaVoice,
       `bandori/cards/${resourceSetName}/voice/gacha`,
       `${label} gachaVoice`,
@@ -279,15 +199,12 @@ export function parseBandoriCardsAssetIndex(value: unknown): BandoriCardsAssetIn
   }
   assertExactKeys(
     value,
-    ["schemaVersion", "updatedAt", "gachaVoiceProvenance", "resources"],
+    ["schemaVersion", "updatedAt", "resources"],
     [],
     "Bandori cards index",
   );
   if (value.schemaVersion !== BANDORI_PUBLIC_ASSET_INDEX_SCHEMA_VERSION) {
     throw new Error("Unsupported Bandori cards index schema");
-  }
-  if (value.gachaVoiceProvenance !== BANDORI_CARD_GACHA_VOICE_PROVENANCE) {
-    throw new Error("Unsupported Bandori cards gacha voice provenance");
   }
   if (!isRecord(value.resources)) {
     throw new Error("Bandori cards index resources must be an object");
@@ -303,7 +220,6 @@ export function parseBandoriCardsAssetIndex(value: unknown): BandoriCardsAssetIn
   return {
     schemaVersion: BANDORI_PUBLIC_ASSET_INDEX_SCHEMA_VERSION,
     updatedAt: parseUpdatedAt(value.updatedAt, "Bandori cards index"),
-    gachaVoiceProvenance: BANDORI_CARD_GACHA_VOICE_PROVENANCE,
     resources,
   };
 }
@@ -318,7 +234,7 @@ function parseRegionalPngSlots(
   return value.map((descriptor, index) => (
     descriptor === null
       ? null
-      : parsePngDescriptor(
+      : createPngDescriptor(
         descriptor,
         "bandori/events/images",
         `${label} ${BANDORI_PUBLIC_ASSET_SERVERS[index]}`,
@@ -342,7 +258,11 @@ function parseEventEntry(value: unknown, eventId: string): BandoriEventAssetEntr
       throw new Error(`${teamIconLabel} must be an object`);
     }
     assertExactKeys(teamIconValue, ["teamId", "iconFileName", "images"], [], teamIconLabel);
-    const teamId = parsePositiveInteger(teamIconValue.teamId, `${teamIconLabel} teamId`);
+    const rawTeamId = teamIconValue.teamId;
+    if (!Number.isSafeInteger(rawTeamId) || (rawTeamId as number) < 1) {
+      throw new Error(`${teamIconLabel} teamId must be a positive integer`);
+    }
+    const teamId = rawTeamId as number;
     if (seenTeamIds.has(teamId)) {
       throw new Error(`${label} has duplicate teamId ${teamId}`);
     }
@@ -374,19 +294,12 @@ export function parseBandoriEventsAssetIndex(value: unknown): BandoriEventsAsset
   }
   assertExactKeys(
     value,
-    ["schemaVersion", "updatedAt", "servers", "events"],
+    ["schemaVersion", "updatedAt", "events"],
     [],
     "Bandori events index",
   );
   if (value.schemaVersion !== BANDORI_PUBLIC_ASSET_INDEX_SCHEMA_VERSION) {
     throw new Error("Unsupported Bandori events index schema");
-  }
-  if (
-    !Array.isArray(value.servers)
-    || value.servers.length !== BANDORI_PUBLIC_ASSET_SERVERS.length
-    || value.servers.some((server, index) => server !== BANDORI_PUBLIC_ASSET_SERVERS[index])
-  ) {
-    throw new Error("Bandori events index has an invalid regional slot order");
   }
   if (!isRecord(value.events)) {
     throw new Error("Bandori events index events must be an object");
@@ -402,7 +315,6 @@ export function parseBandoriEventsAssetIndex(value: unknown): BandoriEventsAsset
   return {
     schemaVersion: BANDORI_PUBLIC_ASSET_INDEX_SCHEMA_VERSION,
     updatedAt: parseUpdatedAt(value.updatedAt, "Bandori events index"),
-    servers: BANDORI_PUBLIC_ASSET_SERVERS,
     events,
   };
 }
@@ -417,7 +329,18 @@ export function lookupBandoriCardImage(
   if (!index || !normalizedResourceSetName) {
     return null;
   }
-  return index.resources[normalizedResourceSetName]?.images[variant]?.[role] ?? null;
+  const images = index.resources[normalizedResourceSetName]?.images;
+  if (!images) {
+    return null;
+  }
+  const requestedImages = images[variant];
+  if (requestedImages) {
+    return requestedImages[role];
+  }
+  const availableImageSets = [images.normal, images.after_training].filter(
+    (imageSet): imageSet is BandoriCardImageSet => Boolean(imageSet),
+  );
+  return availableImageSets.length === 1 ? availableImageSets[0][role] : null;
 }
 
 export function lookupBandoriEventBanner(

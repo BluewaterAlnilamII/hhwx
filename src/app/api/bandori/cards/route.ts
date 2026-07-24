@@ -3,6 +3,7 @@ import { jsonError, jsonRouteError, jsonSuccess } from "@/lib/api-response";
 import { pickBestdoriCnThenJpRegionalName } from "@/lib/bestdori-regional-names";
 import { type BandoriAssetRegion } from "@/lib/bandori-asset-proxy";
 import { readBandoriCardsApiDataset } from "@/lib/bandori-cards-api-server";
+import { hasTrainedCardArt } from "@/lib/bandori-card-training";
 
 type BestdoriCardMetadata = {
   characterId?: number;
@@ -52,10 +53,6 @@ function parseRequestedCardIds(request: Request): number[] {
         .filter((cardId) => Number.isFinite(cardId) && cardId > 0),
     ),
   );
-}
-
-function hasTrainedCardArt(card: BestdoriCardMetadata | null | undefined): boolean {
-  return typeof card?.stat?.training === "object" && card.stat.training !== null;
 }
 
 export async function GET(request: Request) {

@@ -5,6 +5,7 @@ import {
   type AccountAvatarCardTrainType,
 } from "@/lib/account-avatar-defaults";
 import { type BandoriAssetRegion } from "@/lib/bandori-asset-proxy";
+import { hasTrainedCardArt } from "@/lib/bandori-card-training";
 import { readBandoriCardsApiDataset } from "@/lib/bandori-cards-api-server";
 import { pickBestdoriCnThenJpRegionalName } from "@/lib/bestdori-regional-names";
 import {
@@ -223,7 +224,7 @@ async function readCommentAvatarCardsForProfiles(profiles: Array<CommentProfile 
         resourceSetName,
         assetRegion: displayName?.assetRegion ?? (readRegionalTimestampAt(card?.releasedAt, 3) > 0 ? "cn" : "jp"),
         displayName: displayName?.name ?? null,
-        hasTrainedArt: isRecord(card?.stat) && isRecord(card.stat.training),
+        hasTrainedArt: hasTrainedCardArt(card),
       });
     }
 

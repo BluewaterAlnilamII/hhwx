@@ -103,25 +103,24 @@ GET {CDN_BASE}/bandori/cards/index.json
 
 ```json
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "updatedAt": "2026-07-23T00:00:00Z",
-  "gachaVoiceProvenance": "gacha-spin-v2",
   "resources": {
     "res001001": {
-      "artPlan": { "normalSourceVariant": "normal", "hasAfterTraining": false },
       "images": {
         "normal": {
-          "thumb": { "key": "bandori/cards/res001001/normal/thumb/<sha256>.png", "sha256": "<sha256>", "byteSize": 1, "contentType": "image/png", "width": 1, "height": 1 },
-          "full": { "key": "bandori/cards/res001001/normal/full/<sha256>.png", "sha256": "<sha256>", "byteSize": 1, "contentType": "image/png", "width": 1, "height": 1 },
-          "trim": { "key": "bandori/cards/res001001/normal/trim/<sha256>.png", "sha256": "<sha256>", "byteSize": 1, "contentType": "image/png", "width": 1, "height": 1 }
+          "thumb": "<sha256>",
+          "full": "<sha256>",
+          "trim": "<sha256>"
         }
-      }
+      },
+      "gachaVoice": "<sha256>"
     }
   }
 }
 ```
 
-`resources` 以 `resourceSetName` 为 key。`artPlan` 记录公开 `normal` 图片实际取自游戏的 `normal` 还是 `after_training` 源纹理，并声明是否应存在独立训练后图片组；`hasAfterTraining` 必须与公开 `after_training` 图片组是否存在一致。`gachaVoiceProvenance` 把可接受的抽卡语音提取规则固定为 GachaSpin v2，避免旧 cue 或 ACB 规则生成的 descriptor 被静默复用。`normal` 图片组及其中的 `thumb`、`full`、`trim` descriptor 必需存在。`after_training` 是可选的完整图片组；一旦存在，三个 descriptor 都必须存在。并非每张卡都有抽卡语音，所以 `gachaVoice` 在结构上可选；但 Master 声明了抽卡语音时，builder 必须找到与完整 `resourceSetName` 精确匹配的 cue，包括来自 `biliGachaVoice*.acb` 的国服 `bili_` cue。descriptor 使用 `contentType: "audio/mpeg"` 和 `durationMs`，不使用图片尺寸；key 为 `bandori/cards/{resourceSetName}/voice/gacha/{sha256}.mp3`。
+`resources` 以 `resourceSetName` 为 key。公开资源引用均为完整的小写 SHA-256 字符串；客户端将图片 key 推导为 `bandori/cards/{resourceSetName}/{variant}/{role}/{sha256}.png`，可选抽卡语音 key 推导为 `bandori/cards/{resourceSetName}/voice/gacha/{sha256}.mp3`。每个已声明的图片 variant 都必须完整包含 `thumb`、`full`、`trim`。资源可以只声明 `normal`、只声明 `after_training`，或者同时声明两者：只有一个完整 variant 时，特训前后两个 UI 状态共用它；两者都存在时，客户端严格使用所请求的 variant。这样既保留无特训生日卡和 KiraFes 卡在游戏中的 `after_training` 命名，也不复制对象。构建器内部的提取 provenance、字节大小、媒体类型、图片尺寸和音频时长不属于公开 index。
 
 Events 使用另一个公开发现文档：
 
@@ -129,14 +128,14 @@ Events 使用另一个公开发现文档：
 GET {CDN_BASE}/bandori/events/index.json
 ```
 
-响应根对象为 `{ "schemaVersion": 1, "updatedAt": "...", "servers": ["jp", "en", "tw", "cn"], "events": { ... } }`。每个 `events[eventId]` 包含：
+响应根对象为 `{ "schemaVersion": 2, "updatedAt": "...", "events": { ... } }`。区域数组固定采用隐式顺序 `[jp, en, tw, cn]`。每个 `events[eventId]` 包含：
 
-- `banners`：严格四槽 PNG descriptor 或 `null`，顺序与 `servers` 一致。
-- `teamIcons`：每项为 `{ "teamId": 1, "iconFileName": "...", "images": [descriptor-or-null, descriptor-or-null, descriptor-or-null, descriptor-or-null] }`。
+- `banners`：严格四槽 SHA-256 或 `null`。
+- `teamIcons`：每项为 `{ "teamId": 1, "iconFileName": "...", "images": [sha256-or-null, sha256-or-null, sha256-or-null, sha256-or-null] }`。
 
-每个 PNG descriptor 都是 `{ key, sha256, byteSize, contentType: "image/png", width, height }`。活动图片 key 采用 `bandori/events/images/{sha256}.png`。某区域素材缺失时，只能在自己的槽位使用 `null`；客户端不会借用其他服务器的素材。
+活动图片 key 推导为 `bandori/events/images/{sha256}.png`。某区域素材缺失时，只能在自己的槽位使用 `null`；客户端不会借用其他服务器的素材。
 
-所有 descriptor key 都相对于 `{CDN_BASE}`。文件名 stem 必须等于 descriptor 中完整的小写 SHA-256。Web 应用会先校验 index，再使用其中资源，不会从 master data 的 bundle name 猜测 Cards/Events 路径。index 或 descriptor 不可用时，相关图片保留占位，但 master data 与队伍计算继续工作。卡牌缩略图不会用 full 图兜底，Cards/Events 也不会回退 Bestdori 或旧 `/api/bandori/assets` proxy。
+所有推导出的对象 key 都相对于 `{CDN_BASE}`。文件名 stem 等于 index 中完整的小写 SHA-256。Web 应用会先校验 index，再使用其中资源，不会从 master data 的 bundle name 猜测 Cards/Events 路径。index 或所引用对象不可用时，相关图片保留占位，但 master data 与队伍计算继续工作。卡牌缩略图不会用 full 图兜底，Cards/Events 也不会回退 Bestdori 或旧 `/api/bandori/assets` proxy。
 
 Bestdori 通用图标和卡框：
 
@@ -214,9 +213,9 @@ https://your-bandori-asset-cdn.example.com/bandori/stamps/cn/10131/animation/man
 https://your-bandori-asset-cdn.example.com/bandori/stamps/cn/10131/animation/atlas.png
 ```
 
-Cards/Events 应从下载到的 index 中各选代表性 descriptor，再验证 `{CDN_BASE}/{descriptor.key}`。不要验证猜测的 bundle 路径；它们不是公开 HTTP 契约。
+Cards/Events 应从下载到的 index 中各选代表性 hash，按照上面的契约推导 key，再验证 `{CDN_BASE}/{derivedKey}`。不要验证猜测的游戏 bundle 路径；它们不是公开 HTTP 契约。
 
-Cards/Events index 响应及 descriptor 指向的资源都必须允许 HHWX Web origin 无凭据跨域读取：
+Cards/Events index 响应及其引用的对象都必须允许 HHWX Web origin 无凭据跨域读取：
 
 ```bash
 curl -I -H "Origin: https://hhwx.org" https://your-bandori-asset-cdn.example.com/bandori/cards/index.json

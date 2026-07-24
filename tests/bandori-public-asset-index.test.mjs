@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
-  BANDORI_CARD_GACHA_VOICE_PROVENANCE,
   BANDORI_PUBLIC_ASSET_SERVERS,
   buildBandoriPublicAssetIndexUrl,
   buildBandoriPublicAssetUrl,
@@ -25,58 +24,29 @@ const hashes = {
   teamIcon: "9".repeat(64),
 };
 
-function pngDescriptor(prefix, sha256) {
+function imageSet(entries) {
   return {
-    key: `${prefix}/${sha256}.png`,
-    sha256,
-    byteSize: 1234,
-    contentType: "image/png",
-    width: 256,
-    height: 256,
+    thumb: entries.thumb,
+    full: entries.full,
+    trim: entries.trim,
   };
 }
 
 function cardsIndex() {
-  const resourceSetName = "res001001";
-  const imageSet = (variant, entries) => ({
-    thumb: pngDescriptor(
-      `bandori/cards/${resourceSetName}/${variant}/thumb`,
-      entries.thumb,
-    ),
-    full: pngDescriptor(
-      `bandori/cards/${resourceSetName}/${variant}/full`,
-      entries.full,
-    ),
-    trim: pngDescriptor(
-      `bandori/cards/${resourceSetName}/${variant}/trim`,
-      entries.trim,
-    ),
-  });
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     updatedAt: "2026-07-23T00:00:00Z",
-    gachaVoiceProvenance: "gacha-spin-v2",
     resources: {
-      [resourceSetName]: {
-        artPlan: {
-          normalSourceVariant: "normal",
-          hasAfterTraining: true,
-        },
+      res001001: {
         images: {
-          normal: imageSet("normal", hashes),
-          after_training: imageSet("after_training", {
+          normal: imageSet(hashes),
+          after_training: imageSet({
             thumb: hashes.trainedThumb,
             full: hashes.trainedFull,
             trim: hashes.trainedTrim,
           }),
         },
-        gachaVoice: {
-          key: `bandori/cards/${resourceSetName}/voice/gacha/${hashes.voice}.mp3`,
-          sha256: hashes.voice,
-          byteSize: 4321,
-          contentType: "audio/mpeg",
-          durationMs: 1800,
-        },
+        gachaVoice: hashes.voice,
       },
     },
   };
@@ -84,105 +54,109 @@ function cardsIndex() {
 
 function eventsIndex() {
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     updatedAt: "2026-07-23T00:00:00Z",
-    servers: ["jp", "en", "tw", "cn"],
     events: {
       "315": {
-        banners: [
-          pngDescriptor("bandori/events/images", hashes.banner),
-          null,
-          null,
-          pngDescriptor("bandori/events/images", hashes.banner),
-        ],
+        banners: [hashes.banner, null, null, hashes.banner],
         teamIcons: [{
           teamId: 1,
           iconFileName: "team_icon_1.png",
-          images: [
-            pngDescriptor("bandori/events/images", hashes.teamIcon),
-            null,
-            null,
-            pngDescriptor("bandori/events/images", hashes.teamIcon),
-          ],
+          images: [hashes.teamIcon, null, null, hashes.teamIcon],
         }],
       },
     },
   };
 }
 
-test("Cards index parser preserves strict image and audio descriptors", () => {
+test("Cards schema 2 parser reconstructs internal content-addressed descriptors", () => {
   const parsed = parseBandoriCardsAssetIndex(cardsIndex());
 
-  assert.equal(
-    lookupBandoriCardImage(parsed, "res001001", "normal", "thumb")?.sha256,
-    hashes.thumb,
+  assert.deepEqual(
+    lookupBandoriCardImage(parsed, "res001001", "normal", "thumb"),
+    {
+      key: `bandori/cards/res001001/normal/thumb/${hashes.thumb}.png`,
+      sha256: hashes.thumb,
+    },
   );
   assert.equal(
     lookupBandoriCardImage(parsed, "res001001", "after_training", "full")?.sha256,
     hashes.trainedFull,
   );
-  assert.equal(parsed.resources.res001001.gachaVoice?.durationMs, 1800);
-  assert.equal(
-    parsed.gachaVoiceProvenance,
-    BANDORI_CARD_GACHA_VOICE_PROVENANCE,
-  );
-  assert.deepEqual(parsed.resources.res001001.artPlan, {
-    normalSourceVariant: "normal",
-    hasAfterTraining: true,
+  assert.deepEqual(parsed.resources.res001001.gachaVoice, {
+    key: `bandori/cards/res001001/voice/gacha/${hashes.voice}.mp3`,
+    sha256: hashes.voice,
   });
-  assert.equal(
-    lookupBandoriCardImage(parsed, "missing", "normal", "thumb"),
-    null,
-  );
+  assert.equal(lookupBandoriCardImage(parsed, "missing", "normal", "thumb"), null);
 });
 
-test("Cards index requires complete image sets and content-addressed descriptors", () => {
+test("Cards parser requires schema 2 hashes and complete image sets", () => {
+  const legacy = cardsIndex();
+  legacy.schemaVersion = 1;
+  assert.throws(() => parseBandoriCardsAssetIndex(legacy), /Unsupported/u);
+
   const missingRole = cardsIndex();
   delete missingRole.resources.res001001.images.normal.thumb;
-  assert.throws(
-    () => parseBandoriCardsAssetIndex(missingRole),
-    /missing thumb/u,
-  );
-
-  const invalidKey = cardsIndex();
-  invalidKey.resources.res001001.images.normal.thumb.key =
-    `bandori/cards/res001001/normal/thumb/${hashes.full}.png`;
-  assert.throws(
-    () => parseBandoriCardsAssetIndex(invalidKey),
-    /content-addressed key/u,
-  );
+  assert.throws(() => parseBandoriCardsAssetIndex(missingRole), /missing thumb/u);
 
   const invalidSha = cardsIndex();
-  invalidSha.resources.res001001.images.normal.thumb.sha256 = "ABC";
+  invalidSha.resources.res001001.images.normal.thumb = "ABC";
   assert.throws(() => parseBandoriCardsAssetIndex(invalidSha), /SHA-256/u);
 
-  const invalidSize = cardsIndex();
-  invalidSize.resources.res001001.images.normal.thumb.byteSize = 0;
-  assert.throws(() => parseBandoriCardsAssetIndex(invalidSize), /byteSize/u);
-
-  const invalidContentType = cardsIndex();
-  invalidContentType.resources.res001001.images.normal.thumb.contentType = "image/webp";
-  assert.throws(() => parseBandoriCardsAssetIndex(invalidContentType), /content type/u);
-
-  const mismatchedArtPlan = cardsIndex();
-  mismatchedArtPlan.resources.res001001.artPlan.hasAfterTraining = false;
+  const noVariants = cardsIndex();
+  noVariants.resources.res001001.images = {};
   assert.throws(
-    () => parseBandoriCardsAssetIndex(mismatchedArtPlan),
-    /artPlan does not match/u,
+    () => parseBandoriCardsAssetIndex(noVariants),
+    /at least one complete image variant/u,
   );
 
-  const legacyVoiceProvenance = cardsIndex();
-  legacyVoiceProvenance.gachaVoiceProvenance = "voice-pack-v0";
+  const legacyDescriptor = cardsIndex();
+  legacyDescriptor.resources.res001001.images.normal.thumb = {
+    key: "bandori/cards/res001001/normal/thumb/legacy.png",
+    sha256: hashes.thumb,
+  };
+  assert.throws(() => parseBandoriCardsAssetIndex(legacyDescriptor), /SHA-256/u);
+
+  const legacyRootFields = cardsIndex();
+  legacyRootFields.gachaVoiceProvenance = "gacha-spin-v2";
   assert.throws(
-    () => parseBandoriCardsAssetIndex(legacyVoiceProvenance),
-    /gacha voice provenance/u,
+    () => parseBandoriCardsAssetIndex(legacyRootFields),
+    /unsupported field: gachaVoiceProvenance/u,
   );
 });
 
-test("Events index enforces the fixed jp/en/tw/cn four-slot contract", () => {
+test("Cards image lookup shares one complete variant but keeps two variants exact", () => {
+  const normalOnly = cardsIndex();
+  delete normalOnly.resources.res001001.images.after_training;
+  const parsedNormalOnly = parseBandoriCardsAssetIndex(normalOnly);
+  assert.equal(
+    lookupBandoriCardImage(parsedNormalOnly, "res001001", "after_training", "thumb")?.sha256,
+    hashes.thumb,
+  );
+
+  const trainedOnly = cardsIndex();
+  delete trainedOnly.resources.res001001.images.normal;
+  const parsedTrainedOnly = parseBandoriCardsAssetIndex(trainedOnly);
+  assert.equal(
+    lookupBandoriCardImage(parsedTrainedOnly, "res001001", "normal", "thumb")?.sha256,
+    hashes.trainedThumb,
+  );
+
+  const both = parseBandoriCardsAssetIndex(cardsIndex());
+  assert.equal(
+    lookupBandoriCardImage(both, "res001001", "normal", "thumb")?.sha256,
+    hashes.thumb,
+  );
+  assert.equal(
+    lookupBandoriCardImage(both, "res001001", "after_training", "thumb")?.sha256,
+    hashes.trainedThumb,
+  );
+});
+
+test("Events schema 2 uses the implicit fixed jp/en/tw/cn four-slot contract", () => {
   const parsed = parseBandoriEventsAssetIndex(eventsIndex());
 
-  assert.deepEqual(parsed.servers, BANDORI_PUBLIC_ASSET_SERVERS);
+  assert.deepEqual(BANDORI_PUBLIC_ASSET_SERVERS, ["jp", "en", "tw", "cn"]);
   assert.equal(lookupBandoriEventBanner(parsed, 315, "jp")?.sha256, hashes.banner);
   assert.equal(lookupBandoriEventBanner(parsed, 315, "en"), null);
   assert.equal(
@@ -190,12 +164,23 @@ test("Events index enforces the fixed jp/en/tw/cn four-slot contract", () => {
     hashes.teamIcon,
   );
 
-  const wrongOrder = eventsIndex();
-  wrongOrder.servers = ["jp", "en", "cn", "tw"];
+  const legacyServers = eventsIndex();
+  legacyServers.servers = ["jp", "en", "tw", "cn"];
   assert.throws(
-    () => parseBandoriEventsAssetIndex(wrongOrder),
-    /regional slot order/u,
+    () => parseBandoriEventsAssetIndex(legacyServers),
+    /unsupported field: servers/u,
   );
+
+  const legacySchema = eventsIndex();
+  legacySchema.schemaVersion = 1;
+  assert.throws(() => parseBandoriEventsAssetIndex(legacySchema), /Unsupported/u);
+
+  const legacyDescriptor = eventsIndex();
+  legacyDescriptor.events["315"].banners[0] = {
+    key: `bandori/events/images/${hashes.banner}.png`,
+    sha256: hashes.banner,
+  };
+  assert.throws(() => parseBandoriEventsAssetIndex(legacyDescriptor), /SHA-256/u);
 
   const shortSlots = eventsIndex();
   shortSlots.events["315"].banners.pop();
@@ -205,7 +190,7 @@ test("Events index enforces the fixed jp/en/tw/cn four-slot contract", () => {
   );
 });
 
-test("public asset URLs append validated relative descriptor keys to the browser CDN base", () => {
+test("public asset URLs append reconstructed descriptor keys to the browser CDN base", () => {
   const parsed = parseBandoriCardsAssetIndex(cardsIndex());
   const descriptor = lookupBandoriCardImage(parsed, "res001001", "normal", "thumb");
 
