@@ -1,9 +1,13 @@
 import { ApiRouteError } from "@/lib/api-contracts";
 import {
+  resolveStoredAccountAvatarCardIdentity,
+} from "@/lib/account-avatar-card";
+import {
   DEFAULT_ACCOUNT_AVATAR_CARD_ID,
   DEFAULT_ACCOUNT_AVATAR_CARD_TRAIN_TYPE,
   type AccountAvatarCardTrainType,
 } from "@/lib/account-avatar-defaults";
+import { type BandoriServer } from "@/lib/bandori-server";
 import {
   createCommentReactionNotification,
   createCommentReplyNotification,
@@ -23,11 +27,13 @@ const COMMENT_REACTION_PARTICIPANT_LIMIT = 8;
 export type CommentProfile = {
   username: string | null;
   avatar_card_id: number | null;
+  avatar_card_server: number | null;
   avatar_card_train_type: AccountAvatarCardTrainType | null;
 };
 
 export type CommentAvatar = {
   cardId: number;
+  entityServer: BandoriServer | null;
   trainType: AccountAvatarCardTrainType;
 };
 
@@ -122,7 +128,7 @@ const COMMENT_SELECT = [
   "edited_at",
   "deleted_at",
   "moderation_status",
-  "profiles:profiles!user_id(username, avatar_card_id, avatar_card_train_type)",
+  "profiles:profiles!user_id(username, avatar_card_id, avatar_card_server, avatar_card_train_type)",
 ].join(", ");
 
 function parseCursor(cursor: string | null | undefined): { createdAt: string; id: string } | null {
@@ -141,18 +147,29 @@ function normalizeCommentAvatarCardId(profile: CommentProfile | null): number {
   return Number.isInteger(cardId) && cardId > 0 ? cardId : DEFAULT_ACCOUNT_AVATAR_CARD_ID;
 }
 
-function normalizeCommentAvatarTrainType(profile: CommentProfile | null): AccountAvatarCardTrainType {
+function normalizeCommentAvatarTrainType(
+  profile: CommentProfile | null,
+  cardId: number,
+): AccountAvatarCardTrainType {
+  if (cardId === DEFAULT_ACCOUNT_AVATAR_CARD_ID) {
+    return DEFAULT_ACCOUNT_AVATAR_CARD_TRAIN_TYPE;
+  }
   return profile?.avatar_card_train_type === "after_training" ? "after_training" : DEFAULT_ACCOUNT_AVATAR_CARD_TRAIN_TYPE;
 }
 
 function buildCommentAvatar(
   profile: CommentProfile | null,
 ): CommentAvatar {
-  const cardId = normalizeCommentAvatarCardId(profile);
+  const storedCardId = normalizeCommentAvatarCardId(profile);
+  const { cardId, entityServer } = resolveStoredAccountAvatarCardIdentity(
+    storedCardId,
+    profile?.avatar_card_server,
+  );
 
   return {
     cardId,
-    trainType: normalizeCommentAvatarTrainType(profile),
+    entityServer,
+    trainType: normalizeCommentAvatarTrainType(profile, cardId),
   };
 }
 
@@ -258,7 +275,7 @@ async function readCommentReactionsForCommentIds(
   const client = createServerSupabaseClient();
   const { data, error } = await client
     .from(COMMENT_REACTIONS_TABLE)
-    .select("comment_id, emoji_key, user_id, created_at, profiles:profiles!user_id(username, avatar_card_id, avatar_card_train_type)")
+    .select("comment_id, emoji_key, user_id, created_at, profiles:profiles!user_id(username, avatar_card_id, avatar_card_server, avatar_card_train_type)")
     .in("comment_id", uniqueCommentIds)
     .order("created_at", { ascending: true });
 

@@ -41,7 +41,7 @@ HHWX 生产环境应在 `/bandori/stamps/*` 对象上为 `https://hhwx.org` 配�
 
 Events 与 Cards 的列表/详情 API 会通过 `BANDORI_PRIVATE_R2_BUCKET` 配置的私有桶，直接读取各自的内容寻址 snapshot。pointer 或 pack 缺失、无权限、格式错误、损坏或超限时都会失败关闭，且不会回退到 Bestdori 或公开 master artifacts。`BANDORI_EVENT_API_LOCAL_STORE_ROOT` 与 `BANDORI_CARDS_API_LOCAL_STORE_ROOT` 可在本地开发时指向 tracker 生成的 content store，生产环境会拒绝这些设置。其他 master 数据集继续使用现有来源。`songs.notes` 默认继续使用 Bestdori，但可以按上面的配置切换到 HHWX music asset chart counts。
 
-浏览器只从 `GET /api/bandori/master/cards` 读取一次完整 canonical Cards map，并在整个 SPA 生命周期内复用解析后的 map；账号所在服务器对应的标量扩展在浏览器本地物化。公开 Cards 列表/详情请求可选使用精确的 `server=0|1|2|3`，固定对应 JP/EN/TW/CN，字符串区服代码会被拒绝。旧的稀疏接口 `GET /api/bandori/cards?ids=...` 已删除。仅用于展示的四槽文本使用持久化“首选服务器”，默认 CN（`3`）；缺失时按“首选槽优先，随后 JP、EN、TW、CN 且不重复首选槽”的顺序回退，不改变账号或计算所在服务器。
+浏览器只从 `GET /api/bandori/master/cards` 读取一次完整 canonical Cards map，并在整个 SPA 生命周期内复用解析后的 map；账号所在服务器对应的标量扩展在浏览器本地物化。公开 Cards 列表/详情请求可选使用精确的 `server=0|1|2|3`，固定对应 JP/EN/TW/CN，字符串区服代码会被拒绝。旧的稀疏接口 `GET /api/bandori/cards?ids=...` 已删除。无服务器上下文的展示界面按“首选服务器、JP、EN、TW、CN”去重回退；卡牌档案和组队计算器中的档案卡牌则把档案所在服务器放在这个顺序之前，因此卡牌名和技能描述都优先服从档案身份，同时不修改用户的全局首选服务器。ID `10001`–`10010` 的冲突卡在计算和持久化中仍使用数字 ID；无服务器上下文的头像选择会将 EN/CN 实体展开成仅供 UI 使用的带区服引用，并把实际选择写入可空的 `profiles.avatar_card_server` 字段。
 
 ## 榜线历史 API
 

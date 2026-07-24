@@ -95,6 +95,7 @@ export function buildBandoriCardCatalog(
   preferredServer: BandoriServer = DEFAULT_BANDORI_PREFERRED_SERVER,
   locale: AppLocale = "zh-CN",
   expandEntityCollisions = false,
+  contextServer?: BandoriServer | null,
 ): BandoriCardCatalogEntry[] {
   const cardEntries = expandEntityCollisions
     ? expandBandoriCardCatalog(cards).map(({ cardId, cardRef, server, card }) => ({
@@ -122,12 +123,12 @@ export function buildBandoriCardCatalog(
 
     const character = characters[String(characterId)];
     const bandId = toPositiveInteger(character?.bandId);
-    const displayName = pickBestdoriLocalizedName(card?.prefix, preferredServer)
+    const displayName = pickBestdoriLocalizedName(card?.prefix, preferredServer, contextServer)
       ?? (locale === "en" ? `Card ${cardId}` : `卡牌 ${cardId}`);
     const assetRegion = hasCnRelease(card?.releasedAt) ? "cn" as const : "jp" as const;
-    const characterName = pickBestdoriLocalizedName(character?.nickname, preferredServer)
-      ?? pickBestdoriLocalizedName(character?.characterName, preferredServer)
-      ?? pickBestdoriLocalizedName(character?.firstName, preferredServer)
+    const characterName = pickBestdoriLocalizedName(character?.nickname, preferredServer, contextServer)
+      ?? pickBestdoriLocalizedName(character?.characterName, preferredServer, contextServer)
+      ?? pickBestdoriLocalizedName(character?.firstName, preferredServer, contextServer)
       ?? (locale === "en" ? `Character ${characterId}` : `角色 ${characterId}`);
     const attribute = isKnownAttribute(card?.attribute) ? card.attribute : null;
     const levelLimit = toPositiveInteger(card?.levelLimit) ?? 1;

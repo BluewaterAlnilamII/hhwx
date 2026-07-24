@@ -166,6 +166,7 @@ function ReactionChip({ reaction, disabled, onToggle }: ReactionChipProps) {
                 <AccountCardAvatar
                   username={user.username}
                   cardId={user.avatar.cardId}
+                  entityServer={user.avatar.entityServer}
                   trainType={user.avatar.trainType}
                   size="toolbar"
                   className="ring-1 ring-slate-200"
@@ -384,6 +385,7 @@ export const CommentItem = memo(function CommentItem({
         <AccountCardAvatar
           username={comment.username}
           cardId={comment.avatar.cardId}
+          entityServer={comment.avatar.entityServer}
           trainType={comment.avatar.trainType}
           size="comment"
           className="ring-1 ring-sky-200 dark:ring-slate-700"

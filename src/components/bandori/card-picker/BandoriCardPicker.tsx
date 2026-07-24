@@ -13,10 +13,7 @@ import {
   type BandoriAssetRegion,
 } from "@/lib/bandori-asset-proxy";
 import { BANDORI_CHARACTER_GROUPS, compareBandoriCharacterIds } from "@/lib/bandori-character-groups";
-import {
-  isKnownBandoriCardEntityCollision,
-  type BandoriCardServer,
-} from "@/lib/bandori-card-server-extensions";
+import { type BandoriCardServer } from "@/lib/bandori-card-server-extensions";
 import {
   normalizeBandoriSkillLabel,
   type BandoriSkillLabelMaster,
@@ -346,7 +343,6 @@ export type BandoriCardPickerProps = {
   server?: BandoriCardServer;
   className?: string;
   showArtToggle?: boolean;
-  excludeEntityCollisions?: boolean;
   scrollElementRef?: RefObject<HTMLElement | null>;
 };
 
@@ -357,7 +353,6 @@ export default function BandoriCardPicker({
   server,
   className,
   showArtToggle = true,
-  excludeEntityCollisions = false,
   scrollElementRef,
 }: BandoriCardPickerProps) {
   const locale = useLocale() as AppLocale;
@@ -400,15 +395,13 @@ export default function BandoriCardPicker({
         preferredServer,
         locale,
         server === undefined,
+        server,
       );
-      return excludeEntityCollisions
-        ? cards.filter((card) => !isKnownBandoriCardEntityCollision(card.cardId))
-        : cards;
+      return cards;
     },
     [
       cardMetadata,
       characterMetadata,
-      excludeEntityCollisions,
       locale,
       preferredServer,
       server,
@@ -508,16 +501,20 @@ export default function BandoriCardPicker({
   );
 
   const selectedCard = useMemo(
-    () => catalog.find((card) => card.cardId === value?.cardId) ?? null,
-    [catalog, value?.cardId],
+    () => catalog.find((card) => (
+      card.cardId === value?.cardId
+      && card.entityServer === (value?.entityServer ?? null)
+    )) ?? null,
+    [catalog, value?.cardId, value?.entityServer],
   );
   const virtualGridLayoutKey = useMemo(
     () => [
       showArtToggle ? "art-toggle" : "no-art-toggle",
       value?.cardId ?? "no-card",
+      value?.entityServer ?? "no-entity-server",
       value?.trainType ?? "no-train-type",
     ].join(":"),
-    [showArtToggle, value?.cardId, value?.trainType],
+    [showArtToggle, value?.cardId, value?.entityServer, value?.trainType],
   );
 
   const visibleCount = visibleState.key === filterKey ? visibleState.count : INITIAL_VISIBLE_COUNT;
@@ -543,6 +540,7 @@ export default function BandoriCardPicker({
   const handleCardSelect = (card: BandoriCardCatalogEntry) => {
     onValueChange({
       cardId: card.cardId,
+      entityServer: card.entityServer,
       trainType: resolveCardTrainType(card, previewTrainType),
     });
   };
@@ -720,7 +718,8 @@ export default function BandoriCardPicker({
               layoutKey={virtualGridLayoutKey}
               getKey={(card) => card.cardRef}
               renderItem={(card) => {
-                const selected = value?.cardId === card.cardId;
+                const selected = value?.cardId === card.cardId
+                  && (value.entityServer ?? null) === card.entityServer;
                 const activeTrainType = resolveCardTrainType(card, previewTrainType);
                 return (
                   <CardGridItem
@@ -736,6 +735,7 @@ export default function BandoriCardPicker({
                       5,
                       5,
                       preferredServer,
+                      server,
                     )}
                     onSelect={() => handleCardSelect(card)}
                   />

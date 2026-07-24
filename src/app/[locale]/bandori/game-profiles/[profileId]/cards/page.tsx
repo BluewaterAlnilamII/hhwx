@@ -160,6 +160,7 @@ function pickCharacterName(
   character: CharacterRecord | undefined,
   characterId: number | undefined,
   preferredServer: BandoriServer,
+  contextServer: BandoriServer,
   fallback: { unknownCharacter: string; character: (characterId: number) => string },
 ): string {
   const localizedName = pickBandoriRegionalText([
@@ -167,12 +168,12 @@ function pickCharacterName(
     character?.nicknameEn,
     character?.nicknameTw,
     character?.nicknameCn,
-  ], preferredServer) ?? pickBandoriRegionalText([
+  ], preferredServer, contextServer) ?? pickBandoriRegionalText([
     character?.characterNameJp,
     character?.characterNameEn,
     character?.characterNameTw,
     character?.characterNameCn,
-  ], preferredServer);
+  ], preferredServer, contextServer);
 
   return localizedName ?? (characterId ? fallback.character(characterId) : fallback.unknownCharacter);
 }
@@ -181,18 +182,20 @@ function pickFullCharacterName(
   character: CharacterRecord | undefined,
   characterId: number | undefined,
   preferredServer: BandoriServer,
+  contextServer: BandoriServer,
   fallback: { unknownCharacter: string; character: (characterId: number) => string },
 ): string {
-  return pickCharacterName(character, characterId, preferredServer, fallback);
+  return pickCharacterName(character, characterId, preferredServer, contextServer, fallback);
 }
 
 function pickCardName(
   cardId: number,
   metadata: BestdoriCardMetadata | undefined,
   preferredServer: BandoriServer,
+  contextServer: BandoriServer,
   fallback: (cardId: number) => string,
 ): string {
-  return pickBestdoriLocalizedName(metadata?.prefix, preferredServer)
+  return pickBestdoriLocalizedName(metadata?.prefix, preferredServer, contextServer)
     ?? metadata?.displayName
     ?? fallback(cardId);
 }
@@ -206,6 +209,7 @@ function getCardSkillEffectLabel(
   metadata: BestdoriCardMetadata | undefined,
   skills: Record<string, BandoriSkillLabelMaster | undefined>,
   preferredServer: BandoriServer,
+  contextServer: BandoriServer,
 ): string {
   const skillId = Number(metadata?.skillId);
   return normalizeBandoriSkillLabel(
@@ -215,6 +219,7 @@ function getCardSkillEffectLabel(
     card.skillLevel,
     5,
     preferredServer,
+    contextServer,
   );
 }
 
@@ -390,6 +395,7 @@ const CardTile = memo(function CardTile({
   card,
   metadata,
   preferredServer,
+  contextServer,
   labels,
   characterName,
   skillEffectLabel,
@@ -402,6 +408,7 @@ const CardTile = memo(function CardTile({
   card: UserGameProfileCardRecord;
   metadata?: BestdoriCardMetadata;
   preferredServer: BandoriServer;
+  contextServer: BandoriServer;
   labels: {
     cardFallback: (cardId: number) => string;
     editCard: (cardName: string) => string;
@@ -414,7 +421,13 @@ const CardTile = memo(function CardTile({
   canEdit: boolean;
   onEdit: () => void;
 }) {
-  const cardName = pickCardName(card.cardId, metadata, preferredServer, labels.cardFallback);
+  const cardName = pickCardName(
+    card.cardId,
+    metadata,
+    preferredServer,
+    contextServer,
+    labels.cardFallback,
+  );
   const tileRef = useRef<HTMLElement | null>(null);
   const [hoverOpen, setHoverOpen] = useState(false);
 
@@ -560,6 +573,10 @@ export default function GameProfileCardsPage({ params }: { params: Promise<{ pro
   }, [canonicalCards, messages, profileId, t, userId]);
 
   const region = useMemo(() => getRegionFromProfileServer(profilePayload?.bestdoriProfile.server), [profilePayload]);
+  const profileServer = useMemo(
+    () => normalizeBandoriServer(profilePayload?.bestdoriProfile.server) ?? 0,
+    [profilePayload],
+  );
   const charactersById = useMemo(() => new Map(metadata.characters.map((character) => [character.characterId, character])), [metadata.characters]);
   const editingCard = cards.find((card) => card.cardId === editingCardId) ?? null;
 
@@ -571,12 +588,14 @@ export default function GameProfileCardsPage({ params }: { params: Promise<{ pro
         charactersById.get(cardMetadata?.characterId ?? 0),
         cardMetadata?.characterId,
         preferredServer,
+        profileServer,
         fallbackLabels,
       ).toLowerCase();
       const cardName = pickCardName(
         card.cardId,
         cardMetadata,
         preferredServer,
+        profileServer,
         fallbackLabels.card,
       ).toLowerCase();
       const attribute = isKnownAttribute(cardMetadata?.attribute) ? cardMetadata.attribute : null;
@@ -608,6 +627,7 @@ export default function GameProfileCardsPage({ params }: { params: Promise<{ pro
     filters.training,
     metadata.cards,
     preferredServer,
+    profileServer,
   ]);
   const visibleCardCount = Math.min(visibleCount, filteredCards.length);
   const remainingCards = Math.max(0, filteredCards.length - visibleCardCount);
@@ -751,6 +771,7 @@ export default function GameProfileCardsPage({ params }: { params: Promise<{ pro
                             charactersById.get(cardMetadata?.characterId ?? 0),
                             cardMetadata?.characterId,
                             preferredServer,
+                            profileServer,
                             fallbackLabels,
                           );
                           const skillEffectLabel = getCardSkillEffectLabel(
@@ -758,6 +779,7 @@ export default function GameProfileCardsPage({ params }: { params: Promise<{ pro
                             cardMetadata,
                             metadata.skills,
                             preferredServer,
+                            profileServer,
                           );
                           return (
                             <CardTile
@@ -765,6 +787,7 @@ export default function GameProfileCardsPage({ params }: { params: Promise<{ pro
                               card={card}
                               metadata={cardMetadata}
                               preferredServer={preferredServer}
+                              contextServer={profileServer}
                               labels={{
                                 cardFallback: fallbackLabels.card,
                                 editCard: fallbackLabels.editCard,
@@ -809,11 +832,13 @@ export default function GameProfileCardsPage({ params }: { params: Promise<{ pro
                 charactersById.get(metadata.cards[String(editingCard.cardId)]?.characterId ?? 0),
                 metadata.cards[String(editingCard.cardId)]?.characterId,
                 preferredServer,
+                profileServer,
                 fallbackLabels,
               )}
               bandId={charactersById.get(metadata.cards[String(editingCard.cardId)]?.characterId ?? 0)?.bandId ?? null}
               characterBonusesById={characterBonusesById}
               region={region}
+              displayServer={profileServer}
               saving={saving}
               onClose={() => setEditingCardId(null)}
               onSave={replaceCard}

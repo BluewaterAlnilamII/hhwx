@@ -1,6 +1,6 @@
 import { type BandoriAssetRegion } from "@/lib/bandori-asset-proxy";
 import {
-  getBandoriRegionalPreferenceOrder,
+  getBandoriRegionalDisplayOrder,
   type BandoriServer,
 } from "@/lib/bandori-server";
 
@@ -16,12 +16,13 @@ function getBestdoriAssetRegionForNameIndex(index: number): BandoriAssetRegion {
 export function pickBestdoriRegionalName(
   names: readonly (string | null | undefined)[] | null | undefined,
   preferredServer: BandoriServer,
+  contextServer?: BandoriServer | null,
 ): BestdoriRegionalName | null {
   if (!Array.isArray(names)) {
     return null;
   }
 
-  for (const index of getBandoriRegionalPreferenceOrder(preferredServer)) {
+  for (const index of getBandoriRegionalDisplayOrder(preferredServer, contextServer)) {
     const name = names[index]?.trim();
     if (name) {
       return {
@@ -36,6 +37,7 @@ export function pickBestdoriRegionalName(
 export function pickBestdoriLocalizedName(
   names: readonly (string | null | undefined)[] | null | undefined,
   preferredServer: BandoriServer,
+  contextServer?: BandoriServer | null,
 ): string | null {
-  return pickBestdoriRegionalName(names, preferredServer)?.name ?? null;
+  return pickBestdoriRegionalName(names, preferredServer, contextServer)?.name ?? null;
 }

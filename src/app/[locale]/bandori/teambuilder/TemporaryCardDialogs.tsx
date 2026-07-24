@@ -72,6 +72,7 @@ export type TemporaryCardEditorDialogProps = {
   bandId: number | null;
   characterBonusesById: Record<string, BandoriCharacterBonusState | undefined>;
   region: BandoriAssetRegion;
+  displayServer: BandoriCardServer;
   exists: boolean;
   onClose: () => void;
   onSave: (card: UserGameProfileCardRecord) => void;
@@ -138,6 +139,7 @@ export function TemporaryCardEditorDialog({
   bandId,
   characterBonusesById,
   region,
+  displayServer,
   exists,
   onClose,
   onSave,
@@ -153,6 +155,7 @@ export function TemporaryCardEditorDialog({
       bandId={bandId}
       characterBonusesById={characterBonusesById}
       region={region}
+      displayServer={displayServer}
       saving={false}
       title={t("editorTitle")}
       saveLabel={exists ? t("save") : t("add")}

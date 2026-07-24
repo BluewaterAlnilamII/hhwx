@@ -1,7 +1,16 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
-import { bandoriCardCatalogTransforms } from "../src/components/bandori/card-picker/catalog.ts";
+import {
+  bandoriCardCatalogTransforms,
+  buildBandoriCardCatalog,
+} from "../src/components/bandori/card-picker/catalog.ts";
+import {
+  normalizeAccountAvatarCardServer,
+  resolveStoredAccountAvatarCardIdentity,
+} from "../src/lib/account-avatar-card.ts";
+import { pickGameProfileCardName } from "../src/lib/bandori-game-profile-card.ts";
+import { normalizeBandoriSkillLabel } from "../src/lib/bandori-skill-label.ts";
 import {
   expandBandoriCardCatalog,
   getBandoriCardServerIndex,
@@ -15,6 +24,7 @@ import {
   validateBandoriCardServerExtensions,
 } from "../src/lib/bandori-card-server-extensions.ts";
 import {
+  getBandoriRegionalDisplayOrder,
   getBandoriRegionalPreferenceOrder,
   normalizeBandoriServer,
   pickBandoriRegionalText,
@@ -53,9 +63,32 @@ test("regional display values use preferred server then JP, EN, TW, CN fallback"
   assert.equal(normalizeBandoriServer("cn"), null);
   assert.deepEqual(getBandoriRegionalPreferenceOrder(3), [3, 0, 1, 2]);
   assert.deepEqual(getBandoriRegionalPreferenceOrder(2), [2, 0, 1, 3]);
+  assert.deepEqual(getBandoriRegionalDisplayOrder(3, 1), [1, 3, 0, 2]);
+  assert.deepEqual(getBandoriRegionalDisplayOrder(1, 1), [1, 0, 2, 3]);
   assert.equal(pickBandoriRegionalText(["JP", "EN", "", "CN"], 3), "CN");
+  assert.equal(pickBandoriRegionalText(["JP", "EN", "", "CN"], 3, 1), "EN");
   assert.equal(pickBandoriRegionalText(["JP", "EN", "", ""], 3), "JP");
   assert.equal(pickBandoriRegionalText(["", "EN", "", ""], 2), "EN");
+  assert.equal(
+    pickGameProfileCardName(
+      1,
+      { prefix: ["JP Card", "EN Card", "TW Card", "CN Card"] },
+      3,
+      "en",
+      1,
+    ),
+    "EN Card",
+  );
+  assert.equal(
+    normalizeBandoriSkillLabel(
+      { description: ["JP skill", "EN skill", "TW skill", "CN skill"] },
+      1,
+      1,
+      3,
+      1,
+    ),
+    "EN skill",
+  );
 });
 
 test("master cards list and detail routes expose direct data without storage metadata", async () => {
@@ -94,12 +127,164 @@ test("card consumers share the canonical Cards dataset without the sparse route"
   assert.doesNotMatch(comments, /fetchBestdoriMasterDataset\("cards"\)/u);
   assert.match(profile, /readBandoriCardsApiDataset\(\)/u);
   assert.match(profile, /ACCOUNT_AVATAR_CARD_SERVER_REQUIRED/u);
+  assert.match(profile, /materializeBandoriCardForServer/u);
+  assert.match(profile, /avatar_card_server: avatarCardServer/u);
   assert.doesNotMatch(profile, /fetchBestdoriMasterDataset\("cards"\)/u);
-  assert.match(avatarControl, /excludeEntityCollisions/u);
+  assert.match(avatarControl, /avatarCardServer: draftValue\?\.entityServer/u);
+  assert.doesNotMatch(avatarControl, /excludeEntityCollisions/u);
   assert.match(picker, /useBandoriCardsMaster\(server\)/u);
+  assert.match(picker, /entityServer: card\.entityServer/u);
   assert.doesNotMatch(picker, /\?server=/u);
   assert.match(cardsHook, /"\/api\/bandori\/master\/cards"/u);
   assert.match(temporaryDialogs, /server=\{server\}/u);
+});
+
+test("avatar collision identity is persisted and propagated to public avatar consumers", async () => {
+  const [
+    migration,
+    identityMigration,
+    schema,
+    comments,
+    commentTypes,
+    commentItem,
+    toolbar,
+    avatar,
+  ] = await Promise.all([
+    readSource("supabase/migrations/20260724100812_add_avatar_card_server.sql"),
+    readSource("supabase/migrations/20260724185700_enforce_avatar_card_identity.sql"),
+    readSource("supabase/schema/auth_schema.sql"),
+    readSource("src/lib/comments.ts"),
+    readSource("src/app/[locale]/bandori/eventtracker/commentTypes.ts"),
+    readSource("src/app/[locale]/bandori/eventtracker/CommentItem.tsx"),
+    readSource("src/components/Toolbar.tsx"),
+    readSource("src/components/account/AccountCardAvatar.tsx"),
+  ]);
+
+  assert.match(migration, /ADD COLUMN IF NOT EXISTS avatar_card_server SMALLINT/u);
+  assert.match(migration, /avatar_card_server IN \(1, 3\)/u);
+  assert.match(identityMigration, /avatar_card_id BETWEEN 10001 AND 10010/u);
+  assert.match(identityMigration, /avatar_card_id NOT BETWEEN 10001 AND 10010/u);
+  assert.match(identityMigration, /NOTIFY pgrst, 'reload schema'/u);
+  assert.match(schema, /avatar_card_server\s+SMALLINT/u);
+  assert.match(comments, /avatar_card_server/u);
+  assert.match(commentTypes, /entityServer: BandoriServer \| null/u);
+  assert.match(commentItem, /entityServer=\{comment\.avatar\.entityServer\}/u);
+  assert.match(toolbar, /avatarCardServer/u);
+  assert.match(avatar, /useBandoriCardsMaster\(\s*entityServer \?\? undefined/u);
+});
+
+test("avatar entity normalization keeps only explicit EN/CN collision identities", () => {
+  assert.equal(normalizeAccountAvatarCardServer(10001, 1), 1);
+  assert.equal(normalizeAccountAvatarCardServer(10001, "3"), 3);
+  assert.equal(normalizeAccountAvatarCardServer(10001, 0), null);
+  assert.equal(normalizeAccountAvatarCardServer(9999, 3), null);
+  assert.deepEqual(resolveStoredAccountAvatarCardIdentity(10001, null), {
+    cardId: 1,
+    entityServer: null,
+  });
+  assert.deepEqual(resolveStoredAccountAvatarCardIdentity(10001, 3), {
+    cardId: 10001,
+    entityServer: 3,
+  });
+  assert.deepEqual(resolveStoredAccountAvatarCardIdentity(9999, 3), {
+    cardId: 9999,
+    entityServer: null,
+  });
+});
+
+test("profile-bound card displays receive profile server context without changing event bonus cards", async () => {
+  const [
+    profileCardsPage,
+    teamBuilderPage,
+    preferencesPanel,
+    preferenceEntries,
+  ] = await Promise.all([
+    readSource("src/app/[locale]/bandori/game-profiles/[profileId]/cards/page.tsx"),
+    readSource("src/app/[locale]/bandori/teambuilder/page.tsx"),
+    readSource("src/app/[locale]/bandori/teambuilder/CardPreferencesPanel.tsx"),
+    readSource("src/app/[locale]/bandori/teambuilder/useTeamBuilderPreferenceCardEntries.ts"),
+  ]);
+
+  assert.match(profileCardsPage, /displayServer=\{profileServer\}/u);
+  assert.match(profileCardsPage, /preferredServer,\s*profileServer,\s*fallbackLabels/u);
+  assert.match(teamBuilderPage, /displayServer=\{selectedProfileCardServer\}/u);
+  assert.match(teamBuilderPage, /canonicalData: canonicalCards/u);
+  assert.match(teamBuilderPage, /<EventBonusPanel[\s\S]*?cardMetadata=\{canonicalCardMetadata\}/u);
+  assert.match(teamBuilderPage, /<TeamBuilderCardPreferencesPanel[\s\S]*?cardMetadata=\{profileCardMetadata\}/u);
+  assert.match(preferencesPanel, /displayServer: BandoriServer/u);
+  assert.match(preferenceEntries, /contextServer: BandoriServer/u);
+
+  const bonusCardBody = teamBuilderPage.slice(
+    teamBuilderPage.indexOf("function BonusCardThumbnail"),
+    teamBuilderPage.indexOf("function TeamBuilderCardTile"),
+  );
+  assert.doesNotMatch(bonusCardBody, /displayServer=/u);
+});
+
+test("avatar picker expands every registered collision into distinct EN and CN resources", () => {
+  const resources = [
+    [10001, 21, "res021500", 22, "res022900"],
+    [10002, 22, "res022500", 5, "res005900"],
+    [10003, 23, "res023500", 7, "res007900"],
+    [10004, 24, "res024500", 13, "res013900"],
+    [10005, 25, "res025500", 16, "res016900"],
+    [10006, 5, "res005501", 24, "res024900"],
+    [10007, 24, "res024501", 18, "res018900"],
+    [10008, 17, "res017501", 14, "res014900"],
+    [10009, 11, "res011501", 18, "res018901"],
+    [10010, 13, "res013501", 25, "res025900"],
+  ];
+  const cards = Object.fromEntries(resources.map(([
+    cardId,
+    enCharacterId,
+    enResourceSetName,
+    cnCharacterId,
+    cnResourceSetName,
+  ]) => [String(cardId), {
+    characterId: enCharacterId,
+    skillId: 1,
+    rarity: 2,
+    attribute: "powerful",
+    levelLimit: 30,
+    resourceSetName: enResourceSetName,
+    prefix: ["", `EN ${cardId}`, "", `CN ${cardId}`],
+    releasedAt: [null, 1, null, 1],
+    stat: {},
+    type: "campaign",
+    serverExtensions: [
+      null,
+      {},
+      null,
+      {
+        characterId: cnCharacterId,
+        resourceSetName: cnResourceSetName,
+        type: "limited",
+      },
+    ],
+  }]));
+  const characters = Object.fromEntries(
+    Array.from(new Set(resources.flatMap(([, enCharacterId, , cnCharacterId]) => [
+      enCharacterId,
+      cnCharacterId,
+    ]))).map((characterId) => [String(characterId), {
+      bandId: 1,
+      nickname: ["", `EN Character ${characterId}`, "", `CN Character ${characterId}`],
+    }]),
+  );
+
+  const catalog = buildBandoriCardCatalog(cards, characters, 3, "zh-CN", true);
+  assert.equal(catalog.length, 20);
+  for (const [cardId, , enResourceSetName, , cnResourceSetName] of resources) {
+    const entries = catalog.filter((entry) => entry.cardId === cardId);
+    assert.deepEqual(entries.map((entry) => entry.cardRef).sort(), [
+      `1:${cardId}`,
+      `3:${cardId}`,
+    ]);
+    assert.deepEqual(entries.map((entry) => entry.resourceSetName).sort(), [
+      enResourceSetName,
+      cnResourceSetName,
+    ].sort());
+  }
 });
 
 test("all Master consumers reuse the positive-increment training predicate", async () => {

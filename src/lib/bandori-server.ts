@@ -40,21 +40,30 @@ export function getBandoriServerFromCode(value: unknown): BandoriServer | null {
 export function getBandoriRegionalPreferenceOrder(
   preferredServer: BandoriServer,
 ): readonly BandoriServer[] {
+  return getBandoriRegionalDisplayOrder(preferredServer);
+}
+
+export function getBandoriRegionalDisplayOrder(
+  preferredServer: BandoriServer,
+  contextServer?: BandoriServer | null,
+): readonly BandoriServer[] {
   return [
+    ...(contextServer === null || contextServer === undefined ? [] : [contextServer]),
     preferredServer,
-    ...BANDORI_SERVER_FALLBACK_ORDER.filter((server) => server !== preferredServer),
-  ];
+    ...BANDORI_SERVER_FALLBACK_ORDER,
+  ].filter((server, index, order) => order.indexOf(server) === index);
 }
 
 export function pickBandoriRegionalValue<T>(
   slots: readonly T[] | null | undefined,
   preferredServer: BandoriServer,
   isAvailable: (value: T | undefined) => boolean = (value) => value !== null && value !== undefined,
+  contextServer?: BandoriServer | null,
 ): T | null {
   if (!Array.isArray(slots)) {
     return null;
   }
-  for (const server of getBandoriRegionalPreferenceOrder(preferredServer)) {
+  for (const server of getBandoriRegionalDisplayOrder(preferredServer, contextServer)) {
     const value = slots[server];
     if (isAvailable(value)) {
       return value as T;
@@ -66,11 +75,13 @@ export function pickBandoriRegionalValue<T>(
 export function pickBandoriRegionalText(
   slots: readonly unknown[] | null | undefined,
   preferredServer: BandoriServer,
+  contextServer?: BandoriServer | null,
 ): string | null {
   const value = pickBandoriRegionalValue(
     slots,
     preferredServer,
     (candidate) => typeof candidate === "string" && candidate.trim().length > 0,
+    contextServer,
   );
   return typeof value === "string" ? value.trim() : null;
 }

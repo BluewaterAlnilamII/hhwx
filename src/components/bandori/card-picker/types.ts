@@ -5,6 +5,7 @@ export type BandoriCardArtVariant = "normal" | "after_training";
 
 export type BandoriCardPickerValue = {
   cardId: number;
+  entityServer: BandoriServer | null;
   trainType: BandoriCardArtVariant;
 };
 

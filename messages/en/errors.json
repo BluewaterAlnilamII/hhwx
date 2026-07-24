@@ -24,6 +24,7 @@
     "PROFILE_CREATE_FAILED": "Failed to create account profile",
     "ACCOUNT_PROFILE_UPDATE_FAILED": "Failed to update account profile",
     "INVALID_AVATAR_CARD_ID": "Choose a valid avatar card",
+    "ACCOUNT_AVATAR_CARD_SERVER_REQUIRED": "Choose the EN or CN version of this card",
     "INVALID_AVATAR_CARD_TRAIN_TYPE": "Choose a valid card art version",
     "AVATAR_CARD_NOT_FOUND": "The selected card does not exist or is missing card art",
     "INVALID_COMMENT_CONTENT": "Comment content is invalid",

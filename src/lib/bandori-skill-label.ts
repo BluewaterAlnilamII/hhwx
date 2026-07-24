@@ -13,9 +13,13 @@ export type BandoriSkillLabelMaster = BestdoriSkillMaster & {
   };
 };
 
-function pickRegionalText(value: unknown, preferredServer: BandoriServer): string {
+function pickRegionalText(
+  value: unknown,
+  preferredServer: BandoriServer,
+  contextServer?: BandoriServer | null,
+): string {
   if (Array.isArray(value)) {
-    return pickBandoriRegionalText(value, preferredServer) ?? "";
+    return pickBandoriRegionalText(value, preferredServer, contextServer) ?? "";
   }
   return typeof value === "string" ? value.trim() : "";
 }
@@ -56,9 +60,10 @@ export function normalizeBandoriSkillLabel(
   skillLevel: unknown,
   fallbackLevel = 1,
   preferredServer: BandoriServer = DEFAULT_BANDORI_PREFERRED_SERVER,
+  contextServer?: BandoriServer | null,
 ): string {
-  const description = pickRegionalText(skill?.description, preferredServer)
-    || pickRegionalText(skill?.simpleDescription, preferredServer);
+  const description = pickRegionalText(skill?.description, preferredServer, contextServer)
+    || pickRegionalText(skill?.simpleDescription, preferredServer, contextServer);
   const duration = getSkillDurationByLevel(skill, skillLevel, fallbackLevel);
   const onceEffectValue = getSkillOnceEffectValueByLevel(skill, skillLevel, fallbackLevel);
   const durationText = duration !== null ? `${formatSkillNumber(duration)}秒` : "";
