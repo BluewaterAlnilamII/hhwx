@@ -6,13 +6,21 @@ import { useLocale, useTranslations } from "next-intl";
 import { useSearchParams } from "next/navigation";
 import { Link, usePathname } from "@/i18n/navigation";
 import AccountCardAvatar from "@/components/account/AccountCardAvatar";
-import { useCachedFetch } from "@/hooks/useCachedFetch";
+import { useBandoriCardsMaster } from "@/hooks/useBandoriCardsMaster";
 import { useBandoriCardsAssetIndex } from "@/hooks/useBandoriPublicAssetIndex";
 import { buildLocalizedPathname, routing, type AppLocale } from "@/i18n/routing";
 import { type AccountAvatarCardTrainType } from "@/lib/account-avatar-defaults";
 import { getApiErrorMessage, parseApiSuccessData } from "@/lib/api-contracts";
-import { type BandoriAssetRegion } from "@/lib/bandori-asset-proxy";
+import { pickGameProfileCardName } from "@/lib/bandori-game-profile-card";
+import {
+    BANDORI_SERVER_CODES,
+    BANDORI_SERVERS,
+} from "@/lib/bandori-server";
 import { buildAuthPath, clearAuthProfileSummaryCache, getSafeSession, readAuthProfileSummary, supabase } from "@/lib/supabase";
+import {
+    useBandoriPreferencesStore,
+    useBandoriPreferredServer,
+} from "@/store/useBandoriPreferencesStore";
 import { useGameStore } from "@/store/useGameStore";
 
 interface ToolbarProps {
@@ -28,22 +36,10 @@ type ToolbarAccountProfile = {
     avatarCardTrainType: AccountAvatarCardTrainType;
 };
 
-type CardMetadataResponse = {
-    cards?: Record<string, {
-        displayName?: string | null;
-        resourceSetName?: string;
-        assetRegion?: BandoriAssetRegion;
-    }>;
-};
-
 const NOTIFICATIONS_UPDATED_EVENT = "hhwx:notifications-updated";
 const toolbarIconButtonClassName = "group relative flex h-9 w-9 items-center justify-center rounded-[15px] border border-white/45 bg-white/22 text-left text-white shadow-[0_6px_16px_rgba(122,61,0,0.16)] transition duration-200 hover:-translate-y-0.5 hover:scale-[1.03] hover:border-white/75 hover:bg-white/34 hover:shadow-[0_10px_24px_rgba(122,61,0,0.22)]";
 const toolbarIconInnerClassName = "relative flex h-7 w-7 items-center justify-center rounded-[13px] bg-[#fff4db] text-[#c76400] transition duration-200 group-hover:scale-105 group-hover:bg-[#fff7e7]";
 const toolbarMenuClassName = "absolute right-0 top-full mt-3 w-64 overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-[0_20px_60px_rgba(15,23,42,0.16)]";
-
-function transformCardMetadata(raw: unknown): CardMetadataResponse {
-    return parseApiSuccessData<CardMetadataResponse>(raw) ?? {};
-}
 
 function formatUnreadCount(count: number): string {
     return count > 99 ? "99+" : String(count);
@@ -67,6 +63,8 @@ function LanguageMenuContent({ pathname, currentLocale, onSelect }: LanguageMenu
     const searchParams = useSearchParams();
     const t = useTranslations("navigation.toolbar");
     const languageT = useTranslations("common.language");
+    const preferredServer = useBandoriPreferredServer();
+    const setPreferredServer = useBandoriPreferencesStore((state) => state.setPreferredServer);
     const [currentHash, setCurrentHash] = useState(() => (
         typeof window === "undefined" ? "" : window.location.hash
     ));
@@ -123,6 +121,32 @@ function LanguageMenuContent({ pathname, currentLocale, onSelect }: LanguageMenu
                     );
                 })}
             </div>
+            <div className="border-t border-slate-100 px-5 py-3">
+                <div className="mb-2 text-xs font-semibold text-slate-500">
+                    {currentLocale === "en" ? "Preferred server" : "首选服务器"}
+                </div>
+                <div className="grid grid-cols-4 gap-1.5">
+                    {BANDORI_SERVERS.map((server) => {
+                        const label = BANDORI_SERVER_CODES[server].toUpperCase();
+                        const selected = server === preferredServer;
+                        return (
+                            <button
+                                key={server}
+                                type="button"
+                                onClick={() => setPreferredServer(server)}
+                                aria-pressed={selected}
+                                className={`rounded-lg px-2 py-1.5 text-xs font-bold transition ${
+                                    selected
+                                        ? "bg-sky-100 text-sky-700"
+                                        : "bg-slate-50 text-slate-600 hover:bg-slate-100"
+                                }`}
+                            >
+                                {label}
+                            </button>
+                        );
+                    })}
+                </div>
+            </div>
         </div>
     );
 }
@@ -144,6 +168,7 @@ export default function Toolbar({ showDebugButton = true, isSidebarOpen = false,
     const locale = useLocale() as AppLocale;
     const t = useTranslations("navigation.toolbar");
     const languageT = useTranslations("common.language");
+    const preferredServer = useBandoriPreferredServer();
     const { userId, username, emailVerified, setAuth, logout, debugMode, toggleDebugMode } = useGameStore();
     const [showMenu, setShowMenu] = useState(false);
     const [showLanguageMenu, setShowLanguageMenu] = useState(false);
@@ -161,14 +186,21 @@ export default function Toolbar({ showDebugButton = true, isSidebarOpen = false,
     useBandoriCardsAssetIndex(Boolean(userId && avatarCardId));
     const notificationUnreadCount = notificationUnreadState?.userId === userId ? notificationUnreadState.unreadCount : 0;
     const notificationBadgeLabel = notificationUnreadCount > 0 ? formatUnreadCount(notificationUnreadCount) : null;
-    const cardMetadataUrl = userId && avatarCardId ? `/api/bandori/cards?ids=${avatarCardId}` : null;
-    const { data: cardMetadata } = useCachedFetch(
-        userId && avatarCardId ? `toolbar-account-avatar-card-v1-${avatarCardId}` : null,
-        cardMetadataUrl,
-        transformCardMetadata,
-        { staleTimeMs: 86400000 },
+    const { data: cardMetadata } = useBandoriCardsMaster(
+        undefined,
+        Boolean(userId && avatarCardId),
     );
-    const selectedCardMetadata = avatarCardId ? cardMetadata?.cards?.[String(avatarCardId)] : null;
+    const selectedCardMetadata = avatarCardId
+        ? cardMetadata?.[String(avatarCardId)]
+        : null;
+    const selectedCardDisplayName = avatarCardId
+        ? pickGameProfileCardName(
+            avatarCardId,
+            selectedCardMetadata ?? undefined,
+            preferredServer,
+            locale,
+        )
+        : null;
 
     useEffect(() => {
         let disposed = false;
@@ -435,8 +467,7 @@ export default function Toolbar({ showDebugButton = true, isSidebarOpen = false,
                                         cardId={avatarCardId}
                                         trainType={toolbarProfile?.avatarCardTrainType}
                                         resourceSetName={selectedCardMetadata?.resourceSetName}
-                                        displayName={selectedCardMetadata?.displayName}
-                                        assetRegion={selectedCardMetadata?.assetRegion}
+                                        displayName={selectedCardDisplayName}
                                         size="toolbar"
                                         className="shadow-none ring-1 ring-white/80"
                                     />

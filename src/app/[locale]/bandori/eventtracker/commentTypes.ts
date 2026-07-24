@@ -1,12 +1,8 @@
 import type { AccountAvatarCardTrainType } from "@/lib/account-avatar-defaults";
-import type { BandoriAssetRegion } from "@/lib/bandori-asset-proxy";
 
 export type CommentAvatar = {
   cardId: number;
   trainType: AccountAvatarCardTrainType;
-  resourceSetName: string | null;
-  assetRegion: BandoriAssetRegion;
-  displayName: string | null;
 };
 
 export type CommentReactionParticipant = {

@@ -9,6 +9,7 @@ import { type BandoriAssetRegion } from "@/lib/bandori-asset-proxy";
 import { BANDORI_CHARACTER_GROUPS, compareBandoriCharacterIds } from "@/lib/bandori-character-groups";
 import { type BandoriCharacterBonusState } from "@/lib/bandori-team-calculator";
 import { type UserGameProfileCardRecord } from "@/lib/user-game-profile-payload";
+import { useBandoriPreferredServer } from "@/store/useBandoriPreferencesStore";
 import {
   CARD_PARAMETER_RARITY_THRESHOLD_OPTIONS,
   DEFAULT_OWNED_CARD_PARAMETER_PREFERENCES,
@@ -80,6 +81,7 @@ export default function TeamBuilderCardPreferencesPanel({
   onBulkSetExcludedCards,
 }: TeamBuilderCardPreferencesPanelProps) {
   const locale = useLocale() as AppLocale;
+  const preferredServer = useBandoriPreferredServer();
   const t = useTranslations("bandori.teamBuilder.preferences");
   const excludedCardIdSet = useMemo(
     () => new Set(preferences.excludedCardIds),
@@ -113,9 +115,18 @@ export default function TeamBuilderCardPreferencesPanel({
       skills,
       characterBonusesById,
       locale,
+      preferredServer,
     ),
     card,
-  } satisfies TeamBuilderPreferenceCardEntry & { card: TemporaryGameProfileCard })), [cardMetadata, characterBonusesById, characters, locale, preferences.temporaryCards, skills]);
+  } satisfies TeamBuilderPreferenceCardEntry & { card: TemporaryGameProfileCard })), [
+    cardMetadata,
+    characterBonusesById,
+    characters,
+    locale,
+    preferences.temporaryCards,
+    preferredServer,
+    skills,
+  ]);
 
   const bandOptions = useMemo(() => {
     const knownLabels = new Map(BANDORI_CHARACTER_GROUPS.map((group) => [group.bandId, group.label]));

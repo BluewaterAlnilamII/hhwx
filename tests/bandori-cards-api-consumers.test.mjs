@@ -14,6 +14,11 @@ import {
   resolveBandoriCardMapForServer,
   validateBandoriCardServerExtensions,
 } from "../src/lib/bandori-card-server-extensions.ts";
+import {
+  getBandoriRegionalPreferenceOrder,
+  normalizeBandoriServer,
+  pickBandoriRegionalText,
+} from "../src/lib/bandori-server.ts";
 
 const readSource = (path) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
 
@@ -28,11 +33,29 @@ test("card picker consumes cards directly from the API data envelope", () => {
     bandoriCardCatalogTransforms.cards({ success: true, data: { "10048": card } }),
     { "10048": card },
   );
-  assert.deepEqual(
-    bandoriCardCatalogTransforms.cards({ success: true, data: { payload: { "10048": card } } }),
-    { "10048": card },
+  assert.throws(
+    () => bandoriCardCatalogTransforms.cards({
+      success: true,
+      data: { payload: { "10048": card } },
+    }),
+    /invalid card record: payload/u,
   );
-  assert.deepEqual(bandoriCardCatalogTransforms.cards({ success: false }), {});
+  assert.throws(
+    () => bandoriCardCatalogTransforms.cards({ success: false }),
+    /invalid dataset/u,
+  );
+});
+
+test("regional display values use preferred server then JP, EN, TW, CN fallback", () => {
+  assert.equal(normalizeBandoriServer("0"), 0);
+  assert.equal(normalizeBandoriServer("3"), 3);
+  assert.equal(normalizeBandoriServer("03"), null);
+  assert.equal(normalizeBandoriServer("cn"), null);
+  assert.deepEqual(getBandoriRegionalPreferenceOrder(3), [3, 0, 1, 2]);
+  assert.deepEqual(getBandoriRegionalPreferenceOrder(2), [2, 0, 1, 3]);
+  assert.equal(pickBandoriRegionalText(["JP", "EN", "", "CN"], 3), "CN");
+  assert.equal(pickBandoriRegionalText(["JP", "EN", "", ""], 3), "JP");
+  assert.equal(pickBandoriRegionalText(["", "EN", "", ""], 2), "EN");
 });
 
 test("master cards list and detail routes expose direct data without storage metadata", async () => {
@@ -47,42 +70,42 @@ test("master cards list and detail routes expose direct data without storage met
   assert.doesNotMatch(detailRoute, /jsonSuccess\(\{\s*\.\.\.result,\s*cardId\s*\}/u);
 });
 
-test("sparse cards route preserves its cards wrapper and has no Bestdori fallback", async () => {
-  const route = await readSource("src/app/api/bandori/cards/route.ts");
-
-  assert.match(route, /readBandoriCardsApiDataset\(\)/u);
-  assert.match(route, /return jsonSuccess\(\{ cards \},/u);
-  assert.doesNotMatch(route, /bestdori\.com|BESTDORI_CARDS_URL|fetch\(/iu);
+test("legacy sparse cards route is deleted", async () => {
+  await assert.rejects(
+    readSource("src/app/api/bandori/cards/route.ts"),
+    /ENOENT/u,
+  );
 });
 
-test("card consumers use direct data while tolerating stale cached wrappers", async () => {
+test("card consumers share the canonical Cards dataset without the sparse route", async () => {
   const worker = await readSource("src/app/[locale]/bandori/teambuilder/team-search-worker.ts");
   const comments = await readSource("src/lib/comments.ts");
   const profile = await readSource("src/app/api/account/profile/route.ts");
   const avatarControl = await readSource("src/app/[locale]/account/AccountAvatarCardControl.tsx");
   const picker = await readSource("src/components/bandori/card-picker/BandoriCardPicker.tsx");
+  const cardsHook = await readSource("src/hooks/useBandoriCardsMaster.ts");
   const temporaryDialogs = await readSource("src/app/[locale]/bandori/teambuilder/TemporaryCardDialogs.tsx");
 
   assert.match(worker, /type CardsResponse = Record</u);
   assert.match(worker, /normalizeCachedCardsResponse/u);
   assert.match(worker, /getCardsForServer/u);
   assert.match(worker, /resolvedCardsBySource/u);
-  assert.match(comments, /readBandoriCardsApiDataset\(\)/u);
+  assert.doesNotMatch(comments, /readBandoriCardsApiDataset\(\)/u);
   assert.doesNotMatch(comments, /fetchBestdoriMasterDataset\("cards"\)/u);
   assert.match(profile, /readBandoriCardsApiDataset\(\)/u);
   assert.match(profile, /ACCOUNT_AVATAR_CARD_SERVER_REQUIRED/u);
   assert.doesNotMatch(profile, /fetchBestdoriMasterDataset\("cards"\)/u);
   assert.match(avatarControl, /excludeEntityCollisions/u);
-  assert.match(picker, /\?server=\$\{server\}/u);
+  assert.match(picker, /useBandoriCardsMaster\(server\)/u);
+  assert.doesNotMatch(picker, /\?server=/u);
+  assert.match(cardsHook, /"\/api\/bandori\/master\/cards"/u);
   assert.match(temporaryDialogs, /server=\{server\}/u);
 });
 
 test("all Master consumers reuse the positive-increment training predicate", async () => {
   const paths = [
     "src/components/bandori/card-picker/catalog.ts",
-    "src/app/api/bandori/cards/route.ts",
     "src/app/api/account/profile/route.ts",
-    "src/lib/comments.ts",
     "src/lib/bandori-game-profile-card.ts",
     "src/app/[locale]/bandori/teambuilder/team-search-worker.ts",
   ];
@@ -210,16 +233,18 @@ test("registered same-ID collisions keep numeric card IDs and expand to server-s
     serverExtensions: [{}, {}, {}, {}],
   };
 
-  assert.equal(normalizeBandoriCardServer(" CN "), "cn");
+  assert.equal(normalizeBandoriCardServer("3"), 3);
+  assert.equal(normalizeBandoriCardServer("03"), null);
+  assert.equal(normalizeBandoriCardServer("cn"), null);
   assert.equal(normalizeBandoriCardServer("kr"), null);
-  assert.equal(getBandoriCardServerIndex("tw"), 2);
+  assert.equal(getBandoriCardServerIndex(2), 2);
   assert.equal(getBandoriCardServerName(3), "cn");
   assert.deepEqual(
-    parseBandoriCardServerQuery(new Request("https://example.test/api/cards?server=cn")),
-    { status: "valid", server: "cn" },
+    parseBandoriCardServerQuery(new Request("https://example.test/api/cards?server=3")),
+    { status: "valid", server: 3 },
   );
   assert.deepEqual(
-    parseBandoriCardServerQuery(new Request("https://example.test/api/cards?server=cn&server=en")),
+    parseBandoriCardServerQuery(new Request("https://example.test/api/cards?server=3&server=1")),
     { status: "invalid" },
   );
   assert.deepEqual(
@@ -269,8 +294,8 @@ test("registered same-ID collisions keep numeric card IDs and expand to server-s
     server,
   })), [
     { cardId: 1, cardRef: "1", server: null },
-    { cardId: 10001, cardRef: "en:10001", server: "en" },
-    { cardId: 10001, cardRef: "cn:10001", server: "cn" },
+    { cardId: 10001, cardRef: "1:10001", server: 1 },
+    { cardId: 10001, cardRef: "3:10001", server: 3 },
   ]);
   assert.deepEqual(catalog[1].card, {
     characterId: 21,

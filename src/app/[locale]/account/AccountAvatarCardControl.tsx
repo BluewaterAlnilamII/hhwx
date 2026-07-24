@@ -6,28 +6,17 @@ import { useTranslations } from "next-intl";
 import { Image as ImageIcon, Loader2, Save, X } from "lucide-react";
 import AccountCardAvatar from "@/components/account/AccountCardAvatar";
 import { BandoriCardPicker, type BandoriCardPickerValue } from "@/components/bandori/card-picker";
-import { useCachedFetch } from "@/hooks/useCachedFetch";
+import { useBandoriCardsMaster } from "@/hooks/useBandoriCardsMaster";
 import { useBandoriCardsAssetIndex } from "@/hooks/useBandoriPublicAssetIndex";
 import { parseApiSuccessData } from "@/lib/api-contracts";
+import { pickGameProfileCardName } from "@/lib/bandori-game-profile-card";
 import { getLocalizedApiErrorMessage } from "@/lib/localized-api-errors";
 import {
   DEFAULT_ACCOUNT_AVATAR_CARD_ID,
   DEFAULT_ACCOUNT_AVATAR_CARD_TRAIN_TYPE,
 } from "@/lib/account-avatar-defaults";
-import { type BandoriAssetRegion } from "@/lib/bandori-asset-proxy";
+import { useBandoriPreferredServer } from "@/store/useBandoriPreferencesStore";
 import { type AccountProfile, getAccessToken } from "./useAccountProfile";
-
-type CardMetadataResponse = {
-  cards?: Record<string, {
-    displayName?: string | null;
-    resourceSetName?: string;
-    assetRegion?: BandoriAssetRegion;
-  }>;
-};
-
-function transformCardMetadata(raw: unknown): CardMetadataResponse {
-  return parseApiSuccessData<CardMetadataResponse>(raw) ?? {};
-}
 
 function profileToPickerValue(profile: AccountProfile): BandoriCardPickerValue | null {
   return {
@@ -47,15 +36,15 @@ export default function AccountAvatarCardControl({
 }) {
   const t = useTranslations("account.avatar");
   const errorT = useTranslations("errors");
+  const preferredServer = useBandoriPreferredServer();
   useBandoriCardsAssetIndex();
-  const cardMetadataUrl = `/api/bandori/cards?ids=${profile.avatarCardId}`;
-  const { data: cardMetadata } = useCachedFetch(
-    `account-avatar-card-v2-${profile.avatarCardId}`,
-    cardMetadataUrl,
-    transformCardMetadata,
-    { staleTimeMs: 86400000 },
+  const { data: cardMetadata } = useBandoriCardsMaster();
+  const selectedCardMetadata = cardMetadata?.[String(profile.avatarCardId)];
+  const selectedCardDisplayName = pickGameProfileCardName(
+    profile.avatarCardId,
+    selectedCardMetadata ?? undefined,
+    preferredServer,
   );
-  const selectedCardMetadata = cardMetadata?.cards?.[String(profile.avatarCardId)];
   const [open, setOpen] = useState(false);
   const [draftValue, setDraftValue] = useState<BandoriCardPickerValue | null>(() => profileToPickerValue(profile));
   const [saving, setSaving] = useState(false);
@@ -132,8 +121,7 @@ export default function AccountAvatarCardControl({
           cardId={profile.avatarCardId}
           trainType={profile.avatarCardTrainType}
           resourceSetName={selectedCardMetadata?.resourceSetName}
-          displayName={selectedCardMetadata?.displayName}
-          assetRegion={selectedCardMetadata?.assetRegion}
+          displayName={selectedCardDisplayName}
           size={size}
         />
         <span className="absolute -bottom-1 -right-1 inline-flex h-6 w-6 items-center justify-center rounded-full border border-white/80 bg-white text-sky-700 shadow-sm transition group-hover:scale-105">

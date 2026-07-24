@@ -6,6 +6,11 @@ import { useLocale, useTranslations } from "next-intl";
 import { getApiErrorMessage, parseApiSuccessData } from "@/lib/api-contracts";
 import { type AppLocale } from "@/i18n/routing";
 import {
+  pickBandoriRegionalText,
+  type BandoriServer,
+} from "@/lib/bandori-server";
+import { useBandoriPreferredServer } from "@/store/useBandoriPreferencesStore";
+import {
   decodeCompressedGameProfilePayload,
   compactMissionBonusRecords,
   compactPotentialRecords,
@@ -234,43 +239,23 @@ async function requestMetadata(): Promise<MetadataPayload> {
   };
 }
 
-function pickNonEmptyText(...values: Array<string | null | undefined>): string | null {
-  for (const value of values) {
-    const trimmed = value?.trim();
-    if (trimmed) {
-      return trimmed;
-    }
-  }
-  return null;
-}
-
 function pickCharacterName(
   character: CharacterRecord | undefined,
   characterId: number,
-  locale: AppLocale,
+  preferredServer: BandoriServer,
   fallback: (characterId: number) => string,
 ): string {
-  const name = locale === "en"
-    ? pickNonEmptyText(
-      character?.nicknameEn,
-      character?.characterNameEn,
-      character?.nicknameJp,
-      character?.characterNameJp,
-      character?.nicknameCn,
-      character?.nicknameTw,
-      character?.characterNameCn,
-      character?.characterNameTw,
-    )
-    : pickNonEmptyText(
-      character?.nicknameCn,
-      character?.nicknameTw,
-      character?.nicknameJp,
-      character?.nicknameEn,
-      character?.characterNameCn,
-      character?.characterNameTw,
-      character?.characterNameJp,
-      character?.characterNameEn,
-    );
+  const name = pickBandoriRegionalText([
+    character?.nicknameJp,
+    character?.nicknameEn,
+    character?.nicknameTw,
+    character?.nicknameCn,
+  ], preferredServer) ?? pickBandoriRegionalText([
+    character?.characterNameJp,
+    character?.characterNameEn,
+    character?.characterNameTw,
+    character?.characterNameCn,
+  ], preferredServer);
 
   return name ?? fallback(characterId);
 }
@@ -278,12 +263,10 @@ function pickCharacterName(
 function pickAreaItemName(
   areaItem: AreaItemMetadata | undefined,
   areaItemId: number | null,
-  locale: AppLocale,
+  preferredServer: BandoriServer,
   fallback: { areaItem: (areaItemId: number) => string; genericAreaItem: string },
 ): string {
-  const name = locale === "en"
-    ? pickNonEmptyText(areaItem?.areaItemName?.[1], areaItem?.areaItemName?.[0], areaItem?.areaItemName?.[3], areaItem?.areaItemName?.[2])
-    : pickNonEmptyText(areaItem?.areaItemName?.[3], areaItem?.areaItemName?.[2], areaItem?.areaItemName?.[1], areaItem?.areaItemName?.[0]);
+  const name = pickBandoriRegionalText(areaItem?.areaItemName, preferredServer);
 
   return name ?? (areaItemId ? fallback.areaItem(areaItemId) : fallback.genericAreaItem);
 }
@@ -494,6 +477,7 @@ function BonusFields({
 export default function GameProfileItemsPage({ params }: { params: Promise<{ profileId: string }> }) {
   const { profileId } = use(params);
   const locale = useLocale() as AppLocale;
+  const preferredServer = useBandoriPreferredServer();
   const t = useTranslations("bandori.gameProfiles.items");
   const commonT = useTranslations("common");
   const { userId, authReady, loadingProfile, profileError } = useLocalizedAccountProfile();
@@ -606,7 +590,12 @@ export default function GameProfileItemsPage({ params }: { params: Promise<{ pro
         .sort((left, right) => compareBandoriCharacterIds(left.characterId, right.characterId))
         .map((character): CharacterBonusRow => ({
           characterId: character.characterId,
-          characterName: pickCharacterName(character, character.characterId, locale, labels.character),
+          characterName: pickCharacterName(
+            character,
+            character.characterId,
+            preferredServer,
+            labels.character,
+          ),
           potential: potentialByCharacter.get(character.characterId) ?? createPotential(character.characterId),
           training: missionByCharacterAndType.get(`${character.characterId}:TRAINING`) ?? createMissionBonus(character.characterId, "TRAINING"),
           collection: missionByCharacterAndType.get(`${character.characterId}:COLLECTION`) ?? createMissionBonus(character.characterId, "COLLECTION"),
@@ -614,7 +603,13 @@ export default function GameProfileItemsPage({ params }: { params: Promise<{ pro
 
       return { ...group, rows };
     }).filter((group) => group.rows.length > 0);
-  }, [items.characterMissionBonuses, items.characterPotentials, labels, locale, metadata.characters]);
+  }, [
+    items.characterMissionBonuses,
+    items.characterPotentials,
+    labels,
+    metadata.characters,
+    preferredServer,
+  ]);
 
   const baselineCharacterRows = useMemo(() => {
     const potentialByCharacter = new Map(baselineItems.characterPotentials.map((record) => [record.characterId, record]));
@@ -816,7 +811,12 @@ export default function GameProfileItemsPage({ params }: { params: Promise<{ pro
                         const areaItem = item.areaItemId ? metadata.areaItems[String(item.areaItemId)] : undefined;
                         const baseline = item.areaItemId ? baselineAreaItemsById.get(item.areaItemId) : undefined;
                         const maxLevel = getAreaItemMaxLevel(areaItem, item.level);
-                        const areaItemName = pickAreaItemName(areaItem, item.areaItemId, locale, labels);
+                        const areaItemName = pickAreaItemName(
+                          areaItem,
+                          item.areaItemId,
+                          preferredServer,
+                          labels,
+                        );
                         return (
                           <div key={item.itemKey} className="grid gap-2 rounded-lg border border-slate-100 px-2.5 py-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:px-3">
                             <div className="min-w-0">
@@ -848,7 +848,7 @@ export default function GameProfileItemsPage({ params }: { params: Promise<{ pro
                       const itemName = pickAreaItemName(
                         item.areaItemId ? metadata.areaItems[String(item.areaItemId)] : undefined,
                         item.areaItemId,
-                        locale,
+                        preferredServer,
                         labels,
                       );
                       return (

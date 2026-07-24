@@ -1,4 +1,9 @@
 import type { BestdoriSkillMaster } from "@/lib/bandori-team-calculator";
+import {
+  DEFAULT_BANDORI_PREFERRED_SERVER,
+  pickBandoriRegionalText,
+  type BandoriServer,
+} from "@/lib/bandori-server";
 
 export type BandoriSkillLabelMaster = BestdoriSkillMaster & {
   description?: Array<string | null>;
@@ -8,9 +13,9 @@ export type BandoriSkillLabelMaster = BestdoriSkillMaster & {
   };
 };
 
-function pickRegionalText(value: unknown): string {
+function pickRegionalText(value: unknown, preferredServer: BandoriServer): string {
   if (Array.isArray(value)) {
-    return String(value[3] ?? value[2] ?? value[1] ?? value[0] ?? value[4] ?? "").trim();
+    return pickBandoriRegionalText(value, preferredServer) ?? "";
   }
   return typeof value === "string" ? value.trim() : "";
 }
@@ -50,8 +55,10 @@ export function normalizeBandoriSkillLabel(
   skill: BandoriSkillLabelMaster | undefined,
   skillLevel: unknown,
   fallbackLevel = 1,
+  preferredServer: BandoriServer = DEFAULT_BANDORI_PREFERRED_SERVER,
 ): string {
-  const description = pickRegionalText(skill?.description) || pickRegionalText(skill?.simpleDescription);
+  const description = pickRegionalText(skill?.description, preferredServer)
+    || pickRegionalText(skill?.simpleDescription, preferredServer);
   const duration = getSkillDurationByLevel(skill, skillLevel, fallbackLevel);
   const onceEffectValue = getSkillOnceEffectValueByLevel(skill, skillLevel, fallbackLevel);
   const durationText = duration !== null ? `${formatSkillNumber(duration)}秒` : "";

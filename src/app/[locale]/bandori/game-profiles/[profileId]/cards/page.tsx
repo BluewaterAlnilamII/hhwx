@@ -2,7 +2,7 @@
 
 import { Link } from "@/i18n/navigation";
 import { memo, use, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
-import { useLocale, useTranslations } from "next-intl";
+import { useTranslations } from "next-intl";
 import {
   Check,
   Filter,
@@ -10,8 +10,11 @@ import {
   Search,
 } from "lucide-react";
 import { getApiErrorMessage, parseApiSuccessData } from "@/lib/api-contracts";
-import { type AppLocale } from "@/i18n/routing";
 import { type BandoriAssetRegion } from "@/lib/bandori-asset-proxy";
+import { useBandoriCardsMaster } from "@/hooks/useBandoriCardsMaster";
+import {
+  materializeBandoriCardsMasterForServer,
+} from "@/lib/bandori-cards-api-client";
 import {
   normalizeBandoriSkillLabel,
   type BandoriSkillLabelMaster,
@@ -26,6 +29,12 @@ import {
   toBandoriCharacterBonusMap,
 } from "@/lib/bandori-character-bonuses";
 import { pickBestdoriLocalizedName } from "@/lib/bestdori-regional-names";
+import {
+  normalizeBandoriServer,
+  pickBandoriRegionalText,
+  type BandoriServer,
+} from "@/lib/bandori-server";
+import { useBandoriPreferredServer } from "@/store/useBandoriPreferencesStore";
 import { decodeBestdoriProfile, encodeBestdoriProfile } from "@/lib/bestdori-profile-codec";
 import {
   decodeCompressedGameProfilePayload,
@@ -124,7 +133,6 @@ type CardPageMessages = {
   missingVersion: string;
   saveFailed: (status: number) => string;
   invalidSaveResponse: string;
-  loadCardsFailed: (status: number) => string;
   loadCharactersFailed: (status: number) => string;
   loadSkillsFailed: (status: number) => string;
 };
@@ -136,7 +144,6 @@ type CardFilterState = {
   training: "all" | "trained" | "untrained";
 };
 
-const CARD_METADATA_CHUNK_SIZE = 150;
 const CARD_PAGE_SIZE = 60;
 const DEFAULT_FILTERS: CardFilterState = {
   query: "",
@@ -145,51 +152,27 @@ const DEFAULT_FILTERS: CardFilterState = {
   training: "all",
 };
 
-function uniqueNumbers(values: number[]): number[] {
-  return Array.from(new Set(values.filter((value) => Number.isFinite(value) && value > 0)));
-}
-
 function getRegionFromProfileServer(server: number | undefined): BandoriAssetRegion {
   return server === 3 ? "cn" : "jp";
-}
-
-function pickNonEmptyText(...values: Array<string | null | undefined>): string | null {
-  for (const value of values) {
-    const trimmed = value?.trim();
-    if (trimmed) {
-      return trimmed;
-    }
-  }
-  return null;
 }
 
 function pickCharacterName(
   character: CharacterRecord | undefined,
   characterId: number | undefined,
-  locale: AppLocale,
+  preferredServer: BandoriServer,
   fallback: { unknownCharacter: string; character: (characterId: number) => string },
 ): string {
-  const localizedName = locale === "en"
-    ? pickNonEmptyText(
-      character?.nicknameEn,
-      character?.characterNameEn,
-      character?.nicknameJp,
-      character?.characterNameJp,
-      character?.nicknameCn,
-      character?.nicknameTw,
-      character?.characterNameCn,
-      character?.characterNameTw,
-    )
-    : pickNonEmptyText(
-      character?.nicknameCn,
-      character?.nicknameTw,
-      character?.nicknameJp,
-      character?.nicknameEn,
-      character?.characterNameCn,
-      character?.characterNameTw,
-      character?.characterNameJp,
-      character?.characterNameEn,
-    );
+  const localizedName = pickBandoriRegionalText([
+    character?.nicknameJp,
+    character?.nicknameEn,
+    character?.nicknameTw,
+    character?.nicknameCn,
+  ], preferredServer) ?? pickBandoriRegionalText([
+    character?.characterNameJp,
+    character?.characterNameEn,
+    character?.characterNameTw,
+    character?.characterNameCn,
+  ], preferredServer);
 
   return localizedName ?? (characterId ? fallback.character(characterId) : fallback.unknownCharacter);
 }
@@ -197,22 +180,21 @@ function pickCharacterName(
 function pickFullCharacterName(
   character: CharacterRecord | undefined,
   characterId: number | undefined,
-  locale: AppLocale,
+  preferredServer: BandoriServer,
   fallback: { unknownCharacter: string; character: (characterId: number) => string },
 ): string {
-  return pickCharacterName(character, characterId, locale, fallback);
+  return pickCharacterName(character, characterId, preferredServer, fallback);
 }
 
 function pickCardName(
   cardId: number,
   metadata: BestdoriCardMetadata | undefined,
-  locale: AppLocale,
+  preferredServer: BandoriServer,
   fallback: (cardId: number) => string,
 ): string {
-  const localizedName = pickBestdoriLocalizedName(metadata?.prefix, locale);
-  return locale === "en"
-    ? localizedName ?? metadata?.displayName ?? fallback(cardId)
-    : metadata?.displayName ?? localizedName ?? fallback(cardId);
+  return pickBestdoriLocalizedName(metadata?.prefix, preferredServer)
+    ?? metadata?.displayName
+    ?? fallback(cardId);
 }
 
 function isKnownAttribute(value: string | undefined): value is CardAttribute {
@@ -223,9 +205,17 @@ function getCardSkillEffectLabel(
   card: UserGameProfileCardRecord,
   metadata: BestdoriCardMetadata | undefined,
   skills: Record<string, BandoriSkillLabelMaster | undefined>,
+  preferredServer: BandoriServer,
 ): string {
   const skillId = Number(metadata?.skillId);
-  return normalizeBandoriSkillLabel(Number.isFinite(skillId) && skillId > 0 ? skills[String(Math.trunc(skillId))] : undefined, card.skillLevel, 5);
+  return normalizeBandoriSkillLabel(
+    Number.isFinite(skillId) && skillId > 0
+      ? skills[String(Math.trunc(skillId))]
+      : undefined,
+    card.skillLevel,
+    5,
+    preferredServer,
+  );
 }
 
 function buildPayloadWithCards(
@@ -326,29 +316,11 @@ async function saveProfileCards(
   return data.sectionVersions.cardsHash;
 }
 
-async function requestCardMetadata(cardIds: number[], messages: CardPageMessages): Promise<Record<string, BestdoriCardMetadata>> {
-  const chunks: number[][] = [];
-  for (let index = 0; index < cardIds.length; index += CARD_METADATA_CHUNK_SIZE) {
-    chunks.push(cardIds.slice(index, index + CARD_METADATA_CHUNK_SIZE));
-  }
-
-  const responses = await Promise.all(
-    chunks.map(async (chunk) => {
-      const response = await fetch(`/api/bandori/cards?ids=${chunk.join(",")}`);
-      const payload = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        throw new Error(getApiErrorMessage(payload) || messages.loadCardsFailed(response.status));
-      }
-      return parseApiSuccessData<{ cards?: Record<string, BestdoriCardMetadata> }>(payload)?.cards ?? {};
-    }),
-  );
-
-  return Object.assign({}, ...responses);
-}
-
-async function requestMetadata(cardIds: number[], messages: CardPageMessages): Promise<MetadataPayload> {
-  const [cards, charactersResponse, skillsResponse] = await Promise.all([
-    requestCardMetadata(cardIds, messages),
+async function requestMetadata(
+  cards: Record<string, BestdoriCardMetadata>,
+  messages: CardPageMessages,
+): Promise<MetadataPayload> {
+  const [charactersResponse, skillsResponse] = await Promise.all([
     fetch("/api/bandori/characters"),
     fetch("/api/bandori/master/skills"),
   ]);
@@ -417,7 +389,7 @@ function CardThumbnail({
 const CardTile = memo(function CardTile({
   card,
   metadata,
-  locale,
+  preferredServer,
   labels,
   characterName,
   skillEffectLabel,
@@ -429,7 +401,7 @@ const CardTile = memo(function CardTile({
 }: {
   card: UserGameProfileCardRecord;
   metadata?: BestdoriCardMetadata;
-  locale: AppLocale;
+  preferredServer: BandoriServer;
   labels: {
     cardFallback: (cardId: number) => string;
     editCard: (cardName: string) => string;
@@ -442,7 +414,7 @@ const CardTile = memo(function CardTile({
   canEdit: boolean;
   onEdit: () => void;
 }) {
-  const cardName = pickCardName(card.cardId, metadata, locale, labels.cardFallback);
+  const cardName = pickCardName(card.cardId, metadata, preferredServer, labels.cardFallback);
   const tileRef = useRef<HTMLElement | null>(null);
   const [hoverOpen, setHoverOpen] = useState(false);
 
@@ -485,10 +457,14 @@ const CardTile = memo(function CardTile({
 export default function GameProfileCardsPage({ params }: { params: Promise<{ profileId: string }> }) {
   useBandoriCardsAssetIndex();
   const { profileId } = use(params);
-  const locale = useLocale() as AppLocale;
+  const preferredServer = useBandoriPreferredServer();
   const t = useTranslations("bandori.gameProfiles.cards");
   const commonT = useTranslations("common");
   const { userId, authReady, loadingProfile, profileError } = useLocalizedAccountProfile();
+  const { data: canonicalCards } = useBandoriCardsMaster(
+    undefined,
+    Boolean(profileId && userId),
+  );
   const [profilePayload, setProfilePayload] = useState<UserGameProfilePayload | null>(null);
   const [cards, setCards] = useState<UserGameProfileCardRecord[]>([]);
   const [baselineCards, setBaselineCards] = useState<UserGameProfileCardRecord[]>([]);
@@ -510,7 +486,6 @@ export default function GameProfileCardsPage({ params }: { params: Promise<{ pro
     missingVersion: t("errors.missingVersion"),
     saveFailed: (status) => t("errors.saveFailed", { status }),
     invalidSaveResponse: t("errors.invalidSaveResponse"),
-    loadCardsFailed: (status) => t("errors.loadCardsFailed", { status }),
     loadCharactersFailed: (status) => t("errors.loadCharactersFailed", { status }),
     loadSkillsFailed: (status) => t("errors.loadSkillsFailed", { status }),
   }), [t]);
@@ -531,9 +506,10 @@ export default function GameProfileCardsPage({ params }: { params: Promise<{ pro
   );
 
   useEffect(() => {
-    if (!profileId || !userId) {
+    if (!profileId || !userId || !canonicalCards) {
       return;
     }
+    const cardsSnapshot = canonicalCards;
 
     let canceled = false;
     async function loadCards() {
@@ -542,7 +518,18 @@ export default function GameProfileCardsPage({ params }: { params: Promise<{ pro
         const nextProfile = await requestProfilePayload(profileId, messages);
         const nextPayload = nextProfile.payload;
         const nextCards = getGameProfileCards(nextPayload);
-        const nextMetadata = await requestMetadata(uniqueNumbers(nextCards.map((card) => card.cardId)), messages);
+        const profileServer = normalizeBandoriServer(nextPayload.bestdoriProfile.server) ?? 0;
+        const regionalCards = materializeBandoriCardsMasterForServer(
+          cardsSnapshot,
+          profileServer,
+        );
+        const nextCardMetadata = Object.fromEntries(nextCards.flatMap((card) => {
+          const metadataRecord = regionalCards[String(card.cardId)];
+          return metadataRecord
+            ? [[String(card.cardId), metadataRecord as BestdoriCardMetadata]]
+            : [];
+        }));
+        const nextMetadata = await requestMetadata(nextCardMetadata, messages);
         if (!canceled) {
           setProfilePayload(nextPayload);
           setCanEditProfile(nextProfile.isEditable);
@@ -570,7 +557,7 @@ export default function GameProfileCardsPage({ params }: { params: Promise<{ pro
     return () => {
       canceled = true;
     };
-  }, [messages, profileId, t, userId]);
+  }, [canonicalCards, messages, profileId, t, userId]);
 
   const region = useMemo(() => getRegionFromProfileServer(profilePayload?.bestdoriProfile.server), [profilePayload]);
   const charactersById = useMemo(() => new Map(metadata.characters.map((character) => [character.characterId, character])), [metadata.characters]);
@@ -580,8 +567,18 @@ export default function GameProfileCardsPage({ params }: { params: Promise<{ pro
     const normalizedQuery = deferredQuery.trim().toLowerCase();
     return cards.filter((card) => {
       const cardMetadata = metadata.cards[String(card.cardId)];
-      const characterName = pickCharacterName(charactersById.get(cardMetadata?.characterId ?? 0), cardMetadata?.characterId, locale, fallbackLabels).toLowerCase();
-      const cardName = pickCardName(card.cardId, cardMetadata, locale, fallbackLabels.card).toLowerCase();
+      const characterName = pickCharacterName(
+        charactersById.get(cardMetadata?.characterId ?? 0),
+        cardMetadata?.characterId,
+        preferredServer,
+        fallbackLabels,
+      ).toLowerCase();
+      const cardName = pickCardName(
+        card.cardId,
+        cardMetadata,
+        preferredServer,
+        fallbackLabels.card,
+      ).toLowerCase();
       const attribute = isKnownAttribute(cardMetadata?.attribute) ? cardMetadata.attribute : null;
 
       if (normalizedQuery && !String(card.cardId).includes(normalizedQuery) && !cardName.includes(normalizedQuery) && !characterName.includes(normalizedQuery)) {
@@ -601,7 +598,17 @@ export default function GameProfileCardsPage({ params }: { params: Promise<{ pro
       }
       return true;
     });
-  }, [cards, charactersById, deferredQuery, fallbackLabels, filters.attribute, filters.rarity, filters.training, locale, metadata.cards]);
+  }, [
+    cards,
+    charactersById,
+    deferredQuery,
+    fallbackLabels,
+    filters.attribute,
+    filters.rarity,
+    filters.training,
+    metadata.cards,
+    preferredServer,
+  ]);
   const visibleCardCount = Math.min(visibleCount, filteredCards.length);
   const remainingCards = Math.max(0, filteredCards.length - visibleCardCount);
 
@@ -740,14 +747,24 @@ export default function GameProfileCardsPage({ params }: { params: Promise<{ pro
                         getKey={(card) => card.cardId}
                         renderItem={(card) => {
                           const cardMetadata = metadata.cards[String(card.cardId)];
-                          const characterName = pickFullCharacterName(charactersById.get(cardMetadata?.characterId ?? 0), cardMetadata?.characterId, locale, fallbackLabels);
-                          const skillEffectLabel = getCardSkillEffectLabel(card, cardMetadata, metadata.skills);
+                          const characterName = pickFullCharacterName(
+                            charactersById.get(cardMetadata?.characterId ?? 0),
+                            cardMetadata?.characterId,
+                            preferredServer,
+                            fallbackLabels,
+                          );
+                          const skillEffectLabel = getCardSkillEffectLabel(
+                            card,
+                            cardMetadata,
+                            metadata.skills,
+                            preferredServer,
+                          );
                           return (
                             <CardTile
                               key={card.cardId}
                               card={card}
                               metadata={cardMetadata}
-                              locale={locale}
+                              preferredServer={preferredServer}
                               labels={{
                                 cardFallback: fallbackLabels.card,
                                 editCard: fallbackLabels.editCard,
@@ -791,7 +808,7 @@ export default function GameProfileCardsPage({ params }: { params: Promise<{ pro
               characterName={pickFullCharacterName(
                 charactersById.get(metadata.cards[String(editingCard.cardId)]?.characterId ?? 0),
                 metadata.cards[String(editingCard.cardId)]?.characterId,
-                locale,
+                preferredServer,
                 fallbackLabels,
               )}
               bandId={charactersById.get(metadata.cards[String(editingCard.cardId)]?.characterId ?? 0)?.bandId ?? null}

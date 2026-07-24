@@ -1,4 +1,5 @@
 import { type BandoriAssetRegion } from "@/lib/bandori-asset-proxy";
+import { type BandoriServer } from "@/lib/bandori-server";
 
 export type BandoriCardArtVariant = "normal" | "after_training";
 
@@ -11,6 +12,8 @@ export type BandoriCardAttribute = "powerful" | "pure" | "cool" | "happy";
 
 export type BandoriCardCatalogEntry = {
   cardId: number;
+  cardRef: string;
+  entityServer: BandoriServer | null;
   characterId: number;
   skillId: number | null;
   characterName: string;

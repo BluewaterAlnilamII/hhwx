@@ -167,9 +167,6 @@ function ReactionChip({ reaction, disabled, onToggle }: ReactionChipProps) {
                   username={user.username}
                   cardId={user.avatar.cardId}
                   trainType={user.avatar.trainType}
-                  resourceSetName={user.avatar.resourceSetName}
-                  assetRegion={user.avatar.assetRegion}
-                  displayName={user.avatar.displayName}
                   size="toolbar"
                   className="ring-1 ring-slate-200"
                 />
@@ -388,9 +385,6 @@ export const CommentItem = memo(function CommentItem({
           username={comment.username}
           cardId={comment.avatar.cardId}
           trainType={comment.avatar.trainType}
-          resourceSetName={comment.avatar.resourceSetName}
-          assetRegion={comment.avatar.assetRegion}
-          displayName={comment.avatar.displayName}
           size="comment"
           className="ring-1 ring-sky-200 dark:ring-slate-700"
         />
