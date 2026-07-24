@@ -71,7 +71,7 @@ test("failed promises are evicted so the next call retries", async () => {
   assert.equal(attempts, 2);
 });
 
-test("a successful value is reused only for the configured freshness window", async () => {
+test("a successful value is reused for the full page lifetime", async () => {
   let attempts = 0;
   let now = 1_000;
   const store = createBandoriPublicAssetIndexStore({
@@ -81,25 +81,23 @@ test("a successful value is reused only for the configured freshness window", as
       return jsonResponse({ generation: attempts });
     },
     now: () => now,
-    freshnessMs: 60_000,
   });
   const url = "https://assets.example.test/bandori/cards/index.json";
 
   assert.deepEqual(await store.load(url), { generation: 1 });
-  now += 59_999;
+  now += 24 * 60 * 60 * 1_000;
   assert.deepEqual(await store.load(url), { generation: 1 });
   assert.equal(attempts, 1);
-  now += 1;
-  assert.deepEqual(await store.load(url), { generation: 2 });
-  assert.equal(attempts, 2);
 });
 
 test("refresh failures retain the last-good value and loadedAt", async () => {
   let attempts = 0;
+  const requestOptions = [];
   const store = createBandoriPublicAssetIndexStore({
     parse: (value) => value,
-    fetcher: async () => {
+    fetcher: async (_url, init) => {
       attempts += 1;
+      requestOptions.push(init);
       if (attempts === 1) {
         return jsonResponse({ generation: 3 });
       }
@@ -116,6 +114,10 @@ test("refresh failures retain the last-good value and loadedAt", async () => {
     loadedAt: 300,
     inFlight: null,
   });
+  assert.deepEqual(requestOptions, [
+    { cache: "default", credentials: "omit" },
+    { cache: "no-cache", credentials: "omit" },
+  ]);
 });
 
 test("independent index URLs keep the correct value when responses arrive out of order", async () => {

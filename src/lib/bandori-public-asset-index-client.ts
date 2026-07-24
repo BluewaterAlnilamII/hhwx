@@ -29,7 +29,6 @@ type CreateBandoriPublicAssetIndexStoreOptions<T> = {
   parse: (value: unknown) => T;
   fetcher?: typeof fetch;
   now?: () => number;
-  freshnessMs?: number;
 };
 
 function createEmptyState<T>(): BandoriPublicAssetIndexStoreState<T> {
@@ -43,14 +42,14 @@ function createEmptyState<T>(): BandoriPublicAssetIndexStoreState<T> {
 /**
  * Browser-only index cache. Each URL owns one first-load promise, while a
  * failed promise is evicted so a later mount or explicit refresh can retry.
- * Refresh failures retain the last parsed index instead of rolling the UI
- * back to placeholders.
+ * A successful value remains stable for the current page lifetime. Explicit
+ * refreshes revalidate the HTTP cache, and failures retain the last parsed
+ * index instead of rolling the UI back to placeholders.
  */
 export function createBandoriPublicAssetIndexStore<T>({
   parse,
   fetcher = fetch,
   now = Date.now,
-  freshnessMs = 60_000,
 }: CreateBandoriPublicAssetIndexStoreOptions<T>): BandoriPublicAssetIndexStore<T> {
   const entries = new Map<string, StoreEntry<T>>();
 
@@ -84,18 +83,14 @@ export function createBandoriPublicAssetIndexStore<T>({
     if (entry.state.inFlight) {
       return entry.state.inFlight;
     }
-    const isFresh = (
-      entry.state.loadedAt !== null
-      && now() - entry.state.loadedAt < freshnessMs
-    );
-    if (entry.state.value && !options?.refresh && isFresh) {
+    if (entry.state.value && !options?.refresh) {
       return Promise.resolve(entry.state.value);
     }
 
     const requestSequence = entry.requestSequence + 1;
     entry.requestSequence = requestSequence;
     const request: Promise<T> = fetcher(indexUrl, {
-      cache: "default",
+      cache: options?.refresh ? "no-cache" : "default",
       credentials: "omit",
     })
       .then(async (response) => {

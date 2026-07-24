@@ -26,7 +26,6 @@ export default function AccountProfilePage() {
     setProfile,
     loadingProfile,
     profileError,
-    setAuth,
   } = useLocalizedAccountProfile();
   const [usernameInput, setUsernameInput] = useState("");
   const [saving, setSaving] = useState(false);
@@ -96,12 +95,6 @@ export default function AccountProfilePage() {
       }
 
       setProfile(updatedProfile);
-      setAuth({
-        userId: updatedProfile.userId,
-        username: updatedProfile.username,
-        userEmail: updatedProfile.email,
-        emailVerified: updatedProfile.emailVerified,
-      });
       setMessage(t("saveSuccess"));
     } catch (error) {
       setMessage(error instanceof Error ? error.message : t("saveFailed"));

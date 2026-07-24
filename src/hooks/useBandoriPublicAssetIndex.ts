@@ -18,7 +18,6 @@ const EMPTY_INDEX_STATE: BandoriPublicAssetIndexStoreState<never> = {
   loadedAt: null,
   inFlight: null,
 };
-const INDEX_REVALIDATE_INTERVAL_MS = 30_000;
 
 export type BandoriPublicAssetIndexHookResult<T> = {
   value: T | null;
@@ -45,12 +44,7 @@ function useBandoriPublicAssetIndex<T>(
     if (!indexUrl) {
       return;
     }
-    const load = () => {
-      void store.load(indexUrl).catch(() => undefined);
-    };
-    load();
-    const interval = window.setInterval(load, INDEX_REVALIDATE_INTERVAL_MS);
-    return () => window.clearInterval(interval);
+    void store.load(indexUrl).catch(() => undefined);
   }, [indexUrl, store]);
 
   const refresh = useCallback(() => {

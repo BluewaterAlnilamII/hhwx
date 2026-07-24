@@ -6,10 +6,7 @@ import { format } from "date-fns";
 import * as Tabs from "@radix-ui/react-tabs";
 
 import { useCachedFetch } from "@/hooks/useCachedFetch";
-import {
-  useBandoriCardsAssetIndex,
-  useBandoriEventsAssetIndex,
-} from "@/hooks/useBandoriPublicAssetIndex";
+import { useBandoriEventsAssetIndex } from "@/hooks/useBandoriPublicAssetIndex";
 import { parseApiSuccessData } from "@/lib/api-contracts";
 import {
   buildBandoriPublicAssetUrl,
@@ -501,7 +498,6 @@ function EventProgressBar({ startDate, endDate }: { startDate: number; endDate: 
 export default function EventTrackerPage() {
   const cnExclusiveT = useTranslations("bandori.notices.cnExclusive");
   const { value: eventAssetIndex } = useBandoriEventsAssetIndex();
-  useBandoriCardsAssetIndex();
   const [currentEventId, setCurrentEventId] = useState<number | null>(null);
   const [trackingMode, setTrackingMode] = useState<TrackingMode>("event");
   const [selectedTier, setSelectedTier] = useState<number>(() => getDefaultTierForMode("event"));

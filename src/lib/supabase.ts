@@ -12,7 +12,6 @@ import {
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabasePublishableKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!;
 const DEFAULT_SITE_URL = "http://localhost:3000";
-const AUTH_SUMMARY_CACHE_TTL_MS = 5 * 60 * 1000;
 
 export const supabase = createClient(supabaseUrl, supabasePublishableKey);
 
@@ -26,7 +25,6 @@ export interface AuthProfileSummary {
 type AuthSummaryCacheEntry = {
 	userId: string;
 	value: AuthProfileSummary;
-	updatedAt: number;
 };
 
 type AuthSummaryRequestEntry = {
@@ -128,11 +126,20 @@ function readCachedAuthSummary(userId: string): AuthProfileSummary | null {
 		return null;
 	}
 
-	if (Date.now() - authSummaryCache.updatedAt >= AUTH_SUMMARY_CACHE_TTL_MS) {
-		return null;
-	}
-
 	return authSummaryCache.value;
+}
+
+export function writeAuthProfileSummaryCache(summary: AuthProfileSummary): void {
+	authSummaryRequestGeneration += 1;
+	authSummaryRequestInFlight = null;
+	commitAuthProfileSummaryCache(summary);
+}
+
+function commitAuthProfileSummaryCache(summary: AuthProfileSummary): void {
+	authSummaryCache = {
+		userId: summary.userId,
+		value: summary,
+	};
 }
 
 export function clearAuthProfileSummaryCache(): void {
@@ -194,11 +201,7 @@ export async function readAuthProfileSummary(
 				return readCachedAuthSummary(summary.userId);
 			}
 
-			authSummaryCache = {
-				userId: summary.userId,
-				value: summary,
-				updatedAt: Date.now(),
-			};
+			commitAuthProfileSummaryCache(summary);
 
 			return summary;
 		})
