@@ -186,29 +186,29 @@ function SortableRow({
         <button
           {...attributes}
           {...listeners}
-          className="cursor-grab active:cursor-grabbing text-gray-400 hover:text-gray-600 text-sm flex-shrink-0 touch-none"
+          className="cursor-grab active:cursor-grabbing text-gray-400 hover:text-gray-600 text-sm shrink-0 touch-none"
           type="button"
         >
           ☰
         </button>
       ) : (
-        <span className="text-gray-300 text-sm flex-shrink-0" aria-hidden="true">
+        <span className="text-gray-300 text-sm shrink-0" aria-hidden="true">
           ☰
         </span>
       )}
 
       <span
-        className="w-1.5 h-8 rounded-full flex-shrink-0"
+        className="w-1.5 h-8 rounded-full shrink-0"
         style={{ backgroundColor: bandColor }}
         aria-hidden="true"
       />
 
-      <span className="w-[52px] flex-shrink-0 text-xs font-semibold text-gray-600 text-center">
+      <span className="w-[52px] shrink-0 text-xs font-semibold text-gray-600 text-center">
         {item.eventId}
       </span>
 
       <span
-        className="text-sm truncate min-w-[240px] w-[240px] md:min-w-[280px] md:w-[280px] flex-shrink-0 font-medium text-gray-900"
+        className="text-sm truncate min-w-[240px] w-[240px] md:min-w-[280px] md:w-[280px] shrink-0 font-medium text-gray-900"
         title={item.title}
       >
         {item.title}
@@ -221,7 +221,7 @@ function SortableRow({
           value={item.predictedStart}
           onChange={(event) => onChangeStart(item.eventId, event.target.value)}
           min={minDate}
-          className="text-xs border border-gray-200 rounded px-1.5 py-1 bg-white/70 w-[110px] flex-shrink-0"
+          className="text-xs border border-gray-200 rounded-sm px-1.5 py-1 bg-white/70 w-[110px] shrink-0"
         />
 
         <input
@@ -230,10 +230,10 @@ function SortableRow({
           value={item.predictedEnd}
           onChange={(event) => onChangeEnd(item.eventId, event.target.value)}
           min={item.predictedStart || minDate}
-          className="text-xs border border-gray-200 rounded px-1.5 py-1 bg-white/70 w-[110px] flex-shrink-0"
+          className="text-xs border border-gray-200 rounded-sm px-1.5 py-1 bg-white/70 w-[110px] shrink-0"
         />
 
-        <div className="flex items-center gap-1 w-[64px] flex-shrink-0 justify-end">
+        <div className="flex items-center gap-1 w-[64px] shrink-0 justify-end">
           <input
             {...stopDragPropagation}
             type="number"
@@ -241,12 +241,12 @@ function SortableRow({
             step={1}
             value={item.durationDays}
             onChange={(event) => onChangeDuration(item.eventId, event.target.value)}
-            className="text-xs border border-gray-200 rounded px-1.5 py-1 bg-white/70 w-[42px] text-center"
+            className="text-xs border border-gray-200 rounded-sm px-1.5 py-1 bg-white/70 w-[42px] text-center"
           />
           <span className="text-xs text-gray-500">天</span>
         </div>
 
-        <label className="flex items-center gap-1 flex-shrink-0 cursor-pointer w-[72px] justify-end">
+        <label className="flex items-center gap-1 shrink-0 cursor-pointer w-[72px] justify-end">
           <input
             {...stopDragPropagation}
             type="checkbox"
@@ -261,7 +261,7 @@ function SortableRow({
           {...stopDragPropagation}
           type="button"
           onClick={() => onClearSchedule(item.eventId)}
-          className="text-xs text-gray-500 hover:text-red-500 transition-colors w-[44px] flex-shrink-0 text-right"
+          className="text-xs text-gray-500 hover:text-red-500 transition-colors w-[44px] shrink-0 text-right"
         >
           清空
         </button>

@@ -66,7 +66,7 @@ function SegmentedControl<T extends string | number | boolean>({
   return (
     <div className="grid gap-1.5 sm:grid-cols-[128px_minmax(0,1fr)] sm:items-center sm:gap-2">
       <div className="text-sm font-semibold text-slate-600 sm:text-right">{label}</div>
-      <div className="inline-flex w-fit overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm" role="radiogroup" aria-label={label}>
+      <div className="inline-flex w-fit overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xs" role="radiogroup" aria-label={label}>
         {options.map((option) => (
           <button
             key={String(option.value)}
@@ -189,7 +189,7 @@ export default function GameProfileCardEditorDialog({
   }
 
   const dialog = (
-    <div className="fixed inset-0 z-[1100] flex h-dvh items-center justify-center overflow-hidden overscroll-contain bg-slate-950/55 p-3 sm:p-6" role="dialog" aria-modal="true" aria-labelledby="card-editor-title">
+    <div className="fixed inset-0 z-1100 flex h-dvh items-center justify-center overflow-hidden overscroll-contain bg-slate-950/55 p-3 sm:p-6" role="dialog" aria-modal="true" aria-labelledby="card-editor-title">
       <div className="flex max-h-[calc(100dvh-1.5rem)] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-white/90 bg-white shadow-[0_30px_100px_rgba(15,23,42,0.42)] sm:max-h-[calc(100dvh-3rem)] sm:rounded-[28px]">
         <header className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-200 bg-white px-5 py-3 sm:px-6 sm:py-4">
           <div>
@@ -218,7 +218,7 @@ export default function GameProfileCardEditorDialog({
             </div>
 
             <div className="min-w-0">
-              <div className="rounded-2xl border border-sky-100 bg-gradient-to-br from-white via-sky-50/80 to-rose-50/70 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)] sm:rounded-3xl sm:p-4">
+              <div className="rounded-2xl border border-sky-100 bg-linear-to-br from-white via-sky-50/80 to-rose-50/70 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)] sm:rounded-3xl sm:p-4">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0">
                     <h3 className="truncate text-xl font-bold text-slate-900 sm:text-2xl">{cardName}</h3>
@@ -241,7 +241,7 @@ export default function GameProfileCardEditorDialog({
                   <select
                     value={draft.level}
                     onChange={(event) => updateDraft("level", Number(event.target.value))}
-                    className="h-10 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-900 outline-none transition focus:border-sky-300 focus:ring-4 focus:ring-sky-100 sm:h-11"
+                    className="h-10 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-900 outline-hidden transition focus:border-sky-300 focus:ring-4 focus:ring-sky-100 sm:h-11"
                   >
                     {Array.from({ length: levelLimit }, (_, index) => index + 1).map((level) => (
                       <option key={level} value={level}>{level}</option>

@@ -114,7 +114,7 @@ export default function EventComments({ eventId }: { eventId: number | null }) {
 
       {totalCount > COMMENT_ROOT_PAGE_SIZE ? (
         <div className="mt-5 flex justify-center">
-          <div className="inline-flex max-w-full items-center gap-1 rounded-full border border-slate-200 bg-slate-50 p-1 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+          <div className="inline-flex max-w-full items-center gap-1 rounded-full border border-slate-200 bg-slate-50 p-1 shadow-xs dark:border-slate-700 dark:bg-slate-900">
             <button
               type="button"
               onClick={() => goToCommentPage(1)}
@@ -135,7 +135,7 @@ export default function EventComments({ eventId }: { eventId: number | null }) {
             >
               <ChevronLeft size={16} />
             </button>
-            <div className="flex h-8 min-w-28 items-center justify-center rounded-full bg-white px-3 text-sm font-semibold text-slate-700 shadow-sm ring-1 ring-inset ring-sky-200 dark:bg-slate-950 dark:text-slate-200 dark:ring-slate-700">
+            <div className="flex h-8 min-w-28 items-center justify-center rounded-full bg-white px-3 text-sm font-semibold text-slate-700 shadow-xs ring-1 ring-inset ring-sky-200 dark:bg-slate-950 dark:text-slate-200 dark:ring-slate-700">
               <input
                 type="text"
                 inputMode="numeric"
@@ -152,7 +152,7 @@ export default function EventComments({ eventId }: { eventId: number | null }) {
                 disabled={loading}
                 aria-label="跳转到页码"
                 title="输入页码后按回车跳转"
-                className="h-6 w-10 rounded-md border border-transparent bg-transparent text-center text-sm font-semibold text-slate-700 outline-none transition focus:border-sky-200 focus:bg-sky-50 disabled:cursor-not-allowed disabled:text-slate-400 dark:text-slate-200 dark:focus:border-slate-600 dark:focus:bg-slate-900"
+                className="h-6 w-10 rounded-md border border-transparent bg-transparent text-center text-sm font-semibold text-slate-700 outline-hidden transition focus:border-sky-200 focus:bg-sky-50 disabled:cursor-not-allowed disabled:text-slate-400 dark:text-slate-200 dark:focus:border-slate-600 dark:focus:bg-slate-900"
               />
               <span className="mx-1 text-slate-300 dark:text-slate-600">/</span>
               <span className="min-w-8 text-center">{totalPages}</span>

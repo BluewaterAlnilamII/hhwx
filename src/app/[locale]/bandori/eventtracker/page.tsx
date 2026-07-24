@@ -485,7 +485,7 @@ function EventProgressBar({ startDate, endDate }: { startDate: number; endDate: 
       </div>
       <div className="h-3 w-full bg-gray-100 dark:bg-slate-950/70 rounded-full overflow-hidden">
         <div
-          className="h-full bg-gradient-to-r from-blue-400 to-blue-600 rounded-full transition-all duration-1000 ease-out"
+          className="h-full bg-linear-to-r from-blue-400 to-blue-600 rounded-full transition-all duration-1000 ease-out"
           style={{ width: `${progress}%` }}
         />
       </div>
@@ -780,10 +780,10 @@ export default function EventTrackerPage() {
   );
   // 1/2/3 首歌的布局密度差异很大，按数量限制容器宽度可以减少横向留白。
   const challengeSongGridClassName = availableChallengeSongIds.length <= 1
-    ? "max-w-[12rem] grid-cols-1"
+    ? "max-w-48 grid-cols-1"
     : availableChallengeSongIds.length === 2
-      ? "max-w-[23.5rem] grid-cols-1 sm:grid-cols-2"
-      : "max-w-[31.5rem] grid-cols-1 sm:grid-cols-2 xl:grid-cols-3";
+      ? "max-w-94 grid-cols-1 sm:grid-cols-2"
+      : "max-w-126 grid-cols-1 sm:grid-cols-2 xl:grid-cols-3";
 
   const comparisonEventOptions = useMemo(
     () => allEvents.filter((event) => event.startAt !== null && event.endAt !== null),
@@ -1357,7 +1357,7 @@ export default function EventTrackerPage() {
             />
 
             {/* ========== 图表区域 ========== */}
-            <Tabs.Content value={trackingMode} className="outline-none focus:outline-none w-full animate-in fade-in zoom-in-95 duration-500">
+            <Tabs.Content value={trackingMode} className="outline-hidden focus:outline-hidden w-full animate-in fade-in zoom-in-95 duration-500">
               <div className="mt-3 relative rounded-2xl border border-slate-200/80 bg-[#fffef4] p-2 shadow-[0_18px_48px_rgba(15,23,42,0.10)] dark:border-slate-800/80 dark:bg-[#0C111C] dark:shadow-[0_24px_60px_rgba(0,0,0,0.28)] sm:p-4">
 
                 {loading && (

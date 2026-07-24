@@ -160,7 +160,7 @@ export default function BandoriCardThumbnail({
 
   return (
     <div
-      className="bandori-card-thumbnail relative h-full w-full rounded-[5px] bg-white [container-type:inline-size]"
+      className="bandori-card-thumbnail relative h-full w-full rounded-[5px] bg-white @container"
       data-size={size}
       style={starStyle as CSSProperties}
     >

@@ -502,7 +502,7 @@ function AuthConfirmPageContent() {
                 minLength={PASSWORD_MIN_LENGTH}
                 maxLength={PASSWORD_MAX_LENGTH}
                 pattern={PASSWORD_INPUT_PATTERN}
-                className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 text-slate-900 outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100"
+                className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 text-slate-900 outline-hidden transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100"
                 placeholder={authT("placeholders.newPassword")}
               />
               <span className="mt-2 block text-xs leading-5 text-slate-500">
@@ -519,7 +519,7 @@ function AuthConfirmPageContent() {
                 minLength={PASSWORD_MIN_LENGTH}
                 maxLength={PASSWORD_MAX_LENGTH}
                 pattern={PASSWORD_INPUT_PATTERN}
-                className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 text-slate-900 outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100"
+                className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 text-slate-900 outline-hidden transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100"
                 placeholder={authT("placeholders.confirmNewPassword")}
               />
             </label>

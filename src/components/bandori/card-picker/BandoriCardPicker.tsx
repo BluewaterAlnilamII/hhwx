@@ -165,7 +165,7 @@ function SelectionButton({
       aria-pressed={selected}
       onClick={onClick}
       className={cn(
-        "inline-flex h-9 min-w-9 items-center justify-center rounded-full border bg-white px-2 text-sm font-semibold text-slate-700 shadow-sm transition",
+        "inline-flex h-9 min-w-9 items-center justify-center rounded-full border bg-white px-2 text-sm font-semibold text-slate-700 shadow-xs transition",
         selected
           ? "border-blue-500 ring-2 ring-blue-400/70"
           : "border-slate-200 hover:border-blue-300 hover:ring-2 hover:ring-blue-100",
@@ -195,7 +195,7 @@ function ToggleAllButton({
       selected={selected}
       title={selected ? clearAllLabel : selectAllLabel}
       onClick={onClick}
-      className="min-w-[3.25rem] rounded-full px-3 text-xs"
+      className="min-w-13 rounded-full px-3 text-xs"
     >
       {allLabel}
     </SelectionButton>
@@ -275,7 +275,7 @@ function ArtToggle({
   onChange: (nextTrainType: BandoriCardArtVariant) => void;
 }) {
   return (
-    <div className="inline-flex overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+    <div className="inline-flex overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xs">
       <button
         type="button"
         onClick={() => onChange("normal")}
@@ -547,7 +547,7 @@ export default function BandoriCardPicker({
 
   return (
     <div className={cn("space-y-4", className)}>
-      <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+      <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
           <div className="relative flex-1">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" aria-hidden="true" />
@@ -556,7 +556,7 @@ export default function BandoriCardPicker({
               value={filter.query}
               onChange={(event) => updateFilter({ query: event.target.value })}
               placeholder={t("searchPlaceholder")}
-              className="h-10 w-full rounded-xl border border-slate-200 bg-white pl-9 pr-3 text-sm text-slate-900 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
+              className="h-10 w-full rounded-xl border border-slate-200 bg-white pl-9 pr-3 text-sm text-slate-900 outline-hidden transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
             />
           </div>
           <div className="flex items-center gap-2">
@@ -663,7 +663,7 @@ export default function BandoriCardPicker({
               <select
                 value={filter.sortBy}
                 onChange={(event) => updateFilter({ sortBy: event.target.value as BandoriCardPickerSortBy })}
-                className="h-10 min-w-64 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
+                className="h-10 min-w-64 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-hidden transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
               >
                 {sortOptions.map((option) => (
                   <option key={option.value} value={option.value}>{option.label}</option>
@@ -685,8 +685,8 @@ export default function BandoriCardPicker({
       </div>
 
       {value && showArtToggle ? (
-        <div className="sticky top-[-0.75rem] z-[80] -mx-3 bg-slate-50/95 px-3 pb-2 pt-3 backdrop-blur sm:top-[-1.25rem] sm:-mx-5 sm:px-5 sm:pt-5">
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white/95 p-3 shadow-sm">
+        <div className="sticky -top-3 z-80 -mx-3 bg-slate-50/95 px-3 pb-2 pt-3 backdrop-blur-sm sm:-top-5 sm:-mx-5 sm:px-5 sm:pt-5">
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white/95 p-3 shadow-xs">
             <div className="min-w-0 text-sm text-slate-600">
             {t("currentSelection")}
             <span className="font-semibold text-slate-900">
@@ -750,14 +750,14 @@ export default function BandoriCardPicker({
                     key: filterKey,
                     count: Math.min(visibleCount + PAGE_SIZE, filteredCards.length),
                   })}
-                  className="inline-flex h-10 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 shadow-sm transition hover:border-blue-300 hover:text-blue-600"
+                  className="inline-flex h-10 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 shadow-xs transition hover:border-blue-300 hover:text-blue-600"
                 >
                   {t("actions.showMore", { count: Math.min(PAGE_SIZE, hiddenCardCount) })}
                 </button>
                 <button
                   type="button"
                   onClick={() => setVisibleState({ key: filterKey, count: filteredCards.length })}
-                  className="inline-flex h-10 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 shadow-sm transition hover:border-blue-300 hover:text-blue-600"
+                  className="inline-flex h-10 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 shadow-xs transition hover:border-blue-300 hover:text-blue-600"
                 >
                   {t("actions.showAll")}
                 </button>

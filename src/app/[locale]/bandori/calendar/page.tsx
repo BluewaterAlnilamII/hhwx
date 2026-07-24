@@ -138,11 +138,11 @@ function CalendarPageSkeleton({ showEditorPlaceholder }: { showEditorPlaceholder
   return (
     <div className="w-full max-w-5xl mx-auto animate-pulse" aria-hidden="true">
       <div className="mb-5 flex items-center justify-center rounded-[22px] border border-white/70 bg-white/65 px-3 py-3 shadow-[0_12px_30px_rgba(15,23,42,0.08)] ring-1 ring-white/50 md:mb-6">
-        <div className="h-8 w-[15rem] rounded-full bg-white/90 md:h-10 md:w-[18rem]" />
+        <div className="h-8 w-60 rounded-full bg-white/90 md:h-10 md:w-[18rem]" />
       </div>
 
       <div className="overflow-hidden rounded-[24px] border border-white/70 bg-[#fffef4] shadow-[0_22px_60px_rgba(15,23,42,0.12)] ring-1 ring-white/60">
-        <div className="grid grid-cols-7 border-b border-gray-200/70 bg-gradient-to-r from-white/90 via-white/75 to-white/90">
+        <div className="grid grid-cols-7 border-b border-gray-200/70 bg-linear-to-r from-white/90 via-white/75 to-white/90">
           {Array.from({ length: 7 }, (_, index) => (
             <div key={`skeleton-weekday-${index}`} className="py-3 text-center">
               <div className="mx-auto h-4 w-7 rounded-full bg-white/95" />
@@ -153,7 +153,7 @@ function CalendarPageSkeleton({ showEditorPlaceholder }: { showEditorPlaceholder
         {Array.from({ length: 5 }, (_, rowIndex) => (
           <div
             key={`skeleton-week-${rowIndex}`}
-            className="grid grid-cols-7 border-b border-gray-200/50 bg-gradient-to-b from-white/65 via-white/42 to-white/30 last:border-b-0"
+            className="grid grid-cols-7 border-b border-gray-200/50 bg-linear-to-b from-white/65 via-white/42 to-white/30 last:border-b-0"
           >
             {Array.from({ length: 7 }, (_, columnIndex) => (
               <div
@@ -412,7 +412,7 @@ export default function CalendarPage() {
         <div className="flex justify-end mb-5 gap-2">
           <button
             onClick={() => setShowIcsModal(!showIcsModal)}
-            className="flex items-center gap-2 rounded-xl border border-[#ffd36a] bg-gradient-to-r from-[#ffe97a] via-[#ffd95c] to-[#ffc94f] px-4 py-2 text-sm font-semibold text-[#6f3d00] shadow-[0_10px_24px_rgba(255,196,79,0.28)] transition-opacity hover:opacity-95"
+            className="flex items-center gap-2 rounded-xl border border-[#ffd36a] bg-linear-to-r from-[#ffe97a] via-[#ffd95c] to-[#ffc94f] px-4 py-2 text-sm font-semibold text-[#6f3d00] shadow-[0_10px_24px_rgba(255,196,79,0.28)] transition-opacity hover:opacity-95"
           >
             📅 订阅日历
           </button>
@@ -420,7 +420,7 @@ export default function CalendarPage() {
 
         {/* ICS 订阅弹窗 */}
         {showIcsModal && (
-          <div className="mb-6 rounded-2xl border border-white/75 bg-gradient-to-br from-[#fffef4] via-[#fff8d8] to-[#eef9ff] p-5 shadow-[0_14px_40px_rgba(255,184,0,0.16)] ring-1 ring-white/65">
+          <div className="mb-6 rounded-2xl border border-white/75 bg-linear-to-br from-[#fffef4] via-[#fff8d8] to-[#eef9ff] p-5 shadow-[0_14px_40px_rgba(255,184,0,0.16)] ring-1 ring-white/65">
             <p className="mb-3 text-sm font-bold text-[#7a4a00]">BanGDream 国服活动</p>
             <div className="mb-4">
               <div className="flex items-center justify-between gap-3 mb-2">
@@ -429,7 +429,7 @@ export default function CalendarPage() {
                   <button
                     type="button"
                     onClick={handleSelectAllBands}
-                    className="rounded-full bg-gradient-to-r from-[#ff7a59] to-[#ff9b45] px-3 py-1 text-xs font-semibold text-white shadow-sm transition-opacity hover:opacity-95"
+                    className="rounded-full bg-linear-to-r from-[#ff7a59] to-[#ff9b45] px-3 py-1 text-xs font-semibold text-white shadow-xs transition-opacity hover:opacity-95"
                   >
                     全选
                   </button>
@@ -451,7 +451,7 @@ export default function CalendarPage() {
                       key={option.value}
                       className={`px-3 py-1.5 rounded-full text-xs md:text-sm cursor-pointer transition-colors border ${
                         checked
-                          ? "shadow-sm"
+                          ? "shadow-xs"
                           : "bg-white text-gray-700 border-gray-200 hover:bg-gray-50"
                       }`}
                       style={checked ? {
@@ -492,7 +492,7 @@ export default function CalendarPage() {
                           className={`flex h-14 w-14 items-center justify-center overflow-hidden rounded-2xl border bg-white transition-all ${
                             checked
                               ? "scale-[1.05] shadow-lg"
-                              : "border-gray-200 hover:-translate-y-0.5 hover:border-gray-400 hover:shadow-sm"
+                              : "border-gray-200 hover:-translate-y-0.5 hover:border-gray-400 hover:shadow-xs"
                           }`}
                           style={checked ? {
                             borderColor: bandColor,
@@ -602,7 +602,7 @@ export default function CalendarPage() {
                 className={`px-4 py-2 rounded-xl text-sm font-semibold transition-colors ${
                   copied
                     ? "bg-green-500 text-white"
-                    : "bg-gradient-to-r from-[#ff7b57] to-[#ffb11f] text-white hover:opacity-95"
+                    : "bg-linear-to-r from-[#ff7b57] to-[#ffb11f] text-white hover:opacity-95"
                 }`}
               >
                 {copied ? "已复制" : "复制"}

@@ -54,7 +54,7 @@ export default function ResultPanel({
                 <div className="flex flex-col gap-3 justify-center items-center w-full max-w-xs mx-auto mb-4">
                     <button
                         onClick={onRestart}
-                        className="w-full px-6 py-2.5 bg-gradient-to-r from-blue-500 to-purple-600 text-white font-semibold rounded-xl hover:opacity-90 transition text-sm"
+                        className="w-full px-6 py-2.5 bg-linear-to-r from-blue-500 to-purple-600 text-white font-semibold rounded-xl hover:opacity-90 transition text-sm"
                     >
                         {t("restart")}
                     </button>

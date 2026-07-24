@@ -416,7 +416,7 @@ export default function AuthPageContent() {
                     value={usernameInput}
                     onChange={(event) => setUsernameInput(event.target.value)}
                     {...usernameValidationProps}
-                    className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 text-slate-900 outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100"
+                    className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 text-slate-900 outline-hidden transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100"
                     placeholder={t("validation.usernamePlaceholder")}
                     required
                   />
@@ -433,7 +433,7 @@ export default function AuthPageContent() {
                   value={email}
                   onChange={(event) => setEmail(event.target.value)}
                   {...emailValidationProps}
-                  className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 text-slate-900 outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100"
+                  className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 text-slate-900 outline-hidden transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100"
                   placeholder={t("placeholders.email")}
                   required
                 />
@@ -447,7 +447,7 @@ export default function AuthPageContent() {
                     value={password}
                     onChange={(event) => setPassword(event.target.value)}
                     {...passwordValidationProps}
-                    className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 text-slate-900 outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100"
+                    className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 text-slate-900 outline-hidden transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100"
                     placeholder={t("placeholders.password")}
                     minLength={PASSWORD_MIN_LENGTH}
                     maxLength={PASSWORD_MAX_LENGTH}
@@ -470,7 +470,7 @@ export default function AuthPageContent() {
                     value={confirmPassword}
                     onChange={(event) => setConfirmPassword(event.target.value)}
                     {...confirmPasswordValidationProps}
-                    className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 text-slate-900 outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100"
+                    className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 text-slate-900 outline-hidden transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100"
                     placeholder={t("placeholders.confirmPassword")}
                     minLength={PASSWORD_MIN_LENGTH}
                     maxLength={PASSWORD_MAX_LENGTH}

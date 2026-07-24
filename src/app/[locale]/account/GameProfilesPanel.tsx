@@ -532,7 +532,7 @@ export default function GameProfilesPanel() {
   }, [loadData, requestGameJson, t]);
 
   return (
-    <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:rounded-3xl sm:p-6">
+    <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs sm:rounded-3xl sm:p-6">
       <div className="flex flex-wrap items-start justify-between gap-3 sm:gap-4">
         <div className="min-w-0">
           <h2 className="text-lg font-semibold text-slate-900 sm:text-xl">{t("title")}</h2>
@@ -565,7 +565,7 @@ export default function GameProfilesPanel() {
             onChange={(event) => setGameUid(event.target.value.replace(/\D/g, ""))}
             placeholder={t("bind.uidPlaceholder")}
             inputMode="numeric"
-            className="h-11 rounded-2xl border border-slate-200 px-4 text-sm outline-none transition focus:border-sky-300 focus:ring-4 focus:ring-sky-100"
+            className="h-11 rounded-2xl border border-slate-200 px-4 text-sm outline-hidden transition focus:border-sky-300 focus:ring-4 focus:ring-sky-100"
           />
           <button
             type="button"
@@ -585,7 +585,7 @@ export default function GameProfilesPanel() {
           <div className="mt-4 rounded-2xl border border-sky-100 bg-sky-50 p-3 sm:p-4">
             <div className="text-xs font-semibold uppercase tracking-wide text-sky-700">{t("bind.challengeLabel")}</div>
             <div className="mt-2 flex flex-wrap items-center gap-3">
-              <code className="min-w-0 break-all rounded-xl bg-white px-3 py-2 text-base font-bold text-slate-900 shadow-sm sm:text-lg">{challenge.challenge}</code>
+              <code className="min-w-0 break-all rounded-xl bg-white px-3 py-2 text-base font-bold text-slate-900 shadow-xs sm:text-lg">{challenge.challenge}</code>
               <button
                 type="button"
                 onClick={copyChallenge}
@@ -700,7 +700,7 @@ export default function GameProfilesPanel() {
             value={profileName}
             onChange={(event) => setProfileName(event.target.value)}
             placeholder={t("manual.namePlaceholder")}
-            className="h-11 rounded-2xl border border-slate-200 px-4 text-sm outline-none transition focus:border-sky-300 focus:ring-4 focus:ring-sky-100"
+            className="h-11 rounded-2xl border border-slate-200 px-4 text-sm outline-hidden transition focus:border-sky-300 focus:ring-4 focus:ring-sky-100"
           />
           <button
             type="button"
@@ -718,7 +718,7 @@ export default function GameProfilesPanel() {
             value={importText}
             onChange={(event) => setImportText(event.target.value)}
             placeholder={t("manual.jsonPlaceholder")}
-            className="min-h-28 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-sky-300 focus:ring-4 focus:ring-sky-100"
+            className="min-h-28 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-hidden transition focus:border-sky-300 focus:ring-4 focus:ring-sky-100"
           />
           <button
             type="button"
@@ -756,7 +756,7 @@ export default function GameProfilesPanel() {
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
-                        <span className="min-w-0 break-words font-semibold text-slate-900">{profile.name}</span>
+                        <span className="min-w-0 wrap-break-word font-semibold text-slate-900">{profile.name}</span>
                         <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${profile.kind === "auto" ? "bg-emerald-50 text-emerald-700" : "bg-sky-50 text-sky-700"}`}>
                           {profile.label}
                         </span>
@@ -836,7 +836,7 @@ export default function GameProfilesPanel() {
                       <textarea
                         readOnly
                         value={exportedPayload.json}
-                        className="h-52 w-full resize-y rounded-xl border border-emerald-100 bg-white px-3 py-2 font-mono text-xs leading-5 text-slate-700 outline-none"
+                        className="h-52 w-full resize-y rounded-xl border border-emerald-100 bg-white px-3 py-2 font-mono text-xs leading-5 text-slate-700 outline-hidden"
                       />
                     </div>
                   )}

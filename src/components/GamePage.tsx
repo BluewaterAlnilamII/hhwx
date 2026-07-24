@@ -420,12 +420,12 @@ export default function GamePage() {
             {/* 分数栏 */}
             <div className="flex items-center gap-6 mb-4">
                 <div className="flex items-center gap-2">
-                    <div className="w-5 h-5 rounded-full bg-gradient-to-br from-gray-700 to-black shadow" />
+                    <div className="w-5 h-5 rounded-full bg-linear-to-br from-gray-700 to-black shadow-sm" />
                     <span className="text-lg font-bold text-gray-800">{pieces.black}</span>
                 </div>
                 <span className="text-gray-400 font-light">vs</span>
                 <div className="flex items-center gap-2">
-                    <div className="w-5 h-5 rounded-full bg-gradient-to-br from-white to-gray-200 shadow border border-gray-300" />
+                    <div className="w-5 h-5 rounded-full bg-linear-to-br from-white to-gray-200 shadow-sm border border-gray-300" />
                     <span className="text-lg font-bold text-gray-800">{pieces.white}</span>
                 </div>
             </div>
@@ -499,7 +499,7 @@ export default function GamePage() {
                 {/* 中间按钮/状态核心区 */}
                 <div className="flex flex-col items-center gap-3 mb-2 flex-1 px-2">
                     {/* 回合指示器 */}
-                    <div className="px-4 py-2 rounded-full bg-white/88 text-xs font-medium text-gray-600 shadow-sm text-center whitespace-nowrap">
+                    <div className="px-4 py-2 rounded-full bg-white/88 text-xs font-medium text-gray-600 shadow-xs text-center whitespace-nowrap">
                         {state.gamePhase === "playing" && state.currentPlayer === playerColor
                             ? t("yourTurn")
                             : state.gamePhase === "aiThinking" || state.currentPlayer === aiColor
@@ -513,7 +513,7 @@ export default function GamePage() {
                     {state.gamePhase !== "ended" ? (
                         <button
                             onClick={handleGiveUp}
-                            className="w-full max-w-[120px] px-3 py-2 bg-white/82 border border-gray-300 text-xs font-medium text-gray-600 rounded-full hover:bg-red-50 hover:border-red-300 hover:text-red-600 shadow-sm"
+                            className="w-full max-w-[120px] px-3 py-2 bg-white/82 border border-gray-300 text-xs font-medium text-gray-600 rounded-full hover:bg-red-50 hover:border-red-300 hover:text-red-600 shadow-xs"
                         >
                             {t("resign")}
                         </button>
@@ -521,13 +521,13 @@ export default function GamePage() {
                         <div className="flex flex-col gap-2 w-full max-w-[120px]">
                             <button
                                 onClick={handleRestart}
-                                className="w-full px-3 py-2 bg-gradient-to-r from-blue-500 to-purple-600 text-white font-semibold rounded-full hover:opacity-90 shadow-sm text-xs"
+                                className="w-full px-3 py-2 bg-linear-to-r from-blue-500 to-purple-600 text-white font-semibold rounded-full hover:opacity-90 shadow-xs text-xs"
                             >
                                 {t("restart")}
                             </button>
                             <button
                                 onClick={handleReturnToSelect}
-                                className="w-full px-3 py-2 bg-white/82 border border-gray-300 text-xs font-medium text-gray-600 rounded-full hover:bg-white/92 shadow-sm"
+                                className="w-full px-3 py-2 bg-white/82 border border-gray-300 text-xs font-medium text-gray-600 rounded-full hover:bg-white/92 shadow-xs"
                             >
                                 {t("reselect")}
                             </button>
@@ -556,7 +556,7 @@ export default function GamePage() {
             {/* 桌面端：中控及按钮区 */}
             <div className="hidden sm:flex flex-col items-center">
                 {/* 回合指示器 */}
-                <div className="mt-4 px-4 py-2 rounded-full bg-white/88 text-sm font-medium text-gray-600 shadow-sm">
+                <div className="mt-4 px-4 py-2 rounded-full bg-white/88 text-sm font-medium text-gray-600 shadow-xs">
                     {state.gamePhase === "playing" && state.currentPlayer === playerColor
                         ? t("yourTurn")
                         : state.gamePhase === "aiThinking" || state.currentPlayer === aiColor
@@ -570,7 +570,7 @@ export default function GamePage() {
                 {state.gamePhase !== "ended" ? (
                     <button
                         onClick={handleGiveUp}
-                        className="mt-3 px-5 py-2 bg-white/82 border border-gray-300 text-sm font-medium text-gray-600 rounded-full hover:bg-red-50 hover:border-red-300 hover:text-red-600 transition-colors duration-200 shadow-sm"
+                        className="mt-3 px-5 py-2 bg-white/82 border border-gray-300 text-sm font-medium text-gray-600 rounded-full hover:bg-red-50 hover:border-red-300 hover:text-red-600 transition-colors duration-200 shadow-xs"
                     >
                         {t("resign")}
                     </button>
@@ -578,13 +578,13 @@ export default function GamePage() {
                     <div className="mt-3 flex flex-col gap-3">
                         <button
                             onClick={handleRestart}
-                            className="px-5 py-2 bg-gradient-to-r from-blue-500 to-purple-600 text-white font-semibold rounded-full hover:opacity-90 transition text-sm shadow-sm"
+                            className="px-5 py-2 bg-linear-to-r from-blue-500 to-purple-600 text-white font-semibold rounded-full hover:opacity-90 transition text-sm shadow-xs"
                         >
                             {t("restart")}
                         </button>
                         <button
                             onClick={handleReturnToSelect}
-                            className="px-5 py-2 bg-white/82 border border-gray-300 text-sm font-medium text-gray-600 rounded-full hover:bg-white/92 transition-colors duration-200 shadow-sm"
+                            className="px-5 py-2 bg-white/82 border border-gray-300 text-sm font-medium text-gray-600 rounded-full hover:bg-white/92 transition-colors duration-200 shadow-xs"
                         >
                             {t("reselect")}
                         </button>

@@ -58,7 +58,7 @@ const StampPickerOption = memo(function StampPickerOption({
       onPointerLeave={() => setPreviewActive(false)}
       onFocus={() => setPreviewActive(true)}
       onBlur={() => setPreviewActive(false)}
-      className="relative flex h-20 w-full min-w-0 items-center justify-center rounded-lg p-1 transition hover:bg-rose-50 focus:bg-rose-50 focus:outline-none focus:ring-2 focus:ring-rose-200 dark:hover:bg-rose-500/10 dark:focus:bg-rose-500/10 dark:focus:ring-rose-500/30"
+      className="relative flex h-20 w-full min-w-0 items-center justify-center rounded-lg p-1 transition hover:bg-rose-50 focus:bg-rose-50 focus:outline-hidden focus:ring-2 focus:ring-rose-200 dark:hover:bg-rose-500/10 dark:focus:bg-rose-500/10 dark:focus:ring-rose-500/30"
       aria-label={shortcode}
       title={shortcode}
     >
@@ -68,7 +68,7 @@ const StampPickerOption = memo(function StampPickerOption({
           shortcode={shortcode}
           active={previewActive}
           onError={handleAnimationError}
-          className="h-full max-h-[4.5rem] w-full object-contain"
+          className="h-full max-h-18 w-full object-contain"
         />
       ) : (
         // eslint-disable-next-line @next/next/no-img-element
@@ -78,11 +78,11 @@ const StampPickerOption = memo(function StampPickerOption({
           loading="lazy"
           decoding="async"
           referrerPolicy="strict-origin-when-cross-origin"
-          className="h-full max-h-[4.5rem] w-full object-contain"
+          className="h-full max-h-18 w-full object-contain"
         />
       )}
       {hasVoice ? (
-        <span className="absolute bottom-1 right-1 inline-flex h-4 w-4 items-center justify-center rounded-full bg-rose-500 text-white shadow-sm ring-2 ring-white dark:ring-slate-900">
+        <span className="absolute bottom-1 right-1 inline-flex h-4 w-4 items-center justify-center rounded-full bg-rose-500 text-white shadow-xs ring-2 ring-white dark:ring-slate-900">
           <Volume2 size={10} aria-hidden="true" />
         </span>
       ) : null}
@@ -174,9 +174,9 @@ export const StampPickerButton = memo(function StampPickerButton({
                 type="button"
                 onClick={() => onRegionChange(region)}
                 className={cn(
-                  "h-7 rounded-full text-xs font-bold transition focus:outline-none focus:ring-2 focus:ring-rose-200 dark:focus:ring-rose-500/30",
+                  "h-7 rounded-full text-xs font-bold transition focus:outline-hidden focus:ring-2 focus:ring-rose-200 dark:focus:ring-rose-500/30",
                   selectedRegion === region
-                    ? "bg-rose-500 text-white shadow-sm"
+                    ? "bg-rose-500 text-white shadow-xs"
                     : "bg-slate-100 text-slate-500 hover:bg-rose-50 hover:text-rose-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-rose-500/10 dark:hover:text-rose-200",
                 )}
               >
@@ -184,7 +184,7 @@ export const StampPickerButton = memo(function StampPickerButton({
               </button>
             ))}
           </div>
-          <div className="grid max-h-80 grid-cols-[repeat(4,minmax(0,1fr))] gap-1 overflow-x-hidden overflow-y-auto pr-1 [scrollbar-color:#fb7185_#e5e7eb] [scrollbar-width:thin] [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-rose-400 [&::-webkit-scrollbar-track]:rounded-full [&::-webkit-scrollbar-track]:bg-slate-200">
+          <div className="grid max-h-80 grid-cols-4 gap-1 overflow-x-hidden overflow-y-auto pr-1 [scrollbar-color:#fb7185_#e5e7eb] scrollbar-thin [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-rose-400 [&::-webkit-scrollbar-track]:rounded-full [&::-webkit-scrollbar-track]:bg-slate-200">
             {stamps.map((stamp) => (
               <StampPickerOption key={`${stamp.region}-${stamp.id}`} stamp={stamp} onSelect={onSelect} />
             ))}

@@ -104,7 +104,7 @@ export default function AccountPasswordPage() {
       ) : profileError ? (
         <AccountErrorState message={profileError} />
       ) : profile ? (
-        <form onSubmit={handleSubmit} className="space-y-6 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+        <form onSubmit={handleSubmit} className="space-y-6 rounded-3xl border border-slate-200 bg-white p-6 shadow-xs">
           <div>
             <h2 className="text-xl font-semibold text-slate-900">{t("sectionTitle")}</h2>
             <p className="mt-2 text-sm leading-6 text-slate-600">

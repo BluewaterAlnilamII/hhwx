@@ -91,12 +91,12 @@ export default function Home() {
             {savedPieces && (
               <div className="mb-6 flex justify-center gap-6">
                 <div className="flex items-center gap-2">
-                  <div className="h-4 w-4 rounded-full bg-gradient-to-br from-gray-700 to-black" />
+                  <div className="h-4 w-4 rounded-full bg-linear-to-br from-gray-700 to-black" />
                   <span className="text-lg font-bold text-white">{savedPieces.black}</span>
                 </div>
                 <span className="font-light text-gray-400">:</span>
                 <div className="flex items-center gap-2">
-                  <div className="h-4 w-4 rounded-full border border-gray-400 bg-gradient-to-br from-white to-gray-200" />
+                  <div className="h-4 w-4 rounded-full border border-gray-400 bg-linear-to-br from-white to-gray-200" />
                   <span className="text-lg font-bold text-white">{savedPieces.white}</span>
                 </div>
               </div>
@@ -105,7 +105,7 @@ export default function Home() {
             <div className="flex justify-center gap-3">
               <button
                 onClick={handleResume}
-                className="rounded-xl bg-gradient-to-r from-blue-500 to-purple-600 px-6 py-2.5 text-sm font-semibold text-white transition hover:opacity-90"
+                className="rounded-xl bg-linear-to-r from-blue-500 to-purple-600 px-6 py-2.5 text-sm font-semibold text-white transition hover:opacity-90"
               >
                 {t("accept")}
               </button>

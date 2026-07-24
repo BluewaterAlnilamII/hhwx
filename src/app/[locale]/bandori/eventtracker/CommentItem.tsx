@@ -372,7 +372,7 @@ export const CommentItem = memo(function CommentItem({
         "relative transition",
         isReply
           ? "rounded-xl bg-transparent py-1"
-          : "rounded-2xl border bg-white p-3 shadow-sm dark:bg-slate-900 sm:p-4",
+          : "rounded-2xl border bg-white p-3 shadow-xs dark:bg-slate-900 sm:p-4",
         isHighlighted && isReply
           ? "bg-sky-50/80 ring-2 ring-sky-200 dark:bg-sky-500/10 dark:ring-sky-500/25"
           : null,
@@ -401,7 +401,7 @@ export const CommentItem = memo(function CommentItem({
                 <a
                   href={replyToPermalink}
                   onClick={handleReplyToClick}
-                  className="rounded-full text-xs font-medium text-sky-600 underline-offset-2 hover:text-sky-700 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-200 dark:text-sky-300 dark:hover:text-sky-200"
+                  className="rounded-full text-xs font-medium text-sky-600 underline-offset-2 hover:text-sky-700 hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-sky-200 dark:text-sky-300 dark:hover:text-sky-200"
                 >
                   回复 @{comment.replyToUsername}
                 </a>
@@ -421,7 +421,7 @@ export const CommentItem = memo(function CommentItem({
                 value={editValue}
                 onChange={(event) => setEditValue(event.target.value)}
                 maxLength={COMMENT_INPUT_MAX_LENGTH}
-                className="min-h-[5rem] w-full resize-y rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm leading-6 text-slate-800 outline-none transition placeholder:text-slate-400 selection:bg-sky-200 selection:text-slate-900 focus:border-sky-400 focus:bg-white focus:ring-2 focus:ring-sky-100 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:placeholder:text-slate-500 dark:selection:bg-sky-500/40 dark:selection:text-white dark:focus:border-sky-400 dark:focus:bg-slate-900 dark:focus:text-slate-50 dark:focus:ring-sky-500/25"
+                className="min-h-20 w-full resize-y rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm leading-6 text-slate-800 outline-hidden transition placeholder:text-slate-400 selection:bg-sky-200 selection:text-slate-900 focus:border-sky-400 focus:bg-white focus:ring-2 focus:ring-sky-100 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:placeholder:text-slate-500 dark:selection:bg-sky-500/40 dark:selection:text-white dark:focus:border-sky-400 dark:focus:bg-slate-900 dark:focus:text-slate-50 dark:focus:ring-sky-500/25"
               />
               <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
@@ -557,8 +557,8 @@ export const CommentItem = memo(function CommentItem({
                   </button>
                 </Dialog.Trigger>
                 <Dialog.Portal>
-                  <Dialog.Overlay className="fixed inset-0 z-[120] bg-black/35 backdrop-blur-[1px] data-[state=closed]:animate-out data-[state=closed]:fade-out data-[state=open]:animate-in data-[state=open]:fade-in" />
-                  <Dialog.Content className="fixed left-1/2 top-1/2 z-[121] w-[min(18rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-[18px] border border-slate-200 bg-white text-slate-900 shadow-2xl outline-none data-[state=closed]:animate-out data-[state=closed]:fade-out data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in data-[state=open]:zoom-in-95 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-50">
+                  <Dialog.Overlay className="fixed inset-0 z-120 bg-black/35 backdrop-blur-[1px] data-[state=closed]:animate-out data-[state=closed]:fade-out data-[state=open]:animate-in data-[state=open]:fade-in" />
+                  <Dialog.Content className="fixed left-1/2 top-1/2 z-121 w-[min(18rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-[18px] border border-slate-200 bg-white text-slate-900 shadow-2xl outline-hidden data-[state=closed]:animate-out data-[state=closed]:fade-out data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in data-[state=open]:zoom-in-95 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-50">
                     <Dialog.Title className="px-5 py-5 text-center text-base font-semibold">
                       确认删除评论？
                     </Dialog.Title>
@@ -602,7 +602,7 @@ export const CommentItem = memo(function CommentItem({
           ) : null}
 
           {visibleReplies.length > 0 ? (
-            <div className="mt-3 -ml-[1.375rem] space-y-3 border-l border-slate-200 pl-2 dark:border-slate-700 sm:ml-0 sm:pl-3">
+            <div className="mt-3 -ml-5.5 space-y-3 border-l border-slate-200 pl-2 dark:border-slate-700 sm:ml-0 sm:pl-3">
               {visibleReplies.map((reply) => (
                 <CommentItem
                   key={reply.id}
@@ -632,7 +632,7 @@ export const CommentItem = memo(function CommentItem({
               type="button"
               onClick={() => onLoadReplies(threadRootId, loadedReplies?.nextCursor)}
               disabled={loadingReplies[threadRootId]}
-              className="mt-3 inline-flex h-8 items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 text-xs font-semibold text-sky-700 shadow-sm transition hover:border-sky-200 hover:bg-sky-50 disabled:opacity-60 dark:border-slate-700 dark:bg-slate-900 dark:text-sky-300"
+              className="mt-3 inline-flex h-8 items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 text-xs font-semibold text-sky-700 shadow-xs transition hover:border-sky-200 hover:bg-sky-50 disabled:opacity-60 dark:border-slate-700 dark:bg-slate-900 dark:text-sky-300"
             >
               <MoreHorizontal size={14} />
               {loadingReplies[threadRootId] ? "加载中" : loadedReplies?.hasMore ? "再展开 10 条回复" : `展开 ${hiddenReplyCount} 条回复`}

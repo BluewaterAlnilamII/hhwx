@@ -27,7 +27,7 @@ export default function BandoriGameProfilesPage() {
       ) : profile?.emailVerified ? (
         <GameProfilesPanel />
       ) : (
-        <section className="rounded-3xl border border-amber-200 bg-amber-50 p-6 shadow-sm">
+        <section className="rounded-3xl border border-amber-200 bg-amber-50 p-6 shadow-xs">
           <h2 className="text-xl font-semibold text-amber-900">{accountT("gameProfiles.verifyTitle")}</h2>
           <p className="mt-2 text-sm leading-6 text-amber-700">
             {accountT("gameProfiles.verifyDescription")}

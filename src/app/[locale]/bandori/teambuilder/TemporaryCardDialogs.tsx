@@ -18,7 +18,7 @@ import { type TemporaryGameProfileCard } from "./card-preferences";
 function TemporaryCardPickerLoading() {
   const t = useTranslations("bandori.teamBuilder.dynamicLoading");
   return (
-    <div className="flex min-h-[18rem] items-center justify-center gap-2 rounded-xl bg-white p-4 text-sm font-bold text-slate-600">
+    <div className="flex min-h-72 items-center justify-center gap-2 rounded-xl bg-white p-4 text-sm font-bold text-slate-600">
       <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
       {t("cardPicker")}
     </div>
@@ -28,7 +28,7 @@ function TemporaryCardPickerLoading() {
 function TemporaryCardEditorLoading() {
   const t = useTranslations("bandori.teamBuilder.dynamicLoading");
   return (
-    <div className="fixed inset-0 z-[1100] flex h-dvh items-center justify-center overflow-hidden overscroll-contain bg-slate-950/55 p-3 sm:p-6" role="dialog" aria-modal="true">
+    <div className="fixed inset-0 z-1100 flex h-dvh items-center justify-center overflow-hidden overscroll-contain bg-slate-950/55 p-3 sm:p-6" role="dialog" aria-modal="true">
       <div className="inline-flex items-center gap-2 rounded-2xl bg-white px-4 py-3 text-sm font-bold text-slate-600 shadow-2xl">
         <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
         {t("cardEditor")}
@@ -95,7 +95,7 @@ export function TemporaryCardPickerDialog({
   }
 
   return createPortal((
-    <div className="fixed inset-0 z-[1000] flex h-dvh items-center justify-center overflow-hidden overscroll-contain bg-slate-950/55 p-3 sm:p-6" role="dialog" aria-modal="true" aria-labelledby="temporary-card-picker-title">
+    <div className="fixed inset-0 z-1000 flex h-dvh items-center justify-center overflow-hidden overscroll-contain bg-slate-950/55 p-3 sm:p-6" role="dialog" aria-modal="true" aria-labelledby="temporary-card-picker-title">
       <div className="flex max-h-[calc(100dvh-1.5rem)] w-full max-w-6xl flex-col overflow-hidden rounded-2xl bg-slate-50 shadow-2xl sm:max-h-[calc(100dvh-3rem)]">
         <div className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-3 sm:px-5">
           <div className="min-w-0">

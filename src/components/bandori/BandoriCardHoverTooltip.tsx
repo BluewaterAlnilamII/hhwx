@@ -47,8 +47,8 @@ export default function BandoriCardHoverTooltip({
       )}
       style={style}
     >
-      <span className="block whitespace-normal break-words text-sm font-black leading-snug text-slate-900">{cardName}</span>
-      <span className="mt-1 block whitespace-normal break-words text-xs font-semibold leading-snug text-slate-500">
+      <span className="block whitespace-normal wrap-break-word text-sm font-black leading-snug text-slate-900">{cardName}</span>
+      <span className="mt-1 block whitespace-normal wrap-break-word text-xs font-semibold leading-snug text-slate-500">
         {characterName}
       </span>
       {children ? <span className="mt-2 flex flex-wrap justify-center gap-2 text-[11px] font-black">{children}</span> : null}
@@ -125,7 +125,7 @@ export function BandoriCardHoverTooltipPortal({
     <BandoriCardHoverTooltip
       cardName={cardName}
       characterName={characterName}
-      className={cn("fixed z-[1000] -translate-x-1/2", className)}
+      className={cn("fixed z-1000 -translate-x-1/2", className)}
       style={{ left: position.left, top: position.top }}
     >
       {children}

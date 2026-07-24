@@ -33,7 +33,7 @@ export default function CharacterAvatar({
 
     return (
         <div
-            className={`relative flex-shrink-0 ${className}`}
+            className={`relative shrink-0 ${className}`}
             data-character-id={characterId}
             data-emotion={emotion}
             style={{ width, height }}

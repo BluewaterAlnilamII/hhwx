@@ -34,7 +34,7 @@ export default function TeamBuilderPreferenceCardTile({
         onMouseEnter={() => setHoverOpen(true)}
         onMouseLeave={() => setHoverOpen(false)}
         title={title}
-        className={`group relative ${compact ? "h-[56px] w-[56px]" : "h-[74px] w-[74px]"} rounded-[5px] outline outline-1 outline-white/80 transition hover:z-40 hover:-translate-y-0.5 hover:outline-2 hover:outline-sky-400 sm:h-[76px] sm:w-[76px]`}
+        className={`group relative ${compact ? "h-[56px] w-[56px]" : "h-[74px] w-[74px]"} rounded-[5px] outline-solid outline-1 outline-white/80 transition hover:z-40 hover:-translate-y-0.5 hover:outline-2 hover:outline-sky-400 sm:h-[76px] sm:w-[76px]`}
       >
         <span className={`relative block h-full w-full overflow-visible rounded-[5px] bg-white text-left shadow-[0_2px_7px_rgba(15,23,42,0.22)] ${
           muted ? "brightness-[0.42] saturate-[0.9] contrast-110" : ""
@@ -50,7 +50,7 @@ export default function TeamBuilderPreferenceCardTile({
           cardName={entry.cardName}
           characterName={entry.characterName}
         >
-          <span className="block w-full whitespace-normal break-words rounded-xl bg-slate-50 px-2 py-1 text-slate-700">
+          <span className="block w-full whitespace-normal wrap-break-word rounded-xl bg-slate-50 px-2 py-1 text-slate-700">
             {entry.skillEffectLabel}
           </span>
         </BandoriCardHoverTooltipPortal>

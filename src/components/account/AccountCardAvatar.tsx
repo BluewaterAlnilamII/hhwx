@@ -56,7 +56,7 @@ export default function AccountCardAvatar({
   return (
     <div
       className={cn(
-        "relative shrink-0 overflow-hidden rounded-full bg-gradient-to-br from-sky-400 to-indigo-500 text-white shadow-sm ring-2 ring-white/35",
+        "relative shrink-0 overflow-hidden rounded-full bg-linear-to-br from-sky-400 to-indigo-500 text-white shadow-xs ring-2 ring-white/35",
         SIZE_CLASS_NAMES[size],
         className,
       )}

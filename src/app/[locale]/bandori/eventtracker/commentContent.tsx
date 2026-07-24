@@ -250,13 +250,13 @@ function CommentStampView({ stamp, shortcode }: { stamp: CommentStamp; shortcode
       }}
       className={cn(
         className,
-        "rounded-lg transition hover:bg-rose-50 focus:outline-none focus:ring-2 focus:ring-rose-200 dark:hover:bg-rose-500/10 dark:focus:ring-rose-500/30",
+        "rounded-lg transition hover:bg-rose-50 focus:outline-hidden focus:ring-2 focus:ring-rose-200 dark:hover:bg-rose-500/10 dark:focus:ring-rose-500/30",
       )}
       aria-label={`Play ${shortcode}`}
       title={`Play ${shortcode}`}
     >
       {image}
-      <span className="absolute bottom-1 right-1 inline-flex h-5 w-5 items-center justify-center rounded-full bg-rose-500 text-white shadow-sm ring-2 ring-white dark:ring-slate-900">
+      <span className="absolute bottom-1 right-1 inline-flex h-5 w-5 items-center justify-center rounded-full bg-rose-500 text-white shadow-xs ring-2 ring-white dark:ring-slate-900">
         <Volume2 size={12} aria-hidden="true" />
       </span>
     </button>
@@ -424,7 +424,7 @@ export const CommentContent = memo(function CommentContent({
 
   if (isDeleted) {
     return (
-      <p className={cn("mt-2 whitespace-pre-wrap break-words text-[15px] leading-[26px] [overflow-wrap:anywhere]", contentClassName)}>
+      <p className={cn("mt-2 whitespace-pre-wrap wrap-break-word text-[15px] leading-[26px] wrap-anywhere", contentClassName)}>
         （已删除）
       </p>
     );
@@ -432,14 +432,14 @@ export const CommentContent = memo(function CommentContent({
 
   if (isJumboEmojiContent(tokens)) {
     return (
-      <div className={cn("mt-2 flex flex-col items-start gap-1 [overflow-wrap:anywhere]", contentClassName)}>
+      <div className={cn("mt-2 flex flex-col items-start gap-1 wrap-anywhere", contentClassName)}>
         {renderJumboEmojiRows(tokens)}
       </div>
     );
   }
 
   return (
-    <p className={cn("mt-2 whitespace-pre-wrap break-words text-[15px] leading-[26px] [overflow-wrap:anywhere]", contentClassName)}>
+    <p className={cn("mt-2 whitespace-pre-wrap wrap-break-word text-[15px] leading-[26px] wrap-anywhere", contentClassName)}>
       {renderCommentContentTokens(tokens)}
     </p>
   );

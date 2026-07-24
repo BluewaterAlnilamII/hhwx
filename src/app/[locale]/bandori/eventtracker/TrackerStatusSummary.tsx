@@ -78,7 +78,7 @@ export const TrackerStatusSummary = memo(function TrackerStatusSummary({
             <div className="flex items-center gap-1.5 sm:gap-2">
               <span className="font-medium text-slate-500 dark:text-slate-400">更新时间</span>
               <span
-                className="grid w-[4.875rem] shrink-0 grid-cols-[3.75rem_0.875rem] items-center gap-1"
+                className="grid w-19.5 shrink-0 grid-cols-[3.75rem_0.875rem] items-center gap-1"
                 data-testid="tracker-update-status"
               >
                 {scoreSummary.latestUpdateTime !== null

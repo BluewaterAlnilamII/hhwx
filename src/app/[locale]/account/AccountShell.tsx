@@ -50,7 +50,7 @@ export default function AccountShell({
               ) : null}
               <h1 className="mt-2 text-2xl font-bold text-slate-900 sm:text-3xl">{title}</h1>
               {description ? (
-                <p className="mt-2 w-full max-w-[14rem] break-all text-sm leading-6 text-slate-600 min-[390px]:max-w-full sm:max-w-2xl">{description}</p>
+                <p className="mt-2 w-full max-w-56 break-all text-sm leading-6 text-slate-600 min-[390px]:max-w-full sm:max-w-2xl">{description}</p>
               ) : null}
             </div>
             {backHref ? (

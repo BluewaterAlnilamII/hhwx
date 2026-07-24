@@ -107,7 +107,7 @@ export default function GuestbookCommentSection() {
                 emailVerified ? (
                 <form onSubmit={handleSubmit} className="mb-6">
                     <div className="flex gap-3">
-                        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-400 to-purple-500 flex items-center justify-center text-white text-xs font-bold flex-shrink-0 mt-1">
+                        <div className="w-8 h-8 rounded-full bg-linear-to-br from-blue-400 to-purple-500 flex items-center justify-center text-white text-xs font-bold shrink-0 mt-1">
                             {getUsernameAvatarLabel(username)}
                         </div>
                         <div className="flex-1">
@@ -115,14 +115,14 @@ export default function GuestbookCommentSection() {
                                 value={newComment}
                                 onChange={(e) => setNewComment(e.target.value)}
                                 placeholder={t("placeholder")}
-                                className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-blue-400 focus:ring-2 focus:ring-blue-400/20 outline-none transition resize-none text-gray-800 bg-[#fffef4] text-sm"
+                                className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-blue-400 focus:ring-2 focus:ring-blue-400/20 outline-hidden transition resize-none text-gray-800 bg-[#fffef4] text-sm"
                                 rows={2}
                             />
                             <div className="flex justify-end mt-2">
                                 <button
                                     type="submit"
                                     disabled={loading || !newComment.trim()}
-                                    className="px-5 py-1.5 bg-gradient-to-r from-blue-500 to-purple-600 text-white text-sm font-medium rounded-full hover:opacity-90 transition disabled:opacity-40"
+                                    className="px-5 py-1.5 bg-linear-to-r from-blue-500 to-purple-600 text-white text-sm font-medium rounded-full hover:opacity-90 transition disabled:opacity-40"
                                 >
                                     {loading ? t("submitting") : t("submit")}
                                 </button>
@@ -154,10 +154,10 @@ export default function GuestbookCommentSection() {
                 {comments.map((c) => (
                     <div
                         key={c.id}
-                        className="bg-[#fffef4] rounded-xl p-4 shadow-sm"
+                        className="bg-[#fffef4] rounded-xl p-4 shadow-xs"
                     >
                         <div className="flex items-center gap-2 mb-2">
-                            <div className="w-6 h-6 rounded-full bg-gradient-to-br from-gray-300 to-gray-400 flex items-center justify-center text-white text-[10px] font-bold">
+                            <div className="w-6 h-6 rounded-full bg-linear-to-br from-gray-300 to-gray-400 flex items-center justify-center text-white text-[10px] font-bold">
                                 {getUsernameAvatarLabel(c.profiles?.username, "?")}
                             </div>
                             <span className="text-sm font-semibold text-gray-700">

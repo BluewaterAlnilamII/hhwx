@@ -322,7 +322,7 @@ export default function AccountNotificationsPage() {
         key={notification.id}
         href={href}
         onClick={() => void markRead(notification.id).catch(() => undefined)}
-        className="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3.5 shadow-sm transition hover:border-sky-200 hover:shadow-[0_12px_36px_rgba(14,165,233,0.08)]"
+        className="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3.5 shadow-xs transition hover:border-sky-200 hover:shadow-[0_12px_36px_rgba(14,165,233,0.08)]"
       >
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
@@ -366,7 +366,7 @@ export default function AccountNotificationsPage() {
               type="button"
               onClick={() => void loadMoreNotifications(activeNotificationType)}
               disabled={activeColumn.loadingMore}
-              className="inline-flex h-10 items-center rounded-full border border-slate-200 bg-white px-5 text-sm font-semibold text-sky-700 shadow-sm transition hover:border-sky-200 hover:bg-sky-50 disabled:opacity-60"
+              className="inline-flex h-10 items-center rounded-full border border-slate-200 bg-white px-5 text-sm font-semibold text-sky-700 shadow-xs transition hover:border-sky-200 hover:bg-sky-50 disabled:opacity-60"
             >
               {activeColumn.loadingMore ? commonT("actions.loading") : commonT("actions.loadMore")}
             </button>
@@ -427,7 +427,7 @@ export default function AccountNotificationsPage() {
                     className={[
                       "flex h-11 items-center justify-center gap-2 rounded-xl px-3 text-sm font-semibold transition",
                       isActive
-                        ? "bg-white text-sky-700 shadow-sm ring-1 ring-slate-200"
+                        ? "bg-white text-sky-700 shadow-xs ring-1 ring-slate-200"
                         : "text-slate-500 hover:bg-white/70 hover:text-slate-700",
                     ].join(" ")}
                   >
