@@ -105,7 +105,7 @@ GET {CDN_BASE}/bandori/cards/index.json
 {
   "schemaVersion": 1,
   "updatedAt": "2026-07-23T00:00:00Z",
-  "gachaVoiceProvenance": "gacha-spin-v1",
+  "gachaVoiceProvenance": "gacha-spin-v2",
   "resources": {
     "res001001": {
       "artPlan": { "normalSourceVariant": "normal", "hasAfterTraining": false },
@@ -121,7 +121,7 @@ GET {CDN_BASE}/bandori/cards/index.json
 }
 ```
 
-`resources` 以 `resourceSetName` 为 key。`artPlan` 记录公开 `normal` 图片实际取自游戏的 `normal` 还是 `after_training` 源纹理，并声明是否应存在独立训练后图片组；`hasAfterTraining` 必须与公开 `after_training` 图片组是否存在一致。`gachaVoiceProvenance` 把可接受的抽卡语音提取规则固定为 GachaSpin v1，避免旧版宽泛 ACB 扫描生成的 descriptor 被静默复用。`normal` 图片组及其中的 `thumb`、`full`、`trim` descriptor 必需存在。`after_training` 是可选的完整图片组；一旦存在，三个 descriptor 都必须存在。`gachaVoice` 可选，descriptor 字段与图片相同，但使用 `contentType: "audio/mpeg"` 和 `durationMs`，不使用图片尺寸；key 为 `bandori/cards/{resourceSetName}/voice/gacha/{sha256}.mp3`。仅国服存在的 `bili_` 资源使用游戏中的数字卡牌 GachaSpin cue；若官方 cue 确实缺失，只会省略 `gachaVoice`，不会隐藏卡面。
+`resources` 以 `resourceSetName` 为 key。`artPlan` 记录公开 `normal` 图片实际取自游戏的 `normal` 还是 `after_training` 源纹理，并声明是否应存在独立训练后图片组；`hasAfterTraining` 必须与公开 `after_training` 图片组是否存在一致。`gachaVoiceProvenance` 把可接受的抽卡语音提取规则固定为 GachaSpin v2，避免旧 cue 或 ACB 规则生成的 descriptor 被静默复用。`normal` 图片组及其中的 `thumb`、`full`、`trim` descriptor 必需存在。`after_training` 是可选的完整图片组；一旦存在，三个 descriptor 都必须存在。并非每张卡都有抽卡语音，所以 `gachaVoice` 在结构上可选；但 Master 声明了抽卡语音时，builder 必须找到与完整 `resourceSetName` 精确匹配的 cue，包括来自 `biliGachaVoice*.acb` 的国服 `bili_` cue。descriptor 使用 `contentType: "audio/mpeg"` 和 `durationMs`，不使用图片尺寸；key 为 `bandori/cards/{resourceSetName}/voice/gacha/{sha256}.mp3`。
 
 Events 使用另一个公开发现文档：
 

@@ -6,7 +6,7 @@ export const BANDORI_PUBLIC_ASSET_SERVERS = ["jp", "en", "tw", "cn"] as const;
 export const BANDORI_CARDS_INDEX_KEY = "bandori/cards/index.json";
 export const BANDORI_EVENTS_INDEX_KEY = "bandori/events/index.json";
 export const BANDORI_PUBLIC_ASSET_INDEX_SCHEMA_VERSION = 1;
-export const BANDORI_CARD_GACHA_VOICE_PROVENANCE = "gacha-spin-v1";
+export const BANDORI_CARD_GACHA_VOICE_PROVENANCE = "gacha-spin-v2";
 
 export type BandoriPublicAssetServer = (typeof BANDORI_PUBLIC_ASSET_SERVERS)[number];
 export type BandoriAssetRegion = Extract<BandoriPublicAssetServer, "jp" | "cn">;

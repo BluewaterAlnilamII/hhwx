@@ -55,7 +55,7 @@ function cardsIndex() {
   return {
     schemaVersion: 1,
     updatedAt: "2026-07-23T00:00:00Z",
-    gachaVoiceProvenance: "gacha-spin-v1",
+    gachaVoiceProvenance: "gacha-spin-v2",
     resources: {
       [resourceSetName]: {
         artPlan: {

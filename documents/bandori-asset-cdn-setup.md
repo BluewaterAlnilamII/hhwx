@@ -105,7 +105,7 @@ The response is JSON with this shape:
 {
   "schemaVersion": 1,
   "updatedAt": "2026-07-23T00:00:00Z",
-  "gachaVoiceProvenance": "gacha-spin-v1",
+  "gachaVoiceProvenance": "gacha-spin-v2",
   "resources": {
     "res001001": {
       "artPlan": { "normalSourceVariant": "normal", "hasAfterTraining": false },
@@ -121,7 +121,7 @@ The response is JSON with this shape:
 }
 ```
 
-`resources` is keyed by `resourceSetName`. `artPlan` records whether the public `normal` image was extracted from the game's `normal` or `after_training` source texture and whether a separate trained set is expected; `hasAfterTraining` must match the presence of the public `after_training` set. `gachaVoiceProvenance` fixes the accepted acquisition-voice extraction rule to GachaSpin v1, preventing descriptors created by older broad ACB scans from being silently reused. The `normal` image set and its `thumb`, `full`, and `trim` descriptors are required. `after_training` is optional as a complete image set; when present, all three descriptors are required. `gachaVoice` is optional and uses the same descriptor fields except `contentType: "audio/mpeg"` and `durationMs` in place of image dimensions. Its key is `bandori/cards/{resourceSetName}/voice/gacha/{sha256}.mp3`. CN-only `bili_` resources use the game's numeric-card GachaSpin cue; an official cue gap leaves `gachaVoice` absent without suppressing the card images.
+`resources` is keyed by `resourceSetName`. `artPlan` records whether the public `normal` image was extracted from the game's `normal` or `after_training` source texture and whether a separate trained set is expected; `hasAfterTraining` must match the presence of the public `after_training` set. `gachaVoiceProvenance` fixes the accepted acquisition-voice extraction rule to GachaSpin v2, preventing descriptors created by older cue or ACB rules from being silently reused. The `normal` image set and its `thumb`, `full`, and `trim` descriptors are required. `after_training` is optional as a complete image set; when present, all three descriptors are required. `gachaVoice` is optional because not every card has an acquisition voice; when Master declares one, the builder requires the exact `resourceSetName` cue, including CN-only `bili_` cues from `biliGachaVoice*.acb`. The descriptor uses `contentType: "audio/mpeg"` and `durationMs` in place of image dimensions. Its key is `bandori/cards/{resourceSetName}/voice/gacha/{sha256}.mp3`.
 
 Events use a separate public discovery document:
 
