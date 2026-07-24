@@ -1,10 +1,10 @@
 import { unstable_cache } from "next/cache";
 import {
-  BANDORI_EVENT_CATALOG_CACHE_PROFILE,
   BANDORI_EVENTS_CACHE_TAG,
   BANDORI_SCHEDULE_CACHE_TAG,
-  LIVE_API_CACHE_CONTROL,
-  withCacheControl,
+  NO_STORE_HTTP_CACHE_POLICY,
+  SNAPSHOT_HTTP_CACHE_POLICY,
+  withHttpCachePolicy,
 } from "@/lib/api-cache";
 import { jsonRouteError, jsonSuccess } from "@/lib/api-response";
 import { fetchBandoriEventRecords, toBandoriEventsListResponse } from "@/lib/bandori-events-server";
@@ -21,7 +21,7 @@ const readBandoriEventsListResponse = unstable_cache(
   // 否则 data cache 可能继续回放旧 schema 的对象形状。
   ["bandori-events-route:v4"],
   {
-    revalidate: BANDORI_EVENT_CATALOG_CACHE_PROFILE.nextRevalidateSeconds ?? 300,
+    revalidate: SNAPSHOT_HTTP_CACHE_POLICY.nextRevalidateSeconds ?? 1800,
     tags: [BANDORI_EVENTS_CACHE_TAG, BANDORI_SCHEDULE_CACHE_TAG],
   },
 );
@@ -29,7 +29,7 @@ const readBandoriEventsListResponse = unstable_cache(
 export async function GET() {
   try {
     return jsonSuccess(await readBandoriEventsListResponse(), {
-      headers: withCacheControl(BANDORI_EVENT_CATALOG_CACHE_PROFILE.cacheControl),
+      headers: withHttpCachePolicy(SNAPSHOT_HTTP_CACHE_POLICY),
     });
   } catch (error) {
     console.error("Bandori events API 错误:", error);
@@ -38,7 +38,7 @@ export async function GET() {
       code: "BANDORI_EVENTS_READ_FAILED",
       message: "读取活动目录失败",
     }, {
-      headers: withCacheControl(LIVE_API_CACHE_CONTROL),
+      headers: withHttpCachePolicy(NO_STORE_HTTP_CACHE_POLICY),
     });
   }
 }

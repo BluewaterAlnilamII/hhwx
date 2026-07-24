@@ -36,13 +36,14 @@ function writeCacheEntry<T>(key: string, value: T): void {
   globalCache.set(key, { value, updatedAt: Date.now() });
 }
 
-function fetchJsonOnce(url: string): Promise<unknown> {
-  const activeRequest = globalJsonRequests.get(url);
+function fetchJsonOnce(url: string, cache: RequestCache): Promise<unknown> {
+  const requestKey = `${cache}:${url}`;
+  const activeRequest = globalJsonRequests.get(requestKey);
   if (activeRequest) {
     return activeRequest;
   }
 
-  const request = fetch(url)
+  const request = fetch(url, { cache })
     .then((response) => {
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}`);
@@ -50,11 +51,11 @@ function fetchJsonOnce(url: string): Promise<unknown> {
       return response.json() as Promise<unknown>;
     })
     .finally(() => {
-      if (globalJsonRequests.get(url) === request) {
-        globalJsonRequests.delete(url);
+      if (globalJsonRequests.get(requestKey) === request) {
+        globalJsonRequests.delete(requestKey);
       }
     });
-  globalJsonRequests.set(url, request);
+  globalJsonRequests.set(requestKey, request);
   return request;
 }
 
@@ -140,7 +141,7 @@ export function useCachedFetch<T>(
    * 而是与当前缓存合并后再写入。这样即使请求飞行期间 WebSocket 已追加了
    * 新数据到缓存中，合并结果也会保留那些更新的数据点，避免回退。
    */
-  const doFetch = useCallback((silent: boolean) => {
+  const doFetch = useCallback((silent: boolean, requestCache: RequestCache = "default") => {
     // 从 ref 读取调用时刻的 key / url
     const currentKey = keyRef.current;
     const currentUrl = urlRef.current;
@@ -154,7 +155,7 @@ export function useCachedFetch<T>(
       setLoading(true);
     }
 
-    fetchJsonOnce(currentUrl)
+    fetchJsonOnce(currentUrl, requestCache)
       .then((raw) => {
         // 如果请求期间 key 已经变了（用户切换了参数），丢弃本次结果
         if (keyRef.current !== currentKey) return;
@@ -237,7 +238,10 @@ export function useCachedFetch<T>(
     return () => document.removeEventListener("visibilitychange", onVisibilityChange);
   }, [refreshOnVisible, doFetch, shouldRefresh]);
 
-  const refresh = useCallback(() => doFetch(true), [doFetch]);
+  // Explicit refreshes perform conditional HTTP revalidation even while the
+  // browser copy is still fresh. Background refreshes keep the default cache
+  // mode so browser stale-while-revalidate can return immediately.
+  const refresh = useCallback(() => doFetch(true, "no-cache"), [doFetch]);
 
   return { data, loading, refreshing, refresh };
 }

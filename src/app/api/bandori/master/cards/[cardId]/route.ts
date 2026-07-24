@@ -1,7 +1,7 @@
 import {
-  BANDORI_MASTER_DATA_API_CACHE_CONTROL,
-  LIVE_API_CACHE_CONTROL,
-  withCacheControl,
+  NO_STORE_HTTP_CACHE_POLICY,
+  SNAPSHOT_HTTP_CACHE_POLICY,
+  withHttpCachePolicy,
 } from "@/lib/api-cache";
 import { jsonError, jsonRouteError, jsonSuccess } from "@/lib/api-response";
 import {
@@ -30,7 +30,7 @@ export async function GET(request: Request, context: RouteContext) {
       400,
       "BANDORI_MASTER_CARD_SERVER_INVALID",
       "server must be exactly one of 0, 1, 2, or 3",
-      { headers: withCacheControl(LIVE_API_CACHE_CONTROL) },
+      { headers: withHttpCachePolicy(NO_STORE_HTTP_CACHE_POLICY) },
     );
   }
   if (serverQuery.status === "unsupported") {
@@ -43,7 +43,7 @@ export async function GET(request: Request, context: RouteContext) {
   const { cardId } = await context.params;
   if (!BANDORI_MASTER_ID_PATTERN.test(cardId)) {
     return jsonError(404, "BANDORI_MASTER_CARD_NOT_FOUND", "Unknown Bandori master card", {
-      headers: withCacheControl(LIVE_API_CACHE_CONTROL),
+      headers: withHttpCachePolicy(NO_STORE_HTTP_CACHE_POLICY),
     });
   }
 
@@ -53,12 +53,12 @@ export async function GET(request: Request, context: RouteContext) {
       : await readBandoriCardApiDetail(cardId);
     if (!result) {
       return jsonError(404, "BANDORI_MASTER_CARD_NOT_FOUND", "Bandori master card is not available", {
-        headers: withCacheControl(LIVE_API_CACHE_CONTROL),
+        headers: withHttpCachePolicy(NO_STORE_HTTP_CACHE_POLICY),
       });
     }
 
     return jsonSuccess(result, {
-      headers: withCacheControl(BANDORI_MASTER_DATA_API_CACHE_CONTROL),
+      headers: withHttpCachePolicy(SNAPSHOT_HTTP_CACHE_POLICY),
     });
   } catch (error) {
     console.error("Bandori master card detail API error:", error);
@@ -67,7 +67,7 @@ export async function GET(request: Request, context: RouteContext) {
       code: "BANDORI_MASTER_CARD_READ_FAILED",
       message: "Failed to fetch Bandori master card",
     }, {
-      headers: withCacheControl(LIVE_API_CACHE_CONTROL),
+      headers: withHttpCachePolicy(NO_STORE_HTTP_CACHE_POLICY),
     });
   }
 }

@@ -2,7 +2,7 @@
 
 import { useMemo } from "react";
 import { useCachedFetch } from "@/hooks/useCachedFetch";
-import { REALTIME_HOT_CACHE_PROFILE } from "@/lib/api-cache";
+import { LIVE_CLIENT_CACHE_POLICY } from "@/lib/api-cache";
 import type { TrackerData } from "./types";
 
 type BestdoriPredictionPoint = {
@@ -88,7 +88,7 @@ export function useBestdoriPrediction({
     requestKey,
     requestUrl,
     normalizePredictionResponse,
-    { ...(REALTIME_HOT_CACHE_PROFILE.client ?? {}) },
+    { ...LIVE_CLIENT_CACHE_POLICY },
   );
 
   const predictionPoints = useMemo(

@@ -1,4 +1,4 @@
-import { LIVE_API_CACHE_CONTROL, withCacheControl } from "@/lib/api-cache";
+import { NO_STORE_HTTP_CACHE_POLICY, withHttpCachePolicy } from "@/lib/api-cache";
 
 export const dynamic = "force-dynamic";
 
@@ -118,7 +118,7 @@ async function readCspPayload(request: Request): Promise<unknown> {
 }
 
 function buildResponseHeaders() {
-  return withCacheControl(LIVE_API_CACHE_CONTROL);
+  return withHttpCachePolicy(NO_STORE_HTTP_CACHE_POLICY);
 }
 
 export async function POST(request: Request) {

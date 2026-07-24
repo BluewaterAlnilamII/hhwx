@@ -2,9 +2,9 @@ import { unstable_cache } from "next/cache";
 import { ApiRouteError } from "@/lib/api-contracts";
 import {
   BANDORI_EVENT_BONUS_CACHE_TAG,
-  LIVE_API_CACHE_CONTROL,
-  PUBLIC_SHORT_API_CACHE_CONTROL,
-  withCacheControl,
+  FAST_MUTABLE_HTTP_CACHE_POLICY,
+  NO_STORE_HTTP_CACHE_POLICY,
+  withHttpCachePolicy,
 } from "@/lib/api-cache";
 import { jsonRouteError, jsonSuccess } from "@/lib/api-response";
 import { fetchBandoriEventBonuses } from "@/lib/bandori-events-server";
@@ -40,7 +40,7 @@ export async function GET(request: Request) {
     const eventId = parseRequestedEventId(request);
 
     return jsonSuccess(await readBandoriEventBonusesResponse(eventId ?? null), {
-      headers: withCacheControl(PUBLIC_SHORT_API_CACHE_CONTROL),
+      headers: withHttpCachePolicy(FAST_MUTABLE_HTTP_CACHE_POLICY),
     });
   } catch (error) {
     console.error("Bandori events/bonuses API 错误:", error);
@@ -49,7 +49,7 @@ export async function GET(request: Request) {
       code: "BANDORI_EVENT_BONUSES_READ_FAILED",
       message: "读取活动加成失败",
     }, {
-      headers: withCacheControl(LIVE_API_CACHE_CONTROL),
+      headers: withHttpCachePolicy(NO_STORE_HTTP_CACHE_POLICY),
     });
   }
 }

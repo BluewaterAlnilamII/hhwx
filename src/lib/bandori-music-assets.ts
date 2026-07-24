@@ -1,4 +1,4 @@
-import { MUTABLE_DIRECTORY_CACHE_PROFILE } from "@/lib/api-cache";
+import { SNAPSHOT_HTTP_CACHE_POLICY } from "@/lib/api-cache";
 
 export type BandoriMusicIndexSong = {
   musicId?: number;
@@ -18,7 +18,7 @@ export type BandoriMusicIndex = {
 };
 
 export const BANDORI_MUSIC_METADATA_REVALIDATE_SECONDS =
-  MUTABLE_DIRECTORY_CACHE_PROFILE.nextRevalidateSeconds ?? 300;
+  SNAPSHOT_HTTP_CACHE_POLICY.nextRevalidateSeconds ?? 1800;
 
 function normalizeCdnBaseUrl(value: string | null | undefined): string | null {
   const trimmedValue = value?.trim();

@@ -41,25 +41,34 @@ test("account profile and calendar auth reads filter duplicate work", async () =
   assert.match(calendarHook, /checkedUserId === session\?\.user\.id/u);
 });
 
-test("event catalog stays fresh for twelve hours without visibility refreshes", async () => {
+test("event catalog and tracker use separate long-lived and live client policies", async () => {
   const cachePolicy = await readSource("src/lib/api-cache.ts");
   const trackerHook = await readSource("src/app/[locale]/bandori/eventtracker/useTrackerData.ts");
   const calendarHook = await readSource("src/app/[locale]/bandori/calendar/useCalendarData.ts");
 
   assert.match(
     cachePolicy,
-    /BANDORI_EVENT_CATALOG_CACHE_PROFILE[\s\S]*staleTimeMs: 12 \* 60 \* 60 \* 1000,[\s\S]*refreshOnVisible: false/u,
+    /LONG_CLIENT_CACHE_POLICY[\s\S]*staleTimeMs: 12 \* 60 \* 60 \* 1000,[\s\S]*refreshOnVisible: false/u,
   );
   assert.match(
     trackerHook,
-    /BANDORI_EVENT_CATALOG_CACHE_PROFILE\.client/u,
+    /LONG_CLIENT_CACHE_POLICY/u,
   );
   assert.match(
     trackerHook,
-    /REALTIME_HOT_CACHE_PROFILE\.client/u,
+    /LIVE_CLIENT_CACHE_POLICY/u,
   );
   assert.match(
     calendarHook,
-    /BANDORI_EVENT_CATALOG_CACHE_PROFILE\.client/u,
+    /LONG_CLIENT_CACHE_POLICY/u,
   );
+});
+
+test("Cards master remains stable for the page lifetime", async () => {
+  const cardsHook = await readSource("src/hooks/useBandoriCardsMaster.ts");
+  const cachedFetch = await readSource("src/hooks/useCachedFetch.ts");
+
+  assert.match(cardsHook, /SESSION_CLIENT_CACHE_POLICY/u);
+  assert.doesNotMatch(cardsHook, /24 \* 60 \* 60 \* 1000/u);
+  assert.match(cachedFetch, /doFetch\(true, "no-cache"\)/u);
 });

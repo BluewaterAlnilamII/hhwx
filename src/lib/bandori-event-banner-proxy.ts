@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 import {
-  BESTDORI_ASSET_PROXY_CACHE_CONTROL,
+  LONG_ASSET_HTTP_CACHE_POLICY,
+  NO_STORE_HTTP_CACHE_POLICY,
   BESTDORI_ASSET_PROXY_REVALIDATE_SECONDS,
-  LIVE_API_CACHE_CONTROL,
-  withCacheControl,
+  withHttpCachePolicy,
 } from "@/lib/api-cache";
 import {
   buildBestdoriEventBannerOriginUrl,
@@ -125,7 +125,7 @@ export async function proxyBandoriEventBanner({ region, bundleName }: { region: 
     if (!isBandoriAssetRegion(region) || !isSafeBandoriAssetSegment(bundleName)) {
       return NextResponse.json({ error: "无效的横幅资源参数" }, {
         status: 400,
-        headers: withCacheControl(LIVE_API_CACHE_CONTROL),
+        headers: withHttpCachePolicy(NO_STORE_HTTP_CACHE_POLICY),
       });
     }
 
@@ -137,7 +137,7 @@ export async function proxyBandoriEventBanner({ region, bundleName }: { region: 
       if (upstreamResult.ok) {
         return new Response(upstreamResult.buffer, {
           status: 200,
-          headers: withCacheControl(BESTDORI_ASSET_PROXY_CACHE_CONTROL, {
+          headers: withHttpCachePolicy(LONG_ASSET_HTTP_CACHE_POLICY, {
             "Content-Type": upstreamResult.contentType,
           }),
         });
@@ -154,13 +154,13 @@ export async function proxyBandoriEventBanner({ region, bundleName }: { region: 
     });
     return NextResponse.json({ error: "上游横幅资源不存在或返回了非图片内容" }, {
       status: 502,
-      headers: withCacheControl(LIVE_API_CACHE_CONTROL),
+      headers: withHttpCachePolicy(NO_STORE_HTTP_CACHE_POLICY),
     });
   } catch (error) {
     console.error("Bandori event banner proxy API 错误:", error);
     return NextResponse.json({ error: "读取活动横幅失败" }, {
       status: 500,
-      headers: withCacheControl(LIVE_API_CACHE_CONTROL),
+      headers: withHttpCachePolicy(NO_STORE_HTTP_CACHE_POLICY),
     });
   }
 }

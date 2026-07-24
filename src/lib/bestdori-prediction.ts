@@ -1,4 +1,4 @@
-import { LIVE_API_CACHE_CONTROL, withCacheControl } from "@/lib/api-cache";
+import { NO_STORE_HTTP_CACHE_POLICY, withHttpCachePolicy } from "@/lib/api-cache";
 import { jsonError } from "@/lib/api-response";
 import { resolveBandoriCnScheduleWindow } from "@/lib/bandori-event-region";
 import { fetchBandoriEventRecords, toBandoriEventSummary } from "@/lib/bandori-events-server";
@@ -314,7 +314,7 @@ export async function handleBestdoriPredictionRequest(request: Request) {
 
     if (eventId === null || tier === null) {
       return jsonError(400, "INVALID_REQUEST", "Missing or invalid required parameters: event, tier.", {
-        headers: withCacheControl(LIVE_API_CACHE_CONTROL),
+        headers: withHttpCachePolicy(NO_STORE_HTTP_CACHE_POLICY),
         details: {
           event: searchParams.get("event"),
           tier: searchParams.get("tier"),
@@ -324,18 +324,18 @@ export async function handleBestdoriPredictionRequest(request: Request) {
 
     if (!isSupportedTrackerTier("event", tier)) {
       return jsonError(404, "TRACKER_TIER_NOT_SUPPORTED", "The requested event tracker tier is not supported.", {
-        headers: withCacheControl(LIVE_API_CACHE_CONTROL),
+        headers: withHttpCachePolicy(NO_STORE_HTTP_CACHE_POLICY),
         details: { event: eventId, tier },
       });
     }
 
     return Response.json(await buildBestdoriPredictionResponse(eventId, tier), {
-      headers: withCacheControl(LIVE_API_CACHE_CONTROL),
+      headers: withHttpCachePolicy(NO_STORE_HTTP_CACHE_POLICY),
     });
   } catch (error) {
     console.error("Bestdori prediction API error:", error);
     return jsonError(502, "BESTDORI_PREDICTION_FAILED", "Failed to fetch Bestdori prediction data.", {
-      headers: withCacheControl(LIVE_API_CACHE_CONTROL),
+      headers: withHttpCachePolicy(NO_STORE_HTTP_CACHE_POLICY),
     });
   }
 }

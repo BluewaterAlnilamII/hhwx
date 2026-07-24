@@ -7,6 +7,7 @@ import * as Tabs from "@radix-ui/react-tabs";
 
 import { useCachedFetch } from "@/hooks/useCachedFetch";
 import { useBandoriEventsAssetIndex } from "@/hooks/useBandoriPublicAssetIndex";
+import { LONG_CLIENT_CACHE_POLICY } from "@/lib/api-cache";
 import { parseApiSuccessData } from "@/lib/api-contracts";
 import {
   buildBandoriPublicAssetUrl,
@@ -776,7 +777,7 @@ export default function EventTrackerPage() {
       const songs = payload.songs;
       return songs ?? {};
     },
-    { refreshOnVisible: false, staleTimeMs: 24 * 60 * 60 * 1000 },
+    { ...LONG_CLIENT_CACHE_POLICY },
   );
   // 1/2/3 首歌的布局密度差异很大，按数量限制容器宽度可以减少横向留白。
   const challengeSongGridClassName = availableChallengeSongIds.length <= 1

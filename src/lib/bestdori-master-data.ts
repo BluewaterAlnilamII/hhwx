@@ -1,4 +1,4 @@
-import { REFERENCE_METADATA_CACHE_PROFILE } from "@/lib/api-cache";
+import { REFERENCE_HTTP_CACHE_POLICY } from "@/lib/api-cache";
 
 const BESTDORI_API_ORIGIN = "https://bestdori.com/api";
 const BESTDORI_USER_AGENT = "hhwx-tracker/1.0";
@@ -76,7 +76,7 @@ function buildBestdoriApiUrl(path: string): string {
 async function fetchBestdoriJson(url: string): Promise<unknown> {
   const response = await fetch(url, {
     headers: { "User-Agent": BESTDORI_USER_AGENT },
-    next: { revalidate: REFERENCE_METADATA_CACHE_PROFILE.nextRevalidateSeconds },
+    next: { revalidate: REFERENCE_HTTP_CACHE_POLICY.nextRevalidateSeconds },
   });
 
   if (!response.ok) {

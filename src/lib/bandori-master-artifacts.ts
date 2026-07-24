@@ -1,7 +1,7 @@
 import { gunzipSync } from "node:zlib";
 import {
-  BANDORI_MASTER_DATA_CACHE_PROFILE,
-  REFERENCE_METADATA_CACHE_PROFILE,
+  REFERENCE_HTTP_CACHE_POLICY,
+  SNAPSHOT_HTTP_CACHE_POLICY,
 } from "@/lib/api-cache";
 import { fetchR2Object, type R2S3ReaderConfig } from "@/lib/r2-s3-reader";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
@@ -208,7 +208,7 @@ function getBandoriMasterR2Config(): R2S3ReaderConfig {
 
 async function fetchJson<T>(
   url: string,
-  revalidateSeconds = REFERENCE_METADATA_CACHE_PROFILE.nextRevalidateSeconds,
+  revalidateSeconds = REFERENCE_HTTP_CACHE_POLICY.nextRevalidateSeconds,
 ): Promise<T> {
   const response = await fetch(url, {
     next: { revalidate: revalidateSeconds },
@@ -223,7 +223,7 @@ async function fetchJson<T>(
 
 async function fetchR2Json<T>(
   objectKey: string,
-  revalidateSeconds = REFERENCE_METADATA_CACHE_PROFILE.nextRevalidateSeconds,
+  revalidateSeconds = REFERENCE_HTTP_CACHE_POLICY.nextRevalidateSeconds,
 ): Promise<T> {
   const response = await fetchR2Object(
     getBandoriMasterR2Config(),
@@ -240,7 +240,7 @@ async function fetchR2Json<T>(
 
 async function fetchGzipJson<T>(url: string): Promise<T> {
   const response = await fetch(url, {
-    next: { revalidate: REFERENCE_METADATA_CACHE_PROFILE.nextRevalidateSeconds },
+    next: { revalidate: REFERENCE_HTTP_CACHE_POLICY.nextRevalidateSeconds },
   });
 
   if (!response.ok) {
@@ -255,7 +255,7 @@ async function fetchR2GzipJson<T>(objectKey: string): Promise<T> {
   const response = await fetchR2Object(
     getBandoriMasterR2Config(),
     normalizeObjectKey(objectKey),
-    REFERENCE_METADATA_CACHE_PROFILE.nextRevalidateSeconds,
+    REFERENCE_HTTP_CACHE_POLICY.nextRevalidateSeconds,
   );
 
   if (!response.ok) {
@@ -268,7 +268,7 @@ async function fetchR2GzipJson<T>(objectKey: string): Promise<T> {
 
 async function fetchOptionalGzipJson<T>(url: string): Promise<T | null> {
   const response = await fetch(url, {
-    next: { revalidate: REFERENCE_METADATA_CACHE_PROFILE.nextRevalidateSeconds },
+    next: { revalidate: REFERENCE_HTTP_CACHE_POLICY.nextRevalidateSeconds },
   });
 
   if (response.status === 404) {
@@ -287,7 +287,7 @@ async function fetchOptionalR2GzipJson<T>(objectKey: string): Promise<T | null> 
   const response = await fetchR2Object(
     getBandoriMasterR2Config(),
     normalizedObjectKey,
-    REFERENCE_METADATA_CACHE_PROFILE.nextRevalidateSeconds,
+    REFERENCE_HTTP_CACHE_POLICY.nextRevalidateSeconds,
   );
 
   if (response.status === 404) {
@@ -325,7 +325,7 @@ async function readActiveManifestFromSupabase(
   if (shouldReadArtifactsFromR2()) {
     return fetchR2Json<BandoriMasterArtifactManifest>(
       data.manifest_path,
-      BANDORI_MASTER_DATA_CACHE_PROFILE.nextRevalidateSeconds,
+      SNAPSHOT_HTTP_CACHE_POLICY.nextRevalidateSeconds,
     );
   }
 
@@ -336,7 +336,7 @@ async function readActiveManifestFromSupabase(
 
   return fetchJson<BandoriMasterArtifactManifest>(
     joinUrl(publicOrigin, data.manifest_path),
-    BANDORI_MASTER_DATA_CACHE_PROFILE.nextRevalidateSeconds,
+    SNAPSHOT_HTTP_CACHE_POLICY.nextRevalidateSeconds,
   );
 }
 
@@ -346,7 +346,7 @@ async function readActiveManifestFromObjectStorage(
   if (shouldReadArtifactsFromR2()) {
     return fetchR2Json<BandoriMasterArtifactManifest>(
       `${getArtifactObjectKeyPrefix()}/${server}/active/manifest.json`,
-      BANDORI_MASTER_DATA_CACHE_PROFILE.nextRevalidateSeconds,
+      SNAPSHOT_HTTP_CACHE_POLICY.nextRevalidateSeconds,
     );
   }
 
@@ -357,7 +357,7 @@ async function readActiveManifestFromObjectStorage(
 
   return fetchJson<BandoriMasterArtifactManifest>(
     manifestUrl,
-    BANDORI_MASTER_DATA_CACHE_PROFILE.nextRevalidateSeconds,
+    SNAPSHOT_HTTP_CACHE_POLICY.nextRevalidateSeconds,
   );
 }
 

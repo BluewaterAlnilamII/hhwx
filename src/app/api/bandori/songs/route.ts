@@ -1,4 +1,8 @@
-import { LIVE_API_CACHE_CONTROL, PUBLIC_METADATA_API_CACHE_CONTROL, withCacheControl } from "@/lib/api-cache";
+import {
+  NO_STORE_HTTP_CACHE_POLICY,
+  REFERENCE_HTTP_CACHE_POLICY,
+  withHttpCachePolicy,
+} from "@/lib/api-cache";
 import { jsonError, jsonRouteError, jsonSuccess } from "@/lib/api-response";
 import { isBestdoriSongSupportedByJpOrCn } from "@/lib/bestdori-master-data";
 
@@ -59,7 +63,7 @@ export async function GET(request: Request) {
 
   if (songIds.length === 0) {
     return jsonError(400, "SONG_IDS_REQUIRED", "Query parameter ids is required", {
-      headers: withCacheControl(LIVE_API_CACHE_CONTROL),
+      headers: withHttpCachePolicy(NO_STORE_HTTP_CACHE_POLICY),
     });
   }
 
@@ -71,7 +75,7 @@ export async function GET(request: Request) {
 
     if (!response.ok) {
       return jsonError(response.status, "BESTDORI_SONGS_UPSTREAM_FAILED", "Bestdori API error", {
-        headers: withCacheControl(LIVE_API_CACHE_CONTROL),
+        headers: withHttpCachePolicy(NO_STORE_HTTP_CACHE_POLICY),
         details: `HTTP ${response.status}`,
       });
     }
@@ -92,7 +96,7 @@ export async function GET(request: Request) {
     }
 
     return jsonSuccess({ songs }, {
-      headers: withCacheControl(PUBLIC_METADATA_API_CACHE_CONTROL),
+      headers: withHttpCachePolicy(REFERENCE_HTTP_CACHE_POLICY),
     });
   } catch (error) {
     console.error("Bandori songs API 错误:", error);
@@ -101,7 +105,7 @@ export async function GET(request: Request) {
       code: "BANDORI_SONGS_READ_FAILED",
       message: "Failed to fetch song metadata",
     }, {
-      headers: withCacheControl(LIVE_API_CACHE_CONTROL),
+      headers: withHttpCachePolicy(NO_STORE_HTTP_CACHE_POLICY),
     });
   }
 }

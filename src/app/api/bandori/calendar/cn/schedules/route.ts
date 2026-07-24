@@ -5,9 +5,9 @@ import {
   saveBandoriScheduleEvents,
 } from "@/lib/bandori-schedule-server";
 import {
-  LIVE_API_CACHE_CONTROL,
-  PUBLIC_SHORT_API_CACHE_CONTROL,
-  withCacheControl,
+  FAST_MUTABLE_HTTP_CACHE_POLICY,
+  NO_STORE_HTTP_CACHE_POLICY,
+  withHttpCachePolicy,
 } from "@/lib/api-cache";
 import { jsonError, jsonRouteError, jsonSuccess } from "@/lib/api-response";
 import { requireVerifiedAccount } from "@/lib/auth-server";
@@ -17,7 +17,7 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   try {
     return jsonSuccess(await readBandoriScheduleResponseData(), {
-      headers: withCacheControl(PUBLIC_SHORT_API_CACHE_CONTROL),
+      headers: withHttpCachePolicy(FAST_MUTABLE_HTTP_CACHE_POLICY),
     });
   } catch (error) {
     console.error("Bandori schedules API 错误:", error);
@@ -26,7 +26,7 @@ export async function GET() {
       code: "BANDORI_SCHEDULES_READ_FAILED",
       message: "读取国服活动排期失败",
     }, {
-      headers: withCacheControl(LIVE_API_CACHE_CONTROL),
+      headers: withHttpCachePolicy(NO_STORE_HTTP_CACHE_POLICY),
     });
   }
 }

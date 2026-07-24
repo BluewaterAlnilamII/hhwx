@@ -1,4 +1,4 @@
-import { MUTABLE_DIRECTORY_CACHE_PROFILE } from "@/lib/api-cache";
+import { LONG_CLIENT_CACHE_POLICY } from "@/lib/api-cache";
 
 export type BandoriStampRegion = "jp" | "en" | "tw" | "cn";
 
@@ -72,7 +72,7 @@ type RawStampAnimationManifest = {
 const STAMP_VOICE_FILE_NAME_PATTERN = /^[A-Za-z0-9_-]+\.mp3$/u;
 
 export const BANDORI_STAMP_CLIENT_STALE_TIME_MS =
-  MUTABLE_DIRECTORY_CACHE_PROFILE.client?.staleTimeMs ?? 60 * 1000;
+  LONG_CLIENT_CACHE_POLICY.staleTimeMs ?? 12 * 60 * 60 * 1000;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
