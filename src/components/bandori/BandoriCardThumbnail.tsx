@@ -3,12 +3,16 @@
 import type { CSSProperties } from "react";
 import { useState } from "react";
 import { ImageOff } from "lucide-react";
+import { useBandoriCardsAssetIndex } from "@/hooks/useBandoriPublicAssetIndex";
 import {
-  buildBandoriCardThumbnailPublicUrl,
   buildBandoriResIconPublicUrl,
   buildBandoriResImagePublicUrl,
-  type BandoriAssetRegion,
 } from "@/lib/bandori-asset-proxy";
+import {
+  buildBandoriPublicAssetUrl,
+  lookupBandoriCardImage,
+  type BandoriAssetRegion,
+} from "@/lib/bandori-public-asset-index";
 
 type CardAttribute = "powerful" | "pure" | "cool" | "happy";
 type TrainType = "normal" | "after_training";
@@ -41,27 +45,6 @@ function getCardTrainType(card: BandoriCardThumbnailCard): TrainType {
   return card.isTrained ? "after_training" : "normal";
 }
 
-function readRegionalTimestampAt(values: BandoriCardThumbnailMetadata["releasedAt"], index: number): number {
-  if (!Array.isArray(values)) {
-    return 0;
-  }
-  const parsed = Number(values[index]);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
-}
-
-function resolveThumbnailRegion(
-  metadata: BandoriCardThumbnailMetadata | undefined,
-  fallbackRegion: BandoriAssetRegion,
-): BandoriAssetRegion {
-  if (metadata?.assetRegion) {
-    return metadata.assetRegion;
-  }
-  if (fallbackRegion === "cn" && metadata?.releasedAt && readRegionalTimestampAt(metadata.releasedAt, 3) <= 0) {
-    return "jp";
-  }
-  return fallbackRegion;
-}
-
 function formatThumbnailPower(power: number | null | undefined): string | null {
   if (!Number.isFinite(power) || power === null || power === undefined) {
     return null;
@@ -81,24 +64,19 @@ function BrokenImageFallback({ label }: { label: string }) {
 
 function CardAssetImage({
   src,
-  fallbackSrc,
   alt,
   className,
   fallbackLabel = "无资源",
   loading = "lazy",
 }: {
   src: string | null;
-  fallbackSrc?: string | null;
   alt: string;
   className?: string;
   fallbackLabel?: string;
   loading?: "eager" | "lazy";
 }) {
   const [failedSrcs, setFailedSrcs] = useState<string[]>([]);
-  const sourceCandidates = [src, fallbackSrc].filter((candidate): candidate is string => Boolean(candidate));
-  const activeSrc = sourceCandidates.find((candidate, index) => (
-    sourceCandidates.indexOf(candidate) === index && !failedSrcs.includes(candidate)
-  )) ?? null;
+  const activeSrc = src && !failedSrcs.includes(src) ? src : null;
 
   if (!activeSrc) {
     return <BrokenImageFallback label={fallbackLabel} />;
@@ -121,7 +99,6 @@ export default function BandoriCardThumbnail({
   card,
   metadata,
   bandId,
-  region,
   alt,
   size = "tile",
   loading = "lazy",
@@ -140,14 +117,11 @@ export default function BandoriCardThumbnail({
   showPower?: boolean;
   power?: number | null;
 }) {
+  const { value: assetIndex } = useBandoriCardsAssetIndex();
   const trainType = getCardTrainType(card);
-  const thumbnailRegion = resolveThumbnailRegion(metadata, region);
-  const thumbnailUrl = metadata?.resourceSetName
-    ? buildBandoriCardThumbnailPublicUrl(thumbnailRegion, card.cardId, metadata.resourceSetName, trainType)
-    : null;
-  const fallbackThumbnailUrl = metadata?.resourceSetName && thumbnailRegion === "cn"
-    ? buildBandoriCardThumbnailPublicUrl("jp", card.cardId, metadata.resourceSetName, trainType)
-    : null;
+  const thumbnailUrl = buildBandoriPublicAssetUrl(
+    lookupBandoriCardImage(assetIndex, metadata?.resourceSetName, trainType, "thumb"),
+  );
   const rarity = Math.min(5, Math.max(1, Math.trunc(Number(metadata?.rarity) || 1)));
   const attribute = isKnownAttribute(metadata?.attribute) ? metadata.attribute : null;
   const frameUrl = rarity >= 2
@@ -194,7 +168,6 @@ export default function BandoriCardThumbnail({
         <div className="h-full w-full overflow-hidden rounded-[5px]">
           <CardAssetImage
             src={thumbnailUrl}
-            fallbackSrc={fallbackThumbnailUrl}
             alt={alt}
             loading={loading}
             className="h-full w-full object-cover"

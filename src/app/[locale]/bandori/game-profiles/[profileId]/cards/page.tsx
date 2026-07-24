@@ -44,6 +44,7 @@ import {
 import AccountShell, { AccountErrorState, AccountLoadingState, AccountSignInState } from "@/app/[locale]/account/AccountShell";
 import { getAccessToken, useLocalizedAccountProfile } from "@/app/[locale]/account/useAccountProfile";
 import SharedBandoriCardThumbnail from "@/components/bandori/BandoriCardThumbnail";
+import { useBandoriCardsAssetIndex } from "@/hooks/useBandoriPublicAssetIndex";
 import { BandoriCardHoverTooltipPortal } from "@/components/bandori/BandoriCardHoverTooltip";
 import VirtualizedBandoriCardGrid from "@/components/bandori/VirtualizedBandoriCardGrid";
 import GameProfileCardEditorDialog from "@/components/bandori/GameProfileCardEditorDialog";
@@ -482,6 +483,7 @@ const CardTile = memo(function CardTile({
 });
 
 export default function GameProfileCardsPage({ params }: { params: Promise<{ profileId: string }> }) {
+  useBandoriCardsAssetIndex();
   const { profileId } = use(params);
   const locale = useLocale() as AppLocale;
   const t = useTranslations("bandori.gameProfiles.cards");

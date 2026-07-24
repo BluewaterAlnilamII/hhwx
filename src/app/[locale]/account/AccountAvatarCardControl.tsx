@@ -7,6 +7,7 @@ import { Image as ImageIcon, Loader2, Save, X } from "lucide-react";
 import AccountCardAvatar from "@/components/account/AccountCardAvatar";
 import { BandoriCardPicker, type BandoriCardPickerValue } from "@/components/bandori/card-picker";
 import { useCachedFetch } from "@/hooks/useCachedFetch";
+import { useBandoriCardsAssetIndex } from "@/hooks/useBandoriPublicAssetIndex";
 import { parseApiSuccessData } from "@/lib/api-contracts";
 import { getLocalizedApiErrorMessage } from "@/lib/localized-api-errors";
 import {
@@ -46,6 +47,7 @@ export default function AccountAvatarCardControl({
 }) {
   const t = useTranslations("account.avatar");
   const errorT = useTranslations("errors");
+  useBandoriCardsAssetIndex();
   const cardMetadataUrl = `/api/bandori/cards?ids=${profile.avatarCardId}`;
   const { data: cardMetadata } = useCachedFetch(
     `account-avatar-card-v2-${profile.avatarCardId}`,

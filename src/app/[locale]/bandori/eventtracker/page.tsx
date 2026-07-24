@@ -6,11 +6,15 @@ import { format } from "date-fns";
 import * as Tabs from "@radix-ui/react-tabs";
 
 import { useCachedFetch } from "@/hooks/useCachedFetch";
+import {
+  useBandoriCardsAssetIndex,
+  useBandoriEventsAssetIndex,
+} from "@/hooks/useBandoriPublicAssetIndex";
 import { parseApiSuccessData } from "@/lib/api-contracts";
 import {
-  buildBandoriEventBannerPublicUrl,
-  resolveBandoriEventBannerBundleName,
-} from "@/lib/bandori-asset-proxy";
+  buildBandoriPublicAssetUrl,
+  lookupBandoriEventBanner,
+} from "@/lib/bandori-public-asset-index";
 import { resolveBandoriEventAssetRegion } from "@/lib/bandori-event-region";
 import type { ComparisonConfig, ComparisonLine, ComparisonLinePoint, ComparisonTargetType, MinimalEvent, TrackerData, TrackerMouseState, TrackerTooltipPayloadEntry, TrackingMode } from "./types";
 import {
@@ -496,6 +500,8 @@ function EventProgressBar({ startDate, endDate }: { startDate: number; endDate: 
 
 export default function EventTrackerPage() {
   const cnExclusiveT = useTranslations("bandori.notices.cnExclusive");
+  const { value: eventAssetIndex } = useBandoriEventsAssetIndex();
+  useBandoriCardsAssetIndex();
   const [currentEventId, setCurrentEventId] = useState<number | null>(null);
   const [trackingMode, setTrackingMode] = useState<TrackingMode>("event");
   const [selectedTier, setSelectedTier] = useState<number>(() => getDefaultTierForMode("event"));
@@ -956,11 +962,10 @@ export default function EventTrackerPage() {
 
   // ===== 数据派生层 =====
   const cnEventName = eventMeta?.name.cn?.trim() || eventMeta?.name.jp.trim() || "Loading Event...";
-  const bannerPath = eventMeta ? resolveBandoriEventAssetRegion(eventMeta) : "jp";
-  const bannerAssetSegment = eventMeta ? resolveBandoriEventBannerBundleName(eventMeta.asset) : null;
-  const bannerUrl = bannerAssetSegment
-    ? buildBandoriEventBannerPublicUrl(bannerPath, bannerAssetSegment)
-    : "";
+  const bannerServer = eventMeta ? resolveBandoriEventAssetRegion(eventMeta) : "jp";
+  const bannerUrl = buildBandoriPublicAssetUrl(
+    lookupBandoriEventBanner(eventAssetIndex, resolvedCurrentEventId, bannerServer),
+  ) ?? "";
 
   const { domainStart, domainEnd, cutoffEnd, midnights } = useChartDomain(trackingMode, startDate, endDate, selectedMonthlyMonthId);
   const hasActualTrackerData = useMemo(

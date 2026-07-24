@@ -29,7 +29,7 @@ BANDORI_SONG_NOTES_SOURCE=bestdori
 # BANDORI_STAMP_R2_SECRET_ACCESS_KEY=your_r2_secret_access_key
 ```
 
-`NEXT_PUBLIC_BANDORI_ASSET_CDN_BASE_URL` 会暴露给浏览器。`BANDORI_ASSET_CDN_BASE_URL` 可供服务端代码使用。大多数部署中两者应指向同一个资源主机。Stamp 资源使用同一个 Bandori asset CDN 下的 `/bandori/stamps` 路径；没有单独的 stamp CDN 配置。Web 应用会通过 `/api/bandori/stamps` 读取统一 stamp catalog，而 stamp 图片、动画 manifest、动画 atlas 和 voice audio 会在浏览器中直接从 CDN 读取，因此 CDN 必须允许 HHWX Web origin 跨域读取。Stamp voice 会通过 Web Audio 作为短音效播放，而不是作为媒体元素播放，以避免 iOS media session 把它当作音乐并打断后台音乐。
+`NEXT_PUBLIC_BANDORI_ASSET_CDN_BASE_URL` 会暴露给浏览器。`BANDORI_ASSET_CDN_BASE_URL` 可供服务端代码使用。大多数部署中两者应指向同一个资源主机。卡图和活动图片通过下文的公开 Cards/Events index 发现；浏览器使用正常 HTTP 缓存且不携带凭据读取这两个 index。Stamp 资源使用同一个 Bandori asset CDN 下的 `/bandori/stamps` 路径；没有单独的 stamp CDN 配置。Web 应用会通过 `/api/bandori/stamps` 读取统一 stamp catalog，而 stamp 图片、动画 manifest、动画 atlas 和 voice audio 会在浏览器中直接从 CDN 读取，因此 CDN 必须允许 HHWX Web origin 跨域读取。Stamp voice 会通过 Web Audio 作为短音效播放，而不是作为媒体元素播放，以避免 iOS media session 把它当作音乐并打断后台音乐。
 
 服务端 HHWX API 聚合已发布到 CDN 的 Bandori 资源时，必须通过 R2/S3 签名请求直接读取背后的对象存储。服务端路径不要再请求 `cdn.hhwx.org` 等 HHWX 自有公网 CDN URL，因为 Cloudflare bot mitigation 可能会对 server-to-CDN 流量返回 challenge。`/api/bandori/stamps` 会使用 `BANDORI_STAMP_R2_*`、`BANDORI_ASSET_R2_*` 或共享的 `BANDORI_R2_*` 凭据读取对象存储中的 `bandori/stamps/index.json`。只有当 `BANDORI_MASTER_R2_*` 指向同一个包含 Bandori 资源对象的 bucket 时，才可以作为兼容兜底。浏览器仍然直接从公网 CDN 读取 stamp 图片、动画 manifest、atlas 和 voice audio。
 
@@ -91,33 +91,52 @@ npm run compare:bandori-tracker-history -- --event 18 --type monthly --tier 1000
 
 公开 URL path 和 object key 应完全一致。正常运行不应依赖 CDN rewrite 规则。
 
-活动 banner：
+Cards 使用一个公开发现文档：
 
-```text
-{CDN_BASE}/bandori/assets/{region}/event/{assetBundleName}/images_rip/banner.png
-bandori/assets/{region}/event/{assetBundleName}/images_rip/banner.png
+```http
+GET {CDN_BASE}/bandori/cards/index.json
 ```
 
-如果采集服务能解析，也可能存在 legacy event banner alias：
+浏览器请求语义固定为 `fetch(indexUrl, { cache: "default", credentials: "omit" })`。
 
-```text
-{CDN_BASE}/bandori/assets/{region}/event/banner_event13/images_rip/banner.png
-bandori/assets/{region}/event/banner_event13/images_rip/banner.png
+响应 JSON 结构如下：
+
+```json
+{
+  "schemaVersion": 1,
+  "updatedAt": "2026-07-23T00:00:00Z",
+  "gachaVoiceProvenance": "gacha-spin-v2",
+  "resources": {
+    "res001001": {
+      "artPlan": { "normalSourceVariant": "normal", "hasAfterTraining": false },
+      "images": {
+        "normal": {
+          "thumb": { "key": "bandori/cards/res001001/normal/thumb/<sha256>.png", "sha256": "<sha256>", "byteSize": 1, "contentType": "image/png", "width": 1, "height": 1 },
+          "full": { "key": "bandori/cards/res001001/normal/full/<sha256>.png", "sha256": "<sha256>", "byteSize": 1, "contentType": "image/png", "width": 1, "height": 1 },
+          "trim": { "key": "bandori/cards/res001001/normal/trim/<sha256>.png", "sha256": "<sha256>", "byteSize": 1, "contentType": "image/png", "width": 1, "height": 1 }
+        }
+      }
+    }
+  }
+}
 ```
 
-卡牌缩略图：
+`resources` 以 `resourceSetName` 为 key。`artPlan` 记录公开 `normal` 图片实际取自游戏的 `normal` 还是 `after_training` 源纹理，并声明是否应存在独立训练后图片组；`hasAfterTraining` 必须与公开 `after_training` 图片组是否存在一致。`gachaVoiceProvenance` 把可接受的抽卡语音提取规则固定为 GachaSpin v2，避免旧 cue 或 ACB 规则生成的 descriptor 被静默复用。`normal` 图片组及其中的 `thumb`、`full`、`trim` descriptor 必需存在。`after_training` 是可选的完整图片组；一旦存在，三个 descriptor 都必须存在。并非每张卡都有抽卡语音，所以 `gachaVoice` 在结构上可选；但 Master 声明了抽卡语音时，builder 必须找到与完整 `resourceSetName` 精确匹配的 cue，包括来自 `biliGachaVoice*.acb` 的国服 `bili_` cue。descriptor 使用 `contentType: "audio/mpeg"` 和 `durationMs`，不使用图片尺寸；key 为 `bandori/cards/{resourceSetName}/voice/gacha/{sha256}.mp3`。
 
-```text
-{CDN_BASE}/bandori/assets/{region}/thumb/chara/card{floor(cardId / 50).padStart(5, "0")}_rip/{resourceSetName}_{normal|after_training}.png
-bandori/assets/{region}/thumb/chara/card{floor(cardId / 50).padStart(5, "0")}_rip/{resourceSetName}_{normal|after_training}.png
+Events 使用另一个公开发现文档：
+
+```http
+GET {CDN_BASE}/bandori/events/index.json
 ```
 
-完整卡面和透明卡面不是默认公开设置的必需项。只有产品界面需要时才添加：
+响应根对象为 `{ "schemaVersion": 1, "updatedAt": "...", "servers": ["jp", "en", "tw", "cn"], "events": { ... } }`。每个 `events[eventId]` 包含：
 
-```text
-{CDN_BASE}/bandori/assets/{region}/characters/resourceset/{resourceSetName}_rip/card_{normal|after_training}.png
-{CDN_BASE}/bandori/assets/{region}/characters/resourceset/{resourceSetName}_rip/trim_{normal|after_training}.png
-```
+- `banners`：严格四槽 PNG descriptor 或 `null`，顺序与 `servers` 一致。
+- `teamIcons`：每项为 `{ "teamId": 1, "iconFileName": "...", "images": [descriptor-or-null, descriptor-or-null, descriptor-or-null, descriptor-or-null] }`。
+
+每个 PNG descriptor 都是 `{ key, sha256, byteSize, contentType: "image/png", width, height }`。活动图片 key 采用 `bandori/events/images/{sha256}.png`。某区域素材缺失时，只能在自己的槽位使用 `null`；客户端不会借用其他服务器的素材。
+
+所有 descriptor key 都相对于 `{CDN_BASE}`。文件名 stem 必须等于 descriptor 中完整的小写 SHA-256。Web 应用会先校验 index，再使用其中资源，不会从 master data 的 bundle name 猜测 Cards/Events 路径。index 或 descriptor 不可用时，相关图片保留占位，但 master data 与队伍计算继续工作。卡牌缩略图不会用 full 图兜底，Cards/Events 也不会回退 Bestdori 或旧 `/api/bandori/assets` proxy。
 
 Bestdori 通用图标和卡框：
 
@@ -184,9 +203,8 @@ bandori/stamps/{server}/{stampId}/animation/atlas.png
 配置资源主机后，可以用浏览器或 HTTP client 验证代表性 URL：
 
 ```text
-https://your-bandori-asset-cdn.example.com/bandori/assets/cn/event/ranmoca_note/images_rip/banner.png
-https://your-bandori-asset-cdn.example.com/bandori/assets/cn/event/banner_event13/images_rip/banner.png
-https://your-bandori-asset-cdn.example.com/bandori/assets/cn/thumb/chara/card00000_rip/res001001_normal.png
+https://your-bandori-asset-cdn.example.com/bandori/cards/index.json
+https://your-bandori-asset-cdn.example.com/bandori/events/index.json
 https://your-bandori-asset-cdn.example.com/bandori/res/icon/chara_icon_1.png
 https://your-bandori-asset-cdn.example.com/bandori/res/image/card-5.png
 https://your-bandori-asset-cdn.example.com/bandori/music/1/charts/expert.json
@@ -194,6 +212,15 @@ https://your-bandori-asset-cdn.example.com/bandori/stamps/index.json
 https://your-bandori-asset-cdn.example.com/bandori/stamps/cn/10131/image.png
 https://your-bandori-asset-cdn.example.com/bandori/stamps/cn/10131/animation/manifest.json
 https://your-bandori-asset-cdn.example.com/bandori/stamps/cn/10131/animation/atlas.png
+```
+
+Cards/Events 应从下载到的 index 中各选代表性 descriptor，再验证 `{CDN_BASE}/{descriptor.key}`。不要验证猜测的 bundle 路径；它们不是公开 HTTP 契约。
+
+Cards/Events index 响应及 descriptor 指向的资源都必须允许 HHWX Web origin 无凭据跨域读取：
+
+```bash
+curl -I -H "Origin: https://hhwx.org" https://your-bandori-asset-cdn.example.com/bandori/cards/index.json
+curl -I -H "Origin: https://hhwx.org" https://your-bandori-asset-cdn.example.com/bandori/events/index.json
 ```
 
 针对 stamp CORS，至少用 `Origin` header 验证一个 JSON 对象和一个 voice 对象：

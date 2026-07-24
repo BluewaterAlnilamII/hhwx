@@ -53,6 +53,7 @@ export default function BandoriEventSwitcher({
   const t = useTranslations("bandori.eventSwitcher");
   const [isPickerOpen, setIsPickerOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [failedBannerUrl, setFailedBannerUrl] = useState<string | null>(null);
 
   const effectiveBannerAlt = bannerAlt ?? t("bannerAlt");
   const effectiveRecommendedLabel = recommendedLabel ?? t("recommendedLabel");
@@ -237,7 +238,7 @@ export default function BandoriEventSwitcher({
 
       <div className="w-full max-w-[420px] xl:w-[420px] xl:justify-self-end">
         <div className="relative aspect-[3/1] w-full overflow-hidden rounded-2xl shadow-lg ring-1 ring-black/5">
-          {bannerUrl ? (
+          {bannerUrl && bannerUrl !== failedBannerUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
               src={bannerUrl}
@@ -245,6 +246,7 @@ export default function BandoriEventSwitcher({
               loading="eager"
               fetchPriority="high"
               decoding="async"
+              onError={() => setFailedBannerUrl(bannerUrl)}
               className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 hover:scale-105"
             />
           ) : (

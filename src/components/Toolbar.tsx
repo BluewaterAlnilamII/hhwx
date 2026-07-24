@@ -7,6 +7,7 @@ import { useSearchParams } from "next/navigation";
 import { Link, usePathname } from "@/i18n/navigation";
 import AccountCardAvatar from "@/components/account/AccountCardAvatar";
 import { useCachedFetch } from "@/hooks/useCachedFetch";
+import { useBandoriCardsAssetIndex } from "@/hooks/useBandoriPublicAssetIndex";
 import { buildLocalizedPathname, routing, type AppLocale } from "@/i18n/routing";
 import { type AccountAvatarCardTrainType } from "@/lib/account-avatar-defaults";
 import { getApiErrorMessage, parseApiSuccessData } from "@/lib/api-contracts";
@@ -157,6 +158,7 @@ export default function Toolbar({ showDebugButton = true, isSidebarOpen = false,
     const toolbarProfile = toolbarProfileState?.userId === userId ? toolbarProfileState.profile : null;
     const toolbarUsername = toolbarProfile?.username ?? username;
     const avatarCardId = toolbarProfile?.avatarCardId ?? null;
+    useBandoriCardsAssetIndex(Boolean(userId && avatarCardId));
     const notificationUnreadCount = notificationUnreadState?.userId === userId ? notificationUnreadState.unreadCount : 0;
     const notificationBadgeLabel = notificationUnreadCount > 0 ? formatUnreadCount(notificationUnreadCount) : null;
     const cardMetadataUrl = userId && avatarCardId ? `/api/bandori/cards?ids=${avatarCardId}` : null;

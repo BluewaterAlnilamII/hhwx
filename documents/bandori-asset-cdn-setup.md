@@ -29,7 +29,7 @@ BANDORI_SONG_NOTES_SOURCE=bestdori
 # BANDORI_STAMP_R2_SECRET_ACCESS_KEY=your_r2_secret_access_key
 ```
 
-`NEXT_PUBLIC_BANDORI_ASSET_CDN_BASE_URL` is exposed to browsers. `BANDORI_ASSET_CDN_BASE_URL` is available to server-side code. In most deployments they should point to the same asset host. Stamp assets are served from the same Bandori asset CDN under `/bandori/stamps`; there is no separate stamp CDN setting. The web app reads the unified stamp catalog through `/api/bandori/stamps`, while stamp images, animation manifests, animation atlases, and voice audio are read directly from the CDN in browsers, so the CDN must allow browser CORS reads from the HHWX web origins. Stamp voices are played through Web Audio as short sound effects instead of media elements, avoiding iOS media-session behavior that can interrupt background music.
+`NEXT_PUBLIC_BANDORI_ASSET_CDN_BASE_URL` is exposed to browsers. `BANDORI_ASSET_CDN_BASE_URL` is available to server-side code. In most deployments they should point to the same asset host. Card images and event images are discovered from the public Cards and Events indexes described below; the browser reads both indexes with the normal HTTP cache and without credentials. Stamp assets are served from the same Bandori asset CDN under `/bandori/stamps`; there is no separate stamp CDN setting. The web app reads the unified stamp catalog through `/api/bandori/stamps`, while stamp images, animation manifests, animation atlases, and voice audio are read directly from the CDN in browsers, so the CDN must allow browser CORS reads from the HHWX web origins. Stamp voices are played through Web Audio as short sound effects instead of media elements, avoiding iOS media-session behavior that can interrupt background music.
 
 Server-side HHWX APIs that aggregate CDN-published Bandori assets must read the backing object storage directly through R2/S3 signed requests. They must not fetch HHWX-owned public CDN URLs such as `cdn.hhwx.org` from the server path because Cloudflare bot mitigation may challenge server-to-CDN traffic. `/api/bandori/stamps` reads `bandori/stamps/index.json` from object storage using `BANDORI_STAMP_R2_*`, `BANDORI_ASSET_R2_*`, or shared `BANDORI_R2_*` credentials. `BANDORI_MASTER_R2_*` is accepted only when it points at the same bucket that contains Bandori asset objects. Browsers still read stamp images, animation manifests, atlases, and voice audio directly from the public CDN.
 
@@ -91,33 +91,52 @@ Do not point self-hosted deployments at `cdn.hhwx.org` unless you intentionally 
 
 Public URL paths and object keys should match exactly. Do not rely on CDN rewrite rules for normal operation.
 
-Event banners:
+Cards use one public discovery document:
 
-```text
-{CDN_BASE}/bandori/assets/{region}/event/{assetBundleName}/images_rip/banner.png
-bandori/assets/{region}/event/{assetBundleName}/images_rip/banner.png
+```http
+GET {CDN_BASE}/bandori/cards/index.json
 ```
 
-Legacy event banner aliases may also exist when an ingestion service can resolve them:
+The browser request semantics are `fetch(indexUrl, { cache: "default", credentials: "omit" })`.
 
-```text
-{CDN_BASE}/bandori/assets/{region}/event/banner_event13/images_rip/banner.png
-bandori/assets/{region}/event/banner_event13/images_rip/banner.png
+The response is JSON with this shape:
+
+```json
+{
+  "schemaVersion": 1,
+  "updatedAt": "2026-07-23T00:00:00Z",
+  "gachaVoiceProvenance": "gacha-spin-v2",
+  "resources": {
+    "res001001": {
+      "artPlan": { "normalSourceVariant": "normal", "hasAfterTraining": false },
+      "images": {
+        "normal": {
+          "thumb": { "key": "bandori/cards/res001001/normal/thumb/<sha256>.png", "sha256": "<sha256>", "byteSize": 1, "contentType": "image/png", "width": 1, "height": 1 },
+          "full": { "key": "bandori/cards/res001001/normal/full/<sha256>.png", "sha256": "<sha256>", "byteSize": 1, "contentType": "image/png", "width": 1, "height": 1 },
+          "trim": { "key": "bandori/cards/res001001/normal/trim/<sha256>.png", "sha256": "<sha256>", "byteSize": 1, "contentType": "image/png", "width": 1, "height": 1 }
+        }
+      }
+    }
+  }
+}
 ```
 
-Card thumbnails:
+`resources` is keyed by `resourceSetName`. `artPlan` records whether the public `normal` image was extracted from the game's `normal` or `after_training` source texture and whether a separate trained set is expected; `hasAfterTraining` must match the presence of the public `after_training` set. `gachaVoiceProvenance` fixes the accepted acquisition-voice extraction rule to GachaSpin v2, preventing descriptors created by older cue or ACB rules from being silently reused. The `normal` image set and its `thumb`, `full`, and `trim` descriptors are required. `after_training` is optional as a complete image set; when present, all three descriptors are required. `gachaVoice` is optional because not every card has an acquisition voice; when Master declares one, the builder requires the exact `resourceSetName` cue, including CN-only `bili_` cues from `biliGachaVoice*.acb`. The descriptor uses `contentType: "audio/mpeg"` and `durationMs` in place of image dimensions. Its key is `bandori/cards/{resourceSetName}/voice/gacha/{sha256}.mp3`.
 
-```text
-{CDN_BASE}/bandori/assets/{region}/thumb/chara/card{floor(cardId / 50).padStart(5, "0")}_rip/{resourceSetName}_{normal|after_training}.png
-bandori/assets/{region}/thumb/chara/card{floor(cardId / 50).padStart(5, "0")}_rip/{resourceSetName}_{normal|after_training}.png
+Events use a separate public discovery document:
+
+```http
+GET {CDN_BASE}/bandori/events/index.json
 ```
 
-Full card art and transparent card art are not required by the default public setup. Add them only if the product surface requires them:
+The response root is `{ "schemaVersion": 1, "updatedAt": "...", "servers": ["jp", "en", "tw", "cn"], "events": { ... } }`. Each `events[eventId]` value contains:
 
-```text
-{CDN_BASE}/bandori/assets/{region}/characters/resourceset/{resourceSetName}_rip/card_{normal|after_training}.png
-{CDN_BASE}/bandori/assets/{region}/characters/resourceset/{resourceSetName}_rip/trim_{normal|after_training}.png
-```
+- `banners`: exactly four PNG descriptor-or-`null` slots in the declared server order.
+- `teamIcons`: entries shaped as `{ "teamId": 1, "iconFileName": "...", "images": [descriptor-or-null, descriptor-or-null, descriptor-or-null, descriptor-or-null] }`.
+
+Every PNG descriptor is `{ key, sha256, byteSize, contentType: "image/png", width, height }`. Event image keys are content addressed as `bandori/events/images/{sha256}.png`. Missing regional assets are represented only by `null` in their own slot; clients do not borrow another server's asset.
+
+All descriptor keys are relative to `{CDN_BASE}`. The filename stem must equal the descriptor's complete lowercase SHA-256. The web app validates the index before using it and never reconstructs Cards or Events paths from master-data bundle names. If an index or descriptor is unavailable, the affected image remains a placeholder; master data and team calculations continue without an image fallback. Card thumbnails never fall back to full-size art, and Cards/Events do not fall back to Bestdori or the legacy `/api/bandori/assets` proxy.
 
 Shared Bestdori resource icons and card frame images:
 
@@ -184,9 +203,8 @@ If a deployment does not provide compatible private services or a populated asse
 After configuring an asset host, verify representative URLs with a browser or HTTP client:
 
 ```text
-https://your-bandori-asset-cdn.example.com/bandori/assets/cn/event/ranmoca_note/images_rip/banner.png
-https://your-bandori-asset-cdn.example.com/bandori/assets/cn/event/banner_event13/images_rip/banner.png
-https://your-bandori-asset-cdn.example.com/bandori/assets/cn/thumb/chara/card00000_rip/res001001_normal.png
+https://your-bandori-asset-cdn.example.com/bandori/cards/index.json
+https://your-bandori-asset-cdn.example.com/bandori/events/index.json
 https://your-bandori-asset-cdn.example.com/bandori/res/icon/chara_icon_1.png
 https://your-bandori-asset-cdn.example.com/bandori/res/image/card-5.png
 https://your-bandori-asset-cdn.example.com/bandori/music/1/charts/expert.json
@@ -194,6 +212,15 @@ https://your-bandori-asset-cdn.example.com/bandori/stamps/index.json
 https://your-bandori-asset-cdn.example.com/bandori/stamps/cn/10131/image.png
 https://your-bandori-asset-cdn.example.com/bandori/stamps/cn/10131/animation/manifest.json
 https://your-bandori-asset-cdn.example.com/bandori/stamps/cn/10131/animation/atlas.png
+```
+
+For Cards and Events, choose representative descriptors from the downloaded indexes and verify `{CDN_BASE}/{descriptor.key}`. Do not verify guessed bundle paths: they are not part of the public HTTP contract.
+
+The Cards and Events index responses and their descriptor targets must allow credential-free browser reads from the HHWX web origins:
+
+```bash
+curl -I -H "Origin: https://hhwx.org" https://your-bandori-asset-cdn.example.com/bandori/cards/index.json
+curl -I -H "Origin: https://hhwx.org" https://your-bandori-asset-cdn.example.com/bandori/events/index.json
 ```
 
 For stamp CORS, verify at least one JSON object and one voice object with an `Origin` header:
