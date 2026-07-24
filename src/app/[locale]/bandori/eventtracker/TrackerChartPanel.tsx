@@ -251,7 +251,7 @@ export const TrackerChartPanel = memo(function TrackerChartPanel({
                         r={marker.radius}
                         fill={marker.color}
                         stroke="none"
-                        isFront
+                        zIndex={700}
                       />
                     ))}
                   </LineChart>
