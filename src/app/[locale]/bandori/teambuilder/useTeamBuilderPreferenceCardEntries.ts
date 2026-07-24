@@ -68,6 +68,7 @@ export type TeamBuilderPreferenceCardEntry = {
 function pickLocalizedName(
   value: string[] | string | undefined,
   preferredServer: BandoriServer,
+  contextServer: BandoriServer,
   fallback = "",
 ): string {
   if (typeof value === "string") {
@@ -76,17 +77,18 @@ function pickLocalizedName(
   if (!Array.isArray(value)) {
     return fallback;
   }
-  return pickBestdoriLocalizedName(value, preferredServer) ?? fallback;
+  return pickBestdoriLocalizedName(value, preferredServer, contextServer) ?? fallback;
 }
 
 function pickCharacterDisplayName(
   character: TeamBuilderPreferenceCharacterMaster | undefined,
   preferredServer: BandoriServer,
+  contextServer: BandoriServer,
   fallback = "",
 ): string {
-  return pickLocalizedName(character?.nickname, preferredServer)
-    || pickLocalizedName(character?.characterName, preferredServer)
-    || pickLocalizedName(character?.firstName, preferredServer)
+  return pickLocalizedName(character?.nickname, preferredServer, contextServer)
+    || pickLocalizedName(character?.characterName, preferredServer, contextServer)
+    || pickLocalizedName(character?.firstName, preferredServer, contextServer)
     || fallback;
 }
 
@@ -94,13 +96,14 @@ function getCardCharacterLabel(
   metadata: TeamBuilderPreferenceCardMetadata | undefined,
   characters: Record<string, TeamBuilderPreferenceCharacterMaster | undefined>,
   preferredServer: BandoriServer,
+  contextServer: BandoriServer,
 ): string {
   const characterId = Number(metadata?.characterId);
   if (!Number.isFinite(characterId)) {
     return "";
   }
   const character = characters[String(Math.trunc(characterId))];
-  return pickCharacterDisplayName(character, preferredServer);
+  return pickCharacterDisplayName(character, preferredServer, contextServer);
 }
 
 function isKnownAttribute(value: string | undefined): value is BandoriCardAttribute {
@@ -134,6 +137,7 @@ function getCardSkillEffectLabel(
   metadata: TeamBuilderPreferenceCardMetadata | undefined,
   skills: Record<string, TeamBuilderPreferenceSkillMaster | undefined> | undefined,
   preferredServer: BandoriServer,
+  contextServer: BandoriServer,
 ): string {
   const skillId = getCardSkillId(card, metadata);
   return normalizeBandoriSkillLabel(
@@ -141,6 +145,7 @@ function getCardSkillEffectLabel(
     card?.skillLevel,
     5,
     preferredServer,
+    contextServer,
   );
 }
 
@@ -169,6 +174,7 @@ export function buildPreferenceCardEntry(
   characterBonusesById: Record<string, BandoriCharacterBonusState | undefined>,
   locale: AppLocale = "zh-CN",
   preferredServer: BandoriServer = DEFAULT_BANDORI_PREFERRED_SERVER,
+  contextServer: BandoriServer = preferredServer,
 ): TeamBuilderPreferenceCardEntry {
   const metadata = cardMetadata[String(card.cardId)];
   const characterId = Number(metadata?.characterId);
@@ -177,9 +183,26 @@ export function buildPreferenceCardEntry(
   const attribute = isKnownAttribute(metadata?.attribute) ? metadata.attribute : null;
   const rarity = Number(metadata?.rarity);
   const normalizedRarity = Number.isFinite(rarity) && rarity > 0 ? Math.trunc(rarity) : null;
-  const cardName = pickGameProfileCardName(card.cardId, metadata, preferredServer, locale);
-  const characterName = getCardCharacterLabel(metadata, characters, preferredServer);
-  const skillEffectLabel = getCardSkillEffectLabel(card, metadata, skills, preferredServer);
+  const cardName = pickGameProfileCardName(
+    card.cardId,
+    metadata,
+    preferredServer,
+    locale,
+    contextServer,
+  );
+  const characterName = getCardCharacterLabel(
+    metadata,
+    characters,
+    preferredServer,
+    contextServer,
+  );
+  const skillEffectLabel = getCardSkillEffectLabel(
+    card,
+    metadata,
+    skills,
+    preferredServer,
+    contextServer,
+  );
   const totalPower = calculateProfileCardTotalPower(card, metadata, characters, characterBonusesById);
   return {
     card,
@@ -283,6 +306,7 @@ function buildPreferenceCardEntryCacheKey(
   cacheScopeKey: string,
   locale: AppLocale,
   preferredServer: BandoriServer,
+  contextServer: BandoriServer,
   card: UserGameProfileCardRecord,
   metadata: TeamBuilderPreferenceCardMetadata | undefined,
   characters: Record<string, TeamBuilderPreferenceCharacterMaster | undefined>,
@@ -293,6 +317,7 @@ function buildPreferenceCardEntryCacheKey(
     cacheScopeKey,
     locale,
     preferredServer,
+    contextServer,
     card.cardId,
     card.level,
     card.masterRank,
@@ -316,6 +341,7 @@ export function useTeamBuilderPreferenceCardEntries({
   characters,
   skills,
   characterBonusesById,
+  displayServer,
 }: {
   cacheScopeKey: string;
   locale: AppLocale;
@@ -324,6 +350,7 @@ export function useTeamBuilderPreferenceCardEntries({
   characters: Record<string, TeamBuilderPreferenceCharacterMaster | undefined>;
   skills: Record<string, TeamBuilderPreferenceSkillMaster | undefined>;
   characterBonusesById: Record<string, BandoriCharacterBonusState | undefined>;
+  displayServer: BandoriServer;
 }): { entries: TeamBuilderPreferenceCardEntry[]; ready: boolean } {
   const preferredServer = useBandoriPreferredServer();
   const entryCacheRef = useRef(new Map<string, TeamBuilderPreferenceCardEntry>());
@@ -367,6 +394,7 @@ export function useTeamBuilderPreferenceCardEntries({
           cacheScopeKey,
           locale,
           preferredServer,
+          displayServer,
           card,
           metadata,
           characters,
@@ -388,6 +416,7 @@ export function useTeamBuilderPreferenceCardEntries({
           characterBonusesById,
           locale,
           preferredServer,
+          displayServer,
         );
         nextEntryCache.set(entryCacheKey, entry);
         nextEntries.push(entry);
@@ -419,6 +448,7 @@ export function useTeamBuilderPreferenceCardEntries({
     cardMetadata,
     characterBonusesById,
     characters,
+    displayServer,
     locale,
     preferredServer,
     profileCards,

@@ -1,7 +1,9 @@
 import type { AccountAvatarCardTrainType } from "@/lib/account-avatar-defaults";
+import type { BandoriServer } from "@/lib/bandori-server";
 
 export type CommentAvatar = {
   cardId: number;
+  entityServer: BandoriServer | null;
   trainType: AccountAvatarCardTrainType;
 };
 

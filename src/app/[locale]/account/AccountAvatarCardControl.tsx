@@ -21,6 +21,7 @@ import { type AccountProfile, getAccessToken } from "./useAccountProfile";
 function profileToPickerValue(profile: AccountProfile): BandoriCardPickerValue | null {
   return {
     cardId: profile.avatarCardId,
+    entityServer: profile.avatarCardServer,
     trainType: profile.avatarCardTrainType,
   };
 }
@@ -38,7 +39,7 @@ export default function AccountAvatarCardControl({
   const errorT = useTranslations("errors");
   const preferredServer = useBandoriPreferredServer();
   useBandoriCardsAssetIndex();
-  const { data: cardMetadata } = useBandoriCardsMaster();
+  const { data: cardMetadata } = useBandoriCardsMaster(profile.avatarCardServer ?? undefined);
   const selectedCardMetadata = cardMetadata?.[String(profile.avatarCardId)];
   const selectedCardDisplayName = pickGameProfileCardName(
     profile.avatarCardId,
@@ -60,7 +61,9 @@ export default function AccountAvatarCardControl({
 
   const hasChanges = useMemo(() => {
     const current = profileToPickerValue(profile);
-    return current?.cardId !== draftValue?.cardId || current?.trainType !== draftValue?.trainType;
+    return current?.cardId !== draftValue?.cardId
+      || current?.entityServer !== draftValue?.entityServer
+      || current?.trainType !== draftValue?.trainType;
   }, [draftValue, profile]);
 
   const saveAvatar = async () => {
@@ -82,6 +85,7 @@ export default function AccountAvatarCardControl({
         },
         body: JSON.stringify({
           avatarCardId: draftValue?.cardId ?? DEFAULT_ACCOUNT_AVATAR_CARD_ID,
+          avatarCardServer: draftValue?.entityServer ?? null,
           avatarCardTrainType: draftValue?.trainType ?? DEFAULT_ACCOUNT_AVATAR_CARD_TRAIN_TYPE,
         }),
       });
@@ -119,6 +123,7 @@ export default function AccountAvatarCardControl({
         <AccountCardAvatar
           username={profile.username}
           cardId={profile.avatarCardId}
+          entityServer={profile.avatarCardServer}
           trainType={profile.avatarCardTrainType}
           resourceSetName={selectedCardMetadata?.resourceSetName}
           displayName={selectedCardDisplayName}
@@ -151,7 +156,6 @@ export default function AccountAvatarCardControl({
               <BandoriCardPicker
                 value={draftValue}
                 onValueChange={setDraftValue}
-                excludeEntityCollisions
                 scrollElementRef={pickerScrollRef}
               />
             </div>
@@ -165,6 +169,7 @@ export default function AccountAvatarCardControl({
                   type="button"
                   onClick={() => setDraftValue({
                     cardId: DEFAULT_ACCOUNT_AVATAR_CARD_ID,
+                    entityServer: null,
                     trainType: DEFAULT_ACCOUNT_AVATAR_CARD_TRAIN_TYPE,
                   })}
                   className="inline-flex h-10 items-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:border-slate-300"

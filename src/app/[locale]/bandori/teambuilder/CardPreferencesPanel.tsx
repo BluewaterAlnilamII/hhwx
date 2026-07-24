@@ -7,6 +7,7 @@ import VirtualizedBandoriCardGrid from "@/components/bandori/VirtualizedBandoriC
 import { type AppLocale } from "@/i18n/routing";
 import { type BandoriAssetRegion } from "@/lib/bandori-asset-proxy";
 import { BANDORI_CHARACTER_GROUPS, compareBandoriCharacterIds } from "@/lib/bandori-character-groups";
+import { type BandoriServer } from "@/lib/bandori-server";
 import { type BandoriCharacterBonusState } from "@/lib/bandori-team-calculator";
 import { type UserGameProfileCardRecord } from "@/lib/user-game-profile-payload";
 import { useBandoriPreferredServer } from "@/store/useBandoriPreferencesStore";
@@ -46,6 +47,7 @@ export type TeamBuilderCardPreferencesPanelProps = {
   skills: Record<string, TeamBuilderPreferenceSkillMaster | undefined>;
   characterBonusesById: Record<string, BandoriCharacterBonusState | undefined>;
   assetRegion: BandoriAssetRegion;
+  displayServer: BandoriServer;
   currentEventBonusCardCount: number;
   addingCurrentEventCards: boolean;
   temporaryCardActionError: string;
@@ -68,6 +70,7 @@ export default function TeamBuilderCardPreferencesPanel({
   skills,
   characterBonusesById,
   assetRegion,
+  displayServer,
   currentEventBonusCardCount,
   addingCurrentEventCards,
   temporaryCardActionError,
@@ -105,6 +108,7 @@ export default function TeamBuilderCardPreferencesPanel({
     characters,
     skills,
     characterBonusesById,
+    displayServer,
   });
 
   const temporaryCardEntries = useMemo(() => preferences.temporaryCards.map((card) => ({
@@ -116,12 +120,14 @@ export default function TeamBuilderCardPreferencesPanel({
       characterBonusesById,
       locale,
       preferredServer,
+      displayServer,
     ),
     card,
   } satisfies TeamBuilderPreferenceCardEntry & { card: TemporaryGameProfileCard })), [
     cardMetadata,
     characterBonusesById,
     characters,
+    displayServer,
     locale,
     preferences.temporaryCards,
     preferredServer,

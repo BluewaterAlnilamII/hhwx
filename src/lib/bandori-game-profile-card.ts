@@ -34,8 +34,9 @@ export function pickGameProfileCardName(
   metadata?: GameProfileCardMetadata,
   preferredServer: BandoriServer = DEFAULT_BANDORI_PREFERRED_SERVER,
   locale: AppLocale = "zh-CN",
+  contextServer?: BandoriServer | null,
 ): string {
-  const localizedName = pickBestdoriLocalizedName(metadata?.prefix, preferredServer);
+  const localizedName = pickBestdoriLocalizedName(metadata?.prefix, preferredServer, contextServer);
   const fallbackName = locale === "en" ? `Card ${cardId}` : `\u5361\u724c ${cardId}`;
   return localizedName ?? metadata?.displayName ?? fallbackName;
 }

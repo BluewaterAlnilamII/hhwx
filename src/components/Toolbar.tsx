@@ -15,6 +15,7 @@ import { pickGameProfileCardName } from "@/lib/bandori-game-profile-card";
 import {
     BANDORI_SERVER_CODES,
     BANDORI_SERVERS,
+    type BandoriServer,
 } from "@/lib/bandori-server";
 import { buildAuthPath, clearAuthProfileSummaryCache, getSafeSession, readAuthProfileSummary, supabase } from "@/lib/supabase";
 import {
@@ -33,6 +34,7 @@ type ToolbarAccountProfile = {
     userId: string;
     username: string;
     avatarCardId: number;
+    avatarCardServer: BandoriServer | null;
     avatarCardTrainType: AccountAvatarCardTrainType;
 };
 
@@ -183,11 +185,12 @@ export default function Toolbar({ showDebugButton = true, isSidebarOpen = false,
     const toolbarProfile = toolbarProfileState?.userId === userId ? toolbarProfileState.profile : null;
     const toolbarUsername = toolbarProfile?.username ?? username;
     const avatarCardId = toolbarProfile?.avatarCardId ?? null;
+    const avatarCardServer = toolbarProfile?.avatarCardServer ?? null;
     useBandoriCardsAssetIndex(Boolean(userId && avatarCardId));
     const notificationUnreadCount = notificationUnreadState?.userId === userId ? notificationUnreadState.unreadCount : 0;
     const notificationBadgeLabel = notificationUnreadCount > 0 ? formatUnreadCount(notificationUnreadCount) : null;
     const { data: cardMetadata } = useBandoriCardsMaster(
-        undefined,
+        avatarCardServer ?? undefined,
         Boolean(userId && avatarCardId),
     );
     const selectedCardMetadata = avatarCardId
@@ -465,6 +468,7 @@ export default function Toolbar({ showDebugButton = true, isSidebarOpen = false,
                                     <AccountCardAvatar
                                         username={toolbarUsername}
                                         cardId={avatarCardId}
+                                        entityServer={avatarCardServer}
                                         trainType={toolbarProfile?.avatarCardTrainType}
                                         resourceSetName={selectedCardMetadata?.resourceSetName}
                                         displayName={selectedCardDisplayName}

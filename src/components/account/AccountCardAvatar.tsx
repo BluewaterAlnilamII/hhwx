@@ -3,6 +3,7 @@
 import { BandoriCardArtImage } from "@/components/bandori/card-picker";
 import { useBandoriCardsMaster } from "@/hooks/useBandoriCardsMaster";
 import { type AccountAvatarCardTrainType } from "@/lib/account-avatar-defaults";
+import { type BandoriServer } from "@/lib/bandori-server";
 import { pickGameProfileCardName } from "@/lib/bandori-game-profile-card";
 import { getUsernameAvatarLabel } from "@/lib/username-policy";
 import { cn } from "@/lib/utils";
@@ -20,6 +21,7 @@ const SIZE_CLASS_NAMES: Record<AccountCardAvatarSize, string> = {
 export type AccountCardAvatarProps = {
   username: string | null | undefined;
   cardId?: number | null;
+  entityServer?: BandoriServer | null;
   trainType?: AccountAvatarCardTrainType | null;
   resourceSetName?: string | null;
   displayName?: string | null;
@@ -30,6 +32,7 @@ export type AccountCardAvatarProps = {
 export default function AccountCardAvatar({
   username,
   cardId,
+  entityServer = null,
   trainType = "normal",
   resourceSetName,
   displayName,
@@ -38,7 +41,7 @@ export default function AccountCardAvatar({
 }: AccountCardAvatarProps) {
   const preferredServer = useBandoriPreferredServer();
   const { data: cards } = useBandoriCardsMaster(
-    undefined,
+    entityServer ?? undefined,
     Boolean(cardId && !resourceSetName),
   );
   const cardMetadata = cardId ? cards?.[String(cardId)] : null;

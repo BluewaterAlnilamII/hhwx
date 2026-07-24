@@ -1,12 +1,20 @@
 import { ApiRouteError } from "@/lib/api-contracts";
+import {
+  normalizeAccountAvatarCardServer,
+  resolveStoredAccountAvatarCardIdentity,
+} from "@/lib/account-avatar-card";
 import { ensureAccountStatus } from "@/lib/account-status-server";
 import { jsonRouteError, jsonSuccess } from "@/lib/api-response";
 import { requireAuthenticatedUser } from "@/lib/auth-server";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
 import { PROFILES_TABLE, USER_ROLES_TABLE } from "@/lib/supabase-table-names";
 import { readBandoriCardsApiDataset } from "@/lib/bandori-cards-api-server";
-import { isKnownBandoriCardEntityCollision } from "@/lib/bandori-card-server-extensions";
+import {
+  isKnownBandoriCardEntityCollision,
+  materializeBandoriCardForServer,
+} from "@/lib/bandori-card-server-extensions";
 import { hasTrainedCardArt } from "@/lib/bandori-card-training";
+import { type BandoriServer } from "@/lib/bandori-server";
 import {
   DEFAULT_ACCOUNT_AVATAR_CARD_ID,
   DEFAULT_ACCOUNT_AVATAR_CARD_TRAIN_TYPE,
@@ -25,6 +33,7 @@ type ProfileRow = {
   public_uid: number;
   username: string;
   avatar_card_id: number | null;
+  avatar_card_server: number | null;
   avatar_card_train_type: AvatarCardTrainType | null;
   created_at: string | null;
 };
@@ -86,6 +95,25 @@ function normalizeAvatarCardId(value: unknown): number {
   return cardId;
 }
 
+function normalizeRequestedAvatarCardServer(
+  value: unknown,
+  cardId: number,
+): BandoriServer | null {
+  if (!isKnownBandoriCardEntityCollision(cardId)) {
+    return null;
+  }
+
+  const server = normalizeAccountAvatarCardServer(cardId, value);
+  if (server === null) {
+    throw new ApiRouteError(
+      400,
+      "ACCOUNT_AVATAR_CARD_SERVER_REQUIRED",
+      "This card ID identifies different EN and CN cards and requires an explicit server",
+    );
+  }
+  return server;
+}
+
 function normalizeRequestedAvatarTrainType(value: unknown, cardId: number): AvatarCardTrainType {
   if (value === undefined || value === null || value === "") {
     return cardId === DEFAULT_ACCOUNT_AVATAR_CARD_ID ? DEFAULT_ACCOUNT_AVATAR_CARD_TRAIN_TYPE : "after_training";
@@ -98,9 +126,15 @@ function normalizeRequestedAvatarTrainType(value: unknown, cardId: number): Avat
   throw new ApiRouteError(400, "INVALID_AVATAR_CARD_TRAIN_TYPE", "请选择有效的卡面版本");
 }
 
-async function readAvatarCard(cardId: number): Promise<{ hasTrainedArt: boolean }> {
+async function readAvatarCard(
+  cardId: number,
+  server: BandoriServer | null,
+): Promise<{ hasTrainedArt: boolean }> {
   const payload = await readBandoriCardsApiDataset();
-  const card = isRecord(payload) ? payload[String(cardId)] : null;
+  const canonicalCard = isRecord(payload) ? payload[String(cardId)] : null;
+  const card = isRecord(canonicalCard) && server !== null
+    ? materializeBandoriCardForServer(canonicalCard, server)
+    : canonicalCard;
   if (!isRecord(card) || typeof card.resourceSetName !== "string" || !card.resourceSetName.trim()) {
     throw new ApiRouteError(400, "AVATAR_CARD_NOT_FOUND", "所选卡牌不存在或缺少卡面资源");
   }
@@ -121,7 +155,7 @@ async function ensureProfileRow(userId: string, preferredUsername: string | null
   const serviceClient = createServerSupabaseClient();
   const { data, error } = await serviceClient
     .from(PROFILES_TABLE)
-    .select("public_uid, username, avatar_card_id, avatar_card_train_type, created_at")
+    .select("public_uid, username, avatar_card_id, avatar_card_server, avatar_card_train_type, created_at")
     .eq("id", userId)
     .maybeSingle();
 
@@ -140,11 +174,12 @@ async function ensureProfileRow(userId: string, preferredUsername: string | null
       id: userId,
       username: fallbackUsername,
       avatar_card_id: DEFAULT_ACCOUNT_AVATAR_CARD_ID,
+      avatar_card_server: null,
       avatar_card_train_type: DEFAULT_ACCOUNT_AVATAR_CARD_TRAIN_TYPE,
     }, {
       onConflict: "id",
     })
-    .select("public_uid, username, avatar_card_id, avatar_card_train_type, created_at")
+    .select("public_uid, username, avatar_card_id, avatar_card_server, avatar_card_train_type, created_at")
     .single();
 
   if (createError) {
@@ -173,7 +208,13 @@ async function readAccountProfile(
     throw new ApiRouteError(500, "ACCOUNT_ROLES_READ_FAILED", "读取账号权限失败", rolesResult.error.message);
   }
 
-  const avatarCardId = normalizeStoredAvatarCardId(profile.avatar_card_id);
+  const storedAvatarCardId = normalizeStoredAvatarCardId(profile.avatar_card_id);
+  const avatarIdentity = resolveStoredAccountAvatarCardIdentity(
+    storedAvatarCardId,
+    profile.avatar_card_server,
+  );
+  const avatarCardId = avatarIdentity.cardId;
+  const avatarCardServer = avatarIdentity.entityServer;
 
   return {
     userId,
@@ -182,6 +223,7 @@ async function readAccountProfile(
     emailVerified: Boolean(accountStatus.email_verified_at),
     username: profile.username,
     avatarCardId,
+    avatarCardServer,
     avatarCardTrainType: normalizeStoredAvatarTrainType(profile.avatar_card_train_type, avatarCardId),
     createdAt: profile.created_at,
     updatedAt: profile.created_at,
@@ -256,7 +298,11 @@ export async function PATCH(request: Request) {
   try {
     const user = await requireAuthenticatedUser(request);
 
-    let body: { avatarCardId?: unknown; avatarCardTrainType?: unknown };
+    let body: {
+      avatarCardId?: unknown;
+      avatarCardServer?: unknown;
+      avatarCardTrainType?: unknown;
+    };
     try {
       body = await request.json();
     } catch {
@@ -264,15 +310,12 @@ export async function PATCH(request: Request) {
     }
 
     const avatarCardId = normalizeAvatarCardId(body.avatarCardId);
-    if (isKnownBandoriCardEntityCollision(avatarCardId)) {
-      throw new ApiRouteError(
-        400,
-        "ACCOUNT_AVATAR_CARD_SERVER_REQUIRED",
-        "This card ID identifies different EN and CN cards and requires an explicit server",
-      );
-    }
+    const avatarCardServer = normalizeRequestedAvatarCardServer(
+      body.avatarCardServer,
+      avatarCardId,
+    );
     const requestedAvatarCardTrainType = normalizeRequestedAvatarTrainType(body.avatarCardTrainType, avatarCardId);
-    const avatarCard = await readAvatarCard(avatarCardId);
+    const avatarCard = await readAvatarCard(avatarCardId, avatarCardServer);
     const avatarCardTrainType = resolveAvatarTrainTypeForCard(requestedAvatarCardTrainType, avatarCard);
     await ensureProfileRow(user.id, user.metadataUsername);
 
@@ -281,6 +324,7 @@ export async function PATCH(request: Request) {
       .from(PROFILES_TABLE)
       .update({
         avatar_card_id: avatarCardId,
+        avatar_card_server: avatarCardServer,
         avatar_card_train_type: avatarCardTrainType,
       })
       .eq("id", user.id);

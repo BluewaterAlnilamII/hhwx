@@ -24,6 +24,7 @@
     "PROFILE_CREATE_FAILED": "创建账号资料失败",
     "ACCOUNT_PROFILE_UPDATE_FAILED": "更新账号资料失败",
     "INVALID_AVATAR_CARD_ID": "请选择有效的头像卡牌",
+    "ACCOUNT_AVATAR_CARD_SERVER_REQUIRED": "请选择这张卡牌对应的 EN 或 CN 版本",
     "INVALID_AVATAR_CARD_TRAIN_TYPE": "请选择有效的卡面版本",
     "AVATAR_CARD_NOT_FOUND": "所选卡牌不存在或缺少卡面资源",
     "INVALID_COMMENT_CONTENT": "评论内容无效",

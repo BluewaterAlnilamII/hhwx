@@ -80,6 +80,8 @@ export default function BandoriCardThumbnailTile({
       <button
         type="button"
         data-card-id={card.cardId}
+        data-card-ref={card.cardRef}
+        data-entity-server={card.entityServer ?? undefined}
         onClick={onSelect}
         title={label}
         aria-pressed={selected}
@@ -95,6 +97,12 @@ export default function BandoriCardThumbnailTile({
           showLevel={false}
         />
       </button>
+
+      {card.entityServer !== null ? (
+        <span className="pointer-events-none absolute -left-1.5 -top-1.5 z-30 rounded-full border border-white bg-slate-800 px-1.5 py-0.5 text-[9px] font-black leading-none text-white shadow-sm sm:text-[10px]">
+          {card.entityServer === 1 ? "EN" : "CN"}
+        </span>
+      ) : null}
 
       {previewOpen ? (
         <BandoriCardHoverTooltipPortal

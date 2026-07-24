@@ -7,6 +7,7 @@ import { useLocale, useTranslations } from "next-intl";
 import { type AppLocale } from "@/i18n/routing";
 import SharedBandoriCardThumbnail from "@/components/bandori/BandoriCardThumbnail";
 import { type BandoriAssetRegion } from "@/lib/bandori-asset-proxy";
+import { type BandoriServer } from "@/lib/bandori-server";
 import {
   getGameProfileCardLevelLimit,
   hasGameProfileCardChanged,
@@ -94,6 +95,7 @@ export type GameProfileCardEditorDialogProps = {
   bandId: number | null;
   characterBonusesById?: Record<string, BandoriCharacterBonusState | undefined>;
   region: BandoriAssetRegion;
+  displayServer?: BandoriServer;
   saving: boolean;
   title?: string;
   saveLabel?: string;
@@ -114,6 +116,7 @@ export default function GameProfileCardEditorDialog({
   bandId,
   characterBonusesById = {},
   region,
+  displayServer,
   saving,
   title,
   saveLabel,
@@ -138,6 +141,7 @@ export default function GameProfileCardEditorDialog({
     metadata,
     preferredServer,
     locale,
+    displayServer,
   );
   const hasChanges = baselineCard ? hasGameProfileCardChanged(draft, baselineCard) : hasGameProfileCardChanged(draft, card);
   const totalPower = useMemo(() => {

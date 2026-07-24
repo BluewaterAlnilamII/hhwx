@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl";
 import { getApiErrorMessage, parseApiSuccessData } from "@/lib/api-contracts";
 import { getLocalizedApiErrorMessage } from "@/lib/localized-api-errors";
 import { getSafeSession, readAuthProfileSummary } from "@/lib/supabase";
+import { type BandoriServer } from "@/lib/bandori-server";
 import { useGameStore } from "@/store/useGameStore";
 
 export type AccountProfile = {
@@ -14,6 +15,7 @@ export type AccountProfile = {
   emailVerified: boolean;
   username: string;
   avatarCardId: number;
+  avatarCardServer: BandoriServer | null;
   avatarCardTrainType: "normal" | "after_training";
   createdAt: string | null;
   updatedAt: string | null;

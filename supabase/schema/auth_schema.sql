@@ -8,11 +8,23 @@ CREATE TABLE IF NOT EXISTS profiles (
   id                     UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   username               TEXT NOT NULL UNIQUE,
   avatar_card_id         INTEGER NOT NULL DEFAULT 1,
+  avatar_card_server     SMALLINT,
   avatar_card_train_type TEXT NOT NULL DEFAULT 'normal',
   created_at             TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at             TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   CHECK (char_length(username) BETWEEN 2 AND 24),
   CHECK (avatar_card_id > 0),
+  CHECK (
+    (
+      avatar_card_id BETWEEN 10001 AND 10010
+      AND avatar_card_server IN (1, 3)
+    )
+    OR
+    (
+      avatar_card_id NOT BETWEEN 10001 AND 10010
+      AND avatar_card_server IS NULL
+    )
+  ),
   CHECK (avatar_card_train_type IN ('normal', 'after_training'))
 );
 

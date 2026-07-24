@@ -502,6 +502,7 @@ function pickLocalizedName(
   value: string[] | string | undefined,
   preferredServer: BandoriServer,
   fallback = "",
+  contextServer?: BandoriServer,
 ): string {
   if (typeof value === "string") {
     return value.trim() || fallback;
@@ -509,17 +510,18 @@ function pickLocalizedName(
   if (!Array.isArray(value)) {
     return fallback;
   }
-  return pickBestdoriLocalizedName(value, preferredServer) ?? fallback;
+  return pickBestdoriLocalizedName(value, preferredServer, contextServer) ?? fallback;
 }
 
 function pickCharacterDisplayName(
   character: CharacterMaster | undefined,
   preferredServer: BandoriServer,
   fallback = "",
+  contextServer?: BandoriServer,
 ): string {
-  return pickLocalizedName(character?.nickname, preferredServer)
-    || pickLocalizedName(character?.characterName, preferredServer)
-    || pickLocalizedName(character?.firstName, preferredServer)
+  return pickLocalizedName(character?.nickname, preferredServer, "", contextServer)
+    || pickLocalizedName(character?.characterName, preferredServer, "", contextServer)
+    || pickLocalizedName(character?.firstName, preferredServer, "", contextServer)
     || fallback;
 }
 
@@ -887,8 +889,15 @@ function pickCardDisplayName(
   metadata: CardMetadata | undefined,
   preferredServer: BandoriServer,
   locale: AppLocale,
+  contextServer?: BandoriServer,
 ): string {
-  return pickGameProfileCardName(cardId, metadata, preferredServer, locale);
+  return pickGameProfileCardName(
+    cardId,
+    metadata,
+    preferredServer,
+    locale,
+    contextServer,
+  );
 }
 
 function getCardBandId(metadata: CardMetadata | undefined, characters: Record<string, CharacterMaster | undefined>): number | null {
@@ -1155,6 +1164,7 @@ function getCardSkillEffectLabel(
   metadata: CardMetadata | undefined,
   skills: Record<string, SkillMaster | undefined> | undefined,
   preferredServer: BandoriServer,
+  contextServer?: BandoriServer,
 ): string {
   const skillId = getCardSkillId(card, metadata);
   return normalizeBandoriSkillLabel(
@@ -1162,6 +1172,7 @@ function getCardSkillEffectLabel(
     card?.skillLevel,
     5,
     preferredServer,
+    contextServer,
   );
 }
 
@@ -2084,6 +2095,7 @@ function TeamBuilderCardTile({
   characters,
   skills,
   skillEffectLevel,
+  displayServer,
   badge,
   leader,
   assetRegion = "cn",
@@ -2094,6 +2106,7 @@ function TeamBuilderCardTile({
   characters?: Record<string, CharacterMaster | undefined>;
   skills?: Record<string, SkillMaster | undefined>;
   skillEffectLevel?: unknown;
+  displayServer?: BandoriServer;
   badge?: string;
   leader?: boolean;
   assetRegion?: BandoriAssetRegion;
@@ -2103,7 +2116,13 @@ function TeamBuilderCardTile({
   const preferredServer = useBandoriPreferredServer();
   const cardId = card.cardId;
   const labelsT = useTranslations("bandori.teamBuilder.labels");
-  const cardName = pickCardDisplayName(cardId, metadata, preferredServer, locale);
+  const cardName = pickCardDisplayName(
+    cardId,
+    metadata,
+    preferredServer,
+    locale,
+    displayServer,
+  );
   const tileRef = useRef<HTMLElement | null>(null);
   const [hoverOpen, setHoverOpen] = useState(false);
   const rarity = Math.min(5, Math.max(1, Math.trunc(Number(metadata?.rarity ?? card.rarity) || 1)));
@@ -2113,6 +2132,7 @@ function TeamBuilderCardTile({
     metadata,
     skills,
     preferredServer,
+    displayServer,
   );
 
   return (
@@ -2149,7 +2169,12 @@ function TeamBuilderCardTile({
           open={hoverOpen}
           cardName={cardName}
           characterName={characters
-            ? getCardCharacterLabel(metadata, characters, preferredServer)
+            ? getCardCharacterLabel(
+                metadata,
+                characters,
+                preferredServer,
+                displayServer,
+              )
             : `Card #${cardId}`}
         >
           <span className="block w-full whitespace-normal break-words rounded-xl bg-slate-50 px-2 py-1 text-slate-700">
@@ -2363,6 +2388,7 @@ function ResultCard({
   characters,
   skills,
   assetRegion,
+  displayServer,
   displayLiveBoostCount,
   displayChallengeCpCost,
   displayPlacement,
@@ -2373,6 +2399,7 @@ function ResultCard({
   characters: Record<string, CharacterMaster | undefined>;
   skills: Record<string, SkillMaster | undefined>;
   assetRegion: BandoriAssetRegion;
+  displayServer: BandoriServer;
   displayLiveBoostCount: LiveBoostCountOption;
   displayChallengeCpCost: ChallengeCpCostOption;
   displayPlacement: ResultPlacementOption;
@@ -2457,6 +2484,7 @@ function ResultCard({
             metadata={cardMetadata[String(card.cardId)]}
             characters={characters}
             skills={skills}
+            displayServer={displayServer}
             leader={getDisplayCardKey(card) === (result.leaderCardInstanceKey ?? `profile:${result.leaderCardId}`)}
             assetRegion={assetRegion}
           />
@@ -2506,6 +2534,7 @@ function MedleyResultCard({
   characters,
   skills,
   assetRegion,
+  displayServer,
   songs,
   rankLabel,
   badgeLabel,
@@ -2517,6 +2546,7 @@ function MedleyResultCard({
   characters: Record<string, CharacterMaster | undefined>;
   skills: Record<string, SkillMaster | undefined>;
   assetRegion: BandoriAssetRegion;
+  displayServer: BandoriServer;
   songs: Array<SongMaster | null>;
   rankLabel?: string;
   badgeLabel?: string;
@@ -2640,6 +2670,7 @@ function MedleyResultCard({
                     metadata={cardMetadata[String(card.cardId)]}
                     characters={characters}
                     skills={skills}
+                    displayServer={displayServer}
                     leader={getDisplayCardKey(card) === (songResult.leaderCardInstanceKey ?? `profile:${songResult.leaderCardId}`)}
                     assetRegion={assetRegion}
                   />
@@ -2707,13 +2738,14 @@ function getCardCharacterLabel(
   metadata: CardMetadata | undefined,
   characters: Record<string, CharacterMaster | undefined>,
   preferredServer: BandoriServer,
+  contextServer?: BandoriServer,
 ): string {
   const characterId = Number(metadata?.characterId);
   if (!Number.isFinite(characterId)) {
     return "";
   }
   const character = characters[String(Math.trunc(characterId))];
-  return pickCharacterDisplayName(character, preferredServer);
+  return pickCharacterDisplayName(character, preferredServer, "", contextServer);
 }
 
 function TeamBuilderPanel() {
@@ -3205,8 +3237,13 @@ function TeamBuilderPanel() {
   const selectedProfileCardServer = useMemo(() => (
     normalizeBandoriServer(selectedProfilePayload?.bestdoriProfile.server) ?? 0
   ), [selectedProfilePayload]);
-  const { data: selectedServerCards } = useBandoriCardsMaster(selectedProfileCardServer);
-  const cardMetadata = (selectedServerCards
+  const {
+    data: selectedServerCards,
+    canonicalData: canonicalCards,
+  } = useBandoriCardsMaster(selectedProfileCardServer);
+  const profileCardMetadata = (selectedServerCards
+    ?? EMPTY_CARD_METADATA) as Record<string, CardMetadata | undefined>;
+  const canonicalCardMetadata = (canonicalCards
     ?? EMPTY_CARD_METADATA) as Record<string, CardMetadata | undefined>;
   const ensureCardsMetadata = useCallback(async (
     cardIds: number[],
@@ -3216,9 +3253,9 @@ function TeamBuilderPanel() {
       .filter((cardId) => Number.isFinite(cardId) && cardId > 0)));
     return Object.fromEntries(normalizedCardIds.map((cardId) => [
       String(cardId),
-      cardMetadata[String(cardId)],
+      profileCardMetadata[String(cardId)],
     ]));
-  }, [cardMetadata]);
+  }, [profileCardMetadata]);
   const ensureCardMetadata = useCallback(async (
     cardId: number,
   ): Promise<CardMetadata | undefined> => {
@@ -3957,7 +3994,7 @@ function TeamBuilderPanel() {
             eventBonusLoading={eventBonusLoading}
             eventBonusError={eventBonusError}
             characters={data.characters}
-            cardMetadata={cardMetadata}
+            cardMetadata={canonicalCardMetadata}
             skills={data.skills}
             assetRegion={selectedEventAssetRegion}
             eventFormula={eventFormula}
@@ -4138,11 +4175,12 @@ function TeamBuilderPanel() {
               cacheScopeKey={selectedProfileCacheKey}
               profileCards={selectedProfileCards}
               preferences={cardPreferences}
-              cardMetadata={cardMetadata}
+              cardMetadata={profileCardMetadata}
               characters={data.characters}
               skills={data.skills}
               characterBonusesById={selectedProfileCharacterBonusesById}
               assetRegion={selectedProfileAssetRegion}
+              displayServer={selectedProfileCardServer}
               currentEventBonusCardCount={currentEventBonusCardIds.length}
               addingCurrentEventCards={addingCurrentEventCards}
               temporaryCardActionError={temporaryCardActionError}
@@ -4361,10 +4399,11 @@ function TeamBuilderPanel() {
                       <MedleyResultCard
                         key="max-score-candidate"
                         result={result.maxScoreCandidate}
-                        cardMetadata={cardMetadata}
+                        cardMetadata={profileCardMetadata}
                         characters={data.characters}
                         skills={data.skills}
                         assetRegion={displayedMedleyAssetRegion}
+                        displayServer={selectedProfileCardServer}
                         songs={displayedMedleySongs}
                         rankLabel={labelsT("candidate")}
                         badgeLabel={labelsT("maxScoreBadge")}
@@ -4376,10 +4415,11 @@ function TeamBuilderPanel() {
                       <MedleyResultCard
                         key={`evaluated-average-${index}`}
                         result={item}
-                        cardMetadata={cardMetadata}
+                        cardMetadata={profileCardMetadata}
                         characters={data.characters}
                         skills={data.skills}
                         assetRegion={displayedMedleyAssetRegion}
+                        displayServer={selectedProfileCardServer}
                         songs={displayedMedleySongs}
                         rankLabel={labelsT("candidateWithIndex", { index: index + 1 })}
                         badgeLabel={labelsT("evaluatedAverageBadge")}
@@ -4394,20 +4434,22 @@ function TeamBuilderPanel() {
                     <MedleyResultCard
                       key={item.rank}
                       result={item}
-                      cardMetadata={cardMetadata}
+                      cardMetadata={profileCardMetadata}
                       characters={data.characters}
                       skills={data.skills}
                       assetRegion={displayedMedleyAssetRegion}
+                      displayServer={selectedProfileCardServer}
                       songs={displayedMedleySongs}
                     />
                   ) : (
                     <ResultCard
                       key={item.rank}
                       result={item}
-                      cardMetadata={cardMetadata}
+                      cardMetadata={profileCardMetadata}
                       characters={data.characters}
                       skills={data.skills}
                       assetRegion={selectedEventAssetRegion}
+                      displayServer={selectedProfileCardServer}
                       displayLiveBoostCount={resultLiveBoostCount}
                       displayChallengeCpCost={resultChallengeCpCost}
                       displayPlacement={resultPlacement}
@@ -4459,15 +4501,17 @@ function TeamBuilderPanel() {
         <DynamicTemporaryCardEditorDialog
           card={editingTemporaryCard}
           baselineCard={editingTemporaryCardExists ? cardPreferences.temporaryCards.find((card) => card.instanceId === editingTemporaryCard.instanceId) ?? null : null}
-          metadata={cardMetadata[String(editingTemporaryCard.cardId)]}
+          metadata={profileCardMetadata[String(editingTemporaryCard.cardId)]}
           characterName={getCardCharacterLabel(
-            cardMetadata[String(editingTemporaryCard.cardId)],
+            profileCardMetadata[String(editingTemporaryCard.cardId)],
             data.characters,
             preferredServer,
+            selectedProfileCardServer,
           )}
-          bandId={getCardBandId(cardMetadata[String(editingTemporaryCard.cardId)], data.characters)}
+          bandId={getCardBandId(profileCardMetadata[String(editingTemporaryCard.cardId)], data.characters)}
           characterBonusesById={selectedProfileCharacterBonusesById}
           region={selectedProfileAssetRegion}
+          displayServer={selectedProfileCardServer}
           exists={editingTemporaryCardExists}
           onClose={closeTemporaryCardEditor}
           onSave={saveTemporaryCard}
