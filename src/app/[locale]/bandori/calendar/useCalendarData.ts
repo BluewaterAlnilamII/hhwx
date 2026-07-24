@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { type Session } from "@supabase/supabase-js";
 import { useCachedFetch } from "@/hooks/useCachedFetch";
 import {
+  BANDORI_EVENT_CATALOG_CACHE_PROFILE,
   EXTERNAL_REFERENCE_CACHE_PROFILE,
   MUTABLE_DIRECTORY_CACHE_PROFILE,
   REFERENCE_METADATA_CACHE_PROFILE,
@@ -179,7 +180,7 @@ export function useCalendarData() {
         events: Array.isArray(payload?.events) ? payload.events : [],
       };
     },
-    { ...(MUTABLE_DIRECTORY_CACHE_PROFILE.client ?? {}) },
+    { ...(BANDORI_EVENT_CATALOG_CACHE_PROFILE.client ?? {}) },
   );
   const { data: scheduleData, loading: scheduleLoading, refresh: refreshSchedule } = useCachedFetch<{ events: BandoriScheduleSupplement[] }>(
     "bandori-calendar-cn-schedules-v3",

@@ -40,3 +40,26 @@ test("account profile and calendar auth reads filter duplicate work", async () =
   assert.match(calendarHook, /event === "TOKEN_REFRESHED"/u);
   assert.match(calendarHook, /checkedUserId === session\?\.user\.id/u);
 });
+
+test("event catalog stays fresh for twelve hours without visibility refreshes", async () => {
+  const cachePolicy = await readSource("src/lib/api-cache.ts");
+  const trackerHook = await readSource("src/app/[locale]/bandori/eventtracker/useTrackerData.ts");
+  const calendarHook = await readSource("src/app/[locale]/bandori/calendar/useCalendarData.ts");
+
+  assert.match(
+    cachePolicy,
+    /BANDORI_EVENT_CATALOG_CACHE_PROFILE[\s\S]*staleTimeMs: 12 \* 60 \* 60 \* 1000,[\s\S]*refreshOnVisible: false/u,
+  );
+  assert.match(
+    trackerHook,
+    /BANDORI_EVENT_CATALOG_CACHE_PROFILE\.client/u,
+  );
+  assert.match(
+    trackerHook,
+    /REALTIME_HOT_CACHE_PROFILE\.client/u,
+  );
+  assert.match(
+    calendarHook,
+    /BANDORI_EVENT_CATALOG_CACHE_PROFILE\.client/u,
+  );
+});

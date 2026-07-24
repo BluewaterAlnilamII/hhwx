@@ -1,9 +1,9 @@
 import { unstable_cache } from "next/cache";
 import {
+  BANDORI_EVENT_CATALOG_CACHE_PROFILE,
   BANDORI_EVENTS_CACHE_TAG,
   BANDORI_SCHEDULE_CACHE_TAG,
   LIVE_API_CACHE_CONTROL,
-  PUBLIC_SHORT_API_CACHE_CONTROL,
   withCacheControl,
 } from "@/lib/api-cache";
 import { jsonRouteError, jsonSuccess } from "@/lib/api-response";
@@ -20,13 +20,16 @@ const readBandoriEventsListResponse = unstable_cache(
   // 当 events DTO 结构发生破坏性调整时，需要同步提升 cache key 版本，
   // 否则 data cache 可能继续回放旧 schema 的对象形状。
   ["bandori-events-route:v4"],
-  { revalidate: 300, tags: [BANDORI_EVENTS_CACHE_TAG, BANDORI_SCHEDULE_CACHE_TAG] },
+  {
+    revalidate: BANDORI_EVENT_CATALOG_CACHE_PROFILE.nextRevalidateSeconds ?? 300,
+    tags: [BANDORI_EVENTS_CACHE_TAG, BANDORI_SCHEDULE_CACHE_TAG],
+  },
 );
 
 export async function GET() {
   try {
     return jsonSuccess(await readBandoriEventsListResponse(), {
-      headers: withCacheControl(PUBLIC_SHORT_API_CACHE_CONTROL),
+      headers: withCacheControl(BANDORI_EVENT_CATALOG_CACHE_PROFILE.cacheControl),
     });
   } catch (error) {
     console.error("Bandori events API 错误:", error);

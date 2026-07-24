@@ -29,6 +29,17 @@ export const MUTABLE_DIRECTORY_CACHE_PROFILE: CacheProfile = {
   },
 };
 
+export const BANDORI_EVENT_CATALOG_CACHE_PROFILE: CacheProfile = {
+  cacheControl: MUTABLE_DIRECTORY_CACHE_PROFILE.cacheControl,
+  nextRevalidateSeconds: MUTABLE_DIRECTORY_CACHE_PROFILE.nextRevalidateSeconds,
+  client: {
+    // Event metadata changes at publication cadence, not while a tracker tab is
+    // active. Keep it for half a day and avoid visibility-driven revalidation.
+    staleTimeMs: 12 * 60 * 60 * 1000,
+    refreshOnVisible: false,
+  },
+};
+
 export const REFERENCE_METADATA_CACHE_PROFILE: CacheProfile = {
   cacheControl: "public, max-age=3600, s-maxage=86400, stale-while-revalidate=604800",
   nextRevalidateSeconds: 86400,
