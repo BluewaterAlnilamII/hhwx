@@ -436,7 +436,7 @@ const CardTile = memo(function CardTile({
       ref={tileRef}
       onMouseEnter={() => setHoverOpen(true)}
       onMouseLeave={() => setHoverOpen(false)}
-      className="group relative h-[56px] w-[56px] overflow-visible rounded-[5px] outline outline-1 outline-white/80 transition hover:z-40 hover:-translate-y-0.5 hover:outline-2 hover:outline-sky-400 focus-within:z-40 focus-within:outline-2 focus-within:outline-sky-400 sm:h-[76px] sm:w-[76px]"
+      className="group relative h-[56px] w-[56px] overflow-visible rounded-[5px] outline-solid outline-1 outline-white/80 transition hover:z-40 hover:-translate-y-0.5 hover:outline-2 hover:outline-sky-400 focus-within:z-40 focus-within:outline-2 focus-within:outline-sky-400 sm:h-[76px] sm:w-[76px]"
     >
       <button
         type="button"
@@ -458,7 +458,7 @@ const CardTile = memo(function CardTile({
           cardName={cardName}
           characterName={characterName}
         >
-          <span className="block w-full whitespace-normal break-words rounded-xl bg-slate-50 px-2 py-1 text-slate-700">
+          <span className="block w-full whitespace-normal wrap-break-word rounded-xl bg-slate-50 px-2 py-1 text-slate-700">
             {skillEffectLabel}
           </span>
         </BandoriCardHoverTooltipPortal>
@@ -719,29 +719,29 @@ export default function GameProfileCardsPage({ params }: { params: Promise<{ pro
               </div>
 
               <div className="p-4">
-                <div className="rounded-3xl border border-white/70 bg-white/78 p-3 shadow-sm">
+                <div className="rounded-3xl border border-white/70 bg-white/78 p-3 shadow-xs">
                   <div className="grid gap-3 md:grid-cols-[minmax(220px,1fr)_140px_120px] xl:grid-cols-[minmax(220px,1fr)_140px_120px_150px_auto]">
                     <label className="relative block">
                       <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" aria-hidden="true" />
                       <input
                         value={filters.query}
                         onChange={(event) => setFilters((current) => ({ ...current, query: event.target.value }))}
-                        className="h-11 w-full rounded-2xl border border-slate-200 bg-white pl-10 pr-4 text-sm font-semibold text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-sky-300 focus:ring-4 focus:ring-sky-100"
+                        className="h-11 w-full rounded-2xl border border-slate-200 bg-white pl-10 pr-4 text-sm font-semibold text-slate-900 outline-hidden transition placeholder:text-slate-400 focus:border-sky-300 focus:ring-4 focus:ring-sky-100"
                         placeholder={t("searchPlaceholder")}
                       />
                     </label>
-                    <select value={filters.attribute} onChange={(event) => setFilters((current) => ({ ...current, attribute: event.target.value as CardFilterState["attribute"] }))} className="h-11 rounded-2xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-700 outline-none focus:border-sky-300">
+                    <select value={filters.attribute} onChange={(event) => setFilters((current) => ({ ...current, attribute: event.target.value as CardFilterState["attribute"] }))} className="h-11 rounded-2xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-700 outline-hidden focus:border-sky-300">
                       <option value="all">{t("filters.allAttributes")}</option>
                       <option value="powerful">Powerful</option>
                       <option value="pure">Pure</option>
                       <option value="cool">Cool</option>
                       <option value="happy">Happy</option>
                     </select>
-                    <select value={filters.rarity} onChange={(event) => setFilters((current) => ({ ...current, rarity: event.target.value }))} className="h-11 rounded-2xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-700 outline-none focus:border-sky-300">
+                    <select value={filters.rarity} onChange={(event) => setFilters((current) => ({ ...current, rarity: event.target.value }))} className="h-11 rounded-2xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-700 outline-hidden focus:border-sky-300">
                       <option value="all">{t("filters.allRarities")}</option>
                       {[1, 2, 3, 4, 5].map((rarity) => <option key={rarity} value={rarity}>★{rarity}</option>)}
                     </select>
-                    <select value={filters.training} onChange={(event) => setFilters((current) => ({ ...current, training: event.target.value as CardFilterState["training"] }))} className="h-11 rounded-2xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-700 outline-none focus:border-sky-300">
+                    <select value={filters.training} onChange={(event) => setFilters((current) => ({ ...current, training: event.target.value as CardFilterState["training"] }))} className="h-11 rounded-2xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-700 outline-hidden focus:border-sky-300">
                       <option value="all">{t("filters.allTraining")}</option>
                       <option value="trained">{t("filters.trained")}</option>
                       <option value="untrained">{t("filters.untrained")}</option>

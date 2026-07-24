@@ -183,7 +183,7 @@ function CardFilterSelectionButton({
       title={title}
       aria-pressed={selected}
       onClick={onClick}
-      className={`inline-flex h-9 min-w-9 items-center justify-center rounded-full border bg-white px-2 text-sm font-semibold text-slate-700 shadow-sm transition ${
+      className={`inline-flex h-9 min-w-9 items-center justify-center rounded-full border bg-white px-2 text-sm font-semibold text-slate-700 shadow-xs transition ${
         selected
           ? "border-blue-500 ring-2 ring-blue-400/70"
           : "border-slate-200 hover:border-blue-300 hover:ring-2 hover:ring-blue-100"
@@ -212,7 +212,7 @@ function CardFilterToggleAllButton({
       selected={selected}
       title={selected ? clearAllTitle : selectAllTitle}
       onClick={onClick}
-      className="min-w-[3.25rem] rounded-full px-3 text-xs"
+      className="min-w-13 rounded-full px-3 text-xs"
     >
       {allLabel}
     </CardFilterSelectionButton>
@@ -244,7 +244,7 @@ export default function ExcludedCardFilterControls({
   const clearAllTitle = t("actions.clearAll");
 
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
         <div className="relative flex-1">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" aria-hidden="true" />
@@ -253,7 +253,7 @@ export default function ExcludedCardFilterControls({
             value={filter.query}
             onChange={(event) => onFilterChange({ query: event.target.value })}
             placeholder={t("searchPlaceholder")}
-            className="h-10 w-full rounded-xl border border-slate-200 bg-white pl-9 pr-3 text-sm text-slate-900 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
+            className="h-10 w-full rounded-xl border border-slate-200 bg-white pl-9 pr-3 text-sm text-slate-900 outline-hidden transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
           />
         </div>
         <div className="flex items-center gap-2">
@@ -385,7 +385,7 @@ export default function ExcludedCardFilterControls({
             <select
               value={filter.sortBy}
               onChange={(event) => onFilterChange({ sortBy: event.target.value as TeamBuilderExcludedCardSortBy })}
-              className="h-10 min-w-64 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
+              className="h-10 min-w-64 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-hidden transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
             >
               {CARD_FILTER_SORT_OPTIONS.map((option) => (
                 <option key={option.value} value={option.value}>{t(`sort.${option.value}`)}</option>

@@ -295,7 +295,7 @@ export default function TeamBuilderCardPreferencesPanel({
   const profileCardEntriesRefreshing = !profileCardEntriesReady && profileCardEntries.length > 0;
 
   return (
-    <div className="space-y-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+    <div className="space-y-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
       <div>
         <div>
           <h3 className="text-lg font-bold text-slate-900">{t("title")}</h3>
@@ -313,23 +313,23 @@ export default function TeamBuilderCardPreferencesPanel({
           <div className="text-sm font-bold text-slate-700">{t("ownedNormalization")}</div>
           <div className="mt-1 text-xs font-semibold text-slate-500">{t("ownedNormalizationDescription")}</div>
         </div>
-        <label className="grid min-h-11 grid-cols-[auto_minmax(0,1fr)] items-start gap-x-2 rounded-xl bg-white p-2 text-sm font-semibold text-slate-700 shadow-sm">
+        <label className="grid min-h-11 grid-cols-[auto_minmax(0,1fr)] items-start gap-x-2 rounded-xl bg-white p-2 text-sm font-semibold text-slate-700 shadow-xs">
           <input
             type="checkbox"
             checked={preferences.ownedCardParameters.maxLevelEpisodeTraining}
             onChange={(event) => onUpdateOwnedCardParameters({ maxLevelEpisodeTraining: event.target.checked })}
-            className="mt-0.5 h-4 w-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500"
+            className="mt-0.5 h-4 w-4 rounded-sm border-slate-300 text-sky-600 focus:ring-sky-500"
           />
           <span className="min-w-0 leading-5">
             {t("maxOwnedCards")}
           </span>
         </label>
-        <label className="grid min-h-11 grid-cols-[auto_minmax(0,1fr)] items-start gap-x-2 rounded-xl bg-white p-2 text-sm font-semibold text-slate-700 shadow-sm">
+        <label className="grid min-h-11 grid-cols-[auto_minmax(0,1fr)] items-start gap-x-2 rounded-xl bg-white p-2 text-sm font-semibold text-slate-700 shadow-xs">
           <input
             type="checkbox"
             checked={preferences.ownedCardParameters.maxMasterRank}
             onChange={(event) => onUpdateOwnedCardParameters({ maxMasterRank: event.target.checked })}
-            className="mt-0.5 h-4 w-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500"
+            className="mt-0.5 h-4 w-4 rounded-sm border-slate-300 text-sky-600 focus:ring-sky-500"
           />
           <span className="flex min-w-0 flex-wrap items-center gap-2 leading-5">
             <span>{t("maxMasterRank")}</span>
@@ -339,7 +339,7 @@ export default function TeamBuilderCardPreferencesPanel({
                 maxMasterRankRarityThreshold: normalizeRarityThreshold(event.target.value, 4),
               })}
               disabled={!preferences.ownedCardParameters.maxMasterRank}
-              className="h-7 rounded-md border border-slate-200 bg-white px-2 text-sm font-bold text-slate-700 outline-none transition focus:border-sky-300 disabled:cursor-not-allowed disabled:opacity-50"
+              className="h-7 rounded-md border border-slate-200 bg-white px-2 text-sm font-bold text-slate-700 outline-hidden transition focus:border-sky-300 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {CARD_PARAMETER_RARITY_THRESHOLD_OPTIONS.map((rarity) => (
                 <option key={rarity} value={rarity}>{t("rarityAndBelow", { rarity })}</option>
@@ -347,12 +347,12 @@ export default function TeamBuilderCardPreferencesPanel({
             </select>
           </span>
         </label>
-        <label className="grid min-h-11 grid-cols-[auto_minmax(0,1fr)] items-start gap-x-2 rounded-xl bg-white p-2 text-sm font-semibold text-slate-700 shadow-sm">
+        <label className="grid min-h-11 grid-cols-[auto_minmax(0,1fr)] items-start gap-x-2 rounded-xl bg-white p-2 text-sm font-semibold text-slate-700 shadow-xs">
           <input
             type="checkbox"
             checked={preferences.ownedCardParameters.maxSkillLevel}
             onChange={(event) => onUpdateOwnedCardParameters({ maxSkillLevel: event.target.checked })}
-            className="mt-0.5 h-4 w-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500"
+            className="mt-0.5 h-4 w-4 rounded-sm border-slate-300 text-sky-600 focus:ring-sky-500"
           />
           <span className="flex min-w-0 flex-wrap items-center gap-2 leading-5">
             <span>{t("maxSkillLevel")}</span>
@@ -365,7 +365,7 @@ export default function TeamBuilderCardPreferencesPanel({
                 ),
               })}
               disabled={!preferences.ownedCardParameters.maxSkillLevel}
-              className="h-7 rounded-md border border-slate-200 bg-white px-2 text-sm font-bold text-slate-700 outline-none transition focus:border-sky-300 disabled:cursor-not-allowed disabled:opacity-50"
+              className="h-7 rounded-md border border-slate-200 bg-white px-2 text-sm font-bold text-slate-700 outline-hidden transition focus:border-sky-300 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {CARD_PARAMETER_RARITY_THRESHOLD_OPTIONS.map((rarity) => (
                 <option key={rarity} value={rarity}>{t("rarityAndBelow", { rarity })}</option>
@@ -405,7 +405,7 @@ export default function TeamBuilderCardPreferencesPanel({
           <div role="status" aria-live="polite" className="rounded-xl bg-amber-50 p-3 text-sm font-semibold text-amber-700">{temporaryCardActionNotice}</div>
         ) : null}
         {temporaryCardEntries.length > 0 ? (
-          <div className="grid justify-center gap-[6px] [grid-template-columns:repeat(auto-fill,56px)] sm:[grid-template-columns:repeat(auto-fill,76px)]">
+          <div className="grid justify-center gap-[6px] grid-cols-[repeat(auto-fill,56px)] sm:grid-cols-[repeat(auto-fill,76px)]">
             {temporaryCardEntries.map((entry) => (
               <TeamBuilderPreferenceCardTile
                 key={entry.card.instanceId}
@@ -523,7 +523,7 @@ export default function TeamBuilderCardPreferencesPanel({
                       filteredProfileCardEntries.length,
                     ),
                   }))}
-                  className="inline-flex h-10 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 shadow-sm transition hover:border-blue-300 hover:text-blue-600"
+                  className="inline-flex h-10 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 shadow-xs transition hover:border-blue-300 hover:text-blue-600"
                 >
                   {t("showMore", { count: Math.min(EXCLUDED_PROFILE_CARD_VISIBLE_INCREMENT, hiddenExcludedProfileCardCount) })}
                 </button>
@@ -533,7 +533,7 @@ export default function TeamBuilderCardPreferencesPanel({
                     key: excludedCardFilterKey,
                     count: filteredProfileCardEntries.length,
                   })}
-                  className="inline-flex h-10 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 shadow-sm transition hover:border-blue-300 hover:text-blue-600"
+                  className="inline-flex h-10 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 shadow-xs transition hover:border-blue-300 hover:text-blue-600"
                 >
                   {t("showAll")}
                 </button>

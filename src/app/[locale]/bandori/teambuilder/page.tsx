@@ -156,7 +156,7 @@ type BrowserMemoryPerformance = Performance & {
 
 function DynamicTemporaryCardDialogLoading({ message }: { message: string }) {
   return (
-    <div className="fixed inset-0 z-[1000] flex h-dvh items-center justify-center overflow-hidden overscroll-contain bg-slate-950/55 p-3 sm:p-6" role="dialog" aria-modal="true">
+    <div className="fixed inset-0 z-1000 flex h-dvh items-center justify-center overflow-hidden overscroll-contain bg-slate-950/55 p-3 sm:p-6" role="dialog" aria-modal="true">
       <div className="inline-flex items-center gap-2 rounded-2xl bg-white px-4 py-3 text-sm font-bold text-slate-600 shadow-2xl">
         <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
         {message}
@@ -1687,7 +1687,7 @@ function Segment<T extends string>({
           key={option}
           onClick={() => onChange(option)}
           className={`rounded-full px-4 py-1.5 text-sm font-semibold transition ${
-            value === option ? "bg-white text-sky-700 shadow-sm ring-1 ring-inset ring-sky-300" : "text-slate-600 hover:bg-white/80"
+            value === option ? "bg-white text-sky-700 shadow-xs ring-1 ring-inset ring-sky-300" : "text-slate-600 hover:bg-white/80"
           }`}
         >
           {labels?.[option] ?? option}
@@ -1728,8 +1728,8 @@ function SongDifficultyLevelBadge({
   return (
     <span
       title={`${DIFFICULTY_LABELS[difficulty]} ${playLevel}`}
-      className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-sm font-black leading-none shadow-sm ring-1 ${DIFFICULTY_LEVEL_CLASSES[difficulty]} ${
-        selected ? "outline outline-2 outline-offset-2 outline-sky-400" : "outline outline-2 outline-offset-2 outline-transparent"
+      className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-sm font-black leading-none shadow-xs ring-1 ${DIFFICULTY_LEVEL_CLASSES[difficulty]} ${
+        selected ? "outline-solid outline-2 outline-offset-2 outline-sky-400" : "outline-solid outline-2 outline-offset-2 outline-transparent"
       } ${className}`}
     >
       {playLevel}
@@ -1785,7 +1785,7 @@ function TextInput(props: React.InputHTMLAttributes<HTMLInputElement>) {
   return (
     <input
       {...props}
-      className={`w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-sky-400 focus:ring-2 focus:ring-sky-100 ${props.className ?? ""}`}
+      className={`w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-hidden transition focus:border-sky-400 focus:ring-2 focus:ring-sky-100 ${props.className ?? ""}`}
     />
   );
 }
@@ -1795,7 +1795,7 @@ function SelectInput(props: React.SelectHTMLAttributes<HTMLSelectElement>) {
     <div className="relative">
       <select
         {...props}
-        className={`w-full appearance-none rounded-xl border border-slate-200 bg-white px-3 py-2 pr-9 text-sm text-slate-900 outline-none transition focus:border-sky-400 focus:ring-2 focus:ring-sky-100 ${props.className ?? ""}`}
+        className={`w-full appearance-none rounded-xl border border-slate-200 bg-white px-3 py-2 pr-9 text-sm text-slate-900 outline-hidden transition focus:border-sky-400 focus:ring-2 focus:ring-sky-100 ${props.className ?? ""}`}
       />
       <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
     </div>
@@ -1838,7 +1838,7 @@ function SongOptionList({
   }
 
   return (
-    <div ref={containerRef} className="max-h-72 overflow-y-auto rounded-2xl border border-slate-200 bg-white p-1 shadow-sm">
+    <div ref={containerRef} className="max-h-72 overflow-y-auto rounded-2xl border border-slate-200 bg-white p-1 shadow-xs">
       {options.map((option) => {
         const selected = option.id === selectedSongId;
         return (
@@ -1885,7 +1885,7 @@ function QuickPickerPanel({
               onClick={() => onSelect(option.id)}
               className={`inline-flex max-w-full items-center gap-2 rounded-full border px-3 py-1.5 text-sm font-semibold transition ${
                 selected
-                  ? "border-sky-300 bg-white text-sky-800 shadow-sm"
+                  ? "border-sky-300 bg-white text-sky-800 shadow-xs"
                   : "border-sky-100 bg-white/70 text-slate-700 hover:border-sky-200 hover:bg-white"
               }`}
             >
@@ -1952,7 +1952,7 @@ function BonusChip({
       ? "border-slate-200 bg-slate-50 text-slate-500"
       : "border-slate-200 bg-white text-slate-700";
   return (
-    <span className={`inline-flex items-center rounded-full border text-sm font-semibold shadow-sm ${compact ? "min-h-8 gap-1.5 px-2.5 py-1" : "min-h-9 gap-2 px-3 py-1.5"} ${toneClassName}`}>
+    <span className={`inline-flex items-center rounded-full border text-sm font-semibold shadow-xs ${compact ? "min-h-8 gap-1.5 px-2.5 py-1" : "min-h-9 gap-2 px-3 py-1.5"} ${toneClassName}`}>
       {children}
     </span>
   );
@@ -2140,7 +2140,7 @@ function TeamBuilderCardTile({
       ref={tileRef}
       onMouseEnter={() => setHoverOpen(true)}
       onMouseLeave={() => setHoverOpen(false)}
-      className="group relative h-[74px] w-[74px] overflow-visible rounded-[5px] outline outline-1 outline-white/80 transition hover:z-40 hover:-translate-y-0.5 hover:outline-2 hover:outline-sky-400 focus-within:z-40 focus-within:outline-2 focus-within:outline-sky-400 sm:h-[76px] sm:w-[76px]"
+      className="group relative h-[74px] w-[74px] overflow-visible rounded-[5px] outline-solid outline-1 outline-white/80 transition hover:z-40 hover:-translate-y-0.5 hover:outline-2 hover:outline-sky-400 focus-within:z-40 focus-within:outline-2 focus-within:outline-sky-400 sm:h-[76px] sm:w-[76px]"
     >
       <div className="h-full w-full overflow-visible rounded-[5px] shadow-[0_2px_7px_rgba(15,23,42,0.22)]">
         <BandoriCardThumbnail
@@ -2154,12 +2154,12 @@ function TeamBuilderCardTile({
         />
       </div>
       {badge ? (
-        <span className="absolute -right-2 -top-2 z-30 rounded-full border border-rose-200 bg-rose-50 px-1.5 py-0.5 text-[11px] font-black leading-none text-rose-600 shadow-sm">
+        <span className="absolute -right-2 -top-2 z-30 rounded-full border border-rose-200 bg-rose-50 px-1.5 py-0.5 text-[11px] font-black leading-none text-rose-600 shadow-xs">
           {badge}
         </span>
       ) : null}
       {leader ? (
-        <span className="absolute -left-1.5 -top-1.5 z-30 rounded-full border border-sky-200 bg-sky-50 px-1.5 py-0.5 text-[10px] font-black leading-none text-sky-600 shadow-sm">
+        <span className="absolute -left-1.5 -top-1.5 z-30 rounded-full border border-sky-200 bg-sky-50 px-1.5 py-0.5 text-[10px] font-black leading-none text-sky-600 shadow-xs">
           {labelsT("leader")}
         </span>
       ) : null}
@@ -2177,7 +2177,7 @@ function TeamBuilderCardTile({
               )
             : `Card #${cardId}`}
         >
-          <span className="block w-full whitespace-normal break-words rounded-xl bg-slate-50 px-2 py-1 text-slate-700">
+          <span className="block w-full whitespace-normal wrap-break-word rounded-xl bg-slate-50 px-2 py-1 text-slate-700">
             {skillEffectLabel}
           </span>
         </BandoriCardHoverTooltipPortal>
@@ -2341,7 +2341,7 @@ function MultiLiveSettingsPanel({
   };
 
   return (
-    <div className="space-y-4 rounded-3xl border border-slate-200 bg-white/90 p-4 shadow-sm">
+    <div className="space-y-4 rounded-3xl border border-slate-200 bg-white/90 p-4 shadow-xs">
       <FieldRow label={labelsT("averagePower")}>
         <TextInput
           value={averagePower}
@@ -2441,7 +2441,7 @@ function ResultCard({
     : targetsT(result.target);
 
   return (
-    <article className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+    <article className="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="flex items-center gap-4">
           <div className="w-12 text-right text-lg font-bold text-slate-700">#{result.rank}</div>
@@ -2565,10 +2565,10 @@ function MedleyResultCard({
     visual: labelsT("visual"),
   }), [labelsT]);
   const articleClassName = variant === "max-score-candidate"
-    ? "rounded-2xl border border-emerald-200 bg-emerald-50 p-4 shadow-sm"
+    ? "rounded-2xl border border-emerald-200 bg-emerald-50 p-4 shadow-xs"
     : variant === "candidate"
-    ? "rounded-2xl border border-amber-200 bg-amber-50/70 p-4 shadow-sm"
-    : "rounded-2xl border border-slate-200 bg-white p-4 shadow-sm";
+    ? "rounded-2xl border border-amber-200 bg-amber-50/70 p-4 shadow-xs"
+    : "rounded-2xl border border-slate-200 bg-white p-4 shadow-xs";
   const badgeClassName = variant === "max-score-candidate"
     ? "rounded-full border border-emerald-200 bg-white px-2 py-0.5 font-bold text-emerald-700"
     : "rounded-full border border-amber-200 bg-white px-2 py-0.5 font-bold text-amber-700";
@@ -2707,7 +2707,7 @@ function MedleyDebugInfoPanel({
 }) {
   const labelsT = useTranslations("bandori.teamBuilder.labels");
   return (
-    <details className="rounded-2xl border border-red-200 bg-white p-4 text-sm shadow-sm">
+    <details className="rounded-2xl border border-red-200 bg-white p-4 text-sm shadow-xs">
       <summary className="cursor-pointer select-none rounded-xl bg-red-50 px-3 py-2 font-bold text-red-700 transition hover:bg-red-100">
         {labelsT("medleyDebug")}
       </summary>
@@ -2727,7 +2727,7 @@ function MedleyDebugInfoPanel({
         <textarea
           readOnly
           value={debugText}
-          className="h-80 w-full resize-y rounded-xl border border-slate-200 bg-slate-950 p-3 font-mono text-xs leading-5 text-slate-100 outline-none"
+          className="h-80 w-full resize-y rounded-xl border border-slate-200 bg-slate-950 p-3 font-mono text-xs leading-5 text-slate-100 outline-hidden"
         />
       </div>
     </details>
@@ -4029,7 +4029,7 @@ function TeamBuilderPanel() {
         <section className="space-y-5">
           {isMedleyEvent ? (
             <>
-              <div className="rounded-2xl border border-sky-100 bg-white p-4 shadow-sm">
+              <div className="rounded-2xl border border-sky-100 bg-white p-4 shadow-xs">
                 <div className="grid gap-3 lg:grid-cols-3">
                   {medleySongIds.map((slotSongId, index) => {
                     const slotSong = data.songs[slotSongId] ?? null;
@@ -4104,7 +4104,7 @@ function TeamBuilderPanel() {
             </>
           ) : (
             <>
-              <div className="rounded-2xl border border-sky-100 bg-white p-4 shadow-sm">
+              <div className="rounded-2xl border border-sky-100 bg-white p-4 shadow-xs">
                 <div className="text-lg font-bold text-slate-900">{selectedSong ? pickLocalizedName(selectedSong.musicTitle, preferredServer, `#${songId}`) : labelsT("unselectedSong")}</div>
                 {selectedSong && pickLocalizedName(selectedSong.bandName, preferredServer) ? (
                   <div className="mt-1 text-sm text-slate-500">{pickLocalizedName(selectedSong.bandName, preferredServer)}</div>
@@ -4152,7 +4152,7 @@ function TeamBuilderPanel() {
                   type="button"
                   key={`${profile.type}:${profile.id}`}
                   onClick={() => setProfileChoice({ source: profile.type, id: profile.id })}
-                  className={`rounded-2xl border bg-white p-4 text-left shadow-sm transition ${
+                  className={`rounded-2xl border bg-white p-4 text-left shadow-xs transition ${
                     selected ? "border-sky-400 ring-2 ring-sky-100" : "border-slate-200 hover:border-sky-200"
                   }`}
                 >
@@ -4316,7 +4316,7 @@ function TeamBuilderPanel() {
                 type="button"
                 onClick={handleCalculate}
                 disabled={submitting || !isPreloadReady}
-                className="inline-flex items-center gap-2 rounded-full bg-sky-500 px-6 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-sky-600 disabled:cursor-not-allowed disabled:bg-slate-300"
+                className="inline-flex items-center gap-2 rounded-full bg-sky-500 px-6 py-3 text-sm font-bold text-white shadow-xs transition hover:bg-sky-600 disabled:cursor-not-allowed disabled:bg-slate-300"
               >
                 {submitting || isPreloadLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Calculator className="h-4 w-4" />}
                 {isPreloadReady ? actionsT("calculate") : actionsT("preparing")}
@@ -4560,7 +4560,7 @@ export default function BandoriTeamBuilderPage() {
       ) : profile?.emailVerified ? (
         <TeamBuilderPanel />
       ) : (
-        <section className="rounded-2xl border border-amber-200 bg-amber-50 p-6 shadow-sm">
+        <section className="rounded-2xl border border-amber-200 bg-amber-50 p-6 shadow-xs">
           <h2 className="text-xl font-semibold text-amber-900">{t("verifyTitle")}</h2>
           <p className="mt-2 text-sm leading-6 text-amber-700">{t("verifyDescription")}</p>
           <div className="mt-5">

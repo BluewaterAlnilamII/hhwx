@@ -126,7 +126,7 @@ export default function AccountProfilePage() {
             </div>
           </div>
 
-          <form onSubmit={handleSubmit} className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+          <form onSubmit={handleSubmit} className="rounded-3xl border border-slate-200 bg-white p-6 shadow-xs">
             <h2 className="text-xl font-semibold text-slate-900">{t("usernameLabel")}</h2>
             <p className="mt-2 text-sm leading-6 text-slate-600">
               {t("usernameDescription")}
@@ -139,7 +139,7 @@ export default function AccountProfilePage() {
                 value={usernameInput}
                 onChange={(event) => setUsernameInput(event.target.value)}
                 {...usernameValidationProps}
-                className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 text-slate-900 outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100"
+                className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 text-slate-900 outline-hidden transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100"
                 placeholder={t("usernamePlaceholder")}
               />
               <span className="mt-2 block text-xs leading-5 text-slate-500">

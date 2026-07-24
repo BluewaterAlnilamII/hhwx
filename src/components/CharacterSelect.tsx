@@ -32,7 +32,7 @@ export default function CharacterSelect() {
   if (isPickingColor) {
     return (
       <div className="relative z-10 flex h-full items-center justify-center px-4 py-0">
-        <div className="flex w-full max-w-3xl flex-col items-center lg:-translate-y-[6vh]">
+        <div className="flex w-full max-w-3xl flex-col items-center lg:translate-y-[-6vh]">
           <div className="mb-8 text-center">
             <h1 className="mb-2 text-4xl font-extrabold tracking-tight text-gray-800">
               {t("appTitle")}
@@ -47,7 +47,7 @@ export default function CharacterSelect() {
               onClick={() => setPlayerColor("black")}
               className="group flex min-w-[160px] flex-col items-center gap-4 rounded-2xl border-2 border-transparent bg-white/92 p-8 shadow-lg transition-[border-color,box-shadow,transform] duration-300 hover:scale-[1.03] hover:border-gray-800 hover:shadow-xl"
             >
-              <div className="h-16 w-16 rounded-full bg-gradient-to-br from-gray-700 to-black shadow-lg" />
+              <div className="h-16 w-16 rounded-full bg-linear-to-br from-gray-700 to-black shadow-lg" />
               <div className="text-center">
                 <div className="text-lg font-bold text-gray-800">{t("black")}</div>
                 <div className="mt-1 text-xs text-gray-500">{t("first")}</div>
@@ -58,7 +58,7 @@ export default function CharacterSelect() {
               onClick={() => setPlayerColor("white")}
               className="group flex min-w-[160px] flex-col items-center gap-4 rounded-2xl border-2 border-transparent bg-white/92 p-8 shadow-lg transition-[border-color,box-shadow,transform] duration-300 hover:scale-[1.03] hover:border-gray-400 hover:shadow-xl"
             >
-              <div className="h-16 w-16 rounded-full border-2 border-gray-300 bg-gradient-to-br from-white to-gray-200 shadow-lg" />
+              <div className="h-16 w-16 rounded-full border-2 border-gray-300 bg-linear-to-br from-white to-gray-200 shadow-lg" />
               <div className="text-center">
                 <div className="text-lg font-bold text-gray-800">{t("white")}</div>
                 <div className="mt-1 text-xs text-gray-500">{t("second")}</div>
@@ -84,7 +84,7 @@ export default function CharacterSelect() {
 
   return (
     <div className="relative z-10 flex h-full items-center justify-center px-4 py-0">
-      <div className="flex w-full max-w-5xl flex-col items-center lg:-translate-y-[6vh]">
+      <div className="flex w-full max-w-5xl flex-col items-center lg:translate-y-[-6vh]">
         <div className="mb-7 text-center lg:mb-7">
           <h1 className="mb-2 text-4xl font-extrabold tracking-tight text-gray-800">
             {t("appTitle")}

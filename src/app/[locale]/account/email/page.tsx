@@ -186,7 +186,7 @@ export default function AccountEmailPage() {
         <AccountErrorState message={profileError} />
       ) : profile ? (
         <div className="space-y-6">
-          <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+          <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-xs">
             <div className="flex flex-wrap items-center gap-3">
               <h2 className="text-xl font-semibold text-slate-900">{t("currentStatus")}</h2>
               <span className={`rounded-full px-3 py-1 text-xs font-semibold ${profile.emailVerified ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>
@@ -199,7 +199,7 @@ export default function AccountEmailPage() {
           </section>
 
           {!profile.emailVerified && (
-            <section className="rounded-3xl border border-amber-200 bg-amber-50 p-6 shadow-sm">
+            <section className="rounded-3xl border border-amber-200 bg-amber-50 p-6 shadow-xs">
               <h2 className="text-xl font-semibold text-amber-900">{t("resendTitle")}</h2>
               <p className="mt-2 text-sm leading-6 text-amber-700">
                 {t("resendDescription")}
@@ -237,7 +237,7 @@ export default function AccountEmailPage() {
             </section>
           )}
 
-          <form onSubmit={handleEmailUpdate} className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+          <form onSubmit={handleEmailUpdate} className="rounded-3xl border border-slate-200 bg-white p-6 shadow-xs">
             <h2 className="text-xl font-semibold text-slate-900">{t("submitTitle")}</h2>
             <p className="mt-2 text-sm leading-6 text-slate-600">
               {t("submitDescription")}
@@ -250,7 +250,7 @@ export default function AccountEmailPage() {
                 value={newEmail}
                 onChange={(event) => setNewEmail(event.target.value)}
                 {...emailValidationProps}
-                className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 text-slate-900 outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100"
+                className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 text-slate-900 outline-hidden transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100"
                 placeholder={t("newEmailPlaceholder")}
               />
             </label>

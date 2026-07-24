@@ -10,8 +10,8 @@ import {
 } from "@/lib/bandori-event-region";
 import { BANDORI_TRACKER_DATA_TABLE } from "@/lib/supabase-table-names";
 import {
+  BANDORI_EVENT_CATALOG_CACHE_PROFILE,
   EXTERNAL_REFERENCE_CACHE_PROFILE,
-  MUTABLE_DIRECTORY_CACHE_PROFILE,
   REALTIME_HOT_CACHE_PROFILE,
 } from "@/lib/api-cache";
 import type { ChinaMainlandHolidayCalendarData } from "@/lib/bandori-china-mainland-holiday-calendar";
@@ -266,7 +266,8 @@ export function useTrackerData(
   const [liveSongGroupsByKey, setLiveSongGroupsByKey] = useState<Record<string, TrackerSongGroup[]>>({});
   const [liveHasResultByKey, setLiveHasResultByKey] = useState<Record<string, boolean>>({});
 
-  // Event catalog cache and foreground refresh.
+  // Event metadata is stable within a tracker session. Live tracker data uses
+  // a separate foreground refresh policy below.
   const { data: eventCatalog } = useCachedFetch<{ events: BandoriEventSummary[] }>(
     "bandori-events-v3",
     "/api/bandori/events",
@@ -276,7 +277,7 @@ export function useTrackerData(
         events: Array.isArray(payload?.events) ? payload.events : [],
       };
     },
-    { ...(MUTABLE_DIRECTORY_CACHE_PROFILE.client ?? {}) },
+    { ...(BANDORI_EVENT_CATALOG_CACHE_PROFILE.client ?? {}) },
   );
 
   const { data: holidayData } = useCachedFetch<ChinaMainlandHolidayCalendarData | null>(

@@ -42,7 +42,7 @@ function AccountEntryLink({ href, titleKey, descriptionKey }: AccountEntry) {
   return (
     <Link
       href={href}
-      className="group flex items-start justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition hover:border-sky-200 hover:shadow-[0_12px_36px_rgba(14,165,233,0.08)] sm:gap-4 sm:rounded-3xl sm:p-6"
+      className="group flex items-start justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-xs transition hover:border-sky-200 hover:shadow-[0_12px_36px_rgba(14,165,233,0.08)] sm:gap-4 sm:rounded-3xl sm:p-6"
     >
       <div className="min-w-0">
         <h2 className="text-lg font-semibold text-slate-900 sm:text-xl">{t(titleKey)}</h2>
@@ -79,7 +79,7 @@ export default function AccountPage() {
             <div className="flex flex-wrap items-center gap-3 sm:gap-4">
               <AccountAvatarCardControl profile={profile} onProfileChange={setProfile} />
               <div className="min-w-0 flex-1">
-                <div className="break-words text-xl font-bold sm:text-2xl">{profile.username}</div>
+                <div className="wrap-break-word text-xl font-bold sm:text-2xl">{profile.username}</div>
                 <div className="mt-1 break-all text-sm text-slate-300">{profile.email || userEmail || "-"}</div>
                 <Link
                   href={`/u/${profile.publicUid}`}

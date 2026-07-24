@@ -435,7 +435,7 @@ function NumberStepper({
           pattern="[0-9]*"
           value={normalizedValue}
           onChange={(event) => onChange(Number(event.target.value))}
-          className="flex h-9 w-12 items-center justify-center border-l border-slate-200 bg-transparent p-0 text-center font-semibold leading-none text-slate-900 outline-none"
+          className="flex h-9 w-12 items-center justify-center border-l border-slate-200 bg-transparent p-0 text-center font-semibold leading-none text-slate-900 outline-hidden"
         />
       )}
       <button type="button" disabled={disabled} onClick={() => onChange(normalizedValue + 1)} className="h-9 w-8 border-l border-slate-200 text-slate-600 transition hover:bg-slate-50 disabled:cursor-default disabled:text-slate-300">
@@ -750,7 +750,7 @@ export default function GameProfileItemsPage({ params }: { params: Promise<{ pro
       ) : loadingItems ? (
         <AccountLoadingState message={t("loadingItems")} />
       ) : (
-        <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
+        <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-xs sm:p-6">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <h2 className="text-xl font-semibold text-slate-900">{t("heading")}</h2>

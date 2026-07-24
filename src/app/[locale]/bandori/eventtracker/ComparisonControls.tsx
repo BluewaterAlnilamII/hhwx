@@ -94,7 +94,7 @@ export const ComparisonControls = memo(function ComparisonControls({
               onClick={() => setShowInstantProjection((prev) => !prev)}
               className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs sm:text-sm font-semibold transition-all ${
                 showInstantProjection
-                  ? "border-red-300 bg-white text-red-600 shadow-sm dark:border-red-500/40 dark:bg-red-500/15 dark:text-red-300"
+                  ? "border-red-300 bg-white text-red-600 shadow-xs dark:border-red-500/40 dark:bg-red-500/15 dark:text-red-300"
                   : "border-gray-200 bg-white text-gray-500 dark:border-gray-700 dark:bg-[#131A2B] dark:text-gray-400"
               }`}
             >
@@ -108,7 +108,7 @@ export const ComparisonControls = memo(function ComparisonControls({
               onClick={() => setShowDayProjection((prev) => !prev)}
               className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs sm:text-sm font-semibold transition-all ${
                 showDayProjection
-                  ? "border-blue-300 bg-white text-blue-600 shadow-sm dark:border-blue-500/40 dark:bg-blue-500/15 dark:text-blue-300"
+                  ? "border-blue-300 bg-white text-blue-600 shadow-xs dark:border-blue-500/40 dark:bg-blue-500/15 dark:text-blue-300"
                   : "border-gray-200 bg-white text-gray-500 dark:border-gray-700 dark:bg-[#131A2B] dark:text-gray-400"
               }`}
             >
@@ -123,7 +123,7 @@ export const ComparisonControls = memo(function ComparisonControls({
                 onClick={() => setShowBestdoriPrediction((prev) => !prev)}
                 className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs sm:text-sm font-semibold transition-all ${
                   showBestdoriPrediction
-                    ? "border-slate-400 bg-white text-slate-900 shadow-sm dark:border-slate-400/50 dark:bg-slate-400/15 dark:text-slate-100"
+                    ? "border-slate-400 bg-white text-slate-900 shadow-xs dark:border-slate-400/50 dark:bg-slate-400/15 dark:text-slate-100"
                     : "border-gray-200 bg-white text-gray-500 dark:border-gray-700 dark:bg-[#131A2B] dark:text-gray-400"
                 }`}
                 title={showBestdoriPrediction && bestdoriPrediction.status === "no-data" ? "Bestdori预测当前不可用" : "显示 Bestdori Prediction"}
@@ -176,7 +176,7 @@ export const ComparisonControls = memo(function ComparisonControls({
               );
             })}
 
-            <div className="inline-flex overflow-hidden rounded-full border border-gray-200 bg-[#fffef4] text-xs font-semibold shadow-sm dark:border-gray-700 dark:bg-[#131A2B] sm:text-sm">
+            <div className="inline-flex overflow-hidden rounded-full border border-gray-200 bg-[#fffef4] text-xs font-semibold shadow-xs dark:border-gray-700 dark:bg-[#131A2B] sm:text-sm">
               <button
                 type="button"
                 aria-pressed={comparisonAlignment === "start"}
@@ -210,10 +210,10 @@ export const ComparisonControls = memo(function ComparisonControls({
             const rowTierOptions = comparisonTierOptionsByConfigId.get(config.id) ?? comparisonTierOptions;
 
             return (
-              <div key={config.id} className="flex w-full max-w-[46rem] flex-wrap items-center justify-center gap-2">
+              <div key={config.id} className="flex w-full max-w-184 flex-wrap items-center justify-center gap-2">
               <select
-                className={`h-8 max-w-full rounded-full border border-gray-200 bg-white px-3 text-xs font-semibold text-gray-600 outline-none transition-colors hover:border-blue-300 focus:ring-2 focus:ring-blue-500/30 dark:border-gray-700 dark:bg-[#131A2B] dark:text-gray-300 sm:h-9 sm:text-sm ${
-                  comparisonTargetType === "monthly" ? "w-[7.5rem]" : "min-w-[13rem]"
+                className={`h-8 max-w-full rounded-full border border-gray-200 bg-white px-3 text-xs font-semibold text-gray-600 outline-hidden transition-colors hover:border-blue-300 focus:ring-2 focus:ring-blue-500/30 dark:border-gray-700 dark:bg-[#131A2B] dark:text-gray-300 sm:h-9 sm:text-sm ${
+                  comparisonTargetType === "monthly" ? "w-30" : "min-w-52"
                 }`}
                 value={config.targetId ?? ""}
                 onChange={(event) => {
@@ -234,7 +234,7 @@ export const ComparisonControls = memo(function ComparisonControls({
               </select>
 
               <select
-                className="h-8 rounded-full border border-gray-200 bg-white px-3 text-xs font-semibold text-gray-600 outline-none transition-colors hover:border-blue-300 focus:ring-2 focus:ring-blue-500/30 dark:border-gray-700 dark:bg-[#131A2B] dark:text-gray-300 sm:h-9 sm:text-sm"
+                className="h-8 rounded-full border border-gray-200 bg-white px-3 text-xs font-semibold text-gray-600 outline-hidden transition-colors hover:border-blue-300 focus:ring-2 focus:ring-blue-500/30 dark:border-gray-700 dark:bg-[#131A2B] dark:text-gray-300 sm:h-9 sm:text-sm"
                 value={config.tier ?? ""}
                 onChange={(event) => {
                   const nextTier = event.target.value ? Number(event.target.value) : null;

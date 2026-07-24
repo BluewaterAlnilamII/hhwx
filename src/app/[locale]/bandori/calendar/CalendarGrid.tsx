@@ -371,7 +371,7 @@ export default function CalendarGrid({ events, holidayData }: CalendarGridProps)
           <button
             onClick={goToPrevMonth}
             disabled={isPrevDisabled}
-            className="rounded-xl border border-gray-200/80 bg-white px-2.5 py-1.5 text-sm font-semibold text-gray-700 shadow-sm transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:bg-white md:px-4 md:py-2"
+            className="rounded-xl border border-gray-200/80 bg-white px-2.5 py-1.5 text-sm font-semibold text-gray-700 shadow-xs transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:bg-white md:px-4 md:py-2"
           >
             ◀
           </button>
@@ -381,13 +381,13 @@ export default function CalendarGrid({ events, holidayData }: CalendarGridProps)
           <button
             onClick={goToNextMonth}
             disabled={isNextDisabled}
-            className="rounded-xl border border-gray-200/80 bg-white px-2.5 py-1.5 text-sm font-semibold text-gray-700 shadow-sm transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:bg-white md:px-4 md:py-2"
+            className="rounded-xl border border-gray-200/80 bg-white px-2.5 py-1.5 text-sm font-semibold text-gray-700 shadow-xs transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:bg-white md:px-4 md:py-2"
           >
             ▶
           </button>
           <button
             onClick={goToToday}
-            className="ml-1.5 shrink-0 rounded-xl bg-gradient-to-r from-gray-900 to-gray-700 px-2.5 py-1.5 text-sm font-semibold text-white shadow-sm ring-1 ring-black/10 transition-opacity hover:opacity-95 sm:ml-2 md:ml-2.5 md:px-4 md:py-2"
+            className="ml-1.5 shrink-0 rounded-xl bg-linear-to-r from-gray-900 to-gray-700 px-2.5 py-1.5 text-sm font-semibold text-white shadow-xs ring-1 ring-black/10 transition-opacity hover:opacity-95 sm:ml-2 md:ml-2.5 md:px-4 md:py-2"
           >
             今天
           </button>
@@ -397,7 +397,7 @@ export default function CalendarGrid({ events, holidayData }: CalendarGridProps)
       {/* 日历网格 */}
       <div className="overflow-hidden rounded-[24px] border border-white/70 bg-[#fffef4] shadow-[0_22px_60px_rgba(15,23,42,0.12)] ring-1 ring-white/60">
         {/* 星期头 */}
-        <div className="grid grid-cols-7 border-b border-gray-200/70 bg-gradient-to-r from-white/90 via-white/75 to-white/90">
+        <div className="grid grid-cols-7 border-b border-gray-200/70 bg-linear-to-r from-white/90 via-white/75 to-white/90">
           {WEEKDAY_LABELS.map((label, i) => (
             <div
               key={label}
@@ -418,7 +418,7 @@ export default function CalendarGrid({ events, holidayData }: CalendarGridProps)
           return (
             <div
               key={weekIdx}
-              className="relative border-b border-gray-200/50 last:border-b-0 bg-gradient-to-b from-white/65 via-white/42 to-white/30"
+              className="relative border-b border-gray-200/50 last:border-b-0 bg-linear-to-b from-white/65 via-white/42 to-white/30"
               style={{ minHeight: `${Math.max(36 + lanes * 24 + 14, 102)}px` }}
             >
               <div className="grid grid-cols-7">
@@ -445,9 +445,9 @@ export default function CalendarGrid({ events, holidayData }: CalendarGridProps)
                         <div className="pointer-events-none absolute inset-x-1.5 inset-y-1.5 rounded-2xl border border-blue-200/80 bg-blue-50/45 md:inset-x-2 md:inset-y-2" />
                       )}
                       <span
-                        className={`relative z-[1] inline-flex text-sm leading-none ${
+                        className={`relative z-1 inline-flex text-sm leading-none ${
                           today
-                            ? "h-7 w-7 items-center justify-center rounded-full bg-blue-600 font-bold text-white shadow-sm"
+                            ? "h-7 w-7 items-center justify-center rounded-full bg-blue-600 font-bold text-white shadow-xs"
                             : !cell.isCurrentMonth
                               ? isRestDay
                                 ? "font-medium text-red-300"
@@ -503,7 +503,7 @@ export default function CalendarGrid({ events, holidayData }: CalendarGridProps)
                         return (
                           <div
                             key={`${row.event.eventId}-${row.weekRow}-${i}-mask-${segmentIndex}`}
-                            className="absolute inset-y-0 z-[1]"
+                            className="absolute inset-y-0 z-1"
                             style={{
                               left: `${segmentLeftPercent}%`,
                               width: `${segmentWidthPercent}%`,
@@ -515,7 +515,7 @@ export default function CalendarGrid({ events, holidayData }: CalendarGridProps)
                         );
                       })}
                       <span
-                        className="absolute inset-y-0 right-0 z-[2] flex items-center overflow-hidden whitespace-nowrap pr-1"
+                        className="absolute inset-y-0 right-0 z-2 flex items-center overflow-hidden whitespace-nowrap pr-1"
                         style={{ left: textInsetPercent > 0 ? `calc(${textInsetPercent}% + 0.35rem)` : "0.5rem" }}
                       >
                         {row.event.name}

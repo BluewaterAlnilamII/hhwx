@@ -423,7 +423,7 @@ export default function Toolbar({ showDebugButton = true, isSidebarOpen = false,
     };
 
     return (
-        <header className="sticky top-0 z-[250] border-b border-white/85 bg-[#FF9922] shadow-[0_10px_24px_rgba(255,153,34,0.28)]">
+        <header className="sticky top-0 z-250 border-b border-white/85 bg-[#FF9922] shadow-[0_10px_24px_rgba(255,153,34,0.28)]">
             <div className="flex h-[58px] w-full items-center justify-between gap-2 px-3 sm:px-4 lg:justify-end lg:px-5">
                 <div className="lg:hidden">
                     <button
@@ -508,7 +508,7 @@ export default function Toolbar({ showDebugButton = true, isSidebarOpen = false,
                                     <span className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-amber-300 ring-2 ring-[#FF9922]" />
                                 )}
                                 {notificationBadgeLabel ? (
-                                    <span className="absolute -left-2 -top-2 z-10 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold leading-none text-white shadow-sm ring-2 ring-[#FF9922]">
+                                    <span className="absolute -left-2 -top-2 z-10 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold leading-none text-white shadow-xs ring-2 ring-[#FF9922]">
                                         {notificationBadgeLabel}
                                     </span>
                                 ) : null}

@@ -72,7 +72,7 @@ export default function BandoriCardThumbnailTile({
       onMouseEnter={showPreview}
       onMouseLeave={hidePreview}
       className={cn(
-        "relative h-[56px] w-[56px] overflow-visible rounded-[5px] outline outline-1 outline-white/80 transition hover:z-40 hover:-translate-y-0.5 hover:outline-2 hover:outline-sky-400 focus-within:z-40 focus-within:outline-2 focus-within:outline-sky-400 sm:h-[76px] sm:w-[76px]",
+        "relative h-[56px] w-[56px] overflow-visible rounded-[5px] outline-solid outline-1 outline-white/80 transition hover:z-40 hover:-translate-y-0.5 hover:outline-2 hover:outline-sky-400 focus-within:z-40 focus-within:outline-2 focus-within:outline-sky-400 sm:h-[76px] sm:w-[76px]",
         selected && "z-30 outline-2 outline-sky-500 ring-2 ring-sky-300/70",
         className,
       )}
@@ -99,7 +99,7 @@ export default function BandoriCardThumbnailTile({
       </button>
 
       {card.entityServer !== null ? (
-        <span className="pointer-events-none absolute -left-1.5 -top-1.5 z-30 rounded-full border border-white bg-slate-800 px-1.5 py-0.5 text-[9px] font-black leading-none text-white shadow-sm sm:text-[10px]">
+        <span className="pointer-events-none absolute -left-1.5 -top-1.5 z-30 rounded-full border border-white bg-slate-800 px-1.5 py-0.5 text-[9px] font-black leading-none text-white shadow-xs sm:text-[10px]">
           {card.entityServer === 1 ? "EN" : "CN"}
         </span>
       ) : null}
@@ -111,7 +111,7 @@ export default function BandoriCardThumbnailTile({
           cardName={card.displayName}
           characterName={card.characterName}
         >
-          <span className="block w-full whitespace-normal break-words rounded-xl bg-slate-50 px-2 py-1 text-slate-700">
+          <span className="block w-full whitespace-normal wrap-break-word rounded-xl bg-slate-50 px-2 py-1 text-slate-700">
             {skillEffectLabel}
           </span>
         </BandoriCardHoverTooltipPortal>

@@ -59,12 +59,12 @@ export default async function PublicProfilePage({ params }: PublicProfilePagePro
       <section className="w-full overflow-hidden border-y border-white/55 bg-[#fffef4] px-4 py-6 shadow-[0_12px_42px_rgba(15,23,42,0.08)] sm:rounded-[32px] sm:border sm:p-8 sm:shadow-[0_20px_80px_rgba(15,23,42,0.12)]">
         <div className="flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex min-w-0 items-center gap-4">
-            <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-sky-400 to-indigo-500 text-2xl font-bold text-white shadow-lg sm:h-20 sm:w-20 sm:text-3xl">
+            <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-linear-to-br from-sky-400 to-indigo-500 text-2xl font-bold text-white shadow-lg sm:h-20 sm:w-20 sm:text-3xl">
               {getUsernameAvatarLabel(profile.username)}
             </div>
             <div className="min-w-0">
               <p className="text-xs font-semibold uppercase tracking-[0.3em] text-sky-500">{t("eyebrow")}</p>
-              <h1 className="mt-2 break-words text-2xl font-bold text-slate-900 sm:text-4xl">{profile.username}</h1>
+              <h1 className="mt-2 wrap-break-word text-2xl font-bold text-slate-900 sm:text-4xl">{profile.username}</h1>
               <p className="mt-2 text-sm font-semibold text-slate-500">UID {profile.publicUid}</p>
             </div>
           </div>
@@ -78,11 +78,11 @@ export default async function PublicProfilePage({ params }: PublicProfilePagePro
         </div>
 
         <div className="mt-8 grid gap-3 sm:grid-cols-2">
-          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
             <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">UID</p>
             <p className="mt-2 text-lg font-bold text-slate-900">{profile.publicUid}</p>
           </div>
-          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
             <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">{t("joinedAt")}</p>
             <p className="mt-2 text-lg font-bold text-slate-900">
               {formatJoinedAt(profile.createdAt, locale, commonT("states.unknown"))}
