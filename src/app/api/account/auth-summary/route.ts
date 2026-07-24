@@ -1,6 +1,6 @@
 import { jsonRouteError, jsonSuccess } from "@/lib/api-response";
 import { requireAuthenticatedUser } from "@/lib/auth-server";
-import { LIVE_API_CACHE_CONTROL, withCacheControl } from "@/lib/api-cache";
+import { NO_STORE_HTTP_CACHE_POLICY, withHttpCachePolicy } from "@/lib/api-cache";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
 import { PROFILES_TABLE } from "@/lib/supabase-table-names";
 
@@ -36,7 +36,7 @@ export async function GET(request: Request) {
       email: user.email,
       emailVerified: user.emailVerified,
     }, {
-      headers: withCacheControl(LIVE_API_CACHE_CONTROL),
+      headers: withHttpCachePolicy(NO_STORE_HTTP_CACHE_POLICY),
     });
   } catch (error) {
     console.error("Auth summary API error:", error);
@@ -45,7 +45,7 @@ export async function GET(request: Request) {
       code: "AUTH_SUMMARY_READ_FAILED",
       message: "读取登录状态失败",
     }, {
-      headers: withCacheControl(LIVE_API_CACHE_CONTROL),
+      headers: withHttpCachePolicy(NO_STORE_HTTP_CACHE_POLICY),
     });
   }
 }

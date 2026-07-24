@@ -1,4 +1,4 @@
-import { LIVE_API_CACHE_CONTROL, withCacheControl } from "@/lib/api-cache";
+import { NO_STORE_HTTP_CACHE_POLICY, withHttpCachePolicy } from "@/lib/api-cache";
 import { jsonRouteError, jsonSuccess } from "@/lib/api-response";
 import {
   fetchBandoriPlayerProfile,
@@ -26,7 +26,7 @@ export async function GET(request: Request, context: RouteContext) {
     const player = await fetchBandoriPlayerProfile(server, uid, mode);
 
     return jsonSuccess(player, {
-      headers: withCacheControl(LIVE_API_CACHE_CONTROL),
+      headers: withHttpCachePolicy(NO_STORE_HTTP_CACHE_POLICY),
     });
   } catch (error) {
     console.error("Bandori player API error:", error);
@@ -35,7 +35,7 @@ export async function GET(request: Request, context: RouteContext) {
       code: "BANDORI_PLAYER_FETCH_FAILED",
       message: "Failed to fetch player profile",
     }, {
-      headers: withCacheControl(LIVE_API_CACHE_CONTROL),
+      headers: withHttpCachePolicy(NO_STORE_HTTP_CACHE_POLICY),
     });
   }
 }

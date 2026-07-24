@@ -1,4 +1,8 @@
-import { BESTDORI_ASSET_PROXY_CACHE_CONTROL, BESTDORI_ASSET_PROXY_REVALIDATE_SECONDS } from "@/lib/api-cache";
+import {
+  BESTDORI_ASSET_PROXY_REVALIDATE_SECONDS,
+  LONG_ASSET_HTTP_CACHE_POLICY,
+  withHttpCachePolicy,
+} from "@/lib/api-cache";
 import { buildBestdoriAssetOriginUrl, isBandoriAssetRegion } from "@/lib/bandori-asset-proxy";
 
 const SAFE_PATH_SEGMENT_PATTERN = /^[A-Za-z0-9_.-]+$/;
@@ -65,10 +69,9 @@ export async function GET(
 
     return new Response(body, {
       status: 200,
-      headers: {
-        "Cache-Control": BESTDORI_ASSET_PROXY_CACHE_CONTROL,
+      headers: withHttpCachePolicy(LONG_ASSET_HTTP_CACHE_POLICY, {
         "Content-Type": "image/png",
-      },
+      }),
     });
   } catch (error) {
     console.error("Bandori card asset proxy error:", error);

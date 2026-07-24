@@ -11,10 +11,9 @@ import {
   type CalendarCharacter,
 } from "@/lib/calendar-character-service";
 import {
-  LIVE_API_CACHE_CONTROL,
-  SUBSCRIPTION_API_CACHE_CONTROL,
-  SUBSCRIPTION_FEED_CACHE_PROFILE,
-  withCacheControl,
+  NO_STORE_HTTP_CACHE_POLICY,
+  SNAPSHOT_HTTP_CACHE_POLICY,
+  withHttpCachePolicy,
 } from "@/lib/api-cache";
 
 export const dynamic = "force-dynamic";
@@ -230,17 +229,16 @@ export async function GET(request: Request) {
     icsContent.push("END:VCALENDAR");
 
     return new Response(serializeICalendar(icsContent), {
-      headers: {
+      headers: withHttpCachePolicy(SNAPSHOT_HTTP_CACHE_POLICY, {
         "Content-Type": "text/calendar; charset=utf-8",
         "Content-Disposition": 'attachment; filename="bandori-calendar-cn.ics"',
-        "Cache-Control": SUBSCRIPTION_FEED_CACHE_PROFILE.cacheControl ?? SUBSCRIPTION_API_CACHE_CONTROL,
-      },
+      }),
     });
   } catch (error) {
     console.error("Bandori ICS API 错误:", error);
     return new Response("服务器内部错误", {
       status: 500,
-      headers: withCacheControl(LIVE_API_CACHE_CONTROL),
+      headers: withHttpCachePolicy(NO_STORE_HTTP_CACHE_POLICY),
     });
   }
 }

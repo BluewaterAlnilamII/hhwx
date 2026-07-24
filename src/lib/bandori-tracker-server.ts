@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { LIVE_API_CACHE_CONTROL, withCacheControl } from "@/lib/api-cache";
+import { NO_STORE_HTTP_CACHE_POLICY, withHttpCachePolicy } from "@/lib/api-cache";
 import {
   BANDORI_CUTOFF_HISTORY_MAX_ROWS,
   type BandoriCutoffHistoryCutoffs,
@@ -54,7 +54,7 @@ function errorResponse(
   },
 ) {
   return jsonError(status, code, message, {
-    headers: withCacheControl(LIVE_API_CACHE_CONTROL),
+    headers: withHttpCachePolicy(NO_STORE_HTTP_CACHE_POLICY),
     details: options?.details,
   });
 }
@@ -271,7 +271,7 @@ export async function handleBandoriTrackerDataRequest(request: Request) {
     };
     const cutoffs = await readTrackerHistory(query);
     return NextResponse.json({ result: true, cutoffs }, {
-      headers: withCacheControl(LIVE_API_CACHE_CONTROL),
+      headers: withHttpCachePolicy(NO_STORE_HTTP_CACHE_POLICY),
     });
   } catch (error) {
     if (error instanceof TrackerDatabaseError) {

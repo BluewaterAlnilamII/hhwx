@@ -1,4 +1,4 @@
-import { MUTABLE_DIRECTORY_CACHE_PROFILE } from "@/lib/api-cache";
+import { SNAPSHOT_HTTP_CACHE_POLICY } from "@/lib/api-cache";
 import {
   parseBandoriStampCatalogApiResponse,
   type BandoriStampCatalogApiResponse,
@@ -127,7 +127,7 @@ export async function readBandoriStampCatalogFromObjectStorage(): Promise<Bandor
   const response = await fetchR2Object(
     getBandoriAssetR2Config(),
     objectKey,
-    MUTABLE_DIRECTORY_CACHE_PROFILE.nextRevalidateSeconds,
+    SNAPSHOT_HTTP_CACHE_POLICY.nextRevalidateSeconds,
   );
 
   if (!response.ok) {

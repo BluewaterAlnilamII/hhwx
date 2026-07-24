@@ -10,9 +10,8 @@ import {
 } from "@/lib/bandori-event-region";
 import { BANDORI_TRACKER_DATA_TABLE } from "@/lib/supabase-table-names";
 import {
-  BANDORI_EVENT_CATALOG_CACHE_PROFILE,
-  EXTERNAL_REFERENCE_CACHE_PROFILE,
-  REALTIME_HOT_CACHE_PROFILE,
+  LIVE_CLIENT_CACHE_POLICY,
+  LONG_CLIENT_CACHE_POLICY,
 } from "@/lib/api-cache";
 import type { ChinaMainlandHolidayCalendarData } from "@/lib/bandori-china-mainland-holiday-calendar";
 import {
@@ -277,14 +276,14 @@ export function useTrackerData(
         events: Array.isArray(payload?.events) ? payload.events : [],
       };
     },
-    { ...(BANDORI_EVENT_CATALOG_CACHE_PROFILE.client ?? {}) },
+    { ...LONG_CLIENT_CACHE_POLICY },
   );
 
   const { data: holidayData } = useCachedFetch<ChinaMainlandHolidayCalendarData | null>(
     "bandori-calendar-cn-holidays",
     "/api/bandori/calendar/cn/holidays",
     (data: unknown) => parseApiSuccessData<ChinaMainlandHolidayCalendarData>(data) ?? data as ChinaMainlandHolidayCalendarData,
-    { ...(EXTERNAL_REFERENCE_CACHE_PROFILE.client ?? {}) },
+    { ...LONG_CLIENT_CACHE_POLICY },
   );
 
   const eventMetaMap = useMemo(() => {
@@ -424,7 +423,7 @@ export function useTrackerData(
     },
     {
       merge: trackerMerge,
-      ...(REALTIME_HOT_CACHE_PROFILE.client ?? {}),
+      ...LIVE_CLIENT_CACHE_POLICY,
     }
   );
 

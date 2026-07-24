@@ -12,6 +12,7 @@ import {
   buildBandoriResIconPublicUrl,
   type BandoriAssetRegion,
 } from "@/lib/bandori-asset-proxy";
+import { LONG_CLIENT_CACHE_POLICY } from "@/lib/api-cache";
 import { BANDORI_CHARACTER_GROUPS, compareBandoriCharacterIds } from "@/lib/bandori-character-groups";
 import { type BandoriCardServer } from "@/lib/bandori-card-server-extensions";
 import {
@@ -364,13 +365,13 @@ export default function BandoriCardPicker({
     "bandori-card-picker-characters-v3",
     "/api/bandori/master/characters",
     bandoriCardCatalogTransforms.characters,
-    { staleTimeMs: 86400000 },
+    { ...LONG_CLIENT_CACHE_POLICY },
   );
   const { data: skillMetadata, loading: skillsLoading } = useCachedFetch<Record<string, BandoriSkillLabelMaster | null | undefined>>(
     "bandori-card-picker-skills-v1",
     "/api/bandori/master/skills",
     bandoriCardCatalogTransforms.skills,
-    { staleTimeMs: 86400000 },
+    { ...LONG_CLIENT_CACHE_POLICY },
   );
   const [filter, setFilter] = useState<BandoriCardPickerFilter>(DEFAULT_FILTER);
   const [preferencesReady, setPreferencesReady] = useState(false);

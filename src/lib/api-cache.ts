@@ -1,112 +1,88 @@
-// 统一管理 API 与资源代理的缓存层级，避免每个 route 与 client hook 各自硬编码不同口径。
-// 这里刻意把“HTTP 缓存”和“前端内存缓存”放进同一组 profile，
-// 这样可以让页面请求时机、浏览器缓存寿命与 Next 数据缓存寿命更容易同步调参。
-export type ClientCacheProfile = {
+// HTTP cache policies describe transport and server-cache behavior only.
+// Client request lifetimes are separate because the same HTTP snapshot can
+// have different in-page reuse needs without inventing another HTTP tier.
+export type ClientCachePolicy = {
   staleTimeMs?: number;
   refreshOnVisible?: boolean;
 };
 
-export type CacheProfile = {
+export type HttpCachePolicy = {
+  /** Browser and downstream-cache policy. */
   cacheControl: string;
+  /** Cloudflare edge-only policy. Cloudflare removes this header downstream. */
+  cloudflareCdnCacheControl: string;
   nextRevalidateSeconds?: number;
-  client?: ClientCacheProfile;
 };
 
-export const REALTIME_HOT_CACHE_PROFILE: CacheProfile = {
+export const NO_STORE_HTTP_CACHE_POLICY: HttpCachePolicy = {
   cacheControl: "no-store, max-age=0",
-  client: {
-    // tracker data 不走轮询；这里将 staleTime 设为 0，
-    // 让页面切回前台时总会补查一次，补上后台期间遗漏的变更。
-    staleTimeMs: 0,
-  },
+  cloudflareCdnCacheControl: "no-store",
 };
 
-export const MUTABLE_DIRECTORY_CACHE_PROFILE: CacheProfile = {
-  cacheControl: "public, max-age=60, s-maxage=300, stale-while-revalidate=900",
+export const FAST_MUTABLE_HTTP_CACHE_POLICY: HttpCachePolicy = {
+  cacheControl: "public, max-age=60, stale-while-revalidate=300",
+  cloudflareCdnCacheControl: "public, max-age=300, stale-while-revalidate=900",
   nextRevalidateSeconds: 300,
-  client: {
-    staleTimeMs: 60 * 1000,
-  },
 };
 
-export const BANDORI_EVENT_CATALOG_CACHE_PROFILE: CacheProfile = {
-  cacheControl: MUTABLE_DIRECTORY_CACHE_PROFILE.cacheControl,
-  nextRevalidateSeconds: MUTABLE_DIRECTORY_CACHE_PROFILE.nextRevalidateSeconds,
-  client: {
-    // Event metadata changes at publication cadence, not while a tracker tab is
-    // active. Keep it for half a day and avoid visibility-driven revalidation.
-    staleTimeMs: 12 * 60 * 60 * 1000,
-    refreshOnVisible: false,
-  },
-};
-
-export const REFERENCE_METADATA_CACHE_PROFILE: CacheProfile = {
-  cacheControl: "public, max-age=3600, s-maxage=86400, stale-while-revalidate=604800",
-  nextRevalidateSeconds: 86400,
-  client: {
-    staleTimeMs: 12 * 60 * 60 * 1000,
-    refreshOnVisible: false,
-  },
-};
-
-export const BANDORI_MASTER_DATA_CACHE_PROFILE: CacheProfile = {
-  cacheControl: "public, max-age=300, s-maxage=1800, stale-while-revalidate=86400",
+export const SNAPSHOT_HTTP_CACHE_POLICY: HttpCachePolicy = {
+  cacheControl: "public, max-age=300, stale-while-revalidate=1800",
+  cloudflareCdnCacheControl: "public, max-age=1800, stale-while-revalidate=86400",
   nextRevalidateSeconds: 1800,
-  client: {
-    staleTimeMs: 5 * 60 * 1000,
-    refreshOnVisible: false,
-  },
 };
 
-export const EXTERNAL_REFERENCE_CACHE_PROFILE: CacheProfile = {
-  cacheControl: "public, max-age=3600, s-maxage=43200, stale-while-revalidate=86400",
+export const REFERENCE_HTTP_CACHE_POLICY: HttpCachePolicy = {
+  cacheControl: "public, max-age=3600, stale-while-revalidate=43200",
+  cloudflareCdnCacheControl: "public, max-age=43200, stale-while-revalidate=86400",
   nextRevalidateSeconds: 43200,
-  client: {
-    // 节假日这类外部参考数据在单次会话内几乎不会变化，
-    // 因此前端内存缓存可以比 HTTP 缓存更宽松，减少页面间重复请求。
-    staleTimeMs: 24 * 60 * 60 * 1000,
-    refreshOnVisible: false,
-  },
 };
 
-export const EXTERNAL_REFERENCE_FALLBACK_CACHE_PROFILE: CacheProfile = {
-  cacheControl: "public, max-age=600, s-maxage=3600, stale-while-revalidate=43200",
-  client: {
-    staleTimeMs: 60 * 60 * 1000,
-    refreshOnVisible: false,
-  },
-};
-
-export const SUBSCRIPTION_FEED_CACHE_PROFILE: CacheProfile = {
-  cacheControl: "public, max-age=300, s-maxage=1800, stale-while-revalidate=86400",
-};
-
-export const STATIC_ASSET_PROXY_CACHE_PROFILE: CacheProfile = {
-  cacheControl: "public, max-age=86400, s-maxage=2592000, stale-while-revalidate=7776000",
+export const LONG_ASSET_HTTP_CACHE_POLICY: HttpCachePolicy = {
+  cacheControl: "public, max-age=86400, stale-while-revalidate=604800",
+  cloudflareCdnCacheControl: "public, max-age=2592000, stale-while-revalidate=7776000",
   nextRevalidateSeconds: 2592000,
 };
 
-export const STATIC_SITE_ASSET_CACHE_CONTROL = "public, max-age=2592000, s-maxage=2592000, stale-while-revalidate=604800";
-export const FAVICON_SITE_ASSET_CACHE_CONTROL = "public, max-age=604800, s-maxage=604800, stale-while-revalidate=86400";
+export const IMMUTABLE_HTTP_CACHE_POLICY: HttpCachePolicy = {
+  cacheControl: "public, max-age=31536000, immutable",
+  cloudflareCdnCacheControl: "public, max-age=31536000, immutable",
+};
 
-// 兼容现有 route 导入，避免一次性重写整片 API 文件。
-export const LIVE_API_CACHE_CONTROL = REALTIME_HOT_CACHE_PROFILE.cacheControl;
-export const PUBLIC_SHORT_API_CACHE_CONTROL = MUTABLE_DIRECTORY_CACHE_PROFILE.cacheControl;
-export const PUBLIC_METADATA_API_CACHE_CONTROL = REFERENCE_METADATA_CACHE_PROFILE.cacheControl;
-export const BANDORI_MASTER_DATA_API_CACHE_CONTROL = BANDORI_MASTER_DATA_CACHE_PROFILE.cacheControl;
-export const HOLIDAY_API_CACHE_CONTROL = EXTERNAL_REFERENCE_CACHE_PROFILE.cacheControl;
-export const HOLIDAY_FALLBACK_API_CACHE_CONTROL = EXTERNAL_REFERENCE_FALLBACK_CACHE_PROFILE.cacheControl;
-export const SUBSCRIPTION_API_CACHE_CONTROL = SUBSCRIPTION_FEED_CACHE_PROFILE.cacheControl;
-export const BESTDORI_ASSET_PROXY_CACHE_CONTROL = STATIC_ASSET_PROXY_CACHE_PROFILE.cacheControl;
-export const BESTDORI_ASSET_PROXY_REVALIDATE_SECONDS = STATIC_ASSET_PROXY_CACHE_PROFILE.nextRevalidateSeconds ?? 2592000;
+export const LIVE_CLIENT_CACHE_POLICY: ClientCachePolicy = {
+  // Tracker data does not poll. Recheck it when the page returns to the
+  // foreground so changes missed while suspended can be recovered.
+  staleTimeMs: 0,
+  refreshOnVisible: true,
+};
+
+export const SHORT_CLIENT_CACHE_POLICY: ClientCachePolicy = {
+  staleTimeMs: 60 * 1000,
+  refreshOnVisible: true,
+};
+
+export const LONG_CLIENT_CACHE_POLICY: ClientCachePolicy = {
+  staleTimeMs: 12 * 60 * 60 * 1000,
+  refreshOnVisible: false,
+};
+
+export const SESSION_CLIENT_CACHE_POLICY: ClientCachePolicy = {
+  // A successful value remains fresh for the current page lifetime. A full
+  // reload creates a new module instance; explicit refresh still bypasses this.
+  staleTimeMs: Number.POSITIVE_INFINITY,
+  refreshOnVisible: false,
+};
+
+export const BESTDORI_ASSET_PROXY_REVALIDATE_SECONDS =
+  LONG_ASSET_HTTP_CACHE_POLICY.nextRevalidateSeconds ?? 2592000;
 
 export const BANDORI_EVENTS_CACHE_TAG = "bandori:events";
 export const BANDORI_SCHEDULE_CACHE_TAG = "bandori:schedule";
 export const BANDORI_CHARACTERS_CACHE_TAG = "bandori:characters";
 export const BANDORI_EVENT_BONUS_CACHE_TAG = "bandori:event-bonus";
 
-export function withCacheControl(cacheControl: string, headers?: HeadersInit): Headers {
+export function withHttpCachePolicy(policy: HttpCachePolicy, headers?: HeadersInit): Headers {
   const nextHeaders = new Headers(headers ?? {});
-  nextHeaders.set("Cache-Control", cacheControl);
+  nextHeaders.set("Cache-Control", policy.cacheControl);
+  nextHeaders.set("Cloudflare-CDN-Cache-Control", policy.cloudflareCdnCacheControl);
   return nextHeaders;
 }

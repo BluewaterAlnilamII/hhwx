@@ -35,6 +35,10 @@ BANDORI_SONG_NOTES_SOURCE=bestdori
 
 HHWX 生产环境应在 `/bandori/stamps/*` 对象上为 `https://hhwx.org` 配置 CORS。如果允许多个精确 origin，请同时返回 `Vary: Origin`。Web 应用读取 stamp CDN 时不会携带 credentials，除非请求模型发生变化，否则不要启用带凭据 CORS。完全公开且不带 credentials 的资源桶可以使用 `Access-Control-Allow-Origin: *`；不要把 `*` 和带凭据请求搭配使用。
 
+HHWX 应用响应使用 `Cache-Control` 控制浏览器及下游缓存 TTL，并使用 `Cloudflare-CDN-Cache-Control` 单独控制 Cloudflare 边缘 TTL 与 stale 行为。公开 API 使用四个可变缓存档位：fast mutable（浏览器 `1 分钟 + 5 分钟 SWR`，边缘 `5 分钟 + 15 分钟 SWR`）、snapshot（浏览器 `5 分钟 + 30 分钟 SWR`，边缘 `30 分钟 + 1 天 SWR`）、reference（浏览器 `1 小时 + 12 小时 SWR`，边缘 `12 小时 + 1 天 SWR`）和 long asset（浏览器 `1 天 + 7 天 SWR`，边缘 `30 天 + 90 天 SWR`）。私有、实时及错误响应使用 `no-store`；内容寻址对象使用一年 `immutable`。不要再加入 `s-maxage`，因为它会与 stale-while-revalidate 语义冲突。
+
+Cloudflare Cache Rule 可以只把目标公开 `GET`/`HEAD` 路径标记为符合缓存条件，同时继续接受源站响应头。由 R2 或资源 CDN 直接提供的对象（包括 Cards、Events、Music 和 Stamps 的 `index.json`）不会经过 Next.js policy；其对象 metadata 使用 snapshot 浏览器档位。若需要仅把 Cloudflare 副本延长到 snapshot 边缘档位，应使用 Cache Response Rule 配置 `cloudflare_only` 的 `max-age=1800` 和 `stale-while-revalidate=86400`；Cache Response Rule 的结果优先于源站 `Cloudflare-CDN-Cache-Control`。
+
 `BANDORI_CHART_SOURCE=bestdori` 保留默认的 web-only 行为。只有在私有资源构建器已经发布下方 music chart 对象后，才应切换到 `BANDORI_CHART_SOURCE=assets`。`BANDORI_MUSIC_CDN_BASE_URL` 可以让谱面读取使用单独主机；省略时使用 `BANDORI_ASSET_CDN_BASE_URL`。`BANDORI_CHART_BESTDORI_FALLBACK=1` 允许自建谱面对象缺失时临时回退 Bestdori。
 
 `BANDORI_SONG_NOTES_SOURCE=bestdori` 会在音乐资源管线尚未完整时保持 `songs.notes` 与 Bestdori 对齐。当 `bandori/music/index.json` 已包含所有已发布歌曲的谱面派生 `notes` 后，可以切换到 `BANDORI_SONG_NOTES_SOURCE=assets`，让 `/api/bandori/master/songs` 从 HHWX music index 读取 note 数。`BANDORI_SONG_NOTES_BESTDORI_FALLBACK=1` 允许临时发布期间用 Bestdori 补齐缺失的 asset note count。关闭 fallback 后，assets 模式会在 music index 不可读或未覆盖全部歌曲时以 `503` fail closed。

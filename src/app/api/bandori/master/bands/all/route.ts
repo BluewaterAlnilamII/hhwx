@@ -1,7 +1,7 @@
 import {
-  BANDORI_MASTER_DATA_API_CACHE_CONTROL,
-  LIVE_API_CACHE_CONTROL,
-  withCacheControl,
+  NO_STORE_HTTP_CACHE_POLICY,
+  SNAPSHOT_HTTP_CACHE_POLICY,
+  withHttpCachePolicy,
 } from "@/lib/api-cache";
 import { jsonError, jsonRouteError, jsonSuccess } from "@/lib/api-response";
 import {
@@ -22,12 +22,12 @@ export async function GET(request: Request) {
     const result = await readBandoriMasterPath("bands_all", "bands/all.1.json", "bands");
     if (!result) {
       return jsonError(503, "BANDORI_MASTER_BANDS_NOT_CONFIGURED", "Bandori master bands are not configured", {
-        headers: withCacheControl(LIVE_API_CACHE_CONTROL),
+        headers: withHttpCachePolicy(NO_STORE_HTTP_CACHE_POLICY),
       });
     }
 
     return jsonSuccess(result, {
-      headers: withCacheControl(BANDORI_MASTER_DATA_API_CACHE_CONTROL),
+      headers: withHttpCachePolicy(SNAPSHOT_HTTP_CACHE_POLICY),
     });
   } catch (error) {
     console.error("Bandori master bands all API error:", error);
@@ -36,7 +36,7 @@ export async function GET(request: Request) {
       code: "BANDORI_MASTER_BANDS_ALL_READ_FAILED",
       message: "Failed to fetch Bandori master bands",
     }, {
-      headers: withCacheControl(LIVE_API_CACHE_CONTROL),
+      headers: withHttpCachePolicy(NO_STORE_HTTP_CACHE_POLICY),
     });
   }
 }

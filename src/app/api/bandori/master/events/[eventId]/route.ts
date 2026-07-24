@@ -1,7 +1,7 @@
 import {
-  BANDORI_MASTER_DATA_API_CACHE_CONTROL,
-  LIVE_API_CACHE_CONTROL,
-  withCacheControl,
+  NO_STORE_HTTP_CACHE_POLICY,
+  SNAPSHOT_HTTP_CACHE_POLICY,
+  withHttpCachePolicy,
 } from "@/lib/api-cache";
 import { jsonError, jsonRouteError, jsonSuccess } from "@/lib/api-response";
 import { readBandoriEventApiDetail } from "@/lib/bandori-events-api-server";
@@ -28,7 +28,7 @@ export async function GET(request: Request, context: RouteContext) {
   const { eventId } = await context.params;
   if (!BANDORI_MASTER_ID_PATTERN.test(eventId)) {
     return jsonError(404, "BANDORI_MASTER_EVENT_NOT_FOUND", "Unknown Bandori master event", {
-      headers: withCacheControl(LIVE_API_CACHE_CONTROL),
+      headers: withHttpCachePolicy(NO_STORE_HTTP_CACHE_POLICY),
     });
   }
 
@@ -36,12 +36,12 @@ export async function GET(request: Request, context: RouteContext) {
     const result = await readBandoriEventApiDetail(eventId);
     if (!result) {
       return jsonError(404, "BANDORI_MASTER_EVENT_DETAIL_NOT_FOUND", "Bandori master event detail is not available", {
-        headers: withCacheControl(LIVE_API_CACHE_CONTROL),
+        headers: withHttpCachePolicy(NO_STORE_HTTP_CACHE_POLICY),
       });
     }
 
     return jsonSuccess(result, {
-      headers: withCacheControl(BANDORI_MASTER_DATA_API_CACHE_CONTROL),
+      headers: withHttpCachePolicy(SNAPSHOT_HTTP_CACHE_POLICY),
     });
   } catch (error) {
     console.error("Bandori master event detail API error:", error);
@@ -50,7 +50,7 @@ export async function GET(request: Request, context: RouteContext) {
       code: "BANDORI_MASTER_EVENT_DETAIL_READ_FAILED",
       message: "Failed to fetch Bandori master event detail",
     }, {
-      headers: withCacheControl(LIVE_API_CACHE_CONTROL),
+      headers: withHttpCachePolicy(NO_STORE_HTTP_CACHE_POLICY),
     });
   }
 }

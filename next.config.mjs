@@ -2,12 +2,24 @@ import createNextIntlPlugin from "next-intl/plugin";
 
 const withNextIntl = createNextIntlPlugin("./src/i18n/request.ts");
 
-const FAVICON_SITE_ASSET_CACHE_CONTROL = "public, max-age=604800, s-maxage=604800, stale-while-revalidate=86400";
-const STATIC_SITE_ASSET_CACHE_CONTROL = "public, max-age=2592000, s-maxage=2592000, stale-while-revalidate=604800";
-const LONG_LIVED_SITE_RES_CACHE_CONTROL = "public, max-age=31536000, s-maxage=31536000, stale-while-revalidate=31536000, immutable";
+const FAVICON_SITE_ASSET_CACHE_PROFILE = {
+    cacheControl: "public, max-age=604800, stale-while-revalidate=86400",
+    cloudflareCdnCacheControl: "public, max-age=604800, stale-while-revalidate=86400",
+};
+const STATIC_SITE_ASSET_CACHE_PROFILE = {
+    cacheControl: "public, max-age=2592000, stale-while-revalidate=604800",
+    cloudflareCdnCacheControl: "public, max-age=2592000, stale-while-revalidate=604800",
+};
+const LONG_LIVED_SITE_RES_CACHE_PROFILE = {
+    cacheControl: "public, max-age=31536000, immutable",
+    cloudflareCdnCacheControl: "public, max-age=31536000, immutable",
+};
 // The manifest controls installed app metadata, theme color, and icon entry points.
 // Keep its browser TTL shorter so deployed metadata updates are not held for too long.
-const MANIFEST_SITE_ASSET_CACHE_CONTROL = "public, max-age=3600, s-maxage=86400, stale-while-revalidate=604800";
+const MANIFEST_SITE_ASSET_CACHE_PROFILE = {
+    cacheControl: "public, max-age=3600, stale-while-revalidate=43200",
+    cloudflareCdnCacheControl: "public, max-age=43200, stale-while-revalidate=86400",
+};
 const CSP_REPORT_ENDPOINT = "/api/security/csp-report";
 const DEFAULT_SITE_ASSET_CDN_BASE_URL = "https://cdn.hhwx.org";
 const CLOUDFLARE_INSIGHTS_SCRIPT_ORIGIN = "https://static.cloudflareinsights.com";
@@ -99,6 +111,13 @@ const PAGE_SECURITY_HEADERS = [
     { key: "Content-Security-Policy-Report-Only", value: buildContentSecurityPolicyReportOnly() },
 ];
 
+function buildCacheHeaders(profile) {
+    return [
+        { key: "Cache-Control", value: profile.cacheControl },
+        { key: "Cloudflare-CDN-Cache-Control", value: profile.cloudflareCdnCacheControl },
+    ];
+}
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
     poweredByHeader: false,
@@ -123,33 +142,23 @@ const nextConfig = {
             },
             {
                 source: "/favicon.ico",
-                headers: [
-                    { key: "Cache-Control", value: FAVICON_SITE_ASSET_CACHE_CONTROL },
-                ],
+                headers: buildCacheHeaders(FAVICON_SITE_ASSET_CACHE_PROFILE),
             },
             {
                 source: "/favicon/:path*",
-                headers: [
-                    { key: "Cache-Control", value: STATIC_SITE_ASSET_CACHE_CONTROL },
-                ],
+                headers: buildCacheHeaders(STATIC_SITE_ASSET_CACHE_PROFILE),
             },
             {
                 source: "/apple-icon.png",
-                headers: [
-                    { key: "Cache-Control", value: STATIC_SITE_ASSET_CACHE_CONTROL },
-                ],
+                headers: buildCacheHeaders(STATIC_SITE_ASSET_CACHE_PROFILE),
             },
             {
                 source: "/res/:path*",
-                headers: [
-                    { key: "Cache-Control", value: LONG_LIVED_SITE_RES_CACHE_CONTROL },
-                ],
+                headers: buildCacheHeaders(LONG_LIVED_SITE_RES_CACHE_PROFILE),
             },
             {
                 source: "/manifest.webmanifest",
-                headers: [
-                    { key: "Cache-Control", value: MANIFEST_SITE_ASSET_CACHE_CONTROL },
-                ],
+                headers: buildCacheHeaders(MANIFEST_SITE_ASSET_CACHE_PROFILE),
             },
         ];
     },

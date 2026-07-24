@@ -1,7 +1,7 @@
 import {
-  BANDORI_MASTER_DATA_API_CACHE_CONTROL,
-  LIVE_API_CACHE_CONTROL,
-  withCacheControl,
+  NO_STORE_HTTP_CACHE_POLICY,
+  SNAPSHOT_HTTP_CACHE_POLICY,
+  withHttpCachePolicy,
 } from "@/lib/api-cache";
 import { jsonRouteError, jsonSuccess } from "@/lib/api-response";
 import {
@@ -25,7 +25,7 @@ export async function GET(request: Request) {
     });
 
     return jsonSuccess(result, {
-      headers: withCacheControl(BANDORI_MASTER_DATA_API_CACHE_CONTROL),
+      headers: withHttpCachePolicy(SNAPSHOT_HTTP_CACHE_POLICY),
     });
   } catch (error) {
     console.error("Bandori master song meta API error:", error);
@@ -34,7 +34,7 @@ export async function GET(request: Request) {
       code: "BANDORI_MASTER_SONG_META_READ_FAILED",
       message: "Failed to fetch Bandori master song meta",
     }, {
-      headers: withCacheControl(LIVE_API_CACHE_CONTROL),
+      headers: withHttpCachePolicy(NO_STORE_HTTP_CACHE_POLICY),
     });
   }
 }

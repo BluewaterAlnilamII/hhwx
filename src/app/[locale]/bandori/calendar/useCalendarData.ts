@@ -4,10 +4,8 @@ import { useState, useEffect, useCallback } from "react";
 import { type Session } from "@supabase/supabase-js";
 import { useCachedFetch } from "@/hooks/useCachedFetch";
 import {
-  BANDORI_EVENT_CATALOG_CACHE_PROFILE,
-  EXTERNAL_REFERENCE_CACHE_PROFILE,
-  MUTABLE_DIRECTORY_CACHE_PROFILE,
-  REFERENCE_METADATA_CACHE_PROFILE,
+  LONG_CLIENT_CACHE_POLICY,
+  SHORT_CLIENT_CACHE_POLICY,
 } from "@/lib/api-cache";
 import { getApiErrorMessage, parseApiSuccessData } from "@/lib/api-contracts";
 import { getSafeSession, supabase } from "@/lib/supabase";
@@ -180,7 +178,7 @@ export function useCalendarData() {
         events: Array.isArray(payload?.events) ? payload.events : [],
       };
     },
-    { ...(BANDORI_EVENT_CATALOG_CACHE_PROFILE.client ?? {}) },
+    { ...LONG_CLIENT_CACHE_POLICY },
   );
   const { data: scheduleData, loading: scheduleLoading, refresh: refreshSchedule } = useCachedFetch<{ events: BandoriScheduleSupplement[] }>(
     "bandori-calendar-cn-schedules-v3",
@@ -191,7 +189,7 @@ export function useCalendarData() {
         events: Array.isArray(payload?.events) ? payload.events : [],
       };
     },
-    { ...(MUTABLE_DIRECTORY_CACHE_PROFILE.client ?? {}) },
+    { ...SHORT_CLIENT_CACHE_POLICY },
   );
   const { data: characterData, loading: characterLoading, refresh: refreshCharacters } = useCachedFetch<{ characters: CalendarCharacter[] }>(
     "bandori-characters-v2",
@@ -202,13 +200,13 @@ export function useCalendarData() {
         characters: Array.isArray(payload?.characters) ? payload.characters : [],
       };
     },
-    { ...(REFERENCE_METADATA_CACHE_PROFILE.client ?? {}) },
+    { ...LONG_CLIENT_CACHE_POLICY },
   );
   const { data: holidayData, loading: holidayLoading, refresh: refreshHolidayData } = useCachedFetch<CalendarHolidayData>(
     "bandori-calendar-cn-holidays",
     "/api/bandori/calendar/cn/holidays",
     (raw) => parseApiSuccessData<CalendarHolidayData>(raw) ?? raw as CalendarHolidayData,
-    { ...(EXTERNAL_REFERENCE_CACHE_PROFILE.client ?? {}) },
+    { ...LONG_CLIENT_CACHE_POLICY },
   );
 
   const scheduleMap = new Map((scheduleData?.events ?? []).map((event) => [event.eventId, event]));
