@@ -103,25 +103,24 @@ The response is JSON with this shape:
 
 ```json
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "updatedAt": "2026-07-23T00:00:00Z",
-  "gachaVoiceProvenance": "gacha-spin-v2",
   "resources": {
     "res001001": {
-      "artPlan": { "normalSourceVariant": "normal", "hasAfterTraining": false },
       "images": {
         "normal": {
-          "thumb": { "key": "bandori/cards/res001001/normal/thumb/<sha256>.png", "sha256": "<sha256>", "byteSize": 1, "contentType": "image/png", "width": 1, "height": 1 },
-          "full": { "key": "bandori/cards/res001001/normal/full/<sha256>.png", "sha256": "<sha256>", "byteSize": 1, "contentType": "image/png", "width": 1, "height": 1 },
-          "trim": { "key": "bandori/cards/res001001/normal/trim/<sha256>.png", "sha256": "<sha256>", "byteSize": 1, "contentType": "image/png", "width": 1, "height": 1 }
+          "thumb": "<sha256>",
+          "full": "<sha256>",
+          "trim": "<sha256>"
         }
-      }
+      },
+      "gachaVoice": "<sha256>"
     }
   }
 }
 ```
 
-`resources` is keyed by `resourceSetName`. `artPlan` records whether the public `normal` image was extracted from the game's `normal` or `after_training` source texture and whether a separate trained set is expected; `hasAfterTraining` must match the presence of the public `after_training` set. `gachaVoiceProvenance` fixes the accepted acquisition-voice extraction rule to GachaSpin v2, preventing descriptors created by older cue or ACB rules from being silently reused. The `normal` image set and its `thumb`, `full`, and `trim` descriptors are required. `after_training` is optional as a complete image set; when present, all three descriptors are required. `gachaVoice` is optional because not every card has an acquisition voice; when Master declares one, the builder requires the exact `resourceSetName` cue, including CN-only `bili_` cues from `biliGachaVoice*.acb`. The descriptor uses `contentType: "audio/mpeg"` and `durationMs` in place of image dimensions. Its key is `bandori/cards/{resourceSetName}/voice/gacha/{sha256}.mp3`.
+`resources` is keyed by `resourceSetName`. Public resource references are complete lowercase SHA-256 strings; clients derive image keys as `bandori/cards/{resourceSetName}/{variant}/{role}/{sha256}.png` and the optional acquisition-voice key as `bandori/cards/{resourceSetName}/voice/gacha/{sha256}.mp3`. Each declared image variant must contain all three roles: `thumb`, `full`, and `trim`. A resource may declare only `normal`, only `after_training`, or both. When exactly one complete variant exists, both UI art states use it; when both exist, clients use the requested variant exactly. This preserves the game's `after_training` naming for trainingless Birthday and KiraFes art without duplicating objects. Builder-only extraction provenance, byte sizes, media types, image dimensions, and audio duration are not part of the public index.
 
 Events use a separate public discovery document:
 
@@ -129,14 +128,14 @@ Events use a separate public discovery document:
 GET {CDN_BASE}/bandori/events/index.json
 ```
 
-The response root is `{ "schemaVersion": 1, "updatedAt": "...", "servers": ["jp", "en", "tw", "cn"], "events": { ... } }`. Each `events[eventId]` value contains:
+The response root is `{ "schemaVersion": 2, "updatedAt": "...", "events": { ... } }`. Regional arrays always use the implicit fixed order `[jp, en, tw, cn]`. Each `events[eventId]` value contains:
 
-- `banners`: exactly four PNG descriptor-or-`null` slots in the declared server order.
-- `teamIcons`: entries shaped as `{ "teamId": 1, "iconFileName": "...", "images": [descriptor-or-null, descriptor-or-null, descriptor-or-null, descriptor-or-null] }`.
+- `banners`: exactly four SHA-256-or-`null` slots.
+- `teamIcons`: entries shaped as `{ "teamId": 1, "iconFileName": "...", "images": [sha256-or-null, sha256-or-null, sha256-or-null, sha256-or-null] }`.
 
-Every PNG descriptor is `{ key, sha256, byteSize, contentType: "image/png", width, height }`. Event image keys are content addressed as `bandori/events/images/{sha256}.png`. Missing regional assets are represented only by `null` in their own slot; clients do not borrow another server's asset.
+Event image keys are derived as `bandori/events/images/{sha256}.png`. Missing regional assets are represented only by `null` in their own slot; clients do not borrow another server's asset.
 
-All descriptor keys are relative to `{CDN_BASE}`. The filename stem must equal the descriptor's complete lowercase SHA-256. The web app validates the index before using it and never reconstructs Cards or Events paths from master-data bundle names. If an index or descriptor is unavailable, the affected image remains a placeholder; master data and team calculations continue without an image fallback. Card thumbnails never fall back to full-size art, and Cards/Events do not fall back to Bestdori or the legacy `/api/bandori/assets` proxy.
+All derived object keys are relative to `{CDN_BASE}`. The filename stem equals the index's complete lowercase SHA-256. The web app validates the index before using it and never reconstructs Cards or Events paths from master-data bundle names. If an index or referenced object is unavailable, the affected image remains a placeholder; master data and team calculations continue without an external fallback. Card thumbnails never fall back to full-size art, and Cards/Events do not fall back to Bestdori or the legacy `/api/bandori/assets` proxy.
 
 Shared Bestdori resource icons and card frame images:
 
@@ -214,9 +213,9 @@ https://your-bandori-asset-cdn.example.com/bandori/stamps/cn/10131/animation/man
 https://your-bandori-asset-cdn.example.com/bandori/stamps/cn/10131/animation/atlas.png
 ```
 
-For Cards and Events, choose representative descriptors from the downloaded indexes and verify `{CDN_BASE}/{descriptor.key}`. Do not verify guessed bundle paths: they are not part of the public HTTP contract.
+For Cards and Events, choose representative hashes from the downloaded indexes, derive their keys using the contracts above, and verify `{CDN_BASE}/{derivedKey}`. Do not verify guessed game bundle paths: they are not part of the public HTTP contract.
 
-The Cards and Events index responses and their descriptor targets must allow credential-free browser reads from the HHWX web origins:
+The Cards and Events index responses and their referenced objects must allow credential-free browser reads from the HHWX web origins:
 
 ```bash
 curl -I -H "Origin: https://hhwx.org" https://your-bandori-asset-cdn.example.com/bandori/cards/index.json

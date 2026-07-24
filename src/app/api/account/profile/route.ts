@@ -6,6 +6,7 @@ import { createServerSupabaseClient } from "@/lib/supabase-server";
 import { PROFILES_TABLE, USER_ROLES_TABLE } from "@/lib/supabase-table-names";
 import { readBandoriCardsApiDataset } from "@/lib/bandori-cards-api-server";
 import { isKnownBandoriCardEntityCollision } from "@/lib/bandori-card-server-extensions";
+import { hasTrainedCardArt } from "@/lib/bandori-card-training";
 import {
   DEFAULT_ACCOUNT_AVATAR_CARD_ID,
   DEFAULT_ACCOUNT_AVATAR_CARD_TRAIN_TYPE,
@@ -105,7 +106,7 @@ async function readAvatarCard(cardId: number): Promise<{ hasTrainedArt: boolean 
   }
 
   return {
-    hasTrainedArt: isRecord(card.stat) && isRecord(card.stat.training),
+    hasTrainedArt: hasTrainedCardArt(card),
   };
 }
 

@@ -77,6 +77,25 @@ test("card consumers use direct data while tolerating stale cached wrappers", as
   assert.match(temporaryDialogs, /server=\{server\}/u);
 });
 
+test("all Master consumers reuse the positive-increment training predicate", async () => {
+  const paths = [
+    "src/components/bandori/card-picker/catalog.ts",
+    "src/app/api/bandori/cards/route.ts",
+    "src/app/api/account/profile/route.ts",
+    "src/lib/comments.ts",
+    "src/lib/bandori-game-profile-card.ts",
+    "src/app/[locale]/bandori/teambuilder/team-search-worker.ts",
+  ];
+  const sources = await Promise.all(paths.map(readSource));
+
+  for (const source of sources) {
+    assert.match(source, /hasTrainedCardArt/u);
+    assert.doesNotMatch(source, /Boolean\([^)]*stat\?\.training/u);
+    assert.doesNotMatch(source, /typeof [^\n]*training === "object"/u);
+    assert.doesNotMatch(source, /isRecord\([^\n]*stat\.training/u);
+  }
+});
+
 test("card server extensions use fixed four-slot shallow overrides", () => {
   const canonicalStat = {
     "1": { performance: 1, technique: 2, visual: 3 },

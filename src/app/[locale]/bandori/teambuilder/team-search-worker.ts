@@ -63,6 +63,7 @@ import {
   type UserGameProfilePayload,
 } from "@/lib/user-game-profile-payload";
 import { resolveBandoriCardMapForServer } from "@/lib/bandori-card-server-extensions";
+import { hasTrainedCardArt } from "@/lib/bandori-card-training";
 
 type MasterResponse<T> = {
   payload: T;
@@ -328,16 +329,12 @@ function getMasterCardRarity(card: BestdoriCardMaster | undefined): number {
   return readPositiveInteger(card?.rarity, 0);
 }
 
-function hasMasterCardTraining(card: BestdoriCardMaster | undefined): boolean {
-  return typeof card?.stat?.training === "object" && card.stat.training !== null;
-}
-
 function getMasterCardMaxLevel(card: BestdoriCardMaster | undefined): number {
   if (!card) {
     return 0;
   }
   const baseLevelLimit = Math.max(1, readPositiveInteger(card.levelLimit, 1));
-  const trainingLevelLimit = hasMasterCardTraining(card)
+  const trainingLevelLimit = hasTrainedCardArt(card)
     ? Math.max(0, readPositiveInteger(card.stat?.training?.levelLimit, 0))
     : 0;
   return baseLevelLimit + trainingLevelLimit;
@@ -360,7 +357,7 @@ function applyOwnedCardParameterPreferences(
   }
 
   const rarity = getMasterCardRarity(masterCard);
-  const hasTraining = hasMasterCardTraining(masterCard);
+  const hasTraining = hasTrainedCardArt(masterCard);
   const nextCard: UserGameProfileCardRecord = { ...card };
 
   if (preferences.maxLevelEpisodeTraining) {
