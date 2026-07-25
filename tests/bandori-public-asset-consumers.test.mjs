@@ -55,7 +55,7 @@ test("event banners use their exact index slot without bundle or proxy fallback"
   assert.doesNotMatch(tracker, /useBandoriCardsAssetIndex/u);
 });
 
-test("Cards and Events master routes remain data-only and do not read public indexes", async () => {
+test("Cards, Events, and Stamps master routes remain data-only and do not read public indexes", async () => {
   const masterRoute = await readSource("src/app/api/bandori/master/[dataset]/route.ts");
   const cardDetailRoute = await readSource("src/app/api/bandori/master/cards/[cardId]/route.ts");
   const eventDetailRoute = await readSource("src/app/api/bandori/master/events/[eventId]/route.ts");
@@ -63,9 +63,30 @@ test("Cards and Events master routes remain data-only and do not read public ind
   for (const source of [masterRoute, cardDetailRoute, eventDetailRoute]) {
     assert.doesNotMatch(
       source,
-      /bandori\/cards\/index\.json|bandori\/events\/index\.json|bandori-public-asset-index/u,
+      /bandori\/cards\/index\.json|bandori\/events\/index\.json|bandori\/stamps\/index\.json|bandori-public-asset-index/u,
     );
   }
+});
+
+test("Stamps consumers join the private master response with the public hash index in browsers", async () => {
+  const hook = await readSource("src/hooks/useCommentStamps.ts");
+  const stampAssets = await readSource("src/lib/bandori-stamp-assets.ts");
+
+  assert.match(hook, /buildBandoriStampMasterApiUrl/u);
+  assert.match(hook, /useBandoriStampsAssetIndex/u);
+  assert.match(stampAssets, /buildBandoriPublicAssetUrl/u);
+  assert.doesNotMatch(hook, /\/api\/bandori\/stamps/u);
+  assert.doesNotMatch(hook, /getCommentStampsForRegion/u);
+  assert.doesNotMatch(stampAssets, /imageUrl:\s*BandoriStampStringSlots/u);
+  assert.doesNotMatch(stampAssets, /bandori\/stamps\/\$\{region\}\/\$\{stampId\}/u);
+  await assert.rejects(
+    readSource("src/app/api/bandori/stamps/route.ts"),
+    /ENOENT/u,
+  );
+  await assert.rejects(
+    readSource("src/lib/bandori-stamp-assets-server.ts"),
+    /ENOENT/u,
+  );
 });
 
 test("public index failure stays isolated from master loading and calculations", async () => {

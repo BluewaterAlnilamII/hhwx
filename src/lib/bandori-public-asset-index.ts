@@ -5,6 +5,7 @@ const POSITIVE_INTEGER_ID_PATTERN = /^[1-9]\d*$/u;
 export const BANDORI_PUBLIC_ASSET_SERVERS = ["jp", "en", "tw", "cn"] as const;
 export const BANDORI_CARDS_INDEX_KEY = "bandori/cards/index.json";
 export const BANDORI_EVENTS_INDEX_KEY = "bandori/events/index.json";
+export const BANDORI_STAMPS_INDEX_KEY = "bandori/stamps/index.json";
 export const BANDORI_PUBLIC_ASSET_INDEX_SCHEMA_VERSION = 2;
 
 export type BandoriPublicAssetServer = (typeof BANDORI_PUBLIC_ASSET_SERVERS)[number];
@@ -18,6 +19,11 @@ export type BandoriPngAssetDescriptor = {
 };
 
 export type BandoriAudioAssetDescriptor = {
+  key: string;
+  sha256: string;
+};
+
+export type BandoriJsonAssetDescriptor = {
   key: string;
   sha256: string;
 };
@@ -55,11 +61,54 @@ export type BandoriEventsAssetIndex = {
   events: Record<string, BandoriEventAssetEntry>;
 };
 
+export type BandoriStampAnimationAsset = {
+  manifest: BandoriJsonAssetDescriptor;
+  atlas: BandoriPngAssetDescriptor;
+  frameRate?: number;
+  frameCount?: number;
+};
+
+export type BandoriStampChangedAsset = {
+  image?: BandoriPngAssetDescriptor;
+  audio?: BandoriAudioAssetDescriptor;
+};
+
+export type BandoriStampChangedAssetSlots = [
+  BandoriStampChangedAsset[],
+  BandoriStampChangedAsset[],
+  BandoriStampChangedAsset[],
+  BandoriStampChangedAsset[],
+];
+
+export type BandoriStampAssetEntry = {
+  images: BandoriRegionalPngSlots;
+  voices: BandoriRegionalAudioSlots;
+  changedStamps?: BandoriStampChangedAssetSlots;
+  animations?: Partial<Record<BandoriPublicAssetServer, BandoriStampAnimationAsset>>;
+};
+
+export type BandoriStampsAssetIndex = {
+  schemaVersion: typeof BANDORI_PUBLIC_ASSET_INDEX_SCHEMA_VERSION;
+  updatedAt: string;
+  stamps: Record<string, BandoriStampAssetEntry>;
+  changedStampGroups: Record<
+    BandoriPublicAssetServer,
+    Record<string, BandoriJsonAssetDescriptor>
+  >;
+};
+
 export type BandoriRegionalPngSlots = [
   BandoriPngAssetDescriptor | null,
   BandoriPngAssetDescriptor | null,
   BandoriPngAssetDescriptor | null,
   BandoriPngAssetDescriptor | null,
+];
+
+export type BandoriRegionalAudioSlots = [
+  BandoriAudioAssetDescriptor | null,
+  BandoriAudioAssetDescriptor | null,
+  BandoriAudioAssetDescriptor | null,
+  BandoriAudioAssetDescriptor | null,
 ];
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -319,6 +368,262 @@ export function parseBandoriEventsAssetIndex(value: unknown): BandoriEventsAsset
   };
 }
 
+function parseStampHashSlots(
+  value: unknown,
+  stampId: string,
+): BandoriRegionalPngSlots {
+  const label = `Bandori stamps index stamp ${stampId} images`;
+  if (!Array.isArray(value) || value.length !== BANDORI_PUBLIC_ASSET_SERVERS.length) {
+    throw new Error(`${label} must have exactly four regional slots`);
+  }
+  return value.map((sha256, index) => {
+    if (sha256 === "") {
+      return null;
+    }
+    const server = BANDORI_PUBLIC_ASSET_SERVERS[index];
+    const normalizedSha256 = parseSha256(sha256, `${label} ${server}`);
+    return {
+      key: `bandori/stamps/images/${normalizedSha256}.png`,
+      sha256: normalizedSha256,
+    };
+  }) as BandoriRegionalPngSlots;
+}
+
+function parseStampVoiceSlots(
+  value: unknown,
+  stampId: string,
+): BandoriRegionalAudioSlots {
+  const label = `Bandori stamps index stamp ${stampId} voices`;
+  if (
+    !Array.isArray(value)
+    || value.length !== BANDORI_PUBLIC_ASSET_SERVERS.length
+  ) {
+    throw new Error(`${label} must have exactly four regional slots`);
+  }
+  return value.map((sha256, index) => {
+    const server = BANDORI_PUBLIC_ASSET_SERVERS[index];
+    if (sha256 === "") {
+      return null;
+    }
+    const normalizedSha256 = parseSha256(sha256, `${label} ${server}`);
+    return {
+      key: `bandori/stamps/voices/${normalizedSha256}.mp3`,
+      sha256: normalizedSha256,
+    };
+  }) as BandoriRegionalAudioSlots;
+}
+
+function parseStampChangedSlots(
+  value: unknown,
+  stampId: string,
+): BandoriStampChangedAssetSlots {
+  const label = `Bandori stamps index stamp ${stampId} changedStamps`;
+  if (
+    !Array.isArray(value)
+    || value.length !== BANDORI_PUBLIC_ASSET_SERVERS.length
+  ) {
+    throw new Error(`${label} must have exactly four regional slots`);
+  }
+  const slots = value.map((rawVariants, slotIndex) => {
+    const server = BANDORI_PUBLIC_ASSET_SERVERS[slotIndex];
+    if (!Array.isArray(rawVariants)) {
+      throw new Error(`${label} ${server} must be an array`);
+    }
+    return rawVariants.map((rawVariant, variantIndex): BandoriStampChangedAsset => {
+      const variantLabel = `${label} ${server}[${variantIndex}]`;
+      if (!isRecord(rawVariant)) {
+        throw new Error(`${variantLabel} must be an object`);
+      }
+      assertExactKeys(rawVariant, [], ["image", "audio"], variantLabel);
+      const variant: BandoriStampChangedAsset = {};
+      if (Object.hasOwn(rawVariant, "image")) {
+        variant.image = createPngDescriptor(
+          rawVariant.image,
+          "bandori/stamps/images",
+          `${variantLabel} image`,
+        );
+      }
+      if (Object.hasOwn(rawVariant, "audio")) {
+        variant.audio = createAudioDescriptor(
+          rawVariant.audio,
+          "bandori/stamps/voices",
+          `${variantLabel} audio`,
+        );
+      }
+      return variant;
+    });
+  }) as BandoriStampChangedAssetSlots;
+  if (!slots.some((slot) => slot.length > 0)) {
+    throw new Error(`${label} must be omitted when empty`);
+  }
+  return slots;
+}
+
+function parseStampAnimation(
+  value: unknown,
+  stampId: string,
+  server: BandoriPublicAssetServer,
+): BandoriStampAnimationAsset {
+  const label = `Bandori stamps index stamp ${stampId} animation ${server}`;
+  if (!isRecord(value)) {
+    throw new Error(`${label} must be an object`);
+  }
+  assertExactKeys(value, ["manifest", "atlas"], ["frameRate", "frameCount"], label);
+  const manifestSha256 = parseSha256(value.manifest, `${label} manifest`);
+  const atlasSha256 = parseSha256(value.atlas, `${label} atlas`);
+  const animation: BandoriStampAnimationAsset = {
+    manifest: {
+      key: `bandori/stamps/animation/manifests/${manifestSha256}.json`,
+      sha256: manifestSha256,
+    },
+    atlas: {
+      key: `bandori/stamps/animation/atlases/${atlasSha256}.png`,
+      sha256: atlasSha256,
+    },
+  };
+  if (Object.hasOwn(value, "frameRate")) {
+    if (
+      typeof value.frameRate !== "number"
+      || !Number.isFinite(value.frameRate)
+      || value.frameRate <= 0
+    ) {
+      throw new Error(`${label} has an invalid frameRate`);
+    }
+    animation.frameRate = value.frameRate;
+  }
+  if (Object.hasOwn(value, "frameCount")) {
+    if (!Number.isSafeInteger(value.frameCount) || (value.frameCount as number) < 1) {
+      throw new Error(`${label} has an invalid frameCount`);
+    }
+    animation.frameCount = value.frameCount as number;
+  }
+  return animation;
+}
+
+function parseStampAssetEntry(
+  value: unknown,
+  stampId: string,
+): BandoriStampAssetEntry {
+  const label = `Bandori stamps index stamp ${stampId}`;
+  if (!isRecord(value)) {
+    throw new Error(`${label} must be an object`);
+  }
+  assertExactKeys(
+    value,
+    ["images"],
+    ["voices", "changedStamps", "animations"],
+    label,
+  );
+  const hasVoices = Object.hasOwn(value, "voices");
+  const entry: BandoriStampAssetEntry = {
+    images: parseStampHashSlots(value.images, stampId),
+    voices: hasVoices
+      ? parseStampVoiceSlots(value.voices, stampId)
+      : [null, null, null, null],
+  };
+  if (Object.hasOwn(value, "changedStamps")) {
+    entry.changedStamps = parseStampChangedSlots(value.changedStamps, stampId);
+  }
+  if (Object.hasOwn(value, "animations")) {
+    if (!isRecord(value.animations)) {
+      throw new Error(`${label} animations must be an object`);
+    }
+    const animations: Partial<
+      Record<BandoriPublicAssetServer, BandoriStampAnimationAsset>
+    > = {};
+    for (const [server, animation] of Object.entries(value.animations)) {
+      if (!BANDORI_PUBLIC_ASSET_SERVERS.includes(server as BandoriPublicAssetServer)) {
+        throw new Error(`${label} has an unsupported animation server: ${server}`);
+      }
+      const normalizedServer = server as BandoriPublicAssetServer;
+      animations[normalizedServer] = parseStampAnimation(
+        animation,
+        stampId,
+        normalizedServer,
+      );
+    }
+    if (Object.keys(animations).length > 0) {
+      entry.animations = animations;
+    }
+  }
+  return entry;
+}
+
+function parseChangedStampGroups(
+  value: unknown,
+): BandoriStampsAssetIndex["changedStampGroups"] {
+  if (!isRecord(value)) {
+    throw new Error("Bandori stamps index changedStampGroups must be an object");
+  }
+  assertExactKeys(
+    value,
+    BANDORI_PUBLIC_ASSET_SERVERS,
+    [],
+    "Bandori stamps index changedStampGroups",
+  );
+  return Object.fromEntries(
+    BANDORI_PUBLIC_ASSET_SERVERS.map((server) => {
+      const rawGroups = value[server];
+      if (!isRecord(rawGroups)) {
+        throw new Error(
+          `Bandori stamps index changedStampGroups ${server} must be an object`,
+        );
+      }
+      const groups: Record<string, BandoriJsonAssetDescriptor> = Object.create(null);
+      for (const [changedStampId, rawSha256] of Object.entries(rawGroups)) {
+        if (
+          !POSITIVE_INTEGER_ID_PATTERN.test(changedStampId)
+          || !Number.isSafeInteger(Number(changedStampId))
+        ) {
+          throw new Error(
+            `Bandori stamps index has an invalid changed stamp ID: ${changedStampId}`,
+          );
+        }
+        const sha256 = parseSha256(
+          rawSha256,
+          `Bandori stamps index changedStampGroups ${server} ${changedStampId}`,
+        );
+        groups[changedStampId] = {
+          key: `bandori/stamps/changed/manifests/${sha256}.json`,
+          sha256,
+        };
+      }
+      return [server, groups];
+    }),
+  ) as BandoriStampsAssetIndex["changedStampGroups"];
+}
+
+export function parseBandoriStampsAssetIndex(value: unknown): BandoriStampsAssetIndex {
+  if (!isRecord(value)) {
+    throw new Error("Bandori stamps index must be an object");
+  }
+  assertExactKeys(
+    value,
+    ["schemaVersion", "updatedAt", "stamps", "changedStampGroups"],
+    [],
+    "Bandori stamps index",
+  );
+  if (value.schemaVersion !== BANDORI_PUBLIC_ASSET_INDEX_SCHEMA_VERSION) {
+    throw new Error("Unsupported Bandori stamps index schema");
+  }
+  if (!isRecord(value.stamps)) {
+    throw new Error("Bandori stamps index stamps must be an object");
+  }
+  const stamps: Record<string, BandoriStampAssetEntry> = Object.create(null);
+  for (const [stampId, entry] of Object.entries(value.stamps)) {
+    if (!POSITIVE_INTEGER_ID_PATTERN.test(stampId) || !Number.isSafeInteger(Number(stampId))) {
+      throw new Error(`Bandori stamps index has an invalid stamp ID: ${stampId}`);
+    }
+    stamps[stampId] = parseStampAssetEntry(entry, stampId);
+  }
+  return {
+    schemaVersion: BANDORI_PUBLIC_ASSET_INDEX_SCHEMA_VERSION,
+    updatedAt: parseUpdatedAt(value.updatedAt, "Bandori stamps index"),
+    stamps,
+    changedStampGroups: parseChangedStampGroups(value.changedStampGroups),
+  };
+}
+
 export function lookupBandoriCardImage(
   index: BandoriCardsAssetIndex | null | undefined,
   resourceSetName: string | null | undefined,
@@ -392,21 +697,26 @@ export function getBandoriPublicAssetBaseUrl(
 }
 
 export function buildBandoriPublicAssetIndexUrl(
-  kind: "cards" | "events",
+  kind: "cards" | "events" | "stamps",
   baseUrl?: string | null,
 ): string | null {
   const normalizedBaseUrl = getBandoriPublicAssetBaseUrl(baseUrl);
   if (!normalizedBaseUrl) {
     return null;
   }
-  return appendBandoriAssetKey(
-    normalizedBaseUrl,
-    kind === "cards" ? BANDORI_CARDS_INDEX_KEY : BANDORI_EVENTS_INDEX_KEY,
-  );
+  const indexKeys = {
+    cards: BANDORI_CARDS_INDEX_KEY,
+    events: BANDORI_EVENTS_INDEX_KEY,
+    stamps: BANDORI_STAMPS_INDEX_KEY,
+  } as const;
+  return appendBandoriAssetKey(normalizedBaseUrl, indexKeys[kind]);
 }
 
 export function buildBandoriPublicAssetUrl(
-  descriptor: Pick<BandoriPngAssetDescriptor | BandoriAudioAssetDescriptor, "key"> | null | undefined,
+  descriptor: Pick<
+    BandoriPngAssetDescriptor | BandoriAudioAssetDescriptor | BandoriJsonAssetDescriptor,
+    "key"
+  > | null | undefined,
   baseUrl?: string | null,
 ): string | null {
   const normalizedBaseUrl = getBandoriPublicAssetBaseUrl(baseUrl);

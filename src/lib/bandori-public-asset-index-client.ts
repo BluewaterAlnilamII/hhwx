@@ -3,8 +3,10 @@
 import {
   parseBandoriCardsAssetIndex,
   parseBandoriEventsAssetIndex,
+  parseBandoriStampsAssetIndex,
   type BandoriCardsAssetIndex,
   type BandoriEventsAssetIndex,
+  type BandoriStampsAssetIndex,
 } from "@/lib/bandori-public-asset-index";
 
 export type BandoriPublicAssetIndexStoreState<T> = {
@@ -150,4 +152,8 @@ export const bandoriCardsAssetIndexStore = createBandoriPublicAssetIndexStore<Ba
 
 export const bandoriEventsAssetIndexStore = createBandoriPublicAssetIndexStore<BandoriEventsAssetIndex>({
   parse: parseBandoriEventsAssetIndex,
+});
+
+export const bandoriStampsAssetIndexStore = createBandoriPublicAssetIndexStore<BandoriStampsAssetIndex>({
+  parse: parseBandoriStampsAssetIndex,
 });

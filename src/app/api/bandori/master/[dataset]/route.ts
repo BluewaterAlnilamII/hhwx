@@ -14,6 +14,7 @@ import {
 } from "@/lib/bandori-cards-api-server";
 import { parseBandoriCardServerQuery } from "@/lib/bandori-card-server-extensions";
 import { readBandoriEventApiDataset } from "@/lib/bandori-events-api-server";
+import { readBandoriStampsApiDataset } from "@/lib/bandori-stamps-api-server";
 import {
   BESTDORI_MASTER_DATASET_ALIASES,
   BESTDORI_MASTER_DATASETS,
@@ -33,7 +34,12 @@ function isBestdoriMasterDatasetKey(value: string): value is BestdoriMasterDatas
   return value in BESTDORI_MASTER_DATASETS;
 }
 
-function normalizeDatasetKey(value: string): BestdoriMasterDatasetKey | null {
+type MasterDatasetKey = BestdoriMasterDatasetKey | "stamps";
+
+function normalizeDatasetKey(value: string): MasterDatasetKey | null {
+  if (value === "stamps") {
+    return value;
+  }
   if (isBestdoriMasterDatasetKey(value)) {
     return value;
   }
@@ -81,6 +87,12 @@ export async function GET(request: Request, context: RouteContext) {
         ? await readBandoriCardsApiDatasetForServer(serverQuery.server)
         : await readBandoriCardsApiDataset();
       return jsonSuccess(cards, {
+        headers: withHttpCachePolicy(SNAPSHOT_HTTP_CACHE_POLICY),
+      });
+    }
+
+    if (dataset === "stamps") {
+      return jsonSuccess(await readBandoriStampsApiDataset(), {
         headers: withHttpCachePolicy(SNAPSHOT_HTTP_CACHE_POLICY),
       });
     }

@@ -186,7 +186,11 @@ export const StampPickerButton = memo(function StampPickerButton({
           </div>
           <div className="grid max-h-80 grid-cols-4 gap-1 overflow-x-hidden overflow-y-auto pr-1 [scrollbar-color:#fb7185_#e5e7eb] scrollbar-thin [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-rose-400 [&::-webkit-scrollbar-track]:rounded-full [&::-webkit-scrollbar-track]:bg-slate-200">
             {stamps.map((stamp) => (
-              <StampPickerOption key={`${stamp.region}-${stamp.id}`} stamp={stamp} onSelect={onSelect} />
+              <StampPickerOption
+                key={`${stamp.region}-${stamp.id}-${stamp.kind}`}
+                stamp={stamp}
+                onSelect={onSelect}
+              />
             ))}
           </div>
         </div>

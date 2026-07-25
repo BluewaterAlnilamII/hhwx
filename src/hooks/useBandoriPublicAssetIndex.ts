@@ -5,10 +5,12 @@ import {
   buildBandoriPublicAssetIndexUrl,
   type BandoriCardsAssetIndex,
   type BandoriEventsAssetIndex,
+  type BandoriStampsAssetIndex,
 } from "@/lib/bandori-public-asset-index";
 import {
   bandoriCardsAssetIndexStore,
   bandoriEventsAssetIndexStore,
+  bandoriStampsAssetIndexStore,
   type BandoriPublicAssetIndexStore,
   type BandoriPublicAssetIndexStoreState,
 } from "@/lib/bandori-public-asset-index-client";
@@ -76,5 +78,14 @@ export function useBandoriEventsAssetIndex(
   return useBandoriPublicAssetIndex(
     enabled ? buildBandoriPublicAssetIndexUrl("events") : null,
     bandoriEventsAssetIndexStore,
+  );
+}
+
+export function useBandoriStampsAssetIndex(
+  enabled = true,
+): BandoriPublicAssetIndexHookResult<BandoriStampsAssetIndex> {
+  return useBandoriPublicAssetIndex(
+    enabled ? buildBandoriPublicAssetIndexUrl("stamps") : null,
+    bandoriStampsAssetIndexStore,
   );
 }
