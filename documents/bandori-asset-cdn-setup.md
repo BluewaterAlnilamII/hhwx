@@ -22,16 +22,13 @@ BANDORI_CHART_SOURCE=bestdori
 BANDORI_SONG_NOTES_SOURCE=bestdori
 # BANDORI_SONG_NOTES_SOURCE=assets
 # BANDORI_SONG_NOTES_BESTDORI_FALLBACK=0
-# BANDORI_STAMP_CATALOG_OBJECT_KEY=bandori/stamps/index.json
-# BANDORI_STAMP_R2_ACCOUNT_ID=your_cloudflare_account_id
-# BANDORI_STAMP_R2_BUCKET=your_r2_bucket
-# BANDORI_STAMP_R2_ACCESS_KEY_ID=your_r2_access_key_id
-# BANDORI_STAMP_R2_SECRET_ACCESS_KEY=your_r2_secret_access_key
+# BANDORI_PRIVATE_R2_BUCKET=hhwx-private
+# BANDORI_STAMPS_API_LOCAL_STORE_ROOT=/path/to/stamps/store
 ```
 
-`NEXT_PUBLIC_BANDORI_ASSET_CDN_BASE_URL` is exposed to browsers. `BANDORI_ASSET_CDN_BASE_URL` is available to server-side code. In most deployments they should point to the same asset host. Card images and event images are discovered from the public Cards and Events indexes described below; the browser reads both indexes with the normal HTTP cache and without credentials. Stamp assets are served from the same Bandori asset CDN under `/bandori/stamps`; there is no separate stamp CDN setting. The web app reads the unified stamp catalog through `/api/bandori/stamps`, while stamp images, animation manifests, animation atlases, and voice audio are read directly from the CDN in browsers, so the CDN must allow browser CORS reads from the HHWX web origins. Stamp voices are played through Web Audio as short sound effects instead of media elements, avoiding iOS media-session behavior that can interrupt background music.
+`NEXT_PUBLIC_BANDORI_ASSET_CDN_BASE_URL` is exposed to browsers. `BANDORI_ASSET_CDN_BASE_URL` is available to server-side code. In most deployments they should point to the same asset host. Card, Event, and Stamp assets are discovered from their public indexes described below; browsers read those indexes with the normal HTTP cache and without credentials. Stamp assets use the same Bandori asset CDN under `/bandori/stamps`; there is no separate stamp CDN setting. The web app reads Stamp master metadata through `/api/bandori/master/stamps`, reads `bandori/stamps/index.json` directly from the public CDN, and joins both maps by stamp ID in browser memory. Stamp images, animation manifests, animation atlases, and voice audio are then read directly from the CDN, so the CDN must allow browser CORS reads from the HHWX web origins. Stamp voices are played through Web Audio as short sound effects instead of media elements, avoiding iOS media-session behavior that can interrupt background music.
 
-Server-side HHWX APIs that aggregate CDN-published Bandori assets must read the backing object storage directly through R2/S3 signed requests. They must not fetch HHWX-owned public CDN URLs such as `cdn.hhwx.org` from the server path because Cloudflare bot mitigation may challenge server-to-CDN traffic. `/api/bandori/stamps` reads `bandori/stamps/index.json` from object storage using `BANDORI_STAMP_R2_*`, `BANDORI_ASSET_R2_*`, or shared `BANDORI_R2_*` credentials. `BANDORI_MASTER_R2_*` is accepted only when it points at the same bucket that contains Bandori asset objects. Browsers still read stamp images, animation manifests, atlases, and voice audio directly from the public CDN.
+Server-side HHWX APIs that aggregate CDN-published Bandori assets must read the backing object storage directly through R2/S3 signed requests. They must not fetch HHWX-owned public CDN URLs such as `cdn.hhwx.org` from the server path because Cloudflare bot mitigation may challenge server-to-CDN traffic. The Stamps master API reads its independent content-addressed snapshot from `BANDORI_PRIVATE_R2_BUCKET`; it does not read the public asset index. Browsers read the public Stamp index and assets directly from the CDN.
 
 For HHWX production, configure CORS for `https://hhwx.org` on `/bandori/stamps/*` objects. If multiple exact origins are allowed, include `Vary: Origin`. The web app does not send credentials for stamp CDN reads, so do not enable credentialed CORS unless the request model changes. A fully public, no-credentials asset bucket may use `Access-Control-Allow-Origin: *`; do not combine `*` with credentialed requests.
 
@@ -43,7 +40,7 @@ A Cloudflare Cache Rule may mark the intended public `GET`/`HEAD` paths as eligi
 
 `BANDORI_SONG_NOTES_SOURCE=bestdori` keeps `songs.notes` aligned with Bestdori while the music asset pipeline is incomplete. After `bandori/music/index.json` contains chart-derived `notes` for every published song, set `BANDORI_SONG_NOTES_SOURCE=assets` to source `/api/bandori/master/songs` note counts from the HHWX music index. `BANDORI_SONG_NOTES_BESTDORI_FALLBACK=1` fills missing asset note counts from Bestdori during a temporary rollout. With fallback disabled, assets mode fails closed with `503` when the music index is unreadable or does not cover every song record.
 
-The Events and Cards list/detail APIs read their content-addressed snapshots directly from the private bucket configured by `BANDORI_PRIVATE_R2_BUCKET`. Both readers fail closed when their pointer or pack is missing, unauthorized, malformed, corrupt, or oversized; neither falls back to Bestdori or public master artifacts. `BANDORI_EVENT_API_LOCAL_STORE_ROOT` and `BANDORI_CARDS_API_LOCAL_STORE_ROOT` can point to tracker-generated content stores during local development, but production rejects them. Other master datasets keep their existing sources. `songs.notes` continues to default to Bestdori and can switch to HHWX music asset chart counts as described above.
+The Events, Cards, and Stamps master APIs read their content-addressed snapshots directly from the private bucket configured by `BANDORI_PRIVATE_R2_BUCKET`. All readers fail closed when a pointer or pack is missing, unauthorized, malformed, corrupt, or oversized; none falls back to Bestdori, public asset indexes, or public master artifacts. `BANDORI_EVENT_API_LOCAL_STORE_ROOT`, `BANDORI_CARDS_API_LOCAL_STORE_ROOT`, and `BANDORI_STAMPS_API_LOCAL_STORE_ROOT` can point to tracker-generated content stores during local development, but production rejects them. Other master datasets keep their existing sources. `songs.notes` continues to default to Bestdori and can switch to HHWX music asset chart counts as described above.
 
 The browser reads the complete canonical Cards map once from `GET /api/bandori/master/cards` and reuses the parsed map for the lifetime of the SPA. It materializes server-specific scalar extensions locally for the profile's numeric gameplay server. Public Cards list/detail requests accept an optional exact `server=0|1|2|3` query in fixed JP/EN/TW/CN order; string server codes are rejected. The former sparse `GET /api/bandori/cards?ids=...` endpoint has been removed. Serverless display surfaces resolve four-slot text as preferred server, then JP, EN, TW, CN, with duplicate slots removed. Card-profile and team-builder profile surfaces put the profile's gameplay server before that order, so the profile identity controls names and skill descriptions without changing the user's global preference. Same-ID Cards `10001`–`10010` remain numeric for calculation and persistence; serverless avatar selection expands their EN and CN entities with UI-only scoped references and stores the chosen entity in the nullable `profiles.avatar_card_server` field.
 
@@ -177,19 +174,23 @@ Stamp catalog, static images, voice audio, and animation assets:
 
 ```text
 {CDN_BASE}/bandori/stamps/index.json
-{CDN_BASE}/bandori/stamps/{server}/{stampId}/image.png
-{CDN_BASE}/bandori/stamps/{server}/{stampId}/voice/{voiceName}.mp3
-{CDN_BASE}/bandori/stamps/{server}/{stampId}/animation/manifest.json
-{CDN_BASE}/bandori/stamps/{server}/{stampId}/animation/atlas.png
+{CDN_BASE}/bandori/stamps/images/{sha256}.png
+{CDN_BASE}/bandori/stamps/voices/{sha256}.mp3
+{CDN_BASE}/bandori/stamps/changed/manifests/{sha256}.json
+{CDN_BASE}/bandori/stamps/animation/manifests/{sha256}.json
+{CDN_BASE}/bandori/stamps/animation/atlases/{sha256}.png
 
 bandori/stamps/index.json
-bandori/stamps/{server}/{stampId}/image.png
-bandori/stamps/{server}/{stampId}/voice/{voiceName}.mp3
-bandori/stamps/{server}/{stampId}/animation/manifest.json
-bandori/stamps/{server}/{stampId}/animation/atlas.png
+bandori/stamps/images/{sha256}.png
+bandori/stamps/voices/{sha256}.mp3
+bandori/stamps/changed/manifests/{sha256}.json
+bandori/stamps/animation/manifests/{sha256}.json
+bandori/stamps/animation/atlases/{sha256}.png
 ```
 
-`bandori/stamps/index.json` is the public compact stamp catalog. Its `payload` is keyed by stamp ID and uses four fixed slots in `[jp, en, tw, cn]` order for `imageName`, `imageUrl`, and optional `voiceUrl`; missing slots are empty strings, not `null`. Optional animation summaries are keyed by server and point at the animation manifest and atlas. Standard per-stamp manifests are not part of the public contract. Animation manifests should use `hhwx-bandori-stamp-animation-v1` and include `atlasDimensions`, `frameRate`, and frame rectangles so the web app can render atlas-based animated stamps without Unity runtime logic. Current HHWX atlas PNGs use `frames[].unityRect` as the physical PNG crop rectangle; the web app normalizes that into its in-memory `frames[].cssRect`, with source `frames[].cssRect` used only as a fallback when `unityRect` is absent.
+`GET /api/bandori/master/stamps` returns `{ success: true, data }`, where `data` is keyed by stamp ID. Each record contains fixed `[jp, en, tw, cn]` `imageName` and nullable `characterId` arrays. Missing names use `""`; missing or unresolved character IDs use `null`. Records with Changed Stamp variants also contain an optional four-slot `changedStamps` array. Each regional variant list is sorted and deduplicated by `(imageName, soundName)`; raw Changed rule IDs, schedules, and probabilities are omitted. Storage pointers, source metadata, asset URLs, and asset hashes are not exposed by this API.
+
+`bandori/stamps/index.json` is the public asset index with the same root convention as Cards and Events: `schemaVersion`, `updatedAt`, the `stamps` domain map, and `changedStampGroups`. Each Stamp entry contains four-slot `images` SHA-256 values, optional four-slot `voices` SHA-256 values, optional four-slot Changed variant image/audio hashes, and optional `animations` entries with `manifest` and `atlas` SHA-256 values plus display metadata. `changedStampGroups` lists every published Changed rule manifest by server and rule ID, including resources that the current UI does not display. Missing standard slots use `""`, while missing Changed slots use empty arrays. A Changed variant may omit `image` when it reuses the ordinary image and may omit `audio` when no converted cue is available. Clients derive immutable paths as `bandori/stamps/images/{sha256}.png`, `bandori/stamps/voices/{sha256}.mp3`, `bandori/stamps/changed/manifests/{sha256}.json`, `bandori/stamps/animation/manifests/{sha256}.json`, and `bandori/stamps/animation/atlases/{sha256}.png`; no query-string version token is needed. Source voice names and raw Changed rule metadata remain in internal extraction manifests rather than the compact root index. Standard per-stamp manifests are not part of the public index contract. Animation manifests use `hhwx-bandori-stamp-animation-v1` and include `atlasDimensions`, `frameRate`, and frame rectangles so the web app can render atlas-based animated stamps without Unity runtime logic. Current HHWX atlas PNGs use `frames[].unityRect` as the physical PNG crop rectangle; the web app normalizes that into its in-memory `frames[].cssRect`, with source `frames[].cssRect` used only as a fallback when `unityRect` is absent.
 
 ## Self-Hosted Expectations
 
@@ -214,9 +215,9 @@ https://your-bandori-asset-cdn.example.com/bandori/res/icon/chara_icon_1.png
 https://your-bandori-asset-cdn.example.com/bandori/res/image/card-5.png
 https://your-bandori-asset-cdn.example.com/bandori/music/1/charts/expert.json
 https://your-bandori-asset-cdn.example.com/bandori/stamps/index.json
-https://your-bandori-asset-cdn.example.com/bandori/stamps/cn/10131/image.png
-https://your-bandori-asset-cdn.example.com/bandori/stamps/cn/10131/animation/manifest.json
-https://your-bandori-asset-cdn.example.com/bandori/stamps/cn/10131/animation/atlas.png
+https://your-bandori-asset-cdn.example.com/bandori/stamps/images/<imageSha256>.png
+https://your-bandori-asset-cdn.example.com/bandori/stamps/animation/manifests/<manifestSha256>.json
+https://your-bandori-asset-cdn.example.com/bandori/stamps/animation/atlases/<atlasSha256>.png
 ```
 
 For Cards and Events, choose representative hashes from the downloaded indexes, derive their keys using the contracts above, and verify `{CDN_BASE}/{derivedKey}`. Do not verify guessed game bundle paths: they are not part of the public HTTP contract.
@@ -232,7 +233,7 @@ For stamp CORS, verify at least one JSON object and one voice object with an `Or
 
 ```bash
 curl -I -H "Origin: https://hhwx.org" https://your-bandori-asset-cdn.example.com/bandori/stamps/index.json
-curl -I -H "Origin: https://hhwx.org" https://your-bandori-asset-cdn.example.com/bandori/stamps/cn/10131/voice/<voiceName>.mp3
+curl -I -H "Origin: https://hhwx.org" https://your-bandori-asset-cdn.example.com/bandori/stamps/voices/<voiceSha256>.mp3
 ```
 
-Both responses should include `Access-Control-Allow-Origin: https://hhwx.org` or `Access-Control-Allow-Origin: *` for a public no-credentials bucket. Then open the relevant HHWX pages and confirm the stamp catalog is read through `/api/bandori/stamps`, while animation manifests, atlas images, and voice audio requests go directly to the configured CDN base URL.
+Both responses should include `Access-Control-Allow-Origin: https://hhwx.org` or `Access-Control-Allow-Origin: *` for a public no-credentials bucket. Then open the relevant HHWX pages and confirm the Stamp master map is read once through `/api/bandori/master/stamps`, the public hash index is read once from `/bandori/stamps/index.json`, and animation manifests, atlas images, and voice audio requests go directly to the configured CDN base URL.

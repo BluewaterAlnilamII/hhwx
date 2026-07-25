@@ -1,14 +1,50 @@
 import { LONG_CLIENT_CACHE_POLICY } from "@/lib/api-cache";
+import {
+  BANDORI_PUBLIC_ASSET_SERVERS,
+  buildBandoriPublicAssetUrl,
+  type BandoriStampsAssetIndex,
+} from "@/lib/bandori-public-asset-index";
 
 export type BandoriStampRegion = "jp" | "en" | "tw" | "cn";
 
-export const BANDORI_STAMP_REGIONS = ["jp", "en", "tw", "cn"] as const satisfies readonly BandoriStampRegion[];
+export const BANDORI_STAMP_REGIONS = BANDORI_PUBLIC_ASSET_SERVERS;
 const BANDORI_STAMP_SLOT_COUNT = BANDORI_STAMP_REGIONS.length;
 const BANDORI_STAMP_REGION_SLOT: Record<BandoriStampRegion, number> = {
   jp: 0,
   en: 1,
   tw: 2,
   cn: 3,
+};
+
+export type BandoriStampStringSlots = [string, string, string, string];
+export type BandoriStampCharacterSlots = [
+  number | null,
+  number | null,
+  number | null,
+  number | null,
+];
+export type BandoriChangedStampMasterEntry = {
+  imageName: string;
+  soundName: string;
+};
+export type BandoriChangedStampMasterSlots = [
+  BandoriChangedStampMasterEntry[],
+  BandoriChangedStampMasterEntry[],
+  BandoriChangedStampMasterEntry[],
+  BandoriChangedStampMasterEntry[],
+];
+
+export type BandoriStampMasterEntry = {
+  imageName: BandoriStampStringSlots;
+  characterId: BandoriStampCharacterSlots;
+  changedStamps?: BandoriChangedStampMasterSlots;
+};
+
+export type BandoriStampMasterMap = Record<string, BandoriStampMasterEntry>;
+
+export type BandoriStampCatalog = {
+  master: BandoriStampMasterMap;
+  assets: BandoriStampsAssetIndex;
 };
 
 export type BandoriStampAnimationSummary = {
@@ -18,23 +54,12 @@ export type BandoriStampAnimationSummary = {
   frameCount?: number;
 };
 
-export type BandoriStampCatalogPayloadEntry = {
-  imageName: string[];
-  imageUrl: string[];
-  voiceUrl?: string[];
-  animation?: Partial<Record<BandoriStampRegion, BandoriStampAnimationSummary>>;
-};
-
-export type BandoriStampCatalogPayload = Record<string, BandoriStampCatalogPayloadEntry>;
-
-export type BandoriStampCatalogApiResponse = {
-  payload: BandoriStampCatalogPayload;
-};
-
 export type BandoriStampCatalogItem = {
   id: number;
   region: BandoriStampRegion;
+  kind: "normal" | "changed";
   imageName: string;
+  characterId: number | null;
   imageUrl: string;
   voiceUrl: string;
   animation?: BandoriStampAnimationSummary;
@@ -69,30 +94,11 @@ type RawStampAnimationManifest = {
   frames?: unknown;
 };
 
-const STAMP_VOICE_FILE_NAME_PATTERN = /^[A-Za-z0-9_-]+\.mp3$/u;
-
 export const BANDORI_STAMP_CLIENT_STALE_TIME_MS =
   LONG_CLIENT_CACHE_POLICY.staleTimeMs ?? 12 * 60 * 60 * 1000;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}
-
-function normalizeCdnBaseUrl(value: string | null | undefined): string | null {
-  const trimmedValue = value?.trim();
-  return trimmedValue ? trimmedValue.replace(/\/+$/u, "") : null;
-}
-
-function encodeAssetKeyPath(assetKey: string): string {
-  return assetKey
-    .split("/")
-    .filter(Boolean)
-    .map((segment) => encodeURIComponent(segment))
-    .join("/");
-}
-
-function buildBandoriStampRelativeUrl(assetKey: string): string {
-  return `/${encodeAssetKeyPath(assetKey.replace(/^\/+/u, ""))}`;
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function readNumber(value: unknown): number | null {
@@ -112,104 +118,141 @@ function readDimensions(value: unknown): { width: number; height: number } | nul
   if (!isRecord(value)) {
     return null;
   }
-
   const width = readInteger(value.width);
   const height = readInteger(value.height);
-  return width !== null && height !== null && width > 0 && height > 0 ? { width, height } : null;
+  return width !== null && height !== null && width > 0 && height > 0
+    ? { width, height }
+    : null;
 }
 
 function readAnimationFrameRect(value: unknown): BandoriStampAnimationFrameRect | null {
   if (!isRecord(value)) {
     return null;
   }
-
   const x = readInteger(value.x);
   const y = readInteger(value.y);
   const width = readInteger(value.width);
   const height = readInteger(value.height);
-  return x !== null && y !== null && width !== null && height !== null && width > 0 && height > 0
+  return x !== null
+    && y !== null
+    && width !== null
+    && height !== null
+    && width > 0
+    && height > 0
     ? { x, y, width, height }
     : null;
 }
 
-function readPublicUrl(value: unknown): string {
-  const url = readString(value);
-  if (!url) {
-    return "";
-  }
-
-  return /^(?:https?:)?\/\//u.test(url) || url.startsWith("/") ? url : "";
-}
-
-function readStampSlots(value: unknown): string[] {
-  const slots = new Array<string>(BANDORI_STAMP_SLOT_COUNT).fill("");
-  if (!Array.isArray(value)) {
-    return slots;
-  }
-
-  value.slice(0, BANDORI_STAMP_SLOT_COUNT).forEach((item, index) => {
-    slots[index] = readString(item) ?? "";
-  });
-  return slots;
-}
-
-function readUrlSlots(value: unknown): string[] {
-  const slots = new Array<string>(BANDORI_STAMP_SLOT_COUNT).fill("");
-  if (!Array.isArray(value)) {
-    return slots;
-  }
-
-  value.slice(0, BANDORI_STAMP_SLOT_COUNT).forEach((item, index) => {
-    slots[index] = readPublicUrl(item);
-  });
-  return slots;
-}
-
-function appendAssetVersion(url: string, versionToken: string | null | undefined): string {
-  const token = readString(versionToken);
-  if (!token || !/^[0-9a-f]{64}$/iu.test(token)) {
-    return url;
-  }
-
-  return `${url}${url.includes("?") ? "&" : "?"}v=${encodeURIComponent(token)}`;
-}
-
-function buildBandoriStampPath(region: BandoriStampRegion, stampId: number, path: string): string {
-  return `bandori/stamps/${region}/${Math.trunc(stampId)}/${path.replace(/^\/+/u, "")}`;
-}
-
 function readApiSuccessData(raw: unknown): unknown {
-  return isRecord(raw) && raw.success === true && "data" in raw ? raw.data : raw;
+  return isRecord(raw) && raw.success === true && "data" in raw ? raw.data : null;
 }
 
-function readAnimationSummary(value: unknown): BandoriStampAnimationSummary | null {
-  if (!isRecord(value)) {
+function parseChangedMasterSlots(
+  value: unknown,
+): BandoriChangedStampMasterSlots | null {
+  if (!Array.isArray(value) || value.length !== BANDORI_STAMP_SLOT_COUNT) {
     return null;
   }
+  const slots: BandoriChangedStampMasterEntry[][] = [];
+  for (const rawSlot of value) {
+    if (!Array.isArray(rawSlot)) {
+      return null;
+    }
+    const slot: BandoriChangedStampMasterEntry[] = [];
+    for (const rawVariant of rawSlot) {
+      if (
+        !isRecord(rawVariant)
+        || Object.keys(rawVariant).some(
+          (key) => key !== "imageName" && key !== "soundName",
+        )
+        || typeof rawVariant.imageName !== "string"
+        || typeof rawVariant.soundName !== "string"
+        || (!rawVariant.imageName && !rawVariant.soundName)
+      ) {
+        return null;
+      }
+      slot.push({
+        imageName: rawVariant.imageName,
+        soundName: rawVariant.soundName,
+      });
+    }
+    slots.push(slot);
+  }
+  return slots as BandoriChangedStampMasterSlots;
+}
 
-  const manifestUrl = readPublicUrl(value.manifestUrl);
-  const atlasUrl = readPublicUrl(value.atlasUrl);
+function parseMasterEntry(value: unknown): BandoriStampMasterEntry | null {
+  if (
+    !isRecord(value)
+    || Object.keys(value).some(
+      (key) => (
+        key !== "imageName"
+        && key !== "characterId"
+        && key !== "changedStamps"
+      ),
+    )
+    || !Array.isArray(value.imageName)
+    || value.imageName.length !== BANDORI_STAMP_SLOT_COUNT
+    || !Array.isArray(value.characterId)
+    || value.characterId.length !== BANDORI_STAMP_SLOT_COUNT
+  ) {
+    return null;
+  }
+  const imageName = value.imageName;
+  const characterId = value.characterId;
+  for (let index = 0; index < BANDORI_STAMP_SLOT_COUNT; index += 1) {
+    if (
+      typeof imageName[index] !== "string"
+      || (
+        characterId[index] !== null
+        && (
+          !Number.isSafeInteger(characterId[index])
+          || characterId[index] <= 0
+        )
+      )
+      || (imageName[index] === "" && characterId[index] !== null)
+    ) {
+      return null;
+    }
+  }
+  const entry: BandoriStampMasterEntry = {
+    imageName: [...imageName] as BandoriStampStringSlots,
+    characterId: [...characterId] as BandoriStampCharacterSlots,
+  };
+  if (Object.hasOwn(value, "changedStamps")) {
+    const changedStamps = parseChangedMasterSlots(value.changedStamps);
+    if (!changedStamps || !changedStamps.some((slot) => slot.length > 0)) {
+      return null;
+    }
+    entry.changedStamps = changedStamps;
+  }
+  return entry;
+}
+
+function buildAnimationSummary(
+  catalog: BandoriStampCatalog,
+  stampId: string,
+  region: BandoriStampRegion,
+): BandoriStampAnimationSummary | undefined {
+  const animation = catalog.assets.stamps[stampId]?.animations?.[region];
+  if (!animation) {
+    return undefined;
+  }
+  const manifestUrl = buildBandoriPublicAssetUrl(animation.manifest);
+  const atlasUrl = buildBandoriPublicAssetUrl(animation.atlas);
   if (!manifestUrl || !atlasUrl) {
-    return null;
+    return undefined;
   }
-
-  const summary: BandoriStampAnimationSummary = {
+  return {
     manifestUrl,
     atlasUrl,
+    ...(animation.frameRate === undefined ? {} : { frameRate: animation.frameRate }),
+    ...(animation.frameCount === undefined ? {} : { frameCount: animation.frameCount }),
   };
-  const frameRate = readNumber(value.frameRate);
-  const frameCount = readInteger(value.frameCount);
-  if (frameRate !== null) {
-    summary.frameRate = frameRate;
-  }
-  if (frameCount !== null) {
-    summary.frameCount = frameCount;
-  }
-  return summary;
 }
 
 export function isBandoriStampRegion(value: string): value is BandoriStampRegion {
-  return value === "jp" || value === "en" || value === "tw" || value === "cn";
+  return BANDORI_STAMP_REGIONS.includes(value as BandoriStampRegion);
 }
 
 export function normalizeBandoriStampId(value: string | number): number | null {
@@ -218,161 +261,97 @@ export function normalizeBandoriStampId(value: string | number): number | null {
     : /^\d+$/u.test(value.trim())
       ? Number.parseInt(value, 10)
       : Number.NaN;
-  return Number.isSafeInteger(stampId) && stampId > 0 && stampId <= 999999 ? stampId : null;
+  return Number.isSafeInteger(stampId) && stampId > 0 && stampId <= 999999
+    ? stampId
+    : null;
 }
 
-export function normalizeBandoriStampVoiceFileName(value: string): string | null {
-  const trimmedValue = value.trim();
-  return STAMP_VOICE_FILE_NAME_PATTERN.test(trimmedValue) ? trimmedValue : null;
+export function buildBandoriStampMasterApiUrl(): string {
+  return "/api/bandori/master/stamps";
 }
 
-export function getPublicBandoriStampCdnBaseUrl(): string | null {
-  return normalizeCdnBaseUrl(process.env.NEXT_PUBLIC_BANDORI_ASSET_CDN_BASE_URL);
-}
-
-export function buildBandoriStampCdnUrl(
-  assetKey: string,
-  baseUrl = getPublicBandoriStampCdnBaseUrl(),
-  versionToken?: string | null,
-): string {
-  if (!baseUrl) {
-    throw new Error("Bandori stamp CDN base URL is not configured");
+export function parseBandoriStampMasterApiResponse(
+  raw: unknown,
+): BandoriStampMasterMap {
+  const data = readApiSuccessData(raw);
+  if (!isRecord(data)) {
+    throw new Error("Bandori stamps master API response is invalid");
   }
-
-  return appendAssetVersion(`${baseUrl}/${encodeAssetKeyPath(assetKey.replace(/^\/+/u, ""))}`, versionToken);
-}
-
-export function buildBandoriStampPublicUrl(assetKey: string, versionToken?: string | null): string {
-  const baseUrl = getPublicBandoriStampCdnBaseUrl();
-  return baseUrl
-    ? buildBandoriStampCdnUrl(assetKey, baseUrl, versionToken)
-    : appendAssetVersion(buildBandoriStampRelativeUrl(assetKey), versionToken);
-}
-
-export function buildBandoriStampCdnRequestUrl(assetKey: string): string | null {
-  const baseUrl = getPublicBandoriStampCdnBaseUrl();
-  return baseUrl ? buildBandoriStampCdnUrl(assetKey, baseUrl) : null;
-}
-
-export function buildBandoriStampCatalogCdnUrl(): string | null {
-  return buildBandoriStampCdnRequestUrl("bandori/stamps/index.json");
-}
-
-export function buildBandoriStampCatalogApiUrl(): string {
-  return "/api/bandori/stamps";
-}
-
-export function buildBandoriStampAnimationManifestPublicUrl(region: BandoriStampRegion, stampId: number): string {
-  return buildBandoriStampPublicUrl(buildBandoriStampPath(region, stampId, "animation/manifest.json"));
-}
-
-export function buildBandoriStampAnimationManifestCdnUrl(region: BandoriStampRegion, stampId: number): string | null {
-  return buildBandoriStampCdnRequestUrl(buildBandoriStampPath(region, stampId, "animation/manifest.json"));
-}
-
-export function buildBandoriStampVoicePublicUrl(
-  region: BandoriStampRegion,
-  stampId: number,
-  voiceFileName: string,
-  versionToken?: string | null,
-): string | null {
-  const normalizedFileName = normalizeBandoriStampVoiceFileName(voiceFileName);
-  if (!normalizedFileName) {
-    return null;
+  const master: BandoriStampMasterMap = {};
+  for (const [stampId, value] of Object.entries(data)) {
+    const entry = parseMasterEntry(value);
+    if (normalizeBandoriStampId(stampId) === null || !entry) {
+      throw new Error(`Bandori stamps master API record is invalid: ${stampId}`);
+    }
+    master[stampId] = entry;
   }
-
-  return buildBandoriStampPublicUrl(buildBandoriStampPath(region, stampId, `voice/${normalizedFileName}`), versionToken);
-}
-
-export function buildBandoriStampImagePublicUrl(
-  region: BandoriStampRegion,
-  stampId: number,
-  versionToken?: string | null,
-): string {
-  return buildBandoriStampPublicUrl(buildBandoriStampPath(region, stampId, "image.png"), versionToken);
-}
-
-export function buildBandoriStampAssetKey(region: BandoriStampRegion, stampId: number, path: string): string {
-  return buildBandoriStampPath(region, stampId, path);
-}
-
-export function readBandoriStampCatalogPayload(rawPayload: unknown): BandoriStampCatalogPayload {
-  if (!isRecord(rawPayload)) {
-    return {};
+  if (Object.keys(master).length === 0) {
+    throw new Error("Bandori stamps master API dataset is empty");
   }
-
-  const payload: BandoriStampCatalogPayload = {};
-  for (const [stampId, rawEntry] of Object.entries(rawPayload)) {
-    if (normalizeBandoriStampId(stampId) === null || !isRecord(rawEntry)) {
-      continue;
-    }
-
-    const imageName = readStampSlots(rawEntry.imageName);
-    const imageUrl = readUrlSlots(rawEntry.imageUrl);
-    if (!imageName.some(Boolean) && !imageUrl.some(Boolean)) {
-      continue;
-    }
-
-    const entry: BandoriStampCatalogPayloadEntry = { imageName, imageUrl };
-    const voiceUrl = readUrlSlots(rawEntry.voiceUrl);
-    if (voiceUrl.some(Boolean)) {
-      entry.voiceUrl = voiceUrl;
-    }
-
-    if (isRecord(rawEntry.animation)) {
-      const animation: Partial<Record<BandoriStampRegion, BandoriStampAnimationSummary>> = {};
-      for (const region of BANDORI_STAMP_REGIONS) {
-        const summary = readAnimationSummary(rawEntry.animation[region]);
-        if (summary) {
-          animation[region] = summary;
-        }
-      }
-      if (Object.keys(animation).length > 0) {
-        entry.animation = animation;
-      }
-    }
-
-    payload[stampId] = entry;
-  }
-
-  return payload;
+  return master;
 }
 
 export function getBandoriStampCatalogItemsForRegion(
-  catalog: BandoriStampCatalogApiResponse | null,
+  catalog: BandoriStampCatalog | null,
   region: BandoriStampRegion,
 ): BandoriStampCatalogItem[] {
+  if (!catalog) {
+    return [];
+  }
   const slot = BANDORI_STAMP_REGION_SLOT[region];
-  return Object.entries(catalog?.payload ?? {})
-    .map(([stampId, entry]): BandoriStampCatalogItem | null => {
+  const items: BandoriStampCatalogItem[] = [];
+  for (const [stampId, masterEntry] of Object.entries(catalog.master).sort(
+    ([leftId], [rightId]) => Number(leftId) - Number(rightId),
+  )) {
       const id = normalizeBandoriStampId(stampId);
-      const imageUrl = entry.imageUrl[slot] ?? "";
-      if (id === null || !imageUrl) {
-        return null;
+      const image = catalog.assets.stamps[stampId]?.images[slot] ?? null;
+      const imageUrl = buildBandoriPublicAssetUrl(image) ?? "";
+      if (id === null || !masterEntry.imageName[slot] || !imageUrl) {
+        continue;
       }
-
-      return {
+      const voice = catalog.assets.stamps[stampId]?.voices[slot] ?? null;
+      items.push({
         id,
         region,
-        imageName: entry.imageName[slot] ?? "",
+        kind: "normal",
+        imageName: masterEntry.imageName[slot],
+        characterId: masterEntry.characterId[slot],
         imageUrl,
-        voiceUrl: entry.voiceUrl?.[slot] ?? "",
-        animation: entry.animation?.[region],
-      };
-    })
-    .filter((item): item is BandoriStampCatalogItem => item !== null)
-    .sort((left, right) => left.id - right.id);
-}
+        voiceUrl: buildBandoriPublicAssetUrl(voice) ?? "",
+        animation: buildAnimationSummary(catalog, stampId, region),
+      });
 
-export function parseBandoriStampCatalogApiResponse(raw: unknown): BandoriStampCatalogApiResponse | null {
-  const data = readApiSuccessData(raw);
-  if (!isRecord(data) || !isRecord(data.payload)) {
-    return null;
+      const masterChanged = masterEntry.changedStamps?.[slot] ?? [];
+      const assetChanged = catalog.assets.stamps[stampId]?.changedStamps?.[slot] ?? [];
+      if (masterChanged.length !== assetChanged.length) {
+        continue;
+      }
+      const changedIndex = assetChanged.findIndex(
+        (variant) => (
+          variant.image !== undefined
+          && variant.image.sha256 !== image?.sha256
+        ),
+      );
+      if (changedIndex < 0) {
+        continue;
+      }
+      const changedMaster = masterChanged[changedIndex];
+      const changedAsset = assetChanged[changedIndex];
+      const changedImageUrl = buildBandoriPublicAssetUrl(changedAsset.image);
+      if (!changedImageUrl) {
+        continue;
+      }
+      items.push({
+        id,
+        region,
+        kind: "changed",
+        imageName: changedMaster.imageName,
+        characterId: masterEntry.characterId[slot],
+        imageUrl: changedImageUrl,
+        voiceUrl: buildBandoriPublicAssetUrl(changedAsset.audio) ?? "",
+      });
   }
-
-  return {
-    payload: readBandoriStampCatalogPayload(data.payload),
-  };
+  return items;
 }
 
 export function toBandoriStampAnimationResponse(
@@ -387,22 +366,20 @@ export function toBandoriStampAnimationResponse(
   const frames = rawFrames
     .filter(isRecord)
     .map((frame, index): BandoriStampAnimationFrame | null => {
-      const atlasRect = readAnimationFrameRect(frame.unityRect) ?? readAnimationFrameRect(frame.cssRect);
+      const atlasRect = readAnimationFrameRect(frame.unityRect)
+        ?? readAnimationFrameRect(frame.cssRect);
       if (!atlasRect) {
         return null;
       }
-
       return {
         name: readString(frame.name) ?? String(index),
         cssRect: atlasRect,
       };
     })
     .filter((frame): frame is BandoriStampAnimationFrame => frame !== null);
-
   if (!atlasDimensions || frames.length === 0) {
     throw new Error("Bandori stamp animation manifest is incomplete");
   }
-
   return {
     id: stampId,
     region,
@@ -424,6 +401,11 @@ export function parseBandoriStampAnimationCdnResponse(
   if (!isRecord(raw) || !manifestUrl || !atlasUrl) {
     return null;
   }
-
-  return toBandoriStampAnimationResponse(region, stampId, raw, manifestUrl, atlasUrl);
+  return toBandoriStampAnimationResponse(
+    region,
+    stampId,
+    raw,
+    manifestUrl,
+    atlasUrl,
+  );
 }

@@ -10,7 +10,16 @@ import {
   lookupBandoriEventTeamIcon,
   parseBandoriCardsAssetIndex,
   parseBandoriEventsAssetIndex,
+  parseBandoriStampsAssetIndex,
 } from "../src/lib/bandori-public-asset-index.ts";
+import {
+  getBandoriStampCatalogItemsForRegion,
+  parseBandoriStampMasterApiResponse,
+} from "../src/lib/bandori-stamp-assets.ts";
+import {
+  buildCommentStampLookup,
+  buildStampShortcode,
+} from "../src/app/[locale]/bandori/eventtracker/commentContent.tsx";
 
 const hashes = {
   thumb: "1".repeat(64),
@@ -22,6 +31,13 @@ const hashes = {
   voice: "7".repeat(64),
   banner: "8".repeat(64),
   teamIcon: "9".repeat(64),
+  stampImage: "a".repeat(64),
+  stampVoice: "b".repeat(64),
+  stampManifest: "c".repeat(64),
+  stampAtlas: "d".repeat(64),
+  changedStampImage: "e".repeat(64),
+  changedStampAudio: "f".repeat(64),
+  changedStampManifest: "0".repeat(64),
 };
 
 function imageSet(entries) {
@@ -64,6 +80,44 @@ function eventsIndex() {
           iconFileName: "team_icon_1.png",
           images: [hashes.teamIcon, null, null, hashes.teamIcon],
         }],
+      },
+    },
+  };
+}
+
+function stampsIndex() {
+  return {
+    schemaVersion: 2,
+    updatedAt: "2026-07-25T00:00:00Z",
+    stamps: {
+      "501": {
+        images: [hashes.stampImage, "", "", hashes.stampImage],
+        voices: [hashes.stampVoice, "", "", hashes.stampVoice],
+        changedStamps: [
+          [],
+          [],
+          [],
+          [{
+            image: hashes.changedStampImage,
+            audio: hashes.changedStampAudio,
+          }],
+        ],
+        animations: {
+          cn: {
+            manifest: hashes.stampManifest,
+            atlas: hashes.stampAtlas,
+            frameRate: 12,
+            frameCount: 8,
+          },
+        },
+      },
+    },
+    changedStampGroups: {
+      jp: {},
+      en: {},
+      tw: {},
+      cn: {
+        "55": hashes.changedStampManifest,
       },
     },
   };
@@ -190,6 +244,174 @@ test("Events schema 2 uses the implicit fixed jp/en/tw/cn four-slot contract", (
   );
 });
 
+test("Stamps schema 2 reconstructs content-addressed asset keys from compact hashes", () => {
+  const parsed = parseBandoriStampsAssetIndex(stampsIndex());
+
+  assert.deepEqual(parsed.stamps["501"].images[0], {
+    key: `bandori/stamps/images/${hashes.stampImage}.png`,
+    sha256: hashes.stampImage,
+  });
+  assert.deepEqual(parsed.stamps["501"].voices[3], {
+    key: `bandori/stamps/voices/${hashes.stampVoice}.mp3`,
+    sha256: hashes.stampVoice,
+  });
+  assert.deepEqual(parsed.stamps["501"].animations.cn.manifest, {
+    key: `bandori/stamps/animation/manifests/${hashes.stampManifest}.json`,
+    sha256: hashes.stampManifest,
+  });
+  assert.deepEqual(parsed.stamps["501"].changedStamps[3][0].image, {
+    key: `bandori/stamps/images/${hashes.changedStampImage}.png`,
+    sha256: hashes.changedStampImage,
+  });
+  assert.deepEqual(parsed.changedStampGroups.cn["55"], {
+    key: `bandori/stamps/changed/manifests/${hashes.changedStampManifest}.json`,
+    sha256: hashes.changedStampManifest,
+  });
+});
+
+test("Stamps master and public index join by ID while preserving regional character slots", () => {
+  const previousBaseUrl = process.env.NEXT_PUBLIC_BANDORI_ASSET_CDN_BASE_URL;
+  process.env.NEXT_PUBLIC_BANDORI_ASSET_CDN_BASE_URL = "https://assets.example.test";
+  try {
+    const master = parseBandoriStampMasterApiResponse({
+      success: true,
+      data: {
+        "501": {
+          imageName: ["stamp_006035", "stamp_006035", "stamp_001099", "stamp_006035"],
+          characterId: [6, 6, 1, 6],
+          changedStamps: [
+            [],
+            [],
+            [],
+            [{
+              imageName: "stamp_006035_changed",
+              soundName: "stage_collabo",
+            }],
+          ],
+        },
+      },
+    });
+    const assets = parseBandoriStampsAssetIndex(stampsIndex());
+    const cn = getBandoriStampCatalogItemsForRegion({ master, assets }, "cn");
+
+    assert.equal(cn.length, 2);
+    assert.equal(cn[0].kind, "normal");
+    assert.equal(cn[1].kind, "changed");
+    assert.equal(buildStampShortcode(cn[0]), ":stamp-cn-501:");
+    assert.equal(buildStampShortcode(cn[1]), ":stamp-cn-501-changed:");
+    const lookup = buildCommentStampLookup({ master, assets });
+    assert.equal(lookup.get("cn:501:normal")?.kind, "normal");
+    assert.equal(lookup.get("cn:501:changed")?.kind, "changed");
+    assert.equal(cn[0].characterId, 6);
+    assert.equal(
+      cn[0].imageUrl,
+      `https://assets.example.test/bandori/stamps/images/${hashes.stampImage}.png`,
+    );
+    assert.equal(
+      cn[0].animation.manifestUrl,
+      `https://assets.example.test/bandori/stamps/animation/manifests/${hashes.stampManifest}.json`,
+    );
+    assert.equal(
+      cn[1].imageUrl,
+      `https://assets.example.test/bandori/stamps/images/${hashes.changedStampImage}.png`,
+    );
+    assert.equal(
+      cn[1].voiceUrl,
+      `https://assets.example.test/bandori/stamps/voices/${hashes.changedStampAudio}.mp3`,
+    );
+    assert.equal(cn[1].animation, undefined);
+    assert.deepEqual(
+      getBandoriStampCatalogItemsForRegion({ master, assets }, "tw"),
+      [],
+    );
+  } finally {
+    if (previousBaseUrl === undefined) {
+      delete process.env.NEXT_PUBLIC_BANDORI_ASSET_CDN_BASE_URL;
+    } else {
+      process.env.NEXT_PUBLIC_BANDORI_ASSET_CDN_BASE_URL = previousBaseUrl;
+    }
+  }
+});
+
+test("Stamps keep audio-only Changed resources indexed but hidden from the current picker", () => {
+  const previousBaseUrl = process.env.NEXT_PUBLIC_BANDORI_ASSET_CDN_BASE_URL;
+  process.env.NEXT_PUBLIC_BANDORI_ASSET_CDN_BASE_URL = "https://assets.example.test";
+  try {
+    const rawAssets = stampsIndex();
+    rawAssets.stamps["501"].changedStamps[3] = [{
+      audio: hashes.changedStampAudio,
+    }];
+    const assets = parseBandoriStampsAssetIndex(rawAssets);
+    const master = parseBandoriStampMasterApiResponse({
+      success: true,
+      data: {
+        "501": {
+          imageName: ["", "", "", "stamp_bilibili120"],
+          characterId: [null, null, null, null],
+          changedStamps: [
+            [],
+            [],
+            [],
+            [{
+              imageName: "stamp_bilibili120",
+              soundName: "stage_collabo",
+            }],
+          ],
+        },
+      },
+    });
+
+    assert.equal(assets.stamps["501"].changedStamps[3][0].audio.sha256, hashes.changedStampAudio);
+    const cn = getBandoriStampCatalogItemsForRegion({ master, assets }, "cn");
+    assert.equal(cn.length, 1);
+    assert.equal(cn[0].kind, "normal");
+    assert.equal(cn[0].characterId, null);
+  } finally {
+    if (previousBaseUrl === undefined) {
+      delete process.env.NEXT_PUBLIC_BANDORI_ASSET_CDN_BASE_URL;
+    } else {
+      process.env.NEXT_PUBLIC_BANDORI_ASSET_CDN_BASE_URL = previousBaseUrl;
+    }
+  }
+});
+
+test("Stamps parsers reject legacy URLs, null slots, and legacy voice names", () => {
+  const missingChangedGroups = stampsIndex();
+  delete missingChangedGroups.changedStampGroups;
+  assert.throws(
+    () => parseBandoriStampsAssetIndex(missingChangedGroups),
+    /missing changedStampGroups/u,
+  );
+
+  const legacy = stampsIndex();
+  legacy.stamps["501"].imageUrl = ["https://example.test/image.png", "", "", ""];
+  assert.throws(() => parseBandoriStampsAssetIndex(legacy), /unsupported field: imageUrl/u);
+
+  const nullSlot = stampsIndex();
+  nullSlot.stamps["501"].images[1] = null;
+  assert.throws(() => parseBandoriStampsAssetIndex(nullSlot), /SHA-256/u);
+
+  const legacyVoiceNames = stampsIndex();
+  legacyVoiceNames.stamps["501"].voiceNames = ["stamp_006035", "", "", "stamp_006035"];
+  assert.throws(
+    () => parseBandoriStampsAssetIndex(legacyVoiceNames),
+    /unsupported field: voiceNames/u,
+  );
+
+  assert.throws(
+    () => parseBandoriStampMasterApiResponse({
+      success: true,
+      data: {
+        "1": {
+          imageName: ["stamp_001", "", "", ""],
+          characterId: [1, null, 0, 0],
+        },
+      },
+    }),
+    /record is invalid: 1/u,
+  );
+});
+
 test("public asset URLs append reconstructed descriptor keys to the browser CDN base", () => {
   const parsed = parseBandoriCardsAssetIndex(cardsIndex());
   const descriptor = lookupBandoriCardImage(parsed, "res001001", "normal", "thumb");
@@ -201,6 +423,10 @@ test("public asset URLs append reconstructed descriptor keys to the browser CDN 
   assert.equal(
     buildBandoriPublicAssetIndexUrl("events", "https://assets.example.test"),
     "https://assets.example.test/bandori/events/index.json",
+  );
+  assert.equal(
+    buildBandoriPublicAssetIndexUrl("stamps", "https://assets.example.test"),
+    "https://assets.example.test/bandori/stamps/index.json",
   );
   assert.equal(
     buildBandoriPublicAssetUrl(descriptor, "https://assets.example.test/"),

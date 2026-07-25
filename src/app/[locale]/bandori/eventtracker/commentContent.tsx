@@ -7,14 +7,13 @@ import { useCommentStampAnimation } from "@/hooks/useCommentStamps";
 import {
   getBandoriStampCatalogItemsForRegion,
   type BandoriStampAnimationResponse,
-  type BandoriStampCatalogApiResponse,
+  type BandoriStampCatalog,
 } from "@/lib/bandori-stamp-assets";
 import { playCommentStampVoice } from "@/lib/comment-stamp-audio";
 import { getCommentEmojiSrc } from "@/lib/comment-emojis";
 import {
   COMMENT_STAMP_REGIONS,
   isCommentStampRegion,
-  resolveCommentStamp,
   type CommentStamp,
   type CommentStampRegion,
 } from "@/lib/comment-stamps";
@@ -48,7 +47,7 @@ type CommentContentToken =
 
 export type CommentStampLookup = ReadonlyMap<string, CommentStamp>;
 
-const COMMENT_CONTENT_TOKEN_PATTERN = /:stamp-([a-z]{2})-(\d+):|:([A-Za-z0-9_+-]+):/g;
+const COMMENT_CONTENT_TOKEN_PATTERN = /:stamp-([a-z]{2})-(\d+)(?:-(changed))?:|:([A-Za-z0-9_+-]+):/g;
 const commentStampAtlasImageCache = new Map<string, Promise<HTMLImageElement>>();
 
 export function formatCommentTime(value: string): string {
@@ -263,15 +262,19 @@ function CommentStampView({ stamp, shortcode }: { stamp: CommentStamp; shortcode
   );
 }
 
-function commentStampLookupKey(region: CommentStampRegion, stampId: number): string {
-  return `${region}:${stampId}`;
+function commentStampLookupKey(
+  region: CommentStampRegion,
+  stampId: number,
+  kind: CommentStamp["kind"],
+): string {
+  return `${region}:${stampId}:${kind}`;
 }
 
-export function buildCommentStampLookup(catalog: BandoriStampCatalogApiResponse | null): CommentStampLookup {
+export function buildCommentStampLookup(catalog: BandoriStampCatalog | null): CommentStampLookup {
   const lookup = new Map<string, CommentStamp>();
   for (const region of COMMENT_STAMP_REGIONS) {
     for (const stamp of getBandoriStampCatalogItemsForRegion(catalog, region)) {
-      lookup.set(commentStampLookupKey(region, stamp.id), stamp);
+      lookup.set(commentStampLookupKey(region, stamp.id, stamp.kind), stamp);
     }
   }
   return lookup;
@@ -281,8 +284,9 @@ function resolveCommentStampWithCatalog(
   stampLookup: CommentStampLookup,
   region: CommentStampRegion,
   id: number,
+  kind: CommentStamp["kind"],
 ): CommentStamp | null {
-  return stampLookup.get(commentStampLookupKey(region, id)) ?? resolveCommentStamp(region, id);
+  return stampLookup.get(commentStampLookupKey(region, id, kind)) ?? null;
 }
 
 function parseCommentContent(content: string, stampLookup: CommentStampLookup): CommentContentToken[] {
@@ -292,13 +296,20 @@ function parseCommentContent(content: string, stampLookup: CommentStampLookup): 
   COMMENT_CONTENT_TOKEN_PATTERN.lastIndex = 0;
 
   while ((match = COMMENT_CONTENT_TOKEN_PATTERN.exec(content)) !== null) {
-    const [raw, stampRegion, stampId, emojiName] = match;
+    const [raw, stampRegion, stampId, changedMarker, emojiName] = match;
     let token: CommentContentToken | null = null;
 
     if (stampRegion && stampId) {
       if (isCommentStampRegion(stampRegion)) {
         const id = Number.parseInt(stampId, 10);
-        const stamp = Number.isSafeInteger(id) ? resolveCommentStampWithCatalog(stampLookup, stampRegion, id) : null;
+        const stamp = Number.isSafeInteger(id)
+          ? resolveCommentStampWithCatalog(
+            stampLookup,
+            stampRegion,
+            id,
+            changedMarker ? "changed" : "normal",
+          )
+          : null;
         token = stamp ? { type: "stamp", raw, stamp, index: match.index } : null;
       }
     } else if (emojiName) {
@@ -467,5 +478,5 @@ export function buildEmojiShortcode(name: string): string {
 }
 
 export function buildStampShortcode(stamp: CommentStamp): string {
-  return `:stamp-${stamp.region}-${stamp.id}:`;
+  return `:stamp-${stamp.region}-${stamp.id}${stamp.kind === "changed" ? "-changed" : ""}:`;
 }
