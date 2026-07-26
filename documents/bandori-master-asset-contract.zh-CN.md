@@ -17,11 +17,13 @@ English version: [bandori-master-asset-contract.md](bandori-master-asset-contrac
 
 | 数据集 | Master API | 详情 API | 公开 asset index | 主要关联键 | 区服结构 | 缓存档位 |
 | --- | --- | --- | --- | --- | --- | --- |
-| Events | `/api/bandori/master/events` | `/api/bandori/master/events/{eventId}` | `/bandori/events/index.json` | 数字 event ID | Master 四槽字段及 banner/team image 四槽 | fast-mutable API；snapshot index |
+| Events | `/api/bandori/master/events` | `/api/bandori/master/events/{eventId}` | `/bandori/events/index.json` | 数字 event ID | Master 四槽字段及本地 `stampRewardId`；标量 `stampCharacterId`；banner/team image 四槽 | fast-mutable API；snapshot index |
 | Cards | `/api/bandori/master/cards` | `/api/bandori/master/cards/{cardId}` | `/bandori/cards/index.json` | `resourceSetName` | 四槽文本和显式 `serverExtensions`；图片按内容 hash 跨服共享 | snapshot API 与 index |
 | Stamps | `/api/bandori/master/stamps` | 无 | `/bandori/stamps/index.json` | 数字 stamp ID | 四槽 `imageName`、`characterId`、图片、语音与 Changed variant | snapshot API 与 index |
 
 Cards 列表刻意采用一次下载、整个 SPA 会话复用的完整 map；只有它支持可选的 `server=0|1|2|3` 物化查询。Event 的 `cnSchedule` 保持为可选 overlay，因为它可能独立于 immutable event snapshot 变化。
+
+Event `stampRewardId` 固定为 `[jp, en, tw, cn]` 四槽，因为它是服务器本地外键；该服不存在活动时保留 `null`，不得用其他服 ID 补位。历史来源中的十进制字符串 ID 会规范化为整数。`stampCharacterId` 使用单个标量，因为所有已存在区服的奖励必须通过 Stamps API 解析成相同的语义图片和角色；出现分歧时拒绝发布 snapshot。
 
 ## 固定 JSON 顺序
 
@@ -58,4 +60,4 @@ npm run test:bandori-public-assets
 npm run audit:bandori-contracts
 ```
 
-审计会验证响应 envelope、固定四槽、index 字段顺序、API 与 index 覆盖关系、Changed Stamp 位置数组长度、缓存头，以及未知 Master 查询参数必须被拒绝。可通过 `HHWX_BANDORI_API_BASE_URL` 与 `HHWX_BANDORI_ASSET_BASE_URL` 审计其他环境。
+审计会验证响应 envelope、固定四槽、Event 与 Stamp 的语义对应、index 字段顺序、API 与 index 覆盖关系、Changed Stamp 位置数组长度、缓存头，以及未知 Master 查询参数必须被拒绝。可通过 `HHWX_BANDORI_API_BASE_URL` 与 `HHWX_BANDORI_ASSET_BASE_URL` 审计其他环境。

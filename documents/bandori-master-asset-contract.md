@@ -17,11 +17,13 @@ This document is the cross-dataset contract for the Events, Cards, and Stamps da
 
 | Dataset | Master API | Detail API | Public asset index | Primary join | Regional representation | Intended cache tier |
 | --- | --- | --- | --- | --- | --- | --- |
-| Events | `/api/bandori/master/events` | `/api/bandori/master/events/{eventId}` | `/bandori/events/index.json` | numeric event ID | four-slot master fields and four-slot banner/team images | fast-mutable API; snapshot index |
+| Events | `/api/bandori/master/events` | `/api/bandori/master/events/{eventId}` | `/bandori/events/index.json` | numeric event ID | four-slot master fields and local `stampRewardId`; scalar `stampCharacterId`; four-slot banner/team images | fast-mutable API; snapshot index |
 | Cards | `/api/bandori/master/cards` | `/api/bandori/master/cards/{cardId}` | `/bandori/cards/index.json` | `resourceSetName` | four-slot text plus explicit `serverExtensions`; images are shared by content hash | snapshot API and index |
 | Stamps | `/api/bandori/master/stamps` | none | `/bandori/stamps/index.json` | numeric stamp ID | four-slot `imageName`, `characterId`, images, voices, and Changed variants | snapshot API and index |
 
 The Cards list is intentionally downloaded as one reusable SPA-session map. Its optional `server=0|1|2|3` materialization is the only supported master query. Event `cnSchedule` remains an optional overlay because it can change independently of the immutable event snapshot.
+
+Event `stampRewardId` is a fixed `[jp, en, tw, cn]` array because it is a server-local foreign key; unavailable events keep `null`, and another server's ID is never copied into that slot. Decimal string IDs in historical input are normalized to integers. `stampCharacterId` is one scalar because all available regional rewards must resolve through the Stamps API to the same semantic image and character; disagreement fails snapshot publication.
 
 ## Stable JSON Order
 
@@ -58,4 +60,4 @@ npm run test:bandori-public-assets
 npm run audit:bandori-contracts
 ```
 
-The audit verifies envelopes, fixed server slots, index field order, API-to-index coverage, Changed Stamp positional lengths, cache headers, and rejection of unsupported master queries. Override `HHWX_BANDORI_API_BASE_URL` or `HHWX_BANDORI_ASSET_BASE_URL` to audit another deployment.
+The audit verifies envelopes, fixed server slots, Event-to-Stamp semantic identity, index field order, API-to-index coverage, Changed Stamp positional lengths, cache headers, and rejection of unsupported master queries. Override `HHWX_BANDORI_API_BASE_URL` or `HHWX_BANDORI_ASSET_BASE_URL` to audit another deployment.

@@ -59,6 +59,12 @@ function toFiniteNumber(value: unknown): number | null {
   return Number.isFinite(numeric) ? numeric : null;
 }
 
+function eventStampCharacterId(value: unknown): number | null {
+  // Accept the former regional array during the deployment transition. New
+  // snapshots publish the cross-server invariant as one scalar.
+  return toPositiveInteger(Array.isArray(value) ? preferredRegionalSlot(value, 3) : value);
+}
+
 function toPositiveInteger(value: unknown): number | null {
   const numeric = toFiniteNumber(value);
   return numeric !== null && Number.isInteger(numeric) && numeric > 0 ? numeric : null;
@@ -183,7 +189,7 @@ export function toBandoriEventSummary(
       bannerBundleName: regionalString(record.bannerAssetBundleName, 3),
     },
     band: typeof record.band === "string" ? record.band : "mix",
-    stampCharacterId: toPositiveInteger(preferredRegionalSlot(record.stampCharacterId, 3)),
+    stampCharacterId: eventStampCharacterId(record.stampCharacterId),
     timeline: {
       jp: {
         startAt: jpStartAt,
