@@ -443,6 +443,39 @@ export function resolveBandoriCardMapForServer<T extends object>(
   return resolved;
 }
 
+export function resolveBandoriCardForServerWithJpFallback<T extends object>(
+  card: T,
+  server: number,
+): T | null {
+  const serverCard = resolveBandoriCardForServer(card, server);
+  if (serverCard || server === 0) {
+    return serverCard;
+  }
+
+  // Team calculation treats any card that exists on JP as a valid future
+  // candidate for another server. Availability is based only on snapshot
+  // presence, never on release timestamps, because regional schedules can
+  // delay or skip collaborations for an arbitrary amount of time.
+  return resolveBandoriCardForServer(card, 0);
+}
+
+export function resolveBandoriCardMapForServerWithJpFallback<T extends object>(
+  cards: Record<string, T | null | undefined>,
+  server: number,
+): Record<string, T> {
+  const resolved: Record<string, T> = {};
+  for (const [cardId, card] of Object.entries(cards)) {
+    if (!card) {
+      continue;
+    }
+    const serverCard = resolveBandoriCardForServerWithJpFallback(card, server);
+    if (serverCard) {
+      resolved[cardId] = serverCard;
+    }
+  }
+  return resolved;
+}
+
 export function materializeBandoriCardForServer<T extends object>(
   card: T,
   server: number,
@@ -470,6 +503,26 @@ export function materializeBandoriCardMapForServer<T extends object>(
     if (serverCard) {
       materialized[cardId] = serverCard;
     }
+  }
+  return materialized;
+}
+
+export function materializeBandoriCardMapForServerWithJpFallback<T extends object>(
+  cards: Record<string, T | null | undefined>,
+  server: number,
+): Record<string, T> {
+  const materialized: Record<string, T> = {};
+  for (const [cardId, card] of Object.entries(cards)) {
+    if (!card) {
+      continue;
+    }
+    const serverCard = resolveBandoriCardForServerWithJpFallback(card, server);
+    if (!serverCard) {
+      continue;
+    }
+    const resolvedCard = { ...serverCard } as T & Record<string, unknown>;
+    delete resolvedCard.serverExtensions;
+    materialized[cardId] = resolvedCard as T;
   }
   return materialized;
 }

@@ -3222,7 +3222,7 @@ function TeamBuilderPanel() {
   const {
     data: selectedServerCards,
     canonicalData: canonicalCards,
-  } = useBandoriCardsMaster(selectedProfileCardServer);
+  } = useBandoriCardsMaster(selectedProfileCardServer, true, "jp");
   const profileCardMetadata = (selectedServerCards
     ?? EMPTY_CARD_METADATA) as Record<string, CardMetadata | undefined>;
   const canonicalCardMetadata = (canonicalCards

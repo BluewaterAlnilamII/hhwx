@@ -17,10 +17,12 @@ import {
   getBandoriCardServerName,
   isKnownBandoriCardEntityCollision,
   materializeBandoriCardForServer,
+  materializeBandoriCardMapForServerWithJpFallback,
   normalizeBandoriCardServer,
   parseBandoriCardServerQuery,
   resolveBandoriCardForServer,
   resolveBandoriCardMapForServer,
+  resolveBandoriCardMapForServerWithJpFallback,
   validateBandoriCardServerExtensions,
 } from "../src/lib/bandori-card-server-extensions.ts";
 import {
@@ -121,7 +123,7 @@ test("card consumers share the canonical Cards dataset without the sparse route"
 
   assert.match(worker, /type CardsResponse = Record</u);
   assert.match(worker, /normalizeCachedCardsResponse/u);
-  assert.match(worker, /getCardsForServer/u);
+  assert.match(worker, /getCalculationCardsForProfileServer/u);
   assert.match(worker, /resolvedCardsBySource/u);
   assert.doesNotMatch(comments, /readBandoriCardsApiDataset\(\)/u);
   assert.doesNotMatch(comments, /fetchBestdoriMasterDataset\("cards"\)/u);
@@ -132,7 +134,10 @@ test("card consumers share the canonical Cards dataset without the sparse route"
   assert.doesNotMatch(profile, /fetchBestdoriMasterDataset\("cards"\)/u);
   assert.match(avatarControl, /avatarCardServer: draftValue\?\.entityServer/u);
   assert.doesNotMatch(avatarControl, /excludeEntityCollisions/u);
-  assert.match(picker, /useBandoriCardsMaster\(server\)/u);
+  assert.match(
+    picker,
+    /useBandoriCardsMaster\(\s*server,\s*true,\s*missingCardFallback,\s*\)/u,
+  );
   assert.match(picker, /entityServer: card\.entityServer/u);
   assert.doesNotMatch(picker, /\?server=/u);
   assert.match(cardsHook, /"\/api\/bandori\/master\/cards"/u);
@@ -198,27 +203,114 @@ test("profile-bound card displays receive profile server context without changin
     teamBuilderPage,
     preferencesPanel,
     preferenceEntries,
+    temporaryDialogs,
   ] = await Promise.all([
     readSource("src/app/[locale]/bandori/game-profiles/[profileId]/cards/page.tsx"),
     readSource("src/app/[locale]/bandori/teambuilder/page.tsx"),
     readSource("src/app/[locale]/bandori/teambuilder/CardPreferencesPanel.tsx"),
     readSource("src/app/[locale]/bandori/teambuilder/useTeamBuilderPreferenceCardEntries.ts"),
+    readSource("src/app/[locale]/bandori/teambuilder/TemporaryCardDialogs.tsx"),
   ]);
 
   assert.match(profileCardsPage, /displayServer=\{profileServer\}/u);
   assert.match(profileCardsPage, /preferredServer,\s*profileServer,\s*fallbackLabels/u);
   assert.match(teamBuilderPage, /displayServer=\{selectedProfileCardServer\}/u);
   assert.match(teamBuilderPage, /canonicalData: canonicalCards/u);
+  assert.match(teamBuilderPage, /useBandoriCardsMaster\(selectedProfileCardServer, true, "jp"\)/u);
   assert.match(teamBuilderPage, /<EventBonusPanel[\s\S]*?cardMetadata=\{canonicalCardMetadata\}/u);
   assert.match(teamBuilderPage, /<TeamBuilderCardPreferencesPanel[\s\S]*?cardMetadata=\{profileCardMetadata\}/u);
   assert.match(preferencesPanel, /displayServer: BandoriServer/u);
   assert.match(preferenceEntries, /contextServer: BandoriServer/u);
+  assert.match(temporaryDialogs, /missingCardFallback="jp"/u);
 
   const bonusCardBody = teamBuilderPage.slice(
     teamBuilderPage.indexOf("function BonusCardThumbnail"),
     teamBuilderPage.indexOf("function TeamBuilderCardTile"),
   );
   assert.doesNotMatch(bonusCardBody, /displayServer=/u);
+});
+
+test("team builder includes every JP card missing from another server without using release dates", () => {
+  const jpOnlyCard = {
+    characterId: 1,
+    rarity: 5,
+    releasedAt: [100, null, null, null],
+    resourceSetName: "res001999",
+    skillId: 10,
+    serverExtensions: [{}, null, null, null],
+  };
+  const regionalCard = {
+    characterId: 2,
+    rarity: 5,
+    releasedAt: [200, 300, null, null],
+    resourceSetName: "res002999",
+    skillId: 20,
+    serverExtensions: [{}, { skillId: 21 }, null, null],
+  };
+  const cnOnlyCard = {
+    characterId: 3,
+    rarity: 2,
+    releasedAt: [null, null, null, 50],
+    resourceSetName: "res003999",
+    skillId: 30,
+    serverExtensions: [null, null, null, {}],
+  };
+  const cards = {
+    "1": jpOnlyCard,
+    "2": regionalCard,
+    "3": cnOnlyCard,
+  };
+
+  assert.deepEqual(resolveBandoriCardMapForServer(cards, 1), {
+    "2": {
+      characterId: 2,
+      rarity: 5,
+      releasedAt: [200, 300, null, null],
+      resourceSetName: "res002999",
+      skillId: 21,
+    },
+  });
+  const enCards = resolveBandoriCardMapForServerWithJpFallback(cards, 1);
+  assert.equal(enCards["1"], jpOnlyCard);
+  assert.equal(enCards["2"].skillId, 21);
+  assert.equal(enCards["3"], undefined);
+
+  assert.deepEqual(materializeBandoriCardMapForServerWithJpFallback(cards, 3), {
+    "1": {
+      characterId: 1,
+      rarity: 5,
+      releasedAt: [100, null, null, null],
+      resourceSetName: "res001999",
+      skillId: 10,
+    },
+    "2": {
+      characterId: 2,
+      rarity: 5,
+      releasedAt: [200, 300, null, null],
+      resourceSetName: "res002999",
+      skillId: 20,
+    },
+    "3": {
+      characterId: 3,
+      rarity: 2,
+      releasedAt: [null, null, null, 50],
+      resourceSetName: "res003999",
+      skillId: 30,
+    },
+  });
+
+  const collision = {
+    characterId: 21,
+    rarity: 2,
+    resourceSetName: "res021500",
+    type: "campaign",
+    serverExtensions: [null, {}, null, {
+      characterId: 22,
+      resourceSetName: "res022900",
+      type: "limited",
+    }],
+  };
+  assert.deepEqual(resolveBandoriCardMapForServerWithJpFallback({ "10001": collision }, 2), {});
 });
 
 test("avatar picker expands every registered collision into distinct EN and CN resources", () => {
