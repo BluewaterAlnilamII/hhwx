@@ -13,7 +13,7 @@ function eventRecord(overrides = {}) {
     eventName: ["JP event", "EN event", "TW event", "CN event"],
     band: "mix",
     stampRewardId: [10, null, null, 20],
-    stampCharacterId: [1, null, null, 2],
+    stampCharacterId: 2,
     assetBundleName: "event_bundle",
     bannerAssetBundleName: "banner_event1",
     startAt: ["1000", null, null, null],
@@ -51,6 +51,15 @@ test("the shared adapter preserves regional metadata and embedded event bonuses"
     members: [{ situationId: 100, percent: 10 }],
     limitBreaks: [{ rarity: 5, rank: 1, percent: 5 }],
   });
+});
+
+test("the shared adapter accepts the former regional stamp character during rollout", () => {
+  const { events } = parseBandoriEventSummaries({
+    success: true,
+    data: { "1": eventRecord({ stampCharacterId: [1, null, null, 2] }) },
+  });
+
+  assert.equal(events[0].stampCharacterId, 2);
 });
 
 test("CN schedule is inserted after endAt only while the official CN range is incomplete", () => {

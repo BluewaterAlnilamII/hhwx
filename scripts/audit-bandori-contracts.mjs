@@ -54,10 +54,43 @@ assert.deepEqual(Object.keys(stampsIndex.changedStampGroups), serverOrder);
 
 for (const [eventId, event] of Object.entries(events)) {
   assert.equal(isRecord(event), true, `event ${eventId} must be an object`);
+  requireFourSlots(event.stampRewardId, `event ${eventId} stampRewardId`);
+  const resolvedImageNames = new Set();
+  const resolvedCharacterIds = new Set();
+  for (let slot = 0; slot < serverOrder.length; slot += 1) {
+    const stampId = event.stampRewardId[slot];
+    if (stampId === null) {
+      continue;
+    }
+    assert.equal(Number.isInteger(stampId) && stampId > 0, true, `event ${eventId} has an invalid stamp ID`);
+    const stamp = stamps[String(stampId)];
+    assert.equal(isRecord(stamp), true, `event ${eventId} stamp ${stampId} is missing from the Stamps API`);
+    requireFourSlots(stamp.imageName, `stamp ${stampId} imageName`);
+    requireFourSlots(stamp.characterId, `stamp ${stampId} characterId`);
+    const imageName = stamp.imageName[slot];
+    const characterId = stamp.characterId[slot];
+    assert.equal(typeof imageName === "string" && imageName.length > 0, true, `event ${eventId} stamp image is missing`);
+    assert.equal(Number.isInteger(characterId) && characterId > 0, true, `event ${eventId} stamp character is missing`);
+    resolvedImageNames.add(imageName);
+    resolvedCharacterIds.add(characterId);
+  }
+  assert.equal(resolvedImageNames.size <= 1, true, `event ${eventId} stamp images disagree across servers`);
+  assert.equal(resolvedCharacterIds.size <= 1, true, `event ${eventId} stamp characters disagree across servers`);
+  const expectedCharacterId = resolvedCharacterIds.size === 1
+    ? resolvedCharacterIds.values().next().value
+    : null;
+  assert.equal(event.stampCharacterId, expectedCharacterId, `event ${eventId} scalar stamp character changed`);
   const asset = eventsIndex.events[eventId];
   assert.equal(isRecord(asset), true, `event ${eventId} is missing from the asset index`);
   requireFourSlots(asset.banners, `event ${eventId} banners`);
 }
+
+assert.deepEqual(events["4"].stampRewardId, [104, 104, 104, 104]);
+assert.equal(events["4"].stampCharacterId, 3);
+assert.deepEqual(events["299"].stampRewardId, [501, 501, 50100, 501]);
+assert.equal(events["299"].stampCharacterId, 6);
+assert.deepEqual(events["5001"].stampRewardId, [null, null, 309, null]);
+assert.equal(events["5001"].stampCharacterId, 27);
 
 const requiredCardResources = new Set();
 for (const [cardId, card] of Object.entries(cards)) {
