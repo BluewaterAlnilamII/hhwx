@@ -62,7 +62,7 @@ import {
   type UserGameProfileCardRecord,
   type UserGameProfilePayload,
 } from "@/lib/user-game-profile-payload";
-import { resolveBandoriCardMapForServer } from "@/lib/bandori-card-server-extensions";
+import { resolveBandoriCardMapForServerWithJpFallback } from "@/lib/bandori-card-server-extensions";
 import { hasTrainedCardArt } from "@/lib/bandori-card-training";
 
 type MasterResponse<T> = {
@@ -280,7 +280,7 @@ function normalizeCachedCardsResponse(response: CachedCardsResponse): CardsRespo
     : response as CardsResponse;
 }
 
-function getCardsForServer(cards: CardsResponse, server: number): CardsResponse {
+function getCalculationCardsForProfileServer(cards: CardsResponse, server: number): CardsResponse {
   let resolvedByServer = resolvedCardsBySource.get(cards);
   if (!resolvedByServer) {
     resolvedByServer = new Map<number, CardsResponse>();
@@ -290,7 +290,7 @@ function getCardsForServer(cards: CardsResponse, server: number): CardsResponse 
   if (cached) {
     return cached;
   }
-  const resolved = resolveBandoriCardMapForServer(cards, server);
+  const resolved = resolveBandoriCardMapForServerWithJpFallback(cards, server);
   resolvedByServer.set(server, resolved);
   return resolved;
 }
@@ -710,7 +710,10 @@ async function runSearch(
     Promise.all(chartRequests),
   ]);
   const server = request.profilePayload.bestdoriProfile.server;
-  const cardsById = getCardsForServer(normalizeCachedCardsResponse(cachedCards), server);
+  const cardsById = getCalculationCardsForProfileServer(
+    normalizeCachedCardsResponse(cachedCards),
+    server,
+  );
 
   const song = songsPayload.payload[String(songId)];
   if (!song) {

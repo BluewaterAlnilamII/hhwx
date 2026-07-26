@@ -4,7 +4,10 @@ import { useDeferredValue, useEffect, useMemo, useState, type RefObject } from "
 import { ArrowDownWideNarrow, ArrowUpNarrowWide, Filter, Loader2, RotateCcw, Search, X } from "lucide-react";
 import { useLocale, useTranslations } from "next-intl";
 import { type AppLocale } from "@/i18n/routing";
-import { useBandoriCardsMaster } from "@/hooks/useBandoriCardsMaster";
+import {
+  useBandoriCardsMaster,
+  type BandoriCardsMissingCardFallback,
+} from "@/hooks/useBandoriCardsMaster";
 import { useCachedFetch } from "@/hooks/useCachedFetch";
 import { useBandoriCardsAssetIndex } from "@/hooks/useBandoriPublicAssetIndex";
 import { useBandoriPreferredServer } from "@/store/useBandoriPreferencesStore";
@@ -342,6 +345,7 @@ export type BandoriCardPickerProps = {
   onValueChange: (value: BandoriCardPickerValue | null) => void;
   region?: BandoriAssetRegion;
   server?: BandoriCardServer;
+  missingCardFallback?: BandoriCardsMissingCardFallback;
   className?: string;
   showArtToggle?: boolean;
   scrollElementRef?: RefObject<HTMLElement | null>;
@@ -352,6 +356,7 @@ export default function BandoriCardPicker({
   onValueChange,
   region = "cn",
   server,
+  missingCardFallback = "none",
   className,
   showArtToggle = true,
   scrollElementRef,
@@ -360,7 +365,11 @@ export default function BandoriCardPicker({
   const t = useTranslations("bandori.cardPicker");
   const preferredServer = useBandoriPreferredServer();
   useBandoriCardsAssetIndex();
-  const { data: cardMetadata, loading: cardsLoading } = useBandoriCardsMaster(server);
+  const { data: cardMetadata, loading: cardsLoading } = useBandoriCardsMaster(
+    server,
+    true,
+    missingCardFallback,
+  );
   const { data: characterMetadata, loading: charactersLoading } = useCachedFetch(
     "bandori-card-picker-characters-v3",
     "/api/bandori/master/characters",

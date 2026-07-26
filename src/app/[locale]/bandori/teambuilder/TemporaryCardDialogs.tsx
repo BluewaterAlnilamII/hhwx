@@ -116,6 +116,7 @@ export function TemporaryCardPickerDialog({
             onValueChange={onValueChange}
             region={region}
             server={server}
+            missingCardFallback="jp"
             showArtToggle={false}
             scrollElementRef={scrollElementRef}
           />

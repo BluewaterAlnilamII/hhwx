@@ -1,5 +1,8 @@
 import { parseApiSuccessData } from "@/lib/api-contracts";
-import { materializeBandoriCardMapForServer } from "@/lib/bandori-card-server-extensions";
+import {
+  materializeBandoriCardMapForServer,
+  materializeBandoriCardMapForServerWithJpFallback,
+} from "@/lib/bandori-card-server-extensions";
 import type { BandoriServer } from "@/lib/bandori-server";
 
 export type BandoriCardMasterRecord = Record<string, unknown> & {
@@ -20,6 +23,10 @@ export type BandoriCardsMasterMap = Record<
 >;
 
 const materializedCardsByServer = new WeakMap<
+  BandoriCardsMasterMap,
+  Map<BandoriServer, BandoriCardsMasterMap>
+>();
+const materializedCardsWithJpFallbackByServer = new WeakMap<
   BandoriCardsMasterMap,
   Map<BandoriServer, BandoriCardsMasterMap>
 >();
@@ -60,6 +67,26 @@ export function materializeBandoriCardsMasterForServer(
   }
 
   const materialized = materializeBandoriCardMapForServer(cards, server);
+  byServer.set(server, materialized);
+  return materialized;
+}
+
+export function materializeBandoriCardsMasterForServerWithJpFallback(
+  cards: BandoriCardsMasterMap,
+  server: BandoriServer,
+): BandoriCardsMasterMap {
+  let byServer = materializedCardsWithJpFallbackByServer.get(cards);
+  if (!byServer) {
+    byServer = new Map();
+    materializedCardsWithJpFallbackByServer.set(cards, byServer);
+  }
+
+  const cached = byServer.get(server);
+  if (cached) {
+    return cached;
+  }
+
+  const materialized = materializeBandoriCardMapForServerWithJpFallback(cards, server);
   byServer.set(server, materialized);
   return materialized;
 }
