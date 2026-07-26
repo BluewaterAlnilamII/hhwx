@@ -43,7 +43,7 @@
 
 - 用户档案：持有卡牌、等级、技能等级、Master Rank、训练状态、剧情解锁、排除标记、区域道具、角色潜能和角色任务加成；
 - Master 数据：卡牌、角色、乐团、属性、技能、区域道具、歌曲和谱面；
-- 活动加成：优先来自 `bandori_event_bonuses`，也可以与手动 `bonusOverride` 合并；
+- 活动加成：来自共享 Events master API 记录，也可以与手动 `bonusOverride` 合并；
 - 请求参数：歌曲、难度、活动、LIVE 类型、目标、准率、房间综合力、协力外部技能，以及 Live Boost/CP 的默认显示档位。
 
 ## 分数和活动模型

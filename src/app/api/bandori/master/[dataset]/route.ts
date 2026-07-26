@@ -1,4 +1,5 @@
 import {
+  FAST_MUTABLE_HTTP_CACHE_POLICY,
   NO_STORE_HTTP_CACHE_POLICY,
   SNAPSHOT_HTTP_CACHE_POLICY,
   withHttpCachePolicy,
@@ -13,7 +14,7 @@ import {
   readBandoriCardsApiDatasetForServer,
 } from "@/lib/bandori-cards-api-server";
 import { parseBandoriCardServerQuery } from "@/lib/bandori-card-server-extensions";
-import { readBandoriEventApiDataset } from "@/lib/bandori-events-api-server";
+import { readBandoriPublicEventApiDataset } from "@/lib/bandori-events-api-server";
 import { readBandoriStampsApiDataset } from "@/lib/bandori-stamps-api-server";
 import {
   BESTDORI_MASTER_DATASET_ALIASES,
@@ -77,8 +78,8 @@ export async function GET(request: Request, context: RouteContext) {
 
   try {
     if (dataset === "events") {
-      return jsonSuccess(await readBandoriEventApiDataset("events"), {
-        headers: withHttpCachePolicy(SNAPSHOT_HTTP_CACHE_POLICY),
+      return jsonSuccess(await readBandoriPublicEventApiDataset("events"), {
+        headers: withHttpCachePolicy(FAST_MUTABLE_HTTP_CACHE_POLICY),
       });
     }
 

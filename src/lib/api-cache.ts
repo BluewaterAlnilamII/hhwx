@@ -78,7 +78,6 @@ export const BESTDORI_ASSET_PROXY_REVALIDATE_SECONDS =
 export const BANDORI_EVENTS_CACHE_TAG = "bandori:events";
 export const BANDORI_SCHEDULE_CACHE_TAG = "bandori:schedule";
 export const BANDORI_CHARACTERS_CACHE_TAG = "bandori:characters";
-export const BANDORI_EVENT_BONUS_CACHE_TAG = "bandori:event-bonus";
 
 export function withHttpCachePolicy(policy: HttpCachePolicy, headers?: HeadersInit): Headers {
   const nextHeaders = new Headers(headers ?? {});

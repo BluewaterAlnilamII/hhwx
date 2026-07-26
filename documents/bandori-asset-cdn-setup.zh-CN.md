@@ -44,6 +44,8 @@ Events、Cards 与 Stamps master API 会通过 `BANDORI_PRIVATE_R2_BUCKET` 配�
 
 浏览器只从 `GET /api/bandori/master/cards` 读取一次完整 canonical Cards map，并在整个 SPA 生命周期内复用解析后的 map；账号所在服务器对应的标量扩展在浏览器本地物化。公开 Cards 列表/详情请求可选使用精确的 `server=0|1|2|3`，固定对应 JP/EN/TW/CN，字符串区服代码会被拒绝。旧的稀疏接口 `GET /api/bandori/cards?ids=...` 已删除。无服务器上下文的展示界面按“首选服务器、JP、EN、TW、CN”去重回退；卡牌档案和组队计算器中的档案卡牌则把档案所在服务器放在这个顺序之前，因此卡牌名和技能描述都优先服从档案身份，同时不修改用户的全局首选服务器。ID `10001`–`10010` 的冲突卡在计算和持久化中仍使用数字 ID；无服务器上下文的头像选择会将 EN/CN 实体展开成仅供 UI 使用的带区服引用，并把实际选择写入可空的 `profiles.avatar_card_server` 字段。
 
+浏览器同样只从 `GET /api/bandori/master/events` 读取一次完整 Events map，并在 SPA 会话内供 Event Tracker、Calendar 和组队计算器共享。活动记录包含原始四服 master 字段，以及 `band`、四槽 `stampRewardId`、四槽 `stampCharacterId`；仅在官方 CN 时间范围不完整时按需包含顶层 `cnSchedule`。组队计算器直接使用这些记录内的 bonus 字段。旧 Events 列表和 bonus API 已删除；`/api/bandori/events/{eventId}/comments` 下的评论路由保持独立。
+
 ## 榜线历史 API
 
 `GET /api/bandori/tracker/data` 可以从 `bandori/trackerdata` 下的对象直接读取 CN 榜线历史。服务端使用带签名的 R2/S3 请求，不会通过公共 CDN 绕行读取聚合数据。按下面配置数据源和明确的公共 artifact bucket；endpoint 与凭据继续使用仅限服务端的 `BANDORI_R2_*`：

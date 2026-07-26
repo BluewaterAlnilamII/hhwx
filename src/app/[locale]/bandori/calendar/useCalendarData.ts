@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { type Session } from "@supabase/supabase-js";
 import { useCachedFetch } from "@/hooks/useCachedFetch";
+import { useBandoriEventsMaster } from "@/hooks/useBandoriEventsMaster";
 import {
   LONG_CLIENT_CACHE_POLICY,
   SHORT_CLIENT_CACHE_POLICY,
@@ -16,41 +17,11 @@ import {
   getCalendarEventColors,
 } from "@/lib/calendar-character-service";
 import { USER_ROLES_TABLE } from "@/lib/supabase-table-names";
+import type { BandoriEventSummary } from "@/lib/bandori-events";
 
 export { BAND_COLORS } from "@/lib/calendar-character-service";
 
-export interface BandoriEventSummary {
-  eventId: number;
-  eventType: string;
-  name: {
-    jp: string;
-    cn: string | null;
-  };
-  asset: {
-    bundleName: string;
-    bannerBundleName: string | null;
-  };
-  band: string;
-  stampCharacterId: number | null;
-  timeline: {
-    jp: {
-      startAt: number;
-      endAt: number;
-    };
-    cn: {
-      startAt: number | null;
-      endAt: number | null;
-    };
-    cnSchedule?: {
-      startAt: number;
-      endAt: number;
-    };
-  };
-  musicIds: {
-    jp: number[];
-    cn: number[];
-  };
-}
+export type { BandoriEventSummary } from "@/lib/bandori-events";
 
 export interface BandoriScheduleSupplement {
   eventId: number;
@@ -169,17 +140,11 @@ export function filterEventsForMonth(events: CalendarEvent[], year: number, mont
 }
 
 export function useCalendarData() {
-  const { data: eventCatalogData, loading: eventCatalogLoading, refresh: refreshEventCatalog } = useCachedFetch<{ events: BandoriEventSummary[] }>(
-    "bandori-events-v3",
-    "/api/bandori/events",
-    (raw) => {
-      const payload = parseApiSuccessData<{ events?: BandoriEventSummary[] }>(raw) ?? raw as { events?: BandoriEventSummary[] } | null;
-      return {
-        events: Array.isArray(payload?.events) ? payload.events : [],
-      };
-    },
-    { ...LONG_CLIENT_CACHE_POLICY },
-  );
+  const {
+    events: eventCatalog,
+    loading: eventCatalogLoading,
+    refresh: refreshEventCatalog,
+  } = useBandoriEventsMaster();
   const { data: scheduleData, loading: scheduleLoading, refresh: refreshSchedule } = useCachedFetch<{ events: BandoriScheduleSupplement[] }>(
     "bandori-calendar-cn-schedules-v3",
     "/api/bandori/calendar/cn/schedules",
@@ -210,7 +175,7 @@ export function useCalendarData() {
   );
 
   const scheduleMap = new Map((scheduleData?.events ?? []).map((event) => [event.eventId, event]));
-  const allEvents = (eventCatalogData?.events ?? []).map((event) => mergeCalendarEvent(event, scheduleMap.get(event.eventId)));
+  const allEvents = eventCatalog.map((event) => mergeCalendarEvent(event, scheduleMap.get(event.eventId)));
   const allCharacters = characterData?.characters ?? [];
   const characterMap = new Map(allCharacters.map((character) => [character.characterId, character]));
 

@@ -564,6 +564,7 @@
       "requestFailed": "Request failed (HTTP {status})",
       "invalidResponse": "API response format is invalid",
       "loadFailed": "Failed to load team builder data",
+      "retry": "Retry",
       "preloadFailed": "Failed to prepare data",
       "profileLoadFailed": "Failed to load profile",
       "eventBonusLoadFailed": "Failed to load event bonuses",

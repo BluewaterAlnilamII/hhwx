@@ -102,38 +102,8 @@ export type TrackerSongGroup = {
   cutoffs: TrackerData[];
 };
 
-export type BandoriEventSummary = {
-  eventId: number;
-  eventType: string;
-  name: {
-    jp: string;
-    cn: string | null;
-  };
-  asset: {
-    bundleName: string;
-    bannerBundleName: string | null;
-  };
-  band: string;
-  stampCharacterId: number | null;
-  timeline: {
-    jp: {
-      startAt: number;
-      endAt: number;
-    };
-    cn: {
-      startAt: number | null;
-      endAt: number | null;
-    };
-    cnSchedule?: {
-      startAt: number;
-      endAt: number;
-    };
-  };
-  musicIds: {
-    jp: number[];
-    cn: number[];
-  };
-};
+export type { BandoriEventSummary } from "@/lib/bandori-events";
+import type { BandoriEventSummary } from "@/lib/bandori-events";
 
 /** eventtracker 当前只依赖活动目录摘要，不再需要单独拉详情。 */
 export type EventMetadata = BandoriEventSummary;
