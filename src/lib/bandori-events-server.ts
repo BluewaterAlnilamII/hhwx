@@ -2,7 +2,6 @@ import type { CalendarCharacter } from "@/lib/calendar-character-service";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
 import {
   BANDORI_CHARACTERS_TABLE,
-  BANDORI_EVENT_BONUSES_TABLE,
   BANDORI_EVENTS_TABLE,
   BANDORI_EVENT_SCHEDULES_CN_TABLE,
 } from "@/lib/supabase-table-names";
@@ -32,19 +31,6 @@ type ScheduleRow = {
   duration_days: number;
   has_rest_day: boolean;
   sort_order: number;
-};
-
-type BonusRow = {
-  event_id: number;
-  attributes_jsonb: unknown;
-  characters_jsonb: unknown;
-  point_percent: number | null;
-  parameter_percent: number | null;
-  performance_percent: number | null;
-  technique_percent: number | null;
-  visual_percent: number | null;
-  members_jsonb: unknown;
-  limit_breaks_jsonb: unknown;
 };
 
 type CharacterRow = {
@@ -79,19 +65,6 @@ export type BandoriEventRecord = Omit<EventRow, "music_ids_jp" | "music_ids_cn">
   duration_days: number;
   has_rest_day: boolean;
   sort_order: number;
-};
-
-export type BandoriEventBonusRecord = {
-  eventId: number;
-  attributes: unknown[];
-  characters: unknown[];
-  pointPercent: number | null;
-  parameterPercent: number | null;
-  performancePercent: number | null;
-  techniquePercent: number | null;
-  visualPercent: number | null;
-  members: unknown[];
-  limitBreaks: unknown[];
 };
 
 export type BandoriScheduleEvent = {
@@ -162,19 +135,6 @@ const SCHEDULE_SELECT_FIELDS = [
   "sort_order",
 ].join(",");
 
-const BONUS_SELECT_FIELDS = [
-  "event_id",
-  "attributes_jsonb",
-  "characters_jsonb",
-  "point_percent",
-  "parameter_percent",
-  "performance_percent",
-  "technique_percent",
-  "visual_percent",
-  "members_jsonb",
-  "limit_breaks_jsonb",
-].join(",");
-
 const CHARACTER_SELECT_FIELDS = [
   "character_id",
   "character_type",
@@ -208,15 +168,6 @@ function normalizeIntegerArray(value: unknown): number[] {
     .filter((item) => Number.isFinite(item) && item > 0);
 }
 
-function normalizeJsonArray(value: unknown): unknown[] {
-  return Array.isArray(value) ? value : [];
-}
-
-function normalizeNullableNumber(value: unknown): number | null {
-  const numeric = Number(value);
-  return Number.isFinite(numeric) ? numeric : null;
-}
-
 // cnSchedule 只在“官方国服时间还不存在，但本地已经维护了预测排期”时输出。
 // 这样 events DTO 可以同时满足 tracker 的时间窗需求，又不会在官方时间已知时
 // 额外重复一份和 timeline.cn 完全相同的数据。
@@ -233,21 +184,6 @@ function toCnSchedule(record: BandoriEventRecord): BandoriPublicEventSummary["ti
   }
 
   return undefined;
-}
-
-function toBandoriEventBonusRecord(row: BonusRow): BandoriEventBonusRecord {
-  return {
-    eventId: row.event_id,
-    attributes: normalizeJsonArray(row.attributes_jsonb),
-    characters: normalizeJsonArray(row.characters_jsonb),
-    pointPercent: normalizeNullableNumber(row.point_percent),
-    parameterPercent: normalizeNullableNumber(row.parameter_percent),
-    performancePercent: normalizeNullableNumber(row.performance_percent),
-    techniquePercent: normalizeNullableNumber(row.technique_percent),
-    visualPercent: normalizeNullableNumber(row.visual_percent),
-    members: normalizeJsonArray(row.members_jsonb),
-    limitBreaks: normalizeJsonArray(row.limit_breaks_jsonb),
-  };
 }
 
 function toCalendarCharacter(row: CharacterRow): CalendarCharacter {
@@ -287,33 +223,6 @@ export async function fetchBandoriCharacters(): Promise<CalendarCharacter[]> {
   }
 
   return ((data ?? []) as unknown as CharacterRow[]).map((row) => toCalendarCharacter(row));
-}
-
-/**
- * 单独读取活动 bonus 资源。
- *
- * 为什么拆成独立查询：
- * 当前 eventtracker、calendar、ICS 和 schedule 编辑都不依赖 bonus，
- * 如果继续在活动目录查询里顺带拉取 bandori_event_bonuses，会让每次活动目录读取都多出一份无用 payload。
- * 将其拆成独立 API 后，只有真正需要活动加成的页面才会触发这张表的读取。
- */
-export async function fetchBandoriEventBonuses(options?: { eventId?: number }): Promise<BandoriEventBonusRecord[]> {
-  const serviceClient = createServerSupabaseClient();
-  let bonusQuery = serviceClient
-    .from(BANDORI_EVENT_BONUSES_TABLE)
-    .select(BONUS_SELECT_FIELDS)
-    .order("event_id", { ascending: true });
-
-  if (options?.eventId !== undefined) {
-    bonusQuery = bonusQuery.eq("event_id", options.eventId);
-  }
-
-  const { data, error } = await bonusQuery;
-  if (error) {
-    throw new Error(error.message);
-  }
-
-  return ((data ?? []) as unknown as BonusRow[]).map((row) => toBandoriEventBonusRecord(row));
 }
 
 /**

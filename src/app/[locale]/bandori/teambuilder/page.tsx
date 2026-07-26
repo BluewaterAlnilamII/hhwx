@@ -26,6 +26,7 @@ import {
   useBandoriEventsAssetIndex,
 } from "@/hooks/useBandoriPublicAssetIndex";
 import { useBandoriCardsMaster } from "@/hooks/useBandoriCardsMaster";
+import { useBandoriEventsMaster } from "@/hooks/useBandoriEventsMaster";
 import { getApiErrorMessage, parseApiSuccessData } from "@/lib/api-contracts";
 import {
   type BandoriAssetRegion,
@@ -40,6 +41,7 @@ import {
   resolveBandoriCnScheduleWindow,
   resolveBandoriEventAssetRegion,
 } from "@/lib/bandori-event-region";
+import type { BandoriEventSummary } from "@/lib/bandori-events";
 import {
   type BandoriCardAttribute,
   type BandoriEventBonus,
@@ -202,28 +204,6 @@ type CloudGameProfileSummary = {
   cardCount: number;
   syncedAt: string | null;
   updatedAt: string;
-};
-
-type BandoriEventSummary = {
-  eventId: number;
-  eventType: string;
-  name: {
-    jp: string;
-    cn: string | null;
-  };
-  asset: {
-    bundleName: string;
-    bannerBundleName: string | null;
-  };
-  timeline: {
-    jp: { startAt: number; endAt: number };
-    cn: { startAt: number | null; endAt: number | null };
-    cnSchedule?: { startAt: number; endAt: number };
-  };
-  musicIds: {
-    jp: number[];
-    cn: number[];
-  };
 };
 
 type SongMaster = {
@@ -405,10 +385,6 @@ const AREA_ITEM_PARAMETER_LABELS: Record<"performance" | "technique" | "visual",
   technique: "Technique",
   visual: "Visual",
 };
-type EventBonusResponse = {
-  bonuses: BandoriEventBonus[];
-};
-
 type RequestJsonMessages = {
   notSignedIn: string;
   requestFailed: (status: number) => string;
@@ -2753,6 +2729,12 @@ function TeamBuilderPanel() {
   const preferredServer = useBandoriPreferredServer();
   const messages = useMessages();
   useBandoriCardsAssetIndex();
+  const {
+    events: masterEvents,
+    loaded: masterEventsLoaded,
+    error: masterEventsError,
+    refresh: refreshMasterEvents,
+  } = useBandoriEventsMaster();
   const { value: eventAssetIndex } = useBandoriEventsAssetIndex();
   const teamT = useTranslations("bandori.teamBuilder");
   const stepsT = useTranslations("bandori.teamBuilder.steps");
@@ -2865,9 +2847,6 @@ function TeamBuilderPanel() {
   const [resultChallengeCpCost, setResultChallengeCpCost] = useState<ChallengeCpCostOption>("1600");
   const [resultPlacement, setResultPlacement] = useState<ResultPlacementOption>("1");
   const [resultFestivalResult, setResultFestivalResult] = useState<FestivalResultOption>("win");
-  const [eventBonus, setEventBonus] = useState<BandoriEventBonus | null>(null);
-  const [eventBonusLoading, setEventBonusLoading] = useState(false);
-  const [eventBonusError, setEventBonusError] = useState("");
   const [addingCurrentEventCards, setAddingCurrentEventCards] = useState(false);
   const [temporaryCardActionError, setTemporaryCardActionError] = useState("");
   const [temporaryCardActionNotice, setTemporaryCardActionNotice] = useState("");
@@ -2899,6 +2878,9 @@ function TeamBuilderPanel() {
     }
     return recommendedEvent;
   }, [data.events, recommendedEvent, selectedEventId]);
+  const eventBonus = selectedEvent?.bonus ?? null;
+  const eventBonusLoading = false;
+  const eventBonusError = "";
   const selectedEventType = useMemo<BandoriTeamSearchEventType>(() => (
     selectedEvent ? eventTypeFromValue(selectedEvent.eventType) : "none"
   ), [selectedEvent]);
@@ -3449,18 +3431,25 @@ function TeamBuilderPanel() {
   }, [calculationStartedAt, submitting]);
 
   const loadData = useCallback(async () => {
+    if (!masterEventsLoaded && masterEventsError === null) {
+      return;
+    }
+    if (masterEvents.length === 0) {
+      setLoading(false);
+      setError(masterEventsError?.message || errorsT("loadFailed"));
+      return;
+    }
     setLoading(true);
     setError("");
     try {
-      const [cloudProfiles, localProfiles, eventsResponse, songsResponse, charactersResponse, skillsResponse] = await Promise.all([
+      const [cloudProfiles, localProfiles, songsResponse, charactersResponse, skillsResponse] = await Promise.all([
         requestJson<CloudGameProfileSummary[]>("/api/account/game-profiles", undefined, true, requestMessages),
         listLocalGameProfiles(),
-        requestJson<{ events: BandoriEventSummary[] }>("/api/bandori/events", undefined, false, requestMessages),
         requestJson<{ payload: Record<string, SongMaster | undefined> }>("/api/bandori/master/songs", undefined, false, requestMessages),
         requestJson<{ payload: Record<string, CharacterMaster | undefined> }>("/api/bandori/master/characters", undefined, false, requestMessages),
         requestJson<{ payload: Record<string, SkillMaster | undefined> }>("/api/bandori/master/skills", undefined, false, requestMessages),
       ]);
-      const supportedEvents = eventsResponse.events.filter((event) => SUPPORTED_EVENT_TYPES.has(event.eventType));
+      const supportedEvents = masterEvents.filter((event) => SUPPORTED_EVENT_TYPES.has(event.eventType));
       setData({
         cloudProfiles,
         localProfiles,
@@ -3478,7 +3467,17 @@ function TeamBuilderPanel() {
     } finally {
       setLoading(false);
     }
-  }, [errorsT, requestMessages]);
+  }, [errorsT, masterEvents, masterEventsError, masterEventsLoaded, requestMessages]);
+
+  const retryLoadData = useCallback(() => {
+    setError("");
+    setLoading(true);
+    if (masterEvents.length === 0) {
+      refreshMasterEvents();
+      return;
+    }
+    void loadData();
+  }, [loadData, masterEvents.length, refreshMasterEvents]);
 
   useEffect(() => {
     void loadData();
@@ -3497,7 +3496,7 @@ function TeamBuilderPanel() {
       ...current,
       master: current.master === "ready" ? "ready" : "loading",
       chart: canPreloadCharts ? "loading" : "idle",
-      eventBonus: selectedEvent ? "loading" : "ready",
+      eventBonus: "ready",
       message: "",
     }));
 
@@ -3507,7 +3506,6 @@ function TeamBuilderPanel() {
       messages: workerMessages,
       song: !isMedleyEvent && songId ? { songId: Number(songId), difficulty } : undefined,
       songs: preloadSongs,
-      event: selectedEvent ? { eventId: selectedEvent.eventId } : undefined,
     })
       .then((response) => {
         if (!active) {
@@ -3518,7 +3516,7 @@ function TeamBuilderPanel() {
             ...current,
             master: "ready",
             chart: canPreloadCharts ? "ready" : "idle",
-            eventBonus: selectedEvent ? "ready" : "ready",
+            eventBonus: "ready",
             message: "",
           }));
         } else {
@@ -3526,7 +3524,7 @@ function TeamBuilderPanel() {
             ...current,
             master: current.master === "ready" ? "ready" : "error",
             chart: canPreloadCharts ? "error" : "idle",
-            eventBonus: selectedEvent ? "error" : "ready",
+            eventBonus: "ready",
             message: response.error,
           }));
         }
@@ -3539,7 +3537,7 @@ function TeamBuilderPanel() {
           ...current,
           master: current.master === "ready" ? "ready" : "error",
           chart: canPreloadCharts ? "error" : "idle",
-          eventBonus: selectedEvent ? "error" : "ready",
+          eventBonus: "ready",
           message: preloadError instanceof Error ? preloadError.message : errorsT("preloadFailed"),
         }));
       });
@@ -3547,7 +3545,7 @@ function TeamBuilderPanel() {
     return () => {
       active = false;
     };
-  }, [difficulty, errorsT, isMedleyEvent, medleyDifficulties, medleySongIds, postTeamSearchWorkerMessage, selectedEvent, songId, workerMessages]);
+  }, [difficulty, errorsT, isMedleyEvent, medleyDifficulties, medleySongIds, postTeamSearchWorkerMessage, songId, workerMessages]);
 
   useEffect(() => {
     if (!profileChoice) {
@@ -3647,43 +3645,6 @@ function TeamBuilderPanel() {
       setSongId(eventSongOptions[0].id);
     }
   }, [eventSongOptions, shouldLimitSongsToEventSongs, songId]);
-
-  useEffect(() => {
-    if (!selectedEvent) {
-      setEventBonus(null);
-      setEventBonusLoading(false);
-      setEventBonusError("");
-      return;
-    }
-
-    const controller = new AbortController();
-    setEventBonusLoading(true);
-    setEventBonusError("");
-    void requestJson<EventBonusResponse>(
-      `/api/bandori/events/bonuses?event=${selectedEvent.eventId}`,
-      { signal: controller.signal },
-      false,
-      requestMessages,
-    )
-      .then((payload) => {
-        if (!controller.signal.aborted) {
-          setEventBonus(payload.bonuses[0] ?? null);
-        }
-      })
-      .catch((bonusError) => {
-        if (!controller.signal.aborted) {
-          setEventBonus(null);
-          setEventBonusError(bonusError instanceof Error ? bonusError.message : errorsT("eventBonusLoadFailed"));
-        }
-      })
-      .finally(() => {
-        if (!controller.signal.aborted) {
-          setEventBonusLoading(false);
-        }
-      });
-
-    return () => controller.abort();
-  }, [errorsT, requestMessages, selectedEvent]);
 
   useEffect(() => {
     if (selectedSongDifficulties.length > 0 && !selectedSongDifficulties.includes(difficulty)) {
@@ -3869,9 +3830,9 @@ function TeamBuilderPanel() {
         messages: workerMessages,
         profilePayload,
         event: {
-          eventId: selectedEvent ? selectedEvent.eventId : undefined,
           eventType: selectedEventType,
           formula: Number(eventFormula) as 0 | 1 | 2,
+          baseBonus: eventBonus,
           bonusOverride: undefined,
         },
         live: {
@@ -3956,7 +3917,14 @@ function TeamBuilderPanel() {
     return <AccountLoadingState message={teamT("loadingPage")} />;
   }
   if (error) {
-    return <AccountErrorState message={error} />;
+    return (
+      <div className="space-y-4">
+        <AccountErrorState message={error} />
+        <button type="button" className="hhwx-accent-button" onClick={retryLoadData}>
+          {errorsT("retry")}
+        </button>
+      </div>
+    );
   }
 
   const editingTemporaryCardExists = editingTemporaryCard

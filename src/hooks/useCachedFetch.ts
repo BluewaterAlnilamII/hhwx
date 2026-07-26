@@ -95,7 +95,7 @@ export function useCachedFetch<T>(
   url: string | null,
   transform?: (raw: unknown) => T,
   options?: { refreshOnVisible?: boolean; staleTimeMs?: number; merge?: (incoming: T, existing: T) => T }
-): { data: T | null; loading: boolean; refreshing: boolean; refresh: () => void } {
+): { data: T | null; loading: boolean; refreshing: boolean; error: Error | null; refresh: () => void } {
   const refreshOnVisible = options?.refreshOnVisible ?? true;
 
   // 懒初始化：组件首次渲染即可从缓存读取上一次的数据
@@ -112,6 +112,7 @@ export function useCachedFetch<T>(
   const data = selectCachedFetchData(visibleData, key);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<Error | null>(null);
 
   // 使用 ref 持有最新值，避免 doFetch 的 useCallback 因依赖数组为空而产生 stale closure
   const keyRef = useRef(key);
@@ -146,6 +147,7 @@ export function useCachedFetch<T>(
     const currentKey = keyRef.current;
     const currentUrl = urlRef.current;
     if (!currentKey || !currentUrl) return;
+    setError(null);
 
     if (silent) {
       const activeCount = (activeSilentFetchesRef.current.get(currentKey) ?? 0) + 1;
@@ -176,6 +178,9 @@ export function useCachedFetch<T>(
       })
       .catch((err) => {
         console.error(`[useCachedFetch] ${currentKey}:`, err);
+        if (keyRef.current === currentKey) {
+          setError(err instanceof Error ? err : new Error(String(err)));
+        }
       })
       .finally(() => {
         if (silent) {
@@ -204,6 +209,7 @@ export function useCachedFetch<T>(
       if (!key || !url) {
         setVisibleData(null);
         setLoading(false);
+        setError(null);
         return;
       }
 
@@ -243,7 +249,7 @@ export function useCachedFetch<T>(
   // mode so browser stale-while-revalidate can return immediately.
   const refresh = useCallback(() => doFetch(true, "no-cache"), [doFetch]);
 
-  return { data, loading, refreshing, refresh };
+  return { data, loading, refreshing, error, refresh };
 }
 
 /**

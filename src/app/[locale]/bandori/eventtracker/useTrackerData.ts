@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { supabase } from "@/lib/supabase";
 import { useCachedFetch, updateFetchCache } from "@/hooks/useCachedFetch";
+import { useBandoriEventsMaster } from "@/hooks/useBandoriEventsMaster";
 import { parseApiSuccessData } from "@/lib/api-contracts";
 import {
   hasBandoriOfficialCnEventContent,
@@ -265,19 +266,9 @@ export function useTrackerData(
   const [liveSongGroupsByKey, setLiveSongGroupsByKey] = useState<Record<string, TrackerSongGroup[]>>({});
   const [liveHasResultByKey, setLiveHasResultByKey] = useState<Record<string, boolean>>({});
 
-  // Event metadata is stable within a tracker session. Live tracker data uses
+  // Event metadata is shared for the full SPA session. Live tracker data uses
   // a separate foreground refresh policy below.
-  const { data: eventCatalog } = useCachedFetch<{ events: BandoriEventSummary[] }>(
-    "bandori-events-v3",
-    "/api/bandori/events",
-    (data: unknown) => {
-      const payload = parseApiSuccessData<{ events?: BandoriEventSummary[] }>(data) ?? data as { events?: BandoriEventSummary[] } | null;
-      return {
-        events: Array.isArray(payload?.events) ? payload.events : [],
-      };
-    },
-    { ...LONG_CLIENT_CACHE_POLICY },
-  );
+  const { events: eventCatalog } = useBandoriEventsMaster();
 
   const { data: holidayData } = useCachedFetch<ChinaMainlandHolidayCalendarData | null>(
     "bandori-calendar-cn-holidays",
@@ -287,11 +278,11 @@ export function useTrackerData(
   );
 
   const eventMetaMap = useMemo(() => {
-    return new Map<number, BandoriEventSummary>((eventCatalog?.events ?? []).map((event) => [event.eventId, event]));
+    return new Map<number, BandoriEventSummary>(eventCatalog.map((event) => [event.eventId, event]));
   }, [eventCatalog]);
 
   const allEvents = useMemo<MinimalEvent[]>(() => {
-    return (eventCatalog?.events ?? [])
+    return eventCatalog
       .map((event) => {
         const scheduleWindow = resolveBandoriCnScheduleWindow(event);
 

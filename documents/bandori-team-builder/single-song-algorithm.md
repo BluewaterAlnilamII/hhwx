@@ -62,8 +62,8 @@ The search depends on:
   character mission bonuses;
 - master data: cards, characters, bands, attributes, skills, area items, songs,
   and charts;
-- event bonus data from `bandori_event_bonuses`, optionally merged with a manual
-  `bonusOverride`;
+- event bonus data embedded in the shared Events master API records, optionally
+  merged with a manual `bonusOverride`;
 - request parameters: song, difficulty, event, live type, target, perfect rate,
   room power, external multi-live skills, and default display values for Live
   Boost or CP.

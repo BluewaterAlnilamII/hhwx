@@ -82,10 +82,6 @@ type OwnedCardParameterPreferences = {
   maxSkillLevelRarityThreshold: CardPreferenceRarityThreshold;
 };
 
-type EventBonusResponse = {
-  bonuses: BandoriEventBonus[];
-};
-
 export type TeamSearchWorkerMessages = {
   notReady: string;
   requestFailed: string;
@@ -138,9 +134,9 @@ type TeamSearchWorkerSearchRequest = TeamSearchWorkerMessageEnvelope & {
   requestId: string;
   profilePayload: UserGameProfilePayload;
   event: {
-    eventId?: number;
     eventType: BandoriTeamSearchEventType;
     formula: 0 | 1 | 2;
+    baseBonus?: BandoriEventBonus | null;
     bonusOverride?: Partial<BandoriEventBonus>;
   };
   live: {
@@ -187,9 +183,6 @@ export type TeamSearchWorkerPreloadRequest = TeamSearchWorkerMessageEnvelope & {
     songId: number;
     difficulty: BandoriTeamSearchDifficulty;
   }>;
-  event?: {
-    eventId?: number;
-  };
 };
 
 export type TeamSearchWorkerRequest = TeamSearchWorkerSearchRequest;
@@ -683,10 +676,6 @@ async function preloadSearchData(request: TeamSearchWorkerPreloadRequest): Promi
     preloadRequests.push(requestJson<{ chart: BestdoriChartEntity[] }>(`/api/bandori/charts/${songId}/${song.difficulty}`, messages));
   }
 
-  if (request.event?.eventId) {
-    preloadRequests.push(requestJson<EventBonusResponse>(`/api/bandori/events/bonuses?event=${request.event.eventId}`, messages));
-  }
-
   await Promise.all(preloadRequests);
 }
 
@@ -712,16 +701,13 @@ async function runSearch(
         messages,
       ),
     ];
-  const [cachedCards, charactersPayload, skillsPayload, areaItemsPayload, songsPayload, chartPayloads, eventBonuses] = await Promise.all([
+  const [cachedCards, charactersPayload, skillsPayload, areaItemsPayload, songsPayload, chartPayloads] = await Promise.all([
     requireCachedJson<CachedCardsResponse>("/api/bandori/master/cards", messages.cardData, messages),
     requireCachedJson<MasterResponse<Record<string, { bandId?: number | null } | undefined>>>("/api/bandori/master/characters/main", messages.characterData, messages),
     requireCachedJson<MasterResponse<Record<string, BestdoriSkillMaster | undefined>>>("/api/bandori/master/skills", messages.skillData, messages),
     requireCachedJson<MasterResponse<Record<string, BestdoriAreaItemMaster | undefined>>>("/api/bandori/master/areaItems", messages.areaItemData, messages),
     requireCachedJson<MasterResponse<Record<string, BestdoriSongMaster | undefined>>>("/api/bandori/master/songs", messages.songData, messages),
     Promise.all(chartRequests),
-    request.event.eventId
-      ? requireCachedJson<EventBonusResponse>(`/api/bandori/events/bonuses?event=${request.event.eventId}`, messages.eventBonus, messages).then((response) => response.bonuses)
-      : Promise.resolve([]),
   ]);
   const server = request.profilePayload.bestdoriProfile.server;
   const cardsById = getCardsForServer(normalizeCachedCardsResponse(cachedCards), server);
@@ -760,7 +746,7 @@ async function runSearch(
       level: item.level,
     }
   ));
-  const eventBonus = mergeEventBonus(eventBonuses[0] ?? null, request.event.bonusOverride);
+  const eventBonus = mergeEventBonus(request.event.baseBonus ?? null, request.event.bonusOverride);
 
   if (request.event.eventType === "medley") {
     if (medleySongs.length !== 3) {

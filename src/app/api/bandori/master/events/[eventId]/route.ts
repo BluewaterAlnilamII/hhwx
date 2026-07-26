@@ -1,6 +1,6 @@
 import {
+  FAST_MUTABLE_HTTP_CACHE_POLICY,
   NO_STORE_HTTP_CACHE_POLICY,
-  SNAPSHOT_HTTP_CACHE_POLICY,
   withHttpCachePolicy,
 } from "@/lib/api-cache";
 import { jsonError, jsonRouteError, jsonSuccess } from "@/lib/api-response";
@@ -41,7 +41,7 @@ export async function GET(request: Request, context: RouteContext) {
     }
 
     return jsonSuccess(result, {
-      headers: withHttpCachePolicy(SNAPSHOT_HTTP_CACHE_POLICY),
+      headers: withHttpCachePolicy(FAST_MUTABLE_HTTP_CACHE_POLICY),
     });
   } catch (error) {
     console.error("Bandori master event detail API error:", error);

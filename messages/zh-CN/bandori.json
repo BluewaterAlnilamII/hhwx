@@ -564,6 +564,7 @@
       "requestFailed": "请求失败（HTTP {status}）",
       "invalidResponse": "接口返回格式无效",
       "loadFailed": "读取组队计算器数据失败",
+      "retry": "重试",
       "preloadFailed": "准备数据失败",
       "profileLoadFailed": "读取档案失败",
       "eventBonusLoadFailed": "读取活动加成失败",
