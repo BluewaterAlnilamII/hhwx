@@ -6,16 +6,16 @@ import {
 import { jsonRouteError, jsonSuccess } from "@/lib/api-response";
 import {
   readBandoriMasterPath,
-  redirectBandoriMasterSearch,
+  rejectUnsupportedBandoriMasterQuery,
 } from "@/lib/bandori-master-api";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 export async function GET(request: Request) {
-  const redirect = redirectBandoriMasterSearch(request);
-  if (redirect) {
-    return redirect;
+  const rejection = rejectUnsupportedBandoriMasterQuery(request);
+  if (rejection) {
+    return rejection;
   }
 
   try {

@@ -13,6 +13,8 @@ import {
   type BestdoriMasterDatasetKey,
 } from "@/lib/bestdori-master-data";
 import { ApiRouteError } from "@/lib/api-contracts";
+import { NO_STORE_HTTP_CACHE_POLICY, withHttpCachePolicy } from "@/lib/api-cache";
+import { jsonError } from "@/lib/api-response";
 import {
   BANDORI_MUSIC_METADATA_REVALIDATE_SECONDS,
   fetchBandoriMusicIndex,
@@ -45,14 +47,17 @@ function shouldUseArtifacts(): boolean {
   return process.env.BANDORI_MASTER_SOURCE === "artifacts";
 }
 
-export function redirectBandoriMasterSearch(request: Request): Response | null {
-  const requestUrl = new URL(request.url);
-  if (!requestUrl.search) {
+export function rejectUnsupportedBandoriMasterQuery(request: Request): Response | null {
+  if (!new URL(request.url).search) {
     return null;
   }
 
-  requestUrl.search = "";
-  return Response.redirect(requestUrl, 308);
+  return jsonError(
+    400,
+    "BANDORI_MASTER_QUERY_INVALID",
+    "Query parameters are not supported for this Bandori master endpoint",
+    { headers: withHttpCachePolicy(NO_STORE_HTTP_CACHE_POLICY) },
+  );
 }
 
 export function normalizeBandoriMasterServer(value: string): BandoriMasterArtifactServer | null {

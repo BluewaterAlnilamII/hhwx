@@ -1,5 +1,7 @@
 # Bandori Asset CDN 契约
 
+Events/Cards/Stamps API 与 index 的统一约定见 [bandori-master-asset-contract.zh-CN.md](bandori-master-asset-contract.zh-CN.md)。
+
 English version: [bandori-asset-cdn-setup.md](bandori-asset-cdn-setup.md)
 
 本文档说明 HHWX Web 应用对 Bandori 静态资源的公开 URL 契约。它不是 tracker 设置指南。

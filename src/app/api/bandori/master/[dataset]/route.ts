@@ -7,7 +7,7 @@ import {
 import { jsonError, jsonRouteError, jsonSuccess } from "@/lib/api-response";
 import {
   readBandoriMasterDataset,
-  redirectBandoriMasterSearch,
+  rejectUnsupportedBandoriMasterQuery,
 } from "@/lib/bandori-master-api";
 import {
   readBandoriCardsApiDataset,
@@ -70,9 +70,9 @@ export async function GET(request: Request, context: RouteContext) {
     );
   }
   if (serverQuery.status === "unsupported") {
-    const redirect = redirectBandoriMasterSearch(request);
-    if (redirect) {
-      return redirect;
+    const rejection = rejectUnsupportedBandoriMasterQuery(request);
+    if (rejection) {
+      return rejection;
     }
   }
 

@@ -11,7 +11,7 @@ import {
 import { parseBandoriCardServerQuery } from "@/lib/bandori-card-server-extensions";
 import {
   BANDORI_MASTER_ID_PATTERN,
-  redirectBandoriMasterSearch,
+  rejectUnsupportedBandoriMasterQuery,
 } from "@/lib/bandori-master-api";
 
 export const dynamic = "force-dynamic";
@@ -34,9 +34,9 @@ export async function GET(request: Request, context: RouteContext) {
     );
   }
   if (serverQuery.status === "unsupported") {
-    const redirect = redirectBandoriMasterSearch(request);
-    if (redirect) {
-      return redirect;
+    const rejection = rejectUnsupportedBandoriMasterQuery(request);
+    if (rejection) {
+      return rejection;
     }
   }
 

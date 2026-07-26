@@ -7,7 +7,7 @@ import { jsonError, jsonRouteError, jsonSuccess } from "@/lib/api-response";
 import {
   BANDORI_MASTER_ID_PATTERN,
   readBandoriMasterRecord,
-  redirectBandoriMasterSearch,
+  rejectUnsupportedBandoriMasterQuery,
 } from "@/lib/bandori-master-api";
 
 export const dynamic = "force-dynamic";
@@ -20,9 +20,9 @@ type RouteContext = {
 };
 
 export async function GET(request: Request, context: RouteContext) {
-  const redirect = redirectBandoriMasterSearch(request);
-  if (redirect) {
-    return redirect;
+  const rejection = rejectUnsupportedBandoriMasterQuery(request);
+  if (rejection) {
+    return rejection;
   }
 
   const { characterId } = await context.params;
