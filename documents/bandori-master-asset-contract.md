@@ -2,7 +2,7 @@
 
 Chinese version: [bandori-master-asset-contract.zh-CN.md](bandori-master-asset-contract.zh-CN.md).
 
-This document is the cross-dataset contract for the Events, Cards, and Stamps data exposed by HHWX. Dataset-specific fields may differ, but their transport, regional slots, publication, and asset lookup rules should follow this matrix.
+This document is the cross-dataset contract for the Events, Cards, Stamps, and Music data exposed by HHWX. Dataset-specific fields may differ, but their transport, regional slots, publication, and asset lookup rules should follow this matrix.
 
 ## Common Rules
 
@@ -10,7 +10,7 @@ This document is the cross-dataset contract for the Events, Cards, and Stamps da
 - Regional arrays always have four slots in `jp`, `en`, `tw`, `cn` order. API and index JSON use these names for keyed regional maps; numeric `0`, `1`, `2`, `3` values are only accepted by the Cards `server` query and user/profile settings.
 - Missing regional strings use `""`. Fields whose domain explicitly permits an unknown scalar, such as Stamp `characterId`, use `null`. Missing optional structures are omitted.
 - Master APIs contain gameplay metadata. Public asset indexes contain content hashes needed to construct CDN URLs. Storage pointers, pack keys, generations, source hashes, and private object layouts are never exposed by the APIs.
-- Mutable APIs and indexes use cached snapshots. Hash-named media objects are immutable for one year. Readers fail closed instead of falling back to Bestdori or legacy public artifacts.
+- Mutable APIs and indexes use cached snapshots. Every indexed media object, including Music media and chart JSON, is named by its SHA-256 and immutable for one year. Readers fail closed instead of falling back to Bestdori or legacy public artifacts.
 - Unsupported query parameters return `400 BANDORI_MASTER_QUERY_INVALID`; they are never redirected or silently ignored.
 
 ## Dataset Matrix
@@ -20,6 +20,7 @@ This document is the cross-dataset contract for the Events, Cards, and Stamps da
 | Events | `/api/bandori/master/events` | `/api/bandori/master/events/{eventId}` | `/bandori/events/index.json` | numeric event ID | four-slot master fields and local `stampRewardId`; scalar `stampCharacterId`; four-slot banner/team images | fast-mutable API; snapshot index |
 | Cards | `/api/bandori/master/cards` | `/api/bandori/master/cards/{cardId}` | `/bandori/cards/index.json` | `resourceSetName` | four-slot text plus explicit `serverExtensions`; images are shared by content hash | snapshot API and index |
 | Stamps | `/api/bandori/master/stamps` | none | `/bandori/stamps/index.json` | numeric stamp ID | four-slot `imageName`, `characterId`, images, voices, and Changed variants | snapshot API and index |
+| Music | not yet unified | not yet unified | `/bandori/music/index.json` | numeric music ID | one shared media set; metadata uses numeric difficulty keys `0` through `4` | snapshot index |
 
 The Cards list is intentionally downloaded as one reusable SPA-session map. Its optional `server=0|1|2|3` materialization is the only supported master query. Event `cnSchedule` remains an optional overlay because it can change independently of the immutable event snapshot.
 
@@ -32,6 +33,7 @@ Public indexes are serialized for deterministic hashing and human review:
 - root fields: `schemaVersion`, `updatedAt`, then the dataset map;
 - Cards resources: standard names first, then `bili_` names;
 - Stamps root: `schemaVersion`, `updatedAt`, `stamps`, `changedStampGroups`;
+- Music songs: `files`, `notes`, `bpm`, `length`; file fields are `jacket`, `thumb`, optional `audio`, then `charts`;
 - keyed server maps: `jp`, `en`, `tw`, `cn`;
 - numeric IDs: ascending numeric order.
 

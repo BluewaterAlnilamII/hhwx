@@ -1,21 +1,17 @@
+import { unstable_cache } from "next/cache";
 import { SNAPSHOT_HTTP_CACHE_POLICY } from "@/lib/api-cache";
+import {
+  BANDORI_MUSIC_INDEX_KEY,
+  buildBandoriPublicAssetUrl,
+  parseBandoriMusicAssetIndex,
+  type BandoriAudioAssetDescriptor,
+  type BandoriJsonAssetDescriptor,
+  type BandoriMusicAssetIndex,
+  type BandoriPngAssetDescriptor,
+} from "@/lib/bandori-public-asset-index";
+import { fetchBandoriPublicAssetIndexJson } from "@/lib/bandori-public-asset-index-server";
 
-export type BandoriMusicIndexSong = {
-  musicId?: number;
-  sourceServer?: string;
-  manifest?: string;
-  difficulties?: string[];
-  notes?: Record<string, number>;
-  bgmId?: string;
-  bgmFile?: string;
-};
-
-export type BandoriMusicIndex = {
-  schemaVersion?: string;
-  generatedAt?: string;
-  baselineServer?: string;
-  songs?: BandoriMusicIndexSong[];
-};
+export type BandoriMusicIndex = BandoriMusicAssetIndex;
 
 export const BANDORI_MUSIC_METADATA_REVALIDATE_SECONDS =
   SNAPSHOT_HTTP_CACHE_POLICY.nextRevalidateSeconds ?? 1800;
@@ -33,23 +29,28 @@ export function getBandoriMusicCdnBaseUrl(): string | null {
   );
 }
 
-export function buildBandoriMusicAssetUrl(path: string, baseUrl = getBandoriMusicCdnBaseUrl()): string {
-  if (!baseUrl) {
+export function buildBandoriMusicAssetUrl(
+  descriptor: Pick<
+    BandoriPngAssetDescriptor | BandoriAudioAssetDescriptor | BandoriJsonAssetDescriptor,
+    "key"
+  >,
+  baseUrl = getBandoriMusicCdnBaseUrl(),
+): string {
+  const url = buildBandoriPublicAssetUrl(descriptor, baseUrl);
+  if (!url) {
     throw new Error("Bandori music CDN base URL is not configured");
   }
-
-  return `${baseUrl}/bandori/music/${path.replace(/^\/+/u, "")}`;
+  return url;
 }
 
-export async function fetchBandoriMusicIndex(baseUrl = getBandoriMusicCdnBaseUrl()): Promise<BandoriMusicIndex> {
-  const url = buildBandoriMusicAssetUrl("index.json", baseUrl);
-  const response = await fetch(url, {
-    next: { revalidate: BANDORI_MUSIC_METADATA_REVALIDATE_SECONDS },
-  });
-
-  if (!response.ok) {
-    throw new Error(`Bandori music index fetch failed: HTTP ${response.status} ${url}`);
-  }
-
-  return response.json() as Promise<BandoriMusicIndex>;
+export async function fetchBandoriMusicIndex(): Promise<BandoriMusicIndex> {
+  return parseBandoriMusicAssetIndex(
+    await fetchBandoriPublicAssetIndexJson(BANDORI_MUSIC_INDEX_KEY),
+  );
 }
+
+export const readBandoriMusicIndex = unstable_cache(
+  fetchBandoriMusicIndex,
+  ["bandori-public-music-index:v2"],
+  { revalidate: BANDORI_MUSIC_METADATA_REVALIDATE_SECONDS },
+);

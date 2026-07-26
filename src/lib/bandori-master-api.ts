@@ -16,9 +16,7 @@ import { ApiRouteError } from "@/lib/api-contracts";
 import { NO_STORE_HTTP_CACHE_POLICY, withHttpCachePolicy } from "@/lib/api-cache";
 import { jsonError } from "@/lib/api-response";
 import {
-  BANDORI_MUSIC_METADATA_REVALIDATE_SECONDS,
-  fetchBandoriMusicIndex,
-  getBandoriMusicCdnBaseUrl,
+  readBandoriMusicIndex,
   type BandoriMusicIndex,
 } from "@/lib/bandori-music-assets";
 
@@ -370,8 +368,8 @@ function readBestdoriSongNotesById(bestdoriSongsPayload: unknown): SongNotesById
 
 function readAssetSongNotesById(index: BandoriMusicIndex): SongNotesById {
   const notesById: SongNotesById = {};
-  for (const song of index.songs ?? []) {
-    const musicId = toPositiveInteger(song.musicId);
+  for (const [recordId, song] of Object.entries(index.songs)) {
+    const musicId = toPositiveInteger(recordId);
     const notes = normalizeSongNotes(song.notes);
     if (musicId !== null && notes) {
       notesById[String(musicId)] = notes;
@@ -427,7 +425,7 @@ async function normalizeArtifactSongsResult(
   if (notesSource === "assets") {
     let assetNotesById: SongNotesById;
     try {
-      assetNotesById = readAssetSongNotesById(await readBandoriMusicIndex(getBandoriMusicCdnBaseUrl()));
+      assetNotesById = readAssetSongNotesById(await readBandoriMusicIndex());
     } catch (error) {
       if (!allowBestdoriSongNotesFallback()) {
         throw new ApiRouteError(
@@ -562,12 +560,6 @@ const readBestdoriRawDataset = unstable_cache(
   }),
   ["bandori-master-api-bestdori-raw-dataset:v1"],
   { revalidate: 86400 },
-);
-
-const readBandoriMusicIndex = unstable_cache(
-  async (baseUrl: string | null) => fetchBandoriMusicIndex(baseUrl),
-  ["bandori-master-api-music-index:v1"],
-  { revalidate: BANDORI_MUSIC_METADATA_REVALIDATE_SECONDS },
 );
 
 const readBestdoriPath = unstable_cache(

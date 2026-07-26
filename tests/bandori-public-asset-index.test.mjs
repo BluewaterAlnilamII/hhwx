@@ -8,10 +8,13 @@ import {
   lookupBandoriCardImage,
   lookupBandoriEventBanner,
   lookupBandoriEventTeamIcon,
+  lookupBandoriMusicChart,
   parseBandoriCardsAssetIndex,
   parseBandoriEventsAssetIndex,
+  parseBandoriMusicAssetIndex,
   parseBandoriStampsAssetIndex,
 } from "../src/lib/bandori-public-asset-index.ts";
+import { buildBandoriMusicAssetUrl } from "../src/lib/bandori-music-assets.ts";
 import {
   getBandoriStampCatalogItemsForRegion,
   parseBandoriStampMasterApiResponse,
@@ -38,6 +41,10 @@ const hashes = {
   changedStampImage: "e".repeat(64),
   changedStampAudio: "f".repeat(64),
   changedStampManifest: "0".repeat(64),
+  musicJacket: "c".repeat(64),
+  musicThumb: "d".repeat(64),
+  musicAudio: "e".repeat(64),
+  musicChart: "f".repeat(64),
 };
 
 function imageSet(entries) {
@@ -118,6 +125,26 @@ function stampsIndex() {
       tw: {},
       cn: {
         "55": hashes.changedStampManifest,
+      },
+    },
+  };
+}
+
+function musicIndex() {
+  return {
+    schemaVersion: 2,
+    updatedAt: "2026-07-27T00:00:00Z",
+    songs: {
+      "1": {
+        files: {
+          jacket: hashes.musicJacket,
+          thumb: hashes.musicThumb,
+          audio: hashes.musicAudio,
+          charts: { "3": hashes.musicChart },
+        },
+        notes: { "3": 459 },
+        bpm: { "3": [{ bpm: 185, start: 0, end: 119.995 }] },
+        length: 119.995,
       },
     },
   };
@@ -375,6 +402,53 @@ test("Stamps keep audio-only Changed resources indexed but hidden from the curre
   }
 });
 
+test("Music schema 2 reconstructs content-addressed asset keys", () => {
+  const parsed = parseBandoriMusicAssetIndex(musicIndex());
+
+  assert.deepEqual(parsed.songs["1"].files.jacket, {
+    key: `bandori/music/jackets/${hashes.musicJacket}.png`,
+    sha256: hashes.musicJacket,
+  });
+  assert.deepEqual(parsed.songs["1"].files.audio, {
+    key: `bandori/music/audio/${hashes.musicAudio}.mp3`,
+    sha256: hashes.musicAudio,
+  });
+  assert.deepEqual(parsed.songs["1"].files.charts["3"], {
+    key: `bandori/music/charts/${hashes.musicChart}.json`,
+    sha256: hashes.musicChart,
+  });
+  assert.equal(
+    lookupBandoriMusicChart(parsed, 1, "expert")?.sha256,
+    hashes.musicChart,
+  );
+  assert.equal(lookupBandoriMusicChart(parsed, 1, "special"), null);
+  assert.equal(parsed.songs["1"].notes["3"], 459);
+});
+
+test("Music parser rejects legacy arrays and incomplete chart metadata", () => {
+  const legacy = musicIndex();
+  legacy.schemaVersion = "hhwx-bandori-music-index-v1";
+  legacy.songs = [{ musicId: 1 }];
+  assert.throws(() => parseBandoriMusicAssetIndex(legacy), /Unsupported/u);
+
+  const missingNotes = musicIndex();
+  delete missingNotes.songs["1"].notes["3"];
+  assert.throws(
+    () => parseBandoriMusicAssetIndex(missingNotes),
+    /coverage does not match/u,
+  );
+});
+
+test("Music content-addressed asset URLs need no query-string cache version", () => {
+  assert.equal(
+    buildBandoriMusicAssetUrl(
+      { key: `bandori/music/charts/${hashes.musicChart}.json` },
+      "https://assets.example.test",
+    ),
+    `https://assets.example.test/bandori/music/charts/${hashes.musicChart}.json`,
+  );
+});
+
 test("Changed Stamp master metadata and assets share a stable positional identity", () => {
   const previousBaseUrl = process.env.NEXT_PUBLIC_BANDORI_ASSET_CDN_BASE_URL;
   process.env.NEXT_PUBLIC_BANDORI_ASSET_CDN_BASE_URL = "https://assets.example.test";
@@ -466,6 +540,10 @@ test("public asset URLs append reconstructed descriptor keys to the browser CDN 
   assert.equal(
     buildBandoriPublicAssetIndexUrl("events", "https://assets.example.test"),
     "https://assets.example.test/bandori/events/index.json",
+  );
+  assert.equal(
+    buildBandoriPublicAssetIndexUrl("music", "https://assets.example.test"),
+    "https://assets.example.test/bandori/music/index.json",
   );
   assert.equal(
     buildBandoriPublicAssetIndexUrl("stamps", "https://assets.example.test"),

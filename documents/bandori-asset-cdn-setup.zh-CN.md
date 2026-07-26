@@ -24,13 +24,14 @@ BANDORI_CHART_SOURCE=bestdori
 BANDORI_SONG_NOTES_SOURCE=bestdori
 # BANDORI_SONG_NOTES_SOURCE=assets
 # BANDORI_SONG_NOTES_BESTDORI_FALLBACK=0
+# BANDORI_ASSET_R2_BUCKET=your_public_asset_bucket
 # BANDORI_PRIVATE_R2_BUCKET=hhwx-private
 # BANDORI_STAMPS_API_LOCAL_STORE_ROOT=/path/to/stamps/store
 ```
 
 `NEXT_PUBLIC_BANDORI_ASSET_CDN_BASE_URL` 会暴露给浏览器。`BANDORI_ASSET_CDN_BASE_URL` 可供服务端代码使用。大多数部署中两者应指向同一个资源主机。Cards、Events 与 Stamps 资源通过下文各自的公开 index 发现；浏览器使用正常 HTTP 缓存且不携带凭据读取这些 index。Stamp 资源使用同一个 Bandori asset CDN 下的 `/bandori/stamps` 路径；没有单独的 stamp CDN 配置。Web 应用通过 `/api/bandori/master/stamps` 读取 Stamp master 元数据，直接从公开 CDN 读取 `bandori/stamps/index.json`，再在浏览器内存中按 stamp ID 合并两者。Stamp 图片、动画 manifest、动画 atlas 和 voice audio 随后直接从 CDN 读取，因此 CDN 必须允许 HHWX Web origin 跨域读取。Stamp voice 会通过 Web Audio 作为短音效播放，而不是作为媒体元素播放，以避免 iOS media session 把它当作音乐并打断后台音乐。
 
-服务端 HHWX API 聚合已发布到 CDN 的 Bandori 资源时，必须通过 R2/S3 签名请求直接读取背后的对象存储。服务端路径不要再请求 `cdn.hhwx.org` 等 HHWX 自有公网 CDN URL，因为 Cloudflare bot mitigation 可能会对 server-to-CDN 流量返回 challenge。Stamps master API 从 `BANDORI_PRIVATE_R2_BUCKET` 读取独立的内容寻址 snapshot，不读取公开 asset index；浏览器则直接从 CDN 读取公开 Stamp index 与资源。
+服务端 HHWX API 聚合已发布到 CDN 的 Bandori 资源时，必须通过 R2/S3 签名请求直接读取背后的对象存储。服务端路径不要再请求 `cdn.hhwx.org` 等 HHWX 自有公网 CDN URL，因为 Cloudflare bot mitigation 可能会对 server-to-CDN 流量返回 challenge。公开资源桶使用 `BANDORI_ASSET_R2_BUCKET` 配置；endpoint 与凭据默认复用 `BANDORI_R2_*`，也可以用 `BANDORI_ASSET_R2_*` 单独覆盖。Music metadata reader 通过这条路径读取 `bandori/music/index.json`。Stamps master API 从 `BANDORI_PRIVATE_R2_BUCKET` 读取独立的内容寻址 snapshot，不读取公开 asset index；浏览器则直接从 CDN 读取公开 index 与资源。
 
 HHWX 生产环境应在 `/bandori/stamps/*` 对象上为 `https://hhwx.org` 配置 CORS。如果允许多个精确 origin，请同时返回 `Vary: Origin`。Web 应用读取 stamp CDN 时不会携带 credentials，除非请求模型发生变化，否则不要启用带凭据 CORS。完全公开且不带 credentials 的资源桶可以使用 `Access-Control-Allow-Origin: *`；不要把 `*` 和带凭据请求搭配使用。
 
@@ -157,22 +158,43 @@ bandori/res/image/card-{rarity}.png
 音乐资源和谱面 JSON：
 
 ```text
-{CDN_BASE}/bandori/music/{musicId}/jacket.png
-{CDN_BASE}/bandori/music/{musicId}/thumb.png
-{CDN_BASE}/bandori/music/{musicId}/audio.mp3
-{CDN_BASE}/bandori/music/{musicId}/charts/{difficulty}.json
-{CDN_BASE}/bandori/music/{musicId}/manifest.json
 {CDN_BASE}/bandori/music/index.json
+{CDN_BASE}/bandori/music/jackets/{sha256}.png
+{CDN_BASE}/bandori/music/thumbs/{sha256}.png
+{CDN_BASE}/bandori/music/audio/{sha256}.mp3
+{CDN_BASE}/bandori/music/charts/{sha256}.json
 
-bandori/music/{musicId}/jacket.png
-bandori/music/{musicId}/thumb.png
-bandori/music/{musicId}/audio.mp3
-bandori/music/{musicId}/charts/{difficulty}.json
-bandori/music/{musicId}/manifest.json
 bandori/music/index.json
+bandori/music/manifests/{musicId}.json
+bandori/music/jackets/{sha256}.png
+bandori/music/thumbs/{sha256}.png
+bandori/music/audio/{sha256}.mp3
+bandori/music/charts/{sha256}.json
 ```
 
-`bandori/music/index.json` 应包含 Bestdori 兼容形态的 `songs[].notes`，用难度 index `"0"` 到 `"4"` 映射从谱面派生出的 note 数。
+`bandori/music/index.json` 与 Cards、Events、Stamps 使用相同的紧凑可变 index 根结构：
+
+```json
+{
+  "schemaVersion": 2,
+  "updatedAt": "2026-07-27T00:00:00Z",
+  "songs": {
+    "1": {
+      "files": {
+        "jacket": "<sha256>",
+        "thumb": "<sha256>",
+        "audio": "<sha256>",
+        "charts": { "3": "<sha256>" }
+      },
+      "notes": { "3": 459 },
+      "bpm": { "3": [{ "bpm": 185, "start": 0, "end": 119.995 }] },
+      "length": 119.995
+    }
+  }
+}
+```
+
+歌曲 ID 与难度 index 都使用按数值升序排列的数字字符串 key。难度 index `"0"` 到 `"4"` 依次表示 `easy`、`normal`、`hard`、`expert`、`special`。每个文件值都是完整的小写 SHA-256；客户端按上面的内容寻址路径推导对象 key，也可以校验收到的内容，不再需要查询参数版本。`notes`、`bpm` 与 `files.charts` 必须覆盖完全相同的难度。刻意不含音频的本地构建可以省略 `audio`，但生产就绪校验要求它存在。`bandori/music/manifests` 下的单曲提取 manifest 保留来源服务器及 bundle 溯源信息供 builder 使用，但不属于公开 index 契约。
 
 Stamp 目录、静态图、语音与动画资源：
 
@@ -217,7 +239,7 @@ https://your-bandori-asset-cdn.example.com/bandori/cards/index.json
 https://your-bandori-asset-cdn.example.com/bandori/events/index.json
 https://your-bandori-asset-cdn.example.com/bandori/res/icon/chara_icon_1.png
 https://your-bandori-asset-cdn.example.com/bandori/res/image/card-5.png
-https://your-bandori-asset-cdn.example.com/bandori/music/1/charts/expert.json
+https://your-bandori-asset-cdn.example.com/bandori/music/charts/<chartSha256>.json
 https://your-bandori-asset-cdn.example.com/bandori/stamps/index.json
 https://your-bandori-asset-cdn.example.com/bandori/stamps/images/<imageSha256>.png
 https://your-bandori-asset-cdn.example.com/bandori/stamps/animation/manifests/<manifestSha256>.json
