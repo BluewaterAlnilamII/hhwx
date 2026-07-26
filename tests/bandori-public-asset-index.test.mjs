@@ -375,6 +375,49 @@ test("Stamps keep audio-only Changed resources indexed but hidden from the curre
   }
 });
 
+test("Changed Stamp master metadata and assets share a stable positional identity", () => {
+  const previousBaseUrl = process.env.NEXT_PUBLIC_BANDORI_ASSET_CDN_BASE_URL;
+  process.env.NEXT_PUBLIC_BANDORI_ASSET_CDN_BASE_URL = "https://assets.example.test";
+  try {
+    const rawAssets = stampsIndex();
+    rawAssets.stamps["501"].changedStamps[3] = [
+      { image: hashes.stampImage },
+      { image: hashes.changedStampImage, audio: hashes.changedStampAudio },
+    ];
+    const assets = parseBandoriStampsAssetIndex(rawAssets);
+    const master = parseBandoriStampMasterApiResponse({
+      success: true,
+      data: {
+        "501": {
+          imageName: ["", "", "", "stamp_bilibili120"],
+          characterId: [null, null, null, 6],
+          changedStamps: [
+            [],
+            [],
+            [],
+            [
+              { imageName: "stamp_bilibili120", soundName: "" },
+              { imageName: "stamp_bilibili120_changed", soundName: "stage_collabo" },
+            ],
+          ],
+        },
+      },
+    });
+
+    const cn = getBandoriStampCatalogItemsForRegion({ master, assets }, "cn");
+    assert.equal(cn.length, 2);
+    assert.equal(cn[1].kind, "changed");
+    assert.equal(cn[1].imageName, "stamp_bilibili120_changed");
+    assert.equal(cn[1].voiceUrl, `https://assets.example.test/bandori/stamps/voices/${hashes.changedStampAudio}.mp3`);
+  } finally {
+    if (previousBaseUrl === undefined) {
+      delete process.env.NEXT_PUBLIC_BANDORI_ASSET_CDN_BASE_URL;
+    } else {
+      process.env.NEXT_PUBLIC_BANDORI_ASSET_CDN_BASE_URL = previousBaseUrl;
+    }
+  }
+});
+
 test("Stamps parsers reject legacy URLs, null slots, and legacy voice names", () => {
   const missingChangedGroups = stampsIndex();
   delete missingChangedGroups.changedStampGroups;

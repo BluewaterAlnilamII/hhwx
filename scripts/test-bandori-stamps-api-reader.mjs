@@ -82,12 +82,19 @@ await withStore(await createStore(payload), async () => {
   assert.equal(response.status, 200);
   assert.deepEqual(await response.json(), { success: true, data: payload });
 
-  const redirected = await readMasterDatasetRoute(
+  const rejected = await readMasterDatasetRoute(
     new Request("http://localhost/api/bandori/master/stamps?server=3"),
     { params: Promise.resolve({ dataset: "stamps" }) },
   );
-  assert.equal(redirected.status, 308);
-  assert.equal(redirected.headers.get("location"), "http://localhost/api/bandori/master/stamps");
+  assert.equal(rejected.status, 400);
+  assert.equal(rejected.headers.has("location"), false);
+  assert.deepEqual(await rejected.json(), {
+    success: false,
+    error: {
+      code: "BANDORI_MASTER_QUERY_INVALID",
+      message: "Query parameters are not supported for this Bandori master endpoint",
+    },
+  });
 });
 
 await withStore(await createStore({

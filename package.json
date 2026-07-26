@@ -11,6 +11,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "audit:bandori-contracts": "node scripts/audit-bandori-contracts.mjs",
     "compare:bandori-tracker-history": "tsx scripts/compare-bandori-tracker-history.mjs",
     "start": "next start",
     "lint": "eslint",

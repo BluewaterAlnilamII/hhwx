@@ -323,6 +323,9 @@ export function getBandoriStampCatalogItemsForRegion(
 
       const masterChanged = masterEntry.changedStamps?.[slot] ?? [];
       const assetChanged = catalog.assets.stamps[stampId]?.changedStamps?.[slot] ?? [];
+      // These arrays are a parallel contract: both producers sort variants by
+      // imageName and soundName before publication, so an array offset is the
+      // identity shared by private master metadata and the public asset index.
       if (masterChanged.length !== assetChanged.length) {
         continue;
       }

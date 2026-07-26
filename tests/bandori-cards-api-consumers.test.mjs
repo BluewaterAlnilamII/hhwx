@@ -96,6 +96,7 @@ test("regional display values use preferred server then JP, EN, TW, CN fallback"
 test("master cards list and detail routes expose direct data without storage metadata", async () => {
   const listRoute = await readSource("src/app/api/bandori/master/[dataset]/route.ts");
   const detailRoute = await readSource("src/app/api/bandori/master/cards/[cardId]/route.ts");
+  const masterApi = await readSource("src/lib/bandori-master-api.ts");
 
   assert.match(listRoute, /readBandoriCardsApiDatasetForServer/u);
   assert.match(listRoute, /return jsonSuccess\(cards,/u);
@@ -103,6 +104,10 @@ test("master cards list and detail routes expose direct data without storage met
   assert.match(detailRoute, /readBandoriCardApiDetailForServer/u);
   assert.match(detailRoute, /return jsonSuccess\(result,/u);
   assert.doesNotMatch(detailRoute, /jsonSuccess\(\{\s*\.\.\.result,\s*cardId\s*\}/u);
+  assert.match(listRoute, /rejectUnsupportedBandoriMasterQuery/u);
+  assert.match(detailRoute, /rejectUnsupportedBandoriMasterQuery/u);
+  assert.match(masterApi, /"BANDORI_MASTER_QUERY_INVALID"/u);
+  assert.doesNotMatch(masterApi, /Response\.redirect/u);
 });
 
 test("legacy sparse cards route is deleted", async () => {

@@ -1,5 +1,7 @@
 # Bandori Asset CDN Contract
 
+The shared Events/Cards/Stamps API and index conventions are documented in [bandori-master-asset-contract.md](bandori-master-asset-contract.md).
+
 中文说明见 [bandori-asset-cdn-setup.zh-CN.md](bandori-asset-cdn-setup.zh-CN.md).
 
 This document describes the public URL contract that the HHWX web application expects for Bandori static assets. It is intentionally not a tracker setup guide.
