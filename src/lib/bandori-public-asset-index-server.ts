@@ -1,7 +1,9 @@
+import { createHash } from "node:crypto";
 import { fetchR2Object, type R2S3ReaderConfig } from "@/lib/r2-s3-reader";
 
-const MAX_PUBLIC_ASSET_INDEX_BYTES = 4 * 1024 * 1024;
-const PUBLIC_ASSET_INDEX_TIMEOUT_MS = 15_000;
+const MAX_PUBLIC_ASSET_JSON_BYTES = 4 * 1024 * 1024;
+const PUBLIC_ASSET_JSON_TIMEOUT_MS = 15_000;
+const SHA256_PATTERN = /^[0-9a-f]{64}$/u;
 
 function readFirstEnvironmentValue(names: readonly string[]): string | null {
   for (const name of names) {
@@ -65,8 +67,8 @@ export async function fetchBandoriPublicAssetIndexJson(objectKey: string): Promi
     objectKey,
     undefined,
     {
-      maxBytes: MAX_PUBLIC_ASSET_INDEX_BYTES,
-      timeoutMs: PUBLIC_ASSET_INDEX_TIMEOUT_MS,
+      maxBytes: MAX_PUBLIC_ASSET_JSON_BYTES,
+      timeoutMs: PUBLIC_ASSET_JSON_TIMEOUT_MS,
     },
   );
   if (!response.ok) {
@@ -75,4 +77,33 @@ export async function fetchBandoriPublicAssetIndexJson(objectKey: string): Promi
     );
   }
   return response.json<unknown>();
+}
+
+export async function fetchBandoriPublicAssetJson(
+  objectKey: string,
+  expectedSha256: string,
+): Promise<unknown> {
+  if (!SHA256_PATTERN.test(expectedSha256)) {
+    throw new Error("Bandori public asset R2 object has an invalid expected SHA-256");
+  }
+  const response = await fetchR2Object(
+    getBandoriPublicAssetR2Config(),
+    objectKey,
+    undefined,
+    {
+      maxBytes: MAX_PUBLIC_ASSET_JSON_BYTES,
+      timeoutMs: PUBLIC_ASSET_JSON_TIMEOUT_MS,
+    },
+  );
+  if (!response.ok) {
+    throw new Error(
+      `Bandori public asset R2 object read failed: HTTP ${response.status} ${objectKey}`,
+    );
+  }
+  const body = await response.buffer();
+  const actualSha256 = createHash("sha256").update(body).digest("hex");
+  if (actualSha256 !== expectedSha256) {
+    throw new Error(`Bandori public asset R2 object checksum mismatch: ${objectKey}`);
+  }
+  return JSON.parse(body.toString("utf8")) as unknown;
 }

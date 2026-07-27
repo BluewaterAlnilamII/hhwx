@@ -1,10 +1,14 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { once } from "node:events";
 import { createServer } from "node:http";
 import test from "node:test";
 
 import { fetchR2Object } from "../src/lib/r2-s3-reader.ts";
-import { fetchBandoriPublicAssetIndexJson } from "../src/lib/bandori-public-asset-index-server.ts";
+import {
+  fetchBandoriPublicAssetIndexJson,
+  fetchBandoriPublicAssetJson,
+} from "../src/lib/bandori-public-asset-index-server.ts";
 
 async function withServer(handler, assertion) {
   const server = createServer(handler);
@@ -112,6 +116,56 @@ test("Bandori public asset index reader uses its explicit public bucket configur
       assert.deepEqual(
         await fetchBandoriPublicAssetIndexJson("bandori/music/index.json"),
         { schemaVersion: 2 },
+      );
+    } finally {
+      for (const name of names) {
+        if (previous[name] === undefined) {
+          delete process.env[name];
+        } else {
+          process.env[name] = previous[name];
+        }
+      }
+    }
+  });
+});
+
+test("Bandori public asset object reader verifies content-addressed JSON", async () => {
+  const body = Buffer.from('{"notes":[]}');
+  const sha256 = createHash("sha256").update(body).digest("hex");
+  await withServer((request, response) => {
+    assert.equal(request.url, `/test-bucket/bandori/music/charts/${sha256}.json`);
+    response.setHeader("content-type", "application/json");
+    response.end(body);
+  }, async (config) => {
+    const names = [
+      "BANDORI_ASSET_R2_ENDPOINT",
+      "BANDORI_ASSET_R2_BUCKET",
+      "BANDORI_ASSET_R2_ACCESS_KEY_ID",
+      "BANDORI_ASSET_R2_SECRET_ACCESS_KEY",
+      "BANDORI_ASSET_R2_REGION",
+    ];
+    const previous = Object.fromEntries(names.map((name) => [name, process.env[name]]));
+    Object.assign(process.env, {
+      BANDORI_ASSET_R2_ENDPOINT: config.endpoint,
+      BANDORI_ASSET_R2_BUCKET: config.bucket,
+      BANDORI_ASSET_R2_ACCESS_KEY_ID: config.accessKeyId,
+      BANDORI_ASSET_R2_SECRET_ACCESS_KEY: config.secretAccessKey,
+      BANDORI_ASSET_R2_REGION: config.region,
+    });
+    try {
+      assert.deepEqual(
+        await fetchBandoriPublicAssetJson(
+          `bandori/music/charts/${sha256}.json`,
+          sha256,
+        ),
+        { notes: [] },
+      );
+      await assert.rejects(
+        fetchBandoriPublicAssetJson(
+          `bandori/music/charts/${sha256}.json`,
+          "0".repeat(64),
+        ),
+        /checksum mismatch/u,
       );
     } finally {
       for (const name of names) {
