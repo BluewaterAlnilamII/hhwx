@@ -100,7 +100,7 @@ test("public index failure stays isolated from master loading and calculations",
   assert.doesNotMatch(teamBuilder, /loading\s*\|\|[^;\n]*eventAsset/u);
 });
 
-test("server-side Music metadata reads the public bucket directly instead of its CDN", async () => {
+test("server-side Music metadata and charts read the public bucket directly instead of its CDN", async () => {
   const musicAssets = await readSource("src/lib/bandori-music-assets.ts");
   const indexReader = await readSource("src/lib/bandori-public-asset-index-server.ts");
   const chartRoute = await readSource("src/app/api/bandori/charts/[songId]/[difficulty]/route.ts");
@@ -111,6 +111,9 @@ test("server-side Music metadata reads the public bucket directly instead of its
   assert.match(indexReader, /BANDORI_ASSET_R2_BUCKET/u);
   assert.doesNotMatch(indexReader, /BANDORI_ASSET_CDN_BASE_URL|cdn\.hhwx\.org/u);
   assert.match(chartRoute, /lookupBandoriMusicChart/u);
+  assert.match(chartRoute, /fetchBandoriPublicAssetJson/u);
   assert.match(chartRoute, /chart\.key/u);
+  assert.match(chartRoute, /chart\.sha256/u);
+  assert.doesNotMatch(chartRoute, /getBandoriMusicCdnBaseUrl|fetch\(url/u);
   assert.doesNotMatch(chartRoute, /\?sha=/u);
 });

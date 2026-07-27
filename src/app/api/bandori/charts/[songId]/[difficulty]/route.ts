@@ -12,14 +12,13 @@ import {
 } from "@/lib/bestdori-master-data";
 import {
   BANDORI_MUSIC_METADATA_REVALIDATE_SECONDS,
-  buildBandoriMusicAssetUrl,
-  getBandoriMusicCdnBaseUrl,
   readBandoriMusicIndex,
 } from "@/lib/bandori-music-assets";
 import {
   lookupBandoriMusicChart,
   type BandoriJsonAssetDescriptor,
 } from "@/lib/bandori-public-asset-index";
+import { fetchBandoriPublicAssetJson } from "@/lib/bandori-public-asset-index-server";
 
 export const dynamic = "force-dynamic";
 
@@ -50,48 +49,31 @@ function allowBestdoriChartFallback(): boolean {
   return process.env.BANDORI_CHART_BESTDORI_FALLBACK === "1";
 }
 
-function buildBandoriMusicChartUrl(
-  baseUrl: string | null,
-  chart: Pick<BandoriJsonAssetDescriptor, "key">,
-): string {
-  try {
-    return buildBandoriMusicAssetUrl(chart, baseUrl);
-  } catch {
-    throw new BandoriChartAssetError("Bandori music CDN base URL is not configured", 503);
-  }
-}
-
 async function fetchBandoriAssetChart(
-  baseUrl: string | null,
-  chartKey: string,
+  chart: Pick<BandoriJsonAssetDescriptor, "key" | "sha256">,
 ): Promise<unknown> {
-  const url = buildBandoriMusicChartUrl(baseUrl, { key: chartKey });
-  const response = await fetch(url, {
-    next: { revalidate: BANDORI_MUSIC_METADATA_REVALIDATE_SECONDS },
-  });
-
-  if (response.status === 404) {
-    throw new BandoriChartAssetError(`Bandori chart asset not found: ${url}`, 404);
+  try {
+    return await fetchBandoriPublicAssetJson(chart.key, chart.sha256);
+  } catch (error) {
+    throw new BandoriChartAssetError(
+      `Bandori chart R2 read failed: ${error instanceof Error ? error.message : String(error)}`,
+      502,
+    );
   }
-  if (!response.ok) {
-    throw new BandoriChartAssetError(`Bandori chart asset failed: HTTP ${response.status} ${url}`, 502);
-  }
-
-  return response.json();
 }
 
 const readAssetChart = unstable_cache(
   async (
-    baseUrl: string | null,
     songId: number,
     difficulty: BestdoriChartDifficulty,
     chartKey: string,
+    chartSha256: string,
   ) => ({
     songId,
     difficulty,
-    chart: await fetchBandoriAssetChart(baseUrl, chartKey),
+    chart: await fetchBandoriAssetChart({ key: chartKey, sha256: chartSha256 }),
   }),
-  ["bandori-chart-route-assets:v3"],
+  ["bandori-chart-route-assets:v4"],
   { revalidate: BANDORI_MUSIC_METADATA_REVALIDATE_SECONDS },
 );
 
@@ -113,10 +95,10 @@ async function readConfiguredChart(songId: number, difficulty: BestdoriChartDiff
       );
     }
     return await readAssetChart(
-      getBandoriMusicCdnBaseUrl(),
       songId,
       difficulty,
       chart.key,
+      chart.sha256,
     );
   } catch (error) {
     if (!allowBestdoriChartFallback()) {
