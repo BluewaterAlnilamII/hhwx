@@ -2,7 +2,7 @@
 
 English version: [bandori-master-asset-contract.md](bandori-master-asset-contract.md).
 
-本文统一说明 HHWX 对外提供的 Events、Cards、Stamps 数据契约。各数据集的业务字段可以不同，但传输格式、四服槽位、发布方式和资源查找规则应当遵循同一套约定。
+本文统一说明 HHWX 对外提供的 Events、Cards、Stamps、Music 数据契约。各数据集的业务字段可以不同，但传输格式、四服槽位、发布方式和资源查找规则应当遵循同一套约定。
 
 ## 共通规则
 
@@ -10,7 +10,7 @@ English version: [bandori-master-asset-contract.md](bandori-master-asset-contrac
 - 区服数组固定为 `jp`、`en`、`tw`、`cn` 四槽。API 与 index 的具名区服 map 使用这些名称；数字 `0`、`1`、`2`、`3` 只用于 Cards 的 `server` 查询参数及用户/档案设置。
 - 缺失的区服字符串使用 `""`；业务上允许“未知”的标量（例如 Stamp `characterId`）使用 `null`；缺失的可选结构直接省略。
 - Master API 只承载游戏语义数据；公开 asset index 只承载构造 CDN URL 所需的内容 hash。API 不公开 pointer、pack key、generation、来源 hash 或私有对象路径。
-- 可变 API 与 index 使用 snapshot 缓存；按 hash 命名的媒体对象使用一年 immutable 缓存。读取失败时关闭，不回退 Bestdori 或旧公开 artifact。
+- 可变 API 与 index 使用 snapshot 缓存；所有被 index 引用的媒体对象（包括 Music 媒体和谱面 JSON）都以 SHA-256 命名并使用一年 immutable 缓存。读取失败时关闭，不回退 Bestdori 或旧公开 artifact。
 - 未支持的查询参数统一返回 `400 BANDORI_MASTER_QUERY_INVALID`，不重定向，也不静默忽略。
 
 ## 数据集矩阵
@@ -20,6 +20,7 @@ English version: [bandori-master-asset-contract.md](bandori-master-asset-contrac
 | Events | `/api/bandori/master/events` | `/api/bandori/master/events/{eventId}` | `/bandori/events/index.json` | 数字 event ID | Master 四槽字段及本地 `stampRewardId`；标量 `stampCharacterId`；banner/team image 四槽 | fast-mutable API；snapshot index |
 | Cards | `/api/bandori/master/cards` | `/api/bandori/master/cards/{cardId}` | `/bandori/cards/index.json` | `resourceSetName` | 四槽文本和显式 `serverExtensions`；图片按内容 hash 跨服共享 | snapshot API 与 index |
 | Stamps | `/api/bandori/master/stamps` | 无 | `/bandori/stamps/index.json` | 数字 stamp ID | 四槽 `imageName`、`characterId`、图片、语音与 Changed variant | snapshot API 与 index |
+| Music | 尚未统一 | 尚未统一 | `/bandori/music/index.json` | 数字 music ID | 跨服共享一套媒体；元数据使用 `0` 到 `4` 的数字难度 key | snapshot index |
 
 Cards 列表刻意采用一次下载、整个 SPA 会话复用的完整 map；只有它支持可选的 `server=0|1|2|3` 物化查询。Event 的 `cnSchedule` 保持为可选 overlay，因为它可能独立于 immutable event snapshot 变化。
 
@@ -32,6 +33,7 @@ Event `stampRewardId` 固定为 `[jp, en, tw, cn]` 四槽，因为它是服务�
 - 根字段为 `schemaVersion`、`updatedAt`，然后是数据集 map；
 - Cards 先排列标准 resource name，再排列 `bili_` 名称；
 - Stamps 根字段为 `schemaVersion`、`updatedAt`、`stamps`、`changedStampGroups`；
+- Music 单曲字段为 `files`、`notes`、`bpm`、`length`；文件字段依次为 `jacket`、`thumb`、可选 `audio`、`charts`；
 - 具名区服 map 固定按 `jp`、`en`、`tw`、`cn`；
 - 数字 ID 按数值升序。
 

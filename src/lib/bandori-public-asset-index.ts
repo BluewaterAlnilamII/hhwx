@@ -5,6 +5,7 @@ const POSITIVE_INTEGER_ID_PATTERN = /^[1-9]\d*$/u;
 export const BANDORI_PUBLIC_ASSET_SERVERS = ["jp", "en", "tw", "cn"] as const;
 export const BANDORI_CARDS_INDEX_KEY = "bandori/cards/index.json";
 export const BANDORI_EVENTS_INDEX_KEY = "bandori/events/index.json";
+export const BANDORI_MUSIC_INDEX_KEY = "bandori/music/index.json";
 export const BANDORI_STAMPS_INDEX_KEY = "bandori/stamps/index.json";
 export const BANDORI_PUBLIC_ASSET_INDEX_SCHEMA_VERSION = 2;
 
@@ -26,6 +27,40 @@ export type BandoriAudioAssetDescriptor = {
 export type BandoriJsonAssetDescriptor = {
   key: string;
   sha256: string;
+};
+
+export const BANDORI_MUSIC_DIFFICULTIES = [
+  "easy",
+  "normal",
+  "hard",
+  "expert",
+  "special",
+] as const;
+
+export type BandoriMusicDifficultyIndex = "0" | "1" | "2" | "3" | "4";
+
+export type BandoriMusicBpmSegment = {
+  bpm: number;
+  start: number;
+  end: number;
+};
+
+export type BandoriMusicAssetEntry = {
+  files: {
+    jacket: BandoriPngAssetDescriptor;
+    thumb: BandoriPngAssetDescriptor;
+    audio?: BandoriAudioAssetDescriptor;
+    charts: Partial<Record<BandoriMusicDifficultyIndex, BandoriJsonAssetDescriptor>>;
+  };
+  notes: Partial<Record<BandoriMusicDifficultyIndex, number>>;
+  bpm: Partial<Record<BandoriMusicDifficultyIndex, BandoriMusicBpmSegment[]>>;
+  length: number;
+};
+
+export type BandoriMusicAssetIndex = {
+  schemaVersion: typeof BANDORI_PUBLIC_ASSET_INDEX_SCHEMA_VERSION;
+  updatedAt: string;
+  songs: Record<string, BandoriMusicAssetEntry>;
 };
 
 export type BandoriCardImageSet = Record<BandoriCardImageRole, BandoriPngAssetDescriptor>;
@@ -270,6 +305,154 @@ export function parseBandoriCardsAssetIndex(value: unknown): BandoriCardsAssetIn
     schemaVersion: BANDORI_PUBLIC_ASSET_INDEX_SCHEMA_VERSION,
     updatedAt: parseUpdatedAt(value.updatedAt, "Bandori cards index"),
     resources,
+  };
+}
+
+function createJsonDescriptor(
+  value: unknown,
+  expectedPrefix: string,
+  label: string,
+): BandoriJsonAssetDescriptor {
+  const sha256 = parseSha256(value, label);
+  return {
+    key: `${expectedPrefix}/${sha256}.json`,
+    sha256,
+  };
+}
+
+function parseMusicDifficultyIndex(value: string, label: string): BandoriMusicDifficultyIndex {
+  if (!/^[0-4]$/u.test(value)) {
+    throw new Error(`${label} has an invalid difficulty index: ${value}`);
+  }
+  return value as BandoriMusicDifficultyIndex;
+}
+
+function parseMusicEntry(value: unknown, musicId: string): BandoriMusicAssetEntry {
+  const label = `Bandori music index song ${musicId}`;
+  if (!isRecord(value)) {
+    throw new Error(`${label} must be an object`);
+  }
+  assertExactKeys(value, ["files", "notes", "bpm", "length"], [], label);
+  if (!isRecord(value.files)) {
+    throw new Error(`${label} files must be an object`);
+  }
+  assertExactKeys(value.files, ["jacket", "thumb", "charts"], ["audio"], `${label} files`);
+  if (!isRecord(value.files.charts) || Object.keys(value.files.charts).length === 0) {
+    throw new Error(`${label} charts must be a non-empty object`);
+  }
+  if (!isRecord(value.notes) || !isRecord(value.bpm)) {
+    throw new Error(`${label} notes and bpm must be objects`);
+  }
+
+  const charts: BandoriMusicAssetEntry["files"]["charts"] = Object.create(null);
+  const notes: BandoriMusicAssetEntry["notes"] = Object.create(null);
+  const bpm: BandoriMusicAssetEntry["bpm"] = Object.create(null);
+  const chartDifficultyIndexes = Object.keys(value.files.charts);
+  if (
+    Object.keys(value.notes).length !== chartDifficultyIndexes.length
+    || Object.keys(value.bpm).length !== chartDifficultyIndexes.length
+  ) {
+    throw new Error(`${label} chart metadata coverage does not match files`);
+  }
+  for (const rawDifficultyIndex of chartDifficultyIndexes) {
+    const difficultyIndex = parseMusicDifficultyIndex(rawDifficultyIndex, label);
+    if (!Object.hasOwn(value.notes, difficultyIndex) || !Object.hasOwn(value.bpm, difficultyIndex)) {
+      throw new Error(`${label} is missing chart metadata for difficulty ${difficultyIndex}`);
+    }
+    charts[difficultyIndex] = createJsonDescriptor(
+      value.files.charts[difficultyIndex],
+      "bandori/music/charts",
+      `${label} chart ${difficultyIndex}`,
+    );
+    const rawNoteCount = value.notes[difficultyIndex];
+    if (!Number.isSafeInteger(rawNoteCount) || (rawNoteCount as number) < 0) {
+      throw new Error(`${label} has an invalid note count for difficulty ${difficultyIndex}`);
+    }
+    notes[difficultyIndex] = rawNoteCount as number;
+    const rawSegments = value.bpm[difficultyIndex];
+    if (!Array.isArray(rawSegments) || rawSegments.length === 0) {
+      throw new Error(`${label} has invalid BPM data for difficulty ${difficultyIndex}`);
+    }
+    bpm[difficultyIndex] = rawSegments.map((rawSegment, segmentIndex) => {
+      const segmentLabel = `${label} BPM ${difficultyIndex}[${segmentIndex}]`;
+      if (!isRecord(rawSegment)) {
+        throw new Error(`${segmentLabel} must be an object`);
+      }
+      assertExactKeys(rawSegment, ["bpm", "start", "end"], [], segmentLabel);
+      const rawBpm = rawSegment.bpm;
+      const rawStart = rawSegment.start;
+      const rawEnd = rawSegment.end;
+      if (
+        typeof rawBpm !== "number"
+        || !Number.isFinite(rawBpm)
+        || rawBpm <= 0
+        || typeof rawStart !== "number"
+        || !Number.isFinite(rawStart)
+        || rawStart < 0
+        || typeof rawEnd !== "number"
+        || !Number.isFinite(rawEnd)
+        || rawEnd < rawStart
+      ) {
+        throw new Error(`${segmentLabel} has invalid values`);
+      }
+      return { bpm: rawBpm, start: rawStart, end: rawEnd };
+    });
+  }
+  const rawLength = value.length;
+  if (typeof rawLength !== "number" || !Number.isFinite(rawLength) || rawLength <= 0) {
+    throw new Error(`${label} has an invalid length`);
+  }
+
+  const files: BandoriMusicAssetEntry["files"] = {
+    jacket: createPngDescriptor(
+      value.files.jacket,
+      "bandori/music/jackets",
+      `${label} jacket`,
+    ),
+    thumb: createPngDescriptor(
+      value.files.thumb,
+      "bandori/music/thumbs",
+      `${label} thumb`,
+    ),
+    charts,
+  };
+  if (Object.hasOwn(value.files, "audio")) {
+    files.audio = createAudioDescriptor(
+      value.files.audio,
+      "bandori/music/audio",
+      `${label} audio`,
+    );
+  }
+  return { files, notes, bpm, length: rawLength };
+}
+
+export function parseBandoriMusicAssetIndex(value: unknown): BandoriMusicAssetIndex {
+  if (!isRecord(value)) {
+    throw new Error("Bandori music index must be an object");
+  }
+  assertExactKeys(
+    value,
+    ["schemaVersion", "updatedAt", "songs"],
+    [],
+    "Bandori music index",
+  );
+  if (value.schemaVersion !== BANDORI_PUBLIC_ASSET_INDEX_SCHEMA_VERSION) {
+    throw new Error("Unsupported Bandori music index schema");
+  }
+  if (!isRecord(value.songs)) {
+    throw new Error("Bandori music index songs must be an object");
+  }
+  const songs: Record<string, BandoriMusicAssetEntry> = Object.create(null);
+  for (const [musicId, song] of Object.entries(value.songs)) {
+    if (!POSITIVE_INTEGER_ID_PATTERN.test(musicId) || !Number.isSafeInteger(Number(musicId))) {
+      throw new Error(`Bandori music index has an invalid music ID: ${musicId}`);
+    }
+    songs[musicId] = parseMusicEntry(song, musicId);
+  }
+  return {
+    schemaVersion: BANDORI_PUBLIC_ASSET_INDEX_SCHEMA_VERSION,
+    updatedAt: parseUpdatedAt(value.updatedAt, "Bandori music index"),
+    songs,
   };
 }
 
@@ -677,6 +860,25 @@ export function lookupBandoriEventTeamIcon(
     ?.images[serverIndex] ?? null;
 }
 
+export function lookupBandoriMusicChart(
+  index: BandoriMusicAssetIndex | null | undefined,
+  musicId: number | string | null | undefined,
+  difficulty: (typeof BANDORI_MUSIC_DIFFICULTIES)[number],
+): BandoriJsonAssetDescriptor | null {
+  const normalizedMusicId = String(musicId ?? "");
+  const difficultyIndex = BANDORI_MUSIC_DIFFICULTIES.indexOf(difficulty);
+  if (
+    !index
+    || difficultyIndex < 0
+    || !POSITIVE_INTEGER_ID_PATTERN.test(normalizedMusicId)
+  ) {
+    return null;
+  }
+  return index.songs[normalizedMusicId]?.files.charts[
+    String(difficultyIndex) as BandoriMusicDifficultyIndex
+  ] ?? null;
+}
+
 function normalizeBandoriAssetBaseUrl(value: string | null | undefined): string | null {
   const trimmedValue = value?.trim();
   return trimmedValue ? trimmedValue.replace(/\/+$/u, "") : null;
@@ -697,7 +899,7 @@ export function getBandoriPublicAssetBaseUrl(
 }
 
 export function buildBandoriPublicAssetIndexUrl(
-  kind: "cards" | "events" | "stamps",
+  kind: "cards" | "events" | "music" | "stamps",
   baseUrl?: string | null,
 ): string | null {
   const normalizedBaseUrl = getBandoriPublicAssetBaseUrl(baseUrl);
@@ -707,6 +909,7 @@ export function buildBandoriPublicAssetIndexUrl(
   const indexKeys = {
     cards: BANDORI_CARDS_INDEX_KEY,
     events: BANDORI_EVENTS_INDEX_KEY,
+    music: BANDORI_MUSIC_INDEX_KEY,
     stamps: BANDORI_STAMPS_INDEX_KEY,
   } as const;
   return appendBandoriAssetKey(normalizedBaseUrl, indexKeys[kind]);

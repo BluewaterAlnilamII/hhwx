@@ -14,7 +14,12 @@ import {
   BANDORI_MUSIC_METADATA_REVALIDATE_SECONDS,
   buildBandoriMusicAssetUrl,
   getBandoriMusicCdnBaseUrl,
+  readBandoriMusicIndex,
 } from "@/lib/bandori-music-assets";
+import {
+  lookupBandoriMusicChart,
+  type BandoriJsonAssetDescriptor,
+} from "@/lib/bandori-public-asset-index";
 
 export const dynamic = "force-dynamic";
 
@@ -47,11 +52,10 @@ function allowBestdoriChartFallback(): boolean {
 
 function buildBandoriMusicChartUrl(
   baseUrl: string | null,
-  songId: number,
-  difficulty: BestdoriChartDifficulty,
+  chart: Pick<BandoriJsonAssetDescriptor, "key">,
 ): string {
   try {
-    return buildBandoriMusicAssetUrl(`${songId}/charts/${encodeURIComponent(difficulty)}.json`, baseUrl);
+    return buildBandoriMusicAssetUrl(chart, baseUrl);
   } catch {
     throw new BandoriChartAssetError("Bandori music CDN base URL is not configured", 503);
   }
@@ -59,10 +63,9 @@ function buildBandoriMusicChartUrl(
 
 async function fetchBandoriAssetChart(
   baseUrl: string | null,
-  songId: number,
-  difficulty: BestdoriChartDifficulty,
+  chartKey: string,
 ): Promise<unknown> {
-  const url = buildBandoriMusicChartUrl(baseUrl, songId, difficulty);
+  const url = buildBandoriMusicChartUrl(baseUrl, { key: chartKey });
   const response = await fetch(url, {
     next: { revalidate: BANDORI_MUSIC_METADATA_REVALIDATE_SECONDS },
   });
@@ -78,12 +81,17 @@ async function fetchBandoriAssetChart(
 }
 
 const readAssetChart = unstable_cache(
-  async (baseUrl: string | null, songId: number, difficulty: BestdoriChartDifficulty) => ({
+  async (
+    baseUrl: string | null,
+    songId: number,
+    difficulty: BestdoriChartDifficulty,
+    chartKey: string,
+  ) => ({
     songId,
     difficulty,
-    chart: await fetchBandoriAssetChart(baseUrl, songId, difficulty),
+    chart: await fetchBandoriAssetChart(baseUrl, chartKey),
   }),
-  ["bandori-chart-route-assets:v1"],
+  ["bandori-chart-route-assets:v3"],
   { revalidate: BANDORI_MUSIC_METADATA_REVALIDATE_SECONDS },
 );
 
@@ -93,7 +101,23 @@ async function readConfiguredChart(songId: number, difficulty: BestdoriChartDiff
   }
 
   try {
-    return await readAssetChart(getBandoriMusicCdnBaseUrl(), songId, difficulty);
+    const chart = lookupBandoriMusicChart(
+      await readBandoriMusicIndex(),
+      songId,
+      difficulty,
+    );
+    if (!chart) {
+      throw new BandoriChartAssetError(
+        `Bandori chart asset is not indexed: ${songId}:${difficulty}`,
+        404,
+      );
+    }
+    return await readAssetChart(
+      getBandoriMusicCdnBaseUrl(),
+      songId,
+      difficulty,
+      chart.key,
+    );
   } catch (error) {
     if (!allowBestdoriChartFallback()) {
       throw error;

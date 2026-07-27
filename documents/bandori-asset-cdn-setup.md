@@ -24,13 +24,14 @@ BANDORI_CHART_SOURCE=bestdori
 BANDORI_SONG_NOTES_SOURCE=bestdori
 # BANDORI_SONG_NOTES_SOURCE=assets
 # BANDORI_SONG_NOTES_BESTDORI_FALLBACK=0
+# BANDORI_ASSET_R2_BUCKET=your_public_asset_bucket
 # BANDORI_PRIVATE_R2_BUCKET=hhwx-private
 # BANDORI_STAMPS_API_LOCAL_STORE_ROOT=/path/to/stamps/store
 ```
 
 `NEXT_PUBLIC_BANDORI_ASSET_CDN_BASE_URL` is exposed to browsers. `BANDORI_ASSET_CDN_BASE_URL` is available to server-side code. In most deployments they should point to the same asset host. Card, Event, and Stamp assets are discovered from their public indexes described below; browsers read those indexes with the normal HTTP cache and without credentials. Stamp assets use the same Bandori asset CDN under `/bandori/stamps`; there is no separate stamp CDN setting. The web app reads Stamp master metadata through `/api/bandori/master/stamps`, reads `bandori/stamps/index.json` directly from the public CDN, and joins both maps by stamp ID in browser memory. Stamp images, animation manifests, animation atlases, and voice audio are then read directly from the CDN, so the CDN must allow browser CORS reads from the HHWX web origins. Stamp voices are played through Web Audio as short sound effects instead of media elements, avoiding iOS media-session behavior that can interrupt background music.
 
-Server-side HHWX APIs that aggregate CDN-published Bandori assets must read the backing object storage directly through R2/S3 signed requests. They must not fetch HHWX-owned public CDN URLs such as `cdn.hhwx.org` from the server path because Cloudflare bot mitigation may challenge server-to-CDN traffic. The Stamps master API reads its independent content-addressed snapshot from `BANDORI_PRIVATE_R2_BUCKET`; it does not read the public asset index. Browsers read the public Stamp index and assets directly from the CDN.
+Server-side HHWX APIs that aggregate CDN-published Bandori assets must read the backing object storage directly through R2/S3 signed requests. They must not fetch HHWX-owned public CDN URLs such as `cdn.hhwx.org` from the server path because Cloudflare bot mitigation may challenge server-to-CDN traffic. Configure the public asset bucket as `BANDORI_ASSET_R2_BUCKET`; endpoint and credentials default to the shared `BANDORI_R2_*` values, with optional `BANDORI_ASSET_R2_*` overrides. The Music metadata reader uses this path for `bandori/music/index.json`. The Stamps master API reads its independent content-addressed snapshot from `BANDORI_PRIVATE_R2_BUCKET`; it does not read the public asset index. Browsers read public indexes and assets directly from the CDN.
 
 For HHWX production, configure CORS for `https://hhwx.org` on `/bandori/stamps/*` objects. If multiple exact origins are allowed, include `Vary: Origin`. The web app does not send credentials for stamp CDN reads, so do not enable credentialed CORS unless the request model changes. A fully public, no-credentials asset bucket may use `Access-Control-Allow-Origin: *`; do not combine `*` with credentialed requests.
 
@@ -157,22 +158,43 @@ bandori/res/image/card-{rarity}.png
 Music assets and chart JSON:
 
 ```text
-{CDN_BASE}/bandori/music/{musicId}/jacket.png
-{CDN_BASE}/bandori/music/{musicId}/thumb.png
-{CDN_BASE}/bandori/music/{musicId}/audio.mp3
-{CDN_BASE}/bandori/music/{musicId}/charts/{difficulty}.json
-{CDN_BASE}/bandori/music/{musicId}/manifest.json
 {CDN_BASE}/bandori/music/index.json
+{CDN_BASE}/bandori/music/jackets/{sha256}.png
+{CDN_BASE}/bandori/music/thumbs/{sha256}.png
+{CDN_BASE}/bandori/music/audio/{sha256}.mp3
+{CDN_BASE}/bandori/music/charts/{sha256}.json
 
-bandori/music/{musicId}/jacket.png
-bandori/music/{musicId}/thumb.png
-bandori/music/{musicId}/audio.mp3
-bandori/music/{musicId}/charts/{difficulty}.json
-bandori/music/{musicId}/manifest.json
 bandori/music/index.json
+bandori/music/manifests/{musicId}.json
+bandori/music/jackets/{sha256}.png
+bandori/music/thumbs/{sha256}.png
+bandori/music/audio/{sha256}.mp3
+bandori/music/charts/{sha256}.json
 ```
 
-`bandori/music/index.json` should include `songs[].notes` in the Bestdori-compatible shape, with difficulty indexes `"0"` through `"4"` mapping to chart-derived note counts.
+`bandori/music/index.json` uses the same compact mutable-index root as Cards, Events, and Stamps:
+
+```json
+{
+  "schemaVersion": 2,
+  "updatedAt": "2026-07-27T00:00:00Z",
+  "songs": {
+    "1": {
+      "files": {
+        "jacket": "<sha256>",
+        "thumb": "<sha256>",
+        "audio": "<sha256>",
+        "charts": { "3": "<sha256>" }
+      },
+      "notes": { "3": 459 },
+      "bpm": { "3": [{ "bpm": 185, "start": 0, "end": 119.995 }] },
+      "length": 119.995
+    }
+  }
+}
+```
+
+Song IDs and difficulty indexes are numeric-string keys in ascending numeric order. Difficulty indexes `"0"` through `"4"` mean `easy`, `normal`, `hard`, `expert`, and `special`. Each file value is its complete lowercase SHA-256; clients derive the content-addressed paths listed above and may verify the received content. No query-string version token is needed. `notes`, `bpm`, and `files.charts` must have identical difficulty coverage. `audio` is optional for an intentionally audio-free local build, but production readiness verification requires it. Per-song extraction manifests under `bandori/music/manifests` retain source servers and bundle provenance for the builder, but are not part of the public index contract.
 
 Stamp catalog, static images, voice audio, and animation assets:
 
@@ -217,7 +239,7 @@ https://your-bandori-asset-cdn.example.com/bandori/cards/index.json
 https://your-bandori-asset-cdn.example.com/bandori/events/index.json
 https://your-bandori-asset-cdn.example.com/bandori/res/icon/chara_icon_1.png
 https://your-bandori-asset-cdn.example.com/bandori/res/image/card-5.png
-https://your-bandori-asset-cdn.example.com/bandori/music/1/charts/expert.json
+https://your-bandori-asset-cdn.example.com/bandori/music/charts/<chartSha256>.json
 https://your-bandori-asset-cdn.example.com/bandori/stamps/index.json
 https://your-bandori-asset-cdn.example.com/bandori/stamps/images/<imageSha256>.png
 https://your-bandori-asset-cdn.example.com/bandori/stamps/animation/manifests/<manifestSha256>.json
