@@ -51,6 +51,6 @@ export async function fetchBandoriMusicIndex(): Promise<BandoriMusicIndex> {
 
 export const readBandoriMusicIndex = unstable_cache(
   fetchBandoriMusicIndex,
-  ["bandori-public-music-index:v2"],
+  ["bandori-public-music-index:v3"],
   { revalidate: BANDORI_MUSIC_METADATA_REVALIDATE_SECONDS },
 );
