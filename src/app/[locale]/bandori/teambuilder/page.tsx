@@ -27,6 +27,7 @@ import {
 } from "@/hooks/useBandoriPublicAssetIndex";
 import { useBandoriCardsMaster } from "@/hooks/useBandoriCardsMaster";
 import { useBandoriEventsMaster } from "@/hooks/useBandoriEventsMaster";
+import { useBandoriMusicMaster } from "@/hooks/useBandoriMusicMaster";
 import { getApiErrorMessage, parseApiSuccessData } from "@/lib/api-contracts";
 import {
   type BandoriAssetRegion,
@@ -42,6 +43,7 @@ import {
   resolveBandoriEventAssetRegion,
 } from "@/lib/bandori-event-region";
 import type { BandoriEventSummary } from "@/lib/bandori-events";
+import type { BandoriMusicMasterRecord } from "@/lib/bandori-music-api-client";
 import {
   type BandoriCardAttribute,
   type BandoriEventBonus,
@@ -206,11 +208,7 @@ type CloudGameProfileSummary = {
   updatedAt: string;
 };
 
-type SongMaster = {
-  musicTitle?: string[] | string;
-  bandName?: string[] | string;
-  difficulty?: Record<string, { playLevel?: number }>;
-};
+type SongMaster = BandoriMusicMasterRecord;
 
 type CharacterMaster = {
   nickname?: string[] | string;
@@ -475,7 +473,7 @@ async function requestJson<T>(
 }
 
 function pickLocalizedName(
-  value: string[] | string | undefined,
+  value: readonly (string | null | undefined)[] | string | undefined,
   preferredServer: BandoriServer,
   fallback = "",
   contextServer?: BandoriServer,
@@ -2735,6 +2733,12 @@ function TeamBuilderPanel() {
     error: masterEventsError,
     refresh: refreshMasterEvents,
   } = useBandoriEventsMaster();
+  const {
+    music: masterMusic,
+    loaded: masterMusicLoaded,
+    error: masterMusicError,
+    refresh: refreshMasterMusic,
+  } = useBandoriMusicMaster();
   const { value: eventAssetIndex } = useBandoriEventsAssetIndex();
   const teamT = useTranslations("bandori.teamBuilder");
   const stepsT = useTranslations("bandori.teamBuilder.steps");
@@ -3431,21 +3435,23 @@ function TeamBuilderPanel() {
   }, [calculationStartedAt, submitting]);
 
   const loadData = useCallback(async () => {
-    if (!masterEventsLoaded && masterEventsError === null) {
+    if (
+      (!masterEventsLoaded && masterEventsError === null)
+      || (!masterMusicLoaded && masterMusicError === null)
+    ) {
       return;
     }
-    if (masterEvents.length === 0) {
+    if (masterEvents.length === 0 || !masterMusic) {
       setLoading(false);
-      setError(masterEventsError?.message || errorsT("loadFailed"));
+      setError(masterEventsError?.message || masterMusicError?.message || errorsT("loadFailed"));
       return;
     }
     setLoading(true);
     setError("");
     try {
-      const [cloudProfiles, localProfiles, songsResponse, charactersResponse, skillsResponse] = await Promise.all([
+      const [cloudProfiles, localProfiles, charactersResponse, skillsResponse] = await Promise.all([
         requestJson<CloudGameProfileSummary[]>("/api/account/game-profiles", undefined, true, requestMessages),
         listLocalGameProfiles(),
-        requestJson<{ payload: Record<string, SongMaster | undefined> }>("/api/bandori/master/songs", undefined, false, requestMessages),
         requestJson<{ payload: Record<string, CharacterMaster | undefined> }>("/api/bandori/master/characters", undefined, false, requestMessages),
         requestJson<{ payload: Record<string, SkillMaster | undefined> }>("/api/bandori/master/skills", undefined, false, requestMessages),
       ]);
@@ -3454,7 +3460,7 @@ function TeamBuilderPanel() {
         cloudProfiles,
         localProfiles,
         events: supportedEvents,
-        songs: songsResponse.payload,
+        songs: masterMusic,
         characters: charactersResponse.payload,
         skills: skillsResponse.payload,
       });
@@ -3467,17 +3473,37 @@ function TeamBuilderPanel() {
     } finally {
       setLoading(false);
     }
-  }, [errorsT, masterEvents, masterEventsError, masterEventsLoaded, requestMessages]);
+  }, [
+    errorsT,
+    masterEvents,
+    masterEventsError,
+    masterEventsLoaded,
+    masterMusic,
+    masterMusicError,
+    masterMusicLoaded,
+    requestMessages,
+  ]);
 
   const retryLoadData = useCallback(() => {
     setError("");
     setLoading(true);
-    if (masterEvents.length === 0) {
-      refreshMasterEvents();
+    if (masterEvents.length === 0 || !masterMusic) {
+      if (masterEvents.length === 0) {
+        refreshMasterEvents();
+      }
+      if (!masterMusic) {
+        refreshMasterMusic();
+      }
       return;
     }
     void loadData();
-  }, [loadData, masterEvents.length, refreshMasterEvents]);
+  }, [
+    loadData,
+    masterEvents.length,
+    masterMusic,
+    refreshMasterEvents,
+    refreshMasterMusic,
+  ]);
 
   useEffect(() => {
     void loadData();

@@ -1,4 +1,7 @@
 import assert from "node:assert/strict";
+import { setDefaultAutoSelectFamily } from "node:net";
+
+setDefaultAutoSelectFamily(true);
 
 const apiBaseUrl = (process.env.HHWX_BANDORI_API_BASE_URL ?? "https://hhwx.org").replace(/\/$/u, "");
 const assetBaseUrl = (process.env.HHWX_BANDORI_ASSET_BASE_URL ?? "https://cdn.hhwx.org").replace(/\/$/u, "");
@@ -31,24 +34,39 @@ function requireFourSlots(value, label) {
   assert.equal(value.length, serverOrder.length, `${label} must use JP/EN/TW/CN slots`);
 }
 
-const [eventsApi, cardsApi, stampsApi, eventsIndexResponse, cardsIndexResponse, stampsIndexResponse] = await Promise.all([
-  readJson(`${apiBaseUrl}/api/bandori/master/events`),
-  readJson(`${apiBaseUrl}/api/bandori/master/cards`),
-  readJson(`${apiBaseUrl}/api/bandori/master/stamps`),
+const indexesPromise = Promise.all([
   readJson(`${assetBaseUrl}/bandori/events/index.json`),
   readJson(`${assetBaseUrl}/bandori/cards/index.json`),
+  readJson(`${assetBaseUrl}/bandori/music/index.json`),
   readJson(`${assetBaseUrl}/bandori/stamps/index.json`),
 ]);
+// Read private snapshot APIs serially so a release audit does not create an
+// artificial R2 burst across every large aggregate pack at once.
+const eventsApi = await readJson(`${apiBaseUrl}/api/bandori/master/events`);
+const cardsApi = await readJson(`${apiBaseUrl}/api/bandori/master/cards`);
+const musicApi = await readJson(`${apiBaseUrl}/api/bandori/master/music`);
+const musicDetailApi = await readJson(`${apiBaseUrl}/api/bandori/master/music/181`);
+const stampsApi = await readJson(`${apiBaseUrl}/api/bandori/master/stamps`);
+const [
+  eventsIndexResponse,
+  cardsIndexResponse,
+  musicIndexResponse,
+  stampsIndexResponse,
+] = await indexesPromise;
 
 const events = readApiData(eventsApi.body, "Events API");
 const cards = readApiData(cardsApi.body, "Cards API");
+const music = readApiData(musicApi.body, "Music API");
+const musicDetail = readApiData(musicDetailApi.body, "Music detail API");
 const stamps = readApiData(stampsApi.body, "Stamps API");
 const eventsIndex = eventsIndexResponse.body;
 const cardsIndex = cardsIndexResponse.body;
+const musicIndex = musicIndexResponse.body;
 const stampsIndex = stampsIndexResponse.body;
 
 assert.deepEqual(Object.keys(eventsIndex), ["schemaVersion", "updatedAt", "events"]);
 assert.deepEqual(Object.keys(cardsIndex), ["schemaVersion", "updatedAt", "resources"]);
+assert.deepEqual(Object.keys(musicIndex), ["schemaVersion", "updatedAt", "songs"]);
 assert.deepEqual(Object.keys(stampsIndex), ["schemaVersion", "updatedAt", "stamps", "changedStampGroups"]);
 assert.deepEqual(Object.keys(stampsIndex.changedStampGroups), serverOrder);
 
@@ -115,6 +133,30 @@ for (const resourceSetName of requiredCardResources) {
   );
 }
 
+assert.deepEqual(
+  Object.keys(music).sort((left, right) => Number(left) - Number(right)),
+  Object.keys(musicIndex.songs).sort((left, right) => Number(left) - Number(right)),
+  "Music API and asset index ID sets diverged",
+);
+for (const [musicId, record] of Object.entries(music)) {
+  assert.equal(isRecord(record), true, `music ${musicId} must be an object`);
+  requireFourSlots(record.bandName, `music ${musicId} bandName`);
+  requireFourSlots(record.musicTitle, `music ${musicId} musicTitle`);
+  requireFourSlots(record.publishedAt, `music ${musicId} publishedAt`);
+  requireFourSlots(record.closedAt, `music ${musicId} closedAt`);
+  assert.equal(isRecord(record.difficulty), true, `music ${musicId} difficulty is invalid`);
+  assert.equal(isRecord(record.notes), true, `music ${musicId} notes is invalid`);
+  assert.equal(isRecord(record.bpm), true, `music ${musicId} bpm is invalid`);
+  const indexed = musicIndex.songs[musicId];
+  assert.equal(isRecord(indexed), true, `music ${musicId} is missing from the asset index`);
+  assert.deepEqual(record.notes, indexed.notes, `music ${musicId} notes diverged from the asset index`);
+  assert.deepEqual(record.bpm, indexed.bpm, `music ${musicId} bpm diverged from the asset index`);
+  assert.equal(record.length, indexed.length, `music ${musicId} length diverged from the asset index`);
+}
+assert.deepEqual(musicDetail.notes, music["181"].notes);
+assert.deepEqual(musicDetail.bpm, music["181"].bpm);
+assert.equal(musicDetail.length, music["181"].length);
+
 for (const [stampId, stamp] of Object.entries(stamps)) {
   assert.equal(isRecord(stamp), true, `stamp ${stampId} must be an object`);
   requireFourSlots(stamp.imageName, `stamp ${stampId} imageName`);
@@ -144,25 +186,42 @@ assert.equal(rejectedQuery.headers.has("location"), false, "unsupported master q
 const rejectedBody = await rejectedQuery.json();
 assert.equal(rejectedBody?.error?.code, "BANDORI_MASTER_QUERY_INVALID");
 
+for (const removedUrl of [
+  `${apiBaseUrl}/api/bandori/master/songs`,
+  `${apiBaseUrl}/api/bandori/master/songs/181`,
+  `${apiBaseUrl}/api/bandori/songs?ids=181`,
+]) {
+  const response = await fetch(removedUrl, {
+    redirect: "manual",
+    signal: AbortSignal.timeout(30_000),
+  });
+  assert.equal(response.status, 404, `${removedUrl} must be removed`);
+}
+
 console.log(JSON.stringify({
   ok: true,
   serverOrder,
   apiRecords: {
     events: Object.keys(events).length,
     cards: Object.keys(cards).length,
+    music: Object.keys(music).length,
     stamps: Object.keys(stamps).length,
   },
   assetRecords: {
     events: Object.keys(eventsIndex.events).length,
     cardResources: Object.keys(cardsIndex.resources).length,
+    music: Object.keys(musicIndex.songs).length,
     stamps: Object.keys(stampsIndex.stamps).length,
   },
   cacheControl: {
     eventsApi: eventsApi.cacheControl,
     cardsApi: cardsApi.cacheControl,
+    musicApi: musicApi.cacheControl,
+    musicDetailApi: musicDetailApi.cacheControl,
     stampsApi: stampsApi.cacheControl,
     eventsIndex: eventsIndexResponse.cacheControl,
     cardsIndex: cardsIndexResponse.cacheControl,
+    musicIndex: musicIndexResponse.cacheControl,
     stampsIndex: stampsIndexResponse.cacheControl,
   },
 }, null, 2));

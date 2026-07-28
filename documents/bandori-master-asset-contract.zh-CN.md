@@ -20,9 +20,9 @@ English version: [bandori-master-asset-contract.md](bandori-master-asset-contrac
 | Events | `/api/bandori/master/events` | `/api/bandori/master/events/{eventId}` | `/bandori/events/index.json` | 数字 event ID | Master 四槽字段及本地 `stampRewardId`；标量 `stampCharacterId`；banner/team image 四槽 | fast-mutable API；snapshot index |
 | Cards | `/api/bandori/master/cards` | `/api/bandori/master/cards/{cardId}` | `/bandori/cards/index.json` | `resourceSetName` | 四槽文本和显式 `serverExtensions`；图片按内容 hash 跨服共享 | snapshot API 与 index |
 | Stamps | `/api/bandori/master/stamps` | 无 | `/bandori/stamps/index.json` | 数字 stamp ID | 四槽 `imageName`、`characterId`、图片、语音与 Changed variant | snapshot API 与 index |
-| Music | 尚未统一 | 尚未统一 | `/bandori/music/index.json` | 数字 music ID | 跨服共享一套媒体；元数据使用 `0` 到 `4` 的数字难度 key | snapshot index |
+| Music | `/api/bandori/master/music` | `/api/bandori/master/music/{musicId}` | `/bandori/music/index.json` | 数字 music ID | 四槽区服元数据与共享的谱面/音频派生字段；使用 `0` 到 `4` 的数字难度 key | snapshot API 与 index |
 
-Cards 列表刻意采用一次下载、整个 SPA 会话复用的完整 map；只有它支持可选的 `server=0|1|2|3` 物化查询。Event 的 `cnSchedule` 保持为可选 overlay，因为它可能独立于 immutable event snapshot 变化。
+Cards 与 Music 列表都采用一次下载、整个 SPA 会话复用的完整 map；只有 Cards 支持可选的 `server=0|1|2|3` 物化查询。Event 的 `cnSchedule` 保持为可选 overlay，因为它可能独立于 immutable event snapshot 变化。Music 的 `difficulty`、`notes` 与 `bpm` 键表示谱面难度，而不是服务器槽位。
 
 Event `stampRewardId` 固定为 `[jp, en, tw, cn]` 四槽，因为它是服务器本地外键；该服不存在活动时保留 `null`，不得用其他服 ID 补位。历史来源中的十进制字符串 ID 会规范化为整数。`stampCharacterId` 使用单个标量，因为所有已存在区服的奖励必须通过 Stamps API 解析成相同的语义图片和角色；出现分歧时拒绝发布 snapshot。
 
@@ -58,6 +58,7 @@ Changed Stamp 的语义与媒体刻意分开：
 npm run test:bandori-events
 npm run test:bandori-cards
 npm run test:bandori-stamps
+npm run test:bandori-music
 npm run test:bandori-public-assets
 npm run audit:bandori-contracts
 ```

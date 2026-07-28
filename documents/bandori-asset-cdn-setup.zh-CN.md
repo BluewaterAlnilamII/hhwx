@@ -1,6 +1,6 @@
 # Bandori Asset CDN 契约
 
-Events/Cards/Stamps API 与 index 的统一约定见 [bandori-master-asset-contract.zh-CN.md](bandori-master-asset-contract.zh-CN.md)。
+Events/Cards/Music/Stamps API 与 index 的统一约定见 [bandori-master-asset-contract.zh-CN.md](bandori-master-asset-contract.zh-CN.md)。
 
 English version: [bandori-asset-cdn-setup.md](bandori-asset-cdn-setup.md)
 
@@ -21,11 +21,9 @@ BANDORI_CHART_SOURCE=bestdori
 # BANDORI_CHART_SOURCE=assets
 # BANDORI_MUSIC_CDN_BASE_URL=https://your-bandori-asset-cdn.example.com
 # BANDORI_CHART_BESTDORI_FALLBACK=0
-BANDORI_SONG_NOTES_SOURCE=bestdori
-# BANDORI_SONG_NOTES_SOURCE=assets
-# BANDORI_SONG_NOTES_BESTDORI_FALLBACK=0
 # BANDORI_ASSET_R2_BUCKET=your_public_asset_bucket
 # BANDORI_PRIVATE_R2_BUCKET=hhwx-private
+# BANDORI_MUSIC_API_LOCAL_STORE_ROOT=/path/to/music/store
 # BANDORI_STAMPS_API_LOCAL_STORE_ROOT=/path/to/stamps/store
 ```
 
@@ -41,13 +39,13 @@ Cloudflare Cache Rule 可以只把目标公开 `GET`/`HEAD` 路径标记为符�
 
 `BANDORI_CHART_SOURCE=bestdori` 保留默认的 web-only 行为。只有在私有资源构建器已经发布下方 music chart 对象后，才应切换到 `BANDORI_CHART_SOURCE=assets`。`BANDORI_MUSIC_CDN_BASE_URL` 可以让谱面读取使用单独主机；省略时使用 `BANDORI_ASSET_CDN_BASE_URL`。`BANDORI_CHART_BESTDORI_FALLBACK=1` 允许自建谱面对象缺失时临时回退 Bestdori。
 
-`BANDORI_SONG_NOTES_SOURCE=bestdori` 会在音乐资源管线尚未完整时保持 `songs.notes` 与 Bestdori 对齐。当 `bandori/music/index.json` 已包含所有已发布歌曲的谱面派生 `notes` 后，可以切换到 `BANDORI_SONG_NOTES_SOURCE=assets`，让 `/api/bandori/master/songs` 从 HHWX music index 读取 note 数。`BANDORI_SONG_NOTES_BESTDORI_FALLBACK=1` 允许临时发布期间用 Bestdori 补齐缺失的 asset note count。关闭 fallback 后，assets 模式会在 music index 不可读或未覆盖全部歌曲时以 `503` fail closed。
-
-Events、Cards 与 Stamps master API 会通过 `BANDORI_PRIVATE_R2_BUCKET` 配置的私有桶，直接读取各自的内容寻址 snapshot。pointer 或 pack 缺失、无权限、格式错误、损坏或超限时都会失败关闭，且不会回退到 Bestdori、公开 asset index 或公开 master artifacts。`BANDORI_EVENT_API_LOCAL_STORE_ROOT`、`BANDORI_CARDS_API_LOCAL_STORE_ROOT` 与 `BANDORI_STAMPS_API_LOCAL_STORE_ROOT` 可在本地开发时指向 tracker 生成的 content store，生产环境会拒绝这些设置。其他 master 数据集继续使用现有来源。`songs.notes` 默认继续使用 Bestdori，但可以按上面的配置切换到 HHWX music asset chart counts。
+Events、Cards、Music 与 Stamps master API 会通过 `BANDORI_PRIVATE_R2_BUCKET` 配置的私有桶，直接读取各自的内容寻址 snapshot。pointer 或 pack 缺失、无权限、格式错误、损坏或超限时都会失败关闭，且不会回退到 Bestdori、公开 asset index 或公开 master artifacts。`BANDORI_EVENT_API_LOCAL_STORE_ROOT`、`BANDORI_CARDS_API_LOCAL_STORE_ROOT`、`BANDORI_MUSIC_API_LOCAL_STORE_ROOT` 与 `BANDORI_STAMPS_API_LOCAL_STORE_ROOT` 可在本地开发时指向 tracker 生成的 content store，生产环境会拒绝这些设置。其他 master 数据集继续使用现有来源。
 
 浏览器只从 `GET /api/bandori/master/cards` 读取一次完整 canonical Cards map，并在整个 SPA 生命周期内复用解析后的 map；账号所在服务器对应的标量扩展在浏览器本地物化。公开 Cards 列表/详情请求可选使用精确的 `server=0|1|2|3`，固定对应 JP/EN/TW/CN，字符串区服代码会被拒绝。旧的稀疏接口 `GET /api/bandori/cards?ids=...` 已删除。无服务器上下文的展示界面按“首选服务器、JP、EN、TW、CN”去重回退；卡牌档案和组队计算器中的档案卡牌则把档案所在服务器放在这个顺序之前，因此卡牌名和技能描述都优先服从档案身份，同时不修改用户的全局首选服务器。组队计算器还会在档案所在服务器缺少某张卡、但 JP 槽存在时纳入该 JP 卡；此规则只判断 snapshot 槽位是否存在，不读取 `releasedAt`，也不会把仅存在于 EN、TW 或 CN 的卡横向借给其他服务器。公开的按服务器过滤 API 与其他档案界面仍保持严格隔离。ID `10001`–`10010` 的冲突卡在计算和持久化中仍使用数字 ID；无服务器上下文的头像选择会将 EN/CN 实体展开成仅供 UI 使用的带区服引用，并把实际选择写入可空的 `profiles.avatar_card_server` 字段。
 
 浏览器同样只从 `GET /api/bandori/master/events` 读取一次完整 Events map，并在 SPA 会话内供 Event Tracker、Calendar 和组队计算器共享。活动记录包含原始四服 master 字段，以及 `band`、四槽服务器本地 `stampRewardId`、标量 `stampCharacterId`；仅在官方 CN 时间范围不完整时按需包含顶层 `cnSchedule`。组队计算器直接使用这些记录内的 bonus 字段。旧 Events 列表和 bonus API 已删除；`/api/bandori/events/{eventId}/comments` 下的评论路由保持独立。
+
+浏览器只从 `GET /api/bandori/master/music` 读取一次完整 Music map，并在整个 SPA 会话内复用；`GET /api/bandori/master/music/{musicId}` 提供对应详情。`difficulty`、`notes` 与 `bpm` 下的数字键 `0` 至 `4` 表示谱面难度而非服务器，服务器本地发布时间仍使用固定四槽数组。组队计算器从该 map 读取 `difficulty.playLevel`，并从自有谱面 API 读取计分所需的 note 时序。旧 `/api/bandori/master/songs`、`/api/bandori/master/songs/{songId}` 与 `/api/bandori/songs?ids=...` 路由已经删除。
 
 ## 榜线历史 API
 
