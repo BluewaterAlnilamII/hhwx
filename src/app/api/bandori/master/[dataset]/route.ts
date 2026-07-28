@@ -16,6 +16,7 @@ import {
 import { parseBandoriCardServerQuery } from "@/lib/bandori-card-server-extensions";
 import { readBandoriPublicEventApiDataset } from "@/lib/bandori-events-api-server";
 import { readBandoriStampsApiDataset } from "@/lib/bandori-stamps-api-server";
+import { readBandoriMusicApiDataset } from "@/lib/bandori-music-api-server";
 import {
   BESTDORI_MASTER_DATASET_ALIASES,
   BESTDORI_MASTER_DATASETS,
@@ -32,20 +33,31 @@ type RouteContext = {
 };
 
 function isBestdoriMasterDatasetKey(value: string): value is BestdoriMasterDatasetKey {
-  return value in BESTDORI_MASTER_DATASETS;
+  return Object.hasOwn(BESTDORI_MASTER_DATASETS, value);
 }
 
-type MasterDatasetKey = BestdoriMasterDatasetKey | "stamps";
+type LegacyMasterDatasetKey = Exclude<BestdoriMasterDatasetKey, "cards" | "events" | "songs">;
+type MasterDatasetKey = LegacyMasterDatasetKey | "cards" | "events" | "music" | "stamps";
+
+function isLegacyMasterDatasetKey(value: string): value is LegacyMasterDatasetKey {
+  return value !== "cards"
+    && value !== "events"
+    && value !== "songs"
+    && isBestdoriMasterDatasetKey(value);
+}
 
 function normalizeDatasetKey(value: string): MasterDatasetKey | null {
-  if (value === "stamps") {
+  if (value === "cards" || value === "events" || value === "music" || value === "stamps") {
     return value;
   }
-  if (isBestdoriMasterDatasetKey(value)) {
+  if (isLegacyMasterDatasetKey(value)) {
     return value;
   }
 
-  return BESTDORI_MASTER_DATASET_ALIASES[value as keyof typeof BESTDORI_MASTER_DATASET_ALIASES] ?? null;
+  const alias = BESTDORI_MASTER_DATASET_ALIASES[
+    value as keyof typeof BESTDORI_MASTER_DATASET_ALIASES
+  ];
+  return alias && isLegacyMasterDatasetKey(alias) ? alias : null;
 }
 
 export async function GET(request: Request, context: RouteContext) {
@@ -94,6 +106,12 @@ export async function GET(request: Request, context: RouteContext) {
 
     if (dataset === "stamps") {
       return jsonSuccess(await readBandoriStampsApiDataset(), {
+        headers: withHttpCachePolicy(SNAPSHOT_HTTP_CACHE_POLICY),
+      });
+    }
+
+    if (dataset === "music") {
+      return jsonSuccess(await readBandoriMusicApiDataset(), {
         headers: withHttpCachePolicy(SNAPSHOT_HTTP_CACHE_POLICY),
       });
     }

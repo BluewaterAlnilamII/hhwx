@@ -664,7 +664,7 @@ async function preloadSearchData(request: TeamSearchWorkerPreloadRequest): Promi
     requestJson<MasterResponse<Record<string, { bandId?: number | null } | undefined>>>("/api/bandori/master/characters/main", messages),
     requestJson<MasterResponse<Record<string, BestdoriSkillMaster | undefined>>>("/api/bandori/master/skills", messages),
     requestJson<MasterResponse<Record<string, BestdoriAreaItemMaster | undefined>>>("/api/bandori/master/areaItems", messages),
-    requestJson<MasterResponse<Record<string, BestdoriSongMaster | undefined>>>("/api/bandori/master/songs", messages),
+    requestJson<Record<string, BestdoriSongMaster | undefined>>("/api/bandori/master/music", messages),
   ];
 
   if (request.song) {
@@ -706,7 +706,7 @@ async function runSearch(
     requireCachedJson<MasterResponse<Record<string, { bandId?: number | null } | undefined>>>("/api/bandori/master/characters/main", messages.characterData, messages),
     requireCachedJson<MasterResponse<Record<string, BestdoriSkillMaster | undefined>>>("/api/bandori/master/skills", messages.skillData, messages),
     requireCachedJson<MasterResponse<Record<string, BestdoriAreaItemMaster | undefined>>>("/api/bandori/master/areaItems", messages.areaItemData, messages),
-    requireCachedJson<MasterResponse<Record<string, BestdoriSongMaster | undefined>>>("/api/bandori/master/songs", messages.songData, messages),
+    requireCachedJson<Record<string, BestdoriSongMaster | undefined>>("/api/bandori/master/music", messages.songData, messages),
     Promise.all(chartRequests),
   ]);
   const server = request.profilePayload.bestdoriProfile.server;
@@ -715,7 +715,7 @@ async function runSearch(
     server,
   );
 
-  const song = songsPayload.payload[String(songId)];
+  const song = songsPayload[String(songId)];
   if (!song) {
     throw new Error(messages.songDataMissing);
   }
@@ -757,7 +757,7 @@ async function runSearch(
     }
     const medleySongInputs = medleySongs.map((medleySong, index) => {
       const medleySongId = Math.trunc(medleySong.songId);
-      const medleySongMaster = songsPayload.payload[String(medleySongId)];
+      const medleySongMaster = songsPayload[String(medleySongId)];
       const medleyChartPayload = chartPayloads[index];
       if (!medleySongMaster) {
         throw new Error(formatWorkerMessage(messages.medleySongDataMissing, { index: index + 1 }));

@@ -1,6 +1,6 @@
 # Bandori Asset CDN Contract
 
-The shared Events/Cards/Stamps API and index conventions are documented in [bandori-master-asset-contract.md](bandori-master-asset-contract.md).
+The shared Events/Cards/Music/Stamps API and index conventions are documented in [bandori-master-asset-contract.md](bandori-master-asset-contract.md).
 
 中文说明见 [bandori-asset-cdn-setup.zh-CN.md](bandori-asset-cdn-setup.zh-CN.md).
 
@@ -21,11 +21,9 @@ BANDORI_CHART_SOURCE=bestdori
 # BANDORI_CHART_SOURCE=assets
 # BANDORI_MUSIC_CDN_BASE_URL=https://your-bandori-asset-cdn.example.com
 # BANDORI_CHART_BESTDORI_FALLBACK=0
-BANDORI_SONG_NOTES_SOURCE=bestdori
-# BANDORI_SONG_NOTES_SOURCE=assets
-# BANDORI_SONG_NOTES_BESTDORI_FALLBACK=0
 # BANDORI_ASSET_R2_BUCKET=your_public_asset_bucket
 # BANDORI_PRIVATE_R2_BUCKET=hhwx-private
+# BANDORI_MUSIC_API_LOCAL_STORE_ROOT=/path/to/music/store
 # BANDORI_STAMPS_API_LOCAL_STORE_ROOT=/path/to/stamps/store
 ```
 
@@ -41,13 +39,13 @@ A Cloudflare Cache Rule may mark the intended public `GET`/`HEAD` paths as eligi
 
 `BANDORI_CHART_SOURCE=bestdori` keeps the default web-only behavior. Set `BANDORI_CHART_SOURCE=assets` only after a private asset builder has populated the music chart objects documented below. `BANDORI_MUSIC_CDN_BASE_URL` can point charts at a separate host; when omitted, chart reads use `BANDORI_ASSET_CDN_BASE_URL`. `BANDORI_CHART_BESTDORI_FALLBACK=1` permits a temporary Bestdori fallback when a self-hosted chart object is missing.
 
-`BANDORI_SONG_NOTES_SOURCE=bestdori` keeps `songs.notes` aligned with Bestdori while the music asset pipeline is incomplete. After `bandori/music/index.json` contains chart-derived `notes` for every published song, set `BANDORI_SONG_NOTES_SOURCE=assets` to source `/api/bandori/master/songs` note counts from the HHWX music index. `BANDORI_SONG_NOTES_BESTDORI_FALLBACK=1` fills missing asset note counts from Bestdori during a temporary rollout. With fallback disabled, assets mode fails closed with `503` when the music index is unreadable or does not cover every song record.
-
-The Events, Cards, and Stamps master APIs read their content-addressed snapshots directly from the private bucket configured by `BANDORI_PRIVATE_R2_BUCKET`. All readers fail closed when a pointer or pack is missing, unauthorized, malformed, corrupt, or oversized; none falls back to Bestdori, public asset indexes, or public master artifacts. `BANDORI_EVENT_API_LOCAL_STORE_ROOT`, `BANDORI_CARDS_API_LOCAL_STORE_ROOT`, and `BANDORI_STAMPS_API_LOCAL_STORE_ROOT` can point to tracker-generated content stores during local development, but production rejects them. Other master datasets keep their existing sources. `songs.notes` continues to default to Bestdori and can switch to HHWX music asset chart counts as described above.
+The Events, Cards, Music, and Stamps master APIs read their content-addressed snapshots directly from the private bucket configured by `BANDORI_PRIVATE_R2_BUCKET`. All readers fail closed when a pointer or pack is missing, unauthorized, malformed, corrupt, or oversized; none falls back to Bestdori, public asset indexes, or public master artifacts. `BANDORI_EVENT_API_LOCAL_STORE_ROOT`, `BANDORI_CARDS_API_LOCAL_STORE_ROOT`, `BANDORI_MUSIC_API_LOCAL_STORE_ROOT`, and `BANDORI_STAMPS_API_LOCAL_STORE_ROOT` can point to tracker-generated content stores during local development, but production rejects them. Other master datasets keep their existing sources.
 
 The browser reads the complete canonical Cards map once from `GET /api/bandori/master/cards` and reuses the parsed map for the lifetime of the SPA. It materializes server-specific scalar extensions locally for the profile's numeric gameplay server. Public Cards list/detail requests accept an optional exact `server=0|1|2|3` query in fixed JP/EN/TW/CN order; string server codes are rejected. The former sparse `GET /api/bandori/cards?ids=...` endpoint has been removed. Serverless display surfaces resolve four-slot text as preferred server, then JP, EN, TW, CN, with duplicate slots removed. Card-profile and team-builder profile surfaces put the profile's gameplay server before that order, so the profile identity controls names and skill descriptions without changing the user's global preference. Team Builder additionally admits a JP card when that card is absent from the profile server: this fallback is based only on snapshot slot presence, never on `releasedAt`, and does not borrow an EN, TW, or CN-only card for another server. Public server-filtered API responses and other profile surfaces remain strict. Same-ID Cards `10001`–`10010` remain numeric for calculation and persistence; serverless avatar selection expands their EN and CN entities with UI-only scoped references and stores the chosen entity in the nullable `profiles.avatar_card_server` field.
 
 The browser likewise reads the complete Events map once from `GET /api/bandori/master/events` and reuses it across Event Tracker, Calendar, and Team Builder during the SPA session. Event records contain the original four-region master fields plus `band`, four-slot server-local `stampRewardId`, scalar `stampCharacterId`, and an optional top-level `cnSchedule` only when the official CN time range is incomplete. Team Builder consumes bonus fields directly from these records. The former Events list and bonus endpoints have been removed; event comment routes under `/api/bandori/events/{eventId}/comments` remain independent.
+
+The browser reads the complete Music map once from `GET /api/bandori/master/music` and reuses it for the SPA session. `GET /api/bandori/master/music/{musicId}` exposes the corresponding detail record. Numeric keys `0` through `4` under `difficulty`, `notes`, and `bpm` identify chart difficulties, not servers; server-local publication timestamps remain fixed four-slot arrays. Team Builder reads `difficulty.playLevel` from this map and reads score-note timing from the owned chart API. The former `/api/bandori/master/songs`, `/api/bandori/master/songs/{songId}`, and `/api/bandori/songs?ids=...` routes have been removed.
 
 ## Tracker History API
 

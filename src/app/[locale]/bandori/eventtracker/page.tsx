@@ -5,10 +5,10 @@ import { useTranslations } from "next-intl";
 import { format } from "date-fns";
 import * as Tabs from "@radix-ui/react-tabs";
 
-import { useCachedFetch } from "@/hooks/useCachedFetch";
 import { useBandoriEventsAssetIndex } from "@/hooks/useBandoriPublicAssetIndex";
-import { LONG_CLIENT_CACHE_POLICY } from "@/lib/api-cache";
-import { parseApiSuccessData } from "@/lib/api-contracts";
+import { useBandoriMusicMaster } from "@/hooks/useBandoriMusicMaster";
+import { pickBandoriRegionalText } from "@/lib/bandori-server";
+import { useBandoriPreferredServer } from "@/store/useBandoriPreferencesStore";
 import {
   buildBandoriPublicAssetUrl,
   lookupBandoriEventBanner,
@@ -498,6 +498,8 @@ function EventProgressBar({ startDate, endDate }: { startDate: number; endDate: 
 
 export default function EventTrackerPage() {
   const cnExclusiveT = useTranslations("bandori.notices.cnExclusive");
+  const preferredServer = useBandoriPreferredServer();
+  const { music: masterMusic } = useBandoriMusicMaster();
   const { value: eventAssetIndex } = useBandoriEventsAssetIndex();
   const [currentEventId, setCurrentEventId] = useState<number | null>(null);
   const [trackingMode, setTrackingMode] = useState<TrackingMode>("event");
@@ -756,29 +758,20 @@ export default function EventTrackerPage() {
     return Array.from(new Set(songIds)).sort((left, right) => left - right);
   }, [eventMeta]);
 
-  const challengeSongIdsQuery = useMemo(
-    () => availableChallengeSongIds.join(","),
-    [availableChallengeSongIds],
-  );
   const mainTierOptions = useMemo(
     () => getMainTrackerTierOptions(trackingMode, resolvedCurrentEventId),
     [resolvedCurrentEventId, trackingMode],
   );
 
-  const { data: challengeSongTitleMap } = useCachedFetch<Record<string, string>>(
-    availableChallengeSongIds.length > 0 ? `bandori-song-titles-${challengeSongIdsQuery}` : null,
-    availableChallengeSongIds.length > 0 ? `/api/bandori/songs?ids=${challengeSongIdsQuery}` : null,
-    (data: unknown) => {
-      const payload = parseApiSuccessData<{ songs?: Record<string, string> }>(data) ?? data as { songs?: Record<string, string> } | null;
-      if (!payload || typeof payload !== "object") {
-        return {};
-      }
-
-      const songs = payload.songs;
-      return songs ?? {};
-    },
-    { ...LONG_CLIENT_CACHE_POLICY },
-  );
+  const challengeSongTitleMap = useMemo(() => Object.fromEntries(
+    availableChallengeSongIds.flatMap((songId) => {
+      const title = pickBandoriRegionalText(
+        masterMusic?.[String(songId)]?.musicTitle,
+        preferredServer,
+      );
+      return title ? [[String(songId), title]] : [];
+    }),
+  ), [availableChallengeSongIds, masterMusic, preferredServer]);
   // 1/2/3 首歌的布局密度差异很大，按数量限制容器宽度可以减少横向留白。
   const challengeSongGridClassName = availableChallengeSongIds.length <= 1
     ? "max-w-48 grid-cols-1"
