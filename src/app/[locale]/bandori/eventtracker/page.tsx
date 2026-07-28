@@ -47,7 +47,7 @@ import {
 } from "./urlQuery";
 import { mergeComparisonLines, useComparisonTrackerData } from "./useComparisonTrackerData";
 import { mergeBestdoriPredictionData, useBestdoriPrediction } from "./useBestdoriPrediction";
-import { buildTooltipSignature, useTrackerHoverTooltip, type HoverTooltipState } from "./useTrackerHoverTooltip";
+import { buildTooltipSignature, type HoverTooltipState } from "./useTrackerHoverTooltip";
 import { ComparisonControls } from "./ComparisonControls";
 import { TrackerChartPanel } from "./TrackerChartPanel";
 import { TrackerModeTierControls } from "./TrackerModeTierControls";
@@ -79,7 +79,8 @@ type AutomaticComparisonTarget = {
 };
 
 const ZOOM_WIDTH_MULTIPLIERS = [1, 2, 4, 8, 16, 32] as const;
-const TOOLTIP_TIME_TOLERANCE_MS = 30_000;
+// Absorb collection-time jitter without merging adjacent 15/30-minute tracker snapshots.
+const TOOLTIP_TIME_TOLERANCE_MS = 5 * 60_000;
 const EVENT_TIER_1000 = 1000;
 const EVENT_TIER_1500 = 1500;
 const CN_T1500_BACKFILL_EVENT_ID = 311;
@@ -525,6 +526,7 @@ export default function EventTrackerPage() {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const chartViewportRef = useRef<HTMLDivElement>(null);
   const tooltipRef = useRef<HTMLDivElement>(null);
+  const scheduleTooltipPositionUpdateRef = useRef<() => void>(() => {});
   const isUserScrollingRef = useRef(false);
   const modeIndicatorViewportWidthRef = useRef<number | null>(null);
   const isProgrammaticScrollRef = useRef(false);
@@ -1065,19 +1067,9 @@ export default function EventTrackerPage() {
       signature: buildTooltipSignature(label, payload),
     };
   }, [comparisonTooltipPointIndex, mainTooltipPointIndex]);
-  const {
-    activeChartMarkers,
-    clearHoverTooltip,
-    hoverTooltip,
-    scheduleHoverTooltipUpdate,
-    scheduleTooltipPositionUpdate,
-  } = useTrackerHoverTooltip({
-    buildHoverTooltip,
-    chartViewportRef,
-    scrollContainerRef,
-    tooltipRef,
-    zoomWidthMultiplier,
-  });
+  const scheduleTooltipPositionUpdate = useCallback(() => {
+    scheduleTooltipPositionUpdateRef.current();
+  }, []);
   const hasRenderableChartData = hasActualTrackerData ||
     bestdoriPrediction.predictionPoints.length > 0 ||
     comparisonLines.some((line) => line.points.length > 0);
@@ -1373,24 +1365,22 @@ export default function EventTrackerPage() {
                 />
 
                 <TrackerChartPanel
-                  activeChartMarkers={activeChartMarkers}
                   bestdoriPredictionPointCount={bestdoriPrediction.predictionPoints.length}
+                  buildHoverTooltip={buildHoverTooltip}
                   chartContainerKey={chartContainerKey}
                   chartViewportHeight={chartViewportHeight}
                   chartViewportRef={chartViewportRef}
-                  clearHoverTooltip={clearHoverTooltip}
                   comparisonLines={comparisonLines}
                   displayedChartData={displayedChartData}
                   domainEnd={domainEnd}
                   domainStart={domainStart}
                   hasRenderableChartData={hasRenderableChartData}
-                  hoverTooltip={hoverTooltip}
                   isLoading={loading}
                   midnights={midnights}
                   nonWorkingDayBands={nonWorkingDayBands}
                   onZoomIn={handleZoomIn}
                   onZoomOut={handleZoomOut}
-                  scheduleHoverTooltipUpdate={scheduleHoverTooltipUpdate}
+                  scheduleTooltipPositionUpdateRef={scheduleTooltipPositionUpdateRef}
                   scrollContainerRef={scrollContainerRef}
                   showBestdoriPrediction={showBestdoriPrediction}
                   showDayProjection={showDayProjection}

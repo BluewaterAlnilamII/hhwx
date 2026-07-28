@@ -1,18 +1,27 @@
 export type BandoriTrackerSpeedPoint = {
   time: number;
   ep: number;
+  isBaseline?: boolean;
   speed?: number;
   speed24?: number;
   refSpeed24?: number;
 };
 
-export const INSTANT_SPEED_MIN_WINDOW_MS = (4 * 60 + 30) * 1000;
-const DAY_SPEED_MIN_WINDOW_MS = (23 * 60 + 55) * 60 * 1000;
+export const INSTANT_SPEED_MIN_WINDOW_MS = (9 * 60 + 45) * 1000;
+export const DAY_SPEED_MIN_WINDOW_MS = (23 * 60 + 55) * 60 * 1000;
+
+function calculateRate(current: BandoriTrackerSpeedPoint, reference: BandoriTrackerSpeedPoint, unitMs: number) {
+  const elapsedMs = current.time - reference.time;
+  if (elapsedMs <= 0) return undefined;
+
+  return Math.round((current.ep - reference.ep) / (elapsedMs / unitMs));
+}
 
 /**
  * Add the short-window and 24-hour speeds used by tracker projections.
  * Each pointer selects the newest prior point that is still at least the
- * configured window behind the current point.
+ * configured window behind the current point. Before that window is
+ * available, event and monthly tracking use their explicit EP=0 baseline.
  */
 export function calculateBandoriTrackerSpeeds<T extends BandoriTrackerSpeedPoint>(
   points: readonly T[],
@@ -29,13 +38,13 @@ export function calculateBandoriTrackerSpeeds<T extends BandoriTrackerSpeedPoint
       instantLeft++;
     }
 
-    if (processed[right].time - processed[instantLeft].time >= INSTANT_SPEED_MIN_WINDOW_MS) {
-      const elapsedHours = (processed[right].time - processed[instantLeft].time) / 3_600_000;
-      if (elapsedHours > 0) {
-        processed[right].speed = Math.round(
-          (processed[right].ep - processed[instantLeft].ep) / elapsedHours,
-        );
-      }
+    const instantReference = (
+      processed[right].time - processed[instantLeft].time >= INSTANT_SPEED_MIN_WINDOW_MS
+        ? processed[instantLeft]
+        : (processed[0].isBaseline ? processed[0] : undefined)
+    );
+    if (instantReference) {
+      processed[right].speed = calculateRate(processed[right], instantReference, 3_600_000);
     }
 
     while (
@@ -45,18 +54,14 @@ export function calculateBandoriTrackerSpeeds<T extends BandoriTrackerSpeedPoint
       dayLeft++;
     }
 
-    if (processed[right].time - processed[dayLeft].time >= DAY_SPEED_MIN_WINDOW_MS) {
-      const elapsedDays = (processed[right].time - processed[dayLeft].time) / 86_400_000;
-      if (elapsedDays > 0) {
-        processed[right].speed24 = Math.round(
-          (processed[right].ep - processed[dayLeft].ep) / elapsedDays,
-        );
-        processed[right].refSpeed24 = processed[dayLeft].speed24;
-      }
-    } else if (right > 0) {
-      // Preserve the existing early-event approximation until a full day is available.
-      processed[right].speed24 = processed[right].ep;
-      processed[right].refSpeed24 = processed[0].speed24;
+    const dayReference = (
+      processed[right].time - processed[dayLeft].time >= DAY_SPEED_MIN_WINDOW_MS
+        ? processed[dayLeft]
+        : (processed[0].isBaseline ? processed[0] : undefined)
+    );
+    if (dayReference) {
+      processed[right].speed24 = calculateRate(processed[right], dayReference, 86_400_000);
+      processed[right].refSpeed24 = dayReference.speed24;
     }
   }
 
