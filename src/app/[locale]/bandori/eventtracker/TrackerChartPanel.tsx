@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useLayoutEffect, useMemo, type RefObject } from "react";
+import { memo, useCallback, useLayoutEffect, useMemo, useRef, type MouseEvent, type RefObject } from "react";
 import { format } from "date-fns";
 import {
   CartesianGrid,
@@ -9,7 +9,6 @@ import {
   ReferenceArea,
   ReferenceLine,
   ResponsiveContainer,
-  Tooltip,
   XAxis,
   YAxis,
 } from "recharts";
@@ -34,12 +33,26 @@ import type { ComparisonLine, TrackerData, TrackerMouseState, TrackingMode } fro
 const FIXED_Y_AXIS_WIDTH = 38;
 const CHART_MARGIN = { top: 20, right: 5, left: 0, bottom: 20 } as const;
 const X_AXIS_HEIGHT = 30;
-const CHART_MOUSE_THROTTLE_MS = 32;
-const HIDDEN_TOOLTIP_STYLE = { display: "none" } as const;
-const TOOLTIP_CURSOR = { stroke: "#9CA3AF", strokeWidth: 1, strokeDasharray: "4 4" } as const;
 
-function renderEmptyTooltip() {
-  return null;
+function findNearestChartTime(times: number[], targetTime: number): number | null {
+  if (times.length === 0) return null;
+
+  let low = 0;
+  let high = times.length - 1;
+  while (low < high) {
+    const mid = Math.floor((low + high) / 2);
+    if (times[mid] < targetTime) {
+      low = mid + 1;
+    } else {
+      high = mid;
+    }
+  }
+
+  const nextTime = times[low];
+  const previousTime = low > 0 ? times[low - 1] : nextTime;
+  return Math.abs(previousTime - targetTime) <= Math.abs(nextTime - targetTime)
+    ? previousTime
+    : nextTime;
 }
 
 function buildProjectionEndpointMarkers(
@@ -134,22 +147,17 @@ type TrackerChartCanvasProps = Pick<
   | "showInstantProjection"
   | "yDomainInfo"
   | "yTicks"
-> & {
-  clearHoverTooltip: () => void;
-  scheduleHoverTooltipUpdate: (state: TrackerMouseState) => void;
-};
+>;
 
 const TrackerChartCanvas = memo(function TrackerChartCanvas({
   bestdoriPredictionPointCount,
   chartContainerKey,
-  clearHoverTooltip,
   comparisonLines,
   displayedChartData,
   domainEnd,
   domainStart,
   midnights,
   nonWorkingDayBands,
-  scheduleHoverTooltipUpdate,
   showBestdoriPrediction,
   showDayProjection,
   showInstantProjection,
@@ -161,9 +169,6 @@ const TrackerChartCanvas = memo(function TrackerChartCanvas({
       <LineChart
         data={displayedChartData}
         margin={CHART_MARGIN}
-        onMouseMove={scheduleHoverTooltipUpdate}
-        onMouseLeave={clearHoverTooltip}
-        throttleDelay={CHART_MOUSE_THROTTLE_MS}
       >
         {nonWorkingDayBands.map((band) => (
           <ReferenceArea
@@ -203,12 +208,6 @@ const TrackerChartCanvas = memo(function TrackerChartCanvas({
           tickLine={false}
           axisLine={false}
           dy={10}
-        />
-        <Tooltip
-          content={renderEmptyTooltip}
-          wrapperStyle={HIDDEN_TOOLTIP_STYLE}
-          cursor={TOOLTIP_CURSOR}
-          isAnimationActive={false}
         />
         {showInstantProjection && (
           <Line
@@ -331,6 +330,91 @@ export const TrackerChartPanel = memo(function TrackerChartPanel({
     tooltipRef,
     zoomWidthMultiplier,
   });
+  const chartTimes = useMemo(
+    () => displayedChartData
+      .map((point) => point.time)
+      .filter((time): time is number => Number.isFinite(time))
+      .sort((left, right) => left - right),
+    [displayedChartData],
+  );
+  const hoverCursorRef = useRef<HTMLSpanElement>(null);
+  const chartPointerSizeRef = useRef({ height: 0, width: 0 });
+  useLayoutEffect(() => {
+    const viewport = chartViewportRef.current;
+    if (!viewport) return;
+
+    const observer = new ResizeObserver(([entry]) => {
+      if (!entry) return;
+      const borderBox = entry.borderBoxSize[0];
+      chartPointerSizeRef.current = {
+        height: borderBox?.blockSize ?? entry.contentRect.height,
+        width: borderBox?.inlineSize ?? entry.contentRect.width,
+      };
+    });
+    observer.observe(viewport);
+    return () => observer.disconnect();
+  }, [chartViewportRef]);
+  const hideHoverCursor = useCallback(() => {
+    if (hoverCursorRef.current) {
+      hoverCursorRef.current.style.opacity = "0";
+      hoverCursorRef.current.style.visibility = "hidden";
+    }
+  }, []);
+  const handleChartMouseMove = useCallback((event: MouseEvent<HTMLDivElement>) => {
+    let { height: chartHeight, width: chartWidth } = chartPointerSizeRef.current;
+    if (chartWidth <= 0 || chartHeight <= 0) {
+      chartWidth = event.currentTarget.clientWidth;
+      chartHeight = event.currentTarget.clientHeight;
+      chartPointerSizeRef.current = { height: chartHeight, width: chartWidth };
+    }
+    const pointerX = event.nativeEvent.offsetX;
+    const pointerY = event.nativeEvent.offsetY;
+    const plotLeft = CHART_MARGIN.left;
+    const plotRight = chartWidth - CHART_MARGIN.right;
+    const plotBottom = chartHeight - CHART_MARGIN.bottom - X_AXIS_HEIGHT;
+
+    if (
+      typeof domainStart !== "number" ||
+      typeof domainEnd !== "number" ||
+      domainEnd <= domainStart ||
+      plotRight <= plotLeft ||
+      pointerX < plotLeft ||
+      pointerX > plotRight ||
+      pointerY < CHART_MARGIN.top ||
+      pointerY > plotBottom
+    ) {
+      hideHoverCursor();
+      clearHoverTooltip();
+      return;
+    }
+
+    const pointerTime = domainStart + ((pointerX - plotLeft) / (plotRight - plotLeft)) * (domainEnd - domainStart);
+    const activeLabel = findNearestChartTime(chartTimes, pointerTime);
+    if (activeLabel === null) {
+      hideHoverCursor();
+      clearHoverTooltip();
+      return;
+    }
+
+    const activeProgress = (activeLabel - domainStart) / (domainEnd - domainStart);
+    const activeX = plotLeft + activeProgress * (plotRight - plotLeft);
+    const cursor = hoverCursorRef.current;
+    if (cursor) {
+      cursor.style.opacity = "1";
+      cursor.style.visibility = "visible";
+      cursor.style.transform = `translate3d(${Math.round(activeX)}px, 0, 0)`;
+    }
+
+    scheduleHoverTooltipUpdate({
+      isTooltipActive: true,
+      activeLabel,
+      activeCoordinate: { x: activeX, y: pointerY },
+    });
+  }, [chartTimes, clearHoverTooltip, domainEnd, domainStart, hideHoverCursor, scheduleHoverTooltipUpdate]);
+  const handleChartMouseLeave = useCallback(() => {
+    hideHoverCursor();
+    clearHoverTooltip();
+  }, [clearHoverTooltip, hideHoverCursor]);
   const projectionEndpointMarkers = useMemo(
     () => buildProjectionEndpointMarkers(displayedChartData, showInstantProjection, showDayProjection),
     [displayedChartData, showDayProjection, showInstantProjection],
@@ -376,20 +460,36 @@ export const TrackerChartPanel = memo(function TrackerChartPanel({
                 <TrackerChartCanvas
                   bestdoriPredictionPointCount={bestdoriPredictionPointCount}
                   chartContainerKey={chartContainerKey}
-                  clearHoverTooltip={clearHoverTooltip}
                   comparisonLines={comparisonLines}
                   displayedChartData={displayedChartData}
                   domainEnd={domainEnd}
                   domainStart={domainStart}
                   midnights={midnights}
                   nonWorkingDayBands={nonWorkingDayBands}
-                  scheduleHoverTooltipUpdate={scheduleHoverTooltipUpdate}
                   showBestdoriPrediction={showBestdoriPrediction}
                   showDayProjection={showDayProjection}
                   showInstantProjection={showInstantProjection}
                   yDomainInfo={yDomainInfo}
                   yTicks={yTicks}
                 />
+                <div
+                  aria-hidden="true"
+                  className="absolute inset-0 z-[15]"
+                  data-testid="tracker-chart-pointer-layer"
+                  onMouseLeave={handleChartMouseLeave}
+                  onMouseMove={handleChartMouseMove}
+                >
+                  <span
+                    ref={hoverCursorRef}
+                    className="pointer-events-none absolute left-0 border-l border-dashed border-gray-400 opacity-0 will-change-transform"
+                    style={{
+                      bottom: CHART_MARGIN.bottom + X_AXIS_HEIGHT,
+                      top: CHART_MARGIN.top,
+                      transform: "translate3d(0, 0, 0)",
+                      visibility: "hidden",
+                    }}
+                  />
+                </div>
                 <TrackerActiveMarkerOverlay
                   markers={visibleChartMarkers}
                   domainEnd={domainEnd}
