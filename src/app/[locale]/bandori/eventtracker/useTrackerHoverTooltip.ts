@@ -1,11 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
 
 import type { TrackerMouseState, TrackerTooltipPayloadEntry } from "./types";
 
 const TOOLTIP_OFFSET = 12;
 const TOOLTIP_EDGE_PADDING = 8;
+const HOVER_TOOLTIP_UPDATE_INTERVAL_MS = 50;
 
 export type HoverTooltipState = {
   active: boolean;
@@ -26,6 +27,8 @@ export type ActiveChartMarker = {
 type UseTrackerHoverTooltipArgs = {
   buildHoverTooltip: (state: TrackerMouseState) => HoverTooltipState | null;
   chartViewportRef: RefObject<HTMLDivElement | null>;
+  isChartRendered: boolean;
+  onHoverFrame: (state: TrackerMouseState | null) => void;
   scrollContainerRef: RefObject<HTMLDivElement | null>;
   tooltipRef: RefObject<HTMLDivElement | null>;
   zoomWidthMultiplier: number;
@@ -51,7 +54,7 @@ export function buildTooltipSignature(label: number | undefined, payload: Tracke
   return `${label ?? ""}:${payloadSignature}`;
 }
 
-function buildActiveChartMarkers(hoverTooltip: HoverTooltipState | null): ActiveChartMarker[] {
+export function buildActiveChartMarkers(hoverTooltip: HoverTooltipState | null): ActiveChartMarker[] {
   if (!hoverTooltip?.active) return [];
 
   const markers: ActiveChartMarker[] = [];
@@ -118,14 +121,25 @@ function buildActiveChartMarkers(hoverTooltip: HoverTooltipState | null): Active
 export function useTrackerHoverTooltip({
   buildHoverTooltip,
   chartViewportRef,
+  isChartRendered,
+  onHoverFrame,
   scrollContainerRef,
   tooltipRef,
   zoomWidthMultiplier,
 }: UseTrackerHoverTooltipArgs) {
   const hoverTooltipRef = useRef<HoverTooltipState | null>(null);
   const tooltipAnimationFrameRef = useRef<number | null>(null);
-  const hoverTooltipAnimationFrameRef = useRef<number | null>(null);
+  const hoverFrameAnimationFrameRef = useRef<number | null>(null);
+  const hoverTooltipTimeoutRef = useRef<number | null>(null);
+  const lastHoverTooltipUpdateRef = useRef(0);
+  const latestHoverStateRef = useRef<TrackerMouseState | null>(null);
   const pendingHoverStateRef = useRef<TrackerMouseState | null>(null);
+  const layoutMetricsRef = useRef({
+    containerHeight: 0,
+    tooltipHeight: 0,
+    tooltipWidth: 0,
+    viewportWidth: 0,
+  });
   const [hoverTooltip, setHoverTooltip] = useState<HoverTooltipState | null>(null);
 
   const updateTooltipPosition = useCallback(() => {
@@ -134,14 +148,20 @@ export function useTrackerHoverTooltip({
       return;
     }
 
-    const container = chartViewportRef.current;
     const viewport = scrollContainerRef.current;
     const tooltip = tooltipRef.current;
-    const containerHeight = container.clientHeight;
-    const tooltipWidth = tooltip.offsetWidth;
-    const tooltipHeight = tooltip.offsetHeight;
+    const {
+      containerHeight,
+      tooltipHeight,
+      tooltipWidth,
+      viewportWidth,
+    } = layoutMetricsRef.current;
+    if (containerHeight <= 0 || tooltipWidth <= 0 || tooltipHeight <= 0 || viewportWidth <= 0) {
+      return;
+    }
+
     const visibleLeft = viewport.scrollLeft;
-    const visibleRight = viewport.scrollLeft + viewport.clientWidth;
+    const visibleRight = visibleLeft + viewportWidth;
 
     let left = currentHoverTooltip.coordinate.x + TOOLTIP_OFFSET;
     if (left + tooltipWidth > visibleRight - TOOLTIP_EDGE_PADDING) {
@@ -169,6 +189,39 @@ export function useTrackerHoverTooltip({
     });
   }, [updateTooltipPosition]);
 
+  useLayoutEffect(() => {
+    // The chart DOM mounts only after data arrives, so isChartRendered must retrigger observer setup.
+    // Without it, the first empty render leaves every cached dimension at zero and pins the tooltip at the origin.
+    const container = chartViewportRef.current;
+    const viewport = scrollContainerRef.current;
+    const tooltip = tooltipRef.current;
+    if (!container || !viewport || !tooltip) {
+      return;
+    }
+
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const borderBox = entry.borderBoxSize[0];
+        const width = borderBox?.inlineSize ?? entry.contentRect.width;
+        const height = borderBox?.blockSize ?? entry.contentRect.height;
+        if (entry.target === container) {
+          layoutMetricsRef.current.containerHeight = height;
+        } else if (entry.target === viewport) {
+          layoutMetricsRef.current.viewportWidth = width;
+        } else if (entry.target === tooltip) {
+          layoutMetricsRef.current.tooltipWidth = width;
+          layoutMetricsRef.current.tooltipHeight = height;
+        }
+      }
+      scheduleTooltipPositionUpdate();
+    });
+
+    observer.observe(container);
+    observer.observe(viewport);
+    observer.observe(tooltip);
+    return () => observer.disconnect();
+  }, [chartViewportRef, isChartRendered, scheduleTooltipPositionUpdate, scrollContainerRef, tooltipRef]);
+
   const flushTooltipPositionUpdate = useCallback(() => {
     if (tooltipAnimationFrameRef.current !== null) {
       cancelAnimationFrame(tooltipAnimationFrameRef.current);
@@ -178,61 +231,88 @@ export function useTrackerHoverTooltip({
     updateTooltipPosition();
   }, [updateTooltipPosition]);
 
-  const applyHoverTooltipState = useCallback((nextHoverTooltip: HoverTooltipState | null) => {
-    if (!nextHoverTooltip) {
-      hoverTooltipRef.current = null;
-      setHoverTooltip((previous) => previous === null ? previous : null);
-      return;
-    }
-
+  const flushHoverTooltipContentUpdate = useCallback(() => {
+    hoverTooltipTimeoutRef.current = null;
+    lastHoverTooltipUpdateRef.current = performance.now();
+    const latestState = latestHoverStateRef.current;
+    const nextHoverTooltip = latestState ? buildHoverTooltip(latestState) : null;
     hoverTooltipRef.current = nextHoverTooltip;
     scheduleTooltipPositionUpdate();
-
     setHoverTooltip((previous) => {
+      if (!nextHoverTooltip) return previous === null ? previous : null;
       if (previous?.active && previous.signature === nextHoverTooltip.signature) {
         return previous;
       }
 
       return nextHoverTooltip;
     });
-  }, [scheduleTooltipPositionUpdate]);
+  }, [buildHoverTooltip, scheduleTooltipPositionUpdate]);
+
+  const scheduleHoverTooltipContentUpdate = useCallback(() => {
+    if (hoverTooltipTimeoutRef.current !== null) return;
+
+    const elapsed = performance.now() - lastHoverTooltipUpdateRef.current;
+    const delay = Math.max(0, HOVER_TOOLTIP_UPDATE_INTERVAL_MS - elapsed);
+    hoverTooltipTimeoutRef.current = window.setTimeout(flushHoverTooltipContentUpdate, delay);
+  }, [flushHoverTooltipContentUpdate]);
+
+  const flushHoverFrame = useCallback(() => {
+    hoverFrameAnimationFrameRef.current = null;
+    const pendingState = pendingHoverStateRef.current;
+    pendingHoverStateRef.current = null;
+    if (pendingState?.activeCoordinate && hoverTooltipRef.current?.active) {
+      hoverTooltipRef.current = {
+        ...hoverTooltipRef.current,
+        coordinate: { ...pendingState.activeCoordinate },
+      };
+    }
+    onHoverFrame(pendingState);
+    scheduleTooltipPositionUpdate();
+    scheduleHoverTooltipContentUpdate();
+  }, [onHoverFrame, scheduleHoverTooltipContentUpdate, scheduleTooltipPositionUpdate]);
 
   const scheduleHoverTooltipUpdate = useCallback((state: TrackerMouseState) => {
-    pendingHoverStateRef.current = {
+    const nextState = {
       isTooltipActive: state.isTooltipActive,
       activeLabel: state.activeLabel,
       activeCoordinate: state.activeCoordinate
         ? { x: state.activeCoordinate.x, y: state.activeCoordinate.y }
         : undefined,
     };
+    latestHoverStateRef.current = nextState;
+    pendingHoverStateRef.current = nextState;
 
-    if (hoverTooltipAnimationFrameRef.current !== null) {
-      return;
+    if (hoverFrameAnimationFrameRef.current === null) {
+      hoverFrameAnimationFrameRef.current = requestAnimationFrame(flushHoverFrame);
     }
-
-    hoverTooltipAnimationFrameRef.current = requestAnimationFrame(() => {
-      hoverTooltipAnimationFrameRef.current = null;
-      const pendingState = pendingHoverStateRef.current;
-      pendingHoverStateRef.current = null;
-      applyHoverTooltipState(pendingState ? buildHoverTooltip(pendingState) : null);
-    });
-  }, [applyHoverTooltipState, buildHoverTooltip]);
+  }, [flushHoverFrame]);
 
   const clearHoverTooltip = useCallback(() => {
+    latestHoverStateRef.current = null;
     pendingHoverStateRef.current = null;
-    if (hoverTooltipAnimationFrameRef.current !== null) {
-      cancelAnimationFrame(hoverTooltipAnimationFrameRef.current);
-      hoverTooltipAnimationFrameRef.current = null;
+    if (hoverFrameAnimationFrameRef.current !== null) {
+      cancelAnimationFrame(hoverFrameAnimationFrameRef.current);
+      hoverFrameAnimationFrameRef.current = null;
+    }
+    if (hoverTooltipTimeoutRef.current !== null) {
+      window.clearTimeout(hoverTooltipTimeoutRef.current);
+      hoverTooltipTimeoutRef.current = null;
     }
 
-    applyHoverTooltipState(null);
-  }, [applyHoverTooltipState]);
+    hoverTooltipRef.current = null;
+    onHoverFrame(null);
+    setHoverTooltip((previous) => previous === null ? previous : null);
+  }, [onHoverFrame]);
 
   useEffect(() => {
     return () => {
-      if (hoverTooltipAnimationFrameRef.current !== null) {
-        cancelAnimationFrame(hoverTooltipAnimationFrameRef.current);
-        hoverTooltipAnimationFrameRef.current = null;
+      if (hoverTooltipTimeoutRef.current !== null) {
+        window.clearTimeout(hoverTooltipTimeoutRef.current);
+        hoverTooltipTimeoutRef.current = null;
+      }
+      if (hoverFrameAnimationFrameRef.current !== null) {
+        cancelAnimationFrame(hoverFrameAnimationFrameRef.current);
+        hoverFrameAnimationFrameRef.current = null;
       }
       if (tooltipAnimationFrameRef.current !== null) {
         cancelAnimationFrame(tooltipAnimationFrameRef.current);
@@ -251,13 +331,7 @@ export function useTrackerHoverTooltip({
     scheduleTooltipPositionUpdate();
   }, [flushTooltipPositionUpdate, hoverTooltip, scheduleTooltipPositionUpdate, zoomWidthMultiplier]);
 
-  const activeChartMarkers = useMemo(
-    () => buildActiveChartMarkers(hoverTooltip),
-    [hoverTooltip],
-  );
-
   return {
-    activeChartMarkers,
     clearHoverTooltip,
     hoverTooltip,
     scheduleHoverTooltipUpdate,

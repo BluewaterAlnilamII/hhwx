@@ -1,16 +1,14 @@
 "use client";
 
-import { memo, type RefObject } from "react";
+import { memo, useCallback, useLayoutEffect, useMemo, useRef, type MouseEvent, type RefObject } from "react";
 import { format } from "date-fns";
 import {
   CartesianGrid,
   Line,
   LineChart,
   ReferenceArea,
-  ReferenceDot,
   ReferenceLine,
   ResponsiveContainer,
-  Tooltip,
   XAxis,
   YAxis,
 } from "recharts";
@@ -23,13 +21,84 @@ import {
   NON_WORKING_DAY_BAND_STROKE,
 } from "./constants";
 import FixedYAxis from "./FixedYAxis";
+import {
+  TrackerActiveMarkerOverlay,
+  type TrackerActiveMarkerOverlayHandle,
+} from "./TrackerActiveMarkerOverlay";
 import { TrackerTooltip } from "./TrackerTooltip";
-import type { ActiveChartMarker, HoverTooltipState } from "./useTrackerHoverTooltip";
+import {
+  useTrackerHoverTooltip,
+  buildActiveChartMarkers,
+  type ActiveChartMarker,
+  type HoverTooltipState,
+} from "./useTrackerHoverTooltip";
 import type { ComparisonLine, TrackerData, TrackerMouseState, TrackingMode } from "./types";
 
 const FIXED_Y_AXIS_WIDTH = 38;
 const CHART_MARGIN = { top: 20, right: 5, left: 0, bottom: 20 } as const;
 const X_AXIS_HEIGHT = 30;
+
+function findNearestChartTime(times: number[], targetTime: number): number | null {
+  if (times.length === 0) return null;
+
+  let low = 0;
+  let high = times.length - 1;
+  while (low < high) {
+    const mid = Math.floor((low + high) / 2);
+    if (times[mid] < targetTime) {
+      low = mid + 1;
+    } else {
+      high = mid;
+    }
+  }
+
+  const nextTime = times[low];
+  const previousTime = low > 0 ? times[low - 1] : nextTime;
+  return Math.abs(previousTime - targetTime) <= Math.abs(nextTime - targetTime)
+    ? previousTime
+    : nextTime;
+}
+
+function buildProjectionEndpointMarkers(
+  points: TrackerData[],
+  showInstantProjection: boolean,
+  showDayProjection: boolean,
+): ActiveChartMarker[] {
+  let instantMarker: ActiveChartMarker | null = null;
+  let dayMarker: ActiveChartMarker | null = null;
+
+  for (const point of points) {
+    if (
+      showInstantProjection &&
+      Number.isFinite(point.instantEp) &&
+      (!instantMarker || point.time > instantMarker.x)
+    ) {
+      instantMarker = {
+        key: `projection-instant-${point.time}`,
+        x: point.time,
+        y: point.instantEp as number,
+        color: "#ef4444",
+        radius: 6,
+      };
+    }
+
+    if (
+      showDayProjection &&
+      Number.isFinite(point.dayEp) &&
+      (!dayMarker || point.time > dayMarker.x)
+    ) {
+      dayMarker = {
+        key: `projection-day-${point.time}`,
+        x: point.time,
+        y: point.dayEp as number,
+        color: "#3b82f6",
+        radius: 6,
+      };
+    }
+  }
+
+  return [instantMarker, dayMarker].filter((marker): marker is ActiveChartMarker => marker !== null);
+}
 
 type NonWorkingDayBand = {
   key: string;
@@ -38,24 +107,22 @@ type NonWorkingDayBand = {
 };
 
 type TrackerChartPanelProps = {
-  activeChartMarkers: ActiveChartMarker[];
   bestdoriPredictionPointCount: number;
+  buildHoverTooltip: (state: TrackerMouseState) => HoverTooltipState | null;
   chartContainerKey: string;
   chartViewportHeight: number;
   chartViewportRef: RefObject<HTMLDivElement | null>;
-  clearHoverTooltip: () => void;
   comparisonLines: ComparisonLine[];
   displayedChartData: TrackerData[];
   domainEnd: number | "auto";
   domainStart: number | "auto";
   hasRenderableChartData: boolean;
-  hoverTooltip: HoverTooltipState | null;
   isLoading: boolean;
   midnights: number[];
   nonWorkingDayBands: NonWorkingDayBand[];
   onZoomIn: () => void;
   onZoomOut: () => void;
-  scheduleHoverTooltipUpdate: (state: TrackerMouseState) => void;
+  scheduleTooltipPositionUpdateRef: RefObject<() => void>;
   scrollContainerRef: RefObject<HTMLDivElement | null>;
   showBestdoriPrediction: boolean;
   showDayProjection: boolean;
@@ -69,25 +136,179 @@ type TrackerChartPanelProps = {
   maxZoomIndex: number;
 };
 
-export const TrackerChartPanel = memo(function TrackerChartPanel({
-  activeChartMarkers,
+type TrackerChartCanvasProps = Pick<
+  TrackerChartPanelProps,
+  | "bestdoriPredictionPointCount"
+  | "chartContainerKey"
+  | "comparisonLines"
+  | "displayedChartData"
+  | "domainEnd"
+  | "domainStart"
+  | "midnights"
+  | "nonWorkingDayBands"
+  | "showBestdoriPrediction"
+  | "showDayProjection"
+  | "showInstantProjection"
+  | "yDomainInfo"
+  | "yTicks"
+>;
+
+const TrackerChartCanvas = memo(function TrackerChartCanvas({
   bestdoriPredictionPointCount,
+  chartContainerKey,
+  comparisonLines,
+  displayedChartData,
+  domainEnd,
+  domainStart,
+  midnights,
+  nonWorkingDayBands,
+  showBestdoriPrediction,
+  showDayProjection,
+  showInstantProjection,
+  yDomainInfo,
+  yTicks,
+}: TrackerChartCanvasProps) {
+  return (
+    <ResponsiveContainer key={chartContainerKey} width="100%" height="100%">
+      <LineChart
+        data={displayedChartData}
+        margin={CHART_MARGIN}
+      >
+        {nonWorkingDayBands.map((band) => (
+          <ReferenceArea
+            key={band.key}
+            x1={band.start}
+            x2={band.end}
+            fill={NON_WORKING_DAY_BAND_FILL}
+            stroke={NON_WORKING_DAY_BAND_STROKE}
+            strokeOpacity={1}
+            ifOverflow="extendDomain"
+          />
+        ))}
+
+        <YAxis
+          hide
+          width={0}
+          ticks={yTicks}
+          type="number"
+          domain={yDomainInfo}
+        />
+
+        <CartesianGrid vertical={false} stroke="#374151" opacity={0.15} />
+
+        {midnights.map((midnight) => (
+          <ReferenceLine key={midnight} x={midnight} stroke="#D1D5DB" opacity={0.6} />
+        ))}
+
+        <XAxis
+          dataKey="time"
+          domain={[domainStart, domainEnd]}
+          type="number"
+          ticks={midnights}
+          height={X_AXIS_HEIGHT}
+          tickFormatter={(unixTime) => format(unixTime, "MM/dd")}
+          stroke="#6B7280"
+          fontSize={12}
+          tickLine={false}
+          axisLine={false}
+          dy={10}
+        />
+        {showInstantProjection && (
+          <Line
+            type="linear"
+            dataKey="instantEp"
+            tooltipType="none"
+            stroke="#ef4444"
+            strokeWidth={2}
+            strokeDasharray="6 4"
+            dot={false}
+            activeDot={false}
+            connectNulls
+            isAnimationActive={false}
+          />
+        )}
+        <Line
+          type="linear"
+          dataKey="ep"
+          stroke="#3B82F6"
+          strokeWidth={5}
+          strokeOpacity={1}
+          dot={false}
+          activeDot={false}
+          connectNulls
+          isAnimationActive={false}
+        />
+
+        {showBestdoriPrediction && bestdoriPredictionPointCount > 0 && (
+          <Line
+            type="linear"
+            dataKey={BESTDORI_PREDICTION_DATA_KEY}
+            tooltipType="none"
+            stroke={BESTDORI_PREDICTION_COLOR}
+            strokeWidth={2.25}
+            strokeOpacity={0.96}
+            strokeDasharray="6 5"
+            dot={false}
+            activeDot={false}
+            connectNulls
+            isAnimationActive={false}
+          />
+        )}
+
+        {comparisonLines.map((line) => (
+          line.points.length > 0 ? (
+            <Line
+              key={line.dataKey}
+              type="linear"
+              dataKey={line.dataKey}
+              tooltipType="none"
+              stroke={line.color}
+              strokeWidth={1.6}
+              strokeOpacity={0.68}
+              dot={false}
+              activeDot={false}
+              connectNulls
+              isAnimationActive={false}
+            />
+          ) : null
+        ))}
+
+        {showDayProjection && (
+          <Line
+            type="linear"
+            dataKey="dayEp"
+            tooltipType="none"
+            stroke="#3b82f6"
+            strokeWidth={2}
+            strokeDasharray="6 4"
+            dot={false}
+            activeDot={false}
+            connectNulls
+            isAnimationActive={false}
+          />
+        )}
+      </LineChart>
+    </ResponsiveContainer>
+  );
+});
+
+export const TrackerChartPanel = memo(function TrackerChartPanel({
+  bestdoriPredictionPointCount,
+  buildHoverTooltip,
   chartContainerKey,
   chartViewportHeight,
   chartViewportRef,
-  clearHoverTooltip,
   comparisonLines,
   displayedChartData,
   domainEnd,
   domainStart,
   hasRenderableChartData,
-  hoverTooltip,
   isLoading,
   midnights,
   nonWorkingDayBands,
   onZoomIn,
   onZoomOut,
-  scheduleHoverTooltipUpdate,
+  scheduleTooltipPositionUpdateRef,
   scrollContainerRef,
   showBestdoriPrediction,
   showDayProjection,
@@ -100,6 +321,162 @@ export const TrackerChartPanel = memo(function TrackerChartPanel({
   zoomWidthMultiplier,
   maxZoomIndex,
 }: TrackerChartPanelProps) {
+  const chartTimes = useMemo(
+    () => displayedChartData
+      .map((point) => point.time)
+      .filter((time): time is number => Number.isFinite(time))
+      .sort((left, right) => left - right),
+    [displayedChartData],
+  );
+  const activeMarkerIndex = useMemo(() => {
+    const index = new Map<number, ActiveChartMarker[]>();
+    for (const activeLabel of chartTimes) {
+      const hoverTooltip = buildHoverTooltip({
+        isTooltipActive: true,
+        activeLabel,
+        activeCoordinate: { x: 0, y: 0 },
+      });
+      index.set(activeLabel, buildActiveChartMarkers(hoverTooltip));
+    }
+    return index;
+  }, [buildHoverTooltip, chartTimes]);
+  const hoverCursorRef = useRef<HTMLSpanElement>(null);
+  const activeMarkerOverlayRef = useRef<TrackerActiveMarkerOverlayHandle>(null);
+  const hideHoverCursor = useCallback(() => {
+    if (hoverCursorRef.current) {
+      hoverCursorRef.current.style.opacity = "0";
+      hoverCursorRef.current.style.visibility = "hidden";
+    }
+  }, []);
+  const handleHoverFrame = useCallback((state: TrackerMouseState | null) => {
+    const cursor = hoverCursorRef.current;
+    const activeX = state?.activeCoordinate?.x;
+    if (cursor && typeof activeX === "number" && Number.isFinite(activeX)) {
+      cursor.style.opacity = "1";
+      cursor.style.visibility = "visible";
+      cursor.style.transform = `translate3d(${Math.round(activeX)}px, 0, 0)`;
+    } else {
+      hideHoverCursor();
+    }
+
+    const activeLabel = typeof state?.activeLabel === "number" ? state.activeLabel : null;
+    activeMarkerOverlayRef.current?.updateMarkers(
+      activeLabel === null ? [] : (activeMarkerIndex.get(activeLabel) ?? []),
+    );
+  }, [activeMarkerIndex, hideHoverCursor]);
+  const {
+    clearHoverTooltip,
+    hoverTooltip,
+    scheduleHoverTooltipUpdate,
+    scheduleTooltipPositionUpdate,
+  } = useTrackerHoverTooltip({
+    buildHoverTooltip,
+    chartViewportRef,
+    isChartRendered: hasRenderableChartData && displayedChartData.length > 0,
+    onHoverFrame: handleHoverFrame,
+    scrollContainerRef,
+    tooltipRef,
+    zoomWidthMultiplier,
+  });
+  const activePointerRef = useRef<{ activeLabel: number; pointerY: number } | null>(null);
+  const chartPointerSizeRef = useRef({ height: 0, width: 0 });
+  const scheduleActivePointerPosition = useCallback(() => {
+    const activePointer = activePointerRef.current;
+    const { height: chartHeight, width: chartWidth } = chartPointerSizeRef.current;
+    if (
+      !activePointer ||
+      chartWidth <= 0 ||
+      chartHeight <= 0 ||
+      typeof domainStart !== "number" ||
+      typeof domainEnd !== "number" ||
+      domainEnd <= domainStart
+    ) {
+      return;
+    }
+
+    const plotRight = chartWidth - CHART_MARGIN.right;
+    const activeProgress = (activePointer.activeLabel - domainStart) / (domainEnd - domainStart);
+    const activeX = CHART_MARGIN.left + activeProgress * (plotRight - CHART_MARGIN.left);
+    scheduleHoverTooltipUpdate({
+      isTooltipActive: true,
+      activeLabel: activePointer.activeLabel,
+      activeCoordinate: { x: activeX, y: activePointer.pointerY },
+    });
+  }, [domainEnd, domainStart, scheduleHoverTooltipUpdate]);
+  useLayoutEffect(() => {
+    const viewport = chartViewportRef.current;
+    if (!viewport) return;
+
+    const observer = new ResizeObserver(([entry]) => {
+      if (!entry) return;
+      chartPointerSizeRef.current = {
+        height: entry.contentRect.height,
+        width: entry.contentRect.width,
+      };
+      scheduleActivePointerPosition();
+    });
+    observer.observe(viewport);
+    return () => observer.disconnect();
+  }, [chartViewportRef, scheduleActivePointerPosition]);
+  useLayoutEffect(() => {
+    scheduleActivePointerPosition();
+  }, [scheduleActivePointerPosition, zoomWidthMultiplier]);
+  const clearActiveHover = useCallback(() => {
+    activePointerRef.current = null;
+    clearHoverTooltip();
+  }, [clearHoverTooltip]);
+  const handleChartMouseMove = useCallback((event: MouseEvent<HTMLDivElement>) => {
+    let { height: chartHeight, width: chartWidth } = chartPointerSizeRef.current;
+    if (chartWidth <= 0 || chartHeight <= 0) {
+      chartWidth = event.currentTarget.clientWidth;
+      chartHeight = event.currentTarget.clientHeight;
+      chartPointerSizeRef.current = { height: chartHeight, width: chartWidth };
+    }
+    const pointerX = event.nativeEvent.offsetX;
+    const pointerY = event.nativeEvent.offsetY;
+    const plotLeft = CHART_MARGIN.left;
+    const plotRight = chartWidth - CHART_MARGIN.right;
+    const plotBottom = chartHeight - CHART_MARGIN.bottom - X_AXIS_HEIGHT;
+
+    if (
+      typeof domainStart !== "number" ||
+      typeof domainEnd !== "number" ||
+      domainEnd <= domainStart ||
+      plotRight <= plotLeft ||
+      pointerX < plotLeft ||
+      pointerX > plotRight ||
+      pointerY < CHART_MARGIN.top ||
+      pointerY > plotBottom
+    ) {
+      clearActiveHover();
+      return;
+    }
+
+    const pointerTime = domainStart + ((pointerX - plotLeft) / (plotRight - plotLeft)) * (domainEnd - domainStart);
+    const activeLabel = findNearestChartTime(chartTimes, pointerTime);
+    if (activeLabel === null) {
+      clearActiveHover();
+      return;
+    }
+
+    activePointerRef.current = { activeLabel, pointerY };
+    scheduleActivePointerPosition();
+  }, [chartTimes, clearActiveHover, domainEnd, domainStart, scheduleActivePointerPosition]);
+  const handleChartMouseLeave = useCallback(() => {
+    clearActiveHover();
+  }, [clearActiveHover]);
+  const projectionEndpointMarkers = useMemo(
+    () => buildProjectionEndpointMarkers(displayedChartData, showInstantProjection, showDayProjection),
+    [displayedChartData, showDayProjection, showInstantProjection],
+  );
+  useLayoutEffect(() => {
+    scheduleTooltipPositionUpdateRef.current = scheduleTooltipPositionUpdate;
+
+    return () => {
+      scheduleTooltipPositionUpdateRef.current = () => {};
+    };
+  }, [scheduleTooltipPositionUpdate, scheduleTooltipPositionUpdateRef]);
+
   return (
     <div className="h-[400px] w-full relative group rounded-xl bg-slate-50/80 dark:bg-slate-950/35">
       {hasRenderableChartData && displayedChartData.length > 0 ? (
@@ -120,145 +497,52 @@ export const TrackerChartPanel = memo(function TrackerChartPanel({
           >
             <div style={{ minWidth: `${zoomWidthMultiplier * 100}%`, height: "100%", transition: "min-width 0.3s ease-out" }}>
               <div ref={chartViewportRef} className="relative h-full overflow-hidden">
-                <ResponsiveContainer key={chartContainerKey} width="100%" height="100%">
-                  <LineChart
-                    data={displayedChartData}
-                    margin={CHART_MARGIN}
-                    onMouseMove={scheduleHoverTooltipUpdate}
-                    onMouseLeave={clearHoverTooltip}
-                  >
-                    {nonWorkingDayBands.map((band) => (
-                      <ReferenceArea
-                        key={band.key}
-                        x1={band.start}
-                        x2={band.end}
-                        fill={NON_WORKING_DAY_BAND_FILL}
-                        stroke={NON_WORKING_DAY_BAND_STROKE}
-                        strokeOpacity={1}
-                        ifOverflow="extendDomain"
-                      />
-                    ))}
-
-                    <YAxis
-                      hide
-                      width={0}
-                      ticks={yTicks}
-                      type="number"
-                      domain={yDomainInfo}
-                    />
-
-                    <CartesianGrid vertical={false} stroke="#374151" opacity={0.15} />
-
-                    {midnights.map((midnight) => (
-                      <ReferenceLine key={midnight} x={midnight} stroke="#D1D5DB" opacity={0.6} />
-                    ))}
-
-                    <XAxis
-                      dataKey="time"
-                      domain={[domainStart, domainEnd]}
-                      type="number"
-                      ticks={midnights}
-                      height={X_AXIS_HEIGHT}
-                      tickFormatter={(unixTime) => format(unixTime, "MM/dd")}
-                      stroke="#6B7280"
-                      fontSize={12}
-                      tickLine={false}
-                      axisLine={false}
-                      dy={10}
-                    />
-                    <Tooltip
-                      content={() => null}
-                      wrapperStyle={{ display: "none" }}
-                      cursor={{ stroke: "#9CA3AF", strokeWidth: 1, strokeDasharray: "4 4" }}
-                      isAnimationActive={false}
-                    />
-                    {showInstantProjection && (
-                      <Line
-                        type="linear"
-                        dataKey="instantEp"
-                        stroke="#ef4444"
-                        strokeWidth={2}
-                        strokeDasharray="6 4"
-                        dot={false}
-                        activeDot={false}
-                        connectNulls
-                        isAnimationActive={false}
-                      />
-                    )}
-                    <Line
-                      type="linear"
-                      dataKey="ep"
-                      stroke="#3B82F6"
-                      strokeWidth={5}
-                      strokeOpacity={1}
-                      dot={false}
-                      activeDot={false}
-                      connectNulls
-                      isAnimationActive={false}
-                    />
-
-                    {showBestdoriPrediction && bestdoriPredictionPointCount > 0 && (
-                      <Line
-                        type="linear"
-                        dataKey={BESTDORI_PREDICTION_DATA_KEY}
-                        tooltipType="none"
-                        stroke={BESTDORI_PREDICTION_COLOR}
-                        strokeWidth={2.25}
-                        strokeOpacity={0.96}
-                        strokeDasharray="6 5"
-                        dot={false}
-                        activeDot={false}
-                        connectNulls
-                        isAnimationActive={false}
-                      />
-                    )}
-
-                    {comparisonLines.map((line) => (
-                      line.points.length > 0 ? (
-                        <Line
-                          key={line.dataKey}
-                          type="linear"
-                          dataKey={line.dataKey}
-                          stroke={line.color}
-                          strokeWidth={1.6}
-                          strokeOpacity={0.68}
-                          dot={false}
-                          activeDot={false}
-                          connectNulls
-                          isAnimationActive={false}
-                        />
-                      ) : null
-                    ))}
-
-                    {showDayProjection && (
-                      <Line
-                        type="linear"
-                        dataKey="dayEp"
-                        stroke="#3b82f6"
-                        strokeWidth={2}
-                        strokeDasharray="6 4"
-                        dot={false}
-                        activeDot={false}
-                        connectNulls
-                        isAnimationActive={false}
-                      />
-                    )}
-                    {activeChartMarkers.map((marker) => (
-                      <ReferenceDot
-                        key={marker.key}
-                        x={marker.x}
-                        y={marker.y}
-                        r={marker.radius}
-                        fill={marker.color}
-                        stroke="none"
-                        zIndex={700}
-                      />
-                    ))}
-                  </LineChart>
-                </ResponsiveContainer>
+                <TrackerChartCanvas
+                  bestdoriPredictionPointCount={bestdoriPredictionPointCount}
+                  chartContainerKey={chartContainerKey}
+                  comparisonLines={comparisonLines}
+                  displayedChartData={displayedChartData}
+                  domainEnd={domainEnd}
+                  domainStart={domainStart}
+                  midnights={midnights}
+                  nonWorkingDayBands={nonWorkingDayBands}
+                  showBestdoriPrediction={showBestdoriPrediction}
+                  showDayProjection={showDayProjection}
+                  showInstantProjection={showInstantProjection}
+                  yDomainInfo={yDomainInfo}
+                  yTicks={yTicks}
+                />
+                <div
+                  aria-hidden="true"
+                  className="absolute inset-0 z-[15]"
+                  data-testid="tracker-chart-pointer-layer"
+                  onMouseLeave={handleChartMouseLeave}
+                  onMouseMove={handleChartMouseMove}
+                >
+                  <span
+                    ref={hoverCursorRef}
+                    className="pointer-events-none absolute left-0 border-l border-dashed border-gray-400 opacity-0 will-change-transform"
+                    style={{
+                      bottom: CHART_MARGIN.bottom + X_AXIS_HEIGHT,
+                      top: CHART_MARGIN.top,
+                      transform: "translate3d(0, 0, 0)",
+                      visibility: "hidden",
+                    }}
+                  />
+                </div>
+                <TrackerActiveMarkerOverlay
+                  ref={activeMarkerOverlayRef}
+                  markers={projectionEndpointMarkers}
+                  domainEnd={domainEnd}
+                  domainStart={domainStart}
+                  margin={CHART_MARGIN}
+                  xAxisHeight={X_AXIS_HEIGHT}
+                  yDomain={yDomainInfo}
+                />
                 <div
                   ref={tooltipRef}
                   className="pointer-events-none absolute left-0 top-0 z-20 transform-gpu transition-opacity duration-75 will-change-transform"
+                  data-testid="tracker-hover-tooltip"
                   style={{
                     opacity: hoverTooltip?.active && hoverTooltip.payload?.length ? 1 : 0,
                     transform: "translate3d(0, 0, 0)",

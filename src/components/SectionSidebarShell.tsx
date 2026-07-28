@@ -84,7 +84,7 @@ export default function SectionSidebarShell({ children, isMobileDrawerOpen, onCl
 
   return (
     <div className="relative flex flex-1">
-      <aside className="sticky top-[58px] hidden h-[calc(100svh-58px)] w-[270px] shrink-0 border-r border-[#ffe374]/85 bg-[#ffed7a]/74 shadow-[0_18px_48px_rgba(128,91,0,0.12)] lg:flex lg:flex-col">
+      <aside className="sticky top-[58px] hidden h-[calc(100svh-58px)] w-[270px] shrink-0 border-r border-[#ffe374]/85 bg-transparent shadow-[0_18px_48px_rgba(128,91,0,0.12)] lg:flex lg:flex-col">
         {sidebarContent}
       </aside>
 
