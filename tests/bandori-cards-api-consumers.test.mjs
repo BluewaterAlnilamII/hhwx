@@ -21,6 +21,7 @@ import {
   normalizeBandoriCardServer,
   parseBandoriCardServerQuery,
   resolveBandoriCardForServer,
+  resolveBandoriCardForServerWithRegionalFallback,
   resolveBandoriCardMapForServer,
   resolveBandoriCardMapForServerWithJpFallback,
   validateBandoriCardServerExtensions,
@@ -316,6 +317,8 @@ test("team builder includes every JP card missing from another server without us
     }],
   };
   assert.deepEqual(resolveBandoriCardMapForServerWithJpFallback({ "10001": collision }, 2), {});
+  assert.equal(resolveBandoriCardForServerWithRegionalFallback(collision, 2)?.characterId, 21);
+  assert.equal(resolveBandoriCardForServerWithRegionalFallback(cnOnlyCard, 1)?.characterId, 3);
 });
 
 test("avatar picker expands every registered collision into distinct EN and CN resources", () => {

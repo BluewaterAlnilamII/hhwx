@@ -2,6 +2,7 @@ import { parseApiSuccessData } from "@/lib/api-contracts";
 import {
   materializeBandoriCardMapForServer,
   materializeBandoriCardMapForServerWithJpFallback,
+  materializeBandoriCardMapForServerWithRegionalFallback,
 } from "@/lib/bandori-card-server-extensions";
 import type { BandoriServer } from "@/lib/bandori-server";
 
@@ -27,6 +28,10 @@ const materializedCardsByServer = new WeakMap<
   Map<BandoriServer, BandoriCardsMasterMap>
 >();
 const materializedCardsWithJpFallbackByServer = new WeakMap<
+  BandoriCardsMasterMap,
+  Map<BandoriServer, BandoriCardsMasterMap>
+>();
+const materializedCardsWithRegionalFallbackByServer = new WeakMap<
   BandoriCardsMasterMap,
   Map<BandoriServer, BandoriCardsMasterMap>
 >();
@@ -87,6 +92,26 @@ export function materializeBandoriCardsMasterForServerWithJpFallback(
   }
 
   const materialized = materializeBandoriCardMapForServerWithJpFallback(cards, server);
+  byServer.set(server, materialized);
+  return materialized;
+}
+
+export function materializeBandoriCardsMasterForServerWithRegionalFallback(
+  cards: BandoriCardsMasterMap,
+  server: BandoriServer,
+): BandoriCardsMasterMap {
+  let byServer = materializedCardsWithRegionalFallbackByServer.get(cards);
+  if (!byServer) {
+    byServer = new Map();
+    materializedCardsWithRegionalFallbackByServer.set(cards, byServer);
+  }
+
+  const cached = byServer.get(server);
+  if (cached) {
+    return cached;
+  }
+
+  const materialized = materializeBandoriCardMapForServerWithRegionalFallback(cards, server);
   byServer.set(server, materialized);
   return materialized;
 }

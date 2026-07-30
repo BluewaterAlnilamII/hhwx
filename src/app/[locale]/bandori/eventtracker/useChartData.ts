@@ -1,6 +1,10 @@
 "use client";
 
 import { useMemo } from "react";
+import {
+  getBandoriEventStatusAt,
+  type BandoriEventStatus,
+} from "@/lib/bandori-event-status";
 import { calculateBandoriTrackerSpeeds } from "@/lib/bandori-tracker-projection";
 import type { TrackerData, TrackingMode } from "./types";
 import { useBoundaryClock } from "./useBoundaryClock";
@@ -15,8 +19,6 @@ export type ChartDomain = {
   cutoffEnd: number | null;
   midnights: number[];
 };
-
-type EventStatus = "未开始" | "进行中" | "已结束";
 
 type MonthlyRankingWindow = {
   effectiveMonthStart: Date;
@@ -208,36 +210,16 @@ export function useProcessedData(
  * 设计取舍：活动状态只在域边界变化时才需要重算。
  * 若按秒级更新时间反复读取当前时间，会让包含图表的父组件发生无意义的整树重渲染。
  */
-function getEventStatusAt(
-  currentTimeMs: number,
-  domainStart: number | "auto",
-  domainEnd: number | "auto",
-): EventStatus {
-  if (domainStart === "auto" || domainEnd === "auto") {
-    return "未开始";
-  }
-
-  if (currentTimeMs < domainStart) {
-    return "未开始";
-  }
-
-  if (currentTimeMs > domainEnd) {
-    return "已结束";
-  }
-
-  return "进行中";
-}
-
 export function useEventStatus(
   domainStart: number | "auto",
   domainEnd: number | "auto",
-): EventStatus {
+): BandoriEventStatus {
   const boundaryNow = useBoundaryClock([
     typeof domainStart === "number" ? domainStart : null,
     typeof domainEnd === "number" ? domainEnd + 1 : null,
   ]);
 
-  return getEventStatusAt(boundaryNow, domainStart, domainEnd);
+  return getBandoriEventStatusAt(boundaryNow, domainStart, domainEnd);
 }
 
 /**

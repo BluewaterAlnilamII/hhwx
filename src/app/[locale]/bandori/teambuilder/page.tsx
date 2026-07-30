@@ -16,11 +16,11 @@ import {
   Users,
 } from "lucide-react";
 import BandoriAccountShell from "@/app/[locale]/bandori/BandoriAccountShell";
-import BandoriCardThumbnail from "@/components/bandori/BandoriCardThumbnail";
+import BandoriCardTile from "@/components/bandori/BandoriCardTile";
+import BandoriEventBonusPanel from "@/components/bandori/BandoriEventBonusPanel";
 import BandoriEventSwitcher, { type BandoriEventSwitcherEvent } from "@/app/[locale]/bandori/BandoriEventSwitcher";
 import { AccountErrorState, AccountLoadingState, AccountSignInState } from "@/app/[locale]/account/AccountShell";
 import { getAccessToken, useLocalizedAccountProfile } from "@/app/[locale]/account/useAccountProfile";
-import { BandoriCardHoverTooltipPortal } from "@/components/bandori/BandoriCardHoverTooltip";
 import {
   useBandoriCardsAssetIndex,
   useBandoriEventsAssetIndex,
@@ -29,10 +29,7 @@ import { useBandoriCardsMaster } from "@/hooks/useBandoriCardsMaster";
 import { useBandoriEventsMaster } from "@/hooks/useBandoriEventsMaster";
 import { useBandoriMusicMaster } from "@/hooks/useBandoriMusicMaster";
 import { getApiErrorMessage, parseApiSuccessData } from "@/lib/api-contracts";
-import {
-  type BandoriAssetRegion,
-  buildBandoriResIconPublicUrl,
-} from "@/lib/bandori-asset-proxy";
+import type { BandoriAssetRegion } from "@/lib/bandori-asset-proxy";
 import {
   buildBandoriPublicAssetUrl,
   lookupBandoriEventBanner,
@@ -366,18 +363,6 @@ const DEFAULT_OTHER_PLAYERS: OtherPlayerDraft[] = [
   { skillId: "66", skillLevel: "5" },
   { skillId: "66", skillLevel: "1" },
 ];
-const ATTRIBUTE_LABELS: Record<BandoriCardAttribute, string> = {
-  powerful: "Powerful",
-  cool: "Cool",
-  happy: "Happy",
-  pure: "Pure",
-};
-const ATTRIBUTE_SWATCH_CLASSES: Record<BandoriCardAttribute, string> = {
-  powerful: "bg-rose-500",
-  cool: "bg-sky-500",
-  happy: "bg-amber-400",
-  pure: "bg-emerald-500",
-};
 const AREA_ITEM_PARAMETER_LABELS: Record<"performance" | "technique" | "visual", string> = {
   performance: "Performance",
   technique: "Technique",
@@ -675,13 +660,6 @@ function formatPercent(value: number | null | undefined): string {
   return `+${Number.isInteger(rounded) ? rounded.toFixed(0) : rounded.toFixed(1)}%`;
 }
 
-function formatPercentSequence(values: number[]): string {
-  return values.map((value) => {
-    const rounded = Math.round(value * 10) / 10;
-    return Number.isInteger(rounded) ? rounded.toFixed(0) : rounded.toFixed(1);
-  }).join("/");
-}
-
 function normalizeSkillLabel(
   skill: SkillMaster | undefined,
   skillLevel: string | number,
@@ -707,87 +685,6 @@ function buildSkillOptions(
       }];
     })
     .sort((left, right) => Number(left.value) - Number(right.value));
-}
-
-function readAttributeBonusItems(eventBonus: BandoriEventBonus | null): Array<{ attribute: BandoriCardAttribute; percent: number }> {
-  return (eventBonus?.attributes ?? []).flatMap((item) => {
-    if (!isRecord(item)) {
-      return [];
-    }
-    const attribute = item.attribute;
-    const percent = toFiniteNumber(item.percent);
-    if (typeof attribute !== "string" || !(attribute in ATTRIBUTE_LABELS) || percent === null) {
-      return [];
-    }
-    return [{ attribute: attribute as BandoriCardAttribute, percent }];
-  });
-}
-
-function readCharacterBonusItems(
-  eventBonus: BandoriEventBonus | null,
-  characters: Record<string, CharacterMaster | undefined>,
-  preferredServer: BandoriServer,
-): Array<{ characterId: number; label: string; color: string | null; percent: number }> {
-  return (eventBonus?.characters ?? []).flatMap((item) => {
-    if (!isRecord(item)) {
-      return [];
-    }
-    const characterId = toInteger(item.characterId);
-    const percent = toFiniteNumber(item.percent);
-    if (characterId === null || percent === null) {
-      return [];
-    }
-    const character = characters[String(characterId)];
-    return [{
-      characterId,
-      label: pickCharacterDisplayName(character, preferredServer),
-      color: character?.colorCode ?? null,
-      percent,
-    }];
-  });
-}
-
-function readMemberBonusItems(
-  eventBonus: BandoriEventBonus | null,
-  cardMetadata: Record<string, CardMetadata | undefined>,
-): Array<{ cardId: number; metadata: CardMetadata | undefined; percent: number }> {
-  return (eventBonus?.members ?? []).flatMap((item) => {
-    if (!isRecord(item)) {
-      return [];
-    }
-    const cardId = toInteger(item.situationId ?? item.id);
-    const percent = toFiniteNumber(item.percent);
-    if (cardId === null || percent === null) {
-      return [];
-    }
-    return [{
-      cardId,
-      metadata: cardMetadata[String(cardId)],
-      percent,
-    }];
-  });
-}
-
-function readMasterRankBonusGroups(eventBonus: BandoriEventBonus | null): Array<{ rarity: number; values: number[] }> {
-  const groups = new Map<number, number[]>();
-  (eventBonus?.limitBreaks ?? []).forEach((item) => {
-    if (!isRecord(item)) {
-      return;
-    }
-    const rarity = toInteger(item.rarity);
-    const rank = toInteger(item.rank);
-    const percent = toFiniteNumber(item.percent);
-    if (rarity === null || rank === null || percent === null) {
-      return;
-    }
-    const values = groups.get(rarity) ?? [];
-    values[rank] = percent;
-    groups.set(rarity, values);
-  });
-
-  return [...groups.entries()]
-    .sort(([left], [right]) => left - right)
-    .map(([rarity, values]) => ({ rarity, values: Array.from({ length: 5 }, (_, rank) => values[rank] ?? 0) }));
 }
 
 function getEventBonusMemberCardIds(eventBonus: BandoriEventBonus | null): number[] {
@@ -840,18 +737,6 @@ function selectMissingTemporaryCards(
   });
 
   return { cardsToAdd, skippedDuplicateCount };
-}
-
-function buildBandoriCharacterIconUrl(characterId: number): string {
-  return buildBandoriResIconPublicUrl(`chara_icon_${characterId}.png`);
-}
-
-function buildBandoriRarityIconUrl(rarity: number): string {
-  return buildBandoriResIconPublicUrl(`star_${Math.max(1, Math.min(5, Math.trunc(rarity)))}.png`);
-}
-
-function buildBandoriAttributeIconUrl(attribute: BandoriCardAttribute): string | null {
-  return buildBandoriResIconPublicUrl(`${attribute}.svg`);
 }
 
 function isKnownAttribute(value: string | undefined): value is BandoriCardAttribute {
@@ -1101,20 +986,6 @@ function writeLivePreferences(patch: LivePreferenceState): void {
 
 function shouldShowParameterBonus(eventType: BandoriTeamSearchEventType): boolean {
   return eventType === "challenge" || eventType === "versus" || eventType === "festival" || eventType === "medley";
-}
-
-function readEventParameterBonusItems(
-  eventBonus: BandoriEventBonus | null,
-  labels: Record<"performance" | "technique" | "visual", string>,
-): Array<{ label: string; percent: number }> {
-  return [
-    { label: labels.performance, percent: eventBonus?.performancePercent },
-    { label: labels.technique, percent: eventBonus?.techniquePercent },
-    { label: labels.visual, percent: eventBonus?.visualPercent },
-  ].flatMap((item) => {
-    const percent = toFiniteNumber(item.percent);
-    return percent !== null && percent !== 0 ? [{ label: item.label, percent }] : [];
-  });
 }
 
 function createTeamSearchWorker(): Worker {
@@ -1911,158 +1782,6 @@ function MedleyEventSongQuickPicker({
   );
 }
 
-function BonusChip({
-  children,
-  tone = "default",
-  compact = false,
-}: {
-  children: React.ReactNode;
-  tone?: "default" | "accent" | "muted";
-  compact?: boolean;
-}) {
-  const toneClassName = tone === "accent"
-    ? "border-sky-200 bg-sky-50 text-sky-800"
-    : tone === "muted"
-      ? "border-slate-200 bg-slate-50 text-slate-500"
-      : "border-slate-200 bg-white text-slate-700";
-  return (
-    <span className={`inline-flex items-center rounded-full border text-sm font-semibold shadow-xs ${compact ? "min-h-8 gap-1.5 px-2.5 py-1" : "min-h-9 gap-2 px-3 py-1.5"} ${toneClassName}`}>
-      {children}
-    </span>
-  );
-}
-
-function AttributeIcon({ attribute }: { attribute: BandoriCardAttribute }) {
-  const t = useTranslations("bandori.teamBuilder.excludedFilter.attributes");
-  const iconUrl = buildBandoriAttributeIconUrl(attribute);
-
-  return (
-    <span
-      className={`inline-flex h-6 w-6 shrink-0 items-center justify-center overflow-hidden rounded-full ${ATTRIBUTE_SWATCH_CLASSES[attribute]}`}
-      title={t(attribute)}
-    >
-      {iconUrl ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={iconUrl}
-          alt=""
-          className="h-full w-full object-contain"
-          loading="lazy"
-          decoding="async"
-          onError={(event) => { event.currentTarget.style.display = "none"; }}
-        />
-      ) : null}
-    </span>
-  );
-}
-
-function CharacterIcon({ characterId, label }: { characterId: number; label: string }) {
-  return (
-    <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center overflow-hidden rounded-full bg-slate-100 ring-1 ring-slate-200" title={label}>
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src={buildBandoriCharacterIconUrl(characterId)}
-        alt={label}
-        className="h-full w-full object-cover"
-        loading="lazy"
-        decoding="async"
-      />
-    </span>
-  );
-}
-
-function CharacterBonusChip({ items }: { items: Array<{ characterId: number; label: string; percent: number }> }) {
-  const statesT = useTranslations("bandori.teamBuilder.states");
-  if (items.length === 0) {
-    return <BonusChip tone="muted">{statesT("none")}</BonusChip>;
-  }
-
-  const firstPercent = items[0]?.percent ?? 0;
-  const allSamePercent = items.every((item) => item.percent === firstPercent);
-
-  if (!allSamePercent) {
-    return items.map((item) => (
-      <BonusChip key={item.characterId} compact>
-        <CharacterIcon characterId={item.characterId} label={item.label} />
-        {formatPercent(item.percent)}
-      </BonusChip>
-    ));
-  }
-
-  return (
-    <BonusChip compact>
-      <span className="flex items-center -space-x-1">
-        {items.map((item) => (
-          <CharacterIcon key={item.characterId} characterId={item.characterId} label={item.label} />
-        ))}
-      </span>
-      <span className="pl-1">{formatPercent(firstPercent)}</span>
-    </BonusChip>
-  );
-}
-
-function RarityIcon({ rarity }: { rarity: number }) {
-  const t = useTranslations("bandori.cardPicker");
-  const alt = t("rarityAlt", { rarity });
-  return (
-    // eslint-disable-next-line @next/next/no-img-element
-    <img
-      src={buildBandoriRarityIconUrl(rarity)}
-      alt={alt}
-      className="h-5 w-5 shrink-0 object-contain"
-      loading="lazy"
-      decoding="async"
-    />
-  );
-}
-
-function BonusCardThumbnail({
-  cardId,
-  metadata,
-  characters,
-  skills,
-  percent,
-  assetRegion,
-  bandId,
-}: {
-  cardId: number;
-  metadata: CardMetadata | undefined;
-  characters: Record<string, CharacterMaster | undefined>;
-  skills: Record<string, SkillMaster | undefined>;
-  percent: number;
-  assetRegion: BandoriAssetRegion;
-  bandId: number | null;
-}) {
-  const rarity = Math.min(5, Math.max(1, Math.trunc(Number(metadata?.rarity) || 1)));
-  const trainedLevelFallback = rarity >= 5 ? 60 : rarity >= 4 ? 60 : rarity >= 3 ? 50 : rarity >= 2 ? 30 : 20;
-  const baseLevelLimit = Math.trunc(Number(metadata?.levelLimit) || 0);
-  const trainingLevelLimit = Math.trunc(Number(metadata?.stat?.training?.levelLimit) || 0);
-  const level = Math.max(1, baseLevelLimit + trainingLevelLimit || trainedLevelFallback);
-  return (
-    <TeamBuilderCardTile
-      card={{
-        cardId,
-        skillId: getCardSkillId(undefined, metadata) ?? 0,
-        rarity,
-        attribute: isKnownAttribute(metadata?.attribute) ? metadata.attribute : "powerful",
-        bandId,
-        level,
-        masterRank: 0,
-        skillLevel: 1,
-        isTrained: rarity >= 3,
-        totalPower: 0,
-      }}
-      metadata={metadata}
-      characters={characters}
-      skills={skills}
-      skillEffectLevel={5}
-      badge={formatPercent(percent)}
-      assetRegion={assetRegion}
-      showPower={false}
-    />
-  );
-}
-
 function TeamBuilderCardTile({
   card,
   metadata,
@@ -2097,8 +1816,6 @@ function TeamBuilderCardTile({
     locale,
     displayServer,
   );
-  const tileRef = useRef<HTMLElement | null>(null);
-  const [hoverOpen, setHoverOpen] = useState(false);
   const rarity = Math.min(5, Math.max(1, Math.trunc(Number(metadata?.rarity ?? card.rarity) || 1)));
   const attribute = isKnownAttribute(metadata?.attribute) ? metadata.attribute : card.attribute;
   const skillEffectLabel = getCardSkillEffectLabel(
@@ -2110,62 +1827,24 @@ function TeamBuilderCardTile({
   );
 
   return (
-    <article
-      ref={tileRef}
-      onMouseEnter={() => setHoverOpen(true)}
-      onMouseLeave={() => setHoverOpen(false)}
-      className="group relative h-[74px] w-[74px] overflow-visible rounded-[5px] outline-solid outline-1 outline-white/80 transition hover:z-40 hover:-translate-y-0.5 hover:outline-2 hover:outline-sky-400 focus-within:z-40 focus-within:outline-2 focus-within:outline-sky-400 sm:h-[76px] sm:w-[76px]"
-    >
-      <div className="h-full w-full overflow-visible rounded-[5px] shadow-[0_2px_7px_rgba(15,23,42,0.22)]">
-        <BandoriCardThumbnail
-          card={card}
-          metadata={{ ...metadata, rarity, attribute }}
-          bandId={card.bandId}
-          region={assetRegion}
-          alt={cardName}
-          power={card.totalPower}
-          showPower={showPower}
-        />
-      </div>
-      {badge ? (
-        <span className="absolute -right-2 -top-2 z-30 rounded-full border border-rose-200 bg-rose-50 px-1.5 py-0.5 text-[11px] font-black leading-none text-rose-600 shadow-xs">
-          {badge}
-        </span>
-      ) : null}
-      {leader ? (
-        <span className="absolute -left-1.5 -top-1.5 z-30 rounded-full border border-sky-200 bg-sky-50 px-1.5 py-0.5 text-[10px] font-black leading-none text-sky-600 shadow-xs">
-          {labelsT("leader")}
-        </span>
-      ) : null}
-      {hoverOpen ? (
-        <BandoriCardHoverTooltipPortal
-          anchorRef={tileRef}
-          open={hoverOpen}
-          cardName={cardName}
-          characterName={characters
-            ? getCardCharacterLabel(
-                metadata,
-                characters,
-                preferredServer,
-                displayServer,
-              )
-            : `Card #${cardId}`}
-        >
-          <span className="block w-full whitespace-normal wrap-break-word rounded-xl bg-slate-50 px-2 py-1 text-slate-700">
-            {skillEffectLabel}
-          </span>
-        </BandoriCardHoverTooltipPortal>
-      ) : null}
-    </article>
-  );
-}
-
-function EventBonusInfoRow({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="grid gap-2 md:grid-cols-[7rem_1fr] md:items-start">
-      <div className="pt-1 text-sm font-semibold text-slate-600">{label}</div>
-      <div className="flex min-w-0 flex-wrap items-center gap-2">{children}</div>
-    </div>
+    <BandoriCardTile
+      card={card}
+      metadata={{ ...metadata, rarity, attribute }}
+      cardName={cardName}
+      characterName={characters
+        ? getCardCharacterLabel(
+            metadata,
+            characters,
+            preferredServer,
+            displayServer,
+          )
+        : `Card #${cardId}`}
+      skillEffectLabel={skillEffectLabel}
+      assetRegion={assetRegion}
+      badge={badge}
+      leaderLabel={leader ? labelsT("leader") : undefined}
+      showPower={showPower}
+    />
   );
 }
 
@@ -2175,8 +1854,8 @@ function EventBonusPanel({
   eventBonusLoading,
   eventBonusError,
   characters,
-  cardMetadata,
   skills,
+  cardMetadata,
   assetRegion,
   eventFormula,
 }: {
@@ -2185,106 +1864,27 @@ function EventBonusPanel({
   eventBonusLoading: boolean;
   eventBonusError: string;
   characters: Record<string, CharacterMaster | undefined>;
-  cardMetadata: Record<string, CardMetadata | undefined>;
   skills: Record<string, SkillMaster | undefined>;
+  cardMetadata: Record<string, CardMetadata | undefined>;
   assetRegion: BandoriAssetRegion;
   eventFormula: EventFormulaOption;
 }) {
   const preferredServer = useBandoriPreferredServer();
-  const labelsT = useTranslations("bandori.teamBuilder.labels");
   const eventTypesT = useTranslations("bandori.teamBuilder.eventTypes");
-  const statesT = useTranslations("bandori.teamBuilder.states");
-  const parameterLabels = useMemo(() => ({
-    performance: labelsT("performance"),
-    technique: labelsT("technique"),
-    visual: labelsT("visual"),
-  }), [labelsT]);
-  const attributeItems = readAttributeBonusItems(eventBonus);
-  const characterItems = readCharacterBonusItems(eventBonus, characters, preferredServer);
-  const memberItems = readMemberBonusItems(eventBonus, cardMetadata);
-  const masterRankGroups = readMasterRankBonusGroups(eventBonus);
-  const hasBonus = eventBonus !== null;
-  const pointPercent = eventBonus?.pointPercent ?? null;
-  const parameterPercent = eventBonus?.parameterPercent ?? null;
-  const matchBonusPercent = parameterPercent !== null && parameterPercent !== 0 ? parameterPercent : pointPercent;
-  const showParameterBonus = shouldShowParameterBonus(eventType);
-  const parameterBonusItems = readEventParameterBonusItems(eventBonus, parameterLabels);
-
   return (
-    <section className="rounded-3xl border border-slate-200 bg-[#fffef4] p-4 shadow-[0_16px_44px_rgba(15,23,42,0.06)] sm:p-5">
-      <div className="flex flex-col gap-2 border-b border-slate-100 pb-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h2 className="text-base font-bold text-slate-900">{labelsT("eventBonus")}</h2>
-        </div>
-        {eventBonusLoading ? (
-          <span className="inline-flex items-center gap-2 text-sm font-semibold text-slate-500">
-            <Loader2 className="h-4 w-4 animate-spin" />
-            {labelsT("loadBonus")}
-          </span>
-        ) : null}
-      </div>
-
-      <div className="mt-4 space-y-4">
-        <EventBonusInfoRow label={labelsT("type")}>
-          <BonusChip tone="accent">{eventTypesT(eventType)}</BonusChip>
-          {!hasBonus && !eventBonusLoading ? <BonusChip tone="muted">{statesT("noEventBonusData")}</BonusChip> : null}
-          {eventBonusError ? <span className="text-sm font-semibold text-rose-600">{eventBonusError}</span> : null}
-        </EventBonusInfoRow>
-
-        <EventBonusInfoRow label={labelsT("attribute")}>
-          {attributeItems.length > 0 ? attributeItems.map((item) => (
-            <BonusChip key={item.attribute} compact>
-              <AttributeIcon attribute={item.attribute} />
-              {formatPercent(item.percent)}
-            </BonusChip>
-          )) : <BonusChip tone="muted">{statesT("none")}</BonusChip>}
-        </EventBonusInfoRow>
-
-        <EventBonusInfoRow label={labelsT("character")}>
-          <CharacterBonusChip items={characterItems} />
-        </EventBonusInfoRow>
-
-        <EventBonusInfoRow label={labelsT("match")}>
-          <BonusChip compact>{formatPercent(matchBonusPercent)}</BonusChip>
-        </EventBonusInfoRow>
-
-        {showParameterBonus && parameterBonusItems.length > 0 ? (
-          <EventBonusInfoRow label={labelsT("parameter")}>
-            {parameterBonusItems.map((item) => (
-              <BonusChip key={item.label} compact>{item.label} {formatPercent(item.percent)}</BonusChip>
-            ))}
-          </EventBonusInfoRow>
-        ) : null}
-
-        <EventBonusInfoRow label={labelsT("masterRank")}>
-          {masterRankGroups.length > 0 ? masterRankGroups.map((group) => (
-            <BonusChip key={group.rarity}>
-              <RarityIcon rarity={group.rarity} />
-              +{formatPercentSequence(group.values)}%
-            </BonusChip>
-          )) : <BonusChip tone="muted">{statesT("none")}</BonusChip>}
-        </EventBonusInfoRow>
-
-        <EventBonusInfoRow label={labelsT("cards")}>
-          {memberItems.length > 0 ? memberItems.map((item) => (
-            <BonusCardThumbnail
-              key={item.cardId}
-              cardId={item.cardId}
-              metadata={item.metadata}
-              characters={characters}
-              skills={skills}
-              percent={item.percent}
-              assetRegion={assetRegion}
-              bandId={getCardBandId(item.metadata, characters)}
-            />
-          )) : <BonusChip tone="muted">{statesT("none")}</BonusChip>}
-        </EventBonusInfoRow>
-
-        <EventBonusInfoRow label={labelsT("scoreFormula")}>
-          <BonusChip compact>{EVENT_FORMULA_LABELS[eventFormula]}</BonusChip>
-        </EventBonusInfoRow>
-      </div>
-    </section>
+    <BandoriEventBonusPanel
+      eventTypeLabel={eventTypesT(eventType)}
+      eventBonus={eventBonus}
+      loading={eventBonusLoading}
+      error={eventBonusError}
+      characters={characters}
+      skills={skills}
+      cardMetadata={cardMetadata}
+      preferredServer={preferredServer}
+      assetRegion={assetRegion}
+      showParameter={shouldShowParameterBonus(eventType)}
+      scoreFormulaLabel={EVENT_FORMULA_LABELS[eventFormula]}
+    />
   );
 }
 
@@ -3988,8 +3588,8 @@ function TeamBuilderPanel() {
             eventBonusLoading={eventBonusLoading}
             eventBonusError={eventBonusError}
             characters={data.characters}
-            cardMetadata={canonicalCardMetadata}
             skills={data.skills}
+            cardMetadata={canonicalCardMetadata}
             assetRegion={selectedEventAssetRegion}
             eventFormula={eventFormula}
           />

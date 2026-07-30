@@ -28,6 +28,7 @@ MCP/手动流程应用过的历史记录。它们在本地有意保持 no-op，�
 - `supabase/migrations/20260630055412_retarget_legacy_comment_reaction_kokoro_yay.sql`：把旧点赞迁移到默认 `KokoroYay` reaction。
 - `supabase/migrations/20260630071740_remove_legacy_comment_likes.sql`：在确认 reaction 回填后，移除旧 `comment_likes` 表和 `comments.like_count` 兼容计数字段。
 - `supabase/migrations/20260701131822_remove_legacy_like_notifications.sql`：移除旧 `comment_like` 提醒记录，并把 `comment_notifications` 收紧为只支持回复和回应提醒。
+- `supabase/migrations/20260728185041_scope_bandori_event_comments_by_server.sql`：把旧的纯数字 Bandori 活动评论和通知目标迁移为统一的 `<server-code>:<event-id>` 格式，并将迁移前的讨论全部视为 CN。
 - `documents/profile-public-uid-schema.sql`：公开数字 profile UID 支持。
 - `documents/game-profile-schema.sql`：持久化用户游戏档案。
 - `documents/game-account-binding-schema.sql`：游戏账号绑定验证码和绑定关系。
@@ -49,6 +50,8 @@ npm exec -- supabase migration new <name>
 3. 应用前复查 grants、RLS policies、函数 `search_path` 和 service-role 边界。
 4. 如果本机有 Docker，可用 `npm exec -- supabase db reset` 在本地 Supabase stack 上测试。
 5. 对已 link 的远程项目，先用 `npm exec -- supabase db push --dry-run` 复查，再执行 `npm exec -- supabase db push`。
+
+`20260728185041_scope_bandori_event_comments_by_server.sql` 必须与应用协调发布：先部署已支持服务器隔离的评论 API，使并发新写入直接使用统一目标格式，再立即执行迁移。两个步骤之间旧讨论可能会暂时不可见，但迁移会保留全部评论和通知记录。
 
 当前 baseline migration 面向全新的空项目。不要直接对现有生产 HHWX 项目执行它。对已 link 的生产项目，保留远端已应用版本对应的历史 no-op 记录；只有在确认线上 schema 已经匹配后，才把 baseline version 标记为 applied。任何生产 push 前都先运行 `npm exec -- supabase db push --dry-run`。
 

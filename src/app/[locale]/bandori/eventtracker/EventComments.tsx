@@ -12,8 +12,9 @@ import { CommentComposer } from "./CommentComposer";
 import { CommentItem } from "./CommentItem";
 import { COMMENT_ROOT_PAGE_SIZE } from "./commentTypes";
 import { useCommentThread } from "./useCommentThread";
+import type { BandoriServer } from "@/lib/bandori-server";
 
-export default function EventComments({ eventId }: { eventId: number | null }) {
+export default function EventComments({ eventId, server }: { eventId: number | null; server: BandoriServer }) {
   const {
     authReady,
     canReact,
@@ -41,7 +42,7 @@ export default function EventComments({ eventId }: { eventId: number | null }) {
     updateCommentContent,
     userId,
     username,
-  } = useCommentThread(eventId);
+  } = useCommentThread(eventId, server);
 
   const handleCreateRootComment = useCallback((content: string) => createComment(content, null), [createComment]);
   const handleCreateReply = useCallback((parentId: string, content: string) => createComment(content, parentId), [createComment]);
@@ -69,7 +70,7 @@ export default function EventComments({ eventId }: { eventId: number | null }) {
           />
         ) : userId ? (
           <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-center text-sm font-medium text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200">
-            完成邮箱验证后可以发表评论和回复。
+            完成邮箱验证后可以发表评论和回复
           </div>
         ) : (
           <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-center text-sm font-semibold text-slate-500 dark:border-slate-700 dark:bg-slate-900">
@@ -90,6 +91,7 @@ export default function EventComments({ eventId }: { eventId: number | null }) {
             key={comment.id}
             comment={comment}
             eventId={eventId ?? 0}
+            server={server}
             highlightedId={focusedCommentId}
             replies={replies}
             loadingReplies={loadingReplies}
@@ -107,7 +109,7 @@ export default function EventComments({ eventId }: { eventId: number | null }) {
 
         {!loading && comments.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 py-10 text-center text-sm font-semibold text-slate-400 dark:border-slate-700 dark:bg-slate-900/50">
-            还没有评论，来留下本期活动的第一条讨论。
+            还没有评论，来留下本期活动的第一条讨论
           </div>
         ) : null}
       </div>

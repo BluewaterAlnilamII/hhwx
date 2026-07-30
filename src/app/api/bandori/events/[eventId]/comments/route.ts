@@ -7,6 +7,10 @@ import {
   listComments,
   parseCommentContent,
 } from "@/lib/comments";
+import {
+  buildBandoriEventCommentTargetId,
+  parseBandoriEventCommentServer,
+} from "@/lib/bandori-comment-target";
 
 type RouteContext = {
   params: Promise<{ eventId: string }>;
@@ -43,11 +47,15 @@ export async function GET(request: Request, context: RouteContext) {
     const { eventId: rawEventId } = await context.params;
     const eventId = parseEventId(rawEventId);
     const url = new URL(request.url);
+    const server = parseBandoriEventCommentServer(url);
+    if (server === null) {
+      throw new ApiRouteError(400, "INVALID_SERVER", "服务器参数无效");
+    }
     const viewerUserId = await readViewerUserId(request);
 
     return jsonSuccess(await listComments({
       targetType: COMMENT_TARGET_BANDORI_EVENT,
-      targetId: eventId,
+      targetId: buildBandoriEventCommentTargetId(eventId, server),
       parentId: null,
       cursor: url.searchParams.get("cursor"),
       page: Number.parseInt(url.searchParams.get("page") ?? "1", 10),
@@ -68,6 +76,10 @@ export async function POST(request: Request, context: RouteContext) {
     const user = await requireVerifiedAccount(request);
     const { eventId: rawEventId } = await context.params;
     const eventId = parseEventId(rawEventId);
+    const server = parseBandoriEventCommentServer(new URL(request.url));
+    if (server === null) {
+      throw new ApiRouteError(400, "INVALID_SERVER", "服务器参数无效");
+    }
 
     let body: CreateCommentRequest;
     try {
@@ -81,7 +93,7 @@ export async function POST(request: Request, context: RouteContext) {
 
     return jsonSuccess(await createComment({
       targetType: COMMENT_TARGET_BANDORI_EVENT,
-      targetId: eventId,
+      targetId: buildBandoriEventCommentTargetId(eventId, server),
       parentId,
       userId: user.id,
       content,

@@ -7,6 +7,7 @@ import {
   reactToComment,
   removeCommentReaction,
 } from "@/lib/comments";
+import { buildBandoriEventCommentTargetId, parseBandoriEventCommentServer } from "@/lib/bandori-comment-target";
 
 type RouteContext = {
   params: Promise<{ eventId: string; commentId: string; emojiKey: string }>;
@@ -26,11 +27,13 @@ export async function PUT(request: Request, context: RouteContext) {
     const user = await requireVerifiedAccount(request);
     const { eventId: rawEventId, commentId, emojiKey: rawEmojiKey } = await context.params;
     const eventId = parseEventId(rawEventId);
+    const server = parseBandoriEventCommentServer(new URL(request.url));
+    if (server === null) throw new ApiRouteError(400, "INVALID_SERVER", "服务器参数无效");
     const emojiKey = parseCommentReactionKey(rawEmojiKey);
 
     return jsonSuccess(await reactToComment({
       targetType: COMMENT_TARGET_BANDORI_EVENT,
-      targetId: eventId,
+      targetId: buildBandoriEventCommentTargetId(eventId, server),
       commentId,
       userId: user.id,
       emojiKey,
@@ -50,11 +53,13 @@ export async function DELETE(request: Request, context: RouteContext) {
     const user = await requireVerifiedAccount(request);
     const { eventId: rawEventId, commentId, emojiKey: rawEmojiKey } = await context.params;
     const eventId = parseEventId(rawEventId);
+    const server = parseBandoriEventCommentServer(new URL(request.url));
+    if (server === null) throw new ApiRouteError(400, "INVALID_SERVER", "服务器参数无效");
     const emojiKey = parseCommentReactionKey(rawEmojiKey);
 
     return jsonSuccess(await removeCommentReaction({
       targetType: COMMENT_TARGET_BANDORI_EVENT,
-      targetId: eventId,
+      targetId: buildBandoriEventCommentTargetId(eventId, server),
       commentId,
       userId: user.id,
       emojiKey,
