@@ -2,6 +2,7 @@ import { ApiRouteError } from "@/lib/api-contracts";
 import { jsonRouteError, jsonSuccess } from "@/lib/api-response";
 import { requireAuthenticatedUser } from "@/lib/auth-server";
 import { COMMENT_TARGET_BANDORI_EVENT, listThreadReplies } from "@/lib/comments";
+import { buildBandoriEventCommentTargetId, parseBandoriEventCommentServer } from "@/lib/bandori-comment-target";
 
 type RouteContext = {
   params: Promise<{ eventId: string; commentId: string }>;
@@ -32,12 +33,14 @@ export async function GET(request: Request, context: RouteContext) {
   try {
     const { eventId: rawEventId, commentId } = await context.params;
     const eventId = parseEventId(rawEventId);
+    const server = parseBandoriEventCommentServer(new URL(request.url));
+    if (server === null) throw new ApiRouteError(400, "INVALID_SERVER", "服务器参数无效");
     const url = new URL(request.url);
     const viewerUserId = await readViewerUserId(request);
 
     return jsonSuccess(await listThreadReplies({
       targetType: COMMENT_TARGET_BANDORI_EVENT,
-      targetId: eventId,
+      targetId: buildBandoriEventCommentTargetId(eventId, server),
       rootId: commentId,
       cursor: url.searchParams.get("cursor"),
       viewerUserId,

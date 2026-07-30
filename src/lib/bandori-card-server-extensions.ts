@@ -1,5 +1,6 @@
 import {
   BANDORI_SERVER_COUNT,
+  getBandoriRegionalDisplayOrder,
   getBandoriServerCode,
   normalizeBandoriServer,
   type BandoriServer,
@@ -476,6 +477,19 @@ export function resolveBandoriCardMapForServerWithJpFallback<T extends object>(
   return resolved;
 }
 
+export function resolveBandoriCardForServerWithRegionalFallback<T extends object>(
+  card: T,
+  server: BandoriServer,
+): T | null {
+  for (const candidateServer of getBandoriRegionalDisplayOrder(server)) {
+    const serverCard = resolveBandoriCardForServer(card, candidateServer);
+    if (serverCard) {
+      return serverCard;
+    }
+  }
+  return null;
+}
+
 export function materializeBandoriCardForServer<T extends object>(
   card: T,
   server: number,
@@ -517,6 +531,26 @@ export function materializeBandoriCardMapForServerWithJpFallback<T extends objec
       continue;
     }
     const serverCard = resolveBandoriCardForServerWithJpFallback(card, server);
+    if (!serverCard) {
+      continue;
+    }
+    const resolvedCard = { ...serverCard } as T & Record<string, unknown>;
+    delete resolvedCard.serverExtensions;
+    materialized[cardId] = resolvedCard as T;
+  }
+  return materialized;
+}
+
+export function materializeBandoriCardMapForServerWithRegionalFallback<T extends object>(
+  cards: Record<string, T | null | undefined>,
+  server: BandoriServer,
+): Record<string, T> {
+  const materialized: Record<string, T> = {};
+  for (const [cardId, card] of Object.entries(cards)) {
+    if (!card) {
+      continue;
+    }
+    const serverCard = resolveBandoriCardForServerWithRegionalFallback(card, server);
     if (!serverCard) {
       continue;
     }

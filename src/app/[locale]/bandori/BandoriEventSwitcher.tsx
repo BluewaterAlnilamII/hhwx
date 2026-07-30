@@ -6,6 +6,28 @@ import { useTranslations } from "next-intl";
 import * as Dialog from "@radix-ui/react-dialog";
 import { History, Search, X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { BANDORI_SERVERS, getBandoriServerCode, type BandoriServer } from "@/lib/bandori-server";
+
+// Artwork mirrored from https://bestdori.com/res/icon/{jp,en,tw,cn}.svg.
+const BANDORI_SERVER_ICON_PATHS = [
+  "/res/server-icons/jp.svg",
+  "/res/server-icons/en.svg",
+  "/res/server-icons/tw.svg",
+  "/res/server-icons/cn.svg",
+] as const;
+
+const WIDE_EVENT_TITLE_CHARACTER_PATTERN = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Extended_Pictographic}]/u;
+
+function getEventTitleSizeClass(title: string) {
+  const visualLength = Array.from(title).reduce((length, character) => {
+    if (/\s/u.test(character)) return length + 0.35;
+    return length + (WIDE_EVENT_TITLE_CHARACTER_PATTERN.test(character) ? 1 : 0.62);
+  }, 0);
+
+  if (visualLength > 23) return "text-xl sm:text-[22px]";
+  if (visualLength > 16) return "text-[22px] sm:text-[26px]";
+  return "text-2xl sm:text-3xl";
+}
 
 export type BandoriEventSwitcherEvent = {
   id: number;
@@ -33,6 +55,8 @@ type BandoriEventSwitcherProps = {
   allowNoEvent?: boolean;
   noEventLabel?: string;
   loading?: boolean;
+  server?: BandoriServer;
+  onServerChange?: (server: BandoriServer) => void;
 };
 
 export default function BandoriEventSwitcher({
@@ -49,6 +73,8 @@ export default function BandoriEventSwitcher({
   allowNoEvent = false,
   noEventLabel,
   loading = false,
+  server,
+  onServerChange,
 }: BandoriEventSwitcherProps) {
   const t = useTranslations("bandori.eventSwitcher");
   const [isPickerOpen, setIsPickerOpen] = useState(false);
@@ -77,12 +103,54 @@ export default function BandoriEventSwitcher({
 
   return (
     <div className="relative z-20 grid grid-cols-1 gap-6 rounded-3xl border border-[#ffe16c]/95 bg-[#fffef0]/96 p-4 shadow-[0_26px_68px_rgba(232,176,0,0.18),0_4px_18px_rgba(88,69,0,0.08)] dark:border-gray-800 dark:bg-[#131A2B] dark:shadow-blue-500/10 sm:p-8 xl:grid-cols-[minmax(0,1fr)_minmax(320px,420px)] xl:items-center xl:gap-10">
-      <div className="flex min-w-0 flex-1 flex-col gap-4">
-        <h1 className="block min-h-21 max-h-21 w-full overflow-hidden wrap-break-word text-3xl font-extrabold leading-tight text-[#f43f5e] md:min-h-14 md:max-h-14">
-          {title}
-        </h1>
+      <div className={cn(
+        "flex min-w-0 flex-1 flex-col gap-4",
+        server !== undefined && "sm:grid sm:grid-cols-[auto_minmax(280px,1fr)] sm:items-end sm:gap-x-4",
+      )}>
+        {server !== undefined && onServerChange ? (
+          <div className="flex items-center justify-between gap-4 sm:col-start-1 sm:row-start-1 sm:block">
+            <div className="text-sm font-black text-slate-700 dark:text-slate-200 sm:mb-2">服务器</div>
+            <div className="inline-grid grid-cols-4 overflow-hidden rounded-xl border border-slate-200 bg-white/90 shadow-xs dark:border-slate-700 dark:bg-slate-950/60">
+              {BANDORI_SERVERS.map((option) => {
+                const active = option === server;
+                const serverCode = getBandoriServerCode(option).toUpperCase();
+                const accessibleLabel = `切换到 ${serverCode} 服务器`;
+                return (
+                  <button
+                    key={option}
+                    type="button"
+                    aria-pressed={active}
+                    aria-label={accessibleLabel}
+                    title={accessibleLabel}
+                    onClick={() => onServerChange(option)}
+                    className={cn(
+                      "group flex h-11 w-11 items-center justify-center border-r border-slate-200 transition first:rounded-l-[11px] last:rounded-r-[11px] last:border-r-0 focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-sky-500 dark:border-slate-700 sm:h-10",
+                      active
+                        ? "bg-sky-50 dark:bg-sky-500/15"
+                        : "hover:bg-slate-50 dark:hover:bg-slate-800",
+                    )}
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={BANDORI_SERVER_ICON_PATHS[option]}
+                      alt=""
+                      aria-hidden="true"
+                      width={24}
+                      height={24}
+                      className={cn(
+                        "h-6 w-6 rounded-full object-contain shadow-[0_1px_3px_rgba(15,23,42,0.18)] transition-transform group-hover:scale-105",
+                        active && "scale-105 ring-2 ring-sky-400 ring-offset-1 ring-offset-sky-50 dark:ring-sky-300 dark:ring-offset-slate-900",
+                      )}
+                    />
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ) : null}
 
-        <div className="min-h-13">
+        <div className={cn("min-h-13", server !== undefined && "sm:col-start-2 sm:row-start-1")}>
+          {server !== undefined ? <div className="mb-2 text-sm font-black text-slate-700 dark:text-slate-200">活动选择</div> : null}
           {!showSkeleton ? (
             <div className="grid w-full max-w-[492px] grid-cols-[minmax(0,1fr)_44px_44px] items-center gap-2">
               <select
@@ -216,12 +284,33 @@ export default function BandoriEventSwitcher({
           )}
         </div>
 
-        <div className="min-h-12 text-sm font-medium text-gray-500 dark:text-gray-400">
+        <h1
+          title={title}
+          className={cn(
+            "block h-10 min-w-0 w-full truncate whitespace-nowrap font-extrabold leading-10 tracking-[-0.02em] text-[#EF392B]",
+            getEventTitleSizeClass(title),
+            server !== undefined && "sm:col-span-2 sm:row-start-2",
+          )}
+        >
+          {title}
+        </h1>
+
+        <div className={cn("min-h-12 text-sm font-medium text-gray-500 dark:text-gray-400", server !== undefined && "sm:col-span-2 sm:row-start-3")}>
           {startText || endText ? (
-            <>
-              {startText ? <p>{t("startLabel")} {startText}</p> : null}
-              {endText ? <p>{t("endLabel")} {endText}</p> : null}
-            </>
+            <div className="grid gap-1">
+              {startText ? (
+                <p className="grid grid-cols-[auto_minmax(0,1fr)] gap-3 leading-5 sm:block">
+                  <span>{t("startLabel")}</span>
+                  <span className="min-w-0 text-right tabular-nums sm:ml-1 sm:text-left">{startText}</span>
+                </p>
+              ) : null}
+              {endText ? (
+                <p className="grid grid-cols-[auto_minmax(0,1fr)] gap-3 leading-5 sm:block">
+                  <span>{t("endLabel")}</span>
+                  <span className="min-w-0 text-right tabular-nums sm:ml-1 sm:text-left">{endText}</span>
+                </p>
+              ) : null}
+            </div>
           ) : showSkeleton ? (
             <div className="flex flex-col gap-2 py-0.5" aria-hidden="true">
               <div className="h-4 w-48 animate-pulse rounded-full bg-gray-100 dark:bg-gray-800" />

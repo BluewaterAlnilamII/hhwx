@@ -193,7 +193,15 @@ export function CommentStampAnimationCanvas({
   );
 }
 
-function CommentStampView({ stamp, shortcode }: { stamp: CommentStamp; shortcode: string }) {
+export function CommentStampView({
+  stamp,
+  shortcode,
+  variant = "comment",
+}: {
+  stamp: CommentStamp;
+  shortcode: string;
+  variant?: "comment" | "reward";
+}) {
   const [imageFailed, setImageFailed] = useState(false);
   const [animationFailed, setAnimationFailed] = useState(false);
   const animationSummary = stamp.animation;
@@ -205,6 +213,12 @@ function CommentStampView({ stamp, shortcode }: { stamp: CommentStamp; shortcode
   );
   const voiceUrl = stamp.voiceUrl;
   const imageUrl = stamp.imageUrl;
+  const mediaClassName = cn(
+    "h-full w-full object-contain",
+    variant === "reward"
+      ? "max-h-[74px] max-w-[111px] sm:max-h-[76px] sm:max-w-[114px]"
+      : "max-h-16 max-w-24 sm:max-h-[76px] sm:max-w-[114px]",
+  );
 
   const handleAnimationError = useCallback(() => {
     setAnimationFailed(true);
@@ -220,6 +234,7 @@ function CommentStampView({ stamp, shortcode }: { stamp: CommentStamp; shortcode
         animation={animation}
         shortcode={shortcode}
         onError={handleAnimationError}
+        className={mediaClassName}
       />
     ) : (
       // eslint-disable-next-line @next/next/no-img-element
@@ -231,12 +246,17 @@ function CommentStampView({ stamp, shortcode }: { stamp: CommentStamp; shortcode
         decoding="async"
         referrerPolicy="strict-origin-when-cross-origin"
         onError={() => setImageFailed(true)}
-        className="h-full max-h-16 w-full max-w-24 object-contain"
+        className={mediaClassName}
       />
     )
   );
 
-  const className = "relative mx-0.5 inline-flex h-16 w-24 shrink-0 items-center justify-center align-[-1.35em]";
+  const className = cn(
+    "relative mx-0.5 inline-flex shrink-0 items-center justify-center align-[-1.35em]",
+    variant === "reward"
+      ? "h-[74px] w-[111px] sm:h-[76px] sm:w-[114px]"
+      : "h-16 w-24 sm:h-[76px] sm:w-[114px]",
+  );
   if (!voiceUrl) {
     return <span className={className}>{image}</span>;
   }

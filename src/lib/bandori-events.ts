@@ -18,6 +18,8 @@ export type BandoriEventSummary = {
   eventType: string;
   name: {
     jp: string;
+    en: string | null;
+    tw: string | null;
     cn: string | null;
   };
   asset: {
@@ -28,12 +30,32 @@ export type BandoriEventSummary = {
   stampCharacterId: number | null;
   timeline: {
     jp: {
-      startAt: number;
-      endAt: number;
+      startAt: number | null;
+      endAt: number | null;
+    };
+    en: {
+      startAt: number | null;
+      endAt: number | null;
+    };
+    tw: {
+      startAt: number | null;
+      endAt: number | null;
     };
     cn: {
       startAt: number | null;
       endAt: number | null;
+    };
+    jpSchedule?: {
+      startAt: number;
+      endAt: number;
+    };
+    enSchedule?: {
+      startAt: number;
+      endAt: number;
+    };
+    twSchedule?: {
+      startAt: number;
+      endAt: number;
     };
     cnSchedule?: {
       startAt: number;
@@ -42,6 +64,8 @@ export type BandoriEventSummary = {
   };
   musicIds: {
     jp: number[];
+    en: number[];
+    tw: number[];
     cn: number[];
   };
   bonus: BandoriEventBonus | null;
@@ -94,6 +118,15 @@ function regionalString(value: unknown, server: 0 | 1 | 2 | 3, fallback = true):
 
 function regionalTimestamp(value: unknown, server: 0 | 1 | 2 | 3): number | null {
   return toFiniteNumber(regionalSlot(value, server));
+}
+
+function eventScheduleWindow(value: unknown): { startAt: number; endAt: number } | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+  const startAt = toFiniteNumber(value.startAt);
+  const endAt = toFiniteNumber(value.endAt);
+  return startAt !== null && endAt !== null ? { startAt, endAt } : null;
 }
 
 function regionalMusicIds(value: unknown, server: 0 | 1 | 2 | 3): number[] {
@@ -162,26 +195,20 @@ export function toBandoriEventSummary(
   const numericEventId = Number(eventId);
   const eventType = typeof record.eventType === "string" ? record.eventType : "story";
   const jpName = regionalString(record.eventName, 0) ?? `Event #${eventId}`;
-  const jpStartAt = regionalTimestamp(record.startAt, 0) ?? 0;
-  const jpEndAt = regionalTimestamp(record.endAt, 0) ?? 0;
-  const cnSchedule = isRecord(record.cnSchedule)
-    ? {
-        startAt: toFiniteNumber(record.cnSchedule.startAt),
-        endAt: toFiniteNumber(record.cnSchedule.endAt),
-      }
-    : null;
-  const validCnSchedule = cnSchedule?.startAt !== null
-    && cnSchedule?.startAt !== undefined
-    && cnSchedule.endAt !== null
-    && cnSchedule.endAt !== undefined
-    ? { startAt: cnSchedule.startAt, endAt: cnSchedule.endAt }
-    : null;
+  const jpStartAt = regionalTimestamp(record.startAt, 0);
+  const jpEndAt = regionalTimestamp(record.endAt, 0);
+  const jpSchedule = eventScheduleWindow(record.jpSchedule);
+  const enSchedule = eventScheduleWindow(record.enSchedule);
+  const twSchedule = eventScheduleWindow(record.twSchedule);
+  const cnSchedule = eventScheduleWindow(record.cnSchedule);
 
   return {
     eventId: numericEventId,
     eventType,
     name: {
       jp: jpName,
+      en: regionalString(record.eventName, 1, false),
+      tw: regionalString(record.eventName, 2, false),
       cn: regionalString(record.eventName, 3, false),
     },
     asset: {
@@ -195,14 +222,27 @@ export function toBandoriEventSummary(
         startAt: jpStartAt,
         endAt: jpEndAt,
       },
+      en: {
+        startAt: regionalTimestamp(record.startAt, 1),
+        endAt: regionalTimestamp(record.endAt, 1),
+      },
+      tw: {
+        startAt: regionalTimestamp(record.startAt, 2),
+        endAt: regionalTimestamp(record.endAt, 2),
+      },
       cn: {
         startAt: regionalTimestamp(record.startAt, 3),
         endAt: regionalTimestamp(record.endAt, 3),
       },
-      ...(validCnSchedule ? { cnSchedule: validCnSchedule } : {}),
+      ...(jpSchedule ? { jpSchedule } : {}),
+      ...(enSchedule ? { enSchedule } : {}),
+      ...(twSchedule ? { twSchedule } : {}),
+      ...(cnSchedule ? { cnSchedule } : {}),
     },
     musicIds: {
       jp: regionalMusicIds(record.musics, 0),
+      en: regionalMusicIds(record.musics, 1),
+      tw: regionalMusicIds(record.musics, 2),
       cn: regionalMusicIds(record.musics, 3),
     },
     bonus: eventBonus(record),

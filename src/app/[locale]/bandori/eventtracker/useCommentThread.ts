@@ -5,6 +5,7 @@ import { useCommentStampCatalog } from "@/hooks/useCommentStamps";
 import { getApiErrorMessage, parseApiSuccessData } from "@/lib/api-contracts";
 import { getSafeSession } from "@/lib/supabase";
 import { useGameStore } from "@/store/useGameStore";
+import { getBandoriServerCode, type BandoriServer } from "@/lib/bandori-server";
 import {
   buildCommentStampLookup,
 } from "./commentContent";
@@ -180,7 +181,20 @@ function bumpThreadReplyCount(nodes: CommentNode[], rootId: string, child: Comme
   });
 }
 
-export function useCommentThread(eventId: number | null) {
+function buildCommentApiUrl(
+  apiBase: string,
+  server: BandoriServer,
+  path = "",
+  values: Record<string, string | undefined> = {},
+): string {
+  const params = new URLSearchParams({ server: getBandoriServerCode(server) });
+  for (const [key, value] of Object.entries(values)) {
+    if (value !== undefined) params.set(key, value);
+  }
+  return `${apiBase}${path}?${params.toString()}`;
+}
+
+export function useCommentThread(eventId: number | null, server: BandoriServer) {
   const [comments, setComments] = useState<CommentNode[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageInput, setPageInput] = useState("1");
@@ -219,8 +233,9 @@ export function useCommentThread(eventId: number | null) {
     setError("");
     try {
       const headers = await authHeaders();
-      const suffix = `?page=${encodeURIComponent(String(Math.max(1, Math.trunc(page))))}`;
-      const data = await requestJson<CommentListResponse>(`${apiBase}${suffix}`, { headers });
+      const data = await requestJson<CommentListResponse>(buildCommentApiUrl(apiBase, server, "", {
+        page: String(Math.max(1, Math.trunc(page))),
+      }), { headers });
       if (requestId !== rootLoadSequenceRef.current) {
         return null;
       }
@@ -241,7 +256,7 @@ export function useCommentThread(eventId: number | null) {
         setLoading(false);
       }
     }
-  }, [apiBase]);
+  }, [apiBase, server]);
 
   const locateLinkedComment = useCallback(async (
     commentId: string,
@@ -256,7 +271,7 @@ export function useCommentThread(eventId: number | null) {
 
     try {
       const headers = await authHeaders();
-      const data = await requestJson<CommentContextResponse>(`${apiBase}/${commentId}`, { headers });
+      const data = await requestJson<CommentContextResponse>(buildCommentApiUrl(apiBase, server, `/${commentId}`), { headers });
       if (generation !== eventGenerationRef.current) {
         return false;
       }
@@ -303,7 +318,7 @@ export function useCommentThread(eventId: number | null) {
       setError(err instanceof Error ? err.message : "无法定位评论");
       return false;
     }
-  }, [apiBase, loadRootComments]);
+  }, [apiBase, loadRootComments, server]);
 
   const navigateToComment = useCallback(async (commentId: string) => {
     const generation = eventGenerationRef.current;
@@ -317,10 +332,11 @@ export function useCommentThread(eventId: number | null) {
 
     replaceEventTrackerUrlQuery({
       eventId,
+      server,
       commentPage: currentPageRef.current,
       commentId: located ? commentId : null,
     });
-  }, [eventId, locateLinkedComment]);
+  }, [eventId, locateLinkedComment, server]);
 
   useEffect(() => {
     setPageInput(String(currentPage));
@@ -358,7 +374,7 @@ export function useCommentThread(eventId: number | null) {
       if (commentId) {
         if (findComment(data.comments, commentId)) {
           setFocusedCommentId(commentId);
-          replaceEventTrackerUrlQuery({ eventId, commentPage: loadedPage, commentId });
+          replaceEventTrackerUrlQuery({ eventId, server, commentPage: loadedPage, commentId });
           window.requestAnimationFrame(() => {
             scrollToRenderedComment(commentId);
           });
@@ -375,20 +391,21 @@ export function useCommentThread(eventId: number | null) {
 
         replaceEventTrackerUrlQuery({
           eventId,
+          server,
           commentPage: loadedPage,
           commentId: located ? commentId : null,
         });
         return;
       }
 
-      replaceEventTrackerUrlQuery({ eventId, commentPage: loadedPage, commentId: null });
+      replaceEventTrackerUrlQuery({ eventId, server, commentPage: loadedPage, commentId: null });
     })();
-  }, [apiBase, eventId, loadRootComments, locateLinkedComment]);
+  }, [apiBase, eventId, loadRootComments, locateLinkedComment, server]);
 
   const createComment = useCallback(async (content: string, parentId?: string | null) => {
     if (!apiBase) return;
     const headers = await authHeaders();
-    const created = await requestJson<CommentNode>(apiBase, {
+    const created = await requestJson<CommentNode>(buildCommentApiUrl(apiBase, server), {
       method: "POST",
       headers: { ...headers, "Content-Type": "application/json" },
       body: JSON.stringify({ content, parentId }),
@@ -421,6 +438,7 @@ export function useCommentThread(eventId: number | null) {
       setFocusedCommentId(created.id);
       replaceEventTrackerUrlQuery({
         eventId,
+        server,
         commentPage: currentPageRef.current,
         commentId: created.id,
       });
@@ -433,46 +451,47 @@ export function useCommentThread(eventId: number | null) {
     setFocusedCommentId(created.id);
     replaceEventTrackerUrlQuery({
       eventId,
+      server,
       commentPage: createdPage,
       commentId: created.id,
     });
     scrollToCommentAfterRender(created.id);
-  }, [apiBase, eventId, loadRootComments]);
+  }, [apiBase, eventId, loadRootComments, server]);
 
   const updateCommentContent = useCallback(async (commentId: string, content: string) => {
     if (!apiBase) return;
     const headers = await authHeaders();
-    const updated = await requestJson<CommentNode>(`${apiBase}/${commentId}`, {
+    const updated = await requestJson<CommentNode>(buildCommentApiUrl(apiBase, server, `/${commentId}`), {
       method: "PATCH",
       headers: { ...headers, "Content-Type": "application/json" },
       body: JSON.stringify({ content }),
     });
     setComments((current) => replaceComment(current, updated));
     setReplies((current) => mapReplyComments(current, (comments) => replaceComment(comments, updated)));
-  }, [apiBase]);
+  }, [apiBase, server]);
 
   const deleteComment = useCallback(async (commentId: string) => {
     if (!apiBase) return;
     const headers = await authHeaders();
-    const updated = await requestJson<CommentNode>(`${apiBase}/${commentId}`, {
+    const updated = await requestJson<CommentNode>(buildCommentApiUrl(apiBase, server, `/${commentId}`), {
       method: "DELETE",
       headers,
     });
     setComments((current) => replaceComment(current, updated));
     setReplies((current) => mapReplyComments(current, (comments) => replaceComment(comments, updated)));
-  }, [apiBase]);
+  }, [apiBase, server]);
 
   const toggleCommentReaction = useCallback(async (commentId: string, emojiKey: string, reactedByViewer: boolean) => {
     if (!apiBase) return;
     const headers = await authHeaders();
-    const reaction = await requestJson<CommentReactionState>(`${apiBase}/${commentId}/reactions/${encodeURIComponent(emojiKey)}`, {
+    const reaction = await requestJson<CommentReactionState>(buildCommentApiUrl(apiBase, server, `/${commentId}/reactions/${encodeURIComponent(emojiKey)}`), {
       method: reactedByViewer ? "DELETE" : "PUT",
       headers,
     });
 
     setComments((current) => updateCommentReaction(current, reaction));
     setReplies((current) => mapReplyComments(current, (comments) => updateCommentReaction(comments, reaction)));
-  }, [apiBase]);
+  }, [apiBase, server]);
 
   const loadReplies = useCallback(async (commentId: string, cursor?: string | null) => {
     if (!apiBase || replyLoadsInFlightRef.current.has(commentId)) return;
@@ -481,8 +500,9 @@ export function useCommentThread(eventId: number | null) {
     setLoadingReplies((current) => ({ ...current, [commentId]: true }));
     try {
       const headers = await authHeaders();
-      const suffix = cursor ? `?cursor=${encodeURIComponent(cursor)}` : "";
-      const data = await requestJson<CommentListResponse>(`${apiBase}/${commentId}/replies${suffix}`, { headers });
+      const data = await requestJson<CommentListResponse>(buildCommentApiUrl(apiBase, server, `/${commentId}/replies`, {
+        cursor: cursor ?? undefined,
+      }), { headers });
       if (generation !== eventGenerationRef.current) {
         return;
       }
@@ -504,7 +524,7 @@ export function useCommentThread(eventId: number | null) {
         setLoadingReplies((current) => ({ ...current, [commentId]: false }));
       }
     }
-  }, [apiBase]);
+  }, [apiBase, server]);
 
   const goToCommentPage = useCallback((page: number) => {
     const nextPage = Math.min(totalPages, Math.max(1, Math.trunc(page)));
@@ -512,11 +532,12 @@ export function useCommentThread(eventId: number | null) {
     setFocusedCommentId(null);
     replaceEventTrackerUrlQuery({
       eventId,
+      server,
       commentPage: nextPage,
       commentId: null,
     });
     void loadRootComments(nextPage);
-  }, [eventId, loadRootComments, totalPages]);
+  }, [eventId, loadRootComments, server, totalPages]);
 
   const submitPageInput = useCallback(() => {
     const parsed = Number.parseInt(pageInput, 10);

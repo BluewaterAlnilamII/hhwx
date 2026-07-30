@@ -1,4 +1,11 @@
 import type { TrackingMode } from "./types";
+import {
+  getBandoriServerCode,
+  parseBandoriServerParam,
+  type BandoriServer,
+} from "@/lib/bandori-server";
+
+export type EventTrackerView = "tracker" | "info";
 
 type EventTrackerUrlQueryPatch = {
   eventId?: number | null;
@@ -6,9 +13,12 @@ type EventTrackerUrlQueryPatch = {
   tier?: number | null;
   commentPage?: number | null;
   commentId?: string | null;
+  server?: BandoriServer | null;
+  view?: EventTrackerView | null;
 };
 
 const TRACKING_MODES = new Set<TrackingMode>(["event", "song", "monthly"]);
+const EVENT_TRACKER_VIEWS = new Set<EventTrackerView>(["tracker", "info"]);
 
 export function parseTrackingModeSearchParam(value: string | null): TrackingMode | null {
   if (value === null) {
@@ -16,6 +26,23 @@ export function parseTrackingModeSearchParam(value: string | null): TrackingMode
   }
 
   return TRACKING_MODES.has(value as TrackingMode) ? value as TrackingMode : null;
+}
+
+export function parseEventTrackerViewSearchParam(value: string | null): EventTrackerView | null {
+  return value !== null && EVENT_TRACKER_VIEWS.has(value as EventTrackerView)
+    ? value as EventTrackerView
+    : null;
+}
+
+export function parseEventTrackerServerSearchParam(value: string | null): BandoriServer | null {
+  return parseBandoriServerParam(value);
+}
+
+export function resolveEventTrackerServerSelection(
+  value: string | null,
+  preferredServer: BandoriServer,
+): BandoriServer {
+  return parseEventTrackerServerSearchParam(value) ?? preferredServer;
 }
 
 export function readPositiveIntegerSearchParam(params: URLSearchParams, name: string): number | null {
@@ -82,6 +109,22 @@ export function replaceEventTrackerUrlQuery(patch: EventTrackerUrlQueryPatch) {
   setPositiveIntegerParam(url.searchParams, "tier", patch.tier);
   setPositiveIntegerParam(url.searchParams, "page", patch.commentPage);
   setStringParam(url.searchParams, "comment", patch.commentId);
+
+  if (patch.server !== undefined) {
+    if (patch.server === null) {
+      url.searchParams.delete("server");
+    } else {
+      url.searchParams.set("server", getBandoriServerCode(patch.server));
+    }
+  }
+
+  if (patch.view !== undefined) {
+    if (patch.view === null || patch.view === "tracker") {
+      url.searchParams.delete("view");
+    } else {
+      url.searchParams.set("view", patch.view);
+    }
+  }
 
   const nextUrl = url.toString();
   if (nextUrl === window.location.href) {

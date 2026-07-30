@@ -1,6 +1,8 @@
 import { ApiRouteError } from "@/lib/api-contracts";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
 import { COMMENT_NOTIFICATIONS_TABLE } from "@/lib/supabase-table-names";
+import { parseBandoriEventCommentTargetId } from "@/lib/bandori-comment-target";
+import { getBandoriServerCode, type BandoriServerCode } from "@/lib/bandori-server";
 
 export type CommentNotificationType = "comment_reply" | "comment_reaction";
 
@@ -38,6 +40,8 @@ export type CommentNotification = {
   type: CommentNotificationType;
   targetType: string;
   targetId: string;
+  eventId: number | null;
+  server: BandoriServerCode | null;
   commentId: string;
   activityCommentId: string | null;
   reactionEmojiKey: string | null;
@@ -81,6 +85,9 @@ function isDuplicateError(error: { code?: string | null } | null | undefined): b
 }
 
 function toNotification(row: CommentNotificationRow): CommentNotification {
+  const eventTarget = row.target_type === "bandori_event"
+    ? parseBandoriEventCommentTargetId(row.target_id)
+    : null;
   return {
     id: row.id,
     recipientUserId: row.recipient_user_id,
@@ -89,6 +96,8 @@ function toNotification(row: CommentNotificationRow): CommentNotification {
     type: row.type,
     targetType: row.target_type,
     targetId: row.target_id,
+    eventId: eventTarget?.eventId ?? null,
+    server: eventTarget ? getBandoriServerCode(eventTarget.server) : null,
     commentId: row.comment_id,
     activityCommentId: row.activity_comment_id,
     reactionEmojiKey: row.reaction_emoji_key ?? null,

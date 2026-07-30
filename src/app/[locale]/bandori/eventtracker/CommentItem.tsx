@@ -23,6 +23,7 @@ import {
 } from "@/lib/comment-stamps";
 import { getCommentEmojiSrc } from "@/lib/comment-emojis";
 import { cn } from "@/lib/utils";
+import { getBandoriServerCode, type BandoriServer } from "@/lib/bandori-server";
 import {
   buildEmojiShortcode,
   buildStampShortcode,
@@ -189,6 +190,7 @@ function ReactionChip({ reaction, disabled, onToggle }: ReactionChipProps) {
 export type CommentItemProps = {
   comment: CommentNode;
   eventId: number;
+  server: BandoriServer;
   highlightedId: string | null;
   replies: Record<string, CommentListResponse>;
   loadingReplies: Record<string, boolean>;
@@ -208,6 +210,7 @@ export type CommentItemProps = {
 export const CommentItem = memo(function CommentItem({
   comment,
   eventId,
+  server,
   highlightedId,
   replies,
   loadingReplies,
@@ -253,19 +256,21 @@ export const CommentItem = memo(function CommentItem({
     if (typeof window === "undefined") return "";
     const url = new URL(window.location.href);
     url.searchParams.set("event", String(eventId));
+    url.searchParams.set("server", getBandoriServerCode(server));
     url.searchParams.set("page", String(commentPage));
     url.searchParams.set("comment", comment.id);
     return url.toString();
-  }, [comment.id, commentPage, eventId]);
+  }, [comment.id, commentPage, eventId, server]);
 
   const replyToPermalink = useMemo(() => {
     if (typeof window === "undefined" || !comment.replyToCommentId) return "";
     const url = new URL(window.location.href);
     url.searchParams.set("event", String(eventId));
+    url.searchParams.set("server", getBandoriServerCode(server));
     url.searchParams.set("page", String(commentPage));
     url.searchParams.set("comment", comment.replyToCommentId);
     return url.toString();
-  }, [comment.replyToCommentId, commentPage, eventId]);
+  }, [comment.replyToCommentId, commentPage, eventId, server]);
 
   const handleCopyLink = async () => {
     if (!permalink) return;
@@ -608,6 +613,7 @@ export const CommentItem = memo(function CommentItem({
                   key={reply.id}
                   comment={reply}
                   eventId={eventId}
+                  server={server}
                   highlightedId={highlightedId}
                   replies={replies}
                   loadingReplies={loadingReplies}

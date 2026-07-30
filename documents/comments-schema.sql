@@ -9,6 +9,8 @@ ALTER INDEX IF EXISTS idx_comments_user_id RENAME TO idx_guestbook_comments_user
 CREATE TABLE IF NOT EXISTS public.comments (
   id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   target_type       TEXT NOT NULL,
+  -- Bandori event targets use the canonical `<server-code>:<event-id>` form,
+  -- for example `cn:318`, so each regional server owns an isolated thread.
   target_id         TEXT NOT NULL,
   parent_id         UUID REFERENCES public.comments(id) ON DELETE RESTRICT,
   root_id           UUID REFERENCES public.comments(id) ON DELETE RESTRICT,

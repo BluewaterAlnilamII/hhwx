@@ -1,19 +1,26 @@
 "use client";
 
 import { startTransition, useState, useEffect, useRef, useMemo, useCallback, useLayoutEffect } from "react";
-import { useTranslations } from "next-intl";
-import { format } from "date-fns";
 import * as Tabs from "@radix-ui/react-tabs";
 
 import { useBandoriEventsAssetIndex } from "@/hooks/useBandoriPublicAssetIndex";
 import { useBandoriMusicMaster } from "@/hooks/useBandoriMusicMaster";
-import { pickBandoriRegionalText } from "@/lib/bandori-server";
-import { useBandoriPreferredServer } from "@/store/useBandoriPreferencesStore";
+import {
+  DEFAULT_BANDORI_PREFERRED_SERVER,
+  getBandoriRegionalDisplayOrder,
+  getBandoriServerCode,
+  pickBandoriRegionalText,
+  type BandoriServer,
+} from "@/lib/bandori-server";
+import {
+  useBandoriPreferredServer,
+  useBandoriPreferencesStore,
+} from "@/store/useBandoriPreferencesStore";
+import { cn } from "@/lib/utils";
 import {
   buildBandoriPublicAssetUrl,
   lookupBandoriEventBanner,
 } from "@/lib/bandori-public-asset-index";
-import { resolveBandoriEventAssetRegion } from "@/lib/bandori-event-region";
 import type { ComparisonConfig, ComparisonLine, ComparisonLinePoint, ComparisonTargetType, MinimalEvent, TrackerData, TrackerMouseState, TrackerTooltipPayloadEntry, TrackingMode } from "./types";
 import {
   BESTDORI_PREDICTION_STORAGE_KEY,
@@ -41,9 +48,12 @@ import { useComparisonPreferences } from "./useComparisonPreferences";
 import { getDefaultTierForMode, normalizeTierForMode, readTrackerTierPreference, writeTrackerTierPreference } from "./tracker-tier-preference";
 import {
   parseTrackingModeSearchParam,
+  parseEventTrackerViewSearchParam,
   readEventTrackerSearchParams,
   readPositiveIntegerSearchParam,
   replaceEventTrackerUrlQuery,
+  resolveEventTrackerServerSelection,
+  type EventTrackerView,
 } from "./urlQuery";
 import { mergeComparisonLines, useComparisonTrackerData } from "./useComparisonTrackerData";
 import { mergeBestdoriPredictionData, useBestdoriPrediction } from "./useBestdoriPrediction";
@@ -53,9 +63,11 @@ import { TrackerChartPanel } from "./TrackerChartPanel";
 import { TrackerModeTierControls } from "./TrackerModeTierControls";
 import { TrackerStatusSummary } from "./TrackerStatusSummary";
 import BandoriPageShell from "../BandoriPageShell";
-import BandoriCnExclusiveNotice from "../BandoriCnExclusiveNotice";
 import BandoriEventSwitcher from "../BandoriEventSwitcher";
 import EventComments from "./EventComments";
+import EventInfoPanel from "./EventInfoPanel";
+import EventRelativeCountdown from "./EventRelativeCountdown";
+import { useBandoriEventDetail } from "./useBandoriEventDetail";
 import {
   buildChinaMainlandHolidayLookup,
   isChinaMainlandRestDay,
@@ -353,13 +365,17 @@ type InitialTrackerQueryState = {
   currentEventId: number | null;
   trackingMode: TrackingMode;
   selectedTier: number;
+  selectedServer: BandoriServer;
+  activeView: EventTrackerView;
 };
 
-function readInitialTrackerQueryState(): InitialTrackerQueryState {
+function readInitialTrackerQueryState(preferredServer: BandoriServer): InitialTrackerQueryState {
   const params = readEventTrackerSearchParams();
   const trackingMode = parseTrackingModeSearchParam(params.get("type")) ?? "event";
   const queryTier = readPositiveIntegerSearchParam(params, "tier");
   const currentEventId = readPositiveIntegerSearchParam(params, "event");
+  const selectedServer = resolveEventTrackerServerSelection(params.get("server"), preferredServer);
+  const activeView = parseEventTrackerViewSearchParam(params.get("view")) ?? "tracker";
   const selectedTier = queryTier !== null
     ? normalizeTierForMode(trackingMode, queryTier) ?? readTrackerTierPreference(trackingMode)
     : readTrackerTierPreference(trackingMode);
@@ -368,42 +384,22 @@ function readInitialTrackerQueryState(): InitialTrackerQueryState {
     currentEventId,
     trackingMode,
     selectedTier: resolveMainTrackerTier(trackingMode, currentEventId, selectedTier),
+    selectedServer,
+    activeView,
   };
 }
 
-function formatBandoriCnDateTime(timestamp: number) {
-  return format(timestamp, "yyyy年M月d日 HH:mm");
-}
-
-function renderRelativeCountdown(
-  prefix: "距开始" | "距结束",
-  remainingMs: number,
-  completedLabel: string,
-) {
-  if (remainingMs <= 0) {
-    return <span>{completedLabel}</span>;
-  }
-
-  const days = Math.floor(remainingMs / (1000 * 60 * 60 * 24));
-  const hours = Math.floor((remainingMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-  const minutes = Math.floor((remainingMs % (1000 * 60 * 60)) / (1000 * 60));
-  const seconds = Math.floor((remainingMs % (1000 * 60)) / 1000).toString().padStart(2, "0");
-
-  return (
-    <span className="inline-flex items-baseline gap-0.5 whitespace-nowrap">
-      <span>{prefix}</span>
-      <span className="inline-flex items-baseline gap-0.5">
-        <span className="text-blue-500">{days}</span>
-        <span>天</span>
-        <span className="text-blue-500">{hours}</span>
-        <span>小时</span>
-        <span className="text-blue-500">{minutes}</span>
-        <span>分</span>
-        <span className="inline-flex min-w-[2ch] justify-end text-blue-500 tabular-nums">{seconds}</span>
-        <span>秒</span>
-      </span>
-    </span>
-  );
+function formatBandoriDateTime(timestamp: number, server: BandoriServer) {
+  const timeZone = ["Asia/Tokyo", "UTC", "Asia/Taipei", "Asia/Shanghai"][server];
+  return new Intl.DateTimeFormat("zh-CN", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(timestamp);
 }
 
 function buildNonWorkingDayBands(
@@ -461,7 +457,6 @@ function EventProgressBar({ startDate, endDate }: { startDate: number; endDate: 
   }, []);
 
   const hasStarted = now >= startDate;
-  const hasEnded = now >= endDate;
   const durationMs = Math.max(1, endDate - startDate);
   const progress = hasStarted ? Math.min(100, Math.max(0, ((now - startDate) / durationMs) * 100)) : 0;
 
@@ -472,9 +467,11 @@ function EventProgressBar({ startDate, endDate }: { startDate: number; endDate: 
           <span>已完成</span>
         </span>
       )
-    : renderRelativeCountdown("距开始", startDate - now, "活动已开始");
+    : <EventRelativeCountdown prefix="距开始" remainingMs={startDate - now} completedLabel="活动已开始" />;
 
-  const subSummaryContent = renderRelativeCountdown("距结束", endDate - now, hasEnded ? "活动已结束" : "活动已结束");
+  const subSummaryContent = (
+    <EventRelativeCountdown prefix="距结束" remainingMs={endDate - now} completedLabel="活动已结束" />
+  );
 
   return (
     <div className="rounded-2xl border border-[#ffe16c]/90 bg-[#fffef0]/94 p-6 shadow-[0_18px_44px_rgba(232,176,0,0.16),0_2px_10px_rgba(88,69,0,0.07)] dark:border-slate-700/80 dark:bg-[#111827] dark:shadow-[0_18px_44px_rgba(0,0,0,0.22)]">
@@ -498,8 +495,8 @@ function EventProgressBar({ startDate, endDate }: { startDate: number; endDate: 
 // ─────────────────────────── 页面主组件 ───────────────────────────
 
 export default function EventTrackerPage() {
-  const cnExclusiveT = useTranslations("bandori.notices.cnExclusive");
   const preferredServer = useBandoriPreferredServer();
+  const hasHydratedPreferredServer = useBandoriPreferencesStore((state) => state.hydrated);
   const { music: masterMusic } = useBandoriMusicMaster();
   const { value: eventAssetIndex } = useBandoriEventsAssetIndex();
   const [currentEventId, setCurrentEventId] = useState<number | null>(null);
@@ -507,6 +504,8 @@ export default function EventTrackerPage() {
   const [selectedTier, setSelectedTier] = useState<number>(() => getDefaultTierForMode("event"));
   const [selectedSongId, setSelectedSongId] = useState<number>(0);
   const [selectedMonthlyMonthId, setSelectedMonthlyMonthId] = useState<number>(() => getCurrentMonthlyRankingWindow().monthId);
+  const [selectedServer, setSelectedServer] = useState<BandoriServer>(DEFAULT_BANDORI_PREFERRED_SERVER);
+  const [activeView, setActiveView] = useState<EventTrackerView>("tracker");
   const [chartRenderRevision, setChartRenderRevision] = useState(0);
   const [modeIndicatorStyle, setModeIndicatorStyle] = useState<ModeIndicatorStyle>({
     width: 0,
@@ -544,6 +543,9 @@ export default function EventTrackerPage() {
     selectedSongId: resolvedSelectedSongId,
     startDate,
     endDate,
+    eventTimeServer,
+    eventStatusStartDate,
+    eventStatusEndDate,
     chartData,
     holidayData,
     loading,
@@ -556,7 +558,8 @@ export default function EventTrackerPage() {
     selectedTier,
     selectedSongId,
     selectedMonthlyMonthId,
-    hasAppliedInitialUrlState,
+    selectedServer,
+    hasAppliedInitialUrlState && selectedServer === 3 && activeView === "tracker",
   );
 
   // ===== 投影偏好持久化 =====
@@ -604,6 +607,21 @@ export default function EventTrackerPage() {
     });
   }, [eventTypeById, selectedTier, trackingMode]);
 
+  const handleServerChange = useCallback((server: BandoriServer) => {
+    setSelectedServer(server);
+    setZoomIndex(0);
+    replaceEventTrackerUrlQuery({
+      server,
+      commentPage: null,
+      commentId: null,
+    });
+  }, []);
+
+  const handleViewChange = useCallback((view: EventTrackerView) => {
+    setActiveView(view);
+    replaceEventTrackerUrlQuery({ view });
+  }, []);
+
   const handleTrackingModeChange = useCallback((value: string) => {
     const nextMode = parseTrackingModeSearchParam(value);
     if (nextMode === null) {
@@ -647,6 +665,10 @@ export default function EventTrackerPage() {
   }, []);
 
   useEffect(() => {
+    if (!hasHydratedPreferredServer || hasAppliedInitialUrlState) {
+      return;
+    }
+
     let cancelled = false;
 
     window.queueMicrotask(() => {
@@ -654,17 +676,19 @@ export default function EventTrackerPage() {
         return;
       }
 
-      const nextState = readInitialTrackerQueryState();
+      const nextState = readInitialTrackerQueryState(preferredServer);
       setCurrentEventId(nextState.currentEventId);
       setTrackingMode(nextState.trackingMode);
       setSelectedTier(nextState.selectedTier);
+      setSelectedServer(nextState.selectedServer);
+      setActiveView(nextState.activeView);
       setHasAppliedInitialUrlState(true);
     });
 
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [hasAppliedInitialUrlState, hasHydratedPreferredServer, preferredServer]);
 
   useEffect(() => {
     if (!hasAppliedInitialUrlState || trackingMode !== "song" || !isSongModeDisabled) {
@@ -702,8 +726,10 @@ export default function EventTrackerPage() {
       eventId: resolvedCurrentEventId,
       trackingMode,
       tier: selectedTier,
+      server: selectedServer,
+      view: activeView,
     });
-  }, [hasAppliedInitialUrlState, resolvedCurrentEventId, selectedTier, trackingMode]);
+  }, [activeView, hasAppliedInitialUrlState, resolvedCurrentEventId, selectedServer, selectedTier, trackingMode]);
 
   const updateModeIndicator = useCallback(() => {
     const listElement = modeTabsListRef.current;
@@ -769,11 +795,11 @@ export default function EventTrackerPage() {
     availableChallengeSongIds.flatMap((songId) => {
       const title = pickBandoriRegionalText(
         masterMusic?.[String(songId)]?.musicTitle,
-        preferredServer,
+        selectedServer,
       );
       return title ? [[String(songId), title]] : [];
     }),
-  ), [availableChallengeSongIds, masterMusic, preferredServer]);
+  ), [availableChallengeSongIds, masterMusic, selectedServer]);
   // 1/2/3 首歌的布局密度差异很大，按数量限制容器宽度可以减少横向留白。
   const challengeSongGridClassName = availableChallengeSongIds.length <= 1
     ? "max-w-48 grid-cols-1"
@@ -953,11 +979,27 @@ export default function EventTrackerPage() {
   }, [setComparisonConfigs]);
 
   // ===== 数据派生层 =====
-  const cnEventName = eventMeta?.name.cn?.trim() || eventMeta?.name.jp.trim() || "Loading Event...";
-  const bannerServer = eventMeta ? resolveBandoriEventAssetRegion(eventMeta) : "jp";
+  const selectedEventName = eventMeta
+    ? pickBandoriRegionalText(
+        [eventMeta.name.jp, eventMeta.name.en, eventMeta.name.tw, eventMeta.name.cn],
+        selectedServer,
+        selectedServer,
+      ) ?? `活动 #${eventMeta.eventId}`
+    : "Loading Event...";
+  const bannerAsset = getBandoriRegionalDisplayOrder(selectedServer)
+    .map((candidateServer) => lookupBandoriEventBanner(
+      eventAssetIndex,
+      resolvedCurrentEventId,
+      getBandoriServerCode(candidateServer),
+    ))
+    .find((candidate) => candidate !== null) ?? null;
   const bannerUrl = buildBandoriPublicAssetUrl(
-    lookupBandoriEventBanner(eventAssetIndex, resolvedCurrentEventId, bannerServer),
+    bannerAsset,
   ) ?? "";
+  const eventDetail = useBandoriEventDetail(
+    resolvedCurrentEventId,
+    hasAppliedInitialUrlState && activeView === "info",
+  );
 
   const { domainStart, domainEnd, cutoffEnd, midnights } = useChartDomain(trackingMode, startDate, endDate, selectedMonthlyMonthId);
   const hasActualTrackerData = useMemo(
@@ -965,15 +1007,18 @@ export default function EventTrackerPage() {
     [chartData, domainStart, trackingMode],
   );
   const fullProcessedData = useProcessedData(chartData, apiHasResult, domainStart, trackingMode);
-  const status = useEventStatus(domainStart, domainEnd);
+  const status = useEventStatus(
+    eventStatusStartDate ?? "auto",
+    eventStatusEndDate ?? "auto",
+  );
   const finalDisplayedData = useFinalDisplayedData(fullProcessedData, cutoffEnd, status, showInstantProjection, showDayProjection);
   const bestdoriPrediction = useBestdoriPrediction({
-    enabled: hasAppliedInitialUrlState && trackingMode === "event" && status === "进行中" && showBestdoriPrediction,
+    enabled: hasAppliedInitialUrlState && selectedServer === 3 && activeView === "tracker" && trackingMode === "event" && status === "进行中" && showBestdoriPrediction,
     eventId: resolvedCurrentEventId,
     tier: selectedTier,
   });
   const { comparisonLines } = useComparisonTrackerData({
-    enabled: hasAppliedInitialUrlState && (trackingMode === "event" || trackingMode === "monthly"),
+    enabled: hasAppliedInitialUrlState && selectedServer === 3 && activeView === "tracker" && (trackingMode === "event" || trackingMode === "monthly"),
     configs: activeComparisonConfigs,
     events: allEvents,
     monthlyOptions: monthlyRankingOptions,
@@ -1298,26 +1343,50 @@ export default function EventTrackerPage() {
 
         {/* ========== 页头：活动名称、切换器、活动横幅 ========== */}
         <BandoriEventSwitcher
-          title={cnEventName}
+          title={selectedEventName}
           events={allEvents}
           selectedEventId={resolvedCurrentEventId ? String(resolvedCurrentEventId) : ""}
           onSelectedEventIdChange={handleSelectedEventIdChange}
+          server={selectedServer}
+          onServerChange={handleServerChange}
           bannerUrl={bannerUrl}
-          startText={startDate ? `${formatBandoriCnDateTime(startDate)} (CN)` : null}
-          endText={endDate ? `${formatBandoriCnDateTime(endDate)} (CN)` : null}
+          startText={startDate ? `${formatBandoriDateTime(startDate, eventTimeServer)} (${getBandoriServerCode(eventTimeServer).toUpperCase()})` : null}
+          endText={endDate ? `${formatBandoriDateTime(endDate, eventTimeServer)} (${getBandoriServerCode(eventTimeServer).toUpperCase()})` : null}
           recommendedEventId={recommendedEventId !== null ? String(recommendedEventId) : null}
         />
 
-        <BandoriCnExclusiveNotice
-          label={cnExclusiveT("label")}
-          description={cnExclusiveT("eventtrackerDescription")}
-        />
+        <div role="tablist" aria-label="活动页面视图" className="grid grid-cols-2 overflow-hidden rounded-2xl border border-slate-200 bg-[#fffef4] shadow-sm dark:border-slate-700 dark:bg-[#111827]">
+          {(["tracker", "info"] as const).map((view) => {
+            const active = view === activeView;
+            return (
+              <button
+                key={view}
+                type="button"
+                role="tab"
+                aria-selected={active}
+                onClick={() => handleViewChange(view)}
+                className={cn(
+                  "relative h-14 text-base font-black transition",
+                  active ? "text-[#EF392B]" : "text-slate-600 hover:bg-white/70 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800",
+                  view === "tracker" && "border-r border-slate-200 dark:border-slate-700",
+                )}
+              >
+                {view === "tracker" ? "分数追踪器" : "活动信息"}
+                {active ? <span className="absolute inset-x-0 bottom-0 h-0.5 bg-[#EF392B]" /> : null}
+              </button>
+            );
+          })}
+        </div>
 
-        {/* ========== 进度条 ========== */}
-        {startDate && endDate && <EventProgressBar startDate={startDate} endDate={endDate} />}
+        {activeView === "tracker" ? (
+          <>
+            {/* ========== 进度条 ========== */}
+            {eventStatusStartDate !== null && eventStatusEndDate !== null ? (
+              <EventProgressBar startDate={eventStatusStartDate} endDate={eventStatusEndDate} />
+            ) : null}
 
-        {/* ========== 导航与控制区 ========== */}
-        <div className="rounded-3xl border border-white/80 bg-[#fffef4] p-3 shadow-[0_18px_48px_rgba(65,54,0,0.10),0_3px_14px_rgba(15,23,42,0.05)] dark:border-slate-700/80 dark:bg-[#111827] dark:shadow-[0_24px_60px_rgba(0,0,0,0.24)] sm:p-5">
+            {/* ========== 导航与控制区 ========== */}
+            <div className="rounded-3xl border border-white/80 bg-[#fffef4] p-3 shadow-[0_18px_48px_rgba(65,54,0,0.10),0_3px_14px_rgba(15,23,42,0.05)] dark:border-slate-700/80 dark:bg-[#111827] dark:shadow-[0_24px_60px_rgba(0,0,0,0.24)] sm:p-5">
           <Tabs.Root
             value={trackingMode}
             onValueChange={handleTrackingModeChange}
@@ -1424,8 +1493,18 @@ export default function EventTrackerPage() {
               </div>
             </Tabs.Content>
           </Tabs.Root>
-        </div>
-        <EventComments eventId={resolvedCurrentEventId} />
+            </div>
+          </>
+        ) : (
+          <EventInfoPanel
+            eventId={resolvedCurrentEventId}
+            server={selectedServer}
+            eventRecord={eventDetail.data}
+            musicMaster={masterMusic}
+            loading={eventDetail.loading}
+          />
+        )}
+        <EventComments eventId={resolvedCurrentEventId} server={selectedServer} />
     </BandoriPageShell>
   );
 }

@@ -37,6 +37,10 @@ export function getBandoriServerFromCode(value: unknown): BandoriServer | null {
   return index >= 0 ? index as BandoriServer : null;
 }
 
+export function parseBandoriServerParam(value: unknown): BandoriServer | null {
+  return getBandoriServerFromCode(value) ?? normalizeBandoriServer(value);
+}
+
 export function getBandoriRegionalPreferenceOrder(
   preferredServer: BandoriServer,
 ): readonly BandoriServer[] {

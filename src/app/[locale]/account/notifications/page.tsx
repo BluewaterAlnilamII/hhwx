@@ -14,6 +14,8 @@ type BaseCommentNotification = {
   id: string;
   actorUsername: string | null;
   targetId: string;
+  eventId: number | null;
+  server: "jp" | "en" | "tw" | "cn" | null;
   commentId: string;
   linkCommentId: string;
   readAt: string | null;
@@ -316,7 +318,9 @@ export default function AccountNotificationsPage() {
   };
 
   const renderNotificationCard = (notification: CommentNotification) => {
-    const href = `/bandori/eventtracker?event=${encodeURIComponent(notification.targetId)}&comment=${encodeURIComponent(notification.linkCommentId)}`;
+    const eventId = notification.eventId ?? notification.targetId;
+    const serverQuery = notification.server ? `&server=${encodeURIComponent(notification.server)}` : "";
+    const href = `/bandori/eventtracker?event=${encodeURIComponent(eventId)}${serverQuery}&comment=${encodeURIComponent(notification.linkCommentId)}`;
     return (
       <Link
         key={notification.id}
@@ -332,7 +336,9 @@ export default function AccountNotificationsPage() {
             </h3>
           </div>
           <p className="mt-2 text-sm text-slate-500">
-            {t("activityLabel", { eventId: notification.targetId })} · {formatNotificationTime(notification.createdAt, locale)}
+            {t("activityLabel", { eventId })}
+            {notification.server ? ` · ${notification.server.toUpperCase()}` : ""}
+            {` · ${formatNotificationTime(notification.createdAt, locale)}`}
           </p>
         </div>
         <span className="shrink-0 rounded-full border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600">

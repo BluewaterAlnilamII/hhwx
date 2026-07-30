@@ -21,6 +21,7 @@ This document describes HHWX's Supabase schema workflow. New schema changes shou
 - `supabase/migrations/20260630055412_retarget_legacy_comment_reaction_kokoro_yay.sql`: retargets migrated legacy likes to the default `KokoroYay` reaction.
 - `supabase/migrations/20260630071740_remove_legacy_comment_likes.sql`: removes the legacy `comment_likes` table and `comments.like_count` compatibility counter after reaction backfill verification.
 - `supabase/migrations/20260701131822_remove_legacy_like_notifications.sql`: removes legacy `comment_like` notification rows and constrains `comment_notifications` to reply and reaction notifications.
+- `supabase/migrations/20260728185041_scope_bandori_event_comments_by_server.sql`: rewrites legacy numeric Bandori event comment and notification targets to the canonical `<server-code>:<event-id>` form, treating all pre-migration discussions as CN.
 - `documents/profile-public-uid-schema.sql`: public numeric profile UID support.
 - `documents/game-profile-schema.sql`: persisted user game profiles.
 - `documents/game-account-binding-schema.sql`: game-account binding challenges and bindings.
@@ -44,6 +45,8 @@ For new schema work:
 5. For a linked remote project, review with `npm exec -- supabase db push --dry-run` before running `npm exec -- supabase db push`.
 
 The current baseline migration is for new empty projects. Do not run it directly against the existing production HHWX project. For the linked production project, keep the historical no-op records for already-applied remote versions and mark the baseline version as applied only after verifying that the live schema already matches it. Run `npm exec -- supabase db push --dry-run` before any production push.
+
+`20260728185041_scope_bandori_event_comments_by_server.sql` is a coordinated application and data release. Deploy the server-aware comment API first so concurrent writes already use canonical targets, then push the migration immediately. Existing legacy discussions can be temporarily absent between those two steps, but the migration preserves every comment and notification row.
 
 ## Legacy Manual Order
 

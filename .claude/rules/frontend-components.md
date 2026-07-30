@@ -13,3 +13,4 @@ paths:
 - When a component consumes server-returned data, prefer DTOs that have already been mapped to camelCase. Do not handle `snake_case` data directly at the component layer.
 - Pages and components must not directly assemble database protocols or historical API compatibility logic. When legacy protocol compatibility is needed, map it at the service, adapter, or route boundary.
 - For UI with expensive computation, complex animation timing, or presentation state-machine behavior, explicitly split phase state and flow functions. Do not scatter timing logic across anonymous callbacks.
+- Descriptive UI copy, including helper text, empty states, and status explanations, must not end with a full stop (`。` or `.`). Keep punctuation where it carries meaning inside the text or belongs to user-authored content.

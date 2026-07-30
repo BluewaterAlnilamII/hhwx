@@ -36,10 +36,10 @@ test("the shared adapter preserves regional metadata and embedded event bonuses"
   });
 
   assert.equal(events.length, 1);
-  assert.deepEqual(events[0].name, { jp: "JP event", cn: "CN event" });
+  assert.deepEqual(events[0].name, { jp: "JP event", en: "EN event", tw: "TW event", cn: "CN event" });
   assert.equal(events[0].stampCharacterId, 2);
   assert.deepEqual(events[0].timeline.cnSchedule, { startAt: 3000, endAt: 4000 });
-  assert.deepEqual(events[0].musicIds, { jp: [5], cn: [6] });
+  assert.deepEqual(events[0].musicIds, { jp: [5], en: [], tw: [], cn: [6] });
   assert.deepEqual(events[0].bonus, {
     attributes: [{ attribute: "happy", percent: 20 }],
     characters: [{ characterId: 2, percent: 20 }],
