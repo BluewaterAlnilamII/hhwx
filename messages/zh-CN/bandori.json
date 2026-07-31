@@ -556,6 +556,7 @@
       "selectMedleySongs": "巡回演出需要选择 3 首歌曲",
       "medleySongDataMissing": "第 {index} 首歌曲数据不存在",
       "medleyChartDataInvalid": "第 {index} 首谱面数据格式无效",
+      "dataInconsistent": "刷新后计算数据仍不完整：{details}",
       "preloadFailed": "准备数据失败",
       "calculateFailed": "计算失败"
     },

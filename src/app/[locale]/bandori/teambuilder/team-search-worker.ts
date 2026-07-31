@@ -64,6 +64,17 @@ import {
 } from "@/lib/user-game-profile-payload";
 import { resolveBandoriCardMapForServerWithJpFallback } from "@/lib/bandori-card-server-extensions";
 import { hasTrainedCardArt } from "@/lib/bandori-card-training";
+import {
+  assertTeamSearchMasterReferences,
+  assertTeamSearchRequestReferences,
+  createAtomicTimedCache,
+  createTimedLruCache,
+  TEAM_SEARCH_CHART_CACHE_FRESH_TIME_MS,
+  TEAM_SEARCH_CHART_CACHE_MAX_ENTRIES,
+  TEAM_SEARCH_MASTER_CACHE_FRESH_TIME_MS,
+  TeamSearchDataIntegrityError,
+  type TimedCacheSnapshot,
+} from "./team-search-data-cache";
 
 type MasterResponse<T> = {
   payload: T;
@@ -98,6 +109,7 @@ export type TeamSearchWorkerMessages = {
   selectMedleySongs: string;
   medleySongDataMissing: string;
   medleyChartDataInvalid: string;
+  dataInconsistent: string;
   preloadFailed: string;
   calculateFailed: string;
 };
@@ -118,6 +130,7 @@ const DEFAULT_WORKER_MESSAGES: TeamSearchWorkerMessages = {
   selectMedleySongs: "Medley live requires selecting 3 songs",
   medleySongDataMissing: "Song {index} data does not exist",
   medleyChartDataInvalid: "Song {index} chart data format is invalid",
+  dataInconsistent: "Calculation data is incomplete after refresh: {details}",
   preloadFailed: "Failed to prepare data",
   calculateFailed: "Calculation failed",
 };
@@ -219,7 +232,21 @@ type TeamSearchWorkerRunOptions = {
   onMedleyProgress?: (result: BandoriMedleyTeamSearchResponse) => void;
 };
 
-const requestJsonCache = new Map<string, Promise<unknown>>();
+type TeamSearchMasterData = {
+  cardsById: CardsResponse;
+  charactersById: Record<string, { bandId?: number | null } | undefined>;
+  skillsById: Record<string, BestdoriSkillMaster | undefined>;
+  areaItemsById: Record<string, BestdoriAreaItemMaster | undefined>;
+  songsById: Record<string, BestdoriSongMaster | undefined>;
+};
+
+const masterDataCache = createAtomicTimedCache<TeamSearchMasterData>({
+  freshTimeMs: TEAM_SEARCH_MASTER_CACHE_FRESH_TIME_MS,
+});
+const chartDataCache = createTimedLruCache<{ chart: BestdoriChartEntity[] }>({
+  freshTimeMs: TEAM_SEARCH_CHART_CACHE_FRESH_TIME_MS,
+  maxEntries: TEAM_SEARCH_CHART_CACHE_MAX_ENTRIES,
+});
 const resolvedCardsBySource = new WeakMap<CardsResponse, Map<number, CardsResponse>>();
 
 function formatWorkerMessage(template: string, values: Record<string, string | number> = {}): string {
@@ -233,30 +260,13 @@ function getWorkerMessages(messages?: TeamSearchWorkerMessages): TeamSearchWorke
   return messages ?? DEFAULT_WORKER_MESSAGES;
 }
 
-async function requestJson<T>(path: string, messages: TeamSearchWorkerMessages = DEFAULT_WORKER_MESSAGES): Promise<T> {
-  const cached = requestJsonCache.get(path);
-  if (cached) {
-    return cached as Promise<T>;
-  }
-
-  const promise = requestJsonUncached<T>(path, messages).catch((error) => {
-    requestJsonCache.delete(path);
-    throw error;
-  });
-  requestJsonCache.set(path, promise);
-  return promise;
-}
-
-async function requireCachedJson<T>(path: string, label: string, messages: TeamSearchWorkerMessages): Promise<T> {
-  const cached = requestJsonCache.get(path);
-  if (!cached) {
-    throw new Error(formatWorkerMessage(messages.notReady, { label }));
-  }
-  return cached as Promise<T>;
-}
-
-async function requestJsonUncached<T>(path: string, messages: TeamSearchWorkerMessages): Promise<T> {
+async function requestJsonUncached<T>(
+  path: string,
+  messages: TeamSearchWorkerMessages,
+  requestCache: RequestCache,
+): Promise<T> {
   const response = await fetch(path, {
+    cache: requestCache,
     headers: { "Content-Type": "application/json" },
   });
   const payload = await response.json().catch(() => ({}));
@@ -269,6 +279,66 @@ async function requestJsonUncached<T>(path: string, messages: TeamSearchWorkerMe
     throw new Error(messages.invalidResponse);
   }
   return data;
+}
+
+async function loadMasterData(
+  messages: TeamSearchWorkerMessages,
+  requestCache: RequestCache,
+): Promise<TeamSearchMasterData> {
+  const [cachedCards, charactersPayload, skillsPayload, areaItemsPayload, songsById] = await Promise.all([
+    requestJsonUncached<CachedCardsResponse>("/api/bandori/master/cards", messages, requestCache),
+    requestJsonUncached<MasterResponse<Record<string, { bandId?: number | null } | undefined>>>(
+      "/api/bandori/master/characters/main",
+      messages,
+      requestCache,
+    ),
+    requestJsonUncached<MasterResponse<Record<string, BestdoriSkillMaster | undefined>>>(
+      "/api/bandori/master/skills",
+      messages,
+      requestCache,
+    ),
+    requestJsonUncached<MasterResponse<Record<string, BestdoriAreaItemMaster | undefined>>>(
+      "/api/bandori/master/areaItems",
+      messages,
+      requestCache,
+    ),
+    requestJsonUncached<Record<string, BestdoriSongMaster | undefined>>(
+      "/api/bandori/master/music",
+      messages,
+      requestCache,
+    ),
+  ]);
+  const value: TeamSearchMasterData = {
+    cardsById: normalizeCachedCardsResponse(cachedCards),
+    charactersById: charactersPayload.payload,
+    skillsById: skillsPayload.payload,
+    areaItemsById: areaItemsPayload.payload,
+    songsById,
+  };
+  assertTeamSearchMasterReferences(value);
+  return value;
+}
+
+function getMasterData(
+  messages: TeamSearchWorkerMessages,
+  forceRefresh = false,
+): Promise<TimedCacheSnapshot<TeamSearchMasterData>> {
+  return masterDataCache.get(
+    (requestCache) => loadMasterData(messages, requestCache),
+    { forceRefresh },
+  );
+}
+
+function getChartData(
+  path: string,
+  messages: TeamSearchWorkerMessages,
+  forceRefresh = false,
+): Promise<TimedCacheSnapshot<{ chart: BestdoriChartEntity[] }>> {
+  return chartDataCache.get(
+    path,
+    (requestCache) => requestJsonUncached(path, messages, requestCache),
+    { forceRefresh },
+  );
 }
 
 function normalizeCachedCardsResponse(response: CachedCardsResponse): CardsResponse {
@@ -316,6 +386,41 @@ function readPositiveInteger(value: unknown, fallback = 0): number {
     return fallback;
   }
   return Math.trunc(numeric);
+}
+
+function getEventBonusCardIds(eventBonus: BandoriEventBonus | null): number[] {
+  return (eventBonus?.members ?? []).flatMap((member) => {
+    if (typeof member !== "object" || member === null || Array.isArray(member)) {
+      return [];
+    }
+    const record = member as Record<string, unknown>;
+    const cardId = readPositiveInteger(record.situationId ?? record.id);
+    return cardId > 0 ? [cardId] : [];
+  });
+}
+
+async function withIntegrityRefreshRetry<T>(
+  operation: (forceRefresh: boolean) => Promise<T>,
+  messages: TeamSearchWorkerMessages,
+): Promise<T> {
+  try {
+    return await operation(false);
+  } catch (error) {
+    if (!(error instanceof TeamSearchDataIntegrityError)) {
+      throw error;
+    }
+  }
+
+  try {
+    return await operation(true);
+  } catch (error) {
+    if (!(error instanceof TeamSearchDataIntegrityError)) {
+      throw error;
+    }
+    throw new Error(formatWorkerMessage(messages.dataInconsistent, {
+      details: error.issues.join(", "),
+    }));
+  }
 }
 
 function getMasterCardRarity(card: BestdoriCardMaster | undefined): number {
@@ -659,69 +764,92 @@ function buildLegacyGreedyMedleyInput({
 
 async function preloadSearchData(request: TeamSearchWorkerPreloadRequest): Promise<void> {
   const messages = getWorkerMessages(request.messages);
-  const preloadRequests: Array<Promise<unknown>> = [
-    requestJson<CachedCardsResponse>("/api/bandori/master/cards", messages),
-    requestJson<MasterResponse<Record<string, { bandId?: number | null } | undefined>>>("/api/bandori/master/characters/main", messages),
-    requestJson<MasterResponse<Record<string, BestdoriSkillMaster | undefined>>>("/api/bandori/master/skills", messages),
-    requestJson<MasterResponse<Record<string, BestdoriAreaItemMaster | undefined>>>("/api/bandori/master/areaItems", messages),
-    requestJson<Record<string, BestdoriSongMaster | undefined>>("/api/bandori/master/music", messages),
-  ];
-
-  if (request.song) {
-    const songId = Math.trunc(request.song.songId);
-    preloadRequests.push(requestJson<{ chart: BestdoriChartEntity[] }>(`/api/bandori/charts/${songId}/${request.song.difficulty}`, messages));
-  }
-  for (const song of request.songs ?? []) {
-    const songId = Math.trunc(song.songId);
-    preloadRequests.push(requestJson<{ chart: BestdoriChartEntity[] }>(`/api/bandori/charts/${songId}/${song.difficulty}`, messages));
-  }
-
-  await Promise.all(preloadRequests);
+  await withIntegrityRefreshRetry(async (forceRefresh) => {
+    const songs = [
+      ...(request.song ? [request.song] : []),
+      ...(request.songs ?? []),
+    ].map((song) => ({
+      songId: Math.trunc(song.songId),
+      difficulty: song.difficulty,
+    }));
+    const [masterSnapshot, chartSnapshots] = await Promise.all([
+      getMasterData(messages, forceRefresh),
+      Promise.all(songs.map((song) => getChartData(
+        `/api/bandori/charts/${song.songId}/${song.difficulty}`,
+        messages,
+        forceRefresh,
+      ))),
+    ]);
+    assertTeamSearchRequestReferences({
+      cardIds: [],
+      eventCardIds: [],
+      areaItemIds: [],
+      externalSkillIds: [],
+      songIds: songs.map((song) => song.songId),
+      cardsById: masterSnapshot.value.cardsById,
+      areaItemsById: masterSnapshot.value.areaItemsById,
+      skillsById: masterSnapshot.value.skillsById,
+      songsById: masterSnapshot.value.songsById,
+    });
+    const invalidChartIndex = chartSnapshots.findIndex((snapshot) => !Array.isArray(snapshot.value.chart));
+    if (invalidChartIndex >= 0) {
+      const song = songs[invalidChartIndex];
+      throw new TeamSearchDataIntegrityError([
+        `chart ${song.songId}:${song.difficulty}`,
+      ]);
+    }
+  }, messages);
 }
 
-async function runSearch(
+async function runSearchAttempt(
   request: TeamSearchWorkerSearchRequest,
   options: TeamSearchWorkerRunOptions = {},
+  forceRefresh = false,
 ): Promise<BandoriTeamSearchResponse | BandoriMedleyTeamSearchResponse> {
   const messages = getWorkerMessages(request.messages);
   const songId = Math.trunc(request.song.songId);
   const medleySongs = request.event.eventType === "medley" ? request.songs?.slice(0, 3) ?? [] : [];
   const chartRequests = medleySongs.length > 0
     ? medleySongs.map((song) => (
-      requireCachedJson<{ chart: BestdoriChartEntity[] }>(
+      getChartData(
         `/api/bandori/charts/${Math.trunc(song.songId)}/${song.difficulty}`,
-        messages.chartData,
         messages,
+        forceRefresh,
       )
     ))
     : [
-      requireCachedJson<{ chart: BestdoriChartEntity[] }>(
+      getChartData(
         `/api/bandori/charts/${songId}/${request.song.difficulty}`,
-        messages.chartData,
         messages,
+        forceRefresh,
       ),
     ];
-  const [cachedCards, charactersPayload, skillsPayload, areaItemsPayload, songsPayload, chartPayloads] = await Promise.all([
-    requireCachedJson<CachedCardsResponse>("/api/bandori/master/cards", messages.cardData, messages),
-    requireCachedJson<MasterResponse<Record<string, { bandId?: number | null } | undefined>>>("/api/bandori/master/characters/main", messages.characterData, messages),
-    requireCachedJson<MasterResponse<Record<string, BestdoriSkillMaster | undefined>>>("/api/bandori/master/skills", messages.skillData, messages),
-    requireCachedJson<MasterResponse<Record<string, BestdoriAreaItemMaster | undefined>>>("/api/bandori/master/areaItems", messages.areaItemData, messages),
-    requireCachedJson<Record<string, BestdoriSongMaster | undefined>>("/api/bandori/master/music", messages.songData, messages),
+  const [masterSnapshot, chartSnapshots] = await Promise.all([
+    getMasterData(messages, forceRefresh),
     Promise.all(chartRequests),
   ]);
+  const {
+    cardsById: cachedCards,
+    charactersById,
+    skillsById,
+    areaItemsById,
+    songsById,
+  } = masterSnapshot.value;
   const server = request.profilePayload.bestdoriProfile.server;
   const cardsById = getCalculationCardsForProfileServer(
-    normalizeCachedCardsResponse(cachedCards),
+    cachedCards,
     server,
   );
 
-  const song = songsPayload[String(songId)];
+  const song = songsById[String(songId)];
   if (!song) {
-    throw new Error(messages.songDataMissing);
+    throw new TeamSearchDataIntegrityError([`song ${songId}`]);
   }
-  const chartPayload = chartPayloads[0];
-  if (!chartPayload || !Array.isArray(chartPayload.chart)) {
-    throw new Error(messages.chartDataInvalid);
+  const chartSnapshot = chartSnapshots[0];
+  if (!chartSnapshot || !Array.isArray(chartSnapshot.value.chart)) {
+    throw new TeamSearchDataIntegrityError([
+      `chart ${songId}:${request.song.difficulty}`,
+    ]);
   }
 
   const excludedCardIds = new Set(request.cards.excludedCardIds);
@@ -750,6 +878,19 @@ async function runSearch(
     }
   ));
   const eventBonus = mergeEventBonus(request.event.baseBonus ?? null, request.event.bonusOverride);
+  assertTeamSearchRequestReferences({
+    cardIds: userCards.filter((card) => !card.isExcluded).map((card) => card.cardId),
+    eventCardIds: getEventBonusCardIds(eventBonus),
+    areaItemIds: userAreaItems.map((item) => item.areaItemId),
+    externalSkillIds: (request.live.otherPlayerSkills ?? []).map((skill) => skill.skillId),
+    songIds: medleySongs.length > 0
+      ? medleySongs.map((medleySong) => Math.trunc(medleySong.songId))
+      : [songId],
+    cardsById,
+    areaItemsById,
+    skillsById,
+    songsById,
+  });
 
   if (request.event.eventType === "medley") {
     if (medleySongs.length !== 3) {
@@ -757,17 +898,26 @@ async function runSearch(
     }
     const medleySongInputs = medleySongs.map((medleySong, index) => {
       const medleySongId = Math.trunc(medleySong.songId);
-      const medleySongMaster = songsPayload[String(medleySongId)];
-      const medleyChartPayload = chartPayloads[index];
+      const medleySongMaster = songsById[String(medleySongId)];
+      const medleyChartSnapshot = chartSnapshots[index];
       if (!medleySongMaster) {
-        throw new Error(formatWorkerMessage(messages.medleySongDataMissing, { index: index + 1 }));
+        throw new TeamSearchDataIntegrityError([`song ${medleySongId}`]);
       }
-      if (!medleyChartPayload || !Array.isArray(medleyChartPayload.chart)) {
-        throw new Error(formatWorkerMessage(messages.medleyChartDataInvalid, { index: index + 1 }));
+      if (!medleyChartSnapshot || !Array.isArray(medleyChartSnapshot.value.chart)) {
+        throw new TeamSearchDataIntegrityError([
+          `chart ${medleySongId}:${medleySong.difficulty}`,
+        ]);
       }
       return {
-        chart: medleyChartPayload.chart,
-        chartCacheKey: `${medleySongId}:${medleySong.difficulty}:medley:${index}`,
+        chart: medleyChartSnapshot.value.chart,
+        chartCacheKey: [
+          `master-${masterSnapshot.generation}`,
+          `chart-${medleyChartSnapshot.generation}`,
+          medleySongId,
+          medleySong.difficulty,
+          "medley",
+          index,
+        ].join(":"),
         song: medleySongMaster,
         difficulty: medleySong.difficulty,
       };
@@ -785,9 +935,9 @@ async function runSearch(
         userAreaItems,
         characterBonuses,
         cardsById,
-        charactersById: charactersPayload.payload,
-        skillsById: skillsPayload.payload,
-        areaItemsById: areaItemsPayload.payload,
+        charactersById,
+        skillsById,
+        areaItemsById,
         songs: medleySongInputs,
         eventBonus,
         eventFormula: request.event.formula,
@@ -810,9 +960,9 @@ async function runSearch(
       userAreaItems,
       characterBonuses,
       cardsById,
-      charactersById: charactersPayload.payload,
-      skillsById: skillsPayload.payload,
-      areaItemsById: areaItemsPayload.payload,
+      charactersById,
+      skillsById,
+      areaItemsById,
       songs: medleySongInputs,
       eventBonus,
       eventType: "medley",
@@ -846,11 +996,18 @@ async function runSearch(
       getGameProfileCharacterMissionBonuses(request.profilePayload),
     ),
     cardsById,
-    charactersById: charactersPayload.payload,
-    skillsById: skillsPayload.payload,
-    areaItemsById: areaItemsPayload.payload,
-    chart: chartPayload.chart,
-    chartCacheKey: `${songId}:${request.song.difficulty}:${request.live.type}:${request.event.eventType}`,
+    charactersById,
+    skillsById,
+    areaItemsById,
+    chart: chartSnapshot.value.chart,
+    chartCacheKey: [
+      `master-${masterSnapshot.generation}`,
+      `chart-${chartSnapshot.generation}`,
+      songId,
+      request.song.difficulty,
+      request.live.type,
+      request.event.eventType,
+    ].join(":"),
     song,
     difficulty: request.song.difficulty,
     eventBonus,
@@ -871,6 +1028,17 @@ async function runSearch(
     maxSearchDurationMs: request.calculation.maxSearchDurationMs,
     constraints: request.calculation.constraints,
   });
+}
+
+function runSearch(
+  request: TeamSearchWorkerSearchRequest,
+  options: TeamSearchWorkerRunOptions = {},
+): Promise<BandoriTeamSearchResponse | BandoriMedleyTeamSearchResponse> {
+  const messages = getWorkerMessages(request.messages);
+  return withIntegrityRefreshRetry(
+    (forceRefresh) => runSearchAttempt(request, options, forceRefresh),
+    messages,
+  );
 }
 
 self.onmessage = (event: MessageEvent<TeamSearchWorkerMessage>) => {

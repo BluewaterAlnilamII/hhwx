@@ -21,7 +21,7 @@
     "test:bandori-stamps": "node --import tsx --test tests/bandori-stamps-api-contract.test.mjs && node --import tsx scripts/test-bandori-stamps-api-reader.mjs",
     "test:bandori-music": "node --import tsx --test tests/bandori-music-api-contract.test.mjs tests/bandori-music-api-consumers.test.mjs && node --import tsx scripts/test-bandori-music-api-reader.mjs",
     "test:bandori-public-assets": "node --import tsx --test tests/bandori-public-asset-index.test.mjs tests/bandori-public-asset-index-client.test.mjs tests/bandori-public-asset-consumers.test.mjs",
-    "test:cache": "node --import tsx --test tests/api-cache.test.mjs",
+    "test:cache": "node --import tsx --test tests/api-cache.test.mjs tests/bandori-team-search-data-cache.test.mjs",
     "test:bandori-tracker-history": "node --import tsx --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test tests/bandori-tracker-history-contract.test.mjs tests/r2-s3-reader.test.mjs && node scripts/test-bandori-tracker-history-integration.mjs",
     "test:bandori-tracker-live": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test tests/bandori-tracker-live-contract.test.mjs tests/bandori-tracker-projection.test.mjs",
     "test:supabase": "supabase test db",
