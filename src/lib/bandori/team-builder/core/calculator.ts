@@ -199,6 +199,14 @@ function toFiniteNumber(value: unknown): number | null {
   return Number.isFinite(numberValue) ? numberValue : null;
 }
 
+function toRegionalFiniteNumber(value: unknown): number | null {
+  if (value === null || value === undefined) {
+    return null;
+  }
+
+  return toFiniteNumber(value);
+}
+
 function toInteger(value: unknown, fallback = 0): number {
   const numberValue = toFiniteNumber(value);
   return numberValue === null ? fallback : Math.trunc(numberValue);
@@ -206,10 +214,10 @@ function toInteger(value: unknown, fallback = 0): number {
 
 function getRegionalNumber(value: unknown, server: number): number | null {
   if (Array.isArray(value)) {
-    return toFiniteNumber(value[server]) ?? toFiniteNumber(value[0]);
+    return toRegionalFiniteNumber(value[server]) ?? toRegionalFiniteNumber(value[0]);
   }
 
-  return toFiniteNumber(value);
+  return toRegionalFiniteNumber(value);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -730,7 +738,7 @@ export function resolveBandoriSkill(
       type,
       valuePercent: useUnifiedValue ? unifiedValue : regionalValue,
       condition: normalizeJudge(effect.activateCondition),
-      conditionLife: toFiniteNumber(effect.activateConditionLife),
+      conditionLife: getRegionalNumber(effect.activateConditionLife, server),
       isUnifiedValue: useUnifiedValue,
     };
   });

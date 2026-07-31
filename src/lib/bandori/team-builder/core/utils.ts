@@ -32,10 +32,12 @@ export function isRecord(value: unknown): value is Record<string, unknown> {
 
 export function getRegionalNumber(value: unknown, server: number): number {
   if (Array.isArray(value)) {
-    return toFiniteNumber(value[server], toFiniteNumber(value[0], 0));
+    return toRegionalFiniteNumber(value[server])
+      ?? toRegionalFiniteNumber(value[0])
+      ?? 0;
   }
 
-  return toFiniteNumber(value, 0);
+  return toRegionalFiniteNumber(value) ?? 0;
 }
 
 function getRegionalNumberForExactServer(value: unknown, server: number): number | null {
