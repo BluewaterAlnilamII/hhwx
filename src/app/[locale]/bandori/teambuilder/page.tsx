@@ -396,6 +396,7 @@ const DEFAULT_TEAM_SEARCH_WORKER_MESSAGES: TeamSearchWorkerMessages = {
   selectMedleySongs: "Medley live requires selecting 3 songs",
   medleySongDataMissing: "Song {index} data does not exist",
   medleyChartDataInvalid: "Song {index} chart data format is invalid",
+  dataInconsistent: "Calculation data is incomplete after refresh: {details}",
   preloadFailed: "Failed to prepare data",
   calculateFailed: "Calculation failed",
 };

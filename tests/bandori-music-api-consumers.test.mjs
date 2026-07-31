@@ -35,8 +35,8 @@ test("Team Builder and Event Tracker use the shared Music API", async () => {
 
   assert.match(page, /useBandoriMusicMaster\(\)/u);
   assert.match(page, /songs: masterMusic/u);
-  assert.match(worker, /requestJson<Record<string, BestdoriSongMaster \| undefined>>\("\/api\/bandori\/master\/music"/u);
-  assert.match(worker, /const song = songsPayload\[String\(songId\)\]/u);
+  assert.match(worker, /requestJsonUncached<Record<string, BestdoriSongMaster \| undefined>>\(\s*"\/api\/bandori\/master\/music"/u);
+  assert.match(worker, /const song = songsById\[String\(songId\)\]/u);
   assert.match(tracker, /useBandoriMusicMaster\(\)/u);
   assert.match(tracker, /pickBandoriRegionalText/u);
   assert.match(hook, /SESSION_CLIENT_CACHE_POLICY/u);
