@@ -76,6 +76,10 @@ import {
   type TimedCacheSnapshot,
 } from "./team-search-data-cache";
 
+// This entry file owns the immutable Worker asset URL. Bump the revision when imported
+// search semantics change, and isolate all in-memory search caches under the same revision.
+const TEAM_SEARCH_WORKER_ALGORITHM_REVISION = "regional-skill-fallback-v1";
+
 type MasterResponse<T> = {
   payload: T;
 };
@@ -911,6 +915,7 @@ async function runSearchAttempt(
       return {
         chart: medleyChartSnapshot.value.chart,
         chartCacheKey: [
+          TEAM_SEARCH_WORKER_ALGORITHM_REVISION,
           `master-${masterSnapshot.generation}`,
           `chart-${medleyChartSnapshot.generation}`,
           medleySongId,
@@ -1001,6 +1006,7 @@ async function runSearchAttempt(
     areaItemsById,
     chart: chartSnapshot.value.chart,
     chartCacheKey: [
+      TEAM_SEARCH_WORKER_ALGORITHM_REVISION,
       `master-${masterSnapshot.generation}`,
       `chart-${chartSnapshot.generation}`,
       songId,
