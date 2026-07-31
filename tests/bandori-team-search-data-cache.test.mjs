@@ -217,6 +217,11 @@ test("team search worker wires cache revalidation, retry, and cache generations 
   assert.match(source, /withIntegrityRefreshRetry/);
   assert.match(source, /master-\$\{masterSnapshot\.generation\}/);
   assert.match(source, /chart-\$\{chartSnapshot\.generation\}/);
+  assert.match(source, /TEAM_SEARCH_WORKER_ALGORITHM_REVISION = "regional-skill-fallback-v1"/);
+  assert.equal(
+    [...source.matchAll(/chartCacheKey:\s*\[\s*TEAM_SEARCH_WORKER_ALGORITHM_REVISION/g)].length,
+    2,
+  );
   assert.doesNotMatch(source, /requestJsonCache/);
   assert.doesNotMatch(source, /manifest/iu);
 });
