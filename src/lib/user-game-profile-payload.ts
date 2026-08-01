@@ -1,9 +1,9 @@
 import {
-  decodeBestdoriCardIds,
   decodeBestdoriProfile,
+  decodeBestdoriUint16Ids,
   decodeRunLengthPairs,
-  encodeBestdoriCardIds,
   encodeBestdoriProfile,
+  encodeBestdoriUint16Ids,
   encodeRunLengthPairs,
   type BestdoriProfile,
 } from "@/lib/bestdori-profile-codec";
@@ -330,7 +330,7 @@ export function compactPotentialRecords(records?: UserGameProfilePotentialRecord
     .filter((record) => record.characterId > 0 && record.characterId <= MAX_BANDORI_CHARACTER_ID)
     .sort((left, right) => compareBandoriCharacterIds(left.characterId, right.characterId));
   return {
-    ids: encodeBestdoriCardIds(sortedRecords.map((record) => record.characterId)),
+    ids: encodeBestdoriUint16Ids(sortedRecords.map((record) => record.characterId)),
     performance: encodeRunLengthPairs(sortedRecords.map((record) => record.performanceLevel)),
     technique: encodeRunLengthPairs(sortedRecords.map((record) => record.techniqueLevel)),
     visual: encodeRunLengthPairs(sortedRecords.map((record) => record.visualLevel)),
@@ -338,7 +338,7 @@ export function compactPotentialRecords(records?: UserGameProfilePotentialRecord
 }
 
 function decodeCompactPotentialRecords(records: CompactGameProfilePotentialRecords): UserGameProfilePotentialRecord[] {
-  const characterIds = decodeBestdoriCardIds(records.ids);
+  const characterIds = decodeBestdoriUint16Ids(records.ids);
   const expectedLength = characterIds.length;
   const performance = decodeRunLengthPairs<number | null>(records.performance, expectedLength);
   const technique = decodeRunLengthPairs<number | null>(records.technique, expectedLength);
@@ -380,7 +380,7 @@ export function compactMissionBonusRecords(records?: UserGameProfileMissionBonus
   const sortedRecords = [...valuesByCharacter.entries()].sort(([left], [right]) => compareBandoriCharacterIds(left, right));
 
   return {
-    ids: encodeBestdoriCardIds(sortedRecords.map(([characterId]) => characterId)),
+    ids: encodeBestdoriUint16Ids(sortedRecords.map(([characterId]) => characterId)),
     collection: {
       performance: encodeRunLengthPairs(sortedRecords.map(([, record]) => record.collection.performance)),
       technique: encodeRunLengthPairs(sortedRecords.map(([, record]) => record.collection.technique)),
@@ -395,7 +395,7 @@ export function compactMissionBonusRecords(records?: UserGameProfileMissionBonus
 }
 
 function decodeCompactMissionBonusRecords(records: CompactGameProfileMissionBonusRecords): UserGameProfileMissionBonusRecord[] {
-  const characterIds = decodeBestdoriCardIds(records.ids);
+  const characterIds = decodeBestdoriUint16Ids(records.ids);
   const expectedLength = characterIds.length;
   const collectionPerformance = decodeRunLengthPairs<number>(records.collection.performance, expectedLength);
   const collectionTechnique = decodeRunLengthPairs<number>(records.collection.technique, expectedLength);
