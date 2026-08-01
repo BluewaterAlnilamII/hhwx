@@ -67,10 +67,6 @@ function readRegionalTimestampAt(values: BestdoriCardMetadata["releasedAt"], ind
   return 0;
 }
 
-function hasCnRelease(values: BestdoriCardMetadata["releasedAt"]): boolean {
-  return readRegionalTimestampAt(values, 3) > 0;
-}
-
 function transformCardsResponse(raw: unknown): Record<string, BestdoriCardMetadata | null | undefined> {
   return parseBandoriCardsMasterResponse(raw);
 }
@@ -125,7 +121,6 @@ export function buildBandoriCardCatalog(
     const bandId = toPositiveInteger(character?.bandId);
     const displayName = pickBestdoriLocalizedName(card?.prefix, preferredServer, contextServer)
       ?? (locale === "en" ? `Card ${cardId}` : `卡牌 ${cardId}`);
-    const assetRegion = hasCnRelease(card?.releasedAt) ? "cn" as const : "jp" as const;
     const characterName = pickBestdoriLocalizedName(character?.nickname, preferredServer, contextServer)
       ?? pickBestdoriLocalizedName(character?.characterName, preferredServer, contextServer)
       ?? pickBestdoriLocalizedName(character?.firstName, preferredServer, contextServer)
@@ -161,7 +156,6 @@ export function buildBandoriCardCatalog(
       levelLimit,
       trainingLevelLimit,
       resourceSetName,
-      assetRegion,
       displayName,
       searchText,
       releasedAtJp,

@@ -6,7 +6,6 @@ import BandoriCardThumbnail, {
   type BandoriCardThumbnailMetadata,
 } from "@/components/bandori/BandoriCardThumbnail";
 import { BandoriCardHoverTooltipPortal } from "@/components/bandori/BandoriCardHoverTooltip";
-import type { BandoriAssetRegion } from "@/lib/bandori-asset-proxy";
 
 export type BandoriCardTileCard = BandoriCardThumbnailCard & {
   bandId: number | null;
@@ -19,7 +18,6 @@ export type BandoriCardTileProps = {
   cardName: string;
   characterName: string;
   skillEffectLabel: string;
-  assetRegion: BandoriAssetRegion;
   badge?: string;
   leaderLabel?: string;
   showPower?: boolean;
@@ -31,7 +29,6 @@ export default function BandoriCardTile({
   cardName,
   characterName,
   skillEffectLabel,
-  assetRegion,
   badge,
   leaderLabel,
   showPower = true,
@@ -51,7 +48,6 @@ export default function BandoriCardTile({
           card={card}
           metadata={metadata}
           bandId={card.bandId}
-          region={assetRegion}
           alt={cardName}
           power={card.totalPower}
           showPower={showPower}

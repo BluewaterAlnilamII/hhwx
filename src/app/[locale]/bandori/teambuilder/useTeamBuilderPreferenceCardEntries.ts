@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { type BandoriAssetRegion } from "@/lib/bandori-asset-proxy";
 import {
   calculateBandoriCard,
   type BandoriCardAttribute,
@@ -40,7 +39,6 @@ export type TeamBuilderPreferenceCardMetadata = {
   skillId?: number;
   levelLimit?: number;
   resourceSetName?: string;
-  assetRegion?: BandoriAssetRegion;
   releasedAt?: Array<string | number | null>;
   displayName?: string | null;
   hasTrainedArt?: boolean;
@@ -254,7 +252,6 @@ function buildPreferenceCardMetadataCachePart(metadata: TeamBuilderPreferenceCar
     metadata?.skillId ?? "",
     metadata?.levelLimit ?? "",
     metadata?.resourceSetName ?? "",
-    metadata?.assetRegion ?? "",
     metadata?.displayName ?? "",
     metadata?.hasTrainedArt === undefined ? "" : metadata.hasTrainedArt ? 1 : 0,
     buildCachePart(metadata?.stat),

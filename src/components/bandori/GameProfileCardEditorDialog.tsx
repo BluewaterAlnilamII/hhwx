@@ -6,7 +6,6 @@ import { Save, Trash2, X } from "lucide-react";
 import { useLocale, useTranslations } from "next-intl";
 import { type AppLocale } from "@/i18n/routing";
 import SharedBandoriCardThumbnail from "@/components/bandori/BandoriCardThumbnail";
-import { type BandoriAssetRegion } from "@/lib/bandori-asset-proxy";
 import { type BandoriServer } from "@/lib/bandori-server";
 import {
   getGameProfileCardLevelLimit,
@@ -94,7 +93,6 @@ export type GameProfileCardEditorDialogProps = {
   characterName: string;
   bandId: number | null;
   characterBonusesById?: Record<string, BandoriCharacterBonusState | undefined>;
-  region: BandoriAssetRegion;
   displayServer?: BandoriServer;
   saving: boolean;
   title?: string;
@@ -115,7 +113,6 @@ export default function GameProfileCardEditorDialog({
   characterName,
   bandId,
   characterBonusesById = {},
-  region,
   displayServer,
   saving,
   title,
@@ -209,7 +206,6 @@ export default function GameProfileCardEditorDialog({
                   card={draft}
                   metadata={metadata}
                   bandId={bandId}
-                  region={region}
                   alt={t("thumbnailAlt", { cardName })}
                   size="editor"
                   power={totalPower}

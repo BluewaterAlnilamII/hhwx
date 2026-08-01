@@ -225,13 +225,11 @@ function EventCardTile({
         attribute: card?.attribute,
         resourceSetName: card?.resourceSetName,
         levelLimit: card?.levelLimit,
-        assetRegion: card?.assetRegion === "cn" || card?.assetRegion === "jp" ? card.assetRegion : undefined,
         releasedAt: card?.releasedAt,
       }}
       cardName={title}
       characterName={characterName}
       skillEffectLabel={skillEffectLabel}
-      assetRegion={server === 3 ? "cn" : "jp"}
       showPower={false}
     />
   );
@@ -415,7 +413,6 @@ export default function EventInfoPanel({
               skills={skills ?? {}}
               cardMetadata={cards ?? {}}
               preferredServer={server}
-              assetRegion={server === 3 ? "cn" : "jp"}
               showMatch={false}
               showMasterRank={false}
             />

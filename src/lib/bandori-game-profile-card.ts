@@ -1,4 +1,3 @@
-import { type BandoriAssetRegion } from "@/lib/bandori-asset-proxy";
 import { type AppLocale } from "@/i18n/routing";
 import { hasTrainedCardArt } from "@/lib/bandori-card-training";
 import { pickBestdoriLocalizedName } from "@/lib/bestdori-regional-names";
@@ -16,7 +15,6 @@ export type GameProfileCardMetadata = {
   attribute?: GameProfileCardAttribute | string;
   levelLimit?: number;
   resourceSetName?: string;
-  assetRegion?: BandoriAssetRegion;
   prefix?: Array<string | null>;
   releasedAt?: Array<string | number | null>;
   type?: string;

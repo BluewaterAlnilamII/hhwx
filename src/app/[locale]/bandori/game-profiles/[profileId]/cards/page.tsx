@@ -10,7 +10,6 @@ import {
   Search,
 } from "lucide-react";
 import { getApiErrorMessage, parseApiSuccessData } from "@/lib/api-contracts";
-import { type BandoriAssetRegion } from "@/lib/bandori-asset-proxy";
 import { useBandoriCardsMaster } from "@/hooks/useBandoriCardsMaster";
 import {
   materializeBandoriCardsMasterForServer,
@@ -30,6 +29,7 @@ import {
 } from "@/lib/bandori-character-bonuses";
 import { pickBestdoriLocalizedName } from "@/lib/bestdori-regional-names";
 import {
+  getBandoriServerCode,
   normalizeBandoriServer,
   pickBandoriRegionalText,
   type BandoriServer,
@@ -68,7 +68,6 @@ type BestdoriCardMetadata = {
   attribute?: CardAttribute | string;
   levelLimit?: number;
   resourceSetName?: string;
-  assetRegion?: BandoriAssetRegion;
   prefix?: Array<string | null>;
   releasedAt?: Array<string | number | null>;
   type?: string;
@@ -151,10 +150,6 @@ const DEFAULT_FILTERS: CardFilterState = {
   rarity: "all",
   training: "all",
 };
-
-function getRegionFromProfileServer(server: number | undefined): BandoriAssetRegion {
-  return server === 3 ? "cn" : "jp";
-}
 
 function pickCharacterName(
   character: CharacterRecord | undefined,
@@ -353,7 +348,6 @@ function CardThumbnail({
   metadata,
   bandId,
   characterBonusesById,
-  region,
   alt,
   size = "tile",
 }: {
@@ -361,7 +355,6 @@ function CardThumbnail({
   metadata?: BestdoriCardMetadata;
   bandId: number | null;
   characterBonusesById: Record<string, BandoriCharacterBonusState | undefined>;
-  region: BandoriAssetRegion;
   alt: string;
   size?: "tile" | "preview";
 }) {
@@ -384,7 +377,6 @@ function CardThumbnail({
       card={card}
       metadata={metadata}
       bandId={bandId}
-      region={region}
       alt={alt}
       size={size}
       power={totalPower}
@@ -401,7 +393,6 @@ const CardTile = memo(function CardTile({
   skillEffectLabel,
   bandId,
   characterBonusesById,
-  region,
   canEdit,
   onEdit,
 }: {
@@ -417,7 +408,6 @@ const CardTile = memo(function CardTile({
   skillEffectLabel: string;
   bandId: number | null;
   characterBonusesById: Record<string, BandoriCharacterBonusState | undefined>;
-  region: BandoriAssetRegion;
   canEdit: boolean;
   onEdit: () => void;
 }) {
@@ -448,7 +438,7 @@ const CardTile = memo(function CardTile({
         )}
         aria-label={canEdit ? labels.editCard(cardName) : cardName}
       >
-        <CardThumbnail card={card} metadata={metadata} bandId={bandId} characterBonusesById={characterBonusesById} region={region} alt={cardName} />
+        <CardThumbnail card={card} metadata={metadata} bandId={bandId} characterBonusesById={characterBonusesById} alt={cardName} />
       </button>
 
       {hoverOpen ? (
@@ -572,7 +562,6 @@ export default function GameProfileCardsPage({ params }: { params: Promise<{ pro
     };
   }, [canonicalCards, messages, profileId, t, userId]);
 
-  const region = useMemo(() => getRegionFromProfileServer(profilePayload?.bestdoriProfile.server), [profilePayload]);
   const profileServer = useMemo(
     () => normalizeBandoriServer(profilePayload?.bestdoriProfile.server) ?? 0,
     [profilePayload],
@@ -701,7 +690,7 @@ export default function GameProfileCardsPage({ params }: { params: Promise<{ pro
                       total: cards.length,
                       matched: filteredCards.length,
                       loaded: visibleCardCount,
-                      region: region.toUpperCase(),
+                      server: getBandoriServerCode(profileServer).toUpperCase(),
                     })}
                   </p>
                 </div>
@@ -796,7 +785,6 @@ export default function GameProfileCardsPage({ params }: { params: Promise<{ pro
                               skillEffectLabel={skillEffectLabel}
                               bandId={charactersById.get(cardMetadata?.characterId ?? 0)?.bandId ?? null}
                               characterBonusesById={characterBonusesById}
-                              region={region}
                               canEdit={canEditProfile}
                               onEdit={() => setEditingCardId(card.cardId)}
                             />
@@ -837,7 +825,6 @@ export default function GameProfileCardsPage({ params }: { params: Promise<{ pro
               )}
               bandId={charactersById.get(metadata.cards[String(editingCard.cardId)]?.characterId ?? 0)?.bandId ?? null}
               characterBonusesById={characterBonusesById}
-              region={region}
               displayServer={profileServer}
               saving={saving}
               onClose={() => setEditingCardId(null)}

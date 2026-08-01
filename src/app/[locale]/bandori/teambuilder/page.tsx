@@ -142,7 +142,6 @@ type MedleyResultInputSnapshot = {
   perfectRate: string;
   maxSearchDurationSeconds: string;
   medleyCalculationMode: MedleyCalculationMode;
-  assetRegion: BandoriAssetRegion;
 };
 type BrowserMemoryPerformance = Performance & {
   memory?: {
@@ -230,7 +229,6 @@ type CardMetadata = {
   levelLimit?: number;
   resourceSetName?: string;
   prefix?: Array<string | null>;
-  assetRegion?: BandoriAssetRegion;
   releasedAt?: Array<string | number | null>;
   displayName?: string | null;
   hasTrainedArt?: boolean;
@@ -1792,7 +1790,6 @@ function TeamBuilderCardTile({
   displayServer,
   badge,
   leader,
-  assetRegion = "cn",
   showPower = true,
 }: {
   card: DisplayCardLike;
@@ -1803,7 +1800,6 @@ function TeamBuilderCardTile({
   displayServer?: BandoriServer;
   badge?: string;
   leader?: boolean;
-  assetRegion?: BandoriAssetRegion;
   showPower?: boolean;
 }) {
   const locale = useLocale() as AppLocale;
@@ -1841,7 +1837,6 @@ function TeamBuilderCardTile({
           )
         : `Card #${cardId}`}
       skillEffectLabel={skillEffectLabel}
-      assetRegion={assetRegion}
       badge={badge}
       leaderLabel={leader ? labelsT("leader") : undefined}
       showPower={showPower}
@@ -1857,7 +1852,6 @@ function EventBonusPanel({
   characters,
   skills,
   cardMetadata,
-  assetRegion,
   eventFormula,
 }: {
   eventType: BandoriTeamSearchEventType;
@@ -1867,7 +1861,6 @@ function EventBonusPanel({
   characters: Record<string, CharacterMaster | undefined>;
   skills: Record<string, SkillMaster | undefined>;
   cardMetadata: Record<string, CardMetadata | undefined>;
-  assetRegion: BandoriAssetRegion;
   eventFormula: EventFormulaOption;
 }) {
   const preferredServer = useBandoriPreferredServer();
@@ -1882,7 +1875,6 @@ function EventBonusPanel({
       skills={skills}
       cardMetadata={cardMetadata}
       preferredServer={preferredServer}
-      assetRegion={assetRegion}
       showParameter={shouldShowParameterBonus(eventType)}
       scoreFormulaLabel={EVENT_FORMULA_LABELS[eventFormula]}
     />
@@ -1962,7 +1954,6 @@ function ResultCard({
   cardMetadata,
   characters,
   skills,
-  assetRegion,
   displayServer,
   displayLiveBoostCount,
   displayChallengeCpCost,
@@ -1973,7 +1964,6 @@ function ResultCard({
   cardMetadata: Record<string, CardMetadata | undefined>;
   characters: Record<string, CharacterMaster | undefined>;
   skills: Record<string, SkillMaster | undefined>;
-  assetRegion: BandoriAssetRegion;
   displayServer: BandoriServer;
   displayLiveBoostCount: LiveBoostCountOption;
   displayChallengeCpCost: ChallengeCpCostOption;
@@ -2061,7 +2051,6 @@ function ResultCard({
             skills={skills}
             displayServer={displayServer}
             leader={getDisplayCardKey(card) === (result.leaderCardInstanceKey ?? `profile:${result.leaderCardId}`)}
-            assetRegion={assetRegion}
           />
         ))}
       </div>
@@ -2108,7 +2097,6 @@ function MedleyResultCard({
   cardMetadata,
   characters,
   skills,
-  assetRegion,
   displayServer,
   songs,
   rankLabel,
@@ -2120,7 +2108,6 @@ function MedleyResultCard({
   cardMetadata: Record<string, CardMetadata | undefined>;
   characters: Record<string, CharacterMaster | undefined>;
   skills: Record<string, SkillMaster | undefined>;
-  assetRegion: BandoriAssetRegion;
   displayServer: BandoriServer;
   songs: Array<SongMaster | null>;
   rankLabel?: string;
@@ -2247,7 +2234,6 @@ function MedleyResultCard({
                     skills={skills}
                     displayServer={displayServer}
                     leader={getDisplayCardKey(card) === (songResult.leaderCardInstanceKey ?? `profile:${songResult.leaderCardId}`)}
-                    assetRegion={assetRegion}
                   />
                 ))}
               </div>
@@ -2818,9 +2804,6 @@ function TeamBuilderPanel() {
     () => selectedProfilePayload ? getGameProfileCards(selectedProfilePayload) : [],
     [selectedProfilePayload],
   );
-  const selectedProfileAssetRegion = useMemo<BandoriAssetRegion>(() => (
-    selectedProfilePayload?.bestdoriProfile.server === 3 ? "cn" : "jp"
-  ), [selectedProfilePayload]);
   const selectedProfileCardServer = useMemo(() => (
     normalizeBandoriServer(selectedProfilePayload?.bestdoriProfile.server) ?? 0
   ), [selectedProfilePayload]);
@@ -3336,9 +3319,6 @@ function TeamBuilderPanel() {
       : medleySongIds;
     return sourceSongIds.map((id) => data.songs[id] ?? null);
   }, [data.songs, displayedResultIsMedley, medleyResultInputSnapshot, medleySongIds]);
-  const displayedMedleyAssetRegion = displayedResultIsMedley && medleyResultInputSnapshot
-    ? medleyResultInputSnapshot.assetRegion
-    : selectedEventAssetRegion;
   const displayedMaxSearchDurationSeconds = displayedResultIsMedley && medleyResultInputSnapshot
     ? medleyResultInputSnapshot.maxSearchDurationSeconds
     : maxSearchDurationSeconds;
@@ -3423,7 +3403,6 @@ function TeamBuilderPanel() {
         perfectRate,
         maxSearchDurationSeconds,
         medleyCalculationMode,
-        assetRegion: selectedEventAssetRegion,
       }
       : null;
     let constraints: TeamSearchWorkerRequest["calculation"]["constraints"];
@@ -3591,7 +3570,6 @@ function TeamBuilderPanel() {
             characters={data.characters}
             skills={data.skills}
             cardMetadata={canonicalCardMetadata}
-            assetRegion={selectedEventAssetRegion}
             eventFormula={eventFormula}
           />
         </section>
@@ -3774,7 +3752,6 @@ function TeamBuilderPanel() {
               characters={data.characters}
               skills={data.skills}
               characterBonusesById={selectedProfileCharacterBonusesById}
-              assetRegion={selectedProfileAssetRegion}
               displayServer={selectedProfileCardServer}
               currentEventBonusCardCount={currentEventBonusCardIds.length}
               addingCurrentEventCards={addingCurrentEventCards}
@@ -3997,7 +3974,6 @@ function TeamBuilderPanel() {
                         cardMetadata={profileCardMetadata}
                         characters={data.characters}
                         skills={data.skills}
-                        assetRegion={displayedMedleyAssetRegion}
                         displayServer={selectedProfileCardServer}
                         songs={displayedMedleySongs}
                         rankLabel={labelsT("candidate")}
@@ -4013,7 +3989,6 @@ function TeamBuilderPanel() {
                         cardMetadata={profileCardMetadata}
                         characters={data.characters}
                         skills={data.skills}
-                        assetRegion={displayedMedleyAssetRegion}
                         displayServer={selectedProfileCardServer}
                         songs={displayedMedleySongs}
                         rankLabel={labelsT("candidateWithIndex", { index: index + 1 })}
@@ -4032,7 +4007,6 @@ function TeamBuilderPanel() {
                       cardMetadata={profileCardMetadata}
                       characters={data.characters}
                       skills={data.skills}
-                      assetRegion={displayedMedleyAssetRegion}
                       displayServer={selectedProfileCardServer}
                       songs={displayedMedleySongs}
                     />
@@ -4043,7 +4017,6 @@ function TeamBuilderPanel() {
                       cardMetadata={profileCardMetadata}
                       characters={data.characters}
                       skills={data.skills}
-                      assetRegion={selectedEventAssetRegion}
                       displayServer={selectedProfileCardServer}
                       displayLiveBoostCount={resultLiveBoostCount}
                       displayChallengeCpCost={resultChallengeCpCost}
@@ -4081,7 +4054,6 @@ function TeamBuilderPanel() {
           open={cardPickerOpen}
           value={cardPickerValue}
           adding={addingTemporaryCard}
-          region={selectedProfileAssetRegion}
           server={selectedProfileCardServer}
           scrollElementRef={cardPickerScrollRef}
           onValueChange={selectTemporaryCard}
@@ -4105,7 +4077,6 @@ function TeamBuilderPanel() {
           )}
           bandId={getCardBandId(profileCardMetadata[String(editingTemporaryCard.cardId)], data.characters)}
           characterBonusesById={selectedProfileCharacterBonusesById}
-          region={selectedProfileAssetRegion}
           displayServer={selectedProfileCardServer}
           exists={editingTemporaryCardExists}
           onClose={closeTemporaryCardEditor}

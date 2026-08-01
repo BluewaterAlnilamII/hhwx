@@ -5,7 +5,6 @@ import { ChevronDown, ListFilter, Plus, Sparkles, Trash2 } from "lucide-react";
 import { useLocale, useTranslations } from "next-intl";
 import VirtualizedBandoriCardGrid from "@/components/bandori/VirtualizedBandoriCardGrid";
 import { type AppLocale } from "@/i18n/routing";
-import { type BandoriAssetRegion } from "@/lib/bandori-asset-proxy";
 import { BANDORI_CHARACTER_GROUPS, compareBandoriCharacterIds } from "@/lib/bandori-character-groups";
 import { type BandoriServer } from "@/lib/bandori-server";
 import { type BandoriCharacterBonusState } from "@/lib/bandori-team-calculator";
@@ -46,7 +45,6 @@ export type TeamBuilderCardPreferencesPanelProps = {
   characters: Record<string, TeamBuilderPreferenceCharacterMaster | undefined>;
   skills: Record<string, TeamBuilderPreferenceSkillMaster | undefined>;
   characterBonusesById: Record<string, BandoriCharacterBonusState | undefined>;
-  assetRegion: BandoriAssetRegion;
   displayServer: BandoriServer;
   currentEventBonusCardCount: number;
   addingCurrentEventCards: boolean;
@@ -69,7 +67,6 @@ export default function TeamBuilderCardPreferencesPanel({
   characters,
   skills,
   characterBonusesById,
-  assetRegion,
   displayServer,
   currentEventBonusCardCount,
   addingCurrentEventCards,
@@ -410,7 +407,6 @@ export default function TeamBuilderCardPreferencesPanel({
               <TeamBuilderPreferenceCardTile
                 key={entry.card.instanceId}
                 entry={entry}
-                assetRegion={assetRegion}
                 title={t("editTemporaryCard")}
                 compact
                 onClick={() => onEditTemporary(entry.card.instanceId)}
@@ -502,7 +498,6 @@ export default function TeamBuilderCardPreferencesPanel({
                 return (
                   <TeamBuilderPreferenceCardTile
                     entry={entry}
-                    assetRegion={assetRegion}
                     title={excluded ? t("restoreCard") : t("excludeCard")}
                     compact
                     muted={excluded}

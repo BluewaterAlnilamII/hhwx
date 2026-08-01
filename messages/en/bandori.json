@@ -234,7 +234,7 @@
       "back": "Back to game profiles",
       "loadingCards": "Loading cards...",
       "workbenchTitle": "Card Data Workbench",
-      "summary": "{total} cards · {matched} matched · {loaded} loaded · Asset server {region}",
+      "summary": "{total} cards · {matched} matched · {loaded} loaded · Server {server}",
       "manageProfiles": "Profile management",
       "searchPlaceholder": "Search card ID, name, or character",
       "filters": {

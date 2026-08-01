@@ -234,7 +234,7 @@
       "back": "返回游戏档案",
       "loadingCards": "正在读取卡牌...",
       "workbenchTitle": "卡牌资料工作台",
-      "summary": "共 {total} 张卡牌 · 匹配 {matched} 张 · 已加载 {loaded} 张 · 资源区服 {region}",
+      "summary": "共 {total} 张卡牌 · 匹配 {matched} 张 · 已加载 {loaded} 张 · 服务器 {server}",
       "manageProfiles": "档案管理",
       "searchPlaceholder": "搜索卡牌 ID、名称、角色",
       "filters": {
