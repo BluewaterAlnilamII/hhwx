@@ -1,6 +1,11 @@
 export const BESTDORI_PROFILE_COMPRESSION_VERSION = "2";
 export const BESTDORI_CN_SERVER_ID = 3;
 
+// Bestdori compression v2 reserves raw uint16 values above 24464 for
+// card IDs 90001 and above, restoring the high-ID namespace on decode.
+const BESTDORI_WRAPPED_CARD_ID_THRESHOLD = 24464;
+const BESTDORI_WRAPPED_CARD_ID_OFFSET = 65536;
+
 export type BestdoriCardProfile = {
   ids: string;
   levels: unknown[];
@@ -140,23 +145,35 @@ function encodeRunLengthBooleanPairs(values: boolean[]): unknown[] {
   return encodeRunLengthPairs(values.map((value) => (value ? 1 : 0)));
 }
 
-export function decodeBestdoriCardIds(ids: string): number[] {
+export function decodeBestdoriUint16Ids(ids: string): number[] {
   const bytes = decodeBase64ToBytes(ids);
-  const cardIds: number[] = [];
+  const values: number[] = [];
   for (let index = 0; index + 1 < bytes.length; index += 2) {
-    cardIds.push(bytes[index] + (bytes[index + 1] << 8));
+    values.push(bytes[index] + (bytes[index + 1] << 8));
   }
-  return cardIds;
+  return values;
+}
+
+export function encodeBestdoriUint16Ids(values: number[]): string {
+  const bytes = new Uint8Array(values.length * 2);
+  values.forEach((value, index) => {
+    const normalizedValue = toFiniteInteger(value);
+    bytes[index * 2] = normalizedValue & 0xff;
+    bytes[index * 2 + 1] = (normalizedValue >> 8) & 0xff;
+  });
+  return encodeBytesToBase64(bytes);
+}
+
+export function decodeBestdoriCardIds(ids: string): number[] {
+  return decodeBestdoriUint16Ids(ids).map((cardId) => (
+    cardId > BESTDORI_WRAPPED_CARD_ID_THRESHOLD
+      ? cardId + BESTDORI_WRAPPED_CARD_ID_OFFSET
+      : cardId
+  ));
 }
 
 export function encodeBestdoriCardIds(cardIds: number[]): string {
-  const bytes = new Uint8Array(cardIds.length * 2);
-  cardIds.forEach((cardId, index) => {
-    const normalizedCardId = toFiniteInteger(cardId);
-    bytes[index * 2] = normalizedCardId & 0xff;
-    bytes[index * 2 + 1] = (normalizedCardId >> 8) & 0xff;
-  });
-  return encodeBytesToBase64(bytes);
+  return encodeBestdoriUint16Ids(cardIds);
 }
 
 export function parseBestdoriProfile(value: unknown): BestdoriProfile {
@@ -237,7 +254,7 @@ export function encodeBestdoriProfile(profile: NormalizedBestdoriProfile): Bestd
 
   return {
     name: profile.name || "档案",
-    server: profile.server || BESTDORI_CN_SERVER_ID,
+    server: toFiniteInteger(profile.server, BESTDORI_CN_SERVER_ID),
     compression: BESTDORI_PROFILE_COMPRESSION_VERSION,
     data: {
       cards: {
