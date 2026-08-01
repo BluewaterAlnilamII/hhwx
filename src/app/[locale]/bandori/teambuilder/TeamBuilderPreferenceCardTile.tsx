@@ -3,12 +3,10 @@
 import { useRef, useState } from "react";
 import BandoriCardThumbnail from "@/components/bandori/BandoriCardThumbnail";
 import { BandoriCardHoverTooltipPortal } from "@/components/bandori/BandoriCardHoverTooltip";
-import { type BandoriAssetRegion } from "@/lib/bandori-asset-proxy";
 import { type TeamBuilderPreferenceCardEntry } from "./useTeamBuilderPreferenceCardEntries";
 
 export type TeamBuilderPreferenceCardTileProps = {
   entry: TeamBuilderPreferenceCardEntry;
-  assetRegion: BandoriAssetRegion;
   title: string;
   compact?: boolean;
   muted?: boolean;
@@ -17,7 +15,6 @@ export type TeamBuilderPreferenceCardTileProps = {
 
 export default function TeamBuilderPreferenceCardTile({
   entry,
-  assetRegion,
   title,
   compact = false,
   muted = false,
@@ -40,7 +37,7 @@ export default function TeamBuilderPreferenceCardTile({
           muted ? "brightness-[0.42] saturate-[0.9] contrast-110" : ""
         }`}
         >
-          <BandoriCardThumbnail card={entry.card} metadata={entry.metadata} bandId={entry.bandId} region={assetRegion} alt={entry.cardName} power={entry.totalPower} />
+          <BandoriCardThumbnail card={entry.card} metadata={entry.metadata} bandId={entry.bandId} alt={entry.cardName} power={entry.totalPower} />
         </span>
       </button>
       {hoverOpen ? (

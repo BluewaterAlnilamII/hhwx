@@ -11,7 +11,6 @@ import {
 import {
   buildBandoriPublicAssetUrl,
   lookupBandoriCardImage,
-  type BandoriAssetRegion,
 } from "@/lib/bandori-public-asset-index";
 
 type CardAttribute = "powerful" | "pure" | "cool" | "happy";
@@ -31,7 +30,6 @@ export type BandoriCardThumbnailMetadata = {
   attribute?: CardAttribute | string;
   resourceSetName?: string;
   levelLimit?: number;
-  assetRegion?: BandoriAssetRegion;
   releasedAt?: Array<string | number | null>;
 };
 
@@ -109,7 +107,6 @@ export default function BandoriCardThumbnail({
   card: BandoriCardThumbnailCard;
   metadata?: BandoriCardThumbnailMetadata;
   bandId: number | null;
-  region: BandoriAssetRegion;
   alt: string;
   size?: BandoriCardThumbnailSize;
   loading?: "eager" | "lazy";

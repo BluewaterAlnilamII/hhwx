@@ -4,7 +4,6 @@ import { Loader2 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import BandoriCardTile from "@/components/bandori/BandoriCardTile";
 import {
-  type BandoriAssetRegion,
   buildBandoriResIconPublicUrl,
 } from "@/lib/bandori-asset-proxy";
 import {
@@ -51,7 +50,6 @@ type BandoriEventBonusPanelProps = {
   skills: Record<string, BandoriSkillLabelMaster | undefined>;
   cardMetadata: Record<string, BandoriEventBonusCardMetadata | null | undefined>;
   preferredServer: BandoriServer;
-  assetRegion: BandoriAssetRegion;
   loading?: boolean;
   error?: string;
   showMatch?: boolean;
@@ -320,7 +318,6 @@ function EventBonusCard({
   bandId,
   characters,
   skills,
-  assetRegion,
   preferredServer,
 }: {
   cardId: number;
@@ -329,7 +326,6 @@ function EventBonusCard({
   bandId: number | null;
   characters: Record<string, BandoriEventBonusCharacter | undefined>;
   skills: Record<string, BandoriSkillLabelMaster | undefined>;
-  assetRegion: BandoriAssetRegion;
   preferredServer: BandoriServer;
 }) {
   const rarity = Math.min(5, Math.max(1, Math.trunc(Number(metadata?.rarity) || 1)));
@@ -366,7 +362,6 @@ function EventBonusCard({
       cardName={cardName}
       characterName={characterName}
       skillEffectLabel={skillEffectLabel}
-      assetRegion={assetRegion}
       badge={formatPercent(percent)}
       showPower={false}
     />
@@ -380,7 +375,6 @@ export default function BandoriEventBonusPanel({
   skills,
   cardMetadata,
   preferredServer,
-  assetRegion,
   loading = false,
   error = "",
   showMatch = true,
@@ -425,7 +419,6 @@ export default function BandoriEventBonusPanel({
         bandId={bandId}
         characters={characters}
         skills={skills}
-        assetRegion={assetRegion}
         preferredServer={preferredServer}
       />
     );

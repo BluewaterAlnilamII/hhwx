@@ -10,6 +10,30 @@ const migrationSource = fs.readFileSync(
   new URL("../supabase/migrations/20260801185414_accept_manual_profile_server.sql", import.meta.url),
   "utf8",
 );
+const cardPageSource = fs.readFileSync(
+  new URL("../src/app/[locale]/bandori/game-profiles/[profileId]/cards/page.tsx", import.meta.url),
+  "utf8",
+);
+const cardThumbnailSource = fs.readFileSync(
+  new URL("../src/components/bandori/BandoriCardThumbnail.tsx", import.meta.url),
+  "utf8",
+);
+const cardAssetIndexSource = fs.readFileSync(
+  new URL("../src/lib/bandori-public-asset-index.ts", import.meta.url),
+  "utf8",
+);
+const regionalNamesSource = fs.readFileSync(
+  new URL("../src/lib/bestdori-regional-names.ts", import.meta.url),
+  "utf8",
+);
+const zhMessages = JSON.parse(fs.readFileSync(
+  new URL("../messages/zh-CN/bandori.json", import.meta.url),
+  "utf8",
+));
+const enMessages = JSON.parse(fs.readFileSync(
+  new URL("../messages/en/bandori.json", import.meta.url),
+  "utf8",
+));
 
 test("every manual profile creation passes its payload server to the RPC", () => {
   const rpcCalls = [...serverSource.matchAll(
@@ -34,4 +58,31 @@ test("manual profile RPC validates and stores the requested gameplay server", ()
     migrationSource,
     /grant execute on function public\.create_manual_game_profile\([^)]+jsonb, integer\) to service_role/u,
   );
+});
+
+test("card workbench labels the gameplay server instead of the asset region", () => {
+  assert.equal(
+    zhMessages.gameProfiles.cards.summary,
+    "共 {total} 张卡牌 · 匹配 {matched} 张 · 已加载 {loaded} 张 · 服务器 {server}",
+  );
+  assert.equal(
+    enMessages.gameProfiles.cards.summary,
+    "{total} cards · {matched} matched · {loaded} loaded · Server {server}",
+  );
+  assert.match(
+    cardPageSource,
+    /server: getBandoriServerCode\(profileServer\)\.toUpperCase\(\)/u,
+  );
+  assert.doesNotMatch(cardPageSource, /region: region\.toUpperCase\(\)/u);
+});
+
+test("card images use the shared asset index without a regional selector", () => {
+  assert.match(
+    cardAssetIndexSource,
+    /BANDORI_CARDS_INDEX_KEY = "bandori\/cards\/index\.json"/u,
+  );
+  assert.match(cardThumbnailSource, /lookupBandoriCardImage\(/u);
+  assert.doesNotMatch(cardThumbnailSource, /BandoriAssetRegion|assetRegion/u);
+  assert.doesNotMatch(cardPageSource, /getRegionFromProfileServer|assetRegion/u);
+  assert.doesNotMatch(regionalNamesSource, /BandoriAssetRegion|assetRegion/u);
 });

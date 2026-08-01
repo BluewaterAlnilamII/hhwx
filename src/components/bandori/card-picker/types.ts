@@ -1,4 +1,3 @@
-import { type BandoriAssetRegion } from "@/lib/bandori-asset-proxy";
 import { type BandoriServer } from "@/lib/bandori-server";
 
 export type BandoriCardArtVariant = "normal" | "after_training";
@@ -24,7 +23,6 @@ export type BandoriCardCatalogEntry = {
   levelLimit: number;
   trainingLevelLimit: number;
   resourceSetName: string;
-  assetRegion: BandoriAssetRegion;
   displayName: string;
   searchText: string;
   releasedAtJp: number;

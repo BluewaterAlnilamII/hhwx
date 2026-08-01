@@ -7,7 +7,6 @@ import SharedBandoriCardThumbnail, {
   type BandoriCardThumbnailMetadata,
 } from "@/components/bandori/BandoriCardThumbnail";
 import { BandoriCardHoverTooltipPortal } from "@/components/bandori/BandoriCardHoverTooltip";
-import { type BandoriAssetRegion } from "@/lib/bandori-asset-proxy";
 import { cn } from "@/lib/utils";
 import type { BandoriCardArtVariant, BandoriCardCatalogEntry } from "./types";
 
@@ -32,7 +31,6 @@ function buildThumbnailMetadata(card: BandoriCardCatalogEntry): BandoriCardThumb
     attribute: card.attribute ?? undefined,
     resourceSetName: card.resourceSetName,
     levelLimit: card.levelLimit,
-    assetRegion: card.assetRegion,
   };
 }
 
@@ -40,7 +38,6 @@ export default function BandoriCardThumbnailTile({
   card,
   trainType,
   selected = false,
-  region,
   skillEffectLabel = "Unknown skill",
   onSelect,
   className,
@@ -48,13 +45,11 @@ export default function BandoriCardThumbnailTile({
   card: BandoriCardCatalogEntry;
   trainType: BandoriCardArtVariant;
   selected?: boolean;
-  region: BandoriAssetRegion;
   skillEffectLabel?: string;
   onSelect: () => void;
   className?: string;
 }) {
   const label = `${card.displayName} / ${card.characterName} / Card #${card.cardId}`;
-  const assetRegion = card.assetRegion ?? region;
   const tileRef = useRef<HTMLElement | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
 
@@ -91,7 +86,6 @@ export default function BandoriCardThumbnailTile({
           card={buildThumbnailCard(card, trainType)}
           metadata={buildThumbnailMetadata(card)}
           bandId={card.bandId}
-          region={assetRegion}
           alt={card.displayName}
           loading="eager"
           showLevel={false}

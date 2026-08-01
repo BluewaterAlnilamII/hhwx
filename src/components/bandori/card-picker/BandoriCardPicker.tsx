@@ -13,7 +13,6 @@ import { useBandoriCardsAssetIndex } from "@/hooks/useBandoriPublicAssetIndex";
 import { useBandoriPreferredServer } from "@/store/useBandoriPreferencesStore";
 import {
   buildBandoriResIconPublicUrl,
-  type BandoriAssetRegion,
 } from "@/lib/bandori-asset-proxy";
 import { LONG_CLIENT_CACHE_POLICY } from "@/lib/api-cache";
 import { BANDORI_CHARACTER_GROUPS, compareBandoriCharacterIds } from "@/lib/bandori-character-groups";
@@ -317,14 +316,12 @@ function CardGridItem({
   card,
   selected,
   activeTrainType,
-  region,
   skillEffectLabel,
   onSelect,
 }: {
   card: BandoriCardCatalogEntry;
   selected: boolean;
   activeTrainType: BandoriCardPickerValue["trainType"];
-  region: BandoriAssetRegion;
   skillEffectLabel: string;
   onSelect: () => void;
 }) {
@@ -333,7 +330,6 @@ function CardGridItem({
       card={card}
       selected={selected}
       trainType={activeTrainType}
-      region={region}
       skillEffectLabel={skillEffectLabel}
       onSelect={onSelect}
     />
@@ -343,7 +339,6 @@ function CardGridItem({
 export type BandoriCardPickerProps = {
   value: BandoriCardPickerValue | null;
   onValueChange: (value: BandoriCardPickerValue | null) => void;
-  region?: BandoriAssetRegion;
   server?: BandoriCardServer;
   missingCardFallback?: BandoriCardsMissingCardFallback;
   className?: string;
@@ -354,7 +349,6 @@ export type BandoriCardPickerProps = {
 export default function BandoriCardPicker({
   value,
   onValueChange,
-  region = "cn",
   server,
   missingCardFallback = "none",
   className,
@@ -737,7 +731,6 @@ export default function BandoriCardPicker({
                     card={card}
                     selected={selected}
                     activeTrainType={activeTrainType}
-                    region={region}
                     skillEffectLabel={normalizeBandoriSkillLabel(
                       card.skillId
                         ? skillMetadata?.[String(card.skillId)] ?? undefined

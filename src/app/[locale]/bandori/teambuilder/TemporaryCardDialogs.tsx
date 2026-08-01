@@ -5,7 +5,6 @@ import { type RefObject } from "react";
 import { createPortal } from "react-dom";
 import { Loader2, X } from "lucide-react";
 import { useTranslations } from "next-intl";
-import { type BandoriAssetRegion } from "@/lib/bandori-asset-proxy";
 import { type BandoriCardServer } from "@/lib/bandori-card-server-extensions";
 import { type BandoriCharacterBonusState } from "@/lib/bandori-team-calculator";
 import { type GameProfileCardMetadata } from "@/lib/bandori-game-profile-card";
@@ -57,7 +56,6 @@ export type TemporaryCardPickerDialogProps = {
   open: boolean;
   value: BandoriCardPickerValue | null;
   adding: boolean;
-  region: BandoriAssetRegion;
   server: BandoriCardServer;
   scrollElementRef: RefObject<HTMLDivElement | null>;
   onValueChange: (value: BandoriCardPickerValue | null) => void;
@@ -71,7 +69,6 @@ export type TemporaryCardEditorDialogProps = {
   characterName: string;
   bandId: number | null;
   characterBonusesById: Record<string, BandoriCharacterBonusState | undefined>;
-  region: BandoriAssetRegion;
   displayServer: BandoriCardServer;
   exists: boolean;
   onClose: () => void;
@@ -83,7 +80,6 @@ export function TemporaryCardPickerDialog({
   open,
   value,
   adding,
-  region,
   server,
   scrollElementRef,
   onValueChange,
@@ -114,7 +110,6 @@ export function TemporaryCardPickerDialog({
           <DynamicBandoriCardPicker
             value={value}
             onValueChange={onValueChange}
-            region={region}
             server={server}
             missingCardFallback="jp"
             showArtToggle={false}
@@ -139,7 +134,6 @@ export function TemporaryCardEditorDialog({
   characterName,
   bandId,
   characterBonusesById,
-  region,
   displayServer,
   exists,
   onClose,
@@ -155,7 +149,6 @@ export function TemporaryCardEditorDialog({
       characterName={characterName}
       bandId={bandId}
       characterBonusesById={characterBonusesById}
-      region={region}
       displayServer={displayServer}
       saving={false}
       title={t("editorTitle")}
