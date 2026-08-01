@@ -820,6 +820,7 @@ export async function createManualGameProfile(webUserId: string, name: unknown):
     p_payload_size: compressed.payloadSize,
     p_card_count: getGameProfileCardCount(payload),
     p_summary: {},
+    p_server: normalizedProfile.server,
   });
 
   if (error) {
@@ -843,6 +844,7 @@ export async function importManualGameProfile(webUserId: string, rawProfile: unk
     p_payload_size: compressed.payloadSize,
     p_card_count: getGameProfileCardCount(payload),
     p_summary: {},
+    p_server: normalizedProfile.server,
   });
 
   if (error) {
@@ -929,6 +931,7 @@ export async function uploadManualGameProfilePayload(
     p_payload_size: nextCompressed.payloadSize,
     p_card_count: getGameProfileCardCount(payload),
     p_summary: localProfileId ? { localProfileId } : {},
+    p_server: payload.bestdoriProfile.server,
   });
 
   if (error) {
@@ -960,6 +963,7 @@ export async function copyGameProfileToManual(webUserId: string, profileId: stri
     p_payload_size: compressed.payloadSize,
     p_card_count: getGameProfileCardCount(nextPayload),
     p_summary: {},
+    p_server: nextPayload.bestdoriProfile.server,
   });
 
   if (error) {
