@@ -9,6 +9,7 @@ drop function if exists public.touch_user_game_profile_counts(uuid);
 drop function if exists public.create_manual_game_profile(uuid, text, jsonb);
 drop function if exists public.upsert_auto_game_profile(uuid, text, text, jsonb, jsonb);
 drop function if exists public.create_manual_game_profile(uuid, text, text, text, integer, integer, jsonb);
+drop function if exists public.create_manual_game_profile(uuid, text, text, text, integer, integer, jsonb, integer);
 drop function if exists public.upsert_auto_game_profile(uuid, text, text, text, text, integer, integer, jsonb);
 
 drop table if exists public.user_game_profile_character_mission_bonuses;
@@ -113,7 +114,8 @@ create or replace function public.create_manual_game_profile(
   p_payload_sha256 text,
   p_payload_size integer,
   p_card_count integer,
-  p_summary jsonb default '{}'::jsonb
+  p_summary jsonb default '{}'::jsonb,
+  p_server integer default 3
 )
 returns public.user_game_profiles
 language plpgsql
@@ -125,6 +127,10 @@ declare
 begin
   if p_web_user_id is null then
     raise exception 'web_user_id is required';
+  end if;
+
+  if p_server is null or p_server not between 0 and 3 then
+    raise exception 'server must be between 0 and 3';
   end if;
 
   perform pg_advisory_xact_lock(hashtext(p_web_user_id::text || ':manual-game-profiles')::bigint);
@@ -155,7 +161,7 @@ begin
     p_web_user_id,
     'manual',
     p_profile_name,
-    3,
+    p_server,
     null,
     p_payload_compressed,
     p_payload_sha256,
@@ -264,8 +270,8 @@ begin
 end;
 $$;
 
-revoke all on function public.create_manual_game_profile(uuid, text, text, text, integer, integer, jsonb) from public, anon, authenticated;
+revoke all on function public.create_manual_game_profile(uuid, text, text, text, integer, integer, jsonb, integer) from public, anon, authenticated;
 revoke all on function public.upsert_auto_game_profile(uuid, text, text, text, text, integer, integer, jsonb) from public, anon, authenticated;
 
-grant execute on function public.create_manual_game_profile(uuid, text, text, text, integer, integer, jsonb) to service_role;
+grant execute on function public.create_manual_game_profile(uuid, text, text, text, integer, integer, jsonb, integer) to service_role;
 grant execute on function public.upsert_auto_game_profile(uuid, text, text, text, text, integer, integer, jsonb) to service_role;

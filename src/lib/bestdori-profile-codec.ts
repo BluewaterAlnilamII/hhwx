@@ -1,3 +1,5 @@
+import { normalizeBandoriServer } from "@/lib/bandori-server";
+
 export const BESTDORI_PROFILE_COMPRESSION_VERSION = "2";
 export const BESTDORI_CN_SERVER_ID = 3;
 
@@ -184,6 +186,10 @@ export function parseBestdoriProfile(value: unknown): BestdoriProfile {
   const profile = value as BestdoriProfile;
   if (profile.compression !== BESTDORI_PROFILE_COMPRESSION_VERSION) {
     throw new Error(`不支持的 Bestdori profile compression: ${String(profile.compression)}`);
+  }
+
+  if (normalizeBandoriServer(profile.server) === null) {
+    throw new Error(`Bestdori profile server 无效: ${String(profile.server)}`);
   }
 
   if (typeof profile.data.cards.ids !== "string") {

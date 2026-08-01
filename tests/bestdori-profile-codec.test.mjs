@@ -106,6 +106,19 @@ test("Bestdori profile round-trips high card IDs and all gameplay servers", () =
   }
 });
 
+test("Bestdori profiles reject invalid gameplay server IDs", () => {
+  const encoded = encodeBestdoriProfile(createNormalizedProfile(EN_SERVER));
+
+  assert.throws(
+    () => decodeBestdoriProfile({ ...encoded, server: -1 }),
+    /Bestdori profile server 无效/u,
+  );
+  assert.throws(
+    () => importBestdoriGameProfilePayload({ ...encoded, server: 4 }),
+    /Bestdori profile server 无效/u,
+  );
+});
+
 test("profile payload storage codecs preserve high card IDs", async () => {
   const imported = importBestdoriGameProfilePayload(
     encodeBestdoriProfile(createNormalizedProfile(EN_SERVER)),
