@@ -9,13 +9,20 @@ import type { BandoriServer } from "@/lib/bandori-server";
 export type BandoriCardMasterRecord = Record<string, unknown> & {
   attribute?: string;
   characterId?: number;
+  displayName?: string | null;
+  hasTrainedArt?: boolean;
   levelLimit?: number;
   prefix?: Array<string | null>;
   rarity?: number;
   releasedAt?: Array<string | number | null>;
   resourceSetName?: string;
   skillId?: number;
-  stat?: Record<string, unknown>;
+  stat?: Record<string, unknown> & {
+    training?: {
+      levelLimit?: number;
+    };
+  };
+  type?: string;
 };
 
 export type BandoriCardsMasterMap = Record<

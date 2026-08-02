@@ -1,17 +1,17 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { createPortal } from "react-dom";
+import * as Dialog from "@radix-ui/react-dialog";
 import { Save, Trash2, X } from "lucide-react";
 import { useLocale, useTranslations } from "next-intl";
 import { type AppLocale } from "@/i18n/routing";
 import SharedBandoriCardThumbnail from "@/components/bandori/BandoriCardThumbnail";
+import { isBandoriCardAttribute, type BandoriCardAttribute } from "@/lib/bandori-card-filter";
 import { type BandoriServer } from "@/lib/bandori-server";
 import {
   getGameProfileCardLevelLimit,
   hasGameProfileCardChanged,
   pickGameProfileCardName,
-  type GameProfileCardAttribute,
   type GameProfileCardMetadata,
 } from "@/lib/bandori-game-profile-card";
 import { useBandoriPreferredServer } from "@/store/useBandoriPreferencesStore";
@@ -28,14 +28,14 @@ type EditableCardField = keyof Pick<
   "level" | "masterRank" | "skillLevel" | "episodeCount" | "isTrained" | "hasTrainedArt"
 >;
 
-const ATTRIBUTE_LABELS: Record<GameProfileCardAttribute, string> = {
+const ATTRIBUTE_LABELS: Record<BandoriCardAttribute, string> = {
   powerful: "Powerful",
   pure: "Pure",
   cool: "Cool",
   happy: "Happy",
 };
 
-const ATTRIBUTE_CLASSES: Record<GameProfileCardAttribute, string> = {
+const ATTRIBUTE_CLASSES: Record<BandoriCardAttribute, string> = {
   powerful: "border-rose-300 bg-rose-50 text-rose-600",
   pure: "border-emerald-300 bg-emerald-50 text-emerald-600",
   cool: "border-sky-300 bg-sky-50 text-sky-600",
@@ -45,10 +45,6 @@ const ATTRIBUTE_CLASSES: Record<GameProfileCardAttribute, string> = {
 function clampInteger(value: number, min: number, max: number): number {
   const normalizedValue = Number.isFinite(value) ? Math.trunc(value) : min;
   return Math.min(max, Math.max(min, normalizedValue));
-}
-
-function isKnownAttribute(value: string | undefined): value is GameProfileCardAttribute {
-  return value === "powerful" || value === "pure" || value === "cool" || value === "happy";
 }
 
 function SegmentedControl<T extends string | number | boolean>({
@@ -88,41 +84,45 @@ function SegmentedControl<T extends string | number | boolean>({
 
 export type GameProfileCardEditorDialogProps = {
   card: UserGameProfileCardRecord;
+  cardIdLabel: string;
   baselineCard?: UserGameProfileCardRecord | null;
   metadata?: GameProfileCardMetadata;
   characterName: string;
   bandId: number | null;
   characterBonusesById?: Record<string, BandoriCharacterBonusState | undefined>;
   displayServer?: BandoriServer;
-  saving: boolean;
+  isBusy?: boolean;
   title?: string;
-  saveLabel?: string;
+  applyLabel: string;
+  applyDisabledReason?: string;
   deleteLabel?: string;
   showDeleteButton?: boolean;
   showTrainedArtControl?: boolean;
-  allowSaveWithoutChanges?: boolean;
+  canApplyWithoutChanges?: boolean;
   onClose: () => void;
-  onSave: (card: UserGameProfileCardRecord) => void;
+  onApply: (card: UserGameProfileCardRecord) => void;
   onDelete: () => void;
 };
 
 export default function GameProfileCardEditorDialog({
   card,
+  cardIdLabel,
   baselineCard = null,
   metadata,
   characterName,
   bandId,
   characterBonusesById = {},
   displayServer,
-  saving,
+  isBusy = false,
   title,
-  saveLabel,
+  applyLabel,
+  applyDisabledReason,
   deleteLabel,
   showDeleteButton = true,
   showTrainedArtControl = true,
-  allowSaveWithoutChanges = false,
+  canApplyWithoutChanges = false,
   onClose,
-  onSave,
+  onApply,
   onDelete,
 }: GameProfileCardEditorDialogProps) {
   const locale = useLocale() as AppLocale;
@@ -130,7 +130,6 @@ export default function GameProfileCardEditorDialog({
   const t = useTranslations("bandori.cardEditor");
   const [draft, setDraft] = useState(card);
   const effectiveTitle = title ?? t("title");
-  const effectiveSaveLabel = saveLabel ?? t("actions.save");
   const effectiveDeleteLabel = deleteLabel ?? t("actions.delete");
   const levelLimit = getGameProfileCardLevelLimit(draft, metadata);
   const cardName = pickGameProfileCardName(
@@ -140,7 +139,10 @@ export default function GameProfileCardEditorDialog({
     locale,
     displayServer,
   );
+  const attribute = metadata?.attribute;
   const hasChanges = baselineCard ? hasGameProfileCardChanged(draft, baselineCard) : hasGameProfileCardChanged(draft, card);
+  const isApplyDisabled = isBusy || (!canApplyWithoutChanges && !hasChanges);
+  const hasApplyDisabledReason = !isBusy && isApplyDisabled && Boolean(applyDisabledReason);
   const totalPower = useMemo(() => {
     if (!metadata) {
       return null;
@@ -185,13 +187,15 @@ export default function GameProfileCardEditorDialog({
     });
   }
 
-  const dialog = (
-    <div className="fixed inset-0 z-1100 flex h-dvh items-center justify-center overflow-hidden overscroll-contain bg-slate-950/55 p-3 sm:p-6" role="dialog" aria-modal="true" aria-labelledby="card-editor-title">
-      <div className="flex max-h-[calc(100dvh-1.5rem)] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-white/90 bg-white shadow-[0_30px_100px_rgba(15,23,42,0.42)] sm:max-h-[calc(100dvh-3rem)] sm:rounded-[28px]">
+  return (
+    <Dialog.Root open onOpenChange={(open) => { if (!open) onClose(); }}>
+      <Dialog.Portal>
+        <Dialog.Overlay className="fixed inset-0 z-1100 bg-slate-950/55" />
+        <Dialog.Content className="fixed left-1/2 top-1/2 z-1100 flex max-h-[calc(100dvh-1.5rem)] w-[calc(100%-1.5rem)] max-w-3xl -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-white/90 bg-white shadow-[0_30px_100px_rgba(15,23,42,0.42)] focus:outline-hidden sm:max-h-[calc(100dvh-3rem)] sm:w-[calc(100%-3rem)] sm:rounded-[28px]">
         <header className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-200 bg-white px-5 py-3 sm:px-6 sm:py-4">
           <div>
-            <h2 id="card-editor-title" className="text-lg font-bold text-slate-900 sm:text-xl">{effectiveTitle}</h2>
-            <p className="mt-1 text-xs font-semibold text-slate-500">Card #{draft.cardId}</p>
+            <Dialog.Title className="text-lg font-bold text-slate-900 sm:text-xl">{effectiveTitle}</Dialog.Title>
+            <Dialog.Description className="mt-1 text-xs font-semibold text-slate-500">{cardIdLabel}</Dialog.Description>
           </div>
           <button type="button" onClick={onClose} className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-500 transition hover:border-rose-200 hover:text-rose-500" aria-label={t("actions.close")}>
             <X className="h-4 w-4" aria-hidden="true" />
@@ -222,9 +226,9 @@ export default function GameProfileCardEditorDialog({
                   </div>
                   <div className="flex flex-wrap gap-2">
                     {metadata?.rarity ? <span className="rounded-full border border-amber-200 bg-white px-3 py-1 text-xs font-bold text-amber-600">★{metadata.rarity}</span> : null}
-                    {isKnownAttribute(metadata?.attribute) ? (
-                      <span className={cn("rounded-full border px-3 py-1 text-xs font-bold", ATTRIBUTE_CLASSES[metadata.attribute])}>
-                        {ATTRIBUTE_LABELS[metadata.attribute]}
+                    {isBandoriCardAttribute(attribute) ? (
+                      <span className={cn("rounded-full border px-3 py-1 text-xs font-bold", ATTRIBUTE_CLASSES[attribute])}>
+                        {ATTRIBUTE_LABELS[attribute]}
                       </span>
                     ) : null}
                   </div>
@@ -262,28 +266,35 @@ export default function GameProfileCardEditorDialog({
           showDeleteButton ? "grid-cols-3" : "grid-cols-2",
         )}>
           {showDeleteButton ? (
-            <button type="button" onClick={onDelete} disabled={saving} className="inline-flex h-10 items-center justify-center gap-1.5 rounded-2xl border border-rose-200 bg-white px-2 text-sm font-bold text-rose-600 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-60 sm:h-11 sm:gap-2 sm:px-4">
+            <button type="button" onClick={onDelete} disabled={isBusy} className="inline-flex h-10 items-center justify-center gap-1.5 rounded-2xl border border-rose-200 bg-white px-2 text-sm font-bold text-rose-600 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-60 sm:h-11 sm:gap-2 sm:px-4">
               <Trash2 className="h-4 w-4" aria-hidden="true" />
               {effectiveDeleteLabel}
             </button>
           ) : null}
-          <button type="button" onClick={onClose} disabled={saving} className="inline-flex h-10 items-center justify-center gap-1.5 rounded-2xl border border-slate-200 bg-white px-2 text-sm font-bold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60 sm:h-11 sm:gap-2 sm:px-4">
+          <button type="button" onClick={onClose} disabled={isBusy} className="inline-flex h-10 items-center justify-center gap-1.5 rounded-2xl border border-slate-200 bg-white px-2 text-sm font-bold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60 sm:h-11 sm:gap-2 sm:px-4">
             <X className="h-4 w-4" aria-hidden="true" />
             {t("actions.cancel")}
           </button>
-          <button type="button" onClick={() => onSave(draft)} disabled={saving || (!allowSaveWithoutChanges && !hasChanges)} className="inline-flex h-10 items-center justify-center gap-1.5 rounded-2xl bg-sky-600 px-2 text-sm font-bold text-white shadow-[0_12px_28px_rgba(37,99,235,0.26)] transition hover:bg-sky-500 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:shadow-none sm:h-11 sm:gap-2 sm:px-5">
-            <Save className="h-4 w-4" aria-hidden="true" />
-            {saving ? t("actions.saving") : effectiveSaveLabel}
-          </button>
+          <span
+            className={cn("relative flex", isApplyDisabled && "cursor-not-allowed")}
+            tabIndex={hasApplyDisabledReason ? 0 : undefined}
+            title={hasApplyDisabledReason ? applyDisabledReason : undefined}
+            aria-label={hasApplyDisabledReason ? `${applyLabel}: ${applyDisabledReason}` : undefined}
+            aria-disabled={hasApplyDisabledReason ? true : undefined}
+          >
+            <button
+              type="button"
+              onClick={() => onApply(draft)}
+              disabled={isApplyDisabled}
+              className="inline-flex h-10 w-full items-center justify-center gap-1.5 rounded-2xl bg-sky-600 px-2 text-sm font-bold text-white shadow-[0_12px_28px_rgba(37,99,235,0.26)] transition hover:bg-sky-500 disabled:pointer-events-none disabled:cursor-not-allowed disabled:bg-slate-300 disabled:shadow-none sm:h-11 sm:gap-2 sm:px-5"
+            >
+              <Save className="h-4 w-4" aria-hidden="true" />
+              {isBusy ? t("actions.applying") : applyLabel}
+            </button>
+          </span>
         </footer>
-      </div>
-    </div>
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
   );
-
-  const portalRoot = typeof document === "undefined" ? null : document.body;
-  if (!portalRoot) {
-    return null;
-  }
-
-  return createPortal(dialog, portalRoot);
 }

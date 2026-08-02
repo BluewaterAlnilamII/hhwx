@@ -1,11 +1,18 @@
 export const BANDORI_SERVER_COUNT = 4;
 export const BANDORI_SERVERS = [0, 1, 2, 3] as const;
 export const BANDORI_SERVER_CODES = ["jp", "en", "tw", "cn"] as const;
+export const BANDORI_SERVER_LANGUAGE_TAGS = ["ja", "en", "zh-Hant", "zh-Hans"] as const;
 export const DEFAULT_BANDORI_PREFERRED_SERVER = 3;
 export const BANDORI_SERVER_FALLBACK_ORDER = [0, 1, 2, 3] as const;
 
 export type BandoriServer = typeof BANDORI_SERVERS[number];
 export type BandoriServerCode = typeof BANDORI_SERVER_CODES[number];
+export type BandoriServerLanguageTag = typeof BANDORI_SERVER_LANGUAGE_TAGS[number];
+
+export type BandoriRegionalTextSelection = {
+  text: string;
+  server: BandoriServer;
+};
 
 export function isBandoriServer(value: unknown): value is BandoriServer {
   return typeof value === "number"
@@ -26,6 +33,10 @@ export function normalizeBandoriServer(value: unknown): BandoriServer | null {
 
 export function getBandoriServerCode(server: BandoriServer): BandoriServerCode {
   return BANDORI_SERVER_CODES[server];
+}
+
+export function getBandoriServerLanguageTag(server: BandoriServer): BandoriServerLanguageTag {
+  return BANDORI_SERVER_LANGUAGE_TAGS[server];
 }
 
 export function getBandoriServerFromCode(value: unknown): BandoriServer | null {
@@ -58,22 +69,35 @@ export function getBandoriRegionalDisplayOrder(
   ].filter((server, index, order) => order.indexOf(server) === index);
 }
 
+function findBandoriRegionalValueServer<T>(
+  slots: readonly T[] | null | undefined,
+  preferredServer: BandoriServer,
+  isAvailable: (value: T | undefined) => boolean,
+  contextServer?: BandoriServer | null,
+): BandoriServer | null {
+  if (!Array.isArray(slots)) {
+    return null;
+  }
+  for (const server of getBandoriRegionalDisplayOrder(preferredServer, contextServer)) {
+    if (isAvailable(slots[server])) {
+      return server;
+    }
+  }
+  return null;
+}
+
+const isBandoriRegionalTextAvailable = (value: unknown): value is string => (
+  typeof value === "string" && value.trim().length > 0
+);
+
 export function pickBandoriRegionalValue<T>(
   slots: readonly T[] | null | undefined,
   preferredServer: BandoriServer,
   isAvailable: (value: T | undefined) => boolean = (value) => value !== null && value !== undefined,
   contextServer?: BandoriServer | null,
 ): T | null {
-  if (!Array.isArray(slots)) {
-    return null;
-  }
-  for (const server of getBandoriRegionalDisplayOrder(preferredServer, contextServer)) {
-    const value = slots[server];
-    if (isAvailable(value)) {
-      return value as T;
-    }
-  }
-  return null;
+  const server = findBandoriRegionalValueServer(slots, preferredServer, isAvailable, contextServer);
+  return server === null ? null : slots?.[server] as T;
 }
 
 export function pickBandoriRegionalText(
@@ -84,8 +108,28 @@ export function pickBandoriRegionalText(
   const value = pickBandoriRegionalValue(
     slots,
     preferredServer,
-    (candidate) => typeof candidate === "string" && candidate.trim().length > 0,
+    isBandoriRegionalTextAvailable,
     contextServer,
   );
   return typeof value === "string" ? value.trim() : null;
+}
+
+export function pickBandoriRegionalTextWithServer(
+  slots: readonly unknown[] | null | undefined,
+  preferredServer: BandoriServer,
+  contextServer?: BandoriServer | null,
+): BandoriRegionalTextSelection | null {
+  const server = findBandoriRegionalValueServer(
+    slots,
+    preferredServer,
+    isBandoriRegionalTextAvailable,
+    contextServer,
+  );
+  if (server === null) {
+    return null;
+  }
+  return {
+    text: String(slots?.[server]).trim(),
+    server,
+  };
 }

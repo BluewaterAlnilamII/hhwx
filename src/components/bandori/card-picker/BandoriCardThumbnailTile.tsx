@@ -1,12 +1,15 @@
 "use client";
 
-import { useRef, useState } from "react";
 import { Check } from "lucide-react";
+import { useTranslations } from "next-intl";
 import SharedBandoriCardThumbnail, {
+  BANDORI_MUTED_CARD_CLASS_NAME,
   type BandoriCardThumbnailCard,
   type BandoriCardThumbnailMetadata,
 } from "@/components/bandori/BandoriCardThumbnail";
 import { BandoriCardHoverTooltipPortal } from "@/components/bandori/BandoriCardHoverTooltip";
+import { useBandoriCardHoverTooltip } from "@/hooks/useBandoriCardHoverTooltip";
+import type { BandoriServerLanguageTag } from "@/lib/bandori-server";
 import { cn } from "@/lib/utils";
 import type { BandoriCardArtVariant, BandoriCardCatalogEntry } from "./types";
 
@@ -37,38 +40,45 @@ function buildThumbnailMetadata(card: BandoriCardCatalogEntry): BandoriCardThumb
 export default function BandoriCardThumbnailTile({
   card,
   trainType,
-  selected = false,
-  skillEffectLabel = "Unknown skill",
+  isSelected = false,
+  isMuted = false,
+  skillEffectLabel,
+  skillEffectLanguageTag,
   onSelect,
   className,
 }: {
   card: BandoriCardCatalogEntry;
   trainType: BandoriCardArtVariant;
-  selected?: boolean;
+  isSelected?: boolean;
+  isMuted?: boolean;
   skillEffectLabel?: string;
+  skillEffectLanguageTag?: BandoriServerLanguageTag;
   onSelect: () => void;
   className?: string;
 }) {
-  const label = `${card.displayName} / ${card.characterName} / Card #${card.cardId}`;
-  const tileRef = useRef<HTMLElement | null>(null);
-  const [previewOpen, setPreviewOpen] = useState(false);
-
-  const showPreview = () => {
-    setPreviewOpen(true);
-  };
-
-  const hidePreview = () => {
-    setPreviewOpen(false);
-  };
+  const cardPickerT = useTranslations("bandori.cardPicker");
+  const termsT = useTranslations("bandori.terms");
+  const label = `${card.displayName} / ${card.characterName} / ${cardPickerT("cardFallback", { cardId: card.cardId })}`;
+  const resolvedSkillEffectLabel = skillEffectLabel || termsT("unknownSkill");
+  const {
+    anchorRef,
+    isOpen: isHoverTooltipOpen,
+    onMouseEnter,
+    onMouseLeave,
+    onFocus,
+    onBlur,
+  } = useBandoriCardHoverTooltip<HTMLElement>();
 
   return (
     <article
-      ref={tileRef}
-      onMouseEnter={showPreview}
-      onMouseLeave={hidePreview}
+      ref={anchorRef}
+      onMouseEnter={onMouseEnter}
+      onMouseLeave={onMouseLeave}
+      onFocus={onFocus}
+      onBlur={onBlur}
       className={cn(
         "relative h-[56px] w-[56px] overflow-visible rounded-[5px] outline-solid outline-1 outline-white/80 transition hover:z-40 hover:-translate-y-0.5 hover:outline-2 hover:outline-sky-400 focus-within:z-40 focus-within:outline-2 focus-within:outline-sky-400 sm:h-[76px] sm:w-[76px]",
-        selected && "z-30 outline-2 outline-sky-500 ring-2 ring-sky-300/70",
+        isSelected && "z-30 outline-2 outline-sky-500 ring-2 ring-sky-300/70",
         className,
       )}
     >
@@ -79,8 +89,11 @@ export default function BandoriCardThumbnailTile({
         data-entity-server={card.entityServer ?? undefined}
         onClick={onSelect}
         title={label}
-        aria-pressed={selected}
-        className="relative block h-full w-full overflow-visible rounded-[5px] bg-white text-left shadow-[0_2px_7px_rgba(15,23,42,0.22)]"
+        aria-pressed={isSelected}
+        className={cn(
+          "relative block h-full w-full overflow-visible rounded-[5px] bg-white text-left shadow-[0_2px_7px_rgba(15,23,42,0.22)]",
+          isMuted && BANDORI_MUTED_CARD_CLASS_NAME,
+        )}
       >
         <SharedBandoriCardThumbnail
           card={buildThumbnailCard(card, trainType)}
@@ -98,20 +111,21 @@ export default function BandoriCardThumbnailTile({
         </span>
       ) : null}
 
-      {previewOpen ? (
+      {isHoverTooltipOpen ? (
         <BandoriCardHoverTooltipPortal
-          anchorRef={tileRef}
-          open={previewOpen}
+          anchorRef={anchorRef}
+          open={isHoverTooltipOpen}
           cardName={card.displayName}
           characterName={card.characterName}
+          detailLanguageTag={skillEffectLanguageTag}
         >
           <span className="block w-full whitespace-normal wrap-break-word rounded-xl bg-slate-50 px-2 py-1 text-slate-700">
-            {skillEffectLabel}
+            {resolvedSkillEffectLabel}
           </span>
         </BandoriCardHoverTooltipPortal>
       ) : null}
 
-      {selected ? (
+      {isSelected ? (
         <span className="pointer-events-none absolute -right-2 -top-2 z-40 inline-flex h-6 w-6 items-center justify-center rounded-full border border-white bg-sky-600 text-white shadow-[0_6px_16px_rgba(2,132,199,0.35)]">
           <Check className="h-4 w-4" aria-hidden="true" />
         </span>

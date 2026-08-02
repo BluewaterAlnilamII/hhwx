@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import type { CSSProperties, ReactNode, RefObject } from "react";
+import type { BandoriServerLanguageTag } from "@/lib/bandori-server";
 import { cn } from "@/lib/utils";
 
 const TOOLTIP_WIDTH = 256;
@@ -13,6 +14,7 @@ const TOOLTIP_MARGIN = 12;
 export type BandoriCardHoverTooltipProps = {
   cardName: string;
   characterName: string;
+  detailLanguageTag?: BandoriServerLanguageTag;
   children?: ReactNode;
   className?: string;
   style?: CSSProperties;
@@ -23,6 +25,7 @@ export type BandoriCardHoverTooltipPortalProps = {
   open: boolean;
   cardName: string;
   characterName: string;
+  detailLanguageTag?: BandoriServerLanguageTag;
   children?: ReactNode;
   className?: string;
 };
@@ -35,6 +38,7 @@ type TooltipPosition = {
 export default function BandoriCardHoverTooltip({
   cardName,
   characterName,
+  detailLanguageTag,
   children,
   className,
   style,
@@ -51,7 +55,11 @@ export default function BandoriCardHoverTooltip({
       <span className="mt-1 block whitespace-normal wrap-break-word text-xs font-semibold leading-snug text-slate-500">
         {characterName}
       </span>
-      {children ? <span className="mt-2 flex flex-wrap justify-center gap-2 text-[11px] font-black">{children}</span> : null}
+      {children ? (
+        <span lang={detailLanguageTag} className="mt-2 flex flex-wrap justify-center gap-2 text-[11px] font-black">
+          {children}
+        </span>
+      ) : null}
     </span>
   );
 }
@@ -61,6 +69,7 @@ export function BandoriCardHoverTooltipPortal({
   open,
   cardName,
   characterName,
+  detailLanguageTag,
   children,
   className,
 }: BandoriCardHoverTooltipPortalProps) {
@@ -125,6 +134,7 @@ export function BandoriCardHoverTooltipPortal({
     <BandoriCardHoverTooltip
       cardName={cardName}
       characterName={characterName}
+      detailLanguageTag={detailLanguageTag}
       className={cn("fixed z-1000 -translate-x-1/2", className)}
       style={{ left: position.left, top: position.top }}
     >

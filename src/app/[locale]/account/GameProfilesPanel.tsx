@@ -5,7 +5,9 @@ import { CheckCircle2, Copy, Download, FileJson, Plus, RefreshCw, Trash2, Upload
 import { useLocale, useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
 import { type AppLocale } from "@/i18n/routing";
+import BandoriServerIcon from "@/components/bandori/BandoriServerIcon";
 import { getApiErrorMessage, parseApiSuccessData } from "@/lib/api-contracts";
+import { normalizeBandoriServer, type BandoriServer } from "@/lib/bandori-server";
 import { formatLocalizedDateTime } from "@/lib/localized-format";
 import BandoriCnExclusiveNotice from "@/app/[locale]/bandori/BandoriCnExclusiveNotice";
 import type { GameAccountBinding, GameBindChallenge } from "@/lib/game-account-binding";
@@ -41,6 +43,7 @@ type CloudGameProfileSummary = {
 type ManagedProfileSummary = {
   id: string;
   name: string;
+  server: BandoriServer;
   kind: UserGameProfileKind;
   label: string;
   sourceGameUid: string | null;
@@ -163,6 +166,7 @@ export default function GameProfilesPanel() {
       .map((profile) => ({
         id: `cloud:${profile.id}`,
         name: profile.name,
+        server: normalizeBandoriServer(profile.server) ?? 0,
         kind: profile.kind,
         label: t("profileKinds.auto"),
         sourceGameUid: profile.sourceGameUid,
@@ -182,6 +186,7 @@ export default function GameProfilesPanel() {
       .map((profile) => ({
         id: `cloud:${profile.id}`,
         name: profile.name,
+        server: normalizeBandoriServer(profile.server) ?? 0,
         kind: profile.kind,
         label: t("profileKinds.cloudManual"),
         sourceGameUid: profile.sourceGameUid,
@@ -200,6 +205,7 @@ export default function GameProfilesPanel() {
       return {
         id: `local:${profile.id}`,
         name: profile.name,
+        server: normalizeBandoriServer(profile.server) ?? 0,
         kind: profile.kind,
         label: cloudProfile ? t("profileKinds.localCopy") : t("profileKinds.localPendingMigration"),
         sourceGameUid: null,
@@ -634,8 +640,14 @@ export default function GameProfilesPanel() {
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
-                        <span className="break-all font-semibold text-slate-900">
-                          UID {binding.gameUid}{profile ? ` / ${profile.name}` : ""}
+                        <span className="inline-flex min-w-0 items-center gap-2">
+                          <BandoriServerIcon
+                            server={normalizeBandoriServer(profile?.server) ?? 3}
+                            className="h-5 w-5 shadow-[0_1px_3px_rgba(15,23,42,0.18)]"
+                          />
+                          <span className="min-w-0 break-all font-semibold text-slate-900">
+                            UID {binding.gameUid}{profile ? ` / ${profile.name}` : ""}
+                          </span>
                         </span>
                         <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${profile ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-600"}`}>
                           {profile ? t("uidManagement.generated") : t("uidManagement.notSynced")}
@@ -756,7 +768,13 @@ export default function GameProfilesPanel() {
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
-                        <span className="min-w-0 wrap-break-word font-semibold text-slate-900">{profile.name}</span>
+                        <span className="inline-flex min-w-0 items-center gap-2">
+                          <BandoriServerIcon
+                            server={profile.server}
+                            className="h-5 w-5 shadow-[0_1px_3px_rgba(15,23,42,0.18)]"
+                          />
+                          <span className="min-w-0 wrap-break-word font-semibold text-slate-900">{profile.name}</span>
+                        </span>
                         <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${profile.kind === "auto" ? "bg-emerald-50 text-emerald-700" : "bg-sky-50 text-sky-700"}`}>
                           {profile.label}
                         </span>

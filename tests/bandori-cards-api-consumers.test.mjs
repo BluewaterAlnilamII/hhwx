@@ -10,7 +10,10 @@ import {
   resolveStoredAccountAvatarCardIdentity,
 } from "../src/lib/account-avatar-card.ts";
 import { pickGameProfileCardName } from "../src/lib/bandori-game-profile-card.ts";
-import { normalizeBandoriSkillLabel } from "../src/lib/bandori-skill-label.ts";
+import {
+  normalizeBandoriSkillLabel,
+  resolveBandoriSkillLabel,
+} from "../src/lib/bandori-skill-label.ts";
 import {
   expandBandoriCardCatalog,
   getBandoriCardServerIndex,
@@ -29,8 +32,10 @@ import {
 import {
   getBandoriRegionalDisplayOrder,
   getBandoriRegionalPreferenceOrder,
+  getBandoriServerLanguageTag,
   normalizeBandoriServer,
   pickBandoriRegionalText,
+  pickBandoriRegionalTextWithServer,
 } from "../src/lib/bandori-server.ts";
 
 const readSource = (path) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
@@ -92,6 +97,102 @@ test("regional display values use preferred server then JP, EN, TW, CN fallback"
     ),
     "EN skill",
   );
+  assert.deepEqual(
+    [0, 1, 2, 3].map((server) => getBandoriServerLanguageTag(server)),
+    ["ja", "en", "zh-Hant", "zh-Hans"],
+  );
+  for (const [server, languageTag] of ["ja", "en", "zh-Hant", "zh-Hans"].entries()) {
+    assert.deepEqual(
+      resolveBandoriSkillLabel(
+        { description: ["JP skill", "EN skill", "TW skill", "CN skill"] },
+        1,
+        1,
+        server,
+        server,
+      ),
+      {
+        label: ["JP skill", "EN skill", "TW skill", "CN skill"][server],
+        languageTag,
+      },
+    );
+  }
+  assert.deepEqual(
+    pickBandoriRegionalTextWithServer(["JP skill", "EN skill", null, "CN skill"], 3, 2),
+    { text: "CN skill", server: 3 },
+  );
+  assert.deepEqual(
+    resolveBandoriSkillLabel(
+      { description: ["JP skill", "EN skill", null, "CN skill"] },
+      1,
+      1,
+      3,
+      2,
+    ),
+    { label: "CN skill", languageTag: "zh-Hans" },
+  );
+});
+
+test("regional skill descriptions keep units from their own templates", () => {
+  const singlePlaceholderSkill = {
+    duration: [5, 5.6, 6.2, 6.8, 7.5],
+    description: [
+      "{0}秒間 スコアが110%UPする",
+      "Score increased by 110% for {0} secs",
+      "{0} 秒內 分數提升110%",
+      "{0}秒内 得分提升110%",
+    ],
+  };
+
+  assert.equal(
+    normalizeBandoriSkillLabel(singlePlaceholderSkill, 5, 1, 0, 0),
+    "7.5秒間 スコアが110%UPする",
+  );
+  assert.equal(
+    normalizeBandoriSkillLabel(singlePlaceholderSkill, 5, 1, 1, 1),
+    "Score increased by 110% for 7.5 secs",
+  );
+  assert.equal(
+    normalizeBandoriSkillLabel(singlePlaceholderSkill, 5, 1, 2, 2),
+    "7.5 秒內 分數提升110%",
+  );
+  assert.equal(
+    normalizeBandoriSkillLabel(singlePlaceholderSkill, 5, 1, 3, 3),
+    "7.5秒内 得分提升110%",
+  );
+
+  const secondaryPlaceholderSkill = {
+    duration: [5, 5.6, 6.2, 6.8, 7.5],
+    description: [
+      "ライフが{0}回復し、{1}秒間 スコアが110%UPする",
+      "Life restored by {0} and Score increased by 110% for {1} seconds",
+      null,
+      "回复{0}生命值，{1}秒内 得分提升110%",
+    ],
+    onceEffect: {
+      onceEffectValue: [200, 250, 300, 350, 450],
+    },
+  };
+
+  assert.equal(
+    normalizeBandoriSkillLabel(secondaryPlaceholderSkill, 5, 1, 0, 0),
+    "ライフが450回復し、7.5秒間 スコアが110%UPする",
+  );
+  assert.equal(
+    normalizeBandoriSkillLabel(secondaryPlaceholderSkill, 5, 1, 1, 1),
+    "Life restored by 450 and Score increased by 110% for 7.5 seconds",
+  );
+  assert.equal(
+    normalizeBandoriSkillLabel(secondaryPlaceholderSkill, 5, 1, 3, 3),
+    "回复450生命值，7.5秒内 得分提升110%",
+  );
+});
+
+test("missing skill descriptions use the caller-provided localized fallback", () => {
+  assert.deepEqual(
+    resolveBandoriSkillLabel(undefined, 1, 1, 3, 3, "本地化技能占位"),
+    { label: "本地化技能占位", languageTag: "zh-Hans" },
+  );
+  assert.equal(normalizeBandoriSkillLabel(undefined, 1, 1, 1, 1, "Localized skill fallback"), "Localized skill fallback");
 });
 
 test("master cards list and detail routes expose direct data without storage metadata", async () => {
@@ -125,7 +226,7 @@ test("card consumers share the canonical Cards dataset without the sparse route"
   const avatarControl = await readSource("src/app/[locale]/account/AccountAvatarCardControl.tsx");
   const picker = await readSource("src/components/bandori/card-picker/BandoriCardPicker.tsx");
   const cardsHook = await readSource("src/hooks/useBandoriCardsMaster.ts");
-  const temporaryDialogs = await readSource("src/app/[locale]/bandori/teambuilder/TemporaryCardDialogs.tsx");
+  const pickerDialog = await readSource("src/components/bandori/BandoriCardPickerDialog.tsx");
 
   assert.match(worker, /type CardsResponse = Record</u);
   assert.match(worker, /normalizeCachedCardsResponse/u);
@@ -142,12 +243,12 @@ test("card consumers share the canonical Cards dataset without the sparse route"
   assert.doesNotMatch(avatarControl, /excludeEntityCollisions/u);
   assert.match(
     picker,
-    /useBandoriCardsMaster\(\s*server,\s*true,\s*missingCardFallback,\s*\)/u,
+    /useBandoriCardsMaster\(\s*server,\s*providedCardMetadata === undefined,\s*missingCardFallback,\s*\)/u,
   );
   assert.match(picker, /entityServer: card\.entityServer/u);
   assert.doesNotMatch(picker, /\?server=/u);
   assert.match(cardsHook, /"\/api\/bandori\/master\/cards"/u);
-  assert.match(temporaryDialogs, /server=\{server\}/u);
+  assert.match(pickerDialog, /server=\{server\}/u);
 });
 
 test("avatar collision identity is persisted and propagated to public avatar consumers", async () => {
@@ -208,26 +309,30 @@ test("profile-bound card displays receive profile server context without changin
     profileCardsPage,
     teamBuilderPage,
     preferencesPanel,
-    preferenceEntries,
-    temporaryDialogs,
+    profileEntries,
+    pickerDialog,
   ] = await Promise.all([
     readSource("src/app/[locale]/bandori/game-profiles/[profileId]/cards/page.tsx"),
     readSource("src/app/[locale]/bandori/teambuilder/page.tsx"),
     readSource("src/app/[locale]/bandori/teambuilder/CardPreferencesPanel.tsx"),
-    readSource("src/app/[locale]/bandori/teambuilder/useTeamBuilderPreferenceCardEntries.ts"),
-    readSource("src/app/[locale]/bandori/teambuilder/TemporaryCardDialogs.tsx"),
+    readSource("src/hooks/useBandoriProfileCardEntries.ts"),
+    readSource("src/components/bandori/BandoriCardPickerDialog.tsx"),
   ]);
 
   assert.match(profileCardsPage, /displayServer=\{profileServer\}/u);
-  assert.match(profileCardsPage, /preferredServer,\s*profileServer,\s*fallbackLabels/u);
+  assert.match(profileCardsPage, /displayServer: profileServer/u);
   assert.match(teamBuilderPage, /displayServer=\{selectedProfileCardServer\}/u);
   assert.match(teamBuilderPage, /canonicalData: canonicalCards/u);
   assert.match(teamBuilderPage, /useBandoriCardsMaster\(selectedProfileCardServer, true, "jp"\)/u);
   assert.match(teamBuilderPage, /<EventBonusPanel[\s\S]*?cardMetadata=\{canonicalCardMetadata\}/u);
   assert.match(teamBuilderPage, /<TeamBuilderCardPreferencesPanel[\s\S]*?cardMetadata=\{profileCardMetadata\}/u);
   assert.match(preferencesPanel, /displayServer: BandoriServer/u);
-  assert.match(preferenceEntries, /contextServer: BandoriServer/u);
-  assert.match(temporaryDialogs, /missingCardFallback="jp"/u);
+  assert.match(profileEntries, /displayServer: BandoriServer/u);
+  assert.match(pickerDialog, /missingCardFallback=\{missingCardFallback\}/u);
+  assert.match(profileCardsPage, /missingCardFallback="none"/u);
+  assert.match(teamBuilderPage, /missingCardFallback="jp"/u);
+  assert.match(profileCardsPage, /cardMetadata=\{cardMetadata\}/u);
+  assert.match(teamBuilderPage, /cardMetadata=\{profileCardMetadata\}/u);
 
   const bonusCardBody = teamBuilderPage.slice(
     teamBuilderPage.indexOf("function BonusCardThumbnail"),
@@ -372,7 +477,7 @@ test("avatar picker expands every registered collision into distinct EN and CN r
     }]),
   );
 
-  const catalog = buildBandoriCardCatalog(cards, characters, 3, "zh-CN", true);
+  const catalog = buildBandoriCardCatalog(cards, characters, 3, true);
   assert.equal(catalog.length, 20);
   for (const [cardId, , enResourceSetName, , cnResourceSetName] of resources) {
     const entries = catalog.filter((entry) => entry.cardId === cardId);

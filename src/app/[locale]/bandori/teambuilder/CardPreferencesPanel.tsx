@@ -1,39 +1,31 @@
 "use client";
 
-import { useDeferredValue, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { ChevronDown, ListFilter, Plus, Sparkles, Trash2 } from "lucide-react";
 import { useLocale, useTranslations } from "next-intl";
+import BandoriCardFilterControls from "@/components/bandori/BandoriCardFilterControls";
+import BandoriCardTile from "@/components/bandori/BandoriCardTile";
 import VirtualizedBandoriCardGrid from "@/components/bandori/VirtualizedBandoriCardGrid";
+import { useBandoriProfileCardEntries } from "@/hooks/useBandoriProfileCardEntries";
+import { useBandoriProfileCardFilter } from "@/hooks/useBandoriProfileCardFilter";
 import { type AppLocale } from "@/i18n/routing";
-import { BANDORI_CHARACTER_GROUPS, compareBandoriCharacterIds } from "@/lib/bandori-character-groups";
+import { type BandoriCharacterMaster, type BandoriSkillMaster } from "@/lib/bandori-card-master";
+import { buildBandoriCardSortValues } from "@/lib/bandori-card-filter";
+import { type GameProfileCardMetadata } from "@/lib/bandori-game-profile-card";
 import { type BandoriServer } from "@/lib/bandori-server";
 import { type BandoriCharacterBonusState } from "@/lib/bandori-team-calculator";
 import { type UserGameProfileCardRecord } from "@/lib/user-game-profile-payload";
 import { useBandoriPreferredServer } from "@/store/useBandoriPreferencesStore";
+import {
+  buildBandoriProfileCardEntry,
+} from "@/lib/bandori-profile-card-collection";
 import {
   CARD_PARAMETER_RARITY_THRESHOLD_OPTIONS,
   DEFAULT_OWNED_CARD_PARAMETER_PREFERENCES,
   normalizeRarityThreshold,
   type OwnedCardParameterPreferences,
   type TeamBuilderCardPreferences,
-  type TemporaryGameProfileCard,
 } from "./card-preferences";
-import ExcludedCardFilterControls, {
-  CARD_FILTER_ATTRIBUTE_VALUES,
-  CARD_FILTER_RARITY_OPTIONS,
-  buildDefaultExcludedCardFilter,
-  readCardReleaseTimestamp,
-  type TeamBuilderExcludedCardFilterState,
-} from "./ExcludedCardFilterControls";
-import TeamBuilderPreferenceCardTile from "./TeamBuilderPreferenceCardTile";
-import {
-  buildPreferenceCardEntry,
-  type TeamBuilderPreferenceCardEntry,
-  type TeamBuilderPreferenceCardMetadata,
-  type TeamBuilderPreferenceCharacterMaster,
-  type TeamBuilderPreferenceSkillMaster,
-  useTeamBuilderPreferenceCardEntries,
-} from "./useTeamBuilderPreferenceCardEntries";
 
 const EXCLUDED_PROFILE_CARD_INITIAL_VISIBLE_COUNT = 60;
 const EXCLUDED_PROFILE_CARD_VISIBLE_INCREMENT = 60;
@@ -41,14 +33,12 @@ export type TeamBuilderCardPreferencesPanelProps = {
   cacheScopeKey: string;
   profileCards: UserGameProfileCardRecord[];
   preferences: TeamBuilderCardPreferences;
-  cardMetadata: Record<string, TeamBuilderPreferenceCardMetadata | undefined>;
-  characters: Record<string, TeamBuilderPreferenceCharacterMaster | undefined>;
-  skills: Record<string, TeamBuilderPreferenceSkillMaster | undefined>;
+  cardMetadata: Record<string, GameProfileCardMetadata | undefined>;
+  characters: Record<string, BandoriCharacterMaster | undefined>;
+  skills: Record<string, BandoriSkillMaster | undefined>;
   characterBonusesById: Record<string, BandoriCharacterBonusState | undefined>;
   displayServer: BandoriServer;
   currentEventBonusCardCount: number;
-  addingCurrentEventCards: boolean;
-  temporaryCardActionError: string;
   temporaryCardActionNotice: string;
   onAddTemporary: () => void;
   onAddCurrentEventCards: () => void;
@@ -56,7 +46,7 @@ export type TeamBuilderCardPreferencesPanelProps = {
   onClearTemporaryCards: () => void;
   onUpdateOwnedCardParameters: (patch: Partial<OwnedCardParameterPreferences>) => void;
   onToggleExcludedCard: (cardId: number) => void;
-  onBulkSetExcludedCards: (cardIds: number[], excluded: boolean) => void;
+  onBulkSetExcludedCards: (cardIds: number[], isExcluded: boolean) => void;
 };
 
 export default function TeamBuilderCardPreferencesPanel({
@@ -69,8 +59,6 @@ export default function TeamBuilderCardPreferencesPanel({
   characterBonusesById,
   displayServer,
   currentEventBonusCardCount,
-  addingCurrentEventCards,
-  temporaryCardActionError,
   temporaryCardActionNotice,
   onAddTemporary,
   onAddCurrentEventCards,
@@ -83,22 +71,35 @@ export default function TeamBuilderCardPreferencesPanel({
   const locale = useLocale() as AppLocale;
   const preferredServer = useBandoriPreferredServer();
   const t = useTranslations("bandori.teamBuilder.preferences");
+  const filterT = useTranslations("bandori.cardFilters");
+  const termsT = useTranslations("bandori.terms");
   const excludedCardIdSet = useMemo(
     () => new Set(preferences.excludedCardIds),
     [preferences.excludedCardIds],
   );
-  const [excludedFiltersOpen, setExcludedFiltersOpen] = useState(false);
-  const [excludedCardFilter, setExcludedCardFilter] = useState<TeamBuilderExcludedCardFilterState | null>(null);
+  const [isExcludedFilterPanelOpen, setIsExcludedFilterPanelOpen] = useState(false);
   const [visibleExcludedProfileCardState, setVisibleExcludedProfileCardState] = useState({
     key: "",
     count: EXCLUDED_PROFILE_CARD_INITIAL_VISIBLE_COUNT,
   });
+  const excludedSortValues = useMemo(
+    () => buildBandoriCardSortValues({ shouldIncludePower: true, contextServer: displayServer }),
+    [displayServer],
+  );
+  const excludedSortOptions = useMemo(
+    () => excludedSortValues.map((value) => ({
+      value,
+      label: filterT(`sort.${value}`),
+    })),
+    [excludedSortValues, filterT],
+  );
 
   const {
     entries: profileCardEntries,
-    ready: profileCardEntriesReady,
-  } = useTeamBuilderPreferenceCardEntries({
+    isReady: isProfileCardEntryCollectionReady,
+  } = useBandoriProfileCardEntries({
     cacheScopeKey,
+    isEnabled: true,
     locale,
     profileCards,
     cardMetadata,
@@ -106,10 +107,11 @@ export default function TeamBuilderCardPreferencesPanel({
     skills,
     characterBonusesById,
     displayServer,
+    unknownSkillLabel: termsT("unknownSkill"),
   });
 
   const temporaryCardEntries = useMemo(() => preferences.temporaryCards.map((card) => ({
-    ...buildPreferenceCardEntry(
+    ...buildBandoriProfileCardEntry(
       card,
       cardMetadata,
       characters,
@@ -118,9 +120,10 @@ export default function TeamBuilderCardPreferencesPanel({
       locale,
       preferredServer,
       displayServer,
+      termsT("unknownSkill"),
     ),
     card,
-  } satisfies TeamBuilderPreferenceCardEntry & { card: TemporaryGameProfileCard })), [
+  })), [
     cardMetadata,
     characterBonusesById,
     characters,
@@ -129,156 +132,38 @@ export default function TeamBuilderCardPreferencesPanel({
     preferences.temporaryCards,
     preferredServer,
     skills,
+    termsT,
   ]);
 
-  const bandOptions = useMemo(() => {
-    const knownLabels = new Map(BANDORI_CHARACTER_GROUPS.map((group) => [group.bandId, group.label]));
-    return Array.from(new Set(profileCardEntries.flatMap((entry) => entry.bandId === null ? [] : [entry.bandId])))
-      .sort((left, right) => left - right)
-      .map((bandId) => ({
-        bandId,
-        label: knownLabels.get(bandId) ?? `Band ${bandId}`,
-      }));
-  }, [profileCardEntries]);
-  const characterOptions = useMemo(() => {
-    const labelByCharacterId = new Map<number, string>();
-    profileCardEntries.forEach((entry) => {
-      if (entry.characterId !== null && !labelByCharacterId.has(entry.characterId)) {
-        labelByCharacterId.set(entry.characterId, entry.characterName || `Character ${entry.characterId}`);
-      }
-    });
-    return Array.from(labelByCharacterId.entries())
-      .map(([characterId, label]) => ({ characterId, label }))
-      .sort((left, right) => compareBandoriCharacterIds(left.characterId, right.characterId));
-  }, [profileCardEntries]);
-  const bandIds = useMemo(() => bandOptions.map((option) => option.bandId), [bandOptions]);
-  const characterIds = useMemo(() => characterOptions.map((option) => option.characterId), [characterOptions]);
-  const excludedFilterBandIds = excludedCardFilter?.bandIds;
-  const excludedFilterAttributes = excludedCardFilter?.attributes;
-  const excludedFilterRarities = excludedCardFilter?.rarities;
-  const excludedFilterCharacterIds = excludedCardFilter?.characterIds;
-  const excludedFilterSortBy = excludedCardFilter?.sortBy;
-  const excludedFilterSortDirection = excludedCardFilter?.sortDirection;
-
-  const effectiveExcludedCardFilterCriteria = useMemo(() => {
-    const defaultFilter = excludedFilterBandIds ? null : buildDefaultExcludedCardFilter(bandIds, characterIds);
-    return {
-      bandIds: (excludedFilterBandIds ?? defaultFilter?.bandIds ?? []).filter((bandId) => bandIds.includes(bandId)),
-      attributes: (excludedFilterAttributes ?? defaultFilter?.attributes ?? [])
-        .filter((attribute) => CARD_FILTER_ATTRIBUTE_VALUES.includes(attribute)),
-      rarities: (excludedFilterRarities ?? defaultFilter?.rarities ?? [])
-        .filter((rarity) => CARD_FILTER_RARITY_OPTIONS.includes(rarity)),
-      characterIds: (excludedFilterCharacterIds ?? defaultFilter?.characterIds ?? [])
-        .filter((characterId) => characterIds.includes(characterId)),
-      sortBy: excludedFilterSortBy ?? defaultFilter?.sortBy ?? "power",
-      sortDirection: excludedFilterSortDirection ?? defaultFilter?.sortDirection ?? "desc",
-    };
-  }, [
-    bandIds,
-    characterIds,
-    excludedFilterAttributes,
-    excludedFilterBandIds,
-    excludedFilterCharacterIds,
-    excludedFilterRarities,
-    excludedFilterSortBy,
-    excludedFilterSortDirection,
-  ]);
-  const effectiveExcludedCardFilter = useMemo(() => ({
-    query: excludedCardFilter?.query ?? "",
-    ...effectiveExcludedCardFilterCriteria,
-  }), [effectiveExcludedCardFilterCriteria, excludedCardFilter?.query]);
-  const effectiveExcludedCardFilterSets = useMemo(() => ({
-    bandIds: new Set(effectiveExcludedCardFilterCriteria.bandIds),
-    attributes: new Set(effectiveExcludedCardFilterCriteria.attributes),
-    rarities: new Set(effectiveExcludedCardFilterCriteria.rarities),
-    characterIds: new Set(effectiveExcludedCardFilterCriteria.characterIds),
-  }), [
-    effectiveExcludedCardFilterCriteria.attributes,
-    effectiveExcludedCardFilterCriteria.bandIds,
-    effectiveExcludedCardFilterCriteria.characterIds,
-    effectiveExcludedCardFilterCriteria.rarities,
-  ]);
-  const deferredExcludedQuery = useDeferredValue(effectiveExcludedCardFilter.query);
-  const excludedCardFilterKey = useMemo(
-    () => JSON.stringify({
-      query: deferredExcludedQuery,
-      bandIds: effectiveExcludedCardFilterCriteria.bandIds,
-      attributes: effectiveExcludedCardFilterCriteria.attributes,
-      rarities: effectiveExcludedCardFilterCriteria.rarities,
-      characterIds: effectiveExcludedCardFilterCriteria.characterIds,
-      sortBy: effectiveExcludedCardFilterCriteria.sortBy,
-      sortDirection: effectiveExcludedCardFilterCriteria.sortDirection,
-      profileCardCount: profileCards.length,
-    }),
-    [
-      deferredExcludedQuery,
-      effectiveExcludedCardFilterCriteria.attributes,
-      effectiveExcludedCardFilterCriteria.bandIds,
-      effectiveExcludedCardFilterCriteria.characterIds,
-      effectiveExcludedCardFilterCriteria.rarities,
-      effectiveExcludedCardFilterCriteria.sortBy,
-      effectiveExcludedCardFilterCriteria.sortDirection,
-      profileCards.length,
-    ],
+  const getBandFilterLabel = useCallback(
+    (bandId: number) => filterT("bandFallback", { bandId }),
+    [filterT],
+  );
+  const getCharacterFilterLabel = useCallback(
+    (characterId: number) => filterT("characterFallback", { characterId }),
+    [filterT],
   );
 
-  const updateExcludedCardFilter = (patch: Partial<TeamBuilderExcludedCardFilterState>) => {
-    setExcludedCardFilter((current) => ({
-      ...(current ?? buildDefaultExcludedCardFilter(bandIds, characterIds)),
-      ...patch,
-    }));
-  };
-
-  const filteredProfileCardEntries = useMemo(() => {
-    if (
-      effectiveExcludedCardFilterCriteria.bandIds.length === 0
-      || effectiveExcludedCardFilterCriteria.attributes.length === 0
-      || effectiveExcludedCardFilterCriteria.rarities.length === 0
-      || effectiveExcludedCardFilterCriteria.characterIds.length === 0
-    ) {
-      return [];
-    }
-
-    const query = deferredExcludedQuery.trim().toLowerCase();
-    const direction = effectiveExcludedCardFilterCriteria.sortDirection === "asc" ? 1 : -1;
-    return profileCardEntries.filter((entry) => {
-      if (query && !entry.searchText.includes(query)) {
-        return false;
-      }
-      if (entry.bandId === null || !effectiveExcludedCardFilterSets.bandIds.has(entry.bandId)) {
-        return false;
-      }
-      if (entry.attribute === null || !effectiveExcludedCardFilterSets.attributes.has(entry.attribute)) {
-        return false;
-      }
-      if (entry.rarity === null || !effectiveExcludedCardFilterSets.rarities.has(entry.rarity)) {
-        return false;
-      }
-      if (entry.characterId === null || !effectiveExcludedCardFilterSets.characterIds.has(entry.characterId)) {
-        return false;
-      }
-      if (effectiveExcludedCardFilterCriteria.sortBy === "release_cn" && readCardReleaseTimestamp(entry.metadata, "release_cn") <= 0) {
-        return false;
-      }
-      return true;
-    }).sort((left, right) => {
-      if (effectiveExcludedCardFilterCriteria.sortBy === "power") {
-        return direction * (left.totalPower - right.totalPower) || direction * (left.card.cardId - right.card.cardId);
-      }
-      if (effectiveExcludedCardFilterCriteria.sortBy === "id") {
-        return direction * (left.card.cardId - right.card.cardId);
-      }
-      return direction * (
-        readCardReleaseTimestamp(left.metadata, effectiveExcludedCardFilterCriteria.sortBy)
-        - readCardReleaseTimestamp(right.metadata, effectiveExcludedCardFilterCriteria.sortBy)
-      ) || direction * (left.card.cardId - right.card.cardId);
-    });
-  }, [
-    deferredExcludedQuery,
-    effectiveExcludedCardFilterCriteria,
-    effectiveExcludedCardFilterSets,
-    profileCardEntries,
-  ]);
+  const {
+    filter: effectiveExcludedCardFilter,
+    filteredEntries: filteredProfileCardEntries,
+    filterKey: excludedCardFilterKey,
+    bandOptions,
+    characterOptions,
+    bandIds,
+    characterIds,
+    updateFilter: updateExcludedCardFilter,
+    resetFilter: resetExcludedCardFilter,
+  } = useBandoriProfileCardFilter({
+    entries: profileCardEntries,
+    characters,
+    preferredServer,
+    contextServer: displayServer,
+    unknownMetadataPolicy: "exclude",
+    getBandLabel: getBandFilterLabel,
+    getCharacterLabel: getCharacterFilterLabel,
+    sortValues: excludedSortValues,
+  });
   const filteredProfileCardIds = useMemo(
     () => filteredProfileCardEntries.map((entry) => entry.card.cardId),
     [filteredProfileCardEntries],
@@ -288,8 +173,8 @@ export default function TeamBuilderCardPreferencesPanel({
     : EXCLUDED_PROFILE_CARD_INITIAL_VISIBLE_COUNT;
   const visibleExcludedProfileCardCountClamped = Math.min(visibleExcludedProfileCardCount, filteredProfileCardEntries.length);
   const hiddenExcludedProfileCardCount = Math.max(0, filteredProfileCardEntries.length - visibleExcludedProfileCardCountClamped);
-  const profileCardEntriesInitialLoading = !profileCardEntriesReady && profileCardEntries.length === 0;
-  const profileCardEntriesRefreshing = !profileCardEntriesReady && profileCardEntries.length > 0;
+  const isInitialProfileCardEntryLoad = !isProfileCardEntryCollectionReady && profileCardEntries.length === 0;
+  const isProfileCardEntryCollectionRefreshing = !isProfileCardEntryCollectionReady && profileCardEntries.length > 0;
 
   return (
     <div className="space-y-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
@@ -383,11 +268,11 @@ export default function TeamBuilderCardPreferencesPanel({
             <button
               type="button"
               onClick={onAddCurrentEventCards}
-              disabled={currentEventBonusCardCount === 0 || addingCurrentEventCards}
+              disabled={currentEventBonusCardCount === 0}
               className="inline-flex h-10 items-center gap-2 rounded-2xl border border-amber-200 bg-white px-4 text-sm font-bold text-amber-700 transition hover:bg-amber-50 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <Sparkles className="h-4 w-4" aria-hidden="true" />
-              {addingCurrentEventCards ? t("adding") : t("addCurrentEventCards")}
+              {t("addCurrentEventCards")}
             </button>
             <button type="button" onClick={onClearTemporaryCards} disabled={preferences.temporaryCards.length === 0} className="inline-flex h-10 items-center gap-2 rounded-2xl border border-rose-200 bg-white px-4 text-sm font-bold text-rose-600 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50">
               <Trash2 className="h-4 w-4" aria-hidden="true" />
@@ -395,21 +280,23 @@ export default function TeamBuilderCardPreferencesPanel({
             </button>
           </div>
         </div>
-        {temporaryCardActionError ? (
-          <div className="rounded-xl bg-rose-50 p-3 text-sm font-semibold text-rose-600">{temporaryCardActionError}</div>
-        ) : null}
         {temporaryCardActionNotice ? (
           <div role="status" aria-live="polite" className="rounded-xl bg-amber-50 p-3 text-sm font-semibold text-amber-700">{temporaryCardActionNotice}</div>
         ) : null}
         {temporaryCardEntries.length > 0 ? (
           <div className="grid justify-center gap-[6px] grid-cols-[repeat(auto-fill,56px)] sm:grid-cols-[repeat(auto-fill,76px)]">
             {temporaryCardEntries.map((entry) => (
-              <TeamBuilderPreferenceCardTile
+              <BandoriCardTile
                 key={entry.card.instanceId}
-                entry={entry}
-                title={t("editTemporaryCard")}
-                compact
-                onClick={() => onEditTemporary(entry.card.instanceId)}
+                card={{ ...entry.card, bandId: entry.bandId, totalPower: entry.totalPower }}
+                metadata={entry.metadata}
+                cardName={entry.cardName}
+                characterName={entry.characterName}
+                skillEffectLabel={entry.skillEffectLabel}
+                skillEffectLanguageTag={entry.skillEffectLanguageTag}
+                size="compact"
+                actionLabel={t("editTemporaryCard")}
+                onAction={() => onEditTemporary(entry.card.instanceId)}
               />
             ))}
           </div>
@@ -442,48 +329,41 @@ export default function TeamBuilderCardPreferencesPanel({
             </button>
             <button
               type="button"
-              onClick={() => setExcludedFiltersOpen((current) => !current)}
-              aria-expanded={excludedFiltersOpen}
+              onClick={() => setIsExcludedFilterPanelOpen((current) => !current)}
+              aria-expanded={isExcludedFilterPanelOpen}
               className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-700 transition hover:border-blue-300 hover:text-blue-600"
             >
               <ListFilter className="h-4 w-4" aria-hidden="true" />
-              {excludedFiltersOpen ? t("closeFilters") : t("openFilters")}
-              <ChevronDown className={`h-4 w-4 transition ${excludedFiltersOpen ? "rotate-180" : ""}`} aria-hidden="true" />
+              {isExcludedFilterPanelOpen ? t("closeFilters") : t("openFilters")}
+              <ChevronDown className={`h-4 w-4 transition ${isExcludedFilterPanelOpen ? "rotate-180" : ""}`} aria-hidden="true" />
             </button>
           </div>
         </div>
-        {excludedFiltersOpen ? (
-          <ExcludedCardFilterControls
+        {isExcludedFilterPanelOpen ? (
+          <BandoriCardFilterControls
             filter={effectiveExcludedCardFilter}
             resultCountLabel={
-              profileCardEntriesReady
+              isProfileCardEntryCollectionReady
                 ? t("count", { count: filteredProfileCardEntries.length })
-                : profileCardEntriesRefreshing
+                : isProfileCardEntryCollectionRefreshing
                   ? t("countUpdating", { count: filteredProfileCardEntries.length })
                   : t("preparing")
             }
             bandOptions={bandOptions}
             characterOptions={characterOptions}
-            bandIds={bandIds}
-            characterIds={characterIds}
+            availableBandIds={bandIds}
+            availableCharacterIds={characterIds}
+            sortOptions={excludedSortOptions}
             onFilterChange={updateExcludedCardFilter}
-            onClearFilter={() => setExcludedCardFilter({
-              query: "",
-              bandIds: [],
-              attributes: [],
-              rarities: [],
-              characterIds: [],
-              sortBy: "power",
-              sortDirection: "desc",
-            })}
+            onClearFilter={resetExcludedCardFilter}
           />
         ) : null}
         {profileCards.length > 0 ? (
-          profileCardEntriesInitialLoading ? (
+          isInitialProfileCardEntryLoad ? (
             <div className="rounded-xl bg-slate-50 p-3 text-sm font-semibold text-slate-500">{t("preparingCards")}</div>
           ) : (
           <>
-            {profileCardEntriesRefreshing ? (
+            {isProfileCardEntryCollectionRefreshing ? (
               <div role="status" aria-live="polite" className="rounded-xl bg-slate-50 p-3 text-sm font-semibold text-slate-500">
                 {t("updatingCards")}
               </div>
@@ -491,17 +371,22 @@ export default function TeamBuilderCardPreferencesPanel({
             <VirtualizedBandoriCardGrid
               items={filteredProfileCardEntries}
               visibleLimit={visibleExcludedProfileCardCount}
-              layoutKey={excludedFiltersOpen ? "excluded-filters-open" : "excluded-filters-closed"}
+              layoutKey={isExcludedFilterPanelOpen ? "excluded-filters-open" : "excluded-filters-closed"}
               getKey={(entry) => entry.card.cardId}
               renderItem={(entry) => {
-                const excluded = excludedCardIdSet.has(entry.card.cardId);
+                const isExcluded = excludedCardIdSet.has(entry.card.cardId);
                 return (
-                  <TeamBuilderPreferenceCardTile
-                    entry={entry}
-                    title={excluded ? t("restoreCard") : t("excludeCard")}
-                    compact
-                    muted={excluded}
-                    onClick={() => onToggleExcludedCard(entry.card.cardId)}
+                  <BandoriCardTile
+                    card={{ ...entry.card, bandId: entry.bandId, totalPower: entry.totalPower }}
+                    metadata={entry.metadata}
+                    cardName={entry.cardName}
+                    characterName={entry.characterName}
+                    skillEffectLabel={entry.skillEffectLabel}
+                    skillEffectLanguageTag={entry.skillEffectLanguageTag}
+                    size="compact"
+                    isMuted={isExcluded}
+                    actionLabel={isExcluded ? t("restoreCard") : t("excludeCard")}
+                    onAction={() => onToggleExcludedCard(entry.card.cardId)}
                   />
                 );
               }}

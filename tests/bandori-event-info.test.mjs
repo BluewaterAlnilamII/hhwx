@@ -41,6 +41,10 @@ const eventSwitcherSource = readFileSync(
   new URL("../src/app/[locale]/bandori/BandoriEventSwitcher.tsx", import.meta.url),
   "utf8",
 );
+const serverIconSource = readFileSync(
+  new URL("../src/components/bandori/BandoriServerIcon.tsx", import.meta.url),
+  "utf8",
+);
 const eventInfoPanelSource = readFileSync(
   new URL("../src/app/[locale]/bandori/eventtracker/EventInfoPanel.tsx", import.meta.url),
   "utf8",
@@ -177,10 +181,12 @@ test("event tracker renders the shared tracker surface for every server", () => 
   assert.doesNotMatch(eventTrackerPageSource, /分数追踪数据尚未接入|页面结构和服务器上下文已经就绪/u);
 });
 
-test("event server switcher uses compact local Bestdori-style icons", () => {
+test("event server switcher uses the shared compact local Bestdori-style icons", () => {
   for (const server of ["jp", "en", "tw", "cn"]) {
-    assert.match(eventSwitcherSource, new RegExp(`/res/server-icons/${server}\\.svg`, "u"));
+    assert.match(serverIconSource, new RegExp(`/res/server-icons/${server}\\.svg`, "u"));
   }
+  assert.match(eventSwitcherSource, /<BandoriServerIcon/u);
+  assert.match(eventSwitcherSource, /isDecorative/u);
   assert.match(eventSwitcherSource, /aria-label=\{accessibleLabel\}/u);
   assert.match(eventSwitcherSource, /aria-pressed=\{active\}/u);
   assert.match(eventSwitcherSource, /inline-grid grid-cols-4/u);
@@ -188,6 +194,8 @@ test("event server switcher uses compact local Bestdori-style icons", () => {
   assert.match(eventSwitcherSource, /first:rounded-l-\[11px\] last:rounded-r-\[11px\]/u);
   assert.match(eventSwitcherSource, /active && "scale-105 ring-2 ring-sky-400/u);
   assert.doesNotMatch(eventSwitcherSource, /shadow-\[inset_0_0_0_1px/u);
+  assert.doesNotMatch(eventSwitcherSource, /\/res\/server-icons/u);
+  assert.match(serverIconSource, /alt=\{isDecorative \? "" : serverCode\}/u);
   assert.ok(eventSwitcherSource.indexOf(">服务器<") < eventSwitcherSource.indexOf(">活动选择<"));
   assert.ok(eventSwitcherSource.indexOf(">活动选择<") < eventSwitcherSource.indexOf("<h1"));
 });
@@ -233,6 +241,11 @@ test("event overview integrates bonuses into a responsive two-column layout", ()
   for (const label of ["加成属性", "加成角色", "加成参数", "加成卡牌"]) {
     assert.match(eventBonusPanelSource, new RegExp(`variant === "embedded" \\? "${label}"`, "u"));
   }
+});
+
+test("event card skills reuse the shared master hook", () => {
+  assert.match(eventInfoPanelSource, /useBandoriSkillsMaster\(Boolean\(model\)\)/u);
+  assert.doesNotMatch(eventInfoPanelSource, /"bandori-master-skills"|parseSkillResponse/u);
 });
 
 test("event rewards fallback stamps by server and keep reward cards unlabelled", () => {

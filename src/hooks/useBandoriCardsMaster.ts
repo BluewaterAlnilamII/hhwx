@@ -24,6 +24,7 @@ export function useBandoriCardsMaster(
   canonicalData: BandoriCardsMasterMap | null;
   loading: boolean;
   refreshing: boolean;
+  error: Error | null;
   refresh: () => void;
 } {
   const result = useCachedFetch(

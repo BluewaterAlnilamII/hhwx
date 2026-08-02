@@ -132,6 +132,18 @@ export function getGameProfileCards(payload: UserGameProfilePayload): UserGamePr
   return decodeBestdoriProfile(payload.bestdoriProfile).cards;
 }
 
+export function replaceGameProfileCards(
+  payload: UserGameProfilePayload,
+  cards: UserGameProfileCardRecord[],
+): UserGameProfilePayload {
+  const normalizedProfile = decodeBestdoriProfile(payload.bestdoriProfile);
+  normalizedProfile.cards = cards;
+  return {
+    ...payload,
+    bestdoriProfile: encodeBestdoriProfile(normalizedProfile),
+  };
+}
+
 export function getGameProfileAreaItems(payload: UserGameProfilePayload): UserGameProfileItemRecord[] {
   const normalizedProfile = decodeBestdoriProfile(payload.bestdoriProfile);
   return Object.entries(orderBandoriAreaItems(normalizedProfile.items)).flatMap(([itemKey, levels]) => {
@@ -337,7 +349,7 @@ export function compactPotentialRecords(records?: UserGameProfilePotentialRecord
   };
 }
 
-function decodeCompactPotentialRecords(records: CompactGameProfilePotentialRecords): UserGameProfilePotentialRecord[] {
+export function decodeCompactPotentialRecords(records: CompactGameProfilePotentialRecords): UserGameProfilePotentialRecord[] {
   const characterIds = decodeBestdoriUint16Ids(records.ids);
   const expectedLength = characterIds.length;
   const performance = decodeRunLengthPairs<number | null>(records.performance, expectedLength);
@@ -394,7 +406,7 @@ export function compactMissionBonusRecords(records?: UserGameProfileMissionBonus
   };
 }
 
-function decodeCompactMissionBonusRecords(records: CompactGameProfileMissionBonusRecords): UserGameProfileMissionBonusRecord[] {
+export function decodeCompactMissionBonusRecords(records: CompactGameProfileMissionBonusRecords): UserGameProfileMissionBonusRecord[] {
   const characterIds = decodeBestdoriUint16Ids(records.ids);
   const expectedLength = characterIds.length;
   const collectionPerformance = decodeRunLengthPairs<number>(records.collection.performance, expectedLength);

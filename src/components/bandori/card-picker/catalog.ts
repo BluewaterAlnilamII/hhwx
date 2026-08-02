@@ -1,50 +1,24 @@
-import { type AppLocale } from "@/i18n/routing";
 import { pickBestdoriLocalizedName } from "@/lib/bestdori-regional-names";
-import { parseApiSuccessData } from "@/lib/api-contracts";
-import { parseBandoriCardsMasterResponse } from "@/lib/bandori-cards-api-client";
+import {
+  bandoriMasterTransforms,
+  pickBandoriCharacterDisplayName,
+  type BandoriCardMaster,
+  type BandoriCharacterMaster,
+} from "@/lib/bandori-card-master";
 import { hasTrainedCardArt } from "@/lib/bandori-card-training";
 import { expandBandoriCardCatalog } from "@/lib/bandori-card-server-extensions";
-import type { BandoriSkillLabelMaster } from "@/lib/bandori-skill-label";
+import {
+  buildBandoriCardFilterSelection,
+  getBandoriCardReleaseSortServer,
+  isBandoriCardAttribute,
+  matchesBandoriCardFilterSelection,
+  normalizeBandoriCardReleaseSortTimestamp,
+} from "@/lib/bandori-card-filter";
 import {
   DEFAULT_BANDORI_PREFERRED_SERVER,
   type BandoriServer,
 } from "@/lib/bandori-server";
-import type { BandoriCardAttribute, BandoriCardCatalogEntry, BandoriCardPickerFilter } from "./types";
-
-type BestdoriMasterResponse<T> = {
-  payload?: Record<string, T | null | undefined>;
-};
-
-type BestdoriCardMetadata = {
-  [key: string]: unknown;
-  characterId?: number;
-  skillId?: unknown;
-  rarity?: number;
-  attribute?: string;
-  levelLimit?: number;
-  resourceSetName?: string;
-  prefix?: Array<string | null>;
-  releasedAt?: Array<string | number | null>;
-  stat?: {
-    training?: {
-      levelLimit?: number;
-    } | unknown;
-  } & Record<string, unknown>;
-};
-
-type BestdoriCharacterMetadata = {
-  bandId?: number;
-  nickname?: Array<string | null>;
-  characterName?: Array<string | null>;
-  firstName?: Array<string | null>;
-};
-
-const KNOWN_ATTRIBUTES = new Set(["powerful", "pure", "cool", "happy"]);
-const JP_RELEASE_SORT_CUTOFF_TIMESTAMP = Date.UTC(2100, 0, 1);
-
-function isKnownAttribute(value: string | undefined): value is BandoriCardAttribute {
-  return Boolean(value && KNOWN_ATTRIBUTES.has(value));
-}
+import type { BandoriCardCatalogEntry, BandoriCardPickerFilter } from "./types";
 
 function toPositiveInteger(value: unknown): number | null {
   const parsed = Number(value);
@@ -54,7 +28,7 @@ function toPositiveInteger(value: unknown): number | null {
   return Math.trunc(parsed);
 }
 
-function readRegionalTimestampAt(values: BestdoriCardMetadata["releasedAt"], index: number): number {
+function readRegionalTimestampAt(values: BandoriCardMaster["releasedAt"], index: number): number {
   if (!Array.isArray(values)) {
     return 0;
   }
@@ -67,31 +41,20 @@ function readRegionalTimestampAt(values: BestdoriCardMetadata["releasedAt"], ind
   return 0;
 }
 
-function transformCardsResponse(raw: unknown): Record<string, BestdoriCardMetadata | null | undefined> {
-  return parseBandoriCardsMasterResponse(raw);
-}
+export const bandoriCardCatalogTransforms = bandoriMasterTransforms;
 
-function transformCharactersResponse(raw: unknown): Record<string, BestdoriCharacterMetadata | null | undefined> {
-  return parseApiSuccessData<BestdoriMasterResponse<BestdoriCharacterMetadata>>(raw)?.payload ?? {};
+export interface BandoriCardCatalogFallbackLabels {
+  getCardLabel: (cardId: number) => string;
+  getCharacterLabel: (characterId: number) => string;
 }
-
-function transformSkillsResponse(raw: unknown): Record<string, BandoriSkillLabelMaster | null | undefined> {
-  return parseApiSuccessData<BestdoriMasterResponse<BandoriSkillLabelMaster>>(raw)?.payload ?? {};
-}
-
-export const bandoriCardCatalogTransforms = {
-  cards: transformCardsResponse,
-  characters: transformCharactersResponse,
-  skills: transformSkillsResponse,
-};
 
 export function buildBandoriCardCatalog(
-  cards: Record<string, BestdoriCardMetadata | null | undefined>,
-  characters: Record<string, BestdoriCharacterMetadata | null | undefined>,
+  cards: Record<string, BandoriCardMaster | null | undefined>,
+  characters: Record<string, BandoriCharacterMaster | null | undefined>,
   preferredServer: BandoriServer = DEFAULT_BANDORI_PREFERRED_SERVER,
-  locale: AppLocale = "zh-CN",
   expandEntityCollisions = false,
   contextServer?: BandoriServer | null,
+  fallbackLabels?: BandoriCardCatalogFallbackLabels,
 ): BandoriCardCatalogEntry[] {
   const cardEntries = expandEntityCollisions
     ? expandBandoriCardCatalog(cards).map(({ cardId, cardRef, server, card }) => ({
@@ -120,19 +83,25 @@ export function buildBandoriCardCatalog(
     const character = characters[String(characterId)];
     const bandId = toPositiveInteger(character?.bandId);
     const displayName = pickBestdoriLocalizedName(card?.prefix, preferredServer, contextServer)
-      ?? (locale === "en" ? `Card ${cardId}` : `卡牌 ${cardId}`);
-    const characterName = pickBestdoriLocalizedName(character?.nickname, preferredServer, contextServer)
-      ?? pickBestdoriLocalizedName(character?.characterName, preferredServer, contextServer)
-      ?? pickBestdoriLocalizedName(character?.firstName, preferredServer, contextServer)
-      ?? (locale === "en" ? `Character ${characterId}` : `角色 ${characterId}`);
-    const attribute = isKnownAttribute(card?.attribute) ? card.attribute : null;
+      ?? fallbackLabels?.getCardLabel(cardId)
+      ?? `#${cardId}`;
+    const releaseTimestamps = [0, 1, 2, 3].map(
+      (server) => normalizeBandoriCardReleaseSortTimestamp(
+        readRegionalTimestampAt(card?.releasedAt, server),
+      ),
+    ) as [number, number, number, number];
+    const characterName = pickBandoriCharacterDisplayName(
+      character,
+      preferredServer,
+      contextServer,
+      fallbackLabels?.getCharacterLabel(characterId) ?? `#${characterId}`,
+    );
+    const attribute = isBandoriCardAttribute(card?.attribute) ? card.attribute : null;
     const levelLimit = toPositiveInteger(card?.levelLimit) ?? 1;
     const hasTrainedArt = hasTrainedCardArt(card);
     const trainingLevelLimit = hasTrainedArt
       ? toPositiveInteger((card?.stat?.training as { levelLimit?: unknown }).levelLimit) ?? 0
       : 0;
-    const releasedAtJp = readRegionalTimestampAt(card?.releasedAt, 0);
-    const releasedAtCn = readRegionalTimestampAt(card?.releasedAt, 3);
     const searchText = [
       cardId,
       displayName,
@@ -158,11 +127,10 @@ export function buildBandoriCardCatalog(
       resourceSetName,
       displayName,
       searchText,
-      releasedAtJp,
-      releasedAtCn,
+      releaseTimestamps,
       hasTrainedArt,
     }];
-  }).sort((left, right) => right.releasedAtJp - left.releasedAtJp || right.cardId - left.cardId);
+  }).sort((left, right) => right.releaseTimestamps[0] - left.releaseTimestamps[0] || right.cardId - left.cardId);
 }
 
 export function filterBandoriCardCatalog(
@@ -178,37 +146,17 @@ export function filterBandoriCardCatalog(
     return [];
   }
 
-  const query = filter.query.trim().toLowerCase();
-  const bandIds = new Set(filter.bandIds);
-  const attributes = new Set(filter.attributes);
-  const rarities = new Set(filter.rarities);
-  const characterIds = new Set(filter.characterIds);
+  const selection = buildBandoriCardFilterSelection(filter);
+  const releaseServer = getBandoriCardReleaseSortServer(filter.sortBy);
   const filtered = cards.filter((card) => {
-    if (query && !card.searchText.includes(query)) {
+    if (selection.query && !card.searchText.includes(selection.query)) {
       return false;
     }
-    if (!rarities.has(card.rarity)) {
+    if (!matchesBandoriCardFilterSelection(card, selection)) {
       return false;
     }
-    if (card.attribute && !attributes.has(card.attribute)) {
-      return false;
-    }
-    if (!card.attribute && filter.attributes.length > 0) {
-      return false;
-    }
-    if (card.bandId !== null && !bandIds.has(card.bandId)) {
-      return false;
-    }
-    if (card.bandId === null && filter.bandIds.length > 0) {
-      return false;
-    }
-    if (!characterIds.has(card.characterId)) {
-      return false;
-    }
-    if (filter.sortBy === "release_jp" && (card.releasedAtJp <= 0 || card.releasedAtJp >= JP_RELEASE_SORT_CUTOFF_TIMESTAMP)) {
-      return false;
-    }
-    if (filter.sortBy === "release_cn" && card.releasedAtCn <= 0) {
+    const releaseTimestamp = releaseServer === null ? 0 : card.releaseTimestamps[releaseServer];
+    if (releaseServer !== null && releaseTimestamp <= 0) {
       return false;
     }
     return true;
@@ -216,15 +164,12 @@ export function filterBandoriCardCatalog(
 
   return filtered.sort((left, right) => {
     const direction = filter.sortDirection === "asc" ? 1 : -1;
-    switch (filter.sortBy) {
-      case "release_cn":
-        return direction * (left.releasedAtCn - right.releasedAtCn) || direction * (left.cardId - right.cardId);
-      case "id":
-        return direction * (left.cardId - right.cardId);
-      case "release_jp":
-      default:
-        return direction * (left.releasedAtJp - right.releasedAtJp) || direction * (left.cardId - right.cardId);
+    if (filter.sortBy === "id" || releaseServer === null) {
+      return direction * (left.cardId - right.cardId);
     }
+    return direction * (
+      left.releaseTimestamps[releaseServer] - right.releaseTimestamps[releaseServer]
+    ) || direction * (left.cardId - right.cardId);
   });
 }
 

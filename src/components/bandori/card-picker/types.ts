@@ -1,4 +1,11 @@
+import {
+  type BandoriCardAttribute,
+  type BandoriCardFilterState,
+  type BandoriCardPickerSortBy as SharedBandoriCardPickerSortBy,
+} from "@/lib/bandori-card-filter";
 import { type BandoriServer } from "@/lib/bandori-server";
+
+export type { BandoriCardAttribute } from "@/lib/bandori-card-filter";
 
 export type BandoriCardArtVariant = "normal" | "after_training";
 
@@ -7,8 +14,6 @@ export type BandoriCardPickerValue = {
   entityServer: BandoriServer | null;
   trainType: BandoriCardArtVariant;
 };
-
-export type BandoriCardAttribute = "powerful" | "pure" | "cool" | "happy";
 
 export type BandoriCardCatalogEntry = {
   cardId: number;
@@ -25,20 +30,11 @@ export type BandoriCardCatalogEntry = {
   resourceSetName: string;
   displayName: string;
   searchText: string;
-  releasedAtJp: number;
-  releasedAtCn: number;
+  releaseTimestamps: readonly [number, number, number, number];
   hasTrainedArt: boolean;
 };
 
-export type BandoriCardPickerSortBy = "release_jp" | "release_cn" | "id";
+export type BandoriCardPickerSortBy = SharedBandoriCardPickerSortBy;
 export type BandoriCardPickerSortDirection = "desc" | "asc";
 
-export type BandoriCardPickerFilter = {
-  query: string;
-  bandIds: number[];
-  attributes: BandoriCardAttribute[];
-  rarities: number[];
-  characterIds: number[];
-  sortBy: BandoriCardPickerSortBy;
-  sortDirection: BandoriCardPickerSortDirection;
-};
+export type BandoriCardPickerFilter = BandoriCardFilterState<BandoriCardPickerSortBy>;

@@ -2,8 +2,14 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { hasTrainedCardArt } from "../src/lib/bandori-card-training.ts";
-import { createMaxGameProfileCard } from "../src/lib/bandori-game-profile-card.ts";
-import { buildBandoriCardCatalog } from "../src/components/bandori/card-picker/catalog.ts";
+import {
+  createDefaultOwnedGameProfileCard,
+  createMaxGameProfileCard,
+} from "../src/lib/bandori-game-profile-card.ts";
+import {
+  buildBandoriCardCatalog,
+  filterBandoriCardCatalog,
+} from "../src/components/bandori/card-picker/catalog.ts";
 
 test("training art requires at least one positive Master increment", () => {
   assert.equal(hasTrainedCardArt(undefined), false);
@@ -91,4 +97,75 @@ test("card catalog and max-profile creation treat zero-only training as untraine
   assert.equal(trainedProfileCard.isTrained, true);
   assert.equal(trainedProfileCard.hasTrainedArt, true);
   assert.equal(trainedProfileCard.level, 60);
+
+  const defaultUntrainedCard = createDefaultOwnedGameProfileCard(1, zeroTrainingCard);
+  assert.deepEqual(defaultUntrainedCard, {
+    cardId: 1,
+    level: 50,
+    masterRank: 0,
+    skillLevel: 1,
+    episodeCount: 2,
+    isTrained: false,
+    hasTrainedArt: false,
+    isExcluded: false,
+  });
+  const defaultTrainedCard = createDefaultOwnedGameProfileCard(2, trainedCard);
+  assert.equal(defaultTrainedCard.level, 60);
+  assert.equal(defaultTrainedCard.episodeCount, 2);
+  assert.equal(defaultTrainedCard.isTrained, true);
+  assert.equal(defaultTrainedCard.hasTrainedArt, true);
+  assert.equal(defaultTrainedCard.masterRank, 0);
+  assert.equal(defaultTrainedCard.skillLevel, 1);
+});
+
+test("card picker catalog sorts by every regional release slot", () => {
+  const catalog = buildBandoriCardCatalog({
+    "1": {
+      characterId: 1,
+      rarity: 5,
+      attribute: "powerful",
+      levelLimit: 50,
+      resourceSetName: "res001001",
+      releasedAt: [100, 400, 200, 300],
+    },
+    "2": {
+      characterId: 1,
+      rarity: 5,
+      attribute: "powerful",
+      levelLimit: 50,
+      resourceSetName: "res001002",
+      releasedAt: [200, 100, 500, 600],
+    },
+    "3": {
+      characterId: 1,
+      rarity: 5,
+      attribute: "powerful",
+      levelLimit: 50,
+      resourceSetName: "res001003",
+      releasedAt: [4102444800000, 4102444800000, 4102444800000, 4102444800000],
+    },
+  }, {
+    "1": {
+      bandId: 1,
+      characterName: ["Kasumi", null, null, "香澄"],
+    },
+  });
+  const baseFilter = {
+    query: "",
+    bandIds: [1],
+    attributes: ["powerful"],
+    rarities: [5],
+    characterIds: [1],
+    sortDirection: "desc",
+  };
+  const sortedIds = (sortBy) => filterBandoriCardCatalog(
+    catalog,
+    { ...baseFilter, sortBy },
+  ).map((card) => card.cardId);
+
+  assert.deepEqual(sortedIds("id"), [3, 2, 1]);
+  assert.deepEqual(sortedIds("release_jp"), [2, 1]);
+  assert.deepEqual(sortedIds("release_en"), [1, 2]);
+  assert.deepEqual(sortedIds("release_tw"), [2, 1]);
+  assert.deepEqual(sortedIds("release_cn"), [2, 1]);
 });
