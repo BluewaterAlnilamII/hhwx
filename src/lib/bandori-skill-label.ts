@@ -1,8 +1,10 @@
 import type { BestdoriSkillMaster } from "@/lib/bandori-team-calculator";
 import {
   DEFAULT_BANDORI_PREFERRED_SERVER,
-  pickBandoriRegionalText,
+  getBandoriServerLanguageTag,
+  pickBandoriRegionalTextWithServer,
   type BandoriServer,
+  type BandoriServerLanguageTag,
 } from "@/lib/bandori-server";
 
 export type BandoriSkillLabelMaster = BestdoriSkillMaster & {
@@ -13,15 +15,26 @@ export type BandoriSkillLabelMaster = BestdoriSkillMaster & {
   };
 };
 
-function pickRegionalText(
+export type ResolvedBandoriSkillLabel = {
+  label: string;
+  languageTag: BandoriServerLanguageTag;
+};
+
+function resolveRegionalText(
   value: unknown,
   preferredServer: BandoriServer,
   contextServer?: BandoriServer | null,
-): string {
+): { text: string; server: BandoriServer } | null {
   if (Array.isArray(value)) {
-    return pickBandoriRegionalText(value, preferredServer, contextServer) ?? "";
+    return pickBandoriRegionalTextWithServer(value, preferredServer, contextServer);
   }
-  return typeof value === "string" ? value.trim() : "";
+  if (typeof value !== "string" || value.trim().length === 0) {
+    return null;
+  }
+  return {
+    text: value.trim(),
+    server: contextServer ?? preferredServer,
+  };
 }
 
 export function normalizeBandoriSkillLevel(skillLevel: unknown, fallback = 1): number {
@@ -55,27 +68,49 @@ function getSkillOnceEffectValueByLevel(
   return pickSkillLevelNumber(skill?.onceEffect?.onceEffectValue, skillLevel, fallbackLevel);
 }
 
+export function resolveBandoriSkillLabel(
+  skill: BandoriSkillLabelMaster | undefined,
+  skillLevel: unknown,
+  fallbackLevel = 1,
+  preferredServer: BandoriServer = DEFAULT_BANDORI_PREFERRED_SERVER,
+  contextServer?: BandoriServer | null,
+  fallbackLabel = "",
+): ResolvedBandoriSkillLabel {
+  const descriptionSelection = resolveRegionalText(skill?.description, preferredServer, contextServer)
+    ?? resolveRegionalText(skill?.simpleDescription, preferredServer, contextServer)
+    ?? { text: "", server: contextServer ?? preferredServer };
+  const description = descriptionSelection.text;
+  const duration = getSkillDurationByLevel(skill, skillLevel, fallbackLevel);
+  const onceEffectValue = getSkillOnceEffectValueByLevel(skill, skillLevel, fallbackLevel);
+  const durationValueText = duration !== null ? formatSkillNumber(duration) : "";
+  const onceEffectValueText = onceEffectValue !== null ? formatSkillNumber(onceEffectValue) : "";
+  const usesSecondaryPlaceholder = description.includes("{1}");
+  const primaryValueText = usesSecondaryPlaceholder ? onceEffectValueText : durationValueText;
+  const resolvedDescription = description
+    .replace(/\{1\}/g, durationValueText)
+    .replace(/\{0\}/g, primaryValueText)
+    .replace(/\s+/g, " ")
+    .trim();
+  return {
+    label: resolvedDescription || fallbackLabel,
+    languageTag: getBandoriServerLanguageTag(descriptionSelection.server),
+  };
+}
+
 export function normalizeBandoriSkillLabel(
   skill: BandoriSkillLabelMaster | undefined,
   skillLevel: unknown,
   fallbackLevel = 1,
   preferredServer: BandoriServer = DEFAULT_BANDORI_PREFERRED_SERVER,
   contextServer?: BandoriServer | null,
+  fallbackLabel = "",
 ): string {
-  const description = pickRegionalText(skill?.description, preferredServer, contextServer)
-    || pickRegionalText(skill?.simpleDescription, preferredServer, contextServer);
-  const duration = getSkillDurationByLevel(skill, skillLevel, fallbackLevel);
-  const onceEffectValue = getSkillOnceEffectValueByLevel(skill, skillLevel, fallbackLevel);
-  const durationText = duration !== null ? `${formatSkillNumber(duration)}秒` : "";
-  const onceEffectText = onceEffectValue !== null ? formatSkillNumber(onceEffectValue) : "";
-  const usesSecondaryPlaceholder = description.includes("{1}");
-  const primaryText = usesSecondaryPlaceholder ? onceEffectText : durationText;
-  const resolvedDescription = description
-    .replace(/\{1\}秒/g, durationText)
-    .replace(/\{1\}/g, durationText)
-    .replace(/\{0\}秒/g, usesSecondaryPlaceholder && primaryText ? `${primaryText}秒` : primaryText)
-    .replace(/\{0\}/g, primaryText)
-    .replace(/\s+/g, " ")
-    .trim();
-  return resolvedDescription || "未知技能";
+  return resolveBandoriSkillLabel(
+    skill,
+    skillLevel,
+    fallbackLevel,
+    preferredServer,
+    contextServer,
+    fallbackLabel,
+  ).label;
 }

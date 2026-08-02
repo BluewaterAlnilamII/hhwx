@@ -60,14 +60,14 @@ test("manual profile RPC validates and stores the requested gameplay server", ()
   );
 });
 
-test("card workbench labels the gameplay server instead of the asset region", () => {
+test("profile card collection labels the gameplay server instead of the asset region", () => {
   assert.equal(
-    zhMessages.gameProfiles.cards.summary,
-    "共 {total} 张卡牌 · 匹配 {matched} 张 · 已加载 {loaded} 张 · 服务器 {server}",
+    zhMessages.gameProfiles.cards.collectionSummary,
+    "共 {total} 张／匹配 {matched} 张／服务器 {server}",
   );
   assert.equal(
-    enMessages.gameProfiles.cards.summary,
-    "{total} cards · {matched} matched · {loaded} loaded · Server {server}",
+    enMessages.gameProfiles.cards.collectionSummary,
+    "{total} total / {matched} matched / Server {server}",
   );
   assert.match(
     cardPageSource,

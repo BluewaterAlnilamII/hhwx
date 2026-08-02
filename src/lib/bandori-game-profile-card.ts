@@ -1,4 +1,5 @@
 import { type AppLocale } from "@/i18n/routing";
+import { type BandoriCardMasterRecord } from "@/lib/bandori-cards-api-client";
 import { hasTrainedCardArt } from "@/lib/bandori-card-training";
 import { pickBestdoriLocalizedName } from "@/lib/bestdori-regional-names";
 import {
@@ -7,25 +8,7 @@ import {
 } from "@/lib/bandori-server";
 import { type UserGameProfileCardRecord } from "@/lib/user-game-profile-payload";
 
-export type GameProfileCardAttribute = "powerful" | "pure" | "cool" | "happy";
-
-export type GameProfileCardMetadata = {
-  characterId?: number;
-  rarity?: number;
-  attribute?: GameProfileCardAttribute | string;
-  levelLimit?: number;
-  resourceSetName?: string;
-  prefix?: Array<string | null>;
-  releasedAt?: Array<string | number | null>;
-  type?: string;
-  displayName?: string | null;
-  hasTrainedArt?: boolean;
-  stat?: {
-    training?: {
-      levelLimit?: number;
-    };
-  } & Record<string, unknown>;
-};
+export type GameProfileCardMetadata = BandoriCardMasterRecord;
 
 export function pickGameProfileCardName(
   cardId: number,
@@ -49,16 +32,17 @@ export function getGameProfileCardLevelLimit(
   return Math.max(trainedLimit, card.level, 1);
 }
 
-export function createMaxGameProfileCard(
+function createGameProfileCard(
   cardId: number,
-  metadata?: GameProfileCardMetadata,
+  metadata: GameProfileCardMetadata | undefined,
+  values: Pick<UserGameProfileCardRecord, "masterRank" | "skillLevel">,
 ): UserGameProfileCardRecord {
   const hasTraining = metadata?.hasTrainedArt ?? hasTrainedCardArt(metadata);
   const card: UserGameProfileCardRecord = {
     cardId,
     level: 1,
-    masterRank: 4,
-    skillLevel: 5,
+    masterRank: values.masterRank,
+    skillLevel: values.skillLevel,
     episodeCount: 2,
     isTrained: hasTraining,
     hasTrainedArt: hasTraining,
@@ -71,9 +55,43 @@ export function createMaxGameProfileCard(
   };
 }
 
+export function createMaxGameProfileCard(
+  cardId: number,
+  metadata?: GameProfileCardMetadata,
+): UserGameProfileCardRecord {
+  return createGameProfileCard(cardId, metadata, {
+    masterRank: 4,
+    skillLevel: 5,
+  });
+}
+
+export function createDefaultOwnedGameProfileCard(
+  cardId: number,
+  metadata?: GameProfileCardMetadata,
+): UserGameProfileCardRecord {
+  return createGameProfileCard(cardId, metadata, {
+    masterRank: 0,
+    skillLevel: 1,
+  });
+}
+
 export function hasGameProfileCardChanged(
   left: UserGameProfileCardRecord,
   right: UserGameProfileCardRecord,
 ): boolean {
-  return JSON.stringify(left) !== JSON.stringify(right);
+  return !areGameProfileCardsEqual(left, right);
+}
+
+export function areGameProfileCardsEqual(
+  left: UserGameProfileCardRecord,
+  right: UserGameProfileCardRecord,
+): boolean {
+  return left.cardId === right.cardId
+    && left.level === right.level
+    && left.masterRank === right.masterRank
+    && left.skillLevel === right.skillLevel
+    && left.episodeCount === right.episodeCount
+    && left.isTrained === right.isTrained
+    && left.hasTrainedArt === right.hasTrainedArt
+    && left.isExcluded === right.isExcluded;
 }

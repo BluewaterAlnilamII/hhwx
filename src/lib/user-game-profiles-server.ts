@@ -31,6 +31,7 @@ import {
   getGameProfileCharacterMissionBonuses,
   getGameProfileCharacterPotentials,
   importBestdoriGameProfilePayload,
+  replaceGameProfileCards,
   type CompressedGameProfilePayload,
   type UserGameProfileCardRecord,
   type UserGameProfileItemRecord,
@@ -713,15 +714,6 @@ function normalizeMissionBonusRows(records: unknown): UserGameProfileMissionBonu
     .sort((left, right) => left.characterId - right.characterId || left.bonusType.localeCompare(right.bonusType));
 }
 
-function buildPayloadWithCards(payload: UserGameProfilePayload, cards: UserGameProfileCardRecord[]): UserGameProfilePayload {
-  const normalizedProfile = decodeBestdoriProfile(payload.bestdoriProfile);
-  normalizedProfile.cards = cards;
-  return {
-    ...payload,
-    bestdoriProfile: encodeBestdoriProfile(normalizedProfile),
-  };
-}
-
 function buildPayloadWithItems(
   payload: UserGameProfilePayload,
   items: {
@@ -1069,7 +1061,7 @@ export async function updateGameProfileCards(
     profileId,
     "cards",
     normalizedHash,
-    (payload) => buildPayloadWithCards(payload, normalizedCards),
+    (payload) => replaceGameProfileCards(payload, normalizedCards),
   );
 }
 

@@ -15,7 +15,8 @@ test("card image consumers use index descriptors and never substitute full art",
     assert.doesNotMatch(source, /buildBandoriCardThumbnailPublicUrl|buildBandoriCardResourceSetPublicUrl/u);
     assert.doesNotMatch(source, /lookupBandoriCardImage\([^)]*"full"/su);
   }
-  assert.match(picker, /useBandoriCardsAssetIndex\(\)[\s\S]*useCachedFetch\(/u);
+  assert.match(picker, /useBandoriCardsAssetIndex\(\)[\s\S]*useBandoriCharactersMaster/u);
+  assert.match(picker, /useBandoriSkillsMaster/u);
 });
 
 test("avatar, comments, profiles, picker, and team builder stay on the shared index-backed renderers", async () => {
@@ -26,7 +27,7 @@ test("avatar, comments, profiles, picker, and team builder stay on the shared in
     "src/app/[locale]/bandori/game-profiles/[profileId]/cards/page.tsx",
     "src/components/bandori/GameProfileCardEditorDialog.tsx",
     "src/components/bandori/card-picker/BandoriCardThumbnailTile.tsx",
-    "src/app/[locale]/bandori/teambuilder/TeamBuilderPreferenceCardTile.tsx",
+    "src/components/bandori/BandoriCardTile.tsx",
     "src/app/[locale]/bandori/teambuilder/page.tsx",
   ];
   const sources = await Promise.all(consumerPaths.map(readSource));
@@ -34,7 +35,7 @@ test("avatar, comments, profiles, picker, and team builder stay on the shared in
   for (const source of sources) {
     assert.match(
       source,
-      /AccountCardAvatar|BandoriCardThumbnail|SharedBandoriCardThumbnail|useBandoriCardsAssetIndex/u,
+      /AccountCardAvatar|BandoriCardThumbnail|SharedBandoriCardThumbnail|BandoriCardTile|useBandoriCardsAssetIndex/u,
     );
     assert.doesNotMatch(
       source,

@@ -11,6 +11,7 @@ import {
 import BandoriEventBonusPanel from "@/components/bandori/BandoriEventBonusPanel";
 import { useCachedFetch } from "@/hooks/useCachedFetch";
 import { useBandoriCardsMaster } from "@/hooks/useBandoriCardsMaster";
+import { useBandoriSkillsMaster } from "@/hooks/useBandoriSkillsMaster";
 import { useCommentStampCatalog } from "@/hooks/useCommentStamps";
 import { useBandoriMusicAssetIndex } from "@/hooks/useBandoriPublicAssetIndex";
 import { parseApiSuccessData } from "@/lib/api-contracts";
@@ -37,7 +38,7 @@ import { getBandoriStampCatalogItemsForRegion } from "@/lib/bandori-stamp-assets
 import type { BandoriEventBonus } from "@/lib/bandori-team-calculator";
 import BandoriCardTile from "@/components/bandori/BandoriCardTile";
 import {
-  normalizeBandoriSkillLabel,
+  resolveBandoriSkillLabel,
   type BandoriSkillLabelMaster,
 } from "@/lib/bandori-skill-label";
 import { cn } from "@/lib/utils";
@@ -90,13 +91,6 @@ function parseCharacterResponse(raw: unknown): Record<string, CharacterRecord | 
   if (!isRecord(data)) throw new Error("Bandori character API returned an invalid dataset");
   const payload = isRecord(data.payload) ? data.payload : data;
   return payload as Record<string, CharacterRecord | undefined>;
-}
-
-function parseSkillResponse(raw: unknown): Record<string, BandoriSkillLabelMaster | undefined> {
-  const data = parseApiSuccessData<unknown>(raw);
-  if (!isRecord(data)) throw new Error("Bandori skill API returned an invalid dataset");
-  const payload = isRecord(data.payload) ? data.payload : data;
-  return payload as Record<string, BandoriSkillLabelMaster | undefined>;
 }
 
 function parseBandResponse(raw: unknown): Record<string, BandoriBandNameRecord | undefined> {
@@ -184,10 +178,13 @@ function EventCardTile({
   server: BandoriServer;
   cards: ReturnType<typeof useBandoriCardsMaster>["data"];
   characters: Record<string, CharacterRecord | undefined>;
-  skills: Record<string, BandoriSkillLabelMaster | undefined>;
+  skills: Record<string, BandoriSkillLabelMaster | null | undefined>;
 }) {
+  const cardPickerT = useTranslations("bandori.cardPicker");
+  const termsT = useTranslations("bandori.terms");
   const card = cards?.[String(cardId)];
-  const title = pickBandoriRegionalText(card?.prefix, server, server) ?? `卡牌 ${cardId}`;
+  const cardFallback = cardPickerT("cardFallback", { cardId });
+  const title = pickBandoriRegionalText(card?.prefix, server, server) ?? cardFallback;
   const rarity = Math.min(5, Math.max(1, Math.trunc(Number(card?.rarity) || 1)));
   const trainedLevelFallback = rarity >= 4 ? 60 : rarity >= 3 ? 50 : rarity >= 2 ? 30 : 20;
   const baseLevelLimit = Math.trunc(Number(card?.levelLimit) || 0);
@@ -199,15 +196,16 @@ function EventCardTile({
   const character = Number.isFinite(characterId) ? characters[String(Math.trunc(characterId))] : undefined;
   const characterName = [character?.nickname, character?.characterName, character?.firstName]
     .map((value) => typeof value === "string" ? value.trim() : pickBandoriRegionalText(value, server, server))
-    .find((value): value is string => Boolean(value)) ?? `Card #${cardId}`;
+    .find((value): value is string => Boolean(value)) ?? cardFallback;
   const bandId = Number(character?.bandId);
   const skillId = Number(card?.skillId);
-  const skillEffectLabel = normalizeBandoriSkillLabel(
-    Number.isFinite(skillId) && skillId > 0 ? skills[String(Math.trunc(skillId))] : undefined,
+  const skillEffect = resolveBandoriSkillLabel(
+    Number.isFinite(skillId) && skillId > 0 ? skills[String(Math.trunc(skillId))] ?? undefined : undefined,
     5,
     5,
     server,
     server,
+    termsT("unknownSkill"),
   );
   return (
     <BandoriCardTile
@@ -229,7 +227,8 @@ function EventCardTile({
       }}
       cardName={title}
       characterName={characterName}
-      skillEffectLabel={skillEffectLabel}
+      skillEffectLabel={skillEffect.label}
+      skillEffectLanguageTag={skillEffect.languageTag}
       showPower={false}
     />
   );
@@ -293,12 +292,7 @@ export default function EventInfoPanel({
     parseCharacterResponse,
     SESSION_CLIENT_CACHE_POLICY,
   );
-  const { data: skills } = useCachedFetch<Record<string, BandoriSkillLabelMaster | undefined>>(
-    model ? "bandori-master-skills" : null,
-    model ? "/api/bandori/master/skills" : null,
-    parseSkillResponse,
-    SESSION_CLIENT_CACHE_POLICY,
-  );
+  const { data: skills } = useBandoriSkillsMaster(Boolean(model));
   const { data: bands } = useCachedFetch<Record<string, BandoriBandNameRecord | undefined>>(
     eventBandId !== null ? "bandori-master-bands-all" : null,
     eventBandId !== null ? "/api/bandori/master/bands/all" : null,

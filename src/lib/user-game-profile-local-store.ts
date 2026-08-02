@@ -4,7 +4,9 @@ import {
   decodeCompressedGameProfilePayload,
   encodeCompressedGameProfilePayload,
   getGameProfileCardCount,
+  replaceGameProfileCards,
   type CompressedGameProfilePayload,
+  type UserGameProfileCardRecord,
   type UserGameProfilePayload,
 } from "@/lib/user-game-profile-payload";
 
@@ -25,6 +27,13 @@ export type LocalGameProfileSummary = {
   updatedAt: string;
   location: "local";
 };
+
+export class LocalGameProfileNotFoundError extends Error {
+  constructor(readonly profileId: string) {
+    super(`Local game profile ${profileId} does not exist`);
+    this.name = "LocalGameProfileNotFoundError";
+  }
+}
 
 type LocalGameProfileRecord = LocalGameProfileSummary & CompressedGameProfilePayload;
 
@@ -126,18 +135,11 @@ export async function saveLocalGameProfilePayload(
   return record;
 }
 
-export async function updateLocalGameProfilePayload(
-  profileId: string,
+async function writeUpdatedLocalGameProfile(
+  current: LocalGameProfileRecord,
   payload: UserGameProfilePayload,
-  options: {
-    cloudProfileId?: string | null;
-  } = {},
+  options: { cloudProfileId?: string | null } = {},
 ): Promise<LocalGameProfileSummary> {
-  const current = await withStore<LocalGameProfileRecord | undefined>("readonly", (store) => store.get(profileId));
-  if (!current) {
-    throw new Error("本地档案不存在");
-  }
-
   const compressed = await encodeCompressedGameProfilePayload(payload);
   const record: LocalGameProfileRecord = {
     ...current,
@@ -150,6 +152,35 @@ export async function updateLocalGameProfilePayload(
   };
   await withStore("readwrite", (store) => store.put(record));
   return record;
+}
+
+export async function updateLocalGameProfilePayload(
+  profileId: string,
+  payload: UserGameProfilePayload,
+  options: {
+    cloudProfileId?: string | null;
+  } = {},
+): Promise<LocalGameProfileSummary> {
+  const current = await withStore<LocalGameProfileRecord | undefined>("readonly", (store) => store.get(profileId));
+  if (!current) {
+    throw new Error("本地档案不存在");
+  }
+
+  return writeUpdatedLocalGameProfile(current, payload, options);
+}
+
+export async function updateLocalGameProfileCards(
+  profileId: string,
+  cards: UserGameProfileCardRecord[],
+): Promise<UserGameProfilePayload> {
+  const current = await withStore<LocalGameProfileRecord | undefined>("readonly", (store) => store.get(profileId));
+  if (!current) {
+    throw new LocalGameProfileNotFoundError(profileId);
+  }
+  const currentPayload = await decodeCompressedGameProfilePayload(current);
+  const nextPayload = replaceGameProfileCards(currentPayload, cards);
+  await writeUpdatedLocalGameProfile(current, nextPayload);
+  return nextPayload;
 }
 
 export async function deleteLocalGameProfile(profileId: string): Promise<void> {

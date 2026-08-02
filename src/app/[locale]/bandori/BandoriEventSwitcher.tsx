@@ -5,16 +5,9 @@ import { useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import * as Dialog from "@radix-ui/react-dialog";
 import { History, Search, X } from "lucide-react";
+import BandoriServerIcon from "@/components/bandori/BandoriServerIcon";
 import { cn } from "@/lib/utils";
 import { BANDORI_SERVERS, getBandoriServerCode, type BandoriServer } from "@/lib/bandori-server";
-
-// Artwork mirrored from https://bestdori.com/res/icon/{jp,en,tw,cn}.svg.
-const BANDORI_SERVER_ICON_PATHS = [
-  "/res/server-icons/jp.svg",
-  "/res/server-icons/en.svg",
-  "/res/server-icons/tw.svg",
-  "/res/server-icons/cn.svg",
-] as const;
 
 const WIDE_EVENT_TITLE_CHARACTER_PATTERN = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Extended_Pictographic}]/u;
 
@@ -130,13 +123,10 @@ export default function BandoriEventSwitcher({
                         : "hover:bg-slate-50 dark:hover:bg-slate-800",
                     )}
                   >
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={BANDORI_SERVER_ICON_PATHS[option]}
-                      alt=""
-                      aria-hidden="true"
-                      width={24}
-                      height={24}
+                    <BandoriServerIcon
+                      server={option}
+                      size={24}
+                      isDecorative
                       className={cn(
                         "h-6 w-6 rounded-full object-contain shadow-[0_1px_3px_rgba(15,23,42,0.18)] transition-transform group-hover:scale-105",
                         active && "scale-105 ring-2 ring-sky-400 ring-offset-1 ring-offset-sky-50 dark:ring-sky-300 dark:ring-offset-slate-900",

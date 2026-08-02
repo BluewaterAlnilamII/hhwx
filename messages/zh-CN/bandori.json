@@ -15,6 +15,7 @@
     "profile": "档案",
     "gameUid": "游戏 UID",
     "unknown": "未知",
+    "unknownSkill": "未知技能",
     "none": "无",
     "notSet": "未定",
     "seconds": "秒",
@@ -48,8 +49,7 @@
     "actions": {
       "close": "关闭编辑器",
       "cancel": "取消",
-      "save": "保存",
-      "saving": "保存中...",
+      "applying": "应用中...",
       "delete": "删除",
       "add": "添加"
     }
@@ -69,20 +69,47 @@
     "endLabel": "结束:"
   },
   "cardPicker": {
-    "searchPlaceholder": "搜索卡牌名称、角色名或卡牌 ID",
     "resultCount": "{count} 张",
+    "cardFallback": "卡牌 {cardId}",
     "currentSelection": "当前选择：",
+    "art": {
+      "normal": "特训前",
+      "afterTraining": "特训后"
+    },
+    "actions": {
+      "showMore": "显示更多 {count} 张",
+      "showAll": "显示全部"
+    },
+    "states": {
+      "loadingCards": "正在读取卡牌",
+      "empty": "没有符合条件的卡牌"
+    }
+  },
+  "cardFilters": {
+    "searchPlaceholder": "搜索卡牌名称、角色名或卡牌 ID",
     "rarityAlt": "{rarity} 星",
+    "bandFallback": "乐队 {bandId}",
+    "characterFallback": "角色 {characterId}",
     "attributes": {
-      "powerful": "强力",
-      "cool": "酷",
-      "happy": "快乐",
-      "pure": "纯粹"
+      "powerful": "Powerful",
+      "cool": "Cool",
+      "happy": "Happy",
+      "pure": "Pure"
+    },
+    "rows": {
+      "band": "乐队",
+      "attribute": "属性",
+      "rarity": "稀有度",
+      "character": "角色",
+      "sort": "排序"
     },
     "sort": {
+      "power": "综合力",
+      "id": "卡牌 ID",
       "release_jp": "发布日期（JP）",
-      "release_cn": "发布日期（CN）",
-      "id": "卡牌 ID"
+      "release_en": "发布日期（EN）",
+      "release_tw": "发布日期（TW）",
+      "release_cn": "发布日期（CN）"
     },
     "sortDirection": {
       "desc": "倒序",
@@ -92,28 +119,11 @@
       "descAria": "排序方向：倒序",
       "ascAria": "排序方向：正序"
     },
-    "art": {
-      "normal": "特训前",
-      "afterTraining": "特训后"
-    },
-    "filters": {
-      "band": "乐队",
-      "attribute": "属性",
-      "rarity": "稀有度",
-      "character": "角色",
-      "sort": "排序"
-    },
     "actions": {
       "all": "全部",
-      "selectAll": "选择全部",
-      "clearAll": "取消全部",
-      "clear": "清空",
-      "showMore": "显示更多 {count} 张",
-      "showAll": "显示全部"
-    },
-    "states": {
-      "loadingCards": "正在读取卡牌",
-      "empty": "没有符合条件的卡牌"
+      "selectAllGroup": "选择全部{group}",
+      "clearAllGroup": "取消全部{group}",
+      "clear": "清空"
     }
   },
   "gameProfiles": {
@@ -229,23 +239,50 @@
       }
     },
     "cards": {
+      "heading": "档案卡牌",
+      "collectionSummary": "共 {total} 张／匹配 {matched} 张／服务器 {server}",
+      "matchedCount": "匹配 {count} 张",
+      "pendingChanges": "未保存：新增 {added} · 修改 {updated} · 删除 {removed}",
+      "picker": {
+        "title": "添加卡牌",
+        "close": "关闭卡牌选择器",
+        "loading": "正在载入卡牌选择器"
+      },
+      "draftEditor": {
+        "addTitle": "添加卡牌",
+        "editTitle": "编辑卡牌",
+        "noChangesHint": "暂无修改"
+      },
+      "draftActions": {
+        "addCard": "添加卡牌",
+        "openFilters": "展开筛选",
+        "closeFilters": "收起筛选",
+        "discardChanges": "放弃修改",
+        "saveAll": "保存全部修改",
+        "saving": "保存中",
+        "reloadLatest": "重新载入最新档案",
+        "add": "添加",
+        "apply": "应用修改",
+        "delete": "删除"
+      },
+      "collectionStates": {
+        "readOnly": "自动同步档案由游戏数据生成，此处仅供查看",
+        "updatingCards": "正在更新卡牌列表"
+      },
+      "draftMessages": {
+        "savedAll": "全部卡牌修改已保存"
+      },
+      "draftConfirm": {
+        "discardChanges": "尚有未保存的卡牌修改，确定放弃吗？"
+      },
+      "draftErrors": {
+        "loadMasterFailed": "读取卡牌基础资料失败"
+      },
       "title": "档案卡牌",
       "description": "查看、筛选并编辑当前档案的卡牌资料。",
       "back": "返回游戏档案",
       "loadingCards": "正在读取卡牌...",
-      "workbenchTitle": "卡牌资料工作台",
-      "summary": "共 {total} 张卡牌 · 匹配 {matched} 张 · 已加载 {loaded} 张 · 服务器 {server}",
-      "manageProfiles": "档案管理",
-      "searchPlaceholder": "搜索卡牌 ID、名称、角色",
-      "filters": {
-        "allAttributes": "全部属性",
-        "allRarities": "全部星级",
-        "allTraining": "全部训练",
-        "trained": "已特训",
-        "untrained": "未特训"
-      },
       "actions": {
-        "reset": "重置",
         "showMore": "显示更多 {count} 张",
         "showAll": "显示全部"
       },
@@ -254,13 +291,7 @@
       },
       "labels": {
         "unknownCharacter": "未知角色",
-        "characterFallback": "角色 {characterId}",
-        "cardFallback": "卡牌 {cardId}",
         "editCard": "编辑 {cardName}"
-      },
-      "messages": {
-        "saved": "卡牌资料已保存",
-        "removed": "卡牌已移除"
       },
       "errors": {
         "notSignedIn": "请先登录",
@@ -269,10 +300,8 @@
         "missingVersion": "档案版本缺失，请重新载入后再保存",
         "saveFailed": "保存失败（HTTP {status}）",
         "invalidSaveResponse": "保存结果格式无效",
-        "loadCardsFailed": "读取卡牌资料失败（HTTP {status}）",
-        "loadCharactersFailed": "读取角色资料失败（HTTP {status}）",
-        "loadSkillsFailed": "读取技能资料失败（HTTP {status}）",
         "loadFailed": "读取卡牌失败",
+        "localProfileNotFound": "本地档案已不存在",
         "saveCardsFailed": "保存卡牌失败"
       }
     },
@@ -533,7 +562,6 @@
     },
     "messages": {
       "duplicateCardsSkipped": "{count} 张重复卡牌已跳过添加",
-      "addCurrentCardsFailed": "添加当期卡牌失败",
       "workerStartFailed": "计算线程启动失败",
       "memoryWatchdog": "已触发浏览器内存保护，计算已停止（当前约 {usedMiB} MiB，保护上限 {effectiveLimitMiB} MiB{heapLimitLabel}，来源 {source}）。",
       "heapLimit": "，浏览器 heap 上限 {limitMiB} MiB",
@@ -589,7 +617,6 @@
       "temporaryCards": "临时卡牌",
       "addTemporary": "添加临时卡牌",
       "addCurrentEventCards": "添加当期卡牌",
-      "adding": "添加中",
       "clearTemporary": "清除所有临时卡牌",
       "editTemporaryCard": "编辑临时卡牌",
       "emptyTemporary": "当前档案没有临时卡牌",
@@ -610,49 +637,11 @@
       "emptyFiltered": "没有符合筛选条件的卡牌",
       "profileCardsNotLoaded": "档案卡牌尚未加载"
     },
-    "excludedFilter": {
-      "searchPlaceholder": "搜索卡牌名称、角色名或卡牌 ID",
-      "rarityAlt": "{rarity} 星",
-      "attributes": {
-        "powerful": "强力",
-        "cool": "酷",
-        "happy": "快乐",
-        "pure": "纯粹"
-      },
-      "rows": {
-        "band": "乐队",
-        "attribute": "属性",
-        "rarity": "稀有度",
-        "character": "角色",
-        "sort": "排序"
-      },
-      "sort": {
-        "power": "综合力",
-        "release_jp": "发布日期（JP）",
-        "release_cn": "发布日期（CN）",
-        "id": "卡牌 ID"
-      },
-      "sortDirection": {
-        "desc": "倒序",
-        "asc": "正序",
-        "descTitle": "当前为倒序，点击切换为正序",
-        "ascTitle": "当前为正序，点击切换为倒序",
-        "descAria": "排序方向：倒序",
-        "ascAria": "排序方向：正序"
-      },
-      "actions": {
-        "all": "全部",
-        "selectAll": "选择全部",
-        "clearAll": "取消全部",
-        "clear": "清空"
-      }
-    },
     "temporaryCards": {
       "pickerTitle": "添加临时卡牌",
       "close": "关闭",
-      "preparing": "正在准备卡牌参数",
       "editorTitle": "编辑临时卡牌",
-      "save": "保存",
+      "apply": "应用修改",
       "add": "添加",
       "delete": "删除"
     }

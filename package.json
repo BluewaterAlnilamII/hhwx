@@ -16,7 +16,7 @@
     "compare:bandori-tracker-history": "tsx scripts/compare-bandori-tracker-history.mjs",
     "start": "next start",
     "lint": "eslint",
-    "test:bandori-cards": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test tests/bandori-cards-api-contract.test.mjs && node --import tsx --test tests/bandori-card-training.test.mjs tests/bandori-snapshot-api-server.test.mjs tests/bandori-cards-api-consumers.test.mjs && node --import tsx scripts/test-bandori-cards-api-reader.mjs",
+    "test:bandori-cards": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test tests/bandori-cards-api-contract.test.mjs && node --import tsx --test tests/bandori-card-training.test.mjs tests/bandori-profile-card-collection.test.mjs tests/bandori-snapshot-api-server.test.mjs tests/bandori-cards-api-consumers.test.mjs && node --import tsx scripts/test-bandori-cards-api-reader.mjs",
     "test:bandori-events": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test tests/bandori-events-api-contract.test.mjs && node --import tsx --test tests/bandori-events-consumers.test.mjs && node scripts/test-bandori-events-api-integration.mjs",
     "test:bandori-stamps": "node --import tsx --test tests/bandori-stamps-api-contract.test.mjs && node --import tsx scripts/test-bandori-stamps-api-reader.mjs",
     "test:bandori-music": "node --import tsx --test tests/bandori-music-api-contract.test.mjs tests/bandori-music-api-consumers.test.mjs && node --import tsx scripts/test-bandori-music-api-reader.mjs",

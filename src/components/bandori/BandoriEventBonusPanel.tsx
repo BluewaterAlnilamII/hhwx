@@ -6,16 +6,14 @@ import BandoriCardTile from "@/components/bandori/BandoriCardTile";
 import {
   buildBandoriResIconPublicUrl,
 } from "@/lib/bandori-asset-proxy";
+import { isBandoriCardAttribute, type BandoriCardAttribute } from "@/lib/bandori-card-filter";
 import {
   pickBandoriRegionalText,
   type BandoriServer,
 } from "@/lib/bandori-server";
-import type {
-  BandoriCardAttribute,
-  BandoriEventBonus,
-} from "@/lib/bandori-team-calculator";
+import type { BandoriEventBonus } from "@/lib/bandori-team-calculator";
 import {
-  normalizeBandoriSkillLabel,
+  resolveBandoriSkillLabel,
   type BandoriSkillLabelMaster,
 } from "@/lib/bandori-skill-label";
 import { cn } from "@/lib/utils";
@@ -47,7 +45,7 @@ type BandoriEventBonusPanelProps = {
   eventTypeLabel: string;
   eventBonus: BandoriEventBonus | null;
   characters: Record<string, BandoriEventBonusCharacter | undefined>;
-  skills: Record<string, BandoriSkillLabelMaster | undefined>;
+  skills: Record<string, BandoriSkillLabelMaster | null | undefined>;
   cardMetadata: Record<string, BandoriEventBonusCardMetadata | null | undefined>;
   preferredServer: BandoriServer;
   loading?: boolean;
@@ -78,10 +76,6 @@ function toFiniteNumber(value: unknown): number | null {
 function toInteger(value: unknown): number | null {
   const numeric = toFiniteNumber(value);
   return numeric === null ? null : Math.trunc(numeric);
-}
-
-function isKnownAttribute(value: unknown): value is BandoriCardAttribute {
-  return typeof value === "string" && value in ATTRIBUTE_SWATCH_CLASSES;
 }
 
 function formatPercent(value: number | null | undefined): string {
@@ -119,7 +113,7 @@ function pickCharacterDisplayName(
 
 function readAttributeBonusItems(eventBonus: BandoriEventBonus | null) {
   return (eventBonus?.attributes ?? []).flatMap((item) => {
-    if (!isRecord(item) || !isKnownAttribute(item.attribute)) return [];
+    if (!isRecord(item) || !isBandoriCardAttribute(item.attribute)) return [];
     const percent = toFiniteNumber(item.percent);
     return percent === null ? [] : [{ attribute: item.attribute, percent }];
   });
@@ -203,7 +197,7 @@ function BonusChip({
 }
 
 function AttributeIcon({ attribute }: { attribute: BandoriCardAttribute }) {
-  const t = useTranslations("bandori.teamBuilder.excludedFilter.attributes");
+  const t = useTranslations("bandori.cardFilters.attributes");
   return (
     <span
       className={cn(
@@ -325,27 +319,31 @@ function EventBonusCard({
   percent: number;
   bandId: number | null;
   characters: Record<string, BandoriEventBonusCharacter | undefined>;
-  skills: Record<string, BandoriSkillLabelMaster | undefined>;
+  skills: Record<string, BandoriSkillLabelMaster | null | undefined>;
   preferredServer: BandoriServer;
 }) {
+  const cardPickerT = useTranslations("bandori.cardPicker");
+  const termsT = useTranslations("bandori.terms");
   const rarity = Math.min(5, Math.max(1, Math.trunc(Number(metadata?.rarity) || 1)));
   const trainedLevelFallback = rarity >= 4 ? 60 : rarity >= 3 ? 50 : rarity >= 2 ? 30 : 20;
   const baseLevelLimit = Math.trunc(Number(metadata?.levelLimit) || 0);
   const trainingLevelLimit = Math.trunc(Number(metadata?.stat?.training?.levelLimit) || 0);
   const level = Math.max(1, baseLevelLimit + trainingLevelLimit || trainedLevelFallback);
-  const attribute = isKnownAttribute(metadata?.attribute) ? metadata.attribute : "powerful";
-  const cardName = pickBandoriRegionalText(metadata?.prefix, preferredServer, preferredServer) ?? `Card #${cardId}`;
+  const attribute = isBandoriCardAttribute(metadata?.attribute) ? metadata.attribute : "powerful";
+  const cardFallback = cardPickerT("cardFallback", { cardId });
+  const cardName = pickBandoriRegionalText(metadata?.prefix, preferredServer, preferredServer) ?? cardFallback;
   const characterId = toInteger(metadata?.characterId);
   const characterName = characterId === null
-    ? `Card #${cardId}`
+    ? cardFallback
     : pickCharacterDisplayName(characters[String(characterId)], preferredServer, characterId);
   const skillId = toInteger(metadata?.skillId);
-  const skillEffectLabel = normalizeBandoriSkillLabel(
-    skillId === null ? undefined : skills[String(skillId)],
+  const skillEffect = resolveBandoriSkillLabel(
+    skillId === null ? undefined : skills[String(skillId)] ?? undefined,
     5,
     5,
     preferredServer,
     preferredServer,
+    termsT("unknownSkill"),
   );
   return (
     <BandoriCardTile
@@ -361,7 +359,8 @@ function EventBonusCard({
       metadata={{ ...metadata, rarity, attribute }}
       cardName={cardName}
       characterName={characterName}
-      skillEffectLabel={skillEffectLabel}
+      skillEffectLabel={skillEffect.label}
+      skillEffectLanguageTag={skillEffect.languageTag}
       badge={formatPercent(percent)}
       showPower={false}
     />

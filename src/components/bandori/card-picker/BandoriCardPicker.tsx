@@ -1,50 +1,47 @@
 "use client";
 
-import { useDeferredValue, useEffect, useMemo, useState, type RefObject } from "react";
-import { ArrowDownWideNarrow, ArrowUpNarrowWide, Filter, Loader2, RotateCcw, Search, X } from "lucide-react";
-import { useLocale, useTranslations } from "next-intl";
-import { type AppLocale } from "@/i18n/routing";
+import { useDeferredValue, useMemo, useState, type RefObject } from "react";
+import { Loader2, RotateCcw } from "lucide-react";
+import { useTranslations } from "next-intl";
+import BandoriCardFilterControls from "@/components/bandori/BandoriCardFilterControls";
+import { useBandoriCharactersMaster } from "@/hooks/useBandoriCharactersMaster";
 import {
   useBandoriCardsMaster,
   type BandoriCardsMissingCardFallback,
 } from "@/hooks/useBandoriCardsMaster";
-import { useCachedFetch } from "@/hooks/useCachedFetch";
+import { useBandoriSkillsMaster } from "@/hooks/useBandoriSkillsMaster";
 import { useBandoriCardsAssetIndex } from "@/hooks/useBandoriPublicAssetIndex";
 import { useBandoriPreferredServer } from "@/store/useBandoriPreferencesStore";
-import {
-  buildBandoriResIconPublicUrl,
-} from "@/lib/bandori-asset-proxy";
-import { LONG_CLIENT_CACHE_POLICY } from "@/lib/api-cache";
-import { BANDORI_CHARACTER_GROUPS, compareBandoriCharacterIds } from "@/lib/bandori-character-groups";
 import { type BandoriCardServer } from "@/lib/bandori-card-server-extensions";
+import { type BandoriCharacterMaster, type BandoriSkillMaster } from "@/lib/bandori-card-master";
+import { type BandoriCardsMasterMap } from "@/lib/bandori-cards-api-client";
 import {
-  normalizeBandoriSkillLabel,
-  type BandoriSkillLabelMaster,
+  resolveBandoriSkillLabel,
 } from "@/lib/bandori-skill-label";
+import type { BandoriServerLanguageTag } from "@/lib/bandori-server";
+import {
+  BANDORI_CARD_ATTRIBUTES,
+  BANDORI_CARD_RARITIES,
+  buildBandoriCardFilterOptions,
+  buildBandoriCardSortValues,
+  reconcileBandoriCardFilterSelection,
+} from "@/lib/bandori-card-filter";
 import { cn } from "@/lib/utils";
 import VirtualizedBandoriCardGrid from "@/components/bandori/VirtualizedBandoriCardGrid";
-import {
-  bandoriCardCatalogTransforms,
-  buildBandoriCardCatalog,
-  filterBandoriCardCatalog,
-} from "./catalog";
+import { buildBandoriCardCatalog, filterBandoriCardCatalog } from "./catalog";
 import BandoriCardThumbnailTile from "./BandoriCardThumbnailTile";
 import type {
   BandoriCardArtVariant,
   BandoriCardAttribute,
   BandoriCardCatalogEntry,
   BandoriCardPickerFilter,
-  BandoriCardPickerSortBy,
-  BandoriCardPickerSortDirection,
   BandoriCardPickerValue,
 } from "./types";
 
-const ATTRIBUTE_VALUES: BandoriCardAttribute[] = ["powerful", "cool", "happy", "pure"];
-const RARITY_OPTIONS = [1, 2, 3, 4, 5];
-const SORT_OPTION_VALUES: BandoriCardPickerSortBy[] = ["release_jp", "release_cn", "id"];
+const ATTRIBUTE_VALUES: BandoriCardAttribute[] = [...BANDORI_CARD_ATTRIBUTES];
+const RARITY_OPTIONS = [...BANDORI_CARD_RARITIES];
 const INITIAL_VISIBLE_COUNT = 60;
 const PAGE_SIZE = 60;
-const PREFERENCES_STORAGE_KEY = "hhwx-bandori-card-picker-preferences-v1";
 
 const DEFAULT_FILTER: BandoriCardPickerFilter = {
   query: "",
@@ -52,41 +49,9 @@ const DEFAULT_FILTER: BandoriCardPickerFilter = {
   attributes: [],
   rarities: [],
   characterIds: [],
-  sortBy: "release_jp",
+  sortBy: "id",
   sortDirection: "desc",
 };
-
-type BandoriCardPickerPreferences = Omit<BandoriCardPickerFilter, "query">;
-
-function isSortBy(value: unknown): value is BandoriCardPickerSortBy {
-  return value === "release_jp" || value === "release_cn" || value === "id";
-}
-
-function isSortDirection(value: unknown): value is BandoriCardPickerSortDirection {
-  return value === "desc" || value === "asc";
-}
-
-function normalizeSelectedNumbers(value: unknown, availableValues: readonly number[]): number[] | null {
-  if (!Array.isArray(value)) {
-    return null;
-  }
-
-  const available = new Set(availableValues);
-  return Array.from(new Set(
-    value
-      .map((item) => Number(item))
-      .filter((item) => Number.isFinite(item) && available.has(item)),
-  ));
-}
-
-function normalizeSelectedAttributes(value: unknown): BandoriCardAttribute[] | null {
-  if (!Array.isArray(value)) {
-    return null;
-  }
-
-  const available = new Set(ATTRIBUTE_VALUES);
-  return Array.from(new Set(value.filter((item): item is BandoriCardAttribute => available.has(item))));
-}
 
 function buildDefaultFilter(bandIds: number[], characterIds: number[]): BandoriCardPickerFilter {
   return {
@@ -96,174 +61,6 @@ function buildDefaultFilter(bandIds: number[], characterIds: number[]): BandoriC
     rarities: RARITY_OPTIONS,
     characterIds,
   };
-}
-
-function readStoredPreferences(
-  bandIds: number[],
-  characterIds: number[],
-): BandoriCardPickerPreferences | null {
-  if (typeof window === "undefined") {
-    return null;
-  }
-
-  try {
-    const rawValue = window.localStorage.getItem(PREFERENCES_STORAGE_KEY);
-    if (!rawValue) {
-      return null;
-    }
-
-    const parsed = JSON.parse(rawValue) as Partial<BandoriCardPickerPreferences>;
-    return {
-      bandIds: normalizeSelectedNumbers(parsed.bandIds, bandIds) ?? bandIds,
-      attributes: normalizeSelectedAttributes(parsed.attributes) ?? ATTRIBUTE_VALUES,
-      rarities: normalizeSelectedNumbers(parsed.rarities, RARITY_OPTIONS) ?? RARITY_OPTIONS,
-      characterIds: normalizeSelectedNumbers(parsed.characterIds, characterIds) ?? characterIds,
-      sortBy: isSortBy(parsed.sortBy) ? parsed.sortBy : "release_jp",
-      sortDirection: isSortDirection(parsed.sortDirection) ? parsed.sortDirection : "desc",
-    };
-  } catch {
-    return null;
-  }
-}
-
-function writeStoredPreferences(preferences: BandoriCardPickerPreferences) {
-  if (typeof window === "undefined") {
-    return;
-  }
-
-  try {
-    window.localStorage.setItem(PREFERENCES_STORAGE_KEY, JSON.stringify(preferences));
-  } catch {
-    // Ignore local preference write failures; filtering still works for this session.
-  }
-}
-
-function toggleSelected<T>(values: readonly T[], value: T): T[] {
-  return values.includes(value)
-    ? values.filter((item) => item !== value)
-    : [...values, value];
-}
-
-function areAllSelected<T>(selectedValues: readonly T[], availableValues: readonly T[]): boolean {
-  return availableValues.length > 0 && availableValues.every((value) => selectedValues.includes(value));
-}
-
-function SelectionButton({
-  selected,
-  title,
-  children,
-  onClick,
-  className,
-}: {
-  selected: boolean;
-  title: string;
-  children: React.ReactNode;
-  onClick: () => void;
-  className?: string;
-}) {
-  return (
-    <button
-      type="button"
-      title={title}
-      aria-pressed={selected}
-      onClick={onClick}
-      className={cn(
-        "inline-flex h-9 min-w-9 items-center justify-center rounded-full border bg-white px-2 text-sm font-semibold text-slate-700 shadow-xs transition",
-        selected
-          ? "border-blue-500 ring-2 ring-blue-400/70"
-          : "border-slate-200 hover:border-blue-300 hover:ring-2 hover:ring-blue-100",
-        className,
-      )}
-    >
-      {children}
-    </button>
-  );
-}
-
-function ToggleAllButton({
-  selected,
-  selectAllLabel,
-  clearAllLabel,
-  allLabel,
-  onClick,
-}: {
-  selected: boolean;
-  selectAllLabel: string;
-  clearAllLabel: string;
-  allLabel: string;
-  onClick: () => void;
-}) {
-  return (
-    <SelectionButton
-      selected={selected}
-      title={selected ? clearAllLabel : selectAllLabel}
-      onClick={onClick}
-      className="min-w-13 rounded-full px-3 text-xs"
-    >
-      {allLabel}
-    </SelectionButton>
-  );
-}
-
-function FilterRow({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="grid gap-2 sm:grid-cols-[5.5rem_1fr] sm:items-start">
-      <div className="pt-2 text-sm font-medium text-slate-600">{label}</div>
-      <div className="flex min-w-0 flex-wrap items-center gap-2">{children}</div>
-    </div>
-  );
-}
-
-function RarityIcon({ rarity, alt }: { rarity: number; alt: string }) {
-  return (
-    // eslint-disable-next-line @next/next/no-img-element
-    <img
-      src={buildBandoriResIconPublicUrl(`star_${rarity}.png`)}
-      alt={alt}
-      loading="eager"
-      decoding="async"
-      className="h-6 w-6 object-contain"
-    />
-  );
-}
-
-function CharacterIcon({ characterId, label }: { characterId: number; label: string }) {
-  return (
-    // eslint-disable-next-line @next/next/no-img-element
-    <img
-      src={buildBandoriResIconPublicUrl(`chara_icon_${characterId}.png`)}
-      alt={label}
-      loading="eager"
-      decoding="async"
-      className="h-7 w-7 rounded-full object-cover"
-    />
-  );
-}
-
-function AttributeIcon({ attribute, label }: { attribute: BandoriCardAttribute; label: string }) {
-  return (
-    // eslint-disable-next-line @next/next/no-img-element
-    <img
-      src={buildBandoriResIconPublicUrl(`${attribute}.svg`)}
-      alt={label}
-      loading="eager"
-      decoding="async"
-      className="h-7 w-7 object-contain"
-    />
-  );
-}
-
-function BandIcon({ bandId, label }: { bandId: number; label: string }) {
-  return (
-    // eslint-disable-next-line @next/next/no-img-element
-    <img
-      src={buildBandoriResIconPublicUrl(`band_${bandId}.svg`)}
-      alt={label}
-      loading="eager"
-      decoding="async"
-      className="h-7 w-7 object-contain"
-    />
-  );
 }
 
 function ArtToggle({
@@ -314,23 +111,29 @@ function resolveCardTrainType(
 
 function CardGridItem({
   card,
-  selected,
+  isSelected,
+  isMuted,
   activeTrainType,
   skillEffectLabel,
+  skillEffectLanguageTag,
   onSelect,
 }: {
   card: BandoriCardCatalogEntry;
-  selected: boolean;
+  isSelected: boolean;
+  isMuted: boolean;
   activeTrainType: BandoriCardPickerValue["trainType"];
   skillEffectLabel: string;
+  skillEffectLanguageTag: BandoriServerLanguageTag;
   onSelect: () => void;
 }) {
   return (
     <BandoriCardThumbnailTile
       card={card}
-      selected={selected}
+      isSelected={isSelected}
+      isMuted={isMuted}
       trainType={activeTrainType}
       skillEffectLabel={skillEffectLabel}
+      skillEffectLanguageTag={skillEffectLanguageTag}
       onSelect={onSelect}
     />
   );
@@ -344,6 +147,10 @@ export type BandoriCardPickerProps = {
   className?: string;
   showArtToggle?: boolean;
   scrollElementRef?: RefObject<HTMLElement | null>;
+  cardMetadata?: BandoriCardsMasterMap;
+  characters?: Record<string, BandoriCharacterMaster | null | undefined>;
+  skills?: Record<string, BandoriSkillMaster | null | undefined>;
+  mutedCardIds?: ReadonlySet<number>;
 };
 
 export default function BandoriCardPicker({
@@ -354,137 +161,112 @@ export default function BandoriCardPicker({
   className,
   showArtToggle = true,
   scrollElementRef,
+  cardMetadata: providedCardMetadata,
+  characters,
+  skills,
+  mutedCardIds,
 }: BandoriCardPickerProps) {
-  const locale = useLocale() as AppLocale;
   const t = useTranslations("bandori.cardPicker");
+  const filterT = useTranslations("bandori.cardFilters");
+  const termsT = useTranslations("bandori.terms");
   const preferredServer = useBandoriPreferredServer();
+  const sortValues = useMemo(
+    () => buildBandoriCardSortValues({
+      shouldIncludePower: false,
+      contextServer: server,
+    }),
+    [server],
+  );
   useBandoriCardsAssetIndex();
-  const { data: cardMetadata, loading: cardsLoading } = useBandoriCardsMaster(
+  const cardsMaster = useBandoriCardsMaster(
     server,
-    true,
+    providedCardMetadata === undefined,
     missingCardFallback,
   );
-  const { data: characterMetadata, loading: charactersLoading } = useCachedFetch(
-    "bandori-card-picker-characters-v3",
-    "/api/bandori/master/characters",
-    bandoriCardCatalogTransforms.characters,
-    { ...LONG_CLIENT_CACHE_POLICY },
-  );
-  const { data: skillMetadata, loading: skillsLoading } = useCachedFetch<Record<string, BandoriSkillLabelMaster | null | undefined>>(
-    "bandori-card-picker-skills-v1",
-    "/api/bandori/master/skills",
-    bandoriCardCatalogTransforms.skills,
-    { ...LONG_CLIENT_CACHE_POLICY },
-  );
-  const [filter, setFilter] = useState<BandoriCardPickerFilter>(DEFAULT_FILTER);
-  const [preferencesReady, setPreferencesReady] = useState(false);
+  const cardMetadata = providedCardMetadata ?? cardsMaster.data;
+  const charactersMaster = useBandoriCharactersMaster(characters === undefined);
+  const skillsMaster = useBandoriSkillsMaster(skills === undefined);
+  const characterMetadata = characters ?? charactersMaster.data;
+  const skillMetadata = skills ?? skillsMaster.data;
+  const [storedFilterState, setStoredFilterState] = useState<{
+    filter: BandoriCardPickerFilter;
+    availableBandIds: number[];
+    availableCharacterIds: number[];
+  } | null>(null);
   const [previewTrainType, setPreviewTrainType] = useState<BandoriCardArtVariant>(() => value?.trainType ?? "after_training");
-  const deferredQuery = useDeferredValue(filter.query);
   const [visibleState, setVisibleState] = useState({ key: "", count: INITIAL_VISIBLE_COUNT });
-  const loading = cardsLoading || charactersLoading || skillsLoading;
-  const attributeOptions = useMemo(
-    () => ATTRIBUTE_VALUES.map((value) => ({ value, label: t(`attributes.${value}`) })),
-    [t],
-  );
+  const isLoading = (providedCardMetadata === undefined && cardsMaster.loading)
+    || (characters === undefined && charactersMaster.loading)
+    || (skills === undefined && skillsMaster.loading);
   const sortOptions = useMemo(
-    () => SORT_OPTION_VALUES.map((value) => ({ value, label: t(`sort.${value}`) })),
-    [t],
+    () => sortValues.map((value) => ({ value, label: filterT(`sort.${value}`) })),
+    [filterT, sortValues],
   );
-
   const catalog = useMemo(
     () => {
       const cards = buildBandoriCardCatalog(
         cardMetadata ?? {},
-        characterMetadata ?? {},
+        (characterMetadata ?? {}) as Parameters<typeof buildBandoriCardCatalog>[1],
         preferredServer,
-        locale,
         server === undefined,
         server,
+        {
+          getCardLabel: (cardId) => t("cardFallback", { cardId }),
+          getCharacterLabel: (characterId) => filterT("characterFallback", { characterId }),
+        },
       );
       return cards;
     },
     [
       cardMetadata,
       characterMetadata,
-      locale,
+      filterT,
       preferredServer,
       server,
+      t,
     ],
   );
 
-  const characterNameById = useMemo(() => {
-    const mapped = new Map<number, string>();
-    catalog.forEach((card) => {
-      if (!mapped.has(card.characterId)) {
-        mapped.set(card.characterId, card.characterName);
-      }
-    });
-    return mapped;
-  }, [catalog]);
-
-  const bandOptions = useMemo(() => {
-    const knownLabels = new Map(BANDORI_CHARACTER_GROUPS.map((group) => [group.bandId, group.label]));
-    const uniqueBandIds = Array.from(new Set(catalog.flatMap((card) => card.bandId === null ? [] : [card.bandId])));
-    return uniqueBandIds
-      .sort((left, right) => left - right)
-      .map((bandId) => ({
-        bandId,
-        label: knownLabels.get(bandId) ?? `Band ${bandId}`,
-      }));
-  }, [catalog]);
-
-  const characterOptions = useMemo(() => {
-    return Array.from(characterNameById.entries())
-      .map(([characterId, label]) => ({ characterId, label }))
-      .sort((left, right) => compareBandoriCharacterIds(left.characterId, right.characterId));
-  }, [characterNameById]);
-
-  const bandIds = useMemo(() => bandOptions.map((option) => option.bandId), [bandOptions]);
-  const characterIds = useMemo(() => characterOptions.map((option) => option.characterId), [characterOptions]);
-  const persistedPreferences = useMemo<BandoriCardPickerPreferences>(() => ({
-    bandIds: filter.bandIds,
-    attributes: filter.attributes,
-    rarities: filter.rarities,
-    characterIds: filter.characterIds,
-    sortBy: filter.sortBy,
-    sortDirection: filter.sortDirection,
-  }), [
-    filter.attributes,
-    filter.bandIds,
-    filter.characterIds,
-    filter.rarities,
-    filter.sortBy,
-    filter.sortDirection,
-  ]);
+  const { bandOptions, characterOptions, bandIds, characterIds } = useMemo(
+    () => buildBandoriCardFilterOptions(characterMetadata ?? {}, {
+      preferredServer,
+      contextServer: server,
+      getBandLabel: (bandId) => filterT("bandFallback", { bandId }),
+      getCharacterLabel: (characterId) => filterT("characterFallback", { characterId }),
+    }),
+    [characterMetadata, filterT, preferredServer, server],
+  );
+  const effectiveFilter = useMemo<BandoriCardPickerFilter>(() => {
+    const defaultFilter = buildDefaultFilter(bandIds, characterIds);
+    if (!storedFilterState) return defaultFilter;
+    const hasAvailableSort = sortValues.includes(storedFilterState.filter.sortBy);
+    return {
+      ...storedFilterState.filter,
+      bandIds: reconcileBandoriCardFilterSelection(
+        storedFilterState.filter.bandIds,
+        storedFilterState.availableBandIds,
+        bandIds,
+      ),
+      attributes: storedFilterState.filter.attributes.filter(
+        (attribute) => BANDORI_CARD_ATTRIBUTES.includes(attribute),
+      ),
+      rarities: storedFilterState.filter.rarities.filter(
+        (rarity) => BANDORI_CARD_RARITIES.includes(rarity),
+      ),
+      characterIds: reconcileBandoriCardFilterSelection(
+        storedFilterState.filter.characterIds,
+        storedFilterState.availableCharacterIds,
+        characterIds,
+      ),
+      sortBy: hasAvailableSort ? storedFilterState.filter.sortBy : sortValues[0] ?? "id",
+      sortDirection: hasAvailableSort ? storedFilterState.filter.sortDirection : "desc",
+    };
+  }, [bandIds, characterIds, sortValues, storedFilterState]);
+  const deferredQuery = useDeferredValue(effectiveFilter.query);
   const deferredFilter = useMemo<BandoriCardPickerFilter>(() => ({
-    ...persistedPreferences,
+    ...effectiveFilter,
     query: deferredQuery,
-  }), [deferredQuery, persistedPreferences]);
-
-  useEffect(() => {
-    if (preferencesReady || loading || bandIds.length === 0 || characterIds.length === 0) {
-      return;
-    }
-
-    const timer = window.setTimeout(() => {
-      const storedPreferences = readStoredPreferences(bandIds, characterIds);
-      setFilter((current) => ({
-        ...(storedPreferences ? { ...DEFAULT_FILTER, ...storedPreferences } : buildDefaultFilter(bandIds, characterIds)),
-        query: current.query,
-      }));
-      setPreferencesReady(true);
-    }, 0);
-
-    return () => window.clearTimeout(timer);
-  }, [bandIds, characterIds, loading, preferencesReady]);
-
-  useEffect(() => {
-    if (!preferencesReady) {
-      return;
-    }
-
-    writeStoredPreferences(persistedPreferences);
-  }, [persistedPreferences, preferencesReady]);
+  }), [deferredQuery, effectiveFilter]);
 
   const filteredCards = useMemo(
     () => filterBandoriCardCatalog(catalog, deferredFilter),
@@ -494,14 +276,14 @@ export default function BandoriCardPicker({
   const filterKey = useMemo(
     () => JSON.stringify({
       query: deferredQuery,
-      bandIds: filter.bandIds,
-      attributes: filter.attributes,
-      rarities: filter.rarities,
-      characterIds: filter.characterIds,
-      sortBy: filter.sortBy,
-      sortDirection: filter.sortDirection,
+      bandIds: effectiveFilter.bandIds,
+      attributes: effectiveFilter.attributes,
+      rarities: effectiveFilter.rarities,
+      characterIds: effectiveFilter.characterIds,
+      sortBy: effectiveFilter.sortBy,
+      sortDirection: effectiveFilter.sortDirection,
     }),
-    [deferredQuery, filter.attributes, filter.bandIds, filter.characterIds, filter.rarities, filter.sortBy, filter.sortDirection],
+    [deferredQuery, effectiveFilter.attributes, effectiveFilter.bandIds, effectiveFilter.characterIds, effectiveFilter.rarities, effectiveFilter.sortBy, effectiveFilter.sortDirection],
   );
 
   const selectedCard = useMemo(
@@ -526,7 +308,11 @@ export default function BandoriCardPicker({
   const hiddenCardCount = Math.max(0, filteredCards.length - visibleCardCount);
 
   const updateFilter = (patch: Partial<BandoriCardPickerFilter>) => {
-    setFilter((current) => ({ ...current, ...patch }));
+    setStoredFilterState({
+      filter: { ...effectiveFilter, ...patch },
+      availableBandIds: bandIds,
+      availableCharacterIds: characterIds,
+    });
   };
 
   const handlePreviewTrainTypeChange = (nextTrainType: BandoriCardArtVariant) => {
@@ -551,142 +337,17 @@ export default function BandoriCardPicker({
 
   return (
     <div className={cn("space-y-4", className)}>
-      <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-          <div className="relative flex-1">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" aria-hidden="true" />
-            <input
-              type="search"
-              value={filter.query}
-              onChange={(event) => updateFilter({ query: event.target.value })}
-              placeholder={t("searchPlaceholder")}
-              className="h-10 w-full rounded-xl border border-slate-200 bg-white pl-9 pr-3 text-sm text-slate-900 outline-hidden transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
-            />
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="inline-flex h-10 items-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-3 text-sm font-semibold text-blue-700">
-              <Filter className="h-4 w-4" aria-hidden="true" />
-              {t("resultCount", { count: filteredCards.length })}
-            </span>
-            <button
-              type="button"
-              onClick={() => setFilter(DEFAULT_FILTER)}
-              className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 transition hover:border-blue-300 hover:text-blue-600"
-            >
-              <X className="h-4 w-4" aria-hidden="true" />
-              {t("actions.clear")}
-            </button>
-          </div>
-        </div>
-
-        <div className="mt-4 space-y-3">
-          <FilterRow label={t("filters.band")}>
-            {bandOptions.map((group) => (
-              <SelectionButton
-                key={group.bandId}
-                title={group.label}
-                selected={filter.bandIds.includes(group.bandId)}
-                onClick={() => updateFilter({ bandIds: toggleSelected(filter.bandIds, group.bandId) })}
-              >
-                <BandIcon bandId={group.bandId} label={group.label} />
-              </SelectionButton>
-            ))}
-            <ToggleAllButton
-              selected={areAllSelected(filter.bandIds, bandIds)}
-              selectAllLabel={t("actions.selectAll")}
-              clearAllLabel={t("actions.clearAll")}
-              allLabel={t("actions.all")}
-              onClick={() => updateFilter({ bandIds: areAllSelected(filter.bandIds, bandIds) ? [] : bandIds })}
-            />
-          </FilterRow>
-
-          <FilterRow label={t("filters.attribute")}>
-            {attributeOptions.map((option) => (
-              <SelectionButton
-                key={option.value}
-                title={option.label}
-                selected={filter.attributes.includes(option.value)}
-                onClick={() => updateFilter({ attributes: toggleSelected(filter.attributes, option.value) })}
-              >
-                <AttributeIcon attribute={option.value} label={option.label} />
-              </SelectionButton>
-            ))}
-            <ToggleAllButton
-              selected={areAllSelected(filter.attributes, ATTRIBUTE_VALUES)}
-              selectAllLabel={t("actions.selectAll")}
-              clearAllLabel={t("actions.clearAll")}
-              allLabel={t("actions.all")}
-              onClick={() => {
-                updateFilter({ attributes: areAllSelected(filter.attributes, ATTRIBUTE_VALUES) ? [] : ATTRIBUTE_VALUES });
-              }}
-            />
-          </FilterRow>
-
-          <FilterRow label={t("filters.rarity")}>
-            {RARITY_OPTIONS.map((rarity) => (
-              <SelectionButton
-                key={rarity}
-                title={t("rarityAlt", { rarity })}
-                selected={filter.rarities.includes(rarity)}
-                onClick={() => updateFilter({ rarities: toggleSelected(filter.rarities, rarity) })}
-              >
-                <RarityIcon rarity={rarity} alt={t("rarityAlt", { rarity })} />
-              </SelectionButton>
-            ))}
-            <ToggleAllButton
-              selected={areAllSelected(filter.rarities, RARITY_OPTIONS)}
-              selectAllLabel={t("actions.selectAll")}
-              clearAllLabel={t("actions.clearAll")}
-              allLabel={t("actions.all")}
-              onClick={() => updateFilter({ rarities: areAllSelected(filter.rarities, RARITY_OPTIONS) ? [] : RARITY_OPTIONS })}
-            />
-          </FilterRow>
-
-          <FilterRow label={t("filters.character")}>
-            {characterOptions.map(({ characterId, label }) => (
-              <SelectionButton
-                key={characterId}
-                title={label}
-                selected={filter.characterIds.includes(characterId)}
-                onClick={() => updateFilter({ characterIds: toggleSelected(filter.characterIds, characterId) })}
-              >
-                <CharacterIcon characterId={characterId} label={label} />
-              </SelectionButton>
-            ))}
-            <ToggleAllButton
-              selected={areAllSelected(filter.characterIds, characterIds)}
-              selectAllLabel={t("actions.selectAll")}
-              clearAllLabel={t("actions.clearAll")}
-              allLabel={t("actions.all")}
-              onClick={() => updateFilter({ characterIds: areAllSelected(filter.characterIds, characterIds) ? [] : characterIds })}
-            />
-          </FilterRow>
-
-          <FilterRow label={t("filters.sort")}>
-            <div className="flex min-w-0 flex-wrap items-center gap-2">
-              <select
-                value={filter.sortBy}
-                onChange={(event) => updateFilter({ sortBy: event.target.value as BandoriCardPickerSortBy })}
-                className="h-10 min-w-64 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-hidden transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
-              >
-                {sortOptions.map((option) => (
-                  <option key={option.value} value={option.value}>{option.label}</option>
-                ))}
-              </select>
-              <button
-                type="button"
-                onClick={() => updateFilter({ sortDirection: filter.sortDirection === "desc" ? "asc" : "desc" })}
-                className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 transition hover:border-blue-300 hover:text-blue-600"
-                title={filter.sortDirection === "desc" ? t("sortDirection.descTitle") : t("sortDirection.ascTitle")}
-                aria-label={filter.sortDirection === "desc" ? t("sortDirection.descAria") : t("sortDirection.ascAria")}
-              >
-                {filter.sortDirection === "desc" ? <ArrowDownWideNarrow className="h-4 w-4" aria-hidden="true" /> : <ArrowUpNarrowWide className="h-4 w-4" aria-hidden="true" />}
-                {filter.sortDirection === "desc" ? t("sortDirection.desc") : t("sortDirection.asc")}
-              </button>
-            </div>
-          </FilterRow>
-        </div>
-      </div>
+      <BandoriCardFilterControls
+        filter={effectiveFilter}
+        resultCountLabel={t("resultCount", { count: filteredCards.length })}
+        bandOptions={bandOptions}
+        characterOptions={characterOptions}
+        availableBandIds={bandIds}
+        availableCharacterIds={characterIds}
+        sortOptions={sortOptions}
+        onFilterChange={updateFilter}
+        onClearFilter={() => setStoredFilterState(null)}
+      />
 
       {value && showArtToggle ? (
         <div className="sticky -top-3 z-80 -mx-3 bg-slate-50/95 px-3 pb-2 pt-3 backdrop-blur-sm sm:-top-5 sm:-mx-5 sm:px-5 sm:pt-5">
@@ -694,7 +355,9 @@ export default function BandoriCardPicker({
             <div className="min-w-0 text-sm text-slate-600">
             {t("currentSelection")}
             <span className="font-semibold text-slate-900">
-              {selectedCard ? `${selectedCard.displayName} / #${selectedCard.cardId}` : `Card #${value.cardId}`}
+              {selectedCard
+                ? `${selectedCard.displayName} / #${selectedCard.cardId}`
+                : t("cardFallback", { cardId: value.cardId })}
             </span>
           </div>
             <ArtToggle
@@ -708,7 +371,7 @@ export default function BandoriCardPicker({
       ) : null}
 
       <div className="rounded-2xl border border-slate-200 bg-[#fffdf1]/72 p-3 shadow-inner">
-        {loading && catalog.length === 0 ? (
+        {isLoading && catalog.length === 0 ? (
           <div className="flex min-h-56 items-center justify-center gap-2 text-sm font-semibold text-slate-500">
             <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" />
             {t("states.loadingCards")}
@@ -722,24 +385,28 @@ export default function BandoriCardPicker({
               layoutKey={virtualGridLayoutKey}
               getKey={(card) => card.cardRef}
               renderItem={(card) => {
-                const selected = value?.cardId === card.cardId
+                const isSelected = value?.cardId === card.cardId
                   && (value.entityServer ?? null) === card.entityServer;
                 const activeTrainType = resolveCardTrainType(card, previewTrainType);
+                const skillEffect = resolveBandoriSkillLabel(
+                  card.skillId
+                    ? skillMetadata?.[String(card.skillId)] ?? undefined
+                    : undefined,
+                  5,
+                  5,
+                  preferredServer,
+                  server,
+                  termsT("unknownSkill"),
+                );
                 return (
                   <CardGridItem
                     key={card.cardRef}
                     card={card}
-                    selected={selected}
+                    isSelected={isSelected}
+                    isMuted={mutedCardIds?.has(card.cardId) ?? false}
                     activeTrainType={activeTrainType}
-                    skillEffectLabel={normalizeBandoriSkillLabel(
-                      card.skillId
-                        ? skillMetadata?.[String(card.skillId)] ?? undefined
-                        : undefined,
-                      5,
-                      5,
-                      preferredServer,
-                      server,
-                    )}
+                    skillEffectLabel={skillEffect.label}
+                    skillEffectLanguageTag={skillEffect.languageTag}
                     onSelect={() => handleCardSelect(card)}
                   />
                 );

@@ -11,6 +11,8 @@ export interface AccountShellProps {
   description?: string | null;
   backHref?: string | null;
   backLabel?: string;
+  onBack?: () => void;
+  isBackDisabled?: boolean;
   containerClassName?: string;
   flushTop?: boolean;
   hideEyebrow?: boolean;
@@ -26,6 +28,8 @@ export default function AccountShell({
   description,
   backHref = "/account",
   backLabel,
+  onBack,
+  isBackDisabled = false,
   containerClassName = "max-w-full sm:max-w-4xl",
   flushTop = true,
   hideEyebrow = false,
@@ -54,12 +58,23 @@ export default function AccountShell({
               ) : null}
             </div>
             {backHref ? (
-              <Link
-                href={backHref}
-                className="inline-flex w-full items-center justify-center rounded-full border border-slate-200 bg-white px-5 py-2 text-sm font-semibold text-slate-700 transition hover:border-sky-200 hover:text-sky-600 sm:w-auto"
-              >
-                {resolvedBackLabel}
-              </Link>
+              onBack ? (
+                <button
+                  type="button"
+                  onClick={onBack}
+                  disabled={isBackDisabled}
+                  className="inline-flex w-full items-center justify-center rounded-full border border-slate-200 bg-white px-5 py-2 text-sm font-semibold text-slate-700 transition hover:border-sky-200 hover:text-sky-600 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
+                >
+                  {resolvedBackLabel}
+                </button>
+              ) : (
+                <Link
+                  href={backHref}
+                  className="inline-flex w-full items-center justify-center rounded-full border border-slate-200 bg-white px-5 py-2 text-sm font-semibold text-slate-700 transition hover:border-sky-200 hover:text-sky-600 sm:w-auto"
+                >
+                  {resolvedBackLabel}
+                </Link>
+              )
             ) : null}
           </div>
 

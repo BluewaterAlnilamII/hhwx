@@ -12,9 +12,11 @@ import {
   buildBandoriPublicAssetUrl,
   lookupBandoriCardImage,
 } from "@/lib/bandori-public-asset-index";
+import { isBandoriCardAttribute, type BandoriCardAttribute } from "@/lib/bandori-card-filter";
 
-type CardAttribute = "powerful" | "pure" | "cool" | "happy";
 type TrainType = "normal" | "after_training";
+
+export const BANDORI_MUTED_CARD_CLASS_NAME = "brightness-[0.42] saturate-[0.9] contrast-110";
 
 export type BandoriCardThumbnailCard = {
   cardId: number;
@@ -27,17 +29,13 @@ export type BandoriCardThumbnailCard = {
 
 export type BandoriCardThumbnailMetadata = {
   rarity?: number;
-  attribute?: CardAttribute | string;
+  attribute?: BandoriCardAttribute | string;
   resourceSetName?: string;
   levelLimit?: number;
   releasedAt?: Array<string | number | null>;
 };
 
 export type BandoriCardThumbnailSize = "tile" | "preview" | "editor";
-
-function isKnownAttribute(value: string | undefined): value is CardAttribute {
-  return value === "powerful" || value === "pure" || value === "cool" || value === "happy";
-}
 
 function getCardTrainType(card: BandoriCardThumbnailCard): TrainType {
   return card.isTrained ? "after_training" : "normal";
@@ -120,7 +118,7 @@ export default function BandoriCardThumbnail({
     lookupBandoriCardImage(assetIndex, metadata?.resourceSetName, trainType, "thumb"),
   );
   const rarity = Math.min(5, Math.max(1, Math.trunc(Number(metadata?.rarity) || 1)));
-  const attribute = isKnownAttribute(metadata?.attribute) ? metadata.attribute : null;
+  const attribute = isBandoriCardAttribute(metadata?.attribute) ? metadata.attribute : null;
   const frameUrl = rarity >= 2
     ? buildBandoriResImagePublicUrl(`card-${rarity}.png`)
     : attribute ? buildBandoriResImagePublicUrl(`card-1-${attribute}.png`) : null;

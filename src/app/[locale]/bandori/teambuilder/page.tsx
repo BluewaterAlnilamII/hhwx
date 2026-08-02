@@ -18,13 +18,11 @@ import {
 import BandoriAccountShell from "@/app/[locale]/bandori/BandoriAccountShell";
 import BandoriCardTile from "@/components/bandori/BandoriCardTile";
 import BandoriEventBonusPanel from "@/components/bandori/BandoriEventBonusPanel";
+import BandoriServerIcon from "@/components/bandori/BandoriServerIcon";
 import BandoriEventSwitcher, { type BandoriEventSwitcherEvent } from "@/app/[locale]/bandori/BandoriEventSwitcher";
 import { AccountErrorState, AccountLoadingState, AccountSignInState } from "@/app/[locale]/account/AccountShell";
 import { getAccessToken, useLocalizedAccountProfile } from "@/app/[locale]/account/useAccountProfile";
-import {
-  useBandoriCardsAssetIndex,
-  useBandoriEventsAssetIndex,
-} from "@/hooks/useBandoriPublicAssetIndex";
+import { useBandoriEventsAssetIndex } from "@/hooks/useBandoriPublicAssetIndex";
 import { useBandoriCardsMaster } from "@/hooks/useBandoriCardsMaster";
 import { useBandoriEventsMaster } from "@/hooks/useBandoriEventsMaster";
 import { useBandoriMusicMaster } from "@/hooks/useBandoriMusicMaster";
@@ -41,10 +39,8 @@ import {
 } from "@/lib/bandori-event-region";
 import type { BandoriEventSummary } from "@/lib/bandori-events";
 import type { BandoriMusicMasterRecord } from "@/lib/bandori-music-api-client";
-import {
-  type BandoriCardAttribute,
-  type BandoriEventBonus,
-} from "@/lib/bandori-team-calculator";
+import { isBandoriCardAttribute, type BandoriCardAttribute } from "@/lib/bandori-card-filter";
+import { type BandoriEventBonus } from "@/lib/bandori-team-calculator";
 import {
   buildBandoriCharacterBonuses,
   toBandoriCharacterBonusMap,
@@ -81,7 +77,13 @@ import {
   type UserGameProfilePayload,
 } from "@/lib/user-game-profile-payload";
 import { type BandoriCardPickerValue } from "@/components/bandori/card-picker/types";
+import { type BandoriCardPickerDialogProps } from "@/components/bandori/BandoriCardPickerDialog";
 import { type AppLocale } from "@/i18n/routing";
+import {
+  pickBandoriCharacterDisplayName,
+  resolveBandoriCardBandId,
+  resolveBandoriCardSkillLabel,
+} from "@/lib/bandori-card-master";
 import { createMaxGameProfileCard, pickGameProfileCardName } from "@/lib/bandori-game-profile-card";
 import { pickBestdoriLocalizedName } from "@/lib/bestdori-regional-names";
 import {
@@ -91,7 +93,7 @@ import {
 import { formatLocalizedDate, formatLocalizedDateTime, formatLocalizedInteger } from "@/lib/localized-format";
 import { useBandoriPreferredServer } from "@/store/useBandoriPreferencesStore";
 import TeamBuilderCardPreferencesPanel from "./CardPreferencesPanel";
-import { type TemporaryCardEditorDialogProps, type TemporaryCardPickerDialogProps } from "./TemporaryCardDialogs";
+import { type TemporaryCardEditorDialogProps } from "./TemporaryCardEditorDialog";
 import {
   createDefaultCardPreferences,
   normalizeCardPreferences,
@@ -175,8 +177,8 @@ function TemporaryCardEditorLoading() {
   return <DynamicTemporaryCardDialogLoading message={t("cardEditor")} />;
 }
 
-const DynamicTemporaryCardPickerDialog = dynamic<TemporaryCardPickerDialogProps>(
-  () => import("./TemporaryCardDialogs").then((module) => module.TemporaryCardPickerDialog),
+const DynamicBandoriCardPickerDialog = dynamic<BandoriCardPickerDialogProps>(
+  () => import("@/components/bandori/BandoriCardPickerDialog"),
   {
     ssr: false,
     loading: TemporaryCardPickerLoading,
@@ -184,7 +186,7 @@ const DynamicTemporaryCardPickerDialog = dynamic<TemporaryCardPickerDialogProps>
 );
 
 const DynamicTemporaryCardEditorDialog = dynamic<TemporaryCardEditorDialogProps>(
-  () => import("./TemporaryCardDialogs").then((module) => module.TemporaryCardEditorDialog),
+  () => import("./TemporaryCardEditorDialog"),
   {
     ssr: false,
     loading: TemporaryCardEditorLoading,
@@ -471,18 +473,6 @@ function pickLocalizedName(
   return pickBestdoriLocalizedName(value, preferredServer, contextServer) ?? fallback;
 }
 
-function pickCharacterDisplayName(
-  character: CharacterMaster | undefined,
-  preferredServer: BandoriServer,
-  fallback = "",
-  contextServer?: BandoriServer,
-): string {
-  return pickLocalizedName(character?.nickname, preferredServer, "", contextServer)
-    || pickLocalizedName(character?.characterName, preferredServer, "", contextServer)
-    || pickLocalizedName(character?.firstName, preferredServer, "", contextServer)
-    || fallback;
-}
-
 function formatDate(value: number | null, locale: AppLocale, fallback: string): string {
   if (!value) {
     return fallback;
@@ -663,14 +653,23 @@ function normalizeSkillLabel(
   skill: SkillMaster | undefined,
   skillLevel: string | number,
   preferredServer: BandoriServer,
+  unknownSkillLabel: string,
 ): string {
-  return normalizeBandoriSkillLabel(skill, skillLevel, 1, preferredServer);
+  return normalizeBandoriSkillLabel(
+    skill,
+    skillLevel,
+    1,
+    preferredServer,
+    undefined,
+    unknownSkillLabel,
+  );
 }
 
 function buildSkillOptions(
   skills: Record<string, SkillMaster | undefined>,
   skillLevel: string | number,
   preferredServer: BandoriServer,
+  unknownSkillLabel: string,
 ): Array<{ value: string; label: string }> {
   return Object.entries(skills)
     .flatMap(([skillId, skill]) => {
@@ -680,7 +679,7 @@ function buildSkillOptions(
       }
       return [{
         value: skillId,
-        label: normalizeSkillLabel(skill, skillLevel, preferredServer),
+        label: normalizeSkillLabel(skill, skillLevel, preferredServer, unknownSkillLabel),
       }];
     })
     .sort((left, right) => Number(left.value) - Number(right.value));
@@ -738,10 +737,6 @@ function selectMissingTemporaryCards(
   return { cardsToAdd, skippedDuplicateCount };
 }
 
-function isKnownAttribute(value: string | undefined): value is BandoriCardAttribute {
-  return value === "powerful" || value === "cool" || value === "happy" || value === "pure";
-}
-
 function pickCardDisplayName(
   cardId: number,
   metadata: CardMetadata | undefined,
@@ -756,16 +751,6 @@ function pickCardDisplayName(
     locale,
     contextServer,
   );
-}
-
-function getCardBandId(metadata: CardMetadata | undefined, characters: Record<string, CharacterMaster | undefined>): number | null {
-  const characterId = Number(metadata?.characterId);
-  if (!Number.isFinite(characterId)) {
-    return null;
-  }
-
-  const bandId = Number(characters[String(Math.trunc(characterId))]?.bandId);
-  return Number.isFinite(bandId) && bandId > 0 ? Math.trunc(bandId) : null;
 }
 
 function getDisplayedEventPointOption(
@@ -995,29 +980,6 @@ type DisplayCardLike = Pick<BandoriTeamSearchResultCard, "cardId" | "cardInstanc
 
 function getDisplayCardKey(card: Pick<BandoriTeamSearchResultCard, "cardId" | "cardInstanceKey">): string {
   return card.cardInstanceKey ?? `profile:${card.cardId}`;
-}
-
-function getCardSkillId(card: { skillId?: unknown } | undefined, metadata: CardMetadata | undefined): number | null {
-  const rawSkillId = card?.skillId ?? metadata?.skillId;
-  const skillId = Number(rawSkillId);
-  return Number.isFinite(skillId) && skillId > 0 ? Math.trunc(skillId) : null;
-}
-
-function getCardSkillEffectLabel(
-  card: { skillId?: unknown; skillLevel?: unknown } | undefined,
-  metadata: CardMetadata | undefined,
-  skills: Record<string, SkillMaster | undefined> | undefined,
-  preferredServer: BandoriServer,
-  contextServer?: BandoriServer,
-): string {
-  const skillId = getCardSkillId(card, metadata);
-  return normalizeBandoriSkillLabel(
-    skillId ? skills?.[String(skillId)] : undefined,
-    card?.skillLevel,
-    5,
-    preferredServer,
-    contextServer,
-  );
 }
 
 function orderResultCardsWithLeaderCenter(
@@ -1806,6 +1768,8 @@ function TeamBuilderCardTile({
   const preferredServer = useBandoriPreferredServer();
   const cardId = card.cardId;
   const labelsT = useTranslations("bandori.teamBuilder.labels");
+  const cardPickerT = useTranslations("bandori.cardPicker");
+  const termsT = useTranslations("bandori.terms");
   const cardName = pickCardDisplayName(
     cardId,
     metadata,
@@ -1814,13 +1778,15 @@ function TeamBuilderCardTile({
     displayServer,
   );
   const rarity = Math.min(5, Math.max(1, Math.trunc(Number(metadata?.rarity ?? card.rarity) || 1)));
-  const attribute = isKnownAttribute(metadata?.attribute) ? metadata.attribute : card.attribute;
-  const skillEffectLabel = getCardSkillEffectLabel(
+  const attribute = isBandoriCardAttribute(metadata?.attribute) ? metadata.attribute : card.attribute;
+  const skillEffect = resolveBandoriCardSkillLabel(
     skillEffectLevel === undefined ? card : { ...card, skillLevel: skillEffectLevel },
     metadata,
-    skills,
+    skills ?? {},
+    5,
     preferredServer,
     displayServer,
+    termsT("unknownSkill"),
   );
 
   return (
@@ -1835,8 +1801,9 @@ function TeamBuilderCardTile({
             preferredServer,
             displayServer,
           )
-        : `Card #${cardId}`}
-      skillEffectLabel={skillEffectLabel}
+        : cardPickerT("cardFallback", { cardId })}
+      skillEffectLabel={skillEffect.label}
+      skillEffectLanguageTag={skillEffect.languageTag}
       badge={badge}
       leaderLabel={leader ? labelsT("leader") : undefined}
       showPower={showPower}
@@ -1901,6 +1868,7 @@ function MultiLiveSettingsPanel({
   const preferredServer = useBandoriPreferredServer();
   const labelsT = useTranslations("bandori.teamBuilder.labels");
   const encoreT = useTranslations("bandori.teamBuilder.encoreSkillSources");
+  const termsT = useTranslations("bandori.terms");
   const updatePlayer = (index: number, patch: Partial<OtherPlayerDraft>) => {
     onOtherPlayersChange(otherPlayers.map((player, playerIndex) => (
       playerIndex === index ? { ...player, ...patch } : player
@@ -1933,7 +1901,12 @@ function MultiLiveSettingsPanel({
               value={player.skillId}
               onChange={(event) => updatePlayer(index, { skillId: event.target.value })}
             >
-              {buildSkillOptions(skills, player.skillLevel, preferredServer).map((skill) => (
+              {buildSkillOptions(
+                skills,
+                player.skillLevel,
+                preferredServer,
+                termsT("unknownSkill"),
+              ).map((skill) => (
                 <option key={skill.value} value={skill.value}>{skill.label}</option>
               ))}
             </SelectInput>
@@ -2306,14 +2279,13 @@ function getCardCharacterLabel(
     return "";
   }
   const character = characters[String(Math.trunc(characterId))];
-  return pickCharacterDisplayName(character, preferredServer, "", contextServer);
+  return pickBandoriCharacterDisplayName(character, preferredServer, contextServer);
 }
 
 function TeamBuilderPanel() {
   const locale = useLocale() as AppLocale;
   const preferredServer = useBandoriPreferredServer();
   const messages = useMessages();
-  useBandoriCardsAssetIndex();
   const {
     events: masterEvents,
     loaded: masterEventsLoaded,
@@ -2334,8 +2306,9 @@ function TeamBuilderPanel() {
   const actionsT = useTranslations("bandori.teamBuilder.actions");
   const errorsT = useTranslations("bandori.teamBuilder.errors");
   const messagesT = useTranslations("bandori.teamBuilder.messages");
+  const temporaryCardsT = useTranslations("bandori.teamBuilder.temporaryCards");
   const eventTypesT = useTranslations("bandori.teamBuilder.eventTypes");
-  const attributeT = useTranslations("bandori.teamBuilder.excludedFilter.attributes");
+  const attributeT = useTranslations("bandori.cardFilters.attributes");
   const eventStatusT = useTranslations("bandori.teamBuilder.eventStatus");
   const targetLabelsT = useTranslations("bandori.teamBuilder.targetLabels");
   const calculationModesT = useTranslations("bandori.teamBuilder.calculationModes");
@@ -2415,10 +2388,9 @@ function TeamBuilderPanel() {
   const [otherPlayers, setOtherPlayers] = useState<OtherPlayerDraft[]>(() => initialLivePreferences.otherPlayers ?? DEFAULT_OTHER_PLAYERS);
   const [profileChoice, setProfileChoice] = useState<ProfileChoice | null>(null);
   const [cardPreferences, setCardPreferences] = useState<TeamBuilderCardPreferences>(() => createDefaultCardPreferences());
-  const [cardPickerOpen, setCardPickerOpen] = useState(false);
+  const [isCardPickerOpen, setIsCardPickerOpen] = useState(false);
   const [cardPickerValue, setCardPickerValue] = useState<BandoriCardPickerValue | null>(null);
   const [editingTemporaryCard, setEditingTemporaryCard] = useState<TemporaryGameProfileCard | null>(null);
-  const [addingTemporaryCard, setAddingTemporaryCard] = useState(false);
   const cardPickerScrollRef = useRef<HTMLDivElement | null>(null);
   const [target, setTarget] = useState<BandoriTeamSearchTarget>("eventPoint");
   const medleyCalculationMode: MedleyCalculationMode = "maximize";
@@ -2438,8 +2410,6 @@ function TeamBuilderPanel() {
   const [resultChallengeCpCost, setResultChallengeCpCost] = useState<ChallengeCpCostOption>("1600");
   const [resultPlacement, setResultPlacement] = useState<ResultPlacementOption>("1");
   const [resultFestivalResult, setResultFestivalResult] = useState<FestivalResultOption>("win");
-  const [addingCurrentEventCards, setAddingCurrentEventCards] = useState(false);
-  const [temporaryCardActionError, setTemporaryCardActionError] = useState("");
   const [temporaryCardActionNotice, setTemporaryCardActionNotice] = useState("");
   const [preloadState, setPreloadState] = useState<PreloadState>({
     master: "idle",
@@ -2561,25 +2531,24 @@ function TeamBuilderPanel() {
       return { ...current, excludedCardIds: [...excluded] };
     });
   }, [updateCardPreferences]);
-  const bulkSetExcludedCards = useCallback((cardIds: number[], excludedState: boolean) => {
+  const bulkSetExcludedCards = useCallback((cardIds: number[], isExcluded: boolean) => {
     updateCardPreferences((current) => {
-      const excluded = new Set(current.excludedCardIds);
+      const excludedCardIds = new Set(current.excludedCardIds);
       cardIds.forEach((cardId) => {
         if (!Number.isFinite(cardId) || cardId <= 0) {
           return;
         }
         const normalizedCardId = Math.trunc(cardId);
-        if (excludedState) {
-          excluded.add(normalizedCardId);
+        if (isExcluded) {
+          excludedCardIds.add(normalizedCardId);
         } else {
-          excluded.delete(normalizedCardId);
+          excludedCardIds.delete(normalizedCardId);
         }
       });
-      return { ...current, excludedCardIds: [...excluded] };
+      return { ...current, excludedCardIds: [...excludedCardIds] };
     });
   }, [updateCardPreferences]);
   const clearTemporaryCards = useCallback(() => {
-    setTemporaryCardActionError("");
     setTemporaryCardActionNotice("");
     updateCardPreferences((current) => ({ ...current, temporaryCards: [] }));
   }, [updateCardPreferences]);
@@ -2598,11 +2567,10 @@ function TeamBuilderPanel() {
       setEditingTemporaryCard(card);
     }
   }, [cardPreferences.temporaryCards]);
-  const saveTemporaryCard = useCallback((card: UserGameProfileCardRecord) => {
+  const applyTemporaryCard = useCallback((card: UserGameProfileCardRecord) => {
     if (!editingTemporaryCard) {
       return;
     }
-    setTemporaryCardActionError("");
     setTemporaryCardActionNotice("");
     const nextCard: TemporaryGameProfileCard = {
       ...card,
@@ -2610,10 +2578,10 @@ function TeamBuilderPanel() {
       isExcluded: false,
     };
     updateCardPreferences((current) => {
-      const exists = current.temporaryCards.some((item) => item.instanceId === nextCard.instanceId);
+      const isExistingCard = current.temporaryCards.some((item) => item.instanceId === nextCard.instanceId);
       return {
         ...current,
-        temporaryCards: exists
+        temporaryCards: isExistingCard
           ? current.temporaryCards.map((item) => item.instanceId === nextCard.instanceId ? nextCard : item)
           : [...current.temporaryCards, nextCard],
       };
@@ -2625,7 +2593,6 @@ function TeamBuilderPanel() {
     if (!editingTemporaryCard) {
       return;
     }
-    setTemporaryCardActionError("");
     setTemporaryCardActionNotice("");
     updateCardPreferences((current) => ({
       ...current,
@@ -2781,6 +2748,7 @@ function TeamBuilderPanel() {
       type: "cloud" as const,
       id: profile.id,
       name: profile.name,
+      server: normalizeBandoriServer(profile.server) ?? 0,
       cardCount: profile.cardCount,
       syncedAt: profile.syncedAt,
       updatedAt: profile.updatedAt,
@@ -2789,13 +2757,17 @@ function TeamBuilderPanel() {
       type: "local" as const,
       id: profile.id,
       name: profile.name,
+      server: normalizeBandoriServer(profile.server) ?? 0,
       cardCount: profile.cardCount,
       syncedAt: profile.syncedAt,
       updatedAt: profile.updatedAt,
     })),
   ], [data.cloudProfiles, data.localProfiles]);
+  const selectedProfile = profileChoice
+    ? allProfiles.find((profile) => profile.type === profileChoice.source && profile.id === profileChoice.id) ?? null
+    : null;
   const selectedProfileLabel = profileChoice
-    ? allProfiles.find((profile) => profile.type === profileChoice.source && profile.id === profileChoice.id)?.name ?? labelsT("selectedProfile")
+    ? selectedProfile?.name ?? labelsT("selectedProfile")
     : labelsT("unselectedProfile");
   const selectedProfilePayload = selectedProfileCacheKey
     ? profilePayloadCacheRef.current.get(selectedProfileCacheKey) ?? null
@@ -2815,36 +2787,17 @@ function TeamBuilderPanel() {
     ?? EMPTY_CARD_METADATA) as Record<string, CardMetadata | undefined>;
   const canonicalCardMetadata = (canonicalCards
     ?? EMPTY_CARD_METADATA) as Record<string, CardMetadata | undefined>;
-  const ensureCardsMetadata = useCallback(async (
-    cardIds: number[],
-  ): Promise<Record<string, CardMetadata | undefined>> => {
-    const normalizedCardIds = Array.from(new Set(cardIds
-      .map((cardId) => Math.trunc(cardId))
-      .filter((cardId) => Number.isFinite(cardId) && cardId > 0)));
-    return Object.fromEntries(normalizedCardIds.map((cardId) => [
-      String(cardId),
-      profileCardMetadata[String(cardId)],
-    ]));
-  }, [profileCardMetadata]);
-  const ensureCardMetadata = useCallback(async (
-    cardId: number,
-  ): Promise<CardMetadata | undefined> => {
-    const cards = await ensureCardsMetadata([cardId]);
-    return cards[String(Math.trunc(cardId))];
-  }, [ensureCardsMetadata]);
   const selectTemporaryCard = useCallback((value: BandoriCardPickerValue | null) => {
     setCardPickerValue(value);
-    if (!value || addingTemporaryCard) {
+    if (!value) {
       return;
     }
-    setAddingTemporaryCard(true);
-    void ensureCardMetadata(value.cardId)
-      .then((metadata) => {
-        const card = createMaxGameProfileCard(value.cardId, metadata);
-        setEditingTemporaryCard({ ...card, instanceId: crypto.randomUUID() });
-      })
-      .finally(() => setAddingTemporaryCard(false));
-  }, [addingTemporaryCard, ensureCardMetadata]);
+    const card = createMaxGameProfileCard(
+      value.cardId,
+      profileCardMetadata[String(Math.trunc(value.cardId))],
+    );
+    setEditingTemporaryCard({ ...card, instanceId: crypto.randomUUID() });
+  }, [profileCardMetadata]);
   const selectedProfileCharacterBonusesById = useMemo(
     () => selectedProfilePayload
       ? toBandoriCharacterBonusMap(buildBandoriCharacterBonuses(
@@ -2855,47 +2808,35 @@ function TeamBuilderPanel() {
     [selectedProfilePayload],
   );
   const addCurrentEventBonusTemporaryCards = useCallback(() => {
-    if (currentEventBonusCardIds.length === 0 || addingCurrentEventCards) {
+    if (currentEventBonusCardIds.length === 0) {
       return;
     }
 
     const cardIds = currentEventBonusCardIds;
-    setAddingCurrentEventCards(true);
-    setTemporaryCardActionError("");
     setTemporaryCardActionNotice("");
-    void ensureCardsMetadata(cardIds)
-      .then((metadataById) => {
-        const candidateTemporaryCards = cardIds.map((cardId) => ({
-          ...createMaxGameProfileCard(cardId, metadataById[String(cardId)]),
-          instanceId: crypto.randomUUID(),
-        }));
-        const { cardsToAdd, skippedDuplicateCount } = selectMissingTemporaryCards(
-          selectedProfileCards,
-          cardPreferences,
-          candidateTemporaryCards,
-        );
-        if (skippedDuplicateCount > 0) {
-          setTemporaryCardActionNotice(messagesT("duplicateCardsSkipped", { count: skippedDuplicateCount }));
-        }
-        if (cardsToAdd.length > 0) {
-          updateCardPreferences((current) => ({
-            ...current,
-            temporaryCards: [...current.temporaryCards, ...cardsToAdd],
-          }));
-        }
-      })
-      .catch((error) => {
-        setTemporaryCardActionError(error instanceof Error
-          ? `${messagesT("addCurrentCardsFailed")}: ${error.message}`
-          : messagesT("addCurrentCardsFailed"));
-      })
-      .finally(() => setAddingCurrentEventCards(false));
+    const candidateTemporaryCards = cardIds.map((cardId) => ({
+      ...createMaxGameProfileCard(cardId, profileCardMetadata[String(cardId)]),
+      instanceId: crypto.randomUUID(),
+    }));
+    const { cardsToAdd, skippedDuplicateCount } = selectMissingTemporaryCards(
+      selectedProfileCards,
+      cardPreferences,
+      candidateTemporaryCards,
+    );
+    if (skippedDuplicateCount > 0) {
+      setTemporaryCardActionNotice(messagesT("duplicateCardsSkipped", { count: skippedDuplicateCount }));
+    }
+    if (cardsToAdd.length > 0) {
+      updateCardPreferences((current) => ({
+        ...current,
+        temporaryCards: [...current.temporaryCards, ...cardsToAdd],
+      }));
+    }
   }, [
-    addingCurrentEventCards,
     cardPreferences,
     currentEventBonusCardIds,
-    ensureCardsMetadata,
     messagesT,
+    profileCardMetadata,
     selectedProfileCards,
     updateCardPreferences,
   ]);
@@ -3204,7 +3145,7 @@ function TeamBuilderPanel() {
 
   useEffect(() => {
     setCardPreferences(readCardPreferences(selectedProfileCacheKey));
-    setCardPickerOpen(false);
+    setIsCardPickerOpen(false);
     setCardPickerValue(null);
     setEditingTemporaryCard(null);
   }, [selectedProfileCacheKey]);
@@ -3533,7 +3474,7 @@ function TeamBuilderPanel() {
     );
   }
 
-  const editingTemporaryCardExists = editingTemporaryCard
+  const isEditingTemporaryCardPersisted = editingTemporaryCard
     ? cardPreferences.temporaryCards.some((card) => card.instanceId === editingTemporaryCard.instanceId)
     : false;
 
@@ -3730,7 +3671,13 @@ function TeamBuilderPanel() {
                   }`}
                 >
                   <div className="flex items-center justify-between gap-3">
-                    <div className="font-bold text-slate-900">{profile.name}</div>
+                    <div className="flex min-w-0 items-center gap-2 font-bold text-slate-900">
+                      <BandoriServerIcon
+                        server={profile.server}
+                        className="h-5 w-5 shadow-[0_1px_3px_rgba(15,23,42,0.18)]"
+                      />
+                      <span className="min-w-0 wrap-break-word">{profile.name}</span>
+                    </div>
                     <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
                       {profile.type === "cloud" ? labelsT("cloud") : labelsT("local")}
                     </span>
@@ -3754,14 +3701,11 @@ function TeamBuilderPanel() {
               characterBonusesById={selectedProfileCharacterBonusesById}
               displayServer={selectedProfileCardServer}
               currentEventBonusCardCount={currentEventBonusCardIds.length}
-              addingCurrentEventCards={addingCurrentEventCards}
-              temporaryCardActionError={temporaryCardActionError}
               temporaryCardActionNotice={temporaryCardActionNotice}
               onAddTemporary={() => {
-                setTemporaryCardActionError("");
                 setTemporaryCardActionNotice("");
                 setCardPickerValue(null);
-                setCardPickerOpen(true);
+                setIsCardPickerOpen(true);
               }}
               onAddCurrentEventCards={addCurrentEventBonusTemporaryCards}
               onEditTemporary={editTemporaryCard}
@@ -3814,7 +3758,15 @@ function TeamBuilderPanel() {
             </div>
             <div className="rounded-2xl border border-slate-200 bg-white p-4">
               <div className="text-xs font-semibold text-slate-500">{labelsT("profile")}</div>
-              <div className="mt-1 font-bold text-slate-900">{selectedProfileLabel}</div>
+              <div className="mt-1 flex min-w-0 items-center gap-2 font-bold text-slate-900">
+                {selectedProfile ? (
+                  <BandoriServerIcon
+                    server={selectedProfile.server}
+                    className="h-5 w-5 shadow-[0_1px_3px_rgba(15,23,42,0.18)]"
+                  />
+                ) : null}
+                <span className="min-w-0 wrap-break-word">{selectedProfileLabel}</span>
+              </div>
             </div>
           </div>
           <div className="grid gap-4 rounded-2xl border border-slate-200 bg-white p-4">
@@ -4049,16 +4001,21 @@ function TeamBuilderPanel() {
         </section>
       ) : null}
 
-      {cardPickerOpen ? (
-        <DynamicTemporaryCardPickerDialog
-          open={cardPickerOpen}
+      {isCardPickerOpen && !editingTemporaryCard ? (
+        <DynamicBandoriCardPickerDialog
+          isOpen={isCardPickerOpen}
+          title={temporaryCardsT("pickerTitle")}
+          closeLabel={temporaryCardsT("close")}
           value={cardPickerValue}
-          adding={addingTemporaryCard}
           server={selectedProfileCardServer}
+          missingCardFallback="jp"
           scrollElementRef={cardPickerScrollRef}
+          cardMetadata={profileCardMetadata}
+          characters={data.characters}
+          skills={data.skills}
           onValueChange={selectTemporaryCard}
           onClose={() => {
-            setCardPickerOpen(false);
+            setIsCardPickerOpen(false);
             setCardPickerValue(null);
           }}
         />
@@ -4067,7 +4024,7 @@ function TeamBuilderPanel() {
       {editingTemporaryCard ? (
         <DynamicTemporaryCardEditorDialog
           card={editingTemporaryCard}
-          baselineCard={editingTemporaryCardExists ? cardPreferences.temporaryCards.find((card) => card.instanceId === editingTemporaryCard.instanceId) ?? null : null}
+          baselineCard={isEditingTemporaryCardPersisted ? cardPreferences.temporaryCards.find((card) => card.instanceId === editingTemporaryCard.instanceId) ?? null : null}
           metadata={profileCardMetadata[String(editingTemporaryCard.cardId)]}
           characterName={getCardCharacterLabel(
             profileCardMetadata[String(editingTemporaryCard.cardId)],
@@ -4075,12 +4032,12 @@ function TeamBuilderPanel() {
             preferredServer,
             selectedProfileCardServer,
           )}
-          bandId={getCardBandId(profileCardMetadata[String(editingTemporaryCard.cardId)], data.characters)}
+          bandId={resolveBandoriCardBandId(profileCardMetadata[String(editingTemporaryCard.cardId)], data.characters)}
           characterBonusesById={selectedProfileCharacterBonusesById}
           displayServer={selectedProfileCardServer}
-          exists={editingTemporaryCardExists}
+          isExistingCard={isEditingTemporaryCardPersisted}
           onClose={closeTemporaryCardEditor}
-          onSave={saveTemporaryCard}
+          onApply={applyTemporaryCard}
           onDelete={deleteTemporaryCard}
         />
       ) : null}
