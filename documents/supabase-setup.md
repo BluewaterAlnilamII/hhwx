@@ -104,9 +104,9 @@ The web app needs:
 
 - `NEXT_PUBLIC_SUPABASE_URL`
 - `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
-- `NEXT_PUBLIC_BANDORI_TRACKER_LIVE_SOURCE` (`postgres_changes` during rollout, then `broadcast`)
+- `NEXT_PUBLIC_BANDORI_TRACKER_LIVE_SOURCE=broadcast` (must be switched before sparse history stops writing Supabase)
+- `SUPABASE_SECRET_KEY`
 
 Before deploying the tracker-live migration, run `npm run test:supabase` against the local Supabase stack (or an isolated Supabase branch). The transactional check in `supabase/tests/bandori_tracker_latest.sql` covers RPC merge states, integer wire values, ACL/RLS policy presence, and confirms that the latest table is absent from the Postgres Changes publication.
-- `SUPABASE_SECRET_KEY`
 
 `SUPABASE_SECRET_KEY` is required only on the server and must never use a `NEXT_PUBLIC_` prefix.

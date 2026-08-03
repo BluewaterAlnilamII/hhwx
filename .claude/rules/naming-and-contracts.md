@@ -19,7 +19,7 @@
 
 - By default, JSON keys returned by project-owned APIs use camelCase, except for registered historical compatibility public contracts.
 - `snake_case` fields returned from the database and fields from third-party APIs must normally be mapped at the service boundary before they are returned to the frontend. Registered historical compatibility public contracts may keep original key names only at the compatibility boundary.
-- Non-camelCase keys are allowed only for explicitly pass-through third-party protocols or registered historical compatibility public APIs. In those cases, document the compatibility reason in the route or adapter.
+- Non-camelCase keys are allowed only for registered third-party wire-compatible adapters or historical compatibility public APIs. In those cases, document the compatibility reason in the route or adapter.
 - The full definition of new JSON API response envelopes and historical compatibility exceptions lives in `.claude/rules/api-routes.md`. Do not duplicate concrete structures here to avoid rule drift.
 - Do not mix two response structures in the same route by default. If a registered historical compatibility boundary must keep the old success body while using the unified failure body, document the reason in the route or shared handler.
 

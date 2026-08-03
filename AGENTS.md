@@ -19,6 +19,7 @@ This file is the Codex rule entry point for the hhwx repository. Long-lived repo
 - Prefer `@/*` imports that point to `src/` to reduce deep relative paths.
 - New features and refactors must keep module boundaries clear. Avoid coupling multiple responsibilities into the same component, hook, route, or service module.
 - Page components compose UI. API routes parse parameters, enforce authorization, and format responses. Business rules should live in hooks, `src/lib`, or `src/lib/*-server.ts`.
+- `/api/bandori/tracker/topdata` is the registered Bestdori wire-compatible success exception backed by HHWX private object storage; its errors use the HHWX contract, and this exception is not a template for other APIs. Other adapters require their own registration in `.claude/rules/api-routes.md`.
 - Browser code must only use anonymous publishable clients. Service role keys, private environment variables, and RLS-bypass logic are only allowed in server-side modules.
 - Server-side APIs must not fetch HHWX-owned public CDN URLs such as `cdn.hhwx.org` for catalog, manifest, index, or other aggregate asset metadata. Use private object-storage reads through R2/S3 signed requests instead; public CDN reads are for browsers and external clients.
 - When script commands, deployment flow, environment variables, data contracts, or external dependency constraints change, update the related documentation in the same change.

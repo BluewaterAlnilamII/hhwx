@@ -55,6 +55,49 @@ type SnapshotRecordMapCacheOptions = {
   ) => void;
 };
 
+type SnapshotJsonObjectCacheOptions<T> = {
+  maxEntries: number;
+  maxBytes: number;
+  ttlMs: number;
+  readLabel: string;
+  allowNotFound?: boolean;
+  parse: (value: unknown) => T;
+};
+
+export type BandoriVerifiedGzipDescriptor = {
+  key: string;
+  semanticSha256: string;
+  compressedSha256: string;
+  compressedSize: number;
+};
+
+type SnapshotVerifiedGzipCacheOptions<T, TDescriptor extends BandoriVerifiedGzipDescriptor> = {
+  maxEntries: number;
+  maxCacheBytes: number;
+  maxCompressedBytes: number;
+  maxDecompressedBytes: number;
+  datasetLabel: string;
+  verifySemanticHash?: boolean;
+  parse: (value: unknown, descriptor: TDescriptor, cacheKey: string) => T;
+  estimateBytes?: (value: T, decompressedBytes: number) => number;
+};
+
+export type BandoriVerifiedGzipJsonCacheReader<
+  T,
+  TDescriptor extends BandoriVerifiedGzipDescriptor,
+> = ((
+  source: BandoriSnapshotObjectSource,
+  cacheKey: string,
+  descriptor: TDescriptor,
+  readOptions?: R2ObjectReadOptions,
+) => Promise<T>) & {
+  peek: (
+    sourceScope: string,
+    cacheKey: string,
+    descriptor: TDescriptor,
+  ) => T | null;
+};
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -125,6 +168,15 @@ function objectResponse(body: Buffer, status: number): R2ObjectResponse {
     json: async <T = unknown>() => JSON.parse(body.toString("utf8")) as T,
     text: async () => body.toString("utf8"),
   };
+}
+
+function canonicalJson(value: unknown): string {
+  if (value === null || typeof value !== "object") return JSON.stringify(value);
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
+  return `{${Object.entries(value as Record<string, unknown>)
+    .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
+    .map(([key, entry]) => `${JSON.stringify(key)}:${canonicalJson(entry)}`)
+    .join(",")}}`;
 }
 
 function validateObjectKey(objectKey: string, localObjectLabel: string): string[] {
@@ -204,6 +256,237 @@ export function createBandoriSnapshotObjectSource(
   };
 }
 
+export function createBandoriSnapshotJsonObjectCache<T>(
+  options: SnapshotJsonObjectCacheOptions<T>,
+): (
+  source: BandoriSnapshotObjectSource,
+  objectKey: string,
+  readOptions?: R2ObjectReadOptions,
+) => Promise<T | null> {
+  if (!Number.isInteger(options.maxEntries) || options.maxEntries < 1) {
+    throw new Error("Bandori JSON object cache must retain at least one entry");
+  }
+  if (
+    !Number.isSafeInteger(options.maxBytes)
+    || options.maxBytes < 1
+    || !Number.isSafeInteger(options.ttlMs)
+    || options.ttlMs < 1
+  ) {
+    throw new Error("Bandori JSON object cache limits are invalid");
+  }
+  type JsonCacheEntry = {
+    expiresAt: number;
+    promise: Promise<T | null>;
+    isResolved: boolean;
+  };
+  const cache = new Map<string, JsonCacheEntry>();
+  const trim = () => {
+    while (cache.size > options.maxEntries) {
+      const oldest = [...cache.entries()].find(([, candidate]) => candidate.isResolved);
+      if (!oldest) return;
+      cache.delete(oldest[0]);
+    }
+  };
+  return async (source, objectKey, readOptions = {}) => {
+    const cacheKey = `${source.scope}\u0000${objectKey}`;
+    const existing = cache.get(cacheKey);
+    if (existing && (!existing.isResolved || existing.expiresAt > Date.now())) {
+      cache.delete(cacheKey);
+      cache.set(cacheKey, existing);
+      return existing.promise;
+    }
+    if (existing) cache.delete(cacheKey);
+    const promise = (async () => {
+      const response = await source.read(objectKey, {
+        ...readOptions,
+        maxBytes: options.maxBytes,
+      });
+      if (response.status === 404 && options.allowNotFound) return null;
+      if (!response.ok) {
+        throw new Error(`${options.readLabel} read failed: HTTP ${response.status}`);
+      }
+      validateDeclaredLength(
+        response,
+        null,
+        options.maxBytes,
+        `${options.readLabel} is too large`,
+      );
+      return options.parse(await response.json<unknown>());
+    })();
+    const entry: JsonCacheEntry = {
+      expiresAt: Date.now() + options.ttlMs,
+      promise,
+      isResolved: false,
+    };
+    cache.set(cacheKey, entry);
+    trim();
+    void promise.then(() => {
+      if (cache.get(cacheKey) !== entry) return;
+      entry.isResolved = true;
+      trim();
+    }, () => undefined);
+    void promise.catch(() => {
+      if (cache.get(cacheKey) === entry) cache.delete(cacheKey);
+    });
+    return promise;
+  };
+}
+
+export function createBandoriSnapshotVerifiedGzipJsonCache<
+  T,
+  TDescriptor extends BandoriVerifiedGzipDescriptor,
+>(
+  options: SnapshotVerifiedGzipCacheOptions<T, TDescriptor>,
+): BandoriVerifiedGzipJsonCacheReader<T, TDescriptor> {
+  if (!Number.isInteger(options.maxEntries) || options.maxEntries < 1) {
+    throw new Error("Bandori verified gzip cache must retain at least one entry");
+  }
+  if (
+    !Number.isSafeInteger(options.maxCacheBytes)
+    || options.maxCacheBytes < 1
+    || !Number.isSafeInteger(options.maxCompressedBytes)
+    || options.maxCompressedBytes < 1
+    || !Number.isSafeInteger(options.maxDecompressedBytes)
+    || options.maxDecompressedBytes < 1
+  ) {
+    throw new Error("Bandori verified gzip cache limits are invalid");
+  }
+  type CacheEntry = {
+    promise: Promise<T>;
+    isResolved: boolean;
+    estimatedBytes: number;
+    value?: T;
+  };
+  const cache = new Map<string, CacheEntry>();
+  let cacheBytes = 0;
+
+  const trim = () => {
+    while (cache.size > options.maxEntries || cacheBytes > options.maxCacheBytes) {
+      const oldest = [...cache.entries()].find(([, candidate]) => candidate.isResolved);
+      if (!oldest) return;
+      cache.delete(oldest[0]);
+      cacheBytes -= oldest[1].estimatedBytes;
+    }
+  };
+
+  const scopedKey = (
+    sourceScope: string,
+    cacheKey: string,
+    descriptor: TDescriptor,
+  ) => [
+    sourceScope,
+    cacheKey,
+    canonicalJson(descriptor),
+  ].join("\u0000");
+
+  const read: BandoriVerifiedGzipJsonCacheReader<T, TDescriptor> = async (
+    source,
+    cacheKey,
+    descriptor,
+    readOptions = {},
+  ) => {
+    if (
+      !Number.isSafeInteger(descriptor.compressedSize)
+      || descriptor.compressedSize < 1
+      || descriptor.compressedSize > options.maxCompressedBytes
+    ) {
+      throw new Error(`${options.datasetLabel} compressed size is invalid: ${cacheKey}`);
+    }
+    const scopedCacheKey = scopedKey(source.scope, cacheKey, descriptor);
+    const existing = cache.get(scopedCacheKey);
+    if (existing) {
+      if (existing.isResolved) {
+        cache.delete(scopedCacheKey);
+        cache.set(scopedCacheKey, existing);
+      }
+      return existing.promise;
+    }
+
+    const entry: CacheEntry = {
+      promise: Promise.resolve(null as T),
+      isResolved: false,
+      estimatedBytes: 0,
+    };
+    const promise = (async () => {
+      const response = await source.read(descriptor.key, {
+        ...readOptions,
+        maxBytes: Math.min(options.maxCompressedBytes, descriptor.compressedSize),
+      });
+      if (!response.ok) {
+        throw new Error(`${options.datasetLabel} read failed: HTTP ${response.status} ${cacheKey}`);
+      }
+      validateDeclaredLength(
+        response,
+        descriptor.compressedSize,
+        options.maxCompressedBytes,
+        `${options.datasetLabel} compressed size mismatch: ${cacheKey}`,
+      );
+      const compressed = Buffer.from(await response.arrayBuffer());
+      if (compressed.length !== descriptor.compressedSize) {
+        throw new Error(`${options.datasetLabel} compressed size mismatch: ${cacheKey}`);
+      }
+      if (createHash("sha256").update(compressed).digest("hex") !== descriptor.compressedSha256) {
+        throw new Error(`${options.datasetLabel} compressed hash mismatch: ${cacheKey}`);
+      }
+      if (advertisedUncompressedSize(compressed, options.datasetLabel) > options.maxDecompressedBytes) {
+        throw new Error(`${options.datasetLabel} is too large after decompression: ${cacheKey}`);
+      }
+      let decompressed: Buffer;
+      try {
+        decompressed = gunzipSync(compressed, { maxOutputLength: options.maxDecompressedBytes });
+      } catch (error) {
+        throw new Error(`${options.datasetLabel} is corrupt: ${cacheKey}`, { cause: error });
+      }
+      let raw: unknown;
+      try {
+        raw = JSON.parse(decompressed.toString("utf8"));
+      } catch (error) {
+        throw new Error(`${options.datasetLabel} is not valid JSON: ${cacheKey}`, { cause: error });
+      }
+      const value = options.parse(raw, descriptor, cacheKey);
+      if (options.verifySemanticHash !== false) {
+        const semanticSha256 = createHash("sha256").update(canonicalJson(raw)).digest("hex");
+        if (semanticSha256 !== descriptor.semanticSha256) {
+          throw new Error(`${options.datasetLabel} semantic hash mismatch: ${cacheKey}`);
+        }
+      }
+      const estimatedBytes = options.estimateBytes?.(value, decompressed.length)
+        ?? decompressed.length;
+      if (!Number.isSafeInteger(estimatedBytes) || estimatedBytes < 0) {
+        throw new Error(`${options.datasetLabel} cache size estimate is invalid: ${cacheKey}`);
+      }
+      entry.estimatedBytes = estimatedBytes;
+      entry.value = value;
+      return value;
+    })();
+    entry.promise = promise;
+    cache.set(scopedCacheKey, entry);
+    void promise.then(
+      () => {
+        if (cache.get(scopedCacheKey) !== entry) return;
+        entry.isResolved = true;
+        cacheBytes += entry.estimatedBytes;
+        cache.delete(scopedCacheKey);
+        cache.set(scopedCacheKey, entry);
+        trim();
+      },
+      () => undefined,
+    );
+    void promise.catch(() => {
+      if (cache.get(scopedCacheKey) === entry) cache.delete(scopedCacheKey);
+    });
+    return promise;
+  };
+  read.peek = (sourceScope, cacheKey, descriptor) => {
+    const entry = cache.get(scopedKey(sourceScope, cacheKey, descriptor));
+    if (!entry?.isResolved || entry.value === undefined) return null;
+    cache.delete(scopedKey(sourceScope, cacheKey, descriptor));
+    cache.set(scopedKey(sourceScope, cacheKey, descriptor), entry);
+    return entry.value;
+  };
+  return read;
+}
+
 function validateDeclaredLength(
   response: R2ObjectResponse,
   expectedSize: number | null,
@@ -277,44 +560,12 @@ function advertisedUncompressedSize(compressed: Buffer, datasetLabel: string): n
   return compressed.readUInt32LE(compressed.length - 4);
 }
 
-function decodeRecordMap(
+function parseRecordMap(
   cacheKey: string,
-  compressed: Buffer,
+  payload: unknown,
   descriptor: BandoriSnapshotPackDescriptor,
   options: SnapshotRecordMapCacheOptions,
 ): BandoriSnapshotRecordMap {
-  if (
-    compressed.length > options.maxCompressedBytes
-    || compressed.length !== descriptor.compressedSize
-  ) {
-    throw new Error(`${options.datasetLabel} compressed size mismatch: ${cacheKey}`);
-  }
-  const compressedSha256 = createHash("sha256").update(compressed).digest("hex");
-  if (compressedSha256 !== descriptor.compressedSha256) {
-    throw new Error(`${options.datasetLabel} compressed hash mismatch: ${cacheKey}`);
-  }
-  if (advertisedUncompressedSize(compressed, options.datasetLabel) > options.maxDecompressedBytes) {
-    throw new Error(`${options.datasetLabel} is too large after decompression: ${cacheKey}`);
-  }
-
-  let decompressed: Buffer;
-  try {
-    decompressed = gunzipSync(compressed, {
-      maxOutputLength: options.maxDecompressedBytes,
-    });
-  } catch (error) {
-    throw new Error(`${options.datasetLabel} is corrupt: ${cacheKey}`, { cause: error });
-  }
-  if (decompressed.length > options.maxDecompressedBytes) {
-    throw new Error(`${options.datasetLabel} is too large after decompression: ${cacheKey}`);
-  }
-
-  let payload: unknown;
-  try {
-    payload = JSON.parse(decompressed.toString("utf8"));
-  } catch (error) {
-    throw new Error(`${options.datasetLabel} is not valid JSON: ${cacheKey}`, { cause: error });
-  }
   if (!isRecord(payload)) {
     throw new Error(`${options.datasetLabel} must be an object`);
   }
@@ -340,95 +591,34 @@ export function createBandoriSnapshotRecordMapCache(
   cacheKey: string,
   descriptor: BandoriSnapshotPackDescriptor,
 ) => Promise<BandoriSnapshotRecordMap> {
-  if (!Number.isInteger(options.maxEntries) || options.maxEntries < 1) {
-    throw new Error("Bandori snapshot record cache must retain at least one entry");
-  }
-  type CacheEntry = {
-    promise: Promise<BandoriSnapshotRecordMap>;
-    isResolved: boolean;
-  };
-  const cache = new Map<string, CacheEntry>();
-
-  const trimResolvedEntries = () => {
-    let resolvedCount = 0;
-    for (const entry of cache.values()) {
-      if (entry.isResolved) {
-        resolvedCount += 1;
-      }
-    }
-    if (resolvedCount <= options.maxEntries) {
-      return;
-    }
-    for (const [key, entry] of cache) {
-      if (!entry.isResolved) {
-        continue;
-      }
-      cache.delete(key);
-      resolvedCount -= 1;
-      if (resolvedCount <= options.maxEntries) {
-        return;
-      }
-    }
-  };
-
-  return async (source, cacheKey, descriptor) => {
-    const scopedCacheKey = [
-      source.scope,
+  const maxCacheBytes = Math.min(
+    Number.MAX_SAFE_INTEGER,
+    options.maxEntries * options.maxDecompressedBytes,
+  );
+  const read = createBandoriSnapshotVerifiedGzipJsonCache<
+    BandoriSnapshotRecordMap,
+    BandoriSnapshotPackDescriptor
+  >({
+    maxEntries: options.maxEntries,
+    maxCacheBytes,
+    maxCompressedBytes: options.maxCompressedBytes,
+    maxDecompressedBytes: options.maxDecompressedBytes,
+    datasetLabel: options.datasetLabel,
+    // Legacy master packs exposed this field but the established reader never
+    // enforced it. Keep that behavior while sharing all transport, gzip, hash,
+    // in-flight, and LRU mechanics; newer datasets opt into semantic checking.
+    verifySemanticHash: false,
+    parse: (payload, descriptor, cacheKey) => parseRecordMap(
       cacheKey,
-      descriptor.key,
-      descriptor.compressedSha256,
-    ].join("\u0000");
-    const existing = cache.get(scopedCacheKey);
-    if (existing) {
-      if (existing.isResolved) {
-        cache.delete(scopedCacheKey);
-        cache.set(scopedCacheKey, existing);
-      }
-      return existing.promise;
-    }
-
-    const promise = (async () => {
-      const response = await source.read(descriptor.key, {
-        maxBytes: Math.min(options.maxCompressedBytes, descriptor.compressedSize),
-        timeoutMs: SNAPSHOT_OBJECT_TIMEOUT_MS,
-      });
-      if (!response.ok) {
-        throw new Error(
-          `${options.datasetLabel} read failed: HTTP ${response.status} ${cacheKey}`,
-        );
-      }
-      validateDeclaredLength(
-        response,
-        descriptor.compressedSize,
-        options.maxCompressedBytes,
-        `${options.datasetLabel} compressed size mismatch: ${cacheKey}`,
-      );
-      return decodeRecordMap(
-        cacheKey,
-        Buffer.from(await response.arrayBuffer()),
-        descriptor,
-        options,
-      );
-    })();
-    const entry: CacheEntry = { promise, isResolved: false };
-    cache.set(scopedCacheKey, entry);
-    void promise.then(
-      () => {
-        if (cache.get(scopedCacheKey) !== entry) {
-          return;
-        }
-        entry.isResolved = true;
-        cache.delete(scopedCacheKey);
-        cache.set(scopedCacheKey, entry);
-        trimResolvedEntries();
-      },
-      () => undefined,
-    );
-    void promise.catch(() => {
-      if (cache.get(scopedCacheKey) === entry) {
-        cache.delete(scopedCacheKey);
-      }
-    });
-    return promise;
-  };
+      payload,
+      descriptor,
+      options,
+    ),
+  });
+  return (source, cacheKey, descriptor) => read(
+    source,
+    cacheKey,
+    descriptor,
+    { timeoutMs: SNAPSHOT_OBJECT_TIMEOUT_MS },
+  );
 }

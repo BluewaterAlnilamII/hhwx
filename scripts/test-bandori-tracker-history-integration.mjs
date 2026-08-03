@@ -571,7 +571,7 @@ await withFakeR2(async (fakeR2) => {
       assert.equal(getSupabaseRequestCount(), beforeCooldown + 2);
 
       fakeR2.clearBehavior(recoveryArtifacts.manifestKey);
-      await new Promise((resolvePromise) => setTimeout(resolvePromise, 70));
+      await new Promise((resolvePromise) => setTimeout(resolvePromise, 1100));
       const recovered = await readJson(baseUrl, "server=3&event=365&tier=1000&type=event");
       assert.equal(recovered.response.status, 200);
       assert.equal(recovered.body.cutoffs[0].ep, 365);
@@ -594,7 +594,7 @@ await withFakeR2(async (fakeR2) => {
       assert.equal(fakeR2.count(oldest.packKey), 2, "entry-count LRU must reload the oldest pack");
     }, fakeR2Environment(fakeR2, {
       BANDORI_TRACKER_HISTORY_SOURCE: "r2-with-supabase-fallback",
-      BANDORI_TRACKER_HISTORY_TEST_FAILURE_COOLDOWN_MS: "50",
+      BANDORI_TRACKER_HISTORY_TEST_FAILURE_COOLDOWN_MS: "1000",
       BANDORI_TRACKER_HISTORY_TEST_R2_BUDGET_MS: "1000",
       NEXT_PUBLIC_SUPABASE_URL: supabaseUrl,
     }));
