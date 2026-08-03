@@ -24,8 +24,8 @@ import {
 import type { ComparisonConfig, ComparisonLine, ComparisonLinePoint, ComparisonTargetType, MinimalEvent, TrackerData, TrackerMouseState, TrackerTooltipPayloadEntry, TrackingMode } from "./types";
 import {
   BESTDORI_PREDICTION_STORAGE_KEY,
-  EVENT_TIERS,
-  getTiersForMode,
+  EVENT_TRACKER_TIERS,
+  getEventTrackerTiersForMode,
   INSTANT_PROJECTION_STORAGE_KEY,
   DAY_PROJECTION_STORAGE_KEY,
   MAX_COMPARISON_LINES,
@@ -45,7 +45,15 @@ import {
 } from "./useChartData";
 import { useProjectionPreference } from "./useProjectionPreference";
 import { useComparisonPreferences } from "./useComparisonPreferences";
-import { getDefaultTierForMode, normalizeTierForMode, readTrackerTierPreference, writeTrackerTierPreference } from "./tracker-tier-preference";
+import {
+  getDefaultTierForMode,
+  normalizeTierForMode,
+  normalizeTrackerRankingForMode,
+  readTrackerRankingPreference,
+  TOP10_RANKING_SELECTION,
+  writeTrackerRankingPreference,
+  type TrackerRankingSelection,
+} from "./tracker-tier-preference";
 import {
   parseTrackingModeSearchParam,
   parseEventTrackerViewSearchParam,
@@ -62,6 +70,7 @@ import { ComparisonControls } from "./ComparisonControls";
 import { TrackerChartPanel } from "./TrackerChartPanel";
 import { TrackerModeTierControls } from "./TrackerModeTierControls";
 import { TrackerStatusSummary } from "./TrackerStatusSummary";
+import { Top10Panel } from "./Top10Panel";
 import BandoriPageShell from "../BandoriPageShell";
 import BandoriEventSwitcher from "../BandoriEventSwitcher";
 import EventComments from "./EventComments";
@@ -270,7 +279,7 @@ function getComparisonTierOptions(config: ComparisonConfig, tierOptions: readonl
 }
 
 function getMainTrackerTierOptions(trackingMode: TrackingMode, eventId: number | null): readonly number[] {
-  const tierOptions = getTiersForMode(trackingMode);
+  const tierOptions = getEventTrackerTiersForMode(trackingMode);
   if (trackingMode !== "event" || eventId === null || !isLegacyCnEventWithoutT1500(eventId)) {
     return tierOptions;
   }
@@ -305,6 +314,20 @@ function resolveMainTrackerTier(trackingMode: TrackingMode, eventId: number | nu
   }
 
   return resolveLegacyCnEventTier(eventId, tier);
+}
+
+function resolveMainTrackerRanking(
+  trackingMode: TrackingMode,
+  eventId: number | null,
+  ranking: TrackerRankingSelection,
+): TrackerRankingSelection {
+  if (ranking === TOP10_RANKING_SELECTION) {
+    return trackingMode === "event"
+      ? TOP10_RANKING_SELECTION
+      : getDefaultTierForMode(trackingMode);
+  }
+
+  return resolveMainTrackerTier(trackingMode, eventId, ranking);
 }
 
 function getComparisonConfigKey(config: ComparisonConfig): string | null {
@@ -364,7 +387,7 @@ function findPreviousMonthlyComparisonTarget(
 type InitialTrackerQueryState = {
   currentEventId: number | null;
   trackingMode: TrackingMode;
-  selectedTier: number;
+  selectedRanking: TrackerRankingSelection;
   selectedServer: BandoriServer;
   activeView: EventTrackerView;
 };
@@ -372,18 +395,18 @@ type InitialTrackerQueryState = {
 function readInitialTrackerQueryState(preferredServer: BandoriServer): InitialTrackerQueryState {
   const params = readEventTrackerSearchParams();
   const trackingMode = parseTrackingModeSearchParam(params.get("type")) ?? "event";
-  const queryTier = readPositiveIntegerSearchParam(params, "tier");
+  const queryRanking = params.get("tier");
   const currentEventId = readPositiveIntegerSearchParam(params, "event");
   const selectedServer = resolveEventTrackerServerSelection(params.get("server"), preferredServer);
   const activeView = parseEventTrackerViewSearchParam(params.get("view")) ?? "tracker";
-  const selectedTier = queryTier !== null
-    ? normalizeTierForMode(trackingMode, queryTier) ?? readTrackerTierPreference(trackingMode)
-    : readTrackerTierPreference(trackingMode);
+  const selectedRanking = queryRanking !== null
+    ? normalizeTrackerRankingForMode(trackingMode, queryRanking) ?? readTrackerRankingPreference(trackingMode)
+    : readTrackerRankingPreference(trackingMode);
 
   return {
     currentEventId,
     trackingMode,
-    selectedTier: resolveMainTrackerTier(trackingMode, currentEventId, selectedTier),
+    selectedRanking: resolveMainTrackerRanking(trackingMode, currentEventId, selectedRanking),
     selectedServer,
     activeView,
   };
@@ -501,7 +524,7 @@ export default function EventTrackerPage() {
   const { value: eventAssetIndex } = useBandoriEventsAssetIndex();
   const [currentEventId, setCurrentEventId] = useState<number | null>(null);
   const [trackingMode, setTrackingMode] = useState<TrackingMode>("event");
-  const [selectedTier, setSelectedTier] = useState<number>(() => getDefaultTierForMode("event"));
+  const [selectedRanking, setSelectedRanking] = useState<TrackerRankingSelection>(() => getDefaultTierForMode("event"));
   const [selectedSongId, setSelectedSongId] = useState<number>(0);
   const [selectedMonthlyMonthId, setSelectedMonthlyMonthId] = useState<number>(() => getCurrentMonthlyRankingWindow().monthId);
   const [selectedServer, setSelectedServer] = useState<BandoriServer>(DEFAULT_BANDORI_PREFERRED_SERVER);
@@ -533,6 +556,10 @@ export default function EventTrackerPage() {
   const [chartViewportHeight, setChartViewportHeight] = useState(400);
   const [hasAppliedInitialUrlState, setHasAppliedInitialUrlState] = useState(false);
   const monthlyRankingOptions = useMemo(() => getMonthlyRankingOptions(), []);
+  const isTop10Selected = trackingMode === "event" && selectedRanking === TOP10_RANKING_SELECTION;
+  const selectedTier = typeof selectedRanking === "number"
+    ? selectedRanking
+    : getDefaultTierForMode(trackingMode);
 
   // ===== 数据获取层 =====
   const {
@@ -559,7 +586,7 @@ export default function EventTrackerPage() {
     selectedSongId,
     selectedMonthlyMonthId,
     selectedServer,
-    hasAppliedInitialUrlState && selectedServer === 3 && activeView === "tracker",
+    hasAppliedInitialUrlState && selectedServer === 3 && activeView === "tracker" && !isTop10Selected,
   );
 
   // ===== 投影偏好持久化 =====
@@ -591,21 +618,22 @@ export default function EventTrackerPage() {
     }
 
     const nextTrackingMode = resolveTrackingModeForEventType(trackingMode, eventTypeById.get(nextEventId));
-    const preferredTier = normalizeTierForMode(nextTrackingMode, selectedTier) ?? readTrackerTierPreference(nextTrackingMode);
-    const nextTier = resolveMainTrackerTier(nextTrackingMode, nextEventId, preferredTier);
+    const preferredRanking = normalizeTrackerRankingForMode(nextTrackingMode, selectedRanking)
+      ?? readTrackerRankingPreference(nextTrackingMode);
+    const nextRanking = resolveMainTrackerRanking(nextTrackingMode, nextEventId, preferredRanking);
 
     setCurrentEventId(nextEventId);
     setTrackingMode(nextTrackingMode);
-    setSelectedTier(nextTier);
+    setSelectedRanking(nextRanking);
     setZoomIndex(0);
     replaceEventTrackerUrlQuery({
       eventId: nextEventId,
       trackingMode: nextTrackingMode,
-      tier: nextTier,
+      tier: nextRanking,
       commentPage: null,
       commentId: null,
     });
-  }, [eventTypeById, selectedTier, trackingMode]);
+  }, [eventTypeById, selectedRanking, trackingMode]);
 
   const handleServerChange = useCallback((server: BandoriServer) => {
     setSelectedServer(server);
@@ -636,10 +664,14 @@ export default function EventTrackerPage() {
       return;
     }
 
-    const nextTier = resolveMainTrackerTier(nextMode, resolvedCurrentEventId, readTrackerTierPreference(nextMode));
+    const nextRanking = resolveMainTrackerRanking(
+      nextMode,
+      resolvedCurrentEventId,
+      readTrackerRankingPreference(nextMode),
+    );
 
     setTrackingMode(nextMode);
-    setSelectedTier(nextTier);
+    setSelectedRanking(nextRanking);
     setZoomIndex(0);
   }, [isSongModeDisabled, resolvedCurrentEventId, trackingMode]);
 
@@ -651,13 +683,23 @@ export default function EventTrackerPage() {
 
     const nextTier = resolveMainTrackerTier(trackingMode, resolvedCurrentEventId, normalizedTier);
 
-    if (nextTier === selectedTier) {
+    if (nextTier === selectedRanking) {
       return;
     }
 
-    setSelectedTier(nextTier);
-    writeTrackerTierPreference(trackingMode, nextTier);
-  }, [resolvedCurrentEventId, selectedTier, trackingMode]);
+    setSelectedRanking(nextTier);
+    writeTrackerRankingPreference(trackingMode, nextTier);
+  }, [resolvedCurrentEventId, selectedRanking, trackingMode]);
+
+  const handleTop10Change = useCallback(() => {
+    if (trackingMode !== "event" || selectedRanking === TOP10_RANKING_SELECTION) {
+      return;
+    }
+
+    setSelectedRanking(TOP10_RANKING_SELECTION);
+    writeTrackerRankingPreference("event", TOP10_RANKING_SELECTION);
+    setZoomIndex(0);
+  }, [selectedRanking, trackingMode]);
 
   const handleMonthlyMonthChange = useCallback((monthId: number) => {
     setSelectedMonthlyMonthId(monthId);
@@ -679,7 +721,7 @@ export default function EventTrackerPage() {
       const nextState = readInitialTrackerQueryState(preferredServer);
       setCurrentEventId(nextState.currentEventId);
       setTrackingMode(nextState.trackingMode);
-      setSelectedTier(nextState.selectedTier);
+      setSelectedRanking(nextState.selectedRanking);
       setSelectedServer(nextState.selectedServer);
       setActiveView(nextState.activeView);
       setHasAppliedInitialUrlState(true);
@@ -702,9 +744,13 @@ export default function EventTrackerPage() {
         return;
       }
 
-      const nextTier = resolveMainTrackerTier("event", resolvedCurrentEventId, readTrackerTierPreference("event"));
+      const nextRanking = resolveMainTrackerRanking(
+        "event",
+        resolvedCurrentEventId,
+        readTrackerRankingPreference("event"),
+      );
       setTrackingMode("event");
-      setSelectedTier(nextTier);
+      setSelectedRanking(nextRanking);
       setZoomIndex(0);
     });
 
@@ -725,11 +771,11 @@ export default function EventTrackerPage() {
     replaceEventTrackerUrlQuery({
       eventId: resolvedCurrentEventId,
       trackingMode,
-      tier: selectedTier,
+      tier: selectedRanking,
       server: selectedServer,
       view: activeView,
     });
-  }, [activeView, hasAppliedInitialUrlState, resolvedCurrentEventId, selectedServer, selectedTier, trackingMode]);
+  }, [activeView, hasAppliedInitialUrlState, resolvedCurrentEventId, selectedRanking, selectedServer, trackingMode]);
 
   const updateModeIndicator = useCallback(() => {
     const listElement = modeTabsListRef.current;
@@ -834,7 +880,9 @@ export default function EventTrackerPage() {
     () => new Set(comparisonTargetOptions.map((option) => option.id)),
     [comparisonTargetOptions],
   );
-  const comparisonTierOptions = comparisonTargetType === "monthly" ? MONTHLY_TIERS : EVENT_TIERS;
+  const comparisonTierOptions = comparisonTargetType === "monthly"
+    ? MONTHLY_TIERS
+    : EVENT_TRACKER_TIERS;
   const comparisonTierOptionsByConfigId = useMemo(
     () => new Map(comparisonConfigs.map((config) => [
       config.id,
@@ -863,6 +911,7 @@ export default function EventTrackerPage() {
     [resolvedComparisonConfigs],
   );
   const canAddComparisonRow = (
+    !isTop10Selected &&
     (trackingMode === "event" || trackingMode === "monthly") &&
     defaultComparisonTargetId !== null &&
     comparisonConfigs.length < MAX_COMPARISON_LINES
@@ -1013,12 +1062,12 @@ export default function EventTrackerPage() {
   );
   const finalDisplayedData = useFinalDisplayedData(fullProcessedData, cutoffEnd, status, showInstantProjection, showDayProjection);
   const bestdoriPrediction = useBestdoriPrediction({
-    enabled: hasAppliedInitialUrlState && selectedServer === 3 && activeView === "tracker" && trackingMode === "event" && status === "进行中" && showBestdoriPrediction,
+    enabled: hasAppliedInitialUrlState && selectedServer === 3 && activeView === "tracker" && trackingMode === "event" && !isTop10Selected && status === "进行中" && showBestdoriPrediction,
     eventId: resolvedCurrentEventId,
     tier: selectedTier,
   });
   const { comparisonLines } = useComparisonTrackerData({
-    enabled: hasAppliedInitialUrlState && selectedServer === 3 && activeView === "tracker" && (trackingMode === "event" || trackingMode === "monthly"),
+    enabled: hasAppliedInitialUrlState && selectedServer === 3 && activeView === "tracker" && !isTop10Selected && (trackingMode === "event" || trackingMode === "monthly"),
     configs: activeComparisonConfigs,
     events: allEvents,
     monthlyOptions: monthlyRankingOptions,
@@ -1397,6 +1446,7 @@ export default function EventTrackerPage() {
               challengeSongGridClassName={challengeSongGridClassName}
               challengeSongTitleMap={challengeSongTitleMap}
               isSongModeDisabled={isSongModeDisabled}
+              isTop10Selected={isTop10Selected}
               modeIndicatorStyle={modeIndicatorStyle}
               modeTabsListRef={modeTabsListRef}
               modeTriggerRefs={modeTriggerRefs}
@@ -1404,6 +1454,7 @@ export default function EventTrackerPage() {
               onMonthlyMonthChange={handleMonthlyMonthChange}
               onSongChange={setSelectedSongId}
               onTierChange={handleTierChange}
+              onTop10Change={handleTop10Change}
               resolvedSelectedSongId={resolvedSelectedSongId}
               selectedMonthlyMonthId={selectedMonthlyMonthId}
               selectedTier={selectedTier}
@@ -1415,7 +1466,7 @@ export default function EventTrackerPage() {
             <Tabs.Content value={trackingMode} className="outline-hidden focus:outline-hidden w-full animate-in fade-in zoom-in-95 duration-500">
               <div className="mt-3 relative rounded-2xl border border-slate-200/80 bg-[#fffef4] p-2 shadow-[0_18px_48px_rgba(15,23,42,0.10)] dark:border-slate-800/80 dark:bg-[#0C111C] dark:shadow-[0_24px_60px_rgba(0,0,0,0.28)] sm:p-4">
 
-                {loading && (
+                {!isTop10Selected && loading && (
                   <div className="absolute inset-0 bg-white/75 dark:bg-[#0C111C]/75 z-30 flex items-center justify-center rounded-2xl">
                     <div className="flex flex-col items-center">
                       <div className="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
@@ -1424,6 +1475,29 @@ export default function EventTrackerPage() {
                   </div>
                 )}
 
+                {isTop10Selected ? (
+                  <Top10Panel
+                    chartContainerKey={chartContainerKey}
+                    chartViewportHeight={chartViewportHeight}
+                    chartViewportRef={chartViewportRef}
+                    domainStart={domainStart}
+                    domainEnd={domainEnd}
+                    eventId={resolvedCurrentEventId}
+                    maxZoomIndex={ZOOM_WIDTH_MULTIPLIERS.length - 1}
+                    midnights={midnights}
+                    nonWorkingDayBands={nonWorkingDayBands}
+                    onZoomIn={handleZoomIn}
+                    onZoomOut={handleZoomOut}
+                    scheduleTooltipPositionUpdateRef={scheduleTooltipPositionUpdateRef}
+                    scrollContainerRef={scrollContainerRef}
+                    server={selectedServer}
+                    status={status}
+                    tooltipRef={tooltipRef}
+                    zoomIndex={zoomIndex}
+                    zoomWidthMultiplier={zoomWidthMultiplier}
+                  />
+                ) : (
+                  <>
                 <TrackerStatusSummary
                   bestdoriPrediction={bestdoriPrediction}
                   scoreSummary={scoreSummary}
@@ -1490,6 +1564,8 @@ export default function EventTrackerPage() {
                   status={status}
                   trackingMode={trackingMode}
                 />
+                  </>
+                )}
               </div>
             </Tabs.Content>
           </Tabs.Root>

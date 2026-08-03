@@ -175,7 +175,7 @@ test("event tracker server selection prefers the page query without changing the
 test("event tracker renders the shared tracker surface for every server", () => {
   assert.match(
     eventTrackerPageSource,
-    /selectedServer,\s*hasAppliedInitialUrlState && selectedServer === 3 && activeView === "tracker",/u,
+    /selectedServer,\s*hasAppliedInitialUrlState && selectedServer === 3 && activeView === "tracker" && !isTop10Selected,/u,
   );
   assert.doesNotMatch(eventTrackerPageSource, /activeView === "tracker" \? selectedServer === 3/u);
   assert.doesNotMatch(eventTrackerPageSource, /分数追踪数据尚未接入|页面结构和服务器上下文已经就绪/u);

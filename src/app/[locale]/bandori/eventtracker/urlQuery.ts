@@ -1,4 +1,5 @@
 import type { TrackingMode } from "./types";
+import type { TrackerRankingSelection } from "./tracker-tier-preference";
 import {
   getBandoriServerCode,
   parseBandoriServerParam,
@@ -10,7 +11,7 @@ export type EventTrackerView = "tracker" | "info";
 type EventTrackerUrlQueryPatch = {
   eventId?: number | null;
   trackingMode?: TrackingMode | null;
-  tier?: number | null;
+  tier?: TrackerRankingSelection | null;
   commentPage?: number | null;
   commentId?: string | null;
   server?: BandoriServer | null;
@@ -76,6 +77,20 @@ function setPositiveIntegerParam(params: URLSearchParams, name: string, value: n
   params.set(name, String(value));
 }
 
+function setTrackerRankingParam(
+  params: URLSearchParams,
+  value: TrackerRankingSelection | null | undefined,
+) {
+  if (value === undefined) {
+    return;
+  }
+  if (value === "top10") {
+    params.set("tier", value);
+    return;
+  }
+  setPositiveIntegerParam(params, "tier", value);
+}
+
 function setStringParam(params: URLSearchParams, name: string, value: string | null | undefined) {
   if (value === undefined) {
     return;
@@ -106,7 +121,7 @@ export function replaceEventTrackerUrlQuery(patch: EventTrackerUrlQueryPatch) {
     }
   }
 
-  setPositiveIntegerParam(url.searchParams, "tier", patch.tier);
+  setTrackerRankingParam(url.searchParams, patch.tier);
   setPositiveIntegerParam(url.searchParams, "page", patch.commentPage);
   setStringParam(url.searchParams, "comment", patch.commentId);
 

@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  BANDORI_TOPDATA_MAX_SAMPLE_SIZE,
   countBandoriTopDataSamples,
+  groupBandoriTopDataSamples,
   parseBandoriTopDataPayload,
 } from "../src/lib/bandori-topdata-contract.ts";
 
@@ -50,6 +52,8 @@ test("groups variable-size history by time and rejects samples above ten", () =>
   const parsed = parseBandoriTopDataPayload(mixed);
   assert.equal(parsed.points.length, 16);
   assert.equal(countBandoriTopDataSamples(parsed.points), 3);
+  assert.deepEqual(groupBandoriTopDataSamples(parsed.points).map((sample) => sample.length), [1, 5, 10]);
+  assert.equal(BANDORI_TOPDATA_MAX_SAMPLE_SIZE, 10);
 
   const oversized = payload(10);
   oversized.points.push({

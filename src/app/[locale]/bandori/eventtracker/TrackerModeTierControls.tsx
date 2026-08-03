@@ -19,6 +19,7 @@ type TrackerModeTierControlsProps = {
   challengeSongGridClassName: string;
   challengeSongTitleMap: Record<string, string> | null | undefined;
   isSongModeDisabled: boolean;
+  isTop10Selected: boolean;
   modeIndicatorStyle: ModeIndicatorStyle;
   modeTabsListRef: RefObject<HTMLDivElement | null>;
   modeTriggerRefs: MutableRefObject<Record<TrackingMode, HTMLButtonElement | null>>;
@@ -26,6 +27,7 @@ type TrackerModeTierControlsProps = {
   onMonthlyMonthChange: (monthId: number) => void;
   onSongChange: (songId: number) => void;
   onTierChange: (tier: number) => void;
+  onTop10Change: () => void;
   resolvedSelectedSongId: number;
   selectedMonthlyMonthId: number;
   selectedTier: number;
@@ -44,6 +46,7 @@ export const TrackerModeTierControls = memo(function TrackerModeTierControls({
   challengeSongGridClassName,
   challengeSongTitleMap,
   isSongModeDisabled,
+  isTop10Selected,
   modeIndicatorStyle,
   modeTabsListRef,
   modeTriggerRefs,
@@ -51,6 +54,7 @@ export const TrackerModeTierControls = memo(function TrackerModeTierControls({
   onMonthlyMonthChange,
   onSongChange,
   onTierChange,
+  onTop10Change,
   resolvedSelectedSongId,
   selectedMonthlyMonthId,
   selectedTier,
@@ -153,13 +157,28 @@ export const TrackerModeTierControls = memo(function TrackerModeTierControls({
             选择排名
           </div>
           <div className="flex flex-wrap gap-1.5 sm:gap-2">
+            {trackingMode === "event" ? (
+              <button
+                type="button"
+                onClick={onTop10Change}
+                aria-pressed={isTop10Selected}
+                className={`h-8 min-w-[3.7rem] rounded-[12px] border px-2 text-[11px] font-semibold tracking-[0.01em] transition-all duration-300 sm:h-9 sm:min-w-[4.1rem] sm:rounded-[14px] sm:px-2.5 sm:text-[12px] ${
+                  isTop10Selected
+                    ? "border-blue-500 bg-blue-600 text-white shadow-[0_8px_18px_rgba(37,99,235,0.2)] ring-2 ring-blue-500/85 ring-offset-2 ring-offset-white dark:ring-offset-[#111827]"
+                    : "border-slate-300/90 bg-slate-50 text-slate-700 shadow-[0_4px_12px_rgba(15,23,42,0.06)] hover:border-blue-300 hover:bg-white hover:text-blue-700 hover:shadow-[0_8px_18px_rgba(59,130,246,0.14)] dark:border-slate-600/80 dark:bg-slate-800 dark:text-slate-100 dark:hover:border-sky-400/60 dark:hover:bg-slate-700 dark:hover:text-sky-100"
+                }`}
+              >
+                TOP10
+              </button>
+            ) : null}
             {tierOptions.map((tier) => (
               <button
                 key={tier}
                 type="button"
                 onClick={() => onTierChange(tier)}
+                aria-pressed={!isTop10Selected && selectedTier === tier}
                 className={`h-8 min-w-[2.9rem] rounded-[12px] border px-2 text-[11px] font-semibold tracking-[0.01em] transition-all duration-300 sm:h-9 sm:min-w-[3.15rem] sm:rounded-[14px] sm:px-2.5 sm:text-[12px] ${
-                  selectedTier === tier
+                  !isTop10Selected && selectedTier === tier
                     ? "border-blue-500 bg-blue-600 text-white shadow-[0_8px_18px_rgba(37,99,235,0.2)] ring-2 ring-blue-500/85 ring-offset-2 ring-offset-white dark:ring-offset-[#111827]"
                     : "border-slate-300/90 bg-slate-50 text-slate-700 shadow-[0_4px_12px_rgba(15,23,42,0.06)] hover:border-blue-300 hover:bg-white hover:text-blue-700 hover:shadow-[0_8px_18px_rgba(59,130,246,0.14)] dark:border-slate-600/80 dark:bg-slate-800 dark:text-slate-100 dark:hover:border-sky-400/60 dark:hover:bg-slate-700 dark:hover:text-sky-100"
                 }`}

@@ -1,6 +1,15 @@
 "use client";
 
-import { memo, useCallback, useLayoutEffect, useMemo, useRef, type MouseEvent, type RefObject } from "react";
+import {
+  memo,
+  useCallback,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  type MouseEvent,
+  type ReactNode,
+  type RefObject,
+} from "react";
 import { format } from "date-fns";
 import {
   CartesianGrid,
@@ -32,7 +41,7 @@ import {
   type ActiveChartMarker,
   type HoverTooltipState,
 } from "./useTrackerHoverTooltip";
-import type { ComparisonLine, TrackerData, TrackerMouseState, TrackingMode } from "./types";
+import type { ComparisonLine, TrackerMouseState, TrackingMode } from "./types";
 
 const FIXED_Y_AXIS_WIDTH = 38;
 const CHART_MARGIN = { top: 20, right: 5, left: 0, bottom: 20 } as const;
@@ -60,7 +69,7 @@ function findNearestChartTime(times: number[], targetTime: number): number | nul
 }
 
 function buildProjectionEndpointMarkers(
-  points: TrackerData[],
+  points: Array<{ dayEp?: number; instantEp?: number; time: number }>,
   showInstantProjection: boolean,
   showDayProjection: boolean,
 ): ActiveChartMarker[] {
@@ -106,18 +115,28 @@ type NonWorkingDayBand = {
   end: number;
 };
 
-type TrackerChartPanelProps = {
+export type TrackerChartLineSeries = {
+  color: string;
+  connectNulls?: boolean;
+  dataKey: string;
+  name: string;
+  strokeOpacity?: number;
+  strokeWidth?: number;
+};
+
+export type TrackerChartPanelProps = {
   bestdoriPredictionPointCount: number;
   buildHoverTooltip: (state: TrackerMouseState) => HoverTooltipState | null;
   chartContainerKey: string;
   chartViewportHeight: number;
   chartViewportRef: RefObject<HTMLDivElement | null>;
   comparisonLines: ComparisonLine[];
-  displayedChartData: TrackerData[];
+  displayedChartData: Array<{ time: number }>;
   domainEnd: number | "auto";
   domainStart: number | "auto";
   hasRenderableChartData: boolean;
   isLoading: boolean;
+  lineSeries?: readonly TrackerChartLineSeries[];
   midnights: number[];
   nonWorkingDayBands: NonWorkingDayBand[];
   onZoomIn: () => void;
@@ -129,8 +148,10 @@ type TrackerChartPanelProps = {
   showInstantProjection: boolean;
   tooltipRef: RefObject<HTMLDivElement | null>;
   trackingMode: TrackingMode;
+  renderTooltip?: (tooltip: HoverTooltipState) => ReactNode;
   yDomainInfo: [number | string, number | string];
   yTicks: number[] | undefined;
+  zoomEnabled?: boolean;
   zoomIndex: number;
   zoomWidthMultiplier: number;
   maxZoomIndex: number;
@@ -146,6 +167,7 @@ type TrackerChartCanvasProps = Pick<
   | "domainStart"
   | "midnights"
   | "nonWorkingDayBands"
+  | "lineSeries"
   | "showBestdoriPrediction"
   | "showDayProjection"
   | "showInstantProjection"
@@ -162,6 +184,7 @@ const TrackerChartCanvas = memo(function TrackerChartCanvas({
   domainStart,
   midnights,
   nonWorkingDayBands,
+  lineSeries,
   showBestdoriPrediction,
   showDayProjection,
   showInstantProjection,
@@ -213,79 +236,100 @@ const TrackerChartCanvas = memo(function TrackerChartCanvas({
           axisLine={false}
           dy={10}
         />
-        {showInstantProjection && (
-          <Line
-            type="linear"
-            dataKey="instantEp"
-            tooltipType="none"
-            stroke="#ef4444"
-            strokeWidth={2}
-            strokeDasharray="6 4"
-            dot={false}
-            activeDot={false}
-            connectNulls
-            isAnimationActive={false}
-          />
-        )}
-        <Line
-          type="linear"
-          dataKey="ep"
-          stroke="#3B82F6"
-          strokeWidth={5}
-          strokeOpacity={1}
-          dot={false}
-          activeDot={false}
-          connectNulls
-          isAnimationActive={false}
-        />
-
-        {showBestdoriPrediction && bestdoriPredictionPointCount > 0 && (
-          <Line
-            type="linear"
-            dataKey={BESTDORI_PREDICTION_DATA_KEY}
-            tooltipType="none"
-            stroke={BESTDORI_PREDICTION_COLOR}
-            strokeWidth={2.25}
-            strokeOpacity={0.96}
-            strokeDasharray="6 5"
-            dot={false}
-            activeDot={false}
-            connectNulls
-            isAnimationActive={false}
-          />
-        )}
-
-        {comparisonLines.map((line) => (
-          line.points.length > 0 ? (
+        {lineSeries === undefined ? (
+          <>
+            {showInstantProjection && (
+              <Line
+                type="linear"
+                dataKey="instantEp"
+                tooltipType="none"
+                stroke="#ef4444"
+                strokeWidth={2}
+                strokeDasharray="6 4"
+                dot={false}
+                activeDot={false}
+                connectNulls
+                isAnimationActive={false}
+              />
+            )}
             <Line
-              key={line.dataKey}
               type="linear"
-              dataKey={line.dataKey}
-              tooltipType="none"
-              stroke={line.color}
-              strokeWidth={1.6}
-              strokeOpacity={0.68}
+              dataKey="ep"
+              stroke="#3B82F6"
+              strokeWidth={5}
+              strokeOpacity={1}
               dot={false}
               activeDot={false}
               connectNulls
               isAnimationActive={false}
             />
-          ) : null
-        ))}
 
-        {showDayProjection && (
-          <Line
-            type="linear"
-            dataKey="dayEp"
-            tooltipType="none"
-            stroke="#3b82f6"
-            strokeWidth={2}
-            strokeDasharray="6 4"
-            dot={false}
-            activeDot={false}
-            connectNulls
-            isAnimationActive={false}
-          />
+            {showBestdoriPrediction && bestdoriPredictionPointCount > 0 && (
+              <Line
+                type="linear"
+                dataKey={BESTDORI_PREDICTION_DATA_KEY}
+                tooltipType="none"
+                stroke={BESTDORI_PREDICTION_COLOR}
+                strokeWidth={2.25}
+                strokeOpacity={0.96}
+                strokeDasharray="6 5"
+                dot={false}
+                activeDot={false}
+                connectNulls
+                isAnimationActive={false}
+              />
+            )}
+
+            {comparisonLines.map((line) => (
+              line.points.length > 0 ? (
+                <Line
+                  key={line.dataKey}
+                  type="linear"
+                  dataKey={line.dataKey}
+                  tooltipType="none"
+                  stroke={line.color}
+                  strokeWidth={1.6}
+                  strokeOpacity={0.68}
+                  dot={false}
+                  activeDot={false}
+                  connectNulls
+                  isAnimationActive={false}
+                />
+              ) : null
+            ))}
+
+            {showDayProjection && (
+              <Line
+                type="linear"
+                dataKey="dayEp"
+                tooltipType="none"
+                stroke="#3b82f6"
+                strokeWidth={2}
+                strokeDasharray="6 4"
+                dot={false}
+                activeDot={false}
+                connectNulls
+                isAnimationActive={false}
+              />
+            )}
+          </>
+        ) : (
+          lineSeries.map((series) => (
+            <Line
+              key={series.dataKey}
+              type="linear"
+              dataKey={series.dataKey}
+              name={series.name}
+              tooltipType="none"
+              stroke={series.color}
+              strokeWidth={series.strokeWidth ?? 2.4}
+              strokeOpacity={series.strokeOpacity ?? 1}
+              dot={false}
+              activeDot={false}
+              connectNulls={series.connectNulls ?? false}
+              isAnimationActive={false}
+            />
+          ))
         )}
       </LineChart>
     </ResponsiveContainer>
@@ -304,6 +348,7 @@ export const TrackerChartPanel = memo(function TrackerChartPanel({
   domainStart,
   hasRenderableChartData,
   isLoading,
+  lineSeries,
   midnights,
   nonWorkingDayBands,
   onZoomIn,
@@ -315,12 +360,15 @@ export const TrackerChartPanel = memo(function TrackerChartPanel({
   showInstantProjection,
   tooltipRef,
   trackingMode,
+  renderTooltip,
   yDomainInfo,
   yTicks,
+  zoomEnabled = true,
   zoomIndex,
   zoomWidthMultiplier,
   maxZoomIndex,
 }: TrackerChartPanelProps) {
+  const effectiveZoomWidthMultiplier = zoomEnabled ? zoomWidthMultiplier : 1;
   const chartTimes = useMemo(
     () => displayedChartData
       .map((point) => point.time)
@@ -376,7 +424,7 @@ export const TrackerChartPanel = memo(function TrackerChartPanel({
     onHoverFrame: handleHoverFrame,
     scrollContainerRef,
     tooltipRef,
-    zoomWidthMultiplier,
+    zoomWidthMultiplier: effectiveZoomWidthMultiplier,
   });
   const activePointerRef = useRef<{ activeLabel: number; pointerY: number } | null>(null);
   const chartPointerSizeRef = useRef({ height: 0, width: 0 });
@@ -420,7 +468,7 @@ export const TrackerChartPanel = memo(function TrackerChartPanel({
   }, [chartViewportRef, scheduleActivePointerPosition]);
   useLayoutEffect(() => {
     scheduleActivePointerPosition();
-  }, [scheduleActivePointerPosition, zoomWidthMultiplier]);
+  }, [effectiveZoomWidthMultiplier, scheduleActivePointerPosition]);
   const clearActiveHover = useCallback(() => {
     activePointerRef.current = null;
     clearHoverTooltip();
@@ -495,7 +543,7 @@ export const TrackerChartPanel = memo(function TrackerChartPanel({
             ref={scrollContainerRef}
             className="min-w-0 flex-1 h-full overflow-x-auto overflow-y-hidden styling-scrollbar relative"
           >
-            <div style={{ minWidth: `${zoomWidthMultiplier * 100}%`, height: "100%", transition: "min-width 0.3s ease-out" }}>
+            <div style={{ minWidth: `${effectiveZoomWidthMultiplier * 100}%`, height: "100%", transition: "min-width 0.3s ease-out" }}>
               <div ref={chartViewportRef} className="relative h-full overflow-hidden">
                 <TrackerChartCanvas
                   bestdoriPredictionPointCount={bestdoriPredictionPointCount}
@@ -504,6 +552,7 @@ export const TrackerChartPanel = memo(function TrackerChartPanel({
                   displayedChartData={displayedChartData}
                   domainEnd={domainEnd}
                   domainStart={domainStart}
+                  lineSeries={lineSeries}
                   midnights={midnights}
                   nonWorkingDayBands={nonWorkingDayBands}
                   showBestdoriPrediction={showBestdoriPrediction}
@@ -550,12 +599,14 @@ export const TrackerChartPanel = memo(function TrackerChartPanel({
                   }}
                 >
                   {hoverTooltip?.active && hoverTooltip.payload?.length ? (
-                    <TrackerTooltip
-                      active={hoverTooltip.active}
-                      payload={hoverTooltip.payload}
-                      label={hoverTooltip.label}
-                      trackingMode={trackingMode}
-                    />
+                    renderTooltip ? renderTooltip(hoverTooltip) : (
+                      <TrackerTooltip
+                        active={hoverTooltip.active}
+                        payload={hoverTooltip.payload}
+                        label={hoverTooltip.label}
+                        trackingMode={trackingMode}
+                      />
+                    )
                   ) : null}
                 </div>
               </div>
@@ -575,24 +626,26 @@ export const TrackerChartPanel = memo(function TrackerChartPanel({
         </div>
       )}
 
-      <div className="absolute top-[70%] right-4 -translate-y-1/2 flex flex-col gap-2 z-20 transition-opacity opacity-70 hover:opacity-100 mix-blend-difference dark:mix-blend-normal">
-        <button
-          onClick={onZoomIn}
-          className={`p-1.5 text-gray-500 dark:text-gray-400 hover:text-blue-500 dark:hover:text-blue-400 rounded-full transition-transform hover:scale-110 active:scale-95 bg-white/72 dark:bg-black/45 ${zoomIndex >= maxZoomIndex ? "invisible pointer-events-none" : ""}`}
-          disabled={zoomIndex >= maxZoomIndex}
-          title="放大"
-        >
-          <ZoomIn size={22} strokeWidth={2.5} />
-        </button>
-        <button
-          onClick={onZoomOut}
-          className={`p-1.5 rounded-full transition-transform hover:scale-110 active:scale-95 bg-white/72 dark:bg-black/45 ${zoomIndex <= 0 ? "invisible pointer-events-none" : "text-gray-500 dark:text-gray-400 hover:text-blue-500 dark:hover:text-blue-400"}`}
-          disabled={zoomIndex <= 0}
-          title="缩小"
-        >
-          <ZoomOut size={22} strokeWidth={2.5} />
-        </button>
-      </div>
+      {zoomEnabled ? (
+        <div className="absolute top-[70%] right-4 -translate-y-1/2 flex flex-col gap-2 z-20 transition-opacity opacity-70 hover:opacity-100 mix-blend-difference dark:mix-blend-normal">
+          <button
+            onClick={onZoomIn}
+            className={`p-1.5 text-gray-500 dark:text-gray-400 hover:text-blue-500 dark:hover:text-blue-400 rounded-full transition-transform hover:scale-110 active:scale-95 bg-white/72 dark:bg-black/45 ${zoomIndex >= maxZoomIndex ? "invisible pointer-events-none" : ""}`}
+            disabled={zoomIndex >= maxZoomIndex}
+            title="放大"
+          >
+            <ZoomIn size={22} strokeWidth={2.5} />
+          </button>
+          <button
+            onClick={onZoomOut}
+            className={`p-1.5 rounded-full transition-transform hover:scale-110 active:scale-95 bg-white/72 dark:bg-black/45 ${zoomIndex <= 0 ? "invisible pointer-events-none" : "text-gray-500 dark:text-gray-400 hover:text-blue-500 dark:hover:text-blue-400"}`}
+            disabled={zoomIndex <= 0}
+            title="缩小"
+          >
+            <ZoomOut size={22} strokeWidth={2.5} />
+          </button>
+        </div>
+      ) : null}
     </div>
   );
 });

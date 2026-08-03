@@ -46,10 +46,19 @@ reader 限制 manifest 64 KiB、gzip pack 2 MiB、解压后 16 MiB、points/user
 
 ## 前端集成边界
 
-本期不增加面板、hook 或视觉设计。后续前端把旧 T1/T10 入口统一为 TOP10，并让 TOP10 与
-T20+ cutoff 面板互斥，任何时刻只使用一套排名协议。公开 Bestdori 兼容历史 API 必须继续
-忽略 `latest`；HTTP 历史只在首次加载或切换活动时读取。30 秒 latest、Supabase、Private
-Broadcast 和前端面板契约明确延后到下一阶段。
+Event Tracker 的所有地区空壳都用 TOP10 替换旧活动榜 T1/T10 入口；歌曲榜和月度榜继续
+保留 T1/T10。TOP10 与 T20+ cutoff 面板互斥，页面任何时刻只使用一套排名协议。旧的
+活动榜 `tier=1`、`tier=10` URL 和浏览器偏好不迁移，但兼容 cutoff API 仍接受这些档位。
+
+TOP10 面板取最新样本中的 UID，只绘制这些用户的历史；UID 在某个样本中不在榜时中断曲线。
+最新样本的数组顺序就是展示排名。玩家行用 `sid` 和 `strained` 显示卡牌头像，并展示纯文本
+`name`、不带标签的 `uid` 和以 `P` 为单位的分数；不展示 `introduction`、`degrees` 或表示玩家等级的 `rank`。
+空历史沿用通用提示“暂无该排名档位的追踪数据”。
+
+第一阶段只有 `server=3` 历史。日服、国际服和台服前端同步显示 TOP10 入口，但在对应后端
+历史上线前不发出必然失败的请求。公开 Bestdori 兼容历史 API 继续忽略 `latest`。每个活动的
+HTTP 历史在同一浏览器会话中只读取一次；TOP10 面板没有 30 秒轮询、Supabase 订阅、Private
+Broadcast、预测线、投影线或对比线。
 
 ## 发布与回滚
 
