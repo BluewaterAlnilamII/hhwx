@@ -57,13 +57,25 @@ contains a final sample can serve stale while it remains in the bounded cache.
 
 ## Frontend integration boundary
 
-This release does not add a panel, hook, or visual design. A later frontend
-must normalize the old T1/T10 entries into the TOP10 panel, keep TOP10 mutually
-exclusive with T20+ cutoff panels, and maintain at most one ranking protocol at a
-time. The public Bestdori-compatible history API must continue to ignore `latest`.
-HTTP history should be loaded only on initial load or event change. The 30-second
-latest, Supabase, Private Broadcast, and frontend panel contracts are intentionally
-deferred to a later phase.
+The Event Tracker exposes TOP10 instead of the old event-ranking T1/T10 entries
+on every regional shell. Song and monthly T1/T10 entries remain available. TOP10
+is mutually exclusive with T20+ cutoff panels, so the page uses only one ranking
+protocol at a time. Old `tier=1` and `tier=10` event URLs and browser preferences
+are not migrated. The compatibility cutoff API still accepts those tiers.
+
+The TOP10 panel selects the UIDs from the newest sample, draws only those users'
+history, and breaks a line while a UID is absent from a sample. The ordered newest
+sample defines the displayed rank. Player rows show the card avatar from `sid` and
+`strained`, plain-text `name`, the unlabeled `uid`, and the score in `P`. They do not render `introduction`,
+`degrees`, or the player-level `rank` field. Empty history uses the shared tracker
+message, `暂无该排名档位的追踪数据`.
+
+Phase one history is available only for `server=3`. The JP, EN, and TW frontend
+shells expose the same TOP10 selection but do not issue a request until their
+backend histories exist. The public Bestdori-compatible history API continues to
+ignore `latest`. HTTP history is loaded once per browser session for each event;
+there is no 30-second polling, Supabase subscription, Private Broadcast, prediction,
+projection, or comparison path in the TOP10 panel.
 
 ## Release and rollback
 

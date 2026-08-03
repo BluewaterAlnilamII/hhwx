@@ -35,6 +35,9 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
+      - name: Test Bandori TOP10 tracker
+        run: npm run test:bandori-tracker-topdata
+
       - name: Build
         run: npm run build
         env:

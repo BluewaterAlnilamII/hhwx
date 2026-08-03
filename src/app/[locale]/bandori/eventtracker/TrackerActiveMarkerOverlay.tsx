@@ -10,6 +10,7 @@ import {
   type CSSProperties,
 } from "react";
 
+import { BANDORI_TOPDATA_MAX_SAMPLE_SIZE } from "@/lib/bandori-topdata-contract";
 import type { ActiveChartMarker } from "./useTrackerHoverTooltip";
 
 type ChartMargin = {
@@ -32,8 +33,6 @@ export type TrackerActiveMarkerOverlayHandle = {
   clearMarkers: () => void;
   updateMarkers: (markers: ActiveChartMarker[]) => void;
 };
-
-const MAX_ACTIVE_MARKER_COUNT = 8;
 
 function isFiniteNumber(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value);
@@ -155,7 +154,7 @@ export const TrackerActiveMarkerOverlay = memo(forwardRef<
       }
     },
     updateMarkers: (activeMarkers) => {
-      for (let index = 0; index < MAX_ACTIVE_MARKER_COUNT; index += 1) {
+      for (let index = 0; index < BANDORI_TOPDATA_MAX_SAMPLE_SIZE; index += 1) {
         const markerElement = activeMarkerRefs.current[index];
         const marker = activeMarkers[index];
         const style = marker ? getActiveMarkerStyle(marker) : null;
@@ -195,7 +194,7 @@ export const TrackerActiveMarkerOverlay = memo(forwardRef<
       data-testid="tracker-active-marker-overlay"
     >
       {markerElements}
-      {Array.from({ length: MAX_ACTIVE_MARKER_COUNT }, (_, index) => (
+      {Array.from({ length: BANDORI_TOPDATA_MAX_SAMPLE_SIZE }, (_, index) => (
         <span
           key={`active-marker-slot-${index}`}
           ref={(element) => {

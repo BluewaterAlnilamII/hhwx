@@ -12,6 +12,7 @@ export type HoverTooltipState = {
   active: boolean;
   coordinate: { x: number; y: number };
   label?: number;
+  markers?: ActiveChartMarker[];
   payload?: TrackerTooltipPayloadEntry[];
   signature?: string;
 };
@@ -67,6 +68,10 @@ export function buildActiveChartMarkers(hoverTooltip: HoverTooltipState | null):
     seen.add(marker.key);
     markers.push(marker);
   };
+
+  for (const marker of hoverTooltip.markers ?? []) {
+    addMarker(marker);
+  }
 
   for (const entry of hoverTooltip.payload ?? []) {
     const point = entry.payload;

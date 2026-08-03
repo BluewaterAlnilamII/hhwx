@@ -1,6 +1,7 @@
 export const BANDORI_TOPDATA_SCHEMA_VERSION = 1;
 export const BANDORI_TOPDATA_MAX_POINTS = 20_000;
 export const BANDORI_TOPDATA_MAX_USERS = 20_000;
+export const BANDORI_TOPDATA_MAX_SAMPLE_SIZE = 10;
 
 export type BandoriTopDataPoint = {
   time: number;
@@ -23,10 +24,12 @@ export type BandoriTopDataPayload = {
   users: BandoriTopDataUser[];
 };
 
-function groupBandoriTopDataPoints(
+export type BandoriTopDataSample = BandoriTopDataPoint[];
+
+export function groupBandoriTopDataSamples(
   points: readonly BandoriTopDataPoint[],
-): BandoriTopDataPoint[][] {
-  const groups: BandoriTopDataPoint[][] = [];
+): BandoriTopDataSample[] {
+  const groups: BandoriTopDataSample[] = [];
   let previousTime = 0;
   for (const point of points) {
     const currentGroup = groups.at(-1);
@@ -39,7 +42,7 @@ function groupBandoriTopDataPoints(
     }
     const group = groups.at(-1)!;
     group.push(point);
-    if (group.length > 10) {
+    if (group.length > BANDORI_TOPDATA_MAX_SAMPLE_SIZE) {
       throw new Error("Bandori topdata samples must contain between one and ten points");
     }
   }
@@ -49,7 +52,7 @@ function groupBandoriTopDataPoints(
 export function countBandoriTopDataSamples(
   points: readonly BandoriTopDataPoint[],
 ): number {
-  return groupBandoriTopDataPoints(points).length;
+  return groupBandoriTopDataSamples(points).length;
 }
 
 function requireRecord(value: unknown, label: string): Record<string, unknown> {
@@ -138,7 +141,7 @@ export function parseBandoriTopDataPayload(value: unknown): BandoriTopDataPayloa
 
   const points = payload.points.map(parsePoint);
   const referencedUids = new Set<number>();
-  for (const group of groupBandoriTopDataPoints(points)) {
+  for (const group of groupBandoriTopDataSamples(points)) {
     const time = group[0].time;
     const groupUids = new Set<number>();
     for (let position = 0; position < group.length; position += 1) {

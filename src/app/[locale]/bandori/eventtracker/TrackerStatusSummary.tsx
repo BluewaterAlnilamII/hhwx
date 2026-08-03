@@ -24,6 +24,7 @@ type TrackerStatusSummaryProps = {
   scoreSummary: TrackerScoreSummary;
   isRefreshing: boolean;
   showBestdoriPrediction: boolean;
+  showScoreValues?: boolean;
   status: string;
   trackingMode: TrackingMode;
 };
@@ -54,6 +55,7 @@ export const TrackerStatusSummary = memo(function TrackerStatusSummary({
   scoreSummary,
   isRefreshing,
   showBestdoriPrediction,
+  showScoreValues = true,
   status,
   trackingMode,
 }: TrackerStatusSummaryProps) {
@@ -69,12 +71,14 @@ export const TrackerStatusSummary = memo(function TrackerStatusSummary({
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[13px] leading-5 sm:gap-x-5 sm:text-sm">
         {status === "进行中" && (
           <>
-            <div className="flex items-center gap-1.5 sm:gap-2">
-              <span className="font-medium text-slate-500 dark:text-slate-400">最新分数</span>
-              <span className="font-bold text-blue-500 dark:text-sky-300">
-                {scoreSummary.latestScore !== null ? TRACKER_STATUS_NUMBER_FORMATTER.format(scoreSummary.latestScore) : "-"}
-              </span>
-            </div>
+            {showScoreValues ? (
+              <div className="flex items-center gap-1.5 sm:gap-2">
+                <span className="font-medium text-slate-500 dark:text-slate-400">最新分数</span>
+                <span className="font-bold text-blue-500 dark:text-sky-300">
+                  {scoreSummary.latestScore !== null ? TRACKER_STATUS_NUMBER_FORMATTER.format(scoreSummary.latestScore) : "-"}
+                </span>
+              </div>
+            ) : null}
             <div className="flex items-center gap-1.5 sm:gap-2">
               <span className="font-medium text-slate-500 dark:text-slate-400">更新时间</span>
               <span
@@ -110,7 +114,7 @@ export const TrackerStatusSummary = memo(function TrackerStatusSummary({
             )}
           </>
         )}
-        {status === "已结束" && (
+        {status === "已结束" && showScoreValues && (
           <>
             <div className="flex items-center gap-1.5 sm:gap-2">
               <span className="text-slate-500 dark:text-slate-400">结束分数</span>
