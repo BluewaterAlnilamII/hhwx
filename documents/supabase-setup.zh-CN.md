@@ -110,9 +110,9 @@ Web 应用需要：
 
 - `NEXT_PUBLIC_SUPABASE_URL`
 - `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
-- `NEXT_PUBLIC_BANDORI_TRACKER_LIVE_SOURCE`（灰度期间为 `postgres_changes`，切换后为 `broadcast`）
+- `NEXT_PUBLIC_BANDORI_TRACKER_LIVE_SOURCE=broadcast`（必须在稀疏历史停止写 Supabase 前切换）
+- `SUPABASE_SECRET_KEY`
 
 部署 tracker-live migration 前，必须在本地 Supabase 或隔离的 Supabase branch 执行 `npm run test:supabase`。`supabase/tests/bandori_tracker_latest.sql` 会在事务内验证 RPC 合并状态、点数组整数约束、ACL/RLS policy 是否存在，以及 latest 表未加入 Postgres Changes publication。
-- `SUPABASE_SECRET_KEY`
 
 `SUPABASE_SECRET_KEY` 只允许服务端使用，绝不能加 `NEXT_PUBLIC_` 前缀。

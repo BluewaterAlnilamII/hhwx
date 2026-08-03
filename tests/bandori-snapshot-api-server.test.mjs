@@ -4,8 +4,10 @@ import test from "node:test";
 import { gzipSync } from "node:zlib";
 
 import {
+  createBandoriSnapshotJsonObjectCache,
   createBandoriSnapshotPointerCache,
   createBandoriSnapshotRecordMapCache,
+  createBandoriSnapshotVerifiedGzipJsonCache,
 } from "../src/lib/bandori-snapshot-api-server.ts";
 
 function objectResponse(body) {
@@ -31,7 +33,7 @@ function createPack(recordId) {
     body,
     descriptor: {
       key: `packs/${compressedSha256}.json.gz`,
-      semanticSha256: "a".repeat(64),
+      semanticSha256: createHash("sha256").update(JSON.stringify(payload)).digest("hex"),
       compressedSha256,
       compressedSize: body.length,
       recordCount: 1,
@@ -141,4 +143,116 @@ test("resolved packs use a bounded LRU without evicting pending reads", async ()
   assert.equal(readCounts.get(packs[0].descriptor.key), 2);
   assert.equal(readCounts.get(packs[1].descriptor.key), 1);
   assert.equal(readCounts.get(packs[2].descriptor.key), 1);
+});
+
+test("JSON object cache keeps in-flight reads addressable while over capacity", async () => {
+  const resolvers = new Map();
+  const reads = new Map();
+  const source = {
+    scope: "json-pending",
+    read: async (key) => {
+      reads.set(key, (reads.get(key) ?? 0) + 1);
+      await new Promise((resolve) => resolvers.set(key, resolve));
+      return objectResponse(Buffer.from(JSON.stringify({ key }), "utf8"));
+    },
+  };
+  const read = createBandoriSnapshotJsonObjectCache({
+    maxEntries: 1,
+    maxBytes: 1024,
+    ttlMs: 60_000,
+    readLabel: "Test JSON object",
+    parse: (value) => value,
+  });
+
+  const first = read(source, "first.json");
+  const second = read(source, "second.json");
+  const firstAgain = read(source, "first.json");
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(reads.get("first.json"), 1);
+  assert.equal(reads.get("second.json"), 1);
+  resolvers.get("first.json")();
+  resolvers.get("second.json")();
+  assert.deepEqual(await firstAgain, await first);
+  await second;
+});
+
+test("verified gzip cache enforces its byte-bounded LRU and exposes only retained values", async () => {
+  const first = createPack("1");
+  const second = createPack("2");
+  const source = {
+    scope: "byte-lru",
+    read: async (key) => objectResponse(
+      key === first.descriptor.key ? first.body : second.body,
+    ),
+  };
+  const read = createBandoriSnapshotVerifiedGzipJsonCache({
+    maxEntries: 4,
+    maxCacheBytes: 150,
+    maxCompressedBytes: 1024,
+    maxDecompressedBytes: 1024,
+    datasetLabel: "Test verified pack",
+    parse: (value) => value,
+    estimateBytes: () => 100,
+  });
+
+  await read(source, "first", first.descriptor);
+  assert.deepEqual(read.peek(source.scope, "first", first.descriptor), { "1": { id: 1 } });
+  await read(source, "second", second.descriptor);
+  assert.equal(read.peek(source.scope, "first", first.descriptor), null);
+  assert.deepEqual(read.peek(source.scope, "second", second.descriptor), { "2": { id: 2 } });
+});
+
+test("verified gzip cache structurally parses before accepting a semantic hash", async () => {
+  const pack = createPack("1");
+  const descriptor = { ...pack.descriptor, semanticSha256: "0".repeat(64) };
+  let parses = 0;
+  const read = createBandoriSnapshotVerifiedGzipJsonCache({
+    maxEntries: 1,
+    maxCacheBytes: 1024,
+    maxCompressedBytes: 1024,
+    maxDecompressedBytes: 1024,
+    datasetLabel: "Test verified pack",
+    parse: (value) => {
+      parses += 1;
+      return value;
+    },
+  });
+  const source = {
+    scope: "semantic-mismatch",
+    read: async () => objectResponse(pack.body),
+  };
+
+  await assert.rejects(read(source, "first", descriptor), /semantic hash mismatch/u);
+  assert.equal(parses, 1);
+  assert.equal(read.peek(source.scope, "first", descriptor), null);
+});
+
+test("verified gzip cache revalidates the complete descriptor fingerprint", async () => {
+  const pack = createPack("1");
+  let reads = 0;
+  const source = {
+    scope: "descriptor-fingerprint",
+    read: async () => {
+      reads += 1;
+      return objectResponse(pack.body);
+    },
+  };
+  const read = createBandoriSnapshotVerifiedGzipJsonCache({
+    maxEntries: 2,
+    maxCacheBytes: 1024,
+    maxCompressedBytes: 1024,
+    maxDecompressedBytes: 1024,
+    datasetLabel: "Test verified pack",
+    parse: (value) => value,
+  });
+
+  await read(source, "same-target", pack.descriptor);
+  await assert.rejects(
+    read(source, "same-target", {
+      ...pack.descriptor,
+      semanticSha256: "0".repeat(64),
+    }),
+    /semantic hash mismatch/u,
+  );
+  assert.equal(reads, 2);
 });

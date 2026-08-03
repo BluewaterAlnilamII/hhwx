@@ -150,7 +150,7 @@ function readRequiredEnv(names: readonly string[], label: string): string {
 }
 
 export function getBandoriTrackerHistorySource(): BandoriTrackerHistorySource {
-  const value = process.env.BANDORI_TRACKER_HISTORY_SOURCE?.trim() || "supabase";
+  const value = process.env.BANDORI_TRACKER_HISTORY_SOURCE?.trim() || "r2";
   if (
     value !== "supabase"
     && value !== "r2-with-supabase-fallback"

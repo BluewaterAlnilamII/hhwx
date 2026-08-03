@@ -52,17 +52,17 @@ Events、Cards、Music 与 Stamps master API 会通过 `BANDORI_PRIVATE_R2_BUCKE
 `GET /api/bandori/tracker/data` 可以从 `bandori/trackerdata` 下的对象直接读取 CN 榜线历史。服务端使用带签名的 R2/S3 请求，不会通过公共 CDN 绕行读取聚合数据。按下面配置数据源和明确的公共 artifact bucket；endpoint 与凭据继续使用仅限服务端的 `BANDORI_R2_*`：
 
 ```dotenv
-BANDORI_TRACKER_HISTORY_SOURCE=supabase
-BANDORI_TRACKER_HISTORY_R2_BUCKET=your_public_artifact_bucket
+BANDORI_TRACKER_HISTORY_SOURCE=r2
+BANDORI_TRACKER_HISTORY_R2_BUCKET=cdn
 ```
 
 可选数据源为：
 
-- `supabase`：保持旧的纯数据库行为。
-- `r2-with-supabase-fallback`：优先读取 R2；只有 R2 不可用、损坏、超限或校验失败时，才把整个请求重新交给 Supabase。
+- `supabase`：仅用于切换前的纯数据库行为和冻结历史审计。
+- `r2-with-supabase-fallback`：仅用于仍双写时的短期灰度；R2 校验失败才把整个请求交给 Supabase。
 - `r2`：读取 R2；存在已验证的内存 stale snapshot 时可以使用，否则返回 `503 TRACKER_HISTORY_UNAVAILABLE`，不做请求级数据库 fallback。
 
-manifest 不存在、manifest 没有请求的 pack 类型，或有效 pack 中没有请求档位，都属于正常空数据，继续返回现有的 `200 + { result: true, cutoffs: [] }`。manifest 已经引用但 pack 缺失或无效则属于运行故障，不能伪装为空结果。公开请求参数、5000 行上限、响应格式、API `no-store` 策略和 Supabase Realtime 订阅都保持不变。
+manifest 不存在、manifest 没有请求的 pack 类型，或有效 pack 中没有请求档位，都属于正常空数据，继续返回现有的 `200 + { result: true, cutoffs: [] }`。manifest 已经引用但 pack 缺失或无效则属于运行故障，不能伪装为空结果。公开请求参数、5000 行上限、响应格式和 API `no-store` 策略保持不变。稀疏历史停止写 Supabase 前，前端 live source 必须从旧 Postgres Changes 切到 Private Broadcast。
 
 对象根路径固定为数据契约 `bandori/trackerdata`，不会通过环境变量修改。下面的限制是损坏对象和资源耗尽保护，不会预留相应内存，也不是正常对象应达到的目标：
 
@@ -89,7 +89,7 @@ npm run compare:bandori-tracker-history -- --event 316 --type song --tier 1000
 npm run compare:bandori-tracker-history -- --event 18 --type monthly --tier 1000
 ```
 
-对照命令会固定一次 manifest generation，验证 gzip、hash 和 pack 契约，应用现有响应上限及分组语义，再逐点比较 Supabase；还应额外选择一个已知在两侧都为空的受支持档位。验证时 R2 空结果会临时查询 Supabase 核对；生产请求中的正常 R2 空结果不会访问 Supabase。回滚只需恢复 `BANDORI_TRACKER_HISTORY_SOURCE=supabase`，不要删除 tracker artifact 或数据库记录。
+对照命令会固定一次 manifest generation，验证 gzip、hash 和 pack 契约，应用现有响应上限及分组语义，再逐点比较 Supabase；还应额外选择一个已知在两侧都为空的受支持档位。验证时 R2 空结果会临时查询 Supabase 核对；生产请求中的正常 R2 空结果不会访问 Supabase。必须在停止 Supabase 写入前完成 exact 对照；停写后 Supabase 已冻结，`supabase` 和 fallback 都不能作为生产回滚。应修复 R2 或回滚协调后的 writer 切换，但不要删除 tracker artifact 或数据库记录。
 
 自托管部署不要指向 `cdn.hhwx.org`，除非你明确希望依赖 HHWX 生产资源托管。该域名只是部署细节，不授予任何第三方游戏素材权利。
 

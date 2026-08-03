@@ -1,0 +1,53 @@
+{
+  "producer": "hhwx-tracker TopDataHistoryRepository",
+  "eventId": 318,
+  "manifest": {
+    "eventId": 318,
+    "generation": 1,
+    "hasFinalSample": false,
+    "kind": "eventTop10",
+    "pack": {
+      "compressedSha256": "282d2341726c47b085497cc2c2032e8c23b55f87d92c8b468633ac9cb8c3f89c",
+      "compressedSize": 300,
+      "hasFinalSample": false,
+      "key": "bandori/trackerdata/topdata/events/318/cn/packs/event/282d2341726c47b085497cc2c2032e8c23b55f87d92c8b468633ac9cb8c3f89c.json.gz",
+      "pointCount": 10,
+      "sampleCount": 1,
+      "semanticSha256": "d1b8651b003bee362dc0d7c3c73849537cc6544f26061f852667c90afa059bb0",
+      "userCount": 10
+    },
+    "publishedAt": "2026-08-03T04:30:00Z",
+    "recentPackKeys": [
+      "bandori/trackerdata/topdata/events/318/cn/packs/event/282d2341726c47b085497cc2c2032e8c23b55f87d92c8b468633ac9cb8c3f89c.json.gz"
+    ],
+    "schemaVersion": 1,
+    "server": "cn"
+  },
+  "packBase64": "H4sIAAAAAAAC/5WTzW6EIBRGX6W5axcXAQGfoMvZNy7MSBpTqw1qk2biuxemi3ppJ4AbE/B8x4+fG3ws47yt0L7cYBvfLbRMaSmRoWCmxgr2cfBjiKyCz37a/Qfm/hxVAqgpoJMAp4BKAoICTRKQFJBJoKGASAKKAjwJaArUScBQgKUAhhTAo/Nzq3U/e37a3rkPKXCZ+i/rnhhU4E+GW4b9uo3L7Gee7TQtftj18xu0HH3yGvDw3lw/zjZkVTDYV2dtyO/C350OBFXUfxX/pDMdyF8BngVa+hWs/aoIouKxiueq+MMuD1QiVolclShtJWOVzFXJ0lZNrGpyVU1pKxWrVK5KlbbSsUrnqnRpKxOrTK7KFLYKFzy6upjpYphVqzu+AU8a40YnBgAA",
+  "expected": {
+    "points": [
+      { "time": 1785501041920, "uid": 1001, "value": 999999 },
+      { "time": 1785501041920, "uid": 1002, "value": 999998 },
+      { "time": 1785501041920, "uid": 1003, "value": 999997 },
+      { "time": 1785501041920, "uid": 1004, "value": 999996 },
+      { "time": 1785501041920, "uid": 1005, "value": 999995 },
+      { "time": 1785501041920, "uid": 1006, "value": 999994 },
+      { "time": 1785501041920, "uid": 1007, "value": 999993 },
+      { "time": 1785501041920, "uid": 1008, "value": 999992 },
+      { "time": 1785501041920, "uid": 1009, "value": 999991 },
+      { "time": 1785501041920, "uid": 1010, "value": 999990 }
+    ],
+    "users": [
+      { "uid": 1001, "name": "Player 1", "introduction": "Hello", "rank": 300, "sid": 0, "strained": 1, "degrees": [] },
+      { "uid": 1002, "name": "Player 2", "introduction": "", "rank": 300, "sid": 1802, "strained": 0, "degrees": [8508, 20094] },
+      { "uid": 1003, "name": "Player 3", "introduction": "", "rank": 300, "sid": 1803, "strained": 1, "degrees": [8508, 20094] },
+      { "uid": 1004, "name": "Player 4", "introduction": "", "rank": 300, "sid": 1804, "strained": 0, "degrees": [8508, 20094] },
+      { "uid": 1005, "name": "Player 5", "introduction": "", "rank": 300, "sid": 1805, "strained": 1, "degrees": [8508, 20094] },
+      { "uid": 1006, "name": "Player 6", "introduction": "", "rank": 300, "sid": 1806, "strained": 0, "degrees": [8508, 20094] },
+      { "uid": 1007, "name": "Player 7", "introduction": "", "rank": 300, "sid": 1807, "strained": 1, "degrees": [8508, 20094] },
+      { "uid": 1008, "name": "Player 8", "introduction": "", "rank": 300, "sid": 1808, "strained": 0, "degrees": [8508, 20094] },
+      { "uid": 1009, "name": "Player 9", "introduction": "", "rank": 300, "sid": 1809, "strained": 1, "degrees": [8508, 20094] },
+      { "uid": 1010, "name": "Player 10", "introduction": "", "rank": 300, "sid": 1810, "strained": 0, "degrees": [8508, 20094] }
+    ]
+  }
+}
