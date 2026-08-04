@@ -14,45 +14,53 @@ export type BandoriCardTileCard = BandoriCardThumbnailCard & {
   totalPower?: number | null;
 };
 
-export type BandoriCardTileProps = {
+type BandoriCardTileBaseProps = {
   card: BandoriCardTileCard;
   metadata?: BandoriCardThumbnailMetadata;
   cardName: string;
-  characterName: string;
-  skillEffectLabel: string;
-  skillEffectLanguageTag?: BandoriServerLanguageTag;
   badge?: string;
   leaderLabel?: string;
+  showLevel?: boolean;
   showPower?: boolean;
   size?: "compact" | "default";
   isMuted?: boolean;
+};
+
+type BandoriCardTileInteractiveProps = BandoriCardTileBaseProps & {
+  isPresentationOnly?: false;
+  characterName: string;
+  skillEffectLabel: string;
+  skillEffectLanguageTag?: BandoriServerLanguageTag;
   actionLabel?: string;
   onAction?: () => void;
 };
 
-export default function BandoriCardTile({
+type BandoriCardTilePresentationProps = BandoriCardTileBaseProps & {
+  isPresentationOnly: true;
+};
+
+export type BandoriCardTileProps = BandoriCardTileInteractiveProps | BandoriCardTilePresentationProps;
+
+function getBandoriCardTileClassName(size: "compact" | "default", isInteractive: boolean) {
+  const interactionClassName = isInteractive
+    ? "transition hover:z-40 hover:-translate-y-0.5 hover:outline-2 hover:outline-sky-400 focus-within:z-40 focus-within:outline-2 focus-within:outline-sky-400"
+    : "";
+
+  return `group relative ${size === "compact" ? "h-[56px] w-[56px]" : "h-[74px] w-[74px]"} overflow-visible rounded-[5px] outline-solid outline-1 outline-white/80 sm:h-[76px] sm:w-[76px] ${interactionClassName}`;
+}
+
+function BandoriCardTileContent({
   card,
   metadata,
   cardName,
-  characterName,
-  skillEffectLabel,
-  skillEffectLanguageTag,
   badge,
   leaderLabel,
+  showLevel = true,
   showPower = true,
-  size = "default",
   isMuted = false,
   actionLabel,
   onAction,
-}: BandoriCardTileProps) {
-  const {
-    anchorRef,
-    isOpen: isHoverTooltipOpen,
-    onMouseEnter,
-    onMouseLeave,
-    onFocus,
-    onBlur,
-  } = useBandoriCardHoverTooltip<HTMLElement>();
+}: BandoriCardTileBaseProps & Pick<BandoriCardTileInteractiveProps, "actionLabel" | "onAction">) {
   const thumbnail = (
     <BandoriCardThumbnail
       card={card}
@@ -60,19 +68,13 @@ export default function BandoriCardTile({
       bandId={card.bandId}
       alt={cardName}
       power={card.totalPower}
+      showLevel={showLevel}
       showPower={showPower}
     />
   );
 
   return (
-    <article
-      ref={anchorRef}
-      onMouseEnter={onMouseEnter}
-      onMouseLeave={onMouseLeave}
-      onFocus={onFocus}
-      onBlur={onBlur}
-      className={`group relative ${size === "compact" ? "h-[56px] w-[56px]" : "h-[74px] w-[74px]"} overflow-visible rounded-[5px] outline-solid outline-1 outline-white/80 transition hover:z-40 hover:-translate-y-0.5 hover:outline-2 hover:outline-sky-400 focus-within:z-40 focus-within:outline-2 focus-within:outline-sky-400 sm:h-[76px] sm:w-[76px]`}
-    >
+    <>
       {onAction ? (
         <button
           type="button"
@@ -98,6 +100,36 @@ export default function BandoriCardTile({
           {leaderLabel}
         </span>
       ) : null}
+    </>
+  );
+}
+
+function InteractiveBandoriCardTile(props: BandoriCardTileInteractiveProps) {
+  const {
+    cardName,
+    characterName,
+    skillEffectLabel,
+    skillEffectLanguageTag,
+  } = props;
+  const {
+    anchorRef,
+    isOpen: isHoverTooltipOpen,
+    onMouseEnter,
+    onMouseLeave,
+    onFocus,
+    onBlur,
+  } = useBandoriCardHoverTooltip<HTMLElement>();
+
+  return (
+    <article
+      ref={anchorRef}
+      onMouseEnter={onMouseEnter}
+      onMouseLeave={onMouseLeave}
+      onFocus={onFocus}
+      onBlur={onBlur}
+      className={getBandoriCardTileClassName(props.size ?? "default", true)}
+    >
+      <BandoriCardTileContent {...props} />
       {isHoverTooltipOpen ? (
         <BandoriCardHoverTooltipPortal
           anchorRef={anchorRef}
@@ -113,4 +145,18 @@ export default function BandoriCardTile({
       ) : null}
     </article>
   );
+}
+
+function PresentationBandoriCardTile(props: BandoriCardTilePresentationProps) {
+  return (
+    <article className={getBandoriCardTileClassName(props.size ?? "default", false)}>
+      <BandoriCardTileContent {...props} />
+    </article>
+  );
+}
+
+export default function BandoriCardTile(props: BandoriCardTileProps) {
+  return props.isPresentationOnly
+    ? <PresentationBandoriCardTile {...props} />
+    : <InteractiveBandoriCardTile {...props} />;
 }

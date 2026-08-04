@@ -26,6 +26,10 @@ const top10DataHookSource = readFileSync(
   new URL("../src/app/[locale]/bandori/eventtracker/useBandoriTop10Data.ts", import.meta.url),
   "utf8",
 );
+const cardTileSource = readFileSync(
+  new URL("../src/components/bandori/BandoriCardTile.tsx", import.meta.url),
+  "utf8",
+);
 
 test("TOP10 adapts its data into the mature tracker components", () => {
   assert.match(top10PanelSource, /<TrackerStatusSummary/u);
@@ -60,4 +64,17 @@ test("TOP10 player identity and score copy stays label-free and uses P", () => {
   assert.doesNotMatch(top10TooltipSource, />ID<|>UID<|>分<|`UID /u);
   assert.match(top10PlayerListSource, />P<\/span>/u);
   assert.match(top10TooltipSource, /\{SCORE_FORMATTER\.format\(score\)\} P/u);
+});
+
+test("TOP10 avatars reuse the shared card tile presentation mode", () => {
+  assert.match(top10PlayerListSource, /import BandoriCardTile from/u);
+  assert.match(top10PlayerListSource, /<BandoriCardTile/u);
+  assert.match(top10PlayerListSource, /isPresentationOnly/u);
+  assert.match(top10PlayerListSource, /size="compact"/u);
+  assert.match(top10PlayerListSource, /showLevel=\{false\}/u);
+  assert.doesNotMatch(top10PlayerListSource, /BandoriCardThumbnail/u);
+  assert.doesNotMatch(top10PlayerListSource, /rounded-\[7px\]|ring-slate-200/u);
+  assert.match(cardTileSource, /type BandoriCardTilePresentationProps/u);
+  assert.match(cardTileSource, /function PresentationBandoriCardTile/u);
+  assert.match(cardTileSource, /getBandoriCardTileClassName\(props\.size \?\? "default", false\)/u);
 });

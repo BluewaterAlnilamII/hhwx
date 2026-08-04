@@ -259,6 +259,7 @@ export default function EventInfoPanel({
   );
   const songs = songSelection?.songs ?? [];
   const eventBandId = model ? getBandoriEventBandId(model.band) : null;
+  const shouldLoadBandNames = eventId !== null;
   const { catalog: stampCatalog, loading: stampsLoading } = useCommentStampCatalog(Boolean(model));
   const rewardStampIdsByServer = model?.rewardStampIdsByServer;
   const fallbackRewardStampServer = model?.rewardStampServer ?? server;
@@ -294,8 +295,8 @@ export default function EventInfoPanel({
   );
   const { data: skills } = useBandoriSkillsMaster(Boolean(model));
   const { data: bands } = useCachedFetch<Record<string, BandoriBandNameRecord | undefined>>(
-    eventBandId !== null ? "bandori-master-bands-all" : null,
-    eventBandId !== null ? "/api/bandori/master/bands/all" : null,
+    shouldLoadBandNames ? "bandori-master-bands-all" : null,
+    shouldLoadBandNames ? "/api/bandori/master/bands/all" : null,
     parseBandResponse,
     SESSION_CLIENT_CACHE_POLICY,
   );
