@@ -70,18 +70,46 @@ sample defines the displayed rank. Player rows show the card avatar from `sid` a
 `degrees`, or the player-level `rank` field. Empty history uses the shared tracker
 message, `暂无该排名档位的追踪数据`.
 
-Phase one history is available only for `server=3`. The JP, EN, and TW frontend
-shells expose the same TOP10 selection but do not issue a request until their
-backend histories exist. The public Bestdori-compatible history API continues to
-ignore `latest`. HTTP history is loaded once per browser session for each event;
-there is no 30-second polling, Supabase subscription, Private Broadcast, prediction,
-projection, or comparison path in the TOP10 panel.
+TOP10 is available only for `server=3`. The JP, EN, and TW frontend shells expose
+the same TOP10 selection but do not issue a request until their backend histories
+exist. The public Bestdori-compatible history API continues to ignore `latest`.
+HTTP history is loaded on first use, event changes, and foreground resume, using
+the same policy as cutoff history. It is never polled every 30 seconds. Prediction,
+projection, and comparison remain cutoff-only.
+
+## Phase-two live integration
+
+The frontend enforces the required mutual exclusion: selecting
+TOP10 disables the cutoff data hook, comparisons, and projections, while leaving
+the TOP10 panel mounted as the only ranking consumer. `useBandoriTop10Data` owns
+the TOP10 history/live composition; `Top10Panel` remains presentation-only.
+
+Cutoff and TOP10 adapters share the protocol-agnostic lifecycle in
+`bandori-tracker-live-connection`: restore the authenticated session, join a
+private topic, buffer Broadcast messages until the latest-row SELECT completes,
+merge by revision, retry the bootstrap read with a bound, disconnect on unmount or
+prolonged tab hiding, and retain a bounded cache. Each adapter supplies only its
+topic, event, latest-row query, parser, and revision merge rule.
+
+The TOP10 adapter uses
+`bandori_tracker_topdata_latest_snapshots`, event `topdata_snapshot`, and topic
+`bandori:topdata:cn:events:{eventId}`. Its current snapshot is merged into the
+cached HTTP history only for rendering: replace the same timestamp, append a newer
+timestamp, ignore an older snapshot, and let latest user profiles override matching
+UIDs while retaining historical users. It must never write the 30-second samples
+back into the session history cache. A foreground history refresh updates only the
+sparse R2 baseline and remains independent of the live connection. Existing
+unauthenticated behavior remains the sparse HTTP history only. The adapter is active only when
+`NEXT_PUBLIC_BANDORI_TRACKER_LIVE_SOURCE=broadcast` and the restored session has a
+real user.
 
 ## Release and rollback
 
-Deploy the history reader first so a missing manifest returns the empty protocol,
-then deploy the tracker R2 writer. Verify one normal sparse history point, one
-idempotent retry, and the public API response before enabling future consumers.
+For phase two, apply and verify the additive Supabase migration first, deploy the
+frontend in history-only-compatible mode second, deploy the tracker in `snapshot`
+mode third, and enable `broadcast` only after authenticated bootstrap and private
+topic authorization pass. Keep the public history API unchanged throughout.
 
-Rollback removes or reverts application code only. Keep R2 objects and the tracker
-ledger so already collected history remains recoverable.
+Rollback removes or reverts application code only. Keep the additive latest table,
+RPC, policies, R2 objects, and tracker ledger so already collected state remains
+recoverable.

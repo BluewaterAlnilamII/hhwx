@@ -1,5 +1,8 @@
 BEGIN;
 
+CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
+SELECT extensions.plan(1);
+
 DO $$
 BEGIN
     IF has_table_privilege('anon', 'public.bandori_tracker_latest', 'SELECT') THEN
@@ -412,4 +415,6 @@ END;
 $$;
 
 RESET ROLE;
+SELECT extensions.pass('Bandori tracker latest security and RPC contract is valid');
+SELECT * FROM extensions.finish();
 ROLLBACK;

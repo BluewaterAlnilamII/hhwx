@@ -1,17 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { supabase } from "@/lib/supabase";
-import { BANDORI_TRACKER_DATA_TABLE } from "@/lib/supabase-table-names";
 import type {
   BandoriTrackerLiveSnapshot,
   BandoriTrackerLiveTarget,
 } from "@/lib/bandori-tracker-live-contract";
 import { COMPARISON_LINE_COLORS } from "./constants";
-import {
-  isBandoriTrackerBroadcastEnabled,
-  useBandoriTrackerLiveListener,
-} from "./useBandoriTrackerLive";
+import { useBandoriTrackerLiveListener } from "./useBandoriTrackerLive";
 import type { MonthlyRankingOption } from "./useChartData";
 import type {
   ComparisonAlignment,
@@ -375,56 +370,6 @@ export function useComparisonTrackerData({
       for (const timeoutId of loadingTimeoutIds) {
         window.clearTimeout(timeoutId);
       }
-    };
-  }, [configSignature, configs, enabled]);
-
-  useEffect(() => {
-    const resolvedConfigs = configs.filter(isResolvedConfig);
-    if (!enabled || resolvedConfigs.length === 0 || isBandoriTrackerBroadcastEnabled()) return;
-
-    const channel = supabase
-      .channel("bandori_tracker_comparison_realtime")
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: BANDORI_TRACKER_DATA_TABLE },
-        (payload) => {
-          const row = payload.new as {
-            event_id?: number;
-            type?: string;
-            tier?: number;
-            song_id?: number | null;
-            time?: number | string;
-            ep?: number | string;
-            is_final?: boolean | null;
-          } | null;
-
-          if (!row || (row.type !== "event" && row.type !== "monthly") || Number(row.song_id ?? 0) !== 0 || row.is_final) return;
-
-          const targetId = Number(row.event_id);
-          const targetType = row.type as ComparisonTargetType;
-          const tier = Number(row.tier);
-          const time = Number(row.time);
-          const ep = Number(row.ep);
-          const matched = configsRef.current.find((config) => (
-            config.targetType === targetType &&
-            config.targetId === targetId &&
-            config.tier === tier
-          ));
-
-          if (!matched || !Number.isFinite(time) || !Number.isFinite(ep)) return;
-
-          const key = cacheKey(matched);
-          setDataByKey((previous) => {
-            const nextPoints = normalizePoints([...(readComparisonDataCache(key) ?? previous[key] ?? []), { time, ep }]);
-            writeComparisonDataCache(key, nextPoints);
-            return { ...previous, [key]: nextPoints };
-          });
-        },
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
     };
   }, [configSignature, configs, enabled]);
 
