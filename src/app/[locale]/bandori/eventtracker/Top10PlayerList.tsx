@@ -2,7 +2,7 @@
 
 import { ImageOff } from "lucide-react";
 
-import BandoriCardThumbnail from "@/components/bandori/BandoriCardThumbnail";
+import BandoriCardTile from "@/components/bandori/BandoriCardTile";
 import { useBandoriCardsMaster } from "@/hooks/useBandoriCardsMaster";
 import { useBandoriCharactersMaster } from "@/hooks/useBandoriCharactersMaster";
 import { resolveBandoriCardBandId } from "@/lib/bandori-card-master";
@@ -44,9 +44,9 @@ export function Top10PlayerList({ players, server }: Top10PlayerListProps) {
                 </span>
               </div>
 
-              <div className="aspect-square w-16 overflow-hidden rounded-[7px] shadow-sm ring-1 ring-slate-200 dark:ring-slate-700 sm:w-20">
+              <div className="flex items-center justify-center">
                 {player.avatarCardId > 0 ? (
-                  <BandoriCardThumbnail
+                  <BandoriCardTile
                     card={{
                       cardId: player.avatarCardId,
                       level: 1,
@@ -54,16 +54,18 @@ export function Top10PlayerList({ players, server }: Top10PlayerListProps) {
                       skillLevel: 1,
                       isTrained: player.isAvatarTrained,
                       hasTrainedArt: metadata?.hasTrainedArt,
+                      bandId,
+                      totalPower: null,
                     }}
                     metadata={metadata ?? undefined}
-                    bandId={bandId}
-                    alt={player.name || String(player.uid)}
-                    loading="lazy"
+                    cardName={player.name || String(player.uid)}
+                    isPresentationOnly
+                    size="compact"
                     showLevel={false}
                     showPower={false}
                   />
                 ) : (
-                  <div className="flex h-full w-full flex-col items-center justify-center gap-1 bg-slate-100 text-slate-400 dark:bg-slate-800 dark:text-slate-500">
+                  <div className="flex h-14 w-14 flex-col items-center justify-center gap-1 overflow-hidden rounded-[5px] bg-slate-100 text-slate-400 shadow-[0_2px_7px_rgba(15,23,42,0.22)] outline-solid outline-1 outline-white/80 dark:bg-slate-800 dark:text-slate-500 sm:h-[76px] sm:w-[76px]">
                     <ImageOff className="h-5 w-5" aria-hidden="true" />
                     <span className="text-[10px] font-semibold">无头像</span>
                   </div>

@@ -339,7 +339,9 @@ test("event band slugs resolve through the localized bands API records", () => {
   assert.equal(resolveBandoriEventBandName("mix", bands, 3), "混合乐队");
   assert.equal(resolveBandoriEventBandName("unknown", bands, 3), "-");
   assert.match(eventInfoPanelSource, /\/api\/bandori\/master\/bands\/all/u);
-  assert.match(eventInfoPanelSource, /eventBandId !== null/u);
+  assert.match(eventInfoPanelSource, /const shouldLoadBandNames = eventId !== null/u);
+  assert.match(eventInfoPanelSource, /shouldLoadBandNames \? "bandori-master-bands-all" : null/u);
+  assert.doesNotMatch(eventInfoPanelSource, /eventBandId !== null \? "bandori-master-bands-all"/u);
   assert.match(eventInfoPanelSource, /`band_\$\{eventBandId\}\.svg`/u);
   assert.doesNotMatch(eventInfoPanelSource, /BAND_LABELS/u);
 });
