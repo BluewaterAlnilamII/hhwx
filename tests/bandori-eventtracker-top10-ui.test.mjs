@@ -22,6 +22,10 @@ const trackerActiveMarkerOverlaySource = readFileSync(
   new URL("../src/app/[locale]/bandori/eventtracker/TrackerActiveMarkerOverlay.tsx", import.meta.url),
   "utf8",
 );
+const top10DataHookSource = readFileSync(
+  new URL("../src/app/[locale]/bandori/eventtracker/useBandoriTop10Data.ts", import.meta.url),
+  "utf8",
+);
 
 test("TOP10 adapts its data into the mature tracker components", () => {
   assert.match(top10PanelSource, /<TrackerStatusSummary/u);
@@ -43,6 +47,11 @@ test("TOP10 distinguishes blocking loads from background refreshes", () => {
   assert.match(top10PanelSource, /isRefreshing=\{refreshing\}/u);
   assert.match(top10PanelSource, /isLoading=\{isBlockingLoading\}/u);
   assert.doesNotMatch(top10PanelSource, /isRefreshing=\{loading\}/u);
+});
+
+test("TOP10 history uses the same foreground refresh policy as cutoff history", () => {
+  assert.match(top10DataHookSource, /LIVE_CLIENT_CACHE_POLICY/u);
+  assert.doesNotMatch(top10DataHookSource, /SESSION_CLIENT_CACHE_POLICY/u);
 });
 
 test("TOP10 player identity and score copy stays label-free and uses P", () => {

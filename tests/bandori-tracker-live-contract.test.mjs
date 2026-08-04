@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import {
@@ -7,7 +8,10 @@ import {
   mergeBandoriTrackerLiveSnapshots,
   parseBandoriTrackerLiveSnapshot,
 } from "../src/lib/bandori-tracker-live-contract.ts";
-import { authorizeBandoriTrackerRealtimeConnection } from "../src/lib/bandori-tracker-live-connection.ts";
+import {
+  authorizeBandoriTrackerRealtimeConnection,
+  subscribeBandoriTrackerLive,
+} from "../src/lib/bandori-tracker-live-connection.ts";
 import {
   appendBandoriTrackerLivePoint,
   buildBandoriTrackerLiveSeriesUpdates,
@@ -29,6 +33,22 @@ const eventPayload = {
   ],
   songs: [[123, 100, 1780000000000, 654321]],
 };
+
+const trackerDataHookSource = readFileSync(
+  new URL("../src/app/[locale]/bandori/eventtracker/useTrackerData.ts", import.meta.url),
+  "utf8",
+);
+const comparisonDataHookSource = readFileSync(
+  new URL("../src/app/[locale]/bandori/eventtracker/useComparisonTrackerData.ts", import.meta.url),
+  "utf8",
+);
+
+test("history-only mode does not open legacy Postgres Changes connections", () => {
+  for (const source of [trackerDataHookSource, comparisonDataHookSource]) {
+    assert.doesNotMatch(source, /postgres_changes|BANDORI_TRACKER_DATA_TABLE/u);
+    assert.match(source, /useBandoriTrackerLiveListener/u);
+  }
+});
 
 test("parses event/song points and interprets only the final flag bit", () => {
   const parsed = parseBandoriTrackerLiveSnapshot(eventPayload, {
@@ -222,6 +242,171 @@ test("private realtime auth completes before a connection may continue", async (
     ),
     false,
   );
+});
+
+test("shared live connection buffers broadcasts until snapshot bootstrap completes", async () => {
+  let releaseSnapshot;
+  const snapshotPromise = new Promise((resolve) => {
+    releaseSnapshot = resolve;
+  });
+  let broadcastHandler;
+  let removeCount = 0;
+  const channel = {
+    on(_type, _filter, handler) {
+      broadcastHandler = handler;
+      return this;
+    },
+    subscribe(callback) {
+      callback("SUBSCRIBED");
+      return this;
+    },
+  };
+  const client = {
+    realtime: { setAuth: async () => undefined },
+    channel: () => channel,
+    removeChannel: async () => {
+      removeCount += 1;
+    },
+  };
+  const revisions = [];
+  const unsubscribe = subscribeBandoriTrackerLive(
+    {
+      topic: "bandori:test:shared-live:1",
+      event: "snapshot",
+      label: "bandoriTrackerLiveTest",
+      client,
+      loadSnapshot: () => snapshotPromise,
+      parseSnapshot: (value) => value,
+      mergeSnapshots: (current, incoming) => (
+        !current || incoming.revision > current.revision ? incoming : current
+      ),
+      getRevision: (value) => value.revision,
+    },
+    (value) => revisions.push(value.revision),
+  );
+
+  await new Promise((resolve) => setImmediate(resolve));
+  broadcastHandler({ payload: { revision: 2 } });
+  releaseSnapshot({ revision: 1 });
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.deepEqual(revisions, [1, 2]);
+  unsubscribe();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(removeCount, 1);
+});
+
+test("shared live connection reloads latest after a prolonged hidden state", async () => {
+  const originalDocument = Object.getOwnPropertyDescriptor(globalThis, "document");
+  const originalWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
+  const hiddenTimerId = 60_000;
+  let visibilityHandler;
+  let hiddenDisconnect;
+  let channelCount = 0;
+  let loadCount = 0;
+  let removeCount = 0;
+  let unsubscribe;
+
+  const testDocument = {
+    visibilityState: "visible",
+    addEventListener(type, handler) {
+      if (type === "visibilitychange") visibilityHandler = handler;
+    },
+  };
+  const testWindow = {
+    setTimeout(handler, delayMs) {
+      if (delayMs === hiddenTimerId) {
+        hiddenDisconnect = handler;
+        return hiddenTimerId;
+      }
+      return globalThis.setTimeout(handler, delayMs);
+    },
+    clearTimeout(timerId) {
+      if (timerId === hiddenTimerId) {
+        hiddenDisconnect = undefined;
+        return;
+      }
+      globalThis.clearTimeout(timerId);
+    },
+  };
+
+  Object.defineProperty(globalThis, "document", {
+    configurable: true,
+    value: testDocument,
+  });
+  Object.defineProperty(globalThis, "window", {
+    configurable: true,
+    value: testWindow,
+  });
+
+  try {
+    const client = {
+      realtime: { setAuth: async () => undefined },
+      channel: () => {
+        channelCount += 1;
+        return {
+          on() {
+            return this;
+          },
+          subscribe(callback) {
+            callback("SUBSCRIBED");
+            return this;
+          },
+        };
+      },
+      removeChannel: async () => {
+        removeCount += 1;
+      },
+    };
+    const revisions = [];
+    unsubscribe = subscribeBandoriTrackerLive(
+      {
+        topic: "bandori:test:shared-live:visibility",
+        event: "snapshot",
+        label: "bandoriTrackerLiveVisibilityTest",
+        client,
+        loadSnapshot: async () => ({ revision: ++loadCount }),
+        parseSnapshot: (value) => value,
+        mergeSnapshots: (current, incoming) => (
+          !current || incoming.revision > current.revision ? incoming : current
+        ),
+        getRevision: (value) => value.revision,
+      },
+      (value) => revisions.push(value.revision),
+    );
+
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(channelCount, 1);
+    assert.equal(loadCount, 1);
+    assert.deepEqual(revisions, [1]);
+
+    testDocument.visibilityState = "hidden";
+    visibilityHandler();
+    assert.equal(typeof hiddenDisconnect, "function");
+    hiddenDisconnect();
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(removeCount, 1);
+
+    testDocument.visibilityState = "visible";
+    visibilityHandler();
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(channelCount, 2);
+    assert.equal(loadCount, 2);
+    assert.deepEqual(revisions, [1, 2]);
+  } finally {
+    unsubscribe?.();
+    await new Promise((resolve) => setImmediate(resolve));
+    if (originalDocument) {
+      Object.defineProperty(globalThis, "document", originalDocument);
+    } else {
+      delete globalThis.document;
+    }
+    if (originalWindow) {
+      Object.defineProperty(globalThis, "window", originalWindow);
+    } else {
+      delete globalThis.window;
+    }
+  }
 });
 
 test("update age uses seconds for the first minute and minutes afterwards", () => {

@@ -1,8 +1,7 @@
 ﻿"use client";
 
-import { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { supabase } from "@/lib/supabase";
-import { useCachedFetch, updateFetchCache } from "@/hooks/useCachedFetch";
+import { useState, useCallback, useMemo } from "react";
+import { useCachedFetch } from "@/hooks/useCachedFetch";
 import { useBandoriEventsMaster } from "@/hooks/useBandoriEventsMaster";
 import { parseApiSuccessData } from "@/lib/api-contracts";
 import {
@@ -15,7 +14,6 @@ import {
   pickBandoriRegionalText,
   type BandoriServer,
 } from "@/lib/bandori-server";
-import { BANDORI_TRACKER_DATA_TABLE } from "@/lib/supabase-table-names";
 import {
   LIVE_CLIENT_CACHE_POLICY,
   LONG_CLIENT_CACHE_POLICY,
@@ -31,7 +29,7 @@ import {
 } from "@/lib/bandori-tracker-live-series";
 import type { TrackerData, TrackerResult, TrackerSongGroup, EventMetadata, MinimalEvent, TrackingMode, BandoriEventSummary } from "./types";
 import { getMonthlyRankingWindow } from "./useChartData";
-import { isBandoriTrackerBroadcastEnabled, useBandoriTrackerLiveListener } from "./useBandoriTrackerLive";
+import { useBandoriTrackerLiveListener } from "./useBandoriTrackerLive";
 import { useBoundaryClock } from "./useBoundaryClock";
 
 function appendTrackerPoint(series: TrackerData[], time: number, ep: number, isFinal = false): TrackerData[] {
@@ -422,103 +420,6 @@ export function useTrackerData(
     }
   );
 
-  // The subscription is established once, so keep the latest view parameters in a ref.
-  const currentViewRef = useRef({ targetEventId: targetEventParam, mode: trackingMode, tier: selectedTier, songId: resolvedSelectedSongId, server });
-  useEffect(() => {
-    currentViewRef.current = { targetEventId: targetEventParam, mode: trackingMode, tier: selectedTier, songId: resolvedSelectedSongId, server };
-  }, [resolvedSelectedSongId, selectedTier, server, targetEventParam, trackingMode]);
-
-  // Supabase realtime subscription for newly inserted tracker points.
-  useEffect(() => {
-    if (isBandoriTrackerBroadcastEnabled()) return;
-
-    const channel = supabase
-      .channel("bandori_tracker_realtime")
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: BANDORI_TRACKER_DATA_TABLE },
-        (payload) => {
-          const newRow = payload.new;
-          if (!newRow) return;
-
-          const view = currentViewRef.current;
-
-          // Append only points that match the active chart view.
-          if (
-            Number(newRow.server) === view.server &&
-            newRow.event_id === view.targetEventId &&
-            newRow.type === view.mode &&
-            newRow.tier === view.tier
-          ) {
-            const time = Number(newRow.time);
-            const ep = Number(newRow.ep);
-            const incomingSongId = Number(newRow.song_id ?? 0);
-            const incomingIsFinal = Boolean(newRow.is_final ?? false);
-
-            if (view.mode === "song") {
-              // Song mode keeps the full songGroups payload and projects the selected
-              // song locally, so each song_id does not need a separate subscription.
-              const cacheKey = `tracker-${view.server}-${view.targetEventId}-${view.mode}-${view.tier}`;
-
-              setLiveSongGroupsByKey((prev) => {
-                return {
-                  ...prev,
-                  [cacheKey]: upsertSongGroupPoint(
-                    prev[cacheKey] ?? [],
-                    incomingSongId,
-                    time,
-                    ep,
-                    incomingIsFinal,
-                  ),
-                };
-              });
-              setLiveHasResultByKey((prev) => ({ ...prev, [cacheKey]: true }));
-
-              if (view.targetEventId !== null) {
-                updateFetchCache<TrackerResult>(cacheKey, (cached) => {
-                  const nextSongGroups = upsertSongGroupPoint(cached?.songGroups ?? [], incomingSongId, time, ep, incomingIsFinal);
-                  return {
-                    result: true,
-                    cutoffs: nextSongGroups[0]?.cutoffs ?? [],
-                    songGroups: nextSongGroups,
-                  };
-                });
-              }
-
-              return;
-            }
-
-            const cacheKey = `tracker-${view.server}-${view.targetEventId}-${view.mode}-${view.tier}`;
-            setLiveCutoffsByKey((prev) => {
-              return appendBandoriTrackerLivePoint(prev, cacheKey, {
-                time,
-                ep,
-                isFinal: incomingIsFinal || undefined,
-              });
-            });
-            setLiveHasResultByKey((prev) => ({ ...prev, [cacheKey]: true }));
-
-            // Mirror realtime points back into cache so switching views does not
-            // resurrect stale cached series and lose the incremental data.
-            if (view.targetEventId !== null) {
-              updateFetchCache<TrackerResult>(cacheKey, (cached) => {
-                const prevCutoffs = cached?.cutoffs ?? [];
-                return {
-                  result: true,
-                  cutoffs: appendTrackerPoint(prevCutoffs, time, ep, incomingIsFinal),
-                };
-              });
-            }
-          }
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, []);
-
   const handlePrivateLiveSnapshot = useCallback((snapshot: BandoriTrackerLiveSnapshot) => {
     if (snapshot.server !== getBandoriServerCode(server) || snapshot.namespace !== "events") return;
 
@@ -571,11 +472,10 @@ export function useTrackerData(
     enabled,
     handlePrivateLiveSnapshot,
   );
-  const privateLiveDataVisible = !isBandoriTrackerBroadcastEnabled() || hasPrivateLiveAccess;
-  const liveCutoffsForView = trackerCacheKey && privateLiveDataVisible
+  const liveCutoffsForView = trackerCacheKey && hasPrivateLiveAccess
     ? liveCutoffsByKey[trackerCacheKey]
     : undefined;
-  const liveSongGroupsForView = trackerCacheKey && privateLiveDataVisible
+  const liveSongGroupsForView = trackerCacheKey && hasPrivateLiveAccess
     ? liveSongGroupsByKey[trackerCacheKey]
     : undefined;
   const mergedSongGroupsForView = useMemo(
@@ -596,7 +496,7 @@ export function useTrackerData(
   }, [mergedCutoffsForView, mergedSongGroupsForView, resolvedSelectedSongId, trackingMode]);
 
   const apiHasResult = useMemo(() => {
-    const liveHasResult = trackerCacheKey !== null && privateLiveDataVisible
+    const liveHasResult = trackerCacheKey !== null && hasPrivateLiveAccess
       ? liveHasResultByKey[trackerCacheKey]
       : undefined;
 
@@ -605,7 +505,7 @@ export function useTrackerData(
     }
 
     return Boolean(liveHasResult || trackerResult?.result);
-  }, [liveHasResultByKey, mergedSongGroupsForView, privateLiveDataVisible, trackerCacheKey, trackerResult?.result, trackingMode]);
+  }, [hasPrivateLiveAccess, liveHasResultByKey, mergedSongGroupsForView, trackerCacheKey, trackerResult?.result, trackingMode]);
 
   const resolvedCurrentEventWindow = useMemo(() => {
     if (resolvedCurrentEventId === null) {

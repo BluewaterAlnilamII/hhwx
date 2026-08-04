@@ -55,14 +55,33 @@ TOP10 面板取最新样本中的 UID，只绘制这些用户的历史；UID 在
 `name`、不带标签的 `uid` 和以 `P` 为单位的分数；不展示 `introduction`、`degrees` 或表示玩家等级的 `rank`。
 空历史沿用通用提示“暂无该排名档位的追踪数据”。
 
-第一阶段只有 `server=3` 历史。日服、国际服和台服前端同步显示 TOP10 入口，但在对应后端
-历史上线前不发出必然失败的请求。公开 Bestdori 兼容历史 API 继续忽略 `latest`。每个活动的
-HTTP 历史在同一浏览器会话中只读取一次；TOP10 面板没有 30 秒轮询、Supabase 订阅、Private
-Broadcast、预测线、投影线或对比线。
+TOP10 当前只支持 `server=3`。日服、国际服和台服前端同步显示 TOP10 入口，但在对应后端
+历史上线前不发出必然失败的请求。公开 Bestdori 兼容历史 API 继续忽略 `latest`。HTTP 历史在首次使用、
+切换活动及页面恢复前台时读取，与 cutoff 历史采用同一策略；不进行 30 秒轮询。预测线、投影线和对比线
+仍仅属于 cutoff。
+
+## 第二阶段实时对接
+
+前端已经满足互斥要求：选择 TOP10 后会停用 cutoff 数据 hook、对比线和投影线，页面中只有
+TOP10 面板继续作为排名数据调用方。TOP10 的历史与实时数据组合由 `useBandoriTop10Data` 负责，
+`Top10Panel` 只负责展示。
+
+cutoff 与 TOP10 adapter 共用 `bandori-tracker-live-connection` 中协议无关的订阅生命周期：恢复登录会话、
+加入 private topic、在 latest 表 SELECT 完成前缓存 Broadcast、按 revision 合并、有限重试 bootstrap、
+卸载或页面长时间隐藏时断开，以及有界缓存。各 adapter 只提供 topic、event、latest 表查询、parser
+和 revision 合并规则，不复制第二套连接逻辑。
+
+TOP10 adapter 读取 `bandori_tracker_topdata_latest_snapshots`，监听事件 `topdata_snapshot` 和 topic
+`bandori:topdata:cn:events:{eventId}`。当前快照只在渲染时与 HTTP 历史合并：同时间替换、更新时间追加、
+更旧快照忽略；latest 用户资料覆盖相同 UID，其他历史用户继续保留。30 秒样本不得写回会话历史缓存，
+页面恢复前台时只刷新稀疏 R2 历史基线，并与 live 连接保持相互独立。未登录用户继续只显示稀疏 HTTP 历史。只有
+`NEXT_PUBLIC_BANDORI_TRACKER_LIVE_SOURCE=broadcast` 且恢复出的 session 对应真实用户时才启用该 adapter。
 
 ## 发布与回滚
 
-先部署 history reader，确保 manifest 不存在时返回空协议，再部署 tracker R2 writer。
-启用未来调用方前，至少验证一次普通稀疏历史、一次幂等重试和公开 API 响应。
+第二阶段先应用并验证 additive Supabase migration，再部署仍兼容纯历史模式的前端，然后以 `snapshot`
+模式部署 tracker；只有登录 bootstrap 与 private topic 鉴权都通过后才启用 `broadcast`。整个过程不改变
+公开历史 API。
 
-回滚只回退应用代码；保留 R2 对象和 tracker ledger，确保已经采集的历史仍可恢复。
+回滚只回退应用代码；保留 additive latest 表、RPC、policies、R2 对象和 tracker ledger，确保已经采集的
+状态仍可恢复。

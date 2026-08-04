@@ -19,6 +19,7 @@ MCP/手动流程应用过的历史记录。它们在本地有意保持 no-op，�
 - `supabase/schema/bandori_calendar_schema.sql`：Bandori 角色、活动、国服日程、活动 bonus 和日历编辑角色表。
 - `supabase/schema/bandori_tracker_data_schema.sql`：追踪器排名数据表和索引。
 - `supabase/schema/bandori_tracker_latest_schema.sql`：仅登录用户可读的 latest snapshot、service-role 合并 RPC 和 cutoff Private Broadcast 读取 policy。
+- `supabase/schema/bandori_tracker_topdata_latest_schema.sql`：活动 TOP10 latest 表、service-role merge RPC 与锚定的 Private Broadcast 登录读取 policy。
 - `supabase/config.toml`：Supabase CLI 本地项目配置。
 - `supabase/migrations/*_baseline_schema.sql`：当前 HHWX 空 Supabase 项目的迁移基线。
 - `documents/account-status-schema.sql`：应用侧邮箱验证状态。
@@ -81,10 +82,11 @@ node --import tsx scripts/backfill-user-game-profile-servers.mjs
 3. `supabase/schema/bandori_calendar_schema.sql`
 4. `supabase/schema/bandori_tracker_data_schema.sql`
 5. `supabase/schema/bandori_tracker_latest_schema.sql`
-6. `documents/account-status-schema.sql`
-7. `documents/profile-public-uid-schema.sql`
-8. `documents/game-account-binding-schema.sql`
-9. `documents/game-profile-schema.sql`
+6. `supabase/schema/bandori_tracker_topdata_latest_schema.sql`
+7. `documents/account-status-schema.sql`
+8. `documents/profile-public-uid-schema.sql`
+9. `documents/game-account-binding-schema.sql`
+10. `documents/game-profile-schema.sql`
 
 只有在从已有 Supabase Auth 项目迁移、并且需要把已确认邮箱用户变为应用侧已验证用户时，才执行 `documents/account-status-backfill-auth-confirmed.sql`。
 
@@ -99,6 +101,7 @@ node --import tsx scripts/backfill-user-game-profile-servers.mjs
 - 只在应用确实需要时授予直接 table 或 function 访问权限。
 - service-role 操作必须保持在服务端。浏览器代码只能使用公开 Supabase key 和已认证用户 session。
 - `bandori_tracker_latest` 仅允许登录用户读取，不加入 Postgres Changes publication。tracker 通过仅 service role 可执行的 `upsert_bandori_tracker_latest` RPC 写入，再向匹配的 Private Broadcast topic 发布；不要给浏览器授予 `realtime.messages` INSERT。
+- 活动 TOP10 高频 snapshot 使用 `bandori_tracker_topdata_latest_snapshots` 和仅 service role 可执行的 `upsert_bandori_tracker_topdata_latest` RPC。已注册且非匿名的用户可 SELECT latest 行并接收锚定的 `bandori:topdata:cn:events:{eventId}` Private Broadcast。该表不作为 Postgres Changes source；浏览器不能写表、执行 RPC 或插入 Broadcast。
 - 客户端必须以 `(topic, revision)` 排序和幂等。`sampleId` 表示顶层最新观测时间；较旧 partial patch 补齐缺失榜线时，顶层 `sampleId` 可以保持不变而 `revision` 继续递增。
 - 事件追踪器先订阅，再精确查询 snapshot，并缓存查询期间的 Broadcast；snapshot 瞬时失败时使用有限退避重试。Private 分钟点只保留在当前会话内存中，live 权限未激活时不得显示。
 - Supabase Auth 的 Email provider 保持启用，但 Dashboard 的 Confirm email 保持关闭（`mailer_autoconfirm: true`）。HHWX 使用应用侧邮箱验证；Supabase 内置 signup 确认邮件不能完成 `account_status.email_verified_at`。
@@ -113,6 +116,6 @@ Web 应用需要：
 - `NEXT_PUBLIC_BANDORI_TRACKER_LIVE_SOURCE=broadcast`（必须在稀疏历史停止写 Supabase 前切换）
 - `SUPABASE_SECRET_KEY`
 
-部署 tracker-live migration 前，必须在本地 Supabase 或隔离的 Supabase branch 执行 `npm run test:supabase`。`supabase/tests/bandori_tracker_latest.sql` 会在事务内验证 RPC 合并状态、点数组整数约束、ACL/RLS policy 是否存在，以及 latest 表未加入 Postgres Changes publication。
+部署 tracker-live migrations 前，必须在本地 Supabase 或隔离的 Supabase branch 执行 `npm run test:supabase`。`supabase/tests/bandori_tracker_latest.sql` 覆盖 cutoff latest，`supabase/tests/bandori_tracker_topdata_latest.sql` 覆盖 TOP10 表、RPC、RLS、并发、payload 上限与锚定 Broadcast policy。
 
 `SUPABASE_SECRET_KEY` 只允许服务端使用，绝不能加 `NEXT_PUBLIC_` 前缀。
