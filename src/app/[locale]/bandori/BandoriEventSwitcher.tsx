@@ -95,15 +95,15 @@ export default function BandoriEventSwitcher({
   const showSkeleton = loading || (!allowNoEvent && events.length === 0);
 
   return (
-    <div className="relative z-20 grid grid-cols-1 gap-6 rounded-3xl border border-[var(--theme-color-border-default)] bg-[var(--theme-color-surface-background)] p-4 shadow-[0_26px_68px_rgba(232,176,0,0.18),0_4px_18px_rgba(88,69,0,0.08)] dark:border-gray-800 dark:bg-[#131A2B] sm:p-8 xl:grid-cols-[minmax(0,1fr)_minmax(320px,420px)] xl:items-center xl:gap-10">
+    <div className="relative z-20 grid grid-cols-1 gap-6 rounded-3xl border border-[var(--theme-color-border-default)] bg-[var(--theme-color-surface-background)] p-4 shadow-[0_26px_68px_rgba(232,176,0,0.18),0_4px_18px_rgba(88,69,0,0.08)] sm:p-8 xl:grid-cols-[minmax(0,1fr)_minmax(320px,420px)] xl:items-center xl:gap-10">
       <div className={cn(
         "flex min-w-0 flex-1 flex-col gap-4",
         server !== undefined && "sm:grid sm:grid-cols-[auto_minmax(280px,1fr)] sm:items-end sm:gap-x-4",
       )}>
         {server !== undefined && onServerChange ? (
           <div className="flex items-center justify-between gap-4 sm:col-start-1 sm:row-start-1 sm:block">
-            <div className="text-sm font-black text-[var(--theme-color-text-default)] dark:text-slate-200 sm:mb-2">服务器</div>
-            <div className="inline-grid grid-cols-4 overflow-hidden rounded-xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background)] shadow-xs dark:border-slate-700 dark:bg-slate-950/60">
+            <div className="text-sm font-black text-[var(--theme-color-text-default)] sm:mb-2">服务器</div>
+            <div className="inline-grid grid-cols-4 overflow-hidden rounded-xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background)] shadow-xs">
               {BANDORI_SERVERS.map((option) => {
                 const active = option === server;
                 const serverCode = getBandoriServerCode(option).toUpperCase();
@@ -117,10 +117,10 @@ export default function BandoriEventSwitcher({
                     title={accessibleLabel}
                     onClick={() => onServerChange(option)}
                     className={cn(
-                      "group flex h-11 w-11 items-center justify-center border-r border-[var(--theme-color-border-subtle)] transition first:rounded-l-[11px] last:rounded-r-[11px] last:border-r-0 focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--theme-color-focus-ring)] dark:border-slate-700 dark:focus-visible:ring-[var(--theme-color-focus-ring-on-dark)] sm:h-10",
+                      "group flex h-11 w-11 items-center justify-center border-r border-[var(--theme-color-border-subtle)] transition first:rounded-l-[11px] last:rounded-r-[11px] last:border-r-0 focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--theme-color-focus-ring)] sm:h-10",
                       active
                         ? "bg-[var(--theme-color-control-background-pressed)] text-[var(--theme-color-control-foreground-pressed)]"
-                        : "hover:bg-[var(--theme-color-control-background-hover)] dark:hover:bg-slate-800",
+                        : "hover:bg-[var(--theme-color-control-background-hover)]",
                     )}
                   >
                     <BandoriServerIcon
@@ -129,7 +129,7 @@ export default function BandoriEventSwitcher({
                       isDecorative
                       className={cn(
                         "h-6 w-6 rounded-full object-contain shadow-[0_1px_3px_rgba(15,23,42,0.18)] transition-transform group-hover:scale-105",
-                        active && "scale-105 ring-2 ring-[var(--theme-color-control-ring-pressed)] ring-offset-1 ring-offset-[var(--theme-color-surface-background)] dark:ring-offset-slate-900",
+                        active && "scale-105 ring-2 ring-[var(--theme-color-control-ring-pressed)] ring-offset-1 ring-offset-[var(--theme-color-surface-background)]",
                       )}
                     />
                   </button>
@@ -140,11 +140,11 @@ export default function BandoriEventSwitcher({
         ) : null}
 
         <div className={cn("min-h-13", server !== undefined && "sm:col-start-2 sm:row-start-1")}>
-          {server !== undefined ? <div className="mb-2 text-sm font-black text-[var(--theme-color-text-default)] dark:text-slate-200">活动选择</div> : null}
+          {server !== undefined ? <div className="mb-2 text-sm font-black text-[var(--theme-color-text-default)]">活动选择</div> : null}
           {!showSkeleton ? (
             <div className="grid w-full max-w-[492px] grid-cols-[minmax(0,1fr)_44px_44px] items-center gap-2">
               <select
-                className="min-w-0 cursor-pointer truncate rounded-xl border border-[var(--theme-color-control-border-accent)] bg-[var(--theme-color-control-background)] px-4 py-2.5 text-sm font-bold text-[var(--theme-color-text-default)] shadow-xs outline-hidden transition-colors hover:bg-[var(--theme-color-surface-background)] focus:ring-2 focus:ring-[var(--theme-color-control-border-accent)] dark:border-gray-700/50 dark:bg-[#0C111C] dark:text-gray-300 dark:hover:bg-gray-800 dark:focus:ring-[var(--theme-color-control-border-accent)]"
+                className="min-w-0 cursor-pointer truncate rounded-xl border border-[var(--theme-color-control-border-accent)] bg-[var(--theme-color-control-background)] px-4 py-2.5 text-sm font-bold text-[var(--theme-color-text-default)] shadow-xs outline-hidden transition-colors hover:bg-[var(--theme-color-surface-background)] focus:ring-2 focus:ring-[var(--theme-color-control-border-accent)]"
                 value={selectedEventId}
                 onChange={(event) => onSelectedEventIdChange(event.target.value)}
               >
@@ -171,7 +171,7 @@ export default function BandoriEventSwitcher({
                 <Dialog.Trigger asChild>
                   <button
                     type="button"
-                    className="flex h-11 w-11 items-center justify-center rounded-xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background-muted)] text-[var(--theme-color-text-muted)] shadow-xs transition-all hover:border-[var(--theme-color-action-secondary-border)] hover:text-[var(--theme-color-action-secondary-foreground)] dark:border-gray-800 dark:bg-gray-900/50 dark:text-[var(--theme-color-text-muted-on-dark)] dark:hover:text-[var(--theme-color-action-secondary-foreground-on-dark)]"
+                    className="flex h-11 w-11 items-center justify-center rounded-xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background-muted)] text-[var(--theme-color-text-muted)] shadow-xs transition-all hover:border-[var(--theme-color-action-secondary-border)] hover:text-[var(--theme-color-action-secondary-foreground)]"
                     title={t("searchAction")}
                     aria-label={t("searchAction")}
                   >
@@ -181,25 +181,25 @@ export default function BandoriEventSwitcher({
 
                 <Dialog.Portal>
                   <Dialog.Overlay className="fixed inset-0 z-100 bg-black/50 animate-in fade-in duration-200" />
-                  <Dialog.Content className="fixed left-1/2 top-1/2 z-101 flex max-h-[82vh] w-[min(32rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl bg-[var(--theme-color-surface-background)] shadow-2xl animate-in fade-in zoom-in-95 duration-200 dark:bg-[#131A2B]">
-                    <div className="flex items-center justify-between border-b border-[var(--theme-color-border-subtle)] p-5 dark:border-gray-800">
-                      <Dialog.Title className="text-xl font-bold text-[var(--theme-color-text-default)] dark:text-[var(--theme-color-text-default-on-dark)]">{t("pickerTitle")}</Dialog.Title>
+                  <Dialog.Content className="fixed left-1/2 top-1/2 z-101 flex max-h-[82vh] w-[min(32rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl bg-[var(--theme-color-surface-background)] shadow-2xl animate-in fade-in zoom-in-95 duration-200">
+                    <div className="flex items-center justify-between border-b border-[var(--theme-color-border-subtle)] p-5">
+                      <Dialog.Title className="text-xl font-bold text-[var(--theme-color-text-default)]">{t("pickerTitle")}</Dialog.Title>
                       <Dialog.Description className="sr-only">{t("searchPlaceholder")}</Dialog.Description>
                       <Dialog.Close asChild>
-                        <button type="button" aria-label={t("closePicker")} className="rounded-full p-1 text-[var(--theme-color-text-muted)] hover:bg-[var(--theme-color-control-background-hover)] dark:text-[var(--theme-color-text-muted-on-dark)] dark:hover:bg-gray-800">
+                        <button type="button" aria-label={t("closePicker")} className="rounded-full p-1 text-[var(--theme-color-text-muted)] hover:bg-[var(--theme-color-control-background-hover)]">
                           <X size={22} />
                         </button>
                       </Dialog.Close>
                     </div>
 
-                    <div className="flex gap-2 border-b border-[var(--theme-color-border-subtle)] p-4 dark:border-gray-800/50">
+                    <div className="flex gap-2 border-b border-[var(--theme-color-border-subtle)] p-4">
                       <div className="relative flex-1">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--theme-color-action-secondary-foreground)] dark:text-[var(--theme-color-action-secondary-foreground-on-dark)]" size={18} />
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--theme-color-action-secondary-foreground)]" size={18} />
                         <input
                           autoFocus
                           type="text"
                           placeholder={t("searchPlaceholder")}
-                          className="w-full rounded-sm border border-[var(--theme-color-action-secondary-border)] bg-[var(--theme-color-control-background)] px-10 py-1.5 text-sm font-medium text-[var(--theme-color-text-default)] shadow-xs outline-hidden focus:ring-2 focus:ring-[var(--theme-color-focus-ring)] dark:bg-[#0C111C] dark:text-gray-200 dark:focus:ring-[var(--theme-color-focus-ring-on-dark)]"
+                          className="w-full rounded-sm border border-[var(--theme-color-action-secondary-border)] bg-[var(--theme-color-control-background)] px-10 py-1.5 text-sm font-medium text-[var(--theme-color-text-default)] shadow-xs outline-hidden focus:ring-2 focus:ring-[var(--theme-color-focus-ring)]"
                           value={searchQuery}
                           onChange={(event) => setSearchQuery(event.target.value)}
                         />
@@ -208,14 +208,14 @@ export default function BandoriEventSwitcher({
                             type="button"
                             onClick={() => setSearchQuery("")}
                             aria-label={t("clearSearch")}
-                            className="absolute right-3 top-1/2 -translate-y-1/2 rounded-md bg-[var(--theme-color-control-background-muted)] p-0.5 text-[var(--theme-color-text-muted)] dark:bg-gray-800 dark:text-[var(--theme-color-text-muted-on-dark)]"
+                            className="absolute right-3 top-1/2 -translate-y-1/2 rounded-md bg-[var(--theme-color-control-background-muted)] p-0.5 text-[var(--theme-color-text-muted)]"
                           >
                             <X size={14} />
                           </button>
                         ) : null}
                       </div>
                       <Dialog.Close asChild>
-                        <button type="button" aria-label={t("closePicker")} className="rounded-lg border border-[var(--theme-color-action-secondary-border)] px-4 py-2 font-bold text-[var(--theme-color-action-secondary-foreground)] hover:bg-[var(--theme-color-action-secondary-background-hover)] dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-800">
+                        <button type="button" aria-label={t("closePicker")} className="rounded-lg border border-[var(--theme-color-action-secondary-border)] px-4 py-2 font-bold text-[var(--theme-color-action-secondary-foreground)] hover:bg-[var(--theme-color-action-secondary-background-hover)]">
                           <X size={18} />
                         </button>
                       </Dialog.Close>
@@ -226,7 +226,7 @@ export default function BandoriEventSwitcher({
                         <button
                           type="button"
                           onClick={() => handleSelect("none")}
-                          className="flex w-full items-center justify-between px-6 py-3.5 text-left text-sm font-bold text-[var(--theme-color-text-muted)] transition-colors hover:bg-[var(--theme-color-control-background-hover)] dark:text-gray-300 dark:hover:bg-gray-800"
+                          className="flex w-full items-center justify-between px-6 py-3.5 text-left text-sm font-bold text-[var(--theme-color-text-muted)] transition-colors hover:bg-[var(--theme-color-control-background-hover)]"
                         >
                           {effectiveNoEventLabel}
                         </button>
@@ -243,28 +243,28 @@ export default function BandoriEventSwitcher({
                             "group flex w-full items-center justify-between gap-3 px-6 py-3.5 text-left transition-colors",
                             isCurrentEvent
                               ? "bg-[var(--theme-color-menu-item-background-current)]"
-                              : "hover:bg-[var(--theme-color-control-background-hover)] dark:hover:bg-gray-800",
+                              : "hover:bg-[var(--theme-color-control-background-hover)]",
                           )}
                         >
-                          <span className={cn("min-w-0 truncate text-sm font-bold", isCurrentEvent ? "text-[var(--theme-color-menu-item-foreground-current)]" : "text-[var(--theme-color-text-muted)] dark:text-gray-300")}>
+                          <span className={cn("min-w-0 truncate text-sm font-bold", isCurrentEvent ? "text-[var(--theme-color-menu-item-foreground-current)]" : "text-[var(--theme-color-text-muted)]")}>
                             {t("eventOption", { eventId: event.id, eventName: event.name })}
                           </span>
                           <span className="flex shrink-0 items-center gap-2">
-                            {event.typeLabel ? <span className="rounded-sm border border-[var(--theme-color-border-subtle)] px-1.5 py-0.5 text-[10px] font-bold text-[var(--theme-color-text-muted)] dark:border-gray-700 dark:text-[var(--theme-color-text-muted-on-dark)]">{event.typeLabel}</span> : null}
+                            {event.typeLabel ? <span className="rounded-sm border border-[var(--theme-color-border-subtle)] px-1.5 py-0.5 text-[10px] font-bold text-[var(--theme-color-text-muted)]">{event.typeLabel}</span> : null}
                             {event.statusLabel ? (
                               <span
                                 className={cn(
                                   "text-[11px] font-bold",
-                                  event.statusTone === "emerald" && "text-[var(--bandori-event-status-ongoing-foreground)] dark:text-[var(--bandori-event-status-ongoing-foreground-on-dark)]",
-                                  event.statusTone === "blue" && "text-[var(--bandori-event-status-upcoming-foreground)] dark:text-[var(--bandori-event-status-upcoming-foreground-on-dark)]",
-                                  (!event.statusTone || event.statusTone === "muted") && "text-[var(--theme-color-text-muted)] dark:text-gray-400",
+                                  event.statusTone === "emerald" && "text-[var(--bandori-event-status-ongoing-foreground)]",
+                                  event.statusTone === "blue" && "text-[var(--bandori-event-status-upcoming-foreground)]",
+                                  (!event.statusTone || event.statusTone === "muted") && "text-[var(--theme-color-text-muted)]",
                                 )}
                               >
                                 {event.statusLabel}
                               </span>
                             ) : null}
-                            {event.hasCn ? <span className="rounded-sm border border-[var(--theme-color-border-subtle)] px-1.5 py-0.5 text-[10px] font-bold text-[var(--theme-color-text-muted)] transition-colors group-hover:border-[var(--theme-color-action-secondary-border)] group-hover:text-[var(--theme-color-action-secondary-foreground)] dark:border-gray-700 dark:text-[var(--theme-color-text-muted-on-dark)] dark:group-hover:text-[var(--theme-color-action-secondary-foreground-on-dark)]">CN</span> : null}
-                            {event.hasJp ? <span className="rounded-sm border border-[var(--theme-color-border-subtle)] px-1.5 py-0.5 text-[10px] font-bold text-[var(--theme-color-text-muted)] transition-colors group-hover:border-[var(--theme-color-action-secondary-border)] group-hover:text-[var(--theme-color-action-secondary-foreground)] dark:border-gray-700 dark:text-[var(--theme-color-text-muted-on-dark)] dark:group-hover:text-[var(--theme-color-action-secondary-foreground-on-dark)]">JP</span> : null}
+                            {event.hasCn ? <span className="rounded-sm border border-[var(--theme-color-border-subtle)] px-1.5 py-0.5 text-[10px] font-bold text-[var(--theme-color-text-muted)] transition-colors group-hover:border-[var(--theme-color-action-secondary-border)] group-hover:text-[var(--theme-color-action-secondary-foreground)]">CN</span> : null}
+                            {event.hasJp ? <span className="rounded-sm border border-[var(--theme-color-border-subtle)] px-1.5 py-0.5 text-[10px] font-bold text-[var(--theme-color-text-muted)] transition-colors group-hover:border-[var(--theme-color-action-secondary-border)] group-hover:text-[var(--theme-color-action-secondary-foreground)]">JP</span> : null}
                           </span>
                         </button>
                         );
@@ -276,9 +276,9 @@ export default function BandoriEventSwitcher({
             </div>
           ) : (
             <div className="grid w-full max-w-[492px] grid-cols-[minmax(0,1fr)_44px_44px] items-center gap-2" aria-hidden="true">
-              <div className="h-11 animate-pulse rounded-xl bg-[var(--theme-color-control-background-muted)] dark:bg-gray-800" />
-              <div className="h-11 w-11 animate-pulse rounded-xl bg-[var(--theme-color-control-background-pressed)] dark:bg-gray-800" />
-              <div className="h-11 w-11 animate-pulse rounded-xl bg-[var(--theme-color-control-background-muted)] dark:bg-gray-800" />
+              <div className="h-11 animate-pulse rounded-xl bg-[var(--theme-color-control-background-muted)]" />
+              <div className="h-11 w-11 animate-pulse rounded-xl bg-[var(--theme-color-control-background-pressed)]" />
+              <div className="h-11 w-11 animate-pulse rounded-xl bg-[var(--theme-color-control-background-muted)]" />
             </div>
           )}
         </div>
@@ -286,7 +286,7 @@ export default function BandoriEventSwitcher({
         <h1
           title={title}
           className={cn(
-            "block h-10 min-w-0 w-full truncate whitespace-nowrap font-extrabold leading-10 tracking-[-0.02em] text-[var(--theme-color-heading-page-foreground)] dark:text-[var(--theme-color-text-default-on-dark)]",
+            "block h-10 min-w-0 w-full truncate whitespace-nowrap font-extrabold leading-10 tracking-[-0.02em] text-[var(--theme-color-heading-page-foreground)]",
             getEventTitleSizeClass(title),
             server !== undefined && "sm:col-span-2 sm:row-start-2",
           )}
@@ -294,7 +294,7 @@ export default function BandoriEventSwitcher({
           {title}
         </h1>
 
-        <div className={cn("min-h-12 text-sm font-medium text-[var(--theme-color-text-muted)] dark:text-gray-400", server !== undefined && "sm:col-span-2 sm:row-start-3")}>
+        <div className={cn("min-h-12 text-sm font-medium text-[var(--theme-color-text-muted)]", server !== undefined && "sm:col-span-2 sm:row-start-3")}>
           {startText || endText ? (
             <div className="grid gap-1">
               {startText ? (
@@ -312,8 +312,8 @@ export default function BandoriEventSwitcher({
             </div>
           ) : showSkeleton ? (
             <div className="flex flex-col gap-2 py-0.5" aria-hidden="true">
-              <div className="h-4 w-48 animate-pulse rounded-full bg-gray-100 dark:bg-gray-800" />
-              <div className="h-4 w-56 animate-pulse rounded-full bg-gray-100 dark:bg-gray-800" />
+              <div className="h-4 w-48 animate-pulse rounded-full bg-[var(--theme-color-control-background-muted)]" />
+              <div className="h-4 w-56 animate-pulse rounded-full bg-[var(--theme-color-control-background-muted)]" />
             </div>
           ) : (
             <>
@@ -338,7 +338,7 @@ export default function BandoriEventSwitcher({
               className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 hover:scale-105"
             />
           ) : (
-            <div className="absolute inset-0 animate-pulse bg-linear-to-br from-gray-100 via-gray-50 to-gray-200 dark:from-gray-800 dark:via-gray-900 dark:to-gray-800" />
+            <div className="absolute inset-0 animate-pulse bg-[var(--theme-color-control-background-muted)]" />
           )}
         </div>
       </div>
