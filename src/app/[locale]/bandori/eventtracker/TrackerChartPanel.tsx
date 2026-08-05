@@ -526,7 +526,7 @@ export const TrackerChartPanel = memo(function TrackerChartPanel({
   }, [scheduleTooltipPositionUpdate, scheduleTooltipPositionUpdateRef]);
 
   return (
-    <div className="h-[400px] w-full relative group rounded-xl bg-[var(--theme-color-control-background)]">
+    <div className="h-[400px] w-full relative group rounded-xl bg-[var(--theme-color-control-background)] dark:bg-slate-950/35">
       {hasRenderableChartData && displayedChartData.length > 0 ? (
         <div className="flex h-full w-full overflow-hidden rounded-xl">
           <FixedYAxis
@@ -630,7 +630,7 @@ export const TrackerChartPanel = memo(function TrackerChartPanel({
         <div className="absolute top-[70%] right-4 -translate-y-1/2 flex flex-col gap-2 z-20 transition-opacity opacity-80 hover:opacity-100">
           <button
             onClick={onZoomIn}
-            className={`rounded-full border border-[var(--theme-color-action-secondary-border)] bg-[var(--theme-color-action-secondary-background)] p-1.5 text-[var(--theme-color-action-secondary-foreground)] shadow-sm transition-[background-color,transform] hover:scale-110 hover:bg-[var(--theme-color-action-secondary-background-hover)] active:scale-95 ${zoomIndex >= maxZoomIndex ? "invisible pointer-events-none" : ""}`}
+            className={`rounded-full border border-[var(--theme-color-action-secondary-border)] bg-[var(--theme-color-action-secondary-background)] p-1.5 text-[var(--theme-color-action-secondary-foreground)] shadow-sm transition-[background-color,transform] hover:scale-110 hover:bg-[var(--theme-color-action-secondary-background-hover)] active:scale-95 dark:bg-black/45 dark:text-[var(--theme-color-action-secondary-foreground-on-dark)] ${zoomIndex >= maxZoomIndex ? "invisible pointer-events-none" : ""}`}
             disabled={zoomIndex >= maxZoomIndex}
             title="放大"
           >
@@ -638,7 +638,7 @@ export const TrackerChartPanel = memo(function TrackerChartPanel({
           </button>
           <button
             onClick={onZoomOut}
-            className={`rounded-full border border-[var(--theme-color-action-secondary-border)] bg-[var(--theme-color-action-secondary-background)] p-1.5 text-[var(--theme-color-action-secondary-foreground)] shadow-sm transition-[background-color,transform] hover:scale-110 hover:bg-[var(--theme-color-action-secondary-background-hover)] active:scale-95 ${zoomIndex <= 0 ? "invisible pointer-events-none" : ""}`}
+            className={`rounded-full border border-[var(--theme-color-action-secondary-border)] bg-[var(--theme-color-action-secondary-background)] p-1.5 text-[var(--theme-color-action-secondary-foreground)] shadow-sm transition-[background-color,transform] hover:scale-110 hover:bg-[var(--theme-color-action-secondary-background-hover)] active:scale-95 dark:bg-black/45 dark:text-[var(--theme-color-action-secondary-foreground-on-dark)] ${zoomIndex <= 0 ? "invisible pointer-events-none" : ""}`}
             disabled={zoomIndex <= 0}
             title="缩小"
           >

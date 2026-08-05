@@ -497,7 +497,7 @@ function EventProgressBar({ startDate, endDate }: { startDate: number; endDate: 
   );
 
   return (
-    <div className="rounded-2xl border border-[var(--theme-color-border-default)] bg-[var(--theme-color-surface-background)] p-6 shadow-[0_18px_44px_rgba(232,176,0,0.16),0_2px_10px_rgba(88,69,0,0.07)]">
+    <div className="rounded-2xl border border-[var(--theme-color-border-default)] bg-[var(--theme-color-surface-background)] p-6 shadow-[0_18px_44px_rgba(232,176,0,0.16),0_2px_10px_rgba(88,69,0,0.07)] dark:border-slate-700/80 dark:bg-[#111827] dark:shadow-[0_18px_44px_rgba(0,0,0,0.22)]">
       <div className="mb-2 flex items-start justify-between gap-3 text-sm font-semibold">
         <span className="shrink-0 whitespace-nowrap font-bold text-[var(--theme-color-progress-foreground)]">活动进度</span>
         <span className="min-w-0 flex flex-col items-end gap-0.5 text-right leading-tight">
@@ -505,7 +505,7 @@ function EventProgressBar({ startDate, endDate }: { startDate: number; endDate: 
           <span className="inline-flex justify-end">{subSummaryContent}</span>
         </span>
       </div>
-      <div className="h-3 w-full overflow-hidden rounded-full bg-[var(--theme-color-progress-track-background)]">
+      <div className="h-3 w-full overflow-hidden rounded-full bg-[var(--theme-color-progress-track-background)] dark:bg-slate-950/70">
         <div
           className="h-full rounded-full bg-[image:var(--theme-progress-indicator-background-image)] transition-all duration-1000 ease-out"
           style={{ width: `${progress}%` }}
@@ -1404,7 +1404,7 @@ export default function EventTrackerPage() {
           recommendedEventId={recommendedEventId !== null ? String(recommendedEventId) : null}
         />
 
-        <div role="tablist" aria-label="活动页面视图" className="grid grid-cols-2 overflow-hidden rounded-2xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-surface-background)] shadow-sm">
+        <div role="tablist" aria-label="活动页面视图" className="grid grid-cols-2 overflow-hidden rounded-2xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-surface-background)] shadow-sm dark:border-slate-700 dark:bg-[#111827]">
           {(["tracker", "info"] as const).map((view) => {
             const active = view === activeView;
             return (
@@ -1415,11 +1415,11 @@ export default function EventTrackerPage() {
                 aria-selected={active}
                 onClick={() => handleViewChange(view)}
                 className={cn(
-                  "relative h-14 text-base font-black outline-hidden transition focus-visible:bg-[var(--theme-color-tab-background-hover)]",
+                  "relative h-14 text-base font-black outline-hidden transition focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--theme-color-control-ring-pressed)]",
                   active
                     ? "text-[var(--theme-color-tab-foreground-selected)]"
-                    : "text-[var(--theme-color-tab-foreground)] hover:bg-[var(--theme-color-tab-background-hover)] hover:text-[var(--theme-color-tab-foreground-hover)]",
-                  view === "tracker" && "border-r border-[var(--theme-color-border-subtle)]",
+                    : "text-[var(--theme-color-tab-foreground)] hover:bg-[var(--theme-color-tab-background-hover)] hover:text-[var(--theme-color-tab-foreground-hover)] dark:text-slate-300 dark:hover:bg-slate-800",
+                  view === "tracker" && "border-r border-[var(--theme-color-border-subtle)] dark:border-slate-700",
                 )}
               >
                 {view === "tracker" ? "分数追踪器" : "活动信息"}
@@ -1437,7 +1437,7 @@ export default function EventTrackerPage() {
             ) : null}
 
             {/* ========== 导航与控制区 ========== */}
-            <div className="rounded-3xl border border-[var(--theme-color-border-default)] bg-[var(--theme-color-surface-background)] p-3 shadow-[0_18px_48px_rgba(65,54,0,0.10),0_3px_14px_rgba(15,23,42,0.05)] sm:p-5">
+            <div className="rounded-3xl border border-[var(--theme-color-border-default)] bg-[var(--theme-color-surface-background)] p-3 shadow-[0_18px_48px_rgba(65,54,0,0.10),0_3px_14px_rgba(15,23,42,0.05)] dark:border-slate-700/80 dark:bg-[#111827] dark:shadow-[0_24px_60px_rgba(0,0,0,0.24)] sm:p-5">
           <Tabs.Root
             value={trackingMode}
             onValueChange={handleTrackingModeChange}
@@ -1466,10 +1466,10 @@ export default function EventTrackerPage() {
 
             {/* ========== 图表区域 ========== */}
             <Tabs.Content value={trackingMode} className="outline-hidden focus:outline-hidden w-full animate-in fade-in zoom-in-95 duration-500">
-              <div className="mt-3 relative rounded-2xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-surface-background)] p-2 shadow-[0_18px_48px_rgba(15,23,42,0.10)] sm:p-4">
+              <div className="mt-3 relative rounded-2xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-surface-background)] p-2 shadow-[0_18px_48px_rgba(15,23,42,0.10)] dark:border-slate-800/80 dark:bg-[#0C111C] dark:shadow-[0_24px_60px_rgba(0,0,0,0.28)] sm:p-4">
 
                 {!isTop10Selected && loading && (
-                  <div className="absolute inset-0 z-30 flex items-center justify-center rounded-2xl bg-[color-mix(in_srgb,var(--theme-color-surface-background)_75%,transparent)]">
+                  <div className="absolute inset-0 bg-[color-mix(in_srgb,var(--theme-color-surface-background)_75%,transparent)] dark:bg-[#0C111C]/75 z-30 flex items-center justify-center rounded-2xl">
                     <div className="flex flex-col items-center">
                       <div className="w-10 h-10 border-4 border-[var(--theme-color-feedback-info-border)] border-t-transparent rounded-full animate-spin" />
                       <p className="mt-4 text-sm font-semibold text-[var(--theme-color-feedback-info-foreground)] animate-pulse">正在获取最新数据...</p>

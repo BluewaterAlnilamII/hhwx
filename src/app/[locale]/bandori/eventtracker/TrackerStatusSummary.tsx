@@ -31,14 +31,14 @@ type TrackerStatusSummaryProps = {
 
 function getStatusColorClass(status: string): string {
   if (status === "进行中") {
-    return "text-[var(--theme-color-semantic-success-foreground)]";
+    return "text-[var(--theme-color-semantic-success-foreground)] dark:text-[var(--theme-color-semantic-success-foreground-on-dark)]";
   }
 
   if (status === "已结束") {
-    return "text-[var(--theme-color-semantic-neutral-foreground)]";
+    return "text-[var(--theme-color-semantic-neutral-foreground)] dark:text-[var(--theme-color-semantic-neutral-foreground-on-dark)]";
   }
 
-  return "text-[var(--theme-color-feedback-info-foreground)]";
+  return "text-[var(--theme-color-feedback-info-foreground)] dark:text-[var(--theme-color-action-secondary-foreground-on-dark)]";
 }
 
 function TimeAgo({ timestamp }: { timestamp: number }) {
@@ -52,11 +52,11 @@ function TimeAgo({ timestamp }: { timestamp: number }) {
   const { isStale, label } = formatBandoriTrackerUpdateAge(timestamp, now);
 
   return isStale ? (
-    <span className="inline-flex items-center rounded-full border border-[var(--theme-color-feedback-warning-border)] bg-[var(--theme-color-feedback-warning-background)] px-1 py-0.5 text-xs font-semibold tabular-nums text-[var(--theme-color-feedback-warning-foreground)]">
+    <span className="inline-flex items-center rounded-full border border-[var(--theme-color-feedback-warning-border)] bg-[var(--theme-color-feedback-warning-background)] px-1 py-0.5 text-xs font-semibold tabular-nums text-[var(--theme-color-feedback-warning-foreground)] dark:text-[var(--theme-color-semantic-warning-foreground-on-dark)]">
       {label}
     </span>
   ) : (
-    <span className="text-[13px] font-medium tabular-nums text-[var(--theme-color-text-muted)]">
+    <span className="text-[13px] font-medium tabular-nums text-[var(--theme-color-text-muted)] dark:text-slate-400">
       {label}
     </span>
   );
@@ -72,9 +72,9 @@ export const TrackerStatusSummary = memo(function TrackerStatusSummary({
   trackingMode,
 }: TrackerStatusSummaryProps) {
   return (
-    <div className="mb-3 flex flex-col gap-2.5 border-b border-[var(--theme-color-border-subtle)] px-1.5 pb-3.5 pt-0.5 sm:flex-row sm:items-center sm:justify-between sm:px-0 sm:pb-3 sm:pt-0">
+    <div className="mb-3 flex flex-col gap-2.5 border-b border-[var(--theme-color-border-subtle)] px-1.5 pb-3.5 pt-0.5 dark:border-slate-800/80 sm:flex-row sm:items-center sm:justify-between sm:px-0 sm:pb-3 sm:pt-0">
       <div className="flex items-center gap-1.5 px-0.5 text-[13px] leading-5 sm:gap-2 sm:px-0 sm:text-sm">
-        <span className="font-medium text-[var(--theme-color-text-muted)]">活动状态</span>
+        <span className="font-medium text-[var(--theme-color-text-muted)] dark:text-slate-400">活动状态</span>
         <span className={`font-bold ${getStatusColorClass(status)}`}>
           {status}
         </span>
@@ -85,26 +85,26 @@ export const TrackerStatusSummary = memo(function TrackerStatusSummary({
           <>
             {showScoreValues ? (
               <div className="flex items-center gap-1.5 sm:gap-2">
-                <span className="font-medium text-[var(--theme-color-text-muted)]">最新分数</span>
-                <span className="font-bold text-[var(--theme-color-feedback-info-foreground)]">
+                <span className="font-medium text-[var(--theme-color-text-muted)] dark:text-slate-400">最新分数</span>
+                <span className="font-bold text-[var(--theme-color-feedback-info-foreground)] dark:text-[var(--theme-color-action-secondary-foreground-on-dark)]">
                   {scoreSummary.latestScore !== null ? TRACKER_STATUS_NUMBER_FORMATTER.format(scoreSummary.latestScore) : "-"}
                 </span>
               </div>
             ) : null}
             <div className="flex items-center gap-1.5 sm:gap-2">
-              <span className="font-medium text-[var(--theme-color-text-muted)]">更新时间</span>
+              <span className="font-medium text-[var(--theme-color-text-muted)] dark:text-slate-400">更新时间</span>
               <span
                 className="grid w-19.5 shrink-0 grid-cols-[3.75rem_0.875rem] items-center gap-1"
                 data-testid="tracker-update-status"
               >
                 {scoreSummary.latestUpdateTime !== null
                   ? <TimeAgo timestamp={scoreSummary.latestUpdateTime} />
-                  : <span className="text-[13px] font-medium text-[var(--theme-color-text-muted)] opacity-60">-</span>
+                  : <span className="text-[13px] font-medium text-[var(--theme-color-text-muted)] opacity-60 dark:text-slate-500">-</span>
                 }
                 <Loader2
                   aria-hidden={!isRefreshing}
                   aria-label={isRefreshing ? "正在更新分数线" : undefined}
-                  className={`h-3.5 w-3.5 text-[var(--theme-color-feedback-info-foreground)] transition-opacity ${
+                  className={`h-3.5 w-3.5 text-[var(--theme-color-feedback-info-foreground)] transition-opacity dark:text-[var(--theme-color-action-secondary-foreground-on-dark)] ${
                     isRefreshing
                       ? "animate-spin opacity-100 motion-reduce:animate-none"
                       : "opacity-0"
@@ -114,7 +114,7 @@ export const TrackerStatusSummary = memo(function TrackerStatusSummary({
             </div>
             {trackingMode === "event" && showBestdoriPrediction && (
               <div className="flex items-center gap-1.5 sm:gap-2">
-                <span className="font-medium text-[var(--theme-color-text-muted)]">Bestdori预测</span>
+                <span className="font-medium text-[var(--theme-color-text-muted)] dark:text-slate-400">Bestdori预测</span>
                 <span className="font-bold" style={{ color: BESTDORI_PREDICTION_COLOR }}>
                   {bestdoriPrediction.status === "loading"
                     ? "加载中"
@@ -129,14 +129,14 @@ export const TrackerStatusSummary = memo(function TrackerStatusSummary({
         {status === "已结束" && showScoreValues && (
           <>
             <div className="flex items-center gap-1.5 sm:gap-2">
-              <span className="text-[var(--theme-color-text-muted)]">结束分数</span>
-              <span className="font-bold text-[var(--theme-color-text-default)]">
+              <span className="text-[var(--theme-color-text-muted)] dark:text-slate-400">结束分数</span>
+              <span className="font-bold text-[var(--theme-color-text-default)] dark:text-slate-200">
                 {scoreSummary.endScore !== null ? TRACKER_STATUS_NUMBER_FORMATTER.format(scoreSummary.endScore) : "结算中"}
               </span>
             </div>
             <div className="flex items-center gap-1.5 sm:gap-2">
-              <span className="text-[var(--theme-color-text-muted)]">最终分数</span>
-              <span className="font-bold text-[var(--theme-color-text-default)]">
+              <span className="text-[var(--theme-color-text-muted)] dark:text-slate-400">最终分数</span>
+              <span className="font-bold text-[var(--theme-color-text-default)] dark:text-slate-200">
                 {scoreSummary.finalScore !== null ? TRACKER_STATUS_NUMBER_FORMATTER.format(scoreSummary.finalScore) : "结算中"}
               </span>
               {scoreSummary.finalScore !== null && scoreSummary.endScore !== null && scoreSummary.finalScore < scoreSummary.endScore && (

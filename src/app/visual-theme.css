@@ -1,6 +1,4 @@
 [data-visual-theme="smile-patrol"] {
-  color-scheme: light;
-
   /* Smile Patrol's fixed accent palette. Components consume semantic tokens below. */
   --smile-patrol-palette-yellow-ffee22: #ffee22;
   --smile-patrol-palette-orange-ff9922: #ff9922;
@@ -149,4 +147,15 @@
   --theme-color-scrollbar-track: color-mix(in srgb, var(--theme-color-border-subtle) 18%, var(--theme-color-surface-background));
   --theme-color-scrollbar-thumb: var(--smile-patrol-palette-blue-006699);
   --theme-color-scrollbar-thumb-hover: var(--smile-patrol-palette-blue-006699);
+}
+
+@media (prefers-color-scheme: dark) {
+  [data-visual-theme="smile-patrol"] {
+    --theme-color-heading-section-accent-a-background: color-mix(in srgb, var(--smile-patrol-palette-orange-ff9922) 18%, #111827);
+    --theme-color-heading-section-accent-a-foreground: var(--smile-patrol-palette-orange-ff9922);
+    --theme-color-heading-section-accent-b-background: color-mix(in srgb, var(--smile-patrol-palette-pink-f5a4cd) 18%, #111827);
+    --theme-color-heading-section-accent-b-foreground: var(--smile-patrol-palette-pink-f5a4cd);
+    --theme-color-heading-section-accent-c-background: color-mix(in srgb, var(--smile-patrol-palette-cyan-44ddff) 18%, #111827);
+    --theme-color-heading-section-accent-c-foreground: var(--smile-patrol-palette-cyan-44ddff);
+  }
 }

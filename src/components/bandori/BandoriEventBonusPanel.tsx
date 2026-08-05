@@ -221,7 +221,7 @@ function AttributeIcon({ attribute }: { attribute: BandoriCardAttribute }) {
 
 function CharacterIcon({ characterId, label }: { characterId: number; label: string }) {
   return (
-    <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[var(--theme-color-control-background-muted)] ring-1 ring-[var(--theme-color-border-subtle)]" title={label}>
+    <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center overflow-hidden rounded-full bg-slate-100 ring-1 ring-slate-200" title={label}>
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src={buildBandoriResIconPublicUrl(`chara_icon_${characterId}.png`)}
@@ -291,7 +291,7 @@ function EventBonusInfoRow({
       <LabelElement className={cn(
         "pt-1 text-sm font-semibold",
         variant === "embedded"
-          ? "text-[var(--theme-color-text-muted)]"
+          ? "text-[var(--theme-color-text-muted)] dark:text-slate-400"
           : "text-[var(--theme-color-text-muted)]",
       )}>
         {label}
@@ -443,13 +443,13 @@ export default function BandoriEventBonusPanel({
       ) : null}
 
       {variant === "embedded" && loading ? (
-        <div className="inline-flex items-center gap-2 py-3 text-sm font-semibold text-[var(--theme-color-text-muted)]">
+        <div className="inline-flex items-center gap-2 py-3 text-sm font-semibold text-[var(--theme-color-text-muted)] dark:text-[var(--theme-color-text-muted-on-dark)]">
           <Loader2 className="h-4 w-4 animate-spin" />
           {labelsT("loadBonus")}
         </div>
       ) : null}
       {variant === "embedded" && !eventBonus && !loading ? (
-        <div className="py-3 text-sm font-semibold text-[var(--theme-color-text-muted)]">{statesT("noEventBonusData")}</div>
+        <div className="py-3 text-sm font-semibold text-[var(--theme-color-text-muted)] dark:text-[var(--theme-color-text-muted-on-dark)]">{statesT("noEventBonusData")}</div>
       ) : null}
       {variant === "embedded" && error ? (
         <div className="my-3 rounded-xl border border-[var(--theme-color-feedback-error-border)] bg-[var(--theme-color-feedback-error-background)] px-3 py-2 text-sm font-semibold text-[var(--theme-color-feedback-error-foreground)]">
