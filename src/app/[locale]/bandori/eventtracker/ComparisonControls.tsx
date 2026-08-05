@@ -181,7 +181,7 @@ export const ComparisonControls = memo(function ComparisonControls({
                 type="button"
                 aria-pressed={comparisonAlignment === "start"}
                 onClick={() => onAlignmentChange("start")}
-                className={`px-3 py-1.5 outline-hidden transition-colors focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--theme-color-focus-ring)] ${
+                className={`rounded-full px-3 py-1.5 outline-hidden transition-colors focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--theme-color-focus-ring)] ${
                   comparisonAlignment === "start"
                     ? "bg-[var(--theme-color-selection-strong-background)] text-[var(--theme-color-selection-strong-foreground)] ring-2 ring-inset ring-[var(--theme-color-selection-strong-ring)]"
                     : "text-[var(--theme-color-text-muted)] hover:bg-[var(--theme-color-control-background-hover)] hover:text-[var(--theme-color-text-default)] dark:text-gray-400 dark:hover:bg-blue-500/10"
@@ -193,7 +193,7 @@ export const ComparisonControls = memo(function ComparisonControls({
                 type="button"
                 aria-pressed={comparisonAlignment === "end"}
                 onClick={() => onAlignmentChange("end")}
-                className={`px-3 py-1.5 outline-hidden transition-colors focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--theme-color-focus-ring)] ${
+                className={`rounded-full px-3 py-1.5 outline-hidden transition-colors focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--theme-color-focus-ring)] ${
                   comparisonAlignment === "end"
                     ? "bg-[var(--theme-color-selection-strong-background)] text-[var(--theme-color-selection-strong-foreground)] ring-2 ring-inset ring-[var(--theme-color-selection-strong-ring)]"
                     : "text-[var(--theme-color-text-muted)] hover:bg-[var(--theme-color-control-background-hover)] hover:text-[var(--theme-color-text-default)] dark:text-gray-400 dark:hover:bg-blue-500/10"
