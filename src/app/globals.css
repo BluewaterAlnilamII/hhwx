@@ -70,14 +70,6 @@
   --bandori-event-status-ended-foreground-on-dark: var(--theme-color-semantic-neutral-foreground-on-dark);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --eventtracker-bestdori-color: #cbd5e1;
-    --eventtracker-nonworking-band-fill: color-mix(in srgb, var(--theme-color-control-background-muted) 24%, transparent);
-    --eventtracker-nonworking-band-stroke: color-mix(in srgb, var(--theme-color-border-default) 24%, transparent);
-  }
-}
-
 html,
 body {
   min-height: 100vh;

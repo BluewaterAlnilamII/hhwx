@@ -58,7 +58,7 @@ const StampPickerOption = memo(function StampPickerOption({
       onPointerLeave={() => setPreviewActive(false)}
       onFocus={() => setPreviewActive(true)}
       onBlur={() => setPreviewActive(false)}
-      className="relative flex h-20 w-full min-w-0 items-center justify-center rounded-lg p-1 transition hover:bg-rose-50 focus:bg-rose-50 focus:outline-hidden focus:ring-2 focus:ring-rose-200 dark:hover:bg-rose-500/10 dark:focus:bg-rose-500/10 dark:focus:ring-rose-500/30"
+      className="relative flex h-20 w-full min-w-0 items-center justify-center rounded-lg p-1 transition hover:bg-[var(--theme-color-control-background-hover)] focus:bg-[var(--theme-color-control-background-hover)] focus:outline-hidden focus:ring-2 focus:ring-[var(--theme-color-focus-ring)]"
       aria-label={shortcode}
       title={shortcode}
     >
@@ -82,7 +82,7 @@ const StampPickerOption = memo(function StampPickerOption({
         />
       )}
       {hasVoice ? (
-        <span className="absolute bottom-1 right-1 inline-flex h-4 w-4 items-center justify-center rounded-full bg-rose-500 text-white shadow-xs ring-2 ring-white dark:ring-slate-900">
+        <span className="absolute bottom-1 right-1 inline-flex h-4 w-4 items-center justify-center rounded-full bg-[var(--theme-color-notification-badge-background)] text-[var(--theme-color-notification-badge-foreground)] shadow-xs ring-2 ring-[var(--theme-color-surface-background)]">
           <Volume2 size={10} aria-hidden="true" />
         </span>
       ) : null}
@@ -151,10 +151,10 @@ export const StampPickerButton = memo(function StampPickerButton({
         type="button"
         onClick={() => onOpenChange(!open)}
         className={cn(
-          "inline-flex h-8 w-8 items-center justify-center rounded-full border text-slate-500 transition hover:bg-rose-50 hover:text-rose-700 dark:hover:bg-rose-500/10 dark:hover:text-rose-300",
+          "inline-flex h-8 w-8 items-center justify-center rounded-full border text-[var(--theme-color-text-muted)] transition hover:bg-[var(--theme-color-action-secondary-background-hover)] hover:text-[var(--theme-color-action-secondary-foreground)]",
           open
-            ? "border-rose-300 bg-rose-50 text-rose-700 dark:border-rose-500/50 dark:bg-rose-500/10 dark:text-rose-300"
-            : "border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900",
+            ? "border-[var(--theme-color-feedback-info-border)] bg-[var(--theme-color-feedback-info-background)] text-[var(--theme-color-feedback-info-foreground)]"
+            : "border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background)]",
         )}
         aria-expanded={open}
         aria-label="Select stamp"
@@ -165,7 +165,7 @@ export const StampPickerButton = memo(function StampPickerButton({
       {open ? (
         <div
           style={popoverStyle}
-          className="absolute bottom-10 z-20 overflow-hidden rounded-2xl border border-rose-100 bg-white p-2 shadow-xl dark:border-slate-700 dark:bg-slate-900"
+          className="absolute bottom-10 z-20 overflow-hidden rounded-2xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-surface-background)] p-2 shadow-xl"
         >
           <div className="mb-2 grid grid-cols-4 gap-1">
             {COMMENT_STAMP_REGIONS.map((region) => (
@@ -174,17 +174,17 @@ export const StampPickerButton = memo(function StampPickerButton({
                 type="button"
                 onClick={() => onRegionChange(region)}
                 className={cn(
-                  "h-7 rounded-full text-xs font-bold transition focus:outline-hidden focus:ring-2 focus:ring-rose-200 dark:focus:ring-rose-500/30",
+                  "h-7 rounded-full text-xs font-bold transition focus:outline-hidden focus:ring-2 focus:ring-[var(--theme-color-focus-ring)]",
                   selectedRegion === region
-                    ? "bg-rose-500 text-white shadow-xs"
-                    : "bg-slate-100 text-slate-500 hover:bg-rose-50 hover:text-rose-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-rose-500/10 dark:hover:text-rose-200",
+                    ? "bg-[var(--theme-color-selection-strong-background)] text-[var(--theme-color-selection-strong-foreground)] shadow-xs"
+                    : "bg-[var(--theme-color-control-background-muted)] text-[var(--theme-color-text-muted)] hover:bg-[var(--theme-color-control-background-hover)] hover:text-[var(--theme-color-text-default)]",
                 )}
               >
                 {COMMENT_STAMP_REGION_LABELS[region]}
               </button>
             ))}
           </div>
-          <div className="grid max-h-80 grid-cols-4 gap-1 overflow-x-hidden overflow-y-auto pr-1 [scrollbar-color:#fb7185_#e5e7eb] scrollbar-thin [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-rose-400 [&::-webkit-scrollbar-track]:rounded-full [&::-webkit-scrollbar-track]:bg-slate-200">
+          <div className="grid max-h-80 grid-cols-4 gap-1 overflow-x-hidden overflow-y-auto pr-1 [scrollbar-color:var(--theme-color-scrollbar-thumb)_var(--theme-color-scrollbar-track)] scrollbar-thin [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[var(--theme-color-scrollbar-thumb)] [&::-webkit-scrollbar-track]:rounded-full [&::-webkit-scrollbar-track]:bg-[var(--theme-color-scrollbar-track)]">
             {stamps.map((stamp) => (
               <StampPickerOption
                 key={`${stamp.region}-${stamp.id}-${stamp.kind}`}

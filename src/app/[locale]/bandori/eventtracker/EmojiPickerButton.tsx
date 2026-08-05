@@ -79,11 +79,11 @@ export const EmojiPickerButton = memo(function EmojiPickerButton({
         }}
         disabled={disabled}
         className={cn(
-          "inline-flex items-center justify-center rounded-full border text-slate-500 transition hover:bg-sky-50 hover:text-sky-700 disabled:cursor-not-allowed disabled:opacity-60 dark:hover:bg-sky-500/10 dark:hover:text-sky-300",
+          "inline-flex items-center justify-center rounded-full border text-[var(--theme-color-text-muted)] transition hover:bg-[var(--theme-color-action-secondary-background-hover)] hover:text-[var(--theme-color-action-secondary-foreground)] disabled:cursor-not-allowed disabled:opacity-60",
           compact ? "h-7 w-7" : "h-8 w-8",
           open
-            ? "border-sky-300 bg-sky-50 text-sky-700 dark:border-sky-500/50 dark:bg-sky-500/10 dark:text-sky-300"
-            : "border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900",
+            ? "border-[var(--theme-color-feedback-info-border)] bg-[var(--theme-color-feedback-info-background)] text-[var(--theme-color-feedback-info-foreground)]"
+            : "border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background)]",
         )}
         aria-expanded={open}
         aria-label={label}
@@ -94,9 +94,9 @@ export const EmojiPickerButton = memo(function EmojiPickerButton({
       {open ? (
         <div
           style={popoverStyle}
-          className="absolute bottom-10 z-20 overflow-x-hidden rounded-2xl border border-sky-100 bg-white p-2 shadow-xl dark:border-slate-700 dark:bg-slate-900"
+          className="absolute bottom-10 z-20 overflow-x-hidden rounded-2xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-surface-background)] p-2 shadow-xl"
         >
-          <div className="grid max-h-64 grid-cols-9 gap-1 overflow-x-hidden overflow-y-auto pr-1 [scrollbar-color:#94a3b8_#e5e7eb] scrollbar-thin [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-slate-400 [&::-webkit-scrollbar-track]:rounded-full [&::-webkit-scrollbar-track]:bg-slate-200">
+          <div className="grid max-h-64 grid-cols-9 gap-1 overflow-x-hidden overflow-y-auto pr-1 [scrollbar-color:var(--theme-color-scrollbar-thumb)_var(--theme-color-scrollbar-track)] scrollbar-thin [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[var(--theme-color-scrollbar-thumb)] [&::-webkit-scrollbar-track]:rounded-full [&::-webkit-scrollbar-track]:bg-[var(--theme-color-scrollbar-track)]">
             {COMMENT_EMOJI_NAMES.map((name) => {
               const src = getCommentEmojiSrc(name);
               if (!src) return null;
@@ -106,7 +106,7 @@ export const EmojiPickerButton = memo(function EmojiPickerButton({
                   key={name}
                   type="button"
                   onClick={() => onSelect(name)}
-                  className="flex aspect-square w-full min-w-0 items-center justify-center rounded-lg transition hover:bg-sky-50 focus:bg-sky-50 focus:outline-hidden focus:ring-2 focus:ring-sky-200 dark:hover:bg-sky-500/10 dark:focus:bg-sky-500/10 dark:focus:ring-sky-500/30"
+                  className="flex aspect-square w-full min-w-0 items-center justify-center rounded-lg transition hover:bg-[var(--theme-color-control-background-hover)] focus:bg-[var(--theme-color-control-background-hover)] focus:outline-hidden focus:ring-2 focus:ring-[var(--theme-color-focus-ring)]"
                   aria-label={`:${name}:`}
                   title={`:${name}:`}
                 >

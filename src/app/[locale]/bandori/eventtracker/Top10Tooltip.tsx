@@ -43,8 +43,8 @@ export function Top10Tooltip({ players, server, tooltip }: Top10TooltipProps) {
   }
 
   return (
-    <div className="min-w-[220px] rounded-2xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-surface-background)]/95 p-4 shadow-[0_8px_30px_rgb(0,0,0,0.12)] dark:border-gray-800 dark:bg-[#131A2B]/95">
-      <p className="mb-2 text-xs font-semibold text-[var(--theme-color-text-muted)] dark:text-gray-400">
+    <div className="min-w-[220px] rounded-2xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-surface-background)]/95 p-4 shadow-[0_8px_30px_rgb(0,0,0,0.12)]">
+      <p className="mb-2 text-xs font-semibold text-[var(--theme-color-text-muted)]">
         {dateFormatter.format(tooltip.label)}
       </p>
       <div className="space-y-1.5">
