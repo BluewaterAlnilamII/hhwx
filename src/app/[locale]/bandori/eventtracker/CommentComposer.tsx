@@ -85,7 +85,7 @@ export const CommentComposer = memo(function CommentComposer({
   };
 
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-xs dark:border-slate-700 dark:bg-slate-900">
+    <div className="rounded-2xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background)] p-3 shadow-xs dark:border-slate-700 dark:bg-slate-900">
       <textarea
         ref={textareaRef}
         value={content}
@@ -94,11 +94,11 @@ export const CommentComposer = memo(function CommentComposer({
         rows={3}
         maxLength={COMMENT_INPUT_MAX_LENGTH}
         autoFocus={autoFocus}
-        className="min-h-21 w-full resize-y rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm leading-6 text-slate-800 outline-hidden transition placeholder:text-slate-400 selection:bg-sky-200 selection:text-slate-900 focus:border-sky-400 focus:bg-white focus:ring-2 focus:ring-sky-100 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:placeholder:text-slate-500 dark:selection:bg-sky-500/40 dark:selection:text-white dark:focus:border-sky-400 dark:focus:bg-slate-900 dark:focus:text-slate-50 dark:focus:ring-sky-500/25"
+        className="min-h-21 w-full resize-y rounded-xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background)] px-3 py-2 text-sm leading-6 text-[var(--theme-color-text-default)] outline-hidden transition placeholder:text-[var(--theme-color-text-muted)] selection:bg-[var(--theme-color-feedback-info-background)] selection:text-[var(--theme-color-text-default)] focus:border-[var(--theme-color-focus-ring)] focus:ring-2 focus:ring-[var(--theme-color-focus-ring)] dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:placeholder:text-slate-500 dark:selection:bg-sky-500/40 dark:selection:text-white dark:focus:border-sky-400 dark:focus:bg-slate-900 dark:focus:text-slate-50 dark:focus:ring-sky-500/25"
       />
       <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
-          <span className={cn("text-xs", content.length > 460 ? "text-amber-600" : "text-slate-400")}>
+          <span className={cn("text-xs", content.length > 460 ? "text-[var(--theme-color-feedback-warning-foreground)]" : "text-[var(--theme-color-text-muted)]")}>
             {content.length}/500
           </span>
           <EmojiPickerButton
@@ -125,7 +125,7 @@ export const CommentComposer = memo(function CommentComposer({
             <button
               type="button"
               onClick={onCancel}
-              className="inline-flex h-8 items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-500 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"
+              className="inline-flex h-8 items-center gap-1.5 rounded-full border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background)] px-3 text-xs font-semibold text-[var(--theme-color-text-muted)] transition hover:bg-[var(--theme-color-control-background-hover)] hover:text-[var(--theme-color-text-default)] dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"
             >
               <X size={14} />
               取消
@@ -135,7 +135,7 @@ export const CommentComposer = memo(function CommentComposer({
             type="button"
             onClick={handleSubmit}
             disabled={!content.trim() || submitting}
-            className="inline-flex h-8 items-center gap-1.5 rounded-full bg-[var(--theme-color-action-accent-background)] px-3 text-xs font-semibold text-[var(--theme-color-action-accent-foreground)] shadow-xs transition hover:bg-[var(--theme-color-action-accent-background-hover)] disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-500"
+            className="inline-flex h-8 items-center gap-1.5 rounded-full bg-[var(--theme-color-action-accent-background)] px-3 text-xs font-semibold text-[var(--theme-color-action-accent-foreground)] shadow-xs transition hover:bg-[var(--theme-color-action-accent-background-hover)] disabled:cursor-not-allowed disabled:bg-[var(--theme-color-semantic-neutral-background)] disabled:text-[var(--theme-color-semantic-neutral-foreground)] disabled:opacity-70 disabled:shadow-none disabled:ring-1 disabled:ring-inset disabled:ring-[var(--theme-color-semantic-neutral-border)] disabled:hover:bg-[var(--theme-color-semantic-neutral-background)]"
           >
             <Check size={14} />
             {submitting ? "发送中" : submitLabel}

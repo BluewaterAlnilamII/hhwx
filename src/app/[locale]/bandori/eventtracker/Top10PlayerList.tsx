@@ -21,7 +21,7 @@ export function Top10PlayerList({ players, server }: Top10PlayerListProps) {
 
   return (
     <section className="mt-7" aria-label="TOP10 玩家排名">
-      <div className="grid grid-cols-[2.25rem_4rem_minmax(0,1fr)_auto] items-center gap-3 border-b border-[var(--theme-color-border-subtle)] px-2 pb-2 text-xs font-bold tracking-[0.08em] text-[var(--theme-color-text-muted)] dark:border-slate-700 dark:text-slate-400 sm:grid-cols-[3rem_5rem_minmax(0,1fr)_minmax(9rem,auto)] sm:px-3">
+      <div className="grid grid-cols-[2.25rem_4rem_minmax(0,1fr)_auto] items-center gap-3 border-b border-[var(--theme-color-border-subtle)] px-2 pb-2 text-xs font-bold tracking-[0.08em] text-[var(--theme-color-text-muted)] sm:grid-cols-[3rem_5rem_minmax(0,1fr)_minmax(9rem,auto)] sm:px-3 dark:border-slate-700 dark:text-slate-400">
         <span className="text-center">排名</span>
         <span className="sr-only">头像</span>
         <span>玩家</span>
@@ -65,7 +65,7 @@ export function Top10PlayerList({ players, server }: Top10PlayerListProps) {
                     showPower={false}
                   />
                 ) : (
-                  <div className="flex h-14 w-14 flex-col items-center justify-center gap-1 overflow-hidden rounded-[5px] bg-[var(--theme-color-control-background-muted)] text-[var(--theme-color-text-muted)] shadow-[0_2px_7px_rgba(15,23,42,0.22)] outline-solid outline-1 outline-[var(--theme-color-border-subtle)] dark:bg-slate-800 dark:text-slate-500 sm:h-[76px] sm:w-[76px]">
+                  <div className="flex h-14 w-14 flex-col items-center justify-center gap-1 overflow-hidden rounded-[5px] bg-[var(--theme-color-control-background-muted)] text-[var(--theme-color-text-muted)] shadow-[0_2px_7px_rgba(15,23,42,0.22)] outline-solid outline-1 outline-[var(--theme-color-border-subtle)] sm:h-[76px] sm:w-[76px] dark:bg-slate-800 dark:text-slate-500">
                     <ImageOff className="h-5 w-5" aria-hidden="true" />
                     <span className="text-[10px] font-semibold">无头像</span>
                   </div>
@@ -73,16 +73,16 @@ export function Top10PlayerList({ players, server }: Top10PlayerListProps) {
               </div>
 
               <div className="min-w-0">
-                <div className="min-w-0 whitespace-pre-line break-words text-sm font-bold leading-5 text-[var(--theme-color-text-default)] dark:text-slate-100 sm:text-base">
+                <div className="min-w-0 whitespace-pre-line break-words text-sm font-bold leading-5 text-[var(--theme-color-text-default)] sm:text-base dark:text-slate-100">
                   {player.name || "—"}
                 </div>
-                <div className="mt-1 whitespace-nowrap text-[10px] font-medium tabular-nums text-[var(--theme-color-text-muted)] dark:text-slate-400 sm:text-xs">
+                <div className="mt-1 whitespace-nowrap text-[10px] font-medium tabular-nums text-[var(--theme-color-text-muted)] sm:text-xs dark:text-slate-400">
                   {player.uid}
                 </div>
               </div>
 
               <div className="text-right">
-                <span className="block text-sm font-black tabular-nums text-[var(--theme-color-text-default)] dark:text-slate-100 sm:text-lg">
+                <span className="block text-sm font-black tabular-nums text-[var(--theme-color-text-default)] sm:text-lg dark:text-slate-100">
                   {player.score.toLocaleString("zh-CN")}
                 </span>
                 <span className="text-[10px] font-semibold text-[var(--theme-color-text-muted)] opacity-70 sm:text-xs">P</span>

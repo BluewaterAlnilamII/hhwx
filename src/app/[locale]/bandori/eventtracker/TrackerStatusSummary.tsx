@@ -72,7 +72,7 @@ export const TrackerStatusSummary = memo(function TrackerStatusSummary({
   trackingMode,
 }: TrackerStatusSummaryProps) {
   return (
-    <div className="mb-3 flex flex-col gap-2.5 border-b border-[var(--theme-color-border-subtle)] px-1.5 pb-3.5 pt-0.5 dark:border-slate-800/80 sm:flex-row sm:items-center sm:justify-between sm:px-0 sm:pb-3 sm:pt-0">
+    <div className="mb-3 flex flex-col gap-2.5 border-b border-[var(--theme-color-border-subtle)] px-1.5 pb-3.5 pt-0.5 sm:flex-row sm:items-center sm:justify-between sm:px-0 sm:pb-3 sm:pt-0 dark:border-slate-800/80">
       <div className="flex items-center gap-1.5 px-0.5 text-[13px] leading-5 sm:gap-2 sm:px-0 sm:text-sm">
         <span className="font-medium text-[var(--theme-color-text-muted)] dark:text-slate-400">活动状态</span>
         <span className={`font-bold ${getStatusColorClass(status)}`}>

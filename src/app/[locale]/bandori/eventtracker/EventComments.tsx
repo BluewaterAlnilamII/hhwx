@@ -15,7 +15,7 @@ import { COMMENT_ROOT_PAGE_SIZE } from "./commentTypes";
 import { useCommentThread } from "./useCommentThread";
 import type { BandoriServer } from "@/lib/bandori-server";
 
-const paginationButtonClassName = "inline-flex h-8 w-8 items-center justify-center rounded-full text-[var(--theme-color-text-muted)] transition hover:bg-[var(--theme-color-control-background)] hover:text-[var(--theme-color-action-secondary-foreground)] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent dark:text-[var(--theme-color-text-muted-on-dark)] dark:hover:bg-slate-800 dark:hover:text-[var(--theme-color-action-secondary-foreground-on-dark)]";
+const paginationButtonClassName = "inline-flex h-8 w-8 items-center justify-center rounded-full text-[var(--theme-color-text-default)] transition hover:bg-[var(--theme-color-surface-background)] hover:text-[var(--theme-color-action-secondary-foreground)] active:bg-[var(--theme-color-surface-background)] disabled:pointer-events-none disabled:cursor-not-allowed disabled:text-[var(--theme-color-text-muted)] disabled:opacity-25 dark:text-slate-200 dark:hover:bg-slate-800 dark:hover:text-[var(--theme-color-action-secondary-foreground-on-dark)]";
 
 export default function EventComments({ eventId, server }: { eventId: number | null; server: BandoriServer }) {
   const {
@@ -51,8 +51,8 @@ export default function EventComments({ eventId, server }: { eventId: number | n
   const handleCreateReply = useCallback((parentId: string, content: string) => createComment(content, parentId), [createComment]);
 
   return (
-    <section className="rounded-3xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-surface-background)] p-4 shadow-[0_16px_44px_rgba(15,23,42,0.06)] dark:border-slate-800 dark:bg-slate-950 sm:p-5">
-      <div className="flex flex-col gap-3 border-b border-[var(--theme-color-border-subtle)] pb-4 dark:border-slate-800 sm:flex-row sm:items-end sm:justify-between">
+    <section className="rounded-3xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-surface-background)] p-4 shadow-[0_16px_44px_rgba(15,23,42,0.06)] sm:p-5 dark:border-slate-800 dark:bg-slate-950">
+      <div className="flex flex-col gap-3 border-b border-[var(--theme-color-border-subtle)] pb-4 sm:flex-row sm:items-end sm:justify-between dark:border-slate-800">
         <Heading as="h2" visualRole="section" accentSlot="a" icon={<MessageSquare size={20} />} className="dark:text-[var(--theme-color-text-default-on-dark)]">
           活动评论
           <span className="text-sm font-semibold text-[var(--theme-color-text-muted)] dark:text-[var(--theme-color-text-muted-on-dark)]">（{totalCommentCount}）</span>
@@ -118,7 +118,7 @@ export default function EventComments({ eventId, server }: { eventId: number | n
 
       {totalCount > COMMENT_ROOT_PAGE_SIZE ? (
         <div className="mt-5 flex justify-center">
-          <div className="inline-flex max-w-full items-center gap-1 rounded-full border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background-muted)] p-1 shadow-xs dark:border-slate-700 dark:bg-slate-900">
+          <div className="inline-flex max-w-full items-center gap-1 rounded-full border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background)] p-1 shadow-xs dark:border-slate-700 dark:bg-slate-900">
             <button
               type="button"
               onClick={() => goToCommentPage(1)}
@@ -156,7 +156,7 @@ export default function EventComments({ eventId, server }: { eventId: number | n
                 disabled={loading}
                 aria-label="跳转到页码"
                 title="输入页码后按回车跳转"
-                className="h-6 w-10 rounded-md border border-transparent bg-transparent text-center text-sm font-semibold text-[var(--theme-color-text-default)] outline-hidden transition focus:border-[var(--theme-color-action-secondary-border)] focus:bg-[var(--theme-color-control-background-hover)] disabled:cursor-not-allowed disabled:text-[var(--theme-color-text-muted)] dark:text-slate-200 dark:focus:border-slate-600 dark:focus:bg-slate-900"
+                className="h-6 w-10 rounded-md border border-transparent bg-transparent text-center text-sm font-semibold text-[var(--theme-color-text-default)] outline-hidden transition focus:border-[var(--theme-color-action-secondary-border)] focus:bg-[var(--theme-color-surface-background)] disabled:cursor-not-allowed disabled:text-[var(--theme-color-text-muted)] dark:text-slate-200 dark:focus:border-slate-600 dark:focus:bg-slate-900"
               />
               <span className="mx-1 text-[var(--theme-color-text-muted)] opacity-50">/</span>
               <span className="min-w-8 text-center">{totalPages}</span>

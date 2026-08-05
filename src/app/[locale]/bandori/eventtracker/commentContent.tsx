@@ -269,7 +269,7 @@ export function CommentStampView({
       }}
       className={cn(
         className,
-        "rounded-lg transition hover:bg-rose-50 focus:outline-hidden focus:ring-2 focus:ring-rose-200 dark:hover:bg-rose-500/10 dark:focus:ring-rose-500/30",
+        "rounded-lg transition hover:bg-[var(--theme-color-control-background-hover)] focus:outline-hidden focus:ring-2 focus:ring-[var(--theme-color-focus-ring)] dark:hover:bg-rose-500/10 dark:focus:ring-rose-500/30",
       )}
       aria-label={`Play ${shortcode}`}
       title={`Play ${shortcode}`}
@@ -447,7 +447,7 @@ export const CommentContent = memo(function CommentContent({
   isDeleted: boolean;
   stampLookup: CommentStampLookup;
 }) {
-  const contentClassName = isDeleted ? "text-slate-400" : "text-slate-700 dark:text-slate-200";
+  const contentClassName = isDeleted ? "text-[var(--theme-color-text-muted)] opacity-70" : "text-[var(--theme-color-text-muted)] dark:text-slate-200";
   const tokens = useMemo(
     () => (isDeleted ? [] : parseCommentContent(content, stampLookup)),
     [content, isDeleted, stampLookup],

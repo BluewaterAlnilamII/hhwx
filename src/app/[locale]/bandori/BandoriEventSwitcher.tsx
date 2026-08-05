@@ -95,14 +95,14 @@ export default function BandoriEventSwitcher({
   const showSkeleton = loading || (!allowNoEvent && events.length === 0);
 
   return (
-    <div className="relative z-20 grid grid-cols-1 gap-6 rounded-3xl border border-[var(--theme-color-border-default)] bg-[var(--theme-color-surface-background)] p-4 shadow-[0_26px_68px_rgba(232,176,0,0.18),0_4px_18px_rgba(88,69,0,0.08)] dark:border-gray-800 dark:bg-[#131A2B] sm:p-8 xl:grid-cols-[minmax(0,1fr)_minmax(320px,420px)] xl:items-center xl:gap-10">
+    <div className="relative z-20 grid grid-cols-1 gap-6 rounded-3xl border border-[var(--theme-color-border-default)] bg-[var(--theme-color-surface-background)] p-4 shadow-[0_26px_68px_rgba(232,176,0,0.18),0_4px_18px_rgba(88,69,0,0.08)] sm:p-8 xl:grid-cols-[minmax(0,1fr)_minmax(320px,420px)] xl:items-center xl:gap-10 dark:border-gray-800 dark:bg-[#131A2B]">
       <div className={cn(
         "flex min-w-0 flex-1 flex-col gap-4",
         server !== undefined && "sm:grid sm:grid-cols-[auto_minmax(280px,1fr)] sm:items-end sm:gap-x-4",
       )}>
         {server !== undefined && onServerChange ? (
           <div className="flex items-center justify-between gap-4 sm:col-start-1 sm:row-start-1 sm:block">
-            <div className="text-sm font-black text-[var(--theme-color-text-default)] dark:text-slate-200 sm:mb-2">服务器</div>
+            <div className="text-sm font-black text-[var(--theme-color-text-default)] sm:mb-2 dark:text-slate-200">服务器</div>
             <div className="inline-grid grid-cols-4 overflow-hidden rounded-xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background)] shadow-xs dark:border-slate-700 dark:bg-slate-950/60">
               {BANDORI_SERVERS.map((option) => {
                 const active = option === server;
@@ -117,7 +117,7 @@ export default function BandoriEventSwitcher({
                     title={accessibleLabel}
                     onClick={() => onServerChange(option)}
                     className={cn(
-                      "group flex h-11 w-11 items-center justify-center border-r border-[var(--theme-color-border-subtle)] transition first:rounded-l-[11px] last:rounded-r-[11px] last:border-r-0 focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--theme-color-focus-ring)] dark:border-slate-700 dark:focus-visible:ring-[var(--theme-color-focus-ring-on-dark)] sm:h-10",
+                      "group flex h-11 w-11 items-center justify-center border-r border-[var(--theme-color-border-subtle)] transition first:rounded-l-[11px] last:rounded-r-[11px] last:border-r-0 focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--theme-color-focus-ring)] sm:h-10 dark:border-slate-700 dark:focus-visible:ring-[var(--theme-color-focus-ring-on-dark)]",
                       active
                         ? "bg-[var(--theme-color-control-background-pressed)] text-[var(--theme-color-control-foreground-pressed)]"
                         : "hover:bg-[var(--theme-color-control-background-hover)] dark:hover:bg-slate-800",
@@ -312,8 +312,8 @@ export default function BandoriEventSwitcher({
             </div>
           ) : showSkeleton ? (
             <div className="flex flex-col gap-2 py-0.5" aria-hidden="true">
-              <div className="h-4 w-48 animate-pulse rounded-full bg-gray-100 dark:bg-gray-800" />
-              <div className="h-4 w-56 animate-pulse rounded-full bg-gray-100 dark:bg-gray-800" />
+              <div className="h-4 w-48 animate-pulse rounded-full bg-[var(--theme-color-control-background-muted)] dark:bg-gray-800" />
+              <div className="h-4 w-56 animate-pulse rounded-full bg-[var(--theme-color-control-background-muted)] dark:bg-gray-800" />
             </div>
           ) : (
             <>
@@ -338,7 +338,7 @@ export default function BandoriEventSwitcher({
               className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 hover:scale-105"
             />
           ) : (
-            <div className="absolute inset-0 animate-pulse bg-linear-to-br from-gray-100 via-gray-50 to-gray-200 dark:from-gray-800 dark:via-gray-900 dark:to-gray-800" />
+            <div className="absolute inset-0 animate-pulse bg-[var(--theme-color-control-background-muted)] dark:bg-linear-to-br dark:from-gray-800 dark:via-gray-900 dark:to-gray-800" />
           )}
         </div>
       </div>

@@ -323,7 +323,7 @@ export default function EventInfoPanel({
   }
 
   return (
-    <article className="rounded-3xl border border-[var(--theme-color-border-default)] bg-[var(--theme-color-surface-background)] p-4 shadow-[0_18px_48px_rgba(65,54,0,0.09)] dark:border-slate-700/80 dark:bg-[#111827] sm:p-6">
+    <article className="rounded-3xl border border-[var(--theme-color-border-default)] bg-[var(--theme-color-surface-background)] p-4 shadow-[0_18px_48px_rgba(65,54,0,0.09)] sm:p-6 dark:border-slate-700/80 dark:bg-[#111827]">
       <section className="@container">
         <Heading as="h2" visualRole="section" accentSlot="a" icon={<ClipboardList className="h-5 w-5" />} className="dark:text-[var(--theme-color-text-default-on-dark)]">活动概览</Heading>
         <div className="mt-3 grid min-w-0 items-stretch gap-y-0 @min-[54rem]:grid-cols-2 @min-[54rem]:gap-x-0">
@@ -331,7 +331,7 @@ export default function EventInfoPanel({
             <OverviewRow label="活动 ID">{eventId}</OverviewRow>
             <OverviewRow label="活动标题" mobileLayout="stacked">
               <span>{localizedTitle ?? `Event #${eventId}`}</span>
-              {jpTitle && jpTitle !== localizedTitle ? <span className="mt-1 block font-medium text-slate-400">{jpTitle}</span> : null}
+              {jpTitle && jpTitle !== localizedTitle ? <span className="mt-1 block font-medium text-[var(--theme-color-text-muted)] opacity-70">{jpTitle}</span> : null}
             </OverviewRow>
             <OverviewRow label="活动类型">
               <span className="inline-flex rounded-full border border-[var(--theme-color-feedback-info-border)] bg-[var(--theme-color-feedback-info-background)] px-3 py-1 text-[var(--theme-color-feedback-info-foreground)]">
@@ -361,12 +361,12 @@ export default function EventInfoPanel({
                   <span className={cn("inline-flex rounded-full px-3 py-1", EVENT_STATUS_TONES[status])}>{status}</span>
                 ) : null}
                 {status === "未开始" && model.statusStartAt !== null ? (
-                  <span className="text-sm font-semibold text-slate-800 dark:text-slate-100">
+                  <span className="text-sm font-semibold text-[var(--theme-color-text-default)] dark:text-slate-100">
                     <EventRelativeCountdown prefix="距开始" remainingMs={model.statusStartAt - now} completedLabel="活动已开始" />
                   </span>
                 ) : null}
                 {status === "进行中" && model.statusEndAt !== null ? (
-                  <span className="text-sm font-semibold text-slate-800 dark:text-slate-100">
+                  <span className="text-sm font-semibold text-[var(--theme-color-text-default)] dark:text-slate-100">
                     <EventRelativeCountdown prefix="距结束" remainingMs={model.statusEndAt - now} completedLabel="活动已结束" />
                   </span>
                 ) : null}
@@ -380,7 +380,7 @@ export default function EventInfoPanel({
             </OverviewRow>
           </dl>
 
-          <div className="min-w-0 border-t border-slate-200/80 dark:border-slate-700 @min-[54rem]:border-l @min-[54rem]:border-t-0 @min-[54rem]:pl-8">
+          <div className="min-w-0 border-t border-[var(--theme-color-border-subtle)] @min-[54rem]:border-l @min-[54rem]:border-t-0 @min-[54rem]:pl-8 dark:border-slate-700">
             <BandoriEventBonusPanel
               variant="embedded"
               eventTypeLabel={eventTypeLabel}
@@ -420,7 +420,7 @@ export default function EventInfoPanel({
             </OverviewRow>
           </dl>
 
-          <dl className="mt-2 min-w-0 border-t border-slate-200/80 pt-2 dark:border-slate-700 @min-[54rem]:mt-0 @min-[54rem]:border-l @min-[54rem]:border-t-0 @min-[54rem]:pl-8 @min-[54rem]:pt-0">
+          <dl className="mt-2 min-w-0 border-t border-[var(--theme-color-border-subtle)] pt-2 @min-[54rem]:mt-0 @min-[54rem]:border-l @min-[54rem]:border-t-0 @min-[54rem]:pl-8 @min-[54rem]:pt-0 dark:border-slate-700">
             <OverviewRow label="奖励卡牌" mobileLayout="stacked">
               {model.rewardCardIds.length > 0 ? (
                 <div className="flex min-h-16 flex-wrap items-start justify-end gap-3">
@@ -453,7 +453,7 @@ export default function EventInfoPanel({
           {songs.map((song) => {
             const jacketUrl = buildBandoriPublicAssetUrl(musicAssetIndex?.songs[String(song.id)]?.files.thumb);
             return (
-              <div key={song.id} data-music-id={song.id} className="grid grid-cols-[4.5rem_minmax(0,1fr)] gap-3 rounded-2xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background)] p-3 shadow-sm transition hover:border-[var(--theme-color-action-secondary-border)] hover:shadow-md dark:border-slate-700 dark:bg-slate-950/50 sm:grid-cols-[4.5rem_minmax(0,1fr)_auto] sm:items-center">
+              <div key={song.id} data-music-id={song.id} className="grid grid-cols-[4.5rem_minmax(0,1fr)] gap-3 rounded-2xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background)] p-3 shadow-sm transition hover:border-[var(--theme-color-action-secondary-border)] hover:shadow-md sm:grid-cols-[4.5rem_minmax(0,1fr)_auto] sm:items-center dark:border-slate-700 dark:bg-slate-950/50">
                 <div className="flex h-18 w-18 items-center justify-center overflow-hidden rounded-xl bg-[var(--theme-color-control-background-muted)] text-[var(--theme-color-action-secondary-foreground)] dark:bg-slate-800 dark:text-[var(--theme-color-action-secondary-foreground-on-dark)]">
                   {jacketUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
