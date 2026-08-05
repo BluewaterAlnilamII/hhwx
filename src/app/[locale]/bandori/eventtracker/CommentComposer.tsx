@@ -135,14 +135,14 @@ export const CommentComposer = memo(function CommentComposer({
             type="button"
             onClick={handleSubmit}
             disabled={!content.trim() || submitting}
-            className="inline-flex h-8 items-center gap-1.5 rounded-full bg-sky-600 px-3 text-xs font-semibold text-white shadow-xs transition hover:bg-sky-500 disabled:cursor-not-allowed disabled:bg-slate-300"
+            className="inline-flex h-8 items-center gap-1.5 rounded-full bg-[var(--theme-color-action-accent-background)] px-3 text-xs font-semibold text-[var(--theme-color-action-accent-foreground)] shadow-xs transition hover:bg-[var(--theme-color-action-accent-background-hover)] disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-500"
           >
             <Check size={14} />
             {submitting ? "发送中" : submitLabel}
           </button>
         </div>
       </div>
-      {error ? <div className="mt-2 text-xs text-red-500">{error}</div> : null}
+      {error ? <div className="mt-2 text-xs text-[var(--theme-color-feedback-error-foreground)] dark:text-[var(--theme-color-semantic-danger-foreground-on-dark)]">{error}</div> : null}
     </div>
   );
 });

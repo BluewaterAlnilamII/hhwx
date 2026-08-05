@@ -3,6 +3,7 @@
 import { Loader2 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import BandoriCardTile from "@/components/bandori/BandoriCardTile";
+import Heading from "@/components/Heading";
 import {
   buildBandoriResIconPublicUrl,
 } from "@/lib/bandori-asset-proxy";
@@ -181,10 +182,10 @@ function BonusChip({
   compact?: boolean;
 }) {
   const toneClassName = tone === "accent"
-    ? "border-sky-200 bg-sky-50 text-sky-800"
+    ? "border-[var(--theme-color-feedback-info-border)] bg-[var(--theme-color-feedback-info-background)] text-[var(--theme-color-feedback-info-foreground)]"
     : tone === "muted"
-      ? "border-slate-200 bg-slate-50 text-slate-500"
-      : "border-slate-200 bg-white text-slate-700";
+      ? "border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background-muted)] text-[var(--theme-color-text-muted)]"
+      : "border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background)] text-[var(--theme-color-text-default)]";
   return (
     <span className={cn(
       "inline-flex items-center rounded-full border text-sm font-semibold shadow-xs",
@@ -281,7 +282,7 @@ function EventBonusInfoRow({
       "grid gap-2",
       variant === "card" && "md:grid-cols-[7rem_1fr] md:items-start",
       variant === "embedded" && [
-        "border-b border-slate-200/70 py-3 last:border-b-0 md:grid-cols-[7rem_1fr] md:items-start md:gap-5",
+        "border-b border-[var(--theme-color-border-subtle)] py-3 last:border-b-0 md:grid-cols-[7rem_1fr] md:items-start md:gap-5",
         mobileLayout === "inline"
           ? "grid-cols-[7rem_minmax(0,1fr)] items-start gap-3"
           : "grid-cols-1 gap-2",
@@ -290,8 +291,8 @@ function EventBonusInfoRow({
       <LabelElement className={cn(
         "pt-1 text-sm font-semibold",
         variant === "embedded"
-          ? "text-slate-500 dark:text-slate-400"
-          : "text-slate-600",
+          ? "text-[var(--theme-color-text-muted)] dark:text-slate-400"
+          : "text-[var(--theme-color-text-muted)]",
       )}>
         {label}
       </LabelElement>
@@ -426,14 +427,14 @@ export default function BandoriEventBonusPanel({
   return (
     <section className={cn(
       variant === "card"
-        ? "rounded-3xl border border-slate-200 bg-[#fffef4] p-4 shadow-[0_16px_44px_rgba(15,23,42,0.06)] sm:p-5"
+        ? "rounded-3xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-surface-background)] p-4 shadow-[0_16px_44px_rgba(15,23,42,0.06)] sm:p-5"
         : "min-w-0",
     )}>
       {variant === "card" ? (
-        <div className="flex flex-col gap-2 border-b border-slate-100 pb-4 sm:flex-row sm:items-center sm:justify-between">
-          <h2 className="text-base font-bold text-slate-900">{labelsT("eventBonus")}</h2>
+        <div className="flex flex-col gap-2 border-b border-[var(--theme-color-border-subtle)] pb-4 sm:flex-row sm:items-center sm:justify-between">
+          <Heading as="h2" visualRole="subsection" className="text-base">{labelsT("eventBonus")}</Heading>
           {loading ? (
-            <span className="inline-flex items-center gap-2 text-sm font-semibold text-slate-500">
+            <span className="inline-flex items-center gap-2 text-sm font-semibold text-[var(--theme-color-text-muted)]">
               <Loader2 className="h-4 w-4 animate-spin" />
               {labelsT("loadBonus")}
             </span>
@@ -442,22 +443,30 @@ export default function BandoriEventBonusPanel({
       ) : null}
 
       {variant === "embedded" && loading ? (
-        <div className="inline-flex items-center gap-2 py-3 text-sm font-semibold text-slate-500">
+        <div className="inline-flex items-center gap-2 py-3 text-sm font-semibold text-[var(--theme-color-text-muted)] dark:text-[var(--theme-color-text-muted-on-dark)]">
           <Loader2 className="h-4 w-4 animate-spin" />
           {labelsT("loadBonus")}
         </div>
       ) : null}
       {variant === "embedded" && !eventBonus && !loading ? (
-        <div className="py-3 text-sm font-semibold text-slate-500">{statesT("noEventBonusData")}</div>
+        <div className="py-3 text-sm font-semibold text-[var(--theme-color-text-muted)] dark:text-[var(--theme-color-text-muted-on-dark)]">{statesT("noEventBonusData")}</div>
       ) : null}
-      {variant === "embedded" && error ? <div className="py-3 text-sm font-semibold text-rose-600">{error}</div> : null}
+      {variant === "embedded" && error ? (
+        <div className="my-3 rounded-xl border border-[var(--theme-color-feedback-error-border)] bg-[var(--theme-color-feedback-error-background)] px-3 py-2 text-sm font-semibold text-[var(--theme-color-feedback-error-foreground)]">
+          {error}
+        </div>
+      ) : null}
 
       <RowsContainer className={cn(variant === "card" ? "mt-4 space-y-4" : "divide-y-0")}>
         {variant === "card" ? (
           <EventBonusInfoRow label={labelsT("type")} variant={variant}>
             <BonusChip tone="accent">{eventTypeLabel}</BonusChip>
             {!eventBonus && !loading ? <BonusChip tone="muted">{statesT("noEventBonusData")}</BonusChip> : null}
-            {error ? <span className="text-sm font-semibold text-rose-600">{error}</span> : null}
+            {error ? (
+              <span className="inline-flex rounded-xl border border-[var(--theme-color-feedback-error-border)] bg-[var(--theme-color-feedback-error-background)] px-3 py-2 text-sm font-semibold text-[var(--theme-color-feedback-error-foreground)]">
+                {error}
+              </span>
+            ) : null}
           </EventBonusInfoRow>
         ) : null}
 

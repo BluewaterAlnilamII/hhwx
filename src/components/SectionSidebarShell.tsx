@@ -49,8 +49,8 @@ export default function SectionSidebarShell({ children, isMobileDrawerOpen, onCl
     const itemClassName = cn(
       "block rounded-[14px] px-4 py-2.5 text-[15px] font-medium transition duration-200",
       active
-        ? "bg-[#ff9922] text-white shadow-[0_12px_28px_rgba(255,153,34,0.24)]"
-        : "text-slate-700 hover:bg-white hover:text-[#b86100] hover:shadow-[0_10px_24px_rgba(15,23,42,0.06)]",
+        ? "bg-[var(--theme-color-navigation-item-background-current)] text-[var(--theme-color-navigation-item-foreground-current)] shadow-[0_12px_28px_rgba(255,153,34,0.24)]"
+        : "text-[var(--theme-color-navigation-item-foreground)] hover:bg-[var(--theme-color-navigation-item-background-hover)] hover:text-[var(--theme-color-navigation-item-foreground-hover)] hover:shadow-[0_10px_24px_rgba(15,23,42,0.06)]",
     );
 
     return (
@@ -74,7 +74,7 @@ export default function SectionSidebarShell({ children, isMobileDrawerOpen, onCl
       <div className="space-y-7">
         {siteNavigationGroups.map((group) => (
           <section key={group.id} className="space-y-2">
-            <p className="px-4 text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-400">{t(group.labelKey)}</p>
+            <p className="px-4 text-[11px] font-semibold uppercase tracking-[0.24em] text-[var(--theme-color-text-muted)]">{t(group.labelKey)}</p>
             <div className="space-y-1">{group.items.map(renderNavItem)}</div>
           </section>
         ))}
@@ -84,7 +84,7 @@ export default function SectionSidebarShell({ children, isMobileDrawerOpen, onCl
 
   return (
     <div className="relative flex flex-1">
-      <aside className="sticky top-[58px] hidden h-[calc(100svh-58px)] w-[270px] shrink-0 border-r border-[#ffe374]/85 bg-transparent shadow-[0_18px_48px_rgba(128,91,0,0.12)] lg:flex lg:flex-col">
+      <aside className="sticky top-[58px] hidden h-[calc(100svh-58px)] w-[270px] shrink-0 border-r border-[var(--theme-color-sidebar-border)] bg-transparent shadow-[0_18px_48px_rgba(128,91,0,0.12)] lg:flex lg:flex-col">
         {sidebarContent}
       </aside>
 
@@ -105,14 +105,14 @@ export default function SectionSidebarShell({ children, isMobileDrawerOpen, onCl
           className={cn(
             "absolute inset-0 transition-[opacity,background-color] duration-300 ease-out",
             isMobileDrawerOpen
-              ? "pointer-events-auto bg-[#fff3a3]/76 opacity-100"
+              ? "pointer-events-auto bg-[var(--theme-color-sidebar-backdrop-background)] opacity-100"
               : "pointer-events-none bg-white/0 opacity-0",
           )}
           onClick={onCloseMobileDrawer}
         />
         <div
           className={cn(
-            "absolute bottom-0 left-0 top-[58px] flex h-[calc(100svh-58px)] min-h-[calc(100svh-58px)] w-[286px] max-w-[88vw] flex-col overflow-hidden border-r border-[#ffe374]/85 bg-[#fff3a3] shadow-[0_24px_64px_rgba(128,91,0,0.18)] transition-transform duration-300 ease-out will-change-transform",
+            "absolute bottom-0 left-0 top-[58px] flex h-[calc(100svh-58px)] min-h-[calc(100svh-58px)] w-[286px] max-w-[88vw] flex-col overflow-hidden border-r border-[var(--theme-color-sidebar-border)] bg-[var(--theme-color-sidebar-background)] shadow-[0_24px_64px_rgba(128,91,0,0.18)] transition-transform duration-300 ease-out will-change-transform",
             isMobileDrawerOpen ? "translate-x-0" : "-translate-x-full",
           )}
         >
@@ -120,7 +120,7 @@ export default function SectionSidebarShell({ children, isMobileDrawerOpen, onCl
             <button
               type="button"
               onClick={onCloseMobileDrawer}
-              className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-[#ffe0b5] bg-[#fff3df] text-[#b86100]"
+              className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-[var(--theme-color-sidebar-border)] bg-[var(--theme-color-control-background-muted)] text-[var(--theme-color-navigation-item-foreground-hover)]"
               aria-label={t("toolbar.closeNavigation")}
             >
               <X className="h-4 w-4" aria-hidden="true" />

@@ -22,13 +22,13 @@ export default function EventRelativeCountdown({
     <span className="inline-flex items-baseline gap-0.5 whitespace-nowrap">
       <span>{prefix}</span>
       <span className="inline-flex items-baseline gap-0.5">
-        <span className="text-blue-500">{days}</span>
+        <span className="text-[var(--theme-color-feedback-info-foreground)]">{days}</span>
         <span>天</span>
-        <span className="text-blue-500">{hours}</span>
+        <span className="text-[var(--theme-color-feedback-info-foreground)]">{hours}</span>
         <span>小时</span>
-        <span className="text-blue-500">{minutes}</span>
+        <span className="text-[var(--theme-color-feedback-info-foreground)]">{minutes}</span>
         <span>分</span>
-        <span className="inline-flex min-w-[2ch] justify-end text-blue-500 tabular-nums">{seconds}</span>
+        <span className="inline-flex min-w-[2ch] justify-end text-[var(--theme-color-feedback-info-foreground)] tabular-nums">{seconds}</span>
         <span>秒</span>
       </span>
     </span>

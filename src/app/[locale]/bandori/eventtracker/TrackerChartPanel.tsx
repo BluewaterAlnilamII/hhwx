@@ -217,10 +217,10 @@ const TrackerChartCanvas = memo(function TrackerChartCanvas({
           domain={yDomainInfo}
         />
 
-        <CartesianGrid vertical={false} stroke="#374151" opacity={0.15} />
+        <CartesianGrid vertical={false} stroke="var(--theme-color-border-subtle)" opacity={0.55} />
 
         {midnights.map((midnight) => (
-          <ReferenceLine key={midnight} x={midnight} stroke="#D1D5DB" opacity={0.6} />
+          <ReferenceLine key={midnight} x={midnight} stroke="var(--theme-color-border-subtle)" opacity={0.75} />
         ))}
 
         <XAxis
@@ -230,7 +230,7 @@ const TrackerChartCanvas = memo(function TrackerChartCanvas({
           ticks={midnights}
           height={X_AXIS_HEIGHT}
           tickFormatter={(unixTime) => format(unixTime, "MM/dd")}
-          stroke="#6B7280"
+          stroke="var(--theme-color-text-muted)"
           fontSize={12}
           tickLine={false}
           axisLine={false}
@@ -526,7 +526,7 @@ export const TrackerChartPanel = memo(function TrackerChartPanel({
   }, [scheduleTooltipPositionUpdate, scheduleTooltipPositionUpdateRef]);
 
   return (
-    <div className="h-[400px] w-full relative group rounded-xl bg-slate-50/80 dark:bg-slate-950/35">
+    <div className="h-[400px] w-full relative group rounded-xl bg-[var(--theme-color-control-background)] dark:bg-slate-950/35">
       {hasRenderableChartData && displayedChartData.length > 0 ? (
         <div className="flex h-full w-full overflow-hidden rounded-xl">
           <FixedYAxis
@@ -570,7 +570,7 @@ export const TrackerChartPanel = memo(function TrackerChartPanel({
                 >
                   <span
                     ref={hoverCursorRef}
-                    className="pointer-events-none absolute left-0 border-l border-dashed border-gray-400 opacity-0 will-change-transform"
+                    className="pointer-events-none absolute left-0 border-l border-dashed border-[var(--theme-color-border-subtle)] opacity-0 will-change-transform"
                     style={{
                       bottom: CHART_MARGIN.bottom + X_AXIS_HEIGHT,
                       top: CHART_MARGIN.top,
@@ -614,7 +614,7 @@ export const TrackerChartPanel = memo(function TrackerChartPanel({
           </div>
         </div>
       ) : (
-        <div className="h-full flex flex-col items-center justify-center text-gray-400">
+        <div className="h-full flex flex-col items-center justify-center text-[var(--theme-color-text-muted)] opacity-70">
           {isLoading ? null : (
             <>
               <svg className="w-16 h-16 mb-4 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -627,10 +627,10 @@ export const TrackerChartPanel = memo(function TrackerChartPanel({
       )}
 
       {zoomEnabled ? (
-        <div className="absolute top-[70%] right-4 -translate-y-1/2 flex flex-col gap-2 z-20 transition-opacity opacity-70 hover:opacity-100 mix-blend-difference dark:mix-blend-normal">
+        <div className="absolute top-[70%] right-4 -translate-y-1/2 flex flex-col gap-2 z-20 transition-opacity opacity-80 hover:opacity-100">
           <button
             onClick={onZoomIn}
-            className={`p-1.5 text-gray-500 dark:text-gray-400 hover:text-blue-500 dark:hover:text-blue-400 rounded-full transition-transform hover:scale-110 active:scale-95 bg-white/72 dark:bg-black/45 ${zoomIndex >= maxZoomIndex ? "invisible pointer-events-none" : ""}`}
+            className={`rounded-full border border-[var(--theme-color-action-secondary-border)] bg-[var(--theme-color-action-secondary-background)] p-1.5 text-[var(--theme-color-action-secondary-foreground)] shadow-sm transition-[background-color,transform] hover:scale-110 hover:bg-[var(--theme-color-action-secondary-background-hover)] active:scale-95 dark:bg-black/45 dark:text-[var(--theme-color-action-secondary-foreground-on-dark)] ${zoomIndex >= maxZoomIndex ? "invisible pointer-events-none" : ""}`}
             disabled={zoomIndex >= maxZoomIndex}
             title="放大"
           >
@@ -638,7 +638,7 @@ export const TrackerChartPanel = memo(function TrackerChartPanel({
           </button>
           <button
             onClick={onZoomOut}
-            className={`p-1.5 rounded-full transition-transform hover:scale-110 active:scale-95 bg-white/72 dark:bg-black/45 ${zoomIndex <= 0 ? "invisible pointer-events-none" : "text-gray-500 dark:text-gray-400 hover:text-blue-500 dark:hover:text-blue-400"}`}
+            className={`rounded-full border border-[var(--theme-color-action-secondary-border)] bg-[var(--theme-color-action-secondary-background)] p-1.5 text-[var(--theme-color-action-secondary-foreground)] shadow-sm transition-[background-color,transform] hover:scale-110 hover:bg-[var(--theme-color-action-secondary-background-hover)] active:scale-95 dark:bg-black/45 dark:text-[var(--theme-color-action-secondary-foreground-on-dark)] ${zoomIndex <= 0 ? "invisible pointer-events-none" : ""}`}
             disabled={zoomIndex <= 0}
             title="缩小"
           >
