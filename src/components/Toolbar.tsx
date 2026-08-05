@@ -29,9 +29,9 @@ interface ToolbarProps {
 }
 
 const NOTIFICATIONS_UPDATED_EVENT = "hhwx:notifications-updated";
-const toolbarIconButtonClassName = "group relative flex h-9 w-9 items-center justify-center rounded-[15px] border border-white/45 bg-white/22 text-left text-white shadow-[0_6px_16px_rgba(122,61,0,0.16)] transition duration-200 hover:-translate-y-0.5 hover:scale-[1.03] hover:border-white/75 hover:bg-white/34 hover:shadow-[0_10px_24px_rgba(122,61,0,0.22)]";
-const toolbarIconInnerClassName = "relative flex h-7 w-7 items-center justify-center rounded-[13px] bg-[#fff4db] text-[#c76400] transition duration-200 group-hover:scale-105 group-hover:bg-[#fff7e7]";
-const toolbarMenuClassName = "absolute right-0 top-full mt-3 w-64 overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-[0_20px_60px_rgba(15,23,42,0.16)]";
+const toolbarIconButtonClassName = "group relative flex h-9 w-9 items-center justify-center rounded-[15px] border border-[var(--theme-color-toolbar-control-border)] bg-[var(--theme-color-toolbar-control-background)] text-left text-[var(--theme-color-toolbar-control-foreground)] shadow-[0_6px_16px_rgba(122,61,0,0.16)] outline-hidden transition duration-200 hover:-translate-y-0.5 hover:scale-[1.03] hover:bg-[var(--theme-color-toolbar-control-background-hover)] hover:shadow-[0_10px_24px_rgba(122,61,0,0.22)] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--theme-color-focus-ring-on-dark)]";
+const toolbarIconInnerClassName = "relative flex h-7 w-7 items-center justify-center rounded-[13px] bg-[var(--theme-color-toolbar-control-icon-background)] text-[var(--theme-color-toolbar-control-icon-foreground)] transition duration-200 group-hover:scale-105 group-hover:bg-[var(--theme-color-toolbar-control-icon-background-hover)]";
+const toolbarMenuClassName = "absolute right-0 top-full mt-3 w-64 overflow-hidden rounded-3xl border border-[var(--theme-color-border-default)] bg-[var(--theme-color-surface-background)] shadow-[0_20px_60px_rgba(15,23,42,0.16)]";
 
 function formatUnreadCount(count: number): string {
     return count > 99 ? "99+" : String(count);
@@ -75,7 +75,7 @@ function LanguageMenuContent({ pathname, currentLocale, onSelect }: LanguageMenu
 
     return (
         <div className={toolbarMenuClassName}>
-            <div className="border-b border-slate-100 px-5 py-3 text-xs font-semibold text-slate-500">
+            <div className="border-b border-[var(--theme-color-border-subtle)] px-5 py-3 text-xs font-semibold text-[var(--theme-color-text-muted)]">
                 {languageT("label")}
             </div>
             <div className="py-2">
@@ -88,11 +88,11 @@ function LanguageMenuContent({ pathname, currentLocale, onSelect }: LanguageMenu
                         return (
                             <div
                                 key={targetLocale}
-                                className="flex items-center justify-between gap-3 px-5 py-3 text-sm font-semibold text-slate-900"
+                                className="flex items-center justify-between gap-3 px-5 py-3 text-sm font-semibold text-[var(--theme-color-text-default)]"
                                 aria-current="true"
                             >
                                 <span>{label}</span>
-                                <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-sky-50 text-sky-600">
+                                <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-[var(--theme-color-menu-item-indicator-background-current)] text-[var(--theme-color-menu-item-indicator-foreground-current)]">
                                     <Check className="h-3.5 w-3.5" aria-hidden="true" />
                                     <span className="sr-only">{t("currentLanguage")}</span>
                                 </span>
@@ -105,7 +105,7 @@ function LanguageMenuContent({ pathname, currentLocale, onSelect }: LanguageMenu
                             key={targetLocale}
                             href={languageHref}
                             onClick={onSelect}
-                            className="flex items-center justify-between gap-3 px-5 py-3 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+                            className="flex items-center justify-between gap-3 px-5 py-3 text-sm font-medium text-[var(--theme-color-text-default)] transition hover:bg-[var(--theme-color-control-background-hover)]"
                             aria-label={t("switchLanguage", { language: label })}
                         >
                             <span>{label}</span>
@@ -113,8 +113,8 @@ function LanguageMenuContent({ pathname, currentLocale, onSelect }: LanguageMenu
                     );
                 })}
             </div>
-            <div className="border-t border-slate-100 px-5 py-3">
-                <div className="mb-2 text-xs font-semibold text-slate-500">
+            <div className="border-t border-[var(--theme-color-border-subtle)] px-5 py-3">
+                <div className="mb-2 text-xs font-semibold text-[var(--theme-color-text-muted)]">
                     {currentLocale === "en" ? "Preferred server" : "首选服务器"}
                 </div>
                 <div className="grid grid-cols-4 gap-1.5">
@@ -129,8 +129,8 @@ function LanguageMenuContent({ pathname, currentLocale, onSelect }: LanguageMenu
                                 aria-pressed={selected}
                                 className={`rounded-lg px-2 py-1.5 text-xs font-bold transition ${
                                     selected
-                                        ? "bg-sky-100 text-sky-700"
-                                        : "bg-slate-50 text-slate-600 hover:bg-slate-100"
+                                        ? "bg-[var(--theme-color-control-background-pressed)] text-[var(--theme-color-control-foreground-pressed)]"
+                                        : "bg-[var(--theme-color-control-background-muted)] text-[var(--theme-color-text-muted)] hover:bg-[var(--theme-color-control-background-hover)]"
                                 }`}
                             >
                                 {label}
@@ -148,7 +148,7 @@ function LanguageMenuLoading() {
 
     return (
         <div className={toolbarMenuClassName}>
-            <div className="border-b border-slate-100 px-5 py-3 text-xs font-semibold text-slate-500">
+            <div className="border-b border-[var(--theme-color-border-subtle)] px-5 py-3 text-xs font-semibold text-[var(--theme-color-text-muted)]">
                 {languageT("label")}
             </div>
         </div>
@@ -423,16 +423,16 @@ export default function Toolbar({ showDebugButton = true, isSidebarOpen = false,
     };
 
     return (
-        <header className="sticky top-0 z-250 border-b border-white/85 bg-[#FF9922] shadow-[0_10px_24px_rgba(255,153,34,0.28)]">
+        <header className="sticky top-0 z-250 border-b border-[var(--theme-color-toolbar-border)] bg-[var(--theme-color-toolbar-background)] text-[var(--theme-color-toolbar-foreground)] shadow-[0_10px_24px_rgba(255,153,34,0.28)]">
             <div className="flex h-[58px] w-full items-center justify-between gap-2 px-3 sm:px-4 lg:justify-end lg:px-5">
                 <div className="lg:hidden">
                     <button
                         type="button"
                         onClick={onToggleSidebar}
-                        className="group relative flex h-8 w-8 items-center justify-center rounded-[14px] border border-white/45 bg-white/22 text-left shadow-[0_6px_16px_rgba(122,61,0,0.16)] transition duration-200 hover:-translate-y-0.5 hover:scale-[1.03] hover:border-white/75 hover:bg-white/34 hover:shadow-[0_10px_24px_rgba(122,61,0,0.22)]"
+                        className="group relative flex h-8 w-8 items-center justify-center rounded-[14px] border border-[var(--theme-color-toolbar-control-border)] bg-[var(--theme-color-toolbar-control-background)] text-left shadow-[0_6px_16px_rgba(122,61,0,0.16)] transition duration-200 hover:-translate-y-0.5 hover:scale-[1.03] hover:bg-[var(--theme-color-toolbar-control-background-hover)] hover:shadow-[0_10px_24px_rgba(122,61,0,0.22)]"
                         aria-label={isSidebarOpen ? t("closeNavigation") : t("openNavigation")}
                     >
-                        <span className="relative flex h-6 w-6 items-center justify-center rounded-[12px] bg-[#fff4db] text-[#c76400] transition duration-200 group-hover:scale-105 group-hover:bg-[#fff7e7]">
+                        <span className="relative flex h-6 w-6 items-center justify-center rounded-[12px] bg-[var(--theme-color-toolbar-control-icon-background)] text-[var(--theme-color-toolbar-control-icon-foreground)] transition duration-200 group-hover:scale-105 group-hover:bg-[var(--theme-color-toolbar-control-icon-background-hover)]">
                             {isSidebarOpen ? <X className="h-4 w-4" aria-hidden="true" /> : <Menu className="h-4 w-4" aria-hidden="true" />}
                         </span>
                     </button>
@@ -443,8 +443,8 @@ export default function Toolbar({ showDebugButton = true, isSidebarOpen = false,
                         <button
                             onClick={toggleDebugMode}
                             className={`inline-flex h-8 w-8 items-center justify-center rounded-[14px] border transition duration-200 ${debugMode
-                                    ? "border-white/80 bg-white text-[#c76400] shadow-[0_8px_20px_rgba(122,61,0,0.2)]"
-                                    : "border-white/45 bg-white/22 text-white shadow-[0_6px_16px_rgba(122,61,0,0.14)] hover:-translate-y-0.5 hover:scale-[1.03] hover:border-white/70 hover:bg-white/34 hover:shadow-[0_10px_24px_rgba(122,61,0,0.2)]"
+                                    ? "border-[var(--theme-color-toolbar-control-border)] bg-[var(--theme-color-toolbar-control-icon-background)] text-[var(--theme-color-toolbar-control-icon-foreground)] shadow-[0_8px_20px_rgba(122,61,0,0.2)]"
+                                    : "border-[var(--theme-color-toolbar-control-border)] bg-[var(--theme-color-toolbar-control-background)] text-[var(--theme-color-toolbar-control-foreground)] shadow-[0_6px_16px_rgba(122,61,0,0.14)] hover:-translate-y-0.5 hover:scale-[1.03] hover:bg-[var(--theme-color-toolbar-control-background-hover)] hover:shadow-[0_10px_24px_rgba(122,61,0,0.2)]"
                                 }`}
                             title={t("debugTitle")}
                             aria-label={debugMode ? t("disableDebug") : t("enableDebug")}
@@ -505,10 +505,10 @@ export default function Toolbar({ showDebugButton = true, isSidebarOpen = false,
                                     </svg>
                                 )}
                                 {userId && !emailVerified && (
-                                    <span className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-amber-300 ring-2 ring-[#FF9922]" />
+                                    <span className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-[var(--theme-color-status-warning-indicator)] ring-2 ring-[var(--theme-color-notification-badge-ring)]" />
                                 )}
                                 {notificationBadgeLabel ? (
-                                    <span className="absolute -left-2 -top-2 z-10 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold leading-none text-white shadow-xs ring-2 ring-[#FF9922]">
+                                    <span className="absolute -left-2 -top-2 z-10 flex h-5 min-w-5 items-center justify-center rounded-full bg-[var(--theme-color-notification-badge-background)] px-1 text-[10px] font-bold leading-none text-[var(--theme-color-notification-badge-foreground)] shadow-xs ring-2 ring-[var(--theme-color-notification-badge-ring)]">
                                         {notificationBadgeLabel}
                                     </span>
                                 ) : null}
@@ -522,18 +522,18 @@ export default function Toolbar({ showDebugButton = true, isSidebarOpen = false,
                                         <Link
                                             href="/account"
                                             onClick={() => setShowMenu(false)}
-                                            className="block px-5 py-3 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+                                            className="block px-5 py-3 text-sm font-medium text-[var(--theme-color-text-default)] transition hover:bg-[var(--theme-color-control-background-hover)]"
                                         >
                                             {emailVerified ? t("accountCenter") : t("accountCenterUnverified")}
                                         </Link>
                                         <Link
                                             href="/account/notifications"
                                             onClick={() => setShowMenu(false)}
-                                            className="flex items-center justify-between gap-3 px-5 py-3 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+                                            className="flex items-center justify-between gap-3 px-5 py-3 text-sm font-medium text-[var(--theme-color-text-default)] transition hover:bg-[var(--theme-color-control-background-hover)]"
                                         >
                                             <span>{t("notifications")}</span>
                                             {notificationBadgeLabel ? (
-                                                <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1.5 text-[11px] font-bold leading-none text-white">
+                                                <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-[var(--theme-color-notification-badge-background)] px-1.5 text-[11px] font-bold leading-none text-[var(--theme-color-notification-badge-foreground)]">
                                                     {notificationBadgeLabel}
                                                 </span>
                                             ) : null}
@@ -541,7 +541,7 @@ export default function Toolbar({ showDebugButton = true, isSidebarOpen = false,
                                         <button
                                             type="button"
                                             onClick={handleLogout}
-                                            className="block w-full px-5 py-3 text-left text-sm font-medium text-red-500 transition hover:bg-red-50"
+                                            className="block w-full px-5 py-3 text-left text-sm font-medium text-[var(--theme-color-action-destructive-foreground)] transition hover:bg-[var(--theme-color-action-destructive-background-hover)]"
                                         >
                                             {t("logout")}
                                         </button>
@@ -551,7 +551,7 @@ export default function Toolbar({ showDebugButton = true, isSidebarOpen = false,
                                         <Link
                                             href={loginHref}
                                             onClick={() => setShowMenu(false)}
-                                            className="block px-5 py-3 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+                                            className="block px-5 py-3 text-sm font-medium text-[var(--theme-color-text-default)] transition hover:bg-[var(--theme-color-control-background-hover)]"
                                         >
                                             {t("login")}
                                         </Link>

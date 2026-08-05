@@ -467,7 +467,7 @@ export const CommentItem = memo(function CommentItem({
                   <button
                     type="button"
                     onClick={handleEdit}
-                    className="rounded-full bg-sky-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-sky-500"
+                    className="rounded-full bg-[var(--theme-color-action-accent-background)] px-3 py-1.5 text-xs font-semibold text-[var(--theme-color-action-accent-foreground)] hover:bg-[var(--theme-color-action-accent-background-hover)]"
                   >
                     保存
                   </button>
@@ -555,7 +555,7 @@ export const CommentItem = memo(function CommentItem({
                 <Dialog.Trigger asChild>
                   <button
                     type="button"
-                    className="inline-flex h-7 items-center gap-1 rounded-full px-2 text-xs font-semibold text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10"
+                    className="inline-flex h-7 items-center gap-1 rounded-full px-2 text-xs font-semibold text-[var(--theme-color-feedback-error-foreground)] hover:bg-[var(--theme-color-feedback-error-background)] dark:text-[var(--theme-color-semantic-danger-foreground-on-dark)] dark:hover:bg-red-500/10"
                   >
                     <Trash2 size={13} />
                     删除
@@ -572,7 +572,7 @@ export const CommentItem = memo(function CommentItem({
                         type="button"
                         onClick={handleDelete}
                         disabled={deleting}
-                        className="h-11 border-r border-slate-200 text-sm font-semibold text-red-600 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:text-red-300 dark:hover:bg-red-500/10"
+                        className="h-11 border-r border-slate-200 text-sm font-semibold text-[var(--theme-color-feedback-error-foreground)] transition hover:bg-[var(--theme-color-feedback-error-background)] disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:text-[var(--theme-color-semantic-danger-foreground-on-dark)] dark:hover:bg-red-500/10"
                       >
                         删除
                       </button>
@@ -592,7 +592,7 @@ export const CommentItem = memo(function CommentItem({
             ) : null}
           </div>
 
-          {actionError ? <div className="mt-2 text-xs text-red-500">{actionError}</div> : null}
+          {actionError ? <div className="mt-2 text-xs text-[var(--theme-color-feedback-error-foreground)] dark:text-[var(--theme-color-semantic-danger-foreground-on-dark)]">{actionError}</div> : null}
 
           {replying ? (
             <div className="mt-3">

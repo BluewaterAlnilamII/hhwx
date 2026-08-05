@@ -9,6 +9,7 @@ import {
   Music2,
 } from "lucide-react";
 import BandoriEventBonusPanel from "@/components/bandori/BandoriEventBonusPanel";
+import Heading from "@/components/Heading";
 import { useCachedFetch } from "@/hooks/useCachedFetch";
 import { useBandoriCardsMaster } from "@/hooks/useBandoriCardsMaster";
 import { useBandoriSkillsMaster } from "@/hooks/useBandoriSkillsMaster";
@@ -73,9 +74,9 @@ type TeamBuilderEventType = (typeof TEAM_BUILDER_EVENT_TYPES)[number];
 const TEAM_BUILDER_EVENT_TYPE_SET = new Set<string>(TEAM_BUILDER_EVENT_TYPES);
 const TIME_ZONES = ["Asia/Tokyo", "UTC", "Asia/Taipei", "Asia/Shanghai"] as const;
 const EVENT_STATUS_TONES: Record<BandoriEventStatus, string> = {
-  未开始: "text-blue-700 bg-blue-50 dark:bg-blue-500/10 dark:text-blue-200",
-  进行中: "text-emerald-700 bg-emerald-50 dark:bg-emerald-500/10 dark:text-emerald-200",
-  已结束: "text-slate-500 bg-slate-100 dark:bg-slate-800 dark:text-slate-300",
+  未开始: "border border-[var(--bandori-event-status-upcoming-border)] bg-[var(--bandori-event-status-upcoming-background)] text-[var(--bandori-event-status-upcoming-foreground)] dark:text-[var(--bandori-event-status-upcoming-foreground-on-dark)]",
+  进行中: "border border-[var(--bandori-event-status-ongoing-border)] bg-[var(--bandori-event-status-ongoing-background)] text-[var(--bandori-event-status-ongoing-foreground)] dark:text-[var(--bandori-event-status-ongoing-foreground-on-dark)]",
+  已结束: "border border-[var(--bandori-event-status-ended-border)] bg-[var(--bandori-event-status-ended-background)] text-[var(--bandori-event-status-ended-foreground)] dark:text-[var(--bandori-event-status-ended-foreground-on-dark)]",
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -131,39 +132,19 @@ type OverviewRowProps = {
 function OverviewRow({ label, children, mobileLayout = "inline" }: OverviewRowProps) {
   return (
     <div className={cn(
-      "grid border-b border-slate-200/70 py-3 last:border-b-0 sm:grid-cols-[9rem_minmax(0,1fr)] sm:gap-5",
+      "grid border-b border-[var(--theme-color-border-subtle)] py-3 last:border-b-0 sm:grid-cols-[9rem_minmax(0,1fr)] sm:gap-5 dark:border-slate-700",
       mobileLayout === "inline"
         ? "grid-cols-[7rem_minmax(0,1fr)] items-start gap-3"
         : "grid-cols-1 gap-1",
     )}>
       <dt className={cn(
-        "text-sm font-semibold leading-5 text-slate-500 dark:text-slate-400",
+        "text-sm font-semibold leading-5 text-[var(--theme-color-text-muted)] dark:text-slate-400",
         mobileLayout === "inline" && "pt-0.5",
       )}>
         {label}
       </dt>
-      <dd className="min-w-0 text-right text-sm font-semibold leading-5 text-slate-800 dark:text-slate-100">{children}</dd>
+      <dd className="min-w-0 text-right text-sm font-semibold leading-5 text-[var(--theme-color-text-default)] dark:text-slate-100">{children}</dd>
     </div>
-  );
-}
-
-function SectionTitle({ icon, children, tone = "blue" }: {
-  icon: ReactNode;
-  children: ReactNode;
-  tone?: "blue" | "violet" | "amber";
-}) {
-  return (
-    <h2 className="flex items-center gap-2 text-xl font-black text-slate-900 dark:text-white">
-      <span className={cn(
-        "inline-flex h-8 w-8 items-center justify-center rounded-xl",
-        tone === "blue" && "bg-sky-100 text-sky-600 dark:bg-sky-500/15 dark:text-sky-300",
-        tone === "violet" && "bg-violet-100 text-violet-600 dark:bg-violet-500/15 dark:text-violet-300",
-        tone === "amber" && "bg-amber-100 text-amber-600 dark:bg-amber-500/15 dark:text-amber-300",
-      )}>
-        {icon}
-      </span>
-      {children}
-    </h2>
   );
 }
 
@@ -326,25 +307,25 @@ export default function EventInfoPanel({
 
   if (loading && !model) {
     return (
-      <div className="rounded-3xl border border-[#ffe16c]/90 bg-[#fffef4] p-8 text-center shadow-sm dark:border-slate-700 dark:bg-[#111827]">
-        <div className="mx-auto h-10 w-10 animate-spin rounded-full border-4 border-sky-500 border-t-transparent" />
-        <p className="mt-4 text-sm font-semibold text-slate-500">正在读取活动详细信息…</p>
+      <div className="rounded-3xl border border-[var(--theme-color-border-default)] bg-[var(--theme-color-surface-background)] p-8 text-center shadow-sm dark:border-slate-700 dark:bg-[#111827]">
+        <div className="mx-auto h-10 w-10 animate-spin rounded-full border-4 border-[var(--theme-color-action-primary-background)] border-t-transparent" />
+        <p className="mt-4 text-sm font-semibold text-[var(--theme-color-text-muted)] dark:text-[var(--theme-color-text-muted-on-dark)]">正在读取活动详细信息…</p>
       </div>
     );
   }
 
   if (!model || eventId === null) {
     return (
-      <div className="rounded-3xl border border-dashed border-slate-300 bg-white/70 p-10 text-center text-sm font-semibold text-slate-500 dark:border-slate-700 dark:bg-slate-900/60">
+      <div className="rounded-3xl border border-dashed border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background-muted)] p-10 text-center text-sm font-semibold text-[var(--theme-color-text-muted)] dark:border-slate-700 dark:bg-slate-900/60 dark:text-[var(--theme-color-text-muted-on-dark)]">
         暂时无法读取这一期活动的详细信息
       </div>
     );
   }
 
   return (
-    <article className="rounded-3xl border border-[#ffe16c]/90 bg-[#fffef4] p-4 shadow-[0_18px_48px_rgba(65,54,0,0.09)] dark:border-slate-700/80 dark:bg-[#111827] sm:p-6">
+    <article className="rounded-3xl border border-[var(--theme-color-border-default)] bg-[var(--theme-color-surface-background)] p-4 shadow-[0_18px_48px_rgba(65,54,0,0.09)] dark:border-slate-700/80 dark:bg-[#111827] sm:p-6">
       <section className="@container">
-        <SectionTitle icon={<ClipboardList className="h-5 w-5" />}>活动概览</SectionTitle>
+        <Heading as="h2" visualRole="section" accentSlot="a" icon={<ClipboardList className="h-5 w-5" />} className="dark:text-[var(--theme-color-text-default-on-dark)]">活动概览</Heading>
         <div className="mt-3 grid min-w-0 items-stretch gap-y-0 @min-[54rem]:grid-cols-2 @min-[54rem]:gap-x-0">
           <dl className="min-w-0 @min-[54rem]:pr-8">
             <OverviewRow label="活动 ID">{eventId}</OverviewRow>
@@ -353,7 +334,7 @@ export default function EventInfoPanel({
               {jpTitle && jpTitle !== localizedTitle ? <span className="mt-1 block font-medium text-slate-400">{jpTitle}</span> : null}
             </OverviewRow>
             <OverviewRow label="活动类型">
-              <span className="inline-flex rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-sky-700 dark:border-sky-500/30 dark:bg-sky-500/10 dark:text-sky-200">
+              <span className="inline-flex rounded-full border border-[var(--theme-color-feedback-info-border)] bg-[var(--theme-color-feedback-info-background)] px-3 py-1 text-[var(--theme-color-feedback-info-foreground)]">
                 {eventTypeLabel}
               </span>
             </OverviewRow>
@@ -415,8 +396,8 @@ export default function EventInfoPanel({
         </div>
       </section>
 
-      <section className="@container mt-7 border-t border-slate-200/80 pt-6 dark:border-slate-700">
-        <SectionTitle icon={<Gift className="h-5 w-5" />} tone="amber">活动奖励</SectionTitle>
+      <section className="@container mt-7 border-t border-[var(--theme-color-border-subtle)] pt-6 dark:border-slate-700">
+        <Heading as="h2" visualRole="section" accentSlot="b" icon={<Gift className="h-5 w-5" />} className="dark:text-[var(--theme-color-text-default-on-dark)]">活动奖励</Heading>
         <div className="mt-4 grid min-w-0 items-stretch gap-y-0 @min-[54rem]:grid-cols-2 @min-[54rem]:gap-x-0">
           <dl className="min-w-0 @min-[54rem]:pr-8">
             <OverviewRow label={`奖励贴纸（${SERVER_LABELS[rewardStampSelection.server]}）`} mobileLayout="stacked">
@@ -464,24 +445,24 @@ export default function EventInfoPanel({
         </div>
       </section>
 
-      <section className="mt-7 border-t border-slate-200/80 pt-6 dark:border-slate-700">
-        <SectionTitle icon={<Music2 className="h-5 w-5" />} tone="violet">
+      <section className="mt-7 border-t border-[var(--theme-color-border-subtle)] pt-6 dark:border-slate-700">
+        <Heading as="h2" visualRole="section" accentSlot="c" icon={<Music2 className="h-5 w-5" />} className="dark:text-[var(--theme-color-text-default-on-dark)]">
           活动歌曲（{SERVER_LABELS[songSelection?.sourceServer ?? server]}）
-        </SectionTitle>
+        </Heading>
         <div className="mt-4 max-w-3xl space-y-3">
           {songs.map((song) => {
             const jacketUrl = buildBandoriPublicAssetUrl(musicAssetIndex?.songs[String(song.id)]?.files.thumb);
             return (
-              <div key={song.id} data-music-id={song.id} className="grid grid-cols-[4.5rem_minmax(0,1fr)] gap-3 rounded-2xl border border-slate-200 bg-white/80 p-3 shadow-sm transition hover:border-violet-200 hover:shadow-md dark:border-slate-700 dark:bg-slate-950/50 sm:grid-cols-[4.5rem_minmax(0,1fr)_auto] sm:items-center">
-                <div className="flex h-18 w-18 items-center justify-center overflow-hidden rounded-xl bg-violet-50 text-violet-300 dark:bg-violet-500/10">
+              <div key={song.id} data-music-id={song.id} className="grid grid-cols-[4.5rem_minmax(0,1fr)] gap-3 rounded-2xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background)] p-3 shadow-sm transition hover:border-[var(--theme-color-action-secondary-border)] hover:shadow-md dark:border-slate-700 dark:bg-slate-950/50 sm:grid-cols-[4.5rem_minmax(0,1fr)_auto] sm:items-center">
+                <div className="flex h-18 w-18 items-center justify-center overflow-hidden rounded-xl bg-[var(--theme-color-control-background-muted)] text-[var(--theme-color-action-secondary-foreground)] dark:bg-slate-800 dark:text-[var(--theme-color-action-secondary-foreground-on-dark)]">
                   {jacketUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={jacketUrl} alt={`${song.title} 封面`} className="h-full w-full object-cover" />
                   ) : <ImageOff className="h-6 w-6" />}
                 </div>
                 <div className="min-w-0">
-                  <div className="truncate text-base font-black text-slate-900 dark:text-white">{song.title}</div>
-                  <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs font-semibold text-slate-400">
+                  <div className="truncate text-base font-black text-[var(--theme-color-text-default)] dark:text-[var(--theme-color-text-default-on-dark)]">{song.title}</div>
+                  <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs font-semibold text-[var(--theme-color-text-muted)] dark:text-[var(--theme-color-text-muted-on-dark)]">
                     <span>#{song.id}</span>
                     {song.bandName ? <span>{song.bandName}</span> : null}
                     <span>{formatDateTime(song.publishedAt, songSelection?.sourceServer ?? server)} 发布</span>
@@ -489,14 +470,14 @@ export default function EventInfoPanel({
                 </div>
                 <div className="col-start-2 flex flex-wrap gap-1.5 sm:col-start-auto sm:justify-end">
                   {song.difficultyLevels.map((level, index) => (
-                    <span key={`${level}-${index}`} className="inline-flex h-7 min-w-7 items-center justify-center rounded-lg bg-slate-100 px-1.5 text-[11px] font-black text-slate-600 dark:bg-slate-800 dark:text-slate-300">{level}</span>
+                    <span key={`${level}-${index}`} className="inline-flex h-7 min-w-7 items-center justify-center rounded-lg bg-[var(--theme-color-control-background-muted)] px-1.5 text-[11px] font-black text-[var(--theme-color-text-muted)] dark:bg-slate-800 dark:text-slate-300">{level}</span>
                   ))}
                 </div>
               </div>
             );
           })}
           {songs.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-slate-300 bg-white/50 px-5 py-8 text-center text-sm font-semibold text-slate-400 dark:border-slate-700 dark:bg-slate-950/30">
+            <div className="rounded-2xl border border-dashed border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background-muted)] px-5 py-8 text-center text-sm font-semibold text-[var(--theme-color-text-muted)] dark:border-slate-700 dark:bg-slate-950/30 dark:text-[var(--theme-color-text-muted-on-dark)]">
               {songSelection?.startAt === null || songSelection?.endAt === null ? "暂时无法确定活动时间，无法匹配歌曲" : "该活动时间区间内没有匹配到新发布歌曲"}
             </div>
           ) : null}

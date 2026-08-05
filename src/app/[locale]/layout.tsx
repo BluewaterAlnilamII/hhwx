@@ -52,8 +52,8 @@ export default async function LocaleLayout({ children, params }: LocaleLayoutPro
   const messages = await getMessages();
 
   return (
-    <html lang={locale}>
-      <body className="min-h-screen min-h-svh overflow-x-hidden text-slate-900">
+    <html lang={locale} data-visual-theme="smile-patrol">
+      <body className="min-h-screen min-h-svh overflow-x-hidden text-[var(--theme-color-text-default)]">
         <NextIntlClientProvider messages={messages}>
           <AppChrome>{children}</AppChrome>
         </NextIntlClientProvider>

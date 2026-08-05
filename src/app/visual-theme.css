@@ -1,0 +1,161 @@
+[data-visual-theme="smile-patrol"] {
+  /* Smile Patrol's fixed accent palette. Components consume semantic tokens below. */
+  --smile-patrol-palette-yellow-ffee22: #ffee22;
+  --smile-patrol-palette-orange-ff9922: #ff9922;
+  --smile-patrol-palette-cyan-44ddff: #44ddff;
+  --smile-patrol-palette-purple-aa33cc: #aa33cc;
+  --smile-patrol-palette-blue-006699: #006699;
+  --smile-patrol-palette-pink-f5a4cd: #f5a4cd;
+  --smile-patrol-palette-yellow-f9e065: #f9e065;
+  --smile-patrol-palette-red-ef392b: #ef392b;
+  --smile-patrol-palette-red-orange-f05e3a: #f05e3a;
+
+  /* Functional state colors are semantic and intentionally independent from brand accents. */
+  --theme-color-semantic-success-border: #86efac;
+  --theme-color-semantic-success-background: rgb(134 239 172 / 22%);
+  --theme-color-semantic-success-foreground: #15803d;
+  --theme-color-semantic-success-foreground-on-dark: #bbf7d0;
+  --theme-color-semantic-neutral-border: #cbd5e1;
+  --theme-color-semantic-neutral-background: color-mix(in srgb, #cbd5e1 28%, #fffef4);
+  --theme-color-semantic-neutral-foreground: #475569;
+  --theme-color-semantic-neutral-foreground-on-dark: #cbd5e1;
+  --theme-color-semantic-warning-border: var(--smile-patrol-palette-orange-ff9922);
+  --theme-color-semantic-warning-background: rgb(249 224 101 / 30%);
+  --theme-color-semantic-warning-foreground: #9a4b00;
+  --theme-color-semantic-warning-foreground-on-dark: var(--smile-patrol-palette-yellow-f9e065);
+  --theme-color-semantic-danger-border: var(--smile-patrol-palette-red-ef392b);
+  --theme-color-semantic-danger-background: rgb(239 57 43 / 13%);
+  --theme-color-semantic-danger-foreground: var(--smile-patrol-palette-red-ef392b);
+  --theme-color-semantic-danger-foreground-on-dark: var(--smile-patrol-palette-red-orange-f05e3a);
+
+  /* Page and shared surfaces. */
+  --theme-color-page-background: #ffea2f;
+  --theme-page-background-image:
+    linear-gradient(rgba(255, 255, 228, 0.18), rgba(255, 255, 228, 0.18)),
+    linear-gradient(90deg, rgba(255, 167, 26, 0.12) 0%, rgba(255, 255, 255, 0.26) 32%, rgba(255, 255, 255, 0.18) 58%, rgba(255, 196, 32, 0.12) 100%),
+    radial-gradient(rgba(105, 72, 0, 0.09) 1px, transparent 1.25px),
+    radial-gradient(ellipse 960px 560px at 36% 18%, rgba(255, 255, 255, 0.82) 0%, rgba(255, 255, 255, 0.46) 34%, rgba(255, 255, 255, 0) 72%),
+    radial-gradient(ellipse 820px 520px at 76% 34%, rgba(255, 232, 55, 0.46) 0%, rgba(255, 232, 55, 0.24) 42%, rgba(255, 232, 55, 0) 78%),
+    radial-gradient(ellipse 780px 560px at 42% 96%, rgba(255, 255, 255, 0.46) 0%, rgba(255, 246, 151, 0.24) 44%, rgba(255, 246, 151, 0) 80%),
+    repeating-linear-gradient(132deg, transparent 0, transparent 118px, rgba(255, 255, 255, 0.24) 118px, rgba(255, 255, 255, 0.24) 154px, transparent 154px, transparent 252px),
+    linear-gradient(90deg, #ffc33a 0%, #ffe45b 18%, #fff7bc 38%, #fffbe2 55%, #fff05a 76%, #ffd22e 100%);
+  --theme-color-surface-background: #fffef4;
+  --theme-color-control-background: #ffffff;
+  --theme-color-control-background-muted: color-mix(in srgb, var(--smile-patrol-palette-yellow-f9e065) 18%, var(--theme-color-surface-background));
+  --theme-color-control-background-hover: color-mix(in srgb, var(--smile-patrol-palette-cyan-44ddff) 10%, var(--theme-color-surface-background));
+  --theme-color-control-background-pressed: color-mix(in srgb, var(--smile-patrol-palette-cyan-44ddff) 20%, var(--theme-color-surface-background));
+  --theme-color-control-foreground-pressed: var(--theme-color-text-default);
+  --theme-color-text-default: #0f172a;
+  --theme-color-text-muted: #475569;
+  --theme-color-text-default-on-dark: var(--theme-color-surface-background);
+  --theme-color-text-muted-on-dark: #cbd5e1;
+  --theme-color-border-default: var(--smile-patrol-palette-yellow-f9e065);
+  --theme-color-border-subtle: #cbd5e1;
+  --theme-color-control-border-accent: var(--smile-patrol-palette-red-ef392b);
+  --theme-color-focus-ring: var(--smile-patrol-palette-cyan-44ddff);
+  --theme-color-focus-ring-on-dark: var(--smile-patrol-palette-cyan-44ddff);
+  --theme-color-control-ring-pressed: var(--smile-patrol-palette-cyan-44ddff);
+
+  /* Heading hierarchy is visual and independent from the rendered h1-h6 element. */
+  --theme-color-heading-page-foreground: var(--smile-patrol-palette-red-ef392b);
+  --theme-color-heading-section-foreground: var(--theme-color-text-default);
+  --theme-color-heading-subsection-foreground: var(--theme-color-text-default);
+  --theme-color-heading-section-accent-a-background: color-mix(in srgb, var(--smile-patrol-palette-orange-ff9922) 18%, var(--theme-color-surface-background));
+  --theme-color-heading-section-accent-a-foreground: var(--smile-patrol-palette-red-orange-f05e3a);
+  --theme-color-heading-section-accent-b-background: color-mix(in srgb, var(--smile-patrol-palette-pink-f5a4cd) 20%, var(--theme-color-surface-background));
+  --theme-color-heading-section-accent-b-foreground: var(--smile-patrol-palette-purple-aa33cc);
+  --theme-color-heading-section-accent-c-background: color-mix(in srgb, var(--smile-patrol-palette-cyan-44ddff) 26%, var(--theme-color-surface-background));
+  --theme-color-heading-section-accent-c-foreground: var(--smile-patrol-palette-blue-006699);
+
+  /* App chrome. */
+  --theme-color-toolbar-background: var(--smile-patrol-palette-orange-ff9922);
+  --theme-color-toolbar-foreground: var(--theme-color-text-default);
+  --theme-color-toolbar-border: color-mix(in srgb, var(--smile-patrol-palette-yellow-f9e065) 70%, var(--theme-color-surface-background));
+  --theme-color-toolbar-control-background: rgb(255 254 244 / 28%);
+  --theme-color-toolbar-control-background-hover: rgb(255 254 244 / 52%);
+  --theme-color-toolbar-control-border: rgb(255 254 244 / 72%);
+  --theme-color-toolbar-control-foreground: var(--theme-color-text-default);
+  --theme-color-toolbar-control-icon-background: var(--theme-color-surface-background);
+  --theme-color-toolbar-control-icon-background-hover: var(--smile-patrol-palette-yellow-ffee22);
+  --theme-color-toolbar-control-icon-foreground: var(--smile-patrol-palette-red-orange-f05e3a);
+  --theme-color-sidebar-background: color-mix(in srgb, var(--smile-patrol-palette-yellow-f9e065) 32%, var(--theme-color-surface-background));
+  --theme-color-sidebar-backdrop-background: rgb(255 234 47 / 76%);
+  --theme-color-sidebar-border: var(--theme-color-border-default);
+
+  /* Navigation and selection. */
+  --theme-color-navigation-item-foreground: var(--theme-color-text-default);
+  --theme-color-navigation-item-background-hover: var(--theme-color-surface-background);
+  --theme-color-navigation-item-foreground-hover: var(--theme-color-text-default);
+  --theme-color-navigation-item-background-current: var(--smile-patrol-palette-orange-ff9922);
+  --theme-color-navigation-item-foreground-current: var(--theme-color-text-default);
+  --theme-color-menu-item-background-current: var(--theme-color-control-background-pressed);
+  --theme-color-menu-item-foreground-current: var(--theme-color-control-foreground-pressed);
+  --theme-color-menu-item-indicator-background-current: var(--smile-patrol-palette-cyan-44ddff);
+  --theme-color-menu-item-indicator-foreground-current: var(--theme-color-text-default);
+  --theme-color-selection-subtle-background: var(--theme-color-control-background);
+  --theme-color-selection-subtle-foreground: var(--smile-patrol-palette-blue-006699);
+  --theme-color-selection-subtle-ring: var(--theme-color-action-secondary-border);
+  --theme-color-selection-strong-background: var(--smile-patrol-palette-blue-006699);
+  --theme-color-selection-strong-foreground: var(--theme-color-surface-background);
+  --theme-color-selection-strong-ring: var(--smile-patrol-palette-cyan-44ddff);
+
+  /* General actions and page-level tabs. */
+  --theme-color-action-primary-background: var(--smile-patrol-palette-red-ef392b);
+  --theme-color-action-primary-foreground: #020617;
+  --theme-color-action-secondary-background: color-mix(in srgb, var(--smile-patrol-palette-cyan-44ddff) 10%, var(--theme-color-surface-background));
+  --theme-color-action-secondary-background-hover: color-mix(in srgb, var(--smile-patrol-palette-cyan-44ddff) 18%, var(--theme-color-surface-background));
+  --theme-color-action-secondary-foreground: var(--smile-patrol-palette-blue-006699);
+  --theme-color-action-secondary-foreground-on-dark: var(--smile-patrol-palette-cyan-44ddff);
+  --theme-color-action-secondary-border: color-mix(in srgb, var(--smile-patrol-palette-cyan-44ddff) 46%, var(--theme-color-border-subtle));
+  --theme-color-action-accent-background: var(--smile-patrol-palette-cyan-44ddff);
+  --theme-color-action-accent-background-hover: color-mix(in srgb, var(--smile-patrol-palette-cyan-44ddff) 78%, var(--theme-color-surface-background));
+  --theme-color-action-accent-foreground: var(--theme-color-text-default);
+  --theme-color-tab-foreground: var(--theme-color-text-muted);
+  --theme-color-tab-background-hover: rgb(255 255 255 / 70%);
+  --theme-color-tab-foreground-hover: var(--theme-color-text-default);
+  --theme-color-tab-foreground-selected: var(--smile-patrol-palette-red-ef392b);
+  --theme-color-tab-indicator-selected: var(--smile-patrol-palette-red-ef392b);
+
+  /* Feedback states reuse the theme's functional semantics. */
+  --theme-color-feedback-info-background: color-mix(in srgb, var(--smile-patrol-palette-cyan-44ddff) 20%, var(--theme-color-surface-background));
+  --theme-color-feedback-info-foreground: var(--smile-patrol-palette-blue-006699);
+  --theme-color-feedback-info-border: var(--smile-patrol-palette-cyan-44ddff);
+  --theme-color-feedback-success-background: var(--theme-color-semantic-success-background);
+  --theme-color-feedback-success-foreground: var(--theme-color-semantic-success-foreground);
+  --theme-color-feedback-success-border: var(--theme-color-semantic-success-border);
+  --theme-color-feedback-warning-background: var(--theme-color-semantic-warning-background);
+  --theme-color-feedback-warning-foreground: var(--theme-color-semantic-warning-foreground);
+  --theme-color-feedback-warning-border: var(--theme-color-semantic-warning-border);
+  --theme-color-feedback-error-background: var(--theme-color-semantic-danger-background);
+  --theme-color-feedback-error-foreground: var(--theme-color-semantic-danger-foreground);
+  --theme-color-feedback-error-border: var(--theme-color-semantic-danger-border);
+  --theme-color-action-destructive-foreground: var(--theme-color-text-default);
+  --theme-color-action-destructive-background-hover: var(--theme-color-feedback-error-background);
+
+  /* Non-chart progress indicators. Event Tracker data visualization stays independent. */
+  --theme-color-progress-foreground: var(--theme-color-feedback-info-foreground);
+  --theme-color-progress-track-background: color-mix(in srgb, var(--theme-color-text-muted) 10%, var(--theme-color-surface-background));
+  --theme-progress-indicator-background-image: linear-gradient(90deg, var(--smile-patrol-palette-cyan-44ddff) 0%, var(--smile-patrol-palette-blue-006699) 100%);
+
+  /* Small feedback indicators currently used by the app chrome. */
+  --theme-color-status-warning-indicator: var(--smile-patrol-palette-yellow-f9e065);
+  --theme-color-notification-badge-background: var(--smile-patrol-palette-red-ef392b);
+  --theme-color-notification-badge-foreground: var(--theme-color-text-default);
+  --theme-color-notification-badge-ring: var(--theme-color-toolbar-background);
+
+  /* Scrollbar colors are part of the site chrome, not Event Tracker data ink. */
+  --theme-color-scrollbar-track: color-mix(in srgb, var(--theme-color-border-subtle) 18%, var(--theme-color-surface-background));
+  --theme-color-scrollbar-thumb: var(--smile-patrol-palette-blue-006699);
+  --theme-color-scrollbar-thumb-hover: var(--smile-patrol-palette-blue-006699);
+}
+
+@media (prefers-color-scheme: dark) {
+  [data-visual-theme="smile-patrol"] {
+    --theme-color-heading-section-accent-a-background: color-mix(in srgb, var(--smile-patrol-palette-orange-ff9922) 18%, #111827);
+    --theme-color-heading-section-accent-a-foreground: var(--smile-patrol-palette-orange-ff9922);
+    --theme-color-heading-section-accent-b-background: color-mix(in srgb, var(--smile-patrol-palette-pink-f5a4cd) 18%, #111827);
+    --theme-color-heading-section-accent-b-foreground: var(--smile-patrol-palette-pink-f5a4cd);
+    --theme-color-heading-section-accent-c-background: color-mix(in srgb, var(--smile-patrol-palette-cyan-44ddff) 18%, #111827);
+    --theme-color-heading-section-accent-c-foreground: var(--smile-patrol-palette-cyan-44ddff);
+  }
+}

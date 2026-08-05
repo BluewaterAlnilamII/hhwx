@@ -1,4 +1,5 @@
 @import 'tailwindcss';
+@import './visual-theme.css';
 
 /*
   The default border color has changed to `currentcolor` in Tailwind CSS v4,
@@ -29,11 +30,11 @@
   align-items: center;
   justify-content: center;
   border-radius: 9999px;
-  background: linear-gradient(90deg, #ff7a59 0%, #ff9b45 100%);
+  background: var(--theme-color-action-primary-background);
   padding: 0.6rem 1.35rem;
   font-size: 0.875rem;
   font-weight: 600;
-  color: #ffffff;
+  color: var(--theme-color-action-primary-foreground);
   box-shadow: 0 10px 24px rgba(255, 153, 34, 0.28);
   transition: opacity 0.2s ease, transform 0.2s ease;
 }
@@ -50,27 +51,30 @@
 
 
 :root {
-  --bg-yellow: #ffea2f;
-  --fog-white: rgba(255, 255, 228, 0.18);
-  --hhwx-page-background:
-    linear-gradient(var(--fog-white), var(--fog-white)),
-    linear-gradient(90deg, rgba(255, 167, 26, 0.12) 0%, rgba(255, 255, 255, 0.26) 32%, rgba(255, 255, 255, 0.18) 58%, rgba(255, 196, 32, 0.12) 100%),
-    radial-gradient(rgba(105, 72, 0, 0.09) 1px, transparent 1.25px),
-    radial-gradient(ellipse 960px 560px at 36% 18%, rgba(255, 255, 255, 0.82) 0%, rgba(255, 255, 255, 0.46) 34%, rgba(255, 255, 255, 0) 72%),
-    radial-gradient(ellipse 820px 520px at 76% 34%, rgba(255, 232, 55, 0.46) 0%, rgba(255, 232, 55, 0.24) 42%, rgba(255, 232, 55, 0) 78%),
-    radial-gradient(ellipse 780px 560px at 42% 96%, rgba(255, 255, 255, 0.46) 0%, rgba(255, 246, 151, 0.24) 44%, rgba(255, 246, 151, 0) 80%),
-    repeating-linear-gradient(132deg, transparent 0, transparent 118px, rgba(255, 255, 255, 0.24) 118px, rgba(255, 255, 255, 0.24) 154px, transparent 154px, transparent 252px),
-    linear-gradient(90deg, #ffc33a 0%, #ffe45b 18%, #fff7bc 38%, #fffbe2 55%, #fff05a 76%, #ffd22e 100%);
   --eventtracker-bestdori-color: #475569;
-  --eventtracker-nonworking-band-fill: rgba(245, 158, 11, 0.18);
-  --eventtracker-nonworking-band-stroke: rgba(217, 119, 6, 0.24);
+  --eventtracker-nonworking-band-fill: color-mix(in srgb, var(--theme-color-control-background-muted) 56%, transparent);
+  --eventtracker-nonworking-band-stroke: color-mix(in srgb, var(--theme-color-border-default) 34%, transparent);
+
+  /* Bandori lifecycle states are informational, active, or neutral; they are not alerts. */
+  --bandori-event-status-upcoming-border: var(--theme-color-feedback-info-border);
+  --bandori-event-status-upcoming-background: var(--theme-color-feedback-info-background);
+  --bandori-event-status-upcoming-foreground: var(--theme-color-feedback-info-foreground);
+  --bandori-event-status-upcoming-foreground-on-dark: var(--theme-color-action-secondary-foreground-on-dark);
+  --bandori-event-status-ongoing-border: var(--theme-color-semantic-success-border);
+  --bandori-event-status-ongoing-background: var(--theme-color-semantic-success-background);
+  --bandori-event-status-ongoing-foreground: var(--theme-color-semantic-success-foreground);
+  --bandori-event-status-ongoing-foreground-on-dark: var(--theme-color-semantic-success-foreground-on-dark);
+  --bandori-event-status-ended-border: var(--theme-color-semantic-neutral-border);
+  --bandori-event-status-ended-background: var(--theme-color-semantic-neutral-background);
+  --bandori-event-status-ended-foreground: var(--theme-color-semantic-neutral-foreground);
+  --bandori-event-status-ended-foreground-on-dark: var(--theme-color-semantic-neutral-foreground-on-dark);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
     --eventtracker-bestdori-color: #cbd5e1;
-    --eventtracker-nonworking-band-fill: rgba(245, 158, 11, 0.18);
-    --eventtracker-nonworking-band-stroke: rgba(251, 191, 36, 0.24);
+    --eventtracker-nonworking-band-fill: color-mix(in srgb, var(--theme-color-control-background-muted) 24%, transparent);
+    --eventtracker-nonworking-band-stroke: color-mix(in srgb, var(--theme-color-border-default) 24%, transparent);
   }
 }
 
@@ -81,13 +85,14 @@ body {
 }
 
 html {
-  background-color: var(--bg-yellow);
-  background-image: var(--hhwx-page-background);
+  background-color: var(--theme-color-page-background);
+  background-image: var(--theme-page-background-image);
   background-size: auto, auto, 40px 40px, auto, auto, auto, auto, auto;
 }
 
 body {
   background: transparent;
+  color: var(--theme-color-text-default);
   position: relative;
   overflow-x: hidden;
 }
@@ -401,23 +406,23 @@ body {
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
-  background-color: var(--bg-yellow); /* Ensure no transparency bleeding */
+  background-color: var(--theme-color-scrollbar-track);
 }
 
 ::-webkit-scrollbar-track {
-  background: rgba(255, 255, 255, 0.4);
+  background: var(--theme-color-scrollbar-track);
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #44DDFF;
+  background: var(--theme-color-scrollbar-thumb);
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #22BBDD;
+  background: var(--theme-color-scrollbar-thumb-hover);
 }
 
 ::-webkit-scrollbar-corner {
-  background: var(--bg-yellow);
+  background: var(--theme-color-scrollbar-track);
 }

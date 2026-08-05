@@ -57,12 +57,12 @@ export default function FixedYAxis({
 
   return (
     <div
-      className="relative h-full shrink-0 border-r border-gray-300/70 bg-white/60 dark:bg-[#111827]/70 select-none"
+      className="relative h-full shrink-0 border-r border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-surface-background)]/60 dark:bg-[#111827]/70 select-none"
       style={{ width: `${axisWidth}px` }}
       aria-hidden="true"
     >
       <div
-        className="absolute right-0 w-px bg-gray-300/70"
+        className="absolute right-0 w-px bg-[var(--theme-color-border-subtle)]"
         style={{
           top: `${topMargin}px`,
           height: `${usableHeight}px`,
@@ -76,7 +76,7 @@ export default function FixedYAxis({
         return (
           <span
             key={tickValue}
-            className="absolute right-2 -translate-y-1/2 text-[11px] leading-none text-gray-700 dark:text-gray-300"
+            className="absolute right-2 -translate-y-1/2 text-[11px] leading-none text-[var(--theme-color-text-muted)] dark:text-gray-300"
             style={{ top: `${top}px` }}
           >
             {formatTrackerYAxisTick(tickValue)}
