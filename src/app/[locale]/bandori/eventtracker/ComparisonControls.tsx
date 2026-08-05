@@ -84,21 +84,21 @@ export const ComparisonControls = memo(function ComparisonControls({
   }
 
   return (
-    <div className="border-t border-[var(--theme-color-border-subtle)] px-1 pt-4 dark:border-slate-800/80 sm:px-2">
+    <div className="border-t border-[var(--theme-color-border-subtle)] px-1 pt-4 sm:px-2 dark:border-slate-800/80">
       <div className="flex flex-col items-center gap-3">
         {status === "进行中" && (
-          <div className="flex flex-wrap items-center justify-center gap-2 rounded-[18px] bg-[var(--theme-color-surface-background)]/85 px-2 py-1.5 dark:bg-slate-900/55 sm:gap-3">
+          <div className="flex flex-wrap items-center justify-center gap-2 rounded-[18px] bg-[var(--theme-color-surface-background)]/85 px-2 py-1.5 sm:gap-3 dark:bg-slate-900/55">
             <button
               type="button"
               aria-pressed={showInstantProjection}
               onClick={() => setShowInstantProjection((prev) => !prev)}
               className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs sm:text-sm font-semibold transition-all ${
                 showInstantProjection
-                  ? "border-red-300 bg-white text-red-600 shadow-xs dark:border-red-500/40 dark:bg-red-500/15 dark:text-red-300"
+                  ? "border-red-300 bg-[var(--theme-color-control-background)] text-red-600 shadow-xs dark:border-red-500/40 dark:bg-red-500/15 dark:text-red-300"
                   : "border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background)] text-[var(--theme-color-text-muted)] dark:border-gray-700 dark:bg-[#131A2B] dark:text-gray-400"
               }`}
             >
-              <span className={`h-2.5 w-2.5 rounded-full ${showInstantProjection ? "bg-red-500" : "bg-gray-300 dark:bg-gray-600"}`} />
+              <span className={`h-2.5 w-2.5 rounded-full ${showInstantProjection ? "bg-red-500" : "bg-[var(--theme-color-border-subtle)] dark:bg-gray-600"}`} />
               线性投影（瞬时）
             </button>
 
@@ -108,11 +108,11 @@ export const ComparisonControls = memo(function ComparisonControls({
               onClick={() => setShowDayProjection((prev) => !prev)}
               className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs sm:text-sm font-semibold transition-all ${
                 showDayProjection
-                  ? "border-blue-300 bg-white text-blue-600 shadow-xs dark:border-blue-500/40 dark:bg-blue-500/15 dark:text-blue-300"
+                  ? "border-blue-300 bg-[var(--theme-color-control-background)] text-blue-600 shadow-xs dark:border-blue-500/40 dark:bg-blue-500/15 dark:text-blue-300"
                   : "border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background)] text-[var(--theme-color-text-muted)] dark:border-gray-700 dark:bg-[#131A2B] dark:text-gray-400"
               }`}
             >
-              <span className={`h-2.5 w-2.5 rounded-full ${showDayProjection ? "bg-blue-500" : "bg-gray-300 dark:bg-gray-600"}`} />
+              <span className={`h-2.5 w-2.5 rounded-full ${showDayProjection ? "bg-blue-500" : "bg-[var(--theme-color-border-subtle)] dark:bg-gray-600"}`} />
               线性投影（24h）
             </button>
 
@@ -123,13 +123,13 @@ export const ComparisonControls = memo(function ComparisonControls({
                 onClick={() => setShowBestdoriPrediction((prev) => !prev)}
                 className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs sm:text-sm font-semibold transition-all ${
                   showBestdoriPrediction
-                    ? "border-slate-400 bg-white text-slate-900 shadow-xs dark:border-slate-400/50 dark:bg-slate-400/15 dark:text-slate-100"
+                    ? "border-[var(--eventtracker-bestdori-color)] bg-[var(--theme-color-control-background)] text-[var(--eventtracker-bestdori-color)] shadow-xs dark:border-slate-400/50 dark:bg-slate-400/15 dark:text-slate-100"
                     : "border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background)] text-[var(--theme-color-text-muted)] dark:border-gray-700 dark:bg-[#131A2B] dark:text-gray-400"
                 }`}
                 title={showBestdoriPrediction && bestdoriPrediction.status === "no-data" ? "Bestdori预测当前不可用" : "显示 Bestdori Prediction"}
               >
                 <span
-                  className={`h-2.5 w-2.5 rounded-full ${showBestdoriPrediction ? "" : "bg-gray-300 dark:bg-gray-600"}`}
+                  className={`h-2.5 w-2.5 rounded-full ${showBestdoriPrediction ? "" : "bg-[var(--theme-color-border-subtle)] dark:bg-gray-600"}`}
                   style={showBestdoriPrediction ? { backgroundColor: BESTDORI_PREDICTION_COLOR } : undefined}
                 />
                 Bestdori预测
@@ -139,7 +139,7 @@ export const ComparisonControls = memo(function ComparisonControls({
         )}
 
         {resolvedComparisonConfigs.length > 0 && (
-          <div className="flex max-w-full flex-wrap items-center justify-center gap-2 rounded-[18px] bg-[var(--theme-color-surface-background)]/85 px-2 py-1.5 dark:bg-slate-900/45 sm:gap-3">
+          <div className="flex max-w-full flex-wrap items-center justify-center gap-2 rounded-[18px] bg-[var(--theme-color-surface-background)]/85 px-2 py-1.5 sm:gap-3 dark:bg-slate-900/45">
             {resolvedComparisonConfigs.map((config) => {
               const line = comparisonLineById.get(config.id);
               const color = line?.color ?? COMPARISON_LINE_COLORS[(config.colorIndex ?? 0) % COMPARISON_LINE_COLORS.length];
@@ -176,7 +176,7 @@ export const ComparisonControls = memo(function ComparisonControls({
               );
             })}
 
-            <div className="inline-flex overflow-hidden rounded-full border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background)] text-xs font-semibold shadow-xs dark:border-gray-700 dark:bg-[#131A2B] sm:text-sm">
+            <div className="inline-flex overflow-hidden rounded-full border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background)] text-xs font-semibold shadow-xs sm:text-sm dark:border-gray-700 dark:bg-[#131A2B]">
               <button
                 type="button"
                 aria-pressed={comparisonAlignment === "start"}
@@ -205,14 +205,14 @@ export const ComparisonControls = memo(function ComparisonControls({
           </div>
         )}
 
-        <div className="flex w-full flex-col items-center gap-2 border-t border-[var(--theme-color-border-subtle)] pt-3 pb-3 dark:border-slate-800/80 sm:pb-4">
+        <div className="flex w-full flex-col items-center gap-2 border-t border-[var(--theme-color-border-subtle)] pt-3 pb-3 sm:pb-4 dark:border-slate-800/80">
           {comparisonConfigs.map((config) => {
             const rowTierOptions = comparisonTierOptionsByConfigId.get(config.id) ?? comparisonTierOptions;
 
             return (
               <div key={config.id} className="flex w-full max-w-184 flex-wrap items-center justify-center gap-2">
               <select
-                className={`h-8 max-w-full rounded-full border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background)] px-3 text-xs font-semibold text-[var(--theme-color-text-muted)] outline-hidden transition-colors hover:border-[var(--theme-color-action-secondary-border)] focus:ring-2 focus:ring-[var(--theme-color-focus-ring)] dark:border-gray-700 dark:bg-[#131A2B] dark:text-gray-300 sm:h-9 sm:text-sm ${
+                className={`h-8 max-w-full rounded-full border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background)] px-3 text-xs font-semibold text-[var(--theme-color-text-muted)] outline-hidden transition-colors hover:border-[var(--theme-color-action-secondary-border)] focus:ring-2 focus:ring-[var(--theme-color-focus-ring)] sm:h-9 sm:text-sm dark:border-gray-700 dark:bg-[#131A2B] dark:text-gray-300 ${
                   comparisonTargetType === "monthly" ? "w-30" : "min-w-52"
                 }`}
                 value={config.targetId ?? ""}
@@ -225,8 +225,7 @@ export const ComparisonControls = memo(function ComparisonControls({
                   <option
                     key={option.id}
                     value={option.id}
-                    className={option.isSameEventType ? "font-semibold text-red-600 dark:text-red-300" : undefined}
-                    style={option.isSameEventType ? { color: "#dc2626", fontWeight: 600 } : undefined}
+                    className={option.isSameEventType ? "font-semibold text-[var(--theme-color-selection-subtle-foreground)] dark:text-red-300" : undefined}
                   >
                     {option.label}
                   </option>
@@ -234,7 +233,7 @@ export const ComparisonControls = memo(function ComparisonControls({
               </select>
 
               <select
-                className="h-8 rounded-full border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background)] px-3 text-xs font-semibold text-[var(--theme-color-text-muted)] outline-hidden transition-colors hover:border-[var(--theme-color-action-secondary-border)] focus:ring-2 focus:ring-[var(--theme-color-focus-ring)] dark:border-gray-700 dark:bg-[#131A2B] dark:text-gray-300 sm:h-9 sm:text-sm"
+                className="h-8 rounded-full border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background)] px-3 text-xs font-semibold text-[var(--theme-color-text-muted)] outline-hidden transition-colors hover:border-[var(--theme-color-action-secondary-border)] focus:ring-2 focus:ring-[var(--theme-color-focus-ring)] sm:h-9 sm:text-sm dark:border-gray-700 dark:bg-[#131A2B] dark:text-gray-300"
                 value={config.tier ?? ""}
                 onChange={(event) => {
                   const nextTier = event.target.value ? Number(event.target.value) : null;
@@ -251,7 +250,7 @@ export const ComparisonControls = memo(function ComparisonControls({
               <button
                 type="button"
                 onClick={() => onRemoveComparison(config.id)}
-                className="inline-flex h-8 items-center gap-1.5 rounded-full border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background)] px-3 text-xs font-semibold text-[var(--theme-color-text-muted)] transition-colors hover:border-[var(--theme-color-feedback-error-border)] hover:bg-[var(--theme-color-feedback-error-background)] hover:text-[var(--theme-color-feedback-error-foreground)] dark:border-gray-700 dark:bg-[#131A2B] dark:text-gray-400 dark:hover:text-red-300 sm:h-9 sm:text-sm"
+                className="inline-flex h-8 items-center gap-1.5 rounded-full border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background)] px-3 text-xs font-semibold text-[var(--theme-color-text-muted)] transition-colors hover:border-[var(--theme-color-feedback-error-border)] hover:bg-[var(--theme-color-feedback-error-background)] hover:text-[var(--theme-color-feedback-error-foreground)] sm:h-9 sm:text-sm dark:border-gray-700 dark:bg-[#131A2B] dark:text-gray-400 dark:hover:text-red-300"
                 aria-label="移除对比行"
               >
                 <X size={13} />
@@ -267,7 +266,7 @@ export const ComparisonControls = memo(function ComparisonControls({
               onClick={onAddComparison}
               disabled={!canAddComparisonRow}
               title={comparisonConfigs.length >= MAX_COMPARISON_LINES ? "最多添加 5 条对比线" : "添加一条空白对比线"}
-              className="inline-flex h-8 items-center gap-1.5 rounded-full border border-[var(--theme-color-feedback-success-border)] bg-[var(--theme-color-feedback-success-background)] px-3 text-xs font-semibold text-[var(--theme-color-feedback-success-foreground)] transition-all hover:brightness-95 disabled:cursor-not-allowed disabled:border-[var(--theme-color-border-subtle)] disabled:bg-[var(--theme-color-control-background)] disabled:text-[var(--theme-color-text-muted)] disabled:opacity-50 dark:text-[var(--theme-color-semantic-success-foreground-on-dark)] dark:disabled:border-gray-700 dark:disabled:bg-[#131A2B] dark:disabled:text-gray-500 sm:h-9 sm:text-sm"
+              className="inline-flex h-8 items-center gap-1.5 rounded-full border border-[var(--theme-color-feedback-success-border)] bg-[var(--theme-color-feedback-success-background)] px-3 text-xs font-semibold text-[var(--theme-color-feedback-success-foreground)] transition-all hover:brightness-95 disabled:cursor-not-allowed disabled:border-[var(--theme-color-border-subtle)] disabled:bg-[var(--theme-color-control-background)] disabled:text-[var(--theme-color-text-muted)] disabled:opacity-50 sm:h-9 sm:text-sm dark:text-[var(--theme-color-semantic-success-foreground-on-dark)] dark:disabled:border-gray-700 dark:disabled:bg-[#131A2B] dark:disabled:text-gray-500"
             >
               <Plus size={15} />
               添加对比
@@ -276,7 +275,7 @@ export const ComparisonControls = memo(function ComparisonControls({
               <button
                 type="button"
                 onClick={onRemoveAllComparisons}
-                className="inline-flex h-8 items-center gap-1.5 rounded-full border border-[var(--theme-color-feedback-error-border)] bg-[var(--theme-color-feedback-error-background)] px-3 text-xs font-semibold text-[var(--theme-color-feedback-error-foreground)] transition-colors hover:brightness-95 dark:text-red-300 sm:h-9 sm:text-sm"
+                className="inline-flex h-8 items-center gap-1.5 rounded-full border border-[var(--theme-color-feedback-error-border)] bg-[var(--theme-color-feedback-error-background)] px-3 text-xs font-semibold text-[var(--theme-color-feedback-error-foreground)] transition-colors hover:brightness-95 sm:h-9 sm:text-sm dark:text-red-300"
                 aria-label="移除全部对比线"
                 title="移除全部对比线"
               >

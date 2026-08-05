@@ -221,7 +221,7 @@ function AttributeIcon({ attribute }: { attribute: BandoriCardAttribute }) {
 
 function CharacterIcon({ characterId, label }: { characterId: number; label: string }) {
   return (
-    <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center overflow-hidden rounded-full bg-slate-100 ring-1 ring-slate-200" title={label}>
+    <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[var(--theme-color-control-background-muted)] ring-1 ring-[var(--theme-color-border-subtle)]" title={label}>
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src={buildBandoriResIconPublicUrl(`chara_icon_${characterId}.png`)}
