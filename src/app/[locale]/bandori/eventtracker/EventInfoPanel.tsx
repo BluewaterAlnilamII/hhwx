@@ -74,9 +74,9 @@ type TeamBuilderEventType = (typeof TEAM_BUILDER_EVENT_TYPES)[number];
 const TEAM_BUILDER_EVENT_TYPE_SET = new Set<string>(TEAM_BUILDER_EVENT_TYPES);
 const TIME_ZONES = ["Asia/Tokyo", "UTC", "Asia/Taipei", "Asia/Shanghai"] as const;
 const EVENT_STATUS_TONES: Record<BandoriEventStatus, string> = {
-  未开始: "border border-[var(--bandori-event-status-upcoming-border)] bg-[var(--bandori-event-status-upcoming-background)] text-[var(--bandori-event-status-upcoming-foreground)] dark:text-[var(--bandori-event-status-upcoming-foreground-on-dark)]",
-  进行中: "border border-[var(--bandori-event-status-ongoing-border)] bg-[var(--bandori-event-status-ongoing-background)] text-[var(--bandori-event-status-ongoing-foreground)] dark:text-[var(--bandori-event-status-ongoing-foreground-on-dark)]",
-  已结束: "border border-[var(--bandori-event-status-ended-border)] bg-[var(--bandori-event-status-ended-background)] text-[var(--bandori-event-status-ended-foreground)] dark:text-[var(--bandori-event-status-ended-foreground-on-dark)]",
+  未开始: "border border-[var(--theme-color-status-upcoming-border)] bg-[var(--theme-color-status-upcoming-background)] text-[var(--theme-color-status-upcoming-foreground)] dark:text-[var(--theme-color-status-upcoming-foreground-on-dark)]",
+  进行中: "border border-[var(--theme-color-status-ongoing-border)] bg-[var(--theme-color-status-ongoing-background)] text-[var(--theme-color-status-ongoing-foreground)] dark:text-[var(--theme-color-status-ongoing-foreground-on-dark)]",
+  已结束: "border border-[var(--theme-color-status-ended-border)] bg-[var(--theme-color-status-ended-background)] text-[var(--theme-color-status-ended-foreground)] dark:text-[var(--theme-color-status-ended-foreground-on-dark)]",
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -323,7 +323,7 @@ export default function EventInfoPanel({
   }
 
   return (
-    <article className="rounded-3xl border border-[var(--theme-color-border-default)] bg-[var(--theme-color-surface-background)] p-4 shadow-[0_18px_48px_rgba(65,54,0,0.09)] sm:p-6 dark:border-slate-700/80 dark:bg-[#111827]">
+    <article className="rounded-3xl border border-[var(--theme-color-border-default)] bg-[var(--theme-color-surface-background)] p-4 shadow-[var(--theme-shadow-surface-raised)] sm:p-6 dark:border-slate-700/80 dark:bg-[#111827]">
       <section className="@container">
         <Heading as="h2" visualRole="section" accentSlot="a" icon={<ClipboardList className="h-5 w-5" />} className="dark:text-[var(--theme-color-text-default-on-dark)]">活动概览</Heading>
         <div className="mt-3 grid min-w-0 items-stretch gap-y-0 @min-[54rem]:grid-cols-2 @min-[54rem]:gap-x-0">
@@ -334,7 +334,7 @@ export default function EventInfoPanel({
               {jpTitle && jpTitle !== localizedTitle ? <span className="mt-1 block font-medium text-[var(--theme-color-text-muted)] opacity-70">{jpTitle}</span> : null}
             </OverviewRow>
             <OverviewRow label="活动类型">
-              <span className="inline-flex rounded-full border border-[var(--theme-color-feedback-info-border)] bg-[var(--theme-color-feedback-info-background)] px-3 py-1 text-[var(--theme-color-feedback-info-foreground)]">
+              <span className="inline-flex rounded-full border border-[var(--theme-color-semantic-info-border)] bg-[var(--theme-color-semantic-info-background)] px-3 py-1 text-[var(--theme-color-semantic-info-foreground)]">
                 {eventTypeLabel}
               </span>
             </OverviewRow>

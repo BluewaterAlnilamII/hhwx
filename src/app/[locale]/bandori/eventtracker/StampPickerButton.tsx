@@ -153,7 +153,7 @@ export const StampPickerButton = memo(function StampPickerButton({
         className={cn(
           "inline-flex h-8 w-8 items-center justify-center rounded-full border text-[var(--theme-color-text-muted)] transition hover:bg-[var(--theme-color-action-secondary-background-hover)] hover:text-[var(--theme-color-action-secondary-foreground)] dark:hover:bg-rose-500/10 dark:hover:text-rose-300",
           open
-            ? "border-[var(--theme-color-feedback-info-border)] bg-[var(--theme-color-feedback-info-background)] text-[var(--theme-color-feedback-info-foreground)] dark:border-rose-500/50 dark:bg-rose-500/10 dark:text-rose-300"
+            ? "border-[var(--theme-color-semantic-info-border)] bg-[var(--theme-color-semantic-info-background)] text-[var(--theme-color-semantic-info-foreground)] dark:border-rose-500/50 dark:bg-rose-500/10 dark:text-rose-300"
             : "border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background)] dark:border-slate-700 dark:bg-slate-900",
         )}
         aria-expanded={open}
@@ -184,7 +184,7 @@ export const StampPickerButton = memo(function StampPickerButton({
               </button>
             ))}
           </div>
-          <div className="grid max-h-80 grid-cols-4 gap-1 overflow-x-hidden overflow-y-auto pr-1 [scrollbar-color:var(--theme-color-scrollbar-thumb)_var(--theme-color-scrollbar-track)] scrollbar-thin [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[var(--theme-color-scrollbar-thumb)] [&::-webkit-scrollbar-track]:rounded-full [&::-webkit-scrollbar-track]:bg-[var(--theme-color-scrollbar-track)]">
+          <div className="grid max-h-80 grid-cols-4 gap-1 overflow-x-hidden overflow-y-auto pr-1 [scrollbar-color:var(--theme-color-shell-scrollbar-thumb)_var(--theme-color-shell-scrollbar-track)] scrollbar-thin [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[var(--theme-color-shell-scrollbar-thumb)] [&::-webkit-scrollbar-track]:rounded-full [&::-webkit-scrollbar-track]:bg-[var(--theme-color-shell-scrollbar-track)]">
             {stamps.map((stamp) => (
               <StampPickerOption
                 key={`${stamp.region}-${stamp.id}-${stamp.kind}`}

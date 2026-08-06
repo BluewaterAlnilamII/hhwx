@@ -1,5 +1,5 @@
 @import 'tailwindcss';
-@import './visual-theme.css';
+@import './visual-theme/index.css';
 
 /*
   The default border color has changed to `currentcolor` in Tailwind CSS v4,
@@ -35,44 +35,37 @@
   font-size: 0.875rem;
   font-weight: 600;
   color: var(--theme-color-action-primary-foreground);
-  box-shadow: 0 10px 24px rgba(255, 153, 34, 0.28);
-  transition: opacity 0.2s ease, transform 0.2s ease;
+  box-shadow: var(--theme-shadow-action-primary);
+  transition: background-color 0.2s ease, color 0.2s ease, opacity 0.2s ease, transform 0.2s ease;
 }
 
 .hhwx-accent-button:hover {
-  opacity: 0.95;
+  background: var(--theme-color-action-primary-background-hover);
 }
 
 .hhwx-accent-button:disabled,
 .hhwx-accent-button[aria-disabled='true'] {
   cursor: not-allowed;
-  opacity: 0.5;
+  background: var(--theme-color-control-background-disabled);
+  color: var(--theme-color-control-foreground-disabled);
+  box-shadow: inset 0 0 0 1px var(--theme-color-control-border-disabled);
+  opacity: 0.7;
 }
 
 
 :root {
-  --eventtracker-bestdori-color: #475569;
+  /* Chart data ink remains Event Tracker-owned rather than theme-owned. */
+  --eventtracker-bestdori-color: var(--theme-color-text-muted);
+
+  /* Calendar bands are component-private recipes derived from theme chrome. */
   --eventtracker-nonworking-band-fill: color-mix(in srgb, var(--theme-color-control-background-muted) 56%, transparent);
   --eventtracker-nonworking-band-stroke: color-mix(in srgb, var(--theme-color-border-default) 34%, transparent);
 
-  /* Bandori lifecycle states are informational, active, or neutral; they are not alerts. */
-  --bandori-event-status-upcoming-border: var(--theme-color-feedback-info-border);
-  --bandori-event-status-upcoming-background: var(--theme-color-feedback-info-background);
-  --bandori-event-status-upcoming-foreground: var(--theme-color-feedback-info-foreground);
-  --bandori-event-status-upcoming-foreground-on-dark: var(--theme-color-action-secondary-foreground-on-dark);
-  --bandori-event-status-ongoing-border: var(--theme-color-semantic-success-border);
-  --bandori-event-status-ongoing-background: var(--theme-color-semantic-success-background);
-  --bandori-event-status-ongoing-foreground: var(--theme-color-semantic-success-foreground);
-  --bandori-event-status-ongoing-foreground-on-dark: var(--theme-color-semantic-success-foreground-on-dark);
-  --bandori-event-status-ended-border: var(--theme-color-semantic-neutral-border);
-  --bandori-event-status-ended-background: var(--theme-color-semantic-neutral-background);
-  --bandori-event-status-ended-foreground: var(--theme-color-semantic-neutral-foreground);
-  --bandori-event-status-ended-foreground-on-dark: var(--theme-color-semantic-neutral-foreground-on-dark);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --eventtracker-bestdori-color: #cbd5e1;
+    --eventtracker-bestdori-color: var(--theme-color-text-muted-on-dark);
     --eventtracker-nonworking-band-fill: color-mix(in srgb, var(--theme-color-control-background-muted) 24%, transparent);
     --eventtracker-nonworking-band-stroke: color-mix(in srgb, var(--theme-color-border-default) 24%, transparent);
   }
@@ -85,9 +78,9 @@ body {
 }
 
 html {
-  background-color: var(--theme-color-page-background);
-  background-image: var(--theme-page-background-image);
-  background-size: auto, auto, 40px 40px, auto, auto, auto, auto, auto;
+  background-color: var(--theme-color-shell-canvas-background);
+  background-image: var(--theme-effect-shell-canvas-image);
+  background-size: var(--theme-effect-shell-canvas-size);
 }
 
 body {
@@ -406,23 +399,23 @@ body {
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
-  background-color: var(--theme-color-scrollbar-track);
+  background-color: var(--theme-color-shell-scrollbar-track);
 }
 
 ::-webkit-scrollbar-track {
-  background: var(--theme-color-scrollbar-track);
+  background: var(--theme-color-shell-scrollbar-track);
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--theme-color-scrollbar-thumb);
+  background: var(--theme-color-shell-scrollbar-thumb);
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--theme-color-scrollbar-thumb-hover);
+  background: var(--theme-color-shell-scrollbar-thumb-hover);
 }
 
 ::-webkit-scrollbar-corner {
-  background: var(--theme-color-scrollbar-track);
+  background: var(--theme-color-shell-scrollbar-track);
 }

@@ -182,7 +182,7 @@ function BonusChip({
   compact?: boolean;
 }) {
   const toneClassName = tone === "accent"
-    ? "border-[var(--theme-color-feedback-info-border)] bg-[var(--theme-color-feedback-info-background)] text-[var(--theme-color-feedback-info-foreground)]"
+    ? "border-[var(--theme-color-semantic-info-border)] bg-[var(--theme-color-semantic-info-background)] text-[var(--theme-color-semantic-info-foreground)]"
     : tone === "muted"
       ? "border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background-muted)] text-[var(--theme-color-text-muted)]"
       : "border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background)] text-[var(--theme-color-text-default)]";
@@ -427,7 +427,7 @@ export default function BandoriEventBonusPanel({
   return (
     <section className={cn(
       variant === "card"
-        ? "rounded-3xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-surface-background)] p-4 shadow-[0_16px_44px_rgba(15,23,42,0.06)] sm:p-5"
+        ? "rounded-3xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-surface-background)] p-4 shadow-[var(--theme-shadow-surface-raised)] sm:p-5"
         : "min-w-0",
     )}>
       {variant === "card" ? (
@@ -452,7 +452,7 @@ export default function BandoriEventBonusPanel({
         <div className="py-3 text-sm font-semibold text-[var(--theme-color-text-muted)] dark:text-[var(--theme-color-text-muted-on-dark)]">{statesT("noEventBonusData")}</div>
       ) : null}
       {variant === "embedded" && error ? (
-        <div className="my-3 rounded-xl border border-[var(--theme-color-feedback-error-border)] bg-[var(--theme-color-feedback-error-background)] px-3 py-2 text-sm font-semibold text-[var(--theme-color-feedback-error-foreground)]">
+        <div className="my-3 rounded-xl border border-[var(--theme-color-semantic-danger-border)] bg-[var(--theme-color-semantic-danger-background)] px-3 py-2 text-sm font-semibold text-[var(--theme-color-semantic-danger-foreground)]">
           {error}
         </div>
       ) : null}
@@ -463,7 +463,7 @@ export default function BandoriEventBonusPanel({
             <BonusChip tone="accent">{eventTypeLabel}</BonusChip>
             {!eventBonus && !loading ? <BonusChip tone="muted">{statesT("noEventBonusData")}</BonusChip> : null}
             {error ? (
-              <span className="inline-flex rounded-xl border border-[var(--theme-color-feedback-error-border)] bg-[var(--theme-color-feedback-error-background)] px-3 py-2 text-sm font-semibold text-[var(--theme-color-feedback-error-foreground)]">
+              <span className="inline-flex rounded-xl border border-[var(--theme-color-semantic-danger-border)] bg-[var(--theme-color-semantic-danger-background)] px-3 py-2 text-sm font-semibold text-[var(--theme-color-semantic-danger-foreground)]">
                 {error}
               </span>
             ) : null}

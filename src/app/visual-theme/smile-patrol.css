@@ -1,0 +1,59 @@
+[data-visual-theme="smile-patrol"] {
+  /* Smile Patrol's fixed accent palette. Components consume semantic tokens below. */
+  --smile-patrol-palette-yellow-ffee22: #ffee22;
+  --smile-patrol-palette-orange-ff9922: #ff9922;
+  --smile-patrol-palette-cyan-44ddff: #44ddff;
+  --smile-patrol-palette-purple-aa33cc: #aa33cc;
+  --smile-patrol-palette-blue-006699: #006699;
+  --smile-patrol-palette-pink-f5a4cd: #f5a4cd;
+  --smile-patrol-palette-yellow-f9e065: #f9e065;
+  --smile-patrol-palette-red-ef392b: #ef392b;
+  --smile-patrol-palette-red-orange-f35e38: #f35e38;
+
+  /* Bright yellow, cyan, and pink remain source swatches until they have stable theme responsibilities. */
+
+  /* A visual theme supplies seeds and its own composite effects. */
+  --theme-seed-shell-canvas: #ffea2f;
+  --theme-seed-shell-tint: var(--smile-patrol-palette-yellow-f9e065);
+  --theme-seed-shell-scrollbar: var(--smile-patrol-palette-blue-006699);
+  --theme-seed-surface: #fffef4;
+  --theme-seed-neutral: #cbd5e1;
+  --theme-seed-text-primary: #0f172a;
+  --theme-seed-text-secondary: #475569;
+  --theme-seed-semantic-info: #0070a0;
+  --theme-seed-semantic-success: #008348;
+  --theme-seed-semantic-warning: #b14700;
+  --theme-seed-semantic-danger: #e0002f;
+  --theme-seed-brand-primary: var(--smile-patrol-palette-orange-ff9922);
+  --theme-seed-brand-emphasis: var(--smile-patrol-palette-red-ef392b);
+  --theme-seed-brand-detail: var(--smile-patrol-palette-red-orange-f35e38);
+  --theme-seed-decoration-a: var(--smile-patrol-palette-red-orange-f35e38);
+  --theme-seed-decoration-b: var(--smile-patrol-palette-purple-aa33cc);
+  --theme-seed-decoration-c: var(--smile-patrol-palette-blue-006699);
+
+  /* Smile Patrol's layered canvas treatment stays theme-specific. */
+  --theme-effect-shell-canvas-image:
+    linear-gradient(rgba(255, 255, 228, 0.18), rgba(255, 255, 228, 0.18)),
+    linear-gradient(90deg, rgba(255, 167, 26, 0.12) 0%, rgba(255, 255, 255, 0.26) 32%, rgba(255, 255, 255, 0.18) 58%, rgba(255, 196, 32, 0.12) 100%),
+    radial-gradient(rgba(105, 72, 0, 0.09) 1px, transparent 1.25px),
+    radial-gradient(ellipse 960px 560px at 36% 18%, rgba(255, 255, 255, 0.82) 0%, rgba(255, 255, 255, 0.46) 34%, rgba(255, 255, 255, 0) 72%),
+    radial-gradient(ellipse 820px 520px at 76% 34%, rgba(255, 232, 55, 0.46) 0%, rgba(255, 232, 55, 0.24) 42%, rgba(255, 232, 55, 0) 78%),
+    radial-gradient(ellipse 780px 560px at 42% 96%, rgba(255, 255, 255, 0.46) 0%, rgba(255, 246, 151, 0.24) 44%, rgba(255, 246, 151, 0) 80%),
+    repeating-linear-gradient(132deg, transparent 0, transparent 118px, rgba(255, 255, 255, 0.24) 118px, rgba(255, 255, 255, 0.24) 154px, transparent 154px, transparent 252px),
+    linear-gradient(90deg, #ffc33a 0%, #ffe45b 18%, #fff7bc 38%, #fffbe2 55%, #fff05a 76%, #ffd22e 100%);
+  --theme-effect-shell-canvas-size: auto, auto, 40px 40px, auto, auto, auto, auto, auto;
+
+  /* Smile Patrol intentionally lifts controls onto a clean white surface. */
+  --theme-color-control-background: #ffffff;
+}
+
+@media (prefers-color-scheme: dark) {
+  [data-visual-theme="smile-patrol"] {
+    --theme-color-heading-section-accent-a-background: color-mix(in srgb, var(--theme-seed-decoration-a) 18%, #111827);
+    --theme-color-heading-section-accent-a-foreground: color-mix(in srgb, var(--theme-seed-decoration-a) 82%, var(--theme-seed-surface));
+    --theme-color-heading-section-accent-b-background: color-mix(in srgb, var(--theme-seed-decoration-b) 18%, #111827);
+    --theme-color-heading-section-accent-b-foreground: color-mix(in srgb, var(--theme-seed-decoration-b) 82%, var(--theme-seed-surface));
+    --theme-color-heading-section-accent-c-background: color-mix(in srgb, var(--theme-seed-decoration-c) 18%, #111827);
+    --theme-color-heading-section-accent-c-foreground: color-mix(in srgb, var(--theme-seed-decoration-c) 82%, var(--theme-seed-surface));
+  }
+}

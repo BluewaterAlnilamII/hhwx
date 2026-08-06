@@ -145,7 +145,7 @@ function ReactionChip({ reaction, disabled, onToggle }: ReactionChipProps) {
         className={cn(
           "inline-flex h-7 items-center gap-1 rounded-full border px-2 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-60",
           reaction.reactedByViewer
-            ? "border-[var(--theme-color-feedback-info-border)] bg-[var(--theme-color-feedback-info-background)] text-[var(--theme-color-feedback-info-foreground)] hover:brightness-95 dark:border-sky-500/50 dark:bg-sky-500/15 dark:text-sky-200 dark:hover:bg-sky-500/25"
+            ? "border-[var(--theme-color-semantic-info-border)] bg-[var(--theme-color-semantic-info-background)] text-[var(--theme-color-semantic-info-foreground)] hover:brightness-95 dark:border-sky-500/50 dark:bg-sky-500/15 dark:text-sky-200 dark:hover:bg-sky-500/25"
             : "border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background)] text-[var(--theme-color-text-muted)] hover:bg-[var(--theme-color-control-background-hover)] dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800",
         )}
       >
@@ -379,10 +379,10 @@ export const CommentItem = memo(function CommentItem({
           ? "rounded-xl bg-transparent py-1"
           : "rounded-2xl border bg-[var(--theme-color-control-background)] p-3 shadow-xs sm:p-4 dark:bg-slate-900",
         isHighlighted && isReply
-          ? "bg-[var(--theme-color-feedback-info-background)] ring-2 ring-[var(--theme-color-feedback-info-border)] dark:bg-sky-500/10 dark:ring-sky-500/25"
+          ? "bg-[var(--theme-color-semantic-info-background)] ring-2 ring-[var(--theme-color-semantic-info-border)] dark:bg-sky-500/10 dark:ring-sky-500/25"
           : null,
         !isReply && (isHighlighted
-          ? "border-[var(--theme-color-feedback-info-border)] ring-4 ring-[var(--theme-color-feedback-info-background)] dark:border-sky-500 dark:ring-sky-500/20"
+          ? "border-[var(--theme-color-semantic-info-border)] ring-4 ring-[var(--theme-color-semantic-info-background)] dark:border-sky-500 dark:ring-sky-500/20"
           : "border-[var(--theme-color-border-subtle)] dark:border-slate-700"),
       )}
     >
@@ -426,11 +426,11 @@ export const CommentItem = memo(function CommentItem({
                 value={editValue}
                 onChange={(event) => setEditValue(event.target.value)}
                 maxLength={COMMENT_INPUT_MAX_LENGTH}
-                className="min-h-20 w-full resize-y rounded-xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background)] px-3 py-2 text-sm leading-6 text-[var(--theme-color-text-default)] outline-hidden transition placeholder:text-[var(--theme-color-text-muted)] selection:bg-[var(--theme-color-feedback-info-background)] selection:text-[var(--theme-color-text-default)] focus:border-[var(--theme-color-focus-ring)] focus:ring-2 focus:ring-[var(--theme-color-focus-ring)] dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:placeholder:text-slate-500 dark:selection:bg-sky-500/40 dark:selection:text-white dark:focus:border-sky-400 dark:focus:bg-slate-900 dark:focus:text-slate-50 dark:focus:ring-sky-500/25"
+                className="min-h-20 w-full resize-y rounded-xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background)] px-3 py-2 text-sm leading-6 text-[var(--theme-color-text-default)] outline-hidden transition placeholder:text-[var(--theme-color-text-muted)] selection:bg-[var(--theme-color-selection-strong-background)] selection:text-[var(--theme-color-selection-strong-foreground)] focus:border-[var(--theme-color-focus-ring)] focus:ring-2 focus:ring-[var(--theme-color-focus-ring)] dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:placeholder:text-slate-500 dark:selection:bg-sky-500/40 dark:selection:text-white dark:focus:border-sky-400 dark:focus:bg-slate-900 dark:focus:text-slate-50 dark:focus:ring-sky-500/25"
               />
               <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
-                  <span className={cn("text-xs", editValue.length > 460 ? "text-[var(--theme-color-feedback-warning-foreground)]" : "text-[var(--theme-color-text-muted)]")}>
+                  <span className={cn("text-xs", editValue.length > 460 ? "text-[var(--theme-color-semantic-warning-foreground)]" : "text-[var(--theme-color-text-muted)]")}>
                     {editValue.length}/500
                   </span>
                   <EmojiPickerButton
@@ -555,7 +555,7 @@ export const CommentItem = memo(function CommentItem({
                 <Dialog.Trigger asChild>
                   <button
                     type="button"
-                    className="inline-flex h-7 items-center gap-1 rounded-full px-2 text-xs font-semibold text-[var(--theme-color-feedback-error-foreground)] hover:bg-[var(--theme-color-feedback-error-background)] dark:text-[var(--theme-color-semantic-danger-foreground-on-dark)] dark:hover:bg-red-500/10"
+                    className="inline-flex h-7 items-center gap-1 rounded-full px-2 text-xs font-semibold text-[var(--theme-color-action-destructive-foreground)] hover:bg-[var(--theme-color-action-destructive-background-hover)] dark:text-[var(--theme-color-semantic-danger-foreground-on-dark)] dark:hover:bg-red-500/10"
                   >
                     <Trash2 size={13} />
                     删除
@@ -572,7 +572,7 @@ export const CommentItem = memo(function CommentItem({
                         type="button"
                         onClick={handleDelete}
                         disabled={deleting}
-                        className="h-11 border-r border-[var(--theme-color-border-subtle)] text-sm font-semibold text-[var(--theme-color-feedback-error-foreground)] transition hover:bg-[var(--theme-color-feedback-error-background)] disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:text-[var(--theme-color-semantic-danger-foreground-on-dark)] dark:hover:bg-red-500/10"
+                        className="h-11 border-r border-[var(--theme-color-border-subtle)] text-sm font-semibold text-[var(--theme-color-action-destructive-foreground)] transition hover:bg-[var(--theme-color-action-destructive-background-hover)] disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:text-[var(--theme-color-semantic-danger-foreground-on-dark)] dark:hover:bg-red-500/10"
                       >
                         删除
                       </button>
@@ -592,7 +592,7 @@ export const CommentItem = memo(function CommentItem({
             ) : null}
           </div>
 
-          {actionError ? <div className="mt-2 text-xs text-[var(--theme-color-feedback-error-foreground)] dark:text-[var(--theme-color-semantic-danger-foreground-on-dark)]">{actionError}</div> : null}
+          {actionError ? <div className="mt-2 text-xs text-[var(--theme-color-semantic-danger-foreground)] dark:text-[var(--theme-color-semantic-danger-foreground-on-dark)]">{actionError}</div> : null}
 
           {replying ? (
             <div className="mt-3">
