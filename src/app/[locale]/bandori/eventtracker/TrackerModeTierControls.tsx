@@ -65,11 +65,11 @@ export const TrackerModeTierControls = memo(function TrackerModeTierControls({
     <div className="flex flex-col gap-3.5 items-stretch xl:flex-row xl:items-start xl:gap-4">
       <Tabs.List
         ref={modeTabsListRef}
-        className="relative flex w-full flex-row justify-center gap-1 overflow-x-auto rounded-[20px] border border-[var(--theme-color-border-default)] bg-[var(--theme-color-surface-background)] p-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.72)] xl:w-[7.1rem] xl:flex-none xl:flex-col xl:self-start xl:overflow-visible dark:border-slate-700/80 dark:bg-slate-950/70 dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"
+        className="relative flex w-full flex-row justify-center gap-1 overflow-x-auto rounded-[20px] border border-[var(--theme-color-border-default)] bg-[var(--theme-color-surface-background)] p-1 shadow-[var(--theme-shadow-control-inset-highlight)] xl:w-[7.1rem] xl:flex-none xl:flex-col xl:self-start xl:overflow-visible dark:border-slate-700/80 dark:bg-slate-950/70 dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"
       >
         <span
           aria-hidden="true"
-          className="pointer-events-none absolute left-0 top-0 z-0 rounded-[16px] bg-[var(--theme-color-selection-subtle-background)] shadow-[0_8px_18px_rgba(0,102,153,0.14)] ring-1 ring-inset ring-[var(--theme-color-selection-subtle-ring)] transition-[transform,width,height,opacity] duration-300 ease-out dark:bg-slate-800 dark:ring-sky-400/30"
+          className="pointer-events-none absolute left-0 top-0 z-0 rounded-[16px] bg-[var(--theme-color-selection-subtle-background)] shadow-[var(--theme-shadow-selection-subtle)] ring-1 ring-inset ring-[var(--theme-color-selection-subtle-ring)] transition-[transform,width,height,opacity] duration-300 ease-out dark:bg-slate-800 dark:ring-sky-400/30"
           style={{
             width: `${modeIndicatorStyle.width}px`,
             height: `${modeIndicatorStyle.height}px`,
@@ -104,7 +104,7 @@ export const TrackerModeTierControls = memo(function TrackerModeTierControls({
       <div className="flex-1 min-w-0 flex flex-col gap-3">
         {trackingMode === "song" && availableChallengeSongIds.length > 0 && (
           <div className="overflow-visible rounded-none border border-transparent bg-transparent p-2 sm:p-2.5 shadow-none">
-            <div className="mb-2 px-1 text-xs font-bold tracking-[0.1em] text-[var(--theme-color-feedback-info-foreground)] sm:text-[13px] dark:text-[var(--theme-color-action-secondary-foreground-on-dark)]">
+            <div className="mb-2 px-1 text-xs font-bold tracking-[0.1em] text-[var(--theme-color-semantic-info-foreground)] sm:text-[13px] dark:text-[var(--theme-color-action-secondary-foreground-on-dark)]">
               挑战曲目
             </div>
             <div className={`grid w-full gap-2 sm:gap-2.5 ${challengeSongGridClassName}`}>
@@ -135,7 +135,7 @@ export const TrackerModeTierControls = memo(function TrackerModeTierControls({
 
         {trackingMode === "monthly" && (
           <div className="overflow-visible rounded-none border border-transparent bg-transparent px-2 pt-1 pb-0 shadow-none sm:px-2.5 sm:pt-1 sm:pb-0">
-            <div className="mb-2 px-1 text-xs font-bold tracking-[0.1em] text-[var(--theme-color-feedback-info-foreground)] sm:text-[13px] dark:text-[var(--theme-color-action-secondary-foreground-on-dark)]">
+            <div className="mb-2 px-1 text-xs font-bold tracking-[0.1em] text-[var(--theme-color-semantic-info-foreground)] sm:text-[13px] dark:text-[var(--theme-color-action-secondary-foreground-on-dark)]">
               选择月份
             </div>
             <select
@@ -153,7 +153,7 @@ export const TrackerModeTierControls = memo(function TrackerModeTierControls({
         )}
 
         <div className="overflow-visible rounded-none border border-transparent bg-transparent px-2 pt-1 pb-2 shadow-none sm:px-2.5 sm:pt-1 sm:pb-2.5">
-          <div className="mb-2 px-1 text-xs font-bold tracking-[0.1em] text-[var(--theme-color-feedback-info-foreground)] sm:text-[13px] dark:text-[var(--theme-color-action-secondary-foreground-on-dark)]">
+          <div className="mb-2 px-1 text-xs font-bold tracking-[0.1em] text-[var(--theme-color-semantic-info-foreground)] sm:text-[13px] dark:text-[var(--theme-color-action-secondary-foreground-on-dark)]">
             选择排名
           </div>
           <div className="flex flex-wrap gap-1.5 sm:gap-2">

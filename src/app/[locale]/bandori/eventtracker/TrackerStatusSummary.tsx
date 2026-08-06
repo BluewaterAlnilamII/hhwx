@@ -31,14 +31,14 @@ type TrackerStatusSummaryProps = {
 
 function getStatusColorClass(status: string): string {
   if (status === "进行中") {
-    return "text-[var(--theme-color-semantic-success-foreground)] dark:text-[var(--theme-color-semantic-success-foreground-on-dark)]";
+    return "text-[var(--theme-color-status-ongoing-foreground)] dark:text-[var(--theme-color-status-ongoing-foreground-on-dark)]";
   }
 
   if (status === "已结束") {
-    return "text-[var(--theme-color-semantic-neutral-foreground)] dark:text-[var(--theme-color-semantic-neutral-foreground-on-dark)]";
+    return "text-[var(--theme-color-status-ended-foreground)] dark:text-[var(--theme-color-status-ended-foreground-on-dark)]";
   }
 
-  return "text-[var(--theme-color-feedback-info-foreground)] dark:text-[var(--theme-color-action-secondary-foreground-on-dark)]";
+  return "text-[var(--theme-color-status-upcoming-foreground)] dark:text-[var(--theme-color-status-upcoming-foreground-on-dark)]";
 }
 
 function TimeAgo({ timestamp }: { timestamp: number }) {
@@ -52,7 +52,7 @@ function TimeAgo({ timestamp }: { timestamp: number }) {
   const { isStale, label } = formatBandoriTrackerUpdateAge(timestamp, now);
 
   return isStale ? (
-    <span className="inline-flex items-center rounded-full border border-[var(--theme-color-feedback-warning-border)] bg-[var(--theme-color-feedback-warning-background)] px-1 py-0.5 text-xs font-semibold tabular-nums text-[var(--theme-color-feedback-warning-foreground)] dark:text-[var(--theme-color-semantic-warning-foreground-on-dark)]">
+    <span className="inline-flex items-center rounded-full border border-[var(--theme-color-semantic-warning-border)] bg-[var(--theme-color-semantic-warning-background)] px-1 py-0.5 text-xs font-semibold tabular-nums text-[var(--theme-color-semantic-warning-foreground)] dark:text-[var(--theme-color-semantic-warning-foreground-on-dark)]">
       {label}
     </span>
   ) : (
@@ -86,7 +86,7 @@ export const TrackerStatusSummary = memo(function TrackerStatusSummary({
             {showScoreValues ? (
               <div className="flex items-center gap-1.5 sm:gap-2">
                 <span className="font-medium text-[var(--theme-color-text-muted)] dark:text-slate-400">最新分数</span>
-                <span className="font-bold text-[var(--theme-color-feedback-info-foreground)] dark:text-[var(--theme-color-action-secondary-foreground-on-dark)]">
+                <span className="font-bold text-[var(--theme-color-semantic-info-foreground)] dark:text-[var(--theme-color-action-secondary-foreground-on-dark)]">
                   {scoreSummary.latestScore !== null ? TRACKER_STATUS_NUMBER_FORMATTER.format(scoreSummary.latestScore) : "-"}
                 </span>
               </div>
@@ -104,7 +104,7 @@ export const TrackerStatusSummary = memo(function TrackerStatusSummary({
                 <Loader2
                   aria-hidden={!isRefreshing}
                   aria-label={isRefreshing ? "正在更新分数线" : undefined}
-                  className={`h-3.5 w-3.5 text-[var(--theme-color-feedback-info-foreground)] transition-opacity dark:text-[var(--theme-color-action-secondary-foreground-on-dark)] ${
+                  className={`h-3.5 w-3.5 text-[var(--theme-color-semantic-info-foreground)] transition-opacity dark:text-[var(--theme-color-action-secondary-foreground-on-dark)] ${
                     isRefreshing
                       ? "animate-spin opacity-100 motion-reduce:animate-none"
                       : "opacity-0"
@@ -140,7 +140,7 @@ export const TrackerStatusSummary = memo(function TrackerStatusSummary({
                 {scoreSummary.finalScore !== null ? TRACKER_STATUS_NUMBER_FORMATTER.format(scoreSummary.finalScore) : "结算中"}
               </span>
               {scoreSummary.finalScore !== null && scoreSummary.endScore !== null && scoreSummary.finalScore < scoreSummary.endScore && (
-                <span className="font-bold text-[var(--theme-color-feedback-error-foreground)]">
+                <span className="font-bold text-[var(--theme-color-semantic-danger-foreground)]">
                   (-{TRACKER_STATUS_NUMBER_FORMATTER.format(scoreSummary.endScore - scoreSummary.finalScore)})
                 </span>
               )}

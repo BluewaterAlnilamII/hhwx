@@ -1,0 +1,185 @@
+[data-visual-theme] {
+  /* Site-wide recipes shared by every visual theme. */
+  --theme-color-shell-canvas-background: var(--theme-seed-shell-canvas);
+  --theme-color-shell-header-background: var(--theme-seed-brand-primary);
+  --theme-color-shell-header-border: color-mix(in srgb, var(--theme-seed-shell-tint) 70%, var(--theme-seed-surface) 30%);
+  --theme-color-shell-sidebar-background: color-mix(in srgb, var(--theme-seed-shell-tint) 32%, var(--theme-seed-surface) 68%);
+  --theme-color-shell-sidebar-backdrop: color-mix(in srgb, var(--theme-seed-shell-canvas) 76%, transparent 24%);
+  --theme-color-shell-sidebar-border: var(--theme-seed-shell-tint);
+  --theme-color-shell-navigation-group-foreground: var(--theme-color-text-muted);
+  --theme-color-shell-navigation-item-foreground: var(--theme-color-text-default);
+  --theme-color-shell-navigation-item-background-hover: var(--theme-seed-surface);
+  --theme-color-shell-navigation-item-foreground-hover: var(--theme-color-text-default);
+  --theme-color-shell-navigation-item-background-current: var(--theme-seed-brand-primary);
+  --theme-color-shell-navigation-item-foreground-current: var(--theme-color-text-default);
+  --theme-color-shell-scrollbar-track: color-mix(in srgb, var(--theme-seed-neutral) 18%, var(--theme-seed-surface) 82%);
+  --theme-color-shell-scrollbar-thumb: var(--theme-seed-shell-scrollbar);
+  --theme-color-shell-scrollbar-thumb-hover: var(--theme-seed-shell-scrollbar);
+
+  --theme-color-surface-background: var(--theme-seed-surface);
+  --theme-color-text-default: var(--theme-seed-text-primary);
+  --theme-color-text-muted: var(--theme-seed-text-secondary);
+  --theme-color-text-default-on-dark: var(--theme-color-surface-background);
+  --theme-color-text-muted-on-dark: var(--theme-seed-neutral);
+  --theme-color-border-subtle: var(--theme-seed-neutral);
+  --theme-color-border-default: var(--theme-seed-shell-tint);
+  --theme-color-control-border-accent: var(--theme-seed-brand-emphasis);
+
+  /* Heading hierarchy is visual and independent from the rendered h1-h6 element. */
+  --theme-color-heading-page-foreground: var(--theme-seed-brand-emphasis);
+  --theme-color-heading-section-foreground: var(--theme-color-text-default);
+  --theme-color-heading-subsection-foreground: var(--theme-color-text-default);
+
+  /* Elevation changes geometry by component, but its color follows the theme. */
+  --theme-shadow-surface-raised:
+    0 18px 48px color-mix(in srgb, var(--theme-seed-text-primary) 10%, transparent),
+    0 3px 14px color-mix(in srgb, var(--theme-seed-text-primary) 5%, transparent);
+  --theme-shadow-floating:
+    0 8px 30px color-mix(in srgb, var(--theme-seed-text-primary) 12%, transparent);
+
+  /* Toolbar elevation follows the shell and text seeds while preserving component geometry. */
+  --theme-shadow-toolbar-control:
+    0 6px 16px color-mix(in srgb, var(--theme-seed-brand-primary) 16%, transparent);
+  --theme-shadow-toolbar-control-hover:
+    0 10px 24px color-mix(in srgb, var(--theme-seed-brand-primary) 22%, transparent);
+  --theme-shadow-toolbar-control-selected:
+    0 8px 20px color-mix(in srgb, var(--theme-seed-brand-primary) 20%, transparent);
+  --theme-shadow-toolbar-header:
+    0 10px 24px color-mix(in srgb, var(--theme-seed-brand-primary) 28%, transparent);
+  --theme-shadow-toolbar-menu:
+    0 20px 60px color-mix(in srgb, var(--theme-seed-text-primary) 16%, transparent);
+  --theme-shadow-navigation-current:
+    0 12px 28px color-mix(in srgb, var(--theme-seed-brand-primary) 24%, transparent);
+  --theme-shadow-navigation-hover:
+    0 10px 24px color-mix(in srgb, var(--theme-seed-text-primary) 6%, transparent);
+  --theme-shadow-shell-sidebar:
+    0 18px 48px color-mix(in srgb, var(--theme-seed-brand-primary) 12%, transparent);
+  --theme-shadow-shell-sidebar-overlay:
+    0 24px 64px color-mix(in srgb, var(--theme-seed-brand-primary) 18%, transparent);
+  --theme-shadow-media:
+    0 2px 7px color-mix(in srgb, var(--theme-seed-text-primary) 18%, transparent);
+  --theme-shadow-control-inset-highlight:
+    inset 0 1px 0 color-mix(in srgb, var(--theme-color-surface-background) 72%, transparent);
+
+  /* Neutral low-emphasis surfaces stay independent from brand decoration. */
+  --theme-color-control-background-muted: color-mix(in srgb, var(--theme-seed-neutral) 12%, var(--theme-color-control-background));
+
+  /* Translucent toolbar controls inherit the active theme surface. */
+  --theme-color-toolbar-control-background: color-mix(in srgb, var(--theme-color-surface-background) 28%, transparent);
+  --theme-color-toolbar-control-background-hover: color-mix(in srgb, var(--theme-color-surface-background) 52%, transparent);
+  --theme-color-toolbar-control-border: color-mix(in srgb, var(--theme-color-surface-background) 72%, transparent);
+  --theme-color-toolbar-foreground: var(--theme-color-text-default);
+  --theme-color-toolbar-control-foreground: var(--theme-color-text-default);
+  --theme-color-toolbar-control-icon-background: var(--theme-color-surface-background);
+  --theme-color-toolbar-control-icon-background-hover: var(--theme-seed-shell-canvas);
+  --theme-color-toolbar-control-icon-foreground: var(--theme-seed-brand-detail);
+
+  /*
+   * Decoration slots are independent theme inputs. Each result is derived
+   * only from its own slot seed plus the shared surface and text seeds.
+   */
+  --theme-color-heading-section-accent-a-background: color-mix(in srgb, var(--theme-seed-decoration-a) 10%, var(--theme-color-control-background));
+  --theme-color-heading-section-accent-a-foreground: var(--theme-seed-decoration-a);
+  --theme-color-heading-section-accent-b-background: color-mix(in srgb, var(--theme-seed-decoration-b) 10%, var(--theme-color-control-background));
+  --theme-color-heading-section-accent-b-foreground: var(--theme-seed-decoration-b);
+  --theme-color-heading-section-accent-c-background: color-mix(in srgb, var(--theme-seed-decoration-c) 10%, var(--theme-color-control-background));
+  --theme-color-heading-section-accent-c-foreground: var(--theme-seed-decoration-c);
+
+  /*
+   * Functional semantics expose a border, quiet background, foreground, and
+   * lifted dark-surface foreground. Every quiet background uses the same
+   * restrained tint over the clean control surface, keeping the recipe
+   * theme-agnostic while preserving readable semantic text.
+   */
+  --theme-color-semantic-info-border: var(--theme-seed-semantic-info);
+  --theme-color-semantic-info-background: color-mix(in srgb, var(--theme-seed-semantic-info) 4%, var(--theme-color-control-background));
+  --theme-color-semantic-info-foreground: var(--theme-seed-semantic-info);
+  --theme-color-semantic-info-foreground-on-dark: color-mix(in srgb, var(--theme-seed-semantic-info) 82%, var(--theme-seed-surface));
+  --theme-color-semantic-success-border: var(--theme-seed-semantic-success);
+  --theme-color-semantic-success-background: color-mix(in srgb, var(--theme-seed-semantic-success) 4%, var(--theme-color-control-background));
+  --theme-color-semantic-success-foreground: var(--theme-seed-semantic-success);
+  --theme-color-semantic-success-foreground-on-dark: color-mix(in srgb, var(--theme-seed-semantic-success) 82%, var(--theme-seed-surface));
+  --theme-color-semantic-warning-border: var(--theme-seed-semantic-warning);
+  --theme-color-semantic-warning-background: color-mix(in srgb, var(--theme-seed-semantic-warning) 4%, var(--theme-color-control-background));
+  --theme-color-semantic-warning-foreground: var(--theme-seed-semantic-warning);
+  --theme-color-semantic-warning-foreground-on-dark: color-mix(in srgb, var(--theme-seed-semantic-warning) 82%, var(--theme-seed-surface));
+  --theme-color-semantic-danger-border: var(--theme-seed-semantic-danger);
+  --theme-color-semantic-danger-background: color-mix(in srgb, var(--theme-seed-semantic-danger) 4%, var(--theme-color-control-background));
+  --theme-color-semantic-danger-foreground: var(--theme-seed-semantic-danger);
+  --theme-color-semantic-danger-foreground-on-dark: color-mix(in srgb, var(--theme-seed-semantic-danger) 82%, var(--theme-seed-surface));
+  --theme-color-semantic-neutral-border: var(--theme-seed-neutral);
+  --theme-color-semantic-neutral-background: color-mix(in srgb, var(--theme-seed-neutral) 28%, var(--theme-color-control-background));
+  --theme-color-semantic-neutral-foreground: var(--theme-color-text-muted);
+  --theme-color-semantic-neutral-foreground-on-dark: var(--theme-seed-neutral);
+
+  /* Lifecycle aliases keep domain components independent from color names. */
+  --theme-color-status-upcoming-border: var(--theme-color-semantic-neutral-border);
+  --theme-color-status-upcoming-background: var(--theme-color-semantic-neutral-background);
+  --theme-color-status-upcoming-foreground: var(--theme-color-semantic-neutral-foreground);
+  --theme-color-status-upcoming-foreground-on-dark: var(--theme-color-semantic-neutral-foreground-on-dark);
+  --theme-color-status-ongoing-border: var(--theme-color-semantic-success-border);
+  --theme-color-status-ongoing-background: var(--theme-color-semantic-success-background);
+  --theme-color-status-ongoing-foreground: var(--theme-color-semantic-success-foreground);
+  --theme-color-status-ongoing-foreground-on-dark: var(--theme-color-semantic-success-foreground-on-dark);
+  --theme-color-status-ended-border: var(--theme-color-semantic-neutral-border);
+  --theme-color-status-ended-background: var(--theme-color-semantic-neutral-background);
+  --theme-color-status-ended-foreground: var(--theme-color-semantic-neutral-foreground);
+  --theme-color-status-ended-foreground-on-dark: var(--theme-color-semantic-neutral-foreground-on-dark);
+
+  /* Controls and selection reuse the information semantic instead of adding colors. */
+  --theme-color-control-background-hover: var(--theme-color-semantic-info-background);
+  --theme-color-control-background-pressed: color-mix(in srgb, var(--theme-seed-semantic-info) 8%, var(--theme-color-control-background));
+  --theme-color-control-foreground-pressed: var(--theme-color-text-default);
+  --theme-color-control-background-disabled: var(--theme-color-semantic-neutral-background);
+  --theme-color-control-border-disabled: var(--theme-color-semantic-neutral-border);
+  --theme-color-control-foreground-disabled: var(--theme-color-semantic-neutral-foreground);
+  --theme-color-focus-ring: var(--theme-color-semantic-info-border);
+  --theme-color-focus-ring-on-dark: var(--theme-color-semantic-info-foreground-on-dark);
+  --theme-color-control-ring-pressed: var(--theme-color-semantic-info-border);
+  --theme-color-menu-item-background-current: var(--theme-color-control-background-pressed);
+  --theme-color-menu-item-foreground-current: var(--theme-color-control-foreground-pressed);
+  --theme-color-menu-item-indicator-background-current: var(--theme-color-semantic-info-border);
+  --theme-color-menu-item-indicator-foreground-current: var(--theme-color-selection-strong-foreground);
+  --theme-color-selection-subtle-background: var(--theme-color-control-background);
+  --theme-color-selection-subtle-foreground: var(--theme-color-semantic-info-foreground);
+  --theme-color-selection-subtle-ring: var(--theme-color-semantic-info-border);
+  --theme-color-selection-strong-background: var(--theme-color-semantic-info-foreground);
+  --theme-color-selection-strong-foreground: var(--theme-color-surface-background);
+  --theme-color-selection-strong-ring: var(--theme-color-semantic-info-border);
+  --theme-shadow-selection-subtle: 0 8px 18px color-mix(in srgb, var(--theme-color-selection-subtle-ring) 14%, transparent);
+
+  /* Tabs share neutral idle states; a visual theme only supplies its emphasis. */
+  --theme-color-tab-foreground: var(--theme-color-text-muted);
+  --theme-color-tab-background-hover: var(--theme-color-control-background);
+  --theme-color-tab-foreground-hover: var(--theme-color-text-default);
+  --theme-color-tab-foreground-selected: var(--theme-seed-brand-emphasis);
+  --theme-color-tab-indicator-selected: var(--theme-seed-brand-emphasis);
+
+  /* General actions consume the same functional semantics. */
+  --theme-color-action-primary-background: var(--theme-seed-brand-primary);
+  --theme-color-action-primary-background-hover: color-mix(in srgb, var(--theme-color-action-primary-background) 92%, var(--theme-color-control-background));
+  --theme-color-action-primary-foreground: var(--theme-color-text-default);
+  --theme-shadow-action-primary: 0 10px 24px color-mix(in srgb, var(--theme-color-action-primary-background) 28%, transparent);
+  --theme-color-action-secondary-background: var(--theme-color-semantic-info-background);
+  --theme-color-action-secondary-background-hover: var(--theme-color-control-background-pressed);
+  --theme-color-action-secondary-foreground: var(--theme-color-semantic-info-foreground);
+  --theme-color-action-secondary-foreground-on-dark: var(--theme-color-semantic-info-foreground-on-dark);
+  --theme-color-action-secondary-border: var(--theme-color-semantic-info-border);
+  --theme-color-action-accent-background: var(--theme-color-semantic-info-foreground);
+  --theme-color-action-accent-background-hover: color-mix(in srgb, var(--theme-color-semantic-info-foreground) 88%, var(--theme-seed-text-primary));
+  --theme-color-action-accent-foreground: var(--theme-color-surface-background);
+  --theme-color-action-destructive-background: var(--theme-color-control-background);
+  --theme-color-action-destructive-background-hover: var(--theme-color-semantic-danger-background);
+  --theme-color-action-destructive-border: var(--theme-color-semantic-danger-border);
+  --theme-color-action-destructive-foreground: var(--theme-color-semantic-danger-foreground);
+
+  /* Non-chart progress indicators. Event Tracker data visualization stays independent. */
+  --theme-color-progress-foreground: var(--theme-color-semantic-info-foreground);
+  --theme-color-progress-track-background: color-mix(in srgb, var(--theme-color-text-muted) 10%, var(--theme-color-surface-background));
+  --theme-color-progress-indicator-background: var(--theme-color-semantic-info-foreground);
+
+  --theme-color-status-warning-indicator: var(--theme-color-semantic-warning-border);
+  --theme-color-notification-badge-background: var(--theme-color-semantic-danger-border);
+  --theme-color-notification-badge-foreground: var(--theme-color-surface-background);
+  --theme-color-notification-badge-ring: var(--theme-color-shell-header-background);
+}

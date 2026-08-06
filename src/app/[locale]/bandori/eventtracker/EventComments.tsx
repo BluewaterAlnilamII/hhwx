@@ -51,7 +51,7 @@ export default function EventComments({ eventId, server }: { eventId: number | n
   const handleCreateReply = useCallback((parentId: string, content: string) => createComment(content, parentId), [createComment]);
 
   return (
-    <section className="rounded-3xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-surface-background)] p-4 shadow-[0_16px_44px_rgba(15,23,42,0.06)] sm:p-5 dark:border-slate-800 dark:bg-slate-950">
+    <section className="rounded-3xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-surface-background)] p-4 shadow-[var(--theme-shadow-surface-raised)] sm:p-5 dark:border-slate-800 dark:bg-slate-950">
       <div className="flex flex-col gap-3 border-b border-[var(--theme-color-border-subtle)] pb-4 sm:flex-row sm:items-end sm:justify-between dark:border-slate-800">
         <Heading as="h2" visualRole="section" accentSlot="a" icon={<MessageSquare size={20} />} className="dark:text-[var(--theme-color-text-default-on-dark)]">
           活动评论
@@ -61,7 +61,7 @@ export default function EventComments({ eventId, server }: { eventId: number | n
 
       <div className="mt-4">
         {!authReady ? (
-          <div className="rounded-2xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background-muted)] p-4 text-center text-sm font-semibold text-[var(--theme-color-text-muted)] dark:border-slate-700 dark:bg-slate-900 dark:text-[var(--theme-color-text-muted-on-dark)]">
+          <div className="rounded-2xl border border-[var(--theme-color-semantic-neutral-border)] bg-[var(--theme-color-semantic-neutral-background)] p-4 text-center text-sm font-semibold text-[var(--theme-color-semantic-neutral-foreground)] dark:border-slate-700 dark:bg-slate-900 dark:text-[var(--theme-color-semantic-neutral-foreground-on-dark)]">
             正在读取登录状态...
           </div>
         ) : userId && emailVerified ? (
@@ -71,18 +71,18 @@ export default function EventComments({ eventId, server }: { eventId: number | n
             onSubmit={handleCreateRootComment}
           />
         ) : userId ? (
-          <div className="rounded-2xl border border-[var(--theme-color-feedback-warning-border)] bg-[var(--theme-color-feedback-warning-background)] p-4 text-center text-sm font-medium text-[var(--theme-color-feedback-warning-foreground)]">
+          <div className="rounded-2xl border border-[var(--theme-color-semantic-warning-border)] bg-[var(--theme-color-semantic-warning-background)] p-4 text-center text-sm font-medium text-[var(--theme-color-semantic-warning-foreground)]">
             完成邮箱验证后可以发表评论和回复
           </div>
         ) : (
-          <div className="rounded-2xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background-muted)] p-4 text-center text-sm font-semibold text-[var(--theme-color-text-muted)] dark:border-slate-700 dark:bg-slate-900 dark:text-[var(--theme-color-text-muted-on-dark)]">
+          <div className="rounded-2xl border border-[var(--theme-color-semantic-neutral-border)] bg-[var(--theme-color-semantic-neutral-background)] p-4 text-center text-sm font-semibold text-[var(--theme-color-semantic-neutral-foreground)] dark:border-slate-700 dark:bg-slate-900 dark:text-[var(--theme-color-semantic-neutral-foreground-on-dark)]">
             登录后可以发表评论，并启用30秒频率的高频活动榜榜线更新
           </div>
         )}
       </div>
 
       {error ? (
-        <div className="mt-4 rounded-2xl border border-[var(--theme-color-feedback-error-border)] bg-[var(--theme-color-feedback-error-background)] p-3 text-sm text-[var(--theme-color-feedback-error-foreground)]">
+        <div className="mt-4 rounded-2xl border border-[var(--theme-color-semantic-danger-border)] bg-[var(--theme-color-semantic-danger-background)] p-3 text-sm text-[var(--theme-color-semantic-danger-foreground)]">
           {error}
         </div>
       ) : null}
@@ -110,7 +110,7 @@ export default function EventComments({ eventId, server }: { eventId: number | n
         ))}
 
         {!loading && comments.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background-muted)] py-10 text-center text-sm font-semibold text-[var(--theme-color-text-muted)] dark:border-slate-700 dark:bg-slate-900/50 dark:text-[var(--theme-color-text-muted-on-dark)]">
+          <div className="rounded-2xl border border-dashed border-[var(--theme-color-semantic-neutral-border)] bg-[var(--theme-color-semantic-neutral-background)] py-10 text-center text-sm font-semibold text-[var(--theme-color-semantic-neutral-foreground)] dark:border-slate-700 dark:bg-slate-900/50 dark:text-[var(--theme-color-semantic-neutral-foreground-on-dark)]">
             还没有评论，来留下本期活动的第一条讨论
           </div>
         ) : null}

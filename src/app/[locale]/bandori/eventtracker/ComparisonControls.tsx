@@ -250,7 +250,7 @@ export const ComparisonControls = memo(function ComparisonControls({
               <button
                 type="button"
                 onClick={() => onRemoveComparison(config.id)}
-                className="inline-flex h-8 items-center gap-1.5 rounded-full border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background)] px-3 text-xs font-semibold text-[var(--theme-color-text-muted)] transition-colors hover:border-[var(--theme-color-feedback-error-border)] hover:bg-[var(--theme-color-feedback-error-background)] hover:text-[var(--theme-color-feedback-error-foreground)] sm:h-9 sm:text-sm dark:border-gray-700 dark:bg-[#131A2B] dark:text-gray-400 dark:hover:text-red-300"
+                className="inline-flex h-8 items-center gap-1.5 rounded-full border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background)] px-3 text-xs font-semibold text-[var(--theme-color-text-muted)] transition-colors hover:border-[var(--theme-color-semantic-danger-border)] hover:bg-[var(--theme-color-semantic-danger-background)] hover:text-[var(--theme-color-semantic-danger-foreground)] sm:h-9 sm:text-sm dark:border-gray-700 dark:bg-[#131A2B] dark:text-gray-400 dark:hover:text-red-300"
                 aria-label="移除对比行"
               >
                 <X size={13} />
@@ -266,7 +266,7 @@ export const ComparisonControls = memo(function ComparisonControls({
               onClick={onAddComparison}
               disabled={!canAddComparisonRow}
               title={comparisonConfigs.length >= MAX_COMPARISON_LINES ? "最多添加 5 条对比线" : "添加一条空白对比线"}
-              className="inline-flex h-8 items-center gap-1.5 rounded-full border border-[var(--theme-color-feedback-success-border)] bg-[var(--theme-color-feedback-success-background)] px-3 text-xs font-semibold text-[var(--theme-color-feedback-success-foreground)] transition-all hover:brightness-95 disabled:cursor-not-allowed disabled:border-[var(--theme-color-border-subtle)] disabled:bg-[var(--theme-color-control-background)] disabled:text-[var(--theme-color-text-muted)] disabled:opacity-50 sm:h-9 sm:text-sm dark:text-[var(--theme-color-semantic-success-foreground-on-dark)] dark:disabled:border-gray-700 dark:disabled:bg-[#131A2B] dark:disabled:text-gray-500"
+              className="inline-flex h-8 items-center gap-1.5 rounded-full border border-[var(--theme-color-semantic-success-border)] bg-[var(--theme-color-control-background)] px-3 text-xs font-semibold text-[var(--theme-color-semantic-success-foreground)] transition-colors hover:bg-[var(--theme-color-semantic-success-background)] disabled:cursor-not-allowed disabled:border-[var(--theme-color-control-border-disabled)] disabled:bg-[var(--theme-color-control-background-disabled)] disabled:text-[var(--theme-color-control-foreground-disabled)] disabled:opacity-60 disabled:hover:bg-[var(--theme-color-control-background-disabled)] sm:h-9 sm:text-sm dark:text-[var(--theme-color-semantic-success-foreground-on-dark)] dark:disabled:border-gray-700 dark:disabled:bg-[#131A2B] dark:disabled:text-gray-500"
             >
               <Plus size={15} />
               添加对比
@@ -275,7 +275,7 @@ export const ComparisonControls = memo(function ComparisonControls({
               <button
                 type="button"
                 onClick={onRemoveAllComparisons}
-                className="inline-flex h-8 items-center gap-1.5 rounded-full border border-[var(--theme-color-feedback-error-border)] bg-[var(--theme-color-feedback-error-background)] px-3 text-xs font-semibold text-[var(--theme-color-feedback-error-foreground)] transition-colors hover:brightness-95 sm:h-9 sm:text-sm dark:text-red-300"
+                className="inline-flex h-8 items-center gap-1.5 rounded-full border border-[var(--theme-color-action-destructive-border)] bg-[var(--theme-color-action-destructive-background)] px-3 text-xs font-semibold text-[var(--theme-color-action-destructive-foreground)] transition-colors hover:bg-[var(--theme-color-action-destructive-background-hover)] sm:h-9 sm:text-sm dark:text-red-300"
                 aria-label="移除全部对比线"
                 title="移除全部对比线"
               >

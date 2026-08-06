@@ -65,7 +65,7 @@ export function Top10PlayerList({ players, server }: Top10PlayerListProps) {
                     showPower={false}
                   />
                 ) : (
-                  <div className="flex h-14 w-14 flex-col items-center justify-center gap-1 overflow-hidden rounded-[5px] bg-[var(--theme-color-control-background-muted)] text-[var(--theme-color-text-muted)] shadow-[0_2px_7px_rgba(15,23,42,0.22)] outline-solid outline-1 outline-[var(--theme-color-border-subtle)] sm:h-[76px] sm:w-[76px] dark:bg-slate-800 dark:text-slate-500">
+                  <div className="flex h-14 w-14 flex-col items-center justify-center gap-1 overflow-hidden rounded-[5px] bg-[var(--theme-color-control-background-muted)] text-[var(--theme-color-text-muted)] shadow-[var(--theme-shadow-media)] outline-solid outline-1 outline-[var(--theme-color-border-subtle)] sm:h-[76px] sm:w-[76px] dark:bg-slate-800 dark:text-slate-500">
                     <ImageOff className="h-5 w-5" aria-hidden="true" />
                     <span className="text-[10px] font-semibold">无头像</span>
                   </div>

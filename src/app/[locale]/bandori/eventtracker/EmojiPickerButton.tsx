@@ -82,7 +82,7 @@ export const EmojiPickerButton = memo(function EmojiPickerButton({
           "inline-flex items-center justify-center rounded-full border text-[var(--theme-color-text-muted)] transition hover:bg-[var(--theme-color-action-secondary-background-hover)] hover:text-[var(--theme-color-action-secondary-foreground)] disabled:cursor-not-allowed disabled:opacity-60 dark:hover:bg-sky-500/10 dark:hover:text-sky-300",
           compact ? "h-7 w-7" : "h-8 w-8",
           open
-            ? "border-[var(--theme-color-feedback-info-border)] bg-[var(--theme-color-feedback-info-background)] text-[var(--theme-color-feedback-info-foreground)] dark:border-sky-500/50 dark:bg-sky-500/10 dark:text-sky-300"
+            ? "border-[var(--theme-color-semantic-info-border)] bg-[var(--theme-color-semantic-info-background)] text-[var(--theme-color-semantic-info-foreground)] dark:border-sky-500/50 dark:bg-sky-500/10 dark:text-sky-300"
             : "border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background)] dark:border-slate-700 dark:bg-slate-900",
         )}
         aria-expanded={open}
@@ -96,7 +96,7 @@ export const EmojiPickerButton = memo(function EmojiPickerButton({
           style={popoverStyle}
           className="absolute bottom-10 z-20 overflow-x-hidden rounded-2xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background)] p-2 shadow-xl dark:border-slate-700 dark:bg-slate-900"
         >
-          <div className="grid max-h-64 grid-cols-9 gap-1 overflow-x-hidden overflow-y-auto pr-1 [scrollbar-color:var(--theme-color-scrollbar-thumb)_var(--theme-color-scrollbar-track)] scrollbar-thin [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[var(--theme-color-scrollbar-thumb)] [&::-webkit-scrollbar-track]:rounded-full [&::-webkit-scrollbar-track]:bg-[var(--theme-color-scrollbar-track)]">
+          <div className="grid max-h-64 grid-cols-9 gap-1 overflow-x-hidden overflow-y-auto pr-1 [scrollbar-color:var(--theme-color-shell-scrollbar-thumb)_var(--theme-color-shell-scrollbar-track)] scrollbar-thin [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[var(--theme-color-shell-scrollbar-thumb)] [&::-webkit-scrollbar-track]:rounded-full [&::-webkit-scrollbar-track]:bg-[var(--theme-color-shell-scrollbar-track)]">
             {COMMENT_EMOJI_NAMES.map((name) => {
               const src = getCommentEmojiSrc(name);
               if (!src) return null;

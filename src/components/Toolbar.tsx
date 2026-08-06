@@ -29,9 +29,9 @@ interface ToolbarProps {
 }
 
 const NOTIFICATIONS_UPDATED_EVENT = "hhwx:notifications-updated";
-const toolbarIconButtonClassName = "group relative flex h-9 w-9 items-center justify-center rounded-[15px] border border-[var(--theme-color-toolbar-control-border)] bg-[var(--theme-color-toolbar-control-background)] text-left text-[var(--theme-color-toolbar-control-foreground)] shadow-[0_6px_16px_rgba(122,61,0,0.16)] outline-hidden transition duration-200 hover:-translate-y-0.5 hover:scale-[1.03] hover:bg-[var(--theme-color-toolbar-control-background-hover)] hover:shadow-[0_10px_24px_rgba(122,61,0,0.22)] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--theme-color-focus-ring-on-dark)]";
+const toolbarIconButtonClassName = "group relative flex h-9 w-9 items-center justify-center rounded-[15px] border border-[var(--theme-color-toolbar-control-border)] bg-[var(--theme-color-toolbar-control-background)] text-left text-[var(--theme-color-toolbar-control-foreground)] shadow-[var(--theme-shadow-toolbar-control)] outline-hidden transition duration-200 hover:-translate-y-0.5 hover:scale-[1.03] hover:bg-[var(--theme-color-toolbar-control-background-hover)] hover:shadow-[var(--theme-shadow-toolbar-control-hover)] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--theme-color-focus-ring-on-dark)]";
 const toolbarIconInnerClassName = "relative flex h-7 w-7 items-center justify-center rounded-[13px] bg-[var(--theme-color-toolbar-control-icon-background)] text-[var(--theme-color-toolbar-control-icon-foreground)] transition duration-200 group-hover:scale-105 group-hover:bg-[var(--theme-color-toolbar-control-icon-background-hover)]";
-const toolbarMenuClassName = "absolute right-0 top-full mt-3 w-64 overflow-hidden rounded-3xl border border-[var(--theme-color-border-default)] bg-[var(--theme-color-surface-background)] shadow-[0_20px_60px_rgba(15,23,42,0.16)]";
+const toolbarMenuClassName = "absolute right-0 top-full mt-3 w-64 overflow-hidden rounded-3xl border border-[var(--theme-color-border-default)] bg-[var(--theme-color-surface-background)] shadow-[var(--theme-shadow-toolbar-menu)]";
 
 function formatUnreadCount(count: number): string {
     return count > 99 ? "99+" : String(count);
@@ -423,13 +423,13 @@ export default function Toolbar({ showDebugButton = true, isSidebarOpen = false,
     };
 
     return (
-        <header className="sticky top-0 z-250 border-b border-[var(--theme-color-toolbar-border)] bg-[var(--theme-color-toolbar-background)] text-[var(--theme-color-toolbar-foreground)] shadow-[0_10px_24px_rgba(255,153,34,0.28)]">
+        <header className="sticky top-0 z-250 border-b border-[var(--theme-color-shell-header-border)] bg-[var(--theme-color-shell-header-background)] text-[var(--theme-color-toolbar-foreground)] shadow-[var(--theme-shadow-toolbar-header)]">
             <div className="flex h-[58px] w-full items-center justify-between gap-2 px-3 sm:px-4 lg:justify-end lg:px-5">
                 <div className="lg:hidden">
                     <button
                         type="button"
                         onClick={onToggleSidebar}
-                        className="group relative flex h-8 w-8 items-center justify-center rounded-[14px] border border-[var(--theme-color-toolbar-control-border)] bg-[var(--theme-color-toolbar-control-background)] text-left shadow-[0_6px_16px_rgba(122,61,0,0.16)] transition duration-200 hover:-translate-y-0.5 hover:scale-[1.03] hover:bg-[var(--theme-color-toolbar-control-background-hover)] hover:shadow-[0_10px_24px_rgba(122,61,0,0.22)]"
+                        className="group relative flex h-8 w-8 items-center justify-center rounded-[14px] border border-[var(--theme-color-toolbar-control-border)] bg-[var(--theme-color-toolbar-control-background)] text-left shadow-[var(--theme-shadow-toolbar-control)] transition duration-200 hover:-translate-y-0.5 hover:scale-[1.03] hover:bg-[var(--theme-color-toolbar-control-background-hover)] hover:shadow-[var(--theme-shadow-toolbar-control-hover)]"
                         aria-label={isSidebarOpen ? t("closeNavigation") : t("openNavigation")}
                     >
                         <span className="relative flex h-6 w-6 items-center justify-center rounded-[12px] bg-[var(--theme-color-toolbar-control-icon-background)] text-[var(--theme-color-toolbar-control-icon-foreground)] transition duration-200 group-hover:scale-105 group-hover:bg-[var(--theme-color-toolbar-control-icon-background-hover)]">
@@ -443,8 +443,8 @@ export default function Toolbar({ showDebugButton = true, isSidebarOpen = false,
                         <button
                             onClick={toggleDebugMode}
                             className={`inline-flex h-8 w-8 items-center justify-center rounded-[14px] border transition duration-200 ${debugMode
-                                    ? "border-[var(--theme-color-toolbar-control-border)] bg-[var(--theme-color-toolbar-control-icon-background)] text-[var(--theme-color-toolbar-control-icon-foreground)] shadow-[0_8px_20px_rgba(122,61,0,0.2)]"
-                                    : "border-[var(--theme-color-toolbar-control-border)] bg-[var(--theme-color-toolbar-control-background)] text-[var(--theme-color-toolbar-control-foreground)] shadow-[0_6px_16px_rgba(122,61,0,0.14)] hover:-translate-y-0.5 hover:scale-[1.03] hover:bg-[var(--theme-color-toolbar-control-background-hover)] hover:shadow-[0_10px_24px_rgba(122,61,0,0.2)]"
+                                    ? "border-[var(--theme-color-toolbar-control-border)] bg-[var(--theme-color-toolbar-control-icon-background)] text-[var(--theme-color-toolbar-control-icon-foreground)] shadow-[var(--theme-shadow-toolbar-control-selected)]"
+                                    : "border-[var(--theme-color-toolbar-control-border)] bg-[var(--theme-color-toolbar-control-background)] text-[var(--theme-color-toolbar-control-foreground)] shadow-[var(--theme-shadow-toolbar-control)] hover:-translate-y-0.5 hover:scale-[1.03] hover:bg-[var(--theme-color-toolbar-control-background-hover)] hover:shadow-[var(--theme-shadow-toolbar-control-hover)]"
                                 }`}
                             title={t("debugTitle")}
                             aria-label={debugMode ? t("disableDebug") : t("enableDebug")}

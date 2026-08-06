@@ -92,7 +92,7 @@ export function AccountLoadingState({ message }: AccountStateProps) {
 
 export function AccountErrorState({ message }: AccountStateProps) {
   return (
-    <div className="rounded-2xl border border-[var(--theme-color-feedback-error-border)] bg-[var(--theme-color-feedback-error-background)] p-4 text-sm leading-6 text-[var(--theme-color-feedback-error-foreground)]">
+    <div className="rounded-2xl border border-[var(--theme-color-semantic-danger-border)] bg-[var(--theme-color-semantic-danger-background)] p-4 text-sm leading-6 text-[var(--theme-color-semantic-danger-foreground)]">
       {message}
     </div>
   );
