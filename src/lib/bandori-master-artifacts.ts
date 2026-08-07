@@ -166,43 +166,54 @@ function getArtifactObjectKeyPrefix(): string {
   return "bandori/master";
 }
 
-function readOptionalR2Env(primaryName: string, fallbackName?: string): string | null {
-  const primaryValue = process.env[primaryName]?.trim();
-  if (primaryValue) {
-    return primaryValue;
+function readOptionalR2Env(...names: string[]): string | null {
+  for (const name of names) {
+    const value = process.env[name]?.trim();
+    if (value) {
+      return value;
+    }
   }
-
-  const fallbackValue = fallbackName ? process.env[fallbackName]?.trim() : "";
-  return fallbackValue || null;
+  return null;
 }
 
-function readRequiredR2Env(primaryName: string, fallbackName?: string): string {
-  const value = readOptionalR2Env(primaryName, fallbackName);
+function readRequiredR2Env(...names: string[]): string {
+  const value = readOptionalR2Env(...names);
   if (!value) {
-    const expectedNames = fallbackName ? `${primaryName} or ${fallbackName}` : primaryName;
-    throw new Error(`Bandori master R2 artifact read mode is missing ${expectedNames}`);
+    throw new Error(
+      `Bandori master R2 artifact read mode is missing ${names.join(" or ")}`,
+    );
   }
   return value;
 }
 
 function getBandoriMasterR2Config(): R2S3ReaderConfig {
-  const accountId = readOptionalR2Env("BANDORI_MASTER_R2_ACCOUNT_ID", "BANDORI_R2_ACCOUNT_ID");
-  const endpoint = readOptionalR2Env("BANDORI_MASTER_R2_ENDPOINT", "BANDORI_R2_ENDPOINT")
+  const accountId = readOptionalR2Env("BANDORI_R2_ACCOUNT_ID", "BANDORI_MASTER_R2_ACCOUNT_ID");
+  const endpoint = readOptionalR2Env("BANDORI_R2_ENDPOINT", "BANDORI_MASTER_R2_ENDPOINT")
     ?? (accountId ? `https://${accountId}.r2.cloudflarestorage.com` : "");
 
   if (!endpoint) {
     throw new Error(
-      "Bandori master R2 artifact read mode is missing BANDORI_MASTER_R2_ENDPOINT, "
-      + "BANDORI_R2_ENDPOINT, BANDORI_MASTER_R2_ACCOUNT_ID, or BANDORI_R2_ACCOUNT_ID",
+      "Bandori master R2 artifact read mode is missing BANDORI_R2_ENDPOINT, "
+      + "BANDORI_MASTER_R2_ENDPOINT, BANDORI_R2_ACCOUNT_ID, or BANDORI_MASTER_R2_ACCOUNT_ID",
     );
   }
 
   return {
     endpoint,
-    bucket: readRequiredR2Env("BANDORI_MASTER_R2_BUCKET", "BANDORI_R2_BUCKET"),
-    accessKeyId: readRequiredR2Env("BANDORI_MASTER_R2_ACCESS_KEY_ID", "BANDORI_R2_ACCESS_KEY_ID"),
-    secretAccessKey: readRequiredR2Env("BANDORI_MASTER_R2_SECRET_ACCESS_KEY", "BANDORI_R2_SECRET_ACCESS_KEY"),
-    region: readOptionalR2Env("BANDORI_MASTER_R2_REGION", "BANDORI_R2_REGION") || "auto",
+    bucket: readRequiredR2Env(
+      "BANDORI_PUBLIC_R2_BUCKET",
+      "BANDORI_MASTER_R2_BUCKET",
+      "BANDORI_R2_BUCKET",
+    ),
+    accessKeyId: readRequiredR2Env(
+      "BANDORI_R2_ACCESS_KEY_ID",
+      "BANDORI_MASTER_R2_ACCESS_KEY_ID",
+    ),
+    secretAccessKey: readRequiredR2Env(
+      "BANDORI_R2_SECRET_ACCESS_KEY",
+      "BANDORI_MASTER_R2_SECRET_ACCESS_KEY",
+    ),
+    region: readOptionalR2Env("BANDORI_R2_REGION", "BANDORI_MASTER_R2_REGION") || "auto",
   };
 }
 

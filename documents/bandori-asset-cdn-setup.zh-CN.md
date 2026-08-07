@@ -21,7 +21,7 @@ BANDORI_CHART_SOURCE=bestdori
 # BANDORI_CHART_SOURCE=assets
 # BANDORI_MUSIC_CDN_BASE_URL=https://your-bandori-asset-cdn.example.com
 # BANDORI_CHART_BESTDORI_FALLBACK=0
-# BANDORI_ASSET_R2_BUCKET=your_public_asset_bucket
+# BANDORI_PUBLIC_R2_BUCKET=your_public_asset_bucket
 # BANDORI_PRIVATE_R2_BUCKET=hhwx-private
 # BANDORI_MUSIC_API_LOCAL_STORE_ROOT=/path/to/music/store
 # BANDORI_STAMPS_API_LOCAL_STORE_ROOT=/path/to/stamps/store
@@ -29,7 +29,7 @@ BANDORI_CHART_SOURCE=bestdori
 
 `NEXT_PUBLIC_BANDORI_ASSET_CDN_BASE_URL` 会暴露给浏览器。`BANDORI_ASSET_CDN_BASE_URL` 可供服务端代码使用。大多数部署中两者应指向同一个资源主机。Cards、Events 与 Stamps 资源通过下文各自的公开 index 发现；浏览器使用正常 HTTP 缓存且不携带凭据读取这些 index。Stamp 资源使用同一个 Bandori asset CDN 下的 `/bandori/stamps` 路径；没有单独的 stamp CDN 配置。Web 应用通过 `/api/bandori/master/stamps` 读取 Stamp master 元数据，直接从公开 CDN 读取 `bandori/stamps/index.json`，再在浏览器内存中按 stamp ID 合并两者。Stamp 图片、动画 manifest、动画 atlas 和 voice audio 随后直接从 CDN 读取，因此 CDN 必须允许 HHWX Web origin 跨域读取。Stamp voice 会通过 Web Audio 作为短音效播放，而不是作为媒体元素播放，以避免 iOS media session 把它当作音乐并打断后台音乐。
 
-服务端 HHWX API 消费已发布到 CDN 的 Bandori 资源时，必须通过 R2/S3 签名请求直接读取背后的对象存储。服务端路径不要再请求 `cdn.hhwx.org` 等 HHWX 自有公网 CDN URL，因为 Cloudflare bot mitigation 可能会对 server-to-CDN 流量返回 challenge。公开资源桶使用 `BANDORI_ASSET_R2_BUCKET` 配置；endpoint 与凭据默认复用 `BANDORI_R2_*`，也可以用 `BANDORI_ASSET_R2_*` 单独覆盖。Music metadata 与 chart reader 通过这条路径读取 `bandori/music/index.json` 和内容寻址的谱面 JSON；chart reader 会先校验对象 SHA-256 再解析。Stamps master API 从 `BANDORI_PRIVATE_R2_BUCKET` 读取独立的内容寻址 snapshot，不读取公开 asset index；浏览器则直接从 CDN 读取公开 index 与资源。
+服务端 HHWX API 消费已发布到 CDN 的 Bandori 资源时，必须通过 R2/S3 签名请求直接读取背后的对象存储。服务端路径不要再请求 `cdn.hhwx.org` 等 HHWX 自有公网 CDN URL，因为 Cloudflare bot mitigation 可能会对 server-to-CDN 流量返回 challenge。共享 endpoint 与凭据统一使用 `BANDORI_R2_*`，公开 bucket 使用 `BANDORI_PUBLIC_R2_BUCKET`，私有 snapshot bucket 使用 `BANDORI_PRIVATE_R2_BUCKET`。数据集专属的 `BANDORI_ASSET_R2_*`、`BANDORI_MASTER_R2_*`、`BANDORI_TRACKER_HISTORY_R2_BUCKET` 与 `BANDORI_R2_BUCKET` 只保留为迁移期回退，新部署不应继续添加。Music metadata 与 chart reader 通过这条路径读取 `bandori/music/index.json` 和内容寻址的谱面 JSON；chart reader 会先校验对象 SHA-256 再解析。Stamps master API 从 `BANDORI_PRIVATE_R2_BUCKET` 读取独立的内容寻址 snapshot，不读取公开 asset index；浏览器则直接从 CDN 读取公开 index 与资源。
 
 HHWX 生产环境应在 `/bandori/stamps/*` 对象上为 `https://hhwx.org` 配置 CORS。如果允许多个精确 origin，请同时返回 `Vary: Origin`。Web 应用读取 stamp CDN 时不会携带 credentials，除非请求模型发生变化，否则不要启用带凭据 CORS。完全公开且不带 credentials 的资源桶可以使用 `Access-Control-Allow-Origin: *`；不要把 `*` 和带凭据请求搭配使用。
 
@@ -49,11 +49,11 @@ Events、Cards、Music 与 Stamps master API 会通过 `BANDORI_PRIVATE_R2_BUCKE
 
 ## 榜线历史 API
 
-`GET /api/bandori/tracker/data` 可以从 `bandori/trackerdata` 下的对象直接读取 CN 榜线历史。服务端使用带签名的 R2/S3 请求，不会通过公共 CDN 绕行读取聚合数据。按下面配置数据源和明确的公共 artifact bucket；endpoint 与凭据继续使用仅限服务端的 `BANDORI_R2_*`：
+`GET /api/bandori/tracker/data` 可以从 `bandori/trackerdata` 下的对象直接读取 CN 榜线历史。服务端使用带签名的 R2/S3 请求，不会通过公共 CDN 绕行读取聚合数据。按下面配置数据源和共享公共 artifact bucket；endpoint 与凭据继续使用仅限服务端的 `BANDORI_R2_*`：
 
 ```dotenv
 BANDORI_TRACKER_HISTORY_SOURCE=r2
-BANDORI_TRACKER_HISTORY_R2_BUCKET=cdn
+BANDORI_PUBLIC_R2_BUCKET=cdn
 ```
 
 可选数据源为：

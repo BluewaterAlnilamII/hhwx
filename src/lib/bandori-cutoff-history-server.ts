@@ -190,7 +190,11 @@ function getR2Config(): R2S3ReaderConfig {
   return {
     endpoint,
     bucket: readRequiredEnv(
-      ["BANDORI_TRACKER_HISTORY_R2_BUCKET"],
+      [
+        "BANDORI_PUBLIC_R2_BUCKET",
+        "BANDORI_TRACKER_HISTORY_R2_BUCKET",
+        "BANDORI_R2_BUCKET",
+      ],
       "tracker-history bucket",
     ),
     accessKeyId: readRequiredEnv(["BANDORI_R2_ACCESS_KEY_ID"], "access key ID"),
