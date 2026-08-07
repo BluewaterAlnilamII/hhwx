@@ -1,6 +1,17 @@
 import createMiddleware from "next-intl/middleware";
 import { NextResponse, type NextRequest } from "next/server";
-import { DEFAULT_LOCALE, isSupportedLocale, routing, stripLocalePrefix } from "@/i18n/routing";
+import {
+  buildLocalizedPathname,
+  DEFAULT_LOCALE,
+  getLocaleFromPathname,
+  isSupportedLocale,
+  routing,
+  stripLocalePrefix,
+} from "@/i18n/routing";
+import {
+  BANDORI_EVENTS_PATH,
+  LEGACY_BANDORI_EVENT_TRACKER_PATH,
+} from "@/lib/bandori-event-route";
 
 const intlMiddleware = createMiddleware(routing);
 const NEXT_INTL_LOCALE_HEADER = "X-NEXT-INTL-LOCALE";
@@ -59,7 +70,33 @@ function createPublicRedirectUrl(request: NextRequest): URL {
   return url;
 }
 
+function normalizePagePathname(pathname: string): string {
+  const normalized = stripLocalePrefix(pathname).replace(/\/+$/u, "");
+  return normalized || "/";
+}
+
+function redirectLegacyBandoriEventTracker(request: NextRequest): NextResponse | null {
+  if (normalizePagePathname(request.nextUrl.pathname) !== LEGACY_BANDORI_EVENT_TRACKER_PATH) {
+    return null;
+  }
+
+  const rawEventId = request.nextUrl.searchParams.get("event")?.trim() || null;
+  const locale = getLocaleFromPathname(request.nextUrl.pathname) ?? DEFAULT_LOCALE;
+  const destinationPath = rawEventId === null
+    ? BANDORI_EVENTS_PATH
+    : `${BANDORI_EVENTS_PATH}/${encodeURIComponent(rawEventId)}`;
+  const url = createPublicRedirectUrl(request);
+  url.pathname = buildLocalizedPathname(destinationPath, locale);
+  url.searchParams.delete("event");
+  return NextResponse.redirect(url, 308);
+}
+
 export default function proxy(request: NextRequest) {
+  const legacyEventTrackerRedirect = redirectLegacyBandoriEventTracker(request);
+  if (legacyEventTrackerRedirect) {
+    return legacyEventTrackerRedirect;
+  }
+
   const pathname = request.nextUrl.pathname;
   const firstSegment = pathname.split("/").filter(Boolean)[0];
 

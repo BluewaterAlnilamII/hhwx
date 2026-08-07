@@ -59,7 +59,6 @@ import {
   parseTrackingModeSearchParam,
   parseEventTrackerViewSearchParam,
   readEventTrackerSearchParams,
-  readPositiveIntegerSearchParam,
   replaceEventTrackerUrlQuery,
   resolveEventTrackerServerSelection,
   type EventTrackerView,
@@ -417,11 +416,13 @@ type InitialTrackerQueryState = {
   activeView: EventTrackerView;
 };
 
-function readInitialTrackerQueryState(preferredServer: BandoriServer): InitialTrackerQueryState {
+function readInitialTrackerQueryState(
+  preferredServer: BandoriServer,
+  initialEventId: number | null,
+): InitialTrackerQueryState {
   const params = readEventTrackerSearchParams();
   const trackingMode = parseTrackingModeSearchParam(params.get("type")) ?? "event";
   const queryRanking = params.get("tier");
-  const currentEventId = readPositiveIntegerSearchParam(params, "event");
   const selectedServer = resolveEventTrackerServerSelection(params.get("server"), preferredServer);
   const activeView = parseEventTrackerViewSearchParam(params.get("view")) ?? "tracker";
   const selectedRanking = queryRanking !== null
@@ -429,12 +430,12 @@ function readInitialTrackerQueryState(preferredServer: BandoriServer): InitialTr
     : readTrackerRankingPreference(trackingMode);
 
   return {
-    currentEventId,
+    currentEventId: initialEventId,
     trackingMode,
     selectedRanking: resolveMainTrackerRanking(
       selectedServer,
       trackingMode,
-      currentEventId,
+      initialEventId,
       selectedRanking,
     ),
     selectedServer,
@@ -547,7 +548,11 @@ function EventProgressBar({ startDate, endDate }: { startDate: number; endDate: 
 
 // ─────────────────────────── 页面主组件 ───────────────────────────
 
-export default function EventTrackerPage() {
+type EventTrackerPageProps = {
+  initialEventId: number | null;
+};
+
+export default function EventTrackerPage({ initialEventId }: EventTrackerPageProps) {
   const preferredServer = useBandoriPreferredServer();
   const hasHydratedPreferredServer = useBandoriPreferencesStore((state) => state.hydrated);
   const { music: masterMusic } = useBandoriMusicMaster();
@@ -781,7 +786,7 @@ export default function EventTrackerPage() {
         return;
       }
 
-      const nextState = readInitialTrackerQueryState(preferredServer);
+      const nextState = readInitialTrackerQueryState(preferredServer, initialEventId);
       setCurrentEventId(nextState.currentEventId);
       setTrackingMode(nextState.trackingMode);
       setSelectedRanking(nextState.selectedRanking);
@@ -796,7 +801,7 @@ export default function EventTrackerPage() {
     return () => {
       cancelled = true;
     };
-  }, [hasAppliedInitialUrlState, hasHydratedPreferredServer, preferredServer]);
+  }, [hasAppliedInitialUrlState, hasHydratedPreferredServer, initialEventId, preferredServer]);
 
   useEffect(() => {
     if (!hasAppliedInitialUrlState || trackingMode !== "song" || !isSongModeDisabled) {

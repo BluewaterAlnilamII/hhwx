@@ -8,7 +8,7 @@ test("public asset indexes remain stable until explicit refresh or page reload",
   const appChrome = await readSource("src/components/AppChrome.tsx");
   const hook = await readSource("src/hooks/useBandoriPublicAssetIndex.ts");
   const client = await readSource("src/lib/bandori-public-asset-index-client.ts");
-  const tracker = await readSource("src/app/[locale]/bandori/eventtracker/page.tsx");
+  const tracker = await readSource("src/app/[locale]/bandori/events/EventTrackerPage.tsx");
 
   assert.match(appChrome, /useBandoriCardsMaster\(\)/u);
   assert.match(appChrome, /useBandoriCardsAssetIndex\(\)/u);
@@ -43,7 +43,7 @@ test("account profile and calendar auth reads filter duplicate work", async () =
 
 test("event catalog and tracker use separate long-lived and live client policies", async () => {
   const cachePolicy = await readSource("src/lib/api-cache.ts");
-  const trackerHook = await readSource("src/app/[locale]/bandori/eventtracker/useTrackerData.ts");
+  const trackerHook = await readSource("src/app/[locale]/bandori/events/useTrackerData.ts");
   const calendarHook = await readSource("src/app/[locale]/bandori/calendar/useCalendarData.ts");
 
   assert.match(

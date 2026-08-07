@@ -23,7 +23,7 @@ test("avatar, comments, profiles, picker, and team builder stay on the shared in
   const consumerPaths = [
     "src/components/Toolbar.tsx",
     "src/app/[locale]/account/AccountAvatarCardControl.tsx",
-    "src/app/[locale]/bandori/eventtracker/CommentItem.tsx",
+    "src/app/[locale]/bandori/events/CommentItem.tsx",
     "src/app/[locale]/bandori/game-profiles/[profileId]/cards/page.tsx",
     "src/components/bandori/GameProfileCardEditorDialog.tsx",
     "src/components/bandori/card-picker/BandoriCardThumbnailTile.tsx",
@@ -45,7 +45,7 @@ test("avatar, comments, profiles, picker, and team builder stay on the shared in
 });
 
 test("event banners use their exact index slot without bundle or proxy fallback", async () => {
-  const tracker = await readSource("src/app/[locale]/bandori/eventtracker/page.tsx");
+  const tracker = await readSource("src/app/[locale]/bandori/events/EventTrackerPage.tsx");
   const teamBuilder = await readSource("src/app/[locale]/bandori/teambuilder/page.tsx");
 
   for (const source of [tracker, teamBuilder]) {
@@ -91,7 +91,7 @@ test("Stamps consumers join the private master response with the public hash ind
 });
 
 test("public index failure stays isolated from master loading and calculations", async () => {
-  const tracker = await readSource("src/app/[locale]/bandori/eventtracker/page.tsx");
+  const tracker = await readSource("src/app/[locale]/bandori/events/EventTrackerPage.tsx");
   const teamBuilder = await readSource("src/app/[locale]/bandori/teambuilder/page.tsx");
   const artImage = await readSource("src/components/bandori/card-picker/BandoriCardArtImage.tsx");
 

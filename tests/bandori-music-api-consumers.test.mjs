@@ -29,7 +29,7 @@ test("Team Builder and Event Tracker use the shared Music API", async () => {
   const [page, worker, tracker, hook] = await Promise.all([
     readSource("src/app/[locale]/bandori/teambuilder/page.tsx"),
     readSource("src/app/[locale]/bandori/teambuilder/team-search-worker.ts"),
-    readSource("src/app/[locale]/bandori/eventtracker/page.tsx"),
+    readSource("src/app/[locale]/bandori/events/EventTrackerPage.tsx"),
     readSource("src/hooks/useBandoriMusicMaster.ts"),
   ]);
 

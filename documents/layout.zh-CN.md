@@ -36,7 +36,8 @@ hhwx/
 - `[locale]/account/`：账号中心、资料、邮箱和密码页面。
 - `[locale]/bandori/game-profiles/`：游戏档案卡牌和道具视图。
 - `[locale]/auth/`：登录、注册和找回密码页面。
-- `[locale]/bandori/`：日历和活动追踪器页面。
+- `[locale]/bandori/events/`：活动追踪器入口和按活动 ID 定位的页面。旧 `/bandori/eventtracker` URL 由 `src/proxy.ts` 永久重定向。
+- `[locale]/bandori/calendar/`：各服务器的活动日历页面。
 - `api/`：前端使用的同源 API 路由。
 - `api/account/game-bind/`：游戏账号绑定验证码、验证、列表和解绑 API。
 - `api/account/game-profiles/`：游戏档案同步、导入、导出、复制和删除 API。

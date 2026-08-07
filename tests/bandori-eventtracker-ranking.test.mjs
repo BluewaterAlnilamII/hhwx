@@ -4,11 +4,11 @@ import test from "node:test";
 import {
   EVENT_TRACKER_TIERS,
   getEventTrackerTiersForMode,
-} from "../src/app/[locale]/bandori/eventtracker/constants.ts";
+} from "../src/app/[locale]/bandori/events/constants.ts";
 import {
   normalizeTrackerRankingForMode,
   TOP10_RANKING_SELECTION,
-} from "../src/app/[locale]/bandori/eventtracker/tracker-tier-preference.ts";
+} from "../src/app/[locale]/bandori/events/tracker-tier-preference.ts";
 import { isSupportedTrackerTier } from "../src/lib/bandori-tracker-tiers.ts";
 
 test("Event Tracker retires event T1/T10 without changing the compatibility API", () => {

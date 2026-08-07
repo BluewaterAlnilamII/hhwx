@@ -3,27 +3,27 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 const top10PanelSource = readFileSync(
-  new URL("../src/app/[locale]/bandori/eventtracker/Top10Panel.tsx", import.meta.url),
+  new URL("../src/app/[locale]/bandori/events/Top10Panel.tsx", import.meta.url),
   "utf8",
 );
 const top10PlayerListSource = readFileSync(
-  new URL("../src/app/[locale]/bandori/eventtracker/Top10PlayerList.tsx", import.meta.url),
+  new URL("../src/app/[locale]/bandori/events/Top10PlayerList.tsx", import.meta.url),
   "utf8",
 );
 const top10TooltipSource = readFileSync(
-  new URL("../src/app/[locale]/bandori/eventtracker/Top10Tooltip.tsx", import.meta.url),
+  new URL("../src/app/[locale]/bandori/events/Top10Tooltip.tsx", import.meta.url),
   "utf8",
 );
 const trackerChartPanelSource = readFileSync(
-  new URL("../src/app/[locale]/bandori/eventtracker/TrackerChartPanel.tsx", import.meta.url),
+  new URL("../src/app/[locale]/bandori/events/TrackerChartPanel.tsx", import.meta.url),
   "utf8",
 );
 const trackerActiveMarkerOverlaySource = readFileSync(
-  new URL("../src/app/[locale]/bandori/eventtracker/TrackerActiveMarkerOverlay.tsx", import.meta.url),
+  new URL("../src/app/[locale]/bandori/events/TrackerActiveMarkerOverlay.tsx", import.meta.url),
   "utf8",
 );
 const top10DataHookSource = readFileSync(
-  new URL("../src/app/[locale]/bandori/eventtracker/useBandoriTop10Data.ts", import.meta.url),
+  new URL("../src/app/[locale]/bandori/events/useBandoriTop10Data.ts", import.meta.url),
   "utf8",
 );
 const cardTileSource = readFileSync(
