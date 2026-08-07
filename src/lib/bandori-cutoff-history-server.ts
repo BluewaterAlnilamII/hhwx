@@ -172,17 +172,9 @@ function getR2Config(): R2S3ReaderConfig {
   }
   return {
     endpoint,
-    bucket: readRequiredEnv(
-      [
-        "BANDORI_PUBLIC_R2_BUCKET",
-        "BANDORI_TRACKER_HISTORY_R2_BUCKET",
-        "BANDORI_R2_BUCKET",
-      ],
-      "tracker-history bucket",
-    ),
+    bucket: readRequiredEnv(["BANDORI_PUBLIC_R2_BUCKET"], "tracker-history bucket"),
     accessKeyId: readRequiredEnv(["BANDORI_R2_ACCESS_KEY_ID"], "access key ID"),
     secretAccessKey: readRequiredEnv(["BANDORI_R2_SECRET_ACCESS_KEY"], "secret access key"),
-    region: readFirstEnv(["BANDORI_R2_REGION"]) || "auto",
   };
 }
 
@@ -191,7 +183,6 @@ function configScope(config: R2S3ReaderConfig): string {
     endpoint: config.endpoint,
     bucket: config.bucket,
     accessKeyId: config.accessKeyId,
-    region: config.region ?? "auto",
   });
 }
 

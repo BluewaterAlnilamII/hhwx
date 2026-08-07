@@ -121,13 +121,12 @@ function readRequiredEnv(names: readonly string[], label: string, serviceLabel: 
 }
 
 function getPrivateR2Config(serviceLabel: string): R2S3ReaderConfig {
-  const accountId = readFirstEnv(["BANDORI_R2_ACCOUNT_ID", "BANDORI_MASTER_R2_ACCOUNT_ID"]);
-  const endpoint = readFirstEnv(["BANDORI_R2_ENDPOINT", "BANDORI_MASTER_R2_ENDPOINT"])
+  const accountId = readFirstEnv(["BANDORI_R2_ACCOUNT_ID"]);
+  const endpoint = readFirstEnv(["BANDORI_R2_ENDPOINT"])
     ?? (accountId ? `https://${accountId}.r2.cloudflarestorage.com` : "");
   if (!endpoint) {
     throw new Error(
-      `${serviceLabel} is missing BANDORI_R2_ENDPOINT, `
-      + "BANDORI_MASTER_R2_ENDPOINT, BANDORI_R2_ACCOUNT_ID, or BANDORI_MASTER_R2_ACCOUNT_ID",
+      `${serviceLabel} is missing BANDORI_R2_ENDPOINT or BANDORI_R2_ACCOUNT_ID`,
     );
   }
 
@@ -135,16 +134,15 @@ function getPrivateR2Config(serviceLabel: string): R2S3ReaderConfig {
     endpoint,
     bucket: readRequiredEnv(["BANDORI_PRIVATE_R2_BUCKET"], "private bucket", serviceLabel),
     accessKeyId: readRequiredEnv(
-      ["BANDORI_R2_ACCESS_KEY_ID", "BANDORI_MASTER_R2_ACCESS_KEY_ID"],
+      ["BANDORI_R2_ACCESS_KEY_ID"],
       "access key ID",
       serviceLabel,
     ),
     secretAccessKey: readRequiredEnv(
-      ["BANDORI_R2_SECRET_ACCESS_KEY", "BANDORI_MASTER_R2_SECRET_ACCESS_KEY"],
+      ["BANDORI_R2_SECRET_ACCESS_KEY"],
       "secret access key",
       serviceLabel,
     ),
-    region: readFirstEnv(["BANDORI_R2_REGION", "BANDORI_MASTER_R2_REGION"]) || "auto",
   };
 }
 
@@ -153,7 +151,6 @@ function configScope(config: R2S3ReaderConfig): string {
     endpoint: config.endpoint,
     bucket: config.bucket,
     accessKeyId: config.accessKeyId,
-    region: config.region ?? "auto",
   });
 }
 

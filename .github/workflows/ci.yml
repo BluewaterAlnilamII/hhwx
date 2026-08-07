@@ -47,4 +47,3 @@ jobs:
           SUPABASE_SECRET_KEY: example_secret_key
           NEXT_PUBLIC_SITE_ASSET_CDN_BASE_URL: https://your-site-asset-cdn.example.com
           NEXT_PUBLIC_BANDORI_ASSET_CDN_BASE_URL: https://your-bandori-asset-cdn.example.com
-          BANDORI_ASSET_CDN_BASE_URL: https://your-bandori-asset-cdn.example.com

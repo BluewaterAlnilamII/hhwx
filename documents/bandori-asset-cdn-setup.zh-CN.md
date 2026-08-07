@@ -16,20 +16,18 @@ Web 应用从以下环境变量读取 Bandori 资源 URL：
 
 ```dotenv
 NEXT_PUBLIC_BANDORI_ASSET_CDN_BASE_URL=https://your-bandori-asset-cdn.example.com
-BANDORI_ASSET_CDN_BASE_URL=https://your-bandori-asset-cdn.example.com
 BANDORI_CHART_SOURCE=bestdori
 # BANDORI_CHART_SOURCE=assets
 # BANDORI_MUSIC_CDN_BASE_URL=https://your-bandori-asset-cdn.example.com
-# BANDORI_CHART_BESTDORI_FALLBACK=0
 # BANDORI_PUBLIC_R2_BUCKET=your_public_asset_bucket
 # BANDORI_PRIVATE_R2_BUCKET=hhwx-private
 # BANDORI_MUSIC_API_LOCAL_STORE_ROOT=/path/to/music/store
 # BANDORI_STAMPS_API_LOCAL_STORE_ROOT=/path/to/stamps/store
 ```
 
-`NEXT_PUBLIC_BANDORI_ASSET_CDN_BASE_URL` 会暴露给浏览器。`BANDORI_ASSET_CDN_BASE_URL` 可供服务端代码使用。大多数部署中两者应指向同一个资源主机。Cards、Events 与 Stamps 资源通过下文各自的公开 index 发现；浏览器使用正常 HTTP 缓存且不携带凭据读取这些 index。Stamp 资源使用同一个 Bandori asset CDN 下的 `/bandori/stamps` 路径；没有单独的 stamp CDN 配置。Web 应用通过 `/api/bandori/master/stamps` 读取 Stamp master 元数据，直接从公开 CDN 读取 `bandori/stamps/index.json`，再在浏览器内存中按 stamp ID 合并两者。Stamp 图片、动画 manifest、动画 atlas 和 voice audio 随后直接从 CDN 读取，因此 CDN 必须允许 HHWX Web origin 跨域读取。Stamp voice 会通过 Web Audio 作为短音效播放，而不是作为媒体元素播放，以避免 iOS media session 把它当作音乐并打断后台音乐。
+`NEXT_PUBLIC_BANDORI_ASSET_CDN_BASE_URL` 是浏览器与服务端渲染公开 URL 共用的资源主机。Cards、Events 与 Stamps 资源通过下文各自的公开 index 发现；浏览器使用正常 HTTP 缓存且不携带凭据读取这些 index。Stamp 资源使用同一个 Bandori asset CDN 下的 `/bandori/stamps` 路径；没有单独的 stamp CDN 配置。Web 应用通过 `/api/bandori/master/stamps` 读取 Stamp master 元数据，直接从公开 CDN 读取 `bandori/stamps/index.json`，再在浏览器内存中按 stamp ID 合并两者。Stamp 图片、动画 manifest、动画 atlas 和 voice audio 随后直接从 CDN 读取，因此 CDN 必须允许 HHWX Web origin 跨域读取。Stamp voice 会通过 Web Audio 作为短音效播放，而不是作为媒体元素播放，以避免 iOS media session 把它当作音乐并打断后台音乐。
 
-服务端 HHWX API 消费已发布到 CDN 的 Bandori 资源时，必须通过 R2/S3 签名请求直接读取背后的对象存储。服务端路径不要再请求 `cdn.hhwx.org` 等 HHWX 自有公网 CDN URL，因为 Cloudflare bot mitigation 可能会对 server-to-CDN 流量返回 challenge。共享 endpoint 与凭据统一使用 `BANDORI_R2_*`，公开 bucket 使用 `BANDORI_PUBLIC_R2_BUCKET`，私有 snapshot bucket 使用 `BANDORI_PRIVATE_R2_BUCKET`。数据集专属的 `BANDORI_ASSET_R2_*`、`BANDORI_MASTER_R2_*`、`BANDORI_TRACKER_HISTORY_R2_BUCKET` 与 `BANDORI_R2_BUCKET` 只保留为迁移期回退，新部署不应继续添加。Music metadata 与 chart reader 通过这条路径读取 `bandori/music/index.json` 和内容寻址的谱面 JSON；chart reader 会先校验对象 SHA-256 再解析。Stamps master API 从 `BANDORI_PRIVATE_R2_BUCKET` 读取独立的内容寻址 snapshot，不读取公开 asset index；浏览器则直接从 CDN 读取公开 index 与资源。
+服务端 HHWX API 消费已发布到 CDN 的 Bandori 资源时，必须通过 R2/S3 签名请求直接读取背后的对象存储。服务端路径不要再请求 `cdn.hhwx.org` 等 HHWX 自有公网 CDN URL，因为 Cloudflare bot mitigation 可能会对 server-to-CDN 流量返回 challenge。共享 endpoint 与凭据统一使用 `BANDORI_R2_*`，公开 bucket 使用 `BANDORI_PUBLIC_R2_BUCKET`，私有 snapshot bucket 使用 `BANDORI_PRIVATE_R2_BUCKET`；数据集专属的旧 R2 名称不再接受。R2 请求签名固定使用 Cloudflare 的 `auto` region。Music metadata 与 chart reader 通过这条路径读取 `bandori/music/index.json` 和内容寻址的谱面 JSON；chart reader 会先校验对象 SHA-256 再解析。Stamps master API 从 `BANDORI_PRIVATE_R2_BUCKET` 读取独立的内容寻址 snapshot，不读取公开 asset index；浏览器则直接从 CDN 读取公开 index 与资源。
 
 HHWX 生产环境应在 `/bandori/stamps/*` 对象上为 `https://hhwx.org` 配置 CORS。如果允许多个精确 origin，请同时返回 `Vary: Origin`。Web 应用读取 stamp CDN 时不会携带 credentials，除非请求模型发生变化，否则不要启用带凭据 CORS。完全公开且不带 credentials 的资源桶可以使用 `Access-Control-Allow-Origin: *`；不要把 `*` 和带凭据请求搭配使用。
 
@@ -37,7 +35,7 @@ HHWX 应用响应使用 `Cache-Control` 控制浏览器及下游缓存 TTL，并
 
 Cloudflare Cache Rule 可以只把目标公开 `GET`/`HEAD` 路径标记为符合缓存条件，同时继续接受源站响应头。由 R2 或资源 CDN 直接提供的对象（包括 Cards、Events、Music 和 Stamps 的 `index.json`）不会经过 Next.js policy；其对象 metadata 使用 snapshot 浏览器档位。若需要仅把 Cloudflare 副本延长到 snapshot 边缘档位，应使用 Cache Response Rule 配置 `cloudflare_only` 的 `max-age=1800` 和 `stale-while-revalidate=86400`；Cache Response Rule 的结果优先于源站 `Cloudflare-CDN-Cache-Control`。
 
-`BANDORI_CHART_SOURCE=bestdori` 保留默认的 web-only 行为。只有在私有资源构建器已经发布下方 music chart 对象后，才应切换到 `BANDORI_CHART_SOURCE=assets`。`BANDORI_MUSIC_CDN_BASE_URL` 可以让谱面读取使用单独主机；省略时使用 `BANDORI_ASSET_CDN_BASE_URL`。`BANDORI_CHART_BESTDORI_FALLBACK=1` 允许自建谱面对象缺失时临时回退 Bestdori。
+`BANDORI_CHART_SOURCE=bestdori` 保留默认的 web-only 行为。只有在私有资源构建器已经发布下方 music chart 对象后，才应切换到 `BANDORI_CHART_SOURCE=assets`。`BANDORI_MUSIC_CDN_BASE_URL` 可以让浏览器侧 music 资源使用单独主机；省略时使用 `NEXT_PUBLIC_BANDORI_ASSET_CDN_BASE_URL`。assets 模式在谱面缺失或不可读时会失败关闭，绝不会回退 Bestdori。
 
 Events、Cards、Music 与 Stamps master API 会通过 `BANDORI_PRIVATE_R2_BUCKET` 配置的私有桶，直接读取各自的内容寻址 snapshot。pointer 或 pack 缺失、无权限、格式错误、损坏或超限时都会失败关闭，且不会回退到 Bestdori、公开 asset index 或公开 master artifacts。`BANDORI_EVENT_API_LOCAL_STORE_ROOT`、`BANDORI_CARDS_API_LOCAL_STORE_ROOT`、`BANDORI_MUSIC_API_LOCAL_STORE_ROOT` 与 `BANDORI_STAMPS_API_LOCAL_STORE_ROOT` 可在本地开发时指向 tracker 生成的 content store，生产环境会拒绝这些设置。其他 master 数据集继续使用现有来源。
 

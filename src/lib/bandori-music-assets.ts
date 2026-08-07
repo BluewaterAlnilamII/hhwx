@@ -24,7 +24,6 @@ function normalizeCdnBaseUrl(value: string | null | undefined): string | null {
 export function getBandoriMusicCdnBaseUrl(): string | null {
   return normalizeCdnBaseUrl(
     process.env.BANDORI_MUSIC_CDN_BASE_URL
-      ?? process.env.BANDORI_ASSET_CDN_BASE_URL
       ?? process.env.NEXT_PUBLIC_BANDORI_ASSET_CDN_BASE_URL,
   );
 }

@@ -45,10 +45,6 @@ function getBandoriChartSource(): "assets" | "bestdori" {
   return process.env.BANDORI_CHART_SOURCE === "assets" ? "assets" : "bestdori";
 }
 
-function allowBestdoriChartFallback(): boolean {
-  return process.env.BANDORI_CHART_BESTDORI_FALLBACK === "1";
-}
-
 async function fetchBandoriAssetChart(
   chart: Pick<BandoriJsonAssetDescriptor, "key" | "sha256">,
 ): Promise<unknown> {
@@ -82,31 +78,23 @@ async function readConfiguredChart(songId: number, difficulty: BestdoriChartDiff
     return readBestdoriChart(songId, difficulty);
   }
 
-  try {
-    const chart = lookupBandoriMusicChart(
-      await readBandoriMusicIndex(),
-      songId,
-      difficulty,
+  const chart = lookupBandoriMusicChart(
+    await readBandoriMusicIndex(),
+    songId,
+    difficulty,
+  );
+  if (!chart) {
+    throw new BandoriChartAssetError(
+      `Bandori chart asset is not indexed: ${songId}:${difficulty}`,
+      404,
     );
-    if (!chart) {
-      throw new BandoriChartAssetError(
-        `Bandori chart asset is not indexed: ${songId}:${difficulty}`,
-        404,
-      );
-    }
-    return await readAssetChart(
-      songId,
-      difficulty,
-      chart.key,
-      chart.sha256,
-    );
-  } catch (error) {
-    if (!allowBestdoriChartFallback()) {
-      throw error;
-    }
-    console.warn("Bandori chart asset read failed; falling back to Bestdori:", error);
-    return readBestdoriChart(songId, difficulty);
   }
+  return readAssetChart(
+    songId,
+    difficulty,
+    chart.key,
+    chart.sha256,
+  );
 }
 
 type RouteContext = {

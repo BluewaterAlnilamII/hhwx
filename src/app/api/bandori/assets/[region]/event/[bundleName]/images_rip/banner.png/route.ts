@@ -19,7 +19,7 @@ export async function GET(
   if (isBandoriAssetRegion(region)) {
     const redirectUrl = buildBandoriAssetCdnUrl(
       buildBandoriEventBannerAssetKey(region, bundleName),
-      process.env.BANDORI_ASSET_CDN_BASE_URL ?? process.env.NEXT_PUBLIC_BANDORI_ASSET_CDN_BASE_URL,
+      process.env.NEXT_PUBLIC_BANDORI_ASSET_CDN_BASE_URL,
     );
     if (redirectUrl) {
       return NextResponse.redirect(redirectUrl, 307);
