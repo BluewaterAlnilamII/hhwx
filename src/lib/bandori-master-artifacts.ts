@@ -90,18 +90,8 @@ function readRequiredR2Env(...names: string[]): string {
 }
 
 function getBandoriMasterR2Config(): R2S3ReaderConfig {
-  const accountId = readOptionalR2Env("BANDORI_R2_ACCOUNT_ID");
-  const endpoint = readOptionalR2Env("BANDORI_R2_ENDPOINT")
-    ?? (accountId ? `https://${accountId}.r2.cloudflarestorage.com` : "");
-
-  if (!endpoint) {
-    throw new Error(
-      "Bandori master R2 artifact reader is missing BANDORI_R2_ENDPOINT or BANDORI_R2_ACCOUNT_ID",
-    );
-  }
-
   return {
-    endpoint,
+    endpoint: readRequiredR2Env("BANDORI_R2_ENDPOINT"),
     bucket: readRequiredR2Env("BANDORI_PUBLIC_R2_BUCKET"),
     accessKeyId: readRequiredR2Env("BANDORI_R2_ACCESS_KEY_ID"),
     secretAccessKey: readRequiredR2Env("BANDORI_R2_SECRET_ACCESS_KEY"),

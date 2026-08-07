@@ -61,7 +61,7 @@ export function normalizeAuthMode(mode: string | null | undefined, fallback: Aut
 }
 
 export function getSiteUrl(): string {
-	const configured = process.env.NEXT_PUBLIC_SITE_URL?.trim() || process.env.NEXT_PUBLIC_VERCEL_URL?.trim();
+	const configured = process.env.NEXT_PUBLIC_SITE_URL?.trim();
 	if (configured) {
 		const withScheme = configured.startsWith("http") ? configured : `https://${configured}`;
 		return trimTrailingSlash(withScheme);

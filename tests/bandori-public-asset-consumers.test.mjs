@@ -128,6 +128,10 @@ test("chart and master sources are fixed first-party R2 contracts across all fou
   const envExample = await readSource(".env.example");
   const masterApi = await readSource("src/lib/bandori-master-api.ts");
   const masterArtifacts = await readSource("src/lib/bandori-master-artifacts.ts");
+  const publicAssetReader = await readSource("src/lib/bandori-public-asset-index-server.ts");
+  const snapshotReader = await readSource("src/lib/bandori-snapshot-api-server.ts");
+  const historyReader = await readSource("src/lib/bandori-cutoff-history-server.ts");
+  const comparisonScript = await readSource("scripts/compare-bandori-tracker-history.mjs");
 
   assert.match(
     masterArtifacts,
@@ -139,7 +143,28 @@ test("chart and master sources are fixed first-party R2 contracts across all fou
   assert.doesNotMatch(masterApi, /process\.env|shouldUseArtifacts|fetchBestdori/u);
   assert.match(masterApi, /missing for servers/u);
 
+  for (const source of [
+    envExample,
+    masterArtifacts,
+    publicAssetReader,
+    snapshotReader,
+    historyReader,
+    comparisonScript,
+  ]) {
+    assert.doesNotMatch(source, /BANDORI_R2_ACCOUNT_ID/u);
+  }
+  for (const source of [
+    masterArtifacts,
+    publicAssetReader,
+    snapshotReader,
+    historyReader,
+    comparisonScript,
+  ]) {
+    assert.match(source, /BANDORI_R2_ENDPOINT/u);
+  }
+
   for (const removedName of [
+    "NEXT_PUBLIC_VERCEL_URL",
     "BANDORI_CHART_SOURCE",
     "BANDORI_MUSIC_CDN_BASE_URL",
     "BANDORI_MASTER_SOURCE",

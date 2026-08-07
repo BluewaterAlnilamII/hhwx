@@ -24,16 +24,8 @@ function readRequiredEnvironmentValue(names: readonly string[], label: string): 
 }
 
 function getBandoriPublicAssetR2Config(): R2S3ReaderConfig {
-  const accountId = readFirstEnvironmentValue(["BANDORI_R2_ACCOUNT_ID"]);
-  const endpoint = readFirstEnvironmentValue(["BANDORI_R2_ENDPOINT"])
-    ?? (accountId ? `https://${accountId}.r2.cloudflarestorage.com` : "");
-  if (!endpoint) {
-    throw new Error(
-      "Bandori public asset R2 reader is missing an endpoint or account ID",
-    );
-  }
   return {
-    endpoint,
+    endpoint: readRequiredEnvironmentValue(["BANDORI_R2_ENDPOINT"], "endpoint"),
     bucket: readRequiredEnvironmentValue(
       ["BANDORI_PUBLIC_R2_BUCKET"],
       "bucket",

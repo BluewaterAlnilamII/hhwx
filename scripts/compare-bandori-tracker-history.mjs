@@ -53,12 +53,8 @@ function buildQuery() {
 }
 
 function getR2Config() {
-  const accountId = process.env.BANDORI_R2_ACCOUNT_ID?.trim();
-  const endpoint = process.env.BANDORI_R2_ENDPOINT?.trim()
-    || (accountId ? `https://${accountId}.r2.cloudflarestorage.com` : "");
-  if (!endpoint) throw new Error("Missing BANDORI_R2_ENDPOINT or BANDORI_R2_ACCOUNT_ID");
   return {
-    endpoint,
+    endpoint: requiredEnv("BANDORI_R2_ENDPOINT"),
     bucket: requiredEnv("BANDORI_PUBLIC_R2_BUCKET"),
     accessKeyId: requiredEnv("BANDORI_R2_ACCESS_KEY_ID"),
     secretAccessKey: requiredEnv("BANDORI_R2_SECRET_ACCESS_KEY"),

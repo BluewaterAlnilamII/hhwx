@@ -107,9 +107,10 @@ The web app needs:
 
 - `NEXT_PUBLIC_SUPABASE_URL`
 - `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
-- `NEXT_PUBLIC_BANDORI_TRACKER_LIVE_SOURCE=broadcast` (must be switched before sparse history stops writing Supabase)
 - `SUPABASE_SECRET_KEY`
 
 Before deploying tracker-live migrations, run `npm run test:supabase` against the local Supabase stack (or an isolated Supabase branch). `supabase/tests/bandori_tracker_latest.sql` covers cutoff latest, while `supabase/tests/bandori_tracker_topdata_latest.sql` covers the TOP10 table, RPC, RLS, concurrency, payload limits, and anchored Broadcast policy.
+
+Bandori tracker live delivery is a fixed Private Broadcast contract. The browser subscribes only after the restored session has completed authenticated bootstrap; there is no environment-variable transport switch.
 
 `SUPABASE_SECRET_KEY` is required only on the server and must never use a `NEXT_PUBLIC_` prefix.

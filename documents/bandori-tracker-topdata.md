@@ -100,18 +100,17 @@ timestamp, ignore an older snapshot, and let latest user profiles override match
 UIDs while retaining historical users. It must never write the 30-second samples
 back into the session history cache. A foreground history refresh updates only the
 sparse R2 baseline and remains independent of the live connection. Existing
-unauthenticated behavior remains the sparse HTTP history only. The adapter is active only when
-`NEXT_PUBLIC_BANDORI_TRACKER_LIVE_SOURCE=broadcast` and the restored session has a
-real user. JP, EN, and TW never query the TOP10 latest table or create a TOP10
+unauthenticated behavior remains the sparse HTTP history only. The adapter uses
+Private Broadcast as a fixed application contract and is active only when the restored
+session has a real user. JP, EN, and TW never query the TOP10 latest table or create a TOP10
 Broadcast channel; if a compliant regional R2 manifest is published later, the
 existing history API and panel can read it without a frontend change.
 
 ## Release and rollback
 
-For phase two, apply and verify the additive Supabase migration first, deploy the
-frontend in history-only-compatible mode second, deploy the tracker in `snapshot`
-mode third, and enable `broadcast` only after authenticated bootstrap and private
-topic authorization pass. Keep the public history API unchanged throughout.
+The phase-two cutover has completed. Any future application rollback must keep
+authenticated bootstrap and private-topic authorization intact because there is no
+legacy Postgres Changes transport switch. Keep the public history API unchanged.
 
 Rollback removes or reverts application code only. Keep the additive latest table,
 RPC, policies, R2 objects, and tracker ledger so already collected state remains

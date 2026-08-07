@@ -145,15 +145,7 @@ function readRequiredEnv(names: readonly string[], label: string): string {
 }
 
 function getR2Config(): R2S3ReaderConfig {
-  const accountId = readFirstEnv(["BANDORI_R2_ACCOUNT_ID"]);
-  const endpoint = readFirstEnv(["BANDORI_R2_ENDPOINT"])
-    ?? (accountId ? `https://${accountId}.r2.cloudflarestorage.com` : "");
-  if (!endpoint) {
-    throw new BandoriCutoffHistoryReadError(
-      "unconfigured",
-      "Bandori cutoff history R2 read requires BANDORI_R2_ENDPOINT or BANDORI_R2_ACCOUNT_ID",
-    );
-  }
+  const endpoint = readRequiredEnv(["BANDORI_R2_ENDPOINT"], "endpoint");
   let endpointUrl: URL;
   try {
     endpointUrl = new URL(endpoint);

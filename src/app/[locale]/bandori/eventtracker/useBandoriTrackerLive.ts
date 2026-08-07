@@ -20,10 +20,6 @@ import { useGameStore } from "@/store/useGameStore";
 
 type SnapshotListener = BandoriTrackerLiveListener<BandoriTrackerLiveSnapshot>;
 
-export function isBandoriTrackerBroadcastEnabled(): boolean {
-  return process.env.NEXT_PUBLIC_BANDORI_TRACKER_LIVE_SOURCE === "broadcast";
-}
-
 export function useBandoriTrackerLiveSubscription<TSnapshot>(
   subscription: BandoriTrackerLiveSubscription<TSnapshot> | null,
   enabled: boolean,
@@ -32,7 +28,6 @@ export function useBandoriTrackerLiveSubscription<TSnapshot>(
   const userId = useGameStore((state) => state.userId);
   const authReady = useGameStore((state) => state.authReady);
   const shouldSubscribe = enabled
-    && isBandoriTrackerBroadcastEnabled()
     && authReady
     && userId !== null
     && subscription !== null;
