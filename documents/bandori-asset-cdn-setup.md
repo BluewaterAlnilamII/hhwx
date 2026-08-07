@@ -21,7 +21,7 @@ BANDORI_CHART_SOURCE=bestdori
 # BANDORI_CHART_SOURCE=assets
 # BANDORI_MUSIC_CDN_BASE_URL=https://your-bandori-asset-cdn.example.com
 # BANDORI_CHART_BESTDORI_FALLBACK=0
-# BANDORI_ASSET_R2_BUCKET=your_public_asset_bucket
+# BANDORI_PUBLIC_R2_BUCKET=your_public_asset_bucket
 # BANDORI_PRIVATE_R2_BUCKET=hhwx-private
 # BANDORI_MUSIC_API_LOCAL_STORE_ROOT=/path/to/music/store
 # BANDORI_STAMPS_API_LOCAL_STORE_ROOT=/path/to/stamps/store
@@ -29,7 +29,7 @@ BANDORI_CHART_SOURCE=bestdori
 
 `NEXT_PUBLIC_BANDORI_ASSET_CDN_BASE_URL` is exposed to browsers. `BANDORI_ASSET_CDN_BASE_URL` is available to server-side code. In most deployments they should point to the same asset host. Card, Event, and Stamp assets are discovered from their public indexes described below; browsers read those indexes with the normal HTTP cache and without credentials. Stamp assets use the same Bandori asset CDN under `/bandori/stamps`; there is no separate stamp CDN setting. The web app reads Stamp master metadata through `/api/bandori/master/stamps`, reads `bandori/stamps/index.json` directly from the public CDN, and joins both maps by stamp ID in browser memory. Stamp images, animation manifests, animation atlases, and voice audio are then read directly from the CDN, so the CDN must allow browser CORS reads from the HHWX web origins. Stamp voices are played through Web Audio as short sound effects instead of media elements, avoiding iOS media-session behavior that can interrupt background music.
 
-Server-side HHWX APIs that consume CDN-published Bandori assets must read the backing object storage directly through R2/S3 signed requests. They must not fetch HHWX-owned public CDN URLs such as `cdn.hhwx.org` from the server path because Cloudflare bot mitigation may challenge server-to-CDN traffic. Configure the public asset bucket as `BANDORI_ASSET_R2_BUCKET`; endpoint and credentials default to the shared `BANDORI_R2_*` values, with optional `BANDORI_ASSET_R2_*` overrides. The Music metadata and chart readers use this path for `bandori/music/index.json` and content-addressed chart JSON; the chart reader verifies the object SHA-256 before parsing it. The Stamps master API reads its independent content-addressed snapshot from `BANDORI_PRIVATE_R2_BUCKET`; it does not read the public asset index. Browsers read public indexes and assets directly from the CDN.
+Server-side HHWX APIs that consume CDN-published Bandori assets must read the backing object storage directly through R2/S3 signed requests. They must not fetch HHWX-owned public CDN URLs such as `cdn.hhwx.org` from the server path because Cloudflare bot mitigation may challenge server-to-CDN traffic. Configure the shared endpoint and credentials with `BANDORI_R2_*`, the public bucket with `BANDORI_PUBLIC_R2_BUCKET`, and the private snapshot bucket with `BANDORI_PRIVATE_R2_BUCKET`. Dataset-specific `BANDORI_ASSET_R2_*`, `BANDORI_MASTER_R2_*`, `BANDORI_TRACKER_HISTORY_R2_BUCKET`, and `BANDORI_R2_BUCKET` names remain migration-only fallbacks and should not be added to new deployments. The Music metadata and chart readers use this path for `bandori/music/index.json` and content-addressed chart JSON; the chart reader verifies the object SHA-256 before parsing it. The Stamps master API reads its independent content-addressed snapshot from `BANDORI_PRIVATE_R2_BUCKET`; it does not read the public asset index. Browsers read public indexes and assets directly from the CDN.
 
 For HHWX production, configure CORS for `https://hhwx.org` on `/bandori/stamps/*` objects. If multiple exact origins are allowed, include `Vary: Origin`. The web app does not send credentials for stamp CDN reads, so do not enable credentialed CORS unless the request model changes. A fully public, no-credentials asset bucket may use `Access-Control-Allow-Origin: *`; do not combine `*` with credentialed requests.
 
@@ -49,11 +49,11 @@ The browser reads the complete Music map once from `GET /api/bandori/master/musi
 
 ## Tracker History API
 
-`GET /api/bandori/tracker/data` can read CN cutoff history directly from the object-storage keys under `bandori/trackerdata`. The server uses signed R2/S3 requests and never routes these aggregate reads through the public CDN. Configure the source and the explicit public-artifact bucket as follows; endpoint and credentials continue to come from the server-only `BANDORI_R2_*` variables:
+`GET /api/bandori/tracker/data` can read CN cutoff history directly from the object-storage keys under `bandori/trackerdata`. The server uses signed R2/S3 requests and never routes these aggregate reads through the public CDN. Configure the source and shared public-artifact bucket as follows; endpoint and credentials continue to come from the server-only `BANDORI_R2_*` variables:
 
 ```dotenv
 BANDORI_TRACKER_HISTORY_SOURCE=r2
-BANDORI_TRACKER_HISTORY_R2_BUCKET=cdn
+BANDORI_PUBLIC_R2_BUCKET=cdn
 ```
 
 The accepted source values are:

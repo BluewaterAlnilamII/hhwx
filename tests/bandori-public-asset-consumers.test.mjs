@@ -109,6 +109,7 @@ test("server-side Music metadata and charts read the public bucket directly inst
   assert.match(musicAssets, /fetchBandoriPublicAssetIndexJson/u);
   assert.doesNotMatch(musicAssets, /fetch\(url/u);
   assert.match(indexReader, /fetchR2Object/u);
+  assert.match(indexReader, /BANDORI_PUBLIC_R2_BUCKET/u);
   assert.match(indexReader, /BANDORI_ASSET_R2_BUCKET/u);
   assert.doesNotMatch(indexReader, /BANDORI_ASSET_CDN_BASE_URL|cdn\.hhwx\.org/u);
   assert.match(chartRoute, /lookupBandoriMusicChart/u);
