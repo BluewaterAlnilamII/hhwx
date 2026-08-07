@@ -1,16 +1,10 @@
-import { unstable_cache } from "next/cache";
 import {
+  BANDORI_MASTER_ARTIFACT_SERVERS,
   fetchBandoriMasterArtifactDataset,
   fetchBandoriMasterArtifactNamedDataset,
-  getDefaultBandoriMasterArtifactServer,
   type BandoriMasterArtifactServer,
 } from "@/lib/bandori-master-artifacts";
-import {
-  fetchBestdoriApiPath,
-  fetchBestdoriEventDetail,
-  fetchBestdoriMasterDataset,
-  type BestdoriMasterDatasetKey,
-} from "@/lib/bestdori-master-data";
+import type { BandoriMasterDatasetKey } from "@/lib/bandori-master-contract";
 import { NO_STORE_HTTP_CACHE_POLICY, withHttpCachePolicy } from "@/lib/api-cache";
 import { jsonError } from "@/lib/api-response";
 
@@ -18,7 +12,7 @@ export const BANDORI_MASTER_ID_PATTERN = /^[1-9]\d*$/u;
 
 export type BandoriMasterApiReadResult = {
   dataset: string;
-  source: "artifacts" | "bestdori";
+  source: "artifacts";
   server?: BandoriMasterArtifactServer;
   servers?: BandoriMasterArtifactServer[];
   masterVersion?: string | null;
@@ -34,13 +28,9 @@ export type BandoriMasterApiReadResult = {
 };
 
 type LegacyBandoriMasterDatasetKey = Exclude<
-  BestdoriMasterDatasetKey,
+  BandoriMasterDatasetKey,
   "cards" | "events" | "songs"
 >;
-
-function shouldUseArtifacts(): boolean {
-  return process.env.BANDORI_MASTER_SOURCE === "artifacts";
-}
 
 export function rejectUnsupportedBandoriMasterQuery(request: Request): Response | null {
   if (!new URL(request.url).search) {
@@ -53,35 +43,6 @@ export function rejectUnsupportedBandoriMasterQuery(request: Request): Response 
     "Query parameters are not supported for this Bandori master endpoint",
     { headers: withHttpCachePolicy(NO_STORE_HTTP_CACHE_POLICY) },
   );
-}
-
-export function normalizeBandoriMasterServer(value: string): BandoriMasterArtifactServer | null {
-  const normalized = value.trim().toLowerCase();
-  if (normalized === "jp" || normalized === "cn" || normalized === "en" || normalized === "tw") {
-    return normalized;
-  }
-  return null;
-}
-
-function getBandoriMasterArtifactServers(server?: BandoriMasterArtifactServer): BandoriMasterArtifactServer[] {
-  if (server) {
-    return [server];
-  }
-
-  const configuredServers = process.env.BANDORI_MASTER_ARTIFACT_SERVERS;
-  if (!configuredServers) {
-    return [getDefaultBandoriMasterArtifactServer()];
-  }
-
-  const servers: BandoriMasterArtifactServer[] = [];
-  for (const rawServer of configuredServers.split(",")) {
-    const normalizedServer = normalizeBandoriMasterServer(rawServer);
-    if (normalizedServer && !servers.includes(normalizedServer)) {
-      servers.push(normalizedServer);
-    }
-  }
-
-  return servers.length > 0 ? servers : [getDefaultBandoriMasterArtifactServer()];
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -209,29 +170,6 @@ function normalizeArtifactAreaItemsResult(
   };
 }
 
-function projectRecordPayload(payload: unknown, keys: readonly string[]): unknown {
-  if (!isRecord(payload)) {
-    return payload;
-  }
-
-  const projected: Record<string, unknown> = {};
-  for (const [recordId, record] of Object.entries(payload)) {
-    if (!isRecord(record)) {
-      projected[recordId] = record;
-      continue;
-    }
-
-    const nextRecord: Record<string, unknown> = {};
-    for (const key of keys) {
-      if (key in record) {
-        nextRecord[key] = record[key];
-      }
-    }
-    projected[recordId] = nextRecord;
-  }
-  return projected;
-}
-
 function isMissingValue(value: unknown): boolean {
   return value === null || value === undefined;
 }
@@ -317,6 +255,18 @@ function mergeArtifactResults(
   };
 }
 
+function requireCompleteArtifactResults(
+  dataset: string,
+  results: Array<BandoriMasterApiReadResult | null>,
+): void {
+  const missingServers = BANDORI_MASTER_ARTIFACT_SERVERS.filter((_, index) => results[index] === null);
+  if (missingServers.length > 0) {
+    throw new Error(
+      `Bandori master artifact dataset ${dataset} is missing for servers: ${missingServers.join(", ")}`,
+    );
+  }
+}
+
 export function refineBandoriMasterRecordPayload(
   result: BandoriMasterApiReadResult,
   options: {
@@ -356,38 +306,8 @@ export function refineBandoriMasterRecordPayload(
   return { ...result, payload };
 }
 
-const readBestdoriDataset = unstable_cache(
-  async (dataset: BestdoriMasterDatasetKey): Promise<BandoriMasterApiReadResult> => ({
-    dataset,
-    source: "bestdori",
-    payload: await fetchBestdoriMasterDataset(dataset),
-  }),
-  ["bandori-master-api-bestdori-dataset:v1"],
-  { revalidate: 86400 },
-);
-
-const readBestdoriPath = unstable_cache(
-  async (dataset: string, path: string): Promise<BandoriMasterApiReadResult> => ({
-    dataset,
-    source: "bestdori",
-    payload: await fetchBestdoriApiPath(path),
-  }),
-  ["bandori-master-api-bestdori-path:v1"],
-  { revalidate: 86400 },
-);
-
-const readBestdoriEventDetail = unstable_cache(
-  async (eventId: string): Promise<BandoriMasterApiReadResult> => ({
-    dataset: "event_detail",
-    source: "bestdori",
-    payload: await fetchBestdoriEventDetail(eventId),
-  }),
-  ["bandori-master-api-bestdori-event-detail:v1"],
-  { revalidate: 86400 },
-);
-
 async function readArtifactDataset(
-  dataset: BestdoriMasterDatasetKey,
+  dataset: BandoriMasterDatasetKey,
   server: BandoriMasterArtifactServer,
 ): Promise<BandoriMasterApiReadResult | null> {
   const artifact = await fetchBandoriMasterArtifactDataset(dataset, server);
@@ -443,83 +363,39 @@ async function readArtifactNamedDataset(
 
 export async function readBandoriMasterDataset(
   dataset: LegacyBandoriMasterDatasetKey,
-  server?: BandoriMasterArtifactServer,
 ): Promise<BandoriMasterApiReadResult | null> {
-  if (shouldUseArtifacts()) {
-    const results = await Promise.all(
-      getBandoriMasterArtifactServers(server).map((artifactServer) => readArtifactDataset(dataset, artifactServer)),
-    );
-    const result = mergeArtifactResults(dataset, results);
-    if (dataset === "areaItems") {
-      return normalizeArtifactAreaItemsResult(result);
-    }
-    return result;
+  const results = await Promise.all(
+    BANDORI_MASTER_ARTIFACT_SERVERS.map((server) => readArtifactDataset(dataset, server)),
+  );
+  requireCompleteArtifactResults(dataset, results);
+  const result = mergeArtifactResults(dataset, results);
+  if (dataset === "areaItems") {
+    return normalizeArtifactAreaItemsResult(result);
   }
-
-  return readBestdoriDataset(dataset);
+  return result;
 }
 
 export async function readBandoriMasterPath(
   dataset: string,
-  bestdoriPath: string,
   artifactDataset: string,
-  options?: {
-    server?: BandoriMasterArtifactServer;
-    emptyWhenArtifactMissing?: boolean;
-    emptyReason?: string;
-  },
 ): Promise<BandoriMasterApiReadResult | null> {
-  if (shouldUseArtifacts()) {
-    const servers = getBandoriMasterArtifactServers(options?.server);
-    const results = await Promise.all(
-      servers.map((artifactServer) => readArtifactNamedDataset(dataset, artifactDataset, artifactServer)),
-    );
-    const result = mergeArtifactResults(dataset, results, artifactDataset);
-    if (result || !options?.emptyWhenArtifactMissing) {
-      if (artifactDataset === "areaItems") {
-        return normalizeArtifactAreaItemsResult(result);
-      }
-      return result;
-    }
-
-    return {
-      dataset,
-      source: "artifacts",
-      servers,
-      artifactDataset,
-      payload: {},
-      coverage: {
-        status: "empty",
-        reason: options.emptyReason,
-      },
-    };
+  const results = await Promise.all(
+    BANDORI_MASTER_ARTIFACT_SERVERS.map((server) => readArtifactNamedDataset(dataset, artifactDataset, server)),
+  );
+  requireCompleteArtifactResults(dataset, results);
+  const result = mergeArtifactResults(dataset, results, artifactDataset);
+  if (artifactDataset === "areaItems") {
+    return normalizeArtifactAreaItemsResult(result);
   }
-
-  return readBestdoriPath(dataset, bestdoriPath);
-}
-
-export async function readBandoriMasterEventDetail(
-  eventId: string,
-): Promise<BandoriMasterApiReadResult | null> {
-  if (shouldUseArtifacts()) {
-    return readBestdoriEventDetail(eventId);
-  }
-
-  return readBestdoriEventDetail(eventId);
+  return result;
 }
 
 export async function readBandoriMasterRecord(
   dataset: LegacyBandoriMasterDatasetKey,
   recordId: string,
   detailDataset: string,
-  detailBestdoriPath: string,
-  server?: BandoriMasterArtifactServer,
 ): Promise<BandoriMasterApiReadResult | null> {
-  if (!shouldUseArtifacts()) {
-    return readBestdoriPath(detailDataset, detailBestdoriPath);
-  }
-
-  const aggregate = await readBandoriMasterDataset(dataset, server);
+  const aggregate = await readBandoriMasterDataset(dataset);
   const record = readPayloadRecord(aggregate?.payload, recordId);
   if (!aggregate || !record) {
     return null;
@@ -533,28 +409,5 @@ export async function readBandoriMasterRecord(
       status: "partial",
       reason: "Current artifacts do not provide independent detail files yet; this response is derived from the all dataset.",
     },
-  };
-}
-
-export async function readBandoriMasterProjectedDataset(
-  dataset: LegacyBandoriMasterDatasetKey,
-  projectedDataset: string,
-  bestdoriPath: string,
-  keys: readonly string[],
-  server?: BandoriMasterArtifactServer,
-): Promise<BandoriMasterApiReadResult | null> {
-  if (!shouldUseArtifacts()) {
-    return readBestdoriPath(projectedDataset, bestdoriPath);
-  }
-
-  const aggregate = await readBandoriMasterDataset(dataset, server);
-  if (!aggregate) {
-    return null;
-  }
-
-  return {
-    ...aggregate,
-    dataset: projectedDataset,
-    payload: projectRecordPayload(aggregate.payload, keys),
   };
 }

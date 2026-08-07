@@ -14,7 +14,6 @@ import {
   parseBandoriMusicAssetIndex,
   parseBandoriStampsAssetIndex,
 } from "../src/lib/bandori-public-asset-index.ts";
-import { buildBandoriMusicAssetUrl } from "../src/lib/bandori-music-assets.ts";
 import {
   getBandoriStampCatalogItemsForRegion,
   parseBandoriStampMasterApiResponse,
@@ -436,16 +435,6 @@ test("Music parser rejects legacy arrays and incomplete chart metadata", () => {
   assert.throws(
     () => parseBandoriMusicAssetIndex(missingNotes),
     /coverage does not match/u,
-  );
-});
-
-test("Music content-addressed asset URLs need no query-string cache version", () => {
-  assert.equal(
-    buildBandoriMusicAssetUrl(
-      { key: `bandori/music/charts/${hashes.musicChart}.json` },
-      "https://assets.example.test",
-    ),
-    `https://assets.example.test/bandori/music/charts/${hashes.musicChart}.json`,
   );
 });
 

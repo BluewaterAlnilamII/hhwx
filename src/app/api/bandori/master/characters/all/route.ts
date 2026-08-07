@@ -19,7 +19,7 @@ export async function GET(request: Request) {
   }
 
   try {
-    const result = await readBandoriMasterPath("characters_all", "characters/all.5.json", "characters");
+    const result = await readBandoriMasterPath("characters_all", "characters");
     if (!result) {
       return jsonError(503, "BANDORI_MASTER_CHARACTERS_NOT_CONFIGURED", "Bandori master characters are not configured", {
         headers: withHttpCachePolicy(NO_STORE_HTTP_CACHE_POLICY),

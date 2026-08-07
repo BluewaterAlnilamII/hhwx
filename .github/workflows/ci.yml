@@ -38,6 +38,9 @@ jobs:
       - name: Test Bandori TOP10 tracker
         run: npm run test:bandori-tracker-topdata
 
+      - name: Test Bandori public asset and R2 source contracts
+        run: npm run test:bandori-public-assets
+
       - name: Build
         run: npm run build
         env:

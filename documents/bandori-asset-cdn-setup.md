@@ -6,7 +6,7 @@ The shared Events/Cards/Music/Stamps API and index conventions are documented in
 
 This document describes the public URL contract that the HHWX web application expects for Bandori static assets. It is intentionally not a tracker setup guide.
 
-HHWX production uses private ingestion and mirroring services to populate its CDN. Those services are not included in this repository. Self-hosted operators must provide their own asset host or compatible private ingestion pipeline if they want the same asset-heavy workflows to work.
+HHWX production uses private ingestion and mirroring services to populate its CDN and R2 buckets. Those services are not included in this repository. Self-hosted operators must provide their own asset host, compatible private ingestion pipeline, and populated R2 buckets if they want the same asset-heavy workflows to work.
 
 This document is not an asset license, a public redistribution grant, or permission to reuse HHWX production infrastructure. See [../NOTICE.md](../NOTICE.md) before caching, mirroring, or displaying third-party game data and media.
 
@@ -16,11 +16,8 @@ The web app reads Bandori asset URLs from these environment variables:
 
 ```dotenv
 NEXT_PUBLIC_BANDORI_ASSET_CDN_BASE_URL=https://your-bandori-asset-cdn.example.com
-BANDORI_CHART_SOURCE=bestdori
-# BANDORI_CHART_SOURCE=assets
-# BANDORI_MUSIC_CDN_BASE_URL=https://your-bandori-asset-cdn.example.com
-# BANDORI_PUBLIC_R2_BUCKET=your_public_asset_bucket
-# BANDORI_PRIVATE_R2_BUCKET=hhwx-private
+BANDORI_PUBLIC_R2_BUCKET=your_public_asset_bucket
+BANDORI_PRIVATE_R2_BUCKET=hhwx-private
 # BANDORI_MUSIC_API_LOCAL_STORE_ROOT=/path/to/music/store
 # BANDORI_STAMPS_API_LOCAL_STORE_ROOT=/path/to/stamps/store
 ```
@@ -35,9 +32,9 @@ HHWX application responses use `Cache-Control` for browser and downstream-cache 
 
 A Cloudflare Cache Rule may mark the intended public `GET`/`HEAD` paths as eligible while continuing to honor origin headers. Objects served directly by R2 or the asset CDN, including the Cards, Events, Music, and Stamps `index.json` files, do not pass through the Next.js policies. Their object metadata uses the snapshot browser policy. To extend only Cloudflare's copy to the snapshot edge policy, use a Cache Response Rule with `cloudflare_only` `max-age=1800` and `stale-while-revalidate=86400`; a Cache Response Rule takes precedence over origin `Cloudflare-CDN-Cache-Control`.
 
-`BANDORI_CHART_SOURCE=bestdori` keeps the default web-only behavior. Set `BANDORI_CHART_SOURCE=assets` only after a private asset builder has populated the music chart objects documented below. `BANDORI_MUSIC_CDN_BASE_URL` can point browser-facing music assets at a separate host; when omitted, those URLs use `NEXT_PUBLIC_BANDORI_ASSET_CDN_BASE_URL`. Assets mode fails closed when a chart is missing or unreadable and never falls back to Bestdori.
+The chart API always reads `bandori/music/index.json` and its content-addressed chart objects from `BANDORI_PUBLIC_R2_BUCKET` through signed R2 requests. The source and object root are fixed application contracts: a missing or unreadable chart fails closed and never falls back to Bestdori. Browser-facing Music assets use `NEXT_PUBLIC_BANDORI_ASSET_CDN_BASE_URL`; there is no separate Music CDN setting.
 
-The Events, Cards, Music, and Stamps master APIs read their content-addressed snapshots directly from the private bucket configured by `BANDORI_PRIVATE_R2_BUCKET`. All readers fail closed when a pointer or pack is missing, unauthorized, malformed, corrupt, or oversized; none falls back to Bestdori, public asset indexes, or public master artifacts. `BANDORI_EVENT_API_LOCAL_STORE_ROOT`, `BANDORI_CARDS_API_LOCAL_STORE_ROOT`, `BANDORI_MUSIC_API_LOCAL_STORE_ROOT`, and `BANDORI_STAMPS_API_LOCAL_STORE_ROOT` can point to tracker-generated content stores during local development, but production rejects them. Other master datasets keep their existing sources.
+The Events, Cards, Music, and Stamps master APIs read their content-addressed snapshots directly from the private bucket configured by `BANDORI_PRIVATE_R2_BUCKET`. The remaining master datasets always merge the fixed JP, EN, TW, and CN artifacts under `bandori/master` from `BANDORI_PUBLIC_R2_BUCKET`. All readers fail closed when a pointer, manifest, dataset, or pack is missing, unauthorized, malformed, corrupt, or oversized; none falls back to Bestdori, public asset indexes, public CDN reads, or Supabase pointers. `BANDORI_EVENT_API_LOCAL_STORE_ROOT`, `BANDORI_CARDS_API_LOCAL_STORE_ROOT`, `BANDORI_MUSIC_API_LOCAL_STORE_ROOT`, and `BANDORI_STAMPS_API_LOCAL_STORE_ROOT` can point to tracker-generated content stores during local development, but production rejects them.
 
 The browser reads the complete canonical Cards map once from `GET /api/bandori/master/cards` and reuses the parsed map for the lifetime of the SPA. It materializes server-specific scalar extensions locally for the profile's numeric gameplay server. Public Cards list/detail requests accept an optional exact `server=0|1|2|3` query in fixed JP/EN/TW/CN order; string server codes are rejected. The former sparse `GET /api/bandori/cards?ids=...` endpoint has been removed. Serverless display surfaces resolve four-slot text as preferred server, then JP, EN, TW, CN, with duplicate slots removed. Card-profile and team-builder profile surfaces put the profile's gameplay server before that order, so the profile identity controls names and skill descriptions without changing the user's global preference. Team Builder additionally admits a JP card when that card is absent from the profile server: this fallback is based only on snapshot slot presence, never on `releasedAt`, and does not borrow an EN, TW, or CN-only card for another server. Public server-filtered API responses and other profile surfaces remain strict. Same-ID Cards `10001`–`10010` remain numeric for calculation and persistence; serverless avatar selection expands their EN and CN entities with UI-only scoped references and stores the chosen entity in the nullable `profiles.avatar_card_server` field.
 
@@ -221,7 +218,7 @@ The open-source web repository can render pages that use public metadata and con
 - Bilibili session credentials;
 - the HHWX user-fetcher service used for game-account binding and manual game data sync.
 
-If a deployment does not provide compatible private services or a populated asset host, asset-dependent pages may show missing images or unavailable sync workflows. That is expected for a web-only self-hosted deployment.
+Self-hosted deployments must configure compatible R2 endpoint credentials and populated public/private buckets for the master and chart APIs. Missing R2 data is reported as an API failure rather than being fetched from Bestdori. A missing public asset host may still leave browser-rendered images unavailable, and missing private services leave their synchronization workflows unavailable.
 
 ## Verification
 

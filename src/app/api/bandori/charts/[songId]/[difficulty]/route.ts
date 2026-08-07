@@ -6,10 +6,9 @@ import {
 } from "@/lib/api-cache";
 import { jsonError, jsonRouteError, jsonSuccess } from "@/lib/api-response";
 import {
-  fetchBestdoriChart,
-  isBestdoriChartDifficulty,
-  type BestdoriChartDifficulty,
-} from "@/lib/bestdori-master-data";
+  isBandoriChartDifficulty,
+  type BandoriChartDifficulty,
+} from "@/lib/bandori-master-contract";
 import {
   BANDORI_MUSIC_METADATA_REVALIDATE_SECONDS,
   readBandoriMusicIndex,
@@ -22,16 +21,6 @@ import { fetchBandoriPublicAssetJson } from "@/lib/bandori-public-asset-index-se
 
 export const dynamic = "force-dynamic";
 
-const readBestdoriChart = unstable_cache(
-  async (songId: number, difficulty: BestdoriChartDifficulty) => ({
-    songId,
-    difficulty,
-    chart: await fetchBestdoriChart(songId, difficulty),
-  }),
-  ["bandori-chart-route:v1"],
-  { revalidate: 86400 },
-);
-
 class BandoriChartAssetError extends Error {
   constructor(
     message: string,
@@ -39,10 +28,6 @@ class BandoriChartAssetError extends Error {
   ) {
     super(message);
   }
-}
-
-function getBandoriChartSource(): "assets" | "bestdori" {
-  return process.env.BANDORI_CHART_SOURCE === "assets" ? "assets" : "bestdori";
 }
 
 async function fetchBandoriAssetChart(
@@ -61,7 +46,7 @@ async function fetchBandoriAssetChart(
 const readAssetChart = unstable_cache(
   async (
     songId: number,
-    difficulty: BestdoriChartDifficulty,
+    difficulty: BandoriChartDifficulty,
     chartKey: string,
     chartSha256: string,
   ) => ({
@@ -73,11 +58,7 @@ const readAssetChart = unstable_cache(
   { revalidate: BANDORI_MUSIC_METADATA_REVALIDATE_SECONDS },
 );
 
-async function readConfiguredChart(songId: number, difficulty: BestdoriChartDifficulty) {
-  if (getBandoriChartSource() !== "assets") {
-    return readBestdoriChart(songId, difficulty);
-  }
-
+async function readBandoriChart(songId: number, difficulty: BandoriChartDifficulty) {
   const chart = lookupBandoriMusicChart(
     await readBandoriMusicIndex(),
     songId,
@@ -114,14 +95,14 @@ export async function GET(_request: Request, context: RouteContext) {
     });
   }
 
-  if (!isBestdoriChartDifficulty(difficulty)) {
+  if (!isBandoriChartDifficulty(difficulty)) {
     return jsonError(400, "INVALID_CHART_DIFFICULTY", "Invalid chart difficulty", {
       headers: withHttpCachePolicy(NO_STORE_HTTP_CACHE_POLICY),
     });
   }
 
   try {
-    return jsonSuccess(await readConfiguredChart(songId, difficulty), {
+    return jsonSuccess(await readBandoriChart(songId, difficulty), {
       headers: withHttpCachePolicy(REFERENCE_HTTP_CACHE_POLICY),
     });
   } catch (error) {
