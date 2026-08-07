@@ -49,26 +49,23 @@ The browser reads the complete Music map once from `GET /api/bandori/master/musi
 
 ## Tracker History API
 
-`GET /api/bandori/tracker/data` can read CN cutoff history directly from the object-storage keys under `bandori/trackerdata`. The server uses signed R2/S3 requests and never routes these aggregate reads through the public CDN. Configure the source and shared public-artifact bucket as follows; endpoint and credentials continue to come from the server-only `BANDORI_R2_*` variables:
+`GET /api/bandori/tracker/data` reads JP, EN, TW, and CN cutoff history directly from the object-storage keys under `bandori/trackerdata`. The public numeric `server=0|1|2|3` parameter maps to the `jp|en|tw|cn` object path segment. The server uses signed R2/S3 requests and never routes these aggregate reads through the public CDN. Configure the shared public-artifact bucket as follows; endpoint and credentials continue to come from the server-only `BANDORI_R2_*` variables:
 
 ```dotenv
-BANDORI_TRACKER_HISTORY_SOURCE=r2
 BANDORI_PUBLIC_R2_BUCKET=cdn
 ```
 
-The accepted source values are:
+The production API is R2-only. It may use a previously validated in-memory stale snapshot within the documented bounds; otherwise an operational R2 failure returns `503 TRACKER_HISTORY_UNAVAILABLE`. The production route does not import or query the frozen Supabase history table, and there is no runtime source switch or database fallback.
 
-- `supabase`: pre-cutover database-only behavior and frozen-history audits only.
-- `r2-with-supabase-fallback`: temporary dual-write rollout mode; use R2 first and repeat the complete query against Supabase only when R2 fails validation.
-- `r2`: use R2 and a verified in-memory stale snapshot when available; otherwise return `503 TRACKER_HISTORY_UNAVAILABLE` without a request-time database fallback.
+A missing manifest, a missing requested pack kind, or a missing tier in a valid pack is a normal empty dataset and returns the existing `200 + { result: true, cutoffs: [] }` response. A manifest that references a missing or invalid pack is an operational failure, not an empty dataset. The public request parameters, 5,000-row cap, result shape, and `no-store` API policy remain unchanged. CN active-event live delivery remains a separate latest-snapshot and Private Broadcast capability; JP, EN, and TW never create tracker latest queries or tracker Broadcast subscriptions.
 
-A missing manifest, a missing requested pack kind, or a missing tier in a valid pack is a normal empty dataset and returns the existing `200 + { result: true, cutoffs: [] }` response. A manifest that references a missing or invalid pack is an operational failure, not an empty dataset. The public request parameters, 5,000-row cap, result shape, and `no-store` API policy remain unchanged. Before sparse Supabase writes stop, the frontend live source must switch from legacy Postgres Changes to Private Broadcast.
+Monthly ranking IDs are server-local continuous month numbers and must never be copied between servers. The shared Web/R2 calendar uses JP `2024-10/id=1` at UTC+9 15:00, EN `2025-10/id=1` at fixed UTC-8 00:00, TW `2025-06/id=1` at UTC+8 15:00, and CN `2025-02/id=1` at UTC+8 13:00. Monthly object paths use the resulting natural `YYYY-MM`; switching the selected server remaps the current period to that server's ID.
 
 The object root is the fixed data contract `bandori/trackerdata`; it is intentionally not an environment variable. The reader's limits are corruption and resource-exhaustion guards, not reserved memory or expected object sizes:
 
 | Guard | Limit | Rationale |
 | --- | ---: | --- |
-| Shared manifest-plus-pack object-read budget | 3 seconds | Bounds the two signed S3 reads before fallback or a stable `503`; hash, gunzip, JSON parsing, and contract validation are separately bounded by the byte and record ceilings below. |
+| Shared manifest-plus-pack object-read budget | 3 seconds | Bounds the two signed S3 reads before a stable `503`; hash, gunzip, JSON parsing, and contract validation are separately bounded by the byte and record ceilings below. |
 | Manifest | 64 KiB | Allows the current descriptors and up to eight retained pack keys per kind with substantial headroom. |
 | Compressed pack | 2 MiB | About 33 times the measured 61.7 KiB event-315 pack. |
 | Decompressed JSON | 16 MiB | About 64 times the measured 255 KiB event-315 payload and limits malformed gzip expansion. |
@@ -76,9 +73,9 @@ The object root is the fixed data contract `bandori/trackerdata`; it is intentio
 | Parsed cache | 16 entries / estimated 32 MiB | Covers the main chart plus comparison targets while preventing unbounded history browsing from retaining every pack. |
 | Failure cooldown | 15 seconds per target | Prevents an R2 fault from producing one failed object read per incoming API request. |
 
-The parsed-cache weight is conservatively estimated as decompressed bytes plus 64 bytes per point and small Map/group overhead. Compressed bytes, decompressed buffers, and JSON text are not retained after parsing. If an object exceeds a guard, the API does not truncate it: fallback mode runs the full Supabase query, while pure R2 mode returns `503`. Raising a guard should follow a new production inventory rather than happen automatically.
+The parsed-cache weight is conservatively estimated as decompressed bytes plus 64 bytes per point and small Map/group overhead. Compressed bytes, decompressed buffers, and JSON text are not retained after parsing. If an object exceeds a guard, the API does not truncate it and returns `503`. Raising a guard should follow a new production inventory rather than happen automatically.
 
-For rollout evidence, a Web process logs at most one structured `Bandori tracker history R2 read succeeded` event per target kind and manifest generation. It includes the generation, elapsed read time, and returned record count without logging credentials or object bodies. Degraded reads remain rate-limited separately.
+For rollout evidence, a Web process logs at most one structured `Bandori tracker history R2 read succeeded` event per server, target kind, and manifest generation. It includes the server, generation, elapsed read time, and returned record count without logging credentials or object bodies. Degraded reads are also rate-limited per server and target.
 
 Before switching production to R2-first mode, compare representative targets without writing either source:
 
@@ -89,7 +86,7 @@ npm run compare:bandori-tracker-history -- --event 316 --type song --tier 1000
 npm run compare:bandori-tracker-history -- --event 18 --type monthly --tier 1000
 ```
 
-The comparison fixes one manifest generation, validates the gzip/hash/pack contract, applies the existing response limit and grouping semantics, then compares every returned point with Supabase. Also compare at least one supported tier known to be empty in both sources. An empty R2 result is checked against Supabase during this validation command; Supabase is not queried for a normal empty R2 result in the production request path. Complete this exact comparison before stopping Supabase writes. Afterward Supabase is frozen, so neither `supabase` nor fallback is a valid production rollback; repair R2 or roll back the coordinated writer cutover without deleting artifacts or database rows.
+The explicit offline comparison fixes one manifest generation, validates the gzip/hash/pack contract, applies the existing response limit and grouping semantics, then compares every returned point with Supabase. Also compare at least one supported tier known to be empty in both sources. Supabase is never queried by the production request path, including normal empty results and R2 failures. The old rows remain frozen audit evidence, not a rollback source; repair R2 or roll back the coordinated writer/application cutover without deleting artifacts or database rows.
 
 Do not point self-hosted deployments at `cdn.hhwx.org` unless you intentionally depend on HHWX production asset hosting. That domain is a deployment detail and does not grant rights to third-party game assets.
 

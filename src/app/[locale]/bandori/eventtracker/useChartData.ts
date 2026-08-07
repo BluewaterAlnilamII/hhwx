@@ -6,6 +6,14 @@ import {
   type BandoriEventStatus,
 } from "@/lib/bandori-event-status";
 import { calculateBandoriTrackerSpeeds } from "@/lib/bandori-tracker-projection";
+import {
+  BANDORI_MONTHLY_RANKING_EPOCHS,
+  bandoriMonthlyRankingPeriodToId,
+  getBandoriMonthlyRankingMidnights,
+  getBandoriMonthlyRankingWindow,
+  getCurrentBandoriMonthlyRankingWindow,
+} from "@/lib/bandori-monthly-ranking-calendar";
+import { getBandoriServerCode, type BandoriServer } from "@/lib/bandori-server";
 import type { TrackerData, TrackingMode } from "./types";
 import { useBoundaryClock } from "./useBoundaryClock";
 
@@ -21,7 +29,7 @@ export type ChartDomain = {
 };
 
 type MonthlyRankingWindow = {
-  effectiveMonthStart: Date;
+  period: string;
   domainStart: number;
   cutoffEnd: number;
   monthId: number;
@@ -32,84 +40,70 @@ export type MonthlyRankingOption = MonthlyRankingWindow & {
   shortLabel: string;
 };
 
-const MONTHLY_RANKING_START_YEAR = 2026;
-const MONTHLY_RANKING_START_MONTH_INDEX = 2;
-
-function getMonthlyMonthId(year: number, monthIndex: number): number {
-  return (year - 2025) * 12 + monthIndex;
-}
-
-function getMonthlyMonthStartById(monthId: number): Date | null {
-  if (!Number.isInteger(monthId) || monthId <= 0) return null;
-
-  const year = 2025 + Math.floor(monthId / 12);
-  const monthIndex = monthId % 12;
-  return new Date(year, monthIndex, 1, 13, 0, 0);
-}
-
-function buildMonthlyRankingWindow(monthStart: Date): MonthlyRankingWindow {
+function buildMonthlyRankingWindow(
+  server: BandoriServer,
+  monthId: number,
+): MonthlyRankingWindow {
+  const window = getBandoriMonthlyRankingWindow(getBandoriServerCode(server), monthId);
   return {
-    effectiveMonthStart: monthStart,
-    domainStart: monthStart.getTime(),
-    cutoffEnd: new Date(
-      monthStart.getFullYear(),
-      monthStart.getMonth() + 1,
-      1,
-      0,
-      0,
-      0,
-    ).getTime(),
-    monthId: getMonthlyMonthId(monthStart.getFullYear(), monthStart.getMonth()),
+    period: window.period,
+    domainStart: window.opensAt,
+    cutoffEnd: window.endsAt,
+    monthId: window.monthId,
   };
 }
 
 function toMonthlyRankingOption(window: MonthlyRankingWindow): MonthlyRankingOption {
-  const year = window.effectiveMonthStart.getFullYear();
-  const month = window.effectiveMonthStart.getMonth() + 1;
+  const [year, month] = window.period.split("-").map(Number);
 
   return {
     ...window,
     label: `${year}年${month}月`,
-    shortLabel: `${year}-${String(month).padStart(2, "0")}`,
+    shortLabel: window.period,
   };
 }
 
-export function getCurrentMonthlyRankingWindow(referenceTime: Date = new Date()): MonthlyRankingWindow {
-  const monthAnchor = new Date(referenceTime.getFullYear(), referenceTime.getMonth(), 1, 13, 0, 0);
-  const effectiveMonthStart = referenceTime.getTime() < monthAnchor.getTime()
-    ? new Date(referenceTime.getFullYear(), referenceTime.getMonth() - 1, 1, 13, 0, 0)
-    : monthAnchor;
-
-  return buildMonthlyRankingWindow(effectiveMonthStart);
+export function getCurrentMonthlyRankingWindow(
+  server: BandoriServer,
+  referenceTime: Date = new Date(),
+): MonthlyRankingWindow {
+  const window = getCurrentBandoriMonthlyRankingWindow(
+    getBandoriServerCode(server),
+    referenceTime,
+  );
+  return buildMonthlyRankingWindow(server, window.monthId);
 }
 
-export function getMonthlyRankingWindow(monthId: number | null, referenceTime: Date = new Date()): MonthlyRankingWindow {
+export function getMonthlyRankingWindow(
+  server: BandoriServer,
+  monthId: number | null,
+  referenceTime: Date = new Date(),
+): MonthlyRankingWindow {
   if (monthId !== null) {
-    const monthStart = getMonthlyMonthStartById(monthId);
-    if (monthStart !== null) {
-      return buildMonthlyRankingWindow(monthStart);
+    try {
+      return buildMonthlyRankingWindow(server, monthId);
+    } catch {
+      // Invalid persisted IDs fall back to the selected server's current period.
     }
   }
 
-  return getCurrentMonthlyRankingWindow(referenceTime);
+  return getCurrentMonthlyRankingWindow(server, referenceTime);
 }
 
-export function getMonthlyRankingOptions(referenceTime: Date = new Date()): MonthlyRankingOption[] {
-  const currentWindow = getCurrentMonthlyRankingWindow(referenceTime);
+export function getMonthlyRankingOptions(
+  server: BandoriServer,
+  referenceTime: Date = new Date(),
+): MonthlyRankingOption[] {
+  const serverCode = getBandoriServerCode(server);
+  const currentWindow = getCurrentMonthlyRankingWindow(server, referenceTime);
   const options: MonthlyRankingOption[] = [];
-
-  const cursor = new Date(
-    MONTHLY_RANKING_START_YEAR,
-    MONTHLY_RANKING_START_MONTH_INDEX,
-    1,
-    13,
-    0,
-    0,
+  const firstMonthId = bandoriMonthlyRankingPeriodToId(
+    serverCode,
+    BANDORI_MONTHLY_RANKING_EPOCHS[serverCode].anchorPeriod,
   );
 
-  while (cursor.getTime() <= currentWindow.effectiveMonthStart.getTime()) {
-    options.push(toMonthlyRankingOption(buildMonthlyRankingWindow(new Date(cursor))));
-    cursor.setMonth(cursor.getMonth() + 1);
+  for (let monthId = firstMonthId; monthId <= currentWindow.monthId; monthId += 1) {
+    options.push(toMonthlyRankingOption(buildMonthlyRankingWindow(server, monthId)));
   }
 
   return options.reverse();
@@ -129,6 +123,7 @@ export function useChartDomain(
   startDate: number | null,
   endDate: number | null,
   selectedMonthlyMonthId: number | null,
+  server: BandoriServer,
 ): ChartDomain {
   return useMemo(() => {
     let domainStart: number | "auto" = "auto";
@@ -136,7 +131,7 @@ export function useChartDomain(
     let cutoffEnd: number | null = null;
 
     if (trackingMode === "monthly") {
-      const monthlyWindow = getMonthlyRankingWindow(selectedMonthlyMonthId);
+      const monthlyWindow = getMonthlyRankingWindow(server, selectedMonthlyMonthId);
       domainStart = monthlyWindow.domainStart;
       cutoffEnd = monthlyWindow.cutoffEnd;
       domainEnd = cutoffEnd;
@@ -146,18 +141,17 @@ export function useChartDomain(
       domainEnd = cutoffEnd;
     }
 
-    const midnights: number[] = [];
+    let midnights: number[] = [];
     if (typeof domainStart === "number" && typeof domainEnd === "number") {
-      const m = new Date(domainStart);
-      m.setHours(24, 0, 0, 0);
-      while (m.getTime() <= domainEnd) {
-        midnights.push(m.getTime());
-        m.setDate(m.getDate() + 1);
-      }
+      midnights = getBandoriMonthlyRankingMidnights(
+        getBandoriServerCode(server),
+        domainStart,
+        domainEnd,
+      );
     }
 
     return { domainStart, domainEnd, cutoffEnd, midnights };
-  }, [trackingMode, startDate, endDate, selectedMonthlyMonthId]);
+  }, [trackingMode, startDate, endDate, selectedMonthlyMonthId, server]);
 }
 
 /**

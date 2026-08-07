@@ -30,11 +30,6 @@ const MAX_PARSED_PACK_CACHE_ENTRIES = 16;
 const MAX_PARSED_PACK_CACHE_BYTES = 32 * 1024 * 1024;
 const MAX_FAILURE_COOLDOWNS = 256;
 
-export type BandoriTrackerHistorySource =
-  | "supabase"
-  | "r2-with-supabase-fallback"
-  | "r2";
-
 export type BandoriCutoffHistoryReadResult = {
   cutoffs: BandoriCutoffHistoryCutoffs;
   generation: number | null;
@@ -145,18 +140,6 @@ function readRequiredEnv(names: readonly string[], label: string): string {
       "unconfigured",
       `Bandori cutoff history R2 read is missing ${label}: ${names.join(", ")}`,
     );
-  }
-  return value;
-}
-
-export function getBandoriTrackerHistorySource(): BandoriTrackerHistorySource {
-  const value = process.env.BANDORI_TRACKER_HISTORY_SOURCE?.trim() || "r2";
-  if (
-    value !== "supabase"
-    && value !== "r2-with-supabase-fallback"
-    && value !== "r2"
-  ) {
-    throw new Error(`Unsupported BANDORI_TRACKER_HISTORY_SOURCE: ${value}`);
   }
   return value;
 }

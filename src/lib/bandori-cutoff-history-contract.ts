@@ -1,3 +1,6 @@
+import { bandoriMonthlyRankingIdToPeriod } from "@/lib/bandori-monthly-ranking-calendar";
+import type { BandoriServerCode } from "@/lib/bandori-server";
+
 export const BANDORI_CUTOFF_HISTORY_PREFIX = "bandori/trackerdata";
 export const BANDORI_CUTOFF_HISTORY_SCHEMA_VERSION = 1;
 export const BANDORI_CUTOFF_HISTORY_MAX_ROWS = 5_000;
@@ -17,7 +20,7 @@ const TIMEZONE_SUFFIX_PATTERN = /(?:Z|[+-]\d{2}:\d{2})$/u;
 export type BandoriCutoffHistoryType = "event" | "song" | "monthly";
 
 export type BandoriCutoffHistoryQuery = {
-  server: "cn";
+  server: BandoriServerCode;
   targetId: number;
   tier: number;
   type: BandoriCutoffHistoryType;
@@ -112,16 +115,17 @@ function requireCanonicalKey(value: string, pattern: RegExp, label: string): num
   return parsed;
 }
 
-export function bandoriCutoffHistoryMonthIdToPeriod(monthId: number): string {
+export function bandoriCutoffHistoryMonthIdToPeriod(
+  monthId: number,
+  server: BandoriServerCode = "cn",
+): string {
   requireSafeInteger(monthId, "Bandori cutoff history month ID", 1);
-  const year = 2025 + Math.floor(monthId / 12);
-  const month = (monthId % 12) + 1;
-  return `${year}-${String(month).padStart(2, "0")}`;
+  return bandoriMonthlyRankingIdToPeriod(server, monthId);
 }
 
 export function buildBandoriCutoffHistoryTargetPrefix(query: BandoriCutoffHistoryQuery): string {
   if (query.type === "monthly") {
-    return `${BANDORI_CUTOFF_HISTORY_PREFIX}/monthly/${bandoriCutoffHistoryMonthIdToPeriod(query.targetId)}/${query.server}`;
+    return `${BANDORI_CUTOFF_HISTORY_PREFIX}/monthly/${bandoriCutoffHistoryMonthIdToPeriod(query.targetId, query.server)}/${query.server}`;
   }
   return `${BANDORI_CUTOFF_HISTORY_PREFIX}/events/${query.targetId}/${query.server}`;
 }
@@ -201,7 +205,7 @@ export function parseBandoriCutoffHistoryManifest(
     throw new Error("Bandori cutoff history manifest final-point summary must be boolean");
   }
   if (query.type === "monthly") {
-    const expectedPeriod = bandoriCutoffHistoryMonthIdToPeriod(query.targetId);
+    const expectedPeriod = bandoriCutoffHistoryMonthIdToPeriod(query.targetId, query.server);
     if (manifest.period !== expectedPeriod || manifest.sourceMonthId !== query.targetId) {
       throw new Error("Bandori cutoff history monthly manifest identity mismatch");
     }
@@ -293,7 +297,7 @@ function validatePackIdentity(
     throw new Error("Bandori cutoff history pack identity mismatch");
   }
   if (query.type === "monthly") {
-    const expectedPeriod = bandoriCutoffHistoryMonthIdToPeriod(query.targetId);
+    const expectedPeriod = bandoriCutoffHistoryMonthIdToPeriod(query.targetId, query.server);
     if (payload.period !== expectedPeriod || payload.sourceMonthId !== query.targetId) {
       throw new Error("Bandori cutoff history monthly pack identity mismatch");
     }

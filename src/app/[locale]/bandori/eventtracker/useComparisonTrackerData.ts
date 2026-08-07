@@ -5,6 +5,11 @@ import type {
   BandoriTrackerLiveSnapshot,
   BandoriTrackerLiveTarget,
 } from "@/lib/bandori-tracker-live-contract";
+import { getBandoriServerDayStart } from "@/lib/bandori-monthly-ranking-calendar";
+import {
+  getBandoriServerCode,
+  type BandoriServer,
+} from "@/lib/bandori-server";
 import { COMPARISON_LINE_COLORS } from "./constants";
 import { useBandoriTrackerLiveListener } from "./useBandoriTrackerLive";
 import type { MonthlyRankingOption } from "./useChartData";
@@ -45,8 +50,8 @@ function isResolvedConfig(config: ComparisonConfig): config is ResolvedCompariso
   return config.targetId !== null && config.tier !== null;
 }
 
-function cacheKey(config: ComparisonConfig): string {
-  return `${config.targetType}:${config.targetId}:${config.tier}`;
+function cacheKey(server: BandoriServer, config: ComparisonConfig): string {
+  return `${getBandoriServerCode(server)}:${config.targetType}:${config.targetId}:${config.tier}`;
 }
 
 function readComparisonDataCache(key: string): TrackerData[] | undefined {
@@ -99,8 +104,11 @@ function normalizePoints(points: TrackerData[]): TrackerData[] {
   return Array.from(byTime.values()).sort((left, right) => left.time - right.time);
 }
 
-async function fetchComparison(config: ComparisonConfig): Promise<TrackerData[]> {
-  const response = await fetch(`/api/bandori/tracker/data?server=3&event=${config.targetId}&type=${config.targetType}&tier=${config.tier}`);
+async function fetchComparison(
+  server: BandoriServer,
+  config: ComparisonConfig,
+): Promise<TrackerData[]> {
+  const response = await fetch(`/api/bandori/tracker/data?server=${server}&event=${config.targetId}&type=${config.targetType}&tier=${config.tier}`);
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
   const payload = await response.json() as TrackerResponse;
@@ -112,8 +120,11 @@ async function fetchComparison(config: ComparisonConfig): Promise<TrackerData[]>
   }));
 }
 
-function fetchComparisonWithCache(config: ComparisonConfig): Promise<TrackerData[]> {
-  const key = cacheKey(config);
+function fetchComparisonWithCache(
+  server: BandoriServer,
+  config: ComparisonConfig,
+): Promise<TrackerData[]> {
+  const key = cacheKey(server, config);
   const cached = readComparisonDataCache(key);
   if (cached !== undefined) {
     return Promise.resolve(cached);
@@ -124,7 +135,7 @@ function fetchComparisonWithCache(config: ComparisonConfig): Promise<TrackerData
     return inFlightRequest;
   }
 
-  const request = fetchComparison(config)
+  const request = fetchComparison(server, config)
     .then((points) => {
       writeComparisonDataCache(key, points);
       return points;
@@ -136,11 +147,6 @@ function fetchComparisonWithCache(config: ComparisonConfig): Promise<TrackerData
     });
   inFlightRequests.set(key, request);
   return request;
-}
-
-function getLocalDayStart(timestamp: number): number {
-  const date = new Date(timestamp);
-  return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
 }
 
 type ComparisonTargetMeta = {
@@ -186,6 +192,7 @@ function buildLine(
   alignment: ComparisonAlignment,
   currentStart: number | null,
   currentEnd: number | null,
+  server: BandoriServer,
 ): ComparisonLine {
   const colorIndex = config.colorIndex ?? index;
   const dataKey = `compare_${colorIndex}_ep` as const;
@@ -204,7 +211,8 @@ function buildLine(
     const currentEndAt = currentEnd - 1000;
     const offset = alignment === "end"
       ? currentEndAt - target.endAt
-      : getLocalDayStart(currentStart) - getLocalDayStart(target.startAt);
+      : getBandoriServerDayStart(getBandoriServerCode(server), currentStart)
+        - getBandoriServerDayStart(getBandoriServerCode(server), target.startAt);
     const visibleEnd = currentEnd + 1000;
 
     shiftedPoints = points.flatMap((point) => {
@@ -271,6 +279,7 @@ export function useComparisonTrackerData({
   currentStart,
   currentEnd,
   liveTarget,
+  server,
 }: {
   enabled: boolean;
   configs: ComparisonConfig[];
@@ -280,6 +289,7 @@ export function useComparisonTrackerData({
   currentStart: number | null;
   currentEnd: number | null;
   liveTarget: BandoriTrackerLiveTarget | null;
+  server: BandoriServer;
 }) {
   const [dataByKey, setDataByKey] = useState<Record<string, TrackerData[]>>({});
   const [liveDataByKey, setLiveDataByKey] = useState<Record<string, TrackerData[]>>({});
@@ -296,11 +306,14 @@ export function useComparisonTrackerData({
     [monthlyOptions],
   );
   const configSignature = useMemo(
-    () => configs.filter(isResolvedConfig).map((config) => cacheKey(config)).join("|"),
-    [configs],
+    () => configs.filter(isResolvedConfig).map((config) => cacheKey(server, config)).join("|"),
+    [configs, server],
   );
   const handleLiveSnapshot = useCallback((liveSnapshot: BandoriTrackerLiveSnapshot) => {
-    if (liveSnapshot.namespace !== "events") return;
+    if (
+      liveSnapshot.server !== getBandoriServerCode(server)
+      || liveSnapshot.namespace !== "events"
+    ) return;
     const targetType: ComparisonTargetType = "event";
     const matchingConfigs = configsRef.current.filter((config): config is ResolvedComparisonConfig => (
       isResolvedConfig(config)
@@ -314,7 +327,7 @@ export function useComparisonTrackerData({
       for (const config of matchingConfigs) {
         const livePoint = liveSnapshot.event.find((point) => point.tier === config.tier);
         if (!livePoint || livePoint.isFinal) continue;
-        const key = cacheKey(config);
+        const key = cacheKey(server, config);
         next[key] = normalizePoints([
           ...(next[key] ?? []),
           { time: livePoint.time, ep: livePoint.ep },
@@ -322,8 +335,12 @@ export function useComparisonTrackerData({
       }
       return next;
     });
-  }, []);
-  const hasLiveAccess = useBandoriTrackerLiveListener(liveTarget, enabled, handleLiveSnapshot);
+  }, [server]);
+  const hasLiveAccess = useBandoriTrackerLiveListener(
+    liveTarget,
+    enabled && server === 3,
+    handleLiveSnapshot,
+  );
 
   useEffect(() => {
     const resolvedConfigs = configs.filter(isResolvedConfig);
@@ -331,10 +348,10 @@ export function useComparisonTrackerData({
 
     let cancelled = false;
     const loadingTimeoutIds: number[] = [];
-    const uniqueConfigs = Array.from(new Map(resolvedConfigs.map((config) => [cacheKey(config), config])).values());
+    const uniqueConfigs = Array.from(new Map(resolvedConfigs.map((config) => [cacheKey(server, config), config])).values());
 
     for (const config of uniqueConfigs) {
-      const key = cacheKey(config);
+      const key = cacheKey(server, config);
       const cached = readComparisonDataCache(key);
 
       if (cached !== undefined) {
@@ -347,7 +364,7 @@ export function useComparisonTrackerData({
         }
       }, 0);
       loadingTimeoutIds.push(loadingTimeoutId);
-      fetchComparisonWithCache(config)
+      fetchComparisonWithCache(server, config)
         .then((points) => {
           if (cancelled) return;
           setDataByKey((previous) => ({ ...previous, [key]: points }));
@@ -371,13 +388,13 @@ export function useComparisonTrackerData({
         window.clearTimeout(timeoutId);
       }
     };
-  }, [configSignature, configs, enabled]);
+  }, [configSignature, configs, enabled, server]);
 
   const comparisonLines = useMemo(() => {
     if (!enabled) return [];
 
     return configs.filter(isResolvedConfig).map((config, index) => {
-      const key = cacheKey(config);
+      const key = cacheKey(server, config);
       const cached = peekComparisonDataCache(key);
       const target = buildComparisonTargetMeta(config, eventMap, monthlyOptionMap);
       const points = normalizePoints([
@@ -393,9 +410,10 @@ export function useComparisonTrackerData({
         alignment,
         currentStart,
         currentEnd,
+        server,
       );
     });
-  }, [alignment, configs, currentEnd, currentStart, dataByKey, enabled, eventMap, hasLiveAccess, liveDataByKey, loadingByKey, monthlyOptionMap]);
+  }, [alignment, configs, currentEnd, currentStart, dataByKey, enabled, eventMap, hasLiveAccess, liveDataByKey, loadingByKey, monthlyOptionMap, server]);
 
   return { comparisonLines };
 }

@@ -43,13 +43,13 @@ function manifest(targetQuery, packDescriptor = descriptor(targetQuery)) {
   return {
     schemaVersion: 1,
     kind: monthly ? "monthly" : "events",
-    server: "cn",
+    server: targetQuery.server,
     generation: 3,
     publishedAt: "2026-07-13T13:00:00+00:00",
     preserveIrregularPoints: true,
     hasFinalPoint: true,
     ...(monthly
-      ? { period: bandoriCutoffHistoryMonthIdToPeriod(targetQuery.targetId), sourceMonthId: targetQuery.targetId }
+      ? { period: bandoriCutoffHistoryMonthIdToPeriod(targetQuery.targetId, targetQuery.server), sourceMonthId: targetQuery.targetId }
       : { eventId: targetQuery.targetId }),
     packs: { [targetQuery.type]: packDescriptor },
   };
@@ -59,9 +59,9 @@ function eventPack(targetQuery, points = [[1000, 10], [2000, 20, 1]]) {
   return {
     schemaVersion: 1,
     kind: targetQuery.type,
-    server: "cn",
+    server: targetQuery.server,
     ...(targetQuery.type === "monthly"
-      ? { period: bandoriCutoffHistoryMonthIdToPeriod(targetQuery.targetId), sourceMonthId: targetQuery.targetId }
+      ? { period: bandoriCutoffHistoryMonthIdToPeriod(targetQuery.targetId, targetQuery.server), sourceMonthId: targetQuery.targetId }
       : { eventId: targetQuery.targetId }),
     tiers: { [targetQuery.tier]: points },
   };
@@ -77,6 +77,53 @@ test("target keys preserve event/server ordering and map month IDs", () => {
   assert.equal(
     buildBandoriCutoffHistoryManifestKey(monthlyQuery),
     "bandori/trackerdata/monthly/2026-07/cn/manifest.json",
+  );
+});
+
+test("target keys and monthly identities are isolated across all servers", () => {
+  const cases = [
+    ["jp", 23],
+    ["en", 11],
+    ["tw", 15],
+    ["cn", 19],
+  ];
+  for (const [server, monthId] of cases) {
+    const eventQuery = query({ server });
+    assert.equal(
+      buildBandoriCutoffHistoryManifestKey(eventQuery),
+      `bandori/trackerdata/events/316/${server}/manifest.json`,
+    );
+    const monthlyQuery = query({ server, targetId: monthId, type: "monthly" });
+    assert.equal(
+      bandoriCutoffHistoryMonthIdToPeriod(monthId, server),
+      "2026-08",
+    );
+    assert.equal(
+      buildBandoriCutoffHistoryManifestKey(monthlyQuery),
+      `bandori/trackerdata/monthly/2026-08/${server}/manifest.json`,
+    );
+    assert.doesNotThrow(() => parseBandoriCutoffHistoryManifest(
+      manifest(monthlyQuery),
+      monthlyQuery,
+    ));
+  }
+});
+
+test("manifest and pack identities reject cross-server artifacts", () => {
+  const targetQuery = query({ server: "jp" });
+  const wrongManifest = manifest(targetQuery);
+  wrongManifest.server = "cn";
+  assert.throws(
+    () => parseBandoriCutoffHistoryManifest(wrongManifest, targetQuery),
+    /identity mismatch/u,
+  );
+
+  const selection = parseBandoriCutoffHistoryManifest(manifest(targetQuery), targetQuery);
+  const wrongPack = eventPack(targetQuery);
+  wrongPack.server = "tw";
+  assert.throws(
+    () => parseBandoriCutoffHistoryPack(wrongPack, targetQuery, selection.descriptor),
+    /identity mismatch/u,
   );
 });
 

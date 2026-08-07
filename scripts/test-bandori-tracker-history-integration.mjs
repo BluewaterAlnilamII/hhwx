@@ -43,7 +43,7 @@ function buildManifest(identity, packs) {
   return {
     schemaVersion: 1,
     kind: "period" in identity ? "monthly" : "events",
-    server: "cn",
+    server: identity.server ?? "cn",
     generation: 1,
     publishedAt: "2026-07-13T13:00:00+00:00",
     preserveIrregularPoints: true,
@@ -173,7 +173,6 @@ async function withServer(storeRoot, assertion, environment = {}) {
   const logs = [];
   const childEnvironment = {
     ...process.env,
-    BANDORI_TRACKER_HISTORY_SOURCE: "r2",
     NEXT_PUBLIC_SUPABASE_URL: "http://127.0.0.1:9",
     NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "test-key",
     ...environment,
@@ -200,7 +199,7 @@ async function withServer(storeRoot, assertion, environment = {}) {
         throw new Error(`Next dev exited before becoming ready:\n${logs.join("")}`);
       }
       try {
-        const response = await fetch(`${baseUrl}/api/bandori/tracker/data?server=0&event=1&tier=1`);
+        const response = await fetch(`${baseUrl}/api/bandori/tracker/data?server=9&event=1&tier=1`);
         if (response.status === 400) {
           ready = true;
           break;
@@ -350,7 +349,7 @@ const storeRoot = await createStore();
 try {
   await withServer(storeRoot, async (baseUrl) => {
     for (const [requestQuery, expectedStatus, expectedCode] of [
-      ["server=0&event=316&tier=1000&type=event", 400, "INVALID_REQUEST"],
+      ["server=4&event=316&tier=1000&type=event", 400, "INVALID_REQUEST"],
       ["server=3&tier=1000&type=event", 400, "INVALID_REQUEST"],
       ["server=3&event=316&type=event", 400, "INVALID_REQUEST"],
       ["server=3&event=316&tier=1000&type=invalid", 400, "INVALID_REQUEST"],
@@ -398,6 +397,18 @@ try {
       assert.deepEqual(empty.body, { result: true, cutoffs: [] });
     }
 
+    for (const server of [0, 1, 2]) {
+      for (const type of ["event", "song", "monthly"]) {
+        const targetId = type === "monthly" ? 1 : 316;
+        const empty = await readJson(
+          baseUrl,
+          `server=${server}&event=${targetId}&tier=1000&type=${type}`,
+        );
+        assert.equal(empty.response.status, 200);
+        assert.deepEqual(empty.body, { result: true, cutoffs: [] });
+      }
+    }
+
     for (const eventId of [317, 318, 319]) {
       const failure = await readJson(baseUrl, `server=3&event=${eventId}&tier=1000&type=event`);
       assert.equal(failure.response.status, 503);
@@ -417,63 +428,6 @@ try {
     BANDORI_TRACKER_HISTORY_TEST_MANIFEST_TTL_MS: "5",
   });
 
-  await withFakeSupabase(async (supabaseUrl, getRequestCount) => {
-    await withServer(storeRoot, async (baseUrl) => {
-      const empty = await readJson(baseUrl, "server=3&event=999&tier=1000&type=event");
-      assert.equal(empty.response.status, 200);
-      assert.deepEqual(empty.body, { result: true, cutoffs: [] });
-      const missingTier = await readJson(baseUrl, "server=3&event=316&tier=1&type=event");
-      assert.equal(missingTier.response.status, 200);
-      assert.deepEqual(missingTier.body, { result: true, cutoffs: [] });
-      const missingKind = await readJson(baseUrl, "server=3&event=316&tier=1000&type=song");
-      assert.equal(missingKind.response.status, 200);
-      assert.deepEqual(missingKind.body, { result: true, cutoffs: [] });
-      assert.equal(getRequestCount(), 0, "an R2 empty result must not query Supabase");
-
-      const fallback = await readJson(baseUrl, "server=3&event=317&tier=1000&type=event");
-      assert.equal(fallback.response.status, 200);
-      assert.deepEqual(fallback.body, {
-        result: true,
-        cutoffs: [
-          { time: 5000, ep: 50 },
-          { time: 6000, ep: 60, isFinal: true },
-        ],
-      });
-      assert.equal(getRequestCount(), 1, "a corrupt R2 pack must use one whole-request fallback");
-
-      const missingPack = await readJson(baseUrl, "server=3&event=319&tier=1000&type=event");
-      assert.equal(missingPack.response.status, 200);
-      assert.equal(missingPack.body.cutoffs[0].ep, 50);
-      assert.equal(getRequestCount(), 2, "a referenced missing pack must use fallback");
-
-      const doubleFailure = await readJson(baseUrl, "server=3&event=318&tier=1000&type=event");
-      assert.equal(doubleFailure.response.status, 500);
-      assert.equal(doubleFailure.body.success, false);
-      assert.equal(doubleFailure.body.error.code, "DATABASE_QUERY_FAILED");
-      assert.deepEqual(doubleFailure.body.error.details, {
-        event: 318,
-        tier: 1000,
-        type: "event",
-      });
-      assert.equal(getRequestCount(), 3);
-    }, {
-      BANDORI_TRACKER_HISTORY_SOURCE: "r2-with-supabase-fallback",
-      NEXT_PUBLIC_SUPABASE_URL: supabaseUrl,
-    });
-
-    await withServer(storeRoot, async (baseUrl) => {
-      const legacySource = await readJson(baseUrl, "server=3&event=315&tier=1000&type=event");
-      assert.equal(legacySource.response.status, 200);
-      assert.deepEqual(legacySource.body.cutoffs, [
-        { time: 5000, ep: 50 },
-        { time: 6000, ep: 60, isFinal: true },
-      ]);
-      assert.equal(getRequestCount(), 4);
-    }, {
-      BANDORI_TRACKER_HISTORY_SOURCE: "supabase",
-      NEXT_PUBLIC_SUPABASE_URL: supabaseUrl,
-    });
-  });
 } finally {
   await rm(storeRoot, { recursive: true, force: true });
 }
@@ -520,6 +474,7 @@ await withFakeR2(async (fakeR2) => {
   for (const [eventId, behavior] of failureTargets) {
     fakeR2.setBehavior(`${prefix}/events/${eventId}/cn/manifest.json`, behavior);
   }
+  fakeR2.setBehavior(`${prefix}/events/367/jp/manifest.json`, { status: 503 });
 
   const evictionArtifacts = [];
   for (let eventId = 400; eventId < 417; eventId += 1) {
@@ -545,30 +500,35 @@ await withFakeR2(async (fakeR2) => {
 
       for (const eventId of [360, 361, 362, 363, 364, 366]) {
         const before = getSupabaseRequestCount();
-        const fallback = await readJson(
+        const failure = await readJson(
           baseUrl,
           `server=3&event=${eventId}&tier=1000&type=event`,
         );
-        assert.equal(fallback.response.status, 200);
-        assert.deepEqual(fallback.body.cutoffs, [
-          { time: 5000, ep: 50 },
-          { time: 6000, ep: 60, isFinal: true },
-        ]);
+        assert.equal(failure.response.status, 503);
+        assert.equal(failure.body.error.code, "TRACKER_HISTORY_UNAVAILABLE");
         assert.equal(
           getSupabaseRequestCount(),
-          before + 1,
-          `R2 failure for event ${eventId} must use one whole-request fallback`,
+          before,
+          `R2 failure for event ${eventId} must not query Supabase`,
         );
       }
 
+      const regionalFailure = await readJson(
+        baseUrl,
+        "server=0&event=367&tier=1000&type=event",
+      );
+      assert.equal(regionalFailure.response.status, 503);
+      assert.equal(regionalFailure.body.error.code, "TRACKER_HISTORY_UNAVAILABLE");
+      assert.equal(getSupabaseRequestCount(), 0, "regional R2 failure must not query Supabase");
+
       const beforeCooldown = getSupabaseRequestCount();
       for (let attempt = 0; attempt < 2; attempt += 1) {
-        const fallback = await readJson(baseUrl, "server=3&event=365&tier=1000&type=event");
-        assert.equal(fallback.response.status, 200);
-        assert.equal(fallback.body.cutoffs[0].ep, 50);
+        const failure = await readJson(baseUrl, "server=3&event=365&tier=1000&type=event");
+        assert.equal(failure.response.status, 503);
+        assert.equal(failure.body.error.code, "TRACKER_HISTORY_UNAVAILABLE");
       }
       assert.equal(fakeR2.count(recoveryArtifacts.manifestKey), 1);
-      assert.equal(getSupabaseRequestCount(), beforeCooldown + 2);
+      assert.equal(getSupabaseRequestCount(), beforeCooldown);
 
       fakeR2.clearBehavior(recoveryArtifacts.manifestKey);
       await new Promise((resolvePromise) => setTimeout(resolvePromise, 1100));
@@ -576,7 +536,7 @@ await withFakeR2(async (fakeR2) => {
       assert.equal(recovered.response.status, 200);
       assert.equal(recovered.body.cutoffs[0].ep, 365);
       assert.equal(fakeR2.count(recoveryArtifacts.manifestKey), 2);
-      assert.equal(getSupabaseRequestCount(), beforeCooldown + 2);
+      assert.equal(getSupabaseRequestCount(), beforeCooldown);
 
       for (const artifacts of evictionArtifacts) {
         const eventId = Number(artifacts.manifestKey.split("/")[3]);
@@ -593,7 +553,6 @@ await withFakeR2(async (fakeR2) => {
       assert.equal(fakeR2.count(oldest.manifestKey), 1, "fresh manifest should remain cached");
       assert.equal(fakeR2.count(oldest.packKey), 2, "entry-count LRU must reload the oldest pack");
     }, fakeR2Environment(fakeR2, {
-      BANDORI_TRACKER_HISTORY_SOURCE: "r2-with-supabase-fallback",
       BANDORI_TRACKER_HISTORY_TEST_FAILURE_COOLDOWN_MS: "1000",
       BANDORI_TRACKER_HISTORY_TEST_R2_BUDGET_MS: "1000",
       NEXT_PUBLIC_SUPABASE_URL: supabaseUrl,
@@ -613,7 +572,6 @@ await withFakeR2(async (fakeR2) => {
       "estimated-byte LRU must reload an evicted pack",
     );
   }, fakeR2Environment(fakeR2, {
-    BANDORI_TRACKER_HISTORY_SOURCE: "r2",
     BANDORI_TRACKER_HISTORY_TEST_MAX_PARSED_CACHE_BYTES: "600",
   }));
 });

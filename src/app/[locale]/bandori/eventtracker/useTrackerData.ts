@@ -6,7 +6,6 @@ import { useBandoriEventsMaster } from "@/hooks/useBandoriEventsMaster";
 import { parseApiSuccessData } from "@/lib/api-contracts";
 import {
   hasBandoriOfficialCnEventContent,
-  resolveBandoriEventScheduleWindow,
   resolveBandoriEventServerScheduleWindow,
 } from "@/lib/bandori-event-region";
 import {
@@ -209,14 +208,15 @@ function findBestEvent(events: MinimalEvent[], now: number): MinimalEvent | null
   return withStart.sort((left, right) => right.startAt - left.startAt)[0] ?? null;
 }
 
-function getAvailableChallengeSongIds(eventMeta: EventMetadata | null): number[] {
+function getAvailableChallengeSongIds(
+  eventMeta: EventMetadata | null,
+  server: BandoriServer,
+): number[] {
   if (eventMeta?.eventType !== "challenge") {
     return [];
   }
 
-  const challengeSongIds = eventMeta.musicIds.jp.length > 0
-    ? eventMeta.musicIds.jp
-    : eventMeta.musicIds.cn;
+  const challengeSongIds = eventMeta.musicIds[getBandoriServerCode(server)];
 
   return Array.from(
     new Set(
@@ -231,12 +231,13 @@ function resolveSelectedSongId(
   trackingMode: TrackingMode,
   eventMeta: EventMetadata | null,
   selectedSongId: number,
+  server: BandoriServer,
 ): number {
   if (trackingMode !== "song") {
     return 0;
   }
 
-  const availableChallengeSongIds = getAvailableChallengeSongIds(eventMeta);
+  const availableChallengeSongIds = getAvailableChallengeSongIds(eventMeta, server);
   if (availableChallengeSongIds.length === 0) {
     return 0;
   }
@@ -251,7 +252,7 @@ function resolveSelectedSongId(
  *
  * Responsibilities:
  * 1. Load event catalog, event metadata, and tracker series via useCachedFetch.
- * 2. Subscribe to Supabase realtime inserts and mirror new points into local cache.
+ * 2. Subscribe to CN-only Supabase private live snapshots and mirror new points into local cache.
  * 3. Merge API refreshes with realtime points so foreground refreshes do not drop
  *    points that arrived while the request was in flight.
  */
@@ -273,8 +274,8 @@ export function useTrackerData(
   const { events: eventCatalog } = useBandoriEventsMaster();
 
   const { data: holidayData } = useCachedFetch<ChinaMainlandHolidayCalendarData | null>(
-    "bandori-calendar-cn-holidays",
-    "/api/bandori/calendar/cn/holidays",
+    server === 3 ? "bandori-calendar-cn-holidays" : null,
+    server === 3 ? "/api/bandori/calendar/cn/holidays" : null,
     (data: unknown) => parseApiSuccessData<ChinaMainlandHolidayCalendarData>(data) ?? data as ChinaMainlandHolidayCalendarData,
     { ...LONG_CLIENT_CACHE_POLICY },
   );
@@ -286,7 +287,7 @@ export function useTrackerData(
   const allEvents = useMemo<MinimalEvent[]>(() => {
     return eventCatalog
       .map((event) => {
-        const scheduleWindow = resolveBandoriEventScheduleWindow(event, server);
+        const scheduleWindow = resolveBandoriEventServerScheduleWindow(event, server);
 
         return {
           id: event.eventId,
@@ -339,19 +340,19 @@ export function useTrackerData(
   }, [eventMetaMap, resolvedCurrentEventId]);
 
   const resolvedSelectedSongId = useMemo(
-    () => resolveSelectedSongId(trackingMode, eventMeta, selectedSongId),
-    [eventMeta, selectedSongId, trackingMode],
+    () => resolveSelectedSongId(trackingMode, eventMeta, selectedSongId, server),
+    [eventMeta, selectedSongId, server, trackingMode],
   );
 
   // Tracker data cache and foreground refresh.
   // Monthly ranking uses the selected month id. Other modes use the selected event id.
   // Challenge song mode returns every song_id group for the selected event and tier,
   // so the cache key intentionally does not include selectedSongId.
-  const monthlyWindow = getMonthlyRankingWindow(selectedMonthlyMonthId);
+  const monthlyWindow = getMonthlyRankingWindow(server, selectedMonthlyMonthId);
   const targetEventParam = trackingMode === "monthly" ? monthlyWindow.monthId : resolvedCurrentEventId;
   const liveTarget = useMemo<BandoriTrackerLiveTarget | null>(() => {
-    if (!enabled || trackingMode !== "event" || targetEventParam === null) return null;
-    const eventWindow = eventMeta ? resolveBandoriEventScheduleWindow(eventMeta, server) : null;
+    if (!enabled || server !== 3 || trackingMode !== "event" || targetEventParam === null) return null;
+    const eventWindow = eventMeta ? resolveBandoriEventServerScheduleWindow(eventMeta, server) : null;
     if (
       eventWindow === null
       || eventWindow.startAt === null
@@ -367,6 +368,7 @@ export function useTrackerData(
       targetId: targetEventParam,
     };
   }, [enabled, eventMeta, eventScheduleNow, server, targetEventParam, trackingMode]);
+  const canUseTrackerLive = server === 3 && liveTarget !== null;
   const trackerCacheKey = enabled && targetEventParam !== null
     ? `tracker-${server}-${targetEventParam}-${trackingMode}-${selectedTier}`
     : null;
@@ -469,7 +471,7 @@ export function useTrackerData(
 
   const hasPrivateLiveAccess = useBandoriTrackerLiveListener(
     liveTarget,
-    enabled,
+    canUseTrackerLive,
     handlePrivateLiveSnapshot,
   );
   const liveCutoffsForView = trackerCacheKey && hasPrivateLiveAccess
@@ -518,17 +520,16 @@ export function useTrackerData(
       };
     }
 
-    const currentWindow = eventMeta ? resolveBandoriEventScheduleWindow(eventMeta, server) : null;
-    const statusWindow = eventMeta
+    const currentWindow = eventMeta
       ? resolveBandoriEventServerScheduleWindow(eventMeta, server)
       : null;
 
     return {
       startDate: currentWindow?.startAt ?? null,
       endDate: currentWindow?.endAt ?? null,
-      displayServer: currentWindow?.displayServer ?? server,
-      statusStartDate: statusWindow?.startAt ?? null,
-      statusEndDate: statusWindow?.endAt ?? null,
+      displayServer: server,
+      statusStartDate: currentWindow?.startAt ?? null,
+      statusEndDate: currentWindow?.endAt ?? null,
     };
   }, [eventMeta, resolvedCurrentEventId, server]);
 

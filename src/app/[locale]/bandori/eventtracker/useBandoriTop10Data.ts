@@ -60,11 +60,10 @@ export function useBandoriTop10Data(
   server: BandoriServer,
   enabled: boolean,
 ) {
-  // CN is the first tracker server with TOP10 history and live snapshots.
-  // Other regional shells render the same empty state without issuing requests.
-  const canReadTopData = enabled && server === 3 && eventId !== null;
-  const cacheKey = canReadTopData ? `bandori-top10-history-${server}-${eventId}` : null;
-  const url = canReadTopData
+  const canReadTopDataHistory = enabled && eventId !== null;
+  const canUseTopDataLive = canReadTopDataHistory && server === 3;
+  const cacheKey = canReadTopDataHistory ? `bandori-top10-history-${server}-${eventId}` : null;
+  const url = canReadTopDataHistory
     ? `/api/bandori/tracker/topdata?server=${server}&event=${eventId}&type=event`
     : null;
   const history = useCachedFetch<BandoriTopDataPayload>(
@@ -73,10 +72,10 @@ export function useBandoriTop10Data(
     parseBandoriTopDataPayload,
     { ...LIVE_CLIENT_CACHE_POLICY },
   );
-  const liveSubscription = useTopDataLiveSubscription(eventId, canReadTopData);
+  const liveSubscription = useTopDataLiveSubscription(eventId, canUseTopDataLive);
   const liveSnapshot = useBandoriTrackerLiveSubscriptionSnapshot(
     liveSubscription,
-    canReadTopData,
+    canUseTopDataLive,
   );
   const data = useMemo(() => (
     liveSnapshot
