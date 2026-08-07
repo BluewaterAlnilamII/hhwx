@@ -9,7 +9,7 @@ function trimTrailingSlash(value: string): string {
 }
 
 function readConfiguredSiteOrigin(): string {
-  const configured = process.env.NEXT_PUBLIC_SITE_URL?.trim() || process.env.NEXT_PUBLIC_VERCEL_URL?.trim();
+  const configured = process.env.NEXT_PUBLIC_SITE_URL?.trim();
   const siteUrl = configured
     ? configured.startsWith("http") ? configured : `https://${configured}`
     : DEFAULT_AUTH_SITE_URL;

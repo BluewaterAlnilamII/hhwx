@@ -42,12 +42,22 @@ const comparisonDataHookSource = readFileSync(
   new URL("../src/app/[locale]/bandori/eventtracker/useComparisonTrackerData.ts", import.meta.url),
   "utf8",
 );
+const trackerLiveHookSource = readFileSync(
+  new URL("../src/app/[locale]/bandori/eventtracker/useBandoriTrackerLive.ts", import.meta.url),
+  "utf8",
+);
 
 test("history-only mode does not open legacy Postgres Changes connections", () => {
   for (const source of [trackerDataHookSource, comparisonDataHookSource]) {
     assert.doesNotMatch(source, /postgres_changes|BANDORI_TRACKER_DATA_TABLE/u);
     assert.match(source, /useBandoriTrackerLiveListener/u);
   }
+});
+
+test("Private Broadcast is the fixed authenticated live transport", () => {
+  assert.doesNotMatch(trackerLiveHookSource, /NEXT_PUBLIC_BANDORI_TRACKER_LIVE_SOURCE/u);
+  assert.match(trackerLiveHookSource, /enabled[\s\S]*authReady[\s\S]*userId !== null[\s\S]*subscription !== null/u);
+  assert.match(trackerLiveHookSource, /subscribeBandoriTrackerLive/u);
 });
 
 test("parses event/song points and interprets only the final flag bit", () => {

@@ -113,9 +113,10 @@ Web 应用需要：
 
 - `NEXT_PUBLIC_SUPABASE_URL`
 - `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
-- `NEXT_PUBLIC_BANDORI_TRACKER_LIVE_SOURCE=broadcast`（必须在稀疏历史停止写 Supabase 前切换）
 - `SUPABASE_SECRET_KEY`
 
 部署 tracker-live migrations 前，必须在本地 Supabase 或隔离的 Supabase branch 执行 `npm run test:supabase`。`supabase/tests/bandori_tracker_latest.sql` 覆盖 cutoff latest，`supabase/tests/bandori_tracker_topdata_latest.sql` 覆盖 TOP10 表、RPC、RLS、并发、payload 上限与锚定 Broadcast policy。
+
+Bandori tracker 实时传输固定使用 Private Broadcast。浏览器只会在恢复的 session 完成登录 bootstrap 后订阅，不再提供环境变量传输开关。
 
 `SUPABASE_SECRET_KEY` 只允许服务端使用，绝不能加 `NEXT_PUBLIC_` 前缀。

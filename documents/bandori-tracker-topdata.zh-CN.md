@@ -74,14 +74,13 @@ cutoff 与 TOP10 adapter 共用 `bandori-tracker-live-connection` 中协议无�
 TOP10 adapter 读取 `bandori_tracker_topdata_latest_snapshots`，监听事件 `topdata_snapshot` 和 topic
 `bandori:topdata:cn:events:{eventId}`。当前快照只在渲染时与 HTTP 历史合并：同时间替换、更新时间追加、
 更旧快照忽略；latest 用户资料覆盖相同 UID，其他历史用户继续保留。30 秒样本不得写回会话历史缓存，
-页面恢复前台时只刷新稀疏 R2 历史基线，并与 live 连接保持相互独立。未登录用户继续只显示稀疏 HTTP 历史。只有
-`NEXT_PUBLIC_BANDORI_TRACKER_LIVE_SOURCE=broadcast` 且恢复出的 session 对应真实用户时才启用该 adapter。
+页面恢复前台时只刷新稀疏 R2 历史基线，并与 live 连接保持相互独立。未登录用户继续只显示稀疏 HTTP 历史。
+Private Broadcast 已固定为应用契约，只有恢复出的 session 对应真实用户时才启用该 adapter。
 
 ## 发布与回滚
 
-第二阶段先应用并验证 additive Supabase migration，再部署仍兼容纯历史模式的前端，然后以 `snapshot`
-模式部署 tracker；只有登录 bootstrap 与 private topic 鉴权都通过后才启用 `broadcast`。整个过程不改变
-公开历史 API。
+第二阶段切换已经完成。今后的应用回滚仍必须保留登录 bootstrap 与 private topic 鉴权，因为不再提供旧
+Postgres Changes 传输开关；公开历史 API 保持不变。
 
 回滚只回退应用代码；保留 additive latest 表、RPC、policies、R2 对象和 tracker ledger，确保已经采集的
 状态仍可恢复。

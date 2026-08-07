@@ -121,17 +121,8 @@ function readRequiredEnv(names: readonly string[], label: string, serviceLabel: 
 }
 
 function getPrivateR2Config(serviceLabel: string): R2S3ReaderConfig {
-  const accountId = readFirstEnv(["BANDORI_R2_ACCOUNT_ID"]);
-  const endpoint = readFirstEnv(["BANDORI_R2_ENDPOINT"])
-    ?? (accountId ? `https://${accountId}.r2.cloudflarestorage.com` : "");
-  if (!endpoint) {
-    throw new Error(
-      `${serviceLabel} is missing BANDORI_R2_ENDPOINT or BANDORI_R2_ACCOUNT_ID`,
-    );
-  }
-
   return {
-    endpoint,
+    endpoint: readRequiredEnv(["BANDORI_R2_ENDPOINT"], "endpoint", serviceLabel),
     bucket: readRequiredEnv(["BANDORI_PRIVATE_R2_BUCKET"], "private bucket", serviceLabel),
     accessKeyId: readRequiredEnv(
       ["BANDORI_R2_ACCESS_KEY_ID"],
