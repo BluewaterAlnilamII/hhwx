@@ -2,6 +2,7 @@ import type { HTMLAttributes, ReactNode } from "react";
 import { cn } from "@/lib/utils";
 
 export type HeadingVisualRole = "page" | "section" | "subsection";
+// Slots are theme-defined decoration choices, not ordered color rotations.
 export type HeadingAccentSlot = "a" | "b" | "c";
 
 type HeadingBaseProps = HTMLAttributes<HTMLHeadingElement> & {

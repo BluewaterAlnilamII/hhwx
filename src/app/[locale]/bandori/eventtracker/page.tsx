@@ -497,7 +497,7 @@ function EventProgressBar({ startDate, endDate }: { startDate: number; endDate: 
   );
 
   return (
-    <div className="rounded-2xl border border-[var(--theme-color-border-default)] bg-[var(--theme-color-surface-background)] p-6 shadow-[0_18px_44px_rgba(232,176,0,0.16),0_2px_10px_rgba(88,69,0,0.07)] dark:border-slate-700/80 dark:bg-[#111827] dark:shadow-[0_18px_44px_rgba(0,0,0,0.22)]">
+    <div className="rounded-2xl border border-[var(--theme-color-border-default)] bg-[var(--theme-color-surface-background)] p-6 shadow-[var(--theme-shadow-surface-raised)] dark:border-slate-700/80 dark:bg-[#111827] dark:shadow-[0_18px_44px_rgba(0,0,0,0.22)]">
       <div className="mb-2 flex items-start justify-between gap-3 text-sm font-semibold">
         <span className="shrink-0 whitespace-nowrap font-bold text-[var(--theme-color-progress-foreground)]">活动进度</span>
         <span className="min-w-0 flex flex-col items-end gap-0.5 text-right leading-tight">
@@ -507,7 +507,7 @@ function EventProgressBar({ startDate, endDate }: { startDate: number; endDate: 
       </div>
       <div className="h-3 w-full overflow-hidden rounded-full bg-[var(--theme-color-progress-track-background)] dark:bg-slate-950/70">
         <div
-          className="h-full rounded-full bg-[image:var(--theme-progress-indicator-background-image)] transition-all duration-1000 ease-out"
+          className="h-full rounded-full bg-[var(--theme-color-progress-indicator-background)] transition-all duration-1000 ease-out"
           style={{ width: `${progress}%` }}
         />
       </div>
@@ -1437,7 +1437,7 @@ export default function EventTrackerPage() {
             ) : null}
 
             {/* ========== 导航与控制区 ========== */}
-            <div className="rounded-3xl border border-[var(--theme-color-border-default)] bg-[var(--theme-color-surface-background)] p-3 shadow-[0_18px_48px_rgba(65,54,0,0.10),0_3px_14px_rgba(15,23,42,0.05)] sm:p-5 dark:border-slate-700/80 dark:bg-[#111827] dark:shadow-[0_24px_60px_rgba(0,0,0,0.24)]">
+            <div className="rounded-3xl border border-[var(--theme-color-border-default)] bg-[var(--theme-color-surface-background)] p-3 shadow-[var(--theme-shadow-surface-raised)] sm:p-5 dark:border-slate-700/80 dark:bg-[#111827] dark:shadow-[0_24px_60px_rgba(0,0,0,0.24)]">
           <Tabs.Root
             value={trackingMode}
             onValueChange={handleTrackingModeChange}
@@ -1466,13 +1466,13 @@ export default function EventTrackerPage() {
 
             {/* ========== 图表区域 ========== */}
             <Tabs.Content value={trackingMode} className="outline-hidden focus:outline-hidden w-full animate-in fade-in zoom-in-95 duration-500">
-              <div className="mt-3 relative rounded-2xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-surface-background)] p-2 shadow-[0_18px_48px_rgba(15,23,42,0.10)] sm:p-4 dark:border-slate-800/80 dark:bg-[#0C111C] dark:shadow-[0_24px_60px_rgba(0,0,0,0.28)]">
+              <div className="mt-3 relative rounded-2xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-surface-background)] p-2 shadow-[var(--theme-shadow-surface-raised)] sm:p-4 dark:border-slate-800/80 dark:bg-[#0C111C] dark:shadow-[0_24px_60px_rgba(0,0,0,0.28)]">
 
                 {!isTop10Selected && loading && (
                   <div className="absolute inset-0 z-30 flex items-center justify-center rounded-2xl bg-[color-mix(in_srgb,var(--theme-color-surface-background)_75%,transparent)] dark:bg-[#0C111C]/75">
                     <div className="flex flex-col items-center">
-                      <div className="w-10 h-10 border-4 border-[var(--theme-color-feedback-info-border)] border-t-transparent rounded-full animate-spin" />
-                      <p className="mt-4 text-sm font-semibold text-[var(--theme-color-feedback-info-foreground)] animate-pulse">正在获取最新数据...</p>
+                      <div className="w-10 h-10 border-4 border-[var(--theme-color-semantic-info-border)] border-t-transparent rounded-full animate-spin" />
+                      <p className="mt-4 text-sm font-semibold text-[var(--theme-color-semantic-info-foreground)] animate-pulse">正在获取最新数据...</p>
                     </div>
                   </div>
                 )}

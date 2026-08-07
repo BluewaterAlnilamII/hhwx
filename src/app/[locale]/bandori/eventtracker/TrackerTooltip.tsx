@@ -87,7 +87,7 @@ export function TrackerTooltip({
     if (projectionLabelTime === undefined) return null;
 
     return (
-      <div className="min-w-[210px] rounded-2xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-surface-background)]/95 p-4 shadow-[0_8px_30px_rgb(0,0,0,0.12)] dark:border-gray-800 dark:bg-[#131A2B]/95">
+      <div className="min-w-[210px] rounded-2xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-surface-background)]/95 p-4 shadow-[var(--theme-shadow-floating)] dark:border-gray-800 dark:bg-[#131A2B]/95">
         <p className="mb-2 text-xs font-semibold text-[var(--theme-color-text-muted)] dark:text-gray-400">
           {format(projectionLabelTime, "yyyy/MM/dd HH:mm:ss")}
         </p>
@@ -130,7 +130,7 @@ export function TrackerTooltip({
     if (comparisonPoints.length === 0) return null;
 
     return (
-      <div className="min-w-[220px] rounded-2xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-surface-background)]/95 p-4 shadow-[0_8px_30px_rgb(0,0,0,0.12)] dark:border-gray-800 dark:bg-[#131A2B]/95">
+      <div className="min-w-[220px] rounded-2xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-surface-background)]/95 p-4 shadow-[var(--theme-shadow-floating)] dark:border-gray-800 dark:bg-[#131A2B]/95">
         <p className="text-xs font-semibold text-[var(--theme-color-text-muted)] dark:text-gray-400">
           {format(label, "yyyy/MM/dd HH:mm:ss")}
         </p>
@@ -186,7 +186,7 @@ export function TrackerTooltip({
   }
 
   return (
-    <div className="min-w-[180px] rounded-2xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-surface-background)]/95 p-4 shadow-[0_8px_30px_rgb(0,0,0,0.12)] dark:border-gray-800 dark:bg-[#131A2B]/95">
+    <div className="min-w-[180px] rounded-2xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-surface-background)]/95 p-4 shadow-[var(--theme-shadow-floating)] dark:border-gray-800 dark:bg-[#131A2B]/95">
       <p className="mb-2 text-xs font-semibold text-[var(--theme-color-text-muted)] dark:text-gray-400">
         {format(label, "yyyy/MM/dd HH:mm:ss")}
       </p>

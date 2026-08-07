@@ -31,7 +31,7 @@ export default function BandoriPageShell({
   spaced = true,
 }: BandoriPageShellProps) {
   return (
-    <div className={cn("relative z-10 min-h-full font-sans text-gray-800 dark:text-gray-100", className)}>
+    <div className={cn("relative z-10 min-h-full font-sans text-[var(--theme-color-text-default)] dark:text-[var(--theme-color-text-default-on-dark)]", className)}>
       <BandoriPageContent className={contentClassName} spaced={spaced}>
         {children}
       </BandoriPageContent>

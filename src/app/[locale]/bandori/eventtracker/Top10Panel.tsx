@@ -158,8 +158,8 @@ export function Top10Panel({
       {isBlockingLoading && (
         <div className="absolute inset-0 z-30 flex items-center justify-center rounded-xl bg-[var(--theme-color-surface-background)]/75 dark:bg-[#0C111C]/75">
           <div className="flex flex-col items-center">
-            <div className="h-10 w-10 animate-spin rounded-full border-4 border-[var(--theme-color-feedback-info-border)] border-t-transparent" />
-            <p className="mt-4 text-sm font-semibold text-[var(--theme-color-feedback-info-foreground)] dark:text-[var(--theme-color-action-secondary-foreground-on-dark)]">正在获取最新数据...</p>
+            <div className="h-10 w-10 animate-spin rounded-full border-4 border-[var(--theme-color-semantic-info-border)] border-t-transparent" />
+            <p className="mt-4 text-sm font-semibold text-[var(--theme-color-semantic-info-foreground)] dark:text-[var(--theme-color-action-secondary-foreground-on-dark)]">正在获取最新数据...</p>
           </div>
         </div>
       )}
@@ -175,12 +175,12 @@ export function Top10Panel({
       />
 
       {error && (
-        <div className="mb-3 flex items-center justify-between gap-3 rounded-xl border border-[var(--theme-color-feedback-error-border)] bg-[var(--theme-color-feedback-error-background)] px-3 py-2 text-sm text-[var(--theme-color-feedback-error-foreground)] dark:text-red-200">
+        <div className="mb-3 flex items-center justify-between gap-3 rounded-xl border border-[var(--theme-color-semantic-danger-border)] bg-[var(--theme-color-semantic-danger-background)] px-3 py-2 text-sm text-[var(--theme-color-semantic-danger-foreground)] dark:text-red-200">
           <span className="font-semibold">TOP10 追踪数据加载失败</span>
           <button
             type="button"
             onClick={refresh}
-            className="shrink-0 rounded-full border border-[var(--theme-color-feedback-error-border)] bg-[var(--theme-color-control-background)] px-3 py-1 text-xs font-bold transition hover:bg-[var(--theme-color-feedback-error-background)] dark:bg-slate-900 dark:hover:bg-slate-800"
+            className="shrink-0 rounded-full border border-[var(--theme-color-semantic-danger-border)] bg-[var(--theme-color-control-background)] px-3 py-1 text-xs font-bold transition hover:bg-[var(--theme-color-semantic-danger-background)] dark:bg-slate-900 dark:hover:bg-slate-800"
           >
             重新加载
           </button>
