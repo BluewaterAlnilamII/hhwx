@@ -18,10 +18,10 @@ import { readBandoriPublicEventApiDataset } from "@/lib/bandori-events-api-serve
 import { readBandoriStampsApiDataset } from "@/lib/bandori-stamps-api-server";
 import { readBandoriMusicApiDataset } from "@/lib/bandori-music-api-server";
 import {
-  BESTDORI_MASTER_DATASET_ALIASES,
-  BESTDORI_MASTER_DATASETS,
-  type BestdoriMasterDatasetKey,
-} from "@/lib/bestdori-master-data";
+  BANDORI_MASTER_DATASET_ALIASES,
+  BANDORI_MASTER_DATASETS,
+  type BandoriMasterDatasetKey,
+} from "@/lib/bandori-master-contract";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -32,18 +32,18 @@ type RouteContext = {
   }>;
 };
 
-function isBestdoriMasterDatasetKey(value: string): value is BestdoriMasterDatasetKey {
-  return Object.hasOwn(BESTDORI_MASTER_DATASETS, value);
+function isBandoriMasterDatasetKey(value: string): value is BandoriMasterDatasetKey {
+  return Object.hasOwn(BANDORI_MASTER_DATASETS, value);
 }
 
-type LegacyMasterDatasetKey = Exclude<BestdoriMasterDatasetKey, "cards" | "events" | "songs">;
+type LegacyMasterDatasetKey = Exclude<BandoriMasterDatasetKey, "cards" | "events" | "songs">;
 type MasterDatasetKey = LegacyMasterDatasetKey | "cards" | "events" | "music" | "stamps";
 
 function isLegacyMasterDatasetKey(value: string): value is LegacyMasterDatasetKey {
   return value !== "cards"
     && value !== "events"
     && value !== "songs"
-    && isBestdoriMasterDatasetKey(value);
+    && isBandoriMasterDatasetKey(value);
 }
 
 function normalizeDatasetKey(value: string): MasterDatasetKey | null {
@@ -54,8 +54,8 @@ function normalizeDatasetKey(value: string): MasterDatasetKey | null {
     return value;
   }
 
-  const alias = BESTDORI_MASTER_DATASET_ALIASES[
-    value as keyof typeof BESTDORI_MASTER_DATASET_ALIASES
+  const alias = BANDORI_MASTER_DATASET_ALIASES[
+    value as keyof typeof BANDORI_MASTER_DATASET_ALIASES
   ];
   return alias && isLegacyMasterDatasetKey(alias) ? alias : null;
 }

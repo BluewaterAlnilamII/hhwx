@@ -37,7 +37,6 @@ export async function GET(request: Request, context: RouteContext) {
       "characters",
       characterId,
       "character_detail",
-      `characters/${characterId}.json`,
     );
     if (!result) {
       return jsonError(404, "BANDORI_MASTER_CHARACTER_NOT_FOUND", "Bandori master character is not available", {

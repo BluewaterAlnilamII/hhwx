@@ -21,7 +21,6 @@ async function withServer(handler, assertion) {
     bucket: "test-bucket",
     accessKeyId: "test-access-key",
     secretAccessKey: "test-secret-key",
-    region: "auto",
   };
   try {
     await assertion(config);
@@ -102,12 +101,6 @@ test("Bandori public asset index reader uses its explicit public bucket configur
       "BANDORI_PUBLIC_R2_BUCKET",
       "BANDORI_R2_ACCESS_KEY_ID",
       "BANDORI_R2_SECRET_ACCESS_KEY",
-      "BANDORI_R2_REGION",
-      "BANDORI_ASSET_R2_ENDPOINT",
-      "BANDORI_ASSET_R2_BUCKET",
-      "BANDORI_ASSET_R2_ACCESS_KEY_ID",
-      "BANDORI_ASSET_R2_SECRET_ACCESS_KEY",
-      "BANDORI_ASSET_R2_REGION",
     ];
     const previous = Object.fromEntries(names.map((name) => [name, process.env[name]]));
     for (const name of names) delete process.env[name];
@@ -116,12 +109,6 @@ test("Bandori public asset index reader uses its explicit public bucket configur
       BANDORI_PUBLIC_R2_BUCKET: config.bucket,
       BANDORI_R2_ACCESS_KEY_ID: config.accessKeyId,
       BANDORI_R2_SECRET_ACCESS_KEY: config.secretAccessKey,
-      BANDORI_R2_REGION: config.region,
-      BANDORI_ASSET_R2_ENDPOINT: "http://127.0.0.1:1",
-      BANDORI_ASSET_R2_BUCKET: "legacy-bucket",
-      BANDORI_ASSET_R2_ACCESS_KEY_ID: "legacy-access-key",
-      BANDORI_ASSET_R2_SECRET_ACCESS_KEY: "legacy-secret-key",
-      BANDORI_ASSET_R2_REGION: "legacy-region",
     });
     try {
       assert.deepEqual(
@@ -153,21 +140,14 @@ test("Bandori public asset object reader verifies content-addressed JSON", async
       "BANDORI_PUBLIC_R2_BUCKET",
       "BANDORI_R2_ACCESS_KEY_ID",
       "BANDORI_R2_SECRET_ACCESS_KEY",
-      "BANDORI_R2_REGION",
-      "BANDORI_ASSET_R2_ENDPOINT",
-      "BANDORI_ASSET_R2_BUCKET",
-      "BANDORI_ASSET_R2_ACCESS_KEY_ID",
-      "BANDORI_ASSET_R2_SECRET_ACCESS_KEY",
-      "BANDORI_ASSET_R2_REGION",
     ];
     const previous = Object.fromEntries(names.map((name) => [name, process.env[name]]));
     for (const name of names) delete process.env[name];
     Object.assign(process.env, {
-      BANDORI_ASSET_R2_ENDPOINT: config.endpoint,
-      BANDORI_ASSET_R2_BUCKET: config.bucket,
-      BANDORI_ASSET_R2_ACCESS_KEY_ID: config.accessKeyId,
-      BANDORI_ASSET_R2_SECRET_ACCESS_KEY: config.secretAccessKey,
-      BANDORI_ASSET_R2_REGION: config.region,
+      BANDORI_R2_ENDPOINT: config.endpoint,
+      BANDORI_PUBLIC_R2_BUCKET: config.bucket,
+      BANDORI_R2_ACCESS_KEY_ID: config.accessKeyId,
+      BANDORI_R2_SECRET_ACCESS_KEY: config.secretAccessKey,
     });
     try {
       assert.deepEqual(

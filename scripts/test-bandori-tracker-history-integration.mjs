@@ -298,7 +298,6 @@ function fakeR2Environment(fakeR2, overrides = {}) {
     BANDORI_R2_ENDPOINT: fakeR2.endpoint,
     BANDORI_R2_ACCESS_KEY_ID: "test-access-key",
     BANDORI_R2_SECRET_ACCESS_KEY: "test-secret-key",
-    BANDORI_R2_REGION: "auto",
     BANDORI_PUBLIC_R2_BUCKET: fakeR2.bucket,
     ...overrides,
   };

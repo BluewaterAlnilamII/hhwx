@@ -7,10 +7,10 @@ export type R2S3ReaderConfig = {
   bucket: string;
   accessKeyId: string;
   secretAccessKey: string;
-  region?: string;
 };
 
 const S3_SERVICE = "s3";
+const R2_REGION = "auto";
 const AWS4_REQUEST = "aws4_request";
 const EMPTY_PAYLOAD_SHA256 = createHash("sha256").update("").digest("hex");
 
@@ -68,10 +68,9 @@ function buildSigningKey(secretAccessKey: string, dateStamp: string, region: str
 
 function buildR2ObjectRequest(config: R2S3ReaderConfig, objectKey: string, now = new Date()) {
   const endpoint = new URL(config.endpoint.replace(/\/+$/g, ""));
-  const region = config.region?.trim() || "auto";
   const { dateStamp, amzDate } = formatAmzDate(now);
   const canonicalUri = `/${encodeS3PathSegment(config.bucket)}/${encodeS3ObjectKeyPath(objectKey)}`;
-  const credentialScope = `${dateStamp}/${region}/${S3_SERVICE}/${AWS4_REQUEST}`;
+  const credentialScope = `${dateStamp}/${R2_REGION}/${S3_SERVICE}/${AWS4_REQUEST}`;
   const signedHeaders = "host;x-amz-content-sha256;x-amz-date";
   const canonicalHeaders = [
     `host:${endpoint.host}`,
@@ -93,7 +92,7 @@ function buildR2ObjectRequest(config: R2S3ReaderConfig, objectKey: string, now =
     credentialScope,
     hashSha256(canonicalRequest),
   ].join("\n");
-  const signature = createHmac("sha256", buildSigningKey(config.secretAccessKey, dateStamp, region))
+  const signature = createHmac("sha256", buildSigningKey(config.secretAccessKey, dateStamp, R2_REGION))
     .update(stringToSign, "utf8")
     .digest("hex");
 

@@ -19,7 +19,7 @@ export async function GET(request: Request) {
   }
 
   try {
-    const result = await readBandoriMasterPath("bands_all", "bands/all.1.json", "bands");
+    const result = await readBandoriMasterPath("bands_all", "bands");
     if (!result) {
       return jsonError(503, "BANDORI_MASTER_BANDS_NOT_CONFIGURED", "Bandori master bands are not configured", {
         headers: withHttpCachePolicy(NO_STORE_HTTP_CACHE_POLICY),

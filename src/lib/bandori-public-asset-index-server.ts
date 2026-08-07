@@ -24,16 +24,9 @@ function readRequiredEnvironmentValue(names: readonly string[], label: string): 
 }
 
 function getBandoriPublicAssetR2Config(): R2S3ReaderConfig {
-  const accountId = readFirstEnvironmentValue([
-    "BANDORI_R2_ACCOUNT_ID",
-    "BANDORI_ASSET_R2_ACCOUNT_ID",
-    "BANDORI_MASTER_R2_ACCOUNT_ID",
-  ]);
-  const endpoint = readFirstEnvironmentValue([
-    "BANDORI_R2_ENDPOINT",
-    "BANDORI_ASSET_R2_ENDPOINT",
-    "BANDORI_MASTER_R2_ENDPOINT",
-  ]) ?? (accountId ? `https://${accountId}.r2.cloudflarestorage.com` : "");
+  const accountId = readFirstEnvironmentValue(["BANDORI_R2_ACCOUNT_ID"]);
+  const endpoint = readFirstEnvironmentValue(["BANDORI_R2_ENDPOINT"])
+    ?? (accountId ? `https://${accountId}.r2.cloudflarestorage.com` : "");
   if (!endpoint) {
     throw new Error(
       "Bandori public asset R2 reader is missing an endpoint or account ID",
@@ -42,35 +35,17 @@ function getBandoriPublicAssetR2Config(): R2S3ReaderConfig {
   return {
     endpoint,
     bucket: readRequiredEnvironmentValue(
-      [
-        "BANDORI_PUBLIC_R2_BUCKET",
-        "BANDORI_ASSET_R2_BUCKET",
-        "BANDORI_MASTER_R2_BUCKET",
-        "BANDORI_R2_BUCKET",
-      ],
+      ["BANDORI_PUBLIC_R2_BUCKET"],
       "bucket",
     ),
     accessKeyId: readRequiredEnvironmentValue(
-      [
-        "BANDORI_R2_ACCESS_KEY_ID",
-        "BANDORI_ASSET_R2_ACCESS_KEY_ID",
-        "BANDORI_MASTER_R2_ACCESS_KEY_ID",
-      ],
+      ["BANDORI_R2_ACCESS_KEY_ID"],
       "access key ID",
     ),
     secretAccessKey: readRequiredEnvironmentValue(
-      [
-        "BANDORI_R2_SECRET_ACCESS_KEY",
-        "BANDORI_ASSET_R2_SECRET_ACCESS_KEY",
-        "BANDORI_MASTER_R2_SECRET_ACCESS_KEY",
-      ],
+      ["BANDORI_R2_SECRET_ACCESS_KEY"],
       "secret access key",
     ),
-    region: readFirstEnvironmentValue([
-      "BANDORI_R2_REGION",
-      "BANDORI_ASSET_R2_REGION",
-      "BANDORI_MASTER_R2_REGION",
-    ]) ?? "auto",
   };
 }
 

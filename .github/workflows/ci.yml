@@ -38,6 +38,9 @@ jobs:
       - name: Test Bandori TOP10 tracker
         run: npm run test:bandori-tracker-topdata
 
+      - name: Test Bandori public asset and R2 source contracts
+        run: npm run test:bandori-public-assets
+
       - name: Build
         run: npm run build
         env:
@@ -47,4 +50,3 @@ jobs:
           SUPABASE_SECRET_KEY: example_secret_key
           NEXT_PUBLIC_SITE_ASSET_CDN_BASE_URL: https://your-site-asset-cdn.example.com
           NEXT_PUBLIC_BANDORI_ASSET_CDN_BASE_URL: https://your-bandori-asset-cdn.example.com
-          BANDORI_ASSET_CDN_BASE_URL: https://your-bandori-asset-cdn.example.com

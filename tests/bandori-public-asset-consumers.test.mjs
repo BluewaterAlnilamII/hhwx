@@ -110,12 +110,47 @@ test("server-side Music metadata and charts read the public bucket directly inst
   assert.doesNotMatch(musicAssets, /fetch\(url/u);
   assert.match(indexReader, /fetchR2Object/u);
   assert.match(indexReader, /BANDORI_PUBLIC_R2_BUCKET/u);
-  assert.match(indexReader, /BANDORI_ASSET_R2_BUCKET/u);
+  assert.doesNotMatch(indexReader, /BANDORI_ASSET_R2_|BANDORI_MASTER_R2_|BANDORI_R2_BUCKET/u);
   assert.doesNotMatch(indexReader, /BANDORI_ASSET_CDN_BASE_URL|cdn\.hhwx\.org/u);
   assert.match(chartRoute, /lookupBandoriMusicChart/u);
   assert.match(chartRoute, /fetchBandoriPublicAssetJson/u);
   assert.match(chartRoute, /chart\.key/u);
   assert.match(chartRoute, /chart\.sha256/u);
   assert.doesNotMatch(chartRoute, /getBandoriMusicCdnBaseUrl|fetch\(url/u);
+  assert.doesNotMatch(
+    chartRoute,
+    /BANDORI_CHART_SOURCE|BANDORI_CHART_BESTDORI_FALLBACK|fetchBestdoriChart|falling back to Bestdori/u,
+  );
   assert.doesNotMatch(chartRoute, /\?sha=/u);
+});
+
+test("chart and master sources are fixed first-party R2 contracts across all four servers", async () => {
+  const envExample = await readSource(".env.example");
+  const masterApi = await readSource("src/lib/bandori-master-api.ts");
+  const masterArtifacts = await readSource("src/lib/bandori-master-artifacts.ts");
+
+  assert.match(
+    masterArtifacts,
+    /BANDORI_MASTER_ARTIFACT_SERVERS = \["jp", "en", "tw", "cn"\] as const/u,
+  );
+  assert.match(masterArtifacts, /BANDORI_MASTER_ARTIFACT_PREFIX = "bandori\/master"/u);
+  assert.match(masterArtifacts, /fetchR2Object/u);
+  assert.doesNotMatch(masterArtifacts, /createServerSupabaseClient|fetch\(url|PUBLIC_ORIGIN/u);
+  assert.doesNotMatch(masterApi, /process\.env|shouldUseArtifacts|fetchBestdori/u);
+  assert.match(masterApi, /missing for servers/u);
+
+  for (const removedName of [
+    "BANDORI_CHART_SOURCE",
+    "BANDORI_MUSIC_CDN_BASE_URL",
+    "BANDORI_MASTER_SOURCE",
+    "BANDORI_MASTER_ARTIFACT_READ_MODE",
+    "BANDORI_MASTER_ARTIFACT_SERVERS",
+    "BANDORI_MASTER_ARTIFACT_SERVER",
+    "BANDORI_MASTER_ARTIFACT_PUBLIC_ORIGIN",
+    "BANDORI_MASTER_ARTIFACT_BASE_URL",
+    "BANDORI_MASTER_ARTIFACT_MANIFEST_URL",
+    "BANDORI_MASTER_ACTIVE_SOURCE",
+  ]) {
+    assert.doesNotMatch(envExample, new RegExp(`^${removedName}=`, "mu"));
+  }
 });

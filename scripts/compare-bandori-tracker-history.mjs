@@ -36,14 +36,6 @@ function requiredEnv(name) {
   return value;
 }
 
-function requiredFirstEnv(...names) {
-  for (const name of names) {
-    const value = process.env[name]?.trim();
-    if (value) return value;
-  }
-  throw new Error(`Missing required environment variable: ${names.join(" or ")}`);
-}
-
 function buildQuery() {
   const type = argument("--type", "event");
   if (type !== "event" && type !== "song" && type !== "monthly") {
@@ -67,14 +59,9 @@ function getR2Config() {
   if (!endpoint) throw new Error("Missing BANDORI_R2_ENDPOINT or BANDORI_R2_ACCOUNT_ID");
   return {
     endpoint,
-    bucket: requiredFirstEnv(
-      "BANDORI_PUBLIC_R2_BUCKET",
-      "BANDORI_TRACKER_HISTORY_R2_BUCKET",
-      "BANDORI_R2_BUCKET",
-    ),
+    bucket: requiredEnv("BANDORI_PUBLIC_R2_BUCKET"),
     accessKeyId: requiredEnv("BANDORI_R2_ACCESS_KEY_ID"),
     secretAccessKey: requiredEnv("BANDORI_R2_SECRET_ACCESS_KEY"),
-    region: process.env.BANDORI_R2_REGION?.trim() || "auto",
   };
 }
 
