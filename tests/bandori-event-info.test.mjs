@@ -13,11 +13,11 @@ import {
   buildEventInfoModel,
   deriveEventSongs,
   deriveEventSongsWithFallback,
-} from "../src/app/[locale]/bandori/eventtracker/eventInfo.ts";
+} from "../src/app/[locale]/bandori/events/eventInfo.ts";
 import {
   parseEventTrackerServerSearchParam,
   resolveEventTrackerServerSelection,
-} from "../src/app/[locale]/bandori/eventtracker/urlQuery.ts";
+} from "../src/app/[locale]/bandori/events/urlQuery.ts";
 
 const music = {
   "764": {
@@ -34,7 +34,7 @@ const music = {
 };
 
 const eventTrackerPageSource = readFileSync(
-  new URL("../src/app/[locale]/bandori/eventtracker/page.tsx", import.meta.url),
+  new URL("../src/app/[locale]/bandori/events/EventTrackerPage.tsx", import.meta.url),
   "utf8",
 );
 const eventSwitcherSource = readFileSync(
@@ -46,7 +46,7 @@ const serverIconSource = readFileSync(
   "utf8",
 );
 const eventInfoPanelSource = readFileSync(
-  new URL("../src/app/[locale]/bandori/eventtracker/EventInfoPanel.tsx", import.meta.url),
+  new URL("../src/app/[locale]/bandori/events/EventInfoPanel.tsx", import.meta.url),
   "utf8",
 );
 const eventBonusPanelSource = readFileSync(
@@ -54,11 +54,11 @@ const eventBonusPanelSource = readFileSync(
   "utf8",
 );
 const commentContentSource = readFileSync(
-  new URL("../src/app/[locale]/bandori/eventtracker/commentContent.tsx", import.meta.url),
+  new URL("../src/app/[locale]/bandori/events/commentContent.tsx", import.meta.url),
   "utf8",
 );
 const trackerStatusSummarySource = readFileSync(
-  new URL("../src/app/[locale]/bandori/eventtracker/TrackerStatusSummary.tsx", import.meta.url),
+  new URL("../src/app/[locale]/bandori/events/TrackerStatusSummary.tsx", import.meta.url),
   "utf8",
 );
 
@@ -141,7 +141,7 @@ test("event status uses the tracker three-state rule", () => {
   assert.match(eventInfoPanelSource, /prefix="距开始"/u);
   assert.match(eventInfoPanelSource, /prefix="距结束"/u);
   assert.equal(
-    eventInfoPanelSource.match(/<span className="text-sm font-semibold text-slate-800 dark:text-slate-100">/gu)?.length,
+    eventInfoPanelSource.match(/<span className="text-sm font-semibold text-\[var\(--theme-color-text-default\)\] dark:text-slate-100">/gu)?.length,
     2,
   );
   assert.doesNotMatch(eventInfoPanelSource, /text-xs font-semibold text-slate-600/u);
@@ -169,13 +169,13 @@ test("event tracker server selection prefers the page query without changing the
   assert.equal(resolveEventTrackerServerSelection("invalid", 1), 1);
   assert.equal(resolveEventTrackerServerSelection(null, 2), 2);
   assert.doesNotMatch(eventTrackerPageSource, /setPreferredServer/u);
-  assert.match(eventTrackerPageSource, /readInitialTrackerQueryState\(preferredServer\)/u);
+  assert.match(eventTrackerPageSource, /readInitialTrackerQueryState\(preferredServer, initialEventId\)/u);
 });
 
 test("event tracker renders the shared tracker surface for every server", () => {
   assert.match(
     eventTrackerPageSource,
-    /selectedServer,\s*hasAppliedInitialUrlState && selectedServer === 3 && activeView === "tracker" && !isTop10Selected,/u,
+    /selectedServer,\s*hasAppliedInitialUrlState && activeView === "tracker" && !isTop10Selected,/u,
   );
   assert.doesNotMatch(eventTrackerPageSource, /activeView === "tracker" \? selectedServer === 3/u);
   assert.doesNotMatch(eventTrackerPageSource, /分数追踪数据尚未接入|页面结构和服务器上下文已经就绪/u);
@@ -192,7 +192,7 @@ test("event server switcher uses the shared compact local Bestdori-style icons",
   assert.match(eventSwitcherSource, /inline-grid grid-cols-4/u);
   assert.match(eventSwitcherSource, /h-11 w-11[\s\S]*sm:h-10/u);
   assert.match(eventSwitcherSource, /first:rounded-l-\[11px\] last:rounded-r-\[11px\]/u);
-  assert.match(eventSwitcherSource, /active && "scale-105 ring-2 ring-sky-400/u);
+  assert.match(eventSwitcherSource, /active && "scale-105 ring-2 ring-\[var\(--theme-color-control-ring-pressed\)\]/u);
   assert.doesNotMatch(eventSwitcherSource, /shadow-\[inset_0_0_0_1px/u);
   assert.doesNotMatch(eventSwitcherSource, /\/res\/server-icons/u);
   assert.match(serverIconSource, /alt=\{isDecorative \? "" : serverCode\}/u);
@@ -232,7 +232,7 @@ test("event overview integrates bonuses into a responsive two-column layout", ()
   assert.match(eventInfoPanelSource, /<BandoriEventBonusPanel[\s\S]*variant="embedded"/u);
   assert.match(eventBonusPanelSource, /variant === "card" \? \([\s\S]*labelsT\("eventBonus"\)/u);
   assert.match(eventBonusPanelSource, /variant === "card" \? \([\s\S]*labelsT\("type"\)/u);
-  assert.match(eventBonusPanelSource, /border-b border-slate-200\/70 py-3 last:border-b-0[\s\S]*md:gap-5/u);
+  assert.match(eventBonusPanelSource, /border-b border-\[var\(--theme-color-border-subtle\)\] py-3 last:border-b-0[\s\S]*md:gap-5/u);
   assert.match(eventBonusPanelSource, /grid-cols-\[7rem_minmax\(0,1fr\)\] items-start gap-3/u);
   assert.match(eventBonusPanelSource, /variant === "embedded" && "justify-end"/u);
   assert.match(eventBonusPanelSource, /const LabelElement = variant === "embedded" \? "dt" : "div"/u);

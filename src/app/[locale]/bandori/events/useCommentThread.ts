@@ -211,6 +211,7 @@ export function useCommentThread(eventId: number | null, server: BandoriServer) 
   const eventGenerationRef = useRef(0);
   const rootLoadSequenceRef = useRef(0);
   const replyLoadsInFlightRef = useRef<Set<string>>(new Set());
+  const pendingCommentScrollIdRef = useRef<string | null>(null);
   const { userId, username, emailVerified, authReady } = useGameStore();
 
   const apiBase = eventId ? `/api/bandori/events/${eventId}/comments` : null;
@@ -224,6 +225,24 @@ export function useCommentThread(eventId: number | null, server: BandoriServer) 
   useEffect(() => {
     currentPageRef.current = currentPage;
   }, [currentPage]);
+
+  useEffect(() => {
+    const commentId = pendingCommentScrollIdRef.current;
+    if (!commentId || focusedCommentId !== commentId) return;
+
+    // Linked comments can finish loading before React commits the target node.
+    // Retry after relevant comment state commits and cancel obsolete frames.
+    const animationFrame = window.requestAnimationFrame(() => {
+      if (
+        pendingCommentScrollIdRef.current === commentId
+        && scrollToRenderedComment(commentId)
+      ) {
+        pendingCommentScrollIdRef.current = null;
+      }
+    });
+
+    return () => window.cancelAnimationFrame(animationFrame);
+  }, [comments, focusedCommentId, replies]);
 
   const loadRootComments = useCallback(async (page = 1): Promise<CommentListResponse | null> => {
     if (!apiBase) return null;
@@ -261,24 +280,27 @@ export function useCommentThread(eventId: number | null, server: BandoriServer) 
   const locateLinkedComment = useCallback(async (
     commentId: string,
     options: { expectedPage?: number; silent?: boolean } = {},
-  ): Promise<boolean> => {
-    if (!apiBase) return false;
+  ): Promise<number | null> => {
+    if (!apiBase) return null;
     const generation = eventGenerationRef.current;
+    pendingCommentScrollIdRef.current = commentId;
     setFocusedCommentId(commentId);
     if (scrollToRenderedComment(commentId)) {
-      return true;
+      pendingCommentScrollIdRef.current = null;
+      return currentPageRef.current;
     }
 
     try {
       const headers = await authHeaders();
       const data = await requestJson<CommentContextResponse>(buildCommentApiUrl(apiBase, server, `/${commentId}`), { headers });
       if (generation !== eventGenerationRef.current) {
-        return false;
+        return null;
       }
 
       if (options.expectedPage !== undefined && data.rootPage !== options.expectedPage) {
+        pendingCommentScrollIdRef.current = null;
         setFocusedCommentId(null);
-        return false;
+        return null;
       }
 
       const contextRoot = buildContextThread(data);
@@ -286,7 +308,7 @@ export function useCommentThread(eventId: number | null, server: BandoriServer) 
       if (data.rootPage !== currentPageRef.current || !rootVisible) {
         const pageData = await loadRootComments(data.rootPage);
         if (generation !== eventGenerationRef.current || !pageData) {
-          return false;
+          return null;
         }
       }
       if (contextRoot.previewReplies.length > 0) {
@@ -302,27 +324,25 @@ export function useCommentThread(eventId: number | null, server: BandoriServer) 
           };
         });
       }
-      window.requestAnimationFrame(() => {
-        scrollToRenderedComment(commentId);
-      });
-      return true;
+      return data.rootPage;
     } catch (err) {
       if (generation !== eventGenerationRef.current) {
-        return false;
+        return null;
       }
 
+      pendingCommentScrollIdRef.current = null;
       setFocusedCommentId(null);
       if (options.silent) {
-        return false;
+        return null;
       }
       setError(err instanceof Error ? err.message : "无法定位评论");
-      return false;
+      return null;
     }
   }, [apiBase, loadRootComments, server]);
 
   const navigateToComment = useCallback(async (commentId: string) => {
     const generation = eventGenerationRef.current;
-    const located = await locateLinkedComment(commentId, {
+    const locatedPage = await locateLinkedComment(commentId, {
       expectedPage: currentPageRef.current,
       silent: true,
     });
@@ -333,8 +353,8 @@ export function useCommentThread(eventId: number | null, server: BandoriServer) 
     replaceEventTrackerUrlQuery({
       eventId,
       server,
-      commentPage: currentPageRef.current,
-      commentId: located ? commentId : null,
+      commentPage: locatedPage ?? currentPageRef.current,
+      commentId: locatedPage !== null ? commentId : null,
     });
   }, [eventId, locateLinkedComment, server]);
 
@@ -358,6 +378,7 @@ export function useCommentThread(eventId: number | null, server: BandoriServer) 
     setLoading(false);
     setLoadingReplies({});
     setError("");
+    pendingCommentScrollIdRef.current = null;
     setFocusedCommentId(null);
     if (!eventId || !apiBase) return;
 
@@ -365,39 +386,33 @@ export function useCommentThread(eventId: number | null, server: BandoriServer) 
     const requestedPage = readCommentPageSearchParam();
     const commentId = params.get("comment");
     void (async () => {
-      const data = await loadRootComments(requestedPage);
-      if (generation !== eventGenerationRef.current || !data) {
-        return;
-      }
-
-      const loadedPage = data.page ?? requestedPage;
       if (commentId) {
-        if (findComment(data.comments, commentId)) {
-          setFocusedCommentId(commentId);
-          replaceEventTrackerUrlQuery({ eventId, server, commentPage: loadedPage, commentId });
-          window.requestAnimationFrame(() => {
-            scrollToRenderedComment(commentId);
-          });
-          return;
-        }
-
-        const located = await locateLinkedComment(commentId, {
-          expectedPage: loadedPage,
+        // Comment IDs are stable while reverse-sorted page numbers drift as new roots arrive.
+        // Resolve the comment before loading a potentially stale or invalid requested page.
+        const locatedPage = await locateLinkedComment(commentId, {
           silent: true,
         });
         if (generation !== eventGenerationRef.current) {
           return;
         }
 
-        replaceEventTrackerUrlQuery({
-          eventId,
-          server,
-          commentPage: loadedPage,
-          commentId: located ? commentId : null,
-        });
+        if (locatedPage !== null) {
+          replaceEventTrackerUrlQuery({
+            eventId,
+            server,
+            commentPage: locatedPage,
+            commentId,
+          });
+          return;
+        }
+      }
+
+      const data = await loadRootComments(requestedPage);
+      if (generation !== eventGenerationRef.current || !data) {
         return;
       }
 
+      const loadedPage = data.page ?? requestedPage;
       replaceEventTrackerUrlQuery({ eventId, server, commentPage: loadedPage, commentId: null });
     })();
   }, [apiBase, eventId, loadRootComments, locateLinkedComment, server]);
@@ -529,6 +544,7 @@ export function useCommentThread(eventId: number | null, server: BandoriServer) 
   const goToCommentPage = useCallback((page: number) => {
     const nextPage = Math.min(totalPages, Math.max(1, Math.trunc(page)));
     setPageInput(String(nextPage));
+    pendingCommentScrollIdRef.current = null;
     setFocusedCommentId(null);
     replaceEventTrackerUrlQuery({
       eventId,

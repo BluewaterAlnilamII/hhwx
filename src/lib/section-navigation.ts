@@ -36,7 +36,7 @@ export const siteNavigationGroups: SectionSidebarNavGroup[] = [
       },
       {
         id: "tracker",
-        href: "/bandori/eventtracker",
+        href: "/bandori/events",
         labelKey: "items.tracker",
         matchMode: "prefix",
       },

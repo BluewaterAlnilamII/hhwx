@@ -6,11 +6,11 @@ function readSource(path) {
   return readFileSync(new URL(path, import.meta.url), "utf8");
 }
 
-const pageSource = readSource("../src/app/[locale]/bandori/eventtracker/page.tsx");
-const trackerDataSource = readSource("../src/app/[locale]/bandori/eventtracker/useTrackerData.ts");
-const top10DataSource = readSource("../src/app/[locale]/bandori/eventtracker/useBandoriTop10Data.ts");
-const comparisonDataSource = readSource("../src/app/[locale]/bandori/eventtracker/useComparisonTrackerData.ts");
-const comparisonPreferencesSource = readSource("../src/app/[locale]/bandori/eventtracker/useComparisonPreferences.ts");
+const pageSource = readSource("../src/app/[locale]/bandori/events/EventTrackerPage.tsx");
+const trackerDataSource = readSource("../src/app/[locale]/bandori/events/useTrackerData.ts");
+const top10DataSource = readSource("../src/app/[locale]/bandori/events/useBandoriTop10Data.ts");
+const comparisonDataSource = readSource("../src/app/[locale]/bandori/events/useComparisonTrackerData.ts");
+const comparisonPreferencesSource = readSource("../src/app/[locale]/bandori/events/useComparisonPreferences.ts");
 
 test("all servers request cutoff and TOP10 HTTP history", () => {
   assert.match(

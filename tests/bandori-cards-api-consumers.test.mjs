@@ -266,8 +266,8 @@ test("avatar collision identity is persisted and propagated to public avatar con
     readSource("supabase/migrations/20260724185700_enforce_avatar_card_identity.sql"),
     readSource("supabase/schema/auth_schema.sql"),
     readSource("src/lib/comments.ts"),
-    readSource("src/app/[locale]/bandori/eventtracker/commentTypes.ts"),
-    readSource("src/app/[locale]/bandori/eventtracker/CommentItem.tsx"),
+    readSource("src/app/[locale]/bandori/events/commentTypes.ts"),
+    readSource("src/app/[locale]/bandori/events/CommentItem.tsx"),
     readSource("src/components/Toolbar.tsx"),
     readSource("src/components/account/AccountCardAvatar.tsx"),
   ]);

@@ -319,8 +319,9 @@ export default function AccountNotificationsPage() {
 
   const renderNotificationCard = (notification: CommentNotification) => {
     const eventId = notification.eventId ?? notification.targetId;
-    const serverQuery = notification.server ? `&server=${encodeURIComponent(notification.server)}` : "";
-    const href = `/bandori/eventtracker?event=${encodeURIComponent(eventId)}${serverQuery}&comment=${encodeURIComponent(notification.linkCommentId)}`;
+    const query = new URLSearchParams({ comment: notification.linkCommentId });
+    if (notification.server) query.set("server", notification.server);
+    const href = `/bandori/events/${encodeURIComponent(eventId)}?${query.toString()}`;
     return (
       <Link
         key={notification.id}

@@ -1,5 +1,7 @@
 import type { TrackingMode } from "./types";
 import type { TrackerRankingSelection } from "./tracker-tier-preference";
+import { buildLocalizedPathname, DEFAULT_LOCALE, getLocaleFromPathname } from "@/i18n/routing";
+import { buildBandoriEventsPath } from "@/lib/bandori-event-route";
 import {
   getBandoriServerCode,
   parseBandoriServerParam,
@@ -111,7 +113,13 @@ export function replaceEventTrackerUrlQuery(patch: EventTrackerUrlQueryPatch) {
   }
 
   const url = new URL(window.location.href);
-  setPositiveIntegerParam(url.searchParams, "event", patch.eventId);
+  if (patch.eventId !== undefined) {
+    url.searchParams.delete("event");
+    url.pathname = buildLocalizedPathname(
+      buildBandoriEventsPath(patch.eventId),
+      getLocaleFromPathname(url.pathname) ?? DEFAULT_LOCALE,
+    );
+  }
 
   if (patch.trackingMode !== undefined) {
     if (patch.trackingMode === null) {
