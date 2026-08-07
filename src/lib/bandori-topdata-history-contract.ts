@@ -7,6 +7,7 @@ import {
   requireBandoriTopDataSafeInteger,
   type BandoriTopDataPayload,
 } from "@/lib/bandori-topdata-contract";
+import { getBandoriServerFromCode, type BandoriServerCode } from "@/lib/bandori-server";
 
 export const BANDORI_TOPDATA_HISTORY_PREFIX = "bandori/trackerdata/topdata";
 export const BANDORI_TOPDATA_MAX_MANIFEST_BYTES = 64 * 1024;
@@ -61,22 +62,28 @@ function requireSha256(value: unknown, label: string): string {
   return value;
 }
 
-export function buildBandoriTopDataTargetPrefix(eventId: number, server = "cn"): string {
+export function buildBandoriTopDataTargetPrefix(
+  eventId: number,
+  server: BandoriServerCode = "cn",
+): string {
   requireBandoriTopDataSafeInteger(eventId, "Bandori topdata event ID", 1);
-  if (eventId > 2_147_483_647 || server !== "cn") {
+  if (eventId > 2_147_483_647 || getBandoriServerFromCode(server) === null) {
     throw new Error(`Unsupported Bandori topdata target: ${server}/${eventId}`);
   }
   return `${BANDORI_TOPDATA_HISTORY_PREFIX}/events/${eventId}/${server}`;
 }
 
-export function buildBandoriTopDataManifestKey(eventId: number, server = "cn"): string {
+export function buildBandoriTopDataManifestKey(
+  eventId: number,
+  server: BandoriServerCode = "cn",
+): string {
   return `${buildBandoriTopDataTargetPrefix(eventId, server)}/manifest.json`;
 }
 
 export function parseBandoriTopDataManifest(
   value: unknown,
   eventId: number,
-  server = "cn",
+  server: BandoriServerCode = "cn",
 ): BandoriTopDataManifest {
   const manifest = requireRecord(value, "Bandori topdata manifest");
   requireExactKeys(

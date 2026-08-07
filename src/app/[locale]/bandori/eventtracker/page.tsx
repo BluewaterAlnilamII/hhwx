@@ -12,6 +12,7 @@ import {
   pickBandoriRegionalText,
   type BandoriServer,
 } from "@/lib/bandori-server";
+import { remapBandoriMonthlyRankingId } from "@/lib/bandori-monthly-ranking-calendar";
 import {
   useBandoriPreferredServer,
   useBandoriPreferencesStore,
@@ -251,14 +252,16 @@ function hasComparisonConfig(
   ));
 }
 
-function isLegacyCnEventWithoutT1500(targetId: number): boolean {
-  return targetId <= CN_T1500_LEGACY_EVENT_ID_LIMIT && targetId !== CN_T1500_BACKFILL_EVENT_ID;
+function isLegacyCnEventWithoutT1500(server: BandoriServer, targetId: number): boolean {
+  return server === 3
+    && targetId <= CN_T1500_LEGACY_EVENT_ID_LIMIT
+    && targetId !== CN_T1500_BACKFILL_EVENT_ID;
 }
 
-function resolveLegacyCnEventTier(targetId: number, tier: number): number {
+function resolveLegacyCnEventTier(server: BandoriServer, targetId: number, tier: number): number {
   if (
     tier === EVENT_TIER_1500 &&
-    isLegacyCnEventWithoutT1500(targetId)
+    isLegacyCnEventWithoutT1500(server, targetId)
   ) {
     return EVENT_TIER_1000;
   }
@@ -266,11 +269,15 @@ function resolveLegacyCnEventTier(targetId: number, tier: number): number {
   return tier;
 }
 
-function getComparisonTierOptions(config: ComparisonConfig, tierOptions: readonly number[]): readonly number[] {
+function getComparisonTierOptions(
+  server: BandoriServer,
+  config: ComparisonConfig,
+  tierOptions: readonly number[],
+): readonly number[] {
   if (
     config.targetType !== "event" ||
     config.targetId === null ||
-    !isLegacyCnEventWithoutT1500(config.targetId)
+    !isLegacyCnEventWithoutT1500(server, config.targetId)
   ) {
     return tierOptions;
   }
@@ -278,9 +285,13 @@ function getComparisonTierOptions(config: ComparisonConfig, tierOptions: readonl
   return tierOptions.filter((tier) => tier !== EVENT_TIER_1500);
 }
 
-function getMainTrackerTierOptions(trackingMode: TrackingMode, eventId: number | null): readonly number[] {
+function getMainTrackerTierOptions(
+  server: BandoriServer,
+  trackingMode: TrackingMode,
+  eventId: number | null,
+): readonly number[] {
   const tierOptions = getEventTrackerTiersForMode(trackingMode);
-  if (trackingMode !== "event" || eventId === null || !isLegacyCnEventWithoutT1500(eventId)) {
+  if (trackingMode !== "event" || eventId === null || !isLegacyCnEventWithoutT1500(server, eventId)) {
     return tierOptions;
   }
 
@@ -295,28 +306,41 @@ function resolveTrackingModeForEventType(trackingMode: TrackingMode, eventType: 
   return trackingMode === "song" && isSongRankingDisabledEventType(eventType) ? "event" : trackingMode;
 }
 
-function isComparisonTierSelectable(config: ComparisonConfig, tierOptions: readonly number[]): boolean {
-  return config.tier !== null && getComparisonTierOptions(config, tierOptions).includes(config.tier);
+function isComparisonTierSelectable(
+  server: BandoriServer,
+  config: ComparisonConfig,
+  tierOptions: readonly number[],
+): boolean {
+  return config.tier !== null && getComparisonTierOptions(server, config, tierOptions).includes(config.tier);
 }
 
-function normalizeComparisonConfigTier(config: ComparisonConfig): ComparisonConfig {
+function normalizeComparisonConfigTier(
+  server: BandoriServer,
+  config: ComparisonConfig,
+): ComparisonConfig {
   if (config.targetType !== "event" || config.targetId === null || config.tier === null) {
     return config;
   }
 
-  const tier = resolveLegacyCnEventTier(config.targetId, config.tier);
+  const tier = resolveLegacyCnEventTier(server, config.targetId, config.tier);
   return tier === config.tier ? config : { ...config, tier };
 }
 
-function resolveMainTrackerTier(trackingMode: TrackingMode, eventId: number | null, tier: number): number {
+function resolveMainTrackerTier(
+  server: BandoriServer,
+  trackingMode: TrackingMode,
+  eventId: number | null,
+  tier: number,
+): number {
   if (trackingMode !== "event" || eventId === null) {
     return tier;
   }
 
-  return resolveLegacyCnEventTier(eventId, tier);
+  return resolveLegacyCnEventTier(server, eventId, tier);
 }
 
 function resolveMainTrackerRanking(
+  server: BandoriServer,
   trackingMode: TrackingMode,
   eventId: number | null,
   ranking: TrackerRankingSelection,
@@ -327,7 +351,7 @@ function resolveMainTrackerRanking(
       : getDefaultTierForMode(trackingMode);
   }
 
-  return resolveMainTrackerTier(trackingMode, eventId, ranking);
+  return resolveMainTrackerTier(server, trackingMode, eventId, ranking);
 }
 
 function getComparisonConfigKey(config: ComparisonConfig): string | null {
@@ -337,6 +361,7 @@ function getComparisonConfigKey(config: ComparisonConfig): string | null {
 }
 
 function findPreviousSameTypeEventComparisonTarget(
+  server: BandoriServer,
   events: MinimalEvent[],
   currentEventId: number | null,
   currentEventType: string | null,
@@ -348,7 +373,7 @@ function findPreviousSameTypeEventComparisonTarget(
   }
 
   const target = events.find((event) => {
-    const comparisonTier = resolveLegacyCnEventTier(event.id, tier);
+    const comparisonTier = resolveLegacyCnEventTier(server, event.id, tier);
 
     return (
       event.id < currentEventId &&
@@ -360,7 +385,7 @@ function findPreviousSameTypeEventComparisonTarget(
   return target
     ? {
         targetId: target.id,
-        tier: resolveLegacyCnEventTier(target.id, tier),
+        tier: resolveLegacyCnEventTier(server, target.id, tier),
       }
     : null;
 }
@@ -406,7 +431,12 @@ function readInitialTrackerQueryState(preferredServer: BandoriServer): InitialTr
   return {
     currentEventId,
     trackingMode,
-    selectedRanking: resolveMainTrackerRanking(trackingMode, currentEventId, selectedRanking),
+    selectedRanking: resolveMainTrackerRanking(
+      selectedServer,
+      trackingMode,
+      currentEventId,
+      selectedRanking,
+    ),
     selectedServer,
     activeView,
   };
@@ -526,7 +556,9 @@ export default function EventTrackerPage() {
   const [trackingMode, setTrackingMode] = useState<TrackingMode>("event");
   const [selectedRanking, setSelectedRanking] = useState<TrackerRankingSelection>(() => getDefaultTierForMode("event"));
   const [selectedSongId, setSelectedSongId] = useState<number>(0);
-  const [selectedMonthlyMonthId, setSelectedMonthlyMonthId] = useState<number>(() => getCurrentMonthlyRankingWindow().monthId);
+  const [selectedMonthlyMonthId, setSelectedMonthlyMonthId] = useState<number>(
+    () => getCurrentMonthlyRankingWindow(DEFAULT_BANDORI_PREFERRED_SERVER).monthId,
+  );
   const [selectedServer, setSelectedServer] = useState<BandoriServer>(DEFAULT_BANDORI_PREFERRED_SERVER);
   const [activeView, setActiveView] = useState<EventTrackerView>("tracker");
   const [chartRenderRevision, setChartRenderRevision] = useState(0);
@@ -555,7 +587,10 @@ export default function EventTrackerPage() {
   const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [chartViewportHeight, setChartViewportHeight] = useState(400);
   const [hasAppliedInitialUrlState, setHasAppliedInitialUrlState] = useState(false);
-  const monthlyRankingOptions = useMemo(() => getMonthlyRankingOptions(), []);
+  const monthlyRankingOptions = useMemo(
+    () => getMonthlyRankingOptions(selectedServer),
+    [selectedServer],
+  );
   const isTop10Selected = trackingMode === "event" && selectedRanking === TOP10_RANKING_SELECTION;
   const selectedTier = typeof selectedRanking === "number"
     ? selectedRanking
@@ -586,15 +621,15 @@ export default function EventTrackerPage() {
     selectedSongId,
     selectedMonthlyMonthId,
     selectedServer,
-    hasAppliedInitialUrlState && selectedServer === 3 && activeView === "tracker" && !isTop10Selected,
+    hasAppliedInitialUrlState && activeView === "tracker" && !isTop10Selected,
   );
 
   // ===== 投影偏好持久化 =====
   const [showInstantProjection, setShowInstantProjection] = useProjectionPreference(INSTANT_PROJECTION_STORAGE_KEY, true);
   const [showDayProjection, setShowDayProjection] = useProjectionPreference(DAY_PROJECTION_STORAGE_KEY, true);
   const [showBestdoriPrediction, setShowBestdoriPrediction] = useProjectionPreference(BESTDORI_PREDICTION_STORAGE_KEY, false);
-  const eventComparisonPreferences = useComparisonPreferences("event");
-  const monthlyComparisonPreferences = useComparisonPreferences("monthly");
+  const eventComparisonPreferences = useComparisonPreferences(selectedServer, "event");
+  const monthlyComparisonPreferences = useComparisonPreferences(selectedServer, "monthly");
   const comparisonTargetType: ComparisonTargetType = trackingMode === "monthly" ? "monthly" : "event";
   const activeComparisonPreferences = comparisonTargetType === "monthly"
     ? monthlyComparisonPreferences
@@ -620,7 +655,12 @@ export default function EventTrackerPage() {
     const nextTrackingMode = resolveTrackingModeForEventType(trackingMode, eventTypeById.get(nextEventId));
     const preferredRanking = normalizeTrackerRankingForMode(nextTrackingMode, selectedRanking)
       ?? readTrackerRankingPreference(nextTrackingMode);
-    const nextRanking = resolveMainTrackerRanking(nextTrackingMode, nextEventId, preferredRanking);
+    const nextRanking = resolveMainTrackerRanking(
+      selectedServer,
+      nextTrackingMode,
+      nextEventId,
+      preferredRanking,
+    );
 
     setCurrentEventId(nextEventId);
     setTrackingMode(nextTrackingMode);
@@ -633,9 +673,26 @@ export default function EventTrackerPage() {
       commentPage: null,
       commentId: null,
     });
-  }, [eventTypeById, selectedRanking, trackingMode]);
+  }, [eventTypeById, selectedRanking, selectedServer, trackingMode]);
 
   const handleServerChange = useCallback((server: BandoriServer) => {
+    setSelectedMonthlyMonthId((previousMonthId) => {
+      try {
+        return remapBandoriMonthlyRankingId(
+          getBandoriServerCode(selectedServer),
+          getBandoriServerCode(server),
+          previousMonthId,
+        );
+      } catch {
+        return getCurrentMonthlyRankingWindow(server).monthId;
+      }
+    });
+    setSelectedRanking((previousRanking) => resolveMainTrackerRanking(
+      server,
+      trackingMode,
+      resolvedCurrentEventId,
+      previousRanking,
+    ));
     setSelectedServer(server);
     setZoomIndex(0);
     replaceEventTrackerUrlQuery({
@@ -643,7 +700,7 @@ export default function EventTrackerPage() {
       commentPage: null,
       commentId: null,
     });
-  }, []);
+  }, [resolvedCurrentEventId, selectedServer, trackingMode]);
 
   const handleViewChange = useCallback((view: EventTrackerView) => {
     setActiveView(view);
@@ -665,6 +722,7 @@ export default function EventTrackerPage() {
     }
 
     const nextRanking = resolveMainTrackerRanking(
+      selectedServer,
       nextMode,
       resolvedCurrentEventId,
       readTrackerRankingPreference(nextMode),
@@ -673,7 +731,7 @@ export default function EventTrackerPage() {
     setTrackingMode(nextMode);
     setSelectedRanking(nextRanking);
     setZoomIndex(0);
-  }, [isSongModeDisabled, resolvedCurrentEventId, trackingMode]);
+  }, [isSongModeDisabled, resolvedCurrentEventId, selectedServer, trackingMode]);
 
   const handleTierChange = useCallback((tier: number) => {
     const normalizedTier = normalizeTierForMode(trackingMode, tier);
@@ -681,7 +739,12 @@ export default function EventTrackerPage() {
       return;
     }
 
-    const nextTier = resolveMainTrackerTier(trackingMode, resolvedCurrentEventId, normalizedTier);
+    const nextTier = resolveMainTrackerTier(
+      selectedServer,
+      trackingMode,
+      resolvedCurrentEventId,
+      normalizedTier,
+    );
 
     if (nextTier === selectedRanking) {
       return;
@@ -689,7 +752,7 @@ export default function EventTrackerPage() {
 
     setSelectedRanking(nextTier);
     writeTrackerRankingPreference(trackingMode, nextTier);
-  }, [resolvedCurrentEventId, selectedRanking, trackingMode]);
+  }, [resolvedCurrentEventId, selectedRanking, selectedServer, trackingMode]);
 
   const handleTop10Change = useCallback(() => {
     if (trackingMode !== "event" || selectedRanking === TOP10_RANKING_SELECTION) {
@@ -723,6 +786,9 @@ export default function EventTrackerPage() {
       setTrackingMode(nextState.trackingMode);
       setSelectedRanking(nextState.selectedRanking);
       setSelectedServer(nextState.selectedServer);
+      setSelectedMonthlyMonthId(
+        getCurrentMonthlyRankingWindow(nextState.selectedServer).monthId,
+      );
       setActiveView(nextState.activeView);
       setHasAppliedInitialUrlState(true);
     });
@@ -745,6 +811,7 @@ export default function EventTrackerPage() {
       }
 
       const nextRanking = resolveMainTrackerRanking(
+        selectedServer,
         "event",
         resolvedCurrentEventId,
         readTrackerRankingPreference("event"),
@@ -757,7 +824,7 @@ export default function EventTrackerPage() {
     return () => {
       cancelled = true;
     };
-  }, [hasAppliedInitialUrlState, isSongModeDisabled, resolvedCurrentEventId, trackingMode]);
+  }, [hasAppliedInitialUrlState, isSongModeDisabled, resolvedCurrentEventId, selectedServer, trackingMode]);
 
   useEffect(() => {
     if (!hasAppliedInitialUrlState) {
@@ -817,9 +884,7 @@ export default function EventTrackerPage() {
       return [];
     }
 
-    const challengeSongIds = eventMeta.musicIds.jp.length > 0
-      ? eventMeta.musicIds.jp
-      : eventMeta.musicIds.cn;
+    const challengeSongIds = eventMeta.musicIds[getBandoriServerCode(selectedServer)];
 
     if (challengeSongIds.length === 0) {
       return [];
@@ -830,11 +895,11 @@ export default function EventTrackerPage() {
       .filter((musicId) => Number.isFinite(musicId) && musicId > 0);
 
     return Array.from(new Set(songIds)).sort((left, right) => left - right);
-  }, [eventMeta]);
+  }, [eventMeta, selectedServer]);
 
   const mainTierOptions = useMemo(
-    () => getMainTrackerTierOptions(trackingMode, resolvedCurrentEventId),
-    [resolvedCurrentEventId, trackingMode],
+    () => getMainTrackerTierOptions(selectedServer, trackingMode, resolvedCurrentEventId),
+    [resolvedCurrentEventId, selectedServer, trackingMode],
   );
 
   const challengeSongTitleMap = useMemo(() => Object.fromEntries(
@@ -886,9 +951,9 @@ export default function EventTrackerPage() {
   const comparisonTierOptionsByConfigId = useMemo(
     () => new Map(comparisonConfigs.map((config) => [
       config.id,
-      getComparisonTierOptions(config, comparisonTierOptions),
+      getComparisonTierOptions(selectedServer, config, comparisonTierOptions),
     ])),
-    [comparisonConfigs, comparisonTierOptions],
+    [comparisonConfigs, comparisonTierOptions, selectedServer],
   );
   const defaultComparisonTier = comparisonTierOptions.includes(selectedTier) ? selectedTier : comparisonTierOptions[0];
   const defaultComparisonTargetId = comparisonTargetType === "monthly"
@@ -901,10 +966,10 @@ export default function EventTrackerPage() {
         config.targetId !== null &&
         config.tier !== null &&
         comparisonTargetIdSet.has(config.targetId) &&
-        isComparisonTierSelectable(config, comparisonTierOptions)
+        isComparisonTierSelectable(selectedServer, config, comparisonTierOptions)
       ))
       .map((config, colorIndex) => ({ ...config, colorIndex })),
-    [comparisonConfigs, comparisonTargetIdSet, comparisonTargetType, comparisonTierOptions],
+    [comparisonConfigs, comparisonTargetIdSet, comparisonTargetType, comparisonTierOptions, selectedServer],
   );
   const activeComparisonConfigs = useMemo(
     () => resolvedComparisonConfigs.filter((config) => config.enabled),
@@ -927,7 +992,7 @@ export default function EventTrackerPage() {
       const nextConfigs: ComparisonConfig[] = [];
 
       for (const config of previous) {
-        const normalizedConfig = normalizeComparisonConfigTier(config);
+        const normalizedConfig = normalizeComparisonConfigTier(selectedServer, config);
         const configKey = getComparisonConfigKey(normalizedConfig);
 
         if (
@@ -935,7 +1000,7 @@ export default function EventTrackerPage() {
           normalizedConfig.targetId === null ||
           normalizedConfig.tier === null ||
           !comparisonTargetIdSet.has(normalizedConfig.targetId) ||
-          !isComparisonTierSelectable(normalizedConfig, comparisonTierOptions) ||
+          !isComparisonTierSelectable(selectedServer, normalizedConfig, comparisonTierOptions) ||
           configKey === null ||
           seenConfigKeys.has(configKey)
         ) {
@@ -954,6 +1019,7 @@ export default function EventTrackerPage() {
     comparisonTargetOptions.length,
     comparisonTargetType,
     comparisonTierOptions,
+    selectedServer,
     setComparisonConfigs,
   ]);
 
@@ -963,7 +1029,7 @@ export default function EventTrackerPage() {
     setComparisonConfigs((previous) => {
       const comparisonTarget = comparisonTargetType === "monthly"
         ? findPreviousMonthlyComparisonTarget(monthlyRankingOptions, selectedMonthlyMonthId, defaultComparisonTier, previous)
-        : findPreviousSameTypeEventComparisonTarget(comparisonEventOptions, resolvedCurrentEventId, currentEventType, defaultComparisonTier, previous);
+        : findPreviousSameTypeEventComparisonTarget(selectedServer, comparisonEventOptions, resolvedCurrentEventId, currentEventType, defaultComparisonTier, previous);
 
       if (comparisonTarget === null) {
         return previous;
@@ -989,6 +1055,7 @@ export default function EventTrackerPage() {
     monthlyRankingOptions,
     resolvedCurrentEventId,
     selectedMonthlyMonthId,
+    selectedServer,
     setComparisonConfigs,
   ]);
 
@@ -996,7 +1063,7 @@ export default function EventTrackerPage() {
     setComparisonConfigs((previous) => previous.map((config) => {
       if (config.id !== id) return config;
 
-      const nextConfig = normalizeComparisonConfigTier({ ...config, ...patch });
+      const nextConfig = normalizeComparisonConfigTier(selectedServer, { ...config, ...patch });
       const nextKey = getComparisonConfigKey(nextConfig);
       const isDuplicate = nextKey !== null && previous.some((other) => (
         other.id !== id &&
@@ -1011,7 +1078,7 @@ export default function EventTrackerPage() {
 
       return nextConfig;
     }));
-  }, [setComparisonConfigs]);
+  }, [selectedServer, setComparisonConfigs]);
 
   const handleToggleComparison = useCallback((id: string) => {
     setComparisonConfigs((previous) => previous.map((config) => (
@@ -1050,7 +1117,13 @@ export default function EventTrackerPage() {
     hasAppliedInitialUrlState && activeView === "info",
   );
 
-  const { domainStart, domainEnd, cutoffEnd, midnights } = useChartDomain(trackingMode, startDate, endDate, selectedMonthlyMonthId);
+  const { domainStart, domainEnd, cutoffEnd, midnights } = useChartDomain(
+    trackingMode,
+    startDate,
+    endDate,
+    selectedMonthlyMonthId,
+    selectedServer,
+  );
   const hasActualTrackerData = useMemo(
     () => chartData.some((point) => isActualTrackerPoint(point, domainStart, trackingMode, chartData.length)),
     [chartData, domainStart, trackingMode],
@@ -1067,7 +1140,7 @@ export default function EventTrackerPage() {
     tier: selectedTier,
   });
   const { comparisonLines } = useComparisonTrackerData({
-    enabled: hasAppliedInitialUrlState && selectedServer === 3 && activeView === "tracker" && !isTop10Selected && (trackingMode === "event" || trackingMode === "monthly"),
+    enabled: hasAppliedInitialUrlState && activeView === "tracker" && !isTop10Selected && (trackingMode === "event" || trackingMode === "monthly"),
     configs: activeComparisonConfigs,
     events: allEvents,
     monthlyOptions: monthlyRankingOptions,
@@ -1075,6 +1148,7 @@ export default function EventTrackerPage() {
     currentStart: typeof domainStart === "number" ? domainStart : null,
     currentEnd: typeof domainEnd === "number" ? domainEnd : null,
     liveTarget,
+    server: selectedServer,
   });
   const comparisonLineById = useMemo(
     () => new Map(comparisonLines.map((line) => [line.config.id, line])),
@@ -1173,8 +1247,10 @@ export default function EventTrackerPage() {
   );
   const holidayLookup = useMemo(() => buildChinaMainlandHolidayLookup(holidayData), [holidayData]);
   const nonWorkingDayBands = useMemo(
-    () => buildNonWorkingDayBands(domainStart, domainEnd, holidayLookup),
-    [domainEnd, domainStart, holidayLookup],
+    () => selectedServer === 3
+      ? buildNonWorkingDayBands(domainStart, domainEnd, holidayLookup)
+      : [],
+    [domainEnd, domainStart, holidayLookup, selectedServer],
   );
   const latestActualDataTime = useMemo(() => {
     for (let index = finalDisplayedData.length - 1; index >= 0; index -= 1) {
@@ -1353,7 +1429,7 @@ export default function EventTrackerPage() {
     [displayedChartData],
   );
   const comparisonChartKey = comparisonConfigs.map((config) => `${config.targetType}:${config.targetId}:${config.tier}`).join(",");
-  const chartContainerKey = `${resolvedCurrentEventId ?? "none"}-${trackingMode}-${selectedMonthlyMonthId}-${selectedTier}-${resolvedSelectedSongId}-${comparisonChartKey}-${comparisonAlignment}-${showBestdoriPrediction}-${bestdoriPrediction.status}-${chartRenderRevision}`;
+  const chartContainerKey = `${selectedServer}-${resolvedCurrentEventId ?? "none"}-${trackingMode}-${selectedMonthlyMonthId}-${selectedTier}-${resolvedSelectedSongId}-${comparisonChartKey}-${comparisonAlignment}-${showBestdoriPrediction}-${bestdoriPrediction.status}-${chartRenderRevision}`;
 
   // ===== 分数摘要 =====
   const scoreSummary = useMemo(() => {

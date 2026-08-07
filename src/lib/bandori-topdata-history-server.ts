@@ -6,6 +6,7 @@ import {
 import {
   type BandoriTopDataPayload,
 } from "@/lib/bandori-topdata-contract";
+import type { BandoriServerCode } from "@/lib/bandori-server";
 import {
   BANDORI_TOPDATA_MAX_COMPRESSED_BYTES,
   BANDORI_TOPDATA_MAX_DECOMPRESSED_BYTES,
@@ -137,7 +138,7 @@ function staleResult(targetKey: string): BandoriTopDataHistoryReadResult | null 
 }
 
 export async function readBandoriTopDataHistory(
-  server: "cn",
+  server: BandoriServerCode,
   eventId: number,
 ): Promise<BandoriTopDataHistoryReadResult> {
   let source;
@@ -204,6 +205,7 @@ export async function readBandoriTopDataHistory(
     if (stale) {
       console.warn(JSON.stringify({
         event: "bandori_topdata_history_stale",
+        server,
         eventId,
         generation: stale.generation,
         publishedAt: stale.publishedAt,
@@ -214,6 +216,7 @@ export async function readBandoriTopDataHistory(
     }
     console.warn(JSON.stringify({
       event: "bandori_topdata_history_read_failure",
+      server,
       eventId,
       reason: error instanceof BandoriTopDataHistoryReadError ? "timeout" : "object_unavailable",
       cooldownMs: FAILURE_COOLDOWN_MS,

@@ -1,6 +1,6 @@
 # Bandori Event TOP10 Backend and API
 
-This document defines the first CN event TOP10 backend. The public history API
+This document defines the CN event TOP10 producer and the four-server history adapter. The public history API
 preserves Bestdori's successful `eventtop` JSON shape so existing chart callers
 can consume it without an HHWX success envelope. Errors remain explicit HHWX
 errors. This is a registered compatibility adapter, not a template for other APIs.
@@ -8,10 +8,10 @@ errors. This is a registered compatibility adapter, not a template for other API
 ## Public history API
 
 ```text
-GET /api/bandori/tracker/topdata?server=3&event=318&type=event
+GET /api/bandori/tracker/topdata?server={0|1|2|3}&event=318&type=event
 ```
 
-- `server=3` and a positive `event` no greater than `2147483647` are required.
+- A numeric `server=0|1|2|3` and a positive `event` no greater than `2147483647` are required. Server codes in object storage are `jp|en|tw|cn`.
 - `type` defaults to `event`; no other type is currently supported.
 - Only `server`, `event`, and `type` are read. `interval`, `latest`, `mid`, and
   all other query parameters are ignored. Supplying `latest=1` still returns
@@ -37,8 +37,8 @@ The tracker publishes immutable gzip packs and a conditional manifest to the
 bucket configured by `BANDORI_PRIVATE_R2_BUCKET`:
 
 ```text
-bandori/trackerdata/topdata/events/{eventId}/cn/manifest.json
-bandori/trackerdata/topdata/events/{eventId}/cn/packs/event/{sha256}.json.gz
+bandori/trackerdata/topdata/events/{eventId}/{server}/manifest.json
+bandori/trackerdata/topdata/events/{eventId}/{server}/packs/event/{sha256}.json.gz
 ```
 
 The Web API reads these objects through the shared private S3/R2 reader. It
@@ -70,9 +70,10 @@ sample defines the displayed rank. Player rows show the card avatar from `sid` a
 `degrees`, or the player-level `rank` field. Empty history uses the shared tracker
 message, `暂无该排名档位的追踪数据`.
 
-TOP10 is available only for `server=3`. The JP, EN, and TW frontend shells expose
-the same TOP10 selection but do not issue a request until their backend histories
-exist. The public Bestdori-compatible history API continues to ignore `latest`.
+TOP10 history is requested on all four servers. JP, EN, and TW retain the same
+selection and empty panel; a missing regional manifest returns the exact empty
+success body rather than suppressing the request or falling back to another source.
+The public Bestdori-compatible history API continues to ignore `latest`.
 HTTP history is loaded on first use, event changes, and foreground resume, using
 the same policy as cutoff history. It is never polled every 30 seconds. Prediction,
 projection, and comparison remain cutoff-only.
@@ -91,7 +92,7 @@ merge by revision, retry the bootstrap read with a bound, disconnect on unmount 
 prolonged tab hiding, and retain a bounded cache. Each adapter supplies only its
 topic, event, latest-row query, parser, and revision merge rule.
 
-The TOP10 adapter uses
+The CN-only TOP10 live adapter uses
 `bandori_tracker_topdata_latest_snapshots`, event `topdata_snapshot`, and topic
 `bandori:topdata:cn:events:{eventId}`. Its current snapshot is merged into the
 cached HTTP history only for rendering: replace the same timestamp, append a newer
@@ -101,7 +102,9 @@ back into the session history cache. A foreground history refresh updates only t
 sparse R2 baseline and remains independent of the live connection. Existing
 unauthenticated behavior remains the sparse HTTP history only. The adapter is active only when
 `NEXT_PUBLIC_BANDORI_TRACKER_LIVE_SOURCE=broadcast` and the restored session has a
-real user.
+real user. JP, EN, and TW never query the TOP10 latest table or create a TOP10
+Broadcast channel; if a compliant regional R2 manifest is published later, the
+existing history API and panel can read it without a frontend change.
 
 ## Release and rollback
 

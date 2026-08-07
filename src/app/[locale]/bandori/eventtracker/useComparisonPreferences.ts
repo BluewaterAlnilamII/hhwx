@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { getBandoriServerCode, type BandoriServer } from "@/lib/bandori-server";
 import {
   COMPARISON_ALIGNMENT_STORAGE_KEY,
   COMPARISON_CONFIG_STORAGE_KEY,
@@ -14,6 +15,14 @@ const COMPARISON_PREFERENCE_EVENT = "eventtracker:comparison-preference-change";
 
 type ConfigUpdater = ComparisonConfig[] | ((previous: ComparisonConfig[]) => ComparisonConfig[]);
 type AlignmentUpdater = ComparisonAlignment | ((previous: ComparisonAlignment) => ComparisonAlignment);
+type ScopedConfigsState = {
+  storageKey: string;
+  value: ComparisonConfig[];
+};
+type ScopedAlignmentState = {
+  storageKey: string;
+  value: ComparisonAlignment;
+};
 
 function areConfigsEqual(left: ComparisonConfig[], right: ComparisonConfig[]): boolean {
   if (left.length !== right.length) {
@@ -32,17 +41,21 @@ function areConfigsEqual(left: ComparisonConfig[], right: ComparisonConfig[]): b
   });
 }
 
-function getPreferenceStorageKeys(targetType: ComparisonTargetType) {
+function getPreferenceStorageKeys(
+  server: BandoriServer,
+  targetType: ComparisonTargetType,
+) {
+  const serverSuffix = getBandoriServerCode(server);
   if (targetType === "monthly") {
     return {
-      configsKey: MONTHLY_COMPARISON_CONFIG_STORAGE_KEY,
-      alignmentKey: MONTHLY_COMPARISON_ALIGNMENT_STORAGE_KEY,
+      configsKey: `${MONTHLY_COMPARISON_CONFIG_STORAGE_KEY}:${serverSuffix}`,
+      alignmentKey: `${MONTHLY_COMPARISON_ALIGNMENT_STORAGE_KEY}:${serverSuffix}`,
     };
   }
 
   return {
-    configsKey: COMPARISON_CONFIG_STORAGE_KEY,
-    alignmentKey: COMPARISON_ALIGNMENT_STORAGE_KEY,
+    configsKey: `${COMPARISON_CONFIG_STORAGE_KEY}:${serverSuffix}`,
+    alignmentKey: `${COMPARISON_ALIGNMENT_STORAGE_KEY}:${serverSuffix}`,
   };
 }
 
@@ -124,15 +137,34 @@ function writeAlignment(storageKey: string, alignment: ComparisonAlignment) {
   }
 }
 
-export function useComparisonPreferences(targetType: ComparisonTargetType = "event") {
-  const [comparisonConfigs, setComparisonConfigsState] = useState<ComparisonConfig[]>([]);
-  const [comparisonAlignment, setComparisonAlignmentState] = useState<ComparisonAlignment>("start");
-  const { configsKey, alignmentKey } = getPreferenceStorageKeys(targetType);
+export function useComparisonPreferences(
+  server: BandoriServer,
+  targetType: ComparisonTargetType = "event",
+) {
+  const { configsKey, alignmentKey } = getPreferenceStorageKeys(server, targetType);
+  const [configsState, setConfigsState] = useState<ScopedConfigsState>({
+    storageKey: configsKey,
+    value: [],
+  });
+  const [alignmentState, setAlignmentState] = useState<ScopedAlignmentState>({
+    storageKey: alignmentKey,
+    value: "start",
+  });
+  const comparisonConfigs = configsState.storageKey === configsKey ? configsState.value : [];
+  const comparisonAlignment = alignmentState.storageKey === alignmentKey
+    ? alignmentState.value
+    : "start";
 
   useEffect(() => {
     const sync = () => {
-      setComparisonConfigsState(readConfigs(configsKey, targetType));
-      setComparisonAlignmentState(readAlignment(alignmentKey));
+      setConfigsState({
+        storageKey: configsKey,
+        value: readConfigs(configsKey, targetType),
+      });
+      setAlignmentState({
+        storageKey: alignmentKey,
+        value: readAlignment(alignmentKey),
+      });
     };
 
     sync();
@@ -146,27 +178,36 @@ export function useComparisonPreferences(targetType: ComparisonTargetType = "eve
   }, [alignmentKey, configsKey, targetType]);
 
   const setComparisonConfigs = useCallback((nextValue: ConfigUpdater) => {
-    setComparisonConfigsState((previous) => {
-      const resolved = normalizeConfigs(typeof nextValue === "function" ? nextValue(previous) : nextValue, targetType);
-      if (areConfigsEqual(previous, resolved)) {
-        return previous;
+    setConfigsState((previousState) => {
+      const previous = previousState.storageKey === configsKey
+        ? previousState.value
+        : readConfigs(configsKey, targetType);
+      const resolved = normalizeConfigs(
+        typeof nextValue === "function" ? nextValue(previous) : nextValue,
+        targetType,
+      );
+      if (previousState.storageKey === configsKey && areConfigsEqual(previous, resolved)) {
+        return previousState;
       }
 
       writeConfigs(configsKey, targetType, resolved);
-      return resolved;
+      return { storageKey: configsKey, value: resolved };
     });
   }, [configsKey, targetType]);
 
   const setComparisonAlignment = useCallback((nextValue: AlignmentUpdater) => {
-    setComparisonAlignmentState((previous) => {
+    setAlignmentState((previousState) => {
+      const previous = previousState.storageKey === alignmentKey
+        ? previousState.value
+        : readAlignment(alignmentKey);
       const resolved = typeof nextValue === "function" ? nextValue(previous) : nextValue;
       const normalized = resolved === "end" ? "end" : "start";
-      if (previous === normalized) {
-        return previous;
+      if (previousState.storageKey === alignmentKey && previous === normalized) {
+        return previousState;
       }
 
       writeAlignment(alignmentKey, normalized);
-      return normalized;
+      return { storageKey: alignmentKey, value: normalized };
     });
   }, [alignmentKey]);
 

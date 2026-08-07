@@ -46,12 +46,13 @@ async function writeObject(key, body) {
 }
 
 async function writeHistory(eventId, value, options = {}) {
+  const server = options.server ?? "cn";
   const uncompressed = Buffer.from(JSON.stringify(value), "utf8");
   const compressed = options.corrupt
     ? Buffer.from("not-gzip", "utf8")
     : gzipSync(uncompressed, { mtime: 0 });
   const compressedSha256 = createHash("sha256").update(compressed).digest("hex");
-  const prefix = `bandori/trackerdata/topdata/events/${eventId}/cn`;
+  const prefix = `bandori/trackerdata/topdata/events/${eventId}/${server}`;
   const packKey = `${prefix}/packs/event/${compressedSha256}.json.gz`;
   const hasFinalSample = options.hasFinalSample === true;
   const descriptor = {
@@ -67,7 +68,7 @@ async function writeHistory(eventId, value, options = {}) {
   const manifest = {
     schemaVersion: 1,
     kind: "eventTop10",
-    server: "cn",
+    server,
     eventId,
     generation: 1,
     publishedAt: new Date().toISOString(),
@@ -118,9 +119,34 @@ test("returns the exact Bestdori-compatible history body and ignores unrelated p
 });
 
 test("returns the exact empty protocol when the manifest does not exist", async () => {
-  const response = await request("server=3&event=319");
-  assert.equal(response.status, 200);
-  assert.deepEqual(await response.json(), { points: [], users: [] });
+  for (const server of [0, 1, 2, 3]) {
+    const response = await request(`server=${server}&event=319`);
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), { points: [], users: [] });
+  }
+});
+
+test("reads isolated TOP10 history for every server", async () => {
+  const servers = [[0, "jp"], [1, "en"], [2, "tw"], [3, "cn"]];
+  for (const [server, serverCode] of servers) {
+    const value = payload(1_785_502_000_000 + server * 60_000);
+    value.users[0].name = `${serverCode.toUpperCase()} Player`;
+    await writeHistory(340, value, { server: serverCode });
+    const response = await request(`server=${server}&event=340&type=event`);
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), value);
+  }
+});
+
+test("rejects a manifest published under another server identity", async () => {
+  const written = await writeHistory(341, payload(1_785_502_300_000), { server: "jp" });
+  await writeObject(
+    "bandori/trackerdata/topdata/events/341/en/manifest.json",
+    Buffer.from(JSON.stringify(written.manifest), "utf8"),
+  );
+  const response = await request("server=1&event=341&type=event");
+  assert.equal(response.status, 503);
+  assert.equal((await response.json()).error.code, "TRACKER_HISTORY_UNAVAILABLE");
 });
 
 test("returns mixed partial TOP10 history without changing the Bestdori wire shape", async () => {
@@ -154,7 +180,7 @@ test("preserves BBCode, line feeds, and literal backslash-n text through the API
 
 test("validates only the supported contract parameters", async () => {
   for (const query of [
-    "server=0&event=318",
+    "server=4&event=318",
     "server=3&event=",
     "server=3&event=1.5",
     "server=3&event=2147483648",

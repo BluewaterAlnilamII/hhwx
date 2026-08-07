@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { NO_STORE_HTTP_CACHE_POLICY, withHttpCachePolicy } from "@/lib/api-cache";
 import { jsonError } from "@/lib/api-response";
+import { getBandoriServerCode, normalizeBandoriServer } from "@/lib/bandori-server";
 import {
   BandoriTopDataHistoryReadError,
   readBandoriTopDataHistory,
@@ -25,8 +26,9 @@ export async function handleBandoriTrackerTopDataRequest(request: Request) {
     const eventParam = searchParams.get("event");
     const type = searchParams.get("type") || "event";
 
-    if (server !== "3") {
-      return invalidRequest("Only server 3 (CN) is currently supported.");
+    const normalizedServer = normalizeBandoriServer(server);
+    if (normalizedServer === null) {
+      return invalidRequest("Server must be an integer from 0 to 3.");
     }
     if (!eventParam || !EVENT_ID_PATTERN.test(eventParam)) {
       return invalidRequest("Event must be a positive integer.");
@@ -39,7 +41,10 @@ export async function handleBandoriTrackerTopDataRequest(request: Request) {
       return invalidRequest("Only event TOP10 history is currently supported.");
     }
 
-    const result = await readBandoriTopDataHistory("cn", eventId);
+    const result = await readBandoriTopDataHistory(
+      getBandoriServerCode(normalizedServer),
+      eventId,
+    );
     return NextResponse.json(result.payload, { headers: NO_STORE_HEADERS });
   } catch (error) {
     if (error instanceof BandoriTopDataHistoryReadError) {
