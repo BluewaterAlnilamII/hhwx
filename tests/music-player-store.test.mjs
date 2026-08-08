@@ -6,6 +6,7 @@ import {
   createMusicPlayerPreferencesSnapshot,
   createMusicPlayerQueueSnapshot,
 } from "../src/lib/music-player-contract.ts";
+import { seekMusicPlayerAudio } from "../src/lib/music-player-seek.ts";
 import { useMusicPlayerStore } from "../src/store/useMusicPlayerStore.ts";
 
 const FIRST_ITEM = {
@@ -60,6 +61,26 @@ function resetStore(storage = createMemoryStorage()) {
   });
   return storage;
 }
+
+test("audio seeking clamps positions and honors fast Media Session seeks", () => {
+  const fastSeekPositions = [];
+  const audio = {
+    currentTime: 20,
+    duration: 100,
+    fastSeek(position) {
+      fastSeekPositions.push(position);
+      this.currentTime = position;
+    },
+  };
+
+  assert.equal(seekMusicPlayerAudio(audio, 120, true), 100);
+  assert.deepEqual(fastSeekPositions, [100]);
+  assert.equal(audio.currentTime, 100);
+
+  assert.equal(seekMusicPlayerAudio(audio, -5), 0);
+  assert.equal(audio.currentTime, 0);
+  assert.deepEqual(fastSeekPositions, [100]);
+});
 
 test("hydrate restores queue and preferences but starts paused at zero", () => {
   const storage = resetStore(createMemoryStorage([
@@ -149,11 +170,12 @@ test("clear removes the current queue while retaining player preferences", () =>
   assert.equal(storage.getItem(MUSIC_PLAYER_PREFERENCES_STORAGE_KEY), preferencesBeforeClear);
 });
 
-test("track ending advances a temporary queue and retains the final track", () => {
+test("repeat-off plays the temporary queue in order and stops only after the final track", () => {
   resetStore();
   useMusicPlayerStore.getState().playQueueFromStart([FIRST_ITEM, SECOND_ITEM], 0);
   useMusicPlayerStore.getState().handleTrackEnded();
   assert.equal(useMusicPlayerStore.getState().currentIndex, 1);
+  assert.equal(useMusicPlayerStore.getState().status, "loading");
   assert.equal(useMusicPlayerStore.getState().command?.type, "restart");
 
   useMusicPlayerStore.getState().setPlaybackTime(120, 120);

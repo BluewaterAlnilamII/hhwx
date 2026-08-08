@@ -48,6 +48,7 @@ test("event song play action always dispatches the restart-from-beginning queue 
   );
 
   assert.match(eventInfoPanel, /playQueueFromStart\(playableSongs, playableSongIndex\)/u);
+  assert.match(eventInfoPanel, /files\.thumb/u);
 });
 
 test("player claims the iOS playback audio session before media starts", async () => {
@@ -81,6 +82,31 @@ test("Media Session artwork reuses the shared artwork cache", async () => {
   assert.match(host, /artwork: mediaSessionArtworkUrl/u);
   assert.doesNotMatch(host, /artwork: currentTrack\.artworkUrl/u);
   assert.match(host, /\[currentTrack, mediaSessionArtworkUrl\]/u);
+});
+
+test("Media Session seeks the active audio element and exposes relative seek actions", async () => {
+  const host = await readFile(
+    new URL("src/components/music-player/MusicPlayerHost.tsx", ROOT_URL),
+    "utf8",
+  );
+
+  assert.match(host, /safeSetActionHandler\("seekbackward"/u);
+  assert.match(host, /safeSetActionHandler\("seekforward"/u);
+  assert.match(host, /safeSetActionHandler\("seekto"[\s\S]*?applyAudioSeek\(audio, details\.seekTime, details\.fastSeek === true\)/u);
+  assert.doesNotMatch(host, /safeSetActionHandler\("seekto"[\s\S]*?requestSeek/u);
+});
+
+test("progress scrubbing previews locally and commits one seek when the interaction ends", async () => {
+  const player = await readFile(
+    new URL("src/components/music-player/ToolbarMusicPlayer.tsx", ROOT_URL),
+    "utf8",
+  );
+
+  assert.match(player, /onChange=\{\(event\) => updateSeekPreview/u);
+  assert.match(player, /onPointerUp=\{\(event\) => commitSeekPreview/u);
+  assert.match(player, /onPointerCancel=\{cancelSeekPreview\}/u);
+  assert.match(player, /onKeyUp=\{handleSeekKeyUp\}/u);
+  assert.doesNotMatch(player, /onChange=\{\(event\) => requestSeek/u);
 });
 
 test("toolbar player separates mouse hover and playback click from touch toggle", async () => {

@@ -13,6 +13,7 @@ import {
   createMusicPlayerPlaybackCoordinator,
   createMusicPlayerTabId,
 } from "@/lib/music-player-tab-coordinator";
+import { seekMusicPlayerAudio } from "@/lib/music-player-seek";
 import {
   selectMusicPlayerCurrentTrack,
   useMusicPlayerStore,
@@ -33,6 +34,16 @@ function updateMediaSessionPosition(audio: HTMLAudioElement): void {
   } catch {
     // Media Session support differs across browsers; playback does not depend on it.
   }
+}
+
+function applyAudioSeek(
+  audio: HTMLAudioElement,
+  positionSeconds: number,
+  preferFastSeek = false,
+): void {
+  const nextPosition = seekMusicPlayerAudio(audio, positionSeconds, preferFastSeek);
+  useMusicPlayerStore.getState().setPlaybackTime(nextPosition, audio.duration);
+  updateMediaSessionPosition(audio);
 }
 
 export default function MusicPlayerHost() {
@@ -164,8 +175,7 @@ export default function MusicPlayerHost() {
     }
 
     if (command.type === "seek") {
-      audio.currentTime = Math.max(0, command.positionSeconds ?? 0);
-      updateMediaSessionPosition(audio);
+      applyAudioSeek(audio, command.positionSeconds ?? 0);
       return;
     }
 
@@ -226,9 +236,22 @@ export default function MusicPlayerHost() {
     safeSetActionHandler("pause", () => useMusicPlayerStore.getState().requestPause());
     safeSetActionHandler("previoustrack", () => useMusicPlayerStore.getState().requestPrevious());
     safeSetActionHandler("nexttrack", () => useMusicPlayerStore.getState().requestNext());
+    safeSetActionHandler("seekbackward", (details) => {
+      const audio = audioRef.current;
+      if (audio) {
+        applyAudioSeek(audio, audio.currentTime - (details.seekOffset ?? 10));
+      }
+    });
+    safeSetActionHandler("seekforward", (details) => {
+      const audio = audioRef.current;
+      if (audio) {
+        applyAudioSeek(audio, audio.currentTime + (details.seekOffset ?? 10));
+      }
+    });
     safeSetActionHandler("seekto", (details) => {
-      if (details.seekTime !== undefined) {
-        useMusicPlayerStore.getState().requestSeek(details.seekTime);
+      const audio = audioRef.current;
+      if (audio && details.seekTime !== undefined) {
+        applyAudioSeek(audio, details.seekTime, details.fastSeek === true);
       }
     });
 
@@ -237,6 +260,8 @@ export default function MusicPlayerHost() {
       safeSetActionHandler("pause", null);
       safeSetActionHandler("previoustrack", null);
       safeSetActionHandler("nexttrack", null);
+      safeSetActionHandler("seekbackward", null);
+      safeSetActionHandler("seekforward", null);
       safeSetActionHandler("seekto", null);
     };
   }, []);

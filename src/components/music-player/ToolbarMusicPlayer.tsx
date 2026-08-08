@@ -13,7 +13,14 @@ import {
   VolumeX,
 } from "lucide-react";
 import { useTranslations } from "next-intl";
-import { useEffect, useRef, type MouseEvent, type PointerEvent } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type MouseEvent,
+  type PointerEvent,
+} from "react";
 import OverflowMarqueeText from "@/components/music-player/OverflowMarqueeText";
 import SharedMusicArtwork from "@/components/music-player/SharedMusicArtwork";
 import {
@@ -34,6 +41,16 @@ interface ToolbarMusicPlayerProps {
 }
 
 const TOOLBAR_PLAYER_MOUSE_LEAVE_CLOSE_DELAY_MS = 180;
+const SEEK_COMMIT_KEYS = new Set([
+  "ArrowDown",
+  "ArrowLeft",
+  "ArrowRight",
+  "ArrowUp",
+  "End",
+  "Home",
+  "PageDown",
+  "PageUp",
+]);
 
 function formatPlaybackTime(seconds: number): string {
   if (!Number.isFinite(seconds) || seconds < 0) {
@@ -139,6 +156,8 @@ function MusicPlayerPanel({ onRequestClose }: Pick<ToolbarMusicPlayerProps, "onR
   const setVolume = useMusicPlayerStore((state) => state.setVolume);
   const toggleMuted = useMusicPlayerStore((state) => state.toggleMuted);
   const clear = useMusicPlayerStore((state) => state.clear);
+  const [seekPreviewTime, setSeekPreviewTime] = useState<number | null>(null);
+  const seekPreviewTimeRef = useRef<number | null>(null);
 
   if (!currentTrack) {
     return <EmptyMusicPlayerPanel />;
@@ -148,7 +167,8 @@ function MusicPlayerPanel({ onRequestClose }: Pick<ToolbarMusicPlayerProps, "onR
   const isError = status === "error";
   const safeDuration = duration > 0 ? duration : currentTrack.durationSeconds ?? 0;
   const safeCurrentTime = Math.min(safeDuration || currentTime, Math.max(0, currentTime));
-  const progressPercent = safeDuration > 0 ? (safeCurrentTime / safeDuration) * 100 : 0;
+  const displayedCurrentTime = seekPreviewTime ?? safeCurrentTime;
+  const progressPercent = safeDuration > 0 ? (displayedCurrentTime / safeDuration) * 100 : 0;
   const repeatModeLabel = repeatMode === "one"
     ? t("repeatOne")
     : repeatMode === "all"
@@ -159,6 +179,33 @@ function MusicPlayerPanel({ onRequestClose }: Pick<ToolbarMusicPlayerProps, "onR
     : isPlaying
       ? t("pause")
       : t("play");
+
+  const updateSeekPreview = (positionSeconds: number) => {
+    const nextPosition = Math.min(safeDuration, Math.max(0, positionSeconds));
+    seekPreviewTimeRef.current = nextPosition;
+    setSeekPreviewTime(nextPosition);
+  };
+
+  const commitSeekPreview = (positionSeconds?: number) => {
+    const nextPosition = positionSeconds ?? seekPreviewTimeRef.current;
+    if (nextPosition === null || nextPosition === undefined) {
+      return;
+    }
+    seekPreviewTimeRef.current = null;
+    setSeekPreviewTime(null);
+    requestSeek(nextPosition);
+  };
+
+  const cancelSeekPreview = () => {
+    seekPreviewTimeRef.current = null;
+    setSeekPreviewTime(null);
+  };
+
+  const handleSeekKeyUp = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (SEEK_COMMIT_KEYS.has(event.key)) {
+      commitSeekPreview(Number(event.currentTarget.value));
+    }
+  };
 
   return (
     <>
@@ -191,13 +238,13 @@ function MusicPlayerPanel({ onRequestClose }: Pick<ToolbarMusicPlayerProps, "onR
 
       <div className="px-[18px] pb-3">
         <div className="mb-1.5 flex justify-between text-xs tabular-nums text-[var(--theme-color-text-muted)]">
-          <span>{formatPlaybackTime(isError ? 0 : safeCurrentTime)}</span>
+          <span>{formatPlaybackTime(isError ? 0 : displayedCurrentTime)}</span>
           <span>{formatPlaybackTime(safeDuration)}</span>
         </div>
         <div className={`relative h-5 ${isError ? "cursor-not-allowed" : ""}`}>
           <div className={`absolute inset-x-0 top-1/2 h-1.5 -translate-y-1/2 overflow-hidden rounded-full ${isError ? "bg-[var(--theme-color-semantic-danger-background)]" : "bg-[var(--theme-color-progress-track-background)]"}`}>
             <div
-              className="h-full rounded-full bg-[var(--theme-color-progress-indicator-background)] transition-[width] duration-150"
+              className={`h-full rounded-full bg-[var(--theme-color-progress-indicator-background)] ${seekPreviewTime === null ? "transition-[width] duration-150" : ""}`}
               style={{ width: isError ? "0%" : `${progressPercent}%` }}
             />
           </div>
@@ -206,9 +253,21 @@ function MusicPlayerPanel({ onRequestClose }: Pick<ToolbarMusicPlayerProps, "onR
             min={0}
             max={safeDuration || 0}
             step={0.1}
-            value={isError ? 0 : safeCurrentTime}
+            value={isError ? 0 : displayedCurrentTime}
             disabled={isError || safeDuration <= 0}
-            onChange={(event) => requestSeek(Number(event.currentTarget.value))}
+            onPointerDown={(event) => {
+              try {
+                event.currentTarget.setPointerCapture(event.pointerId);
+              } catch {
+                // Pointer capture is an enhancement; native range input still works without it.
+              }
+              updateSeekPreview(Number(event.currentTarget.value));
+            }}
+            onChange={(event) => updateSeekPreview(Number(event.currentTarget.value))}
+            onPointerUp={(event) => commitSeekPreview(Number(event.currentTarget.value))}
+            onPointerCancel={cancelSeekPreview}
+            onKeyUp={handleSeekKeyUp}
+            onBlur={() => commitSeekPreview()}
             className="absolute inset-0 h-full w-full cursor-pointer opacity-0 disabled:cursor-not-allowed"
             aria-label={t("progress")}
           />
