@@ -23,16 +23,17 @@ test("all servers request cutoff and TOP10 HTTP history", () => {
   );
   assert.match(trackerDataSource, /tracker-\$\{server\}/u);
   assert.match(trackerDataSource, /tracker\/data\?server=\$\{server\}/u);
-  assert.match(top10DataSource, /const canReadTopDataHistory = enabled && eventId !== null/u);
+  assert.match(top10DataSource, /const canReadTopDataHistory = enabled && targetId !== null/u);
   assert.match(top10DataSource, /topdata\?server=\$\{server\}/u);
+  assert.match(top10DataSource, /type=\$\{type\}/u);
 });
 
 test("regional history never creates tracker latest or Broadcast capabilities", () => {
   assert.match(trackerDataSource, /server !== 3 \|\| trackingMode !== "event"/u);
   assert.match(trackerDataSource, /const canUseTrackerLive = server === 3 && liveTarget !== null/u);
-  assert.match(top10DataSource, /const canUseTopDataLive = canReadTopDataHistory && server === 3/u);
-  assert.match(top10DataSource, /useTopDataLiveSubscription\(eventId, canUseTopDataLive\)/u);
-  assert.doesNotMatch(top10DataSource, /useTopDataLiveSubscription\(eventId, canReadTopDataHistory\)/u);
+  assert.match(top10DataSource, /const canUseTopDataLive = canReadTopDataHistory && server === 3 && type === "event"/u);
+  assert.match(top10DataSource, /useTopDataLiveSubscription\(targetId, canUseTopDataLive\)/u);
+  assert.doesNotMatch(top10DataSource, /useTopDataLiveSubscription\(targetId, canReadTopDataHistory\)/u);
 });
 
 test("regional schedules, comparison requests, and caches use the selected server", () => {
