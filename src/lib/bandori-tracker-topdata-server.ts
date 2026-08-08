@@ -6,6 +6,10 @@ import {
   BandoriTopDataHistoryReadError,
   readBandoriTopDataHistory,
 } from "@/lib/bandori-topdata-history-server";
+export {
+  inspectBandoriTopDataTargetStateSizesForTests,
+  resetBandoriTopDataTargetStatesForTests,
+} from "@/lib/bandori-topdata-history-server";
 import {
   BandoriScopedTopDataNotFoundError,
   BandoriScopedTopDataReadError,

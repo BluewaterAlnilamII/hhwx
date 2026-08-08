@@ -8,12 +8,12 @@ import { dirname, join } from "node:path";
 import test, { after, before } from "node:test";
 import { gzipSync } from "node:zlib";
 
-import { handleBandoriTrackerTopDataRequest } from "../src/lib/bandori-tracker-topdata-server.ts";
-import { countBandoriTopDataSamples } from "../src/lib/bandori-topdata-contract.ts";
 import {
+  handleBandoriTrackerTopDataRequest,
   inspectBandoriTopDataTargetStateSizesForTests,
   resetBandoriTopDataTargetStatesForTests,
-} from "@/lib/bandori-topdata-history-server";
+} from "../src/lib/bandori-tracker-topdata-server.ts";
+import { countBandoriTopDataSamples } from "../src/lib/bandori-topdata-contract.ts";
 
 let storeRoot;
 
