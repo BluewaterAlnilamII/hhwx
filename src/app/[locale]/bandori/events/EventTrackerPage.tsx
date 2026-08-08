@@ -345,9 +345,7 @@ function resolveMainTrackerRanking(
   ranking: TrackerRankingSelection,
 ): TrackerRankingSelection {
   if (ranking === TOP10_RANKING_SELECTION) {
-    return trackingMode === "event"
-      ? TOP10_RANKING_SELECTION
-      : getDefaultTierForMode(trackingMode);
+    return TOP10_RANKING_SELECTION;
   }
 
   return resolveMainTrackerTier(server, trackingMode, eventId, ranking);
@@ -596,7 +594,7 @@ export default function EventTrackerPage({ initialEventId }: EventTrackerPagePro
     () => getMonthlyRankingOptions(selectedServer),
     [selectedServer],
   );
-  const isTop10Selected = trackingMode === "event" && selectedRanking === TOP10_RANKING_SELECTION;
+  const isTop10Selected = selectedRanking === TOP10_RANKING_SELECTION;
   const selectedTier = typeof selectedRanking === "number"
     ? selectedRanking
     : getDefaultTierForMode(trackingMode);
@@ -760,12 +758,12 @@ export default function EventTrackerPage({ initialEventId }: EventTrackerPagePro
   }, [resolvedCurrentEventId, selectedRanking, selectedServer, trackingMode]);
 
   const handleTop10Change = useCallback(() => {
-    if (trackingMode !== "event" || selectedRanking === TOP10_RANKING_SELECTION) {
+    if (selectedRanking === TOP10_RANKING_SELECTION) {
       return;
     }
 
     setSelectedRanking(TOP10_RANKING_SELECTION);
-    writeTrackerRankingPreference("event", TOP10_RANKING_SELECTION);
+    writeTrackerRankingPreference(trackingMode, TOP10_RANKING_SELECTION);
     setZoomIndex(0);
   }, [selectedRanking, trackingMode]);
 
@@ -1566,6 +1564,7 @@ export default function EventTrackerPage({ initialEventId }: EventTrackerPagePro
                     domainStart={domainStart}
                     domainEnd={domainEnd}
                     eventId={resolvedCurrentEventId}
+                    monthlyRankingId={selectedMonthlyMonthId}
                     maxZoomIndex={ZOOM_WIDTH_MULTIPLIERS.length - 1}
                     midnights={midnights}
                     nonWorkingDayBands={nonWorkingDayBands}
@@ -1574,8 +1573,10 @@ export default function EventTrackerPage({ initialEventId }: EventTrackerPagePro
                     scheduleTooltipPositionUpdateRef={scheduleTooltipPositionUpdateRef}
                     scrollContainerRef={scrollContainerRef}
                     server={selectedServer}
+                    songId={resolvedSelectedSongId}
                     status={status}
                     tooltipRef={tooltipRef}
+                    trackingMode={trackingMode}
                     zoomIndex={zoomIndex}
                     zoomWidthMultiplier={zoomWidthMultiplier}
                   />

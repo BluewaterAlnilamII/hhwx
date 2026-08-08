@@ -3,10 +3,8 @@ import {
   createBandoriSnapshotObjectSource,
   createBandoriSnapshotVerifiedGzipJsonCache,
 } from "@/lib/bandori-snapshot-api-server";
-import {
-  type BandoriTopDataPayload,
-} from "@/lib/bandori-topdata-contract";
 import type { BandoriServerCode } from "@/lib/bandori-server";
+import type { BandoriTopDataPayload } from "@/lib/bandori-topdata-contract";
 import {
   BANDORI_TOPDATA_MAX_COMPRESSED_BYTES,
   BANDORI_TOPDATA_MAX_DECOMPRESSED_BYTES,
@@ -14,7 +12,7 @@ import {
   buildBandoriTopDataManifestKey,
   parseBandoriTopDataManifest,
   validateBandoriTopDataPack,
-  type BandoriTopDataManifest,
+  type BandoriTopDataPackDescriptor,
 } from "@/lib/bandori-topdata-history-contract";
 
 const MANIFEST_TTL_MS = 60_000;
@@ -25,10 +23,31 @@ const MAX_TARGET_STATES = 64;
 const MAX_PACK_CACHE_ENTRIES = 16;
 const MAX_PACK_CACHE_BYTES = 32 * 1024 * 1024;
 
-type CachedTarget = {
-  manifest: BandoriTopDataManifest;
+type ManifestHeader = {
+  generation: number;
+  publishedAt: string;
+  hasFinalSample: boolean;
+};
+
+type SelectedPack = {
+  descriptor: BandoriTopDataPackDescriptor | null;
+  cacheKey: string;
+};
+
+type CachedTarget = ManifestHeader & {
+  descriptor: BandoriTopDataPackDescriptor;
+  packCacheKey: string;
   sourceScope: string;
   completedAt: number;
+};
+
+type BandoriTopDataTargetReadOptions<TManifest extends ManifestHeader> = {
+  manifestKey: string;
+  targetDiscriminator?: string;
+  parseManifest: (value: unknown) => TManifest;
+  selectPack: (manifest: TManifest) => SelectedPack;
+  isExpectedSelectionError?: (error: unknown) => boolean;
+  logContext: Record<string, string | number>;
 };
 
 export type BandoriTopDataHistoryReadResult = {
@@ -88,7 +107,9 @@ function retainMostRecent<T>(map: Map<string, T>, key: string, value: T): void {
 
 function remainingBudget(deadline: number): number {
   const remaining = deadline - Date.now();
-  if (remaining <= 0) throw new BandoriTopDataHistoryReadError("Bandori TOP10 history read timed out");
+  if (remaining <= 0) {
+    throw new BandoriTopDataHistoryReadError("Bandori TOP10 history read timed out");
+  }
   return remaining;
 }
 
@@ -113,16 +134,13 @@ async function withinDeadline<T>(promise: Promise<T>, deadline: number): Promise
 function staleResult(targetKey: string): BandoriTopDataHistoryReadResult | null {
   const cached = lastSuccessByTarget.get(targetKey);
   if (!cached) return null;
-  if (
-    !cached.manifest.hasFinalSample
-    && Date.now() - cached.completedAt > ACTIVE_STALE_WINDOW_MS
-  ) {
+  if (!cached.hasFinalSample && Date.now() - cached.completedAt > ACTIVE_STALE_WINDOW_MS) {
     return null;
   }
   const payload = readPackObject.peek(
     cached.sourceScope,
-    targetKey,
-    cached.manifest.descriptor,
+    cached.packCacheKey,
+    cached.descriptor,
   );
   if (!payload) {
     lastSuccessByTarget.delete(targetKey);
@@ -131,15 +149,27 @@ function staleResult(targetKey: string): BandoriTopDataHistoryReadResult | null 
   retainMostRecent(lastSuccessByTarget, targetKey, cached);
   return {
     payload,
-    generation: cached.manifest.generation,
-    publishedAt: cached.manifest.publishedAt,
+    generation: cached.generation,
+    publishedAt: cached.publishedAt,
     isStale: true,
   };
 }
 
-export async function readBandoriTopDataHistory(
-  server: BandoriServerCode,
-  eventId: number,
+function targetStateKey(
+  sourceScope: string,
+  manifestKey: string,
+  discriminator?: string,
+): string {
+  return [sourceScope, manifestKey, discriminator ?? "manifest"].join("\u0000");
+}
+
+/**
+ * Shared bounded reader for event, song, and monthly TOP10 history. Callers own
+ * manifest identity validation and target selection; this layer owns transport,
+ * the end-to-end read deadline, failure cooldown, and stale-last-success policy.
+ */
+export async function readBandoriTopDataTarget<TManifest extends ManifestHeader>(
+  options: BandoriTopDataTargetReadOptions<TManifest>,
 ): Promise<BandoriTopDataHistoryReadResult> {
   let source;
   try {
@@ -153,8 +183,12 @@ export async function readBandoriTopDataHistory(
       cause: error,
     });
   }
-  const manifestKey = buildBandoriTopDataManifestKey(eventId, server);
-  const targetKey = `${source.scope}:${manifestKey}`;
+
+  const targetKey = targetStateKey(
+    source.scope,
+    options.manifestKey,
+    options.targetDiscriminator,
+  );
   if ((cooldownUntilByTarget.get(targetKey) ?? 0) > Date.now()) {
     const stale = staleResult(targetKey);
     if (stale) return stale;
@@ -164,7 +198,7 @@ export async function readBandoriTopDataHistory(
   const deadline = Date.now() + READ_BUDGET_MS;
   try {
     const manifestValue = await withinDeadline(
-      readManifestObject(source, manifestKey, {
+      readManifestObject(source, options.manifestKey, {
         timeoutMs: remainingBudget(deadline),
       }),
       deadline,
@@ -180,15 +214,42 @@ export async function readBandoriTopDataHistory(
       };
     }
 
-    const manifest = parseBandoriTopDataManifest(manifestValue, eventId, server);
+    const manifest = options.parseManifest(manifestValue);
+    let selected: SelectedPack;
+    try {
+      selected = options.selectPack(manifest);
+    } catch (error) {
+      if (!options.isExpectedSelectionError?.(error)) throw error;
+      lastSuccessByTarget.delete(targetKey);
+      cooldownUntilByTarget.delete(targetKey);
+      throw error;
+    }
+    if (selected.descriptor === null) {
+      lastSuccessByTarget.delete(targetKey);
+      cooldownUntilByTarget.delete(targetKey);
+      return {
+        payload: { points: [], users: [] },
+        generation: manifest.generation,
+        publishedAt: manifest.publishedAt,
+        isStale: false,
+      };
+    }
+
     const payload = await withinDeadline(
-      readPackObject(source, targetKey, manifest.descriptor, {
+      readPackObject(source, selected.cacheKey, selected.descriptor, {
         timeoutMs: remainingBudget(deadline),
       }),
       deadline,
     );
     retainMostRecent(lastSuccessByTarget, targetKey, {
-      manifest,
+      generation: manifest.generation,
+      publishedAt: manifest.publishedAt,
+      // The shared manifest is authoritative for finality. In particular, a
+      // Challenge manifest may temporarily contain a mix of final/non-final
+      // descriptors while its aggregate hasFinalSample remains false.
+      hasFinalSample: manifest.hasFinalSample,
+      descriptor: selected.descriptor,
+      packCacheKey: selected.cacheKey,
       sourceScope: source.scope,
       completedAt: Date.now(),
     });
@@ -200,13 +261,13 @@ export async function readBandoriTopDataHistory(
       isStale: false,
     };
   } catch (error) {
+    if (options.isExpectedSelectionError?.(error)) throw error;
     retainMostRecent(cooldownUntilByTarget, targetKey, Date.now() + FAILURE_COOLDOWN_MS);
     const stale = staleResult(targetKey);
     if (stale) {
       console.warn(JSON.stringify({
         event: "bandori_topdata_history_stale",
-        server,
-        eventId,
+        ...options.logContext,
         generation: stale.generation,
         publishedAt: stale.publishedAt,
         reason: error instanceof BandoriTopDataHistoryReadError ? "timeout" : "object_unavailable",
@@ -216,8 +277,7 @@ export async function readBandoriTopDataHistory(
     }
     console.warn(JSON.stringify({
       event: "bandori_topdata_history_read_failure",
-      server,
-      eventId,
+      ...options.logContext,
       reason: error instanceof BandoriTopDataHistoryReadError ? "timeout" : "object_unavailable",
       cooldownMs: FAILURE_COOLDOWN_MS,
     }));
@@ -226,4 +286,35 @@ export async function readBandoriTopDataHistory(
       cause: error,
     });
   }
+}
+
+export async function readBandoriTopDataHistory(
+  server: BandoriServerCode,
+  eventId: number,
+): Promise<BandoriTopDataHistoryReadResult> {
+  const manifestKey = buildBandoriTopDataManifestKey(eventId, server);
+  return readBandoriTopDataTarget({
+    manifestKey,
+    parseManifest: (value) => parseBandoriTopDataManifest(value, eventId, server),
+    selectPack: (manifest) => ({
+      descriptor: manifest.descriptor,
+      cacheKey: manifestKey,
+    }),
+    logContext: { kind: "event", server, eventId },
+  });
+}
+
+export function resetBandoriTopDataTargetStatesForTests(): void {
+  lastSuccessByTarget.clear();
+  cooldownUntilByTarget.clear();
+}
+
+export function inspectBandoriTopDataTargetStateSizesForTests(): {
+  lastSuccess: number;
+  cooldown: number;
+} {
+  return {
+    lastSuccess: lastSuccessByTarget.size,
+    cooldown: cooldownUntilByTarget.size,
+  };
 }

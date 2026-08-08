@@ -17,6 +17,7 @@ import { TrackerStatusSummary } from "./TrackerStatusSummary";
 import { Top10PlayerList } from "./Top10PlayerList";
 import { Top10Tooltip } from "./Top10Tooltip";
 import type {
+  TrackingMode,
   TrackerMouseState,
   TrackerTooltipPayloadEntry,
 } from "./types";
@@ -31,6 +32,9 @@ type Top10PanelProps = {
   domainStart: number | "auto";
   domainEnd: number | "auto";
   eventId: number | null;
+  monthlyRankingId: number;
+  songId: number;
+  trackingMode: TrackingMode;
   maxZoomIndex: number;
   midnights: number[];
   nonWorkingDayBands: TrackerChartPanelProps["nonWorkingDayBands"];
@@ -57,6 +61,7 @@ export function Top10Panel({
   domainStart,
   domainEnd,
   eventId,
+  monthlyRankingId,
   maxZoomIndex,
   midnights,
   nonWorkingDayBands,
@@ -65,12 +70,21 @@ export function Top10Panel({
   scheduleTooltipPositionUpdateRef,
   scrollContainerRef,
   server,
+  songId,
   status,
   tooltipRef,
+  trackingMode,
   zoomIndex,
   zoomWidthMultiplier,
 }: Top10PanelProps) {
-  const { data, loading, refreshing, error, refresh } = useBandoriTop10Data(eventId, server, true);
+  const targetId = trackingMode === "monthly" ? monthlyRankingId : eventId;
+  const { data, loading, refreshing, error, refresh } = useBandoriTop10Data(
+    targetId,
+    server,
+    true,
+    trackingMode,
+    trackingMode === "song" ? songId : null,
+  );
   const view = useMemo(
     () => data ? buildBandoriTop10View(data) : null,
     [data],
@@ -171,7 +185,7 @@ export function Top10Panel({
         showBestdoriPrediction={false}
         showScoreValues={false}
         status={status}
-        trackingMode="event"
+        trackingMode={trackingMode}
       />
 
       {error && (
@@ -190,7 +204,7 @@ export function Top10Panel({
       <TrackerChartPanel
         bestdoriPredictionPointCount={0}
         buildHoverTooltip={buildHoverTooltip}
-        chartContainerKey={`${chartContainerKey}-top10-${server}`}
+        chartContainerKey={`${chartContainerKey}-top10-${server}-${trackingMode}-${targetId}-${songId}`}
         chartViewportHeight={chartViewportHeight}
         chartViewportRef={chartViewportRef}
         comparisonLines={[]}
@@ -211,7 +225,7 @@ export function Top10Panel({
         showDayProjection={false}
         showInstantProjection={false}
         tooltipRef={tooltipRef}
-        trackingMode="event"
+        trackingMode={trackingMode}
         yDomainInfo={yAxis.domain}
         yTicks={yAxis.ticks}
         zoomIndex={zoomIndex}

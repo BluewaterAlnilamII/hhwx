@@ -39,7 +39,7 @@ export function normalizeTrackerRankingForMode(
   mode: TrackingMode,
   value: unknown,
 ): TrackerRankingSelection | null {
-  if (mode === "event" && value === TOP10_RANKING_SELECTION) {
+  if (value === TOP10_RANKING_SELECTION) {
     return TOP10_RANKING_SELECTION;
   }
 
