@@ -1,11 +1,7 @@
 export type BandoriAssetRegion = "jp" | "cn";
 
 const BESTDORI_ASSET_ORIGIN = "https://bestdori.com/assets";
-const BESTDORI_RES_ICON_ORIGIN = "https://bestdori.com/res/icon";
-const BESTDORI_RES_IMAGE_ORIGIN = "https://bestdori.com/res/image";
 const BANDORI_ASSET_OBJECT_KEY_PREFIX = "bandori/assets";
-const BANDORI_RES_ICON_OBJECT_KEY_PREFIX = "bandori/res/icon";
-const BANDORI_RES_IMAGE_OBJECT_KEY_PREFIX = "bandori/res/image";
 const SAFE_ASSET_SEGMENT_PATTERN = /^[A-Za-z0-9_-]+$/;
 const CARD_TRAIN_TYPES = new Set(["normal", "after_training"]);
 
@@ -75,18 +71,6 @@ export function buildBandoriAssetCdnUrl(assetKey: string, baseUrl?: string | nul
   }
 
   return `${normalizedBaseUrl}/${encodeBandoriAssetKeyPath(assetKey)}`;
-}
-
-export function buildBandoriResIconPublicUrl(iconName: string): string {
-  const normalizedIconName = iconName.trim().replace(/^\/+/, "");
-  const assetKey = `${BANDORI_RES_ICON_OBJECT_KEY_PREFIX}/${normalizedIconName}`;
-  return buildBandoriAssetCdnUrl(assetKey) ?? `${BESTDORI_RES_ICON_ORIGIN}/${encodeURIComponent(normalizedIconName)}`;
-}
-
-export function buildBandoriResImagePublicUrl(imageName: string): string {
-  const normalizedImageName = imageName.trim().replace(/^\/+/, "");
-  const assetKey = `${BANDORI_RES_IMAGE_OBJECT_KEY_PREFIX}/${normalizedImageName}`;
-  return buildBandoriAssetCdnUrl(assetKey) ?? `${BESTDORI_RES_IMAGE_ORIGIN}/${encodeURIComponent(normalizedImageName)}`;
 }
 
 export function buildBandoriEventBannerProxyPath(region: BandoriAssetRegion, bundleName: string): string {

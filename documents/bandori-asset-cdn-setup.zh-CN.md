@@ -12,6 +12,8 @@ HHWX 生产环境使用私有采集和镜像服务填充 CDN 与 R2 bucket。这
 
 ## Web 配置
 
+卡牌 UI 内建资源使用稳定、非内容寻址路径，并保留游戏原始资源名。完整卡框位于 `bandori/resources/images/card-frame/{resourceName}.png`，独立 MenuAtlas sprite 位于 `bandori/resources/atlases/menu-atlas/{spriteName}.png`。这些对象只从 JP base APK 一次性提取，使用一年 `immutable` 缓存发布，不通过公开 index 发现。Web 应用按固定 allowlist 组装 URL；未配置资源 CDN 时失败关闭，不回退 Bestdori。已有的五张组合稀有度预览保持不变，仍位于 `bandori/res/icon/star_1.png` 至 `star_5.png`，它们是唯一的遗留例外。
+
 Web 应用从以下环境变量读取 Bandori 资源 URL：
 
 ```dotenv
@@ -138,14 +140,14 @@ GET {CDN_BASE}/bandori/events/index.json
 
 所有推导出的对象 key 都相对于 `{CDN_BASE}`。文件名 stem 等于 index 中完整的小写 SHA-256。Web 应用会先校验 index，再使用其中资源，不会从 master data 的 bundle name 猜测 Cards/Events 路径。index 或所引用对象不可用时，相关图片保留占位，但 master data 与队伍计算继续工作。卡牌缩略图不会用 full 图兜底，Cards/Events 也不会回退 Bestdori 或旧 `/api/bandori/assets` proxy。
 
-Bestdori 通用图标和卡框：
+固定的官方卡牌 UI 资源：
 
 ```text
-{CDN_BASE}/bandori/res/icon/{iconName}
-bandori/res/icon/{iconName}
+{CDN_BASE}/bandori/resources/images/card-frame/{resourceName}.png
+bandori/resources/images/card-frame/{resourceName}.png
 
-{CDN_BASE}/bandori/res/image/card-{rarity}.png
-bandori/res/image/card-{rarity}.png
+{CDN_BASE}/bandori/resources/atlases/menu-atlas/{spriteName}.png
+bandori/resources/atlases/menu-atlas/{spriteName}.png
 ```
 
 音乐资源和谱面 JSON：
@@ -230,8 +232,8 @@ bandori/stamps/animation/atlases/{sha256}.png
 ```text
 https://your-bandori-asset-cdn.example.com/bandori/cards/index.json
 https://your-bandori-asset-cdn.example.com/bandori/events/index.json
-https://your-bandori-asset-cdn.example.com/bandori/res/icon/chara_icon_1.png
-https://your-bandori-asset-cdn.example.com/bandori/res/image/card-5.png
+https://your-bandori-asset-cdn.example.com/bandori/resources/atlases/menu-atlas/icon_character001.png
+https://your-bandori-asset-cdn.example.com/bandori/resources/images/card-frame/frame_ss_rainbow.png
 https://your-bandori-asset-cdn.example.com/bandori/music/charts/<chartSha256>.json
 https://your-bandori-asset-cdn.example.com/bandori/stamps/index.json
 https://your-bandori-asset-cdn.example.com/bandori/stamps/images/<imageSha256>.png

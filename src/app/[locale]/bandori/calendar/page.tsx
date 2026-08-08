@@ -259,7 +259,7 @@ export default function CalendarPage() {
         id: number;
         bandType: Exclude<CalendarBandType, "mix">;
         name: string;
-        iconUrl: string;
+        iconUrl: string | null;
       } => character !== null);
   }, [characterNameById, stampCharacterOptions]);
 
@@ -501,13 +501,16 @@ export default function CalendarPage() {
                           } : undefined}
                           aria-pressed={checked}
                         >
-                          <img
-                            src={character.iconUrl}
-                            alt={character.name}
-                            loading="lazy"
-                            decoding="async"
-                            className={`h-full w-full object-cover transition-opacity ${checked ? "opacity-100" : "opacity-80 hover:opacity-100"}`}
-                          />
+                          {character.iconUrl ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={character.iconUrl}
+                              alt={character.name}
+                              loading="lazy"
+                              decoding="async"
+                              className={`h-full w-full object-cover transition-opacity ${checked ? "opacity-100" : "opacity-80 hover:opacity-100"}`}
+                            />
+                          ) : null}
                         </button>
                       );
                     })}
