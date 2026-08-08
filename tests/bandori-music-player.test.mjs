@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { buildBandoriMusicPlayerItem } from "../src/lib/bandori-music-player.ts";
+import {
+  buildBandoriMusicPlayerArtworkUpdates,
+  buildBandoriMusicPlayerItem,
+} from "../src/lib/bandori-music-player.ts";
 
 test("Bandori player adapter resolves regional copy, audio, and full jacket assets", () => {
   process.env.NEXT_PUBLIC_BANDORI_ASSET_CDN_BASE_URL = "https://cdn.hhwx.org";
@@ -51,6 +54,41 @@ test("Bandori player adapter falls back to a thumbnail when the jacket is unavai
   });
 
   assert.equal(item?.artworkUrl, "https://cdn.hhwx.org/bandori/music/thumbs/595.png");
+});
+
+test("Bandori player refresh upgrades persisted thumbnail artwork to the current jacket", () => {
+  process.env.NEXT_PUBLIC_BANDORI_ASSET_CDN_BASE_URL = "https://cdn.hhwx.org";
+  const item = {
+    id: "bandori:595",
+    provider: "bandori",
+    providerTrackId: "595",
+    title: "Persisted song",
+    artist: "Band",
+    sourceUrl: "https://cdn.hhwx.org/bandori/music/audio/old.ogg",
+    artworkUrl: "https://cdn.hhwx.org/bandori/music/thumbs/old.png",
+    durationSeconds: 100,
+  };
+  const updates = buildBandoriMusicPlayerArtworkUpdates([item], {
+    schemaVersion: 2,
+    updatedAt: "2026-08-08T00:00:00.000Z",
+    songs: {
+      "595": {
+        files: {
+          jacket: { key: "bandori/music/jackets/current.png", sha256: "0".repeat(64) },
+          thumb: { key: "bandori/music/thumbs/current.png", sha256: "1".repeat(64) },
+          audio: { key: "bandori/music/audio/current.ogg", sha256: "2".repeat(64) },
+          charts: {},
+        },
+        notes: {},
+        bpm: {},
+        length: 100,
+      },
+    },
+  });
+
+  assert.deepEqual(updates, {
+    "bandori:595": "https://cdn.hhwx.org/bandori/music/jackets/current.png",
+  });
 });
 
 test("Bandori player adapter excludes entries without an audio descriptor", () => {

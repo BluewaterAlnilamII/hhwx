@@ -51,6 +51,19 @@ test("event song play action always dispatches the restart-from-beginning queue 
   assert.match(eventInfoPanel, /files\.thumb/u);
 });
 
+test("page and player artwork use durable CDN source URLs without a Blob cache", async () => {
+  const [artwork, eventInfoPanel, player] = await Promise.all([
+    readFile(new URL("src/components/music-player/MusicArtwork.tsx", ROOT_URL), "utf8"),
+    readFile(new URL("src/app/[locale]/bandori/events/EventInfoPanel.tsx", ROOT_URL), "utf8"),
+    readFile(new URL("src/components/music-player/ToolbarMusicPlayer.tsx", ROOT_URL), "utf8"),
+  ]);
+
+  assert.match(artwork, /src=\{src\}/u);
+  assert.doesNotMatch(artwork, /\bfetch\(|createObjectURL|revokeObjectURL/u);
+  assert.match(eventInfoPanel, /<MusicArtwork[\s\S]*?src=\{thumbnailUrl\}/u);
+  assert.match(player, /<MusicArtwork[\s\S]*?src=\{currentTrack\.artworkUrl\}/u);
+});
+
 test("player claims the iOS playback audio session before media starts", async () => {
   const [host, stampAudio] = await Promise.all([
     readFile(new URL("src/components/music-player/MusicPlayerHost.tsx", ROOT_URL), "utf8"),
@@ -68,32 +81,42 @@ test("player claims the iOS playback audio session before media starts", async (
   assert.doesNotMatch(stampAudio, /audioSession\.type = "ambient"/u);
 });
 
-test("Media Session artwork reuses the shared artwork cache", async () => {
+test("Media Session artwork uses the durable track URL", async () => {
   const host = await readFile(
     new URL("src/components/music-player/MusicPlayerHost.tsx", ROOT_URL),
     "utf8",
   );
 
-  assert.match(host, /useSharedMusicArtworkUrl/u);
-  assert.match(
-    host,
-    /useSharedMusicArtworkUrl\(currentTrack\?\.artworkUrl \?\? null\)/u,
-  );
-  assert.match(host, /artwork: mediaSessionArtworkUrl/u);
-  assert.doesNotMatch(host, /artwork: currentTrack\.artworkUrl/u);
-  assert.match(host, /\[currentTrack, mediaSessionArtworkUrl\]/u);
+  assert.doesNotMatch(host, /useSharedMusicArtworkUrl/u);
+  assert.match(host, /artwork: currentTrack\.artworkUrl/u);
+  assert.match(host, /src: currentTrack\.artworkUrl/u);
+  assert.match(host, /\}, \[currentTrack\]\);/u);
 });
 
-test("Media Session seeks the active audio element and exposes relative seek actions", async () => {
+test("Media Session keeps track controls while seeking the active audio element", async () => {
   const host = await readFile(
     new URL("src/components/music-player/MusicPlayerHost.tsx", ROOT_URL),
     "utf8",
   );
 
-  assert.match(host, /safeSetActionHandler\("seekbackward"/u);
-  assert.match(host, /safeSetActionHandler\("seekforward"/u);
+  assert.match(host, /safeSetActionHandler\("previoustrack"/u);
+  assert.match(host, /safeSetActionHandler\("nexttrack"/u);
+  assert.doesNotMatch(host, /safeSetActionHandler\("seekbackward"/u);
+  assert.doesNotMatch(host, /safeSetActionHandler\("seekforward"/u);
   assert.match(host, /safeSetActionHandler\("seekto"[\s\S]*?applyAudioSeek\(audio, details\.seekTime, details\.fastSeek === true\)/u);
   assert.doesNotMatch(host, /safeSetActionHandler\("seekto"[\s\S]*?requestSeek/u);
+});
+
+test("player host refreshes persisted Bandori artwork from the current asset index", async () => {
+  const host = await readFile(
+    new URL("src/components/music-player/MusicPlayerHost.tsx", ROOT_URL),
+    "utf8",
+  );
+
+  assert.match(host, /useBandoriMusicAssetIndex\(hasBandoriQueueItems\)/u);
+  assert.match(host, /buildBandoriMusicPlayerArtworkUpdates\(queue, musicAssetIndex\)/u);
+  assert.match(host, /refreshQueueArtwork/u);
+  assert.match(host, /\[currentTrackId, currentTrackSourceUrl\]/u);
 });
 
 test("progress scrubbing previews locally and commits one seek when the interaction ends", async () => {

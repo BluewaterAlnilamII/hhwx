@@ -21,7 +21,7 @@
     "test:bandori-stamps": "node --import tsx --test tests/bandori-stamps-api-contract.test.mjs && node --import tsx scripts/test-bandori-stamps-api-reader.mjs",
     "test:bandori-music": "node --import tsx --test tests/bandori-music-api-contract.test.mjs tests/bandori-music-api-consumers.test.mjs && node --import tsx scripts/test-bandori-music-api-reader.mjs",
     "test:bandori-public-assets": "node --import tsx --test tests/bandori-builtin-resources.test.mjs tests/bandori-public-asset-index.test.mjs tests/bandori-public-asset-index-client.test.mjs tests/bandori-public-asset-consumers.test.mjs",
-    "test:music-player": "node --import tsx --test tests/music-player-contract.test.mjs tests/music-player-store.test.mjs tests/bandori-music-player.test.mjs tests/browser-audio-session.test.mjs tests/music-player-artwork-cache.test.mjs tests/music-player-ui-contract.test.mjs",
+    "test:music-player": "node --import tsx --test tests/music-player-contract.test.mjs tests/music-player-store.test.mjs tests/bandori-music-player.test.mjs tests/browser-audio-session.test.mjs tests/music-player-ui-contract.test.mjs",
     "test:cache": "node --import tsx --test tests/api-cache.test.mjs tests/bandori-team-search-data-cache.test.mjs",
     "test:team-builder": "node --import tsx --test tests/bandori-team-search-regional-skill.test.mjs",
     "test:bandori-tracker-history": "node --import tsx --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test tests/bandori-monthly-ranking-calendar.test.mjs tests/bandori-tracker-history-contract.test.mjs tests/bandori-tracker-regional-api.test.mjs tests/r2-s3-reader.test.mjs && node scripts/test-bandori-tracker-history-integration.mjs",

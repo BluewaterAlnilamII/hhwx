@@ -42,6 +42,7 @@ type MusicPlayerStore = {
   hydrate: () => void;
   applyExternalQueueSnapshot: (snapshot: MusicPlayerQueueSnapshot | null) => void;
   applyExternalPreferencesSnapshot: (snapshot: MusicPlayerPreferencesSnapshot | null) => void;
+  refreshQueueArtwork: (artworkUrlsByItemId: Readonly<Record<string, string>>) => void;
   playQueueFromStart: (items: MusicPlayerItem[], currentIndex: number) => void;
   requestTogglePlayback: () => void;
   requestPause: () => void;
@@ -104,6 +105,24 @@ function persistPreferences(
   }
 }
 
+function hasSameActiveTrack(
+  state: Pick<MusicPlayerStore, "queue" | "currentIndex">,
+  queue: readonly MusicPlayerItem[],
+  currentIndex: number | null,
+): boolean {
+  const activeItem = state.currentIndex === null
+    ? null
+    : state.queue[state.currentIndex] ?? null;
+  const incomingActiveItem = currentIndex === null
+    ? null
+    : queue[currentIndex] ?? null;
+
+  return activeItem !== null
+    && incomingActiveItem !== null
+    && activeItem.id === incomingActiveItem.id
+    && activeItem.sourceUrl === incomingActiveItem.sourceUrl;
+}
+
 export const useMusicPlayerStore = create<MusicPlayerStore>((set, get) => ({
   queueId: MUSIC_PLAYER_TEMPORARY_QUEUE_ID,
   queue: [],
@@ -148,6 +167,17 @@ export const useMusicPlayerStore = create<MusicPlayerStore>((set, get) => ({
     const queue = snapshot?.items ?? [];
     const currentIndex = snapshot?.currentIndex ?? null;
     const currentItem = currentIndex === null ? null : queue[currentIndex] ?? null;
+    const state = get();
+
+    if (hasSameActiveTrack(state, queue, currentIndex)) {
+      set({
+        queueId: snapshot?.queueId ?? MUSIC_PLAYER_TEMPORARY_QUEUE_ID,
+        queue,
+        currentIndex,
+      });
+      return;
+    }
+
     set({
       queueId: snapshot?.queueId ?? MUSIC_PLAYER_TEMPORARY_QUEUE_ID,
       queue,
@@ -173,6 +203,24 @@ export const useMusicPlayerStore = create<MusicPlayerStore>((set, get) => ({
       muted: snapshot.muted,
       repeatMode: snapshot.repeatMode,
     });
+  },
+
+  refreshQueueArtwork: (artworkUrlsByItemId) => {
+    const state = get();
+    let changed = false;
+    const queue = state.queue.map((item) => {
+      const artworkUrl = artworkUrlsByItemId[item.id];
+      if (!artworkUrl || artworkUrl === item.artworkUrl) {
+        return item;
+      }
+      changed = true;
+      return { ...item, artworkUrl };
+    });
+    if (!changed) {
+      return;
+    }
+    set({ queue });
+    persistQueue({ queue, currentIndex: state.currentIndex });
   },
 
   playQueueFromStart: (items, currentIndex) => {
