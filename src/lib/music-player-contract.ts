@@ -7,7 +7,7 @@ export const MUSIC_PLAYER_TEMPORARY_QUEUE_ID = "temporary";
 
 export const DEFAULT_MUSIC_PLAYER_VOLUME = 0.72;
 export const DEFAULT_MUSIC_PLAYER_MUTED = false;
-export const DEFAULT_MUSIC_PLAYER_REPEAT_MODE = "one" as const;
+export const DEFAULT_MUSIC_PLAYER_REPEAT_MODE = "off" as const;
 
 export type MusicPlayerRepeatMode = "off" | "one" | "all";
 export type MusicPlayerStatus =

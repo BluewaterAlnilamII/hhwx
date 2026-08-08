@@ -9,6 +9,7 @@ import {
   Music2,
   Play,
 } from "lucide-react";
+import SharedMusicArtwork from "@/components/music-player/SharedMusicArtwork";
 import BandoriEventBonusPanel from "@/components/bandori/BandoriEventBonusPanel";
 import Heading from "@/components/Heading";
 import { useCachedFetch } from "@/hooks/useCachedFetch";
@@ -481,8 +482,12 @@ export default function EventInfoPanel({
               <div key={song.id} data-music-id={song.id} className="grid grid-cols-[4.5rem_minmax(0,1fr)] gap-3 rounded-2xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background)] p-3 shadow-sm transition hover:border-[var(--theme-color-action-secondary-border)] hover:shadow-md sm:grid-cols-[4.5rem_minmax(0,1fr)_auto] sm:items-center dark:border-slate-700 dark:bg-slate-950/50">
                 <div className="flex h-18 w-18 items-center justify-center overflow-hidden rounded-xl bg-[var(--theme-color-control-background-muted)] text-[var(--theme-color-action-secondary-foreground)] dark:bg-slate-800 dark:text-[var(--theme-color-action-secondary-foreground-on-dark)]">
                   {jacketUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={jacketUrl} alt={`${song.title} 封面`} className="h-full w-full object-cover" />
+                    <SharedMusicArtwork
+                      src={jacketUrl}
+                      alt={`${song.title} 封面`}
+                      className="h-full w-full object-cover"
+                      fallback={<ImageOff className="h-6 w-6" />}
+                    />
                   ) : <ImageOff className="h-6 w-6" />}
                 </div>
                 <div className="min-w-0">

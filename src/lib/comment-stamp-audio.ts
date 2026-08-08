@@ -1,35 +1,18 @@
-type AudioContextConstructor = new () => AudioContext;
+import { claimAmbientBrowserAudioSession } from "@/lib/browser-audio-session";
 
+type AudioContextConstructor = new () => AudioContext;
 type WebAudioWindow = Window & typeof globalThis & {
   webkitAudioContext?: AudioContextConstructor;
 };
 
-type AmbientAudioSessionNavigator = Navigator & {
-  audioSession?: {
-    type: string;
-  };
-};
+interface ActiveCommentStampAudio {
+  source: AudioBufferSourceNode;
+  releaseAudioSession: () => void;
+}
 
 let commentStampAudioContext: AudioContext | null = null;
-let activeCommentStampSource: AudioBufferSourceNode | null = null;
+let activeCommentStampAudio: ActiveCommentStampAudio | null = null;
 const commentStampAudioBufferCache = new Map<string, Promise<AudioBuffer>>();
-
-function configureAmbientAudioSession(): void {
-  if (typeof navigator === "undefined") {
-    return;
-  }
-
-  const audioSession = (navigator as AmbientAudioSessionNavigator).audioSession;
-  if (!audioSession) {
-    return;
-  }
-
-  try {
-    audioSession.type = "ambient";
-  } catch {
-    // Unsupported Audio Session implementations should not block stamp playback.
-  }
-}
 
 function getCommentStampAudioContext(): AudioContext {
   if (commentStampAudioContext) {
@@ -90,39 +73,48 @@ function loadCommentStampAudioBuffer(voiceUrl: string, context: AudioContext): P
 }
 
 function stopActiveCommentStampSource(): void {
-  const source = activeCommentStampSource;
-  if (!source) {
+  const activeAudio = activeCommentStampAudio;
+  if (!activeAudio) {
     return;
   }
 
-  activeCommentStampSource = null;
+  activeCommentStampAudio = null;
   try {
-    source.stop();
+    activeAudio.source.stop();
   } catch {
     // Already-ended one-shot sources throw on stop in some browsers.
+  } finally {
+    activeAudio.releaseAudioSession();
   }
 }
 
 export async function playCommentStampVoice(voiceUrl: string): Promise<void> {
-  configureAmbientAudioSession();
+  const releaseAudioSession = claimAmbientBrowserAudioSession();
 
-  const context = getCommentStampAudioContext();
-  if (context.state === "suspended") {
-    await context.resume();
-  }
-
-  const buffer = await loadCommentStampAudioBuffer(voiceUrl, context);
-  stopActiveCommentStampSource();
-
-  const source = context.createBufferSource();
-  source.buffer = buffer;
-  source.connect(context.destination);
-  source.onended = () => {
-    if (activeCommentStampSource === source) {
-      activeCommentStampSource = null;
+  try {
+    const context = getCommentStampAudioContext();
+    if (context.state === "suspended") {
+      await context.resume();
     }
-  };
 
-  activeCommentStampSource = source;
-  source.start(0);
+    const buffer = await loadCommentStampAudioBuffer(voiceUrl, context);
+    stopActiveCommentStampSource();
+
+    const source = context.createBufferSource();
+    source.buffer = buffer;
+    source.connect(context.destination);
+    const activeAudio = { source, releaseAudioSession };
+    source.onended = () => {
+      if (activeCommentStampAudio === activeAudio) {
+        activeCommentStampAudio = null;
+        releaseAudioSession();
+      }
+    };
+
+    activeCommentStampAudio = activeAudio;
+    source.start(0);
+  } catch (error) {
+    releaseAudioSession();
+    throw error;
+  }
 }

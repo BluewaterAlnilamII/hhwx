@@ -32,6 +32,8 @@ test("player UI uses semantic theme tokens without fixed palette classes", async
   assert.match(player, /motion-reduce:animate-none/u);
   assert.match(player, /\[animation-play-state:running\]/u);
   assert.match(player, /\[animation-play-state:paused\]/u);
+  assert.match(player, /state\.command\?\.restartRequestId \?\? 0/u);
+  assert.match(player, /key=\{artworkAnimationKey\}/u);
   assert.match(player, /aria-pressed=\{muted\}/u);
   assert.match(
     player,
@@ -46,6 +48,39 @@ test("event song play action always dispatches the restart-from-beginning queue 
   );
 
   assert.match(eventInfoPanel, /playQueueFromStart\(playableSongs, playableSongIndex\)/u);
+});
+
+test("player claims the iOS playback audio session before media starts", async () => {
+  const [host, stampAudio] = await Promise.all([
+    readFile(new URL("src/components/music-player/MusicPlayerHost.tsx", ROOT_URL), "utf8"),
+    readFile(new URL("src/lib/comment-stamp-audio.ts", ROOT_URL), "utf8"),
+  ]);
+
+  const playbackClaimIndex = host.indexOf("setMusicPlaybackAudioSessionActive(true)");
+  const mediaPlayIndex = host.indexOf("await audio.play()");
+  assert.ok(playbackClaimIndex >= 0 && playbackClaimIndex < mediaPlayIndex);
+  assert.match(host, /setMusicPlaybackAudioSessionActive\(false\)/u);
+  assert.doesNotMatch(host, /className="hidden"/u);
+  assert.match(host, /className="pointer-events-none fixed left-0 top-0 h-px w-px opacity-0"/u);
+  assert.match(host, /type: "image\/png"/u);
+  assert.match(stampAudio, /claimAmbientBrowserAudioSession/u);
+  assert.doesNotMatch(stampAudio, /audioSession\.type = "ambient"/u);
+});
+
+test("Media Session artwork reuses the shared artwork cache", async () => {
+  const host = await readFile(
+    new URL("src/components/music-player/MusicPlayerHost.tsx", ROOT_URL),
+    "utf8",
+  );
+
+  assert.match(host, /useSharedMusicArtworkUrl/u);
+  assert.match(
+    host,
+    /useSharedMusicArtworkUrl\(currentTrack\?\.artworkUrl \?\? null\)/u,
+  );
+  assert.match(host, /artwork: mediaSessionArtworkUrl/u);
+  assert.doesNotMatch(host, /artwork: currentTrack\.artworkUrl/u);
+  assert.match(host, /\[currentTrack, mediaSessionArtworkUrl\]/u);
 });
 
 test("toolbar player separates mouse hover and playback click from touch toggle", async () => {
@@ -126,4 +161,21 @@ test("overflowing track metadata scrolls and transport controls stay centered", 
   assert.ok(previousControlIndex < playbackControlIndex);
   assert.ok(playbackControlIndex < nextControlIndex);
   assert.match(player, /<div className="flex items-center gap-1\.5">/u);
+  assert.doesNotMatch(player, /hasMultipleTracks/u);
+  assert.doesNotMatch(player, /disabled=\{!canGoPrevious\}|disabled=\{!canGoNext\}/u);
+});
+
+test("repeat control exposes off, playlist, and one modes", async () => {
+  const [player, englishMessages, chineseMessages] = await Promise.all([
+    readFile(new URL("src/components/music-player/ToolbarMusicPlayer.tsx", ROOT_URL), "utf8"),
+    readFile(new URL("messages/en/navigation.json", ROOT_URL), "utf8"),
+    readFile(new URL("messages/zh-CN/navigation.json", ROOT_URL), "utf8"),
+  ]);
+
+  assert.match(player, /cycleRepeatMode/u);
+  assert.match(player, /data-repeat-mode=\{repeatMode\}/u);
+  assert.match(player, /repeatMode === "one"[\s\S]*?<Repeat1/u);
+  assert.match(player, /<Repeat className=/u);
+  assert.match(englishMessages, /"repeatAll": "Repeat playlist"/u);
+  assert.match(chineseMessages, /"repeatAll": "列表循环"/u);
 });
