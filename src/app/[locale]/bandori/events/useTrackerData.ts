@@ -27,6 +27,12 @@ import {
   buildBandoriTrackerLiveSeriesUpdates,
 } from "@/lib/bandori-tracker-live-series";
 import type { TrackerData, TrackerResult, TrackerSongGroup, EventMetadata, MinimalEvent, TrackingMode, BandoriEventSummary } from "./types";
+import {
+  mergeTrackerCutoffs,
+  mergeTrackerSongGroups,
+  resolveSelectedSongId,
+  selectSongCutoffs,
+} from "@/lib/bandori-tracker-song-series";
 import { getMonthlyRankingWindow } from "./useChartData";
 import { useBandoriTrackerLiveListener } from "./useBandoriTrackerLive";
 import { useBoundaryClock } from "./useBoundaryClock";
@@ -37,60 +43,6 @@ function appendTrackerPoint(series: TrackerData[], time: number, ep: number, isF
   }
 
   return [...series, { time, ep, isFinal }];
-}
-
-function normalizeTrackerCutoffs(series: TrackerData[]): TrackerData[] {
-  const pointByTime = new Map<number, TrackerData>();
-
-  for (const point of series) {
-    const time = Number(point?.time);
-    const ep = Number(point?.ep);
-
-    if (!Number.isFinite(time) || !Number.isFinite(ep)) {
-      continue;
-    }
-
-    const previousPoint = pointByTime.get(time);
-    pointByTime.set(time, {
-      ...previousPoint,
-      ...point,
-      time,
-      ep,
-      isFinal: previousPoint?.isFinal || point?.isFinal ? true : undefined,
-    });
-  }
-
-  return Array.from(pointByTime.values()).sort((left, right) => left.time - right.time);
-}
-
-function mergeTrackerCutoffs(incoming: TrackerData[], existing: TrackerData[]): TrackerData[] {
-  const merged = new Map<number, TrackerData>();
-
-  for (const point of normalizeTrackerCutoffs(existing)) {
-    merged.set(point.time, point);
-  }
-
-  for (const point of normalizeTrackerCutoffs(incoming)) {
-    merged.set(point.time, point);
-  }
-
-  return Array.from(merged.values()).sort((left, right) => left.time - right.time);
-}
-
-function mergeTrackerSongGroups(incoming: TrackerSongGroup[], existing: TrackerSongGroup[]): TrackerSongGroup[] {
-  const existingBySongId = new Map(existing.map((group) => [group.songId, group]));
-
-  for (const group of incoming) {
-    const previousGroup = existingBySongId.get(group.songId);
-    existingBySongId.set(group.songId, {
-      songId: group.songId,
-      cutoffs: previousGroup
-        ? mergeTrackerCutoffs(group.cutoffs, previousGroup.cutoffs)
-        : group.cutoffs,
-    });
-  }
-
-  return Array.from(existingBySongId.values()).sort((left, right) => left.songId - right.songId);
 }
 
 function upsertSongGroupPoint(songGroups: TrackerSongGroup[], songId: number, time: number, ep: number, isFinal = false): TrackerSongGroup[] {
@@ -117,21 +69,6 @@ function upsertSongGroupPoint(songGroups: TrackerSongGroup[], songId: number, ti
   return nextGroups.sort((left, right) => left.songId - right.songId);
 }
 
-function selectSongCutoffs(songGroups: TrackerSongGroup[], selectedSongId: number): TrackerData[] {
-  const selectedGroup = songGroups.find((group) => group.songId === selectedSongId);
-  if (selectedGroup) {
-    return selectedGroup.cutoffs;
-  }
-
-  if (selectedSongId === 0) {
-    return songGroups.find((group) => group.songId === 0)?.cutoffs
-      ?? songGroups[0]?.cutoffs
-      ?? [];
-  }
-
-  return [];
-}
-
 function parseTrackerPoint(point: unknown): TrackerData {
   const parsedPoint = point as { time?: number | string; ep?: number | string; isFinal?: boolean | null } | null;
   const nextPoint: TrackerData = {
@@ -149,6 +86,7 @@ function parseTrackerPoint(point: unknown): TrackerData {
 function parseSongCutoffsPayload(
   payload: unknown,
   selectedSongId: number,
+  eventType?: string | null,
 ): { cutoffs: TrackerData[]; songGroups?: TrackerSongGroup[] } {
   if (Array.isArray(payload)) {
     return {
@@ -171,7 +109,7 @@ function parseSongCutoffsPayload(
     .sort((left, right) => left.songId - right.songId);
 
   return {
-    cutoffs: selectSongCutoffs(songGroups, selectedSongId),
+    cutoffs: selectSongCutoffs(songGroups, selectedSongId, eventType),
     songGroups,
   };
 }
@@ -206,45 +144,6 @@ function findBestEvent(events: MinimalEvent[], now: number): MinimalEvent | null
   }
 
   return withStart.sort((left, right) => right.startAt - left.startAt)[0] ?? null;
-}
-
-function getAvailableChallengeSongIds(
-  eventMeta: EventMetadata | null,
-  server: BandoriServer,
-): number[] {
-  if (eventMeta?.eventType !== "challenge") {
-    return [];
-  }
-
-  const challengeSongIds = eventMeta.musicIds[getBandoriServerCode(server)];
-
-  return Array.from(
-    new Set(
-      challengeSongIds
-        .map((musicId) => Number(musicId))
-        .filter((musicId) => Number.isFinite(musicId) && musicId > 0),
-    ),
-  ).sort((left, right) => left - right);
-}
-
-function resolveSelectedSongId(
-  trackingMode: TrackingMode,
-  eventMeta: EventMetadata | null,
-  selectedSongId: number,
-  server: BandoriServer,
-): number {
-  if (trackingMode !== "song") {
-    return 0;
-  }
-
-  const availableChallengeSongIds = getAvailableChallengeSongIds(eventMeta, server);
-  if (availableChallengeSongIds.length === 0) {
-    return 0;
-  }
-
-  return availableChallengeSongIds.includes(selectedSongId)
-    ? selectedSongId
-    : availableChallengeSongIds[0];
 }
 
 /**
@@ -403,7 +302,7 @@ export function useTrackerData(
     (data: unknown) => {
       const payload = data as { cutoffs?: unknown; result?: boolean } | null;
       const parsedSongResult = trackingMode === "song"
-        ? parseSongCutoffsPayload(payload?.cutoffs, resolvedSelectedSongId)
+        ? parseSongCutoffsPayload(payload?.cutoffs, resolvedSelectedSongId, eventMeta?.eventType)
         : undefined;
 
       return {
@@ -491,11 +390,15 @@ export function useTrackerData(
 
   const chartData = useMemo(() => {
     if (trackingMode === "song" && mergedSongGroupsForView.length > 0) {
-      return selectSongCutoffs(mergedSongGroupsForView, resolvedSelectedSongId);
+      return selectSongCutoffs(
+        mergedSongGroupsForView,
+        resolvedSelectedSongId,
+        eventMeta?.eventType,
+      );
     }
 
     return mergedCutoffsForView;
-  }, [mergedCutoffsForView, mergedSongGroupsForView, resolvedSelectedSongId, trackingMode]);
+  }, [eventMeta?.eventType, mergedCutoffsForView, mergedSongGroupsForView, resolvedSelectedSongId, trackingMode]);
 
   const apiHasResult = useMemo(() => {
     const liveHasResult = trackerCacheKey !== null && hasPrivateLiveAccess
