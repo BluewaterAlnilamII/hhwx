@@ -100,6 +100,99 @@ test("hydrate restores queue and preferences but starts paused at zero", () => {
   assert.ok(storage.getItem(MUSIC_PLAYER_QUEUE_STORAGE_KEY));
 });
 
+test("refreshing queue artwork upgrades persistence without resetting playback", () => {
+  const storage = resetStore();
+  useMusicPlayerStore.getState().playQueueFromStart([FIRST_ITEM], 0);
+  useMusicPlayerStore.getState().setPlaybackStatus("playing");
+  useMusicPlayerStore.getState().setPlaybackTime(42, 100);
+  const command = useMusicPlayerStore.getState().command;
+
+  useMusicPlayerStore.getState().refreshQueueArtwork({
+    [FIRST_ITEM.id]: "https://cdn.hhwx.org/jacket.png",
+  });
+
+  const state = useMusicPlayerStore.getState();
+  assert.equal(state.queue[0]?.artworkUrl, "https://cdn.hhwx.org/jacket.png");
+  assert.equal(state.status, "playing");
+  assert.equal(state.currentTime, 42);
+  assert.equal(state.command, command);
+  assert.equal(
+    JSON.parse(storage.getItem(MUSIC_PLAYER_QUEUE_STORAGE_KEY)).items[0].artworkUrl,
+    "https://cdn.hhwx.org/jacket.png",
+  );
+});
+
+test("external metadata and queue updates preserve the active playback identity", () => {
+  resetStore();
+  useMusicPlayerStore.getState().playQueueFromStart([FIRST_ITEM, SECOND_ITEM], 0);
+  useMusicPlayerStore.getState().setPlaybackStatus("playing");
+  useMusicPlayerStore.getState().setPlaybackTime(42, 100);
+  const command = useMusicPlayerStore.getState().command;
+  const updatedFirstItem = {
+    ...FIRST_ITEM,
+    title: "Updated first song",
+    artist: "Updated band",
+    artworkUrl: "https://cdn.hhwx.org/updated-first.png",
+  };
+
+  useMusicPlayerStore.getState().applyExternalQueueSnapshot(
+    createMusicPlayerQueueSnapshot([SECOND_ITEM, updatedFirstItem], 1),
+  );
+
+  const state = useMusicPlayerStore.getState();
+  assert.equal(state.currentIndex, 1);
+  assert.equal(state.queue[1]?.title, "Updated first song");
+  assert.equal(state.queue[1]?.artist, "Updated band");
+  assert.equal(state.queue[1]?.artworkUrl, "https://cdn.hhwx.org/updated-first.png");
+  assert.equal(state.status, "playing");
+  assert.equal(state.currentTime, 42);
+  assert.equal(state.duration, 100);
+  assert.equal(state.command, command);
+});
+
+test("external source changes reset playback even when the track ID is unchanged", () => {
+  resetStore();
+  useMusicPlayerStore.getState().playQueueFromStart([FIRST_ITEM], 0);
+  useMusicPlayerStore.getState().setPlaybackStatus("playing");
+  useMusicPlayerStore.getState().setPlaybackTime(42, 100);
+
+  useMusicPlayerStore.getState().applyExternalQueueSnapshot(
+    createMusicPlayerQueueSnapshot([{
+      ...FIRST_ITEM,
+      sourceUrl: "https://cdn.hhwx.org/replaced-first.ogg",
+      durationSeconds: 130,
+    }], 0),
+  );
+
+  const state = useMusicPlayerStore.getState();
+  assert.equal(state.status, "paused");
+  assert.equal(state.currentTime, 0);
+  assert.equal(state.duration, 130);
+  assert.equal(state.command, null);
+});
+
+test("external track changes and queue clearing reset playback", () => {
+  resetStore();
+  useMusicPlayerStore.getState().playQueueFromStart([FIRST_ITEM, SECOND_ITEM], 0);
+  useMusicPlayerStore.getState().setPlaybackStatus("playing");
+  useMusicPlayerStore.getState().setPlaybackTime(42, 100);
+
+  useMusicPlayerStore.getState().applyExternalQueueSnapshot(
+    createMusicPlayerQueueSnapshot([FIRST_ITEM, SECOND_ITEM], 1),
+  );
+  assert.equal(useMusicPlayerStore.getState().currentIndex, 1);
+  assert.equal(useMusicPlayerStore.getState().status, "paused");
+  assert.equal(useMusicPlayerStore.getState().currentTime, 0);
+  assert.equal(useMusicPlayerStore.getState().command, null);
+
+  useMusicPlayerStore.getState().applyExternalQueueSnapshot(null);
+  assert.deepEqual(useMusicPlayerStore.getState().queue, []);
+  assert.equal(useMusicPlayerStore.getState().currentIndex, null);
+  assert.equal(useMusicPlayerStore.getState().status, "idle");
+  assert.equal(useMusicPlayerStore.getState().currentTime, 0);
+  assert.equal(useMusicPlayerStore.getState().command, null);
+});
+
 test("hydrate disables repeat by default when no preference has been saved", () => {
   resetStore();
 

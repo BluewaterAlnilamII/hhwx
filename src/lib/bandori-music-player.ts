@@ -2,6 +2,7 @@ import type { BandoriMusicMasterRecord } from "@/lib/bandori-music-api-client";
 import {
   buildBandoriPublicAssetUrl,
   type BandoriMusicAssetEntry,
+  type BandoriMusicAssetIndex,
 } from "@/lib/bandori-public-asset-index";
 import {
   pickBandoriRegionalText,
@@ -58,4 +59,26 @@ export function buildBandoriMusicPlayerItem({
     artworkUrl: buildBandoriPublicAssetUrl(assets?.files.jacket ?? assets?.files.thumb),
     durationSeconds: assets?.length ?? null,
   };
+}
+
+export function buildBandoriMusicPlayerArtworkUpdates(
+  items: readonly MusicPlayerItem[],
+  assetIndex: BandoriMusicAssetIndex,
+): Record<string, string> {
+  const updates: Record<string, string> = {};
+
+  for (const item of items) {
+    if (item.provider !== "bandori") {
+      continue;
+    }
+    const assets = assetIndex.songs[item.providerTrackId];
+    const artworkUrl = buildBandoriPublicAssetUrl(
+      assets?.files.jacket ?? assets?.files.thumb,
+    );
+    if (artworkUrl && artworkUrl !== item.artworkUrl) {
+      updates[item.id] = artworkUrl;
+    }
+  }
+
+  return updates;
 }

@@ -21,8 +21,8 @@ import {
   type MouseEvent,
   type PointerEvent,
 } from "react";
+import MusicArtwork from "@/components/music-player/MusicArtwork";
 import OverflowMarqueeText from "@/components/music-player/OverflowMarqueeText";
-import SharedMusicArtwork from "@/components/music-player/SharedMusicArtwork";
 import {
   toolbarIconButtonClassName,
   toolbarIconInnerClassName,
@@ -106,7 +106,7 @@ function ToolbarMusicPlayerButton({ isOpen, onToggle }: Pick<ToolbarMusicPlayerP
     >
       <span className={`${toolbarIconInnerClassName} overflow-hidden rounded-full`}>
         {currentTrack?.artworkUrl ? (
-          <SharedMusicArtwork
+          <MusicArtwork
             key={artworkAnimationKey}
             src={currentTrack.artworkUrl}
             alt=""
@@ -212,7 +212,7 @@ function MusicPlayerPanel({ onRequestClose }: Pick<ToolbarMusicPlayerProps, "onR
       <div className="grid grid-cols-[5.125rem_minmax(0,1fr)] gap-4 px-[18px] pb-3 pt-[18px]">
         <div className={`flex aspect-square w-[5.125rem] items-center justify-center overflow-hidden rounded-[18px] bg-[var(--theme-color-control-background-muted)] text-[var(--theme-color-action-secondary-foreground)] shadow-[var(--theme-shadow-surface-raised)] ${isError ? "ring-2 ring-[var(--theme-color-semantic-danger-border)]" : ""}`}>
           {currentTrack.artworkUrl ? (
-            <SharedMusicArtwork
+            <MusicArtwork
               src={currentTrack.artworkUrl}
               alt=""
               className="h-full w-full object-cover"

@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { useSharedMusicArtworkUrl } from "@/hooks/useSharedMusicArtworkUrl";
+import { useBandoriMusicAssetIndex } from "@/hooks/useBandoriPublicAssetIndex";
+import { buildBandoriMusicPlayerArtworkUpdates } from "@/lib/bandori-music-player";
 import { setMusicPlaybackAudioSessionActive } from "@/lib/browser-audio-session";
 import {
   MUSIC_PLAYER_PREFERENCES_STORAGE_KEY,
@@ -53,7 +54,12 @@ export default function MusicPlayerHost() {
   const playAttemptIdRef = useRef(0);
   const tabIdRef = useRef<string>("");
   const currentTrack = useMusicPlayerStore(selectMusicPlayerCurrentTrack);
-  const mediaSessionArtworkUrl = useSharedMusicArtworkUrl(currentTrack?.artworkUrl ?? null);
+  const queue = useMusicPlayerStore((state) => state.queue);
+  const refreshQueueArtwork = useMusicPlayerStore((state) => state.refreshQueueArtwork);
+  const hasBandoriQueueItems = queue.some((item) => item.provider === "bandori");
+  const { value: musicAssetIndex } = useBandoriMusicAssetIndex(hasBandoriQueueItems);
+  const currentTrackId = currentTrack?.id ?? null;
+  const currentTrackSourceUrl = currentTrack?.sourceUrl ?? null;
   const command = useMusicPlayerStore((state) => state.command);
   const volume = useMusicPlayerStore((state) => state.volume);
   const muted = useMusicPlayerStore((state) => state.muted);
@@ -86,6 +92,13 @@ export default function MusicPlayerHost() {
     window.addEventListener("storage", handleStorage);
     return () => window.removeEventListener("storage", handleStorage);
   }, [applyExternalPreferencesSnapshot, applyExternalQueueSnapshot, hydrate]);
+
+  useEffect(() => {
+    if (!musicAssetIndex) {
+      return;
+    }
+    refreshQueueArtwork(buildBandoriMusicPlayerArtworkUpdates(queue, musicAssetIndex));
+  }, [musicAssetIndex, queue, refreshQueueArtwork]);
 
   useEffect(() => {
     tabIdRef.current = createMusicPlayerTabId();
@@ -121,16 +134,16 @@ export default function MusicPlayerHost() {
     audio.pause();
     audio.currentTime = 0;
 
-    if (!currentTrack) {
+    if (!currentTrackSourceUrl) {
       setMusicPlaybackAudioSessionActive(false);
       audio.removeAttribute("src");
       audio.load();
       return;
     }
 
-    audio.src = currentTrack.sourceUrl;
+    audio.src = currentTrackSourceUrl;
     audio.load();
-  }, [currentTrack]);
+  }, [currentTrackId, currentTrackSourceUrl]);
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -236,18 +249,6 @@ export default function MusicPlayerHost() {
     safeSetActionHandler("pause", () => useMusicPlayerStore.getState().requestPause());
     safeSetActionHandler("previoustrack", () => useMusicPlayerStore.getState().requestPrevious());
     safeSetActionHandler("nexttrack", () => useMusicPlayerStore.getState().requestNext());
-    safeSetActionHandler("seekbackward", (details) => {
-      const audio = audioRef.current;
-      if (audio) {
-        applyAudioSeek(audio, audio.currentTime - (details.seekOffset ?? 10));
-      }
-    });
-    safeSetActionHandler("seekforward", (details) => {
-      const audio = audioRef.current;
-      if (audio) {
-        applyAudioSeek(audio, audio.currentTime + (details.seekOffset ?? 10));
-      }
-    });
     safeSetActionHandler("seekto", (details) => {
       const audio = audioRef.current;
       if (audio && details.seekTime !== undefined) {
@@ -260,8 +261,6 @@ export default function MusicPlayerHost() {
       safeSetActionHandler("pause", null);
       safeSetActionHandler("previoustrack", null);
       safeSetActionHandler("nexttrack", null);
-      safeSetActionHandler("seekbackward", null);
-      safeSetActionHandler("seekforward", null);
       safeSetActionHandler("seekto", null);
     };
   }, []);
@@ -275,12 +274,14 @@ export default function MusicPlayerHost() {
       ? new MediaMetadata({
         title: currentTrack.title,
         artist: currentTrack.artist ?? undefined,
-        artwork: mediaSessionArtworkUrl
-          ? [{ src: mediaSessionArtworkUrl, type: "image/png" }]
+        // Keep a durable network URL here: iOS may consume Media Session
+        // artwork outside the page context where blob URLs are valid.
+        artwork: currentTrack.artworkUrl
+          ? [{ src: currentTrack.artworkUrl, type: "image/png" }]
           : undefined,
       })
       : null;
-  }, [currentTrack, mediaSessionArtworkUrl]);
+  }, [currentTrack]);
 
   return (
     <audio
