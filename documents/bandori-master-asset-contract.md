@@ -59,8 +59,9 @@ npm run test:bandori-events
 npm run test:bandori-cards
 npm run test:bandori-stamps
 npm run test:bandori-music
+npm run test:music-player
 npm run test:bandori-public-assets
 npm run audit:bandori-contracts
 ```
 
-The audit verifies envelopes, fixed server slots, Event-to-Stamp semantic identity, index field order, API-to-index coverage, Changed Stamp positional lengths, cache headers, and rejection of unsupported master queries. Override `HHWX_BANDORI_API_BASE_URL` or `HHWX_BANDORI_ASSET_BASE_URL` to audit another deployment.
+The Music Player suite verifies the Music-to-player adapter, durable queue and preference snapshots, restart and repeat behavior, and toolbar input decisions. The production audit verifies envelopes, fixed server slots, Event-to-Stamp semantic identity, index field order, API-to-index coverage, Changed Stamp positional lengths, cache headers, and rejection of unsupported master queries. Override `HHWX_BANDORI_API_BASE_URL` or `HHWX_BANDORI_ASSET_BASE_URL` to audit another deployment.

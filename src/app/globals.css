@@ -396,6 +396,33 @@ body {
   }
 }
 
+@keyframes music-player-overflow-marquee {
+  0%,
+  15% {
+    transform: translateX(0);
+  }
+
+  85%,
+  100% {
+    transform: translateX(calc(-1 * var(--music-player-marquee-distance)));
+  }
+}
+
+.music-player-overflow-marquee {
+  animation-name: music-player-overflow-marquee;
+  animation-duration: var(--music-player-marquee-duration);
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+  animation-direction: alternate;
+  will-change: transform;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .music-player-overflow-marquee {
+    animation: none;
+  }
+}
+
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;

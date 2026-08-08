@@ -7,6 +7,7 @@ import {
   Gift,
   ImageOff,
   Music2,
+  Play,
 } from "lucide-react";
 import BandoriEventBonusPanel from "@/components/bandori/BandoriEventBonusPanel";
 import Heading from "@/components/Heading";
@@ -29,6 +30,7 @@ import {
   type BandoriBandNameRecord,
 } from "@/lib/bandori-event-band";
 import type { BandoriMusicMasterMap } from "@/lib/bandori-music-api-client";
+import { buildBandoriMusicPlayerItem } from "@/lib/bandori-music-player";
 import {
   getBandoriRegionalDisplayOrder,
   getBandoriServerCode,
@@ -43,6 +45,7 @@ import {
   type BandoriSkillLabelMaster,
 } from "@/lib/bandori-skill-label";
 import { cn } from "@/lib/utils";
+import { useMusicPlayerStore } from "@/store/useMusicPlayerStore";
 import {
   buildStampShortcode,
   CommentStampView,
@@ -229,6 +232,7 @@ export default function EventInfoPanel({
   loading: boolean;
 }) {
   const eventTypesT = useTranslations("bandori.teamBuilder.eventTypes");
+  const playerT = useTranslations("navigation.toolbar.player");
   const now = useCurrentTime();
   const model = useMemo(
     () => eventRecord ? buildEventInfoModel(eventRecord, server) : null,
@@ -238,7 +242,7 @@ export default function EventInfoPanel({
     () => eventRecord ? deriveEventSongsWithFallback(musicMaster, eventRecord, server) : null,
     [eventRecord, musicMaster, server],
   );
-  const songs = songSelection?.songs ?? [];
+  const songs = useMemo(() => songSelection?.songs ?? [], [songSelection]);
   const eventBandId = model ? getBandoriEventBandId(model.band) : null;
   const shouldLoadBandNames = eventId !== null;
   const { catalog: stampCatalog, loading: stampsLoading } = useCommentStampCatalog(Boolean(model));
@@ -267,6 +271,26 @@ export default function EventInfoPanel({
   }, [fallbackRewardStampServer, rewardStampIdsByServer, server, stampCatalog]);
   const rewardStamps = rewardStampSelection.stamps;
   const { value: musicAssetIndex } = useBandoriMusicAssetIndex(Boolean(model));
+  const playQueueFromStart = useMusicPlayerStore((state) => state.playQueueFromStart);
+  const playableSongs = useMemo(
+    () => songs.flatMap((song) => {
+      const item = buildBandoriMusicPlayerItem({
+        musicId: song.id,
+        music: musicMaster?.[String(song.id)],
+        assets: musicAssetIndex?.songs[String(song.id)],
+        preferredServer: server,
+        contextServer: songSelection?.sourceServer ?? server,
+        fallbackTitle: song.title,
+        fallbackArtist: song.bandName,
+      });
+      return item ? [item] : [];
+    }),
+    [musicAssetIndex, musicMaster, server, songSelection?.sourceServer, songs],
+  );
+  const playableSongIndexById = useMemo(
+    () => new Map(playableSongs.map((song, index) => [song.providerTrackId, index])),
+    [playableSongs],
+  );
   const { data: cards } = useBandoriCardsMaster(server, Boolean(model), "regional");
   const { data: characters } = useCachedFetch<Record<string, CharacterRecord | undefined>>(
     model ? "bandori-master-characters-main" : null,
@@ -452,6 +476,7 @@ export default function EventInfoPanel({
         <div className="mt-4 max-w-3xl space-y-3">
           {songs.map((song) => {
             const jacketUrl = buildBandoriPublicAssetUrl(musicAssetIndex?.songs[String(song.id)]?.files.thumb);
+            const playableSongIndex = playableSongIndexById.get(String(song.id));
             return (
               <div key={song.id} data-music-id={song.id} className="grid grid-cols-[4.5rem_minmax(0,1fr)] gap-3 rounded-2xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background)] p-3 shadow-sm transition hover:border-[var(--theme-color-action-secondary-border)] hover:shadow-md sm:grid-cols-[4.5rem_minmax(0,1fr)_auto] sm:items-center dark:border-slate-700 dark:bg-slate-950/50">
                 <div className="flex h-18 w-18 items-center justify-center overflow-hidden rounded-xl bg-[var(--theme-color-control-background-muted)] text-[var(--theme-color-action-secondary-foreground)] dark:bg-slate-800 dark:text-[var(--theme-color-action-secondary-foreground-on-dark)]">
@@ -472,6 +497,22 @@ export default function EventInfoPanel({
                   {song.difficultyLevels.map((level, index) => (
                     <span key={`${level}-${index}`} className="inline-flex h-7 min-w-7 items-center justify-center rounded-lg bg-[var(--theme-color-control-background-muted)] px-1.5 text-[11px] font-black text-[var(--theme-color-text-muted)] dark:bg-slate-800 dark:text-slate-300">{level}</span>
                   ))}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (playableSongIndex !== undefined) {
+                        playQueueFromStart(playableSongs, playableSongIndex);
+                      }
+                    }}
+                    disabled={playableSongIndex === undefined}
+                    title={playableSongIndex === undefined ? playerT("audioUnavailable") : undefined}
+                    aria-label={playableSongIndex === undefined
+                      ? playerT("audioUnavailable")
+                      : playerT("playSong", { title: song.title })}
+                    className="ml-1 inline-flex h-7 w-7 items-center justify-center rounded-lg bg-[var(--theme-color-action-accent-background)] text-[var(--theme-color-action-accent-foreground)] shadow-sm outline-hidden transition hover:scale-105 hover:bg-[var(--theme-color-action-accent-background-hover)] focus-visible:ring-2 focus-visible:ring-[var(--theme-color-focus-ring)] disabled:cursor-not-allowed disabled:bg-[var(--theme-color-control-background-disabled)] disabled:text-[var(--theme-color-control-foreground-disabled)] disabled:shadow-none"
+                  >
+                    <Play className="ml-px h-3.5 w-3.5" aria-hidden="true" />
+                  </button>
                 </div>
               </div>
             );
