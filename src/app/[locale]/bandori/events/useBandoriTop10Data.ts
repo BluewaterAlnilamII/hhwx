@@ -56,15 +56,23 @@ function useTopDataLiveSubscription(
 }
 
 export function useBandoriTop10Data(
-  eventId: number | null,
+  targetId: number | null,
   server: BandoriServer,
   enabled: boolean,
+  type: "event" | "song" | "monthly" = "event",
+  songId: number | null = null,
 ) {
-  const canReadTopDataHistory = enabled && eventId !== null;
-  const canUseTopDataLive = canReadTopDataHistory && server === 3;
-  const cacheKey = canReadTopDataHistory ? `bandori-top10-history-${server}-${eventId}` : null;
+  const canReadTopDataHistory = enabled && targetId !== null;
+  const canUseTopDataLive = canReadTopDataHistory && server === 3 && type === "event";
+  // Challenge 必须显式选择正数 song；Versus/Medley 让服务端从唯一声明自动解析。
+  const songQuery = type === "song" && songId !== null && songId > 0
+    ? `&song=${songId}`
+    : "";
+  const cacheKey = canReadTopDataHistory
+    ? `bandori-top10-history-${server}-${type}-${targetId}-${songId ?? "auto"}`
+    : null;
   const url = canReadTopDataHistory
-    ? `/api/bandori/tracker/topdata?server=${server}&event=${eventId}&type=event`
+    ? `/api/bandori/tracker/topdata?server=${server}&event=${targetId}&type=${type}${songQuery}`
     : null;
   const history = useCachedFetch<BandoriTopDataPayload>(
     cacheKey,
@@ -72,7 +80,7 @@ export function useBandoriTop10Data(
     parseBandoriTopDataPayload,
     { ...LIVE_CLIENT_CACHE_POLICY },
   );
-  const liveSubscription = useTopDataLiveSubscription(eventId, canUseTopDataLive);
+  const liveSubscription = useTopDataLiveSubscription(targetId, canUseTopDataLive);
   const liveSnapshot = useBandoriTrackerLiveSubscriptionSnapshot(
     liveSubscription,
     canUseTopDataLive,

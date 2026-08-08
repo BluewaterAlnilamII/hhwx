@@ -6,6 +6,13 @@ import {
   BandoriTopDataHistoryReadError,
   readBandoriTopDataHistory,
 } from "@/lib/bandori-topdata-history-server";
+import {
+  BandoriScopedTopDataNotFoundError,
+  BandoriScopedTopDataReadError,
+  BandoriSongTopDataRequiredError,
+  readBandoriMonthlyTopDataHistory,
+  readBandoriSongTopDataHistory,
+} from "@/lib/bandori-topdata-scoped-history-server";
 
 const EVENT_ID_PATTERN = /^[0-9]+$/u;
 const MAX_EVENT_ID = 2_147_483_647;
@@ -25,6 +32,7 @@ export async function handleBandoriTrackerTopDataRequest(request: Request) {
     const server = searchParams.get("server");
     const eventParam = searchParams.get("event");
     const type = searchParams.get("type") || "event";
+    const songParam = searchParams.get("song");
 
     const normalizedServer = normalizeBandoriServer(server);
     if (normalizedServer === null) {
@@ -37,16 +45,34 @@ export async function handleBandoriTrackerTopDataRequest(request: Request) {
     if (!Number.isSafeInteger(eventId) || eventId < 1 || eventId > MAX_EVENT_ID) {
       return invalidRequest(`Event must be between 1 and ${MAX_EVENT_ID}.`);
     }
-    if (type !== "event") {
-      return invalidRequest("Only event TOP10 history is currently supported.");
+    const serverCode = getBandoriServerCode(normalizedServer);
+    if (type === "event") {
+      const result = await readBandoriTopDataHistory(serverCode, eventId);
+      return NextResponse.json(result.payload, { headers: NO_STORE_HEADERS });
     }
-
-    const result = await readBandoriTopDataHistory(
-      getBandoriServerCode(normalizedServer),
-      eventId,
-    );
-    return NextResponse.json(result.payload, { headers: NO_STORE_HEADERS });
+    if (type === "song") {
+      if (songParam !== null && !EVENT_ID_PATTERN.test(songParam)) {
+        return invalidRequest("Song must be a non-negative integer.");
+      }
+      const songId = songParam === null ? null : Number(songParam);
+      if (songId !== null && (!Number.isSafeInteger(songId) || songId < 0 || songId > MAX_EVENT_ID)) {
+        return invalidRequest("Song must be a non-negative integer.");
+      }
+      const payload = await readBandoriSongTopDataHistory(serverCode, eventId, songId);
+      return NextResponse.json(payload, { headers: NO_STORE_HEADERS });
+    }
+    if (type === "monthly") {
+      const payload = await readBandoriMonthlyTopDataHistory(serverCode, eventId);
+      return NextResponse.json(payload, { headers: NO_STORE_HEADERS });
+    }
+    return invalidRequest("Type must be event, song, or monthly.");
   } catch (error) {
+    if (error instanceof BandoriSongTopDataRequiredError) {
+      return jsonError(400, "SONG_REQUIRED", "Song is required for challenge TOP10 history.", { headers: NO_STORE_HEADERS });
+    }
+    if (error instanceof BandoriScopedTopDataNotFoundError) {
+      return jsonError(404, "SONG_TOP10_NOT_FOUND", "Song TOP10 history target was not found.", { headers: NO_STORE_HEADERS });
+    }
     if (error instanceof BandoriTopDataHistoryReadError) {
       return jsonError(
         503,
@@ -54,6 +80,9 @@ export async function handleBandoriTrackerTopDataRequest(request: Request) {
         "Tracker history is temporarily unavailable.",
         { headers: NO_STORE_HEADERS },
       );
+    }
+    if (error instanceof BandoriScopedTopDataReadError) {
+      return jsonError(503, "TRACKER_HISTORY_UNAVAILABLE", "Tracker history is temporarily unavailable.", { headers: NO_STORE_HEADERS });
     }
     console.error("Bandori TOP10 tracker API failed", error);
     return jsonError(500, "INTERNAL_SERVER_ERROR", "Internal server error.", {

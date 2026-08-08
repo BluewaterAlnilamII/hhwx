@@ -157,7 +157,7 @@ export const TrackerModeTierControls = memo(function TrackerModeTierControls({
             选择排名
           </div>
           <div className="flex flex-wrap gap-1.5 sm:gap-2">
-            {trackingMode === "event" ? (
+            {(
               <button
                 type="button"
                 onClick={onTop10Change}
@@ -170,7 +170,7 @@ export const TrackerModeTierControls = memo(function TrackerModeTierControls({
               >
                 TOP10
               </button>
-            ) : null}
+            )}
             {tierOptions.map((tier) => (
               <button
                 key={tier}

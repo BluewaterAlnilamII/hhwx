@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { createServer } from "node:http";
+import { once } from "node:events";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import test, { after, before } from "node:test";
@@ -8,6 +10,10 @@ import { gzipSync } from "node:zlib";
 
 import { handleBandoriTrackerTopDataRequest } from "../src/lib/bandori-tracker-topdata-server.ts";
 import { countBandoriTopDataSamples } from "../src/lib/bandori-topdata-contract.ts";
+import {
+  inspectBandoriTopDataTargetStateSizesForTests,
+  resetBandoriTopDataTargetStatesForTests,
+} from "../src/lib/bandori-topdata-history-server.ts";
 
 let storeRoot;
 
@@ -80,6 +86,72 @@ async function writeHistory(eventId, value, options = {}) {
   const manifestKey = `${prefix}/manifest.json`;
   await writeObject(manifestKey, Buffer.from(JSON.stringify(manifest), "utf8"));
   return { packKey, manifestKey, manifest };
+}
+
+async function buildScopedPack(prefix, packName, value, hasFinalSample = false) {
+  const compressed = gzipSync(Buffer.from(JSON.stringify(value), "utf8"), { mtime: 0 });
+  const compressedSha256 = createHash("sha256").update(compressed).digest("hex");
+  const key = `${prefix}/packs/${packName}/${compressedSha256}.json.gz`;
+  const descriptor = {
+    key,
+    semanticSha256: createHash("sha256").update(canonicalJson(value)).digest("hex"),
+    compressedSha256,
+    compressedSize: compressed.length,
+    pointCount: value.points.length,
+    userCount: value.users.length,
+    sampleCount: countBandoriTopDataSamples(value.points),
+    hasFinalSample,
+  };
+  await writeObject(key, compressed);
+  return descriptor;
+}
+
+async function writeSongHistory(eventId, server, songIds, values) {
+  const prefix = `bandori/trackerdata/topdata/songs/${eventId}/${server}`;
+  const packs = {};
+  const recentPackKeys = {};
+  for (const songId of songIds) {
+    const value = values[songId];
+    packs[songId] = value ? await buildScopedPack(prefix, songId, value) : null;
+    recentPackKeys[songId] = packs[songId] ? [packs[songId].key] : [];
+  }
+  const manifest = {
+    schemaVersion: 1,
+    kind: "songTop10",
+    server,
+    eventId,
+    songIds,
+    generation: 1,
+    publishedAt: new Date().toISOString(),
+    hasFinalSample: false,
+    packs,
+    recentPackKeys,
+  };
+  const manifestKey = `${prefix}/manifest.json`;
+  await writeObject(manifestKey, Buffer.from(JSON.stringify(manifest), "utf8"));
+  return { manifest, manifestKey };
+}
+
+async function writeMonthlyHistory(period, monthlyRankingId, server, value, options = {}) {
+  const prefix = `bandori/trackerdata/topdata/monthly/${period}/${server}`;
+  const descriptor = await buildScopedPack(
+    prefix,
+    "monthly",
+    value,
+    options.hasFinalSample === true,
+  );
+  await writeObject(`${prefix}/manifest.json`, Buffer.from(JSON.stringify({
+    schemaVersion: 1,
+    kind: "monthlyTop10",
+    server,
+    period,
+    monthlyRankingId,
+    generation: 1,
+    publishedAt: new Date().toISOString(),
+    hasFinalSample: options.hasFinalSample === true,
+    pack: descriptor,
+    recentPackKeys: [descriptor.key],
+  }), "utf8"));
 }
 
 async function request(query) {
@@ -184,7 +256,8 @@ test("validates only the supported contract parameters", async () => {
     "server=3&event=",
     "server=3&event=1.5",
     "server=3&event=2147483648",
-    "server=3&event=318&type=song",
+    "server=3&event=318&type=unknown",
+    "server=3&event=318&type=song&song=-1",
   ]) {
     const response = await request(query);
     assert.equal(response.status, 400, query);
@@ -192,6 +265,64 @@ test("validates only the supported contract parameters", async () => {
     assert.equal(body.success, false);
     assert.equal(body.error.code, "INVALID_REQUEST");
   }
+});
+
+test("resolves song TOP10 targets and enforces challenge song selection", async () => {
+  const challenge = payload(1_785_503_000_000);
+  await writeSongHistory(350, "cn", [583, 714, 743], { 583: challenge });
+
+  let response = await request("server=3&event=350&type=song&song=583");
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), challenge);
+
+  response = await request("server=3&event=350&type=song");
+  assert.equal(response.status, 400);
+  assert.equal((await response.json()).error.code, "SONG_REQUIRED");
+
+  response = await request("server=3&event=350&type=song&song=999");
+  assert.equal(response.status, 404);
+  assert.equal((await response.json()).error.code, "SONG_TOP10_NOT_FOUND");
+
+  const versus = payload(1_785_503_100_000);
+  await writeSongHistory(351, "jp", [746], { 746: versus });
+  response = await request("server=0&event=351&type=song");
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), versus);
+  response = await request("server=0&event=351&type=song&song=746");
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), versus);
+
+  const medley = payload(1_785_503_200_000);
+  await writeSongHistory(352, "tw", [0], { 0: medley });
+  response = await request("server=2&event=352&type=song&song=0");
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), medley);
+});
+
+test("rejects a song manifest whose final summary is not all-target complete", async () => {
+  const written = await writeSongHistory(
+    353,
+    "en",
+    [583, 714, 743],
+    { 583: payload(1_785_503_250_000) },
+  );
+  written.manifest.hasFinalSample = true;
+  await writeObject(
+    written.manifestKey,
+    Buffer.from(JSON.stringify(written.manifest), "utf8"),
+  );
+
+  const response = await request("server=1&event=353&type=song&song=583");
+  assert.equal(response.status, 503);
+  assert.equal((await response.json()).error.code, "TRACKER_HISTORY_UNAVAILABLE");
+});
+
+test("maps monthly ranking IDs to natural-period TOP10 paths", async () => {
+  const value = payload(1_785_503_300_000);
+  await writeMonthlyHistory("2026-08", 19, "cn", value);
+  const response = await request("server=3&event=19&type=monthly");
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), value);
 });
 
 test("returns an explicit HHWX error for a referenced corrupt pack", async () => {
@@ -370,5 +501,243 @@ test("final history remains eligible for stale reads while retained in the bound
     assert.deepEqual(await response.json(), expected);
   } finally {
     Date.now = originalNow;
+  }
+});
+
+test("song history shares stale fallback, failure cooldown, and recovery semantics", async () => {
+  const originalNow = Date.now;
+  let now = 1_830_000_000_000;
+  Date.now = () => now;
+  resetBandoriTopDataTargetStatesForTests();
+  try {
+    const initial = payload(1_785_504_000_000);
+    const updated = payload(1_785_504_100_000);
+    const written = await writeSongHistory(360, "cn", [711], { 711: initial });
+
+    let response = await request("server=3&event=360&type=song");
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), initial);
+
+    now += 60_001;
+    await writeObject(written.manifestKey, Buffer.from("{", "utf8"));
+    response = await request("server=3&event=360&type=song");
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), initial);
+
+    await writeSongHistory(360, "cn", [711], { 711: updated });
+    response = await request("server=3&event=360&type=song");
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), initial);
+
+    now += 15_001;
+    response = await request("server=3&event=360&type=song");
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), updated);
+  } finally {
+    Date.now = originalNow;
+    resetBandoriTopDataTargetStatesForTests();
+  }
+});
+
+test("active scoped stale history expires after six hours", async () => {
+  const originalNow = Date.now;
+  let now = 1_840_000_000_000;
+  Date.now = () => now;
+  resetBandoriTopDataTargetStatesForTests();
+  try {
+    const written = await writeSongHistory(361, "cn", [712], {
+      712: payload(1_785_504_200_000),
+    });
+    let response = await request("server=3&event=361&type=song&song=712");
+    assert.equal(response.status, 200);
+
+    now += 6 * 60 * 60 * 1_000 + 1;
+    await writeObject(written.manifestKey, Buffer.from("{", "utf8"));
+    response = await request("server=3&event=361&type=song&song=712");
+    assert.equal(response.status, 503);
+  } finally {
+    Date.now = originalNow;
+    resetBandoriTopDataTargetStatesForTests();
+  }
+});
+
+test("a partially-final Challenge manifest does not make one song stale forever", async () => {
+  const originalNow = Date.now;
+  let now = 1_845_000_000_000;
+  Date.now = () => now;
+  resetBandoriTopDataTargetStatesForTests();
+  try {
+    const expected = payload(1_785_504_250_000);
+    const written = await writeSongHistory(362, "cn", [713, 714, 715], {
+      713: expected,
+      714: payload(1_785_504_251_000),
+      715: payload(1_785_504_252_000),
+    });
+    written.manifest.packs[713].hasFinalSample = true;
+    await writeObject(
+      written.manifestKey,
+      Buffer.from(JSON.stringify(written.manifest), "utf8"),
+    );
+
+    let response = await request("server=3&event=362&type=song&song=713");
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), expected);
+
+    now += 6 * 60 * 60 * 1_000 + 1;
+    await writeObject(written.manifestKey, Buffer.from("{", "utf8"));
+    response = await request("server=3&event=362&type=song&song=713");
+    assert.equal(response.status, 503);
+  } finally {
+    Date.now = originalNow;
+    resetBandoriTopDataTargetStatesForTests();
+  }
+});
+
+test("final monthly history remains stale-eligible while its pack is retained", async () => {
+  const originalNow = Date.now;
+  let now = 1_850_000_000_000;
+  Date.now = () => now;
+  resetBandoriTopDataTargetStatesForTests();
+  try {
+    const expected = payload(1_785_504_300_000);
+    await writeMonthlyHistory("2026-09", 20, "cn", expected, { hasFinalSample: true });
+    let response = await request("server=3&event=20&type=monthly");
+    assert.equal(response.status, 200);
+
+    now += 30 * 24 * 60 * 60 * 1_000;
+    await writeObject(
+      "bandori/trackerdata/topdata/monthly/2026-09/cn/manifest.json",
+      Buffer.from("{", "utf8"),
+    );
+    response = await request("server=3&event=20&type=monthly");
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), expected);
+  } finally {
+    Date.now = originalNow;
+    resetBandoriTopDataTargetStatesForTests();
+  }
+});
+
+test("shared TOP10 failure state remains bounded across event and scoped targets", async () => {
+  const originalWarn = console.warn;
+  console.warn = () => {};
+  resetBandoriTopDataTargetStatesForTests();
+  try {
+    for (let eventId = 400; eventId < 470; eventId += 1) {
+      await writeObject(
+        `bandori/trackerdata/topdata/songs/${eventId}/cn/manifest.json`,
+        Buffer.from("{}", "utf8"),
+      );
+      const response = await request(`server=3&event=${eventId}&type=song&song=1`);
+      assert.equal(response.status, 503);
+    }
+    assert.deepEqual(inspectBandoriTopDataTargetStateSizesForTests(), {
+      lastSuccess: 0,
+      cooldown: 64,
+    });
+
+    resetBandoriTopDataTargetStatesForTests();
+    for (let eventId = 500; eventId < 570; eventId += 1) {
+      await writeHistory(eventId, payload(1_785_505_000_000 + eventId));
+      const response = await request(`server=3&event=${eventId}&type=event`);
+      assert.equal(response.status, 200);
+    }
+    assert.deepEqual(inspectBandoriTopDataTargetStateSizesForTests(), {
+      lastSuccess: 64,
+      cooldown: 0,
+    });
+  } finally {
+    console.warn = originalWarn;
+    resetBandoriTopDataTargetStatesForTests();
+  }
+});
+
+test("song manifest and pack reads share one end-to-end three-second budget", async () => {
+  const value = payload(1_785_504_400_000);
+  const compressed = gzipSync(Buffer.from(JSON.stringify(value), "utf8"), { mtime: 0 });
+  const compressedSha256 = createHash("sha256").update(compressed).digest("hex");
+  const prefix = "bandori/trackerdata/topdata/songs/380/cn";
+  const packKey = `${prefix}/packs/713/${compressedSha256}.json.gz`;
+  const manifestKey = `${prefix}/manifest.json`;
+  const manifest = Buffer.from(JSON.stringify({
+    schemaVersion: 1,
+    kind: "songTop10",
+    server: "cn",
+    eventId: 380,
+    songIds: [713],
+    generation: 1,
+    publishedAt: new Date().toISOString(),
+    hasFinalSample: false,
+    packs: {
+      713: {
+        key: packKey,
+        semanticSha256: createHash("sha256").update(canonicalJson(value)).digest("hex"),
+        compressedSha256,
+        compressedSize: compressed.length,
+        pointCount: value.points.length,
+        userCount: value.users.length,
+        sampleCount: countBandoriTopDataSamples(value.points),
+        hasFinalSample: false,
+      },
+    },
+    recentPackKeys: { 713: [packKey] },
+  }), "utf8");
+  const objects = new Map([
+    [`/test-bucket/${manifestKey}`, manifest],
+    [`/test-bucket/${packKey}`, compressed],
+  ]);
+  const server = createServer((incoming, outgoing) => {
+    const body = objects.get(new URL(incoming.url ?? "/", "http://localhost").pathname);
+    setTimeout(() => {
+      if (outgoing.destroyed) return;
+      if (!body) {
+        outgoing.writeHead(404, { "content-length": "0" });
+        outgoing.end();
+        return;
+      }
+      outgoing.writeHead(200, { "content-length": String(body.length) });
+      outgoing.end(body);
+    }, 1_750);
+  });
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+
+  const originalRoot = process.env.BANDORI_TOPDATA_HISTORY_LOCAL_STORE_ROOT;
+  const originalR2 = {
+    endpoint: process.env.BANDORI_R2_ENDPOINT,
+    bucket: process.env.BANDORI_PRIVATE_R2_BUCKET,
+    accessKeyId: process.env.BANDORI_R2_ACCESS_KEY_ID,
+    secretAccessKey: process.env.BANDORI_R2_SECRET_ACCESS_KEY,
+  };
+  delete process.env.BANDORI_TOPDATA_HISTORY_LOCAL_STORE_ROOT;
+  const address = server.address();
+  assert(address && typeof address === "object");
+  process.env.BANDORI_R2_ENDPOINT = `http://127.0.0.1:${address.port}`;
+  process.env.BANDORI_PRIVATE_R2_BUCKET = "test-bucket";
+  process.env.BANDORI_R2_ACCESS_KEY_ID = "test-access-key";
+  process.env.BANDORI_R2_SECRET_ACCESS_KEY = "test-secret-key";
+  resetBandoriTopDataTargetStatesForTests();
+  try {
+    const startedAt = performance.now();
+    const response = await request("server=3&event=380&type=song&song=713");
+    const elapsedMs = performance.now() - startedAt;
+    assert.equal(response.status, 503);
+    assert(elapsedMs >= 2_700, `read returned too early: ${elapsedMs}ms`);
+    assert(elapsedMs < 3_800, `read exceeded the shared budget: ${elapsedMs}ms`);
+  } finally {
+    if (originalRoot === undefined) delete process.env.BANDORI_TOPDATA_HISTORY_LOCAL_STORE_ROOT;
+    else process.env.BANDORI_TOPDATA_HISTORY_LOCAL_STORE_ROOT = originalRoot;
+    for (const [name, value] of [
+      ["BANDORI_R2_ENDPOINT", originalR2.endpoint],
+      ["BANDORI_PRIVATE_R2_BUCKET", originalR2.bucket],
+      ["BANDORI_R2_ACCESS_KEY_ID", originalR2.accessKeyId],
+      ["BANDORI_R2_SECRET_ACCESS_KEY", originalR2.secretAccessKey],
+    ]) {
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
+    }
+    resetBandoriTopDataTargetStatesForTests();
+    server.close();
+    await once(server, "close");
   }
 });

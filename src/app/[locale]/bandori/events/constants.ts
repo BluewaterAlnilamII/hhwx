@@ -5,23 +5,26 @@ export {
 } from "@/lib/bandori-tracker-tiers";
 
 import {
-  EVENT_TIERS,
   getTiersForMode,
   type TrackerTierMode,
 } from "@/lib/bandori-tracker-tiers";
 
-const RETIRED_EVENT_TRACKER_TIERS = new Set([1, 10]);
-export const EVENT_TRACKER_TIERS = Object.freeze(
-  EVENT_TIERS.filter((tier) => !RETIRED_EVENT_TRACKER_TIERS.has(tier)),
-);
+const RETIRED_TRACKER_TIERS = new Set([1, 10]);
+const TRACKER_TIERS_BY_MODE: Readonly<Record<TrackerTierMode, readonly number[]>> = Object.freeze({
+  event: Object.freeze(getTiersForMode("event").filter((tier) => !RETIRED_TRACKER_TIERS.has(tier))),
+  song: Object.freeze(getTiersForMode("song").filter((tier) => !RETIRED_TRACKER_TIERS.has(tier))),
+  monthly: Object.freeze(getTiersForMode("monthly").filter((tier) => !RETIRED_TRACKER_TIERS.has(tier))),
+});
+
+export const EVENT_TRACKER_TIERS = TRACKER_TIERS_BY_MODE.event;
 
 /**
  * T1/T10 remain valid on the compatibility API, but the Event Tracker no
- * longer exposes them for event rankings. Song and monthly rankings keep the
- * full API tier list.
+ * longer exposes them in any ranking mode. TOP10 is the UI entry point for
+ * these leading positions.
  */
 export function getEventTrackerTiersForMode(mode: TrackerTierMode): readonly number[] {
-  return mode === "event" ? EVENT_TRACKER_TIERS : getTiersForMode(mode);
+  return TRACKER_TIERS_BY_MODE[mode];
 }
 
 const INSTANT_PROJECTION_STORAGE_KEY = "eventtracker_projection_instant";
