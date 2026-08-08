@@ -55,7 +55,7 @@ export function buildBandoriMusicPlayerItem({
     title,
     artist: artist || null,
     sourceUrl,
-    artworkUrl: buildBandoriPublicAssetUrl(assets?.files.thumb ?? assets?.files.jacket),
+    artworkUrl: buildBandoriPublicAssetUrl(assets?.files.jacket ?? assets?.files.thumb),
     durationSeconds: assets?.length ?? null,
   };
 }

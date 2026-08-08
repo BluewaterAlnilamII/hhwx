@@ -476,14 +476,14 @@ export default function EventInfoPanel({
         </Heading>
         <div className="mt-4 max-w-3xl space-y-3">
           {songs.map((song) => {
-            const jacketUrl = buildBandoriPublicAssetUrl(musicAssetIndex?.songs[String(song.id)]?.files.thumb);
+            const thumbnailUrl = buildBandoriPublicAssetUrl(musicAssetIndex?.songs[String(song.id)]?.files.thumb);
             const playableSongIndex = playableSongIndexById.get(String(song.id));
             return (
               <div key={song.id} data-music-id={song.id} className="grid grid-cols-[4.5rem_minmax(0,1fr)] gap-3 rounded-2xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background)] p-3 shadow-sm transition hover:border-[var(--theme-color-action-secondary-border)] hover:shadow-md sm:grid-cols-[4.5rem_minmax(0,1fr)_auto] sm:items-center dark:border-slate-700 dark:bg-slate-950/50">
                 <div className="flex h-18 w-18 items-center justify-center overflow-hidden rounded-xl bg-[var(--theme-color-control-background-muted)] text-[var(--theme-color-action-secondary-foreground)] dark:bg-slate-800 dark:text-[var(--theme-color-action-secondary-foreground-on-dark)]">
-                  {jacketUrl ? (
+                  {thumbnailUrl ? (
                     <SharedMusicArtwork
-                      src={jacketUrl}
+                      src={thumbnailUrl}
                       alt={`${song.title} 封面`}
                       className="h-full w-full object-cover"
                       fallback={<ImageOff className="h-6 w-6" />}
