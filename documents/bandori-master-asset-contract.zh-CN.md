@@ -59,8 +59,9 @@ npm run test:bandori-events
 npm run test:bandori-cards
 npm run test:bandori-stamps
 npm run test:bandori-music
+npm run test:music-player
 npm run test:bandori-public-assets
 npm run audit:bandori-contracts
 ```
 
-审计会验证响应 envelope、固定四槽、Event 与 Stamp 的语义对应、index 字段顺序、API 与 index 覆盖关系、Changed Stamp 位置数组长度、缓存头，以及未知 Master 查询参数必须被拒绝。可通过 `HHWX_BANDORI_API_BASE_URL` 与 `HHWX_BANDORI_ASSET_BASE_URL` 审计其他环境。
+Music Player 测试会验证 Music 到播放器的适配、可持久化队列与偏好快照、从头重播和循环行为，以及工具栏输入决策。线上审计会验证响应 envelope、固定四槽、Event 与 Stamp 的语义对应、index 字段顺序、API 与 index 覆盖关系、Changed Stamp 位置数组长度、缓存头，以及未知 Master 查询参数必须被拒绝。可通过 `HHWX_BANDORI_API_BASE_URL` 与 `HHWX_BANDORI_ASSET_BASE_URL` 审计其他环境。

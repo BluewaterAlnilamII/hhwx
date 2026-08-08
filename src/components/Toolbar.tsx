@@ -6,6 +6,12 @@ import { useLocale, useTranslations } from "next-intl";
 import { useSearchParams } from "next/navigation";
 import { Link, usePathname } from "@/i18n/navigation";
 import AccountCardAvatar from "@/components/account/AccountCardAvatar";
+import ToolbarMusicPlayer from "@/components/music-player/ToolbarMusicPlayer";
+import {
+    toolbarIconButtonClassName,
+    toolbarIconInnerClassName,
+    toolbarMenuClassName,
+} from "@/components/toolbar/toolbar-styles";
 import { useBandoriCardsMaster } from "@/hooks/useBandoriCardsMaster";
 import { buildLocalizedPathname, routing, type AppLocale } from "@/i18n/routing";
 import { getApiErrorMessage, parseApiSuccessData } from "@/lib/api-contracts";
@@ -29,9 +35,7 @@ interface ToolbarProps {
 }
 
 const NOTIFICATIONS_UPDATED_EVENT = "hhwx:notifications-updated";
-const toolbarIconButtonClassName = "group relative flex h-9 w-9 items-center justify-center rounded-[15px] border border-[var(--theme-color-toolbar-control-border)] bg-[var(--theme-color-toolbar-control-background)] text-left text-[var(--theme-color-toolbar-control-foreground)] shadow-[var(--theme-shadow-toolbar-control)] outline-hidden transition duration-200 hover:-translate-y-0.5 hover:scale-[1.03] hover:bg-[var(--theme-color-toolbar-control-background-hover)] hover:shadow-[var(--theme-shadow-toolbar-control-hover)] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--theme-color-focus-ring-on-dark)]";
-const toolbarIconInnerClassName = "relative flex h-7 w-7 items-center justify-center rounded-[13px] bg-[var(--theme-color-toolbar-control-icon-background)] text-[var(--theme-color-toolbar-control-icon-foreground)] transition duration-200 group-hover:scale-105 group-hover:bg-[var(--theme-color-toolbar-control-icon-background-hover)]";
-const toolbarMenuClassName = "absolute right-0 top-full mt-3 w-64 overflow-hidden rounded-3xl border border-[var(--theme-color-border-default)] bg-[var(--theme-color-surface-background)] shadow-[var(--theme-shadow-toolbar-menu)]";
+type OpenToolbarMenu = "player" | "language" | "account" | null;
 
 function formatUnreadCount(count: number): string {
     return count > 99 ? "99+" : String(count);
@@ -162,15 +166,16 @@ export default function Toolbar({ showDebugButton = true, isSidebarOpen = false,
     const languageT = useTranslations("common.language");
     const preferredServer = useBandoriPreferredServer();
     const { userId, username, emailVerified, setAuth, logout, debugMode, toggleDebugMode } = useGameStore();
-    const [showMenu, setShowMenu] = useState(false);
-    const [showLanguageMenu, setShowLanguageMenu] = useState(false);
+    const [toolbarMenuState, setToolbarMenuState] = useState<{
+        pathname: string;
+        menu: OpenToolbarMenu;
+    }>(() => ({ pathname, menu: null }));
     const [notificationUnreadState, setNotificationUnreadState] = useState<{ userId: string; unreadCount: number } | null>(null);
     const storedProfileUserId = useAccountProfileStore((state) => state.userId);
     const storedProfile = useAccountProfileStore((state) => state.profile);
     const loadAccountProfile = useAccountProfileStore((state) => state.loadProfile);
     const clearAccountProfile = useAccountProfileStore((state) => state.clearProfile);
-    const menuRef = useRef<HTMLDivElement | null>(null);
-    const languageMenuRef = useRef<HTMLDivElement | null>(null);
+    const toolbarMenusRef = useRef<HTMLDivElement | null>(null);
     const unreadRequestRef = useRef<{ userId: string; promise: Promise<void> } | null>(null);
     const returnPath = pathname && !pathname.startsWith("/auth") ? pathname : "/account";
     const loginHref = buildAuthPath("login", returnPath, undefined, locale);
@@ -182,6 +187,19 @@ export default function Toolbar({ showDebugButton = true, isSidebarOpen = false,
     const avatarCardServer = toolbarProfile?.avatarCardServer ?? null;
     const notificationUnreadCount = notificationUnreadState?.userId === userId ? notificationUnreadState.unreadCount : 0;
     const notificationBadgeLabel = notificationUnreadCount > 0 ? formatUnreadCount(notificationUnreadCount) : null;
+    const openToolbarMenu = toolbarMenuState.pathname === pathname ? toolbarMenuState.menu : null;
+    const setOpenToolbarMenu = useCallback((nextValue: React.SetStateAction<OpenToolbarMenu>) => {
+        setToolbarMenuState((currentState) => {
+            const currentMenu = currentState.pathname === pathname ? currentState.menu : null;
+            return {
+                pathname,
+                menu: typeof nextValue === "function" ? nextValue(currentMenu) : nextValue,
+            };
+        });
+    }, [pathname]);
+    const showMenu = openToolbarMenu === "account";
+    const showLanguageMenu = openToolbarMenu === "language";
+    const showPlayerMenu = openToolbarMenu === "player";
     const { data: cardMetadata } = useBandoriCardsMaster(
         avatarCardServer ?? undefined,
         Boolean(userId && avatarCardId),
@@ -274,34 +292,28 @@ export default function Toolbar({ showDebugButton = true, isSidebarOpen = false,
     }, [clearAccountProfile, setAuth, logout]);
 
     useEffect(() => {
-        if (!showMenu) {
+        if (!openToolbarMenu) {
             return;
         }
 
         const handlePointerDown = (event: MouseEvent) => {
-            if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
-                setShowMenu(false);
+            if (toolbarMenusRef.current && !toolbarMenusRef.current.contains(event.target as Node)) {
+                setOpenToolbarMenu(null);
+            }
+        };
+        const handleKeyDown = (event: KeyboardEvent) => {
+            if (event.key === "Escape") {
+                setOpenToolbarMenu(null);
             }
         };
 
         document.addEventListener("mousedown", handlePointerDown);
-        return () => document.removeEventListener("mousedown", handlePointerDown);
-    }, [showMenu]);
-
-    useEffect(() => {
-        if (!showLanguageMenu) {
-            return;
-        }
-
-        const handlePointerDown = (event: MouseEvent) => {
-            if (languageMenuRef.current && !languageMenuRef.current.contains(event.target as Node)) {
-                setShowLanguageMenu(false);
-            }
+        document.addEventListener("keydown", handleKeyDown);
+        return () => {
+            document.removeEventListener("mousedown", handlePointerDown);
+            document.removeEventListener("keydown", handleKeyDown);
         };
-
-        document.addEventListener("mousedown", handlePointerDown);
-        return () => document.removeEventListener("mousedown", handlePointerDown);
-    }, [showLanguageMenu]);
+    }, [openToolbarMenu, setOpenToolbarMenu]);
 
     const loadToolbarProfile = useCallback(async () => {
         if (!userId) {
@@ -409,17 +421,15 @@ export default function Toolbar({ showDebugButton = true, isSidebarOpen = false,
         clearAccountProfile();
         setNotificationUnreadState(null);
         logout();
-        setShowMenu(false);
+        setOpenToolbarMenu(null);
     };
 
     const toggleLanguageMenu = () => {
-        setShowLanguageMenu((currentValue) => !currentValue);
-        setShowMenu(false);
+        setOpenToolbarMenu((currentValue) => currentValue === "language" ? null : "language");
     };
 
     const toggleAccountMenu = () => {
-        setShowMenu((currentValue) => !currentValue);
-        setShowLanguageMenu(false);
+        setOpenToolbarMenu((currentValue) => currentValue === "account" ? null : "account");
     };
 
     return (
@@ -438,7 +448,7 @@ export default function Toolbar({ showDebugButton = true, isSidebarOpen = false,
                     </button>
                 </div>
 
-                <div className="flex items-center gap-2.5">
+                <div ref={toolbarMenusRef} className="flex items-center gap-2.5">
                     {shouldShowDebugButton && (
                         <button
                             onClick={toggleDebugMode}
@@ -453,7 +463,13 @@ export default function Toolbar({ showDebugButton = true, isSidebarOpen = false,
                         </button>
                     )}
 
-                    <div ref={languageMenuRef} className="relative">
+                    <ToolbarMusicPlayer
+                        isOpen={showPlayerMenu}
+                        onToggle={() => setOpenToolbarMenu((currentValue) => currentValue === "player" ? null : "player")}
+                        onRequestClose={() => setOpenToolbarMenu((currentValue) => currentValue === "player" ? null : currentValue)}
+                    />
+
+                    <div className="relative">
                         <button
                             type="button"
                             onClick={toggleLanguageMenu}
@@ -471,13 +487,13 @@ export default function Toolbar({ showDebugButton = true, isSidebarOpen = false,
                                 <LanguageMenuContent
                                     pathname={pathname}
                                     currentLocale={locale}
-                                    onSelect={() => setShowLanguageMenu(false)}
+                                    onSelect={() => setOpenToolbarMenu(null)}
                                 />
                             </Suspense>
                         )}
                     </div>
 
-                    <div ref={menuRef} className="relative">
+                    <div className="relative">
                         <button
                             type="button"
                             onClick={toggleAccountMenu}
@@ -521,14 +537,14 @@ export default function Toolbar({ showDebugButton = true, isSidebarOpen = false,
                                     <div className="py-2">
                                         <Link
                                             href="/account"
-                                            onClick={() => setShowMenu(false)}
+                                            onClick={() => setOpenToolbarMenu(null)}
                                             className="block px-5 py-3 text-sm font-medium text-[var(--theme-color-text-default)] transition hover:bg-[var(--theme-color-control-background-hover)]"
                                         >
                                             {emailVerified ? t("accountCenter") : t("accountCenterUnverified")}
                                         </Link>
                                         <Link
                                             href="/account/notifications"
-                                            onClick={() => setShowMenu(false)}
+                                            onClick={() => setOpenToolbarMenu(null)}
                                             className="flex items-center justify-between gap-3 px-5 py-3 text-sm font-medium text-[var(--theme-color-text-default)] transition hover:bg-[var(--theme-color-control-background-hover)]"
                                         >
                                             <span>{t("notifications")}</span>
@@ -550,7 +566,7 @@ export default function Toolbar({ showDebugButton = true, isSidebarOpen = false,
                                     <div className="py-2">
                                         <Link
                                             href={loginHref}
-                                            onClick={() => setShowMenu(false)}
+                                            onClick={() => setOpenToolbarMenu(null)}
                                             className="block px-5 py-3 text-sm font-medium text-[var(--theme-color-text-default)] transition hover:bg-[var(--theme-color-control-background-hover)]"
                                         >
                                             {t("login")}

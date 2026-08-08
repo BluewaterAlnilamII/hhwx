@@ -25,6 +25,25 @@
     "notifications": "Notifications",
     "logout": "Log out",
     "login": "Log in",
-    "switchLanguage": "Switch to {language}"
+    "switchLanguage": "Switch to {language}",
+    "player": {
+      "openPlayer": "Open music player",
+      "openEmptyPlayer": "Open empty music player",
+      "panelLabel": "Music player",
+      "empty": "Choose music from a song page",
+      "play": "Play",
+      "pause": "Pause",
+      "retry": "Play again",
+      "progress": "Playback progress",
+      "repeatOne": "Repeat one song",
+      "previous": "Previous song",
+      "next": "Next song",
+      "mute": "Mute",
+      "unmute": "Unmute",
+      "volume": "Volume",
+      "clear": "Clear player",
+      "playSong": "Play {title} from the beginning",
+      "audioUnavailable": "Audio unavailable"
+    }
   }
 }
