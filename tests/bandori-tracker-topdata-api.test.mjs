@@ -13,7 +13,7 @@ import { countBandoriTopDataSamples } from "../src/lib/bandori-topdata-contract.
 import {
   inspectBandoriTopDataTargetStateSizesForTests,
   resetBandoriTopDataTargetStatesForTests,
-} from "../src/lib/bandori-topdata-history-server.ts";
+} from "@/lib/bandori-topdata-history-server";
 
 let storeRoot;
 
