@@ -36,6 +36,8 @@
       "retry": "Play again",
       "progress": "Playback progress",
       "repeatOne": "Repeat one song",
+      "repeatAll": "Repeat playlist",
+      "repeatOff": "Repeat off",
       "previous": "Previous song",
       "next": "Next song",
       "mute": "Mute",

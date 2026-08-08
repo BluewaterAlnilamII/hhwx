@@ -36,6 +36,8 @@
       "retry": "重新播放",
       "progress": "播放进度",
       "repeatOne": "单曲循环",
+      "repeatAll": "列表循环",
+      "repeatOff": "关闭循环",
       "previous": "上一首",
       "next": "下一首",
       "mute": "静音",

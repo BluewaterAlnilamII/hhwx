@@ -5,6 +5,7 @@ import {
   Music2,
   Pause,
   Play,
+  Repeat,
   Repeat1,
   SkipBack,
   SkipForward,
@@ -14,6 +15,7 @@ import {
 import { useTranslations } from "next-intl";
 import { useEffect, useRef, type MouseEvent, type PointerEvent } from "react";
 import OverflowMarqueeText from "@/components/music-player/OverflowMarqueeText";
+import SharedMusicArtwork from "@/components/music-player/SharedMusicArtwork";
 import {
   toolbarIconButtonClassName,
   toolbarIconInnerClassName,
@@ -21,8 +23,6 @@ import {
 } from "@/components/toolbar/toolbar-styles";
 import { resolveMusicPlayerToolbarAction } from "@/lib/music-player-toolbar-input";
 import {
-  selectMusicPlayerCanGoNext,
-  selectMusicPlayerCanGoPrevious,
   selectMusicPlayerCurrentTrack,
   useMusicPlayerStore,
 } from "@/store/useMusicPlayerStore";
@@ -48,8 +48,12 @@ function ToolbarMusicPlayerButton({ isOpen, onToggle }: Pick<ToolbarMusicPlayerP
   const t = useTranslations("navigation.toolbar.player");
   const currentTrack = useMusicPlayerStore(selectMusicPlayerCurrentTrack);
   const isPlaying = useMusicPlayerStore((state) => state.status === "playing");
+  const restartRequestId = useMusicPlayerStore(
+    (state) => state.command?.restartRequestId ?? 0,
+  );
   const requestTogglePlayback = useMusicPlayerStore((state) => state.requestTogglePlayback);
   const lastPointerTypeRef = useRef<string | null>(null);
+  const artworkAnimationKey = `${currentTrack?.id ?? "empty"}:${restartRequestId}`;
   const rotationPlaybackClassName = isPlaying
     ? "[animation-play-state:running]"
     : "[animation-play-state:paused]";
@@ -85,15 +89,16 @@ function ToolbarMusicPlayerButton({ isOpen, onToggle }: Pick<ToolbarMusicPlayerP
     >
       <span className={`${toolbarIconInnerClassName} overflow-hidden rounded-full`}>
         {currentTrack?.artworkUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
+          <SharedMusicArtwork
+            key={artworkAnimationKey}
             src={currentTrack.artworkUrl}
             alt=""
             aria-hidden="true"
             className={`h-full w-full animate-spin object-cover [animation-duration:10s] motion-reduce:animate-none ${rotationPlaybackClassName}`}
+            fallback={<Music2 className={`h-4 w-4 animate-spin [animation-duration:10s] motion-reduce:animate-none ${rotationPlaybackClassName}`} aria-hidden="true" />}
           />
         ) : currentTrack ? (
-          <Music2 className={`h-4 w-4 animate-spin [animation-duration:10s] motion-reduce:animate-none ${rotationPlaybackClassName}`} aria-hidden="true" />
+          <Music2 key={artworkAnimationKey} className={`h-4 w-4 animate-spin [animation-duration:10s] motion-reduce:animate-none ${rotationPlaybackClassName}`} aria-hidden="true" />
         ) : (
           <Disc3 className="h-4 w-4" aria-hidden="true" />
         )}
@@ -120,20 +125,17 @@ function EmptyMusicPlayerPanel() {
 function MusicPlayerPanel({ onRequestClose }: Pick<ToolbarMusicPlayerProps, "onRequestClose">) {
   const t = useTranslations("navigation.toolbar.player");
   const currentTrack = useMusicPlayerStore(selectMusicPlayerCurrentTrack);
-  const queueLength = useMusicPlayerStore((state) => state.queue.length);
   const status = useMusicPlayerStore((state) => state.status);
   const currentTime = useMusicPlayerStore((state) => state.currentTime);
   const duration = useMusicPlayerStore((state) => state.duration);
   const volume = useMusicPlayerStore((state) => state.volume);
   const muted = useMusicPlayerStore((state) => state.muted);
   const repeatMode = useMusicPlayerStore((state) => state.repeatMode);
-  const canGoPrevious = useMusicPlayerStore(selectMusicPlayerCanGoPrevious);
-  const canGoNext = useMusicPlayerStore(selectMusicPlayerCanGoNext);
   const requestTogglePlayback = useMusicPlayerStore((state) => state.requestTogglePlayback);
   const requestSeek = useMusicPlayerStore((state) => state.requestSeek);
   const requestPrevious = useMusicPlayerStore((state) => state.requestPrevious);
   const requestNext = useMusicPlayerStore((state) => state.requestNext);
-  const toggleRepeatOne = useMusicPlayerStore((state) => state.toggleRepeatOne);
+  const cycleRepeatMode = useMusicPlayerStore((state) => state.cycleRepeatMode);
   const setVolume = useMusicPlayerStore((state) => state.setVolume);
   const toggleMuted = useMusicPlayerStore((state) => state.toggleMuted);
   const clear = useMusicPlayerStore((state) => state.clear);
@@ -147,7 +149,11 @@ function MusicPlayerPanel({ onRequestClose }: Pick<ToolbarMusicPlayerProps, "onR
   const safeDuration = duration > 0 ? duration : currentTrack.durationSeconds ?? 0;
   const safeCurrentTime = Math.min(safeDuration || currentTime, Math.max(0, currentTime));
   const progressPercent = safeDuration > 0 ? (safeCurrentTime / safeDuration) * 100 : 0;
-  const hasMultipleTracks = queueLength > 1;
+  const repeatModeLabel = repeatMode === "one"
+    ? t("repeatOne")
+    : repeatMode === "all"
+      ? t("repeatAll")
+      : t("repeatOff");
   const playbackLabel = isError
     ? t("retry")
     : isPlaying
@@ -159,8 +165,12 @@ function MusicPlayerPanel({ onRequestClose }: Pick<ToolbarMusicPlayerProps, "onR
       <div className="grid grid-cols-[5.125rem_minmax(0,1fr)] gap-4 px-[18px] pb-3 pt-[18px]">
         <div className={`flex aspect-square w-[5.125rem] items-center justify-center overflow-hidden rounded-[18px] bg-[var(--theme-color-control-background-muted)] text-[var(--theme-color-action-secondary-foreground)] shadow-[var(--theme-shadow-surface-raised)] ${isError ? "ring-2 ring-[var(--theme-color-semantic-danger-border)]" : ""}`}>
           {currentTrack.artworkUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={currentTrack.artworkUrl} alt="" className="h-full w-full object-cover" />
+            <SharedMusicArtwork
+              src={currentTrack.artworkUrl}
+              alt=""
+              className="h-full w-full object-cover"
+              fallback={<Music2 className="h-7 w-7" aria-hidden="true" />}
+            />
           ) : (
             <Music2 className="h-7 w-7" aria-hidden="true" />
           )}
@@ -209,27 +219,29 @@ function MusicPlayerPanel({ onRequestClose }: Pick<ToolbarMusicPlayerProps, "onR
         <div className="absolute left-[18px] flex items-center">
           <button
             type="button"
-            onClick={toggleRepeatOne}
-            aria-label={t("repeatOne")}
-            aria-pressed={repeatMode === "one"}
-            className={`flex h-9 w-9 items-center justify-center rounded-[14px] outline-hidden transition focus-visible:ring-2 focus-visible:ring-[var(--theme-color-focus-ring)] ${repeatMode === "one" ? "bg-[var(--theme-color-control-background-pressed)] text-[var(--theme-color-progress-foreground)]" : "text-[var(--theme-color-text-muted)] hover:bg-[var(--theme-color-control-background-hover)]"}`}
+            onClick={cycleRepeatMode}
+            aria-label={repeatModeLabel}
+            aria-pressed={repeatMode !== "off"}
+            data-repeat-mode={repeatMode}
+            className={`flex h-9 w-9 items-center justify-center rounded-[14px] outline-hidden transition focus-visible:ring-2 focus-visible:ring-[var(--theme-color-focus-ring)] ${repeatMode !== "off" ? "bg-[var(--theme-color-control-background-pressed)] text-[var(--theme-color-progress-foreground)]" : "text-[var(--theme-color-text-muted)] hover:bg-[var(--theme-color-control-background-hover)]"}`}
           >
-            <Repeat1 className="h-4 w-4" aria-hidden="true" />
+            {repeatMode === "one" ? (
+              <Repeat1 className="h-4 w-4" aria-hidden="true" />
+            ) : (
+              <Repeat className="h-4 w-4" aria-hidden="true" />
+            )}
           </button>
         </div>
 
         <div className="flex items-center gap-1.5">
-          {hasMultipleTracks ? (
-            <button
-              type="button"
-              onClick={requestPrevious}
-              disabled={!canGoPrevious}
-              aria-label={t("previous")}
-              className="flex h-9 w-9 items-center justify-center rounded-[14px] text-[var(--theme-color-text-muted)] outline-hidden transition hover:bg-[var(--theme-color-control-background-hover)] focus-visible:ring-2 focus-visible:ring-[var(--theme-color-focus-ring)] disabled:cursor-not-allowed disabled:opacity-35"
-            >
-              <SkipBack className="h-4 w-4" aria-hidden="true" />
-            </button>
-          ) : null}
+          <button
+            type="button"
+            onClick={requestPrevious}
+            aria-label={t("previous")}
+            className="flex h-9 w-9 items-center justify-center rounded-[14px] text-[var(--theme-color-text-muted)] outline-hidden transition hover:bg-[var(--theme-color-control-background-hover)] focus-visible:ring-2 focus-visible:ring-[var(--theme-color-focus-ring)]"
+          >
+            <SkipBack className="h-4 w-4" aria-hidden="true" />
+          </button>
 
           <button
             type="button"
@@ -240,17 +252,14 @@ function MusicPlayerPanel({ onRequestClose }: Pick<ToolbarMusicPlayerProps, "onR
             {isPlaying ? <Pause className="h-5 w-5" aria-hidden="true" /> : <Play className="ml-0.5 h-5 w-5" aria-hidden="true" />}
           </button>
 
-          {hasMultipleTracks ? (
-            <button
-              type="button"
-              onClick={requestNext}
-              disabled={!canGoNext}
-              aria-label={t("next")}
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[14px] text-[var(--theme-color-text-muted)] outline-hidden transition hover:bg-[var(--theme-color-control-background-hover)] focus-visible:ring-2 focus-visible:ring-[var(--theme-color-focus-ring)] disabled:cursor-not-allowed disabled:opacity-35"
-            >
-              <SkipForward className="h-4 w-4" aria-hidden="true" />
-            </button>
-          ) : null}
+          <button
+            type="button"
+            onClick={requestNext}
+            aria-label={t("next")}
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[14px] text-[var(--theme-color-text-muted)] outline-hidden transition hover:bg-[var(--theme-color-control-background-hover)] focus-visible:ring-2 focus-visible:ring-[var(--theme-color-focus-ring)]"
+          >
+            <SkipForward className="h-4 w-4" aria-hidden="true" />
+          </button>
         </div>
 
         <div className="absolute right-[18px] flex items-center gap-1">
@@ -270,7 +279,7 @@ function MusicPlayerPanel({ onRequestClose }: Pick<ToolbarMusicPlayerProps, "onR
             step={0.01}
             value={volume}
             onChange={(event) => setVolume(Number(event.currentTarget.value))}
-            className={`hidden accent-[var(--theme-color-progress-indicator-background)] sm:block ${hasMultipleTracks ? "w-12" : "w-[4.75rem]"}`}
+            className="hidden w-12 accent-[var(--theme-color-progress-indicator-background)] sm:block"
             aria-label={t("volume")}
           />
         </div>

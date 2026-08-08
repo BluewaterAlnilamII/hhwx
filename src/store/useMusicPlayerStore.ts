@@ -22,6 +22,7 @@ import {
 
 export type MusicPlayerCommand = {
   requestId: number;
+  restartRequestId: number;
   type: "restart" | "resume" | "pause" | "seek" | "clear";
   positionSeconds?: number;
 };
@@ -48,7 +49,7 @@ type MusicPlayerStore = {
   requestPrevious: () => void;
   requestNext: () => void;
   clear: () => void;
-  toggleRepeatOne: () => void;
+  cycleRepeatMode: () => void;
   setVolume: (volume: number) => void;
   toggleMuted: () => void;
   setPlaybackStatus: (status: MusicPlayerStatus) => void;
@@ -76,8 +77,12 @@ function createCommand(
   type: MusicPlayerCommand["type"],
   positionSeconds?: number,
 ): MusicPlayerCommand {
+  const requestId = (previousCommand?.requestId ?? 0) + 1;
   return {
-    requestId: (previousCommand?.requestId ?? 0) + 1,
+    requestId,
+    restartRequestId: type === "restart"
+      ? requestId
+      : previousCommand?.restartRequestId ?? 0,
     type,
     ...(positionSeconds === undefined ? {} : { positionSeconds }),
   };
@@ -234,10 +239,11 @@ export const useMusicPlayerStore = create<MusicPlayerStore>((set, get) => ({
 
   requestPrevious: () => {
     const state = get();
-    if (state.currentIndex === null) {
+    if (state.currentIndex === null || state.queue.length === 0) {
       return;
     }
-    const nextIndex = Math.max(0, state.currentIndex - 1);
+    const isFirst = state.currentIndex <= 0;
+    const nextIndex = isFirst ? state.queue.length - 1 : state.currentIndex - 1;
     set({
       currentIndex: nextIndex,
       status: "loading",
@@ -254,9 +260,6 @@ export const useMusicPlayerStore = create<MusicPlayerStore>((set, get) => ({
       return;
     }
     const isLast = state.currentIndex >= state.queue.length - 1;
-    if (isLast && state.repeatMode !== "all") {
-      return;
-    }
     const nextIndex = isLast ? 0 : state.currentIndex + 1;
     set({
       currentIndex: nextIndex,
@@ -285,9 +288,14 @@ export const useMusicPlayerStore = create<MusicPlayerStore>((set, get) => ({
     }
   },
 
-  toggleRepeatOne: () => {
+  cycleRepeatMode: () => {
     const state = get();
-    set({ repeatMode: state.repeatMode === "one" ? "off" : "one" });
+    const repeatMode: MusicPlayerRepeatMode = state.repeatMode === "off"
+      ? "all"
+      : state.repeatMode === "all"
+        ? "one"
+        : "off";
+    set({ repeatMode });
     persistPreferences(get());
   },
 
@@ -344,13 +352,4 @@ export const useMusicPlayerStore = create<MusicPlayerStore>((set, get) => ({
 
 export function selectMusicPlayerCurrentTrack(state: MusicPlayerStore): MusicPlayerItem | null {
   return state.currentIndex === null ? null : state.queue[state.currentIndex] ?? null;
-}
-
-export function selectMusicPlayerCanGoPrevious(state: MusicPlayerStore): boolean {
-  return state.currentIndex !== null && state.currentIndex > 0;
-}
-
-export function selectMusicPlayerCanGoNext(state: MusicPlayerStore): boolean {
-  return state.currentIndex !== null
-    && (state.currentIndex < state.queue.length - 1 || state.repeatMode === "all");
 }

@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { useSharedMusicArtworkUrl } from "@/hooks/useSharedMusicArtworkUrl";
+import { setMusicPlaybackAudioSessionActive } from "@/lib/browser-audio-session";
 import {
   MUSIC_PLAYER_PREFERENCES_STORAGE_KEY,
   MUSIC_PLAYER_QUEUE_STORAGE_KEY,
@@ -40,6 +42,7 @@ export default function MusicPlayerHost() {
   const playAttemptIdRef = useRef(0);
   const tabIdRef = useRef<string>("");
   const currentTrack = useMusicPlayerStore(selectMusicPlayerCurrentTrack);
+  const mediaSessionArtworkUrl = useSharedMusicArtworkUrl(currentTrack?.artworkUrl ?? null);
   const command = useMusicPlayerStore((state) => state.command);
   const volume = useMusicPlayerStore((state) => state.volume);
   const muted = useMusicPlayerStore((state) => state.muted);
@@ -91,6 +94,7 @@ export default function MusicPlayerHost() {
     );
 
     return () => {
+      setMusicPlaybackAudioSessionActive(false);
       coordinatorRef.current?.dispose();
       coordinatorRef.current = null;
     };
@@ -107,6 +111,7 @@ export default function MusicPlayerHost() {
     audio.currentTime = 0;
 
     if (!currentTrack) {
+      setMusicPlaybackAudioSessionActive(false);
       audio.removeAttribute("src");
       audio.load();
       return;
@@ -143,6 +148,7 @@ export default function MusicPlayerHost() {
     }
 
     if (command.type === "clear") {
+      setMusicPlaybackAudioSessionActive(false);
       playAttemptIdRef.current += 1;
       audio.pause();
       audio.currentTime = 0;
@@ -170,6 +176,9 @@ export default function MusicPlayerHost() {
     const attemptId = playAttemptIdRef.current + 1;
     playAttemptIdRef.current = attemptId;
     const play = async () => {
+      // WebKit uses the playback audio-session category to keep music eligible
+      // for iOS lock-screen controls and background playback.
+      setMusicPlaybackAudioSessionActive(true);
       if (audio.getAttribute("src") !== currentTrack.sourceUrl) {
         audio.src = currentTrack.sourceUrl;
       }
@@ -241,17 +250,18 @@ export default function MusicPlayerHost() {
       ? new MediaMetadata({
         title: currentTrack.title,
         artist: currentTrack.artist ?? undefined,
-        artwork: currentTrack.artworkUrl
-          ? [{ src: currentTrack.artworkUrl }]
+        artwork: mediaSessionArtworkUrl
+          ? [{ src: mediaSessionArtworkUrl, type: "image/png" }]
           : undefined,
       })
       : null;
-  }, [currentTrack]);
+  }, [currentTrack, mediaSessionArtworkUrl]);
 
   return (
     <audio
       ref={audioRef}
-      className="hidden"
+      className="pointer-events-none fixed left-0 top-0 h-px w-px opacity-0"
+      aria-hidden="true"
       preload="metadata"
       onLoadedMetadata={(event) => {
         const audio = event.currentTarget;
