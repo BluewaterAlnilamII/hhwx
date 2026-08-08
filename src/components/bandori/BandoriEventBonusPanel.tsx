@@ -5,8 +5,10 @@ import { useTranslations } from "next-intl";
 import BandoriCardTile from "@/components/bandori/BandoriCardTile";
 import Heading from "@/components/Heading";
 import {
-  buildBandoriResIconPublicUrl,
-} from "@/lib/bandori-asset-proxy";
+  buildBandoriAttributeIconUrl,
+  buildBandoriCharacterIconUrl,
+  buildBandoriLegacyRarityCompositeUrl,
+} from "@/lib/bandori-builtin-resources";
 import { isBandoriCardAttribute, type BandoriCardAttribute } from "@/lib/bandori-card-filter";
 import {
   pickBandoriRegionalText,
@@ -209,7 +211,7 @@ function AttributeIcon({ attribute }: { attribute: BandoriCardAttribute }) {
     >
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
-        src={buildBandoriResIconPublicUrl(`${attribute}.svg`)}
+        src={buildBandoriAttributeIconUrl(attribute) ?? undefined}
         alt=""
         className="h-full w-full object-contain"
         loading="lazy"
@@ -224,7 +226,7 @@ function CharacterIcon({ characterId, label }: { characterId: number; label: str
     <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[var(--theme-color-control-background-muted)] ring-1 ring-[var(--theme-color-border-subtle)]" title={label}>
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
-        src={buildBandoriResIconPublicUrl(`chara_icon_${characterId}.png`)}
+        src={buildBandoriCharacterIconUrl(characterId) ?? undefined}
         alt={label}
         className="h-full w-full object-cover"
         loading="lazy"
@@ -503,7 +505,7 @@ export default function BandoriEventBonusPanel({
               <BonusChip key={group.rarity}>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
-                  src={buildBandoriResIconPublicUrl(`star_${Math.max(1, Math.min(5, Math.trunc(group.rarity)))}.png`)}
+                  src={buildBandoriLegacyRarityCompositeUrl(group.rarity) ?? undefined}
                   alt=""
                   className="h-5 w-5 shrink-0 object-contain"
                   loading="lazy"

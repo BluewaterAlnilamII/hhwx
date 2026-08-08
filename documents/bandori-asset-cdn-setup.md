@@ -12,6 +12,8 @@ This document is not an asset license, a public redistribution grant, or permiss
 
 ## Web Configuration
 
+Built-in card UI resources use stable, non-content-addressed paths that preserve the official game resource names. Full card frames are under `bandori/resources/images/card-frame/{resourceName}.png`; individual MenuAtlas sprites are under `bandori/resources/atlases/menu-atlas/{spriteName}.png`. These objects are extracted once from a JP base APK, published with a one-year immutable cache policy, and never discovered through a public index. The web app builds their URLs from a fixed allowlist and fails closed when the asset CDN is not configured; it does not fall back to Bestdori. The five pre-existing composite rarity previews remain unchanged at `bandori/res/icon/star_1.png` through `star_5.png` and are the only legacy exception.
+
 The web app reads Bandori asset URLs from these environment variables:
 
 ```dotenv
@@ -138,14 +140,14 @@ Event image keys are derived as `bandori/events/images/{sha256}.png`. Missing re
 
 All derived object keys are relative to `{CDN_BASE}`. The filename stem equals the index's complete lowercase SHA-256. The web app validates the index before using it and never reconstructs Cards or Events paths from master-data bundle names. If an index or referenced object is unavailable, the affected image remains a placeholder; master data and team calculations continue without an external fallback. Card thumbnails never fall back to full-size art, and Cards/Events do not fall back to Bestdori or the legacy `/api/bandori/assets` proxy.
 
-Shared Bestdori resource icons and card frame images:
+Fixed official card UI resources:
 
 ```text
-{CDN_BASE}/bandori/res/icon/{iconName}
-bandori/res/icon/{iconName}
+{CDN_BASE}/bandori/resources/images/card-frame/{resourceName}.png
+bandori/resources/images/card-frame/{resourceName}.png
 
-{CDN_BASE}/bandori/res/image/card-{rarity}.png
-bandori/res/image/card-{rarity}.png
+{CDN_BASE}/bandori/resources/atlases/menu-atlas/{spriteName}.png
+bandori/resources/atlases/menu-atlas/{spriteName}.png
 ```
 
 Music assets and chart JSON:
@@ -230,8 +232,8 @@ After configuring an asset host, verify representative URLs with a browser or HT
 ```text
 https://your-bandori-asset-cdn.example.com/bandori/cards/index.json
 https://your-bandori-asset-cdn.example.com/bandori/events/index.json
-https://your-bandori-asset-cdn.example.com/bandori/res/icon/chara_icon_1.png
-https://your-bandori-asset-cdn.example.com/bandori/res/image/card-5.png
+https://your-bandori-asset-cdn.example.com/bandori/resources/atlases/menu-atlas/icon_character001.png
+https://your-bandori-asset-cdn.example.com/bandori/resources/images/card-frame/frame_ss_rainbow.png
 https://your-bandori-asset-cdn.example.com/bandori/music/charts/<chartSha256>.json
 https://your-bandori-asset-cdn.example.com/bandori/stamps/index.json
 https://your-bandori-asset-cdn.example.com/bandori/stamps/images/<imageSha256>.png

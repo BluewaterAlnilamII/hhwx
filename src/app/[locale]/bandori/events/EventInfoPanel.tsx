@@ -17,7 +17,7 @@ import { useCommentStampCatalog } from "@/hooks/useCommentStamps";
 import { useBandoriMusicAssetIndex } from "@/hooks/useBandoriPublicAssetIndex";
 import { parseApiSuccessData } from "@/lib/api-contracts";
 import { SESSION_CLIENT_CACHE_POLICY } from "@/lib/api-cache";
-import { buildBandoriResIconPublicUrl } from "@/lib/bandori-asset-proxy";
+import { buildBandoriBandIconUrl } from "@/lib/bandori-builtin-resources";
 import { buildBandoriPublicAssetUrl } from "@/lib/bandori-public-asset-index";
 import {
   getBandoriEventStatusAt,
@@ -343,7 +343,7 @@ export default function EventInfoPanel({
                 {eventBandId !== null ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
-                    src={buildBandoriResIconPublicUrl(`band_${eventBandId}.svg`)}
+                    src={buildBandoriBandIconUrl(eventBandId) ?? undefined}
                     data-event-band-icon={eventBandId}
                     alt=""
                     aria-hidden="true"

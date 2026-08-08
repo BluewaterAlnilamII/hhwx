@@ -5,9 +5,12 @@ import { useState } from "react";
 import { ImageOff } from "lucide-react";
 import { useBandoriCardsAssetIndex } from "@/hooks/useBandoriPublicAssetIndex";
 import {
-  buildBandoriResIconPublicUrl,
-  buildBandoriResImagePublicUrl,
-} from "@/lib/bandori-asset-proxy";
+  buildBandoriAttributeIconUrl,
+  buildBandoriBandIconUrl,
+  buildBandoriMasterRankIconUrl,
+  buildBandoriRarityStarIconUrl,
+  buildBandoriThumbnailFrameUrl,
+} from "@/lib/bandori-builtin-resources";
 import {
   buildBandoriPublicAssetUrl,
   lookupBandoriCardImage,
@@ -119,13 +122,11 @@ export default function BandoriCardThumbnail({
   );
   const rarity = Math.min(5, Math.max(1, Math.trunc(Number(metadata?.rarity) || 1)));
   const attribute = isBandoriCardAttribute(metadata?.attribute) ? metadata.attribute : null;
-  const frameUrl = rarity >= 2
-    ? buildBandoriResImagePublicUrl(`card-${rarity}.png`)
-    : attribute ? buildBandoriResImagePublicUrl(`card-1-${attribute}.png`) : null;
-  const attributeIconUrl = attribute ? buildBandoriResIconPublicUrl(`${attribute}.svg`) : null;
-  const bandIconUrl = bandId ? buildBandoriResIconPublicUrl(`band_${bandId}.svg`) : null;
-  const starIconUrl = buildBandoriResIconPublicUrl(card.isTrained ? "star_trained.png" : "star.png");
-  const masterIconUrl = buildBandoriResIconPublicUrl("master.svg");
+  const frameUrl = buildBandoriThumbnailFrameUrl(rarity, attribute);
+  const attributeIconUrl = attribute ? buildBandoriAttributeIconUrl(attribute) : null;
+  const bandIconUrl = bandId ? buildBandoriBandIconUrl(bandId) : null;
+  const starIconUrl = buildBandoriRarityStarIconUrl(Boolean(card.isTrained));
+  const masterIconUrl = buildBandoriMasterRankIconUrl();
   const starSlots = Array.from({ length: rarity }, (_, index) => index);
   const isPreview = size !== "tile";
   const powerLabel = showPower && showLevel ? formatThumbnailPower(power) : null;
@@ -195,7 +196,7 @@ export default function BandoriCardThumbnail({
         />
       ) : null}
       <div className="pointer-events-none absolute inset-0 z-10">
-        {starSlots.map((slot) => (
+        {starIconUrl ? starSlots.map((slot) => (
           // eslint-disable-next-line @next/next/no-img-element
           <img
             key={slot}
@@ -207,9 +208,9 @@ export default function BandoriCardThumbnail({
             className="bandori-card-thumbnail-star absolute object-contain drop-shadow-[0_1px_1px_rgba(0,0,0,0.55)]"
             style={{ "--bandori-card-star-slot": slot } as CSSProperties}
           />
-        ))}
+        )) : null}
       </div>
-      {card.masterRank > 0 ? (
+      {card.masterRank > 0 && masterIconUrl ? (
         <div className="pointer-events-none absolute right-[-5.3%] top-[26.3%] z-30 h-[27.6%] w-[27.6%] drop-shadow-[0_1px_2px_rgba(15,23,42,0.55)]">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={masterIconUrl} alt="" aria-hidden="true" loading={loading} decoding="async" className="h-full w-full object-contain" />

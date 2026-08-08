@@ -1,4 +1,4 @@
-import { buildBandoriResIconPublicUrl } from "@/lib/bandori-asset-proxy";
+import { buildBandoriCharacterIconUrl } from "@/lib/bandori-builtin-resources";
 
 export type CalendarBandType = "ppp" | "ag" | "hhw" | "pp" | "roselia" | "morfonica" | "ras" | "mygo" | "mix";
 
@@ -172,6 +172,6 @@ export function getSubscriptionEventColor(
   return BAND_COLORS[normalizedBand] ?? "#FFDD00";
 }
 
-export function getCharacterIconUrl(characterId: number): string {
-  return buildBandoriResIconPublicUrl(`chara_icon_${characterId}.png`);
+export function getCharacterIconUrl(characterId: number): string | null {
+  return buildBandoriCharacterIconUrl(characterId);
 }

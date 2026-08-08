@@ -3,7 +3,12 @@
 import { type ReactNode } from "react";
 import { ArrowDownWideNarrow, ArrowUpNarrowWide, Filter, Search, X } from "lucide-react";
 import { useTranslations } from "next-intl";
-import { buildBandoriResIconPublicUrl } from "@/lib/bandori-asset-proxy";
+import {
+  buildBandoriAttributeIconUrl,
+  buildBandoriBandIconUrl,
+  buildBandoriCharacterIconUrl,
+  buildBandoriLegacyRarityCompositeUrl,
+} from "@/lib/bandori-builtin-resources";
 import {
   BANDORI_CARD_ATTRIBUTES,
   BANDORI_CARD_RARITIES,
@@ -108,10 +113,6 @@ function FilterRow({ label, children }: { label: string; children: ReactNode }) 
   );
 }
 
-function iconUrl(name: string): string {
-  return buildBandoriResIconPublicUrl(name);
-}
-
 export default function BandoriCardFilterControls<TSortBy extends string>({
   filter,
   resultCountLabel,
@@ -161,17 +162,20 @@ export default function BandoriCardFilterControls<TSortBy extends string>({
 
       <div className="mt-4 space-y-3">
         <FilterRow label={bandLabel}>
-          {bandOptions.map((option) => (
-            <SelectionButton
-              key={option.bandId}
-              title={option.label}
-              isSelected={filter.bandIds.includes(option.bandId)}
-              onClick={() => onFilterChange({ bandIds: toggleSelection(filter.bandIds, option.bandId) })}
-            >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={iconUrl(`band_${option.bandId}.svg`)} alt={option.label} loading="lazy" decoding="async" className="h-7 w-7 object-contain" />
-            </SelectionButton>
-          ))}
+          {bandOptions.map((option) => {
+            const bandIconUrl = buildBandoriBandIconUrl(option.bandId);
+            return (
+              <SelectionButton
+                key={option.bandId}
+                title={option.label}
+                isSelected={filter.bandIds.includes(option.bandId)}
+                onClick={() => onFilterChange({ bandIds: toggleSelection(filter.bandIds, option.bandId) })}
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                {bandIconUrl ? <img src={bandIconUrl} alt={option.label} loading="lazy" decoding="async" className="h-7 w-7 object-contain" /> : null}
+              </SelectionButton>
+            );
+          })}
           <ToggleAllButton
             isSelected={areAllSelected(filter.bandIds, availableBandIds)}
             allLabel={allLabel}
@@ -193,7 +197,7 @@ export default function BandoriCardFilterControls<TSortBy extends string>({
             >
               <span className={`inline-flex h-6 w-6 shrink-0 items-center justify-center overflow-hidden rounded-full ${ATTRIBUTE_SWATCH_CLASSES[attribute]}`}>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={iconUrl(`${attribute}.svg`)} alt="" loading="lazy" decoding="async" className="h-full w-full object-contain" />
+                <img src={buildBandoriAttributeIconUrl(attribute) ?? undefined} alt="" loading="lazy" decoding="async" className="h-full w-full object-contain" />
               </span>
             </SelectionButton>
           ))}
@@ -219,7 +223,7 @@ export default function BandoriCardFilterControls<TSortBy extends string>({
               onClick={() => onFilterChange({ rarities: toggleSelection(filter.rarities, rarity) })}
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={iconUrl(`star_${rarity}.png`)} alt={t("rarityAlt", { rarity })} loading="lazy" decoding="async" className="h-5 w-5 object-contain" />
+              <img src={buildBandoriLegacyRarityCompositeUrl(rarity) ?? undefined} alt={t("rarityAlt", { rarity })} loading="lazy" decoding="async" className="h-5 w-5 object-contain" />
             </SelectionButton>
           ))}
           <ToggleAllButton
@@ -244,7 +248,7 @@ export default function BandoriCardFilterControls<TSortBy extends string>({
               onClick={() => onFilterChange({ characterIds: toggleSelection(filter.characterIds, option.characterId) })}
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={iconUrl(`chara_icon_${option.characterId}.png`)} alt={option.label} loading="lazy" decoding="async" className="h-6 w-6 rounded-full object-cover" />
+              <img src={buildBandoriCharacterIconUrl(option.characterId) ?? undefined} alt={option.label} loading="lazy" decoding="async" className="h-6 w-6 rounded-full object-cover" />
             </SelectionButton>
           ))}
           <ToggleAllButton
