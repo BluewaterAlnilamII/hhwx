@@ -1,5 +1,9 @@
+-- Legacy/reference SQL snapshot retained for setup compatibility.
+-- supabase/migrations/** is the sole source of truth for new schema changes.
+-- Do not treat edits here as migrations or as an independent schema authority.
+
 -- Bandori 活动目录、国服日历预测和活动加成基础结构。
--- 这是 hhwx 产品侧的 canonical schema，tracker 只负责写入和同步数据。
+-- hhwx owns this structure; tracker writes and synchronizes its data.
 
 CREATE TABLE IF NOT EXISTS bandori_characters (
   character_id        INT PRIMARY KEY,

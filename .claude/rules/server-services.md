@@ -1,19 +1,57 @@
 ---
 paths:
-  - "src/lib/**/*-server.ts"
-  - "src/lib/bandori-asset-proxy.ts"
+  - "src/lib/account-email-verification-server.ts"
+  - "src/lib/account-status-server.ts"
+  - "src/lib/auth-redirect-server.ts"
+  - "src/lib/auth-server.ts"
+  - "src/lib/auth-user-server.ts"
+  - "src/lib/bandori-cards-api-server.ts"
+  - "src/lib/bandori-cutoff-history-server.ts"
+  - "src/lib/bandori-events-api-server.ts"
+  - "src/lib/bandori-events-server.ts"
+  - "src/lib/bandori-music-api-server.ts"
+  - "src/lib/bandori-public-asset-index-server.ts"
+  - "src/lib/bandori-schedule-server.ts"
+  - "src/lib/bandori-snapshot-api-server.ts"
+  - "src/lib/bandori-stamps-api-server.ts"
+  - "src/lib/bandori-topdata-history-server.ts"
+  - "src/lib/bandori-topdata-scoped-history-server.ts"
+  - "src/lib/bandori-tracker-server.ts"
+  - "src/lib/bandori-tracker-topdata-server.ts"
+  - "src/lib/comment-notifications-server.ts"
+  - "src/lib/public-profile-server.ts"
+  - "src/lib/supabase-auth-server.ts"
+  - "src/lib/supabase-server.ts"
+  - "src/lib/turnstile-server.ts"
+  - "src/lib/user-game-profile-payload-server.ts"
+  - "src/lib/user-game-profile-server-backfill-server.ts"
+  - "src/lib/user-game-profiles-server.ts"
+  - "src/lib/bandori-area-items.ts"
   - "src/lib/bandori-event-banner-proxy.ts"
+  - "src/lib/bandori-master-api.ts"
+  - "src/lib/bandori-master-artifacts.ts"
+  - "src/lib/bandori-music-assets.ts"
+  - "src/lib/bandori-player-fetcher.ts"
+  - "src/lib/bestdori-prediction.ts"
+  - "src/lib/comments.ts"
+  - "src/lib/game-account-binding.ts"
+  - "src/lib/r2-s3-reader.ts"
+  - "src/lib/user-game-snapshot-fetcher.ts"
 ---
 
 # Server Module and Database Boundary Rules
 
 - Server modules bridge databases, external APIs, cache tags, and domain transformations. Exposed results should usually be normalized domain objects with standardized naming.
-- Asset proxy modules such as `bandori-asset-proxy.ts` and `bandori-event-banner-proxy.ts` mainly use the security validation and error-handling rules in this file. Database Row/DTO mapping rules do not apply to them.
-- Database Row types may keep `snake_case` to accurately map table fields. DTOs and shared objects returned from server modules should be converted to camelCase.
-- Server modules that depend on environment variables must fail fast with clear error messages. Do not silently degrade when required configuration is missing.
-- Modules containing service role usage, private environment variables, RLS-bypass logic, or other privileged capabilities must keep a server-only boundary. Client components, hooks, and browser-executable modules must not import `*-server.ts`.
+- Every exact path above is a registered server boundary, including the existing non-suffix entries. New privileged modules should default to the `*-server.ts` naming convention; an unavoidable non-suffix server boundary requires exact registration here and a documented semantic reason.
+- `bandori-area-items.ts` is an existing semantic server boundary despite its missing `-server` suffix because it performs a cached upstream fetch and must not be runtime-imported by browser code. By contrast, `bandori-server.ts` and `bandori-asset-proxy.ts` are browser-safe shared domain/URL modules; do not register or treat them as server-only unless their runtime responsibilities and all consumers are deliberately migrated.
+- The `bandori-event-banner-proxy.ts` image proxy mainly uses the security validation and error-handling rules in this file; database mapping guidance does not apply to it.
+- Browser-executable modules must not runtime-import registered server boundaries; erased type-only imports may be used when an existing shared contract requires them, although neutral contract modules are preferred for new types. Server boundaries must not expose configuration, authorization headers, credentials, privileged error details, or upstream payloads that lack a validated contract. A payload required by an established contract may cross the boundary only after its outer shape and required fields are validated and sensitive or internal fields are projected out or explicitly allowed by that contract.
+- Configuration required for the current operation must fail fast with a clear error. An explicitly documented disabled, optional, or fallback path may handle absent configuration as its contract requires; do not turn missing required configuration into an undocumented silent fallback.
+- Modules containing service role usage, private environment variables, RLS-bypass logic, or other privileged capabilities must keep a server-only boundary.
 - Server-side readers for HHWX-owned asset catalogs, manifests, indexes, or aggregate metadata must use private object-storage access such as R2/S3 signed requests. Do not fetch `cdn.hhwx.org` or other HHWX public CDN URLs from server code for these resources; Cloudflare bot mitigation can challenge server-to-CDN traffic. Browser-facing asset URLs may still point at the public CDN.
+- Private object-storage readers must preserve signature construction and private/public bucket boundaries. Validate each object key's source and structure before reading. Preserve caller-configured byte or timeout limits when provided, and do not silently remove or weaken them; when a boundary needs limits that its callers do not yet provide, add and verify them deliberately rather than assuming they already exist. Do not add a public-CDN or unsigned fallback for a failed private read without an explicit contract decision.
+- Internal service fetchers must read credentials only from server-side configuration, send them only to the configured trusted service origin, and never log or return tokens or secret-bearing headers. Preserve the service's authorization and error-normalization contract; do not replace authenticated tracker calls with unauthenticated public calls as a convenience fallback.
 - All write operations must re-check authentication and authorization on the server path. RLS-bypass behavior must be limited to explicit server-side modules.
 - Use limited retries and backoff only when a call is known to be a transient failure and the operation is idempotent or safe to retry. Do not retry non-idempotent writes or calls with external side effects by default. After the retry limit is reached, return a stable, handleable error result.
+- Reuse an existing shared reader or fetcher when its contract fits the operation, preserving the cache, timeout, payload-size, authorization, and retry semantics on which callers actually rely. Changes to those boundaries must be deliberate, reported, and covered by the narrowest relevant failure-path checks.
 - Server modules should centralize shared queries, DTO mapping, and compatibility logic. Avoid each API route maintaining its own similar implementation.
-- When adding database entities, follow the layered boundary of plural `snake_case` table names, `snake_case` column names, and camelCase DTO fields. Do not mix naming conventions.

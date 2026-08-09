@@ -1,3 +1,7 @@
+-- Legacy/reference SQL snapshot retained for setup compatibility.
+-- supabase/migrations/** is the sole source of truth for new schema changes.
+-- Do not treat edits here as migrations or as an independent schema authority.
+
 -- 仅对早期数据库执行一次。
 -- 这个补丁用于给旧版 profiles 表补齐 created_at 和 updated_at 字段，
 -- 并统一默认值与非空约束。

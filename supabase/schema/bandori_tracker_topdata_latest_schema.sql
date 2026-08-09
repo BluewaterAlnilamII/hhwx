@@ -1,4 +1,8 @@
--- Canonical schema for authenticated Bandori event TOP10 latest snapshots.
+-- Legacy/reference SQL snapshot retained for setup compatibility.
+-- supabase/migrations/** is the sole source of truth for new schema changes.
+-- Do not treat edits here as migrations or as an independent schema authority.
+
+-- Snapshot of authenticated Bandori event TOP10 latest structures.
 -- hhwx-tracker is the only writer; registered users can bootstrap one complete
 -- snapshot before consuming the matching private Broadcast topic.
 
