@@ -1,6 +1,9 @@
--- Canonical schema source for tracker_ranking_type and public.bandori_tracker_data.
+-- Legacy/reference SQL snapshot retained for setup compatibility.
+-- supabase/migrations/** is the sole source of truth for new schema changes.
+-- Do not treat edits here as migrations or as an independent schema authority.
+
+-- Snapshot of tracker_ranking_type and public.bandori_tracker_data.
 -- hhwx-tracker writes this data, but hhwx owns the database structure.
--- Do not duplicate this DDL in other SQL files.
 
 DO $$
 BEGIN

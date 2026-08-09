@@ -1,3 +1,7 @@
+-- Legacy/reference SQL snapshot retained for setup compatibility.
+-- supabase/migrations/** is the sole source of truth for new schema changes.
+-- Do not treat edits here as migrations or as an independent schema authority.
+
 -- 账号与评论相关的基础结构。
 -- 用于新库初始化或完整重建；若数据库已存在旧版 profiles 字段，
 -- 请额外执行 auth_legacy_patch.sql 补齐历史字段。

@@ -1,4 +1,8 @@
--- Canonical schema source for the authenticated cutoff latest snapshot.
+-- Legacy/reference SQL snapshot retained for setup compatibility.
+-- supabase/migrations/** is the sole source of truth for new schema changes.
+-- Do not treat edits here as migrations or as an independent schema authority.
+
+-- Snapshot of the authenticated cutoff latest structure.
 -- hhwx-tracker publishes snapshots through the service role. Browser clients
 -- can only read snapshots and receive matching private Broadcast topics.
 

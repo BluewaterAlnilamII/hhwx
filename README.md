@@ -64,13 +64,13 @@ npm run start
 
 ## Supabase Setup
 
-The base schema files are under [supabase/schema](supabase/schema). Application feature schemas that are still maintained as standalone SQL files live under [documents](documents). See [documents/supabase-setup.md](documents/supabase-setup.md) for the full execution order, including RLS and service-role-only review notes.
+New schema changes have one source of truth: [supabase/migrations](supabase/migrations). Files under [supabase/schema](supabase/schema) are legacy/reference snapshots, while `documents/**/*.sql` contains maintenance, backfill, compatibility, or reference SQL. See [documents/supabase-setup.md](documents/supabase-setup.md) for setup and review notes; neither snapshot/reference area is an independent migration history.
 
 ## Repository Layout
 
 ```text
 hhwx/
-|-- documents/      # product notes, setup notes, and feature SQL
+|-- documents/      # product/setup notes and maintenance/backfill/reference SQL
 |-- public/         # static assets served directly by Next.js
 |-- src/
 |   |-- app/        # App Router pages, layouts, metadata, and API routes
@@ -78,7 +78,7 @@ hhwx/
 |   |-- hooks/      # reusable hooks
 |   |-- lib/        # server and shared business logic
 |   `-- store/      # client state
-|-- supabase/       # base schema and manual maintenance SQL
+|-- supabase/       # canonical migrations and legacy/reference schema snapshots
 `-- package.json    # scripts and dependencies
 ```
 

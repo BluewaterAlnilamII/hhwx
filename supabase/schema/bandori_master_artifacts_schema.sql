@@ -1,4 +1,8 @@
--- Canonical schema source for Bandori master artifact manifests.
+-- Legacy/reference SQL snapshot retained for setup compatibility.
+-- supabase/migrations/** is the sole source of truth for new schema changes.
+-- Do not treat edits here as migrations or as an independent schema authority.
+
+-- Snapshot of the Bandori master artifact manifest structure.
 -- hhwx-tracker writes these rows after publishing immutable artifacts.
 -- hhwx API reads active pointers and bundle indexes from these tables.
 

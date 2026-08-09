@@ -64,13 +64,13 @@ npm run start
 
 ## Supabase 设置
 
-基础 schema 位于 [supabase/schema](supabase/schema)。仍以独立 SQL 文件维护的应用功能 schema 位于 [documents](documents)。完整执行顺序、RLS 和 service-role-only 复查说明见 [documents/supabase-setup.zh-CN.md](documents/supabase-setup.zh-CN.md)。
+新 schema 变更只有一个 source of truth：[supabase/migrations](supabase/migrations)。[supabase/schema](supabase/schema) 下的文件是 legacy/reference snapshot，`documents/**/*.sql` 用于 maintenance、backfill、compatibility 或 reference。设置和复查说明见 [documents/supabase-setup.zh-CN.md](documents/supabase-setup.zh-CN.md)；两类 snapshot/reference 区域都不是独立的 migration history。
 
 ## 仓库结构
 
 ```text
 hhwx/
-|-- documents/      # 产品说明、设置说明和功能 SQL
+|-- documents/      # 产品/设置说明及维护、回填、兼容、参考 SQL
 |-- public/         # 由 Next.js 直接提供的静态资源
 |-- src/
 |   |-- app/        # App Router 页面、布局、元数据和 API 路由
@@ -78,7 +78,7 @@ hhwx/
 |   |-- hooks/      # 可复用 hooks
 |   |-- lib/        # 服务端和共享业务逻辑
 |   `-- store/      # 客户端状态
-|-- supabase/       # 基础 schema 和手动维护 SQL
+|-- supabase/       # canonical migrations 与 legacy/reference schema snapshots
 `-- package.json    # 脚本和依赖入口
 ```
 
