@@ -2,7 +2,7 @@
 
 import { useCachedFetch } from "@/hooks/useCachedFetch";
 import { LONG_CLIENT_CACHE_POLICY } from "@/lib/api-cache";
-import { bandoriMasterTransforms, type BandoriSkillMaster } from "@/lib/bandori-card-master";
+import { bandoriMasterTransforms, type BandoriSkillMaster } from "@/lib/bandori/cards/master";
 
 export function useBandoriSkillsMaster(isEnabled = true) {
   return useCachedFetch<Record<string, BandoriSkillMaster | null | undefined>>(

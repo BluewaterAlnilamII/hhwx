@@ -36,8 +36,8 @@ hhwx/
 - `[locale]/account/`：账号中心、资料、邮箱和密码页面。
 - `[locale]/bandori/game-profiles/`：游戏档案卡牌和道具视图。
 - `[locale]/auth/`：登录、注册和找回密码页面。
-- `[locale]/bandori/events/`：活动追踪器入口和按活动 ID 定位的页面。旧 `/bandori/eventtracker` URL 由 `src/proxy.ts` 永久重定向。
-- `[locale]/bandori/cards/`：支持服务器上下文的卡牌图鉴与单卡详情页面。
+- `[locale]/bandori/events/`：活动追踪器入口和按活动 ID 定位的页面。页面私有的活动信息与追踪器实现分别归入 `_info/`、`_tracker/`；旧 `/bandori/eventtracker` URL 由 `src/proxy.ts` 永久重定向。
+- `[locale]/bandori/cards/`：支持服务器上下文的卡牌图鉴与单卡详情页面，页面私有 UI 归入 `_components/`。
 - `[locale]/bandori/calendar/`：各服务器的活动日历页面。
 - `api/`：前端使用的同源 API 路由。
 - `api/account/game-bind/`：游戏账号绑定验证码、验证、列表和解绑 API。
@@ -65,13 +65,23 @@ hhwx/
 - `Toolbar.tsx`：顶部工具栏。
 - `SectionSidebarShell.tsx`：共享侧边栏容器。
 - `TurnstileChallenge.tsx`：敏感操作使用的安全验证组件。
-- 其他组件按首页游戏、账号和 Bandori 复用场景分组。
+- `comments/`：与目标类型无关的评论列表、编辑器、评论项、表情和贴纸选择 UI。
+- `bandori/`：跨路由复用的 Bandori 媒体和选择 UI，包括卡面与贴纸渲染。
+- 其他组件按首页游戏、账号和复用场景分组。
+
+## src/hooks
+
+- 共享 hook 负责可复用的浏览器状态与请求编排；目标页面特有的路由和查询适配器仍留在对应路由。例如 `useCommentThread.ts` 保持通用，Bandori 活动 URL 适配器留在 events 路由中。
 
 ## src/lib
 
 - `auth-*.ts`、`supabase-*.ts`、`turnstile-server.ts` 和 `turnstile-public.ts`：认证、安全验证以及服务端/公开配置封装。
-- `bandori-*.ts` 和 `calendar-*.ts`：Bandori 页面和公开元数据相关兼容入口与服务逻辑。
-- `bandori/`：按领域整理的 Bandori 模块。`bandori/data/` 包含生成数据和参考数据，`bandori/team-builder/core/` 包含组队搜索共享基础设施和计算辅助逻辑，`bandori/team-builder/single/` 包含单曲 exact 搜索编排，`bandori/team-builder/medley/` 包含组曲 exact/bounded 搜索编排，并由公开兼容 facade 对外导出。
+- 根目录中保留的 `bandori-*.ts` 和 `calendar-*.ts`：不属于单一功能目录的跨领域基础设施与兼容入口。
+- `bandori/cards/`：卡牌目录、区服数据物化、API 契约与服务、发布/训练规则、布局和档案卡牌辅助逻辑。
+- `bandori/events/`：活动目录、API 契约与服务、路由/区服/状态辅助逻辑、横幅代理和活动评论目标校验。
+- `bandori/data/`：Bandori 各领域共享的生成数据和参考数据。
+- `bandori/team-builder/`：组队搜索实现。`core/` 包含共享计算基础设施，`single/` 包含单曲 exact 搜索编排，`medley/` 包含组曲 exact/bounded 搜索编排，并由公开兼容 facade 对外导出。
+- `comments/`：与目标类型无关的评论契约、内容解析和特权持久化服务；各目标类型的存在性与可见性校验留在各自领域中。
 - `api-*.ts`：API 响应约定和缓存策略。
 - `bestdori-profile-codec.ts` 和 `user-game-*-server.ts`：游戏档案兼容、同步和服务端持久化逻辑。
 - `characters.ts`、`othello.ts` 和 `ai/`：首页黑白棋和角色逻辑。

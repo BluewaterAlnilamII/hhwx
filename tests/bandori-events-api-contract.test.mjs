@@ -8,7 +8,7 @@ import {
   MAX_EVENT_API_COMPRESSED_BYTES,
   MAX_EVENT_API_RECORDS,
   parseEventApiPointer,
-} from "../src/lib/bandori-events-api-contract.ts";
+} from "../src/lib/bandori/events/api-contract.ts";
 
 const semanticSha256 = "a".repeat(64);
 const compressedSha256 = "b".repeat(64);

@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import EventTrackerPage from "../EventTrackerPage";
-import { parseBandoriEventRouteId } from "@/lib/bandori-event-route";
-import { readBandoriEventApiDetail } from "@/lib/bandori-events-api-server";
+import { parseBandoriEventRouteId } from "@/lib/bandori/events/route";
+import { readBandoriEventApiDetail } from "@/lib/bandori/events/api-server";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";

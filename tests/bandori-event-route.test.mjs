@@ -7,7 +7,7 @@ import proxyModule from "../src/proxy.ts";
 import {
   buildBandoriEventsPath,
   parseBandoriEventRouteId,
-} from "../src/lib/bandori-event-route.ts";
+} from "../src/lib/bandori/events/route.ts";
 
 const dynamicPageSource = readFileSync(
   new URL("../src/app/[locale]/bandori/events/[eventId]/page.tsx", import.meta.url),
@@ -76,7 +76,7 @@ test("dynamic event pages validate existence on the server and query state no lo
 });
 
 test("internal event links use the canonical event path", () => {
-  assert.match(notificationPageSource, /`\/bandori\/events\/\$\{encodeURIComponent\(eventId\)\}\?/u);
+  assert.match(notificationPageSource, /`\/bandori\/events\/\$\{encodeURIComponent\(target\.eventId\)\}\?/u);
   assert.match(sectionNavigationSource, /href: "\/bandori\/events"/u);
   assert.match(sectionNavigationSource, /href: "\/bandori\/cards"/u);
   assert.ok(

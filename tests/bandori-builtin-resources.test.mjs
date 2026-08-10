@@ -12,7 +12,7 @@ import {
   buildBandoriRarityStarIconUrl,
   buildBandoriThumbnailFrameUrl,
 } from "../src/lib/bandori-builtin-resources.ts";
-import { BANDORI_FULL_CARD_LAYOUT } from "../src/lib/bandori-full-card-layout.ts";
+import { BANDORI_FULL_CARD_LAYOUT } from "../src/lib/bandori/cards/full-card-layout.ts";
 
 test("full-card overlays preserve the measured game and Bestdori geometry", () => {
   assert.deepEqual(BANDORI_FULL_CARD_LAYOUT.surface, { width: 508, height: 340 });

@@ -7,7 +7,7 @@ import {
   BANDORI_EVENTS_MASTER_URL,
   parseBandoriEventSummaries,
   type BandoriEventSummary,
-} from "@/lib/bandori-events";
+} from "@/lib/bandori/events/summary";
 
 const EMPTY_EVENTS: BandoriEventSummary[] = [];
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useMemo, useReducer } from "react";
-import { summarizeGameProfileCardChanges } from "@/lib/bandori-profile-card-collection";
+import { summarizeGameProfileCardChanges } from "@/lib/bandori/cards/profile-card-collection";
 import { type UserGameProfileCardRecord } from "@/lib/user-game-profile-payload";
 
 export type GameProfileCardDraftState = {

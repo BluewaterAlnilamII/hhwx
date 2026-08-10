@@ -3,27 +3,27 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 const top10PanelSource = readFileSync(
-  new URL("../src/app/[locale]/bandori/events/Top10Panel.tsx", import.meta.url),
+  new URL("../src/app/[locale]/bandori/events/_tracker/Top10Panel.tsx", import.meta.url),
   "utf8",
 );
 const top10PlayerListSource = readFileSync(
-  new URL("../src/app/[locale]/bandori/events/Top10PlayerList.tsx", import.meta.url),
+  new URL("../src/app/[locale]/bandori/events/_tracker/Top10PlayerList.tsx", import.meta.url),
   "utf8",
 );
 const top10TooltipSource = readFileSync(
-  new URL("../src/app/[locale]/bandori/events/Top10Tooltip.tsx", import.meta.url),
+  new URL("../src/app/[locale]/bandori/events/_tracker/Top10Tooltip.tsx", import.meta.url),
   "utf8",
 );
 const trackerChartPanelSource = readFileSync(
-  new URL("../src/app/[locale]/bandori/events/TrackerChartPanel.tsx", import.meta.url),
+  new URL("../src/app/[locale]/bandori/events/_tracker/TrackerChartPanel.tsx", import.meta.url),
   "utf8",
 );
 const trackerActiveMarkerOverlaySource = readFileSync(
-  new URL("../src/app/[locale]/bandori/events/TrackerActiveMarkerOverlay.tsx", import.meta.url),
+  new URL("../src/app/[locale]/bandori/events/_tracker/TrackerActiveMarkerOverlay.tsx", import.meta.url),
   "utf8",
 );
 const top10DataHookSource = readFileSync(
-  new URL("../src/app/[locale]/bandori/events/useBandoriTop10Data.ts", import.meta.url),
+  new URL("../src/app/[locale]/bandori/events/_tracker/useBandoriTop10Data.ts", import.meta.url),
   "utf8",
 );
 const cardTileSource = readFileSync(
@@ -63,7 +63,7 @@ test("TOP10 player identity and score copy stays label-free and uses P", () => {
   assert.doesNotMatch(top10PlayerListSource, /style=\{\{ backgroundColor: player\.color \}\}/u);
   assert.doesNotMatch(top10TooltipSource, />ID<|>UID<|>分<|`UID /u);
   assert.match(top10PlayerListSource, />P<\/span>/u);
-  assert.match(top10TooltipSource, /\{SCORE_FORMATTER\.format\(score\)\} P/u);
+  assert.match(top10TooltipSource, /\{scoreFormatter\.format\(score\)\} P/u);
 });
 
 test("TOP10 avatars reuse the shared card tile presentation mode", () => {

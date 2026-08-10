@@ -6,7 +6,7 @@ import {
   withHttpCachePolicy,
 } from "@/lib/api-cache";
 import { jsonRouteError, jsonSuccess } from "@/lib/api-response";
-import { fetchBandoriCharacters } from "@/lib/bandori-events-server";
+import { fetchBandoriCharacters } from "@/lib/bandori/events/catalog-server";
 
 export const dynamic = "force-dynamic";
 

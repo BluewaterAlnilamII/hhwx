@@ -36,10 +36,10 @@ import {
   hasBandoriOfficialCnEventContent,
   resolveBandoriCnScheduleWindow,
   resolveBandoriEventAssetRegion,
-} from "@/lib/bandori-event-region";
-import type { BandoriEventSummary } from "@/lib/bandori-events";
+} from "@/lib/bandori/events/region";
+import type { BandoriEventSummary } from "@/lib/bandori/events/summary";
 import type { BandoriMusicMasterRecord } from "@/lib/bandori-music-api-client";
-import { isBandoriCardAttribute, type BandoriCardAttribute } from "@/lib/bandori-card-filter";
+import { isBandoriCardAttribute, type BandoriCardAttribute } from "@/lib/bandori/cards/filter";
 import { type BandoriEventBonus } from "@/lib/bandori-team-calculator";
 import {
   buildBandoriCharacterBonuses,
@@ -77,14 +77,14 @@ import {
   type UserGameProfilePayload,
 } from "@/lib/user-game-profile-payload";
 import { type BandoriCardPickerValue } from "@/components/bandori/card-picker/types";
-import { type BandoriCardPickerDialogProps } from "@/components/bandori/BandoriCardPickerDialog";
+import { type BandoriCardPickerDialogProps } from "@/components/bandori/card-picker/BandoriCardPickerDialog";
 import { type AppLocale } from "@/i18n/routing";
 import {
   pickBandoriCharacterDisplayName,
   resolveBandoriCardBandId,
   resolveBandoriCardSkillLabel,
-} from "@/lib/bandori-card-master";
-import { createMaxGameProfileCard, pickGameProfileCardName } from "@/lib/bandori-game-profile-card";
+} from "@/lib/bandori/cards/master";
+import { createMaxGameProfileCard, pickGameProfileCardName } from "@/lib/bandori/cards/game-profile-card";
 import { pickBestdoriLocalizedName } from "@/lib/bestdori-regional-names";
 import {
   normalizeBandoriServer,
@@ -178,7 +178,7 @@ function TemporaryCardEditorLoading() {
 }
 
 const DynamicBandoriCardPickerDialog = dynamic<BandoriCardPickerDialogProps>(
-  () => import("@/components/bandori/BandoriCardPickerDialog"),
+  () => import("@/components/bandori/card-picker/BandoriCardPickerDialog"),
   {
     ssr: false,
     loading: TemporaryCardPickerLoading,

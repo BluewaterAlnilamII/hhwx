@@ -9,7 +9,7 @@ import {
   toBandoriScheduleEvent,
   type BandoriEventRecord,
   type BandoriScheduleEvent,
-} from "@/lib/bandori-events-server";
+} from "@/lib/bandori/events/catalog-server";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
 import {
   BANDORI_EVENTS_TABLE,

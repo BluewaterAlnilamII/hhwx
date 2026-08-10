@@ -1,0 +1,60 @@
+{
+  "actions": {
+    "addReaction": "添加回应",
+    "cancel": "取消",
+    "copyLink": "链接",
+    "delete": "删除",
+    "edit": "编辑",
+    "publish": "发布评论",
+    "reply": "回复",
+    "save": "保存",
+    "sending": "发送中"
+  },
+  "composer": {
+    "replyPlaceholder": "写下你的回复...",
+    "rootPlaceholder": "以 {username} 发表主评论..."
+  },
+  "dialogs": {
+    "deleteTitle": "确认删除评论？"
+  },
+  "errors": {
+    "deleteFailed": "删除失败",
+    "loadFailed": "评论加载失败",
+    "locateFailed": "无法定位评论",
+    "reactionFailed": "评论回应失败",
+    "requestFailed": "请求失败（HTTP {status}）",
+    "submitFailed": "提交失败",
+    "updateFailed": "更新失败"
+  },
+  "pagination": {
+    "expandReplies": "{count, plural, one {展开 # 条回复} other {展开 # 条回复}}",
+    "first": "第一页",
+    "jumpHint": "输入页码后按回车跳转",
+    "jumpLabel": "跳转到页码",
+    "last": "最后一页",
+    "loadMoreReplies": "{count, plural, one {再展开 # 条回复} other {再展开 # 条回复}}",
+    "next": "下一页",
+    "previous": "上一页"
+  },
+  "pickers": {
+    "emoji": "选择表情",
+    "stamp": "选择贴纸"
+  },
+  "reactions": {
+    "authenticationRequired": "登录并完成邮箱验证后可以回应",
+    "count": "{count, plural, one {# 个回应} other {# 个回应}}"
+  },
+  "states": {
+    "anonymous": "匿名用户",
+    "currentAccount": "当前账号",
+    "deleted": "（已删除）",
+    "edited": "（已编辑）",
+    "loading": "加载中",
+    "loadingAuth": "正在读取登录状态...",
+    "verificationRequired": "完成邮箱验证后可以发表评论和回复"
+  },
+  "thread": {
+    "commentCount": "（{count}）",
+    "replyTo": "回复 @{username}"
+  }
+}

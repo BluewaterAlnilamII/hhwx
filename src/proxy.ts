@@ -11,7 +11,7 @@ import {
 import {
   BANDORI_EVENTS_PATH,
   LEGACY_BANDORI_EVENT_TRACKER_PATH,
-} from "@/lib/bandori-event-route";
+} from "@/lib/bandori/events/route";
 
 const intlMiddleware = createMiddleware(routing);
 const NEXT_INTL_LOCALE_HEADER = "X-NEXT-INTL-LOCALE";

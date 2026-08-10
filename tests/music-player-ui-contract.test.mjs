@@ -43,7 +43,7 @@ test("player UI uses semantic theme tokens without fixed palette classes", async
 
 test("event song play action always dispatches the restart-from-beginning queue command", async () => {
   const eventInfoPanel = await readFile(
-    new URL("src/app/[locale]/bandori/events/EventInfoPanel.tsx", ROOT_URL),
+    new URL("src/app/[locale]/bandori/events/_info/EventInfoPanel.tsx", ROOT_URL),
     "utf8",
   );
 
@@ -54,7 +54,7 @@ test("event song play action always dispatches the restart-from-beginning queue 
 test("page and player artwork use durable CDN source URLs without a Blob cache", async () => {
   const [artwork, eventInfoPanel, player] = await Promise.all([
     readFile(new URL("src/components/music-player/MusicArtwork.tsx", ROOT_URL), "utf8"),
-    readFile(new URL("src/app/[locale]/bandori/events/EventInfoPanel.tsx", ROOT_URL), "utf8"),
+    readFile(new URL("src/app/[locale]/bandori/events/_info/EventInfoPanel.tsx", ROOT_URL), "utf8"),
     readFile(new URL("src/components/music-player/ToolbarMusicPlayer.tsx", ROOT_URL), "utf8"),
   ]);
 

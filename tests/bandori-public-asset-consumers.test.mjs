@@ -5,7 +5,7 @@ import test from "node:test";
 const readSource = (path) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
 
 test("card image consumers use index descriptors and never substitute full art", async () => {
-  const artImage = await readSource("src/components/bandori/card-picker/BandoriCardArtImage.tsx");
+  const artImage = await readSource("src/components/bandori/BandoriCardArtImage.tsx");
   const thumbnail = await readSource("src/components/bandori/BandoriCardThumbnail.tsx");
   const picker = await readSource("src/components/bandori/card-picker/BandoriCardPicker.tsx");
 
@@ -29,7 +29,7 @@ test("card image consumers use index descriptors and never substitute full art",
   assert.match(artImage, /aria-busy="true"/u);
   assert.match(artImage, /imageUnavailable/u);
   assert.doesNotMatch(artImage, /No image/u);
-  const fullCard = await readSource("src/components/bandori/BandoriFullCardArt.tsx");
+  const fullCard = await readSource("src/app/[locale]/bandori/cards/[cardId]/_components/BandoriFullCardArt.tsx");
   assert.match(fullCard, /buildBandoriCardAttributeIconUrl/u);
   assert.match(fullCard, /buildBandoriCardBandIconUrl/u);
   assert.doesNotMatch(fullCard, /buildBandoriAttributeIconUrl|buildBandoriBandIconUrl/u);
@@ -45,7 +45,7 @@ test("card image consumers use index descriptors and never substitute full art",
 test("card details expand rarity into the correct individual star style", async () => {
   const [cardDetail, detailedRow] = await Promise.all([
     readSource("src/app/[locale]/bandori/cards/[cardId]/CardDetailPageClient.tsx"),
-    readSource("src/components/bandori/card-picker/BandoriCardDetailedRow.tsx"),
+    readSource("src/app/[locale]/bandori/cards/_components/BandoriCardDetailedRow.tsx"),
   ]);
 
   assert.match(cardDetail, /buildBandoriRarityStarIconUrl/u);
@@ -84,7 +84,7 @@ test("card catalog surfaces use owned SVG band and attribute icons", async () =>
 test("Bandori UI consumers do not expose PNG band or attribute builders", async () => {
   const [resources, eventInfo, eventBonus] = await Promise.all([
     readSource("src/lib/bandori-builtin-resources.ts"),
-    readSource("src/app/[locale]/bandori/events/EventInfoPanel.tsx"),
+    readSource("src/app/[locale]/bandori/events/_info/EventInfoPanel.tsx"),
     readSource("src/components/bandori/BandoriEventBonusPanel.tsx"),
   ]);
 
@@ -97,7 +97,7 @@ test("avatar, comments, profiles, picker, and team builder stay on the shared in
   const consumerPaths = [
     "src/components/Toolbar.tsx",
     "src/app/[locale]/account/AccountAvatarCardControl.tsx",
-    "src/app/[locale]/bandori/events/CommentItem.tsx",
+    "src/components/comments/CommentItem.tsx",
     "src/app/[locale]/bandori/game-profiles/[profileId]/cards/page.tsx",
     "src/components/bandori/GameProfileCardEditorDialog.tsx",
     "src/components/bandori/card-picker/BandoriCardThumbnailTile.tsx",
@@ -167,7 +167,7 @@ test("Stamps consumers join the private master response with the public hash ind
 test("public index failure stays isolated from master loading and calculations", async () => {
   const tracker = await readSource("src/app/[locale]/bandori/events/EventTrackerPage.tsx");
   const teamBuilder = await readSource("src/app/[locale]/bandori/teambuilder/page.tsx");
-  const artImage = await readSource("src/components/bandori/card-picker/BandoriCardArtImage.tsx");
+  const artImage = await readSource("src/components/bandori/BandoriCardArtImage.tsx");
 
   assert.match(tracker, /buildBandoriPublicAssetUrl\([\s\S]*\) \?\? ""/u);
   assert.match(teamBuilder, /buildBandoriPublicAssetUrl\([\s\S]*\) \?\? ""/u);

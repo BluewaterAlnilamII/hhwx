@@ -17,8 +17,8 @@ import {
   lookupBandoriCardImage,
   resolveBandoriCardAssetVariant,
 } from "@/lib/bandori-public-asset-index";
-import { isBandoriCardAttribute, type BandoriCardAttribute } from "@/lib/bandori-card-filter";
-import { usesBandoriTrainedStarStyle } from "@/lib/bandori-card-training";
+import { isBandoriCardAttribute, type BandoriCardAttribute } from "@/lib/bandori/cards/filter";
+import { usesBandoriTrainedStarStyle } from "@/lib/bandori/cards/training";
 
 type TrainType = "normal" | "after_training";
 

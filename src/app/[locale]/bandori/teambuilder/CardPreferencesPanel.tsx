@@ -9,16 +9,16 @@ import VirtualizedBandoriCardGrid from "@/components/bandori/VirtualizedBandoriC
 import { useBandoriProfileCardEntries } from "@/hooks/useBandoriProfileCardEntries";
 import { useBandoriProfileCardFilter } from "@/hooks/useBandoriProfileCardFilter";
 import { type AppLocale } from "@/i18n/routing";
-import { type BandoriCharacterMaster, type BandoriSkillMaster } from "@/lib/bandori-card-master";
-import { buildBandoriCardSortValues } from "@/lib/bandori-card-filter";
-import { type GameProfileCardMetadata } from "@/lib/bandori-game-profile-card";
+import { type BandoriCharacterMaster, type BandoriSkillMaster } from "@/lib/bandori/cards/master";
+import { buildBandoriCardSortValues } from "@/lib/bandori/cards/filter";
+import { type GameProfileCardMetadata } from "@/lib/bandori/cards/game-profile-card";
 import { type BandoriServer } from "@/lib/bandori-server";
 import { type BandoriCharacterBonusState } from "@/lib/bandori-team-calculator";
 import { type UserGameProfileCardRecord } from "@/lib/user-game-profile-payload";
 import { useBandoriPreferredServer } from "@/store/useBandoriPreferencesStore";
 import {
   buildBandoriProfileCardEntry,
-} from "@/lib/bandori-profile-card-collection";
+} from "@/lib/bandori/cards/profile-card-collection";
 import {
   CARD_PARAMETER_RARITY_THRESHOLD_OPTIONS,
   DEFAULT_OWNED_CARD_PARAMETER_PREFERENCES,

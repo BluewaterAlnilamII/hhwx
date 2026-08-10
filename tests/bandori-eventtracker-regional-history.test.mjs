@@ -7,10 +7,11 @@ function readSource(path) {
 }
 
 const pageSource = readSource("../src/app/[locale]/bandori/events/EventTrackerPage.tsx");
-const trackerDataSource = readSource("../src/app/[locale]/bandori/events/useTrackerData.ts");
-const top10DataSource = readSource("../src/app/[locale]/bandori/events/useBandoriTop10Data.ts");
-const comparisonDataSource = readSource("../src/app/[locale]/bandori/events/useComparisonTrackerData.ts");
-const comparisonPreferencesSource = readSource("../src/app/[locale]/bandori/events/useComparisonPreferences.ts");
+const trackerModelSource = readSource("../src/app/[locale]/bandori/events/_tracker/tracker-model.ts");
+const trackerDataSource = readSource("../src/app/[locale]/bandori/events/_tracker/useTrackerData.ts");
+const top10DataSource = readSource("../src/app/[locale]/bandori/events/_tracker/useBandoriTop10Data.ts");
+const comparisonDataSource = readSource("../src/app/[locale]/bandori/events/_tracker/useComparisonTrackerData.ts");
+const comparisonPreferencesSource = readSource("../src/app/[locale]/bandori/events/_tracker/useComparisonPreferences.ts");
 
 test("all servers request cutoff and TOP10 HTTP history", () => {
   assert.match(
@@ -55,7 +56,7 @@ test("regional schedules, comparison requests, and caches use the selected serve
 });
 
 test("CN-only presentation rules do not leak to regional servers", () => {
-  assert.match(pageSource, /return server === 3\s+&& targetId <= CN_T1500_LEGACY_EVENT_ID_LIMIT/u);
+  assert.match(trackerModelSource, /return server === 3\s+&& targetId <= CN_T1500_LEGACY_EVENT_ID_LIMIT/u);
   assert.match(pageSource, /selectedServer === 3\s+\? buildNonWorkingDayBands/u);
   assert.match(pageSource, /selectedServer === 3 && activeView === "tracker".*showBestdoriPrediction/u);
 });

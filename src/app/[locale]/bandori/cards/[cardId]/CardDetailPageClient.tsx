@@ -2,8 +2,6 @@
 
 import { useMemo, type ReactNode } from "react";
 import { ArrowLeft, ClipboardList, Images, Play } from "lucide-react";
-import BandoriCardServerSwitcher from "@/components/bandori/BandoriCardServerSwitcher";
-import BandoriFullCardGallery from "@/components/bandori/BandoriFullCardArt";
 import Heading from "@/components/Heading";
 import { useBandoriCharactersMaster } from "@/hooks/useBandoriCharactersMaster";
 import { useBandoriCardsAssetIndex } from "@/hooks/useBandoriPublicAssetIndex";
@@ -12,13 +10,16 @@ import { Link } from "@/i18n/navigation";
 import {
   normalizeBandoriCardCatalogType,
   type BandoriCardCatalogType,
-} from "@/lib/bandori-card-catalog";
-import { normalizeBandoriCardDisplayReleaseTimestamp } from "@/lib/bandori-card-release";
-import type { BandoriCardMaster } from "@/lib/bandori-card-master";
+} from "@/lib/bandori/cards/cards-page-catalog";
+import { normalizeBandoriCardDisplayReleaseTimestamp } from "@/lib/bandori/cards/release";
+import {
+  pickBandoriCharacterDisplayName,
+  type BandoriCardMaster,
+} from "@/lib/bandori/cards/master";
 import {
   hasTrainedCardArt,
   usesBandoriTrainedStarStyle,
-} from "@/lib/bandori-card-training";
+} from "@/lib/bandori/cards/training";
 import {
   buildBandoriCardAttributeIconUrl,
   buildBandoriCardBandIconUrl,
@@ -32,11 +33,12 @@ import {
   lookupBandoriCardGachaVoice,
   type BandoriCardAssetVariant,
 } from "@/lib/bandori-public-asset-index";
-import { isBandoriCardAttribute } from "@/lib/bandori-card-filter";
+import { isBandoriCardAttribute } from "@/lib/bandori/cards/filter";
 import { resolveBandoriSkillLabelForServer } from "@/lib/bandori-skill-label";
 import { playSoundEffect } from "@/lib/sound-effect-audio";
 import {
   getBandoriServerCode,
+  getBandoriServerTimeZone,
   readBandoriRegionalNumberAt,
   readBandoriRegionalTextAt,
   type BandoriServer,
@@ -48,8 +50,8 @@ import {
 } from "@/lib/bandori-team-calculator";
 import { useLocale, useTranslations } from "next-intl";
 import BandoriPageShell from "../../BandoriPageShell";
-
-const TIME_ZONES = ["Asia/Tokyo", "UTC", "Asia/Taipei", "Asia/Shanghai"] as const;
+import BandoriCardServerSwitcher from "../_components/BandoriCardServerSwitcher";
+import BandoriFullCardGallery from "./_components/BandoriFullCardArt";
 
 type CardStats = {
   totalPower: number;
@@ -61,19 +63,6 @@ function toPositiveInteger(value: unknown): number | null {
   return Number.isFinite(numericValue) && numericValue > 0
     ? Math.trunc(numericValue)
     : null;
-}
-
-function readCharacterName(
-  character: {
-    nickname?: Array<string | null> | string;
-    characterName?: Array<string | null> | string;
-    firstName?: Array<string | null> | string;
-  } | null | undefined,
-  server: BandoriServer,
-): string | null {
-  return readBandoriRegionalTextAt(character?.nickname, server)
-    ?? readBandoriRegionalTextAt(character?.characterName, server)
-    ?? readBandoriRegionalTextAt(character?.firstName, server);
 }
 
 function calculateMaxCardStats(cardId: number, card: BandoriCardMaster): CardStats | null {
@@ -192,7 +181,12 @@ export default function CardDetailPageClient({
   const noInformation = t("common.noInformation");
   const characterId = toPositiveInteger(currentCard.characterId);
   const character = characterId === null ? null : charactersMaster.data?.[String(characterId)];
-  const characterName = readCharacterName(character, selectedServer) ?? noInformation;
+  const characterName = pickBandoriCharacterDisplayName(
+    character,
+    selectedServer,
+    selectedServer,
+    noInformation,
+  );
   const bandId = toPositiveInteger(character?.bandId);
   const bandName = BANDORI_CHARACTER_GROUPS.find((group) => group.bandId === bandId)?.label
     ?? noInformation;
@@ -224,7 +218,7 @@ export default function CardDetailPageClient({
     : null;
   const formatDate = (timestamp: number | null, server: BandoriServer) => timestamp !== null
     ? new Intl.DateTimeFormat(locale, {
-        timeZone: TIME_ZONES[server],
+        timeZone: getBandoriServerTimeZone(server),
         year: "numeric",
         month: "2-digit",
         day: "2-digit",

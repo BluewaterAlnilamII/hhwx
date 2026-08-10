@@ -1,193 +1,65 @@
 "use client";
 
 import { useCallback } from "react";
+import { useTranslations } from "next-intl";
+import CommentThread from "@/components/comments/CommentThread";
+import type { CommentThreadLocation } from "@/hooks/useCommentThread";
+import { getBandoriServerCode, type BandoriServer } from "@/lib/bandori-server";
 import {
-  ChevronFirst,
-  ChevronLast,
-  ChevronLeft,
-  ChevronRight,
-  MessageSquare,
-} from "lucide-react";
-import Heading from "@/components/Heading";
-import { CommentComposer } from "./CommentComposer";
-import { CommentItem } from "./CommentItem";
-import { COMMENT_ROOT_PAGE_SIZE } from "./commentTypes";
-import { useCommentThread } from "./useCommentThread";
-import type { BandoriServer } from "@/lib/bandori-server";
+  readEventTrackerSearchParams,
+  readPositiveIntegerSearchParam,
+  replaceEventTrackerUrlQuery,
+} from "./urlQuery";
 
-const paginationButtonClassName = "inline-flex h-8 w-8 items-center justify-center rounded-full text-[var(--theme-color-text-default)] transition hover:bg-[var(--theme-color-surface-background)] hover:text-[var(--theme-color-action-secondary-foreground)] active:bg-[var(--theme-color-surface-background)] disabled:pointer-events-none disabled:cursor-not-allowed disabled:text-[var(--theme-color-text-muted)] disabled:opacity-25 dark:text-slate-200 dark:hover:bg-slate-800 dark:hover:text-[var(--theme-color-action-secondary-foreground-on-dark)]";
+export default function EventComments({
+  eventId,
+  server,
+}: {
+  eventId: number | null;
+  server: BandoriServer;
+}) {
+  const t = useTranslations("bandori.events.comments");
+  const serverCode = getBandoriServerCode(server);
+  const apiBase = eventId ? `/api/bandori/events/${eventId}/comments` : null;
 
-export default function EventComments({ eventId, server }: { eventId: number | null; server: BandoriServer }) {
-  const {
-    authReady,
-    canReact,
-    comments,
-    createComment,
-    currentPage,
-    deleteComment,
-    emailVerified,
-    error,
-    focusedCommentId,
-    goToCommentPage,
-    loading,
-    loadingReplies,
-    loadReplies,
-    navigateToComment,
-    pageInput,
-    replies,
-    setPageInput,
-    stampLookup,
-    submitPageInput,
-    toggleCommentReaction,
-    totalCommentCount,
-    totalCount,
-    totalPages,
-    updateCommentContent,
-    userId,
-    username,
-  } = useCommentThread(eventId, server);
+  const readLocation = useCallback((): CommentThreadLocation => {
+    const params = readEventTrackerSearchParams();
+    return {
+      page: readPositiveIntegerSearchParam(params, "page") ?? 1,
+      commentId: params.get("comment"),
+    };
+  }, []);
 
-  const handleCreateRootComment = useCallback((content: string) => createComment(content, null), [createComment]);
-  const handleCreateReply = useCallback((parentId: string, content: string) => createComment(content, parentId), [createComment]);
+  const updateLocation = useCallback((location: CommentThreadLocation) => {
+    replaceEventTrackerUrlQuery({
+      eventId,
+      server,
+      commentPage: location.page,
+      commentId: location.commentId,
+    });
+  }, [eventId, server]);
+
+  const buildPermalink = useCallback((commentId: string, page: number): string => {
+    if (typeof window === "undefined") return "";
+    const url = new URL(window.location.href);
+    if (eventId) url.searchParams.set("event", String(eventId));
+    url.searchParams.set("server", serverCode);
+    url.searchParams.set("page", String(page));
+    url.searchParams.set("comment", commentId);
+    return url.toString();
+  }, [eventId, serverCode]);
 
   return (
-    <section className="rounded-3xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-surface-background)] p-4 shadow-[var(--theme-shadow-surface-raised)] sm:p-5 dark:border-slate-800 dark:bg-slate-950">
-      <div className="flex flex-col gap-3 border-b border-[var(--theme-color-border-subtle)] pb-4 sm:flex-row sm:items-end sm:justify-between dark:border-slate-800">
-        <Heading as="h2" visualRole="section" accentSlot="a" icon={<MessageSquare size={20} />} className="dark:text-[var(--theme-color-text-default-on-dark)]">
-          活动评论
-          <span className="text-sm font-semibold text-[var(--theme-color-text-muted)] dark:text-[var(--theme-color-text-muted-on-dark)]">（{totalCommentCount}）</span>
-        </Heading>
-      </div>
-
-      <div className="mt-4">
-        {!authReady ? (
-          <div className="rounded-2xl border border-[var(--theme-color-semantic-neutral-border)] bg-[var(--theme-color-semantic-neutral-background)] p-4 text-center text-sm font-semibold text-[var(--theme-color-semantic-neutral-foreground)] dark:border-slate-700 dark:bg-slate-900 dark:text-[var(--theme-color-semantic-neutral-foreground-on-dark)]">
-            正在读取登录状态...
-          </div>
-        ) : userId && emailVerified ? (
-          <CommentComposer
-            placeholder={`以 ${username ?? "当前账号"} 发表主评论...`}
-            submitLabel="发布评论"
-            onSubmit={handleCreateRootComment}
-          />
-        ) : userId ? (
-          <div className="rounded-2xl border border-[var(--theme-color-semantic-warning-border)] bg-[var(--theme-color-semantic-warning-background)] p-4 text-center text-sm font-medium text-[var(--theme-color-semantic-warning-foreground)]">
-            完成邮箱验证后可以发表评论和回复
-          </div>
-        ) : (
-          <div className="rounded-2xl border border-[var(--theme-color-semantic-neutral-border)] bg-[var(--theme-color-semantic-neutral-background)] p-4 text-center text-sm font-semibold text-[var(--theme-color-semantic-neutral-foreground)] dark:border-slate-700 dark:bg-slate-900 dark:text-[var(--theme-color-semantic-neutral-foreground-on-dark)]">
-            登录后可以发表评论，并启用30秒频率的高频活动榜榜线更新
-          </div>
-        )}
-      </div>
-
-      {error ? (
-        <div className="mt-4 rounded-2xl border border-[var(--theme-color-semantic-danger-border)] bg-[var(--theme-color-semantic-danger-background)] p-3 text-sm text-[var(--theme-color-semantic-danger-foreground)]">
-          {error}
-        </div>
-      ) : null}
-
-      <div className="mt-5 space-y-3">
-        {comments.map((comment) => (
-          <CommentItem
-            key={comment.id}
-            comment={comment}
-            eventId={eventId ?? 0}
-            server={server}
-            highlightedId={focusedCommentId}
-            replies={replies}
-            loadingReplies={loadingReplies}
-            stampLookup={stampLookup}
-            canReact={canReact}
-            commentPage={currentPage}
-            onCreateReply={handleCreateReply}
-            onToggleReaction={toggleCommentReaction}
-            onUpdate={updateCommentContent}
-            onDelete={deleteComment}
-            onLoadReplies={loadReplies}
-            onLocateComment={navigateToComment}
-          />
-        ))}
-
-        {!loading && comments.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-[var(--theme-color-semantic-neutral-border)] bg-[var(--theme-color-semantic-neutral-background)] py-10 text-center text-sm font-semibold text-[var(--theme-color-semantic-neutral-foreground)] dark:border-slate-700 dark:bg-slate-900/50 dark:text-[var(--theme-color-semantic-neutral-foreground-on-dark)]">
-            还没有评论，来留下本期活动的第一条讨论
-          </div>
-        ) : null}
-      </div>
-
-      {totalCount > COMMENT_ROOT_PAGE_SIZE ? (
-        <div className="mt-5 flex justify-center">
-          <div className="inline-flex max-w-full items-center gap-1 rounded-full border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background)] p-1 shadow-xs dark:border-slate-700 dark:bg-slate-900">
-            <button
-              type="button"
-              onClick={() => goToCommentPage(1)}
-              disabled={loading || currentPage <= 1}
-              className={paginationButtonClassName}
-              aria-label="第一页"
-              title="第一页"
-            >
-              <ChevronFirst size={16} />
-            </button>
-            <button
-              type="button"
-              onClick={() => goToCommentPage(currentPage - 1)}
-              disabled={loading || currentPage <= 1}
-              className={paginationButtonClassName}
-              aria-label="上一页"
-              title="上一页"
-            >
-              <ChevronLeft size={16} />
-            </button>
-            <div className="flex h-8 min-w-28 items-center justify-center rounded-full bg-[var(--theme-color-control-background)] px-3 text-sm font-semibold text-[var(--theme-color-text-default)] shadow-xs ring-1 ring-inset ring-[var(--theme-color-action-secondary-border)] dark:bg-slate-950 dark:text-slate-200 dark:ring-slate-700">
-              <input
-                type="text"
-                inputMode="numeric"
-                pattern="[0-9]*"
-                value={pageInput}
-                onChange={(event) => setPageInput(event.target.value.replace(/\D/g, ""))}
-                onBlur={() => setPageInput(String(currentPage))}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") {
-                    event.preventDefault();
-                    submitPageInput();
-                  }
-                }}
-                disabled={loading}
-                aria-label="跳转到页码"
-                title="输入页码后按回车跳转"
-                className="h-6 w-10 rounded-md border border-transparent bg-transparent text-center text-sm font-semibold text-[var(--theme-color-text-default)] outline-hidden transition focus:border-[var(--theme-color-action-secondary-border)] focus:bg-[var(--theme-color-surface-background)] disabled:cursor-not-allowed disabled:text-[var(--theme-color-text-muted)] dark:text-slate-200 dark:focus:border-slate-600 dark:focus:bg-slate-900"
-              />
-              <span className="mx-1 text-[var(--theme-color-text-muted)] opacity-50">/</span>
-              <span className="min-w-8 text-center">{totalPages}</span>
-            </div>
-            <button
-              type="button"
-              onClick={() => goToCommentPage(currentPage + 1)}
-              disabled={loading || currentPage >= totalPages}
-              className={paginationButtonClassName}
-              aria-label="下一页"
-              title="下一页"
-            >
-              <ChevronRight size={16} />
-            </button>
-            <button
-              type="button"
-              onClick={() => goToCommentPage(totalPages)}
-              disabled={loading || currentPage >= totalPages}
-              className={paginationButtonClassName}
-              aria-label="最后一页"
-              title="最后一页"
-            >
-              <ChevronLast size={16} />
-            </button>
-          </div>
-        </div>
-      ) : null}
-
-      {loading && comments.length > 0 ? (
-        <div className="mt-3 text-center text-xs text-[var(--theme-color-text-muted)] dark:text-[var(--theme-color-text-muted-on-dark)]">加载中</div>
-      ) : null}
-    </section>
+    <CommentThread
+      apiBase={apiBase}
+      apiQuery={`server=${serverCode}`}
+      targetKey={`${serverCode}:${eventId ?? ""}`}
+      readLocation={readLocation}
+      updateLocation={updateLocation}
+      buildPermalink={buildPermalink}
+      title={t("title")}
+      signedOutMessage={t("signedOutMessage")}
+      emptyMessage={t("emptyMessage")}
+    />
   );
 }

@@ -15,7 +15,7 @@ import {
 import { useBandoriCardsMaster } from "@/hooks/useBandoriCardsMaster";
 import { buildLocalizedPathname, routing, type AppLocale } from "@/i18n/routing";
 import { getApiErrorMessage, parseApiSuccessData } from "@/lib/api-contracts";
-import { pickGameProfileCardName } from "@/lib/bandori-game-profile-card";
+import { pickGameProfileCardName } from "@/lib/bandori/cards/game-profile-card";
 import {
     BANDORI_SERVER_CODES,
     BANDORI_SERVERS,

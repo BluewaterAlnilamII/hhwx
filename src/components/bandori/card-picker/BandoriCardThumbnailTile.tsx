@@ -14,8 +14,9 @@ import {
   type BandoriServer,
   type BandoriServerLanguageTag,
 } from "@/lib/bandori-server";
+import type { BandoriCardCatalogEntry } from "@/lib/bandori/cards/picker-catalog";
 import { cn } from "@/lib/utils";
-import type { BandoriCardArtVariant, BandoriCardCatalogEntry } from "./types";
+import type { BandoriCardArtVariant } from "./types";
 
 function buildThumbnailCard(
   card: BandoriCardCatalogEntry,

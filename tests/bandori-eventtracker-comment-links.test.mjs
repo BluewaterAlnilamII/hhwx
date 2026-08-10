@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 const commentThreadSource = readFileSync(
-  new URL("../src/app/[locale]/bandori/events/useCommentThread.ts", import.meta.url),
+  new URL("../src/hooks/useCommentThread.ts", import.meta.url),
   "utf8",
 );
 
@@ -16,7 +16,7 @@ test("comment deep links override stale reverse-sorted page parameters", () => {
     commentThreadSource.indexOf("const locatedPage = await locateLinkedComment(commentId")
       < commentThreadSource.indexOf("const data = await loadRootComments(requestedPage)"),
   );
-  assert.match(commentThreadSource, /commentPage: locatedPage,\s*commentId,/u);
+  assert.match(commentThreadSource, /page: locatedPage,\s*commentId,/u);
   assert.doesNotMatch(commentThreadSource, /expectedPage: loadedPage/u);
 });
 

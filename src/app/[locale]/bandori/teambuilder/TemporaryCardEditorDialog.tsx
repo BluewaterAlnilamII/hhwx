@@ -2,8 +2,8 @@
 
 import { useTranslations } from "next-intl";
 import GameProfileCardEditorDialog from "@/components/bandori/GameProfileCardEditorDialog";
-import { type BandoriCardServer } from "@/lib/bandori-card-server-extensions";
-import { type GameProfileCardMetadata } from "@/lib/bandori-game-profile-card";
+import { type BandoriCardServer } from "@/lib/bandori/cards/regional-extensions";
+import { type GameProfileCardMetadata } from "@/lib/bandori/cards/game-profile-card";
 import { type BandoriCharacterBonusState } from "@/lib/bandori-team-calculator";
 import { type UserGameProfileCardRecord } from "@/lib/user-game-profile-payload";
 import { type TemporaryGameProfileCard } from "./card-preferences";

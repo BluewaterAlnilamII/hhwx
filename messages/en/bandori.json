@@ -68,6 +68,136 @@
     "startLabel": "Start:",
     "endLabel": "End:"
   },
+  "events": {
+    "comments": {
+      "title": "Event comments",
+      "signedOutMessage": "Sign in to comment and enable high-frequency event cutoff updates every 30 seconds",
+      "emptyMessage": "No comments yet—start the first discussion for this event"
+    },
+    "status": {
+      "upcoming": "Upcoming",
+      "ongoing": "Ongoing",
+      "ended": "Ended"
+    },
+    "countdown": {
+      "untilStart": "Starts in",
+      "untilEnd": "Ends in",
+      "started": "Event started",
+      "ended": "Event ended",
+      "days": "d",
+      "hours": "h",
+      "minutes": "m",
+      "seconds": "s"
+    },
+    "progress": {
+      "title": "Event progress",
+      "completed": "complete"
+    },
+    "view": {
+      "label": "Event page view",
+      "tracker": "Score tracker",
+      "info": "Event info"
+    },
+    "common": {
+      "eventFallback": "Event #{eventId}",
+      "eventOption": "Event {eventId}: {eventName}",
+      "loadingEvent": "Loading event",
+      "loadingLatestData": "Loading latest data"
+    },
+    "info": {
+      "unannounced": "Not announced",
+      "loading": "Loading event details…",
+      "unavailable": "Event details are temporarily unavailable",
+      "overviewTitle": "Event overview",
+      "eventId": "Event ID",
+      "eventTitle": "Event title",
+      "eventTitleFallback": "Event #{eventId}",
+      "eventType": "Event type",
+      "featuredBand": "Featured band",
+      "eventStatus": "Event status",
+      "startTime": "Start time ({server})",
+      "endTime": "End time ({server})",
+      "rewardsTitle": "Event rewards",
+      "rewardStamps": "Reward stamps ({server})",
+      "loadingRewardStamps": "Loading reward stamps",
+      "noRewardStamps": "No reward stamps",
+      "rewardCards": "Reward cards",
+      "noRewardCards": "No reward cards for this event",
+      "songsTitle": "Event songs ({server})",
+      "coverAlt": "{title} cover",
+      "publishedAt": "Published {date}",
+      "songWindowUnavailable": "The event window is unavailable, so songs cannot be matched",
+      "noSongs": "No newly released songs match this event window"
+    },
+    "tracker": {
+      "modes": {
+        "event": "Event ranking",
+        "song": "Song ranking",
+        "monthly": "Monthly ranking"
+      },
+      "songRankingUnavailable": "Song ranking is unavailable for this event type",
+      "challengeSongs": "Challenge songs",
+      "songFallback": "Song {songId}",
+      "selectMonth": "Select month",
+      "selectRanking": "Select ranking",
+      "summary": {
+        "eventStatus": "Event status",
+        "latestScore": "Latest score",
+        "updateTime": "Updated",
+        "updatingScore": "Updating cutoff",
+        "prediction": "Bestdori prediction",
+        "loading": "Loading",
+        "unavailable": "Unavailable",
+        "endScore": "End score",
+        "finalScore": "Final score",
+        "settling": "Settling",
+        "secondsAgo": "{count}s ago",
+        "minutesAgo": "{count}m ago"
+      },
+      "comparison": {
+        "instantProjection": "Linear projection (instant)",
+        "dayProjection": "Linear projection (24h)",
+        "predictionUnavailable": "Bestdori prediction is currently unavailable",
+        "showPrediction": "Show Bestdori Prediction",
+        "prediction": "Bestdori prediction",
+        "monthlyTarget": "Monthly {targetId}",
+        "eventTarget": "Event {targetId}",
+        "alignLeft": "Align left",
+        "alignRight": "Align right",
+        "removeLine": "Remove comparison row",
+        "remove": "Remove",
+        "maxLines": "Add up to {count} comparison lines",
+        "addLine": "Add an empty comparison line",
+        "addComparison": "Add comparison",
+        "removeAll": "Remove all",
+        "removeAllLines": "Remove all comparison lines"
+      },
+      "tooltip": {
+        "instantProjection": "Linear projection (instant)",
+        "dayProjection": "Linear projection (24h)",
+        "comparisonReference": "Comparison reference",
+        "instantSpeed": "Instant speed",
+        "daySpeed": "24h speed"
+      },
+      "chart": {
+        "noTierData": "No tracking data for this ranking tier",
+        "zoomIn": "Zoom in",
+        "zoomOut": "Zoom out"
+      },
+      "top10": {
+        "loading": "Loading latest data…",
+        "loadFailed": "Failed to load TOP10 tracking data",
+        "reload": "Reload",
+        "legend": "TOP10 player legend",
+        "ranking": "TOP10 player ranking",
+        "rank": "Rank",
+        "avatar": "Avatar",
+        "player": "Player",
+        "score": "Score",
+        "noAvatar": "No avatar"
+      }
+    }
+  },
   "cardPicker": {
     "resultCount": "{count} cards",
     "cardFallback": "Card {cardId}",

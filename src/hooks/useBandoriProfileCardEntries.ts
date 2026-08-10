@@ -5,9 +5,9 @@ import { type AppLocale } from "@/i18n/routing";
 import {
   buildBandoriProfileCardEntry,
   type BandoriProfileCardEntry,
-} from "@/lib/bandori-profile-card-collection";
-import { type BandoriCharacterMaster, type BandoriSkillMaster } from "@/lib/bandori-card-master";
-import { type GameProfileCardMetadata } from "@/lib/bandori-game-profile-card";
+} from "@/lib/bandori/cards/profile-card-collection";
+import { type BandoriCharacterMaster, type BandoriSkillMaster } from "@/lib/bandori/cards/master";
+import { type GameProfileCardMetadata } from "@/lib/bandori/cards/game-profile-card";
 import { type BandoriServer } from "@/lib/bandori-server";
 import { type BandoriCharacterBonusState } from "@/lib/bandori-team-calculator";
 import { type UserGameProfileCardRecord } from "@/lib/user-game-profile-payload";

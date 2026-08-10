@@ -1,0 +1,358 @@
+"use client";
+
+import { useMemo } from "react";
+import {
+  getBandoriEventStatusAt,
+  type BandoriEventStatus,
+} from "@/lib/bandori/events/status";
+import { calculateBandoriTrackerSpeeds } from "@/lib/bandori-tracker-projection";
+import {
+  BANDORI_MONTHLY_RANKING_EPOCHS,
+  bandoriMonthlyRankingPeriodToId,
+  getBandoriMonthlyRankingMidnights,
+  getBandoriMonthlyRankingWindow,
+  getCurrentBandoriMonthlyRankingWindow,
+} from "@/lib/bandori-monthly-ranking-calendar";
+import {
+  getBandoriServerCode,
+  getBandoriServerTimeZone,
+  type BandoriServer,
+} from "@/lib/bandori-server";
+import type { TrackerData, TrackingMode } from "./types";
+import { useBoundaryClock } from "./useBoundaryClock";
+
+/**
+ * 图表时间域（X 轴范围）信息。
+ * domainStart/domainEnd 为 "auto" 时表示自适应。
+ */
+type ChartDomain = {
+  domainStart: number | "auto";
+  domainEnd: number | "auto";
+  cutoffEnd: number | null;
+  midnights: number[];
+};
+
+type MonthlyRankingWindow = {
+  period: string;
+  domainStart: number;
+  cutoffEnd: number;
+  monthId: number;
+};
+
+export type MonthlyRankingOption = MonthlyRankingWindow & {
+  label: string;
+  shortLabel: string;
+};
+
+function buildMonthlyRankingWindow(
+  server: BandoriServer,
+  monthId: number,
+): MonthlyRankingWindow {
+  const window = getBandoriMonthlyRankingWindow(getBandoriServerCode(server), monthId);
+  return {
+    period: window.period,
+    domainStart: window.opensAt,
+    cutoffEnd: window.endsAt,
+    monthId: window.monthId,
+  };
+}
+
+function toMonthlyRankingOption(
+  window: MonthlyRankingWindow,
+  dateFormatter: Intl.DateTimeFormat,
+): MonthlyRankingOption {
+  const [year, month] = window.period.split("-").map(Number);
+
+  return {
+    ...window,
+    label: dateFormatter.format(Date.UTC(year, month - 1, 15)),
+    shortLabel: window.period,
+  };
+}
+
+export function getCurrentMonthlyRankingWindow(
+  server: BandoriServer,
+  referenceTime: Date = new Date(),
+): MonthlyRankingWindow {
+  const window = getCurrentBandoriMonthlyRankingWindow(
+    getBandoriServerCode(server),
+    referenceTime,
+  );
+  return buildMonthlyRankingWindow(server, window.monthId);
+}
+
+export function getMonthlyRankingWindow(
+  server: BandoriServer,
+  monthId: number | null,
+  referenceTime: Date = new Date(),
+): MonthlyRankingWindow {
+  if (monthId !== null) {
+    try {
+      return buildMonthlyRankingWindow(server, monthId);
+    } catch {
+      // Invalid persisted IDs fall back to the selected server's current period.
+    }
+  }
+
+  return getCurrentMonthlyRankingWindow(server, referenceTime);
+}
+
+export function getMonthlyRankingOptions(
+  server: BandoriServer,
+  locale: string,
+  referenceTime: Date = new Date(),
+): MonthlyRankingOption[] {
+  const serverCode = getBandoriServerCode(server);
+  const currentWindow = getCurrentMonthlyRankingWindow(server, referenceTime);
+  const options: MonthlyRankingOption[] = [];
+  const dateFormatter = new Intl.DateTimeFormat(locale, {
+    timeZone: getBandoriServerTimeZone(server),
+    year: "numeric",
+    month: "long",
+  });
+  const firstMonthId = bandoriMonthlyRankingPeriodToId(
+    serverCode,
+    BANDORI_MONTHLY_RANKING_EPOCHS[serverCode].anchorPeriod,
+  );
+
+  for (let monthId = firstMonthId; monthId <= currentWindow.monthId; monthId += 1) {
+    options.push(toMonthlyRankingOption(
+      buildMonthlyRankingWindow(server, monthId),
+      dateFormatter,
+    ));
+  }
+
+  return options.reverse();
+}
+
+/**
+ * useChartDomain —— 根据追踪模式和活动起止时间计算图表 X 轴域范围。
+ *
+ * - 月度排行模式：默认显示“当前有效月度榜”
+ *   - 若当前时间已到本月 1 日 13:00，则显示本月 1 日 13:00 到次月 1 日 00:00
+ *   - 若当前时间尚未到本月 1 日 13:00，则继续显示上月 1 日 13:00 到本月 1 日 00:00
+ * - 活动排行与歌曲排行模式：从活动开始到结束后 1 秒
+ * - `midnights`：域内每个午夜 0:00 的时间戳列表，用于绘制日期分割竖线
+ */
+export function useChartDomain(
+  trackingMode: TrackingMode,
+  startDate: number | null,
+  endDate: number | null,
+  selectedMonthlyMonthId: number | null,
+  server: BandoriServer,
+): ChartDomain {
+  return useMemo(() => {
+    let domainStart: number | "auto" = "auto";
+    let domainEnd: number | "auto" = "auto";
+    let cutoffEnd: number | null = null;
+
+    if (trackingMode === "monthly") {
+      const monthlyWindow = getMonthlyRankingWindow(server, selectedMonthlyMonthId);
+      domainStart = monthlyWindow.domainStart;
+      cutoffEnd = monthlyWindow.cutoffEnd;
+      domainEnd = cutoffEnd;
+    } else if (startDate && endDate) {
+      domainStart = startDate;
+      cutoffEnd = endDate + 1000;
+      domainEnd = cutoffEnd;
+    }
+
+    let midnights: number[] = [];
+    if (typeof domainStart === "number" && typeof domainEnd === "number") {
+      midnights = getBandoriMonthlyRankingMidnights(
+        getBandoriServerCode(server),
+        domainStart,
+        domainEnd,
+      );
+    }
+
+    return { domainStart, domainEnd, cutoffEnd, midnights };
+  }, [trackingMode, startDate, endDate, selectedMonthlyMonthId, server]);
+}
+
+/**
+ * useProcessedData —— 对原始追踪数据进行速度计算，生成含瞬时速度和 24h 速度的完整数据。
+ *
+ * 计算逻辑：
+ * - speed（瞬时速度）：当前点与至少 9 分 45 秒前、且时间上最近的点之间的 EP 差 / 时间差（单位 P/h）
+ * - speed24（24h 速度）：当前点与约 24 小时前那个点的 EP 差 / 天数差（单位 P/d）
+ * - 尚未达到对应时间窗口时，两者都从活动开始的 EP=0 基准点按真实时间差计算
+ *
+ * 设计原因：24 小时速度使用 23 小时 55 分阈值，而不是严格的 24 小时。
+ * 服务端采集间隔约为 5 分钟，若完全按 24 小时截取，容易恰好落在两个采集点之间，
+ * 导致找不到足够远的参考点。放宽 5 分钟容差可以稳定命中有效样本。
+ */
+function processTrackerData(
+  chartData: TrackerData[],
+  apiHasResult: boolean,
+  domainStart: number | "auto",
+  trackingMode: TrackingMode,
+): TrackerData[] {
+  let raw = [...chartData];
+
+  // 当域起点明确且存在有效数据时，在序列头部补一个原点，
+  // 让折线从活动起点开始绘制，而不是从第一个采集点突然出现。
+  // 歌曲排行没有统一的起始时刻，因此不补原点。
+  if (apiHasResult && raw.length > 0 && typeof domainStart === "number" && trackingMode !== "song") {
+    if (raw.length === 0 || raw[0].time > domainStart) {
+      raw = [{ time: domainStart, ep: 0, isBaseline: true }, ...raw];
+    }
+  }
+
+  return calculateBandoriTrackerSpeeds(raw);
+}
+
+export function useProcessedData(
+  chartData: TrackerData[],
+  apiHasResult: boolean,
+  domainStart: number | "auto",
+  trackingMode: TrackingMode,
+): TrackerData[] {
+  return useMemo(
+    () => processTrackerData(chartData, apiHasResult, domainStart, trackingMode),
+    [chartData, apiHasResult, domainStart, trackingMode],
+  );
+}
+
+/**
+ * useEventStatus —— 根据活动时间域判断当前活动状态。
+ *
+ * 设计取舍：活动状态只在域边界变化时才需要重算。
+ * 若按秒级更新时间反复读取当前时间，会让包含图表的父组件发生无意义的整树重渲染。
+ */
+export function useEventStatus(
+  domainStart: number | "auto",
+  domainEnd: number | "auto",
+): BandoriEventStatus {
+  const boundaryNow = useBoundaryClock([
+    typeof domainStart === "number" ? domainStart : null,
+    typeof domainEnd === "number" ? domainEnd + 1 : null,
+  ]);
+
+  return getBandoriEventStatusAt(boundaryNow, domainStart, domainEnd);
+}
+
+/**
+ * useFinalDisplayedData —— 在已处理数据基础上裁剪时间范围并追加投影虚拟点。
+ *
+ * 投影逻辑：在活动进行中且图表最新点未到达结束时间时，
+ * 根据瞬时速度和 24h 速度线性外推到活动结束时刻，
+ * 在数据末尾追加一个虚拟投影点与最新真实点相连形成虚线投影。
+ */
+export function useFinalDisplayedData(
+  fullProcessedData: TrackerData[],
+  cutoffEnd: number | null,
+  status: BandoriEventStatus,
+  showInstantProjection: boolean,
+  showDayProjection: boolean,
+): TrackerData[] {
+  return useMemo(() => {
+    const base = fullProcessedData.filter(d => cutoffEnd === null || d.time <= cutoffEnd);
+    if (status !== "ongoing" || base.length === 0 || typeof cutoffEnd !== "number") return base;
+
+    const result = base.map(d => ({ ...d }));
+    const latestPoint = result[result.length - 1];
+    if (latestPoint.time >= cutoffEnd) return result;
+
+    const remainingMs = cutoffEnd - latestPoint.time;
+    const renderEndTime = cutoffEnd - 1;
+
+    let instantEp: number | undefined;
+    let dayEp: number | undefined;
+
+    if (showInstantProjection && latestPoint.speed !== undefined) {
+      instantEp = Math.max(0, Math.round(latestPoint.ep + latestPoint.speed * (remainingMs / 3600000)));
+    }
+    if (showDayProjection && latestPoint.speed24 !== undefined) {
+      dayEp = Math.max(0, Math.round(latestPoint.ep + latestPoint.speed24 * (remainingMs / 86400000)));
+    }
+
+    if (instantEp !== undefined || dayEp !== undefined) {
+      // 在最新真实点加入投影数据键，使投影虚线能从此点开始连接
+      latestPoint.instantEp = latestPoint.ep;
+      latestPoint.dayEp = latestPoint.ep;
+
+      result.push({
+        time: renderEndTime,
+        instantEp,
+        dayEp,
+        projectionType: instantEp !== undefined && dayEp !== undefined ? "both" : (instantEp !== undefined ? "instant" : "24h"),
+        projectionEndTime: cutoffEnd,
+        isProjection: true,
+      } as TrackerData);
+    }
+
+    return result;
+  }, [fullProcessedData, cutoffEnd, status, showInstantProjection, showDayProjection]);
+}
+
+/** 自定义 Y 轴刻度生成器，使用“友好刻度”算法自动计算更易读的刻度间距。 */
+export function generateYTicks(data: TrackerData[]): { ticks: number[] | undefined; domain: [number | string, number | string] } {
+  if (data.length === 0) return { ticks: undefined, domain: [0, "dataMax"] };
+
+  const minEp = 0;
+  let maxEp = minEp;
+  for (const d of data) {
+    if (d.ep !== undefined && Number.isFinite(d.ep) && d.ep > maxEp) maxEp = d.ep;
+    if (d.instantEp !== undefined && d.instantEp > maxEp) maxEp = d.instantEp;
+    if (d.dayEp !== undefined && d.dayEp > maxEp) maxEp = d.dayEp;
+    if (d.bestdoriPredictionEp !== undefined && d.bestdoriPredictionEp > maxEp) maxEp = d.bestdoriPredictionEp;
+    for (const point of Object.values(d.comparisonPoints ?? {})) {
+      if (point.ep > maxEp) maxEp = point.ep;
+    }
+  }
+
+  const range = Math.max(maxEp - minEp, 100);
+  // 分母为 6，确保除底座 0 位外刻度总数不超过约 10 个
+  const roughStep = range / 6;
+
+  const magnitude = Math.pow(10, Math.floor(Math.log10(roughStep)));
+  const normalizedStep = roughStep / magnitude;
+
+  let stepMultiplier;
+  if (normalizedStep <= 1.5) stepMultiplier = 1;
+  else if (normalizedStep <= 3) stepMultiplier = 2;
+  else if (normalizedStep <= 7) stepMultiplier = 5;
+  else stepMultiplier = 10;
+
+  const selectedStep = stepMultiplier * magnitude;
+  const ticks: number[] = [minEp];
+
+  let currentTick = Math.floor(minEp / selectedStep) * selectedStep + selectedStep;
+  while (currentTick <= maxEp + selectedStep) {
+    ticks.push(currentTick);
+    currentTick += selectedStep;
+  }
+
+  return { ticks, domain: [ticks[0], ticks[ticks.length - 1]] };
+}
+
+/**
+ * 在已处理数据中查找距目标时间最近的得分值（容差内）。
+ * 用于活动结束后查询"结束分数"和"最终分数"。
+ */
+export function getScoreAtTime(
+  data: TrackerData[],
+  targetTime: number,
+  toleranceMs = 5 * 60 * 1000,
+): number | null {
+  let best = null;
+  let minDiff = Infinity;
+  for (const pt of data) {
+    const diff = Math.abs(pt.time - targetTime);
+    if (diff < minDiff && diff <= toleranceMs) {
+      minDiff = diff;
+      best = pt.ep;
+    }
+  }
+  return best;
+}
+
+export function getFinalScore(data: TrackerData[]): number | null {
+  for (let index = data.length - 1; index >= 0; index -= 1) {
+    if (data[index].isFinal) {
+      return data[index].ep;
+    }
+  }
+  return null;
+}

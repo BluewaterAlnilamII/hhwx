@@ -5,7 +5,7 @@ import test from "node:test";
 import {
   addBandoriCnSchedules,
   parseBandoriEventSummaries,
-} from "../src/lib/bandori-events.ts";
+} from "../src/lib/bandori/events/summary.ts";
 
 function eventRecord(overrides = {}) {
   return {

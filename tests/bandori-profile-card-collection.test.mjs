@@ -3,13 +3,13 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 import { encodeBestdoriProfile } from "../src/lib/bestdori-profile-codec.ts";
-import { areGameProfileCardsEqual } from "../src/lib/bandori-game-profile-card.ts";
+import { areGameProfileCardsEqual } from "../src/lib/bandori/cards/game-profile-card.ts";
 import { BANDORI_CHARACTER_GROUPS } from "../src/lib/bandori-character-groups.ts";
 import {
   buildDefaultBandoriProfileCardFilter,
   filterAndSortBandoriProfileCardEntries,
   summarizeGameProfileCardChanges,
-} from "../src/lib/bandori-profile-card-collection.ts";
+} from "../src/lib/bandori/cards/profile-card-collection.ts";
 import {
   buildBandoriCardFilterOptions,
   buildBandoriCardSortValues,
@@ -17,7 +17,7 @@ import {
   isBandoriCardAttribute,
   normalizeBandoriCardReleaseSortTimestamp,
   reconcileBandoriCardFilterSelection,
-} from "../src/lib/bandori-card-filter.ts";
+} from "../src/lib/bandori/cards/filter.ts";
 import {
   getGameProfileCards,
   replaceGameProfileCards,
@@ -25,7 +25,7 @@ import {
 import {
   patchUserGameProfileCards,
   UserGameProfileCardsPatchError,
-} from "../src/lib/user-game-profile-cards-client.ts";
+} from "../src/lib/bandori/cards/profile-cards-client.ts";
 import {
   reduceGameProfileCardDraft,
 } from "../src/app/[locale]/bandori/game-profiles/[profileId]/cards/useGameProfileCardDraft.ts";
@@ -415,16 +415,16 @@ test("profile cards and team builder use one shared collection implementation", 
     readSource("src/components/AppChrome.tsx"),
     readSource("src/app/[locale]/bandori/teambuilder/CardPreferencesPanel.tsx"),
     readSource("src/components/bandori/card-picker/BandoriCardPicker.tsx"),
-    readSource("src/components/bandori/BandoriCardPickerDialog.tsx"),
+    readSource("src/components/bandori/card-picker/BandoriCardPickerDialog.tsx"),
     readSource("src/components/bandori/card-picker/BandoriCardThumbnailTile.tsx"),
     readSource("src/components/bandori/BandoriCardTile.tsx"),
     readSource("src/hooks/useBandoriCardHoverTooltip.ts"),
     readSource("src/components/bandori/BandoriCardHoverTooltip.tsx"),
     readSource("src/components/bandori/BandoriCardThumbnail.tsx"),
     readSource("src/components/bandori/BandoriCardFilterControls.tsx"),
-    readSource("src/lib/bandori-card-filter.ts"),
+    readSource("src/lib/bandori/cards/filter.ts"),
     readSource("src/hooks/useBandoriProfileCardFilter.ts"),
-    readSource("src/lib/bandori-profile-card-collection.ts"),
+    readSource("src/lib/bandori/cards/profile-card-collection.ts"),
     readSource("src/components/bandori/GameProfileCardEditorDialog.tsx"),
     readSource("src/app/[locale]/bandori/teambuilder/TemporaryCardEditorDialog.tsx"),
     readSource("src/lib/user-game-profiles-server.ts"),
@@ -519,7 +519,7 @@ test("profile cards and team builder use one shared collection implementation", 
   assert.doesNotMatch(page, /\/api\/bandori\/characters|buildPayloadWithCards|JSON\.stringify\(draftCards/u);
   assert.doesNotMatch(page, /bandori\/teambuilder/u);
   for (const masterHook of [characterHook, skillHook]) {
-    assert.match(masterHook, /@\/lib\/bandori-card-master/u);
+    assert.match(masterHook, /@\/lib\/bandori\/cards\/master/u);
     assert.doesNotMatch(masterHook, /@\/components\//u);
   }
   for (const source of [page, filterControls, filterState, collection, enMessages, zhMessages]) {

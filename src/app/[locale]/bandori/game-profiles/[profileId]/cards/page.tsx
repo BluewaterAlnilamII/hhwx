@@ -18,7 +18,7 @@ import AccountShell, {
 } from "@/app/[locale]/account/AccountShell";
 import { getAccessToken, useLocalizedAccountProfile } from "@/app/[locale]/account/useAccountProfile";
 import BandoriCardFilterControls from "@/components/bandori/BandoriCardFilterControls";
-import { type BandoriCardPickerDialogProps } from "@/components/bandori/BandoriCardPickerDialog";
+import { type BandoriCardPickerDialogProps } from "@/components/bandori/card-picker/BandoriCardPickerDialog";
 import BandoriCardTile from "@/components/bandori/BandoriCardTile";
 import { type GameProfileCardEditorDialogProps } from "@/components/bandori/GameProfileCardEditorDialog";
 import VirtualizedBandoriCardGrid from "@/components/bandori/VirtualizedBandoriCardGrid";
@@ -32,14 +32,14 @@ import { useRouter } from "@/i18n/navigation";
 import { type AppLocale } from "@/i18n/routing";
 import { getApiErrorMessage, parseApiSuccessData } from "@/lib/api-contracts";
 import { buildBandoriCharacterBonuses, toBandoriCharacterBonusMap } from "@/lib/bandori-character-bonuses";
-import { buildBandoriCardSortValues } from "@/lib/bandori-card-filter";
-import { materializeBandoriCardsMasterForServer } from "@/lib/bandori-cards-api-client";
-import { createDefaultOwnedGameProfileCard } from "@/lib/bandori-game-profile-card";
-import { type BandoriCharacterMaster, type BandoriSkillMaster } from "@/lib/bandori-card-master";
-import { type GameProfileCardMetadata } from "@/lib/bandori-game-profile-card";
+import { buildBandoriCardSortValues } from "@/lib/bandori/cards/filter";
+import { materializeBandoriCardsMasterForServer } from "@/lib/bandori/cards/api-client";
+import { createDefaultOwnedGameProfileCard } from "@/lib/bandori/cards/game-profile-card";
+import { type BandoriCharacterMaster, type BandoriSkillMaster } from "@/lib/bandori/cards/master";
+import { type GameProfileCardMetadata } from "@/lib/bandori/cards/game-profile-card";
 import {
   buildBandoriProfileCardEntry,
-} from "@/lib/bandori-profile-card-collection";
+} from "@/lib/bandori/cards/profile-card-collection";
 import { getBandoriServerCode, normalizeBandoriServer, type BandoriServer } from "@/lib/bandori-server";
 import {
   decodeCompressedGameProfilePayload,
@@ -54,7 +54,7 @@ import {
 import {
   patchUserGameProfileCards,
   UserGameProfileCardsPatchError,
-} from "@/lib/user-game-profile-cards-client";
+} from "@/lib/bandori/cards/profile-cards-client";
 import {
   isLocalGameProfileId,
   LocalGameProfileNotFoundError,
@@ -117,7 +117,7 @@ function CardPickerLoading() {
 }
 
 const DynamicBandoriCardPickerDialog = dynamic<BandoriCardPickerDialogProps>(
-  () => import("@/components/bandori/BandoriCardPickerDialog"),
+  () => import("@/components/bandori/card-picker/BandoriCardPickerDialog"),
   { ssr: false, loading: CardPickerLoading },
 );
 

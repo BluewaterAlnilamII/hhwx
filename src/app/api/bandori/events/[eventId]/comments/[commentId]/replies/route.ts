@@ -1,21 +1,18 @@
 import { ApiRouteError } from "@/lib/api-contracts";
 import { jsonRouteError, jsonSuccess } from "@/lib/api-response";
 import { requireAuthenticatedUser } from "@/lib/auth-server";
-import { COMMENT_TARGET_BANDORI_EVENT, listThreadReplies } from "@/lib/comments";
-import { buildBandoriEventCommentTargetId, parseBandoriEventCommentServer } from "@/lib/bandori-comment-target";
+import { parseCommentId } from "@/lib/comments/comment-contract";
+import { listThreadReplies } from "@/lib/comments/comments-server";
+import {
+  COMMENT_TARGET_BANDORI_EVENT,
+  buildBandoriEventCommentTargetId,
+  parseBandoriEventCommentEventId,
+  parseBandoriEventCommentServer,
+} from "@/lib/bandori/events/comment-target";
 
 type RouteContext = {
   params: Promise<{ eventId: string; commentId: string }>;
 };
-
-function parseEventId(rawEventId: string): string {
-  const eventId = Number.parseInt(rawEventId, 10);
-  if (!Number.isInteger(eventId) || eventId <= 0) {
-    throw new ApiRouteError(400, "INVALID_EVENT_ID", "活动 ID 无效");
-  }
-
-  return String(eventId);
-}
 
 async function readViewerUserId(request: Request): Promise<string | null> {
   if (!request.headers.get("authorization")) {
@@ -31,8 +28,9 @@ async function readViewerUserId(request: Request): Promise<string | null> {
 
 export async function GET(request: Request, context: RouteContext) {
   try {
-    const { eventId: rawEventId, commentId } = await context.params;
-    const eventId = parseEventId(rawEventId);
+    const { eventId: rawEventId, commentId: rawCommentId } = await context.params;
+    const eventId = parseBandoriEventCommentEventId(rawEventId);
+    const commentId = parseCommentId(rawCommentId);
     const server = parseBandoriEventCommentServer(new URL(request.url));
     if (server === null) throw new ApiRouteError(400, "INVALID_SERVER", "服务器参数无效");
     const url = new URL(request.url);

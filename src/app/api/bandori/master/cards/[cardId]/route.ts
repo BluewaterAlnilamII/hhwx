@@ -7,8 +7,8 @@ import { jsonError, jsonRouteError, jsonSuccess } from "@/lib/api-response";
 import {
   readBandoriCardApiDetail,
   readBandoriCardApiDetailForServer,
-} from "@/lib/bandori-cards-api-server";
-import { parseBandoriCardServerQuery } from "@/lib/bandori-card-server-extensions";
+} from "@/lib/bandori/cards/api-server";
+import { parseBandoriCardServerQuery } from "@/lib/bandori/cards/api-query";
 import {
   BANDORI_MASTER_ID_PATTERN,
   rejectUnsupportedBandoriMasterQuery,

@@ -35,15 +35,15 @@ const eventPayload = {
 };
 
 const trackerDataHookSource = readFileSync(
-  new URL("../src/app/[locale]/bandori/events/useTrackerData.ts", import.meta.url),
+  new URL("../src/app/[locale]/bandori/events/_tracker/useTrackerData.ts", import.meta.url),
   "utf8",
 );
 const comparisonDataHookSource = readFileSync(
-  new URL("../src/app/[locale]/bandori/events/useComparisonTrackerData.ts", import.meta.url),
+  new URL("../src/app/[locale]/bandori/events/_tracker/useComparisonTrackerData.ts", import.meta.url),
   "utf8",
 );
 const trackerLiveHookSource = readFileSync(
-  new URL("../src/app/[locale]/bandori/events/useBandoriTrackerLive.ts", import.meta.url),
+  new URL("../src/app/[locale]/bandori/events/_tracker/useBandoriTrackerLive.ts", import.meta.url),
   "utf8",
 );
 

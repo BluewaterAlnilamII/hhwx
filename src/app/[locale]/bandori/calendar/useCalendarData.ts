@@ -17,11 +17,11 @@ import {
   getCalendarEventColors,
 } from "@/lib/calendar-character-service";
 import { USER_ROLES_TABLE } from "@/lib/supabase-table-names";
-import type { BandoriEventSummary } from "@/lib/bandori-events";
+import type { BandoriEventSummary } from "@/lib/bandori/events/summary";
 
 export { BAND_COLORS } from "@/lib/calendar-character-service";
 
-export type { BandoriEventSummary } from "@/lib/bandori-events";
+export type { BandoriEventSummary } from "@/lib/bandori/events/summary";
 
 export interface BandoriScheduleSupplement {
   eventId: number;
