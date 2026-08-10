@@ -53,7 +53,7 @@ export async function GET(
 
   try {
     const response = await fetch(buildBestdoriAssetOriginUrl(region, assetPath), {
-      headers: { "User-Agent": "hhwx-tracker/1.0" },
+      headers: { "User-Agent": "hhwx/1.0" },
       next: { revalidate: BESTDORI_ASSET_PROXY_REVALIDATE_SECONDS },
     });
 

@@ -3,7 +3,7 @@
 -- Do not treat edits here as migrations or as an independent schema authority.
 
 -- Snapshot of tracker_ranking_type and public.bandori_tracker_data.
--- hhwx-tracker writes this data, but hhwx owns the database structure.
+-- hhwx-bandori-backend writes this data, but hhwx owns the database structure.
 
 DO $$
 BEGIN

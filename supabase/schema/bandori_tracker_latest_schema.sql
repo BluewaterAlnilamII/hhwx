@@ -3,7 +3,7 @@
 -- Do not treat edits here as migrations or as an independent schema authority.
 
 -- Snapshot of the authenticated cutoff latest structure.
--- hhwx-tracker publishes snapshots through the service role. Browser clients
+-- hhwx-bandori-backend publishes snapshots through the service role. Browser clients
 -- can only read snapshots and receive matching private Broadcast topics.
 
 CREATE TABLE IF NOT EXISTS public.bandori_tracker_latest (
