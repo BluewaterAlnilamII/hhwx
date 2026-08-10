@@ -77,11 +77,11 @@ hhwx/
 
 - `auth-*.ts`, `supabase-*.ts`, `turnstile-server.ts`, and `turnstile-public.ts`: authentication, security verification, and server/public wrappers.
 - Remaining root-level `bandori-*.ts` and `calendar-*.ts`: shared cross-domain infrastructure and compatibility entry points that do not belong to one feature folder.
-- `bandori/cards/`: Card catalogs, regional materialization, API contracts/services, release/training rules, layouts, and profile-card helpers.
+- `bandori/cards/`: Card catalogs, regional materialization, API contracts/services, release/training rules, generated Card metadata, layouts, and profile-card helpers.
 - `bandori/events/`: event catalogs, API contracts/services, route/region/status helpers, banner proxy logic, and event-specific comment target validation.
-- `bandori/data/`: generated and reference data shared across Bandori domains.
+- `bandori/event-tracker/`: Event Tracker cutoff, TOP10, live-series, projection, history, and prediction contracts/services shared by event, song, and monthly tracker modes.
 - `bandori/team-builder/`: team-search implementation. `core/` contains shared calculation primitives, `single/` contains single-song exact search orchestration, and `medley/` contains medley exact/bounded search orchestration behind the public compatibility facades.
-- `comments/`: target-agnostic comment contracts, content parsing, and privileged comment persistence service. Each target type keeps its existence and visibility validation in its own domain.
+- `comments/`: target-agnostic comment contracts, emoji/stamp catalogs, content parsing, and privileged comment persistence service. Each target type keeps its existence and visibility validation in its own domain.
 - `api-*.ts`: API response conventions and cache policies.
 - `bestdori-profile-codec.ts` and `user-game-*-server.ts`: game profile compatibility, sync, and server-side persistence logic.
 - `characters.ts`, `othello.ts`, and `ai/`: home-page Othello and character logic.

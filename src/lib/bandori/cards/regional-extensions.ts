@@ -1,7 +1,6 @@
 import {
   BANDORI_SERVER_COUNT,
   getBandoriRegionalDisplayOrder,
-  getBandoriServerCode,
   normalizeBandoriServer,
   type BandoriServer,
 } from "@/lib/bandori-server";
@@ -15,7 +14,6 @@ import {
 
 export const BANDORI_CARD_SERVER_COUNT = BANDORI_SERVER_COUNT;
 export type BandoriCardServer = BandoriServer;
-export type BandoriCardServerIndex = BandoriServer;
 
 export type BandoriCardServerExtension = Record<string, unknown>;
 export type BandoriCardServerExtensions = [
@@ -132,14 +130,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 export function normalizeBandoriCardServer(value: unknown): BandoriCardServer | null {
   return normalizeBandoriServer(value);
-}
-
-export function getBandoriCardServerIndex(server: BandoriCardServer): BandoriCardServerIndex {
-  return server;
-}
-
-export function getBandoriCardServerName(server: BandoriCardServer): string {
-  return getBandoriServerCode(server);
 }
 
 export function isKnownBandoriCardEntityCollision(cardId: string | number): boolean {
@@ -535,60 +525,4 @@ export function materializeBandoriCardMapForServerWithRegionalFallback<T extends
     materialized[cardId] = resolvedCard as T;
   }
   return materialized;
-}
-
-export type BandoriCardCatalogEntry<T extends object> = {
-  cardId: number;
-  cardRef: string;
-  server: BandoriCardServer | null;
-  card: T;
-};
-
-export function expandBandoriCardCatalog<T extends object>(
-  cards: Record<string, T | null | undefined>,
-): BandoriCardCatalogEntry<T>[] {
-  const entries: BandoriCardCatalogEntry<T>[] = [];
-  const sortedCards = Object.entries(cards).sort(([left], [right]) => Number(left) - Number(right));
-
-  for (const [rawCardId, card] of sortedCards) {
-    if (!card) {
-      continue;
-    }
-    const cardId = Number(rawCardId);
-    if (!Number.isSafeInteger(cardId) || cardId < 1 || String(cardId) !== rawCardId) {
-      throw new Error(`Bandori card catalog contains an invalid card ID: ${rawCardId}`);
-    }
-    if (!isKnownBandoriCardEntityCollision(rawCardId)) {
-      entries.push({
-        cardId,
-        cardRef: rawCardId,
-        server: null,
-        card,
-      });
-      continue;
-    }
-
-    validateBandoriCardServerExtensions(
-      card as T & Record<string, unknown>,
-      `Bandori card catalog record ${rawCardId}`,
-      { dataset: "cards", recordId: rawCardId },
-    );
-    for (const server of [1, 3] as const) {
-      const serverCard = materializeBandoriCardForServer(card, server);
-      if (!serverCard) {
-        throw new Error(
-          `Bandori card catalog collision is missing server `
-          + `${getBandoriServerCode(server)}: ${rawCardId}`,
-        );
-      }
-      entries.push({
-        cardId,
-        cardRef: `${server}:${rawCardId}`,
-        server,
-        card: serverCard,
-      });
-    }
-  }
-
-  return entries;
 }

@@ -4,7 +4,6 @@ import {
   type BandoriSkillMaster,
 } from "@/lib/bandori/cards/master";
 import {
-  expandBandoriCardCatalog,
   materializeBandoriCardForServer,
   type BandoriCardServer,
 } from "@/lib/bandori/cards/regional-extensions";
@@ -18,6 +17,7 @@ import {
   type BandoriCardPickerSortBy,
 } from "@/lib/bandori/cards/filter";
 import {
+  expandBandoriCardCatalog,
   listBandoriCardCatalogAvailableServers,
   normalizeBandoriCardCatalogBase,
   parsePositiveBandoriCardCatalogInteger,

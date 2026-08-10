@@ -4,7 +4,7 @@ import {
   createBandoriSnapshotVerifiedGzipJsonCache,
 } from "@/lib/bandori-snapshot-api-server";
 import type { BandoriServerCode } from "@/lib/bandori-server";
-import type { BandoriTopDataPayload } from "@/lib/bandori-topdata-contract";
+import type { BandoriTopDataPayload } from "@/lib/bandori/event-tracker/topdata-contract";
 import {
   BANDORI_TOPDATA_MAX_COMPRESSED_BYTES,
   BANDORI_TOPDATA_MAX_DECOMPRESSED_BYTES,
@@ -13,7 +13,7 @@ import {
   parseBandoriTopDataManifest,
   validateBandoriTopDataPack,
   type BandoriTopDataPackDescriptor,
-} from "@/lib/bandori-topdata-history-contract";
+} from "@/lib/bandori/event-tracker/topdata-history-contract";
 
 const MANIFEST_TTL_MS = 60_000;
 const READ_BUDGET_MS = 3_000;

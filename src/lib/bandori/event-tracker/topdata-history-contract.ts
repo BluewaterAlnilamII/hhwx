@@ -6,7 +6,7 @@ import {
   parseBandoriTopDataPayload,
   requireBandoriTopDataSafeInteger,
   type BandoriTopDataPayload,
-} from "@/lib/bandori-topdata-contract";
+} from "@/lib/bandori/event-tracker/topdata-contract";
 import { getBandoriServerFromCode, type BandoriServerCode } from "@/lib/bandori-server";
 
 export const BANDORI_TOPDATA_HISTORY_PREFIX = "bandori/trackerdata/topdata";

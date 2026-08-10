@@ -4,8 +4,8 @@ import test from "node:test";
 import {
   BANDORI_TOP10_LINE_COLORS,
   buildBandoriTop10View,
-} from "../src/lib/bandori-top10-view.ts";
-import { BANDORI_TOPDATA_MAX_SAMPLE_SIZE } from "../src/lib/bandori-topdata-contract.ts";
+} from "../src/lib/bandori/event-tracker/top10-view.ts";
+import { BANDORI_TOPDATA_MAX_SAMPLE_SIZE } from "../src/lib/bandori/event-tracker/topdata-contract.ts";
 
 test("TOP10 line colors cover the complete contract sample size", () => {
   assert.equal(BANDORI_TOP10_LINE_COLORS.length, BANDORI_TOPDATA_MAX_SAMPLE_SIZE);

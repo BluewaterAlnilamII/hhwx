@@ -6,7 +6,7 @@ import {
   COMMENT_STAMP_REGIONS,
   type CommentStamp,
   type CommentStampRegion,
-} from "@/lib/comment-stamps";
+} from "@/lib/comments/stamps";
 import { MAX_COMMENT_LENGTH } from "@/lib/comments/comment-contract";
 
 export type CommentStampLookup = ReadonlyMap<string, CommentStamp>;

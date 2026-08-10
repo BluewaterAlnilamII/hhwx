@@ -65,10 +65,10 @@ test("page and player artwork use durable CDN source URLs without a Blob cache",
 });
 
 test("music and one-shot sound effects use compatible browser audio sessions", async () => {
-  const [host, soundEffectAudio, stampAudio, cardDetail] = await Promise.all([
+  const [host, soundEffectAudio, stampView, cardDetail] = await Promise.all([
     readFile(new URL("src/components/music-player/MusicPlayerHost.tsx", ROOT_URL), "utf8"),
     readFile(new URL("src/lib/sound-effect-audio.ts", ROOT_URL), "utf8"),
-    readFile(new URL("src/lib/comment-stamp-audio.ts", ROOT_URL), "utf8"),
+    readFile(new URL("src/components/bandori/BandoriStampView.tsx", ROOT_URL), "utf8"),
     readFile(new URL("src/app/[locale]/bandori/cards/[cardId]/CardDetailPageClient.tsx", ROOT_URL), "utf8"),
   ]);
 
@@ -84,7 +84,7 @@ test("music and one-shot sound effects use compatible browser audio sessions", a
   const stopActiveSoundIndex = soundEffectAudio.indexOf("stopActiveSoundEffect();");
   const startSoundIndex = soundEffectAudio.indexOf("source.start(0)");
   assert.ok(stopActiveSoundIndex >= 0 && stopActiveSoundIndex < startSoundIndex);
-  assert.match(stampAudio, /playSoundEffect/u);
+  assert.match(stampView, /playSoundEffect\(stamp\.voiceUrl\)/u);
   assert.match(cardDetail, /playSoundEffect\(src\)/u);
   assert.doesNotMatch(cardDetail, /<audio/u);
   assert.doesNotMatch(cardDetail, /aria-pressed|pauseVoice/u);

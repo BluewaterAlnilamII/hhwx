@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useState, useCallback, useMemo } from "react";
 import { useTranslations } from "next-intl";
@@ -23,18 +23,18 @@ import type { BandoriEventSummary } from "@/lib/bandori/events/summary";
 import {
   type BandoriTrackerLiveSnapshot,
   type BandoriTrackerLiveTarget,
-} from "@/lib/bandori-tracker-live-contract";
+} from "@/lib/bandori/event-tracker/live-contract";
 import {
   appendBandoriTrackerLivePoint,
   buildBandoriTrackerLiveSeriesUpdates,
-} from "@/lib/bandori-tracker-live-series";
+} from "@/lib/bandori/event-tracker/live-series";
 import type { TrackerData, TrackerResult, TrackerSongGroup, EventMetadata, MinimalEvent, TrackingMode } from "./types";
 import {
   mergeTrackerCutoffs,
   mergeTrackerSongGroups,
   resolveSelectedSongId,
   selectSongCutoffs,
-} from "@/lib/bandori-tracker-song-series";
+} from "@/lib/bandori/event-tracker/song-series";
 import { getMonthlyRankingWindow } from "./useChartData";
 import { useBandoriTrackerLiveListener } from "./useBandoriTrackerLive";
 import { useBoundaryClock } from "./useBoundaryClock";

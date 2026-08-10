@@ -1,7 +1,7 @@
 import type { AccountAvatarCardTrainType } from "@/lib/account-avatar-defaults";
 import { ApiRouteError } from "@/lib/api-contracts";
 import type { BandoriServer } from "@/lib/bandori-server";
-import { COMMENT_EMOJI_NAME_SET } from "@/lib/comment-emojis";
+import { COMMENT_EMOJI_NAME_SET } from "@/lib/comments/emoji";
 
 export const COMMENT_PAGE_SIZE = 10;
 export const COMMENT_PREVIEW_REPLY_LIMIT = 3;

@@ -14,7 +14,7 @@ import {
   isSongRankingDisabledEventType,
   resolveMainTrackerTier,
 } from "../src/app/[locale]/bandori/events/_tracker/tracker-model.ts";
-import { isSupportedTrackerTier } from "../src/lib/bandori-tracker-tiers.ts";
+import { isSupportedTrackerTier } from "../src/lib/bandori/event-tracker/tiers.ts";
 
 const trackerPageSource = readFileSync(
   new URL("../src/app/[locale]/bandori/events/EventTrackerPage.tsx", import.meta.url),

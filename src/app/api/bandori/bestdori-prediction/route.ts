@@ -1,4 +1,4 @@
-import { handleBestdoriPredictionRequest } from "@/lib/bestdori-prediction";
+import { handleBestdoriPredictionRequest } from "@/lib/bandori/event-tracker/bestdori-prediction-server";
 
 export const dynamic = "force-dynamic";
 

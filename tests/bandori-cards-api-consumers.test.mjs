@@ -2,24 +2,22 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 import {
-  bandoriCardCatalogTransforms,
   buildBandoriCardCatalog,
   filterBandoriCardCatalog,
 } from "../src/lib/bandori/cards/picker-catalog.ts";
+import { expandBandoriCardCatalog } from "../src/lib/bandori/cards/catalog.ts";
 import {
   normalizeAccountAvatarCardServer,
   resolveStoredAccountAvatarCardIdentity,
 } from "../src/lib/account-avatar-card.ts";
 import { pickGameProfileCardName } from "../src/lib/bandori/cards/game-profile-card.ts";
+import { bandoriMasterTransforms } from "../src/lib/bandori/cards/master.ts";
 import { parseBandoriCardServerQuery } from "../src/lib/bandori/cards/api-query.ts";
 import {
   normalizeBandoriSkillLabel,
   resolveBandoriSkillLabel,
 } from "../src/lib/bandori-skill-label.ts";
 import {
-  expandBandoriCardCatalog,
-  getBandoriCardServerIndex,
-  getBandoriCardServerName,
   isKnownBandoriCardEntityCollision,
   materializeBandoriCardForServer,
   materializeBandoriCardMapForServerWithJpFallback,
@@ -41,7 +39,7 @@ import {
 
 const readSource = (path) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
 
-test("card picker consumes cards directly from the API data envelope", () => {
+test("Cards Master transform consumes cards directly from the API data envelope", () => {
   const card = {
     characterId: 1,
     rarity: 5,
@@ -49,18 +47,18 @@ test("card picker consumes cards directly from the API data envelope", () => {
   };
 
   assert.deepEqual(
-    bandoriCardCatalogTransforms.cards({ success: true, data: { "10048": card } }),
+    bandoriMasterTransforms.cards({ success: true, data: { "10048": card } }),
     { "10048": card },
   );
   assert.throws(
-    () => bandoriCardCatalogTransforms.cards({
+    () => bandoriMasterTransforms.cards({
       success: true,
       data: { payload: { "10048": card } },
     }),
     /invalid card record: payload/u,
   );
   assert.throws(
-    () => bandoriCardCatalogTransforms.cards({ success: false }),
+    () => bandoriMasterTransforms.cards({ success: false }),
     /invalid dataset/u,
   );
 });
@@ -682,8 +680,6 @@ test("registered same-ID collisions keep numeric card IDs and expand to server-s
   assert.equal(normalizeBandoriCardServer("03"), null);
   assert.equal(normalizeBandoriCardServer("cn"), null);
   assert.equal(normalizeBandoriCardServer("kr"), null);
-  assert.equal(getBandoriCardServerIndex(2), 2);
-  assert.equal(getBandoriCardServerName(3), "cn");
   assert.deepEqual(
     parseBandoriCardServerQuery(new Request("https://example.test/api/cards?server=3")),
     { status: "valid", server: 3 },

@@ -9,7 +9,7 @@ import { useTranslations } from "next-intl";
 
 import type { BandoriEventStatus } from "@/lib/bandori/events/status";
 import type { BandoriServer } from "@/lib/bandori-server";
-import { buildBandoriTop10View } from "@/lib/bandori-top10-view";
+import { buildBandoriTop10View } from "@/lib/bandori/event-tracker/top10-view";
 import {
   TrackerChartPanel,
   type TrackerChartLineSeries,

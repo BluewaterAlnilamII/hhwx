@@ -7,7 +7,7 @@ import type { BandoriServer } from "@/lib/bandori-server";
 import {
   parseBandoriTopDataPayload,
   type BandoriTopDataPayload,
-} from "@/lib/bandori-topdata-contract";
+} from "@/lib/bandori/event-tracker/topdata-contract";
 import {
   BANDORI_TRACKER_TOPDATA_LIVE_EVENT,
   buildBandoriTrackerTopDataLiveTopic,
@@ -15,8 +15,8 @@ import {
   mergeBandoriTrackerTopDataLiveSnapshots,
   parseBandoriTrackerTopDataLiveSnapshot,
   type BandoriTrackerTopDataLiveSnapshot,
-} from "@/lib/bandori-tracker-topdata-live-contract";
-import type { BandoriTrackerLiveSubscription } from "@/lib/bandori-tracker-live-connection";
+} from "@/lib/bandori/event-tracker/topdata-live-contract";
+import type { BandoriTrackerLiveSubscription } from "@/lib/bandori/event-tracker/live-connection";
 import { BANDORI_TRACKER_TOPDATA_LATEST_TABLE } from "@/lib/supabase-table-names";
 import { supabase } from "@/lib/supabase";
 import { useBandoriTrackerLiveSubscriptionSnapshot } from "./useBandoriTrackerLive";

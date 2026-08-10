@@ -7,17 +7,17 @@ import {
   buildBandoriTrackerLiveTopic,
   mergeBandoriTrackerLiveSnapshots,
   parseBandoriTrackerLiveSnapshot,
-} from "../src/lib/bandori-tracker-live-contract.ts";
+} from "../src/lib/bandori/event-tracker/live-contract.ts";
 import {
   authorizeBandoriTrackerRealtimeConnection,
   subscribeBandoriTrackerLive,
-} from "../src/lib/bandori-tracker-live-connection.ts";
+} from "../src/lib/bandori/event-tracker/live-connection.ts";
 import {
   appendBandoriTrackerLivePoint,
   buildBandoriTrackerLiveSeriesUpdates,
-} from "../src/lib/bandori-tracker-live-series.ts";
+} from "../src/lib/bandori/event-tracker/live-series.ts";
 import { selectCachedFetchData } from "../src/hooks/useCachedFetch.ts";
-import { formatBandoriTrackerUpdateAge } from "../src/lib/bandori-tracker-time.ts";
+import { formatBandoriTrackerUpdateAge } from "../src/lib/bandori/event-tracker/time.ts";
 
 const eventPayload = {
   schemaVersion: 1,

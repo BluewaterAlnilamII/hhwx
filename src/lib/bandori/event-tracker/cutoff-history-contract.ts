@@ -1,4 +1,4 @@
-import { bandoriMonthlyRankingIdToPeriod } from "@/lib/bandori-monthly-ranking-calendar";
+import { bandoriMonthlyRankingIdToPeriod } from "@/lib/bandori/event-tracker/monthly-ranking-calendar";
 import type { BandoriServerCode } from "@/lib/bandori-server";
 
 export const BANDORI_CUTOFF_HISTORY_PREFIX = "bandori/trackerdata";

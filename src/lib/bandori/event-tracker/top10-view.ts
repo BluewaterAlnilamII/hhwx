@@ -1,7 +1,7 @@
 import {
   groupBandoriTopDataSamples,
   type BandoriTopDataPayload,
-} from "@/lib/bandori-topdata-contract";
+} from "@/lib/bandori/event-tracker/topdata-contract";
 
 export const BANDORI_TOP10_LINE_COLORS = [
   "#2563eb",

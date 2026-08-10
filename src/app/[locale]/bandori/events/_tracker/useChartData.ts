@@ -5,14 +5,14 @@ import {
   getBandoriEventStatusAt,
   type BandoriEventStatus,
 } from "@/lib/bandori/events/status";
-import { calculateBandoriTrackerSpeeds } from "@/lib/bandori-tracker-projection";
+import { calculateBandoriTrackerSpeeds } from "@/lib/bandori/event-tracker/projection";
 import {
   BANDORI_MONTHLY_RANKING_EPOCHS,
   bandoriMonthlyRankingPeriodToId,
   getBandoriMonthlyRankingMidnights,
   getBandoriMonthlyRankingWindow,
   getCurrentBandoriMonthlyRankingWindow,
-} from "@/lib/bandori-monthly-ranking-calendar";
+} from "@/lib/bandori/event-tracker/monthly-ranking-calendar";
 import {
   getBandoriServerCode,
   getBandoriServerTimeZone,

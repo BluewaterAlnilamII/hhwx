@@ -5,7 +5,7 @@ import {
   mergeTrackerSongGroups,
   resolveSelectedSongId,
   selectSongCutoffs,
-} from "../src/lib/bandori-tracker-song-series.ts";
+} from "../src/lib/bandori/event-tracker/song-series.ts";
 
 function eventMeta(eventType, musicIds) {
   return {

@@ -174,7 +174,7 @@ function eventBonus(record: BandoriMasterEventRecord): BandoriEventBonus | null 
   };
 }
 
-export function parseBandoriMasterEventMap(raw: unknown): BandoriMasterEventMap {
+function parseBandoriMasterEventMap(raw: unknown): BandoriMasterEventMap {
   const payload = parseApiSuccessData<unknown>(raw);
   if (!isRecord(payload)) {
     throw new Error("Bandori master events response is invalid");
@@ -251,7 +251,7 @@ export function toBandoriEventSummary(
   };
 }
 
-export function toBandoriEventSummaries(events: BandoriMasterEventMap): BandoriEventSummary[] {
+function toBandoriEventSummaries(events: BandoriMasterEventMap): BandoriEventSummary[] {
   return Object.entries(events)
     .map(([eventId, record]) => toBandoriEventSummary(eventId, record))
     .sort((left, right) => left.eventId - right.eventId);

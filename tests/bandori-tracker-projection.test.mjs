@@ -5,7 +5,7 @@ import {
   calculateBandoriTrackerSpeeds,
   DAY_SPEED_MIN_WINDOW_MS,
   INSTANT_SPEED_MIN_WINDOW_MS,
-} from "../src/lib/bandori-tracker-projection.ts";
+} from "../src/lib/bandori/event-tracker/projection.ts";
 
 test("instant speed uses the newest point at least nine minutes forty-five seconds behind", () => {
   const points = calculateBandoriTrackerSpeeds([

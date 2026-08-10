@@ -13,8 +13,8 @@ import {
   pickBandoriRegionalText,
   type BandoriServer,
 } from "@/lib/bandori-server";
-import { remapBandoriMonthlyRankingId } from "@/lib/bandori-monthly-ranking-calendar";
-import { MONTHLY_TIERS } from "@/lib/bandori-tracker-tiers";
+import { remapBandoriMonthlyRankingId } from "@/lib/bandori/event-tracker/monthly-ranking-calendar";
+import { MONTHLY_TIERS } from "@/lib/bandori/event-tracker/tiers";
 import {
   useBandoriPreferredServer,
   useBandoriPreferencesStore,

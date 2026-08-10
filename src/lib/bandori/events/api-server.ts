@@ -87,7 +87,7 @@ function getEventApiObjectSource() {
   });
 }
 
-export async function readBandoriEventApiDataset(
+async function readBandoriEventApiDataset(
   dataset: EventApiDatasetName,
 ): Promise<BandoriEventApiRecordMap> {
   const source = getEventApiObjectSource();

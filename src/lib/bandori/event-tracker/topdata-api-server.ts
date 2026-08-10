@@ -5,18 +5,18 @@ import { getBandoriServerCode, normalizeBandoriServer } from "@/lib/bandori-serv
 import {
   BandoriTopDataHistoryReadError,
   readBandoriTopDataHistory,
-} from "@/lib/bandori-topdata-history-server";
+} from "@/lib/bandori/event-tracker/topdata-history-server";
 export {
   inspectBandoriTopDataTargetStateSizesForTests,
   resetBandoriTopDataTargetStatesForTests,
-} from "@/lib/bandori-topdata-history-server";
+} from "@/lib/bandori/event-tracker/topdata-history-server";
 import {
   BandoriScopedTopDataNotFoundError,
   BandoriScopedTopDataReadError,
   BandoriSongTopDataRequiredError,
   readBandoriMonthlyTopDataHistory,
   readBandoriSongTopDataHistory,
-} from "@/lib/bandori-topdata-scoped-history-server";
+} from "@/lib/bandori/event-tracker/topdata-scoped-history-server";
 
 const EVENT_ID_PATTERN = /^[0-9]+$/u;
 const MAX_EVENT_ID = 2_147_483_647;

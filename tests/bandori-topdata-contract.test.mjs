@@ -6,7 +6,7 @@ import {
   countBandoriTopDataSamples,
   groupBandoriTopDataSamples,
   parseBandoriTopDataPayload,
-} from "../src/lib/bandori-topdata-contract.ts";
+} from "../src/lib/bandori/event-tracker/topdata-contract.ts";
 
 function payload(count = 10, time = 1_785_501_041_920) {
   return {

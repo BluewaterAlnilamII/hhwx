@@ -1,7 +1,4 @@
-import type {
-  BandoriStampCatalogItem,
-  BandoriStampRegion,
-} from "@/lib/bandori-stamp-assets";
+import type { BandoriStampCatalogItem, BandoriStampRegion } from "@/lib/bandori-stamp-assets";
 
 export type CommentStampRegion = BandoriStampRegion;
 export type CommentStamp = BandoriStampCatalogItem;

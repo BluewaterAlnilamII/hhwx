@@ -14,7 +14,7 @@ import {
   type BandoriCutoffHistoryManifestSelection,
   type BandoriCutoffHistoryQuery,
   type ParsedBandoriCutoffHistoryPack,
-} from "@/lib/bandori-cutoff-history-contract";
+} from "@/lib/bandori/event-tracker/cutoff-history-contract";
 import {
   fetchR2Object,
   type R2ObjectResponse,

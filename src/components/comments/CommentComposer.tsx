@@ -7,7 +7,7 @@ import {
   COMMENT_STAMP_DEFAULT_REGION,
   type CommentStamp,
   type CommentStampRegion,
-} from "@/lib/comment-stamps";
+} from "@/lib/comments/stamps";
 import { MAX_COMMENT_LENGTH } from "@/lib/comments/comment-contract";
 import { cn } from "@/lib/utils";
 import {

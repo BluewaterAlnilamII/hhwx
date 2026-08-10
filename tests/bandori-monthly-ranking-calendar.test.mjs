@@ -9,7 +9,7 @@ import {
   getBandoriMonthlyRankingWindow,
   getCurrentBandoriMonthlyRankingWindow,
   remapBandoriMonthlyRankingId,
-} from "../src/lib/bandori-monthly-ranking-calendar.ts";
+} from "../src/lib/bandori/event-tracker/monthly-ranking-calendar.ts";
 
 const SERVERS = ["jp", "en", "tw", "cn"];
 

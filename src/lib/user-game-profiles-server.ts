@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { ApiRouteError } from "@/lib/api-contracts";
-import { BANDORI_CARD_EPISODE_METADATA } from "@/lib/bandori/data/card-episode-metadata";
+import { BANDORI_CARD_EPISODE_METADATA } from "@/lib/bandori/cards/card-episode-metadata";
 import {
   BESTDORI_CN_SERVER_ID,
   decodeBestdoriProfile,
