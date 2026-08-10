@@ -8,12 +8,12 @@ import {
   parseBandoriTrackerLiveSnapshot,
   type BandoriTrackerLiveSnapshot,
   type BandoriTrackerLiveTarget,
-} from "@/lib/bandori-tracker-live-contract";
+} from "@/lib/bandori/event-tracker/live-contract";
 import {
   subscribeBandoriTrackerLive,
   type BandoriTrackerLiveListener,
   type BandoriTrackerLiveSubscription,
-} from "@/lib/bandori-tracker-live-connection";
+} from "@/lib/bandori/event-tracker/live-connection";
 import { BANDORI_TRACKER_LATEST_TABLE } from "@/lib/supabase-table-names";
 import { supabase } from "@/lib/supabase";
 import { useGameStore } from "@/store/useGameStore";

@@ -2,7 +2,7 @@ import { NO_STORE_HTTP_CACHE_POLICY, withHttpCachePolicy } from "@/lib/api-cache
 import { jsonError } from "@/lib/api-response";
 import { resolveBandoriCnScheduleWindow } from "@/lib/bandori/events/region";
 import { fetchBandoriEventRecords, toBandoriEventSummary } from "@/lib/bandori/events/catalog-server";
-import { isSupportedTrackerTier } from "@/lib/bandori-tracker-tiers";
+import { isSupportedTrackerTier } from "@/lib/bandori/event-tracker/tiers";
 
 const BESTDORI_CN_SERVER = 3;
 const BESTDORI_TRACKER_DATA_URL = "https://bestdori.com/api/tracker/data";

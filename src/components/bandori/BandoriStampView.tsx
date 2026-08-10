@@ -7,7 +7,7 @@ import type {
   BandoriStampAnimationResponse,
   BandoriStampCatalogItem,
 } from "@/lib/bandori-stamp-assets";
-import { playCommentStampVoice } from "@/lib/comment-stamp-audio";
+import { playSoundEffect } from "@/lib/sound-effect-audio";
 import { cn } from "@/lib/utils";
 
 const stampAtlasImageCache = new Map<string, Promise<HTMLImageElement>>();
@@ -192,7 +192,7 @@ export default function BandoriStampView({
     <button
       type="button"
       onClick={() => {
-        void playCommentStampVoice(stamp.voiceUrl);
+        void playSoundEffect(stamp.voiceUrl);
       }}
       className={cn(
         className,

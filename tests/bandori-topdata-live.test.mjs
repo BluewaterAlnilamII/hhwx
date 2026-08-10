@@ -7,7 +7,7 @@ import {
   mergeBandoriTopDataHistoryWithLiveSnapshot,
   mergeBandoriTrackerTopDataLiveSnapshots,
   parseBandoriTrackerTopDataLiveSnapshot,
-} from "../src/lib/bandori-tracker-topdata-live-contract.ts";
+} from "../src/lib/bandori/event-tracker/topdata-live-contract.ts";
 import { BANDORI_TRACKER_TOPDATA_LATEST_TABLE } from "../src/lib/supabase-table-names.ts";
 
 function snapshot(revision, publishedAt = 1_785_501_041_920, count = 10) {

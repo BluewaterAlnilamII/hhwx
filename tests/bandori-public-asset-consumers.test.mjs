@@ -204,7 +204,7 @@ test("chart and master sources are fixed first-party R2 contracts across all fou
   const masterArtifacts = await readSource("src/lib/bandori-master-artifacts.ts");
   const publicAssetReader = await readSource("src/lib/bandori-public-asset-index-server.ts");
   const snapshotReader = await readSource("src/lib/bandori-snapshot-api-server.ts");
-  const historyReader = await readSource("src/lib/bandori-cutoff-history-server.ts");
+  const historyReader = await readSource("src/lib/bandori/event-tracker/cutoff-history-server.ts");
   const comparisonScript = await readSource("scripts/compare-bandori-tracker-history.mjs");
 
   assert.match(

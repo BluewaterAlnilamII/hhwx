@@ -14,7 +14,7 @@ import {
   COMMENT_STAMP_REGIONS,
   type CommentStamp,
   type CommentStampRegion,
-} from "@/lib/comment-stamps";
+} from "@/lib/comments/stamps";
 import { cn } from "@/lib/utils";
 import { buildStampShortcode } from "@/lib/comments/comment-content";
 

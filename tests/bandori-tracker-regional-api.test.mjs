@@ -9,8 +9,8 @@ import { gzipSync } from "node:zlib";
 import {
   bandoriCutoffHistoryMonthIdToPeriod,
   buildBandoriCutoffHistoryTargetPrefix,
-} from "../src/lib/bandori-cutoff-history-contract.ts";
-import { handleBandoriTrackerDataRequest } from "../src/lib/bandori-tracker-server.ts";
+} from "../src/lib/bandori/event-tracker/cutoff-history-contract.ts";
+import { handleBandoriTrackerDataRequest } from "../src/lib/bandori/event-tracker/api-server.ts";
 
 let storeRoot;
 

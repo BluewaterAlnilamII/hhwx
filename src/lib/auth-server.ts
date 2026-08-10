@@ -51,7 +51,7 @@ export async function requireAuthenticatedUser(request: Request): Promise<Authen
   return toAuthenticatedRequestUser(user, emailVerified);
 }
 
-export function ensureVerifiedEmail(user: AuthenticatedRequestUser): void {
+function ensureVerifiedEmail(user: AuthenticatedRequestUser): void {
   if (!user.emailVerified) {
     throw new ApiRouteError(403, "EMAIL_VERIFICATION_REQUIRED", "请先完成邮箱验证");
   }

@@ -12,8 +12,8 @@ import {
   handleBandoriTrackerTopDataRequest,
   inspectBandoriTopDataTargetStateSizesForTests,
   resetBandoriTopDataTargetStatesForTests,
-} from "../src/lib/bandori-tracker-topdata-server.ts";
-import { countBandoriTopDataSamples } from "../src/lib/bandori-topdata-contract.ts";
+} from "../src/lib/bandori/event-tracker/topdata-api-server.ts";
+import { countBandoriTopDataSamples } from "../src/lib/bandori/event-tracker/topdata-contract.ts";
 
 let storeRoot;
 

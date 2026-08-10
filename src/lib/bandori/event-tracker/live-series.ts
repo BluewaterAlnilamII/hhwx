@@ -1,7 +1,7 @@
 import type {
   BandoriTrackerLiveServer,
   BandoriTrackerLiveSnapshot,
-} from "@/lib/bandori-tracker-live-contract";
+} from "@/lib/bandori/event-tracker/live-contract";
 
 export type BandoriTrackerSeriesPoint = {
   time: number;

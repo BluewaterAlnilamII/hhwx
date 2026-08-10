@@ -4,7 +4,7 @@ import type { CSSProperties } from "react";
 import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Smile } from "lucide-react";
 import { useTranslations } from "next-intl";
-import { COMMENT_EMOJI_NAMES, getCommentEmojiSrc } from "@/lib/comment-emojis";
+import { COMMENT_EMOJI_NAMES, getCommentEmojiSrc } from "@/lib/comments/emoji";
 import { cn } from "@/lib/utils";
 
 type EmojiPickerButtonProps = {

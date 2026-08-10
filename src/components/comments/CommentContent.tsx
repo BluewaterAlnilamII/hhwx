@@ -4,11 +4,11 @@ import type { ReactNode } from "react";
 import { memo, useMemo } from "react";
 import { useTranslations } from "next-intl";
 import BandoriStampView from "@/components/bandori/BandoriStampView";
-import { getCommentEmojiSrc } from "@/lib/comment-emojis";
+import { getCommentEmojiSrc } from "@/lib/comments/emoji";
 import {
   isCommentStampRegion,
   type CommentStamp,
-} from "@/lib/comment-stamps";
+} from "@/lib/comments/stamps";
 import {
   resolveCommentStamp,
   type CommentStampLookup,

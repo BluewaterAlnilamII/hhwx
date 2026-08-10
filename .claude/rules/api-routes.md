@@ -8,9 +8,9 @@ paths:
   - "src/lib/bandori/events/comment-target.ts"
   - "src/lib/bandori/events/banner-proxy-server.ts"
   - "src/lib/bandori-master-api.ts"
-  - "src/lib/bandori-tracker-server.ts"
-  - "src/lib/bandori-tracker-topdata-server.ts"
-  - "src/lib/bestdori-prediction.ts"
+  - "src/lib/bandori/event-tracker/api-server.ts"
+  - "src/lib/bandori/event-tracker/topdata-api-server.ts"
+  - "src/lib/bandori/event-tracker/bestdori-prediction-server.ts"
   - "src/lib/game-account-binding.ts"
 ---
 

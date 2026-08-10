@@ -15,7 +15,7 @@ import {
   parseBandoriCutoffHistoryManifest,
   parseBandoriCutoffHistoryPack,
   selectBandoriCutoffHistoryCutoffs,
-} from "../src/lib/bandori-cutoff-history-contract.ts";
+} from "../src/lib/bandori/event-tracker/cutoff-history-contract.ts";
 import { fetchR2Object } from "../src/lib/r2-s3-reader.ts";
 
 const PAGE_SIZE = 1_000;

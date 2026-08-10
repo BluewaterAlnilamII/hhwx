@@ -81,7 +81,3 @@ export function validatePasswordValue(password: string): string | null {
 
   return null;
 }
-
-export function isPasswordStrongEnough(password: string): boolean {
-  return validatePasswordValue(password) === null;
-}

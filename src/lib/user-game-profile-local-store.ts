@@ -107,34 +107,6 @@ export async function readLocalGameProfilePayload(profileId: string): Promise<Us
   return decodeCompressedGameProfilePayload(await readLocalCompressedGameProfile(profileId));
 }
 
-export async function saveLocalGameProfilePayload(
-  payload: UserGameProfilePayload,
-  name = payload.bestdoriProfile.name || "手动档案",
-  options: {
-    profileId?: string;
-    cloudProfileId?: string | null;
-  } = {},
-): Promise<LocalGameProfileSummary> {
-  const compressed = await encodeCompressedGameProfilePayload(payload);
-  const now = new Date().toISOString();
-  const record: LocalGameProfileRecord = {
-    id: options.profileId ?? `local_${crypto.randomUUID()}`,
-    kind: "manual",
-    name,
-    server: payload.bestdoriProfile.server,
-    sourceGameUid: null,
-    cloudProfileId: options.cloudProfileId ?? null,
-    isEditable: true,
-    cardCount: getGameProfileCardCount(payload),
-    syncedAt: null,
-    updatedAt: now,
-    location: "local",
-    ...compressed,
-  };
-  await withStore("readwrite", (store) => store.put(record));
-  return record;
-}
-
 async function writeUpdatedLocalGameProfile(
   current: LocalGameProfileRecord,
   payload: UserGameProfilePayload,
@@ -185,10 +157,4 @@ export async function updateLocalGameProfileCards(
 
 export async function deleteLocalGameProfile(profileId: string): Promise<void> {
   await withStore("readwrite", (store) => store.delete(profileId));
-}
-
-export async function duplicateLocalGameProfile(profileId: string, name: string): Promise<LocalGameProfileSummary> {
-  const payload = await readLocalGameProfilePayload(profileId);
-  payload.bestdoriProfile.name = name;
-  return saveLocalGameProfilePayload(payload, name);
 }

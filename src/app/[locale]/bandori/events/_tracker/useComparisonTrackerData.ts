@@ -5,8 +5,8 @@ import { useTranslations } from "next-intl";
 import type {
   BandoriTrackerLiveSnapshot,
   BandoriTrackerLiveTarget,
-} from "@/lib/bandori-tracker-live-contract";
-import { getBandoriServerDayStart } from "@/lib/bandori-monthly-ranking-calendar";
+} from "@/lib/bandori/event-tracker/live-contract";
+import { getBandoriServerDayStart } from "@/lib/bandori/event-tracker/monthly-ranking-calendar";
 import {
   getBandoriServerCode,
   type BandoriServer,

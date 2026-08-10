@@ -16,7 +16,7 @@ import {
 import {
   type CommentStamp,
   type CommentStampRegion,
-} from "@/lib/comment-stamps";
+} from "@/lib/comments/stamps";
 import { useCachedFetch } from "@/hooks/useCachedFetch";
 
 export function useCommentStampCatalog(enabled = true): {

@@ -10,7 +10,7 @@ import {
   type CSSProperties,
 } from "react";
 
-import { BANDORI_TOPDATA_MAX_SAMPLE_SIZE } from "@/lib/bandori-topdata-contract";
+import { BANDORI_TOPDATA_MAX_SAMPLE_SIZE } from "@/lib/bandori/event-tracker/topdata-contract";
 import type { ActiveChartMarker } from "./useTrackerHoverTooltip";
 
 type ChartMargin = {

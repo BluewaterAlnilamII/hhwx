@@ -28,8 +28,8 @@ import {
   COMMENT_STAMP_DEFAULT_REGION,
   type CommentStamp,
   type CommentStampRegion,
-} from "@/lib/comment-stamps";
-import { getCommentEmojiSrc } from "@/lib/comment-emojis";
+} from "@/lib/comments/stamps";
+import { getCommentEmojiSrc } from "@/lib/comments/emoji";
 import { cn } from "@/lib/utils";
 import {
   buildEmojiShortcode,

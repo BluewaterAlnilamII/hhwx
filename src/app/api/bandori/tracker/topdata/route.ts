@@ -1,4 +1,4 @@
-import { handleBandoriTrackerTopDataRequest } from "@/lib/bandori-tracker-topdata-server";
+import { handleBandoriTrackerTopDataRequest } from "@/lib/bandori/event-tracker/topdata-api-server";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";

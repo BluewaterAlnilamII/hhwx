@@ -9,7 +9,7 @@ import { useBandoriCardsMaster } from "@/hooks/useBandoriCardsMaster";
 import { useBandoriCharactersMaster } from "@/hooks/useBandoriCharactersMaster";
 import { resolveBandoriCardBandId } from "@/lib/bandori/cards/master";
 import type { BandoriServer } from "@/lib/bandori-server";
-import type { BandoriTop10Player } from "@/lib/bandori-top10-view";
+import type { BandoriTop10Player } from "@/lib/bandori/event-tracker/top10-view";
 
 type Top10PlayerListProps = {
   players: BandoriTop10Player[];

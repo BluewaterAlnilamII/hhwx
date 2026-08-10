@@ -10,7 +10,6 @@ export const BANDORI_STAMPS_INDEX_KEY = "bandori/stamps/index.json";
 export const BANDORI_PUBLIC_ASSET_INDEX_SCHEMA_VERSION = 2;
 
 export type BandoriPublicAssetServer = (typeof BANDORI_PUBLIC_ASSET_SERVERS)[number];
-export type BandoriAssetRegion = Extract<BandoriPublicAssetServer, "jp" | "cn">;
 export type BandoriCardAssetVariant = "normal" | "after_training";
 export type BandoriCardImageRole = "thumb" | "full" | "trim";
 

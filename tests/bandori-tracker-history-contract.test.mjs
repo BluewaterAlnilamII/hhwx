@@ -10,7 +10,7 @@ import {
   parseBandoriCutoffHistoryManifest,
   parseBandoriCutoffHistoryPack,
   selectBandoriCutoffHistoryCutoffs,
-} from "../src/lib/bandori-cutoff-history-contract.ts";
+} from "../src/lib/bandori/event-tracker/cutoff-history-contract.ts";
 
 const semanticSha256 = "a".repeat(64);
 const compressedSha256 = "b".repeat(64);

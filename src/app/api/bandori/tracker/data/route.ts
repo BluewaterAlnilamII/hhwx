@@ -1,4 +1,4 @@
-import { handleBandoriTrackerDataRequest } from "@/lib/bandori-tracker-server";
+import { handleBandoriTrackerDataRequest } from "@/lib/bandori/event-tracker/api-server";
 
 export const dynamic = "force-dynamic";
 

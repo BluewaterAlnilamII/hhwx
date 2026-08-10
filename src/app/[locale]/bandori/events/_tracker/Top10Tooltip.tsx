@@ -7,7 +7,7 @@ import {
   getBandoriServerTimeZone,
   type BandoriServer,
 } from "@/lib/bandori-server";
-import type { BandoriTop10Player } from "@/lib/bandori-top10-view";
+import type { BandoriTop10Player } from "@/lib/bandori/event-tracker/top10-view";
 import type { HoverTooltipState } from "./useTrackerHoverTooltip";
 
 type Top10TooltipProps = {

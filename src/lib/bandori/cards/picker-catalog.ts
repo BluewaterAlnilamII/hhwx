@@ -1,13 +1,9 @@
 import { pickBestdoriLocalizedName } from "@/lib/bestdori-regional-names";
 import {
-  bandoriMasterTransforms,
   pickBandoriCharacterDisplayName,
   type BandoriCardMaster,
   type BandoriCharacterMaster,
 } from "@/lib/bandori/cards/master";
-import {
-  expandBandoriCardCatalog,
-} from "@/lib/bandori/cards/regional-extensions";
 import {
   buildBandoriCardFilterSelection,
   getBandoriCardReleaseSortServer,
@@ -16,6 +12,7 @@ import {
   type BandoriCardPickerSortBy,
 } from "@/lib/bandori/cards/filter";
 import {
+  expandBandoriCardCatalog,
   listBandoriCardCatalogAvailableServers,
   normalizeBandoriCardCatalogBase,
   readBandoriCardCatalogReleaseTimestamp,
@@ -42,8 +39,6 @@ export type BandoriCardCatalogEntry = BandoriCardCatalogBaseEntry & {
 };
 
 export type BandoriCardPickerFilter = BandoriCardFilterState<BandoriCardPickerSortBy>;
-
-export const bandoriCardCatalogTransforms = bandoriMasterTransforms;
 
 export interface BandoriCardCatalogFallbackLabels {
   getCardLabel: (cardId: number) => string;

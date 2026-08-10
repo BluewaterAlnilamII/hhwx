@@ -1,7 +1,7 @@
 import {
   getTiersForMode,
   type TrackerTierMode,
-} from "@/lib/bandori-tracker-tiers";
+} from "@/lib/bandori/event-tracker/tiers";
 
 const RETIRED_TRACKER_TIERS = new Set([1, 10]);
 const TRACKER_TIERS_BY_MODE: Readonly<Record<TrackerTierMode, readonly number[]>> = Object.freeze({

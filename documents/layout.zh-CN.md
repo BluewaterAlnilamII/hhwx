@@ -77,11 +77,11 @@ hhwx/
 
 - `auth-*.ts`、`supabase-*.ts`、`turnstile-server.ts` 和 `turnstile-public.ts`：认证、安全验证以及服务端/公开配置封装。
 - 根目录中保留的 `bandori-*.ts` 和 `calendar-*.ts`：不属于单一功能目录的跨领域基础设施与兼容入口。
-- `bandori/cards/`：卡牌目录、区服数据物化、API 契约与服务、发布/训练规则、布局和档案卡牌辅助逻辑。
+- `bandori/cards/`：卡牌目录、区服数据物化、API 契约与服务、发布/训练规则、生成的卡牌元数据、布局和档案卡牌辅助逻辑。
 - `bandori/events/`：活动目录、API 契约与服务、路由/区服/状态辅助逻辑、横幅代理和活动评论目标校验。
-- `bandori/data/`：Bandori 各领域共享的生成数据和参考数据。
+- `bandori/event-tracker/`：Event Tracker 的档线、TOP10、实时序列、投影、历史与预测契约/服务，由活动、歌曲和月度追踪模式共同使用。
 - `bandori/team-builder/`：组队搜索实现。`core/` 包含共享计算基础设施，`single/` 包含单曲 exact 搜索编排，`medley/` 包含组曲 exact/bounded 搜索编排，并由公开兼容 facade 对外导出。
-- `comments/`：与目标类型无关的评论契约、内容解析和特权持久化服务；各目标类型的存在性与可见性校验留在各自领域中。
+- `comments/`：与目标类型无关的评论契约、表情/贴纸目录、内容解析和特权持久化服务；各目标类型的存在性与可见性校验留在各自领域中。
 - `api-*.ts`：API 响应约定和缓存策略。
 - `bestdori-profile-codec.ts` 和 `user-game-*-server.ts`：游戏档案兼容、同步和服务端持久化逻辑。
 - `characters.ts`、`othello.ts` 和 `ai/`：首页黑白棋和角色逻辑。

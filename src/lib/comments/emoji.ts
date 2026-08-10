@@ -161,7 +161,7 @@ export const COMMENT_EMOJI_NAMES = [
   "Pure"
 ] as const;
 
-export const CUSTOM_COMMENT_EMOJIS = [
+const CUSTOM_COMMENT_EMOJIS = [
   { name: "KanonJii", src: "/res/emoji/KanonJii.webp" },
   { name: "KokoroJii", src: "/res/emoji/KokoroJii.webp" },
   { name: "HinaLul", src: "/res/emoji/HinaLul.webp" },
@@ -170,8 +170,6 @@ export const CUSTOM_COMMENT_EMOJIS = [
   { name: "LayerBashful", src: "/res/emoji/LayerBashful.webp" },
   { name: "ChisatoBonk", src: "/res/emoji/ChisatoBonk.webp" },
 ] as const;
-
-export type CommentEmojiName = (typeof COMMENT_EMOJI_NAMES)[number];
 
 export const COMMENT_EMOJI_NAME_SET: ReadonlySet<string> = new Set(COMMENT_EMOJI_NAMES);
 

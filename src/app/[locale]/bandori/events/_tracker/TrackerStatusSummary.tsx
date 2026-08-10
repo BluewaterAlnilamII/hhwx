@@ -5,7 +5,7 @@ import { useLocale, useTranslations } from "next-intl";
 import { Loader2 } from "lucide-react";
 
 import type { BandoriEventStatus } from "@/lib/bandori/events/status";
-import { formatBandoriTrackerUpdateAge } from "@/lib/bandori-tracker-time";
+import { formatBandoriTrackerUpdateAge } from "@/lib/bandori/event-tracker/time";
 import { BESTDORI_PREDICTION_COLOR } from "./constants";
 import type { TrackingMode } from "./types";
 
