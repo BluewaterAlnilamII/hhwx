@@ -39,6 +39,32 @@ export function getBandoriServerLanguageTag(server: BandoriServer): BandoriServe
   return BANDORI_SERVER_LANGUAGE_TAGS[server];
 }
 
+export function readBandoriRegionalTextAt(
+  value: unknown,
+  server: BandoriServer,
+): string | null {
+  if (typeof value === "string") {
+    return value.trim() || null;
+  }
+  if (!Array.isArray(value)) {
+    return null;
+  }
+  const text = value[server];
+  return typeof text === "string" && text.trim() ? text.trim() : null;
+}
+
+export function readBandoriRegionalNumberAt(
+  value: unknown,
+  server: BandoriServer,
+): number | null {
+  const candidate = Array.isArray(value) ? value[server] : value;
+  if (candidate === null || candidate === undefined || candidate === "") {
+    return null;
+  }
+  const numberValue = Number(candidate);
+  return Number.isFinite(numberValue) ? numberValue : null;
+}
+
 export function getBandoriServerFromCode(value: unknown): BandoriServer | null {
   if (typeof value !== "string") {
     return null;
@@ -67,6 +93,16 @@ export function getBandoriRegionalDisplayOrder(
     preferredServer,
     ...BANDORI_SERVER_FALLBACK_ORDER,
   ].filter((server, index, order) => order.indexOf(server) === index);
+}
+
+export function pickAvailableBandoriServer(
+  availableServers: readonly BandoriServer[],
+  preferredServer: BandoriServer,
+): BandoriServer | null {
+  const availableSet = new Set(availableServers);
+  return getBandoriRegionalDisplayOrder(preferredServer).find(
+    (server) => availableSet.has(server),
+  ) ?? null;
 }
 
 function findBandoriRegionalValueServer<T>(

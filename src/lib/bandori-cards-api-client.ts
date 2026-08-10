@@ -11,12 +11,15 @@ export type BandoriCardMasterRecord = Record<string, unknown> & {
   characterId?: number;
   displayName?: string | null;
   hasTrainedArt?: boolean;
+  gachaText?: Array<string | null>;
   levelLimit?: number;
   prefix?: Array<string | null>;
   rarity?: number;
   releasedAt?: Array<string | number | null>;
   resourceSetName?: string;
+  sdResourceName?: string;
   skillId?: number;
+  skillName?: Array<string | null>;
   stat?: Record<string, unknown> & {
     training?: {
       levelLimit?: number;

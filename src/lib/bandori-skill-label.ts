@@ -114,3 +114,37 @@ export function normalizeBandoriSkillLabel(
     fallbackLabel,
   ).label;
 }
+
+function isolateBandoriRegionalText(value: unknown, server: BandoriServer): unknown {
+  if (!Array.isArray(value)) {
+    return value;
+  }
+  return value.map((entry, index) => index === server ? entry : null);
+}
+
+export function resolveBandoriSkillLabelForServer(
+  skill: BandoriSkillLabelMaster | undefined,
+  skillLevel: unknown,
+  server: BandoriServer,
+  fallbackLevel = 1,
+  fallbackLabel = "",
+): ResolvedBandoriSkillLabel {
+  if (!skill) {
+    return {
+      label: fallbackLabel,
+      languageTag: getBandoriServerLanguageTag(server),
+    };
+  }
+  return resolveBandoriSkillLabel(
+    {
+      ...skill,
+      description: isolateBandoriRegionalText(skill.description, server) as Array<string | null>,
+      simpleDescription: isolateBandoriRegionalText(skill.simpleDescription, server) as Array<string | null>,
+    },
+    skillLevel,
+    fallbackLevel,
+    server,
+    server,
+    fallbackLabel,
+  );
+}

@@ -12,7 +12,7 @@ This document is not an asset license, a public redistribution grant, or permiss
 
 ## Web Configuration
 
-Built-in card UI resources use stable, non-content-addressed paths that preserve the official game resource names. Full card frames are under `bandori/resources/images/card-frame/{resourceName}.png`; individual MenuAtlas sprites are under `bandori/resources/atlases/menu-atlas/{spriteName}.png`. These objects are extracted once from a JP base APK, published with a one-year immutable cache policy, and never discovered through a public index. The web app builds their URLs from a fixed allowlist and fails closed when the asset CDN is not configured; it does not fall back to Bestdori. The five pre-existing composite rarity previews remain unchanged at `bandori/res/icon/star_1.png` through `star_5.png` and are the only legacy exception.
+Built-in card UI resources use stable, non-content-addressed paths that preserve the official game resource names. Full card frames are under `bandori/resources/images/card-frame/{resourceName}.png`; individual MenuAtlas sprites are under `bandori/resources/atlases/menu-atlas/{spriteName}.png`. These objects are extracted once from a JP base APK, published with a one-year immutable cache policy, and never discovered through a public index. The web app builds their URLs from a fixed allowlist and fails closed when the asset CDN is not configured; it does not fall back to Bestdori. Card renderers use the pre-existing vector overlays at `bandori/res/icon/band_{bandId}.svg`, `bandori/res/icon/{attribute}.svg`, and `bandori/res/icon/master.svg`; both thumbnails and full-card surfaces use SVG for the applicable band and attribute marks, while the master-rank badge is used where that overlay is rendered. The five composite rarity previews also remain unchanged at `bandori/res/icon/star_1.png` through `star_5.png`. These fixed legacy objects are served from owned R2 and never fetched from Bestdori at runtime.
 
 The web app reads Bandori asset URLs from these environment variables:
 
@@ -27,11 +27,11 @@ BANDORI_PRIVATE_R2_BUCKET=hhwx-private
 # BANDORI_STAMPS_API_LOCAL_STORE_ROOT=/path/to/stamps/store
 ```
 
-`NEXT_PUBLIC_BANDORI_ASSET_CDN_BASE_URL` is the shared public asset host used by browser and server-rendered public URLs. Card, Event, and Stamp assets are discovered from their public indexes described below; browsers read those indexes with the normal HTTP cache and without credentials. Stamp assets use the same Bandori asset CDN under `/bandori/stamps`; there is no separate stamp CDN setting. The web app reads Stamp master metadata through `/api/bandori/master/stamps`, reads `bandori/stamps/index.json` directly from the public CDN, and joins both maps by stamp ID in browser memory. Stamp images, animation manifests, animation atlases, and voice audio are then read directly from the CDN, so the CDN must allow browser CORS reads from the HHWX web origins. Stamp voices are played through Web Audio as short sound effects instead of media elements, avoiding iOS media-session behavior that can interrupt background music.
+`NEXT_PUBLIC_BANDORI_ASSET_CDN_BASE_URL` is the shared public asset host used by browser and server-rendered public URLs. Card, Event, and Stamp assets are discovered from their public indexes described below; browsers read those indexes with the normal HTTP cache and without credentials. Stamp assets use the same Bandori asset CDN under `/bandori/stamps`; there is no separate stamp CDN setting. The web app reads Stamp master metadata through `/api/bandori/master/stamps`, reads `bandori/stamps/index.json` directly from the public CDN, and joins both maps by stamp ID in browser memory. Stamp images, animation manifests, animation atlases, voice audio, and Card recruitment voices are then read directly from the CDN, so the CDN must allow browser CORS reads from the HHWX web origins. Stamp voices and Card recruitment voices share the Web Audio one-shot sound-effect channel instead of using media elements, so they follow the same browser audio-session policy intended to keep iOS from treating them as music and interrupting background playback.
 
 Server-side HHWX APIs that consume CDN-published Bandori assets must read the backing object storage directly through R2/S3 signed requests. They must not fetch HHWX-owned public CDN URLs such as `cdn.hhwx.org` from the server path because Cloudflare bot mitigation may challenge server-to-CDN traffic. Configure the complete shared endpoint as `BANDORI_R2_ENDPOINT`, credentials with the remaining `BANDORI_R2_*` variables, the public bucket with `BANDORI_PUBLIC_R2_BUCKET`, and the private snapshot bucket with `BANDORI_PRIVATE_R2_BUCKET`. The application does not derive an endpoint from a separate account-ID variable, and dataset-specific legacy R2 names are not accepted. R2 request signing always uses Cloudflare's `auto` region. The Music metadata and chart readers use this path for `bandori/music/index.json` and content-addressed chart JSON; the chart reader verifies the object SHA-256 before parsing. The Stamps master API reads its independent content-addressed snapshot from `BANDORI_PRIVATE_R2_BUCKET`; it does not read the public asset index. Browsers read public indexes and assets directly from the CDN.
 
-For HHWX production, configure CORS for `https://hhwx.org` on `/bandori/stamps/*` objects. If multiple exact origins are allowed, include `Vary: Origin`. The web app does not send credentials for stamp CDN reads, so do not enable credentialed CORS unless the request model changes. A fully public, no-credentials asset bucket may use `Access-Control-Allow-Origin: *`; do not combine `*` with credentialed requests.
+For HHWX production, configure CORS for `https://hhwx.org` on `/bandori/stamps/*` and `/bandori/cards/*/voice/*` objects. If multiple exact origins are allowed, include `Vary: Origin`. The web app does not send credentials for these CDN reads, so do not enable credentialed CORS unless the request model changes. A fully public, no-credentials asset bucket may use `Access-Control-Allow-Origin: *`; do not combine `*` with credentialed requests. Local browser validation should use `http://localhost:3000` when that exact origin is allowlisted; `http://127.0.0.1:3000` is a different origin and requires its own explicit CORS entry.
 
 HHWX application responses use `Cache-Control` for browser and downstream-cache TTLs and `Cloudflare-CDN-Cache-Control` for Cloudflare edge TTLs and stale behavior. Public API responses use four mutable tiers: fast mutable (`1m + 5m` browser SWR, `5m + 15m` edge SWR), snapshot (`5m + 30m` browser SWR, `30m + 1d` edge SWR), reference (`1h + 12h` browser SWR, `12h + 1d` edge SWR), and long asset (`1d + 7d` browser SWR, `30d + 90d` edge SWR). Private, real-time, and error responses use `no-store`; content-addressed objects use a one-year immutable policy. Do not add `s-maxage` to these response headers because it conflicts with stale-while-revalidate semantics.
 
@@ -150,6 +150,20 @@ bandori/resources/images/card-frame/{resourceName}.png
 bandori/resources/atlases/menu-atlas/{spriteName}.png
 ```
 
+Fixed legacy thumbnail vector overlays:
+
+```text
+{CDN_BASE}/bandori/res/icon/band_{bandId}.svg
+{CDN_BASE}/bandori/res/icon/{attribute}.svg
+{CDN_BASE}/bandori/res/icon/master.svg
+
+bandori/res/icon/band_{bandId}.svg
+bandori/res/icon/{attribute}.svg
+bandori/res/icon/master.svg
+```
+
+The fixed band allowlist is `1`, `2`, `3`, `4`, `5`, `18`, `21`, and `45`; attributes are `powerful`, `cool`, `happy`, and `pure`. These owned R2 objects are not periodically synchronized and have no Bestdori runtime fallback.
+
 Music assets and chart JSON:
 
 ```text
@@ -248,6 +262,7 @@ The Cards and Events index responses and their referenced objects must allow cre
 ```bash
 curl -I -H "Origin: https://hhwx.org" https://your-bandori-asset-cdn.example.com/bandori/cards/index.json
 curl -I -H "Origin: https://hhwx.org" https://your-bandori-asset-cdn.example.com/bandori/events/index.json
+curl -I -H "Origin: https://hhwx.org" https://your-bandori-asset-cdn.example.com/bandori/cards/<resourceSetName>/voice/gacha/<voiceSha256>.mp3
 ```
 
 For stamp CORS, verify at least one JSON object and one voice object with an `Origin` header:
@@ -257,4 +272,4 @@ curl -I -H "Origin: https://hhwx.org" https://your-bandori-asset-cdn.example.com
 curl -I -H "Origin: https://hhwx.org" https://your-bandori-asset-cdn.example.com/bandori/stamps/voices/<voiceSha256>.mp3
 ```
 
-Both responses should include `Access-Control-Allow-Origin: https://hhwx.org` or `Access-Control-Allow-Origin: *` for a public no-credentials bucket. Then open the relevant HHWX pages and confirm the Stamp master map is read once through `/api/bandori/master/stamps`, the public hash index is read once from `/bandori/stamps/index.json`, and animation manifests, atlas images, and voice audio requests go directly to the configured CDN base URL.
+The responses should include `Access-Control-Allow-Origin: https://hhwx.org` or `Access-Control-Allow-Origin: *` for a public no-credentials bucket. Then open the relevant HHWX pages and confirm the Stamp master map is read once through `/api/bandori/master/stamps`, the public hash indexes are read from their configured CDN paths, and animation manifests, atlas images, Stamp voices, and Card recruitment voices request their content-addressed objects directly from the configured CDN base URL.

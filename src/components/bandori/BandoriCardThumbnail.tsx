@@ -3,19 +3,22 @@
 import type { CSSProperties } from "react";
 import { useState } from "react";
 import { ImageOff } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { useBandoriCardsAssetIndex } from "@/hooks/useBandoriPublicAssetIndex";
 import {
-  buildBandoriAttributeIconUrl,
-  buildBandoriBandIconUrl,
-  buildBandoriMasterRankIconUrl,
   buildBandoriRarityStarIconUrl,
+  buildBandoriCardAttributeIconUrl,
+  buildBandoriCardBandIconUrl,
+  buildBandoriCardMasterRankIconUrl,
   buildBandoriThumbnailFrameUrl,
 } from "@/lib/bandori-builtin-resources";
 import {
   buildBandoriPublicAssetUrl,
   lookupBandoriCardImage,
+  resolveBandoriCardAssetVariant,
 } from "@/lib/bandori-public-asset-index";
 import { isBandoriCardAttribute, type BandoriCardAttribute } from "@/lib/bandori-card-filter";
+import { usesBandoriTrainedStarStyle } from "@/lib/bandori-card-training";
 
 type TrainType = "normal" | "after_training";
 
@@ -36,6 +39,7 @@ export type BandoriCardThumbnailMetadata = {
   resourceSetName?: string;
   levelLimit?: number;
   releasedAt?: Array<string | number | null>;
+  type?: string;
 };
 
 export type BandoriCardThumbnailSize = "tile" | "preview" | "editor";
@@ -65,17 +69,32 @@ function CardAssetImage({
   src,
   alt,
   className,
-  fallbackLabel = "无资源",
+  isResolving,
+  loadingLabel,
+  fallbackLabel,
   loading = "lazy",
 }: {
   src: string | null;
   alt: string;
   className?: string;
-  fallbackLabel?: string;
+  isResolving: boolean;
+  loadingLabel: string;
+  fallbackLabel: string;
   loading?: "eager" | "lazy";
 }) {
   const [failedSrcs, setFailedSrcs] = useState<string[]>([]);
   const activeSrc = src && !failedSrcs.includes(src) ? src : null;
+
+  if (!activeSrc && isResolving) {
+    return (
+      <div
+        role="status"
+        aria-busy="true"
+        aria-label={loadingLabel}
+        className="h-full w-full animate-pulse bg-slate-100"
+      />
+    );
+  }
 
   if (!activeSrc) {
     return <BrokenImageFallback label={fallbackLabel} />;
@@ -115,20 +134,27 @@ export default function BandoriCardThumbnail({
   showPower?: boolean;
   power?: number | null;
 }) {
-  const { value: assetIndex } = useBandoriCardsAssetIndex();
-  const trainType = getCardTrainType(card);
+  const t = useTranslations("bandori.cards.common");
+  const { value: assetIndex, loading: assetIndexLoading } = useBandoriCardsAssetIndex();
+  const requestedTrainType = getCardTrainType(card);
+  const trainType = resolveBandoriCardAssetVariant(
+    assetIndex,
+    metadata?.resourceSetName,
+    requestedTrainType,
+  ) ?? requestedTrainType;
   const thumbnailUrl = buildBandoriPublicAssetUrl(
-    lookupBandoriCardImage(assetIndex, metadata?.resourceSetName, trainType, "thumb"),
+    lookupBandoriCardImage(assetIndex, metadata?.resourceSetName, requestedTrainType, "thumb"),
   );
   const rarity = Math.min(5, Math.max(1, Math.trunc(Number(metadata?.rarity) || 1)));
   const attribute = isBandoriCardAttribute(metadata?.attribute) ? metadata.attribute : null;
   const frameUrl = buildBandoriThumbnailFrameUrl(rarity, attribute);
-  const attributeIconUrl = attribute ? buildBandoriAttributeIconUrl(attribute) : null;
-  const bandIconUrl = bandId ? buildBandoriBandIconUrl(bandId) : null;
-  const starIconUrl = buildBandoriRarityStarIconUrl(Boolean(card.isTrained));
-  const masterIconUrl = buildBandoriMasterRankIconUrl();
+  const attributeIconUrl = attribute ? buildBandoriCardAttributeIconUrl(attribute) : null;
+  const bandIconUrl = bandId ? buildBandoriCardBandIconUrl(bandId) : null;
+  const starIconUrl = buildBandoriRarityStarIconUrl(
+    usesBandoriTrainedStarStyle(metadata?.type, trainType),
+  );
+  const masterIconUrl = buildBandoriCardMasterRankIconUrl();
   const starSlots = Array.from({ length: rarity }, (_, index) => index);
-  const isPreview = size !== "tile";
   const powerLabel = showPower && showLevel ? formatThumbnailPower(power) : null;
   const starStyle = size === "preview"
     ? {
@@ -167,7 +193,9 @@ export default function BandoriCardThumbnail({
             alt={alt}
             loading={loading}
             className="h-full w-full object-cover"
-            fallbackLabel={isPreview ? "缩略图" : "无图"}
+            isResolving={assetIndexLoading}
+            loadingLabel={t("imageLoading")}
+            fallbackLabel={t("imageUnavailable")}
           />
         </div>
       </div>
@@ -181,7 +209,8 @@ export default function BandoriCardThumbnail({
           aria-hidden="true"
           loading={loading}
           decoding="async"
-          className="pointer-events-none absolute left-0 top-0 h-[27.6%] w-[27.6%]"
+          data-bandori-thumbnail-overlay="band"
+          className="pointer-events-none absolute left-0 top-0 h-[27.6%] w-[27.6%] object-contain"
         />
       ) : null}
       {attributeIconUrl ? (

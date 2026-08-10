@@ -831,6 +831,51 @@ export function lookupBandoriCardImage(
   return availableImageSets.length === 1 ? availableImageSets[0][role] : null;
 }
 
+export function listBandoriCardAssetVariants(
+  index: BandoriCardsAssetIndex | null | undefined,
+  resourceSetName: string | null | undefined,
+): BandoriCardAssetVariant[] {
+  const normalizedResourceSetName = resourceSetName?.trim();
+  if (!index || !normalizedResourceSetName) {
+    return [];
+  }
+  const images = index.resources[normalizedResourceSetName]?.images;
+  if (!images) {
+    return [];
+  }
+  const variants: BandoriCardAssetVariant[] = [];
+  if (images.normal) variants.push("normal");
+  if (images.after_training) variants.push("after_training");
+  return variants;
+}
+
+/**
+ * Returns the variant that actually supplies a requested image. Single-art
+ * cards intentionally fall back to their only stored variant, but consumers
+ * still need the resolved variant to choose the matching trained-star style.
+ */
+export function resolveBandoriCardAssetVariant(
+  index: BandoriCardsAssetIndex | null | undefined,
+  resourceSetName: string | null | undefined,
+  requestedVariant: BandoriCardAssetVariant,
+): BandoriCardAssetVariant | null {
+  const variants = listBandoriCardAssetVariants(index, resourceSetName);
+  if (variants.includes(requestedVariant)) {
+    return requestedVariant;
+  }
+  return variants.length === 1 ? variants[0] : null;
+}
+
+export function lookupBandoriCardGachaVoice(
+  index: BandoriCardsAssetIndex | null | undefined,
+  resourceSetName: string | null | undefined,
+): BandoriAudioAssetDescriptor | null {
+  const normalizedResourceSetName = resourceSetName?.trim();
+  return index && normalizedResourceSetName
+    ? index.resources[normalizedResourceSetName]?.gachaVoice ?? null
+    : null;
+}
+
 export function lookupBandoriEventBanner(
   index: BandoriEventsAssetIndex | null | undefined,
   eventId: number | string | null | undefined,

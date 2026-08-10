@@ -217,6 +217,12 @@ test("event overview presents start and end timestamps as separate standard rows
   assert.doesNotMatch(eventInfoPanelSource, /label=\{`活动时间|>至 \{formatDateTime/u);
 });
 
+test("event overview always presents an available JP title on non-JP servers", () => {
+  assert.match(eventInfoPanelSource, /const jpTitle = model && server !== 0/u);
+  assert.match(eventInfoPanelSource, /\{jpTitle \? <span/u);
+  assert.doesNotMatch(eventInfoPanelSource, /jpTitle !== localizedTitle/u);
+});
+
 test("event overview reuses the team builder event type labels", () => {
   assert.match(eventInfoPanelSource, /useTranslations\("bandori\.teamBuilder\.eventTypes"\)/u);
   assert.doesNotMatch(eventInfoPanelSource, /EVENT_TYPE_LABELS|挑战演出|任务演出|团队演出祭典|对邦活动|组曲演出/u);
@@ -342,7 +348,7 @@ test("event band slugs resolve through the localized bands API records", () => {
   assert.match(eventInfoPanelSource, /const shouldLoadBandNames = eventId !== null/u);
   assert.match(eventInfoPanelSource, /shouldLoadBandNames \? "bandori-master-bands-all" : null/u);
   assert.doesNotMatch(eventInfoPanelSource, /eventBandId !== null \? "bandori-master-bands-all"/u);
-  assert.match(eventInfoPanelSource, /`band_\$\{eventBandId\}\.svg`/u);
+  assert.match(eventInfoPanelSource, /buildBandoriCardBandIconUrl\(eventBandId\)/u);
   assert.doesNotMatch(eventInfoPanelSource, /BAND_LABELS/u);
 });
 

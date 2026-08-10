@@ -5,9 +5,13 @@ import BandoriCardThumbnail, {
   type BandoriCardThumbnailCard,
   type BandoriCardThumbnailMetadata,
 } from "@/components/bandori/BandoriCardThumbnail";
-import { BandoriCardHoverTooltipPortal } from "@/components/bandori/BandoriCardHoverTooltip";
+import { BandoriCardHoverPopover } from "@/components/bandori/BandoriCardHoverTooltip";
 import { useBandoriCardHoverTooltip } from "@/hooks/useBandoriCardHoverTooltip";
-import type { BandoriServerLanguageTag } from "@/lib/bandori-server";
+import {
+  getBandoriServerCode,
+  type BandoriServer,
+  type BandoriServerLanguageTag,
+} from "@/lib/bandori-server";
 
 export type BandoriCardTileCard = BandoriCardThumbnailCard & {
   bandId: number | null;
@@ -26,17 +30,26 @@ type BandoriCardTileBaseProps = {
   isMuted?: boolean;
 };
 
+export type BandoriCardTileInteraction =
+  | { kind: "information" }
+  | {
+      kind: "action";
+      label: string;
+      onAction: () => void;
+      disabled?: boolean;
+    }
+  | { kind: "presentation" };
+
 type BandoriCardTileInteractiveProps = BandoriCardTileBaseProps & {
-  isPresentationOnly?: false;
+  interaction: Exclude<BandoriCardTileInteraction, { kind: "presentation" }>;
+  server: BandoriServer;
   characterName: string;
   skillEffectLabel: string;
   skillEffectLanguageTag?: BandoriServerLanguageTag;
-  actionLabel?: string;
-  onAction?: () => void;
 };
 
 type BandoriCardTilePresentationProps = BandoriCardTileBaseProps & {
-  isPresentationOnly: true;
+  interaction: Extract<BandoriCardTileInteraction, { kind: "presentation" }>;
 };
 
 export type BandoriCardTileProps = BandoriCardTileInteractiveProps | BandoriCardTilePresentationProps;
@@ -58,9 +71,16 @@ function BandoriCardTileContent({
   showLevel = true,
   showPower = true,
   isMuted = false,
-  actionLabel,
-  onAction,
-}: BandoriCardTileBaseProps & Pick<BandoriCardTileInteractiveProps, "actionLabel" | "onAction">) {
+  trigger,
+}: BandoriCardTileBaseProps & {
+  trigger?: {
+    label: string;
+    onClick: () => void;
+    disabled?: boolean;
+    tooltipId?: string;
+    isTooltipOpen?: boolean;
+  };
+}) {
   const thumbnail = (
     <BandoriCardThumbnail
       card={card}
@@ -75,13 +95,17 @@ function BandoriCardTileContent({
 
   return (
     <>
-      {onAction ? (
+      {trigger ? (
         <button
           type="button"
-          aria-label={actionLabel ?? cardName}
-          title={actionLabel ?? cardName}
-          onClick={onAction}
-          className={`h-full w-full overflow-visible rounded-[5px] bg-white text-left shadow-[0_2px_7px_rgba(15,23,42,0.22)] ${isMuted ? BANDORI_MUTED_CARD_CLASS_NAME : ""}`}
+          aria-label={trigger.label}
+          title={trigger.label}
+          aria-controls={trigger.tooltipId}
+          aria-expanded={trigger.tooltipId ? trigger.isTooltipOpen : undefined}
+          aria-haspopup={trigger.tooltipId ? "dialog" : undefined}
+          disabled={trigger.disabled}
+          onClick={trigger.onClick}
+          className={`h-full w-full overflow-visible rounded-[5px] bg-white text-left shadow-[0_2px_7px_rgba(15,23,42,0.22)] disabled:cursor-not-allowed disabled:opacity-70 ${isMuted ? BANDORI_MUTED_CARD_CLASS_NAME : ""}`}
         >
           {thumbnail}
         </button>
@@ -113,12 +137,33 @@ function InteractiveBandoriCardTile(props: BandoriCardTileInteractiveProps) {
   } = props;
   const {
     anchorRef,
+    tooltipId,
     isOpen: isHoverTooltipOpen,
+    openTooltip,
+    closeTooltip,
     onMouseEnter,
     onMouseLeave,
     onFocus,
     onBlur,
+    onKeyDown,
+    tooltipInteractionProps,
   } = useBandoriCardHoverTooltip<HTMLElement>();
+  const interaction = props.interaction;
+  const trigger = interaction.kind === "action"
+    ? {
+        label: interaction.label,
+        onClick: () => {
+          closeTooltip();
+          interaction.onAction();
+        },
+        disabled: interaction.disabled,
+      }
+    : {
+        label: cardName,
+        onClick: openTooltip,
+        tooltipId,
+        isTooltipOpen: isHoverTooltipOpen,
+      };
 
   return (
     <article
@@ -127,21 +172,25 @@ function InteractiveBandoriCardTile(props: BandoriCardTileInteractiveProps) {
       onMouseLeave={onMouseLeave}
       onFocus={onFocus}
       onBlur={onBlur}
+      onKeyDown={onKeyDown}
       className={getBandoriCardTileClassName(props.size ?? "default", true)}
     >
-      <BandoriCardTileContent {...props} />
+      <BandoriCardTileContent {...props} trigger={trigger} />
       {isHoverTooltipOpen ? (
-        <BandoriCardHoverTooltipPortal
+        <BandoriCardHoverPopover
+          id={tooltipId}
           anchorRef={anchorRef}
           open={isHoverTooltipOpen}
           cardName={cardName}
           characterName={characterName}
           detailLanguageTag={skillEffectLanguageTag}
+          detailHref={`/bandori/cards/${props.card.cardId}?server=${getBandoriServerCode(props.server)}`}
+          {...tooltipInteractionProps}
         >
           <span className="block w-full whitespace-normal wrap-break-word rounded-xl bg-slate-50 px-2 py-1 text-slate-700">
             {skillEffectLabel}
           </span>
-        </BandoriCardHoverTooltipPortal>
+        </BandoriCardHoverPopover>
       ) : null}
     </article>
   );
@@ -155,8 +204,14 @@ function PresentationBandoriCardTile(props: BandoriCardTilePresentationProps) {
   );
 }
 
+function isPresentationBandoriCardTile(
+  props: BandoriCardTileProps,
+): props is BandoriCardTilePresentationProps {
+  return props.interaction.kind === "presentation";
+}
+
 export default function BandoriCardTile(props: BandoriCardTileProps) {
-  return props.isPresentationOnly
+  return isPresentationBandoriCardTile(props)
     ? <PresentationBandoriCardTile {...props} />
     : <InteractiveBandoriCardTile {...props} />;
 }

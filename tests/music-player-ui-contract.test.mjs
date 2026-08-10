@@ -64,10 +64,12 @@ test("page and player artwork use durable CDN source URLs without a Blob cache",
   assert.match(player, /<MusicArtwork[\s\S]*?src=\{currentTrack\.artworkUrl\}/u);
 });
 
-test("player claims the iOS playback audio session before media starts", async () => {
-  const [host, stampAudio] = await Promise.all([
+test("music and one-shot sound effects use compatible browser audio sessions", async () => {
+  const [host, soundEffectAudio, stampAudio, cardDetail] = await Promise.all([
     readFile(new URL("src/components/music-player/MusicPlayerHost.tsx", ROOT_URL), "utf8"),
+    readFile(new URL("src/lib/sound-effect-audio.ts", ROOT_URL), "utf8"),
     readFile(new URL("src/lib/comment-stamp-audio.ts", ROOT_URL), "utf8"),
+    readFile(new URL("src/app/[locale]/bandori/cards/[cardId]/CardDetailPageClient.tsx", ROOT_URL), "utf8"),
   ]);
 
   const playbackClaimIndex = host.indexOf("setMusicPlaybackAudioSessionActive(true)");
@@ -77,8 +79,15 @@ test("player claims the iOS playback audio session before media starts", async (
   assert.doesNotMatch(host, /className="hidden"/u);
   assert.match(host, /className="pointer-events-none fixed left-0 top-0 h-px w-px opacity-0"/u);
   assert.match(host, /type: "image\/png"/u);
-  assert.match(stampAudio, /claimAmbientBrowserAudioSession/u);
-  assert.doesNotMatch(stampAudio, /audioSession\.type = "ambient"/u);
+  assert.match(soundEffectAudio, /claimAmbientBrowserAudioSession/u);
+  assert.doesNotMatch(soundEffectAudio, /audioSession\.type = "ambient"/u);
+  const stopActiveSoundIndex = soundEffectAudio.indexOf("stopActiveSoundEffect();");
+  const startSoundIndex = soundEffectAudio.indexOf("source.start(0)");
+  assert.ok(stopActiveSoundIndex >= 0 && stopActiveSoundIndex < startSoundIndex);
+  assert.match(stampAudio, /playSoundEffect/u);
+  assert.match(cardDetail, /playSoundEffect\(src\)/u);
+  assert.doesNotMatch(cardDetail, /<audio/u);
+  assert.doesNotMatch(cardDetail, /aria-pressed|pauseVoice/u);
 });
 
 test("Media Session artwork uses the durable track URL", async () => {

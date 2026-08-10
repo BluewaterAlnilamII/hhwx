@@ -21,12 +21,14 @@ const EMPTY_INDEX_STATE: BandoriPublicAssetIndexStoreState<never> = {
   value: null,
   loadedAt: null,
   inFlight: null,
+  error: null,
 };
 
 export type BandoriPublicAssetIndexHookResult<T> = {
   value: T | null;
   loadedAt: number | null;
   loading: boolean;
+  error: Error | null;
   refresh: () => void;
 };
 
@@ -60,7 +62,8 @@ function useBandoriPublicAssetIndex<T>(
   return {
     value: state.value,
     loadedAt: state.loadedAt,
-    loading: state.value === null && state.inFlight !== null,
+    loading: Boolean(indexUrl) && state.value === null && state.error === null,
+    error: state.error,
     refresh,
   };
 }

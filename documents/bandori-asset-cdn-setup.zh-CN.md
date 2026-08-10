@@ -12,7 +12,7 @@ HHWX 生产环境使用私有采集和镜像服务填充 CDN 与 R2 bucket。这
 
 ## Web 配置
 
-卡牌 UI 内建资源使用稳定、非内容寻址路径，并保留游戏原始资源名。完整卡框位于 `bandori/resources/images/card-frame/{resourceName}.png`，独立 MenuAtlas sprite 位于 `bandori/resources/atlases/menu-atlas/{spriteName}.png`。这些对象只从 JP base APK 一次性提取，使用一年 `immutable` 缓存发布，不通过公开 index 发现。Web 应用按固定 allowlist 组装 URL；未配置资源 CDN 时失败关闭，不回退 Bestdori。已有的五张组合稀有度预览保持不变，仍位于 `bandori/res/icon/star_1.png` 至 `star_5.png`，它们是唯一的遗留例外。
+卡牌 UI 内建资源使用稳定、非内容寻址路径，并保留游戏原始资源名。完整卡框位于 `bandori/resources/images/card-frame/{resourceName}.png`，独立 MenuAtlas sprite 位于 `bandori/resources/atlases/menu-atlas/{spriteName}.png`。这些对象只从 JP base APK 一次性提取，使用一年 `immutable` 缓存发布，不通过公开 index 发现。Web 应用按固定 allowlist 组装 URL；未配置资源 CDN 时失败关闭，不回退 Bestdori。卡牌渲染组件使用已有的矢量叠层：`bandori/res/icon/band_{bandId}.svg`、`bandori/res/icon/{attribute}.svg` 与 `bandori/res/icon/master.svg`；缩略图和完整卡面均使用对应的 SVG 乐团与属性标记，Master 标记则在需要显示该叠层的位置使用。五张组合稀有度预览也保持不变，仍位于 `bandori/res/icon/star_1.png` 至 `star_5.png`。这些固定遗留对象由自有 R2 提供，运行时不会请求 Bestdori。
 
 Web 应用从以下环境变量读取 Bandori 资源 URL：
 
@@ -27,11 +27,11 @@ BANDORI_PRIVATE_R2_BUCKET=hhwx-private
 # BANDORI_STAMPS_API_LOCAL_STORE_ROOT=/path/to/stamps/store
 ```
 
-`NEXT_PUBLIC_BANDORI_ASSET_CDN_BASE_URL` 是浏览器与服务端渲染公开 URL 共用的资源主机。Cards、Events 与 Stamps 资源通过下文各自的公开 index 发现；浏览器使用正常 HTTP 缓存且不携带凭据读取这些 index。Stamp 资源使用同一个 Bandori asset CDN 下的 `/bandori/stamps` 路径；没有单独的 stamp CDN 配置。Web 应用通过 `/api/bandori/master/stamps` 读取 Stamp master 元数据，直接从公开 CDN 读取 `bandori/stamps/index.json`，再在浏览器内存中按 stamp ID 合并两者。Stamp 图片、动画 manifest、动画 atlas 和 voice audio 随后直接从 CDN 读取，因此 CDN 必须允许 HHWX Web origin 跨域读取。Stamp voice 会通过 Web Audio 作为短音效播放，而不是作为媒体元素播放，以避免 iOS media session 把它当作音乐并打断后台音乐。
+`NEXT_PUBLIC_BANDORI_ASSET_CDN_BASE_URL` 是浏览器与服务端渲染公开 URL 共用的资源主机。Cards、Events 与 Stamps 资源通过下文各自的公开 index 发现；浏览器使用正常 HTTP 缓存且不携带凭据读取这些 index。Stamp 资源使用同一个 Bandori asset CDN 下的 `/bandori/stamps` 路径；没有单独的 stamp CDN 配置。Web 应用通过 `/api/bandori/master/stamps` 读取 Stamp master 元数据，直接从公开 CDN 读取 `bandori/stamps/index.json`，再在浏览器内存中按 stamp ID 合并两者。Stamp 图片、动画 manifest、动画 atlas、voice audio 与卡牌招募语音随后直接从 CDN 读取，因此 CDN 必须允许 HHWX Web origin 跨域读取。Stamp voice 与卡牌招募语音共用 Web Audio 一次性音效通道，而不是作为媒体元素播放，从而沿用旨在避免 iOS 把它们当作音乐并打断后台播放的浏览器音频会话策略。
 
 服务端 HHWX API 消费已发布到 CDN 的 Bandori 资源时，必须通过 R2/S3 签名请求直接读取背后的对象存储。服务端路径不要再请求 `cdn.hhwx.org` 等 HHWX 自有公网 CDN URL，因为 Cloudflare bot mitigation 可能会对 server-to-CDN 流量返回 challenge。完整共享 endpoint 固定使用 `BANDORI_R2_ENDPOINT`，凭据使用其余 `BANDORI_R2_*`，公开 bucket 使用 `BANDORI_PUBLIC_R2_BUCKET`，私有 snapshot bucket 使用 `BANDORI_PRIVATE_R2_BUCKET`。应用不会再从单独的 account-ID 变量推导 endpoint，也不接受数据集专属的旧 R2 名称。R2 请求签名固定使用 Cloudflare 的 `auto` region。Music metadata 与 chart reader 通过这条路径读取 `bandori/music/index.json` 和内容寻址的谱面 JSON；chart reader 会先校验对象 SHA-256 再解析。Stamps master API 从 `BANDORI_PRIVATE_R2_BUCKET` 读取独立的内容寻址 snapshot，不读取公开 asset index；浏览器则直接从 CDN 读取公开 index 与资源。
 
-HHWX 生产环境应在 `/bandori/stamps/*` 对象上为 `https://hhwx.org` 配置 CORS。如果允许多个精确 origin，请同时返回 `Vary: Origin`。Web 应用读取 stamp CDN 时不会携带 credentials，除非请求模型发生变化，否则不要启用带凭据 CORS。完全公开且不带 credentials 的资源桶可以使用 `Access-Control-Allow-Origin: *`；不要把 `*` 和带凭据请求搭配使用。
+HHWX 生产环境应在 `/bandori/stamps/*` 与 `/bandori/cards/*/voice/*` 对象上为 `https://hhwx.org` 配置 CORS。如果允许多个精确 origin，请同时返回 `Vary: Origin`。Web 应用读取这些 CDN 对象时不会携带 credentials，除非请求模型发生变化，否则不要启用带凭据 CORS。完全公开且不带 credentials 的资源桶可以使用 `Access-Control-Allow-Origin: *`；不要把 `*` 和带凭据请求搭配使用。本地浏览器验证应使用已列入允许范围的精确 origin `http://localhost:3000`；`http://127.0.0.1:3000` 属于另一个 origin，需要单独配置 CORS。
 
 HHWX 应用响应使用 `Cache-Control` 控制浏览器及下游缓存 TTL，并使用 `Cloudflare-CDN-Cache-Control` 单独控制 Cloudflare 边缘 TTL 与 stale 行为。公开 API 使用四个可变缓存档位：fast mutable（浏览器 `1 分钟 + 5 分钟 SWR`，边缘 `5 分钟 + 15 分钟 SWR`）、snapshot（浏览器 `5 分钟 + 30 分钟 SWR`，边缘 `30 分钟 + 1 天 SWR`）、reference（浏览器 `1 小时 + 12 小时 SWR`，边缘 `12 小时 + 1 天 SWR`）和 long asset（浏览器 `1 天 + 7 天 SWR`，边缘 `30 天 + 90 天 SWR`）。私有、实时及错误响应使用 `no-store`；内容寻址对象使用一年 `immutable`。不要再加入 `s-maxage`，因为它会与 stale-while-revalidate 语义冲突。
 
@@ -150,6 +150,20 @@ bandori/resources/images/card-frame/{resourceName}.png
 bandori/resources/atlases/menu-atlas/{spriteName}.png
 ```
 
+固定的遗留缩略图矢量叠层：
+
+```text
+{CDN_BASE}/bandori/res/icon/band_{bandId}.svg
+{CDN_BASE}/bandori/res/icon/{attribute}.svg
+{CDN_BASE}/bandori/res/icon/master.svg
+
+bandori/res/icon/band_{bandId}.svg
+bandori/res/icon/{attribute}.svg
+bandori/res/icon/master.svg
+```
+
+乐团固定 allowlist 为 `1`、`2`、`3`、`4`、`5`、`18`、`21`、`45`；属性固定为 `powerful`、`cool`、`happy`、`pure`。这些自有 R2 对象不做定期同步，也不提供 Bestdori 运行时回退。
+
 音乐资源和谱面 JSON：
 
 ```text
@@ -248,6 +262,7 @@ Cards/Events index 响应及其引用的对象都必须允许 HHWX Web origin �
 ```bash
 curl -I -H "Origin: https://hhwx.org" https://your-bandori-asset-cdn.example.com/bandori/cards/index.json
 curl -I -H "Origin: https://hhwx.org" https://your-bandori-asset-cdn.example.com/bandori/events/index.json
+curl -I -H "Origin: https://hhwx.org" https://your-bandori-asset-cdn.example.com/bandori/cards/<resourceSetName>/voice/gacha/<voiceSha256>.mp3
 ```
 
 针对 stamp CORS，至少用 `Origin` header 验证一个 JSON 对象和一个 voice 对象：
@@ -257,4 +272,4 @@ curl -I -H "Origin: https://hhwx.org" https://your-bandori-asset-cdn.example.com
 curl -I -H "Origin: https://hhwx.org" https://your-bandori-asset-cdn.example.com/bandori/stamps/voices/<voiceSha256>.mp3
 ```
 
-两者都应返回 `Access-Control-Allow-Origin: https://hhwx.org`；如果是完全公开且不带 credentials 的资源桶，也可以返回 `Access-Control-Allow-Origin: *`。然后打开相关 HHWX 页面，确认 Stamp master map 只通过 `/api/bandori/master/stamps` 读取一次，公开 hash index 只从 `/bandori/stamps/index.json` 读取一次，而动画 manifest、atlas 图片和 voice audio 请求都直接访问配置的 CDN base URL。
+这些响应都应返回 `Access-Control-Allow-Origin: https://hhwx.org`；如果是完全公开且不带 credentials 的资源桶，也可以返回 `Access-Control-Allow-Origin: *`。然后打开相关 HHWX 页面，确认 Stamp master map 只通过 `/api/bandori/master/stamps` 读取一次，各公开 hash index 从配置的 CDN 路径读取，而动画 manifest、atlas 图片、Stamp voice 与卡牌招募语音都直接请求配置 CDN base URL 下的内容寻址对象。

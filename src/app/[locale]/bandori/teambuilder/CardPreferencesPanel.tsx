@@ -287,16 +287,20 @@ export default function TeamBuilderCardPreferencesPanel({
           <div className="grid justify-center gap-[6px] grid-cols-[repeat(auto-fill,56px)] sm:grid-cols-[repeat(auto-fill,76px)]">
             {temporaryCardEntries.map((entry) => (
               <BandoriCardTile
+                interaction={{
+                  kind: "action",
+                  label: t("editTemporaryCard"),
+                  onAction: () => onEditTemporary(entry.card.instanceId),
+                }}
                 key={entry.card.instanceId}
                 card={{ ...entry.card, bandId: entry.bandId, totalPower: entry.totalPower }}
                 metadata={entry.metadata}
                 cardName={entry.cardName}
+                server={displayServer}
                 characterName={entry.characterName}
                 skillEffectLabel={entry.skillEffectLabel}
                 skillEffectLanguageTag={entry.skillEffectLanguageTag}
                 size="compact"
-                actionLabel={t("editTemporaryCard")}
-                onAction={() => onEditTemporary(entry.card.instanceId)}
               />
             ))}
           </div>
@@ -353,6 +357,7 @@ export default function TeamBuilderCardPreferencesPanel({
             characterOptions={characterOptions}
             availableBandIds={bandIds}
             availableCharacterIds={characterIds}
+            availableServers={[displayServer]}
             sortOptions={excludedSortOptions}
             onFilterChange={updateExcludedCardFilter}
             onClearFilter={resetExcludedCardFilter}
@@ -377,16 +382,20 @@ export default function TeamBuilderCardPreferencesPanel({
                 const isExcluded = excludedCardIdSet.has(entry.card.cardId);
                 return (
                   <BandoriCardTile
+                    interaction={{
+                      kind: "action",
+                      label: isExcluded ? t("restoreCard") : t("excludeCard"),
+                      onAction: () => onToggleExcludedCard(entry.card.cardId),
+                    }}
                     card={{ ...entry.card, bandId: entry.bandId, totalPower: entry.totalPower }}
                     metadata={entry.metadata}
                     cardName={entry.cardName}
+                    server={displayServer}
                     characterName={entry.characterName}
                     skillEffectLabel={entry.skillEffectLabel}
                     skillEffectLanguageTag={entry.skillEffectLanguageTag}
                     size="compact"
                     isMuted={isExcluded}
-                    actionLabel={isExcluded ? t("restoreCard") : t("excludeCard")}
-                    onAction={() => onToggleExcludedCard(entry.card.cardId)}
                   />
                 );
               }}

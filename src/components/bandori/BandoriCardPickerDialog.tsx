@@ -19,6 +19,7 @@ export type BandoriCardPickerDialogProps = {
   missingCardFallback: BandoriCardsMissingCardFallback;
   scrollElementRef: RefObject<HTMLDivElement | null>;
   cardMetadata?: BandoriCardsMasterMap;
+  canonicalCardMetadata?: BandoriCardsMasterMap;
   characters?: Record<string, BandoriCharacterMaster | null | undefined>;
   skills?: Record<string, BandoriSkillMaster | null | undefined>;
   mutedCardIds?: ReadonlySet<number>;
@@ -35,6 +36,7 @@ export default function BandoriCardPickerDialog({
   missingCardFallback,
   scrollElementRef,
   cardMetadata,
+  canonicalCardMetadata,
   characters,
   skills,
   mutedCardIds,
@@ -68,6 +70,7 @@ export default function BandoriCardPickerDialog({
               showArtToggle={false}
               scrollElementRef={scrollElementRef}
               cardMetadata={cardMetadata}
+              canonicalCardMetadata={canonicalCardMetadata}
               characters={characters}
               skills={skills}
               mutedCardIds={mutedCardIds}

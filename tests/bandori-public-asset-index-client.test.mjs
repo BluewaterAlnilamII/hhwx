@@ -49,6 +49,7 @@ test("same index URL uses one first-load request with the public HTTP options", 
     value: { generation: 1 },
     loadedAt: 100,
     inFlight: null,
+    error: null,
   });
 });
 
@@ -67,7 +68,9 @@ test("failed promises are evicted so the next call retries", async () => {
 
   await assert.rejects(store.load(url), /HTTP 503/u);
   assert.equal(store.getState(url).inFlight, null);
+  assert.match(store.getState(url).error?.message ?? "", /HTTP 503/u);
   assert.deepEqual(await store.load(url), { generation: 2 });
+  assert.equal(store.getState(url).error, null);
   assert.equal(attempts, 2);
 });
 
@@ -109,11 +112,11 @@ test("refresh failures retain the last-good value and loadedAt", async () => {
 
   await store.load(url);
   await assert.rejects(store.load(url, { refresh: true }), /offline/u);
-  assert.deepEqual(store.getState(url), {
-    value: { generation: 3 },
-    loadedAt: 300,
-    inFlight: null,
-  });
+  const failedRefreshState = store.getState(url);
+  assert.deepEqual(failedRefreshState.value, { generation: 3 });
+  assert.equal(failedRefreshState.loadedAt, 300);
+  assert.equal(failedRefreshState.inFlight, null);
+  assert.match(failedRefreshState.error?.message ?? "", /offline/u);
   assert.deepEqual(requestOptions, [
     { cache: "default", credentials: "omit" },
     { cache: "no-cache", credentials: "omit" },

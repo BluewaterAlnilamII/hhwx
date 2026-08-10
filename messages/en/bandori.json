@@ -85,11 +85,74 @@
       "empty": "No cards match the current filters"
     }
   },
+  "cards": {
+    "page": {
+      "title": "Card Catalog",
+      "displayServer": "Display server",
+      "resultCount": "{count} cards",
+      "showMore": "Show {count} more"
+    },
+    "common": {
+      "noInformation": "No information",
+      "cardDetails": "Card details",
+      "imageLoading": "Loading card art",
+      "imageUnavailable": "Card art unavailable"
+    },
+    "types": {
+      "permanent": "Permanent",
+      "kirafes": "KiraFes",
+      "dreamfes": "DreamFes",
+      "limited": "Limited",
+      "birthday": "Birthday",
+      "event": "Event reward",
+      "campaign": "Collaboration",
+      "initial": "Initial",
+      "special": "Special",
+      "others": "Other"
+    },
+    "states": {
+      "loading": "Loading the card catalog",
+      "loadFailed": "Failed to load card data. Please try again later",
+      "empty": "No cards match the current filters"
+    },
+    "detail": {
+      "back": "Back to card catalog",
+      "informationTitle": "Card Information",
+      "artworkTitle": "Card Art",
+      "server": "Server",
+      "cardId": "Card ID",
+      "cardName": "Card title",
+      "character": "Character",
+      "band": "Band",
+      "type": "Type",
+      "attribute": "Attribute",
+      "rarity": "Rarity",
+      "releaseDate": "Release time",
+      "skillName": "Skill name",
+      "skillEffect": "Skill effect",
+      "gachaText": "Recruitment voice",
+      "jpReference": "JP",
+      "totalPower": "Total power",
+      "performance": "Performance",
+      "technique": "Technique",
+      "visual": "Visual",
+      "playVoice": "Play recruitment voice",
+      "normalArt": "Before training",
+      "afterTrainingArt": "After training",
+      "openOriginal": "Open {label} card art",
+      "closeViewer": "Close image viewer",
+      "zoomIn": "Zoom in",
+      "zoomOut": "Zoom out",
+      "previousArt": "Previous card art",
+      "nextArt": "Next card art"
+    }
+  },
   "cardFilters": {
     "searchPlaceholder": "Search card name, character name, or card ID",
     "rarityAlt": "{rarity} star",
     "bandFallback": "Band {bandId}",
     "characterFallback": "Character {characterId}",
+    "serverAvailabilityAria": "Filter cards available on {server}",
     "attributes": {
       "powerful": "Powerful",
       "cool": "Cool",
@@ -97,10 +160,12 @@
       "pure": "Pure"
     },
     "rows": {
+      "serverAvailability": "Server",
       "band": "Band",
       "attribute": "Attribute",
       "rarity": "Rarity",
       "character": "Character",
+      "type": "Type",
       "sort": "Sort"
     },
     "sort": {

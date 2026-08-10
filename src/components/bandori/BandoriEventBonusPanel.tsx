@@ -5,7 +5,7 @@ import { useTranslations } from "next-intl";
 import BandoriCardTile from "@/components/bandori/BandoriCardTile";
 import Heading from "@/components/Heading";
 import {
-  buildBandoriAttributeIconUrl,
+  buildBandoriCardAttributeIconUrl,
   buildBandoriCharacterIconUrl,
   buildBandoriLegacyRarityCompositeUrl,
 } from "@/lib/bandori-builtin-resources";
@@ -211,7 +211,7 @@ function AttributeIcon({ attribute }: { attribute: BandoriCardAttribute }) {
     >
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
-        src={buildBandoriAttributeIconUrl(attribute) ?? undefined}
+        src={buildBandoriCardAttributeIconUrl(attribute) ?? undefined}
         alt=""
         className="h-full w-full object-contain"
         loading="lazy"
@@ -350,6 +350,7 @@ function EventBonusCard({
   );
   return (
     <BandoriCardTile
+      interaction={{ kind: "information" }}
       card={{
         cardId,
         level,
@@ -361,6 +362,7 @@ function EventBonusCard({
       }}
       metadata={{ ...metadata, rarity, attribute }}
       cardName={cardName}
+      server={preferredServer}
       characterName={characterName}
       skillEffectLabel={skillEffect.label}
       skillEffectLanguageTag={skillEffect.languageTag}

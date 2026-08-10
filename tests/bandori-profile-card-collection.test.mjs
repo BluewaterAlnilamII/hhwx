@@ -480,6 +480,12 @@ test("profile cards and team builder use one shared collection implementation", 
   }
   assert.match(hoverTooltipHook, /event\.currentTarget\.contains\(event\.relatedTarget/u);
   assert.match(hoverTooltip, /lang=\{detailLanguageTag\}/u);
+  assert.match(hoverTooltipHook, /tooltipInteractionProps/u);
+  assert.match(hoverTooltip, /t\("cardDetails"\)/u);
+  assert.match(hoverTooltip, /pointer-events-auto/u);
+  assert.doesNotMatch(hoverTooltip, /pointer-events-none/u);
+  assert.match(cardTile, /detailHref=\{`\/bandori\/cards\/\$\{props\.card\.cardId\}\?server=\$\{getBandoriServerCode\(props\.server\)\}`\}/u);
+  assert.match(pickerTile, /detailHref=\{`\/bandori\/cards\/\$\{card\.cardId\}\?server=\$\{getBandoriServerCode\(detailServer\)\}`\}/u);
   assert.doesNotMatch(hoverTooltip, /font-family|fontFamily/u);
   assert.match(collection, /skillEffectLanguageTag: skillEffect\.languageTag/u);
   assert.equal((cardThumbnail.match(/BANDORI_MUTED_CARD_CLASS_NAME/gu) ?? []).length, 1);

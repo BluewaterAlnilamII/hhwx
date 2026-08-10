@@ -7,9 +7,13 @@ import SharedBandoriCardThumbnail, {
   type BandoriCardThumbnailCard,
   type BandoriCardThumbnailMetadata,
 } from "@/components/bandori/BandoriCardThumbnail";
-import { BandoriCardHoverTooltipPortal } from "@/components/bandori/BandoriCardHoverTooltip";
+import { BandoriCardHoverPopover } from "@/components/bandori/BandoriCardHoverTooltip";
 import { useBandoriCardHoverTooltip } from "@/hooks/useBandoriCardHoverTooltip";
-import type { BandoriServerLanguageTag } from "@/lib/bandori-server";
+import {
+  getBandoriServerCode,
+  type BandoriServer,
+  type BandoriServerLanguageTag,
+} from "@/lib/bandori-server";
 import { cn } from "@/lib/utils";
 import type { BandoriCardArtVariant, BandoriCardCatalogEntry } from "./types";
 
@@ -34,6 +38,7 @@ function buildThumbnailMetadata(card: BandoriCardCatalogEntry): BandoriCardThumb
     attribute: card.attribute ?? undefined,
     resourceSetName: card.resourceSetName,
     levelLimit: card.levelLimit,
+    type: card.type,
   };
 }
 
@@ -44,6 +49,7 @@ export default function BandoriCardThumbnailTile({
   isMuted = false,
   skillEffectLabel,
   skillEffectLanguageTag,
+  detailServer,
   onSelect,
   className,
 }: {
@@ -53,6 +59,7 @@ export default function BandoriCardThumbnailTile({
   isMuted?: boolean;
   skillEffectLabel?: string;
   skillEffectLanguageTag?: BandoriServerLanguageTag;
+  detailServer: BandoriServer;
   onSelect: () => void;
   className?: string;
 }) {
@@ -62,11 +69,14 @@ export default function BandoriCardThumbnailTile({
   const resolvedSkillEffectLabel = skillEffectLabel || termsT("unknownSkill");
   const {
     anchorRef,
+    tooltipId,
     isOpen: isHoverTooltipOpen,
     onMouseEnter,
     onMouseLeave,
     onFocus,
     onBlur,
+    onKeyDown,
+    tooltipInteractionProps,
   } = useBandoriCardHoverTooltip<HTMLElement>();
 
   return (
@@ -76,6 +86,7 @@ export default function BandoriCardThumbnailTile({
       onMouseLeave={onMouseLeave}
       onFocus={onFocus}
       onBlur={onBlur}
+      onKeyDown={onKeyDown}
       className={cn(
         "relative h-[56px] w-[56px] overflow-visible rounded-[5px] outline-solid outline-1 outline-white/80 transition hover:z-40 hover:-translate-y-0.5 hover:outline-2 hover:outline-sky-400 focus-within:z-40 focus-within:outline-2 focus-within:outline-sky-400 sm:h-[76px] sm:w-[76px]",
         isSelected && "z-30 outline-2 outline-sky-500 ring-2 ring-sky-300/70",
@@ -112,17 +123,20 @@ export default function BandoriCardThumbnailTile({
       ) : null}
 
       {isHoverTooltipOpen ? (
-        <BandoriCardHoverTooltipPortal
+        <BandoriCardHoverPopover
+          id={tooltipId}
           anchorRef={anchorRef}
           open={isHoverTooltipOpen}
           cardName={card.displayName}
           characterName={card.characterName}
           detailLanguageTag={skillEffectLanguageTag}
+          detailHref={`/bandori/cards/${card.cardId}?server=${getBandoriServerCode(detailServer)}`}
+          {...tooltipInteractionProps}
         >
           <span className="block w-full whitespace-normal wrap-break-word rounded-xl bg-slate-50 px-2 py-1 text-slate-700">
             {resolvedSkillEffectLabel}
           </span>
-        </BandoriCardHoverTooltipPortal>
+        </BandoriCardHoverPopover>
       ) : null}
 
       {isSelected ? (

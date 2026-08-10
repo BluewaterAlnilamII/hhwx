@@ -15,8 +15,82 @@ test("card image consumers use index descriptors and never substitute full art",
     assert.doesNotMatch(source, /buildBandoriCardThumbnailPublicUrl|buildBandoriCardResourceSetPublicUrl/u);
     assert.doesNotMatch(source, /lookupBandoriCardImage\([^)]*"full"/su);
   }
+  assert.match(
+    thumbnail,
+    /data-bandori-thumbnail-overlay="band"[\s\S]*?className="[^"]*object-contain[^"]*"/u,
+  );
+  assert.match(thumbnail, /buildBandoriCardAttributeIconUrl/u);
+  assert.match(thumbnail, /buildBandoriCardBandIconUrl/u);
+  assert.match(thumbnail, /buildBandoriCardMasterRankIconUrl/u);
+  assert.match(thumbnail, /usesBandoriTrainedStarStyle\(metadata\?\.type, trainType\)/u);
+  assert.match(thumbnail, /resolveBandoriCardAssetVariant/u);
+  assert.match(thumbnail, /aria-busy="true"/u);
+  assert.doesNotMatch(thumbnail, /No image/u);
+  assert.match(artImage, /aria-busy="true"/u);
+  assert.match(artImage, /imageUnavailable/u);
+  assert.doesNotMatch(artImage, /No image/u);
+  const fullCard = await readSource("src/components/bandori/BandoriFullCardArt.tsx");
+  assert.match(fullCard, /buildBandoriCardAttributeIconUrl/u);
+  assert.match(fullCard, /buildBandoriCardBandIconUrl/u);
+  assert.doesNotMatch(fullCard, /buildBandoriAttributeIconUrl|buildBandoriBandIconUrl/u);
+  assert.match(fullCard, /lg:max-w-\[calc\(50%-0\.75rem\)\]/u);
+  assert.doesNotMatch(fullCard, /max-w-2xl/u);
+  assert.match(fullCard, /isResolving/u);
+  assert.match(fullCard, /imageUnavailable/u);
+  assert.doesNotMatch(fullCard, />No image</u);
   assert.match(picker, /useBandoriCardsAssetIndex\(\)[\s\S]*useBandoriCharactersMaster/u);
   assert.match(picker, /useBandoriSkillsMaster/u);
+});
+
+test("card details expand rarity into the correct individual star style", async () => {
+  const [cardDetail, detailedRow] = await Promise.all([
+    readSource("src/app/[locale]/bandori/cards/[cardId]/CardDetailPageClient.tsx"),
+    readSource("src/components/bandori/card-picker/BandoriCardDetailedRow.tsx"),
+  ]);
+
+  assert.match(cardDetail, /buildBandoriRarityStarIconUrl/u);
+  assert.match(cardDetail, /listBandoriCardAssetVariants/u);
+  assert.match(cardDetail, /artItems\.some\(\(item\) => item\.isTrained\)/u);
+  assert.match(cardDetail, /Array\.from\(\{ length: rarity \}/u);
+  assert.doesNotMatch(cardDetail, /buildBandoriLegacyRarityCompositeUrl/u);
+  assert.match(detailedRow, /listBandoriCardAssetVariants/u);
+  assert.match(detailedRow, /variants\.map\(\(variant\)/u);
+  assert.doesNotMatch(detailedRow, /entry\.hasTrainedArt \?/u);
+});
+
+test("card details hide empty recruitment lines and tag release times by server", async () => {
+  const cardDetail = await readSource(
+    "src/app/[locale]/bandori/cards/[cardId]/CardDetailPageClient.tsx",
+  );
+
+  assert.match(cardDetail, /\{gachaText \? \(/u);
+  assert.match(cardDetail, /ServerTaggedValue value=\{currentReleaseDate\} server=\{selectedServer\}/u);
+  assert.match(cardDetail, /ServerTaggedValue value=\{jpReferenceReleaseDate\} server=\{0\}/u);
+});
+
+test("card catalog surfaces use owned SVG band and attribute icons", async () => {
+  const sources = await Promise.all([
+    readSource("src/app/[locale]/bandori/cards/[cardId]/CardDetailPageClient.tsx"),
+    readSource("src/components/bandori/BandoriCardFilterControls.tsx"),
+  ]);
+
+  for (const source of sources) {
+    assert.match(source, /buildBandoriCardAttributeIconUrl/u);
+    assert.match(source, /buildBandoriCardBandIconUrl/u);
+    assert.doesNotMatch(source, /buildBandoriAttributeIconUrl|buildBandoriBandIconUrl/u);
+  }
+});
+
+test("Bandori UI consumers do not expose PNG band or attribute builders", async () => {
+  const [resources, eventInfo, eventBonus] = await Promise.all([
+    readSource("src/lib/bandori-builtin-resources.ts"),
+    readSource("src/app/[locale]/bandori/events/EventInfoPanel.tsx"),
+    readSource("src/components/bandori/BandoriEventBonusPanel.tsx"),
+  ]);
+
+  assert.doesNotMatch(resources, /buildBandoriAttributeIconUrl|buildBandoriBandIconUrl/u);
+  assert.match(eventInfo, /buildBandoriCardBandIconUrl/u);
+  assert.match(eventBonus, /buildBandoriCardAttributeIconUrl/u);
 });
 
 test("avatar, comments, profiles, picker, and team builder stay on the shared index-backed renderers", async () => {

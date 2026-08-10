@@ -85,11 +85,74 @@
       "empty": "没有符合条件的卡牌"
     }
   },
+  "cards": {
+    "page": {
+      "title": "卡牌图鉴",
+      "displayServer": "显示服务器",
+      "resultCount": "{count} 张卡牌",
+      "showMore": "再显示 {count} 张"
+    },
+    "common": {
+      "noInformation": "无信息",
+      "cardDetails": "卡牌详情",
+      "imageLoading": "正在读取卡面",
+      "imageUnavailable": "暂无卡面"
+    },
+    "types": {
+      "permanent": "常驻",
+      "kirafes": "闪限",
+      "dreamfes": "梦限",
+      "limited": "期间限定",
+      "birthday": "生日",
+      "event": "活动奖励",
+      "campaign": "联名合作",
+      "initial": "初始",
+      "special": "特殊",
+      "others": "其他"
+    },
+    "states": {
+      "loading": "正在读取卡牌图鉴",
+      "loadFailed": "读取卡牌数据失败，请稍后重试",
+      "empty": "没有符合当前条件的卡牌"
+    },
+    "detail": {
+      "back": "返回卡牌图鉴",
+      "informationTitle": "卡牌信息",
+      "artworkTitle": "卡面",
+      "server": "服务器",
+      "cardId": "卡牌 ID",
+      "cardName": "卡牌标题",
+      "character": "角色",
+      "band": "乐队",
+      "type": "类型",
+      "attribute": "属性",
+      "rarity": "稀有度",
+      "releaseDate": "发布时间",
+      "skillName": "技能名称",
+      "skillEffect": "技能效果",
+      "gachaText": "招募语音",
+      "jpReference": "JP",
+      "totalPower": "总综合力",
+      "performance": "演出",
+      "technique": "技巧",
+      "visual": "形象",
+      "playVoice": "播放招募语音",
+      "normalArt": "特训前",
+      "afterTrainingArt": "特训后",
+      "openOriginal": "放大查看{label}卡面",
+      "closeViewer": "关闭原图查看",
+      "zoomIn": "放大",
+      "zoomOut": "缩小",
+      "previousArt": "上一张卡面",
+      "nextArt": "下一张卡面"
+    }
+  },
   "cardFilters": {
     "searchPlaceholder": "搜索卡牌名称、角色名或卡牌 ID",
     "rarityAlt": "{rarity} 星",
     "bandFallback": "乐队 {bandId}",
     "characterFallback": "角色 {characterId}",
+    "serverAvailabilityAria": "筛选可用于 {server} 的卡牌",
     "attributes": {
       "powerful": "Powerful",
       "cool": "Cool",
@@ -97,10 +160,12 @@
       "pure": "Pure"
     },
     "rows": {
+      "serverAvailability": "服务器",
       "band": "乐队",
       "attribute": "属性",
       "rarity": "稀有度",
       "character": "角色",
+      "type": "类型",
       "sort": "排序"
     },
     "sort": {

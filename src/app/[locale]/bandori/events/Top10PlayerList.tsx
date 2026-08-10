@@ -47,6 +47,7 @@ export function Top10PlayerList({ players, server }: Top10PlayerListProps) {
               <div className="flex items-center justify-center">
                 {player.avatarCardId > 0 ? (
                   <BandoriCardTile
+                    interaction={{ kind: "presentation" }}
                     card={{
                       cardId: player.avatarCardId,
                       level: 1,
@@ -59,7 +60,6 @@ export function Top10PlayerList({ players, server }: Top10PlayerListProps) {
                     }}
                     metadata={metadata ?? undefined}
                     cardName={player.name || String(player.uid)}
-                    isPresentationOnly
                     size="compact"
                     showLevel={false}
                     showPower={false}

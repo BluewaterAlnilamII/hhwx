@@ -4,17 +4,19 @@ import { type ReactNode } from "react";
 import { ArrowDownWideNarrow, ArrowUpNarrowWide, Filter, Search, X } from "lucide-react";
 import { useTranslations } from "next-intl";
 import {
-  buildBandoriAttributeIconUrl,
-  buildBandoriBandIconUrl,
+  buildBandoriCardAttributeIconUrl,
+  buildBandoriCardBandIconUrl,
   buildBandoriCharacterIconUrl,
   buildBandoriLegacyRarityCompositeUrl,
 } from "@/lib/bandori-builtin-resources";
+import BandoriServerIcon from "@/components/bandori/BandoriServerIcon";
 import {
   BANDORI_CARD_ATTRIBUTES,
   BANDORI_CARD_RARITIES,
   type BandoriCardAttribute,
   type BandoriCardFilterState,
 } from "@/lib/bandori-card-filter";
+import { getBandoriServerCode, type BandoriServer } from "@/lib/bandori-server";
 
 export type BandoriCardFilterControlsProps<TSortBy extends string> = {
   filter: BandoriCardFilterState<TSortBy>;
@@ -23,7 +25,11 @@ export type BandoriCardFilterControlsProps<TSortBy extends string> = {
   characterOptions: Array<{ characterId: number; label: string }>;
   availableBandIds: number[];
   availableCharacterIds: number[];
+  availableServers: BandoriServer[];
   sortOptions: Array<{ value: TSortBy; label: string }>;
+  typeOptions?: Array<{ value: string; label: string }>;
+  selectedTypes?: string[];
+  onTypesChange?: (types: string[]) => void;
   onFilterChange: (patch: Partial<BandoriCardFilterState<TSortBy>>) => void;
   onClearFilter: () => void;
 };
@@ -120,7 +126,11 @@ export default function BandoriCardFilterControls<TSortBy extends string>({
   characterOptions,
   availableBandIds,
   availableCharacterIds,
+  availableServers,
   sortOptions,
+  typeOptions = [],
+  selectedTypes = [],
+  onTypesChange,
   onFilterChange,
   onClearFilter,
 }: BandoriCardFilterControlsProps<TSortBy>) {
@@ -130,6 +140,7 @@ export default function BandoriCardFilterControls<TSortBy extends string>({
   const attributeLabel = t("rows.attribute");
   const rarityLabel = t("rows.rarity");
   const characterLabel = t("rows.character");
+  const serverLabel = t("rows.serverAvailability");
 
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
@@ -161,9 +172,37 @@ export default function BandoriCardFilterControls<TSortBy extends string>({
       </div>
 
       <div className="mt-4 space-y-3">
+        <FilterRow label={serverLabel}>
+          {availableServers.map((server) => {
+            const code = getBandoriServerCode(server).toUpperCase();
+            return (
+              <SelectionButton
+                key={server}
+                title={code}
+                ariaLabel={t("serverAvailabilityAria", { server: code })}
+                isSelected={filter.servers.includes(server)}
+                onClick={() => onFilterChange({ servers: toggleSelection(filter.servers, server) })}
+                className="gap-1.5 px-2.5"
+              >
+                <BandoriServerIcon server={server} size={22} isDecorative />
+                <span className="text-xs font-black">{code}</span>
+              </SelectionButton>
+            );
+          })}
+          <ToggleAllButton
+            isSelected={areAllSelected(filter.servers, availableServers)}
+            allLabel={allLabel}
+            selectAllLabel={t("actions.selectAllGroup", { group: serverLabel })}
+            clearAllLabel={t("actions.clearAllGroup", { group: serverLabel })}
+            onClick={() => onFilterChange({
+              servers: areAllSelected(filter.servers, availableServers) ? [] : availableServers,
+            })}
+          />
+        </FilterRow>
+
         <FilterRow label={bandLabel}>
           {bandOptions.map((option) => {
-            const bandIconUrl = buildBandoriBandIconUrl(option.bandId);
+            const bandIconUrl = buildBandoriCardBandIconUrl(option.bandId);
             return (
               <SelectionButton
                 key={option.bandId}
@@ -197,7 +236,7 @@ export default function BandoriCardFilterControls<TSortBy extends string>({
             >
               <span className={`inline-flex h-6 w-6 shrink-0 items-center justify-center overflow-hidden rounded-full ${ATTRIBUTE_SWATCH_CLASSES[attribute]}`}>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={buildBandoriAttributeIconUrl(attribute) ?? undefined} alt="" loading="lazy" decoding="async" className="h-full w-full object-contain" />
+                <img src={buildBandoriCardAttributeIconUrl(attribute) ?? undefined} alt="" loading="lazy" decoding="async" className="h-full w-full object-contain" />
               </span>
             </SelectionButton>
           ))}
@@ -261,6 +300,33 @@ export default function BandoriCardFilterControls<TSortBy extends string>({
             })}
           />
         </FilterRow>
+
+        {typeOptions.length > 0 && onTypesChange ? (
+          <FilterRow label={t("rows.type")}>
+            {typeOptions.map((option) => (
+              <SelectionButton
+                key={option.value}
+                title={option.label}
+                isSelected={selectedTypes.includes(option.value)}
+                onClick={() => onTypesChange(toggleSelection(selectedTypes, option.value))}
+                className="px-3 text-xs"
+              >
+                {option.label}
+              </SelectionButton>
+            ))}
+            <ToggleAllButton
+              isSelected={areAllSelected(selectedTypes, typeOptions.map((option) => option.value))}
+              allLabel={allLabel}
+              selectAllLabel={t("actions.selectAllGroup", { group: t("rows.type") })}
+              clearAllLabel={t("actions.clearAllGroup", { group: t("rows.type") })}
+              onClick={() => onTypesChange(
+                areAllSelected(selectedTypes, typeOptions.map((option) => option.value))
+                  ? []
+                  : typeOptions.map((option) => option.value),
+              )}
+            />
+          </FilterRow>
+        ) : null}
 
         <FilterRow label={t("rows.sort")}>
           <select
