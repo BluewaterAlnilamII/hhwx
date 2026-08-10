@@ -1,7 +1,7 @@
 import type { TrackingMode } from "./_tracker/types";
 import type { TrackerRankingSelection } from "./_tracker/tracker-tier-preference";
-import { buildLocalizedPathname, DEFAULT_LOCALE, getLocaleFromPathname } from "@/i18n/routing";
-import { buildBandoriEventsPath } from "@/lib/bandori/events/route";
+import { buildLocalizedPathname, normalizeLocale } from "@/i18n/routing";
+import { buildBandoriEventsPath, parseBandoriEventRouteId } from "@/lib/bandori/events/route";
 import {
   getBandoriServerCode,
   parseBandoriServerParam,
@@ -10,8 +10,9 @@ import {
 
 export type EventTrackerView = "tracker" | "info";
 
+type SearchParamsReader = Pick<URLSearchParams, "get">;
+
 type EventTrackerUrlQueryPatch = {
-  eventId?: number | null;
   trackingMode?: TrackingMode | null;
   tier?: TrackerRankingSelection | null;
   commentPage?: number | null;
@@ -66,6 +67,21 @@ export function readEventTrackerSearchParams(): URLSearchParams {
   return new URLSearchParams(window.location.search);
 }
 
+export function buildEventTrackerRouteStateKey(
+  initialEventId: number | null,
+  params: SearchParamsReader,
+  preferredServer: BandoriServer,
+): string {
+  return JSON.stringify({
+    eventId: initialEventId,
+    type: params.get("type"),
+    tier: params.get("tier"),
+    server: params.get("server"),
+    view: params.get("view"),
+    preferredServer,
+  });
+}
+
 function setPositiveIntegerParam(params: URLSearchParams, name: string, value: number | null | undefined) {
   if (value === undefined) {
     return;
@@ -107,50 +123,97 @@ function setStringParam(params: URLSearchParams, name: string, value: string | n
   params.set(name, normalizedValue);
 }
 
-export function replaceEventTrackerUrlQuery(patch: EventTrackerUrlQueryPatch) {
-  if (typeof window === "undefined") {
-    return;
-  }
+export function buildEventTrackerHref(
+  pathname: string,
+  patch: EventTrackerUrlQueryPatch,
+  currentParams: URLSearchParams = readEventTrackerSearchParams(),
+): string {
+  const params = new URLSearchParams(currentParams);
 
-  const url = new URL(window.location.href);
-  if (patch.eventId !== undefined) {
-    url.searchParams.delete("event");
-    url.pathname = buildLocalizedPathname(
-      buildBandoriEventsPath(patch.eventId),
-      getLocaleFromPathname(url.pathname) ?? DEFAULT_LOCALE,
-    );
-  }
+  // Event identity is owned by /events/[eventId], never by query state.
+  params.delete("event");
 
   if (patch.trackingMode !== undefined) {
     if (patch.trackingMode === null) {
-      url.searchParams.delete("type");
+      params.delete("type");
     } else {
-      url.searchParams.set("type", patch.trackingMode);
+      params.set("type", patch.trackingMode);
     }
   }
 
-  setTrackerRankingParam(url.searchParams, patch.tier);
-  setPositiveIntegerParam(url.searchParams, "page", patch.commentPage);
-  setStringParam(url.searchParams, "comment", patch.commentId);
+  setTrackerRankingParam(params, patch.tier);
+  setPositiveIntegerParam(params, "page", patch.commentPage);
+  setStringParam(params, "comment", patch.commentId);
 
   if (patch.server !== undefined) {
     if (patch.server === null) {
-      url.searchParams.delete("server");
+      params.delete("server");
     } else {
-      url.searchParams.set("server", getBandoriServerCode(patch.server));
+      params.set("server", getBandoriServerCode(patch.server));
     }
   }
 
   if (patch.view !== undefined) {
     if (patch.view === null || patch.view === "tracker") {
-      url.searchParams.delete("view");
+      params.delete("view");
     } else {
-      url.searchParams.set("view", patch.view);
+      params.set("view", patch.view);
     }
   }
 
-  const nextUrl = url.toString();
-  if (nextUrl === window.location.href) {
+  const queryString = params.toString();
+  return queryString ? `${pathname}?${queryString}` : pathname;
+}
+
+export function buildEventCommentPermalink({
+  currentHref,
+  locale,
+  eventId,
+  server,
+  page,
+  commentId,
+}: {
+  currentHref: string;
+  locale: string;
+  eventId: number | null;
+  server: BandoriServer;
+  page: number;
+  commentId: string;
+}): string {
+  const canonicalEventId = parseBandoriEventRouteId(String(eventId ?? ""));
+  if (canonicalEventId === null) {
+    return "";
+  }
+
+  const currentUrl = new URL(currentHref);
+  const canonicalPathname = buildLocalizedPathname(
+    buildBandoriEventsPath(canonicalEventId),
+    normalizeLocale(locale),
+  );
+  const canonicalUrl = new URL(
+    buildEventTrackerHref(
+      canonicalPathname,
+      {
+        server,
+        commentPage: page,
+        commentId,
+      },
+      currentUrl.searchParams,
+    ),
+    currentUrl.origin,
+  );
+  canonicalUrl.hash = currentUrl.hash;
+  return canonicalUrl.toString();
+}
+
+export function replaceEventTrackerUrlQuery(patch: EventTrackerUrlQueryPatch) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  const nextUrl = `${buildEventTrackerHref(window.location.pathname, patch)}${window.location.hash}`;
+  const currentUrl = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+  if (nextUrl === currentUrl) {
     return;
   }
 

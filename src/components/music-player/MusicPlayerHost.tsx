@@ -9,6 +9,7 @@ import {
   MUSIC_PLAYER_QUEUE_STORAGE_KEY,
   parseMusicPlayerPreferencesSnapshot,
   parseMusicPlayerQueueSnapshot,
+  type MusicPlayerItem,
 } from "@/lib/music-player-contract";
 import {
   createMusicPlayerPlaybackCoordinator,
@@ -37,6 +38,24 @@ function updateMediaSessionPosition(audio: HTMLAudioElement): void {
   }
 }
 
+function updateMediaSessionMetadata(track: MusicPlayerItem | null): void {
+  if (!("mediaSession" in navigator)) {
+    return;
+  }
+
+  navigator.mediaSession.metadata = track
+    ? new MediaMetadata({
+        title: track.title,
+        artist: track.artist ?? undefined,
+        // Keep a durable network URL here: iOS may consume Media Session
+        // artwork outside the page context where blob URLs are valid.
+        artwork: track.artworkUrl
+          ? [{ src: track.artworkUrl, type: "image/png" }]
+          : undefined,
+      })
+    : null;
+}
+
 function applyAudioSeek(
   audio: HTMLAudioElement,
   positionSeconds: number,
@@ -52,6 +71,7 @@ export default function MusicPlayerHost() {
   const coordinatorRef = useRef<PlaybackCoordinator | null>(null);
   const handledCommandIdRef = useRef(0);
   const playAttemptIdRef = useRef(0);
+  const hasPlayedMusicInDocumentRef = useRef(false);
   const tabIdRef = useRef<string>("");
   const currentTrack = useMusicPlayerStore(selectMusicPlayerCurrentTrack);
   const queue = useMusicPlayerStore((state) => state.queue);
@@ -266,21 +286,21 @@ export default function MusicPlayerHost() {
   }, []);
 
   useEffect(() => {
-    if (!("mediaSession" in navigator)) {
+    if (!currentTrack) {
+      hasPlayedMusicInDocumentRef.current = false;
+      updateMediaSessionMetadata(null);
+      if ("mediaSession" in navigator) {
+        navigator.mediaSession.playbackState = "none";
+      }
       return;
     }
 
-    navigator.mediaSession.metadata = currentTrack
-      ? new MediaMetadata({
-        title: currentTrack.title,
-        artist: currentTrack.artist ?? undefined,
-        // Keep a durable network URL here: iOS may consume Media Session
-        // artwork outside the page context where blob URLs are valid.
-        artwork: currentTrack.artworkUrl
-          ? [{ src: currentTrack.artworkUrl, type: "image/png" }]
-          : undefined,
-      })
-      : null;
+    // Hydration restores a persisted queue paused at zero. Keep that queue in
+    // the in-page player without claiming a system media session until music
+    // has actually played in this document.
+    if (hasPlayedMusicInDocumentRef.current) {
+      updateMediaSessionMetadata(currentTrack);
+    }
   }, [currentTrack]);
 
   return (
@@ -309,6 +329,21 @@ export default function MusicPlayerHost() {
         }
       }}
       onPlaying={() => {
+        const audio = audioRef.current;
+        const activeTrack = selectMusicPlayerCurrentTrack(useMusicPlayerStore.getState());
+        if (
+          !audio
+          || audio.paused
+          || !activeTrack
+          || audio.getAttribute("src") !== activeTrack.sourceUrl
+        ) {
+          return;
+        }
+
+        if (!hasPlayedMusicInDocumentRef.current) {
+          hasPlayedMusicInDocumentRef.current = true;
+          updateMediaSessionMetadata(activeTrack);
+        }
         useMusicPlayerStore.getState().setPlaybackStatus("playing");
         if ("mediaSession" in navigator) {
           navigator.mediaSession.playbackState = "playing";
@@ -316,11 +351,12 @@ export default function MusicPlayerHost() {
       }}
       onPause={() => {
         const state = useMusicPlayerStore.getState();
-        if (state.currentIndex !== null && state.status !== "error" && state.status !== "ended") {
+        const hasActiveTrack = state.currentIndex !== null;
+        if (hasActiveTrack && state.status !== "error" && state.status !== "ended") {
           state.setPlaybackStatus("paused");
         }
         if ("mediaSession" in navigator) {
-          navigator.mediaSession.playbackState = "paused";
+          navigator.mediaSession.playbackState = hasActiveTrack ? "paused" : "none";
         }
       }}
       onEnded={() => useMusicPlayerStore.getState().handleTrackEnded()}

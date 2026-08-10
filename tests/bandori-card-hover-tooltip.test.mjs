@@ -62,6 +62,15 @@ test("card tooltip clamps horizontally using its actual width", () => {
   });
 });
 
+test("card details link keeps normal Next navigation defaults", async () => {
+  const tooltip = await readSource("src/components/bandori/BandoriCardHoverTooltip.tsx");
+  const detailLink = tooltip.match(/<Link[\s\S]*?<\/Link>/u)?.[0];
+
+  assert.ok(detailLink);
+  assert.match(detailLink, /\{t\("cardDetails"\)\}/u);
+  assert.doesNotMatch(detailLink, /\bprefetch=|\breplace=/u);
+});
+
 test("card tooltip positioning reacts to real layout and preserves logical tab order", async () => {
   const [tooltip, hook] = await Promise.all([
     readSource("src/components/bandori/BandoriCardHoverTooltip.tsx"),

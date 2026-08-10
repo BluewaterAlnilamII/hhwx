@@ -268,9 +268,6 @@ export const CommentItem = memo(function CommentItem({
   const handleCopyLink = async () => {
     if (!permalink) return;
     await navigator.clipboard?.writeText(permalink).catch(() => undefined);
-    if (permalink !== window.location.href) {
-      window.history.replaceState(null, "", permalink);
-    }
   };
 
   const handleReplyToClick = (event: MouseEvent<HTMLAnchorElement>) => {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { ArrowLeft, ClipboardList, Images, Play } from "lucide-react";
 import Heading from "@/components/Heading";
 import { useBandoriCharactersMaster } from "@/hooks/useBandoriCharactersMaster";
@@ -11,6 +11,7 @@ import {
   normalizeBandoriCardCatalogType,
   type BandoriCardCatalogType,
 } from "@/lib/bandori/cards/cards-page-catalog";
+import { readBandoriCardsListHref } from "@/lib/bandori/cards/cards-list-query-snapshot";
 import { normalizeBandoriCardDisplayReleaseTimestamp } from "@/lib/bandori/cards/release";
 import {
   pickBandoriCharacterDisplayName,
@@ -178,6 +179,21 @@ export default function CardDetailPageClient({
   const charactersMaster = useBandoriCharactersMaster();
   const skillsMaster = useBandoriSkillsMaster();
   const { value: assetIndex, loading: assetIndexLoading } = useBandoriCardsAssetIndex();
+  const [cardsListHref, setCardsListHref] = useState("/bandori/cards");
+
+  useEffect(() => {
+    let cancelled = false;
+    window.queueMicrotask(() => {
+      if (!cancelled) {
+        setCardsListHref(readBandoriCardsListHref());
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const noInformation = t("common.noInformation");
   const characterId = toPositiveInteger(currentCard.characterId);
   const character = characterId === null ? null : charactersMaster.data?.[String(characterId)];
@@ -266,7 +282,7 @@ export default function CardDetailPageClient({
   return (
     <BandoriPageShell contentClassName="max-w-6xl">
       <article className="rounded-3xl border border-[var(--theme-color-border-default)] bg-[var(--theme-color-surface-background)] p-4 shadow-[var(--theme-shadow-surface-raised)] sm:p-6 dark:border-slate-700 dark:bg-[#111827]">
-        <Link href="/bandori/cards" className="inline-flex items-center gap-2 text-sm font-black text-sky-700 transition hover:text-sky-500 dark:text-sky-300">
+        <Link href={cardsListHref} className="inline-flex items-center gap-2 text-sm font-black text-sky-700 transition hover:text-sky-500 dark:text-sky-300">
           <ArrowLeft className="h-4 w-4" aria-hidden="true" />
           {t("detail.back")}
         </Link>
@@ -287,6 +303,7 @@ export default function CardDetailPageClient({
             availableServers={availableServers}
             label={t("detail.server")}
             getHref={(server) => `/bandori/cards/${cardId}?server=${getBandoriServerCode(server)}`}
+            replace
           />
         </div>
 

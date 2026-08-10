@@ -1,11 +1,12 @@
 "use client";
 
 import { useCallback } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import CommentThread from "@/components/comments/CommentThread";
 import type { CommentThreadLocation } from "@/hooks/useCommentThread";
 import { getBandoriServerCode, type BandoriServer } from "@/lib/bandori-server";
 import {
+  buildEventCommentPermalink,
   readEventTrackerSearchParams,
   readPositiveIntegerSearchParam,
   replaceEventTrackerUrlQuery,
@@ -18,6 +19,7 @@ export default function EventComments({
   eventId: number | null;
   server: BandoriServer;
 }) {
+  const locale = useLocale();
   const t = useTranslations("bandori.events.comments");
   const serverCode = getBandoriServerCode(server);
   const apiBase = eventId ? `/api/bandori/events/${eventId}/comments` : null;
@@ -32,22 +34,23 @@ export default function EventComments({
 
   const updateLocation = useCallback((location: CommentThreadLocation) => {
     replaceEventTrackerUrlQuery({
-      eventId,
       server,
       commentPage: location.page,
       commentId: location.commentId,
     });
-  }, [eventId, server]);
+  }, [server]);
 
   const buildPermalink = useCallback((commentId: string, page: number): string => {
     if (typeof window === "undefined") return "";
-    const url = new URL(window.location.href);
-    if (eventId) url.searchParams.set("event", String(eventId));
-    url.searchParams.set("server", serverCode);
-    url.searchParams.set("page", String(page));
-    url.searchParams.set("comment", commentId);
-    return url.toString();
-  }, [eventId, serverCode]);
+    return buildEventCommentPermalink({
+      currentHref: window.location.href,
+      locale,
+      eventId,
+      server,
+      page,
+      commentId,
+    });
+  }, [eventId, locale, server]);
 
   return (
     <CommentThread
