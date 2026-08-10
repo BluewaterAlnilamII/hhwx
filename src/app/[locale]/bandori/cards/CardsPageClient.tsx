@@ -1,6 +1,6 @@
 "use client";
 
-import { useDeferredValue, useMemo, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import { Images, Loader2, SearchX } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import BandoriCardFilterControls from "@/components/bandori/BandoriCardFilterControls";
@@ -25,6 +25,7 @@ import {
   isBandoriCardAttribute,
   isBandoriCardPickerSortBy,
 } from "@/lib/bandori/cards/filter";
+import { saveBandoriCardsListQuery } from "@/lib/bandori/cards/cards-list-query-snapshot";
 import {
   BANDORI_SERVERS,
   getBandoriServerCode,
@@ -103,6 +104,11 @@ export default function CardsPageClient() {
   const skillsMaster = useBandoriSkillsMaster();
   const cardsAssetIndex = useBandoriCardsAssetIndex();
   const [visibleState, setVisibleState] = useState({ key: "", count: INITIAL_VISIBLE_COUNT });
+  const cardsListQuery = searchParams.toString();
+
+  useEffect(() => {
+    saveBandoriCardsListQuery(cardsListQuery);
+  }, [cardsListQuery]);
 
   const filterOptions = useMemo(() => buildBandoriCardFilterOptions(
     charactersMaster.data ?? {},

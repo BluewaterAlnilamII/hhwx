@@ -14,6 +14,7 @@ export type BandoriCardServerSwitcherProps = {
   availableServers?: readonly BandoriServer[];
   label: string;
   getHref?: (server: BandoriServer) => string;
+  replace?: boolean;
   onChange?: (server: BandoriServer) => void;
   className?: string;
 };
@@ -23,6 +24,7 @@ export default function BandoriCardServerSwitcher({
   availableServers = BANDORI_SERVERS,
   label,
   getHref,
+  replace = false,
   onChange,
   className,
 }: BandoriCardServerSwitcherProps) {
@@ -62,6 +64,7 @@ export default function BandoriCardServerSwitcher({
               <Link
                 key={server}
                 href={getHref(server)}
+                replace={replace}
                 aria-current={isActive ? "page" : undefined}
                 aria-label={code}
                 title={code}

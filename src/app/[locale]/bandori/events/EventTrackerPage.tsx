@@ -1,9 +1,11 @@
 "use client";
 
-import { startTransition, useState, useEffect, useRef, useMemo, useCallback } from "react";
+import { Suspense, startTransition, useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { useLocale, useTranslations } from "next-intl";
+import { useSearchParams } from "next/navigation";
 import * as Tabs from "@radix-ui/react-tabs";
 
+import { useRouter } from "@/i18n/navigation";
 import { useBandoriEventsAssetIndex } from "@/hooks/useBandoriPublicAssetIndex";
 import { useBandoriMusicMaster } from "@/hooks/useBandoriMusicMaster";
 import {
@@ -56,6 +58,8 @@ import {
   type TrackerRankingSelection,
 } from "./_tracker/tracker-tier-preference";
 import {
+  buildEventTrackerRouteStateKey,
+  buildEventTrackerHref,
   parseTrackingModeSearchParam,
   parseEventTrackerViewSearchParam,
   readEventTrackerSearchParams,
@@ -63,6 +67,7 @@ import {
   resolveEventTrackerServerSelection,
   type EventTrackerView,
 } from "./urlQuery";
+import { buildBandoriEventsPath, parseBandoriEventRouteId } from "@/lib/bandori/events/route";
 import { mergeComparisonLines, useComparisonTrackerData } from "./_tracker/useComparisonTrackerData";
 import { mergeBestdoriPredictionData, useBestdoriPrediction } from "./_tracker/useBestdoriPrediction";
 import { buildTooltipSignature, type HoverTooltipState } from "./_tracker/useTrackerHoverTooltip";
@@ -197,10 +202,34 @@ type EventTrackerPageProps = {
   initialEventId: number | null;
 };
 
-export default function EventTrackerPage({ initialEventId }: EventTrackerPageProps) {
+function EventTrackerRouteStateSync({
+  initialEventId,
+  preferredServer,
+  onRouteUrlStateKeyChange,
+}: {
+  initialEventId: number | null;
+  preferredServer: BandoriServer;
+  onRouteUrlStateKeyChange: (routeUrlStateKey: string) => void;
+}) {
+  const searchParams = useSearchParams();
+  const routeUrlStateKey = buildEventTrackerRouteStateKey(
+    initialEventId,
+    searchParams,
+    preferredServer,
+  );
+
+  useEffect(() => {
+    onRouteUrlStateKeyChange(routeUrlStateKey);
+  }, [onRouteUrlStateKeyChange, routeUrlStateKey]);
+
+  return null;
+}
+
+function EventTrackerPageContent({ initialEventId }: EventTrackerPageProps) {
   const locale = useLocale();
   const commonT = useTranslations("bandori.events.common");
   const viewT = useTranslations("bandori.events.view");
+  const router = useRouter();
   const preferredServer = useBandoriPreferredServer();
   const hasHydratedPreferredServer = useBandoriPreferencesStore((state) => state.hydrated);
   const { music: masterMusic } = useBandoriMusicMaster();
@@ -216,6 +245,9 @@ export default function EventTrackerPage({ initialEventId }: EventTrackerPagePro
   const [activeView, setActiveView] = useState<EventTrackerView>("tracker");
   const [chartRenderRevision, setChartRenderRevision] = useState(0);
   const [zoomIndex, setZoomIndex] = useState(0);
+  const appliedRouteUrlStateKeyRef = useRef<string | null>(null);
+  const appliedSelectedServerRef = useRef<BandoriServer | null>(null);
+  const pendingRecommendedEventHrefRef = useRef<string | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const chartViewportRef = useRef<HTMLDivElement>(null);
   const tooltipRef = useRef<HTMLDivElement>(null);
@@ -225,6 +257,7 @@ export default function EventTrackerPage({ initialEventId }: EventTrackerPagePro
   const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [chartViewportHeight, setChartViewportHeight] = useState(400);
   const [hasAppliedInitialUrlState, setHasAppliedInitialUrlState] = useState(false);
+  const [routeUrlStateKey, setRouteUrlStateKey] = useState<string | null>(null);
   const monthlyRankingOptions = useMemo(
     () => getMonthlyRankingOptions(selectedServer, locale),
     [locale, selectedServer],
@@ -285,8 +318,8 @@ export default function EventTrackerPage({ initialEventId }: EventTrackerPagePro
   const isSongModeDisabled = isSongRankingDisabledEventType(eventMeta?.eventType);
 
   const handleSelectedEventIdChange = useCallback((eventId: string) => {
-    const nextEventId = Number.parseInt(eventId, 10);
-    if (!Number.isInteger(nextEventId) || nextEventId <= 0) {
+    const nextEventId = parseBandoriEventRouteId(eventId);
+    if (nextEventId === null || nextEventId === resolvedCurrentEventId) {
       return;
     }
 
@@ -300,18 +333,17 @@ export default function EventTrackerPage({ initialEventId }: EventTrackerPagePro
       preferredRanking,
     );
 
-    setCurrentEventId(nextEventId);
-    setTrackingMode(nextTrackingMode);
-    setSelectedRanking(nextRanking);
     setZoomIndex(0);
-    replaceEventTrackerUrlQuery({
-      eventId: nextEventId,
-      trackingMode: nextTrackingMode,
-      tier: nextRanking,
-      commentPage: null,
-      commentId: null,
-    });
-  }, [eventTypeById, selectedRanking, selectedServer, trackingMode]);
+    router.push(
+      buildEventTrackerHref(buildBandoriEventsPath(nextEventId), {
+        trackingMode: nextTrackingMode,
+        tier: nextRanking,
+        commentPage: null,
+        commentId: null,
+      }),
+      { scroll: false },
+    );
+  }, [eventTypeById, resolvedCurrentEventId, router, selectedRanking, selectedServer, trackingMode]);
 
   const handleServerChange = useCallback((server: BandoriServer) => {
     setSelectedMonthlyMonthId((previousMonthId) => {
@@ -325,20 +357,23 @@ export default function EventTrackerPage({ initialEventId }: EventTrackerPagePro
         return getCurrentMonthlyRankingWindow(server).monthId;
       }
     });
-    setSelectedRanking((previousRanking) => resolveMainTrackerRanking(
+    const nextRanking = resolveMainTrackerRanking(
       server,
       trackingMode,
       resolvedCurrentEventId,
-      previousRanking,
-    ));
+      selectedRanking,
+    );
+    setSelectedRanking(nextRanking);
     setSelectedServer(server);
+    appliedSelectedServerRef.current = server;
     setZoomIndex(0);
     replaceEventTrackerUrlQuery({
       server,
+      tier: nextRanking,
       commentPage: null,
       commentId: null,
     });
-  }, [resolvedCurrentEventId, selectedServer, trackingMode]);
+  }, [resolvedCurrentEventId, selectedRanking, selectedServer, trackingMode]);
 
   const handleViewChange = useCallback((view: EventTrackerView) => {
     setActiveView(view);
@@ -369,6 +404,10 @@ export default function EventTrackerPage({ initialEventId }: EventTrackerPagePro
     setTrackingMode(nextMode);
     setSelectedRanking(nextRanking);
     setZoomIndex(0);
+    replaceEventTrackerUrlQuery({
+      trackingMode: nextMode,
+      tier: nextRanking,
+    });
   }, [isSongModeDisabled, resolvedCurrentEventId, selectedServer, trackingMode]);
 
   const handleTierChange = useCallback((tier: number) => {
@@ -390,6 +429,7 @@ export default function EventTrackerPage({ initialEventId }: EventTrackerPagePro
 
     setSelectedRanking(nextTier);
     writeTrackerRankingPreference(trackingMode, nextTier);
+    replaceEventTrackerUrlQuery({ tier: nextTier });
   }, [resolvedCurrentEventId, selectedRanking, selectedServer, trackingMode]);
 
   const handleTop10Change = useCallback(() => {
@@ -400,6 +440,7 @@ export default function EventTrackerPage({ initialEventId }: EventTrackerPagePro
     setSelectedRanking(TOP10_RANKING_SELECTION);
     writeTrackerRankingPreference(trackingMode, TOP10_RANKING_SELECTION);
     setZoomIndex(0);
+    replaceEventTrackerUrlQuery({ tier: TOP10_RANKING_SELECTION });
   }, [selectedRanking, trackingMode]);
 
   const handleMonthlyMonthChange = useCallback((monthId: number) => {
@@ -408,7 +449,11 @@ export default function EventTrackerPage({ initialEventId }: EventTrackerPagePro
   }, []);
 
   useEffect(() => {
-    if (!hasHydratedPreferredServer || hasAppliedInitialUrlState) {
+    if (
+      !hasHydratedPreferredServer ||
+      routeUrlStateKey === null ||
+      appliedRouteUrlStateKeyRef.current === routeUrlStateKey
+    ) {
       return;
     }
 
@@ -420,21 +465,44 @@ export default function EventTrackerPage({ initialEventId }: EventTrackerPagePro
       }
 
       const nextState = readInitialTrackerQueryState(preferredServer, initialEventId);
+      const previousServer = appliedSelectedServerRef.current;
+      appliedRouteUrlStateKeyRef.current = routeUrlStateKey;
+      appliedSelectedServerRef.current = nextState.selectedServer;
       setCurrentEventId(nextState.currentEventId);
       setTrackingMode(nextState.trackingMode);
       setSelectedRanking(nextState.selectedRanking);
       setSelectedServer(nextState.selectedServer);
-      setSelectedMonthlyMonthId(
-        getCurrentMonthlyRankingWindow(nextState.selectedServer).monthId,
-      );
+      if (previousServer === null) {
+        setSelectedMonthlyMonthId(
+          getCurrentMonthlyRankingWindow(nextState.selectedServer).monthId,
+        );
+      } else if (previousServer !== nextState.selectedServer) {
+        setSelectedMonthlyMonthId((previousMonthId) => {
+          try {
+            return remapBandoriMonthlyRankingId(
+              getBandoriServerCode(previousServer),
+              getBandoriServerCode(nextState.selectedServer),
+              previousMonthId,
+            );
+          } catch {
+            return getCurrentMonthlyRankingWindow(nextState.selectedServer).monthId;
+          }
+        });
+      }
       setActiveView(nextState.activeView);
       setHasAppliedInitialUrlState(true);
+      replaceEventTrackerUrlQuery({
+        trackingMode: nextState.trackingMode,
+        tier: nextState.selectedRanking,
+        server: nextState.selectedServer,
+        view: nextState.activeView,
+      });
     });
 
     return () => {
       cancelled = true;
     };
-  }, [hasAppliedInitialUrlState, hasHydratedPreferredServer, initialEventId, preferredServer]);
+  }, [hasHydratedPreferredServer, initialEventId, preferredServer, routeUrlStateKey]);
 
   useEffect(() => {
     if (!hasAppliedInitialUrlState || trackingMode !== "song" || !isSongModeDisabled) {
@@ -457,6 +525,10 @@ export default function EventTrackerPage({ initialEventId }: EventTrackerPagePro
       setTrackingMode("event");
       setSelectedRanking(nextRanking);
       setZoomIndex(0);
+      replaceEventTrackerUrlQuery({
+        trackingMode: "event",
+        tier: nextRanking,
+      });
     });
 
     return () => {
@@ -465,22 +537,40 @@ export default function EventTrackerPage({ initialEventId }: EventTrackerPagePro
   }, [hasAppliedInitialUrlState, isSongModeDisabled, resolvedCurrentEventId, selectedServer, trackingMode]);
 
   useEffect(() => {
-    if (!hasAppliedInitialUrlState) {
+    if (
+      !hasAppliedInitialUrlState ||
+      initialEventId !== null ||
+      resolvedCurrentEventId === null
+    ) {
+      pendingRecommendedEventHrefRef.current = null;
       return;
     }
 
-    if (resolvedCurrentEventId === null) {
+    const nextHref = buildEventTrackerHref(
+      buildBandoriEventsPath(resolvedCurrentEventId),
+      {
+        trackingMode,
+        tier: selectedRanking,
+        server: selectedServer,
+        view: activeView,
+      },
+    );
+    if (pendingRecommendedEventHrefRef.current === nextHref) {
       return;
     }
 
-    replaceEventTrackerUrlQuery({
-      eventId: resolvedCurrentEventId,
-      trackingMode,
-      tier: selectedRanking,
-      server: selectedServer,
-      view: activeView,
-    });
-  }, [activeView, hasAppliedInitialUrlState, resolvedCurrentEventId, selectedRanking, selectedServer, trackingMode]);
+    pendingRecommendedEventHrefRef.current = nextHref;
+    router.replace(nextHref, { scroll: false });
+  }, [
+    activeView,
+    hasAppliedInitialUrlState,
+    initialEventId,
+    resolvedCurrentEventId,
+    router,
+    selectedRanking,
+    selectedServer,
+    trackingMode,
+  ]);
 
   const availableChallengeSongIds = useMemo(() => {
     if (eventMeta?.eventType !== "challenge") {
@@ -1026,6 +1116,13 @@ export default function EventTrackerPage({ initialEventId }: EventTrackerPagePro
   // ===== 渲染 =====
   return (
     <BandoriPageShell contentClassName="max-w-6xl">
+        <Suspense fallback={null}>
+          <EventTrackerRouteStateSync
+            initialEventId={initialEventId}
+            preferredServer={preferredServer}
+            onRouteUrlStateKeyChange={setRouteUrlStateKey}
+          />
+        </Suspense>
 
         {/* ========== 页头：活动名称、切换器、活动横幅 ========== */}
         <BandoriEventSwitcher
@@ -1223,4 +1320,8 @@ export default function EventTrackerPage({ initialEventId }: EventTrackerPagePro
         <EventComments eventId={resolvedCurrentEventId} server={selectedServer} />
     </BandoriPageShell>
   );
+}
+
+export default function EventTrackerPage(props: EventTrackerPageProps) {
+  return <EventTrackerPageContent {...props} />;
 }

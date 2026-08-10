@@ -97,9 +97,74 @@ test("Media Session artwork uses the durable track URL", async () => {
   );
 
   assert.doesNotMatch(host, /useSharedMusicArtworkUrl/u);
-  assert.match(host, /artwork: currentTrack\.artworkUrl/u);
-  assert.match(host, /src: currentTrack\.artworkUrl/u);
-  assert.match(host, /\}, \[currentTrack\]\);/u);
+  assert.match(host, /function updateMediaSessionMetadata\(track: MusicPlayerItem \| null\)/u);
+  assert.match(host, /navigator\.mediaSession\.metadata = track/u);
+  assert.match(host, /artwork: track\.artworkUrl/u);
+  assert.match(host, /src: track\.artworkUrl/u);
+});
+
+test("Media Session metadata starts with real playback and then follows the track lifecycle", async () => {
+  const host = await readFile(
+    new URL("src/components/music-player/MusicPlayerHost.tsx", ROOT_URL),
+    "utf8",
+  );
+
+  assert.match(host, /const hasPlayedMusicInDocumentRef = useRef\(false\)/u);
+
+  const clearGateAbsoluteIndex = host.indexOf(
+    "hasPlayedMusicInDocumentRef.current = false",
+  );
+  const metadataEffectStart = host.lastIndexOf("useEffect(() => {", clearGateAbsoluteIndex);
+  const metadataEffectEnd = host.indexOf("  }, [currentTrack]);", metadataEffectStart);
+  assert.ok(metadataEffectStart >= 0 && metadataEffectEnd > metadataEffectStart);
+  const metadataEffect = host.slice(metadataEffectStart, metadataEffectEnd);
+
+  const clearGateIndex = metadataEffect.indexOf("hasPlayedMusicInDocumentRef.current = false");
+  const clearMetadataIndex = metadataEffect.indexOf("updateMediaSessionMetadata(null)");
+  assert.ok(clearGateIndex >= 0 && clearGateIndex < clearMetadataIndex);
+  assert.match(metadataEffect, /navigator\.mediaSession\.playbackState = "none"/u);
+
+  const hydratedTrackGateIndex = metadataEffect.indexOf(
+    "if (hasPlayedMusicInDocumentRef.current)",
+  );
+  const hydratedTrackPublishIndex = metadataEffect.indexOf(
+    "updateMediaSessionMetadata(currentTrack)",
+  );
+  assert.ok(
+    hydratedTrackGateIndex >= 0 && hydratedTrackGateIndex < hydratedTrackPublishIndex,
+    "restored paused tracks must not publish Media Session metadata before playback",
+  );
+
+  const onPlayingStart = host.indexOf("onPlaying={() => {");
+  const onPauseStart = host.indexOf("onPause={() => {", onPlayingStart);
+  assert.ok(onPlayingStart >= 0 && onPauseStart > onPlayingStart);
+  const onPlayingHandler = host.slice(onPlayingStart, onPauseStart);
+  assert.equal(
+    host.match(/hasPlayedMusicInDocumentRef\.current = true/gu)?.length,
+    1,
+    "only actual playback may open the Media Session metadata gate",
+  );
+
+  const firstPlaybackGateIndex = onPlayingHandler.indexOf(
+    "if (!hasPlayedMusicInDocumentRef.current)",
+  );
+  const markPlayedIndex = onPlayingHandler.indexOf(
+    "hasPlayedMusicInDocumentRef.current = true",
+  );
+  const firstPublishIndex = onPlayingHandler.indexOf(
+    "updateMediaSessionMetadata(activeTrack)",
+  );
+  assert.ok(
+    firstPlaybackGateIndex >= 0
+      && firstPlaybackGateIndex < markPlayedIndex
+      && markPlayedIndex < firstPublishIndex,
+    "the first onPlaying event must publish the active track exactly after playback begins",
+  );
+  assert.match(
+    onPlayingHandler,
+    /audio\.paused[\s\S]*?audio\.getAttribute\("src"\) !== activeTrack\.sourceUrl/u,
+  );
+  assert.match(host, /playbackState = hasActiveTrack \? "paused" : "none"/u);
 });
 
 test("Media Session keeps track controls while seeking the active audio element", async () => {
