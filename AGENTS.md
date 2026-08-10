@@ -21,9 +21,9 @@ This file is the canonical shared rule entry point for the `hhwx` repository. Co
 ## Repository and Cross-Repository Boundaries
 
 - `hhwx` owns the public Web application, frontend and public API contracts, the canonical Supabase schema and migrations, and public project documentation.
-- `../hhwx-tracker` owns scraping, synchronization, master-artifact production, maintenance jobs, and private user-fetcher services.
+- `../hhwx-bandori-backend` owns scraping, synchronization, master-artifact production, maintenance jobs, and private user-fetcher services.
 - `../hhwx-assets-builder` owns AssetBundle extraction, generated asset indexes, object publication, and publication verification.
-- Choose the task's starting repository by the primary contract or source of truth: Web UI, public API, or schema-led work normally starts in `hhwx`; scraping or synchronization-led work normally starts in `hhwx-tracker`.
+- Choose the task's starting repository by the primary contract or source of truth: Web UI, public API, or schema-led work normally starts in `hhwx`; scraping or synchronization-led work normally starts in `hhwx-bandori-backend`.
 - Do not modify a sibling repository merely because it is related. The user's request or an explicitly confirmed plan must place that repository in scope.
 - Before modifying an in-scope sibling repository, read its root `AGENTS.md` when present and the relevant ownership, README, deployment, or contract documentation. If no `AGENTS.md` exists, the repository documentation and existing implementation remain the evidence source; do not invent missing policy.
 - Apply each repository's rules only to its own files. Inspect, validate, and report each repository separately, and state any required rollout or deployment order.

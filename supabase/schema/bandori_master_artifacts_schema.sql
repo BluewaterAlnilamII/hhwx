@@ -3,7 +3,7 @@
 -- Do not treat edits here as migrations or as an independent schema authority.
 
 -- Snapshot of the Bandori master artifact manifest structure.
--- hhwx-tracker writes these rows after publishing immutable artifacts.
+-- hhwx-bandori-backend writes these rows after publishing immutable artifacts.
 -- hhwx API reads active pointers and bundle indexes from these tables.
 
 CREATE TABLE IF NOT EXISTS public.master_artifact_versions (

@@ -3,7 +3,7 @@
 -- Do not treat edits here as migrations or as an independent schema authority.
 
 -- Snapshot of authenticated Bandori event TOP10 latest structures.
--- hhwx-tracker is the only writer; registered users can bootstrap one complete
+-- hhwx-bandori-backend is the only writer; registered users can bootstrap one complete
 -- snapshot before consuming the matching private Broadcast topic.
 
 CREATE TABLE IF NOT EXISTS public.bandori_tracker_topdata_latest_snapshots (

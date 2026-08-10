@@ -21,7 +21,7 @@ export type BandoriMonthlyRankingWindow = {
 const PERIOD_PATTERN = /^(\d{4})-(0[1-9]|1[0-2])$/u;
 
 /**
- * Mirrors hhwx-tracker's verified per-server monthly ranking contract.
+ * Mirrors hhwx-bandori-backend's verified per-server monthly ranking contract.
  * Offsets are deliberately fixed because EN uses the game's fixed UTC-8
  * calendar rather than a daylight-saving civil timezone.
  */

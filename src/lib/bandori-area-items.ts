@@ -70,7 +70,7 @@ function normalizeAreaItem(areaItemId: number, item: Omit<BandoriAreaItemMetadat
 
 export async function fetchBandoriAreaItems(): Promise<Record<string, BandoriAreaItemMetadata>> {
   const response = await fetch(BESTDORI_AREA_ITEMS_URL, {
-    headers: { "User-Agent": "hhwx-tracker/1.0" },
+    headers: { "User-Agent": "hhwx/1.0" },
     next: { revalidate: 86400 },
   });
 
