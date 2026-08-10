@@ -78,6 +78,15 @@ test("dynamic event pages validate existence on the server and query state no lo
 test("internal event links use the canonical event path", () => {
   assert.match(notificationPageSource, /`\/bandori\/events\/\$\{encodeURIComponent\(eventId\)\}\?/u);
   assert.match(sectionNavigationSource, /href: "\/bandori\/events"/u);
+  assert.match(sectionNavigationSource, /href: "\/bandori\/cards"/u);
+  assert.ok(
+    sectionNavigationSource.indexOf('id: "tracker"')
+      < sectionNavigationSource.indexOf('id: "cards"'),
+  );
+  assert.ok(
+    sectionNavigationSource.indexOf('id: "cards"')
+      < sectionNavigationSource.indexOf('id: "game-profiles"'),
+  );
   assert.doesNotMatch(notificationPageSource, /\/bandori\/eventtracker/u);
   assert.doesNotMatch(sectionNavigationSource, /\/bandori\/eventtracker/u);
 });

@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { hasTrainedCardArt } from "../src/lib/bandori-card-training.ts";
+import {
+  hasTrainedCardArt,
+  usesBandoriTrainedStarStyle,
+} from "../src/lib/bandori-card-training.ts";
 import {
   createDefaultOwnedGameProfileCard,
   createMaxGameProfileCard,
@@ -9,6 +12,8 @@ import {
 import {
   buildBandoriCardCatalog,
   filterBandoriCardCatalog,
+  getDefaultTrainType,
+  resolveBandoriCardCatalogTrainType,
 } from "../src/components/bandori/card-picker/catalog.ts";
 
 test("training art requires at least one positive Master increment", () => {
@@ -46,10 +51,83 @@ test("training predicate accepts numeric Master strings but rejects invalid valu
   }), false);
 });
 
+test("Birthday, KiraFes, and after-training art use trained rarity stars", () => {
+  assert.equal(usesBandoriTrainedStarStyle("birthday", "normal"), true);
+  assert.equal(usesBandoriTrainedStarStyle("kirafes", "normal"), true);
+  assert.equal(usesBandoriTrainedStarStyle("permanent", "after_training"), true);
+  assert.equal(usesBandoriTrainedStarStyle("permanent", "normal"), false);
+});
+
+test("card picker variants follow the asset index instead of Master training stats", () => {
+  const cards = {
+    "2126": {
+      characterId: 26,
+      rarity: 4,
+      attribute: "cool",
+      levelLimit: 50,
+      resourceSetName: "res026017",
+      stat: {
+        training: {
+          performance: 0,
+          technique: 0,
+          visual: 0,
+          levelLimit: 0,
+        },
+      },
+    },
+    "271": {
+      characterId: 1,
+      rarity: 4,
+      attribute: "powerful",
+      levelLimit: 50,
+      resourceSetName: "res001012",
+      stat: {
+        training: {
+          performance: 400,
+          technique: 400,
+          visual: 400,
+          levelLimit: 10,
+        },
+      },
+    },
+  };
+  const characters = {
+    "1": { bandId: 1 },
+    "26": { bandId: 2 },
+  };
+  const assetIndex = {
+    resources: {
+      res026017: { images: { normal: {}, after_training: {} } },
+      res001012: { images: { after_training: {} } },
+    },
+  };
+  const catalog = buildBandoriCardCatalog(
+    cards,
+    characters,
+    0,
+    false,
+    undefined,
+    undefined,
+    { assetIndex },
+  );
+  const card2126 = catalog.find((card) => card.cardId === 2126);
+  const card271 = catalog.find((card) => card.cardId === 271);
+
+  assert.deepEqual(card2126.availableArtVariants, ["normal", "after_training"]);
+  assert.equal(card2126.hasTrainedArt, true);
+  assert.deepEqual(card271.availableArtVariants, ["after_training"]);
+  assert.equal(getDefaultTrainType(card271), "after_training");
+  assert.equal(
+    resolveBandoriCardCatalogTrainType(card271, "normal"),
+    "after_training",
+  );
+});
+
 test("card catalog and max-profile creation treat zero-only training as untrained", () => {
   const zeroTrainingCard = {
     characterId: 1,
     rarity: 5,
+    type: "kirafes",
     levelLimit: 50,
     resourceSetName: "res001001",
     stat: {
@@ -82,6 +160,10 @@ test("card catalog and max-profile creation treat zero-only training as untraine
   assert.equal(
     buildBandoriCardCatalog({ "1": zeroTrainingCard }, characters)[0].hasTrainedArt,
     false,
+  );
+  assert.equal(
+    buildBandoriCardCatalog({ "1": zeroTrainingCard }, characters)[0].type,
+    "kirafes",
   );
   assert.equal(
     buildBandoriCardCatalog({ "2": trainedCard }, characters)[0].hasTrainedArt,

@@ -5,6 +5,7 @@ import {
   BANDORI_PUBLIC_ASSET_SERVERS,
   buildBandoriPublicAssetIndexUrl,
   buildBandoriPublicAssetUrl,
+  listBandoriCardAssetVariants,
   lookupBandoriCardImage,
   lookupBandoriEventBanner,
   lookupBandoriEventTeamIcon,
@@ -13,6 +14,7 @@ import {
   parseBandoriEventsAssetIndex,
   parseBandoriMusicAssetIndex,
   parseBandoriStampsAssetIndex,
+  resolveBandoriCardAssetVariant,
 } from "../src/lib/bandori-public-asset-index.ts";
 import {
   getBandoriStampCatalogItemsForRegion,
@@ -213,6 +215,11 @@ test("Cards image lookup shares one complete variant but keeps two variants exac
     lookupBandoriCardImage(parsedNormalOnly, "res001001", "after_training", "thumb")?.sha256,
     hashes.thumb,
   );
+  assert.deepEqual(listBandoriCardAssetVariants(parsedNormalOnly, "res001001"), ["normal"]);
+  assert.equal(
+    resolveBandoriCardAssetVariant(parsedNormalOnly, "res001001", "after_training"),
+    "normal",
+  );
 
   const trainedOnly = cardsIndex();
   delete trainedOnly.resources.res001001.images.normal;
@@ -220,6 +227,14 @@ test("Cards image lookup shares one complete variant but keeps two variants exac
   assert.equal(
     lookupBandoriCardImage(parsedTrainedOnly, "res001001", "normal", "thumb")?.sha256,
     hashes.trainedThumb,
+  );
+  assert.deepEqual(
+    listBandoriCardAssetVariants(parsedTrainedOnly, "res001001"),
+    ["after_training"],
+  );
+  assert.equal(
+    resolveBandoriCardAssetVariant(parsedTrainedOnly, "res001001", "normal"),
+    "after_training",
   );
 
   const both = parseBandoriCardsAssetIndex(cardsIndex());
@@ -231,6 +246,17 @@ test("Cards image lookup shares one complete variant but keeps two variants exac
     lookupBandoriCardImage(both, "res001001", "after_training", "thumb")?.sha256,
     hashes.trainedThumb,
   );
+  assert.deepEqual(
+    listBandoriCardAssetVariants(both, "res001001"),
+    ["normal", "after_training"],
+  );
+  assert.equal(resolveBandoriCardAssetVariant(both, "res001001", "normal"), "normal");
+  assert.equal(
+    resolveBandoriCardAssetVariant(both, "res001001", "after_training"),
+    "after_training",
+  );
+  assert.deepEqual(listBandoriCardAssetVariants(both, "missing"), []);
+  assert.equal(resolveBandoriCardAssetVariant(both, "missing", "normal"), null);
 });
 
 test("Events schema 2 uses the implicit fixed jp/en/tw/cn four-slot contract", () => {

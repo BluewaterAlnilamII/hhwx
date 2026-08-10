@@ -19,7 +19,7 @@ import { useCommentStampCatalog } from "@/hooks/useCommentStamps";
 import { useBandoriMusicAssetIndex } from "@/hooks/useBandoriPublicAssetIndex";
 import { parseApiSuccessData } from "@/lib/api-contracts";
 import { SESSION_CLIENT_CACHE_POLICY } from "@/lib/api-cache";
-import { buildBandoriBandIconUrl } from "@/lib/bandori-builtin-resources";
+import { buildBandoriCardBandIconUrl } from "@/lib/bandori-builtin-resources";
 import { buildBandoriPublicAssetUrl } from "@/lib/bandori-public-asset-index";
 import {
   getBandoriEventStatusAt,
@@ -194,6 +194,7 @@ function EventCardTile({
   );
   return (
     <BandoriCardTile
+      interaction={{ kind: "information" }}
       card={{
         cardId,
         level,
@@ -211,6 +212,7 @@ function EventCardTile({
         releasedAt: card?.releasedAt,
       }}
       cardName={title}
+      server={server}
       characterName={characterName}
       skillEffectLabel={skillEffect.label}
       skillEffectLanguageTag={skillEffect.languageTag}
@@ -309,7 +311,9 @@ export default function EventInfoPanel({
   const status = model
     ? getBandoriEventStatusAt(now, model.statusStartAt, model.statusEndAt)
     : null;
-  const jpTitle = model ? pickBandoriRegionalText(model.eventName, 0, 0) : null;
+  const jpTitle = model && server !== 0
+    ? pickBandoriRegionalText(model.eventName, 0, 0)
+    : null;
   const localizedTitle = model ? pickBandoriRegionalText(model.eventName, server, server) : null;
   const eventTypeLabel = model && isTeamBuilderEventType(model.eventType)
     ? eventTypesT(model.eventType)
@@ -356,7 +360,7 @@ export default function EventInfoPanel({
             <OverviewRow label="活动 ID">{eventId}</OverviewRow>
             <OverviewRow label="活动标题" mobileLayout="stacked">
               <span>{localizedTitle ?? `Event #${eventId}`}</span>
-              {jpTitle && jpTitle !== localizedTitle ? <span className="mt-1 block font-medium text-[var(--theme-color-text-muted)] opacity-70">{jpTitle}</span> : null}
+              {jpTitle ? <span className="mt-1 block font-medium text-[var(--theme-color-text-muted)] opacity-70">{jpTitle}</span> : null}
             </OverviewRow>
             <OverviewRow label="活动类型">
               <span className="inline-flex rounded-full border border-[var(--theme-color-semantic-info-border)] bg-[var(--theme-color-semantic-info-background)] px-3 py-1 text-[var(--theme-color-semantic-info-foreground)]">
@@ -368,7 +372,7 @@ export default function EventInfoPanel({
                 {eventBandId !== null ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
-                    src={buildBandoriBandIconUrl(eventBandId) ?? undefined}
+                    src={buildBandoriCardBandIconUrl(eventBandId) ?? undefined}
                     data-event-band-icon={eventBandId}
                     alt=""
                     aria-hidden="true"

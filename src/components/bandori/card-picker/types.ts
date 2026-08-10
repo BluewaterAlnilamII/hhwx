@@ -19,6 +19,7 @@ export type BandoriCardCatalogEntry = {
   cardId: number;
   cardRef: string;
   entityServer: BandoriServer | null;
+  availableServers: readonly BandoriServer[];
   characterId: number;
   skillId: number | null;
   characterName: string;
@@ -28,9 +29,11 @@ export type BandoriCardCatalogEntry = {
   levelLimit: number;
   trainingLevelLimit: number;
   resourceSetName: string;
+  type?: string;
   displayName: string;
   searchText: string;
   releaseTimestamps: readonly [number, number, number, number];
+  availableArtVariants: readonly BandoriCardArtVariant[];
   hasTrainedArt: boolean;
 };
 

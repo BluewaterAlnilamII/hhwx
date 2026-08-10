@@ -18,17 +18,25 @@ import { type BandoriCardsMasterMap } from "@/lib/bandori-cards-api-client";
 import {
   resolveBandoriSkillLabel,
 } from "@/lib/bandori-skill-label";
-import type { BandoriServerLanguageTag } from "@/lib/bandori-server";
+import {
+  pickAvailableBandoriServer,
+  type BandoriServerLanguageTag,
+} from "@/lib/bandori-server";
 import {
   BANDORI_CARD_ATTRIBUTES,
   BANDORI_CARD_RARITIES,
   buildBandoriCardFilterOptions,
+  getBandoriCardFilterServers,
   buildBandoriCardSortValues,
   reconcileBandoriCardFilterSelection,
 } from "@/lib/bandori-card-filter";
 import { cn } from "@/lib/utils";
 import VirtualizedBandoriCardGrid from "@/components/bandori/VirtualizedBandoriCardGrid";
-import { buildBandoriCardCatalog, filterBandoriCardCatalog } from "./catalog";
+import {
+  buildBandoriCardCatalog,
+  filterBandoriCardCatalog,
+  resolveBandoriCardCatalogTrainType,
+} from "./catalog";
 import BandoriCardThumbnailTile from "./BandoriCardThumbnailTile";
 import type {
   BandoriCardArtVariant,
@@ -45,6 +53,7 @@ const PAGE_SIZE = 60;
 
 const DEFAULT_FILTER: BandoriCardPickerFilter = {
   query: "",
+  servers: [],
   bandIds: [],
   attributes: [],
   rarities: [],
@@ -53,9 +62,14 @@ const DEFAULT_FILTER: BandoriCardPickerFilter = {
   sortDirection: "desc",
 };
 
-function buildDefaultFilter(bandIds: number[], characterIds: number[]): BandoriCardPickerFilter {
+function buildDefaultFilter(
+  bandIds: number[],
+  characterIds: number[],
+  servers: BandoriCardServer[],
+): BandoriCardPickerFilter {
   return {
     ...DEFAULT_FILTER,
+    servers,
     bandIds,
     attributes: ATTRIBUTE_VALUES,
     rarities: RARITY_OPTIONS,
@@ -102,13 +116,6 @@ function ArtToggle({
   );
 }
 
-function resolveCardTrainType(
-  card: Pick<BandoriCardCatalogEntry, "hasTrainedArt">,
-  trainType: BandoriCardArtVariant,
-): BandoriCardArtVariant {
-  return trainType === "after_training" && !card.hasTrainedArt ? "normal" : trainType;
-}
-
 function CardGridItem({
   card,
   isSelected,
@@ -116,6 +123,7 @@ function CardGridItem({
   activeTrainType,
   skillEffectLabel,
   skillEffectLanguageTag,
+  detailServer,
   onSelect,
 }: {
   card: BandoriCardCatalogEntry;
@@ -124,6 +132,7 @@ function CardGridItem({
   activeTrainType: BandoriCardPickerValue["trainType"];
   skillEffectLabel: string;
   skillEffectLanguageTag: BandoriServerLanguageTag;
+  detailServer: BandoriCardServer;
   onSelect: () => void;
 }) {
   return (
@@ -134,6 +143,7 @@ function CardGridItem({
       trainType={activeTrainType}
       skillEffectLabel={skillEffectLabel}
       skillEffectLanguageTag={skillEffectLanguageTag}
+      detailServer={detailServer}
       onSelect={onSelect}
     />
   );
@@ -148,6 +158,7 @@ export type BandoriCardPickerProps = {
   showArtToggle?: boolean;
   scrollElementRef?: RefObject<HTMLElement | null>;
   cardMetadata?: BandoriCardsMasterMap;
+  canonicalCardMetadata?: BandoriCardsMasterMap;
   characters?: Record<string, BandoriCharacterMaster | null | undefined>;
   skills?: Record<string, BandoriSkillMaster | null | undefined>;
   mutedCardIds?: ReadonlySet<number>;
@@ -162,6 +173,7 @@ export default function BandoriCardPicker({
   showArtToggle = true,
   scrollElementRef,
   cardMetadata: providedCardMetadata,
+  canonicalCardMetadata: providedCanonicalCardMetadata,
   characters,
   skills,
   mutedCardIds,
@@ -177,13 +189,17 @@ export default function BandoriCardPicker({
     }),
     [server],
   );
-  useBandoriCardsAssetIndex();
+  const availableServers = useMemo(() => getBandoriCardFilterServers(server), [server]);
+  const cardsAssetIndex = useBandoriCardsAssetIndex();
   const cardsMaster = useBandoriCardsMaster(
     server,
     providedCardMetadata === undefined,
     missingCardFallback,
   );
   const cardMetadata = providedCardMetadata ?? cardsMaster.data;
+  const canonicalCardMetadata = providedCanonicalCardMetadata
+    ?? cardsMaster.canonicalData
+    ?? cardMetadata;
   const charactersMaster = useBandoriCharactersMaster(characters === undefined);
   const skillsMaster = useBandoriSkillsMaster(skills === undefined);
   const characterMetadata = characters ?? charactersMaster.data;
@@ -214,11 +230,17 @@ export default function BandoriCardPicker({
           getCardLabel: (cardId) => t("cardFallback", { cardId }),
           getCharacterLabel: (characterId) => filterT("characterFallback", { characterId }),
         },
+        {
+          canonicalCards: canonicalCardMetadata ?? {},
+          assetIndex: cardsAssetIndex.value,
+        },
       );
       return cards;
     },
     [
       cardMetadata,
+      canonicalCardMetadata,
+      cardsAssetIndex.value,
       characterMetadata,
       filterT,
       preferredServer,
@@ -237,11 +259,12 @@ export default function BandoriCardPicker({
     [characterMetadata, filterT, preferredServer, server],
   );
   const effectiveFilter = useMemo<BandoriCardPickerFilter>(() => {
-    const defaultFilter = buildDefaultFilter(bandIds, characterIds);
+    const defaultFilter = buildDefaultFilter(bandIds, characterIds, availableServers);
     if (!storedFilterState) return defaultFilter;
     const hasAvailableSort = sortValues.includes(storedFilterState.filter.sortBy);
     return {
       ...storedFilterState.filter,
+      servers: storedFilterState.filter.servers.filter((candidate) => availableServers.includes(candidate)),
       bandIds: reconcileBandoriCardFilterSelection(
         storedFilterState.filter.bandIds,
         storedFilterState.availableBandIds,
@@ -261,7 +284,7 @@ export default function BandoriCardPicker({
       sortBy: hasAvailableSort ? storedFilterState.filter.sortBy : sortValues[0] ?? "id",
       sortDirection: hasAvailableSort ? storedFilterState.filter.sortDirection : "desc",
     };
-  }, [bandIds, characterIds, sortValues, storedFilterState]);
+  }, [availableServers, bandIds, characterIds, sortValues, storedFilterState]);
   const deferredQuery = useDeferredValue(effectiveFilter.query);
   const deferredFilter = useMemo<BandoriCardPickerFilter>(() => ({
     ...effectiveFilter,
@@ -276,6 +299,7 @@ export default function BandoriCardPicker({
   const filterKey = useMemo(
     () => JSON.stringify({
       query: deferredQuery,
+      servers: effectiveFilter.servers,
       bandIds: effectiveFilter.bandIds,
       attributes: effectiveFilter.attributes,
       rarities: effectiveFilter.rarities,
@@ -283,7 +307,7 @@ export default function BandoriCardPicker({
       sortBy: effectiveFilter.sortBy,
       sortDirection: effectiveFilter.sortDirection,
     }),
-    [deferredQuery, effectiveFilter.attributes, effectiveFilter.bandIds, effectiveFilter.characterIds, effectiveFilter.rarities, effectiveFilter.sortBy, effectiveFilter.sortDirection],
+    [deferredQuery, effectiveFilter.attributes, effectiveFilter.bandIds, effectiveFilter.characterIds, effectiveFilter.rarities, effectiveFilter.servers, effectiveFilter.sortBy, effectiveFilter.sortDirection],
   );
 
   const selectedCard = useMemo(
@@ -322,7 +346,7 @@ export default function BandoriCardPicker({
     }
 
     const nextValueTrainType = selectedCard
-      ? resolveCardTrainType(selectedCard, nextTrainType)
+      ? resolveBandoriCardCatalogTrainType(selectedCard, nextTrainType)
       : nextTrainType;
     onValueChange({ ...value, trainType: nextValueTrainType });
   };
@@ -331,7 +355,7 @@ export default function BandoriCardPicker({
     onValueChange({
       cardId: card.cardId,
       entityServer: card.entityServer,
-      trainType: resolveCardTrainType(card, previewTrainType),
+      trainType: resolveBandoriCardCatalogTrainType(card, previewTrainType),
     });
   };
 
@@ -344,6 +368,7 @@ export default function BandoriCardPicker({
         characterOptions={characterOptions}
         availableBandIds={bandIds}
         availableCharacterIds={characterIds}
+        availableServers={availableServers}
         sortOptions={sortOptions}
         onFilterChange={updateFilter}
         onClearFilter={() => setStoredFilterState(null)}
@@ -387,7 +412,7 @@ export default function BandoriCardPicker({
               renderItem={(card) => {
                 const isSelected = value?.cardId === card.cardId
                   && (value.entityServer ?? null) === card.entityServer;
-                const activeTrainType = resolveCardTrainType(card, previewTrainType);
+                const activeTrainType = resolveBandoriCardCatalogTrainType(card, previewTrainType);
                 const skillEffect = resolveBandoriSkillLabel(
                   card.skillId
                     ? skillMetadata?.[String(card.skillId)] ?? undefined
@@ -398,6 +423,10 @@ export default function BandoriCardPicker({
                   server,
                   termsT("unknownSkill"),
                 );
+                const detailServer = card.entityServer
+                  ?? server
+                  ?? pickAvailableBandoriServer(card.availableServers, preferredServer)
+                  ?? preferredServer;
                 return (
                   <CardGridItem
                     key={card.cardRef}
@@ -407,6 +436,7 @@ export default function BandoriCardPicker({
                     activeTrainType={activeTrainType}
                     skillEffectLabel={skillEffect.label}
                     skillEffectLanguageTag={skillEffect.languageTag}
+                    detailServer={detailServer}
                     onSelect={() => handleCardSelect(card)}
                   />
                 );

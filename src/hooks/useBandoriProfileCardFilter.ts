@@ -52,10 +52,16 @@ export function useBandoriProfileCardFilter({
   );
   const filter = useMemo<BandoriProfileCardFilterState>(() => {
     const defaultSortBy = sortValues[0] ?? "power";
-    const defaultFilter = buildDefaultBandoriProfileCardFilter(bandIds, characterIds, defaultSortBy);
+    const defaultFilter = buildDefaultBandoriProfileCardFilter(
+      bandIds,
+      characterIds,
+      contextServer,
+      defaultSortBy,
+    );
     if (!storedState) return defaultFilter;
     return {
       ...storedState.filter,
+      servers: storedState.filter.servers.includes(contextServer) ? [contextServer] : [],
       bandIds: reconcileBandoriCardFilterSelection(
         storedState.filter.bandIds,
         storedState.availableBandIds,
@@ -70,7 +76,7 @@ export function useBandoriProfileCardFilter({
       ),
       sortBy: sortValues.includes(storedState.filter.sortBy) ? storedState.filter.sortBy : defaultSortBy,
     };
-  }, [bandIds, characterIds, sortValues, storedState]);
+  }, [bandIds, characterIds, contextServer, sortValues, storedState]);
   const deferredQuery = useDeferredValue(filter.query);
   const filteredEntries = useMemo(() => filterAndSortBandoriProfileCardEntries(
     entries,
@@ -83,6 +89,7 @@ export function useBandoriProfileCardFilter({
   ), [bandIds, characterIds, deferredQuery, entries, filter, unknownMetadataPolicy]);
   const filterKey = useMemo(() => JSON.stringify({
     query: deferredQuery,
+    servers: filter.servers,
     bandIds: filter.bandIds,
     attributes: filter.attributes,
     rarities: filter.rarities,

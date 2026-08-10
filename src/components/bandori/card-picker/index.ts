@@ -1,4 +1,5 @@
 export { BandoriCardArtImage } from "./BandoriCardArtImage";
+export { default as BandoriCardDetailedRow } from "./BandoriCardDetailedRow";
 export { default as BandoriCardPicker } from "./BandoriCardPicker";
 export { default as BandoriCardThumbnailTile } from "./BandoriCardThumbnailTile";
 export {
@@ -6,6 +7,7 @@ export {
   buildBandoriCardCatalog,
   filterBandoriCardCatalog,
   getDefaultTrainType,
+  resolveBandoriCardCatalogTrainType,
 } from "./catalog";
 export type {
   BandoriCardArtVariant,

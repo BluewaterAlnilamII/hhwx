@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   bandoriCardCatalogTransforms,
   buildBandoriCardCatalog,
+  filterBandoriCardCatalog,
 } from "../src/components/bandori/card-picker/catalog.ts";
 import {
   normalizeAccountAvatarCardServer,
@@ -329,10 +330,12 @@ test("profile-bound card displays receive profile server context without changin
   assert.match(preferencesPanel, /displayServer: BandoriServer/u);
   assert.match(profileEntries, /displayServer: BandoriServer/u);
   assert.match(pickerDialog, /missingCardFallback=\{missingCardFallback\}/u);
+  assert.match(pickerDialog, /canonicalCardMetadata=\{canonicalCardMetadata\}/u);
   assert.match(profileCardsPage, /missingCardFallback="none"/u);
   assert.match(teamBuilderPage, /missingCardFallback="jp"/u);
   assert.match(profileCardsPage, /cardMetadata=\{cardMetadata\}/u);
   assert.match(teamBuilderPage, /cardMetadata=\{profileCardMetadata\}/u);
+  assert.match(teamBuilderPage, /canonicalCardMetadata=\{canonicalCardMetadata\}/u);
 
   const bonusCardBody = teamBuilderPage.slice(
     teamBuilderPage.indexOf("function BonusCardThumbnail"),
@@ -490,6 +493,58 @@ test("avatar picker expands every registered collision into distinct EN and CN r
       cnResourceSetName,
     ].sort());
   }
+});
+
+test("server-scoped picker filters canonical availability without dropping JP fallback metadata", () => {
+  const canonicalCards = {
+    "1": {
+      characterId: 1,
+      rarity: 4,
+      attribute: "cool",
+      levelLimit: 50,
+      resourceSetName: "res001001",
+      serverExtensions: [{}, null, null, null],
+    },
+    "2": {
+      characterId: 1,
+      rarity: 4,
+      attribute: "cool",
+      levelLimit: 50,
+      resourceSetName: "res001002",
+      serverExtensions: [{}, null, null, {}],
+    },
+  };
+  const displayCards = materializeBandoriCardMapForServerWithJpFallback(
+    canonicalCards,
+    3,
+  );
+  const catalog = buildBandoriCardCatalog(
+    displayCards,
+    { "1": { bandId: 1 } },
+    3,
+    false,
+    3,
+    undefined,
+    { canonicalCards },
+  );
+  const filter = {
+    query: "",
+    servers: [3],
+    bandIds: [1],
+    attributes: ["cool"],
+    rarities: [4],
+    characterIds: [1],
+    sortBy: "id",
+    sortDirection: "asc",
+  };
+
+  assert.deepEqual(Object.keys(displayCards), ["1", "2"]);
+  assert.deepEqual(catalog.find((card) => card.cardId === 1).availableServers, []);
+  assert.deepEqual(catalog.find((card) => card.cardId === 2).availableServers, [3]);
+  assert.deepEqual(
+    filterBandoriCardCatalog(catalog, filter).map((card) => card.cardId),
+    [2],
+  );
 });
 
 test("all Master consumers reuse the positive-increment training predicate", async () => {

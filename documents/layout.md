@@ -37,6 +37,7 @@ hhwx/
 - `[locale]/bandori/game-profiles/`: game profile card and item views.
 - `[locale]/auth/`: sign-in, registration, and password recovery pages.
 - `[locale]/bandori/events/`: event tracker entry and event-ID routes. The former `/bandori/eventtracker` URL is a permanent redirect handled by `src/proxy.ts`.
+- `[locale]/bandori/cards/`: server-aware Card catalog and per-card detail routes.
 - `[locale]/bandori/calendar/`: regional event calendar pages.
 - `api/`: same-origin API routes used by the frontend.
 - `api/account/game-bind/`: game account binding challenge, verification, listing, and unlinking APIs.

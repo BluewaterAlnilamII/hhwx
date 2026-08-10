@@ -38,6 +38,7 @@ import { type UserGameProfileCardRecord } from "@/lib/user-game-profile-payload"
 export type BandoriProfileCardEntry = {
   card: UserGameProfileCardRecord;
   metadata: GameProfileCardMetadata | undefined;
+  availableServers: readonly BandoriServer[];
   bandId: number | null;
   characterId: number | null;
   attribute: BandoriCardAttribute | null;
@@ -111,6 +112,7 @@ export function buildBandoriProfileCardEntry(
   return {
     card,
     metadata,
+    availableServers: [contextServer],
     bandId,
     characterId: normalizedCharacterId,
     attribute,
@@ -137,10 +139,12 @@ export function buildBandoriProfileCardEntry(
 export function buildDefaultBandoriProfileCardFilter(
   bandIds: number[],
   characterIds: number[],
+  contextServer: BandoriServer = DEFAULT_BANDORI_PREFERRED_SERVER,
   sortBy: BandoriProfileCardSortBy = "power",
 ): BandoriProfileCardFilterState {
   return {
     query: "",
+    servers: [contextServer],
     bandIds,
     attributes: BANDORI_CARD_ATTRIBUTES,
     rarities: BANDORI_CARD_RARITIES,
@@ -182,7 +186,8 @@ export function filterAndSortBandoriProfileCardEntries(
   },
 ): BandoriProfileCardEntry[] {
   if (
-    (filter.bandIds.length === 0 && options.availableBandIds.length > 0)
+    filter.servers.length === 0
+    || (filter.bandIds.length === 0 && options.availableBandIds.length > 0)
     || filter.attributes.length === 0
     || filter.rarities.length === 0
     || (filter.characterIds.length === 0 && options.availableCharacterIds.length > 0)

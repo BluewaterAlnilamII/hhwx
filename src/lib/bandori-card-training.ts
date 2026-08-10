@@ -29,3 +29,17 @@ export function hasTrainedCardArt(
     return Number.isFinite(numericValue) && numericValue > 0;
   });
 }
+
+/**
+ * Birthday and KiraFes cards publish one finished illustration instead of a
+ * separate training pair, but the game presents that illustration with
+ * trained stars.
+ */
+export function usesBandoriTrainedStarStyle(
+  cardType: unknown,
+  variant: "normal" | "after_training",
+): boolean {
+  return variant === "after_training"
+    || cardType === "birthday"
+    || cardType === "kirafes";
+}

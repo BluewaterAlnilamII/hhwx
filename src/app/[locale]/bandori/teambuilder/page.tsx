@@ -1791,9 +1791,11 @@ function TeamBuilderCardTile({
 
   return (
     <BandoriCardTile
+      interaction={{ kind: "information" }}
       card={card}
       metadata={{ ...metadata, rarity, attribute }}
       cardName={cardName}
+      server={displayServer ?? preferredServer}
       characterName={characters
         ? getCardCharacterLabel(
             metadata,
@@ -4011,6 +4013,7 @@ function TeamBuilderPanel() {
           missingCardFallback="jp"
           scrollElementRef={cardPickerScrollRef}
           cardMetadata={profileCardMetadata}
+          canonicalCardMetadata={canonicalCardMetadata}
           characters={data.characters}
           skills={data.skills}
           onValueChange={selectTemporaryCard}

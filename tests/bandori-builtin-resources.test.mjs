@@ -2,8 +2,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
-  buildBandoriAttributeIconUrl,
-  buildBandoriBandIconUrl,
+  buildBandoriCardAttributeIconUrl,
+  buildBandoriCardBandIconUrl,
+  buildBandoriCardMasterRankIconUrl,
   buildBandoriCharacterIconUrl,
   buildBandoriFullCardFrameUrl,
   buildBandoriLegacyRarityCompositeUrl,
@@ -11,6 +12,37 @@ import {
   buildBandoriRarityStarIconUrl,
   buildBandoriThumbnailFrameUrl,
 } from "../src/lib/bandori-builtin-resources.ts";
+import { BANDORI_FULL_CARD_LAYOUT } from "../src/lib/bandori-full-card-layout.ts";
+
+test("full-card overlays preserve the measured game and Bestdori geometry", () => {
+  assert.deepEqual(BANDORI_FULL_CARD_LAYOUT.surface, { width: 508, height: 340 });
+  assert.deepEqual(BANDORI_FULL_CARD_LAYOUT.artworkViewport, {
+    top: 7,
+    right: 8,
+    bottom: 7,
+    left: 8,
+    radius: 7,
+  });
+  assert.deepEqual(BANDORI_FULL_CARD_LAYOUT.attribute, {
+    top: 7,
+    right: 8,
+    width: 52,
+    height: 52,
+  });
+  assert.deepEqual(BANDORI_FULL_CARD_LAYOUT.rarityStar, {
+    left: 4,
+    bottom: 4,
+    width: 40,
+    height: 40,
+    verticalStep: 31,
+  });
+  assert.deepEqual(BANDORI_FULL_CARD_LAYOUT.bandMark, {
+    left: 6,
+    top: 7,
+    width: 51,
+    height: 51,
+  });
+});
 
 test("built-in resources preserve official fixed names", () => {
   const previousBaseUrl = process.env.NEXT_PUBLIC_BANDORI_ASSET_CDN_BASE_URL;
@@ -29,16 +61,8 @@ test("built-in resources preserve official fixed names", () => {
       "https://assets.example.test/bandori/resources/atlases/menu-atlas/frame_ur_orange.png",
     );
     assert.equal(
-      buildBandoriAttributeIconUrl("powerful"),
-      "https://assets.example.test/bandori/resources/atlases/menu-atlas/icon_attribute_powerful.png",
-    );
-    assert.equal(
       buildBandoriCharacterIconUrl(1),
       "https://assets.example.test/bandori/resources/atlases/menu-atlas/icon_character001.png",
-    );
-    assert.equal(
-      buildBandoriBandIconUrl(45),
-      "https://assets.example.test/bandori/resources/atlases/menu-atlas/bandmark_flat_045.png",
     );
     assert.equal(
       buildBandoriRarityStarIconUrl(true),
@@ -47,6 +71,18 @@ test("built-in resources preserve official fixed names", () => {
     assert.equal(
       buildBandoriMasterRankIconUrl(),
       "https://assets.example.test/bandori/resources/atlases/menu-atlas/bg_masterrank.png",
+    );
+    assert.equal(
+      buildBandoriCardAttributeIconUrl("powerful"),
+      "https://assets.example.test/bandori/res/icon/powerful.svg",
+    );
+    assert.equal(
+      buildBandoriCardBandIconUrl(18),
+      "https://assets.example.test/bandori/res/icon/band_18.svg",
+    );
+    assert.equal(
+      buildBandoriCardMasterRankIconUrl(),
+      "https://assets.example.test/bandori/res/icon/master.svg",
     );
     assert.equal(
       buildBandoriLegacyRarityCompositeUrl(5),
@@ -66,7 +102,7 @@ test("built-in resources fail closed without an owned CDN", () => {
   delete process.env.NEXT_PUBLIC_BANDORI_ASSET_CDN_BASE_URL;
   try {
     assert.equal(buildBandoriCharacterIconUrl(1), null);
-    assert.equal(buildBandoriBandIconUrl(999), null);
+    assert.equal(buildBandoriCardBandIconUrl(999), null);
     assert.equal(buildBandoriLegacyRarityCompositeUrl(6), null);
   } finally {
     if (previousBaseUrl !== undefined) {

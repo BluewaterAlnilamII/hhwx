@@ -15,6 +15,7 @@ export type BandoriPublicAssetIndexStoreState<T> = {
   value: T | null;
   loadedAt: number | null;
   inFlight: Promise<T> | null;
+  error: Error | null;
 };
 
 type StoreEntry<T> = {
@@ -40,7 +41,12 @@ function createEmptyState<T>(): BandoriPublicAssetIndexStoreState<T> {
     value: null,
     loadedAt: null,
     inFlight: null,
+    error: null,
   };
+}
+
+function normalizeError(error: unknown): Error {
+  return error instanceof Error ? error : new Error(String(error));
 }
 
 /**
@@ -112,9 +118,24 @@ export function createBandoriPublicAssetIndexStore<T>({
             value,
             loadedAt: now(),
             inFlight: request,
+            error: null,
           });
         }
         return value;
+      })
+      .catch((error: unknown) => {
+        if (
+          entry.requestSequence === requestSequence
+          && entry.state.inFlight === request
+        ) {
+          publish(entry, {
+            value: entry.state.value,
+            loadedAt: entry.state.loadedAt,
+            inFlight: request,
+            error: normalizeError(error),
+          });
+        }
+        throw error;
       })
       .finally(() => {
         if (
@@ -125,6 +146,7 @@ export function createBandoriPublicAssetIndexStore<T>({
             value: entry.state.value,
             loadedAt: entry.state.loadedAt,
             inFlight: null,
+            error: entry.state.error,
           });
         }
       });
@@ -133,6 +155,7 @@ export function createBandoriPublicAssetIndexStore<T>({
       value: entry.state.value,
       loadedAt: entry.state.loadedAt,
       inFlight: request,
+      error: null,
     });
     return request;
   };

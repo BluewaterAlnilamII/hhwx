@@ -69,7 +69,7 @@ test("TOP10 player identity and score copy stays label-free and uses P", () => {
 test("TOP10 avatars reuse the shared card tile presentation mode", () => {
   assert.match(top10PlayerListSource, /import BandoriCardTile from/u);
   assert.match(top10PlayerListSource, /<BandoriCardTile/u);
-  assert.match(top10PlayerListSource, /isPresentationOnly/u);
+  assert.match(top10PlayerListSource, /interaction=\{\{ kind: "presentation" \}\}/u);
   assert.match(top10PlayerListSource, /size="compact"/u);
   assert.match(top10PlayerListSource, /showLevel=\{false\}/u);
   assert.doesNotMatch(top10PlayerListSource, /BandoriCardThumbnail/u);

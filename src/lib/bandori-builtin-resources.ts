@@ -1,7 +1,7 @@
 import { buildBandoriAssetCdnUrl } from "@/lib/bandori-asset-proxy";
 
 const BUILTIN_RESOURCE_PREFIX = "bandori/resources";
-const LEGACY_RARITY_ICON_PREFIX = "bandori/res/icon";
+const LEGACY_RES_ICON_PREFIX = "bandori/res/icon";
 const SUPPORTED_BAND_IDS = new Set([1, 2, 3, 4, 5, 18, 21, 45]);
 
 export type BandoriBuiltinAttribute = "powerful" | "cool" | "happy" | "pure";
@@ -47,26 +47,12 @@ export function buildBandoriThumbnailFrameUrl(
   return frameName ? buildMenuAtlasSpriteUrl(frameName) : null;
 }
 
-export function buildBandoriAttributeIconUrl(
-  attribute: BandoriBuiltinAttribute,
-): string | null {
-  return buildMenuAtlasSpriteUrl(`icon_attribute_${attribute}`);
-}
-
 export function buildBandoriCharacterIconUrl(characterId: number): string | null {
   const normalizedId = Math.trunc(characterId);
   if (normalizedId < 1 || normalizedId > 40) {
     return null;
   }
   return buildMenuAtlasSpriteUrl(`icon_character${normalizedId.toString().padStart(3, "0")}`);
-}
-
-export function buildBandoriBandIconUrl(bandId: number): string | null {
-  const normalizedId = Math.trunc(bandId);
-  if (!SUPPORTED_BAND_IDS.has(normalizedId)) {
-    return null;
-  }
-  return buildMenuAtlasSpriteUrl(`bandmark_flat_${normalizedId.toString().padStart(3, "0")}`);
 }
 
 export function buildBandoriRarityStarIconUrl(isTrained: boolean): string | null {
@@ -79,12 +65,34 @@ export function buildBandoriMasterRankIconUrl(): string | null {
   return buildMenuAtlasSpriteUrl("bg_masterrank");
 }
 
+export function buildBandoriCardAttributeIconUrl(
+  attribute: BandoriBuiltinAttribute,
+): string | null {
+  return buildBandoriAssetCdnUrl(
+    `${LEGACY_RES_ICON_PREFIX}/${attribute}.svg`,
+  );
+}
+
+export function buildBandoriCardBandIconUrl(bandId: number): string | null {
+  const normalizedId = Math.trunc(bandId);
+  if (!SUPPORTED_BAND_IDS.has(normalizedId)) {
+    return null;
+  }
+  return buildBandoriAssetCdnUrl(
+    `${LEGACY_RES_ICON_PREFIX}/band_${normalizedId}.svg`,
+  );
+}
+
+export function buildBandoriCardMasterRankIconUrl(): string | null {
+  return buildBandoriAssetCdnUrl(`${LEGACY_RES_ICON_PREFIX}/master.svg`);
+}
+
 export function buildBandoriLegacyRarityCompositeUrl(rarity: number): string | null {
   const normalizedRarity = Math.trunc(rarity);
   if (normalizedRarity < 1 || normalizedRarity > 5) {
     return null;
   }
   return buildBandoriAssetCdnUrl(
-    `${LEGACY_RARITY_ICON_PREFIX}/star_${normalizedRarity}.png`,
+    `${LEGACY_RES_ICON_PREFIX}/star_${normalizedRarity}.png`,
   );
 }

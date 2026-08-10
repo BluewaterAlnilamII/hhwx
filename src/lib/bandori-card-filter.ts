@@ -4,6 +4,7 @@ import {
   type BandoriCharacterMaster,
 } from "@/lib/bandori-card-master";
 import {
+  BANDORI_SERVERS,
   getBandoriServerCode,
   getBandoriServerFromCode,
   type BandoriServer,
@@ -96,6 +97,7 @@ export function buildBandoriCardSortValues({
 
 export type BandoriCardFilterState<TSortBy extends string> = {
   query: string;
+  servers: BandoriServer[];
   bandIds: number[];
   attributes: BandoriCardAttribute[];
   rarities: number[];
@@ -123,6 +125,7 @@ export type BandoriCardFilterOptionContext = BandoriCardFilterFallbackLabels & {
 
 export type BandoriCardFilterSelection = {
   query: string;
+  servers: Set<BandoriServer>;
   bandIds: Set<number>;
   attributes: Set<BandoriCardAttribute>;
   rarities: Set<number>;
@@ -130,6 +133,7 @@ export type BandoriCardFilterSelection = {
 };
 
 export type BandoriCardFilterEntryFields = {
+  availableServers: readonly BandoriServer[];
   bandId: number | null;
   attribute: BandoriCardAttribute | null;
   rarity: number | null;
@@ -158,10 +162,11 @@ export function reconcileBandoriCardFilterSelection<T>(
 }
 
 export function buildBandoriCardFilterSelection(
-  filter: Pick<BandoriCardFilterState<string>, "query" | "bandIds" | "attributes" | "rarities" | "characterIds">,
+  filter: Pick<BandoriCardFilterState<string>, "query" | "servers" | "bandIds" | "attributes" | "rarities" | "characterIds">,
 ): BandoriCardFilterSelection {
   return {
     query: filter.query.trim().toLowerCase(),
+    servers: new Set(filter.servers ?? BANDORI_SERVERS),
     bandIds: new Set(filter.bandIds),
     attributes: new Set(filter.attributes),
     rarities: new Set(filter.rarities),
@@ -174,6 +179,10 @@ export function matchesBandoriCardFilterSelection(
   selection: BandoriCardFilterSelection,
   unknownFieldPolicy: BandoriCardFilterUnknownFieldPolicy = {},
 ): boolean {
+  if (
+    entry.availableServers
+    && !entry.availableServers.some((server) => selection.servers.has(server))
+  ) return false;
   if (entry.bandId === null
     ? !unknownFieldPolicy.shouldIncludeUnknownBand
     : !selection.bandIds.has(entry.bandId)) return false;
@@ -187,6 +196,12 @@ export function matchesBandoriCardFilterSelection(
     ? !unknownFieldPolicy.shouldIncludeUnknownCharacter
     : !selection.characterIds.has(entry.characterId)) return false;
   return true;
+}
+
+export function getBandoriCardFilterServers(contextServer?: BandoriServer | null): BandoriServer[] {
+  return contextServer === undefined || contextServer === null
+    ? [...BANDORI_SERVERS]
+    : [contextServer];
 }
 
 export function buildBandoriCardFilterOptions(

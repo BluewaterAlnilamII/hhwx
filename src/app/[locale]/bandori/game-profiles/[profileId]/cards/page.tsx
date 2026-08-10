@@ -667,6 +667,7 @@ export default function GameProfileCardsPage({ params }: { params: Promise<{ pro
                 characterOptions={characterOptions}
                 availableBandIds={bandIds}
                 availableCharacterIds={characterIds}
+                availableServers={[profileServer]}
                 sortOptions={sortOptions}
                 onFilterChange={updateFilter}
                 onClearFilter={resetFilter}
@@ -691,19 +692,24 @@ export default function GameProfileCardsPage({ params }: { params: Promise<{ pro
                     getKey={(entry) => entry.card.cardId}
                     renderItem={(entry) => (
                       <BandoriCardTile
+                        interaction={canEditProfile ? {
+                          kind: "action",
+                          label: t("labels.editCard", { cardName: entry.cardName }),
+                          onAction: () => setCardEditorState({
+                            mode: "edit",
+                            card: entry.card,
+                            baselineCard: entry.card,
+                          }),
+                          disabled: isSavingChanges,
+                        } : { kind: "information" }}
                         card={{ ...entry.card, bandId: entry.bandId, totalPower: entry.totalPower }}
                         metadata={entry.metadata}
                         cardName={entry.cardName}
+                        server={profileServer}
                         characterName={entry.characterName}
                         skillEffectLabel={entry.skillEffectLabel}
                         skillEffectLanguageTag={entry.skillEffectLanguageTag}
                         size="compact"
-                        actionLabel={canEditProfile ? t("labels.editCard", { cardName: entry.cardName }) : undefined}
-                        onAction={canEditProfile && !isSavingChanges ? () => setCardEditorState({
-                          mode: "edit",
-                          card: entry.card,
-                          baselineCard: entry.card,
-                        }) : undefined}
                       />
                     )}
                   />

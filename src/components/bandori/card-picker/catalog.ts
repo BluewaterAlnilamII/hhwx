@@ -6,7 +6,10 @@ import {
   type BandoriCharacterMaster,
 } from "@/lib/bandori-card-master";
 import { hasTrainedCardArt } from "@/lib/bandori-card-training";
-import { expandBandoriCardCatalog } from "@/lib/bandori-card-server-extensions";
+import {
+  expandBandoriCardCatalog,
+  materializeBandoriCardForServer,
+} from "@/lib/bandori-card-server-extensions";
 import {
   buildBandoriCardFilterSelection,
   getBandoriCardReleaseSortServer,
@@ -15,10 +18,19 @@ import {
   normalizeBandoriCardReleaseSortTimestamp,
 } from "@/lib/bandori-card-filter";
 import {
+  BANDORI_SERVERS,
   DEFAULT_BANDORI_PREFERRED_SERVER,
   type BandoriServer,
 } from "@/lib/bandori-server";
-import type { BandoriCardCatalogEntry, BandoriCardPickerFilter } from "./types";
+import {
+  listBandoriCardAssetVariants,
+  type BandoriCardsAssetIndex,
+} from "@/lib/bandori-public-asset-index";
+import type {
+  BandoriCardArtVariant,
+  BandoriCardCatalogEntry,
+  BandoriCardPickerFilter,
+} from "./types";
 
 function toPositiveInteger(value: unknown): number | null {
   const parsed = Number(value);
@@ -48,6 +60,11 @@ export interface BandoriCardCatalogFallbackLabels {
   getCharacterLabel: (characterId: number) => string;
 }
 
+export interface BandoriCardCatalogSourceContext {
+  canonicalCards?: Record<string, BandoriCardMaster | null | undefined>;
+  assetIndex?: BandoriCardsAssetIndex | null;
+}
+
 export function buildBandoriCardCatalog(
   cards: Record<string, BandoriCardMaster | null | undefined>,
   characters: Record<string, BandoriCharacterMaster | null | undefined>,
@@ -55,6 +72,7 @@ export function buildBandoriCardCatalog(
   expandEntityCollisions = false,
   contextServer?: BandoriServer | null,
   fallbackLabels?: BandoriCardCatalogFallbackLabels,
+  sourceContext: BandoriCardCatalogSourceContext = {},
 ): BandoriCardCatalogEntry[] {
   const cardEntries = expandEntityCollisions
     ? expandBandoriCardCatalog(cards).map(({ cardId, cardRef, server, card }) => ({
@@ -98,10 +116,34 @@ export function buildBandoriCardCatalog(
     );
     const attribute = isBandoriCardAttribute(card?.attribute) ? card.attribute : null;
     const levelLimit = toPositiveInteger(card?.levelLimit) ?? 1;
-    const hasTrainedArt = hasTrainedCardArt(card);
-    const trainingLevelLimit = hasTrainedArt
+    const masterHasTrainedArt = hasTrainedCardArt(card);
+    const indexedArtVariants = listBandoriCardAssetVariants(
+      sourceContext.assetIndex,
+      resourceSetName,
+    );
+    const availableArtVariants: readonly BandoriCardArtVariant[] = sourceContext.assetIndex
+      ? indexedArtVariants
+      : masterHasTrainedArt
+        ? ["normal", "after_training"]
+        : ["normal"];
+    const hasTrainedArt = availableArtVariants.includes("after_training");
+    const trainingLevelLimit = masterHasTrainedArt
       ? toPositiveInteger((card?.stat?.training as { levelLimit?: unknown }).levelLimit) ?? 0
       : 0;
+    const canonicalCard = sourceContext.canonicalCards === undefined
+      ? card
+      : sourceContext.canonicalCards[rawCardId];
+    const availableServers = entityServer !== null
+      ? [entityServer]
+      : contextServer !== undefined && contextServer !== null
+        ? canonicalCard && materializeBandoriCardForServer(canonicalCard, contextServer)
+          ? [contextServer]
+          : []
+        : BANDORI_SERVERS.filter((server) => (
+            canonicalCard
+              ? materializeBandoriCardForServer(canonicalCard, server) !== null
+              : false
+          ));
     const searchText = [
       cardId,
       displayName,
@@ -116,6 +158,7 @@ export function buildBandoriCardCatalog(
       cardId,
       cardRef,
       entityServer,
+      availableServers,
       characterId,
       skillId,
       characterName,
@@ -125,9 +168,11 @@ export function buildBandoriCardCatalog(
       levelLimit,
       trainingLevelLimit,
       resourceSetName,
+      type: card?.type,
       displayName,
       searchText,
       releaseTimestamps,
+      availableArtVariants,
       hasTrainedArt,
     }];
   }).sort((left, right) => right.releaseTimestamps[0] - left.releaseTimestamps[0] || right.cardId - left.cardId);
@@ -138,6 +183,8 @@ export function filterBandoriCardCatalog(
   filter: BandoriCardPickerFilter,
 ): BandoriCardCatalogEntry[] {
   if (
+    (filter.servers?.length ?? BANDORI_SERVERS.length) === 0
+    ||
     filter.bandIds.length === 0
     || filter.attributes.length === 0
     || filter.rarities.length === 0
@@ -173,6 +220,23 @@ export function filterBandoriCardCatalog(
   });
 }
 
-export function getDefaultTrainType(card: Pick<BandoriCardCatalogEntry, "hasTrainedArt"> | null | undefined) {
+export function getDefaultTrainType(
+  card: Pick<BandoriCardCatalogEntry, "availableArtVariants" | "hasTrainedArt"> | null | undefined,
+): BandoriCardArtVariant {
+  if (card?.availableArtVariants.length === 1) {
+    return card.availableArtVariants[0];
+  }
   return card?.hasTrainedArt ? "after_training" : "normal";
+}
+
+export function resolveBandoriCardCatalogTrainType(
+  card: Pick<BandoriCardCatalogEntry, "availableArtVariants">,
+  requestedTrainType: BandoriCardArtVariant,
+): BandoriCardArtVariant {
+  if (card.availableArtVariants.includes(requestedTrainType)) {
+    return requestedTrainType;
+  }
+  return card.availableArtVariants.length === 1
+    ? card.availableArtVariants[0]
+    : "normal";
 }
