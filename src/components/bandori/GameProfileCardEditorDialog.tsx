@@ -6,14 +6,14 @@ import { Save, Trash2, X } from "lucide-react";
 import { useLocale, useTranslations } from "next-intl";
 import { type AppLocale } from "@/i18n/routing";
 import SharedBandoriCardThumbnail from "@/components/bandori/BandoriCardThumbnail";
-import { isBandoriCardAttribute, type BandoriCardAttribute } from "@/lib/bandori-card-filter";
+import { isBandoriCardAttribute, type BandoriCardAttribute } from "@/lib/bandori/cards/filter";
 import { type BandoriServer } from "@/lib/bandori-server";
 import {
   getGameProfileCardLevelLimit,
   hasGameProfileCardChanged,
   pickGameProfileCardName,
   type GameProfileCardMetadata,
-} from "@/lib/bandori-game-profile-card";
+} from "@/lib/bandori/cards/game-profile-card";
 import { useBandoriPreferredServer } from "@/store/useBandoriPreferencesStore";
 import {
   calculateBandoriCard,

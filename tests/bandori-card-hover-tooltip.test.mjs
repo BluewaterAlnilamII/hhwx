@@ -94,12 +94,12 @@ test("card tiles declare information, action, and presentation semantics explici
   ] = await Promise.all([
     readSource("src/components/bandori/BandoriCardTile.tsx"),
     readSource("src/components/bandori/card-picker/BandoriCardThumbnailTile.tsx"),
-    readSource("src/app/[locale]/bandori/events/EventInfoPanel.tsx"),
+    readSource("src/app/[locale]/bandori/events/_info/EventInfoPanel.tsx"),
     readSource("src/components/bandori/BandoriEventBonusPanel.tsx"),
     readSource("src/app/[locale]/bandori/teambuilder/page.tsx"),
     readSource("src/app/[locale]/bandori/teambuilder/CardPreferencesPanel.tsx"),
     readSource("src/app/[locale]/bandori/game-profiles/[profileId]/cards/page.tsx"),
-    readSource("src/app/[locale]/bandori/events/Top10PlayerList.tsx"),
+    readSource("src/app/[locale]/bandori/events/_tracker/Top10PlayerList.tsx"),
   ]);
 
   assert.match(tile, /kind: "information"/u);

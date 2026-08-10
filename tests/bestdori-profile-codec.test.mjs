@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { resolveBandoriCardMapForServerWithJpFallback } from "../src/lib/bandori-card-server-extensions.ts";
+import { resolveBandoriCardMapForServerWithJpFallback } from "../src/lib/bandori/cards/regional-extensions.ts";
 import {
   BESTDORI_PROFILE_COMPRESSION_VERSION,
   decodeBestdoriCardIds,

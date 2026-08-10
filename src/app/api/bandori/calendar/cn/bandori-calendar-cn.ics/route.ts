@@ -2,7 +2,7 @@ import {
   fetchBandoriCharacters,
   fetchBandoriEventRecords,
   type BandoriEventRecord,
-} from "@/lib/bandori-events-server";
+} from "@/lib/bandori/events/catalog-server";
 import {
   buildStampCharacterOptions,
   formatCalendarSubscriptionTitle,

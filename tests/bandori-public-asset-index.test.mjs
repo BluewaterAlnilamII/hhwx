@@ -23,7 +23,7 @@ import {
 import {
   buildCommentStampLookup,
   buildStampShortcode,
-} from "../src/app/[locale]/bandori/events/commentContent.tsx";
+} from "../src/lib/comments/comment-content.ts";
 
 const hashes = {
   thumb: "1".repeat(64),

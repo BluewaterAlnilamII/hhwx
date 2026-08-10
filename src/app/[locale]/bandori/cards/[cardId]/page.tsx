@@ -5,8 +5,8 @@ import { buildLocalizedPathname, normalizeLocale } from "@/i18n/routing";
 import {
   isKnownBandoriCardEntityCollision,
   materializeBandoriCardForServer,
-} from "@/lib/bandori-card-server-extensions";
-import { readBandoriCardApiDetail } from "@/lib/bandori-cards-api-server";
+} from "@/lib/bandori/cards/regional-extensions";
+import { readBandoriCardApiDetail } from "@/lib/bandori/cards/api-server";
 import {
   BANDORI_SERVERS,
   getBandoriServerCode,

@@ -6,47 +6,29 @@ import { Link } from "@/i18n/navigation";
 import AccountShell, { AccountErrorState, AccountLoadingState, AccountSignInState } from "../AccountShell";
 import { getAccessToken, useLocalizedAccountProfile } from "../useAccountProfile";
 import { getApiErrorMessage, parseApiSuccessData } from "@/lib/api-contracts";
+import {
+  COMMENT_TARGET_BANDORI_EVENT,
+  parseBandoriEventCommentTargetId,
+} from "@/lib/bandori/events/comment-target";
+import { getBandoriServerCode, type BandoriServerCode } from "@/lib/bandori-server";
+import type {
+  CommentNotification,
+  CommentNotificationListResponse,
+  CommentNotificationType,
+} from "@/lib/comments/comment-contract";
 import { getLocalizedApiErrorMessage } from "@/lib/localized-api-errors";
 
-type CommentNotificationType = "comment_reply" | "comment_reaction";
-
-type BaseCommentNotification = {
-  id: string;
-  actorUsername: string | null;
-  targetId: string;
-  eventId: number | null;
-  server: "jp" | "en" | "tw" | "cn" | null;
-  commentId: string;
-  linkCommentId: string;
-  readAt: string | null;
-  createdAt: string;
-};
-
-type CommentReplyNotification = BaseCommentNotification & {
-  type: "comment_reply";
-  activityCommentId: string;
-  reactionEmojiKey: null;
-};
-
-type CommentReactionNotification = BaseCommentNotification & {
-  type: "comment_reaction";
-  activityCommentId: null;
-  reactionEmojiKey: string;
-};
-
-type CommentNotification = CommentReplyNotification | CommentReactionNotification;
-
-type NotificationListResponse = {
-  notifications: CommentNotification[];
-  nextCursor: string | null;
-  hasMore: boolean;
-};
-
-type NotificationColumnState = NotificationListResponse & {
+type NotificationColumnState = CommentNotificationListResponse & {
   loadingMore: boolean;
 };
 
 type NotificationColumns = Record<CommentNotificationType, NotificationColumnState>;
+
+type NotificationTargetPresentation = {
+  eventId: number | null;
+  serverCode: BandoriServerCode | null;
+  href: string | null;
+};
 
 const NOTIFICATIONS_UPDATED_EVENT = "hhwx:notifications-updated";
 const NOTIFICATION_TYPES = ["comment_reply", "comment_reaction"] as const satisfies readonly CommentNotificationType[];
@@ -68,7 +50,7 @@ function createEmptyColumns(): NotificationColumns {
   };
 }
 
-function toLoadedColumnState(data: NotificationListResponse): NotificationColumnState {
+function toLoadedColumnState(data: CommentNotificationListResponse): NotificationColumnState {
   return {
     ...data,
     loadingMore: false,
@@ -86,6 +68,36 @@ function getNotificationMessage(notification: CommentNotification, t: Translatio
   }
 
   return t("reply", { actor });
+}
+
+function getNotificationTargetPresentation(
+  notification: CommentNotification,
+): NotificationTargetPresentation {
+  switch (notification.targetType) {
+    case COMMENT_TARGET_BANDORI_EVENT: {
+      const target = parseBandoriEventCommentTargetId(notification.targetId);
+      if (!target) break;
+
+      const serverCode = getBandoriServerCode(target.server);
+      const query = new URLSearchParams({
+        comment: notification.linkCommentId,
+        server: serverCode,
+      });
+      return {
+        eventId: target.eventId,
+        serverCode,
+        href: `/bandori/events/${encodeURIComponent(target.eventId)}?${query.toString()}`,
+      };
+    }
+    default:
+      break;
+  }
+
+  return {
+    eventId: null,
+    serverCode: null,
+    href: null,
+  };
 }
 
 function formatNotificationTime(value: string, locale: string): string {
@@ -165,7 +177,7 @@ export default function AccountNotificationsPage() {
     type: CommentNotificationType,
     cursor: string | null | undefined,
     accessToken: string,
-  ) => requestJson<NotificationListResponse>(
+  ) => requestJson<CommentNotificationListResponse>(
     buildNotificationRequestUrl(type, cursor),
     (status) => t("requestFailed", { status }),
     (payload) => getLocalizedApiErrorMessage(payload, errorT),
@@ -318,17 +330,9 @@ export default function AccountNotificationsPage() {
   };
 
   const renderNotificationCard = (notification: CommentNotification) => {
-    const eventId = notification.eventId ?? notification.targetId;
-    const query = new URLSearchParams({ comment: notification.linkCommentId });
-    if (notification.server) query.set("server", notification.server);
-    const href = `/bandori/events/${encodeURIComponent(eventId)}?${query.toString()}`;
-    return (
-      <Link
-        key={notification.id}
-        href={href}
-        onClick={() => void markRead(notification.id).catch(() => undefined)}
-        className="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3.5 shadow-xs transition hover:border-sky-200 hover:shadow-[0_12px_36px_rgba(14,165,233,0.08)]"
-      >
+    const target = getNotificationTargetPresentation(notification);
+    const content = (
+      <>
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             {!notification.readAt ? <span className="h-2 w-2 rounded-full bg-sky-500" aria-label={t("unreadLabel")} /> : null}
@@ -337,14 +341,37 @@ export default function AccountNotificationsPage() {
             </h3>
           </div>
           <p className="mt-2 text-sm text-slate-500">
-            {t("activityLabel", { eventId })}
-            {notification.server ? ` · ${notification.server.toUpperCase()}` : ""}
-            {` · ${formatNotificationTime(notification.createdAt, locale)}`}
+            {target.eventId === null ? null : (
+              <>
+                {t("activityLabel", { eventId: target.eventId })}
+                {target.serverCode ? ` · ${target.serverCode.toUpperCase()}` : ""}
+                {" · "}
+              </>
+            )}
+            {formatNotificationTime(notification.createdAt, locale)}
           </p>
         </div>
-        <span className="shrink-0 rounded-full border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600">
-          {commonT("actions.view")}
-        </span>
+        {target.href ? (
+          <span className="shrink-0 rounded-full border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600">
+            {commonT("actions.view")}
+          </span>
+        ) : null}
+      </>
+    );
+    const className = "flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3.5 shadow-xs";
+
+    if (!target.href) {
+      return <div key={notification.id} className={className}>{content}</div>;
+    }
+
+    return (
+      <Link
+        key={notification.id}
+        href={target.href}
+        onClick={() => void markRead(notification.id).catch(() => undefined)}
+        className={`${className} transition hover:border-sky-200 hover:shadow-[0_12px_36px_rgba(14,165,233,0.08)]`}
+      >
+        {content}
       </Link>
     );
   };

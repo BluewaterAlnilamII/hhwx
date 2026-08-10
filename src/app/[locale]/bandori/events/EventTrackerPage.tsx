@@ -1,6 +1,7 @@
 "use client";
 
-import { startTransition, useState, useEffect, useRef, useMemo, useCallback, useLayoutEffect } from "react";
+import { startTransition, useState, useEffect, useRef, useMemo, useCallback } from "react";
+import { useLocale, useTranslations } from "next-intl";
 import * as Tabs from "@radix-ui/react-tabs";
 
 import { useBandoriEventsAssetIndex } from "@/hooks/useBandoriPublicAssetIndex";
@@ -13,6 +14,7 @@ import {
   type BandoriServer,
 } from "@/lib/bandori-server";
 import { remapBandoriMonthlyRankingId } from "@/lib/bandori-monthly-ranking-calendar";
+import { MONTHLY_TIERS } from "@/lib/bandori-tracker-tiers";
 import {
   useBandoriPreferredServer,
   useBandoriPreferencesStore,
@@ -22,17 +24,15 @@ import {
   buildBandoriPublicAssetUrl,
   lookupBandoriEventBanner,
 } from "@/lib/bandori-public-asset-index";
-import type { ComparisonConfig, ComparisonLine, ComparisonLinePoint, ComparisonTargetType, MinimalEvent, TrackerData, TrackerMouseState, TrackerTooltipPayloadEntry, TrackingMode } from "./types";
+import type { ComparisonConfig, ComparisonTargetType, TrackerMouseState, TrackerTooltipPayloadEntry, TrackingMode } from "./_tracker/types";
 import {
   BESTDORI_PREDICTION_STORAGE_KEY,
   EVENT_TRACKER_TIERS,
-  getEventTrackerTiersForMode,
   INSTANT_PROJECTION_STORAGE_KEY,
   DAY_PROJECTION_STORAGE_KEY,
   MAX_COMPARISON_LINES,
-  MONTHLY_TIERS,
-} from "./constants";
-import { useTrackerData } from "./useTrackerData";
+} from "./_tracker/constants";
+import { useTrackerData } from "./_tracker/useTrackerData";
 import {
   useChartDomain,
   useProcessedData,
@@ -43,9 +43,9 @@ import {
   getFinalScore,
   getCurrentMonthlyRankingWindow,
   getMonthlyRankingOptions,
-} from "./useChartData";
-import { useProjectionPreference } from "./useProjectionPreference";
-import { useComparisonPreferences } from "./useComparisonPreferences";
+} from "./_tracker/useChartData";
+import { useProjectionPreference } from "./_tracker/useProjectionPreference";
+import { useComparisonPreferences } from "./_tracker/useComparisonPreferences";
 import {
   getDefaultTierForMode,
   normalizeTierForMode,
@@ -54,7 +54,7 @@ import {
   TOP10_RANKING_SELECTION,
   writeTrackerRankingPreference,
   type TrackerRankingSelection,
-} from "./tracker-tier-preference";
+} from "./_tracker/tracker-tier-preference";
 import {
   parseTrackingModeSearchParam,
   parseEventTrackerViewSearchParam,
@@ -63,348 +63,46 @@ import {
   resolveEventTrackerServerSelection,
   type EventTrackerView,
 } from "./urlQuery";
-import { mergeComparisonLines, useComparisonTrackerData } from "./useComparisonTrackerData";
-import { mergeBestdoriPredictionData, useBestdoriPrediction } from "./useBestdoriPrediction";
-import { buildTooltipSignature, type HoverTooltipState } from "./useTrackerHoverTooltip";
-import { ComparisonControls } from "./ComparisonControls";
-import { TrackerChartPanel } from "./TrackerChartPanel";
-import { TrackerModeTierControls } from "./TrackerModeTierControls";
-import { TrackerStatusSummary } from "./TrackerStatusSummary";
-import { Top10Panel } from "./Top10Panel";
+import { mergeComparisonLines, useComparisonTrackerData } from "./_tracker/useComparisonTrackerData";
+import { mergeBestdoriPredictionData, useBestdoriPrediction } from "./_tracker/useBestdoriPrediction";
+import { buildTooltipSignature, type HoverTooltipState } from "./_tracker/useTrackerHoverTooltip";
+import { ComparisonControls } from "./_tracker/ComparisonControls";
+import { TrackerChartPanel } from "./_tracker/TrackerChartPanel";
+import { TrackerModeTierControls } from "./_tracker/TrackerModeTierControls";
+import { TrackerStatusSummary } from "./_tracker/TrackerStatusSummary";
+import { Top10Panel } from "./_tracker/Top10Panel";
 import BandoriPageShell from "../BandoriPageShell";
 import BandoriEventSwitcher from "../BandoriEventSwitcher";
 import EventComments from "./EventComments";
-import EventInfoPanel from "./EventInfoPanel";
-import EventRelativeCountdown from "./EventRelativeCountdown";
-import { useBandoriEventDetail } from "./useBandoriEventDetail";
+import EventInfoPanel from "./_info/EventInfoPanel";
+import EventRelativeCountdown from "./_info/EventRelativeCountdown";
+import { useBandoriEventDetail } from "./_info/useBandoriEventDetail";
+import { buildChinaMainlandHolidayLookup } from "@/lib/bandori-china-mainland-holiday-calendar";
 import {
-  buildChinaMainlandHolidayLookup,
-  isChinaMainlandRestDay,
-} from "@/lib/bandori-china-mainland-holiday-calendar";
-
-type NonWorkingDayBand = {
-  key: string;
-  start: number;
-  end: number;
-};
-
-type ComparisonTargetOption = {
-  id: number;
-  label: string;
-  isSameEventType?: boolean;
-};
-
-type AutomaticComparisonTarget = {
-  targetId: number;
-  tier: number;
-};
-
-const ZOOM_WIDTH_MULTIPLIERS = [1, 2, 4, 8, 16, 32] as const;
-// Absorb collection-time jitter without merging adjacent 15/30-minute tracker snapshots.
-const TOOLTIP_TIME_TOLERANCE_MS = 5 * 60_000;
-const EVENT_TIER_1000 = 1000;
-const EVENT_TIER_1500 = 1500;
-const CN_T1500_BACKFILL_EVENT_ID = 311;
-const CN_T1500_LEGACY_EVENT_ID_LIMIT = 313;
-const EVENT_TYPES_WITHOUT_SONG_RANKING = new Set(["story", "mission_live", "live_try", "festival"]);
-
-type ModeIndicatorStyle = {
-  width: number;
-  height: number;
-  x: number;
-  y: number;
-  ready: boolean;
-};
-
-type MainTooltipPointIndexEntry = {
-  time: number;
-  point: TrackerData;
-};
-
-type ComparisonTooltipPointIndexEntry = {
-  dataKey: `compare_${number}_ep`;
-  points: ComparisonLinePoint[];
-};
-
-function isActualTrackerPoint(
-  point: TrackerData,
-  domainStart: number | "auto",
-  trackingMode: TrackingMode,
-  seriesLength: number,
-): boolean {
-  if (point.isBaseline) {
-    return false;
-  }
-
-  if (
-    seriesLength === 1 &&
-    trackingMode !== "song" &&
-    typeof domainStart === "number" &&
-    point.time === domainStart &&
-    point.ep === 0 &&
-    !point.isFinal
-  ) {
-    return false;
-  }
-
-  return true;
-}
-
-function getTooltipPointTime(point: TrackerData): number {
-  return point.isProjection ? point.projectionEndTime ?? point.time : point.time;
-}
-
-function isMainTooltipPoint(point: TrackerData): boolean {
-  if (point.isProjection) {
-    return (
-      (point.instantEp !== undefined && Number.isFinite(point.instantEp)) ||
-      (point.dayEp !== undefined && Number.isFinite(point.dayEp))
-    );
-  }
-
-  return (
-    !point.isBaseline &&
-    !point.isFinal &&
-    point.ep !== undefined &&
-    Number.isFinite(point.ep)
-  );
-}
-
-function findNearestSortedPoint<T>(
-  points: T[],
-  targetTime: number,
-  getTime: (point: T) => number,
-): T | null {
-  if (points.length === 0) return null;
-
-  let low = 0;
-  let high = points.length - 1;
-  while (low < high) {
-    const mid = Math.floor((low + high) / 2);
-    if (getTime(points[mid]) < targetTime) {
-      low = mid + 1;
-    } else {
-      high = mid;
-    }
-  }
-
-  const candidates = [points[low]];
-  if (low > 0) candidates.push(points[low - 1]);
-  if (low + 1 < points.length) candidates.push(points[low + 1]);
-
-  let nearestPoint: T | null = null;
-  let nearestDistance = Number.POSITIVE_INFINITY;
-  for (const point of candidates) {
-    const distance = Math.abs(getTime(point) - targetTime);
-    if (distance <= TOOLTIP_TIME_TOLERANCE_MS && distance < nearestDistance) {
-      nearestPoint = point;
-      nearestDistance = distance;
-    }
-  }
-
-  return nearestPoint;
-}
-
-function buildMainTooltipPointIndex(points: TrackerData[]): MainTooltipPointIndexEntry[] {
-  return points
-    .filter(isMainTooltipPoint)
-    .map((point) => ({ time: getTooltipPointTime(point), point }))
-    .sort((left, right) => left.time - right.time);
-}
-
-function buildComparisonTooltipPointIndex(lines: ComparisonLine[]): ComparisonTooltipPointIndexEntry[] {
-  return lines.map((line) => ({
-    dataKey: line.dataKey,
-    points: [...line.points].sort((left, right) => left.shiftedTime - right.shiftedTime),
-  }));
-}
-
-function findNearestMainTooltipPoint(index: MainTooltipPointIndexEntry[], targetTime: number): TrackerData | null {
-  return findNearestSortedPoint(index, targetTime, (entry) => entry.time)?.point ?? null;
-}
-
-function collectNearbyComparisonPoints(index: ComparisonTooltipPointIndexEntry[], targetTime: number): ComparisonLinePoint[] {
-  return index.flatMap((entry) => {
-    const nearestPoint = findNearestSortedPoint(entry.points, targetTime, (point) => point.shiftedTime);
-    return nearestPoint ? [nearestPoint] : [];
-  });
-}
-
-function buildComparisonPointMap(points: ComparisonLinePoint[]) {
-  return Object.fromEntries(points.map((point) => [point.dataKey, point]));
-}
-
-function createComparisonConfigId(): string {
-  return `comparison-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-}
-
-function hasComparisonConfig(
-  configs: ComparisonConfig[],
-  targetType: ComparisonTargetType,
-  targetId: number,
-  tier: number,
-): boolean {
-  return configs.some((config) => (
-    config.targetType === targetType &&
-    config.targetId === targetId &&
-    config.tier === tier
-  ));
-}
-
-function isLegacyCnEventWithoutT1500(server: BandoriServer, targetId: number): boolean {
-  return server === 3
-    && targetId <= CN_T1500_LEGACY_EVENT_ID_LIMIT
-    && targetId !== CN_T1500_BACKFILL_EVENT_ID;
-}
-
-function resolveLegacyCnEventTier(server: BandoriServer, targetId: number, tier: number): number {
-  if (
-    tier === EVENT_TIER_1500 &&
-    isLegacyCnEventWithoutT1500(server, targetId)
-  ) {
-    return EVENT_TIER_1000;
-  }
-
-  return tier;
-}
-
-function getComparisonTierOptions(
-  server: BandoriServer,
-  config: ComparisonConfig,
-  tierOptions: readonly number[],
-): readonly number[] {
-  if (
-    config.targetType !== "event" ||
-    config.targetId === null ||
-    !isLegacyCnEventWithoutT1500(server, config.targetId)
-  ) {
-    return tierOptions;
-  }
-
-  return tierOptions.filter((tier) => tier !== EVENT_TIER_1500);
-}
-
-function getMainTrackerTierOptions(
-  server: BandoriServer,
-  trackingMode: TrackingMode,
-  eventId: number | null,
-): readonly number[] {
-  const tierOptions = getEventTrackerTiersForMode(trackingMode);
-  if (trackingMode !== "event" || eventId === null || !isLegacyCnEventWithoutT1500(server, eventId)) {
-    return tierOptions;
-  }
-
-  return tierOptions.filter((tier) => tier !== EVENT_TIER_1500);
-}
-
-function isSongRankingDisabledEventType(eventType: string | null | undefined): boolean {
-  return typeof eventType === "string" && EVENT_TYPES_WITHOUT_SONG_RANKING.has(eventType);
-}
-
-function resolveTrackingModeForEventType(trackingMode: TrackingMode, eventType: string | null | undefined): TrackingMode {
-  return trackingMode === "song" && isSongRankingDisabledEventType(eventType) ? "event" : trackingMode;
-}
-
-function isComparisonTierSelectable(
-  server: BandoriServer,
-  config: ComparisonConfig,
-  tierOptions: readonly number[],
-): boolean {
-  return config.tier !== null && getComparisonTierOptions(server, config, tierOptions).includes(config.tier);
-}
-
-function normalizeComparisonConfigTier(
-  server: BandoriServer,
-  config: ComparisonConfig,
-): ComparisonConfig {
-  if (config.targetType !== "event" || config.targetId === null || config.tier === null) {
-    return config;
-  }
-
-  const tier = resolveLegacyCnEventTier(server, config.targetId, config.tier);
-  return tier === config.tier ? config : { ...config, tier };
-}
-
-function resolveMainTrackerTier(
-  server: BandoriServer,
-  trackingMode: TrackingMode,
-  eventId: number | null,
-  tier: number,
-): number {
-  if (trackingMode !== "event" || eventId === null) {
-    return tier;
-  }
-
-  return resolveLegacyCnEventTier(server, eventId, tier);
-}
-
-function resolveMainTrackerRanking(
-  server: BandoriServer,
-  trackingMode: TrackingMode,
-  eventId: number | null,
-  ranking: TrackerRankingSelection,
-): TrackerRankingSelection {
-  if (ranking === TOP10_RANKING_SELECTION) {
-    return TOP10_RANKING_SELECTION;
-  }
-
-  return resolveMainTrackerTier(server, trackingMode, eventId, ranking);
-}
-
-function getComparisonConfigKey(config: ComparisonConfig): string | null {
-  return config.targetId !== null && config.tier !== null
-    ? `${config.targetType}:${config.targetId}:${config.tier}`
-    : null;
-}
-
-function findPreviousSameTypeEventComparisonTarget(
-  server: BandoriServer,
-  events: MinimalEvent[],
-  currentEventId: number | null,
-  currentEventType: string | null,
-  tier: number,
-  configs: ComparisonConfig[],
-): AutomaticComparisonTarget | null {
-  if (currentEventId === null || currentEventType === null) {
-    return null;
-  }
-
-  const target = events.find((event) => {
-    const comparisonTier = resolveLegacyCnEventTier(server, event.id, tier);
-
-    return (
-      event.id < currentEventId &&
-      event.eventType === currentEventType &&
-      !hasComparisonConfig(configs, "event", event.id, comparisonTier)
-    );
-  });
-
-  return target
-    ? {
-        targetId: target.id,
-        tier: resolveLegacyCnEventTier(server, target.id, tier),
-      }
-    : null;
-}
-
-function findPreviousMonthlyComparisonTarget(
-  monthlyOptions: Array<{ monthId: number }>,
-  selectedMonthlyMonthId: number,
-  tier: number,
-  configs: ComparisonConfig[],
-): AutomaticComparisonTarget | null {
-  const target = monthlyOptions.find((option) => (
-    option.monthId < selectedMonthlyMonthId &&
-    !hasComparisonConfig(configs, "monthly", option.monthId, tier)
-  ));
-
-  return target
-    ? {
-        targetId: target.monthId,
-        tier,
-      }
-    : null;
-}
+  buildComparisonPointMap,
+  buildComparisonTooltipPointIndex,
+  buildMainTooltipPointIndex,
+  buildNonWorkingDayBands,
+  collectNearbyComparisonPoints,
+  createComparisonConfigId,
+  findNearestMainTooltipPoint,
+  findPreviousMonthlyComparisonTarget,
+  findPreviousSameTypeEventComparisonTarget,
+  formatBandoriDateTime,
+  getComparisonConfigKey,
+  getComparisonTierOptions,
+  getMainTrackerTierOptions,
+  getTooltipPointTime,
+  isActualTrackerPoint,
+  isComparisonTierSelectable,
+  isSongRankingDisabledEventType,
+  normalizeComparisonConfigTier,
+  resolveMainTrackerRanking,
+  resolveMainTrackerTier,
+  resolveTrackingModeForEventType,
+  ZOOM_WIDTH_MULTIPLIERS,
+  type ComparisonTargetOption,
+} from "./_tracker/tracker-model";
 
 type InitialTrackerQueryState = {
   currentEventId: number | null;
@@ -441,58 +139,6 @@ function readInitialTrackerQueryState(
   };
 }
 
-function formatBandoriDateTime(timestamp: number, server: BandoriServer) {
-  const timeZone = ["Asia/Tokyo", "UTC", "Asia/Taipei", "Asia/Shanghai"][server];
-  return new Intl.DateTimeFormat("zh-CN", {
-    timeZone,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  }).format(timestamp);
-}
-
-function buildNonWorkingDayBands(
-  domainStart: number | "auto",
-  domainEnd: number | "auto",
-  holidayLookup: ReturnType<typeof buildChinaMainlandHolidayLookup>,
-): NonWorkingDayBand[] {
-  if (typeof domainStart !== "number" || typeof domainEnd !== "number") {
-    return [];
-  }
-
-  const bands: NonWorkingDayBand[] = [];
-  const cursor = new Date(domainStart);
-  cursor.setHours(0, 0, 0, 0);
-
-  while (cursor.getTime() < domainEnd) {
-    const nextDay = new Date(cursor);
-    nextDay.setDate(nextDay.getDate() + 1);
-
-    if (isChinaMainlandRestDay(cursor, holidayLookup)) {
-      const bandStart = Math.max(cursor.getTime(), domainStart);
-      const bandEnd = Math.min(nextDay.getTime(), domainEnd);
-
-      if (bandStart < bandEnd) {
-        const year = cursor.getFullYear();
-        const month = String(cursor.getMonth() + 1).padStart(2, "0");
-        const day = String(cursor.getDate()).padStart(2, "0");
-        bands.push({
-          key: `${year}-${month}-${day}`,
-          start: bandStart,
-          end: bandEnd,
-        });
-      }
-    }
-
-    cursor.setDate(cursor.getDate() + 1);
-  }
-
-  return bands;
-}
-
 // ─────────────────────────── 展示子组件 ───────────────────────────
 
 /**
@@ -501,6 +147,7 @@ function buildNonWorkingDayBands(
  * 防止父组件每秒触发包含 Recharts 图表的全量重渲染。
  */
 function EventProgressBar({ startDate, endDate }: { startDate: number; endDate: number }) {
+  const t = useTranslations("bandori.events.progress");
   const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
@@ -516,19 +163,19 @@ function EventProgressBar({ startDate, endDate }: { startDate: number; endDate: 
     ? (
         <span className="inline-flex items-baseline gap-1 whitespace-nowrap">
           <span className="text-[var(--theme-color-progress-foreground)] tabular-nums">{progress.toFixed(1)}%</span>
-          <span>已完成</span>
+          <span>{t("completed")}</span>
         </span>
       )
-    : <EventRelativeCountdown prefix="距开始" remainingMs={startDate - now} completedLabel="活动已开始" />;
+    : <EventRelativeCountdown target="start" remainingMs={startDate - now} />;
 
   const subSummaryContent = (
-    <EventRelativeCountdown prefix="距结束" remainingMs={endDate - now} completedLabel="活动已结束" />
+    <EventRelativeCountdown target="end" remainingMs={endDate - now} />
   );
 
   return (
     <div className="rounded-2xl border border-[var(--theme-color-border-default)] bg-[var(--theme-color-surface-background)] p-6 shadow-[var(--theme-shadow-surface-raised)] dark:border-slate-700/80 dark:bg-[#111827] dark:shadow-[0_18px_44px_rgba(0,0,0,0.22)]">
       <div className="mb-2 flex items-start justify-between gap-3 text-sm font-semibold">
-        <span className="shrink-0 whitespace-nowrap font-bold text-[var(--theme-color-progress-foreground)]">活动进度</span>
+        <span className="shrink-0 whitespace-nowrap font-bold text-[var(--theme-color-progress-foreground)]">{t("title")}</span>
         <span className="min-w-0 flex flex-col items-end gap-0.5 text-right leading-tight">
           <span className="inline-flex justify-end">{summaryContent}</span>
           <span className="inline-flex justify-end">{subSummaryContent}</span>
@@ -551,6 +198,9 @@ type EventTrackerPageProps = {
 };
 
 export default function EventTrackerPage({ initialEventId }: EventTrackerPageProps) {
+  const locale = useLocale();
+  const commonT = useTranslations("bandori.events.common");
+  const viewT = useTranslations("bandori.events.view");
   const preferredServer = useBandoriPreferredServer();
   const hasHydratedPreferredServer = useBandoriPreferencesStore((state) => state.hydrated);
   const { music: masterMusic } = useBandoriMusicMaster();
@@ -565,34 +215,19 @@ export default function EventTrackerPage({ initialEventId }: EventTrackerPagePro
   const [selectedServer, setSelectedServer] = useState<BandoriServer>(DEFAULT_BANDORI_PREFERRED_SERVER);
   const [activeView, setActiveView] = useState<EventTrackerView>("tracker");
   const [chartRenderRevision, setChartRenderRevision] = useState(0);
-  const [modeIndicatorStyle, setModeIndicatorStyle] = useState<ModeIndicatorStyle>({
-    width: 0,
-    height: 0,
-    x: 0,
-    y: 0,
-    ready: false,
-  });
-
   const [zoomIndex, setZoomIndex] = useState(0);
-  const modeTabsListRef = useRef<HTMLDivElement>(null);
-  const modeTriggerRefs = useRef<Record<TrackingMode, HTMLButtonElement | null>>({
-    event: null,
-    song: null,
-    monthly: null,
-  });
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const chartViewportRef = useRef<HTMLDivElement>(null);
   const tooltipRef = useRef<HTMLDivElement>(null);
   const scheduleTooltipPositionUpdateRef = useRef<() => void>(() => {});
   const isUserScrollingRef = useRef(false);
-  const modeIndicatorViewportWidthRef = useRef<number | null>(null);
   const isProgrammaticScrollRef = useRef(false);
   const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [chartViewportHeight, setChartViewportHeight] = useState(400);
   const [hasAppliedInitialUrlState, setHasAppliedInitialUrlState] = useState(false);
   const monthlyRankingOptions = useMemo(
-    () => getMonthlyRankingOptions(selectedServer),
-    [selectedServer],
+    () => getMonthlyRankingOptions(selectedServer, locale),
+    [locale, selectedServer],
   );
   const isTop10Selected = selectedRanking === TOP10_RANKING_SELECTION;
   const selectedTier = typeof selectedRanking === "number"
@@ -847,41 +482,6 @@ export default function EventTrackerPage({ initialEventId }: EventTrackerPagePro
     });
   }, [activeView, hasAppliedInitialUrlState, resolvedCurrentEventId, selectedRanking, selectedServer, trackingMode]);
 
-  const updateModeIndicator = useCallback(() => {
-    const listElement = modeTabsListRef.current;
-    const activeTrigger = modeTriggerRefs.current[trackingMode];
-    if (!listElement || !activeTrigger) {
-      return;
-    }
-
-    const listRect = listElement.getBoundingClientRect();
-    const activeRect = activeTrigger.getBoundingClientRect();
-
-    // 指示器直接跟随真实按钮几何信息，可以同时兼容横排与竖排布局，
-    // 避免为不同断点手写两套动画逻辑。
-    const nextStyle = {
-      width: activeRect.width,
-      height: activeRect.height,
-      x: activeRect.left - listRect.left,
-      y: activeRect.top - listRect.top,
-      ready: true,
-    };
-
-    setModeIndicatorStyle((previous) => {
-      if (
-        previous.width === nextStyle.width &&
-        previous.height === nextStyle.height &&
-        previous.x === nextStyle.x &&
-        previous.y === nextStyle.y &&
-        previous.ready === nextStyle.ready
-      ) {
-        return previous;
-      }
-
-      return nextStyle;
-    });
-  }, [trackingMode]);
-
   const availableChallengeSongIds = useMemo(() => {
     if (eventMeta?.eventType !== "challenge") {
       return [];
@@ -931,14 +531,14 @@ export default function EventTrackerPage({ initialEventId }: EventTrackerPagePro
       ? monthlyRankingOptions.map((option) => ({ id: option.monthId, label: option.label }))
       : comparisonEventOptions.map((event) => ({
           id: event.id,
-          label: `${event.id}期: ${event.name}`,
+          label: commonT("eventOption", { eventId: event.id, eventName: event.name }),
           isSameEventType: (
             currentEventType !== null &&
             event.id !== resolvedCurrentEventId &&
             event.eventType === currentEventType
           ),
         })),
-    [comparisonEventOptions, comparisonTargetType, currentEventType, monthlyRankingOptions, resolvedCurrentEventId],
+    [commonT, comparisonEventOptions, comparisonTargetType, currentEventType, monthlyRankingOptions, resolvedCurrentEventId],
   );
   const comparisonTargetLabelMap = useMemo(
     () => new Map(comparisonTargetOptions.map((option) => [option.id, option.label])),
@@ -1103,8 +703,8 @@ export default function EventTrackerPage({ initialEventId }: EventTrackerPagePro
         [eventMeta.name.jp, eventMeta.name.en, eventMeta.name.tw, eventMeta.name.cn],
         selectedServer,
         selectedServer,
-      ) ?? `活动 #${eventMeta.eventId}`
-    : "Loading Event...";
+      ) ?? commonT("eventFallback", { eventId: eventMeta.eventId })
+    : commonT("loadingEvent");
   const bannerAsset = getBandoriRegionalDisplayOrder(selectedServer)
     .map((candidateServer) => lookupBandoriEventBanner(
       eventAssetIndex,
@@ -1138,7 +738,7 @@ export default function EventTrackerPage({ initialEventId }: EventTrackerPagePro
   );
   const finalDisplayedData = useFinalDisplayedData(fullProcessedData, cutoffEnd, status, showInstantProjection, showDayProjection);
   const bestdoriPrediction = useBestdoriPrediction({
-    enabled: hasAppliedInitialUrlState && selectedServer === 3 && activeView === "tracker" && trackingMode === "event" && !isTop10Selected && status === "进行中" && showBestdoriPrediction,
+    enabled: hasAppliedInitialUrlState && selectedServer === 3 && activeView === "tracker" && trackingMode === "event" && !isTop10Selected && status === "ongoing" && showBestdoriPrediction,
     eventId: resolvedCurrentEventId,
     tier: selectedTier,
   });
@@ -1385,48 +985,6 @@ export default function EventTrackerPage({ initialEventId }: EventTrackerPagePro
     };
   }, [focusViewportNearLatestDataPoint, scheduleTooltipPositionUpdate, syncScrollbarMetrics]);
 
-  useLayoutEffect(() => {
-    const listElement = modeTabsListRef.current;
-    if (!listElement) {
-      return;
-    }
-
-    updateModeIndicator();
-
-    const resizeObserver = new ResizeObserver(() => {
-      updateModeIndicator();
-    });
-    resizeObserver.observe(listElement);
-
-    const activeTrigger = modeTriggerRefs.current[trackingMode];
-    if (activeTrigger) {
-      resizeObserver.observe(activeTrigger);
-    }
-
-    const animationFrame = requestAnimationFrame(() => {
-      updateModeIndicator();
-    });
-
-    modeIndicatorViewportWidthRef.current = window.innerWidth;
-    const handleWindowResize = () => {
-      const nextViewportWidth = window.innerWidth;
-      if (modeIndicatorViewportWidthRef.current === nextViewportWidth) {
-        return;
-      }
-
-      modeIndicatorViewportWidthRef.current = nextViewportWidth;
-      updateModeIndicator();
-    };
-
-    window.addEventListener("resize", handleWindowResize);
-
-    return () => {
-      resizeObserver.disconnect();
-      cancelAnimationFrame(animationFrame);
-      window.removeEventListener("resize", handleWindowResize);
-    };
-  }, [trackingMode, updateModeIndicator]);
-
   const { ticks: yTicks, domain: yDomainInfo } = useMemo(
     () => generateYTicks(displayedChartData),
     [displayedChartData],
@@ -1446,7 +1004,7 @@ export default function EventTrackerPage({ initialEventId }: EventTrackerPagePro
       latestScore = latestPt.ep;
       latestUpdateTime = latestPt.time;
 
-      if (status === "已结束") {
+      if (status === "ended") {
         if (trackingMode === "monthly" && typeof domainEnd === "number") {
           const nextMonth1st0000 = domainEnd + 1;
           const nextMonth1st0015 = nextMonth1st0000 + 15 * 60 * 1000;
@@ -1478,12 +1036,12 @@ export default function EventTrackerPage({ initialEventId }: EventTrackerPagePro
           server={selectedServer}
           onServerChange={handleServerChange}
           bannerUrl={bannerUrl}
-          startText={startDate ? `${formatBandoriDateTime(startDate, eventTimeServer)} (${getBandoriServerCode(eventTimeServer).toUpperCase()})` : null}
-          endText={endDate ? `${formatBandoriDateTime(endDate, eventTimeServer)} (${getBandoriServerCode(eventTimeServer).toUpperCase()})` : null}
+          startText={startDate ? `${formatBandoriDateTime(startDate, eventTimeServer, locale)} (${getBandoriServerCode(eventTimeServer).toUpperCase()})` : null}
+          endText={endDate ? `${formatBandoriDateTime(endDate, eventTimeServer, locale)} (${getBandoriServerCode(eventTimeServer).toUpperCase()})` : null}
           recommendedEventId={recommendedEventId !== null ? String(recommendedEventId) : null}
         />
 
-        <div role="tablist" aria-label="活动页面视图" className="grid grid-cols-2 overflow-hidden rounded-2xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-surface-background)] shadow-sm dark:border-slate-700 dark:bg-[#111827]">
+        <div role="tablist" aria-label={viewT("label")} className="grid grid-cols-2 overflow-hidden rounded-2xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-surface-background)] shadow-sm dark:border-slate-700 dark:bg-[#111827]">
           {(["tracker", "info"] as const).map((view) => {
             const active = view === activeView;
             return (
@@ -1501,7 +1059,7 @@ export default function EventTrackerPage({ initialEventId }: EventTrackerPagePro
                   view === "tracker" && "border-r border-[var(--theme-color-border-subtle)] dark:border-slate-700",
                 )}
               >
-                {view === "tracker" ? "分数追踪器" : "活动信息"}
+                {viewT(view)}
                 {active ? <span className="absolute inset-x-0 bottom-0 h-0.5 bg-[var(--theme-color-tab-indicator-selected)]" /> : null}
               </button>
             );
@@ -1528,9 +1086,6 @@ export default function EventTrackerPage({ initialEventId }: EventTrackerPagePro
               challengeSongTitleMap={challengeSongTitleMap}
               isSongModeDisabled={isSongModeDisabled}
               isTop10Selected={isTop10Selected}
-              modeIndicatorStyle={modeIndicatorStyle}
-              modeTabsListRef={modeTabsListRef}
-              modeTriggerRefs={modeTriggerRefs}
               monthlyRankingOptions={monthlyRankingOptions}
               onMonthlyMonthChange={handleMonthlyMonthChange}
               onSongChange={setSelectedSongId}
@@ -1551,7 +1106,7 @@ export default function EventTrackerPage({ initialEventId }: EventTrackerPagePro
                   <div className="absolute inset-0 z-30 flex items-center justify-center rounded-2xl bg-[color-mix(in_srgb,var(--theme-color-surface-background)_75%,transparent)] dark:bg-[#0C111C]/75">
                     <div className="flex flex-col items-center">
                       <div className="w-10 h-10 border-4 border-[var(--theme-color-semantic-info-border)] border-t-transparent rounded-full animate-spin" />
-                      <p className="mt-4 text-sm font-semibold text-[var(--theme-color-semantic-info-foreground)] animate-pulse">正在获取最新数据...</p>
+                      <p className="mt-4 text-sm font-semibold text-[var(--theme-color-semantic-info-foreground)] animate-pulse">{commonT("loadingLatestData")}</p>
                     </div>
                   </div>
                 )}
@@ -1609,6 +1164,7 @@ export default function EventTrackerPage({ initialEventId }: EventTrackerPagePro
                   onZoomOut={handleZoomOut}
                   scheduleTooltipPositionUpdateRef={scheduleTooltipPositionUpdateRef}
                   scrollContainerRef={scrollContainerRef}
+                  server={selectedServer}
                   showBestdoriPrediction={showBestdoriPrediction}
                   showDayProjection={showDayProjection}
                   showInstantProjection={showInstantProjection}

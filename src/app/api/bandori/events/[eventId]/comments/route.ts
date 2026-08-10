@@ -2,15 +2,18 @@ import { ApiRouteError } from "@/lib/api-contracts";
 import { jsonRouteError, jsonSuccess } from "@/lib/api-response";
 import { requireAuthenticatedUser, requireVerifiedAccount } from "@/lib/auth-server";
 import {
-  COMMENT_TARGET_BANDORI_EVENT,
-  createComment,
-  listComments,
   parseCommentContent,
-} from "@/lib/comments";
+  parseCommentPage,
+  parseParentCommentId,
+} from "@/lib/comments/comment-contract";
+import { requireBandoriEventCommentTarget } from "@/lib/bandori/events/comment-target-server";
+import { createComment, listComments } from "@/lib/comments/comments-server";
 import {
+  COMMENT_TARGET_BANDORI_EVENT,
   buildBandoriEventCommentTargetId,
+  parseBandoriEventCommentEventId,
   parseBandoriEventCommentServer,
-} from "@/lib/bandori-comment-target";
+} from "@/lib/bandori/events/comment-target";
 
 type RouteContext = {
   params: Promise<{ eventId: string }>;
@@ -20,15 +23,6 @@ type CreateCommentRequest = {
   content?: unknown;
   parentId?: unknown;
 };
-
-function parseEventId(rawEventId: string): string {
-  const eventId = Number.parseInt(rawEventId, 10);
-  if (!Number.isInteger(eventId) || eventId <= 0) {
-    throw new ApiRouteError(400, "INVALID_EVENT_ID", "活动 ID 无效");
-  }
-
-  return String(eventId);
-}
 
 async function readViewerUserId(request: Request): Promise<string | null> {
   if (!request.headers.get("authorization")) {
@@ -45,7 +39,7 @@ async function readViewerUserId(request: Request): Promise<string | null> {
 export async function GET(request: Request, context: RouteContext) {
   try {
     const { eventId: rawEventId } = await context.params;
-    const eventId = parseEventId(rawEventId);
+    const eventId = parseBandoriEventCommentEventId(rawEventId);
     const url = new URL(request.url);
     const server = parseBandoriEventCommentServer(url);
     if (server === null) {
@@ -58,7 +52,7 @@ export async function GET(request: Request, context: RouteContext) {
       targetId: buildBandoriEventCommentTargetId(eventId, server),
       parentId: null,
       cursor: url.searchParams.get("cursor"),
-      page: Number.parseInt(url.searchParams.get("page") ?? "1", 10),
+      page: parseCommentPage(url.searchParams.get("page")),
       viewerUserId,
     }));
   } catch (error) {
@@ -75,7 +69,7 @@ export async function POST(request: Request, context: RouteContext) {
   try {
     const user = await requireVerifiedAccount(request);
     const { eventId: rawEventId } = await context.params;
-    const eventId = parseEventId(rawEventId);
+    const eventId = parseBandoriEventCommentEventId(rawEventId);
     const server = parseBandoriEventCommentServer(new URL(request.url));
     if (server === null) {
       throw new ApiRouteError(400, "INVALID_SERVER", "服务器参数无效");
@@ -88,12 +82,13 @@ export async function POST(request: Request, context: RouteContext) {
       throw new ApiRouteError(400, "INVALID_JSON", "请求体不是有效的 JSON");
     }
 
-    const parentId = typeof body.parentId === "string" && body.parentId ? body.parentId : null;
+    const parentId = parseParentCommentId(body.parentId);
     const content = parseCommentContent(body.content);
+    const targetId = await requireBandoriEventCommentTarget(eventId, server);
 
     return jsonSuccess(await createComment({
       targetType: COMMENT_TARGET_BANDORI_EVENT,
-      targetId: buildBandoriEventCommentTargetId(eventId, server),
+      targetId,
       parentId,
       userId: user.id,
       content,

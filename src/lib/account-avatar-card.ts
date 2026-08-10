@@ -1,5 +1,5 @@
 import { DEFAULT_ACCOUNT_AVATAR_CARD_ID } from "@/lib/account-avatar-defaults";
-import { isKnownBandoriCardEntityCollision } from "@/lib/bandori-card-server-extensions";
+import { isKnownBandoriCardEntityCollision } from "@/lib/bandori/cards/regional-extensions";
 import {
   normalizeBandoriServer,
   type BandoriServer,

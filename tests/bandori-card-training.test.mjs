@@ -4,17 +4,17 @@ import test from "node:test";
 import {
   hasTrainedCardArt,
   usesBandoriTrainedStarStyle,
-} from "../src/lib/bandori-card-training.ts";
+} from "../src/lib/bandori/cards/training.ts";
 import {
   createDefaultOwnedGameProfileCard,
   createMaxGameProfileCard,
-} from "../src/lib/bandori-game-profile-card.ts";
+} from "../src/lib/bandori/cards/game-profile-card.ts";
 import {
   buildBandoriCardCatalog,
   filterBandoriCardCatalog,
   getDefaultTrainType,
   resolveBandoriCardCatalogTrainType,
-} from "../src/components/bandori/card-picker/catalog.ts";
+} from "../src/lib/bandori/cards/picker-catalog.ts";
 
 test("training art requires at least one positive Master increment", () => {
   assert.equal(hasTrainedCardArt(undefined), false);

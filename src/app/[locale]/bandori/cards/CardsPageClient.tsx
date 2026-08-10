@@ -4,8 +4,6 @@ import { useDeferredValue, useMemo, useState } from "react";
 import { Images, Loader2, SearchX } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import BandoriCardFilterControls from "@/components/bandori/BandoriCardFilterControls";
-import BandoriCardServerSwitcher from "@/components/bandori/BandoriCardServerSwitcher";
-import { BandoriCardDetailedRow } from "@/components/bandori/card-picker";
 import { useBandoriCharactersMaster } from "@/hooks/useBandoriCharactersMaster";
 import { useBandoriCardsMaster } from "@/hooks/useBandoriCardsMaster";
 import { useBandoriCardsAssetIndex } from "@/hooks/useBandoriPublicAssetIndex";
@@ -17,7 +15,7 @@ import {
   filterBandoriCardsPageCatalog,
   type BandoriCardCatalogType,
   type BandoriCardsPageFilter,
-} from "@/lib/bandori-card-catalog";
+} from "@/lib/bandori/cards/cards-page-catalog";
 import {
   BANDORI_CARD_ATTRIBUTES,
   BANDORI_CARD_RARITIES,
@@ -26,7 +24,7 @@ import {
   getBandoriCardReleaseSortBy,
   isBandoriCardAttribute,
   isBandoriCardPickerSortBy,
-} from "@/lib/bandori-card-filter";
+} from "@/lib/bandori/cards/filter";
 import {
   BANDORI_SERVERS,
   getBandoriServerCode,
@@ -39,6 +37,8 @@ import {
 } from "@/store/useBandoriPreferencesStore";
 import BandoriPageShell from "../BandoriPageShell";
 import { useTranslations } from "next-intl";
+import BandoriCardDetailedRow from "./_components/BandoriCardDetailedRow";
+import BandoriCardServerSwitcher from "./_components/BandoriCardServerSwitcher";
 
 const INITIAL_VISIBLE_COUNT = 40;
 const PAGE_SIZE = 40;

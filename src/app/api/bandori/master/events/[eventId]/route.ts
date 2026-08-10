@@ -4,7 +4,7 @@ import {
   withHttpCachePolicy,
 } from "@/lib/api-cache";
 import { jsonError, jsonRouteError, jsonSuccess } from "@/lib/api-response";
-import { readBandoriEventApiDetail } from "@/lib/bandori-events-api-server";
+import { readBandoriEventApiDetail } from "@/lib/bandori/events/api-server";
 import {
   BANDORI_MASTER_ID_PATTERN,
   rejectUnsupportedBandoriMasterQuery,

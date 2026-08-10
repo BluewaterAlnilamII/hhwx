@@ -1,0 +1,60 @@
+{
+  "actions": {
+    "addReaction": "Add reaction",
+    "cancel": "Cancel",
+    "copyLink": "Link",
+    "delete": "Delete",
+    "edit": "Edit",
+    "publish": "Post comment",
+    "reply": "Reply",
+    "save": "Save",
+    "sending": "Sending"
+  },
+  "composer": {
+    "replyPlaceholder": "Write a reply...",
+    "rootPlaceholder": "Comment as {username}..."
+  },
+  "dialogs": {
+    "deleteTitle": "Delete this comment?"
+  },
+  "errors": {
+    "deleteFailed": "Delete failed",
+    "loadFailed": "Failed to load comments",
+    "locateFailed": "Unable to locate comment",
+    "reactionFailed": "Comment reaction failed",
+    "requestFailed": "Request failed (HTTP {status})",
+    "submitFailed": "Submission failed",
+    "updateFailed": "Update failed"
+  },
+  "pagination": {
+    "expandReplies": "{count, plural, one {Expand # reply} other {Expand # replies}}",
+    "first": "First page",
+    "jumpHint": "Enter a page number and press Enter",
+    "jumpLabel": "Jump to page",
+    "last": "Last page",
+    "loadMoreReplies": "{count, plural, one {Load # more reply} other {Load # more replies}}",
+    "next": "Next page",
+    "previous": "Previous page"
+  },
+  "pickers": {
+    "emoji": "Select emoji",
+    "stamp": "Select stamp"
+  },
+  "reactions": {
+    "authenticationRequired": "Sign in and verify your email to react",
+    "count": "{count, plural, one {# reaction} other {# reactions}}"
+  },
+  "states": {
+    "anonymous": "Anonymous user",
+    "currentAccount": "Current account",
+    "deleted": "(deleted)",
+    "edited": "(edited)",
+    "loading": "Loading",
+    "loadingAuth": "Loading sign-in status...",
+    "verificationRequired": "Verify your email to comment and reply"
+  },
+  "thread": {
+    "commentCount": "({count})",
+    "replyTo": "Reply to @{username}"
+  }
+}

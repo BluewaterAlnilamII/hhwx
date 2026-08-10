@@ -10,7 +10,7 @@ import {
   MAX_CARDS_API_COMPRESSED_BYTES,
   cardApiDetailShardKey,
   parseCardsApiPointer,
-} from "../src/lib/bandori-cards-api-contract.ts";
+} from "../src/lib/bandori/cards/api-contract.ts";
 
 const semanticSha256 = "a".repeat(64);
 const compressedSha256 = "b".repeat(64);

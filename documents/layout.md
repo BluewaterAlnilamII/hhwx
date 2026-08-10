@@ -36,8 +36,8 @@ hhwx/
 - `[locale]/account/`: account center, profile, email, and password pages.
 - `[locale]/bandori/game-profiles/`: game profile card and item views.
 - `[locale]/auth/`: sign-in, registration, and password recovery pages.
-- `[locale]/bandori/events/`: event tracker entry and event-ID routes. The former `/bandori/eventtracker` URL is a permanent redirect handled by `src/proxy.ts`.
-- `[locale]/bandori/cards/`: server-aware Card catalog and per-card detail routes.
+- `[locale]/bandori/events/`: event tracker entry and event-ID routes. Route-local event information and tracker implementations are grouped under `_info/` and `_tracker/`; the former `/bandori/eventtracker` URL is a permanent redirect handled by `src/proxy.ts`.
+- `[locale]/bandori/cards/`: server-aware Card catalog and per-card detail routes, with page-private UI grouped under `_components/`.
 - `[locale]/bandori/calendar/`: regional event calendar pages.
 - `api/`: same-origin API routes used by the frontend.
 - `api/account/game-bind/`: game account binding challenge, verification, listing, and unlinking APIs.
@@ -65,13 +65,23 @@ hhwx/
 - `Toolbar.tsx`: top toolbar.
 - `SectionSidebarShell.tsx`: shared sidebar container.
 - `TurnstileChallenge.tsx`: security verification component for sensitive actions.
-- Other components are grouped by home-page game, account, and Bandori reuse contexts.
+- `comments/`: target-agnostic comment thread, composer, item, emoji, and stamp-picker UI.
+- `bandori/`: reusable Bandori media and selection UI shared across routes, including Card art and stamp rendering.
+- Other components are grouped by home-page game, account, and reuse contexts.
+
+## src/hooks
+
+- Shared hooks own reusable browser state and request orchestration. Target-specific route/query adapters stay with their route; for example, `useCommentThread.ts` is generic while the Bandori event URL adapter remains under the events route.
 
 ## src/lib
 
 - `auth-*.ts`, `supabase-*.ts`, `turnstile-server.ts`, and `turnstile-public.ts`: authentication, security verification, and server/public wrappers.
-- `bandori-*.ts` and `calendar-*.ts`: compatibility entry points and service logic for Bandori pages and public metadata.
-- `bandori/`: domain-organized Bandori modules. `bandori/data/` contains generated/reference data, `bandori/team-builder/core/` contains shared team-search primitives and calculation helpers, `bandori/team-builder/single/` contains single-song exact search orchestration, and `bandori/team-builder/medley/` contains medley exact/bounded search orchestration behind the public compatibility facades.
+- Remaining root-level `bandori-*.ts` and `calendar-*.ts`: shared cross-domain infrastructure and compatibility entry points that do not belong to one feature folder.
+- `bandori/cards/`: Card catalogs, regional materialization, API contracts/services, release/training rules, layouts, and profile-card helpers.
+- `bandori/events/`: event catalogs, API contracts/services, route/region/status helpers, banner proxy logic, and event-specific comment target validation.
+- `bandori/data/`: generated and reference data shared across Bandori domains.
+- `bandori/team-builder/`: team-search implementation. `core/` contains shared calculation primitives, `single/` contains single-song exact search orchestration, and `medley/` contains medley exact/bounded search orchestration behind the public compatibility facades.
+- `comments/`: target-agnostic comment contracts, content parsing, and privileged comment persistence service. Each target type keeps its existence and visibility validation in its own domain.
 - `api-*.ts`: API response conventions and cache policies.
 - `bestdori-profile-codec.ts` and `user-game-*-server.ts`: game profile compatibility, sync, and server-side persistence logic.
 - `characters.ts`, `othello.ts`, and `ai/`: home-page Othello and character logic.

@@ -5,11 +5,12 @@ import { createPortal } from "react-dom";
 import { useTranslations } from "next-intl";
 import { Image as ImageIcon, Loader2, Save, X } from "lucide-react";
 import AccountCardAvatar from "@/components/account/AccountCardAvatar";
-import { BandoriCardPicker, type BandoriCardPickerValue } from "@/components/bandori/card-picker";
+import BandoriCardPicker from "@/components/bandori/card-picker/BandoriCardPicker";
+import { type BandoriCardPickerValue } from "@/components/bandori/card-picker/types";
 import { useBandoriCardsMaster } from "@/hooks/useBandoriCardsMaster";
 import { useBandoriCardsAssetIndex } from "@/hooks/useBandoriPublicAssetIndex";
 import { parseApiSuccessData } from "@/lib/api-contracts";
-import { pickGameProfileCardName } from "@/lib/bandori-game-profile-card";
+import { pickGameProfileCardName } from "@/lib/bandori/cards/game-profile-card";
 import { getLocalizedApiErrorMessage } from "@/lib/localized-api-errors";
 import {
   DEFAULT_ACCOUNT_AVATAR_CARD_ID,

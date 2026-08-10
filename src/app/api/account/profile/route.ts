@@ -8,12 +8,12 @@ import { jsonRouteError, jsonSuccess } from "@/lib/api-response";
 import { requireAuthenticatedUser } from "@/lib/auth-server";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
 import { PROFILES_TABLE, USER_ROLES_TABLE } from "@/lib/supabase-table-names";
-import { readBandoriCardsApiDataset } from "@/lib/bandori-cards-api-server";
+import { readBandoriCardsApiDataset } from "@/lib/bandori/cards/api-server";
 import {
   isKnownBandoriCardEntityCollision,
   materializeBandoriCardForServer,
-} from "@/lib/bandori-card-server-extensions";
-import { hasTrainedCardArt } from "@/lib/bandori-card-training";
+} from "@/lib/bandori/cards/regional-extensions";
+import { hasTrainedCardArt } from "@/lib/bandori/cards/training";
 import { type BandoriServer } from "@/lib/bandori-server";
 import {
   DEFAULT_ACCOUNT_AVATAR_CARD_ID,

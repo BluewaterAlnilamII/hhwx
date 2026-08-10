@@ -4,14 +4,16 @@ import test from "node:test";
 
 const readSource = (path) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
 
-test("public asset indexes remain stable until explicit refresh or page reload", async () => {
+test("global card-avatar resources preload once and remain stable for the page lifetime", async () => {
   const appChrome = await readSource("src/components/AppChrome.tsx");
   const hook = await readSource("src/hooks/useBandoriPublicAssetIndex.ts");
   const client = await readSource("src/lib/bandori-public-asset-index-client.ts");
   const tracker = await readSource("src/app/[locale]/bandori/events/EventTrackerPage.tsx");
 
-  assert.match(appChrome, /useBandoriCardsMaster\(\)/u);
-  assert.match(appChrome, /useBandoriCardsAssetIndex\(\)/u);
+  assert.match(appChrome, /function BandoriCardAvatarResourcesPreloader/u);
+  assert.equal((appChrome.match(/useBandoriCardsMaster\(\)/gu) ?? []).length, 1);
+  assert.equal((appChrome.match(/useBandoriCardsAssetIndex\(\)/gu) ?? []).length, 1);
+  assert.equal((appChrome.match(/<BandoriCardAvatarResourcesPreloader \/>/gu) ?? []).length, 1);
   assert.doesNotMatch(hook, /setInterval|INDEX_REVALIDATE_INTERVAL_MS/u);
   assert.match(client, /entry\.state\.value && !options\?\.refresh/u);
   assert.match(client, /options\?\.refresh \? "no-cache" : "default"/u);
@@ -43,7 +45,7 @@ test("account profile and calendar auth reads filter duplicate work", async () =
 
 test("event catalog and tracker use separate long-lived and live client policies", async () => {
   const cachePolicy = await readSource("src/lib/api-cache.ts");
-  const trackerHook = await readSource("src/app/[locale]/bandori/events/useTrackerData.ts");
+  const trackerHook = await readSource("src/app/[locale]/bandori/events/_tracker/useTrackerData.ts");
   const calendarHook = await readSource("src/app/[locale]/bandori/calendar/useCalendarData.ts");
 
   assert.match(

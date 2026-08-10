@@ -2,12 +2,13 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   BANDORI_CARD_CATALOG_TYPES,
+  buildBandoriCardsPageCatalog,
   filterBandoriCardsPageCatalog,
-} from "../src/lib/bandori-card-catalog.ts";
+} from "../src/lib/bandori/cards/cards-page-catalog.ts";
 import {
   BANDORI_CARD_ATTRIBUTES,
   BANDORI_CARD_RARITIES,
-} from "../src/lib/bandori-card-filter.ts";
+} from "../src/lib/bandori/cards/filter.ts";
 import {
   BANDORI_SERVERS,
   pickAvailableBandoriServer,
@@ -77,6 +78,84 @@ test("available-server fallback starts with the preferred server", () => {
   assert.equal(pickAvailableBandoriServer([0, 1, 2], 3), 0);
   assert.equal(pickAvailableBandoriServer([2, 1], 3), 1);
   assert.equal(pickAvailableBandoriServer([], 3), null);
+});
+
+test("cards-page projection reuses normalized identity, availability, training, and release fields", () => {
+  const catalog = buildBandoriCardsPageCatalog({
+    "1": {
+      characterId: 21,
+      skillId: 7,
+      rarity: 4,
+      attribute: "cool",
+      type: "limited",
+      resourceSetName: "res021001",
+      levelLimit: 50,
+      prefix: ["JP Card", null, null, "CN Card"],
+      releasedAt: [100, null, null, 400],
+      stat: {
+        training: {
+          performance: 1,
+          levelLimit: 10,
+        },
+      },
+      serverExtensions: [{}, null, null, {}],
+    },
+  }, {
+    "21": {
+      bandId: 1,
+      nickname: ["JP Character", null, null, "CN Character"],
+    },
+  }, {}, 3, {
+    card: (cardId) => `Card ${cardId}`,
+    character: (characterId) => `Character ${characterId}`,
+    skill: "Unknown skill",
+  });
+
+  assert.equal(catalog.length, 1);
+  assert.deepEqual(catalog[0], {
+    cardId: 1,
+    cardRef: "1",
+    entityServer: null,
+    availableServers: [0, 3],
+    characterId: 21,
+    bandId: 1,
+    rarity: 4,
+    attribute: "cool",
+    resourceSetName: "res021001",
+    levelLimit: 50,
+    trainingLevelLimit: 10,
+    hasTrainedArt: true,
+    releaseTimestamps: [100, 0, 0, 400],
+    displayServer: 3,
+    displayCard: {
+      characterId: 21,
+      skillId: 7,
+      rarity: 4,
+      attribute: "cool",
+      type: "limited",
+      resourceSetName: "res021001",
+      levelLimit: 50,
+      prefix: ["JP Card", null, null, "CN Card"],
+      releasedAt: [100, null, null, 400],
+      stat: {
+        training: {
+          performance: 1,
+          levelLimit: 10,
+        },
+      },
+    },
+    displayName: "CN Card",
+    characterName: "CN Character",
+    skillEffectLabel: "Unknown skill",
+    type: "limited",
+    displayReleaseTimestamp: 400,
+    filterBandId: 1,
+    filterCharacterId: 21,
+    filterRarity: 4,
+    filterAttribute: "cool",
+    filterType: "limited",
+    filterSearchText: "cn card cn character",
+  });
 });
 
 test("exact card IDs retain both registered collision entities", () => {

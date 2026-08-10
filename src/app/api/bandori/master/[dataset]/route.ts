@@ -12,9 +12,9 @@ import {
 import {
   readBandoriCardsApiDataset,
   readBandoriCardsApiDatasetForServer,
-} from "@/lib/bandori-cards-api-server";
-import { parseBandoriCardServerQuery } from "@/lib/bandori-card-server-extensions";
-import { readBandoriPublicEventApiDataset } from "@/lib/bandori-events-api-server";
+} from "@/lib/bandori/cards/api-server";
+import { parseBandoriCardServerQuery } from "@/lib/bandori/cards/api-query";
+import { readBandoriPublicEventApiDataset } from "@/lib/bandori/events/api-server";
 import { readBandoriStampsApiDataset } from "@/lib/bandori-stamps-api-server";
 import { readBandoriMusicApiDataset } from "@/lib/bandori-music-api-server";
 import {

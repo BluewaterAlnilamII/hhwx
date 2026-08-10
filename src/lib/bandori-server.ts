@@ -2,12 +2,14 @@ export const BANDORI_SERVER_COUNT = 4;
 export const BANDORI_SERVERS = [0, 1, 2, 3] as const;
 export const BANDORI_SERVER_CODES = ["jp", "en", "tw", "cn"] as const;
 export const BANDORI_SERVER_LANGUAGE_TAGS = ["ja", "en", "zh-Hant", "zh-Hans"] as const;
+export const BANDORI_SERVER_TIME_ZONES = ["Asia/Tokyo", "UTC", "Asia/Taipei", "Asia/Shanghai"] as const;
 export const DEFAULT_BANDORI_PREFERRED_SERVER = 3;
 export const BANDORI_SERVER_FALLBACK_ORDER = [0, 1, 2, 3] as const;
 
 export type BandoriServer = typeof BANDORI_SERVERS[number];
 export type BandoriServerCode = typeof BANDORI_SERVER_CODES[number];
 export type BandoriServerLanguageTag = typeof BANDORI_SERVER_LANGUAGE_TAGS[number];
+export type BandoriServerTimeZone = typeof BANDORI_SERVER_TIME_ZONES[number];
 
 export type BandoriRegionalTextSelection = {
   text: string;
@@ -37,6 +39,10 @@ export function getBandoriServerCode(server: BandoriServer): BandoriServerCode {
 
 export function getBandoriServerLanguageTag(server: BandoriServer): BandoriServerLanguageTag {
   return BANDORI_SERVER_LANGUAGE_TAGS[server];
+}
+
+export function getBandoriServerTimeZone(server: BandoriServer): BandoriServerTimeZone {
+  return BANDORI_SERVER_TIME_ZONES[server];
 }
 
 export function readBandoriRegionalTextAt(

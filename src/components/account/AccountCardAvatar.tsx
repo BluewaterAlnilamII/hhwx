@@ -1,10 +1,10 @@
 "use client";
 
-import { BandoriCardArtImage } from "@/components/bandori/card-picker";
+import { BandoriCardArtImage } from "@/components/bandori/BandoriCardArtImage";
 import { useBandoriCardsMaster } from "@/hooks/useBandoriCardsMaster";
 import { type AccountAvatarCardTrainType } from "@/lib/account-avatar-defaults";
 import { type BandoriServer } from "@/lib/bandori-server";
-import { pickGameProfileCardName } from "@/lib/bandori-game-profile-card";
+import { pickGameProfileCardName } from "@/lib/bandori/cards/game-profile-card";
 import { getUsernameAvatarLabel } from "@/lib/username-policy";
 import { cn } from "@/lib/utils";
 import { useBandoriPreferredServer } from "@/store/useBandoriPreferencesStore";

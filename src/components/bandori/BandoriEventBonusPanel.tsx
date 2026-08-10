@@ -9,7 +9,7 @@ import {
   buildBandoriCharacterIconUrl,
   buildBandoriLegacyRarityCompositeUrl,
 } from "@/lib/bandori-builtin-resources";
-import { isBandoriCardAttribute, type BandoriCardAttribute } from "@/lib/bandori-card-filter";
+import { isBandoriCardAttribute, type BandoriCardAttribute } from "@/lib/bandori/cards/filter";
 import {
   pickBandoriRegionalText,
   type BandoriServer,

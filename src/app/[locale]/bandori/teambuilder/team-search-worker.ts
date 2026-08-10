@@ -62,8 +62,8 @@ import {
   type UserGameProfileCardRecord,
   type UserGameProfilePayload,
 } from "@/lib/user-game-profile-payload";
-import { resolveBandoriCardMapForServerWithJpFallback } from "@/lib/bandori-card-server-extensions";
-import { hasTrainedCardArt } from "@/lib/bandori-card-training";
+import { resolveBandoriCardMapForServerWithJpFallback } from "@/lib/bandori/cards/regional-extensions";
+import { hasTrainedCardArt } from "@/lib/bandori/cards/training";
 import {
   assertTeamSearchMasterReferences,
   assertTeamSearchRequestReferences,

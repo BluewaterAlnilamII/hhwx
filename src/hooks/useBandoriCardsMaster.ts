@@ -9,7 +9,7 @@ import {
   materializeBandoriCardsMasterForServerWithRegionalFallback,
   parseBandoriCardsMasterResponse,
   type BandoriCardsMasterMap,
-} from "@/lib/bandori-cards-api-client";
+} from "@/lib/bandori/cards/api-client";
 import type { BandoriServer } from "@/lib/bandori-server";
 
 const BANDORI_CARDS_MASTER_CACHE_KEY = "bandori-master-cards-canonical-v1";

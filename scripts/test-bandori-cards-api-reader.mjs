@@ -13,7 +13,7 @@ const {
   readBandoriCardApiDetailForServer,
   readBandoriCardsApiDataset,
   readBandoriCardsApiDatasetForServer,
-} = await import("../src/lib/bandori-cards-api-server.ts");
+} = await import("../src/lib/bandori/cards/api-server.ts");
 const { GET: readMasterDatasetRoute } = await import(
   "../src/app/api/bandori/master/[dataset]/route.ts"
 );

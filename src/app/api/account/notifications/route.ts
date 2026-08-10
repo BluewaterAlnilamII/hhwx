@@ -2,16 +2,57 @@ import { ApiRouteError } from "@/lib/api-contracts";
 import { jsonRouteError, jsonSuccess } from "@/lib/api-response";
 import { requireAuthenticatedUser } from "@/lib/auth-server";
 import {
+  COMMENT_TARGET_BANDORI_EVENT,
+  parseBandoriEventCommentTargetId,
+} from "@/lib/bandori/events/comment-target";
+import { getBandoriServerCode, type BandoriServerCode } from "@/lib/bandori-server";
+import {
+  parseCommentNotificationType,
+  type CommentNotification,
+  type CommentNotificationListResponse,
+} from "@/lib/comments/comment-contract";
+import {
   listCommentNotifications,
   markAllCommentNotificationsRead,
   markCommentNotificationRead,
-  parseCommentNotificationType,
-} from "@/lib/comment-notifications-server";
+} from "@/lib/comments/notifications-server";
 
 type UpdateNotificationsRequest = {
   action?: unknown;
   notificationId?: unknown;
 };
+
+type AccountCommentNotification = CommentNotification & {
+  /** @deprecated Read targetType and targetId instead. */
+  eventId: number | null;
+  /** @deprecated Read targetType and targetId instead. */
+  server: BandoriServerCode | null;
+};
+
+type AccountCommentNotificationListResponse = Omit<CommentNotificationListResponse, "notifications"> & {
+  notifications: AccountCommentNotification[];
+};
+
+function toAccountCommentNotification(notification: CommentNotification): AccountCommentNotification {
+  const target = notification.targetType === COMMENT_TARGET_BANDORI_EVENT
+    ? parseBandoriEventCommentTargetId(notification.targetId)
+    : null;
+
+  return {
+    ...notification,
+    eventId: target?.eventId ?? null,
+    server: target ? getBandoriServerCode(target.server) : null,
+  };
+}
+
+function toAccountCommentNotificationListResponse(
+  response: CommentNotificationListResponse,
+): AccountCommentNotificationListResponse {
+  return {
+    ...response,
+    notifications: response.notifications.map(toAccountCommentNotification),
+  };
+}
 
 function normalizeNotificationId(value: unknown): string {
   if (typeof value !== "string" || !value.trim()) {
@@ -39,11 +80,12 @@ export async function GET(request: Request) {
     const user = await requireAuthenticatedUser(request);
     const url = new URL(request.url);
 
-    return jsonSuccess(await listCommentNotifications({
+    const notifications = await listCommentNotifications({
       userId: user.id,
       type: normalizeNotificationType(url.searchParams.get("type")),
       cursor: url.searchParams.get("cursor"),
-    }));
+    });
+    return jsonSuccess(toAccountCommentNotificationListResponse(notifications));
   } catch (error) {
     console.error("Account notifications GET API error:", error);
     return jsonRouteError(error, {

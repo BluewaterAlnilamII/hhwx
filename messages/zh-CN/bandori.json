@@ -68,6 +68,136 @@
     "startLabel": "开始:",
     "endLabel": "结束:"
   },
+  "events": {
+    "comments": {
+      "title": "活动评论",
+      "signedOutMessage": "登录后可以发表评论，并启用每 30 秒更新的高频活动榜线",
+      "emptyMessage": "还没有评论，来留下本期活动的第一条讨论"
+    },
+    "status": {
+      "upcoming": "未开始",
+      "ongoing": "进行中",
+      "ended": "已结束"
+    },
+    "countdown": {
+      "untilStart": "距开始",
+      "untilEnd": "距结束",
+      "started": "活动已开始",
+      "ended": "活动已结束",
+      "days": "天",
+      "hours": "小时",
+      "minutes": "分",
+      "seconds": "秒"
+    },
+    "progress": {
+      "title": "活动进度",
+      "completed": "已完成"
+    },
+    "view": {
+      "label": "活动页面视图",
+      "tracker": "分数追踪器",
+      "info": "活动信息"
+    },
+    "common": {
+      "eventFallback": "活动 #{eventId}",
+      "eventOption": "{eventId}期: {eventName}",
+      "loadingEvent": "正在读取活动",
+      "loadingLatestData": "正在获取最新数据"
+    },
+    "info": {
+      "unannounced": "尚未公布",
+      "loading": "正在读取活动详细信息…",
+      "unavailable": "暂时无法读取这一期活动的详细信息",
+      "overviewTitle": "活动概览",
+      "eventId": "活动 ID",
+      "eventTitle": "活动标题",
+      "eventTitleFallback": "活动 #{eventId}",
+      "eventType": "活动类型",
+      "featuredBand": "主题乐队",
+      "eventStatus": "活动状态",
+      "startTime": "开始时间（{server}）",
+      "endTime": "结束时间（{server}）",
+      "rewardsTitle": "活动奖励",
+      "rewardStamps": "奖励贴纸（{server}）",
+      "loadingRewardStamps": "正在读取奖励贴纸",
+      "noRewardStamps": "暂无奖励贴纸",
+      "rewardCards": "奖励卡牌",
+      "noRewardCards": "本期活动暂无奖励卡牌",
+      "songsTitle": "活动歌曲（{server}）",
+      "coverAlt": "{title} 封面",
+      "publishedAt": "{date} 发布",
+      "songWindowUnavailable": "暂时无法确定活动时间，无法匹配歌曲",
+      "noSongs": "该活动时间区间内没有匹配到新发布歌曲"
+    },
+    "tracker": {
+      "modes": {
+        "event": "活动排行",
+        "song": "歌曲排行",
+        "monthly": "月度排行"
+      },
+      "songRankingUnavailable": "该活动类型没有歌曲排行",
+      "challengeSongs": "挑战曲目",
+      "songFallback": "曲目 {songId}",
+      "selectMonth": "选择月份",
+      "selectRanking": "选择排名",
+      "summary": {
+        "eventStatus": "活动状态",
+        "latestScore": "最新分数",
+        "updateTime": "更新时间",
+        "updatingScore": "正在更新分数线",
+        "prediction": "Bestdori预测",
+        "loading": "加载中",
+        "unavailable": "不可用",
+        "endScore": "结束分数",
+        "finalScore": "最终分数",
+        "settling": "结算中",
+        "secondsAgo": "{count}秒前",
+        "minutesAgo": "{count}分钟前"
+      },
+      "comparison": {
+        "instantProjection": "线性投影（瞬时）",
+        "dayProjection": "线性投影（24h）",
+        "predictionUnavailable": "Bestdori预测当前不可用",
+        "showPrediction": "显示 Bestdori Prediction",
+        "prediction": "Bestdori预测",
+        "monthlyTarget": "月度 {targetId}",
+        "eventTarget": "{targetId}期",
+        "alignLeft": "左对齐",
+        "alignRight": "右对齐",
+        "removeLine": "移除对比行",
+        "remove": "移除",
+        "maxLines": "最多添加 {count} 条对比线",
+        "addLine": "添加一条空白对比线",
+        "addComparison": "添加对比",
+        "removeAll": "移除全部",
+        "removeAllLines": "移除全部对比线"
+      },
+      "tooltip": {
+        "instantProjection": "线性投影（瞬时）",
+        "dayProjection": "线性投影（24h）",
+        "comparisonReference": "对比参考",
+        "instantSpeed": "瞬时速度",
+        "daySpeed": "24h速度"
+      },
+      "chart": {
+        "noTierData": "暂无该排名档位的追踪数据",
+        "zoomIn": "放大",
+        "zoomOut": "缩小"
+      },
+      "top10": {
+        "loading": "正在获取最新数据…",
+        "loadFailed": "TOP10 追踪数据加载失败",
+        "reload": "重新加载",
+        "legend": "TOP10 玩家图例",
+        "ranking": "TOP10 玩家排名",
+        "rank": "排名",
+        "avatar": "头像",
+        "player": "玩家",
+        "score": "分数",
+        "noAvatar": "无头像"
+      }
+    }
+  },
   "cardPicker": {
     "resultCount": "{count} 张",
     "cardFallback": "卡牌 {cardId}",

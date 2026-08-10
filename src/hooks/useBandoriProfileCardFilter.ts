@@ -1,20 +1,20 @@
 "use client";
 
 import { useCallback, useDeferredValue, useMemo, useState } from "react";
-import { type BandoriCharacterMaster } from "@/lib/bandori-card-master";
+import { type BandoriCharacterMaster } from "@/lib/bandori/cards/master";
 import {
   BANDORI_CARD_ATTRIBUTES,
   BANDORI_CARD_RARITIES,
   buildBandoriCardFilterOptions,
   reconcileBandoriCardFilterSelection,
-} from "@/lib/bandori-card-filter";
+} from "@/lib/bandori/cards/filter";
 import {
   buildDefaultBandoriProfileCardFilter,
   filterAndSortBandoriProfileCardEntries,
   type BandoriProfileCardEntry,
   type BandoriProfileCardFilterState,
   type BandoriProfileCardSortBy,
-} from "@/lib/bandori-profile-card-collection";
+} from "@/lib/bandori/cards/profile-card-collection";
 import { type BandoriServer } from "@/lib/bandori-server";
 
 export function useBandoriProfileCardFilter({

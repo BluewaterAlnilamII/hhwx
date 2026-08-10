@@ -15,7 +15,7 @@ import {
   BANDORI_CARD_RARITIES,
   type BandoriCardAttribute,
   type BandoriCardFilterState,
-} from "@/lib/bandori-card-filter";
+} from "@/lib/bandori/cards/filter";
 import { getBandoriServerCode, type BandoriServer } from "@/lib/bandori-server";
 
 export type BandoriCardFilterControlsProps<TSortBy extends string> = {

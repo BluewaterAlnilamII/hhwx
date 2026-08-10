@@ -2,9 +2,29 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-import { normalizeBandoriCardDisplayReleaseTimestamp } from "../src/lib/bandori-card-release.ts";
+import { normalizeBandoriCardDisplayReleaseTimestamp } from "../src/lib/bandori/cards/release.ts";
 
 const ROOT_URL = new URL("../", import.meta.url);
+
+test("card pages reuse shared character-name and server-time-zone rules", async () => {
+  const [detailPage, catalogRow] = await Promise.all([
+    readFile(
+      new URL("src/app/[locale]/bandori/cards/[cardId]/CardDetailPageClient.tsx", ROOT_URL),
+      "utf8",
+    ),
+    readFile(
+      new URL("src/app/[locale]/bandori/cards/_components/BandoriCardDetailedRow.tsx", ROOT_URL),
+      "utf8",
+    ),
+  ]);
+
+  assert.match(detailPage, /pickBandoriCharacterDisplayName\(/u);
+  assert.doesNotMatch(detailPage, /function readCharacterName/u);
+  for (const source of [detailPage, catalogRow]) {
+    assert.match(source, /getBandoriServerTimeZone\(/u);
+    assert.doesNotMatch(source, /const TIME_ZONES/u);
+  }
+});
 
 test("card detail shows max Master Rank stats with total power last", async () => {
   const detailPage = await readFile(

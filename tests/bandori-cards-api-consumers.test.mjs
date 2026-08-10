@@ -5,12 +5,13 @@ import {
   bandoriCardCatalogTransforms,
   buildBandoriCardCatalog,
   filterBandoriCardCatalog,
-} from "../src/components/bandori/card-picker/catalog.ts";
+} from "../src/lib/bandori/cards/picker-catalog.ts";
 import {
   normalizeAccountAvatarCardServer,
   resolveStoredAccountAvatarCardIdentity,
 } from "../src/lib/account-avatar-card.ts";
-import { pickGameProfileCardName } from "../src/lib/bandori-game-profile-card.ts";
+import { pickGameProfileCardName } from "../src/lib/bandori/cards/game-profile-card.ts";
+import { parseBandoriCardServerQuery } from "../src/lib/bandori/cards/api-query.ts";
 import {
   normalizeBandoriSkillLabel,
   resolveBandoriSkillLabel,
@@ -23,13 +24,12 @@ import {
   materializeBandoriCardForServer,
   materializeBandoriCardMapForServerWithJpFallback,
   normalizeBandoriCardServer,
-  parseBandoriCardServerQuery,
   resolveBandoriCardForServer,
   resolveBandoriCardForServerWithRegionalFallback,
   resolveBandoriCardMapForServer,
   resolveBandoriCardMapForServerWithJpFallback,
   validateBandoriCardServerExtensions,
-} from "../src/lib/bandori-card-server-extensions.ts";
+} from "../src/lib/bandori/cards/regional-extensions.ts";
 import {
   getBandoriRegionalDisplayOrder,
   getBandoriRegionalPreferenceOrder,
@@ -222,12 +222,12 @@ test("legacy sparse cards route is deleted", async () => {
 
 test("card consumers share the canonical Cards dataset without the sparse route", async () => {
   const worker = await readSource("src/app/[locale]/bandori/teambuilder/team-search-worker.ts");
-  const comments = await readSource("src/lib/comments.ts");
+  const comments = await readSource("src/lib/comments/comments-server.ts");
   const profile = await readSource("src/app/api/account/profile/route.ts");
   const avatarControl = await readSource("src/app/[locale]/account/AccountAvatarCardControl.tsx");
   const picker = await readSource("src/components/bandori/card-picker/BandoriCardPicker.tsx");
   const cardsHook = await readSource("src/hooks/useBandoriCardsMaster.ts");
-  const pickerDialog = await readSource("src/components/bandori/BandoriCardPickerDialog.tsx");
+  const pickerDialog = await readSource("src/components/bandori/card-picker/BandoriCardPickerDialog.tsx");
 
   assert.match(worker, /type CardsResponse = Record</u);
   assert.match(worker, /normalizeCachedCardsResponse/u);
@@ -258,7 +258,7 @@ test("avatar collision identity is persisted and propagated to public avatar con
     identityMigration,
     schema,
     comments,
-    commentTypes,
+    commentContract,
     commentItem,
     toolbar,
     avatar,
@@ -266,9 +266,9 @@ test("avatar collision identity is persisted and propagated to public avatar con
     readSource("supabase/migrations/20260724100812_add_avatar_card_server.sql"),
     readSource("supabase/migrations/20260724185700_enforce_avatar_card_identity.sql"),
     readSource("supabase/schema/auth_schema.sql"),
-    readSource("src/lib/comments.ts"),
-    readSource("src/app/[locale]/bandori/events/commentTypes.ts"),
-    readSource("src/app/[locale]/bandori/events/CommentItem.tsx"),
+    readSource("src/lib/comments/comments-server.ts"),
+    readSource("src/lib/comments/comment-contract.ts"),
+    readSource("src/components/comments/CommentItem.tsx"),
     readSource("src/components/Toolbar.tsx"),
     readSource("src/components/account/AccountCardAvatar.tsx"),
   ]);
@@ -280,7 +280,7 @@ test("avatar collision identity is persisted and propagated to public avatar con
   assert.match(identityMigration, /NOTIFY pgrst, 'reload schema'/u);
   assert.match(schema, /avatar_card_server\s+SMALLINT/u);
   assert.match(comments, /avatar_card_server/u);
-  assert.match(commentTypes, /entityServer: BandoriServer \| null/u);
+  assert.match(commentContract, /entityServer: BandoriServer \| null/u);
   assert.match(commentItem, /entityServer=\{comment\.avatar\.entityServer\}/u);
   assert.match(toolbar, /avatarCardServer/u);
   assert.match(avatar, /useBandoriCardsMaster\(\s*entityServer \?\? undefined/u);
@@ -317,7 +317,7 @@ test("profile-bound card displays receive profile server context without changin
     readSource("src/app/[locale]/bandori/teambuilder/page.tsx"),
     readSource("src/app/[locale]/bandori/teambuilder/CardPreferencesPanel.tsx"),
     readSource("src/hooks/useBandoriProfileCardEntries.ts"),
-    readSource("src/components/bandori/BandoriCardPickerDialog.tsx"),
+    readSource("src/components/bandori/card-picker/BandoriCardPickerDialog.tsx"),
   ]);
 
   assert.match(profileCardsPage, /displayServer=\{profileServer\}/u);
@@ -549,9 +549,9 @@ test("server-scoped picker filters canonical availability without dropping JP fa
 
 test("all Master consumers reuse the positive-increment training predicate", async () => {
   const paths = [
-    "src/components/bandori/card-picker/catalog.ts",
+    "src/lib/bandori/cards/catalog.ts",
     "src/app/api/account/profile/route.ts",
-    "src/lib/bandori-game-profile-card.ts",
+    "src/lib/bandori/cards/game-profile-card.ts",
     "src/app/[locale]/bandori/teambuilder/team-search-worker.ts",
   ];
   const sources = await Promise.all(paths.map(readSource));

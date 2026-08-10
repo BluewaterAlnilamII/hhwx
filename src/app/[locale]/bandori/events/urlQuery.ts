@@ -1,7 +1,7 @@
-import type { TrackingMode } from "./types";
-import type { TrackerRankingSelection } from "./tracker-tier-preference";
+import type { TrackingMode } from "./_tracker/types";
+import type { TrackerRankingSelection } from "./_tracker/tracker-tier-preference";
 import { buildLocalizedPathname, DEFAULT_LOCALE, getLocaleFromPathname } from "@/i18n/routing";
-import { buildBandoriEventsPath } from "@/lib/bandori-event-route";
+import { buildBandoriEventsPath } from "@/lib/bandori/events/route";
 import {
   getBandoriServerCode,
   parseBandoriServerParam,

@@ -12,7 +12,12 @@ interface AppChromeProps {
   children: ReactNode;
 }
 
-function BandoriCardsPreloader() {
+/**
+ * Account card avatars can appear in the toolbar on every route. Start both
+ * catalogs together so the first avatar does not create a master-to-index
+ * request waterfall, and keep their snapshots pinned for this page lifetime.
+ */
+function BandoriCardAvatarResourcesPreloader() {
   useBandoriCardsMaster();
   useBandoriCardsAssetIndex();
   return null;
@@ -23,7 +28,7 @@ export default function AppChrome({ children }: AppChromeProps) {
 
   return (
     <div className="relative flex min-h-screen min-h-svh flex-col">
-      <BandoriCardsPreloader />
+      <BandoriCardAvatarResourcesPreloader />
       <MusicPlayerHost />
       <Toolbar
         isSidebarOpen={isSidebarOpen}

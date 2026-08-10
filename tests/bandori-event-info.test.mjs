@@ -2,18 +2,18 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
-import { buildBandoriEventCommentTargetId, parseBandoriEventCommentTargetId } from "../src/lib/bandori-comment-target.ts";
+import { buildBandoriEventCommentTargetId, parseBandoriEventCommentTargetId } from "../src/lib/bandori/events/comment-target.ts";
 import {
   BANDORI_EVENT_BAND_ID_BY_SLUG,
   getBandoriEventBandId,
   resolveBandoriEventBandName,
-} from "../src/lib/bandori-event-band.ts";
-import { getBandoriEventStatusAt } from "../src/lib/bandori-event-status.ts";
+} from "../src/lib/bandori/events/band.ts";
+import { getBandoriEventStatusAt } from "../src/lib/bandori/events/status.ts";
 import {
   buildEventInfoModel,
   deriveEventSongs,
   deriveEventSongsWithFallback,
-} from "../src/app/[locale]/bandori/events/eventInfo.ts";
+} from "../src/app/[locale]/bandori/events/_info/eventInfo.ts";
 import {
   parseEventTrackerServerSearchParam,
   resolveEventTrackerServerSelection,
@@ -46,19 +46,27 @@ const serverIconSource = readFileSync(
   "utf8",
 );
 const eventInfoPanelSource = readFileSync(
-  new URL("../src/app/[locale]/bandori/events/EventInfoPanel.tsx", import.meta.url),
+  new URL("../src/app/[locale]/bandori/events/_info/EventInfoPanel.tsx", import.meta.url),
+  "utf8",
+);
+const eventStatusSummarySource = readFileSync(
+  new URL("../src/app/[locale]/bandori/events/_info/EventStatusSummary.tsx", import.meta.url),
+  "utf8",
+);
+const eventRelativeCountdownSource = readFileSync(
+  new URL("../src/app/[locale]/bandori/events/_info/EventRelativeCountdown.tsx", import.meta.url),
   "utf8",
 );
 const eventBonusPanelSource = readFileSync(
   new URL("../src/components/bandori/BandoriEventBonusPanel.tsx", import.meta.url),
   "utf8",
 );
-const commentContentSource = readFileSync(
-  new URL("../src/app/[locale]/bandori/events/commentContent.tsx", import.meta.url),
+const bandoriStampViewSource = readFileSync(
+  new URL("../src/components/bandori/BandoriStampView.tsx", import.meta.url),
   "utf8",
 );
 const trackerStatusSummarySource = readFileSync(
-  new URL("../src/app/[locale]/bandori/events/TrackerStatusSummary.tsx", import.meta.url),
+  new URL("../src/app/[locale]/bandori/events/_tracker/TrackerStatusSummary.tsx", import.meta.url),
   "utf8",
 );
 
@@ -120,11 +128,11 @@ test("event songs keep publication timestamps and event windows on one fallback 
 });
 
 test("event status uses the tracker three-state rule", () => {
-  assert.equal(getBandoriEventStatusAt(999, 1000, 2000), "未开始");
-  assert.equal(getBandoriEventStatusAt(1000, 1000, 2000), "进行中");
-  assert.equal(getBandoriEventStatusAt(2000, 1000, 2000), "进行中");
-  assert.equal(getBandoriEventStatusAt(2001, 1000, 2000), "已结束");
-  assert.equal(getBandoriEventStatusAt(1000, null, null), "未开始");
+  assert.equal(getBandoriEventStatusAt(999, 1000, 2000), "upcoming");
+  assert.equal(getBandoriEventStatusAt(1000, 1000, 2000), "ongoing");
+  assert.equal(getBandoriEventStatusAt(2000, 1000, 2000), "ongoing");
+  assert.equal(getBandoriEventStatusAt(2001, 1000, 2000), "ended");
+  assert.equal(getBandoriEventStatusAt(1000, null, null), "upcoming");
   const fallbackOnlyModel = buildEventInfoModel({
     eventType: "story",
     startAt: [1000, null, null, null],
@@ -135,23 +143,21 @@ test("event status uses the tracker three-state rule", () => {
   assert.equal(fallbackOnlyModel.statusEndAt, null);
   assert.equal(
     getBandoriEventStatusAt(1500, fallbackOnlyModel.statusStartAt, fallbackOnlyModel.statusEndAt),
-    "未开始",
+    "upcoming",
   );
-  assert.doesNotMatch(eventInfoPanelSource, /该服务器尚未公布时间|label: "活动已结束"/u);
-  assert.match(eventInfoPanelSource, /prefix="距开始"/u);
-  assert.match(eventInfoPanelSource, /prefix="距结束"/u);
-  assert.equal(
-    eventInfoPanelSource.match(/<span className="text-sm font-semibold text-\[var\(--theme-color-text-default\)\] dark:text-slate-100">/gu)?.length,
-    2,
-  );
+  assert.match(eventInfoPanelSource, /<EventStatusSummary/u);
+  assert.match(eventInfoPanelSource, /startAt=\{model\.statusStartAt\}/u);
+  assert.match(eventInfoPanelSource, /endAt=\{model\.statusEndAt\}/u);
+  assert.doesNotMatch(eventInfoPanelSource, /useCurrentTime|setInterval|Date\.now/u);
+  assert.match(eventStatusSummarySource, /window\.setInterval\(\(\) => setNow\(Date\.now\(\)\), 1000\)/u);
+  assert.match(eventStatusSummarySource, /status === "upcoming"/u);
+  assert.match(eventStatusSummarySource, /status === "ongoing"/u);
+  assert.match(eventRelativeCountdownSource, /useTranslations\("bandori\.events\.countdown"\)/u);
   assert.doesNotMatch(eventInfoPanelSource, /text-xs font-semibold text-slate-600/u);
   assert.match(eventInfoPanelSource, /SERVER_LABELS\[model\.timeServer\]/u);
-  assert.match(eventInfoPanelSource, /<OverviewRow label="活动状态">/u);
-  assert.match(eventInfoPanelSource, /model\.statusStartAt !== null/u);
-  assert.match(eventInfoPanelSource, /model\.statusEndAt !== null/u);
-  assert.doesNotMatch(eventInfoPanelSource, /活动状态（/u);
-  assert.match(trackerStatusSummarySource, />活动状态<\/span>/u);
-  assert.doesNotMatch(trackerStatusSummarySource, /活动状态（|eventServer/u);
+  assert.match(eventInfoPanelSource, /<OverviewRow label=\{t\("eventStatus"\)\}>/u);
+  assert.match(trackerStatusSummarySource, /statusT\(status\)/u);
+  assert.doesNotMatch(trackerStatusSummarySource, /eventServer/u);
   assert.match(eventTrackerPageSource, /eventStatusStartDate \?\? "auto"/u);
   assert.match(eventTrackerPageSource, /eventStatusEndDate \?\? "auto"/u);
   assert.match(eventTrackerPageSource, /eventStatusStartDate !== null && eventStatusEndDate !== null/u);
@@ -212,8 +218,10 @@ test("event title stays on one line with bounded adaptive sizing", () => {
 
 test("event overview presents start and end timestamps as separate standard rows", () => {
   assert.doesNotMatch(eventInfoPanelSource, /公开展示时间|结算 \/ 发奖|兑换截止|model\.exchangeEndAt/u);
-  assert.match(eventInfoPanelSource, /label=\{`开始时间（\$\{SERVER_LABELS\[model\.timeServer\]\}）`\}/u);
-  assert.match(eventInfoPanelSource, /label=\{`结束时间（\$\{SERVER_LABELS\[model\.timeServer\]\}）`\}/u);
+  assert.match(eventInfoPanelSource, /label=\{t\("startTime", \{ server: SERVER_LABELS\[model\.timeServer\] \}\)\}/u);
+  assert.match(eventInfoPanelSource, /label=\{t\("endTime", \{ server: SERVER_LABELS\[model\.timeServer\] \}\)\}/u);
+  assert.match(eventInfoPanelSource, /new Intl\.DateTimeFormat\(locale/u);
+  assert.match(eventInfoPanelSource, /timeZone: getBandoriServerTimeZone\(server\)/u);
   assert.doesNotMatch(eventInfoPanelSource, /label=\{`活动时间|>至 \{formatDateTime/u);
 });
 
@@ -288,18 +296,25 @@ test("event rewards fallback stamps by server and keep reward cards unlabelled",
   assert.deepEqual(model.rewardStampIds, [541, 10135]);
   assert.equal(model.rewardStampServer, 3);
   assert.deepEqual(model.rewardStampIdsByServer, [[541, 9001], [], [], [541, 10135]]);
-  assert.ok(eventInfoPanelSource.indexOf("活动奖励") < eventInfoPanelSource.indexOf("活动歌曲"));
-  assert.ok(eventInfoPanelSource.indexOf("奖励贴纸") < eventInfoPanelSource.indexOf("奖励卡牌"));
+  assert.ok(
+    eventInfoPanelSource.indexOf('t("rewardsTitle")')
+      < eventInfoPanelSource.indexOf('t("songsTitle"'),
+  );
+  assert.ok(
+    eventInfoPanelSource.indexOf('t("rewardStamps"')
+      < eventInfoPanelSource.indexOf('t("rewardCards")'),
+  );
   assert.match(eventInfoPanelSource, /useCommentStampCatalog/u);
   assert.match(eventInfoPanelSource, /getBandoriStampCatalogItemsForRegion/u);
-  assert.match(eventInfoPanelSource, /<CommentStampView/u);
+  assert.match(eventInfoPanelSource, /<BandoriStampView/u);
   assert.match(eventInfoPanelSource, /variant="reward"/u);
-  assert.match(commentContentSource, /export function CommentStampView/u);
-  assert.match(commentContentSource, /variant\?: "comment" \| "reward"/u);
-  assert.match(commentContentSource, /h-\[74px\] w-\[111px\] sm:h-\[76px\] sm:w-\[114px\]/u);
-  assert.match(commentContentSource, /h-16 w-24 sm:h-\[76px\] sm:w-\[114px\]/u);
-  assert.ok(eventInfoPanelSource.includes('<OverviewRow label={`奖励贴纸（${SERVER_LABELS[rewardStampSelection.server]}）`} mobileLayout="stacked">'));
-  assert.match(eventInfoPanelSource, /<OverviewRow label="奖励卡牌" mobileLayout="stacked">/u);
+  assert.match(bandoriStampViewSource, /export default function BandoriStampView/u);
+  assert.match(bandoriStampViewSource, /variant\?: "comment" \| "reward"/u);
+  assert.match(bandoriStampViewSource, /h-\[74px\] w-\[111px\] sm:h-\[76px\] sm:w-\[114px\]/u);
+  assert.match(bandoriStampViewSource, /h-16 w-24 sm:h-\[76px\] sm:w-\[114px\]/u);
+  assert.doesNotMatch(bandoriStampViewSource, /shortcode|COMMENT_CONTENT_TOKEN_PATTERN/u);
+  assert.match(eventInfoPanelSource, /<OverviewRow label=\{t\("rewardStamps"/u);
+  assert.match(eventInfoPanelSource, /<OverviewRow label=\{t\("rewardCards"\)\} mobileLayout="stacked">/u);
   assert.match(eventInfoPanelSource, /useBandoriCardsMaster\(server, Boolean\(model\), "regional"\)/u);
   assert.equal(eventInfoPanelSource.match(/justify-end/gu)?.length >= 4, true);
   assert.match(eventInfoPanelSource, /@min-\[54rem\]:grid-cols-2/u);
@@ -308,10 +323,10 @@ test("event rewards fallback stamps by server and keep reward cards unlabelled",
 });
 
 test("only source-sensitive activity information fields display fallback server labels", () => {
-  assert.match(eventInfoPanelSource, /开始时间（/u);
-  assert.match(eventInfoPanelSource, /结束时间（/u);
-  assert.match(eventInfoPanelSource, /奖励贴纸（/u);
-  assert.match(eventInfoPanelSource, /活动歌曲（/u);
+  assert.match(eventInfoPanelSource, /t\("startTime", \{ server:/u);
+  assert.match(eventInfoPanelSource, /t\("endTime", \{ server:/u);
+  assert.match(eventInfoPanelSource, /t\("rewardStamps", \{ server:/u);
+  assert.match(eventInfoPanelSource, /t\("songsTitle", \{ server:/u);
   assert.doesNotMatch(
     eventInfoPanelSource,
     /活动状态（|活动标题（|主题乐队（|活动横幅（|奖励卡牌（|加成角色（|加成卡牌（|歌曲标题（|乐队名（|封面（/u,
