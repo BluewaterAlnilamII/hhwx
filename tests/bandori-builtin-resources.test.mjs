@@ -8,7 +8,6 @@ import {
   buildBandoriCharacterIconUrl,
   buildBandoriFullCardFrameUrl,
   buildBandoriLegacyRarityCompositeUrl,
-  buildBandoriMasterRankIconUrl,
   buildBandoriRarityStarIconUrl,
   buildBandoriThumbnailFrameUrl,
 } from "../src/lib/bandori-builtin-resources.ts";
@@ -67,10 +66,6 @@ test("built-in resources preserve official fixed names", () => {
     assert.equal(
       buildBandoriRarityStarIconUrl(true),
       "https://assets.example.test/bandori/resources/atlases/menu-atlas/icon_rarity_rainbow.png",
-    );
-    assert.equal(
-      buildBandoriMasterRankIconUrl(),
-      "https://assets.example.test/bandori/resources/atlases/menu-atlas/bg_masterrank.png",
     );
     assert.equal(
       buildBandoriCardAttributeIconUrl("powerful"),

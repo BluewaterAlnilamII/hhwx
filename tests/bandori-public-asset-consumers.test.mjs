@@ -81,14 +81,17 @@ test("card catalog surfaces use owned SVG band and attribute icons", async () =>
   }
 });
 
-test("Bandori UI consumers do not expose PNG band or attribute builders", async () => {
+test("Bandori UI consumers do not expose PNG band, attribute, or master-rank builders", async () => {
   const [resources, eventInfo, eventBonus] = await Promise.all([
     readSource("src/lib/bandori-builtin-resources.ts"),
     readSource("src/app/[locale]/bandori/events/_info/EventInfoPanel.tsx"),
     readSource("src/components/bandori/BandoriEventBonusPanel.tsx"),
   ]);
 
-  assert.doesNotMatch(resources, /buildBandoriAttributeIconUrl|buildBandoriBandIconUrl/u);
+  assert.doesNotMatch(
+    resources,
+    /buildBandoriAttributeIconUrl|buildBandoriBandIconUrl|buildBandoriMasterRankIconUrl|bg_masterrank/u,
+  );
   assert.match(eventInfo, /buildBandoriCardBandIconUrl/u);
   assert.match(eventBonus, /buildBandoriCardAttributeIconUrl/u);
 });
