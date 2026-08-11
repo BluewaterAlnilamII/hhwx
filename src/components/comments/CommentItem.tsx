@@ -5,18 +5,18 @@ import type {
   PointerEvent as ReactPointerEvent,
 } from "react";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import Image from "next/image";
 import * as Dialog from "@radix-ui/react-dialog";
 import { useFormatter, useTranslations } from "next-intl";
 import {
+  ChevronRight,
   Edit3,
   Link2,
   MoreHorizontal,
   Reply,
-  Smile,
   Trash2,
 } from "lucide-react";
 import AccountCardAvatar from "@/components/account/AccountCardAvatar";
+import type { CommentReactionParticipantPageLoader } from "@/hooks/useCommentReactionParticipants";
 import {
   COMMENT_PAGE_SIZE,
   MAX_COMMENT_LENGTH,
@@ -29,7 +29,6 @@ import {
   type CommentStamp,
   type CommentStampRegion,
 } from "@/lib/comments/stamps";
-import { getCommentEmojiSrc } from "@/lib/comments/emoji";
 import { cn } from "@/lib/utils";
 import {
   buildEmojiShortcode,
@@ -39,6 +38,8 @@ import {
 } from "@/lib/comments/comment-content";
 import { CommentContent } from "./CommentContent";
 import { CommentComposer } from "./CommentComposer";
+import { CommentReactionEmoji } from "./CommentReactionEmoji";
+import { CommentReactionsDialog } from "./CommentReactionsDialog";
 import { EmojiPickerButton } from "./EmojiPickerButton";
 import { StampPickerButton } from "./StampPickerButton";
 
@@ -46,28 +47,10 @@ type ReactionChipProps = {
   reaction: CommentReactionSummary;
   disabled: boolean;
   onToggle: (emojiKey: string, reactedByViewer: boolean) => Promise<void>;
+  onViewAll: (emojiKey: string) => void;
 };
 
-function ReactionEmoji({ emojiKey, size = 20 }: { emojiKey: string; size?: number }) {
-  const src = getCommentEmojiSrc(emojiKey);
-  if (!src) {
-    return <Smile size={Math.min(size, 18)} aria-hidden="true" />;
-  }
-
-  return (
-    <Image
-      src={src}
-      alt={`:${emojiKey}:`}
-      width={size}
-      height={size}
-      unoptimized
-      className="shrink-0 object-contain"
-      style={{ width: size, height: size }}
-    />
-  );
-}
-
-function ReactionChip({ reaction, disabled, onToggle }: ReactionChipProps) {
+function ReactionChip({ reaction, disabled, onToggle, onViewAll }: ReactionChipProps) {
   const t = useTranslations("comments");
   const containerRef = useRef<HTMLSpanElement>(null);
   const longPressTimerRef = useRef<number | null>(null);
@@ -129,7 +112,11 @@ function ReactionChip({ reaction, disabled, onToggle }: ReactionChipProps) {
         if (event.pointerType !== "touch") setTooltipOpen(false);
       }}
       onFocus={() => setTooltipOpen(true)}
-      onBlur={() => setTooltipOpen(false)}
+      onBlur={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+          setTooltipOpen(false);
+        }
+      }}
     >
       <button
         type="button"
@@ -150,16 +137,20 @@ function ReactionChip({ reaction, disabled, onToggle }: ReactionChipProps) {
             : "border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background)] text-[var(--theme-color-text-muted)] hover:bg-[var(--theme-color-control-background-hover)] dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800",
         )}
       >
-        <ReactionEmoji emojiKey={reaction.emojiKey} size={18} />
+        <CommentReactionEmoji emojiKey={reaction.emojiKey} size={18} />
         {reaction.count}
       </button>
       {tooltipOpen ? (
         <div
-          role="tooltip"
+          role="dialog"
+          aria-label={t("reactions.previewLabel", {
+            emoji: reaction.emojiKey,
+            count: reaction.count,
+          })}
           className="absolute bottom-full left-1/2 z-30 mb-0 w-64 max-w-[calc(100vw-2rem)] -translate-x-1/2 rounded-lg border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background)] p-2.5 text-left text-xs text-[var(--theme-color-text-muted)] shadow-2xl dark:border-slate-200 dark:bg-white dark:text-slate-700"
         >
           <div className="mb-2 flex items-center gap-1.5 font-semibold text-[var(--theme-color-text-default)]">
-            <ReactionEmoji emojiKey={reaction.emojiKey} size={20} />
+            <CommentReactionEmoji emojiKey={reaction.emojiKey} size={20} />
             <span>{t("reactions.count", { count: reaction.count })}</span>
           </div>
           <div className="space-y-1.5">
@@ -180,9 +171,17 @@ function ReactionChip({ reaction, disabled, onToggle }: ReactionChipProps) {
             ))}
           </div>
           {reaction.remainingUserCount > 0 ? (
-            <div className="mt-2 border-t border-[var(--theme-color-border-subtle)] pt-2 text-[var(--theme-color-text-muted)]">
-              …
-            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setTooltipOpen(false);
+                onViewAll(reaction.emojiKey);
+              }}
+              className="mt-2 flex w-full items-center justify-between border-t border-[var(--theme-color-border-subtle)] pt-2 font-semibold text-[var(--theme-color-action-secondary-foreground)] transition hover:text-[var(--theme-color-text-default)] focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--theme-color-focus-ring)]"
+            >
+              {t("reactions.viewAll")}
+              <ChevronRight size={13} aria-hidden="true" />
+            </button>
           ) : null}
         </div>
       ) : null}
@@ -202,6 +201,7 @@ export type CommentItemProps = {
   isReply?: boolean;
   rootCommentId?: string | null;
   onCreateReply: (parentId: string, content: string) => Promise<void>;
+  onLoadReactionParticipants: CommentReactionParticipantPageLoader;
   onToggleReaction: (commentId: string, emojiKey: string, reactedByViewer: boolean) => Promise<void>;
   onUpdate: (commentId: string, content: string) => Promise<void>;
   onDelete: (commentId: string) => Promise<void>;
@@ -221,6 +221,7 @@ export const CommentItem = memo(function CommentItem({
   isReply = false,
   rootCommentId = null,
   onCreateReply,
+  onLoadReactionParticipants,
   onToggleReaction,
   onUpdate,
   onDelete,
@@ -236,6 +237,7 @@ export const CommentItem = memo(function CommentItem({
   const [editStampOpen, setEditStampOpen] = useState(false);
   const [editStampRegion, setEditStampRegion] = useState<CommentStampRegion>(COMMENT_STAMP_DEFAULT_REGION);
   const [reactionPickerOpen, setReactionPickerOpen] = useState(false);
+  const [reactionDialogEmojiKey, setReactionDialogEmojiKey] = useState<string | null>(null);
   const [reactingEmojiKey, setReactingEmojiKey] = useState<string | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -252,6 +254,7 @@ export const CommentItem = memo(function CommentItem({
     setDeleteDialogOpen(false);
     setDeleting(false);
     setReactionPickerOpen(false);
+    setReactionDialogEmojiKey(null);
     setReactingEmojiKey(null);
   }, [comment.id, isDeleted]);
 
@@ -500,6 +503,11 @@ export const CommentItem = memo(function CommentItem({
                     reaction={reaction}
                     disabled={Boolean(reactingEmojiKey)}
                     onToggle={handleToggleReaction}
+                    onViewAll={(emojiKey) => {
+                      setDeleteDialogOpen(false);
+                      setReactionPickerOpen(false);
+                      setReactionDialogEmojiKey(emojiKey);
+                    }}
                   />
                 ))}
                 <EmojiPickerButton
@@ -621,6 +629,7 @@ export const CommentItem = memo(function CommentItem({
                   isReply
                   rootCommentId={comment.id}
                   onCreateReply={onCreateReply}
+                  onLoadReactionParticipants={onLoadReactionParticipants}
                   onToggleReaction={onToggleReaction}
                   onUpdate={onUpdate}
                   onDelete={onDelete}
@@ -648,6 +657,16 @@ export const CommentItem = memo(function CommentItem({
           ) : null}
         </div>
       </div>
+
+      {reactionDialogEmojiKey ? (
+        <CommentReactionsDialog
+          commentId={comment.id}
+          initialEmojiKey={reactionDialogEmojiKey}
+          reactions={comment.reactions ?? []}
+          loadParticipants={onLoadReactionParticipants}
+          onClose={() => setReactionDialogEmojiKey(null)}
+        />
+      ) : null}
     </article>
   );
 });

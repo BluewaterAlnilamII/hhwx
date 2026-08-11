@@ -15,9 +15,13 @@ import {
 import {
   COMMENT_PAGE_SIZE,
   COMMENT_PREVIEW_REPLY_LIMIT,
+  COMMENT_REACTION_PARTICIPANT_PAGE_SIZE,
+  buildCommentReactionParticipantCursor,
   parseCommentReactionKey,
   type CommentAvatar,
   type CommentNode,
+  type CommentReactionParticipantCursor,
+  type CommentReactionParticipantListResponse,
   type CommentReactionState,
   type CommentReactionSummary,
 } from "@/lib/comments/comment-contract";
@@ -621,6 +625,62 @@ async function ensureReactableComment(options: {
   }
 
   return data as CommentNotificationCommentRef;
+}
+
+export async function listCommentReactionParticipants(options: {
+  targetType: string;
+  targetId: string;
+  commentId: string;
+  emojiKey: string;
+  cursor?: CommentReactionParticipantCursor | null;
+}): Promise<CommentReactionParticipantListResponse> {
+  parseCommentReactionKey(options.emojiKey);
+  await ensureReactableComment(options);
+
+  const client = createServerSupabaseClient();
+  let query = client
+    .from(COMMENT_REACTIONS_TABLE)
+    .select("comment_id, emoji_key, user_id, created_at, profiles:profiles!user_id(username, avatar_card_id, avatar_card_server, avatar_card_train_type)")
+    .eq("comment_id", options.commentId)
+    .eq("emoji_key", options.emojiKey)
+    .order("created_at", { ascending: true })
+    .order("user_id", { ascending: true });
+
+  if (options.cursor) {
+    query = query.or(
+      `created_at.gt.${options.cursor.reactedAt},and(created_at.eq.${options.cursor.reactedAt},user_id.gt.${options.cursor.userId})`,
+    );
+  }
+
+  const { data, error } = await query.limit(COMMENT_REACTION_PARTICIPANT_PAGE_SIZE + 1);
+  if (error) {
+    throw new ApiRouteError(
+      500,
+      "COMMENT_REACTION_PARTICIPANTS_READ_FAILED",
+      "无法读取评论回应用户",
+      error.message,
+    );
+  }
+
+  const rows = ((data ?? []) as unknown as CommentReactionRow[]).slice(
+    0,
+    COMMENT_REACTION_PARTICIPANT_PAGE_SIZE,
+  );
+  const users = rows.map((row) => ({
+    userId: row.user_id,
+    username: row.profiles?.username ?? null,
+    avatar: buildCommentAvatar(row.profiles),
+    reactedAt: row.created_at,
+  }));
+  const lastUser = users[users.length - 1];
+
+  return {
+    commentId: options.commentId,
+    emojiKey: options.emojiKey,
+    users,
+    hasMore: (data?.length ?? 0) > COMMENT_REACTION_PARTICIPANT_PAGE_SIZE,
+    nextCursor: lastUser ? buildCommentReactionParticipantCursor(lastUser) : null,
+  };
 }
 
 async function readCommentReactionState(options: {

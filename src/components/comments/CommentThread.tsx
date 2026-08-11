@@ -55,6 +55,7 @@ export default function CommentThread({
     goToCommentPage,
     loading,
     loadingReplies,
+    loadReactionParticipants,
     loadReplies,
     navigateToComment,
     pageInput,
@@ -126,6 +127,7 @@ export default function CommentThread({
             canReact={canReact}
             commentPage={currentPage}
             onCreateReply={handleCreateReply}
+            onLoadReactionParticipants={loadReactionParticipants}
             onToggleReaction={toggleCommentReaction}
             onUpdate={updateCommentContent}
             onDelete={deleteComment}

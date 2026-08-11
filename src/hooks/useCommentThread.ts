@@ -11,6 +11,7 @@ import type {
   CommentContextResponse,
   CommentListResponse,
   CommentNode,
+  CommentReactionParticipantListResponse,
   CommentReactionState,
 } from "@/lib/comments/comment-contract";
 
@@ -519,6 +520,33 @@ export function useCommentThread({
     setReplies((current) => mapReplyComments(current, (comments) => replaceComment(comments, updated)));
   }, [apiBase, apiQuery, requestFailedMessage]);
 
+  const loadReactionParticipants = useCallback(async ({
+    commentId,
+    emojiKey,
+    cursor,
+    signal,
+  }: {
+    commentId: string;
+    emojiKey: string;
+    cursor?: string | null;
+    signal?: AbortSignal;
+  }): Promise<CommentReactionParticipantListResponse> => {
+    if (!apiBase) {
+      throw new Error(t("errors.reactionParticipantsLoadFailed"));
+    }
+
+    return requestJson<CommentReactionParticipantListResponse>(
+      buildCommentApiUrl(
+        apiBase,
+        apiQuery,
+        `/${commentId}/reactions/${encodeURIComponent(emojiKey)}`,
+        { cursor: cursor ?? undefined },
+      ),
+      requestFailedMessage,
+      { signal },
+    );
+  }, [apiBase, apiQuery, requestFailedMessage, t]);
+
   const toggleCommentReaction = useCallback(async (commentId: string, emojiKey: string, reactedByViewer: boolean) => {
     if (!apiBase) return;
     const headers = await authHeaders();
@@ -607,6 +635,7 @@ export function useCommentThread({
     goToCommentPage,
     loading,
     loadingReplies,
+    loadReactionParticipants,
     loadReplies,
     navigateToComment,
     pageInput,

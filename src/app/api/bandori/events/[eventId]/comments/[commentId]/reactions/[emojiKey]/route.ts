@@ -4,14 +4,17 @@ import { requireVerifiedAccount } from "@/lib/auth-server";
 import {
   parseCommentId,
   parseCommentReactionKey,
+  parseCommentReactionParticipantCursor,
 } from "@/lib/comments/comment-contract";
 import { requireBandoriEventCommentTarget } from "@/lib/bandori/events/comment-target-server";
 import {
+  listCommentReactionParticipants,
   reactToComment,
   removeCommentReaction,
 } from "@/lib/comments/comments-server";
 import {
   COMMENT_TARGET_BANDORI_EVENT,
+  buildBandoriEventCommentTargetId,
   parseBandoriEventCommentEventId,
   parseBandoriEventCommentServer,
 } from "@/lib/bandori/events/comment-target";
@@ -19,6 +22,36 @@ import {
 type RouteContext = {
   params: Promise<{ eventId: string; commentId: string; emojiKey: string }>;
 };
+
+const NO_STORE_HEADERS = { "Cache-Control": "no-store" };
+
+export async function GET(request: Request, context: RouteContext) {
+  try {
+    const { eventId: rawEventId, commentId: rawCommentId, emojiKey: rawEmojiKey } = await context.params;
+    const eventId = parseBandoriEventCommentEventId(rawEventId);
+    const commentId = parseCommentId(rawCommentId);
+    const emojiKey = parseCommentReactionKey(rawEmojiKey);
+    const url = new URL(request.url);
+    const server = parseBandoriEventCommentServer(url);
+    if (server === null) throw new ApiRouteError(400, "INVALID_SERVER", "服务器参数无效");
+    const cursor = parseCommentReactionParticipantCursor(url.searchParams.get("cursor"));
+
+    return jsonSuccess(await listCommentReactionParticipants({
+      targetType: COMMENT_TARGET_BANDORI_EVENT,
+      targetId: buildBandoriEventCommentTargetId(eventId, server),
+      commentId,
+      emojiKey,
+      cursor,
+    }), { headers: NO_STORE_HEADERS });
+  } catch (error) {
+    console.error("Bandori event comment reaction participants API error:", error);
+    return jsonRouteError(error, {
+      status: 500,
+      code: "EVENT_COMMENT_REACTION_PARTICIPANTS_READ_FAILED",
+      message: "无法读取评论回应用户",
+    }, { headers: NO_STORE_HEADERS });
+  }
+}
 
 export async function PUT(request: Request, context: RouteContext) {
   try {
