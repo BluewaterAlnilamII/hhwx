@@ -4,6 +4,11 @@ import {
   buildBandoriPublicAssetUrl,
   type BandoriStampsAssetIndex,
 } from "@/lib/bandori-public-asset-index";
+import type {
+  BandoriAtlasAnimation,
+  BandoriAtlasAnimationFrame,
+  BandoriAtlasFrameRect,
+} from "@/lib/bandori-atlas-animation";
 
 export type BandoriStampRegion = "jp" | "en" | "tw" | "cn";
 
@@ -50,8 +55,6 @@ export type BandoriStampCatalog = {
 export type BandoriStampAnimationSummary = {
   manifestUrl: string;
   atlasUrl: string;
-  frameRate?: number;
-  frameCount?: number;
 };
 
 export type BandoriStampCatalogItem = {
@@ -65,29 +68,14 @@ export type BandoriStampCatalogItem = {
   animation?: BandoriStampAnimationSummary;
 };
 
-type BandoriStampAnimationFrameRect = {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-};
-
-export type BandoriStampAnimationFrame = {
-  name: string;
-  cssRect: BandoriStampAnimationFrameRect;
-};
-
-export type BandoriStampAnimationResponse = {
+export type BandoriStampAnimationResponse = BandoriAtlasAnimation & {
   id: number;
   region: BandoriStampRegion;
   manifestUrl: string;
-  atlasUrl: string;
-  atlasDimensions: { width: number; height: number };
-  frameRate: number;
-  frames: BandoriStampAnimationFrame[];
 };
 
 type RawStampAnimationManifest = {
+  schemaVersion?: unknown;
   frameRate?: unknown;
   atlas?: unknown;
   atlasDimensions?: unknown;
@@ -107,7 +95,9 @@ function readNumber(value: unknown): number | null {
 
 function readInteger(value: unknown): number | null {
   const numericValue = readNumber(value);
-  return numericValue !== null ? Math.trunc(numericValue) : null;
+  return numericValue !== null && Number.isSafeInteger(numericValue)
+    ? numericValue
+    : null;
 }
 
 function readString(value: unknown): string | null {
@@ -125,7 +115,7 @@ function readDimensions(value: unknown): { width: number; height: number } | nul
     : null;
 }
 
-function readAnimationFrameRect(value: unknown): BandoriStampAnimationFrameRect | null {
+function readAnimationFrameRect(value: unknown): BandoriAtlasFrameRect | null {
   if (!isRecord(value)) {
     return null;
   }
@@ -137,6 +127,8 @@ function readAnimationFrameRect(value: unknown): BandoriStampAnimationFrameRect 
     && y !== null
     && width !== null
     && height !== null
+    && x >= 0
+    && y >= 0
     && width > 0
     && height > 0
     ? { x, y, width, height }
@@ -246,8 +238,6 @@ function buildAnimationSummary(
   return {
     manifestUrl,
     atlasUrl,
-    ...(animation.frameRate === undefined ? {} : { frameRate: animation.frameRate }),
-    ...(animation.frameCount === undefined ? {} : { frameCount: animation.frameCount }),
   };
 }
 
@@ -364,32 +354,50 @@ export function toBandoriStampAnimationResponse(
   manifestUrl: string,
   atlasUrl: string,
 ): BandoriStampAnimationResponse {
+  if (rawManifest.schemaVersion !== "hhwx-bandori-stamp-animation-v1") {
+    throw new Error("Bandori stamp animation manifest schema is unsupported");
+  }
   const atlasDimensions = readDimensions(rawManifest.atlasDimensions);
-  const rawFrames = Array.isArray(rawManifest.frames) ? rawManifest.frames : [];
-  const frames = rawFrames
-    .filter(isRecord)
-    .map((frame, index): BandoriStampAnimationFrame | null => {
-      const atlasRect = readAnimationFrameRect(frame.unityRect)
-        ?? readAnimationFrameRect(frame.cssRect);
-      if (!atlasRect) {
-        return null;
-      }
-      return {
-        name: readString(frame.name) ?? String(index),
-        cssRect: atlasRect,
-      };
-    })
-    .filter((frame): frame is BandoriStampAnimationFrame => frame !== null);
-  if (!atlasDimensions || frames.length === 0) {
+  const frameRate = readNumber(rawManifest.frameRate);
+  if (
+    !atlasDimensions
+    || !Array.isArray(rawManifest.frames)
+    || rawManifest.frames.length === 0
+    || frameRate === null
+    || frameRate <= 0
+  ) {
     throw new Error("Bandori stamp animation manifest is incomplete");
   }
+  const frameNames = new Set<string>();
+  const frames = rawManifest.frames.map((frame, index): BandoriAtlasAnimationFrame => {
+    if (!isRecord(frame)) {
+      throw new Error(`Bandori stamp animation frame is invalid: ${index}`);
+    }
+    const name = readString(frame.name);
+    const atlasRect = readAnimationFrameRect(frame.cssRect);
+    if (!name || !atlasRect) {
+      throw new Error(`Bandori stamp animation frame is invalid: ${index}`);
+    }
+    if (frameNames.has(name)) {
+      throw new Error(`Bandori stamp animation frame name is duplicated: ${name}`);
+    }
+    frameNames.add(name);
+    if (
+      atlasRect.x + atlasRect.width > atlasDimensions.width
+      || atlasRect.y + atlasRect.height > atlasDimensions.height
+    ) {
+      throw new Error(`Bandori stamp animation frame is outside the atlas: ${name}`);
+    }
+    return { name, rect: atlasRect };
+  });
   return {
     id: stampId,
     region,
     manifestUrl,
     atlasUrl,
     atlasDimensions,
-    frameRate: Math.max(1, readNumber(rawManifest.frameRate) ?? 12),
+    frameRate,
+    loop: true,
     frames,
   };
 }

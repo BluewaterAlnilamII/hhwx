@@ -37,6 +37,7 @@ function requireFourSlots(value, label) {
 const indexesPromise = Promise.all([
   readJson(`${assetBaseUrl}/bandori/events/index.json`),
   readJson(`${assetBaseUrl}/bandori/cards/index.json`),
+  readJson(`${assetBaseUrl}/bandori/degrees/index.json`),
   readJson(`${assetBaseUrl}/bandori/music/index.json`),
   readJson(`${assetBaseUrl}/bandori/stamps/index.json`),
 ]);
@@ -44,28 +45,34 @@ const indexesPromise = Promise.all([
 // artificial R2 burst across every large aggregate pack at once.
 const eventsApi = await readJson(`${apiBaseUrl}/api/bandori/master/events`);
 const cardsApi = await readJson(`${apiBaseUrl}/api/bandori/master/cards`);
+const degreesApi = await readJson(`${apiBaseUrl}/api/bandori/master/degrees`);
 const musicApi = await readJson(`${apiBaseUrl}/api/bandori/master/music`);
 const musicDetailApi = await readJson(`${apiBaseUrl}/api/bandori/master/music/181`);
 const stampsApi = await readJson(`${apiBaseUrl}/api/bandori/master/stamps`);
 const [
   eventsIndexResponse,
   cardsIndexResponse,
+  degreesIndexResponse,
   musicIndexResponse,
   stampsIndexResponse,
 ] = await indexesPromise;
 
 const events = readApiData(eventsApi.body, "Events API");
 const cards = readApiData(cardsApi.body, "Cards API");
+const degrees = readApiData(degreesApi.body, "Degrees API");
 const music = readApiData(musicApi.body, "Music API");
 const musicDetail = readApiData(musicDetailApi.body, "Music detail API");
 const stamps = readApiData(stampsApi.body, "Stamps API");
 const eventsIndex = eventsIndexResponse.body;
 const cardsIndex = cardsIndexResponse.body;
+const degreesIndex = degreesIndexResponse.body;
 const musicIndex = musicIndexResponse.body;
 const stampsIndex = stampsIndexResponse.body;
 
 assert.deepEqual(Object.keys(eventsIndex), ["schemaVersion", "updatedAt", "events"]);
 assert.deepEqual(Object.keys(cardsIndex), ["schemaVersion", "updatedAt", "resources"]);
+assert.deepEqual(Object.keys(degreesIndex), ["schemaVersion", "updatedAt", "resources"]);
+assert.equal(degreesIndex.schemaVersion, 1);
 assert.deepEqual(Object.keys(musicIndex), ["schemaVersion", "updatedAt", "songs"]);
 assert.deepEqual(Object.keys(stampsIndex), ["schemaVersion", "updatedAt", "stamps", "changedStampGroups"]);
 assert.deepEqual(Object.keys(stampsIndex.changedStampGroups), serverOrder);
@@ -133,6 +140,72 @@ for (const resourceSetName of requiredCardResources) {
   );
 }
 
+const degreeStringFields = [
+  "degreeType",
+  "iconImageName",
+  "baseImageName",
+  "rank",
+  "degreeName",
+  "description",
+];
+const degreeNumberFields = ["seq", "characterId"];
+for (const [degreeId, degree] of Object.entries(degrees)) {
+  assert.equal(isRecord(degree), true, `degree ${degreeId} must be an object`);
+  assert.deepEqual(
+    Object.keys(degree),
+    [...degreeStringFields, ...degreeNumberFields],
+    `degree ${degreeId} fields changed`,
+  );
+  for (const field of [...degreeStringFields, ...degreeNumberFields]) {
+    requireFourSlots(degree[field], `degree ${degreeId} ${field}`);
+  }
+  for (let slot = 0; slot < serverOrder.length; slot += 1) {
+    for (const field of degreeStringFields) {
+      assert.equal(typeof degree[field][slot], "string", `degree ${degreeId} ${field} must be a string`);
+    }
+    for (const field of degreeNumberFields) {
+      assert.equal(
+        Number.isInteger(degree[field][slot]) && degree[field][slot] >= 0,
+        true,
+        `degree ${degreeId} ${field} must be a non-negative integer`,
+      );
+    }
+    const server = serverOrder[slot];
+    const hasRegionalRecord = degreeStringFields.some((field) => degree[field][slot] !== "")
+      || degreeNumberFields.some((field) => degree[field][slot] !== 0);
+    if (!hasRegionalRecord) continue;
+
+    const requireDegreeResource = (resourceName, role, allowAnimation) => {
+      assert.equal(Boolean(resourceName), true, `degree ${degreeId} ${server} ${role} name is missing`);
+      const resource = degreesIndex.resources[resourceName];
+      assert.equal(isRecord(resource), true, `degree ${degreeId} ${server} ${role} resource ${resourceName} is missing`);
+      const image = Array.isArray(resource.images) ? resource.images[slot] : null;
+      const animation = isRecord(resource.animations)
+        ? resource.animations[server]
+        : undefined;
+      if (allowAnimation && resourceName.startsWith("ani_degree")) {
+        assert.equal(Boolean(image), false, `degree ${degreeId} ${server} dynamic base must not use a static image`);
+        assert.equal(isRecord(animation), true, `degree ${degreeId} ${server} dynamic base animation is missing`);
+        assert.deepEqual(Object.keys(animation), ["manifest", "atlas"]);
+      } else {
+        assert.equal(Boolean(image), true, `degree ${degreeId} ${server} ${role} image is missing`);
+        assert.equal(Boolean(animation), false, `degree ${degreeId} ${server} ${role} must be static`);
+      }
+    };
+
+    const rank = degree.rank[slot];
+    const degreeType = degree.degreeType[slot];
+    const iconImageName = degree.iconImageName[slot];
+    const rankImageName = rank === "none" ? "rank_none" : `${degreeType}_${rank}`;
+    const iconImageResourceName = iconImageName === "none"
+      ? "icon_none"
+      : `${iconImageName}_${rank}`;
+    requireDegreeResource(degree.baseImageName[slot], "base", true);
+    requireDegreeResource(rankImageName, "rank", false);
+    requireDegreeResource(iconImageResourceName, "icon", false);
+  }
+}
+
 assert.deepEqual(
   Object.keys(music).sort((left, right) => Number(left) - Number(right)),
   Object.keys(musicIndex.songs).sort((left, right) => Number(left) - Number(right)),
@@ -164,6 +237,11 @@ for (const [stampId, stamp] of Object.entries(stamps)) {
   const asset = stampsIndex.stamps[stampId];
   assert.equal(isRecord(asset), true, `stamp ${stampId} is missing from the asset index`);
   requireFourSlots(asset.images, `stamp ${stampId} asset images`);
+  if (isRecord(asset.animations)) {
+    for (const animation of Object.values(asset.animations)) {
+      assert.deepEqual(Object.keys(animation), ["manifest", "atlas"]);
+    }
+  }
   if (stamp.changedStamps !== undefined) {
     requireFourSlots(stamp.changedStamps, `stamp ${stampId} changedStamps`);
     requireFourSlots(asset.changedStamps, `stamp ${stampId} asset changedStamps`);
@@ -204,23 +282,27 @@ console.log(JSON.stringify({
   apiRecords: {
     events: Object.keys(events).length,
     cards: Object.keys(cards).length,
+    degrees: Object.keys(degrees).length,
     music: Object.keys(music).length,
     stamps: Object.keys(stamps).length,
   },
   assetRecords: {
     events: Object.keys(eventsIndex.events).length,
     cardResources: Object.keys(cardsIndex.resources).length,
+    degreeResources: Object.keys(degreesIndex.resources).length,
     music: Object.keys(musicIndex.songs).length,
     stamps: Object.keys(stampsIndex.stamps).length,
   },
   cacheControl: {
     eventsApi: eventsApi.cacheControl,
     cardsApi: cardsApi.cacheControl,
+    degreesApi: degreesApi.cacheControl,
     musicApi: musicApi.cacheControl,
     musicDetailApi: musicDetailApi.cacheControl,
     stampsApi: stampsApi.cacheControl,
     eventsIndex: eventsIndexResponse.cacheControl,
     cardsIndex: cardsIndexResponse.cacheControl,
+    degreesIndex: degreesIndexResponse.cacheControl,
     musicIndex: musicIndexResponse.cacheControl,
     stampsIndex: stampsIndexResponse.cacheControl,
   },

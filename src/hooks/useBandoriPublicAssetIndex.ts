@@ -4,12 +4,14 @@ import { useCallback, useEffect, useSyncExternalStore } from "react";
 import {
   buildBandoriPublicAssetIndexUrl,
   type BandoriCardsAssetIndex,
+  type BandoriDegreesAssetIndex,
   type BandoriEventsAssetIndex,
   type BandoriMusicAssetIndex,
   type BandoriStampsAssetIndex,
 } from "@/lib/bandori-public-asset-index";
 import {
   bandoriCardsAssetIndexStore,
+  bandoriDegreesAssetIndexStore,
   bandoriEventsAssetIndexStore,
   bandoriMusicAssetIndexStore,
   bandoriStampsAssetIndexStore,
@@ -74,6 +76,15 @@ export function useBandoriCardsAssetIndex(
   return useBandoriPublicAssetIndex(
     enabled ? buildBandoriPublicAssetIndexUrl("cards") : null,
     bandoriCardsAssetIndexStore,
+  );
+}
+
+export function useBandoriDegreesAssetIndex(
+  enabled = true,
+): BandoriPublicAssetIndexHookResult<BandoriDegreesAssetIndex> {
+  return useBandoriPublicAssetIndex(
+    enabled ? buildBandoriPublicAssetIndexUrl("degrees") : null,
+    bandoriDegreesAssetIndexStore,
   );
 }
 

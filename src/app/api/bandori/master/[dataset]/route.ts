@@ -15,6 +15,7 @@ import {
 } from "@/lib/bandori/cards/api-server";
 import { parseBandoriCardServerQuery } from "@/lib/bandori/cards/api-query";
 import { readBandoriPublicEventApiDataset } from "@/lib/bandori/events/api-server";
+import { readBandoriDegreesApiDataset } from "@/lib/bandori-degrees-api-server";
 import { readBandoriStampsApiDataset } from "@/lib/bandori-stamps-api-server";
 import { readBandoriMusicApiDataset } from "@/lib/bandori-music-api-server";
 import {
@@ -37,7 +38,7 @@ function isBandoriMasterDatasetKey(value: string): value is BandoriMasterDataset
 }
 
 type LegacyMasterDatasetKey = Exclude<BandoriMasterDatasetKey, "cards" | "events" | "songs">;
-type MasterDatasetKey = LegacyMasterDatasetKey | "cards" | "events" | "music" | "stamps";
+type MasterDatasetKey = LegacyMasterDatasetKey | "cards" | "degrees" | "events" | "music" | "stamps";
 
 function isLegacyMasterDatasetKey(value: string): value is LegacyMasterDatasetKey {
   return value !== "cards"
@@ -47,7 +48,13 @@ function isLegacyMasterDatasetKey(value: string): value is LegacyMasterDatasetKe
 }
 
 function normalizeDatasetKey(value: string): MasterDatasetKey | null {
-  if (value === "cards" || value === "events" || value === "music" || value === "stamps") {
+  if (
+    value === "cards"
+    || value === "degrees"
+    || value === "events"
+    || value === "music"
+    || value === "stamps"
+  ) {
     return value;
   }
   if (isLegacyMasterDatasetKey(value)) {
@@ -106,6 +113,12 @@ export async function GET(request: Request, context: RouteContext) {
 
     if (dataset === "stamps") {
       return jsonSuccess(await readBandoriStampsApiDataset(), {
+        headers: withHttpCachePolicy(SNAPSHOT_HTTP_CACHE_POLICY),
+      });
+    }
+
+    if (dataset === "degrees") {
+      return jsonSuccess(await readBandoriDegreesApiDataset(), {
         headers: withHttpCachePolicy(SNAPSHOT_HTTP_CACHE_POLICY),
       });
     }

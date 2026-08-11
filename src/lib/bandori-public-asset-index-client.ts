@@ -2,10 +2,12 @@
 
 import {
   parseBandoriCardsAssetIndex,
+  parseBandoriDegreesAssetIndex,
   parseBandoriEventsAssetIndex,
   parseBandoriMusicAssetIndex,
   parseBandoriStampsAssetIndex,
   type BandoriCardsAssetIndex,
+  type BandoriDegreesAssetIndex,
   type BandoriEventsAssetIndex,
   type BandoriMusicAssetIndex,
   type BandoriStampsAssetIndex,
@@ -173,6 +175,10 @@ export function createBandoriPublicAssetIndexStore<T>({
 
 export const bandoriCardsAssetIndexStore = createBandoriPublicAssetIndexStore<BandoriCardsAssetIndex>({
   parse: parseBandoriCardsAssetIndex,
+});
+
+export const bandoriDegreesAssetIndexStore = createBandoriPublicAssetIndexStore<BandoriDegreesAssetIndex>({
+  parse: parseBandoriDegreesAssetIndex,
 });
 
 export const bandoriEventsAssetIndexStore = createBandoriPublicAssetIndexStore<BandoriEventsAssetIndex>({
