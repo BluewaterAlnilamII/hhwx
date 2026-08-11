@@ -5,6 +5,7 @@ import { COMMENT_EMOJI_NAME_SET } from "@/lib/comments/emoji";
 
 export const COMMENT_PAGE_SIZE = 10;
 export const COMMENT_PREVIEW_REPLY_LIMIT = 3;
+export const COMMENT_REACTION_PARTICIPANT_PAGE_SIZE = 50;
 export const MAX_COMMENT_LENGTH = 500;
 
 export type CommentNotificationType = "comment_reply" | "comment_reaction";
@@ -43,7 +44,21 @@ export type CommentNotificationListResponse = {
 };
 
 const COMMENT_UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu;
+const COMMENT_REACTION_TIMESTAMP_PATTERN = /^(\d{4})-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])T(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d{1,6})?(?:Z|[+-](?:[01]\d|2[0-3]):[0-5]\d)$/u;
 const POSITIVE_INTEGER_TOKEN_PATTERN = /^[1-9]\d*$/u;
+
+function isValidCommentReactionTimestamp(value: string): boolean {
+  const match = COMMENT_REACTION_TIMESTAMP_PATTERN.exec(value);
+  if (!match || Number.isNaN(new Date(value).getTime())) return false;
+
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const isLeapYear = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+  const daysInMonth = [31, isLeapYear ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+
+  return year > 0 && day <= daysInMonth[month - 1];
+}
 
 export function parseCommentNotificationType(
   value: string | null | undefined,
@@ -70,6 +85,32 @@ export type CommentReactionSummary = {
   reactedByViewer: boolean;
   users: CommentReactionParticipant[];
   remainingUserCount: number;
+};
+
+export type CommentReactionParticipantCursor = {
+  reactedAt: string;
+  userId: string;
+};
+
+export function buildCommentReactionParticipantCursor(
+  cursor: CommentReactionParticipantCursor,
+): string {
+  if (
+    !isValidCommentReactionTimestamp(cursor.reactedAt)
+    || !COMMENT_UUID_PATTERN.test(cursor.userId)
+  ) {
+    throw new Error("Cannot build an invalid comment reaction participant cursor");
+  }
+
+  return `${cursor.reactedAt}|${cursor.userId}`;
+}
+
+export type CommentReactionParticipantListResponse = {
+  commentId: string;
+  emojiKey: string;
+  users: CommentReactionParticipant[];
+  nextCursor: string | null;
+  hasMore: boolean;
 };
 
 export type CommentNode = {
@@ -142,6 +183,34 @@ export function parseCommentReactionKey(value: unknown): string {
   }
 
   return value;
+}
+
+export function parseCommentReactionParticipantCursor(
+  value: string | null | undefined,
+): CommentReactionParticipantCursor | null {
+  if (value === null || value === undefined || value === "") {
+    return null;
+  }
+
+  const parts = value.split("|");
+  if (parts.length !== 2) {
+    throw new ApiRouteError(400, "INVALID_COMMENT_REACTION_CURSOR", "评论回应游标无效");
+  }
+
+  const [rawReactedAt, userId] = parts;
+  if (
+    !isValidCommentReactionTimestamp(rawReactedAt)
+    || !COMMENT_UUID_PATTERN.test(userId)
+  ) {
+    throw new ApiRouteError(400, "INVALID_COMMENT_REACTION_CURSOR", "评论回应游标无效");
+  }
+
+  return {
+    // Keep PostgreSQL microseconds intact so the next keyset page starts
+    // strictly after the exact row used to create the cursor.
+    reactedAt: rawReactedAt,
+    userId,
+  };
 }
 
 export function parseCommentId(value: unknown): string {

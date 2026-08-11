@@ -2,6 +2,7 @@
   "actions": {
     "addReaction": "添加回应",
     "cancel": "取消",
+    "close": "关闭",
     "copyLink": "链接",
     "delete": "删除",
     "edit": "编辑",
@@ -15,13 +16,15 @@
     "rootPlaceholder": "以 {username} 发表主评论..."
   },
   "dialogs": {
-    "deleteTitle": "确认删除评论？"
+    "deleteTitle": "确认删除评论？",
+    "reactionsTitle": "回应"
   },
   "errors": {
     "deleteFailed": "删除失败",
     "loadFailed": "评论加载失败",
     "locateFailed": "无法定位评论",
     "reactionFailed": "评论回应失败",
+    "reactionParticipantsLoadFailed": "回应用户加载失败",
     "requestFailed": "请求失败（HTTP {status}）",
     "submitFailed": "提交失败",
     "updateFailed": "更新失败"
@@ -42,7 +45,15 @@
   },
   "reactions": {
     "authenticationRequired": "登录并完成邮箱验证后可以回应",
-    "count": "{count, plural, one {# 个回应} other {# 个回应}}"
+    "count": "{count, plural, one {# 个回应} other {# 个回应}}",
+    "empty": "暂无回应用户",
+    "filterLabel": "查看 :{emoji}: 的 {count} 个回应",
+    "filtersLabel": "回应分类",
+    "loadFailedRetry": "加载失败，点击重试",
+    "loadingMore": "正在加载更多回应",
+    "participantsLabel": "回应 :{emoji}: 的用户",
+    "previewLabel": ":{emoji}:，{count} 个回应",
+    "viewAll": "查看全部"
   },
   "states": {
     "anonymous": "匿名用户",

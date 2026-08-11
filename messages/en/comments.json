@@ -2,6 +2,7 @@
   "actions": {
     "addReaction": "Add reaction",
     "cancel": "Cancel",
+    "close": "Close",
     "copyLink": "Link",
     "delete": "Delete",
     "edit": "Edit",
@@ -15,13 +16,15 @@
     "rootPlaceholder": "Comment as {username}..."
   },
   "dialogs": {
-    "deleteTitle": "Delete this comment?"
+    "deleteTitle": "Delete this comment?",
+    "reactionsTitle": "Reactions"
   },
   "errors": {
     "deleteFailed": "Delete failed",
     "loadFailed": "Failed to load comments",
     "locateFailed": "Unable to locate comment",
     "reactionFailed": "Comment reaction failed",
+    "reactionParticipantsLoadFailed": "Failed to load reaction users",
     "requestFailed": "Request failed (HTTP {status})",
     "submitFailed": "Submission failed",
     "updateFailed": "Update failed"
@@ -42,7 +45,15 @@
   },
   "reactions": {
     "authenticationRequired": "Sign in and verify your email to react",
-    "count": "{count, plural, one {# reaction} other {# reactions}}"
+    "count": "{count, plural, one {# reaction} other {# reactions}}",
+    "empty": "No reaction users found",
+    "filterLabel": "View :{emoji}: reactions ({count})",
+    "filtersLabel": "Reaction filters",
+    "loadFailedRetry": "Loading failed, click to retry",
+    "loadingMore": "Loading more reactions",
+    "participantsLabel": "Users who reacted with :{emoji}:",
+    "previewLabel": ":{emoji}:, {count} reactions",
+    "viewAll": "View all"
   },
   "states": {
     "anonymous": "Anonymous user",

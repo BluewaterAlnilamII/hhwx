@@ -39,6 +39,7 @@ test("shared comment UI reads copy from the comments namespace", () => {
     "../src/components/comments/CommentComposer.tsx",
     "../src/components/comments/CommentContent.tsx",
     "../src/components/comments/CommentItem.tsx",
+    "../src/components/comments/CommentReactionsDialog.tsx",
     "../src/components/comments/CommentThread.tsx",
     "../src/components/comments/EmojiPickerButton.tsx",
     "../src/components/comments/StampPickerButton.tsx",

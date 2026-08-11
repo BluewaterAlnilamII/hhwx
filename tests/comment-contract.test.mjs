@@ -8,10 +8,13 @@ import {
   parseBandoriEventCommentEventId,
 } from "../src/lib/bandori/events/comment-target.ts";
 import {
+  COMMENT_REACTION_PARTICIPANT_PAGE_SIZE,
+  buildCommentReactionParticipantCursor,
   parseCommentId,
   parseCommentNotificationType,
   parseCommentPage,
   parseParentCommentId,
+  parseCommentReactionParticipantCursor,
 } from "../src/lib/comments/comment-contract.ts";
 
 const VALID_COMMENT_ID = "123e4567-e89b-12d3-a456-426614174000";
@@ -59,6 +62,92 @@ test("comment route tokens require complete positive integers and UUIDs", () => 
     assert.throws(() => parseCommentId(value));
     assert.throws(() => parseParentCommentId(value));
   }
+});
+
+test("comment reaction participant cursors preserve stable timestamp and user ordering", () => {
+  const postgresReactedAt = "2026-08-10T08:24:23.86436+00:00";
+  const postgresCursor = buildCommentReactionParticipantCursor({
+    reactedAt: postgresReactedAt,
+    userId: VALID_COMMENT_ID,
+  });
+
+  assert.equal(COMMENT_REACTION_PARTICIPANT_PAGE_SIZE, 50);
+  assert.equal(parseCommentReactionParticipantCursor(null), null);
+  assert.equal(postgresCursor, `${postgresReactedAt}|${VALID_COMMENT_ID}`);
+  assert.deepEqual(parseCommentReactionParticipantCursor(postgresCursor), {
+    reactedAt: postgresReactedAt,
+    userId: VALID_COMMENT_ID,
+  });
+  assert.deepEqual(
+    parseCommentReactionParticipantCursor(`2026-08-11T08:09:10.123Z|${VALID_COMMENT_ID}`),
+    {
+      reactedAt: "2026-08-11T08:09:10.123Z",
+      userId: VALID_COMMENT_ID,
+    },
+  );
+
+  for (const value of [
+    "not-a-cursor",
+    `not-a-date|${VALID_COMMENT_ID}`,
+    `2026-08-11|${VALID_COMMENT_ID}`,
+    `2026-02-30T08:09:10.123Z|${VALID_COMMENT_ID}`,
+    `2026-08-11T08:09:10.1234567Z|${VALID_COMMENT_ID}`,
+    `2026-08-11T08:09:10.123Z,created_at.gt.0|${VALID_COMMENT_ID}`,
+    "2026-08-11T08:09:10.123Z|not-a-uuid",
+    `2026-08-11T08:09:10.123Z|${VALID_COMMENT_ID}|extra`,
+  ]) {
+    assert.throws(() => parseCommentReactionParticipantCursor(value));
+  }
+});
+
+test("comment reaction participant cursors advance a 51-user keyset page without duplicates", () => {
+  const reactedAt = "2026-08-10T08:24:23.86436+00:00";
+  const participants = Array.from({ length: 51 }, (_, index) => ({
+    reactedAt,
+    userId: `00000000-0000-0000-0000-${String(index + 1).padStart(12, "0")}`,
+  }));
+  const firstPage = participants.slice(0, COMMENT_REACTION_PARTICIPANT_PAGE_SIZE);
+  const nextCursor = parseCommentReactionParticipantCursor(
+    buildCommentReactionParticipantCursor(firstPage[firstPage.length - 1]),
+  );
+
+  assert.ok(nextCursor);
+  assert.equal(participants.length > COMMENT_REACTION_PARTICIPANT_PAGE_SIZE, true);
+
+  const secondPage = participants.filter((participant) => (
+    participant.reactedAt > nextCursor.reactedAt
+    || (
+      participant.reactedAt === nextCursor.reactedAt
+      && participant.userId > nextCursor.userId
+    )
+  ));
+
+  assert.deepEqual(secondPage, [participants[50]]);
+  assert.equal(firstPage.some((participant) => participant.userId === secondPage[0].userId), false);
+});
+
+test("reaction participant reads extend the existing emoji route without requiring sign-in", () => {
+  const routeSource = readFileSync(
+    new URL("../src/app/api/bandori/events/[eventId]/comments/[commentId]/reactions/[emojiKey]/route.ts", import.meta.url),
+    "utf8",
+  );
+  const serviceSource = readFileSync(
+    new URL("../src/lib/comments/comments-server.ts", import.meta.url),
+    "utf8",
+  );
+  const getHandlerSource = routeSource.slice(
+    routeSource.indexOf("export async function GET"),
+    routeSource.indexOf("export async function PUT"),
+  );
+
+  assert.match(getHandlerSource, /listCommentReactionParticipants\(/u);
+  assert.match(getHandlerSource, /buildBandoriEventCommentTargetId\(eventId, server\)/u);
+  assert.match(getHandlerSource, /parseCommentReactionParticipantCursor/u);
+  assert.doesNotMatch(getHandlerSource, /requireVerifiedAccount/u);
+  assert.match(serviceSource, /await ensureReactableComment\(options\)/u);
+  assert.match(serviceSource, /\.order\("created_at", \{ ascending: true \}\)[\s\S]*\.order\("user_id", \{ ascending: true \}\)/u);
+  assert.match(serviceSource, /\.limit\(COMMENT_REACTION_PARTICIPANT_PAGE_SIZE \+ 1\)/u);
+  assert.match(serviceSource, /nextCursor: lastUser \? buildCommentReactionParticipantCursor\(lastUser\) : null/u);
 });
 
 test("comment notification contracts stay generic and target presentation stays at the edge", () => {
