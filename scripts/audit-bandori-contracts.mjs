@@ -239,7 +239,14 @@ for (const [stampId, stamp] of Object.entries(stamps)) {
   requireFourSlots(asset.images, `stamp ${stampId} asset images`);
   if (isRecord(asset.animations)) {
     for (const animation of Object.values(asset.animations)) {
-      assert.deepEqual(Object.keys(animation), ["manifest", "atlas"]);
+      const animationFields = Object.keys(animation);
+      assert.equal(animationFields.includes("manifest"), true, `stamp ${stampId} animation manifest is missing`);
+      assert.equal(animationFields.includes("atlas"), true, `stamp ${stampId} animation atlas is missing`);
+      assert.deepEqual(
+        animationFields.filter((field) => !["manifest", "atlas", "frameRate", "frameCount"].includes(field)),
+        [],
+        `stamp ${stampId} animation contains unsupported fields`,
+      );
     }
   }
   if (stamp.changedStamps !== undefined) {
