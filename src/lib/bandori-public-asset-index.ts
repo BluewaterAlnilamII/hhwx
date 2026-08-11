@@ -1,13 +1,16 @@
 const SHA256_PATTERN = /^[0-9a-f]{64}$/u;
 const RESOURCE_SET_NAME_PATTERN = /^[A-Za-z0-9_-]+$/u;
+const DEGREE_RESOURCE_NAME_PATTERN = /^[A-Za-z0-9_.-]+$/u;
 const POSITIVE_INTEGER_ID_PATTERN = /^[1-9]\d*$/u;
 
 export const BANDORI_PUBLIC_ASSET_SERVERS = ["jp", "en", "tw", "cn"] as const;
 export const BANDORI_CARDS_INDEX_KEY = "bandori/cards/index.json";
+export const BANDORI_DEGREES_INDEX_KEY = "bandori/degrees/index.json";
 export const BANDORI_EVENTS_INDEX_KEY = "bandori/events/index.json";
 export const BANDORI_MUSIC_INDEX_KEY = "bandori/music/index.json";
 export const BANDORI_STAMPS_INDEX_KEY = "bandori/stamps/index.json";
 export const BANDORI_PUBLIC_ASSET_INDEX_SCHEMA_VERSION = 2;
+export const BANDORI_DEGREES_ASSET_INDEX_SCHEMA_VERSION = 1;
 
 export type BandoriPublicAssetServer = (typeof BANDORI_PUBLIC_ASSET_SERVERS)[number];
 export type BandoriCardAssetVariant = "normal" | "after_training";
@@ -95,12 +98,12 @@ export type BandoriEventsAssetIndex = {
   events: Record<string, BandoriEventAssetEntry>;
 };
 
-export type BandoriStampAnimationAsset = {
+export type BandoriAnimationAssetDescriptor = {
   manifest: BandoriJsonAssetDescriptor;
   atlas: BandoriPngAssetDescriptor;
-  frameRate?: number;
-  frameCount?: number;
 };
+
+export type BandoriStampAnimationAsset = BandoriAnimationAssetDescriptor;
 
 export type BandoriStampChangedAsset = {
   image?: BandoriPngAssetDescriptor;
@@ -129,6 +132,19 @@ export type BandoriStampsAssetIndex = {
     BandoriPublicAssetServer,
     Record<string, BandoriJsonAssetDescriptor>
   >;
+};
+
+export type BandoriDegreeAssetResource = {
+  images?: BandoriRegionalPngSlots;
+  animations?: Partial<
+    Record<BandoriPublicAssetServer, BandoriAnimationAssetDescriptor>
+  >;
+};
+
+export type BandoriDegreesAssetIndex = {
+  schemaVersion: typeof BANDORI_DEGREES_ASSET_INDEX_SCHEMA_VERSION;
+  updatedAt: string;
+  resources: Record<string, BandoriDegreeAssetResource>;
 };
 
 export type BandoriRegionalPngSlots = [
@@ -671,13 +687,11 @@ function parseStampAnimation(
     ) {
       throw new Error(`${label} has an invalid frameRate`);
     }
-    animation.frameRate = value.frameRate;
   }
   if (Object.hasOwn(value, "frameCount")) {
     if (!Number.isSafeInteger(value.frameCount) || (value.frameCount as number) < 1) {
       throw new Error(`${label} has an invalid frameCount`);
     }
-    animation.frameCount = value.frameCount as number;
   }
   return animation;
 }
@@ -803,6 +817,138 @@ export function parseBandoriStampsAssetIndex(value: unknown): BandoriStampsAsset
     updatedAt: parseUpdatedAt(value.updatedAt, "Bandori stamps index"),
     stamps,
     changedStampGroups: parseChangedStampGroups(value.changedStampGroups),
+  };
+}
+
+function parseDegreeImageSlots(
+  value: unknown,
+  resourceName: string,
+): BandoriRegionalPngSlots {
+  const label = `Bandori degrees index resource ${resourceName} images`;
+  if (!Array.isArray(value) || value.length !== BANDORI_PUBLIC_ASSET_SERVERS.length) {
+    throw new Error(`${label} must have exactly four regional slots`);
+  }
+  return value.map((sha256, index) => {
+    if (sha256 === "") return null;
+    const server = BANDORI_PUBLIC_ASSET_SERVERS[index];
+    const normalizedSha256 = parseSha256(sha256, `${label} ${server}`);
+    return {
+      key: `bandori/degrees/images/${normalizedSha256}.png`,
+      sha256: normalizedSha256,
+    };
+  }) as BandoriRegionalPngSlots;
+}
+
+function parseDegreeAnimation(
+  value: unknown,
+  resourceName: string,
+  server: BandoriPublicAssetServer,
+): BandoriAnimationAssetDescriptor {
+  const label = `Bandori degrees index resource ${resourceName} animation ${server}`;
+  if (!isRecord(value)) {
+    throw new Error(`${label} must be an object`);
+  }
+  assertExactKeys(value, ["manifest", "atlas"], [], label);
+  const manifestSha256 = parseSha256(value.manifest, `${label} manifest`);
+  const atlasSha256 = parseSha256(value.atlas, `${label} atlas`);
+  return {
+    manifest: {
+      key: `bandori/degrees/animation/manifests/${manifestSha256}.json`,
+      sha256: manifestSha256,
+    },
+    atlas: {
+      key: `bandori/degrees/animation/atlases/${atlasSha256}.png`,
+      sha256: atlasSha256,
+    },
+  };
+}
+
+function parseDegreeResource(
+  value: unknown,
+  resourceName: string,
+): BandoriDegreeAssetResource {
+  const label = `Bandori degrees index resource ${resourceName}`;
+  if (!isRecord(value)) {
+    throw new Error(`${label} must be an object`);
+  }
+  assertExactKeys(value, [], ["images", "animations"], label);
+  const resource: BandoriDegreeAssetResource = {};
+  if (Object.hasOwn(value, "images")) {
+    const images = parseDegreeImageSlots(value.images, resourceName);
+    if (!images.some(Boolean)) {
+      throw new Error(`${label} images must be omitted when empty`);
+    }
+    resource.images = images;
+  }
+  if (Object.hasOwn(value, "animations")) {
+    if (!isRecord(value.animations)) {
+      throw new Error(`${label} animations must be an object`);
+    }
+    if (Object.keys(value.animations).length === 0) {
+      throw new Error(`${label} animations must be omitted when empty`);
+    }
+    const animations: Partial<
+      Record<BandoriPublicAssetServer, BandoriAnimationAssetDescriptor>
+    > = {};
+    for (const [server, animation] of Object.entries(value.animations)) {
+      if (!BANDORI_PUBLIC_ASSET_SERVERS.includes(server as BandoriPublicAssetServer)) {
+        throw new Error(`${label} has an unsupported animation server: ${server}`);
+      }
+      const normalizedServer = server as BandoriPublicAssetServer;
+      animations[normalizedServer] = parseDegreeAnimation(
+        animation,
+        resourceName,
+        normalizedServer,
+      );
+    }
+    resource.animations = animations;
+  }
+  if (!resource.images && !resource.animations) {
+    throw new Error(`${label} has no regional resource`);
+  }
+  const isAnimationResource = resourceName.startsWith("ani_degree");
+  if (isAnimationResource && resource.images) {
+    throw new Error(`${label} must not contain images`);
+  }
+  if (!isAnimationResource && resource.animations) {
+    throw new Error(`${label} must not contain animations`);
+  }
+  for (let slot = 0; slot < BANDORI_PUBLIC_ASSET_SERVERS.length; slot += 1) {
+    const server = BANDORI_PUBLIC_ASSET_SERVERS[slot];
+    if (resource.images?.[slot] && resource.animations?.[server]) {
+      throw new Error(`${label} has both an image and animation for ${server}`);
+    }
+  }
+  return resource;
+}
+
+export function parseBandoriDegreesAssetIndex(value: unknown): BandoriDegreesAssetIndex {
+  if (!isRecord(value)) {
+    throw new Error("Bandori degrees index must be an object");
+  }
+  assertExactKeys(
+    value,
+    ["schemaVersion", "updatedAt", "resources"],
+    [],
+    "Bandori degrees index",
+  );
+  if (value.schemaVersion !== BANDORI_DEGREES_ASSET_INDEX_SCHEMA_VERSION) {
+    throw new Error("Unsupported Bandori degrees index schema");
+  }
+  if (!isRecord(value.resources)) {
+    throw new Error("Bandori degrees index resources must be an object");
+  }
+  const resources: Record<string, BandoriDegreeAssetResource> = Object.create(null);
+  for (const [resourceName, resource] of Object.entries(value.resources)) {
+    if (!DEGREE_RESOURCE_NAME_PATTERN.test(resourceName)) {
+      throw new Error(`Bandori degrees index has an invalid resource name: ${resourceName}`);
+    }
+    resources[resourceName] = parseDegreeResource(resource, resourceName);
+  }
+  return {
+    schemaVersion: BANDORI_DEGREES_ASSET_INDEX_SCHEMA_VERSION,
+    updatedAt: parseUpdatedAt(value.updatedAt, "Bandori degrees index"),
+    resources,
   };
 }
 
@@ -943,7 +1089,7 @@ export function getBandoriPublicAssetBaseUrl(
 }
 
 export function buildBandoriPublicAssetIndexUrl(
-  kind: "cards" | "events" | "music" | "stamps",
+  kind: "cards" | "degrees" | "events" | "music" | "stamps",
   baseUrl?: string | null,
 ): string | null {
   const normalizedBaseUrl = getBandoriPublicAssetBaseUrl(baseUrl);
@@ -952,6 +1098,7 @@ export function buildBandoriPublicAssetIndexUrl(
   }
   const indexKeys = {
     cards: BANDORI_CARDS_INDEX_KEY,
+    degrees: BANDORI_DEGREES_INDEX_KEY,
     events: BANDORI_EVENTS_INDEX_KEY,
     music: BANDORI_MUSIC_INDEX_KEY,
     stamps: BANDORI_STAMPS_INDEX_KEY,

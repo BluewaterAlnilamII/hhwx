@@ -14,6 +14,7 @@ paths:
   - "src/lib/bandori-public-asset-index-server.ts"
   - "src/lib/bandori-schedule-server.ts"
   - "src/lib/bandori-snapshot-api-server.ts"
+  - "src/lib/bandori-degrees-api-server.ts"
   - "src/lib/bandori-stamps-api-server.ts"
   - "src/lib/bandori/event-tracker/topdata-history-server.ts"
   - "src/lib/bandori/event-tracker/topdata-scoped-history-server.ts"

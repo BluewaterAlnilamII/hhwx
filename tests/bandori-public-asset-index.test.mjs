@@ -11,6 +11,7 @@ import {
   lookupBandoriEventTeamIcon,
   lookupBandoriMusicChart,
   parseBandoriCardsAssetIndex,
+  parseBandoriDegreesAssetIndex,
   parseBandoriEventsAssetIndex,
   parseBandoriMusicAssetIndex,
   parseBandoriStampsAssetIndex,
@@ -46,6 +47,9 @@ const hashes = {
   musicThumb: "d".repeat(64),
   musicAudio: "e".repeat(64),
   musicChart: "f".repeat(64),
+  degreeImage: "1".repeat(64),
+  degreeManifest: "2".repeat(64),
+  degreeAtlas: "3".repeat(64),
 };
 
 function imageSet(entries) {
@@ -126,6 +130,26 @@ function stampsIndex() {
       tw: {},
       cn: {
         "55": hashes.changedStampManifest,
+      },
+    },
+  };
+}
+
+function degreesIndex() {
+  return {
+    schemaVersion: 1,
+    updatedAt: "2026-08-11T00:00:00Z",
+    resources: {
+      degree001: {
+        images: [hashes.degreeImage, "", "", hashes.degreeImage],
+      },
+      ani_degree_cn: {
+        animations: {
+          cn: {
+            manifest: hashes.degreeManifest,
+            atlas: hashes.degreeAtlas,
+          },
+        },
       },
     },
   };
@@ -311,6 +335,10 @@ test("Stamps schema 2 reconstructs content-addressed asset keys from compact has
     key: `bandori/stamps/animation/manifests/${hashes.stampManifest}.json`,
     sha256: hashes.stampManifest,
   });
+  assert.deepEqual(
+    Object.keys(parsed.stamps["501"].animations.cn),
+    ["manifest", "atlas"],
+  );
   assert.deepEqual(parsed.stamps["501"].changedStamps[3][0].image, {
     key: `bandori/stamps/images/${hashes.changedStampImage}.png`,
     sha256: hashes.changedStampImage,
@@ -319,6 +347,55 @@ test("Stamps schema 2 reconstructs content-addressed asset keys from compact has
     key: `bandori/stamps/changed/manifests/${hashes.changedStampManifest}.json`,
     sha256: hashes.changedStampManifest,
   });
+});
+
+test("Degrees schema 1 reconstructs static and dynamic regional resources", () => {
+  const parsed = parseBandoriDegreesAssetIndex(degreesIndex());
+  assert.deepEqual(parsed.resources.degree001.images[0], {
+    key: `bandori/degrees/images/${hashes.degreeImage}.png`,
+    sha256: hashes.degreeImage,
+  });
+  assert.equal(parsed.resources.degree001.images[1], null);
+  assert.deepEqual(parsed.resources.ani_degree_cn.animations.cn, {
+    manifest: {
+      key: `bandori/degrees/animation/manifests/${hashes.degreeManifest}.json`,
+      sha256: hashes.degreeManifest,
+    },
+    atlas: {
+      key: `bandori/degrees/animation/atlases/${hashes.degreeAtlas}.png`,
+      sha256: hashes.degreeAtlas,
+    },
+  });
+
+  const conflict = degreesIndex();
+  conflict.resources.ani_degree_cn.images = ["", "", "", hashes.degreeImage];
+  assert.throws(
+    () => parseBandoriDegreesAssetIndex(conflict),
+    /must not contain images/u,
+  );
+
+  const staticAnimation = degreesIndex();
+  staticAnimation.resources.degree001.animations = {
+    en: { manifest: hashes.degreeManifest, atlas: hashes.degreeAtlas },
+  };
+  assert.throws(
+    () => parseBandoriDegreesAssetIndex(staticAnimation),
+    /must not contain animations/u,
+  );
+
+  const empty = degreesIndex();
+  empty.resources.empty = { images: ["", "", "", ""] };
+  assert.throws(() => parseBandoriDegreesAssetIndex(empty), /images must be omitted when empty/u);
+});
+
+test("Stamp legacy animation metadata is validated and discarded", () => {
+  const invalidRate = stampsIndex();
+  invalidRate.stamps["501"].animations.cn.frameRate = 0;
+  assert.throws(() => parseBandoriStampsAssetIndex(invalidRate), /invalid frameRate/u);
+
+  const invalidCount = stampsIndex();
+  invalidCount.stamps["501"].animations.cn.frameCount = 0;
+  assert.throws(() => parseBandoriStampsAssetIndex(invalidCount), /invalid frameCount/u);
 });
 
 test("Stamps master and public index join by ID while preserving regional character slots", () => {
@@ -555,6 +632,10 @@ test("public asset URLs append reconstructed descriptor keys to the browser CDN 
   assert.equal(
     buildBandoriPublicAssetIndexUrl("events", "https://assets.example.test"),
     "https://assets.example.test/bandori/events/index.json",
+  );
+  assert.equal(
+    buildBandoriPublicAssetIndexUrl("degrees", "https://assets.example.test"),
+    "https://assets.example.test/bandori/degrees/index.json",
   );
   assert.equal(
     buildBandoriPublicAssetIndexUrl("music", "https://assets.example.test"),

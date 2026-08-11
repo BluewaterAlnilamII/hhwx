@@ -1,6 +1,6 @@
 # Bandori Asset CDN 契约
 
-Events/Cards/Music/Stamps API 与 index 的统一约定见 [bandori-master-asset-contract.zh-CN.md](bandori-master-asset-contract.zh-CN.md)。
+Events/Cards/Degrees/Music/Stamps API 与 index 的统一约定见 [bandori-master-asset-contract.zh-CN.md](bandori-master-asset-contract.zh-CN.md)。
 
 English version: [bandori-asset-cdn-setup.md](bandori-asset-cdn-setup.md)
 
@@ -24,22 +24,23 @@ BANDORI_R2_ENDPOINT=https://your_account_id.r2.cloudflarestorage.com
 BANDORI_PUBLIC_R2_BUCKET=your_public_asset_bucket
 BANDORI_PRIVATE_R2_BUCKET=hhwx-private
 # BANDORI_MUSIC_API_LOCAL_STORE_ROOT=/path/to/music/store
+# BANDORI_DEGREES_API_LOCAL_STORE_ROOT=/path/to/degrees/store
 # BANDORI_STAMPS_API_LOCAL_STORE_ROOT=/path/to/stamps/store
 ```
 
-`NEXT_PUBLIC_BANDORI_ASSET_CDN_BASE_URL` 是浏览器与服务端渲染公开 URL 共用的资源主机。Cards、Events 与 Stamps 资源通过下文各自的公开 index 发现；浏览器使用正常 HTTP 缓存且不携带凭据读取这些 index。Stamp 资源使用同一个 Bandori asset CDN 下的 `/bandori/stamps` 路径；没有单独的 stamp CDN 配置。Web 应用通过 `/api/bandori/master/stamps` 读取 Stamp master 元数据，直接从公开 CDN 读取 `bandori/stamps/index.json`，再在浏览器内存中按 stamp ID 合并两者。Stamp 图片、动画 manifest、动画 atlas、voice audio 与卡牌招募语音随后直接从 CDN 读取，因此 CDN 必须允许 HHWX Web origin 跨域读取。Stamp voice 与卡牌招募语音共用 Web Audio 一次性音效通道，而不是作为媒体元素播放，从而沿用旨在避免 iOS 把它们当作音乐并打断后台播放的浏览器音频会话策略。
+`NEXT_PUBLIC_BANDORI_ASSET_CDN_BASE_URL` 是浏览器与服务端渲染公开 URL 共用的资源主机。Cards、Events、Degrees 与 Stamps 资源通过下文各自的公开 index 发现；浏览器使用正常 HTTP 缓存且不携带凭据读取这些 index。Degree 与 Stamp 使用同一个 Bandori asset CDN 下的 `/bandori/degrees` 和 `/bandori/stamps` 路径，不提供数据集专属 CDN 配置。Web 应用通过 `/api/bandori/master/degrees` 或 `/api/bandori/master/stamps` 读取私有 Master 元数据，直接从公开 CDN 读取对应 index，再在浏览器内存中合并。图片、动画 manifest、动画 atlas、voice audio 与卡牌招募语音随后直接从 CDN 读取，因此 CDN 必须允许 HHWX Web origin 跨域读取。Stamp voice 与卡牌招募语音共用 Web Audio 一次性音效通道，而不是作为媒体元素播放，从而沿用旨在避免 iOS 把它们当作音乐并打断后台播放的浏览器音频会话策略。
 
-服务端 HHWX API 消费已发布到 CDN 的 Bandori 资源时，必须通过 R2/S3 签名请求直接读取背后的对象存储。服务端路径不要再请求 `cdn.hhwx.org` 等 HHWX 自有公网 CDN URL，因为 Cloudflare bot mitigation 可能会对 server-to-CDN 流量返回 challenge。完整共享 endpoint 固定使用 `BANDORI_R2_ENDPOINT`，凭据使用其余 `BANDORI_R2_*`，公开 bucket 使用 `BANDORI_PUBLIC_R2_BUCKET`，私有 snapshot bucket 使用 `BANDORI_PRIVATE_R2_BUCKET`。应用不会再从单独的 account-ID 变量推导 endpoint，也不接受数据集专属的旧 R2 名称。R2 请求签名固定使用 Cloudflare 的 `auto` region。Music metadata 与 chart reader 通过这条路径读取 `bandori/music/index.json` 和内容寻址的谱面 JSON；chart reader 会先校验对象 SHA-256 再解析。Stamps master API 从 `BANDORI_PRIVATE_R2_BUCKET` 读取独立的内容寻址 snapshot，不读取公开 asset index；浏览器则直接从 CDN 读取公开 index 与资源。
+服务端 HHWX API 消费已发布到 CDN 的 Bandori 资源时，必须通过 R2/S3 签名请求直接读取背后的对象存储。服务端路径不要再请求 `cdn.hhwx.org` 等 HHWX 自有公网 CDN URL，因为 Cloudflare bot mitigation 可能会对 server-to-CDN 流量返回 challenge。完整共享 endpoint 固定使用 `BANDORI_R2_ENDPOINT`，凭据使用其余 `BANDORI_R2_*`，公开 bucket 使用 `BANDORI_PUBLIC_R2_BUCKET`，私有 snapshot bucket 使用 `BANDORI_PRIVATE_R2_BUCKET`。应用不会再从单独的 account-ID 变量推导 endpoint，也不接受数据集专属的旧 R2 名称。R2 请求签名固定使用 Cloudflare 的 `auto` region。Music metadata 与 chart reader 通过这条路径读取 `bandori/music/index.json` 和内容寻址的谱面 JSON；chart reader 会先校验对象 SHA-256 再解析。Degrees 与 Stamps master API 从 `BANDORI_PRIVATE_R2_BUCKET` 读取各自独立的内容寻址 snapshot，不读取公开 asset index；浏览器则直接从 CDN 读取公开 index 与资源。
 
-HHWX 生产环境应在 `/bandori/stamps/*` 与 `/bandori/cards/*/voice/*` 对象上为 `https://hhwx.org` 配置 CORS。如果允许多个精确 origin，请同时返回 `Vary: Origin`。Web 应用读取这些 CDN 对象时不会携带 credentials，除非请求模型发生变化，否则不要启用带凭据 CORS。完全公开且不带 credentials 的资源桶可以使用 `Access-Control-Allow-Origin: *`；不要把 `*` 和带凭据请求搭配使用。本地浏览器验证应使用已列入允许范围的精确 origin `http://localhost:3000`；`http://127.0.0.1:3000` 属于另一个 origin，需要单独配置 CORS。
+HHWX 生产环境应在 `/bandori/degrees/*`、`/bandori/stamps/*` 与 `/bandori/cards/*/voice/*` 对象上为 `https://hhwx.org` 配置 CORS。如果允许多个精确 origin，请同时返回 `Vary: Origin`。Web 应用读取这些 CDN 对象时不会携带 credentials，除非请求模型发生变化，否则不要启用带凭据 CORS。完全公开且不带 credentials 的资源桶可以使用 `Access-Control-Allow-Origin: *`；不要把 `*` 和带凭据请求搭配使用。本地浏览器验证应使用已列入允许范围的精确 origin `http://localhost:3000`；`http://127.0.0.1:3000` 属于另一个 origin，需要单独配置 CORS。
 
 HHWX 应用响应使用 `Cache-Control` 控制浏览器及下游缓存 TTL，并使用 `Cloudflare-CDN-Cache-Control` 单独控制 Cloudflare 边缘 TTL 与 stale 行为。公开 API 使用四个可变缓存档位：fast mutable（浏览器 `1 分钟 + 5 分钟 SWR`，边缘 `5 分钟 + 15 分钟 SWR`）、snapshot（浏览器 `5 分钟 + 30 分钟 SWR`，边缘 `30 分钟 + 1 天 SWR`）、reference（浏览器 `1 小时 + 12 小时 SWR`，边缘 `12 小时 + 1 天 SWR`）和 long asset（浏览器 `1 天 + 7 天 SWR`，边缘 `30 天 + 90 天 SWR`）。私有、实时及错误响应使用 `no-store`；内容寻址对象使用一年 `immutable`。不要再加入 `s-maxage`，因为它会与 stale-while-revalidate 语义冲突。
 
-Cloudflare Cache Rule 可以只把目标公开 `GET`/`HEAD` 路径标记为符合缓存条件，同时继续接受源站响应头。由 R2 或资源 CDN 直接提供的对象（包括 Cards、Events、Music 和 Stamps 的 `index.json`）不会经过 Next.js policy；其对象 metadata 使用 snapshot 浏览器档位。若需要仅把 Cloudflare 副本延长到 snapshot 边缘档位，应使用 Cache Response Rule 配置 `cloudflare_only` 的 `max-age=1800` 和 `stale-while-revalidate=86400`；Cache Response Rule 的结果优先于源站 `Cloudflare-CDN-Cache-Control`。
+Cloudflare Cache Rule 可以只把目标公开 `GET`/`HEAD` 路径标记为符合缓存条件，同时继续接受源站响应头。由 R2 或资源 CDN 直接提供的对象（包括 Cards、Degrees、Events、Music 和 Stamps 的 `index.json`）不会经过 Next.js policy；其对象 metadata 使用 snapshot 浏览器档位。若需要仅把 Cloudflare 副本延长到 snapshot 边缘档位，应使用 Cache Response Rule 配置 `cloudflare_only` 的 `max-age=1800` 和 `stale-while-revalidate=86400`；Cache Response Rule 的结果优先于源站 `Cloudflare-CDN-Cache-Control`。
 
 谱面 API 始终通过带签名的 R2 请求，从 `BANDORI_PUBLIC_R2_BUCKET` 读取 `bandori/music/index.json` 及其内容寻址谱面对象。数据源和对象根路径属于固定应用契约；谱面缺失或不可读时会失败关闭，绝不会回退 Bestdori。浏览器侧 Music 资源使用 `NEXT_PUBLIC_BANDORI_ASSET_CDN_BASE_URL`，不再提供单独的 Music CDN 配置。
 
-Events、Cards、Music 与 Stamps master API 会通过 `BANDORI_PRIVATE_R2_BUCKET` 配置的私有桶，直接读取各自的内容寻址 snapshot。其余 master 数据集始终从 `BANDORI_PUBLIC_R2_BUCKET` 的 `bandori/master` 路径合并固定 JP、EN、TW、CN 四服 artifact。pointer、manifest、dataset 或 pack 缺失、无权限、格式错误、损坏或超限时都会失败关闭，且不会回退到 Bestdori、公开 asset index、公开 CDN 读取或 Supabase pointer。`BANDORI_EVENT_API_LOCAL_STORE_ROOT`、`BANDORI_CARDS_API_LOCAL_STORE_ROOT`、`BANDORI_MUSIC_API_LOCAL_STORE_ROOT` 与 `BANDORI_STAMPS_API_LOCAL_STORE_ROOT` 可在本地开发时指向 tracker 生成的 content store，生产环境会拒绝这些设置。
+Events、Cards、Degrees、Music 与 Stamps master API 会通过 `BANDORI_PRIVATE_R2_BUCKET` 配置的私有桶，直接读取各自的内容寻址 snapshot。其余 master 数据集始终从 `BANDORI_PUBLIC_R2_BUCKET` 的 `bandori/master` 路径合并固定 JP、EN、TW、CN 四服 artifact。pointer、manifest、dataset 或 pack 缺失、无权限、格式错误、损坏或超限时都会失败关闭，且不会回退到 Bestdori、公开 asset index、公开 CDN 读取或 Supabase pointer。`BANDORI_EVENT_API_LOCAL_STORE_ROOT`、`BANDORI_CARDS_API_LOCAL_STORE_ROOT`、`BANDORI_DEGREES_API_LOCAL_STORE_ROOT`、`BANDORI_MUSIC_API_LOCAL_STORE_ROOT` 与 `BANDORI_STAMPS_API_LOCAL_STORE_ROOT` 可在本地开发时指向 tracker 生成的 content store，生产环境会拒绝这些设置。
 
 浏览器只从 `GET /api/bandori/master/cards` 读取一次完整 canonical Cards map，并在整个 SPA 生命周期内复用解析后的 map；账号所在服务器对应的标量扩展在浏览器本地物化。公开 Cards 列表/详情请求可选使用精确的 `server=0|1|2|3`，固定对应 JP/EN/TW/CN，字符串区服代码会被拒绝。旧的稀疏接口 `GET /api/bandori/cards?ids=...` 已删除。无服务器上下文的展示界面按“首选服务器、JP、EN、TW、CN”去重回退；卡牌档案和组队计算器中的档案卡牌则把档案所在服务器放在这个顺序之前，因此卡牌名和技能描述都优先服从档案身份，同时不修改用户的全局首选服务器。组队计算器还会在档案所在服务器缺少某张卡、但 JP 槽存在时纳入该 JP 卡；此规则只判断 snapshot 槽位是否存在，不读取 `releasedAt`，也不会把仅存在于 EN、TW 或 CN 的卡横向借给其他服务器。公开的按服务器过滤 API 与其他档案界面仍保持严格隔离。ID `10001`–`10010` 的冲突卡在计算和持久化中仍使用数字 ID；无服务器上下文的头像选择会将 EN/CN 实体展开成仅供 UI 使用的带区服引用，并把实际选择写入可空的 `profiles.avatar_card_server` 字段。
 
@@ -225,7 +226,28 @@ bandori/stamps/animation/atlases/{sha256}.png
 
 `GET /api/bandori/master/stamps` 返回 `{ success: true, data }`，其中 `data` 以 stamp ID 为 key。每条记录都包含固定 `[jp, en, tw, cn]` 四槽的 `imageName` 与 nullable `characterId`；缺失名称使用 `""`，缺失或无法解析的角色 ID 使用 `null`。存在 Changed Stamp 的记录还会包含可选四槽 `changedStamps`；每服内部按 `(imageName, soundName)` 排序去重，不公开原始 Changed 规则 ID、时间或概率。此 API 不公开存储 pointer、来源元数据、资源 URL 或资源 hash。
 
-`bandori/stamps/index.json` 是公开 asset index，根结构与 Cards/Events 一致：`schemaVersion`、`updatedAt`、`stamps` 领域 map 和 `changedStampGroups`。每个 Stamp 条目包含四槽 `images` SHA-256、可选四槽 `voices` SHA-256、可选四槽 Changed 图片/音频 hash，以及可选的 `animations`。`changedStampGroups` 按服务器和规则 ID 列出所有已发布 Changed manifest，即使当前前端未展示对应资源也不会从 index 省略。标准缺失槽位使用 `""`，Changed 缺失槽位使用空数组；复用普通图片的 Changed 条目可以省略 `image`，没有可用转码音频时可以省略 `audio`。客户端直接推导不可变路径：`bandori/stamps/images/{sha256}.png`、`bandori/stamps/voices/{sha256}.mp3`、`bandori/stamps/changed/manifests/{sha256}.json`、`bandori/stamps/animation/manifests/{sha256}.json` 和 `bandori/stamps/animation/atlases/{sha256}.png`，不再需要查询字符串版本参数。源语音名称和原始 Changed 规则元数据保留在内部提取 manifest 中，不进入精简根 index。标准单个 stamp manifest 不属于公开 index 合约。动画 manifest 使用 `hhwx-bandori-stamp-animation-v1`，并包含 `atlasDimensions`、`frameRate` 和帧裁剪矩形，使 Web 应用不依赖 Unity runtime 即可渲染基于 atlas 的动画 stamp。当前 HHWX atlas PNG 以 `frames[].unityRect` 作为实际 PNG 裁剪矩形；Web 应用会将它归一化为内存中的 `frames[].cssRect`，仅在缺少 `unityRect` 时回退使用源 `frames[].cssRect`。
+`bandori/stamps/index.json` 是公开 asset index，根结构与 Cards/Events 一致：`schemaVersion`、`updatedAt`、`stamps` 领域 map 和 `changedStampGroups`。每个 Stamp 条目包含四槽 `images` SHA-256、可选四槽 `voices` SHA-256、可选四槽 Changed 图片/音频 hash，以及只含 `manifest` 与 `atlas` SHA-256 的可选 `animations`。`changedStampGroups` 按服务器和规则 ID 列出所有已发布 Changed manifest，即使当前前端未展示对应资源也不会从 index 省略。标准缺失槽位使用 `""`，Changed 缺失槽位使用空数组；复用普通图片的 Changed 条目可以省略 `image`，没有可用转码音频时可以省略 `audio`。客户端直接推导不可变路径：`bandori/stamps/images/{sha256}.png`、`bandori/stamps/voices/{sha256}.mp3`、`bandori/stamps/changed/manifests/{sha256}.json`、`bandori/stamps/animation/manifests/{sha256}.json` 和 `bandori/stamps/animation/atlases/{sha256}.png`，不再需要查询字符串版本参数。源语音名称和原始 Changed 规则元数据保留在内部提取元数据中，不进入精简根 index。标准单个 stamp manifest 不属于公开 index 合约。动画 manifest 严格使用精简 `hhwx-bandori-stamp-animation-v1` 结构：`schemaVersion`、显式正数 `frameRate`、`atlasDimensions` 和有序 `frames: [{ name, cssRect }]`。`cssRect` 使用 atlas PNG 的左上角坐标且不能越界；不再提供 12 FPS 或 `unityRect` fallback，bundle 审计字段只保留在各区服诊断 index。Web reader 仍会为兼容旧根描述符而校验并丢弃可选的 `frameRate`、`frameCount`。重新发布时先写入并验证新的不可变对象，再写区服诊断 index 和 root；root 切换后再部署仅使用 cssRect 的 Web reader，因此无需回滚或原地覆盖不可变对象。
+
+Degree 元数据、静态图与动画资源：
+
+```text
+GET /api/bandori/master/degrees
+{CDN_BASE}/bandori/degrees/index.json
+{CDN_BASE}/bandori/degrees/images/{sha256}.png
+{CDN_BASE}/bandori/degrees/animation/manifests/{sha256}.json
+{CDN_BASE}/bandori/degrees/animation/atlases/{sha256}.png
+
+bandori/master/degrees/api/active.json
+bandori/master/degrees/api/packs/degrees/{sha256}.json.gz
+bandori/degrees/index.json
+bandori/degrees/images/{sha256}.png
+bandori/degrees/animation/manifests/{sha256}.json
+bandori/degrees/animation/atlases/{sha256}.png
+```
+
+前两个对象存储路径为私有对象，其余 Degree index 和内容寻址媒体路径为公开对象。Master 响应按 degree ID 组织，恰好包含八个 `[jp, en, tw, cn]` 字段：`degreeType`、`iconImageName`、`baseImageName`、`rank`、`degreeName`、`description`、`seq`、`characterId`。缺失字符串使用 `""`，缺失数字槽使用 `0`，`rank` 保持字符串。公开 schema 1 index 按资源名组织：base 使用 `baseImageName`；rank 使用 `rank_none` 或 `{degreeType}_{rank}`；icon 使用 `icon_none` 或 `{iconImageName}_{rank}`。资源类型由名称在所有区服固定：`ani_degree*` 资源只能包含按区服组织的 `manifest`/`atlas` 动态描述符，其他资源只能包含严格四槽的图片 hash。即使两种类型出现在不同区服也会被拒绝，客户端也不会借用其他区服对象。浏览器合并结果保留资源名与 `{key, sha256}` descriptor，不会预先构造未使用的 Degree URL。
+
+Degree 动画 manifest 必须恰好使用 `schemaVersion: "hhwx-bandori-degree-animation-v1"`、`frameRate: 30`、`loop: true`、`atlasDimensions` 和有序 `frames: [{ name, rect }]`。矩形使用图集左上角坐标且不能越界；零填充帧名按字典序连续排列。内容 hash 针对最终 PNG 或 JSON 字节计算，因此即使区服描述符分开，完全相同的字节也会自然复用同一个不可变对象。
 
 ## 自托管预期
 
@@ -246,6 +268,9 @@ bandori/stamps/animation/atlases/{sha256}.png
 ```text
 https://your-bandori-asset-cdn.example.com/bandori/cards/index.json
 https://your-bandori-asset-cdn.example.com/bandori/events/index.json
+https://your-bandori-asset-cdn.example.com/bandori/degrees/index.json
+https://your-bandori-asset-cdn.example.com/bandori/degrees/images/<imageSha256>.png
+https://your-bandori-asset-cdn.example.com/bandori/degrees/animation/manifests/<manifestSha256>.json
 https://your-bandori-asset-cdn.example.com/bandori/resources/atlases/menu-atlas/icon_character001.png
 https://your-bandori-asset-cdn.example.com/bandori/resources/images/card-frame/frame_ss_rainbow.png
 https://your-bandori-asset-cdn.example.com/bandori/music/charts/<chartSha256>.json
@@ -255,13 +280,15 @@ https://your-bandori-asset-cdn.example.com/bandori/stamps/animation/manifests/<m
 https://your-bandori-asset-cdn.example.com/bandori/stamps/animation/atlases/<atlasSha256>.png
 ```
 
-Cards/Events 应从下载到的 index 中各选代表性 hash，按照上面的契约推导 key，再验证 `{CDN_BASE}/{derivedKey}`。不要验证猜测的游戏 bundle 路径；它们不是公开 HTTP 契约。
+Cards/Events/Degrees 应从下载到的 index 中各选代表性 hash，按照上面的契约推导 key，再验证 `{CDN_BASE}/{derivedKey}`。不要验证猜测的游戏 bundle 路径；它们不是公开 HTTP 契约。
 
 Cards/Events index 响应及其引用的对象都必须允许 HHWX Web origin 无凭据跨域读取：
 
 ```bash
 curl -I -H "Origin: https://hhwx.org" https://your-bandori-asset-cdn.example.com/bandori/cards/index.json
 curl -I -H "Origin: https://hhwx.org" https://your-bandori-asset-cdn.example.com/bandori/events/index.json
+curl -I -H "Origin: https://hhwx.org" https://your-bandori-asset-cdn.example.com/bandori/degrees/index.json
+curl -I -H "Origin: https://hhwx.org" https://your-bandori-asset-cdn.example.com/bandori/degrees/animation/manifests/<manifestSha256>.json
 curl -I -H "Origin: https://hhwx.org" https://your-bandori-asset-cdn.example.com/bandori/cards/<resourceSetName>/voice/gacha/<voiceSha256>.mp3
 ```
 

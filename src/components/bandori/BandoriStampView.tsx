@@ -1,135 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useState } from "react";
 import { Volume2 } from "lucide-react";
+import { BandoriAtlasAnimationCanvas } from "@/components/bandori/BandoriAtlasAnimationCanvas";
 import { useCommentStampAnimation } from "@/hooks/useCommentStamps";
-import type {
-  BandoriStampAnimationResponse,
-  BandoriStampCatalogItem,
-} from "@/lib/bandori-stamp-assets";
+import type { BandoriStampCatalogItem } from "@/lib/bandori-stamp-assets";
 import { playSoundEffect } from "@/lib/sound-effect-audio";
 import { cn } from "@/lib/utils";
 
-const stampAtlasImageCache = new Map<string, Promise<HTMLImageElement>>();
-
-function loadStampAtlasImage(atlasUrl: string): Promise<HTMLImageElement> {
-  const cachedImage = stampAtlasImageCache.get(atlasUrl);
-  if (cachedImage) return cachedImage;
-
-  const promise = new Promise<HTMLImageElement>((resolve, reject) => {
-    const image = new window.Image();
-    image.onload = () => resolve(image);
-    image.onerror = () => reject(new Error(`Failed to load stamp atlas: ${atlasUrl}`));
-    image.src = atlasUrl;
-  }).catch((error) => {
-    stampAtlasImageCache.delete(atlasUrl);
-    throw error;
-  });
-
-  stampAtlasImageCache.set(atlasUrl, promise);
-  return promise;
-}
-
-function usePrefersReducedMotion(): boolean {
-  const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
-
-  useEffect(() => {
-    const mediaQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
-    const updatePreference = () => setPrefersReducedMotion(mediaQuery.matches);
-    updatePreference();
-    mediaQuery.addEventListener("change", updatePreference);
-    return () => mediaQuery.removeEventListener("change", updatePreference);
-  }, []);
-
-  return prefersReducedMotion;
-}
-
-export function BandoriStampAnimationCanvas({
-  animation,
-  label,
-  onError,
-  active = true,
-  className = "h-full max-h-16 w-full max-w-24 object-contain",
-}: {
-  animation: BandoriStampAnimationResponse;
-  label: string;
-  onError: () => void;
-  active?: boolean;
-  className?: string;
-}) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const prefersReducedMotion = usePrefersReducedMotion();
-  const [frameIndex, setFrameIndex] = useState(0);
-  const [isVisible, setIsVisible] = useState(true);
-  const frameCount = animation.frames.length;
-  const frame = animation.frames[Math.min(frameIndex, Math.max(0, frameCount - 1))];
-
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas || typeof IntersectionObserver === "undefined") return;
-
-    const observer = new IntersectionObserver(
-      ([entry]) => setIsVisible(entry?.isIntersecting ?? true),
-      { rootMargin: "96px" },
-    );
-    observer.observe(canvas);
-    return () => observer.disconnect();
-  }, []);
-
-  useEffect(() => {
-    if (!active || prefersReducedMotion || !isVisible || frameCount <= 1) return;
-
-    const intervalMs = 1000 / Math.max(1, animation.frameRate);
-    const intervalId = window.setInterval(() => {
-      setFrameIndex((currentFrameIndex) => (currentFrameIndex + 1) % frameCount);
-    }, intervalMs);
-
-    return () => window.clearInterval(intervalId);
-  }, [active, animation.frameRate, frameCount, isVisible, prefersReducedMotion]);
-
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas || !frame) return;
-
-    let cancelled = false;
-    void loadStampAtlasImage(animation.atlasUrl)
-      .then((atlasImage) => {
-        if (cancelled) return;
-        const context = canvas.getContext("2d");
-        if (!context) {
-          onError();
-          return;
-        }
-
-        const { x, y, width, height } = frame.cssRect;
-        canvas.width = width;
-        canvas.height = height;
-        context.clearRect(0, 0, width, height);
-        context.drawImage(atlasImage, x, y, width, height, 0, 0, width, height);
-      })
-      .catch(() => {
-        if (!cancelled) onError();
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [animation.atlasUrl, frame, onError]);
-
-  if (!frame) return null;
-
-  return (
-    <canvas
-      ref={canvasRef}
-      width={frame.cssRect.width}
-      height={frame.cssRect.height}
-      role="img"
-      aria-label={label}
-      title={label}
-      className={className}
-    />
-  );
-}
+export { BandoriAtlasAnimationCanvas as BandoriStampAnimationCanvas };
 
 export default function BandoriStampView({
   stamp,
@@ -160,7 +39,7 @@ export default function BandoriStampView({
   if (imageFailed) return <span>{label}</span>;
 
   const image = animation && !animationFailed ? (
-    <BandoriStampAnimationCanvas
+    <BandoriAtlasAnimationCanvas
       animation={animation}
       label={label}
       onError={handleAnimationError}

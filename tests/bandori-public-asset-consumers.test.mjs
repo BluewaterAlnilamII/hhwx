@@ -133,7 +133,7 @@ test("event banners use their exact index slot without bundle or proxy fallback"
   assert.doesNotMatch(tracker, /useBandoriCardsAssetIndex/u);
 });
 
-test("Cards, Events, and Stamps master routes remain data-only and do not read public indexes", async () => {
+test("Cards, Degrees, Events, and Stamps master routes remain data-only and do not read public indexes", async () => {
   const masterRoute = await readSource("src/app/api/bandori/master/[dataset]/route.ts");
   const cardDetailRoute = await readSource("src/app/api/bandori/master/cards/[cardId]/route.ts");
   const eventDetailRoute = await readSource("src/app/api/bandori/master/events/[eventId]/route.ts");
@@ -141,9 +141,30 @@ test("Cards, Events, and Stamps master routes remain data-only and do not read p
   for (const source of [masterRoute, cardDetailRoute, eventDetailRoute]) {
     assert.doesNotMatch(
       source,
-      /bandori\/cards\/index\.json|bandori\/events\/index\.json|bandori\/stamps\/index\.json|bandori-public-asset-index/u,
+      /bandori\/cards\/index\.json|bandori\/degrees\/index\.json|bandori\/events\/index\.json|bandori\/stamps\/index\.json|bandori-public-asset-index/u,
     );
   }
+});
+
+test("Degrees consumers keep ID metadata separate from base-name assets and share atlas rendering", async () => {
+  const [degreeAssets, indexHook, stampView, atlasCanvas] = await Promise.all([
+    readSource("src/lib/bandori-degree-assets.ts"),
+    readSource("src/hooks/useBandoriPublicAssetIndex.ts"),
+    readSource("src/components/bandori/BandoriStampView.tsx"),
+    readSource("src/components/bandori/BandoriAtlasAnimationCanvas.tsx"),
+  ]);
+
+  assert.match(degreeAssets, /baseImageName/u);
+  assert.match(degreeAssets, /catalog\.assets\.resources\[baseImageName\]/u);
+  assert.match(degreeAssets, /rankImageName/u);
+  assert.match(degreeAssets, /iconImageResourceName/u);
+  assert.doesNotMatch(degreeAssets, /imageUrl|buildBandoriPublicAssetUrl/u);
+  assert.doesNotMatch(degreeAssets, /bestdori|fallback/iu);
+  assert.match(indexHook, /useBandoriDegreesAssetIndex/u);
+  assert.match(stampView, /BandoriAtlasAnimationCanvas/u);
+  assert.match(atlasCanvas, /animation\.loop/u);
+  assert.match(atlasCanvas, /requestAnimationFrame/u);
+  assert.doesNotMatch(atlasCanvas, /setInterval|setFrameIndex/u);
 });
 
 test("Stamps consumers join the private master response with the public hash index in browsers", async () => {
