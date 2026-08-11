@@ -61,10 +61,6 @@ export function buildBandoriRarityStarIconUrl(isTrained: boolean): string | null
   );
 }
 
-export function buildBandoriMasterRankIconUrl(): string | null {
-  return buildMenuAtlasSpriteUrl("bg_masterrank");
-}
-
 export function buildBandoriCardAttributeIconUrl(
   attribute: BandoriBuiltinAttribute,
 ): string | null {
