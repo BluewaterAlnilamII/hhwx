@@ -16,6 +16,7 @@ import {
   parseParentCommentId,
   parseCommentReactionParticipantCursor,
 } from "../src/lib/comments/comment-contract.ts";
+import { parseCommentReactionSummaryRows } from "../src/lib/comments/comments-server.ts";
 
 const VALID_COMMENT_ID = "123e4567-e89b-12d3-a456-426614174000";
 
@@ -148,6 +149,84 @@ test("reaction participant reads extend the existing emoji route without requiri
   assert.match(serviceSource, /\.order\("created_at", \{ ascending: true \}\)[\s\S]*\.order\("user_id", \{ ascending: true \}\)/u);
   assert.match(serviceSource, /\.limit\(COMMENT_REACTION_PARTICIPANT_PAGE_SIZE \+ 1\)/u);
   assert.match(serviceSource, /nextCursor: lastUser \? buildCommentReactionParticipantCursor\(lastUser\) : null/u);
+});
+
+test("comment page hydration batches reply previews and reaction summaries", () => {
+  const serviceSource = readFileSync(
+    new URL("../src/lib/comments/comments-server.ts", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(serviceSource, /\.rpc\("read_comment_preview_reply_ids"/u);
+  assert.match(serviceSource, /\.rpc\("read_comment_reaction_summary_rows"/u);
+  assert.match(serviceSource, /\.in\("id", replyIds\)/u);
+  assert.match(serviceSource, /toCommentNodes\(\[\.\.\.rows, \.\.\.previewRows\], options\.viewerUserId\)/u);
+  assert.doesNotMatch(serviceSource, /Promise\.all\(rootIds\.map/u);
+});
+
+test("comment reaction summary rows map ordered JSON and reject incomplete previews", () => {
+  const rawRows = [{
+    comment_id: VALID_COMMENT_ID,
+    reaction_groups: [{
+      emoji_key: "KokoroYay",
+      reaction_count: "2",
+      reacted_by_viewer: true,
+      first_reacted_at: "2026-08-11T00:00:00Z",
+      users: [
+        {
+          user_id: "00000000-0000-0000-0000-000000000001",
+          username: "First user",
+          avatar_card_id: 1,
+          avatar_card_server: null,
+          avatar_card_train_type: "normal",
+          reacted_at: "2026-08-11T00:00:00Z",
+        },
+        {
+          user_id: "00000000-0000-0000-0000-000000000002",
+          username: null,
+          avatar_card_id: null,
+          avatar_card_server: null,
+          avatar_card_train_type: null,
+          reacted_at: "2026-08-11T00:00:01Z",
+        },
+      ],
+    }],
+  }];
+
+  assert.deepEqual(
+    parseCommentReactionSummaryRows(rawRows, [VALID_COMMENT_ID]).get(VALID_COMMENT_ID),
+    [{
+      emojiKey: "KokoroYay",
+      count: 2,
+      reactedByViewer: true,
+      users: [
+        {
+          userId: "00000000-0000-0000-0000-000000000001",
+          username: "First user",
+          avatar: { cardId: 1, entityServer: null, trainType: "normal" },
+          reactedAt: "2026-08-11T00:00:00Z",
+        },
+        {
+          userId: "00000000-0000-0000-0000-000000000002",
+          username: null,
+          avatar: { cardId: 1, entityServer: null, trainType: "normal" },
+          reactedAt: "2026-08-11T00:00:01Z",
+        },
+      ],
+      remainingUserCount: 0,
+    }],
+  );
+
+  const incompleteRows = structuredClone(rawRows);
+  incompleteRows[0].reaction_groups[0].reaction_count = "3";
+  assert.throws(
+    () => parseCommentReactionSummaryRows(incompleteRows, [VALID_COMMENT_ID]),
+    (error) => error?.details === "Incomplete comment reaction participant preview",
+  );
+  assert.throws(
+    () => parseCommentReactionSummaryRows(rawRows, ["00000000-0000-0000-0000-000000000099"]),
+    (error) => error?.details === "Invalid comment reaction summary row",
+  );
 });
 
 test("comment notification contracts stay generic and target presentation stays at the edge", () => {
