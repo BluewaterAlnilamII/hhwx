@@ -20,6 +20,14 @@ test("comment load errors and empty states are mutually exclusive", () => {
   );
 });
 
+test("comment timestamps use the browser local time zone", () => {
+  assert.match(itemSource, /useLocale\(\)/u);
+  assert.match(itemSource, /new Intl\.DateTimeFormat\(locale, \{/u);
+  assert.match(itemSource, /localDateTimeFormatter\.format\(new Date\(comment\.createdAt\)\)/u);
+  assert.doesNotMatch(itemSource, /useFormatter\(\)/u);
+  assert.doesNotMatch(itemSource, /timeZone:/u);
+});
+
 test("comment edits use a synchronous single-flight guard and lock editing controls", () => {
   const editHandler = itemSource.slice(
     itemSource.indexOf("const handleEdit = async"),
