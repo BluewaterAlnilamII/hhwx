@@ -255,6 +255,7 @@ export type CommentItemProps = {
   commentPage: number;
   draftTargetKey: string;
   draftUserId: string | null;
+  draftUsername: string | null;
   isReply?: boolean;
   rootCommentId?: string | null;
   onCreateReply: (parentId: string, content: string) => Promise<void>;
@@ -277,6 +278,7 @@ export const CommentItem = memo(function CommentItem({
   commentPage,
   draftTargetKey,
   draftUserId,
+  draftUsername,
   isReply = false,
   rootCommentId = null,
   onCreateReply,
@@ -716,7 +718,9 @@ export const CommentItem = memo(function CommentItem({
             <div className="mt-3">
               <CommentComposer
                 key={replyDraftStorageKey ?? `reply-comment-composer:${comment.id}`}
-                placeholder={t("composer.replyPlaceholder")}
+                placeholder={t("composer.replyPlaceholder", {
+                  username: draftUsername ?? t("states.currentAccount"),
+                })}
                 submitLabel={t("actions.reply")}
                 autoFocus
                 draftStorageKey={replyDraftStorageKey}
@@ -742,6 +746,7 @@ export const CommentItem = memo(function CommentItem({
                   commentPage={commentPage}
                   draftTargetKey={draftTargetKey}
                   draftUserId={draftUserId}
+                  draftUsername={draftUsername}
                   isReply
                   rootCommentId={comment.id}
                   onCreateReply={onCreateReply}

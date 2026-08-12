@@ -13,8 +13,8 @@
     "sending": "Sending"
   },
   "composer": {
-    "replyPlaceholder": "Write a reply...",
-    "rootPlaceholder": "Comment as {username}..."
+    "replyPlaceholder": "Post a reply as {username}...",
+    "rootPlaceholder": "Post a main comment as {username}..."
   },
   "dialogs": {
     "deleteTitle": "Delete this comment?",

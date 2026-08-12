@@ -62,13 +62,27 @@ test("card tooltip clamps horizontally using its actual width", () => {
   });
 });
 
-test("card details link keeps normal Next navigation defaults", async () => {
+test("card details link opens safely in a new tab", async () => {
   const tooltip = await readSource("src/components/bandori/BandoriCardHoverTooltip.tsx");
   const detailLink = tooltip.match(/<Link[\s\S]*?<\/Link>/u)?.[0];
 
   assert.ok(detailLink);
   assert.match(detailLink, /\{t\("cardDetails"\)\}/u);
+  assert.match(detailLink, /target="_blank"/u);
+  assert.match(detailLink, /rel="noopener noreferrer"/u);
   assert.doesNotMatch(detailLink, /\bprefetch=|\breplace=/u);
+});
+
+test("card thumbnails stay still and show an active tooltip selection", async () => {
+  const [tile, pickerTile] = await Promise.all([
+    readSource("src/components/bandori/BandoriCardTile.tsx"),
+    readSource("src/components/bandori/card-picker/BandoriCardThumbnailTile.tsx"),
+  ]);
+
+  assert.doesNotMatch(tile, /hover:-translate-y/u);
+  assert.doesNotMatch(pickerTile, /hover:-translate-y/u);
+  assert.match(tile, /z-40 outline-2 outline-sky-500 ring-2/u);
+  assert.match(tile, /getBandoriCardTileClassName\([\s\S]*?isHoverTooltipOpen,/u);
 });
 
 test("card tooltip positioning reacts to real layout and preserves logical tab order", async () => {

@@ -72,7 +72,7 @@
     "comments": {
       "title": "评论",
       "signedOutMessage": "登录后可以发表评论，并启用每 30 秒更新的高频活动榜线",
-      "emptyMessage": "还没有评论，来留下第一条评论"
+      "emptyMessage": "还没有评论，来个面包吗？"
     },
     "status": {
       "upcoming": "未开始",
@@ -248,7 +248,7 @@
     "comments": {
       "title": "评论",
       "signedOutMessage": "登录后可以发表评论",
-      "emptyMessage": "还没有评论，来留下第一条评论"
+      "emptyMessage": "还没有评论，来个面包吗？"
     },
     "detail": {
       "back": "返回卡牌图鉴",

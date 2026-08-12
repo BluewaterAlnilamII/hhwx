@@ -13,8 +13,8 @@
     "sending": "发送中"
   },
   "composer": {
-    "replyPlaceholder": "写下你的回复...",
-    "rootPlaceholder": "以 {username} 发表主评论..."
+    "replyPlaceholder": "以 {username} 发布回复...",
+    "rootPlaceholder": "以 {username} 发布主评论..."
   },
   "dialogs": {
     "deleteTitle": "确认删除评论？",

@@ -54,12 +54,19 @@ type BandoriCardTilePresentationProps = BandoriCardTileBaseProps & {
 
 export type BandoriCardTileProps = BandoriCardTileInteractiveProps | BandoriCardTilePresentationProps;
 
-function getBandoriCardTileClassName(size: "compact" | "default", isInteractive: boolean) {
+function getBandoriCardTileClassName(
+  size: "compact" | "default",
+  isInteractive: boolean,
+  isActive = false,
+) {
   const interactionClassName = isInteractive
-    ? "transition hover:z-40 hover:-translate-y-0.5 hover:outline-2 hover:outline-sky-400 focus-within:z-40 focus-within:outline-2 focus-within:outline-sky-400"
+    ? "transition hover:z-40 hover:outline-2 hover:outline-sky-400 focus-within:z-40 focus-within:outline-2 focus-within:outline-sky-400"
+    : "";
+  const activeClassName = isActive
+    ? "z-40 outline-2 outline-sky-500 ring-2 ring-sky-300/70"
     : "";
 
-  return `group relative ${size === "compact" ? "h-[56px] w-[56px]" : "h-[74px] w-[74px]"} overflow-visible rounded-[5px] outline-solid outline-1 outline-white/80 sm:h-[76px] sm:w-[76px] ${interactionClassName}`;
+  return `group relative ${size === "compact" ? "h-[56px] w-[56px]" : "h-[74px] w-[74px]"} overflow-visible rounded-[5px] outline-solid outline-1 outline-white/80 sm:h-[76px] sm:w-[76px] ${interactionClassName} ${activeClassName}`;
 }
 
 function BandoriCardTileContent({
@@ -173,7 +180,11 @@ function InteractiveBandoriCardTile(props: BandoriCardTileInteractiveProps) {
       onFocus={onFocus}
       onBlur={onBlur}
       onKeyDown={onKeyDown}
-      className={getBandoriCardTileClassName(props.size ?? "default", true)}
+      className={getBandoriCardTileClassName(
+        props.size ?? "default",
+        true,
+        isHoverTooltipOpen,
+      )}
     >
       <BandoriCardTileContent {...props} trigger={trigger} />
       {isHoverTooltipOpen ? (
