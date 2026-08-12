@@ -72,7 +72,7 @@
     "comments": {
       "title": "Comments",
       "signedOutMessage": "Sign in to comment and enable high-frequency event cutoff updates every 30 seconds",
-      "emptyMessage": "No comments yet—leave the first comment"
+      "emptyMessage": "No comments yet, anyone for bread?"
     },
     "status": {
       "upcoming": "Upcoming",
@@ -248,7 +248,7 @@
     "comments": {
       "title": "Comments",
       "signedOutMessage": "Sign in to comment",
-      "emptyMessage": "No comments yet—leave the first comment"
+      "emptyMessage": "No comments yet, anyone for bread?"
     },
     "detail": {
       "back": "Back to card catalog",

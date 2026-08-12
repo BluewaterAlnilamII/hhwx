@@ -146,6 +146,8 @@ const BandoriCardHoverTooltip = forwardRef<HTMLDivElement, BandoriCardHoverToolt
       {detailHref ? (
         <Link
           href={detailHref}
+          target="_blank"
+          rel="noopener noreferrer"
           className="mt-2 inline-flex rounded-sm text-xs font-black text-sky-700 underline decoration-sky-300 underline-offset-4 transition hover:text-sky-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-500"
         >
           {t("cardDetails")}

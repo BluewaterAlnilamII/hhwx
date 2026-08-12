@@ -213,6 +213,7 @@ export default function CommentThread({
             commentPage={currentPage}
             draftTargetKey={draftTargetKey}
             draftUserId={userId}
+            draftUsername={username}
             onCreateReply={handleCreateReply}
             onLoadReactionParticipants={loadReactionParticipants}
             onToggleReaction={toggleCommentReaction}

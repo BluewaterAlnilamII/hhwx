@@ -89,7 +89,7 @@ export default function BandoriCardThumbnailTile({
       onBlur={onBlur}
       onKeyDown={onKeyDown}
       className={cn(
-        "relative h-[56px] w-[56px] overflow-visible rounded-[5px] outline-solid outline-1 outline-white/80 transition hover:z-40 hover:-translate-y-0.5 hover:outline-2 hover:outline-sky-400 focus-within:z-40 focus-within:outline-2 focus-within:outline-sky-400 sm:h-[76px] sm:w-[76px]",
+        "relative h-[56px] w-[56px] overflow-visible rounded-[5px] outline-solid outline-1 outline-white/80 transition hover:z-40 hover:outline-2 hover:outline-sky-400 focus-within:z-40 focus-within:outline-2 focus-within:outline-sky-400 sm:h-[76px] sm:w-[76px]",
         isSelected && "z-30 outline-2 outline-sky-500 ring-2 ring-sky-300/70",
         className,
       )}

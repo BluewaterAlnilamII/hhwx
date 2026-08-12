@@ -1,10 +1,11 @@
 "use client";
 
 import type {
+  CSSProperties,
   MouseEvent,
   PointerEvent as ReactPointerEvent,
 } from "react";
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { useFormatter, useTranslations } from "next-intl";
 import {
@@ -41,6 +42,7 @@ import {
   type CommentStampLookup,
 } from "@/lib/comments/comment-content";
 import { buildCommentDraftStorageKey } from "@/lib/comments/comment-drafts";
+import { getCommentPopoverHorizontalPosition } from "@/lib/comments/comment-popover-position";
 import { CommentContent } from "./CommentContent";
 import { CommentComposer } from "./CommentComposer";
 import { CommentReactionEmoji } from "./CommentReactionEmoji";
@@ -61,6 +63,7 @@ function ReactionChip({ reaction, disabled, onToggle, onViewAll }: ReactionChipP
   const longPressTimerRef = useRef<number | null>(null);
   const suppressClickRef = useRef(false);
   const [tooltipOpen, setTooltipOpen] = useState(false);
+  const [tooltipStyle, setTooltipStyle] = useState<CSSProperties | null>(null);
 
   const clearLongPressTimer = useCallback(() => {
     if (longPressTimerRef.current !== null) {
@@ -83,13 +86,56 @@ function ReactionChip({ reaction, disabled, onToggle, onViewAll }: ReactionChipP
     return () => document.removeEventListener("pointerdown", handlePointerDown);
   }, [tooltipOpen]);
 
+  const updateTooltipPosition = useCallback(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    const rect = container.getBoundingClientRect();
+    const viewport = window.visualViewport;
+    setTooltipStyle(getCommentPopoverHorizontalPosition({
+      anchorRect: rect,
+      containerLeft: rect.left,
+      preferredWidth: 256,
+      viewportLeft: viewport?.offsetLeft ?? 0,
+      viewportWidth: viewport?.width ?? window.innerWidth,
+    }));
+  }, []);
+
+  const showTooltip = useCallback(() => {
+    updateTooltipPosition();
+    setTooltipOpen(true);
+  }, [updateTooltipPosition]);
+
+  useLayoutEffect(() => {
+    if (!tooltipOpen) return;
+
+    let frame = window.requestAnimationFrame(updateTooltipPosition);
+    const scheduleUpdate = () => {
+      window.cancelAnimationFrame(frame);
+      frame = window.requestAnimationFrame(updateTooltipPosition);
+    };
+    const viewport = window.visualViewport;
+
+    window.addEventListener("resize", scheduleUpdate);
+    window.addEventListener("scroll", scheduleUpdate, true);
+    viewport?.addEventListener("resize", scheduleUpdate);
+    viewport?.addEventListener("scroll", scheduleUpdate);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.removeEventListener("resize", scheduleUpdate);
+      window.removeEventListener("scroll", scheduleUpdate, true);
+      viewport?.removeEventListener("resize", scheduleUpdate);
+      viewport?.removeEventListener("scroll", scheduleUpdate);
+    };
+  }, [tooltipOpen, updateTooltipPosition]);
+
   const handlePointerDown = (event: ReactPointerEvent<HTMLButtonElement>) => {
     if (event.pointerType === "mouse") return;
     clearLongPressTimer();
     suppressClickRef.current = false;
     longPressTimerRef.current = window.setTimeout(() => {
       suppressClickRef.current = true;
-      setTooltipOpen(true);
+      showTooltip();
     }, 450);
   };
 
@@ -111,12 +157,12 @@ function ReactionChip({ reaction, disabled, onToggle, onViewAll }: ReactionChipP
       ref={containerRef}
       className="relative inline-flex"
       onPointerEnter={(event) => {
-        if (event.pointerType !== "touch") setTooltipOpen(true);
+        if (event.pointerType !== "touch") showTooltip();
       }}
       onPointerLeave={(event) => {
         if (event.pointerType !== "touch") setTooltipOpen(false);
       }}
-      onFocus={() => setTooltipOpen(true)}
+      onFocus={showTooltip}
       onBlur={(event) => {
         if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
           setTooltipOpen(false);
@@ -152,7 +198,11 @@ function ReactionChip({ reaction, disabled, onToggle, onViewAll }: ReactionChipP
             emoji: reaction.emojiKey,
             count: reaction.count,
           })}
-          className="absolute bottom-full left-1/2 z-30 mb-0 w-64 max-w-[calc(100vw-2rem)] -translate-x-1/2 rounded-lg border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background)] p-2.5 text-left text-xs text-[var(--theme-color-text-muted)] shadow-2xl dark:border-slate-200 dark:bg-white dark:text-slate-700"
+          style={tooltipStyle ?? undefined}
+          className={cn(
+            "absolute bottom-full z-30 mb-0 rounded-lg border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background)] p-2.5 text-left text-xs text-[var(--theme-color-text-muted)] shadow-2xl dark:border-slate-200 dark:bg-white dark:text-slate-700",
+            !tooltipStyle && "invisible",
+          )}
         >
           <div className="mb-2 flex items-center gap-1.5 font-semibold text-[var(--theme-color-text-default)]">
             <CommentReactionEmoji emojiKey={reaction.emojiKey} size={20} />
@@ -205,6 +255,7 @@ export type CommentItemProps = {
   commentPage: number;
   draftTargetKey: string;
   draftUserId: string | null;
+  draftUsername: string | null;
   isReply?: boolean;
   rootCommentId?: string | null;
   onCreateReply: (parentId: string, content: string) => Promise<void>;
@@ -227,6 +278,7 @@ export const CommentItem = memo(function CommentItem({
   commentPage,
   draftTargetKey,
   draftUserId,
+  draftUsername,
   isReply = false,
   rootCommentId = null,
   onCreateReply,
@@ -666,7 +718,9 @@ export const CommentItem = memo(function CommentItem({
             <div className="mt-3">
               <CommentComposer
                 key={replyDraftStorageKey ?? `reply-comment-composer:${comment.id}`}
-                placeholder={t("composer.replyPlaceholder")}
+                placeholder={t("composer.replyPlaceholder", {
+                  username: draftUsername ?? t("states.currentAccount"),
+                })}
                 submitLabel={t("actions.reply")}
                 autoFocus
                 draftStorageKey={replyDraftStorageKey}
@@ -692,6 +746,7 @@ export const CommentItem = memo(function CommentItem({
                   commentPage={commentPage}
                   draftTargetKey={draftTargetKey}
                   draftUserId={draftUserId}
+                  draftUsername={draftUsername}
                   isReply
                   rootCommentId={comment.id}
                   onCreateReply={onCreateReply}
