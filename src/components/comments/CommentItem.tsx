@@ -7,7 +7,7 @@ import type {
 } from "react";
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
-import { useFormatter, useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import {
   ChevronRight,
   Edit3,
@@ -290,7 +290,13 @@ export const CommentItem = memo(function CommentItem({
   onLocateComment,
 }: CommentItemProps) {
   const t = useTranslations("comments");
-  const format = useFormatter();
+  const locale = useLocale();
+  const localDateTimeFormatter = useMemo(() => new Intl.DateTimeFormat(locale, {
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }), [locale]);
   const [replying, setReplying] = useState(false);
   const [editing, setEditing] = useState(false);
   const [editValue, setEditValue] = useState(comment.content ?? "");
@@ -475,12 +481,7 @@ export const CommentItem = memo(function CommentItem({
               {comment.username ?? t("states.anonymous")}
             </span>
             <span className="text-xs text-[var(--theme-color-text-muted)]">
-              {format.dateTime(new Date(comment.createdAt), {
-                month: "short",
-                day: "numeric",
-                hour: "2-digit",
-                minute: "2-digit",
-              })}
+              {localDateTimeFormatter.format(new Date(comment.createdAt))}
             </span>
             {comment.replyToUsername ? (
               comment.replyToCommentId && replyToPermalink ? (
