@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
+import { buildSiteMetadataTitle } from "@/lib/site-brand";
 
 type AccountLayoutProps = {
   children: React.ReactNode;
@@ -10,7 +11,7 @@ export async function generateMetadata({ params }: Pick<AccountLayoutProps, "par
   const { locale } = await params;
   const t = await getTranslations({ locale, namespace: "metadata.account" });
   return {
-    title: t("title"),
+    title: buildSiteMetadataTitle(t("title")),
     description: t("description"),
   };
 }

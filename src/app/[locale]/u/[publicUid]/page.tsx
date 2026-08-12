@@ -4,6 +4,7 @@ import { Link } from "@/i18n/navigation";
 import { notFound } from "next/navigation";
 import { getUsernameAvatarLabel } from "@/lib/username-policy";
 import { normalizePublicUid, readPublicProfile } from "@/lib/public-profile-server";
+import { buildSiteMetadataTitle } from "@/lib/site-brand";
 
 type PublicProfilePageProps = {
   params: Promise<{ locale: string; publicUid: string }>;
@@ -26,16 +27,16 @@ export async function generateMetadata({ params }: PublicProfilePageProps): Prom
   const t = await getTranslations({ locale, namespace: "metadata.publicProfile" });
   const publicUid = normalizePublicUid(rawPublicUid);
   if (!publicUid) {
-    return { title: t("missingTitle") };
+    return { title: buildSiteMetadataTitle(t("missingTitle")) };
   }
 
   const profile = await readPublicProfile(publicUid);
   if (!profile) {
-    return { title: t("missingTitle") };
+    return { title: buildSiteMetadataTitle(t("missingTitle")) };
   }
 
   return {
-    title: t("title", { username: profile.username }),
+    title: buildSiteMetadataTitle(t("title", { username: profile.username })),
     description: t("description", { publicUid: profile.publicUid }),
   };
 }

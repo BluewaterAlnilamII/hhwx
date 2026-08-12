@@ -2,6 +2,7 @@
 
 import React from "react";
 import { useTranslations } from "next-intl";
+import { SITE_BRAND } from "@/lib/site-brand";
 import { CHARACTERS, Character } from "@/lib/characters";
 import { useGameStore } from "@/store/useGameStore";
 import CharacterAvatar from "./CharacterAvatar";
@@ -35,7 +36,7 @@ export default function CharacterSelect() {
         <div className="flex w-full max-w-3xl flex-col items-center lg:translate-y-[-6vh]">
           <div className="mb-8 text-center">
             <h1 className="mb-2 text-4xl font-extrabold tracking-tight text-gray-800">
-              {t("appTitle")}
+              {SITE_BRAND}
             </h1>
             <p className="text-lg text-gray-600">
               {t("pickColor")}
@@ -87,7 +88,7 @@ export default function CharacterSelect() {
       <div className="flex w-full max-w-5xl flex-col items-center lg:translate-y-[-6vh]">
         <div className="mb-7 text-center lg:mb-7">
           <h1 className="mb-2 text-4xl font-extrabold tracking-tight text-gray-800">
-            {t("appTitle")}
+            {SITE_BRAND}
           </h1>
           <p className="text-lg text-gray-600">
             {isPickingAI ? t("opponentLabel") : t("playerLabel")}
