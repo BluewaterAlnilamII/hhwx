@@ -4,6 +4,10 @@ import test from "node:test";
 
 import { normalizeBandoriCardDisplayReleaseTimestamp } from "../src/lib/bandori/cards/release.ts";
 import {
+  buildBandoriCardCommentPermalink,
+  buildBandoriCardDetailHref,
+} from "../src/lib/bandori/cards/detail-url.ts";
+import {
   buildBandoriCardsListHref,
   readBandoriCardsListHref,
   saveBandoriCardsListQuery,
@@ -77,7 +81,8 @@ test("Cards list restoration and detail server switching keep their navigation s
   assert.match(cardsPage, /saveBandoriCardsListQuery\(cardsListQuery\)/u);
   assert.match(detailPage, /setCardsListHref\(readBandoriCardsListHref\(\)\)/u);
   assert.match(detailPage, /<Link href=\{cardsListHref\}/u);
-  assert.match(detailPage, /getHref=\{\(server\)[\s\S]*?replace\s*\/>/u);
+  assert.match(detailPage, /onChange=\{handleServerChange\}/u);
+  assert.match(detailPage, /buildBandoriCardDetailHref\(/u);
   assert.match(serverSwitcher, /<Link[\s\S]*?replace=\{replace\}/u);
 });
 
@@ -199,6 +204,107 @@ test("card detail resolves missing or unavailable servers from the browser prefe
   assert.match(resolver, /if \(!hydrated \|\| selectedServer === null\)/u);
   assert.match(
     resolver,
-    /router\.replace\([\s\S]*\?server=\$\{getBandoriServerCode\(selectedServer\)\}/u,
+    /router\.replace\([\s\S]*buildBandoriCardDetailHref\(/u,
   );
+});
+
+test("card detail URLs preserve shared comment links but can clear collision-target links", () => {
+  const currentParams = new URLSearchParams("server=jp&page=3&comment=comment-id&custom=keep");
+  assert.equal(
+    buildBandoriCardDetailHref("/bandori/cards/595", { server: 3 }, currentParams),
+    "/bandori/cards/595?server=cn&page=3&comment=comment-id&custom=keep",
+  );
+  assert.equal(
+    buildBandoriCardDetailHref(
+      "/bandori/cards/595",
+      { commentPage: 2, commentId: "next-comment" },
+      currentParams,
+    ),
+    "/bandori/cards/595?server=jp&page=2&comment=next-comment&custom=keep",
+  );
+  assert.equal(
+    buildBandoriCardDetailHref(
+      "/bandori/cards/10001",
+      { server: 3, commentPage: null, commentId: null },
+      currentParams,
+    ),
+    "/bandori/cards/10001?server=cn&custom=keep",
+  );
+
+  assert.equal(buildBandoriCardCommentPermalink({
+    currentHref: "https://hhwx.org/en/bandori/cards/595?server=tw&page=9&comment=old&custom=keep#details",
+    locale: "en",
+    cardId: 595,
+    page: 2,
+    commentId: "new-comment",
+  }), "https://hhwx.org/en/bandori/cards/595?server=tw&page=2&comment=new-comment&custom=keep#details");
+});
+
+test("card comments render below the detail article and collision identity follows the selected server", async () => {
+  const [detailPage, resolver] = await Promise.all([
+    readFile(
+      new URL("src/app/[locale]/bandori/cards/[cardId]/CardDetailPageClient.tsx", ROOT_URL),
+      "utf8",
+    ),
+    readFile(
+      new URL(
+        "src/app/[locale]/bandori/cards/[cardId]/CardDetailPreferredServerResolver.tsx",
+        ROOT_URL,
+      ),
+      "utf8",
+    ),
+  ]);
+  const articleEnd = detailPage.indexOf("</article>");
+  const comments = detailPage.indexOf("<CardComments");
+
+  assert.ok(articleEnd >= 0 && comments > articleEnd);
+  assert.match(detailPage, /isKnownBandoriCardEntityCollision\(cardId\)[\s\S]*\? selectedServer[\s\S]*: null/u);
+  assert.match(detailPage, /<CardComments cardId=\{cardId\} entityServer=\{entityServer\}/u);
+  assert.match(detailPage, /const changesCommentTarget = isKnownBandoriCardEntityCollision\(cardId\)/u);
+  assert.match(detailPage, /commentPage: changesCommentTarget \? null : undefined/u);
+  assert.match(detailPage, /commentId: changesCommentTarget \? null : undefined/u);
+  assert.match(resolver, /commentPage: isKnownBandoriCardEntityCollision\(cardId\) \? null : undefined/u);
+  assert.match(resolver, /commentId: isKnownBandoriCardEntityCollision\(cardId\) \? null : undefined/u);
+});
+
+test("the global content shell owns the compact mobile page gutter", async () => {
+  const [globalShell, pageShell, detailPage, resolver, eventPage] = await Promise.all([
+    readFile(
+      new URL("src/components/SectionSidebarShell.tsx", ROOT_URL),
+      "utf8",
+    ),
+    readFile(
+      new URL("src/app/[locale]/bandori/BandoriPageShell.tsx", ROOT_URL),
+      "utf8",
+    ),
+    readFile(
+      new URL("src/app/[locale]/bandori/cards/[cardId]/CardDetailPageClient.tsx", ROOT_URL),
+      "utf8",
+    ),
+    readFile(
+      new URL(
+        "src/app/[locale]/bandori/cards/[cardId]/CardDetailPreferredServerResolver.tsx",
+        ROOT_URL,
+      ),
+      "utf8",
+    ),
+    readFile(
+      new URL("src/app/[locale]/bandori/events/EventTrackerPage.tsx", ROOT_URL),
+      "utf8",
+    ),
+  ]);
+
+  assert.match(
+    globalShell,
+    /px-2 py-0 sm:px-6[\s\S]*px-2 py-5 sm:px-6 lg:px-8/u,
+  );
+  assert.match(
+    pageShell,
+    /relative z-10 mx-auto w-full/u,
+  );
+  assert.doesNotMatch(pageShell, /-mx-2|calc\(100%\+1rem\)/u);
+  for (const source of [detailPage, resolver, eventPage]) {
+    assert.match(source, /<BandoriPageShell/u);
+    assert.doesNotMatch(source, /-mx-2 w-\[calc\(100%\+1rem\)\]/u);
+  }
 });

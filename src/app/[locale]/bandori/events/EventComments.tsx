@@ -23,6 +23,7 @@ export default function EventComments({
   const t = useTranslations("bandori.events.comments");
   const serverCode = getBandoriServerCode(server);
   const apiBase = eventId ? `/api/bandori/events/${eventId}/comments` : null;
+  const targetKey = `${serverCode}:${eventId ?? ""}`;
 
   const readLocation = useCallback((): CommentThreadLocation => {
     const params = readEventTrackerSearchParams();
@@ -54,9 +55,10 @@ export default function EventComments({
 
   return (
     <CommentThread
+      key={targetKey}
       apiBase={apiBase}
       apiQuery={`server=${serverCode}`}
-      targetKey={`${serverCode}:${eventId ?? ""}`}
+      targetKey={targetKey}
       readLocation={readLocation}
       updateLocation={updateLocation}
       buildPermalink={buildPermalink}

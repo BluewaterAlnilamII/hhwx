@@ -20,11 +20,11 @@ const eventCommentsSource = readFileSync(
 test("comment deep links override stale reverse-sorted page parameters", () => {
   assert.match(
     commentThreadSource,
-    /if \(commentId\) \{[\s\S]*?const locatedPage = await locateLinkedComment\(commentId, \{\s*silent: true,\s*\}\)/u,
+    /if \(commentId\) \{[\s\S]*?const locatedPage = await locateLinkedComment\(commentId, \{[\s\S]*?silent: true,[\s\S]*?onFailure:/u,
   );
   assert.ok(
     commentThreadSource.indexOf("const locatedPage = await locateLinkedComment(commentId")
-      < commentThreadSource.indexOf("const data = await loadRootComments(requestedPage)"),
+      < commentThreadSource.indexOf("const data = await loadRootComments(requestedPage, requestTarget)"),
   );
   assert.match(commentThreadSource, /page: locatedPage,\s*commentId,/u);
   assert.doesNotMatch(commentThreadSource, /expectedPage: loadedPage/u);

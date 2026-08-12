@@ -27,8 +27,8 @@ export default function SectionSidebarShell({ children, isMobileDrawerOpen, onCl
   const [prefetchIntents, setPrefetchIntents] = useState<Record<string, boolean>>({});
   const isHomePage = pathname === "/";
   const contentWrapperClassName = isHomePage
-    ? "relative h-[calc(100svh-58px)] min-h-[calc(100svh-58px)] px-4 py-0 sm:px-6 sm:py-0 lg:px-6 lg:py-0"
-    : "relative min-h-full px-4 py-5 sm:px-6 lg:px-8 lg:py-6";
+    ? "relative h-[calc(100svh-58px)] min-h-[calc(100svh-58px)] px-2 py-0 sm:px-6 sm:py-0 lg:px-6 lg:py-0"
+    : "relative min-h-full px-2 py-5 sm:px-6 lg:px-8 lg:py-6";
 
   const requestPrefetch = (href: string) => {
     setPrefetchIntents((currentValue) => {

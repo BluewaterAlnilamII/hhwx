@@ -10,6 +10,10 @@ import {
   COMMENT_TARGET_BANDORI_EVENT,
   parseBandoriEventCommentTargetId,
 } from "@/lib/bandori/events/comment-target";
+import {
+  COMMENT_TARGET_BANDORI_CARD,
+  parseBandoriCardCommentTargetId,
+} from "@/lib/bandori/cards/comment-target";
 import { getBandoriServerCode, type BandoriServerCode } from "@/lib/bandori-server";
 import type {
   CommentNotification,
@@ -26,6 +30,7 @@ type NotificationColumns = Record<CommentNotificationType, NotificationColumnSta
 
 type NotificationTargetPresentation = {
   eventId: number | null;
+  cardId: number | null;
   serverCode: BandoriServerCode | null;
   href: string | null;
 };
@@ -85,8 +90,29 @@ function getNotificationTargetPresentation(
       });
       return {
         eventId: target.eventId,
+        cardId: null,
         serverCode,
         href: `/bandori/events/${encodeURIComponent(target.eventId)}?${query.toString()}`,
+      };
+    }
+    case COMMENT_TARGET_BANDORI_CARD: {
+      const target = parseBandoriCardCommentTargetId(notification.targetId);
+      if (!target) break;
+
+      const query = new URLSearchParams({
+        comment: notification.linkCommentId,
+      });
+      const serverCode = target.entityServer === null
+        ? null
+        : getBandoriServerCode(target.entityServer);
+      if (serverCode) {
+        query.set("server", serverCode);
+      }
+      return {
+        eventId: null,
+        cardId: target.cardId,
+        serverCode,
+        href: `/bandori/cards/${encodeURIComponent(target.cardId)}?${query.toString()}`,
       };
     }
     default:
@@ -95,6 +121,7 @@ function getNotificationTargetPresentation(
 
   return {
     eventId: null,
+    cardId: null,
     serverCode: null,
     href: null,
   };
@@ -341,13 +368,19 @@ export default function AccountNotificationsPage() {
             </h3>
           </div>
           <p className="mt-2 text-sm text-slate-500">
-            {target.eventId === null ? null : (
+            {target.eventId !== null ? (
               <>
                 {t("activityLabel", { eventId: target.eventId })}
                 {target.serverCode ? ` · ${target.serverCode.toUpperCase()}` : ""}
                 {" · "}
               </>
-            )}
+            ) : target.cardId !== null ? (
+              <>
+                {t("cardLabel", { cardId: target.cardId })}
+                {target.serverCode ? ` · ${target.serverCode.toUpperCase()}` : ""}
+                {" · "}
+              </>
+            ) : null}
             {formatNotificationTime(notification.createdAt, locale)}
           </p>
         </div>

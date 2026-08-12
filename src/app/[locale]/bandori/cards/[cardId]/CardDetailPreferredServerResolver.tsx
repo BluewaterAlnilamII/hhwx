@@ -3,10 +3,11 @@
 import { useEffect } from "react";
 import { useRouter } from "@/i18n/navigation";
 import {
-  getBandoriServerCode,
   pickAvailableBandoriServer,
   type BandoriServer,
 } from "@/lib/bandori-server";
+import { buildBandoriCardDetailHref } from "@/lib/bandori/cards/detail-url";
+import { isKnownBandoriCardEntityCollision } from "@/lib/bandori/cards/regional-extensions";
 import { useBandoriPreferencesStore } from "@/store/useBandoriPreferencesStore";
 import BandoriPageShell from "../../BandoriPageShell";
 
@@ -38,7 +39,11 @@ export default function CardDetailPreferredServerResolver({
       return;
     }
     router.replace(
-      `/bandori/cards/${cardId}?server=${getBandoriServerCode(selectedServer)}`,
+      buildBandoriCardDetailHref(`/bandori/cards/${cardId}`, {
+        server: selectedServer,
+        commentPage: isKnownBandoriCardEntityCollision(cardId) ? null : undefined,
+        commentId: isKnownBandoriCardEntityCollision(cardId) ? null : undefined,
+      }),
     );
   }, [cardId, hydrated, router, selectedServer]);
 

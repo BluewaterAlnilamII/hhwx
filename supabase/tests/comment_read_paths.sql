@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = public, extensions;
 
-select plan(28);
+select plan(36);
 
 select ok(
   to_regprocedure('public.read_comment_reaction_summary_rows(uuid[],uuid)') is not null,
@@ -128,6 +128,146 @@ select
   now(),
   now()
 from generate_series(1, 10) as sequence(value);
+
+select lives_ok(
+  $$
+    insert into public.comments (
+      id, target_type, target_id, user_id, content
+    ) values (
+      '30000000-0000-0000-0000-000000000001',
+      'bandori_card',
+      '595',
+      '00000000-0000-0000-0000-000000000001',
+      'Card comment target constraint test'
+    )
+  $$,
+  'comments accept Bandori card targets'
+);
+
+select throws_ok(
+  $$
+    insert into public.comments (
+      id, target_type, target_id, user_id, content
+    ) values (
+      '30000000-0000-0000-0000-000000000002',
+      'unknown_target',
+      '595',
+      '00000000-0000-0000-0000-000000000001',
+      'Unknown target constraint test'
+    )
+  $$,
+  '23514',
+  null,
+  'comments reject unknown target types'
+);
+
+select lives_ok(
+  $$
+    insert into public.comment_notifications (
+      recipient_user_id,
+      actor_user_id,
+      type,
+      target_type,
+      target_id,
+      comment_id,
+      activity_comment_id
+    ) values (
+      '00000000-0000-0000-0000-000000000001',
+      '00000000-0000-0000-0000-000000000002',
+      'comment_reply',
+      'bandori_card',
+      '595',
+      '30000000-0000-0000-0000-000000000001',
+      '30000000-0000-0000-0000-000000000001'
+    )
+  $$,
+  'comment notifications accept Bandori card targets'
+);
+
+select throws_ok(
+  $$
+    insert into public.comment_notifications (
+      recipient_user_id,
+      actor_user_id,
+      type,
+      target_type,
+      target_id,
+      comment_id,
+      activity_comment_id
+    ) values (
+      '00000000-0000-0000-0000-000000000002',
+      '00000000-0000-0000-0000-000000000001',
+      'comment_reply',
+      'unknown_target',
+      '595',
+      '30000000-0000-0000-0000-000000000001',
+      '30000000-0000-0000-0000-000000000001'
+    )
+  $$,
+  '23514',
+  null,
+  'comment notifications reject unknown target types'
+);
+
+select lives_ok(
+  $$
+    insert into public.comments (
+      id, target_type, target_id, user_id, content
+    ) values (
+      '30000000-0000-0000-0000-000000000003',
+      'bandori_card',
+      '595',
+      '00000000-0000-0000-0000-000000000001',
+      repeat('长', 1000)
+    )
+  $$,
+  'shared comments accept 1000 Unicode characters'
+);
+
+select throws_ok(
+  $$
+    insert into public.comments (
+      id, target_type, target_id, user_id, content
+    ) values (
+      '30000000-0000-0000-0000-000000000004',
+      'bandori_card',
+      '595',
+      '00000000-0000-0000-0000-000000000001',
+      repeat('长', 1001)
+    )
+  $$,
+  '23514',
+  null,
+  'shared comments reject more than 1000 Unicode characters'
+);
+
+select lives_ok(
+  $$
+    insert into public.guestbook_comments (
+      id, user_id, content
+    ) values (
+      '40000000-0000-0000-0000-000000000001',
+      '00000000-0000-0000-0000-000000000001',
+      repeat('旧', 500)
+    )
+  $$,
+  'legacy Othello guestbook still accepts 500 Unicode characters'
+);
+
+select throws_ok(
+  $$
+    insert into public.guestbook_comments (
+      id, user_id, content
+    ) values (
+      '40000000-0000-0000-0000-000000000002',
+      '00000000-0000-0000-0000-000000000001',
+      repeat('旧', 501)
+    )
+  $$,
+  '23514',
+  null,
+  'legacy Othello guestbook still rejects more than 500 Unicode characters'
+);
 
 insert into public.comments (
   id,

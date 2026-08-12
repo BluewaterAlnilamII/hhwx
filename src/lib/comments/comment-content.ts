@@ -7,7 +7,7 @@ import {
   type CommentStamp,
   type CommentStampRegion,
 } from "@/lib/comments/stamps";
-import { MAX_COMMENT_LENGTH } from "@/lib/comments/comment-contract";
+import { truncateCommentContent } from "@/lib/comments/comment-contract";
 
 export type CommentStampLookup = ReadonlyMap<string, CommentStamp>;
 
@@ -46,9 +46,8 @@ export function insertCommentShortcode(
 ): { nextValue: string; nextCursor: number } {
   const prefix = start > 0 && !/\s/.test(value[start - 1] ?? "") ? " " : "";
   const suffix = !/\s/.test(value[end] ?? "") ? " " : "";
-  const nextValue = `${value.slice(0, start)}${prefix}${shortcode}${suffix}${value.slice(end)}`.slice(
-    0,
-    MAX_COMMENT_LENGTH,
+  const nextValue = truncateCommentContent(
+    `${value.slice(0, start)}${prefix}${shortcode}${suffix}${value.slice(end)}`,
   );
   const nextCursor = Math.min(start + prefix.length + shortcode.length + suffix.length, nextValue.length);
 

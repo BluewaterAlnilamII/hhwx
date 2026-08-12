@@ -6,6 +6,7 @@ paths:
   - "src/lib/auth-server.ts"
   - "src/lib/auth-user-server.ts"
   - "src/lib/bandori/cards/api-server.ts"
+  - "src/lib/bandori/cards/comment-target-server.ts"
   - "src/lib/bandori/event-tracker/cutoff-history-server.ts"
   - "src/lib/bandori/events/api-server.ts"
   - "src/lib/bandori/events/comment-target-server.ts"

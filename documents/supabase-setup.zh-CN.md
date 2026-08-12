@@ -1,5 +1,20 @@
 # Supabase 设置
 
+`supabase/migrations/20260812043505_add_bandori_card_comment_targets.sql`
+允许通用评论和通知表保存 `bandori_card` 目标，同时保持浏览器只读 grants 和
+RLS policy 不变。普通卡牌跨服共用 `<card-id>` 目标；已登记的 EN/CN 数字 ID
+碰撞使用 `<server-code>:<card-id>`。
+
+这项卡牌评论约束变更必须先迁移、后部署应用：先推送
+`20260812043505_add_bandori_card_comment_targets.sql`，再部署会写入
+`bandori_card` 行的应用版本。旧应用与扩展后的约束兼容。只有确认 `comments` 和
+`comment_notifications` 中都不存在 `bandori_card` 行后，才能安全回滚为仅允许活动评论的约束。
+
+`supabase/migrations/20260812053202_expand_comment_content_length.sql` 将 Bandori
+共享评论、回复和编辑内容的上限从 500 个 Unicode 字符放宽到 1000 个，不修改黑白棋旧留言板的
+500 字上限，也不修改 grants 或 RLS policy。这项变更同样必须先迁移、后部署应用；旧应用仍只会
+提交最多 500 字，因此与新约束兼容。回滚前必须确认 `comments` 中没有超过 500 字的非空内容。
+
 English version: [supabase-setup.md](supabase-setup.md)
 
 迁移历史说明：`supabase/migrations/` 中 2026-06-02、2026-06-03 和
