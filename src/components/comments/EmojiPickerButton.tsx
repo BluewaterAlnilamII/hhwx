@@ -5,6 +5,7 @@ import { memo, useCallback, useEffect, useId, useLayoutEffect, useRef, useState 
 import { Smile } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { COMMENT_EMOJI_NAMES, getCommentEmojiSrc } from "@/lib/comments/emoji";
+import { getCommentPopoverHorizontalPosition } from "@/lib/comments/comment-popover-position";
 import { cn } from "@/lib/utils";
 
 type EmojiPickerButtonProps = {
@@ -36,18 +37,15 @@ export const EmojiPickerButton = memo(function EmojiPickerButton({
 
     const rect = buttonRef.current.getBoundingClientRect();
     const containerRect = containerRef.current.getBoundingClientRect();
-    const viewportWidth = window.innerWidth;
-    const horizontalPadding = 16;
-    const width = Math.min(384, Math.max(0, viewportWidth - horizontalPadding * 2));
-    const viewportLeft = Math.min(
-      Math.max(horizontalPadding, rect.left + rect.width / 2 - width / 2),
-      viewportWidth - width - horizontalPadding,
-    );
+    const viewport = window.visualViewport;
 
-    setPopoverStyle({
-      width,
-      left: viewportLeft - containerRect.left,
-    });
+    setPopoverStyle(getCommentPopoverHorizontalPosition({
+      anchorRect: rect,
+      containerLeft: containerRect.left,
+      preferredWidth: 384,
+      viewportLeft: viewport?.offsetLeft ?? 0,
+      viewportWidth: viewport?.width ?? window.innerWidth,
+    }));
   }, [open]);
 
   useEffect(() => {
@@ -78,10 +76,15 @@ export const EmojiPickerButton = memo(function EmojiPickerButton({
     if (!open) return;
 
     updatePopoverPosition();
+    const viewport = window.visualViewport;
     window.addEventListener("resize", updatePopoverPosition);
+    viewport?.addEventListener("resize", updatePopoverPosition);
+    viewport?.addEventListener("scroll", updatePopoverPosition);
 
     return () => {
       window.removeEventListener("resize", updatePopoverPosition);
+      viewport?.removeEventListener("resize", updatePopoverPosition);
+      viewport?.removeEventListener("scroll", updatePopoverPosition);
     };
   }, [open, updatePopoverPosition]);
 

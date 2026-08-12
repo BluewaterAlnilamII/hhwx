@@ -17,6 +17,7 @@ import {
 } from "@/lib/comments/stamps";
 import { cn } from "@/lib/utils";
 import { buildStampShortcode } from "@/lib/comments/comment-content";
+import { getCommentPopoverHorizontalPosition } from "@/lib/comments/comment-popover-position";
 
 type StampPickerButtonProps = {
   open: boolean;
@@ -109,18 +110,15 @@ export const StampPickerButton = memo(function StampPickerButton({
 
     const rect = buttonRef.current.getBoundingClientRect();
     const containerRect = containerRef.current.getBoundingClientRect();
-    const viewportWidth = window.innerWidth;
-    const horizontalPadding = 16;
-    const width = Math.min(456, Math.max(0, viewportWidth - horizontalPadding * 2));
-    const viewportLeft = Math.min(
-      Math.max(horizontalPadding, rect.left + rect.width / 2 - width / 2),
-      viewportWidth - width - horizontalPadding,
-    );
+    const viewport = window.visualViewport;
 
-    setPopoverStyle({
-      width,
-      left: viewportLeft - containerRect.left,
-    });
+    setPopoverStyle(getCommentPopoverHorizontalPosition({
+      anchorRect: rect,
+      containerLeft: containerRect.left,
+      preferredWidth: 456,
+      viewportLeft: viewport?.offsetLeft ?? 0,
+      viewportWidth: viewport?.width ?? window.innerWidth,
+    }));
   }, [open]);
 
   useEffect(() => {
@@ -151,10 +149,15 @@ export const StampPickerButton = memo(function StampPickerButton({
     if (!open) return;
 
     updatePopoverPosition();
+    const viewport = window.visualViewport;
     window.addEventListener("resize", updatePopoverPosition);
+    viewport?.addEventListener("resize", updatePopoverPosition);
+    viewport?.addEventListener("scroll", updatePopoverPosition);
 
     return () => {
       window.removeEventListener("resize", updatePopoverPosition);
+      viewport?.removeEventListener("resize", updatePopoverPosition);
+      viewport?.removeEventListener("scroll", updatePopoverPosition);
     };
   }, [open, updatePopoverPosition]);
 
