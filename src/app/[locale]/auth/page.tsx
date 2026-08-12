@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Suspense } from "react";
 import { getTranslations } from "next-intl/server";
 import AuthPageContent from "@/components/AuthPageContent";
+import { buildSiteMetadataTitle } from "@/lib/site-brand";
 
 type AuthPageProps = {
   params: Promise<{ locale: string }>;
@@ -34,7 +35,7 @@ export async function generateMetadata({ params }: AuthPageProps): Promise<Metad
   const { locale } = await params;
   const t = await getTranslations({ locale, namespace: "metadata.auth" });
   return {
-    title: t("title"),
+    title: buildSiteMetadataTitle(t("title")),
     description: t("description"),
   };
 }

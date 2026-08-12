@@ -1,26 +1,47 @@
 {
   "root": {
-    "title": "🎭 Happy！Lucky！黑白棋！",
-    "applicationName": "Happy！Lucky！黑白棋！",
     "description": "与 Hello, Happy World! 的成员们来一场黑白棋对决吧！"
   },
   "calendar": {
-    "title": "活动日历 - HHWX"
+    "title": "国服活动日历"
   },
   "eventtracker": {
-    "title": "Event Tracker - HHWX"
+    "title": "活动追踪",
+    "eventTitle": "{eventId}期 - {eventName} 活动追踪"
+  },
+  "cards": {
+    "title": "卡牌图鉴",
+    "detailTitle": "{characterName} - {cardName} 卡牌图鉴"
+  },
+  "gameProfiles": {
+    "title": "游戏档案"
+  },
+  "teamBuilder": {
+    "title": "组队计算器"
   },
   "auth": {
-    "title": "账号登录 - HHWX",
+    "title": "账号登录",
     "description": "登录、注册或重置 HHWX 网页账号密码。"
   },
   "authConfirm": {
-    "title": "账号确认 - HHWX",
+    "title": "账号确认",
     "description": "处理 HHWX 账号邮箱验证、登录确认和密码重置。"
   },
   "account": {
-    "title": "账号中心 - HHWX",
+    "title": "账号中心",
     "description": "管理 HHWX 网页账号、邮箱、安全设置和游戏档案。"
+  },
+  "accountProfile": {
+    "title": "编辑资料"
+  },
+  "accountEmail": {
+    "title": "更换邮箱"
+  },
+  "accountPassword": {
+    "title": "修改密码"
+  },
+  "accountNotifications": {
+    "title": "提醒"
   },
   "publicProfile": {
     "missingTitle": "用户不存在",
@@ -28,8 +49,6 @@
     "description": "UID {publicUid} 的公开个人主页"
   },
   "manifest": {
-    "name": "Happy！Lucky！黑白棋！",
-    "shortName": "HHW黑白棋",
     "description": "与 Hello, Happy World! 的成员们来一场黑白棋对决吧！"
   }
 }

@@ -79,6 +79,7 @@ import { Top10Panel } from "./_tracker/Top10Panel";
 import BandoriPageShell from "../BandoriPageShell";
 import BandoriEventSwitcher from "../BandoriEventSwitcher";
 import EventComments from "./EventComments";
+import EventDocumentTitle from "./EventDocumentTitle";
 import EventInfoPanel from "./_info/EventInfoPanel";
 import EventRelativeCountdown from "./_info/EventRelativeCountdown";
 import { useBandoriEventDetail } from "./_info/useBandoriEventDetail";
@@ -1116,6 +1117,7 @@ function EventTrackerPageContent({ initialEventId }: EventTrackerPageProps) {
   // ===== 渲染 =====
   return (
     <BandoriPageShell contentClassName="max-w-6xl">
+        <EventDocumentTitle event={eventMeta} server={selectedServer} />
         <Suspense fallback={null}>
           <EventTrackerRouteStateSync
             initialEventId={initialEventId}

@@ -6,6 +6,7 @@ import {
   REFERENCE_HTTP_CACHE_POLICY,
   withHttpCachePolicy,
 } from "@/lib/api-cache";
+import { SITE_BRAND } from "@/lib/site-brand";
 
 type ManifestRouteContext = {
   params: Promise<{ locale: string }>;
@@ -17,8 +18,8 @@ export async function GET(_request: NextRequest, { params }: ManifestRouteContex
   const t = await getTranslations({ locale, namespace: "metadata.manifest" });
 
   return NextResponse.json({
-    name: t("name"),
-    short_name: t("shortName"),
+    name: SITE_BRAND,
+    short_name: SITE_BRAND,
     description: t("description"),
     start_url: buildLocalizedPathname("/", locale as AppLocale),
     display: "standalone",

@@ -1,3 +1,6 @@
+import type { Metadata } from "next";
+import { cache } from "react";
+import { getTranslations } from "next-intl/server";
 import { redirect } from "next/navigation";
 import CardDetailPageClient from "./CardDetailPageClient";
 import CardDetailPreferredServerResolver from "./CardDetailPreferredServerResolver";
@@ -8,9 +11,16 @@ import {
 } from "@/lib/bandori/cards/regional-extensions";
 import { readBandoriCardApiDetail } from "@/lib/bandori/cards/api-server";
 import {
+  pickBandoriCharacterDisplayName,
+  type BandoriCharacterMaster,
+} from "@/lib/bandori/cards/master";
+import { readBandoriMasterRecord } from "@/lib/bandori-master-api";
+import { buildSiteMetadataTitle } from "@/lib/site-brand";
+import {
   BANDORI_SERVERS,
   getBandoriServerCode,
   getBandoriServerFromCode,
+  readBandoriRegionalTextAt,
   type BandoriServer,
 } from "@/lib/bandori-server";
 
@@ -21,6 +31,59 @@ type BandoriCardDetailPageProps = {
   params: Promise<{ locale: string; cardId: string }>;
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 };
+
+const readCardDetail = cache(readBandoriCardApiDetail);
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+export async function generateMetadata({
+  params,
+  searchParams,
+}: BandoriCardDetailPageProps): Promise<Metadata> {
+  const [{ locale, cardId }, query] = await Promise.all([params, searchParams]);
+  const t = await getTranslations({ locale, namespace: "metadata.cards" });
+  const rawServer = typeof query.server === "string" ? query.server : null;
+  const selectedServer = getBandoriServerFromCode(rawServer);
+  if (!/^[1-9]\d*$/u.test(cardId) || selectedServer === null) {
+    return { title: buildSiteMetadataTitle(t("title")) };
+  }
+
+  const canonicalCard = await readCardDetail(cardId);
+  const currentCard = canonicalCard
+    ? materializeBandoriCardForServer(canonicalCard, selectedServer)
+    : null;
+  const characterId = Number(currentCard?.characterId);
+  const cardName = currentCard
+    ? readBandoriRegionalTextAt(currentCard.prefix, selectedServer)
+    : null;
+  if (!currentCard || !Number.isSafeInteger(characterId) || characterId <= 0 || !cardName) {
+    return { title: buildSiteMetadataTitle(t("title")) };
+  }
+
+  const characterResult = await readBandoriMasterRecord(
+    "characters",
+    String(characterId),
+    "character_detail",
+  ).catch(() => null);
+  const character = isRecord(characterResult?.payload)
+    ? characterResult.payload as BandoriCharacterMaster
+    : null;
+  const characterName = pickBandoriCharacterDisplayName(
+    character,
+    selectedServer,
+    selectedServer,
+  );
+
+  return {
+    title: buildSiteMetadataTitle(
+      characterName
+        ? t("detailTitle", { characterName, cardName })
+        : t("title"),
+    ),
+  };
+}
 
 function buildCardsIndexPath(locale: string, cardId: string): string {
   const path = buildLocalizedPathname("/bandori/cards", normalizeLocale(locale));
@@ -41,7 +104,7 @@ export default async function BandoriCardDetailPage({
     redirect(buildCardsIndexPath(locale, cardId));
   }
 
-  const canonicalCard = await readBandoriCardApiDetail(cardId);
+  const canonicalCard = await readCardDetail(cardId);
   if (!canonicalCard) {
     redirect(buildCardsIndexPath(locale, cardId));
   }

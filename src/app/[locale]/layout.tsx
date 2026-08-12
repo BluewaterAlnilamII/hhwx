@@ -6,6 +6,7 @@ import { notFound } from "next/navigation";
 import "../globals.css";
 import AppChrome from "@/components/AppChrome";
 import { buildLocalizedPathname, routing, type AppLocale } from "@/i18n/routing";
+import { SITE_BRAND } from "@/lib/site-brand";
 
 // Next segment config must stay statically analyzable; do not replace this literal with an imported constant.
 export const revalidate = 900;
@@ -26,8 +27,11 @@ export async function generateMetadata({ params }: Pick<LocaleLayoutProps, "para
   const manifestPath = buildLocalizedPathname("/manifest.webmanifest", locale as AppLocale);
 
   return {
-    title: t("title"),
-    applicationName: t("applicationName"),
+    title: {
+      default: SITE_BRAND,
+      template: `%s - ${SITE_BRAND}`,
+    },
+    applicationName: SITE_BRAND,
     description: t("description"),
     manifest: manifestPath,
     icons: {
