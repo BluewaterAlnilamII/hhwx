@@ -11,6 +11,8 @@ CREATE TABLE IF NOT EXISTS public.comments (
   target_type       TEXT NOT NULL,
   -- Bandori event targets use the canonical `<server-code>:<event-id>` form,
   -- for example `cn:318`, so each regional server owns an isolated thread.
+  -- Ordinary Bandori card targets use `<card-id>` and share one cross-server
+  -- thread. Registered EN/CN entity collisions use `<server-code>:<card-id>`.
   target_id         TEXT NOT NULL,
   parent_id         UUID REFERENCES public.comments(id) ON DELETE RESTRICT,
   root_id           UUID REFERENCES public.comments(id) ON DELETE RESTRICT,
@@ -26,9 +28,9 @@ CREATE TABLE IF NOT EXISTS public.comments (
   moderated_by      UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
   moderated_at      TIMESTAMPTZ,
   moderation_reason TEXT,
-  CHECK (target_type IN ('bandori_event')),
+  CHECK (target_type IN ('bandori_event', 'bandori_card')),
   CHECK (char_length(target_id) BETWEEN 1 AND 128),
-  CHECK (content IS NULL OR (char_length(btrim(content)) > 0 AND char_length(content) <= 500)),
+  CHECK (content IS NULL OR (char_length(btrim(content)) > 0 AND char_length(content) <= 1000)),
   CHECK (depth >= 0),
   CHECK (reply_count >= 0),
   CHECK (moderation_status IN ('visible', 'removed_by_admin', 'hidden')),
@@ -80,7 +82,7 @@ CREATE TABLE IF NOT EXISTS public.comment_notifications (
   read_at             TIMESTAMPTZ,
   created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   CHECK (type IN ('comment_reply', 'comment_reaction')),
-  CHECK (target_type IN ('bandori_event')),
+  CHECK (target_type IN ('bandori_event', 'bandori_card')),
   CHECK (char_length(target_id) BETWEEN 1 AND 128),
   CHECK (
     reaction_emoji_key IS NULL OR (

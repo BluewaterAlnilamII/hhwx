@@ -16,10 +16,14 @@ import {
   Trash2,
 } from "lucide-react";
 import AccountCardAvatar from "@/components/account/AccountCardAvatar";
+import { useAutoResizeTextarea } from "@/hooks/useAutoResizeTextarea";
 import type { CommentReactionParticipantPageLoader } from "@/hooks/useCommentReactionParticipants";
 import {
   COMMENT_PAGE_SIZE,
+  COMMENT_LENGTH_WARNING_THRESHOLD,
   MAX_COMMENT_LENGTH,
+  countCommentCharacters,
+  truncateCommentContent,
   type CommentListResponse,
   type CommentNode,
   type CommentReactionSummary,
@@ -36,6 +40,7 @@ import {
   insertCommentShortcode,
   type CommentStampLookup,
 } from "@/lib/comments/comment-content";
+import { buildCommentDraftStorageKey } from "@/lib/comments/comment-drafts";
 import { CommentContent } from "./CommentContent";
 import { CommentComposer } from "./CommentComposer";
 import { CommentReactionEmoji } from "./CommentReactionEmoji";
@@ -131,7 +136,7 @@ function ReactionChip({ reaction, disabled, onToggle, onViewAll }: ReactionChipP
         aria-pressed={reaction.reactedByViewer}
         aria-label={`:${reaction.emojiKey}: ${reaction.count}`}
         className={cn(
-          "inline-flex h-7 items-center gap-1 rounded-full border px-2 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-60",
+          "inline-flex h-8 items-center gap-1 rounded-full border px-2 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-60 sm:h-7",
           reaction.reactedByViewer
             ? "border-[var(--theme-color-semantic-info-border)] bg-[var(--theme-color-semantic-info-background)] text-[var(--theme-color-semantic-info-foreground)] hover:brightness-95 dark:border-sky-500/50 dark:bg-sky-500/15 dark:text-sky-200 dark:hover:bg-sky-500/25"
             : "border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background)] text-[var(--theme-color-text-muted)] hover:bg-[var(--theme-color-control-background-hover)] dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800",
@@ -198,6 +203,8 @@ export type CommentItemProps = {
   stampLookup: CommentStampLookup;
   canReact: boolean;
   commentPage: number;
+  draftTargetKey: string;
+  draftUserId: string | null;
   isReply?: boolean;
   rootCommentId?: string | null;
   onCreateReply: (parentId: string, content: string) => Promise<void>;
@@ -218,6 +225,8 @@ export const CommentItem = memo(function CommentItem({
   stampLookup,
   canReact,
   commentPage,
+  draftTargetKey,
+  draftUserId,
   isReply = false,
   rootCommentId = null,
   onCreateReply,
@@ -240,15 +249,27 @@ export const CommentItem = memo(function CommentItem({
   const [reactionDialogEmojiKey, setReactionDialogEmojiKey] = useState<string | null>(null);
   const [reactingEmojiKey, setReactingEmojiKey] = useState<string | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const editSaveInFlightRef = useRef(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [actionError, setActionError] = useState("");
-  const editTextareaRef = useRef<HTMLTextAreaElement>(null);
+  const editTextareaRef = useAutoResizeTextarea(editValue, editing);
   const threadRootId = rootCommentId ?? comment.id;
   const loadedReplies = replies[threadRootId];
   const visibleReplies = isReply ? [] : loadedReplies?.comments ?? comment.previewReplies;
   const hiddenReplyCount = isReply ? 0 : Math.max(0, comment.replyCount - visibleReplies.length);
   const isHighlighted = highlightedId === comment.id;
   const isDeleted = Boolean(comment.deletedAt);
+  const commentReactions = comment.reactions ?? [];
+  const hasDedicatedReactionRow = !isDeleted && commentReactions.length >= 2;
+  const editValueLength = countCommentCharacters(editValue);
+  const replyDraftStorageKey = draftUserId
+    ? buildCommentDraftStorageKey({
+        userId: draftUserId,
+        targetKey: draftTargetKey,
+        replyToCommentId: comment.id,
+      })
+    : null;
 
   useEffect(() => {
     setDeleteDialogOpen(false);
@@ -281,16 +302,25 @@ export const CommentItem = memo(function CommentItem({
   };
 
   const handleEdit = async () => {
+    if (editSaveInFlightRef.current) {
+      return;
+    }
+
+    editSaveInFlightRef.current = true;
+    setIsSaving(true);
     setDeleteDialogOpen(false);
     setReactionPickerOpen(false);
+    setEditEmojiOpen(false);
+    setEditStampOpen(false);
     setActionError("");
     try {
       await onUpdate(comment.id, editValue);
       setEditing(false);
-      setEditEmojiOpen(false);
-      setEditStampOpen(false);
     } catch (err) {
       setActionError(err instanceof Error ? err.message : t("errors.updateFailed"));
+    } finally {
+      editSaveInFlightRef.current = false;
+      setIsSaving(false);
     }
   };
 
@@ -369,17 +399,17 @@ export const CommentItem = memo(function CommentItem({
       className={cn(
         "relative transition",
         isReply
-          ? "rounded-xl bg-transparent py-1"
-          : "rounded-2xl border bg-[var(--theme-color-control-background)] p-3 shadow-xs sm:p-4 dark:bg-slate-900",
+          ? "bg-transparent py-2 first:pt-1 last:pb-0 sm:rounded-xl sm:py-1 sm:last:pb-1"
+          : "rounded-2xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background)] px-3 py-3 shadow-xs sm:p-4 dark:border-slate-700 dark:bg-slate-900",
         isHighlighted && isReply
-          ? "bg-[var(--theme-color-semantic-info-background)] ring-2 ring-[var(--theme-color-semantic-info-border)] dark:bg-sky-500/10 dark:ring-sky-500/25"
+          ? "rounded-lg bg-[var(--theme-color-semantic-info-background)] ring-2 ring-[var(--theme-color-semantic-info-border)] dark:bg-sky-500/10 dark:ring-sky-500/25"
           : null,
         !isReply && (isHighlighted
-          ? "border-[var(--theme-color-semantic-info-border)] ring-4 ring-[var(--theme-color-semantic-info-background)] dark:border-sky-500 dark:ring-sky-500/20"
-          : "border-[var(--theme-color-border-subtle)] dark:border-slate-700"),
+          ? "border-[var(--theme-color-semantic-info-border)] bg-[var(--theme-color-semantic-info-background)] ring-4 ring-[var(--theme-color-semantic-info-border)]/15 dark:border-sky-500 dark:bg-sky-500/10 dark:ring-sky-500/20"
+          : null),
       )}
     >
-      <div className={cn("flex items-start", isReply ? "gap-2" : "gap-3")}>
+      <div className="grid grid-cols-[2.75rem_minmax(0,1fr)] items-start gap-x-3">
         <AccountCardAvatar
           username={comment.username}
           cardId={comment.avatar.cardId}
@@ -388,8 +418,7 @@ export const CommentItem = memo(function CommentItem({
           size="comment"
           className="ring-1 ring-[var(--theme-color-action-secondary-border)] dark:ring-slate-700"
         />
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+        <div className="flex min-h-11 min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
             <span className="truncate text-sm font-semibold text-[var(--theme-color-text-default)] dark:text-slate-100">
               {comment.username ?? t("states.anonymous")}
             </span>
@@ -419,85 +448,84 @@ export const CommentItem = memo(function CommentItem({
             {comment.editedAt && !isDeleted ? (
               <span className="text-xs text-[var(--theme-color-text-muted)]">{t("states.edited")}</span>
             ) : null}
-          </div>
+        </div>
+
+        <div className="col-span-2 min-w-0 pt-1 sm:col-span-1 sm:col-start-2 sm:pt-0">
 
           {editing ? (
             <div className="mt-2">
-              <textarea
-                ref={editTextareaRef}
-                value={editValue}
-                onChange={(event) => setEditValue(event.target.value)}
-                maxLength={MAX_COMMENT_LENGTH}
-                className="min-h-20 w-full resize-y rounded-xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background)] px-3 py-2 text-sm leading-6 text-[var(--theme-color-text-default)] outline-hidden transition placeholder:text-[var(--theme-color-text-muted)] selection:bg-[var(--theme-color-selection-strong-background)] selection:text-[var(--theme-color-selection-strong-foreground)] focus:border-[var(--theme-color-focus-ring)] focus:ring-2 focus:ring-[var(--theme-color-focus-ring)] dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:placeholder:text-slate-500 dark:selection:bg-sky-500/40 dark:selection:text-white dark:focus:border-sky-400 dark:focus:bg-slate-900 dark:focus:text-slate-50 dark:focus:ring-sky-500/25"
-              />
-              <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
-                <div className="flex items-center gap-2">
-                  <span className={cn("text-xs", editValue.length > 460 ? "text-[var(--theme-color-semantic-warning-foreground)]" : "text-[var(--theme-color-text-muted)]")}>
-                    {editValue.length}/{MAX_COMMENT_LENGTH}
-                  </span>
-                  <EmojiPickerButton
-                    open={editEmojiOpen}
-                    onOpenChange={(open) => {
-                      setEditEmojiOpen(open);
-                      if (open) setEditStampOpen(false);
-                    }}
-                    onSelect={insertEditEmoji}
-                  />
-                  <StampPickerButton
-                    open={editStampOpen}
-                    selectedRegion={editStampRegion}
-                    onOpenChange={(open) => {
-                      setEditStampOpen(open);
-                      if (open) setEditEmojiOpen(false);
-                    }}
-                    onRegionChange={setEditStampRegion}
-                    onSelect={insertEditStamp}
-                  />
+              <fieldset
+                disabled={isSaving}
+                aria-busy={isSaving}
+                className="m-0 min-w-0 border-0 p-0 disabled:cursor-wait disabled:opacity-60"
+              >
+                <textarea
+                  ref={editTextareaRef}
+                  value={editValue}
+                  onChange={(event) => setEditValue(truncateCommentContent(event.target.value))}
+                  className="min-h-20 max-h-60 w-full resize-y overflow-y-hidden rounded-xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background)] px-3 py-2 text-sm leading-6 text-[var(--theme-color-text-default)] outline-hidden transition placeholder:text-[var(--theme-color-text-muted)] selection:bg-[var(--theme-color-selection-strong-background)] selection:text-[var(--theme-color-selection-strong-foreground)] focus:border-[var(--theme-color-focus-ring)] focus:ring-2 focus:ring-[var(--theme-color-focus-ring)] dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:placeholder:text-slate-500 dark:selection:bg-sky-500/40 dark:selection:text-white dark:focus:border-sky-400 dark:focus:bg-slate-900 dark:focus:text-slate-50 dark:focus:ring-sky-500/25"
+                />
+                <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <span className={cn("text-xs", editValueLength > COMMENT_LENGTH_WARNING_THRESHOLD ? "text-[var(--theme-color-semantic-warning-foreground)]" : "text-[var(--theme-color-text-muted)]")}>
+                      {editValueLength}/{MAX_COMMENT_LENGTH}
+                    </span>
+                    <EmojiPickerButton
+                      open={editEmojiOpen}
+                      onOpenChange={(open) => {
+                        setEditEmojiOpen(open);
+                        if (open) setEditStampOpen(false);
+                      }}
+                      onSelect={insertEditEmoji}
+                    />
+                    <StampPickerButton
+                      open={editStampOpen}
+                      selectedRegion={editStampRegion}
+                      onOpenChange={(open) => {
+                        setEditStampOpen(open);
+                        if (open) setEditEmojiOpen(false);
+                      }}
+                      onRegionChange={setEditStampRegion}
+                      onSelect={insertEditStamp}
+                    />
+                  </div>
+                  <div className="flex justify-end gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditing(false);
+                        setEditEmojiOpen(false);
+                        setEditStampOpen(false);
+                      }}
+                      className="rounded-full px-3 py-1.5 text-xs font-semibold text-[var(--theme-color-text-muted)] hover:bg-[var(--theme-color-control-background-hover)] hover:text-[var(--theme-color-text-default)] dark:hover:bg-slate-800"
+                    >
+                      {t("actions.cancel")}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleEdit}
+                      className="rounded-full bg-[var(--theme-color-action-accent-background)] px-3 py-1.5 text-xs font-semibold text-[var(--theme-color-action-accent-foreground)] hover:bg-[var(--theme-color-action-accent-background-hover)]"
+                    >
+                      {t("actions.save")}
+                    </button>
+                  </div>
                 </div>
-                <div className="flex justify-end gap-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setEditing(false);
-                      setEditEmojiOpen(false);
-                      setEditStampOpen(false);
-                    }}
-                    className="rounded-full px-3 py-1.5 text-xs font-semibold text-[var(--theme-color-text-muted)] hover:bg-[var(--theme-color-control-background-hover)] hover:text-[var(--theme-color-text-default)] dark:hover:bg-slate-800"
-                  >
-                    {t("actions.cancel")}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleEdit}
-                    className="rounded-full bg-[var(--theme-color-action-accent-background)] px-3 py-1.5 text-xs font-semibold text-[var(--theme-color-action-accent-foreground)] hover:bg-[var(--theme-color-action-accent-background-hover)]"
-                  >
-                    {t("actions.save")}
-                  </button>
-                </div>
-              </div>
+              </fieldset>
             </div>
           ) : (
             <CommentContent content={comment.content ?? ""} isDeleted={isDeleted} stampLookup={stampLookup} />
           )}
 
-          <div className="mt-3 flex flex-wrap items-center gap-1.5">
+          <div
+            data-comment-action-layout={hasDedicatedReactionRow ? "stacked" : "inline"}
+            className={cn(
+              "mt-3",
+              hasDedicatedReactionRow ? "space-y-1.5" : "flex flex-wrap items-center gap-1.5",
+            )}
+          >
             {!isDeleted ? (
-              <button
-                type="button"
-                onClick={() => {
-                  setDeleteDialogOpen(false);
-                  setReactionPickerOpen(false);
-                  setReplying((value) => !value);
-                }}
-                className="inline-flex h-7 items-center gap-1 rounded-full px-2 text-xs font-semibold text-[var(--theme-color-action-secondary-foreground)] hover:bg-[var(--theme-color-action-secondary-background-hover)] dark:text-sky-300 dark:hover:bg-sky-500/10"
-              >
-                <Reply size={13} />
-                {t("actions.reply")}
-              </button>
-            ) : null}
-            {!isDeleted ? (
-              <>
-                {(comment.reactions ?? []).map((reaction) => (
+              <div data-comment-reactions className="flex flex-wrap items-center gap-1.5">
+                {commentReactions.map((reaction) => (
                   <ReactionChip
                     key={reaction.emojiKey}
                     reaction={reaction}
@@ -517,24 +545,51 @@ export const CommentItem = memo(function CommentItem({
                   label={t("actions.addReaction")}
                   onOpenChange={setReactionPickerOpen}
                   onSelect={(emojiKey) => {
-                    const existingReaction = (comment.reactions ?? []).find((reaction) => reaction.emojiKey === emojiKey);
+                    const existingReaction = commentReactions.find((reaction) => reaction.emojiKey === emojiKey);
                     setReactionPickerOpen(false);
                     void handleToggleReaction(emojiKey, Boolean(existingReaction?.reactedByViewer));
                   }}
                 />
-              </>
+              </div>
             ) : null}
-            <button
+
+            <div
+              data-comment-actions
+              className={cn(
+                "flex shrink-0 items-center gap-1",
+                hasDedicatedReactionRow
+                  ? "justify-end sm:justify-start"
+                  : "ml-auto justify-end sm:ml-0 sm:justify-start",
+              )}
+            >
+              {!isDeleted ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDeleteDialogOpen(false);
+                    setReactionPickerOpen(false);
+                    setReplying((value) => !value);
+                  }}
+                  className="inline-flex h-8 items-center gap-1 rounded-full px-2 text-xs font-semibold text-[var(--theme-color-action-secondary-foreground)] hover:bg-[var(--theme-color-action-secondary-background-hover)] sm:h-7 dark:text-sky-300 dark:hover:bg-sky-500/10"
+                >
+                  <Reply size={13} />
+                  {t("actions.reply")}
+                </button>
+              ) : null}
+              <button
               type="button"
               onClick={handleCopyLink}
-              className="inline-flex h-7 items-center gap-1 rounded-full px-2 text-xs font-semibold text-[var(--theme-color-text-muted)] hover:bg-[var(--theme-color-control-background-hover)] hover:text-[var(--theme-color-text-default)] dark:text-slate-400 dark:hover:bg-slate-800"
+              aria-label={t("actions.copyLink")}
+              title={t("actions.copyLink")}
+              className="inline-flex h-8 items-center gap-1 rounded-full px-2 text-xs font-semibold text-[var(--theme-color-text-muted)] hover:bg-[var(--theme-color-control-background-hover)] hover:text-[var(--theme-color-text-default)] sm:h-7 dark:text-slate-400 dark:hover:bg-slate-800"
             >
               <Link2 size={13} />
-              {t("actions.copyLink")}
+              <span className="hidden sm:inline">{t("actions.copyLink")}</span>
             </button>
             {comment.canEdit ? (
               <button
                 type="button"
+                disabled={isSaving}
                 onClick={() => {
                   setEditValue(comment.content ?? "");
                   setEditEmojiOpen(false);
@@ -543,17 +598,19 @@ export const CommentItem = memo(function CommentItem({
                   setReactionPickerOpen(false);
                   setEditing(true);
                 }}
-                className="inline-flex h-7 items-center gap-1 rounded-full px-2 text-xs font-semibold text-[var(--theme-color-text-muted)] hover:bg-[var(--theme-color-control-background-hover)] hover:text-[var(--theme-color-text-default)] dark:text-slate-400 dark:hover:bg-slate-800"
+                aria-label={t("actions.edit")}
+                title={t("actions.edit")}
+                className="inline-flex h-8 items-center gap-1 rounded-full px-2 text-xs font-semibold text-[var(--theme-color-text-muted)] hover:bg-[var(--theme-color-control-background-hover)] hover:text-[var(--theme-color-text-default)] disabled:cursor-not-allowed disabled:opacity-60 sm:h-7 dark:text-slate-400 dark:hover:bg-slate-800"
               >
                 <Edit3 size={13} />
-                {t("actions.edit")}
+                <span className="hidden sm:inline">{t("actions.edit")}</span>
               </button>
             ) : null}
             {comment.canDelete ? (
               <Dialog.Root
                 open={deleteDialogOpen}
                 onOpenChange={(open) => {
-                  if (!deleting) {
+                  if (!deleting && !isSaving) {
                     setDeleteDialogOpen(open);
                     if (!open) setActionError("");
                   }
@@ -562,10 +619,13 @@ export const CommentItem = memo(function CommentItem({
                 <Dialog.Trigger asChild>
                   <button
                     type="button"
-                    className="inline-flex h-7 items-center gap-1 rounded-full px-2 text-xs font-semibold text-[var(--theme-color-action-destructive-foreground)] hover:bg-[var(--theme-color-action-destructive-background-hover)] dark:text-[var(--theme-color-semantic-danger-foreground-on-dark)] dark:hover:bg-red-500/10"
+                    disabled={isSaving}
+                    aria-label={t("actions.delete")}
+                    title={t("actions.delete")}
+                    className="inline-flex h-8 items-center gap-1 rounded-full px-2 text-xs font-semibold text-[var(--theme-color-action-destructive-foreground)] hover:bg-[var(--theme-color-action-destructive-background-hover)] disabled:cursor-not-allowed disabled:opacity-60 sm:h-7 dark:text-[var(--theme-color-semantic-danger-foreground-on-dark)] dark:hover:bg-red-500/10"
                   >
                     <Trash2 size={13} />
-                    {t("actions.delete")}
+                    <span className="hidden sm:inline">{t("actions.delete")}</span>
                   </button>
                 </Dialog.Trigger>
                 <Dialog.Portal>
@@ -597,6 +657,7 @@ export const CommentItem = memo(function CommentItem({
                 </Dialog.Portal>
               </Dialog.Root>
             ) : null}
+            </div>
           </div>
 
           {actionError ? <div className="mt-2 text-xs text-[var(--theme-color-semantic-danger-foreground)] dark:text-[var(--theme-color-semantic-danger-foreground-on-dark)]">{actionError}</div> : null}
@@ -604,9 +665,12 @@ export const CommentItem = memo(function CommentItem({
           {replying ? (
             <div className="mt-3">
               <CommentComposer
+                key={replyDraftStorageKey ?? `reply-comment-composer:${comment.id}`}
                 placeholder={t("composer.replyPlaceholder")}
                 submitLabel={t("actions.reply")}
                 autoFocus
+                draftStorageKey={replyDraftStorageKey}
+                variant="reply"
                 onCancel={() => setReplying(false)}
                 onSubmit={handleSubmitReply}
               />
@@ -614,7 +678,7 @@ export const CommentItem = memo(function CommentItem({
           ) : null}
 
           {visibleReplies.length > 0 ? (
-            <div className="mt-3 -ml-5.5 space-y-3 border-l border-[var(--theme-color-border-subtle)] pl-2 sm:ml-0 sm:pl-3 dark:border-slate-700">
+            <div className="mt-3 space-y-0 border-l border-[var(--theme-color-border-subtle)] pl-3 sm:space-y-3 dark:border-slate-700">
               {visibleReplies.map((reply) => (
                 <CommentItem
                   key={reply.id}
@@ -626,6 +690,8 @@ export const CommentItem = memo(function CommentItem({
                   stampLookup={stampLookup}
                   canReact={canReact}
                   commentPage={commentPage}
+                  draftTargetKey={draftTargetKey}
+                  draftUserId={draftUserId}
                   isReply
                   rootCommentId={comment.id}
                   onCreateReply={onCreateReply}

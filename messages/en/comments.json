@@ -7,6 +7,7 @@
     "delete": "Delete",
     "edit": "Edit",
     "publish": "Post comment",
+    "refresh": "Refresh comments",
     "reply": "Reply",
     "save": "Save",
     "sending": "Sending"
@@ -62,6 +63,8 @@
     "edited": "(edited)",
     "loading": "Loading",
     "loadingAuth": "Loading sign-in status...",
+    "refreshFailed": "Refresh failed",
+    "refreshSuccess": "Refreshed",
     "verificationRequired": "Verify your email to comment and reply"
   },
   "thread": {

@@ -99,7 +99,7 @@
   },
   "notifications": {
     "title": "提醒",
-    "description": "查看活动评论的回复和回应提醒。",
+    "description": "查看活动和卡牌评论的回复与回应提醒",
     "loading": "正在读取提醒...",
     "fallbackActor": "有用户",
     "replyColumnTitle": "回复提醒",
@@ -112,6 +112,7 @@
     "emptyReactions": "还没有新的回应提醒。",
     "unreadLabel": "未读",
     "activityLabel": "活动 #{eventId}",
+    "cardLabel": "卡牌 #{cardId}",
     "loadFailed": "提醒读取失败",
     "updateFailed": "提醒状态更新失败",
     "requestFailed": "请求失败（HTTP {status}）"

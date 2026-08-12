@@ -62,9 +62,9 @@ CREATE TABLE IF NOT EXISTS comments (
   moderated_by      UUID REFERENCES profiles(id) ON DELETE SET NULL,
   moderated_at      TIMESTAMPTZ,
   moderation_reason TEXT,
-  CHECK (target_type IN ('bandori_event')),
+  CHECK (target_type IN ('bandori_event', 'bandori_card')),
   CHECK (char_length(target_id) BETWEEN 1 AND 128),
-  CHECK (content IS NULL OR (char_length(btrim(content)) > 0 AND char_length(content) <= 500)),
+  CHECK (content IS NULL OR (char_length(btrim(content)) > 0 AND char_length(content) <= 1000)),
   CHECK (depth >= 0),
   CHECK (reply_count >= 0),
   CHECK (moderation_status IN ('visible', 'removed_by_admin', 'hidden')),
@@ -238,7 +238,7 @@ CREATE TABLE IF NOT EXISTS comment_notifications (
   read_at             TIMESTAMPTZ,
   created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   CHECK (type IN ('comment_reply', 'comment_reaction')),
-  CHECK (target_type IN ('bandori_event')),
+  CHECK (target_type IN ('bandori_event', 'bandori_card')),
   CHECK (char_length(target_id) BETWEEN 1 AND 128),
   CHECK (
     reaction_emoji_key IS NULL OR (

@@ -34,6 +34,30 @@ test("comment locale catalogs keep identical keys and ICU placeholders", () => {
   }
 });
 
+test("event and card comment panels share generic copy while events retain the cutoff benefit", () => {
+  const zh = readJson("../messages/zh-CN/bandori.json");
+  const en = readJson("../messages/en/bandori.json");
+
+  assert.equal(zh.events.comments.title, "评论");
+  assert.equal(zh.cards.comments.title, "评论");
+  assert.equal(zh.events.comments.emptyMessage, "还没有评论，来留下第一条评论");
+  assert.equal(zh.cards.comments.emptyMessage, "还没有评论，来留下第一条评论");
+  assert.equal(zh.cards.comments.signedOutMessage, "登录后可以发表评论");
+  assert.equal(
+    zh.events.comments.signedOutMessage,
+    "登录后可以发表评论，并启用每 30 秒更新的高频活动榜线",
+  );
+  assert.equal(en.events.comments.title, "Comments");
+  assert.equal(en.cards.comments.title, "Comments");
+  assert.equal(en.events.comments.emptyMessage, "No comments yet—leave the first comment");
+  assert.equal(en.cards.comments.emptyMessage, "No comments yet—leave the first comment");
+  assert.equal(en.cards.comments.signedOutMessage, "Sign in to comment");
+  assert.equal(
+    en.events.comments.signedOutMessage,
+    "Sign in to comment and enable high-frequency event cutoff updates every 30 seconds",
+  );
+});
+
 test("shared comment UI reads copy from the comments namespace", () => {
   const paths = [
     "../src/components/comments/CommentComposer.tsx",

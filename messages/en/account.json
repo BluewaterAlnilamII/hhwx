@@ -99,7 +99,7 @@
   },
   "notifications": {
     "title": "Notifications",
-    "description": "View reply and reaction notifications for event comments.",
+    "description": "View reply and reaction notifications for event and card comments",
     "loading": "Loading notifications...",
     "fallbackActor": "Someone",
     "replyColumnTitle": "Replies",
@@ -112,6 +112,7 @@
     "emptyReactions": "No reaction notifications yet.",
     "unreadLabel": "Unread",
     "activityLabel": "Event #{eventId}",
+    "cardLabel": "Card #{cardId}",
     "loadFailed": "Failed to load notifications",
     "updateFailed": "Failed to update notification status",
     "requestFailed": "Request failed (HTTP {status})"

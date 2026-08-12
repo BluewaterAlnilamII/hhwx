@@ -6,7 +6,22 @@ import { COMMENT_EMOJI_NAME_SET } from "@/lib/comments/emoji";
 export const COMMENT_PAGE_SIZE = 10;
 export const COMMENT_PREVIEW_REPLY_LIMIT = 3;
 export const COMMENT_REACTION_PARTICIPANT_PAGE_SIZE = 50;
-export const MAX_COMMENT_LENGTH = 500;
+export const MAX_COMMENT_LENGTH = 1_000;
+export const COMMENT_LENGTH_WARNING_THRESHOLD = 920;
+
+export function countCommentCharacters(value: string): number {
+  return Array.from(value).length;
+}
+
+export function truncateCommentContent(
+  value: string,
+  maxLength = MAX_COMMENT_LENGTH,
+): string {
+  const characters = Array.from(value);
+  return characters.length <= maxLength
+    ? value
+    : characters.slice(0, maxLength).join("");
+}
 
 export type CommentNotificationType = "comment_reply" | "comment_reaction";
 
@@ -170,7 +185,7 @@ export function parseCommentContent(value: unknown): string {
     throw new ApiRouteError(400, "EMPTY_COMMENT", "评论内容不能为空");
   }
 
-  if (Array.from(content).length > MAX_COMMENT_LENGTH) {
+  if (countCommentCharacters(content) > MAX_COMMENT_LENGTH) {
     throw new ApiRouteError(400, "COMMENT_TOO_LONG", `评论内容不能超过 ${MAX_COMMENT_LENGTH} 个字符`);
   }
 

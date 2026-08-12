@@ -70,9 +70,9 @@
   },
   "events": {
     "comments": {
-      "title": "活动评论",
+      "title": "评论",
       "signedOutMessage": "登录后可以发表评论，并启用每 30 秒更新的高频活动榜线",
-      "emptyMessage": "还没有评论，来留下本期活动的第一条讨论"
+      "emptyMessage": "还没有评论，来留下第一条评论"
     },
     "status": {
       "upcoming": "未开始",
@@ -244,6 +244,11 @@
       "loading": "正在读取卡牌图鉴",
       "loadFailed": "读取卡牌数据失败，请稍后重试",
       "empty": "没有符合当前条件的卡牌"
+    },
+    "comments": {
+      "title": "评论",
+      "signedOutMessage": "登录后可以发表评论",
+      "emptyMessage": "还没有评论，来留下第一条评论"
     },
     "detail": {
       "back": "返回卡牌图鉴",

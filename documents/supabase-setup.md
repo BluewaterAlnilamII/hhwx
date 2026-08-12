@@ -23,6 +23,8 @@ This document describes HHWX's Supabase schema workflow. New schema changes shou
 - `supabase/migrations/20260630071740_remove_legacy_comment_likes.sql`: removes the legacy `comment_likes` table and `comments.like_count` compatibility counter after reaction backfill verification.
 - `supabase/migrations/20260701131822_remove_legacy_like_notifications.sql`: removes legacy `comment_like` notification rows and constrains `comment_notifications` to reply and reaction notifications.
 - `supabase/migrations/20260728185041_scope_bandori_event_comments_by_server.sql`: rewrites legacy numeric Bandori event comment and notification targets to the canonical `<server-code>:<event-id>` form, treating all pre-migration discussions as CN.
+- `supabase/migrations/20260812043505_add_bandori_card_comment_targets.sql`: allows the generic comment and notification tables to store `bandori_card` targets without changing their read-only browser grants or RLS policies. Ordinary cards use one cross-server `<card-id>` target; registered EN/CN numeric-ID collisions use `<server-code>:<card-id>`.
+- `supabase/migrations/20260812053202_expand_comment_content_length.sql`: raises the shared Bandori comment, reply, and edit limit from 500 to 1,000 Unicode characters without changing the legacy Othello guestbook limit, grants, or RLS policies.
 - `supabase/migrations/20260801185414_accept_manual_profile_server.sql`: makes the service-role manual-profile RPC persist the profile payload's explicit Bandori server.
 - `scripts/backfill-user-game-profile-servers.mjs`: audits or repairs manual-profile summary servers from their checksummed compressed payloads.
 - `documents/profile-public-uid-schema.sql`: public numeric profile UID support.
@@ -50,6 +52,10 @@ For new schema work:
 The current baseline migration is for new empty projects. Do not run it directly against the existing production HHWX project. For the linked production project, keep the historical no-op records for already-applied remote versions and mark the baseline version as applied only after verifying that the live schema already matches it. Run `npm exec -- supabase db push --dry-run` before any production push.
 
 `20260728185041_scope_bandori_event_comments_by_server.sql` is a coordinated application and data release. Deploy the server-aware comment API first so concurrent writes already use canonical targets, then push the migration immediately. Existing legacy discussions can be temporarily absent between those two steps, but the migration preserves every comment and notification row.
+
+The card-comment target constraint change is migration-first. Push `20260812043505_add_bandori_card_comment_targets.sql` before deploying the application that can write `bandori_card` rows. The previous application remains compatible with the expanded constraints. Rollback to the event-only constraints is safe only after confirming that both `comments` and `comment_notifications` contain no `bandori_card` rows.
+
+The shared comment length change is also migration-first. Push `20260812053202_expand_comment_content_length.sql` before deploying the application that accepts 1,000-character comments. The previous application remains compatible because it still submits at most 500 characters. Restoring the old constraint requires first confirming that `comments` contains no non-null content longer than 500 characters.
 
 The manual-profile server fix is backward-compatible only in the migration-first direction. Push `20260801185414_accept_manual_profile_server.sql`, deploy the application immediately afterward, and then audit historical rows:
 

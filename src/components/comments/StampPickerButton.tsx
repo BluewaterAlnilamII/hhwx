@@ -1,7 +1,7 @@
 "use client";
 
 import type { CSSProperties } from "react";
-import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { Sticker, Volume2 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { BandoriStampAnimationCanvas } from "@/components/bandori/BandoriStampView";
@@ -97,6 +97,8 @@ export const StampPickerButton = memo(function StampPickerButton({
   onSelect,
 }: StampPickerButtonProps) {
   const t = useTranslations("comments");
+  const pickerLabel = t("pickers.stamp");
+  const popoverId = useId();
   const containerRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const [popoverStyle, setPopoverStyle] = useState<CSSProperties>({});
@@ -129,8 +131,20 @@ export const StampPickerButton = memo(function StampPickerButton({
       onOpenChange(false);
     };
 
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+
+      event.preventDefault();
+      onOpenChange(false);
+      window.requestAnimationFrame(() => buttonRef.current?.focus());
+    };
+
     document.addEventListener("pointerdown", handlePointerDown);
-    return () => document.removeEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
   }, [onOpenChange, open]);
 
   useLayoutEffect(() => {
@@ -156,14 +170,19 @@ export const StampPickerButton = memo(function StampPickerButton({
             ? "border-[var(--theme-color-semantic-info-border)] bg-[var(--theme-color-semantic-info-background)] text-[var(--theme-color-semantic-info-foreground)] dark:border-rose-500/50 dark:bg-rose-500/10 dark:text-rose-300"
             : "border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background)] dark:border-slate-700 dark:bg-slate-900",
         )}
+        aria-haspopup="dialog"
+        aria-controls={popoverId}
         aria-expanded={open}
-        aria-label={t("pickers.stamp")}
-        title={t("pickers.stamp")}
+        aria-label={pickerLabel}
+        title={pickerLabel}
       >
         <Sticker size={15} />
       </button>
       {open ? (
         <div
+          id={popoverId}
+          role="dialog"
+          aria-label={pickerLabel}
           style={popoverStyle}
           className="absolute bottom-10 z-20 overflow-hidden rounded-2xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background)] p-2 shadow-xl dark:border-slate-700 dark:bg-slate-900"
         >

@@ -1,22 +1,33 @@
 "use client";
 
-import { useCallback } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  CheckCircle2,
   ChevronFirst,
   ChevronLast,
   ChevronLeft,
   ChevronRight,
+  CircleX,
   MessageSquare,
+  RefreshCw,
 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import Heading from "@/components/Heading";
 import type { CommentThreadLocation } from "@/hooks/useCommentThread";
 import { useCommentThread } from "@/hooks/useCommentThread";
 import { COMMENT_PAGE_SIZE } from "@/lib/comments/comment-contract";
+import { buildCommentDraftStorageKey } from "@/lib/comments/comment-drafts";
 import { CommentComposer } from "./CommentComposer";
 import { CommentItem } from "./CommentItem";
 
 const paginationButtonClassName = "inline-flex h-8 w-8 items-center justify-center rounded-full text-[var(--theme-color-text-default)] transition hover:bg-[var(--theme-color-surface-background)] hover:text-[var(--theme-color-action-secondary-foreground)] active:bg-[var(--theme-color-surface-background)] disabled:pointer-events-none disabled:cursor-not-allowed disabled:text-[var(--theme-color-text-muted)] disabled:opacity-25 dark:text-slate-200 dark:hover:bg-slate-800 dark:hover:text-[var(--theme-color-action-secondary-foreground-on-dark)]";
+const REFRESH_SUCCESS_DURATION_MS = 2_000;
+const REFRESH_ERROR_DURATION_MS = 4_000;
+
+type RefreshState = {
+  targetKey: string;
+  phase: "pending" | "success" | "error";
+};
 
 type CommentThreadProps = {
   apiBase: string | null;
@@ -42,6 +53,9 @@ export default function CommentThread({
   emptyMessage,
 }: CommentThreadProps) {
   const t = useTranslations("comments");
+  const [refreshState, setRefreshState] = useState<RefreshState | null>(null);
+  const refreshSequenceRef = useRef(0);
+  const refreshFeedbackTimerRef = useRef<number | null>(null);
   const {
     authReady,
     canReact,
@@ -60,6 +74,7 @@ export default function CommentThread({
     navigateToComment,
     pageInput,
     replies,
+    refreshComments,
     setPageInput,
     stampLookup,
     submitPageInput,
@@ -74,16 +89,84 @@ export default function CommentThread({
 
   const handleCreateRootComment = useCallback((content: string) => createComment(content, null), [createComment]);
   const handleCreateReply = useCallback((parentId: string, content: string) => createComment(content, parentId), [createComment]);
+  const visibleRefreshPhase = refreshState?.targetKey === targetKey
+    ? refreshState.phase
+    : null;
+  const draftTargetKey = `${apiBase ?? "disabled"}?${apiQuery}`;
+  const rootDraftStorageKey = userId && apiBase
+    ? buildCommentDraftStorageKey({ userId, targetKey: draftTargetKey })
+    : null;
+
+  const handleRefresh = useCallback(async () => {
+    const sequence = refreshSequenceRef.current + 1;
+    refreshSequenceRef.current = sequence;
+    if (refreshFeedbackTimerRef.current !== null) {
+      window.clearTimeout(refreshFeedbackTimerRef.current);
+      refreshFeedbackTimerRef.current = null;
+    }
+    setRefreshState({ targetKey, phase: "pending" });
+
+    const succeeded = await refreshComments();
+    if (sequence !== refreshSequenceRef.current) return;
+
+    const phase = succeeded ? "success" : "error";
+    setRefreshState({ targetKey, phase });
+    refreshFeedbackTimerRef.current = window.setTimeout(() => {
+      if (sequence === refreshSequenceRef.current) {
+        setRefreshState(null);
+      }
+      refreshFeedbackTimerRef.current = null;
+    }, succeeded ? REFRESH_SUCCESS_DURATION_MS : REFRESH_ERROR_DURATION_MS);
+  }, [refreshComments, targetKey]);
+
+  useEffect(() => () => {
+    refreshSequenceRef.current += 1;
+    if (refreshFeedbackTimerRef.current !== null) {
+      window.clearTimeout(refreshFeedbackTimerRef.current);
+    }
+  }, []);
 
   return (
-    <section className="rounded-3xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-surface-background)] p-4 shadow-[var(--theme-shadow-surface-raised)] sm:p-5 dark:border-slate-800 dark:bg-slate-950">
-      <div className="flex flex-col gap-3 border-b border-[var(--theme-color-border-subtle)] pb-4 sm:flex-row sm:items-end sm:justify-between dark:border-slate-800">
+    <section className="rounded-3xl border border-[var(--theme-color-border-subtle)] bg-[#fffef4] p-2 shadow-[var(--theme-shadow-surface-raised)] sm:p-5 dark:border-slate-800 dark:bg-slate-950">
+      <div className="flex items-center justify-between gap-3 border-b border-[var(--theme-color-border-subtle)] px-2 pb-4 pt-2 sm:px-0 sm:pt-0 dark:border-slate-800">
         <Heading as="h2" visualRole="section" accentSlot="a" icon={<MessageSquare size={20} />} className="dark:text-[var(--theme-color-text-default-on-dark)]">
           {title}
           <span className="text-sm font-semibold text-[var(--theme-color-text-muted)] dark:text-[var(--theme-color-text-muted-on-dark)]">
             {t("thread.commentCount", { count: totalCommentCount })}
           </span>
         </Heading>
+        <div className="relative shrink-0">
+          <button
+            type="button"
+            onClick={handleRefresh}
+            disabled={apiBase === null || loading || visibleRefreshPhase === "pending"}
+            aria-label={t("actions.refresh")}
+            title={t("actions.refresh")}
+            className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background)] text-[var(--theme-color-text-muted)] shadow-xs transition hover:bg-[var(--theme-color-control-background-hover)] hover:text-[var(--theme-color-text-default)] disabled:cursor-not-allowed disabled:opacity-45 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white"
+          >
+            <RefreshCw
+              size={17}
+              className={loading || visibleRefreshPhase === "pending" ? "animate-spin" : undefined}
+            />
+          </button>
+          {visibleRefreshPhase === "success" ? (
+            <div
+              role="status"
+              className="pointer-events-none absolute right-full top-1/2 z-20 mr-2 inline-flex -translate-y-1/2 items-center gap-1.5 whitespace-nowrap rounded-full border border-[var(--theme-color-semantic-success-border)] bg-[var(--theme-color-semantic-success-background)] px-3 py-1.5 text-xs font-semibold text-[var(--theme-color-semantic-success-foreground)] shadow-md dark:text-[var(--theme-color-semantic-success-foreground-on-dark)]"
+            >
+              <CheckCircle2 size={14} aria-hidden="true" />
+              {t("states.refreshSuccess")}
+            </div>
+          ) : visibleRefreshPhase === "error" ? (
+            <div
+              role="alert"
+              className="pointer-events-none absolute right-full top-1/2 z-20 mr-2 inline-flex -translate-y-1/2 items-center gap-1.5 whitespace-nowrap rounded-full border border-[var(--theme-color-semantic-danger-border)] bg-[var(--theme-color-semantic-danger-background)] px-3 py-1.5 text-xs font-semibold text-[var(--theme-color-semantic-danger-foreground)] shadow-md dark:text-[var(--theme-color-semantic-danger-foreground-on-dark)]"
+            >
+              <CircleX size={14} aria-hidden="true" />
+              {t("states.refreshFailed")}
+            </div>
+          ) : null}
+        </div>
       </div>
 
       <div className="mt-4">
@@ -93,8 +176,10 @@ export default function CommentThread({
           </div>
         ) : userId && emailVerified ? (
           <CommentComposer
+            key={rootDraftStorageKey ?? "root-comment-composer"}
             placeholder={t("composer.rootPlaceholder", { username: username ?? t("states.currentAccount") })}
             submitLabel={t("actions.publish")}
+            draftStorageKey={rootDraftStorageKey}
             onSubmit={handleCreateRootComment}
           />
         ) : userId ? (
@@ -126,6 +211,8 @@ export default function CommentThread({
             stampLookup={stampLookup}
             canReact={canReact}
             commentPage={currentPage}
+            draftTargetKey={draftTargetKey}
+            draftUserId={userId}
             onCreateReply={handleCreateReply}
             onLoadReactionParticipants={loadReactionParticipants}
             onToggleReaction={toggleCommentReaction}
@@ -136,7 +223,7 @@ export default function CommentThread({
           />
         ))}
 
-        {!loading && comments.length === 0 ? (
+        {!loading && !error && comments.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-[var(--theme-color-semantic-neutral-border)] bg-[var(--theme-color-semantic-neutral-background)] py-10 text-center text-sm font-semibold text-[var(--theme-color-semantic-neutral-foreground)] dark:border-slate-700 dark:bg-slate-900/50 dark:text-[var(--theme-color-semantic-neutral-foreground-on-dark)]">
             {emptyMessage}
           </div>

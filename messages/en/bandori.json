@@ -70,9 +70,9 @@
   },
   "events": {
     "comments": {
-      "title": "Event comments",
+      "title": "Comments",
       "signedOutMessage": "Sign in to comment and enable high-frequency event cutoff updates every 30 seconds",
-      "emptyMessage": "No comments yet—start the first discussion for this event"
+      "emptyMessage": "No comments yet—leave the first comment"
     },
     "status": {
       "upcoming": "Upcoming",
@@ -244,6 +244,11 @@
       "loading": "Loading the card catalog",
       "loadFailed": "Failed to load card data. Please try again later",
       "empty": "No cards match the current filters"
+    },
+    "comments": {
+      "title": "Comments",
+      "signedOutMessage": "Sign in to comment",
+      "emptyMessage": "No comments yet—leave the first comment"
     },
     "detail": {
       "back": "Back to card catalog",

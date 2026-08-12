@@ -1,16 +1,18 @@
 "use client";
 
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { ArrowLeft, ClipboardList, Images, Play } from "lucide-react";
 import Heading from "@/components/Heading";
 import { useBandoriCharactersMaster } from "@/hooks/useBandoriCharactersMaster";
 import { useBandoriCardsAssetIndex } from "@/hooks/useBandoriPublicAssetIndex";
 import { useBandoriSkillsMaster } from "@/hooks/useBandoriSkillsMaster";
-import { Link } from "@/i18n/navigation";
+import { Link, useRouter } from "@/i18n/navigation";
 import {
   normalizeBandoriCardCatalogType,
   type BandoriCardCatalogType,
 } from "@/lib/bandori/cards/cards-page-catalog";
+import { buildBandoriCardDetailHref } from "@/lib/bandori/cards/detail-url";
+import { isKnownBandoriCardEntityCollision } from "@/lib/bandori/cards/regional-extensions";
 import { readBandoriCardsListHref } from "@/lib/bandori/cards/cards-list-query-snapshot";
 import { normalizeBandoriCardDisplayReleaseTimestamp } from "@/lib/bandori/cards/release";
 import {
@@ -52,6 +54,7 @@ import {
 import { useLocale, useTranslations } from "next-intl";
 import BandoriPageShell from "../../BandoriPageShell";
 import BandoriCardServerSwitcher from "../_components/BandoriCardServerSwitcher";
+import CardComments from "./CardComments";
 import BandoriFullCardGallery from "./_components/BandoriFullCardArt";
 
 type CardStats = {
@@ -176,6 +179,7 @@ export default function CardDetailPageClient({
   const locale = useLocale();
   const t = useTranslations("bandori.cards");
   const termsT = useTranslations("bandori.terms");
+  const router = useRouter();
   const charactersMaster = useBandoriCharactersMaster();
   const skillsMaster = useBandoriSkillsMaster();
   const { value: assetIndex, loading: assetIndexLoading } = useBandoriCardsAssetIndex();
@@ -278,6 +282,21 @@ export default function CardDetailPageClient({
   const attributeIconUrl = attribute ? buildBandoriCardAttributeIconUrl(attribute) : null;
   const jpReferenceName = jpCardName;
   const jpReferenceReleaseDate = jpReleaseDate;
+  const entityServer = isKnownBandoriCardEntityCollision(cardId)
+    ? selectedServer
+    : null;
+  const handleServerChange = useCallback((server: BandoriServer) => {
+    const changesCommentTarget = isKnownBandoriCardEntityCollision(cardId)
+      && server !== selectedServer;
+    router.replace(buildBandoriCardDetailHref(
+      `/bandori/cards/${cardId}`,
+      {
+        server,
+        commentPage: changesCommentTarget ? null : undefined,
+        commentId: changesCommentTarget ? null : undefined,
+      },
+    ));
+  }, [cardId, router, selectedServer]);
 
   return (
     <BandoriPageShell contentClassName="max-w-6xl">
@@ -302,8 +321,7 @@ export default function CardDetailPageClient({
             selectedServer={selectedServer}
             availableServers={availableServers}
             label={t("detail.server")}
-            getHref={(server) => `/bandori/cards/${cardId}?server=${getBandoriServerCode(server)}`}
-            replace
+            onChange={handleServerChange}
           />
         </div>
 
@@ -467,6 +485,7 @@ export default function CardDetailPageClient({
           </div>
         </section>
       </article>
+      <CardComments cardId={cardId} entityServer={entityServer} />
     </BandoriPageShell>
   );
 }
