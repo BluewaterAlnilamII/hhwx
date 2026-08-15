@@ -60,6 +60,28 @@
     "httpSaveFailed": "Save failed: HTTP {status}",
     "invalidResponse": "Account profile response is invalid"
   },
+  "displayDegree": {
+    "chooseTitle": "Choose display title",
+    "dialogTitle": "Choose display title",
+    "dialogDescription": "Choose a title owned by one of your bound game accounts",
+    "accountsLabel": "Bound game accounts",
+    "degreesLabel": "Owned titles",
+    "close": "Close",
+    "empty": "No titles available",
+    "loading": "Loading titles",
+    "loadFailed": "Failed to load titles",
+    "httpLoadFailed": "Failed to load titles (HTTP {status})",
+    "retry": "Retry",
+    "resourceUnavailable": "Title resources are unavailable",
+    "cancel": "Cancel",
+    "save": "Save title",
+    "saving": "Saving",
+    "notSignedIn": "Please log in first",
+    "saveFailed": "Save failed",
+    "httpSaveFailed": "Save failed (HTTP {status})",
+    "invalidResponse": "Title response is invalid",
+    "ownershipChanged": "Title ownership changed, please choose again"
+  },
   "password": {
     "title": "Change password",
     "description": "Send a password reset email to the current inbox.",

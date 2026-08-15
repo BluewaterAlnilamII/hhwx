@@ -237,6 +237,27 @@ test("comment page hydration batches reply previews and reaction summaries", () 
   assert.doesNotMatch(serviceSource, /Promise\.all\(rootIds\.map/u);
 });
 
+test("comment responses expose the author's current display Degree", () => {
+  const contractSource = readFileSync(
+    new URL("../src/lib/comments/comment-contract.ts", import.meta.url),
+    "utf8",
+  );
+  const serviceSource = readFileSync(
+    new URL("../src/lib/comments/comments-server.ts", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(contractSource, /displayDegree: AccountDisplayDegreeSelection \| null/u);
+  assert.match(
+    serviceSource,
+    /profiles:profiles!user_id\(username, avatar_card_id, avatar_card_server, avatar_card_train_type, display_degree_server, display_degree_id\)/u,
+  );
+  assert.match(
+    serviceSource,
+    /displayDegree: row\.profiles[\s\S]*?normalizeStoredDisplayDegree\([\s\S]*?display_degree_server[\s\S]*?display_degree_id/u,
+  );
+});
+
 test("comment reaction summary rows map ordered JSON and reject incomplete previews", () => {
   const rawRows = [{
     comment_id: VALID_COMMENT_ID,

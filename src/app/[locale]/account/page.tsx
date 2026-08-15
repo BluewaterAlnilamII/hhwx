@@ -4,6 +4,7 @@ import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
 import AccountShell, { AccountErrorState, AccountLoadingState, AccountSignInState } from "./AccountShell";
 import AccountAvatarCardControl from "./AccountAvatarCardControl";
+import AccountDisplayDegreeControl from "./AccountDisplayDegreeControl";
 import { useLocalizedAccountProfile } from "./useAccountProfile";
 
 type AccountEntry = {
@@ -87,6 +88,7 @@ export default function AccountPage() {
                 >
                   UID {profile.publicUid}
                 </Link>
+                <AccountDisplayDegreeControl profile={profile} onProfileChange={setProfile} />
               </div>
               <span className={`rounded-full px-3 py-1 text-xs font-semibold sm:ml-auto ${profile.emailVerified ? "bg-emerald-500/20 text-emerald-200" : "bg-amber-500/20 text-amber-200"}`}>
                 {profile.emailVerified ? t("home.emailVerified") : t("home.emailUnverified")}

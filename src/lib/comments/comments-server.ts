@@ -7,6 +7,7 @@ import {
   DEFAULT_ACCOUNT_AVATAR_CARD_TRAIN_TYPE,
   type AccountAvatarCardTrainType,
 } from "@/lib/account-avatar-defaults";
+import { normalizeStoredDisplayDegree } from "@/lib/account-display-degree";
 import {
   createCommentReactionNotification,
   createCommentReplyNotification,
@@ -36,6 +37,8 @@ type CommentProfile = {
   avatar_card_id: number | null;
   avatar_card_server: number | null;
   avatar_card_train_type: AccountAvatarCardTrainType | null;
+  display_degree_server?: number | null;
+  display_degree_id?: number | null;
 };
 
 type CommentRow = {
@@ -99,7 +102,7 @@ const COMMENT_SELECT = [
   "edited_at",
   "deleted_at",
   "moderation_status",
-  "profiles:profiles!user_id(username, avatar_card_id, avatar_card_server, avatar_card_train_type)",
+  "profiles:profiles!user_id(username, avatar_card_id, avatar_card_server, avatar_card_train_type, display_degree_server, display_degree_id)",
 ].join(", ");
 
 function parseCursor(cursor: string | null | undefined): { createdAt: string; id: string } | null {
@@ -317,6 +320,12 @@ function toCommentNode(
     userId: row.user_id,
     username: row.profiles?.username ?? null,
     avatar: buildCommentAvatar(row.profiles),
+    displayDegree: row.profiles
+      ? normalizeStoredDisplayDegree(
+          row.profiles.display_degree_server,
+          row.profiles.display_degree_id,
+        )
+      : null,
     content: row.content,
     depth: row.depth,
     replyCount: row.reply_count,

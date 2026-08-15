@@ -25,6 +25,7 @@ This document describes HHWX's Supabase schema workflow. New schema changes shou
 - `supabase/migrations/20260728185041_scope_bandori_event_comments_by_server.sql`: rewrites legacy numeric Bandori event comment and notification targets to the canonical `<server-code>:<event-id>` form, treating all pre-migration discussions as CN.
 - `supabase/migrations/20260812043505_add_bandori_card_comment_targets.sql`: allows the generic comment and notification tables to store `bandori_card` targets without changing their read-only browser grants or RLS policies. Ordinary cards use one cross-server `<card-id>` target; registered EN/CN numeric-ID collisions use `<server-code>:<card-id>`.
 - `supabase/migrations/20260812053202_expand_comment_content_length.sql`: raises the shared Bandori comment, reply, and edit limit from 500 to 1,000 Unicode characters without changing the legacy Othello guestbook limit, grants, or RLS policies.
+- `supabase/migrations/20260815211415_add_profile_display_degree.sql`: stores the selected public Degree, restricts writes to a service-role RPC, and restores JP Degree 100 when the final owning CN binding is removed or transferred.
 - `supabase/migrations/20260801185414_accept_manual_profile_server.sql`: makes the service-role manual-profile RPC persist the profile payload's explicit Bandori server.
 - `scripts/backfill-user-game-profile-servers.mjs`: audits or repairs manual-profile summary servers from their checksummed compressed payloads.
 - `documents/profile-public-uid-schema.sql`: public numeric profile UID support.
@@ -56,6 +57,8 @@ The current baseline migration is for new empty projects. Do not run it directly
 The card-comment target constraint change is migration-first. Push `20260812043505_add_bandori_card_comment_targets.sql` before deploying the application that can write `bandori_card` rows. The previous application remains compatible with the expanded constraints. Rollback to the event-only constraints is safe only after confirming that both `comments` and `comment_notifications` contain no `bandori_card` rows.
 
 The shared comment length change is also migration-first. Push `20260812053202_expand_comment_content_length.sql` before deploying the application that accepts 1,000-character comments. The previous application remains compatible because it still submits at most 500 characters. Restoring the old constraint requires first confirming that `comments` contains no non-null content longer than 500 characters.
+
+The profile display Degree change is migration-first. Push `20260815211415_add_profile_display_degree.sql` before deploying the account-center selector because the new profile read and save routes require the columns and service-role RPC. Older application builds ignore the new defaulted columns. The migration also replaces bind-transfer and unbind RPCs so a selected Degree falls back atomically when its final owning binding disappears.
 
 The manual-profile server fix is backward-compatible only in the migration-first direction. Push `20260801185414_accept_manual_profile_server.sql`, deploy the application immediately afterward, and then audit historical rows:
 

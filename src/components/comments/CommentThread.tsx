@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   CheckCircle2,
   ChevronFirst,
@@ -13,8 +13,15 @@ import {
 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import Heading from "@/components/Heading";
+import { useBandoriDegreeCatalog } from "@/hooks/useBandoriDegrees";
 import type { CommentThreadLocation } from "@/hooks/useCommentThread";
 import { useCommentThread } from "@/hooks/useCommentThread";
+import type { AccountDisplayDegreeSelection } from "@/lib/account-display-degree";
+import {
+  getBandoriDegreeCatalogItemsForRegion,
+  type BandoriDegreeCatalogItem,
+} from "@/lib/bandori-degree-assets";
+import { BANDORI_SERVERS, getBandoriServerCode } from "@/lib/bandori-server";
 import { COMMENT_PAGE_SIZE } from "@/lib/comments/comment-contract";
 import { buildCommentDraftStorageKey } from "@/lib/comments/comment-drafts";
 import { CommentComposer } from "./CommentComposer";
@@ -23,6 +30,10 @@ import { CommentItem } from "./CommentItem";
 const paginationButtonClassName = "inline-flex h-8 w-8 items-center justify-center rounded-full text-[var(--theme-color-text-default)] transition hover:bg-[var(--theme-color-surface-background)] hover:text-[var(--theme-color-action-secondary-foreground)] active:bg-[var(--theme-color-surface-background)] disabled:pointer-events-none disabled:cursor-not-allowed disabled:text-[var(--theme-color-text-muted)] disabled:opacity-25 dark:text-slate-200 dark:hover:bg-slate-800 dark:hover:text-[var(--theme-color-action-secondary-foreground-on-dark)]";
 const REFRESH_SUCCESS_DURATION_MS = 2_000;
 const REFRESH_ERROR_DURATION_MS = 4_000;
+
+function getDisplayDegreeKey(selection: AccountDisplayDegreeSelection): string {
+  return `${selection.server}:${selection.degreeId}`;
+}
 
 type RefreshState = {
   targetKey: string;
@@ -86,6 +97,25 @@ export default function CommentThread({
     userId,
     username,
   } = useCommentThread({ apiBase, apiQuery, targetKey, readLocation, updateLocation });
+  const { catalog: degreeCatalog } = useBandoriDegreeCatalog(comments.length > 0);
+  const degreesBySelection = useMemo(() => {
+    const result = new Map<string, BandoriDegreeCatalogItem>();
+    for (const server of BANDORI_SERVERS) {
+      for (const degree of getBandoriDegreeCatalogItemsForRegion(
+        degreeCatalog,
+        getBandoriServerCode(server),
+      )) {
+        result.set(getDisplayDegreeKey({ server, degreeId: degree.id }), degree);
+      }
+    }
+    return result;
+  }, [degreeCatalog]);
+  const resolveDisplayDegree = useCallback(
+    (selection: AccountDisplayDegreeSelection) => (
+      degreesBySelection.get(getDisplayDegreeKey(selection)) ?? null
+    ),
+    [degreesBySelection],
+  );
 
   const handleCreateRootComment = useCallback((content: string) => createComment(content, null), [createComment]);
   const handleCreateReply = useCallback((parentId: string, content: string) => createComment(content, parentId), [createComment]);
@@ -214,6 +244,7 @@ export default function CommentThread({
             draftTargetKey={draftTargetKey}
             draftUserId={userId}
             draftUsername={username}
+            resolveDisplayDegree={resolveDisplayDegree}
             onCreateReply={handleCreateReply}
             onLoadReactionParticipants={loadReactionParticipants}
             onToggleReaction={toggleCommentReaction}

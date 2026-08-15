@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   getBandoriDegreeCatalogItemsForRegion,
+  hasBandoriDegreeMasterRegion,
   normalizeBandoriDegreeId,
   parseBandoriDegreeAnimationManifest,
   parseBandoriDegreeMasterApiResponse,
@@ -106,6 +107,8 @@ test("degree master metadata resolves all resource descriptors without server fa
   assert.equal(cn[1].rankImageName, "rank_none");
   assert.equal(cn[1].rankImage, null);
   assert.deepEqual(en, []);
+  assert.equal(hasBandoriDegreeMasterRegion(master["1"], "jp"), true);
+  assert.equal(hasBandoriDegreeMasterRegion(master["1"], "en"), false);
 });
 
 test("degree master metadata enforces complete four-server slots and public limits", () => {

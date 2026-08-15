@@ -1,4 +1,5 @@
 import type { AccountAvatarCardTrainType } from "@/lib/account-avatar-defaults";
+import type { AccountDisplayDegreeSelection } from "@/lib/account-display-degree";
 import { ApiRouteError } from "@/lib/api-contracts";
 import type { BandoriServer } from "@/lib/bandori-server";
 import { COMMENT_EMOJI_NAME_SET } from "@/lib/comments/emoji";
@@ -137,6 +138,7 @@ export type CommentNode = {
   userId: string;
   username: string | null;
   avatar: CommentAvatar;
+  displayDegree: AccountDisplayDegreeSelection | null;
   content: string | null;
   depth: number;
   replyCount: number;

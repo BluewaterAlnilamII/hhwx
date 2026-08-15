@@ -18,6 +18,7 @@
     "lint": "eslint",
     "test:bandori-cards": "node --import tsx --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test tests/bandori-cards-api-contract.test.mjs && node --import tsx --test tests/bandori-card-catalog.test.mjs tests/bandori-card-detail-ui-contract.test.mjs tests/bandori-card-hover-tooltip.test.mjs tests/bandori-card-training.test.mjs tests/bandori-profile-card-collection.test.mjs tests/bandori-snapshot-api-server.test.mjs tests/bandori-cards-api-consumers.test.mjs && node --import tsx scripts/test-bandori-cards-api-reader.mjs",
     "test:bandori-degrees": "node --import tsx --test tests/bandori-degrees-api-contract.test.mjs tests/bandori-degree-assets.test.mjs && node --import tsx scripts/test-bandori-degrees-api-reader.mjs",
+    "test:account-display-degree": "node --import tsx --test tests/account-display-degree.test.mjs",
     "test:bandori-events": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test tests/bandori-events-api-contract.test.mjs && node --import tsx --test tests/bandori-event-info.test.mjs tests/bandori-events-consumers.test.mjs && node scripts/test-bandori-events-api-integration.mjs",
     "test:bandori-stamps": "node --import tsx --test tests/bandori-stamps-api-contract.test.mjs && node --import tsx scripts/test-bandori-stamps-api-reader.mjs",
     "test:bandori-music": "node --import tsx --test tests/bandori-music-api-contract.test.mjs tests/bandori-music-api-consumers.test.mjs && node --import tsx scripts/test-bandori-music-api-reader.mjs",

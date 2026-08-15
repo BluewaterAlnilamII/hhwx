@@ -20,6 +20,7 @@ import {
   DEFAULT_ACCOUNT_AVATAR_CARD_TRAIN_TYPE,
   type AccountAvatarCardTrainType,
 } from "@/lib/account-avatar-defaults";
+import { normalizeStoredDisplayDegree } from "@/lib/account-display-degree";
 import {
   USERNAME_REQUIRED_MESSAGE,
   USERNAME_TAKEN_MESSAGE,
@@ -35,8 +36,12 @@ type ProfileRow = {
   avatar_card_id: number | null;
   avatar_card_server: number | null;
   avatar_card_train_type: AvatarCardTrainType | null;
+  display_degree_server: number | null;
+  display_degree_id: number | null;
   created_at: string | null;
 };
+
+const PROFILE_SELECT = "public_uid, username, avatar_card_id, avatar_card_server, avatar_card_train_type, display_degree_server, display_degree_id, created_at";
 
 function buildFallbackUsername(preferredUsername: string | null, userId: string): string {
   if (preferredUsername) {
@@ -155,7 +160,7 @@ async function ensureProfileRow(userId: string, preferredUsername: string | null
   const serviceClient = createServerSupabaseClient();
   const { data, error } = await serviceClient
     .from(PROFILES_TABLE)
-    .select("public_uid, username, avatar_card_id, avatar_card_server, avatar_card_train_type, created_at")
+    .select(PROFILE_SELECT)
     .eq("id", userId)
     .maybeSingle();
 
@@ -179,7 +184,7 @@ async function ensureProfileRow(userId: string, preferredUsername: string | null
     }, {
       onConflict: "id",
     })
-    .select("public_uid, username, avatar_card_id, avatar_card_server, avatar_card_train_type, created_at")
+    .select(PROFILE_SELECT)
     .single();
 
   if (createError) {
@@ -215,6 +220,10 @@ async function readAccountProfile(
   );
   const avatarCardId = avatarIdentity.cardId;
   const avatarCardServer = avatarIdentity.entityServer;
+  const displayDegree = normalizeStoredDisplayDegree(
+    profile.display_degree_server,
+    profile.display_degree_id,
+  );
 
   return {
     userId,
@@ -225,6 +234,8 @@ async function readAccountProfile(
     avatarCardId,
     avatarCardServer,
     avatarCardTrainType: normalizeStoredAvatarTrainType(profile.avatar_card_train_type, avatarCardId),
+    displayDegreeServer: displayDegree.server,
+    displayDegreeId: displayDegree.degreeId,
     createdAt: profile.created_at,
     updatedAt: profile.created_at,
     roles: (rolesResult.data ?? []).map((row) => row.role),
