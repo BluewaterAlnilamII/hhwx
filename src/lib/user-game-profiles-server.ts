@@ -128,6 +128,10 @@ type TrackerMissionBonus = {
   visual?: unknown;
 };
 
+type TrackerDegree = {
+  degree_id?: unknown;
+};
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
@@ -352,6 +356,30 @@ function normalizeLocalProfileId(value: unknown): string | null {
 
 function getSnapshotSuiteUser(snapshot: TrackerUserSnapshotPayload): Record<string, unknown> {
   return isRecord(snapshot.snapshot?.suite_user) ? snapshot.snapshot.suite_user : {};
+}
+
+export function extractSnapshotDegreeIds(snapshot: TrackerUserSnapshotPayload): number[] {
+  const degrees = getSnapshotSuiteUser(snapshot).degrees;
+  if (!Array.isArray(degrees)) {
+    return [];
+  }
+
+  return Array.from(new Set(
+    degrees
+      .filter(isRecord)
+      .map((degree: TrackerDegree) => {
+        const rawDegreeId = degree.degree_id;
+        if (
+          typeof rawDegreeId !== "number"
+          && (typeof rawDegreeId !== "string" || !/^[1-9][0-9]*$/.test(rawDegreeId.trim()))
+        ) {
+          return null;
+        }
+        const degreeId = Number(rawDegreeId);
+        return degreeId > 0 && Number.isSafeInteger(degreeId) ? degreeId : null;
+      })
+      .filter((degreeId): degreeId is number => degreeId !== null),
+  )).sort((left, right) => left - right);
 }
 
 function getSnapshotProfile(snapshot: TrackerUserSnapshotPayload): Record<string, unknown> {
@@ -1007,6 +1035,18 @@ export async function syncAutoGameProfile(webUserId: string, gameUid: string): P
 
   if (error) {
     throw new ApiRouteError(400, "AUTO_GAME_PROFILE_SYNC_FAILED", "保存自动档案失败", error.message);
+  }
+
+  const degreeIds = extractSnapshotDegreeIds(snapshot);
+  if (degreeIds.length > 0) {
+    const { error: degreeMergeError } = await serviceClient.rpc("merge_game_uid_binding_degrees", {
+      p_web_user_id: webUserId,
+      p_game_uid: gameUid,
+      p_degree_ids: degreeIds,
+    });
+    if (degreeMergeError) {
+      console.error("Game profile Degree merge failed:", degreeMergeError.message);
+    }
   }
 
   return readGameProfileSummary(webUserId, (data as UserGameProfileRow).id);
