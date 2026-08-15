@@ -230,9 +230,7 @@ export function getBandoriDegreeCatalogItemsForRegion(
     const degreeType = master.degreeType[slot];
     const iconImageName = master.iconImageName[slot];
     const rank = master.rank[slot];
-    const hasRegionalRecord = DEGREE_STRING_FIELDS.some(
-      (field) => master[field][slot] !== "",
-    ) || DEGREE_NUMBER_FIELDS.some((field) => master[field][slot] !== 0);
+    const hasRegionalRecord = hasBandoriDegreeMasterRegion(master, region);
     if (id === null || !hasRegionalRecord) continue;
 
     const rankImageName = rank === "none"
@@ -275,6 +273,15 @@ export function getBandoriDegreeCatalogItemsForRegion(
     });
   }
   return items;
+}
+
+export function hasBandoriDegreeMasterRegion(
+  entry: BandoriDegreeMasterEntry,
+  region: BandoriDegreeRegion,
+): boolean {
+  const slot = BANDORI_DEGREE_REGIONS.indexOf(region);
+  return DEGREE_STRING_FIELDS.some((field) => entry[field][slot] !== "")
+    || DEGREE_NUMBER_FIELDS.some((field) => entry[field][slot] !== 0);
 }
 
 function parsePositiveInteger(value: unknown, label: string): number {

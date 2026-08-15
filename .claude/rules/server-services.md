@@ -2,6 +2,7 @@
 paths:
   - "src/lib/account-email-verification-server.ts"
   - "src/lib/account-status-server.ts"
+  - "src/lib/account-display-degree-server.ts"
   - "src/lib/auth-redirect-server.ts"
   - "src/lib/auth-server.ts"
   - "src/lib/auth-user-server.ts"

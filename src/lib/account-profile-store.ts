@@ -11,6 +11,8 @@ export type AccountProfile = {
   avatarCardId: number;
   avatarCardServer: BandoriServer | null;
   avatarCardTrainType: "normal" | "after_training";
+  displayDegreeServer: BandoriServer;
+  displayDegreeId: number;
   createdAt: string | null;
   updatedAt: string | null;
   roles: string[];

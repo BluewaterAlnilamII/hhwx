@@ -46,6 +46,7 @@ MCP/手动流程应用过的历史记录。它们在本地有意保持 no-op，�
 - `supabase/migrations/20260701131822_remove_legacy_like_notifications.sql`：移除旧 `comment_like` 提醒记录，并把 `comment_notifications` 收紧为只支持回复和回应提醒。
 - `supabase/migrations/20260728185041_scope_bandori_event_comments_by_server.sql`：把旧的纯数字 Bandori 活动评论和通知目标迁移为统一的 `<server-code>:<event-id>` 格式，并将迁移前的讨论全部视为 CN。
 - `supabase/migrations/20260801185414_accept_manual_profile_server.sql`：让仅 service role 可调用的手动档案 RPC 显式保存档案正文中的 Bandori 服务器。
+- `supabase/migrations/20260815211415_add_profile_display_degree.sql`：保存公开展示称号、仅允许 service-role RPC 修改，并在最后一个拥有该称号的国服绑定被解绑或转移时回退到日服称号 100。
 - `scripts/backfill-user-game-profile-servers.mjs`：根据带校验和的压缩档案正文审计或修复手动档案的服务器摘要字段。
 - `documents/profile-public-uid-schema.sql`：公开数字 profile UID 支持。
 - `documents/game-profile-schema.sql`：持久化用户游戏档案。
@@ -70,6 +71,8 @@ npm exec -- supabase migration new <name>
 5. 对已 link 的远程项目，先用 `npm exec -- supabase db push --dry-run` 复查，再执行 `npm exec -- supabase db push`。
 
 `20260728185041_scope_bandori_event_comments_by_server.sql` 必须与应用协调发布：先部署已支持服务器隔离的评论 API，使并发新写入直接使用统一目标格式，再立即执行迁移。两个步骤之间旧讨论可能会暂时不可见，但迁移会保留全部评论和通知记录。
+
+账号展示称号改动采用 migration-first 顺序。先 push `20260815211415_add_profile_display_degree.sql`，再部署账号中心选择器；新的资料读取和保存路由依赖该迁移提供的字段与 service-role RPC。旧应用会忽略带默认值的新字段。迁移还会替换绑定转移和解绑 RPC，使最后一个拥有当前称号的绑定消失时能在同一事务中回退。
 
 手动档案服务器修复只支持“迁移优先”的向后兼容发布顺序。先 push `20260801185414_accept_manual_profile_server.sql`，随后立即部署应用，再审计历史记录：
 

@@ -60,6 +60,28 @@
     "httpSaveFailed": "保存失败：HTTP {status}",
     "invalidResponse": "账号资料返回格式无效"
   },
+  "displayDegree": {
+    "chooseTitle": "选择展示称号",
+    "dialogTitle": "选择展示称号",
+    "dialogDescription": "按绑定游戏账号选择要在账号资料中展示的称号",
+    "accountsLabel": "绑定游戏账号",
+    "degreesLabel": "拥有的称号",
+    "close": "关闭",
+    "empty": "暂无可用称号",
+    "loading": "正在加载称号",
+    "loadFailed": "加载称号失败",
+    "httpLoadFailed": "加载称号失败（HTTP {status}）",
+    "retry": "重试",
+    "resourceUnavailable": "称号资源暂不可用",
+    "cancel": "取消",
+    "save": "保存称号",
+    "saving": "正在保存",
+    "notSignedIn": "请先登录",
+    "saveFailed": "保存失败",
+    "httpSaveFailed": "保存失败（HTTP {status}）",
+    "invalidResponse": "称号响应格式无效",
+    "ownershipChanged": "该称号的拥有状态已变化，请重新选择"
+  },
   "password": {
     "title": "修改密码",
     "description": "把重置密码邮件发到当前邮箱。",

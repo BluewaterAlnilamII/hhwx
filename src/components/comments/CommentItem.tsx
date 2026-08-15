@@ -17,8 +17,11 @@ import {
   Trash2,
 } from "lucide-react";
 import AccountCardAvatar from "@/components/account/AccountCardAvatar";
+import BandoriDegreeView from "@/components/bandori/BandoriDegreeView";
 import { useAutoResizeTextarea } from "@/hooks/useAutoResizeTextarea";
 import type { CommentReactionParticipantPageLoader } from "@/hooks/useCommentReactionParticipants";
+import type { AccountDisplayDegreeSelection } from "@/lib/account-display-degree";
+import type { BandoriDegreeCatalogItem } from "@/lib/bandori-degree-assets";
 import {
   COMMENT_PAGE_SIZE,
   COMMENT_LENGTH_WARNING_THRESHOLD,
@@ -256,6 +259,9 @@ export type CommentItemProps = {
   draftTargetKey: string;
   draftUserId: string | null;
   draftUsername: string | null;
+  resolveDisplayDegree: (
+    selection: AccountDisplayDegreeSelection,
+  ) => BandoriDegreeCatalogItem | null;
   isReply?: boolean;
   rootCommentId?: string | null;
   onCreateReply: (parentId: string, content: string) => Promise<void>;
@@ -279,6 +285,7 @@ export const CommentItem = memo(function CommentItem({
   draftTargetKey,
   draftUserId,
   draftUsername,
+  resolveDisplayDegree,
   isReply = false,
   rootCommentId = null,
   onCreateReply,
@@ -318,6 +325,9 @@ export const CommentItem = memo(function CommentItem({
   const hiddenReplyCount = isReply ? 0 : Math.max(0, comment.replyCount - visibleReplies.length);
   const isHighlighted = highlightedId === comment.id;
   const isDeleted = Boolean(comment.deletedAt);
+  const displayDegree = comment.displayDegree
+    ? resolveDisplayDegree(comment.displayDegree)
+    : null;
   const commentReactions = comment.reactions ?? [];
   const hasDedicatedReactionRow = !isDeleted && commentReactions.length >= 2;
   const editValueLength = countCommentCharacters(editValue);
@@ -476,7 +486,8 @@ export const CommentItem = memo(function CommentItem({
           size="comment"
           className="ring-1 ring-[var(--theme-color-action-secondary-border)] dark:ring-slate-700"
         />
-        <div className="flex min-h-11 min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+        <div className="flex min-h-11 min-w-0 flex-col items-start justify-center">
+          <div className="flex min-w-0 max-w-full flex-wrap items-center gap-x-2 gap-y-0.5">
             <span className="truncate text-sm font-semibold text-[var(--theme-color-text-default)] dark:text-slate-100">
               {comment.username ?? t("states.anonymous")}
             </span>
@@ -501,6 +512,14 @@ export const CommentItem = memo(function CommentItem({
             {comment.editedAt && !isDeleted ? (
               <span className="text-xs text-[var(--theme-color-text-muted)]">{t("states.edited")}</span>
             ) : null}
+          </div>
+          {comment.displayDegree ? (
+            <div data-comment-display-degree className="mt-[3px] h-5 w-[92px] shrink-0">
+              {displayDegree ? (
+                <BandoriDegreeView degree={displayDegree} active size="comment" />
+              ) : null}
+            </div>
+          ) : null}
         </div>
 
         <div className="col-span-2 min-w-0 pt-1 sm:col-span-1 sm:col-start-2 sm:pt-0">
@@ -748,6 +767,7 @@ export const CommentItem = memo(function CommentItem({
                   draftTargetKey={draftTargetKey}
                   draftUserId={draftUserId}
                   draftUsername={draftUsername}
+                  resolveDisplayDegree={resolveDisplayDegree}
                   isReply
                   rootCommentId={comment.id}
                   onCreateReply={onCreateReply}

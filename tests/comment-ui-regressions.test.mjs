@@ -28,6 +28,14 @@ test("comment timestamps use the browser local time zone", () => {
   assert.doesNotMatch(itemSource, /timeZone:/u);
 });
 
+test("comment Degrees use the compact 92 by 20 layout without growing the avatar row", () => {
+  assert.match(threadSource, /useBandoriDegreeCatalog\(comments\.length > 0\)/u);
+  assert.doesNotMatch(itemSource, /useBandoriDegreeCatalog/u);
+  assert.match(itemSource, /flex min-h-11 min-w-0 flex-col items-start justify-center/u);
+  assert.match(itemSource, /data-comment-display-degree className="mt-\[3px\] h-5 w-\[92px\] shrink-0"/u);
+  assert.match(itemSource, /<BandoriDegreeView degree=\{displayDegree\} active size="comment" \/>/u);
+});
+
 test("comment edits use a synchronous single-flight guard and lock editing controls", () => {
   const editHandler = itemSource.slice(
     itemSource.indexOf("const handleEdit = async"),

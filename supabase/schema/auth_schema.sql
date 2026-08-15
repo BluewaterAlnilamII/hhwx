@@ -14,6 +14,8 @@ CREATE TABLE IF NOT EXISTS profiles (
   avatar_card_id         INTEGER NOT NULL DEFAULT 1,
   avatar_card_server     SMALLINT,
   avatar_card_train_type TEXT NOT NULL DEFAULT 'normal',
+  display_degree_server  INTEGER NOT NULL DEFAULT 0,
+  display_degree_id      INTEGER NOT NULL DEFAULT 100,
   created_at             TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at             TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   CHECK (char_length(username) BETWEEN 2 AND 24),
@@ -29,8 +31,15 @@ CREATE TABLE IF NOT EXISTS profiles (
       AND avatar_card_server IS NULL
     )
   ),
-  CHECK (avatar_card_train_type IN ('normal', 'after_training'))
+  CHECK (avatar_card_train_type IN ('normal', 'after_training')),
+  CONSTRAINT profiles_display_degree_server_check CHECK (display_degree_server BETWEEN 0 AND 3),
+  CONSTRAINT profiles_display_degree_id_check CHECK (display_degree_id > 0)
 );
+
+COMMENT ON COLUMN public.profiles.display_degree_server IS
+  'Bandori server slot for the public display Degree: 0 JP, 1 EN, 2 TW, 3 CN.';
+COMMENT ON COLUMN public.profiles.display_degree_id IS
+  'Bandori Degree ID selected for public display; JP Degree 100 is the system baseline.';
 
 CREATE TABLE IF NOT EXISTS guestbook_comments (
   id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -430,6 +439,10 @@ REVOKE ALL ON TABLE public.comment_notifications FROM PUBLIC, anon, authenticate
 REVOKE ALL ON TABLE public.comment_reports FROM PUBLIC, anon, authenticated;
 
 GRANT SELECT ON TABLE public.profiles TO anon, authenticated;
+GRANT INSERT (id, username, avatar_card_id, avatar_card_server, avatar_card_train_type)
+  ON TABLE public.profiles TO authenticated;
+GRANT UPDATE (username, avatar_card_id, avatar_card_server, avatar_card_train_type)
+  ON TABLE public.profiles TO authenticated;
 GRANT ALL ON TABLE public.profiles TO service_role;
 
 GRANT SELECT ON TABLE public.guestbook_comments TO anon, authenticated;

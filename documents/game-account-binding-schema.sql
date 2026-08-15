@@ -231,6 +231,60 @@ begin
 end;
 $$;
 
+create or replace function public.set_profile_display_degree(
+  p_web_user_id uuid,
+  p_server integer,
+  p_degree_id integer
+)
+returns jsonb
+language plpgsql
+security invoker
+set search_path = ''
+as $$
+begin
+  if p_web_user_id is null then
+    raise exception 'web_user_id is required';
+  end if;
+  if p_server is null or p_server < 0 or p_server > 3 then
+    raise exception 'display degree server is invalid';
+  end if;
+  if p_degree_id is null or p_degree_id <= 0 then
+    raise exception 'display degree id is invalid';
+  end if;
+
+  perform 1
+  from public.profiles
+  where id = p_web_user_id
+  for update;
+
+  if not found then
+    raise exception 'profile does not exist';
+  end if;
+
+  if not (p_server = 0 and p_degree_id = 100) and not (
+    p_server = 3
+    and exists (
+      select 1
+      from public.user_game_bindings as bindings
+      where bindings.web_user_id = p_web_user_id
+        and p_degree_id = any(bindings.owned_degree_ids)
+    )
+  ) then
+    raise exception 'display degree is not owned';
+  end if;
+
+  update public.profiles
+  set display_degree_server = p_server,
+      display_degree_id = p_degree_id
+  where id = p_web_user_id;
+
+  return jsonb_build_object(
+    'displayDegreeServer', p_server,
+    'displayDegreeId', p_degree_id
+  );
+end;
+$$;
+
 create or replace function public.complete_game_uid_binding(
   p_challenge_id uuid,
   p_game_uid text,
@@ -239,7 +293,7 @@ create or replace function public.complete_game_uid_binding(
 returns jsonb
 language plpgsql
 security definer
-set search_path = public
+set search_path = ''
 as $$
 declare
   result public.user_game_bindings;
@@ -303,6 +357,26 @@ begin
       bound_at = now()
   returning * into result;
 
+  if transferred then
+    update public.profiles as profile
+    set display_degree_server = 0,
+        display_degree_id = 100
+    where profile.id = previous_web_user_id
+      and not (
+        profile.display_degree_server = 0
+        and profile.display_degree_id = 100
+      )
+      and (
+        profile.display_degree_server <> 3
+        or not exists (
+          select 1
+          from public.user_game_bindings as remaining_binding
+          where remaining_binding.web_user_id = previous_web_user_id
+            and profile.display_degree_id = any(remaining_binding.owned_degree_ids)
+        )
+      );
+  end if;
+
   return jsonb_build_object(
     'gameUid', result.game_uid,
     'webUserId', result.web_user_id,
@@ -349,7 +423,7 @@ create or replace function public.unbind_game_uid(
 returns void
 language plpgsql
 security definer
-set search_path = public
+set search_path = ''
 as $$
 begin
   if p_web_user_id is null then
@@ -359,6 +433,26 @@ begin
   delete from public.user_game_bindings
   where game_uid = p_game_uid
     and web_user_id = p_web_user_id;
+
+  if found then
+    update public.profiles as profile
+    set display_degree_server = 0,
+        display_degree_id = 100
+    where profile.id = p_web_user_id
+      and not (
+        profile.display_degree_server = 0
+        and profile.display_degree_id = 100
+      )
+      and (
+        profile.display_degree_server <> 3
+        or not exists (
+          select 1
+          from public.user_game_bindings as remaining_binding
+          where remaining_binding.web_user_id = p_web_user_id
+            and profile.display_degree_id = any(remaining_binding.owned_degree_ids)
+        )
+      );
+  end if;
 
   if to_regclass('public.user_game_profiles') is not null then
     execute
@@ -426,6 +520,7 @@ revoke all on function public.complete_game_uid_binding(uuid, text, uuid) from p
 revoke all on function public.increment_game_bind_challenge_attempt(uuid, uuid) from public, anon, authenticated;
 revoke all on function public.unbind_game_uid(text, uuid) from public, anon, authenticated;
 revoke all on function public.merge_game_uid_binding_degrees(uuid, text, integer[]) from public, anon, authenticated;
+revoke all on function public.set_profile_display_degree(uuid, integer, integer) from public, anon, authenticated;
 
 grant execute on function public.cleanup_old_game_bind_challenges(timestamptz) to service_role;
 grant execute on function public.create_game_uid_bind_challenge(uuid, text, text, timestamptz) to service_role;
@@ -433,3 +528,4 @@ grant execute on function public.complete_game_uid_binding(uuid, text, uuid) to 
 grant execute on function public.increment_game_bind_challenge_attempt(uuid, uuid) to service_role;
 grant execute on function public.unbind_game_uid(text, uuid) to service_role;
 grant execute on function public.merge_game_uid_binding_degrees(uuid, text, integer[]) to service_role;
+grant execute on function public.set_profile_display_degree(uuid, integer, integer) to service_role;
