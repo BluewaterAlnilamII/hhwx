@@ -66,7 +66,12 @@ test("account center exposes the grouped picker without a reset control", async 
   assert.match(pageSource, /AccountDisplayDegreeControl/u);
   assert.match(pickerSource, /BandoriServerIcon/u);
   assert.match(pickerSource, /ownedDegreeIds/u);
-  assert.match(degreeViewSource, /size === "comment" \? "w-\[92px\]" : "w-\[115px\]"/u);
+  assert.match(degreeViewSource, /container: "h-5 w-\[92px\]"/u);
+  assert.match(degreeViewSource, /container: "h-\[25px\] w-\[115px\]"/u);
+  assert.match(degreeViewSource, /"absolute inset-0 flex items-center justify-center overflow-hidden"/u);
+  assert.match(degreeViewSource, /"absolute left-0 top-0 z-10 h-full"/u);
+  assert.match(degreeViewSource, /pointer-events-none select-none object-contain/u);
+  assert.doesNotMatch(degreeViewSource, /aspect-\[23\/5\]/u);
   assert.match(pickerSource, /h-\[25px\] w-\[115px\]/u);
   assert.doesNotMatch(`${degreeViewSource}\n${pickerSource}`, /w-\[230px\]|h-\[50px\]/u);
   assert.doesNotMatch(pickerSource, /useDefault|reset|DEFAULT_DISPLAY_DEGREE/u);
