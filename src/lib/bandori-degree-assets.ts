@@ -14,6 +14,8 @@ import type {
 
 export const BANDORI_DEGREE_ANIMATION_SCHEMA_VERSION =
   "hhwx-bandori-degree-animation-v1";
+export const BANDORI_DEGREE_EFFECT_SCHEMA_VERSION =
+  "hhwx-bandori-degree-effect-v1";
 export const BANDORI_DEGREE_REGIONS = BANDORI_PUBLIC_ASSET_SERVERS;
 export type BandoriDegreeRegion = BandoriPublicAssetServer;
 
@@ -29,7 +31,36 @@ export type BandoriDegreeMasterEntry = {
   description: BandoriDegreeStringSlots;
   seq: BandoriDegreeNumberSlots;
   characterId: BandoriDegreeNumberSlots;
+  serverExtensions?: BandoriDegreeServerExtensionSlots;
 };
+
+export type BandoriDegreeEffectMaster = {
+  biliDegreeEffectId: number;
+  seq: number;
+  degreeEffectType: string;
+  assetBundleName: string;
+  description: string;
+};
+
+export type BandoriDegreeServerExtension = {
+  degreeEffect: BandoriDegreeEffectMaster;
+};
+
+export type BandoriDegreeEmptyServerExtension = {
+  degreeEffect?: never;
+};
+
+export type BandoriDegreeServerExtensionSlot =
+  | BandoriDegreeServerExtension
+  | BandoriDegreeEmptyServerExtension
+  | null;
+
+export type BandoriDegreeServerExtensionSlots = [
+  BandoriDegreeServerExtensionSlot,
+  BandoriDegreeServerExtensionSlot,
+  BandoriDegreeServerExtensionSlot,
+  BandoriDegreeServerExtensionSlot,
+];
 
 export type BandoriDegreeMasterMap = Record<string, BandoriDegreeMasterEntry>;
 
@@ -39,6 +70,9 @@ export type BandoriDegreeCatalog = {
 };
 
 export type BandoriDegreeAnimationSummary = BandoriAnimationAssetDescriptor;
+export type BandoriDegreeEffectSummary = BandoriDegreeEffectMaster & {
+  animation?: BandoriAnimationAssetDescriptor;
+};
 
 export type BandoriDegreeCatalogItem = {
   id: number;
@@ -57,9 +91,14 @@ export type BandoriDegreeCatalogItem = {
   rankImage: BandoriPngAssetDescriptor | null;
   iconImage: BandoriPngAssetDescriptor | null;
   animation?: BandoriDegreeAnimationSummary;
+  degreeEffect?: BandoriDegreeEffectSummary;
 };
 
 export type BandoriDegreeAnimationResponse = BandoriAtlasAnimation & {
+  manifestUrl: string;
+};
+
+export type BandoriDegreeEffectResponse = BandoriAtlasAnimation & {
   manifestUrl: string;
 };
 
@@ -74,6 +113,11 @@ const DEGREE_STRING_FIELDS = [
   "description",
 ] as const;
 const DEGREE_NUMBER_FIELDS = ["seq", "characterId"] as const;
+const DEGREE_EFFECT_STRING_FIELDS = [
+  "degreeEffectType",
+  "assetBundleName",
+  "description",
+] as const;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -119,17 +163,79 @@ function parseNumberSlots(value: unknown): BandoriDegreeNumberSlots | null {
   return [...value] as BandoriDegreeNumberSlots;
 }
 
+function parseDegreeEffect(value: unknown): BandoriDegreeEffectMaster | null {
+  if (!isRecord(value)) return null;
+  const fields = ["biliDegreeEffectId", "seq", ...DEGREE_EFFECT_STRING_FIELDS] as const;
+  if (
+    Object.keys(value).length !== fields.length
+    || fields.some((field) => !Object.hasOwn(value, field))
+    || !isDisplayPositiveInteger(value.biliDegreeEffectId)
+    || !isDisplayPositiveInteger(value.seq)
+    || typeof value.degreeEffectType !== "string"
+    || !value.degreeEffectType
+    || value.degreeEffectType.length > 255
+    || typeof value.assetBundleName !== "string"
+    || !DEGREE_RESOURCE_NAME_PATTERN.test(value.assetBundleName)
+    || typeof value.description !== "string"
+    || value.description.length > 4096
+  ) return null;
+  return {
+    biliDegreeEffectId: value.biliDegreeEffectId,
+    seq: value.seq,
+    degreeEffectType: value.degreeEffectType,
+    assetBundleName: value.assetBundleName,
+    description: value.description,
+  };
+}
+
+function isDisplayPositiveInteger(value: unknown): value is number {
+  return Number.isSafeInteger(value) && (value as number) > 0;
+}
+
+function parseDegreeServerExtensions(
+  value: unknown,
+  baseImageName: BandoriDegreeStringSlots,
+): BandoriDegreeServerExtensionSlots | null {
+  if (!Array.isArray(value) || value.length !== DEGREE_SLOT_COUNT) return null;
+  const slots: BandoriDegreeServerExtensionSlot[] = [];
+  let hasDegreeEffect = false;
+  for (let slot = 0; slot < DEGREE_SLOT_COUNT; slot += 1) {
+    const extension = value[slot];
+    const isPopulated = baseImageName[slot] !== "";
+    if (!isPopulated) {
+      if (extension !== null) return null;
+      slots.push(null);
+      continue;
+    }
+    if (!isRecord(extension)) return null;
+    if (Object.keys(extension).length === 0) {
+      slots.push({});
+      continue;
+    }
+    if (
+      slot !== 3
+      || Object.keys(extension).length !== 1
+      || !Object.hasOwn(extension, "degreeEffect")
+    ) return null;
+    const degreeEffect = parseDegreeEffect(extension.degreeEffect);
+    if (!degreeEffect) return null;
+    slots.push({ degreeEffect });
+    hasDegreeEffect = true;
+  }
+  return hasDegreeEffect ? slots as BandoriDegreeServerExtensionSlots : null;
+}
+
 export function parseBandoriDegreeMasterEntry(
   value: unknown,
 ): BandoriDegreeMasterEntry | null {
   if (!isRecord(value)) return null;
   const fields = [...DEGREE_STRING_FIELDS, ...DEGREE_NUMBER_FIELDS];
+  const allowedFields = new Set([...fields, "serverExtensions"]);
   if (
-    Object.keys(value).length !== fields.length
+    (Object.keys(value).length !== fields.length
+      && Object.keys(value).length !== fields.length + 1)
     || fields.some((field) => !Object.hasOwn(value, field))
-    || Object.keys(value).some((field) => !fields.includes(
-      field as (typeof fields)[number],
-    ))
+    || Object.keys(value).some((field) => !allowedFields.has(field))
   ) return null;
   const degreeType = parseStringSlots(value.degreeType, "degreeType");
   const iconImageName = parseStringSlots(value.iconImageName, "iconImageName");
@@ -139,6 +245,9 @@ export function parseBandoriDegreeMasterEntry(
   const description = parseStringSlots(value.description, "description");
   const seq = parseNumberSlots(value.seq);
   const characterId = parseNumberSlots(value.characterId);
+  const serverExtensions = Object.hasOwn(value, "serverExtensions") && baseImageName
+    ? parseDegreeServerExtensions(value.serverExtensions, baseImageName)
+    : undefined;
   if (
     !degreeType
     || !iconImageName
@@ -148,6 +257,7 @@ export function parseBandoriDegreeMasterEntry(
     || !description
     || !seq
     || !characterId
+    || (Object.hasOwn(value, "serverExtensions") && !serverExtensions)
   ) return null;
   const entry = {
     degreeType,
@@ -158,6 +268,7 @@ export function parseBandoriDegreeMasterEntry(
     description,
     seq,
     characterId,
+    ...(serverExtensions ? { serverExtensions } : {}),
   };
   let hasPopulatedSlot = false;
   for (let slot = 0; slot < DEGREE_SLOT_COUNT; slot += 1) {
@@ -253,6 +364,11 @@ export function getBandoriDegreeCatalogItemsForRegion(
       ? catalog.assets.resources[iconImageResourceName]
       : undefined;
     const animation = baseResource?.animations?.[region];
+    const extension = master.serverExtensions?.[slot];
+    const effectResource = extension?.degreeEffect
+      ? catalog.assets.resources[extension.degreeEffect.assetBundleName]
+      : undefined;
+    const effectAnimation = effectResource?.effects?.[region];
     items.push({
       id,
       region,
@@ -270,6 +386,12 @@ export function getBandoriDegreeCatalogItemsForRegion(
       rankImage: rankResource?.images?.[slot] ?? null,
       iconImage: iconResource?.images?.[slot] ?? null,
       ...(animation ? { animation } : {}),
+      ...(extension?.degreeEffect ? {
+        degreeEffect: {
+          ...extension.degreeEffect,
+          ...(effectAnimation ? { animation: effectAnimation } : {}),
+        },
+      } : {}),
     });
   }
   return items;
@@ -340,6 +462,21 @@ function validateFrameSequence(frames: readonly BandoriAtlasAnimationFrame[]): v
   });
 }
 
+function validateEffectFrameSequence(frames: readonly BandoriAtlasAnimationFrame[]): void {
+  frames.forEach((frame, index) => {
+    const match = /^effect_degree_(\d{4})$/u.exec(frame.name);
+    if (!match) {
+      throw new Error("Bandori degree effect frame name is invalid");
+    }
+    if (
+      Number.parseInt(match[1], 10) !== index
+      || (index > 0 && frames[index - 1].name >= frame.name)
+    ) {
+      throw new Error("Bandori degree effect frames must be sorted and contiguous");
+    }
+  });
+}
+
 export function parseBandoriDegreeAnimationManifest(
   raw: unknown,
   manifestUrl: string,
@@ -381,6 +518,52 @@ export function parseBandoriDegreeAnimationManifest(
     atlasUrl,
     atlasDimensions,
     frameRate: 30,
+    loop: true,
+    frames,
+  };
+}
+
+export function parseBandoriDegreeEffectManifest(
+  raw: unknown,
+  manifestUrl: string,
+  atlasUrl: string,
+): BandoriDegreeEffectResponse {
+  if (!isRecord(raw) || !manifestUrl || !atlasUrl) {
+    throw new Error("Bandori degree effect manifest is invalid");
+  }
+  assertExactKeys(
+    raw,
+    ["schemaVersion", "frameRate", "loop", "atlasDimensions", "frames"],
+    "Bandori degree effect manifest",
+  );
+  if (
+    raw.schemaVersion !== BANDORI_DEGREE_EFFECT_SCHEMA_VERSION
+    || !isDisplayPositiveInteger(raw.frameRate)
+    || raw.loop !== true
+    || !Array.isArray(raw.frames)
+    || raw.frames.length < 1
+  ) {
+    throw new Error("Bandori degree effect manifest contract is unsupported");
+  }
+  const atlasDimensions = parseAtlasDimensions(raw.atlasDimensions);
+  const frames = raw.frames.map((frame, index): BandoriAtlasAnimationFrame => {
+    const label = `Bandori degree effect frame ${index}`;
+    if (!isRecord(frame)) throw new Error(`${label} is invalid`);
+    assertExactKeys(frame, ["name", "rect"], label);
+    if (typeof frame.name !== "string" || !frame.name) {
+      throw new Error(`${label} has an invalid name`);
+    }
+    return {
+      name: frame.name,
+      rect: parseFrameRect(frame.rect, atlasDimensions, label),
+    };
+  });
+  validateEffectFrameSequence(frames);
+  return {
+    manifestUrl,
+    atlasUrl,
+    atlasDimensions,
+    frameRate: raw.frameRate,
     loop: true,
     frames,
   };

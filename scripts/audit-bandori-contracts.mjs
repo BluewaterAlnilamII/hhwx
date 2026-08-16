@@ -72,7 +72,11 @@ const stampsIndex = stampsIndexResponse.body;
 assert.deepEqual(Object.keys(eventsIndex), ["schemaVersion", "updatedAt", "events"]);
 assert.deepEqual(Object.keys(cardsIndex), ["schemaVersion", "updatedAt", "resources"]);
 assert.deepEqual(Object.keys(degreesIndex), ["schemaVersion", "updatedAt", "resources"]);
-assert.equal(degreesIndex.schemaVersion, 1);
+assert.equal(
+  degreesIndex.schemaVersion === 1 || degreesIndex.schemaVersion === 2,
+  true,
+  "Degrees index must use schema 1 or 2 during rollout",
+);
 assert.deepEqual(Object.keys(musicIndex), ["schemaVersion", "updatedAt", "songs"]);
 assert.deepEqual(Object.keys(stampsIndex), ["schemaVersion", "updatedAt", "stamps", "changedStampGroups"]);
 assert.deepEqual(Object.keys(stampsIndex.changedStampGroups), serverOrder);
@@ -151,14 +155,23 @@ const degreeStringFields = [
 const degreeNumberFields = ["seq", "characterId"];
 for (const [degreeId, degree] of Object.entries(degrees)) {
   assert.equal(isRecord(degree), true, `degree ${degreeId} must be an object`);
+  const hasServerExtensions = Object.hasOwn(degree, "serverExtensions");
   assert.deepEqual(
     Object.keys(degree),
-    [...degreeStringFields, ...degreeNumberFields],
+    [
+      ...degreeStringFields,
+      ...degreeNumberFields,
+      ...(hasServerExtensions ? ["serverExtensions"] : []),
+    ],
     `degree ${degreeId} fields changed`,
   );
   for (const field of [...degreeStringFields, ...degreeNumberFields]) {
     requireFourSlots(degree[field], `degree ${degreeId} ${field}`);
   }
+  if (hasServerExtensions) {
+    requireFourSlots(degree.serverExtensions, `degree ${degreeId} serverExtensions`);
+  }
+  let hasDegreeEffect = false;
   for (let slot = 0; slot < serverOrder.length; slot += 1) {
     for (const field of degreeStringFields) {
       assert.equal(typeof degree[field][slot], "string", `degree ${degreeId} ${field} must be a string`);
@@ -173,7 +186,52 @@ for (const [degreeId, degree] of Object.entries(degrees)) {
     const server = serverOrder[slot];
     const hasRegionalRecord = degreeStringFields.some((field) => degree[field][slot] !== "")
       || degreeNumberFields.some((field) => degree[field][slot] !== 0);
-    if (!hasRegionalRecord) continue;
+    const extension = hasServerExtensions ? degree.serverExtensions[slot] : undefined;
+    if (!hasRegionalRecord) {
+      if (hasServerExtensions) {
+        assert.equal(extension, null, `degree ${degreeId} ${server} missing slot extension must be null`);
+      }
+      continue;
+    }
+    if (hasServerExtensions) {
+      assert.equal(isRecord(extension), true, `degree ${degreeId} ${server} populated slot extension must be an object`);
+      if (Object.keys(extension).length > 0) {
+        assert.equal(server, "cn", `degree ${degreeId} has a non-CN server extension`);
+        assert.deepEqual(Object.keys(extension), ["degreeEffect"]);
+        assert.equal(isRecord(extension.degreeEffect), true, `degree ${degreeId} CN degreeEffect is invalid`);
+        assert.deepEqual(
+          Object.keys(extension.degreeEffect).sort(),
+          ["biliDegreeEffectId", "seq", "degreeEffectType", "assetBundleName", "description"].sort(),
+        );
+        assert.equal(
+          Number.isSafeInteger(extension.degreeEffect.biliDegreeEffectId)
+            && extension.degreeEffect.biliDegreeEffectId > 0,
+          true,
+          `degree ${degreeId} CN effect ID is invalid`,
+        );
+        assert.equal(
+          Number.isSafeInteger(extension.degreeEffect.seq) && extension.degreeEffect.seq > 0,
+          true,
+          `degree ${degreeId} CN effect seq is invalid`,
+        );
+        for (const field of ["degreeEffectType", "assetBundleName", "description"]) {
+          assert.equal(
+            typeof extension.degreeEffect[field] === "string",
+            true,
+            `degree ${degreeId} CN effect ${field} is invalid`,
+          );
+        }
+        const effectResource = degreesIndex.resources[extension.degreeEffect.assetBundleName];
+        assert.equal(degreesIndex.schemaVersion, 2, `degree ${degreeId} effect requires index schema 2`);
+        assert.equal(isRecord(effectResource), true, `degree ${degreeId} effect resource is missing`);
+        assert.deepEqual(Object.keys(effectResource), ["effects"]);
+        assert.equal(isRecord(effectResource.effects), true, `degree ${degreeId} effect map is invalid`);
+        assert.deepEqual(Object.keys(effectResource.effects), ["cn"]);
+        assert.equal(isRecord(effectResource.effects.cn), true, `degree ${degreeId} CN effect descriptor is missing`);
+        assert.deepEqual(Object.keys(effectResource.effects.cn), ["manifest", "atlas"]);
+        hasDegreeEffect = true;
+      }
+    }
 
     const requireDegreeResource = (resourceName, role, allowAnimation) => {
       assert.equal(Boolean(resourceName), true, `degree ${degreeId} ${server} ${role} name is missing`);
@@ -203,6 +261,9 @@ for (const [degreeId, degree] of Object.entries(degrees)) {
     requireDegreeResource(degree.baseImageName[slot], "base", true);
     requireDegreeResource(rankImageName, "rank", false);
     requireDegreeResource(iconImageResourceName, "icon", false);
+  }
+  if (hasServerExtensions) {
+    assert.equal(hasDegreeEffect, true, `degree ${degreeId} empty serverExtensions must be omitted`);
   }
 }
 

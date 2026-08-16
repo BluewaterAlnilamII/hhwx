@@ -74,6 +74,13 @@ npm exec -- supabase migration new <name>
 
 账号展示称号改动采用 migration-first 顺序。先 push `20260815211415_add_profile_display_degree.sql`，再部署账号中心选择器；新的资料读取和保存路由依赖该迁移提供的字段与 service-role RPC。旧应用会忽略带默认值的新字段。迁移还会替换绑定转移和解绑 RPC，使最后一个拥有当前称号的绑定消失时能在同一事务中回退。
 
+CN Degree effect 的私有持久化同样采用 migration-first 顺序。先 push
+`20260816024443_add_game_binding_degree_effects.sql`，再部署 effect-aware
+账号同步与 Web reader。该迁移只增加绑定表上的单调集合
+`owned_degree_effect_ids` 和仅 service role 可调用的
+`merge_game_uid_binding_degree_effects` RPC；公开资料选择与渲染属于独立的后续
+应用和 schema 发布。
+
 手动档案服务器修复只支持“迁移优先”的向后兼容发布顺序。先 push `20260801185414_accept_manual_profile_server.sql`，随后立即部署应用，再审计历史记录：
 
 ```powershell

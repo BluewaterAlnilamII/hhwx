@@ -137,7 +137,7 @@ function stampsIndex() {
 
 function degreesIndex() {
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     updatedAt: "2026-08-11T00:00:00Z",
     resources: {
       degree001: {
@@ -145,6 +145,14 @@ function degreesIndex() {
       },
       ani_degree_cn: {
         animations: {
+          cn: {
+            manifest: hashes.degreeManifest,
+            atlas: hashes.degreeAtlas,
+          },
+        },
+      },
+      effect_degree_bili_default01: {
+        effects: {
           cn: {
             manifest: hashes.degreeManifest,
             atlas: hashes.degreeAtlas,
@@ -349,7 +357,7 @@ test("Stamps schema 2 reconstructs content-addressed asset keys from compact has
   });
 });
 
-test("Degrees schema 1 reconstructs static and dynamic regional resources", () => {
+test("Degrees schema 2 reconstructs static, animated, and effect resources", () => {
   const parsed = parseBandoriDegreesAssetIndex(degreesIndex());
   assert.deepEqual(parsed.resources.degree001.images[0], {
     key: `bandori/degrees/images/${hashes.degreeImage}.png`,
@@ -366,6 +374,21 @@ test("Degrees schema 1 reconstructs static and dynamic regional resources", () =
       sha256: hashes.degreeAtlas,
     },
   });
+  assert.deepEqual(parsed.resources.effect_degree_bili_default01.effects.cn, {
+    manifest: {
+      key: `bandori/degrees/effect/manifests/${hashes.degreeManifest}.json`,
+      sha256: hashes.degreeManifest,
+    },
+    atlas: {
+      key: `bandori/degrees/effect/atlases/${hashes.degreeAtlas}.png`,
+      sha256: hashes.degreeAtlas,
+    },
+  });
+
+  const legacy = degreesIndex();
+  legacy.schemaVersion = 1;
+  delete legacy.resources.effect_degree_bili_default01;
+  assert.equal(parseBandoriDegreesAssetIndex(legacy).schemaVersion, 2);
 
   const conflict = degreesIndex();
   conflict.resources.ani_degree_cn.images = ["", "", "", hashes.degreeImage];
@@ -386,6 +409,13 @@ test("Degrees schema 1 reconstructs static and dynamic regional resources", () =
   const empty = degreesIndex();
   empty.resources.empty = { images: ["", "", "", ""] };
   assert.throws(() => parseBandoriDegreesAssetIndex(empty), /images must be omitted when empty/u);
+
+  const mixedEffect = degreesIndex();
+  mixedEffect.resources.effect_degree_bili_default01.images = ["", "", "", hashes.degreeImage];
+  assert.throws(
+    () => parseBandoriDegreesAssetIndex(mixedEffect),
+    /effect resource must not mix/u,
+  );
 });
 
 test("Stamp legacy animation metadata is validated and discarded", () => {

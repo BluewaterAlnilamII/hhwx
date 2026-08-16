@@ -6,6 +6,7 @@ import {
   hasBandoriDegreeMasterRegion,
   normalizeBandoriDegreeId,
   parseBandoriDegreeAnimationManifest,
+  parseBandoriDegreeEffectManifest,
   parseBandoriDegreeMasterApiResponse,
 } from "../src/lib/bandori-degree-assets.ts";
 import { parseBandoriDegreesAssetIndex } from "../src/lib/bandori-public-asset-index.ts";
@@ -15,6 +16,8 @@ import { getBandoriAtlasFrameIndex } from "../src/lib/bandori-atlas-animation.ts
 const imageSha256 = "a".repeat(64);
 const manifestSha256 = "b".repeat(64);
 const atlasSha256 = "c".repeat(64);
+const effectManifestSha256 = "d".repeat(64);
+const effectAtlasSha256 = "e".repeat(64);
 
 function masterResponse() {
   return {
@@ -29,6 +32,20 @@ function masterResponse() {
         description: ["JP", "", "", "CN"],
         seq: [1, 0, 0, 9],
         characterId: [0, 0, 0, 0],
+        serverExtensions: [
+          {},
+          null,
+          null,
+          {
+            degreeEffect: {
+              biliDegreeEffectId: 901,
+              seq: 1,
+              degreeEffectType: "DEFAULT",
+              assetBundleName: "effect_degree_bili_default01",
+              description: "CN effect",
+            },
+          },
+        ],
       },
       "2": {
         degreeType: ["", "", "", "normal"],
@@ -46,7 +63,7 @@ function masterResponse() {
 
 function assetIndex() {
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     updatedAt: "2026-08-11T00:00:00Z",
     resources: {
       degree001: { images: [imageSha256, "", "", ""] },
@@ -59,6 +76,11 @@ function assetIndex() {
       ani_degree_cn: {
         animations: {
           cn: { manifest: manifestSha256, atlas: atlasSha256 },
+        },
+      },
+      effect_degree_bili_default01: {
+        effects: {
+          cn: { manifest: effectManifestSha256, atlas: effectAtlasSha256 },
         },
       },
     },
@@ -74,6 +96,19 @@ function degreeManifest() {
     frames: [
       { name: "ani_degree_0000", rect: { x: 0, y: 0, width: 64, height: 32 } },
       { name: "ani_degree_0001", rect: { x: 64, y: 0, width: 64, height: 32 } },
+    ],
+  };
+}
+
+function degreeEffectManifest() {
+  return {
+    schemaVersion: "hhwx-bandori-degree-effect-v1",
+    frameRate: 15,
+    loop: true,
+    atlasDimensions: { width: 128, height: 64 },
+    frames: [
+      { name: "effect_degree_0000", rect: { x: 0, y: 0, width: 64, height: 32 } },
+      { name: "effect_degree_0001", rect: { x: 64, y: 0, width: 64, height: 32 } },
     ],
   };
 }
@@ -102,6 +137,23 @@ test("degree master metadata resolves all resource descriptors without server fa
     atlas: {
       key: `bandori/degrees/animation/atlases/${atlasSha256}.png`,
       sha256: atlasSha256,
+    },
+  });
+  assert.deepEqual(cn[0].degreeEffect, {
+    biliDegreeEffectId: 901,
+    seq: 1,
+    degreeEffectType: "DEFAULT",
+    assetBundleName: "effect_degree_bili_default01",
+    description: "CN effect",
+    animation: {
+      manifest: {
+        key: `bandori/degrees/effect/manifests/${effectManifestSha256}.json`,
+        sha256: effectManifestSha256,
+      },
+      atlas: {
+        key: `bandori/degrees/effect/atlases/${effectAtlasSha256}.png`,
+        sha256: effectAtlasSha256,
+      },
     },
   });
   assert.equal(cn[1].degreeName, "Missing Asset Degree");
@@ -144,6 +196,36 @@ test("degree master metadata enforces complete four-server slots and public limi
 
   assert.equal(normalizeBandoriDegreeId(1.5), null);
   assert.equal(normalizeBandoriDegreeId("9007199254740992"), null);
+
+  const populatedWithoutEmptyExtension = masterResponse();
+  populatedWithoutEmptyExtension.data["1"].serverExtensions[0] = null;
+  assert.throws(
+    () => parseBandoriDegreeMasterApiResponse(populatedWithoutEmptyExtension),
+    /record is invalid: 1/u,
+  );
+
+  const missingWithEmptyExtension = masterResponse();
+  missingWithEmptyExtension.data["1"].serverExtensions[1] = {};
+  assert.throws(
+    () => parseBandoriDegreeMasterApiResponse(missingWithEmptyExtension),
+    /record is invalid: 1/u,
+  );
+
+  const nonCnEffect = masterResponse();
+  nonCnEffect.data["1"].serverExtensions[0] =
+    nonCnEffect.data["1"].serverExtensions[3];
+  nonCnEffect.data["1"].serverExtensions[3] = {};
+  assert.throws(
+    () => parseBandoriDegreeMasterApiResponse(nonCnEffect),
+    /record is invalid: 1/u,
+  );
+
+  const emptyExtensions = masterResponse();
+  emptyExtensions.data["1"].serverExtensions[3] = {};
+  assert.throws(
+    () => parseBandoriDegreeMasterApiResponse(emptyExtensions),
+    /record is invalid: 1/u,
+  );
 });
 
 test("degree animation manifest requires the fixed 30 FPS looping contiguous contract", () => {
@@ -175,6 +257,30 @@ test("degree animation manifest requires the fixed 30 FPS looping contiguous con
   assert.throws(
     () => parseBandoriDegreeAnimationManifest(outside, "manifest", "atlas"),
     /outside the atlas/u,
+  );
+});
+
+test("degree effect manifest accepts its explicit positive frame rate and exact frames", () => {
+  const parsed = parseBandoriDegreeEffectManifest(
+    degreeEffectManifest(),
+    "https://assets.example.test/effect.json",
+    "https://assets.example.test/effect.png",
+  );
+  assert.equal(parsed.frameRate, 15);
+  assert.equal(parsed.loop, true);
+
+  const gap = degreeEffectManifest();
+  gap.frames[1].name = "effect_degree_0002";
+  assert.throws(
+    () => parseBandoriDegreeEffectManifest(gap, "manifest", "atlas"),
+    /sorted and contiguous/u,
+  );
+
+  const wrongPrefix = degreeEffectManifest();
+  wrongPrefix.frames[0].name = "ani_degree_0000";
+  assert.throws(
+    () => parseBandoriDegreeEffectManifest(wrongPrefix, "manifest", "atlas"),
+    /frame name is invalid/u,
   );
 });
 

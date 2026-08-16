@@ -10,7 +10,8 @@ export const BANDORI_EVENTS_INDEX_KEY = "bandori/events/index.json";
 export const BANDORI_MUSIC_INDEX_KEY = "bandori/music/index.json";
 export const BANDORI_STAMPS_INDEX_KEY = "bandori/stamps/index.json";
 export const BANDORI_PUBLIC_ASSET_INDEX_SCHEMA_VERSION = 2;
-export const BANDORI_DEGREES_ASSET_INDEX_SCHEMA_VERSION = 1;
+export const BANDORI_DEGREES_ASSET_INDEX_SCHEMA_VERSION = 2;
+export const BANDORI_DEGREES_LEGACY_ASSET_INDEX_SCHEMA_VERSION = 1;
 
 export type BandoriPublicAssetServer = (typeof BANDORI_PUBLIC_ASSET_SERVERS)[number];
 export type BandoriCardAssetVariant = "normal" | "after_training";
@@ -137,6 +138,9 @@ export type BandoriStampsAssetIndex = {
 export type BandoriDegreeAssetResource = {
   images?: BandoriRegionalPngSlots;
   animations?: Partial<
+    Record<BandoriPublicAssetServer, BandoriAnimationAssetDescriptor>
+  >;
+  effects?: Partial<
     Record<BandoriPublicAssetServer, BandoriAnimationAssetDescriptor>
   >;
 };
@@ -863,6 +867,30 @@ function parseDegreeAnimation(
   };
 }
 
+function parseDegreeEffect(
+  value: unknown,
+  resourceName: string,
+  server: BandoriPublicAssetServer,
+): BandoriAnimationAssetDescriptor {
+  const label = `Bandori degrees index resource ${resourceName} effect ${server}`;
+  if (!isRecord(value)) {
+    throw new Error(`${label} must be an object`);
+  }
+  assertExactKeys(value, ["manifest", "atlas"], [], label);
+  const manifestSha256 = parseSha256(value.manifest, `${label} manifest`);
+  const atlasSha256 = parseSha256(value.atlas, `${label} atlas`);
+  return {
+    manifest: {
+      key: `bandori/degrees/effect/manifests/${manifestSha256}.json`,
+      sha256: manifestSha256,
+    },
+    atlas: {
+      key: `bandori/degrees/effect/atlases/${atlasSha256}.png`,
+      sha256: atlasSha256,
+    },
+  };
+}
+
 function parseDegreeResource(
   value: unknown,
   resourceName: string,
@@ -871,7 +899,7 @@ function parseDegreeResource(
   if (!isRecord(value)) {
     throw new Error(`${label} must be an object`);
   }
-  assertExactKeys(value, [], ["images", "animations"], label);
+  assertExactKeys(value, [], ["images", "animations", "effects"], label);
   const resource: BandoriDegreeAssetResource = {};
   if (Object.hasOwn(value, "images")) {
     const images = parseDegreeImageSlots(value.images, resourceName);
@@ -903,8 +931,26 @@ function parseDegreeResource(
     }
     resource.animations = animations;
   }
-  if (!resource.images && !resource.animations) {
+  if (Object.hasOwn(value, "effects")) {
+    if (!isRecord(value.effects) || Object.keys(value.effects).length === 0) {
+      throw new Error(`${label} effects must be a non-empty object`);
+    }
+    const effects: Partial<
+      Record<BandoriPublicAssetServer, BandoriAnimationAssetDescriptor>
+    > = {};
+    for (const [server, effect] of Object.entries(value.effects)) {
+      if (server !== "cn") {
+        throw new Error(`${label} has an unsupported effect server: ${server}`);
+      }
+      effects.cn = parseDegreeEffect(effect, resourceName, "cn");
+    }
+    resource.effects = effects;
+  }
+  if (!resource.images && !resource.animations && !resource.effects) {
     throw new Error(`${label} has no regional resource`);
+  }
+  if (resource.effects && (resource.images || resource.animations)) {
+    throw new Error(`${label} effect resource must not mix other asset types`);
   }
   const isAnimationResource = resourceName.startsWith("ani_degree");
   if (isAnimationResource && resource.images) {
@@ -932,7 +978,10 @@ export function parseBandoriDegreesAssetIndex(value: unknown): BandoriDegreesAss
     [],
     "Bandori degrees index",
   );
-  if (value.schemaVersion !== BANDORI_DEGREES_ASSET_INDEX_SCHEMA_VERSION) {
+  if (
+    value.schemaVersion !== BANDORI_DEGREES_ASSET_INDEX_SCHEMA_VERSION
+    && value.schemaVersion !== BANDORI_DEGREES_LEGACY_ASSET_INDEX_SCHEMA_VERSION
+  ) {
     throw new Error("Unsupported Bandori degrees index schema");
   }
   if (!isRecord(value.resources)) {
@@ -943,7 +992,14 @@ export function parseBandoriDegreesAssetIndex(value: unknown): BandoriDegreesAss
     if (!DEGREE_RESOURCE_NAME_PATTERN.test(resourceName)) {
       throw new Error(`Bandori degrees index has an invalid resource name: ${resourceName}`);
     }
-    resources[resourceName] = parseDegreeResource(resource, resourceName);
+    const parsed = parseDegreeResource(resource, resourceName);
+    if (
+      value.schemaVersion === BANDORI_DEGREES_LEGACY_ASSET_INDEX_SCHEMA_VERSION
+      && parsed.effects
+    ) {
+      throw new Error("Legacy Bandori degrees index cannot contain effects");
+    }
+    resources[resourceName] = parsed;
   }
   return {
     schemaVersion: BANDORI_DEGREES_ASSET_INDEX_SCHEMA_VERSION,

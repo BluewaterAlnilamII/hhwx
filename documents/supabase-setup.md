@@ -60,6 +60,12 @@ The shared comment length change is also migration-first. Push `20260812053202_e
 
 The profile display Degree change is migration-first. Push `20260815211415_add_profile_display_degree.sql` before deploying the account-center selector because the new profile read and save routes require the columns and service-role RPC. Older application builds ignore the new defaulted columns. The migration also replaces bind-transfer and unbind RPCs so a selected Degree falls back atomically when its final owning binding disappears.
 
+CN Degree effects are also migration-first. Push `20260816024443_add_game_binding_degree_effects.sql`
+before deploying effect-aware sync or Web readers. It adds the private monotonic
+`owned_degree_effect_ids` binding column and the service-role-only
+`merge_game_uid_binding_degree_effects` RPC. Public profile selection and rendering
+remain a separate application and schema release.
+
 The manual-profile server fix is backward-compatible only in the migration-first direction. Push `20260801185414_accept_manual_profile_server.sql`, deploy the application immediately afterward, and then audit historical rows:
 
 ```powershell

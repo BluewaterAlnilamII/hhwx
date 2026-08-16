@@ -132,6 +132,10 @@ type TrackerDegree = {
   degree_id?: unknown;
 };
 
+type TrackerDegreeEffect = {
+  bili_degree_effect_id?: unknown;
+};
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
@@ -379,6 +383,30 @@ export function extractSnapshotDegreeIds(snapshot: TrackerUserSnapshotPayload): 
         return degreeId > 0 && Number.isSafeInteger(degreeId) ? degreeId : null;
       })
       .filter((degreeId): degreeId is number => degreeId !== null),
+  )).sort((left, right) => left - right);
+}
+
+export function extractSnapshotDegreeEffectIds(snapshot: TrackerUserSnapshotPayload): number[] {
+  const effects = getSnapshotSuiteUser(snapshot).degree_effects;
+  if (!Array.isArray(effects)) {
+    return [];
+  }
+
+  return Array.from(new Set(
+    effects
+      .filter(isRecord)
+      .map((effect: TrackerDegreeEffect) => {
+        const rawEffectId = effect.bili_degree_effect_id;
+        if (
+          typeof rawEffectId !== "number"
+          && (typeof rawEffectId !== "string" || !/^[1-9][0-9]*$/.test(rawEffectId.trim()))
+        ) {
+          return null;
+        }
+        const effectId = Number(rawEffectId);
+        return effectId > 0 && Number.isSafeInteger(effectId) ? effectId : null;
+      })
+      .filter((effectId): effectId is number => effectId !== null),
   )).sort((left, right) => left - right);
 }
 
@@ -1046,6 +1074,21 @@ export async function syncAutoGameProfile(webUserId: string, gameUid: string): P
     });
     if (degreeMergeError) {
       console.error("Game profile Degree merge failed:", degreeMergeError.message);
+    }
+  }
+
+  const degreeEffectIds = extractSnapshotDegreeEffectIds(snapshot);
+  if (degreeEffectIds.length > 0) {
+    const { error: degreeEffectMergeError } = await serviceClient.rpc(
+      "merge_game_uid_binding_degree_effects",
+      {
+        p_web_user_id: webUserId,
+        p_game_uid: gameUid,
+        p_degree_effect_ids: degreeEffectIds,
+      },
+    );
+    if (degreeEffectMergeError) {
+      console.error("Game profile Degree effect merge failed:", degreeEffectMergeError.message);
     }
   }
 
