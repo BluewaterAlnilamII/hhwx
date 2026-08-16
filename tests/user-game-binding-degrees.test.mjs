@@ -19,6 +19,10 @@ const effectMigrationSource = fs.readFileSync(
   new URL("../supabase/migrations/20260816024443_add_game_binding_degree_effects.sql", import.meta.url),
   "utf8",
 );
+const displayEffectMigrationSource = fs.readFileSync(
+  new URL("../supabase/migrations/20260816092425_add_profile_display_degree_effect.sql", import.meta.url),
+  "utf8",
+);
 
 test("extracts a canonical non-empty Degree ID set from suite/user", () => {
   assert.deepEqual(
@@ -82,6 +86,26 @@ test("Degree effects use an independent monotonic private binding column", () =>
   assert.doesNotMatch(effectMigrationSource, /set_profile_display_degree/u);
   assert.doesNotMatch(effectMigrationSource, /complete_game_uid_binding/u);
   assert.doesNotMatch(effectMigrationSource, /unbind_game_uid/u);
+});
+
+test("public display effect selection is isolated in its own compatible migration", () => {
+  assert.match(displayEffectMigrationSource, /display_degree_effect_id integer/u);
+  assert.match(
+    displayEffectMigrationSource,
+    /p_degree_effect_id = any\(bindings\.owned_degree_effect_ids\)/u,
+  );
+  assert.match(
+    displayEffectMigrationSource,
+    /set_profile_display_degree\(uuid, integer, integer, integer\)[\s\S]*to service_role/u,
+  );
+  assert.match(
+    displayEffectMigrationSource,
+    /set_profile_display_degree\(uuid, integer, integer\)[\s\S]*to service_role/u,
+  );
+  assert.match(
+    displayEffectMigrationSource,
+    /profile\.display_degree_effect_id = any\(remaining_binding\.owned_degree_effect_ids\)/u,
+  );
 });
 
 test("migration stores private Degree IDs and merges them atomically", () => {

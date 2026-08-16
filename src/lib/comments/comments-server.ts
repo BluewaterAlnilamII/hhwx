@@ -39,6 +39,7 @@ type CommentProfile = {
   avatar_card_train_type: AccountAvatarCardTrainType | null;
   display_degree_server?: number | null;
   display_degree_id?: number | null;
+  display_degree_effect_id?: number | null;
 };
 
 type CommentRow = {
@@ -102,7 +103,7 @@ const COMMENT_SELECT = [
   "edited_at",
   "deleted_at",
   "moderation_status",
-  "profiles:profiles!user_id(username, avatar_card_id, avatar_card_server, avatar_card_train_type, display_degree_server, display_degree_id)",
+  "profiles:profiles!user_id(username, avatar_card_id, avatar_card_server, avatar_card_train_type, display_degree_server, display_degree_id, display_degree_effect_id)",
 ].join(", ");
 
 function parseCursor(cursor: string | null | undefined): { createdAt: string; id: string } | null {
@@ -324,6 +325,7 @@ function toCommentNode(
       ? normalizeStoredDisplayDegree(
           row.profiles.display_degree_server,
           row.profiles.display_degree_id,
+          row.profiles.display_degree_effect_id,
         )
       : null,
     content: row.content,

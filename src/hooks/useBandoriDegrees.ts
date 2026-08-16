@@ -7,11 +7,14 @@ import {
   buildBandoriDegreeMasterApiUrl,
   getBandoriDegreeCatalogItemsForRegion,
   parseBandoriDegreeAnimationManifest,
+  parseBandoriDegreeEffectManifest,
   parseBandoriDegreeMasterApiResponse,
   type BandoriDegreeAnimationResponse,
   type BandoriDegreeAnimationSummary,
   type BandoriDegreeCatalog,
   type BandoriDegreeCatalogItem,
+  type BandoriDegreeEffectResponse,
+  type BandoriDegreeEffectSummary,
   type BandoriDegreeMasterMap,
   type BandoriDegreeRegion,
 } from "@/lib/bandori-degree-assets";
@@ -26,7 +29,7 @@ export function useBandoriDegreeCatalog(enabled = true): {
 } {
   const masterUrl = useMemo(() => buildBandoriDegreeMasterApiUrl(), []);
   const masterResult = useCachedFetch<BandoriDegreeMasterMap>(
-    enabled ? "bandori-degrees:master:v1" : null,
+    enabled ? "bandori-degrees:master:v2" : null,
     enabled ? masterUrl : null,
     parseBandoriDegreeMasterApiResponse,
     { staleTimeMs: BANDORI_DEGREES_STALE_TIME_MS, refreshOnVisible: false },
@@ -80,4 +83,29 @@ export function useBandoriDegreeAnimation(
     { staleTimeMs: BANDORI_DEGREES_STALE_TIME_MS, refreshOnVisible: false },
   );
   return { animation: result.data, loading: result.loading };
+}
+
+export function useBandoriDegreeEffect(
+  summary: BandoriDegreeEffectSummary | undefined,
+  enabled = true,
+): { effect: BandoriDegreeEffectResponse | null; loading: boolean } {
+  const manifestUrl = buildBandoriPublicAssetUrl(summary?.animation?.manifest);
+  const atlasUrl = buildBandoriPublicAssetUrl(summary?.animation?.atlas);
+  const parser = useMemo(
+    () => (raw: unknown) => parseBandoriDegreeEffectManifest(
+      raw,
+      manifestUrl ?? "",
+      atlasUrl ?? "",
+    ),
+    [atlasUrl, manifestUrl],
+  );
+  const result = useCachedFetch<BandoriDegreeEffectResponse>(
+    enabled && manifestUrl && atlasUrl
+      ? `bandori-degree-effect:${manifestUrl}:${atlasUrl}`
+      : null,
+    enabled && manifestUrl && atlasUrl ? manifestUrl : null,
+    parser,
+    { staleTimeMs: BANDORI_DEGREES_STALE_TIME_MS, refreshOnVisible: false },
+  );
+  return { effect: result.data, loading: result.loading };
 }
