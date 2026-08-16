@@ -516,7 +516,12 @@ export const CommentItem = memo(function CommentItem({
           {comment.displayDegree ? (
             <div data-comment-display-degree className="mt-[3px] h-5 w-[92px] shrink-0">
               {displayDegree ? (
-                <BandoriDegreeView degree={displayDegree} active size="comment" />
+                <BandoriDegreeView
+                  degree={displayDegree}
+                  degreeEffectId={comment.displayDegree.degreeEffectId}
+                  active
+                  size="comment"
+                />
               ) : null}
             </div>
           ) : null}

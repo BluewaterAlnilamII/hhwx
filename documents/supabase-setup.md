@@ -66,6 +66,14 @@ before deploying effect-aware sync or Web readers. It adds the private monotonic
 `merge_game_uid_binding_degree_effects` RPC. Public profile selection and rendering
 remain a separate application and schema release.
 
+Public Degree effect selection is a subsequent migration-first release. Push
+`20260816092425_add_profile_display_degree_effect.sql` before deploying the
+effect-aware selector and renderer. It adds nullable `display_degree_effect_id`,
+keeps the three-argument `set_profile_display_degree` contract for older builds,
+and adds the four-argument contract used to select an owned effect variant. Bind
+transfer and unbind preserve the standard Degree when it remains owned and clear
+only an invalid effect; they restore JP Degree 100 when the base Degree is also lost.
+
 The manual-profile server fix is backward-compatible only in the migration-first direction. Push `20260801185414_accept_manual_profile_server.sql`, deploy the application immediately afterward, and then audit historical rows:
 
 ```powershell

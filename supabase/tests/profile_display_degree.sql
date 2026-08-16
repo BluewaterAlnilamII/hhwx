@@ -34,14 +34,14 @@ select ok(
 );
 
 insert into auth.users (
-  instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
+  instance_id, id, aud, role, email, encrypted_password,
   raw_app_meta_data, raw_user_meta_data, created_at, updated_at
 )
 values
   (
     '00000000-0000-0000-0000-000000000000',
     'd1740f88-f48e-44b9-a557-7a458070b0d1',
-    'authenticated', 'authenticated', 'display-degree-1@example.invalid', '', now(),
+    'authenticated', 'authenticated', 'display-degree-1@example.invalid', '',
     '{"provider":"email","providers":["email"]}'::jsonb,
     '{"username":"display_degree_1"}'::jsonb,
     now(), now()
@@ -49,7 +49,7 @@ values
   (
     '00000000-0000-0000-0000-000000000000',
     'd1740f88-f48e-44b9-a557-7a458070b0d2',
-    'authenticated', 'authenticated', 'display-degree-2@example.invalid', '', now(),
+    'authenticated', 'authenticated', 'display-degree-2@example.invalid', '',
     '{"provider":"email","providers":["email"]}'::jsonb,
     '{"username":"display_degree_2"}'::jsonb,
     now(), now()

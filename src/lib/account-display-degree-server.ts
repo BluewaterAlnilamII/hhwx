@@ -19,11 +19,13 @@ import { PROFILES_TABLE, USER_GAME_BINDINGS_TABLE } from "@/lib/supabase-table-n
 type ProfileDegreeRow = {
   display_degree_server: number | null;
   display_degree_id: number | null;
+  display_degree_effect_id: number | null;
 };
 
 type BindingDegreeRow = {
   game_uid: string;
   owned_degree_ids: number[] | null;
+  owned_degree_effect_ids: number[] | null;
 };
 
 export async function readAccountDisplayDegreeOptions(
@@ -33,12 +35,12 @@ export async function readAccountDisplayDegreeOptions(
   const [profileResult, bindingsResult] = await Promise.all([
     serviceClient
       .from(PROFILES_TABLE)
-      .select("display_degree_server, display_degree_id")
+      .select("display_degree_server, display_degree_id, display_degree_effect_id")
       .eq("id", userId)
       .single<ProfileDegreeRow>(),
     serviceClient
       .from(USER_GAME_BINDINGS_TABLE)
-      .select("game_uid, owned_degree_ids")
+      .select("game_uid, owned_degree_ids, owned_degree_effect_ids")
       .eq("web_user_id", userId),
   ]);
 
@@ -53,6 +55,7 @@ export async function readAccountDisplayDegreeOptions(
     selected: normalizeStoredDisplayDegree(
       profileResult.data.display_degree_server,
       profileResult.data.display_degree_id,
+      profileResult.data.display_degree_effect_id,
     ),
     accounts: sortDisplayDegreeBindings(
       ((bindingsResult.data ?? []) as BindingDegreeRow[]).map((binding) => ({
@@ -60,6 +63,9 @@ export async function readAccountDisplayDegreeOptions(
         gameUid: binding.game_uid,
         ownedDegreeIds: [...new Set(binding.owned_degree_ids ?? [])]
           .filter((degreeId) => Number.isSafeInteger(degreeId) && degreeId > 0)
+          .sort((left, right) => left - right),
+        ownedDegreeEffectIds: [...new Set(binding.owned_degree_effect_ids ?? [])]
+          .filter((effectId) => Number.isSafeInteger(effectId) && effectId > 0)
           .sort((left, right) => left - right),
       })),
     ),
@@ -79,6 +85,11 @@ async function assertDegreeExists(selection: AccountDisplayDegreeSelection): Pro
   if (!entry || !hasBandoriDegreeMasterRegion(entry, getBandoriServerCode(selection.server))) {
     throw new ApiRouteError(400, "DISPLAY_DEGREE_NOT_FOUND", "所选称号不存在");
   }
+  const masterEffectId = entry.serverExtensions?.[selection.server]?.degreeEffect
+    ?.biliDegreeEffectId ?? null;
+  if (selection.degreeEffectId !== null && masterEffectId !== selection.degreeEffectId) {
+    throw new ApiRouteError(400, "DISPLAY_DEGREE_EFFECT_NOT_FOUND", "所选称号动态效果不存在");
+  }
 }
 
 export async function updateAccountDisplayDegree(
@@ -92,6 +103,7 @@ export async function updateAccountDisplayDegree(
     p_web_user_id: userId,
     p_server: selection.server,
     p_degree_id: selection.degreeId,
+    p_degree_effect_id: selection.degreeEffectId,
   });
 
   if (error) {
@@ -106,6 +118,7 @@ export async function updateAccountDisplayDegree(
     || data === null
     || (data as Record<string, unknown>).displayDegreeServer !== selection.server
     || (data as Record<string, unknown>).displayDegreeId !== selection.degreeId
+    || (data as Record<string, unknown>).displayDegreeEffectId !== selection.degreeEffectId
   ) {
     throw new ApiRouteError(500, "DISPLAY_DEGREE_INVALID_RESPONSE", "保存展示称号返回了无效结果");
   }

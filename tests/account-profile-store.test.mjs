@@ -28,6 +28,7 @@ function createProfile(overrides = {}) {
     avatarCardTrainType: "normal",
     displayDegreeServer: 0,
     displayDegreeId: 100,
+    displayDegreeEffectId: null,
     createdAt: "2026-01-01T00:00:00.000Z",
     updatedAt: "2026-01-01T00:00:00.000Z",
     roles: [],

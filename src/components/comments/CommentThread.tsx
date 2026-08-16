@@ -31,7 +31,9 @@ const paginationButtonClassName = "inline-flex h-8 w-8 items-center justify-cent
 const REFRESH_SUCCESS_DURATION_MS = 2_000;
 const REFRESH_ERROR_DURATION_MS = 4_000;
 
-function getDisplayDegreeKey(selection: AccountDisplayDegreeSelection): string {
+function getDisplayDegreeKey(
+  selection: Pick<AccountDisplayDegreeSelection, "server" | "degreeId">,
+): string {
   return `${selection.server}:${selection.degreeId}`;
 }
 

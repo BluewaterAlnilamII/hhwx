@@ -81,6 +81,13 @@ CN Degree effect 的私有持久化同样采用 migration-first 顺序。先 pus
 `merge_game_uid_binding_degree_effects` RPC；公开资料选择与渲染属于独立的后续
 应用和 schema 发布。
 
+公开 Degree effect 选择属于后续的 migration-first 发布。先 push
+`20260816092425_add_profile_display_degree_effect.sql`，再部署支持 effect 的选择器
+和渲染器。该迁移增加可空的 `display_degree_effect_id`，保留旧应用使用的三参数
+`set_profile_display_degree`，并增加用于选择已拥有 effect 变体的四参数合同。绑定
+转移或解绑后，如果普通 Degree 仍由其他绑定拥有，则只清除失效的 effect；普通
+Degree 也失去所有权时才回退到 JP Degree 100。
+
 手动档案服务器修复只支持“迁移优先”的向后兼容发布顺序。先 push `20260801185414_accept_manual_profile_server.sql`，随后立即部署应用，再审计历史记录：
 
 ```powershell

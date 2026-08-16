@@ -38,10 +38,11 @@ type ProfileRow = {
   avatar_card_train_type: AvatarCardTrainType | null;
   display_degree_server: number | null;
   display_degree_id: number | null;
+  display_degree_effect_id: number | null;
   created_at: string | null;
 };
 
-const PROFILE_SELECT = "public_uid, username, avatar_card_id, avatar_card_server, avatar_card_train_type, display_degree_server, display_degree_id, created_at";
+const PROFILE_SELECT = "public_uid, username, avatar_card_id, avatar_card_server, avatar_card_train_type, display_degree_server, display_degree_id, display_degree_effect_id, created_at";
 
 function buildFallbackUsername(preferredUsername: string | null, userId: string): string {
   if (preferredUsername) {
@@ -223,6 +224,7 @@ async function readAccountProfile(
   const displayDegree = normalizeStoredDisplayDegree(
     profile.display_degree_server,
     profile.display_degree_id,
+    profile.display_degree_effect_id,
   );
 
   return {
@@ -236,6 +238,7 @@ async function readAccountProfile(
     avatarCardTrainType: normalizeStoredAvatarTrainType(profile.avatar_card_train_type, avatarCardId),
     displayDegreeServer: displayDegree.server,
     displayDegreeId: displayDegree.degreeId,
+    displayDegreeEffectId: displayDegree.degreeEffectId,
     createdAt: profile.created_at,
     updatedAt: profile.created_at,
     roles: (rolesResult.data ?? []).map((row) => row.role),

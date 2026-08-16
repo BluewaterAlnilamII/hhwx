@@ -9,6 +9,7 @@ import BandoriServerIcon from "@/components/bandori/BandoriServerIcon";
 import { useBandoriDegreeCatalog } from "@/hooks/useBandoriDegrees";
 import {
   compareDisplayDegreeSelections,
+  getAccountDisplayDegreeVariants,
   parseAccountDisplayDegreeOptions,
   parseDisplayDegreeRequest,
   type AccountDisplayDegreeBinding,
@@ -26,6 +27,7 @@ function toSelection(profile: AccountProfile): AccountDisplayDegreeSelection {
   return {
     server: profile.displayDegreeServer,
     degreeId: profile.displayDegreeId,
+    degreeEffectId: profile.displayDegreeEffectId ?? null,
   };
 }
 
@@ -39,6 +41,10 @@ function pickInitialAccount(
   return options.accounts.find((account) => (
     account.server === options.selected.server
     && account.ownedDegreeIds.includes(options.selected.degreeId)
+    && (
+      options.selected.degreeEffectId === null
+      || account.ownedDegreeEffectIds.includes(options.selected.degreeEffectId)
+    )
   )) ?? options.accounts.find((account) => account.ownedDegreeIds.length > 0)
     ?? options.accounts[0]
     ?? null;
@@ -46,10 +52,12 @@ function pickInitialAccount(
 
 function DegreeOption({
   degree,
+  degreeEffectId,
   selected,
   onSelect,
 }: {
   degree: BandoriDegreeCatalogItem;
+  degreeEffectId: number | null;
   selected: boolean;
   onSelect: () => void;
 }) {
@@ -70,7 +78,11 @@ function DegreeOption({
           : "border-slate-200 hover:border-sky-200 hover:shadow-md",
       )}
     >
-      <BandoriDegreeView degree={degree} active={selected || interactive} />
+      <BandoriDegreeView
+        degree={degree}
+        degreeEffectId={degreeEffectId}
+        active={selected || interactive}
+      />
     </button>
   );
 }
@@ -108,13 +120,12 @@ export default function AccountDisplayDegreeControl({
   const selectedAccount = options?.accounts.find(
     (account) => getAccountKey(account) === selectedAccountKey,
   ) ?? null;
-  const availableDegrees = useMemo(() => {
+  const availableDegreeVariants = useMemo(() => {
     if (!selectedAccount) return [];
-    const serverCatalog = catalogByServer.get(selectedAccount.server);
-    return selectedAccount.ownedDegreeIds
-      .map((degreeId) => serverCatalog?.get(degreeId) ?? null)
-      .filter((degree): degree is BandoriDegreeCatalogItem => degree !== null)
-      .sort((left, right) => left.seq - right.seq || left.id - right.id);
+    return getAccountDisplayDegreeVariants(
+      selectedAccount,
+      catalogByServer.get(selectedAccount.server),
+    );
   }, [catalogByServer, selectedAccount]);
   const hasChanges = !compareDisplayDegreeSelections(toSelection(profile), draft);
 
@@ -154,6 +165,7 @@ export default function AccountDisplayDegreeControl({
           ...profile,
           displayDegreeServer: parsed.selected.server,
           displayDegreeId: parsed.selected.degreeId,
+          displayDegreeEffectId: parsed.selected.degreeEffectId,
         });
       }
     } catch (error) {
@@ -210,6 +222,7 @@ export default function AccountDisplayDegreeControl({
         ...profile,
         displayDegreeServer: saved.server,
         displayDegreeId: saved.degreeId,
+        displayDegreeEffectId: saved.degreeEffectId,
       });
       setOpen(false);
     } catch (error) {
@@ -228,7 +241,12 @@ export default function AccountDisplayDegreeControl({
           className="mt-3 flex max-w-full rounded-lg text-white/90 outline-hidden transition hover:bg-white/8 focus-visible:ring-2 focus-visible:ring-white/60"
         >
           {currentDegree ? (
-            <BandoriDegreeView degree={currentDegree} active className="w-[115px]" />
+            <BandoriDegreeView
+              degree={currentDegree}
+              degreeEffectId={profile.displayDegreeEffectId}
+              active
+              className="w-[115px]"
+            />
           ) : (
             <span className="inline-flex h-[25px] w-[115px] max-w-full items-center justify-center rounded-lg border border-dashed border-white/35 px-2 text-xs font-semibold">
               {loadingCatalog ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : t("resourceUnavailable")}
@@ -300,14 +318,21 @@ export default function AccountDisplayDegreeControl({
                     <h3 className="mb-3 text-sm font-bold text-slate-700">{t("degreesLabel")}</h3>
                     {loadingCatalog ? (
                       <div className="flex min-h-32 items-center justify-center gap-2 text-sm font-semibold text-slate-500"><Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" />{t("loading")}</div>
-                    ) : availableDegrees.length > 0 ? (
+                    ) : availableDegreeVariants.length > 0 ? (
                       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                        {availableDegrees.map((degree) => (
+                        {availableDegreeVariants.map(({ degree, degreeEffectId }) => (
                           <DegreeOption
-                            key={`${degree.region}:${degree.id}`}
+                            key={`${degree.region}:${degree.id}:${degreeEffectId ?? "plain"}`}
                             degree={degree}
-                            selected={draft.server === selectedAccount?.server && draft.degreeId === degree.id}
-                            onSelect={() => setDraft({ server: selectedAccount?.server ?? profile.displayDegreeServer, degreeId: degree.id })}
+                            degreeEffectId={degreeEffectId}
+                            selected={draft.server === selectedAccount?.server
+                              && draft.degreeId === degree.id
+                              && draft.degreeEffectId === degreeEffectId}
+                            onSelect={() => setDraft({
+                              server: selectedAccount?.server ?? profile.displayDegreeServer,
+                              degreeId: degree.id,
+                              degreeEffectId,
+                            })}
                           />
                         ))}
                       </div>

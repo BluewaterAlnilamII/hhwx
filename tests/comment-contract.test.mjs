@@ -250,11 +250,11 @@ test("comment responses expose the author's current display Degree", () => {
   assert.match(contractSource, /displayDegree: AccountDisplayDegreeSelection \| null/u);
   assert.match(
     serviceSource,
-    /profiles:profiles!user_id\(username, avatar_card_id, avatar_card_server, avatar_card_train_type, display_degree_server, display_degree_id\)/u,
+    /profiles:profiles!user_id\(username, avatar_card_id, avatar_card_server, avatar_card_train_type, display_degree_server, display_degree_id, display_degree_effect_id\)/u,
   );
   assert.match(
     serviceSource,
-    /displayDegree: row\.profiles[\s\S]*?normalizeStoredDisplayDegree\([\s\S]*?display_degree_server[\s\S]*?display_degree_id/u,
+    /displayDegree: row\.profiles[\s\S]*?normalizeStoredDisplayDegree\([\s\S]*?display_degree_server[\s\S]*?display_degree_id[\s\S]*?display_degree_effect_id/u,
   );
 });
 

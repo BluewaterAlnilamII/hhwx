@@ -56,6 +56,25 @@ alter table public.user_game_bindings
 alter table public.user_game_bindings
   add column if not exists owned_degree_effect_ids integer[] not null default '{}'::integer[];
 
+alter table public.profiles
+  add column if not exists display_degree_effect_id integer;
+
+alter table public.profiles
+  drop constraint if exists profiles_display_degree_effect_id_check;
+
+alter table public.profiles
+  add constraint profiles_display_degree_effect_id_check
+    check (display_degree_effect_id is null or display_degree_effect_id > 0);
+
+comment on column public.profiles.display_degree_effect_id is
+  'Optional CN biliDegreeEffectId selected for the public display Degree; null selects the standard variant.';
+
+revoke insert, update on table public.profiles from authenticated;
+grant insert (id, username, avatar_card_id, avatar_card_server, avatar_card_train_type)
+  on table public.profiles to authenticated;
+grant update (username, avatar_card_id, avatar_card_server, avatar_card_train_type)
+  on table public.profiles to authenticated;
+
 alter table public.user_game_bindings
   drop column if exists challenge_id;
 
@@ -238,7 +257,8 @@ $$;
 create or replace function public.set_profile_display_degree(
   p_web_user_id uuid,
   p_server integer,
-  p_degree_id integer
+  p_degree_id integer,
+  p_degree_effect_id integer
 )
 returns jsonb
 language plpgsql
@@ -255,6 +275,12 @@ begin
   if p_degree_id is null or p_degree_id <= 0 then
     raise exception 'display degree id is invalid';
   end if;
+  if p_degree_effect_id is not null and p_degree_effect_id <= 0 then
+    raise exception 'display degree effect id is invalid';
+  end if;
+  if p_degree_effect_id is not null and p_server <> 3 then
+    raise exception 'display degree effect is only available on CN';
+  end if;
 
   perform 1
   from public.profiles
@@ -265,13 +291,21 @@ begin
     raise exception 'profile does not exist';
   end if;
 
-  if not (p_server = 0 and p_degree_id = 100) and not (
+  if not (
+    p_server = 0
+    and p_degree_id = 100
+    and p_degree_effect_id is null
+  ) and not (
     p_server = 3
     and exists (
       select 1
       from public.user_game_bindings as bindings
       where bindings.web_user_id = p_web_user_id
         and p_degree_id = any(bindings.owned_degree_ids)
+        and (
+          p_degree_effect_id is null
+          or p_degree_effect_id = any(bindings.owned_degree_effect_ids)
+        )
     )
   ) then
     raise exception 'display degree is not owned';
@@ -279,12 +313,40 @@ begin
 
   update public.profiles
   set display_degree_server = p_server,
-      display_degree_id = p_degree_id
+      display_degree_id = p_degree_id,
+      display_degree_effect_id = p_degree_effect_id
   where id = p_web_user_id;
 
   return jsonb_build_object(
     'displayDegreeServer', p_server,
-    'displayDegreeId', p_degree_id
+    'displayDegreeId', p_degree_id,
+    'displayDegreeEffectId', p_degree_effect_id
+  );
+end;
+$$;
+
+create or replace function public.set_profile_display_degree(
+  p_web_user_id uuid,
+  p_server integer,
+  p_degree_id integer
+)
+returns jsonb
+language plpgsql
+security invoker
+set search_path = ''
+as $$
+declare
+  applied jsonb;
+begin
+  applied := public.set_profile_display_degree(
+    p_web_user_id,
+    p_server,
+    p_degree_id,
+    null::integer
+  );
+  return jsonb_build_object(
+    'displayDegreeServer', applied -> 'displayDegreeServer',
+    'displayDegreeId', applied -> 'displayDegreeId'
   );
 end;
 $$;
@@ -363,21 +425,41 @@ begin
 
   if transferred then
     update public.profiles as profile
-    set display_degree_server = 0,
-        display_degree_id = 100
+    set display_degree_server = case
+          when profile.display_degree_server = 3 and exists (
+            select 1
+            from public.user_game_bindings as remaining_binding
+            where remaining_binding.web_user_id = previous_web_user_id
+              and profile.display_degree_id = any(remaining_binding.owned_degree_ids)
+          ) then profile.display_degree_server
+          else 0
+        end,
+        display_degree_id = case
+          when profile.display_degree_server = 3 and exists (
+            select 1
+            from public.user_game_bindings as remaining_binding
+            where remaining_binding.web_user_id = previous_web_user_id
+              and profile.display_degree_id = any(remaining_binding.owned_degree_ids)
+          ) then profile.display_degree_id
+          else 100
+        end,
+        display_degree_effect_id = case
+          when profile.display_degree_server = 3
+            and profile.display_degree_effect_id is not null
+            and exists (
+              select 1
+              from public.user_game_bindings as remaining_binding
+              where remaining_binding.web_user_id = previous_web_user_id
+                and profile.display_degree_id = any(remaining_binding.owned_degree_ids)
+                and profile.display_degree_effect_id = any(remaining_binding.owned_degree_effect_ids)
+            ) then profile.display_degree_effect_id
+          else null
+        end
     where profile.id = previous_web_user_id
       and not (
         profile.display_degree_server = 0
         and profile.display_degree_id = 100
-      )
-      and (
-        profile.display_degree_server <> 3
-        or not exists (
-          select 1
-          from public.user_game_bindings as remaining_binding
-          where remaining_binding.web_user_id = previous_web_user_id
-            and profile.display_degree_id = any(remaining_binding.owned_degree_ids)
-        )
+        and profile.display_degree_effect_id is null
       );
   end if;
 
@@ -440,21 +522,41 @@ begin
 
   if found then
     update public.profiles as profile
-    set display_degree_server = 0,
-        display_degree_id = 100
+    set display_degree_server = case
+          when profile.display_degree_server = 3 and exists (
+            select 1
+            from public.user_game_bindings as remaining_binding
+            where remaining_binding.web_user_id = p_web_user_id
+              and profile.display_degree_id = any(remaining_binding.owned_degree_ids)
+          ) then profile.display_degree_server
+          else 0
+        end,
+        display_degree_id = case
+          when profile.display_degree_server = 3 and exists (
+            select 1
+            from public.user_game_bindings as remaining_binding
+            where remaining_binding.web_user_id = p_web_user_id
+              and profile.display_degree_id = any(remaining_binding.owned_degree_ids)
+          ) then profile.display_degree_id
+          else 100
+        end,
+        display_degree_effect_id = case
+          when profile.display_degree_server = 3
+            and profile.display_degree_effect_id is not null
+            and exists (
+              select 1
+              from public.user_game_bindings as remaining_binding
+              where remaining_binding.web_user_id = p_web_user_id
+                and profile.display_degree_id = any(remaining_binding.owned_degree_ids)
+                and profile.display_degree_effect_id = any(remaining_binding.owned_degree_effect_ids)
+            ) then profile.display_degree_effect_id
+          else null
+        end
     where profile.id = p_web_user_id
       and not (
         profile.display_degree_server = 0
         and profile.display_degree_id = 100
-      )
-      and (
-        profile.display_degree_server <> 3
-        or not exists (
-          select 1
-          from public.user_game_bindings as remaining_binding
-          where remaining_binding.web_user_id = p_web_user_id
-            and profile.display_degree_id = any(remaining_binding.owned_degree_ids)
-        )
+        and profile.display_degree_effect_id is null
       );
   end if;
 
@@ -573,6 +675,7 @@ revoke all on function public.increment_game_bind_challenge_attempt(uuid, uuid) 
 revoke all on function public.unbind_game_uid(text, uuid) from public, anon, authenticated;
 revoke all on function public.merge_game_uid_binding_degrees(uuid, text, integer[]) from public, anon, authenticated;
 revoke all on function public.merge_game_uid_binding_degree_effects(uuid, text, integer[]) from public, anon, authenticated;
+revoke all on function public.set_profile_display_degree(uuid, integer, integer, integer) from public, anon, authenticated;
 revoke all on function public.set_profile_display_degree(uuid, integer, integer) from public, anon, authenticated;
 
 grant execute on function public.cleanup_old_game_bind_challenges(timestamptz) to service_role;
@@ -582,4 +685,5 @@ grant execute on function public.increment_game_bind_challenge_attempt(uuid, uui
 grant execute on function public.unbind_game_uid(text, uuid) to service_role;
 grant execute on function public.merge_game_uid_binding_degrees(uuid, text, integer[]) to service_role;
 grant execute on function public.merge_game_uid_binding_degree_effects(uuid, text, integer[]) to service_role;
+grant execute on function public.set_profile_display_degree(uuid, integer, integer, integer) to service_role;
 grant execute on function public.set_profile_display_degree(uuid, integer, integer) to service_role;
