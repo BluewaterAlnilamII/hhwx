@@ -236,6 +236,8 @@ GET /api/bandori/master/degrees
 {CDN_BASE}/bandori/degrees/images/{sha256}.png
 {CDN_BASE}/bandori/degrees/animation/manifests/{sha256}.json
 {CDN_BASE}/bandori/degrees/animation/atlases/{sha256}.png
+{CDN_BASE}/bandori/degrees/effect/manifests/{sha256}.json
+{CDN_BASE}/bandori/degrees/effect/atlases/{sha256}.png
 
 bandori/master/degrees/api/active.json
 bandori/master/degrees/api/packs/degrees/{sha256}.json.gz
@@ -243,11 +245,15 @@ bandori/degrees/index.json
 bandori/degrees/images/{sha256}.png
 bandori/degrees/animation/manifests/{sha256}.json
 bandori/degrees/animation/atlases/{sha256}.png
+bandori/degrees/effect/manifests/{sha256}.json
+bandori/degrees/effect/atlases/{sha256}.png
 ```
 
-The first two object-store paths are private; the remaining Degree index and content-addressed media paths are public. The master response is keyed by a positive JavaScript-safe degree ID and has exactly eight `[jp, en, tw, cn]` fields: `degreeType`, `iconImageName`, `baseImageName`, `rank`, `degreeName`, `description`, `seq`, and `characterId`. A non-empty `baseImageName` marks a populated server slot: all six strings must then be non-empty and `seq` positive. A missing slot uses `""` for every string and `0` for both numbers. Ordinary strings are limited to 255 characters, `description` to 4096, all numbers are non-negative safe integers, and `rank` remains a string. The public schema-1 index is keyed by resource name. Base uses `baseImageName`; rank uses `rank_none` or `{degreeType}_{rank}`; icon uses `icon_none` or `{iconImageName}_{rank}`. Resource type is fixed across servers by name: `ani_degree*` resources contain only keyed `manifest`/`atlas` animation descriptors, while every other resource contains only four-slot image hashes. Mixed types are rejected even when they occur on different servers, and clients never borrow another server's object. Browser joins retain names and `{key, sha256}` descriptors; they do not precompute unused Degree URLs.
+The first two object-store paths are private; the remaining Degree index and content-addressed media paths are public. The master response is keyed by a positive JavaScript-safe degree ID and has eight canonical `[jp, en, tw, cn]` fields: `degreeType`, `iconImageName`, `baseImageName`, `rank`, `degreeName`, `description`, `seq`, and `characterId`. An optional four-slot `serverExtensions` is emitted only for actual CN effects. It follows the shared Cards/Music slot semantics: `null` means the Degree is absent on that server, `{}` means it is present without an extension, and only the CN slot may contain `degreeEffect`. A non-empty `baseImageName` marks a populated server slot: all six strings must then be non-empty and `seq` positive. A missing slot uses `""` for every string and `0` for both numbers. The public schema-2 index is keyed by resource name; readers accept schema 1 during rollout. Base uses `baseImageName`; rank uses `rank_none` or `{degreeType}_{rank}`; icon uses `icon_none` or `{iconImageName}_{rank}`; CN effects use their master `assetBundleName` with `effects.cn`. Images, ordinary `ani_degree` animations, and effect resources cannot mix. Browser joins retain names and `{key, sha256}` descriptors. Public profile selection and visual rendering are a separate application contract.
 
 Degree animation manifests use exactly `schemaVersion: "hhwx-bandori-degree-animation-v1"`, `frameRate: 30`, `loop: true`, `atlasDimensions`, and ordered `frames: [{ name, rect }]`. Rectangles use top-left atlas coordinates and must remain in bounds; zero-padded frame names are sorted and contiguous. Content hashes cover final PNG or JSON bytes, so identical bytes naturally reuse the same immutable object even when server descriptors remain separate.
+
+Degree effect manifests use `schemaVersion: "hhwx-bandori-degree-effect-v1"`, the bundle's explicit positive integer `frameRate`, `loop: true`, and contiguous `effect_degree_0000...` frames.
 
 ## Self-Hosted Expectations
 

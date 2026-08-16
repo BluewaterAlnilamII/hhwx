@@ -236,6 +236,8 @@ GET /api/bandori/master/degrees
 {CDN_BASE}/bandori/degrees/images/{sha256}.png
 {CDN_BASE}/bandori/degrees/animation/manifests/{sha256}.json
 {CDN_BASE}/bandori/degrees/animation/atlases/{sha256}.png
+{CDN_BASE}/bandori/degrees/effect/manifests/{sha256}.json
+{CDN_BASE}/bandori/degrees/effect/atlases/{sha256}.png
 
 bandori/master/degrees/api/active.json
 bandori/master/degrees/api/packs/degrees/{sha256}.json.gz
@@ -243,11 +245,15 @@ bandori/degrees/index.json
 bandori/degrees/images/{sha256}.png
 bandori/degrees/animation/manifests/{sha256}.json
 bandori/degrees/animation/atlases/{sha256}.png
+bandori/degrees/effect/manifests/{sha256}.json
+bandori/degrees/effect/atlases/{sha256}.png
 ```
 
-前两个对象存储路径为私有对象，其余 Degree index 和内容寻址媒体路径为公开对象。Master 响应按 degree ID 组织，恰好包含八个 `[jp, en, tw, cn]` 字段：`degreeType`、`iconImageName`、`baseImageName`、`rank`、`degreeName`、`description`、`seq`、`characterId`。缺失字符串使用 `""`，缺失数字槽使用 `0`，`rank` 保持字符串。公开 schema 1 index 按资源名组织：base 使用 `baseImageName`；rank 使用 `rank_none` 或 `{degreeType}_{rank}`；icon 使用 `icon_none` 或 `{iconImageName}_{rank}`。资源类型由名称在所有区服固定：`ani_degree*` 资源只能包含按区服组织的 `manifest`/`atlas` 动态描述符，其他资源只能包含严格四槽的图片 hash。即使两种类型出现在不同区服也会被拒绝，客户端也不会借用其他区服对象。浏览器合并结果保留资源名与 `{key, sha256}` descriptor，不会预先构造未使用的 Degree URL。
+前两个对象存储路径为私有对象，其余 Degree index 和内容寻址媒体路径为公开对象。Master 响应按 degree ID 组织，包含八个 `[jp, en, tw, cn]` canonical 字段：`degreeType`、`iconImageName`、`baseImageName`、`rank`、`degreeName`、`description`、`seq`、`characterId`；只有 CN 动态效果存在时才增加四槽 `serverExtensions`。它沿用 Cards/Music 的共享槽位语义：该服不存在 Degree 时为 `null`，存在但没有扩展时为 `{}`，只有 CN 槽可以包含 `degreeEffect`。缺失字符串使用 `""`，缺失数字槽使用 `0`，`rank` 保持字符串。公开 schema 2 index 按资源名组织：base 使用 `baseImageName`；rank 使用 `rank_none` 或 `{degreeType}_{rank}`；icon 使用 `icon_none` 或 `{iconImageName}_{rank}`；effect 直接使用 master `assetBundleName`，并位于该资源的 `effects.cn`。`ani_degree*` 动画、普通图片和 effect 资源不能混用；浏览器可在发布过渡期读取 schema 1。公开资料选择和视觉渲染属于独立的应用合同。
 
 Degree 动画 manifest 必须恰好使用 `schemaVersion: "hhwx-bandori-degree-animation-v1"`、`frameRate: 30`、`loop: true`、`atlasDimensions` 和有序 `frames: [{ name, rect }]`。矩形使用图集左上角坐标且不能越界；零填充帧名按字典序连续排列。内容 hash 针对最终 PNG 或 JSON 字节计算，因此即使区服描述符分开，完全相同的字节也会自然复用同一个不可变对象。
+
+Degree effect manifest 使用 `schemaVersion: "hhwx-bandori-degree-effect-v1"`、bundle 内显式的正整数 `frameRate`、`loop: true` 和连续的 `effect_degree_0000...` 帧。
 
 ## 自托管预期
 

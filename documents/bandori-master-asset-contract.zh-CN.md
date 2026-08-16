@@ -19,7 +19,7 @@ English version: [bandori-master-asset-contract.md](bandori-master-asset-contrac
 | --- | --- | --- | --- | --- | --- | --- |
 | Events | `/api/bandori/master/events` | `/api/bandori/master/events/{eventId}` | `/bandori/events/index.json` | 数字 event ID | Master 四槽字段及本地 `stampRewardId`；标量 `stampCharacterId`；banner/team image 四槽 | fast-mutable API；snapshot index |
 | Cards | `/api/bandori/master/cards` | `/api/bandori/master/cards/{cardId}` | `/bandori/cards/index.json` | `resourceSetName` | 四槽文本和显式 `serverExtensions`；图片按内容 hash 跨服共享 | snapshot API 与 index |
-| Degrees | `/api/bandori/master/degrees` | 无 | `/bandori/degrees/index.json` | 元数据使用数字 degree ID；资源使用派生资源名 | 八个固定四槽 Master 字段；各服独立选择 base、rank 与 icon 资源 | snapshot API 与 index |
+| Degrees | `/api/bandori/master/degrees` | 无 | `/bandori/degrees/index.json` | 元数据使用数字 degree ID；资源使用派生资源名 | 八个固定四槽 Master 字段及可选四槽 `serverExtensions`，缺服 `null`、有服无扩展 `{}`、仅 CN 可含 `degreeEffect`；独立选择 base、rank、icon 与 effect 资源 | snapshot API 与 schema 2 index |
 | Stamps | `/api/bandori/master/stamps` | 无 | `/bandori/stamps/index.json` | 数字 stamp ID | 四槽 `imageName`、`characterId`、图片、语音与 Changed variant | snapshot API 与 index |
 | Music | `/api/bandori/master/music` | `/api/bandori/master/music/{musicId}` | `/bandori/music/index.json` | 数字 music ID | 四槽区服元数据与共享的谱面/音频派生字段；使用 `0` 到 `4` 的数字难度 key | snapshot API 与 index |
 
