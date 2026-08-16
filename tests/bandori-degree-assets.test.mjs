@@ -32,7 +32,7 @@ function masterResponse() {
       },
       "2": {
         degreeType: ["", "", "", "normal"],
-        iconImageName: ["", "", "", "degree_missing"],
+        iconImageName: ["", "", "", "none"],
         baseImageName: ["", "", "", "degree_missing"],
         rank: ["", "", "", "none"],
         degreeName: ["", "", "", "Missing Asset Degree"],
@@ -54,6 +54,8 @@ function assetIndex() {
       degree_1_1: { images: [imageSha256, "", "", ""] },
       normal_3: { images: ["", "", "", imageSha256] },
       degree_1_3: { images: ["", "", "", imageSha256] },
+      rank_none: { images: ["", "", "", imageSha256] },
+      icon_none: { images: ["", "", "", imageSha256] },
       ani_degree_cn: {
         animations: {
           cn: { manifest: manifestSha256, atlas: atlasSha256 },
@@ -106,6 +108,8 @@ test("degree master metadata resolves all resource descriptors without server fa
   assert.equal(cn[1].baseImage, null);
   assert.equal(cn[1].rankImageName, "rank_none");
   assert.equal(cn[1].rankImage, null);
+  assert.equal(cn[1].iconImageResourceName, "icon_none");
+  assert.equal(cn[1].iconImage, null);
   assert.deepEqual(en, []);
   assert.equal(hasBandoriDegreeMasterRegion(master["1"], "jp"), true);
   assert.equal(hasBandoriDegreeMasterRegion(master["1"], "en"), false);

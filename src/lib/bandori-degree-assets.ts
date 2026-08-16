@@ -246,10 +246,10 @@ export function getBandoriDegreeCatalogItemsForRegion(
     const baseResource = baseImageName
       ? catalog.assets.resources[baseImageName]
       : undefined;
-    const rankResource = rankImageName
+    const rankResource = rankImageName && rank !== "none"
       ? catalog.assets.resources[rankImageName]
       : undefined;
-    const iconResource = iconImageResourceName
+    const iconResource = iconImageResourceName && iconImageName !== "none"
       ? catalog.assets.resources[iconImageResourceName]
       : undefined;
     const animation = baseResource?.animations?.[region];

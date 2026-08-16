@@ -5,13 +5,18 @@
 - Source visual truth:
   - `C:\Users\bluew\AppData\Local\Temp\codex-clipboard-19f6bc45-36e0-47b7-bfba-0930c9c7400e.png` (account-center identity card and requested insertion point)
   - `C:\Users\bluew\AppData\Local\Temp\codex-clipboard-da6c663a-5be7-4cc4-acce-a888f367b7d9.png` (team-builder profile-card visual language used only as the account-selector style reference)
+  - `C:\Users\bluew\AppData\Local\Temp\codex-clipboard-3f6dff89-8fea-4965-9e71-36c902bf7dbc.png` (authoritative ranking-Degree layer geometry)
 - Rendered implementation before the final size-only refinement:
   - `C:\Users\bluew\.codex\visualizations\2026\08\15\01a00701-7fad-7b83-aecc-de0004d42023\account-degree-saved-desktop.png`
   - `C:\Users\bluew\.codex\visualizations\2026\08\15\01a00701-7fad-7b83-aecc-de0004d42023\account-degree-mobile.png`
   - `C:\Users\bluew\.codex\visualizations\2026\08\15\01a00701-7fad-7b83-aecc-de0004d42023\account-degree-picker-desktop-post-fix.png`
   - `C:\Users\bluew\.codex\visualizations\2026\08\15\01a00701-7fad-7b83-aecc-de0004d42023\account-degree-picker-empty-account-mobile.png`
+- Final focused ranking-Degree evidence:
+  - `C:\Users\bluew\AppData\Local\Temp\hhwx-degree-ranking-same-origin.png`
+  - `C:\Users\bluew\AppData\Local\Temp\hhwx-degree-ranking-comparison.png`
 - Local implementation URL: `http://localhost:3001/account`
-- State: authenticated, verified local QA user; one CN binding with four Degrees, one empty CN binding; dynamic CN Degree 20099 selected
+- Local asset source during browser QA: `http://localhost:4000` via a process-only `NEXT_PUBLIC_BANDORI_ASSET_CDN_BASE_URL` override, because the production CDN CORS policy permits `http://localhost:3000` but not the worktree's port 3001; no repository environment file was changed
+- State: authenticated, verified local QA user; CN binding selected; `It's MyGO!!!!! TOP500` draft-selected only for the focused capture, then cancelled without saving
 
 ## Viewport and density normalization
 
@@ -23,6 +28,8 @@
 | Picker style source | 996 x 300 | Related team-builder surface, not the final dialog state | Used for card geometry, border, spacing, server icon, and UID hierarchy only |
 | Picker desktop implementation | 1100 x 900 | 1100 x 900 viewport override | Browser capture at device scale 1 |
 | Picker mobile empty-state implementation | 477 x 747 | 485 x 760 viewport override | Browser capture at device scale 1 |
+| Ranking layout source | 2532 x 1170 | 319 x 69 focused title region | Source render normalized from about 1.385x to the 115 x 25 CSS target |
+| Ranking implementation | 190 x 95 | 115 x 25 Degree inside the focused capture | Chrome viewport 1920 x 911, device scale 1; compared at an equal 115 x 25 footprint |
 
 The two sources describe different product states from the new selector, so a pixel overlay would create false precision. The source and implementation were opened together in the same comparison inputs, and the comparison was normalized around the focused card regions and the explicitly requested visual language.
 
@@ -37,12 +44,13 @@ The two sources describe different product states from the new selector, so a pi
 
 - Account identity region: compared the 485 px source crop against `account-degree-mobile.png`. Avatar, name/email/UID hierarchy, blue radius, and the requested below-UID Degree placement remained legible and balanced before the final size-only refinement.
 - Account-selector region: compared the team-builder source against `account-degree-picker-desktop-post-fix.png`. Card height, radius, border weight, server icon scale, UID emphasis, two-column desktop grid, and selected outline carry over; the simplified content is intentional.
+- Ranking-Degree region: matched the exact `It's MyGO!!!!! TOP500` base, rank, and crown resources from the implementation against the same title in the ranking-layout source. The source crown and 230 x 50 body share the same top-left origin; a zero-pixel native offset was the best pixel match. The final browser capture was normalized beside the source in `hhwx-degree-ranking-comparison.png`.
 - Asset fidelity: the account cards use the existing `BandoriServerIcon` SVG assets. Every title uses the real Bandori Degree base/rank/icon resources or animation atlas; there are no hand-drawn or placeholder replacements.
 
 ## Required fidelity surfaces
 
 - Fonts and typography: existing HHWX font stack and account hierarchy are unchanged. Dialog title, section labels, UIDs, helper copy, and button text use the established weights and line heights; no clipping or awkward wrapping was observed at either viewport.
-- Spacing and layout rhythm: the final 115 x 25 Degree footprint is shared by the account card and options. Desktop uses two account columns and up to three Degree columns; mobile collapses cleanly to one column. Radii, gaps, borders, and footer spacing match nearby account UI.
+- Spacing and layout rhythm: every Degree keeps the final 115 x 25 footprint. Ranking base and rank layers fill that box; the 25 x 25 crown layer starts at the same `left: 0; top: 0` coordinate and is painted above them. Its own transparent and grey connector pixels create the intended protruding-crown silhouette without expanding or offsetting the layout box. Desktop uses two account columns and up to three Degree columns; mobile collapses cleanly to one column. Radii, gaps, borders, and footer spacing match nearby account UI.
 - Colors and tokens: existing blue identity-card color is preserved. White/light-slate selector surfaces and sky selected states match the supplied profile-card reference and maintain clear disabled/empty contrast.
 - Image quality and asset fidelity: static PNG descriptors remain sharp and contained at native aspect ratio. Dynamic atlases render through the existing canvas implementation and hold the first frame when inactive or reduced motion applies.
 - Copy and content: account grouping and selector copy are concise. Empty accounts and the empty list use the approved exact text `暂无可用称号`. JP Degree 100 is not exposed as a synthetic option and there is no reset control.
@@ -71,10 +79,22 @@ The two sources describe different product states from the new selector, so a pi
 - Browser DOM and interaction evidence confirmed that background controls were inert, Shift+Tab wrapped to Cancel, Escape closed the dialog, and the trigger returned to the closed state.
 - No remaining actionable P0, P1, or P2 findings.
 
+### Pass 3
+
+- [P2] The first ranking-Degree fix treated the crown as an external badge and shifted the 230 x 50 body right by 25 native pixels, producing a 127.5 x 25 outer footprint at the account size.
+  - Evidence: this disagreed with the supplied game screenshot, where the crown resource's grey connector occupies the body's left edge rather than extending the layout box.
+  - Fix: measured the exact source assets and screenshot instead of retaining the half-overlap estimate.
+
+### Pass 4
+
+- Source matching located the crown resource at approximately `(593, 627)` and about `1.385x` scale. Compositing the 50 x 50 crown and 230 x 50 body at a zero-pixel native offset produced the best match; even a one-pixel body shift increased the pixel error.
+- Browser geometry for the final implementation measured base and rank at `(1225.15625, 454.5)`, 115 x 25, and the crown at the same `(1225.15625, 454.5)` origin, 25 x 25.
+- `hhwx-degree-ranking-comparison.png` contains the equal-size source and final implementation crops. No actionable P0, P1, or P2 geometry mismatch remains.
+
 ## Findings
 
 - No actionable P0, P1, or P2 visual, responsive, interaction, accessibility, asset, or copy differences remain.
-- The final requested display size is enforced as 115 x 25 by the shared `BandoriDegreeView` aspect-ratio box and the account-card fallback. A focused source regression test rejects the earlier 230 x 50 classes. The underlying static and animated resources retain their original resolution.
+- The final requested size is enforced as one 115 x 25 box by the shared `BandoriDegreeView` and the account-card fallback. Ranking base, rank, and crown layers share the same origin; the crown remains square at 25 x 25 and overlays the body's left edge. A focused source regression test rejects the earlier 230 x 50 classes, the incorrect shared aspect-ratio box, and any ranking-only width expansion. The underlying static and animated resources retain their original resolution.
 
 ## Primary interactions tested
 
@@ -106,7 +126,7 @@ The source and final desktop capture were opened together in the same comparison
 ### Layout and asset evidence
 
 - The author area now has two explicit rows to the right of the avatar: nickname and timestamp on the first row, the Degree on the second.
-- The comment variant is exactly 92 x 20. Its two 20 px rows plus the final 3 px inter-row gap fit inside the existing 44 px avatar/header minimum, so a normal one-line author header does not gain vertical height from the Degree. The 43 px group remains vertically centered by the header's flex alignment.
+- The comment variant is one 92 x 20 box for both ordinary and ranking Degrees. Ranking icons remain 20 x 20 and share the body's top-left origin, so they do not increase the footprint. Its two 20 px rows plus the final 3 px inter-row gap fit inside the existing 44 px avatar/header minimum, so a normal one-line author header does not gain vertical height from the Degree. The 43 px group remains vertically centered by the header's flex alignment.
 - The account-center variant remains 115 x 25; the compact size is scoped to comments and does not silently change the selector or account card.
 - The captured dynamic Degree rendered through the existing canvas path at 92 x 20 with the correct accessible name. Static Degrees use the same catalog mapping and image path.
 - The comment thread loads one shared Degree catalog and resolves all author selections from that map. Each comment does not create an independent catalog request.
@@ -123,6 +143,6 @@ The source and final desktop capture were opened together in the same comparison
 ### Comment findings
 
 - No actionable P0, P1, or P2 visual, responsive, data-contract, accessibility, or asset-fidelity differences remain.
-- The 92 x 20 result is legible at both tested widths and satisfies the requirement not to add height to the common one-line comment header. Further reduction is not needed for this layout.
+- The single 92 x 20 footprint is legible at both tested widths and satisfies the requirement not to add height to the common one-line comment header. Further reduction is not needed for this layout.
 
 final result: passed
