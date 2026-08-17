@@ -106,6 +106,7 @@ const cases = Object.entries(candidate.charts ?? {}).flatMap(([musicId, difficul
     difficulty: record.difficulty,
     sha256: record.sha256,
     expectedNotes: record.notes,
+    features: record.features ?? [],
   }))
 )).sort((left, right) => (
   Number(left.musicId) - Number(right.musicId)
@@ -124,8 +125,10 @@ const dimensions = [
   "skillTriggerTimes",
 ];
 const mismatchKeys = Object.fromEntries(dimensions.map((dimension) => [dimension, []]));
+const applicableCounts = Object.fromEntries(dimensions.map((dimension) => [dimension, 0]));
 const preparedDifferenceSamples = [];
 let rawExactMatches = 0;
+let multiRangeCharts = 0;
 
 for (let index = 0; index < cases.length; index += 1) {
   const current = cases[index];
@@ -133,6 +136,16 @@ for (let index = 0; index < cases.length; index += 1) {
   const song = songs[current.musicId];
   if (!song) {
     throw new Error(`songs input is missing ${current.musicId}`);
+  }
+  if (!Array.isArray(current.features)) {
+    throw new Error(`candidate features are invalid: ${key}`);
+  }
+  const isMultiRange = current.features.includes("multiRange");
+  if (current.features.some((feature) => feature !== "multiRange")) {
+    throw new Error(`candidate has unsupported chart features: ${key}`);
+  }
+  if (isMultiRange) {
+    multiRangeCharts += 1;
   }
   const candidateObjectPath = path.join(
     candidateRoot,
@@ -144,28 +157,36 @@ for (let index = 0; index < cases.length; index += 1) {
   if (await sha256File(candidateObjectPath) !== current.sha256) {
     throw new Error(`candidate hash mismatch: ${key}`);
   }
-  const [rebuiltChart, bestdoriChart] = await Promise.all([
-    readJson(candidateObjectPath),
-    readJson(path.join(bestdoriRoot, current.musicId, `${current.difficulty}.json`)),
-  ]);
-  if (same(rebuiltChart, bestdoriChart)) {
-    rawExactMatches += 1;
-  }
-
+  const rebuiltChart = await readJson(candidateObjectPath);
   const rebuilt = prepareBandoriChart(rebuiltChart, song, current.difficulty);
-  const bestdori = prepareBandoriChart(bestdoriChart, song, current.difficulty);
   const checks = {
-    preparedFull: same(rebuilt, bestdori),
-    timeline: same(chartTimeline(rebuilt), chartTimeline(bestdori)),
-    notesCount: rebuilt.notesCount === bestdori.notesCount,
     candidateMetadataNotes: rebuilt.notesCount === current.expectedNotes,
-    skillStartNotes: same(rebuilt.skillStartNotes, bestdori.skillStartNotes),
-    skillTriggerTimes: same(rebuilt.skillTriggerTimes, bestdori.skillTriggerTimes),
   };
+  let bestdori = null;
+  if (!isMultiRange) {
+    const bestdoriChart = await readJson(
+      path.join(bestdoriRoot, current.musicId, `${current.difficulty}.json`),
+    );
+    if (same(rebuiltChart, bestdoriChart)) {
+      rawExactMatches += 1;
+    }
+    bestdori = prepareBandoriChart(bestdoriChart, song, current.difficulty);
+    Object.assign(checks, {
+      preparedFull: same(rebuilt, bestdori),
+      timeline: same(chartTimeline(rebuilt), chartTimeline(bestdori)),
+      notesCount: rebuilt.notesCount === bestdori.notesCount,
+      skillStartNotes: same(rebuilt.skillStartNotes, bestdori.skillStartNotes),
+      skillTriggerTimes: same(rebuilt.skillTriggerTimes, bestdori.skillTriggerTimes),
+    });
+  }
   for (const dimension of dimensions) {
+    if (typeof checks[dimension] !== "boolean") {
+      continue;
+    }
+    applicableCounts[dimension] += 1;
     if (!checks[dimension]) mismatchKeys[dimension].push(key);
   }
-  if (!checks.preparedFull && preparedDifferenceSamples.length < 20) {
+  if (checks.preparedFull === false && preparedDifferenceSamples.length < 20) {
     preparedDifferenceSamples.push({
       key,
       difference: firstDifference(rebuilt, bestdori),
@@ -178,10 +199,10 @@ for (let index = 0; index < cases.length; index += 1) {
 
 const counts = Object.fromEntries(dimensions.map((dimension) => [
   dimension,
-  cases.length - mismatchKeys[dimension].length,
+  applicableCounts[dimension] - mismatchKeys[dimension].length,
 ]));
 const report = {
-  schemaVersion: "hhwx-bandori-music-chart-consumer-audit-v1",
+  schemaVersion: "hhwx-bandori-music-chart-consumer-audit-v3",
   generatedAt: new Date().toISOString(),
   inputs: {
     candidate: candidatePath,
@@ -193,12 +214,15 @@ const report = {
   contract: {
     consumer: "prepareBandoriChart",
     blockingDimensions: dimensions,
-    rawEntityEquality: "informational only; scoring ignores lane and presentation-only metadata",
+    rawEntityEquality: "informational for ordinary charts only; multiRange does not read Bestdori",
   },
   counts: {
     charts: cases.length,
+    bestdoriComparableCharts: cases.length - multiRangeCharts,
+    multiRangeCharts,
     rawExactMatches,
-    rawStructuralDifferences: cases.length - rawExactMatches,
+    rawStructuralDifferences: cases.length - multiRangeCharts - rawExactMatches,
+    checksApplicable: applicableCounts,
     ...counts,
   },
   mismatches: mismatchKeys,
