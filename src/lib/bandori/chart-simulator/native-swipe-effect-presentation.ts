@@ -22,7 +22,7 @@ export const BANDORI_NATIVE_DIRECTIONAL_EFFECT_FRAME_URLS = Array.from(
 
 export type BandoriNativeSwipeEffectKind = keyof typeof recipes;
 
-export const BANDORI_APPROVED_MANUAL_SLASH_ABOVE_JUDGMENT_RATIO = 1 / 3;
+export const BANDORI_APPROVED_MANUAL_VERTICAL_BEAM_ABOVE_JUDGMENT_RATIO = 1 / 3;
 
 export type BandoriNativeSwipeEffectPlacement = Readonly<{
   pixelsPerWorldUnit: number;
@@ -106,7 +106,7 @@ export function getBandoriNativeSwipeParticleWidthScale(
     : 1;
 }
 
-export function getBandoriApprovedManualSlashScreenY(
+export function getBandoriApprovedManualVerticalBeamScreenY(
   kind: BandoriNativeSwipeEffectKind,
   judgmentScreenY: number,
   instance: Pick<
@@ -114,18 +114,22 @@ export function getBandoriApprovedManualSlashScreenY(
     "basisX" | "basisY" | "heightPixels" | "hierarchyPath" | "screenY" | "widthPixels"
   >,
 ): number {
-  const isApprovedSlash = instance.hierarchyPath.endsWith("/slash")
+  const isApprovedVerticalBeam = (
+    kind === "flick"
     && (
-      kind === "flick"
-      || kind === "directional-finger-left"
-      || kind === "directional-finger-right"
-    );
-  if (!isApprovedSlash) return instance.screenY;
+      instance.hierarchyPath.endsWith("/slash")
+      || instance.hierarchyPath.endsWith("/line1")
+    )
+  ) || (
+    instance.hierarchyPath.endsWith("/slash")
+    && (kind === "directional-finger-left" || kind === "directional-finger-right")
+  );
+  if (!isApprovedVerticalBeam) return instance.screenY;
 
   const verticalExtentPixels = Math.abs(instance.basisX.y * instance.widthPixels)
     + Math.abs(instance.basisY.y * instance.heightPixels);
   return judgmentScreenY + verticalExtentPixels
-    * (0.5 - BANDORI_APPROVED_MANUAL_SLASH_ABOVE_JUDGMENT_RATIO);
+    * (0.5 - BANDORI_APPROVED_MANUAL_VERTICAL_BEAM_ABOVE_JUDGMENT_RATIO);
 }
 
 export function getBandoriApprovedManualDirectionalNotesCenterOffsetPixels(

@@ -63,8 +63,10 @@ test("the Pixi stage loads the selected stage, point-note atlases, and bounded h
   assert.match(notePresentation, /BANDORI_NATIVE_NOTE_SPEED_STEP = 0\.01/u);
   assert.match(notePresentation, /noteSpeed > 11\.01/u);
   assert.match(stage, /getBandoriSimulatorNoteArrivalSeconds\([\s\S]*currentNoteSpeed,[\s\S]*currentNoteApproachTimeScale/u);
-  assert.match(stage, /getBandoriApprovedManualSlashScreenY\([\s\S]*display\.kind,[\s\S]*display\.placement\.screenY,[\s\S]*instance/u);
-  assert.match(stage, /getBandoriApprovedManualDirectionalNotesCenterOffsetPixels\(instance\)/u);
+  assert.match(stage, /const particleScreenY = getBandoriApprovedManualVerticalBeamScreenY\([\s\S]*display\.kind,[\s\S]*display\.placement\.screenY,[\s\S]*instance/u);
+  assert.match(stage, /const directionalNotesCenterOffsetPixels =\s*getBandoriApprovedManualDirectionalNotesCenterOffsetPixels\(instance\)/u);
+  assert.doesNotMatch(stage, /const (?:particleScreenY|directionalNotesCenterOffsetPixels) = display\.isNativeDefault/u);
+  assert.match(stage, /const terminalScreenX = event\.terminalLane === null[\s\S]*if \(limitedEffects\)[\s\S]*triggerSwipeEffect\([\s\S]*terminalScreenX/u);
   assert.match(stage, /BANDORI_NATIVE_JUDGMENT_LANE_SPACING_PIXELS/u);
   assert.match(stage, /noteSpeedRef\.current/u);
   assert.match(stage, /noteApproachTimeScaleRef\.current/u);

@@ -43,12 +43,12 @@ import {
   getBandoriNativeComboDigitPlacements,
 } from "../src/lib/bandori/chart-simulator/native-judgment-combo-presentation.ts";
 import {
-  BANDORI_APPROVED_MANUAL_SLASH_ABOVE_JUDGMENT_RATIO,
+  BANDORI_APPROVED_MANUAL_VERTICAL_BEAM_ABOVE_JUDGMENT_RATIO,
   BANDORI_NATIVE_DIRECTIONAL_EFFECT_FRAME_URLS,
   BANDORI_NATIVE_SWIPE_EFFECT_TEXTURE_URLS,
   createBandoriNativeSwipeEffectRuntime,
   getBandoriApprovedManualDirectionalNotesCenterOffsetPixels,
-  getBandoriApprovedManualSlashScreenY,
+  getBandoriApprovedManualVerticalBeamScreenY,
   getBandoriNativeSwipeEffectPlacement,
   getBandoriNativeSwipeEffectSeed,
   getBandoriNativeSwipeParticleWidthScale,
@@ -1667,7 +1667,7 @@ test("JP Flick and Directional recipes execute the recovered particle module all
   );
 });
 
-test("approved Flick and directional-finger slash bounds place one third above the judgment line", () => {
+test("approved ordinary and limited vertical beams place one third above the judgment line", () => {
   const judgmentScreenY = 700;
   const assertApprovedSlashPlacement = (kind) => {
     const frame = createBandoriNativeSwipeEffectRuntime(kind, 3, 9).play(0, 9);
@@ -1677,7 +1677,7 @@ test("approved Flick and directional-finger slash bounds place one third above t
     assert.ok(slash);
     const verticalExtentPixels = Math.abs(slash.basisX.y * slash.widthPixels)
       + Math.abs(slash.basisY.y * slash.heightPixels);
-    const screenY = getBandoriApprovedManualSlashScreenY(
+    const screenY = getBandoriApprovedManualVerticalBeamScreenY(
       kind,
       judgmentScreenY,
       slash,
@@ -1695,10 +1695,27 @@ test("approved Flick and directional-finger slash bounds place one third above t
     ) < 1e-9);
   };
 
-  assert.equal(BANDORI_APPROVED_MANUAL_SLASH_ABOVE_JUDGMENT_RATIO, 1 / 3);
+  assert.equal(BANDORI_APPROVED_MANUAL_VERTICAL_BEAM_ABOVE_JUDGMENT_RATIO, 1 / 3);
   assertApprovedSlashPlacement("flick");
   assertApprovedSlashPlacement("directional-finger-left");
   assertApprovedSlashPlacement("directional-finger-right");
+
+  const limitedFlickLine = {
+    basisX: { x: 1, y: 0 },
+    basisY: { x: 0, y: 1 },
+    heightPixels: 1_200,
+    hierarchyPath: "effect_tap_swipe/line1",
+    screenY: 1_260,
+    widthPixels: 300,
+  };
+  assert.equal(
+    getBandoriApprovedManualVerticalBeamScreenY(
+      "flick",
+      judgmentScreenY,
+      limitedFlickLine,
+    ),
+    judgmentScreenY + limitedFlickLine.heightPixels / 6,
+  );
 
   const directionalFrame = createBandoriNativeSwipeEffectRuntime(
     "directional-left-1",
@@ -1707,7 +1724,7 @@ test("approved Flick and directional-finger slash bounds place one third above t
   ).play(0, 9);
   const directionalParticle = directionalFrame.instances[0];
   assert.equal(
-    getBandoriApprovedManualSlashScreenY(
+    getBandoriApprovedManualVerticalBeamScreenY(
       "directional-left-1",
       judgmentScreenY,
       directionalParticle,

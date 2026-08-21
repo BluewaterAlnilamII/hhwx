@@ -108,7 +108,7 @@ import {
   BANDORI_NATIVE_SWIPE_EFFECT_TEXTURE_URLS,
   createBandoriNativeSwipeEffectRuntime,
   getBandoriApprovedManualDirectionalNotesCenterOffsetPixels,
-  getBandoriApprovedManualSlashScreenY,
+  getBandoriApprovedManualVerticalBeamScreenY,
   getBandoriNativeSwipeEffectPlacement,
   getBandoriNativeSwipeEffectSeed,
   getBandoriNativeSwipeParticleWidthScale,
@@ -1069,12 +1069,10 @@ function updateSwipeEffect(
       subtextures,
       ownedTextures,
     );
-    const anchorX = display.isNativeDefault
-      && isBandoriNativeDirectionalTerminalParticle(instance)
+    const anchorX = isBandoriNativeDirectionalTerminalParticle(instance)
       ? display.terminalOffsetX
       : 0;
-    const anchorY = display.isNativeDefault
-      && isBandoriNativeDirectionalTerminalParticle(instance)
+    const anchorY = isBandoriNativeDirectionalTerminalParticle(instance)
       ? display.terminalOffsetY
       : 0;
     const scaleX = instance.widthPixels / texture.orig.width
@@ -1090,16 +1088,13 @@ function updateSwipeEffect(
     const scaleY = instance.heightPixels / texture.orig.height
       * pixelScale
       * (instance.uv.flipV ? -1 : 1);
-    const directionalNotesCenterOffsetPixels = display.isNativeDefault
-      ? getBandoriApprovedManualDirectionalNotesCenterOffsetPixels(instance)
-      : 0;
-    const particleScreenY = display.isNativeDefault
-      ? getBandoriApprovedManualSlashScreenY(
-          display.kind,
-          display.placement.screenY,
-          instance,
-        )
-      : instance.screenY;
+    const directionalNotesCenterOffsetPixels =
+      getBandoriApprovedManualDirectionalNotesCenterOffsetPixels(instance);
+    const particleScreenY = getBandoriApprovedManualVerticalBeamScreenY(
+      display.kind,
+      display.placement.screenY,
+      instance,
+    );
     sprite.texture = texture;
     sprite.setFromMatrix(new Matrix(
       instance.basisX.x * scaleX,
@@ -2339,6 +2334,11 @@ export default function NativeSimulatorStage({
             );
             const laneEffect = laneEffects[event.lane];
             if (!projection || !laneEffect) continue;
+            const terminalScreenX = event.terminalLane === null
+              ? projection.screenX
+              : projection.screenX
+                + (event.terminalLane - event.lane)
+                * BANDORI_NATIVE_JUDGMENT_LANE_SPACING_PIXELS;
 
             if (limitedEffects) {
               const semantic = getLimitedMainEffectRecipeKey(event.kind);
@@ -2365,7 +2365,7 @@ export default function NativeSimulatorStage({
                 event,
                 projection.screenX,
                 projection.screenY,
-                projection.screenX,
+                terminalScreenX,
                 projection.screenY,
                 effectAnimationTimeSeconds,
                 swipeEffectTextures,
@@ -2446,11 +2446,6 @@ export default function NativeSimulatorStage({
                 );
                 swipeEffects.set(key, display);
               }
-              const terminalScreenX = event.terminalLane === null
-                ? projection.screenX
-                : projection.screenX
-                  + (event.terminalLane - event.lane)
-                  * BANDORI_NATIVE_JUDGMENT_LANE_SPACING_PIXELS;
               triggerSwipeEffect(
                 display,
                 event,
