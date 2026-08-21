@@ -115,9 +115,12 @@ import {
   isBandoriNativeDirectionalTerminalParticle,
   type BandoriNativeSwipeEffectKind,
 } from "@/lib/bandori/chart-simulator/native-swipe-effect-presentation";
-import type {
-  BandoriDefaultEffectRuntime,
-  BandoriEffectFrameInstance,
+import {
+  createBandoriDefaultEffectRuntime,
+  getBandoriDefaultEffectPlacement,
+  type BandoriDefaultEffectPlacement,
+  type BandoriDefaultEffectRuntime,
+  type BandoriEffectFrameInstance,
 } from "@/lib/bandori/chart-simulator/default-effects";
 import {
   BANDORI_NATIVE_BACKGROUND_RECT,
@@ -139,11 +142,13 @@ import {
   getBandoriNativeIconFrameId,
   getBandoriNativeLongFlashUrl,
   getBandoriNativeNoteFrame,
+  getBandoriNativeNoteFrameUrl,
   getBandoriNativeRhythmSupportNoteUrl,
   type BandoriNativeDirectionalFlickSkin,
   type BandoriNativeNoteFrameId,
   type BandoriNativeNoteSkin,
 } from "./native-note-assets";
+import type { BandoriLimitedPerformanceSkin } from "./limited-performance-skins";
 import {
   BANDORI_HABAHIRO_SPRITES,
   type BandoriHabahiroSpriteName,
@@ -159,6 +164,7 @@ type NativeSimulatorStageProps = {
   getPresentationTime: () => number;
   isMirrored: boolean;
   laneEffectEnabled: boolean;
+  limitedPerformanceSkin: BandoriLimitedPerformanceSkin | null;
   loadingLabel: string;
   noteApproachTimeScale: number;
   noteSpeed: number;
@@ -250,7 +256,8 @@ type SwipeEffectDisplay = {
   kind: BandoriNativeSwipeEffectKind;
   lane: number;
   low: Container;
-  placement: ReturnType<typeof getBandoriNativeSwipeEffectPlacement>;
+  isNativeDefault: boolean;
+  placement: BandoriDefaultEffectPlacement;
   rangeWidth: number;
   runtime: BandoriDefaultEffectRuntime;
   sprites: Sprite[];
@@ -264,8 +271,14 @@ type HoldEffectDisplay = {
   flash: Sprite;
   high: Container;
   low: Container;
+  placement: BandoriDefaultEffectPlacement;
   runtime: BandoriDefaultEffectRuntime;
   sprites: Sprite[];
+};
+
+type LoadedLimitedPerformanceEffects = {
+  recipes: ReadonlyMap<string, unknown>;
+  textures: ReadonlyMap<string, Texture>;
 };
 
 type LaneEffectDisplay = {
@@ -636,6 +649,100 @@ function effectTint(red: number, green: number, blue: number): number {
   return (channel(red) << 16) | (channel(green) << 8) | channel(blue);
 }
 
+async function loadLimitedPerformanceEffects(
+  skin: BandoriLimitedPerformanceSkin | null,
+): Promise<LoadedLimitedPerformanceEffects | null> {
+  if (!skin) return null;
+  const recipeUrls = {
+    ...Object.fromEntries(
+      Object.entries(skin.effects.recipes).map(([key, url]) => [`tap:${key}`, url]),
+    ),
+    ...Object.fromEntries(
+      Object.entries(skin.effects.directionalRecipes).map(
+        ([key, url]) => [`directional:${key}`, url],
+      ),
+    ),
+  };
+  const [recipeEntries, textureEntries] = await Promise.all([
+    Promise.all(Object.entries(recipeUrls).map(async ([key, url]) => {
+      const response = await fetch(url, { cache: "force-cache" });
+      if (!response.ok) {
+        throw new Error(`Limited performance effect recipe failed: ${url}`);
+      }
+      return [key, await response.json()] as const;
+    })),
+    Promise.all(Object.entries(skin.effects.resources).map(async ([key, url]) => (
+      [key, await Assets.load<Texture>(url)] as const
+    ))),
+  ]);
+  return {
+    recipes: new Map(recipeEntries),
+    textures: new Map(textureEntries),
+  };
+}
+
+function configureParticleBlend(
+  sprite: Sprite,
+  instance: BandoriEffectFrameInstance,
+): void {
+  if (
+    instance.blendEquation === "add"
+    && instance.blendSource === "src-alpha"
+    && instance.blendDestination === "one"
+    && !instance.premultipliedAlpha
+  ) {
+    sprite.blendMode = "add";
+    return;
+  }
+  if (
+    instance.blendEquation === "add"
+    && instance.blendDestination === "one-minus-src-alpha"
+    && (
+      (instance.blendSource === "src-alpha" && !instance.premultipliedAlpha)
+      || (instance.blendSource === "one" && instance.premultipliedAlpha)
+    )
+  ) {
+    sprite.blendMode = "normal";
+    return;
+  }
+  throw new BandoriNativeNoteContractError(
+    "Particle effect left the verified additive/alpha material profiles",
+  );
+}
+
+function limitedEffectSeed(noteIndex: number, lane: number, semantic: string): number {
+  let semanticHash = 0x811c9dc5;
+  for (let index = 0; index < semantic.length; index += 1) {
+    semanticHash = Math.imul(semanticHash ^ semantic.charCodeAt(index), 0x01000193);
+  }
+  return (
+    Math.imul(noteIndex + 1, 0x9e3779b1)
+    ^ Math.imul(lane + 1, 0x85ebca6b)
+    ^ semanticHash
+  ) >>> 0;
+}
+
+function getLimitedMainEffectRecipeKey(kind: string): string {
+  if (kind === "normal" || kind === "skill" || kind === "flick") {
+    return `tap:${kind}`;
+  }
+  if (kind.startsWith("directional-")) {
+    return `directional:${kind.slice("directional-".length)}`;
+  }
+  throw new BandoriNativeNoteContractError(
+    `Limited performance effect kind is unsupported: ${kind}`,
+  );
+}
+
+function getLimitedFingerEffectRecipeKey(kind: string): string {
+  if (!kind.startsWith("directional-")) {
+    throw new BandoriNativeNoteContractError(
+      `Limited performance finger effect kind is unsupported: ${kind}`,
+    );
+  }
+  return `directional:${kind.slice("directional-".length)}`;
+}
+
 function createHitEffectDisplay(
   kind: BandoriNativeTapHitEffectKind,
   rangeWidth: number,
@@ -701,6 +808,39 @@ function createHitEffectDisplay(
     low,
     rangeWidth,
     staticLayers,
+    triggerAnimationTimeSeconds: null,
+  };
+}
+
+function createLimitedEffectDisplay(
+  recipe: unknown,
+  lane: number,
+  rangeWidth: number,
+  lowLayer: Container,
+  highLayer: Container,
+): SwipeEffectDisplay {
+  const low = new Container();
+  const high = new Container();
+  low.eventMode = "none";
+  high.eventMode = "none";
+  low.sortableChildren = true;
+  high.sortableChildren = true;
+  low.visible = false;
+  high.visible = false;
+  lowLayer.addChild(low);
+  highLayer.addChild(high);
+  return {
+    high,
+    isNativeDefault: false,
+    kind: "flick",
+    lane,
+    low,
+    placement: getBandoriDefaultEffectPlacement(recipe, lane),
+    rangeWidth,
+    runtime: createBandoriDefaultEffectRuntime(recipe, { buttonIndex: lane, seed: 0 }),
+    sprites: [],
+    terminalOffsetX: 0,
+    terminalOffsetY: 0,
     triggerAnimationTimeSeconds: null,
   };
 }
@@ -865,6 +1005,7 @@ function createSwipeEffectDisplay(
   highLayer.addChild(high);
   return {
     high,
+    isNativeDefault: true,
     kind,
     lane,
     low,
@@ -912,24 +1053,14 @@ function updateSwipeEffect(
     / display.placement.pixelsPerWorldUnit;
   for (let index = 0; index < frame.count; index += 1) {
     const instance = frame.instances[index];
-    if (
-      instance.blendSource !== "src-alpha"
-      || instance.blendDestination !== "one"
-      || instance.blendEquation !== "add"
-      || instance.premultipliedAlpha
-    ) {
-      throw new BandoriNativeNoteContractError(
-        "Swipe-effect particle left the verified additive material profile",
-      );
-    }
     let sprite = display.sprites[index];
     if (!sprite) {
       sprite = new Sprite(Texture.EMPTY);
       sprite.anchor.set(0.5);
-      sprite.blendMode = "add";
       sprite.eventMode = "none";
       display.sprites[index] = sprite;
     }
+    configureParticleBlend(sprite, instance);
     const targetLayer = instance.sortingOrder >= 50 ? display.high : display.low;
     if (sprite.parent !== targetLayer) targetLayer.addChild(sprite);
     const texture = getParticleEffectFrameTexture(
@@ -938,30 +1069,37 @@ function updateSwipeEffect(
       subtextures,
       ownedTextures,
     );
-    const anchorX = isBandoriNativeDirectionalTerminalParticle(instance)
+    const anchorX = display.isNativeDefault
+      && isBandoriNativeDirectionalTerminalParticle(instance)
       ? display.terminalOffsetX
       : 0;
-    const anchorY = isBandoriNativeDirectionalTerminalParticle(instance)
+    const anchorY = display.isNativeDefault
+      && isBandoriNativeDirectionalTerminalParticle(instance)
       ? display.terminalOffsetY
       : 0;
     const scaleX = instance.widthPixels / texture.orig.width
       * pixelScale
-      * getBandoriNativeSwipeParticleWidthScale(
-        display.kind,
-        display.rangeWidth,
-        instance,
-      )
+      * (display.isNativeDefault
+        ? getBandoriNativeSwipeParticleWidthScale(
+            display.kind,
+            display.rangeWidth,
+            instance,
+          )
+        : 1)
       * (instance.uv.flipU ? -1 : 1);
     const scaleY = instance.heightPixels / texture.orig.height
       * pixelScale
       * (instance.uv.flipV ? -1 : 1);
-    const directionalNotesCenterOffsetPixels =
-      getBandoriApprovedManualDirectionalNotesCenterOffsetPixels(instance);
-    const particleScreenY = getBandoriApprovedManualSlashScreenY(
-      display.kind,
-      display.placement.screenY,
-      instance,
-    );
+    const directionalNotesCenterOffsetPixels = display.isNativeDefault
+      ? getBandoriApprovedManualDirectionalNotesCenterOffsetPixels(instance)
+      : 0;
+    const particleScreenY = display.isNativeDefault
+      ? getBandoriApprovedManualSlashScreenY(
+          display.kind,
+          display.placement.screenY,
+          instance,
+        )
+      : instance.screenY;
     sprite.texture = texture;
     sprite.setFromMatrix(new Matrix(
       instance.basisX.x * scaleX,
@@ -993,6 +1131,7 @@ function triggerSwipeEffect(
   textures: ReadonlyMap<string, Texture>,
   subtextures: Map<string, Texture>,
   ownedTextures: Texture[],
+  seedOverride?: number,
 ): void {
   if (display.rangeWidth !== event.rangeWidth) {
     throw new BandoriNativeNoteContractError("Swipe-effect display width does not match its event");
@@ -1000,7 +1139,7 @@ function triggerSwipeEffect(
   display.runtime.setButtonIndex(display.lane);
   display.runtime.play(
     0,
-    getBandoriNativeSwipeEffectSeed(event.index, event.lane, display.kind),
+    seedOverride ?? getBandoriNativeSwipeEffectSeed(event.index, event.lane, display.kind),
   );
   display.triggerAnimationTimeSeconds = animationTimeSeconds;
   display.low.position.set(screenX, screenY);
@@ -1020,6 +1159,7 @@ function createHoldEffectDisplay(
   flashTexture: Texture,
   flashAnchorX: number,
   flashAnchorY: number,
+  limitedRecipe: unknown | null,
   seed: number,
   kind: "long" | "slide",
   rangeWidth: number,
@@ -1043,13 +1183,19 @@ function createHoldEffectDisplay(
   flash.eventMode = "none";
   flashLayer.addChild(flash);
 
-  const runtime = createBandoriNativeHoldEffectRuntime(seed, { kind, rangeWidth });
+  const runtime = limitedRecipe
+    ? createBandoriDefaultEffectRuntime(limitedRecipe, { buttonIndex: 3, seed })
+    : createBandoriNativeHoldEffectRuntime(seed, { kind, rangeWidth });
+  const placement = limitedRecipe
+    ? getBandoriDefaultEffectPlacement(limitedRecipe, 3)
+    : BANDORI_NATIVE_HOLD_EFFECT_PLACEMENT;
   runtime.play(0, seed);
   return {
     animationElapsedSeconds: initialAnimationElapsedSeconds,
     flash,
     high,
     low,
+    placement,
     runtime,
     sprites: [],
   };
@@ -1078,27 +1224,17 @@ function updateHoldEffect(
   for (const sprite of display.sprites) sprite.visible = false;
 
   const pixelScale = BANDORI_NATIVE_BUTTON_EFFECT_PIXELS_PER_WORLD_UNIT
-    / BANDORI_NATIVE_HOLD_EFFECT_PLACEMENT.pixelsPerWorldUnit;
+    / display.placement.pixelsPerWorldUnit;
   for (let index = 0; index < frame.count; index += 1) {
     const instance = frame.instances[index];
-    if (
-      instance.blendSource !== "src-alpha"
-      || instance.blendDestination !== "one"
-      || instance.blendEquation !== "add"
-      || instance.premultipliedAlpha
-    ) {
-      throw new BandoriNativeNoteContractError(
-        "TapKeep particle left the verified additive material profile",
-      );
-    }
     let sprite = display.sprites[index];
     if (!sprite) {
       sprite = new Sprite(Texture.EMPTY);
       sprite.anchor.set(0.5);
-      sprite.blendMode = "add";
       sprite.eventMode = "none";
       display.sprites[index] = sprite;
     }
+    configureParticleBlend(sprite, instance);
     const targetLayer = instance.sortingOrder >= 50 ? display.high : display.low;
     if (sprite.parent !== targetLayer) targetLayer.addChild(sprite);
     const texture = getParticleEffectFrameTexture(
@@ -1119,8 +1255,8 @@ function updateHoldEffect(
       instance.basisX.y * scaleX,
       instance.basisY.x * scaleY,
       instance.basisY.y * scaleY,
-      (instance.screenX - BANDORI_NATIVE_HOLD_EFFECT_PLACEMENT.screenX) * pixelScale,
-      (instance.screenY - BANDORI_NATIVE_HOLD_EFFECT_PLACEMENT.screenY) * pixelScale,
+      (instance.screenX - display.placement.screenX) * pixelScale,
+      (instance.screenY - display.placement.screenY) * pixelScale,
     ));
     sprite.tint = effectTint(instance.color.r, instance.color.g, instance.color.b);
     sprite.alpha = Math.max(0, Math.min(1, instance.color.a));
@@ -1283,6 +1419,7 @@ export default function NativeSimulatorStage({
   getPresentationTime,
   isMirrored,
   laneEffectEnabled,
+  limitedPerformanceSkin,
   loadingLabel,
   noteApproachTimeScale,
   noteSpeed,
@@ -1401,14 +1538,45 @@ export default function NativeSimulatorStage({
         if (!disposed) setStatus("noteContractError");
         return;
       }
+      const usedFrameIds = new Set<BandoriNativeNoteFrameId>();
+      for (const group of chartVisuals.notes) {
+        if (!group) continue;
+        for (const visual of group.visuals) {
+          if (!getBandoriHabahiroBodySpriteName(visual)) {
+            usedFrameIds.add(getBandoriNativeBodyFrameId(visual));
+          }
+          if (visual.icon && !isBandoriHabahiroMultiRangeFlickIcon(visual)) {
+            usedFrameIds.add(getBandoriNativeIconFrameId(visual.icon));
+          }
+        }
+      }
       let habahiroTextures = new Map<BandoriHabahiroSpriteName, HabahiroTexture>();
+      let limitedEffects: LoadedLimitedPerformanceEffects | null = null;
+      let spriteFrameTextures = new Map<BandoriNativeNoteFrameId, Texture>();
       try {
+        const limitedEffectsPromise = loadLimitedPerformanceEffects(
+          limitedPerformanceSkin,
+        );
+        const spriteFramePromise = Promise.all([...usedFrameIds].map(async (frameId) => {
+          const url = getBandoriNativeNoteFrameUrl(
+            frameId,
+            noteSkin,
+            directionalFlickSkin,
+          );
+          return url
+            ? [frameId, await Assets.load<Texture>(url)] as const
+            : null;
+        }));
         resources = await Promise.all([
           Assets.load<Texture>(BANDORI_NATIVE_BACKGROUND_TEXTURE_URL),
           Assets.load<Texture>(fieldSkin.textureUrl),
           Assets.load<Texture>(fieldSkin.judgmentLineTextureUrl),
-          Assets.load<Texture>(noteSkin.atlasUrl),
-          Assets.load<Texture>(directionalFlickSkin.atlasUrl),
+          noteSkin.frameSource === "atlas"
+            ? Assets.load<Texture>(noteSkin.atlasUrl)
+            : Promise.resolve(Texture.EMPTY),
+          directionalFlickSkin.frameSource === "atlas"
+            ? Assets.load<Texture>(directionalFlickSkin.atlasUrl)
+            : Promise.resolve(Texture.EMPTY),
           Assets.load<Texture>(noteSkin.longNoteLineUrl),
           Assets.load<Texture>(noteSkin.curveSlideNoteLineUrl),
           Assets.load<Texture>(noteSkin.syncLineUrl),
@@ -1442,8 +1610,11 @@ export default function NativeSimulatorStage({
             (url) => Assets.load<Texture>(url),
           ),
         ]);
-        if (habahiroSpriteNames.size > 0) {
-          const entries = await Promise.all([...habahiroSpriteNames].map(async (name) => {
+        const [loadedLimitedEffects, loadedSpriteFrames, habahiroEntries] =
+          await Promise.all([
+            limitedEffectsPromise,
+            spriteFramePromise,
+            Promise.all([...habahiroSpriteNames].map(async (name) => {
             const texture = await Assets.load<Texture>(getBandoriHabahiroSpriteUrl(name));
             const contract = BANDORI_HABAHIRO_SPRITES[name];
             return [name, {
@@ -1451,9 +1622,13 @@ export default function NativeSimulatorStage({
               anchorY: contract.anchorY,
               texture,
             }] as const;
-          }));
-          habahiroTextures = new Map(entries);
-        }
+            })),
+          ]);
+        limitedEffects = loadedLimitedEffects;
+        spriteFrameTextures = new Map(
+          loadedSpriteFrames.filter((entry) => entry !== null),
+        );
+        habahiroTextures = new Map(habahiroEntries);
       } catch {
         if (!disposed) setStatus("resourceError");
         return;
@@ -1520,6 +1695,12 @@ export default function NativeSimulatorStage({
         ...directionalEffectFrameTextures
       ] = resources;
       for (const texture of resources) texture.source.scaleMode = "linear";
+      for (const texture of limitedEffects?.textures.values() ?? []) {
+        texture.source.scaleMode = "linear";
+      }
+      for (const texture of spriteFrameTextures.values()) {
+        texture.source.scaleMode = "linear";
+      }
 
       const directionalLineLeftShader = createNativeTransparentColoredShader(
         directionalLineLeftTexture,
@@ -1563,33 +1744,19 @@ export default function NativeSimulatorStage({
       judgmentLine.tint = 0xffffff;
       judgmentLine.alpha = 1;
 
-      const usedFrameIds = new Set<BandoriNativeNoteFrameId>();
-      for (const group of chartVisuals.notes) {
-        if (!group) continue;
-        for (const visual of group.visuals) {
-          if (!getBandoriHabahiroBodySpriteName(visual)) {
-            usedFrameIds.add(getBandoriNativeBodyFrameId(visual));
-          }
-          if (
-            visual.icon
-            && !isBandoriHabahiroMultiRangeFlickIcon(visual)
-          ) {
-            usedFrameIds.add(getBandoriNativeIconFrameId(visual.icon));
-          }
-        }
-      }
       const frameTextures = new Map<BandoriNativeNoteFrameId, Texture>();
       try {
         for (const frameId of usedFrameIds) {
-          const texture = createFrameTexture(
-            standardAtlas,
-            directionalAtlas,
-            frameId,
-            noteSkin,
-            directionalFlickSkin,
-          );
+          const directTexture = spriteFrameTextures.get(frameId);
+          const texture = directTexture ?? createFrameTexture(
+              standardAtlas,
+              directionalAtlas,
+              frameId,
+              noteSkin,
+              directionalFlickSkin,
+            );
           frameTextures.set(frameId, texture);
-          localFrameTextures.push(texture);
+          if (!directTexture) localFrameTextures.push(texture);
         }
       } catch (error) {
         if (error instanceof BandoriNativeNoteContractError) {
@@ -1616,13 +1783,15 @@ export default function NativeSimulatorStage({
           localFrameTextures.push(texture);
         }
       }
-      const swipeEffectTextures = new Map<string, Texture>([
-        ["tap-set1", tapEffectAtlas1],
-        ["tap-set2", tapEffectAtlas2],
-        ["tap-light", tapEffectLight],
-        ["tap-circle", tapEffectCircle],
-        ["tap-default-particle", tapEffectDefaultParticle],
-      ]);
+      const swipeEffectTextures = limitedEffects
+        ? new Map(limitedEffects.textures)
+        : new Map<string, Texture>([
+            ["tap-set1", tapEffectAtlas1],
+            ["tap-set2", tapEffectAtlas2],
+            ["tap-light", tapEffectLight],
+            ["tap-circle", tapEffectCircle],
+            ["tap-default-particle", tapEffectDefaultParticle],
+          ]);
       const longFlashTextures = [
         longFlashTexture0,
         longFlashTexture1,
@@ -1665,9 +1834,11 @@ export default function NativeSimulatorStage({
         allPerfectComboDigitTexture8,
         allPerfectComboDigitTexture9,
       ] as const;
-      directionalEffectFrameTextures.forEach((texture, frame) => {
-        swipeEffectTextures.set(`directional-set1:${frame}`, texture);
-      });
+      if (!limitedEffects) {
+        directionalEffectFrameTextures.forEach((texture, frame) => {
+          swipeEffectTextures.set(`directional-set1:${frame}`, texture);
+        });
+      }
       const swipeEffectSubtextures = new Map<string, Texture>();
 
       const directionalLineLayer = new Container();
@@ -1922,6 +2093,7 @@ export default function NativeSimulatorStage({
               flashTexture,
               flashAnchorX,
               flashAnchorY,
+              limitedEffects?.recipes.get("tap:hold") ?? null,
               seed,
               state.ribbon.kind,
               holdRangeWidth,
@@ -2168,6 +2340,79 @@ export default function NativeSimulatorStage({
             const laneEffect = laneEffects[event.lane];
             if (!projection || !laneEffect) continue;
 
+            if (limitedEffects) {
+              const semantic = getLimitedMainEffectRecipeKey(event.kind);
+              const recipe = limitedEffects.recipes.get(semantic);
+              if (!recipe) {
+                throw new BandoriNativeNoteContractError(
+                  `Limited performance effect recipe is absent: ${semantic}`,
+                );
+              }
+              const key = `limited:${semantic}:${event.lane}:${event.rangeWidth}`;
+              let display = swipeEffects.get(key);
+              if (!display) {
+                display = createLimitedEffectDisplay(
+                  recipe,
+                  event.lane,
+                  event.rangeWidth,
+                  lowHitEffectLayer,
+                  highHitEffectLayer,
+                );
+                swipeEffects.set(key, display);
+              }
+              triggerSwipeEffect(
+                display,
+                event,
+                projection.screenX,
+                projection.screenY,
+                projection.screenX,
+                projection.screenY,
+                effectAnimationTimeSeconds,
+                swipeEffectTextures,
+                swipeEffectSubtextures,
+                localFrameTextures,
+                limitedEffectSeed(event.index, event.lane, semantic),
+              );
+
+              if (event.fingerKind) {
+                const fingerSemantic = getLimitedFingerEffectRecipeKey(
+                  event.fingerKind,
+                );
+                const fingerRecipe = limitedEffects.recipes.get(fingerSemantic);
+                if (!fingerRecipe) {
+                  throw new BandoriNativeNoteContractError(
+                    `Limited performance finger recipe is absent: ${fingerSemantic}`,
+                  );
+                }
+                const fingerKey = `limited:${fingerSemantic}:${event.lane}:${event.rangeWidth}`;
+                let fingerDisplay = swipeEffects.get(fingerKey);
+                if (!fingerDisplay) {
+                  fingerDisplay = createLimitedEffectDisplay(
+                    fingerRecipe,
+                    event.lane,
+                    event.rangeWidth,
+                    lowHitEffectLayer,
+                    highHitEffectLayer,
+                  );
+                  swipeEffects.set(fingerKey, fingerDisplay);
+                }
+                triggerSwipeEffect(
+                  fingerDisplay,
+                  event,
+                  projection.screenX,
+                  projection.screenY,
+                  projection.screenX,
+                  projection.screenY,
+                  effectAnimationTimeSeconds,
+                  swipeEffectTextures,
+                  swipeEffectSubtextures,
+                  localFrameTextures,
+                  limitedEffectSeed(event.index, event.lane, fingerSemantic),
+                );
+              }
+              continue;
+            }
+
             if (event.kind === "normal" || event.kind === "skill") {
               const key = `${event.kind}:${event.lane}:${event.rangeWidth}`;
               let display = hitEffects.get(key);
@@ -2306,6 +2551,7 @@ export default function NativeSimulatorStage({
     getEffectPlaybackState,
     getPresentationTime,
     isMirrored,
+    limitedPerformanceSkin,
     noteSkin,
   ]);
 

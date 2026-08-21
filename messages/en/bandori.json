@@ -649,6 +649,24 @@
         "on": "On",
         "off": "Off",
         "tapSeStyle": "Note SE",
+        "limitedPerformance": {
+          "label": "Limited performance skin",
+          "none": "None (use ordinary settings)",
+          "overriddenBy": "Overridden by {skin}",
+          "coverage": "Overrides: {slots}. Background remains an ordinary setting.",
+          "slotSeparator": ", ",
+          "skin": {
+            "persona": "Persona collaboration"
+          },
+          "slot": {
+            "lane": "lane field and judgment line",
+            "notes": "notes",
+            "directionalFlick": "left/right Flick notes",
+            "tapEffect": "tap effects",
+            "directionalFlickEffect": "left/right Flick effects",
+            "soundEffect": "Note SE"
+          }
+        },
         "fieldSkin": {
           "1": "Lane skin 00",
           "2": "Lane skin 01",
@@ -664,7 +682,8 @@
           "12": "RAISE A SUILEN lane skin",
           "13": "Lane skin 05",
           "14": "Lane skin 06",
-          "15": "MyGO!!!!! lane skin"
+          "15": "MyGO!!!!! lane skin",
+          "persona": "Persona collaboration lane skin"
         }
       },
       "diagnostics": {

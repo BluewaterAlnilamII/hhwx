@@ -649,6 +649,24 @@
         "on": "开",
         "off": "关",
         "tapSeStyle": "节奏标志 SE",
+        "limitedPerformance": {
+          "label": "限定演出皮肤",
+          "none": "无（使用普通设置）",
+          "overriddenBy": "由 {skin} 覆盖",
+          "coverage": "覆盖范围：{slots}。背景仍使用普通背景设置。",
+          "slotSeparator": "、",
+          "skin": {
+            "persona": "Persona 联动"
+          },
+          "slot": {
+            "lane": "按键条与判定线",
+            "notes": "节奏标志",
+            "directionalFlick": "左右 Flick 标志",
+            "tapEffect": "点击特效",
+            "directionalFlickEffect": "左右 Flick 特效",
+            "soundEffect": "节奏标志 SE"
+          }
+        },
         "fieldSkin": {
           "1": "按键条皮肤00",
           "2": "按键条皮肤01",
@@ -664,7 +682,8 @@
           "12": "RAISE A SUILEN 的按键条皮肤",
           "13": "按键条皮肤05",
           "14": "按键条皮肤06",
-          "15": "MyGO!!!!! 的按键条皮肤"
+          "15": "MyGO!!!!! 的按键条皮肤",
+          "persona": "Persona 联动按键条皮肤"
         }
       },
       "diagnostics": {

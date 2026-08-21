@@ -96,6 +96,10 @@ import {
   createMusicPlayerTabId,
 } from "@/lib/music-player-tab-coordinator";
 import { useMusicPlayerStore } from "@/store/useMusicPlayerStore";
+import {
+  BANDORI_LIMITED_PERFORMANCE_SKINS,
+  type BandoriLimitedPerformanceSkin,
+} from "./limited-performance-skins";
 
 const NativeSimulatorStage = dynamic(() => import("./NativeSimulatorStage"), {
   ssr: false,
@@ -107,7 +111,10 @@ const PLAYBACK_RATE_INCREASES = [1, 10] as const;
 const NOTE_SPEED_DECREASES = [-0.5, -0.1, -0.01] as const;
 const NOTE_SPEED_INCREASES = [0.01, 0.1, 0.5] as const;
 const NOTE_SOUND_CUE_BANKS: readonly BandoriNativeNoteSoundCueBank[] =
-  BANDORI_NATIVE_TAP_SE_SKINS.map((skin) => ({
+  [
+    ...BANDORI_NATIVE_TAP_SE_SKINS,
+    ...BANDORI_LIMITED_PERFORMANCE_SKINS.map((skin) => skin.tapSeSkin),
+  ].map((skin) => ({
     id: getBandoriNativeTapSeCueBankId(skin),
     cueUrls: getBandoriNativeNoteSoundCueUrls(skin),
   }));
@@ -227,6 +234,8 @@ export default function ChartSimulatorRuntime({
   const [tapSeSkin, setTapSeSkin] = useState<BandoriNativeTapSeSkin>(
     BANDORI_NATIVE_TAP_SE_SKIN,
   );
+  const [limitedPerformanceSkin, setLimitedPerformanceSkin] =
+    useState<BandoriLimitedPerformanceSkin | null>(null);
   const [isSyncLineEnabled, setIsSyncLineEnabled] = useState(true);
   const [isRhythmSupportEnabled, setIsRhythmSupportEnabled] = useState(true);
   const [isLaneEffectEnabled, setIsLaneEffectEnabled] = useState(true);
@@ -237,7 +246,13 @@ export default function ChartSimulatorRuntime({
     playbackRateHundredths,
     isNoteSpeedSlowdownSynchronized,
   );
-  const noteSkinLabel = `TYPE${noteSkin.id}`;
+  const effectiveFieldSkin = limitedPerformanceSkin?.fieldSkin ?? fieldSkin;
+  const effectiveNoteSkin = limitedPerformanceSkin?.noteSkin ?? noteSkin;
+  const effectiveDirectionalFlickSkin =
+    limitedPerformanceSkin?.directionalFlickSkin ?? directionalFlickSkin;
+  const noteSkinLabel = typeof effectiveNoteSkin.id === "number"
+    ? `TYPE${effectiveNoteSkin.id}`
+    : t(`skinControls.limitedPerformance.skin.${effectiveNoteSkin.id}`);
 
   const noteSoundTimeline = useMemo(() => {
     if (loadState.status !== "ready") return null;
@@ -843,6 +858,31 @@ export default function ChartSimulatorRuntime({
     }
   };
 
+  const changeLimitedPerformanceSkin = (
+    skin: BandoriLimitedPerformanceSkin | null,
+  ) => {
+    const effectiveTapSeSkin = skin?.tapSeSkin ?? tapSeSkin;
+    try {
+      noteSoundRuntimeRef.current?.selectCueBank(
+        getBandoriNativeTapSeCueBankId(effectiveTapSeSkin),
+      );
+      setLimitedPerformanceSkin(skin);
+      const audio = audioRef.current;
+      const currentTimeSeconds = transportRef.current.phase === "playing"
+        && audio
+        && Number.isFinite(audio.currentTime)
+        ? audio.currentTime
+        : getBandoriChartPresentationTime(transportRef.current);
+      stopAndResetNoteSounds(
+        currentTimeSeconds,
+        currentTimeSeconds > 0,
+        currentTimeSeconds === 0,
+      );
+    } catch (error) {
+      setPlaybackError(error instanceof Error ? error.message : String(error));
+    }
+  };
+
   const changePlaybackRate = (adjustmentHundredths: number) => {
     const nextHundredths = adjustBandoriSimulatorPlaybackRate(
       playbackRateHundredthsRef.current,
@@ -919,24 +959,27 @@ export default function ChartSimulatorRuntime({
       <div className="mt-5">
         {activeTab === "stage" ? (
           <NativeSimulatorStage
-            key={`${fieldSkin.id}:${noteSkin.id}:${directionalFlickSkin.id}:${difficulty}:${isMirrored ? "mirror" : "normal"}`}
+            key={`${effectiveFieldSkin.id}:${effectiveNoteSkin.id}:${effectiveDirectionalFlickSkin.id}:${limitedPerformanceSkin?.id ?? "ordinary"}:${difficulty}:${isMirrored ? "mirror" : "normal"}`}
             allPerfectStatusEnabled={isAllPerfectStatusEnabled}
             ariaLabel={t("stageAria")}
             compiled={loadState.compiled}
-            directionalFlickSkin={directionalFlickSkin}
-            fieldSkin={fieldSkin}
+            directionalFlickSkin={effectiveDirectionalFlickSkin}
+            fieldSkin={effectiveFieldSkin}
             getEffectPlaybackState={getStageEffectPlaybackState}
             getPresentationTime={getStagePresentationTime}
             isMirrored={isMirrored}
             laneEffectEnabled={isLaneEffectEnabled}
+            limitedPerformanceSkin={limitedPerformanceSkin}
             loadingLabel={t("stageLoading")}
             noteApproachTimeScale={noteApproachTimeScale}
             noteSpeed={noteSpeed}
-            noteSkin={noteSkin}
+            noteSkin={effectiveNoteSkin}
             noteContractErrorLabel={t("stageNoteContractUnavailable")}
             readyLabel={t("stageReady", {
-              directionalFlickSkin: `TYPE${directionalFlickSkin.id}`,
-              fieldSkin: t(`skinControls.fieldSkin.${fieldSkin.id}`),
+              directionalFlickSkin: typeof effectiveDirectionalFlickSkin.id === "number"
+                ? `TYPE${effectiveDirectionalFlickSkin.id}`
+                : t(`skinControls.limitedPerformance.skin.${effectiveDirectionalFlickSkin.id}`),
+              fieldSkin: t(`skinControls.fieldSkin.${effectiveFieldSkin.id}`),
               noteSkin: noteSkinLabel,
             })}
             rendererErrorLabel={t("rendererUnavailable")}
@@ -1181,11 +1224,13 @@ export default function ChartSimulatorRuntime({
           isLaneEffectEnabled={isLaneEffectEnabled}
           isRhythmSupportEnabled={isRhythmSupportEnabled}
           isSyncLineEnabled={isSyncLineEnabled}
+          limitedPerformanceSkin={limitedPerformanceSkin}
           noteSkin={noteSkin}
           onDirectionalFlickSkinChange={setDirectionalFlickSkin}
           onFieldSkinChange={setFieldSkin}
           onAllPerfectStatusEnabledChange={setIsAllPerfectStatusEnabled}
           onLaneEffectEnabledChange={setIsLaneEffectEnabled}
+          onLimitedPerformanceSkinChange={changeLimitedPerformanceSkin}
           onNoteSkinChange={setNoteSkin}
           onRhythmSupportEnabledChange={setIsRhythmSupportEnabled}
           onSyncLineEnabledChange={setIsSyncLineEnabled}
@@ -1210,7 +1255,7 @@ export default function ChartSimulatorRuntime({
         <div className="rounded-2xl bg-[var(--theme-color-control-background-muted)] p-3">
           <dt className="text-xs font-semibold text-[var(--theme-color-text-muted)]">{t("diagnostics.presentationCapabilities")}</dt>
           <dd className="mt-1 font-bold">
-            {t("diagnostics.liveBackground")} · {t(`skinControls.fieldSkin.${fieldSkin.id}`)} · {noteSkinLabel} · {t("diagnostics.ordinaryJudgmentLine")} · TYPE{directionalFlickSkin.id} · {t("diagnostics.pointNotes")} · {t(isMirrored ? "diagnostics.mirrorOn" : "diagnostics.mirrorOff")}
+            {t("diagnostics.liveBackground")} · {t(`skinControls.fieldSkin.${effectiveFieldSkin.id}`)} · {noteSkinLabel} · {t("diagnostics.ordinaryJudgmentLine")} · {typeof effectiveDirectionalFlickSkin.id === "number" ? `TYPE${effectiveDirectionalFlickSkin.id}` : t(`skinControls.limitedPerformance.skin.${effectiveDirectionalFlickSkin.id}`)} · {t("diagnostics.pointNotes")} · {t(isMirrored ? "diagnostics.mirrorOn" : "diagnostics.mirrorOff")}
           </dd>
         </div>
       </dl>

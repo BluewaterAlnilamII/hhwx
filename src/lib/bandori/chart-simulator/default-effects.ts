@@ -101,6 +101,12 @@ export interface BandoriDefaultEffectRuntime {
   setButtonIndex(buttonIndex: number): void;
 }
 
+export interface BandoriDefaultEffectPlacement {
+  pixelsPerWorldUnit: number;
+  screenX: number;
+  screenY: number;
+}
+
 interface Vec3 {
   x: number;
   y: number;
@@ -2747,4 +2753,26 @@ export function createBandoriDefaultEffectRuntime(
   options: BandoriDefaultEffectRuntimeOptions,
 ): BandoriDefaultEffectRuntime {
   return new DefaultEffectRuntime(recipe, options);
+}
+
+export function getBandoriDefaultEffectPlacement(
+  recipe: unknown,
+  buttonIndex: number,
+): BandoriDefaultEffectPlacement {
+  const compiled = compileRecipe(recipe);
+  if (
+    !Number.isInteger(buttonIndex)
+    || buttonIndex < 0
+    || buttonIndex >= compiled.screenButtons.length
+  ) {
+    throw new Error(
+      `Bandori effect buttonIndex must be between 0 and ${compiled.screenButtons.length - 1}`,
+    );
+  }
+  const button = compiled.screenButtons[buttonIndex];
+  return {
+    pixelsPerWorldUnit: compiled.pixelsPerWorldUnit,
+    screenX: button.x,
+    screenY: button.y,
+  };
 }

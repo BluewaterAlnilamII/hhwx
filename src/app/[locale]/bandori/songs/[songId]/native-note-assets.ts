@@ -17,13 +17,15 @@ const NOTE_SKIN_SPRITE_ROOT =
 
 type StandardNoteFrameLayout = "a" | "b" | "c";
 type DirectionalNoteFrameLayout = "short-right-icon" | "tall-right-icon";
+type NativeNoteFrameSource = "atlas" | "sprites";
 
 export type BandoriNativeNoteSkin = {
   assetBundleName: string;
   atlasUrl: string;
   curveSlideNoteLineUrl: string;
   frameLayout: StandardNoteFrameLayout;
-  id: number;
+  frameSource: NativeNoteFrameSource;
+  id: number | string;
   longNoteLineUrl: string;
   syncLineEdgeMargin: number;
   syncLineUrl: string;
@@ -33,7 +35,8 @@ export type BandoriNativeDirectionalFlickSkin = {
   assetBundleName: string;
   atlasUrl: string;
   frameLayout: DirectionalNoteFrameLayout;
-  id: number;
+  frameSource: NativeNoteFrameSource;
+  id: number | string;
   lineLeftUrl: string;
   lineRightUrl: string;
 };
@@ -49,6 +52,7 @@ function createNoteSkin(
     atlasUrl: `${NOTE_SKIN_ROOT}/${assetBundleName}/rhythmgamesprites.png`,
     curveSlideNoteLineUrl: `${NOTE_SKIN_ROOT}/${assetBundleName}/longnoteline2.png`,
     frameLayout,
+    frameSource: "atlas",
     id,
     longNoteLineUrl: `${NOTE_SKIN_ROOT}/${assetBundleName}/longnoteline.png`,
     syncLineEdgeMargin,
@@ -65,6 +69,7 @@ function createDirectionalFlickSkin(
     assetBundleName,
     atlasUrl: `${NOTE_SKIN_ROOT}/directionalflick${assetBundleName}/directionalflicksprites.png`,
     frameLayout,
+    frameSource: "atlas",
     id,
     lineLeftUrl: `${NOTE_SKIN_ROOT}/directionalflick${assetBundleName}/flicknoteline_l.png`,
     lineRightUrl: `${NOTE_SKIN_ROOT}/directionalflick${assetBundleName}/flicknoteline_r.png`,
@@ -350,4 +355,23 @@ export function getBandoriNativeNoteFrame(
     return STANDARD_NOTE_LAYOUT_C_OVERRIDES[frameId] ?? defaultFrame;
   }
   return defaultFrame;
+}
+
+export function getBandoriNativeNoteFrameUrl(
+  frameId: BandoriNativeNoteFrameId,
+  noteSkin: BandoriNativeNoteSkin,
+  directionalFlickSkin: BandoriNativeDirectionalFlickSkin,
+): string | null {
+  const frame = NOTE_FRAMES[frameId];
+  if (!frame) {
+    throw new BandoriNativeNoteContractError(
+      `Resolved Note frame is outside the verified JP set: ${frameId}`,
+    );
+  }
+  const skin = frame.atlas === "standard" ? noteSkin : directionalFlickSkin;
+  if (skin.frameSource !== "sprites") return null;
+  const prefix = frame.atlas === "standard"
+    ? `${NOTE_SKIN_SPRITE_ROOT}/${skin.assetBundleName}`
+    : `${NOTE_SKIN_SPRITE_ROOT}/directionalflick${skin.assetBundleName}`;
+  return `${prefix}/sprites/${frameId}.png`;
 }

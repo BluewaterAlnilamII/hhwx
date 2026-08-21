@@ -14,6 +14,10 @@ import {
   BANDORI_NATIVE_TAP_SE_SKINS,
   type BandoriNativeTapSeSkin,
 } from "@/lib/bandori/chart-simulator/native-note-sound-presentation";
+import {
+  BANDORI_LIMITED_PERFORMANCE_SKINS,
+  type BandoriLimitedPerformanceSkin,
+} from "./limited-performance-skins";
 
 type SimulatorSkinControlsProps = {
   directionalFlickSkin: BandoriNativeDirectionalFlickSkin;
@@ -23,11 +27,15 @@ type SimulatorSkinControlsProps = {
   isLaneEffectEnabled: boolean;
   isRhythmSupportEnabled: boolean;
   isSyncLineEnabled: boolean;
+  limitedPerformanceSkin: BandoriLimitedPerformanceSkin | null;
   noteSkin: BandoriNativeNoteSkin;
   onDirectionalFlickSkinChange: (skin: BandoriNativeDirectionalFlickSkin) => void;
   onFieldSkinChange: (skin: BandoriNativeFieldSkin) => void;
   onAllPerfectStatusEnabledChange: (isEnabled: boolean) => void;
   onLaneEffectEnabledChange: (isEnabled: boolean) => void;
+  onLimitedPerformanceSkinChange: (
+    skin: BandoriLimitedPerformanceSkin | null,
+  ) => void;
   onNoteSkinChange: (skin: BandoriNativeNoteSkin) => void;
   onRhythmSupportEnabledChange: (isEnabled: boolean) => void;
   onSyncLineEnabledChange: (isEnabled: boolean) => void;
@@ -38,24 +46,37 @@ type SimulatorSkinControlsProps = {
 type SkinControlRowProps = {
   children: ReactNode;
   label: string;
+  overriddenLabel?: string;
 };
 
-function SkinControlRow({ children, label }: SkinControlRowProps) {
+function SkinControlRow({ children, label, overriddenLabel }: SkinControlRowProps) {
   return (
     <div className="grid items-start gap-2 sm:grid-cols-[9.5rem_minmax(0,1fr)] sm:gap-3">
       <div className="pt-2 text-sm font-semibold text-[var(--theme-color-text-muted)] sm:text-right">
-        {label}
+        <span>{label}</span>
+        {overriddenLabel ? (
+          <span className="mt-1 block text-xs font-medium text-[var(--theme-color-semantic-warning-foreground)]">
+            {overriddenLabel}
+          </span>
+        ) : null}
       </div>
-      <div className="flex min-w-0 flex-wrap gap-1.5">{children}</div>
+      <div
+        aria-disabled={overriddenLabel ? "true" : undefined}
+        className="flex min-w-0 flex-wrap gap-1.5"
+      >
+        {children}
+      </div>
     </div>
   );
 }
 
-function choiceClassName(isSelected: boolean): string {
+function choiceClassName(isSelected: boolean, isDisabled = false): string {
   return `inline-flex min-h-10 items-center justify-center rounded-lg border px-3 py-2 text-sm font-medium outline-hidden transition focus-visible:z-10 focus-visible:ring-2 focus-visible:ring-[var(--theme-color-focus-ring)] ${
-    isSelected
-      ? "border-[var(--theme-color-action-primary-border)] bg-[var(--theme-color-control-background-pressed)] text-[var(--theme-color-control-foreground-pressed)] shadow-sm"
-      : "border-[var(--theme-color-border-default)] bg-[var(--theme-color-control-background)] text-[var(--theme-color-text-default)] hover:bg-[var(--theme-color-control-background-hover)]"
+    isDisabled
+      ? "cursor-not-allowed border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background-muted)] text-[var(--theme-color-text-muted)] opacity-60"
+      : isSelected
+        ? "border-[var(--theme-color-action-primary-border)] bg-[var(--theme-color-control-background-pressed)] text-[var(--theme-color-control-foreground-pressed)] shadow-sm"
+        : "border-[var(--theme-color-border-default)] bg-[var(--theme-color-control-background)] text-[var(--theme-color-text-default)] hover:bg-[var(--theme-color-control-background-hover)]"
   }`;
 }
 
@@ -109,11 +130,13 @@ export default function SimulatorSkinControls({
   isLaneEffectEnabled,
   isRhythmSupportEnabled,
   isSyncLineEnabled,
+  limitedPerformanceSkin,
   noteSkin,
   onDirectionalFlickSkinChange,
   onFieldSkinChange,
   onAllPerfectStatusEnabledChange,
   onLaneEffectEnabledChange,
+  onLimitedPerformanceSkinChange,
   onNoteSkinChange,
   onRhythmSupportEnabledChange,
   onSyncLineEnabledChange,
@@ -121,6 +144,12 @@ export default function SimulatorSkinControls({
   tapSeSkin,
 }: SimulatorSkinControlsProps) {
   const t = useTranslations("bandori.songs.simulator.skinControls");
+  const overrides = new Set(limitedPerformanceSkin?.coverage ?? []);
+  const overriddenLabel = limitedPerformanceSkin
+    ? t("limitedPerformance.overriddenBy", {
+        skin: t(`limitedPerformance.skin.${limitedPerformanceSkin.id}`),
+      })
+    : undefined;
 
   return (
     <section
@@ -128,13 +157,48 @@ export default function SimulatorSkinControls({
       className="mt-5 rounded-2xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background-muted)] p-4"
     >
       <div className="space-y-3">
-        <SkinControlRow label={t("noteStyle")}>
+        <SkinControlRow label={t("limitedPerformance.label")}>
+          <button
+            type="button"
+            aria-pressed={limitedPerformanceSkin === null}
+            className={choiceClassName(limitedPerformanceSkin === null)}
+            onClick={() => onLimitedPerformanceSkinChange(null)}
+          >
+            {t("limitedPerformance.none")}
+          </button>
+          {BANDORI_LIMITED_PERFORMANCE_SKINS.map((skin) => (
+            <button
+              key={skin.id}
+              type="button"
+              aria-pressed={limitedPerformanceSkin?.id === skin.id}
+              className={choiceClassName(limitedPerformanceSkin?.id === skin.id)}
+              onClick={() => onLimitedPerformanceSkinChange(skin)}
+            >
+              {t(`limitedPerformance.skin.${skin.id}`)}
+            </button>
+          ))}
+          {limitedPerformanceSkin ? (
+            <span className="basis-full text-xs text-[var(--theme-color-text-muted)]">
+              {t("limitedPerformance.coverage", {
+                slots: limitedPerformanceSkin.coverage
+                  .map((slot) => t(`limitedPerformance.slot.${slot}`))
+                  .join(t("limitedPerformance.slotSeparator")),
+              })}
+            </span>
+          ) : null}
+        </SkinControlRow>
+
+        <SkinControlRow
+          label={t("noteStyle")}
+          overriddenLabel={overrides.has("notes") ? overriddenLabel : undefined}
+        >
           {BANDORI_NATIVE_NOTE_SKINS.map((skin) => (
             <button
               key={skin.id}
               type="button"
               aria-pressed={noteSkin.id === skin.id}
-              className={choiceClassName(noteSkin.id === skin.id)}
+              className={choiceClassName(noteSkin.id === skin.id, overrides.has("notes"))}
+              disabled={overrides.has("notes")}
               onClick={() => onNoteSkinChange(skin)}
             >
               TYPE{skin.id}
@@ -142,13 +206,20 @@ export default function SimulatorSkinControls({
           ))}
         </SkinControlRow>
 
-        <SkinControlRow label={t("directionalFlickStyle")}>
+        <SkinControlRow
+          label={t("directionalFlickStyle")}
+          overriddenLabel={overrides.has("directionalFlick") ? overriddenLabel : undefined}
+        >
           {BANDORI_NATIVE_DIRECTIONAL_FLICK_SKINS.map((skin) => (
             <button
               key={skin.id}
               type="button"
               aria-pressed={directionalFlickSkin.id === skin.id}
-              className={choiceClassName(directionalFlickSkin.id === skin.id)}
+              className={choiceClassName(
+                directionalFlickSkin.id === skin.id,
+                overrides.has("directionalFlick"),
+              )}
+              disabled={overrides.has("directionalFlick")}
               onClick={() => onDirectionalFlickSkinChange(skin)}
             >
               TYPE{skin.id}
@@ -156,13 +227,17 @@ export default function SimulatorSkinControls({
           ))}
         </SkinControlRow>
 
-        <SkinControlRow label={t("fieldStyle")}>
+        <SkinControlRow
+          label={t("fieldStyle")}
+          overriddenLabel={overrides.has("lane") ? overriddenLabel : undefined}
+        >
           {fieldSkins.map((skin) => (
             <button
               key={skin.id}
               type="button"
               aria-pressed={fieldSkin.id === skin.id}
-              className={choiceClassName(fieldSkin.id === skin.id)}
+              className={choiceClassName(fieldSkin.id === skin.id, overrides.has("lane"))}
+              disabled={overrides.has("lane")}
               onClick={() => onFieldSkinChange(skin)}
             >
               {t(`fieldSkin.${skin.id}`)}
@@ -220,13 +295,20 @@ export default function SimulatorSkinControls({
           />
         </SkinControlRow>
 
-        <SkinControlRow label={t("tapSeStyle")}>
+        <SkinControlRow
+          label={t("tapSeStyle")}
+          overriddenLabel={overrides.has("soundEffect") ? overriddenLabel : undefined}
+        >
           {BANDORI_NATIVE_TAP_SE_SKINS.map((skin) => (
             <button
               key={skin.id}
               type="button"
               aria-pressed={tapSeSkin.id === skin.id}
-              className={choiceClassName(tapSeSkin.id === skin.id)}
+              className={choiceClassName(
+                tapSeSkin.id === skin.id,
+                overrides.has("soundEffect"),
+              )}
+              disabled={overrides.has("soundEffect")}
               onClick={() => onTapSeSkinChange(skin)}
             >
               SE skin0{skin.id}

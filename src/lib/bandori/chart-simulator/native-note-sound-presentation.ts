@@ -9,7 +9,7 @@ import {
   upperBoundBandoriNoteTime,
 } from "./native-note-presentation";
 
-export type BandoriNativeTapSeSkinId = 0 | 1 | 2 | 3;
+export type BandoriNativeTapSeSkinId = 0 | 1 | 2 | 3 | "persona";
 
 export type BandoriNativeNoteSoundCue =
   | "perfect"
@@ -82,7 +82,9 @@ export const BANDORI_NATIVE_LONG_KEEP_FADE_SECONDS = 0.3000000119;
 export function getBandoriNativeTapSeCueBankId(
   skin: BandoriNativeTapSeSkin,
 ): string {
-  return `tapse-skin0${skin.id}`;
+  return typeof skin.id === "number"
+    ? `tapse-skin0${skin.id}`
+    : `tapse-${skin.id}`;
 }
 
 const DIRECTIONAL_CUE_URLS = {

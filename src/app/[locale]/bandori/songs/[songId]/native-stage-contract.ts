@@ -30,7 +30,7 @@ const FIELD_SKIN_ROOT =
 
 export type BandoriNativeFieldSkin = {
   assetBundleName: string;
-  id: number;
+  id: number | string;
   judgmentLineSpriteHeight: 18 | 38 | 40 | 56;
   judgmentLineTextureUrl: string;
   skinType: "normal" | "mission";
