@@ -13,6 +13,10 @@
     "title": "Card Catalog",
     "detailTitle": "{characterName} - {cardName} Card Catalog"
   },
+  "songs": {
+    "title": "Songs and Chart Simulator",
+    "detailTitle": "{songTitle} - Chart Simulator"
+  },
   "gameProfiles": {
     "title": "Game Profiles"
   },

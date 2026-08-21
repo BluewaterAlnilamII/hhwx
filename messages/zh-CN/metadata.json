@@ -13,6 +13,10 @@
     "title": "卡牌图鉴",
     "detailTitle": "{characterName} - {cardName} 卡牌图鉴"
   },
+  "songs": {
+    "title": "歌曲与谱面模拟器",
+    "detailTitle": "{songTitle} - 谱面模拟器"
+  },
   "gameProfiles": {
     "title": "游戏档案"
   },

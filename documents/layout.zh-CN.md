@@ -39,6 +39,7 @@ hhwx/
 - `[locale]/bandori/events/`：活动追踪器入口和按活动 ID 定位的页面。页面私有的活动信息与追踪器实现分别归入 `_info/`、`_tracker/`；旧 `/bandori/eventtracker` URL 由 `src/proxy.ts` 永久重定向。
 - `[locale]/bandori/cards/`：支持服务器上下文的卡牌图鉴与单卡详情页面，页面私有 UI 归入 `_components/`。
 - `[locale]/bandori/calendar/`：各服务器的活动日历页面。
+- `[locale]/bandori/songs/[songId]/`：仅供开发阶段使用的歌曲详情、完整谱面分析与白名单式谱面模拟器 UI；固定原生舞台只加载逐项确认过的 JP 演出资源。
 - `api/`：前端使用的同源 API 路由。
 - `api/account/game-bind/`：游戏账号绑定验证码、验证、列表和解绑 API。
 - `api/account/game-profiles/`：游戏档案同步、导入、导出、复制和删除 API。
@@ -80,6 +81,7 @@ hhwx/
 - `bandori/cards/`：卡牌目录、区服数据物化、API 契约与服务、发布/训练规则、生成的卡牌元数据、布局和档案卡牌辅助逻辑。
 - `bandori/events/`：活动目录、API 契约与服务、路由/区服/状态辅助逻辑、横幅代理和活动评论目标校验。
 - `bandori/event-tracker/`：Event Tracker 的档线、TOP10、实时序列、投影、历史与预测契约/服务，由活动、歌曲和月度追踪模式共同使用。
+- `bandori/chart-simulator/`：无损谱面编译、带版本的 Worker 传输、定位状态重建和音频主导的播放状态；其中刻意不包含原生演出资源或区服选择。
 - `bandori/team-builder/`：组队搜索实现。`core/` 包含共享计算基础设施，`single/` 包含单曲 exact 搜索编排，`medley/` 包含组曲 exact/bounded 搜索编排，并由公开兼容 facade 对外导出。
 - `comments/`：与目标类型无关的评论契约、表情/贴纸目录、内容解析和特权持久化服务；各目标类型的存在性与可见性校验留在各自领域中。
 - `api-*.ts`：API 响应约定和缓存策略。
