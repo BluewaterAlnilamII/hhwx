@@ -114,16 +114,12 @@ export function getBandoriApprovedManualVerticalBeamScreenY(
     "basisX" | "basisY" | "heightPixels" | "hierarchyPath" | "screenY" | "widthPixels"
   >,
 ): number {
-  const isApprovedVerticalBeam = (
-    kind === "flick"
+  const isApprovedVerticalBeam = instance.hierarchyPath.endsWith("/slash")
     && (
-      instance.hierarchyPath.endsWith("/slash")
-      || instance.hierarchyPath.endsWith("/line1")
-    )
-  ) || (
-    instance.hierarchyPath.endsWith("/slash")
-    && (kind === "directional-finger-left" || kind === "directional-finger-right")
-  );
+      kind === "flick"
+      || kind === "directional-finger-left"
+      || kind === "directional-finger-right"
+    );
   if (!isApprovedVerticalBeam) return instance.screenY;
 
   const verticalExtentPixels = Math.abs(instance.basisX.y * instance.widthPixels)

@@ -1667,7 +1667,7 @@ test("JP Flick and Directional recipes execute the recovered particle module all
   );
 });
 
-test("approved ordinary and limited vertical beams place one third above the judgment line", () => {
+test("approved slash beams are corrected while Persona line1 retains its authored position", () => {
   const judgmentScreenY = 700;
   const assertApprovedSlashPlacement = (kind) => {
     const frame = createBandoriNativeSwipeEffectRuntime(kind, 3, 9).play(0, 9);
@@ -1700,7 +1700,7 @@ test("approved ordinary and limited vertical beams place one third above the jud
   assertApprovedSlashPlacement("directional-finger-left");
   assertApprovedSlashPlacement("directional-finger-right");
 
-  const limitedFlickLine = {
+  const personaFlickLine = {
     basisX: { x: 1, y: 0 },
     basisY: { x: 0, y: 1 },
     heightPixels: 1_200,
@@ -1712,9 +1712,9 @@ test("approved ordinary and limited vertical beams place one third above the jud
     getBandoriApprovedManualVerticalBeamScreenY(
       "flick",
       judgmentScreenY,
-      limitedFlickLine,
+      personaFlickLine,
     ),
-    judgmentScreenY + limitedFlickLine.heightPixels / 6,
+    personaFlickLine.screenY,
   );
 
   const directionalFrame = createBandoriNativeSwipeEffectRuntime(
