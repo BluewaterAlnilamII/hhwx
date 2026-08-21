@@ -69,7 +69,7 @@ Music 区域元数据仍可沿用应用既有的本地化偏好。它只负责�
 
 界面只列出浏览器合同已经完整闭合的家族。首个准入项为 Persona：它覆盖底板及配对判定条、Note 与 Directional Flick Sprite、点击／持续及 Directional Flick 粒子 recipe，以及六个已核验 TapSE cue；它不覆盖正常播放背景。合同承诺的任一直接文件缺失时必须失败关闭；家族未声明拥有的槽位不算缺失。
 
-构建器注册表记录 22 个已知家族和 120 个精确 JP bundle，但 pending 或 blocked 家族不会出现在选择器中。April 2019 的普通点击特效依赖当前有界浏览器求值器尚未实现的 Velocity over Lifetime profile，因此继续 blocked。`teamlivefestival` 从限定注册表排除，延期到普通复合背景设置；其它限定背景也统一等普通背景选择器完成后再处理。这里不引入运行时 catalog 或逐家族 manifest。
+构建器注册表记录 21 个已知家族和 113 个精确 JP bundle，但 pending 或 blocked 家族不会出现在选择器中。April 2019 的普通点击特效依赖当前有界浏览器求值器尚未实现的 Velocity over Lifetime profile，因此继续 blocked。`teamlivefestival` 从限定注册表排除，延期到普通复合背景设置；其它限定背景也统一等普通背景选择器完成后再处理。这里不引入运行时 catalog 或逐家族 manifest。
 
 ## 架构边界
 
