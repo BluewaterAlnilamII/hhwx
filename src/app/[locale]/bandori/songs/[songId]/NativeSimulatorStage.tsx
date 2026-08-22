@@ -107,6 +107,7 @@ import {
   BANDORI_NATIVE_DIRECTIONAL_EFFECT_FRAME_URLS,
   BANDORI_NATIVE_SWIPE_EFFECT_TEXTURE_URLS,
   createBandoriNativeSwipeEffectRuntime,
+  getBandoriApprovedAnimatedTravelScreenY,
   getBandoriApprovedManualDirectionalNotesCenterOffsetPixels,
   getBandoriApprovedManualVerticalBeamScreenY,
   getBandoriNativeSwipeEffectPlacement,
@@ -252,6 +253,11 @@ type HitEffectDisplay = {
 };
 
 type SwipeEffectDisplay = {
+  animatedVerticalBeam: {
+    hierarchyPath: string;
+    initialScreenY: number | null;
+    travelSpeedMultiplier: number;
+  } | null;
   high: Container;
   kind: BandoriNativeSwipeEffectKind;
   lane: number;
@@ -277,6 +283,11 @@ type HoldEffectDisplay = {
 };
 
 type LoadedLimitedPerformanceEffects = {
+  animatedVerticalBeam: Readonly<{
+    hierarchyPath: string;
+    recipeKey: string;
+    travelSpeedMultiplier: number;
+  }> | null;
   recipes: ReadonlyMap<string, unknown>;
   textures: ReadonlyMap<string, Texture>;
 };
@@ -676,6 +687,13 @@ async function loadLimitedPerformanceEffects(
     ))),
   ]);
   return {
+    animatedVerticalBeam: skin.effects.animatedVerticalBeam
+      ? {
+          hierarchyPath: skin.effects.animatedVerticalBeam.hierarchyPath,
+          recipeKey: `tap:${skin.effects.animatedVerticalBeam.recipe}`,
+          travelSpeedMultiplier: skin.effects.animatedVerticalBeam.travelSpeedMultiplier,
+        }
+      : null,
     recipes: new Map(recipeEntries),
     textures: new Map(textureEntries),
   };
@@ -814,6 +832,7 @@ function createHitEffectDisplay(
 
 function createLimitedEffectDisplay(
   recipe: unknown,
+  animatedVerticalBeam: LoadedLimitedPerformanceEffects["animatedVerticalBeam"],
   lane: number,
   rangeWidth: number,
   lowLayer: Container,
@@ -830,6 +849,13 @@ function createLimitedEffectDisplay(
   lowLayer.addChild(low);
   highLayer.addChild(high);
   return {
+    animatedVerticalBeam: animatedVerticalBeam
+      ? {
+          hierarchyPath: animatedVerticalBeam.hierarchyPath,
+          initialScreenY: null,
+          travelSpeedMultiplier: animatedVerticalBeam.travelSpeedMultiplier,
+        }
+      : null,
     high,
     isNativeDefault: false,
     kind: "flick",
@@ -1004,6 +1030,7 @@ function createSwipeEffectDisplay(
   lowLayer.addChild(low);
   highLayer.addChild(high);
   return {
+    animatedVerticalBeam: null,
     high,
     isNativeDefault: true,
     kind,
@@ -1021,6 +1048,7 @@ function createSwipeEffectDisplay(
 
 function clearSwipeEffect(display: SwipeEffectDisplay): void {
   display.runtime.stop();
+  if (display.animatedVerticalBeam) display.animatedVerticalBeam.initialScreenY = null;
   display.triggerAnimationTimeSeconds = null;
   display.low.visible = false;
   display.high.visible = false;
@@ -1090,11 +1118,26 @@ function updateSwipeEffect(
       * (instance.uv.flipV ? -1 : 1);
     const directionalNotesCenterOffsetPixels =
       getBandoriApprovedManualDirectionalNotesCenterOffsetPixels(instance);
-    const particleScreenY = getBandoriApprovedManualVerticalBeamScreenY(
+    let particleScreenY = getBandoriApprovedManualVerticalBeamScreenY(
       display.kind,
       display.placement.screenY,
       instance,
     );
+    const animatedVerticalBeam = display.animatedVerticalBeam;
+    if (instance.hierarchyPath === animatedVerticalBeam?.hierarchyPath) {
+      // Persona line1 keeps its authored spawn and lifetime while its upward
+      // displacement receives the user-approved Web speed compensation.
+      let initialScreenY = animatedVerticalBeam.initialScreenY;
+      if (initialScreenY === null) {
+        initialScreenY = instance.screenY;
+        animatedVerticalBeam.initialScreenY = initialScreenY;
+      }
+      particleScreenY = getBandoriApprovedAnimatedTravelScreenY(
+        initialScreenY,
+        instance.screenY,
+        animatedVerticalBeam.travelSpeedMultiplier,
+      );
+    }
     sprite.texture = texture;
     sprite.setFromMatrix(new Matrix(
       instance.basisX.x * scaleX,
@@ -1131,6 +1174,7 @@ function triggerSwipeEffect(
   if (display.rangeWidth !== event.rangeWidth) {
     throw new BandoriNativeNoteContractError("Swipe-effect display width does not match its event");
   }
+  if (display.animatedVerticalBeam) display.animatedVerticalBeam.initialScreenY = null;
   display.runtime.setButtonIndex(display.lane);
   display.runtime.play(
     0,
@@ -2353,6 +2397,9 @@ export default function NativeSimulatorStage({
               if (!display) {
                 display = createLimitedEffectDisplay(
                   recipe,
+                  limitedEffects.animatedVerticalBeam?.recipeKey === semantic
+                    ? limitedEffects.animatedVerticalBeam
+                    : null,
                   event.lane,
                   event.rangeWidth,
                   lowHitEffectLayer,
@@ -2389,6 +2436,9 @@ export default function NativeSimulatorStage({
                 if (!fingerDisplay) {
                   fingerDisplay = createLimitedEffectDisplay(
                     fingerRecipe,
+                    limitedEffects.animatedVerticalBeam?.recipeKey === fingerSemantic
+                      ? limitedEffects.animatedVerticalBeam
+                      : null,
                     event.lane,
                     event.rangeWidth,
                     lowHitEffectLayer,

@@ -128,6 +128,14 @@ export function getBandoriApprovedManualVerticalBeamScreenY(
     * (0.5 - BANDORI_APPROVED_MANUAL_VERTICAL_BEAM_ABOVE_JUDGMENT_RATIO);
 }
 
+export function getBandoriApprovedAnimatedTravelScreenY(
+  initialScreenY: number,
+  currentScreenY: number,
+  travelSpeedMultiplier: number,
+): number {
+  return initialScreenY + (currentScreenY - initialScreenY) * travelSpeedMultiplier;
+}
+
 export function getBandoriApprovedManualDirectionalNotesCenterOffsetPixels(
   instance: Pick<BandoriEffectFrameInstance, "hierarchyPath" | "widthPixels">,
 ): number {

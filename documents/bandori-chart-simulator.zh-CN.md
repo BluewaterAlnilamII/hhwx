@@ -69,7 +69,7 @@ Music 区域元数据仍可沿用应用既有的本地化偏好。它只负责�
 
 界面只列出浏览器合同已经完整闭合的家族。首个准入项为 Persona：它覆盖底板及配对判定条、Note 与 Directional Flick Sprite、点击／持续及 Directional Flick 粒子 recipe，以及六个已核验 TapSE cue；它不覆盖正常播放背景。合同承诺的任一直接文件缺失时必须失败关闭；家族未声明拥有的槽位不算缺失。
 
-经用户批准的纵向光束与 Directional 末端向外生长定位补偿，只对已准入为语义等价项的节点作为渲染器全局规则。Persona 的 finger `/slash` 与 main `/notes` 复用这些规则；Flick `line1` 不执行手动定位，保留原生偏下出生位置与向上运动。后续若出现带特殊出生偏移或动画的 Flick／Directional 节点，必须先向用户汇报并共同审查，再决定是否扩展覆盖映射。
+经用户批准的纵向光束与 Directional 末端向外生长定位补偿，只对已准入为语义等价项的节点作为渲染器全局规则。Persona 的 finger `/slash` 与 main `/notes` 复用这些规则；其动画 Flick `line1` 保留 recipe 中偏下的原始出生位置与生命周期，只对向上位移应用 `4.0` 倍 Web 补偿。后续若出现带特殊出生偏移或动画的 Flick／Directional 节点，必须先向用户汇报并共同审查，再决定是否扩展覆盖映射。
 
 构建器注册表记录 21 个已知家族和 113 个精确 JP bundle，但 pending 或 blocked 家族不会出现在选择器中。April 2019 的普通点击特效依赖当前有界浏览器求值器尚未实现的 Velocity over Lifetime profile，因此继续 blocked。`teamlivefestival` 从限定注册表排除，延期到普通复合背景设置；其它限定背景也统一等普通背景选择器完成后再处理。这里不引入运行时 catalog 或逐家族 manifest。
 

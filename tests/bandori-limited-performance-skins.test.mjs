@@ -25,6 +25,11 @@ test("only the fully closed Persona collaboration is browser-selectable", () => 
     "soundEffect",
   ]);
   assert.equal(skin.coverage.includes("background"), false);
+  assert.deepEqual(skin.effects.animatedVerticalBeam, {
+    hierarchyPath: "effect_tap_swipe/line1",
+    recipe: "flick",
+    travelSpeedMultiplier: 4,
+  });
   assert.equal(skin.fieldSkin.judgmentLineSpriteHeight, 40);
   assert.equal(getBandoriNativeTapSeCueBankId(skin.tapSeSkin), "tapse-persona");
 });

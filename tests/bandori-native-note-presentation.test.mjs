@@ -47,6 +47,7 @@ import {
   BANDORI_NATIVE_DIRECTIONAL_EFFECT_FRAME_URLS,
   BANDORI_NATIVE_SWIPE_EFFECT_TEXTURE_URLS,
   createBandoriNativeSwipeEffectRuntime,
+  getBandoriApprovedAnimatedTravelScreenY,
   getBandoriApprovedManualDirectionalNotesCenterOffsetPixels,
   getBandoriApprovedManualVerticalBeamScreenY,
   getBandoriNativeSwipeEffectPlacement,
@@ -1715,6 +1716,22 @@ test("approved slash beams are corrected while Persona line1 retains its authore
       personaFlickLine,
     ),
     personaFlickLine.screenY,
+  );
+  assert.equal(
+    getBandoriApprovedAnimatedTravelScreenY(
+      personaFlickLine.screenY,
+      personaFlickLine.screenY,
+      4,
+    ),
+    personaFlickLine.screenY,
+  );
+  assert.equal(
+    getBandoriApprovedAnimatedTravelScreenY(
+      personaFlickLine.screenY,
+      personaFlickLine.screenY - 130,
+      4,
+    ),
+    personaFlickLine.screenY - 520,
   );
 
   const directionalFrame = createBandoriNativeSwipeEffectRuntime(

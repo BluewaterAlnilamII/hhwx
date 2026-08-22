@@ -24,6 +24,11 @@ export type LimitedDirectionalEffectRecipe =
   | "right-3";
 
 export type BandoriLimitedPerformanceEffectContract = Readonly<{
+  animatedVerticalBeam: Readonly<{
+    hierarchyPath: string;
+    recipe: LimitedTapEffectRecipe;
+    travelSpeedMultiplier: number;
+  }> | null;
   directionalRecipes: Readonly<Record<LimitedDirectionalEffectRecipe, string>>;
   recipes: Readonly<Record<LimitedTapEffectRecipe, string>>;
   resources: Readonly<Record<string, string>>;
@@ -108,6 +113,11 @@ export const BANDORI_LIMITED_PERFORMANCE_SKINS = [
     ],
     directionalFlickSkin: PERSONA_DIRECTIONAL_FLICK_SKIN,
     effects: {
+      animatedVerticalBeam: {
+        hierarchyPath: "effect_tap_swipe/line1",
+        recipe: "flick",
+        travelSpeedMultiplier: 4,
+      },
       directionalRecipes: {
         "finger-left": `${PERSONA_DIRECTIONAL_EFFECT_ROOT}/recipes/finger-left.json`,
         "finger-right": `${PERSONA_DIRECTIONAL_EFFECT_ROOT}/recipes/finger-right.json`,
