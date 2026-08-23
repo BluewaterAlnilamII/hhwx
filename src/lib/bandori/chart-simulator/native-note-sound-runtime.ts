@@ -13,6 +13,14 @@ type ActiveLoop = {
   readonly source: AudioBufferSourceNode;
 };
 
+type ActiveMusic = {
+  contextStartTimeSeconds: number;
+  mediaStartTimeSeconds: number;
+  playbackRate: number;
+  readonly source: AudioBufferSourceNode;
+  readonly token: number;
+};
+
 type CueUrls = Readonly<Record<BandoriNativeNoteSoundCue, string>>;
 
 export type BandoriNativeNoteSoundCueBank = {
@@ -45,7 +53,8 @@ export function getBandoriNativeNoteSoundContextTime(
 
 export type BandoriNativeNoteSoundRuntime = {
   readonly isPrepared: boolean;
-  attachMediaElement(mediaElement: HTMLMediaElement): void;
+  readonly isMusicPlaying: boolean;
+  readonly isMusicPrepared: boolean;
   dispatch(
     events: readonly BandoriNativeNoteSoundEvent[],
     mediaTimeSeconds: number,
@@ -53,17 +62,22 @@ export type BandoriNativeNoteSoundRuntime = {
   ): void;
   dispose(): void;
   getContextState(): BandoriNativeAudioContextState | null;
-  pause(): Promise<void>;
+  getMusicTime(): number;
+  pauseMusic(): number;
   prepare(): Promise<void>;
   prepareCueBank(cueBank: BandoriNativeNoteSoundCueBank): Promise<void>;
+  prepareMusic(url: string, signal?: AbortSignal): Promise<void>;
   resume(): Promise<void>;
   selectCueBank(cueBankId: string): void;
+  setMusicPlaybackRate(playbackRate: number): number;
   setVolume(volume: number): void;
+  startMusic(offsetSeconds: number, playbackRate: number): number;
   startLoop(voiceKey: string, cue: BandoriNativeNoteSoundCue, offsetSeconds?: number): void;
   stopAll(): void;
   subscribeContextState(
     listener: (state: BandoriNativeAudioContextState) => void,
   ): () => void;
+  subscribeMusicEnded(listener: () => void): () => void;
 };
 
 class WebAudioBandoriNativeNoteSoundRuntime implements BandoriNativeNoteSoundRuntime {
@@ -81,11 +95,16 @@ class WebAudioBandoriNativeNoteSoundRuntime implements BandoriNativeNoteSoundRun
   private readonly bufferPromisesByUrl = new Map<string, Promise<AudioBuffer>>();
   private readonly activeSources = new Set<AudioBufferSourceNode>();
   private readonly activeLoops = new Map<string, ActiveLoop>();
-  private readonly mediaSources = new Map<HTMLMediaElement, MediaElementAudioSourceNode>();
   private readonly contextStateListeners = new Set<
     (state: BandoriNativeAudioContextState) => void
   >();
+  private readonly musicEndedListeners = new Set<() => void>();
+  private activeMusic: ActiveMusic | null = null;
   private disposed = false;
+  private musicBuffer: AudioBuffer | null = null;
+  private musicBufferUrl: string | null = null;
+  private musicTimeSeconds = 0;
+  private musicToken = 0;
 
   private readonly handleContextStateChange = () => {
     const state = this.context?.state as BandoriNativeAudioContextState | undefined;
@@ -114,10 +133,29 @@ class WebAudioBandoriNativeNoteSoundRuntime implements BandoriNativeNoteSoundRun
     return this.buffersByCueBank.has(this.activeCueBankId);
   }
 
+  get isMusicPlaying(): boolean {
+    return this.activeMusic !== null;
+  }
+
+  get isMusicPrepared(): boolean {
+    return this.musicBuffer !== null;
+  }
+
   private assertVolume(volume: number): void {
     if (!Number.isFinite(volume) || volume < 0 || volume > 1) {
       throw new Error("Native note sound volume must be from 0 through 1");
     }
+  }
+
+  private assertPlaybackRate(playbackRate: number): void {
+    if (!Number.isFinite(playbackRate) || playbackRate <= 0) {
+      throw new Error("Native music playback rate must be positive");
+    }
+  }
+
+  private clampMusicTime(timeSeconds: number): number {
+    const durationSeconds = this.musicBuffer?.duration ?? 0;
+    return Math.max(0, Math.min(durationSeconds, timeSeconds));
   }
 
   private getContext(): AudioContext {
@@ -206,12 +244,37 @@ class WebAudioBandoriNativeNoteSoundRuntime implements BandoriNativeNoteSoundRun
     await request;
   }
 
-  attachMediaElement(mediaElement: HTMLMediaElement): void {
-    if (this.mediaSources.has(mediaElement)) return;
+  async prepareMusic(url: string, signal?: AbortSignal): Promise<void> {
+    if (!url) throw new Error("Native music URL is required");
+    if (signal?.aborted) throw this.createAbortError();
+    if (this.musicBuffer && this.musicBufferUrl === url) return;
+    if (this.musicBufferUrl && this.musicBufferUrl !== url) {
+      throw new Error("Native music changed in place");
+    }
     const context = this.getContext();
-    const source = context.createMediaElementSource(mediaElement);
-    source.connect(context.destination);
-    this.mediaSources.set(mediaElement, source);
+    this.musicBufferUrl = url;
+    try {
+      const response = await fetch(url, {
+        cache: "force-cache",
+        credentials: "omit",
+        signal,
+      });
+      if (!response.ok) {
+        throw new Error(`Native music fetch failed: HTTP ${response.status}`);
+      }
+      const audioData = await response.arrayBuffer();
+      if (signal?.aborted) throw this.createAbortError();
+      const musicBuffer = await context.decodeAudioData(audioData.slice(0));
+      if (signal?.aborted) throw this.createAbortError();
+      if (musicBuffer.duration <= 0) {
+        throw new Error("Native music decoded to an empty buffer");
+      }
+      this.musicBuffer = musicBuffer;
+      this.musicTimeSeconds = 0;
+    } catch (error) {
+      this.musicBufferUrl = null;
+      throw error;
+    }
   }
 
   async resume(): Promise<void> {
@@ -225,10 +288,98 @@ class WebAudioBandoriNativeNoteSoundRuntime implements BandoriNativeNoteSoundRun
     }
   }
 
-  async pause(): Promise<void> {
-    // Keep the shared media-element and Note SE graph running after its first
-    // resume. Explicit transport pauses still remove every scheduled Note SE.
-    this.stopAll();
+  getMusicTime(): number {
+    const context = this.context;
+    if (!context) return this.clampMusicTime(this.musicTimeSeconds);
+    return this.getMusicTimeAt(context.currentTime);
+  }
+
+  private getMusicTimeAt(contextTimeSeconds: number): number {
+    const activeMusic = this.activeMusic;
+    if (!activeMusic) return this.clampMusicTime(this.musicTimeSeconds);
+    return this.clampMusicTime(
+      activeMusic.mediaStartTimeSeconds
+        + Math.max(0, contextTimeSeconds - activeMusic.contextStartTimeSeconds)
+          * activeMusic.playbackRate,
+    );
+  }
+
+  private stopMusicAt(timeSeconds: number): void {
+    const activeMusic = this.activeMusic;
+    this.musicToken += 1;
+    this.activeMusic = null;
+    this.musicTimeSeconds = this.clampMusicTime(timeSeconds);
+    if (!activeMusic) return;
+    activeMusic.source.onended = null;
+    try {
+      activeMusic.source.stop();
+    } catch {
+      // A source may have ended immediately before the explicit stop.
+    }
+    activeMusic.source.disconnect();
+  }
+
+  pauseMusic(): number {
+    const timeSeconds = this.getMusicTime();
+    this.stopMusicAt(timeSeconds);
+    return timeSeconds;
+  }
+
+  startMusic(offsetSeconds: number, playbackRate: number): number {
+    this.assertPlaybackRate(playbackRate);
+    if (!Number.isFinite(offsetSeconds)) {
+      throw new Error("Native music offset must be finite");
+    }
+    const context = this.getContext();
+    const musicBuffer = this.musicBuffer;
+    if (!musicBuffer) throw new Error("Native music is not prepared");
+    if (context.state !== "running") throw new Error("Audio output is not running");
+
+    const startTimeSeconds = this.clampMusicTime(offsetSeconds);
+    this.stopMusicAt(startTimeSeconds);
+    if (startTimeSeconds >= musicBuffer.duration) return startTimeSeconds;
+
+    const source = context.createBufferSource();
+    const token = ++this.musicToken;
+    const contextStartTimeSeconds = context.currentTime;
+    source.buffer = musicBuffer;
+    source.playbackRate.setValueAtTime(playbackRate, contextStartTimeSeconds);
+    source.connect(context.destination);
+    this.activeMusic = {
+      contextStartTimeSeconds,
+      mediaStartTimeSeconds: startTimeSeconds,
+      playbackRate,
+      source,
+      token,
+    };
+    source.onended = () => {
+      if (
+        this.activeMusic?.source !== source
+        || this.activeMusic.token !== token
+        || this.musicToken !== token
+      ) return;
+      source.disconnect();
+      this.activeMusic = null;
+      this.musicTimeSeconds = musicBuffer.duration;
+      for (const listener of this.musicEndedListeners) listener();
+    };
+    source.start(contextStartTimeSeconds, startTimeSeconds);
+    return startTimeSeconds;
+  }
+
+  setMusicPlaybackRate(playbackRate: number): number {
+    this.assertPlaybackRate(playbackRate);
+    const activeMusic = this.activeMusic;
+    const context = this.context;
+    const contextTimeSeconds = context?.currentTime ?? 0;
+    const timeSeconds = this.getMusicTimeAt(contextTimeSeconds);
+    this.musicTimeSeconds = timeSeconds;
+    if (!activeMusic || !context) return timeSeconds;
+    activeMusic.source.playbackRate.setValueAtTime(playbackRate, contextTimeSeconds);
+    activeMusic.contextStartTimeSeconds = contextTimeSeconds;
+    activeMusic.mediaStartTimeSeconds = timeSeconds;
+    activeMusic.playbackRate = playbackRate;
+    return timeSeconds;
   }
 
   getContextState(): BandoriNativeAudioContextState | null {
@@ -327,13 +478,20 @@ class WebAudioBandoriNativeNoteSoundRuntime implements BandoriNativeNoteSoundRun
       || playbackRate <= 0
     ) return;
     const contextTimeSeconds = context.currentTime;
+    const activeMusic = this.activeMusic;
     for (const event of events) {
-      const when = getBandoriNativeNoteSoundContextTime(
-        contextTimeSeconds,
-        mediaTimeSeconds,
-        event.timeSeconds,
-        playbackRate,
-      );
+      const when = activeMusic && activeMusic.playbackRate === playbackRate
+        ? Math.max(
+            contextTimeSeconds,
+            activeMusic.contextStartTimeSeconds
+              + (event.timeSeconds - activeMusic.mediaStartTimeSeconds) / playbackRate,
+          )
+        : getBandoriNativeNoteSoundContextTime(
+            contextTimeSeconds,
+            mediaTimeSeconds,
+            event.timeSeconds,
+            playbackRate,
+          );
       if (event.action === "play-one-shot") {
         this.playOneShot(event.cue, when);
       } else if (event.action === "start-loop" && event.voiceKey) {
@@ -372,18 +530,32 @@ class WebAudioBandoriNativeNoteSoundRuntime implements BandoriNativeNoteSoundRun
     return () => this.contextStateListeners.delete(listener);
   }
 
+  subscribeMusicEnded(listener: () => void): () => void {
+    if (this.disposed) throw new Error("Native note sound runtime is disposed");
+    this.musicEndedListeners.add(listener);
+    return () => this.musicEndedListeners.delete(listener);
+  }
+
   dispose(): void {
     if (this.disposed) return;
+    this.pauseMusic();
     this.stopAll();
     this.disposed = true;
-    for (const source of this.mediaSources.values()) source.disconnect();
-    this.mediaSources.clear();
     const context = this.context;
     context?.removeEventListener("statechange", this.handleContextStateChange);
     this.contextStateListeners.clear();
+    this.musicEndedListeners.clear();
     this.context = null;
     this.masterGain = null;
+    this.musicBuffer = null;
+    this.musicBufferUrl = null;
     if (context && context.state !== "closed") void context.close();
+  }
+
+  private createAbortError(): Error {
+    const error = new Error("Native music load was aborted");
+    error.name = "AbortError";
+    return error;
   }
 }
 

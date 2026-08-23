@@ -164,18 +164,51 @@ test("future note sounds use exact shared AudioContext timestamps without a manu
   );
 });
 
-test("the note sound runtime keeps its first resumed AudioContext running on pause", async () => {
+test("the shared AudioContext owns decoded music, exact anchors, rate changes, and stale endings", async () => {
   const originalWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
+  const originalFetch = Object.getOwnPropertyDescriptor(globalThis, "fetch");
+  class FakeBufferSource {
+    buffer = null;
+    connectCalls = [];
+    disconnectCalls = 0;
+    loop = false;
+    onended = null;
+    playbackRate = {
+      calls: [],
+      setValueAtTime: (value, when) => {
+        this.playbackRate.calls.push([value, when]);
+      },
+    };
+    startCalls = [];
+    stopCalls = 0;
+
+    connect(destination) {
+      this.connectCalls.push(destination);
+    }
+
+    disconnect() {
+      this.disconnectCalls += 1;
+    }
+
+    start(...args) {
+      this.startCalls.push(args);
+    }
+
+    stop() {
+      this.stopCalls += 1;
+    }
+  }
+
   class FakeAudioContext extends EventTarget {
     static created = null;
 
     closeCalls = 0;
     currentTime = 12;
+    decodeCalls = 0;
     destination = {};
-    mediaDestination = null;
     resumeCalls = 0;
+    sources = [];
     state = "suspended";
-    suspendCalls = 0;
 
     constructor() {
       super();
@@ -191,17 +224,24 @@ test("the note sound runtime keeps its first resumed AudioContext running on pau
     createGain() {
       return {
         connect() {},
-        gain: { value: 0 },
+        gain: {
+          cancelScheduledValues() {},
+          linearRampToValueAtTime() {},
+          setValueAtTime() {},
+          value: 0,
+        },
       };
     }
 
-    createMediaElementSource() {
-      return {
-        connect: (destination) => {
-          this.mediaDestination = destination;
-        },
-        disconnect() {},
-      };
+    createBufferSource() {
+      const source = new FakeBufferSource();
+      this.sources.push(source);
+      return source;
+    }
+
+    decodeAudioData() {
+      this.decodeCalls += 1;
+      return Promise.resolve({ duration: 120 });
     }
 
     resume() {
@@ -211,16 +251,22 @@ test("the note sound runtime keeps its first resumed AudioContext running on pau
       return Promise.resolve();
     }
 
-    suspend() {
-      this.suspendCalls += 1;
-      this.state = "suspended";
-      return Promise.resolve();
-    }
   }
 
   Object.defineProperty(globalThis, "window", {
     configurable: true,
     value: { AudioContext: FakeAudioContext },
+  });
+  const fetchCalls = [];
+  Object.defineProperty(globalThis, "fetch", {
+    configurable: true,
+    value: async (url, options) => {
+      fetchCalls.push([url, options]);
+      return {
+        arrayBuffer: async () => new ArrayBuffer(8),
+        ok: true,
+      };
+    },
   });
   try {
     const cueBank = {
@@ -229,23 +275,82 @@ test("the note sound runtime keeps its first resumed AudioContext running on pau
     };
     const runtime = createBandoriNativeNoteSoundRuntime([cueBank], cueBank.id, 1);
     assert.equal(runtime.getContextState(), null);
+    assert.equal(runtime.isMusicPrepared, false);
+    assert.equal(runtime.isMusicPlaying, false);
     const contextStates = [];
+    let musicEndedCount = 0;
     const unsubscribeContextState = runtime.subscribeContextState(
       (state) => contextStates.push(state),
     );
+    const unsubscribeMusicEnded = runtime.subscribeMusicEnded(() => {
+      musicEndedCount += 1;
+    });
 
+    const controller = new AbortController();
+    await runtime.prepareMusic("https://cdn.example/song.mp3", controller.signal);
+    assert.equal(runtime.isMusicPrepared, true);
+    assert.equal(fetchCalls.length, 1);
+    assert.equal(fetchCalls[0][0], "https://cdn.example/song.mp3");
+    assert.equal(fetchCalls[0][1].cache, "force-cache");
+    assert.equal(fetchCalls[0][1].credentials, "omit");
+    assert.equal(fetchCalls[0][1].signal, controller.signal);
+    await runtime.prepare();
     await runtime.resume();
-    runtime.attachMediaElement({});
     const context = FakeAudioContext.created;
     assert.ok(context);
+    assert.equal(context.decodeCalls, 8);
     assert.equal(context.resumeCalls, 1);
     assert.equal(runtime.getContextState(), "running");
-    assert.equal(context.mediaDestination, context.destination);
     assert.deepEqual(contextStates, ["suspended", "running"]);
 
-    await runtime.pause();
-    assert.equal(context.suspendCalls, 0);
+    assert.throws(
+      () => runtime.startMusic(Number.NaN, 1),
+      /music offset must be finite/u,
+    );
+    assert.equal(runtime.startMusic(30, 0.5), 30);
+    const firstSource = context.sources[0];
+    assert.deepEqual(firstSource.startCalls, [[12, 30]]);
+    assert.deepEqual(firstSource.playbackRate.calls, [[0.5, 12]]);
+    assert.deepEqual(firstSource.connectCalls, [context.destination]);
+    context.currentTime = 13;
+    runtime.dispatch([{
+      action: "play-one-shot",
+      cue: "perfect",
+      fadeSeconds: 0,
+      timeSeconds: 31,
+      voiceKey: null,
+    }], 30.5, 0.5);
+    const scheduledNoteSource = context.sources[1];
+    assert.deepEqual(scheduledNoteSource.startCalls, [[14]]);
+    context.currentTime = 16;
+    assert.equal(runtime.getMusicTime(), 32);
+    assert.equal(runtime.setMusicPlaybackRate(0.75), 32);
+    assert.deepEqual(firstSource.playbackRate.calls.at(-1), [0.75, 16]);
+    context.currentTime = 20;
+    assert.equal(runtime.getMusicTime(), 35);
+    const firstEnded = firstSource.onended;
+    assert.equal(runtime.pauseMusic(), 35);
+    assert.equal(firstSource.stopCalls, 1);
+    assert.equal(runtime.isMusicPlaying, false);
+    firstEnded?.();
+    assert.equal(musicEndedCount, 0);
+    assert.equal(runtime.getMusicTime(), 35);
     assert.equal(context.state, "running");
+
+    assert.equal(runtime.startMusic(40, 1), 40);
+    const staleSource = context.sources.at(-1);
+    const staleEnded = staleSource.onended;
+    assert.equal(runtime.startMusic(50, 1), 50);
+    const finalSource = context.sources.at(-1);
+    staleEnded?.();
+    assert.equal(runtime.isMusicPlaying, true);
+    assert.equal(runtime.getMusicTime(), 50);
+    assert.equal(musicEndedCount, 0);
+    finalSource.onended?.();
+    assert.equal(runtime.isMusicPlaying, false);
+    assert.equal(runtime.getMusicTime(), 120);
+    assert.equal(musicEndedCount, 1);
+
     await runtime.resume();
     assert.equal(context.resumeCalls, 1);
 
@@ -259,6 +364,7 @@ test("the note sound runtime keeps its first resumed AudioContext running on pau
       ["suspended", "running", "interrupted", "running"],
     );
     unsubscribeContextState();
+    unsubscribeMusicEnded();
 
     runtime.dispose();
     assert.equal(context.closeCalls, 1);
@@ -267,6 +373,11 @@ test("the note sound runtime keeps its first resumed AudioContext running on pau
       Object.defineProperty(globalThis, "window", originalWindow);
     } else {
       delete globalThis.window;
+    }
+    if (originalFetch) {
+      Object.defineProperty(globalThis, "fetch", originalFetch);
+    } else {
+      delete globalThis.fetch;
     }
   }
 });
@@ -280,7 +391,7 @@ test("unsupported multi-lane point coverage cannot emit hidden audio", () => {
   assert.deepEqual(timeline.loops, []);
 });
 
-test("the simulator owns a polyphonic runtime instead of the monophonic shared helper", async () => {
+test("the simulator owns one shared music and polyphonic Note SE AudioContext", async () => {
   const [runtime, pageRuntime] = await Promise.all([
     read("../src/lib/bandori/chart-simulator/native-note-sound-runtime.ts"),
     read("../src/app/[locale]/bandori/songs/[songId]/ChartSimulatorRuntime.tsx"),
@@ -291,21 +402,30 @@ test("the simulator owns a polyphonic runtime instead of the monophonic shared h
   assert.match(runtime, /buffersByCueBank\.has\(this\.activeCueBankId\)/u);
   assert.match(runtime, /prepareCueBank\(cueBank/u);
   assert.match(runtime, /selectCueBank\(cueBankId/u);
-  assert.match(runtime, /createMediaElementSource\(mediaElement\)/u);
+  assert.match(runtime, /prepareMusic\(url: string, signal\?: AbortSignal\)/u);
+  assert.match(runtime, /source\.connect\(context\.destination\)/u);
+  assert.match(runtime, /source\.start\(contextStartTimeSeconds, startTimeSeconds\)/u);
+  assert.match(runtime, /activeMusic\.contextStartTimeSeconds/u);
+  assert.match(runtime, /activeMusic\.mediaStartTimeSeconds/u);
+  assert.match(runtime, /activeMusic\.playbackRate/u);
+  assert.match(runtime, /this\.activeMusic\?\.source !== source/u);
+  assert.match(runtime, /subscribeMusicEnded\(listener/u);
+  assert.doesNotMatch(runtime, /createMediaElementSource|MediaElementAudioSourceNode/u);
   assert.match(runtime, /source\.start\(when\)/u);
   assert.match(runtime, /linearRampToValueAtTime\(0, startTime \+ fade\)/u);
   assert.doesNotMatch(runtime, /context\.suspend\(\)/u);
-  assert.match(runtime, /async pause\(\): Promise<void> \{[\s\S]*this\.stopAll\(\)/u);
-  assert.match(pageRuntime, /crossOrigin="anonymous"/u);
+  assert.match(runtime, /pauseMusic\(\): number/u);
+  assert.doesNotMatch(pageRuntime, /<audio|crossOrigin="anonymous"/u);
   assert.match(pageRuntime, /BANDORI_NATIVE_NOTE_SOUND_SCHEDULE_AHEAD_SECONDS/u);
   assert.match(pageRuntime, /BANDORI_NATIVE_NOTE_SOUND_SCHEDULE_AHEAD_SECONDS \* currentPlaybackRate/u);
-  assert.match(pageRuntime, /audio\.playbackRate = playbackRate/u);
-  assert.match(pageRuntime, /audio\.preservesPitch = true/u);
-  assert.doesNotMatch(runtime, /source\.playbackRate/u);
+  assert.match(pageRuntime, /runtime\.setMusicPlaybackRate\(nextPlaybackRate\)/u);
+  assert.doesNotMatch(pageRuntime, /preservesPitch/u);
+  assert.match(runtime, /source\.playbackRate\.setValueAtTime/u);
   assert.match(pageRuntime, /createResolvedNoteSoundCueBank/u);
   assert.match(pageRuntime, /runtime\.prepareCueBank\(cueBank\)/u);
+  assert.match(pageRuntime, /runtime\.prepareMusic\(audioUrl, controller\.signal\)/u);
   assert.doesNotMatch(pageRuntime, /NOTE_SOUND_CUE_BANKS/u);
-  assert.match(pageRuntime, /requestAnimationFrame\(updateNoteSounds\)/u);
+  assert.match(pageRuntime, /requestAnimationFrame\(updatePlayback\)/u);
   assert.match(pageRuntime, /getBandoriNativeActiveNoteSoundLoops/u);
   assert.doesNotMatch(pageRuntime, /playSoundEffect/u);
 });

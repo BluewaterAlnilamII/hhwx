@@ -69,10 +69,6 @@ import {
   createBandoriMediaOperationSequencer,
 } from "@/lib/bandori/chart-simulator/media-operation-sequencer";
 import {
-  playBandoriMediaElement,
-  seekBandoriMediaElement,
-} from "@/lib/bandori/chart-simulator/media-seek";
-import {
   createBandoriFullSongLoopRange,
   isBandoriTimeInsideLoopRange,
   type BandoriChartLoopRange,
@@ -119,8 +115,7 @@ const PLAYBACK_RATE_DECREASES = [-10, -1] as const;
 const PLAYBACK_RATE_INCREASES = [1, 10] as const;
 const NOTE_SPEED_DECREASES = [-0.5, -0.1, -0.01] as const;
 const NOTE_SPEED_INCREASES = [0.01, 0.1, 0.5] as const;
-const MEDIA_HAVE_FUTURE_DATA = 3;
-const MEDIA_ERROR_ABORTED = 1;
+const TRANSPORT_UI_UPDATE_INTERVAL_MS = 100;
 function createResolvedNoteSoundCueBank(
   skin: BandoriNativeTapSeSkin,
   resolveAssetUrl: BandoriChartSimulatorAssetResolver,
@@ -169,15 +164,6 @@ function parseChartResponse(
   return parseBandoriChartForSimulator(data.chart);
 }
 
-function applySimulatorPlaybackRate(
-  audio: HTMLAudioElement,
-  playbackRate: number,
-): void {
-  audio.defaultPlaybackRate = playbackRate;
-  audio.playbackRate = playbackRate;
-  audio.preservesPitch = true;
-}
-
 function createLoopSeekTransport(
   state: BandoriChartTransportState,
   startTimeSeconds: number,
@@ -211,7 +197,6 @@ export default function ChartSimulatorRuntime({
   expectedCombo,
 }: ChartSimulatorClientShellProps) {
   const t = useTranslations("bandori.songs.simulator");
-  const audioRef = useRef<HTMLAudioElement | null>(null);
   const playbackRateHundredthsRef = useRef(
     BANDORI_SIMULATOR_PLAYBACK_RATE_DEFAULT_HUNDREDTHS,
   );
@@ -222,7 +207,6 @@ export default function ChartSimulatorRuntime({
   const noteSoundCursorRef = useRef(-1e-7);
   const noteSoundLastMediaTimeRef = useRef(0);
   const noteSoundNeedsLoopSyncRef = useRef(false);
-  const frozenMediaTimeRef = useRef(0);
   const isMediaPlaybackReadyRef = useRef(false);
   const shouldMediaPlayRef = useRef(false);
   const loopRangeRef = useRef(createBandoriFullSongLoopRange(durationSeconds));
@@ -271,6 +255,7 @@ export default function ChartSimulatorRuntime({
   const [isRhythmSupportEnabled, setIsRhythmSupportEnabled] = useState(true);
   const [isLaneEffectEnabled, setIsLaneEffectEnabled] = useState(true);
   const [isAllPerfectStatusEnabled, setIsAllPerfectStatusEnabled] = useState(true);
+  const [isMusicPrepared, setIsMusicPrepared] = useState(false);
   const [playbackError, setPlaybackError] = useState<string | null>(null);
   const playbackRate = getBandoriSimulatorPlaybackRate(playbackRateHundredths);
   const noteApproachTimeScale = getBandoriSimulatorNoteApproachTimeScale(
@@ -304,35 +289,31 @@ export default function ChartSimulatorRuntime({
     mediaOperationSequencer.cancel();
   }, [mediaOperationSequencer]);
 
-  const pauseAudioInternally = useCallback((audio: HTMLAudioElement | null) => {
+  const pauseAudioInternally = useCallback(() => {
     shouldMediaPlayRef.current = false;
-    if (!audio) return;
-    audio.pause();
+    return noteSoundRuntimeRef.current?.pauseMusic() ?? null;
   }, []);
 
   const getStagePresentationTime = useCallback(() => {
     const currentTransport = transportRef.current;
-    const audio = audioRef.current;
-    if (currentTransport.phase === "playing" && audio && Number.isFinite(audio.currentTime)) {
-      if (!isMediaPlaybackReadyRef.current) {
-        return Math.max(
-          0,
-          Math.min(currentTransport.durationSeconds, frozenMediaTimeRef.current),
-        );
-      }
-      const presentationTimeSeconds = Math.max(
+    const runtime = noteSoundRuntimeRef.current;
+    if (
+      currentTransport.phase === "playing"
+      && isMediaPlaybackReadyRef.current
+      && runtime?.isMusicPlaying
+    ) {
+      return Math.max(
         0,
-        Math.min(currentTransport.durationSeconds, audio.currentTime),
+        Math.min(currentTransport.durationSeconds, runtime.getMusicTime()),
       );
-      frozenMediaTimeRef.current = presentationTimeSeconds;
-      return presentationTimeSeconds;
     }
     return getBandoriChartPresentationTime(currentTransport);
   }, []);
 
   const getStageEffectPlaybackState = useCallback(() => ({
     isPlaying: transportRef.current.phase === "playing"
-      && isMediaPlaybackReadyRef.current,
+      && isMediaPlaybackReadyRef.current
+      && noteSoundRuntimeRef.current?.isMusicPlaying === true,
     playbackRate: getBandoriSimulatorPlaybackRate(playbackRateHundredthsRef.current),
     timelineVersion: effectTimelineVersionRef.current,
   }), []);
@@ -415,27 +396,30 @@ export default function ChartSimulatorRuntime({
     noteSoundLastMediaTimeRef.current = currentTimeSeconds;
   }, []);
 
-  const snapshotTransportAtAudioTime = useCallback((audio: HTMLAudioElement | null) => {
+  const snapshotTransportAtAudioTime = useCallback(() => {
     const current = transportRef.current;
-    if (!audio || current.phase !== "playing" || !Number.isFinite(audio.currentTime)) {
+    if (
+      current.phase !== "playing"
+      || !isMediaPlaybackReadyRef.current
+      || noteSoundRuntimeRef.current?.isMusicPlaying !== true
+    ) {
       return current;
     }
     return syncBandoriChartMediaTime(current, getStagePresentationTime());
   }, [getStagePresentationTime]);
 
-  const pauseAudioAndTransport = useCallback((audio: HTMLAudioElement | null) => {
+  const pauseAudioAndTransport = useCallback(() => {
     cancelPendingMediaOperation();
-    const snapshot = snapshotTransportAtAudioTime(audio);
-    frozenMediaTimeRef.current = snapshot.currentTimeSeconds;
+    const snapshot = snapshotTransportAtAudioTime();
     isMediaPlaybackReadyRef.current = false;
     const next = pauseBandoriChartTransport(snapshot);
     updateTransport(next);
-    pauseAudioInternally(audio);
+    pauseAudioInternally();
     stopAndResetNoteSounds(
       snapshot.currentTimeSeconds,
       snapshot.currentTimeSeconds > 0,
     );
-    void noteSoundRuntimeRef.current?.pause();
+    noteSoundRuntimeRef.current?.stopAll();
     setMusicPlaybackAudioSessionActive(false);
   }, [
     cancelPendingMediaOperation,
@@ -446,7 +430,6 @@ export default function ChartSimulatorRuntime({
   ]);
 
   const seekAudioAndTransport = useCallback(async (
-    audio: HTMLAudioElement,
     requestedTransport: BandoriChartTransportState,
   ) => {
     const shouldResume = requestedTransport.phase === "playing";
@@ -458,10 +441,8 @@ export default function ChartSimulatorRuntime({
       shouldResumeAfterInteraction: false,
     };
 
-    setPlaybackError(null);
-    frozenMediaTimeRef.current = requestedTimeSeconds;
     isMediaPlaybackReadyRef.current = false;
-    pauseAudioInternally(audio);
+    pauseAudioInternally();
     setMusicPlaybackAudioSessionActive(false);
     invalidateStageEffects();
     stopAndResetNoteSounds(
@@ -471,20 +452,17 @@ export default function ChartSimulatorRuntime({
     );
     updateTransport(pendingTransport);
 
+    const runtime = noteSoundRuntimeRef.current;
+    if (!runtime?.isMusicPrepared) {
+      if (shouldResume) setPlaybackError("Native music is not prepared");
+      return;
+    }
+    setPlaybackError(null);
+
     return mediaOperationSequencer.runLatest(async (operation) => {
-      await noteSoundRuntimeRef.current?.pause();
-      operation.throwIfSuperseded();
-
-      const committedMediaTime = await seekBandoriMediaElement(
-        audio,
-        requestedTimeSeconds,
-        operation.signal,
-      );
-      operation.throwIfSuperseded();
-
       const settledTimeSeconds = Math.max(
         0,
-        Math.min(requestedTransport.durationSeconds, committedMediaTime),
+        Math.min(requestedTransport.durationSeconds, requestedTimeSeconds),
       );
       const settledTransport: BandoriChartTransportState = {
         ...pendingTransport,
@@ -497,13 +475,16 @@ export default function ChartSimulatorRuntime({
         return { settledTransport, startedTimeSeconds: null };
       }
 
-      noteSoundRuntimeRef.current?.attachMediaElement(audio);
-      await noteSoundRuntimeRef.current?.resume();
+      await runtime.resume();
       operation.throwIfSuperseded();
-      shouldMediaPlayRef.current = true;
-      const startedMediaTime = await playBandoriMediaElement(audio, operation.signal);
-      operation.throwIfSuperseded();
-      if (noteSoundRuntimeRef.current?.getContextState() !== "running") {
+      if (noteSoundRuntimeRef.current !== runtime) {
+        throw new Error("Native audio runtime changed during playback start");
+      }
+      const startedMediaTime = runtime.startMusic(
+        settledTimeSeconds,
+        getBandoriSimulatorPlaybackRate(playbackRateHundredthsRef.current),
+      );
+      if (runtime.getContextState() !== "running" || !runtime.isMusicPlaying) {
         throw new Error("Audio output is not running");
       }
       return {
@@ -516,13 +497,9 @@ export default function ChartSimulatorRuntime({
     }, {
       commit: ({ settledTransport, startedTimeSeconds }) => {
         const settledTimeSeconds = settledTransport.currentTimeSeconds;
-        frozenMediaTimeRef.current = settledTimeSeconds;
         invalidateStageEffects();
         if (startedTimeSeconds === null) {
-          // A superseded play() may still complete at the browser layer even
-          // though its state commit was rejected. Reassert the latest paused
-          // intent after this seek has settled.
-          pauseAudioInternally(audio);
+          pauseAudioInternally();
           isMediaPlaybackReadyRef.current = false;
           stopAndResetNoteSounds(
             settledTimeSeconds,
@@ -533,12 +510,14 @@ export default function ChartSimulatorRuntime({
           return;
         }
 
+        shouldMediaPlayRef.current = true;
         isMediaPlaybackReadyRef.current = true;
         stopAndResetNoteSounds(
           startedTimeSeconds,
           startedTimeSeconds > 0,
           startedTimeSeconds === 0,
         );
+        flushNoteSoundsThrough(runtime.getMusicTime());
         updateTransport({
           ...settledTransport,
           phase: "playing",
@@ -549,11 +528,10 @@ export default function ChartSimulatorRuntime({
       reportError: (error) => {
         shouldMediaPlayRef.current = false;
         isMediaPlaybackReadyRef.current = false;
-        pauseAudioInternally(audio);
-        const fallbackTimeSeconds = Number.isFinite(audio.currentTime)
-          ? Math.max(0, Math.min(requestedTransport.durationSeconds, audio.currentTime))
-          : requestedTimeSeconds;
-        frozenMediaTimeRef.current = fallbackTimeSeconds;
+        const fallbackTimeSeconds = Math.max(
+          0,
+          Math.min(requestedTransport.durationSeconds, runtime.pauseMusic()),
+        );
         updateTransport({
           ...pendingTransport,
           phase: fallbackTimeSeconds >= requestedTransport.durationSeconds
@@ -566,12 +544,13 @@ export default function ChartSimulatorRuntime({
           fallbackTimeSeconds > 0,
           fallbackTimeSeconds === 0,
         );
-        void noteSoundRuntimeRef.current?.pause();
+        runtime.stopAll();
         setMusicPlaybackAudioSessionActive(false);
         setPlaybackError(error instanceof Error ? error.message : String(error));
       },
     });
   }, [
+    flushNoteSoundsThrough,
     invalidateStageEffects,
     mediaOperationSequencer,
     pauseAudioInternally,
@@ -583,13 +562,8 @@ export default function ChartSimulatorRuntime({
     range: BandoriChartLoopRange,
     onlyWhenOutside: boolean,
   ) => {
-    const audio = audioRef.current;
-    const current = snapshotTransportAtAudioTime(audio);
-    const currentTimeSeconds = current.phase === "playing"
-      && audio
-      && Number.isFinite(audio.currentTime)
-      ? audio.currentTime
-      : getBandoriChartPresentationTime(current);
+    const current = snapshotTransportAtAudioTime();
+    const currentTimeSeconds = getBandoriChartPresentationTime(current);
     if (onlyWhenOutside && isBandoriTimeInsideLoopRange(range, currentTimeSeconds)) return;
 
     const requested = createLoopSeekTransport(
@@ -597,15 +571,8 @@ export default function ChartSimulatorRuntime({
       range.startTimeSeconds,
       shouldMediaPlayRef.current,
     );
-    if (!audio) {
-      invalidateStageEffects();
-      stopAndResetNoteSounds(range.startTimeSeconds, range.startTimeSeconds > 0);
-      updateTransport(requested);
-      return;
-    }
-
     loopSeekPendingRef.current = true;
-    const request = seekAudioAndTransport(audio, requested);
+    const request = seekAudioAndTransport(requested);
     loopSeekPromiseRef.current = request;
     void request.finally(() => {
       if (loopSeekPromiseRef.current !== request) return;
@@ -613,11 +580,8 @@ export default function ChartSimulatorRuntime({
       loopSeekPendingRef.current = false;
     });
   }, [
-    invalidateStageEffects,
     seekAudioAndTransport,
     snapshotTransportAtAudioTime,
-    stopAndResetNoteSounds,
-    updateTransport,
   ]);
 
   const applyLoopRange = useCallback((range: BandoriChartLoopRange) => {
@@ -632,22 +596,56 @@ export default function ChartSimulatorRuntime({
     if (isEnabled) seekToLoopStart(loopRangeRef.current, true);
   }, [seekToLoopStart]);
 
-  const wrapLoopAtBoundary = useCallback((audio: HTMLAudioElement): boolean => {
+  const wrapLoopAtBoundary = useCallback((): boolean => {
+    const presentationTimeSeconds = getStagePresentationTime();
     if (
       !isLoopEnabledRef.current
       || loopSeekPendingRef.current
       || transportRef.current.phase !== "playing"
-      || !Number.isFinite(audio.currentTime)
-      || audio.currentTime < loopRangeRef.current.endTimeSeconds
+      || presentationTimeSeconds < loopRangeRef.current.endTimeSeconds
     ) {
       return false;
     }
     seekToLoopStart(loopRangeRef.current, false);
     return true;
-  }, [seekToLoopStart]);
+  }, [getStagePresentationTime, seekToLoopStart]);
+
+  const handleMusicEnded = useCallback(() => {
+    if (
+      !shouldMediaPlayRef.current
+      || transportRef.current.phase !== "playing"
+    ) return;
+    if (isLoopEnabledRef.current) {
+      if (!loopSeekPendingRef.current) {
+        seekToLoopStart(loopRangeRef.current, false);
+      }
+      return;
+    }
+    cancelPendingMediaOperation();
+    shouldMediaPlayRef.current = false;
+    isMediaPlaybackReadyRef.current = false;
+    flushNoteSoundsThrough(durationSeconds);
+    setMusicPlaybackAudioSessionActive(false);
+    updateTransport({
+      ...transportRef.current,
+      phase: "ended",
+      currentTimeSeconds: durationSeconds,
+      previewTimeSeconds: null,
+      shouldResumeAfterInteraction: false,
+    });
+  }, [
+    cancelPendingMediaOperation,
+    durationSeconds,
+    flushNoteSoundsThrough,
+    seekToLoopStart,
+    updateTransport,
+  ]);
 
   useEffect(() => {
     if (assetLoadState.status !== "ready") return;
+    const controller = new AbortController();
+    let isCurrent = true;
+    setIsMusicPrepared(false);
     const initialCueBank = createResolvedNoteSoundCueBank(
       BANDORI_NATIVE_TAP_SE_SKIN,
       assetLoadState.resolveAssetUrl,
@@ -664,15 +662,42 @@ export default function ChartSimulatorRuntime({
         || transportRef.current.phase !== "playing"
         || !shouldMediaPlayRef.current
       ) return;
-      pauseAudioAndTransport(audioRef.current);
+      pauseAudioAndTransport();
       if (state === "closed") setPlaybackError("Audio output became unavailable");
     });
+    const unsubscribeMusicEnded = runtime.subscribeMusicEnded(handleMusicEnded);
+    if (audioUrl) {
+      void Promise.all([
+        runtime.prepareCueBank(initialCueBank),
+        runtime.prepareMusic(audioUrl, controller.signal),
+      ]).then(() => {
+        if (!isCurrent || noteSoundRuntimeRef.current !== runtime) return;
+        setIsMusicPrepared(true);
+      }).catch((error: unknown) => {
+        if (
+          controller.signal.aborted
+          || !isCurrent
+          || noteSoundRuntimeRef.current !== runtime
+        ) return;
+        setPlaybackError(error instanceof Error ? error.message : String(error));
+      });
+    }
     return () => {
+      isCurrent = false;
+      controller.abort();
+      cancelPendingMediaOperation();
       unsubscribeContextState();
+      unsubscribeMusicEnded();
       runtime.dispose();
       if (noteSoundRuntimeRef.current === runtime) noteSoundRuntimeRef.current = null;
     };
-  }, [assetLoadState, pauseAudioAndTransport]);
+  }, [
+    assetLoadState,
+    audioUrl,
+    cancelPendingMediaOperation,
+    handleMusicEnded,
+    pauseAudioAndTransport,
+  ]);
 
   useEffect(() => {
     if (assetLoadState.status !== "ready") return;
@@ -686,12 +711,7 @@ export default function ChartSimulatorRuntime({
     void runtime.prepareCueBank(cueBank).then(() => {
       if (!isCurrent || noteSoundRuntimeRef.current !== runtime) return;
       runtime.selectCueBank(cueBank.id);
-      const audio = audioRef.current;
-      const currentTimeSeconds = transportRef.current.phase === "playing"
-        && audio
-        && Number.isFinite(audio.currentTime)
-        ? audio.currentTime
-        : getBandoriChartPresentationTime(transportRef.current);
+      const currentTimeSeconds = getStagePresentationTime();
       stopAndResetNoteSounds(
         currentTimeSeconds,
         currentTimeSeconds > 0,
@@ -705,7 +725,12 @@ export default function ChartSimulatorRuntime({
     return () => {
       isCurrent = false;
     };
-  }, [assetLoadState, effectiveTapSeSkin, stopAndResetNoteSounds]);
+  }, [
+    assetLoadState,
+    effectiveTapSeSkin,
+    getStagePresentationTime,
+    stopAndResetNoteSounds,
+  ]);
 
   useEffect(() => {
     cancelPendingMediaOperation();
@@ -716,13 +741,12 @@ export default function ChartSimulatorRuntime({
     isLoopEnabledRef.current = false;
     loopSeekPendingRef.current = false;
     loopSeekPromiseRef.current = null;
-    frozenMediaTimeRef.current = 0;
     isMediaPlaybackReadyRef.current = false;
     shouldMediaPlayRef.current = false;
-    pauseAudioInternally(audioRef.current);
+    pauseAudioInternally();
     effectTimelineVersionRef.current += 1;
     stopAndResetNoteSounds(0, false, true);
-    void noteSoundRuntimeRef.current?.pause();
+    noteSoundRuntimeRef.current?.stopAll();
     setTransport(next);
     setLoopRange(nextLoopRange);
     setIsLoopEnabled(false);
@@ -805,33 +829,21 @@ export default function ChartSimulatorRuntime({
   }, [chartUrl, difficulty, durationSeconds, expectedCombo, loadAttempt, songId]);
 
   useEffect(() => {
-    const audio = audioRef.current;
-    if (!audio) return;
-    try {
-      applySimulatorPlaybackRate(
-        audio,
-        getBandoriSimulatorPlaybackRate(playbackRateHundredthsRef.current),
-      );
-      noteSoundRuntimeRef.current?.attachMediaElement(audio);
-    } catch (error) {
-      setPlaybackError(error instanceof Error ? error.message : String(error));
-    }
     const coordinator = createMusicPlayerPlaybackCoordinator(
       createMusicPlayerTabId(),
-      () => {
-        pauseAudioAndTransport(audio);
-      },
+      pauseAudioAndTransport,
     );
     coordinatorRef.current = coordinator;
     return () => {
       shouldMediaPlayRef.current = false;
       isMediaPlaybackReadyRef.current = false;
-      audio.pause();
+      noteSoundRuntimeRef.current?.pauseMusic();
+      noteSoundRuntimeRef.current?.stopAll();
       coordinator.dispose();
       coordinatorRef.current = null;
       setMusicPlaybackAudioSessionActive(false);
     };
-  }, [audioUrl, loadState.status, pauseAudioAndTransport]);
+  }, [pauseAudioAndTransport]);
 
   useEffect(() => {
     const pauseWhenDocumentBecomesHidden = () => {
@@ -839,9 +851,9 @@ export default function ChartSimulatorRuntime({
         document.visibilityState !== "hidden"
         || transportRef.current.phase !== "playing"
       ) return;
-      // Browser media can outlive a throttled animation frame. Reuse the exact
-      // transport pause path before either the visual or SE cursor falls behind.
-      pauseAudioAndTransport(audioRef.current);
+      // The audio render thread can outlive a throttled animation frame. Freeze
+      // the shared clock before either the visual or SE cursor falls behind.
+      pauseAudioAndTransport();
     };
     document.addEventListener("visibilitychange", pauseWhenDocumentBecomesHidden);
     return () => {
@@ -860,172 +872,75 @@ export default function ChartSimulatorRuntime({
 
   useEffect(() => {
     let animationFrame = 0;
-    const enforceLoopBoundary = () => {
-      const audio = audioRef.current;
-      if (audio) wrapLoopAtBoundary(audio);
-      animationFrame = window.requestAnimationFrame(enforceLoopBoundary);
-    };
-    animationFrame = window.requestAnimationFrame(enforceLoopBoundary);
-    return () => window.cancelAnimationFrame(animationFrame);
-  }, [wrapLoopAtBoundary]);
-
-  useEffect(() => {
-    if (!noteSoundTimeline) return;
-    let animationFrame = 0;
-    const updateNoteSounds = () => {
-      const audio = audioRef.current;
+    let lastUiUpdateMs = 0;
+    const updatePlayback = (nowMs: number) => {
+      const runtime = noteSoundRuntimeRef.current;
       if (
         transportRef.current.phase === "playing"
         && isMediaPlaybackReadyRef.current
-        && audio
-        && !audio.paused
-        && !audio.seeking
-        && audio.readyState >= MEDIA_HAVE_FUTURE_DATA
-        && Number.isFinite(audio.currentTime)
+        && runtime?.isMusicPlaying
       ) {
-        flushNoteSoundsThrough(audio.currentTime);
+        if (!wrapLoopAtBoundary()) {
+          const presentationTimeSeconds = getStagePresentationTime();
+          if (noteSoundTimeline) flushNoteSoundsThrough(presentationTimeSeconds);
+          if (nowMs - lastUiUpdateMs >= TRANSPORT_UI_UPDATE_INTERVAL_MS) {
+            lastUiUpdateMs = nowMs;
+            updateTransport(syncBandoriChartMediaTime(
+              transportRef.current,
+              presentationTimeSeconds,
+            ));
+          }
+        }
       }
-      animationFrame = window.requestAnimationFrame(updateNoteSounds);
+      animationFrame = window.requestAnimationFrame(updatePlayback);
     };
-    animationFrame = window.requestAnimationFrame(updateNoteSounds);
+    animationFrame = window.requestAnimationFrame(updatePlayback);
     return () => window.cancelAnimationFrame(animationFrame);
-  }, [flushNoteSoundsThrough, noteSoundTimeline]);
+  }, [
+    flushNoteSoundsThrough,
+    getStagePresentationTime,
+    noteSoundTimeline,
+    updateTransport,
+    wrapLoopAtBoundary,
+  ]);
 
   const presentationTime = getBandoriChartPresentationTime(transport);
   const play = async () => {
-    const audio = audioRef.current;
-    if (!audio || !audioUrl || loadState.status !== "ready") return;
+    if (
+      !audioUrl
+      || !isMusicPrepared
+      || noteSoundRuntimeRef.current?.isMusicPrepared !== true
+      || loadState.status !== "ready"
+    ) return;
     const next = playBandoriChartTransport(transportRef.current);
     useMusicPlayerStore.getState().requestPause();
     coordinatorRef.current?.claimPlayback();
-    await seekAudioAndTransport(audio, next);
+    await seekAudioAndTransport(next);
   };
 
   const pause = () => {
-    pauseAudioAndTransport(audioRef.current);
-  };
-
-  const handleMediaWaiting = (audio: HTMLAudioElement) => {
-    if (
-      transportRef.current.phase !== "playing"
-      || !shouldMediaPlayRef.current
-      || !isMediaPlaybackReadyRef.current
-      || audio.paused
-      || audio.ended
-    ) return;
-
-    const frozenTimeSeconds = getStagePresentationTime();
-    frozenMediaTimeRef.current = frozenTimeSeconds;
-    isMediaPlaybackReadyRef.current = false;
-    invalidateStageEffects();
-    if (Number.isFinite(audio.currentTime)) {
-      stopAndResetNoteSounds(
-        audio.currentTime,
-        audio.currentTime > 0,
-        audio.currentTime === 0,
-      );
-    } else {
-      noteSoundRuntimeRef.current?.stopAll();
-    }
-    updateTransport(syncBandoriChartMediaTime(
-      transportRef.current,
-      frozenTimeSeconds,
-    ));
-  };
-
-  const handleMediaPlaying = (audio: HTMLAudioElement) => {
-    if (
-      transportRef.current.phase !== "playing"
-      || !shouldMediaPlayRef.current
-      || isMediaPlaybackReadyRef.current
-      || audio.paused
-      || audio.seeking
-      || audio.ended
-      || audio.readyState < MEDIA_HAVE_FUTURE_DATA
-    ) return;
-
-    isMediaPlaybackReadyRef.current = true;
-    invalidateStageEffects();
-    if (Number.isFinite(audio.currentTime)) {
-      stopAndResetNoteSounds(
-        audio.currentTime,
-        audio.currentTime > 0,
-        audio.currentTime === 0,
-      );
-    }
-    updateTransport(syncBandoriChartMediaTime(
-      transportRef.current,
-      getStagePresentationTime(),
-    ));
-    setMusicPlaybackAudioSessionActive(true);
-  };
-
-  const handleMediaError = (audio: HTMLAudioElement) => {
-    const mediaError = audio.error;
-    if (!mediaError || mediaError.code === MEDIA_ERROR_ABORTED) return;
-    cancelPendingMediaOperation();
-    const currentTransport = transportRef.current;
-    const sourceTimeSeconds = Number.isFinite(audio.currentTime)
-      ? Math.max(0, Math.min(currentTransport.durationSeconds, audio.currentTime))
-      : currentTransport.currentTimeSeconds;
-    frozenMediaTimeRef.current = sourceTimeSeconds;
-    isMediaPlaybackReadyRef.current = false;
-    pauseAudioInternally(audio);
-    invalidateStageEffects();
-    stopAndResetNoteSounds(
-      sourceTimeSeconds,
-      sourceTimeSeconds > 0,
-      sourceTimeSeconds === 0,
-    );
-    updateTransport({
-      ...currentTransport,
-      phase: sourceTimeSeconds >= currentTransport.durationSeconds
-        ? "ended"
-        : currentTransport.phase === "ready" ? "ready" : "paused",
-      currentTimeSeconds: sourceTimeSeconds,
-      previewTimeSeconds: null,
-      shouldResumeAfterInteraction: false,
-    });
-    setMusicPlaybackAudioSessionActive(false);
-    const detail = mediaError.message || `code ${mediaError.code}`;
-    setPlaybackError(`Media playback failed: ${detail}`);
+    pauseAudioAndTransport();
   };
 
   const restart = () => {
-    const audio = audioRef.current;
     const next = restartBandoriChartTransport(transportRef.current);
-    if (!audio) {
-      invalidateStageEffects();
-      stopAndResetNoteSounds(0, false, true);
-      updateTransport(next);
-      return;
-    }
-    void seekAudioAndTransport(audio, next);
+    void seekAudioAndTransport(next);
   };
 
   const jump = (delta: -5 | 5) => {
-    const audio = audioRef.current;
-    const next = jumpBandoriChartTransport(snapshotTransportAtAudioTime(audio), delta);
-    if (!audio) {
-      invalidateStageEffects();
-      stopAndResetNoteSounds(next.currentTimeSeconds, true);
-      updateTransport(next);
-      return;
-    }
-    void seekAudioAndTransport(audio, next);
+    const next = jumpBandoriChartTransport(snapshotTransportAtAudioTime(), delta);
+    void seekAudioAndTransport(next);
   };
 
   const beginScrub = () => {
-    const audio = audioRef.current;
     cancelPendingMediaOperation();
-    const current = snapshotTransportAtAudioTime(audio);
-    frozenMediaTimeRef.current = current.currentTimeSeconds;
+    const current = snapshotTransportAtAudioTime();
     isMediaPlaybackReadyRef.current = false;
     if (current.phase !== "scrubbing") invalidateStageEffects();
     stopAndResetNoteSounds(current.currentTimeSeconds, false);
     updateTransport(beginBandoriChartScrub(current));
-    pauseAudioInternally(audio);
-    void noteSoundRuntimeRef.current?.pause();
+    pauseAudioInternally();
+    noteSoundRuntimeRef.current?.stopAll();
     setMusicPlaybackAudioSessionActive(false);
   };
 
@@ -1037,13 +952,7 @@ export default function ChartSimulatorRuntime({
     const current = transportRef.current;
     if (current.phase !== "scrubbing") return;
     const next = commitBandoriChartScrub(current);
-    const audio = audioRef.current;
-    if (!audio) {
-      stopAndResetNoteSounds(next.currentTimeSeconds, true);
-      updateTransport(next);
-      return;
-    }
-    void seekAudioAndTransport(audio, next);
+    void seekAudioAndTransport(next);
   };
 
   const changeTapSeSkin = (skin: BandoriNativeTapSeSkin) => {
@@ -1062,22 +971,17 @@ export default function ChartSimulatorRuntime({
       adjustmentHundredths,
     );
     if (nextHundredths === playbackRateHundredthsRef.current) return;
-    const audio = audioRef.current;
-    const presentationTimeSeconds = getStagePresentationTime();
-    const noteSoundTimeSeconds = transportRef.current.phase === "playing"
-      && audio
-      && Number.isFinite(audio.currentTime)
-      ? audio.currentTime
-      : getBandoriChartPresentationTime(transportRef.current);
-    frozenMediaTimeRef.current = presentationTimeSeconds;
+    const currentTransport = snapshotTransportAtAudioTime();
+    const runtime = noteSoundRuntimeRef.current;
     playbackRateHundredthsRef.current = nextHundredths;
     setPlaybackRateHundredths(nextHundredths);
-
-    if (audio) {
-      applySimulatorPlaybackRate(
-        audio,
-        getBandoriSimulatorPlaybackRate(nextHundredths),
-      );
+    const nextPlaybackRate = getBandoriSimulatorPlaybackRate(nextHundredths);
+    const noteSoundTimeSeconds = currentTransport.phase === "playing"
+      && runtime?.isMusicPlaying
+      ? runtime.setMusicPlaybackRate(nextPlaybackRate)
+      : getBandoriChartPresentationTime(currentTransport);
+    if (currentTransport.phase === "playing") {
+      updateTransport(syncBandoriChartMediaTime(currentTransport, noteSoundTimeSeconds));
     }
     // Future triggers need new real-time timestamps. Active keep SE is rebuilt
     // at its 1x sample phase while the chart/media clock stays untouched.
@@ -1086,6 +990,9 @@ export default function ChartSimulatorRuntime({
       noteSoundTimeSeconds > 0,
       noteSoundTimeSeconds === 0,
     );
+    if (currentTransport.phase === "playing") {
+      flushNoteSoundsThrough(noteSoundTimeSeconds);
+    }
   };
 
   if (loadState.status === "loading" || assetLoadState.status === "loading") {
@@ -1170,55 +1077,6 @@ export default function ChartSimulatorRuntime({
         )}
       </div>
 
-      <audio
-        ref={audioRef}
-        crossOrigin="anonymous"
-        src={audioUrl ?? undefined}
-        preload="auto"
-        onTimeUpdate={(event) => {
-          if (wrapLoopAtBoundary(event.currentTarget)) return;
-          updateTransport(syncBandoriChartMediaTime(
-            transportRef.current,
-            getStagePresentationTime(),
-          ));
-        }}
-        onPause={(event) => {
-          if (
-            event.currentTarget.paused
-            && shouldMediaPlayRef.current
-            && transportRef.current.phase === "playing"
-            && !event.currentTarget.ended
-          ) {
-            pauseAudioAndTransport(event.currentTarget);
-          }
-        }}
-        onWaiting={(event) => handleMediaWaiting(event.currentTarget)}
-        onPlaying={(event) => handleMediaPlaying(event.currentTarget)}
-        onError={(event) => handleMediaError(event.currentTarget)}
-        onEnded={(event) => {
-          if (!event.currentTarget.ended) return;
-          if (isLoopEnabledRef.current && shouldMediaPlayRef.current) {
-            if (!loopSeekPendingRef.current) {
-              seekToLoopStart(loopRangeRef.current, false);
-            }
-            return;
-          }
-          cancelPendingMediaOperation();
-          shouldMediaPlayRef.current = false;
-          isMediaPlaybackReadyRef.current = false;
-          frozenMediaTimeRef.current = durationSeconds;
-          flushNoteSoundsThrough(durationSeconds);
-          setMusicPlaybackAudioSessionActive(false);
-          updateTransport({
-            ...transportRef.current,
-            phase: "ended",
-            currentTimeSeconds: durationSeconds,
-            previewTimeSeconds: null,
-            shouldResumeAfterInteraction: false,
-          });
-        }}
-      />
-
       <div className="mt-5 space-y-3">
         <input
           type="range"
@@ -1247,7 +1105,7 @@ export default function ChartSimulatorRuntime({
           <button
             type="button"
             className={controlClassName(true)}
-            disabled={!audioUrl}
+            disabled={!audioUrl || !isMusicPrepared}
             onClick={isPlaying ? pause : () => void play()}
           >
             {isPlaying ? <Pause className="h-4 w-4" aria-hidden="true" /> : <Play className="h-4 w-4" aria-hidden="true" />}
