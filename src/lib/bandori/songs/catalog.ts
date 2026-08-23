@@ -9,17 +9,24 @@ import type {
   BandoriMusicMasterRecord,
 } from "@/lib/bandori-music-api-client";
 import {
+  BANDORI_SERVERS,
+  getBandoriServerFromCode,
   pickBandoriRegionalText,
   readBandoriRegionalNumberAt,
   type BandoriServer,
 } from "@/lib/bandori-server";
 
 export const BANDORI_SONG_TYPES = ["original", "cover", "extra"] as const;
-export const BANDORI_SONG_SORTS = ["release", "title", "level", "id"] as const;
-export const BANDORI_SONG_DIFFICULTY_FILTERS = [
-  "all",
-  ...BANDORI_CHART_DIFFICULTIES,
+export const BANDORI_SONG_SORTS = [
+  "id",
+  "title",
+  "level",
+  "release_jp",
+  "release_en",
+  "release_tw",
+  "release_cn",
 ] as const;
+export const BANDORI_SONG_DIFFICULTY_FILTERS = [...BANDORI_CHART_DIFFICULTIES] as const;
 export const BANDORI_SONG_MAIN_BAND_IDS = BANDORI_CHARACTER_GROUPS.map(
   (group) => group.bandId,
 );
@@ -43,12 +50,20 @@ export type BandoriSongCatalogEntry = {
   bandName: string;
   type: BandoriSongCatalogType;
   publishedAt: number;
+  publishedAtServer: BandoriServer;
+  publishedAtByServer: readonly [
+    number | null,
+    number | null,
+    number | null,
+    number | null,
+  ];
   difficultyLevels: Partial<Record<BandoriChartDifficulty, number>>;
   searchText: string;
 };
 
 export type BandoriSongsPageFilter = {
   query: string;
+  servers: BandoriServer[];
   bands: BandoriSongBandFilter[];
   types: BandoriSongType[];
   difficulty: BandoriSongDifficultyFilter;
@@ -71,24 +86,42 @@ const SONG_TAG_TYPE_MAP: Record<string, BandoriSongType> = {
   tie_up: "extra",
 };
 
+function getSongReleaseSortServer(sortBy: BandoriSongSort): BandoriServer | null {
+  return sortBy.startsWith("release_")
+    ? getBandoriServerFromCode(sortBy.slice("release_".length))
+    : null;
+}
+
+function getPublishedAtByServer(
+  publishedAt: unknown,
+): BandoriSongCatalogEntry["publishedAtByServer"] {
+  return [
+    readBandoriRegionalNumberAt(publishedAt, BANDORI_SERVERS[0]),
+    readBandoriRegionalNumberAt(publishedAt, BANDORI_SERVERS[1]),
+    readBandoriRegionalNumberAt(publishedAt, BANDORI_SERVERS[2]),
+    readBandoriRegionalNumberAt(publishedAt, BANDORI_SERVERS[3]),
+  ];
+}
+
+function getFirstRelease(
+  publishedAtByServer: BandoriSongCatalogEntry["publishedAtByServer"],
+): { timestamp: number; server: BandoriServer } | null {
+  return BANDORI_SERVERS.reduce<{ timestamp: number; server: BandoriServer } | null>(
+    (earliest, server) => {
+      const timestamp = publishedAtByServer[server];
+      if (timestamp === null || timestamp <= 0) return earliest;
+      return earliest === null || timestamp < earliest.timestamp
+        ? { timestamp, server }
+        : earliest;
+    },
+    null,
+  );
+}
+
 function parsePositiveInteger(value: string | null): number | null {
   if (value === null || !/^\d+$/u.test(value)) return null;
   const parsed = Number(value);
   return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null;
-}
-
-function isReleasedAt(
-  publishedAt: unknown,
-  closedAt: unknown,
-  server: BandoriServer,
-  now: number,
-): boolean {
-  const publishedTimestamp = readBandoriRegionalNumberAt(publishedAt, server);
-  const closedTimestamp = readBandoriRegionalNumberAt(closedAt, server);
-  return publishedTimestamp !== null
-    && publishedTimestamp > 0
-    && publishedTimestamp <= now
-    && (closedTimestamp === null || closedTimestamp <= 0 || closedTimestamp > now);
 }
 
 function isDifficultyReleased(
@@ -118,7 +151,7 @@ function resolveSongType(tag: unknown): BandoriSongCatalogType {
 function getDifficultyLevel(
   record: BandoriMusicMasterRecord,
   difficulty: BandoriChartDifficulty,
-  server: BandoriServer,
+  availableServers: readonly BandoriServer[],
   now: number,
 ): number | null {
   const difficultyIndex = String(BANDORI_CHART_DIFFICULTIES.indexOf(difficulty));
@@ -127,7 +160,7 @@ function getDifficultyLevel(
     !entry
     || !Number.isSafeInteger(entry.playLevel)
     || (entry.playLevel ?? 0) <= 0
-    || !isDifficultyReleased(entry, server, now)
+    || !availableServers.some((server) => isDifficultyReleased(entry, server, now))
   ) {
     return null;
   }
@@ -136,7 +169,7 @@ function getDifficultyLevel(
 
 export function buildBandoriSongCatalog(
   music: BandoriMusicMasterMap,
-  server: BandoriServer,
+  preferredTextServer: BandoriServer,
   options: BuildBandoriSongCatalogOptions,
 ): BandoriSongCatalogEntry[] {
   const now = options.now ?? Date.now();
@@ -148,16 +181,19 @@ export function buildBandoriSongCatalog(
       || !Number.isSafeInteger(songId)
       || songId <= 0
       || !Number.isSafeInteger(record.bandId)
-      || !isReleasedAt(record.publishedAt, record.closedAt, server, now)
     ) {
       return [];
     }
 
-    const publishedAt = readBandoriRegionalNumberAt(record.publishedAt, server);
-    if (publishedAt === null) return [];
+    const publishedAtByServer = getPublishedAtByServer(record.publishedAt);
+    const firstRelease = getFirstRelease(publishedAtByServer);
+    if (firstRelease === null) return [];
+    const availableServers = BANDORI_SERVERS.filter(
+      (server) => publishedAtByServer[server] !== null,
+    );
     const difficultyLevels = Object.fromEntries(
       BANDORI_CHART_DIFFICULTIES.flatMap((difficulty) => {
-        const level = getDifficultyLevel(record, difficulty, server, now);
+        const level = getDifficultyLevel(record, difficulty, availableServers, now);
         return level === null ? [] : [[difficulty, level]];
       }),
     ) as Partial<Record<BandoriChartDifficulty, number>>;
@@ -168,12 +204,22 @@ export function buildBandoriSongCatalog(
       songId,
       bandId,
       bandFilter: MAIN_BAND_ID_SET.has(bandId) ? bandId : "other",
-      title: pickBandoriRegionalText(record.musicTitle, server, server)
+      title: pickBandoriRegionalText(
+        record.musicTitle,
+        preferredTextServer,
+        preferredTextServer,
+      )
         ?? options.unknownTitle(songId),
-      bandName: pickBandoriRegionalText(record.bandName, server, server)
+      bandName: pickBandoriRegionalText(
+        record.bandName,
+        preferredTextServer,
+        preferredTextServer,
+      )
         ?? options.unknownBand,
       type: resolveSongType(record.tag),
-      publishedAt,
+      publishedAt: firstRelease.timestamp,
+      publishedAtServer: firstRelease.server,
+      publishedAtByServer,
       difficultyLevels,
       searchText: collectSearchText(record, songId),
     }];
@@ -184,7 +230,6 @@ function selectedLevels(
   entry: BandoriSongCatalogEntry,
   difficulty: BandoriSongDifficultyFilter,
 ): number[] {
-  if (difficulty === "all") return Object.values(entry.difficultyLevels);
   const level = entry.difficultyLevels[difficulty];
   return level === undefined ? [] : [level];
 }
@@ -205,9 +250,13 @@ export function filterBandoriSongCatalog(
   const shouldFilterBands = filter.bands.length < BANDORI_SONG_BAND_FILTERS.length;
   const shouldFilterTypes = filter.types.length < BANDORI_SONG_TYPES.length;
   const direction = filter.sortDirection === "asc" ? 1 : -1;
+  const releaseServer = getSongReleaseSortServer(filter.sortBy);
 
   return catalog.filter((entry) => {
     if (query && !entry.searchText.includes(query)) return false;
+    if (!filter.servers.some((server) => entry.publishedAtByServer[server] !== null)) {
+      return false;
+    }
     if (shouldFilterBands && !filter.bands.includes(entry.bandFilter)) return false;
     if (
       shouldFilterTypes
@@ -227,7 +276,17 @@ export function filterBandoriSongCatalog(
     else if (filter.sortBy === "level") {
       comparison = sortLevel(left, filter.difficulty) - sortLevel(right, filter.difficulty);
     } else if (filter.sortBy === "id") comparison = left.songId - right.songId;
-    else comparison = left.publishedAt - right.publishedAt;
+    else if (releaseServer !== null) {
+      const leftTimestamp = left.publishedAtByServer[releaseServer] ?? 0;
+      const rightTimestamp = right.publishedAtByServer[releaseServer] ?? 0;
+      if (leftTimestamp <= 0 || rightTimestamp <= 0) {
+        if (leftTimestamp <= 0 && rightTimestamp <= 0) {
+          return left.songId - right.songId;
+        }
+        return leftTimestamp <= 0 ? 1 : -1;
+      }
+      comparison = leftTimestamp - rightTimestamp;
+    }
     return comparison * direction || left.songId - right.songId;
   });
 }
@@ -238,6 +297,14 @@ function parseBandSelection(rawValue: string | null): BandoriSongBandFilter[] {
   return [...new Set(rawValue.split(",").flatMap((value) => {
     if (!available.has(value)) return [];
     return [value === "other" ? "other" : Number(value) as BandoriSongBandFilter];
+  }))];
+}
+
+function parseServerSelection(rawValue: string | null): BandoriServer[] {
+  if (rawValue === null) return [...BANDORI_SERVERS];
+  return [...new Set(rawValue.split(",").flatMap((value) => {
+    const server = getBandoriServerFromCode(value);
+    return server === null ? [] : [server];
   }))];
 }
 
@@ -255,14 +322,15 @@ export function parseBandoriSongsPageFilter(
   const rawDifficulty = searchParams.get("difficulty");
   const difficulty = BANDORI_SONG_DIFFICULTY_FILTERS.includes(
     rawDifficulty as BandoriSongDifficultyFilter,
-  ) ? rawDifficulty as BandoriSongDifficultyFilter : "all";
+  ) ? rawDifficulty as BandoriSongDifficultyFilter : "expert";
   const rawSort = searchParams.get("sort");
   const sortBy = BANDORI_SONG_SORTS.includes(rawSort as BandoriSongSort)
     ? rawSort as BandoriSongSort
-    : "release";
+    : "id";
 
   return {
     query: searchParams.get("q") ?? "",
+    servers: parseServerSelection(searchParams.get("available")),
     bands: parseBandSelection(searchParams.get("bands")),
     types: parseTypeSelection(searchParams.get("types")),
     difficulty,

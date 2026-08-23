@@ -557,17 +557,17 @@
   "songs": {
     "page": {
       "title": "Song Catalog",
-      "displayServer": "Display server",
       "resultCount": "{count} songs",
       "showMore": "Show {count} more"
     },
     "filters": {
       "searchPlaceholder": "Search song title, band, or song ID",
       "otherBand": "Other",
-      "allDifficulties": "All difficulties",
+      "serverAvailabilityAria": "Filter songs available on the {server} server",
       "levelMin": "Min",
       "levelMax": "Max",
       "rows": {
+        "serverAvailability": "Server",
         "band": "Band",
         "type": "Type",
         "difficulty": "Difficulty",
@@ -588,10 +588,13 @@
         "special": "SPECIAL"
       },
       "sort": {
-        "release": "Release date",
+        "id": "Song ID",
         "title": "Song title",
         "level": "Song level",
-        "id": "Song ID"
+        "release_jp": "Release date (JP)",
+        "release_en": "Release date (EN)",
+        "release_tw": "Release date (TW)",
+        "release_cn": "Release date (CN)"
       },
       "sortDirection": {
         "desc": "Descending",

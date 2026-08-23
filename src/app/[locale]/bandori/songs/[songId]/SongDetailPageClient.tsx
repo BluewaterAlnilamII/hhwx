@@ -13,11 +13,10 @@ import MusicArtwork from "@/components/music-player/MusicArtwork";
 import { usePathname, useRouter } from "@/i18n/navigation";
 import type { BandoriChartDifficulty } from "@/lib/bandori-master-contract";
 import {
-  getBandoriServerFromCode,
   pickBandoriRegionalText,
+  type BandoriServer,
 } from "@/lib/bandori-server";
 import { cn } from "@/lib/utils";
-import { useBandoriPreferredServer } from "@/store/useBandoriPreferencesStore";
 
 export type SongDetailRegionalTextSlots = [
   string | null,
@@ -67,26 +66,34 @@ export default function SongDetailPageClient({
 }: SongDetailPageClientProps) {
   const t = useTranslations("bandori.songs");
   const locale = useLocale();
-  const preferredServer = useBandoriPreferredServer();
+  const preferredTextServer: BandoriServer = locale === "en" ? 1 : 3;
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
   const [isDifficultyPending, startDifficultyTransition] = useTransition();
-  const displayServer = getBandoriServerFromCode(searchParams.get("server")) ?? preferredServer;
   const activeView = searchParams.get("view") === "simulator" ? "simulator" : "info";
-  const title = pickBandoriRegionalText(titleSlots, displayServer, displayServer) ?? t("unknownTitle", { songId });
-  const bandName = pickBandoriRegionalText(bandNameSlots, displayServer, displayServer) ?? t("unknownBand");
+  const title = pickBandoriRegionalText(
+    titleSlots,
+    preferredTextServer,
+    preferredTextServer,
+  ) ?? t("unknownTitle", { songId });
+  const bandName = pickBandoriRegionalText(
+    bandNameSlots,
+    preferredTextServer,
+    preferredTextServer,
+  ) ?? t("unknownBand");
   const selectedOption = difficulties.find((option) => option.difficulty === selectedDifficulty)
     ?? difficulties[0];
-  const playLevel = selectedOption.playLevels[displayServer]
-    ?? selectedOption.playLevels.find((value) => value !== null)
+  const playLevel = selectedOption.playLevels.find((value) => value !== null)
     ?? null;
 
   useEffect(() => {
     const rawView = searchParams.get("view");
-    if (rawView === null || rawView === "simulator") return;
+    const hasInvalidView = rawView !== null && rawView !== "simulator";
+    if (!hasInvalidView && !searchParams.has("server")) return;
     const next = new URLSearchParams(searchParams.toString());
-    next.delete("view");
+    if (hasInvalidView) next.delete("view");
+    next.delete("server");
     const query = next.toString();
     router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
   }, [pathname, router, searchParams]);

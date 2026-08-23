@@ -3,7 +3,7 @@
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { ListMusic, Loader2, SearchX } from "lucide-react";
 import { useSearchParams } from "next/navigation";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { useBandoriMusicMaster } from "@/hooks/useBandoriMusicMaster";
 import { useBandoriMusicAssetIndex } from "@/hooks/useBandoriPublicAssetIndex";
 import { usePathname, useRouter } from "@/i18n/navigation";
@@ -16,16 +16,11 @@ import {
   type BandoriSongsPageFilter,
 } from "@/lib/bandori/songs/catalog";
 import {
+  BANDORI_SERVERS,
   getBandoriServerCode,
-  getBandoriServerFromCode,
   type BandoriServer,
 } from "@/lib/bandori-server";
-import {
-  useBandoriPreferencesStore,
-  useBandoriPreferredServer,
-} from "@/store/useBandoriPreferencesStore";
 import BandoriPageShell from "../BandoriPageShell";
-import BandoriCardServerSwitcher from "../cards/_components/BandoriCardServerSwitcher";
 import BandoriSongDetailedRow from "./_components/BandoriSongDetailedRow";
 import BandoriSongFilterControls from "./_components/BandoriSongFilterControls";
 
@@ -48,12 +43,11 @@ function setListParam<T extends string | number>(
 
 export default function SongsPageClient() {
   const t = useTranslations("bandori.songs");
+  const locale = useLocale();
   const searchParams = useSearchParams();
   const pathname = usePathname();
   const router = useRouter();
-  const preferredServer = useBandoriPreferredServer();
-  const setPreferredServer = useBandoriPreferencesStore((state) => state.setPreferredServer);
-  const selectedServer = getBandoriServerFromCode(searchParams.get("server")) ?? preferredServer;
+  const preferredTextServer: BandoriServer = locale === "en" ? 1 : 3;
   const musicMaster = useBandoriMusicMaster();
   const musicAssetIndex = useBandoriMusicAssetIndex();
   const [visibleState, setVisibleState] = useState({ key: "", count: INITIAL_VISIBLE_COUNT });
@@ -65,6 +59,13 @@ export default function SongsPageClient() {
   useEffect(() => {
     pendingFilterRef.current = filter;
   }, [filter]);
+  useEffect(() => {
+    if (!searchParams.has("server")) return;
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete("server");
+    const query = params.toString();
+    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+  }, [pathname, router, searchParams]);
   const deferredQuery = useDeferredValue(filter.query);
   const deferredFilter = useMemo(
     () => ({ ...filter, query: deferredQuery }),
@@ -72,12 +73,12 @@ export default function SongsPageClient() {
   );
   const catalog = useMemo(() => buildBandoriSongCatalog(
     musicMaster.music ?? {},
-    selectedServer,
+    preferredTextServer,
     {
       unknownTitle: (songId) => t("unknownTitle", { songId }),
       unknownBand: t("unknownBand"),
     },
-  ), [musicMaster.music, selectedServer, t]);
+  ), [musicMaster.music, preferredTextServer, t]);
   const filteredSongs = useMemo(
     () => filterBandoriSongCatalog(catalog, deferredFilter),
     [catalog, deferredFilter],
@@ -89,22 +90,26 @@ export default function SongsPageClient() {
 
   const replaceFilter = (
     nextFilter: BandoriSongsPageFilter,
-    options: { server?: BandoriServer } = {},
   ) => {
     const params = new URLSearchParams(searchParams.toString());
-    const server = options.server ?? selectedServer;
-    params.set("server", getBandoriServerCode(server));
+    params.delete("server");
     if (nextFilter.query.trim()) params.set("q", nextFilter.query.trim());
     else params.delete("q");
+    setListParam(
+      params,
+      "available",
+      nextFilter.servers.map(getBandoriServerCode),
+      BANDORI_SERVERS.map(getBandoriServerCode),
+    );
     setListParam(params, "bands", nextFilter.bands, BANDORI_SONG_BAND_FILTERS);
     setListParam(params, "types", nextFilter.types, BANDORI_SONG_TYPES);
-    if (nextFilter.difficulty === "all") params.delete("difficulty");
+    if (nextFilter.difficulty === "expert") params.delete("difficulty");
     else params.set("difficulty", nextFilter.difficulty);
     if (nextFilter.minLevel === null) params.delete("minLevel");
     else params.set("minLevel", String(nextFilter.minLevel));
     if (nextFilter.maxLevel === null) params.delete("maxLevel");
     else params.set("maxLevel", String(nextFilter.maxLevel));
-    if (nextFilter.sortBy === "release") params.delete("sort");
+    if (nextFilter.sortBy === "id") params.delete("sort");
     else params.set("sort", nextFilter.sortBy);
     if (nextFilter.sortDirection === "desc") params.delete("direction");
     else params.set("direction", nextFilter.sortDirection);
@@ -120,32 +125,19 @@ export default function SongsPageClient() {
 
   const clearFilter = () => {
     pendingFilterRef.current = parseBandoriSongsPageFilter(new URLSearchParams());
-    const params = new URLSearchParams({ server: getBandoriServerCode(selectedServer) });
-    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
-  };
-
-  const handleServerChange = (server: BandoriServer) => {
-    setPreferredServer(server);
-    replaceFilter(pendingFilterRef.current, { server });
+    router.replace(pathname, { scroll: false });
   };
 
   return (
     <BandoriPageShell contentClassName="max-w-6xl">
       <section className="rounded-3xl border border-[var(--theme-color-border-default)] bg-[var(--theme-color-surface-background)] p-5 shadow-[var(--theme-shadow-surface-raised)] sm:p-8 dark:border-slate-700 dark:bg-[#111827]">
-        <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
-          <div className="flex items-center gap-3">
-            <span className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-sky-100 text-sky-700 dark:bg-sky-950/60 dark:text-sky-300">
-              <ListMusic className="h-6 w-6" aria-hidden="true" />
-            </span>
-            <h1 className="text-2xl font-black tracking-tight text-[var(--theme-color-text-default)] sm:text-3xl dark:text-slate-100">
-              {t("page.title")}
-            </h1>
-          </div>
-          <BandoriCardServerSwitcher
-            selectedServer={selectedServer}
-            label={t("page.displayServer")}
-            onChange={handleServerChange}
-          />
+        <div className="flex items-center gap-3">
+          <span className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-sky-100 text-sky-700 dark:bg-sky-950/60 dark:text-sky-300">
+            <ListMusic className="h-6 w-6" aria-hidden="true" />
+          </span>
+          <h1 className="text-2xl font-black tracking-tight text-[var(--theme-color-text-default)] sm:text-3xl dark:text-slate-100">
+            {t("page.title")}
+          </h1>
         </div>
       </section>
 
@@ -177,8 +169,7 @@ export default function SongsPageClient() {
               key={entry.songId}
               entry={entry}
               assetIndex={musicAssetIndex.value}
-              displayServer={selectedServer}
-              href={`/bandori/songs/${entry.songId}?server=${getBandoriServerCode(selectedServer)}`}
+              href={`/bandori/songs/${entry.songId}`}
             />
           ))}
           {remainingCount > 0 ? (

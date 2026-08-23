@@ -9,7 +9,7 @@ import {
   buildBandoriPublicAssetUrl,
   type BandoriMusicAssetIndex,
 } from "@/lib/bandori-public-asset-index";
-import { getBandoriServerTimeZone, type BandoriServer } from "@/lib/bandori-server";
+import { getBandoriServerTimeZone } from "@/lib/bandori-server";
 import type { BandoriSongCatalogEntry } from "@/lib/bandori/songs/catalog";
 
 const DIFFICULTY_CLASSES: Record<BandoriChartDifficulty, string> = {
@@ -23,14 +23,12 @@ const DIFFICULTY_CLASSES: Record<BandoriChartDifficulty, string> = {
 type BandoriSongDetailedRowProps = {
   entry: BandoriSongCatalogEntry;
   assetIndex: BandoriMusicAssetIndex | null;
-  displayServer: BandoriServer;
   href: string;
 };
 
 export default function BandoriSongDetailedRow({
   entry,
   assetIndex,
-  displayServer,
   href,
 }: BandoriSongDetailedRowProps) {
   const locale = useLocale();
@@ -39,7 +37,7 @@ export default function BandoriSongDetailedRow({
     assetIndex?.songs[String(entry.songId)]?.files.thumb,
   );
   const releaseDate = new Intl.DateTimeFormat(locale, {
-    timeZone: getBandoriServerTimeZone(displayServer),
+    timeZone: getBandoriServerTimeZone(entry.publishedAtServer),
     year: "numeric",
     month: "2-digit",
     day: "2-digit",

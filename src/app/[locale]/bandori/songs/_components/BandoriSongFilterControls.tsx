@@ -3,6 +3,7 @@
 import { type ReactNode } from "react";
 import { ArrowDownWideNarrow, ArrowUpNarrowWide, Filter, Search, X } from "lucide-react";
 import { useTranslations } from "next-intl";
+import BandoriServerIcon from "@/components/bandori/BandoriServerIcon";
 import { buildBandoriCardBandIconUrl } from "@/lib/bandori-builtin-resources";
 import { BANDORI_CHARACTER_GROUPS } from "@/lib/bandori-character-groups";
 import {
@@ -14,6 +15,7 @@ import {
   type BandoriSongType,
   type BandoriSongsPageFilter,
 } from "@/lib/bandori/songs/catalog";
+import { BANDORI_SERVERS, getBandoriServerCode } from "@/lib/bandori-server";
 
 type BandoriSongFilterControlsProps = {
   filter: BandoriSongsPageFilter;
@@ -113,6 +115,7 @@ export default function BandoriSongFilterControls({
   const t = useTranslations("bandori.songs.filters");
   const bandLabel = t("rows.band");
   const typeLabel = t("rows.type");
+  const serverLabel = t("rows.serverAvailability");
 
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
@@ -144,6 +147,35 @@ export default function BandoriSongFilterControls({
       </div>
 
       <div className="mt-4 space-y-3">
+        <FilterRow label={serverLabel}>
+          {BANDORI_SERVERS.map((server) => {
+            const code = getBandoriServerCode(server).toUpperCase();
+            return (
+              <SelectionButton
+                key={server}
+                title={t("serverAvailabilityAria", { server: code })}
+                isSelected={filter.servers.includes(server)}
+                onClick={() => onFilterChange({
+                  servers: toggleSelection(filter.servers, server),
+                })}
+                className="gap-1.5 px-2.5"
+              >
+                <BandoriServerIcon server={server} size={22} isDecorative />
+                <span className="text-xs font-black">{code}</span>
+              </SelectionButton>
+            );
+          })}
+          <ToggleAllButton
+            isSelected={areAllSelected(filter.servers, BANDORI_SERVERS)}
+            label={serverLabel}
+            onClick={() => onFilterChange({
+              servers: areAllSelected(filter.servers, BANDORI_SERVERS)
+                ? []
+                : [...BANDORI_SERVERS],
+            })}
+          />
+        </FilterRow>
+
         <FilterRow label={bandLabel}>
           {BANDORI_CHARACTER_GROUPS.map((group) => (
             <SelectionButton
@@ -214,12 +246,12 @@ export default function BandoriSongFilterControls({
           {BANDORI_SONG_DIFFICULTY_FILTERS.map((difficulty) => (
             <SelectionButton
               key={difficulty}
-              title={difficulty === "all" ? t("allDifficulties") : t(`difficulties.${difficulty}`)}
+              title={t(`difficulties.${difficulty}`)}
               isSelected={filter.difficulty === difficulty}
               onClick={() => onFilterChange({ difficulty })}
               className="px-3 text-xs"
             >
-              {difficulty === "all" ? t("actions.all") : t(`difficulties.${difficulty}`)}
+              {t(`difficulties.${difficulty}`)}
             </SelectionButton>
           ))}
         </FilterRow>

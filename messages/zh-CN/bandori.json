@@ -557,21 +557,21 @@
   "songs": {
     "page": {
       "title": "歌曲图鉴",
-      "displayServer": "显示服务器",
       "resultCount": "{count} 首歌曲",
       "showMore": "再显示 {count} 首"
     },
     "filters": {
       "searchPlaceholder": "搜索歌曲名、乐队名或歌曲 ID",
       "otherBand": "其他",
-      "allDifficulties": "全部难度",
+      "serverAvailabilityAria": "筛选在 {server} 服务器有效的歌曲",
       "levelMin": "最低",
       "levelMax": "最高",
       "rows": {
+        "serverAvailability": "服务器",
         "band": "乐队",
         "type": "类型",
-        "difficulty": "难度",
-        "level": "歌曲等级",
+        "difficulty": "难易度",
+        "level": "乐曲等级",
         "sort": "排序"
       },
       "types": {
@@ -588,10 +588,13 @@
         "special": "SPECIAL"
       },
       "sort": {
-        "release": "发布日期",
+        "id": "歌曲 ID",
         "title": "歌曲名",
-        "level": "歌曲等级",
-        "id": "歌曲 ID"
+        "level": "乐曲等级",
+        "release_jp": "发布日期（JP）",
+        "release_en": "发布日期（EN）",
+        "release_tw": "发布日期（TW）",
+        "release_cn": "发布日期（CN）"
       },
       "sortDirection": {
         "desc": "倒序",
