@@ -644,7 +644,15 @@
     },
     "simulator": {
       "title": "谱面模拟器",
-      "loading": "正在载入无损谱面与模拟器内核...",
+      "loading": {
+        "simulator": "正在加载模拟器...",
+        "chart": "正在加载谱面...",
+        "manifest": "正在加载资源清单...",
+        "performance": "正在加载演出资源...",
+        "sound": "正在加载音效...",
+        "music": "正在加载音乐...",
+        "stage": "正在初始化模拟舞台..."
+      },
       "retry": "重试",
       "unavailableTitle": "当前谱面无法载入",
       "tabs": {
@@ -692,7 +700,6 @@
         "invalidNoteRange": "Note 区间必须是谱面物量内的递增整数范围"
       },
       "stageAria": "谱面模拟舞台",
-      "stageLoading": "正在载入谱面模拟舞台…",
       "stageResourceUnavailable": "本地缺少当前舞台需要的 JP 解包资源，未使用其它资源回退",
       "stageNoteContractUnavailable": "该谱面含有尚未确认的 Note 组合；Note 图层已失败关闭，静态舞台仍可检查",
       "rendererUnavailable": "当前浏览器无法启动 Pixi 舞台",

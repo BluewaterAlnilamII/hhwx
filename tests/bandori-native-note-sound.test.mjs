@@ -294,7 +294,18 @@ test("the shared AudioContext owns decoded music, exact anchors, rate changes, a
     assert.equal(fetchCalls[0][1].cache, "force-cache");
     assert.equal(fetchCalls[0][1].credentials, "omit");
     assert.equal(fetchCalls[0][1].signal, controller.signal);
-    await runtime.prepare();
+    const loadedCueUrls = [];
+    await runtime.prepareCueBank(cueBank, (url) => loadedCueUrls.push(url));
+    assert.deepEqual(
+      new Set(loadedCueUrls),
+      new Set(Object.values(cueBank.cueUrls)),
+    );
+    const cachedCueUrls = [];
+    await runtime.prepareCueBank(cueBank, (url) => cachedCueUrls.push(url));
+    assert.deepEqual(
+      new Set(cachedCueUrls),
+      new Set(Object.values(cueBank.cueUrls)),
+    );
     await runtime.resume();
     const context = FakeAudioContext.created;
     assert.ok(context);
@@ -400,7 +411,7 @@ test("the simulator owns one shared music and polyphonic Note SE AudioContext", 
   assert.match(runtime, /activeLoops = new Map<string, ActiveLoop>/u);
   assert.match(runtime, /buffersByCueBank/u);
   assert.match(runtime, /buffersByCueBank\.has\(this\.activeCueBankId\)/u);
-  assert.match(runtime, /prepareCueBank\(cueBank/u);
+  assert.match(runtime, /prepareCueBank\([\s\S]*cueBank/u);
   assert.match(runtime, /selectCueBank\(cueBankId/u);
   assert.match(runtime, /prepareMusic\(url: string, signal\?: AbortSignal\)/u);
   assert.match(runtime, /source\.connect\(context\.destination\)/u);
@@ -422,7 +433,7 @@ test("the simulator owns one shared music and polyphonic Note SE AudioContext", 
   assert.doesNotMatch(pageRuntime, /preservesPitch/u);
   assert.match(runtime, /source\.playbackRate\.setValueAtTime/u);
   assert.match(pageRuntime, /createResolvedNoteSoundCueBank/u);
-  assert.match(pageRuntime, /runtime\.prepareCueBank\(cueBank\)/u);
+  assert.match(pageRuntime, /runtime\.prepareCueBank\(cueBank, \(url\) =>/u);
   assert.match(pageRuntime, /runtime\.prepareMusic\(audioUrl, controller\.signal\)/u);
   assert.doesNotMatch(pageRuntime, /NOTE_SOUND_CUE_BANKS/u);
   assert.match(pageRuntime, /requestAnimationFrame\(updatePlayback\)/u);

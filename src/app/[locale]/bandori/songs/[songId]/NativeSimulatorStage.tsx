@@ -172,11 +172,12 @@ type NativeSimulatorStageProps = {
   isMirrored: boolean;
   laneEffectEnabled: boolean;
   limitedPerformanceSkin: BandoriLimitedPerformanceSkin | null;
-  loadingLabel: string;
+  loadId: string;
   noteApproachTimeScale: number;
   noteSpeed: number;
   noteSkin: BandoriNativeNoteSkin;
   noteContractErrorLabel: string;
+  onLoadProgress: (progress: NativeSimulatorStageLoadProgress) => void;
   rendererErrorLabel: string;
   resourceErrorLabel: string;
   resolveAssetUrl: BandoriChartSimulatorAssetResolver;
@@ -203,6 +204,13 @@ type NoteDisplay = {
   visual: BandoriNativeNoteVisual;
 };
 
+export type NativeSimulatorStageLoadProgress = {
+  readonly completedResources: number;
+  readonly loadId: string;
+  readonly phase: "resources" | "initializing" | "ready" | "error";
+  readonly totalResources: number | null;
+};
+
 type HabahiroTexture = {
   anchorX: number;
   anchorY: number;
@@ -220,17 +228,10 @@ const LIMITED_SPRITE_ANCHORS_SCHEMA =
 
 async function loadNativeSpriteAnchors(
   url: string | null,
-  resolveAssetUrl: BandoriChartSimulatorAssetResolver,
+  loadJson: (logicalUrl: string) => Promise<unknown>,
 ): Promise<ReadonlyMap<string, NativeSpriteAnchor>> {
   if (!url) return new Map();
-  const response = await fetch(resolveAssetUrl(url), {
-    cache: "force-cache",
-    credentials: "omit",
-  });
-  if (!response.ok) {
-    throw new Error(`Unable to load limited Sprite anchors: ${response.status}`);
-  }
-  const payload: unknown = await response.json();
+  const payload = await loadJson(url);
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
     throw new Error("Limited Sprite anchor contract must be an object");
   }
@@ -784,7 +785,8 @@ function effectTint(red: number, green: number, blue: number): number {
 
 async function loadLimitedPerformanceEffects(
   skin: BandoriLimitedPerformanceSkin | null,
-  resolveAssetUrl: BandoriChartSimulatorAssetResolver,
+  loadJson: (logicalUrl: string) => Promise<unknown>,
+  loadTexture: (logicalUrl: string) => Promise<Texture>,
 ): Promise<LoadedLimitedPerformanceEffects | null> {
   if (!skin?.effects) return null;
   const effects = skin.effects;
@@ -800,17 +802,10 @@ async function loadLimitedPerformanceEffects(
   };
   const [recipeEntries, textureEntries] = await Promise.all([
     Promise.all(Object.entries(recipeUrls).map(async ([key, url]) => {
-      const response = await fetch(resolveAssetUrl(url), {
-        cache: "force-cache",
-        credentials: "omit",
-      });
-      if (!response.ok) {
-        throw new Error(`Limited performance effect recipe failed: ${url}`);
-      }
-      return [key, await response.json()] as const;
+      return [key, await loadJson(url)] as const;
     })),
     Promise.all(Object.entries(effects.resources).map(async ([key, url]) => (
-      [key, await Assets.load<Texture>(resolveAssetUrl(url))] as const
+      [key, await loadTexture(url)] as const
     ))),
   ]);
   return {
@@ -1725,11 +1720,12 @@ export default function NativeSimulatorStage({
   isMirrored,
   laneEffectEnabled,
   limitedPerformanceSkin,
-  loadingLabel,
+  loadId,
   noteApproachTimeScale,
   noteSpeed,
   noteSkin,
   noteContractErrorLabel,
+  onLoadProgress,
   rendererErrorLabel,
   resourceErrorLabel,
   resolveAssetUrl,
@@ -1779,6 +1775,12 @@ export default function NativeSimulatorStage({
     const localFrameTextures: Texture[] = [];
     const localShaders: Shader[] = [];
     let disposed = false;
+    onLoadProgress({
+      completedResources: 0,
+      loadId,
+      phase: "resources",
+      totalResources: null,
+    });
 
     const initialize = async () => {
       try {
@@ -1791,7 +1793,15 @@ export default function NativeSimulatorStage({
           resolution: Math.min(window.devicePixelRatio || 1, 2),
         });
       } catch {
-        if (!disposed) setStatus("rendererError");
+        if (!disposed) {
+          setStatus("rendererError");
+          onLoadProgress({
+            completedResources: 0,
+            loadId,
+            phase: "error",
+            totalResources: null,
+          });
+        }
         return;
       }
       if (disposed) {
@@ -1810,7 +1820,15 @@ export default function NativeSimulatorStage({
         chartVisuals = prepareBandoriNativeChartVisuals(compiled, isMirrored);
       } catch (error) {
         if (error instanceof BandoriNativeNoteContractError) {
-          if (!disposed) setStatus("noteContractError");
+          if (!disposed) {
+            setStatus("noteContractError");
+            onLoadProgress({
+              completedResources: 0,
+              loadId,
+              phase: "error",
+              totalResources: null,
+            });
+          }
           return;
         }
         throw error;
@@ -1840,7 +1858,15 @@ export default function NativeSimulatorStage({
           }
         }
       } catch {
-        if (!disposed) setStatus("noteContractError");
+        if (!disposed) {
+          setStatus("noteContractError");
+          onLoadProgress({
+            completedResources: 0,
+            loadId,
+            phase: "error",
+            totalResources: null,
+          });
+        }
         return;
       }
       const usedFrameIds = new Set<BandoriNativeNoteFrameId>();
@@ -1859,26 +1885,143 @@ export default function NativeSimulatorStage({
       let noteSpriteAnchors = new Map<string, NativeSpriteAnchor>();
       let limitedEffects: LoadedLimitedPerformanceEffects | null = null;
       let spriteFrameTextures = new Map<BandoriNativeNoteFrameId, Texture>();
+      let loadedResourceTotal: number | null = null;
       try {
-        const loadTexture = (logicalUrl: string) => (
-          Assets.load<Texture>(resolveAssetUrl(logicalUrl))
-        );
         const usesLimitedTapEffect = limitedPerformanceSkin?.coverage.includes(
           "tapEffect",
         ) === true;
         const usesLimitedDirectionalEffect = limitedPerformanceSkin?.coverage.includes(
           "directionalFlickEffect",
         ) === true;
+        const ordinaryTapTextureUrls = usesLimitedTapEffect ? [] : [
+          BANDORI_NATIVE_TAP_EFFECT_ATLAS_1_URL,
+          BANDORI_NATIVE_TAP_EFFECT_ATLAS_2_URL,
+          BANDORI_NATIVE_SWIPE_EFFECT_TEXTURE_URLS["tap-light"],
+          BANDORI_NATIVE_SWIPE_EFFECT_TEXTURE_URLS["tap-circle"],
+          BANDORI_NATIVE_HOLD_EFFECT_TEXTURE_URLS["tap-default-particle"],
+        ];
+        const rhythmSupportUrls = Array.from(
+          { length: 7 },
+          (_, lane) => getBandoriNativeRhythmSupportNoteUrl(noteSkin, lane),
+        );
+        const longFlashUrls = Array.from(
+          { length: 7 },
+          (_, lane) => getBandoriNativeLongFlashUrl(noteSkin, lane),
+        );
+        const laneEffectUrls = [
+          getBandoriNativeLaneEffectUrl("NoteLaneEffect_1.png"),
+          getBandoriNativeLaneEffectUrl("NoteLaneEffect_2.png"),
+          getBandoriNativeLaneEffectUrl("NoteLaneEffect_3.png"),
+          getBandoriNativeLaneEffectUrl("NoteLaneEffect_4.png"),
+        ];
+        const spriteFrameUrls = [...usedFrameIds].flatMap((frameId) => {
+          const url = getBandoriNativeNoteFrameUrl(
+            frameId,
+            noteSkin,
+            directionalFlickSkin,
+          );
+          return url ? [url] : [];
+        });
+        const habahiroUrls = [...habahiroSpriteNames].map(
+          getBandoriHabahiroSpriteUrl,
+        );
+        const effectRecipeUrls = limitedPerformanceSkin?.effects
+          ? [
+              ...Object.values(limitedPerformanceSkin.effects.recipes),
+              ...Object.values(limitedPerformanceSkin.effects.directionalRecipes),
+            ]
+          : [];
+        const effectTextureUrls = limitedPerformanceSkin?.effects
+          ? Object.values(limitedPerformanceSkin.effects.resources)
+          : [];
+        const requiredLogicalUrls = [
+          ...backgroundSkin.layers.map((layer) => layer.textureUrl),
+          fieldSkin.textureUrl,
+          fieldSkin.judgmentLineTextureUrl,
+          ...(noteSkin.frameSource === "atlas" ? [noteSkin.atlasUrl] : []),
+          ...(directionalFlickSkin.frameSource === "atlas"
+            ? [directionalFlickSkin.atlasUrl]
+            : []),
+          noteSkin.longNoteLineUrl,
+          noteSkin.curveSlideNoteLineUrl,
+          noteSkin.syncLineUrl,
+          directionalFlickSkin.lineLeftUrl,
+          directionalFlickSkin.lineRightUrl,
+          ...ordinaryTapTextureUrls,
+          limitedPerformanceSkin?.judgmentPerfectTextureUrl
+            ?? BANDORI_NATIVE_PERFECT_JUDGMENT_URL,
+          BANDORI_NATIVE_COMBO_UNIT_URL,
+          BANDORI_NATIVE_ALL_PERFECT_COMBO_UNIT_URL,
+          ...BANDORI_NATIVE_COMBO_DIGIT_URLS,
+          ...BANDORI_NATIVE_ALL_PERFECT_COMBO_DIGIT_URLS,
+          ...rhythmSupportUrls,
+          ...longFlashUrls,
+          ...laneEffectUrls,
+          ...(usesLimitedDirectionalEffect
+            ? []
+            : BANDORI_NATIVE_DIRECTIONAL_EFFECT_FRAME_URLS),
+          ...spriteFrameUrls,
+          ...habahiroUrls,
+          ...(noteSkin.spriteAnchorsUrl ? [noteSkin.spriteAnchorsUrl] : []),
+          ...effectRecipeUrls,
+          ...effectTextureUrls,
+        ];
+        const plannedResourceUrls = new Set(
+          requiredLogicalUrls.map(resolveAssetUrl),
+        );
+        const completedResourceUrls = new Set<string>();
+        const totalResources = plannedResourceUrls.size;
+        loadedResourceTotal = totalResources;
+        onLoadProgress({
+          completedResources: 0,
+          loadId,
+          phase: "resources",
+          totalResources,
+        });
+        const markResourceComplete = (resolvedUrl: string) => {
+          if (
+            disposed
+            || !plannedResourceUrls.has(resolvedUrl)
+            || completedResourceUrls.has(resolvedUrl)
+          ) return;
+          completedResourceUrls.add(resolvedUrl);
+          onLoadProgress({
+            completedResources: completedResourceUrls.size,
+            loadId,
+            phase: "resources",
+            totalResources,
+          });
+        };
+        const loadTexture = async (logicalUrl: string) => {
+          const resolvedUrl = resolveAssetUrl(logicalUrl);
+          const texture = await Assets.load<Texture>(resolvedUrl);
+          markResourceComplete(resolvedUrl);
+          return texture;
+        };
+        const loadJson = async (logicalUrl: string): Promise<unknown> => {
+          const resolvedUrl = resolveAssetUrl(logicalUrl);
+          const response = await fetch(resolvedUrl, {
+            cache: "force-cache",
+            credentials: "omit",
+          });
+          if (!response.ok) {
+            throw new Error(`Simulator resource failed: ${logicalUrl}`);
+          }
+          const payload: unknown = await response.json();
+          markResourceComplete(resolvedUrl);
+          return payload;
+        };
         const loadOrdinaryTapTexture = (logicalUrl: string) => (
           usesLimitedTapEffect ? Promise.resolve(Texture.EMPTY) : loadTexture(logicalUrl)
         );
         const limitedEffectsPromise = loadLimitedPerformanceEffects(
           limitedPerformanceSkin,
-          resolveAssetUrl,
+          loadJson,
+          loadTexture,
         );
         const noteSpriteAnchorsPromise = loadNativeSpriteAnchors(
           noteSkin.spriteAnchorsUrl,
-          resolveAssetUrl,
+          loadJson,
         );
         const spriteFramePromise = Promise.all([...usedFrameIds].map(async (frameId) => {
           const url = getBandoriNativeNoteFrameUrl(
@@ -1922,16 +2065,13 @@ export default function NativeSimulatorStage({
           ),
           ...Array.from(
             { length: 7 },
-            (_, lane) => loadTexture(getBandoriNativeRhythmSupportNoteUrl(noteSkin, lane)),
+            (_, lane) => loadTexture(rhythmSupportUrls[lane]),
           ),
           ...Array.from(
             { length: 7 },
-            (_, lane) => loadTexture(getBandoriNativeLongFlashUrl(noteSkin, lane)),
+            (_, lane) => loadTexture(longFlashUrls[lane]),
           ),
-          loadTexture(getBandoriNativeLaneEffectUrl("NoteLaneEffect_1.png")),
-          loadTexture(getBandoriNativeLaneEffectUrl("NoteLaneEffect_2.png")),
-          loadTexture(getBandoriNativeLaneEffectUrl("NoteLaneEffect_3.png")),
-          loadTexture(getBandoriNativeLaneEffectUrl("NoteLaneEffect_4.png")),
+          ...laneEffectUrls.map(loadTexture),
           ...BANDORI_NATIVE_DIRECTIONAL_EFFECT_FRAME_URLS.map(
             (url) => usesLimitedDirectionalEffect
               ? Promise.resolve(Texture.EMPTY)
@@ -1958,14 +2098,31 @@ export default function NativeSimulatorStage({
             }] as const;
             })),
           ]);
+        if (completedResourceUrls.size !== totalResources) {
+          throw new Error("Simulator resource plan did not complete");
+        }
         limitedEffects = loadedLimitedEffects;
         noteSpriteAnchors = new Map(loadedNoteSpriteAnchors);
         spriteFrameTextures = new Map(
           loadedSpriteFrames.filter((entry) => entry !== null),
         );
         habahiroTextures = new Map(habahiroEntries);
+        onLoadProgress({
+          completedResources: totalResources,
+          loadId,
+          phase: "initializing",
+          totalResources,
+        });
       } catch {
-        if (!disposed) setStatus("resourceError");
+        if (!disposed) {
+          setStatus("resourceError");
+          onLoadProgress({
+            completedResources: 0,
+            loadId,
+            phase: "error",
+            totalResources: null,
+          });
+        }
         return;
       }
       if (disposed) return;
@@ -2101,7 +2258,15 @@ export default function NativeSimulatorStage({
         }
       } catch (error) {
         if (error instanceof BandoriNativeNoteContractError) {
-          if (!disposed) setStatus("noteContractError");
+          if (!disposed) {
+            setStatus("noteContractError");
+            onLoadProgress({
+              completedResources: loadedResourceTotal ?? 0,
+              loadId,
+              phase: "error",
+              totalResources: loadedResourceTotal,
+            });
+          }
           return;
         }
         throw error;
@@ -2900,6 +3065,12 @@ export default function NativeSimulatorStage({
       renderNotes();
       app.ticker.add(renderNotes);
       setStatus("ready");
+      onLoadProgress({
+        completedResources: loadedResourceTotal ?? 0,
+        loadId,
+        phase: "ready",
+        totalResources: loadedResourceTotal,
+      });
     };
 
     void initialize();
@@ -2922,7 +3093,9 @@ export default function NativeSimulatorStage({
     getPresentationTime,
     isMirrored,
     limitedPerformanceSkin,
+    loadId,
     noteSkin,
+    onLoadProgress,
     resolveAssetUrl,
   ]);
 
@@ -2932,9 +3105,7 @@ export default function NativeSimulatorStage({
       ? resourceErrorLabel
       : status === "noteContractError"
         ? noteContractErrorLabel
-        : status === "ready"
-          ? null
-          : loadingLabel;
+        : null;
 
   return (
     <div>

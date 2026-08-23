@@ -644,7 +644,15 @@
     },
     "simulator": {
       "title": "Chart Simulator",
-      "loading": "Loading the lossless chart and simulator core...",
+      "loading": {
+        "simulator": "Loading the simulator...",
+        "chart": "Loading the chart...",
+        "manifest": "Loading the resource manifest...",
+        "performance": "Loading performance resources...",
+        "sound": "Loading sound effects...",
+        "music": "Loading music...",
+        "stage": "Initializing the simulator stage..."
+      },
       "retry": "Retry",
       "unavailableTitle": "This chart cannot be loaded",
       "tabs": {
@@ -692,7 +700,6 @@
         "invalidNoteRange": "The Note range must be an increasing integer range inside the chart"
       },
       "stageAria": "Chart simulator stage",
-      "stageLoading": "Loading the chart simulator stage…",
       "stageResourceUnavailable": "A required unpacked JP stage resource is missing; no other resource was used as a fallback",
       "stageNoteContractUnavailable": "This chart contains an unverified note combination; the note layer failed closed while the static stage remains available",
       "rendererUnavailable": "This browser could not start the Pixi stage",

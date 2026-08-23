@@ -22,8 +22,21 @@ test("the heavy runtime and renderer stay outside the default song-detail view",
   assert.match(detail, /activeView === "info"[\s\S]*<ChartSimulatorClientShell \{\.\.\.simulator\} \/>/u);
   assert.match(shell, /dynamic\(\(\) => import\("\.\/ChartSimulatorRuntime"\)/u);
   assert.match(shell, /ssr: false/u);
+  assert.match(shell, /ChartSimulatorLoadingIndicator/u);
+  assert.match(shell, /t\("loading\.simulator"\)/u);
   assert.match(runtime, /dynamic\(\(\) => import\("\.\/NativeSimulatorStage"\)/u);
   assert.match(runtime, /compileBandoriChartInWorker/u);
+});
+
+test("simulator loading reuses the page spinner and keeps the resource count compact", async () => {
+  const indicator = await read(
+    "../src/app/[locale]/bandori/songs/[songId]/ChartSimulatorLoadingIndicator.tsx",
+  );
+
+  assert.match(indicator, /import \{ Loader2 \} from "lucide-react"/u);
+  assert.match(indicator, /animate-spin motion-reduce:animate-none/u);
+  assert.match(indicator, /\{completedResources\} \/ \{totalResources\}/u);
+  assert.doesNotMatch(indicator, /已准备|Loading resources/iu);
 });
 
 test("the Pixi stage loads the selected stage, point-note atlases, and bounded hit effects", async () => {
@@ -46,7 +59,10 @@ test("the Pixi stage loads the selected stage, point-note atlases, and bounded h
 
   assert.match(stage, /Application,[\s\S]*Assets,[\s\S]*Container,[\s\S]*Sprite/u);
   assert.match(stage, /Promise\.all\(\[/u);
-  assert.match(stage, /const loadTexture = \(logicalUrl: string\)[\s\S]*Assets\.load<Texture>\(resolveAssetUrl\(logicalUrl\)\)/u);
+  assert.match(stage, /const loadTexture = async \(logicalUrl: string\)[\s\S]*const resolvedUrl = resolveAssetUrl\(logicalUrl\)[\s\S]*Assets\.load<Texture>\(resolvedUrl\)/u);
+  assert.match(stage, /plannedResourceUrls = new Set\([\s\S]*requiredLogicalUrls\.map\(resolveAssetUrl\)/u);
+  assert.match(stage, /completedResourceUrls = new Set<string>\(\)/u);
+  assert.match(stage, /onLoadProgress\(\{[\s\S]*phase: "resources"[\s\S]*totalResources/u);
   assert.match(stage, /backgroundSkin\.layers\.map\(\(layer\) => loadTexture\(layer\.textureUrl\)\)/u);
   assert.match(stage, /loadTexture\(fieldSkin\.textureUrl\)/u);
   assert.match(stage, /loadTexture\(fieldSkin\.judgmentLineTextureUrl\)/u);
@@ -120,6 +136,18 @@ test("the Pixi stage loads the selected stage, point-note atlases, and bounded h
   assert.doesNotMatch(runtime, /<audio|crossOrigin="anonymous"/u);
   assert.match(runtime, /BANDORI_NATIVE_NOTE_SOUND_SCHEDULE_AHEAD_SECONDS/u);
   assert.match(runtime, /runtime\.prepareMusic\(audioUrl, controller\.signal\)/u);
+  assert.match(runtime, /runtime\.prepareCueBank\(cueBank, \(url\) =>/u);
+  assert.match(runtime, /currentStageLoadProgress\.completedResources[\s\S]*currentSoundLoadProgress\.completedResources[\s\S]*currentMusicLoadProgress\?\.completedResources/u);
+  assert.match(runtime, /<ChartSimulatorLoadingIndicator[\s\S]*completedResources=\{completedResources\}[\s\S]*totalResources=\{totalResources\}/u);
+  assert.match(runtime, /disabled=\{!audioUrl \|\| \(!isPlaying && !isSimulatorReady\)\}/u);
+  const performanceLoadingIndex = runtime.indexOf('t("loading.performance")');
+  const soundLoadingIndex = runtime.indexOf('t("loading.sound")');
+  const musicLoadingIndex = runtime.indexOf('t("loading.music")');
+  const stageLoadingIndex = runtime.indexOf('t("loading.stage")');
+  assert.ok(performanceLoadingIndex >= 0);
+  assert.ok(soundLoadingIndex > performanceLoadingIndex);
+  assert.ok(musicLoadingIndex > soundLoadingIndex);
+  assert.ok(stageLoadingIndex > musicLoadingIndex);
   assert.match(runtime, /requestAnimationFrame\(updatePlayback\)/u);
   assert.doesNotMatch(runtime, /playSoundEffect/u);
   assert.match(runtime, /jumpBandoriChartTransport\(snapshotTransportAtAudioTime\(\), delta\)/u);
@@ -334,6 +362,16 @@ test("localized song and simulator keys stay mirrored", async () => {
   }
   assert.equal(zh.songs.simulator.stageAria, "谱面模拟舞台");
   assert.equal(en.songs.simulator.stageAria, "Chart simulator stage");
+  assert.deepEqual(Object.values(zh.songs.simulator.loading), [
+    "正在加载模拟器...",
+    "正在加载谱面...",
+    "正在加载资源清单...",
+    "正在加载演出资源...",
+    "正在加载音效...",
+    "正在加载音乐...",
+    "正在初始化模拟舞台...",
+  ]);
+  assert.equal(Object.hasOwn(zh.songs.simulator, "stageLoading"), false);
 });
 
 test("the public simulator contract keeps product boundaries without private reverse ledgers", async () => {

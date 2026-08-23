@@ -65,7 +65,10 @@ export type BandoriNativeNoteSoundRuntime = {
   getMusicTime(): number;
   pauseMusic(): number;
   prepare(): Promise<void>;
-  prepareCueBank(cueBank: BandoriNativeNoteSoundCueBank): Promise<void>;
+  prepareCueBank(
+    cueBank: BandoriNativeNoteSoundCueBank,
+    onResourceLoaded?: (url: string) => void,
+  ): Promise<void>;
   prepareMusic(url: string, signal?: AbortSignal): Promise<void>;
   resume(): Promise<void>;
   selectCueBank(cueBankId: string): void;
@@ -185,7 +188,10 @@ class WebAudioBandoriNativeNoteSoundRuntime implements BandoriNativeNoteSoundRun
     ));
   }
 
-  async prepareCueBank(cueBank: BandoriNativeNoteSoundCueBank): Promise<void> {
+  async prepareCueBank(
+    cueBank: BandoriNativeNoteSoundCueBank,
+    onResourceLoaded?: (url: string) => void,
+  ): Promise<void> {
     const existingCueUrls = this.cueBanks.get(cueBank.id);
     if (
       existingCueUrls
@@ -196,10 +202,18 @@ class WebAudioBandoriNativeNoteSoundRuntime implements BandoriNativeNoteSoundRun
       throw new Error(`Native note sound cue bank changed in place: ${cueBank.id}`);
     }
     if (!existingCueUrls) this.cueBanks.set(cueBank.id, cueBank.cueUrls);
-    if (this.buffersByCueBank.has(cueBank.id)) return;
+    if (this.buffersByCueBank.has(cueBank.id)) {
+      for (const url of new Set(Object.values(cueBank.cueUrls))) {
+        onResourceLoaded?.(url);
+      }
+      return;
+    }
     const existingPromise = this.bufferPromisesByCueBank.get(cueBank.id);
     if (existingPromise) {
       await existingPromise;
+      for (const url of new Set(Object.values(cueBank.cueUrls))) {
+        onResourceLoaded?.(url);
+      }
       return;
     }
     const context = this.getContext();
@@ -222,7 +236,11 @@ class WebAudioBandoriNativeNoteSoundRuntime implements BandoriNativeNoteSoundRun
     const cueUrls = this.cueBanks.get(cueBank.id);
     if (!cueUrls) throw new Error(`Unknown native note sound cue bank: ${cueBank.id}`);
     const request = Promise.all(Object.entries(cueUrls).map(
-      async ([cue, url]) => [cue, await loadBuffer(url)] as const,
+      async ([cue, url]) => {
+        const buffer = await loadBuffer(url);
+        onResourceLoaded?.(url);
+        return [cue, buffer] as const;
+      },
     )).then((entries) => {
       const buffers = new Map(entries) as ReadonlyMap<
         BandoriNativeNoteSoundCue,

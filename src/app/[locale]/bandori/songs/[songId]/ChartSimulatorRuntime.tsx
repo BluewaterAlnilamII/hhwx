@@ -12,6 +12,7 @@ import {
   RotateCcw,
 } from "lucide-react";
 import BandoriFullChartView from "./BandoriFullChartView";
+import ChartSimulatorLoadingIndicator from "./ChartSimulatorLoadingIndicator";
 import SimulatorLoopControls from "./SimulatorLoopControls";
 import SimulatorSkinControls, {
   SimulatorBooleanControl,
@@ -22,6 +23,7 @@ import {
   BANDORI_NATIVE_BACKGROUND_SKINS,
   BANDORI_NATIVE_FIELD_SKIN,
   BANDORI_NATIVE_FIELD_SKINS,
+  BANDORI_NATIVE_STAGE_SIZE,
   type BandoriNativeBackgroundSkin,
   type BandoriNativeFieldSkin,
 } from "./native-stage-contract";
@@ -105,6 +107,9 @@ import type {
   BandoriChartSimulatorAssetResolver,
 } from "@/lib/bandori/chart-simulator/asset-manifest";
 import type { BandoriLimitedPerformanceSkin } from "./limited-performance-skins";
+import type {
+  NativeSimulatorStageLoadProgress,
+} from "./NativeSimulatorStage";
 
 const NativeSimulatorStage = dynamic(() => import("./NativeSimulatorStage"), {
   ssr: false,
@@ -143,6 +148,14 @@ type AssetLoadState =
       resolveAssetUrl: BandoriChartSimulatorAssetResolver;
     }
   | { status: "error"; message: string };
+
+type AudioResourceLoadProgress = {
+  readonly completedResources: number;
+  readonly loadId: string;
+  readonly message?: string;
+  readonly status: "loading" | "ready" | "error";
+  readonly totalResources: number;
+};
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -255,7 +268,12 @@ export default function ChartSimulatorRuntime({
   const [isRhythmSupportEnabled, setIsRhythmSupportEnabled] = useState(true);
   const [isLaneEffectEnabled, setIsLaneEffectEnabled] = useState(true);
   const [isAllPerfectStatusEnabled, setIsAllPerfectStatusEnabled] = useState(true);
-  const [isMusicPrepared, setIsMusicPrepared] = useState(false);
+  const [stageLoadProgress, setStageLoadProgress] =
+    useState<NativeSimulatorStageLoadProgress | null>(null);
+  const [soundLoadProgress, setSoundLoadProgress] =
+    useState<AudioResourceLoadProgress | null>(null);
+  const [musicLoadProgress, setMusicLoadProgress] =
+    useState<AudioResourceLoadProgress | null>(null);
   const [playbackError, setPlaybackError] = useState<string | null>(null);
   const playbackRate = getBandoriSimulatorPlaybackRate(playbackRateHundredths);
   const noteApproachTimeScale = getBandoriSimulatorNoteApproachTimeScale(
@@ -269,6 +287,25 @@ export default function ChartSimulatorRuntime({
   const effectiveDirectionalFlickSkin =
     limitedPerformanceSkin?.directionalFlickSkin ?? directionalFlickSkin;
   const effectiveTapSeSkin = limitedPerformanceSkin?.tapSeSkin ?? tapSeSkin;
+  const stageLoadId = assetLoadState.status === "ready"
+    ? `${loadAttempt}:${assetLoadState.manifestSha256}:${songId}:${effectiveBackgroundSkin.id}:${effectiveFieldSkin.id}:${effectiveNoteSkin.id}:${effectiveDirectionalFlickSkin.id}:${limitedPerformanceSkin?.id ?? "ordinary"}:${difficulty}:${isMirrored ? "mirror" : "normal"}`
+    : "unavailable";
+  const soundLoadId = assetLoadState.status === "ready"
+    ? `${loadAttempt}:${assetLoadState.manifestSha256}:${getBandoriNativeTapSeCueBankId(effectiveTapSeSkin)}`
+    : "unavailable";
+  const musicLoadId = assetLoadState.status === "ready" && audioUrl
+    ? `${loadAttempt}:${assetLoadState.manifestSha256}:${audioUrl}`
+    : "unavailable";
+  const stageLoadIdRef = useRef(stageLoadId);
+  stageLoadIdRef.current = stageLoadId;
+
+  const handleStageLoadProgress = useCallback(
+    (progress: NativeSimulatorStageLoadProgress) => {
+      if (progress.loadId !== stageLoadIdRef.current) return;
+      setStageLoadProgress(progress);
+    },
+    [],
+  );
 
   const noteSoundTimeline = useMemo(() => {
     if (loadState.status !== "ready") return null;
@@ -645,7 +682,6 @@ export default function ChartSimulatorRuntime({
     if (assetLoadState.status !== "ready") return;
     const controller = new AbortController();
     let isCurrent = true;
-    setIsMusicPrepared(false);
     const initialCueBank = createResolvedNoteSoundCueBank(
       BANDORI_NATIVE_TAP_SE_SKIN,
       assetLoadState.resolveAssetUrl,
@@ -667,20 +703,38 @@ export default function ChartSimulatorRuntime({
     });
     const unsubscribeMusicEnded = runtime.subscribeMusicEnded(handleMusicEnded);
     if (audioUrl) {
-      void Promise.all([
-        runtime.prepareCueBank(initialCueBank),
-        runtime.prepareMusic(audioUrl, controller.signal),
-      ]).then(() => {
+      setMusicLoadProgress({
+        completedResources: 0,
+        loadId: musicLoadId,
+        status: "loading",
+        totalResources: 1,
+      });
+      void runtime.prepareMusic(audioUrl, controller.signal).then(() => {
         if (!isCurrent || noteSoundRuntimeRef.current !== runtime) return;
-        setIsMusicPrepared(true);
+        setMusicLoadProgress({
+          completedResources: 1,
+          loadId: musicLoadId,
+          status: "ready",
+          totalResources: 1,
+        });
       }).catch((error: unknown) => {
         if (
           controller.signal.aborted
           || !isCurrent
           || noteSoundRuntimeRef.current !== runtime
         ) return;
-        setPlaybackError(error instanceof Error ? error.message : String(error));
+        const message = error instanceof Error ? error.message : String(error);
+        setMusicLoadProgress({
+          completedResources: 0,
+          loadId: musicLoadId,
+          message,
+          status: "error",
+          totalResources: 1,
+        });
+        setPlaybackError(message);
       });
+    } else {
+      setMusicLoadProgress(null);
     }
     return () => {
       isCurrent = false;
@@ -696,6 +750,7 @@ export default function ChartSimulatorRuntime({
     audioUrl,
     cancelPendingMediaOperation,
     handleMusicEnded,
+    musicLoadId,
     pauseAudioAndTransport,
   ]);
 
@@ -708,9 +763,36 @@ export default function ChartSimulatorRuntime({
       assetLoadState.resolveAssetUrl,
     );
     let isCurrent = true;
-    void runtime.prepareCueBank(cueBank).then(() => {
+    const resourceUrls = new Set(Object.values(cueBank.cueUrls));
+    const completedResourceUrls = new Set<string>();
+    setSoundLoadProgress({
+      completedResources: 0,
+      loadId: soundLoadId,
+      status: "loading",
+      totalResources: resourceUrls.size,
+    });
+    void runtime.prepareCueBank(cueBank, (url) => {
+      if (
+        !isCurrent
+        || noteSoundRuntimeRef.current !== runtime
+        || completedResourceUrls.has(url)
+      ) return;
+      completedResourceUrls.add(url);
+      setSoundLoadProgress({
+        completedResources: completedResourceUrls.size,
+        loadId: soundLoadId,
+        status: "loading",
+        totalResources: resourceUrls.size,
+      });
+    }).then(() => {
       if (!isCurrent || noteSoundRuntimeRef.current !== runtime) return;
       runtime.selectCueBank(cueBank.id);
+      setSoundLoadProgress({
+        completedResources: resourceUrls.size,
+        loadId: soundLoadId,
+        status: "ready",
+        totalResources: resourceUrls.size,
+      });
       const currentTimeSeconds = getStagePresentationTime();
       stopAndResetNoteSounds(
         currentTimeSeconds,
@@ -719,7 +801,15 @@ export default function ChartSimulatorRuntime({
       );
     }).catch((error: unknown) => {
       if (isCurrent && noteSoundRuntimeRef.current === runtime) {
-        setPlaybackError(error instanceof Error ? error.message : String(error));
+        const message = error instanceof Error ? error.message : String(error);
+        setSoundLoadProgress({
+          completedResources: completedResourceUrls.size,
+          loadId: soundLoadId,
+          message,
+          status: "error",
+          totalResources: resourceUrls.size,
+        });
+        setPlaybackError(message);
       }
     });
     return () => {
@@ -729,6 +819,7 @@ export default function ChartSimulatorRuntime({
     assetLoadState,
     effectiveTapSeSkin,
     getStagePresentationTime,
+    soundLoadId,
     stopAndResetNoteSounds,
   ]);
 
@@ -871,6 +962,10 @@ export default function ChartSimulatorRuntime({
   }, [noteSoundTimeline, stopAndResetNoteSounds]);
 
   useEffect(() => {
+    if (activeTab === "fullChart") setStageLoadProgress(null);
+  }, [activeTab]);
+
+  useEffect(() => {
     let animationFrame = 0;
     let lastUiUpdateMs = 0;
     const updatePlayback = (nowMs: number) => {
@@ -908,7 +1003,12 @@ export default function ChartSimulatorRuntime({
   const play = async () => {
     if (
       !audioUrl
-      || !isMusicPrepared
+      || musicLoadProgress?.loadId !== musicLoadId
+      || musicLoadProgress.status !== "ready"
+      || soundLoadProgress?.loadId !== soundLoadId
+      || soundLoadProgress.status !== "ready"
+      || stageLoadProgress?.loadId !== stageLoadId
+      || stageLoadProgress.phase !== "ready"
       || noteSoundRuntimeRef.current?.isMusicPrepared !== true
       || loadState.status !== "ready"
     ) return;
@@ -995,10 +1095,72 @@ export default function ChartSimulatorRuntime({
     }
   };
 
+  const currentStageLoadProgress = stageLoadProgress?.loadId === stageLoadId
+    ? stageLoadProgress
+    : null;
+  const currentSoundLoadProgress = soundLoadProgress?.loadId === soundLoadId
+    ? soundLoadProgress
+    : null;
+  const currentMusicLoadProgress = musicLoadProgress?.loadId === musicLoadId
+    ? musicLoadProgress
+    : null;
+  const isStageReady = currentStageLoadProgress?.phase === "ready";
+  const isSoundReady = currentSoundLoadProgress?.status === "ready";
+  const isMusicReady = !audioUrl || currentMusicLoadProgress?.status === "ready";
+  const audioLoadingError = currentSoundLoadProgress?.status === "error"
+    ? currentSoundLoadProgress.message ?? t("unavailableTitle")
+    : currentMusicLoadProgress?.status === "error"
+      ? currentMusicLoadProgress.message ?? t("unavailableTitle")
+      : null;
+  const simulatorLoadingLabel = currentStageLoadProgress?.phase === "error"
+    || audioLoadingError
+    ? null
+    : !currentStageLoadProgress
+      || currentStageLoadProgress.phase === "resources"
+      ? t("loading.performance")
+      : !isSoundReady
+        ? t("loading.sound")
+        : !isMusicReady
+          ? t("loading.music")
+          : !isStageReady
+            ? t("loading.stage")
+            : null;
+  const hasResourceCount = currentStageLoadProgress?.totalResources !== null
+    && currentStageLoadProgress?.totalResources !== undefined
+    && currentSoundLoadProgress !== null
+    && (!audioUrl || currentMusicLoadProgress !== null);
+  const completedResources = hasResourceCount
+    ? currentStageLoadProgress.completedResources
+      + currentSoundLoadProgress.completedResources
+      + (currentMusicLoadProgress?.completedResources ?? 0)
+    : null;
+  const totalResources = hasResourceCount
+    ? currentStageLoadProgress.totalResources
+      + currentSoundLoadProgress.totalResources
+      + (currentMusicLoadProgress?.totalResources ?? 0)
+    : null;
+  const isSimulatorReady = isStageReady && isSoundReady && isMusicReady;
+
   if (loadState.status === "loading" || assetLoadState.status === "loading") {
+    const loadingLabel = loadState.status === "loading"
+      ? t("loading.chart")
+      : t("loading.manifest");
     return (
-      <section className="rounded-3xl border border-[var(--theme-color-border-default)] bg-[var(--theme-color-surface-background)] p-6 shadow-[var(--theme-shadow-surface-raised)] dark:border-slate-700 dark:bg-[#111827]">
-        <p aria-live="polite" className="text-sm text-[var(--theme-color-text-muted)]">{t("loading")}</p>
+      <section
+        aria-busy="true"
+        className="rounded-3xl border border-[var(--theme-color-border-default)] bg-[var(--theme-color-surface-background)] p-4 shadow-[var(--theme-shadow-surface-raised)] sm:p-6 dark:border-slate-700 dark:bg-[#111827]"
+      >
+        <h2 className="text-xl font-black text-[var(--theme-color-text-default)]">
+          {t("title")}
+        </h2>
+        <div
+          className="mt-5 flex w-full items-center justify-center rounded-2xl bg-[var(--theme-color-control-background-muted)] ring-1 ring-inset ring-[var(--theme-color-border-subtle)]"
+          style={{
+            aspectRatio: `${BANDORI_NATIVE_STAGE_SIZE.width} / ${BANDORI_NATIVE_STAGE_SIZE.height}`,
+          }}
+        >
+          <ChartSimulatorLoadingIndicator label={loadingLabel} />
+        </div>
       </section>
     );
   }
@@ -1042,30 +1204,70 @@ export default function ChartSimulatorRuntime({
 
       <div className="mt-5">
         {activeTab === "stage" ? (
-          <NativeSimulatorStage
-            key={`${assetLoadState.manifestSha256}:${effectiveBackgroundSkin.id}:${effectiveFieldSkin.id}:${effectiveNoteSkin.id}:${effectiveDirectionalFlickSkin.id}:${limitedPerformanceSkin?.id ?? "ordinary"}:${difficulty}:${isMirrored ? "mirror" : "normal"}`}
-            allPerfectStatusEnabled={isAllPerfectStatusEnabled}
-            ariaLabel={t("stageAria")}
-            backgroundSkin={effectiveBackgroundSkin}
-            compiled={loadState.compiled}
-            directionalFlickSkin={effectiveDirectionalFlickSkin}
-            fieldSkin={effectiveFieldSkin}
-            getEffectPlaybackState={getStageEffectPlaybackState}
-            getPresentationTime={getStagePresentationTime}
-            isMirrored={isMirrored}
-            laneEffectEnabled={isLaneEffectEnabled}
-            limitedPerformanceSkin={limitedPerformanceSkin}
-            loadingLabel={t("stageLoading")}
-            noteApproachTimeScale={noteApproachTimeScale}
-            noteSpeed={noteSpeed}
-            noteSkin={effectiveNoteSkin}
-            noteContractErrorLabel={t("stageNoteContractUnavailable")}
-            rendererErrorLabel={t("rendererUnavailable")}
-            resourceErrorLabel={t("stageResourceUnavailable")}
-            resolveAssetUrl={assetLoadState.resolveAssetUrl}
-            rhythmSupportEnabled={isRhythmSupportEnabled}
-            syncLineEnabled={isSyncLineEnabled}
-          />
+          <div className="relative" aria-busy={simulatorLoadingLabel !== null}>
+            <NativeSimulatorStage
+              key={stageLoadId}
+              allPerfectStatusEnabled={isAllPerfectStatusEnabled}
+              ariaLabel={t("stageAria")}
+              backgroundSkin={effectiveBackgroundSkin}
+              compiled={loadState.compiled}
+              directionalFlickSkin={effectiveDirectionalFlickSkin}
+              fieldSkin={effectiveFieldSkin}
+              getEffectPlaybackState={getStageEffectPlaybackState}
+              getPresentationTime={getStagePresentationTime}
+              isMirrored={isMirrored}
+              laneEffectEnabled={isLaneEffectEnabled}
+              limitedPerformanceSkin={limitedPerformanceSkin}
+              loadId={stageLoadId}
+              noteApproachTimeScale={noteApproachTimeScale}
+              noteSpeed={noteSpeed}
+              noteSkin={effectiveNoteSkin}
+              noteContractErrorLabel={t("stageNoteContractUnavailable")}
+              onLoadProgress={handleStageLoadProgress}
+              rendererErrorLabel={t("rendererUnavailable")}
+              resourceErrorLabel={t("stageResourceUnavailable")}
+              resolveAssetUrl={assetLoadState.resolveAssetUrl}
+              rhythmSupportEnabled={isRhythmSupportEnabled}
+              syncLineEnabled={isSyncLineEnabled}
+            />
+            {audioLoadingError ? (
+              <div
+                className="absolute inset-x-0 top-0 z-20 flex items-center justify-center rounded-2xl bg-[color-mix(in_srgb,var(--theme-color-surface-background)_94%,transparent)] p-6 text-center backdrop-blur-sm"
+                style={{
+                  aspectRatio: `${BANDORI_NATIVE_STAGE_SIZE.width} / ${BANDORI_NATIVE_STAGE_SIZE.height}`,
+                }}
+              >
+                <div>
+                  <h3 className="text-base font-bold text-[var(--theme-color-semantic-danger-foreground)]">
+                    {t("unavailableTitle")}
+                  </h3>
+                  <p className="mt-2 text-sm text-[var(--theme-color-semantic-danger-foreground)]">
+                    {audioLoadingError}
+                  </p>
+                  <button
+                    type="button"
+                    className={`${controlClassName()} mt-4`}
+                    onClick={() => setLoadAttempt((value) => value + 1)}
+                  >
+                    {t("retry")}
+                  </button>
+                </div>
+              </div>
+            ) : simulatorLoadingLabel ? (
+              <div
+                className="pointer-events-none absolute inset-x-0 top-0 z-20 flex items-center justify-center rounded-2xl bg-[color-mix(in_srgb,var(--theme-color-surface-background)_90%,transparent)] p-6 backdrop-blur-sm"
+                style={{
+                  aspectRatio: `${BANDORI_NATIVE_STAGE_SIZE.width} / ${BANDORI_NATIVE_STAGE_SIZE.height}`,
+                }}
+              >
+                <ChartSimulatorLoadingIndicator
+                  completedResources={completedResources}
+                  label={simulatorLoadingLabel}
+                  totalResources={totalResources}
+                />
+              </div>
+            ) : null}
+          </div>
         ) : (
           <BandoriFullChartView
             compiled={loadState.compiled}
@@ -1105,7 +1307,7 @@ export default function ChartSimulatorRuntime({
           <button
             type="button"
             className={controlClassName(true)}
-            disabled={!audioUrl || !isMusicPrepared}
+            disabled={!audioUrl || (!isPlaying && !isSimulatorReady)}
             onClick={isPlaying ? pause : () => void play()}
           >
             {isPlaying ? <Pause className="h-4 w-4" aria-hidden="true" /> : <Play className="h-4 w-4" aria-hidden="true" />}
