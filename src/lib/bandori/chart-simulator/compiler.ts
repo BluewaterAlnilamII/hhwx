@@ -2,6 +2,10 @@ import {
   parseBandoriChartForSimulator,
   type BandoriChartEntity,
 } from "@/lib/bandori-chart-simulator-contract";
+import {
+  roundNonNegativeMidpointToEven,
+  upperBoundNumber,
+} from "./numeric";
 
 export const BANDORI_CHART_SIMULATOR_PAYLOAD_VERSION = 4 as const;
 
@@ -256,29 +260,20 @@ function buildBpmSegments(chart: readonly BandoriChartEntity[]): BpmSegment[] {
 }
 
 function findLastAtOrBefore(values: ArrayLike<number>, target: number): number {
-  let low = 0;
-  let high = values.length;
-  while (low < high) {
-    const middle = (low + high) >>> 1;
-    if (values[middle] <= target) low = middle + 1;
-    else high = middle;
-  }
-  return low - 1;
+  return upperBoundNumber(values, target) - 1;
 }
 
-export function upperBound(values: ArrayLike<number>, target: number): number {
-  let low = 0;
-  let high = values.length;
-  while (low < high) {
-    const middle = (low + high) >>> 1;
-    if (values[middle] <= target) low = middle + 1;
-    else high = middle;
-  }
-  return low;
-}
+export const upperBound = upperBoundNumber;
 
 function beatToTime(segments: readonly BpmSegment[], beat: number): number {
-  const index = findLastAtOrBefore(segments.map((segment) => segment.beat), beat);
+  let low = 0;
+  let high = segments.length;
+  while (low < high) {
+    const middle = (low + high) >>> 1;
+    if (segments[middle].beat <= beat) low = middle + 1;
+    else high = middle;
+  }
+  const index = low - 1;
   if (index < 0) throw new Error(`No BPM is active at beat ${beat}`);
   const segment = segments[index];
   return segment.time + ((beat - segment.beat) * 60) / segment.bpm;
@@ -378,18 +373,10 @@ function quadraticBezierFloat32(start: number, control: number, end: number, t: 
   return Math.fround(first + Math.fround(t * Math.fround(second - first)));
 }
 
-function roundMidpointToEven(value: number): number {
-  const lower = Math.floor(value);
-  const fraction = value - lower;
-  if (fraction < 0.5) return lower;
-  if (fraction > 0.5) return lower + 1;
-  return lower % 2 === 0 ? lower : lower + 1;
-}
-
 /** Resolves a continuous lane + DiffVolume position to its native scalar lane. */
 export function getBandoriNativeCurveLaneAnchor(laneAbsolutePosition: number): number | null {
   if (!Number.isFinite(laneAbsolutePosition)) return null;
-  const roundedLane = roundMidpointToEven(laneAbsolutePosition);
+  const roundedLane = roundNonNegativeMidpointToEven(laneAbsolutePosition);
   return roundedLane >= 0 && roundedLane <= 6 ? roundedLane : null;
 }
 

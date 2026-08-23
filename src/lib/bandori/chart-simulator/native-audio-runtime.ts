@@ -51,7 +51,7 @@ export function getBandoriNativeNoteSoundContextTime(
     + Math.max(0, eventTimeSeconds - mediaTimeSeconds) / playbackRate;
 }
 
-export type BandoriNativeNoteSoundRuntime = {
+export type BandoriNativeAudioRuntime = {
   readonly isPrepared: boolean;
   readonly isMusicPlaying: boolean;
   readonly isMusicPrepared: boolean;
@@ -68,6 +68,7 @@ export type BandoriNativeNoteSoundRuntime = {
   prepareCueBank(
     cueBank: BandoriNativeNoteSoundCueBank,
     onResourceLoaded?: (url: string) => void,
+    signal?: AbortSignal,
   ): Promise<void>;
   prepareMusic(url: string, signal?: AbortSignal): Promise<void>;
   resume(): Promise<void>;
@@ -83,7 +84,7 @@ export type BandoriNativeNoteSoundRuntime = {
   subscribeMusicEnded(listener: () => void): () => void;
 };
 
-class WebAudioBandoriNativeNoteSoundRuntime implements BandoriNativeNoteSoundRuntime {
+class WebAudioBandoriNativeAudioRuntime implements BandoriNativeAudioRuntime {
   private context: AudioContext | null = null;
   private masterGain: GainNode | null = null;
   private readonly cueBanks = new Map<string, CueUrls>();
@@ -191,7 +192,9 @@ class WebAudioBandoriNativeNoteSoundRuntime implements BandoriNativeNoteSoundRun
   async prepareCueBank(
     cueBank: BandoriNativeNoteSoundCueBank,
     onResourceLoaded?: (url: string) => void,
+    signal?: AbortSignal,
   ): Promise<void> {
+    if (signal?.aborted) throw this.createAbortError();
     const existingCueUrls = this.cueBanks.get(cueBank.id);
     if (
       existingCueUrls
@@ -223,6 +226,7 @@ class WebAudioBandoriNativeNoteSoundRuntime implements BandoriNativeNoteSoundRun
       const promise = fetch(url, {
         cache: "force-cache",
         credentials: "omit",
+        signal,
       }).then(async (response) => {
         if (!response.ok) {
           throw new Error(`Native note sound fetch failed: HTTP ${response.status}`);
@@ -577,12 +581,12 @@ class WebAudioBandoriNativeNoteSoundRuntime implements BandoriNativeNoteSoundRun
   }
 }
 
-export function createBandoriNativeNoteSoundRuntime(
+export function createBandoriNativeAudioRuntime(
   cueBanks: readonly BandoriNativeNoteSoundCueBank[],
   activeCueBankId: string,
   volume: number,
-): BandoriNativeNoteSoundRuntime {
-  return new WebAudioBandoriNativeNoteSoundRuntime(
+): BandoriNativeAudioRuntime {
+  return new WebAudioBandoriNativeAudioRuntime(
     cueBanks,
     activeCueBankId,
     volume,

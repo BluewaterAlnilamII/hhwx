@@ -6,7 +6,7 @@ import {
   type BandoriNativeFieldSkin,
 } from "./native-stage-contract";
 
-const LOCAL_ROOT = "/local/chart-simulator";
+const CHART_SIMULATOR_LOGICAL_ASSET_ROOT = "/local/chart-simulator";
 
 export type BandoriLimitedPerformanceSkinSlot =
   | "background"
@@ -72,18 +72,18 @@ export type BandoriLimitedPerformanceSkin = Readonly<{
   tapSeSkin: BandoriNativeTapSeSkin | null;
 }>;
 
-const PERSONA_NOTE_ROOT = `${LOCAL_ROOT}/assets/star/forassetbundle/startapp/ingameskin/noteskin/skin_persona`;
-const PERSONA_DIRECTIONAL_NOTE_ROOT = `${LOCAL_ROOT}/assets/star/forassetbundle/startapp/ingameskin/noteskin/directionalflickskin_persona`;
-const PERSONA_FIELD_ROOT = `${LOCAL_ROOT}/assets/star/forassetbundle/startapp/ingameskin/fieldskin/skin_persona`;
-const PERSONA_BACKGROUND_ROOT = `${LOCAL_ROOT}/assets/star/forassetbundle/asneeded/ingameskin/bgskin/skin_persona`;
-const PERSONA_TAP_EFFECT_ROOT = `${LOCAL_ROOT}/ingameskin/tapeffect/skin_persona`;
-const PERSONA_DIRECTIONAL_EFFECT_ROOT = `${LOCAL_ROOT}/ingameskin/tapeffect/directionalflickskin_personanormal`;
-const APRIL_2019_NOTE_ROOT = `${LOCAL_ROOT}/assets/star/forassetbundle/startapp/ingameskin/noteskin/skin_april2019`;
-const APRIL_2019_FIELD_ROOT = `${LOCAL_ROOT}/assets/star/forassetbundle/startapp/ingameskin/fieldskin/skin_april2019`;
-const APRIL_2019_BACKGROUND_ROOT = `${LOCAL_ROOT}/assets/star/forassetbundle/asneeded/ingameskin/bgskin/skin_april2019`;
-const APRIL_2019_TAP_EFFECT_ROOT = `${LOCAL_ROOT}/ingameskin/tapeffect/skin_april2019`;
-const MIKU_TAP_EFFECT_ROOT = `${LOCAL_ROOT}/ingameskin/tapeffect/skin_miku`;
-const STAGE_TAP_EFFECT_ROOT = `${LOCAL_ROOT}/ingameskin/tapeffect/skin_stage`;
+const PERSONA_NOTE_ROOT = `${CHART_SIMULATOR_LOGICAL_ASSET_ROOT}/assets/star/forassetbundle/startapp/ingameskin/noteskin/skin_persona`;
+const PERSONA_DIRECTIONAL_NOTE_ROOT = `${CHART_SIMULATOR_LOGICAL_ASSET_ROOT}/assets/star/forassetbundle/startapp/ingameskin/noteskin/directionalflickskin_persona`;
+const PERSONA_FIELD_ROOT = `${CHART_SIMULATOR_LOGICAL_ASSET_ROOT}/assets/star/forassetbundle/startapp/ingameskin/fieldskin/skin_persona`;
+const PERSONA_BACKGROUND_ROOT = `${CHART_SIMULATOR_LOGICAL_ASSET_ROOT}/assets/star/forassetbundle/asneeded/ingameskin/bgskin/skin_persona`;
+const PERSONA_TAP_EFFECT_ROOT = `${CHART_SIMULATOR_LOGICAL_ASSET_ROOT}/ingameskin/tapeffect/skin_persona`;
+const PERSONA_DIRECTIONAL_EFFECT_ROOT = `${CHART_SIMULATOR_LOGICAL_ASSET_ROOT}/ingameskin/tapeffect/directionalflickskin_personanormal`;
+const APRIL_2019_NOTE_ROOT = `${CHART_SIMULATOR_LOGICAL_ASSET_ROOT}/assets/star/forassetbundle/startapp/ingameskin/noteskin/skin_april2019`;
+const APRIL_2019_FIELD_ROOT = `${CHART_SIMULATOR_LOGICAL_ASSET_ROOT}/assets/star/forassetbundle/startapp/ingameskin/fieldskin/skin_april2019`;
+const APRIL_2019_BACKGROUND_ROOT = `${CHART_SIMULATOR_LOGICAL_ASSET_ROOT}/assets/star/forassetbundle/asneeded/ingameskin/bgskin/skin_april2019`;
+const APRIL_2019_TAP_EFFECT_ROOT = `${CHART_SIMULATOR_LOGICAL_ASSET_ROOT}/ingameskin/tapeffect/skin_april2019`;
+const MIKU_TAP_EFFECT_ROOT = `${CHART_SIMULATOR_LOGICAL_ASSET_ROOT}/ingameskin/tapeffect/skin_miku`;
+const STAGE_TAP_EFFECT_ROOT = `${CHART_SIMULATOR_LOGICAL_ASSET_ROOT}/ingameskin/tapeffect/skin_stage`;
 
 const PERSONA_FIELD_SKIN: BandoriNativeFieldSkin = {
   assetBundleName: "skin_persona",
@@ -105,7 +105,6 @@ const PERSONA_BACKGROUND_SKIN: BandoriNativeBackgroundSkin = {
 
 const PERSONA_NOTE_SKIN: BandoriNativeNoteSkin = {
   assetBundleName: "skin_persona",
-  atlasUrl: "",
   curveSlideNoteLineUrl: `${PERSONA_NOTE_ROOT}/longnoteline2.png`,
   frameLayout: "b",
   frameSource: "sprites",
@@ -118,7 +117,6 @@ const PERSONA_NOTE_SKIN: BandoriNativeNoteSkin = {
 
 const PERSONA_DIRECTIONAL_FLICK_SKIN: BandoriNativeDirectionalFlickSkin = {
   assetBundleName: "skin_persona",
-  atlasUrl: "",
   frameLayout: "tall-right-icon",
   frameSource: "sprites",
   id: "persona",
@@ -130,9 +128,9 @@ const PERSONA_DIRECTIONAL_FLICK_SKIN: BandoriNativeDirectionalFlickSkin = {
 const PERSONA_TAP_SE_SKIN: BandoriNativeTapSeSkin = {
   id: "persona",
   cueUrls: {
-    flick: `${LOCAL_ROOT}/sound/tapseskin/skin_persona/TapSE/flick.wav`,
-    "long-keep": `${LOCAL_ROOT}/sound/tapseskin/skin_persona/TapSE/SE_RHYTHM_TAP_LONG.wav`,
-    perfect: `${LOCAL_ROOT}/sound/tapseskin/skin_persona/TapSE/perfect.wav`,
+    flick: `${CHART_SIMULATOR_LOGICAL_ASSET_ROOT}/sound/tapseskin/skin_persona/TapSE/flick.wav`,
+    "long-keep": `${CHART_SIMULATOR_LOGICAL_ASSET_ROOT}/sound/tapseskin/skin_persona/TapSE/SE_RHYTHM_TAP_LONG.wav`,
+    perfect: `${CHART_SIMULATOR_LOGICAL_ASSET_ROOT}/sound/tapseskin/skin_persona/TapSE/perfect.wav`,
   },
 };
 
@@ -166,13 +164,12 @@ const APRIL_2019_BACKGROUND_SKIN: BandoriNativeBackgroundSkin = {
 
 const APRIL_2019_NOTE_SKIN: BandoriNativeNoteSkin = {
   assetBundleName: "skin_april2019",
-  atlasUrl: "",
   curveSlideNoteLineUrl: `${APRIL_2019_NOTE_ROOT}/longnoteline2.png`,
   frameLayout: "b",
   frameSource: "sprites",
   id: "april2019",
   longNoteLineUrl: `${APRIL_2019_NOTE_ROOT}/longnoteline.png`,
-  spriteAnchorsUrl: `${LOCAL_ROOT}/ingameskin/noteskin/skin_april2019/sprites/sprite-anchors.json`,
+  spriteAnchorsUrl: `${CHART_SIMULATOR_LOGICAL_ASSET_ROOT}/ingameskin/noteskin/skin_april2019/sprites/sprite-anchors.json`,
   syncLineEdgeMargin: 0,
   syncLineUrl: `${APRIL_2019_NOTE_ROOT}/simultaneous_line.png`,
 };
@@ -180,9 +177,9 @@ const APRIL_2019_NOTE_SKIN: BandoriNativeNoteSkin = {
 const APRIL_2019_TAP_SE_SKIN: BandoriNativeTapSeSkin = {
   id: "april2019",
   cueUrls: {
-    flick: `${LOCAL_ROOT}/sound/tapseskin/skin_april2019/TapSE/flick.wav`,
-    "long-keep": `${LOCAL_ROOT}/sound/tapseskin/skin_april2019/TapSE/SE_RHYTHM_TAP_LONG.wav`,
-    perfect: `${LOCAL_ROOT}/sound/tapseskin/skin_april2019/TapSE/perfect.wav`,
+    flick: `${CHART_SIMULATOR_LOGICAL_ASSET_ROOT}/sound/tapseskin/skin_april2019/TapSE/flick.wav`,
+    "long-keep": `${CHART_SIMULATOR_LOGICAL_ASSET_ROOT}/sound/tapseskin/skin_april2019/TapSE/SE_RHYTHM_TAP_LONG.wav`,
+    perfect: `${CHART_SIMULATOR_LOGICAL_ASSET_ROOT}/sound/tapseskin/skin_april2019/TapSE/perfect.wav`,
   },
 };
 
@@ -199,7 +196,7 @@ function createSparseBackgroundSkin(
     id,
     layers: [{
       rect: BANDORI_NATIVE_BACKGROUND_RECT,
-      textureUrl: `${LOCAL_ROOT}/assets/star/forassetbundle/asneeded/ingameskin/bgskin/${assetBundleName}/${filename}`,
+      textureUrl: `${CHART_SIMULATOR_LOGICAL_ASSET_ROOT}/assets/star/forassetbundle/asneeded/ingameskin/bgskin/${assetBundleName}/${filename}`,
     }],
   };
 }
@@ -209,16 +206,15 @@ function createSparseNoteSkin(
   assetBundleName: string,
   curveSlideFilename: "longnoteline.png" | "longnoteline2.png",
 ): BandoriNativeNoteSkin {
-  const noteRoot = `${LOCAL_ROOT}/assets/star/forassetbundle/startapp/ingameskin/noteskin/${assetBundleName}`;
+  const noteRoot = `${CHART_SIMULATOR_LOGICAL_ASSET_ROOT}/assets/star/forassetbundle/startapp/ingameskin/noteskin/${assetBundleName}`;
   return {
     assetBundleName,
-    atlasUrl: "",
     curveSlideNoteLineUrl: `${noteRoot}/${curveSlideFilename}`,
     frameLayout: "b",
     frameSource: "sprites",
     id,
     longNoteLineUrl: `${noteRoot}/longnoteline.png`,
-    spriteAnchorsUrl: `${LOCAL_ROOT}/ingameskin/noteskin/${assetBundleName}/sprites/sprite-anchors.json`,
+    spriteAnchorsUrl: `${CHART_SIMULATOR_LOGICAL_ASSET_ROOT}/ingameskin/noteskin/${assetBundleName}/sprites/sprite-anchors.json`,
     syncLineEdgeMargin: 0,
     syncLineUrl: `${noteRoot}/simultaneous_line.png`,
   };
@@ -228,7 +224,7 @@ function createSparseTapSeSkin(
   id: BandoriNativeTapSeSkin["id"],
   assetBundleName: string,
 ): BandoriNativeTapSeSkin {
-  const root = `${LOCAL_ROOT}/sound/tapseskin/${assetBundleName}/TapSE`;
+  const root = `${CHART_SIMULATOR_LOGICAL_ASSET_ROOT}/sound/tapseskin/${assetBundleName}/TapSE`;
   return {
     id,
     cueUrls: {
@@ -244,7 +240,7 @@ function createSparseTapEffectContract(
   assetBundleName: string,
   textureNames: readonly string[],
 ): BandoriLimitedPerformanceEffectContract {
-  const root = `${LOCAL_ROOT}/ingameskin/tapeffect/${assetBundleName}`;
+  const root = `${CHART_SIMULATOR_LOGICAL_ASSET_ROOT}/ingameskin/tapeffect/${assetBundleName}`;
   return {
     animatedVerticalBeam: null,
     directionalRecipes: {},
@@ -267,7 +263,7 @@ function createSparseFieldSkin(
   judgmentLineSpriteWidth: number,
   judgmentLineSpriteHeight: number,
 ): BandoriNativeFieldSkin {
-  const root = `${LOCAL_ROOT}/assets/star/forassetbundle/startapp/ingameskin/fieldskin/${assetBundleName}`;
+  const root = `${CHART_SIMULATOR_LOGICAL_ASSET_ROOT}/assets/star/forassetbundle/startapp/ingameskin/fieldskin/${assetBundleName}`;
   return {
     assetBundleName,
     id,
@@ -284,9 +280,9 @@ const MIKU_FIELD_SKIN: BandoriNativeFieldSkin = {
   id: "miku",
   judgmentLineSpriteHeight: 40,
   judgmentLineSpriteWidth: 1800,
-  judgmentLineTextureUrl: `${LOCAL_ROOT}/assets/star/forassetbundle/startapp/ingameskin/fieldskin/skin_miku/game_play_line.png`,
+  judgmentLineTextureUrl: `${CHART_SIMULATOR_LOGICAL_ASSET_ROOT}/assets/star/forassetbundle/startapp/ingameskin/fieldskin/skin_miku/game_play_line.png`,
   skinType: "normal",
-  textureUrl: `${LOCAL_ROOT}/assets/star/forassetbundle/startapp/ingameskin/fieldskin/skin_miku/bg_line_rhythm.png`,
+  textureUrl: `${CHART_SIMULATOR_LOGICAL_ASSET_ROOT}/assets/star/forassetbundle/startapp/ingameskin/fieldskin/skin_miku/bg_line_rhythm.png`,
 };
 
 const MIKU_EFFECT_RESOURCES = {
@@ -397,7 +393,7 @@ const BANDORI_LIMITED_PERFORMANCE_SKIN_DEFINITIONS = [
     },
     fieldSkin: APRIL_2019_FIELD_SKIN,
     id: "april2019",
-    judgmentPerfectTextureUrl: `${LOCAL_ROOT}/ingameskin/judgeskin/skin_april2019/perfect.png`,
+    judgmentPerfectTextureUrl: `${CHART_SIMULATOR_LOGICAL_ASSET_ROOT}/ingameskin/judgeskin/skin_april2019/perfect.png`,
     noteSkin: APRIL_2019_NOTE_SKIN,
     tapSeSkin: APRIL_2019_TAP_SE_SKIN,
   },
@@ -496,7 +492,7 @@ const BANDORI_LIMITED_PERFORMANCE_SKIN_DEFINITIONS = [
     effects: null,
     fieldSkin: createSparseFieldSkin("bike", "skin_bike", 1801, 56),
     id: "bike",
-    judgmentPerfectTextureUrl: `${LOCAL_ROOT}/ingameskin/judgeskin/skin_bike/perfect.png`,
+    judgmentPerfectTextureUrl: `${CHART_SIMULATOR_LOGICAL_ASSET_ROOT}/ingameskin/judgeskin/skin_bike/perfect.png`,
     noteSkin: null,
     tapSeSkin: null,
   },
@@ -612,7 +608,7 @@ const BANDORI_LIMITED_PERFORMANCE_SKIN_DEFINITIONS = [
       36,
     ),
     id: "april2021",
-    judgmentPerfectTextureUrl: `${LOCAL_ROOT}/ingameskin/judgeskin/skinapril2021/perfect.png`,
+    judgmentPerfectTextureUrl: `${CHART_SIMULATOR_LOGICAL_ASSET_ROOT}/ingameskin/judgeskin/skinapril2021/perfect.png`,
     noteSkin: createSparseNoteSkin(
       "april2021",
       "skin_april2021",

@@ -8,9 +8,10 @@ import {
   getBandoriCompiledBeatAtTime,
 } from "../src/lib/bandori/chart-simulator/compiler.ts";
 import {
-  createBandoriDefaultEffectRuntime,
+  compileBandoriEffectRecipe,
+  createBandoriEffectRecipeRuntime,
   evaluateBandoriEffectGradient,
-} from "../src/lib/bandori/chart-simulator/default-effects.ts";
+} from "../src/lib/bandori/chart-simulator/effect-recipe-runtime.ts";
 import nativeSwipeEffectRecipes from "../src/lib/bandori/chart-simulator/native-swipe-effect-recipes.json" with { type: "json" };
 import {
   BANDORI_NATIVE_APPROXIMATE_HIT_EFFECTS,
@@ -1935,7 +1936,7 @@ test("bounded effects evaluate verified lifetime velocity and built-in Quad mesh
   };
 
   const sample = (recipe) => {
-    const runtime = createBandoriDefaultEffectRuntime(recipe, {
+    const runtime = createBandoriEffectRecipeRuntime(recipe, {
       buttonIndex: 3,
       seed: 27,
     });
@@ -1954,6 +1955,77 @@ test("bounded effects evaluate verified lifetime velocity and built-in Quad mesh
     0,
   ) / instances.length;
   assert.ok(averageY(april) < averageY(baseline));
+});
+
+test("effect recipes fail closed for ignored Unity lifecycle and direction fields", () => {
+  const findNode = (node, predicate) => {
+    if (predicate(node)) return node;
+    for (const child of node.children) {
+      const match = findNode(child, predicate);
+      if (match) return match;
+    }
+    return null;
+  };
+  const assertRejected = (mutate, expected) => {
+    const recipe = structuredClone(nativeSwipeEffectRecipes.flick);
+    mutate(recipe);
+    assert.throws(
+      () => createBandoriEffectRecipeRuntime(recipe, {
+        buttonIndex: 3,
+        seed: 27,
+      }),
+      expected,
+    );
+  };
+
+  assertRejected((recipe) => {
+    recipe.root.particleSystem.playOnAwake = true;
+  }, /playOnAwake.*outside the runtime lifecycle/u);
+  assertRejected((recipe) => {
+    recipe.root.particleSystem.useUnscaledTime = true;
+  }, /useUnscaledTime.*unsupported/u);
+  assertRejected((recipe) => {
+    recipe.root.particleSystem.scalingSpace = "hierarchy";
+  }, /scalingSpace.*unsupported/u);
+  assertRejected((recipe) => {
+    recipe.root.particleSystem.cullingMode = "pause";
+  }, /cullingMode.*unsupported/u);
+  assertRejected((recipe) => {
+    const node = findNode(
+      recipe.root,
+      (candidate) => candidate.particleSystem?.modules.shape?.direction,
+    );
+    assert.ok(node);
+    node.particleSystem.modules.shape.direction.alignToDirection = true;
+  }, /alignToDirection.*unsupported/u);
+});
+
+test("compiled effect recipes validate once while keeping runtime state isolated", () => {
+  const compiledRecipe = compileBandoriEffectRecipe(nativeSwipeEffectRecipes.flick);
+  const first = createBandoriEffectRecipeRuntime(compiledRecipe, {
+    buttonIndex: 3,
+    seed: 27,
+  });
+  const second = createBandoriEffectRecipeRuntime(compiledRecipe, {
+    buttonIndex: 3,
+    seed: 27,
+  });
+  first.play(0, 27);
+  second.play(0, 27);
+  first.sample(0.2);
+  const secondFrame = second.sample(0.05);
+  const baseline = createBandoriEffectRecipeRuntime(compiledRecipe, {
+    buttonIndex: 3,
+    seed: 27,
+  });
+  baseline.play(0, 27);
+  const baselineFrame = baseline.sample(0.05);
+
+  assert.equal(secondFrame.count, baselineFrame.count);
+  assert.deepEqual(
+    secondFrame.instances.slice(0, secondFrame.count),
+    baselineFrame.instances.slice(0, baselineFrame.count),
+  );
 });
 
 test("Witch custom Mesh recipes retain 3D geometry and CustomData U scrolling", () => {
@@ -2009,7 +2081,7 @@ test("Witch custom Mesh recipes retain 3D geometry and CustomData U scrolling", 
     },
   };
 
-  const runtime = createBandoriDefaultEffectRuntime(recipe, {
+  const runtime = createBandoriEffectRecipeRuntime(recipe, {
     buttonIndex: 3,
     seed: 27,
   });
@@ -2030,7 +2102,7 @@ test("Witch custom Mesh recipes retain 3D geometry and CustomData U scrolling", 
   const unsupportedSamplerRecipe = structuredClone(recipe);
   unsupportedSamplerRecipe.materials[materialId].sampler.addressModeU = "mirror-repeat";
   assert.throws(
-    () => createBandoriDefaultEffectRuntime(unsupportedSamplerRecipe, {
+    () => createBandoriEffectRecipeRuntime(unsupportedSamplerRecipe, {
       buttonIndex: 3,
       seed: 27,
     }),
@@ -2061,7 +2133,7 @@ test("Miku separate-axis Size over Lifetime scales rendered X and Y independentl
     return recipe;
   };
   const sample = (recipe) => {
-    const runtime = createBandoriDefaultEffectRuntime(recipe, {
+    const runtime = createBandoriEffectRecipeRuntime(recipe, {
       buttonIndex: 3,
       seed: 27,
     });

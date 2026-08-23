@@ -17,31 +17,49 @@ const NOTE_SKIN_SPRITE_ROOT =
 
 type StandardNoteFrameLayout = "a" | "b" | "c";
 type DirectionalNoteFrameLayout = "short-right-icon" | "tall-right-icon";
-type NativeNoteFrameSource = "atlas" | "sprites";
 
-export type BandoriNativeNoteSkin = {
+type BandoriNativeNoteSkinBase = {
   assetBundleName: string;
-  atlasUrl: string;
   curveSlideNoteLineUrl: string;
   frameLayout: StandardNoteFrameLayout;
-  frameSource: NativeNoteFrameSource;
   id: number | string;
   longNoteLineUrl: string;
-  spriteAnchorsUrl: string | null;
   syncLineEdgeMargin: number;
   syncLineUrl: string;
 };
 
-export type BandoriNativeDirectionalFlickSkin = {
+export type BandoriNativeNoteSkin = BandoriNativeNoteSkinBase & (
+  | {
+      atlasUrl: string;
+      frameSource: "atlas";
+      spriteAnchorsUrl: null;
+    }
+  | {
+      frameSource: "sprites";
+      spriteAnchorsUrl: string | null;
+    }
+);
+
+type BandoriNativeDirectionalFlickSkinBase = {
   assetBundleName: string;
-  atlasUrl: string;
   frameLayout: DirectionalNoteFrameLayout;
-  frameSource: NativeNoteFrameSource;
   id: number | string;
   lineLeftUrl: string;
   lineRightUrl: string;
-  spriteAnchorsUrl: string | null;
 };
+
+export type BandoriNativeDirectionalFlickSkin =
+  BandoriNativeDirectionalFlickSkinBase & (
+    | {
+        atlasUrl: string;
+        frameSource: "atlas";
+        spriteAnchorsUrl: null;
+      }
+    | {
+        frameSource: "sprites";
+        spriteAnchorsUrl: string | null;
+      }
+  );
 
 function createNoteSkin(
   id: number,

@@ -1,8 +1,10 @@
 import recipe from "./native-hold-effect-recipe.json";
 import {
-  createBandoriDefaultEffectRuntime,
-  type BandoriDefaultEffectRuntime,
-} from "./default-effects";
+  compileBandoriEffectRecipe,
+  createBandoriEffectRecipeRuntime,
+  type BandoriCompiledEffectRecipe,
+  type BandoriEffectRecipeRuntime,
+} from "./effect-recipe-runtime";
 import {
   projectBandoriNativeRibbonPoint,
   type BandoriNativeChartVisuals,
@@ -71,12 +73,13 @@ function resolveBandoriNativeHoldState(
 export function collectBandoriNativeHoldStates(
   chartVisuals: BandoriNativeChartVisuals,
   presentationTimeSeconds: number,
+  candidateRibbons: readonly BandoriNativeRibbonVisual[] = chartVisuals.ribbons,
 ): BandoriNativeHoldState[] {
   if (!Number.isFinite(presentationTimeSeconds)) {
     throw new Error("Native hold-state time must be finite");
   }
   const states: BandoriNativeHoldState[] = [];
-  for (const ribbon of chartVisuals.ribbons) {
+  for (const ribbon of candidateRibbons) {
     const state = resolveBandoriNativeHoldState(ribbon, presentationTimeSeconds);
     if (state) states.push(state);
   }
@@ -216,9 +219,13 @@ const LONG_TAP_KEEP_CURVE_BY_WIDTH = [
   [0.7005774379, 0.2994225621],
 ] as const;
 
-const longTapKeepRecipes = new Map<number, unknown>([[1, recipe]]);
+const longTapKeepRecipes = new Map<number, BandoriCompiledEffectRecipe>([
+  [1, compileBandoriEffectRecipe(recipe)],
+]);
 
-function getBandoriNativeLongTapKeepRecipe(rangeWidth: number): unknown {
+function getBandoriNativeLongTapKeepRecipe(
+  rangeWidth: number,
+): BandoriCompiledEffectRecipe {
   const cached = longTapKeepRecipes.get(rangeWidth);
   if (cached) return cached;
   const cloned = structuredClone(recipe) as unknown as MutableHoldRecipe;
@@ -250,14 +257,15 @@ function getBandoriNativeLongTapKeepRecipe(rangeWidth: number): unknown {
     child.serializedHierarchyActive = false;
     child.runtimeParticipation = "excluded-serialized-inactive";
   }
-  longTapKeepRecipes.set(rangeWidth, cloned);
-  return cloned;
+  const compiled = compileBandoriEffectRecipe(cloned);
+  longTapKeepRecipes.set(rangeWidth, compiled);
+  return compiled;
 }
 
 export function createBandoriNativeHoldEffectRuntime(
   seed: number,
   variant: BandoriNativeHoldEffectVariant = { kind: "slide", rangeWidth: 1 },
-): BandoriDefaultEffectRuntime {
+): BandoriEffectRecipeRuntime {
   if (
     !Number.isInteger(variant.rangeWidth)
     || variant.rangeWidth < 1
@@ -271,8 +279,8 @@ export function createBandoriNativeHoldEffectRuntime(
   // the width-specific button prefab selected from the head range.
   const selectedRecipe = variant.kind === "long"
     ? getBandoriNativeLongTapKeepRecipe(variant.rangeWidth)
-    : recipe;
-  return createBandoriDefaultEffectRuntime(selectedRecipe, { buttonIndex: 3, seed });
+    : getBandoriNativeLongTapKeepRecipe(1);
+  return createBandoriEffectRecipeRuntime(selectedRecipe, { buttonIndex: 3, seed });
 }
 
 export const BANDORI_NATIVE_HOLD_EFFECT_PLACEMENT = {

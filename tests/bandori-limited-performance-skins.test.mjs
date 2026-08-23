@@ -11,8 +11,8 @@ import {
   getBandoriNativeTapSeCueBankId,
 } from "../src/lib/bandori/chart-simulator/native-note-sound-presentation.ts";
 import {
-  createBandoriDefaultEffectRuntime,
-} from "../src/lib/bandori/chart-simulator/default-effects.ts";
+  createBandoriEffectRecipeRuntime,
+} from "../src/lib/bandori/chart-simulator/effect-recipe-runtime.ts";
 
 const chartSimulatorProjectionRoot =
   process.env.HHWX_CHART_SIMULATOR_PROJECTION_ROOT?.trim() || null;
@@ -260,7 +260,7 @@ test(
             `${id}/${recipeName} should register ${resourceId}`,
           );
         }
-        const runtime = createBandoriDefaultEffectRuntime(recipe, {
+        const runtime = createBandoriEffectRecipeRuntime(recipe, {
           buttonIndex: 3,
           seed: 17,
         });

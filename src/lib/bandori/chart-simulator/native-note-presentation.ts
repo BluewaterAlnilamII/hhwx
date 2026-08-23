@@ -7,6 +7,7 @@ import {
   getBandoriNativeCurveLaneAnchor,
   type CompiledBandoriChart,
 } from "./compiler";
+import { lowerBoundNumber, upperBoundNumber } from "./numeric";
 
 export const BANDORI_NATIVE_NOTE_PIXELS_PER_UNIT = 375;
 export const BANDORI_NATIVE_NOTE_SPEED_MIN = 1;
@@ -969,28 +970,14 @@ export function lowerBoundBandoriNoteTime(
   values: ArrayLike<number>,
   target: number,
 ): number {
-  let low = 0;
-  let high = values.length;
-  while (low < high) {
-    const middle = (low + high) >>> 1;
-    if (values[middle] < target) low = middle + 1;
-    else high = middle;
-  }
-  return low;
+  return lowerBoundNumber(values, target);
 }
 
 export function upperBoundBandoriNoteTime(
   values: ArrayLike<number>,
   target: number,
 ): number {
-  let low = 0;
-  let high = values.length;
-  while (low < high) {
-    const middle = (low + high) >>> 1;
-    if (values[middle] <= target) low = middle + 1;
-    else high = middle;
-  }
-  return low;
+  return upperBoundNumber(values, target);
 }
 
 function projectBandoriNativeLane(

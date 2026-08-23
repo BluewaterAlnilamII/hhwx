@@ -1,9 +1,11 @@
 import recipes from "./native-swipe-effect-recipes.json";
 import {
-  createBandoriDefaultEffectRuntime,
-  type BandoriDefaultEffectRuntime,
+  compileBandoriEffectRecipe,
+  createBandoriEffectRecipeRuntime,
+  type BandoriCompiledEffectRecipe,
+  type BandoriEffectRecipeRuntime,
   type BandoriEffectFrameInstance,
-} from "./default-effects";
+} from "./effect-recipe-runtime";
 
 export const BANDORI_NATIVE_SWIPE_EFFECT_TEXTURE_URLS = {
   "tap-circle": "/local/chart-simulator/ingameskin/tapeffect/skin00/textures/effect_circle.png",
@@ -31,6 +33,13 @@ export type BandoriNativeSwipeEffectPlacement = Readonly<{
 }>;
 
 type NativeSwipeRecipe = (typeof recipes)[BandoriNativeSwipeEffectKind];
+
+const compiledRecipes = Object.fromEntries(
+  Object.entries(recipes).map(([kind, recipe]) => [
+    kind,
+    compileBandoriEffectRecipe(recipe),
+  ]),
+) as Record<BandoriNativeSwipeEffectKind, BandoriCompiledEffectRecipe>;
 
 export function getBandoriNativeSwipeEffectRecipe(
   kind: BandoriNativeSwipeEffectKind,
@@ -78,9 +87,9 @@ export function createBandoriNativeSwipeEffectRuntime(
   kind: BandoriNativeSwipeEffectKind,
   lane: number,
   seed: number,
-): BandoriDefaultEffectRuntime {
-  return createBandoriDefaultEffectRuntime(
-    getBandoriNativeSwipeEffectRecipe(kind),
+): BandoriEffectRecipeRuntime {
+  return createBandoriEffectRecipeRuntime(
+    compiledRecipes[kind],
     { buttonIndex: lane, seed },
   );
 }

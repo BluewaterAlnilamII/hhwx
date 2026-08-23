@@ -120,12 +120,14 @@ import {
   type BandoriNativeSwipeEffectKind,
 } from "@/lib/bandori/chart-simulator/native-swipe-effect-presentation";
 import {
-  createBandoriDefaultEffectRuntime,
-  getBandoriDefaultEffectPlacement,
-  type BandoriDefaultEffectPlacement,
-  type BandoriDefaultEffectRuntime,
+  compileBandoriEffectRecipe,
+  createBandoriEffectRecipeRuntime,
+  getBandoriEffectRecipePlacement,
+  type BandoriCompiledEffectRecipe,
+  type BandoriEffectRecipePlacement,
+  type BandoriEffectRecipeRuntime,
   type BandoriEffectFrameInstance,
-} from "@/lib/bandori/chart-simulator/default-effects";
+} from "@/lib/bandori/chart-simulator/effect-recipe-runtime";
 import {
   BANDORI_NATIVE_FIELD_RECT,
   BANDORI_NATIVE_STAGE_SIZE,
@@ -354,9 +356,9 @@ type SwipeEffectDisplay = {
   lane: number;
   low: Container;
   isNativeDefault: boolean;
-  placement: BandoriDefaultEffectPlacement;
+  placement: BandoriEffectRecipePlacement;
   rangeWidth: number;
-  runtime: BandoriDefaultEffectRuntime;
+  runtime: BandoriEffectRecipeRuntime;
   renderables: ParticleEffectRenderable[];
   terminalOffsetX: number;
   terminalOffsetY: number;
@@ -368,8 +370,8 @@ type HoldEffectDisplay = {
   flash: Sprite;
   high: Container;
   low: Container;
-  placement: BandoriDefaultEffectPlacement;
-  runtime: BandoriDefaultEffectRuntime;
+  placement: BandoriEffectRecipePlacement;
+  runtime: BandoriEffectRecipeRuntime;
   renderables: ParticleEffectRenderable[];
 };
 
@@ -379,7 +381,7 @@ type LoadedLimitedPerformanceEffects = {
     recipeKey: string;
     travelSpeedMultiplier: number;
   }> | null;
-  recipes: ReadonlyMap<string, unknown>;
+  recipes: ReadonlyMap<string, BandoriCompiledEffectRecipe>;
   textures: ReadonlyMap<string, Texture>;
   usesDirectionalFlickEffect: boolean;
   usesTapEffect: boolean;
@@ -802,7 +804,7 @@ async function loadLimitedPerformanceEffects(
   };
   const [recipeEntries, textureEntries] = await Promise.all([
     Promise.all(Object.entries(recipeUrls).map(async ([key, url]) => {
-      return [key, await loadJson(url)] as const;
+      return [key, compileBandoriEffectRecipe(await loadJson(url))] as const;
     })),
     Promise.all(Object.entries(effects.resources).map(async ([key, url]) => (
       [key, await loadTexture(url)] as const
@@ -955,7 +957,7 @@ function createHitEffectDisplay(
 }
 
 function createLimitedEffectDisplay(
-  recipe: unknown,
+  recipe: BandoriCompiledEffectRecipe,
   animatedVerticalBeam: LoadedLimitedPerformanceEffects["animatedVerticalBeam"],
   lane: number,
   rangeWidth: number,
@@ -985,9 +987,9 @@ function createLimitedEffectDisplay(
     kind: "flick",
     lane,
     low,
-    placement: getBandoriDefaultEffectPlacement(recipe, lane),
+    placement: getBandoriEffectRecipePlacement(recipe, lane),
     rangeWidth,
-    runtime: createBandoriDefaultEffectRuntime(recipe, { buttonIndex: lane, seed: 0 }),
+    runtime: createBandoriEffectRecipeRuntime(recipe, { buttonIndex: lane, seed: 0 }),
     renderables: [],
     terminalOffsetX: 0,
     terminalOffsetY: 0,
@@ -1201,7 +1203,7 @@ function updateParticleEffectMesh(
   renderable: Extract<ParticleEffectRenderable, { kind: "mesh" }>,
   instance: BandoriEffectFrameInstance,
   texture: Texture,
-  placement: BandoriDefaultEffectPlacement,
+  placement: BandoriEffectRecipePlacement,
   pixelScale: number,
 ): void {
   const meshFrame = instance.mesh;
@@ -1442,7 +1444,7 @@ function createHoldEffectDisplay(
   flashTexture: Texture,
   flashAnchorX: number,
   flashAnchorY: number,
-  limitedRecipe: unknown | null,
+  limitedRecipe: BandoriCompiledEffectRecipe | null,
   seed: number,
   kind: "long" | "slide",
   rangeWidth: number,
@@ -1467,10 +1469,10 @@ function createHoldEffectDisplay(
   flashLayer.addChild(flash);
 
   const runtime = limitedRecipe
-    ? createBandoriDefaultEffectRuntime(limitedRecipe, { buttonIndex: 3, seed })
+    ? createBandoriEffectRecipeRuntime(limitedRecipe, { buttonIndex: 3, seed })
     : createBandoriNativeHoldEffectRuntime(seed, { kind, rangeWidth });
   const placement = limitedRecipe
-    ? getBandoriDefaultEffectPlacement(limitedRecipe, 3)
+    ? getBandoriEffectRecipePlacement(limitedRecipe, 3)
     : BANDORI_NATIVE_HOLD_EFFECT_PLACEMENT;
   runtime.play(0, seed);
   return {
@@ -1734,6 +1736,7 @@ export default function NativeSimulatorStage({
 }: NativeSimulatorStageProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const allPerfectStatusEnabledRef = useRef(allPerfectStatusEnabled);
+  const isMirroredRef = useRef(isMirrored);
   const laneEffectEnabledRef = useRef(laneEffectEnabled);
   const noteApproachTimeScaleRef = useRef(noteApproachTimeScale);
   const noteSpeedRef = useRef(noteSpeed);
@@ -1744,6 +1747,10 @@ export default function NativeSimulatorStage({
   useEffect(() => {
     allPerfectStatusEnabledRef.current = allPerfectStatusEnabled;
   }, [allPerfectStatusEnabled]);
+
+  useEffect(() => {
+    isMirroredRef.current = isMirrored;
+  }, [isMirrored]);
 
   useEffect(() => {
     // Speed is read by the ticker and must not recreate the Pixi renderer.
@@ -1772,9 +1779,41 @@ export default function NativeSimulatorStage({
     if (!container) return;
 
     const app = new Application();
+    const resourceAbortController = new AbortController();
     const localFrameTextures: Texture[] = [];
     const localShaders: Shader[] = [];
     let disposed = false;
+    let appInitialized = false;
+    let appDestroyed = false;
+    let loadedResourceTotal: number | null = null;
+    const destroyApp = () => {
+      if (appDestroyed) return;
+      appDestroyed = true;
+      resourceAbortController.abort();
+      try {
+        if (appInitialized) app.stop();
+        app.destroy({ removeView: true }, { children: true });
+      } catch {
+        // Initialization can be aborted before the renderer exists.
+      }
+      for (const shader of localShaders.splice(0)) shader.destroy();
+      for (const texture of localFrameTextures.splice(0)) texture.destroy(false);
+    };
+    const failStage = (
+      failureStatus: Exclude<StageStatus, "loading" | "ready">,
+      completedResources = 0,
+      totalResources: number | null = null,
+    ) => {
+      if (disposed) return;
+      setStatus(failureStatus);
+      onLoadProgress({
+        completedResources,
+        loadId,
+        phase: "error",
+        totalResources,
+      });
+      destroyApp();
+    };
     onLoadProgress({
       completedResources: 0,
       loadId,
@@ -1789,23 +1828,17 @@ export default function NativeSimulatorStage({
           height: BANDORI_NATIVE_STAGE_SIZE.height,
           backgroundAlpha: 0,
           antialias: true,
+          autoStart: false,
           autoDensity: true,
           resolution: Math.min(window.devicePixelRatio || 1, 2),
         });
       } catch {
-        if (!disposed) {
-          setStatus("rendererError");
-          onLoadProgress({
-            completedResources: 0,
-            loadId,
-            phase: "error",
-            totalResources: null,
-          });
-        }
+        failStage("rendererError");
         return;
       }
+      appInitialized = true;
       if (disposed) {
-        app.destroy({ removeView: true }, { children: true });
+        destroyApp();
         return;
       }
 
@@ -1815,69 +1848,62 @@ export default function NativeSimulatorStage({
       app.canvas.style.height = "100%";
       container.appendChild(app.canvas);
 
-      let chartVisuals: BandoriNativeChartVisuals;
+      let normalChartVisuals: BandoriNativeChartVisuals;
+      let mirroredChartVisuals: BandoriNativeChartVisuals;
       try {
-        chartVisuals = prepareBandoriNativeChartVisuals(compiled, isMirrored);
+        normalChartVisuals = prepareBandoriNativeChartVisuals(compiled, false);
+        mirroredChartVisuals = prepareBandoriNativeChartVisuals(compiled, true);
       } catch (error) {
         if (error instanceof BandoriNativeNoteContractError) {
-          if (!disposed) {
-            setStatus("noteContractError");
-            onLoadProgress({
-              completedResources: 0,
-              loadId,
-              phase: "error",
-              totalResources: null,
-            });
-          }
+          failStage("noteContractError");
           return;
         }
         throw error;
       }
+      let chartVisuals = isMirroredRef.current
+        ? mirroredChartVisuals
+        : normalChartVisuals;
 
       let resources: Texture[];
       const habahiroSpriteNames = new Set<BandoriHabahiroSpriteName>();
       try {
-        for (const group of chartVisuals.notes) {
-          if (!group) continue;
-          for (const visual of group.visuals) {
-            const bodyName = getBandoriHabahiroBodySpriteName(visual);
-            const iconName = getBandoriHabahiroIconSpriteName(visual);
-            if (bodyName) habahiroSpriteNames.add(bodyName);
-            if (iconName) habahiroSpriteNames.add(iconName);
-            if (bodyName && visual.body === "normal") {
-              habahiroSpriteNames.add(getBandoriHabahiroRhythmSpriteName(visual));
+        for (const preparedVisuals of [normalChartVisuals, mirroredChartVisuals]) {
+          for (const group of preparedVisuals.notes) {
+            if (!group) continue;
+            for (const visual of group.visuals) {
+              const bodyName = getBandoriHabahiroBodySpriteName(visual);
+              const iconName = getBandoriHabahiroIconSpriteName(visual);
+              if (bodyName) habahiroSpriteNames.add(bodyName);
+              if (iconName) habahiroSpriteNames.add(iconName);
+              if (bodyName && visual.body === "normal") {
+                habahiroSpriteNames.add(getBandoriHabahiroRhythmSpriteName(visual));
+              }
+            }
+          }
+          for (const ribbon of preparedVisuals.ribbons) {
+            const head = ribbon.points[0];
+            if (head && head.coveredLanes.length > 1) {
+              habahiroSpriteNames.add(
+                getBandoriHabahiroLongFlashSpriteName(head.coveredLanes),
+              );
             }
           }
         }
-        for (const ribbon of chartVisuals.ribbons) {
-          const head = ribbon.points[0];
-          if (head && head.coveredLanes.length > 1) {
-            habahiroSpriteNames.add(
-              getBandoriHabahiroLongFlashSpriteName(head.coveredLanes),
-            );
-          }
-        }
       } catch {
-        if (!disposed) {
-          setStatus("noteContractError");
-          onLoadProgress({
-            completedResources: 0,
-            loadId,
-            phase: "error",
-            totalResources: null,
-          });
-        }
+        failStage("noteContractError");
         return;
       }
       const usedFrameIds = new Set<BandoriNativeNoteFrameId>();
-      for (const group of chartVisuals.notes) {
-        if (!group) continue;
-        for (const visual of group.visuals) {
-          if (!getBandoriHabahiroBodySpriteName(visual)) {
-            usedFrameIds.add(getBandoriNativeBodyFrameId(visual));
-          }
-          if (visual.icon && !isBandoriHabahiroMultiRangeFlickIcon(visual)) {
-            usedFrameIds.add(getBandoriNativeIconFrameId(visual.icon));
+      for (const preparedVisuals of [normalChartVisuals, mirroredChartVisuals]) {
+        for (const group of preparedVisuals.notes) {
+          if (!group) continue;
+          for (const visual of group.visuals) {
+            if (!getBandoriHabahiroBodySpriteName(visual)) {
+              usedFrameIds.add(getBandoriNativeBodyFrameId(visual));
+            }
+            if (visual.icon && !isBandoriHabahiroMultiRangeFlickIcon(visual)) {
+              usedFrameIds.add(getBandoriNativeIconFrameId(visual.icon));
+            }
           }
         }
       }
@@ -1885,7 +1911,6 @@ export default function NativeSimulatorStage({
       let noteSpriteAnchors = new Map<string, NativeSpriteAnchor>();
       let limitedEffects: LoadedLimitedPerformanceEffects | null = null;
       let spriteFrameTextures = new Map<BandoriNativeNoteFrameId, Texture>();
-      let loadedResourceTotal: number | null = null;
       try {
         const usesLimitedTapEffect = limitedPerformanceSkin?.coverage.includes(
           "tapEffect",
@@ -1893,13 +1918,6 @@ export default function NativeSimulatorStage({
         const usesLimitedDirectionalEffect = limitedPerformanceSkin?.coverage.includes(
           "directionalFlickEffect",
         ) === true;
-        const ordinaryTapTextureUrls = usesLimitedTapEffect ? [] : [
-          BANDORI_NATIVE_TAP_EFFECT_ATLAS_1_URL,
-          BANDORI_NATIVE_TAP_EFFECT_ATLAS_2_URL,
-          BANDORI_NATIVE_SWIPE_EFFECT_TEXTURE_URLS["tap-light"],
-          BANDORI_NATIVE_SWIPE_EFFECT_TEXTURE_URLS["tap-circle"],
-          BANDORI_NATIVE_HOLD_EFFECT_TEXTURE_URLS["tap-default-particle"],
-        ];
         const rhythmSupportUrls = Array.from(
           { length: 7 },
           (_, lane) => getBandoriNativeRhythmSupportNoteUrl(noteSkin, lane),
@@ -1913,6 +1931,43 @@ export default function NativeSimulatorStage({
           getBandoriNativeLaneEffectUrl("NoteLaneEffect_2.png"),
           getBandoriNativeLaneEffectUrl("NoteLaneEffect_3.png"),
           getBandoriNativeLaneEffectUrl("NoteLaneEffect_4.png"),
+        ];
+        const mainTextureUrls: Array<string | null> = [
+          ...backgroundSkin.layers.map((layer) => layer.textureUrl),
+          fieldSkin.textureUrl,
+          fieldSkin.judgmentLineTextureUrl,
+          noteSkin.frameSource === "atlas" ? noteSkin.atlasUrl : null,
+          directionalFlickSkin.frameSource === "atlas"
+            ? directionalFlickSkin.atlasUrl
+            : null,
+          noteSkin.longNoteLineUrl,
+          noteSkin.curveSlideNoteLineUrl,
+          noteSkin.syncLineUrl,
+          directionalFlickSkin.lineLeftUrl,
+          directionalFlickSkin.lineRightUrl,
+          usesLimitedTapEffect ? null : BANDORI_NATIVE_TAP_EFFECT_ATLAS_1_URL,
+          usesLimitedTapEffect ? null : BANDORI_NATIVE_TAP_EFFECT_ATLAS_2_URL,
+          usesLimitedTapEffect
+            ? null
+            : BANDORI_NATIVE_SWIPE_EFFECT_TEXTURE_URLS["tap-light"],
+          usesLimitedTapEffect
+            ? null
+            : BANDORI_NATIVE_SWIPE_EFFECT_TEXTURE_URLS["tap-circle"],
+          usesLimitedTapEffect
+            ? null
+            : BANDORI_NATIVE_HOLD_EFFECT_TEXTURE_URLS["tap-default-particle"],
+          limitedPerformanceSkin?.judgmentPerfectTextureUrl
+            ?? BANDORI_NATIVE_PERFECT_JUDGMENT_URL,
+          BANDORI_NATIVE_COMBO_UNIT_URL,
+          BANDORI_NATIVE_ALL_PERFECT_COMBO_UNIT_URL,
+          ...BANDORI_NATIVE_COMBO_DIGIT_URLS,
+          ...BANDORI_NATIVE_ALL_PERFECT_COMBO_DIGIT_URLS,
+          ...rhythmSupportUrls,
+          ...longFlashUrls,
+          ...laneEffectUrls,
+          ...BANDORI_NATIVE_DIRECTIONAL_EFFECT_FRAME_URLS.map(
+            (url) => usesLimitedDirectionalEffect ? null : url,
+          ),
         ];
         const spriteFrameUrls = [...usedFrameIds].flatMap((frameId) => {
           const url = getBandoriNativeNoteFrameUrl(
@@ -1935,31 +1990,7 @@ export default function NativeSimulatorStage({
           ? Object.values(limitedPerformanceSkin.effects.resources)
           : [];
         const requiredLogicalUrls = [
-          ...backgroundSkin.layers.map((layer) => layer.textureUrl),
-          fieldSkin.textureUrl,
-          fieldSkin.judgmentLineTextureUrl,
-          ...(noteSkin.frameSource === "atlas" ? [noteSkin.atlasUrl] : []),
-          ...(directionalFlickSkin.frameSource === "atlas"
-            ? [directionalFlickSkin.atlasUrl]
-            : []),
-          noteSkin.longNoteLineUrl,
-          noteSkin.curveSlideNoteLineUrl,
-          noteSkin.syncLineUrl,
-          directionalFlickSkin.lineLeftUrl,
-          directionalFlickSkin.lineRightUrl,
-          ...ordinaryTapTextureUrls,
-          limitedPerformanceSkin?.judgmentPerfectTextureUrl
-            ?? BANDORI_NATIVE_PERFECT_JUDGMENT_URL,
-          BANDORI_NATIVE_COMBO_UNIT_URL,
-          BANDORI_NATIVE_ALL_PERFECT_COMBO_UNIT_URL,
-          ...BANDORI_NATIVE_COMBO_DIGIT_URLS,
-          ...BANDORI_NATIVE_ALL_PERFECT_COMBO_DIGIT_URLS,
-          ...rhythmSupportUrls,
-          ...longFlashUrls,
-          ...laneEffectUrls,
-          ...(usesLimitedDirectionalEffect
-            ? []
-            : BANDORI_NATIVE_DIRECTIONAL_EFFECT_FRAME_URLS),
+          ...mainTextureUrls.filter((url): url is string => url !== null),
           ...spriteFrameUrls,
           ...habahiroUrls,
           ...(noteSkin.spriteAnchorsUrl ? [noteSkin.spriteAnchorsUrl] : []),
@@ -2003,6 +2034,7 @@ export default function NativeSimulatorStage({
           const response = await fetch(resolvedUrl, {
             cache: "force-cache",
             credentials: "omit",
+            signal: resourceAbortController.signal,
           });
           if (!response.ok) {
             throw new Error(`Simulator resource failed: ${logicalUrl}`);
@@ -2011,84 +2043,33 @@ export default function NativeSimulatorStage({
           markResourceComplete(resolvedUrl);
           return payload;
         };
-        const loadOrdinaryTapTexture = (logicalUrl: string) => (
-          usesLimitedTapEffect ? Promise.resolve(Texture.EMPTY) : loadTexture(logicalUrl)
-        );
-        const limitedEffectsPromise = loadLimitedPerformanceEffects(
-          limitedPerformanceSkin,
-          loadJson,
-          loadTexture,
-        );
-        const noteSpriteAnchorsPromise = loadNativeSpriteAnchors(
-          noteSkin.spriteAnchorsUrl,
-          loadJson,
-        );
-        const spriteFramePromise = Promise.all([...usedFrameIds].map(async (frameId) => {
-          const url = getBandoriNativeNoteFrameUrl(
-            frameId,
-            noteSkin,
-            directionalFlickSkin,
-          );
-          return url
-            ? [frameId, await loadTexture(url)] as const
-            : null;
-        }));
-        resources = await Promise.all([
-          ...backgroundSkin.layers.map((layer) => loadTexture(layer.textureUrl)),
-          loadTexture(fieldSkin.textureUrl),
-          loadTexture(fieldSkin.judgmentLineTextureUrl),
-          noteSkin.frameSource === "atlas"
-            ? loadTexture(noteSkin.atlasUrl)
-            : Promise.resolve(Texture.EMPTY),
-          directionalFlickSkin.frameSource === "atlas"
-            ? loadTexture(directionalFlickSkin.atlasUrl)
-            : Promise.resolve(Texture.EMPTY),
-          loadTexture(noteSkin.longNoteLineUrl),
-          loadTexture(noteSkin.curveSlideNoteLineUrl),
-          loadTexture(noteSkin.syncLineUrl),
-          loadTexture(directionalFlickSkin.lineLeftUrl),
-          loadTexture(directionalFlickSkin.lineRightUrl),
-          loadOrdinaryTapTexture(BANDORI_NATIVE_TAP_EFFECT_ATLAS_1_URL),
-          loadOrdinaryTapTexture(BANDORI_NATIVE_TAP_EFFECT_ATLAS_2_URL),
-          loadOrdinaryTapTexture(BANDORI_NATIVE_SWIPE_EFFECT_TEXTURE_URLS["tap-light"]),
-          loadOrdinaryTapTexture(BANDORI_NATIVE_SWIPE_EFFECT_TEXTURE_URLS["tap-circle"]),
-          loadOrdinaryTapTexture(BANDORI_NATIVE_HOLD_EFFECT_TEXTURE_URLS["tap-default-particle"]),
-          loadTexture(
-            limitedPerformanceSkin?.judgmentPerfectTextureUrl
-              ?? BANDORI_NATIVE_PERFECT_JUDGMENT_URL,
-          ),
-          loadTexture(BANDORI_NATIVE_COMBO_UNIT_URL),
-          loadTexture(BANDORI_NATIVE_ALL_PERFECT_COMBO_UNIT_URL),
-          ...BANDORI_NATIVE_COMBO_DIGIT_URLS.map(loadTexture),
-          ...BANDORI_NATIVE_ALL_PERFECT_COMBO_DIGIT_URLS.map(
-            loadTexture,
-          ),
-          ...Array.from(
-            { length: 7 },
-            (_, lane) => loadTexture(rhythmSupportUrls[lane]),
-          ),
-          ...Array.from(
-            { length: 7 },
-            (_, lane) => loadTexture(longFlashUrls[lane]),
-          ),
-          ...laneEffectUrls.map(loadTexture),
-          ...BANDORI_NATIVE_DIRECTIONAL_EFFECT_FRAME_URLS.map(
-            (url) => usesLimitedDirectionalEffect
-              ? Promise.resolve(Texture.EMPTY)
-              : loadTexture(url),
-          ),
-        ]);
         const [
+          loadedResources,
           loadedLimitedEffects,
           loadedSpriteFrames,
           loadedNoteSpriteAnchors,
           habahiroEntries,
-        ] =
-          await Promise.all([
-            limitedEffectsPromise,
-            spriteFramePromise,
-            noteSpriteAnchorsPromise,
-            Promise.all([...habahiroSpriteNames].map(async (name) => {
+        ] = await Promise.all([
+          Promise.all(mainTextureUrls.map(
+            (url) => url ? loadTexture(url) : Promise.resolve(Texture.EMPTY),
+          )),
+          loadLimitedPerformanceEffects(
+            limitedPerformanceSkin,
+            loadJson,
+            loadTexture,
+          ),
+          Promise.all([...usedFrameIds].map(async (frameId) => {
+            const url = getBandoriNativeNoteFrameUrl(
+              frameId,
+              noteSkin,
+              directionalFlickSkin,
+            );
+            return url
+              ? [frameId, await loadTexture(url)] as const
+              : null;
+          })),
+          loadNativeSpriteAnchors(noteSkin.spriteAnchorsUrl, loadJson),
+          Promise.all([...habahiroSpriteNames].map(async (name) => {
             const texture = await loadTexture(getBandoriHabahiroSpriteUrl(name));
             const contract = BANDORI_HABAHIRO_SPRITES[name];
             return [name, {
@@ -2096,11 +2077,12 @@ export default function NativeSimulatorStage({
               anchorY: contract.anchorY,
               texture,
             }] as const;
-            })),
-          ]);
+          })),
+        ]);
         if (completedResourceUrls.size !== totalResources) {
           throw new Error("Simulator resource plan did not complete");
         }
+        resources = loadedResources;
         limitedEffects = loadedLimitedEffects;
         noteSpriteAnchors = new Map(loadedNoteSpriteAnchors);
         spriteFrameTextures = new Map(
@@ -2114,15 +2096,7 @@ export default function NativeSimulatorStage({
           totalResources,
         });
       } catch {
-        if (!disposed) {
-          setStatus("resourceError");
-          onLoadProgress({
-            completedResources: 0,
-            loadId,
-            phase: "error",
-            totalResources: null,
-          });
-        }
+        failStage("resourceError");
         return;
       }
       if (disposed) return;
@@ -2258,15 +2232,11 @@ export default function NativeSimulatorStage({
         }
       } catch (error) {
         if (error instanceof BandoriNativeNoteContractError) {
-          if (!disposed) {
-            setStatus("noteContractError");
-            onLoadProgress({
-              completedResources: loadedResourceTotal ?? 0,
-              loadId,
-              phase: "error",
-              totalResources: loadedResourceTotal,
-            });
-          }
+          failStage(
+            "noteContractError",
+            loadedResourceTotal ?? 0,
+            loadedResourceTotal,
+          );
           return;
         }
         throw error;
@@ -2412,10 +2382,23 @@ export default function NativeSimulatorStage({
         laneEffectLayer.addChild(display.sprite);
         return display;
       });
-      const syncLineDisplays = collectBandoriNativeSyncLinePairs(
+      const normalSyncLinePairs = collectBandoriNativeSyncLinePairs(
         compiled,
-        chartVisuals,
-      ).map((pair) => {
+        normalChartVisuals,
+      );
+      const mirroredSyncLinePairs = collectBandoriNativeSyncLinePairs(
+        compiled,
+        mirroredChartVisuals,
+      );
+      if (normalSyncLinePairs.length !== mirroredSyncLinePairs.length) {
+        throw new BandoriNativeNoteContractError(
+          "Mirrored sync-line topology does not match the source chart",
+        );
+      }
+      const initialSyncLinePairs = isMirroredRef.current
+        ? mirroredSyncLinePairs
+        : normalSyncLinePairs;
+      const syncLineDisplays = initialSyncLinePairs.map((pair) => {
         const display = createSyncLineDisplay(
           pair,
           syncLineTexture,
@@ -2425,12 +2408,21 @@ export default function NativeSimulatorStage({
         syncLineLayer.addChild(display.sprite);
         return display;
       });
+      const syncLinesByNoteIndex: SyncLineDisplay[][] = Array.from(
+        { length: compiled.notes.times.length },
+        () => [],
+      );
+      const visibleSyncLines = new Set<SyncLineDisplay>();
+      const desiredSyncLines = new Set<SyncLineDisplay>();
       const hitEffects = new Map<string, HitEffectDisplay>();
       const swipeEffects = new Map<string, SwipeEffectDisplay>();
       const holdEffects = new Map<number, HoldEffectDisplay>();
 
       const ribbonSegments: RibbonSegmentDisplay[] = [];
+      const ribbonSegmentsByIndex = new Map<number, RibbonSegmentDisplay[]>();
       for (const ribbon of chartVisuals.ribbons) {
+        const displays: RibbonSegmentDisplay[] = [];
+        ribbonSegmentsByIndex.set(ribbon.ribbonIndex, displays);
         const texture = ribbon.isCurvedSlide
           ? curveSlideNoteLineTexture
           : longNoteLineTexture;
@@ -2438,41 +2430,162 @@ export default function NativeSimulatorStage({
           const ordinary = createRibbonMeshDisplay(texture, "ordinary");
           const advanced = createRibbonMeshDisplay(texture, "advanced");
           ribbonLayer.addChild(ordinary.mesh, advanced.mesh);
-          ribbonSegments.push({
+          const display = {
             advanced,
             end: ribbon.points[pointIndex],
             ordinary,
             ribbon,
             ribbonPointIndex: pointIndex - 1,
             start: ribbon.points[pointIndex - 1],
-          });
+          };
+          ribbonSegments.push(display);
+          displays.push(display);
         }
       }
 
-      const ribbonByIndex = new Map(
-        chartVisuals.ribbons.map((ribbon) => [ribbon.ribbonIndex, ribbon]),
-      );
+      const ribbonByIndex = new Map<number, BandoriNativeRibbonVisual>();
       const ribbonPointByNoteIndex: Array<{
         pointIndex: number;
         ribbon: BandoriNativeRibbonVisual;
       } | null> = Array.from({ length: compiled.notes.times.length }, () => null);
       const ribbonNoteIndexes = new Map<number, number[]>();
-      for (let noteIndex = 0; noteIndex < compiled.notes.times.length; noteIndex += 1) {
-        const ribbonIndex = compiled.notes.ribbonIndexes[noteIndex];
-        const ribbon = ribbonByIndex.get(ribbonIndex);
-        const pointIndex = compiled.notes.sourceNodeIndexes[noteIndex];
-        if (!ribbon || pointIndex < 0 || pointIndex >= ribbon.points.length) continue;
-        ribbonPointByNoteIndex[noteIndex] = { pointIndex, ribbon };
-        const indexes = ribbonNoteIndexes.get(ribbonIndex) ?? [];
-        indexes.push(noteIndex);
-        ribbonNoteIndexes.set(ribbonIndex, indexes);
-      }
+      const applyChartVisuals = (
+        nextVisuals: BandoriNativeChartVisuals,
+        syncLinePairs: readonly BandoriNativeSyncLinePair[],
+      ) => {
+        chartVisuals = nextVisuals;
+        for (const displays of syncLinesByNoteIndex) displays.length = 0;
+        ribbonByIndex.clear();
+        ribbonNoteIndexes.clear();
+        ribbonPointByNoteIndex.fill(null);
+        for (const ribbon of chartVisuals.ribbons) {
+          ribbonByIndex.set(ribbon.ribbonIndex, ribbon);
+        }
+        for (let noteIndex = 0; noteIndex < compiled.notes.times.length; noteIndex += 1) {
+          const ribbonIndex = compiled.notes.ribbonIndexes[noteIndex];
+          const ribbon = ribbonByIndex.get(ribbonIndex);
+          const pointIndex = compiled.notes.sourceNodeIndexes[noteIndex];
+          if (!ribbon || pointIndex < 0 || pointIndex >= ribbon.points.length) continue;
+          ribbonPointByNoteIndex[noteIndex] = { pointIndex, ribbon };
+          const indexes = ribbonNoteIndexes.get(ribbonIndex) ?? [];
+          indexes.push(noteIndex);
+          ribbonNoteIndexes.set(ribbonIndex, indexes);
+        }
+        let segmentIndex = 0;
+        for (const ribbon of chartVisuals.ribbons) {
+          for (let pointIndex = 1; pointIndex < ribbon.points.length; pointIndex += 1) {
+            const segment = ribbonSegments[segmentIndex];
+            if (!segment) {
+              throw new BandoriNativeNoteContractError(
+                "Mirrored ribbon topology does not match the source chart",
+              );
+            }
+            segment.end = ribbon.points[pointIndex];
+            segment.ribbon = ribbon;
+            segment.ribbonPointIndex = pointIndex - 1;
+            segment.start = ribbon.points[pointIndex - 1];
+            segmentIndex += 1;
+          }
+        }
+        if (segmentIndex !== ribbonSegments.length) {
+          throw new BandoriNativeNoteContractError(
+            "Mirrored ribbon topology does not match the source chart",
+          );
+        }
+        for (let index = 0; index < syncLineDisplays.length; index += 1) {
+          const display = syncLineDisplays[index];
+          const pair = syncLinePairs[index];
+          if (!pair) {
+            throw new BandoriNativeNoteContractError(
+              "Mirrored sync-line topology does not match the source chart",
+            );
+          }
+          display.leftNoteIndex = pair.leftNoteIndex;
+          display.leftVisualLane = pair.leftVisualLane;
+          display.rightNoteIndex = pair.rightNoteIndex;
+          display.rightVisualLane = pair.rightVisualLane;
+          display.sprite.visible = false;
+          syncLinesByNoteIndex[display.leftNoteIndex]?.push(display);
+          if (display.rightNoteIndex !== display.leftNoteIndex) {
+            syncLinesByNoteIndex[display.rightNoteIndex]?.push(display);
+          }
+        }
+      };
+      applyChartVisuals(chartVisuals, initialSyncLinePairs);
+
+      const ribbonIntervalsByStart = normalChartVisuals.ribbons.map((ribbon) => {
+        const first = ribbon.points[0];
+        const last = ribbon.points.at(-1);
+        if (!first || !last) {
+          throw new BandoriNativeNoteContractError("Ribbon interval is empty");
+        }
+        return {
+          endTimeSeconds: last.time,
+          ribbonIndex: ribbon.ribbonIndex,
+          startTimeSeconds: first.time,
+        };
+      }).sort((left, right) => left.startTimeSeconds - right.startTimeSeconds);
+      const ribbonIntervalsByEnd = [...ribbonIntervalsByStart].sort(
+        (left, right) => left.endTimeSeconds - right.endTimeSeconds,
+      );
+      const visibleRibbonIndexes = new Set<number>();
+      const visibleRibbons: BandoriNativeRibbonVisual[] = [];
+      let nextRibbonStartIndex = 0;
+      let nextRibbonEndIndex = 0;
+      let previousRibbonStartThreshold = Number.NEGATIVE_INFINITY;
+      let previousRibbonTimeSeconds = Number.NEGATIVE_INFINITY;
+      const updateVisibleRibbonIndexes = (
+        presentationTimeSeconds: number,
+        arrivalSeconds: number,
+      ) => {
+        const startThreshold = presentationTimeSeconds + arrivalSeconds;
+        if (
+          presentationTimeSeconds < previousRibbonTimeSeconds
+          || startThreshold < previousRibbonStartThreshold
+        ) {
+          visibleRibbonIndexes.clear();
+          nextRibbonStartIndex = 0;
+          nextRibbonEndIndex = 0;
+        }
+        while (
+          nextRibbonStartIndex < ribbonIntervalsByStart.length
+          && ribbonIntervalsByStart[nextRibbonStartIndex].startTimeSeconds
+            <= startThreshold
+        ) {
+          visibleRibbonIndexes.add(
+            ribbonIntervalsByStart[nextRibbonStartIndex].ribbonIndex,
+          );
+          nextRibbonStartIndex += 1;
+        }
+        while (
+          nextRibbonEndIndex < ribbonIntervalsByEnd.length
+          && ribbonIntervalsByEnd[nextRibbonEndIndex].endTimeSeconds
+            < presentationTimeSeconds
+        ) {
+          visibleRibbonIndexes.delete(
+            ribbonIntervalsByEnd[nextRibbonEndIndex].ribbonIndex,
+          );
+          nextRibbonEndIndex += 1;
+        }
+        previousRibbonStartThreshold = startThreshold;
+        previousRibbonTimeSeconds = presentationTimeSeconds;
+      };
 
       const activeNotes = new Map<number, NoteGroupDisplay>();
+      const renderedRibbonIndexes = new Set<number>();
+      const desiredNoteMarks = new Uint32Array(compiled.notes.times.length);
+      const desiredNoteIndexes: number[] = [];
+      let desiredNoteGeneration = 0;
+      const markDesiredNote = (index: number) => {
+        if (desiredNoteMarks[index] === desiredNoteGeneration) return;
+        desiredNoteMarks[index] = desiredNoteGeneration;
+        desiredNoteIndexes.push(index);
+      };
       let effectPlaybackState = getEffectPlaybackState();
       let effectTimelineVersion = effectPlaybackState.timelineVersion;
       let lastEffectTimeSeconds = getPresentationTime();
       let effectAnimationTimeSeconds = 0;
+      let renderedMirror = isMirroredRef.current;
 
       const clearEffects = () => {
         clearPerfectJudgment(perfectJudgment);
@@ -2497,8 +2610,25 @@ export default function NativeSimulatorStage({
 
       const renderNotes = () => {
         const presentationTime = getPresentationTime();
-        const holdStates = collectBandoriNativeHoldStates(chartVisuals, presentationTime);
         effectPlaybackState = getEffectPlaybackState();
+        if (renderedMirror !== isMirroredRef.current) {
+          for (const [index, display] of activeNotes) {
+            removeNoteGroup(index, display);
+          }
+          for (const segment of ribbonSegments) {
+            segment.ordinary.mesh.visible = false;
+            segment.advanced.mesh.visible = false;
+          }
+          renderedRibbonIndexes.clear();
+          clearEffects();
+          renderedMirror = isMirroredRef.current;
+          applyChartVisuals(
+            renderedMirror ? mirroredChartVisuals : normalChartVisuals,
+            renderedMirror ? mirroredSyncLinePairs : normalSyncLinePairs,
+          );
+          effectTimelineVersion = effectPlaybackState.timelineVersion;
+          lastEffectTimeSeconds = presentationTime;
+        }
         const effectClockStep = advanceBandoriEffectAnimationClock({
           animationTimeSeconds: effectAnimationTimeSeconds,
           isPlaying: effectPlaybackState.isPlaying,
@@ -2547,6 +2677,17 @@ export default function NativeSimulatorStage({
         const arrivalSeconds = getBandoriSimulatorNoteArrivalSeconds(
           currentNoteSpeed,
           currentNoteApproachTimeScale,
+        );
+        updateVisibleRibbonIndexes(presentationTime, arrivalSeconds);
+        visibleRibbons.length = 0;
+        for (const ribbonIndex of visibleRibbonIndexes) {
+          const ribbon = ribbonByIndex.get(ribbonIndex);
+          if (ribbon) visibleRibbons.push(ribbon);
+        }
+        const holdStates = collectBandoriNativeHoldStates(
+          chartVisuals,
+          presentationTime,
+          visibleRibbons,
         );
         const currentBeat = getBandoriCompiledBeatAtTime(compiled, presentationTime);
         const firstIndex = lowerBoundBandoriNoteTime(compiled.notes.times, presentationTime);
@@ -2646,7 +2787,17 @@ export default function NativeSimulatorStage({
         }
 
         const useAdvancedMesh = isBandoriNativeAdvancedNoteSpeed(currentNoteSpeed);
-        for (const segment of ribbonSegments) {
+        for (const ribbonIndex of renderedRibbonIndexes) {
+          if (visibleRibbonIndexes.has(ribbonIndex)) continue;
+          for (const segment of ribbonSegmentsByIndex.get(ribbonIndex) ?? []) {
+            segment.ordinary.mesh.visible = false;
+            segment.advanced.mesh.visible = false;
+          }
+          renderedRibbonIndexes.delete(ribbonIndex);
+        }
+        for (const ribbonIndex of visibleRibbonIndexes) {
+          renderedRibbonIndexes.add(ribbonIndex);
+          for (const segment of ribbonSegmentsByIndex.get(ribbonIndex) ?? []) {
           const start = projectBandoriNativeRibbonPoint(
             segment.ribbon,
             segment.ribbonPointIndex,
@@ -2687,13 +2838,21 @@ export default function NativeSimulatorStage({
               y: end.screenY,
             },
           );
+          }
         }
 
-        const desiredNoteIndexes = new Set<number>();
-        for (let index = firstIndex; index < endIndex; index += 1) {
-          if (chartVisuals.notes[index]) desiredNoteIndexes.add(index);
+        desiredNoteGeneration = (desiredNoteGeneration + 1) >>> 0;
+        if (desiredNoteGeneration === 0) {
+          desiredNoteMarks.fill(0);
+          desiredNoteGeneration = 1;
         }
-        for (const [ribbonIndex, noteIndexes] of ribbonNoteIndexes) {
+        desiredNoteIndexes.length = 0;
+        for (let index = firstIndex; index < endIndex; index += 1) {
+          if (chartVisuals.notes[index]) markDesiredNote(index);
+        }
+        for (const ribbonIndex of visibleRibbonIndexes) {
+          const noteIndexes = ribbonNoteIndexes.get(ribbonIndex);
+          if (!noteIndexes) continue;
           const ribbon = ribbonByIndex.get(ribbonIndex);
           const firstPoint = ribbon?.points[0];
           const lastPoint = ribbon?.points.at(-1);
@@ -2705,16 +2864,17 @@ export default function NativeSimulatorStage({
           ) {
             continue;
           }
-          for (const noteIndex of noteIndexes) desiredNoteIndexes.add(noteIndex);
+          for (const noteIndex of noteIndexes) markDesiredNote(noteIndex);
         }
 
         for (const [index, display] of activeNotes) {
-          if (!desiredNoteIndexes.has(index)) {
+          if (desiredNoteMarks[index] !== desiredNoteGeneration) {
             removeNoteGroup(index, display);
           }
         }
 
-        for (const index of [...desiredNoteIndexes].sort((left, right) => left - right)) {
+        desiredNoteIndexes.sort((left, right) => left - right);
+        for (const index of desiredNoteIndexes) {
           const group = chartVisuals.notes[index];
           if (!group) continue;
           let display = activeNotes.get(index);
@@ -2830,8 +2990,22 @@ export default function NativeSimulatorStage({
           }
         }
 
-        for (const display of syncLineDisplays) {
-          updateSyncLine(display, activeNotes, syncLineEnabledRef.current);
+        desiredSyncLines.clear();
+        if (syncLineEnabledRef.current) {
+          for (const noteIndex of desiredNoteIndexes) {
+            for (const display of syncLinesByNoteIndex[noteIndex] ?? []) {
+              desiredSyncLines.add(display);
+            }
+          }
+        }
+        for (const display of visibleSyncLines) {
+          if (desiredSyncLines.has(display)) continue;
+          display.sprite.visible = false;
+          visibleSyncLines.delete(display);
+        }
+        for (const display of desiredSyncLines) {
+          updateSyncLine(display, activeNotes, true);
+          visibleSyncLines.add(display);
         }
 
         if (effectPlaybackState.isPlaying) {
@@ -2841,6 +3015,7 @@ export default function NativeSimulatorStage({
               chartVisuals,
               lastEffectTimeSeconds,
               presentationTime,
+              ribbonByIndex,
             );
             for (const event of laneEffectEvents) {
               const laneEffect = laneEffects[event.lane];
@@ -3064,6 +3239,7 @@ export default function NativeSimulatorStage({
 
       renderNotes();
       app.ticker.add(renderNotes);
+      app.start();
       setStatus("ready");
       onLoadProgress({
         completedResources: loadedResourceTotal ?? 0,
@@ -3073,16 +3249,18 @@ export default function NativeSimulatorStage({
       });
     };
 
-    void initialize();
+    void initialize().catch((error: unknown) => {
+      failStage(
+        error instanceof BandoriNativeNoteContractError
+          ? "noteContractError"
+          : "resourceError",
+        loadedResourceTotal ?? 0,
+        loadedResourceTotal,
+      );
+    });
     return () => {
       disposed = true;
-      try {
-        app.destroy({ removeView: true }, { children: true });
-        for (const shader of localShaders) shader.destroy();
-        for (const texture of localFrameTextures) texture.destroy(false);
-      } catch {
-        // Initialization can be aborted before the renderer exists.
-      }
+      destroyApp();
     };
   }, [
     backgroundSkin,
@@ -3091,7 +3269,6 @@ export default function NativeSimulatorStage({
     fieldSkin,
     getEffectPlaybackState,
     getPresentationTime,
-    isMirrored,
     limitedPerformanceSkin,
     loadId,
     noteSkin,

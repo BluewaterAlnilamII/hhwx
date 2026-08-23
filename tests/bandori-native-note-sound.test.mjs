@@ -16,9 +16,9 @@ import {
 } from "../src/lib/bandori/chart-simulator/native-note-sound-presentation.ts";
 import {
   BANDORI_NATIVE_NOTE_SOUND_SCHEDULE_AHEAD_SECONDS,
-  createBandoriNativeNoteSoundRuntime,
+  createBandoriNativeAudioRuntime,
   getBandoriNativeNoteSoundContextTime,
-} from "../src/lib/bandori/chart-simulator/native-note-sound-runtime.ts";
+} from "../src/lib/bandori/chart-simulator/native-audio-runtime.ts";
 
 const read = (path) => readFile(new URL(path, import.meta.url), "utf8");
 
@@ -273,7 +273,7 @@ test("the shared AudioContext owns decoded music, exact anchors, rate changes, a
       cueUrls: getBandoriNativeNoteSoundCueUrls(BANDORI_NATIVE_TAP_SE_SKIN),
       id: "test",
     };
-    const runtime = createBandoriNativeNoteSoundRuntime([cueBank], cueBank.id, 1);
+    const runtime = createBandoriNativeAudioRuntime([cueBank], cueBank.id, 1);
     assert.equal(runtime.getContextState(), null);
     assert.equal(runtime.isMusicPrepared, false);
     assert.equal(runtime.isMusicPlaying, false);
@@ -404,7 +404,7 @@ test("unsupported multi-lane point coverage cannot emit hidden audio", () => {
 
 test("the simulator owns one shared music and polyphonic Note SE AudioContext", async () => {
   const [runtime, pageRuntime] = await Promise.all([
-    read("../src/lib/bandori/chart-simulator/native-note-sound-runtime.ts"),
+    read("../src/lib/bandori/chart-simulator/native-audio-runtime.ts"),
     read("../src/app/[locale]/bandori/songs/[songId]/ChartSimulatorRuntime.tsx"),
   ]);
   assert.match(runtime, /activeSources = new Set<AudioBufferSourceNode>/u);
