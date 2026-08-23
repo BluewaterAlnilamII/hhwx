@@ -590,7 +590,7 @@
         "backFive": "Back 5 seconds",
         "forwardFive": "Forward 5 seconds",
         "timeline": "Playback timeline",
-        "mirrorData": "Mirror chart data",
+        "mirrorData": "Mirror",
         "playbackRate": "Music slow playback",
         "decreasePlaybackRate": "Decrease music playback rate by {amount}",
         "increasePlaybackRate": "Increase music playback rate by {amount}",
@@ -606,6 +606,7 @@
         "currentNoteSpeed": "Current note speed",
         "noteSpeedRange": "{min}–{max}, with 0.50 / 0.10 / 0.01 adjustment steps"
       },
+      "effectControlsTitle": "Performance effect settings",
       "loopControls": {
         "ariaLabel": "Loop-range settings",
         "title": "Range loop",
@@ -636,7 +637,7 @@
       "capabilityNotice": "The native presentation currently supports the fixed 1334×750 JP stage, verified JP lane-field/judgment-line and note skins, selectable skin00, skin02, skin03, the practice background, three fixed team-live stage backgrounds, and the normal backgrounds from 19 eligible limited overlays, Single notes, Directional width 1–7, and ordinary plus Habahiro multi-range Point/Skill/Flick/Long/Slide geometry and admitted dynamic feedback at fixed NoteSize=100 and adjustable NoteSpeed=1.00–12.00. Team-live player carriers and red/blue objects are omitted because the simulator does not render player characters. Verified Habahiro wide Sprites are selected only for individual multi-range Notes, not exposed as a rhythm-marker style, and lane-change presentation is not played. AutoPerfect feedback, the Perfect judgment label, ordinary/All Perfect Combo, selectable skin00–03 100-percent Note sounds, 0.50×–1.00× music slow play, optional Note-fall synchronization, and seek-backed looping remain available; dynamic team-live or fever switching, limited stage effects other than admitted tap particles, cont_force controls, real touch/broken-hold interaction, full lane-change presentation, the TapSE volume control, non-Perfect labels, non-AutoPerfect sounds, and other unverified parameters remain disabled.",
       "audioUnavailable": "This song has no available audio, but the full chart and timeline remain usable",
       "skinControls": {
-        "ariaLabel": "Presentation style selectors",
+        "ariaLabel": "Performance skin settings",
         "noteStyle": "Note style",
         "directionalFlickStyle": "Left/right Flick style",
         "fieldStyle": "Lane field and judgment line",

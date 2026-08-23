@@ -16,6 +16,7 @@ import {
 } from "../src/lib/bandori/chart-simulator/native-note-sound-presentation.ts";
 import {
   BANDORI_NATIVE_NOTE_SOUND_SCHEDULE_AHEAD_SECONDS,
+  createBandoriNativeNoteSoundRuntime,
   getBandoriNativeNoteSoundContextTime,
 } from "../src/lib/bandori/chart-simulator/native-note-sound-runtime.ts";
 
@@ -163,6 +164,113 @@ test("future note sounds use exact shared AudioContext timestamps without a manu
   );
 });
 
+test("the note sound runtime keeps its first resumed AudioContext running on pause", async () => {
+  const originalWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
+  class FakeAudioContext extends EventTarget {
+    static created = null;
+
+    closeCalls = 0;
+    currentTime = 12;
+    destination = {};
+    mediaDestination = null;
+    resumeCalls = 0;
+    state = "suspended";
+    suspendCalls = 0;
+
+    constructor() {
+      super();
+      FakeAudioContext.created = this;
+    }
+
+    close() {
+      this.closeCalls += 1;
+      this.state = "closed";
+      return Promise.resolve();
+    }
+
+    createGain() {
+      return {
+        connect() {},
+        gain: { value: 0 },
+      };
+    }
+
+    createMediaElementSource() {
+      return {
+        connect: (destination) => {
+          this.mediaDestination = destination;
+        },
+        disconnect() {},
+      };
+    }
+
+    resume() {
+      this.resumeCalls += 1;
+      this.state = "running";
+      this.dispatchEvent(new Event("statechange"));
+      return Promise.resolve();
+    }
+
+    suspend() {
+      this.suspendCalls += 1;
+      this.state = "suspended";
+      return Promise.resolve();
+    }
+  }
+
+  Object.defineProperty(globalThis, "window", {
+    configurable: true,
+    value: { AudioContext: FakeAudioContext },
+  });
+  try {
+    const cueBank = {
+      cueUrls: getBandoriNativeNoteSoundCueUrls(BANDORI_NATIVE_TAP_SE_SKIN),
+      id: "test",
+    };
+    const runtime = createBandoriNativeNoteSoundRuntime([cueBank], cueBank.id, 1);
+    assert.equal(runtime.getContextState(), null);
+    const contextStates = [];
+    const unsubscribeContextState = runtime.subscribeContextState(
+      (state) => contextStates.push(state),
+    );
+
+    await runtime.resume();
+    runtime.attachMediaElement({});
+    const context = FakeAudioContext.created;
+    assert.ok(context);
+    assert.equal(context.resumeCalls, 1);
+    assert.equal(runtime.getContextState(), "running");
+    assert.equal(context.mediaDestination, context.destination);
+    assert.deepEqual(contextStates, ["suspended", "running"]);
+
+    await runtime.pause();
+    assert.equal(context.suspendCalls, 0);
+    assert.equal(context.state, "running");
+    await runtime.resume();
+    assert.equal(context.resumeCalls, 1);
+
+    context.state = "interrupted";
+    context.dispatchEvent(new Event("statechange"));
+    assert.deepEqual(contextStates, ["suspended", "running", "interrupted"]);
+    await runtime.resume();
+    assert.equal(context.resumeCalls, 2);
+    assert.deepEqual(
+      contextStates,
+      ["suspended", "running", "interrupted", "running"],
+    );
+    unsubscribeContextState();
+
+    runtime.dispose();
+    assert.equal(context.closeCalls, 1);
+  } finally {
+    if (originalWindow) {
+      Object.defineProperty(globalThis, "window", originalWindow);
+    } else {
+      delete globalThis.window;
+    }
+  }
+});
+
 test("unsupported multi-lane point coverage cannot emit hidden audio", () => {
   const timeline = createBandoriNativeNoteSoundTimeline(compileBandoriChart([
     { type: "BPM", beat: 0, bpm: 60 },
@@ -186,7 +294,8 @@ test("the simulator owns a polyphonic runtime instead of the monophonic shared h
   assert.match(runtime, /createMediaElementSource\(mediaElement\)/u);
   assert.match(runtime, /source\.start\(when\)/u);
   assert.match(runtime, /linearRampToValueAtTime\(0, startTime \+ fade\)/u);
-  assert.match(runtime, /context\.suspend\(\)/u);
+  assert.doesNotMatch(runtime, /context\.suspend\(\)/u);
+  assert.match(runtime, /async pause\(\): Promise<void> \{[\s\S]*this\.stopAll\(\)/u);
   assert.match(pageRuntime, /crossOrigin="anonymous"/u);
   assert.match(pageRuntime, /BANDORI_NATIVE_NOTE_SOUND_SCHEDULE_AHEAD_SECONDS/u);
   assert.match(pageRuntime, /BANDORI_NATIVE_NOTE_SOUND_SCHEDULE_AHEAD_SECONDS \* currentPlaybackRate/u);

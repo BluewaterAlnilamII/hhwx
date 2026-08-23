@@ -28,34 +28,30 @@ type SimulatorSkinControlsProps = {
   directionalFlickSkin: BandoriNativeDirectionalFlickSkin;
   fieldSkin: BandoriNativeFieldSkin;
   fieldSkins: readonly BandoriNativeFieldSkin[];
-  isAllPerfectStatusEnabled: boolean;
-  isLaneEffectEnabled: boolean;
-  isRhythmSupportEnabled: boolean;
-  isSyncLineEnabled: boolean;
   limitedPerformanceSkin: BandoriLimitedPerformanceSkin | null;
   noteSkin: BandoriNativeNoteSkin;
   onBackgroundSkinChange: (skin: BandoriNativeBackgroundSkin) => void;
   onDirectionalFlickSkinChange: (skin: BandoriNativeDirectionalFlickSkin) => void;
   onFieldSkinChange: (skin: BandoriNativeFieldSkin) => void;
-  onAllPerfectStatusEnabledChange: (isEnabled: boolean) => void;
-  onLaneEffectEnabledChange: (isEnabled: boolean) => void;
   onLimitedPerformanceSkinChange: (
     skin: BandoriLimitedPerformanceSkin | null,
   ) => void;
   onNoteSkinChange: (skin: BandoriNativeNoteSkin) => void;
-  onRhythmSupportEnabledChange: (isEnabled: boolean) => void;
-  onSyncLineEnabledChange: (isEnabled: boolean) => void;
   onTapSeSkinChange: (skin: BandoriNativeTapSeSkin) => void;
   tapSeSkin: BandoriNativeTapSeSkin;
 };
 
-type SkinControlRowProps = {
+type SimulatorControlRowProps = {
   children: ReactNode;
   label: string;
   overriddenLabel?: string;
 };
 
-function SkinControlRow({ children, label, overriddenLabel }: SkinControlRowProps) {
+export function SimulatorControlRow({
+  children,
+  label,
+  overriddenLabel,
+}: SimulatorControlRowProps) {
   return (
     <div className="grid items-start gap-2 sm:grid-cols-[9.5rem_minmax(0,1fr)] sm:gap-3">
       <div className="pt-2 text-sm font-semibold text-[var(--theme-color-text-muted)] sm:text-right">
@@ -134,21 +130,13 @@ export default function SimulatorSkinControls({
   directionalFlickSkin,
   fieldSkin,
   fieldSkins,
-  isAllPerfectStatusEnabled,
-  isLaneEffectEnabled,
-  isRhythmSupportEnabled,
-  isSyncLineEnabled,
   limitedPerformanceSkin,
   noteSkin,
   onBackgroundSkinChange,
   onDirectionalFlickSkinChange,
   onFieldSkinChange,
-  onAllPerfectStatusEnabledChange,
-  onLaneEffectEnabledChange,
   onLimitedPerformanceSkinChange,
   onNoteSkinChange,
-  onRhythmSupportEnabledChange,
-  onSyncLineEnabledChange,
   onTapSeSkinChange,
   tapSeSkin,
 }: SimulatorSkinControlsProps) {
@@ -161,12 +149,12 @@ export default function SimulatorSkinControls({
     : undefined;
 
   return (
-    <section
-      aria-label={t("ariaLabel")}
-      className="mt-5 rounded-2xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background-muted)] p-4"
-    >
+    <fieldset className="rounded-2xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background-muted)] px-4 pb-4 pt-2">
+      <legend className="px-2 text-sm font-semibold text-[var(--theme-color-text-default)]">
+        {t("ariaLabel")}
+      </legend>
       <div className="space-y-3">
-        <SkinControlRow label={t("limitedPerformance.label")}>
+        <SimulatorControlRow label={t("limitedPerformance.label")}>
           <button
             type="button"
             aria-pressed={limitedPerformanceSkin === null}
@@ -195,66 +183,9 @@ export default function SimulatorSkinControls({
               })}
             </span>
           ) : null}
-        </SkinControlRow>
+        </SimulatorControlRow>
 
-        <SkinControlRow
-          label={t("noteStyle")}
-          overriddenLabel={overrides.has("notes") ? overriddenLabel : undefined}
-        >
-          {BANDORI_NATIVE_NOTE_SKINS.map((skin) => (
-            <button
-              key={skin.id}
-              type="button"
-              aria-pressed={noteSkin.id === skin.id}
-              className={choiceClassName(noteSkin.id === skin.id, overrides.has("notes"))}
-              disabled={overrides.has("notes")}
-              onClick={() => onNoteSkinChange(skin)}
-            >
-              TYPE{skin.id}
-            </button>
-          ))}
-        </SkinControlRow>
-
-        <SkinControlRow
-          label={t("directionalFlickStyle")}
-          overriddenLabel={overrides.has("directionalFlick") ? overriddenLabel : undefined}
-        >
-          {BANDORI_NATIVE_DIRECTIONAL_FLICK_SKINS.map((skin) => (
-            <button
-              key={skin.id}
-              type="button"
-              aria-pressed={directionalFlickSkin.id === skin.id}
-              className={choiceClassName(
-                directionalFlickSkin.id === skin.id,
-                overrides.has("directionalFlick"),
-              )}
-              disabled={overrides.has("directionalFlick")}
-              onClick={() => onDirectionalFlickSkinChange(skin)}
-            >
-              TYPE{skin.id}
-            </button>
-          ))}
-        </SkinControlRow>
-
-        <SkinControlRow
-          label={t("fieldStyle")}
-          overriddenLabel={overrides.has("lane") ? overriddenLabel : undefined}
-        >
-          {fieldSkins.map((skin) => (
-            <button
-              key={skin.id}
-              type="button"
-              aria-pressed={fieldSkin.id === skin.id}
-              className={choiceClassName(fieldSkin.id === skin.id, overrides.has("lane"))}
-              disabled={overrides.has("lane")}
-              onClick={() => onFieldSkinChange(skin)}
-            >
-              {t(`fieldSkin.${skin.id}`)}
-            </button>
-          ))}
-        </SkinControlRow>
-
-        <SkinControlRow
+        <SimulatorControlRow
           label={t("backgroundStyle")}
           overriddenLabel={overrides.has("background") ? overriddenLabel : undefined}
         >
@@ -273,49 +204,45 @@ export default function SimulatorSkinControls({
               {t(`backgroundSkin.${skin.id}`)}
             </button>
           ))}
-        </SkinControlRow>
+        </SimulatorControlRow>
 
-        <SkinControlRow label={t("syncLine")}>
-          <SimulatorBooleanControl
-            disabledLabel={t("off")}
-            enabledLabel={t("on")}
-            isEnabled={isSyncLineEnabled}
-            label={t("syncLine")}
-            onChange={onSyncLineEnabledChange}
-          />
-        </SkinControlRow>
+        <SimulatorControlRow
+          label={t("fieldStyle")}
+          overriddenLabel={overrides.has("lane") ? overriddenLabel : undefined}
+        >
+          {fieldSkins.map((skin) => (
+            <button
+              key={skin.id}
+              type="button"
+              aria-pressed={fieldSkin.id === skin.id}
+              className={choiceClassName(fieldSkin.id === skin.id, overrides.has("lane"))}
+              disabled={overrides.has("lane")}
+              onClick={() => onFieldSkinChange(skin)}
+            >
+              {t(`fieldSkin.${skin.id}`)}
+            </button>
+          ))}
+        </SimulatorControlRow>
 
-        <SkinControlRow label={t("rhythmSupport")}>
-          <SimulatorBooleanControl
-            disabledLabel={t("off")}
-            enabledLabel={t("on")}
-            isEnabled={isRhythmSupportEnabled}
-            label={t("rhythmSupport")}
-            onChange={onRhythmSupportEnabledChange}
-          />
-        </SkinControlRow>
+        <SimulatorControlRow
+          label={t("noteStyle")}
+          overriddenLabel={overrides.has("notes") ? overriddenLabel : undefined}
+        >
+          {BANDORI_NATIVE_NOTE_SKINS.map((skin) => (
+            <button
+              key={skin.id}
+              type="button"
+              aria-pressed={noteSkin.id === skin.id}
+              className={choiceClassName(noteSkin.id === skin.id, overrides.has("notes"))}
+              disabled={overrides.has("notes")}
+              onClick={() => onNoteSkinChange(skin)}
+            >
+              TYPE{skin.id}
+            </button>
+          ))}
+        </SimulatorControlRow>
 
-        <SkinControlRow label={t("laneEffect")}>
-          <SimulatorBooleanControl
-            disabledLabel={t("off")}
-            enabledLabel={t("on")}
-            isEnabled={isLaneEffectEnabled}
-            label={t("laneEffect")}
-            onChange={onLaneEffectEnabledChange}
-          />
-        </SkinControlRow>
-
-        <SkinControlRow label={t("allPerfectStatus")}>
-          <SimulatorBooleanControl
-            disabledLabel={t("off")}
-            enabledLabel={t("on")}
-            isEnabled={isAllPerfectStatusEnabled}
-            label={t("allPerfectStatus")}
-            onChange={onAllPerfectStatusEnabledChange}
-          />
-        </SkinControlRow>
-
-        <SkinControlRow
+        <SimulatorControlRow
           label={t("tapSeStyle")}
           overriddenLabel={overrides.has("soundEffect") ? overriddenLabel : undefined}
         >
@@ -334,8 +261,29 @@ export default function SimulatorSkinControls({
               SE skin0{skin.id}
             </button>
           ))}
-        </SkinControlRow>
+        </SimulatorControlRow>
+
+        <SimulatorControlRow
+          label={t("directionalFlickStyle")}
+          overriddenLabel={overrides.has("directionalFlick") ? overriddenLabel : undefined}
+        >
+          {BANDORI_NATIVE_DIRECTIONAL_FLICK_SKINS.map((skin) => (
+            <button
+              key={skin.id}
+              type="button"
+              aria-pressed={directionalFlickSkin.id === skin.id}
+              className={choiceClassName(
+                directionalFlickSkin.id === skin.id,
+                overrides.has("directionalFlick"),
+              )}
+              disabled={overrides.has("directionalFlick")}
+              onClick={() => onDirectionalFlickSkinChange(skin)}
+            >
+              TYPE{skin.id}
+            </button>
+          ))}
+        </SimulatorControlRow>
       </div>
-    </section>
+    </fieldset>
   );
 }

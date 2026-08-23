@@ -15,6 +15,7 @@ import BandoriFullChartView from "./BandoriFullChartView";
 import SimulatorLoopControls from "./SimulatorLoopControls";
 import SimulatorSkinControls, {
   SimulatorBooleanControl,
+  SimulatorControlRow,
 } from "./SimulatorSkinControls";
 import {
   BANDORI_NATIVE_BACKGROUND_SKIN,
@@ -65,7 +66,13 @@ import {
   type BandoriNativeNoteSoundCueBank,
   type BandoriNativeNoteSoundRuntime,
 } from "@/lib/bandori/chart-simulator/native-note-sound-runtime";
-import { seekBandoriMediaElement } from "@/lib/bandori/chart-simulator/media-seek";
+import {
+  createBandoriMediaOperationSequencer,
+} from "@/lib/bandori/chart-simulator/media-operation-sequencer";
+import {
+  playBandoriMediaElement,
+  seekBandoriMediaElement,
+} from "@/lib/bandori/chart-simulator/media-seek";
 import {
   createBandoriFullSongLoopRange,
   isBandoriTimeInsideLoopRange,
@@ -113,6 +120,8 @@ const PLAYBACK_RATE_DECREASES = [-10, -1] as const;
 const PLAYBACK_RATE_INCREASES = [1, 10] as const;
 const NOTE_SPEED_DECREASES = [-0.5, -0.1, -0.01] as const;
 const NOTE_SPEED_INCREASES = [0.01, 0.1, 0.5] as const;
+const MEDIA_HAVE_FUTURE_DATA = 3;
+const MEDIA_ERROR_ABORTED = 1;
 function createResolvedNoteSoundCueBank(
   skin: BandoriNativeTapSeSkin,
   resolveAssetUrl: BandoriChartSimulatorAssetResolver,
@@ -178,11 +187,12 @@ function applySimulatorPlaybackRate(
 function createLoopSeekTransport(
   state: BandoriChartTransportState,
   startTimeSeconds: number,
+  shouldResume: boolean,
 ): BandoriChartTransportState {
   return {
     ...state,
     currentTimeSeconds: startTimeSeconds,
-    phase: state.phase === "playing"
+    phase: shouldResume
       ? "playing"
       : state.phase === "ready" ? "ready" : "paused",
     previewTimeSeconds: null,
@@ -218,12 +228,15 @@ export default function ChartSimulatorRuntime({
   const noteSoundCursorRef = useRef(-1e-7);
   const noteSoundLastMediaTimeRef = useRef(0);
   const noteSoundNeedsLoopSyncRef = useRef(false);
-  const expectedPauseEventsRef = useRef(0);
+  const frozenMediaTimeRef = useRef(0);
+  const isMediaPlaybackReadyRef = useRef(false);
+  const shouldMediaPlayRef = useRef(false);
   const loopRangeRef = useRef(createBandoriFullSongLoopRange(durationSeconds));
   const isLoopEnabledRef = useRef(false);
   const loopSeekPendingRef = useRef(false);
-  const mediaSeekAbortControllerRef = useRef<AbortController | null>(null);
+  const loopSeekPromiseRef = useRef<Promise<unknown> | null>(null);
   const coordinatorRef = useRef<ReturnType<typeof createMusicPlayerPlaybackCoordinator> | null>(null);
+  const [mediaOperationSequencer] = useState(createBandoriMediaOperationSequencer);
   const [loadAttempt, setLoadAttempt] = useState(0);
   const [loadState, setLoadState] = useState<LoadState>({ status: "loading" });
   const [assetLoadState, setAssetLoadState] = useState<AssetLoadState>({
@@ -299,14 +312,13 @@ export default function ChartSimulatorRuntime({
     setTransport(next);
   }, []);
 
-  const cancelPendingMediaSeek = useCallback(() => {
-    mediaSeekAbortControllerRef.current?.abort();
-    mediaSeekAbortControllerRef.current = null;
-  }, []);
+  const cancelPendingMediaOperation = useCallback(() => {
+    mediaOperationSequencer.cancel();
+  }, [mediaOperationSequencer]);
 
   const pauseAudioInternally = useCallback((audio: HTMLAudioElement | null) => {
+    shouldMediaPlayRef.current = false;
     if (!audio) return;
-    if (!audio.paused) expectedPauseEventsRef.current += 1;
     audio.pause();
   }, []);
 
@@ -314,20 +326,25 @@ export default function ChartSimulatorRuntime({
     const currentTransport = transportRef.current;
     const audio = audioRef.current;
     if (currentTransport.phase === "playing" && audio && Number.isFinite(audio.currentTime)) {
-      const mediaTimeSeconds = Math.max(
+      if (!isMediaPlaybackReadyRef.current) {
+        return Math.max(
+          0,
+          Math.min(currentTransport.durationSeconds, frozenMediaTimeRef.current),
+        );
+      }
+      const presentationTimeSeconds = Math.max(
         0,
         Math.min(currentTransport.durationSeconds, audio.currentTime),
       );
-      const activeLoopRange = isLoopEnabledRef.current ? loopRangeRef.current : null;
-      return activeLoopRange && mediaTimeSeconds >= activeLoopRange.endTimeSeconds
-        ? activeLoopRange.startTimeSeconds
-        : mediaTimeSeconds;
+      frozenMediaTimeRef.current = presentationTimeSeconds;
+      return presentationTimeSeconds;
     }
     return getBandoriChartPresentationTime(currentTransport);
   }, []);
 
   const getStageEffectPlaybackState = useCallback(() => ({
-    isPlaying: transportRef.current.phase === "playing",
+    isPlaying: transportRef.current.phase === "playing"
+      && isMediaPlaybackReadyRef.current,
     playbackRate: getBandoriSimulatorPlaybackRate(playbackRateHundredthsRef.current),
     timelineVersion: effectTimelineVersionRef.current,
   }), []);
@@ -415,12 +432,14 @@ export default function ChartSimulatorRuntime({
     if (!audio || current.phase !== "playing" || !Number.isFinite(audio.currentTime)) {
       return current;
     }
-    return syncBandoriChartMediaTime(current, audio.currentTime);
-  }, []);
+    return syncBandoriChartMediaTime(current, getStagePresentationTime());
+  }, [getStagePresentationTime]);
 
   const pauseAudioAndTransport = useCallback((audio: HTMLAudioElement | null) => {
-    cancelPendingMediaSeek();
+    cancelPendingMediaOperation();
     const snapshot = snapshotTransportAtAudioTime(audio);
+    frozenMediaTimeRef.current = snapshot.currentTimeSeconds;
+    isMediaPlaybackReadyRef.current = false;
     const next = pauseBandoriChartTransport(snapshot);
     updateTransport(next);
     pauseAudioInternally(audio);
@@ -431,7 +450,7 @@ export default function ChartSimulatorRuntime({
     void noteSoundRuntimeRef.current?.pause();
     setMusicPlaybackAudioSessionActive(false);
   }, [
-    cancelPendingMediaSeek,
+    cancelPendingMediaOperation,
     pauseAudioInternally,
     snapshotTransportAtAudioTime,
     stopAndResetNoteSounds,
@@ -442,9 +461,6 @@ export default function ChartSimulatorRuntime({
     audio: HTMLAudioElement,
     requestedTransport: BandoriChartTransportState,
   ) => {
-    cancelPendingMediaSeek();
-    const controller = new AbortController();
-    mediaSeekAbortControllerRef.current = controller;
     const shouldResume = requestedTransport.phase === "playing";
     const requestedTimeSeconds = requestedTransport.currentTimeSeconds;
     const pendingTransport: BandoriChartTransportState = {
@@ -455,6 +471,8 @@ export default function ChartSimulatorRuntime({
     };
 
     setPlaybackError(null);
+    frozenMediaTimeRef.current = requestedTimeSeconds;
+    isMediaPlaybackReadyRef.current = false;
     pauseAudioInternally(audio);
     setMusicPlaybackAudioSessionActive(false);
     invalidateStageEffects();
@@ -465,16 +483,16 @@ export default function ChartSimulatorRuntime({
     );
     updateTransport(pendingTransport);
 
-    try {
+    return mediaOperationSequencer.runLatest(async (operation) => {
       await noteSoundRuntimeRef.current?.pause();
-      if (controller.signal.aborted) return;
+      operation.throwIfSuperseded();
 
       const committedMediaTime = await seekBandoriMediaElement(
         audio,
         requestedTimeSeconds,
-        controller.signal,
+        operation.signal,
       );
-      if (controller.signal.aborted) return;
+      operation.throwIfSuperseded();
 
       const settledTimeSeconds = Math.max(
         0,
@@ -487,60 +505,87 @@ export default function ChartSimulatorRuntime({
           : pendingTransport.phase,
         currentTimeSeconds: settledTimeSeconds,
       };
-      invalidateStageEffects();
-      stopAndResetNoteSounds(
-        settledTimeSeconds,
-        settledTimeSeconds > 0,
-        settledTimeSeconds === 0,
-      );
-
       if (!shouldResume || settledTransport.phase === "ended") {
-        updateTransport(settledTransport);
-        return;
+        return { settledTransport, startedTimeSeconds: null };
       }
 
       noteSoundRuntimeRef.current?.attachMediaElement(audio);
       await noteSoundRuntimeRef.current?.resume();
-      if (controller.signal.aborted) return;
-
-      const playPromise = audio.play();
-      updateTransport({ ...settledTransport, phase: "playing" });
-      await playPromise;
-      if (controller.signal.aborted) return;
-      setMusicPlaybackAudioSessionActive(true);
-    } catch (error) {
-      if (
-        controller.signal.aborted
-        || (error instanceof Error && error.name === "AbortError")
-      ) return;
-
-      pauseAudioInternally(audio);
-      const fallbackTimeSeconds = Number.isFinite(audio.currentTime)
-        ? Math.max(0, Math.min(requestedTransport.durationSeconds, audio.currentTime))
-        : requestedTimeSeconds;
-      updateTransport({
-        ...pendingTransport,
-        phase: fallbackTimeSeconds >= requestedTransport.durationSeconds
-          ? "ended"
-          : "paused",
-        currentTimeSeconds: fallbackTimeSeconds,
-      });
-      stopAndResetNoteSounds(
-        fallbackTimeSeconds,
-        fallbackTimeSeconds > 0,
-        fallbackTimeSeconds === 0,
-      );
-      void noteSoundRuntimeRef.current?.pause();
-      setMusicPlaybackAudioSessionActive(false);
-      setPlaybackError(error instanceof Error ? error.message : String(error));
-    } finally {
-      if (mediaSeekAbortControllerRef.current === controller) {
-        mediaSeekAbortControllerRef.current = null;
+      operation.throwIfSuperseded();
+      shouldMediaPlayRef.current = true;
+      const startedMediaTime = await playBandoriMediaElement(audio, operation.signal);
+      operation.throwIfSuperseded();
+      if (noteSoundRuntimeRef.current?.getContextState() !== "running") {
+        throw new Error("Audio output is not running");
       }
-    }
+      return {
+        settledTransport,
+        startedTimeSeconds: Math.max(
+          0,
+          Math.min(requestedTransport.durationSeconds, startedMediaTime),
+        ),
+      };
+    }, {
+      commit: ({ settledTransport, startedTimeSeconds }) => {
+        const settledTimeSeconds = settledTransport.currentTimeSeconds;
+        frozenMediaTimeRef.current = settledTimeSeconds;
+        invalidateStageEffects();
+        if (startedTimeSeconds === null) {
+          // A superseded play() may still complete at the browser layer even
+          // though its state commit was rejected. Reassert the latest paused
+          // intent after this seek has settled.
+          pauseAudioInternally(audio);
+          isMediaPlaybackReadyRef.current = false;
+          stopAndResetNoteSounds(
+            settledTimeSeconds,
+            settledTimeSeconds > 0,
+            settledTimeSeconds === 0,
+          );
+          updateTransport(settledTransport);
+          return;
+        }
+
+        isMediaPlaybackReadyRef.current = true;
+        stopAndResetNoteSounds(
+          startedTimeSeconds,
+          startedTimeSeconds > 0,
+          startedTimeSeconds === 0,
+        );
+        updateTransport({
+          ...settledTransport,
+          phase: "playing",
+          currentTimeSeconds: settledTimeSeconds,
+        });
+        setMusicPlaybackAudioSessionActive(true);
+      },
+      reportError: (error) => {
+        shouldMediaPlayRef.current = false;
+        isMediaPlaybackReadyRef.current = false;
+        pauseAudioInternally(audio);
+        const fallbackTimeSeconds = Number.isFinite(audio.currentTime)
+          ? Math.max(0, Math.min(requestedTransport.durationSeconds, audio.currentTime))
+          : requestedTimeSeconds;
+        frozenMediaTimeRef.current = fallbackTimeSeconds;
+        updateTransport({
+          ...pendingTransport,
+          phase: fallbackTimeSeconds >= requestedTransport.durationSeconds
+            ? "ended"
+            : "paused",
+          currentTimeSeconds: fallbackTimeSeconds,
+        });
+        stopAndResetNoteSounds(
+          fallbackTimeSeconds,
+          fallbackTimeSeconds > 0,
+          fallbackTimeSeconds === 0,
+        );
+        void noteSoundRuntimeRef.current?.pause();
+        setMusicPlaybackAudioSessionActive(false);
+        setPlaybackError(error instanceof Error ? error.message : String(error));
+      },
+    });
   }, [
-    cancelPendingMediaSeek,
     invalidateStageEffects,
+    mediaOperationSequencer,
     pauseAudioInternally,
     stopAndResetNoteSounds,
     updateTransport,
@@ -559,7 +604,11 @@ export default function ChartSimulatorRuntime({
       : getBandoriChartPresentationTime(current);
     if (onlyWhenOutside && isBandoriTimeInsideLoopRange(range, currentTimeSeconds)) return;
 
-    const requested = createLoopSeekTransport(current, range.startTimeSeconds);
+    const requested = createLoopSeekTransport(
+      current,
+      range.startTimeSeconds,
+      shouldMediaPlayRef.current,
+    );
     if (!audio) {
       invalidateStageEffects();
       stopAndResetNoteSounds(range.startTimeSeconds, range.startTimeSeconds > 0);
@@ -568,7 +617,11 @@ export default function ChartSimulatorRuntime({
     }
 
     loopSeekPendingRef.current = true;
-    void seekAudioAndTransport(audio, requested).finally(() => {
+    const request = seekAudioAndTransport(audio, requested);
+    loopSeekPromiseRef.current = request;
+    void request.finally(() => {
+      if (loopSeekPromiseRef.current !== request) return;
+      loopSeekPromiseRef.current = null;
       loopSeekPendingRef.current = false;
     });
   }, [
@@ -617,11 +670,21 @@ export default function ChartSimulatorRuntime({
       BANDORI_NATIVE_NOTE_SOUND_VOLUME,
     );
     noteSoundRuntimeRef.current = runtime;
+    const unsubscribeContextState = runtime.subscribeContextState((state) => {
+      if (
+        state === "running"
+        || transportRef.current.phase !== "playing"
+        || !shouldMediaPlayRef.current
+      ) return;
+      pauseAudioAndTransport(audioRef.current);
+      if (state === "closed") setPlaybackError("Audio output became unavailable");
+    });
     return () => {
+      unsubscribeContextState();
       runtime.dispose();
       if (noteSoundRuntimeRef.current === runtime) noteSoundRuntimeRef.current = null;
     };
-  }, [assetLoadState]);
+  }, [assetLoadState, pauseAudioAndTransport]);
 
   useEffect(() => {
     if (assetLoadState.status !== "ready") return;
@@ -657,13 +720,18 @@ export default function ChartSimulatorRuntime({
   }, [assetLoadState, effectiveTapSeSkin, stopAndResetNoteSounds]);
 
   useEffect(() => {
-    cancelPendingMediaSeek();
+    cancelPendingMediaOperation();
     const next = createBandoriChartTransportState(durationSeconds);
     const nextLoopRange = createBandoriFullSongLoopRange(durationSeconds);
     transportRef.current = next;
     loopRangeRef.current = nextLoopRange;
     isLoopEnabledRef.current = false;
     loopSeekPendingRef.current = false;
+    loopSeekPromiseRef.current = null;
+    frozenMediaTimeRef.current = 0;
+    isMediaPlaybackReadyRef.current = false;
+    shouldMediaPlayRef.current = false;
+    pauseAudioInternally(audioRef.current);
     effectTimelineVersionRef.current += 1;
     stopAndResetNoteSounds(0, false, true);
     void noteSoundRuntimeRef.current?.pause();
@@ -672,15 +740,20 @@ export default function ChartSimulatorRuntime({
     setIsLoopEnabled(false);
     setIsMirrored(false);
     setPlaybackError(null);
+    setMusicPlaybackAudioSessionActive(false);
   }, [
-    cancelPendingMediaSeek,
+    cancelPendingMediaOperation,
     difficulty,
     durationSeconds,
+    pauseAudioInternally,
     songId,
     stopAndResetNoteSounds,
   ]);
 
-  useEffect(() => () => cancelPendingMediaSeek(), [cancelPendingMediaSeek]);
+  useEffect(
+    () => () => cancelPendingMediaOperation(),
+    [cancelPendingMediaOperation],
+  );
 
   useEffect(() => {
     let isCurrent = true;
@@ -763,6 +836,8 @@ export default function ChartSimulatorRuntime({
     );
     coordinatorRef.current = coordinator;
     return () => {
+      shouldMediaPlayRef.current = false;
+      isMediaPlaybackReadyRef.current = false;
       audio.pause();
       coordinator.dispose();
       coordinatorRef.current = null;
@@ -813,8 +888,11 @@ export default function ChartSimulatorRuntime({
       const audio = audioRef.current;
       if (
         transportRef.current.phase === "playing"
+        && isMediaPlaybackReadyRef.current
         && audio
         && !audio.paused
+        && !audio.seeking
+        && audio.readyState >= MEDIA_HAVE_FUTURE_DATA
         && Number.isFinite(audio.currentTime)
       ) {
         flushNoteSoundsThrough(audio.currentTime);
@@ -834,31 +912,100 @@ export default function ChartSimulatorRuntime({
   const play = async () => {
     const audio = audioRef.current;
     if (!audio || !audioUrl || loadState.status !== "ready") return;
-    cancelPendingMediaSeek();
-    setPlaybackError(null);
-    const isRestartingEndedPlayback = transportRef.current.phase === "ended";
     const next = playBandoriChartTransport(transportRef.current);
     useMusicPlayerStore.getState().requestPause();
     coordinatorRef.current?.claimPlayback();
-    if (isRestartingEndedPlayback) {
-      await seekAudioAndTransport(audio, next);
-      return;
-    }
-    try {
-      noteSoundRuntimeRef.current?.attachMediaElement(audio);
-      await noteSoundRuntimeRef.current?.resume();
-      const playPromise = audio.play();
-      updateTransport(next);
-      await playPromise;
-      setMusicPlaybackAudioSessionActive(true);
-    } catch (error) {
-      pauseAudioAndTransport(audio);
-      setPlaybackError(error instanceof Error ? error.message : String(error));
-    }
+    await seekAudioAndTransport(audio, next);
   };
 
   const pause = () => {
     pauseAudioAndTransport(audioRef.current);
+  };
+
+  const handleMediaWaiting = (audio: HTMLAudioElement) => {
+    if (
+      transportRef.current.phase !== "playing"
+      || !shouldMediaPlayRef.current
+      || !isMediaPlaybackReadyRef.current
+      || audio.paused
+      || audio.ended
+    ) return;
+
+    const frozenTimeSeconds = getStagePresentationTime();
+    frozenMediaTimeRef.current = frozenTimeSeconds;
+    isMediaPlaybackReadyRef.current = false;
+    invalidateStageEffects();
+    if (Number.isFinite(audio.currentTime)) {
+      stopAndResetNoteSounds(
+        audio.currentTime,
+        audio.currentTime > 0,
+        audio.currentTime === 0,
+      );
+    } else {
+      noteSoundRuntimeRef.current?.stopAll();
+    }
+    updateTransport(syncBandoriChartMediaTime(
+      transportRef.current,
+      frozenTimeSeconds,
+    ));
+  };
+
+  const handleMediaPlaying = (audio: HTMLAudioElement) => {
+    if (
+      transportRef.current.phase !== "playing"
+      || !shouldMediaPlayRef.current
+      || isMediaPlaybackReadyRef.current
+      || audio.paused
+      || audio.seeking
+      || audio.ended
+      || audio.readyState < MEDIA_HAVE_FUTURE_DATA
+    ) return;
+
+    isMediaPlaybackReadyRef.current = true;
+    invalidateStageEffects();
+    if (Number.isFinite(audio.currentTime)) {
+      stopAndResetNoteSounds(
+        audio.currentTime,
+        audio.currentTime > 0,
+        audio.currentTime === 0,
+      );
+    }
+    updateTransport(syncBandoriChartMediaTime(
+      transportRef.current,
+      getStagePresentationTime(),
+    ));
+    setMusicPlaybackAudioSessionActive(true);
+  };
+
+  const handleMediaError = (audio: HTMLAudioElement) => {
+    const mediaError = audio.error;
+    if (!mediaError || mediaError.code === MEDIA_ERROR_ABORTED) return;
+    cancelPendingMediaOperation();
+    const currentTransport = transportRef.current;
+    const sourceTimeSeconds = Number.isFinite(audio.currentTime)
+      ? Math.max(0, Math.min(currentTransport.durationSeconds, audio.currentTime))
+      : currentTransport.currentTimeSeconds;
+    frozenMediaTimeRef.current = sourceTimeSeconds;
+    isMediaPlaybackReadyRef.current = false;
+    pauseAudioInternally(audio);
+    invalidateStageEffects();
+    stopAndResetNoteSounds(
+      sourceTimeSeconds,
+      sourceTimeSeconds > 0,
+      sourceTimeSeconds === 0,
+    );
+    updateTransport({
+      ...currentTransport,
+      phase: sourceTimeSeconds >= currentTransport.durationSeconds
+        ? "ended"
+        : currentTransport.phase === "ready" ? "ready" : "paused",
+      currentTimeSeconds: sourceTimeSeconds,
+      previewTimeSeconds: null,
+      shouldResumeAfterInteraction: false,
+    });
+    setMusicPlaybackAudioSessionActive(false);
+    const detail = mediaError.message || `code ${mediaError.code}`;
+    setPlaybackError(`Media playback failed: ${detail}`);
   };
 
   const restart = () => {
@@ -887,8 +1034,10 @@ export default function ChartSimulatorRuntime({
 
   const beginScrub = () => {
     const audio = audioRef.current;
-    cancelPendingMediaSeek();
+    cancelPendingMediaOperation();
     const current = snapshotTransportAtAudioTime(audio);
+    frozenMediaTimeRef.current = current.currentTimeSeconds;
+    isMediaPlaybackReadyRef.current = false;
     if (current.phase !== "scrubbing") invalidateStageEffects();
     stopAndResetNoteSounds(current.currentTimeSeconds, false);
     updateTransport(beginBandoriChartScrub(current));
@@ -930,15 +1079,17 @@ export default function ChartSimulatorRuntime({
       adjustmentHundredths,
     );
     if (nextHundredths === playbackRateHundredthsRef.current) return;
-    playbackRateHundredthsRef.current = nextHundredths;
-    setPlaybackRateHundredths(nextHundredths);
-
     const audio = audioRef.current;
-    const currentTimeSeconds = transportRef.current.phase === "playing"
+    const presentationTimeSeconds = getStagePresentationTime();
+    const noteSoundTimeSeconds = transportRef.current.phase === "playing"
       && audio
       && Number.isFinite(audio.currentTime)
       ? audio.currentTime
       : getBandoriChartPresentationTime(transportRef.current);
+    frozenMediaTimeRef.current = presentationTimeSeconds;
+    playbackRateHundredthsRef.current = nextHundredths;
+    setPlaybackRateHundredths(nextHundredths);
+
     if (audio) {
       applySimulatorPlaybackRate(
         audio,
@@ -948,9 +1099,9 @@ export default function ChartSimulatorRuntime({
     // Future triggers need new real-time timestamps. Active keep SE is rebuilt
     // at its 1x sample phase while the chart/media clock stays untouched.
     stopAndResetNoteSounds(
-      currentTimeSeconds,
-      currentTimeSeconds > 0,
-      currentTimeSeconds === 0,
+      noteSoundTimeSeconds,
+      noteSoundTimeSeconds > 0,
+      noteSoundTimeSeconds === 0,
     );
   };
 
@@ -1048,34 +1199,48 @@ export default function ChartSimulatorRuntime({
         ref={audioRef}
         crossOrigin="anonymous"
         src={audioUrl ?? undefined}
-        preload="metadata"
+        preload="auto"
         onTimeUpdate={(event) => {
           if (wrapLoopAtBoundary(event.currentTarget)) return;
           updateTransport(syncBandoriChartMediaTime(
             transportRef.current,
-            event.currentTarget.currentTime,
+            getStagePresentationTime(),
           ));
         }}
         onPause={(event) => {
-          if (expectedPauseEventsRef.current > 0) {
-            expectedPauseEventsRef.current -= 1;
-            return;
-          }
           if (
-            transportRef.current.phase === "playing"
+            event.currentTarget.paused
+            && shouldMediaPlayRef.current
+            && transportRef.current.phase === "playing"
             && !event.currentTarget.ended
           ) {
             pauseAudioAndTransport(event.currentTarget);
           }
         }}
+        onWaiting={(event) => handleMediaWaiting(event.currentTarget)}
+        onPlaying={(event) => handleMediaPlaying(event.currentTarget)}
+        onError={(event) => handleMediaError(event.currentTarget)}
         onEnded={(event) => {
-          if (wrapLoopAtBoundary(event.currentTarget)) return;
+          if (!event.currentTarget.ended) return;
+          if (isLoopEnabledRef.current && shouldMediaPlayRef.current) {
+            if (!loopSeekPendingRef.current) {
+              seekToLoopStart(loopRangeRef.current, false);
+            }
+            return;
+          }
+          cancelPendingMediaOperation();
+          shouldMediaPlayRef.current = false;
+          isMediaPlaybackReadyRef.current = false;
+          frozenMediaTimeRef.current = durationSeconds;
           flushNoteSoundsThrough(durationSeconds);
           setMusicPlaybackAudioSessionActive(false);
-          updateTransport(syncBandoriChartMediaTime(
-            transportRef.current,
-            durationSeconds,
-          ));
+          updateTransport({
+            ...transportRef.current,
+            phase: "ended",
+            currentTimeSeconds: durationSeconds,
+            previewTimeSeconds: null,
+            shouldResumeAfterInteraction: false,
+          });
         }}
       />
 
@@ -1117,18 +1282,6 @@ export default function ChartSimulatorRuntime({
             {t("controls.forwardFive")}
             <ChevronRight className="h-4 w-4" aria-hidden="true" />
           </button>
-          <button
-            type="button"
-            aria-pressed={isMirrored}
-            className={controlClassName()}
-            onClick={() => setIsMirrored((value) => !value)}
-          >
-            <FlipHorizontal2 className="h-4 w-4" aria-hidden="true" />
-            {t("controls.mirrorData")}
-            <span className="font-normal">
-              {t(isMirrored ? "diagnostics.mirrorOn" : "diagnostics.mirrorOff")}
-            </span>
-          </button>
         </div>
       </div>
 
@@ -1142,124 +1295,173 @@ export default function ChartSimulatorRuntime({
           range={loopRange}
         />
 
-        <fieldset className="rounded-2xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background-muted)] px-4 pb-3 pt-2">
+        <fieldset className="rounded-2xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background-muted)] px-4 pb-4 pt-2">
           <legend className="px-2 text-sm font-semibold text-[var(--theme-color-text-default)]">
-            {t("controls.playbackRate")}
+            {t("effectControlsTitle")}
           </legend>
-          <div className="flex flex-wrap items-center justify-center gap-2">
-            {PLAYBACK_RATE_DECREASES.map((adjustmentHundredths) => (
-              <button
-                key={adjustmentHundredths}
-                type="button"
-                className={controlClassName()}
-                disabled={
-                  playbackRateHundredths
-                  === BANDORI_SIMULATOR_PLAYBACK_RATE_MIN_HUNDREDTHS
-                }
-                aria-label={t("controls.decreasePlaybackRate", {
-                  amount: (Math.abs(adjustmentHundredths) / 100).toFixed(2),
-                })}
-                onClick={() => changePlaybackRate(adjustmentHundredths)}
+          <div className="space-y-3">
+            <SimulatorControlRow label={t("controls.noteSpeed")}>
+              {NOTE_SPEED_DECREASES.map((adjustment) => (
+                <button
+                  key={adjustment}
+                  type="button"
+                  className={controlClassName()}
+                  disabled={noteSpeed === BANDORI_NATIVE_NOTE_SPEED_MIN}
+                  aria-label={t("controls.decreaseNoteSpeed", {
+                    amount: Math.abs(adjustment).toFixed(2),
+                  })}
+                  onClick={() => setNoteSpeed((current) => (
+                    adjustBandoriSimulatorNoteSpeed(current, adjustment)
+                  ))}
+                >
+                  −{Math.abs(adjustment).toFixed(2)}
+                </button>
+              ))}
+              <output
+                aria-label={t("controls.currentNoteSpeed")}
+                aria-live="polite"
+                className="inline-flex h-10 min-w-24 items-center justify-center rounded-xl border border-[var(--theme-color-border-default)] bg-[var(--theme-color-control-background)] px-4 text-base font-black tabular-nums text-[var(--theme-color-text-default)]"
               >
-                −{(Math.abs(adjustmentHundredths) / 100).toFixed(2)}
-              </button>
-            ))}
-            <output
-              aria-label={t("controls.currentPlaybackRate")}
-              aria-live="polite"
-              className="inline-flex h-10 min-w-24 items-center justify-center rounded-xl border border-[var(--theme-color-border-default)] bg-[var(--theme-color-control-background)] px-4 text-base font-black tabular-nums text-[var(--theme-color-text-default)]"
-            >
-              {playbackRate.toFixed(2)}×
-            </output>
-            {PLAYBACK_RATE_INCREASES.map((adjustmentHundredths) => (
-              <button
-                key={adjustmentHundredths}
-                type="button"
-                className={controlClassName()}
-                disabled={
-                  playbackRateHundredths
-                  === BANDORI_SIMULATOR_PLAYBACK_RATE_MAX_HUNDREDTHS
-                }
-                aria-label={t("controls.increasePlaybackRate", {
-                  amount: (adjustmentHundredths / 100).toFixed(2),
+                {noteSpeed.toFixed(2)}
+              </output>
+              {NOTE_SPEED_INCREASES.map((adjustment) => (
+                <button
+                  key={adjustment}
+                  type="button"
+                  className={controlClassName()}
+                  disabled={noteSpeed === BANDORI_NATIVE_NOTE_SPEED_MAX}
+                  aria-label={t("controls.increaseNoteSpeed", {
+                    amount: adjustment.toFixed(2),
+                  })}
+                  onClick={() => setNoteSpeed((current) => (
+                    adjustBandoriSimulatorNoteSpeed(current, adjustment)
+                  ))}
+                >
+                  +{adjustment.toFixed(2)}
+                </button>
+              ))}
+              <p className="basis-full text-xs tabular-nums text-[var(--theme-color-text-muted)]">
+                {t("controls.noteSpeedRange", {
+                  min: BANDORI_NATIVE_NOTE_SPEED_MIN.toFixed(2),
+                  max: BANDORI_NATIVE_NOTE_SPEED_MAX.toFixed(2),
                 })}
-                onClick={() => changePlaybackRate(adjustmentHundredths)}
-              >
-                +{(adjustmentHundredths / 100).toFixed(2)}
-              </button>
-            ))}
-          </div>
-          <p className="mt-2 text-center text-xs tabular-nums text-[var(--theme-color-text-muted)]">
-            {t("controls.playbackRateRange")}
-          </p>
-          <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
-            <span className="text-sm font-semibold text-[var(--theme-color-text-muted)]">
-              {t("controls.syncNoteSpeedSlowdown")}
-            </span>
-            <SimulatorBooleanControl
-              disabledLabel={t("controls.syncNoteSpeedSlowdownOff")}
-              enabledLabel={t("controls.syncNoteSpeedSlowdownOn")}
-              isEnabled={isNoteSpeedSlowdownSynchronized}
-              label={t("controls.syncNoteSpeedSlowdown")}
-              onChange={setIsNoteSpeedSlowdownSynchronized}
-            />
-          </div>
-          <p className="mt-2 text-center text-xs text-[var(--theme-color-text-muted)]">
-            {t("controls.syncNoteSpeedSlowdownDescription")}
-          </p>
-        </fieldset>
+              </p>
+            </SimulatorControlRow>
 
-        <fieldset className="rounded-2xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background-muted)] px-4 pb-3 pt-2">
-          <legend className="px-2 text-sm font-semibold text-[var(--theme-color-text-default)]">
-            {t("controls.noteSpeed")}
-          </legend>
-          <div className="flex flex-wrap items-center justify-center gap-2">
-            {NOTE_SPEED_DECREASES.map((adjustment) => (
-              <button
-                key={adjustment}
-                type="button"
-                className={controlClassName()}
-                disabled={noteSpeed === BANDORI_NATIVE_NOTE_SPEED_MIN}
-                aria-label={t("controls.decreaseNoteSpeed", {
-                  amount: Math.abs(adjustment).toFixed(2),
-                })}
-                onClick={() => setNoteSpeed((current) => (
-                  adjustBandoriSimulatorNoteSpeed(current, adjustment)
-                ))}
+            <SimulatorControlRow label={t("controls.playbackRate")}>
+              {PLAYBACK_RATE_DECREASES.map((adjustmentHundredths) => (
+                <button
+                  key={adjustmentHundredths}
+                  type="button"
+                  className={controlClassName()}
+                  disabled={
+                    playbackRateHundredths
+                    === BANDORI_SIMULATOR_PLAYBACK_RATE_MIN_HUNDREDTHS
+                  }
+                  aria-label={t("controls.decreasePlaybackRate", {
+                    amount: (Math.abs(adjustmentHundredths) / 100).toFixed(2),
+                  })}
+                  onClick={() => changePlaybackRate(adjustmentHundredths)}
+                >
+                  −{(Math.abs(adjustmentHundredths) / 100).toFixed(2)}
+                </button>
+              ))}
+              <output
+                aria-label={t("controls.currentPlaybackRate")}
+                aria-live="polite"
+                className="inline-flex h-10 min-w-24 items-center justify-center rounded-xl border border-[var(--theme-color-border-default)] bg-[var(--theme-color-control-background)] px-4 text-base font-black tabular-nums text-[var(--theme-color-text-default)]"
               >
-                −{Math.abs(adjustment).toFixed(2)}
-              </button>
-            ))}
-            <output
-              aria-label={t("controls.currentNoteSpeed")}
-              aria-live="polite"
-              className="inline-flex h-10 min-w-24 items-center justify-center rounded-xl border border-[var(--theme-color-border-default)] bg-[var(--theme-color-control-background)] px-4 text-base font-black tabular-nums text-[var(--theme-color-text-default)]"
-            >
-              {noteSpeed.toFixed(2)}
-            </output>
-            {NOTE_SPEED_INCREASES.map((adjustment) => (
+                {playbackRate.toFixed(2)}×
+              </output>
+              {PLAYBACK_RATE_INCREASES.map((adjustmentHundredths) => (
+                <button
+                  key={adjustmentHundredths}
+                  type="button"
+                  className={controlClassName()}
+                  disabled={
+                    playbackRateHundredths
+                    === BANDORI_SIMULATOR_PLAYBACK_RATE_MAX_HUNDREDTHS
+                  }
+                  aria-label={t("controls.increasePlaybackRate", {
+                    amount: (adjustmentHundredths / 100).toFixed(2),
+                  })}
+                  onClick={() => changePlaybackRate(adjustmentHundredths)}
+                >
+                  +{(adjustmentHundredths / 100).toFixed(2)}
+                </button>
+              ))}
+              <p className="basis-full text-xs tabular-nums text-[var(--theme-color-text-muted)]">
+                {t("controls.playbackRateRange")}
+              </p>
+              <div className="flex basis-full flex-wrap items-center gap-2">
+                <span className="text-sm font-semibold text-[var(--theme-color-text-muted)]">
+                  {t("controls.syncNoteSpeedSlowdown")}
+                </span>
+                <SimulatorBooleanControl
+                  disabledLabel={t("controls.syncNoteSpeedSlowdownOff")}
+                  enabledLabel={t("controls.syncNoteSpeedSlowdownOn")}
+                  isEnabled={isNoteSpeedSlowdownSynchronized}
+                  label={t("controls.syncNoteSpeedSlowdown")}
+                  onChange={setIsNoteSpeedSlowdownSynchronized}
+                />
+              </div>
+              <p className="basis-full text-xs text-[var(--theme-color-text-muted)]">
+                {t("controls.syncNoteSpeedSlowdownDescription")}
+              </p>
+            </SimulatorControlRow>
+
+            <SimulatorControlRow label={t("skinControls.syncLine")}>
+              <SimulatorBooleanControl
+                disabledLabel={t("skinControls.off")}
+                enabledLabel={t("skinControls.on")}
+                isEnabled={isSyncLineEnabled}
+                label={t("skinControls.syncLine")}
+                onChange={setIsSyncLineEnabled}
+              />
+            </SimulatorControlRow>
+
+            <SimulatorControlRow label={t("skinControls.rhythmSupport")}>
+              <SimulatorBooleanControl
+                disabledLabel={t("skinControls.off")}
+                enabledLabel={t("skinControls.on")}
+                isEnabled={isRhythmSupportEnabled}
+                label={t("skinControls.rhythmSupport")}
+                onChange={setIsRhythmSupportEnabled}
+              />
+            </SimulatorControlRow>
+
+            <SimulatorControlRow label={t("controls.mirrorData")}>
               <button
-                key={adjustment}
                 type="button"
+                aria-pressed={isMirrored}
                 className={controlClassName()}
-                disabled={noteSpeed === BANDORI_NATIVE_NOTE_SPEED_MAX}
-                aria-label={t("controls.increaseNoteSpeed", {
-                  amount: adjustment.toFixed(2),
-                })}
-                onClick={() => setNoteSpeed((current) => (
-                  adjustBandoriSimulatorNoteSpeed(current, adjustment)
-                ))}
+                onClick={() => setIsMirrored((value) => !value)}
               >
-                +{adjustment.toFixed(2)}
+                <FlipHorizontal2 className="h-4 w-4" aria-hidden="true" />
+                {t(isMirrored ? "diagnostics.mirrorOn" : "diagnostics.mirrorOff")}
               </button>
-            ))}
+            </SimulatorControlRow>
+
+            <SimulatorControlRow label={t("skinControls.laneEffect")}>
+              <SimulatorBooleanControl
+                disabledLabel={t("skinControls.off")}
+                enabledLabel={t("skinControls.on")}
+                isEnabled={isLaneEffectEnabled}
+                label={t("skinControls.laneEffect")}
+                onChange={setIsLaneEffectEnabled}
+              />
+            </SimulatorControlRow>
+
+            <SimulatorControlRow label={t("skinControls.allPerfectStatus")}>
+              <SimulatorBooleanControl
+                disabledLabel={t("skinControls.off")}
+                enabledLabel={t("skinControls.on")}
+                isEnabled={isAllPerfectStatusEnabled}
+                label={t("skinControls.allPerfectStatus")}
+                onChange={setIsAllPerfectStatusEnabled}
+              />
+            </SimulatorControlRow>
           </div>
-          <p className="mt-2 text-center text-xs tabular-nums text-[var(--theme-color-text-muted)]">
-            {t("controls.noteSpeedRange", {
-              min: BANDORI_NATIVE_NOTE_SPEED_MIN.toFixed(2),
-              max: BANDORI_NATIVE_NOTE_SPEED_MAX.toFixed(2),
-            })}
-          </p>
         </fieldset>
 
         <SimulatorSkinControls
@@ -1268,21 +1470,13 @@ export default function ChartSimulatorRuntime({
           directionalFlickSkin={directionalFlickSkin}
           fieldSkin={fieldSkin}
           fieldSkins={BANDORI_NATIVE_FIELD_SKINS}
-          isAllPerfectStatusEnabled={isAllPerfectStatusEnabled}
-          isLaneEffectEnabled={isLaneEffectEnabled}
-          isRhythmSupportEnabled={isRhythmSupportEnabled}
-          isSyncLineEnabled={isSyncLineEnabled}
           limitedPerformanceSkin={limitedPerformanceSkin}
           noteSkin={noteSkin}
           onBackgroundSkinChange={setBackgroundSkin}
           onDirectionalFlickSkinChange={setDirectionalFlickSkin}
           onFieldSkinChange={setFieldSkin}
-          onAllPerfectStatusEnabledChange={setIsAllPerfectStatusEnabled}
-          onLaneEffectEnabledChange={setIsLaneEffectEnabled}
           onLimitedPerformanceSkinChange={changeLimitedPerformanceSkin}
           onNoteSkinChange={setNoteSkin}
-          onRhythmSupportEnabledChange={setIsRhythmSupportEnabled}
-          onSyncLineEnabledChange={setIsSyncLineEnabled}
           onTapSeSkinChange={changeTapSeSkin}
           tapSeSkin={tapSeSkin}
         />

@@ -22,6 +22,8 @@ export type BandoriNativeNoteSoundCueBank = {
 
 export const BANDORI_NATIVE_NOTE_SOUND_SCHEDULE_AHEAD_SECONDS = 0.1;
 
+export type BandoriNativeAudioContextState = AudioContextState | "interrupted";
+
 export function getBandoriNativeNoteSoundContextTime(
   contextTimeSeconds: number,
   mediaTimeSeconds: number,
@@ -50,6 +52,7 @@ export type BandoriNativeNoteSoundRuntime = {
     playbackRate: number,
   ): void;
   dispose(): void;
+  getContextState(): BandoriNativeAudioContextState | null;
   pause(): Promise<void>;
   prepare(): Promise<void>;
   prepareCueBank(cueBank: BandoriNativeNoteSoundCueBank): Promise<void>;
@@ -58,6 +61,9 @@ export type BandoriNativeNoteSoundRuntime = {
   setVolume(volume: number): void;
   startLoop(voiceKey: string, cue: BandoriNativeNoteSoundCue, offsetSeconds?: number): void;
   stopAll(): void;
+  subscribeContextState(
+    listener: (state: BandoriNativeAudioContextState) => void,
+  ): () => void;
 };
 
 class WebAudioBandoriNativeNoteSoundRuntime implements BandoriNativeNoteSoundRuntime {
@@ -76,7 +82,16 @@ class WebAudioBandoriNativeNoteSoundRuntime implements BandoriNativeNoteSoundRun
   private readonly activeSources = new Set<AudioBufferSourceNode>();
   private readonly activeLoops = new Map<string, ActiveLoop>();
   private readonly mediaSources = new Map<HTMLMediaElement, MediaElementAudioSourceNode>();
+  private readonly contextStateListeners = new Set<
+    (state: BandoriNativeAudioContextState) => void
+  >();
   private disposed = false;
+
+  private readonly handleContextStateChange = () => {
+    const state = this.context?.state as BandoriNativeAudioContextState | undefined;
+    if (!state) return;
+    for (const listener of this.contextStateListeners) listener(state);
+  };
 
   constructor(
     cueBanks: readonly BandoriNativeNoteSoundCueBank[],
@@ -120,6 +135,8 @@ class WebAudioBandoriNativeNoteSoundRuntime implements BandoriNativeNoteSoundRun
     masterGain.connect(context.destination);
     this.context = context;
     this.masterGain = masterGain;
+    context.addEventListener("statechange", this.handleContextStateChange);
+    this.handleContextStateChange();
     return context;
   }
 
@@ -199,12 +216,23 @@ class WebAudioBandoriNativeNoteSoundRuntime implements BandoriNativeNoteSoundRun
 
   async resume(): Promise<void> {
     const context = this.getContext();
-    if (context.state === "suspended") await context.resume();
+    if (context.state === "closed") {
+      throw new Error("Native note sound audio context is closed");
+    }
+    if (context.state !== "running") await context.resume();
+    if (context.state !== "running") {
+      throw new Error("Native note sound audio context did not resume");
+    }
   }
 
   async pause(): Promise<void> {
-    const context = this.context;
-    if (context?.state === "running") await context.suspend();
+    // Keep the shared media-element and Note SE graph running after its first
+    // resume. Explicit transport pauses still remove every scheduled Note SE.
+    this.stopAll();
+  }
+
+  getContextState(): BandoriNativeAudioContextState | null {
+    return (this.context?.state as BandoriNativeAudioContextState | undefined) ?? null;
   }
 
   selectCueBank(cueBankId: string): void {
@@ -334,6 +362,16 @@ class WebAudioBandoriNativeNoteSoundRuntime implements BandoriNativeNoteSoundRun
     this.activeSources.clear();
   }
 
+  subscribeContextState(
+    listener: (state: BandoriNativeAudioContextState) => void,
+  ): () => void {
+    if (this.disposed) throw new Error("Native note sound runtime is disposed");
+    this.contextStateListeners.add(listener);
+    const state = this.context?.state as BandoriNativeAudioContextState | undefined;
+    if (state) listener(state);
+    return () => this.contextStateListeners.delete(listener);
+  }
+
   dispose(): void {
     if (this.disposed) return;
     this.stopAll();
@@ -341,6 +379,8 @@ class WebAudioBandoriNativeNoteSoundRuntime implements BandoriNativeNoteSoundRun
     for (const source of this.mediaSources.values()) source.disconnect();
     this.mediaSources.clear();
     const context = this.context;
+    context?.removeEventListener("statechange", this.handleContextStateChange);
+    this.contextStateListeners.clear();
     this.context = null;
     this.masterGain = null;
     if (context && context.state !== "closed") void context.close();

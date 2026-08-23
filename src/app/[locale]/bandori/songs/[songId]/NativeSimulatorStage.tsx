@@ -19,6 +19,9 @@ import {
   type CompiledBandoriChart,
 } from "@/lib/bandori/chart-simulator/compiler";
 import {
+  advanceBandoriEffectAnimationClock,
+} from "@/lib/bandori/chart-simulator/effect-animation-clock";
+import {
   createBandoriNativeTransparentColoredShaderSources,
 } from "@/lib/bandori/chart-simulator/native-note-material";
 import {
@@ -2333,17 +2336,22 @@ export default function NativeSimulatorStage({
         const presentationTime = getPresentationTime();
         const holdStates = collectBandoriNativeHoldStates(chartVisuals, presentationTime);
         effectPlaybackState = getEffectPlaybackState();
-        let didResetTimeline = false;
-        const effectAnimationDeltaSeconds = effectPlaybackState.isPlaying
-          ? Math.max(0, app.ticker.deltaMS / 1000)
-          : 0;
-        effectAnimationTimeSeconds += effectAnimationDeltaSeconds;
-        if (
-          effectPlaybackState.timelineVersion !== effectTimelineVersion
-          || presentationTime < lastEffectTimeSeconds
-        ) {
+        const effectClockStep = advanceBandoriEffectAnimationClock({
+          animationTimeSeconds: effectAnimationTimeSeconds,
+          isPlaying: effectPlaybackState.isPlaying,
+          playbackRate: effectPlaybackState.playbackRate,
+          presentationTimeSeconds: presentationTime,
+          previousPresentationTimeSeconds: lastEffectTimeSeconds,
+          previousTimelineVersion: effectTimelineVersion,
+          timelineVersion: effectPlaybackState.timelineVersion,
+        });
+        const effectAnimationDeltaSeconds = effectClockStep.animationDeltaSeconds;
+        const didResetTimeline = effectClockStep.didResetTimeline;
+        effectAnimationTimeSeconds = effectClockStep.animationTimeSeconds;
+        if (didResetTimeline) {
           clearEffects();
-          didResetTimeline = true;
+          combo.popStartAnimationTimeSeconds = null;
+          allPerfectCombo.popStartAnimationTimeSeconds = null;
           effectTimelineVersion = effectPlaybackState.timelineVersion;
           lastEffectTimeSeconds = presentationTime;
         }
@@ -2351,7 +2359,7 @@ export default function NativeSimulatorStage({
           if (laneEffectEnabledRef.current) {
             updateLaneEffect(
               laneEffects[lane],
-              app.ticker.deltaMS / 1000,
+              effectAnimationDeltaSeconds,
               effectPlaybackState.isPlaying,
             );
           } else {
