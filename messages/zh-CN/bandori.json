@@ -555,6 +555,71 @@
     }
   },
   "songs": {
+    "page": {
+      "title": "歌曲图鉴",
+      "displayServer": "显示服务器",
+      "resultCount": "{count} 首歌曲",
+      "showMore": "再显示 {count} 首"
+    },
+    "filters": {
+      "searchPlaceholder": "搜索歌曲名、乐队名或歌曲 ID",
+      "otherBand": "其他",
+      "allDifficulties": "全部难度",
+      "levelMin": "最低",
+      "levelMax": "最高",
+      "rows": {
+        "band": "乐队",
+        "type": "类型",
+        "difficulty": "难度",
+        "level": "歌曲等级",
+        "sort": "排序"
+      },
+      "types": {
+        "original": "原创歌曲",
+        "cover": "翻唱歌曲",
+        "extra": "EXTRA 曲",
+        "other": "其他"
+      },
+      "difficulties": {
+        "easy": "EASY",
+        "normal": "NORMAL",
+        "hard": "HARD",
+        "expert": "EXPERT",
+        "special": "SPECIAL"
+      },
+      "sort": {
+        "release": "发布日期",
+        "title": "歌曲名",
+        "level": "歌曲等级",
+        "id": "歌曲 ID"
+      },
+      "sortDirection": {
+        "desc": "倒序",
+        "asc": "正序",
+        "descTitle": "当前为倒序，点击切换为正序",
+        "ascTitle": "当前为正序，点击切换为倒序",
+        "descAria": "排序方向：倒序",
+        "ascAria": "排序方向：正序"
+      },
+      "actions": {
+        "all": "全部",
+        "clear": "清除筛选",
+        "selectAll": "选择全部{group}",
+        "clearAll": "清除全部{group}"
+      }
+    },
+    "states": {
+      "loading": "正在读取歌曲图鉴",
+      "loadFailed": "读取歌曲数据失败，请稍后重试",
+      "empty": "没有符合当前条件的歌曲"
+    },
+    "detail": {
+      "view": {
+        "label": "歌曲页面视图",
+        "info": "歌曲详情",
+        "simulator": "谱面模拟"
+      }
+    },
     "songId": "歌曲 #{songId}",
     "unknownTitle": "歌曲 #{songId}",
     "unknownBand": "未知乐团",
@@ -595,7 +660,6 @@
         "decreasePlaybackRate": "降低音乐播放倍率 {amount}",
         "increasePlaybackRate": "提高音乐播放倍率 {amount}",
         "currentPlaybackRate": "当前音乐播放倍率",
-        "playbackRateRange": "0.50×–1.00×，两档步长 0.10 / 0.01；音乐音高、音效与演出动画保持原样",
         "syncNoteSpeedSlowdown": "同步慢放谱面速度",
         "syncNoteSpeedSlowdownOn": "开",
         "syncNoteSpeedSlowdownOff": "关",
@@ -603,8 +667,7 @@
         "noteSpeed": "节奏图标的速度",
         "decreaseNoteSpeed": "降低节奏图标的速度 {amount}",
         "increaseNoteSpeed": "提高节奏图标的速度 {amount}",
-        "currentNoteSpeed": "当前节奏图标的速度",
-        "noteSpeedRange": "{min}–{max}，三档步长 0.50 / 0.10 / 0.01"
+        "currentNoteSpeed": "当前节奏图标的速度"
       },
       "effectControlsTitle": "演出效果设定",
       "loopControls": {
@@ -625,16 +688,14 @@
         "invalidTimeRange": "时间区间必须满足 0 ≤ 起点 < 终点 ≤ 歌曲长度",
         "invalidNoteRange": "Note 区间必须是谱面物量内的递增整数范围"
       },
-      "stageAria": "带 JP 原生背景、轨道底板、普通判定条、已确认 Single、Directional、Long、Slide Note 与已准入自动 Perfect 反馈的谱面模拟舞台",
-      "stageLoading": "正在载入已确认的 JP 原生舞台、Note 图集、长条纹理与已准入击打效果资源",
-      "stageReady": "已载入 JP {backgroundSkin} 背景、{fieldSkin}、节奏标志 {noteSkin}、左右 Flick 标志 {directionalFlickSkin}、已确认 Long/Slide 演出与已准入自动 Perfect 反馈",
+      "stageAria": "谱面模拟舞台",
+      "stageLoading": "正在载入谱面模拟舞台…",
       "stageResourceUnavailable": "本地缺少当前舞台需要的 JP 解包资源，未使用其它资源回退",
       "stageNoteContractUnavailable": "该谱面含有尚未确认的 Note 组合；Note 图层已失败关闭，静态舞台仍可检查",
       "rendererUnavailable": "当前浏览器无法启动 Pixi 舞台",
       "fullChartDescription": "按时间展开的完整谱面结构，用于确认音符、长条与 BPM 数据",
       "fullChartAnalysisLabel": "分析视图，不代表游戏原生舞台",
       "fullChartAria": "完整谱面分析图",
-      "capabilityNotice": "当前原生演出支持固定 1334×750 的 JP 舞台、已确认的 JP 按键条·判定线与 Note 皮肤、可切换的 skin00、skin02、skin03、练习背景、三种固定团队演出舞台背景及 19 个适用限定覆盖的常规主背景，以及固定 NoteSize=100、可调 NoteSpeed=1.00–12.00 下的 Single、宽 1–7 Directional、普通及 Habahiro 多轨 Point／Skill／Flick／Long／Slide 几何与已准入动态反馈、Perfect 判定文字、普通／All Perfect Combo 和可切换 skin00–03、固定 100% 音量的 AutoPerfect Note 音效；由于模拟器不渲染玩家角色，团队演出的玩家承载组件与红蓝队伍物件均省略；Habahiro 多宽 Sprite 只按具体多轨 Note 选用，不作为节奏标志样式，也不播放 lane-change 换轨演出；另有 0.50×–1.00× 的 Web 音乐慢放、可选谱面下落同步与复用 seek 的时间／Note 区间循环，Note 音效和演出动画保持原速；团队演出动态切换、Fever 切换、除已准入点击粒子外的限定舞台效果、cont_force 控制、真实触摸／断 Hold 交互、完整 lane-change 演出、TapSE 音量控件、非 Perfect 判定、非 AutoPerfect 音效和其它未确认参数仍保持禁用",
       "audioUnavailable": "当前歌曲没有可用音频，仍可查看完整谱面并拖动时间轴",
       "skinControls": {
         "ariaLabel": "演出皮肤设定",
@@ -733,22 +794,8 @@
         }
       },
       "diagnostics": {
-        "status": "状态",
-        "time": "时间",
-        "internalCombo": "内部连击",
-        "presentationCapabilities": "原生演出能力",
-        "liveBackground": "正常播放背景",
-        "ordinaryJudgmentLine": "普通判定条",
-        "pointNotes": "Single/Directional/Long/Slide Note",
         "mirrorOn": "镜像开启",
         "mirrorOff": "镜像关闭"
-      },
-      "status": {
-        "ready": "就绪",
-        "playing": "播放中",
-        "paused": "已暂停",
-        "scrubbing": "定位中",
-        "ended": "已结束"
       }
     }
   },

@@ -177,7 +177,6 @@ type NativeSimulatorStageProps = {
   noteSpeed: number;
   noteSkin: BandoriNativeNoteSkin;
   noteContractErrorLabel: string;
-  readyLabel: string;
   rendererErrorLabel: string;
   resourceErrorLabel: string;
   resolveAssetUrl: BandoriChartSimulatorAssetResolver;
@@ -1731,7 +1730,6 @@ export default function NativeSimulatorStage({
   noteSpeed,
   noteSkin,
   noteContractErrorLabel,
-  readyLabel,
   rendererErrorLabel,
   resourceErrorLabel,
   resolveAssetUrl,
@@ -2928,14 +2926,14 @@ export default function NativeSimulatorStage({
     resolveAssetUrl,
   ]);
 
-  const statusLabel = status === "rendererError"
+  const statusLabel: string | null = status === "rendererError"
     ? rendererErrorLabel
     : status === "resourceError"
       ? resourceErrorLabel
       : status === "noteContractError"
         ? noteContractErrorLabel
         : status === "ready"
-          ? readyLabel
+          ? null
           : loadingLabel;
 
   return (
@@ -2949,12 +2947,14 @@ export default function NativeSimulatorStage({
           aspectRatio: `${BANDORI_NATIVE_STAGE_SIZE.width} / ${BANDORI_NATIVE_STAGE_SIZE.height}`,
         }}
       />
-      <p
-        aria-live="polite"
-        className="mt-2 text-sm text-[var(--theme-color-text-muted)]"
-      >
-        {statusLabel}
-      </p>
+      {statusLabel ? (
+        <p
+          aria-live="polite"
+          className="mt-2 text-sm text-[var(--theme-color-text-muted)]"
+        >
+          {statusLabel}
+        </p>
+      ) : null}
     </div>
   );
 }

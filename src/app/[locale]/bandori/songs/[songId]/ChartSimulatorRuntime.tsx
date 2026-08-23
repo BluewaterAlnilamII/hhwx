@@ -39,7 +39,6 @@ import {
 } from "@/lib/bandori-chart-simulator-contract";
 import { setMusicPlaybackAudioSessionActive } from "@/lib/browser-audio-session";
 import {
-  rebuildBandoriChartState,
   type CompiledBandoriChart,
 } from "@/lib/bandori/chart-simulator/compiler";
 import { compileBandoriChartInWorker } from "@/lib/bandori/chart-simulator/compiler-client";
@@ -170,11 +169,6 @@ function parseChartResponse(
   return parseBandoriChartForSimulator(data.chart);
 }
 
-function formatTime(seconds: number): string {
-  const wholeSeconds = Math.max(0, Math.floor(seconds));
-  return `${Math.floor(wholeSeconds / 60)}:${String(wholeSeconds % 60).padStart(2, "0")}`;
-}
-
 function applySimulatorPlaybackRate(
   audio: HTMLAudioElement,
   playbackRate: number,
@@ -290,12 +284,6 @@ export default function ChartSimulatorRuntime({
   const effectiveDirectionalFlickSkin =
     limitedPerformanceSkin?.directionalFlickSkin ?? directionalFlickSkin;
   const effectiveTapSeSkin = limitedPerformanceSkin?.tapSeSkin ?? tapSeSkin;
-  const noteSkinLabel = typeof effectiveNoteSkin.id === "number"
-    ? `TYPE${effectiveNoteSkin.id}`
-    : t(`skinControls.limitedPerformance.skin.${effectiveNoteSkin.id}`);
-  const backgroundSkinLabel = limitedPerformanceSkin?.backgroundSkin
-    ? t(`skinControls.limitedPerformance.skin.${limitedPerformanceSkin.id}`)
-    : t(`skinControls.backgroundSkin.${backgroundSkin.id}`);
 
   const noteSoundTimeline = useMemo(() => {
     if (loadState.status !== "ready") return null;
@@ -904,11 +892,6 @@ export default function ChartSimulatorRuntime({
   }, [flushNoteSoundsThrough, noteSoundTimeline]);
 
   const presentationTime = getBandoriChartPresentationTime(transport);
-  const seekState = useMemo(() => (
-    loadState.status === "ready"
-      ? rebuildBandoriChartState(loadState.compiled, presentationTime, 0)
-      : null
-  ), [loadState, presentationTime]);
   const play = async () => {
     const audio = audioRef.current;
     if (!audio || !audioUrl || loadState.status !== "ready") return;
@@ -1170,14 +1153,6 @@ export default function ChartSimulatorRuntime({
             noteSpeed={noteSpeed}
             noteSkin={effectiveNoteSkin}
             noteContractErrorLabel={t("stageNoteContractUnavailable")}
-            readyLabel={t("stageReady", {
-              backgroundSkin: backgroundSkinLabel,
-              directionalFlickSkin: typeof effectiveDirectionalFlickSkin.id === "number"
-                ? `TYPE${effectiveDirectionalFlickSkin.id}`
-                : t(`skinControls.limitedPerformance.skin.${effectiveDirectionalFlickSkin.id}`),
-              fieldSkin: t(`skinControls.fieldSkin.${effectiveFieldSkin.id}`),
-              noteSkin: noteSkinLabel,
-            })}
             rendererErrorLabel={t("rendererUnavailable")}
             resourceErrorLabel={t("stageResourceUnavailable")}
             resolveAssetUrl={assetLoadState.resolveAssetUrl}
@@ -1340,12 +1315,6 @@ export default function ChartSimulatorRuntime({
                   +{adjustment.toFixed(2)}
                 </button>
               ))}
-              <p className="basis-full text-xs tabular-nums text-[var(--theme-color-text-muted)]">
-                {t("controls.noteSpeedRange", {
-                  min: BANDORI_NATIVE_NOTE_SPEED_MIN.toFixed(2),
-                  max: BANDORI_NATIVE_NOTE_SPEED_MAX.toFixed(2),
-                })}
-              </p>
             </SimulatorControlRow>
 
             <SimulatorControlRow label={t("controls.playbackRate")}>
@@ -1390,9 +1359,6 @@ export default function ChartSimulatorRuntime({
                   +{(adjustmentHundredths / 100).toFixed(2)}
                 </button>
               ))}
-              <p className="basis-full text-xs tabular-nums text-[var(--theme-color-text-muted)]">
-                {t("controls.playbackRateRange")}
-              </p>
               <div className="flex basis-full flex-wrap items-center gap-2">
                 <span className="text-sm font-semibold text-[var(--theme-color-text-muted)]">
                   {t("controls.syncNoteSpeedSlowdown")}
@@ -1482,28 +1448,6 @@ export default function ChartSimulatorRuntime({
         />
       </div>
 
-      <dl className="mt-5 grid grid-cols-2 gap-2 sm:grid-cols-4">
-        <div className="rounded-2xl bg-[var(--theme-color-control-background-muted)] p-3">
-          <dt className="text-xs font-semibold text-[var(--theme-color-text-muted)]">{t("diagnostics.status")}</dt>
-          <dd className="mt-1 font-bold">{t(`status.${transport.phase}`)}</dd>
-        </div>
-        <div className="rounded-2xl bg-[var(--theme-color-control-background-muted)] p-3">
-          <dt className="text-xs font-semibold text-[var(--theme-color-text-muted)]">{t("diagnostics.time")}</dt>
-          <dd className="mt-1 font-bold tabular-nums">{formatTime(presentationTime)} / {formatTime(durationSeconds)}</dd>
-        </div>
-        <div className="rounded-2xl bg-[var(--theme-color-control-background-muted)] p-3">
-          <dt className="text-xs font-semibold text-[var(--theme-color-text-muted)]">{t("diagnostics.internalCombo")}</dt>
-          <dd className="mt-1 font-bold tabular-nums">{seekState?.combo ?? 0} / {loadState.compiled.maxCombo}</dd>
-        </div>
-        <div className="rounded-2xl bg-[var(--theme-color-control-background-muted)] p-3">
-          <dt className="text-xs font-semibold text-[var(--theme-color-text-muted)]">{t("diagnostics.presentationCapabilities")}</dt>
-          <dd className="mt-1 font-bold">
-            {backgroundSkinLabel} · {t(`skinControls.fieldSkin.${effectiveFieldSkin.id}`)} · {noteSkinLabel} · {t("diagnostics.ordinaryJudgmentLine")} · {typeof effectiveDirectionalFlickSkin.id === "number" ? `TYPE${effectiveDirectionalFlickSkin.id}` : t(`skinControls.limitedPerformance.skin.${effectiveDirectionalFlickSkin.id}`)} · {t("diagnostics.pointNotes")} · {t(isMirrored ? "diagnostics.mirrorOn" : "diagnostics.mirrorOff")}
-          </dd>
-        </div>
-      </dl>
-
-      <p className="mt-4 text-sm text-[var(--theme-color-text-muted)]">{t("capabilityNotice")}</p>
       {!audioUrl ? <p className="mt-2 text-sm text-[var(--theme-color-semantic-warning-foreground)]">{t("audioUnavailable")}</p> : null}
       {playbackError ? <p className="mt-2 text-sm text-[var(--theme-color-semantic-danger-foreground)]">{playbackError}</p> : null}
     </section>

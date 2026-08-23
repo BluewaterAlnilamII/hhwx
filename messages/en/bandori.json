@@ -555,6 +555,71 @@
     }
   },
   "songs": {
+    "page": {
+      "title": "Song Catalog",
+      "displayServer": "Display server",
+      "resultCount": "{count} songs",
+      "showMore": "Show {count} more"
+    },
+    "filters": {
+      "searchPlaceholder": "Search song title, band, or song ID",
+      "otherBand": "Other",
+      "allDifficulties": "All difficulties",
+      "levelMin": "Min",
+      "levelMax": "Max",
+      "rows": {
+        "band": "Band",
+        "type": "Type",
+        "difficulty": "Difficulty",
+        "level": "Song level",
+        "sort": "Sort"
+      },
+      "types": {
+        "original": "Original",
+        "cover": "Cover",
+        "extra": "EXTRA",
+        "other": "Other"
+      },
+      "difficulties": {
+        "easy": "EASY",
+        "normal": "NORMAL",
+        "hard": "HARD",
+        "expert": "EXPERT",
+        "special": "SPECIAL"
+      },
+      "sort": {
+        "release": "Release date",
+        "title": "Song title",
+        "level": "Song level",
+        "id": "Song ID"
+      },
+      "sortDirection": {
+        "desc": "Descending",
+        "asc": "Ascending",
+        "descTitle": "Currently descending, switch to ascending",
+        "ascTitle": "Currently ascending, switch to descending",
+        "descAria": "Sort direction: descending",
+        "ascAria": "Sort direction: ascending"
+      },
+      "actions": {
+        "all": "All",
+        "clear": "Clear filters",
+        "selectAll": "Select all {group}",
+        "clearAll": "Clear all {group}"
+      }
+    },
+    "states": {
+      "loading": "Loading the song catalog",
+      "loadFailed": "Failed to load song data. Please try again later",
+      "empty": "No songs match the current filters"
+    },
+    "detail": {
+      "view": {
+        "label": "Song page view",
+        "info": "Song Details",
+        "simulator": "Chart Simulator"
+      }
+    },
     "songId": "Song #{songId}",
     "unknownTitle": "Song #{songId}",
     "unknownBand": "Unknown band",
@@ -595,7 +660,6 @@
         "decreasePlaybackRate": "Decrease music playback rate by {amount}",
         "increasePlaybackRate": "Increase music playback rate by {amount}",
         "currentPlaybackRate": "Current music playback rate",
-        "playbackRateRange": "0.50×–1.00× with 0.10 / 0.01 steps; pitch, Note SE, and presentation animations stay unchanged",
         "syncNoteSpeedSlowdown": "Synchronize note-speed slowdown",
         "syncNoteSpeedSlowdownOn": "On",
         "syncNoteSpeedSlowdownOff": "Off",
@@ -603,8 +667,7 @@
         "noteSpeed": "Note speed",
         "decreaseNoteSpeed": "Decrease note speed by {amount}",
         "increaseNoteSpeed": "Increase note speed by {amount}",
-        "currentNoteSpeed": "Current note speed",
-        "noteSpeedRange": "{min}–{max}, with 0.50 / 0.10 / 0.01 adjustment steps"
+        "currentNoteSpeed": "Current note speed"
       },
       "effectControlsTitle": "Performance effect settings",
       "loopControls": {
@@ -625,16 +688,14 @@
         "invalidTimeRange": "The time range must satisfy 0 ≤ start < end ≤ song duration",
         "invalidNoteRange": "The Note range must be an increasing integer range inside the chart"
       },
-      "stageAria": "Chart simulator stage with the native JP background, lane field, ordinary judgment line, verified Single, Directional, Long, and Slide notes, and admitted automatic Perfect feedback",
-      "stageLoading": "Loading the verified native JP stage, note atlases, ribbon textures, and admitted hit-effect resources",
-      "stageReady": "Loaded the JP {backgroundSkin} background, {fieldSkin}, note style {noteSkin}, directional Flick style {directionalFlickSkin}, verified Long/Slide presentation, and admitted automatic Perfect feedback",
+      "stageAria": "Chart simulator stage",
+      "stageLoading": "Loading the chart simulator stage…",
       "stageResourceUnavailable": "A required unpacked JP stage resource is missing; no other resource was used as a fallback",
       "stageNoteContractUnavailable": "This chart contains an unverified note combination; the note layer failed closed while the static stage remains available",
       "rendererUnavailable": "This browser could not start the Pixi stage",
       "fullChartDescription": "A time-expanded view of notes, ribbons, and BPM data for structural verification",
       "fullChartAnalysisLabel": "Analysis view, not the native game stage",
       "fullChartAria": "Full chart analysis view",
-      "capabilityNotice": "The native presentation currently supports the fixed 1334×750 JP stage, verified JP lane-field/judgment-line and note skins, selectable skin00, skin02, skin03, the practice background, three fixed team-live stage backgrounds, and the normal backgrounds from 19 eligible limited overlays, Single notes, Directional width 1–7, and ordinary plus Habahiro multi-range Point/Skill/Flick/Long/Slide geometry and admitted dynamic feedback at fixed NoteSize=100 and adjustable NoteSpeed=1.00–12.00. Team-live player carriers and red/blue objects are omitted because the simulator does not render player characters. Verified Habahiro wide Sprites are selected only for individual multi-range Notes, not exposed as a rhythm-marker style, and lane-change presentation is not played. AutoPerfect feedback, the Perfect judgment label, ordinary/All Perfect Combo, selectable skin00–03 100-percent Note sounds, 0.50×–1.00× music slow play, optional Note-fall synchronization, and seek-backed looping remain available; dynamic team-live or fever switching, limited stage effects other than admitted tap particles, cont_force controls, real touch/broken-hold interaction, full lane-change presentation, the TapSE volume control, non-Perfect labels, non-AutoPerfect sounds, and other unverified parameters remain disabled.",
       "audioUnavailable": "This song has no available audio, but the full chart and timeline remain usable",
       "skinControls": {
         "ariaLabel": "Performance skin settings",
@@ -733,22 +794,8 @@
         }
       },
       "diagnostics": {
-        "status": "Status",
-        "time": "Time",
-        "internalCombo": "Internal combo",
-        "presentationCapabilities": "Native presentation capabilities",
-        "liveBackground": "Normal-play background",
-        "ordinaryJudgmentLine": "Ordinary judgment line",
-        "pointNotes": "Single/Directional/Long/Slide notes",
         "mirrorOn": "Mirror on",
         "mirrorOff": "Mirror off"
-      },
-      "status": {
-        "ready": "Ready",
-        "playing": "Playing",
-        "paused": "Paused",
-        "scrubbing": "Seeking",
-        "ended": "Ended"
       }
     }
   },

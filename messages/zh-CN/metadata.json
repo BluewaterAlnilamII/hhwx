@@ -15,7 +15,7 @@
   },
   "songs": {
     "title": "歌曲与谱面模拟器",
-    "detailTitle": "{songTitle} - 谱面模拟器"
+    "detailTitle": "{songTitle} - 歌曲详情"
   },
   "gameProfiles": {
     "title": "游戏档案"

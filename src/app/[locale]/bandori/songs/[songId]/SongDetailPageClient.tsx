@@ -1,6 +1,6 @@
 "use client";
 
-import { useTransition } from "react";
+import { useEffect, useTransition } from "react";
 import { useSearchParams } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 import { Gauge, ListMusic, Music2, Timer } from "lucide-react";
@@ -12,7 +12,11 @@ import Heading from "@/components/Heading";
 import MusicArtwork from "@/components/music-player/MusicArtwork";
 import { usePathname, useRouter } from "@/i18n/navigation";
 import type { BandoriChartDifficulty } from "@/lib/bandori-master-contract";
-import { pickBandoriRegionalText } from "@/lib/bandori-server";
+import {
+  getBandoriServerFromCode,
+  pickBandoriRegionalText,
+} from "@/lib/bandori-server";
+import { cn } from "@/lib/utils";
 import { useBandoriPreferredServer } from "@/store/useBandoriPreferencesStore";
 
 export type SongDetailRegionalTextSlots = [
@@ -68,13 +72,24 @@ export default function SongDetailPageClient({
   const router = useRouter();
   const searchParams = useSearchParams();
   const [isDifficultyPending, startDifficultyTransition] = useTransition();
-  const title = pickBandoriRegionalText(titleSlots, preferredServer) ?? t("unknownTitle", { songId });
-  const bandName = pickBandoriRegionalText(bandNameSlots, preferredServer) ?? t("unknownBand");
+  const displayServer = getBandoriServerFromCode(searchParams.get("server")) ?? preferredServer;
+  const activeView = searchParams.get("view") === "simulator" ? "simulator" : "info";
+  const title = pickBandoriRegionalText(titleSlots, displayServer, displayServer) ?? t("unknownTitle", { songId });
+  const bandName = pickBandoriRegionalText(bandNameSlots, displayServer, displayServer) ?? t("unknownBand");
   const selectedOption = difficulties.find((option) => option.difficulty === selectedDifficulty)
     ?? difficulties[0];
-  const playLevel = selectedOption.playLevels[preferredServer]
+  const playLevel = selectedOption.playLevels[displayServer]
     ?? selectedOption.playLevels.find((value) => value !== null)
     ?? null;
+
+  useEffect(() => {
+    const rawView = searchParams.get("view");
+    if (rawView === null || rawView === "simulator") return;
+    const next = new URLSearchParams(searchParams.toString());
+    next.delete("view");
+    const query = next.toString();
+    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+  }, [pathname, router, searchParams]);
 
   const selectDifficulty = (difficulty: BandoriChartDifficulty) => {
     if (difficulty === selectedDifficulty) return;
@@ -83,6 +98,15 @@ export default function SongDetailPageClient({
     startDifficultyTransition(() => {
       router.replace(`${pathname}?${next.toString()}`, { scroll: false });
     });
+  };
+
+  const selectView = (view: "info" | "simulator") => {
+    if (view === activeView) return;
+    const next = new URLSearchParams(searchParams.toString());
+    if (view === "info") next.delete("view");
+    else next.set("view", view);
+    const query = next.toString();
+    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
   };
 
   const statistics = [
@@ -133,7 +157,36 @@ export default function SongDetailPageClient({
             </div>
           </div>
         </div>
-        <dl className="mt-5 grid grid-cols-2 gap-2 sm:grid-cols-4">
+      </article>
+
+      <div role="tablist" aria-label={t("detail.view.label")} className="grid grid-cols-2 overflow-hidden rounded-2xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-surface-background)] shadow-sm dark:border-slate-700 dark:bg-[#111827]">
+        {(["info", "simulator"] as const).map((view) => {
+          const active = view === activeView;
+          return (
+            <button
+              key={view}
+              type="button"
+              role="tab"
+              aria-selected={active}
+              onClick={() => selectView(view)}
+              className={cn(
+                "relative h-14 text-base font-black outline-hidden transition focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--theme-color-control-border-accent)]",
+                active
+                  ? "text-[var(--theme-color-tab-foreground-selected)]"
+                  : "text-[var(--theme-color-tab-foreground)] hover:bg-[var(--theme-color-tab-background-hover)] hover:text-[var(--theme-color-tab-foreground-hover)] dark:text-slate-300 dark:hover:bg-slate-800",
+                view === "info" && "border-r border-[var(--theme-color-border-subtle)] dark:border-slate-700",
+              )}
+            >
+              {t(`detail.view.${view}`)}
+              {active ? <span className="absolute inset-x-0 bottom-0 h-0.5 bg-[var(--theme-color-tab-indicator-selected)]" /> : null}
+            </button>
+          );
+        })}
+      </div>
+
+      {activeView === "info" ? (
+        <section className="rounded-3xl border border-[var(--theme-color-border-default)] bg-[var(--theme-color-surface-background)] p-4 shadow-[var(--theme-shadow-surface-raised)] sm:p-6 dark:border-slate-700 dark:bg-[#111827]">
+          <dl className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           {statistics.map(({ id, value, icon: Icon }) => (
             <div key={id} className="rounded-2xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background-muted)] p-3">
               <dt className="flex items-center gap-1.5 text-xs font-semibold text-[var(--theme-color-text-muted)]">
@@ -143,9 +196,11 @@ export default function SongDetailPageClient({
               <dd className="mt-1 text-lg font-bold tabular-nums text-[var(--theme-color-text-default)]">{value}</dd>
             </div>
           ))}
-        </dl>
-      </article>
-      <ChartSimulatorClientShell {...simulator} />
+          </dl>
+        </section>
+      ) : (
+        <ChartSimulatorClientShell {...simulator} />
+      )}
     </BandoriPageShell>
   );
 }

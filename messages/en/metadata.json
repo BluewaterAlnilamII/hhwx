@@ -15,7 +15,7 @@
   },
   "songs": {
     "title": "Songs and Chart Simulator",
-    "detailTitle": "{songTitle} - Chart Simulator"
+    "detailTitle": "{songTitle} - Song Details"
   },
   "gameProfiles": {
     "title": "Game Profiles"

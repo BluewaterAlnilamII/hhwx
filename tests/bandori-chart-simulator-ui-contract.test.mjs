@@ -14,10 +14,12 @@ test("song detail composes existing master and music-index contracts in parallel
   assert.doesNotMatch(source, /multiRange|chartFeatures|local override/iu);
 });
 
-test("the heavy runtime and renderer stay outside the initial client bundle", async () => {
+test("the heavy runtime and renderer stay outside the default song-detail view", async () => {
+  const detail = await read("../src/app/[locale]/bandori/songs/[songId]/SongDetailPageClient.tsx");
   const shell = await read("../src/app/[locale]/bandori/songs/[songId]/ChartSimulatorClientShell.tsx");
   const runtime = await read("../src/app/[locale]/bandori/songs/[songId]/ChartSimulatorRuntime.tsx");
 
+  assert.match(detail, /activeView === "info"[\s\S]*<ChartSimulatorClientShell \{\.\.\.simulator\} \/>/u);
   assert.match(shell, /dynamic\(\(\) => import\("\.\/ChartSimulatorRuntime"\)/u);
   assert.match(shell, /ssr: false/u);
   assert.match(runtime, /dynamic\(\(\) => import\("\.\/NativeSimulatorStage"\)/u);
@@ -327,10 +329,14 @@ test("localized song and simulator keys stay mirrored", async () => {
   assert.deepEqual(Object.keys(zh.songs), Object.keys(en.songs));
   assert.deepEqual(Object.keys(zh.songs.simulator), Object.keys(en.songs.simulator));
   assert.deepEqual(Object.keys(zhMetadata.songs), Object.keys(enMetadata.songs));
-  assert.match(en.songs.simulator.capabilityNotice, /Habahiro multi-range Point\/Skill\/Flick\/Long\/Slide geometry and admitted dynamic feedback/u);
-  assert.doesNotMatch(en.songs.simulator.capabilityNotice, /Habahiro multi-range dynamic particles.*disabled/iu);
-  assert.match(zh.songs.simulator.capabilityNotice, /Habahiro 多轨 Point／Skill／Flick／Long／Slide 几何与已准入动态反馈/u);
-  assert.doesNotMatch(zh.songs.simulator.capabilityNotice, /Habahiro 多轨动态粒子.*禁用/u);
+  for (const messages of [zh.songs.simulator, en.songs.simulator]) {
+    assert.equal(Object.hasOwn(messages, "capabilityNotice"), false);
+    assert.equal(Object.hasOwn(messages, "stageReady"), false);
+    assert.equal(Object.hasOwn(messages.controls, "noteSpeedRange"), false);
+    assert.equal(Object.hasOwn(messages.controls, "playbackRateRange"), false);
+  }
+  assert.equal(zh.songs.simulator.stageAria, "谱面模拟舞台");
+  assert.equal(en.songs.simulator.stageAria, "Chart simulator stage");
 });
 
 test("the public simulator contract keeps product boundaries without private reverse ledgers", async () => {
