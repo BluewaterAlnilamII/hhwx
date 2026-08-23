@@ -615,7 +615,38 @@ export function compileBandoriChart(
       throw new Error(`chart[${entityIndex}] has unsupported entity type: ${entity.type}`);
     }
 
-    if (!Array.isArray(entity.connections) || entity.connections.length < 2) {
+    if (!Array.isArray(entity.connections) || entity.connections.length === 0) {
+      throw new Error(`chart[${entityIndex}].connections is incomplete`);
+    }
+    if (entity.type === "Slide" && entity.connections.length === 1) {
+      if (entity.curveControls !== undefined && (
+        !Array.isArray(entity.curveControls)
+        || entity.curveControls.length !== 0
+      )) {
+        throw new Error(`chart[${entityIndex}] single-connection Slide cannot contain curve controls`);
+      }
+      // One published JP chart contains an orphan Slide that still contributes
+      // one Combo. With no second point there is no ribbon geometry to invent,
+      // so retain its only scoring point as an ordinary point-note entity.
+      const point = compilePoint(
+        entity.connections[0],
+        `chart[${entityIndex}].connections[0]`,
+        0,
+        segments,
+        false,
+      );
+      appendNote(notes, point, {
+        kind: point.direction === BANDORI_COMPILED_DIRECTION.none
+          ? BANDORI_COMPILED_NOTE_KIND.single
+          : BANDORI_COMPILED_NOTE_KIND.directional,
+        direction: point.direction,
+        sourceEntityIndex: entityIndex,
+        sourceNodeIndex: 0,
+        ribbonIndex: -1,
+      });
+      return;
+    }
+    if (entity.connections.length < 2) {
       throw new Error(`chart[${entityIndex}].connections is incomplete`);
     }
     const sourceConnectionCount = entity.connections.length;

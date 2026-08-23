@@ -207,7 +207,7 @@ test("confirmed point-note semantic priority selects the native Sprite families"
 
 });
 
-test("unconfirmed point-note combinations fail closed", () => {
+test("invalid point-note combinations fail closed", () => {
   const failureCases = [
     { width: 2 },
     { lane: 1.5 },
@@ -226,15 +226,27 @@ test("unconfirmed point-note combinations fail closed", () => {
   for (const input of failureCases) {
     assert.throws(() => resolve(input), BandoriNativeNoteContractError);
   }
+});
 
-  const duplicate = compileBandoriChart([
-    { type: "BPM", beat: 0, bpm: 120 },
-    { type: "Single", beat: 1, lane: 3 },
-    { type: "Single", beat: 1, lane: 3 },
+test("JP 77 HARD retains same-lane Charge and Long-start scoring Notes", () => {
+  const compiled = compileBandoriChart([
+    { type: "BPM", beat: 0, bpm: 140 },
+    { type: "Single", lane: 2, beat: 176, charge: true },
+    { type: "Single", lane: 6, beat: 176, charge: true },
+    {
+      type: "Long",
+      connections: [
+        { lane: 6, beat: 176 },
+        { lane: 6, beat: 177 },
+      ],
+    },
   ]);
-  assert.throws(
-    () => prepareBandoriNativeNoteVisuals(duplicate, false),
-    /unconfirmed draw order/u,
+  const visuals = prepareBandoriNativeChartVisuals(compiled, false);
+
+  assert.equal(compiled.maxCombo, 4);
+  assert.deepEqual(
+    visuals.notes.map((group) => group?.visuals[0].body),
+    ["normal", "normal", "long", "long"],
   );
 });
 
@@ -335,6 +347,58 @@ test("Slide hidden nodes select the curve belt while unsupported ribbon variants
   assert.equal(visuals.notes[0].visuals[0].body, "long");
   assert.equal(visuals.notes[1].visuals[0].body, "long");
   assert.deepEqual(visuals.notes.slice(2), [null, null, null, null]);
+});
+
+test("JP 689 SPECIAL charge markers keep their Slide and Long ribbons renderable", () => {
+  const compiled = compileBandoriChart([
+    { type: "BPM", beat: 0, bpm: 190 },
+    {
+      type: "Slide",
+      connections: [
+        { lane: 1, beat: 146, charge: true },
+        { lane: 0, beat: 146.0625, hidden: true },
+        { lane: 0, beat: 147 },
+      ],
+    },
+    {
+      type: "Long",
+      connections: [
+        { lane: 5, beat: 160, charge: true },
+        { lane: 5, beat: 160.75 },
+      ],
+    },
+  ]);
+  const visuals = prepareBandoriNativeChartVisuals(compiled, false);
+
+  assert.equal(compiled.maxCombo, 4);
+  assert.equal(visuals.ribbons.length, 2);
+  assert.deepEqual(visuals.ribbons.map((ribbon) => ribbon.points.length), [3, 2]);
+  assert.deepEqual(
+    visuals.notes.map((group) => group?.visuals[0].body),
+    ["long", "long", "long", "long"],
+  );
+  assert.equal(
+    compiled.ribbons.connectionFlags[0] & BANDORI_COMPILED_NOTE_FLAG.charge,
+    BANDORI_COMPILED_NOTE_FLAG.charge,
+  );
+  assert.equal(
+    compiled.ribbons.connectionFlags[3] & BANDORI_COMPILED_NOTE_FLAG.charge,
+    BANDORI_COMPILED_NOTE_FLAG.charge,
+  );
+});
+
+test("JP 792 EXPERT retains a single-connection Slide as its one scoring point", () => {
+  const compiled = compileBandoriChart([
+    { type: "BPM", beat: 0, bpm: 182 },
+    { type: "Slide", connections: [{ lane: 3, beat: 124 }] },
+  ]);
+  const visuals = prepareBandoriNativeChartVisuals(compiled, false);
+
+  assert.equal(compiled.maxCombo, 1);
+  assert.equal(compiled.ribbons.kinds.length, 0);
+  assert.equal(compiled.notes.sourceEntityIndexes[0], 1);
+  assert.equal(compiled.notes.sourceNodeIndexes[0], 0);
+  assert.equal(visuals.notes[0]?.visuals[0].body, "normal");
 });
 
 test("hidden Slide DiffVolume may extend beyond the outer lane centers", () => {

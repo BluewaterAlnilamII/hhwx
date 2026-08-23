@@ -576,7 +576,6 @@
     },
     "simulator": {
       "title": "谱面模拟器",
-      "developmentSlice": "白名单重建阶段",
       "loading": "正在载入无损谱面与模拟器内核...",
       "retry": "重试",
       "unavailableTitle": "当前谱面无法载入",
@@ -634,7 +633,7 @@
       "fullChartDescription": "按时间展开的完整谱面结构，用于确认音符、长条与 BPM 数据",
       "fullChartAnalysisLabel": "分析视图，不代表游戏原生舞台",
       "fullChartAria": "完整谱面分析图",
-      "whitelistNotice": "当前原生演出白名单包含固定 1334×750 的 JP 舞台、已确认的 JP 按键条·判定线与 Note 皮肤、可切换的 skin00、skin02、skin03、练习背景、三种固定团队演出舞台背景及 19 个适用限定覆盖的常规主背景，以及固定 NoteSize=100、可调 NoteSpeed=1.00–12.00 下的 Single、宽 1–7 Directional、普通及 Habahiro 多轨 Point／Skill／Flick／Long／Slide 几何与已准入动态反馈、Perfect 判定文字、普通／All Perfect Combo 和可切换 skin00–03、固定 100% 音量的 AutoPerfect Note 音效；由于模拟器不渲染玩家角色，团队演出的玩家承载组件与红蓝队伍物件均省略；Habahiro 多宽 Sprite 只按具体多轨 Note 选用，不作为节奏标志样式，也不播放 lane-change 换轨演出；另有 0.50×–1.00× 的 Web 音乐慢放、可选谱面下落同步与复用 seek 的时间／Note 区间循环，Note 音效和演出动画保持原速；团队演出动态切换、Fever 切换、除已准入点击粒子外的限定舞台效果、cont_force 控制、真实触摸／断 Hold 交互、完整 lane-change 演出、TapSE 音量控件、非 Perfect 判定、非 AutoPerfect 音效和其它未确认参数仍保持禁用",
+      "capabilityNotice": "当前原生演出支持固定 1334×750 的 JP 舞台、已确认的 JP 按键条·判定线与 Note 皮肤、可切换的 skin00、skin02、skin03、练习背景、三种固定团队演出舞台背景及 19 个适用限定覆盖的常规主背景，以及固定 NoteSize=100、可调 NoteSpeed=1.00–12.00 下的 Single、宽 1–7 Directional、普通及 Habahiro 多轨 Point／Skill／Flick／Long／Slide 几何与已准入动态反馈、Perfect 判定文字、普通／All Perfect Combo 和可切换 skin00–03、固定 100% 音量的 AutoPerfect Note 音效；由于模拟器不渲染玩家角色，团队演出的玩家承载组件与红蓝队伍物件均省略；Habahiro 多宽 Sprite 只按具体多轨 Note 选用，不作为节奏标志样式，也不播放 lane-change 换轨演出；另有 0.50×–1.00× 的 Web 音乐慢放、可选谱面下落同步与复用 seek 的时间／Note 区间循环，Note 音效和演出动画保持原速；团队演出动态切换、Fever 切换、除已准入点击粒子外的限定舞台效果、cont_force 控制、真实触摸／断 Hold 交互、完整 lane-change 演出、TapSE 音量控件、非 Perfect 判定、非 AutoPerfect 音效和其它未确认参数仍保持禁用",
       "audioUnavailable": "当前歌曲没有可用音频，仍可查看完整谱面并拖动时间轴",
       "skinControls": {
         "ariaLabel": "演出样式切换",

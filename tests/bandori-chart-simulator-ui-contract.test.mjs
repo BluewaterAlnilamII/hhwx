@@ -285,10 +285,10 @@ test("localized song and simulator keys stay mirrored", async () => {
   assert.deepEqual(Object.keys(zh.songs), Object.keys(en.songs));
   assert.deepEqual(Object.keys(zh.songs.simulator), Object.keys(en.songs.simulator));
   assert.deepEqual(Object.keys(zhMetadata.songs), Object.keys(enMetadata.songs));
-  assert.match(en.songs.simulator.whitelistNotice, /Habahiro multi-range Point\/Skill\/Flick\/Long\/Slide geometry and admitted dynamic feedback/u);
-  assert.doesNotMatch(en.songs.simulator.whitelistNotice, /Habahiro multi-range dynamic particles.*disabled/iu);
-  assert.match(zh.songs.simulator.whitelistNotice, /Habahiro 多轨 Point／Skill／Flick／Long／Slide 几何与已准入动态反馈/u);
-  assert.doesNotMatch(zh.songs.simulator.whitelistNotice, /Habahiro 多轨动态粒子.*禁用/u);
+  assert.match(en.songs.simulator.capabilityNotice, /Habahiro multi-range Point\/Skill\/Flick\/Long\/Slide geometry and admitted dynamic feedback/u);
+  assert.doesNotMatch(en.songs.simulator.capabilityNotice, /Habahiro multi-range dynamic particles.*disabled/iu);
+  assert.match(zh.songs.simulator.capabilityNotice, /Habahiro 多轨 Point／Skill／Flick／Long／Slide 几何与已准入动态反馈/u);
+  assert.doesNotMatch(zh.songs.simulator.capabilityNotice, /Habahiro 多轨动态粒子.*禁用/u);
 });
 
 test("the public simulator contract keeps product boundaries without private reverse ledgers", async () => {

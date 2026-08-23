@@ -289,7 +289,7 @@ export default function ChartSimulatorRuntime({
     try {
       return createBandoriNativeNoteSoundTimeline(loadState.compiled);
     } catch {
-      // Sound shares the visual whitelist and therefore fails closed with it.
+      // Sound follows the same renderability contract as visual presentation.
       return null;
     }
   }, [loadState]);
@@ -983,7 +983,6 @@ export default function ChartSimulatorRuntime({
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="text-xl font-black text-[var(--theme-color-text-default)]">{t("title")}</h2>
-          <p className="mt-1 text-sm text-[var(--theme-color-text-muted)]">{t("developmentSlice")}</p>
         </div>
         <div className="inline-flex rounded-full border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background-muted)] p-1">
           {(["stage", "fullChart"] as const).map((tab) => (
@@ -1310,7 +1309,7 @@ export default function ChartSimulatorRuntime({
         </div>
       </dl>
 
-      <p className="mt-4 text-sm text-[var(--theme-color-text-muted)]">{t("whitelistNotice")}</p>
+      <p className="mt-4 text-sm text-[var(--theme-color-text-muted)]">{t("capabilityNotice")}</p>
       {!audioUrl ? <p className="mt-2 text-sm text-[var(--theme-color-semantic-warning-foreground)]">{t("audioUnavailable")}</p> : null}
       {playbackError ? <p className="mt-2 text-sm text-[var(--theme-color-semantic-danger-foreground)]">{playbackError}</p> : null}
     </section>

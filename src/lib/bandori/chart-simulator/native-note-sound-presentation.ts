@@ -139,8 +139,8 @@ function hasFlag(flags: number, flag: number): boolean {
 
 /**
  * Compiles only the approved JP AutoPerfect sound lifecycle. Point and ribbon
- * eligibility is shared with the visual whitelist, so unsupported chart data
- * cannot emit audio behind a failed-closed note presentation.
+ * eligibility is shared with visual presentation, so chart data without a
+ * renderable Note cannot emit hidden audio.
  */
 export function createBandoriNativeNoteSoundTimeline(
   compiled: CompiledBandoriChart,

@@ -471,9 +471,6 @@ function prepareRibbonVisuals(
       const relativeIndex = pointIndex - connectionStart;
       const isEndpoint = relativeIndex === 0 || relativeIndex === connectionCount - 1;
       const isFlick = hasFlag(flags, BANDORI_COMPILED_NOTE_FLAG.flick);
-      const allowedFlags = BANDORI_COMPILED_NOTE_FLAG.hidden
-        | BANDORI_COMPILED_NOTE_FLAG.flick
-        | BANDORI_COMPILED_NOTE_FLAG.skill;
       const isDirectional = direction === BANDORI_COMPILED_DIRECTION.left
         || direction === BANDORI_COMPILED_DIRECTION.right;
       const sourceCoverage = readRibbonCoverage(compiled, pointIndex, isMirrored, hidden);
@@ -504,7 +501,6 @@ function prepareRibbonVisuals(
         || !Number.isInteger(width)
         || width < 1
         || width > 7
-        || (flags & ~allowedFlags) !== 0
         || (hidden && (isLong || isEndpoint))
         || (hidden && direction !== BANDORI_COMPILED_DIRECTION.none)
         || (direction !== BANDORI_COMPILED_DIRECTION.none && !isDirectional)
@@ -621,7 +617,6 @@ function preparePointVisuals(
   }
 
   const groups: Array<BandoriNativeNoteVisualGroup | null> = [];
-  const occupied = new Set<string>();
   for (let index = 0; index < length; index += 1) {
     const coverageStart = notes.coverageOffsets[index];
     const coverageEnd = notes.coverageOffsets[index + 1];
@@ -730,16 +725,6 @@ function preparePointVisuals(
       }
     }
     groups.push(group);
-    if (!group) continue;
-    for (const visual of group.visuals) {
-      for (const lane of visual.coveredLanes ?? [visual.lane]) {
-        const occupiedKey = `${notes.times[index]}:${lane}`;
-        if (occupied.has(occupiedKey)) {
-          return fail(`Overlapping point notes at time ${notes.times[index]} lane ${lane} have unconfirmed draw order`);
-        }
-        occupied.add(occupiedKey);
-      }
-    }
   }
   return groups;
 }
