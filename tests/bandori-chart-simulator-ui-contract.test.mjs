@@ -44,15 +44,17 @@ test("the Pixi stage loads the selected stage, point-note atlases, and bounded h
 
   assert.match(stage, /Application,[\s\S]*Assets,[\s\S]*Container,[\s\S]*Sprite/u);
   assert.match(stage, /Promise\.all\(\[/u);
-  assert.match(stage, /Assets\.load<Texture>\(BANDORI_NATIVE_BACKGROUND_TEXTURE_URL\)/u);
-  assert.match(stage, /Assets\.load<Texture>\(fieldSkin\.textureUrl\)/u);
-  assert.match(stage, /Assets\.load<Texture>\(fieldSkin\.judgmentLineTextureUrl\)/u);
-  assert.match(stage, /Assets\.load<Texture>\(noteSkin\.atlasUrl\)/u);
-  assert.match(stage, /Assets\.load<Texture>\(noteSkin\.syncLineUrl\)/u);
+  assert.match(stage, /const loadTexture = \(logicalUrl: string\)[\s\S]*Assets\.load<Texture>\(resolveAssetUrl\(logicalUrl\)\)/u);
+  assert.match(stage, /backgroundSkin\.layers\.map\(\(layer\) => loadTexture\(layer\.textureUrl\)\)/u);
+  assert.match(stage, /loadTexture\(fieldSkin\.textureUrl\)/u);
+  assert.match(stage, /loadTexture\(fieldSkin\.judgmentLineTextureUrl\)/u);
+  assert.match(stage, /loadTexture\(noteSkin\.atlasUrl\)/u);
+  assert.match(stage, /loadTexture\(noteSkin\.syncLineUrl\)/u);
   assert.match(stage, /getBandoriNativeRhythmSupportNoteUrl\(noteSkin, lane\)/u);
-  assert.match(stage, /Assets\.load<Texture>\(directionalFlickSkin\.atlasUrl\)/u);
-  assert.match(stage, /Assets\.load<Texture>\(BANDORI_NATIVE_TAP_EFFECT_ATLAS_1_URL\)/u);
-  assert.match(stage, /Assets\.load<Texture>\(BANDORI_NATIVE_TAP_EFFECT_ATLAS_2_URL\)/u);
+  assert.match(stage, /loadTexture\(directionalFlickSkin\.atlasUrl\)/u);
+  assert.match(stage, /loadOrdinaryTapTexture\(BANDORI_NATIVE_TAP_EFFECT_ATLAS_1_URL\)/u);
+  assert.match(stage, /loadOrdinaryTapTexture\(BANDORI_NATIVE_TAP_EFFECT_ATLAS_2_URL\)/u);
+  assert.match(stage, /usesLimitedDirectionalEffect[\s\S]*Promise\.resolve\(Texture\.EMPTY\)/u);
   assert.match(stage, /app\.stage\.addChild\([\s\S]*directionalLineLayer,[\s\S]*judgmentLine,[\s\S]*laneEffectLayer,[\s\S]*lowHitEffectLayer,[\s\S]*highHitEffectLayer,[\s\S]*ribbonLayer,[\s\S]*noteLayer/u);
   assert.match(stage, /app\.ticker\.add\(renderNotes\)/u);
   assert.match(stage, /prepareBandoriNativeChartVisuals\(compiled, isMirrored\)/u);
@@ -68,7 +70,9 @@ test("the Pixi stage loads the selected stage, point-note atlases, and bounded h
   assert.match(stage, /particleScreenY = getBandoriApprovedAnimatedTravelScreenY\([\s\S]*initialScreenY,[\s\S]*instance\.screenY,[\s\S]*animatedVerticalBeam\.travelSpeedMultiplier/u);
   assert.match(stage, /const directionalNotesCenterOffsetPixels =\s*getBandoriApprovedManualDirectionalNotesCenterOffsetPixels\(instance\)/u);
   assert.doesNotMatch(stage, /const (?:particleScreenY|directionalNotesCenterOffsetPixels) = display\.isNativeDefault/u);
-  assert.match(stage, /const terminalScreenX = event\.terminalLane === null[\s\S]*if \(limitedEffects\)[\s\S]*triggerSwipeEffect\([\s\S]*terminalScreenX/u);
+  assert.match(stage, /const terminalScreenX = event\.terminalLane === null[\s\S]*if \(limitedEffects && useLimitedEffect\)[\s\S]*triggerSwipeEffect\([\s\S]*terminalScreenX/u);
+  assert.match(stage, /limitedPerformanceSkin\?\.judgmentPerfectTextureUrl[\s\S]*BANDORI_NATIVE_PERFECT_JUDGMENT_URL/u);
+  assert.match(stage, /loadNativeSpriteAnchors\([\s\S]*noteSkin\.spriteAnchorsUrl/u);
   assert.match(stage, /BANDORI_NATIVE_JUDGMENT_LANE_SPACING_PIXELS/u);
   assert.match(stage, /noteSpeedRef\.current/u);
   assert.match(stage, /noteApproachTimeScaleRef\.current/u);
@@ -83,7 +87,7 @@ test("the Pixi stage loads the selected stage, point-note atlases, and bounded h
   assert.doesNotMatch(stage, /leftNoteIndex\)\?\.notes\[0\]/u);
   assert.doesNotMatch(stage, /rightNoteIndex\)\?\.notes\[0\]/u);
   assert.match(stage, /updateSyncLine\(display, activeNotes, syncLineEnabledRef\.current\)/u);
-  assert.match(stage, /rhythmSupportEnabledRef\.current && note\.rhythmSupportTexture/u);
+  assert.match(stage, /rhythmSupportEnabledRef\.current[\s\S]*&& note\.rhythmSupportTexture/u);
   assert.match(stage, /isRhythmSupportNote && visual\.body === "normal"/u);
   assert.match(stage, /if \(laneEffectEnabledRef\.current\)/u);
   assert.match(stage, /effectTint\(1 - 0\.3 \* progress, 1 - 0\.3 \* progress, 1\)/u);
@@ -221,7 +225,13 @@ test("the Pixi stage loads the selected stage, point-note atlases, and bounded h
   assert.match(stageContract, /top: -131/u);
   assert.match(stageContract, /width: 1766\.4/u);
   assert.match(stageContract, /height: 1324\.8/u);
-  assert.match(stageContract, /startapp\/ingameskin\/bgskin\/skin00\/livebg_normal\.png/u);
+  assert.match(stageContract, /startapp\/ingameskin\/bgskin/u);
+  assert.match(stageContract, /skin00\/livebg_normal\.png/u);
+  assert.match(stageContract, /asneeded\/ingameskin\/bgskin/u);
+  assert.match(stageContract, /skin02\/livebg_layer1\.png/u);
+  assert.match(stageContract, /skin03\/livebg_layer2\.png/u);
+  assert.match(stageContract, /skin_teamlivefestival/u);
+  assert.doesNotMatch(stageContract, /stageobject_(?:red|blue)team/u);
   assert.match(stageContract, /createFieldSkin\(1, "skin00", 38, "normal"\)/u);
   assert.match(stageContract, /createFieldSkin\(15, "skin14", 56, "mission"\)/u);
   assert.match(stageContract, /BANDORI_NATIVE_FIELD_SKIN = BANDORI_NATIVE_FIELD_SKINS\[9\]/u);
@@ -235,12 +245,19 @@ test("the Pixi stage loads the selected stage, point-note atlases, and bounded h
   assert.match(skinControls, /onRhythmSupportEnabledChange/u);
   assert.match(skinControls, /onLaneEffectEnabledChange/u);
   assert.match(skinControls, /fieldSkins\.map/u);
-  assert.match(skinControls, />\s*skin00\s*<\/button>/u);
+  assert.match(skinControls, /backgroundSkins\.map/u);
+  assert.match(skinControls, /onBackgroundSkinChange\(skin\)/u);
+  assert.match(skinControls, /overrides\.has\("background"\)/u);
+  assert.match(skinControls, /disabled=\{overrides\.has\("background"\)\}/u);
+  assert.match(runtime, /useState<BandoriNativeBackgroundSkin>\([\s\S]*BANDORI_NATIVE_BACKGROUND_SKIN/u);
+  assert.match(runtime, /limitedPerformanceSkin\?\.backgroundSkin \?\? backgroundSkin/u);
+  assert.match(runtime, /backgroundSkin=\{effectiveBackgroundSkin\}/u);
+  assert.match(stage, /app\.stage\.addChild\(\s*\.\.\.backgroundLayers,\s*field,/u);
   assert.doesNotMatch(`${stageContract}\n${runtime}`, /isMultiRangeNotes/u);
   assert.doesNotMatch(stageContract, /\/local\/chart-simulator\/(?:jp|cn)\//iu);
   assert.doesNotMatch(simulatorSource, /assetPack|resourceManifest|fallbackSource/iu);
   assert.doesNotMatch(stage, /liveBG_fever|BgCover|judgeLineAdjustSkillEffect|soundEffect|AnimatedSprite/iu);
-  assert.doesNotMatch(stage, /scale\.x\s*=\s*-1|stage\.scale/iu);
+  assert.doesNotMatch(stage, /stage\.scale/iu);
   assert.doesNotMatch(noteAssets, /\/local\/chart-simulator\/(?:jp|cn)\//iu);
 
   const timelineIndex = runtime.indexOf('aria-label={t("controls.timeline")}');
@@ -274,67 +291,29 @@ test("localized song and simulator keys stay mirrored", async () => {
   assert.doesNotMatch(zh.songs.simulator.whitelistNotice, /Habahiro 多轨动态粒子.*禁用/u);
 });
 
-test("the durable rebuild contract records default-deny, JP-only, and native-note evidence", async () => {
-  const [english, chinese, staticStageEnglish, staticStageChinese, notesEnglish, notesChinese] = await Promise.all([
+test("the public simulator contract keeps product boundaries without private reverse ledgers", async () => {
+  const [english, chinese] = await Promise.all([
     read("../documents/bandori-chart-simulator.md"),
     read("../documents/bandori-chart-simulator.zh-CN.md"),
-    read("../documents/bandori-chart-simulator-static-stage.md"),
-    read("../documents/bandori-chart-simulator-static-stage.zh-CN.md"),
-    read("../documents/bandori-chart-simulator-native-notes.md"),
-    read("../documents/bandori-chart-simulator-native-notes.zh-CN.md"),
   ]);
 
-  assert.match(english, /Anything not listed above is disabled/u);
-  assert.match(english, /official JP resource pack/u);
-  assert.match(english, /must not add a CN resource pack/u);
-  assert.match(chinese, /未列入上述白名单的能力一律禁用/u);
-  assert.match(chinese, /演出资源只允许来自官方 JP 资源包/u);
-  assert.match(chinese, /不得加入 CN 资源包/u);
-  assert.doesNotMatch(english, /still has no multi-lane `lanes` presentation, Habahiro behavior, Directional width above 3/u);
-  assert.doesNotMatch(chinese, /仍不包含多轨 `lanes` 演出、Habahiro 行为、`width>3` Directional/u);
-  assert.match(staticStageEnglish, /The base static stage is complete for the fixed normal-play state/u);
-  assert.match(staticStageEnglish, /confirmed-static-plus-code/u);
-  assert.match(staticStageEnglish, /Bestdori layout constants/u);
-  assert.match(staticStageEnglish, /pathId `3141674654239334496`/u);
-  assert.match(staticStageEnglish, /Visual review may reject an implementation as incorrect, but it may not supply replacement numbers/u);
-  assert.match(staticStageChinese, /固定正常播放状态下的基础静态舞台已经完成/u);
-  assert.match(staticStageChinese, /证据冲突或不完整时必须失败关闭/u);
-  assert.match(staticStageChinese, /视觉检查可以否决错误实现，但不能提供替换数值/u);
-  assert.match(notesEnglish, /verified falling-note slice is complete/u);
-  assert.match(notesEnglish, /Single.*`flick > skill > normal`/u);
-  assert.match(notesEnglish, /`NoteSpeed=1\.00\.\.\.12\.00`/u);
-  assert.match(notesEnglish, /three button pairs apply `±0\.50`, `±0\.10`, and `±0\.01`/u);
-  assert.match(
-    notesEnglish,
-    /APK default-button value `s=5\.00` gives `A=3\.5 seconds`; the user-selected simulator default `s=10\.00` gives `A=1\.0 second`/u,
-  );
-  assert.match(notesEnglish, /ordinary and lane-change-marked multi-range Long\/Slide geometry/u);
-  assert.match(notesEnglish, /22 vertices, 11 cross-sections, and 20 triangles/u);
-  assert.match(notesEnglish, /Directional width 1 through 7 is not one stretched Sprite/u);
-  assert.match(notesEnglish, /Width 1, 2, and 3\.\.\.7 select main prefab buckets 1, 2, and 3 respectively/u);
-  assert.match(notesEnglish, /deliberately narrow approximation boundary/u);
-  assert.match(notesEnglish, /normal and Skill `Smatt_1` preserve the source `-90°` screen orientation/u);
-  assert.match(notesEnglish, /texture's `U=0` length origin on the hit point/u);
-  assert.match(notesEnglish, /selectable-skin00\.\.\.03, 100-percent AutoPerfect note sounds/u);
-  assert.match(notesEnglish, /dedicated polyphonic Web Audio graph/u);
-  assert.match(notesEnglish, /music media element and Note voices are routed through the same `AudioContext`/u);
-  assert.match(notesEnglish, /TapSE volume control/u);
-  assert.match(notesEnglish, /`lanes \?\? \[lane\]` is authoritative coverage/u);
-  assert.match(notesEnglish, /`width` as a Habahiro discriminator/u);
-  assert.match(notesChinese, /已确认的下落 Note 切片/u);
-  assert.match(notesChinese, /三组按钮分别执行 `±0\.50`、`±0\.10` 与 `±0\.01`/u);
-  assert.match(notesChinese, /本能力的近似边界经过有意收窄/u);
-  assert.match(notesChinese, /普通与 Skill `Smatt_1` 都保留源效果在屏幕上的 `-90°` 朝向/u);
-  assert.match(notesChinese, /纹理长度轴的 `U=0` 原点放在击打点/u);
-  assert.match(notesChinese, /AutoPerfect Note 音效/u);
-  assert.match(notesChinese, /专用的多声部 Web Audio 图/u);
-  assert.match(notesChinese, /音乐媒体元素与 Note voice 接入同一个 `AudioContext`/u);
-  assert.match(notesChinese, /TapSE 音量控件/u);
-  assert.match(notesChinese, /失败关闭契约/u);
-  assert.match(notesChinese, /多轨 Long\/Slide 几何/u);
-  assert.match(notesChinese, /22 个顶点、11 个横截面、20 个三角形/u);
-  assert.match(notesChinese, /宽 1\.\.\.7 Directional 都不是横向拉伸一张 Sprite/u);
-  assert.match(notesChinese, /width 1、2、3\.\.\.7 分别选择 main prefab 桶 1、2、3/u);
-  assert.match(notesChinese, /`lanes \?\? \[lane\]` 才是权威覆盖/u);
-  assert.match(notesChinese, /不使用 `width` 判断多轨覆盖/u);
+  assert.match(english, /Anything not listed in the current implementation and tests is disabled/u);
+  assert.match(english, /official JP resource set/u);
+  assert.match(english, /must not add a CN presentation pack/u);
+  assert.match(english, /exactly 20 overlays/u);
+  assert.match(english, /`practice`.*ordinary backgrounds, not limited overlays/su);
+  assert.match(english, /chart-level `laneChange=true`/u);
+  assert.match(english, /They are not files served from the\s+Web repository/u);
+  assert.match(english, /HHWX_CHART_SIMULATOR_PROJECTION_ROOT/u);
+  assert.match(chinese, /当前实现与测试没有列入的能力一律禁用/u);
+  assert.match(chinese, /演出资源只允许来自官方 JP 资源集/u);
+  assert.match(chinese, /不得加入 CN 演出资源包/u);
+  assert.match(chinese, /共有且只有 20 项/u);
+  assert.match(chinese, /`practice`.*普通背景，不属于限定覆盖/su);
+  assert.match(chinese, /谱面级 `laneChange=true`/u);
+  assert.match(chinese, /并不是 Web 仓库提供的实体文件/u);
+  for (const document of [english, chinese]) {
+    assert.doesNotMatch(document, /\b(?:RVA|pathId|IL2CPP)\b|CAB-[0-9a-f]+/iu);
+    assert.doesNotMatch(document, /21 (?:limited|限定)/iu);
+  }
 });

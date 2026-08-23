@@ -17,8 +17,11 @@ import SimulatorSkinControls, {
   SimulatorBooleanControl,
 } from "./SimulatorSkinControls";
 import {
+  BANDORI_NATIVE_BACKGROUND_SKIN,
+  BANDORI_NATIVE_BACKGROUND_SKINS,
   BANDORI_NATIVE_FIELD_SKIN,
   BANDORI_NATIVE_FIELD_SKINS,
+  type BandoriNativeBackgroundSkin,
   type BandoriNativeFieldSkin,
 } from "./native-stage-contract";
 import {
@@ -53,7 +56,6 @@ import {
   getBandoriNativeTapSeCueBankId,
   BANDORI_NATIVE_NOTE_SOUND_VOLUME,
   BANDORI_NATIVE_TAP_SE_SKIN,
-  BANDORI_NATIVE_TAP_SE_SKINS,
   type BandoriNativeNoteSoundTimeline,
   type BandoriNativeTapSeSkin,
 } from "@/lib/bandori/chart-simulator/native-note-sound-presentation";
@@ -96,10 +98,11 @@ import {
   createMusicPlayerTabId,
 } from "@/lib/music-player-tab-coordinator";
 import { useMusicPlayerStore } from "@/store/useMusicPlayerStore";
-import {
-  BANDORI_LIMITED_PERFORMANCE_SKINS,
-  type BandoriLimitedPerformanceSkin,
-} from "./limited-performance-skins";
+import { loadBandoriChartSimulatorAssets } from "@/lib/bandori/chart-simulator/asset-manifest-client";
+import type {
+  BandoriChartSimulatorAssetResolver,
+} from "@/lib/bandori/chart-simulator/asset-manifest";
+import type { BandoriLimitedPerformanceSkin } from "./limited-performance-skins";
 
 const NativeSimulatorStage = dynamic(() => import("./NativeSimulatorStage"), {
   ssr: false,
@@ -110,17 +113,32 @@ const PLAYBACK_RATE_DECREASES = [-10, -1] as const;
 const PLAYBACK_RATE_INCREASES = [1, 10] as const;
 const NOTE_SPEED_DECREASES = [-0.5, -0.1, -0.01] as const;
 const NOTE_SPEED_INCREASES = [0.01, 0.1, 0.5] as const;
-const NOTE_SOUND_CUE_BANKS: readonly BandoriNativeNoteSoundCueBank[] =
-  [
-    ...BANDORI_NATIVE_TAP_SE_SKINS,
-    ...BANDORI_LIMITED_PERFORMANCE_SKINS.map((skin) => skin.tapSeSkin),
-  ].map((skin) => ({
+function createResolvedNoteSoundCueBank(
+  skin: BandoriNativeTapSeSkin,
+  resolveAssetUrl: BandoriChartSimulatorAssetResolver,
+): BandoriNativeNoteSoundCueBank {
+  return {
     id: getBandoriNativeTapSeCueBankId(skin),
-    cueUrls: getBandoriNativeNoteSoundCueUrls(skin),
-  }));
+    cueUrls: Object.fromEntries(
+      Object.entries(getBandoriNativeNoteSoundCueUrls(skin)).map(
+        ([cue, logicalUrl]) => [cue, resolveAssetUrl(logicalUrl)],
+      ),
+    ) as BandoriNativeNoteSoundCueBank["cueUrls"],
+  };
+}
+
 type LoadState =
   | { status: "loading" }
   | { status: "ready"; compiled: CompiledBandoriChart }
+  | { status: "error"; message: string };
+
+type AssetLoadState =
+  | { status: "loading" }
+  | {
+      status: "ready";
+      manifestSha256: string;
+      resolveAssetUrl: BandoriChartSimulatorAssetResolver;
+    }
   | { status: "error"; message: string };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -208,6 +226,9 @@ export default function ChartSimulatorRuntime({
   const coordinatorRef = useRef<ReturnType<typeof createMusicPlayerPlaybackCoordinator> | null>(null);
   const [loadAttempt, setLoadAttempt] = useState(0);
   const [loadState, setLoadState] = useState<LoadState>({ status: "loading" });
+  const [assetLoadState, setAssetLoadState] = useState<AssetLoadState>({
+    status: "loading",
+  });
   const [transport, setTransport] = useState(transportRef.current);
   const [activeTab, setActiveTab] = useState<SimulatorTab>("stage");
   const [isMirrored, setIsMirrored] = useState(false);
@@ -221,6 +242,9 @@ export default function ChartSimulatorRuntime({
   const [isNoteSpeedSlowdownSynchronized, setIsNoteSpeedSlowdownSynchronized] =
     useState(BANDORI_SIMULATOR_SYNC_NOTE_SPEED_SLOWDOWN_DEFAULT);
   const [noteSpeed, setNoteSpeed] = useState(BANDORI_NATIVE_NOTE_SPEED_DEFAULT);
+  const [backgroundSkin, setBackgroundSkin] = useState<BandoriNativeBackgroundSkin>(
+    BANDORI_NATIVE_BACKGROUND_SKIN,
+  );
   const [fieldSkin, setFieldSkin] = useState<BandoriNativeFieldSkin>(
     BANDORI_NATIVE_FIELD_SKIN,
   );
@@ -246,13 +270,19 @@ export default function ChartSimulatorRuntime({
     playbackRateHundredths,
     isNoteSpeedSlowdownSynchronized,
   );
+  const effectiveBackgroundSkin =
+    limitedPerformanceSkin?.backgroundSkin ?? backgroundSkin;
   const effectiveFieldSkin = limitedPerformanceSkin?.fieldSkin ?? fieldSkin;
   const effectiveNoteSkin = limitedPerformanceSkin?.noteSkin ?? noteSkin;
   const effectiveDirectionalFlickSkin =
     limitedPerformanceSkin?.directionalFlickSkin ?? directionalFlickSkin;
+  const effectiveTapSeSkin = limitedPerformanceSkin?.tapSeSkin ?? tapSeSkin;
   const noteSkinLabel = typeof effectiveNoteSkin.id === "number"
     ? `TYPE${effectiveNoteSkin.id}`
     : t(`skinControls.limitedPerformance.skin.${effectiveNoteSkin.id}`);
+  const backgroundSkinLabel = limitedPerformanceSkin?.backgroundSkin
+    ? t(`skinControls.limitedPerformance.skin.${limitedPerformanceSkin.id}`)
+    : t(`skinControls.backgroundSkin.${backgroundSkin.id}`);
 
   const noteSoundTimeline = useMemo(() => {
     if (loadState.status !== "ready") return null;
@@ -576,32 +606,55 @@ export default function ChartSimulatorRuntime({
   }, [seekToLoopStart]);
 
   useEffect(() => {
+    if (assetLoadState.status !== "ready") return;
+    const initialCueBank = createResolvedNoteSoundCueBank(
+      BANDORI_NATIVE_TAP_SE_SKIN,
+      assetLoadState.resolveAssetUrl,
+    );
     const runtime = createBandoriNativeNoteSoundRuntime(
-      NOTE_SOUND_CUE_BANKS,
-      getBandoriNativeTapSeCueBankId(BANDORI_NATIVE_TAP_SE_SKIN),
+      [initialCueBank],
+      initialCueBank.id,
       BANDORI_NATIVE_NOTE_SOUND_VOLUME,
     );
     noteSoundRuntimeRef.current = runtime;
+    return () => {
+      runtime.dispose();
+      if (noteSoundRuntimeRef.current === runtime) noteSoundRuntimeRef.current = null;
+    };
+  }, [assetLoadState]);
+
+  useEffect(() => {
+    if (assetLoadState.status !== "ready") return;
+    const runtime = noteSoundRuntimeRef.current;
+    if (!runtime) return;
+    const cueBank = createResolvedNoteSoundCueBank(
+      effectiveTapSeSkin,
+      assetLoadState.resolveAssetUrl,
+    );
     let isCurrent = true;
-    void runtime.prepare().then(() => {
-      if (!isCurrent) return;
+    void runtime.prepareCueBank(cueBank).then(() => {
+      if (!isCurrent || noteSoundRuntimeRef.current !== runtime) return;
+      runtime.selectCueBank(cueBank.id);
       const audio = audioRef.current;
-      noteSoundCursorRef.current = audio && Number.isFinite(audio.currentTime)
+      const currentTimeSeconds = transportRef.current.phase === "playing"
+        && audio
+        && Number.isFinite(audio.currentTime)
         ? audio.currentTime
         : getBandoriChartPresentationTime(transportRef.current);
-      noteSoundLastMediaTimeRef.current = noteSoundCursorRef.current;
-      noteSoundNeedsLoopSyncRef.current = true;
+      stopAndResetNoteSounds(
+        currentTimeSeconds,
+        currentTimeSeconds > 0,
+        currentTimeSeconds === 0,
+      );
     }).catch((error: unknown) => {
-      if (isCurrent) {
+      if (isCurrent && noteSoundRuntimeRef.current === runtime) {
         setPlaybackError(error instanceof Error ? error.message : String(error));
       }
     });
     return () => {
       isCurrent = false;
-      runtime.dispose();
-      if (noteSoundRuntimeRef.current === runtime) noteSoundRuntimeRef.current = null;
     };
-  }, []);
+  }, [assetLoadState, effectiveTapSeSkin, stopAndResetNoteSounds]);
 
   useEffect(() => {
     cancelPendingMediaSeek();
@@ -628,6 +681,31 @@ export default function ChartSimulatorRuntime({
   ]);
 
   useEffect(() => () => cancelPendingMediaSeek(), [cancelPendingMediaSeek]);
+
+  useEffect(() => {
+    let isCurrent = true;
+    setAssetLoadState({ status: "loading" });
+    void loadBandoriChartSimulatorAssets({ refresh: loadAttempt > 0 }).then(
+      (loaded) => {
+        if (!isCurrent) return;
+        setAssetLoadState({
+          status: "ready",
+          manifestSha256: loaded.manifestSha256,
+          resolveAssetUrl: loaded.resolveAssetUrl,
+        });
+      },
+      (error: unknown) => {
+        if (!isCurrent) return;
+        setAssetLoadState({
+          status: "error",
+          message: error instanceof Error ? error.message : String(error),
+        });
+      },
+    );
+    return () => {
+      isCurrent = false;
+    };
+  }, [loadAttempt]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -837,50 +915,13 @@ export default function ChartSimulatorRuntime({
   };
 
   const changeTapSeSkin = (skin: BandoriNativeTapSeSkin) => {
-    try {
-      noteSoundRuntimeRef.current?.selectCueBank(
-        getBandoriNativeTapSeCueBankId(skin),
-      );
-      setTapSeSkin(skin);
-      const audio = audioRef.current;
-      const currentTimeSeconds = transportRef.current.phase === "playing"
-        && audio
-        && Number.isFinite(audio.currentTime)
-        ? audio.currentTime
-        : getBandoriChartPresentationTime(transportRef.current);
-      stopAndResetNoteSounds(
-        currentTimeSeconds,
-        currentTimeSeconds > 0,
-        currentTimeSeconds === 0,
-      );
-    } catch (error) {
-      setPlaybackError(error instanceof Error ? error.message : String(error));
-    }
+    setTapSeSkin(skin);
   };
 
   const changeLimitedPerformanceSkin = (
     skin: BandoriLimitedPerformanceSkin | null,
   ) => {
-    const effectiveTapSeSkin = skin?.tapSeSkin ?? tapSeSkin;
-    try {
-      noteSoundRuntimeRef.current?.selectCueBank(
-        getBandoriNativeTapSeCueBankId(effectiveTapSeSkin),
-      );
-      setLimitedPerformanceSkin(skin);
-      const audio = audioRef.current;
-      const currentTimeSeconds = transportRef.current.phase === "playing"
-        && audio
-        && Number.isFinite(audio.currentTime)
-        ? audio.currentTime
-        : getBandoriChartPresentationTime(transportRef.current);
-      stopAndResetNoteSounds(
-        currentTimeSeconds,
-        currentTimeSeconds > 0,
-        currentTimeSeconds === 0,
-      );
-    } catch (error) {
-      setPlaybackError(error instanceof Error ? error.message : String(error));
-    }
+    setLimitedPerformanceSkin(skin);
   };
 
   const changePlaybackRate = (adjustmentHundredths: number) => {
@@ -913,7 +954,7 @@ export default function ChartSimulatorRuntime({
     );
   };
 
-  if (loadState.status === "loading") {
+  if (loadState.status === "loading" || assetLoadState.status === "loading") {
     return (
       <section className="rounded-3xl border border-[var(--theme-color-border-default)] bg-[var(--theme-color-surface-background)] p-6 shadow-[var(--theme-shadow-surface-raised)] dark:border-slate-700 dark:bg-[#111827]">
         <p aria-live="polite" className="text-sm text-[var(--theme-color-text-muted)]">{t("loading")}</p>
@@ -921,11 +962,14 @@ export default function ChartSimulatorRuntime({
     );
   }
 
-  if (loadState.status === "error") {
+  if (loadState.status === "error" || assetLoadState.status === "error") {
+    const message = loadState.status === "error"
+      ? loadState.message
+      : assetLoadState.status === "error" ? assetLoadState.message : "";
     return (
       <section className="rounded-3xl border border-[var(--theme-color-semantic-danger-border)] bg-[var(--theme-color-semantic-danger-background)] p-6">
         <h2 className="text-lg font-bold text-[var(--theme-color-semantic-danger-foreground)]">{t("unavailableTitle")}</h2>
-        <p className="mt-2 text-sm text-[var(--theme-color-semantic-danger-foreground)]">{loadState.message}</p>
+        <p className="mt-2 text-sm text-[var(--theme-color-semantic-danger-foreground)]">{message}</p>
         <button type="button" className={`${controlClassName()} mt-4`} onClick={() => setLoadAttempt((value) => value + 1)}>
           {t("retry")}
         </button>
@@ -959,9 +1003,10 @@ export default function ChartSimulatorRuntime({
       <div className="mt-5">
         {activeTab === "stage" ? (
           <NativeSimulatorStage
-            key={`${effectiveFieldSkin.id}:${effectiveNoteSkin.id}:${effectiveDirectionalFlickSkin.id}:${limitedPerformanceSkin?.id ?? "ordinary"}:${difficulty}:${isMirrored ? "mirror" : "normal"}`}
+            key={`${assetLoadState.manifestSha256}:${effectiveBackgroundSkin.id}:${effectiveFieldSkin.id}:${effectiveNoteSkin.id}:${effectiveDirectionalFlickSkin.id}:${limitedPerformanceSkin?.id ?? "ordinary"}:${difficulty}:${isMirrored ? "mirror" : "normal"}`}
             allPerfectStatusEnabled={isAllPerfectStatusEnabled}
             ariaLabel={t("stageAria")}
+            backgroundSkin={effectiveBackgroundSkin}
             compiled={loadState.compiled}
             directionalFlickSkin={effectiveDirectionalFlickSkin}
             fieldSkin={effectiveFieldSkin}
@@ -976,6 +1021,7 @@ export default function ChartSimulatorRuntime({
             noteSkin={effectiveNoteSkin}
             noteContractErrorLabel={t("stageNoteContractUnavailable")}
             readyLabel={t("stageReady", {
+              backgroundSkin: backgroundSkinLabel,
               directionalFlickSkin: typeof effectiveDirectionalFlickSkin.id === "number"
                 ? `TYPE${effectiveDirectionalFlickSkin.id}`
                 : t(`skinControls.limitedPerformance.skin.${effectiveDirectionalFlickSkin.id}`),
@@ -984,6 +1030,7 @@ export default function ChartSimulatorRuntime({
             })}
             rendererErrorLabel={t("rendererUnavailable")}
             resourceErrorLabel={t("stageResourceUnavailable")}
+            resolveAssetUrl={assetLoadState.resolveAssetUrl}
             rhythmSupportEnabled={isRhythmSupportEnabled}
             syncLineEnabled={isSyncLineEnabled}
           />
@@ -1217,6 +1264,8 @@ export default function ChartSimulatorRuntime({
         </fieldset>
 
         <SimulatorSkinControls
+          backgroundSkin={backgroundSkin}
+          backgroundSkins={BANDORI_NATIVE_BACKGROUND_SKINS}
           directionalFlickSkin={directionalFlickSkin}
           fieldSkin={fieldSkin}
           fieldSkins={BANDORI_NATIVE_FIELD_SKINS}
@@ -1226,6 +1275,7 @@ export default function ChartSimulatorRuntime({
           isSyncLineEnabled={isSyncLineEnabled}
           limitedPerformanceSkin={limitedPerformanceSkin}
           noteSkin={noteSkin}
+          onBackgroundSkinChange={setBackgroundSkin}
           onDirectionalFlickSkinChange={setDirectionalFlickSkin}
           onFieldSkinChange={setFieldSkin}
           onAllPerfectStatusEnabledChange={setIsAllPerfectStatusEnabled}
@@ -1255,7 +1305,7 @@ export default function ChartSimulatorRuntime({
         <div className="rounded-2xl bg-[var(--theme-color-control-background-muted)] p-3">
           <dt className="text-xs font-semibold text-[var(--theme-color-text-muted)]">{t("diagnostics.presentationCapabilities")}</dt>
           <dd className="mt-1 font-bold">
-            {t("diagnostics.liveBackground")} · {t(`skinControls.fieldSkin.${effectiveFieldSkin.id}`)} · {noteSkinLabel} · {t("diagnostics.ordinaryJudgmentLine")} · {typeof effectiveDirectionalFlickSkin.id === "number" ? `TYPE${effectiveDirectionalFlickSkin.id}` : t(`skinControls.limitedPerformance.skin.${effectiveDirectionalFlickSkin.id}`)} · {t("diagnostics.pointNotes")} · {t(isMirrored ? "diagnostics.mirrorOn" : "diagnostics.mirrorOff")}
+            {backgroundSkinLabel} · {t(`skinControls.fieldSkin.${effectiveFieldSkin.id}`)} · {noteSkinLabel} · {t("diagnostics.ordinaryJudgmentLine")} · {typeof effectiveDirectionalFlickSkin.id === "number" ? `TYPE${effectiveDirectionalFlickSkin.id}` : t(`skinControls.limitedPerformance.skin.${effectiveDirectionalFlickSkin.id}`)} · {t("diagnostics.pointNotes")} · {t(isMirrored ? "diagnostics.mirrorOn" : "diagnostics.mirrorOff")}
           </dd>
         </div>
       </dl>

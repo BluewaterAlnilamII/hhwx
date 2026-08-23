@@ -27,6 +27,7 @@ export type BandoriNativeNoteSkin = {
   frameSource: NativeNoteFrameSource;
   id: number | string;
   longNoteLineUrl: string;
+  spriteAnchorsUrl: string | null;
   syncLineEdgeMargin: number;
   syncLineUrl: string;
 };
@@ -39,6 +40,7 @@ export type BandoriNativeDirectionalFlickSkin = {
   id: number | string;
   lineLeftUrl: string;
   lineRightUrl: string;
+  spriteAnchorsUrl: string | null;
 };
 
 function createNoteSkin(
@@ -55,6 +57,7 @@ function createNoteSkin(
     frameSource: "atlas",
     id,
     longNoteLineUrl: `${NOTE_SKIN_ROOT}/${assetBundleName}/longnoteline.png`,
+    spriteAnchorsUrl: null,
     syncLineEdgeMargin,
     syncLineUrl: `${NOTE_SKIN_ROOT}/${assetBundleName}/simultaneous_line.png`,
   };
@@ -73,6 +76,7 @@ function createDirectionalFlickSkin(
     id,
     lineLeftUrl: `${NOTE_SKIN_ROOT}/directionalflick${assetBundleName}/flicknoteline_l.png`,
     lineRightUrl: `${NOTE_SKIN_ROOT}/directionalflick${assetBundleName}/flicknoteline_r.png`,
+    spriteAnchorsUrl: null,
   };
 }
 
@@ -99,12 +103,6 @@ export const BANDORI_NATIVE_DIRECTIONAL_FLICK_SKINS = [
 export const BANDORI_NATIVE_NOTE_SKIN = BANDORI_NATIVE_NOTE_SKINS[0];
 export const BANDORI_NATIVE_DIRECTIONAL_FLICK_SKIN =
   BANDORI_NATIVE_DIRECTIONAL_FLICK_SKINS[0];
-
-export const BANDORI_NATIVE_STANDARD_NOTE_ATLAS_URL =
-  BANDORI_NATIVE_NOTE_SKIN.atlasUrl;
-
-export const BANDORI_NATIVE_DIRECTIONAL_NOTE_ATLAS_URL =
-  BANDORI_NATIVE_DIRECTIONAL_FLICK_SKIN.atlasUrl;
 
 export function getBandoriNativeLongFlashUrl(
   noteSkin: BandoriNativeNoteSkin,
@@ -329,9 +327,8 @@ export function getBandoriNativeIconFrameId(
 
 export function getBandoriNativeNoteFrame(
   frameId: BandoriNativeNoteFrameId,
-  noteSkin: BandoriNativeNoteSkin = BANDORI_NATIVE_NOTE_SKIN,
-  directionalFlickSkin: BandoriNativeDirectionalFlickSkin =
-    BANDORI_NATIVE_DIRECTIONAL_FLICK_SKIN,
+  noteSkin: BandoriNativeNoteSkin,
+  directionalFlickSkin: BandoriNativeDirectionalFlickSkin,
 ): BandoriNativeNoteFrame {
   const defaultFrame = NOTE_FRAMES[frameId];
   if (!defaultFrame) {

@@ -22,8 +22,149 @@ export const BANDORI_NATIVE_BACKGROUND_RECT = {
   height: 1324.8,
 } as const;
 
-export const BANDORI_NATIVE_BACKGROUND_TEXTURE_URL =
-  "/local/chart-simulator/assets/star/forassetbundle/startapp/ingameskin/bgskin/skin00/livebg_normal.png";
+export type BandoriNativeBackgroundSkinId =
+  | "skin00"
+  | "skin02"
+  | "skin03"
+  | "5th"
+  | "april2021"
+  | "april2024"
+  | "bike"
+  | "cafe"
+  | "coin"
+  | "collabo23_summer_g"
+  | "collabo23_winter_d"
+  | "collabo24_autumn_i"
+  | "collabo25_autumn_s"
+  | "delta"
+  | "gbp2020"
+  | "maid"
+  | "miku"
+  | "practice"
+  | "persona"
+  | "satan"
+  | "stage"
+  | "april2019"
+  | "witch"
+  | "teamLiveJudgment"
+  | "teamLiveCombo"
+  | "teamLiveLife";
+
+export type BandoriNativeBackgroundLayer = {
+  rect: {
+    height: number;
+    left: number;
+    top: number;
+    width: number;
+  };
+  textureUrl: string;
+};
+
+export type BandoriNativeBackgroundSkin = {
+  id: BandoriNativeBackgroundSkinId;
+  layers: readonly BandoriNativeBackgroundLayer[];
+};
+
+const BACKGROUND_STARTAPP_ROOT =
+  "/local/chart-simulator/assets/star/forassetbundle/startapp/ingameskin/bgskin";
+const BACKGROUND_ASNEEDED_ROOT =
+  "/local/chart-simulator/assets/star/forassetbundle/asneeded/ingameskin/bgskin";
+const NATIVE_BACKGROUND_SCALE = 0.92;
+const NATIVE_BACKGROUND_OBJECT_IMAGE_Y = 546;
+
+function projectNativeBackgroundLayer(
+  textureUrl: string,
+  nativeWidth: number,
+  nativeHeight: number,
+  nativeX = 0,
+  nativeY = NATIVE_BACKGROUND_OBJECT_IMAGE_Y,
+): BandoriNativeBackgroundLayer {
+  const width = nativeWidth * NATIVE_BACKGROUND_SCALE;
+  const height = nativeHeight * NATIVE_BACKGROUND_SCALE;
+  const centerX = BANDORI_NATIVE_STAGE_SIZE.width / 2
+    + nativeX * NATIVE_BACKGROUND_SCALE;
+  const centerY = BANDORI_NATIVE_STAGE_SIZE.height / 2
+    - nativeY * NATIVE_BACKGROUND_SCALE;
+  return {
+    rect: {
+      height,
+      left: centerX - width / 2,
+      top: centerY - height / 2,
+      width,
+    },
+    textureUrl,
+  };
+}
+
+function createMainBackgroundLayer(textureUrl: string): BandoriNativeBackgroundLayer {
+  return {
+    rect: BANDORI_NATIVE_BACKGROUND_RECT,
+    textureUrl,
+  };
+}
+
+function createTeamLiveBackground(
+  id: Extract<BandoriNativeBackgroundSkinId, `teamLive${string}`>,
+  stageTextureName: "combostage" | "lifestage" | "perfectstage",
+): BandoriNativeBackgroundSkin {
+  const root = `${BACKGROUND_ASNEEDED_ROOT}/skin_teamlivefestival`;
+  return {
+    id,
+    layers: [
+      createMainBackgroundLayer(`${root}/${stageTextureName}.png`),
+    ],
+  };
+}
+
+/** Statically verified normal-play and team-live background compositions. */
+export const BANDORI_NATIVE_BACKGROUND_SKINS = [
+  {
+    id: "skin00",
+    layers: [
+      createMainBackgroundLayer(`${BACKGROUND_STARTAPP_ROOT}/skin00/livebg_normal.png`),
+    ],
+  },
+  {
+    id: "skin02",
+    layers: [
+      createMainBackgroundLayer(`${BACKGROUND_ASNEEDED_ROOT}/skin02/livebg_normal.png`),
+      projectNativeBackgroundLayer(
+        `${BACKGROUND_ASNEEDED_ROOT}/skin02/livebg_layer1.png`,
+        1920,
+        601,
+      ),
+    ],
+  },
+  {
+    id: "skin03",
+    layers: [
+      createMainBackgroundLayer(`${BACKGROUND_ASNEEDED_ROOT}/skin03/livebg_normal.png`),
+      projectNativeBackgroundLayer(
+        `${BACKGROUND_ASNEEDED_ROOT}/skin03/livebg_layer1.png`,
+        1920,
+        609,
+      ),
+      projectNativeBackgroundLayer(
+        `${BACKGROUND_ASNEEDED_ROOT}/skin03/livebg_layer2.png`,
+        1920,
+        476,
+      ),
+    ],
+  },
+  {
+    id: "practice",
+    layers: [
+      createMainBackgroundLayer(
+        `${BACKGROUND_ASNEEDED_ROOT}/skinpractice/livebg_normal.png`,
+      ),
+    ],
+  },
+  createTeamLiveBackground("teamLiveJudgment", "perfectstage"),
+  createTeamLiveBackground("teamLiveCombo", "combostage"),
+  createTeamLiveBackground("teamLiveLife", "lifestage"),
+] as const satisfies readonly BandoriNativeBackgroundSkin[];
+
+export const BANDORI_NATIVE_BACKGROUND_SKIN = BANDORI_NATIVE_BACKGROUND_SKINS[0];
 
 const FIELD_SKIN_ROOT =
   "/local/chart-simulator/assets/star/forassetbundle/startapp/ingameskin/fieldskin";
@@ -31,7 +172,8 @@ const FIELD_SKIN_ROOT =
 export type BandoriNativeFieldSkin = {
   assetBundleName: string;
   id: number | string;
-  judgmentLineSpriteHeight: 18 | 38 | 40 | 56;
+  judgmentLineSpriteHeight: number;
+  judgmentLineSpriteWidth: number;
   judgmentLineTextureUrl: string;
   skinType: "normal" | "mission";
   textureUrl: string;
@@ -48,6 +190,7 @@ function createFieldSkin(
     assetBundleName,
     id,
     judgmentLineSpriteHeight,
+    judgmentLineSpriteWidth: 1800,
     judgmentLineTextureUrl: `${baseUrl}/game_play_line.png`,
     skinType,
     textureUrl: `${baseUrl}/bg_line_rhythm.png`,
@@ -85,13 +228,14 @@ const JUDGMENT_LINE_PIXEL_SCALE = 0.99
 
 export function getBandoriNativeJudgmentLineRect(
   spriteHeight: BandoriNativeFieldSkin["judgmentLineSpriteHeight"],
+  spriteWidth: BandoriNativeFieldSkin["judgmentLineSpriteWidth"] = 1800,
 ): {
   height: number;
   left: number;
   top: number;
   width: number;
 } {
-  const width = 1800 * JUDGMENT_LINE_PIXEL_SCALE;
+  const width = spriteWidth * JUDGMENT_LINE_PIXEL_SCALE;
   const height = spriteHeight * JUDGMENT_LINE_PIXEL_SCALE;
   return {
     height,
@@ -100,9 +244,6 @@ export function getBandoriNativeJudgmentLineRect(
     width,
   };
 }
-
-export const BANDORI_NATIVE_JUDGMENT_LINE_RECT =
-  getBandoriNativeJudgmentLineRect(BANDORI_NATIVE_FIELD_SKIN.judgmentLineSpriteHeight);
 
 export function mirrorBandoriChartLane(lane: number): number {
   if (!Number.isFinite(lane)) {

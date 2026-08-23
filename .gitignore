@@ -13,7 +13,6 @@
 # testing
 /coverage
 /temp/
-/public/local/chart-simulator/
 
 # next.js
 /.next/

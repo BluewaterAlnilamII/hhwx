@@ -206,6 +206,18 @@ bandori/music/charts/{sha256}.json
 
 Song IDs and difficulty indexes are numeric-string keys in ascending numeric order. Difficulty indexes `"0"` through `"4"` mean `easy`, `normal`, `hard`, `expert`, and `special`. Each file value is its complete lowercase SHA-256; clients derive the content-addressed paths listed above and may verify the received content. No query-string version token is needed. `notes`, `bpm`, and `files.charts` must have identical difficulty coverage. `audio` is optional for an intentionally audio-free local build, but production readiness verification requires it. Per-song extraction manifests under `bandori/music/manifests` retain source servers and bundle provenance for the builder, but are not part of the public index contract.
 
+Chart-simulator presentation resources:
+
+```text
+{CDN_BASE}/bandori/chart-simulator/index.json
+{CDN_BASE}/bandori/chart-simulator/manifests/{manifestSha256}.json
+{CDN_BASE}/bandori/chart-simulator/packs/{packTreeHash}/{projectionRelativePath}
+```
+
+The mutable index is exactly `{schemaVersion, updatedAt, manifest}` with schema version `1`; `manifest` is the complete lowercase SHA-256 of the immutable manifest bytes. The manifest is exactly `{schemaVersion, packs}` with schema `hhwx-bandori-chart-simulator-assets-v1`; `packs` maps each original game bundle name, such as `ingameskin/noteskin/skin00` or `sound/tapseskin/skin00`, to one deterministic tree hash. It contains no kind, ordinary/limited classification, URL, size, per-file hash, or audit metadata. `apk` is the only synthetic pack key for fixed APK-derived HUD resources.
+
+Pack members retain their exact existing path below `/local/chart-simulator/` and their exact final PNG, WAV, or JSON bytes. They are not re-encoded, merged, or wrapped in ZIP files. The tree hash covers the sorted normalized member paths and bytes for the complete source bundle projection, so the member directory is immutable even though individual public member descriptors are unnecessary. The browser validates and pins the total manifest, then derives a member URL from the logical path and its original game bundle. It fetches only resources required by the selected ordinary or limited background, field/judgment line, note, Directional, tap-effect, and TapSE settings. Missing entries fail closed without a local-file, Bestdori, or cross-pack fallback. `skin_teamlivefestival` is the canonical bundle and logical directory name.
+
 Stamp catalog, static images, voice audio, and animation assets:
 
 ```text

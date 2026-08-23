@@ -8,8 +8,10 @@ import {
   getBandoriCompiledBeatAtTime,
 } from "../src/lib/bandori/chart-simulator/compiler.ts";
 import {
+  createBandoriDefaultEffectRuntime,
   evaluateBandoriEffectGradient,
 } from "../src/lib/bandori/chart-simulator/default-effects.ts";
+import nativeSwipeEffectRecipes from "../src/lib/bandori/chart-simulator/native-swipe-effect-recipes.json" with { type: "json" };
 import {
   BANDORI_NATIVE_APPROXIMATE_HIT_EFFECTS,
   BANDORI_NATIVE_LANE_EFFECTS,
@@ -94,10 +96,10 @@ import {
   updateBandoriNativeRibbonMeshVertices,
 } from "../src/lib/bandori/chart-simulator/native-note-presentation.ts";
 import {
+  BANDORI_NATIVE_DIRECTIONAL_FLICK_SKIN,
   BANDORI_NATIVE_DIRECTIONAL_FLICK_SKINS,
-  BANDORI_NATIVE_DIRECTIONAL_NOTE_ATLAS_URL,
+  BANDORI_NATIVE_NOTE_SKIN,
   BANDORI_NATIVE_NOTE_SKINS,
-  BANDORI_NATIVE_STANDARD_NOTE_ATLAS_URL,
   getBandoriHabahiroBodySpriteName,
   getBandoriHabahiroIconSpriteName,
   getBandoriHabahiroLongFlashSpriteName,
@@ -1839,6 +1841,182 @@ test("Fixed Random Color selects every authored discrete color interval", () => 
   assert.ok(sourceColors.size >= 2);
 });
 
+test("bounded effects evaluate verified lifetime velocity and built-in Quad meshes", () => {
+  const baselineRecipe = structuredClone(nativeSwipeEffectRecipes.flick);
+  const aprilRecipe = structuredClone(nativeSwipeEffectRecipes.flick);
+  const hierarchyPath = "effect_tap_swipe/glow";
+  const target = aprilRecipe.root.children.find(
+    (node) => node.hierarchyPath === hierarchyPath,
+  );
+  assert.ok(target?.particleSystem);
+  assert.ok(target.renderer);
+  const constant = (value, unit) => ({
+    mode: "constant",
+    unit,
+    domain: "normalized-particle-lifetime",
+    value,
+  });
+  target.particleSystem.modules.velocityOverLifetime = {
+    space: "world",
+    x: constant(0, "world-units-per-second"),
+    y: constant(20, "world-units-per-second"),
+    z: constant(0, "world-units-per-second"),
+    speedModifier: constant(1, "velocity-multiplier"),
+  };
+  target.renderer.mode = "mesh";
+  target.renderer.mesh = {
+    geometry: "unity-builtin-quad",
+    fileId: 1,
+    pathId: 10210,
+  };
+
+  const sample = (recipe) => {
+    const runtime = createBandoriDefaultEffectRuntime(recipe, {
+      buttonIndex: 3,
+      seed: 27,
+    });
+    runtime.play(0, 27);
+    return runtime.sample(0.05).instances
+      .slice(0, runtime.frame.count)
+      .filter((instance) => instance.hierarchyPath === hierarchyPath);
+  };
+  const baseline = sample(baselineRecipe);
+  const april = sample(aprilRecipe);
+  assert.equal(april.length, baseline.length);
+  assert.ok(april.length > 0);
+  assert.ok(april.every((instance) => instance.rendererMode === "mesh"));
+  const averageY = (instances) => instances.reduce(
+    (sum, instance) => sum + instance.screenY,
+    0,
+  ) / instances.length;
+  assert.ok(averageY(april) < averageY(baseline));
+});
+
+test("Witch custom Mesh recipes retain 3D geometry and CustomData U scrolling", () => {
+  const recipe = structuredClone(nativeSwipeEffectRecipes.flick);
+  const hierarchyPath = "effect_tap_swipe/glow";
+  const target = recipe.root.children.find(
+    (node) => node.hierarchyPath === hierarchyPath,
+  );
+  assert.ok(target?.particleSystem);
+  assert.ok(target.renderer);
+  const pathId = "7141092885653479763";
+  const vertices = Array.from({ length: 35 }, (_, index) => [
+    index % 2 === 0 ? -1 : 1,
+    0,
+    (index / 34) * 10,
+  ]).flat();
+  recipe.meshes = {
+    [pathId]: {
+      indices: Array.from({ length: 96 }, (_, index) => index % 35),
+      name: "screwTower",
+      pathId,
+      profile: "witch-screw-tower-v1",
+      rawObjectSha256:
+        "e7e2328d60c428527f7d0b545ce86d4ed70e308e6d1025818b8ba8b86084242a",
+      uvs: Array.from({ length: 35 }, (_, index) => [index / 34, index % 2]).flat(),
+      vertices,
+    },
+  };
+  target.renderer.mode = "mesh";
+  target.renderer.mesh = {
+    fileId: 0,
+    geometry: "bounded-custom-mesh",
+    pathId,
+  };
+  const materialId = target.renderer.materials[0];
+  recipe.materials[materialId].sampler = {
+    addressModeU: "clamp-to-edge",
+    addressModeV: "clamp-to-edge",
+  };
+  target.particleSystem.modules.initial.startRotation = {
+    separateAxes: true,
+    x: { domain: "spawn", mode: "constant", unit: "radians", value: -Math.PI / 2 },
+    y: { domain: "spawn", mode: "constant", unit: "radians", value: 0 },
+    z: { domain: "spawn", mode: "constant", unit: "radians", value: 0 },
+  };
+  target.particleSystem.modules.customData = {
+    profile: "witch-vector0-w-uv-scroll-u-v1",
+    vector0W: {
+      domain: "normalized-particle-lifetime",
+      mode: "constant",
+      unit: "shader-custom-data",
+      value: 0.5,
+    },
+  };
+
+  const runtime = createBandoriDefaultEffectRuntime(recipe, {
+    buttonIndex: 3,
+    seed: 27,
+  });
+  runtime.play(0, 27);
+  const meshInstance = runtime.sample(0.05).instances
+    .slice(0, runtime.frame.count)
+    .find((instance) => instance.hierarchyPath === hierarchyPath);
+  assert.ok(meshInstance?.mesh);
+  assert.equal(meshInstance.mesh.pathId, pathId);
+  assert.equal(meshInstance.mesh.vertices.length, 70);
+  assert.equal(meshInstance.mesh.uvs.length, 70);
+  assert.equal(meshInstance.mesh.indices.length, 96);
+  assert.equal(meshInstance.mesh.uvOffsetU, 0.5);
+  assert.equal(meshInstance.textureAddressModeU, "clamp-to-edge");
+  assert.equal(meshInstance.textureAddressModeV, "clamp-to-edge");
+  assert.ok(meshInstance.heightPixels > meshInstance.widthPixels);
+
+  const unsupportedSamplerRecipe = structuredClone(recipe);
+  unsupportedSamplerRecipe.materials[materialId].sampler.addressModeU = "mirror-repeat";
+  assert.throws(
+    () => createBandoriDefaultEffectRuntime(unsupportedSamplerRecipe, {
+      buttonIndex: 3,
+      seed: 27,
+    }),
+    /unsupported texture address mode/u,
+  );
+});
+
+test("Miku separate-axis Size over Lifetime scales rendered X and Y independently", () => {
+  const hierarchyPath = "effect_tap_swipe/glow";
+  const constant = (value) => ({
+    mode: "constant",
+    unit: "start-size-multiplier",
+    domain: "normalized-particle-lifetime",
+    value,
+  });
+  const createRecipe = (x, y) => {
+    const recipe = structuredClone(nativeSwipeEffectRecipes.flick);
+    const target = recipe.root.children.find(
+      (node) => node.hierarchyPath === hierarchyPath,
+    );
+    assert.ok(target?.particleSystem);
+    target.particleSystem.modules.sizeOverLifetime = {
+      separateAxes: true,
+      x: constant(x),
+      y: constant(y),
+      z: constant(1),
+    };
+    return recipe;
+  };
+  const sample = (recipe) => {
+    const runtime = createBandoriDefaultEffectRuntime(recipe, {
+      buttonIndex: 3,
+      seed: 27,
+    });
+    runtime.play(0, 27);
+    return runtime.sample(0.05).instances
+      .slice(0, runtime.frame.count)
+      .filter((instance) => instance.hierarchyPath === hierarchyPath);
+  };
+  const uniform = sample(createRecipe(1, 1));
+  const separate = sample(createRecipe(2, 0.5));
+
+  assert.equal(separate.length, uniform.length);
+  assert.ok(separate.length > 0);
+  for (let index = 0; index < separate.length; index += 1) {
+    assert.ok(Math.abs(separate[index].widthPixels / uniform[index].widthPixels - 2) < 1e-6);
+    assert.ok(Math.abs(separate[index].heightPixels / uniform[index].heightPixels - 0.5) < 1e-6);
+  }
+});
+
 test("Directional particles retain authored white and discrete colored children", () => {
   const frame = createBandoriNativeSwipeEffectRuntime(
     "directional-left-1",
@@ -1911,14 +2089,21 @@ test("the same Directional note seed remains exactly deterministic", () => {
 });
 
 test("runtime frame lookup preserves the two original JP atlases and Unity rects", () => {
-  assert.match(BANDORI_NATIVE_STANDARD_NOTE_ATLAS_URL, /skin00\/rhythmgamesprites\.png$/u);
-  assert.match(BANDORI_NATIVE_DIRECTIONAL_NOTE_ATLAS_URL, /directionalflickskin00\/directionalflicksprites\.png$/u);
-  assert.doesNotMatch(`${BANDORI_NATIVE_STANDARD_NOTE_ATLAS_URL}\n${BANDORI_NATIVE_DIRECTIONAL_NOTE_ATLAS_URL}`, /\/(?:jp|cn)\//iu);
+  assert.match(BANDORI_NATIVE_NOTE_SKIN.atlasUrl, /skin00\/rhythmgamesprites\.png$/u);
+  assert.match(BANDORI_NATIVE_DIRECTIONAL_FLICK_SKIN.atlasUrl, /directionalflickskin00\/directionalflicksprites\.png$/u);
+  assert.doesNotMatch(
+    `${BANDORI_NATIVE_NOTE_SKIN.atlasUrl}\n${BANDORI_NATIVE_DIRECTIONAL_FLICK_SKIN.atlasUrl}`,
+    /\/(?:jp|cn)\//iu,
+  );
 
   const visual = resolve();
   assert.ok(visual);
   assert.equal(getBandoriNativeBodyFrameId(visual), "note_normal_2");
-  assert.deepEqual(getBandoriNativeNoteFrame("note_normal_2"), {
+  assert.deepEqual(getBandoriNativeNoteFrame(
+    "note_normal_2",
+    BANDORI_NATIVE_NOTE_SKIN,
+    BANDORI_NATIVE_DIRECTIONAL_FLICK_SKIN,
+  ), {
     atlas: "standard",
     x: 620,
     y: 0,
@@ -1926,21 +2111,33 @@ test("runtime frame lookup preserves the two original JP atlases and Unity rects
     height: 120,
   });
   assert.equal(getBandoriNativeIconFrameId("left"), "note_flick_top_l");
-  assert.deepEqual(getBandoriNativeNoteFrame("note_flick_top_l"), {
+  assert.deepEqual(getBandoriNativeNoteFrame(
+    "note_flick_top_l",
+    BANDORI_NATIVE_NOTE_SKIN,
+    BANDORI_NATIVE_DIRECTIONAL_FLICK_SKIN,
+  ), {
     atlas: "directional",
     x: 310,
     y: 366,
     width: 138,
     height: 171,
   });
-  assert.deepEqual(getBandoriNativeNoteFrame("note_long_0"), {
+  assert.deepEqual(getBandoriNativeNoteFrame(
+    "note_long_0",
+    BANDORI_NATIVE_NOTE_SKIN,
+    BANDORI_NATIVE_DIRECTIONAL_FLICK_SKIN,
+  ), {
     atlas: "standard",
     x: 1550,
     y: 366,
     width: 308,
     height: 120,
   });
-  assert.deepEqual(getBandoriNativeNoteFrame("note_slide_among"), {
+  assert.deepEqual(getBandoriNativeNoteFrame(
+    "note_slide_among",
+    BANDORI_NATIVE_NOTE_SKIN,
+    BANDORI_NATIVE_DIRECTIONAL_FLICK_SKIN,
+  ), {
     atlas: "standard",
     x: 310,
     y: 610,
@@ -1978,19 +2175,35 @@ test("the rhythm-marker selector exposes only the seven master note styles", () 
   );
 
   assert.deepEqual(
-    getBandoriNativeNoteFrame("note_normal_2", BANDORI_NATIVE_NOTE_SKINS[2]),
+    getBandoriNativeNoteFrame(
+      "note_normal_2",
+      BANDORI_NATIVE_NOTE_SKINS[2],
+      BANDORI_NATIVE_DIRECTIONAL_FLICK_SKIN,
+    ),
     { atlas: "standard", x: 1240, y: 366, width: 308, height: 120 },
   );
   assert.deepEqual(
-    getBandoriNativeNoteFrame("note_flick_0", BANDORI_NATIVE_NOTE_SKINS[5]),
+    getBandoriNativeNoteFrame(
+      "note_flick_0",
+      BANDORI_NATIVE_NOTE_SKINS[5],
+      BANDORI_NATIVE_DIRECTIONAL_FLICK_SKIN,
+    ),
     { atlas: "standard", x: 930, y: 488, width: 308, height: 120 },
   );
   assert.deepEqual(
-    getBandoriNativeNoteFrame("note_skill_3", BANDORI_NATIVE_NOTE_SKINS[5]),
+    getBandoriNativeNoteFrame(
+      "note_skill_3",
+      BANDORI_NATIVE_NOTE_SKINS[5],
+      BANDORI_NATIVE_DIRECTIONAL_FLICK_SKIN,
+    ),
     { atlas: "standard", x: 0, y: 738, width: 308, height: 120 },
   );
   assert.deepEqual(
-    getBandoriNativeNoteFrame("note_long_4", BANDORI_NATIVE_NOTE_SKINS[2]),
+    getBandoriNativeNoteFrame(
+      "note_long_4",
+      BANDORI_NATIVE_NOTE_SKINS[2],
+      BANDORI_NATIVE_DIRECTIONAL_FLICK_SKIN,
+    ),
     { atlas: "standard", x: 310, y: 610, width: 308, height: 120 },
   );
 });

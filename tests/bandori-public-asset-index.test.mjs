@@ -660,6 +660,10 @@ test("public asset URLs append reconstructed descriptor keys to the browser CDN 
     "https://assets.example.test/bandori/cards/index.json",
   );
   assert.equal(
+    buildBandoriPublicAssetIndexUrl("chartSimulator", "https://assets.example.test/"),
+    "https://assets.example.test/bandori/chart-simulator/index.json",
+  );
+  assert.equal(
     buildBandoriPublicAssetIndexUrl("events", "https://assets.example.test"),
     "https://assets.example.test/bandori/events/index.json",
   );

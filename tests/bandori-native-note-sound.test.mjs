@@ -25,7 +25,7 @@ test("skin00 remains the default while all four JP TapSE packs are selectable at
   assert.deepEqual(BANDORI_NATIVE_TAP_SE_SKINS.map(({ id }) => id), [0, 1, 2, 3]);
   assert.equal(BANDORI_NATIVE_TAP_SE_SKIN.id, 0);
   assert.equal(BANDORI_NATIVE_NOTE_SOUND_VOLUME, 1);
-  assert.deepEqual(getBandoriNativeNoteSoundCueUrls(), {
+  assert.deepEqual(getBandoriNativeNoteSoundCueUrls(BANDORI_NATIVE_TAP_SE_SKIN), {
     "directional-1": "/local/chart-simulator/sound/tapseskin/directionalflickskin00/DirectionalFlickSE/directional_fl.wav",
     "directional-2": "/local/chart-simulator/sound/tapseskin/directionalflickskin00/DirectionalFlickSE/directional_fl_2.wav",
     "directional-3": "/local/chart-simulator/sound/tapseskin/directionalflickskin00/DirectionalFlickSE/directional_fl_3.wav",
@@ -180,6 +180,8 @@ test("the simulator owns a polyphonic runtime instead of the monophonic shared h
   assert.match(runtime, /activeSources = new Set<AudioBufferSourceNode>/u);
   assert.match(runtime, /activeLoops = new Map<string, ActiveLoop>/u);
   assert.match(runtime, /buffersByCueBank/u);
+  assert.match(runtime, /buffersByCueBank\.has\(this\.activeCueBankId\)/u);
+  assert.match(runtime, /prepareCueBank\(cueBank/u);
   assert.match(runtime, /selectCueBank\(cueBankId/u);
   assert.match(runtime, /createMediaElementSource\(mediaElement\)/u);
   assert.match(runtime, /source\.start\(when\)/u);
@@ -191,7 +193,9 @@ test("the simulator owns a polyphonic runtime instead of the monophonic shared h
   assert.match(pageRuntime, /audio\.playbackRate = playbackRate/u);
   assert.match(pageRuntime, /audio\.preservesPitch = true/u);
   assert.doesNotMatch(runtime, /source\.playbackRate/u);
-  assert.match(pageRuntime, /NOTE_SOUND_CUE_BANKS/u);
+  assert.match(pageRuntime, /createResolvedNoteSoundCueBank/u);
+  assert.match(pageRuntime, /runtime\.prepareCueBank\(cueBank\)/u);
+  assert.doesNotMatch(pageRuntime, /NOTE_SOUND_CUE_BANKS/u);
   assert.match(pageRuntime, /requestAnimationFrame\(updateNoteSounds\)/u);
   assert.match(pageRuntime, /getBandoriNativeActiveNoteSoundLoops/u);
   assert.doesNotMatch(pageRuntime, /playSoundEffect/u);

@@ -124,11 +124,10 @@ import {
   type BandoriEffectFrameInstance,
 } from "@/lib/bandori/chart-simulator/default-effects";
 import {
-  BANDORI_NATIVE_BACKGROUND_RECT,
-  BANDORI_NATIVE_BACKGROUND_TEXTURE_URL,
   BANDORI_NATIVE_FIELD_RECT,
   BANDORI_NATIVE_STAGE_SIZE,
   getBandoriNativeJudgmentLineRect,
+  type BandoriNativeBackgroundSkin,
   type BandoriNativeFieldSkin,
 } from "./native-stage-contract";
 import {
@@ -150,6 +149,9 @@ import {
   type BandoriNativeNoteSkin,
 } from "./native-note-assets";
 import type { BandoriLimitedPerformanceSkin } from "./limited-performance-skins";
+import type {
+  BandoriChartSimulatorAssetResolver,
+} from "@/lib/bandori/chart-simulator/asset-manifest";
 import {
   BANDORI_HABAHIRO_SPRITES,
   type BandoriHabahiroSpriteName,
@@ -158,6 +160,7 @@ import {
 type NativeSimulatorStageProps = {
   allPerfectStatusEnabled: boolean;
   ariaLabel: string;
+  backgroundSkin: BandoriNativeBackgroundSkin;
   compiled: CompiledBandoriChart;
   directionalFlickSkin: BandoriNativeDirectionalFlickSkin;
   fieldSkin: BandoriNativeFieldSkin;
@@ -174,6 +177,7 @@ type NativeSimulatorStageProps = {
   readyLabel: string;
   rendererErrorLabel: string;
   resourceErrorLabel: string;
+  resolveAssetUrl: BandoriChartSimulatorAssetResolver;
   rhythmSupportEnabled: boolean;
   syncLineEnabled: boolean;
 };
@@ -186,11 +190,13 @@ type StageStatus =
   | "noteContractError";
 
 type NoteDisplay = {
+  baseBodyAnchor: NativeSpriteAnchor;
   baseBodyTexture: Texture;
   body: Sprite;
   container: Container;
   icon: Sprite | null;
   projected: BandoriNativeProjectedNote | null;
+  rhythmSupportAnchor: NativeSpriteAnchor | null;
   rhythmSupportTexture: Texture | null;
   visual: BandoriNativeNoteVisual;
 };
@@ -200,6 +206,74 @@ type HabahiroTexture = {
   anchorY: number;
   texture: Texture;
 };
+
+type NativeSpriteAnchor = Readonly<{
+  x: number;
+  y: number;
+}>;
+
+const CENTER_SPRITE_ANCHOR: NativeSpriteAnchor = { x: 0.5, y: 0.5 };
+const LIMITED_SPRITE_ANCHORS_SCHEMA =
+  "hhwx-bandori-limited-performance-sprite-anchors-v1";
+
+async function loadNativeSpriteAnchors(
+  url: string | null,
+  resolveAssetUrl: BandoriChartSimulatorAssetResolver,
+): Promise<ReadonlyMap<string, NativeSpriteAnchor>> {
+  if (!url) return new Map();
+  const response = await fetch(resolveAssetUrl(url), {
+    cache: "force-cache",
+    credentials: "omit",
+  });
+  if (!response.ok) {
+    throw new Error(`Unable to load limited Sprite anchors: ${response.status}`);
+  }
+  const payload: unknown = await response.json();
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    throw new Error("Limited Sprite anchor contract must be an object");
+  }
+  const source = payload as Record<string, unknown>;
+  if (
+    source.schemaVersion !== LIMITED_SPRITE_ANCHORS_SCHEMA
+    || !source.anchors
+    || typeof source.anchors !== "object"
+    || Array.isArray(source.anchors)
+    || Object.keys(source).some((key) => key !== "anchors" && key !== "schemaVersion")
+  ) {
+    throw new Error("Limited Sprite anchor contract has an unsupported schema");
+  }
+  const anchors = new Map<string, NativeSpriteAnchor>();
+  for (const [name, value] of Object.entries(
+    source.anchors as Record<string, unknown>,
+  )) {
+    if (!value || typeof value !== "object" || Array.isArray(value)) {
+      throw new Error(`Limited Sprite anchor is invalid: ${name}`);
+    }
+    const anchor = value as Record<string, unknown>;
+    if (
+      Object.keys(anchor).some((key) => key !== "x" && key !== "y")
+      || typeof anchor.x !== "number"
+      || !Number.isFinite(anchor.x)
+      || anchor.x < 0
+      || anchor.x > 1
+      || typeof anchor.y !== "number"
+      || !Number.isFinite(anchor.y)
+      || anchor.y < 0
+      || anchor.y > 1
+    ) {
+      throw new Error(`Limited Sprite anchor is invalid: ${name}`);
+    }
+    anchors.set(name, { x: anchor.x, y: anchor.y });
+  }
+  return anchors;
+}
+
+function getNativeSpriteAnchor(
+  anchors: ReadonlyMap<string, NativeSpriteAnchor>,
+  name: string,
+): NativeSpriteAnchor {
+  return anchors.get(name) ?? CENTER_SPRITE_ANCHOR;
+}
 
 export type NativeSimulatorEffectPlaybackState = {
   isPlaying: boolean;
@@ -252,6 +326,20 @@ type HitEffectDisplay = {
   triggerAnimationTimeSeconds: number | null;
 };
 
+type ParticleEffectRenderable =
+  | {
+      kind: "sprite";
+      display: Sprite;
+    }
+  | {
+      kind: "mesh";
+      baseUvs: Float32Array;
+      display: MeshSimple;
+      meshPathId: string;
+      uvs: Float32Array;
+      vertices: Float32Array;
+    };
+
 type SwipeEffectDisplay = {
   animatedVerticalBeam: {
     hierarchyPath: string;
@@ -266,7 +354,7 @@ type SwipeEffectDisplay = {
   placement: BandoriDefaultEffectPlacement;
   rangeWidth: number;
   runtime: BandoriDefaultEffectRuntime;
-  sprites: Sprite[];
+  renderables: ParticleEffectRenderable[];
   terminalOffsetX: number;
   terminalOffsetY: number;
   triggerAnimationTimeSeconds: number | null;
@@ -279,7 +367,7 @@ type HoldEffectDisplay = {
   low: Container;
   placement: BandoriDefaultEffectPlacement;
   runtime: BandoriDefaultEffectRuntime;
-  sprites: Sprite[];
+  renderables: ParticleEffectRenderable[];
 };
 
 type LoadedLimitedPerformanceEffects = {
@@ -290,6 +378,8 @@ type LoadedLimitedPerformanceEffects = {
   }> | null;
   recipes: ReadonlyMap<string, unknown>;
   textures: ReadonlyMap<string, Texture>;
+  usesDirectionalFlickEffect: boolean;
+  usesTapEffect: boolean;
 };
 
 type LaneEffectDisplay = {
@@ -518,13 +608,15 @@ function createNoteDisplay(
   visual: BandoriNativeNoteVisual,
   textures: ReadonlyMap<BandoriNativeNoteFrameId, Texture>,
   habahiroTextures: ReadonlyMap<BandoriHabahiroSpriteName, HabahiroTexture>,
+  spriteAnchors: ReadonlyMap<string, NativeSpriteAnchor>,
   standardRhythmSupportTexture: Texture | null,
   isRhythmSupportNote: boolean,
 ): NoteDisplay {
   const habahiroBodyName = getBandoriHabahiroBodySpriteName(visual);
   const habahiroBody = habahiroBodyName ? habahiroTextures.get(habahiroBodyName) : null;
+  const bodyFrameId = getBandoriNativeBodyFrameId(visual);
   const bodyTexture = habahiroBody?.texture
-    ?? textures.get(getBandoriNativeBodyFrameId(visual));
+    ?? textures.get(bodyFrameId);
   if (!bodyTexture) {
     throw new BandoriNativeNoteContractError("Resolved body Sprite is absent from the verified atlas frames");
   }
@@ -532,7 +624,10 @@ function createNoteDisplay(
   const container = new Container();
   container.eventMode = "none";
   const body = new Sprite(bodyTexture);
-  body.anchor.set(habahiroBody?.anchorX ?? 0.5, habahiroBody?.anchorY ?? 0.5);
+  const baseBodyAnchor = habahiroBody
+    ? { x: habahiroBody.anchorX, y: habahiroBody.anchorY }
+    : getNativeSpriteAnchor(spriteAnchors, bodyFrameId);
+  body.anchor.set(baseBodyAnchor.x, baseBodyAnchor.y);
   body.eventMode = "none";
   body.tint = 0xffffff;
   body.alpha = 1;
@@ -549,24 +644,47 @@ function createNoteDisplay(
       throw new BandoriNativeNoteContractError("Resolved flick icon is absent from the verified atlas frames");
     }
     icon = new Sprite(iconTexture);
-    icon.anchor.set(habahiroIcon?.anchorX ?? 0.5, habahiroIcon?.anchorY ?? 0.5);
+    const iconAnchor = habahiroIcon
+      ? { x: habahiroIcon.anchorX, y: habahiroIcon.anchorY }
+      : getNativeSpriteAnchor(
+          spriteAnchors,
+          getBandoriNativeIconFrameId(visual.icon),
+        );
+    icon.anchor.set(iconAnchor.x, iconAnchor.y);
     icon.eventMode = "none";
     icon.tint = 0xffffff;
     icon.alpha = 1;
     container.addChild(icon);
   }
 
+  const rhythmSupport = isRhythmSupportNote && visual.body === "normal"
+    ? habahiroBodyName
+      ? habahiroTextures.get(getBandoriHabahiroRhythmSpriteName(visual)) ?? null
+      : standardRhythmSupportTexture
+        ? {
+            anchorX: getNativeSpriteAnchor(
+              spriteAnchors,
+              `note_normal_16_${visual.lane}`,
+            ).x,
+            anchorY: getNativeSpriteAnchor(
+              spriteAnchors,
+              `note_normal_16_${visual.lane}`,
+            ).y,
+            texture: standardRhythmSupportTexture,
+          }
+        : null
+    : null;
   return {
+    baseBodyAnchor,
     baseBodyTexture: bodyTexture,
     body,
     container,
     icon,
     projected: null,
-    rhythmSupportTexture: isRhythmSupportNote && visual.body === "normal"
-      ? habahiroBodyName
-        ? habahiroTextures.get(getBandoriHabahiroRhythmSpriteName(visual))?.texture ?? null
-        : standardRhythmSupportTexture
+    rhythmSupportAnchor: rhythmSupport
+      ? { x: rhythmSupport.anchorX, y: rhythmSupport.anchorY }
       : null,
+    rhythmSupportTexture: rhythmSupport?.texture ?? null,
     visual,
   };
 }
@@ -595,6 +713,7 @@ function createNoteGroupDisplay(
   group: BandoriNativeNoteVisualGroup,
   textures: ReadonlyMap<BandoriNativeNoteFrameId, Texture>,
   habahiroTextures: ReadonlyMap<BandoriHabahiroSpriteName, HabahiroTexture>,
+  spriteAnchors: ReadonlyMap<string, NativeSpriteAnchor>,
   standardRhythmSupportTexture: Texture | null,
   isRhythmSupportNote: boolean,
   leftLineTexture: Texture,
@@ -614,6 +733,7 @@ function createNoteGroupDisplay(
       visual,
       textures,
       habahiroTextures,
+      spriteAnchors,
       standardRhythmSupportTexture,
       isRhythmSupportNote,
     )),
@@ -662,45 +782,52 @@ function effectTint(red: number, green: number, blue: number): number {
 
 async function loadLimitedPerformanceEffects(
   skin: BandoriLimitedPerformanceSkin | null,
+  resolveAssetUrl: BandoriChartSimulatorAssetResolver,
 ): Promise<LoadedLimitedPerformanceEffects | null> {
-  if (!skin) return null;
+  if (!skin?.effects) return null;
+  const effects = skin.effects;
   const recipeUrls = {
     ...Object.fromEntries(
-      Object.entries(skin.effects.recipes).map(([key, url]) => [`tap:${key}`, url]),
+      Object.entries(effects.recipes).map(([key, url]) => [`tap:${key}`, url]),
     ),
     ...Object.fromEntries(
-      Object.entries(skin.effects.directionalRecipes).map(
+      Object.entries(effects.directionalRecipes).map(
         ([key, url]) => [`directional:${key}`, url],
       ),
     ),
   };
   const [recipeEntries, textureEntries] = await Promise.all([
     Promise.all(Object.entries(recipeUrls).map(async ([key, url]) => {
-      const response = await fetch(url, { cache: "force-cache" });
+      const response = await fetch(resolveAssetUrl(url), {
+        cache: "force-cache",
+        credentials: "omit",
+      });
       if (!response.ok) {
         throw new Error(`Limited performance effect recipe failed: ${url}`);
       }
       return [key, await response.json()] as const;
     })),
-    Promise.all(Object.entries(skin.effects.resources).map(async ([key, url]) => (
-      [key, await Assets.load<Texture>(url)] as const
+    Promise.all(Object.entries(effects.resources).map(async ([key, url]) => (
+      [key, await Assets.load<Texture>(resolveAssetUrl(url))] as const
     ))),
   ]);
   return {
-    animatedVerticalBeam: skin.effects.animatedVerticalBeam
+    animatedVerticalBeam: effects.animatedVerticalBeam
       ? {
-          hierarchyPath: skin.effects.animatedVerticalBeam.hierarchyPath,
-          recipeKey: `tap:${skin.effects.animatedVerticalBeam.recipe}`,
-          travelSpeedMultiplier: skin.effects.animatedVerticalBeam.travelSpeedMultiplier,
+          hierarchyPath: effects.animatedVerticalBeam.hierarchyPath,
+          recipeKey: `tap:${effects.animatedVerticalBeam.recipe}`,
+          travelSpeedMultiplier: effects.animatedVerticalBeam.travelSpeedMultiplier,
         }
       : null,
     recipes: new Map(recipeEntries),
     textures: new Map(textureEntries),
+    usesDirectionalFlickEffect: skin.coverage.includes("directionalFlickEffect"),
+    usesTapEffect: skin.coverage.includes("tapEffect"),
   };
 }
 
 function configureParticleBlend(
-  sprite: Sprite,
+  display: Sprite | MeshSimple,
   instance: BandoriEffectFrameInstance,
 ): void {
   if (
@@ -709,7 +836,7 @@ function configureParticleBlend(
     && instance.blendDestination === "one"
     && !instance.premultipliedAlpha
   ) {
-    sprite.blendMode = "add";
+    display.blendMode = "add";
     return;
   }
   if (
@@ -720,7 +847,7 @@ function configureParticleBlend(
       || (instance.blendSource === "one" && instance.premultipliedAlpha)
     )
   ) {
-    sprite.blendMode = "normal";
+    display.blendMode = "normal";
     return;
   }
   throw new BandoriNativeNoteContractError(
@@ -864,7 +991,7 @@ function createLimitedEffectDisplay(
     placement: getBandoriDefaultEffectPlacement(recipe, lane),
     rangeWidth,
     runtime: createBandoriDefaultEffectRuntime(recipe, { buttonIndex: lane, seed: 0 }),
-    sprites: [],
+    renderables: [],
     terminalOffsetX: 0,
     terminalOffsetY: 0,
     triggerAnimationTimeSeconds: null,
@@ -1012,6 +1139,110 @@ function getParticleEffectFrameTexture(
   return texture;
 }
 
+function hideParticleEffectRenderables(
+  renderables: readonly ParticleEffectRenderable[],
+): void {
+  for (const renderable of renderables) renderable.display.visible = false;
+}
+
+function replaceParticleEffectRenderable(
+  renderables: ParticleEffectRenderable[],
+  index: number,
+  instance: BandoriEffectFrameInstance,
+  texture: Texture,
+): ParticleEffectRenderable {
+  const existing = renderables[index];
+  const meshFrame = instance.mesh;
+  if (!meshFrame && existing?.kind === "sprite") return existing;
+  if (
+    meshFrame
+    && existing?.kind === "mesh"
+    && existing.meshPathId === meshFrame.pathId
+    && existing.vertices.length === meshFrame.vertices.length
+    && existing.uvs.length === meshFrame.uvs.length
+  ) {
+    return existing;
+  }
+  if (existing) {
+    existing.display.removeFromParent();
+    existing.display.destroy();
+  }
+  if (!meshFrame) {
+    const sprite = new Sprite(Texture.EMPTY);
+    sprite.anchor.set(0.5);
+    sprite.eventMode = "none";
+    const renderable: ParticleEffectRenderable = { display: sprite, kind: "sprite" };
+    renderables[index] = renderable;
+    return renderable;
+  }
+
+  const vertices = new Float32Array(meshFrame.vertices.length);
+  const baseUvs = new Float32Array(meshFrame.uvs);
+  const uvs = new Float32Array(baseUvs);
+  const mesh = new MeshSimple({
+    indices: meshFrame.indices,
+    texture,
+    topology: "triangle-list",
+    uvs,
+    vertices,
+  });
+  mesh.autoUpdate = false;
+  mesh.eventMode = "none";
+  const renderable: ParticleEffectRenderable = {
+    baseUvs,
+    display: mesh,
+    kind: "mesh",
+    meshPathId: meshFrame.pathId,
+    uvs,
+    vertices,
+  };
+  renderables[index] = renderable;
+  return renderable;
+}
+
+function updateParticleEffectMesh(
+  renderable: Extract<ParticleEffectRenderable, { kind: "mesh" }>,
+  instance: BandoriEffectFrameInstance,
+  texture: Texture,
+  placement: BandoriDefaultEffectPlacement,
+  pixelScale: number,
+): void {
+  const meshFrame = instance.mesh;
+  if (!meshFrame || meshFrame.pathId !== renderable.meshPathId) {
+    throw new BandoriNativeNoteContractError(
+      "Particle-effect Mesh frame does not match its display",
+    );
+  }
+  const style = texture.source.style;
+  if (
+    style.addressModeU !== instance.textureAddressModeU
+    || style.addressModeV !== instance.textureAddressModeV
+  ) {
+    style.addressModeU = instance.textureAddressModeU;
+    style.addressModeV = instance.textureAddressModeV;
+    style.update();
+  }
+  renderable.display.texture = texture;
+  for (let index = 0; index < meshFrame.vertices.length; index += 2) {
+    renderable.vertices[index] =
+      (meshFrame.vertices[index] - placement.screenX) * pixelScale;
+    renderable.vertices[index + 1] =
+      (meshFrame.vertices[index + 1] - placement.screenY) * pixelScale;
+  }
+  renderable.display.geometry.getBuffer("aPosition").update();
+  for (let index = 0; index < renderable.baseUvs.length; index += 2) {
+    const baseU = renderable.baseUvs[index];
+    const baseV = renderable.baseUvs[index + 1];
+    renderable.uvs[index] =
+      (instance.uv.flipU ? 1 - baseU : baseU) + meshFrame.uvOffsetU;
+    renderable.uvs[index + 1] = instance.uv.flipV ? 1 - baseV : baseV;
+  }
+  renderable.display.geometry.getBuffer("aUV").update();
+  renderable.display.position.set(0);
+  renderable.display.scale.set(1);
+  renderable.display.rotation = 0;
+}
+
 function createSwipeEffectDisplay(
   kind: BandoriNativeSwipeEffectKind,
   lane: number,
@@ -1039,7 +1270,7 @@ function createSwipeEffectDisplay(
     placement: getBandoriNativeSwipeEffectPlacement(kind, lane),
     rangeWidth,
     runtime: createBandoriNativeSwipeEffectRuntime(kind, lane, 0),
-    sprites: [],
+    renderables: [],
     terminalOffsetX: 0,
     terminalOffsetY: 0,
     triggerAnimationTimeSeconds: null,
@@ -1052,7 +1283,7 @@ function clearSwipeEffect(display: SwipeEffectDisplay): void {
   display.triggerAnimationTimeSeconds = null;
   display.low.visible = false;
   display.high.visible = false;
-  for (const sprite of display.sprites) sprite.visible = false;
+  hideParticleEffectRenderables(display.renderables);
 }
 
 function updateSwipeEffect(
@@ -1075,86 +1306,102 @@ function updateSwipeEffect(
   }
   display.low.visible = true;
   display.high.visible = true;
-  for (const sprite of display.sprites) sprite.visible = false;
+  hideParticleEffectRenderables(display.renderables);
 
   const pixelScale = BANDORI_NATIVE_BUTTON_EFFECT_PIXELS_PER_WORLD_UNIT
     / display.placement.pixelsPerWorldUnit;
   for (let index = 0; index < frame.count; index += 1) {
     const instance = frame.instances[index];
-    let sprite = display.sprites[index];
-    if (!sprite) {
-      sprite = new Sprite(Texture.EMPTY);
-      sprite.anchor.set(0.5);
-      sprite.eventMode = "none";
-      display.sprites[index] = sprite;
-    }
-    configureParticleBlend(sprite, instance);
-    const targetLayer = instance.sortingOrder >= 50 ? display.high : display.low;
-    if (sprite.parent !== targetLayer) targetLayer.addChild(sprite);
     const texture = getParticleEffectFrameTexture(
       instance,
       textures,
       subtextures,
       ownedTextures,
     );
-    const anchorX = isBandoriNativeDirectionalTerminalParticle(instance)
-      ? display.terminalOffsetX
-      : 0;
-    const anchorY = isBandoriNativeDirectionalTerminalParticle(instance)
-      ? display.terminalOffsetY
-      : 0;
-    const scaleX = instance.widthPixels / texture.orig.width
-      * pixelScale
-      * (display.isNativeDefault
-        ? getBandoriNativeSwipeParticleWidthScale(
-            display.kind,
-            display.rangeWidth,
-            instance,
-          )
-        : 1)
-      * (instance.uv.flipU ? -1 : 1);
-    const scaleY = instance.heightPixels / texture.orig.height
-      * pixelScale
-      * (instance.uv.flipV ? -1 : 1);
-    const directionalNotesCenterOffsetPixels =
-      getBandoriApprovedManualDirectionalNotesCenterOffsetPixels(instance);
-    let particleScreenY = getBandoriApprovedManualVerticalBeamScreenY(
-      display.kind,
-      display.placement.screenY,
+    const renderable = replaceParticleEffectRenderable(
+      display.renderables,
+      index,
       instance,
+      texture,
     );
-    const animatedVerticalBeam = display.animatedVerticalBeam;
-    if (instance.hierarchyPath === animatedVerticalBeam?.hierarchyPath) {
-      // Persona line1 keeps its authored spawn and lifetime while its upward
-      // displacement receives the user-approved Web speed compensation.
-      let initialScreenY = animatedVerticalBeam.initialScreenY;
-      if (initialScreenY === null) {
-        initialScreenY = instance.screenY;
-        animatedVerticalBeam.initialScreenY = initialScreenY;
-      }
-      particleScreenY = getBandoriApprovedAnimatedTravelScreenY(
-        initialScreenY,
-        instance.screenY,
-        animatedVerticalBeam.travelSpeedMultiplier,
-      );
+    configureParticleBlend(renderable.display, instance);
+    const targetLayer = instance.sortingOrder >= 50 ? display.high : display.low;
+    if (renderable.display.parent !== targetLayer) {
+      targetLayer.addChild(renderable.display);
     }
-    sprite.texture = texture;
-    sprite.setFromMatrix(new Matrix(
-      instance.basisX.x * scaleX,
-      instance.basisX.y * scaleX,
-      instance.basisY.x * scaleY,
-      instance.basisY.y * scaleY,
-      anchorX
-        + (instance.screenX - display.placement.screenX) * pixelScale
-        + instance.basisX.x * directionalNotesCenterOffsetPixels * pixelScale,
-      anchorY
-        + (particleScreenY - display.placement.screenY) * pixelScale
-        + instance.basisX.y * directionalNotesCenterOffsetPixels * pixelScale,
-    ));
-    sprite.tint = effectTint(instance.color.r, instance.color.g, instance.color.b);
-    sprite.alpha = Math.max(0, Math.min(1, instance.color.a));
-    sprite.zIndex = instance.sortingOrder * 100_000 + index;
-    sprite.visible = true;
+    if (renderable.kind === "mesh") {
+      updateParticleEffectMesh(
+        renderable,
+        instance,
+        texture,
+        display.placement,
+        pixelScale,
+      );
+    } else {
+      const sprite = renderable.display;
+      const anchorX = isBandoriNativeDirectionalTerminalParticle(instance)
+        ? display.terminalOffsetX
+        : 0;
+      const anchorY = isBandoriNativeDirectionalTerminalParticle(instance)
+        ? display.terminalOffsetY
+        : 0;
+      const scaleX = instance.widthPixels / texture.orig.width
+        * pixelScale
+        * (display.isNativeDefault
+          ? getBandoriNativeSwipeParticleWidthScale(
+              display.kind,
+              display.rangeWidth,
+              instance,
+            )
+          : 1)
+        * (instance.uv.flipU ? -1 : 1);
+      const scaleY = instance.heightPixels / texture.orig.height
+        * pixelScale
+        * (instance.uv.flipV ? -1 : 1);
+      const directionalNotesCenterOffsetPixels =
+        getBandoriApprovedManualDirectionalNotesCenterOffsetPixels(instance);
+      let particleScreenY = getBandoriApprovedManualVerticalBeamScreenY(
+        display.kind,
+        display.placement.screenY,
+        instance,
+      );
+      const animatedVerticalBeam = display.animatedVerticalBeam;
+      if (instance.hierarchyPath === animatedVerticalBeam?.hierarchyPath) {
+        // Persona line1 keeps its authored spawn and lifetime while its upward
+        // displacement receives the user-approved Web speed compensation.
+        let initialScreenY = animatedVerticalBeam.initialScreenY;
+        if (initialScreenY === null) {
+          initialScreenY = instance.screenY;
+          animatedVerticalBeam.initialScreenY = initialScreenY;
+        }
+        particleScreenY = getBandoriApprovedAnimatedTravelScreenY(
+          initialScreenY,
+          instance.screenY,
+          animatedVerticalBeam.travelSpeedMultiplier,
+        );
+      }
+      sprite.texture = texture;
+      sprite.setFromMatrix(new Matrix(
+        instance.basisX.x * scaleX,
+        instance.basisX.y * scaleX,
+        instance.basisY.x * scaleY,
+        instance.basisY.y * scaleY,
+        anchorX
+          + (instance.screenX - display.placement.screenX) * pixelScale
+          + instance.basisX.x * directionalNotesCenterOffsetPixels * pixelScale,
+        anchorY
+          + (particleScreenY - display.placement.screenY) * pixelScale
+          + instance.basisX.y * directionalNotesCenterOffsetPixels * pixelScale,
+      ));
+    }
+    renderable.display.tint = effectTint(
+      instance.color.r,
+      instance.color.g,
+      instance.color.b,
+    );
+    renderable.display.alpha = Math.max(0, Math.min(1, instance.color.a));
+    renderable.display.zIndex = instance.sortingOrder * 100_000 + index;
+    renderable.display.visible = true;
   }
 }
 
@@ -1235,8 +1482,8 @@ function createHoldEffectDisplay(
     high,
     low,
     placement,
+    renderables: [],
     runtime,
-    sprites: [],
   };
 }
 
@@ -1260,47 +1507,63 @@ function updateHoldEffect(
   display.high.position.set(effectScreenX, effectScreenY);
   display.low.visible = true;
   display.high.visible = true;
-  for (const sprite of display.sprites) sprite.visible = false;
+  hideParticleEffectRenderables(display.renderables);
 
   const pixelScale = BANDORI_NATIVE_BUTTON_EFFECT_PIXELS_PER_WORLD_UNIT
     / display.placement.pixelsPerWorldUnit;
   for (let index = 0; index < frame.count; index += 1) {
     const instance = frame.instances[index];
-    let sprite = display.sprites[index];
-    if (!sprite) {
-      sprite = new Sprite(Texture.EMPTY);
-      sprite.anchor.set(0.5);
-      sprite.eventMode = "none";
-      display.sprites[index] = sprite;
-    }
-    configureParticleBlend(sprite, instance);
-    const targetLayer = instance.sortingOrder >= 50 ? display.high : display.low;
-    if (sprite.parent !== targetLayer) targetLayer.addChild(sprite);
     const texture = getParticleEffectFrameTexture(
       instance,
       textures,
       subtextures,
       ownedTextures,
     );
-    const scaleX = instance.widthPixels / texture.orig.width
-      * pixelScale
-      * (instance.uv.flipU ? -1 : 1);
-    const scaleY = instance.heightPixels / texture.orig.height
-      * pixelScale
-      * (instance.uv.flipV ? -1 : 1);
-    sprite.texture = texture;
-    sprite.setFromMatrix(new Matrix(
-      instance.basisX.x * scaleX,
-      instance.basisX.y * scaleX,
-      instance.basisY.x * scaleY,
-      instance.basisY.y * scaleY,
-      (instance.screenX - display.placement.screenX) * pixelScale,
-      (instance.screenY - display.placement.screenY) * pixelScale,
-    ));
-    sprite.tint = effectTint(instance.color.r, instance.color.g, instance.color.b);
-    sprite.alpha = Math.max(0, Math.min(1, instance.color.a));
-    sprite.zIndex = instance.sortingOrder * 100_000 + index;
-    sprite.visible = true;
+    const renderable = replaceParticleEffectRenderable(
+      display.renderables,
+      index,
+      instance,
+      texture,
+    );
+    configureParticleBlend(renderable.display, instance);
+    const targetLayer = instance.sortingOrder >= 50 ? display.high : display.low;
+    if (renderable.display.parent !== targetLayer) {
+      targetLayer.addChild(renderable.display);
+    }
+    if (renderable.kind === "mesh") {
+      updateParticleEffectMesh(
+        renderable,
+        instance,
+        texture,
+        display.placement,
+        pixelScale,
+      );
+    } else {
+      const sprite = renderable.display;
+      const scaleX = instance.widthPixels / texture.orig.width
+        * pixelScale
+        * (instance.uv.flipU ? -1 : 1);
+      const scaleY = instance.heightPixels / texture.orig.height
+        * pixelScale
+        * (instance.uv.flipV ? -1 : 1);
+      sprite.texture = texture;
+      sprite.setFromMatrix(new Matrix(
+        instance.basisX.x * scaleX,
+        instance.basisX.y * scaleX,
+        instance.basisY.x * scaleY,
+        instance.basisY.y * scaleY,
+        (instance.screenX - display.placement.screenX) * pixelScale,
+        (instance.screenY - display.placement.screenY) * pixelScale,
+      ));
+    }
+    renderable.display.tint = effectTint(
+      instance.color.r,
+      instance.color.g,
+      instance.color.b,
+    );
+    renderable.display.alpha = Math.max(0, Math.min(1, instance.color.a));
+    renderable.display.zIndex = instance.sortingOrder * 100_000 + index;
+    renderable.display.visible = true;
   }
 
   const flashColor = evaluateBandoriNativeLongFlashColor(elapsedSeconds);
@@ -1451,6 +1714,7 @@ function updateSyncLine(
 export default function NativeSimulatorStage({
   allPerfectStatusEnabled,
   ariaLabel,
+  backgroundSkin,
   compiled,
   directionalFlickSkin,
   fieldSkin,
@@ -1467,6 +1731,7 @@ export default function NativeSimulatorStage({
   readyLabel,
   rendererErrorLabel,
   resourceErrorLabel,
+  resolveAssetUrl,
   rhythmSupportEnabled,
   syncLineEnabled,
 }: NativeSimulatorStageProps) {
@@ -1590,11 +1855,29 @@ export default function NativeSimulatorStage({
         }
       }
       let habahiroTextures = new Map<BandoriHabahiroSpriteName, HabahiroTexture>();
+      let noteSpriteAnchors = new Map<string, NativeSpriteAnchor>();
       let limitedEffects: LoadedLimitedPerformanceEffects | null = null;
       let spriteFrameTextures = new Map<BandoriNativeNoteFrameId, Texture>();
       try {
+        const loadTexture = (logicalUrl: string) => (
+          Assets.load<Texture>(resolveAssetUrl(logicalUrl))
+        );
+        const usesLimitedTapEffect = limitedPerformanceSkin?.coverage.includes(
+          "tapEffect",
+        ) === true;
+        const usesLimitedDirectionalEffect = limitedPerformanceSkin?.coverage.includes(
+          "directionalFlickEffect",
+        ) === true;
+        const loadOrdinaryTapTexture = (logicalUrl: string) => (
+          usesLimitedTapEffect ? Promise.resolve(Texture.EMPTY) : loadTexture(logicalUrl)
+        );
         const limitedEffectsPromise = loadLimitedPerformanceEffects(
           limitedPerformanceSkin,
+          resolveAssetUrl,
+        );
+        const noteSpriteAnchorsPromise = loadNativeSpriteAnchors(
+          noteSkin.spriteAnchorsUrl,
+          resolveAssetUrl,
         );
         const spriteFramePromise = Promise.all([...usedFrameIds].map(async (frameId) => {
           const url = getBandoriNativeNoteFrameUrl(
@@ -1603,58 +1886,69 @@ export default function NativeSimulatorStage({
             directionalFlickSkin,
           );
           return url
-            ? [frameId, await Assets.load<Texture>(url)] as const
+            ? [frameId, await loadTexture(url)] as const
             : null;
         }));
         resources = await Promise.all([
-          Assets.load<Texture>(BANDORI_NATIVE_BACKGROUND_TEXTURE_URL),
-          Assets.load<Texture>(fieldSkin.textureUrl),
-          Assets.load<Texture>(fieldSkin.judgmentLineTextureUrl),
+          ...backgroundSkin.layers.map((layer) => loadTexture(layer.textureUrl)),
+          loadTexture(fieldSkin.textureUrl),
+          loadTexture(fieldSkin.judgmentLineTextureUrl),
           noteSkin.frameSource === "atlas"
-            ? Assets.load<Texture>(noteSkin.atlasUrl)
+            ? loadTexture(noteSkin.atlasUrl)
             : Promise.resolve(Texture.EMPTY),
           directionalFlickSkin.frameSource === "atlas"
-            ? Assets.load<Texture>(directionalFlickSkin.atlasUrl)
+            ? loadTexture(directionalFlickSkin.atlasUrl)
             : Promise.resolve(Texture.EMPTY),
-          Assets.load<Texture>(noteSkin.longNoteLineUrl),
-          Assets.load<Texture>(noteSkin.curveSlideNoteLineUrl),
-          Assets.load<Texture>(noteSkin.syncLineUrl),
-          Assets.load<Texture>(directionalFlickSkin.lineLeftUrl),
-          Assets.load<Texture>(directionalFlickSkin.lineRightUrl),
-          Assets.load<Texture>(BANDORI_NATIVE_TAP_EFFECT_ATLAS_1_URL),
-          Assets.load<Texture>(BANDORI_NATIVE_TAP_EFFECT_ATLAS_2_URL),
-          Assets.load<Texture>(BANDORI_NATIVE_SWIPE_EFFECT_TEXTURE_URLS["tap-light"]),
-          Assets.load<Texture>(BANDORI_NATIVE_SWIPE_EFFECT_TEXTURE_URLS["tap-circle"]),
-          Assets.load<Texture>(BANDORI_NATIVE_HOLD_EFFECT_TEXTURE_URLS["tap-default-particle"]),
-          Assets.load<Texture>(BANDORI_NATIVE_PERFECT_JUDGMENT_URL),
-          Assets.load<Texture>(BANDORI_NATIVE_COMBO_UNIT_URL),
-          Assets.load<Texture>(BANDORI_NATIVE_ALL_PERFECT_COMBO_UNIT_URL),
-          ...BANDORI_NATIVE_COMBO_DIGIT_URLS.map((url) => Assets.load<Texture>(url)),
+          loadTexture(noteSkin.longNoteLineUrl),
+          loadTexture(noteSkin.curveSlideNoteLineUrl),
+          loadTexture(noteSkin.syncLineUrl),
+          loadTexture(directionalFlickSkin.lineLeftUrl),
+          loadTexture(directionalFlickSkin.lineRightUrl),
+          loadOrdinaryTapTexture(BANDORI_NATIVE_TAP_EFFECT_ATLAS_1_URL),
+          loadOrdinaryTapTexture(BANDORI_NATIVE_TAP_EFFECT_ATLAS_2_URL),
+          loadOrdinaryTapTexture(BANDORI_NATIVE_SWIPE_EFFECT_TEXTURE_URLS["tap-light"]),
+          loadOrdinaryTapTexture(BANDORI_NATIVE_SWIPE_EFFECT_TEXTURE_URLS["tap-circle"]),
+          loadOrdinaryTapTexture(BANDORI_NATIVE_HOLD_EFFECT_TEXTURE_URLS["tap-default-particle"]),
+          loadTexture(
+            limitedPerformanceSkin?.judgmentPerfectTextureUrl
+              ?? BANDORI_NATIVE_PERFECT_JUDGMENT_URL,
+          ),
+          loadTexture(BANDORI_NATIVE_COMBO_UNIT_URL),
+          loadTexture(BANDORI_NATIVE_ALL_PERFECT_COMBO_UNIT_URL),
+          ...BANDORI_NATIVE_COMBO_DIGIT_URLS.map(loadTexture),
           ...BANDORI_NATIVE_ALL_PERFECT_COMBO_DIGIT_URLS.map(
-            (url) => Assets.load<Texture>(url),
+            loadTexture,
           ),
           ...Array.from(
             { length: 7 },
-            (_, lane) => Assets.load<Texture>(getBandoriNativeRhythmSupportNoteUrl(noteSkin, lane)),
+            (_, lane) => loadTexture(getBandoriNativeRhythmSupportNoteUrl(noteSkin, lane)),
           ),
           ...Array.from(
             { length: 7 },
-            (_, lane) => Assets.load<Texture>(getBandoriNativeLongFlashUrl(noteSkin, lane)),
+            (_, lane) => loadTexture(getBandoriNativeLongFlashUrl(noteSkin, lane)),
           ),
-          Assets.load<Texture>(getBandoriNativeLaneEffectUrl("NoteLaneEffect_1.png")),
-          Assets.load<Texture>(getBandoriNativeLaneEffectUrl("NoteLaneEffect_2.png")),
-          Assets.load<Texture>(getBandoriNativeLaneEffectUrl("NoteLaneEffect_3.png")),
-          Assets.load<Texture>(getBandoriNativeLaneEffectUrl("NoteLaneEffect_4.png")),
+          loadTexture(getBandoriNativeLaneEffectUrl("NoteLaneEffect_1.png")),
+          loadTexture(getBandoriNativeLaneEffectUrl("NoteLaneEffect_2.png")),
+          loadTexture(getBandoriNativeLaneEffectUrl("NoteLaneEffect_3.png")),
+          loadTexture(getBandoriNativeLaneEffectUrl("NoteLaneEffect_4.png")),
           ...BANDORI_NATIVE_DIRECTIONAL_EFFECT_FRAME_URLS.map(
-            (url) => Assets.load<Texture>(url),
+            (url) => usesLimitedDirectionalEffect
+              ? Promise.resolve(Texture.EMPTY)
+              : loadTexture(url),
           ),
         ]);
-        const [loadedLimitedEffects, loadedSpriteFrames, habahiroEntries] =
+        const [
+          loadedLimitedEffects,
+          loadedSpriteFrames,
+          loadedNoteSpriteAnchors,
+          habahiroEntries,
+        ] =
           await Promise.all([
             limitedEffectsPromise,
             spriteFramePromise,
+            noteSpriteAnchorsPromise,
             Promise.all([...habahiroSpriteNames].map(async (name) => {
-            const texture = await Assets.load<Texture>(getBandoriHabahiroSpriteUrl(name));
+            const texture = await loadTexture(getBandoriHabahiroSpriteUrl(name));
             const contract = BANDORI_HABAHIRO_SPRITES[name];
             return [name, {
               anchorX: contract.anchorX,
@@ -1664,6 +1958,7 @@ export default function NativeSimulatorStage({
             })),
           ]);
         limitedEffects = loadedLimitedEffects;
+        noteSpriteAnchors = new Map(loadedNoteSpriteAnchors);
         spriteFrameTextures = new Map(
           loadedSpriteFrames.filter((entry) => entry !== null),
         );
@@ -1674,8 +1969,8 @@ export default function NativeSimulatorStage({
       }
       if (disposed) return;
 
+      const backgroundTextures = resources.slice(0, backgroundSkin.layers.length);
       const [
-        backgroundTexture,
         fieldTexture,
         judgmentLineTexture,
         standardAtlas,
@@ -1732,7 +2027,7 @@ export default function NativeSimulatorStage({
         laneEffectTexture3,
         laneEffectTexture4,
         ...directionalEffectFrameTextures
-      ] = resources;
+      ] = resources.slice(backgroundSkin.layers.length);
       for (const texture of resources) texture.source.scaleMode = "linear";
       for (const texture of limitedEffects?.textures.values() ?? []) {
         texture.source.scaleMode = "linear";
@@ -1752,16 +2047,21 @@ export default function NativeSimulatorStage({
         directionalLineRightShader,
       );
 
-      const background = new Sprite(backgroundTexture);
-      background.eventMode = "none";
-      background.position.set(
-        BANDORI_NATIVE_BACKGROUND_RECT.left,
-        BANDORI_NATIVE_BACKGROUND_RECT.top,
-      );
-      background.width = BANDORI_NATIVE_BACKGROUND_RECT.width;
-      background.height = BANDORI_NATIVE_BACKGROUND_RECT.height;
-      background.tint = 0xffffff;
-      background.alpha = 1;
+      const backgroundLayers = backgroundTextures.map((texture, index) => {
+        const layer = backgroundSkin.layers[index];
+        const background = new Sprite(texture);
+        background.anchor.set(0.5);
+        background.eventMode = "none";
+        background.position.set(
+          layer.rect.left + layer.rect.width / 2,
+          layer.rect.top + layer.rect.height / 2,
+        );
+        background.width = layer.rect.width;
+        background.height = layer.rect.height;
+        background.tint = 0xffffff;
+        background.alpha = 1;
+        return background;
+      });
 
       const field = new Sprite(fieldTexture);
       field.eventMode = "none";
@@ -1772,6 +2072,7 @@ export default function NativeSimulatorStage({
       const judgmentLine = new Sprite(judgmentLineTexture);
       const judgmentLineRect = getBandoriNativeJudgmentLineRect(
         fieldSkin.judgmentLineSpriteHeight,
+        fieldSkin.judgmentLineSpriteWidth,
       );
       judgmentLine.eventMode = "none";
       judgmentLine.position.set(
@@ -1822,15 +2123,14 @@ export default function NativeSimulatorStage({
           localFrameTextures.push(texture);
         }
       }
-      const swipeEffectTextures = limitedEffects
-        ? new Map(limitedEffects.textures)
-        : new Map<string, Texture>([
-            ["tap-set1", tapEffectAtlas1],
-            ["tap-set2", tapEffectAtlas2],
-            ["tap-light", tapEffectLight],
-            ["tap-circle", tapEffectCircle],
-            ["tap-default-particle", tapEffectDefaultParticle],
-          ]);
+      const swipeEffectTextures = new Map<string, Texture>([
+        ["tap-set1", tapEffectAtlas1],
+        ["tap-set2", tapEffectAtlas2],
+        ["tap-light", tapEffectLight],
+        ["tap-circle", tapEffectCircle],
+        ["tap-default-particle", tapEffectDefaultParticle],
+        ...(limitedEffects?.textures.entries() ?? []),
+      ]);
       const longFlashTextures = [
         longFlashTexture0,
         longFlashTexture1,
@@ -1873,7 +2173,7 @@ export default function NativeSimulatorStage({
         allPerfectComboDigitTexture8,
         allPerfectComboDigitTexture9,
       ] as const;
-      if (!limitedEffects) {
+      if (!limitedEffects?.usesDirectionalFlickEffect) {
         directionalEffectFrameTextures.forEach((texture, frame) => {
           swipeEffectTextures.set(`directional-set1:${frame}`, texture);
         });
@@ -1899,7 +2199,7 @@ export default function NativeSimulatorStage({
       touchingFlashLayer.eventMode = "none";
       informationLayer.eventMode = "none";
       app.stage.addChild(
-        background,
+        ...backgroundLayers,
         field,
         directionalLineLayer,
         syncLineLayer,
@@ -2106,7 +2406,14 @@ export default function NativeSimulatorStage({
             flashAnchorX = flash?.anchorX ?? 0.5;
             flashAnchorY = flash?.anchorY ?? 0.5;
           } else {
-            flashTexture = longFlashTextures[head.coveredLanes[0]];
+            const lane = head.coveredLanes[0];
+            flashTexture = longFlashTextures[lane];
+            const anchor = getNativeSpriteAnchor(
+              noteSpriteAnchors,
+              `note_long_flash_${lane}`,
+            );
+            flashAnchorX = anchor.x;
+            flashAnchorY = anchor.y;
           }
           if (!flashTexture) continue;
           const holdRangeWidth = state.ribbon.kind === "long"
@@ -2255,6 +2562,7 @@ export default function NativeSimulatorStage({
               group,
               frameTextures,
               habahiroTextures,
+              noteSpriteAnchors,
               rhythmSupportTexture,
               isRhythmSupportNote,
               directionalLineLeftTexture,
@@ -2271,9 +2579,16 @@ export default function NativeSimulatorStage({
 
           let isGroupVisible = true;
           for (const note of display.notes) {
-            note.body.texture = rhythmSupportEnabledRef.current && note.rhythmSupportTexture
-              ? note.rhythmSupportTexture
+            const useRhythmSupport = rhythmSupportEnabledRef.current
+              && note.rhythmSupportTexture
+              && note.rhythmSupportAnchor;
+            note.body.texture = useRhythmSupport
+              ? note.rhythmSupportTexture!
               : note.baseBodyTexture;
+            const bodyAnchor = useRhythmSupport
+              ? note.rhythmSupportAnchor!
+              : note.baseBodyAnchor;
+            note.body.anchor.set(bodyAnchor.x, bodyAnchor.y);
             const ribbonNode = ribbonPointByNoteIndex[index];
             const ribbonPoint = ribbonNode?.ribbon.points[ribbonNode.pointIndex];
             const projected = ribbonNode && ribbonPoint
@@ -2384,7 +2699,10 @@ export default function NativeSimulatorStage({
                 + (event.terminalLane - event.lane)
                 * BANDORI_NATIVE_JUDGMENT_LANE_SPACING_PIXELS;
 
-            if (limitedEffects) {
+            const useLimitedEffect = event.kind.startsWith("directional-")
+              ? limitedEffects?.usesDirectionalFlickEffect === true
+              : limitedEffects?.usesTapEffect === true;
+            if (limitedEffects && useLimitedEffect) {
               const semantic = getLimitedMainEffectRecipeKey(event.kind);
               const recipe = limitedEffects.recipes.get(semantic);
               if (!recipe) {
@@ -2590,6 +2908,7 @@ export default function NativeSimulatorStage({
       }
     };
   }, [
+    backgroundSkin,
     compiled,
     directionalFlickSkin,
     fieldSkin,
@@ -2598,6 +2917,7 @@ export default function NativeSimulatorStage({
     isMirrored,
     limitedPerformanceSkin,
     noteSkin,
+    resolveAssetUrl,
   ]);
 
   const statusLabel = status === "rendererError"

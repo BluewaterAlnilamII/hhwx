@@ -3,7 +3,10 @@
 import type { ReactNode } from "react";
 import { Check, X } from "lucide-react";
 import { useTranslations } from "next-intl";
-import type { BandoriNativeFieldSkin } from "./native-stage-contract";
+import type {
+  BandoriNativeBackgroundSkin,
+  BandoriNativeFieldSkin,
+} from "./native-stage-contract";
 import {
   BANDORI_NATIVE_DIRECTIONAL_FLICK_SKINS,
   BANDORI_NATIVE_NOTE_SKINS,
@@ -20,6 +23,8 @@ import {
 } from "./limited-performance-skins";
 
 type SimulatorSkinControlsProps = {
+  backgroundSkin: BandoriNativeBackgroundSkin;
+  backgroundSkins: readonly BandoriNativeBackgroundSkin[];
   directionalFlickSkin: BandoriNativeDirectionalFlickSkin;
   fieldSkin: BandoriNativeFieldSkin;
   fieldSkins: readonly BandoriNativeFieldSkin[];
@@ -29,6 +34,7 @@ type SimulatorSkinControlsProps = {
   isSyncLineEnabled: boolean;
   limitedPerformanceSkin: BandoriLimitedPerformanceSkin | null;
   noteSkin: BandoriNativeNoteSkin;
+  onBackgroundSkinChange: (skin: BandoriNativeBackgroundSkin) => void;
   onDirectionalFlickSkinChange: (skin: BandoriNativeDirectionalFlickSkin) => void;
   onFieldSkinChange: (skin: BandoriNativeFieldSkin) => void;
   onAllPerfectStatusEnabledChange: (isEnabled: boolean) => void;
@@ -123,6 +129,8 @@ export function SimulatorBooleanControl({
 
 /** Organizes only the statically verified JP skin choices admitted by the simulator contract. */
 export default function SimulatorSkinControls({
+  backgroundSkin,
+  backgroundSkins,
   directionalFlickSkin,
   fieldSkin,
   fieldSkins,
@@ -132,6 +140,7 @@ export default function SimulatorSkinControls({
   isSyncLineEnabled,
   limitedPerformanceSkin,
   noteSkin,
+  onBackgroundSkinChange,
   onDirectionalFlickSkinChange,
   onFieldSkinChange,
   onAllPerfectStatusEnabledChange,
@@ -245,14 +254,25 @@ export default function SimulatorSkinControls({
           ))}
         </SkinControlRow>
 
-        <SkinControlRow label={t("backgroundStyle")}>
-          <button
-            type="button"
-            aria-pressed="true"
-            className={choiceClassName(true)}
-          >
-            skin00
-          </button>
+        <SkinControlRow
+          label={t("backgroundStyle")}
+          overriddenLabel={overrides.has("background") ? overriddenLabel : undefined}
+        >
+          {backgroundSkins.map((skin) => (
+            <button
+              key={skin.id}
+              type="button"
+              aria-pressed={backgroundSkin.id === skin.id}
+              className={choiceClassName(
+                backgroundSkin.id === skin.id,
+                overrides.has("background"),
+              )}
+              disabled={overrides.has("background")}
+              onClick={() => onBackgroundSkinChange(skin)}
+            >
+              {t(`backgroundSkin.${skin.id}`)}
+            </button>
+          ))}
         </SkinControlRow>
 
         <SkinControlRow label={t("syncLine")}>

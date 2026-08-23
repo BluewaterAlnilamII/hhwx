@@ -9,7 +9,22 @@ import {
   upperBoundBandoriNoteTime,
 } from "./native-note-presentation";
 
-export type BandoriNativeTapSeSkinId = 0 | 1 | 2 | 3 | "persona";
+export type BandoriNativeTapSeSkinId =
+  | 0
+  | 1
+  | 2
+  | 3
+  | "april2018"
+  | "april2019"
+  | "april2021"
+  | "cafe"
+  | "coin"
+  | "delta"
+  | "maid"
+  | "miku"
+  | "persona"
+  | "stage"
+  | "witch";
 
 export type BandoriNativeNoteSoundCue =
   | "perfect"
@@ -65,8 +80,8 @@ function createTapSeSkin(id: BandoriNativeTapSeSkinId): BandoriNativeTapSeSkin {
 }
 
 /**
- * The four JP TapSE packs are retained as data so a later approved selector
- * changes only this input. The current simulator intentionally fixes skin00.
+ * The ordinary selector exposes all four JP TapSE packs and defaults to skin00.
+ * A limited-performance overlay may replace this input with its verified bank.
  */
 export const BANDORI_NATIVE_TAP_SE_SKINS = [
   createTapSeSkin(0),
@@ -96,7 +111,7 @@ const DIRECTIONAL_CUE_URLS = {
 const SKILL_CUE_URL = `${SOUND_ROOT}/common/RhythmGameSE/SE_RHYTHM_TAP_SKILL.wav`;
 
 export function getBandoriNativeNoteSoundCueUrls(
-  skin: BandoriNativeTapSeSkin = BANDORI_NATIVE_TAP_SE_SKIN,
+  skin: BandoriNativeTapSeSkin,
 ): Readonly<Record<BandoriNativeNoteSoundCue, string>> {
   return {
     ...skin.cueUrls,

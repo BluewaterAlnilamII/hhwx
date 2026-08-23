@@ -12,6 +12,47 @@ const DEFAULT_FIXED_STEP_SECONDS = 1 / 120;
 const CALIBRATED_DAMPEN_STEPS_PER_SECOND = 30;
 const UINT32_RANGE = 0x1_0000_0000;
 const EPSILON = 1e-9;
+const BOUNDED_CUSTOM_MESH_PROFILES: ReadonlyMap<string, Readonly<{
+  indexCount: number;
+  name: string;
+  profile: string;
+  rawObjectSha256: string;
+  vertexCount: number;
+}>> = new Map([
+  [
+    "3077011630755533612",
+    {
+      indexCount: 240,
+      name: "screwTowerLow",
+      profile: "witch-screw-tower-low-v1",
+      rawObjectSha256:
+        "29ebb9c3f84ab4081b3751ba663e8ba2da95de0bb9397489eff59f6460aafb9d",
+      vertexCount: 82,
+    },
+  ],
+  [
+    "6557177055925279836",
+    {
+      indexCount: 768,
+      name: "crossCylinder",
+      profile: "witch-cross-cylinder-v1",
+      rawObjectSha256:
+        "5b2b0f8978cf1bdb6ebcd0a4a9495e3bfb9c2c3d4b9338aa8c046dc8f7a65c27",
+      vertexCount: 448,
+    },
+  ],
+  [
+    "7141092885653479763",
+    {
+      indexCount: 96,
+      name: "screwTower",
+      profile: "witch-screw-tower-v1",
+      rawObjectSha256:
+        "e7e2328d60c428527f7d0b545ce86d4ed70e308e6d1025818b8ba8b86084242a",
+      vertexCount: 35,
+    },
+  ],
+]);
 const TWO_PI = Math.PI * 2;
 const ZERO_CURVE: MinMaxCurve = { mode: "constant", value: 0 };
 
@@ -43,16 +84,28 @@ export interface BandoriEffectStretchFrame {
   rotateWithStretchDirection: boolean;
 }
 
+export interface BandoriEffectMeshFrame {
+  pathId: string;
+  vertices: Float32Array;
+  uvs: Float32Array;
+  indices: Uint32Array;
+  uvOffsetU: number;
+}
+
+type BandoriEffectTextureAddressMode = "clamp-to-edge" | "repeat";
+
 export interface BandoriEffectFrameInstance {
   hierarchyPath: string;
   particleIndex: number;
   materialId: string;
   textureResource: string;
+  textureAddressModeU: BandoriEffectTextureAddressMode;
+  textureAddressModeV: BandoriEffectTextureAddressMode;
   blendSource: string;
   blendDestination: string;
   blendEquation: string;
   premultipliedAlpha: boolean;
-  rendererMode: "billboard" | "stretched-billboard";
+  rendererMode: "billboard" | "mesh" | "stretched-billboard";
   screenX: number;
   screenY: number;
   depth: number;
@@ -63,6 +116,7 @@ export interface BandoriEffectFrameInstance {
   heightPixels: number;
   color: BandoriEffectColor;
   uv: BandoriEffectUvFrame;
+  mesh: BandoriEffectMeshFrame | null;
   stretch: BandoriEffectStretchFrame | null;
   sortingLayerId: number;
   sortingOrder: number;
@@ -122,6 +176,7 @@ interface CurveKey {
   value: number;
   inSlope: number;
   outSlope: number;
+  stepAfter: boolean;
 }
 
 interface AnimationCurve {
@@ -184,7 +239,21 @@ interface ShapeTransform {
   scale: Vec3;
 }
 
+interface ArcSpec {
+  degrees: number;
+  mode: "burst-spread" | "random";
+}
+
 type ShapeSpec =
+  | {
+      type: "sphere";
+      transform: ShapeTransform;
+      radius: number;
+      innerRadius: number;
+      randomDirectionAmount: number;
+      sphericalDirectionAmount: number;
+      randomPositionAmount: number;
+    }
   | {
       type: "box";
       transform: ShapeTransform;
@@ -199,7 +268,7 @@ type ShapeSpec =
       transform: ShapeTransform;
       radius: number;
       innerRadius: number;
-      arcDegrees: number;
+      arc: ArcSpec;
       randomDirectionAmount: number;
       sphericalDirectionAmount: number;
       randomPositionAmount: number;
@@ -209,7 +278,7 @@ type ShapeSpec =
       transform: ShapeTransform;
       radius: number;
       innerRadius: number;
-      arcDegrees: number;
+      arc: ArcSpec;
       angleDegrees: number;
       length: number;
       emissionSurface: string;
@@ -261,20 +330,39 @@ interface LimitVelocityModule {
   multiplyDragByParticleVelocity: boolean;
 }
 
+interface VelocityModule {
+  space: "local" | "world";
+  x: MinMaxCurve;
+  y: MinMaxCurve;
+  z: MinMaxCurve;
+  speedModifier: MinMaxCurve;
+  orbitalZ: MinMaxCurve | null;
+}
+
 interface MaterialSpec {
   id: string;
   textureResource: string;
+  textureAddressModeU: BandoriEffectTextureAddressMode;
+  textureAddressModeV: BandoriEffectTextureAddressMode;
   blendSource: string;
   blendDestination: string;
   blendEquation: string;
   premultipliedAlpha: boolean;
 }
 
+interface MeshSpec {
+  pathId: string;
+  vertices: Float32Array;
+  uvs: Float32Array;
+  indices: Uint32Array;
+}
+
 interface RendererSpec {
   enabled: boolean;
-  mode: "billboard" | "stretched-billboard";
+  mode: "billboard" | "mesh" | "stretched-billboard";
   alignment: "view" | "local";
   material: MaterialSpec | null;
+  mesh: MeshSpec | null;
   sortingLayerId: number;
   sortingOrder: number;
   sortingFudge: number;
@@ -303,11 +391,15 @@ interface CompiledSystem {
   shape: ShapeSpec | null;
   colorOverLifetime: MinMaxGradient | null;
   sizeOverLifetimeX: MinMaxCurve | null;
+  sizeOverLifetimeY: MinMaxCurve | null;
+  sizeOverLifetimeZ: MinMaxCurve | null;
   rotationOverLifetimeX: MinMaxCurve | null;
   rotationOverLifetimeY: MinMaxCurve | null;
   rotationOverLifetimeZ: MinMaxCurve | null;
   textureSheet: TextureSheetModule | null;
+  velocityOverLifetime: VelocityModule | null;
   limitVelocity: LimitVelocityModule | null;
+  customDataVector0W: MinMaxCurve | null;
   renderer: RendererSpec;
   worldPosition: Vec3;
   worldRotation: Quaternion;
@@ -405,6 +497,17 @@ function text(value: unknown, path: string): string {
   return value;
 }
 
+function textureAddressMode(
+  value: unknown,
+  path: string,
+): BandoriEffectTextureAddressMode {
+  const result = text(value, path);
+  if (result !== "clamp-to-edge" && result !== "repeat") {
+    fail(path, "unsupported texture address mode");
+  }
+  return result;
+}
+
 function array(value: unknown, path: string): unknown[] {
   if (!Array.isArray(value)) fail(path, "expected array");
   return value;
@@ -459,7 +562,7 @@ function curveKey(value: unknown, path: string): CurveKey {
     "time",
     "value",
     "weightedMode",
-  ]);
+  ], ["stepAfter"]);
   if (source.weightedMode !== "none") {
     fail(`${path}.weightedMode`, "only none is supported");
   }
@@ -470,6 +573,9 @@ function curveKey(value: unknown, path: string): CurveKey {
     value: finite(source.value, `${path}.value`),
     inSlope: finite(source.inSlope, `${path}.inSlope`),
     outSlope: finite(source.outSlope, `${path}.outSlope`),
+    stepAfter: source.stepAfter === undefined
+      ? false
+      : bool(source.stepAfter, `${path}.stepAfter`),
   };
 }
 
@@ -670,6 +776,7 @@ function evaluateAnimationCurve(curve: AnimationCurve, input: number): number {
     const left = keys[index - 1];
     const duration = right.time - left.time;
     if (duration <= EPSILON) return right.value;
+    if (left.stepAfter) return left.value;
     const amount = (input - left.time) / duration;
     const amount2 = amount * amount;
     const amount3 = amount2 * amount;
@@ -844,18 +951,6 @@ function evaluateGradient(
 }
 
 /** Strict standalone evaluator used by tests and dev tooling. */
-export function evaluateBandoriEffectCurve(
-  source: unknown,
-  domainValue: number,
-  random01: number,
-): number {
-  if (!Number.isFinite(domainValue) || !Number.isFinite(random01)) {
-    throw new Error("Bandori effect curve inputs must be finite");
-  }
-  return evaluateCurve(minMaxCurve(source, "curve"), domainValue, random01);
-}
-
-/** Strict standalone evaluator used by tests and dev tooling. */
 export function evaluateBandoriEffectGradient(
   source: unknown,
   domainValue: number,
@@ -914,13 +1009,30 @@ function parseShapeDirection(
   };
 }
 
-function parseArc(value: unknown, path: string): number {
+function parseArc(value: unknown, path: string): ArcSpec {
   const source = record(value, path);
   exactKeys(source, path, ["degrees", "mode", "speed", "spread"]);
-  if (source.mode !== "random") fail(`${path}.mode`, "only random arc is supported");
-  minMaxCurve(source.speed, `${path}.speed`);
-  finite(source.spread, `${path}.spread`);
-  return finite(source.degrees, `${path}.degrees`);
+  if (source.mode !== "random" && source.mode !== "burst-spread") {
+    fail(`${path}.mode`, "unsupported arc mode");
+  }
+  const speed = minMaxCurve(source.speed, `${path}.speed`);
+  const spread = finite(source.spread, `${path}.spread`);
+  const degrees = finite(source.degrees, `${path}.degrees`);
+  if (source.mode === "burst-spread") {
+    if (Math.abs(spread) > EPSILON) {
+      fail(`${path}.spread`, "burst-spread approximation requires zero spread");
+    }
+    if (Math.abs(degrees - 360) > EPSILON) {
+      fail(`${path}.degrees`, "burst-spread approximation requires a full arc");
+    }
+    if (speed.mode !== "constant" || Math.abs(speed.value - 1) > EPSILON) {
+      fail(`${path}.speed`, "burst-spread approximation requires constant speed 1");
+    }
+  }
+  return {
+    degrees,
+    mode: source.mode,
+  };
 }
 
 function parseRadius(
@@ -946,6 +1058,26 @@ function shape(value: unknown, path: string): ShapeSpec {
   }
   const direction = parseShapeDirection(source.direction, `${path}.direction`);
   const transform = parseShapeTransform(source.transform, `${path}.transform`);
+  if (type === "sphere") {
+    exactKeys(source, path, [
+      "direction",
+      "distribution",
+      "radius",
+      "transform",
+      "type",
+    ]);
+    if (distribution.algorithm !== "bounded-sphere-shell") {
+      fail(`${path}.distribution.algorithm`, "unsupported sphere algorithm");
+    }
+    const radius = parseRadius(source.radius, `${path}.radius`);
+    return {
+      type,
+      transform,
+      radius: radius.outer,
+      innerRadius: radius.inner,
+      ...direction,
+    };
+  }
   if (type === "box") {
     exactKeys(source, path, [
       "boxThickness",
@@ -984,7 +1116,7 @@ function shape(value: unknown, path: string): ShapeSpec {
       transform,
       radius: radius.outer,
       innerRadius: radius.inner,
-      arcDegrees: parseArc(source.arc, `${path}.arc`),
+      arc: parseArc(source.arc, `${path}.arc`),
       ...direction,
     };
   }
@@ -1009,7 +1141,7 @@ function shape(value: unknown, path: string): ShapeSpec {
       transform,
       radius: radius.outer,
       innerRadius: radius.inner,
-      arcDegrees: parseArc(source.arc, `${path}.arc`),
+      arc: parseArc(source.arc, `${path}.arc`),
       angleDegrees: finite(source.angleDegrees, `${path}.angleDegrees`),
       length: finite(source.lengthWorldUnits, `${path}.lengthWorldUnits`),
       emissionSurface: text(source.emissionSurface, `${path}.emissionSurface`),
@@ -1198,6 +1330,35 @@ function limitVelocityModule(value: unknown, path: string): LimitVelocityModule 
   };
 }
 
+function velocityModule(value: unknown, path: string): VelocityModule {
+  const source = record(value, path);
+  exactKeys(source, path, ["space", "speedModifier", "x", "y", "z"], ["orbitalZ"]);
+  if (source.space !== "local" && source.space !== "world") {
+    fail(`${path}.space`, "unsupported velocity space");
+  }
+  const orbitalZ = source.orbitalZ === undefined
+    ? null
+    : minMaxCurve(source.orbitalZ, `${path}.orbitalZ`);
+  if (
+    orbitalZ !== null
+    && (
+      source.space !== "world"
+      || orbitalZ.mode !== "constant"
+      || Math.abs(orbitalZ.value + 4) > EPSILON
+    )
+  ) {
+    fail(`${path}.orbitalZ`, "unsupported orbital Z approximation profile");
+  }
+  return {
+    space: source.space,
+    x: minMaxCurve(source.x, `${path}.x`),
+    y: minMaxCurve(source.y, `${path}.y`),
+    z: minMaxCurve(source.z, `${path}.z`),
+    speedModifier: minMaxCurve(source.speedModifier, `${path}.speedModifier`),
+    orbitalZ,
+  };
+}
+
 function particlePool(capacity: number): ParticlePool {
   return {
     alive: new Uint8Array(capacity),
@@ -1229,7 +1390,22 @@ function parseMaterials(value: unknown, path: string): Map<string, MaterialSpec>
   for (const [id, rawMaterial] of Object.entries(source)) {
     const materialPath = `${path}.${id}`;
     const material = record(rawMaterial, materialPath);
-    exactKeys(material, materialPath, ["mainTexture", "shader"]);
+    exactKeys(material, materialPath, ["mainTexture", "shader"], ["sampler"]);
+    let textureAddressModeU: BandoriEffectTextureAddressMode = "repeat";
+    let textureAddressModeV: BandoriEffectTextureAddressMode = "clamp-to-edge";
+    if (material.sampler !== undefined) {
+      const samplerPath = `${materialPath}.sampler`;
+      const sampler = record(material.sampler, samplerPath);
+      exactKeys(sampler, samplerPath, ["addressModeU", "addressModeV"]);
+      textureAddressModeU = textureAddressMode(
+        sampler.addressModeU,
+        `${samplerPath}.addressModeU`,
+      );
+      textureAddressModeV = textureAddressMode(
+        sampler.addressModeV,
+        `${samplerPath}.addressModeV`,
+      );
+    }
     const shader = record(material.shader, `${materialPath}.shader`);
     exactKeys(shader, `${materialPath}.shader`, ["blend"]);
     const blend = record(shader.blend, `${materialPath}.shader.blend`);
@@ -1246,6 +1422,8 @@ function parseMaterials(value: unknown, path: string): Map<string, MaterialSpec>
     result.set(id, {
       id,
       textureResource: text(material.mainTexture, `${materialPath}.mainTexture`),
+      textureAddressModeU,
+      textureAddressModeV,
       blendSource: text(blend.source, `${materialPath}.shader.blend.source`),
       blendDestination: text(
         blend.destination,
@@ -1261,10 +1439,73 @@ function parseMaterials(value: unknown, path: string): Map<string, MaterialSpec>
   return result;
 }
 
+function parseMeshes(value: unknown, path: string): Map<string, MeshSpec> {
+  const source = record(value, path);
+  const result = new Map<string, MeshSpec>();
+  for (const [id, rawMesh] of Object.entries(source)) {
+    const meshPath = `${path}.${id}`;
+    const mesh = record(rawMesh, meshPath);
+    exactKeys(mesh, meshPath, [
+      "indices",
+      "name",
+      "pathId",
+      "profile",
+      "rawObjectSha256",
+      "uvs",
+      "vertices",
+    ]);
+    const expected = BOUNDED_CUSTOM_MESH_PROFILES.get(id);
+    if (!expected) fail(meshPath, "mesh path is outside the Witch allowlist");
+    if (text(mesh.pathId, `${meshPath}.pathId`) !== id) {
+      fail(`${meshPath}.pathId`, "does not match the mesh registry key");
+    }
+    if (mesh.profile !== expected.profile || mesh.name !== expected.name) {
+      fail(meshPath, "mesh profile identity changed");
+    }
+    if (
+      text(mesh.rawObjectSha256, `${meshPath}.rawObjectSha256`)
+      !== expected.rawObjectSha256
+    ) {
+      fail(`${meshPath}.rawObjectSha256`, "mesh source hash changed");
+    }
+    const rawVertices = array(mesh.vertices, `${meshPath}.vertices`);
+    const rawUvs = array(mesh.uvs, `${meshPath}.uvs`);
+    const rawIndices = array(mesh.indices, `${meshPath}.indices`);
+    if (rawVertices.length !== expected.vertexCount * 3) {
+      fail(`${meshPath}.vertices`, "unexpected vertex count");
+    }
+    if (rawUvs.length !== expected.vertexCount * 2) {
+      fail(`${meshPath}.uvs`, "unexpected UV count");
+    }
+    if (rawIndices.length !== expected.indexCount) {
+      fail(`${meshPath}.indices`, "unexpected index count");
+    }
+    const vertices = new Float32Array(rawVertices.length);
+    for (let index = 0; index < rawVertices.length; index += 1) {
+      vertices[index] = finite(rawVertices[index], `${meshPath}.vertices[${index}]`);
+    }
+    const uvs = new Float32Array(rawUvs.length);
+    for (let index = 0; index < rawUvs.length; index += 1) {
+      uvs[index] = finite(rawUvs[index], `${meshPath}.uvs[${index}]`);
+    }
+    const indices = new Uint32Array(rawIndices.length);
+    for (let index = 0; index < rawIndices.length; index += 1) {
+      const vertexIndex = integer(rawIndices[index], `${meshPath}.indices[${index}]`);
+      if (vertexIndex < 0 || vertexIndex >= expected.vertexCount) {
+        fail(`${meshPath}.indices[${index}]`, "index is outside the vertex array");
+      }
+      indices[index] = vertexIndex;
+    }
+    result.set(id, { pathId: id, vertices, uvs, indices });
+  }
+  return result;
+}
+
 function parseRenderer(
   value: unknown,
   path: string,
   materials: ReadonlyMap<string, MaterialSpec>,
+  meshes: ReadonlyMap<string, MeshSpec>,
 ): RendererSpec {
   const source = record(value, path);
   exactKeys(source, path, [
@@ -1276,13 +1517,36 @@ function parseRenderer(
     "meshDistribution",
     "mode",
     "stretch",
-  ]);
+  ], ["mesh"]);
   if (source.alignment !== "view" && source.alignment !== "local") {
     fail(`${path}.alignment`, "unsupported renderer alignment");
   }
   const mode = text(source.mode, `${path}.mode`);
-  if (mode !== "billboard" && mode !== "stretched-billboard") {
+  if (mode !== "billboard" && mode !== "mesh" && mode !== "stretched-billboard") {
     fail(`${path}.mode`, `unsupported renderer mode ${mode}`);
+  }
+  let resolvedMesh: MeshSpec | null = null;
+  if (mode === "mesh") {
+    const mesh = record(source.mesh, `${path}.mesh`);
+    exactKeys(mesh, `${path}.mesh`, ["fileId", "geometry", "pathId"]);
+    const fileId = integer(mesh.fileId, `${path}.mesh.fileId`);
+    const isBuiltinQuad =
+      mesh.geometry === "unity-builtin-quad"
+      && fileId === 1
+      && integer(mesh.pathId, `${path}.mesh.pathId`) === 10210;
+    const customMeshPathId = fileId === 0
+      ? text(mesh.pathId, `${path}.mesh.pathId`)
+      : null;
+    const isBoundedCustomMesh =
+      mesh.geometry === "bounded-custom-mesh"
+      && customMeshPathId !== null
+      && meshes.has(customMeshPathId);
+    if (!isBuiltinQuad && !isBoundedCustomMesh) {
+      fail(`${path}.mesh`, "unsupported mesh profile");
+    }
+    resolvedMesh = isBoundedCustomMesh ? meshes.get(customMeshPathId!) ?? null : null;
+  } else if (source.mesh !== undefined) {
+    fail(`${path}.mesh`, "mesh geometry requires mesh renderer mode");
   }
   finite(source.meshDistribution, `${path}.meshDistribution`);
   const billboard = record(source.billboard, `${path}.billboard`);
@@ -1340,6 +1604,7 @@ function parseRenderer(
     mode,
     alignment: source.alignment,
     material: material ?? null,
+    mesh: resolvedMesh,
     sortingLayerId: integer(draw.sortingLayerId, `${path}.draw.sortingLayerId`),
     sortingOrder: integer(draw.sortingOrder, `${path}.draw.sortingOrder`),
     sortingFudge: finite(draw.sortingFudge, `${path}.draw.sortingFudge`),
@@ -1408,6 +1673,14 @@ function eulerDegreesQuaternion(value: Vec3): Quaternion {
   );
 }
 
+function eulerRadiansQuaternion(value: Vec3): Quaternion {
+  return eulerDegreesQuaternion({
+    x: (value.x * 180) / Math.PI,
+    y: (value.y * 180) / Math.PI,
+    z: (value.z * 180) / Math.PI,
+  });
+}
+
 function projectedZRotation(rotation: Quaternion): number {
   return Math.atan2(
     2 * (rotation.w * rotation.z + rotation.x * rotation.y),
@@ -1447,6 +1720,7 @@ function parseNode(
   value: unknown,
   path: string,
   materials: ReadonlyMap<string, MaterialSpec>,
+  meshes: ReadonlyMap<string, MeshSpec>,
   systems: CompiledSystem[],
   parentPosition: Vec3,
   parentRotation: Quaternion,
@@ -1538,8 +1812,15 @@ function parseNode(
     if (particle.stopAction !== "none") {
       fail(`${particlePath}.stopAction`, "unsupported stop action");
     }
-    if (particle.seedMode !== "runtime-auto") {
+    if (particle.seedMode !== "runtime-auto" && particle.seedMode !== "serialized") {
       fail(`${particlePath}.seedMode`, "unsupported seed mode");
+    }
+    const autoRandomSeed = bool(
+      particle.autoRandomSeed,
+      `${particlePath}.autoRandomSeed`,
+    );
+    if ((particle.seedMode === "runtime-auto") !== autoRandomSeed) {
+      fail(`${particlePath}.seedMode`, "seed mode disagrees with autoRandomSeed");
     }
     const simulationSpace = text(
       particle.simulationSpace,
@@ -1556,6 +1837,7 @@ function parseNode(
     const modules = record(particle.modules, `${particlePath}.modules`);
     const supportedModules = new Set([
       "colorOverLifetime",
+      "customData",
       "emission",
       "initial",
       "limitVelocityOverLifetime",
@@ -1563,6 +1845,7 @@ function parseNode(
       "shape",
       "sizeOverLifetime",
       "textureSheetAnimation",
+      "velocityOverLifetime",
     ]);
     for (const moduleName of Object.keys(modules)) {
       if (!supportedModules.has(moduleName)) {
@@ -1578,12 +1861,18 @@ function parseNode(
         ? { rateOverTime: ZERO_CURVE, rateOverDistance: ZERO_CURVE, bursts: [] }
         : emissionModule(modules.emission, `${particlePath}.modules.emission`);
     let sizeOverLifetimeX: MinMaxCurve | null = null;
+    let sizeOverLifetimeY: MinMaxCurve | null = null;
+    let sizeOverLifetimeZ: MinMaxCurve | null = null;
     if (modules.sizeOverLifetime !== undefined) {
       const modulePath = `${particlePath}.modules.sizeOverLifetime`;
       const size = record(modules.sizeOverLifetime, modulePath);
-      exactKeys(size, modulePath, ["separateAxes", "x"]);
-      if (bool(size.separateAxes, `${modulePath}.separateAxes`)) {
-        fail(`${modulePath}.separateAxes`, "outside the frozen profile");
+      const separateAxes = bool(size.separateAxes, `${modulePath}.separateAxes`);
+      if (separateAxes) {
+        exactKeys(size, modulePath, ["separateAxes", "x", "y", "z"]);
+        sizeOverLifetimeY = minMaxCurve(size.y, `${modulePath}.y`);
+        sizeOverLifetimeZ = minMaxCurve(size.z, `${modulePath}.z`);
+      } else {
+        exactKeys(size, modulePath, ["separateAxes", "x"]);
       }
       sizeOverLifetimeX = minMaxCurve(size.x, `${modulePath}.x`);
     }
@@ -1604,7 +1893,40 @@ function parseNode(
         rotationZ = minMaxCurve(rotation.z, `${modulePath}.z`);
       }
     }
-    const renderer = parseRenderer(source.renderer, `${path}.renderer`, materials);
+    const renderer = parseRenderer(
+      source.renderer,
+      `${path}.renderer`,
+      materials,
+      meshes,
+    );
+    const velocityOverLifetime = modules.velocityOverLifetime === undefined
+      ? null
+      : velocityModule(
+          modules.velocityOverLifetime,
+          `${particlePath}.modules.velocityOverLifetime`,
+        );
+    const limitVelocity = modules.limitVelocityOverLifetime === undefined
+      ? null
+      : limitVelocityModule(
+          modules.limitVelocityOverLifetime,
+          `${particlePath}.modules.limitVelocityOverLifetime`,
+        );
+    let customDataVector0W: MinMaxCurve | null = null;
+    if (modules.customData !== undefined) {
+      const customDataPath = `${particlePath}.modules.customData`;
+      const customData = record(modules.customData, customDataPath);
+      exactKeys(customData, customDataPath, ["profile", "vector0W"]);
+      if (
+        customData.profile !== "witch-vector0-w-uv-scroll-u-v1"
+        || renderer.mesh === null
+      ) {
+        fail(`${customDataPath}.profile`, "unsupported Witch UV-scroll profile");
+      }
+      customDataVector0W = minMaxCurve(
+        customData.vector0W,
+        `${customDataPath}.vector0W`,
+      );
+    }
     if (included) {
       systems.push({
         hierarchyPath,
@@ -1644,6 +1966,8 @@ function parseNode(
                 return minMaxGradient(colorModule.color, `${modulePath}.color`);
               })(),
         sizeOverLifetimeX,
+        sizeOverLifetimeY,
+        sizeOverLifetimeZ,
         rotationOverLifetimeX: rotationX,
         rotationOverLifetimeY: rotationY,
         rotationOverLifetimeZ: rotationZ,
@@ -1654,18 +1978,14 @@ function parseNode(
                 modules.textureSheetAnimation,
                 `${particlePath}.modules.textureSheetAnimation`,
               ),
-        limitVelocity:
-          modules.limitVelocityOverLifetime === undefined
-            ? null
-            : limitVelocityModule(
-                modules.limitVelocityOverLifetime,
-                `${particlePath}.modules.limitVelocityOverLifetime`,
-              ),
+        velocityOverLifetime,
+        limitVelocity,
+        customDataVector0W,
         renderer,
         worldPosition: world.position,
         worldRotation: world.rotation,
         worldScale: world.scale,
-        autoRandomSeed: bool(particle.autoRandomSeed, `${particlePath}.autoRandomSeed`),
+        autoRandomSeed,
         serializedRandomSeed: integer(particle.randomSeed, `${particlePath}.randomSeed`),
         particles: particlePool(initial.maxParticles),
         renderInstances: createRenderInstances(
@@ -1684,6 +2004,7 @@ function parseNode(
       children[index],
       `${path}.children[${index}]`,
       materials,
+      meshes,
       systems,
       world.position,
       world.rotation,
@@ -1702,7 +2023,7 @@ function compileRecipe(value: unknown): CompiledRecipe {
     "placement",
     "root",
     "schemaVersion",
-  ]);
+  ], ["meshes"]);
   if (source.schemaVersion !== BANDORI_DEFAULT_EFFECT_RECIPE_SCHEMA) {
     fail("recipe.schemaVersion", "unsupported schema");
   }
@@ -1759,11 +2080,13 @@ function compileRecipe(value: unknown): CompiledRecipe {
     fail("recipe.placement", "source and screen buttons must have the same length");
   }
   const materials = parseMaterials(source.materials, "recipe.materials");
+  const meshes = parseMeshes(source.meshes ?? {}, "recipe.meshes");
   const systems: CompiledSystem[] = [];
   parseNode(
     source.root,
     "recipe.root",
     materials,
+    meshes,
     systems,
     { x: 0, y: 0, z: 0 },
     { x: 0, y: 0, z: 0, w: 1 },
@@ -1804,6 +2127,8 @@ function createRenderInstances(
       particleIndex: 0,
       materialId: material?.id ?? "",
       textureResource: material?.textureResource ?? "",
+      textureAddressModeU: material?.textureAddressModeU ?? "repeat",
+      textureAddressModeV: material?.textureAddressModeV ?? "clamp-to-edge",
       blendSource: material?.blendSource ?? "",
       blendDestination: material?.blendDestination ?? "",
       blendEquation: material?.blendEquation ?? "",
@@ -1827,6 +2152,15 @@ function createRenderInstances(
         flipU: false,
         flipV: false,
       },
+      mesh: renderer.mesh
+        ? {
+            pathId: renderer.mesh.pathId,
+            vertices: new Float32Array(renderer.mesh.vertices.length / 3 * 2),
+            uvs: renderer.mesh.uvs,
+            indices: renderer.mesh.indices,
+            uvOffsetU: 0,
+          }
+        : null,
       stretch:
         renderer.mode === "stretched-billboard"
           ? {
@@ -1899,13 +2233,27 @@ function shapeSample(
   spec: ShapeSpec | null,
   seed: number,
   ordinal: number,
+  burstIndex?: number,
+  burstCount?: number,
 ): { position: Vec3; direction: Vec3 } {
   if (!spec) {
     return { position: { x: 0, y: 0, z: 0 }, direction: { x: 0, y: 0, z: 1 } };
   }
   let position: Vec3;
   let direction: Vec3;
-  if (spec.type === "box") {
+  if (spec.type === "sphere") {
+    direction = randomUnitVector(seed, ordinal, 20);
+    const radius = Math.cbrt(lerp(
+      spec.innerRadius ** 3,
+      spec.radius ** 3,
+      keyedRandom(seed, ordinal, 22),
+    ));
+    position = {
+      x: direction.x * radius,
+      y: direction.y * radius,
+      z: direction.z * radius,
+    };
+  } else if (spec.type === "box") {
     position = {
       x: (keyedRandom(seed, ordinal, 20) - 0.5) * spec.dimensions.x,
       y: (keyedRandom(seed, ordinal, 21) - 0.5) * spec.dimensions.y,
@@ -1913,8 +2261,11 @@ function shapeSample(
     };
     direction = { x: 0, y: 0, z: 1 };
   } else {
-    const angle =
-      keyedRandom(seed, ordinal, 20) * ((spec.arcDegrees * Math.PI) / 180);
+    const arcFraction =
+      spec.arc.mode === "burst-spread" && burstCount !== undefined && burstCount > 0
+        ? (burstIndex ?? 0) / burstCount
+        : keyedRandom(seed, ordinal, 20);
+    const angle = arcFraction * ((spec.arc.degrees * Math.PI) / 180);
     const radiusSquared = lerp(
       spec.innerRadius * spec.innerRadius,
       spec.radius * spec.radius,
@@ -1936,6 +2287,11 @@ function shapeSample(
       }
       if (spec.emissionSurface === "volume") {
         position.z = keyedRandom(seed, ordinal, 22) * spec.length;
+        const radiusScale = spec.radius > EPSILON
+          ? (spec.radius + Math.tan(coneAngle) * position.z) / spec.radius
+          : 1;
+        position.x *= radiusScale;
+        position.y *= radiusScale;
       }
     }
   }
@@ -1994,6 +2350,8 @@ function spawnParticle(
   seed: number,
   eventTime: number,
   normalizedSystemTime: number,
+  burstIndex?: number,
+  burstCount?: number,
 ): void {
   const pool = system.particles;
   const slot = findFreeSlot(pool);
@@ -2006,7 +2364,13 @@ function spawnParticle(
     keyedRandom(seed, ordinal, 1),
   );
   if (!(lifetime > 0)) return;
-  const sampledShape = shapeSample(system.shape, seed, ordinal);
+  const sampledShape = shapeSample(
+    system.shape,
+    seed,
+    ordinal,
+    burstIndex,
+    burstCount,
+  );
   const scaledPosition = {
     x: sampledShape.position.x * system.worldScale.x,
     y: sampledShape.position.y * system.worldScale.y,
@@ -2136,7 +2500,7 @@ function emitBursts(
         );
         const eventTime = startDelaySeconds + eventActiveTime / system.simulationSpeed;
         for (let index = 0; index < count; index += 1) {
-          spawnParticle(system, seed, eventTime, normalized);
+          spawnParticle(system, seed, eventTime, normalized, index, count);
         }
       }
     }
@@ -2180,6 +2544,61 @@ function emitRate(
   for (let index = 0; index < count; index += 1) {
     spawnParticle(system, seed, wallEnd, normalized);
   }
+}
+
+function evaluateParticleVelocity(
+  system: CompiledSystem,
+  pool: ParticlePool,
+  slot: number,
+  seed: number,
+  normalizedAge: number,
+): Vec3 {
+  const velocityModule = system.velocityOverLifetime;
+  if (!velocityModule) {
+    return { x: pool.vx[slot], y: pool.vy[slot], z: pool.vz[slot] };
+  }
+  const ordinal = pool.ordinal[slot];
+  let additionalVelocity = {
+    x: evaluateCurve(
+      velocityModule.x,
+      normalizedAge,
+      keyedRandom(seed, ordinal, 126),
+    ),
+    y: evaluateCurve(
+      velocityModule.y,
+      normalizedAge,
+      keyedRandom(seed, ordinal, 127),
+    ),
+    z: evaluateCurve(
+      velocityModule.z,
+      normalizedAge,
+      keyedRandom(seed, ordinal, 128),
+    ),
+  };
+  if (velocityModule.orbitalZ) {
+    const angularVelocity = evaluateCurve(
+      velocityModule.orbitalZ,
+      normalizedAge,
+      keyedRandom(seed, ordinal, 130),
+    );
+    const radialX = pool.x[slot] - system.worldPosition.x;
+    const radialY = pool.y[slot] - system.worldPosition.y;
+    additionalVelocity.x -= radialY * angularVelocity;
+    additionalVelocity.y += radialX * angularVelocity;
+  }
+  if (velocityModule.space === "local") {
+    additionalVelocity = rotateVector(system.worldRotation, additionalVelocity);
+  }
+  const speedModifier = evaluateCurve(
+    velocityModule.speedModifier,
+    normalizedAge,
+    keyedRandom(seed, ordinal, 129),
+  );
+  return {
+    x: (pool.vx[slot] + additionalVelocity.x) * speedModifier,
+    y: (pool.vy[slot] + additionalVelocity.y) * speedModifier,
+    z: (pool.vz[slot] + additionalVelocity.z) * speedModifier,
+  };
 }
 
 function updateParticles(
@@ -2258,9 +2677,16 @@ function updateParticles(
       pool.vy[slot] *= dragScale;
       pool.vz[slot] *= dragScale;
     }
-    pool.x[slot] += pool.vx[slot] * activeDt;
-    pool.y[slot] += pool.vy[slot] * activeDt;
-    pool.z[slot] += pool.vz[slot] * activeDt;
+    const velocity = evaluateParticleVelocity(
+      system,
+      pool,
+      slot,
+      seed,
+      normalizedAge,
+    );
+    pool.x[slot] += velocity.x * activeDt;
+    pool.y[slot] += velocity.y * activeDt;
+    pool.z[slot] += velocity.z * activeDt;
     if (system.rotationOverLifetimeX) {
       pool.rotationX[slot] +=
         evaluateCurve(
@@ -2375,6 +2801,74 @@ function sortFrameInstances(instances: BandoriEffectFrameInstance[], count: numb
     }
     instances[position] = current;
   }
+}
+
+function writeCustomMeshFrame(
+  instance: BandoriEffectFrameInstance,
+  system: CompiledSystem,
+  pool: ParticlePool,
+  slot: number,
+  screenButton: Readonly<{ x: number; y: number }>,
+  pixelsPerWorldUnit: number,
+  sizeMultiplierX: number,
+  sizeMultiplierY: number,
+  sizeMultiplierZ: number,
+  normalizedAge: number,
+  seed: number,
+  ordinal: number,
+): void {
+  const mesh = system.renderer.mesh;
+  const target = instance.mesh;
+  if (!mesh || !target) return;
+  const particleRotation = eulerRadiansQuaternion({
+    x: pool.rotationX[slot],
+    y: pool.rotationY[slot],
+    z: pool.rotationZ[slot],
+  });
+  // View-aligned Mesh particles receive their authored 3D particle rotation in
+  // camera space. Local-aligned particles additionally inherit the hierarchy.
+  const rotation = system.renderer.alignment === "local"
+    ? multiplyQuaternion(system.worldRotation, particleRotation)
+    : particleRotation;
+  const scaleX = pool.sizeX[slot] * system.worldScale.x * sizeMultiplierX;
+  const scaleY = pool.sizeY[slot] * system.worldScale.y * sizeMultiplierY;
+  const scaleZ = pool.sizeZ[slot] * system.worldScale.z * sizeMultiplierZ;
+  let minimumX = Number.POSITIVE_INFINITY;
+  let maximumX = Number.NEGATIVE_INFINITY;
+  let minimumY = Number.POSITIVE_INFINITY;
+  let maximumY = Number.NEGATIVE_INFINITY;
+  for (let index = 0; index < mesh.vertices.length; index += 3) {
+    const projected = rotateVector(rotation, {
+      x: mesh.vertices[index] * scaleX,
+      y: mesh.vertices[index + 1] * scaleY,
+      z: mesh.vertices[index + 2] * scaleZ,
+    });
+    const screenX = screenButton.x + (pool.x[slot] + projected.x) * pixelsPerWorldUnit;
+    const screenY = screenButton.y - (pool.y[slot] + projected.y) * pixelsPerWorldUnit;
+    const targetIndex = (index / 3) * 2;
+    target.vertices[targetIndex] = screenX;
+    target.vertices[targetIndex + 1] = screenY;
+    minimumX = Math.min(minimumX, screenX);
+    maximumX = Math.max(maximumX, screenX);
+    minimumY = Math.min(minimumY, screenY);
+    maximumY = Math.max(maximumY, screenY);
+  }
+  instance.screenX = screenButton.x + pool.x[slot] * pixelsPerWorldUnit;
+  instance.screenY = screenButton.y - pool.y[slot] * pixelsPerWorldUnit;
+  instance.rotationRadians = 0;
+  instance.basisX.x = 1;
+  instance.basisX.y = 0;
+  instance.basisY.x = 0;
+  instance.basisY.y = 1;
+  instance.widthPixels = maximumX - minimumX;
+  instance.heightPixels = maximumY - minimumY;
+  target.uvOffsetU = system.customDataVector0W
+    ? evaluateCurve(
+        system.customDataVector0W,
+        normalizedAge,
+        keyedRandom(seed, ordinal, 147),
+      )
+    : 0;
 }
 
 class DefaultEffectRuntime implements BandoriDefaultEffectRuntime {
@@ -2615,96 +3109,138 @@ class DefaultEffectRuntime implements BandoriDefaultEffectRuntime {
           if (age < 0 || age >= pool.lifetime[slot]) continue;
           const normalizedAge = clamp01(age / pool.lifetime[slot]);
           const ordinal = pool.ordinal[slot];
-          const sizeMultiplier = system.sizeOverLifetimeX
+          const sizeMultiplierX = system.sizeOverLifetimeX
             ? evaluateCurve(
                 system.sizeOverLifetimeX,
                 normalizedAge,
                 keyedRandom(seed, ordinal, 130),
               )
             : 1;
-          const sizeX = Math.abs(pool.sizeX[slot] * system.worldScale.x * sizeMultiplier);
-          const sizeY = Math.abs(pool.sizeY[slot] * system.worldScale.y * sizeMultiplier);
+          const sizeMultiplierY = system.sizeOverLifetimeY
+            ? evaluateCurve(
+                system.sizeOverLifetimeY,
+                normalizedAge,
+                keyedRandom(seed, ordinal, 131),
+              )
+            : sizeMultiplierX;
+          const sizeMultiplierZ = system.sizeOverLifetimeZ
+            ? evaluateCurve(
+                system.sizeOverLifetimeZ,
+                normalizedAge,
+                keyedRandom(seed, ordinal, 132),
+              )
+            : sizeMultiplierX;
+          const sizeX = Math.abs(
+            pool.sizeX[slot] * system.worldScale.x * sizeMultiplierX,
+          );
+          const sizeY = Math.abs(
+            pool.sizeY[slot] * system.worldScale.y * sizeMultiplierY,
+          );
           let renderSizeX = sizeX;
           let renderSizeY = sizeY;
           const instance = system.renderInstances[slot];
           instance.particleIndex = ordinal;
           instance.depth = buttonWorld.z + pool.z[slot];
-          let rotation =
-            pool.rotationZ[slot] +
-            (system.renderer.alignment === "local"
-              ? projectedZRotation(system.worldRotation)
-              : 0);
-          const velocityX = pool.vx[slot] * ppu;
-          const velocityY = -pool.vy[slot] * ppu;
-          if (instance.stretch) {
-            const particleVelocity = Math.hypot(velocityX, velocityY);
-            const cameraVelocity =
-              Math.hypot(this.cameraVelocity.x, this.cameraVelocity.y) * ppu;
-            const length =
-              Math.abs(sizeY * ppu * system.renderer.lengthScale) +
-              particleVelocity * Math.abs(system.renderer.velocityScale) +
-              cameraVelocity * Math.abs(system.renderer.cameraVelocityScale);
-            instance.stretch.velocityPixelsPerSecond = particleVelocity;
-            instance.stretch.lengthPixels = length;
-            if (
-              system.renderer.rotateWithStretchDirection &&
-              particleVelocity > EPSILON
-            ) {
-              /*
-               * The recovered particle atlases author streaks along texture X
-               * (the normal-hit beam and directional-flick taper are both
-               * horizontal inside their cells). Unity's stretched billboard
-               * turns that authored axis onto the particle velocity. Rotating
-               * local Y instead leaves normal hits as horizontal capsules and
-               * turns directional beams away from their recorded travel axis.
-               */
-              rotation = Math.atan2(velocityY, velocityX);
-            }
-            /*
-             * Unity's stretched particle shader maps the authored atlas X
-             * direction to the motion/length axis. Keep the un-stretched X
-             * size as the cross-axis thickness and put the stretch magnitude
-             * on the texture-X extent. Direction is already carried by the
-             * velocity-aligned basis; retaining a negative length here would
-             * mirror the atlas a second time. This matters for the recovered
-             * horizontal taper cells: normal hits become vertical columns,
-             * while left/right flicks remain long horizontal beams.
-             */
-            renderSizeX = length / ppu;
-            renderSizeY = sizeX;
-          }
-          const cos = Math.cos(rotation);
-          const sin = Math.sin(rotation);
-          const pivotX = system.renderer.pivot.x * renderSizeX;
-          const pivotY = system.renderer.pivot.y * renderSizeY;
-          const worldX = pool.x[slot] + pivotX * cos - pivotY * sin;
-          const worldY = pool.y[slot] + pivotX * sin + pivotY * cos;
-          instance.screenX = buttonScreen.x + worldX * ppu;
-          instance.screenY = buttonScreen.y - worldY * ppu;
-          instance.rotationRadians = rotation;
-          if (system.renderer.alignment === "local") {
-            const localRight = rotateVector(system.worldRotation, {
-              x: cos,
-              y: sin,
-              z: 0,
-            });
-            const localUp = rotateVector(system.worldRotation, {
-              x: -sin,
-              y: cos,
-              z: 0,
-            });
-            instance.basisX.x = localRight.x;
-            instance.basisX.y = localRight.y;
-            instance.basisY.x = localUp.x;
-            instance.basisY.y = localUp.y;
+          if (instance.mesh) {
+            writeCustomMeshFrame(
+              instance,
+              system,
+              pool,
+              slot,
+              buttonScreen,
+              ppu,
+              sizeMultiplierX,
+              sizeMultiplierY,
+              sizeMultiplierZ,
+              normalizedAge,
+              seed,
+              ordinal,
+            );
           } else {
-            instance.basisX.x = cos;
-            instance.basisX.y = sin;
-            instance.basisY.x = -sin;
-            instance.basisY.y = cos;
+            let rotation =
+              pool.rotationZ[slot] +
+              (system.renderer.alignment === "local"
+                ? projectedZRotation(system.worldRotation)
+                : 0);
+            const particleVelocity = evaluateParticleVelocity(
+              system,
+              pool,
+              slot,
+              seed,
+              normalizedAge,
+            );
+            const velocityX = particleVelocity.x * ppu;
+            const velocityY = -particleVelocity.y * ppu;
+            if (instance.stretch) {
+              const particleVelocityPixels = Math.hypot(velocityX, velocityY);
+              const cameraVelocity =
+                Math.hypot(this.cameraVelocity.x, this.cameraVelocity.y) * ppu;
+              const length =
+                Math.abs(sizeY * ppu * system.renderer.lengthScale) +
+                particleVelocityPixels * Math.abs(system.renderer.velocityScale) +
+                cameraVelocity * Math.abs(system.renderer.cameraVelocityScale);
+              instance.stretch.velocityPixelsPerSecond = particleVelocityPixels;
+              instance.stretch.lengthPixels = length;
+              if (
+                system.renderer.rotateWithStretchDirection &&
+                particleVelocityPixels > EPSILON
+              ) {
+                /*
+                 * The recovered particle atlases author streaks along texture X
+                 * (the normal-hit beam and directional-flick taper are both
+                 * horizontal inside their cells). Unity's stretched billboard
+                 * turns that authored axis onto the particle velocity. Rotating
+                 * local Y instead leaves normal hits as horizontal capsules and
+                 * turns directional beams away from their recorded travel axis.
+                 */
+                rotation = Math.atan2(velocityY, velocityX);
+              }
+              /*
+               * Unity's stretched particle shader maps the authored atlas X
+               * direction to the motion/length axis. Keep the un-stretched X
+               * size as the cross-axis thickness and put the stretch magnitude
+               * on the texture-X extent. Direction is already carried by the
+               * velocity-aligned basis; retaining a negative length here would
+               * mirror the atlas a second time. This matters for the recovered
+               * horizontal taper cells: normal hits become vertical columns,
+               * while left/right flicks remain long horizontal beams.
+               */
+              renderSizeX = length / ppu;
+              renderSizeY = sizeX;
+            }
+            const cos = Math.cos(rotation);
+            const sin = Math.sin(rotation);
+            const pivotX = system.renderer.pivot.x * renderSizeX;
+            const pivotY = system.renderer.pivot.y * renderSizeY;
+            const worldX = pool.x[slot] + pivotX * cos - pivotY * sin;
+            const worldY = pool.y[slot] + pivotX * sin + pivotY * cos;
+            instance.screenX = buttonScreen.x + worldX * ppu;
+            instance.screenY = buttonScreen.y - worldY * ppu;
+            instance.rotationRadians = rotation;
+            if (system.renderer.alignment === "local") {
+              const localRight = rotateVector(system.worldRotation, {
+                x: cos,
+                y: sin,
+                z: 0,
+              });
+              const localUp = rotateVector(system.worldRotation, {
+                x: -sin,
+                y: cos,
+                z: 0,
+              });
+              instance.basisX.x = localRight.x;
+              instance.basisX.y = localRight.y;
+              instance.basisY.x = localUp.x;
+              instance.basisY.y = localUp.y;
+            } else {
+              instance.basisX.x = cos;
+              instance.basisX.y = sin;
+              instance.basisY.x = -sin;
+              instance.basisY.y = cos;
+            }
+            instance.widthPixels = renderSizeX * ppu;
+            instance.heightPixels = renderSizeY * ppu;
           }
-          instance.widthPixels = renderSizeX * ppu;
-          instance.heightPixels = renderSizeY * ppu;
           if (system.colorOverLifetime) {
             const lifetimeColor = evaluateGradient(
               system.colorOverLifetime,

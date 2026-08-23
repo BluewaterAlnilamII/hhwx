@@ -52,6 +52,7 @@ export type BandoriNativeNoteSoundRuntime = {
   dispose(): void;
   pause(): Promise<void>;
   prepare(): Promise<void>;
+  prepareCueBank(cueBank: BandoriNativeNoteSoundCueBank): Promise<void>;
   resume(): Promise<void>;
   selectCueBank(cueBankId: string): void;
   setVolume(volume: number): void;
@@ -67,11 +68,14 @@ class WebAudioBandoriNativeNoteSoundRuntime implements BandoriNativeNoteSoundRun
     string,
     ReadonlyMap<BandoriNativeNoteSoundCue, AudioBuffer>
   >();
+  private readonly bufferPromisesByCueBank = new Map<
+    string,
+    Promise<ReadonlyMap<BandoriNativeNoteSoundCue, AudioBuffer>>
+  >();
   private readonly bufferPromisesByUrl = new Map<string, Promise<AudioBuffer>>();
   private readonly activeSources = new Set<AudioBufferSourceNode>();
   private readonly activeLoops = new Map<string, ActiveLoop>();
   private readonly mediaSources = new Map<HTMLMediaElement, MediaElementAudioSourceNode>();
-  private preparePromise: Promise<void> | null = null;
   private disposed = false;
 
   constructor(
@@ -92,7 +96,7 @@ class WebAudioBandoriNativeNoteSoundRuntime implements BandoriNativeNoteSoundRun
   }
 
   get isPrepared(): boolean {
-    return this.buffersByCueBank.size === this.cueBanks.size;
+    return this.buffersByCueBank.has(this.activeCueBankId);
   }
 
   private assertVolume(volume: number): void {
@@ -120,15 +124,36 @@ class WebAudioBandoriNativeNoteSoundRuntime implements BandoriNativeNoteSoundRun
   }
 
   async prepare(): Promise<void> {
-    if (this.isPrepared) return;
-    if (this.preparePromise) return this.preparePromise;
+    await Promise.all(Array.from(
+      this.cueBanks,
+      ([id, cueUrls]) => this.prepareCueBank({ id, cueUrls }),
+    ));
+  }
+
+  async prepareCueBank(cueBank: BandoriNativeNoteSoundCueBank): Promise<void> {
+    const existingCueUrls = this.cueBanks.get(cueBank.id);
+    if (
+      existingCueUrls
+      && Object.entries(cueBank.cueUrls).some(
+        ([cue, url]) => existingCueUrls[cue as BandoriNativeNoteSoundCue] !== url,
+      )
+    ) {
+      throw new Error(`Native note sound cue bank changed in place: ${cueBank.id}`);
+    }
+    if (!existingCueUrls) this.cueBanks.set(cueBank.id, cueBank.cueUrls);
+    if (this.buffersByCueBank.has(cueBank.id)) return;
+    const existingPromise = this.bufferPromisesByCueBank.get(cueBank.id);
+    if (existingPromise) {
+      await existingPromise;
+      return;
+    }
     const context = this.getContext();
     const loadBuffer = (url: string): Promise<AudioBuffer> => {
       const existing = this.bufferPromisesByUrl.get(url);
       if (existing) return existing;
       const promise = fetch(url, {
         cache: "force-cache",
-        credentials: "same-origin",
+        credentials: "omit",
       }).then(async (response) => {
         if (!response.ok) {
           throw new Error(`Native note sound fetch failed: HTTP ${response.status}`);
@@ -139,28 +164,29 @@ class WebAudioBandoriNativeNoteSoundRuntime implements BandoriNativeNoteSoundRun
       this.bufferPromisesByUrl.set(url, promise);
       return promise;
     };
-    this.preparePromise = Promise.all(Array.from(
-      this.cueBanks,
-      async ([cueBankId, cueUrls]) => {
-        const entries = await Promise.all(Object.entries(cueUrls).map(
-          async ([cue, url]) => [cue, await loadBuffer(url)] as const,
-        ));
-        return [cueBankId, new Map(entries) as ReadonlyMap<
-          BandoriNativeNoteSoundCue,
-          AudioBuffer
-        >] as const;
-      },
-    )).then((cueBanks) => {
-      for (const [cueBankId, buffers] of cueBanks) {
-        this.buffersByCueBank.set(cueBankId, buffers);
-      }
+    const cueUrls = this.cueBanks.get(cueBank.id);
+    if (!cueUrls) throw new Error(`Unknown native note sound cue bank: ${cueBank.id}`);
+    const request = Promise.all(Object.entries(cueUrls).map(
+      async ([cue, url]) => [cue, await loadBuffer(url)] as const,
+    )).then((entries) => {
+      const buffers = new Map(entries) as ReadonlyMap<
+        BandoriNativeNoteSoundCue,
+        AudioBuffer
+      >;
+      this.buffersByCueBank.set(cueBank.id, buffers);
+      return buffers;
     }).catch((error) => {
-      this.buffersByCueBank.clear();
-      this.bufferPromisesByUrl.clear();
-      this.preparePromise = null;
+      for (const url of Object.values(cueUrls)) {
+        this.bufferPromisesByUrl.delete(url);
+      }
       throw error;
+    }).finally(() => {
+      if (this.bufferPromisesByCueBank.get(cueBank.id) === request) {
+        this.bufferPromisesByCueBank.delete(cueBank.id);
+      }
     });
-    return this.preparePromise;
+    this.bufferPromisesByCueBank.set(cueBank.id, request);
+    await request;
   }
 
   attachMediaElement(mediaElement: HTMLMediaElement): void {
@@ -182,8 +208,8 @@ class WebAudioBandoriNativeNoteSoundRuntime implements BandoriNativeNoteSoundRun
   }
 
   selectCueBank(cueBankId: string): void {
-    if (!this.cueBanks.has(cueBankId)) {
-      throw new Error(`Unknown native note sound cue bank: ${cueBankId}`);
+    if (!this.buffersByCueBank.has(cueBankId)) {
+      throw new Error(`Unprepared native note sound cue bank: ${cueBankId}`);
     }
     this.activeCueBankId = cueBankId;
   }
