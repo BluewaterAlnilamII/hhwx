@@ -600,10 +600,10 @@
         "syncNoteSpeedSlowdownOn": "开",
         "syncNoteSpeedSlowdownOff": "关",
         "syncNoteSpeedSlowdownDescription": "关闭时 Note 下落速度保持不变；开启时随音乐倍率同步变慢",
-        "noteSpeed": "谱面流速",
-        "decreaseNoteSpeed": "降低谱面流速 {amount}",
-        "increaseNoteSpeed": "提高谱面流速 {amount}",
-        "currentNoteSpeed": "当前谱面流速",
+        "noteSpeed": "节奏图标的速度",
+        "decreaseNoteSpeed": "降低节奏图标的速度 {amount}",
+        "increaseNoteSpeed": "提高节奏图标的速度 {amount}",
+        "currentNoteSpeed": "当前节奏图标的速度",
         "noteSpeedRange": "{min}–{max}，三档步长 0.50 / 0.10 / 0.01"
       },
       "loopControls": {
@@ -651,9 +651,9 @@
           "teamLiveLife": "团队演出·生命"
         },
         "syncLine": "同时点击线",
-        "rhythmSupport": "节奏辅助",
-        "laneEffect": "轨道效果",
-        "allPerfectStatus": "All Perfect 状态显示",
+        "rhythmSupport": "节奏的色觉辅助",
+        "laneEffect": "判定辅助效果",
+        "allPerfectStatus": "Perfect状态显示",
         "on": "开",
         "off": "关",
         "tapSeStyle": "节奏标志 SE",
